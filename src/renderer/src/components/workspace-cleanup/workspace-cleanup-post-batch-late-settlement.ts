@@ -68,6 +68,7 @@ export function createPostBatchLateSettlementReporter({
   const retainedSkippedAncestors = skippedAncestors
     .filter((entry) => entry.provisional)
     .map((entry) => ({ ...entry, failure: { ...entry.failure } }))
+
   const retainedCandidates = failedCandidates.filter(
     (candidate) =>
       provisionallyBlocked.has(candidate) &&
@@ -78,6 +79,7 @@ export function createPostBatchLateSettlementReporter({
           isStrictWorkspaceCleanupDescendant(entry.candidate, candidate)
       )
   )
+
   const state: PostBatchLateSettlementState = {
     skippedAncestors: retainedSkippedAncestors,
     failedCandidates: retainedCandidates,
@@ -87,7 +89,9 @@ export function createPostBatchLateSettlementReporter({
     removalTimeoutMs,
     removalSettlementGraceMs
   }
+
   let reconcileChain: Promise<void> = Promise.resolve()
+
   const reportLateSettlement: WorkspaceCleanupLateSettlementReporter = (candidate, result) => {
     // Why: queue reconciliation before reporting so a presentation-layer error
     // cannot suppress ancestor retries; the report still runs synchronously.
@@ -99,6 +103,7 @@ export function createPostBatchLateSettlementReporter({
           result,
           reportLateSettlement
         )
+
         if (reconciled.result.removedIds.length > 0 || reconciled.result.failures.length > 0) {
           reportResult(reconciled.result, reconciled.pendingSettlementFailures)
         }
@@ -108,15 +113,18 @@ export function createPostBatchLateSettlementReporter({
       })
     reportResult(result)
   }
+
   const retainedCandidateIdentities = new Set(
     retainedCandidates.map((candidate) => getWorkspaceCleanupCandidateIdentity(candidate))
   )
+
   const reportWithoutReconciliation: WorkspaceCleanupLateSettlementReporter = (
     _candidate,
     result
   ) => {
     reportResult(result)
   }
+
   return (candidate) =>
     retainedCandidateIdentities.has(getWorkspaceCleanupCandidateIdentity(candidate))
       ? reportLateSettlement
@@ -133,11 +141,14 @@ async function reconcilePostBatchLateSettlement(
   pendingSettlementFailures?: ReadonlySet<WorkspaceCleanupFailure>
 }> {
   const settledIdentity = getWorkspaceCleanupCandidateIdentity(settledCandidateIdentity)
+
   const settledCandidate = state.failedCandidates.find(
     (candidate) => getWorkspaceCleanupCandidateIdentity(candidate) === settledIdentity
   )
+
   if (settledCandidate) {
     state.provisionallyBlocked.delete(settledCandidate)
+
     if (lateResult.failures.length === 0) {
       removeArrayEntry(state.failedCandidates, settledCandidate)
     }
@@ -147,6 +158,7 @@ async function reconcilePostBatchLateSettlement(
   const removedIdentities: string[] = []
   const lateFailures: WorkspaceCleanupFailure[] = []
   const pendingSettlementFailures = new Set<WorkspaceCleanupFailure>()
+
   const findBlockingDescendants = (
     candidate: WorkspaceCleanupCandidate
   ): WorkspaceCleanupCandidate[] =>
@@ -161,24 +173,30 @@ async function reconcilePostBatchLateSettlement(
     failedCandidates: state.failedCandidates,
     failures: state.failures
   })
+
   lateFailures.push(...updatedFailures)
 
   // Why: deepest descendants first so a failed parent re-blocks its ancestors
   // before those ancestors are retried.
   unblocked.sort((a, b) => b.path.length - a.path.length)
+
   for (const ancestor of unblocked) {
     const blockers = findBlockingDescendants(ancestor)
+
     if (blockers.length > 0) {
       const provisional = blockers.every((blocker) => state.provisionallyBlocked.has(blocker))
+
       const failure: WorkspaceCleanupFailure = {
         worktreeId: ancestor.worktreeId,
         executionHostId: getWorkspaceCleanupCandidateHostId(ancestor),
         displayName: ancestor.displayName,
         message: getSkippedAncestorMessage(provisional)
       }
+
       if (provisional) {
         state.provisionallyBlocked.add(ancestor)
       }
+
       state.failedCandidates.push(ancestor)
       state.skippedAncestors.push({ candidate: ancestor, failure, provisional })
       state.failures.push(failure)
@@ -187,10 +205,13 @@ async function reconcilePostBatchLateSettlement(
     }
 
     const removeCandidates = state.removeCandidates
+
     if (!removeCandidates) {
       continue
     }
+
     let removal: Promise<WorkspaceCleanupRemoveResult>
+
     try {
       removal = removeCandidates([ancestor.worktreeId], {
         approvedCandidates: [ancestor]
@@ -205,11 +226,13 @@ async function reconcilePostBatchLateSettlement(
       })
       continue
     }
+
     const outcome = await waitForWorkspaceCleanupRemovalWithTimeout(
       removal,
       state.removalTimeoutMs,
       state.removalSettlementGraceMs
     )
+
     if (outcome.status === 'unresolved') {
       const timeoutFailure = getWorkspaceCleanupTimeoutFailure(ancestor)
       state.failedCandidates.push(ancestor)
@@ -220,6 +243,7 @@ async function reconcilePostBatchLateSettlement(
       tracker.detach(reportLateSettlement)
       continue
     }
+
     const result =
       outcome.status === 'fulfilled'
         ? outcome.result
@@ -236,8 +260,10 @@ async function reconcilePostBatchLateSettlement(
               }
             ]
           }
+
     removedIds.push(...result.removedIds)
     removedIdentities.push(...(result.removedIdentities ?? []))
+
     if (result.failures.length > 0) {
       state.failedCandidates.push(ancestor)
       lateFailures.push(...result.failures)
@@ -245,6 +271,7 @@ async function reconcilePostBatchLateSettlement(
   }
 
   releaseSettledPostBatchState(state)
+
   return {
     result: { removedIds, removedIdentities, failures: lateFailures },
     pendingSettlementFailures:
@@ -256,6 +283,7 @@ function releaseSettledPostBatchState(state: PostBatchLateSettlementState): void
   if (state.skippedAncestors.some((entry) => entry.provisional)) {
     return
   }
+
   // Why: once no provisional ancestor can change, remaining late settlements
   // only report themselves and must not pin removal or candidate state.
   state.skippedAncestors.length = 0
@@ -267,6 +295,7 @@ function releaseSettledPostBatchState(state: PostBatchLateSettlementState): void
 
 function removeArrayEntry<T>(entries: T[], entry: T): void {
   const index = entries.indexOf(entry)
+
   if (index !== -1) {
     entries.splice(index, 1)
   }

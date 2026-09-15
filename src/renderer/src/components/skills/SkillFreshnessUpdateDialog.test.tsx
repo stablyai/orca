@@ -64,6 +64,7 @@ vi.mock('@/components/ui/collapsible', () => ({
     defaultOpen?: boolean
   } & Record<string, unknown>) => {
     const [open] = useState(defaultOpen)
+
     return (
       <div {...rest} data-collapsible-open={String(open)}>
         {children}
@@ -87,9 +88,11 @@ const skillsApi = {
   getUpdateRun: vi.fn(async (): Promise<SkillUpdateRun> => ({ state: 'idle' })),
   onUpdateRun: vi.fn((callback: (run: SkillUpdateRun) => void) => {
     pushRun = callback
+
     return () => {}
   })
 }
+
 let pushRun: ((run: SkillUpdateRun) => void) | null = null
 
 function placement(
@@ -130,6 +133,7 @@ function eligibleInventory(): SkillFreshnessInventory {
 }
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 async function renderDialog(): Promise<void> {
@@ -194,6 +198,7 @@ describe('SkillFreshnessUpdateDialog', () => {
     if (root) {
       await act(async () => root?.unmount())
     }
+
     root = null
     container?.remove()
     container = null
@@ -349,6 +354,7 @@ describe('SkillFreshnessUpdateDialog', () => {
 
   it('does not let the status-bar linger retire the result being read here', async () => {
     vi.useFakeTimers()
+
     try {
       await renderDialog()
       await openViaRequest()
@@ -412,6 +418,7 @@ describe('SkillFreshnessUpdateDialog', () => {
     const message = Array.from(container?.querySelectorAll('p') ?? []).find(
       (candidate) => candidate.textContent === unbrokenMessage
     )
+
     expect(message?.className).toContain('[overflow-wrap:anywhere]')
     expect(message?.parentElement?.className).toContain('min-w-0')
   })
@@ -714,6 +721,7 @@ describe('SkillFreshnessUpdateDialog', () => {
     const error = Array.from(container?.querySelectorAll('p') ?? []).find(
       (candidate) => candidate.textContent === unbrokenError
     )
+
     expect(error?.className).toContain('min-w-0')
     expect(error?.className).toContain('[overflow-wrap:anywhere]')
   })

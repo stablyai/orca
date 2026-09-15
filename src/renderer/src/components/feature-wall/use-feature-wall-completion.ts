@@ -48,9 +48,12 @@ export function useFeatureWallCompletion(
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const rateLimits = useAppStore((s) => s.rateLimits)
   const fetchRateLimits = useAppStore((s) => s.fetchRateLimits)
+
   const githubConfigured =
     preflightStatus?.gh.installed === true && preflightStatus.gh.authenticated === true
+
   const commitMessageAi = settings?.commitMessageAi
+
   const resolvedCommitMessageAgent =
     settings && commitMessageAi?.enabled === true
       ? resolveCommitMessageAgentChoice(
@@ -59,6 +62,7 @@ export function useFeatureWallCompletion(
           settings.disabledTuiAgents
         )
       : null
+
   const aiCommitPrConfigured =
     commitMessageAi?.enabled === true &&
     (isCustomAgentId(resolvedCommitMessageAgent)
@@ -69,6 +73,7 @@ export function useFeatureWallCompletion(
 
   const [hasUsageAccount, setHasUsageAccount] = useState(false)
   const persistedCompletion = usePersistedFeatureWallCompletion()
+
   const {
     visitedWorkflows,
     visitedAgentSteps,
@@ -93,6 +98,7 @@ export function useFeatureWallCompletion(
       window.api.claudeAccounts.list().catch(() => null),
       window.api.codexAccounts.list().catch(() => null)
     ])
+
     return hasFeatureWallUsageTracking({
       claudeManagedAccountCount: claude?.accounts.length ?? 0,
       codexManagedAccountCount: codex?.accounts.length ?? 0,
@@ -103,6 +109,7 @@ export function useFeatureWallCompletion(
 
   const refreshUsageAccountState = useCallback(async (): Promise<void> => {
     const nextHasUsageAccount = await readUsageAccountState()
+
     if (mountedRef.current) {
       setHasUsageAccount(nextHasUsageAccount)
     }
@@ -132,17 +139,23 @@ export function useFeatureWallCompletion(
     if (!isOpen) {
       return
     }
+
     let stale = false
+
     const refresh = async (): Promise<void> => {
       const nextHasUsageAccount = await readUsageAccountState()
+
       if (stale) {
         return
       }
+
       setHasUsageAccount(nextHasUsageAccount)
     }
+
     void refresh()
     const onFocus = (): void => void refresh()
     window.addEventListener('focus', onFocus)
+
     return () => {
       stale = true
       window.removeEventListener('focus', onFocus)
@@ -185,21 +198,25 @@ export function useFeatureWallCompletion(
     if (!isOpen) {
       return
     }
+
     for (const id of Object.keys(currentProgress.workflowDone) as FeatureWallWorkflowId[]) {
       if (currentProgress.workflowDone[id] && !completedWorkflows.has(id)) {
         markWorkflowCompleted(id)
       }
     }
+
     for (const id of FEATURE_WALL_AGENT_STEP_IDS) {
       if (currentProgress.agentStepDone[id] && !completedAgentSteps.has(id)) {
         markAgentStepCompleted(id)
       }
     }
+
     for (const id of FEATURE_WALL_WORKBENCH_STEP_IDS) {
       if (currentProgress.workbenchStepDone[id] && !completedWorkbenchSteps.has(id)) {
         markWorkbenchStepCompleted(id)
       }
     }
+
     for (const id of FEATURE_WALL_REVIEW_STEP_IDS) {
       if (currentProgress.reviewStepDone[id] && !completedReviewSteps.has(id)) {
         markReviewStepCompleted(id)
@@ -271,6 +288,7 @@ export function useFeatureWallCompletion(
     },
     [markSessionWorkflowVisited, markWorkflowVisited]
   )
+
   const markAgentStepVisitedForSession = useCallback(
     (id: AgentsStepId): void => {
       markAgentStepVisited(id)
@@ -278,6 +296,7 @@ export function useFeatureWallCompletion(
     },
     [markAgentStepVisited, markSessionAgentStepVisited]
   )
+
   const markWorkbenchStepVisitedForSession = useCallback(
     (id: WorkbenchStepId): void => {
       markWorkbenchStepVisited(id)
@@ -285,6 +304,7 @@ export function useFeatureWallCompletion(
     },
     [markSessionWorkbenchStepVisited, markWorkbenchStepVisited]
   )
+
   const markReviewStepVisitedForSession = useCallback(
     (id: ReviewStepId): void => {
       markReviewStepVisited(id)

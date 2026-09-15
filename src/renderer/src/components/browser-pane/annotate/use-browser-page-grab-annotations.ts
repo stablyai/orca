@@ -31,11 +31,13 @@ const copiedGrabToastMessage = (): string =>
     'auto.components.browser.pane.annotate.use.browser.page.grab.annotations.0c7b9b2b7a',
     'Copied'
   )
+
 const screenshottedGrabToastMessage = (): string =>
   translate(
     'auto.components.browser.pane.annotate.use.browser.page.grab.annotations.c937229f19',
     'Screenshotted'
   )
+
 const annotationAddedGrabToastMessage = (): string =>
   translate(
     'auto.components.browser.pane.annotate.use.browser.page.grab.annotations.1f5cb19034',
@@ -92,8 +94,10 @@ export function useBrowserPageGrabAnnotations({
   const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [grabIntent, setGrabIntent] = useState<GrabIntent>('copy')
   const grabIntentRef = useRef(grabIntent)
+
   const [pendingAnnotationPayload, setPendingAnnotationPayload] =
     useState<BrowserGrabPayload | null>(null)
+
   const pendingAnnotationPayloadRef = useRef<BrowserGrabPayload | null>(null)
   // Inline toast near the grabbed element (below, or above near the viewport bottom) so it doesn't occlude the selection.
   const [grabToast, setGrabToast] = useState<BrowserPageGrabToastState | null>(null)
@@ -121,6 +125,7 @@ export function useBrowserPageGrabAnnotations({
   const dismissGrabToast = useCallback(() => {
     clearTimeout(grabToastTimerRef.current)
     setGrabToast(null)
+
     // Why: only rearm while 'confirming'; if a C/S shortcut already rearmed (state 'armed'), skip to avoid a double-rearm race.
     if (
       grabRef.current.state === 'confirming' &&
@@ -136,6 +141,7 @@ export function useBrowserPageGrabAnnotations({
       let y = 0
       let below = true
       const containerRect = containerRef.current?.getBoundingClientRect()
+
       if (payload) {
         const rect = payload.target.rectViewport
         const webview = webviewRef.current
@@ -153,6 +159,7 @@ export function useBrowserPageGrabAnnotations({
         x = containerRect.width / 2
         y = containerRect.height / 2
       }
+
       clearTimeout(grabToastTimerRef.current)
       setGrabToast({ message, type, x, y, below, payload: payload ?? null })
       grabToastTimerRef.current = setTimeout(() => dismissGrabToast(), 2000)
@@ -165,10 +172,13 @@ export function useBrowserPageGrabAnnotations({
     if (grab.state !== 'confirming' || !grab.payload) {
       return
     }
+
     if (grabIntent === 'annotate') {
       setPendingAnnotationPayload(grab.payload)
+
       return
     }
+
     if (!grab.contextMenu) {
       const text = formatGrabPayloadAsText(grab.payload)
       void window.api.ui.writeClipboardText(text)
@@ -199,15 +209,19 @@ export function useBrowserPageGrabAnnotations({
   const startGrabIntent = useCallback(
     (nextIntent: GrabIntent): void => {
       recordFeatureInteraction('browser-grab')
+
       if (nextIntent === 'annotate') {
         recordFeatureInteraction('browser-annotations')
       }
+
       setGrabIntent(nextIntent)
+
       if (nextIntent === 'copy') {
         setPendingAnnotationPayload(null)
       } else {
         setBrowserAnnotationTrayOpen(true)
       }
+
       if (grab.state === 'idle' || grab.state === 'error' || grabIntent === nextIntent) {
         grab.toggle()
       }
@@ -234,9 +248,11 @@ export function useBrowserPageGrabAnnotations({
   const handleGrabCopy = useCallback(() => {
     grabMenuActionTakenRef.current = true
     const payload = grabPayloadRef.current
+
     if (!payload) {
       return
     }
+
     const text = formatGrabPayloadAsText(payload)
     void window.api.ui.writeClipboardText(text)
     recordFeatureInteraction('browser-grab')
@@ -247,13 +263,17 @@ export function useBrowserPageGrabAnnotations({
   const handleGrabCopyScreenshot = useCallback(() => {
     grabMenuActionTakenRef.current = true
     const payload = grabPayloadRef.current
+
     if (!payload) {
       return
     }
+
     const dataUrl = payload.screenshot?.dataUrl
+
     if (!dataUrl?.startsWith('data:image/png;base64,')) {
       return
     }
+
     void window.api.ui.writeClipboardImage(dataUrl)
     recordFeatureInteraction('browser-grab')
     showGrabToast(screenshottedGrabToastMessage(), 'success', payload)
@@ -263,9 +283,11 @@ export function useBrowserPageGrabAnnotations({
   const handleAddBrowserAnnotation = useCallback(
     (comment: string, intent: BrowserAnnotationIntent): void => {
       const payload = pendingAnnotationPayload
+
       if (!payload) {
         return
       }
+
       addBrowserPageAnnotation({
         id: createBrowserAnnotationId(),
         browserPageId: browserTabId,
@@ -294,6 +316,7 @@ export function useBrowserPageGrabAnnotations({
 
   const handleCancelPendingBrowserAnnotation = useCallback((): void => {
     setPendingAnnotationPayload(null)
+
     if (grabIntent === 'annotate' && grab.state === 'confirming') {
       grab.rearm()
     }

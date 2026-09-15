@@ -49,7 +49,9 @@ function status(
     stateStartedAt: receivedAt,
     ...overrides
   } as AgentStatusIpcPayload
+
   const dispatchId = payload.orchestration?.dispatchId
+
   return mintFleetAgentStatusEvidence(payload, {
     ...(dispatchId ? { kind: 'worker' as const, dispatchId } : { kind: 'pane' as const }),
     terminalHandle: payload.terminalHandle ?? `term-${id}`,
@@ -61,6 +63,7 @@ function status(
 describe('orchestration fleet projection', () => {
   it('uses fresh WSL host evidence without requiring an SSH connection', () => {
     const now = 10_000
+
     const result = projectOrchestrationFleet({
       workers: [
         worker('wsl', {
@@ -79,12 +82,14 @@ describe('orchestration fleet projection', () => {
       statuses: [status('wsl', now - 1)],
       now
     })
+
     expect(result.workers[0].liveness).toMatchObject({ verdict: 'live' })
     expect(result.workers[0].host).toEqual({ kind: 'local', id: 'local' })
   })
 
   it('composes durable identity with redacted push-fed status', () => {
     const now = 10_000
+
     const result = projectOrchestrationFleet({
       workers: [
         worker('1', {
@@ -169,11 +174,13 @@ describe('orchestration fleet projection', () => {
 
   it('does not promote stale or restored status to live evidence', () => {
     const now = 2_000_000
+
     const stale = projectOrchestrationFleet({
       workers: [worker('stale')],
       statuses: [status('stale', 1)],
       now
     }).workers[0]
+
     const restored = projectOrchestrationFleet({
       workers: [worker('restored')],
       statuses: [status('restored', now, { restoredUnconfirmed: true })],
@@ -210,6 +217,7 @@ describe('orchestration fleet projection', () => {
   it('bounds 100-worker memory and paginates by stable Dispatch id', () => {
     const workers = Array.from({ length: 250 }, (_, index) => worker(`dispatch-${index}`))
     const first = projectOrchestrationFleet({ workers, statuses: [], limit: 10, now: 1 })
+
     const second = projectOrchestrationFleet({
       workers,
       statuses: [],
@@ -282,6 +290,7 @@ describe('orchestration fleet projection', () => {
         updatedAt: '2026-01-01T00:00:00Z'
       }
     })
+
     const result = projectOrchestrationFleet({
       workers: [durable],
       statuses: [
@@ -389,6 +398,7 @@ describe('orchestration fleet projection', () => {
 describe('fleet liveness and attention after a host verdict', () => {
   it('measures staleness on the evidence clock, not the replay delivery clock', () => {
     const now = 10 * AGENT_STATUS_STALE_AFTER_MS
+
     const replayed = projectOrchestrationFleet({
       workers: [worker('1')],
       // A relay reconnect restamps receivedAt to stay monotonic; the evidence is an hour old.
@@ -408,11 +418,13 @@ describe('fleet liveness and attention after a host verdict', () => {
 
   it('keeps an unproven outcome unverifiable after the host reports live', () => {
     const now = 10_000
+
     const projected = projectOrchestrationFleet({
       workers: [worker('1', { outcome: 'finished_unverified' })],
       statuses: [status('1', now - 1)],
       now
     })
+
     const subject = projected.workers[0]!
     expect(subject.attention).toMatchObject({ requiresAction: true })
     expect(subject.attention.categories).toContain('unverifiable')
@@ -426,11 +438,13 @@ describe('fleet liveness and attention after a host verdict', () => {
 
   it('drops a stale category the host verdict disproves', () => {
     const now = 10 * AGENT_STATUS_STALE_AFTER_MS
+
     const projected = projectOrchestrationFleet({
       workers: [worker('1', { outcome: 'in_progress' })],
       statuses: [status('1', now - AGENT_STATUS_STALE_AFTER_MS - 60_000)],
       now
     })
+
     const subject = projected.workers[0]!
     expect(subject.attention.categories).toContain('stale')
 
@@ -441,6 +455,7 @@ describe('fleet liveness and attention after a host verdict', () => {
   })
   it('reports an operator-closed worker as exited, not as absence', () => {
     const now = 10_000
+
     const projected = projectOrchestrationFleet({
       workers: [
         worker('1', {
@@ -453,6 +468,7 @@ describe('fleet liveness and attention after a host verdict', () => {
       statuses: [],
       now
     })
+
     // The same receipt used to carry `observation.status: exited` next to this verdict.
     expect(projected.workers[0]!.liveness).toEqual({
       verdict: 'exited',
@@ -462,11 +478,13 @@ describe('fleet liveness and attention after a host verdict', () => {
 
   it('sends a proven-dead worker that never settled to worker-read, not the worker-show loop', () => {
     const now = 10_000
+
     const projected = projectOrchestrationFleet({
       workers: [worker('1', { workerStage: 'process_exited' })],
       statuses: [],
       now
     })
+
     expect(projected.workers[0]!.nextAction).toEqual({
       kind: 'recover',
       argv: ['orchestration', 'worker-read', '--dispatch', '1']
@@ -485,6 +503,7 @@ describe('fleet liveness and attention after a host verdict', () => {
       statuses: [],
       now: 10_000
     })
+
     expect(projected.workers[0]!.liveness).toEqual({
       verdict: 'unverifiable',
       reason: 'missing_status'
@@ -505,6 +524,7 @@ describe('fleet liveness and attention after a host verdict', () => {
       statuses: [],
       now: 10_000
     })
+
     expect(projected.workers[0]!.liveness).toEqual({
       verdict: 'exited',
       source: 'execution_host'
@@ -513,11 +533,13 @@ describe('fleet liveness and attention after a host verdict', () => {
 
   it('asks nothing of a live running worker instead of looping on worker-show', () => {
     const now = 10_000
+
     const projected = projectOrchestrationFleet({
       workers: [worker('1')],
       statuses: [status('1', now - 1_000)],
       now
     })
+
     expect(projected.workers[0]!.liveness.verdict).toBe('live')
     expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
   })
@@ -525,11 +547,13 @@ describe('fleet liveness and attention after a host verdict', () => {
   // worker-show repeats this projection, so inspecting again would loop.
   it('asks nothing of an unverifiable worker instead of looping on worker-show', () => {
     const now = 10 * AGENT_STATUS_STALE_AFTER_MS
+
     const projected = projectOrchestrationFleet({
       workers: [worker('1')],
       statuses: [status('1', now - AGENT_STATUS_STALE_AFTER_MS - 60_000)],
       now
     })
+
     expect(projected.workers[0]!.liveness).toMatchObject({
       verdict: 'unverifiable',
       reason: 'stale_status'
@@ -543,6 +567,7 @@ describe('fleet liveness and attention after a host verdict', () => {
       statuses: [],
       now: 10_000
     })
+
     expect(projected.workers[0]!.nextAction.kind).toBe('inspect')
   })
 
@@ -554,6 +579,7 @@ describe('fleet liveness and attention after a host verdict', () => {
         statuses: [],
         now: 10_000
       })
+
       expect(projected.workers[0]!.liveness.verdict).toBe('unverifiable')
       expect(projected.workers[0]!.nextAction).toEqual({
         kind: 'inspect',
@@ -588,6 +614,7 @@ describe('fleet liveness and attention after a host verdict', () => {
       statuses: [],
       now: 10_000
     })
+
     const row = projected.workers[0]!
 
     expect(row.liveness.verdict).toBe('exited')

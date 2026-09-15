@@ -18,8 +18,10 @@ export function buildRecentSessions(
       const matchingLocations = session.locationBreakdown.filter((entry) =>
         scope === 'all' ? true : entry.worktreeId !== null
       )
+
       const scopedLocations =
         matchingLocations.length > 0 ? matchingLocations : session.locationBreakdown
+
       const totals = scopedLocations.reduce(
         (acc, entry) => {
           acc.events += entry.eventCount
@@ -29,6 +31,7 @@ export function buildRecentSessions(
           acc.reasoningOutputTokens += entry.reasoningOutputTokens
           acc.totalTokens += entry.totalTokens
           acc.hasInferredPricing ||= entry.hasInferredPricing
+
           return acc
         },
         {
@@ -41,6 +44,7 @@ export function buildRecentSessions(
           hasInferredPricing: false
         }
       )
+
       const durationMinutes = Math.max(
         0,
         Math.round(
@@ -48,6 +52,7 @@ export function buildRecentSessions(
             60_000
         )
       )
+
       return {
         sessionId: session.sessionId,
         lastActiveAt: session.lastTimestamp,

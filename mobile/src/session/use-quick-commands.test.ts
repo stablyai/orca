@@ -15,6 +15,7 @@ const FIRST: TerminalQuickCommand = {
   appendEnter: true,
   scope: { type: 'global' }
 }
+
 const SECOND: TerminalQuickCommand = {
   id: 'second',
   label: 'Second',
@@ -40,9 +41,11 @@ function failure(message: string): RpcResponse {
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {}
+
   const promise = new Promise<T>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
 
@@ -58,8 +61,10 @@ describe('useQuickCommands', () => {
   async function mount(client: RpcClient, enabled = true): Promise<void> {
     function Harness(): null {
       state = useQuickCommands({ client, enabled })
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
       await Promise.resolve()
@@ -118,6 +123,7 @@ describe('useQuickCommands', () => {
 
   it('stops replaying a cutover-interrupted load after the sheet closes', async () => {
     let rejectLoad: (error: Error) => void = () => {}
+
     const client = {
       sendRequest: vi.fn(
         () =>
@@ -129,8 +135,10 @@ describe('useQuickCommands', () => {
 
     function Harness({ enabled }: { enabled: boolean }): null {
       state = useQuickCommands({ client, enabled })
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness, { enabled: true }))
       await Promise.resolve()
@@ -152,6 +160,7 @@ describe('useQuickCommands', () => {
     const client = {
       sendRequest: vi.fn().mockResolvedValue(failure('load failed'))
     } as unknown as RpcClient
+
     await mount(client)
 
     await act(async () => {
@@ -168,6 +177,7 @@ describe('useQuickCommands', () => {
     const client = {
       sendRequest: vi.fn().mockResolvedValue({ ok: true, result: {} } as RpcResponse)
     } as unknown as RpcClient
+
     await mount(client)
 
     await act(async () => {
@@ -184,15 +194,19 @@ describe('useQuickCommands', () => {
     const firstUpdate = deferred<RpcResponse>()
     const secondUpdate = deferred<RpcResponse>()
     const updateParams: unknown[] = []
+
     const client = {
       sendRequest: vi.fn((method: string, params?: unknown) => {
         if (method === 'settings.getTerminalQuickCommands') {
           return Promise.resolve(success([FIRST, SECOND]))
         }
+
         updateParams.push(params)
+
         return updateParams.length === 1 ? firstUpdate.promise : secondUpdate.promise
       })
     } as unknown as RpcClient
+
     await mount(client)
     expect(state?.commands).toEqual([FIRST, SECOND])
 
@@ -234,15 +248,19 @@ describe('useQuickCommands', () => {
     const firstUpdate = deferred<RpcResponse>()
     const secondUpdate = deferred<RpcResponse>()
     const updateParams: unknown[] = []
+
     const client = {
       sendRequest: vi.fn((method: string, params?: unknown) => {
         if (method === 'settings.getTerminalQuickCommands') {
           return Promise.resolve(success([FIRST, SECOND]))
         }
+
         updateParams.push(params)
+
         return updateParams.length === 1 ? firstUpdate.promise : secondUpdate.promise
       })
     } as unknown as RpcClient
+
     await mount(client)
 
     let firstPersist: Promise<boolean> = Promise.resolve(false)
@@ -275,6 +293,7 @@ describe('useQuickCommands', () => {
 
   it('preserves unrelated commands added by another client while the sheet is open', async () => {
     const edited = { ...FIRST, label: 'Edited on mobile' }
+
     const client = {
       sendRequest: vi
         .fn()
@@ -282,6 +301,7 @@ describe('useQuickCommands', () => {
         // The host applies the targeted upsert to a list that desktop changed.
         .mockResolvedValueOnce(success([edited, SECOND]))
     } as unknown as RpcClient
+
     await mount(client)
 
     await act(async () => {
@@ -296,20 +316,24 @@ describe('useQuickCommands', () => {
 
   it('isolates an old client mutation from a replacement client', async () => {
     const oldUpdate = deferred<RpcResponse>()
+
     const oldClient = {
       sendRequest: vi
         .fn()
         .mockResolvedValueOnce(success([FIRST]))
         .mockReturnValueOnce(oldUpdate.promise)
     } as unknown as RpcClient
+
     const newClient = {
       sendRequest: vi.fn().mockResolvedValue(success([SECOND]))
     } as unknown as RpcClient
 
     function Harness({ client }: { client: RpcClient }): null {
       state = useQuickCommands({ client, enabled: true })
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness, { client: oldClient }))
       await Promise.resolve()
@@ -339,6 +363,7 @@ describe('useQuickCommands', () => {
         .mockResolvedValueOnce(success([FIRST]))
         .mockResolvedValueOnce(failure('save failed'))
     } as unknown as RpcClient
+
     await mount(client)
 
     await act(async () => {
@@ -356,6 +381,7 @@ describe('useQuickCommands', () => {
         .mockResolvedValueOnce(success([FIRST]))
         .mockResolvedValueOnce({ ok: true, result: {} } as RpcResponse)
     } as unknown as RpcClient
+
     await mount(client)
 
     let persisted = true
@@ -371,20 +397,25 @@ describe('useQuickCommands', () => {
   it('waits for an in-flight save before reloading after reopen', async () => {
     const update = deferred<RpcResponse>()
     let loadCount = 0
+
     const client = {
       sendRequest: vi.fn((method: string) => {
         if (method === 'settings.updateTerminalQuickCommands') {
           return update.promise
         }
+
         loadCount += 1
+
         return Promise.resolve(success(loadCount === 1 ? [FIRST] : []))
       })
     } as unknown as RpcClient
 
     function Harness({ enabled }: { enabled: boolean }): null {
       state = useQuickCommands({ client, enabled })
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness, { enabled: true }))
       await Promise.resolve()
@@ -420,6 +451,7 @@ describe('useQuickCommands', () => {
   it('rolls back to the confirmed list when consecutive queued mutations fail', async () => {
     const firstUpdate = deferred<RpcResponse>()
     const secondUpdate = deferred<RpcResponse>()
+
     const client = {
       sendRequest: vi
         .fn()
@@ -427,6 +459,7 @@ describe('useQuickCommands', () => {
         .mockReturnValueOnce(firstUpdate.promise)
         .mockReturnValueOnce(secondUpdate.promise)
     } as unknown as RpcClient
+
     await mount(client)
 
     let firstPersist: Promise<boolean> = Promise.resolve(false)

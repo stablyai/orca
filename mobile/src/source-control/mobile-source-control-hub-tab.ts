@@ -23,6 +23,7 @@ export function parseSourceControlHubTab(
   value: string | string[] | undefined | null
 ): SourceControlHubTab {
   const first = Array.isArray(value) ? value[0] : value
+
   return SOURCE_CONTROL_HUB_TABS.includes(first as SourceControlHubTab)
     ? (first as SourceControlHubTab)
     : 'changes'

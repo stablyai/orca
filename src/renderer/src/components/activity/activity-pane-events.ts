@@ -37,11 +37,13 @@ export function newestActivityHistoryEntries(
   cap: number
 ): AgentStateHistoryEntry[] {
   const newest: AgentStateHistoryEntry[] = []
+
   for (let i = history.length - 1; i >= 0 && newest.length < cap; i -= 1) {
     if (isHistoricalActivityState(history[i].state)) {
       newest.push(history[i])
     }
   }
+
   return newest.toReversed()
 }
 
@@ -62,11 +64,14 @@ type PaneEventInputs = {
 export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] {
   const events: ActivityEvent[] = []
   const seenIds = new Set<string>()
+
   const append = (state: ActivityEventState, timestamp: number, entry: AgentStatusEntry): void => {
     const id = `agent:${entry.paneKey}:${state}:${timestamp}`
+
     if (seenIds.has(id)) {
       return
     }
+
     seenIds.add(id)
     events.push({
       id,
@@ -90,6 +95,7 @@ export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] 
     if (history.startedAt <= args.clearedAt) {
       continue
     }
+
     append(
       history.state as ActivityEventState,
       history.startedAt,
@@ -102,12 +108,16 @@ export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] 
     args.liveState === 'working' || isHistoricalActivityState(args.entry.state)
       ? args.entry.state
       : null
+
   if (currentState === null || args.entry.sessionBoundary === true) {
     return events
   }
+
   if (args.entry.stateStartedAt <= args.clearedAt) {
     return events
   }
+
   append(currentState, args.entry.stateStartedAt, args.entry)
+
   return events
 }

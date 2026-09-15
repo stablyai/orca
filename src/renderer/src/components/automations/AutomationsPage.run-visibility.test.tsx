@@ -32,6 +32,7 @@ const DESKTOP_SELF_FILTER = {
 }
 
 const BEFORE_RUN = makeAutomation({ id: 'a-1', name: 'Nightly', nextRunAt: 1_000 })
+
 const AFTER_RUN: Automation = { ...BEFORE_RUN, nextRunAt: 2_000, lastRunAt: 1_500 }
 
 /** The desktop store now reports the post-run projection; every later read must say so. */

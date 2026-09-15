@@ -65,6 +65,7 @@ export async function sendNotificationSettingsTestNotification(
   options?: SendTestNotificationOptions
 ): Promise<NotificationTestOutcome> {
   const permissionStatus = await window.api.notifications.getPermissionStatus()
+
   if (!permissionStatus.supported) {
     toast.error(
       translate(
@@ -72,6 +73,7 @@ export async function sendNotificationSettingsTestNotification(
         'Notifications are not supported on this system'
       )
     )
+
     return 'not-sent'
   }
 
@@ -79,6 +81,7 @@ export async function sendNotificationSettingsTestNotification(
     source: 'test',
     requireDisplayConfirmation: true
   })
+
   if (result.delivered) {
     const soundResult =
       notificationSettings.customSoundId !== 'system'
@@ -87,6 +90,7 @@ export async function sendNotificationSettingsTestNotification(
             volume: volumeDraft
           })
         : null
+
     if (notificationSettings.customSoundId !== 'system' && soundResult && !soundResult.played) {
       toast.error(
         translate(
@@ -94,12 +98,16 @@ export async function sendNotificationSettingsTestNotification(
           'Custom notification sound could not be played'
         )
       )
+
       return 'delivered'
     }
+
     if (options?.suppressSystemPermissionToasts) {
       return 'delivered'
     }
+
     const settingsCopy = getSystemNotificationSettingsCopy(permissionStatus.platform)
+
     if (permissionStatus.platform === 'darwin' && settingsCopy) {
       toast.message(
         translate(
@@ -122,11 +130,14 @@ export async function sendNotificationSettingsTestNotification(
           }
         }
       )
+
       return 'delivered'
     }
+
     toast.success(
       translate('auto.components.settings.NotificationsPane.d3d54e0915', 'Test notification sent')
     )
+
     return 'delivered'
   }
 
@@ -134,7 +145,9 @@ export async function sendNotificationSettingsTestNotification(
     if (options?.suppressSystemPermissionToasts) {
       return 'not-displayed'
     }
+
     const settingsCopy = getSystemNotificationSettingsCopy(permissionStatus.platform)
+
     if (settingsCopy) {
       toast.error(settingsCopy.failureTitle, {
         description: settingsCopy.failureDescription,
@@ -162,6 +175,7 @@ export async function sendNotificationSettingsTestNotification(
         }
       )
     }
+
     return 'not-displayed'
   }
 
@@ -176,5 +190,6 @@ export async function sendNotificationSettingsTestNotification(
           'Test notification was not delivered'
         )
   )
+
   return 'not-sent'
 }

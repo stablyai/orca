@@ -11,18 +11,21 @@ describe('OrchestrationPeerCapabilityCache', () => {
   it('coalesces concurrent probes and caches by peer and runtime epoch', async () => {
     const cache = new OrchestrationPeerCapabilityCache()
     let resolveStatus!: (value: ReturnType<typeof runtimeStatus>) => void
+
     const probe = vi.fn(
       () =>
         new Promise<ReturnType<typeof runtimeStatus>>((resolve) => {
           resolveStatus = resolve
         })
     )
+
     const args = {
       peerFingerprint: 'peer-a',
       expectedRuntimeEpoch: 'epoch-a',
       capability,
       probe
     }
+
     const first = cache.resolve(args)
     const second = cache.resolve(args)
     expect(probe).toHaveBeenCalledTimes(1)
@@ -71,10 +74,12 @@ describe('OrchestrationPeerCapabilityCache', () => {
 
   it('re-probes an expired negative after restart without an external epoch observation', async () => {
     let now = 1_000
+
     const cache = new OrchestrationPeerCapabilityCache({
       negativeTtlMs: 500,
       now: () => now
     })
+
     const oldProbe = vi.fn().mockResolvedValue(runtimeStatus('epoch-a', false))
     await expect(
       cache.resolve({
@@ -124,12 +129,14 @@ describe('OrchestrationPeerCapabilityCache', () => {
   it('does not let a late old-epoch probe evict a newer epoch', async () => {
     const cache = new OrchestrationPeerCapabilityCache()
     let resolveOld!: (value: ReturnType<typeof runtimeStatus>) => void
+
     const oldProbe = vi.fn(
       () =>
         new Promise<ReturnType<typeof runtimeStatus>>((resolve) => {
           resolveOld = resolve
         })
     )
+
     const oldDecision = cache.resolve({
       peerFingerprint: 'peer-a',
       expectedRuntimeEpoch: 'epoch-a',
@@ -195,16 +202,19 @@ describe('OrchestrationPeerCapabilityCache', () => {
 
   it('does not cache failed probes', async () => {
     const cache = new OrchestrationPeerCapabilityCache()
+
     const probe = vi
       .fn()
       .mockRejectedValueOnce(new Error('relay lost'))
       .mockResolvedValueOnce(runtimeStatus('epoch-a', true))
+
     const args = {
       peerFingerprint: 'peer-a',
       expectedRuntimeEpoch: 'epoch-a',
       capability,
       probe
     }
+
     await expect(cache.resolve(args)).rejects.toThrow('relay lost')
     await expect(cache.resolve(args)).resolves.toMatchObject({ supported: true, cached: false })
     expect(probe).toHaveBeenCalledTimes(2)
@@ -252,33 +262,39 @@ describe('OrchestrationPeerCapabilityCache', () => {
   it('rejects a late pre-eviction probe and finalizer after the peer is re-added', async () => {
     const cache = new OrchestrationPeerCapabilityCache({ maxPeers: 1 })
     let resolveOld!: (value: ReturnType<typeof runtimeStatus>) => void
+
     const oldProbe = vi.fn(
       () =>
         new Promise<ReturnType<typeof runtimeStatus>>((resolve) => {
           resolveOld = resolve
         })
     )
+
     const oldDecision = cache.resolve({
       peerFingerprint: 'peer-a',
       expectedRuntimeEpoch: 'epoch-a',
       capability,
       probe: oldProbe
     })
+
     cache.remember('peer-b', 'epoch-b', capability, true)
 
     let resolveNew!: (value: ReturnType<typeof runtimeStatus>) => void
+
     const newProbe = vi.fn(
       () =>
         new Promise<ReturnType<typeof runtimeStatus>>((resolve) => {
           resolveNew = resolve
         })
     )
+
     const newDecision = cache.resolve({
       peerFingerprint: 'peer-a',
       expectedRuntimeEpoch: 'epoch-a',
       capability,
       probe: newProbe
     })
+
     resolveOld(runtimeStatus('epoch-a', false))
     await new Promise<void>((resolve) => setImmediate(resolve))
     resolveNew(runtimeStatus('epoch-c', true))
@@ -304,6 +320,7 @@ describe('OrchestrationPeerCapabilityCache', () => {
   it('ignores a remember() for an epoch the peer already moved off', async () => {
     const cache = new OrchestrationPeerCapabilityCache()
     let releaseProbe!: (value: ReturnType<typeof runtimeStatus>) => void
+
     const inFlight = cache.resolve({
       peerFingerprint: 'peer-a',
       expectedRuntimeEpoch: 'epoch-a',

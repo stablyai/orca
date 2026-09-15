@@ -25,11 +25,14 @@ export function usePromptCacheCountdownStartedAt(worktreeId: string, active = tr
       if (!active) {
         return [false, 0, null] as const
       }
+
       const enabled = s.settings?.promptCacheTimerEnabled ?? false
       const ttlMs = s.settings?.promptCacheTtlMs ?? 0
+
       if (!enabled || ttlMs <= 0) {
         return [enabled, ttlMs, null] as const
       }
+
       return [
         enabled,
         ttlMs,
@@ -37,6 +40,7 @@ export function usePromptCacheCountdownStartedAt(worktreeId: string, active = tr
       ] as const
     })
   )
+
   return enabled && ttlMs > 0 && startedAt != null ? startedAt : null
 }
 
@@ -49,6 +53,7 @@ export function usePromptCacheCountdownForPane(
       if (!active || !(s.settings?.promptCacheTimerEnabled ?? false)) {
         return null
       }
+
       return getPromptCacheCountdownForPane(
         paneKey,
         s.cacheTimerByKey,

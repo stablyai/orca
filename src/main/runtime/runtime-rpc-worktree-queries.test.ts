@@ -18,6 +18,7 @@ vi.mock('../git/worktree', () => {
       isMainWorktree: false
     }
   ]
+
   return {
     listWorktrees: vi.fn().mockResolvedValue(worktrees),
     listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
@@ -56,6 +57,7 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.start()
 
     const metadata = readRuntimeMetadata(userDataPath)
+
     const response = await sendRequest(metadata!.transports[0]!.endpoint, {
       id: 'req_ps',
       authToken: metadata!.authToken,
@@ -98,6 +100,7 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.start()
 
     const metadata = readRuntimeMetadata(userDataPath)
+
     const response = await sendRequest(metadata!.transports[0]!.endpoint, {
       id: 'req_worktrees',
       authToken: metadata!.authToken,

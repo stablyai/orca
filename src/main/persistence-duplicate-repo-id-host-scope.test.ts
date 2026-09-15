@@ -20,7 +20,9 @@ vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
+
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 
 function duplicateIdRepos(): Repo[] {
@@ -57,6 +59,7 @@ async function createStoreFromState(state: Record<string, unknown>) {
   // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
+
   return new Store()
 }
 
@@ -74,6 +77,7 @@ function staleLocalSetupState() {
     createdAt: 1,
     updatedAt: 1
   }
+
   const setup: ProjectHostSetup = {
     id: 'project-dup::local',
     projectId: project.id,
@@ -86,6 +90,7 @@ function staleLocalSetupState() {
     createdAt: 1,
     updatedAt: 1
   }
+
   return {
     repos: [duplicateIdRepos()[1]],
     projects: [project],

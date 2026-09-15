@@ -30,20 +30,26 @@ export function resolveModalReturnFocusAction(
   if (!captured) {
     return { kind: 'none' }
   }
+
   if (captured.tabType === 'browser' && captured.browserPageId) {
     return { kind: 'browser', pageId: captured.browserPageId, target: captured.browserTarget }
   }
+
   if (captured.tabType === 'terminal' && captured.terminalTabId) {
     return { kind: 'terminal', tabId: captured.terminalTabId, leafId: captured.terminalLeafId }
   }
+
   if (captured.tabType === 'editor' && captured.worktreeId) {
     return { kind: 'editor' }
   }
+
   if (captured.tabType === 'simulator' && captured.worktreeId) {
     return { kind: 'simulator' }
   }
+
   if (captured.worktreeId) {
     return { kind: 'surface' }
   }
+
   return { kind: 'none' }
 }

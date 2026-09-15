@@ -33,6 +33,7 @@ const EXPECTED_TOTAL = {
   test: { added: 0, removed: 0 },
   generated: { added: 0, removed: 0 }
 }
+
 // Summing the per-area status rows instead would give this — the wrong answer
 // the shared module exists to avoid.
 const AREA_ROW_SUM = { added: 5, removed: 2 }
@@ -44,6 +45,7 @@ const relayGit: GitExec = async (args, cwd, opts) => {
     ...(opts?.signal ? { signal: opts.signal } : {}),
     ...(opts?.timeout ? { timeout: opts.timeout } : {})
   })
+
   return { stdout, stderr }
 }
 
@@ -52,6 +54,7 @@ const relayStreamGit: RelayGitStreamExec = async (args, cwd, options) => {
     disableOptionalLocks: options.disableOptionalLocks,
     signal: options.signal
   })
+
   return { stoppedEarly: options.onStdout(stdout) === true }
 }
 
@@ -97,6 +100,7 @@ async function seedParityFixture(repo: string): Promise<string> {
   // The branch commit's line, taken back out in the worktree: net zero.
   await writeFile(path.join(repo, 'flip.txt'), 'p\n')
   await writeFile(path.join(repo, 'fresh.txt'), 'n1\nn2\nn3\n')
+
   return mergeBase
 }
 
@@ -106,10 +110,12 @@ function sumAreaRows(entries: readonly { added?: number; removed?: number }[]): 
 } {
   let added = 0
   let removed = 0
+
   for (const entry of entries) {
     added += entry.added ?? 0
     removed += entry.removed ?? 0
   }
+
   return { added, removed }
 }
 
@@ -133,6 +139,7 @@ describe('branch line total parity between main and relay', () => {
 
     const mainStatus = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
     clearGitStatusLineStatsCache()
+
     const relayStatus = await getStatusOp(relayGit, relayStreamGit, {
       worktreePath: repo,
       branchLineTotalMergeBase: mergeBase
@@ -152,6 +159,7 @@ describe('branch line total parity between main and relay', () => {
 
     const mainStatus = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
     clearGitStatusLineStatsCache()
+
     const relayStatus = await getStatusOp(relayGit, relayStreamGit, {
       worktreePath: repo,
       branchLineTotalMergeBase: mergeBase

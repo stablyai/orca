@@ -40,9 +40,11 @@ export async function readIssueConnectionPages(
     hasMore = Boolean(connection?.pageInfo?.hasNextPage)
 
     const nextCursor = connection?.pageInfo?.endCursor ?? undefined
+
     if (!hasMore || !nextCursor || nextCursor === after || nodes.length === 0) {
       break
     }
+
     after = nextCursor
   }
 
@@ -56,11 +58,14 @@ export async function listProjectIssues(
   force = false
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const id = projectId.trim()
+
   if (!id) {
     throw new Error('Project ID is required')
   }
+
   const first = clampLinearIssueListLimit(limit)
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
+
   return readConcreteCollection(
     `listProjectIssues:${concreteWorkspaceId}:${id}:${first}`,
     concreteWorkspaceId,
@@ -70,10 +75,13 @@ export async function listProjectIssues(
           ProjectIssueConnectionResponse,
           LinearRawVariables
         >(PROJECT_ISSUES_QUERY, { id, ...page, orderBy: 'updatedAt' })
+
         const project = result.data?.project
+
         if (!project) {
           throw new Error('Project was not found')
         }
+
         return project.issues
       })
     },

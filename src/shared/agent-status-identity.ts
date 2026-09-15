@@ -32,6 +32,7 @@ function normalizedKnownAgentType(agentType: AgentType | null | undefined): Agen
   if (!agentType || agentType === 'unknown') {
     return null
   }
+
   return agentType
 }
 
@@ -59,17 +60,20 @@ export function resolveAgentStatusIdentity(args: {
       inheritedFromActivePane: false
     }
   }
+
   if (!args.existing || !existingAgentType || existingAgentType === incomingAgentType) {
     return {
       agentType: incomingAgentType,
       inheritedFromActivePane: false
     }
   }
+
   const canonical = resolveCanonicalPaneAgentIdentity({
     hookAgent: incomingAgentType as TuiAgent,
     hookIsLive: true,
     completedHookAgent: args.existing.state === 'done' ? (existingAgentType as TuiAgent) : undefined
   })
+
   if (isActiveExistingIdentity(args.existing, args.now, staleAfterMs)) {
     return {
       // Why: child agent CLIs inherit ORCA_PANE_KEY from their parent terminal.

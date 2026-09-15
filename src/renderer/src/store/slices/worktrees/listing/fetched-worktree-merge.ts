@@ -37,18 +37,23 @@ export function preserveConcurrentManualOrder<T extends Worktree>(
   if (!requestStarted || !current) {
     return [...incoming]
   }
+
   const startedById = new Map(
     requestStarted.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
   )
+
   const currentById = new Map(
     current.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
   )
+
   return incoming.map((worktree) => {
     const started = startedById.get(worktree.id)
     const latest = currentById.get(worktree.id)
+
     if (!started || !latest || started.manualOrder === latest.manualOrder) {
       return worktree
     }
+
     // Why: a refresh response may predate a completed drag; the renderer's optimistic rank is newer.
     return { ...worktree, manualOrder: latest.manualOrder }
   })
@@ -63,18 +68,23 @@ export function preserveConcurrentDisplayName<T extends Worktree>(
   if (!requestStarted || !current) {
     return [...incoming]
   }
+
   const startedById = new Map(
     requestStarted.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
   )
+
   const currentById = new Map(
     current.filter(matchesRefreshHost).map((worktree) => [worktree.id, worktree])
   )
+
   return incoming.map((worktree) => {
     const started = startedById.get(worktree.id)
     const latest = currentById.get(worktree.id)
+
     if (!started || !latest) {
       return worktree
     }
+
     if (isDisplayNamePersistencePending(worktree.id, latest.hostId)) {
       return {
         ...worktree,
@@ -84,22 +94,28 @@ export function preserveConcurrentDisplayName<T extends Worktree>(
           : { displayNameMode: undefined })
       }
     }
+
     const latestChanged =
       latest.displayName !== started.displayName ||
       latest.displayNameMode !== started.displayNameMode
+
     // The label is the stable stale-response marker; mode may be absent on an
     // older host or newly projected by a newer one.
     const incomingIsStale = worktree.displayName === started.displayName
+
     const latestDisplayNameIsPinned =
       latest.displayNameMode === 'fixed' ||
       (latest.displayNameMode === undefined && latest.cliProvenance?.kind === 'created-by-cli')
+
     const incomingBranchShort = branchName(worktree.branch)
+
     // Old hosts re-derive automatic labels from branch (or path basename when detached);
     // any other label in their response is explicit meta a peer wrote there.
     const incomingLooksAutomatic =
       worktree.displayName === incomingBranchShort ||
       (incomingBranchShort === '' &&
         worktree.displayName === (worktree.path.split(/[\\/]/).pop() ?? ''))
+
     if (
       worktree.displayNameMode === undefined &&
       latestDisplayNameIsPinned &&
@@ -114,9 +130,11 @@ export function preserveConcurrentDisplayName<T extends Worktree>(
           : { displayNameMode: undefined })
       }
     }
+
     if (!latestChanged || !incomingIsStale) {
       return worktree
     }
+
     return {
       ...worktree,
       displayName: latest.displayName,
@@ -147,9 +165,11 @@ export function mergeFetchedWorktrees(
     ) {
       return s
     }
+
     admitted = true
     const matchOptions = worktreeHostMatchOptions(s, args.repoId, args.hostId)
     const currentWorktrees = s.worktreesByRepo[args.repoId]
+
     const refreshResult = {
       ...args.refresh.result,
       worktrees: preserveConcurrentDisplayName(
@@ -164,6 +184,7 @@ export function mergeFetchedWorktrees(
         (worktree) => worktreeMatchesHost(worktree, args.hostId, matchOptions)
       )
     }
+
     let incoming = toVisibleWorktrees(refreshResult, args.hostId, args.setup)
     incoming = routeListingBranchSwitchesThroughGitIdentity({
       requestStarted: args.requestStartedWorktrees,
@@ -173,13 +194,16 @@ export function mergeFetchedWorktrees(
       hasBranchScopedReviewContext: hasBranchScopedHostedReviewContext,
       updateWorktreeGitIdentity: s.updateWorktreeGitIdentity
     })
+
     const worktrees = sanitizeHostedReviewLinksForBranchClears(
       incoming,
       s.worktreesByRepo[args.repoId]
     )
+
     const currentForHost = (s.worktreesByRepo[args.repoId] ?? []).filter((worktree) =>
       worktreeMatchesHost(worktree, args.hostId, matchOptions)
     )
+
     const mergedDetected = mergeDetectedWorktreesForHost(
       s.detectedWorktreesByRepo[args.repoId],
       refreshResult,
@@ -187,6 +211,7 @@ export function mergeFetchedWorktrees(
       args.setup,
       matchOptions
     )
+
     if (!args.refresh.result.authoritative && worktrees.length === 0 && currentForHost.length > 0) {
       return areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[args.repoId], mergedDetected)
         ? s
@@ -197,12 +222,14 @@ export function mergeFetchedWorktrees(
             }
           }
     }
+
     const mergedWorktrees = mergeWorktreesForHost(
       s.worktreesByRepo[args.repoId],
       worktrees,
       args.hostId,
       matchOptions
     )
+
     const removedIds =
       args.purgeRemovedWorktrees === false
         ? []
@@ -212,18 +239,24 @@ export function mergeFetchedWorktrees(
             args.refresh.result,
             args.hostId
           )
+
     authoritativelyRemovedIds = removedIds
+
     if (args.refresh.result.authoritative) {
       authoritativelySeenIds = args.refresh.result.worktrees.map((worktree) => worktree.id)
     }
+
     const worktreesChanged = !areWorktreesEqual(s.worktreesByRepo[args.repoId], mergedWorktrees)
+
     const detectedChanged = !areDetectedWorktreeResultsEqual(
       s.detectedWorktreesByRepo[args.repoId],
       mergedDetected
     )
+
     if (!worktreesChanged && !detectedChanged && removedIds.length === 0) {
       return s
     }
+
     return {
       ...(worktreesChanged
         ? {
@@ -250,6 +283,7 @@ export function mergeFetchedWorktrees(
         : {})
     }
   })
+
   if (admitted) {
     // Why: applied outside the updater so a repeated updater call cannot double-apply the removal memory.
     forgetAuthoritativelyRemovedWorktrees(args.hostId, authoritativelySeenIds)
@@ -263,5 +297,6 @@ export function mergeFetchedWorktrees(
       args.refresh.result.source === 'git' ? authoritativelyRemovedIds : []
     )
   }
+
   return admitted
 }

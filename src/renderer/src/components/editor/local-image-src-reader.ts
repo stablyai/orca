@@ -13,6 +13,7 @@ export function readLocalImagePreview(
         connectionId: connectionId ?? undefined
       })
     }
+
     return readRuntimeFilePreview(
       { ...runtimeContext, connectionId: runtimeContext.connectionId ?? connectionId ?? undefined },
       absolutePath

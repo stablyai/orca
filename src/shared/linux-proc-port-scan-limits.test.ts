@@ -16,6 +16,7 @@ describe('Linux proc port scan limits', () => {
 
   it('shares one retained-byte budget across process metadata files', async () => {
     const budget = createLinuxProcTextReadBudget(5)
+
     const readFile = vi
       .fn<(filePath: string, maxBytes: number) => Promise<Buffer>>()
       .mockResolvedValueOnce(Buffer.from('abc'))
@@ -40,6 +41,7 @@ describe('Linux proc port scan limits', () => {
 
   it('does not debit failed metadata reads', async () => {
     const budget = createLinuxProcTextReadBudget(4)
+
     const readFile = vi.fn(async () => {
       throw new Error('oversized')
     })

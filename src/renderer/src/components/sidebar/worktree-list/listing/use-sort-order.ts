@@ -29,6 +29,7 @@ function trackSmartClassDistribution(attention: ReadonlyMap<string, WorktreeAtte
   let class3 = 0
   let class4 = 0
   let class5 = 0
+
   for (const info of attention.values()) {
     if (info.cls === 1) {
       class1++
@@ -42,6 +43,7 @@ function trackSmartClassDistribution(attention: ReadonlyMap<string, WorktreeAtte
       class5++
     }
   }
+
   track('smart_sort_class_distribution', {
     class_1: class1,
     class_2: class2,
@@ -69,12 +71,15 @@ function useDebouncedSortEpoch(worktreeCount: number, sortBy: SortBy): number {
     // Why: manual drag/drop is direct manipulation; the settle-window delay would make a successful drop look broken.
     if (structuralChange || sortBy === 'manual') {
       setDebouncedSortEpoch(sortEpoch)
+
       return
     }
 
     const timer = setTimeout(() => setDebouncedSortEpoch(sortEpoch), SORT_SETTLE_MS)
+
     return () => clearTimeout(timer)
   }, [sortEpoch, debouncedSortEpoch, worktreeCount, sortBy])
+
   return debouncedSortEpoch
 }
 
@@ -87,16 +92,20 @@ export function useSidebarWorktreeSortOrder(args: {
   sortBy: SortBy
 }): string[] {
   const { allWorktrees, repoMap, sortBy } = args
+
   // Non-archived count — detects structural changes (add/remove) so the debounce below can apply immediately.
   const worktreeCount = useMemo(() => {
     let count = 0
+
     for (const worktree of allWorktrees) {
       if (!worktree.isArchived) {
         count++
       }
     }
+
     return count
   }, [allWorktrees])
+
   const debouncedSortEpoch = useDebouncedSortEpoch(worktreeCount, sortBy)
 
   // Why a latching ref: a live signal makes Smart authoritative for the session, even after that activity ends.
@@ -104,9 +113,11 @@ export function useSidebarWorktreeSortOrder(args: {
 
   const recomputedSort = useMemo(() => {
     const state = useAppStore.getState()
+
     const nonArchivedWorktrees = getAllWorktreesFromState(state).filter(
       (worktree) => !worktree.isArchived
     )
+
     const now = Date.now()
     // Why precompute: the label tiebreaker runs on every comparison in every mode.
     const labels = buildWorktreeSortLabels(nonArchivedWorktrees)
@@ -118,6 +129,7 @@ export function useSidebarWorktreeSortOrder(args: {
       const hasAnyLivePty = Object.values(state.tabsByWorktree).some((tabs) =>
         tabs.some((tab) => tabHasLivePty(state.ptyIdsByTabId, tab.id))
       )
+
       if (
         hasAnyLivePty ||
         hasFreshAttributedAgentStatus(state.agentStatusByPaneKey, now, state.tabsByWorktree)
@@ -127,6 +139,7 @@ export function useSidebarWorktreeSortOrder(args: {
         nonArchivedWorktrees.sort(
           (a, b) => b.sortOrder - a.sortOrder || compareWorktreeSortLabel(a, b, labels)
         )
+
         return {
           sortedIds: nonArchivedWorktrees.map((w) => w.id),
           attentionByWorktree: null,
@@ -149,9 +162,11 @@ export function useSidebarWorktreeSortOrder(args: {
             state.terminalLayoutsByTabId
           )
         : new Map<string, WorktreeAttention>()
+
     nonArchivedWorktrees.sort(
       buildWorktreeComparator(sortBy, repoMap, now, attentionByWorktree, labels)
     )
+
     return {
       sortedIds: nonArchivedWorktrees.map((w) => w.id),
       attentionByWorktree: sortBy === 'smart' ? attentionByWorktree : null,
@@ -160,6 +175,7 @@ export function useSidebarWorktreeSortOrder(args: {
     // debouncedSortEpoch is an intentional trigger not read in the memo; its change (debounced) signals a recompute.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSortEpoch, repoMap, sortBy])
+
   // Why: stable ID order prevents rank-only refreshes from echoing an unchanged snapshot.
   const sortedIds = useReusedArrayIdentity(recomputedSort.sortedIds)
 
@@ -177,21 +193,28 @@ export function useSidebarWorktreeSortOrder(args: {
 
   useEffect(() => {
     const attention = recomputedSort.attentionByWorktree
+
     if (sortBy !== 'smart' || !attention) {
       // Why reset: leaving Smart drops the prior-class map (and first-observation gate) so re-entry doesn't fire stale promotions.
       prevClassByWorktreeIdRef.current = new Map()
       hasObservedSmartOnceRef.current = false
+
       return
     }
+
     const next = new Map<string, SmartClass>()
     const isFirstObservation = !hasObservedSmartOnceRef.current
+
     for (const [worktreeId, info] of attention) {
       const prev = prevClassByWorktreeIdRef.current.get(worktreeId)
+
       if (!isFirstObservation && info.cls === 1 && prev !== 1 && info.cause) {
         track('smart_sort_class_1_promotion', { cause: info.cause })
       }
+
       next.set(worktreeId, info.cls)
     }
+
     prevClassByWorktreeIdRef.current = next
     hasObservedSmartOnceRef.current = true
   }, [sortBy, recomputedSort.attentionByWorktree, recomputedSort.sortedIds])
@@ -201,12 +224,16 @@ export function useSidebarWorktreeSortOrder(args: {
   useEffect(() => {
     if (sortBy !== 'smart') {
       hasTrackedSmartDistributionRef.current = false
+
       return
     }
+
     const attention = recomputedSort.attentionByWorktree
+
     if (hasTrackedSmartDistributionRef.current || !attention || attention.size === 0) {
       return
     }
+
     trackSmartClassDistribution(attention)
     hasTrackedSmartDistributionRef.current = true
   }, [sortBy, recomputedSort.attentionByWorktree, recomputedSort.sortedIds])
@@ -216,6 +243,7 @@ export function useSidebarWorktreeSortOrder(args: {
   useEffect(() => {
     const prev = prevSortByRef.current
     prevSortByRef.current = sortBy
+
     if (prev === 'smart' && sortBy === 'recent') {
       track('smart_to_recent_switch', {})
     }
@@ -226,6 +254,7 @@ export function useSidebarWorktreeSortOrder(args: {
     if (sortBy !== 'smart' || sortedIds.length === 0 || !sessionHasHadLiveSmartSignal.current) {
       return
     }
+
     // Why: sortOrder lives in each host's worktreeMeta, so persist each host's ids on that host.
     persistWorktreeSortOrderByHost(useAppStore.getState(), sortedIds)
   }, [sortedIds, sortBy])

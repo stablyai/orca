@@ -29,10 +29,12 @@ export function formatWithheldSelectionNotice(count: number): string {
 
 export function toggleSetMember(current: Set<string>, value: string): Set<string> {
   const next = new Set(current)
+
   if (next.has(value)) {
     next.delete(value)
   } else {
     next.add(value)
   }
+
   return next
 }

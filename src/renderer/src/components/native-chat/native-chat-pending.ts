@@ -48,7 +48,9 @@ export type NativeChatPendingSendScope = {
 }
 
 const PENDING_SEND_LIMIT = 8
+
 const pendingSendCache = new Map<string, NativeChatPendingSend[]>()
+
 let pendingSendCounter = 0
 
 function pendingSendScopeKey(scope: NativeChatPendingSendScope): string {
@@ -65,6 +67,7 @@ export function writePendingSendCache(
 ): NativeChatPendingSend[] {
   const next = pending.slice(-PENDING_SEND_LIMIT)
   const key = pendingSendScopeKey(scope)
+
   if (next.length === 0) {
     pendingSendCache.delete(key)
   } else {
@@ -73,6 +76,7 @@ export function writePendingSendCache(
     // would strand its entry forever. LRU-bound the key count too.
     setBoundedScopeCacheEntry(pendingSendCache, key, next)
   }
+
   return [...next]
 }
 
@@ -82,6 +86,7 @@ export function appendPendingSendCache(
 ): NativeChatPendingSend[] {
   const existing = readPendingSendCache(scope)
   const next = assignNativeChatPendingOccurrence(existing, entry)
+
   return writePendingSendCache(scope, [...existing, next])
 }
 
@@ -97,13 +102,17 @@ function messagesAfterPendingBoundary(
   if (pending.afterMessageId === undefined) {
     return messages
   }
+
   if (pending.afterMessageId === null) {
     return messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
   }
+
   const boundaryIndex = messages.findIndex((message) => message.id === pending.afterMessageId)
+
   if (boundaryIndex !== -1) {
     return messages.slice(boundaryIndex + 1)
   }
+
   // A bounded authoritative read can page the boundary out. Fall back to the
   // send time instead of matching an arbitrary older identical prompt.
   return messages.filter((message) => messageIsAfterPendingTimestamp(message, pending))
@@ -119,7 +128,9 @@ function messageIsAfterPendingTimestamp(
   if (message.timestamp === null) {
     return true
   }
+
   const boundary = nativeChatPendingMatchingAfter(pending)
+
   // A transcript-clock boundary describes an existing message, so exclude ties.
   // Local send time has no existing record and remains inclusive.
   return pending.afterMessageTimestamp == null
@@ -144,14 +155,17 @@ function gluedCandidateRows(
   const [oldest, ...newer] = open.map((entry) =>
     entry.afterMessageId === undefined ? { ...entry, afterMessageId: null } : entry
   )
+
   // Glue needs a run of 2+ sends, so a lone queued echo — by far the common
   // case while an agent streams — skips the per-send boundary scans entirely.
   if (!oldest || newer.length === 0) {
     return []
   }
+
   const newerRowIds = newer.map(
     (entry) => new Set(rowsOf(messagesAfterPendingBoundary(messages, entry)).map((row) => row.id))
   )
+
   // The run always starts at the oldest open send, so its rows are the whole
   // candidate set and index 0 is representable in every one of them.
   return rowsOf(messagesAfterPendingBoundary(messages, oldest)).map((row) => {
@@ -161,6 +175,7 @@ function gluedCandidateRows(
         representablePendingIndices.add(index + 1)
       }
     })
+
     return { text: row.text, representablePendingIndices }
   })
 }
@@ -178,34 +193,45 @@ export function prunePendingSends(
   if (pending.length === 0) {
     return pending
   }
+
   const consumed = new Map<string, number>()
+
   const exactKeep = pending.map((entry) => {
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
+
     const available =
       advancedNativeChatUserContentCounts(messagesAfterPendingBoundary(messages, entry)).get(
         contentKey
       ) ?? 0
+
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
     consumed.set(key, Math.max(used, occurrence))
+
     return occurrence > available
   })
+
   // Why: when a lost Enter glued two optimistic sends onto one input line, the
   // transcript carries one row ("joke"+"continue"→"jokecontinue") that no exact
   // key matches. Drop those echoes once an assistant turn advances past it.
   const stillOpen = pending.filter((_, index) => exactKeep[index])
+
   const gluedRepresented = selectPendingIndicesRepresentedByUserRows(
     stillOpen,
     gluedCandidateRows(messages, stillOpen, advancedNativeChatUserRows)
   )
+
   const next = pending.filter((entry, index) => {
     if (!exactKeep[index]) {
       return false
     }
+
     const openIndex = stillOpen.indexOf(entry)
+
     return openIndex === -1 || !gluedRepresented.has(openIndex)
   })
+
   return next.length === pending.length ? pending : next
 }
 
@@ -222,32 +248,42 @@ export function pendingSendsAsMessages(
   if (pending.length === 0) {
     return []
   }
+
   const consumed = new Map<string, number>()
+
   const exactVisible = pending.map((entry) => {
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
+
     const represented =
       matchingNativeChatUserContentCounts(
         messagesAfterPendingBoundary(existingMessages, entry)
       ).get(contentKey) ?? 0
+
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
     consumed.set(key, Math.max(used, occurrence))
+
     return occurrence > represented
   })
+
   // Hide optimistic echoes that were glued into a single transcript user row
   // even before the assistant reply lands (matching, not advanced).
   const stillVisible = pending.filter((_, index) => exactVisible[index])
+
   const gluedRepresented = selectPendingIndicesRepresentedByUserRows(
     stillVisible,
     gluedCandidateRows(existingMessages, stillVisible, matchingNativeChatUserRows)
   )
+
   return pending
     .filter((entry, index) => {
       if (!exactVisible[index]) {
         return false
       }
+
       const openIndex = stillVisible.indexOf(entry)
+
       return openIndex === -1 || !gluedRepresented.has(openIndex)
     })
     .map((entry) => ({
@@ -277,6 +313,7 @@ export function launchPromptAsMessage(
   if (!entry) {
     return null
   }
+
   // Why: a launch prompt seeds a brand-new session, so a matching user turn
   // with no timestamp (e.g. Grok transcripts) can only be its own delivery.
   const represented = matchingNativeChatUserContentCounts(
@@ -284,9 +321,11 @@ export function launchPromptAsMessage(
       (message) => message.timestamp === null || message.timestamp >= entry.createdAt
     )
   )
+
   if ((represented.get(nativeChatPendingContentKey(entry)) ?? 0) > 0) {
     return null
   }
+
   return {
     id: `launch-pending:${entry.tabId}`,
     role: 'user' as const,
@@ -306,6 +345,7 @@ export function shouldPruneLaunchPrompt(
   const relevant = messages.filter(
     (message) => message.timestamp === null || message.timestamp >= entry.createdAt
   )
+
   return (
     (advancedNativeChatUserContentCounts(relevant).get(nativeChatPendingContentKey(entry)) ?? 0) > 0
   )
@@ -313,6 +353,7 @@ export function shouldPruneLaunchPrompt(
 
 export function nextNativeChatPendingSendId(now = Date.now()): string {
   pendingSendCounter += 1
+
   return `${now}-${pendingSendCounter}`
 }
 

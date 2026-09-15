@@ -34,16 +34,20 @@ export function createLinearProjectDetailActions(
     fetchLinearProject: async (id, workspaceId, options?: LinearFetchOptions) => {
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const { contextKey } = scope
+
       const cacheKey = scopedLinearCacheKey(
         scope,
         linearCollectionCacheKey(workspaceId, 'project-detail', id)
       )
+
       const cached = get().linearProjectDetailCache[cacheKey]
+
       if (!options?.force && isFresh(cached)) {
         return cached.data
       }
 
       const inflight = inflightProjectDetailRequests.get(cacheKey)
+
       if (
         inflight &&
         inflight.contextKey === contextKey &&
@@ -56,6 +60,7 @@ export function createLinearProjectDetailActions(
       let entry: InflightLinearDetailRequest<LinearProjectDetail | null>
       const requestCacheGeneration = getLinearCacheGeneration()
       const requestMutationGeneration = getLinearMutationGeneration()
+
       const promise = linearGetProject(scope.settings, id, workspaceId, {
         force: options?.force
       })
@@ -77,10 +82,12 @@ export function createLinearProjectDetailActions(
               })
             }))
           }
+
           return project
         })
         .catch((error) => {
           console.warn('[linear] fetchLinearProject failed:', error)
+
           if (
             (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
@@ -93,19 +100,24 @@ export function createLinearProjectDetailActions(
           ) {
             void get().checkLinearConnection(true)
           }
+
           if (options?.force) {
             throw error
           }
+
           const cachedResult = get().linearProjectDetailCache[cacheKey]
+
           if (cachedResult) {
             return cachedResult.data
           }
+
           throw error
         })
         .finally(() => {
           if (inflightProjectDetailRequests.get(cacheKey) === entry) {
             inflightProjectDetailRequests.delete(cacheKey)
           }
+
           if (
             shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
             canWriteLinearReadResult(
@@ -127,6 +139,7 @@ export function createLinearProjectDetailActions(
         mutationGeneration: requestMutationGeneration
       }
       inflightProjectDetailRequests.set(cacheKey, entry)
+
       return promise
     }
   }

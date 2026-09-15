@@ -3,6 +3,7 @@ import { parseGitHistoryLog } from './git-history-log-parser'
 
 it('keeps a multiline commit body intact without materializing every message line', () => {
   const message = `subject\n\n${'body line\n'.repeat(10000)}`
+
   const record = [
     'a'.repeat(40),
     'Author',
@@ -14,25 +15,32 @@ it('keeps a multiline commit body intact without materializing every message lin
     '',
     message
   ].join('\n')
+
   const original = String.prototype.split
   let allocatedFields = 0
+
   const spy = vi.spyOn(String.prototype, 'split').mockImplementation(function (
     this: string,
     separator: string | RegExp | { [Symbol.split](value: string, limit?: number): string[] },
     limit?: number
   ) {
     const result = Reflect.apply(original, this, [separator, limit]) as string[]
+
     if (separator === '\n' && String(this).includes('body line')) {
       allocatedFields += result.length
     }
+
     return result
   })
+
   let result: ReturnType<typeof parseGitHistoryLog>
+
   try {
     result = parseGitHistoryLog(`${record}\n\0`)
   } finally {
     spy.mockRestore()
   }
+
   expect(result![0].message).toBe(message)
   expect(result![0].subject).toBe('subject')
   expect(allocatedFields).toBe(0)

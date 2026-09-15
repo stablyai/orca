@@ -48,6 +48,7 @@ describe('SSH provider authority', () => {
   it('checks unknown authority without allocating provider state', () => {
     const sequence = (authority: ReturnType<typeof getSshProviderAuthority>): number =>
       Number.parseInt(authority.providerEpoch.split('-').at(-1) ?? '', 36)
+
     const before = getSshProviderAuthority('before-probe')
 
     expect(

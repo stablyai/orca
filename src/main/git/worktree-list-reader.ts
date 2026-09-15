@@ -32,10 +32,13 @@ function parseRepoLocation(repoPath: string, output: string): RepoLocation | und
     .split('\n')
     .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
     .filter((line) => line.length > 0 && !line.startsWith('-'))
+
   if (lines.length < 2) {
     return undefined
   }
+
   const [topLevel, commonDir] = lines.slice(-2)
+
   return {
     topLevel: resolveRevParsePath(repoPath, topLevel),
     commonDir: resolveRevParsePath(repoPath, commonDir)
@@ -58,10 +61,12 @@ export async function readRepoLocation(
               ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
               gitExecOptions(repoPath, options)
             )
+
             if (hasUnsupportedRevParsePathFormatEcho(stdout)) {
               // Why: some old Git echoes the unknown option and exits zero; remember that compat signal even though parsing recovers.
               capabilities.rememberUnsupported('rev-parse-path-format')
             }
+
             return parseRepoLocation(resolveBasePath, stdout)
           },
           async () => {
@@ -69,6 +74,7 @@ export async function readRepoLocation(
               ['rev-parse', '--show-toplevel', '--git-common-dir'],
               gitExecOptions(repoPath, options)
             )
+
             return parseRepoLocation(resolveBasePath, stdout)
           },
           isUnsupportedRevParsePathFormatError
@@ -92,13 +98,16 @@ export async function readRepoCommonDirFromGit(
   options: GitWorktreeExecOptions = {}
 ): Promise<string | undefined> {
   const resolveBasePath = toWslExecutionSpace(repoPath)
+
   const readCommonDir = (stdout: string): string | undefined => {
     const commonDir = stdout
       .split('\n')
       .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
       .findLast((line) => line.length > 0 && !line.startsWith('-'))
+
     return commonDir ? resolveRevParsePath(resolveBasePath, commonDir) : undefined
   }
+
   try {
     return await withLocalGitCapabilityCacheForExecution(
       { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
@@ -110,9 +119,11 @@ export async function readRepoCommonDirFromGit(
               ['rev-parse', '--path-format=absolute', '--git-common-dir'],
               gitExecOptions(repoPath, options)
             )
+
             if (hasUnsupportedRevParsePathFormatEcho(stdout)) {
               capabilities.rememberUnsupported('rev-parse-path-format')
             }
+
             return readCommonDir(stdout)
           },
           async () => {
@@ -120,6 +131,7 @@ export async function readRepoCommonDirFromGit(
               ['rev-parse', '--git-common-dir'],
               gitExecOptions(repoPath, options)
             )
+
             return readCommonDir(stdout)
           },
           isUnsupportedRevParsePathFormatError
@@ -140,6 +152,7 @@ export async function readCheckedOutBranchRef(
       ['symbolic-ref', '--quiet', 'HEAD'],
       gitExecOptions(worktreePath, options)
     )
+
     return stdout.trim() || undefined
   } catch {
     return undefined
@@ -155,6 +168,7 @@ export async function readWorktreeHeadOid(
       ['rev-parse', 'HEAD'],
       gitExecOptions(worktreePath, options)
     )
+
     return stdout.trim()
   } catch {
     return ''
@@ -171,11 +185,13 @@ async function normalizeMainWorktreePath(
   // Why: under WSL, porcelain/rev-parse paths are Linux but repoPath is UNC; compare in Git-output
   // space so the early-return matches and we skip a needless rev-parse per poll (runner still gets repoPath).
   const comparablePath = toWslExecutionSpace(repoPath)
+
   if (!mainWorktree || areWorktreePathsEqual(mainWorktree.path, comparablePath)) {
     return worktrees
   }
 
   const location = await readRepoLocation(repoPath, comparablePath, options)
+
   if (!location) {
     return worktrees
   }
@@ -188,6 +204,7 @@ async function normalizeMainWorktreePath(
 
   const normalized = [...worktrees]
   normalized[mainIndex] = { ...mainWorktree, path: location.topLevel }
+
   return normalized
 }
 
@@ -200,6 +217,7 @@ export async function readWorktreeList(
     ...options,
     timeout: options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
   }
+
   return withLocalGitCapabilityCacheForExecution(
     { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
     (capabilities) =>
@@ -210,6 +228,7 @@ export async function readWorktreeList(
             ['worktree', 'list', '--porcelain', '-z'],
             execOptions
           )
+
           return normalizeMainWorktreePath(
             repoPath,
             parseWorktreeList(stdout, { nulDelimited: true }),
@@ -222,11 +241,13 @@ export async function readWorktreeList(
             ['worktree', 'list', '--porcelain'],
             execOptions
           )
+
           const normalized = await normalizeMainWorktreePath(
             repoPath,
             parseWorktreeList(stdout),
             options
           )
+
           // Why: Git <2.31 emits no `prunable`, so probe each linked path for existence instead of trusting
           // stale registrations; a harmless backstop on 2.31–2.35 where parseWorktreeList already set it (#8389).
           return annotatePrunableByExistence(normalized, repoPath, options)
@@ -249,6 +270,7 @@ async function annotatePrunableByExistence(
       const index = nextIndex
       nextIndex += 1
       const worktree = worktrees[index]
+
       // Git only prunes linked worktrees, never locked ones (a lock shields a missing dir; `locked`
       // parses only on Git >=2.31). A missing main worktree is handled by the repo-level ENOENT paths.
       if (
@@ -260,6 +282,7 @@ async function annotatePrunableByExistence(
       ) {
         continue
       }
+
       try {
         await stat(translateWorktreePath(worktree.path, repoPath, options))
       } catch (err) {
@@ -272,6 +295,7 @@ async function annotatePrunableByExistence(
 
   const workerCount = Math.min(PRUNABLE_EXISTENCE_PROBE_CONCURRENCY, worktrees.length)
   await Promise.all(Array.from({ length: workerCount }, () => probeNext()))
+
   return annotated
 }
 
@@ -281,6 +305,7 @@ export async function readTranslatedWorktreeGraph(
 ): Promise<GitWorktreeInfo[]> {
   return (await readWorktreeList(repoPath, options)).map((worktree) => {
     const translatedPath = translateWorktreePath(worktree.path, repoPath, options)
+
     return translatedPath === worktree.path ? worktree : { ...worktree, path: translatedPath }
   })
 }

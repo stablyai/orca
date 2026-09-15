@@ -21,9 +21,11 @@ export function nextPetDragAnimation(
   if (deltaX >= 4) {
     return { animation: 'running-right', accepted: true }
   }
+
   if (deltaX <= -4) {
     return { animation: 'running-left', accepted: true }
   }
+
   return { animation: current, accepted: false }
 }
 
@@ -50,9 +52,11 @@ function agentStateAnimation(
     if (!isExplicitAgentStatusFresh(entry, now, staleAfterMs)) {
       continue
     }
+
     if (entry.state === 'blocked' || entry.state === 'waiting') {
       return 'waiting'
     }
+
     if (entry.state === 'working' && entry.workingMode !== 'monitoring') {
       hasWorking = true
     } else if (entry.state === 'done') {
@@ -63,9 +67,11 @@ function agentStateAnimation(
   if (hasWorking) {
     return 'running'
   }
+
   if (hasDone || retainedCount > 0) {
     return 'review'
   }
+
   return 'idle'
 }
 
@@ -79,13 +85,16 @@ export function selectPetAnimationName({
   staleAfterMs
 }: PetAnimationInput): PetAnimationName {
   const base = agentStateAnimation(entries, retainedCount, now, staleAfterMs)
+
   // Why: aligned with Codex. A horizontal drag runs toward the pointer,
   // grab-and-hold keeps the live agent state, and only a plain hover jumps.
   if (dragging) {
     return dragAnimation ?? base
   }
+
   if (hovering) {
     return 'jumping'
   }
+
   return base
 }

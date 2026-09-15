@@ -33,10 +33,13 @@ export function createHydrateEditorSession(
           s,
           Object.keys(openFilesByWorktree)
         )
+
         validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+
         for (const workspace of s.folderWorkspaces) {
           validWorktreeIds.add(folderWorkspaceKey(workspace.id))
         }
+
         addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
 
         const openFiles: OpenFile[] = []
@@ -44,27 +47,33 @@ export function createHydrateEditorSession(
         const usedOpenFileIds = new Set<string>()
         const legacyFileIndex = new LegacyHydratedEditorFileIndex()
         const editorFileIdMigrationsByWorktree: Record<string, Map<string, string>> = {}
+
         for (const [worktreeId, files] of Object.entries(openFilesByWorktree)) {
           if (!validWorktreeIds.has(worktreeId)) {
             continue
           }
+
           for (const pf of files) {
             // Split tabs share one OpenFile; repeated records for the same owner are corruption.
             if (legacyFileIndex.hasOwner(pf, worktreeId)) {
               continue
             }
+
             const legacyId = legacyFileIndex.resolve(pf, worktreeId)
             // Why: floating/runtime-owned files need IDs that survive peers disappearing between restarts; collision-based IDs drift when the path is no longer open elsewhere.
             const ownedId = buildOwnedEditorFileId(pf.filePath, worktreeId, pf.runtimeEnvironmentId)
+
             const id =
               shouldHydrateWithOwnedEditorFileId(worktreeId, pf.runtimeEnvironmentId) ||
               usedOpenFileIds.has(pf.filePath)
                 ? ownedId
                 : pf.filePath
+
             // Why: the persisted schema allows repeated (path, worktree, runtime) tuples, and an owned id repeats verbatim — restoring both would put two files under one id.
             if (usedOpenFileIds.has(id)) {
               continue
             }
+
             usedOpenFileIds.add(id)
             // Why: map from the collision-derived legacy id; keying by filePath would collapse same-path local/runtime tabs onto the last owner to hydrate.
             addEditorFileIdMigration(editorFileIdMigrationsByWorktree, worktreeId, legacyId, id)
@@ -76,9 +85,11 @@ export function createHydrateEditorSession(
             })
             // Why: read-only tabs (AI Vault View Log) must restore clean — ignore any persisted dirty draft/baseline so they can't come back writable.
             const isReadOnly = pf.readOnly === true
+
             if (!isReadOnly && pf.dirtyDraftContent !== undefined) {
               editorDrafts[id] = pf.dirtyDraftContent
             }
+
             openFiles.push({
               id,
               filePath: pf.filePath,
@@ -107,6 +118,7 @@ export function createHydrateEditorSession(
 
         // Why: use the store's activeWorktreeId — hydrateWorkspaceSession may have nulled an invalid ID, and we must respect that.
         const activeWorktreeId = s.activeWorktreeId
+
         const {
           activeFileId: nextActiveFileId,
           activeFileIdByWorktree: filteredActiveFileIdByWorktree
@@ -117,6 +129,7 @@ export function createHydrateEditorSession(
           persistedActiveFileIds: persistedActiveFileIdByWorktree,
           migrations: editorFileIdMigrationsByWorktree
         })
+
         const activeTabType: WorkspaceVisibleTabType =
           activeWorktreeId && persistedActiveTabTypeByWorktree[activeWorktreeId]
             ? persistedActiveTabTypeByWorktree[activeWorktreeId]
@@ -127,9 +140,11 @@ export function createHydrateEditorSession(
             if (!validWorktreeIds.has(wId)) {
               return false
             }
+
             if (tabType !== 'editor') {
               return true
             }
+
             // Why: an "editor" marker is valid only if the worktree restored a concrete active file; otherwise it's a stale marker.
             return Boolean(filteredActiveFileIdByWorktree[wId])
           })
@@ -138,6 +153,7 @@ export function createHydrateEditorSession(
         // Why: transient diff/conflict surfaces aren't restored, so clear a stale "editor" marker and fall back to terminal.
         const nextActiveTabType =
           nextActiveFileId || activeTabType !== 'editor' ? activeTabType : 'terminal'
+
         const markdownFrontmatterVisible = resolveHydratedEditorFrontmatter(
           persistedMarkdownFrontmatterVisible,
           usedOpenFileIds,

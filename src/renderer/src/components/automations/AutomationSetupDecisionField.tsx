@@ -29,6 +29,7 @@ export function AutomationSetupDecisionField({
   onSetupDecisionTouched
 }: AutomationSetupDecisionFieldProps): React.JSX.Element | null {
   const [advancedOpen, setAdvancedOpen] = React.useState(false)
+
   const defaultDecision = getVisibleAutomationSetupDecision({
     createTarget,
     workspaceMode: draft.workspaceMode,
@@ -37,14 +38,18 @@ export function AutomationSetupDecisionField({
     projectHostSetups,
     yamlHooks
   })
+
   if (!defaultDecision) {
     return null
   }
+
   const checked = (draft.setupDecision ?? defaultDecision) === 'run'
+
   const label = translate(
     'auto.components.automations.AutomationSetupDecisionField.5a7863909c',
     'Run setup for each new workspace'
   )
+
   return (
     // Why: the setup choice is a power-user knob, so tuck it behind the same
     // Advanced disclosure grammar the New Workspace composer uses.

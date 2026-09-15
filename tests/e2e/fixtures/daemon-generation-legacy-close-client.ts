@@ -27,12 +27,15 @@ type FixtureConfig = {
 
 async function waitFor(description: string, predicate: () => boolean): Promise<void> {
   const deadline = Date.now() + 10_000
+
   while (Date.now() <= deadline) {
     if (predicate()) {
       return
     }
+
     await new Promise<void>((resolve) => setTimeout(resolve, 25))
   }
+
   throw new Error(`Timed out waiting for ${description}`)
 }
 
@@ -44,6 +47,7 @@ const LEGACY_VIEWER = {
   callSite: 'legacy-viewer:stale-pty-exit-cleanup',
   wireReason: null
 }
+
 const CAPABLE_VIEWER = {
   clientKind: 'runtime' as const,
   clientId: 'capable-viewer',
@@ -53,6 +57,7 @@ const CAPABLE_VIEWER = {
   callSite: 'capable-viewer:stale-pty-exit-cleanup',
   wireReason: null
 }
+
 const OBSERVER = {
   clientKind: 'runtime' as const,
   clientId: 'current-viewer',
@@ -63,9 +68,11 @@ const OBSERVER = {
 function readConfig(): FixtureConfig {
   const configIndex = process.argv.indexOf('--config')
   const configPath = configIndex !== -1 ? process.argv[configIndex + 1] : undefined
+
   if (!configPath) {
     throw new Error('Legacy close client requires --config <path>')
   }
+
   return JSON.parse(readFileSync(configPath, 'utf8')) as FixtureConfig
 }
 
@@ -76,6 +83,7 @@ async function dispatchReasonlessClose(
   viewer: typeof LEGACY_VIEWER | typeof CAPABLE_VIEWER
 ): Promise<Record<string, unknown>> {
   const requestId = `${session.closeContract}-close-${sequence}`
+
   return await new Promise((resolve, reject) => {
     void dispatcher
       .dispatchStreaming(
@@ -126,6 +134,7 @@ async function waitForFinish(): Promise<void> {
 async function main(): Promise<void> {
   const config = readConfig()
   const { router } = await createDesktopDiscoveredDaemonRouter(config)
+
   try {
     const outputBySessionId = new Map<string, string>()
     router.onData((event) => {
@@ -136,6 +145,7 @@ async function main(): Promise<void> {
     })
     await router.getCurrentAdapter().listProcesses()
     await router.discoverLegacySessions()
+
     for (const session of config.sessions) {
       const attached = await router.spawn({
         sessionId: session.sessionId,
@@ -144,6 +154,7 @@ async function main(): Promise<void> {
         rows: 30,
         cwd: config.cwd
       })
+
       if (!attached.isReattach || attached.pid !== session.rootPid) {
         throw new Error(`Legacy close fixture changed ${session.sessionId} incarnation`)
       }
@@ -155,6 +166,7 @@ async function main(): Promise<void> {
     runtime.setPtyController({
       write: (ptyId, data) => {
         router.write(ptyId, data)
+
         return true
       },
       kill: () => false,
@@ -168,9 +180,11 @@ async function main(): Promise<void> {
       },
       closeTerminalTab: async (tabId: string) => {
         const session = sessionByTabId.get(tabId)
+
         if (!session) {
           throw new Error(`Legacy close fixture received unknown tab ${tabId}`)
         }
+
         calls.push({
           callSite: 'RuntimeNotifier.closeTerminalTab -> DaemonPtyRouter.shutdown',
           immediate: true,
@@ -185,6 +199,7 @@ async function main(): Promise<void> {
 
     const snapshots: RuntimeMobileSessionTabsSnapshot[] = config.sessions.map((session, index) => {
       const leafId = `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
+
       return {
         worktree: session.worktreeId,
         publicationEpoch: `legacy-viewer-${index + 1}`,
@@ -205,6 +220,7 @@ async function main(): Promise<void> {
         ]
       }
     })
+
     runtime.syncWindowGraph(1, {
       tabs: snapshots.map((snapshot) => ({
         tabId: snapshot.tabs[0]!.parentTabId,
@@ -226,10 +242,13 @@ async function main(): Promise<void> {
 
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const observerBefore: Record<string, unknown>[] = []
+
     for (const [index, session] of config.sessions.entries()) {
       observerBefore.push(await dispatchObserverList(dispatcher, session, index + 1))
     }
+
     const capableResponses: Record<string, unknown>[] = []
+
     for (const [index, session] of config.sessions
       .filter((candidate) => candidate.closeContract === 'capable')
       .entries()) {
@@ -237,11 +256,15 @@ async function main(): Promise<void> {
         await dispatchReasonlessClose(dispatcher, session, index + 1, CAPABLE_VIEWER)
       )
     }
+
     const observerAfterCapable: Record<string, unknown>[] = []
+
     for (const [index, session] of config.sessions.entries()) {
       observerAfterCapable.push(await dispatchObserverList(dispatcher, session, index + 101))
     }
+
     const legacyResponses: Record<string, unknown>[] = []
+
     for (const [index, session] of config.sessions
       .filter((candidate) => candidate.closeContract === 'legacy')
       .entries()) {
@@ -249,17 +272,23 @@ async function main(): Promise<void> {
         await dispatchReasonlessClose(dispatcher, session, index + 1, LEGACY_VIEWER)
       )
     }
+
     const observerAfter: Record<string, unknown>[] = []
+
     for (const [index, session] of config.sessions.entries()) {
       observerAfter.push(await dispatchObserverList(dispatcher, session, index + 201))
     }
+
     const postClosePing: Record<string, boolean> = {}
+
     for (const [index, session] of config.sessions.entries()) {
       if (calls.some((call) => call.sessionId === session.sessionId)) {
         postClosePing[session.sessionId] = false
         continue
       }
+
       const nonce = `post-close-${index + 1}`
+
       try {
         router.write(
           session.sessionId,
@@ -275,6 +304,7 @@ async function main(): Promise<void> {
         postClosePing[session.sessionId] = false
       }
     }
+
     process.send?.({
       type: 'legacy-close-complete',
       capableInitiator: CAPABLE_VIEWER,

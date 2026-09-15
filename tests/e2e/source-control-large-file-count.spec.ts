@@ -36,6 +36,7 @@ import { RIGHT_SIDEBAR_MIN_WIDTH } from '../../src/renderer/src/components/right
 // Matches the large-diff freeze budget: a blocking stall past 1s is the
 // "UI becomes unresponsive" symptom reported in #8013.
 const MAX_EVENT_LOOP_LAG_MS = 1_000
+
 // A second full status→store→render cycle with identical data must not leak
 // unbounded memory; allow generous headroom for GC timing noise.
 const MAX_HEAP_GROWTH_PER_CYCLE_MB = 75
@@ -43,6 +44,7 @@ const MAX_HEAP_GROWTH_PER_CYCLE_MB = 75
 // A virtualized list mounts viewport + overscan rows only; anything past this
 // bound means the panel is mounting rows proportional to the change set again.
 const MAX_MOUNTED_ROWS = 200
+
 const MAX_CAPPED_STATUS_PAYLOAD_BYTES = 200_000
 
 type LoadMeasurement = {
@@ -64,13 +66,17 @@ type LoadMeasurement = {
 async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<string> {
   const repoId = await orcaPage.evaluate(async (pathToRepo: string) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const addedRepo = await store.getState().addRepoPath(pathToRepo)
+
     if (!addedRepo) {
       throw new Error(`isolated repo not found: ${pathToRepo}`)
     }
+
     return addedRepo.id
   }, repoPath)
 
@@ -81,10 +87,13 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
       () =>
         orcaPage.evaluate(async (targetRepoId: string) => {
           const store = window.__store
+
           if (!store) {
             return 0
           }
+
           await store.getState().fetchWorktrees(targetRepoId)
+
           return store.getState().worktreesByRepo[targetRepoId]?.length ?? 0
         }, repoId),
       { timeout: 30_000, message: 'isolated large-file-count worktree did not load' }
@@ -94,19 +103,24 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
   const worktreeId = await orcaPage.evaluate(
     ({ targetRepoId, pathToRepo }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       const state = store.getState()
       const worktrees = state.worktreesByRepo[targetRepoId] ?? []
       const worktree = worktrees.find((entry) => entry.path === pathToRepo) ?? worktrees[0]
+
       if (!worktree) {
         throw new Error(`isolated worktree not found: ${pathToRepo}`)
       }
+
       state.setActiveRepo(targetRepoId)
       state.setActiveWorktree(worktree.id)
       state.setRightSidebarOpen(true)
       state.setRightSidebarTab('source-control')
+
       return worktree.id
     },
     { targetRepoId: repoId, pathToRepo: repoPath }
@@ -136,6 +150,7 @@ async function unregisterLargeFileCountRepos(
     await orcaPage.evaluate(async (pathToRepo) => {
       const store = window.__store
       const repo = store?.getState().repos.find((entry) => entry.path === pathToRepo)
+
       if (repo) {
         await store?.getState().removeProject(repo.id)
       }
@@ -155,6 +170,7 @@ async function measureSourceControlLoad(
 ): Promise<LoadMeasurement> {
   return await orcaPage.evaluate(async ({ worktreeId, repoPath, expectedRows, pollCycles }) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
@@ -162,6 +178,7 @@ async function measureSourceControlLoad(
     const lagSamples: number[] = []
     const probeIntervalMs = 50
     let lastTick = performance.now()
+
     const probe = window.setInterval(() => {
       const now = performance.now()
       lagSamples.push(Math.max(0, now - lastTick - probeIntervalMs))
@@ -170,6 +187,7 @@ async function measureSourceControlLoad(
 
     const readHeapMb = (): number => {
       const memory = (performance as unknown as { memory?: { usedJSHeapSize: number } }).memory
+
       return memory ? memory.usedJSHeapSize / (1024 * 1024) : -1
     }
 
@@ -186,13 +204,17 @@ async function measureSourceControlLoad(
       const renderStart = performance.now()
       store.getState().setGitStatus(worktreeId, status)
       let renderedRows = 0
+
       while (performance.now() - renderStart < 60_000) {
         renderedRows = document.querySelectorAll('[data-testid="source-control-entry"]').length
+
         if (renderedRows >= firstRowsTarget) {
           break
         }
+
         await new Promise((resolve) => window.setTimeout(resolve, 50))
       }
+
       const renderMs = performance.now() - renderStart
       // Settle so the lag probe captures post-render layout/paint stalls too.
       await new Promise((resolve) => window.setTimeout(resolve, 1_000))
@@ -204,15 +226,18 @@ async function measureSourceControlLoad(
       const heapUsedMbPerCycle: number[] = []
       const cycleMaxLagMs: number[] = []
       let rescanMs = 0
+
       for (let cycle = 0; cycle < pollCycles; cycle += 1) {
         const cycleLagStart = lagSamples.length
         const cycleScanStart = performance.now()
         const cycleStatus = await window.api.git.status({ worktreePath: repoPath })
+
         if (cycle === 0) {
           // First rescan isolates warm-cache scan cost (untracked line-stat
           // reads are mtime-cached after the initial scan).
           rescanMs = performance.now() - cycleScanStart
         }
+
         store.getState().setGitStatus(worktreeId, cycleStatus)
         await new Promise((resolve) => window.setTimeout(resolve, 500))
         heapUsedMbPerCycle.push(readHeapMb())
@@ -220,6 +245,7 @@ async function measureSourceControlLoad(
       }
 
       const sorted = [...lagSamples].sort((a, b) => a - b)
+
       return {
         entryCount: status.entries.length,
         didHitLimit: status.didHitLimit === true,
@@ -256,11 +282,13 @@ function logMeasurement(
 async function readRendererWorkingSetMb(electronApp: ElectronApplication): Promise<number> {
   return await electronApp.evaluate(({ app }) => {
     let totalKb = 0
+
     for (const metric of app.getAppMetrics()) {
       if (metric.type === 'Tab') {
         totalKb += metric.memory.workingSetSize
       }
     }
+
     return totalKb / 1024
   })
 }
@@ -281,22 +309,27 @@ test.describe('Source Control large file count (#8013)', () => {
     // per-poll line-stat reads (cache-capped at 2,048 entries) become visible
     // in rescanMs instead of hiding behind ~30-byte fixture files.
     const untrackedFileBytes = Number(process.env.ORCA_LARGE_FILE_BYTES ?? '0')
+
     const fixture = createLargeFileCountRepo({
       trackedFiles: 100,
       untrackedFiles,
       untrackedFileBytes
     })
+
     registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
+
     try {
       await waitForSessionReady(orcaPage)
       const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
       const workingSetBeforeMb = await readRendererWorkingSetMb(electronApp)
+
       const measurement = await measureSourceControlLoad(orcaPage, {
         worktreeId,
         repoPath: fixture.repoPath,
         expectedRows: untrackedFiles,
         pollCycles: 3
       })
+
       const workingSetAfterMb = await readRendererWorkingSetMb(electronApp)
       logMeasurement(`untracked=${untrackedFiles}`, {
         ...measurement,
@@ -310,6 +343,7 @@ test.describe('Source Control large file count (#8013)', () => {
       // a virtualized panel mounts viewport + overscan only.
       expect(measurement.renderedRows).toBeLessThan(MAX_MOUNTED_ROWS)
       expect(measurement.maxLagMs).toBeLessThan(MAX_EVENT_LOOP_LAG_MS)
+
       if (measurement.heapUsedMbPerCycle.length > 1) {
         const first = measurement.heapUsedMbPerCycle[0]
         const last = measurement.heapUsedMbPerCycle.at(-1) ?? first
@@ -331,16 +365,19 @@ test.describe('Source Control large file count (#8013)', () => {
     const modifiedFiles = Number(process.env.ORCA_LARGE_FILE_COUNT ?? '750')
     const fixture = createLargeFileCountRepo({ trackedFiles: modifiedFiles, modifiedFiles })
     registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
+
     try {
       await waitForSessionReady(orcaPage)
       const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
       const workingSetBeforeMb = await readRendererWorkingSetMb(electronApp)
+
       const measurement = await measureSourceControlLoad(orcaPage, {
         worktreeId,
         repoPath: fixture.repoPath,
         expectedRows: modifiedFiles,
         pollCycles: 3
       })
+
       const workingSetAfterMb = await readRendererWorkingSetMb(electronApp)
       logMeasurement(`modified=${modifiedFiles}`, {
         ...measurement,
@@ -366,6 +403,7 @@ test.describe('Source Control large file count (#8013)', () => {
     const untrackedFiles = 12_000
     const fixture = createLargeFileCountRepo({ untrackedFiles })
     registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
+
     try {
       await waitForSessionReady(orcaPage)
       await orcaPage.evaluate(() => {
@@ -384,6 +422,7 @@ test.describe('Source Control large file count (#8013)', () => {
       const activationStart = performance.now()
       const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
       const activationMs = performance.now() - activationStart
+
       const activationMaxLagMs = await orcaPage.evaluate(() => {
         const target = window as unknown as {
           __sourceControlActivationLagProbe?: {
@@ -391,18 +430,24 @@ test.describe('Source Control large file count (#8013)', () => {
             timer: number
           }
         }
+
         const probe = target.__sourceControlActivationLagProbe
+
         if (!probe) {
           return -1
         }
+
         window.clearInterval(probe.timer)
         delete target.__sourceControlActivationLagProbe
+
         return probe.maxLagMs
       })
+
       console.log(
         `[large-file-count] initial-activation ${JSON.stringify({ activationMs, activationMaxLagMs })}`
       )
       const workingSetBeforeMb = await readRendererWorkingSetMb(electronApp)
+
       const measurement = await measureSourceControlLoad(orcaPage, {
         worktreeId,
         repoPath: fixture.repoPath,
@@ -411,6 +456,7 @@ test.describe('Source Control large file count (#8013)', () => {
         expectedRows: 0,
         pollCycles: 1
       })
+
       const workingSetAfterMb = await readRendererWorkingSetMb(electronApp)
       logMeasurement(`over-cap untracked=${untrackedFiles}`, {
         ...measurement,
@@ -419,6 +465,7 @@ test.describe('Source Control large file count (#8013)', () => {
 
       const tooManyChangesBanner = orcaPage.getByTestId('too-many-changes-banner')
       await expect(tooManyChangesBanner).toBeVisible()
+
       if (process.env.ORCA_LARGE_FILE_SCREENSHOT_PATH) {
         // Narrowest supported sidebar is where the banner layout is worst.
         await orcaPage.evaluate((minWidth) => {
@@ -443,12 +490,14 @@ test.describe('Source Control large file count (#8013)', () => {
         (wId) => window.__store?.getState().gitStatusHugeByWorktree?.[wId] ?? null,
         worktreeId
       )
+
       expect(hugeState).not.toBeNull()
 
       const retryButton = tooManyChangesBanner.getByRole('button', { name: 'Retry' })
       await expect(retryButton).toBeVisible()
       // Keep automatic refreshes from removing Retry before its real request starts.
       await installGitStatusRetryBarrier(electronApp, fixture.repoPath)
+
       try {
         await retryButton.click()
         await expect.poll(() => hasCapturedGitStatusRetry(electronApp)).toBe(true)
@@ -456,6 +505,7 @@ test.describe('Source Control large file count (#8013)', () => {
       } finally {
         await restoreGitStatusRetryHandler(electronApp)
       }
+
       await expect(tooManyChangesBanner).not.toBeVisible()
       await expect
         .poll(() =>
@@ -478,13 +528,16 @@ test.describe('Source Control large file count (#8013)', () => {
     // Why: compare warm rescan cost at two sub-cap scales on the same machine;
     // a cache sized below one complete status result makes the ratio balloon.
     const fileBytes = 65_536
+
     const smallRepo = createLargeFileCountRepo({
       trackedFiles: 10,
       untrackedFiles: 400,
       untrackedFileBytes: fileBytes
     })
+
     registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(smallRepo.repoPath))
     let largeRepo: ReturnType<typeof createLargeFileCountRepo> | null = null
+
     try {
       largeRepo = createLargeFileCountRepo({
         trackedFiles: 10,
@@ -497,12 +550,14 @@ test.describe('Source Control large file count (#8013)', () => {
 
       const warmRescanPerFileMs = async (repoPath: string, files: number): Promise<number> => {
         const worktreeId = await addAndActivateRepo(orcaPage, repoPath)
+
         const measurement = await measureSourceControlLoad(orcaPage, {
           worktreeId,
           repoPath,
           expectedRows: files,
           pollCycles: 1
         })
+
         return measurement.rescanMs / files
       }
 
@@ -529,16 +584,19 @@ test.describe('Source Control large file count (#8013)', () => {
     const trackedFiles = Number(process.env.ORCA_LARGE_FILE_COUNT ?? '15000')
     const fixture = createLargeFileCountRepo({ trackedFiles })
     registerPostElectronShutdownCleanup(() => removeLargeFileCountRepo(fixture.repoPath))
+
     try {
       await waitForSessionReady(orcaPage)
       const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
       const workingSetBeforeMb = await readRendererWorkingSetMb(electronApp)
+
       const measurement = await measureSourceControlLoad(orcaPage, {
         worktreeId,
         repoPath: fixture.repoPath,
         expectedRows: 0,
         pollCycles: 2
       })
+
       const workingSetAfterMb = await readRendererWorkingSetMb(electronApp)
       logMeasurement(`clean tracked=${trackedFiles}`, {
         ...measurement,

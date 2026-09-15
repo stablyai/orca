@@ -25,6 +25,7 @@ import { publishLegacyWorkerReveal } from '../orca-runtime-test-scenario-builder
 describe('OrcaRuntimeService', () => {
   it('defers live workers without exact controller identity evidence', async () => {
     const incarnationId = '56565656-5656-4656-8656-565656565656'
+
     const cases = [
       {
         name: 'missing',
@@ -47,9 +48,11 @@ describe('OrcaRuntimeService', () => {
         terminalHandle: 'term_wrong_incarnation'
       }
     ] as const
+
     const sleepingAgentSessionsByPaneKey = Object.fromEntries(
       cases.map(({ name, leafId }) => {
         const paneKey = `legacy-${name}:${leafId}`
+
         return [
           paneKey,
           {
@@ -67,17 +70,21 @@ describe('OrcaRuntimeService', () => {
         ]
       })
     ) as WorkspaceSessionState['sleepingAgentSessionsByPaneKey']
+
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
       sleepingAgentSessionsByPaneKey
     }
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
+
     const runtime = new OrcaRuntimeService(
       { ...runtimeStore, flushOrThrow: vi.fn() } as never,
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
+
     runtime.setOrchestrationDb({
       listLegacyWorkerTerminalRecoveryRows: () =>
         cases.map(({ name, leafId, terminalHandle }) => ({
@@ -93,6 +100,7 @@ describe('OrcaRuntimeService', () => {
           agent_terminal_handle: terminalHandle
         }))
     } as unknown as OrchestrationDb)
+
     const listProcesses = vi.fn(async () => [
       {
         id: 'pty-missing',
@@ -133,6 +141,7 @@ describe('OrcaRuntimeService', () => {
         worktreeId: TEST_WORKTREE_ID
       }
     ])
+
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),
@@ -148,11 +157,13 @@ describe('OrcaRuntimeService', () => {
     })
     expect(listProcesses).toHaveBeenCalledOnce()
     expect(listProcesses).toHaveBeenCalledWith(null, LIST_PROVIDER_DEADLINE)
+
     for (const { name, leafId } of cases.slice(0, 2)) {
       expect(
         getSession().sleepingAgentSessionsByPaneKey?.[`legacy-${name}:${leafId}`]
       ).toBeDefined()
     }
+
     for (const { name, leafId } of cases.slice(2)) {
       expect(
         getSession().sleepingAgentSessionsByPaneKey?.[`legacy-${name}:${leafId}`]
@@ -164,6 +175,7 @@ describe('OrcaRuntimeService', () => {
     const workerPaneKey = `legacy-folder-worker:${HEADLESS_LEAF_ID}`
     const incarnationId = '66666666-6666-4666-8666-666666666666'
     const folderPath = await mkdtemp(join(tmpdir(), 'orca-legacy-worker-folder-'))
+
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       activeWorktreeId: TEST_FOLDER_WORKSPACE_KEY,
@@ -183,9 +195,11 @@ describe('OrcaRuntimeService', () => {
         }
       }
     }
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const folderWorkspace = makeFolderWorkspace({ folderPath })
     const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
+
     const runtime = new OrcaRuntimeService(
       {
         ...runtimeStore,
@@ -196,6 +210,7 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
+
     runtime.setOrchestrationDb({
       listLegacyWorkerTerminalRecoveryRows: () => [
         {
@@ -212,6 +227,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     } as unknown as OrchestrationDb)
+
     const listProcesses = vi.fn(async () => [
       {
         id: 'pty-folder-legacy',
@@ -223,6 +239,7 @@ describe('OrcaRuntimeService', () => {
         wslDistro: null
       }
     ])
+
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),
@@ -230,6 +247,7 @@ describe('OrcaRuntimeService', () => {
       hasPty: (candidate) => candidate === 'pty-folder-legacy',
       listProcesses
     })
+
     const revealTerminalSession = vi.fn().mockImplementation(() =>
       publishLegacyWorkerReveal(runtime, {
         worktreeId: TEST_FOLDER_WORKSPACE_KEY,
@@ -238,6 +256,7 @@ describe('OrcaRuntimeService', () => {
         ptyId: 'pty-folder-legacy'
       })
     )
+
     runtime.setNotifier({ revealTerminalSession } as never)
 
     await expect(
@@ -278,6 +297,7 @@ describe('OrcaRuntimeService', () => {
     const workerPaneKey = `legacy-ssh-folder-worker:${HEADLESS_LEAF_ID}`
     const incarnationId = '67676767-6767-4767-8767-676767676767'
     const folderPath = '/srv/platform'
+
     const sshInitialSession: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       activeWorktreeId: TEST_FOLDER_WORKSPACE_KEY,
@@ -298,20 +318,26 @@ describe('OrcaRuntimeService', () => {
         }
       }
     }
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(sshInitialSession)
     const localSession = getDefaultWorkspaceSession()
     let sshSession = sshInitialSession
+
     const getWorkspaceSession = vi.fn((hostId?: string | null) =>
       hostId === `ssh:${connectionId}` ? sshSession : localSession
     )
+
     const setWorkspaceSession = vi.fn((next: WorkspaceSessionState, hostId?: string | null) => {
       if (hostId !== `ssh:${connectionId}`) {
         throw new Error(`unexpected workspace-session host ${hostId ?? 'default'}`)
       }
+
       sshSession = next
     })
+
     const folderWorkspace = makeFolderWorkspace({ folderPath, connectionId })
     const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
+
     const runtime = new OrcaRuntimeService(
       {
         ...runtimeStore,
@@ -324,6 +350,7 @@ describe('OrcaRuntimeService', () => {
       undefined,
       { canRecoverPersistentLocalPtys: () => true }
     )
+
     runtime.setOrchestrationDb({
       listLegacyWorkerTerminalRecoveryRows: () => [
         {
@@ -340,6 +367,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     } as unknown as OrchestrationDb)
+
     const listProcesses = vi.fn(async () => [
       {
         id: ptyId,
@@ -351,6 +379,7 @@ describe('OrcaRuntimeService', () => {
         wslDistro: null
       }
     ])
+
     runtime.setPtyController({
       write: vi.fn(() => true),
       kill: vi.fn(() => true),
@@ -358,6 +387,7 @@ describe('OrcaRuntimeService', () => {
       hasPty: (candidate) => candidate === ptyId,
       listProcesses
     })
+
     const revealTerminalSession = vi.fn().mockImplementation(() =>
       publishLegacyWorkerReveal(runtime, {
         worktreeId: TEST_FOLDER_WORKSPACE_KEY,
@@ -366,6 +396,7 @@ describe('OrcaRuntimeService', () => {
         ptyId
       })
     )
+
     runtime.setNotifier({ revealTerminalSession } as never)
     registerSshFilesystemProvider(connectionId, {
       stat: vi.fn(async () => ({ size: 0, type: 'directory', mtime: 1 }))

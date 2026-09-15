@@ -21,12 +21,14 @@ const mapMetadataCalls = vi.hoisted(() => ({
 
 vi.mock('./dashboard-snapshot-workspaces', async (importOriginal) => {
   const actual = await importOriginal<typeof DashboardSnapshotWorkspacesModule>()
+
   return {
     ...actual,
     dashboardCardMapWorkspaceMetadata: (
       ...args: Parameters<typeof actual.dashboardCardMapWorkspaceMetadata>
     ) => {
       mapMetadataCalls.hostKind()
+
       return actual.dashboardCardMapWorkspaceMetadata(...args)
     }
   }
@@ -34,24 +36,35 @@ vi.mock('./dashboard-snapshot-workspaces', async (importOriginal) => {
 
 vi.mock('./agent-row-lineage', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentRowLineageModule>()
+
   return {
     ...actual,
     dashboardCardParentPaneKey: (...args: Parameters<typeof actual.dashboardCardParentPaneKey>) => {
       mapMetadataCalls.parentPaneKey()
+
       return actual.dashboardCardParentPaneKey(...args)
     }
   }
 })
 
 const NOW = 1_000_000_000
+
 const TAB_ID = 'tab1'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const CHILD_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+
 const GRANDCHILD_LEAF_ID = '44444444-4444-4444-8444-444444444444'
+
 const GONE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const SPLIT_SIBLING_LEAF_ID = '55555555-5555-4555-8555-555555555555'
+
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
+
 const CHILD_PANE_KEY = makePaneKey(TAB_ID, CHILD_LEAF_ID)
+
 const GRANDCHILD_PANE_KEY = makePaneKey(TAB_ID, GRANDCHILD_LEAF_ID)
 
 function entry(overrides: Partial<AgentStatusEntry>): AgentStatusEntry {
@@ -186,6 +199,7 @@ describe('buildDashboardSnapshot', () => {
       }),
       NOW
     )
+
     expect(snapshot.cards).toHaveLength(1)
     const card = snapshot.cards[0]
     expect(card.bucket).toBe('working')
@@ -276,6 +290,7 @@ describe('buildDashboardSnapshot', () => {
   it('preserves explicit lineage when a child runs in another worktree', () => {
     const childTabId = 'child-tab'
     const childPaneKey = makePaneKey(childTabId, CHILD_LEAF_ID)
+
     const snapshot = buildDashboardSnapshot(
       baseState({
         worktreesByRepo: { r1: [worktree(), worktree('w2', 'wt-two')] },
@@ -345,6 +360,7 @@ describe('buildDashboardSnapshot', () => {
       }),
       NOW
     )
+
     expect(named.cards[0].conversationName).toBe('Sparse-checkout parser')
 
     // The fixture tab's title is the 'agent' placeholder — not a name.
@@ -352,12 +368,14 @@ describe('buildDashboardSnapshot', () => {
       baseState({ agentStatusByPaneKey: { [PANE_KEY]: entry({}) } }),
       NOW
     )
+
     expect(unnamed.cards[0].conversationName).toBeUndefined()
   })
 
   // STA-2811: both panes of a split tab carried the focused pane's title.
   it('names each pane of a split tab from its own title', () => {
     const siblingPaneKey = makePaneKey(TAB_ID, SPLIT_SIBLING_LEAF_ID)
+
     const snapshot = buildDashboardSnapshot(
       baseState({
         agentStatusByPaneKey: {
@@ -391,6 +409,7 @@ describe('buildDashboardSnapshot', () => {
     const nameByPaneKey = new Map(
       snapshot.cards.map((card) => [card.paneKey, card.conversationName])
     )
+
     expect(nameByPaneKey.get(PANE_KEY)).toBe('Linear work log')
     expect(nameByPaneKey.get(siblingPaneKey)).toBe('Redis cache strategy')
   })
@@ -426,10 +445,12 @@ describe('buildDashboardSnapshot', () => {
 
   it('withholds generated titles until the setting enables them', () => {
     const tabs = { w1: [{ ...tab(), generatedTitle: 'Fix the flaky pty test' }] }
+
     const off = buildDashboardSnapshot(
       baseState({ agentStatusByPaneKey: { [PANE_KEY]: entry({}) }, tabsByWorktree: tabs }),
       NOW
     )
+
     expect(off.cards[0].conversationName).toBeUndefined()
 
     const on = buildDashboardSnapshot(
@@ -440,6 +461,7 @@ describe('buildDashboardSnapshot', () => {
       } as unknown as Partial<DashboardSnapshotState>),
       NOW
     )
+
     expect(on.cards[0].conversationName).toBe('Fix the flaky pty test')
   })
 
@@ -461,6 +483,7 @@ describe('buildDashboardSnapshot', () => {
       } as unknown as Partial<DashboardSnapshotState>),
       NOW
     )
+
     // r2 has a worktree but no agent card, so its icon never ships.
     expect(snapshot.repoIconsByRepoId).toEqual({ r1: { type: 'lucide', name: 'Rocket' } })
   })
@@ -470,6 +493,7 @@ describe('buildDashboardSnapshot', () => {
       baseState({ agentStatusByPaneKey: { [PANE_KEY]: entry({}) } }),
       NOW
     )
+
     expect(snapshot.repoIconsByRepoId).toEqual({ r1: null })
   })
 
@@ -483,6 +507,7 @@ describe('buildDashboardSnapshot', () => {
       }),
       NOW
     )
+
     expect(snapshot.cards[0].ptyId).toBeNull()
   })
 
@@ -494,6 +519,7 @@ describe('buildDashboardSnapshot', () => {
       }),
       NOW
     )
+
     // ack (NOW-1000) is after stateStartedAt (NOW-5000) → seen.
     expect(snapshot.cards[0].unseen).toBe(false)
     expect(snapshot.cards[0].dotState).toBe('done')
@@ -527,6 +553,7 @@ describe('buildDashboardSnapshot', () => {
         }),
         NOW
       )
+
       expect(snapshot.cards[0].bucket).toBe('attention')
       expect(snapshot.cards[0].dotState).toBe(state)
       expect(snapshot.cards[0].askSummary).toBe('Approve deploy?')
@@ -545,12 +572,14 @@ describe('buildDashboardSnapshot', () => {
       }),
       NOW
     )
+
     expect(snapshot.cards[0].bucket).toBe('idle')
     expect(snapshot.cards[0].dotState).toBe('idle')
   })
 
   it('routes retained done agents to the done bucket', () => {
     const donePaneKey = makePaneKey(TAB_ID, GONE_LEAF_ID)
+
     const snapshot = buildDashboardSnapshot(
       baseState({
         retainedAgentsByPaneKey: {
@@ -565,6 +594,7 @@ describe('buildDashboardSnapshot', () => {
       }),
       NOW
     )
+
     const done = snapshot.cards.find((c) => c.dotState === 'done')
     expect(done).toBeDefined()
     expect(done?.bucket).toBe('done')
@@ -622,9 +652,11 @@ describe('buildDashboardSnapshot', () => {
       enumerable: true,
       get: () => {
         linkedReviewReads += 1
+
         return null
       }
     })
+
     const countRepo = {
       id: 'r1',
       path: '/r1',
@@ -633,9 +665,11 @@ describe('buildDashboardSnapshot', () => {
       addedAt: 0,
       get connectionId() {
         hostIdentityReads += 1
+
         return null
       }
     }
+
     const snapshot = buildDashboardSnapshot(
       baseState({
         repos: [countRepo],
@@ -666,17 +700,21 @@ describe('buildDashboardSnapshot', () => {
   it('indexes runtime host labels once per detailed snapshot', () => {
     let environmentIdReads = 0
     const environmentCount = 24
+
     const runtimeEnvironments = Array.from({ length: environmentCount }, (_, index) => {
       const environment = { id: `environment-${index}`, name: `Builder ${index}` }
       Object.defineProperty(environment, 'id', {
         enumerable: true,
         get: () => {
           environmentIdReads += 1
+
           return `environment-${index}`
         }
       })
+
       return environment
     }) as unknown as DashboardSnapshotState['runtimeEnvironments']
+
     const executionHostId = `runtime:environment-${environmentCount - 1}` as const
 
     const snapshot = buildDashboardSnapshot(
@@ -761,6 +799,7 @@ describe('buildDashboardSnapshot', () => {
     const secondLeafId = '77777777-7777-4777-8777-777777777777'
     const firstPaneKey = makePaneKey('tab-w1', LEAF_ID)
     const secondPaneKey = makePaneKey('tab-w2', secondLeafId)
+
     const runtimeAgentOrchestrationByPaneKey = {
       [firstPaneKey]: {
         taskId: 'task-1',
@@ -771,6 +810,7 @@ describe('buildDashboardSnapshot', () => {
         dispatchId: 'dispatch-2'
       }
     }
+
     const multiState = baseState({
       worktreesByRepo: { r1: [worktree('w1'), worktree('w2')] },
       tabsByWorktree: {
@@ -779,6 +819,7 @@ describe('buildDashboardSnapshot', () => {
       },
       runtimeAgentOrchestrationByPaneKey
     })
+
     const requested = ['w1', 'w2']
     const firstBatch = selectRuntimeAgentOrchestrationBatch(multiState, requested)
     const firstW1 = firstBatch.get('w1')
@@ -798,6 +839,7 @@ describe('buildDashboardSnapshot', () => {
     buildDashboardSnapshot(baseState({ repos: [], worktreesByRepo: {} }), NOW)
     const afterZero = selectRuntimeAgentOrchestrationBatch(multiState, requested)
     expect(afterZero).toBe(firstBatch)
+
     for (const worktreeId of requested) {
       expect(afterZero.get(worktreeId)).toBe(
         selectRuntimeAgentOrchestrationForWorktree(multiState, worktreeId)
@@ -817,11 +859,13 @@ describe('buildDashboardSnapshot', () => {
         `tab-${index % worktreeCount}`,
         `33333333-3333-4333-8333-${index.toString(16).padStart(12, '0')}`
       )
+
       runtimeRecords[paneKey] = {
         taskId: `task-${index}`,
         dispatchId: `dispatch-${index}`,
         get parentPaneKey() {
           contextVisits += 1
+
           return undefined
         }
       }
@@ -830,12 +874,15 @@ describe('buildDashboardSnapshot', () => {
     const runtimeAgentOrchestrationByPaneKey = new Proxy(runtimeRecords, {
       ownKeys(target) {
         runtimeEnumerations += 1
+
         return Reflect.ownKeys(target)
       }
     })
+
     const worktrees = Array.from({ length: worktreeCount }, (_, index) =>
       worktree(`w${index}`, `wt-${index}`)
     )
+
     const tabsByWorktree = Object.fromEntries(
       worktrees.map((worktree, index) => [worktree.id, [tab(`tab-${index}`, worktree.id)]])
     )

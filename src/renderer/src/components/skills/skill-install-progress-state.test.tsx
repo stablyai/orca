@@ -16,6 +16,7 @@ describe('useSkillInstallProgress', () => {
         skills: {
           onInstallProgress: vi.fn((next) => {
             listener = next
+
             return () => {
               listener = null
             }

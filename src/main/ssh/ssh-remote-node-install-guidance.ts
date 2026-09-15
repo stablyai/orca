@@ -25,6 +25,7 @@ export async function buildPosixNodeInstallGuidance(
   options?: RemoteNodeResolutionOptions
 ): Promise<string> {
   const detectedBin = await detectPackageManager(conn, options)
+
   return formatNodeInstallHints(detectedBin)
 }
 
@@ -34,19 +35,24 @@ async function detectPackageManager(
 ): Promise<string | null> {
   throwIfAborted(options)
   const bins = NODE_PACKAGE_MANAGER_HINTS.map((hint) => hint.bin).join(' ')
+
   try {
     const output = await execCommand(
       conn,
       `for p in ${bins}; do if command -v "$p" >/dev/null 2>&1; then echo "$p"; break; fi; done`,
       commandOptions(options)
     )
+
     const detected = output.trim().split('\n')[0]
+
     return NODE_PACKAGE_MANAGER_HINTS.some((hint) => hint.bin === detected) ? detected : null
   } catch (err) {
     if (options?.rethrowSessionLimitErrors && isSshSessionLimitError(err)) {
       throw err
     }
+
     throwIfAborted(options)
+
     return null
   }
 }
@@ -55,11 +61,13 @@ function formatNodeInstallHints(detectedBin: string | null): string {
   const tailored = detectedBin
     ? NODE_PACKAGE_MANAGER_HINTS.find((hint) => hint.bin === detectedBin)
     : null
+
   const lines = [
     'Node.js not found on remote host. Orca relay requires Node.js 18+ and npm.',
     '',
     'Install Node.js 18+ with npm on the remote host, then reconnect:'
   ]
+
   if (tailored) {
     lines.push(`  ${tailored.label}: ${tailored.install}`)
   } else {
@@ -67,6 +75,7 @@ function formatNodeInstallHints(detectedBin: string | null): string {
       lines.push(`  ${hint.label}: ${hint.install}`)
     }
   }
+
   lines.push(
     '',
     'Verify the remote runtime before reconnecting:',
@@ -75,6 +84,7 @@ function formatNodeInstallHints(detectedBin: string | null): string {
     '',
     'If your distro package is older than Node 18, install an LTS release from https://nodejs.org/.'
   )
+
   return lines.join('\n')
 }
 
@@ -83,6 +93,7 @@ function commandOptions(options?: RemoteNodeResolutionOptions): {
   signal?: AbortSignal
 } {
   const base = { timeoutMs: NODE_PACKAGE_MANAGER_PROBE_TIMEOUT_MS }
+
   return options?.signal ? { ...base, signal: options.signal } : base
 }
 

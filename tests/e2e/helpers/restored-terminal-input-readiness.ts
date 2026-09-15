@@ -20,23 +20,29 @@ export async function waitForRestoredTerminalInputReady(
   while (Date.now() < deadline) {
     const marker = `ORCA_RESTORED_INPUT_READY_${randomUUID().replaceAll('-', '')}`
     const [input] = buildFreshShellProbeInputSequence(`echo ${marker}\r`)
+
     if (!input) {
       return false
     }
+
     try {
       const result = await page.evaluate(
         ({ expectedPtyId, input, pendingAttempts }) => {
           for (const manager of window.__paneManagers?.values() ?? []) {
             const pane = manager.getActivePane?.() ?? manager.getPanes?.()[0]
+
             if (pane?.container?.dataset?.ptyId !== expectedPtyId) {
               continue
             }
+
             const container = pane.container as HTMLElement & {
               __orcaE2eTerminalInputReadinessInstanceId?: string
             }
+
             container.__orcaE2eTerminalInputReadinessInstanceId ??= crypto.randomUUID()
             const paneInstanceId = container.__orcaE2eTerminalInputReadinessInstanceId
             const output = pane.serializeAddon?.serialize?.() ?? ''
+
             if (
               pendingAttempts.some(
                 (attempt) =>
@@ -45,18 +51,23 @@ export async function waitForRestoredTerminalInputReady(
             ) {
               return { ready: true, paneInstanceId }
             }
+
             // Why: one input() payload is either wholly replay-suppressed or
             // wholly forwarded, unlike character-by-character keyboard typing.
             pane.terminal.input(input, true)
+
             return { ready: false, paneInstanceId }
           }
+
           return null
         },
         { expectedPtyId, input, pendingAttempts }
       )
+
       if (result?.ready) {
         return true
       }
+
       pendingAttempts = result
         ? [
             ...pendingAttempts.filter(
@@ -72,9 +83,11 @@ export async function waitForRestoredTerminalInputReady(
     }
 
     const remainingMs = deadline - Date.now()
+
     if (remainingMs > 0) {
       await page.waitForTimeout(Math.min(100, remainingMs))
     }
   }
+
   return false
 }

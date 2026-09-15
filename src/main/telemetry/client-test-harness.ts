@@ -41,6 +41,7 @@ export const BASE_COMMON: CommonProps = {
 
 export function makeMockPostHog(): MockPostHog {
   const listeners = new Map<string, Set<(payload: unknown) => void>>()
+
   const emitForTests = (event: string, payload: unknown): void => {
     for (const listener of listeners.get(event) ?? []) {
       listener(payload)
@@ -61,11 +62,14 @@ export function makeMockPostHog(): MockPostHog {
     shutdown: vi.fn(async () => {}),
     on: vi.fn((event: string, listener: (payload: unknown) => void) => {
       let eventListeners = listeners.get(event)
+
       if (!eventListeners) {
         eventListeners = new Set()
         listeners.set(event, eventListeners)
       }
+
       eventListeners.add(listener)
+
       return () => {
         eventListeners?.delete(listener)
       }
@@ -88,6 +92,7 @@ export function makeFakeStore(settings: GlobalSettings): Store {
           ...updates.telemetry
         } as typeof settings.telemetry
       }
+
       return settings
     })
   } as unknown as Store
@@ -108,16 +113,19 @@ const CONSENT_ENV_VARS = [
 
 function stashAndClearConsentEnv(): Record<string, string | undefined> {
   const stash: Record<string, string | undefined> = {}
+
   for (const name of CONSENT_ENV_VARS) {
     stash[name] = process.env[name]
     delete process.env[name]
   }
+
   return stash
 }
 
 function restoreConsentEnv(stash: Record<string, string | undefined>): void {
   for (const name of CONSENT_ENV_VARS) {
     const prior = stash[name]
+
     if (prior === undefined) {
       delete process.env[name]
     } else {

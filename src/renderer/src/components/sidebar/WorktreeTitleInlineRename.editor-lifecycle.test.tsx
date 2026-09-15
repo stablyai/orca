@@ -59,6 +59,7 @@ function ShortcutRenameHarness({
   showUnreadEmphasis = false
 }: HarnessProps): React.JSX.Element {
   const [renameRequested, setRenameRequested] = useState(true)
+
   return (
     <WorktreeTitleInlineRename
       displayName={displayName}
@@ -78,9 +79,11 @@ function openEditorByShortcut(props: HarnessProps = {}): {
 } {
   const { rerender } = render(<ShortcutRenameHarness {...props} />)
   const input = renameEditor()
+
   if (!input) {
     throw new Error('the rename shortcut did not open an editor')
   }
+
   return {
     input,
     markUnread: () => rerender(<ShortcutRenameHarness {...props} showUnreadEmphasis={true} />),

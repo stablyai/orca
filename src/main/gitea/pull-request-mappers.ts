@@ -58,28 +58,37 @@ export function deriveGiteaCommitStatus(rollup: RawGiteaCombinedStatus | null): 
   if (!rollup) {
     return 'neutral'
   }
+
   const combined = classifyGiteaStatus(rollup.state)
+
   if (combined !== 'neutral') {
     return combined
   }
+
   const statuses = rollup.statuses ?? []
+
   if (statuses.length === 0) {
     return 'neutral'
   }
 
   let hasPending = false
+
   for (const status of statuses) {
     const classified = classifyGiteaStatus(status.status ?? status.state)
+
     if (classified === 'failure') {
       return 'failure'
     }
+
     if (classified === 'pending') {
       hasPending = true
     }
   }
+
   if (hasPending) {
     return 'pending'
   }
+
   return statuses.every(
     (status) => classifyGiteaStatus(status.status ?? status.state) === 'success'
   )
@@ -93,14 +102,17 @@ export function mapGiteaPullRequestState(
   if (raw.merged) {
     return 'merged'
   }
+
   // Closed Gitea PRs can still carry the draft flag; terminal state should
   // win so review summaries do not show closed PRs as active drafts.
   if (raw.state?.trim().toLowerCase() === 'closed') {
     return 'closed'
   }
+
   if (raw.draft) {
     return 'draft'
   }
+
   return 'open'
 }
 
@@ -108,9 +120,11 @@ export function mapGiteaMergeable(value: boolean | null | undefined): PRMergeabl
   if (value === true) {
     return 'MERGEABLE'
   }
+
   if (value === false) {
     return 'CONFLICTING'
   }
+
   return 'UNKNOWN'
 }
 
@@ -121,7 +135,9 @@ export function mapGiteaPullRequest(
   if (typeof raw.number !== 'number' || !raw.title || !raw.html_url) {
     return null
   }
+
   const headSha = raw.head?.sha?.trim()
+
   return {
     number: raw.number,
     title: raw.title,

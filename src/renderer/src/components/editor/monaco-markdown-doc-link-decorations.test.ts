@@ -62,6 +62,7 @@ describe('getMarkdownDocLinkDecorationRanges', () => {
 
   it('scans pasted markdown without allocating one array entry per line', () => {
     const split = vi.spyOn(String.prototype, 'split')
+
     const content = [
       '# Notes',
       ...Array.from({ length: 10_000 }, () => 'plain'),
@@ -92,6 +93,7 @@ describe('createMarkdownDocLinkDecorationController', () => {
 
     let modelValue = '[[initial.md]]'
     let contentListener = (): void => {}
+
     const set = vi.fn()
     const clear = vi.fn()
     const dispose = vi.fn()
@@ -101,6 +103,7 @@ describe('createMarkdownDocLinkDecorationController', () => {
       getModel: () => ({ getValue: () => modelValue }),
       onDidChangeModelContent: (listener: () => void) => {
         contentListener = listener
+
         return { dispose }
       }
     } as unknown as editor.IStandaloneCodeEditor
@@ -147,6 +150,7 @@ describe('createMarkdownDocLinkDecorationController', () => {
     vi.useFakeTimers()
 
     let contentListener = (): void => {}
+
     const set = vi.fn()
     const clear = vi.fn()
 
@@ -155,6 +159,7 @@ describe('createMarkdownDocLinkDecorationController', () => {
       getModel: () => ({ getValue: () => '[[initial.md]]' }),
       onDidChangeModelContent: (listener: () => void) => {
         contentListener = listener
+
         return { dispose: vi.fn() }
       }
     } as unknown as editor.IStandaloneCodeEditor

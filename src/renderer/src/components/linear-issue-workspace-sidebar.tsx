@@ -83,16 +83,19 @@ function LinearIssueActionsCard({
       icon: Clipboard,
       action: () => {
         const renderedText = buildLinearIssueContextSnapshot(issue, comments)
+
         const prompt =
           buildContainedLinkedContextBlock({
             provider: 'linear',
             version: 1,
             renderedText
           }) ?? renderedText
+
         void copyLinearIssueText(prompt, 'Prompt')
       }
     }
   ]
+
   return (
     <section className="rounded-xl border border-border/60 bg-card text-card-foreground shadow-xs">
       <div className="flex h-10 items-center gap-1 border-b border-border/50 px-4 text-sm font-medium text-muted-foreground">
@@ -102,6 +105,7 @@ function LinearIssueActionsCard({
       <div className="space-y-1 p-3">
         {actionItems.map((item) => {
           const Icon = item.icon
+
           return (
             <Tooltip key={item.label}>
               <TooltipTrigger asChild>

@@ -76,9 +76,11 @@ describe('reattach payload context', () => {
       hasSleepingRecord: false,
       sleepingRecordEntry: null
     } as ColdRestoreAgentResumeStartup
+
     const buildColdRestoreAgentResumeStartup = vi.fn()
     const applyColdRestoreAgentResumeStartup = vi.fn(() => true)
     const schedulePendingStartupCommandDelivery = vi.fn()
+
     const session = createSession({
       buildColdRestoreAgentResumeStartup,
       applyColdRestoreAgentResumeStartup,
@@ -88,6 +90,7 @@ describe('reattach payload context', () => {
       consumeRestoredViewportBlankingMarker: vi.fn(),
       writeFreshShellViewportBlanking: vi.fn()
     })
+
     const context: ReattachPayloadContext = {
       ...createContext('', 1),
       connectResult: {

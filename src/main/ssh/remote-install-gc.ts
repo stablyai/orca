@@ -44,6 +44,7 @@ import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
 // Legacy relay dirs predate `.install-complete`; they need a liveness-only GC check so they
 // eventually drain. There is no orcad equivalent — orcad has never shipped without one.
 const LEGACY_RELAY_DIR_REGEX = /^relay-v\d+\.\d+\.\d+$/
+
 const DEFAULT_REMOTE_HOST = getRemoteHostPlatform('linux-x64')
 
 function execHostCommand(
@@ -89,6 +90,7 @@ export async function gcOldRemoteInstallVersions(
   const baseDir = joinRemotePath(host, remoteHome, RELAY_REMOTE_DIR)
   const currentDirName = remoteBasename(currentDirAbsPath, host)
   let listing: string
+
   try {
     listing = await execHostCommand(
       conn,
@@ -98,6 +100,7 @@ export async function gcOldRemoteInstallVersions(
   } catch {
     return
   }
+
   const entries = listing
     .split('\n')
     .map((s) => s.trim())
@@ -108,6 +111,7 @@ export async function gcOldRemoteInstallVersions(
 
   const versionDirRegex = remoteInstallVersionDirRegex(model)
   const pinned = new Set([currentDirName, ...(options.pinnedDirNames ?? [])])
+
   const candidates = entries
     // Why re-check ownership after a prefix-scoped listing: this is the one line that stands
     // between a parameterized GC and deleting the sibling model's live install.
@@ -121,38 +125,49 @@ export async function gcOldRemoteInstallVersions(
 
   const removed: string[] = []
   const kept: string[] = []
+
   for (const name of candidates) {
     const dir = joinRemotePath(host, baseDir, name)
+
     try {
       const safe = await isCandidateSafeToRemove(conn, model, dir, name, host, options)
+
       if (!safe) {
         kept.push(name)
         continue
       }
+
       // Why: the claim is a sibling, so it survives moving/deleting the candidate and lets installers back out first.
       const gcClaimToken = await tryAcquireRelayGcClaim(conn, dir, host)
+
       if (!gcClaimToken) {
         kept.push(name)
         continue
       }
+
       let preserveGcClaim = false
       let gcClaimReleaseNeeded = true
+
       try {
         // Recheck under the stable claim; installers probe it before and after creating their lock, closing both orders.
         if (!(await isCandidateSafeToRemove(conn, model, dir, name, host, options))) {
           kept.push(name)
           continue
         }
+
         if (!(await isRelayGcClaimOwned(conn, dir, gcClaimToken, host))) {
           kept.push(name)
           continue
         }
+
         const tombstone = `${dir}.gc-tombstone.${process.pid}.${Date.now()}`
         const moved = await execHostCommand(conn, host, moveRemoteTreeCommand(host, dir, tombstone))
+
         if (moved.trim() !== 'MOVED') {
           kept.push(name)
           continue
         }
+
         // Once renamed, a fresh install at the original path is isolated from the tombstone's deletion, so release the claim.
         const release = await releaseRelayGcClaimWithRetry(conn, dir, gcClaimToken, host)
         gcClaimReleaseNeeded = release === 'unknown'
@@ -161,12 +176,14 @@ export async function gcOldRemoteInstallVersions(
         if (isUnconfirmedSshCommandTermination(err)) {
           preserveGcClaim = true
         }
+
         throw err
       } finally {
         if (!preserveGcClaim && gcClaimReleaseNeeded) {
           await releaseRelayGcClaimWithRetry(conn, dir, gcClaimToken, host)
         }
       }
+
       removed.push(name)
     } catch (err) {
       console.warn(
@@ -196,15 +213,19 @@ async function isCandidateSafeToRemove(
 
   const lockDir = joinRemotePath(host, dir, RELAY_INSTALL_LOCK_NAME)
   let lockProbe: string
+
   try {
     lockProbe = await execHostCommand(conn, host, probeInstallLockExistsCommand(host, lockDir))
   } catch {
     return false
   }
+
   const lockState = lockProbe.trim()
+
   if (lockState !== 'OPEN' && lockState !== 'LOCKED') {
     return false
   }
+
   const locked = lockState === 'LOCKED'
 
   if (locked) {
@@ -212,6 +233,7 @@ async function isCandidateSafeToRemove(
     if (!(await isRelayInstallLockStale(conn, lockDir, host))) {
       return false
     }
+
     process.stderr.write?.(
       `[${model.id}] GC: lock at ${lockDir} is stale; treating as recoverable\n`
     )
@@ -220,11 +242,13 @@ async function isCandidateSafeToRemove(
   // Legacy dirs predate .install-complete; skip the sentinel and rely on the live-socket probe alone.
   if (!isLegacy) {
     const completePath = joinRemotePath(host, dir, model.installCompleteFilename)
+
     const completeProbe = await execHostCommand(
       conn,
       host,
       probeFileExistsCommand(host, completePath)
     ).catch(() => 'PARTIAL')
+
     if (completeProbe.trim() !== 'COMPLETE') {
       // Crashed-install partial; leave for the next deploy to recover.
       return false
@@ -258,6 +282,7 @@ export async function gcOldRelayVersions(
     ...options,
     isDirLive: (dir) => hasLiveRelaySocket(conn, dir, host, options)
   })
+
   // Why after and not before: version-dir removal is what turns a cache entry unreferenced, so
   // running it second lets one pass reclaim both instead of leaving the tree for the next connect.
   if (options?.nativeDepsCacheKeys?.length) {
@@ -287,12 +312,15 @@ async function hasLiveRelaySocket(
             )
           }
         : undefined
+
     const out = await execHostCommand(
       conn,
       host,
       relayLivenessProbeCommand(host, dir, windowsOptions)
     )
+
     const state = out.trim()
+
     return state !== 'DEAD' && state !== 'WAITING'
   } catch {
     // Why: an inconclusive liveness probe must never authorize deletion.

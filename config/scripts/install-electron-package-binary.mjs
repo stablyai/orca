@@ -25,13 +25,21 @@ import {
 } from './shared-electron-dist-cache.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const electronPackageDir = resolve(projectDir, 'node_modules/electron')
+
 const electronRequire = createRequire(resolve(electronPackageDir, 'package.json'))
+
 const { version: electronVersion } = electronRequire('./package.json')
+
 const { downloadArtifact } = electronRequire('@electron/get')
+
 const targetPlatform = getElectronTargetPlatform()
+
 const targetArch = getElectronTargetArch()
+
 const platformPath = getElectronPlatformPath(targetPlatform)
+
 const transientDownloadErrorCodes = new Set([
   'EAI_AGAIN',
   'ECONNREFUSED',
@@ -62,6 +70,7 @@ try {
 
 async function main() {
   repairElectronPathFile()
+
   const sharedEntry = resolveSharedElectronDistEntry({
     repoRoot: projectDir,
     electronPackageDir,
@@ -74,6 +83,7 @@ async function main() {
     if (sharedEntry !== null && !hasAdoptedSharedElectronDist(sharedEntry)) {
       shareExistingElectronDist(sharedEntry)
     }
+
     return
   }
 
@@ -95,6 +105,7 @@ async function main() {
 function electronPackageIsUsable() {
   try {
     const installedPlatformPath = readFileSync(resolve(electronPackageDir, 'path.txt'), 'utf8')
+
     return (
       electronDistMatchesPackage(getElectronExecutablePath()) &&
       installedPlatformPath === platformPath
@@ -109,6 +120,7 @@ function electronDistMatchesPackage(electronExecutable) {
     const installedVersion = readFileSync(resolve(electronPackageDir, 'dist', 'version'), 'utf8')
       .trim()
       .replace(/^v/, '')
+
     return installedVersion === electronVersion && existsSync(electronExecutable)
   } catch {
     return false
@@ -123,12 +135,14 @@ function getElectronExecutablePath() {
 
 function repairElectronPathFile() {
   const electronExecutable = resolve(electronPackageDir, 'dist', platformPath)
+
   if (!electronDistMatchesPackage(electronExecutable)) {
     return
   }
 
   const pathFile = resolve(electronPackageDir, 'path.txt')
   let currentPath = ''
+
   try {
     currentPath = readFileSync(pathFile, 'utf8')
   } catch {
@@ -143,12 +157,16 @@ function repairElectronPathFile() {
 
 async function installElectronPackageBinary(sharedEntry) {
   const electronDistDir = resolve(electronPackageDir, 'dist')
+
   if (sharedEntry !== null && adoptSharedElectronDist(sharedEntry, electronDistDir)) {
     return
   }
+
   const tempDir = mkdtempSync(resolve(tmpdir(), 'orca-electron-'))
+
   const persistentCacheRoot =
     process.env.ORCA_ELECTRON_PACKAGE_CACHE_ROOT || process.env.ELECTRON_CACHE || null
+
   const cacheRoot = persistentCacheRoot ?? join(tempDir, 'cache')
   const extractDir = join(tempDir, 'extract')
 
@@ -163,6 +181,7 @@ async function installElectronPackageBinary(sharedEntry) {
       tempDirectory: tempDir,
       ...(shouldUseRemoteChecksums() ? {} : { checksums: electronRequire('./checksums.json') })
     }
+
     const zipPath = await downloadElectronArtifactWithRetry(downloadOptions, {
       cacheRootIsPersistent: Boolean(persistentCacheRoot)
     })
@@ -171,6 +190,7 @@ async function installElectronPackageBinary(sharedEntry) {
     // that leave only dist/locales. Verify in temp before replacing package dist.
     extractElectronArchive(zipPath, extractDir)
     const extractedExecutable = resolve(extractDir, platformPath)
+
     if (!existsSync(extractedExecutable)) {
       console.error('[electron-package] Electron archive extract did not contain executable.')
       console.error(`  platformPath=${platformPath}`)
@@ -180,6 +200,7 @@ async function installElectronPackageBinary(sharedEntry) {
     }
 
     moveExtractedElectronDist(extractDir, electronDistDir)
+
     if (sharedEntry !== null) {
       publishElectronDistForSiblingWorktrees(sharedEntry, electronDistDir)
     }
@@ -197,8 +218,10 @@ async function installElectronPackageBinary(sharedEntry) {
  */
 function adoptSharedElectronDist(sharedEntry, electronDistDir) {
   const stageRoot = mkdtempSync(resolve(electronPackageDir, '.dist-clone-'))
+
   try {
     const stagePath = join(stageRoot, 'dist')
+
     if (
       !shareElectronDistFromCache(sharedEntry, stagePath, {
         version: electronVersion,
@@ -207,15 +230,18 @@ function adoptSharedElectronDist(sharedEntry, electronDistDir) {
     ) {
       return false
     }
+
     moveExtractedElectronDist(stagePath, electronDistDir)
     recordAdoptedSharedElectronDist(sharedEntry, writeFileSync)
     console.log(
       `[electron-package] Shared Electron ${electronVersion} from ${sharedEntry.entryPath}`
     )
+
     return true
   } catch (error) {
     // The download path below is always a correct fallback, so sharing never fails an install.
     console.warn(`[electron-package] Shared Electron dist unavailable: ${formatShareError(error)}`)
+
     return false
   } finally {
     rmSync(stageRoot, { recursive: true, force: true })
@@ -225,6 +251,7 @@ function adoptSharedElectronDist(sharedEntry, electronDistDir) {
 /** An already-installed dist joins the cache: clone from it if it exists, seed it otherwise. */
 function shareExistingElectronDist(sharedEntry) {
   const electronDistDir = resolve(electronPackageDir, 'dist')
+
   if (!adoptSharedElectronDist(sharedEntry, electronDistDir)) {
     publishElectronDistForSiblingWorktrees(sharedEntry, electronDistDir)
   }
@@ -235,6 +262,7 @@ function publishElectronDistForSiblingWorktrees(sharedEntry, electronDistDir) {
     version: electronVersion,
     platformPath
   })
+
   if (published) {
     console.log(
       `[electron-package] Published Electron ${electronVersion} to ${sharedEntry.entryPath}`
@@ -255,6 +283,7 @@ async function downloadElectronArtifactWithRetry(downloadOptions, { cacheRootIsP
       return await downloadArtifact(downloadOptions)
     } catch (error) {
       const retryDelay = retryDelays[attempt]
+
       if (retryDelay === undefined || !isTransientDownloadError(error)) {
         throw error
       }
@@ -263,9 +292,11 @@ async function downloadElectronArtifactWithRetry(downloadOptions, { cacheRootIsP
         `[electron-package] Transient Electron download failure (${formatDownloadError(error)}); ` +
           `retrying in ${retryDelay}ms (${attempt + 2}/${retryDelays.length + 1}).`
       )
+
       if (!cacheRootIsPersistent) {
         rmSync(downloadOptions.cacheRoot, { recursive: true, force: true })
       }
+
       await new Promise((resolveDelay) => setTimeout(resolveDelay, retryDelay))
     }
   }
@@ -273,6 +304,7 @@ async function downloadElectronArtifactWithRetry(downloadOptions, { cacheRootIsP
 
 function getDownloadRetryDelays() {
   const configured = process.env.ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS
+
   if (!configured) {
     // Why: GitHub release CDN returns intermittent 503 / HTTP2 stream refusals
     // under CI fan-out; a few short attempts still exhaust during outages.
@@ -280,9 +312,11 @@ function getDownloadRetryDelays() {
   }
 
   const delays = configured.split(',').map(Number)
+
   if (delays.some((delay) => !Number.isSafeInteger(delay) || delay < 0)) {
     throw new Error('ORCA_ELECTRON_PACKAGE_RETRY_DELAYS_MS must contain non-negative integers')
   }
+
   return delays
 }
 
@@ -291,7 +325,9 @@ function isTransientDownloadError(error) {
     if (transientDownloadErrorCodes.has(candidate?.code)) {
       return true
     }
+
     const statusCode = getDownloadErrorStatusCode(candidate)
+
     if (
       statusCode === 408 ||
       statusCode === 425 ||
@@ -301,6 +337,7 @@ function isTransientDownloadError(error) {
       return true
     }
   }
+
   return false
 }
 
@@ -314,23 +351,28 @@ function getDownloadErrorStatusCode(error) {
 function getErrorChain(error) {
   const errors = []
   let candidate = error
+
   while (candidate && errors.length < 5) {
     errors.push(candidate)
     candidate = candidate.cause
   }
+
   return errors
 }
 
 function formatDownloadError(error) {
   for (const candidate of getErrorChain(error)) {
     const statusCode = getDownloadErrorStatusCode(candidate)
+
     if (statusCode) {
       return `HTTP ${statusCode}`
     }
+
     if (candidate?.code) {
       return candidate.code
     }
   }
+
   return error instanceof Error ? error.message : String(error)
 }
 
@@ -339,6 +381,7 @@ function extractElectronArchive(zipPath, extractDir) {
   // Why: extract-zip/Electron install.js can leave Node 24 with an unsettled
   // promise and no active handles on CI. Host unzip tools fail synchronously.
   const command = getExtractorCommand(zipPath, extractDir)
+
   const result = spawnSync(command.file, command.args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe']
@@ -347,6 +390,7 @@ function extractElectronArchive(zipPath, extractDir) {
   if (result.error) {
     throw result.error
   }
+
   if (result.status !== 0) {
     throw new Error(formatExtractorFailure(command, result))
   }
@@ -366,22 +410,27 @@ function moveExtractedElectronDist(extractDir, electronDistDir) {
   try {
     stageExtractedElectronDist(extractDir, nextDistDir)
     const hasNextTypeDef = existsSync(resolve(nextDistDir, 'electron.d.ts'))
+
     try {
       if (existsSync(electronDistDir)) {
         renameSync(electronDistDir, previousDistDir)
         previousMoved = true
       }
+
       if (hasNextTypeDef && existsSync(packageTypeDefPath)) {
         renameSync(packageTypeDefPath, previousTypeDefPath)
         previousTypeDefMoved = true
       }
+
       renameSync(nextDistDir, electronDistDir)
       nextPublished = true
+
       if (hasNextTypeDef) {
         renameSync(resolve(electronDistDir, 'electron.d.ts'), packageTypeDefPath)
       }
     } catch (publishError) {
       const rollbackErrors = []
+
       for (const [shouldMove, source, target] of [
         [nextPublished, electronDistDir, nextDistDir],
         [previousMoved, previousDistDir, electronDistDir],
@@ -390,12 +439,14 @@ function moveExtractedElectronDist(extractDir, electronDistDir) {
         if (!shouldMove) {
           continue
         }
+
         try {
           renameSync(source, target)
         } catch (rollbackError) {
           rollbackErrors.push(rollbackError)
         }
       }
+
       if (rollbackErrors.length > 0) {
         cleanupTransaction = false
         throw new AggregateError(
@@ -403,6 +454,7 @@ function moveExtractedElectronDist(extractDir, electronDistDir) {
           `Electron install publish failed; previous files remain at ${transactionDir}`
         )
       }
+
       throw publishError
     }
   } finally {
@@ -431,6 +483,7 @@ function stageExtractedElectronDist(extractDir, nextDistDir) {
     if (err?.code !== 'EXDEV') {
       throw err
     }
+
     cpSync(extractDir, nextDistDir, {
       recursive: true,
       dereference: false,
@@ -502,6 +555,7 @@ function logElectronInstallDiagnostics() {
   console.error(`  distDir=${electronDistDir} exists=${existsSync(electronDistDir)}`)
   console.error(`  pathFile=${pathFile} exists=${existsSync(pathFile)}`)
   console.error(`  platformPath=${platformPath}`)
+
   if (existsSync(electronDistDir)) {
     console.error(`  distEntries=${safeReaddir(electronDistDir).join(', ')}`)
   }

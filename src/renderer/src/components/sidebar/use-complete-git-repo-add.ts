@@ -46,16 +46,20 @@ export function useCompleteGitRepoAdd({
           worktree.hostId === executionHostId ||
           (!worktree.hostId && executionHostId === 'local')
       )
+
       const sortedWorktrees = [...worktrees].sort((a, b) => {
         if (a.lastActivityAt !== b.lastActivityAt) {
           return b.lastActivityAt - a.lastActivityAt
         }
+
         return compareWorktreeDisplayName(a, b)
       })
+
       const existingWorkspaceTelemetry = buildAddRepoExistingWorkspacesTelemetry(
         source,
         sortedWorktrees
       )
+
       if (
         existingWorkspaceTelemetry &&
         shouldTrackAddRepoExistingWorkspacesDetected(existingWorkspaceTelemetry) &&
@@ -64,10 +68,13 @@ export function useCompleteGitRepoAdd({
         detectedTelemetryTrackedRef.current.add(repoId)
         track('add_repo_existing_workspaces_detected', existingWorkspaceTelemetry)
       }
+
       if (finishProjectAdd) {
         await finishProjectAdd(repoId, source, executionHostId)
+
         return
       }
+
       await finishProjectAddWithDefaultCheckout({
         repoId,
         source,

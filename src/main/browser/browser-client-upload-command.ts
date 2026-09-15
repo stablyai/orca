@@ -24,20 +24,25 @@ export async function executeBrowserClientUploadCommand(options: {
   run(params: Record<string, unknown>): Promise<unknown>
 }): Promise<unknown> {
   const { fileChannel, staging } = options
+
   if (!fileChannel?.available || !staging) {
     throw new BrowserClientPageCommandError(BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR)
   }
+
   const remotePaths = readBrowserClientUploadPaths(options.params)
+
   const files = await fetchBrowserClientUploadFiles({
     request: (method, params) => fileChannel.request(method, params),
     event: options.event,
     remotePaths
   })
+
   const staged = await staging.stage({
     browserPageId: options.event.browserPageId,
     pageHostGeneration: options.event.pageHostGeneration,
     files
   })
+
   try {
     return await options.run({ ...options.params, files: [...staged.localFilePaths] })
   } catch (error) {

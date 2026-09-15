@@ -35,13 +35,16 @@ export function buildWorktreeSourcePreferenceUpdate(
   const current = normalizeWorktreeVisibilitySourcePreferences(
     repo.worktreeVisibilitySourcePreferences
   )
+
   const builtIn = { ...legacyBuiltInPreferences(repo), ...current?.builtIn }
   const custom = { ...current?.custom }
+
   if (source.kind === 'built-in') {
     builtIn[source.id] = visibility
   } else {
     custom[source.id] = visibility
   }
+
   return preferenceResult(builtIn, custom)
 }
 
@@ -52,8 +55,10 @@ export function removeCustomWorktreeSourcePreference(
   const current = normalizeWorktreeVisibilitySourcePreferences(
     repo.worktreeVisibilitySourcePreferences
   )
+
   const custom = { ...current?.custom }
   delete custom[sourceId]
+
   return preferenceResult({ ...legacyBuiltInPreferences(repo), ...current?.builtIn }, custom)
 }
 
@@ -64,8 +69,10 @@ export function removeBuiltInWorktreeSourcePreference(
   const current = normalizeWorktreeVisibilitySourcePreferences(
     repo.worktreeVisibilitySourcePreferences
   )
+
   const builtIn = { ...legacyBuiltInPreferences(repo), ...current?.builtIn }
   delete builtIn[sourceId]
+
   return preferenceResult(builtIn, { ...current?.custom })
 }
 
@@ -77,11 +84,13 @@ export function buildDefaultWorktreeSourcePreferenceUpdate(
   const current = normalizeWorktreeVisibilitySourcePreferences(defaults.sourcePreferences)
   const builtIn = { ...current?.builtIn }
   const custom = { ...current?.custom }
+
   if (source.kind === 'built-in') {
     builtIn[source.id] = visibility
   } else {
     custom[source.id] = visibility
   }
+
   return preferenceResult(builtIn, custom)
 }
 
@@ -92,5 +101,6 @@ export function removeDefaultCustomWorktreeSourcePreference(
   const current = normalizeWorktreeVisibilitySourcePreferences(defaults.sourcePreferences)
   const custom = { ...current?.custom }
   delete custom[sourceId]
+
   return preferenceResult({ ...current?.builtIn }, custom)
 }

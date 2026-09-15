@@ -7,9 +7,11 @@ export function areWorkspaceLinkedItemsEqual(
   if (a === b) {
     return true
   }
+
   if (!a || !b) {
     return !a && !b
   }
+
   return (
     a.provider === b.provider &&
     a.type === b.type &&
@@ -26,7 +28,9 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const raw = value as Partial<WorkspaceLinkedItem>
+
   if (
     raw.provider !== 'github' &&
     raw.provider !== 'gitlab' &&
@@ -35,9 +39,11 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
   ) {
     return null
   }
+
   if (raw.type !== 'issue' && raw.type !== 'pr' && raw.type !== 'mr') {
     return null
   }
+
   if (
     typeof raw.number !== 'number' ||
     !Number.isFinite(raw.number) ||
@@ -48,6 +54,7 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
   ) {
     return null
   }
+
   return {
     provider: raw.provider,
     type: raw.type,

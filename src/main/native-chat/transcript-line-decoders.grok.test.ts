@@ -8,6 +8,7 @@ describe('decodeGrokTranscriptLine', () => {
       content: [{ type: 'text', text: '<user_query>\nFix the bug\n</user_query>' }],
       timestamp: '2026-06-18T00:00:00.000Z'
     })
+
     expect(decodeGrokTranscriptLine(line, 'fb-1')).toEqual({
       id: 'fb-1',
       role: 'user',
@@ -24,6 +25,7 @@ describe('decodeGrokTranscriptLine', () => {
       tool_calls: [{ id: 'c1', name: 'grep', arguments: '{"pattern":"foo"}' }],
       id: 'asst-1'
     })
+
     expect(decodeGrokTranscriptLine(line, 'fb-2')).toEqual({
       id: 'fb-2:asst-1',
       role: 'assistant',
@@ -61,6 +63,7 @@ describe('decodeGrokTranscriptLine', () => {
 
   it('restores an attachment-only pasted image from Grok transcript text', () => {
     const imagePath = '/tmp/orca-paste-1783675302563-2207c073-535f-4b83-a181-61127c8bbd68.png'
+
     const line = JSON.stringify({
       type: 'user',
       content: [{ type: 'text', text: `<user_query>${imagePath}</user_query>` }]
@@ -74,6 +77,7 @@ describe('decodeGrokTranscriptLine', () => {
 
   it('preserves ordinary prompts that mention pasted-image filenames', () => {
     const text = 'Explain what an orca-paste-123-example.png file is'
+
     const line = JSON.stringify({
       type: 'user',
       content: [{ type: 'text', text: `<user_query>${text}</user_query>` }]
@@ -183,6 +187,7 @@ describe('decodeGrokTranscriptLine', () => {
       id: 'rs-1',
       summary: [{ type: 'summary_text', text: 'Planning the change' }]
     })
+
     expect(decodeGrokTranscriptLine(line, 'fb-3')).toMatchObject({
       id: 'fb-3:rs-1',
       role: 'reasoning',

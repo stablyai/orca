@@ -35,6 +35,7 @@ function Harness({
     settledTurns,
     scopeKey
   })
+
   return createElement('result', { disclosure })
 }
 
@@ -56,6 +57,7 @@ describe('useMobileNativeChatTurnDisclosure', () => {
         source: 'transcript'
       }
     ]
+
     const findLastIndex = vi.spyOn(messages, 'findLastIndex')
     const slice = vi.spyOn(messages, 'slice')
     const filter = vi.spyOn(messages, 'filter')
@@ -73,8 +75,10 @@ describe('useMobileNativeChatTurnDisclosure', () => {
 
   it('keeps a settled turn handler stable for NUL-delimited scope keys', () => {
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(1_000)
+
       const messages: NativeChatMessage[] = [
         {
           id: 'u1',
@@ -84,6 +88,7 @@ describe('useMobileNativeChatTurnDisclosure', () => {
           source: 'transcript'
         }
       ]
+
       act(() => {
         renderer = create(createElement(Harness, { messages, enabled: true }))
       })
@@ -99,6 +104,7 @@ describe('useMobileNativeChatTurnDisclosure', () => {
           createElement(Harness, { messages: refreshed, enabled: true, isWorking: false })
         )
       })
+
       const second = renderer!.root
         .findByType('result')
         .props.disclosure.resolveRow(0, refreshed[0])
@@ -122,6 +128,7 @@ describe('useMobileNativeChatTurnDisclosure', () => {
 
   it('shows the host-recorded duration over the locally observed one', () => {
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(1_000)
       const messages = [userMessage('u1')]
@@ -146,6 +153,7 @@ describe('useMobileNativeChatTurnDisclosure', () => {
 
   it('suppresses local duration when the host explicitly cannot verify the end', () => {
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(1_000)
       const messages = [userMessage('u1')]
@@ -172,8 +180,10 @@ describe('useMobileNativeChatTurnDisclosure', () => {
 
   it('keeps at most the latest 128 turns expanded', () => {
     vi.useFakeTimers()
+
     try {
       let messages: NativeChatMessage[] = []
+
       for (let index = 0; index < 129; index++) {
         messages = messages.concat(userMessage(`u${index}`))
         vi.setSystemTime(index * 2_000)
@@ -194,9 +204,11 @@ describe('useMobileNativeChatTurnDisclosure', () => {
       }
 
       const disclosure = renderer!.root.findByType('result').props.disclosure
+
       const expanded = messages.filter(
         (message, index) => disclosure.resolveRow(index, message).turnExpanded
       )
+
       expect(expanded).toHaveLength(128)
       expect(disclosure.resolveRow(0, messages[0]).turnExpanded).toBe(false)
       expect(disclosure.resolveRow(128, messages[128]).turnExpanded).toBe(true)

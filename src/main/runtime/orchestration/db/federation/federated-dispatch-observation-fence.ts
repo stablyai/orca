@@ -55,9 +55,11 @@ export function captureFederatedDispatchObservationFences(
   if (dispatchIds.length === 0) {
     return new Map()
   }
+
   const rows = this.db
     .prepare(`${OBSERVATION_FENCE_SQL} IN (SELECT value FROM json_each(?))`)
     .all(JSON.stringify([...dispatchIds])) as FederatedDispatchObservationFence[]
+
   return new Map(rows.map((row) => [row.dispatch_id, row]))
 }
 
@@ -67,14 +69,19 @@ export function projectFederatedDispatchObservation(
   projection: () => void
 ): boolean {
   const transaction = beginLifecycleWriteTransaction(this.db, 'federated_dispatch_observation')
+
   try {
     const current = this.captureFederatedDispatchObservationFence(fence.dispatch_id)
+
     if (!current || !observationFenceMatches(current, fence)) {
       commitLifecycleWriteTransaction(this.db, transaction)
+
       return false
     }
+
     projection()
     commitLifecycleWriteTransaction(this.db, transaction)
+
     return true
   } catch (error) {
     rollbackLifecycleWriteTransaction(this.db, transaction)

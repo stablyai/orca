@@ -23,6 +23,7 @@ describe('summarizeLatencySamples', () => {
       Number.POSITIVE_INFINITY,
       9.87654
     ])
+
     expect(summary).toEqual({ count: 2, p50: 1.23, p95: 9.88, max: 9.88 })
   })
 

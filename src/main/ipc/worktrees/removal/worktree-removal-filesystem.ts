@@ -14,6 +14,7 @@ export async function isAlreadyRemovedWorktreePath(
 ): Promise<boolean> {
   if (!repo.connectionId) {
     const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
+
     return isWorktreePathMissing(
       toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
       access.statPath
@@ -21,9 +22,11 @@ export async function isAlreadyRemovedWorktreePath(
   }
 
   const fsProvider = getSshFilesystemProvider(repo.connectionId)
+
   if (!fsProvider) {
     return false
   }
+
   return isWorktreePathMissing(worktreePath, (path) => fsProvider.stat(path))
 }
 
@@ -36,6 +39,7 @@ export async function isLocalGitRepository(
       cwd: runtimeWorktreePath,
       ...localWorktreeGitOptions
     })
+
     return true
   } catch (error) {
     return !gitStatusErrorMeansNotRepository(error)
@@ -51,9 +55,11 @@ export function gitStatusErrorMeansNotRepository(error: unknown): boolean {
         : typeof error === 'string'
           ? error
           : ''
+
   const stderr =
     error && typeof error === 'object' && 'stderr' in error
       ? String((error as { stderr: unknown }).stderr)
       : ''
+
   return /not a git repository/i.test(`${message}\n${stderr}`)
 }

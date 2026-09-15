@@ -100,6 +100,7 @@ export function installableSkillProviders(
   detectedProviders: readonly string[]
 ): SkillInstallProviderDefinition[] {
   const detected = new Set(detectedProviders)
+
   return SKILL_INSTALL_PROVIDERS.filter((provider) => detected.has(provider.id))
 }
 

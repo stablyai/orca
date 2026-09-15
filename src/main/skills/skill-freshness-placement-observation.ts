@@ -30,9 +30,11 @@ function freshnessStatus(
   if (!snapshot) {
     return 'unrecognized'
   }
+
   if (snapshot.releaseRevision > current.releaseRevision) {
     return 'newer-known'
   }
+
   return snapshot.packageDigest === current.packageDigest ? 'current' : 'outdated'
 }
 
@@ -54,6 +56,7 @@ function knownSnapshots(
   current: SkillCurrentBundleEntry
 ): SkillKnownSnapshot[] {
   const snapshots = artifacts.knownSnapshots[current.name] ?? []
+
   return snapshots.some((snapshot) => snapshot.packageDigest === current.packageDigest)
     ? snapshots
     : [...snapshots, current]
@@ -86,6 +89,7 @@ export async function observeSkillFreshnessInstallation(args: {
     currentAppVersion: args.currentAppVersion,
     errorCategory: args.topology.errorCategory
   }
+
   if (!args.topology.resolvedPath || !args.topology.identity) {
     return {
       ...base,
@@ -102,10 +106,12 @@ export async function observeSkillFreshnessInstallation(args: {
     const snapshots = knownSnapshots(args.artifacts, args.current)
     const officialPaths = new Set(args.current.files.map((file) => file.path))
     const matchedSnapshot = matchingKnownSnapshot(observed, snapshots, officialPaths)
+
     // Why: a later release can reintroduce identical bytes. Exact current
     // identity is still current, and cannot honestly be attributed to the later tag.
     const snapshot =
       observed.observedDigest === args.current.packageDigest ? args.current : matchedSnapshot
+
     return {
       ...base,
       status: freshnessStatus(snapshot, args.current),
@@ -145,12 +151,14 @@ export async function classifyHomeSkillCandidate(args: {
   candidateLstat: CandidateLstat
 }): Promise<SkillFreshnessInstallation | null> {
   const unresolvedPath = join(args.root.path, args.current.name)
+
   try {
     await args.candidateLstat(unresolvedPath)
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
       return null
     }
+
     return observeSkillFreshnessInstallation({
       current: args.current,
       currentAppVersion: args.currentAppVersion,
@@ -170,6 +178,7 @@ export async function classifyHomeSkillCandidate(args: {
   }
 
   let topology: ClassifiedSkillTopology
+
   try {
     topology = await classifyHomeSkillTopology(args.root, unresolvedPath, args.canonicalRootPath)
   } catch (error) {
@@ -180,6 +189,7 @@ export async function classifyHomeSkillCandidate(args: {
       errorCategory: errorCategory(error, 'skill-candidate-topology-failed')
     }
   }
+
   return observeSkillFreshnessInstallation({
     current: args.current,
     currentAppVersion: args.currentAppVersion,
@@ -207,6 +217,7 @@ export async function classifyUnsupportedSkillCandidate(args: {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
       return null
     }
+
     return observeSkillFreshnessInstallation({
       current: args.current,
       currentAppVersion: args.currentAppVersion,
@@ -224,6 +235,7 @@ export async function classifyUnsupportedSkillCandidate(args: {
       }
     })
   }
+
   return observeSkillFreshnessInstallation({
     current: args.current,
     currentAppVersion: args.currentAppVersion,
@@ -250,21 +262,27 @@ export function dedupeSkillFreshnessPlacements(
   installations: readonly SkillFreshnessInstallation[]
 ): SkillFreshnessInstallation[] {
   const deduped = new Map<string, SkillFreshnessInstallation>()
+
   for (const installation of installations) {
     const key = installation.physicalIdentity
       ? `${installation.name}\0${installation.physicalIdentity}\0${topologyDedupeBucket(installation)}`
       : `logical\0${installation.id}`
+
     const existing = deduped.get(key)
+
     if (!existing) {
       deduped.set(key, installation)
       continue
     }
+
     const providers = [...new Set([...existing.providers, ...installation.providers])]
+
     if (skillTopologyPriority(installation.topology) > skillTopologyPriority(existing.topology)) {
       deduped.set(key, { ...installation, providers })
     } else {
       existing.providers = providers
     }
   }
+
   return [...deduped.values()]
 }

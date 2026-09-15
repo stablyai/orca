@@ -4,9 +4,11 @@ export function colorHex(color: string): string {
   if (!color) {
     return 'inherit'
   }
+
   if (color.startsWith('#')) {
     return color
   }
+
   return /^[0-9a-fA-F]{6}$/.test(color) ? `#${color}` : color
 }
 
@@ -41,6 +43,7 @@ export function singleSelectChipColors(color: string): ChipColors {
   if (!color) {
     return labelChipColors('')
   }
+
   return labelChipColors(SINGLE_SELECT_HEX[color.toUpperCase()] ?? color)
 }
 
@@ -51,17 +54,22 @@ export function labelChipColors(color: string): ChipColors {
     fgDark: '#e6edf3',
     border: 'rgba(125,125,125,0.36)'
   }
+
   if (!color) {
     return fallback
   }
+
   const hex = color.startsWith('#') ? color.slice(1) : color
+
   if (!/^[0-9a-fA-F]{6}$/.test(hex)) {
     return fallback
   }
+
   const r = Number.parseInt(hex.slice(0, 2), 16)
   const g = Number.parseInt(hex.slice(2, 4), 16)
   const b = Number.parseInt(hex.slice(4, 6), 16)
   const [h, s] = rgbToHsl(r, g, b)
+
   return {
     bg: `rgba(${r}, ${g}, ${b}, 0.18)`,
     border: `rgba(${r}, ${g}, ${b}, 0.3)`,
@@ -76,11 +84,14 @@ function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
   const min = Math.min(rn, gn, bn)
   const l = (max + min) / 2
   const d = max - min
+
   if (d === 0) {
     return [0, 0, l]
   }
+
   const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
   let h: number
+
   if (max === rn) {
     h = ((gn - bn) / d + (gn < bn ? 6 : 0)) * 60
   } else if (max === gn) {
@@ -88,6 +99,7 @@ function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
   } else {
     h = ((rn - gn) / d + 4) * 60
   }
+
   return [h, s, l]
 }
 

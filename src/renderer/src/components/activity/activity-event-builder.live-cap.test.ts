@@ -15,9 +15,11 @@ describe('live activity capacity', () => {
     const repo = makeRepo()
     const worktree = makeWorktree()
     const tabs = Array.from({ length: 82 }, (_, i) => makeTabWithIds(`tab-${i}`, worktree.id))
+
     const entries = Object.fromEntries(
       tabs.map((tab, i) => {
         const paneKey = makePaneKey(tab.id, LEAF_ID)
+
         return [
           paneKey,
           {
@@ -32,6 +34,7 @@ describe('live activity capacity', () => {
         ]
       })
     )
+
     const result = buildActivityEvents({
       agentStatusByPaneKey: entries,
       retainedAgentsByPaneKey: {},
@@ -41,6 +44,7 @@ describe('live activity capacity', () => {
       acknowledgedAgentsByPaneKey: {},
       now: 3_000
     })
+
     const threads = buildAgentPaneThreads(result)
 
     expect(threads).toHaveLength(82)

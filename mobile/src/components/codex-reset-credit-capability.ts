@@ -14,6 +14,7 @@ export async function readCodexResetCreditCapability(
   try {
     const response = await client.sendRequest('status.get')
     const capabilities = rpcObjectResultOrNull(response)?.capabilities
+
     return (
       Array.isArray(capabilities) && capabilities.includes(MOBILE_CODEX_RESET_CREDIT_CAPABILITY)
     )
@@ -30,9 +31,11 @@ export function useCodexResetCreditCapability(
 
   useEffect(() => {
     setSupported(false)
+
     if (!client || !connected) {
       return
     }
+
     return startRuntimeCapabilityProbe(client, (capabilities) => {
       setSupported(capabilities.includes(MOBILE_CODEX_RESET_CREDIT_CAPABILITY))
     })

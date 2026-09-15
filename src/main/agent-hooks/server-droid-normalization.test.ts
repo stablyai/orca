@@ -33,6 +33,7 @@ describe('Droid hook normalization', () => {
       buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'ship this fix' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.agentType).toBe('droid')
     expect(result?.payload.prompt).toBe('ship this fix')
@@ -47,6 +48,7 @@ describe('Droid hook normalization', () => {
       }),
       'production'
     )
+
     expect(waiting?.payload.state).toBe('waiting')
 
     const done = _internals.normalizeHookPayload(
@@ -57,6 +59,7 @@ describe('Droid hook normalization', () => {
       }),
       'production'
     )
+
     expect(done?.payload.state).toBe('done')
 
     const ignored = _internals.normalizeHookPayload(
@@ -67,6 +70,7 @@ describe('Droid hook normalization', () => {
       }),
       'production'
     )
+
     expect(ignored).toBeNull()
   })
 
@@ -127,6 +131,7 @@ describe('Droid hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('Read')
     expect(result?.payload.toolInput).toBe('/tmp/example.ts')
@@ -142,6 +147,7 @@ describe('Droid hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.toolName).toBe('Bash')
     expect(result?.payload.toolInput).toBe('pnpm typecheck')
   })
@@ -234,6 +240,7 @@ describe('Droid hook normalization', () => {
       buildBody({ hook_event_name: 'SessionStart' }),
       'production'
     )
+
     expect(sessionStart).toBeNull()
 
     const nextTool = _internals.normalizeHookPayload(
@@ -245,6 +252,7 @@ describe('Droid hook normalization', () => {
       }),
       'production'
     )
+
     expect(nextTool?.payload.state).toBe('working')
     expect(nextTool?.payload.prompt).toBe('')
     expect(nextTool?.payload.toolName).toBe('Execute')
@@ -257,6 +265,7 @@ describe('Droid hook normalization', () => {
       buildBody({ hook_event_name: 'SubagentStop' }),
       'production'
     )
+
     expect(result).toBeNull()
   })
 
@@ -266,11 +275,13 @@ describe('Droid hook normalization', () => {
       buildBody({ hook_event_name: 'UserPromptSubmit', prompt: 'write tests' }),
       'production'
     )
+
     const stop = _internals.normalizeHookPayload(
       'droid',
       buildBody({ hook_event_name: 'Stop' }),
       'production'
     )
+
     expect(stop?.payload.state).toBe('done')
     expect(stop?.payload.prompt).toBe('write tests')
   })

@@ -18,6 +18,7 @@ import { translate } from '@/i18n/i18n'
 
 function describeSpeechModelDownloadError(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
+
   // Why: ipcRenderer.invoke wraps main-process rejections; strip the transport
   // prefix so the toast shows only the underlying download failure.
   return message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '')
@@ -41,13 +42,16 @@ export function VoiceSpeechModelSection({
   onRefreshModelStates
 }: VoiceSpeechModelSectionProps): React.JSX.Element {
   const [pendingDeleteModelIds, setPendingDeleteModelIds] = useState<Set<string>>(() => new Set())
+
   const getModelState = (id: string): SpeechModelState | undefined =>
     modelStates.find((s) => s.id === id)
 
   const selectedModel = catalog.find((m) => m.id === voiceSettings.sttModel)
+
   const selectedModelState = voiceSettings.sttModel
     ? getModelState(voiceSettings.sttModel)
     : undefined
+
   const selectedIsReady = selectedModelState?.status === 'ready'
 
   return (
@@ -81,8 +85,10 @@ export function VoiceSpeechModelSection({
           {catalog.map((manifest) => {
             const mState = getModelState(manifest.id)
             const isReady = mState?.status === 'ready'
+
             const isDownloading =
               mState?.status === 'downloading' || mState?.status === 'extracting'
+
             const isActive = voiceSettings.sttModel === manifest.id
             const isCloud = manifest.provider === 'openai'
             const deletePending = pendingDeleteModelIds.has(manifest.id)
@@ -182,12 +188,15 @@ export function VoiceSpeechModelSection({
                     onClick={(event) => {
                       event.preventDefault()
                       event.stopPropagation()
+
                       if (deletePending) {
                         return
                       }
+
                       setPendingDeleteModelIds((prev) => {
                         const next = new Set(prev)
                         next.add(manifest.id)
+
                         return next
                       })
                       void window.api.speech
@@ -205,6 +214,7 @@ export function VoiceSpeechModelSection({
                           setPendingDeleteModelIds((prev) => {
                             const next = new Set(prev)
                             next.delete(manifest.id)
+
                             return next
                           })
                         )

@@ -9,6 +9,7 @@ export function buildPluginWorkerSpawnSpec(
   if (!plugin.manifest.main) {
     throw new Error(`plugin ${plugin.pluginKey} has no worker entry`)
   }
+
   return {
     pluginKey: plugin.pluginKey,
     rootDir: plugin.rootDir,
@@ -32,8 +33,10 @@ export function pluginWorkerSpawnSpecsEqual(
   ) {
     return false
   }
+
   const leftCapabilities = [...left.grantedCapabilities].sort()
   const rightCapabilities = [...right.grantedCapabilities].sort()
+
   return (
     leftCapabilities.length === rightCapabilities.length &&
     leftCapabilities.every((capability, index) => capability === rightCapabilities[index])

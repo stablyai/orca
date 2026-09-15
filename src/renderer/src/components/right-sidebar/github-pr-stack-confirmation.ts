@@ -19,6 +19,7 @@ export function buildGitHubPRStackMergeConfirmation({
 }): ConfirmationDialogOptions {
   const scope = getGitHubPRStackMergeScope(stack, currentPRNumber)
   const numbers = scope.entries.map((entry) => `#${entry.number}`).join(', ')
+
   const included =
     scope.complete && numbers
       ? translate(

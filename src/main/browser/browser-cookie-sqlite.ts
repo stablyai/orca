@@ -4,14 +4,17 @@ export function chromiumTimestampToUnix(chromiumTs: bigint | number | string): n
   if (!chromiumTs || chromiumTs === 0n || chromiumTs === 0 || chromiumTs === '0') {
     return 0
   }
+
   try {
     const ts =
       typeof chromiumTs === 'bigint'
         ? chromiumTs
         : BigInt(typeof chromiumTs === 'number' ? Math.round(chromiumTs) : chromiumTs)
+
     if (ts === 0n) {
       return 0
     }
+
     return Math.max(Number(ts / 1000000n - CHROMIUM_EPOCH_OFFSET), 0)
   } catch {
     return 0
@@ -42,27 +45,34 @@ export function parseSqliteDefaultValue(
   if (raw === null || raw === undefined) {
     return null
   }
+
   if (typeof raw !== 'string') {
     return typeof raw === 'number' || typeof raw === 'bigint' ? Number(raw) : String(raw)
   }
 
   const trimmed = raw.trim()
+
   if (!trimmed || trimmed.toUpperCase() === 'NULL') {
     return null
   }
+
   if (/^X''$/i.test(trimmed) || type.includes('BLOB')) {
     return Buffer.alloc(0)
   }
+
   if (
     (trimmed.startsWith("'") && trimmed.endsWith("'")) ||
     (trimmed.startsWith('"') && trimmed.endsWith('"'))
   ) {
     return trimmed.slice(1, -1).replaceAll("''", "'")
   }
+
   if (type.includes('INT')) {
     const numeric = Number(trimmed)
+
     return Number.isFinite(numeric) ? numeric : 0
   }
+
   return trimmed
 }
 
@@ -72,12 +82,15 @@ export function normalizeSqliteCookieValue(
   if (value instanceof Uint8Array) {
     return Buffer.from(value)
   }
+
   if (value === undefined || value === null) {
     return null
   }
+
   if (typeof value === 'number' || typeof value === 'bigint' || typeof value === 'string') {
     return value
   }
+
   return String(value)
 }
 
@@ -91,9 +104,11 @@ export function fallbackChromiumCookieColumnValue(
 ): string | number | bigint | Buffer | null {
   const type = (column.type ?? '').toUpperCase()
   const defaultValue = parseSqliteDefaultValue(column.dflt_value, type)
+
   if (defaultValue !== null) {
     return defaultValue
   }
+
   if (!isSqliteNotNull(column)) {
     return null
   }
@@ -112,9 +127,11 @@ export function fallbackChromiumCookieColumnValue(
       if (type.includes('BLOB')) {
         return Buffer.alloc(0)
       }
+
       if (type.includes('INT')) {
         return 0
       }
+
       return ''
   }
 }
@@ -128,15 +145,18 @@ export function buildChromiumCookieInsertParams(
     if (column.name === 'encrypted_value') {
       return Buffer.alloc(0)
     }
+
     if (column.name === 'value') {
       return decryptedValue
     }
 
     const sourceHasColumn = Object.hasOwn(sourceRow, column.name)
     const sourceValue = sourceHasColumn ? normalizeSqliteCookieValue(sourceRow[column.name]) : null
+
     if (sourceValue !== null) {
       return sourceValue
     }
+
     if (sourceHasColumn && !isSqliteNotNull(column)) {
       return null
     }

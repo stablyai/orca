@@ -35,8 +35,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -57,6 +60,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -66,6 +70,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -86,6 +91,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -96,9 +102,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -108,9 +116,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -119,6 +129,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -180,13 +191,16 @@ describe('connectPanePty', () => {
   // Why: a late exit from a replaced PTY skips onExit's kitty reset, so a fresh spawn must reset the reused per-pane tracker itself or restart-in-place leaks old kitty flags.
   it('resets a stale kitty keyboard mirror when spawning a fresh PTY', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { TerminalKittyKeyboardModeTracker } =
       await import('../../../../shared/terminal-kitty-keyboard-mode-tracker')
+
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const staleTracker = new TerminalKittyKeyboardModeTracker()
     staleTracker.scan('\x1b[>1u')
     expect(staleTracker.flags).toBe(1)
+
     // Why: a unique tab id keeps this pane's key clear of other tests' pendingSpawnByPaneKey entries so the connect deterministically fresh-spawns.
     const deps = createDeps({
       tabId: 'tab-kitty-fresh-spawn',
@@ -240,12 +254,15 @@ describe('connectPanePty', () => {
   // the raw "Terminal cannot start while the worktree is being removed" banner.
   it('swallows a worktree-removal fence error instead of surfacing it', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { TERMINAL_REMOVAL_IN_PROGRESS_MESSAGE } =
       await import('../../../../shared/worktree/removal-fence-error')
+
     const transport = createMockTransport()
     const capturedOnError: { current: ((message: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedOnError.current = callbacks.onError ?? null
+
       return 'pty-1'
     })
     transportFactoryQueue.push(transport)
@@ -271,6 +288,7 @@ describe('connectPanePty', () => {
     const capturedOnError: { current: ((message: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedOnError.current = callbacks.onError ?? null
+
       return 'pty-1'
     })
     transportFactoryQueue.push(transport)
@@ -388,6 +406,7 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-1'
     })
     transportFactoryQueue.push(transport)
@@ -413,9 +432,11 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-codex-backfill-timeout'
     })
     transportFactoryQueue.push(transport)
+
     const deps = createDeps({
       tabId: 'tab-codex-backfill-timeout',
       startup: { command: 'codex', launchAgent: 'codex' }
@@ -464,6 +485,7 @@ describe('connectPanePty', () => {
         coreService: {
           onUserInput: (listener: () => void) => {
             userInputListeners.add(listener)
+
             return { dispose: () => userInputListeners.delete(listener) }
           }
         }
@@ -482,53 +504,71 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     transport.sendInput.mockClear()
     deps.replayingPanesRef.current.set(pane.id, 1)
+
     for (const listener of userInputListeners) {
       listener()
     }
+
     sendTerminalInputThroughPane(pane, 'input_under_flood\r')
     sendTerminalInputThroughPane(pane, '\x1b[?1;2c')
+
     // A click on replayed scrollback that still has mouse tracking armed is user input to xterm, but must not reach the shell.
     for (const listener of userInputListeners) {
       listener()
     }
+
     sendTerminalInputThroughPane(pane, '\x1b[<0;12;4M')
+
     for (const forward of deferred.splice(0)) {
       forward()
     }
+
     expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r')
 
     // A wheel over a replayed alt-screen frame becomes cursor keys; the fresh shell must not recall history from them.
     pane.terminal.buffer.active.type = 'alternate'
+
     for (const listener of userInputListeners) {
       listener()
     }
+
     sendTerminalInputThroughPane(pane, '\x1b[B')
+
     for (const forward of deferred.splice(0)) {
       forward()
     }
+
     expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r')
 
     // The same bytes on the normal buffer can only be a keyboard arrow, which survives replay.
     pane.terminal.buffer.active.type = 'normal'
+
     for (const listener of userInputListeners) {
       listener()
     }
+
     sendTerminalInputThroughPane(pane, '\x1b[B')
+
     for (const forward of deferred.splice(0)) {
       forward()
     }
+
     expect(transport.sendInput).toHaveBeenCalledTimes(2)
     expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[B')
 
     // Once the guard releases, the same mouse report is ordinary input again.
     deps.replayingPanesRef.current.delete(pane.id)
+
     for (const listener of userInputListeners) {
       listener()
     }
+
     sendTerminalInputThroughPane(pane, '\x1b[<0;12;4M')
+
     for (const forward of deferred.splice(0)) {
       forward()
     }
+
     expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[<0;12;4M')
   })
 
@@ -537,6 +577,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-resume')
     transportFactoryQueue.push(transport)
     const onStartupBound = vi.fn()
+
     const startup = {
       command: "codex 'resume' 'codex-session-1'",
       resumeProviderSession: { key: 'session_id', id: 'codex-session-1' } as const
@@ -554,6 +595,7 @@ describe('connectPanePty', () => {
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
       | ((ptyId: string) => void)
       | undefined
+
     onPtySpawn?.('pty-resume')
     onPtySpawn?.('pty-resume')
 

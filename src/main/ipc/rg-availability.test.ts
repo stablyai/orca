@@ -15,7 +15,9 @@ import { RipgrepLaunchFailureError } from '../../shared/ripgrep-process-availabi
 
 function createMockProcess(): ChildProcess {
   const child = new EventEmitter() as unknown as ChildProcess
+
   ;(child as unknown as { kill: () => boolean }).kill = vi.fn(() => true)
+
   return child
 }
 
@@ -51,6 +53,7 @@ describe('checkRgAvailable', () => {
   it('rejects transient asynchronous launch pressure when requested', async () => {
     const child = createMockProcess()
     wslAwareSpawnMock.mockReturnValue(child)
+
     const promise = checkRgAvailable('/repo', 'Ubuntu', {
       rejectTransientLaunchFailure: true
     })

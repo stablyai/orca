@@ -14,6 +14,7 @@ export const LINEAR_ISSUE_FLAGS = new Set([
   'workspace',
   'id'
 ])
+
 export const LINEAR_SEARCH_FLAGS = new Set([
   'help',
   'json',
@@ -23,6 +24,7 @@ export const LINEAR_SEARCH_FLAGS = new Set([
   'workspace',
   'query'
 ])
+
 export const LINEAR_TEAM_LIST_FLAGS = new Set([
   'help',
   'json',
@@ -30,6 +32,7 @@ export const LINEAR_TEAM_LIST_FLAGS = new Set([
   'environment',
   'workspace'
 ])
+
 export const LINEAR_TEAM_LOOKUP_FLAGS = new Set([
   'help',
   'json',
@@ -38,6 +41,7 @@ export const LINEAR_TEAM_LOOKUP_FLAGS = new Set([
   'team',
   'workspace'
 ])
+
 export const LINEAR_PROJECT_LIST_FLAGS = new Set([
   'help',
   'json',
@@ -47,6 +51,7 @@ export const LINEAR_PROJECT_LIST_FLAGS = new Set([
   'limit',
   'workspace'
 ])
+
 export const LINEAR_LIST_FLAGS = new Set([
   'help',
   'json',
@@ -57,6 +62,7 @@ export const LINEAR_LIST_FLAGS = new Set([
   'limit',
   'workspace'
 ])
+
 export const LINEAR_MCP_ISSUE_LIST_FLAGS = new Set([
   'help',
   'json',

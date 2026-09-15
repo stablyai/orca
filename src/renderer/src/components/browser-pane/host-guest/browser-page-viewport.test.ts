@@ -20,6 +20,7 @@ function mountSlotViewport(workspaceTabId: string): HTMLDivElement {
   root.className = 'relative flex min-h-0 flex-1 flex-col'
   document.body.appendChild(root)
   registerBrowserOverlaySlotViewport(workspaceTabId, root)
+
   return root
 }
 
@@ -28,6 +29,7 @@ afterEach(() => {
     removeBrowserPageViewport(id)
     setBrowserPageViewportPresetSize(id, null)
   }
+
   for (const id of ['workspace-1']) {
     getBrowserOverlaySlotViewport(id)?.remove()
     registerBrowserOverlaySlotViewport(id, null)
@@ -224,6 +226,7 @@ describe('syncBrowserPageChromeInset', () => {
 describe('subscribeBrowserOverlaySlotViewport', () => {
   it('keeps notifying a mounted subscriber across an unregister/re-register cycle', () => {
     const seen: (HTMLDivElement | null)[] = []
+
     const unsubscribe = subscribeBrowserOverlaySlotViewport('workspace-1', () => {
       seen.push(getBrowserOverlaySlotViewport('workspace-1'))
     })
@@ -242,9 +245,11 @@ describe('subscribeBrowserOverlaySlotViewport', () => {
     stale()
 
     let notified = 0
+
     const active = subscribeBrowserOverlaySlotViewport('workspace-1', () => {
       notified += 1
     })
+
     // StrictMode/double-cleanup: the emptied first Set must not evict the replacement.
     stale()
 

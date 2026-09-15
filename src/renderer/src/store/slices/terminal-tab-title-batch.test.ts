@@ -3,12 +3,15 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+
 vi.mock('@/components/terminal-pane/pty-transport', () => ({
   registerEagerPtyBuffer: vi.fn(),
   ensurePtyDispatcher: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
 }))
+
 vi.mock('@/components/terminal-pane/shutdown-buffer-captures', () => ({
   shutdownBufferCaptures: vi.fn()
 }))
@@ -30,9 +33,11 @@ const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 function makeScaleState(count: number) {
   let idReads = 0
+
   const worktrees = Array.from({ length: count }, (_, index) =>
     makeWorktree({ id: `wt-${index}`, repoId: 'repo1' })
   )
+
   const tabsByWorktree = Object.fromEntries(
     worktrees.map((worktree, index) => {
       const tab = makeTab({ id: `tab-${index}`, worktreeId: worktree.id })
@@ -42,18 +47,22 @@ function makeScaleState(count: number) {
         enumerable: true,
         get() {
           idReads += 1
+
           return id
         }
       })
+
       return [worktree.id, [tab]]
     })
   )
+
   const unifiedTabsByWorktree = Object.fromEntries(
     worktrees.map((worktree, index) => [
       worktree.id,
       [makeUnifiedTab({ id: `tab-${index}`, worktreeId: worktree.id, groupId: 'group-1' })]
     ])
   )
+
   return {
     getIdReads: () => idReads,
     resetIdReads: () => {
@@ -78,6 +87,7 @@ describe('terminal tab title batches', () => {
     const baselineSortEpoch = store.getState().sortEpoch
     fixture.resetIdReads()
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })
@@ -94,6 +104,7 @@ describe('terminal tab title batches', () => {
     expect(fixture.getIdReads()).toBeLessThanOrEqual(305)
     expect(store.getState().tabsByWorktree['wt-100']).toBe(untouchedTabs)
     expect(store.getState().sortEpoch).toBe(baselineSortEpoch + 100)
+
     for (let index = 0; index < 100; index += 1) {
       expect(store.getState().tabsByWorktree[`wt-${index}`]?.[0]?.title).toBe(
         `Remote agent ${index}`
@@ -112,17 +123,21 @@ describe('terminal tab title batches', () => {
     store.getState().updateTabTitle('tab-299', 'First warm title')
 
     const idReadsByWorktree = Array.from({ length: 300 }, () => 0)
+
     for (let index = 0; index < 300; index += 1) {
       const tab = store.getState().tabsByWorktree[`wt-${index}`]?.[0]
+
       if (!tab) {
         throw new Error(`missing scale tab ${index}`)
       }
+
       const id = tab.id
       Object.defineProperty(tab, 'id', {
         configurable: true,
         enumerable: true,
         get() {
           idReadsByWorktree[index] += 1
+
           return id
         }
       })
@@ -131,18 +146,22 @@ describe('terminal tab title batches', () => {
     let outerKeyVisits = 0
     let bucketVisits = 0
     const currentTabsByWorktree = store.getState().tabsByWorktree
+
     const observedTabsByWorktree = new Proxy(currentTabsByWorktree, {
       ownKeys(target) {
         outerKeyVisits += 1
+
         return Reflect.ownKeys(target)
       },
       get(target, property, receiver) {
         if (typeof property === 'string' && property.startsWith('wt-')) {
           bucketVisits += 1
         }
+
         return Reflect.get(target, property, receiver)
       }
     })
+
     adoptTerminalTabOwnerMetadataOnlyBuckets(currentTabsByWorktree, observedTabsByWorktree, [])
     store.setState({ tabsByWorktree: observedTabsByWorktree })
     outerKeyVisits = 0
@@ -234,6 +253,7 @@ describe('terminal tab title batches', () => {
   it('matches sequential live and generated title semantics in event order', () => {
     const sequentialStore = createTestStore()
     const batchStore = createTestStore()
+
     const fixture = {
       settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: true },
       tabsByWorktree: {
@@ -243,8 +263,10 @@ describe('terminal tab title batches', () => {
         owner: [makeUnifiedTab({ id: 'tab-1', worktreeId: 'owner', groupId: 'group-1' })]
       }
     }
+
     seedStore(sequentialStore, structuredClone(fixture))
     seedStore(batchStore, structuredClone(fixture))
+
     const liveUpdates = [
       { tabId: 'tab-1', title: 'Codex' },
       { tabId: 'tab-1', title: '⠋ Codex is thinking' },
@@ -252,6 +274,7 @@ describe('terminal tab title batches', () => {
       { tabId: 'tab-1', title: '' },
       { tabId: 'tab-1', title: 'Final stable title' }
     ]
+
     const generatedUpdates = [
       { paneKey: makePaneKey('tab-1', LEAF_ID), prompt: 'First generated title wins here' },
       { paneKey: makePaneKey('tab-1', LEAF_ID), prompt: 'Ignored later generated title' },
@@ -265,11 +288,13 @@ describe('terminal tab title batches', () => {
     for (const update of liveUpdates) {
       sequentialStore.getState().updateTabTitle(update.tabId, update.title)
     }
+
     for (const update of generatedUpdates) {
       sequentialStore
         .getState()
         .setGeneratedTabTitleFromAgentPrompt(update.paneKey, update.prompt, update.options)
     }
+
     batchStore.getState().updateTabTitles(liveUpdates)
     batchStore.getState().setGeneratedTabTitlesFromAgentPrompts(generatedUpdates)
 
@@ -291,13 +316,16 @@ describe('terminal tab title batches', () => {
     })
     fixture.resetIdReads()
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })
+
     const updates: GeneratedTabTitleUpdate[] = Array.from({ length: 100 }, (_, index) => ({
       paneKey: makePaneKey(`tab-${index}`, LEAF_ID),
       prompt: `Refactor remote module ${index} for startup performance`
     }))
+
     updates.push(
       {
         paneKey: makePaneKey('tab-0', LEAF_ID),

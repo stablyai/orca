@@ -18,14 +18,17 @@ export function AutomationEditorPromptSection({
   onDismiss
 }: AutomationEditorPromptSectionProps): React.JSX.Element {
   const titleRef = React.useRef<HTMLTextAreaElement>(null)
+
   const namePlaceholder = translate(
     'auto.components.automations.AutomationEditorDialogHeader.1d9826933e',
     'Weekday repo audit'
   )
+
   const nameLabel = translate(
     'auto.components.automations.AutomationEditorDialogHeader.58f56b73d9',
     'Automation name'
   )
+
   const editNameLabel = translate(
     'auto.components.automations.AutomationEditorPromptSection.a7c3e91b04',
     'Edit name'

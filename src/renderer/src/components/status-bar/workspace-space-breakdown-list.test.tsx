@@ -82,6 +82,7 @@ describe('WorkspaceSpaceBreakdownList', () => {
     const widths = Array.from(container.querySelectorAll<HTMLElement>('div[style]')).map(
       (node) => node.style.width
     )
+
     expect(widths).toEqual(['25%', '100%'])
   })
 

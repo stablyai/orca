@@ -10,6 +10,7 @@ export function normalizeSearchFileMatchCount(
   fileResult: Pick<SearchFileResult, 'matches' | 'matchCount'>
 ): number {
   const matchCount = isValidMatchCount(fileResult.matchCount) ? fileResult.matchCount : 0
+
   return Math.max(matchCount, fileResult.matches.length)
 }
 

@@ -45,6 +45,7 @@ describe('notebook document editing lifecycle', () => {
         const frameId = nextFrameId
         nextFrameId += 1
         animationFrames.set(frameId, callback)
+
         return frameId
       })
     )
@@ -66,6 +67,7 @@ describe('notebook document editing lifecycle', () => {
     const onDirtyStateHint = vi.fn()
     const onDeactivateEditor = vi.fn()
     const initialContent = notebookContent()
+
     const hook = renderHook(
       ({ content }: { content: string }) =>
         useIpynbDocumentEditing({
@@ -104,6 +106,7 @@ describe('notebook document editing lifecycle', () => {
     const onContentChange = vi.fn()
     const onDeactivateEditor = vi.fn()
     const content = notebookContent()
+
     const { result } = renderHook(() =>
       useIpynbDocumentEditing({
         content,

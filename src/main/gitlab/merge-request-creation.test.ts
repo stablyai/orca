@@ -189,8 +189,10 @@ describe('createGitLabMergeRequest', () => {
       if (path === '/remote/repo-root/.gitlab/merge_request_templates/Default.md') {
         return { content: 'Remote MR template body', isBinary: false }
       }
+
       throw new Error('missing template')
     })
+
     getSshFilesystemProviderMock.mockReturnValue({ readFile: readRemoteFile })
     glabExecFileAsyncMock.mockResolvedValueOnce({
       stdout: 'https://gitlab.com/acme/widgets/-/merge_requests/46\n',

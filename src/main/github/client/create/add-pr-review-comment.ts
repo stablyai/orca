@@ -11,6 +11,7 @@ import {
 } from '../../gh-utils'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
 import { mapReviewCommentResponse } from './../map/review-comment-response'
+
 export async function addPRReviewComment(
   args: GitHubPRReviewCommentInput & {
     connectionId?: string | null
@@ -23,10 +24,13 @@ export async function addPRReviewComment(
     args.connectionId,
     args.localGitOptions
   )
+
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
+
   await acquire()
+
   try {
     const fields = [
       'api',
@@ -44,6 +48,7 @@ export async function addPRReviewComment(
       '--raw-field',
       'side=RIGHT'
     ]
+
     if (typeof args.startLine === 'number' && args.startLine !== args.line) {
       fields.push(
         '--field',
@@ -52,18 +57,22 @@ export async function addPRReviewComment(
         'start_side=RIGHT'
       )
     }
+
     const { stdout } = await ghExecFileAsync(fields, ghOptions)
     const data = JSON.parse(stdout) as Parameters<typeof mapReviewCommentResponse>[0]
+
     // Why: mapReviewCommentResponse substitutes Date.now() for a missing id, which later replies/reactions would target.
     if (typeof data.id !== 'number' || !Number.isSafeInteger(data.id) || data.id < 1) {
       return { ok: false, error: 'Unexpected response from GitHub' }
     }
+
     return {
       ok: true,
       comment: mapReviewCommentResponse(data, args.body, args.path, args.line, args.startLine)
     }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
+
     return { ok: false, error: classifyGhError(stderr).message }
   } finally {
     release()
@@ -88,10 +97,13 @@ export async function addPRReviewCommentReply(
     connectionId,
     localGitOptions
   )
+
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
+
   await acquire()
+
   try {
     const { stdout } = await ghExecFileAsync(
       [
@@ -104,16 +116,20 @@ export async function addPRReviewCommentReply(
       ],
       ghOptions
     )
+
     const data = JSON.parse(stdout) as Parameters<typeof mapReviewCommentResponse>[0]
+
     if (typeof data.id !== 'number' || !Number.isSafeInteger(data.id) || data.id < 1) {
       return { ok: false, error: 'Unexpected response from GitHub' }
     }
+
     return {
       ok: true,
       comment: mapReviewCommentResponse(data, body, path, line, undefined, threadId)
     }
   } catch (err) {
     const stderr = err instanceof Error ? err.message : String(err)
+
     return { ok: false, error: classifyGhError(stderr).message }
   } finally {
     release()

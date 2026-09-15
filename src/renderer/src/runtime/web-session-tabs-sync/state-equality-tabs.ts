@@ -38,9 +38,11 @@ export function sameTerminalTabs(
 ): boolean {
   const left = a ?? []
   const right = b ?? []
+
   if (left.length !== right.length) {
     return false
   }
+
   return left.every((tab, index) => terminalTabEqual(tab, right[index]!))
 }
 
@@ -79,9 +81,11 @@ export function browserCertificateFailureEqual(
 ): boolean {
   const left = a ?? null
   const right = b ?? null
+
   if (left === right) {
     return true
   }
+
   return Boolean(
     left &&
     right &&
@@ -102,9 +106,11 @@ export function sameBrowserPages(
 ): boolean {
   const left = a ?? []
   const right = b ?? []
+
   if (left.length !== right.length) {
     return false
   }
+
   return left.every((page, index) => browserPageEqual(page, right[index]!))
 }
 
@@ -135,8 +141,10 @@ export function sameBrowserTabs(
 ): boolean {
   const left = a ?? []
   const right = b ?? []
+
   if (left.length !== right.length) {
     return false
   }
+
   return left.every((tab, index) => browserWorkspaceEqual(tab, right[index]!))
 }

@@ -1,4 +1,5 @@
 export const GIT_CHECK_IGNORE_TIMEOUT_MS = 15_000
+
 export const GIT_CHECK_IGNORE_STDIN_CHUNK_BYTES = 1024 * 1024
 
 export const GIT_CHECK_IGNORE_STDIN_ARGS = [
@@ -21,29 +22,37 @@ export function splitGitCheckIgnorePathsByStdinBytes(
   const chunks: string[][] = []
   let chunk: string[] = []
   let chunkBytes = 0
+
   for (const path of paths) {
     const pathBytes = encoder.encode(path).byteLength + 1
+
     if (chunk.length > 0 && chunkBytes + pathBytes > maxBytes) {
       chunks.push(chunk)
       chunk = []
       chunkBytes = 0
     }
+
     chunk.push(path)
     chunkBytes += pathBytes
   }
+
   if (chunk.length > 0) {
     chunks.push(chunk)
   }
+
   return chunks
 }
 
 export function parseGitCheckIgnorePaths(stdout: string): string[] {
   const paths: string[] = []
+
   for (const path of iterateNulDelimitedFields(stdout)) {
     if (path) {
       paths.push(path)
     }
   }
+
   return paths
 }
+
 import { iterateNulDelimitedFields } from './nul-delimited-fields'

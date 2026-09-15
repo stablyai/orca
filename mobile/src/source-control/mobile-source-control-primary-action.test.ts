@@ -46,6 +46,7 @@ function args(overrides: Partial<MobileSourceControlPrimaryActionArgs> = {}) {
 describe('buildMobileSourceControlPrimaryAction', () => {
   it('selects Stage All for unstaged work and dispatches the stage runner', () => {
     const h = handlers()
+
     const action = buildMobileSourceControlPrimaryAction(
       args({
         stageablePaths: ['a.ts'],
@@ -53,6 +54,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
         handlers: h
       })
     )
+
     expect(action.label).toBe('Stage All')
     expect(action.disabled).toBe(false)
     action.onPress()
@@ -61,6 +63,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
 
   it('selects Commit for staged work with a message and dispatches commit', () => {
     const h = handlers()
+
     const action = buildMobileSourceControlPrimaryAction(
       args({
         stagedCount: 1,
@@ -68,6 +71,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
         handlers: h
       })
     )
+
     expect(action.label).toBe('Commit')
     expect(action.disabled).toBe(false)
     action.onPress()
@@ -80,6 +84,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
         args({ status: status({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 } }) })
       ).label
     ).toBe('Publish Branch')
+
     const detached = buildMobileSourceControlPrimaryAction(
       args({
         status: status({
@@ -88,12 +93,14 @@ describe('buildMobileSourceControlPrimaryAction', () => {
         })
       })
     )
+
     expect(detached.label).toBe('Commit')
     expect(detached.disabled).toBe(true)
   })
 
   it('dispatches force push with lease when the shared decision requires it', () => {
     const h = handlers()
+
     const action = buildMobileSourceControlPrimaryAction(
       args({
         status: status({
@@ -120,6 +127,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
         handlers: h
       })
     )
+
     expect(action.label).toBe('Force Push')
     expect(action.requiresForceWithLease).toBe(true)
     action.onPress()
@@ -137,6 +145,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
         commitMessage: 'Resolve'
       })
     )
+
     expect(action.label).toBe('Commit')
     expect(action.disabled).toBe(true)
     expect(action.accessibilityHint).toBe('Resolve conflicts before committing.')
@@ -151,6 +160,7 @@ describe('buildMobileSourceControlPrimaryAction', () => {
         commitMessage: 'Resolve'
       })
     )
+
     expect(action.disabled).toBe(false)
   })
 })

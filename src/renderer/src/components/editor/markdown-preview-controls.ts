@@ -7,10 +7,15 @@ type MarkdownPreviewTarget = Pick<OpenFile, 'mode' | 'diffSource'> & {
 }
 
 const MARKDOWN_EDIT_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+
 const MARKDOWN_DIFF_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+
 const MERMAID_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+
 const CSV_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+
 const NOTEBOOK_VIEW_MODES = ['source', 'rich'] as const satisfies readonly MarkdownViewMode[]
+
 const NO_VIEW_MODES = [] as const satisfies readonly MarkdownViewMode[]
 
 // Why: every editable file (markdown, mermaid, or plain code) can flip into
@@ -25,15 +30,19 @@ export function getEditorToggleModes(target: MarkdownPreviewTarget): readonly Ed
   if (target.mode !== 'edit') {
     return getMarkdownViewModes(target)
   }
+
   if (target.language === 'notebook') {
     // Why: notebook source mode is raw JSON and Changes would diff that JSON,
     // which is noisy and currently invalid for restored external notebooks.
     return NOTEBOOK_VIEW_MODES
   }
+
   const languageModes = getMarkdownViewModes(target)
+
   if (languageModes.length > 0) {
     return [...languageModes, 'changes']
   }
+
   return CODE_EDIT_TOGGLE_MODES
 }
 
@@ -42,6 +51,7 @@ export function getMarkdownViewModes(target: MarkdownPreviewTarget): readonly Ma
     if (target.mode === 'edit') {
       return MARKDOWN_EDIT_VIEW_MODES
     }
+
     if (
       target.mode === 'diff' &&
       target.diffSource !== 'combined-all' &&
@@ -72,7 +82,9 @@ export function getDefaultMarkdownViewMode(target: MarkdownPreviewTarget): Markd
   if (target.language === 'markdown' && target.mode === 'diff') {
     return 'source'
   }
+
   const modes = getMarkdownViewModes(target)
+
   return modes.includes('rich') ? 'rich' : 'source'
 }
 

@@ -22,10 +22,12 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: Error) => void
+
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, reject, resolve }
 }
 
@@ -33,6 +35,7 @@ describe('shared Markdown document list requests', () => {
   it('collapses concurrent pane scans and releases the result after settlement', async () => {
     const pending = deferred<MarkdownDocument[]>()
     const load = vi.fn(() => pending.promise)
+
     const requests = Array.from({ length: 200 }, () =>
       requestSharedMarkdownDocumentList(context(), '/repo', {}, load)
     )
@@ -60,6 +63,7 @@ describe('shared Markdown document list requests', () => {
     const load = vi.fn().mockReturnValueOnce(stale.promise).mockReturnValueOnce(fresh.promise)
 
     const initialRequest = requestSharedMarkdownDocumentList(context(), '/repo', {}, load)
+
     const mutationRefresh = requestSharedMarkdownDocumentList(
       context(),
       '/repo',
@@ -114,6 +118,7 @@ describe('shared Markdown document list requests', () => {
         {},
         load
       )
+
       now.mockReturnValue(31_001)
       // A request for a different route sweeps the expired entry so the map
       // does not pin the abandoned promise for the renderer's lifetime.

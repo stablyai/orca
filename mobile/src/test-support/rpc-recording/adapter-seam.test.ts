@@ -10,15 +10,21 @@ import { ADAPTER_DIRECTORY, RECORDER_DIRECTORY } from './recorder-digest'
 import { readScenarios } from './scenario-input'
 
 const root = resolve(import.meta.dirname, '../../../..')
+
 const manifest = readScenarios(
   process.env.RPC_FOUNDATION_SCENARIOS ??
     resolve(root, 'mobile/rpc-foundation/pilot-scenarios.json')
 ).scenarios
+
 const engine = join(root, RECORDER_DIRECTORY)
+
 const directory = join(root, ADAPTER_DIRECTORY)
+
 /** The register is the seam's own index, not an adapter: no golden is recorded through it. */
 const REGISTER = 'mounted-operation-modules.ts'
+
 const registerPath = join(directory, REGISTER).replace(/\.ts$/, '')
+
 const sources = MOUNTED_OPERATION_MODULES.map((module) => module.source)
 
 /** Relative specifiers, resolved against the importing file's directory, extension dropped. */
@@ -36,21 +42,27 @@ function read(source: string): string {
 /** Every named import the register makes, local name to specifier. */
 function registerImports(file: ts.SourceFile): Map<string, string> {
   const bindings = new Map<string, string>()
+
   for (const statement of file.statements) {
     const clause = ts.isImportDeclaration(statement) ? statement.importClause : undefined
+
     if (!clause || clause.isTypeOnly || !ts.isStringLiteral(statement.moduleSpecifier!)) {
       continue
     }
+
     const named = clause.namedBindings
+
     if (!named || !ts.isNamedImports(named)) {
       continue
     }
+
     for (const element of named.elements) {
       if (!element.isTypeOnly) {
         bindings.set(element.name.text, statement.moduleSpecifier.text)
       }
     }
   }
+
   return bindings
 }
 
@@ -60,8 +72,10 @@ function registerEntries(file: ts.SourceFile): ts.ObjectLiteralExpression[] {
     if (!ts.isVariableStatement(statement)) {
       continue
     }
+
     for (const declaration of statement.declarationList.declarations) {
       const initializer = declaration.initializer
+
       if (
         declaration.name.getText() === 'MOUNTED_OPERATION_MODULES' &&
         initializer &&
@@ -71,6 +85,7 @@ function registerEntries(file: ts.SourceFile): ts.ObjectLiteralExpression[] {
       }
     }
   }
+
   throw new Error('MOUNTED_OPERATION_MODULES is not an array literal in the register')
 }
 
@@ -80,6 +95,7 @@ function property(entry: ts.ObjectLiteralExpression, name: string): ts.Expressio
       return member.initializer
     }
   }
+
   return undefined
 }
 
@@ -96,9 +112,11 @@ describe('the engine/adapter seam', () => {
 
   it('pairs each registered module with the file that declares it', () => {
     expect(new Set(sources).size).toBe(sources.length)
+
     const unpaired = MOUNTED_OPERATION_MODULES.filter(
       ({ source, mounts }) => !read(source).includes(`export function ${mounts.name}(`)
     ).map(({ source, mounts }) => `${mounts.name} is not declared in ${source}`)
+
     expect(unpaired).toEqual([])
   })
 
@@ -110,6 +128,7 @@ describe('the engine/adapter seam', () => {
         .filter(({ target }) => target.startsWith(`${directory}${sep}`))
         .map(({ specifier }) => `${source} imports ${specifier}`)
     )
+
     expect(inward).toEqual([])
   })
 
@@ -129,6 +148,7 @@ describe('the engine/adapter seam', () => {
           )
           .map(({ specifier }) => `${entry.name} imports ${specifier}`)
       )
+
     expect(crossings).toEqual([])
   })
 
@@ -144,42 +164,55 @@ describe('the engine/adapter seam', () => {
     const bindings = registerImports(file)
     const entries = registerEntries(file)
     expect(entries.length).toBe(MOUNTED_OPERATION_MODULES.length)
+
     const carried = entries.flatMap((entry) => {
       const source = property(entry, 'source')
+
       if (!source || !ts.isStringLiteral(source)) {
         return ['an entry declares no literal source']
       }
+
       const expected = `./${source.text.replace(/\.ts$/, '')}`
+
       return ['mounts', 'exposes'].flatMap((field) => {
         const value = property(entry, field)
+
         if (!value) {
           return field === 'mounts' ? [`${source.text} registers no mounts`] : []
         }
+
         if (!ts.isIdentifier(value)) {
           return [`${source.text} writes ${field} inline instead of importing it`]
         }
+
         const from = bindings.get(value.text)
+
         return from === expected
           ? []
           : [`${source.text} takes ${field} from ${from ?? 'no import'}`]
       })
     })
+
     expect(carried).toEqual([])
   })
 
   it('mounts nothing outside a registered module', () => {
     const modules = operationModuleLoader(root)
+
     const registered = MOUNTED_OPERATION_MODULES.flatMap((module) =>
       Object.keys(module.mounts(modules, {}))
     )
+
     expect(Object.keys(pilotMountAdapters(root).adapters).sort()).toEqual([...registered].sort())
   })
 
   it('attributes every recorded operation to a registered module', () => {
     const owners = adapterSourceByOperation(root)
+
     const orphans = [...new Set(manifest.map((scenario) => scenario.operation))]
       .filter((operation) => !owners.has(operation))
       .sort()
+
     expect(orphans).toEqual([])
   })
 })

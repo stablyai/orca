@@ -13,6 +13,7 @@ export function normalizeTaskProviderSettings(value: {
   defaultTaskSource: unknown
 }): { visibleTaskProviders: TaskProvider[]; defaultTaskSource: TaskProvider } {
   const visibleTaskProviders = normalizeVisibleTaskProviders(value.visibleTaskProviders)
+
   const defaultTaskSource = isTaskProvider(value.defaultTaskSource)
     ? value.defaultTaskSource
     : resolveVisibleTaskProvider('github', visibleTaskProviders)
@@ -38,10 +39,12 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
   }
 
   const normalized: TaskProvider[] = []
+
   for (const provider of value) {
     if (!TASK_PROVIDER_SET.has(provider as TaskProvider)) {
       continue
     }
+
     if (!normalized.includes(provider as TaskProvider)) {
       normalized.push(provider as TaskProvider)
     }
@@ -97,14 +100,17 @@ function isTaskProviderAvailable(
   if (provider === 'github') {
     return true
   }
+
   if (provider === 'gitlab') {
     return availability.gitlabInstalled
   }
+
   // Why: Jira can be connected from the Tasks surface itself, so hiding it
   // when disconnected would remove the entry point for first-time setup.
   if (provider === 'jira') {
     return true
   }
+
   return availability.linearConnected
 }
 
@@ -115,5 +121,6 @@ export function resolveVisibleTaskProvider(
   if (preferred && visibleProviders.includes(preferred)) {
     return preferred
   }
+
   return visibleProviders[0] ?? 'github'
 }

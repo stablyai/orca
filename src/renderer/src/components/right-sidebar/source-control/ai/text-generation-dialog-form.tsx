@@ -71,6 +71,7 @@ export function getDefaultSourceControlTextGenerationSaveTargetKey(
 ): string {
   const defaultTarget =
     saveTargets.find((saveTarget) => saveTarget.target.type === 'global') ?? saveTargets[0]
+
   return defaultTarget ? sourceControlTextGenerationSaveTargetKey(defaultTarget.target) : 'global'
 }
 
@@ -92,21 +93,26 @@ export function SourceControlTextGenerationDialogForm({
   onSaveDefaults
 }: SourceControlTextGenerationDialogFormProps): React.JSX.Element {
   const capabilities = useMemo(() => listCommitMessageAgentCapabilities(), [])
+
   const showCustomAgent = Boolean(
     baseParams && (isCustomAgentId(baseParams.agentId) || baseParams.customAgentCommand?.trim())
   )
+
   const [agentId, setAgentId] = useState<CommitMessageGenerationAgentChoice>(
     baseParams?.agentId ?? ''
   )
+
   const [commandTemplate, setCommandTemplate] = useState(
     baseParams?.commandInputTemplate ?? '{basePrompt}'
   )
+
   const [agentArgs, setAgentArgs] = useState(baseParams?.agentArgs ?? '')
   const [generationError, setGenerationError] = useState<string | null>(null)
   const [savingTargetKey, setSavingTargetKey] = useState<string | null>(null)
   const defaultSaveTargetKey = getDefaultSourceControlTextGenerationSaveTargetKey(saveTargets)
   const [saveTargetKey, setSaveTargetKey] = useState(defaultSaveTargetKey)
   const commandTemplateId = `source-control-${actionId}-command-template`
+
   const selectedSaveTarget =
     saveTargets.find((saveTarget) => {
       return sourceControlTextGenerationSaveTargetKey(saveTarget.target) === saveTargetKey
@@ -120,21 +126,27 @@ export function SourceControlTextGenerationDialogForm({
     settings,
     customAgentCommand: baseParams?.customAgentCommand
   })
+
   // Why: chip previews only. The plan below stays synthetic so a workspace-empty
   // `{linkedIssue}` cannot disable Save/Generate for a repo- or global-scoped recipe.
   const variablePreviews = useMemo(() => {
     const previews: Record<string, string> = {}
+
     if (basePromptPreview) {
       previews.basePrompt = basePromptPreview
     }
+
     if (linkedIssue !== undefined) {
       previews.linkedIssue = formatLinkedIssueTemplateValue(linkedIssue)
     }
+
     return Object.keys(previews).length > 0 ? previews : undefined
   }, [basePromptPreview, linkedIssue])
+
   const paramsPlanResult = params ? planSourceControlTextGeneration(actionId, params) : null
   const canRunGeneration = Boolean(params && paramsPlanResult?.ok)
   const saving = savingTargetKey !== null
+
   const defaultsAlreadySaved = Boolean(
     params &&
     selectedSaveTarget &&
@@ -146,6 +158,7 @@ export function SourceControlTextGenerationDialogForm({
       repo
     })
   )
+
   const allSaveTargetsAlreadySaved = Boolean(
     params &&
     saveTargets.length > 0 &&
@@ -159,6 +172,7 @@ export function SourceControlTextGenerationDialogForm({
       })
     )
   )
+
   const showSaveRecipeControl = Boolean(selectedSaveTarget && !allSaveTargetsAlreadySaved)
 
   const saveCurrentDefaults = useCallback(
@@ -174,15 +188,20 @@ export function SourceControlTextGenerationDialogForm({
               : 'Choose an agent before saving defaults.'
           )
         }
+
         return false
       }
+
       const targetKey = sourceControlTextGenerationSaveTargetKey(saveTarget.target)
       setSavingTargetKey(targetKey)
+
       try {
         await onSaveDefaults(saveTarget.target, params)
+
         if (options.showToast) {
           toast.success(saveTarget.successMessage)
         }
+
         return true
       } finally {
         setSavingTargetKey(null)
@@ -198,8 +217,10 @@ export function SourceControlTextGenerationDialogForm({
           ? paramsPlanResult.error
           : 'Choose an agent before generating.'
       )
+
       return
     }
+
     onGenerate(params)
     onOpenChange(false)
   }
@@ -226,6 +247,7 @@ export function SourceControlTextGenerationDialogForm({
               if (value === UNCONFIGURED_AGENT_SELECT_VALUE) {
                 return
               }
+
               setAgentId(value === CUSTOM_AGENT_ID ? CUSTOM_AGENT_ID : (value as TuiAgent))
               setGenerationError(null)
             }}
@@ -309,6 +331,7 @@ export function SourceControlTextGenerationDialogForm({
             onInsert={(variable) => {
               const separator =
                 commandTemplate.endsWith('\n') || commandTemplate.length === 0 ? '' : ' '
+
               setCommandTemplate(`${commandTemplate}${separator}{${variable}}`)
               setGenerationError(null)
             }}
@@ -330,6 +353,7 @@ export function SourceControlTextGenerationDialogForm({
               <SelectContent>
                 {saveTargets.map((saveTarget) => {
                   const targetKey = sourceControlTextGenerationSaveTargetKey(saveTarget.target)
+
                   return (
                     <SelectItem key={targetKey} value={targetKey}>
                       {saveTarget.label}

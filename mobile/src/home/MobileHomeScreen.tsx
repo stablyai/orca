@@ -56,8 +56,10 @@ export function MobileHomeScreen() {
         )
       ) {
         data.router.push(hostRouteWithNotice(card.hostId, 'worktree-missing'))
+
         return
       }
+
       openMobileSession({
         hostId: card.hostId,
         worktreeId: card.worktree.worktreeId,
@@ -100,7 +102,9 @@ export function MobileHomeScreen() {
     if (!confirmRemove) {
       return
     }
+
     const host = confirmRemove
+
     try {
       await removeHostAndCloseClient(host.id, forgetHostClient)
       setConfirmRemove(null)

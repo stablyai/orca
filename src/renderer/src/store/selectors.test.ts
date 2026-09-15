@@ -70,11 +70,13 @@ describe('store selectors', () => {
   it('deduplicates cached worktree snapshots without changing reference reuse', () => {
     const first = makeWorktree({ id: 'wt-1', repoId: 'repo-1', displayName: 'first' })
     const second = makeWorktree({ id: 'wt-2', repoId: 'repo-1', displayName: 'second' })
+
     const replacement = makeWorktree({
       id: 'wt-1',
       repoId: 'repo-2',
       displayName: 'replacement'
     })
+
     const state = {
       worktreesByRepo: {
         'repo-1': [first, second],
@@ -93,6 +95,7 @@ describe('store selectors', () => {
 
   it('reuses the floating tab-count projection across unrelated store ticks', () => {
     const worktreeId = FLOATING_TERMINAL_WORKTREE_ID
+
     const terminalTabs = [
       {
         id: 'term-1',
@@ -105,8 +108,10 @@ describe('store selectors', () => {
         createdAt: 1
       }
     ] as AppState['tabsByWorktree'][string]
+
     const browserTabs = [{ id: 'browser-1' }] as AppState['browserTabsByWorktree'][string]
     let openFileScans = 0
+
     const fileEntries = [
       {
         id: 'file-1',
@@ -127,15 +132,18 @@ describe('store selectors', () => {
         isDirty: false
       }
     ] as AppState['openFiles']
+
     const openFiles = [...fileEntries] as AppState['openFiles']
     Object.defineProperty(openFiles, Symbol.iterator, {
       value: function* () {
         openFileScans += 1
+
         for (const entry of fileEntries) {
           yield entry
         }
       }
     })
+
     const unifiedTabs = [
       {
         id: 'unified-term-1',
@@ -183,6 +191,7 @@ describe('store selectors', () => {
         createdAt: 5
       }
     ] as AppState['unifiedTabsByWorktree'][string]
+
     const state = {
       tabsByWorktree: { [worktreeId]: terminalTabs },
       browserTabsByWorktree: { [worktreeId]: browserTabs },
@@ -203,16 +212,19 @@ describe('store selectors', () => {
       worktreeId: 'wt-1',
       title: 'Codex working'
     })
+
     const secondTab = makeTerminalTab({
       id: 'term-2',
       worktreeId: 'wt-1',
       title: 'Shell'
     })
+
     const otherWorktreeTab = makeTerminalTab({
       id: 'term-other',
       worktreeId: 'wt-2',
       title: 'Background'
     })
+
     const state = {
       activeWorktreeId: 'wt-1',
       activeTabId: 'term-1',
@@ -225,6 +237,7 @@ describe('store selectors', () => {
     } satisfies Parameters<typeof selectActiveTerminalChromeState>[0]
 
     const selected = selectActiveTerminalChromeState(state)
+
     const retitledState = {
       ...state,
       tabsByWorktree: {
@@ -252,6 +265,7 @@ describe('store selectors', () => {
         displayName: 'orca'
       })
     ]
+
     const state = { repos }
 
     const projection = getProjectHostSetupProjectionFromState(state)
@@ -273,12 +287,14 @@ describe('store selectors', () => {
       displayName: 'local',
       executionHostId: 'local'
     })
+
     const runtime = makeRepo({
       id: 'same-repo',
       path: '/runtime/repo',
       displayName: 'runtime',
       executionHostId: toRuntimeExecutionHostId('env-1')
     })
+
     const activeState = {
       activeRepoId: 'same-repo',
       activeWorkspaceExecutionHostId: toRuntimeExecutionHostId('env-1')
@@ -300,12 +316,14 @@ describe('store selectors', () => {
       displayName: 'hub',
       executionHostId: toRuntimeExecutionHostId('hub-a')
     })
+
     const local = makeRepo({
       id: 'hub-repo',
       path: '/local/repo',
       displayName: 'local',
       executionHostId: 'local'
     })
+
     const activeState = {
       activeRepoId: 'hub-repo',
       activeWorkspaceExecutionHostId: toSshExecutionHostId('hub-private-target')
@@ -314,11 +332,13 @@ describe('store selectors', () => {
     for (const repos of [[repo], [local, repo], [repo, local]]) {
       expect(selectRepoByIdForActiveWorkspace({ ...activeState, repos }, 'hub-repo')).toBe(repo)
     }
+
     // Why: useGitStatusPolling gates every lane on this exact expression, so a null repo silently stops polling.
     const activeRepo = selectRepoByIdForActiveWorkspace(
       { ...activeState, repos: [repo] },
       'hub-repo'
     )
+
     expect(activeRepo ? isGitRepoKind(activeRepo) : false).toBe(true)
   })
 
@@ -350,6 +370,7 @@ describe('store selectors', () => {
       displayName: 'hub',
       executionHostId: toRuntimeExecutionHostId('hub-a')
     })
+
     const ssh = makeRepo({
       id: 'shared-repo',
       path: '/ssh/repo',
@@ -377,6 +398,7 @@ describe('store selectors', () => {
       displayName: 'runtime',
       executionHostId: toRuntimeExecutionHostId('env-1')
     })
+
     const ssh = makeRepo({
       id: 'ssh-repo',
       path: '/ssh/repo',
@@ -414,6 +436,7 @@ describe('store selectors', () => {
         displayName: 'orca'
       })
     ]
+
     const projects = [
       {
         id: 'project-1',
@@ -424,6 +447,7 @@ describe('store selectors', () => {
         updatedAt: 1
       }
     ]
+
     const projectHostSetups = [
       {
         id: 'setup-1',
@@ -461,6 +485,7 @@ describe('store selectors', () => {
         executionHostId: toRuntimeExecutionHostId('vm-env')
       })
     ]
+
     const projects = [
       {
         id: 'github:stablyai/orca',
@@ -479,6 +504,7 @@ describe('store selectors', () => {
         updatedAt: 1
       }
     ]
+
     const projectHostSetups = [
       {
         id: 'local-setup',
@@ -562,6 +588,7 @@ describe('store selectors', () => {
         displayName: 'orca'
       })
     ]
+
     const projects = [
       {
         id: 'cloud-project',
@@ -572,6 +599,7 @@ describe('store selectors', () => {
         updatedAt: 1
       }
     ]
+
     const projectHostSetups = [
       {
         id: 'cloud-project::gpu-vm',
@@ -635,6 +663,7 @@ describe('selectFloatingWorkspaceHasUnread', () => {
       tabsByWorktree: { [FLOATING]: [floatingTab('ft1')] },
       unreadTerminalTabs: { ft1: true }
     })
+
     expect(selectFloatingWorkspaceHasUnread(state)).toBe(true)
   })
 
@@ -643,6 +672,7 @@ describe('selectFloatingWorkspaceHasUnread', () => {
       tabsByWorktree: { [FLOATING]: [floatingTab('ft1')] },
       unreadAgentCompletionPanes: { 'ft1:leaf-a': true }
     })
+
     expect(selectFloatingWorkspaceHasUnread(state)).toBe(true)
   })
 
@@ -651,6 +681,7 @@ describe('selectFloatingWorkspaceHasUnread', () => {
       tabsByWorktree: { [FLOATING]: [floatingTab('ft1'), floatingTab('ft2'), floatingTab('ft3')] },
       unreadTerminalTabs: { ft3: true }
     })
+
     expect(selectFloatingWorkspaceHasUnread(state)).toBe(true)
   })
 
@@ -660,6 +691,7 @@ describe('selectFloatingWorkspaceHasUnread', () => {
       unreadTerminalTabs: { 'main-tab': true },
       unreadAgentCompletionPanes: { 'main-tab:leaf-x': true }
     })
+
     expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
   })
 
@@ -671,6 +703,7 @@ describe('selectFloatingWorkspaceHasUnread', () => {
       unreadTerminalTabs: { 'ft-closed': true },
       unreadAgentCompletionPanes: { 'ft-closed:leaf-a': true }
     })
+
     expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
   })
 
@@ -678,16 +711,19 @@ describe('selectFloatingWorkspaceHasUnread', () => {
     let tabIdReads = 0
     let terminalUnreadReads = 0
     let completionKeyScans = 0
+
     const tabs = [
       {
         get id() {
           tabIdReads += 1
+
           return 'ft1'
         },
         title: 'floating',
         ptyId: null
       } as unknown as TerminalTab
     ]
+
     const unreadTerminalTabs = new Proxy<Record<string, true>>(
       {},
       {
@@ -695,19 +731,23 @@ describe('selectFloatingWorkspaceHasUnread', () => {
           if (typeof property === 'string') {
             terminalUnreadReads += 1
           }
+
           return Reflect.get(target, property, receiver)
         }
       }
     )
+
     const unreadAgentCompletionPanes = new Proxy<Record<string, true>>(
       { 'main-tab:leaf-a': true },
       {
         ownKeys(target) {
           completionKeyScans += 1
+
           return Reflect.ownKeys(target)
         }
       }
     )
+
     const state = makeState({
       tabsByWorktree: { [FLOATING]: tabs },
       unreadTerminalTabs,
@@ -715,12 +755,15 @@ describe('selectFloatingWorkspaceHasUnread', () => {
     })
 
     expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
+
     const countsAfterFirstConsumer = {
       tabIdReads,
       terminalUnreadReads,
       completionKeyScans
     }
+
     expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
+
     for (let write = 0; write < 1_000; write += 1) {
       expect(
         selectFloatingWorkspaceHasUnread({
@@ -729,6 +772,7 @@ describe('selectFloatingWorkspaceHasUnread', () => {
         } as unknown as UnreadState)
       ).toBe(false)
     }
+
     expect({ tabIdReads, terminalUnreadReads, completionKeyScans }).toEqual(
       countsAfterFirstConsumer
     )

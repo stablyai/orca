@@ -4,6 +4,7 @@ import { z } from 'zod'
 import type { CodexResetCreditExpectedScope } from '../../../src/shared/codex-reset-credit-scope'
 
 const STORAGE_PREFIX = 'orca:codex-reset-credit-attempt:v1:'
+
 const IdempotencyKeySchema = z.uuid()
 
 export const CodexResetCreditExpectedScopeSchema = z
@@ -27,6 +28,7 @@ export const CodexResetCreditExpectedScopeSchema = z
         path: ['target', 'wslDistro']
       })
     }
+
     if (
       scope.target.runtime === 'wsl' &&
       (scope.target.wslDistro === null || scope.target.wslDistro.trim() !== scope.target.wslDistro)
@@ -95,12 +97,15 @@ function stableAccountScopesEqual(
 
 function parseAttempt(raw: string, identity: AttemptIdentity): CodexResetAttempt {
   let value: unknown
+
   try {
     value = JSON.parse(raw)
   } catch {
     throw new Error('Codex reset attempt journal is unreadable')
   }
+
   const result = CodexResetAttemptSchema.safeParse(value)
+
   if (
     !result.success ||
     result.data.hostId !== identity.hostId ||
@@ -108,6 +113,7 @@ function parseAttempt(raw: string, identity: AttemptIdentity): CodexResetAttempt
   ) {
     throw new Error('Codex reset attempt journal is unreadable')
   }
+
   return result.data
 }
 
@@ -118,11 +124,14 @@ async function withScopeMutation<T>(
   const key = storageKey(identity)
   const previous = scopeMutations.get(key) ?? Promise.resolve()
   const operation = previous.then(action, action)
+
   const tail = operation.then(
     () => undefined,
     () => undefined
   )
+
   scopeMutations.set(key, tail)
+
   try {
     return await operation
   } finally {
@@ -138,23 +147,28 @@ export async function getOrCreateCodexResetAttempt(
   return withScopeMutation(identity, async () => {
     const key = storageKey(identity)
     const raw = await AsyncStorage.getItem(key)
+
     if (raw !== null) {
       return parseAttempt(raw, identity)
     }
 
     const idempotencyKey = identity.createIdempotencyKey()
+
     if (!IdempotencyKeySchema.safeParse(idempotencyKey).success) {
       throw new Error('Codex reset attempt idempotency key is invalid')
     }
+
     const attempt = CodexResetAttemptSchema.parse({
       v: 1,
       hostId: identity.hostId,
       expectedScope: identity.expectedScope,
       idempotencyKey
     })
+
     // Why: the key must survive a committed provider mutation whose response is
     // lost; no reset RPC may start until this write has completed successfully.
     await AsyncStorage.setItem(key, JSON.stringify(attempt))
+
     return attempt
   })
 }
@@ -165,13 +179,17 @@ export async function clearCodexResetAttemptAfterAuthoritativeResponse(
   return withScopeMutation(identity, async () => {
     const key = storageKey(identity)
     const raw = await AsyncStorage.getItem(key)
+
     if (raw === null) {
       return
     }
+
     const current = parseAttempt(raw, identity)
+
     if (current.idempotencyKey !== identity.idempotencyKey) {
       throw new Error('Codex reset attempt journal identity changed')
     }
+
     await AsyncStorage.removeItem(key)
   })
 }

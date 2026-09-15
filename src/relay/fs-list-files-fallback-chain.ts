@@ -20,6 +20,7 @@ export async function runListFilesScan(
   searchQuery?: string
 ): Promise<string[]> {
   throwIfFileListingCancelled(signal)
+
   try {
     return await listFilesWithRg(rootPath, excludePathPrefixes, {
       signal,
@@ -28,13 +29,16 @@ export async function runListFilesScan(
     })
   } catch (error) {
     throwIfFileListingCancelled(signal)
+
     if (!(error instanceof RipgrepUnavailableError)) {
       throw error
     }
   }
+
   if (searchQuery !== undefined) {
     throw new Error(await buildRipgrepRequiredMessage())
   }
+
   // Why: git ls-files only works inside git repos. Use rev-parse to detect
   // git ancestry — unlike checking for a local .git entry, this works from
   // subdirectories of a checkout (e.g. /repo/packages/app added as a folder).
@@ -48,6 +52,7 @@ export async function runListFilesScan(
       (err) => resolve(!err)
     )
   })
+
   if (isGitRepo) {
     // Why: a git monorepo parent fills nested-repo subtrees via the readdir
     // walk, which can exhaust the same cap/deadline. Translate only those
@@ -66,9 +71,11 @@ export async function runListFilesScan(
       if (isQuickOpenReaddirBudgetError(err)) {
         throw new Error(await buildInstallRgMessage(err))
       }
+
       throw err
     }
   }
+
   // Why: the readdir walker rejects on cap/deadline instead of returning a
   // partial list (design doc: silent truncation is worse than an explicit
   // error). On a home-root without rg that's almost always an install-rg
@@ -89,6 +96,7 @@ export async function runListFilesScan(
     if (isFileListingCancellation(err)) {
       throw err
     }
+
     throw new Error(await buildInstallRgMessage(err))
   }
 }
@@ -101,9 +109,12 @@ function rankFallbackFiles(
   if (query === undefined) {
     return [...files]
   }
+
   const ranker = new QuickOpenPathRanker(query, limit ?? 16)
+
   for (const file of files) {
     ranker.consider(file)
   }
+
   return ranker.result().paths
 }

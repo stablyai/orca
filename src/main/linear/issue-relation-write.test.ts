@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinearClientForWorkspace } from './client'
 
 const rawRequest = vi.fn()
+
 const getClients = vi.fn()
 
 vi.mock('./linear-request-concurrency', () => ({
@@ -37,6 +38,7 @@ const issue = {
   title: 'Current',
   url: 'https://linear.app/acme/issue/ENG-1'
 }
+
 const relatedIssue = {
   id: 'issue-2',
   identifier: 'ENG-2',
@@ -172,6 +174,7 @@ describe('Linear issue relation writes', () => {
         }
       })
     }
+
     const { writeIssueRelation } = await import('./issue-relation-write')
 
     await expect(

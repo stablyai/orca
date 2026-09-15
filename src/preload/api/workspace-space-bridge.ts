@@ -11,7 +11,9 @@ export const workspaceSpaceApi = {
       _event: Electron.IpcRendererEvent,
       progress: WorkspaceSpaceScanProgress
     ): void => callback(progress)
+
     ipcRenderer.on('workspaceSpace:progress', listener)
+
     return () => ipcRenderer.removeListener('workspaceSpace:progress', listener)
   }
 } satisfies PreloadApi['workspaceSpace']

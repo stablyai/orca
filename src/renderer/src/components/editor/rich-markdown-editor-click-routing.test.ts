@@ -18,6 +18,7 @@ beforeEach(() => {
 // future "make them consistent" change cannot land silently.
 function clickExternalLinkWithShift(sourceOwner: HttpLinkSourceOwner, isMac = true): boolean {
   const href = 'https://example.com/docs'
+
   const view = {
     state: {
       doc: {

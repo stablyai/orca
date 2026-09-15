@@ -82,15 +82,25 @@ export const linearRequestState = {
 
 // Named aliases keep action modules focused on behavior while sharing one request registry.
 export const inflightIssueRequests = linearRequestState.issueRequests
+
 export const inflightSearchRequests = linearRequestState.searchRequests
+
 export const inflightListRequests = linearRequestState.listRequests
+
 export const inflightTeamRequests = linearRequestState.teamRequests
+
 export const inflightProjectRequests = linearRequestState.projectRequests
+
 export const inflightProjectDetailRequests = linearRequestState.projectDetailRequests
+
 export const inflightProjectIssueRequests = linearRequestState.projectIssueRequests
+
 export const inflightCustomViewRequests = linearRequestState.customViewRequests
+
 export const inflightCustomViewDetailRequests = linearRequestState.customViewDetailRequests
+
 export const inflightCustomViewIssueRequests = linearRequestState.customViewIssueRequests
+
 export const inflightCustomViewProjectRequests = linearRequestState.customViewProjectRequests
 
 export function clearLinearRequestMaps(): void {
@@ -123,6 +133,7 @@ export function clearLinearIssueCollectionRequestMaps(): void {
 export function beginLinearMutation(): number {
   linearRequestState.mutationGeneration += 1
   linearRequestState.inflightStatusRequest = null
+
   return linearRequestState.mutationGeneration
 }
 
@@ -132,6 +143,7 @@ export function isCurrentLinearMutation(generation: number): boolean {
 
 export function nextLinearStatusReadGeneration(): number {
   linearRequestState.statusReadGeneration += 1
+
   return linearRequestState.statusReadGeneration
 }
 

@@ -43,6 +43,7 @@ export async function readNativeChatTranscript(
   options: ReadTranscriptOptions = {}
 ): Promise<ReadTranscriptResult> {
   let filePath: string | null
+
   try {
     filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))
   } catch (err) {
@@ -50,23 +51,30 @@ export async function readNativeChatTranscript(
     // `notFound` would settle callers into a false "missing" state.
     return { error: wslTranscriptFsRefusal(err).message }
   }
+
   if (!filePath) {
     return { error: `No transcript found for ${agent} session ${sessionId}`, notFound: true }
   }
+
   try {
     const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+
     if (transcriptAgent === 'claude') {
       return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
     }
+
     if (transcriptAgent === 'codex') {
       return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
     }
+
     if (transcriptAgent === 'grok') {
       return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
     }
+
     if (transcriptAgent === 'omp') {
       return { messages: await readTranscript(filePath, decodeOmpTranscriptLine) }
     }
+
     return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
   } catch (err) {
     // Why: ENOENT after a successful resolve is the same first-flush/rotation
@@ -74,6 +82,7 @@ export async function readNativeChatTranscript(
     if ((err as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
       return { error: errorMessage(err), notFound: true }
     }
+
     return { error: errorMessage(err) }
   }
 }
@@ -84,5 +93,6 @@ async function readTranscript(
 ): Promise<NativeChatMessage[]> {
   const stream = openTranscriptReadStream(filePath, { encoding: 'utf-8' }, 'exact')
   const { messages } = await decodeTranscriptStream(stream, filePath, 0, decode, true)
+
   return messages
 }

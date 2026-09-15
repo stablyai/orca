@@ -26,9 +26,11 @@ export function getFloatingWorkspaceDirectoryInputValue({
   resolvedFloatingWorkspacePath: string
 }): string {
   const configuredPath = configuredFloatingWorkspacePath.trim()
+
   if (!configuredPath || configuredPath === '~') {
     return '~'
   }
+
   return resolvedFloatingWorkspacePath
 }
 
@@ -56,6 +58,7 @@ export function FloatingWorkspacePane({
           setResolvedFloatingWorkspacePath('')
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -63,9 +66,11 @@ export function FloatingWorkspacePane({
 
   const pickFloatingWorkspaceDirectory = async (): Promise<void> => {
     const path = await window.api.app.pickFloatingWorkspaceDirectory()
+
     if (!path) {
       return
     }
+
     useAppStore.getState().recordFeatureInteraction('floating-workspace')
     updateSettings({ floatingTerminalCwd: path })
   }
@@ -119,6 +124,7 @@ export function FloatingWorkspacePane({
             } else {
               useAppStore.getState().recordFeatureInteraction('floating-workspace-hidden')
             }
+
             updateSettings({
               floatingTerminalEnabled: !settings.floatingTerminalEnabled
             })
@@ -176,6 +182,7 @@ export function FloatingWorkspacePane({
                 if (!value) {
                   return
                 }
+
                 updateSettings({
                   floatingTerminalTriggerLocation: value as FloatingTerminalTriggerLocation
                 })

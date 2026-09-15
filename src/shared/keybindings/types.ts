@@ -22,6 +22,7 @@ export type KeybindingMatchOptions = {
 }
 
 export type AgentTabActionId = `tab.newAgent.${TuiAgent}`
+
 export type PluginKeybindingActionId = `plugin:${string}`
 
 export type KeybindingActionId =
@@ -155,6 +156,7 @@ export type KeybindingDefinition = {
 }
 
 export type ModifierToken = 'Mod' | 'Cmd' | 'Ctrl' | 'Alt' | 'Shift'
+
 export type PhysicalModifierToken = Exclude<ModifierToken, 'Mod'>
 
 export type KeybindingInput = {

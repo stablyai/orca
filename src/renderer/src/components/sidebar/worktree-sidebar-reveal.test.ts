@@ -3,6 +3,7 @@ import { revealElementInScrollContainer } from './worktree-sidebar-reveal'
 
 function makeContainer(scrollTop: number, clientHeight: number) {
   const scrollTo = vi.fn()
+
   const container = {
     clientHeight,
     scrollTop,
@@ -10,6 +11,7 @@ function makeContainer(scrollTop: number, clientHeight: number) {
     getBoundingClientRect: () => ({ top: 0, bottom: clientHeight }) as DOMRect,
     scrollTo
   }
+
   return { container: container as unknown as HTMLElement, scrollTo }
 }
 

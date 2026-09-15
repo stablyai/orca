@@ -15,6 +15,7 @@ afterEach(() => {
 
 function makeAgentEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
   const paneKey = overrides.paneKey ?? 'tab-1:leaf-1'
+
   return {
     state: 'working',
     prompt: 'finish the task',
@@ -42,6 +43,7 @@ function makeSleepingRecord(
   overrides: Partial<SleepingAgentSessionRecord> = {}
 ): SleepingAgentSessionRecord {
   const paneKey = overrides.paneKey ?? 'tab-1:leaf-1'
+
   return {
     paneKey,
     tabId: paneKey.split(':')[0],
@@ -176,11 +178,13 @@ describe('manual sleep agent session capture', () => {
     vi.setSystemTime(NOW)
     const store = createTestStore()
     seedTabs(store)
+
     const entry = makeAgentEntry({
       paneKey: 'tab-1:retained',
       updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
       interrupted: true
     })
+
     store.setState({
       retainedAgentsByPaneKey: {
         'tab-1:retained': {

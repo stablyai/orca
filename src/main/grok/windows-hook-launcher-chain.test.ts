@@ -15,6 +15,7 @@ const { homedirMock } = vi.hoisted(() => ({
 
 vi.mock('os', async () => {
   const actual = (await vi.importActual('os')) as Record<string, unknown>
+
   return {
     ...actual,
     homedir: homedirMock
@@ -45,6 +46,7 @@ type InstalledConfig = {
 function withWin32<T>(run: () => T): T {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
   try {
     return run()
   } finally {
@@ -117,12 +119,15 @@ describe('Windows Grok managed hook launch shape', () => {
       'writes the generated script path itself to every managed event',
       () => {
         const scriptPath = join(home, '.orca', 'agent-hooks', 'grok-hook.cmd')
+
         const commands = withWin32(() => {
           expect(new GrokHookService().install().state).toBe('installed')
+
           return registeredCommands(readInstalledConfig(home))
         })
 
         expect(commands).toHaveLength(GROK_EVENT_NAMES.length)
+
         for (const command of commands) {
           expect(command).toBe(scriptPath)
           expect(existsSync(command), 'registered command must name a real file').toBe(true)
@@ -152,12 +157,14 @@ describe('Windows Grok managed hook launch shape', () => {
 
         const config = withWin32(() => {
           expect(new GrokHookService().install().state).toBe('installed')
+
           return readInstalledConfig(home)
         })
 
         const all = Object.values(config.hooks).flatMap((definitions) =>
           definitions.flatMap((definition) => definition.hooks.map((hook) => hook.command))
         )
+
         expect(all).not.toContain(staleCommand)
         expect(all.filter((command) => /-EncodedCommand/i.test(command))).toEqual([])
         expect(config.hooks.SubagentStop).toBeUndefined()
@@ -172,13 +179,16 @@ describe('Windows Grok managed hook launch shape', () => {
     it('falls back to the encoded launcher when the profile path is not cmd-safe (#6078)', () => {
       const spaceHome = mkdtempSync(join(tmpdir(), 'orca grok spaced '))
       homedirMock.mockReturnValue(spaceHome)
+
       try {
         const commands = withWin32(() => {
           expect(new GrokHookService().install().state).toBe('installed')
+
           return registeredCommands(readInstalledConfig(spaceHome))
         })
 
         expect(commands.length).toBeGreaterThan(0)
+
         for (const command of commands) {
           expect(command).toMatch(/-EncodedCommand \S+$/)
           expect(command).not.toContain(spaceHome)

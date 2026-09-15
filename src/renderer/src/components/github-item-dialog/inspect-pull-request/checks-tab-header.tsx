@@ -62,6 +62,7 @@ export function ChecksTabActions({
       </TooltipContent>
     </Tooltip>
   )
+
   const fixBrokenChecksAction =
     failedChecksLength > 0 || fixingChecks ? (
       <Tooltip>
@@ -92,6 +93,7 @@ export function ChecksTabActions({
         </TooltipContent>
       </Tooltip>
     ) : null
+
   const rerunAction =
     listLength > 0 || rerunning ? (
       <DropdownMenu modal={false}>
@@ -127,6 +129,7 @@ export function ChecksTabActions({
         </DropdownMenuContent>
       </DropdownMenu>
     ) : null
+
   const secondaryActions =
     variant === 'compact' && !fixBrokenChecksAction ? null : fixBrokenChecksAction ||
       rerunAction ? (
@@ -135,6 +138,7 @@ export function ChecksTabActions({
         {variant === 'page' ? rerunAction : null}
       </div>
     ) : null
+
   const actions = (
     <div className="flex min-w-0 flex-wrap items-center justify-end gap-1.5">
       {refreshAction}
@@ -142,6 +146,7 @@ export function ChecksTabActions({
       {rerunAction}
     </div>
   )
+
   return { refreshAction, fixBrokenChecksAction, rerunAction, secondaryActions, actions }
 }
 

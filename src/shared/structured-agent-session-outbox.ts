@@ -64,7 +64,9 @@ export function updateStructuredAgentSessionOutboxEntry(
     if (entry.clientMessageId !== id) {
       return [entry]
     }
+
     const next = update(entry)
+
     return next ? [next] : []
   })
 }
@@ -76,6 +78,7 @@ export function requeueStructuredAgentSessionSendRefusal(
   retainOperationId = false
 ): StructuredAgentSessionOutboxEntry {
   const refusalState = agentSessionRefusalOperationState('agentSession.send', code)
+
   if (
     refusalState !== 'settled-rejected' ||
     retainOperationId ||
@@ -84,6 +87,7 @@ export function requeueStructuredAgentSessionSendRefusal(
   ) {
     return { ...entry, state: 'queued' }
   }
+
   return {
     ...entry,
     clientMessageId: createOperationId(),
@@ -98,20 +102,25 @@ export function reconcileStructuredAgentSessionOutbox(
   submissions: readonly AgentJournalSubmission[]
 ): StructuredAgentSessionOutboxEntry[] {
   const settled = new Map(submissions.map((entry) => [entry.clientMessageId, entry]))
+
   return entries.flatMap((entry) => {
     const submission = settled.get(entry.clientMessageId)
+
     if (submission?.dispatchState === 'accepted') {
       return []
     }
+
     if (
       submission?.dispatchState === 'rejected' &&
       submission.reason === DISPATCH_REJECTED_CANCELLED
     ) {
       return []
     }
+
     if (submission?.dispatchState === 'pending') {
       return entry.state === 'dispatching' ? [entry] : [{ ...entry, state: 'dispatching' as const }]
     }
+
     if (
       submission?.dispatchState === 'unknown' &&
       entry.retryAfterUnknownSubmittedAt !== -1 &&
@@ -119,6 +128,7 @@ export function reconcileStructuredAgentSessionOutbox(
     ) {
       return [{ ...entry, state: 'unconfirmed' as const }]
     }
+
     return [entry]
   })
 }
@@ -130,8 +140,10 @@ export function parseStructuredAgentSessionOutboxEntry(
   if (typeof value !== 'object' || value === null) {
     return null
   }
+
   const entry = value as Partial<StructuredAgentSessionOutboxEntry>
   const body = entry.body
+
   if (
     entry.sessionId !== sessionId ||
     typeof entry.clientMessageId !== 'string' ||
@@ -146,6 +158,7 @@ export function parseStructuredAgentSessionOutboxEntry(
   ) {
     return null
   }
+
   return {
     clientMessageId: entry.clientMessageId,
     sessionId,
@@ -166,6 +179,7 @@ export function structuredAgentSessionSendRequest(
   expectedRuntimeFence: number
 ): Record<string, unknown> {
   const fields = { body: entry.body }
+
   return {
     envelope: {
       sessionId: entry.sessionId,

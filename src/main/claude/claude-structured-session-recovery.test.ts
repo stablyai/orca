@@ -22,22 +22,26 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
     const persistence = Promise.withResolvers<void>()
     const persistHandle = vi.fn(() => persistence.promise)
     const adapter = adapterFor(claude, {}, events, [], undefined, undefined, persistHandle)
+
     const journalSink: StructuredAgentSessionEventSink = {
       appendItem: () => {},
       appendTombstone: () => {},
       publish: () => {}
     }
+
     await adapter.acquire({
       identity: identityFor(),
       fence: 7,
       spawnToken: 'spawn-9',
       events: journalSink
     })
+
     const session = (
       adapter as unknown as {
         sessions: Map<string, { translator: { dispose: () => void } | null }>
       }
     ).sessions.get('session-1')
+
     const disposeTranslator = vi.spyOn(session!.translator!, 'dispose')
 
     const first = adapter.closeSession('session-1')
@@ -57,6 +61,7 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
     const claude = fakeClaude()
     const events: ClaudeStructuredSessionEvent[] = []
     const callbackError = new Error('handle delivery failed')
+
     const adapter = new ClaudeStructuredSessionAdapter({
       resolveLaunch: async () => ({
         pathToClaudeCodeExecutable: 'claude',
@@ -69,6 +74,7 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
       }),
       onEvent: (event) => {
         events.push(event)
+
         if (event.type === 'handle') {
           throw callbackError
         }
@@ -77,22 +83,26 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
       readProcessStartTime: async () => 1_700_000_000_000,
       persistHandle: vi.fn(async () => undefined)
     })
+
     const journalSink: StructuredAgentSessionEventSink = {
       appendItem: () => {},
       appendTombstone: () => {},
       publish: () => {}
     }
+
     await adapter.acquire({
       identity: identityFor(),
       fence: 7,
       spawnToken: 'spawn-9',
       events: journalSink
     })
+
     const session = (
       adapter as unknown as {
         sessions: Map<string, { translator: { dispose: () => void } | null }>
       }
     ).sessions.get('session-1')
+
     const disposeTranslator = vi.spyOn(session!.translator!, 'dispose')
 
     await expect(adapter.closeSession('session-1')).rejects.toBe(callbackError)
@@ -104,10 +114,12 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
   it('retains a closed session until its durable cursor persistence succeeds', async () => {
     const claude = fakeClaude()
     const persistenceError = new Error('store unavailable')
+
     const persistHandle = vi
       .fn<NonNullable<ClaudeStructuredSessionAdapterDeps['persistHandle']>>()
       .mockRejectedValueOnce(persistenceError)
       .mockResolvedValueOnce(undefined)
+
     const adapter = adapterFor(claude, {}, [], [], undefined, undefined, persistHandle)
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
 
@@ -185,6 +197,7 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
     const claude = fakeClaude()
     const persistedHandles: unknown[] = []
     const readTranscriptLeaf = vi.fn().mockResolvedValue('durable-tail')
+
     const adapter = adapterFor(
       claude,
       { claudeConfigDir: '/accounts/selected' },
@@ -193,6 +206,7 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
       undefined,
       readTranscriptLeaf
     )
+
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
     claude.connections[0].handlers.onMessage?.({
       type: 'assistant',
@@ -212,10 +226,12 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
   it('re-proves from the transcript root when the observed cursor is missing', async () => {
     const claude = fakeClaude()
     const persistedHandles: unknown[] = []
+
     const readTranscriptLeaf = vi
       .fn()
       .mockRejectedValueOnce(new ClaudeTranscriptPreviousCursorMissingError())
       .mockResolvedValueOnce('reproved-main-leaf')
+
     const adapter = adapterFor(claude, {}, [], persistedHandles, undefined, readTranscriptLeaf)
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
     claude.connections[0].handlers.onMessage?.({
@@ -242,9 +258,11 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
   it('keeps the observed leaf when transcript validation proves a sibling branch', async () => {
     const claude = fakeClaude()
     const persistedHandles: unknown[] = []
+
     const readTranscriptLeaf = vi
       .fn()
       .mockRejectedValue(new Error('latest marker is on a sibling branch'))
+
     const adapter = adapterFor(claude, {}, [], persistedHandles, undefined, readTranscriptLeaf)
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
     claude.connections[0].handlers.onMessage?.({
@@ -293,6 +311,7 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
   it('derives the crash cursor from the validated transcript tail', async () => {
     const claude = fakeClaude()
     const persistedHandles: unknown[] = []
+
     const adapter = adapterFor(
       claude,
       {},
@@ -301,6 +320,7 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
       undefined,
       vi.fn().mockResolvedValue('durable-crash-leaf')
     )
+
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
     claude.connections[0].handlers.onMessage?.({
       type: 'assistant',
@@ -318,10 +338,12 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
   it('re-proves a first-hand crash cursor from the transcript root after stale validation', async () => {
     const claude = fakeClaude()
     const persistedHandles: unknown[] = []
+
     const readTranscriptLeaf = vi
       .fn()
       .mockRejectedValueOnce(new ClaudeTranscriptPreviousCursorMissingError())
       .mockResolvedValueOnce('reproved-crash-leaf')
+
     const adapter = adapterFor(claude, {}, [], persistedHandles, undefined, readTranscriptLeaf)
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
     claude.connections[0].handlers.onMessage?.({
@@ -348,9 +370,11 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
   it('keeps the observed crash leaf when transcript validation proves a sibling branch', async () => {
     const claude = fakeClaude()
     const persistedHandles: unknown[] = []
+
     const readTranscriptLeaf = vi
       .fn()
       .mockRejectedValue(new Error('latest marker is on a sibling branch'))
+
     const adapter = adapterFor(claude, {}, [], persistedHandles, undefined, readTranscriptLeaf)
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
     claude.connections[0].handlers.onMessage?.({
@@ -368,6 +392,7 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
   it('publishes lifecycle recovery even when crash-cursor persistence fails', async () => {
     const claude = fakeClaude()
     const events: ClaudeStructuredSessionEvent[] = []
+
     const adapter = adapterFor(
       claude,
       {},
@@ -377,6 +402,7 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
       undefined,
       vi.fn().mockRejectedValue(new Error('store unavailable'))
     )
+
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
 
     claude.connections[0].handlers.onExit?.(new Error('crashed'))
@@ -456,13 +482,16 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
     const claude = fakeClaude()
     const events: ClaudeStructuredSessionEvent[] = []
     const persistedHandles: unknown[] = []
+
     const journalSink: StructuredAgentSessionEventSink = {
       appendItem: () => {},
       appendTombstone: () => {},
       publish: () => {}
     }
+
     const readTranscriptLeaf = vi.fn().mockResolvedValue('durable-retained-leaf')
     let durableLeafUuid: string | null = null
+
     const resolveLaunch = vi.fn(async ({ identity }) => {
       if (
         identity.providerHandle.kind !== 'claude' ||
@@ -471,6 +500,7 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
       ) {
         throw new Error('claude durable resume identity changed before spawn')
       }
+
       if (durableLeafUuid === null) {
         return {
           pathToClaudeCodeExecutable: 'claude',
@@ -482,6 +512,7 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
           resumed: false
         }
       }
+
       return {
         pathToClaudeCodeExecutable: 'claude',
         options: { resume: PROVIDER_SESSION_ID, resumeSessionAt: durableLeafUuid },
@@ -492,12 +523,14 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
         resumed: true
       }
     })
+
     const persistHandle = vi.fn<NonNullable<ClaudeStructuredSessionAdapterDeps['persistHandle']>>(
       async (handle) => {
         durableLeafUuid = handle.leafUuid
         persistedHandles.push(handle)
       }
     )
+
     const adapter = new ClaudeStructuredSessionAdapter({
       resolveLaunch,
       openConnection: claude.openConnection,
@@ -507,14 +540,17 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
       readTranscriptLeaf,
       persistHandle
     })
+
     const firstAcquisition = await adapter.acquire({
       identity: identityFor(),
       fence: 7,
       spawnToken: 'spawn-9',
       events: journalSink
     })
+
     const first = claude.connections[0]
     const oldPrompt = invokeCanUseTool(first, 'Bash', 'permission-retained', 'tool-retained')
+
     const oldSession = (
       adapter as unknown as {
         sessions: Map<
@@ -528,6 +564,7 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
         >
       }
     ).sessions.get('session-1')
+
     expect(oldSession?.translator).not.toBeNull()
     const disposeTranslator = vi.spyOn(oldSession!.translator!, 'dispose')
     const pendingPrompt = oldSession?.prompts.find('permission-retained')

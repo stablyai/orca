@@ -13,6 +13,7 @@ export function getUntitledFileRoot(file: UntitledPathFile, worktreePath?: strin
   }
 
   const rootLength = file.filePath.length - file.relativePath.length - 1
+
   if (rootLength <= 0) {
     return dirname(file.filePath)
   }

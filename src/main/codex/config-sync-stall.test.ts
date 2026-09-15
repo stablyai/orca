@@ -11,6 +11,7 @@ import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
 import { getCodexSettingsBaselinePath } from './config-settings-baseline'
 
 let root: string
+
 let homes: { runtimeHomePath: string; systemHomePath: string }
 
 function systemConfigPath(): string {
@@ -231,6 +232,7 @@ describe('reportCodexConfigSyncOutcome', () => {
       // back into a read-only ~/.codex, so it throws and the mirror is skipped.
       writeFileSync(systemConfigPath(), 'model = "gpt-5"\n', 'utf-8')
       chmodSync(homes.systemHomePath, 0o555)
+
       try {
         syncSystemConfigIntoManagedCodexHome(homes)
       } finally {

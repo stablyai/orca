@@ -1,6 +1,7 @@
 import type { TerminalScrollBufferType } from './terminal-scroll-buffer-snapshot'
 
 export type TerminalScrollIntentKind = 'followOutput' | 'pinnedViewport'
+
 export type TerminalScrollIntentKey = string
 
 export type TerminalScrollIntent = {
@@ -16,6 +17,7 @@ export type TerminalScrollIntent = {
 // terminal-scroll-intent.ts these hold a strong string key, so a leaf that is
 // gone for good must be released explicitly — see releaseTerminalScrollIntentKey.
 const terminalScrollIntentByKey = new Map<TerminalScrollIntentKey, TerminalScrollIntent>()
+
 const terminalScrollIntentBindingByKey = new Map<TerminalScrollIntentKey, number>()
 
 export function readKeyedTerminalScrollIntent(

@@ -11,13 +11,17 @@ import {
  *  by semver and every build is uniquely versioned. */
 export function createHourlyBuildVersion(baseVersion, date) {
   const match = /^(\d+\.\d+\.\d+)(?:-[0-9A-Za-z.-]+)?$/.exec(baseVersion)
+
   if (!match) {
     throw new Error(`Package version is not valid semver: ${baseVersion}`)
   }
+
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     throw new Error('Hourly build timestamp is invalid.')
   }
+
   const pad = (value, width = 2) => String(value).padStart(width, '0')
+
   const stamp = [
     pad(date.getUTCFullYear(), 4),
     pad(date.getUTCMonth() + 1),
@@ -25,6 +29,7 @@ export function createHourlyBuildVersion(baseVersion, date) {
     pad(date.getUTCHours()),
     pad(date.getUTCMinutes())
   ].join('')
+
   // Why: drop any -rc.N tail. Keeping it makes every hourly semver-NEWER than the
   // RC it was cut from (1.4.160-rc.3-hourly.X > 1.4.160-rc.3), which would let an
   // ordinary RC-channel check offer untested hourly builds to RC users. Stripping
@@ -48,14 +53,19 @@ export function createHourlyBuildVersion(baseVersion, date) {
  */
 export function nextHourlyBuildNumber(baseVersion, releaseNames = []) {
   const prefix = `${baseVersion} • `
+
   const highest = releaseNames.reduce((max, entry) => {
     const name = String(entry ?? '')
+
     if (!name.startsWith(prefix)) {
       return max
     }
+
     const match = /^(\d+) • /.exec(name.slice(prefix.length))
+
     return match ? Math.max(max, Number(match[1])) : max
   }, 0)
+
   return highest + 1
 }
 
@@ -67,6 +77,7 @@ export function formatHourlyReleaseName(version, buildNumber, commit, date) {
   if (!Number.isInteger(buildNumber) || buildNumber < 1) {
     throw new Error(`Hourly build number must be a positive integer: ${buildNumber}`)
   }
+
   return [
     version.split('-')[0],
     String(buildNumber).padStart(2, '0'),
@@ -81,12 +92,15 @@ export function formatHourlyReleaseName(version, buildNumber, commit, date) {
 // version the caller guessed.
 export function getHourlyBuildIdentity(now = new Date(), { publishedVersions, releaseNames } = {}) {
   const packageJson = JSON.parse(readFileSync(resolve('package.json'), 'utf8'))
+
   const commit = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
     encoding: 'utf8'
   }).trim()
+
   const base = resolveDevChannelBaseVersion(packageJson.version, publishedVersions ?? [])
   const version = createHourlyBuildVersion(base, now)
   const buildNumber = nextHourlyBuildNumber(base, releaseNames ?? [])
+
   return {
     commit,
     version,
@@ -102,6 +116,7 @@ if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename
     // whitespace split the version list gets.
     releaseNames: (process.env.ORCA_HOURLY_RELEASE_NAMES ?? '').split('\n').filter(Boolean)
   })
+
   // Consumed by the workflow via $GITHUB_OUTPUT.
   process.stdout.write(
     `version=${identity.version}\ncommit=${identity.commit}\nbuild_number=${identity.buildNumber}\nname=${identity.name}\n`

@@ -27,13 +27,17 @@ export function nativeChatPinnedRowIndexes({
   revealIndex
 }: NativeChatPinnedRowsInput): ReadonlySet<number> {
   const pinned = new Set<number>()
+
   if (count <= 0) {
     return pinned
   }
+
   pinned.add(count - 1)
+
   if (revealIndex != null && revealIndex >= 0 && revealIndex < count) {
     pinned.add(revealIndex)
   }
+
   return pinned
 }
 
@@ -45,13 +49,16 @@ export function nativeChatTranscriptRange(
   const first = Math.max(range.startIndex - range.overscan, 0)
   const last = Math.min(range.endIndex + range.overscan, range.count - 1)
   const indexes = new Set<number>()
+
   for (let index = first; index <= last; index += 1) {
     indexes.add(index)
   }
+
   for (const index of pinned) {
     if (index >= 0 && index < range.count) {
       indexes.add(index)
     }
   }
+
   return Array.from(indexes).sort((left, right) => left - right)
 }

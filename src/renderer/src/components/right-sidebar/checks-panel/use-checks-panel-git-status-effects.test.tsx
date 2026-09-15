@@ -15,10 +15,15 @@ import { useChecksPanelGitStatusEffects } from './use-checks-panel-git-status-ef
 import { deferred, flush, mountProbe, unmountProbes } from '../source-control-hook-test-harness'
 
 const retryTimerRef = { current: null as ReturnType<typeof setTimeout> | null }
+
 const panelContextKeyRef = { current: 'context-A' }
+
 const setGitStatusSnapshot = vi.fn()
+
 const setGitStatusProbeErrorContextKey = vi.fn()
+
 const setGitStatusRefreshNonce = vi.fn()
+
 const updateWorktreeGitIdentity = vi.fn()
 
 function Probe({
@@ -78,6 +83,7 @@ function Probe({
     sshConnectionStatus,
     updateWorktreeGitIdentity
   } as never)
+
   return null
 }
 
@@ -107,12 +113,14 @@ describe('useChecksPanelGitStatusEffects poll runner', () => {
       branch: string
       upstreamStatus: { hasUpstream: boolean; ahead: number; behind: number }
     }>()
+
     const status = {
       entries: [],
       head: 'head-A',
       branch: 'feature',
       upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
     }
+
     mocks.getRuntimeGitStatus.mockReturnValueOnce(first.promise).mockResolvedValue(status)
     const root: Root = await mountProbe(<Probe nonce={0} />)
     expect(mocks.getRuntimeGitStatus).toHaveBeenCalledTimes(1)
@@ -122,6 +130,7 @@ describe('useChecksPanelGitStatusEffects poll runner', () => {
         root.render(<Probe nonce={tick} />)
       })
     }
+
     expect(mocks.getRuntimeGitStatus).toHaveBeenCalledTimes(1)
 
     await act(async () => {
@@ -148,12 +157,14 @@ describe('useChecksPanelGitStatusEffects poll runner', () => {
       branch: string
       upstreamStatus: { hasUpstream: boolean; ahead: number; behind: number }
     }>()
+
     const status = {
       entries: [],
       head: 'head-A',
       branch: 'feature',
       upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
     }
+
     mocks.getRuntimeGitStatus.mockReturnValueOnce(first.promise).mockResolvedValue(status)
     const root: Root = await mountProbe(<Probe nonce={0} />)
     expect(mocks.getRuntimeGitStatus).toHaveBeenCalledTimes(1)
@@ -185,12 +196,14 @@ describe('useChecksPanelGitStatusEffects poll runner', () => {
       branch: string
       upstreamStatus: { hasUpstream: boolean; ahead: number; behind: number }
     }>()
+
     const status = {
       entries: [],
       head: 'head-A',
       branch: 'feature',
       upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
     }
+
     mocks.getRuntimeGitStatus.mockReturnValueOnce(first.promise).mockResolvedValue(status)
     const root: Root = await mountProbe(<Probe nonce={0} />)
     expect(mocks.getRuntimeGitStatus).toHaveBeenCalledTimes(1)
@@ -217,16 +230,20 @@ describe('useChecksPanelGitStatusEffects poll runner', () => {
       branch: string
       upstreamStatus: { hasUpstream: boolean; ahead: number; behind: number }
     }>()
+
     const status = {
       entries: [],
       head: 'head-A',
       branch: 'feature',
       upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
     }
+
     mocks.getRuntimeGitStatus.mockReturnValueOnce(first.promise).mockResolvedValue(status)
+
     const root: Root = await mountProbe(
       <Probe nonce={0} repoConnectionId="ssh-1" sshConnectionStatus="connected" />
     )
+
     expect(mocks.getRuntimeGitStatus).toHaveBeenCalledTimes(1)
 
     await act(async () => {

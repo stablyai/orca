@@ -16,6 +16,7 @@ export function selectAgentlessMapWorkspaces({
   const occupiedWorkspaceIds = new Set(
     cards.map((card) => agentMapWorktreeIdentityFromParts(card.worktreeId, card.executionHostId))
   )
+
   return filterDashboardWorkspaces(workspaces, query, filters).filter(
     (workspace) =>
       !occupiedWorkspaceIds.has(

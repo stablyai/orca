@@ -23,6 +23,7 @@ export function useSetupScriptPromptRevalidation(input: {
   const activeRepoHostIdentity = activeRepo ? getRepoHostIdentity(activeRepo) : null
   const repoHost = parseExecutionHostId(activeRepo ? getRepoExecutionHostId(activeRepo) : null)
   const repoRuntimeEnvironmentId = repoHost?.kind === 'runtime' ? repoHost.environmentId : null
+
   // Why: scope to the repo's own runtime so an unrelated host reconnect does not
   // re-fire inspections for every repo.
   const repoConnectionGeneration = useAppStore((s) =>
@@ -37,6 +38,7 @@ export function useSetupScriptPromptRevalidation(input: {
   const promptBelongsToActiveRepo =
     promptState?.repoId === activeRepo?.id &&
     Boolean(activeRepo && promptState?.repoHostIdentity === activeRepoHostIdentity)
+
   const promptNeedsRevalidation =
     promptBelongsToActiveRepo &&
     (promptState?.status === 'error' ||
@@ -55,7 +57,9 @@ export function useSetupScriptPromptRevalidation(input: {
     ) {
       return
     }
+
     window.addEventListener('focus', requestRevalidation)
+
     return () => {
       window.removeEventListener('focus', requestRevalidation)
     }
@@ -82,6 +86,7 @@ export function useSetupScriptPromptRevalidation(input: {
     previousWorktreeIdRef.current = activeWorktreeId
     previousRepoHostIdentityRef.current = activeRepoHostIdentity
     previousConnectionGenerationRef.current = repoConnectionGeneration
+
     if (hostChanged) {
       // A repo/host switch re-runs the card's own inspection, so no extra pass is owed.
       pendingRevalidationRef.current = false
@@ -99,6 +104,7 @@ export function useSetupScriptPromptRevalidation(input: {
     ) {
       return
     }
+
     pendingRevalidationRef.current = false
     requestRevalidation()
   }, [

@@ -39,10 +39,12 @@ export function createGitCommonWatchReconciliation({
   const worktreesDir = join(commonDirPath, 'worktrees')
   let subscription: WorktreeBaseSubscription | null = null
   const visibilityListeners = new Set<() => void>()
+
   const pollVisibility: WorktreePollerWindowVisibility = {
     isWindowVisible: visibility.isWindowVisible,
     onWindowBecameVisible: (listener) => {
       visibilityListeners.add(listener)
+
       return () => {
         visibilityListeners.delete(listener)
       }
@@ -54,12 +56,14 @@ export function createGitCommonWatchReconciliation({
       if (subscription || !canStart()) {
         return
       }
+
       const reconciliation = await startGitCommonPolling(
         commonDirPath,
         (events) => {
           const rootWasReplaced =
             events.some((event) => event.type === 'delete' && event.path === worktreesDir) &&
             events.some((event) => event.type === 'create' && event.path === worktreesDir)
+
           // Why: this backstop lags the native stream by up to 15 ticks, so it
           // routinely reports entry creates the stream already delivered. Only
           // treat them as a replacement when the root itself was also recreated
@@ -68,6 +72,7 @@ export function createGitCommonWatchReconciliation({
           const rootRecreated = events.some(
             (event) => event.type === 'create' && event.path === worktreesDir
           )
+
           const coarseRootReplacement =
             rootRecreated &&
             events.some(
@@ -76,9 +81,11 @@ export function createGitCommonWatchReconciliation({
                 event.path !== worktreesDir &&
                 dirname(event.path) === worktreesDir
             )
+
           if (rootWasReplaced || coarseRootReplacement) {
             onRootReplacement()
           }
+
           onEvents(
             coarseRootReplacement
               ? events.map((event) =>
@@ -96,6 +103,7 @@ export function createGitCommonWatchReconciliation({
         () => [],
         { forceFullScanEveryTick: true }
       )
+
       if (!shouldKeep()) {
         await reconciliation.unsubscribe()
       } else {

@@ -2,24 +2,40 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = await vi.hoisted(async () => {
   const { createSshIpcMocks } = await import('./ssh-ipc-module-mocks')
+
   return createSshIpcMocks()
 })
 
 vi.mock('../ssh/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
+
 vi.mock('electron', () => mocks.electron)
+
 vi.mock('./ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegistry)
+
 vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
+
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
+
 vi.mock('../ssh/ssh-relay-deploy', () => mocks.sshRelayDeploy)
+
 vi.mock('../ssh/ssh-relay-reset', () => mocks.sshRelayReset)
+
 vi.mock('../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
+
 vi.mock('../providers/ssh-pty-provider', () => mocks.sshPtyProvider)
+
 vi.mock('../providers/ssh-filesystem-provider', () => mocks.sshFilesystemProvider)
+
 vi.mock('./pty', () => mocks.pty)
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => mocks.sshFilesystemDispatch)
+
 vi.mock('../providers/ssh-git-provider', () => mocks.sshGitProvider)
+
 vi.mock('../providers/ssh-git-dispatch', () => mocks.sshGitDispatch)
+
 vi.mock('../ssh/ssh-port-forward', () => mocks.sshPortForward)
+
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
 import { getSshConnectionManager, registerSshHandlers } from './ssh'
@@ -42,6 +58,7 @@ const {
 
 describe('SSH IPC handlers', () => {
   const harness = createSshIpcHarness(mocks)
+
   const {
     ipcTestSource,
     handlers,
@@ -62,7 +79,9 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
+
     const forward = {
       id: 'pf-1',
       connectionId: 'ssh-1',
@@ -71,14 +90,17 @@ describe('SSH IPC handlers', () => {
       remotePort: 3000,
       label: 'app'
     }
+
     const updatedForward = { ...forward, remotePort: 3001 }
     const newForward = { ...forward, id: 'pf-2', localPort: 4101 }
+
     const connectedState = {
       targetId: 'ssh-1',
       status: 'connected' as const,
       error: null,
       reconnectAttempt: 0
     }
+
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
     mockConnectionManager.getConnection.mockReturnValue(conn)
@@ -178,6 +200,7 @@ describe('SSH IPC handlers', () => {
         }
       ]
     }
+
     const forward = {
       id: 'pf-1',
       connectionId: 'ssh-1',
@@ -186,12 +209,14 @@ describe('SSH IPC handlers', () => {
       remotePort: 3000,
       label: 'app'
     }
+
     mockSshStore.getTarget.mockReturnValue(target)
     mockPortForwardManager.listForwards.mockReturnValue([])
 
     const callbacks = mockPortForwardManager.callbacksRef.current as {
       onForwardClosed: (entry: typeof forward, reason: { kind: 'unexpected-exit' }) => void
     }
+
     callbacks.onForwardClosed(forward, { kind: 'unexpected-exit' })
 
     expect(mockSshStore.updateTarget).toHaveBeenCalledWith('ssh-1', {
@@ -218,6 +243,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -249,15 +275,19 @@ describe('SSH IPC handlers', () => {
   it('refreshes live session callbacks to the newest window and output authorities', async () => {
     const firstWindow = createMockWindow()
     const secondWindow = createMockWindow()
+
     const firstRuntime = {
       onPtyData: vi.fn(),
       onPtyExit: vi.fn()
     }
+
     const secondRuntime = {
       onPtyData: vi.fn(),
       onPtyExit: vi.fn()
     }
+
     registerSshHandlers(mockStore as never, () => firstWindow as never, firstRuntime as never)
+
     const target: SshTarget = {
       id: 'ssh-1',
       label: 'Server',
@@ -265,6 +295,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -278,6 +309,7 @@ describe('SSH IPC handlers', () => {
 
     await handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })
     const onData = mockPtyProvider.onData.mock.calls[0]?.[0] as SshPtyDataCallback | undefined
+
     const onExit = mockPtyProvider.onExit.mock.calls[0]?.[0] as
       | ((payload: {
           id: string
@@ -286,13 +318,16 @@ describe('SSH IPC handlers', () => {
           ptyIncarnation: string
         }) => void)
       | undefined
+
     const onDetectedPorts = mockPortScannerCallbacks.get('ssh-1') as
       | ((targetId: string, ports: unknown[], platform: string) => void)
       | undefined
+
     firstWindow.webContents.send.mockClear()
     secondWindow.webContents.send.mockClear()
 
     registerSshHandlers(mockStore as never, () => secondWindow as never, secondRuntime as never)
+
     const callbacks = mockConnectionManager.callbacksRef.current as {
       onStateChange: (targetId: string, state: unknown) => void
     }

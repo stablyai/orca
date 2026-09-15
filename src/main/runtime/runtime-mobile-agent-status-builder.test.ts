@@ -4,6 +4,7 @@ import type { RuntimeAgentRowSnapshot } from './runtime-hook-agent-row-selection
 import { buildRuntimeMobileAgentStatus } from './runtime-mobile-agent-status-builder'
 
 const PROVIDER_SESSION = { key: 'session_id' as const, id: 'session-1' }
+
 const TAB: RuntimeMobileSessionTerminalTab = {
   type: 'terminal',
   id: 'tab::leaf',

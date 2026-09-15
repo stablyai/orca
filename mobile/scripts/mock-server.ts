@@ -13,6 +13,7 @@ import {
 } from './mock-server-rpc-handlers'
 
 const PORT = Number(process.env.PORT) || 6768
+
 const AUTH_TOKEN = 'mock-device-token'
 
 // Why: generate a persistent server keypair for this mock session.
@@ -20,6 +21,7 @@ const AUTH_TOKEN = 'mock-device-token'
 // MOCK_SERVER_KEY_FILE reuses one across restarts so a paired device (which
 // pins the public key) survives a server restart.
 const serverKeyPair = loadOrCreateMockServerKeyPair(process.env.MOCK_SERVER_KEY_FILE)
+
 const serverPublicKeyB64 = Buffer.from(serverKeyPair.publicKey).toString('base64')
 
 const wss = new WebSocketServer({ port: PORT })
@@ -39,24 +41,29 @@ wss.on('connection', (ws) => {
     if (!e2ee) {
       // Handshake phase — expect e2ee_hello
       let hello: { type?: string; publicKeyB64?: string }
+
       try {
         hello = JSON.parse(msg)
       } catch {
         ws.send(JSON.stringify({ type: 'e2ee_error', message: 'Invalid JSON' }))
         ws.close()
+
         return
       }
 
       if (hello.type !== 'e2ee_hello' || !hello.publicKeyB64) {
         ws.send(JSON.stringify({ type: 'e2ee_error', message: 'Expected e2ee_hello' }))
         ws.close()
+
         return
       }
 
       const clientPublicKey = Uint8Array.from(Buffer.from(hello.publicKeyB64, 'base64'))
+
       if (clientPublicKey.length !== 32) {
         ws.send(JSON.stringify({ type: 'e2ee_error', message: 'Invalid public key' }))
         ws.close()
+
         return
       }
 
@@ -65,17 +72,21 @@ wss.on('connection', (ws) => {
 
       ws.send(JSON.stringify({ type: 'e2ee_ready' }))
       console.log('[mock] E2EE key exchange complete — waiting for encrypted auth')
+
       return
     }
 
     // Post-handshake — decrypt, handle, encrypt reply
     const plaintext = e2eeDecrypt(msg, e2ee.sharedKey)
+
     if (plaintext === null) {
       console.log('[mock] Decryption failed — dropping message')
+
       return
     }
 
     let request: RpcRequest
+
     try {
       request = JSON.parse(plaintext) as RpcRequest
     } catch {
@@ -83,12 +94,15 @@ wss.on('connection', (ws) => {
         JSON.stringify(error('unknown', 'bad_request', 'Invalid JSON')),
         e2ee.sharedKey
       )
+
       ws.send(encrypted)
+
       return
     }
 
     if (!e2ee.authenticated) {
       const auth = request as unknown as { type?: string; deviceToken?: string }
+
       if (auth.type !== 'e2ee_auth' || auth.deviceToken !== AUTH_TOKEN) {
         ws.send(
           e2eeEncrypt(
@@ -97,12 +111,15 @@ wss.on('connection', (ws) => {
           )
         )
         ws.close()
+
         return
       }
+
       e2ee.deviceToken = auth.deviceToken
       e2ee.authenticated = true
       ws.send(e2eeEncrypt(JSON.stringify({ type: 'e2ee_authenticated' }), e2ee.sharedKey))
       console.log('[mock] E2EE authentication complete')
+
       return
     }
 
@@ -130,9 +147,13 @@ wss.on('connection', (ws) => {
 })
 
 console.log(`[mock] Orca mock server listening on ws://localhost:${PORT}`)
+
 console.log(`[mock] Auth token: ${AUTH_TOKEN}`)
+
 console.log(`[mock] Server public key (base64): ${serverPublicKeyB64}`)
+
 console.log(
   `[mock] Scenario: ${mockScenarioSummary.repoCount} repos, ${mockScenarioSummary.worktreeCount} worktrees, ${mockScenarioSummary.rpcDelayMs}ms default RPC delay`
 )
+
 console.log(`[mock] E2EE enabled — clients must send e2ee_hello before RPC`)

@@ -85,7 +85,9 @@ export class SkillUpdateRunner {
     if (this.run.state === 'running') {
       return { started: false, reason: 'already-running' }
     }
+
     const canonicalNames = canonicalizeSkillUpdateNames(names)
+
     if (!canonicalNames) {
       return { started: false, reason: 'invalid-names' }
     }
@@ -97,8 +99,10 @@ export class SkillUpdateRunner {
 
     let spawnCmd: string
     let spawnArgs: string[]
+
     try {
       const buildSpawnArgs = this.deps.buildSpawnArgs ?? getSpawnArgsForWindows
+
       ;({ spawnCmd, spawnArgs } = buildSpawnArgs(npxCommand, npxArgs))
     } catch {
       // Why: the names are already canonical here, so this is the cmd.exe rail
@@ -116,6 +120,7 @@ export class SkillUpdateRunner {
           `Could not run ${npxCommand} safely from this location: its path contains one of ` +
           `${WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL}, which cmd.exe would reinterpret.`
       })
+
       return { started: false, reason: 'unsafe-command-path' }
     }
 
@@ -133,6 +138,7 @@ export class SkillUpdateRunner {
       // PATH it loads under whatever version leads, and a native dep dies on ABI.
       env: withCliRuntimeOnPath(npxCommand, { ...process.env })
     })
+
     this.child = child
 
     // Why: `stripAnsi` turns each \r progress frame into its own line, so an npm
@@ -140,33 +146,42 @@ export class SkillUpdateRunner {
     // the whole buffer to every window. Coalesce into one push per tick.
     let flushTimer: ReturnType<typeof setTimeout> | null = null
     let pendingOutput = ''
+
     const flush = (): void => {
       flushTimer = null
+
       if (token !== this.runToken || this.run.state !== 'running' || !pendingOutput) {
         return
       }
+
       const appended = pendingOutput
       pendingOutput = ''
       this.publish({ ...this.run, output: clampOutput(this.run.output + appended) })
     }
+
     const append = (chunk: Buffer): void => {
       if (token !== this.runToken || this.run.state !== 'running') {
         return
       }
+
       pendingOutput = clampOutput(pendingOutput + stripAnsi(chunk.toString('utf8')))
+
       if (!flushTimer) {
         flushTimer = setTimeout(flush, OUTPUT_FLUSH_MS)
         flushTimer.unref?.()
       }
     }
+
     child.stdout?.on('data', append)
     child.stderr?.on('data', append)
+
     // The tail matters most on failure, so never let a pending chunk die with the
     // process — drain it before the exit handlers settle the run.
     const drain = (): void => {
       if (flushTimer) {
         clearTimeout(flushTimer)
       }
+
       flush()
     }
 
@@ -190,6 +205,7 @@ export class SkillUpdateRunner {
     if (token !== this.runToken || this.settling || this.run.state !== 'running') {
       return
     }
+
     this.settling = true
     this.child = null
     const output = this.run.output
@@ -207,11 +223,15 @@ export class SkillUpdateRunner {
       if (token !== this.runToken) {
         return
       }
+
       const failed = failedNames ?? (spawnError ? names : [])
+
       if (failed.length === 0) {
         this.publish({ state: 'success', names, finishedAt, output })
+
         return
       }
+
       this.publish({
         state: 'error',
         names,
@@ -224,8 +244,10 @@ export class SkillUpdateRunner {
 
     if (!rescan) {
       finish(null)
+
       return
     }
+
     void rescan(names).then(
       (failedNames) => finish(failedNames),
       () => finish(null)
@@ -236,15 +258,18 @@ export class SkillUpdateRunner {
     if (this.killing) {
       return
     }
+
     // Retire the child's handlers now so its exit settles nothing.
     this.runToken += 1
     this.settling = false
     const child = this.child
     this.child = null
+
     if (!child) {
       if (this.run.state === 'running') {
         this.publish({ state: 'idle' })
       }
+
       return
     }
 
@@ -255,15 +280,20 @@ export class SkillUpdateRunner {
     this.killing = true
     let hasReleased = false
     let releaseTimer: ReturnType<typeof setTimeout> | null = null
+
     const release = (): void => {
       if (hasReleased) {
         return
       }
+
       hasReleased = true
+
       if (releaseTimer) {
         clearTimeout(releaseTimer)
       }
+
       this.killing = false
+
       // Why: stay `running` until the tree is actually dead. The sweep waits for
       // a descendant snapshot before it signals anything, so releasing on the
       // synchronous path would let an immediate re-Update spawn a second npx
@@ -274,17 +304,20 @@ export class SkillUpdateRunner {
         this.publish({ state: 'idle' })
       }
     }
+
     // Every layer of the sweep is individually bounded, but this is the recovery
     // path: if one ever fails to settle, the run would be stuck `running` with
     // Stop already spent. Cap it rather than depend on that transitively.
     releaseTimer = setTimeout(release, CANCEL_RELEASE_TIMEOUT_MS)
     releaseTimer.unref?.()
+
     if (this.run.state === 'running') {
       this.publish({ ...this.run, stopping: true })
     }
 
     const kill = this.deps.killTree ?? killWithDescendantSweep
     const pid = child.pid
+
     if (typeof pid !== 'number') {
       // Same contract as the sweep path below: a throwing kill must not escape
       // and leave `killing` latched with the run stuck `running`.
@@ -293,9 +326,12 @@ export class SkillUpdateRunner {
       } catch {
         /* already gone, or not ours to signal */
       }
+
       release()
+
       return
     }
+
     // Why `release` on both paths and no retry: the sweep runs `killRoot()` in its
     // own `finally`, so the only way it rejects is that kill throwing (EPERM) —
     // calling it again would throw straight back out of the rejection handler,

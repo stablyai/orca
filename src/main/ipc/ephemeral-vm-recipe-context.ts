@@ -32,6 +32,7 @@ export function listRecipes(
   pluginRecipes: readonly OrcaVmRecipe[] = []
 ): EphemeralVmRecipeListResult {
   const repo = store.getRepo(repoId)
+
   if (!repo || isFolderRepo(repo)) {
     return {
       status: 'error',
@@ -41,6 +42,7 @@ export function listRecipes(
       message: `Repo not found: ${repoId}`
     }
   }
+
   if (repo.connectionId) {
     return {
       status: 'error',
@@ -50,7 +52,9 @@ export function listRecipes(
       message: 'Ephemeral VM recipes run on the local desktop host in v1.'
     }
   }
+
   const hooks = loadHooks(repo.path)
+
   return {
     status: 'ok',
     repoPath: repo.path,
@@ -68,6 +72,7 @@ export function listRecipeCatalog(
     .filter((repo) => isGitRepoKind(repo) && !isFolderRepo(repo) && !repo.connectionId)
     .map((repo) => {
       const hooks = loadHooks(repo.path)
+
       return {
         repoId: repo.id,
         repoName: repo.displayName,
@@ -81,12 +86,15 @@ export function listRecipeCatalog(
 
 export function getRecipeRepo(store: Store, repoId: string): RecipeRepoResult {
   const repo = store.getRepo(repoId)
+
   if (!repo || isFolderRepo(repo)) {
     return failedRecipeRepo(null, `Repo not found: ${repoId}`)
   }
+
   if (repo.connectionId) {
     return failedRecipeRepo(repo.path, 'Ephemeral VM recipes run on the local desktop host in v1.')
   }
+
   return { ok: true, repo }
 }
 
@@ -100,16 +108,21 @@ export function getRuntimeRecipeContext(
   recipe: OrcaVmRecipe
 } {
   const runtime = listEphemeralVmRuntimes(userDataPath).find((entry) => entry.id === runtimeId)
+
   if (!runtime) {
     throw new Error(`Unknown ephemeral VM runtime: ${runtimeId}`)
   }
+
   if (!runtime.repoId) {
     throw new Error(`Ephemeral VM runtime has no repo id: ${runtimeId}`)
   }
+
   const repo = getRecipeRepo(store, runtime.repoId)
+
   if (!repo.ok) {
     throw new Error(repo.message)
   }
+
   // Pre-snapshot runtimes can only be attributed to repo-owned recipes. Never
   // substitute a later same-id plugin recipe for an older runtime lifecycle.
   const recipe =
@@ -117,9 +130,11 @@ export function getRuntimeRecipeContext(
     (loadHooks(repo.repo.path)?.environmentRecipes ?? []).find(
       (entry) => entry.id === runtime.recipeId
     )
+
   if (!recipe) {
     throw new Error(`Recipe not found: ${runtime.recipeId}`)
   }
+
   return { runtime, repo, recipe }
 }
 
@@ -142,6 +157,7 @@ export function combineEphemeralVmRecipes(
   pluginRecipes: readonly OrcaVmRecipe[]
 ): OrcaVmRecipe[] {
   const repoIds = new Set(repoRecipes.map((recipe) => recipe.id))
+
   return [...repoRecipes, ...pluginRecipes.filter((recipe) => !repoIds.has(recipe.id))]
 }
 

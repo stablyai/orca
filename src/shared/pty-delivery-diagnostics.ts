@@ -21,6 +21,7 @@ export type PtyDeliveryBreadcrumbRing = {
 }
 
 const BREADCRUMB_RING_CAPACITY = 100
+
 const BREADCRUMB_COALESCE_MS = 1_000
 
 // Why a ring with same-kind coalescing: breadcrumbs record rare transitions,
@@ -31,19 +32,25 @@ export function createPtyDeliveryBreadcrumbRing(
   coalesceMs = BREADCRUMB_COALESCE_MS
 ): PtyDeliveryBreadcrumbRing {
   let entries: PtyDeliveryBreadcrumb[] = []
+
   return {
     record(kind, detail) {
       const now = Date.now()
       const last = entries.at(-1)
+
       if (last && last.kind === kind && now - last.atMs < coalesceMs) {
         last.repeats = (last.repeats ?? 1) + 1
         last.atMs = now
+
         if (detail !== undefined) {
           last.detail = detail
         }
+
         return
       }
+
       entries.push(detail === undefined ? { atMs: now, kind } : { atMs: now, kind, detail })
+
       if (entries.length > capacity) {
         entries = entries.slice(entries.length - capacity)
       }
@@ -63,9 +70,11 @@ export function createPtyDeliveryBreadcrumbRing(
 // shipping the user's filesystem layout.
 export function redactPtyIdForDiagnostics(id: string): string {
   const separatorIdx = id.lastIndexOf('@@')
+
   if (separatorIdx !== -1) {
     return `…${id.slice(separatorIdx)}`
   }
+
   return id.length <= 12 ? id : `…${id.slice(-12)}`
 }
 

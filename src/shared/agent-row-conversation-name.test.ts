@@ -16,6 +16,7 @@ describe('getAgentRowConversationName', () => {
       generatedTitle: 'Fix intake flow',
       title: '✳ Investigate replay bug'
     })
+
     expect(getAgentRowConversationName(tab, 'claude', true)).toBe('Patient sync spike')
   })
 
@@ -37,6 +38,7 @@ describe('getAgentRowConversationName', () => {
       generatedTitle: 'Fix intake flow',
       title: '\u2733 Investigate replay bug'
     })
+
     expect(getAgentRowConversationName(tab, 'claude', true, undefined, 's1')).toBe(
       'Fix the lease probe'
     )
@@ -70,6 +72,7 @@ describe('getAgentRowConversationName', () => {
       aiVaultTitle: { agent: 'claude', sessionId: 's1', title: 'auth/login' },
       title: '\u2733 Investigate replay bug'
     })
+
     expect(getAgentRowConversationName(tab, 'claude', true, undefined, 's1')).toBe('auth/login')
     expect(getAgentRowConversationName(makeTab({ title: 'auth/login' }), 'claude', true)).toBeNull()
   })

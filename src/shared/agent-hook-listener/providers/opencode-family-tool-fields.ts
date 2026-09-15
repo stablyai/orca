@@ -25,20 +25,24 @@ export function extractOpenCodeToolFields(
 ): ToolSnapshot {
   if (eventName === 'MessagePart' && hookPayload.role === 'assistant') {
     const text = readString(hookPayload, 'text')
+
     if (text) {
       return { ...OPENCODE_TOOL_FIELDS_RETIRED, lastAssistantMessage: capOpenCodeHookText(text) }
     }
   }
+
   if (eventName === 'AskUserQuestion') {
     // Why: OpenCode's payload is question.asked's event.properties (hook_event_name merged in); strip envelope or use tool_input, capture JSON for the card.
     const toolInputSource = hasOwnField(hookPayload, 'tool_input')
       ? hookPayload.tool_input
       : stripHookEnvelopeKeys(hookPayload)
+
     return {
       ...OPENCODE_TOOL_FIELDS_RETIRED,
       interactivePrompt: deriveInteractivePrompt('AskUserQuestion', toolInputSource)
     }
   }
+
   if (eventName === 'PermissionRequest') {
     // Why: the payload is permission.asked's event.properties — `permission` names what is
     // being requested and `metadata`/`patterns` say which command or path it covers. Without
@@ -48,6 +52,7 @@ export function extractOpenCodeToolFields(
     // against opencode 1.18.18). `file_path`/`path` cover tools that spell it the common way.
     // `diff` is deliberately absent — edit ships the whole patch and it would swamp the row.
     const metadata = hookPayload.metadata
+
     const metadataInput =
       metadata !== null && typeof metadata === 'object' && !Array.isArray(metadata)
         ? readFirstString(metadata as Record<string, unknown>, [
@@ -58,11 +63,13 @@ export function extractOpenCodeToolFields(
             'url'
           ])
         : undefined
+
     const patterns = Array.isArray(hookPayload.patterns)
       ? hookPayload.patterns.filter(
           (pattern): pattern is string => typeof pattern === 'string' && pattern.length > 0
         )
       : []
+
     return toolUpdate(
       {
         toolName: readString(hookPayload, 'permission'),
@@ -71,5 +78,6 @@ export function extractOpenCodeToolFields(
       { hasToolInputField: hasAnyOwnField(hookPayload, ['metadata', 'patterns']) }
     )
   }
+
   return OPENCODE_TOOL_FIELDS_RETIRED
 }

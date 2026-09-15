@@ -20,6 +20,7 @@ import type {
 } from './linear-project-nodes'
 
 const inFlight = new Map<string, Promise<unknown>>()
+
 export const LINEAR_PROJECT_API_PAGE_SIZE_MAX = 50
 
 export function clampLimit(limit = 20): number {
@@ -28,15 +29,19 @@ export function clampLimit(limit = 20): number {
 
 export function coalesce<T>(key: string, load: () => Promise<T>, force = false): Promise<T> {
   const existing = inFlight.get(key) as Promise<T> | undefined
+
   if (existing && !force) {
     return existing
   }
+
   const promise = load().finally(() => {
     if (inFlight.get(key) === promise) {
       inFlight.delete(key)
     }
   })
+
   inFlight.set(key, promise)
+
   return promise
 }
 
@@ -44,6 +49,7 @@ export function normalizeConcreteWorkspaceId(workspaceId: unknown): LinearConcre
   if (typeof workspaceId !== 'string' || !workspaceId.trim() || workspaceId === 'all') {
     throw new Error('Concrete Linear workspace ID is required')
   }
+
   return workspaceId.trim()
 }
 
@@ -62,12 +68,14 @@ export function workspaceError(
 
   const record = error as { name?: string; message?: string; status?: number; response?: unknown }
   const message = record.message || 'Linear request failed.'
+
   const status =
     typeof record.status === 'number'
       ? record.status
       : typeof (record.response as { status?: unknown } | undefined)?.status === 'number'
         ? ((record.response as { status: number }).status as number)
         : undefined
+
   const name = record.name ?? ''
 
   if (status === 429 || /rate/i.test(name)) {
@@ -78,6 +86,7 @@ export function workspaceError(
       message
     }
   }
+
   if ((typeof status === 'number' && status >= 500) || /network/i.test(name)) {
     return {
       workspaceId: entry.workspace.id,
@@ -103,6 +112,7 @@ export function shouldFailWholeRequest(
 
 export function lastNumericValue(values?: number[] | null): number | undefined {
   const last = values?.at(-1)
+
   return typeof last === 'number' ? last : undefined
 }
 
@@ -110,6 +120,7 @@ export function mapUser(user?: LinearUserNode | null): LinearProjectMemberSummar
   if (!user?.id) {
     return undefined
   }
+
   return {
     id: user.id,
     displayName: user.displayName ?? '',
@@ -211,6 +222,7 @@ export function mapIssueForWorkspace(
   issue: LinearIssueNode
 ): LinearIssue {
   const labelNodes = issue.labels?.nodes ?? []
+
   return {
     id: issue.id,
     identifier: issue.identifier,
@@ -240,12 +252,15 @@ export function mapIssueForWorkspace(
 
 export function mapCustomViewModel(modelName?: string | null): LinearCustomViewModel | null {
   const normalized = modelName?.toLowerCase()
+
   if (normalized === 'issue') {
     return 'issue'
   }
+
   if (normalized === 'project') {
     return 'project'
   }
+
   return null
 }
 
@@ -254,9 +269,11 @@ export function mapCustomViewForWorkspace(
   view: LinearCustomViewNode
 ): LinearCustomViewSummary | null {
   const model = mapCustomViewModel(view.modelName)
+
   if (!model) {
     return null
   }
+
   return {
     id: view.id,
     workspaceId: entry.workspace.id,

@@ -11,6 +11,7 @@ import type { CreateOrAttachOptions, CreateOrAttachResult } from './terminal-hos
 
 function createMockSubprocess(): SubprocessHandle {
   let onExit: ((code: number) => void) | undefined
+
   return {
     pid: 55_555,
     getForegroundProcess: () => null,
@@ -108,21 +109,27 @@ describe('DaemonServer attachment lifecycle', () => {
     const originalCreateOrAttach = daemon.host.createOrAttach.bind(daemon.host)
     let attachmentCreated!: () => void
     let finishRequest!: () => void
+
     const created = new Promise<void>((resolve) => {
       attachmentCreated = resolve
     })
+
     const gate = new Promise<void>((resolve) => {
       finishRequest = resolve
     })
+
     vi.spyOn(daemon.host, 'createOrAttach').mockImplementation(async (options) => {
       const result = await originalCreateOrAttach(options)
       attachmentCreated()
       await gate
+
       return result
     })
+
     const request = client
       .request('createOrAttach', { sessionId: 'close-race-session', cols: 80, rows: 24 })
       .catch(() => undefined)
+
     await created
 
     client.disconnect()

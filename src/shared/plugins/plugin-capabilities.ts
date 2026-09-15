@@ -55,6 +55,7 @@ export function canonicalizeCapabilitySet(capabilities: readonly PluginCapabilit
       Object.fromEntries(Object.entries(capability).sort(([a], [b]) => a.localeCompare(b)))
     )
   )
+
   return JSON.stringify([...new Set(encoded)].sort())
 }
 

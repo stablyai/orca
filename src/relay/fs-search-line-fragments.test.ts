@@ -3,6 +3,7 @@ import type { ChildProcess } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
+
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
 
 import { searchWithGitGrep } from './fs-handler-git-fallback'
@@ -50,9 +51,11 @@ describe.each(searchCases)('relay $name line fragments', ({ search, encode }) =>
     spawnMock.mockReturnValueOnce(child)
     const result = search('/remote/root', 'hit', { maxResults: 100 })
     expect(child.stdout!.setEncoding).toHaveBeenCalledWith('utf-8')
+
     for (const chunk of chunks) {
       child.stdout!.emit('data', chunk)
     }
+
     child.emit('close', 0, null)
     const value = await result
     expect(child.stdout!.listenerCount('data')).toBe(0)
@@ -60,6 +63,7 @@ describe.each(searchCases)('relay $name line fragments', ({ search, encode }) =>
     expect(child.listenerCount('close')).toBe(0)
     expect(child.listenerCount('error')).toBe(0)
     expect(child.kill).not.toHaveBeenCalled()
+
     return value
   }
 
@@ -80,11 +84,14 @@ describe.each(searchCases)('relay $name line fragments', ({ search, encode }) =>
     const wire = `${encode(`hit ${'x'.repeat(1024 * 1024)}`, 7)}\n`
     const complete = await run([wire])
     const chunks: string[] = []
+
     for (let offset = 0; offset < wire.length; offset += 4096) {
       chunks.push(wire.slice(offset, offset + 4096))
     }
+
     const originalSplit = String.prototype.split
     let scannedCharacters = 0
+
     const spy = vi.spyOn(String.prototype, 'split').mockImplementation(function (
       this: string,
       separator: unknown,
@@ -93,14 +100,18 @@ describe.each(searchCases)('relay $name line fragments', ({ search, encode }) =>
       if (separator === '\n') {
         scannedCharacters += this.length
       }
+
       return Reflect.apply(originalSplit, this, [separator, limit])
     })
+
     let fragmented
+
     try {
       fragmented = await run(chunks)
     } finally {
       spy.mockRestore()
     }
+
     expect(fragmented).toEqual(complete)
     expect(fragmented.totalMatches).toBe(1)
     expect(fragmented.files[0].matches[0].line).toBe(7)

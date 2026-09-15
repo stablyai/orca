@@ -44,17 +44,20 @@ function createService(
     setMobilePushRegistrar: vi.fn(),
     onNotificationDispatched: vi.fn((next: (event: MobileNotificationEvent) => void) => {
       listener = next
+
       return () => {
         listener = null
       }
     })
   }
+
   const runtimeRpc = {
     getE2EEKeypair: () => createPushHostKeypair(),
     getDeviceRegistry: () => registry,
     getPushUnregisterOutbox: () => outbox,
     setOnPushUnregisterQueued: vi.fn()
   }
+
   // A stub gateway keeps the suite on the service's own persistence decisions.
   const client = {
     registerDevice: vi.fn(async () =>
@@ -65,11 +68,14 @@ function createService(
     deleteDevice: vi.fn(async (registrationId: string) => {
       deletes.push(registrationId)
       options.onDelete?.(registrationId)
+
       return !options.deleteFails
     }),
     send: vi.fn(async () => ({ ok: true, results: [] }) as const)
   }
+
   const retries: { run: () => void; delayMs: number }[] = []
+
   const service = DesktopPushService.create({
     runtime: runtime as never,
     runtimeRpc: runtimeRpc as never,
@@ -82,6 +88,7 @@ function createService(
   })!
 
   service.start()
+
   return {
     service,
     registry,
@@ -197,17 +204,20 @@ describe('DesktopPushService', () => {
 
   it('drains a delete queued while a flush is already running', async () => {
     let queued = false
+
     const harness = createService({
       onDelete: () => {
         if (queued) {
           return
         }
+
         queued = true
         harness.outbox.enqueue({ registrationId: 'reg-late', deviceId: 'device-late' })
         // Mirrors unregister(): the trigger arrives while the flush is mid-await.
         void harness.service.flushUnregisterOutbox()
       }
     })
+
     harness.outbox.enqueue({ registrationId: 'reg-first', deviceId: 'device-first' })
 
     await harness.service.flushUnregisterOutbox()
@@ -253,6 +263,7 @@ describe('DesktopPushService', () => {
         registrationId: 'reg-1'
       })
     }
+
     expect(await harness.service.register(input)).toEqual({
       registered: false,
       reason: 'throttled'
@@ -294,6 +305,7 @@ it('renews a seven-day mobile lease only on explicit registration', async () => 
   const now = 1_800_000_000_000
   const clock = vi.spyOn(Date, 'now').mockReturnValue(now)
   const h = createService()
+
   try {
     await h.service.register({
       deviceId: h.deviceId,

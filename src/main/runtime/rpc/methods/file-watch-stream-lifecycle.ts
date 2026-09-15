@@ -13,6 +13,7 @@ export async function runFileWatchStream(args: {
   if (args.signal?.aborted) {
     return
   }
+
   await new Promise<void>((resolve, reject) => {
     let settled = false
     let setupFailed = false
@@ -25,27 +26,34 @@ export async function runFileWatchStream(args: {
     let endEmitted = false
     const setupAbortController = new AbortController()
     const eventBatcher = createFileWatchEventBatcher(args.worktree, args.emit)
+
     const settle = (callback: () => void): void => {
       if (settled) {
         return
       }
+
       settled = true
       args.signal?.removeEventListener('abort', handleAbort)
       callback()
     }
+
     const cleanup = (): Promise<void> => {
       if (cleanupPromise) {
         return cleanupPromise
       }
+
       const attempt = (async () => {
         if (!logicalCleanupStarted) {
           logicalCleanupStarted = true
+
           // Mark cleanup complete before emitting so a synchronous transport
           // abort cannot re-enter this function and duplicate error/end.
           if (!setupFailed) {
             settle(resolve)
           }
+
           setupAbortController.abort()
+
           if (terminalError) {
             // Why: recovery emits overflow before giving up. Flush that final
             // refresh so clients never end on a knowingly stale snapshot.
@@ -61,6 +69,7 @@ export async function runFileWatchStream(args: {
             eventBatcher.dispose()
           }
         }
+
         try {
           if (!unwatch && setupPromise) {
             try {
@@ -71,6 +80,7 @@ export async function runFileWatchStream(args: {
               }
             }
           }
+
           await unwatch?.()
         } catch (error) {
           if (isWatcherProcessFailure(error) && error.physicalExit) {
@@ -80,6 +90,7 @@ export async function runFileWatchStream(args: {
               error.physicalExit
             )
           }
+
           throw error
         } finally {
           if (!setupFailed && !endEmitted) {
@@ -88,6 +99,7 @@ export async function runFileWatchStream(args: {
           }
         }
       })()
+
       cleanupPromise = attempt
       void attempt.catch(() => {
         if (cleanupPromise === attempt) {
@@ -96,15 +108,19 @@ export async function runFileWatchStream(args: {
           cleanupPromise = null
         }
       })
+
       return attempt
     }
+
     const handleTerminalError = (error: Error): void => {
       if (settled || terminalError) {
         return
       }
+
       terminalError = error
       args.runtime.cleanupSubscription(args.subscriptionId)
     }
+
     function handleAbort(): void {
       args.runtime.cleanupSubscription(args.subscriptionId)
     }
@@ -125,6 +141,7 @@ export async function runFileWatchStream(args: {
         if (cleanupPromise || settled) {
           return
         }
+
         unwatch = nextUnwatch
         watchReady = true
         args.emit({ type: 'ready', subscriptionId: args.subscriptionId })
@@ -133,12 +150,14 @@ export async function runFileWatchStream(args: {
         if (cleanupPromise || settled || setupAbortController.signal.aborted) {
           return
         }
+
         setupFailed = true
         await args.runtime.cleanupSubscriptionAndWait(args.subscriptionId).catch((cleanupError) => {
           console.error('[runtime-files.watch] failed-setup cleanup failed', cleanupError)
         })
         settle(() => reject(error))
       })
+
     if (args.signal?.aborted) {
       handleAbort()
     }

@@ -12,10 +12,12 @@ const response = makeResponse('request-1')
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason?: unknown) => void
+
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, resolve, reject }
 }
 
@@ -29,10 +31,12 @@ describe('sendSingleFlightRequest', () => {
     const trailing = deferred<RpcResponse>()
     const leadingResponse = makeResponse('leading')
     const trailingResponse = makeResponse('trailing')
+
     const sendRequest = vi
       .fn<() => Promise<RpcResponse>>()
       .mockReturnValueOnce(leading.promise)
       .mockReturnValueOnce(trailing.promise)
+
     const client = rpcClient(sendRequest)
 
     const first = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 10000 })
@@ -57,10 +61,12 @@ describe('sendSingleFlightRequest', () => {
 
   it('starts a fresh request once nothing is in flight', async () => {
     const leading = deferred<RpcResponse>()
+
     const sendRequest = vi
       .fn<() => Promise<RpcResponse>>()
       .mockReturnValueOnce(leading.promise)
       .mockResolvedValueOnce(response)
+
     const client = rpcClient(sendRequest)
 
     const first = sendSingleFlightRequest(client, 'host-1', 'worktree.ps', { limit: 10000 })
@@ -76,10 +82,12 @@ describe('sendSingleFlightRequest', () => {
   it('rejects the leading caller on failure but still runs a queued follow-up', async () => {
     const leading = deferred<RpcResponse>()
     const failure = new Error('request failed')
+
     const sendRequest = vi
       .fn<() => Promise<RpcResponse>>()
       .mockReturnValueOnce(leading.promise)
       .mockResolvedValueOnce(response)
+
     const client = rpcClient(sendRequest)
 
     const first = sendSingleFlightRequest(client, 'host-1', 'accounts.list')
@@ -94,10 +102,12 @@ describe('sendSingleFlightRequest', () => {
 
   it('clears a failed leading request so the next call retries', async () => {
     const failure = new Error('request failed')
+
     const sendRequest = vi
       .fn<() => Promise<RpcResponse>>()
       .mockRejectedValueOnce(failure)
       .mockResolvedValueOnce(response)
+
     const client = rpcClient(sendRequest)
 
     await expect(sendSingleFlightRequest(client, 'host-1', 'accounts.list')).rejects.toBe(failure)

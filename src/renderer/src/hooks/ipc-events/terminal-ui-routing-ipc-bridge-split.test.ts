@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     },
     unifiedTabsByWorktree: {}
   }
+
   return {
     hasRegisteredRuntimeTerminalTab: vi.fn<(tabId: string, worktreeId?: string) => boolean>(),
     requestBackgroundTerminalWorktreeMount: vi.fn(),
@@ -99,6 +100,7 @@ describe('runtime terminal split IPC routing', () => {
   it('dispatches immediately when the target lifecycle is already mounted', () => {
     const received: SplitTerminalPaneDetail[] = []
     mocks.hasRegisteredRuntimeTerminalTab.mockReturnValue(true)
+
     const unregister = registerTerminalPaneSplitRequestHandler(
       'tab-parked',
       'repo::/folder',
@@ -216,6 +218,7 @@ describe('runtime terminal split IPC routing', () => {
       'repo::/folder',
       (detail) => received.push(detail)
     )
+
     expect(received).toEqual([
       expect.objectContaining({
         tabId: 'tab-hydrating',
@@ -248,11 +251,13 @@ describe('runtime terminal split IPC routing', () => {
     )
     const receivedHere: SplitTerminalPaneDetail[] = []
     const receivedThere: SplitTerminalPaneDetail[] = []
+
     const unregisterHere = registerTerminalPaneSplitRequestHandler(
       'tab-parked',
       'repo::/folder',
       (detail) => receivedHere.push(detail)
     )
+
     const unregisterThere = registerTerminalPaneSplitRequestHandler(
       'tab-parked',
       'repo::/other-folder',

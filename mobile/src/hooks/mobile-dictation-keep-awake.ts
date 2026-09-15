@@ -7,21 +7,27 @@ const MOBILE_DICTATION_KEEP_AWAKE_TAG_PREFIX = 'orca-mobile-dictation'
 export const MOBILE_DICTATION_KEEP_AWAKE_NATIVE_TIMEOUT_MS = 10_000
 
 let nextOwnerId = 0
+
 let keepAwakeOperation: Promise<void> = Promise.resolve()
+
 const activeTags = new Set<string>()
+
 const pendingCleanupTags = new Set<string>()
+
 // Timed-out activations that may still land natively, keyed to a predicate
 // saying whether their dictation still wants the tag.
 const pendingActivations = new Map<string, () => boolean>()
 
 function createOwnerId(): string {
   nextOwnerId += 1
+
   return `${Date.now()}-${nextOwnerId}-${Math.random().toString(36).slice(2)}`
 }
 
 function enqueueKeepAwakeOperation(action: () => Promise<void>): Promise<void> {
   const operation = keepAwakeOperation.then(action)
   keepAwakeOperation = operation.catch(() => undefined)
+
   return operation
 }
 
@@ -38,6 +44,7 @@ function withNativeCallTimeout(nativeCall: Promise<void>): Promise<void> {
       timeoutError.name = KEEP_AWAKE_TIMEOUT_ERROR_NAME
       reject(timeoutError)
     }, MOBILE_DICTATION_KEEP_AWAKE_NATIVE_TIMEOUT_MS)
+
     nativeCall.then(
       () => {
         clearTimeout(timer)
@@ -53,6 +60,7 @@ function withNativeCallTimeout(nativeCall: Promise<void>): Promise<void> {
 
 async function activateTrackedTag(tag: string, isStillWanted: () => boolean): Promise<void> {
   const nativeActivation = activateKeepAwakeAsync(tag)
+
   try {
     await withNativeCallTimeout(nativeActivation)
   } catch (err) {
@@ -70,15 +78,19 @@ async function activateTrackedTag(tag: string, isStillWanted: () => boolean): Pr
             if (pendingActivations.get(tag) === isStillWanted) {
               pendingActivations.delete(tag)
             }
+
             if (activeTags.has(tag)) {
               return
             }
+
             if (isStillWanted()) {
               // The activation landed late but its dictation is still live;
               // adopt it rather than turning off screen-lock protection.
               activeTags.add(tag)
+
               return
             }
+
             // No owner wants it anymore — the screen must not stay awake.
             await deactivateTrackedTag(tag).catch(() => undefined)
           }),
@@ -91,8 +103,10 @@ async function activateTrackedTag(tag: string, isStillWanted: () => boolean): Pr
         }
       )
     }
+
     throw err
   }
+
   activeTags.add(tag)
   pendingCleanupTags.delete(tag)
   pendingActivations.delete(tag)
@@ -107,6 +121,7 @@ async function deactivateTrackedTag(tag: string): Promise<void> {
     pendingCleanupTags.add(tag)
     throw err
   }
+
   activeTags.delete(tag)
   pendingCleanupTags.delete(tag)
   pendingActivations.delete(tag)
@@ -114,6 +129,7 @@ async function deactivateTrackedTag(tag: string): Promise<void> {
 
 async function cleanupPendingTags(): Promise<void> {
   const staleTags = new Set(pendingCleanupTags)
+
   for (const [tag, isStillWanted] of pendingActivations) {
     // A still-wanted timed-out activation is not an orphan: deactivating it
     // would turn off screen-lock protection for a live dictation.
@@ -122,9 +138,11 @@ async function cleanupPendingTags(): Promise<void> {
       staleTags.add(tag)
     }
   }
+
   if (staleTags.size === 0) {
     return
   }
+
   // Retry concurrently so N stale tags cost one timeout window, not N, and
   // swallow failures: a stale tag that still cannot be deactivated must not
   // fail the fresh acquire that triggered this retry; it stays queued.
@@ -139,14 +157,18 @@ export class MobileDictationKeepAwakeOwner {
 
   acquire(dictationId: string): Promise<void> {
     const tag = this.createTag(dictationId)
+
     return enqueueKeepAwakeOperation(async () => {
       await cleanupPendingTags()
+
       if (this.acquiredTag && !activeTags.has(this.acquiredTag)) {
         this.acquiredTag = null
       }
+
       if (this.acquiredTag === tag) {
         return
       }
+
       if (this.acquiredTag) {
         const previousTag = this.acquiredTag
         this.acquiredTag = null
@@ -154,6 +176,7 @@ export class MobileDictationKeepAwakeOwner {
         // must not block recording intent for the new dictation below.
         await deactivateTrackedTag(previousTag).catch(() => undefined)
       }
+
       // Record ownership before the native call: acquiredTag is intent while
       // activeTags is native state, so a failed initial activation can still
       // be healed by a later foreground reacquire.
@@ -167,11 +190,14 @@ export class MobileDictationKeepAwakeOwner {
   // skips re-applying the flag while any tag remains, so deactivate first.
   reacquire(dictationId: string): Promise<void> {
     const tag = this.createTag(dictationId)
+
     return enqueueKeepAwakeOperation(async () => {
       await cleanupPendingTags()
+
       if (this.acquiredTag !== tag) {
         return
       }
+
       // A timed-out activation may be natively active too, and Android only
       // re-applies the window flag from an empty tag set — deactivate both.
       if (activeTags.has(tag) || pendingActivations.has(tag)) {
@@ -187,6 +213,7 @@ export class MobileDictationKeepAwakeOwner {
           throw err
         }
       }
+
       // Also recovers an activation lost to an earlier native failure, so a
       // later foreground event can restore keep-awake instead of no-oping.
       // Known gap: if another expo-keep-awake owner exists (e.g. dev-build
@@ -198,16 +225,21 @@ export class MobileDictationKeepAwakeOwner {
 
   release(dictationId?: string): Promise<void> {
     const targetTag = dictationId ? this.createTag(dictationId) : null
+
     return enqueueKeepAwakeOperation(async () => {
       try {
         const tag = this.acquiredTag
+
         if (!tag || (targetTag && tag !== targetTag)) {
           return
         }
+
         if (!activeTags.has(tag)) {
           this.acquiredTag = null
+
           return
         }
+
         await deactivateTrackedTag(tag)
         this.acquiredTag = null
       } finally {

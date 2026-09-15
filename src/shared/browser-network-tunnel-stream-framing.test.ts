@@ -9,10 +9,12 @@ describe('browser network tunnel stream framing', () => {
   it('decodes fragmented and coalesced frames without changing their bytes', () => {
     const frames: Uint8Array[] = []
     const errors: Error[] = []
+
     const decoder = new BrowserNetworkTunnelStreamFrameDecoder(
       (frame) => frames.push(frame),
       (error) => errors.push(error)
     )
+
     const first = encodeBrowserNetworkTunnelStreamFrame(new Uint8Array([1, 2, 3]))
     const second = encodeBrowserNetworkTunnelStreamFrame(new Uint8Array([4, 5]))
     const combined = new Uint8Array(first.byteLength + second.byteLength)
@@ -44,6 +46,7 @@ describe('browser network tunnel stream framing', () => {
 
   it('fails the stream when a frame consumer rejects input', () => {
     const onError = vi.fn()
+
     const decoder = new BrowserNetworkTunnelStreamFrameDecoder(() => {
       throw new Error('consumer rejected frame')
     }, onError)
@@ -62,13 +65,16 @@ describe('browser network tunnel stream framing', () => {
       const encoded = encodeBrowserNetworkTunnelStreamFrame(payload)
       const frames: Uint8Array[] = []
       const onError = vi.fn()
+
       const decoder = new BrowserNetworkTunnelStreamFrameDecoder(
         (frame) => frames.push(frame),
         onError
       )
+
       for (let offset = 0; offset < encoded.length; offset += chunkSize) {
         decoder.feed(encoded.subarray(offset, offset + chunkSize))
       }
+
       expect(frames).toEqual([payload])
       expect(onError).not.toHaveBeenCalled()
     }
@@ -76,22 +82,27 @@ describe('browser network tunnel stream framing', () => {
 
   it('copies fragmented bytes once instead of recopying the growing carry', () => {
     const encoded = encodeBrowserNetworkTunnelStreamFrame(new Uint8Array(65536))
+
     const decoder = new BrowserNetworkTunnelStreamFrameDecoder(
       () => {},
       () => {}
     )
+
     const originalSet = Uint8Array.prototype.set
     let copiedBytes = 0
+
     const set = vi
       .spyOn(Uint8Array.prototype, 'set')
       .mockImplementation(function (this: Uint8Array, source, offset) {
         copiedBytes += source.length
         originalSet.call(this, source, offset)
       })
+
     try {
       for (const byte of encoded) {
         decoder.feed(new Uint8Array([byte]))
       }
+
       expect(copiedBytes).toBe(encoded.length)
     } finally {
       set.mockRestore()
@@ -100,10 +111,12 @@ describe('browser network tunnel stream framing', () => {
 
   it('owns partial input and emitted frames independently of caller buffers', () => {
     const frames: Uint8Array[] = []
+
     const decoder = new BrowserNetworkTunnelStreamFrameDecoder(
       (frame) => frames.push(frame),
       () => {}
     )
+
     const first = new Uint8Array([0, 0, 0, 3, 1])
     decoder.feed(first)
     first.fill(255)
@@ -151,6 +164,7 @@ describe('browser network tunnel stream framing', () => {
     const callbacks: ((error?: Error | null) => void)[] = []
     const writes: Uint8Array[] = []
     const onError = vi.fn()
+
     const writer = new BrowserNetworkTunnelStreamFrameWriter(
       (bytes, callback) => {
         writes.push(bytes)
@@ -178,13 +192,16 @@ describe('browser network tunnel stream framing', () => {
       () => {},
       { maxQueuedFrames: 1 }
     )
+
     const frame = new Uint8Array(65536)
     expect(writer.send(frame)).toBe(true)
     const set = vi.spyOn(Uint8Array.prototype, 'set')
+
     try {
       for (let index = 0; index < 1000; index += 1) {
         expect(writer.send(frame)).toBe(false)
       }
+
       expect(set.mock.calls.length).toBe(0)
       expect(writer.queuedBytes).toBe(65540)
     } finally {
@@ -199,6 +216,7 @@ describe('browser network tunnel stream framing', () => {
       () => {},
       { maxQueuedBytes: 158 }
     )
+
     expect(writer.send(new Uint8Array(100))).toBe(true)
     expect(writer.queuedBytes).toBe(104)
     expect(writer.send(new Uint8Array(51))).toBe(false)

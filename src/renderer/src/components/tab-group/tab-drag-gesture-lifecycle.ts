@@ -52,6 +52,7 @@ export function useTabDragGestureLifecycle({
       if (node) {
         return
       }
+
       // Why: this root owns the dnd-kit gesture that temporarily puts browser
       // webviews in pointer passthrough and installs global fallback listeners,
       // so root teardown must release both.

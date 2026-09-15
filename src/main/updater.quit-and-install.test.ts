@@ -18,22 +18,36 @@ const { launchPathScope } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => moduleFactories.electron())
+
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
+
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
+
 vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
+
 vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
+
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
+
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
+
 vi.mock('./updater-nudge', () => moduleFactories.updaterNudge())
+
 vi.mock('./update-install-exit-watchdog', () => moduleFactories.updateInstallExitWatchdog())
+
 vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed())
+
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
+
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
+
 vi.mock('./startup/hydrate-shell-path', () => ({
   runWithLaunchPath: (action: () => unknown): unknown => {
     launchPathScope.active = true
     launchPathScope.calls += 1
+
     try {
       return action()
     } finally {
@@ -58,10 +72,12 @@ describe('updater', () => {
       queueMicrotask(() => {
         autoUpdaterMock.emit('update-available', { version: '1.0.61' })
       })
+
       return Promise.resolve(undefined)
     })
     autoUpdaterMock.downloadUpdate.mockImplementation(() => {
       autoUpdaterMock.emit('error', new Error('download failed'))
+
       return new Promise(() => {})
     })
     const sendMock = vi.fn()
@@ -97,6 +113,7 @@ describe('updater', () => {
       queueMicrotask(() => {
         autoUpdaterMock.emit('update-available', { version: '1.0.61' })
       })
+
       return Promise.resolve(undefined)
     })
     autoUpdaterMock.downloadUpdate
@@ -202,12 +219,14 @@ describe('updater', () => {
     vi.useFakeTimers()
 
     let finishCleanup!: () => void
+
     const onBeforeQuit = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           finishCleanup = resolve
         })
     )
+
     const mainWindow = { webContents: { send: vi.fn() } }
     const { setupAutoUpdater, quitAndInstall } = await loadUpdaterModule()
 
@@ -272,6 +291,7 @@ describe('updater', () => {
       queueMicrotask(() => {
         autoUpdaterMock.emit('update-available', { version: '1.0.61' })
       })
+
       return Promise.resolve(undefined)
     })
 
@@ -298,6 +318,7 @@ describe('updater', () => {
       const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
         ([eventName]) => eventName === 'update-downloaded'
       )?.[1] as (() => void) | undefined
+
       expect(nativeDownloadedHandler).toBeTypeOf('function')
       nativeDownloadedHandler?.()
     }
@@ -333,6 +354,7 @@ describe('updater', () => {
       queueMicrotask(() => {
         autoUpdaterMock.emit('update-available', { version: '1.0.61' })
       })
+
       return Promise.resolve(undefined)
     })
 
@@ -350,11 +372,13 @@ describe('updater', () => {
     })
 
     autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+
     // Why: on macOS install commits only once Squirrel is ready; mark it ready so this test covers the committed path on all platforms.
     if (process.platform === 'darwin') {
       const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
         ([eventName]) => eventName === 'update-downloaded'
       )?.[1] as (() => void) | undefined
+
       expect(nativeDownloadedHandler).toBeTypeOf('function')
       nativeDownloadedHandler?.()
     }
@@ -398,12 +422,14 @@ describe('updater', () => {
     vi.useFakeTimers()
 
     let finishCleanup!: () => void
+
     const onBeforeQuit = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           finishCleanup = resolve
         })
     )
+
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
     const { setupAutoUpdater, quitAndInstall, isQuittingForUpdate } = await loadUpdaterModule()

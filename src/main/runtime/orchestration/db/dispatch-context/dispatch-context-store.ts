@@ -27,9 +27,11 @@ export function createDispatchContext(
   const { taskId, assigneeHandle, assigneePaneKey, launchTokenHash, processIncarnation } = params
   const depth = this.resolveChildDispatchDepth(params.creator, params.maxDepth)
   const task = this.getTask(taskId)
+
   if (!task) {
     throw taskNotFoundError(`Task not found: ${taskId}`, { taskId })
   }
+
   if (task.status !== 'ready') {
     throw taskNotStartableError(
       this,
@@ -51,13 +53,16 @@ export function createDispatchContext(
   const prior = this.db
     .prepare('SELECT MAX(failure_count) as max_failures FROM dispatch_contexts WHERE task_id = ?')
     .get(taskId) as { max_failures: number | null } | undefined
+
   const priorFailures = prior?.max_failures ?? 0
 
   const paneSuffix =
     assigneePaneKey && parsePaneKey(assigneePaneKey) ? paneKeyMatchSuffix(assigneePaneKey) : null
+
   const id = generateId('ctx')
   const creatorDispatchId = this.resolveCreatorDispatchId(params.creator)
   this.db.exec('SAVEPOINT create_dispatch_context')
+
   try {
     const inserted = claimDispatchContextRow(this.db, {
       id,
@@ -73,14 +78,17 @@ export function createDispatchContext(
       taskId,
       paneSuffix
     })
+
     if (inserted.changes !== 1) {
       const current = this.getTask(taskId)
       const occupied = this.findActiveDispatchForAssignee(assigneeHandle, assigneePaneKey)
+
       if (current?.status === 'ready' && occupied) {
         throw new Error(
           `Terminal ${assigneeHandle} already has an active dispatch (${occupied.id} for task ${occupied.task_id})`
         )
       }
+
       // Why: the atomic claim lost to a concurrent status change; report it with the same
       // typed receipt as the precheck so the loser can recover instead of reading runtime_error.
       const message = `Task ${taskId} is ${current?.status ?? 'missing'}; only ready tasks can be dispatched`
@@ -88,17 +96,21 @@ export function createDispatchContext(
         ? taskNotStartableError(this, message, current)
         : taskNotFoundError(message, { taskId })
     }
+
     transitionLifecycleWithDb(this.db, {
       entity: 'task',
       id: taskId,
       from: 'ready',
       to: 'dispatched'
     })
+
     const dispatch = this.db
       .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
       .get(id) as DispatchContextRow
+
     this.db.exec('RELEASE create_dispatch_context')
     this.hasAnyDispatchContextsCache = true
+
     return dispatch
   } catch (error) {
     this.db.exec('ROLLBACK TO create_dispatch_context')
@@ -131,21 +143,25 @@ export function commitDispatchLaunchTokenHash(
   launchTokenHash: string
 ): DispatchContextRow {
   const dispatch = this.getDispatchContextById(dispatchId)
+
   if (!dispatch) {
     throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
   }
+
   if (dispatch.contract_version !== CURRENT_CONTRACT_VERSION) {
     throw new OrchestrationError(
       'request_mismatch',
       `Dispatch ${dispatchId} does not use the current contract.`
     )
   }
+
   if (dispatch.launch_token_hash && dispatch.launch_token_hash !== launchTokenHash) {
     throw new OrchestrationError(
       'request_mismatch',
       `Dispatch ${dispatchId} already has a different launch-token commitment.`
     )
   }
+
   this.db
     .prepare(
       `UPDATE dispatch_contexts
@@ -153,6 +169,7 @@ export function commitDispatchLaunchTokenHash(
        WHERE id = ?`
     )
     .run(launchTokenHash, dispatchId)
+
   return this.getDispatchContextById(dispatchId) as DispatchContextRow
 }
 

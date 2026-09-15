@@ -189,6 +189,7 @@ describe('createGitHubSlice.fetchPRComments', () => {
   it('deduplicates a forced comment fetch onto an existing non-forced request', async () => {
     const store = createTestStore()
     const pendingComments = Promise.withResolvers<PRComment[]>()
+
     const comments: PRComment[] = [
       {
         id: 1,
@@ -199,9 +200,11 @@ describe('createGitHubSlice.fetchPRComments', () => {
         url: ''
       }
     ]
+
     mockApi.gh.prComments.mockReturnValueOnce(pendingComments.promise)
 
     const first = store.getState().fetchPRComments('/repo/one', 12, { repoId: 'repo-1' })
+
     const forced = store
       .getState()
       .fetchPRComments('/repo/one', 12, { repoId: 'repo-1', force: true })
@@ -240,6 +243,7 @@ describe('createGitHubSlice.fetchPRComments', () => {
     const repoPath = '/repo'
     const branch = 'feature/test'
     const checksCacheKey = `${repoPath}::pr-checks::12`
+
     const cachedChecks = [
       { name: 'build', status: 'completed', conclusion: 'failure', url: null } as const
     ]
@@ -268,6 +272,7 @@ describe('createGitHubSlice.fetchPRComments', () => {
     const repoPath = '/repo'
     const branch = 'feature/test'
     const checksCacheKey = `${repoPath}::pr-checks::12`
+
     const oldHeadChecks = [
       { name: 'build', status: 'completed', conclusion: 'success', url: null } as const
     ]
@@ -560,6 +565,7 @@ describe('createGitHubSlice PR comment mutations', () => {
       repoId,
       prRepo: { owner: 'Acme', repo: 'Widgets' }
     })
+
     const optimisticEntry = store.getState().commentsCache[cacheKey]
     store.setState({
       commentsCache: {

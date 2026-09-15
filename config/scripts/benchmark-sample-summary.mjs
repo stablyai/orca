@@ -10,11 +10,14 @@ export function summarizeBenchmarkSamples(samples) {
   if (samples.length === 0) {
     throw new Error('Benchmark samples must not be empty')
   }
+
   const sorted = [...samples].sort((left, right) => left - right)
   const middle = sorted.length / 2
+
   const median = Number.isInteger(middle)
     ? (sorted[middle - 1] + sorted[middle]) / 2
     : sorted[Math.floor(middle)]
+
   const p95 = sorted[Math.ceil(0.95 * sorted.length) - 1]
 
   return {

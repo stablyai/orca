@@ -13,11 +13,17 @@ vi.mock('electron', () => ({
 }))
 
 const saveMiniMaxSessionCookieMock = vi.hoisted(() => vi.fn())
+
 const clearMiniMaxSessionCookieMock = vi.hoisted(() => vi.fn())
+
 const hasMiniMaxSessionCookieMock = vi.hoisted(() => vi.fn(() => false))
+
 const clearMiniMaxSessionCookieJarMock = vi.hoisted(() => vi.fn(() => Promise.resolve()))
+
 const saveMiniMaxApiKeyMock = vi.hoisted(() => vi.fn())
+
 const clearMiniMaxApiKeyMock = vi.hoisted(() => vi.fn())
+
 const hasMiniMaxApiKeyMock = vi.hoisted(() => vi.fn(() => false))
 
 vi.mock('../minimax/minimax-cookie-store', () => ({
@@ -47,6 +53,7 @@ function makeRefreshMock(): {
 } {
   const refresh = vi.fn(() => Promise.resolve({} as RateLimitState))
   const invalidateMiniMaxCredentialState = vi.fn()
+
   return {
     refresh,
     invalidateMiniMaxCredentialState,
@@ -56,9 +63,11 @@ function makeRefreshMock(): {
 
 async function invoke<T>(channel: string, ...args: unknown[]): Promise<T> {
   const handler = ipcState.handleHandlers.get(channel)
+
   if (!handler) {
     throw new Error(`No handler registered for ${channel}`)
   }
+
   return (await handler({}, ...args)) as T
 }
 
@@ -93,11 +102,13 @@ describe('registerMiniMaxCredentialsHandlers', () => {
   it('returns the configured state on getStatus from the cookie store', async () => {
     hasMiniMaxSessionCookieMock.mockReturnValue(true)
     registerMiniMaxCredentialsHandlers(null)
+
     const status = await invoke<{
       configured: boolean
       cookieConfigured: boolean
       apiKeyConfigured: boolean
     }>('minimaxCredentials:getStatus')
+
     expect(status).toEqual({
       configured: true,
       cookieConfigured: true,
@@ -108,11 +119,13 @@ describe('registerMiniMaxCredentialsHandlers', () => {
   it('returns apiKeyConfigured true on getStatus when the API key store has a key', async () => {
     hasMiniMaxApiKeyMock.mockReturnValue(true)
     registerMiniMaxCredentialsHandlers(null)
+
     const status = await invoke<{
       configured: boolean
       cookieConfigured: boolean
       apiKeyConfigured: boolean
     }>('minimaxCredentials:getStatus')
+
     expect(status).toEqual({
       configured: true,
       cookieConfigured: false,
@@ -123,11 +136,13 @@ describe('registerMiniMaxCredentialsHandlers', () => {
   it('persists the cookie and reports configured after saveCookie', async () => {
     hasMiniMaxSessionCookieMock.mockReturnValueOnce(true)
     registerMiniMaxCredentialsHandlers(null)
+
     const status = await invoke<{
       configured: boolean
       cookieConfigured: boolean
       apiKeyConfigured: boolean
     }>('minimaxCredentials:saveCookie', '_token=abc; minimax_group_id_v2=42')
+
     expect(saveMiniMaxSessionCookieMock).toHaveBeenCalledWith('_token=abc; minimax_group_id_v2=42')
     expect(status).toMatchObject({ configured: true, cookieConfigured: true })
   })
@@ -152,11 +167,13 @@ describe('registerMiniMaxCredentialsHandlers', () => {
     const { refresh, invalidateMiniMaxCredentialState, service } = makeRefreshMock()
     hasMiniMaxSessionCookieMock.mockReturnValueOnce(false)
     registerMiniMaxCredentialsHandlers(service as RateLimitService)
+
     const status = await invoke<{
       configured: boolean
       cookieConfigured: boolean
       apiKeyConfigured: boolean
     }>('minimaxCredentials:clearCookie')
+
     expect(clearMiniMaxSessionCookieMock).toHaveBeenCalledTimes(1)
     expect(invalidateMiniMaxCredentialState).toHaveBeenCalledTimes(1)
     expect(clearMiniMaxSessionCookieJarMock).toHaveBeenCalledTimes(1)
@@ -210,11 +227,13 @@ describe('registerMiniMaxCredentialsHandlers', () => {
   it('persists the API key and reports apiKeyConfigured after saveApiKey', async () => {
     hasMiniMaxApiKeyMock.mockReturnValueOnce(true)
     registerMiniMaxCredentialsHandlers(null)
+
     const status = await invoke<{
       configured: boolean
       cookieConfigured: boolean
       apiKeyConfigured: boolean
     }>('minimaxCredentials:saveApiKey', 'sk-test-1234567890')
+
     expect(saveMiniMaxApiKeyMock).toHaveBeenCalledWith('sk-test-1234567890')
     expect(status).toMatchObject({ configured: true, apiKeyConfigured: true })
   })
@@ -238,11 +257,13 @@ describe('registerMiniMaxCredentialsHandlers', () => {
     const { refresh, invalidateMiniMaxCredentialState, service } = makeRefreshMock()
     hasMiniMaxApiKeyMock.mockReturnValueOnce(false)
     registerMiniMaxCredentialsHandlers(service as RateLimitService)
+
     const status = await invoke<{
       configured: boolean
       cookieConfigured: boolean
       apiKeyConfigured: boolean
     }>('minimaxCredentials:clearApiKey')
+
     expect(clearMiniMaxApiKeyMock).toHaveBeenCalledTimes(1)
     expect(invalidateMiniMaxCredentialState).toHaveBeenCalledTimes(1)
     expect(status).toMatchObject({ configured: false, apiKeyConfigured: false })
@@ -254,11 +275,13 @@ describe('registerMiniMaxCredentialsHandlers', () => {
     hasMiniMaxSessionCookieMock.mockReturnValue(true)
     hasMiniMaxApiKeyMock.mockReturnValue(true)
     registerMiniMaxCredentialsHandlers(null)
+
     const status = await invoke<{
       configured: boolean
       cookieConfigured: boolean
       apiKeyConfigured: boolean
     }>('minimaxCredentials:getStatus')
+
     expect(status.configured).toBe(true)
     expect(status.cookieConfigured).toBe(true)
     expect(status.apiKeyConfigured).toBe(true)

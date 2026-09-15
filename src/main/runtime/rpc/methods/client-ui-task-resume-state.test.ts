@@ -12,16 +12,19 @@ function makeRequest(params: unknown): RpcRequest {
 
 function makeDispatcher(): { dispatcher: RpcDispatcher; updateUIState: ReturnType<typeof vi.fn> } {
   const updateUIState = vi.fn(() => getDefaultUIState())
+
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     updateUIState
   } as unknown as OrcaRuntimeService
+
   return { dispatcher: new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS }), updateUIState }
 }
 
 describe('ui.set task resume state', () => {
   it('persists the cross-client resume fields', async () => {
     const { dispatcher, updateUIState } = makeDispatcher()
+
     const taskResumeState = {
       githubMode: 'items' as const,
       githubItemsQuery: 'is:open',

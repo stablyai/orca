@@ -21,6 +21,7 @@ import {
 } from './workspace-snapshot-prune-index'
 
 const SNAPSHOT_FILE_NAME = 'orca-workspace-cleanup-scan.json'
+
 const SNAPSHOT_VERSION = 2
 
 export type WorkspaceCleanupScanSnapshotPruneTarget = WorkspaceSnapshotPruneTarget
@@ -46,6 +47,7 @@ function isPersistableCandidate(value: unknown): value is WorkspaceCleanupCandid
   if (!isRecord(value)) {
     return false
   }
+
   return (
     typeof value.worktreeId === 'string' &&
     typeof value.repoId === 'string' &&
@@ -64,16 +66,21 @@ function parseSnapshot(parsed: unknown): WorkspaceCleanupScanResult | null {
   if (!isRecord(parsed)) {
     return null
   }
+
   if (parsed.version !== SNAPSHOT_VERSION) {
     return null
   }
+
   if (parsed.argsFingerprint !== workspaceCleanupScanSnapshotFingerprint()) {
     return null
   }
+
   const result = parsed.result
+
   if (!isRecord(result)) {
     return null
   }
+
   if (
     typeof result.scannedAt !== 'number' ||
     !Array.isArray(result.candidates) ||
@@ -82,6 +89,7 @@ function parseSnapshot(parsed: unknown): WorkspaceCleanupScanResult | null {
   ) {
     return null
   }
+
   return result as unknown as WorkspaceCleanupScanResult
 }
 
@@ -110,13 +118,17 @@ function patchCandidates(
   fresh: WorkspaceCleanupCandidate[]
 ): WorkspaceCleanupScanResult {
   const freshById = new Map(fresh.map((candidate) => [candidateSnapshotKey(candidate), candidate]))
+
   const candidates = existing.candidates.map((candidate) => {
     const key = candidateSnapshotKey(candidate)
     const replacement = freshById.get(key)
     freshById.delete(key)
+
     return replacement ?? candidate
   })
+
   candidates.push(...freshById.values())
+
   // Why keep scannedAt: it marks the last FULL scan; a focused rescan must not advertise fleet-wide freshness.
   return { ...existing, candidates }
 }
@@ -135,6 +147,7 @@ export function registerWorkspaceCleanupScanSnapshotPruneTombstones(
   if (targets.length === 0) {
     return
   }
+
   registerWorkspaceSnapshotPrunesForFile(
     prunedWorkspacesByFile,
     sidecarSnapshotFile(snapshotDirectory, SNAPSHOT_FILE_NAME),
@@ -150,14 +163,17 @@ function excludeRowsPrunedDuringScan(
     prunedWorkspacesByFile.get(file),
     result.scannedAt
   )
+
   if (prunedKeys.size === 0) {
     return result
   }
+
   const candidates = result.candidates.filter(
     (candidate) =>
       !prunedKeys.has(workspaceSnapshotPruneKey(candidate.worktreeId, candidate.executionHostId)) &&
       !prunedKeys.has(workspaceSnapshotPruneKey(candidate.worktreeId))
   )
+
   return candidates.length === result.candidates.length ? result : { ...result, candidates }
 }
 
@@ -167,9 +183,11 @@ function clearSupersededPrunes(
   broad: boolean
 ): void {
   const pruned = prunedWorkspacesByFile.get(file)
+
   if (!pruned) {
     return
   }
+
   const candidateKeys = broad
     ? undefined
     : new Set(
@@ -178,11 +196,13 @@ function clearSupersededPrunes(
           workspaceSnapshotPruneKey(candidate.worktreeId)
         ])
       )
+
   for (const [key, entry] of pruned) {
     if (entry.prunedAt < result.scannedAt && (broad || candidateKeys?.has(key))) {
       pruned.delete(key)
     }
   }
+
   if (pruned.size === 0) {
     prunedWorkspacesByFile.delete(file)
   }
@@ -203,36 +223,48 @@ export async function persistWorkspaceCleanupScanResult(
   result: WorkspaceCleanupScanResult
 ): Promise<void> {
   const file = sidecarSnapshotFile(snapshotDirectory, SNAPSHOT_FILE_NAME)
+
   try {
     await withSidecarSnapshotQueue(file, async () => {
       const filteredResult = excludeRowsPrunedDuringScan(file, result)
+
       // worktreeIds (even empty) is a targeted scan; persisting it as broad
       // would replace the fleet snapshot with a subset.
       const broad =
         !args.worktreeId && !Array.isArray(args.worktreeIds) && args.includeAllWorkspaces === true
+
       if (broad) {
         let knownScannedAt = lastPersistedScannedAtByFile.get(file)
+
         if (knownScannedAt === undefined) {
           const existing = await readWorkspaceCleanupScanSnapshot(snapshotDirectory)
           knownScannedAt = existing?.scannedAt
         }
+
         if (knownScannedAt !== undefined && knownScannedAt > filteredResult.scannedAt) {
           lastPersistedScannedAtByFile.set(file, knownScannedAt)
+
           return
         }
+
         await writeSnapshot(file, filteredResult)
         lastPersistedScannedAtByFile.set(file, filteredResult.scannedAt)
         clearSupersededPrunes(file, result, true)
+
         return
       }
+
       if (filteredResult.candidates.length === 0) {
         return
       }
+
       const existing = await readWorkspaceCleanupScanSnapshot(snapshotDirectory)
+
       // Why: a focused/legacy scan is a subset; without a broad baseline it is not a fleet snapshot.
       if (!existing) {
         return
       }
+
       await writeSnapshot(file, patchCandidates(existing, filteredResult.candidates))
       clearSupersededPrunes(file, result, false)
     })
@@ -249,33 +281,43 @@ async function pruneWorkspaceCleanupScanSnapshotsWithRegisteredTombstones(
   if (targets.length === 0) {
     return
   }
+
   const file = sidecarSnapshotFile(snapshotDirectory, SNAPSHOT_FILE_NAME)
   const targetKeys = workspaceSnapshotPruneTargetKeys(targets)
+
   if (registerTombstones) {
     registerWorkspaceSnapshotPrunesForFile(prunedWorkspacesByFile, file, targets)
   }
+
   try {
     await withSidecarSnapshotQueue(file, async () => {
       const registered = prunedWorkspacesByFile.get(file)
+
       const coalescedTargetKeys = registerTombstones
         ? targetKeys
         : new Set([...targetKeys].filter((key) => registered?.has(key)))
+
       if (coalescedTargetKeys.size === 0) {
         return
       }
+
       const existing = await readWorkspaceCleanupScanSnapshot(snapshotDirectory)
+
       if (!existing) {
         return
       }
+
       const candidates = existing.candidates.filter(
         (candidate) =>
           !coalescedTargetKeys.has(
             workspaceSnapshotPruneKey(candidate.worktreeId, candidate.executionHostId)
           ) && !coalescedTargetKeys.has(workspaceSnapshotPruneKey(candidate.worktreeId))
       )
+
       if (candidates.length === existing.candidates.length) {
         return
       }
+
       await writeSnapshot(file, { ...existing, candidates })
     })
   } catch (error) {

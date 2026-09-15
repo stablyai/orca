@@ -29,6 +29,7 @@ export function hostScopeCensusIsComplete(scope: RuntimeListingHostScope | undef
   if (scope === undefined) {
     return false
   }
+
   // A listing that covered no host proves nothing, and an unreadable coverage claim is not a
   // claim: `isTerminalListResult` checks only that `hostIds` is an array, so at least one covered
   // id has to be legible before the claim can be believed. Deliberately "at least one" rather than
@@ -37,5 +38,6 @@ export function hostScopeCensusIsComplete(scope: RuntimeListingHostScope | undef
   if (!scope.hostIds.some((hostId) => parseExecutionHostId(hostId))) {
     return false
   }
+
   return scope.omittedHostIds.every((hostId) => parseExecutionHostId(hostId)?.kind === 'runtime')
 }

@@ -20,6 +20,7 @@ vi.mock('electron', () => ({
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof osModule>()
+
   return {
     ...actual,
     homedir: homedirMock.mockImplementation(actual.homedir)
@@ -35,8 +36,11 @@ import { WINDOWS_HOOK_STDIN_DRAIN_COMMAND } from '../agent-hooks/hook-stdin-cont
 // delayed expansion cmd eats it out of a percent-expanded curl argument, so bake one into
 // every value the script forwards rather than asserting the `setlocal` line alone.
 const PANE_KEY = 'tab-1:leaf-1!bang'
+
 const WORKTREE_ID = 'repo-1::C:\\Users\\alice\\orca\\feature!branch'
+
 const HOOK_TOKEN = 'antigravity-payload-delivery-token'
+
 // Why: exercise the sizes and bytes a real hook carries — a multi-KB body crosses the pipe
 // in several chunks, and non-ASCII catches a launcher that recodes stdin through a code page.
 const PAYLOAD = JSON.stringify({
@@ -61,6 +65,7 @@ async function startHookListener(): Promise<{
   posts: HookPost[]
 }> {
   const posts: HookPost[] = []
+
   const server = createServer((req, res) => {
     let body = ''
     req.setEncoding('utf8')
@@ -81,12 +86,14 @@ async function startHookListener(): Promise<{
       res.end('{}')
     })
   })
+
   const port = await new Promise<number>((resolve) => {
     server.listen(0, '127.0.0.1', () => {
       const address = server.address()
       resolve(typeof address === 'object' && address ? address.port : 0)
     })
   })
+
   return { server, port, posts }
 }
 
@@ -97,6 +104,7 @@ type HookRun = { exitCode: number | null; stdout: string; stderr: string; timedO
 // hostile half reachable on any host — under `/v:on` cmd eats `!` out of every percent
 // expansion (#9358/#9941), and a harness pinned to `/v:off` could never fail on it.
 type DelayedExpansion = 'on' | 'off'
+
 const DELAYED_EXPANSION_STATES = ['off', 'on'] as const satisfies readonly DelayedExpansion[]
 
 function runWrapper(
@@ -113,14 +121,17 @@ function runWrapper(
       windowsHide: true,
       env
     })
+
     let stdout = ''
     let stderr = ''
     let timedOut = false
+
     const timer = setTimeout(() => {
       timedOut = true
       child.stdin.destroy()
       child.kill('SIGKILL')
     }, 15_000)
+
     child.on('error', (error) => {
       clearTimeout(timer)
       reject(error)
@@ -139,6 +150,7 @@ function runWrapper(
     // Why: an abandoned pipe raises EPIPE once the child exits; swallow it so the run still
     // resolves on the child's own terms.
     child.stdin.on('error', () => {})
+
     if (stdinPayload !== null) {
       child.stdin.end(Buffer.from(stdinPayload, 'utf8'))
     }
@@ -149,6 +161,7 @@ function hookEnvironment(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const base = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith('ORCA_'))
   )
+
   return { ...base, ...extra }
 }
 
@@ -156,6 +169,7 @@ function expectedStdout(eventName: string): string {
   if (eventName === 'PreToolUse') {
     return ANTIGRAVITY_PRE_TOOL_USE_DECISION
   }
+
   return eventName === 'Stop' ? '{"decision":""}' : '{}'
 }
 
@@ -167,6 +181,7 @@ describe('Antigravity Windows hook post command', () => {
     const drain = script.indexOf(WINDOWS_HOOK_STDIN_DRAIN_COMMAND)
     const answer = script.lastIndexOf('echo {}')
     expect(drain).toBeGreaterThan(answer)
+
     for (const key of ['ORCA_AGENT_HOOK_PORT', 'ORCA_AGENT_HOOK_TOKEN', 'ORCA_PANE_KEY']) {
       const guard = script.indexOf(`if "%${key}%"=="" exit /b 0`)
       expect(guard, key).toBeGreaterThan(answer)
@@ -204,6 +219,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
     server?.close()
     server = null
     homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+
     if (home) {
       rmSync(home, { recursive: true, force: true })
       home = ''
@@ -224,6 +240,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
 
     const listener = await startHookListener()
     server = listener.server
+
     const env = hookEnvironment({
       USERPROFILE: home,
       HOME: home,
@@ -237,6 +254,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
       for (const event of ANTIGRAVITY_EVENTS) {
         const label = `${event.eventName} (/v:${delayedExpansion})`
         const before = listener.posts.length
+
         const result = await runWrapper(
           join(hooksDir, event.windowsWrapperFileName),
           env,
@@ -280,6 +298,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
 
     const listener = await startHookListener()
     server = listener.server
+
     const result = await runWrapper(
       join(home, '.orca', 'agent-hooks', 'antigravity-pre-invocation.cmd'),
       hookEnvironment({
@@ -309,6 +328,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
     expect(new AntigravityHookService().install().state).toBe('installed')
     const hooksDir = join(home, '.orca', 'agent-hooks')
     rmSync(join(hooksDir, 'antigravity-hook.cmd'))
+
     return hooksDir
   }
 
@@ -318,6 +338,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
       const hooksDir = await installWithoutCore()
       const listener = await startHookListener()
       server = listener.server
+
       const env = hookEnvironment({
         USERPROFILE: home,
         HOME: home,
@@ -326,6 +347,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
         ORCA_PANE_KEY: PANE_KEY,
         [missingKey]: ''
       })
+
       for (const event of ANTIGRAVITY_EVENTS) {
         const result = await runWrapper(join(hooksDir, event.windowsWrapperFileName), env, null)
         expect(result.timedOut, event.eventName).toBe(false)
@@ -333,6 +355,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
         expect(result.stdout.trim(), event.eventName).toBe(expectedStdout(event.eventName))
         expect(result.stderr, event.eventName).toBe('')
       }
+
       expect(listener.posts).toHaveLength(0)
     },
     90_000
@@ -344,6 +367,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
     const hooksDir = await installWithoutCore()
     const listener = await startHookListener()
     server = listener.server
+
     const env = hookEnvironment({
       USERPROFILE: home,
       HOME: home,
@@ -351,6 +375,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
       ORCA_AGENT_HOOK_TOKEN: HOOK_TOKEN,
       ORCA_PANE_KEY: PANE_KEY
     })
+
     for (const event of ANTIGRAVITY_EVENTS) {
       const result = await runWrapper(join(hooksDir, event.windowsWrapperFileName), env)
       expect(result.timedOut, event.eventName).toBe(false)
@@ -358,6 +383,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
       expect(result.stdout.trim(), event.eventName).toBe(expectedStdout(event.eventName))
       expect(result.stderr, event.eventName).toBe('')
     }
+
     // Why: the fallback answers the agent but has no core to post through.
     expect(listener.posts).toHaveLength(0)
   }, 60_000)
@@ -369,6 +395,7 @@ describe.skipIf(process.platform !== 'win32')('Antigravity Windows hook payload 
 
     const listener = await startHookListener()
     server = listener.server
+
     // Why (#11549): outside an Orca pane the caller may abandon stdin rather than close it,
     // so the guard must exit before the read — otherwise the console lingers indefinitely.
     const result = await runWrapper(

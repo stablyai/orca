@@ -91,6 +91,7 @@ export function inspectWindowsProcessTreeAddon(addonPath) {
   if (!existsSync(addonPath)) {
     return 'missing'
   }
+
   return readFileSync(addonPath).includes(FLAGGED_IMPORT) ? 'unpatched' : 'clean'
 }
 
@@ -99,12 +100,14 @@ export function assertWindowsProcessTreeCreationTimePatch(
 ) {
   for (const [relativePath, expected] of CREATION_TIME_PATCH_MARKERS) {
     const filePath = join(packageDir, relativePath)
+
     if (!existsSync(filePath)) {
       throw new Error(
         `${filePath} is missing, so the process creation-time patch cannot be verified. ` +
           'Run pnpm install.'
       )
     }
+
     if (!readFileSync(filePath, 'utf8').includes(expected)) {
       throw new Error(
         `${relativePath} does not contain the process creation-time patch (${expected}). ` +
@@ -137,11 +140,13 @@ export function ensureWindowsProcessTreeCommandLinePatch(
   packageDir = WINDOWS_PROCESS_TREE_PACKAGE_DIR
 ) {
   const source = join(packageDir, 'src', 'process_commandline.cc')
+
   if (!existsSync(source)) {
     throw new Error(
       `${source} is missing, so the command-line patch cannot be verified. Run pnpm install.`
     )
   }
+
   let repaired = false
 
   if (!readFileSync(source, 'utf8').includes(COMMAND_LINE_PATCH_MARKER)) {
@@ -182,12 +187,14 @@ export function ensureWindowsProcessTreeCommandLinePatch(
           `${WINDOWS_PROCESS_TREE_PATCH_PATH} failed: ${error?.message ?? error}. Run pnpm install.`
       )
     }
+
     if (!readFileSync(source, 'utf8').includes(COMMAND_LINE_PATCH_MARKER)) {
       throw new Error(
         'src/process_commandline.cc still reads the PEB after repair, so the patch did not ' +
           'apply. Run pnpm install.'
       )
     }
+
     repaired = true
   }
 
@@ -200,6 +207,7 @@ export function ensureWindowsProcessTreeCommandLinePatch(
     rmSync(windowsProcessTreeAddonPath(packageDir), { force: true })
     repaired = true
   }
+
   assertWindowsProcessTreeCreationTimePatch(packageDir)
 
   return repaired
@@ -212,10 +220,13 @@ export function stageWindowsProcessTreeNodeAddonApiHeaders(
   const nodeAddonApiDir = dirname(
     createRequire(join(packageDir, 'package.json')).resolve('node-addon-api/package.json')
   )
+
   const stagedHeaderDir = join(packageDir, 'deps', 'node-addon-api')
   mkdirSync(stagedHeaderDir, { recursive: true })
+
   for (const header of WINDOWS_PROCESS_TREE_NODE_ADDON_API_HEADERS) {
     copyFileSync(join(nodeAddonApiDir, header), join(stagedHeaderDir, header))
   }
+
   return stagedHeaderDir
 }

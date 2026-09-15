@@ -40,21 +40,26 @@ export function useWorkspaceOptionsFilterBadge(): {
 
   const selectedCount = useMemo(() => {
     let count = 0
+
     for (const repo of repos) {
       if (filterRepoIds.includes(repo.id)) {
         count += 1
       }
     }
+
     return count
   }, [repos, filterRepoIds])
 
   const hasSleepingFilter = showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES
+
   const hasSleepingExemptionFilter = isSleepingSweepExemptionNarrowingList(
     showSleepingWorkspaces,
     alwaysShowDefaultBranchWorkspace
   )
+
   const hasRepoFilter = selectedCount > 0
   const hasHostVisibilityFilter = visibleWorkspaceHostIds !== null
+
   const hasAnyFilter =
     hasSleepingFilter ||
     hideDefaultBranchWorkspace ||
@@ -65,6 +70,7 @@ export function useWorkspaceOptionsFilterBadge(): {
     hasSleepingExemptionFilter ||
     hasRepoFilter ||
     hasHostVisibilityFilter
+
   const activeFilterCount =
     (hasSleepingFilter ? 1 : 0) +
     (hideDefaultBranchWorkspace ? 1 : 0) +
@@ -101,8 +107,10 @@ export function WorkspaceOptionsMenuItems({
   const { hostOptions } = useSidebarHostScopeOptions()
   const showHostScopeControls = shouldShowHostScopeControls(hostOptions)
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
+
   const projectOrderLabel =
     PROJECT_ORDER_OPTIONS.find((opt) => opt.id === projectOrderBy)?.label ?? 'Manual'
+
   const hostVisibilityLabel = getSidebarHostVisibilityLabel(visibleWorkspaceHostIds, hostOptions)
   const boardAttr = preserveWorkspaceBoardOpen ? '' : undefined
 
@@ -173,9 +181,11 @@ export function WorkspaceOptionsMenuItems({
                   {opt.label}
                 </DropdownMenuRadioItem>
               )
+
               if (!opt.description) {
                 return radioItem
               }
+
               return (
                 <Tooltip key={opt.id}>
                   <TooltipTrigger asChild>{radioItem}</TooltipTrigger>

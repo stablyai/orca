@@ -15,6 +15,7 @@ describe('prepareCodexAiVaultSessionResume', () => {
     root = mkdtempSync(join(tmpdir(), 'orca-codex-ai-vault-resume-'))
     peerHome = join(root, 'codex-accounts', 'account-a', 'home')
     selectedHome = join(root, 'codex-accounts', 'account-b', 'home')
+
     const relativeRolloutPath = join(
       'sessions',
       '2026',
@@ -22,6 +23,7 @@ describe('prepareCodexAiVaultSessionResume', () => {
       '17',
       'rollout-2026-08-17T10-00-00-session.jsonl'
     )
+
     peerRolloutPath = join(peerHome, relativeRolloutPath)
     const selectedRolloutPath = join(selectedHome, relativeRolloutPath)
     mkdirSync(dirname(peerRolloutPath), { recursive: true })
@@ -38,6 +40,7 @@ describe('prepareCodexAiVaultSessionResume', () => {
     const resolveSelectedHome = vi.fn((): string | null => {
       throw new ManagedCodexHomeTemporarilyUnavailableError()
     })
+
     const isSystemDefaultRealHome = vi.fn(() => true)
 
     await expect(prepare(resolveSelectedHome, isSystemDefaultRealHome)).rejects.toBeInstanceOf(

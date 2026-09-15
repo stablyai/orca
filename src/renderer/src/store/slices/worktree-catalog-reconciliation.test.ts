@@ -19,6 +19,7 @@ describe('reuseEqualCatalogRows', () => {
       { id: 'a', nested: { labels: ['one', 'two'] }, optional: undefined },
       { id: 'b', nested: { labels: ['three'] } }
     ]
+
     const incoming = [
       { id: 'a', nested: { labels: ['one', 'two'] } },
       { id: 'b', nested: { labels: ['three'] } }
@@ -35,6 +36,7 @@ describe('reuseEqualCatalogRows', () => {
       { id: 'a', nested: { value: 1 } },
       { id: 'b', nested: { value: 2 } }
     ]
+
     const incoming = [
       { id: 'a', nested: { value: 3 } },
       { id: 'b', nested: { value: 2 } }
@@ -59,6 +61,7 @@ describe('reuseEqualCatalogRows', () => {
       { id: 'repo::/same/path', hostId: 'ssh:a' },
       { id: 'repo::/same/path', hostId: 'ssh:b' }
     ]
+
     const equivalent = structuredClone(current)
 
     expect(reuseEqualCatalogRows(current, equivalent)).toBe(current)
@@ -89,16 +92,20 @@ describe('reuseEqualCatalogRows', () => {
   // — a wall-clock assertion would be flaky on shared CI runners.
   it('caps the deep compares for one id instead of scanning the whole bucket', () => {
     const bucketSize = 64
+
     const current = Array.from({ length: bucketSize }, (_, index) => ({
       id: 'dup',
       marker: `previous-${index}`
     }))
+
     let reads = 0
+
     const incoming = [
       {
         id: 'dup',
         get marker(): string {
           reads++
+
           return 'matches-nothing'
         }
       }

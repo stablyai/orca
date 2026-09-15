@@ -1,6 +1,7 @@
 import type { OpenInApplication } from './ui-chrome-types'
 
 export const OPEN_IN_APPLICATIONS_MAX = 8
+
 export const DEFAULT_OPEN_IN_APPLICATIONS: OpenInApplication[] = [
   { id: 'vscode', label: 'VS Code', command: 'code' }
 ]
@@ -33,19 +34,23 @@ export function normalizeOpenInApplications(
     if (normalized.length >= OPEN_IN_APPLICATIONS_MAX) {
       break
     }
+
     if (!row || typeof row !== 'object') {
       continue
     }
 
     const label = normalizeToken((row as { label?: unknown }).label)
     const command = normalizeToken((row as { command?: unknown }).command)
+
     if (!label || !command) {
       continue
     }
 
     let id = normalizeToken((row as { id?: unknown }).id)
+
     if (!id) {
       id = normalizeToken(options.createId?.())
+
       if (!id) {
         id = makeFallbackId(index)
       }
@@ -54,6 +59,7 @@ export function normalizeOpenInApplications(
     if (seenIds.has(id)) {
       continue
     }
+
     seenIds.add(id)
     normalized.push({ id, label, command })
   }

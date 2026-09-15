@@ -14,6 +14,7 @@ describe('browser client page metadata publisher', () => {
     const second = deferred<unknown>()
     const publish = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
     let revision = 0
+
     const publisher = createBrowserClientPageMetadataPublisher({
       browserPageId: 'page-a',
       placement: PLACEMENT,
@@ -43,6 +44,7 @@ describe('browser client page metadata publisher', () => {
     const first = deferred<unknown>()
     const publish = vi.fn().mockReturnValue(first.promise)
     let revision = 0
+
     const publisher = createBrowserClientPageMetadataPublisher({
       browserPageId: 'page-a',
       placement: PLACEMENT,
@@ -64,13 +66,17 @@ describe('browser client page metadata publisher', () => {
   it('keeps publishing after the revision counter throws', async () => {
     const publish = vi.fn().mockResolvedValue({ status: 'published', accepted: true })
     let revision = 0
+
     const nextRevision = vi.fn(() => {
       revision += 1
+
       if (revision === 1) {
         throw new Error('browser_client_page_renderer_visible_page_detached')
       }
+
       return revision
     })
+
     const publisher = createBrowserClientPageMetadataPublisher({
       browserPageId: 'page-a',
       placement: PLACEMENT,
@@ -91,11 +97,14 @@ describe('browser client page metadata publisher', () => {
 
   it('reports a publish the runtime refused instead of discarding it', async () => {
     const onUnpublished = vi.fn()
+
     const publish = vi
       .fn()
       .mockResolvedValueOnce({ status: 'published', accepted: false })
       .mockResolvedValueOnce({ status: 'failed', errorCode: 'browser_host_lease_stale' })
+
     let revision = 0
+
     const publisher = createBrowserClientPageMetadataPublisher({
       browserPageId: 'page-a',
       placement: PLACEMENT,
@@ -121,6 +130,7 @@ describe('browser client page metadata publisher', () => {
   it('reports a publish that threw on its way out', async () => {
     const onUnpublished = vi.fn()
     let revision = 0
+
     const publisher = createBrowserClientPageMetadataPublisher({
       browserPageId: 'page-a',
       placement: PLACEMENT,
@@ -150,8 +160,10 @@ function snapshot(title: string) {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }

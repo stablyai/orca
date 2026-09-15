@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { BrowserProfileUserAgentOption } from './browser-profile-user-agent-option'
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 afterEach(() => {
@@ -18,6 +19,7 @@ afterEach(() => {
 function renderOption(): HTMLDivElement {
   function Harness(): React.JSX.Element {
     const [checked, setChecked] = useState(false)
+
     return <BrowserProfileUserAgentOption checked={checked} onCheckedChange={setChecked} />
   }
 
@@ -25,6 +27,7 @@ function renderOption(): HTMLDivElement {
   document.body.appendChild(container)
   root = createRoot(container)
   act(() => root?.render(<Harness />))
+
   return container
 }
 

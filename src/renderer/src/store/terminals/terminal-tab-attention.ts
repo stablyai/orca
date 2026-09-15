@@ -19,17 +19,21 @@ export function createTerminalTabAttentionActions(
   return {
     markTerminalTabUnread: (tabId, reason) => {
       const state = get()
+
       const ownerTab = Object.values(state.tabsByWorktree ?? {})
         .flat()
         .find((t) => t.id === tabId)
+
       if (!ownerTab) {
         return
       }
+
       // Why: terminal attention persists until real interaction.
       set((s) => {
         if (s.unreadTerminalTabs[tabId]) {
           return s
         }
+
         return { unreadTerminalTabs: { ...s.unreadTerminalTabs, [tabId]: reason } }
       })
     },
@@ -38,6 +42,7 @@ export function createTerminalTabAttentionActions(
         if (s.unreadTerminalPanes[paneKey]) {
           return s
         }
+
         return { unreadTerminalPanes: { ...s.unreadTerminalPanes, [paneKey]: reason } }
       })
     },
@@ -46,6 +51,7 @@ export function createTerminalTabAttentionActions(
         if (s.unreadAgentCompletionPanes[paneKey]) {
           return s
         }
+
         return {
           unreadAgentCompletionPanes: {
             ...s.unreadAgentCompletionPanes,
@@ -59,8 +65,10 @@ export function createTerminalTabAttentionActions(
         if (!s.unreadTerminalTabs[tabId]) {
           return s
         }
+
         const copy = { ...s.unreadTerminalTabs }
         delete copy[tabId]
+
         return { unreadTerminalTabs: copy }
       })
     },
@@ -69,10 +77,12 @@ export function createTerminalTabAttentionActions(
         if (!s.unreadTerminalPanes[paneKey] && !s.unreadAgentCompletionPanes[paneKey]) {
           return s
         }
+
         const nextUnreadTerminalPanes = { ...s.unreadTerminalPanes }
         const nextUnreadAgentCompletionPanes = { ...s.unreadAgentCompletionPanes }
         delete nextUnreadTerminalPanes[paneKey]
         delete nextUnreadAgentCompletionPanes[paneKey]
+
         return {
           unreadTerminalPanes: nextUnreadTerminalPanes,
           unreadAgentCompletionPanes: nextUnreadAgentCompletionPanes
@@ -82,13 +92,17 @@ export function createTerminalTabAttentionActions(
     setTabCustomTitle: (tabId, title, opts) => {
       set((s) => {
         const next = { ...s.tabsByWorktree }
+
         for (const wId of Object.keys(next)) {
           next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, customTitle: title } : t))
         }
+
         scheduleRuntimeGraphSync()
+
         return { tabsByWorktree: next }
       })
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
+
       if (item) {
         get().setTabCustomLabel(item.id, title, opts)
       }
@@ -96,19 +110,24 @@ export function createTerminalTabAttentionActions(
     setTabColor: (tabId, color) => {
       set((s) => {
         const next = { ...s.tabsByWorktree }
+
         for (const wId of Object.keys(next)) {
           next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, color } : t))
         }
+
         return { tabsByWorktree: next }
       })
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
+
       if (item) {
         get().setUnifiedTabColor(item.id, color)
         // Why: tab color is host-authoritative for remote-server tabs; mirror it so it persists instead of reverting on the next snapshot.
         const state = get()
+
         const owningWorktreeId = Object.keys(state.unifiedTabsByWorktree).find((wId) =>
           (state.unifiedTabsByWorktree[wId] ?? []).some((entry) => entry.id === item.id)
         )
+
         if (
           owningWorktreeId &&
           resolveTerminalWorktreeRoute(state, owningWorktreeId)?.runtimeEnvironmentId

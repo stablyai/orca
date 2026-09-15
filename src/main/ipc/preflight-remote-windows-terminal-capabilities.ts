@@ -20,11 +20,14 @@ export async function detectRemoteWindowsTerminalCapabilities(args: {
   connectionId: string
 }): Promise<RemoteWindowsTerminalCapabilities> {
   const mux = getActiveMultiplexer(args.connectionId)
+
   if (!mux || mux.isDisposed()) {
     return EMPTY_REMOTE_WINDOWS_TERMINAL_CAPABILITIES
   }
+
   const result = (await mux.request('preflight.detectWindowsTerminalCapabilities', {})) as
     | RemoteWindowsTerminalCapabilities
     | undefined
+
   return result ?? EMPTY_REMOTE_WINDOWS_TERMINAL_CAPABILITIES
 }

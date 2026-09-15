@@ -47,6 +47,7 @@ describe('buildAiVaultProjectContext', () => {
   it('uses durable worktree project ids before repo fallback', () => {
     const repo = makeRepo({ id: 'repo-1', displayName: 'Legacy Repo', path: '/Users/ada/orca' })
     const project = makeProject({ id: 'project-1', displayName: 'Canonical Orca' })
+
     const worktree = makeWorktree({
       id: 'wt-1',
       repoId: repo.id,
@@ -76,6 +77,7 @@ describe('buildAiVaultProjectContext', () => {
 
   it('normalizes compatibility project ids to repo keys', () => {
     const repo = makeRepo({ id: 'repo-1', displayName: 'Orca', path: '/Users/ada/orca' })
+
     const worktree = makeWorktree({
       id: 'wt-1',
       repoId: repo.id,
@@ -123,11 +125,13 @@ describe('buildAiVaultProjectContext', () => {
 
   it('inherits setup project ids for legacy worktrees without project metadata', () => {
     const repo = makeRepo({ id: 'repo-1', displayName: 'Orca Repo', path: '/repo/orca' })
+
     const worktree = makeWorktree({
       id: 'wt-legacy',
       repoId: repo.id,
       path: '/repo/orca'
     })
+
     const session = makeSession({ id: 'claude:legacy-worktree', cwd: '/repo/orca/src' })
 
     const context = buildAiVaultProjectContext({
@@ -158,11 +162,13 @@ describe('buildAiVaultProjectContext', () => {
 
   it('uses active worktree setup project ids when active repo is unavailable', () => {
     const repo = makeRepo({ id: 'repo-1', displayName: 'Orca Repo', path: '/repo/orca' })
+
     const worktree = makeWorktree({
       id: 'wt-restored',
       repoId: repo.id,
       path: '/repo/orca'
     })
+
     const session = makeSession({ id: 'claude:restored', cwd: '/repo/orca/src' })
 
     const context = buildAiVaultProjectContext({
@@ -189,11 +195,13 @@ describe('buildAiVaultProjectContext', () => {
 
   it('inherits setup host ids for legacy worktrees without host metadata', () => {
     const repo = makeRepo({ id: 'repo-1', displayName: 'Runtime Repo', path: '/runtime/orca' })
+
     const worktree = makeWorktree({
       id: 'wt-runtime',
       repoId: repo.id,
       path: '/runtime/orca'
     })
+
     const session = makeSession({
       id: 'claude:runtime-worktree',
       cwd: '/runtime/orca/src',
@@ -256,12 +264,14 @@ describe('buildAiVaultProjectContext', () => {
   it('chooses the most specific nested path and lets worktrees win equal-length ties', () => {
     const repo = makeRepo({ id: 'repo-root', displayName: 'Root', path: '/repo' })
     const childRepo = makeRepo({ id: 'repo-child', displayName: 'Child Repo', path: '/repo/pkg' })
+
     const worktree = makeWorktree({
       id: 'wt-child',
       repoId: childRepo.id,
       projectId: 'child-project',
       path: '/repo/pkg'
     })
+
     const session = makeSession({ id: 'claude:nested', cwd: '/repo/pkg/src' })
 
     const context = buildAiVaultProjectContext({
@@ -291,6 +301,7 @@ describe('buildAiVaultProjectContext', () => {
       displayName: 'Windows Repo',
       path: 'C:\\Users\\Ada\\Repo'
     })
+
     const session = makeSession({ id: 'claude:win', cwd: 'c:/users/ada/repo/src' })
 
     const context = buildAiVaultProjectContext({
@@ -310,12 +321,14 @@ describe('buildAiVaultProjectContext', () => {
 
   it('uses the session host when matching overlapping local and SSH project paths', () => {
     const localRepo = makeRepo({ id: 'local', displayName: 'Local', path: '/srv/orca' })
+
     const sshRepo = makeRepo({
       id: 'ssh',
       displayName: 'SSH',
       path: '/srv/orca',
       connectionId: 'target-1'
     })
+
     const session = makeSession({
       id: 'claude:ssh-session',
       cwd: '/srv/orca/src',
@@ -354,6 +367,7 @@ describe('buildAiVaultProjectContext', () => {
   it('falls back to folder when a legacy hostless session matches multiple host buckets', () => {
     const localRepo = makeRepo({ id: 'local', displayName: 'Local', path: '/srv/orca' })
     const runtimeRepo = makeRepo({ id: 'runtime', displayName: 'Runtime', path: '/srv/orca' })
+
     const session = makeSession({
       id: 'claude:runtime-ambiguous',
       cwd: '/srv/orca/src',
@@ -405,6 +419,7 @@ describe('buildAiVaultProjectContext', () => {
     const groups = groupAiVaultSessions([resolved, unresolved], 'project', {
       sessionProjectById: context.sessionProjectById
     })
+
     expect(groups).toHaveLength(1)
     expect(groups[0].sessions.map((session) => session.id)).toEqual([
       'claude:resolved',
@@ -485,6 +500,7 @@ describe('buildAiVaultSessionProjectById', () => {
     const repoB = makeRepo({ id: 'repo-b', displayName: 'Beta', path: '/Users/ada/beta' })
     const worktreeA = makeWorktree({ id: 'wt-a', repoId: repoA.id, path: '/Users/ada/alpha' })
     const worktreeB = makeWorktree({ id: 'wt-b', repoId: repoB.id, path: '/Users/ada/beta' })
+
     const shared = {
       repos: [repoA, repoB],
       worktrees: [worktreeA, worktreeB],
@@ -607,23 +623,30 @@ describe('AI vault session project attribution reuse', () => {
     const repos = Array.from({ length: 200 }, (_, i) =>
       makeRepo({ id: `repo-${i}`, path: `/repo-${i}` })
     )
+
     const sessions = Array.from({ length: 1000 }, (_, i) => ({
       ...baseSession,
       id: String(i),
       cwd: '/repo-199/sub'
     }))
+
     let comparisons = 0
     const original = paths.createNormalizedPathInsideOrEqualMatcher
+
     const spy = vi
       .spyOn(paths, 'createNormalizedPathInsideOrEqualMatcher')
       .mockImplementation((root) => {
         const matches = original(root)
+
         return (cwd) => {
           comparisons++
+
           return matches(cwd)
         }
       })
+
     let result: ReturnType<typeof buildAiVaultSessionProjectById>
+
     try {
       result = buildAiVaultSessionProjectById({
         repos,
@@ -635,15 +658,18 @@ describe('AI vault session project attribution reuse', () => {
     } finally {
       spy.mockRestore()
     }
+
     expect(result.get('0')?.key).toBe('repo:repo-199')
     expect(result.get('0')).toEqual(result.get('999'))
     expect(result.get('0')).not.toBe(result.get('999'))
+
     const hosts = buildAiVaultSessionProjectById({
       repos,
       worktrees: [],
       projectHostSetupProjection: { projects: [], setups: [] },
       sessions: [sessions[0], { ...sessions[0], id: 'remote', executionHostId: 'ssh:other' }]
     })
+
     expect(hosts.get('remote')?.kind).toBe('folder')
   })
 
@@ -654,6 +680,7 @@ describe('AI vault session project attribution reuse', () => {
       makeRepo({ id: 'repo-a', path: '/repo-a' }),
       makeRepo({ id: 'repo-b', path: '/repo-b' })
     ]
+
     const result = buildAiVaultSessionProjectById({
       repos,
       worktrees: [],
@@ -676,6 +703,7 @@ describe('AI vault session project attribution reuse', () => {
     // The key is deliberately NOT canonicalized: two spellings of one folder miss
     // each other's entry and are recomputed, which is correct but unshared.
     const repos = [makeRepo({ id: 'repo-win', path: 'C:\\Users\\Ada\\repo' })]
+
     const result = buildAiVaultSessionProjectById({
       repos,
       worktrees: [],

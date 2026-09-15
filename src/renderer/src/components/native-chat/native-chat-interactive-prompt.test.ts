@@ -35,6 +35,7 @@ describe('parseAskFromStatus', () => {
         ]
       })
     )
+
     expect(prompt).toEqual({
       questions: [
         {
@@ -51,6 +52,7 @@ describe('parseAskFromStatus', () => {
     const prompt = parseAskFromStatus(
       JSON.stringify({ questions: [{ question: 'q', options: ['A', 'B'] }] })
     )
+
     expect(prompt?.questions[0]).toMatchObject({
       multiSelect: false,
       options: [{ label: 'A' }, { label: 'B' }]
@@ -66,6 +68,7 @@ describe('parseAskFromStatus', () => {
         ]
       })
     )
+
     expect(prompt?.questions).toHaveLength(2)
     expect(prompt?.questions[0]?.multiSelect).toBe(true)
     expect(prompt?.questions[1]?.multiSelect).toBe(false)
@@ -75,6 +78,7 @@ describe('parseAskFromStatus', () => {
     const prompt = parseAskFromStatus(
       JSON.stringify({ questions: [null, 42, { question: 'ok', options: ['A'] }] })
     )
+
     expect(prompt?.questions).toHaveLength(1)
     expect(prompt?.questions[0]?.question).toBe('ok')
   })
@@ -93,6 +97,7 @@ describe('parseApprovalFromStatus', () => {
     const approval = parseApprovalFromStatus(
       JSON.stringify({ approval: { tool: 'Bash', summary: 'rm -rf build' } })
     )
+
     expect(approval).toEqual({
       title: 'Allow Bash?',
       detail: 'rm -rf build',
@@ -118,6 +123,7 @@ describe('parseInteractivePrompt', () => {
         approval: { tool: 'Bash', summary: 's' }
       })
     )
+
     expect(card?.kind).toBe('question')
   })
 
@@ -140,6 +146,7 @@ describe('formatAskAnswer', () => {
         { question: 'q2', multiSelect: false, options: [{ label: 'C' }] }
       ]
     }
+
     expect(formatAskAnswer(prompt, [{ indices: [0, 1] }, { indices: [0] }])).toBe('A, B\nC')
   })
 
@@ -147,6 +154,7 @@ describe('formatAskAnswer', () => {
     const prompt: AskPrompt = {
       questions: [{ question: 'q1', multiSelect: true, options: [{ label: 'A' }, { label: 'B' }] }]
     }
+
     expect(formatAskAnswer(prompt, [{ indices: [0], other: '  extra ' }])).toBe('A, extra')
   })
 
@@ -157,6 +165,7 @@ describe('formatAskAnswer', () => {
         { question: 'q2', multiSelect: false, options: [{ label: 'B' }] }
       ]
     }
+
     // Leading blank stays an empty line: '\nB' (2 lines), not 'B'.
     expect(formatAskAnswer(prompt, [{ indices: [] }, { indices: [0] }])).toBe('\nB')
   })
@@ -169,6 +178,7 @@ describe('formatAskAnswer', () => {
         { question: 'q3', multiSelect: false, options: [{ label: 'C' }] }
       ]
     }
+
     const answer = formatAskAnswer(prompt, [{ indices: [0] }, { indices: [] }, { indices: [0] }])
     expect(answer).toBe('A\n\nC')
     expect(answer.split('\n')).toHaveLength(3)
@@ -215,6 +225,7 @@ describe('buildAskAnswerKeys', () => {
         }
       ]
     }
+
     expect(buildAskAnswerKeys(prompt, [{ indices: [1] }, { indices: [2] }])).toEqual([
       { raw: '2' },
       { raw: '3' },
@@ -229,6 +240,7 @@ describe('buildAskAnswerKeys', () => {
         { question: 'q2', multiSelect: false, options: [{ label: 'Apple' }, { label: 'Banana' }] }
       ]
     }
+
     expect(buildAskAnswerKeys(prompt, [{ indices: [] }, { indices: [1] }])).toEqual([
       { raw: '\x1b[C' },
       { raw: '2' },

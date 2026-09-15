@@ -9,7 +9,9 @@ import {
 import type { SkillScanRoot } from './skill-discovery-sources'
 
 const MAX_PLUGIN_METADATA_BYTES = 4 * 1024 * 1024
+
 const WSL_METADATA_TIMEOUT_MS = 5_000
+
 const WSL_METADATA_MAX_OUTPUT_BYTES = 32 * 1024 * 1024
 
 export function buildWslClaudePluginMetadataCommand(paths: readonly string[]): string {
@@ -28,9 +30,11 @@ export function buildWslClaudePluginMetadataCommand(paths: readonly string[]): s
     `  printf '%s\\0%s\\0%s\\0%s\\0' F "$metadata_index" 1 "$encoded_metadata"`,
     '}'
   ]
+
   paths.forEach((pathValue, index) => {
     lines.push(`read_metadata ${index} ${quoteBashString(pathValue)}`)
   })
+
   return lines.join('\n')
 }
 
@@ -41,18 +45,22 @@ export function parseWslClaudePluginMetadataOutput(
   const contents = Array<string | null>(fileCount).fill(null)
   const fields = output.split('\0')
   let index = 0
+
   while (index < fields.length && fields[index]) {
     const kind = fields[index++]
     const fileIndex = Number.parseInt(fields[index++] ?? '', 10)
     const exists = fields[index++] === '1'
     const encoded = fields[index++]
+
     if (kind !== 'F' || !Number.isInteger(fileIndex) || fileIndex < 0 || fileIndex >= fileCount) {
       throw new Error('WSL Claude plugin metadata returned an invalid response.')
     }
+
     if (exists && encoded !== undefined) {
       contents[fileIndex] = Buffer.from(encoded, 'base64').toString('utf8')
     }
   }
+
   return contents
 }
 
@@ -70,10 +78,12 @@ async function executeWslMetadataRead(distro: string, script: string): Promise<s
     timeoutMs: WSL_METADATA_TIMEOUT_MS,
     maxOutputBytes: WSL_METADATA_MAX_OUTPUT_BYTES
   })
+
   // Truncated-but-well-formed output would otherwise parse as real metadata.
   if (result.code !== 0 || result.timedOut) {
     throw new Error('claude-plugin-skill-sources-wsl-read-failed')
   }
+
   return result.stdout
 }
 
@@ -84,16 +94,20 @@ export async function discoverClaudePluginSkillSourcesInWsl(args: {
 }): Promise<SkillScanRoot[]> {
   const paths = getClaudePluginMetadataPaths(args.homeDir, args.cwd, pathPosix)
   const orderedPaths = [paths.installedPlugins, ...paths.settings]
+
   // Why: plugin enablement and install paths belong to the distro just like
   // SKILL.md identity; reading them through UNC could apply Windows semantics.
   const output = await executeWslMetadataRead(
     args.distro,
     buildWslClaudePluginMetadataCommand(orderedPaths)
   )
+
   const [installedPlugins, ...settings] = parseWslClaudePluginMetadataOutput(
     output,
     orderedPaths.length
   )
+
   const metadata: ClaudePluginMetadata = { installedPlugins, settings }
+
   return resolveClaudePluginSkillSources({ metadata, cwd: args.cwd, pathApi: pathPosix })
 }

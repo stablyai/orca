@@ -45,9 +45,11 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
     toggleProjectGitHubFileExpansion,
     toggleProjectGitHubFileViewed
   } = model
+
   if (!projectRowItem) {
     return null
   }
+
   return SHOW_MOBILE_PROJECT_REVIEW_PANELS &&
     projectRowItem.itemType === 'PULL_REQUEST' &&
     projectRowDetail?.provider === 'github' &&
@@ -95,6 +97,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
           <View style={styles.chipRow}>
             {projectReviewerCandidates.map((user) => {
               const selected = projectSelectedReviewerLogins.has(user.login.trim().toLowerCase())
+
               return (
                 <Pressable
                   key={user.login}

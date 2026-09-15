@@ -69,15 +69,21 @@ export class RelayPtySourcePublication {
     let current = this.deliveries.get(id)
     // Only release this caller's delivery; its replacement may still be rotating.
     const owned = current?.clientId === context?.clientId ? current : undefined
+
     if (!context?.onResponseSettled) {
       this.sender.releaseRotationFence(owned)
+
       return false
     }
+
     const mode = this.session.deliveryMode(context.clientId)
+
     if (mode === 'unadmitted' || mode === 'subscriber') {
       this.sender.releaseRotationFence(owned)
+
       return false
     }
+
     if (mode === 'legacy-owner') {
       if (owned) {
         this.session.cancelDelivery(owned.identity, 'source-credit-disabled')
@@ -85,8 +91,10 @@ export class RelayPtySourcePublication {
         this.deliveries.delete(id)
         this.onCapacity(id)
       }
+
       return false
     }
+
     if (
       current?.clientId === context.clientId &&
       !current.restoreRequired &&
@@ -99,28 +107,37 @@ export class RelayPtySourcePublication {
       this.onCapacity(id)
       current = undefined
     }
+
     if (current?.clientId === context.clientId) {
       this.sender.releaseRotationFence(current)
+
       if (current.activating && current.activationRecoveryRequest) {
         if (!samePtySourceRecoveryRequest(current.activationRecoveryRequest, recovery)) {
           return this.publishRestoreRequired(id, context, 'checkpointUnavailable')
         }
+
         this.registerActivationSettlement(id, current, context)
+
         return pendingPtySourceRecoveryResult(current)
       }
+
       return 'existing'
     }
+
     let identity: PtySourceDeliveryIdentity | null = null
     let displayEnd = 0
     let recoveryCheckpointSourceEndSu: number | null = null
     let recoveryEndSu: number | null = null
     let recoveryWasSealed = false
+
     if (!current && recovery) {
       return this.publishRestoreRequired(id, context, 'deliveryUnavailable')
     }
+
     if (current) {
       try {
         const snapshot = this.session.sourceDeliverySnapshot(current.identity)
+
         if (
           snapshot.state === 'closed' ||
           snapshot.state === 'closing' ||
@@ -132,11 +149,13 @@ export class RelayPtySourcePublication {
         ) {
           return this.requireRestore(id, current, context, 'checkpointUnavailable')
         }
+
         const rotation = this.session.rotateDelivery(
           current.identity,
           context.clientId,
           recovery.acceptedSourceEndSu
         )
+
         identity = rotation.identity
         displayEnd = current.displayEnd
         recoveryCheckpointSourceEndSu = recovery.acceptedSourceEndSu
@@ -152,17 +171,24 @@ export class RelayPtySourcePublication {
         )
       }
     }
+
     identity ??= this.session.openDelivery(context.clientId, id, ptyIncarnation)
+
     if (!identity) {
       return false
     }
+
     if (!current || identity !== current.identity) {
       this.counters.opened++
     }
+
     const activationSnapshot = this.session.sourceDeliverySnapshot(identity)
+
     const activationCheckpointSourceEndSu =
       recoveryCheckpointSourceEndSu ?? activationSnapshot.sentEndSu
+
     const activationRecoveryEndSu = recoveryEndSu ?? activationSnapshot.receivedEndSu
+
     const record: RelayPtySourceDeliveryRecord = {
       clientId: context.clientId,
       identity,
@@ -189,11 +215,14 @@ export class RelayPtySourcePublication {
       restoreRequired: false,
       rotationPending: false
     }
+
     this.deliveries.set(id, record)
     this.registerActivationSettlement(id, record, context)
+
     if (recoveryEndSu !== null && recoveryCheckpointSourceEndSu !== null) {
       return pendingPtySourceRecoveryResult(record)
     }
+
     return current ? 'rotated' : 'opened'
   }
 
@@ -201,6 +230,7 @@ export class RelayPtySourcePublication {
 
   receivingActivation(id: string, clientId: number): PtySourceReceivingActivation | undefined {
     const record = this.deliveries.get(id)
+
     return record?.clientId === clientId && !record.restoreRequired
       ? record.sourceActivation
       : undefined
@@ -211,6 +241,7 @@ export class RelayPtySourcePublication {
 
   publish(id: string, output: RelayPtySourceOutput, interactive: boolean): boolean {
     const record = this.deliveries.get(id)
+
     if (
       !record ||
       record.sealed ||
@@ -220,8 +251,10 @@ export class RelayPtySourcePublication {
     ) {
       return false
     }
+
     if (!output.sourceAccepted && !appendPtySourceOutput(this.session, record, output)) {
       this.counters.appendDenied++
+
       if (ptySourceDeliveryClosed(this.session, record.identity)) {
         this.sender.wakeSendWaiters(record)
         this.deliveries.delete(id)
@@ -230,14 +263,19 @@ export class RelayPtySourcePublication {
         // publish pty.exit ahead of still-buffered output. By microtask time the failed chunk
         // has been re-queued (flushPtyOutput re-sets the queue synchronously on failure).
         queueMicrotask(() => this.onCapacity(id))
+
         return false
       }
+
       return false
     }
+
     if (!projectPtySourceOutputToLegacy(this.dispatcher, this.session, id, output, interactive)) {
       return false
     }
+
     this.sender.pump(record)
+
     return true
   }
 
@@ -261,13 +299,16 @@ export class RelayPtySourcePublication {
 
   exitPublicationSettled(id: string): boolean {
     const record = this.deliveries.get(id)
+
     if (!record || record.sourceExitState !== 'published') {
       return false
     }
+
     // Why: owner and legacy subscribers both hold this exit now, so the index row would otherwise
     // outlive the pty for the daemon's lifetime and re-publish on any later fallback.
     this.legacyExits.forget(id)
     this.sender.pruneClosed(id, record)
+
     return true
   }
 
@@ -305,6 +346,7 @@ export class RelayPtySourcePublication {
     current.activating = false
     this.sender.wakeSendWaiters(current)
     registerCanceledPtySourceRetirement(current, context, this.deliveries, this.onCapacity)
+
     return this.publishRestoreRequired(id, context, reason)
   }
 
@@ -320,6 +362,7 @@ export class RelayPtySourcePublication {
       }
     })
     this.onCapacity(id)
+
     return result
   }
 }

@@ -16,17 +16,20 @@ import { translate } from '@/i18n/i18n'
 
 function projectCommandFilter(_value: string, search: string, keywords?: string[]): number {
   const query = search.trim().toLowerCase()
+
   if (!query) {
     return 1
   }
 
   const [displayName = '', path = ''] = keywords ?? []
   const displayNameIndex = displayName.toLowerCase().indexOf(query)
+
   if (displayNameIndex !== -1) {
     return 2 + 1 / (displayNameIndex + 1)
   }
 
   const pathIndex = path.toLowerCase().indexOf(query)
+
   if (pathIndex !== -1) {
     return 1 + 1 / (pathIndex + 1)
   }
@@ -64,6 +67,7 @@ export function SidebarProjectFilterPanel({
   // A frame later both focus scopes have settled, so this focus sticks.
   useEffect(() => {
     const frame = requestAnimationFrame(() => inputRef.current?.focus())
+
     return () => cancelAnimationFrame(frame)
   }, [])
 
@@ -72,6 +76,7 @@ export function SidebarProjectFilterPanel({
       if (!filterRepoIds.includes(repoId)) {
         setFilterRepoIds([...filterRepoIds, repoId])
       }
+
       setQuery('')
     },
     [filterRepoIds, setFilterRepoIds]
@@ -90,22 +95,26 @@ export function SidebarProjectFilterPanel({
       // stay in the search field instead of triggering menu typeahead.
       if (event.key === 'Backspace' && query === '' && selectedRepos.length > 0) {
         const lastRepo = selectedRepos.at(-1)
+
         if (lastRepo) {
           event.preventDefault()
           event.stopPropagation()
           handleRemoveProject(lastRepo.id)
         }
+
         return
       }
 
       if (event.key === 'Enter') {
         const highlightedRepo = availableRepos.find((repo) => repo.id === highlightedRepoId)
         const repo = highlightedRepo ?? searchRepos(availableRepos, query)[0]
+
         if (repo) {
           event.preventDefault()
           event.stopPropagation()
           handleSelectRepo(repo.id)
         }
+
         return
       }
 
@@ -115,9 +124,11 @@ export function SidebarProjectFilterPanel({
       if (event.key === 'ArrowLeft') {
         const { selectionStart, selectionEnd } = event.currentTarget
         const caretAtStart = selectionStart === 0 && selectionEnd === 0
+
         if (!caretAtStart) {
           event.stopPropagation()
         }
+
         return
       }
 

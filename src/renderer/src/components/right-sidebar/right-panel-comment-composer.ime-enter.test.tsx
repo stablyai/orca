@@ -20,6 +20,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -50,9 +51,11 @@ function renderComposer(onSubmit: () => Promise<{ ok: true }>): HTMLTextAreaElem
     )
   })
   const textarea = container.querySelector('textarea')
+
   if (!textarea) {
     throw new Error('comment textarea not rendered')
   }
+
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(
       textarea,
@@ -60,6 +63,7 @@ function renderComposer(onSubmit: () => Promise<{ ok: true }>): HTMLTextAreaElem
     )
     textarea.dispatchEvent(new Event('input', { bubbles: true }))
   })
+
   return textarea
 }
 
@@ -74,9 +78,11 @@ function pressCtrlEnter(
     ctrlKey: true,
     ...init
   })
+
   if (init?.keyCode !== undefined) {
     Object.defineProperty(event, 'keyCode', { value: init.keyCode })
   }
+
   act(() => {
     textarea.dispatchEvent(event)
   })

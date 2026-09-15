@@ -9,6 +9,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 
 function createMockSubprocess(): SubprocessHandle {
   let onExit: ((code: number) => void) | undefined
+
   return {
     pid: 55555,
     getForegroundProcess: vi.fn(() => null),
@@ -35,7 +36,9 @@ describe('DaemonServer attach-only preparation', () => {
     for (const client of clients.splice(0)) {
       client.disconnect()
     }
+
     await Promise.all(servers.splice(0).map((server) => server.shutdown()))
+
     for (const directory of directories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -47,12 +50,14 @@ describe('DaemonServer attach-only preparation', () => {
     const socketPath = getDaemonSocketPath(directory)
     const tokenPath = join(directory, 'test.token')
     const preparePtySpawn = vi.fn(async () => {})
+
     const server = new DaemonServer({
       socketPath,
       tokenPath,
       preparePtySpawn,
       spawnSubprocess: () => createMockSubprocess()
     })
+
     servers.push(server)
     await server.start()
     const client = new DaemonClient({ socketPath, tokenPath })
@@ -81,12 +86,14 @@ describe('DaemonServer attach-only preparation', () => {
     const socketPath = getDaemonSocketPath(directory)
     const tokenPath = join(directory, 'test.token')
     const preparePtySpawn = vi.fn(async () => {})
+
     const server = new DaemonServer({
       socketPath,
       tokenPath,
       preparePtySpawn,
       spawnSubprocess: () => createMockSubprocess()
     })
+
     servers.push(server)
     await server.start()
     const client = new DaemonClient({ socketPath, tokenPath })

@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const { filePublicationFailures } = vi.hoisted(() => ({
   filePublicationFailures: { link: 0, replaceBeforeRename: '' }
 }))
+
 const registrationLock = vi.hoisted(() => ({
   completed: null as ((cacheRootPath: string) => void) | null,
   entered: null as ((cacheRootPath: string) => void) | null,
@@ -16,6 +17,7 @@ const registrationLock = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
+
   return {
     ...actual,
     link: async (...args: Parameters<typeof actual.link>) => {
@@ -23,6 +25,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         filePublicationFailures.link -= 1
         throw Object.assign(new Error('link unsupported'), { code: 'ENOTSUP' })
       }
+
       return actual.link(...args)
     },
     rename: async (...args: Parameters<typeof actual.rename>) => {
@@ -32,6 +35,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         })
         filePublicationFailures.replaceBeforeRename = ''
       }
+
       return actual.rename(...args)
     }
   }
@@ -52,6 +56,7 @@ vi.mock('./appimage-registration-lock', () => ({
     await pause
     const result = await operation()
     registrationLock.completed?.(cacheRootPath)
+
     return result
   }
 }))
@@ -68,6 +73,7 @@ async function makeFixture(): Promise<{ homePath: string; resourcesPath: string 
   // The bundled orca-ide launcher must exist for the dispatcher to be written.
   await mkdir(join(resourcesPath, 'bin'), { recursive: true })
   await writeFile(join(resourcesPath, 'bin', 'orca-ide'), '#!/usr/bin/env bash\n', 'utf8')
+
   return { homePath: join(root, 'home'), resourcesPath }
 }
 
@@ -124,6 +130,7 @@ describe('installLinuxBareOrcaDispatcher', () => {
       homePath,
       appImagePath: null
     })
+
     const second = await installLinuxBareOrcaDispatcher({
       resourcesPath,
       homePath,
@@ -251,9 +258,11 @@ describe('installLinuxBareOrcaDispatcher', () => {
     await writeFile(appImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 })
     let reportStarted!: () => void
     let releaseExtraction!: () => void
+
     const started = new Promise<void>((resolve) => {
       reportStarted = resolve
     })
+
     const released = new Promise<void>((resolve) => {
       releaseExtraction = resolve
     })
@@ -269,6 +278,7 @@ describe('installLinuxBareOrcaDispatcher', () => {
         await released
       }
     })
+
     await started
     await mkdir(dirname(dispatcherPath), { recursive: true })
     await writeFile(dispatcherPath, '#!/bin/sh\necho foreign\n', { mode: 0o755 })
@@ -288,6 +298,7 @@ describe('installLinuxBareOrcaDispatcher', () => {
     await mkdir(homePath, { recursive: true })
     await writeFile(appImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 })
     const events: string[] = []
+
     const options = {
       resourcesPath,
       homePath,
@@ -312,6 +323,7 @@ describe('installLinuxBareOrcaDispatcher', () => {
       events.push('lock-entered')
       lockEntered.resolve(rootPath)
     }
+
     registrationLock.completed = () => {
       events.push(
         existsSync(previous.rootPath) ? 'lock-left-before-prune' : 'lock-left-after-prune'

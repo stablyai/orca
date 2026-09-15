@@ -12,9 +12,11 @@ export async function readRendererProcessMemory(
 ): Promise<RendererProcessMemory | null> {
   try {
     const info = await source.getProcessMemoryInfo()
+
     if (!isFiniteKilobytes(info?.private)) {
       return null
     }
+
     return {
       privateKB: info.private,
       // Why optional: Chromium reports no resident set on macOS.

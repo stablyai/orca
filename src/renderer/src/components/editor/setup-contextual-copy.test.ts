@@ -111,6 +111,7 @@ describe('setupContextualCopy', () => {
       getStartPosition: () => ({ lineNumber: 1, column: 1 }),
       getEndPosition: () => ({ lineNumber: 2, column: 4 })
     }
+
     const editorInstance = {
       addContentWidget: vi.fn(),
       getContainerDomNode: () => ({
@@ -172,11 +173,13 @@ describe('setupContextualCopy', () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn()
     }
+
     const selectionDispose = vi.fn()
     const scrollDispose = vi.fn()
     const focusDispose = vi.fn()
     const blurDispose = vi.fn()
     let disposeEditor = (): void => {}
+
     const editorInstance = {
       addContentWidget: vi.fn(),
       getContainerDomNode: () => editorDomNode,
@@ -188,12 +191,14 @@ describe('setupContextualCopy', () => {
       onDidChangeCursorSelection: () => ({ dispose: selectionDispose }),
       onDidDispose: (listener: () => void) => {
         disposeEditor = listener
+
         return { dispose: vi.fn() }
       },
       onDidFocusEditorText: () => ({ dispose: focusDispose }),
       onDidScrollChange: () => ({ dispose: scrollDispose }),
       removeContentWidget: vi.fn()
     } as unknown as editor.IStandaloneCodeEditor
+
     const copyToastTimeoutRef = { current: 42 }
     const setCopyToast = vi.fn()
 

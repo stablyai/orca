@@ -64,6 +64,7 @@ describe('groupWorkspaceKanbanWorktrees', () => {
         lastActivityAt: 50
       })
     ]
+
     const grouped = groupWorkspaceKanbanWorktrees({
       worktrees,
       visibleWorktreeIds: visibleIdentities(worktrees),
@@ -89,6 +90,7 @@ describe('groupWorkspaceKanbanWorktrees', () => {
         manualOrder: 100
       })
     ]
+
     // Repro for crash 99657ab1: a worktree reached the sidebar with an
     // undefined displayName, so `a.displayName.localeCompare(...)` threw
     // `Cannot read properties of undefined (reading 'localeCompare')`.
@@ -117,6 +119,7 @@ describe('groupWorkspaceKanbanWorktrees', () => {
         lastActivityAt: 10
       })
     ]
+
     expect(() =>
       groupWorkspaceKanbanWorktrees({
         worktrees,
@@ -144,6 +147,7 @@ describe('groupWorkspaceKanbanWorktrees', () => {
         lastActivityAt: 1
       })
     ]
+
     const grouped = groupWorkspaceKanbanWorktrees({
       worktrees,
       visibleWorktreeIds: visibleIdentities(worktrees),

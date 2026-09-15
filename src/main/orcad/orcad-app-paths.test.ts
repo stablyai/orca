@@ -46,6 +46,7 @@ describe('resolveOrcadPath', () => {
 
     for (const [name, answer] of answers) {
       expect(answer, `${name} answered nothing`).toBeTruthy()
+
       if (name !== 'userData') {
         // The catch-all this replaced returned the data directory for four of seven
         // names, 'exe' included — a data directory is not an executable.
@@ -113,6 +114,7 @@ describe('resolveOrcadInstallRoot', () => {
     const originalArgv = process.argv
     // `node -e` leaves argv[1] unset; cwd would be a guess, not an answer.
     process.argv = [process.execPath]
+
     try {
       expect(() => resolveOrcadInstallRoot()).toThrow(/orcad_install_root_unavailable/)
     } finally {

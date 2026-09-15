@@ -9,6 +9,7 @@ class FakeCaffeinateProcess extends EventEmitter {
   pid = 123
   kill = vi.fn(() => {
     this.emit('exit', null, 'SIGTERM')
+
     return true
   })
 }
@@ -24,6 +25,7 @@ describe('MacosSystemSleepAssertion', () => {
   it('spawns caffeinate with the system and idle sleep assertions on macOS', () => {
     const child = new FakeCaffeinateProcess()
     const spawn = vi.fn(() => child)
+
     const assertion = new MacosSystemSleepAssertion({
       logger: createLogger(),
       platform: 'darwin',
@@ -40,6 +42,7 @@ describe('MacosSystemSleepAssertion', () => {
 
   it('is a no-op off macOS', () => {
     const spawn = vi.fn(() => new FakeCaffeinateProcess())
+
     const assertion = new MacosSystemSleepAssertion({
       logger: createLogger(),
       platform: 'linux',
@@ -53,6 +56,7 @@ describe('MacosSystemSleepAssertion', () => {
 
   it('does not start a second caffeinate process while one is live', () => {
     const spawn = vi.fn(() => new FakeCaffeinateProcess())
+
     const assertion = new MacosSystemSleepAssertion({
       logger: createLogger(),
       platform: 'darwin',
@@ -67,6 +71,7 @@ describe('MacosSystemSleepAssertion', () => {
 
   it('stops only the child process it started', () => {
     const child = new FakeCaffeinateProcess()
+
     const assertion = new MacosSystemSleepAssertion({
       logger: createLogger(),
       platform: 'darwin',
@@ -81,6 +86,7 @@ describe('MacosSystemSleepAssertion', () => {
 
   it('removes child listeners when stopped intentionally', () => {
     const child = new FakeCaffeinateProcess()
+
     const assertion = new MacosSystemSleepAssertion({
       logger: createLogger(),
       platform: 'darwin',
@@ -104,6 +110,7 @@ describe('MacosSystemSleepAssertion', () => {
     spawn.mockImplementationOnce(() => secondChild)
     let now = 1_000
     const onUnexpectedFailure = vi.fn()
+
     const assertion = new MacosSystemSleepAssertion({
       logger: createLogger(),
       now: () => now,
@@ -126,6 +133,7 @@ describe('MacosSystemSleepAssertion', () => {
   it('does not report an intentional stop as unexpected', () => {
     const child = new FakeCaffeinateProcess()
     const onUnexpectedFailure = vi.fn()
+
     const assertion = new MacosSystemSleepAssertion({
       logger: createLogger(),
       onUnexpectedFailure,
@@ -142,10 +150,13 @@ describe('MacosSystemSleepAssertion', () => {
   it('suppresses retry attempts until the shared retry gate expires', () => {
     vi.useFakeTimers()
     let now = 1_000
+
     const spawn = vi.fn(() => {
       throw new Error('missing caffeinate')
     })
+
     const onUnexpectedFailure = vi.fn()
+
     const assertion = new MacosSystemSleepAssertion({
       logger: createLogger(),
       now: () => now,
@@ -175,10 +186,13 @@ describe('MacosSystemSleepAssertion', () => {
 
   it('keeps at most one retry timer for repeated failures', () => {
     vi.useFakeTimers()
+
     const spawn = vi.fn(() => {
       throw new Error('missing caffeinate')
     })
+
     const onUnexpectedFailure = vi.fn()
+
     const assertion = new MacosSystemSleepAssertion({
       logger: createLogger(),
       now: () => 1_000,
@@ -200,9 +214,11 @@ describe('MacosSystemSleepAssertion', () => {
   it('logs the first identical failure at warn and repeats at debug until reset', () => {
     let now = 1_000
     const logger = createLogger()
+
     const spawn = vi.fn(() => {
       throw new Error('missing caffeinate')
     })
+
     const assertion = new MacosSystemSleepAssertion({
       logger,
       now: () => now,

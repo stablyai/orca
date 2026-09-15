@@ -45,6 +45,7 @@ describe('legacy coordinator gate run routing', () => {
 
   it('routes an unnamed Run to the caller binding even when attestation fails', async () => {
     const harness = createHarness()
+
     const run = harness.db.createRun({
       objective: 'current work',
       coordinatorHandle: CURRENT_COORDINATOR_HANDLE,

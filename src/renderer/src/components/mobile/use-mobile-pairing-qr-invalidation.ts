@@ -41,6 +41,7 @@ export function useMobilePairingQrInvalidation(params: {
     setRelayMintFailure,
     regenerate
   } = params
+
   const wasSignedInRef = useRef(signedIn)
   // Tracks the mode we last acted on so the mode effect can tell a cross-window
   // preference sync apart from an already-handled change.
@@ -53,9 +54,11 @@ export function useMobilePairingQrInvalidation(params: {
   useEffect(() => {
     const wasSignedIn = wasSignedInRef.current
     wasSignedInRef.current = signedIn
+
     if (connectionMode !== 'automatic' || !hasGeneratedRef.current || wasSignedIn === signedIn) {
       return
     }
+
     pairingRequestIdRef.current += 1
     hasGeneratedRef.current = false
     setPairingUrl(null)
@@ -63,6 +66,7 @@ export function useMobilePairingQrInvalidation(params: {
     setPairQrDataUrl(null)
     setPairQrSize(null)
     setRelayMintFailure?.(null)
+
     if (signedIn && canMintMobilePairingOffer({ connectionMode, signedIn })) {
       // Why: rotate on the sign-in edge — the token behind the QR cleared at
       // sign-out may have been exposed, so the fresh session mints fresh.
@@ -94,6 +98,7 @@ export function useMobilePairingQrInvalidation(params: {
     if (connectionMode === handledModeRef.current) {
       return
     }
+
     handledModeRef.current = connectionMode
     pairingRequestIdRef.current += 1
     const shouldRegenerate = hasGeneratedRef.current || pairLoading
@@ -103,6 +108,7 @@ export function useMobilePairingQrInvalidation(params: {
     setPairQrDataUrl(null)
     setPairQrSize(null)
     setRelayMintFailure?.(null)
+
     if (shouldRegenerate && canMintMobilePairingOffer({ connectionMode, signedIn })) {
       // Why: no rotate here — the main process rotates exactly once when the
       // requested mode differs from the pending token's minted mode, so the

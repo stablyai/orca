@@ -30,6 +30,7 @@ describe('getWindowsRemoteWriteExecutionHostKey', () => {
 
   it('separates hosts, ports and users', () => {
     const base = { id: 'a', host: 'win.example', username: 'dev', port: 22 }
+
     const keys = [
       asTarget(base),
       asTarget({ ...base, host: 'other.example' }),

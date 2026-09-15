@@ -26,21 +26,26 @@ export function runAcceptedMobileSessionTabsEffects<Tab extends AcceptedSessionT
   markActiveMarkdownStale
 }: Options<Tab>): void {
   const pendingPageId = getPendingBrowserPageId()
+
   if (pendingPageId) {
     const browserTab = effectiveTabs.find(
       (tab) => tab.type === 'browser' && tab.browserPageId === pendingPageId
     )
+
     if (browserTab) {
       clearPendingBrowserPageId(pendingPageId)
       activateBrowserTab(browserTab)
     }
   }
+
   if (source !== 'stream') {
     return
   }
+
   const activeMarkdown = effectiveTabs.find(
     (tab) => tab.type === 'markdown' && tab.isActive && tab.isDirty
   )
+
   if (activeMarkdown) {
     markActiveMarkdownStale(activeMarkdown.id)
   }

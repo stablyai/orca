@@ -17,20 +17,26 @@ export function codexAuthMatchesManagedAccount(
   managedAuthContents: string | null
 ): boolean {
   const identity = readCodexAuthIdentity(runtimeAuthContents)
+
   if (!identity) {
     return false
   }
+
   const managedIdentity = managedAuthContents ? readCodexAuthIdentity(managedAuthContents) : null
   const selectedEmail = firstNonNull(normalizeField(account.email), managedIdentity?.email)
+
   const selectedProviderId = firstNonNull(
     normalizeField(account.providerAccountId),
     managedIdentity?.providerAccountId
   )
+
   const selectedWorkspaceId = firstNonNull(
     normalizeField(account.workspaceAccountId),
     managedIdentity?.workspaceAccountId
   )
+
   const emailMatches = identityFieldsAgree(selectedEmail, identity.email)
+
   if (
     identityContradictsSelection(
       {
@@ -43,9 +49,11 @@ export function codexAuthMatchesManagedAccount(
   ) {
     return false
   }
+
   if (!identityFieldMatches(selectedProviderId, identity.providerAccountId)) {
     return false
   }
+
   if (!identityFieldMatches(selectedWorkspaceId, identity.workspaceAccountId)) {
     return false
   }
@@ -54,6 +62,7 @@ export function codexAuthMatchesManagedAccount(
     (selectedProviderId && identity.providerAccountId) ||
     (selectedWorkspaceId && identity.workspaceAccountId)
   )
+
   return (
     hasStrongIdentity ||
     (emailMatches && !identity.providerAccountId && !identity.workspaceAccountId)
@@ -67,6 +76,7 @@ export function codexAuthCouldBelongToManagedAccount(
   account: CodexManagedAccount
 ): boolean {
   const identity = readCodexAuthIdentity(runtimeAuthContents)
+
   return (
     !identity ||
     !identityContradictsSelection(
@@ -88,9 +98,11 @@ export function codexAuthMatchesSystemDefaultIdentity(
 ): boolean {
   const runtimeIdentity = readCodexAuthIdentity(runtimeAuthContents)
   const systemDefaultIdentity = readCodexAuthIdentity(systemDefaultAuthContents)
+
   if (!runtimeIdentity || !systemDefaultIdentity) {
     return false
   }
+
   if (
     systemDefaultIdentity.email &&
     runtimeIdentity.email &&
@@ -98,6 +110,7 @@ export function codexAuthMatchesSystemDefaultIdentity(
   ) {
     return false
   }
+
   if (
     !identityFieldMatches(
       systemDefaultIdentity.providerAccountId,
@@ -106,6 +119,7 @@ export function codexAuthMatchesSystemDefaultIdentity(
   ) {
     return false
   }
+
   if (
     !identityFieldMatches(
       systemDefaultIdentity.workspaceAccountId,
@@ -119,11 +133,13 @@ export function codexAuthMatchesSystemDefaultIdentity(
     (systemDefaultIdentity.providerAccountId && runtimeIdentity.providerAccountId) ||
     (systemDefaultIdentity.workspaceAccountId && runtimeIdentity.workspaceAccountId)
   )
+
   const emailMatches = Boolean(
     systemDefaultIdentity.email &&
     runtimeIdentity.email &&
     systemDefaultIdentity.email === runtimeIdentity.email
   )
+
   return (
     strongIdentityMatches ||
     (emailMatches && !runtimeIdentity.providerAccountId && !runtimeIdentity.workspaceAccountId)
@@ -138,9 +154,11 @@ export function compareCodexAuthFreshness(
 ): -1 | 0 | 1 | null {
   const candidateFreshness = readFreshnessFromAuthContents(candidateAuthContents)
   const baselineFreshness = readFreshnessFromAuthContents(baselineAuthContents)
+
   if (candidateFreshness === null || baselineFreshness === null) {
     return null
   }
+
   return candidateFreshness === baselineFreshness
     ? 0
     : candidateFreshness > baselineFreshness
@@ -157,16 +175,21 @@ export function codexAuthIsFresher(
 
 export function readCodexAuthIdentity(contents: string): CodexAuthIdentity | null {
   const raw = parseJsonRecord(contents)
+
   if (!raw) {
     return null
   }
+
   const tokens = readRecordClaim(raw, 'tokens')
+
   const idToken = normalizeField(
     readStringClaim(tokens, 'id_token') ?? readStringClaim(tokens, 'idToken')
   )
+
   const payload = idToken ? parseJwtPayload(idToken) : null
   const authClaims = readRecordClaim(payload, 'https://api.openai.com/auth')
   const profileClaims = readRecordClaim(payload, 'https://api.openai.com/profile')
+
   // Why: normalize before the fallback chains, not after — a blank tokens.account_id
   // must fall through to the JWT claims rather than ending the chain on an empty string.
   const tokenAccountId = normalizeField(
@@ -221,14 +244,19 @@ function readPlanWorkspaceLabel(authClaims: Record<string, unknown> | null): str
 
 function readFreshnessFromAuthContents(contents: string): number | null {
   const raw = parseJsonRecord(contents)
+
   if (!raw) {
     return null
   }
+
   const tokens = readRecordClaim(raw, 'tokens')
+
   const idToken = normalizeField(
     readStringClaim(tokens, 'id_token') ?? readStringClaim(tokens, 'idToken')
   )
+
   const payload = idToken ? parseJwtPayload(idToken) : null
+
   return (
     readNumberClaim(tokens, 'expires_at') ??
     readNumberClaim(tokens, 'expiresAt') ??
@@ -242,6 +270,7 @@ function readFreshnessFromAuthContents(contents: string): number | null {
 function parseJsonRecord(contents: string): Record<string, unknown> | null {
   try {
     const parsed = JSON.parse(contents) as unknown
+
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : null
@@ -252,11 +281,14 @@ function parseJsonRecord(contents: string): Record<string, unknown> | null {
 
 function parseJwtPayload(token: string): Record<string, unknown> | null {
   const parts = token.split('.')
+
   if (parts.length < 2) {
     return null
   }
+
   try {
     const json = Buffer.from(parts[1], 'base64url').toString('utf-8')
+
     return parseJsonRecord(json)
   } catch {
     return null
@@ -268,6 +300,7 @@ function readRecordClaim(
   key: string
 ): Record<string, unknown> | null {
   const claim = value?.[key]
+
   return claim && typeof claim === 'object' && !Array.isArray(claim)
     ? (claim as Record<string, unknown>)
     : null
@@ -275,23 +308,29 @@ function readRecordClaim(
 
 function readStringClaim(value: Record<string, unknown> | null, key: string): string | null {
   const claim = value?.[key]
+
   return typeof claim === 'string' ? claim : null
 }
 
 function readNumberClaim(value: Record<string, unknown> | null, key: string): number | null {
   const claim = value?.[key]
+
   if (typeof claim === 'number' && Number.isFinite(claim)) {
     return claim
   }
+
   if (typeof claim === 'string') {
     const parsed = Number(claim)
+
     return Number.isFinite(parsed) ? parsed : null
   }
+
   return null
 }
 
 function normalizeField(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
+
   return trimmed ? trimmed : null
 }
 
@@ -316,6 +355,7 @@ function identityContradictsSelection(
   ) {
     return true
   }
+
   return (
     identityFieldsConflict(selected.email, identity.email) &&
     !identityFieldsAgree(selected.providerAccountId, identity.providerAccountId)

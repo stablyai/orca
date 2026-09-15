@@ -148,6 +148,7 @@ describe('tui agent startup plans', () => {
     { platform: 'win32' as const, shell: 'cmd' as const }
   ])('delivers multiline Hermes queries through a child-only expansion on $shell', (testCase) => {
     const prompt = 'first line\nsecond "quoted" line with %PATH%'
+
     const plan = buildAgentStartupPlan({
       agent: 'hermes',
       prompt,
@@ -161,10 +162,12 @@ describe('tui agent startup plans', () => {
     expect(plan?.followupPrompt).toBeNull()
     expect(plan?.launchConfig.agentCommand).toBe('hermes --tui')
     expect(plan?.env?.ORCA_HERMES_STARTUP_QUERY).toBe(prompt)
+
     const script =
       testCase.shell === 'posix'
         ? unwrapPosixShellScript(plan?.launchCommand)
         : unwrapPowerShellScript(plan?.launchCommand)
+
     expect(script).toContain("'hermes' 'chat'")
     expect(script).toContain('--query=')
     expect(testCase.shell === 'posix' ? plan?.launchCommand : script).toContain(
@@ -176,6 +179,7 @@ describe('tui agent startup plans', () => {
         ? '--query=${__orca_hermes_startup_query}'
         : 'Remove-Item Env:ORCA_HERMES_STARTUP_QUERY'
     )
+
     if (testCase.shell === 'posix') {
       expect(plan?.launchCommand).toContain('unset ORCA_HERMES_STARTUP_QUERY')
     }
@@ -528,6 +532,7 @@ describe('tui agent startup plans', () => {
     const agentDefaultArgs = normalizeTuiAgentArgsRecord({
       opencode: '--dangerously-skip-permissions'
     })
+
     const plan = buildAgentStartupPlan({
       agent: 'opencode',
       prompt: 'fix it',
@@ -683,6 +688,7 @@ describe('tui agent startup plans', () => {
       agentArgs: resolveTuiAgentLaunchArgs('devin', null),
       platform: 'linux'
     })
+
     expect(plan).toEqual({
       agent: 'devin',
       launchCommand: "devin '--permission-mode' 'bypass'",

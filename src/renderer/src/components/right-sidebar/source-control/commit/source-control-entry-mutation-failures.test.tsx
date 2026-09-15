@@ -16,11 +16,14 @@ const mocks = vi.hoisted(() => ({
 vi.mock('sonner', () => ({
   toast: { error: mocks.toastError, dismiss: mocks.toastDismiss, message: vi.fn() }
 }))
+
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+
 vi.mock('@/components/editor/editor-autosave', () => ({
   notifyEditorExternalFileChange: vi.fn(),
   requestEditorSaveQuiesce: vi.fn(async () => {})
 }))
+
 vi.mock('@/runtime/runtime-git-client', () => ({
   stageRuntimeGitPath: (...args: unknown[]) => mocks.stagePath(...args),
   unstageRuntimeGitPath: (...args: unknown[]) => mocks.unstagePath(...args),
@@ -28,6 +31,7 @@ vi.mock('@/runtime/runtime-git-client', () => ({
   bulkDiscardRuntimeGitPaths: vi.fn(),
   bulkUnstageRuntimeGitPaths: vi.fn()
 }))
+
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(() => undefined, {
     getState: () => ({ settings: { activeRuntimeEnvironmentId: null }, activeWorktreeId: 'wt-1' })
@@ -50,6 +54,7 @@ function entry(
 
 function lastToast(): { title: string; options: SourceControlToastTestOptions } {
   const [title = '', options = {}] = mocks.toastError.mock.lastCall ?? []
+
   return { title, options }
 }
 
@@ -175,6 +180,7 @@ describe('source-control entry mutation failures', () => {
     const discardSingle = vi.fn(async () => {
       throw new Error('unable to write file')
     })
+
     const { result } = renderDiscard(discardSingle)
 
     await act(async () => {
@@ -193,6 +199,7 @@ describe('source-control entry mutation failures', () => {
     const discardSingle = vi.fn(async () => {
       throw new Error('unable to write file')
     })
+
     const { result } = renderDiscard(discardSingle)
 
     await act(async () => {
@@ -209,6 +216,7 @@ describe('source-control entry mutation failures', () => {
     const discardSingle = vi
       .fn<(path: string) => Promise<void>>()
       .mockRejectedValue(new Error('unable to write file'))
+
     const { result } = renderDiscard(discardSingle)
 
     await act(async () => {

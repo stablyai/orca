@@ -54,6 +54,7 @@ import { SkillDeleteResultBand } from './SkillDeleteResultBand'
 import { useSkillDeleteFlow } from './use-skill-delete-flow'
 
 const EMPTY_SKILLS: DiscoveredSkill[] = []
+
 const NO_FILTERS: SkillsFilterState = {
   query: '',
   sourceKind: 'all',
@@ -105,19 +106,24 @@ export default function SkillsPage(): React.JSX.Element {
       // Why: a cold local scan walks every skill root, so switching runtimes can
       // land a stale result after a newer one. Only the newest scan may write.
       const scanGeneration = ++scanGenerationRef.current
+
       const isCurrentScan = (): boolean =>
         mountedRef.current && scanGeneration === scanGenerationRef.current
+
       if (!runtimeTarget) {
         // Why: keep scanning until the owning runtime is known, rather than
         // showing the client's skills to someone whose skills live remotely.
         return
       }
+
       try {
         const nextResult = await discoverSkillsForRuntimeTarget(
           runtimeTarget,
           refresh ? { refresh: true } : undefined
         )
+
         const local = runtimeTarget.kind === 'local'
+
         if (isCurrentScan()) {
           setScanState({ runtimeTarget, result: nextResult, error: null })
           setSelectedSkillIds((current) =>
@@ -128,6 +134,7 @@ export default function SkillsPage(): React.JSX.Element {
         }
       } catch (error) {
         console.error('Failed to discover skills:', error)
+
         if (isCurrentScan()) {
           // Why: a failed scan needs to stay on screen with a retry — a toast
           // disappears before the user can act on it.
@@ -153,6 +160,7 @@ export default function SkillsPage(): React.JSX.Element {
   useEffect(() => {
     const refresh = (): void => void loadSkills()
     window.addEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refresh)
+
     return () => window.removeEventListener(INSTALLED_AGENT_SKILLS_CHANGED_EVENT, refresh)
   }, [loadSkills])
 
@@ -168,6 +176,7 @@ export default function SkillsPage(): React.JSX.Element {
     if (!pendingSkillShareId) {
       return
     }
+
     setInstallLink(`https://app.orca.dev/skills/share/${pendingSkillShareId}`)
     setInstallOpen(true)
     clearPendingSkillShare()
@@ -211,17 +220,22 @@ export default function SkillsPage(): React.JSX.Element {
   const local = runtimeTarget?.kind === 'local'
   const agentByRootPath = useMemo(() => skillAgentByRootPath(result), [result])
   const agentOptions = useMemo(() => skillAgentOptions(result), [result])
+
   const visibleSkills = useMemo(
     () => filterSkills(skills, filters, agentByRootPath),
     [agentByRootPath, filters, skills]
   )
+
   const sourceCounts = useMemo(() => countSkillsBySource(skills), [skills])
   const sourceEntries = useMemo(() => summarizeSkillSources(result), [result])
+
   const eligibleCount =
     selectionMode === 'delete'
       ? eligibleDeleteSkillCount(visibleSkills)
       : eligibleShareSkillCount(visibleSkills, local)
+
   const deleting = selectionMode === 'delete'
+
   const addSelected = (
     current: ReadonlySet<string>,
     results: readonly DiscoveredSkill[]
@@ -229,6 +243,7 @@ export default function SkillsPage(): React.JSX.Element {
     deleting
       ? addDeletableSkillResults(current, skills, results)
       : addShareableSkillResults(current, skills, results, local)
+
   const openInstallDialog = (): void => {
     setInstallLink('')
     setInstallOpen(true)
@@ -271,10 +286,13 @@ export default function SkillsPage(): React.JSX.Element {
           onCancel={exitSelection}
           onSubmit={() => {
             const selected = skills.filter((skill) => selectedSkillIds.has(skill.id))
+
             if (deleting) {
               void deleteFlow.requestDelete(selected)
+
               return
             }
+
             setShareSkills(selected)
           }}
         />
@@ -314,8 +332,10 @@ export default function SkillsPage(): React.JSX.Element {
         onRefresh={() => {
           if (view === 'shared') {
             ownedShares.refresh()
+
             return
           }
+
           deleteFlow.reprobe()
           void loadSkills()
         }}
@@ -401,6 +421,7 @@ export default function SkillsPage(): React.JSX.Element {
         initialLink={installLink}
         onOpenChange={(next) => {
           setInstallOpen(next)
+
           if (!next) {
             setInstallLink('')
           }

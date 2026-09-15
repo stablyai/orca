@@ -91,12 +91,14 @@ describe('createTerminalImeLinuxCandidateState', () => {
     const state = createTerminalImeLinuxCandidateState(() => time)
     const letterKeydown = event({ key: 'a', code: 'KeyA' })
     state.observeKeyboardEvent(letterKeydown, state.classifyKeyboardEvent(letterKeydown))
+
     const modifiedKeyup = event({
       type: 'keyup',
       key: 'A',
       code: 'KeyA',
       shiftKey: true
     })
+
     state.observeKeyboardEvent(modifiedKeyup, state.classifyKeyboardEvent(modifiedKeyup))
 
     time += 10
@@ -111,6 +113,7 @@ describe('createTerminalImeLinuxCandidateState', () => {
   it('does not mistake a shifted physical letter for an orphan after Shift releases first', () => {
     let time = 100
     const state = createTerminalImeLinuxCandidateState(() => time)
+
     for (const keyboardEvent of [
       event({ key: 'A', code: 'KeyA', shiftKey: true }),
       event({ type: 'keyup', key: 'Shift', code: 'ShiftLeft' }),
@@ -128,6 +131,7 @@ describe('createTerminalImeLinuxCandidateState', () => {
   it('cancels the orphan guard when another non-digit keydown intervenes', () => {
     let time = 100
     const state = createTerminalImeLinuxCandidateState(() => time)
+
     for (const keyboardEvent of [
       event({ type: 'keyup', key: 'a', code: 'KeyA' }),
       event({ key: 'b', code: 'KeyB' }),
@@ -169,11 +173,13 @@ describe('createTerminalImeLinuxCandidateState', () => {
     const removeWindowListener = vi.spyOn(rendererWindow, 'removeEventListener')
     const firstTerminal = new EventTarget()
     const secondTerminal = new EventTarget()
+
     const firstState = installTerminalImeLinuxCandidateState(
       firstTerminal,
       () => time,
       rendererWindow
     )
+
     const secondState = installTerminalImeLinuxCandidateState(
       secondTerminal,
       () => time,
@@ -200,11 +206,13 @@ describe('createTerminalImeLinuxCandidateState', () => {
   it('clears renderer-wide pressed letters when the window blurs', () => {
     let time = 100
     const rendererWindow = new EventTarget()
+
     const state = installTerminalImeLinuxCandidateState(
       new EventTarget(),
       () => time,
       rendererWindow
     )
+
     const letterKeydown = event({ key: 'a', code: 'KeyA' })
     state.observeKeyboardEvent(letterKeydown, state.classifyKeyboardEvent(letterKeydown))
 

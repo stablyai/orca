@@ -36,6 +36,7 @@ describe('runtime file client', () => {
     let onResponse: ((response: unknown) => void) | undefined
     runtimeEnvironmentSubscribe.mockImplementation((_args, callbacks) => {
       onResponse = callbacks.onResponse
+
       return Promise.resolve({ unsubscribe, sendBinary: vi.fn() })
     })
 
@@ -84,6 +85,7 @@ describe('runtime file client', () => {
     let callbacks: { onResponse: (response: unknown) => void; onClose: () => void } | undefined
     runtimeEnvironmentSubscribe.mockImplementation((_args, nextCallbacks) => {
       callbacks = nextCallbacks
+
       return Promise.resolve({ unsubscribe, sendBinary: vi.fn() })
     })
 
@@ -137,17 +139,21 @@ describe('runtime file client', () => {
       onResponse: (response: unknown) => void
       onClose: () => void
     }[] = []
+
     runtimeEnvironmentSubscribe.mockImplementation((_args, nextCallbacks) => {
       callbacks.push(nextCallbacks)
+
       return Promise.resolve({ unsubscribe: vi.fn(), sendBinary: vi.fn() })
     })
     const retryPayload = vi.fn()
     let retryPromise: Promise<() => void> | undefined
+
     const context = {
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       worktreeId: 'wt-1',
       worktreePath: '/remote/repo'
     }
+
     await subscribeRuntimeFileChanges(context, vi.fn(), () => {
       retryPromise = subscribeRuntimeFileChanges(context, retryPayload, vi.fn())
     })
@@ -192,6 +198,7 @@ describe('runtime file client', () => {
     const unsubscribes = [vi.fn(), vi.fn()]
     runtimeEnvironmentSubscribe.mockImplementation((_args, nextCallbacks) => {
       callbacks.push(nextCallbacks)
+
       return Promise.resolve({
         unsubscribe: unsubscribes[callbacks.length - 1],
         sendBinary: vi.fn()
@@ -199,11 +206,13 @@ describe('runtime file client', () => {
     })
     const retryPayload = vi.fn()
     let retryPromise: Promise<() => void> | undefined
+
     const context = {
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       worktreeId: 'wt-1',
       worktreePath: '/remote/repo'
     }
+
     await subscribeRuntimeFileChanges(context, vi.fn(), () => {
       retryPromise = subscribeRuntimeFileChanges(context, retryPayload, vi.fn())
     })
@@ -250,6 +259,7 @@ describe('runtime file client', () => {
     })
     runtimeEnvironmentSubscribe.mockImplementation((_args, callbacks) => {
       onResponse = callbacks.onResponse
+
       return Promise.resolve({ unsubscribe, sendBinary: vi.fn() })
     })
 
@@ -261,6 +271,7 @@ describe('runtime file client', () => {
       },
       firstPayload
     )
+
     const secondStop = await subscribeRuntimeFileChanges(
       {
         settings: { activeRuntimeEnvironmentId: 'env-1' },
@@ -319,6 +330,7 @@ describe('runtime file client', () => {
     let onResponse: ((response: unknown) => void) | undefined
     runtimeEnvironmentSubscribe.mockImplementation((_args, callbacks) => {
       onResponse = callbacks.onResponse
+
       return Promise.resolve({ unsubscribe, sendBinary: vi.fn() })
     })
 
@@ -357,6 +369,7 @@ describe('runtime file client', () => {
     let onResponse: ((response: unknown) => void) | undefined
     runtimeEnvironmentSubscribe.mockImplementation((_args, callbacks) => {
       onResponse = callbacks.onResponse
+
       return Promise.resolve({ unsubscribe, sendBinary: vi.fn() })
     })
 

@@ -59,6 +59,7 @@ describe('image item translation', () => {
       savedPath: '/remote/image.png',
       result: 'A'.repeat(100_000)
     })
+
     expect(body).toEqual({
       kind: 'message',
       role: 'assistant',
@@ -68,9 +69,11 @@ describe('image item translation', () => {
       ]
     })
     expect(AgentJournalItemBodySchema.safeParse(body).success).toBe(true)
+
     const [message] = projectStructuredItemsToNativeChat([
       { itemId: 'gen', revision: 1, sequence: 1, observedAt: 1, body: body! }
     ])
+
     expect(message?.blocks).toEqual(body?.kind === 'message' ? body.blocks : [])
   })
   it.each(['AAAA', 'data:image/png;base64,AAAA'])(
@@ -97,6 +100,7 @@ describe('image item translation', () => {
         status: 'completed',
         result
       })
+
       expect(body).toEqual({
         kind: 'message',
         role: 'assistant',

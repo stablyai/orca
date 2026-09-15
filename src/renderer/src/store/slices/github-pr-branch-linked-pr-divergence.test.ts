@@ -34,12 +34,15 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const branch = 'feature/unlinked-direct-pr'
     const worktreeId = 'wt-unlinked-direct-pr'
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
     let resolveRefresh: (
       value: Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>
     ) => void = () => {}
+
     const refresh = new Promise<Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>>((resolve) => {
       resolveRefresh = resolve
     })
+
     mockApi.gh.refreshPRNow.mockReturnValueOnce(refresh)
 
     store.setState({
@@ -67,6 +70,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       worktreeId,
       linkedPRNumber: 12
     })
+
     store.setState({
       worktreesByRepo: {
         [repoId]: [
@@ -107,6 +111,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/new-work'
     const worktreeId = 'wt-diverged-linked-pr'
+
     const worktree = makePRRefreshWorktree({
       id: worktreeId,
       repoId,
@@ -114,12 +119,14 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       head: 'current-head',
       linkedPR: 12
     })
+
     const updateWorktreeMeta = installLinkedPRClearStub(store, {
       repoId,
       repoPath,
       branch,
       worktree
     })
+
     mockApi.gh.refreshPRNow.mockResolvedValueOnce({
       kind: 'found',
       pr: makePR({
@@ -155,18 +162,21 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/current'
     const worktreeId = 'wt-stale-open-pr'
+
     const stalePR = makePR({
       number: 12,
       title: 'Stale linked PR',
       headSha: 'old-head',
       headRefName: 'feature/old'
     })
+
     const currentPR = makePR({
       number: 13,
       title: 'Current branch PR',
       headSha: 'current-head',
       headRefName: branch
     })
+
     const updateWorktreeMeta = installLinkedPRClearStub(store, {
       repoId,
       repoPath,
@@ -179,6 +189,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         linkedPR: 12
       })
     })
+
     mockApi.gh.refreshPRNow
       .mockResolvedValueOnce({ kind: 'found', pr: stalePR, fetchedAt: 2 })
       .mockResolvedValueOnce({ kind: 'found', pr: currentPR, fetchedAt: 3 })
@@ -220,6 +231,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/cached-diverged'
     const worktreeId = 'wt-cached-diverged'
+
     const updateWorktreeMeta = installLinkedPRClearStub(store, {
       repoId,
       repoPath,
@@ -232,6 +244,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         linkedPR: 12
       })
     })
+
     store.setState({
       prCache: {
         [`${repoId}::${branch}`]: {
@@ -268,6 +281,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/at-pr-head'
     const worktreeId = 'wt-at-pr-head'
+
     const updateWorktreeMeta = installLinkedPRClearStub(store, {
       repoId,
       repoPath,
@@ -280,6 +294,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         linkedPR: 12
       })
     })
+
     mockApi.gh.refreshPRNow.mockResolvedValueOnce({
       kind: 'found',
       pr: makePR({
@@ -308,6 +323,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/contained'
     const worktreeId = 'wt-contained'
+
     const updateWorktreeMeta = installLinkedPRClearStub(store, {
       repoId,
       repoPath,
@@ -320,6 +336,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         linkedPR: 12
       })
     })
+
     mockApi.gh.refreshPRNow.mockResolvedValueOnce({
       kind: 'found',
       pr: makePR({
@@ -349,6 +366,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/open-pr'
     const worktreeId = 'wt-open-pr'
+
     const updateWorktreeMeta = installLinkedPRClearStub(store, {
       repoId,
       repoPath,
@@ -361,6 +379,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         linkedPR: 12
       })
     })
+
     mockApi.gh.refreshPRNow.mockResolvedValueOnce({
       kind: 'found',
       pr: makePR({
@@ -388,6 +407,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/null-pr'
     const worktreeId = 'wt-null-pr'
+
     const updateWorktreeMeta = installLinkedPRClearStub(store, {
       repoId,
       repoPath,
@@ -400,6 +420,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         linkedPR: 12
       })
     })
+
     mockApi.gh.refreshPRNow.mockResolvedValueOnce({ kind: 'no-pr', fetchedAt: 2 })
 
     await store.getState().fetchPRForBranch(repoPath, branch, {
@@ -418,6 +439,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/unknown-probe'
     const worktreeId = 'wt-unknown-probe'
+
     const updateWorktreeMeta = installLinkedPRClearStub(store, {
       repoId,
       repoPath,
@@ -430,6 +452,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         linkedPR: 12
       })
     })
+
     mockApi.gh.refreshPRNow.mockResolvedValueOnce({
       kind: 'found',
       pr: makePR({
@@ -458,12 +481,15 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/relinked'
     const worktreeId = 'wt-relinked'
+
     let resolveRefresh: (
       value: Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>
     ) => void = () => {}
+
     const refresh = new Promise<Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>>((resolve) => {
       resolveRefresh = resolve
     })
+
     const updateWorktreeMeta = installLinkedPRClearStub(store, {
       repoId,
       repoPath,
@@ -476,6 +502,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         linkedPR: 12
       })
     })
+
     mockApi.gh.refreshPRNow.mockReturnValueOnce(refresh)
 
     const request = store.getState().fetchPRForBranch(repoPath, branch, {
@@ -484,6 +511,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       worktreeId,
       linkedPRNumber: 12
     })
+
     store.setState({
       worktreesByRepo: {
         [repoId]: [
@@ -519,12 +547,15 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/head-moved'
     const worktreeId = 'wt-head-moved'
+
     let resolveRefresh: (
       value: Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>
     ) => void = () => {}
+
     const refresh = new Promise<Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>>((resolve) => {
       resolveRefresh = resolve
     })
+
     const updateWorktreeMeta = installLinkedPRClearStub(store, {
       repoId,
       repoPath,
@@ -537,6 +568,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         linkedPR: 12
       })
     })
+
     mockApi.gh.refreshPRNow.mockReturnValueOnce(refresh)
 
     const request = store.getState().fetchPRForBranch(repoPath, branch, {
@@ -545,6 +577,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       worktreeId,
       linkedPRNumber: 12
     })
+
     store.setState({
       worktreesByRepo: {
         [repoId]: [

@@ -29,21 +29,37 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
+
 const linearStatusLocal = vi.fn()
+
 const linearSearchIssuesLocal = vi.fn()
+
 const linearListIssuesLocal = vi.fn()
+
 const linearCreateIssueLocal = vi.fn()
+
 const linearCreateProjectLocal = vi.fn()
+
 const linearUpdateIssueLocal = vi.fn()
+
 const linearListTeamsLocal = vi.fn()
+
 const linearListProjectsLocal = vi.fn()
+
 const linearGetCustomViewLocal = vi.fn()
+
 const linearGetProjectLocal = vi.fn()
+
 const linearListProjectIssuesLocal = vi.fn()
+
 const linearListCustomViewsLocal = vi.fn()
+
 const linearListCustomViewIssuesLocal = vi.fn()
+
 const linearListCustomViewProjectsLocal = vi.fn()
+
 const linearSelectWorkspaceLocal = vi.fn()
 
 beforeEach(() => {
@@ -356,11 +372,13 @@ describe('runtime linear client', () => {
       _meta: { runtimeId: 'runtime-old' }
     })
     const oldServerStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+
     if (oldServerStatus.ok) {
       oldServerStatus.result.capabilities = oldServerStatus.result.capabilities?.filter(
         (capability) => capability !== 'linear.issue-attribute-filter.v1'
       )
     }
+
     runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
       args.method === 'status.get' ? oldServerStatus : runtimeEnvironmentCall(args)
     )

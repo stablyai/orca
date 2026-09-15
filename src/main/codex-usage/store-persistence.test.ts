@@ -41,6 +41,7 @@ describe('CodexUsageStore', () => {
       join(storeEnv.tempUserData, 'orca-codex-usage.json'),
       'utf-8'
     )
+
     expect(scanCodexUsageFiles).toHaveBeenCalledWith([], [])
     expect(persistedJson).toBe(JSON.stringify(JSON.parse(persistedJson)))
   })

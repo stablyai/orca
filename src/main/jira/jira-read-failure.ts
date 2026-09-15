@@ -14,10 +14,13 @@ export async function withJiraDeadline<T>(
   const controller = new AbortController()
   const abort = (): void => controller.abort()
   signal?.addEventListener('abort', abort, { once: true })
+
   if (signal?.aborted) {
     controller.abort()
   }
+
   const timer = setTimeout(abort, timeoutMs)
+
   try {
     return await run(controller.signal)
   } finally {
@@ -30,11 +33,13 @@ export function settleJiraSummaryRead<T>(read: Promise<T>, signal: AbortSignal):
   if (signal.aborted) {
     return Promise.reject(new Error('Jira summary lookup aborted'))
   }
+
   return new Promise((resolve, reject) => {
     const handleAbort = (): void => {
       cleanup()
       reject(new Error('Jira summary lookup aborted'))
     }
+
     const cleanup = (): void => signal.removeEventListener('abort', handleAbort)
     signal.addEventListener('abort', handleAbort, { once: true })
     void read.then(
@@ -54,12 +59,15 @@ export function getErrorStatus(error: unknown): number | null {
   if (!error || typeof error !== 'object' || !('status' in error)) {
     return null
   }
+
   const status = (error as { status?: unknown }).status
+
   return typeof status === 'number' && Number.isFinite(status) ? status : null
 }
 
 export function toIssueSearchFailureError(error: unknown): unknown {
   const status = getErrorStatus(error)
+
   if (
     status === null ||
     !(error instanceof Error) ||
@@ -67,6 +75,7 @@ export function toIssueSearchFailureError(error: unknown): unknown {
   ) {
     return error
   }
+
   return new Error(`Error ${status}: ${error.message}`)
 }
 

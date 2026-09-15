@@ -53,6 +53,7 @@ export function resolvePaneTitleDecision(input: ResolvePaneTitleDecisionInput): 
     input.displayOwnerAgentType,
     input.displayOwnerIsLaunch === true
   )
+
   const rendererPolicy = resolvePaneRendererPolicy({
     rawTitle: input.rawTitle,
     ownerAgentType: input.rendererOwnerAgentType,
@@ -60,5 +61,6 @@ export function resolvePaneTitleDecision(input: ResolvePaneTitleDecisionInput): 
     webglUnavailable: input.webglUnavailable,
     inContextLossContainment: input.inContextLossContainment
   })
+
   return { displayTitle, rawTitle: input.rawTitle, rendererPolicy }
 }

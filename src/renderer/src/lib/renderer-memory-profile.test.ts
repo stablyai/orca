@@ -15,6 +15,7 @@ afterEach(() => {
   while (unregisters.length > 0) {
     unregisters.pop()?.()
   }
+
   vi.restoreAllMocks()
 })
 
@@ -57,6 +58,7 @@ describe('collectRendererMemoryProfileCounts', () => {
 
   it('stops reading a runaway contributor after the output budget', () => {
     let reads = 0
+
     const contribution = Object.fromEntries(
       Array.from({ length: 500 }, (_, index) => [
         `key${index}`,
@@ -64,11 +66,13 @@ describe('collectRendererMemoryProfileCounts', () => {
           enumerable: true,
           get: () => {
             reads += 1
+
             return index
           }
         }
       ])
     )
+
     const counts = Object.defineProperties({}, contribution) as Record<string, number>
     register('runaway', () => counts)
 
@@ -101,9 +105,11 @@ describe('collectRendererMemoryProfileCounts', () => {
   it('does not retain contributors beyond the registry budget', () => {
     const firstUnregister = registerRendererMemoryProfileContributor('empty-0', () => ({}))
     unregisters.push(firstUnregister)
+
     for (let index = 1; index < 64; index += 1) {
       register(`empty-${index}`, () => ({}))
     }
+
     const overflowContributor = vi.fn(() => ({ retained: 1 }))
     register('overflow', overflowContributor)
 
@@ -117,6 +123,7 @@ describe('collectRendererMemoryProfileCounts', () => {
     const inherited = Object.fromEntries(
       Array.from({ length: 100 }, (_, index) => [`inherited${index}`, index])
     )
+
     register('inherited', () => Object.create(inherited) as Record<string, number>)
     register('oversized-key', () => ({ ['x'.repeat(10_000)]: 1, valid: 2 }))
     const hasOwnSpy = vi.spyOn(Object, 'hasOwn')

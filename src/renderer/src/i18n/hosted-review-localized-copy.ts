@@ -31,6 +31,7 @@ export function localizedHostedReviewCopy(
       providerName: translate('auto.i18n.hostedReview.copy.91b5c8d7e6', 'GitLab')
     }
   }
+
   if (provider === 'azure-devops') {
     return {
       shortLabel: translate('auto.i18n.hostedReview.copy.f0a4b8c2d1', 'PR'),
@@ -39,6 +40,7 @@ export function localizedHostedReviewCopy(
       providerName: 'Azure DevOps'
     }
   }
+
   if (provider === 'gitea') {
     return {
       shortLabel: translate('auto.i18n.hostedReview.copy.f0a4b8c2d1', 'PR'),
@@ -47,6 +49,7 @@ export function localizedHostedReviewCopy(
       providerName: 'Gitea'
     }
   }
+
   if (provider === 'bitbucket') {
     return {
       shortLabel: translate('auto.i18n.hostedReview.copy.f0a4b8c2d1', 'PR'),
@@ -55,6 +58,7 @@ export function localizedHostedReviewCopy(
       providerName: 'Bitbucket'
     }
   }
+
   return {
     shortLabel: translate('auto.i18n.hostedReview.copy.f0a4b8c2d1', 'PR'),
     reviewLabel: translate('auto.i18n.hostedReview.copy.e9f3a7b1c0', 'pull request'),

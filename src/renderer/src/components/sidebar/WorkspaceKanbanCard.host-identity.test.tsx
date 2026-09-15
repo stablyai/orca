@@ -31,6 +31,7 @@ afterEach(cleanup)
 describe('WorkspaceKanbanCard host identity', () => {
   it('keeps the DOM and selection gesture scoped to one host', () => {
     const onSelectionGesture = vi.fn(() => false)
+
     const { container } = render(
       <WorkspaceKanbanCard
         worktree={makeWorktree({ id: 'shared', repoId: 'repo', hostId: 'ssh:host-b' })}

@@ -40,6 +40,7 @@ function RunLog({ output }: { output: string }): React.JSX.Element | null {
   if (!output.trim()) {
     return null
   }
+
   return (
     <Collapsible className="min-w-0">
       <CollapsibleTrigger asChild>
@@ -67,11 +68,13 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const state = useSkillFreshness(activeSkillRuntime.canUseLocalSkillFreshness)
   const run = useSkillUpdateRun()
+
   const open = useSyncExternalStore(
     subscribeSkillFreshnessUpdateDialog,
     getSkillFreshnessUpdateDialogRequest,
     getSkillFreshnessUpdateDialogRequest
   )
+
   const [copied, setCopied] = useState(false)
 
   // Why: settling a run notifies every skills surface, and that refresh nulls the
@@ -80,9 +83,11 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
   // of blanking the dialog at the exact moment the result appears. Eligibility
   // below still reads the live snapshot, so nothing is authorized off stale bytes.
   const lastInventoryRef = useRef<SkillFreshnessInventory | null>(null)
+
   if (state.inventory) {
     lastInventoryRef.current = state.inventory
   }
+
   const inventory = state.inventory ?? (state.loading ? lastInventoryRef.current : null)
   const eligibleNames = useMemo(() => state.inventory?.eligibleUpdateNames ?? [], [state.inventory])
   // Display only. The action still fires `eligibleNames`, so a re-scan in flight
@@ -98,6 +103,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
   // run, and regrouping the whole inventory per chunk would re-render each row.
   const runNamesKey = run.state === 'idle' ? '' : run.names.join('\n')
   const runNames = useMemo(() => (runNamesKey ? runNamesKey.split('\n') : []), [runNamesKey])
+
   const groups = useMemo(
     () =>
       inventory
@@ -105,11 +111,13 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
         : [],
     [inventory, runNames]
   )
+
   const hasBlockedGroup = groups.some((group) => group.status === 'cannot-update')
   const blockedCount = groups.filter((group) => group.status === 'cannot-update').length
   // Retained: the list keeps the last known folders on screen through a re-scan, the
   // same way the rows above stay put rather than blanking.
   const scanIssues = inventory?.scanIssues ?? []
+
   // Why: the headline reads the LIVE snapshot, not the retained one — the two
   // disagree for the whole loading window, and pairing a retained "eligible" with
   // a live count of 0 renders "0 updates available" over rows badged "Update
@@ -126,16 +134,20 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
   // transition, so pressing Update changes each row's leading icon in place
   // instead of swapping the dialog's body for a different component.
   const failedNamesKey = run.state === 'error' ? run.failedNames.join('\n') : ''
+
   const rows = useMemo(() => {
     const failed = new Set(failedNamesKey ? failedNamesKey.split('\n') : [])
     const inRun = new Set(runNames)
+
     return groups.map((group) => {
       if (inRun.has(group.name)) {
         if (isRunning) {
           return { group, state: 'pending' as const }
         }
+
         return { group, state: failed.has(group.name) ? ('failed' as const) : ('done' as const) }
       }
+
       return {
         group,
         state: group.status === 'cannot-update' ? ('blocked' as const) : ('available' as const)
@@ -147,19 +159,23 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
     if (next) {
       return
     }
+
     // Why: closing never cancels. The run is owned by main and keeps going; the
     // status-bar segment carries it from here.
     consumeSkillFreshnessUpdateDialogRequest()
     setCopied(false)
+
     // Don't carry a finished session's rows into the next open — but a live run
     // keeps its own, or reopening from the status segment mid-run would land on
     // an empty list while the close's own re-scan is still reading disk.
     if (run.state === 'idle') {
       lastInventoryRef.current = null
     }
+
     if (showResult) {
       void acknowledgeSkillUpdateRun()
     }
+
     notifyInstalledAgentSkillsChanged()
   }
 
@@ -171,9 +187,11 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
     const command = buildTargetedSkillUpdateCommand(
       run.state === 'error' ? run.failedNames : eligibleNames
     )
+
     if (!command) {
       return
     }
+
     // Clipboard writes reject on a denied permission or an unfocused document;
     // without this the button just never flips to "Copied".
     void navigator.clipboard
@@ -201,6 +219,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
         </div>
       )
     }
+
     if (isRunning) {
       return (
         <div className="space-y-1">
@@ -226,6 +245,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
         </div>
       )
     }
+
     if (run.state === 'success') {
       return (
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -243,8 +263,10 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
         </div>
       )
     }
+
     if (run.state === 'error') {
       const updated = run.names.length - run.failedNames.length
+
       return (
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
           <AlertTriangle className="size-4 text-destructive" />
@@ -256,6 +278,7 @@ export function SkillFreshnessUpdateDialog(): React.JSX.Element {
         </div>
       )
     }
+
     return (
       <SummaryHeadline
         kind={summaryKind}

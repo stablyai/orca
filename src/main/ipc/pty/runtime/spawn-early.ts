@@ -11,6 +11,7 @@ export function adoptMaterializedRuntimePtySpawn(
   startupAlreadyAwaited = false
 ): Promise<PtySpawnResult | null> | PtySpawnResult | null {
   const args = ctx.args
+
   // Why: the re-entry after the startup await must not re-mint the lifecycle
   // sequence or re-snapshot routes taken before the barrier.
   if (!startupAlreadyAwaited) {
@@ -28,17 +29,23 @@ export function adoptMaterializedRuntimePtySpawn(
         )
       : new Map<string, CodexPaneHomeRoute | null>()
   }
+
   const startupPromise = ctx.deps.getLocalPtyStartupPromise(args.connectionId)
+
   if (startupPromise && !startupAlreadyAwaited) {
     return startupPromise.then(() => adoptMaterializedRuntimePtySpawn(ctx, true))
   }
+
   if (!ctx.preAdoptedStablePane?.materialized) {
     return null
   }
+
   const handle = ctx.preAdoptedStablePane.owner.handle ?? args.preAllocatedHandle
+
   if (!handle) {
     throw new Error('terminal_pane_owner_unknown')
   }
+
   ctx.result = {
     id: ctx.preAdoptedStablePane.result.id,
     ...(ctx.preAdoptedStablePane.result.incarnationId
@@ -57,6 +64,7 @@ export function adoptMaterializedRuntimePtySpawn(
     { isReattach: true, wslDistro: ctx.preAdoptedStablePane.result.wslDistro },
     args.connectionId
   )
+
   if (!args.connectionId) {
     ctx.deps.options?.onCodexHomePtySpawned?.({
       id: ctx.result.id,
@@ -67,5 +75,6 @@ export function adoptMaterializedRuntimePtySpawn(
       ...codexReattachedHomeRouteField(ctx.reattachedCodexHomeRoutes, ctx.result.id, true)
     })
   }
+
   return ctx.result
 }

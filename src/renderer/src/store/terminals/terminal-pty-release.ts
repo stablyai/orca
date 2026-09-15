@@ -18,6 +18,7 @@ export function createTerminalPtyReleaseActions(
         // Why: an owner exit can arrive before its post-stop inventory; keep the renderer binding retryable until verification commits.
         return
       }
+
       let worktreeId: string | null = null
       let wasActivationSpawn = false
       let preservesDirectSshContinuationGap = false
@@ -27,20 +28,26 @@ export function createTerminalPtyReleaseActions(
         const remainingPtyIds = ptyId ? existingPtyIds.filter((id) => id !== ptyId) : []
         const liveBinding = s.directSshLivePtyBindingByTabId[tabId]
         let nextTabsByWorktree = s.tabsByWorktree
+
         for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
           const index = tabs.findIndex((t) => t.id === tabId)
+
           if (index === -1) {
             continue
           }
+
           worktreeId = wId
           const tab = tabs[index]
+
           if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
             wasActivationSpawn = true
           }
+
           if (!ptyId) {
             isRemoteRuntimeMirror =
               existingPtyIds.length > 0 && existingPtyIds.every((id) => isRemoteRuntimePtyId(id))
           }
+
           // Why: consume pendingActivationSpawn on real activation clears, but keep it when clearing a stale wake-hint id — its fallback spawn still needs the suppression.
           const { pendingActivationSpawn: _unused, ...rest } = tab
           void _unused
@@ -52,12 +59,15 @@ export function createTerminalPtyReleaseActions(
             getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0 &&
             isCurrentDirectSshAuthority(s, liveBinding.authority)
           )
+
           const shouldRetainActivationSpawn =
             preservesDirectSshContinuationGap ||
             (wasActivationSpawn && ptyId != null && !existingPtyIds.includes(ptyId))
+
           const nextPendingActivationSpawn = shouldRetainActivationSpawn
             ? tab.pendingActivationSpawn
             : consumePendingActivationSpawn(tab.pendingActivationSpawn)
+
           if (tab.pendingActivationSpawn || tab.ptyId !== nextTabPtyId) {
             const nextTabs = [...tabs]
             nextTabs[index] = {
@@ -69,17 +79,22 @@ export function createTerminalPtyReleaseActions(
             }
             nextTabsByWorktree = { ...s.tabsByWorktree, [wId]: nextTabs }
           }
+
           break
         }
+
         const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
+
         if (worktreeId) {
           nextPtyIdsByTabId[tabId] = remainingPtyIds
         } else {
           // Why: repo purge can retire the owning tab before its async exit arrives; don't resurrect an orphan PTY index.
           delete nextPtyIdsByTabId[tabId]
         }
+
         const nextPendingCodexPaneRestartIds = { ...s.pendingCodexPaneRestartIds }
         const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
+
         if (ptyId) {
           delete nextPendingCodexPaneRestartIds[ptyId]
           delete nextCodexRestartNoticeByPtyId[ptyId]
@@ -89,8 +104,10 @@ export function createTerminalPtyReleaseActions(
             delete nextCodexRestartNoticeByPtyId[currentPtyId]
           }
         }
+
         // Why: an explicit exit drops the dead relay ID; bulk clears retain it for relay grace.
         const nextLastKnownRelay = { ...s.lastKnownRelayPtyIdByTabId }
+
         if (ptyId && nextLastKnownRelay[tabId] === ptyId) {
           // Why: the relay slot holds ONE id per tab (the last pane to bind). If
           // that pane exits, promote a surviving pane instead of clearing — else the
@@ -98,14 +115,17 @@ export function createTerminalPtyReleaseActions(
           // relay-drop bulk-clear lets the orphan sweep delete the still-live tab
           // (the orphan predicate reads this map but not layout leaves) (#9911).
           const survivingPtyId = remainingPtyIds.at(-1)
+
           if (survivingPtyId) {
             nextLastKnownRelay[tabId] = survivingPtyId
           } else {
             delete nextLastKnownRelay[tabId]
           }
         }
+
         let nextDirectSshPaneRetryByTabId = s.directSshPaneRetryByTabId
         const pendingRetry = s.directSshPaneRetryByTabId[tabId]
+
         if (
           pendingRetry &&
           (!ptyId ||
@@ -115,12 +135,15 @@ export function createTerminalPtyReleaseActions(
           nextDirectSshPaneRetryByTabId = { ...s.directSshPaneRetryByTabId }
           delete nextDirectSshPaneRetryByTabId[tabId]
         }
+
         let nextDirectSshLivePtyBindingByTabId = s.directSshLivePtyBindingByTabId
+
         if (liveBinding && (!ptyId || liveBinding.ptyId === ptyId)) {
           nextDirectSshLivePtyBindingByTabId = {
             ...s.directSshLivePtyBindingByTabId
           }
           const promotedPtyId = ptyId ? remainingPtyIds.at(-1) : undefined
+
           if (
             promotedPtyId &&
             parseAppSshPtyId(promotedPtyId)?.connectionId === liveBinding.authority.targetId &&
@@ -134,6 +157,7 @@ export function createTerminalPtyReleaseActions(
             delete nextDirectSshLivePtyBindingByTabId[tabId]
           }
         }
+
         return {
           ...(nextTabsByWorktree !== s.tabsByWorktree
             ? { tabsByWorktree: nextTabsByWorktree }
@@ -146,6 +170,7 @@ export function createTerminalPtyReleaseActions(
           directSshLivePtyBindingByTabId: nextDirectSshLivePtyBindingByTabId
         }
       })
+
       // Bump activity on PTY exit, but skip intentional shutdowns (suppressed exits) and click-driven pane unmounts (pendingActivationSpawn).
       if (
         worktreeId &&

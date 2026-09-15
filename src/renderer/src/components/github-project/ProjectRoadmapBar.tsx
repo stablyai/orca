@@ -33,12 +33,14 @@ export default function ProjectRoadmapBar({
   const colors = chipColor ? singleSelectChipColors(chipColor) : labelChipColors('')
   const interactive = row.itemType !== 'REDACTED' && row.itemType !== 'DRAFT_ISSUE'
   const dates = formatRoadmapSpan(span, locale)
+
   // Why: shared by the visible text, aria-label, and tooltip — a redacted row
   // must never announce or render an empty name.
   const title =
     row.itemType === 'REDACTED'
       ? translate('auto.components.github.project.ProjectRoadmapBar.7d1220d979', 'Restricted item')
       : row.content.title
+
   const bar = (
     <button
       type="button"
@@ -78,6 +80,7 @@ export default function ProjectRoadmapBar({
       <span className="truncate">{title}</span>
     </button>
   )
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>{bar}</TooltipTrigger>

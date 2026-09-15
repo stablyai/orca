@@ -55,6 +55,7 @@ export function useCombinedDiffViewRestore({
     shouldAutoReloadFromGitStatus,
     treeMode
   } = entrySet
+
   const {
     generationRef,
     deferredLoadRequestsRef,
@@ -72,6 +73,7 @@ export function useCombinedDiffViewRestore({
     offset: combinedDiffScrollTopCache.get(viewStateKey) ?? 0,
     anchor: combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
   }))
+
   const scrollOffsetRef = useRef(restoreSeed.offset)
   const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(restoreSeed.anchor)
   const latestDomScrollAnchorRef = useRef<VirtualizedScrollAnchor>(restoreSeed.anchor)
@@ -82,8 +84,10 @@ export function useCombinedDiffViewRestore({
     entrySignature: string
     hasUncommittedEntriesSnapshot: boolean
   } | null>(null)
+
   useLayoutEffect(() => {
     const initializedEntryState = initializedEntryStateRef.current
+
     if (
       initializedEntryState?.viewStateKey === viewStateKey &&
       initializedEntryState.entrySignature === entrySignature &&
@@ -91,6 +95,7 @@ export function useCombinedDiffViewRestore({
     ) {
       return
     }
+
     initializedEntryStateRef.current = {
       viewStateKey,
       entrySignature,
@@ -98,6 +103,7 @@ export function useCombinedDiffViewRestore({
     }
     deferredLoadRequestsRef.current.clear()
     const cached = combinedDiffViewStateCache.get(viewStateKey)
+
     const canRestoreSnapshotSectionsByKey =
       hasUncommittedEntriesSnapshot &&
       cached !== undefined &&
@@ -106,6 +112,7 @@ export function useCombinedDiffViewRestore({
         sections: cached.sections,
         treeMode
       })
+
     const canRestoreCachedSections =
       cached &&
       (cached.entrySignature === entrySignature || canRestoreSnapshotSectionsByKey) &&
@@ -113,8 +120,10 @@ export function useCombinedDiffViewRestore({
         (cached.gitStatusSignature ?? '') ===
           buildCombinedGitStatusSignature(cached.sections, gitStatusEntries)) &&
       (cached.sections.length > 0 || entries.length === 0)
+
     if (canRestoreCachedSections && cached) {
       const collapsedPreference = combinedDiffViewPreferences.collapsed
+
       const restoredSections =
         collapsedPreference === null
           ? cached.sections
@@ -122,12 +131,14 @@ export function useCombinedDiffViewRestore({
               ...section,
               collapsed: collapsedPreference
             }))
+
       setSections(restoredSections)
       setSectionHeights(cached.sectionHeights)
       setSideBySide(combinedDiffViewPreferences.sideBySide ?? cached.sideBySide)
       loadedIndicesRef.current = new Set(
         cached.loadedIndices.filter((index) => {
           const section = restoredSections[index]
+
           return section !== undefined && isCombinedDiffSectionViewed(section)
         })
       )
@@ -135,6 +146,7 @@ export function useCombinedDiffViewRestore({
       scrollOffsetRef.current = combinedDiffScrollTopCache.get(viewStateKey) ?? cached.scrollTop
       scrollAnchorRef.current = combinedDiffScrollAnchorCache.get(viewStateKey) ?? null
       latestDomScrollAnchorRef.current = scrollAnchorRef.current
+
       return
     }
 
@@ -156,6 +168,7 @@ export function useCombinedDiffViewRestore({
           submodule: 'submodule' in entry ? entry.submodule : undefined,
           hasCountedSiblings: countedPasses.has(getCombinedDiffCountingPassKey(entry))
         })
+
         return {
           key: getCombinedDiffFileTreeSectionKey(treeMode, entry),
           path: entry.path,

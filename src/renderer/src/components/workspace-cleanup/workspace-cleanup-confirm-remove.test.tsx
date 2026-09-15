@@ -20,6 +20,7 @@ vi.mock('./workspace-cleanup-candidate-list', () => ({
     renderRow: (row: Row, index: number) => ReactNode
   }) => {
     listProbe(rows.length)
+
     return <>{rows.slice(0, 5).map(renderRow)}</>
   }
 }))
@@ -42,6 +43,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 let container: HTMLDivElement
+
 let root: Root
 
 describe('WorkspaceCleanupConfirmRemove', () => {
@@ -119,6 +121,7 @@ describe('WorkspaceCleanupConfirmRemove', () => {
       'Diff notes: 4',
       'Completed agents: 5'
     ]
+
     const renderedLabels = Array.from(container.querySelectorAll('span'))
       .map((element) => element.textContent)
       .filter((label): label is string => labels.includes(label ?? ''))
@@ -129,6 +132,7 @@ describe('WorkspaceCleanupConfirmRemove', () => {
 
   it('visibly and accessibly identifies each host for colliding confirmations', () => {
     const local = makeFacetCandidate({ executionHostId: 'local' })
+
     const remote = makeFacetCandidate({
       connectionId: 'builder',
       executionHostId: 'ssh:builder'
@@ -151,6 +155,7 @@ describe('WorkspaceCleanupConfirmRemove', () => {
     expect(getWorkspaceCleanupCandidateAccessibleName(local)).not.toBe(
       getWorkspaceCleanupCandidateAccessibleName(remote)
     )
+
     for (const candidate of [local, remote]) {
       const name = getWorkspaceCleanupCandidateAccessibleName(candidate)
       const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate)
@@ -170,6 +175,7 @@ describe('WorkspaceCleanupConfirmRemove', () => {
         checkedAt: null
       }
     })
+
     const unknownBase = makeFacetCandidate({
       worktreeId: 'repo-1::/unknown-base',
       blockers: ['unknown-base']

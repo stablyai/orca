@@ -37,9 +37,11 @@ export function clearPaneCwdDeferredSpawn(
   if (!existing || (expectedPendingCwd && existing.pendingCwd !== expectedPendingCwd)) {
     return existing
   }
+
   if (!existing.deferredSplitSpawn && !existing.pendingCwd) {
     return existing
   }
+
   return { cwd: existing.cwd, confirmed: existing.confirmed }
 }
 
@@ -51,6 +53,7 @@ export function settlePaneCwdDeferredSpawn(
 ): void {
   const existing = paneCwdMap.get(paneId)
   const settled = clearPaneCwdDeferredSpawn(existing, expectedPendingCwd)
+
   if (settled && settled !== existing) {
     paneCwdMap.set(paneId, settled)
   }
@@ -74,6 +77,7 @@ export async function resolveSplitCwd(args: {
 
   // 1) Live OSC 7 wins — no IPC round-trip needed.
   const cached = paneCwdMap.get(sourcePaneId)
+
   if (cached?.confirmed && cached.cwd) {
     return cached.cwd
   }
@@ -86,6 +90,7 @@ export async function resolveSplitCwd(args: {
         window.api.pty.getCwd(sourcePtyId).catch(() => null),
         new Promise<null>((resolve) => setTimeout(() => resolve(null), GET_CWD_TIMEOUT_MS))
       ])
+
       if (ipcCwd) {
         return ipcCwd
       }

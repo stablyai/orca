@@ -23,6 +23,7 @@ function pasteEvent(text: string): ClipboardEvent {
       getData: (type: string) => (type === 'text/plain' ? text : '')
     }
   })
+
   return event
 }
 
@@ -32,15 +33,18 @@ function makeEditor() {
   const model = {}
   let currentModel: object | null = model
   let focused = true
+
   let selection: FakeSelection = {
     startLineNumber: 1,
     startColumn: 1,
     endLineNumber: 1,
     endColumn: 1
   }
+
   let value = ''
   const edits: string[] = []
   const undoStops: number[] = []
+
   const editor = {
     getModel: () => currentModel,
     getContainerDomNode: () => container,
@@ -54,14 +58,17 @@ function makeEditor() {
         edits.push(edit.text)
         value += edit.text
       }
+
       return true
     },
     pushUndoStop: () => {
       undoStops.push(1)
+
       return true
     },
     getValue: () => value
   }
+
   return {
     container,
     editor,
@@ -125,6 +132,7 @@ describe('monaco large text paste', () => {
       onPasteStart: startSpy,
       onPasteResult: resultSpy
     })
+
     await flushPromises()
 
     expect(result).toEqual({ status: 'handled' })
@@ -182,6 +190,7 @@ describe('monaco large text paste', () => {
       directMaxBytes: 1,
       chunkMaxBytes: 64
     })
+
     await flushPromises()
 
     expect(result).toEqual({ status: 'handled' })
@@ -251,6 +260,7 @@ describe('monaco large text paste', () => {
       maxBytes: 8,
       onPasteResult: resultSpy
     })
+
     await flushPromises()
 
     expect(result).toEqual({ status: 'handled' })
@@ -276,6 +286,7 @@ describe('monaco large text paste', () => {
       maxBytes: 5,
       onPasteResult: resultSpy
     })
+
     await flushPromises()
 
     expect(result).toEqual({ status: 'handled' })

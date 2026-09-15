@@ -40,24 +40,30 @@ export function useWorktreeListVirtualizer(args: {
   const getVirtualItemKey = useCallback(
     (index: number) => {
       const row = renderRows[index]
+
       if (!row) {
         return `__stale_${index}`
       }
+
       return getRenderRowKey(row)
     },
     [renderRows]
   )
+
   const getExpectedVirtualRowKey = useCallback(
     (element: Element) => {
       const index = getVirtualRowIndex(element)
       const row = index === null ? undefined : renderRows[index]
+
       return row ? getRenderRowKey(row) : null
     },
     [renderRows]
   )
+
   const isCurrentVirtualRowElement = useCallback(
     (element: Element) => {
       const expectedKey = getExpectedVirtualRowKey(element)
+
       return (
         element.isConnected &&
         expectedKey !== null &&
@@ -66,6 +72,7 @@ export function useWorktreeListVirtualizer(args: {
     },
     [getExpectedVirtualRowKey]
   )
+
   const measureCurrentVirtualRowElement = useCallback(
     (
       element: HTMLDivElement,
@@ -75,6 +82,7 @@ export function useWorktreeListVirtualizer(args: {
       if (!isCurrentVirtualRowElement(element)) {
         const index = getVirtualRowIndex(element)
         const measured = instance.getVirtualItems().find((item) => item.index === index)
+
         // Why: a stale ResizeObserver row after remount would write a wrong height; return current size to no-op it.
         return (
           measured?.size ??
@@ -86,7 +94,9 @@ export function useWorktreeListVirtualizer(args: {
           )
         )
       }
+
       const index = getVirtualRowIndex(element)
+
       if (
         index !== null &&
         (renderRows[index]?.type === 'header' || renderRows[index]?.type === 'host-header')
@@ -98,6 +108,7 @@ export function useWorktreeListVirtualizer(args: {
           activeStickyHeaderIndexRef.current
         )
       }
+
       return measureVirtualElementSize(element, entry, instance)
     },
     [firstHeaderIndex, isCurrentVirtualRowElement, renderRows]
@@ -118,6 +129,7 @@ export function useWorktreeListVirtualizer(args: {
     rangeExtractor: useCallback(
       (range: Range) => {
         stickyRangeStartIndexRef.current = range.startIndex
+
         return extractWorktreeVirtualRowIndexes({
           range,
           stickyHeaderIndexes,
@@ -137,6 +149,7 @@ export function useWorktreeListVirtualizer(args: {
     initialOffset: () => scrollOffsetRef.current,
     getItemKey: getVirtualItemKey
   })
+
   // Why: TanStack's default correction writes scrollTop while cards remeasure mid-wheel, which feels like rubber-banding.
   // TODO(scroll-origin-migration): wall-clock suppression misclassifies under jank; migrate to programmaticScrollMarks + restoreSignal (see CombinedDiffViewer).
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (_item, _delta, instance) =>

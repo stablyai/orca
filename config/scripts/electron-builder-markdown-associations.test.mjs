@@ -5,6 +5,7 @@ import { basename } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 
 const MARKDOWN_EXTENSIONS = ['md', 'markdown', 'mdx']
@@ -41,6 +42,7 @@ describe('electron-builder markdown file associations', () => {
     expect([...associations].map((association) => association.ext).sort()).toEqual(
       [...MARKDOWN_EXTENSIONS].sort()
     )
+
     for (const association of associations) {
       expect(association).toMatchObject({ role: 'Editor', rank: 'Alternate' })
     }
@@ -69,9 +71,11 @@ describe('electron-builder markdown file associations', () => {
     ]) {
       expect(takeover).toMatch(DEFAULT_HANDLER_WRITE)
     }
+
     expect(
       'WriteRegNone SHELL_CONTEXT "Software\\Classes\\.md\\OpenWithProgids" "Orca.Markdown"'
     ).not.toMatch(DEFAULT_HANDLER_WRITE)
+
     // Comment stripping must drop prose that quotes the bad line without swallowing a real
     // one that happens to carry a trailing comment.
     const stripped = stripNsisCommentLines(
@@ -80,6 +84,7 @@ describe('electron-builder markdown file associations', () => {
         '  WriteRegStr SHELL_CONTEXT "Software\\Classes\\.md" "" "$0" ; oops'
       ].join('\n')
     )
+
     expect(stripped.split('\n')).toHaveLength(1)
     expect(stripped).toMatch(DEFAULT_HANDLER_WRITE)
   })
@@ -93,10 +98,12 @@ describe('electron-builder markdown file associations', () => {
       /WriteRegNone\s+SHELL_CONTEXT\s+"Software\\Classes\\\$\{EXT\}\\OpenWithProgids"/
     )
     expect(hooks).toMatch(/!macro\s+ORCA_REGISTER_MARKDOWN_OPEN_WITH\s+EXT/)
+
     for (const ext of MARKDOWN_EXTENSIONS) {
       expect(hooks).toContain(`ORCA_REGISTER_MARKDOWN_OPEN_WITH ".${ext}"`)
       expect(hooks).toContain(`ORCA_UNREGISTER_MARKDOWN_OPEN_WITH ".${ext}"`)
     }
+
     expect(hooks).toMatch(/!macro\s+customInstall\b/)
     expect(hooks).toMatch(/!macro\s+customUnInstall\b/)
   })

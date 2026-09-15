@@ -55,6 +55,7 @@ export function renderTabBarSurface({
     onOpenEntry,
     tabStripChrome = 'default'
   } = props
+
   const {
     resolvedGroupId,
     mobileEmulatorEnabled,
@@ -71,6 +72,7 @@ export function renderTabBarSurface({
     newFileShortcut,
     openMarkdownShortcut
   } = runtime
+
   const {
     newTabMenuOpen,
     setNewTabMenuOpen,
@@ -86,10 +88,12 @@ export function renderTabBarSurface({
     queueFocusAfterNewTabMenuClose,
     showStaticCreateMenuItems
   } = createMenu
+
   const { orderedItems, sortableIds, dropIndicatorByVisibleId } = itemProjection
   const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
   const { tabStripRef, tabStripOverflowState, scrollTabStrip } = tabStripNavigation
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
+
   const renderedItems = renderTabBarItems({
     items: orderedItems,
     props,

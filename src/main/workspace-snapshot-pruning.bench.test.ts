@@ -16,7 +16,9 @@ import {
 } from './workspace-space-analysis-snapshot'
 
 const describeBench = process.env.ORCA_WORKSPACE_SNAPSHOT_PRUNE_BENCH ? describe : describe.skip
+
 const ROW_COUNT = 610
+
 const DELETE_COUNT = 100
 
 describeBench('workspace snapshot bulk pruning', () => {
@@ -33,10 +35,12 @@ describeBench('workspace snapshot bulk pruning', () => {
   it('prunes the measured 610-row/100-delete shape with one write per sidecar', async () => {
     const candidates = Array.from({ length: ROW_COUNT }, (_, index) => makeCandidate(index))
     const worktrees = Array.from({ length: ROW_COUNT }, (_, index) => makeWorktree(index))
+
     const targets = candidates.slice(0, DELETE_COUNT).map((candidate) => ({
       worktreeId: candidate.worktreeId,
       executionHostId: candidate.executionHostId
     }))
+
     await persistWorkspaceCleanupScanResult(
       snapshotDirectory,
       { includeAllWorkspaces: true },
@@ -59,9 +63,11 @@ describeBench('workspace snapshot bulk pruning', () => {
       pruneWorkspaceSpaceAnalysisSnapshots(snapshotDirectory, targets)
     ])
     const pruneMs = performance.now() - startedAt
+
     const cleanupPayload = JSON.parse(
       await readFile(join(snapshotDirectory, 'orca-workspace-cleanup-scan.json'), 'utf-8')
     ) as { result: { candidates: unknown[] } }
+
     const spacePayload = JSON.parse(
       await readFile(join(snapshotDirectory, 'orca-workspace-space-analysis.json'), 'utf-8')
     ) as { analysis: { worktrees: unknown[] } }
@@ -80,6 +86,7 @@ function executionHostId(index: number): 'local' | `ssh:${string}` {
 
 function makeCandidate(index: number): WorkspaceCleanupCandidate {
   const hostId = executionHostId(index)
+
   return {
     worktreeId: `repo-${index % 20}::/workspace-${index}`,
     repoId: `repo-${index % 20}`,
@@ -109,6 +116,7 @@ function makeCandidate(index: number): WorkspaceCleanupCandidate {
 
 function makeWorktree(index: number): WorkspaceSpaceWorktree {
   const candidate = makeCandidate(index)
+
   return {
     worktreeId: candidate.worktreeId,
     repoId: candidate.repoId,
@@ -137,6 +145,7 @@ function makeWorktree(index: number): WorkspaceSpaceWorktree {
 
 function makeRepoSummaries(worktrees: WorkspaceSpaceWorktree[]) {
   const groups = Map.groupBy(worktrees, (row) => `${row.executionHostId ?? 'local'}\0${row.repoId}`)
+
   return [...groups.values()].map((rows) => ({
     repoId: rows[0].repoId,
     executionHostId: rows[0].executionHostId,

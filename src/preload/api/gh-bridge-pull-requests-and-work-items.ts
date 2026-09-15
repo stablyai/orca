@@ -40,7 +40,9 @@ export const ghPullRequestsAndWorkItemsApi = {
   onPRRefreshEvent: (callback: (event: GitHubPRRefreshEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, event: GitHubPRRefreshEvent): void =>
       callback(event)
+
     ipcRenderer.on('gh:prRefreshEvent', listener)
+
     return () => ipcRenderer.removeListener('gh:prRefreshEvent', listener)
   },
   issue: (args: {

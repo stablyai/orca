@@ -16,6 +16,7 @@ import { disposePane } from './pane-lifecycle'
 
 function createPane(options: { loadAddon?: () => void } = {}): ManagedPaneInternal {
   const leafId = '22222222-2222-4222-8222-222222222222' as never
+
   return {
     id: 1,
     leafId,
@@ -63,6 +64,7 @@ function createFittablePane(): ManagedPaneInternal {
   pane.fitAddon.proposeDimensions = vi.fn(() =>
     pane.webglAddon ? { cols: 84, rows: 24 } : { cols: 80, rows: 24 }
   ) as never
+
   return pane
 }
 
@@ -81,6 +83,7 @@ function createPausedPane(display: 'block' | 'none'): {
   setDisplay: (next: 'block' | 'none') => void
 } {
   const pane = createPane()
+
   const renderService: FakeRenderService = {
     _isPaused: true,
     _needsFullRefresh: false,
@@ -91,6 +94,7 @@ function createPausedPane(display: 'block' | 'none'): {
       }
     })
   }
+
   let currentDisplay = display
   const view = { getComputedStyle: () => ({ display: currentDisplay }) }
   const element = { ownerDocument: { defaultView: view }, parentElement: null }
@@ -101,6 +105,7 @@ function createPausedPane(display: 'block' | 'none'): {
     refresh: vi.fn(() => renderService.refreshRows(0, pane.terminal.rows - 1)),
     _core: { _renderService: renderService }
   } as never
+
   return {
     pane,
     renderService,
@@ -117,6 +122,7 @@ describe('terminal WebGL addon lifecycle', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(16)
+
       return 1
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -159,6 +165,7 @@ describe('terminal WebGL addon lifecycle', () => {
 
   it('disposes the constructed addon when loading it fails', () => {
     const disposeSpy = vi.spyOn(WebglAddon.prototype, 'dispose')
+
     const pane = createPane({
       loadAddon: () => {
         throw new Error('WebGL2 not supported null')
@@ -257,6 +264,7 @@ describe('terminal WebGL addon lifecycle', () => {
     const queued: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       queued.push(callback)
+
       return queued.length
     })
     const { pane, renderService, setDisplay } = createPausedPane('none')
@@ -277,6 +285,7 @@ describe('terminal WebGL addon lifecycle', () => {
     const queued: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       queued.push(callback)
+
       return queued.length
     })
     const { pane, renderService } = createPausedPane('none')
@@ -285,6 +294,7 @@ describe('terminal WebGL addon lifecycle', () => {
     presentPaneViewport(pane)
     expect(queued).toHaveLength(1)
     let callbacks = 0
+
     while (queued.length > 0) {
       queued.shift()?.(callbacks * 16)
       callbacks += 1
@@ -326,6 +336,7 @@ describe('terminal WebGL addon lifecycle', () => {
         throw new Error('WebGL2 not supported null')
       }
     })
+
     attachWebgl(failing)
     expect(failing.webglAddon).toBeNull()
     expect(failing.webglAttachFailedSinceRecovery).toBe(true)
@@ -341,6 +352,7 @@ describe('terminal WebGL addon lifecycle', () => {
     const loadAddon = vi.fn(() => {
       throw new Error('WebGL2 not supported null')
     })
+
     const pane = createPane({ loadAddon })
 
     attachWebgl(pane)
@@ -362,6 +374,7 @@ describe('fit-anchored WebGL reattach', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(16)
+
       return 1
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -387,6 +400,7 @@ describe('fit-anchored WebGL reattach', () => {
     const loadAddon = vi.fn(() => {
       throw new Error('WebGL2 not supported null')
     })
+
     const pane = createPane({ loadAddon })
     attachWebgl(pane)
     expect(loadAddon).toHaveBeenCalledTimes(1)
@@ -431,6 +445,7 @@ describe('safeFit drives the fit-anchored WebGL reattach', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(16)
+
       return 1
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -521,6 +536,7 @@ describe('the deferred fit-anchored refit frame', () => {
     const pane = createFittablePane()
 
     safeFit(pane)
+
     // Bounded drain: a cycle would keep queueing frames past the cap.
     for (let index = 0; index < frames.length && index < 8; index += 1) {
       const frame = frames[index]
@@ -542,6 +558,7 @@ describe('deferred WebGL addon load', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(16)
+
       return 1
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -576,6 +593,7 @@ describe('deferred WebGL addon load', () => {
       if (loadShouldFail) {
         throw new Error('chunk load failed')
       }
+
       return {
         WebglAddon: class {
           onContextLoss(): void {}

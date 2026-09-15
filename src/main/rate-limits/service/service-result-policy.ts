@@ -47,6 +47,7 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
       fresh.usageMetadata?.failureKind === 'rate-limited'
         ? RATE_LIMITED_STALE_THRESHOLD_MS
         : STALE_THRESHOLD_MS
+
     if (Date.now() - previous.updatedAt > staleThresholdMs) {
       return fresh
     }
@@ -74,8 +75,10 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
         this.activeFailureStreakByProvider[provider] + 1,
         MAX_ACTIVE_FAILURE_STREAK
       )
+
       return
     }
+
     if (fresh.status === 'ok' || fresh.status === 'unavailable') {
       this.activeFailureStreakByProvider[provider] = 0
     }
@@ -103,10 +106,12 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
         status: 'fetching'
       }
     }
+
     // Why: keep a settled chip visible during background refetch so a persistently failing provider doesn't flash "…" → error each cycle.
     if (current.status === 'ok' || current.status === 'error' || current.status === 'unavailable') {
       return current
     }
+
     return { ...current, status: 'fetching' }
   }
 }

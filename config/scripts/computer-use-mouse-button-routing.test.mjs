@@ -11,15 +11,18 @@ function source(path) {
 function sourceBetween(contents, startMarker, endMarker) {
   const start = contents.indexOf(startMarker)
   const end = contents.indexOf(endMarker, start + startMarker.length)
+
   if (start === -1 || end === -1) {
     throw new Error(`Missing source boundary: ${startMarker} → ${endMarker}`)
   }
+
   return contents.slice(start, end)
 }
 
 describe('computer-use mouse button routing', () => {
   it('maps the macOS middle button onto the otherMouse event family', () => {
     const macOS = source('native/computer-use-macos/Sources/OrcaComputerUseMacOS/main.swift')
+
     const mapping = sourceBetween(
       macOS,
       'extension MouseButtonSelection {',
@@ -35,6 +38,7 @@ describe('computer-use mouse button routing', () => {
 
   it('validates the macOS mouse button before any accessibility shortcut runs', () => {
     const macOS = source('native/computer-use-macos/Sources/OrcaComputerUseMacOS/main.swift')
+
     const click = sourceBetween(
       macOS,
       'private func click(params:',
@@ -49,6 +53,7 @@ describe('computer-use mouse button routing', () => {
 
   it('keeps every platform from resolving a middle click through its accessibility path', () => {
     const windows = source('native/computer-use-windows/runtime.ps1')
+
     const windowsClick = sourceBetween(
       windows,
       '$handledByPattern = $false',

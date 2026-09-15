@@ -27,11 +27,14 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const available = entries.filter(
     (entry) => entry.phase === 'available' || entry.phase === 'failed'
   ).length
+
   const manual = entries.filter((entry) => entry.phase === 'manual').length
   const offline = entries.filter((entry) => entry.phase === 'offline').length
+
   const current = entries.filter(
     (entry) => entry.phase === 'current' || entry.phase === 'updated'
   ).length
+
   const summary = [
     entries.length === 1
       ? translate(

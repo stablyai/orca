@@ -70,11 +70,14 @@ function getWorktreeItemRowGeometry(
   nested: boolean
 ): { surfaceInset: number; cardContentIndent: number; lineageChildrenInlineOffset?: number } {
   const projectGroupId = itemRow.repo?.projectGroupId
+
   const isFolderBackedRepoChild =
     ctx.groupBy === 'repo' &&
     Boolean(projectGroupId && ctx.folderBackedProjectGroupIds.has(projectGroupId))
+
   // Why: experimental in-card lineage inherits the parent surface; legacy cards keep depth-based nested geometry.
   const paddingDepth = nested ? Math.max(0, itemRow.depth - 1) : itemRow.depth
+
   const getCardContentIndent = (lineageDepth: number): number =>
     isFolderBackedRepoChild
       ? getFolderBackedRepoWorktreeCardContentIndent({
@@ -86,6 +89,7 @@ function getWorktreeItemRowGeometry(
           groupDepth: itemRow.groupDepth,
           lineageDepth
         })
+
   const nestedLineageGeometry = nested
     ? getLineageNestedRowGeometry({
         experimentalNewWorktreeCardStyle: ctx.settings?.experimentalNewWorktreeCardStyle === true,
@@ -93,6 +97,7 @@ function getWorktreeItemRowGeometry(
         lineageDepth: itemRow.depth
       })
     : null
+
   // Why: grouped rows inherit their header depth, but the card surface still spans the full row.
   const paddingLeft =
     nested && ctx.groupBy !== 'none'
@@ -102,6 +107,7 @@ function getWorktreeItemRowGeometry(
           lineageDepth: paddingDepth
         })
       : getCardContentIndent(paddingDepth)
+
   const surfaceInset = nestedLineageGeometry
     ? nestedLineageGeometry.surfaceInset
     : isFolderBackedRepoChild
@@ -113,6 +119,7 @@ function getWorktreeItemRowGeometry(
           isGrouped: ctx.groupBy !== 'none',
           groupDepth: itemRow.groupDepth
         })
+
   return {
     surfaceInset,
     cardContentIndent: nestedLineageGeometry
@@ -131,20 +138,25 @@ export function renderWorktreeItemRow(
 ): React.JSX.Element {
   const { surfaceInset, cardContentIndent, lineageChildrenInlineOffset } =
     getWorktreeItemRowGeometry(ctx, itemRow, nested)
+
   const lineageChildrenStyle = lineageChildren
     ? getLineageChildrenInlineStyle(lineageChildrenInlineOffset ?? LINEAGE_CHILDREN_INLINE_OFFSET)
     : undefined
+
   const worktreeDragGroupKey = ctx.groupKeyByRowKey.get(itemRow.rowKey)
   const worktreeIdentity = getWorktreeHostIdentity(itemRow.worktree)
+
   const isLineageDropTarget =
     ctx.worktreeDragState.draggingWorktreeId &&
     (ctx.worktreeDragState.lineageDropTargetId === itemRow.worktree.id ||
       ctx.nativeLineageDropTargetId === itemRow.worktree.id)
+
   const isActiveWorktree =
     ctx.activeWorktreeId === itemRow.worktree.id &&
     (!ctx.activeWorkspaceExecutionHostId ||
       worktreeIdentity ===
         composeWorktreeHostIdentity(ctx.activeWorkspaceExecutionHostId, itemRow.worktree.id))
+
   return (
     <div
       key={itemRow.rowKey}
@@ -178,6 +190,7 @@ export function renderWorktreeItemRow(
         if (nested) {
           event.stopPropagation()
         }
+
         ctx.onRowPointerDown(event, itemRow.worktree, itemRow.rowKey)
       }}
       style={{
@@ -235,14 +248,17 @@ export function renderWorktreeLineageDescendants(
 ): React.ReactNode | undefined {
   const childNodes: React.ReactNode[] = []
   let cursor = 0
+
   while (cursor < descendants.length) {
     const child = descendants[cursor]
+
     if (!child || child.depth !== parent.depth + 1) {
       cursor++
       continue
     }
 
     let nextSiblingIndex = cursor + 1
+
     while (
       nextSiblingIndex < descendants.length &&
       descendants[nextSiblingIndex]!.depth > child.depth
@@ -255,8 +271,10 @@ export function renderWorktreeLineageDescendants(
       child,
       descendants.slice(cursor + 1, nextSiblingIndex)
     )
+
     childNodes.push(renderWorktreeItemRow(ctx, child, true, childLineageChildren))
     cursor = nextSiblingIndex
   }
+
   return childNodes.length > 0 ? childNodes : undefined
 }

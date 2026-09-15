@@ -51,9 +51,11 @@ export async function initDaemonPtyProvider(
   logDaemonMilestone('daemon-init-start')
   // Why: e2e coverage for the startup PTY gate (#5232) needs a daemon init that deterministically outlasts the first-window timeout.
   const e2eInitDelayMs = Number(process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS)
+
   if (Number.isFinite(e2eInitDelayMs) && e2eInitDelayMs > 0) {
     await new Promise((resolve) => setTimeout(resolve, e2eInitDelayMs))
   }
+
   const runtimeDir = getRuntimeDir()
 
   const newSpawner = new DaemonSpawner({
@@ -67,6 +69,7 @@ export async function initDaemonPtyProvider(
   pruneOldDaemonHosts(collectPinnedDaemonVersions(runtimeDir))
   const launchMode = newSpawner.getHandle()?.mode
   logDaemonMilestone('daemon-current-ready')
+
   if (signal?.aborted) {
     // Why: fail-open may already have spawned fallback PTYs; don't install late, but retire an empty daemon (live sessions reject it and survive).
     const abortedStartupAdapter = new DaemonPtyAdapter({
@@ -76,8 +79,10 @@ export async function initDaemonPtyProvider(
       profileScope: runtimeDir,
       runtimeDir
     })
+
     releaseDaemonAdoptionLease(newSpawner.getHandle())
     await abortedStartupAdapter.disconnectOnly()
+
     return
   }
 
@@ -97,6 +102,7 @@ export async function initDaemonPtyProvider(
       // failed_health_check from the launcher — the app cannot tell wedged from dead at this point.
       if (reason === 'daemon_died') {
         console.warn('[daemon] Daemon process died — respawning')
+
         // Why: a manual restart tears the daemon down under a still-live adapter, so a pane
         // respawning on its synthetic exit would bill a user action to the crash bucket.
         if (!isDaemonRestartInFlight()) {
@@ -106,13 +112,17 @@ export async function initDaemonPtyProvider(
         // Must reach the launcher below without an await in between; see the consume site.
         attributeNextDaemonReplacement(reason)
       }
+
       newSpawner.resetHandle()
       await newSpawner.ensureRunning()
+
       return takeDaemonAdoptionLeaseRelease(newSpawner.getHandle())
     }
   })
+
   let legacyAdapters: DaemonPtyAdapter[] = []
   let routedAdapter: DaemonProvider = newAdapter
+
   try {
     // Why: the launcher's temporary pair closes only after this permanent pair is established, leaving no adoption gap.
     await newAdapter.establishLifecycleLease()
@@ -134,15 +144,18 @@ export async function initDaemonPtyProvider(
               legacy: legacyAdapters
             })
           : newAdapter
+
     if (routedAdapter instanceof DegradedDaemonPtyProvider) {
       // Why: preserved daemon can't create fresh terminals; discover its live session ids so only they route to it (fresh panes fall back locally).
       await routedAdapter.discoverDaemonSessions()
     } else if (routedAdapter instanceof DaemonPtyRouter) {
       await routedAdapter.discoverLegacySessions()
     }
+
     if (signal?.aborted) {
       // Why: same late-swap guard after legacy discovery; release uninstalled adapter leases without killing live sessions.
       await routedAdapter.disconnectOnly()
+
       return
     }
   } catch (error) {
@@ -151,17 +164,21 @@ export async function initDaemonPtyProvider(
     } catch (cleanupError) {
       throw new AggregateError([error, cleanupError], 'Daemon adoption and cleanup both failed')
     }
+
     throw error
   }
+
   installDaemonProvider(newSpawner, routedAdapter)
   // Why: the first window may register PTY listeners before daemon init finishes; rebind so daemon PTYs still fan out events.
   rebindLocalProviderListeners()
   logDaemonMilestone('daemon-init-done', {
     legacyAdapters: legacyAdapters.length
   })
+
   if (process.platform === 'darwin' && newSpawner.getHandle()?.adopted) {
     void reportDaemonAdoption(runtimeDir, info.socketPath, info.tokenPath, newAdapter)
   }
+
   await reconcileSeededClaudeLivePtys(routedAdapter)
 }
 
@@ -180,6 +197,7 @@ async function reportDaemonAdoption(
         () => null
       )
     ])
+
     trackDaemonAdopted(
       readDaemonPidRecord(getDaemonPidPath(runtimeDir)),
       tccAttribution,
@@ -195,16 +213,21 @@ async function reconcileSeededClaudeLivePtys(provider: DaemonProvider): Promise<
   if (!hasSeededUnconfirmedClaudePtys()) {
     return
   }
+
   try {
     const adapters =
       provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider
         ? provider.getAllAdapters()
         : [provider]
+
     const results = await Promise.allSettled(adapters.map((entry) => entry.listSessions()))
+
     if (results.some((result) => result.status === 'rejected')) {
       console.warn('[daemon] Keeping seeded Claude live-PTY gate — session listing failed')
+
       return
     }
+
     confirmSeededClaudeLivePtys(
       results.flatMap((result) =>
         result.status === 'fulfilled' ? result.value.map((session) => session.sessionId) : []

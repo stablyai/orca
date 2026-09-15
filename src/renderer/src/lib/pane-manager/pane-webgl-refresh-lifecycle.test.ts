@@ -12,6 +12,7 @@ function createPane(
   overrides: Partial<Pick<ManagedPaneInternal, 'pendingWebglRefreshRafId' | 'webglAddon'>> = {}
 ): ManagedPaneInternal {
   const leafId = '11111111-1111-4111-8111-111111111111' as never
+
   return {
     id: 1,
     leafId,
@@ -83,6 +84,7 @@ describe('pane WebGL refresh lifecycle', () => {
     const refreshFrame: { current: FrameRequestCallback | null } = { current: null }
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       refreshFrame.current = callback
+
       return 29
     })
     const pane = createPane()
@@ -103,6 +105,7 @@ describe('pane WebGL refresh lifecycle', () => {
     const loseContext = vi.fn()
     const canvas = { width: 120, height: 40 }
     const dispose = vi.fn()
+
     const pane = createPane({
       webglAddon: {
         dispose,
@@ -137,10 +140,12 @@ describe('pane WebGL refresh lifecycle', () => {
   it('cancels a pending WebGL refresh when the pane is disposed', () => {
     const cancelAnimationFrame = vi.fn()
     vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
+
     const pane = createPane({
       pendingWebglRefreshRafId: 31,
       webglAddon: null
     })
+
     const panes = new Map([[pane.id, pane]])
 
     disposePane(pane, panes)

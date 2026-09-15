@@ -9,6 +9,7 @@ import type { SendRecipientWarning } from './recipient-routing'
 import type { z } from 'zod'
 
 type SendParamsInput = z.infer<typeof SendParams>
+
 type SendReceipt = <T extends object>(receipt: T) => T & { warnings?: SendRecipientWarning[] }
 
 /** Delivers coordinator control mail to a federated worker when `to` names its exact Dispatch. */
@@ -34,31 +35,39 @@ export function sendFederatedControlMail(args: {
     recordMutationReceipt,
     withSendWarnings
   } = args
+
   const dispatchId = to.startsWith('dispatch:') ? to.slice('dispatch:'.length) : undefined
+
   const federatedTarget =
     dispatchId && to === `dispatch:${dispatchId}` ? db.getFederatedDispatch(dispatchId) : undefined
+
   if (!federatedTarget || !dispatchId) {
     return undefined
   }
+
   if (federatedTarget.protocol_version < ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION) {
     throw new OrchestrationError(
       'capability_unsupported',
       `Federated Dispatch ${dispatchId} does not support coordinator control mail; start a fresh worker after updating its Orca server.`
     )
   }
+
   if (db.getWorkerDispatch(dispatchId)?.state !== 'ready') {
     throw new OrchestrationError(
       'dispatch_inactive',
       `Federated Dispatch ${dispatchId} is not active.`
     )
   }
+
   if (params.type === 'worker_done' || params.type === 'heartbeat') {
     throw new OrchestrationError(
       'invalid_argument',
       'Coordinator-to-worker control mail cannot report worker lifecycle.'
     )
   }
+
   revalidateLegacyCoordinator?.()
+
   const relay = db.enqueueFederationRelay({
     dispatchId,
     direction: 'to_worker',
@@ -73,6 +82,7 @@ export function sendFederatedControlMail(args: {
       payload: params.payload ?? null
     })
   })
+
   const receipt = withSendWarnings({
     relay: {
       messageId: relay.message_id,
@@ -82,6 +92,7 @@ export function sendFederatedControlMail(args: {
       accepted: true
     }
   })
+
   return recordReceiptBeforeNudge(
     recordMutationReceipt,
     receipt,

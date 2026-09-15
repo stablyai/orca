@@ -15,11 +15,13 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
 }): Promise<void> {
   const home = await resolveRemoteHome(args.connectionId)
   const fsProvider = getSshFilesystemProvider(args.connectionId)
+
   if (!home || !fsProvider) {
     return
   }
 
   const workspacePath = await canonicalizeRemoteWorkspacePath(fsProvider, args.workspacePath)
+
   if (args.preset === 'codex') {
     await markRemoteCodexProjectTrusted(fsProvider, home, workspacePath)
   } else if (args.preset === 'cursor') {
@@ -31,16 +33,20 @@ export async function markRemoteAgentWorkspaceTrusted(args: {
 
 async function resolveRemoteHome(connectionId: string): Promise<string | null> {
   const mux = getActiveMultiplexer(connectionId)
+
   if (!mux || mux.isDisposed?.()) {
     return null
   }
+
   const result = (await mux.request('session.resolveHome', { path: '~' })) as {
     resolvedPath?: unknown
   }
+
   const home =
     typeof result.resolvedPath === 'string'
       ? normalizeRuntimePathSeparators(result.resolvedPath.trim())
       : ''
+
   return home &&
     (home.startsWith('/') || isWindowsAbsolutePathLike(home)) &&
     !hasRemotePathControlCharacter(home)
@@ -69,6 +75,7 @@ async function readRemoteTextFile(
 ): Promise<string> {
   try {
     const result = await fsProvider.readFile(filePath)
+
     return result.isBinary ? '' : result.content
   } catch {
     return ''
@@ -83,14 +90,17 @@ async function markRemoteCodexProjectTrusted(
   const codexDir = `${remoteHome}/.codex`
   const configPath = `${codexDir}/config.toml`
   const existing = await readRemoteTextFile(fsProvider, configPath)
+
   const updated = upsertProjectTrustLevelInContent(existing, workspacePath, 'trusted', {
     // Why: workspacePath was resolved by the remote filesystem provider; local
     // realpath would canonicalize the wrong machine on SSH.
     alreadyCanonical: true
   })
+
   if (updated === existing) {
     return
   }
+
   await fsProvider.createDir(codexDir)
   await fsProvider.writeFile(configPath, updated)
 }
@@ -101,17 +111,22 @@ async function markRemoteCursorWorkspaceTrusted(
   workspacePath: string
 ): Promise<void> {
   const slug = workspacePath.replace(/^[\\/]+/, '').replace(/[\\/:*?"<>|]+/g, '-')
+
   if (!slug) {
     return
   }
+
   const trustDir = `${remoteHome}/.cursor/projects/${slug}`
   const trustFile = `${trustDir}/.workspace-trusted`
+
   try {
     await fsProvider.stat(trustFile)
+
     return
   } catch {
     // Missing marker: write the same shape the local trust preset writes.
   }
+
   await fsProvider.createDir(trustDir)
   await fsProvider.writeFile(
     trustFile,
@@ -128,9 +143,11 @@ async function markRemoteCopilotFolderTrusted(
   const configPath = `${configDir}/config.json`
   const raw = await readRemoteTextFile(fsProvider, configPath)
   let config: Record<string, unknown> = {}
+
   if (raw.trim()) {
     try {
       const parsed = JSON.parse(raw)
+
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
         config = parsed as Record<string, unknown>
       }
@@ -138,10 +155,13 @@ async function markRemoteCopilotFolderTrusted(
       return
     }
   }
+
   const existing = Array.isArray(config.trustedFolders) ? (config.trustedFolders as unknown[]) : []
+
   if (existing.includes(workspacePath)) {
     return
   }
+
   config.trustedFolders = [...existing.filter((entry) => typeof entry === 'string'), workspacePath]
   await fsProvider.createDir(configDir)
   await fsProvider.writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`)

@@ -7,6 +7,7 @@ export function markBrowserClientPageUnavailable(
   onUnavailable: (browserPageId: string, pageHostGeneration: number) => void
 ): boolean {
   const page = pages.get(registration.browserPageId)
+
   if (
     !page ||
     page.retiring ||
@@ -18,7 +19,9 @@ export function markBrowserClientPageUnavailable(
   ) {
     return false
   }
+
   page.inventory = Object.freeze({ ...page.inventory, state: 'outcomeUnknown' })
   onUnavailable(registration.browserPageId, page.generation)
+
   return true
 }

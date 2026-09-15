@@ -15,6 +15,7 @@ test('appends a paired browser tab last in its pane and keeps it there across ho
 }, testInfo) => {
   test.setTimeout(300_000)
   const fixture = await setUpPairedFixture(testInfo, testRepoPath)
+
   try {
     const { client, rootGroupId, worktreeId } = fixture
     const before = await readPanes(client.page, worktreeId)
@@ -22,6 +23,7 @@ test('appends a paired browser tab last in its pane and keeps it there across ho
     expect(contentTypesOf(before, rootGroupId).every((kind) => kind === 'terminal')).toBe(true)
 
     await openRemoteBrowserTab(client.page, fixture.url, rootGroupId)
+
     const after = await waitForGroupTabCount(
       client.page,
       worktreeId,
@@ -29,6 +31,7 @@ test('appends a paired browser tab last in its pane and keeps it there across ho
       terminalOrder.length + 1,
       'paired client never materialized the remote browser tab in the root group'
     )
+
     const placed = requireGroup(after, rootGroupId).tabOrder
     expect(placed.slice(0, terminalOrder.length)).toEqual(terminalOrder)
     expect(contentTypesOf(after, rootGroupId).at(-1)).toBe('browser')
@@ -50,6 +53,7 @@ test('creates paired split-pane tabs in the focused pane without disturbing the 
 }, testInfo) => {
   test.setTimeout(300_000)
   const fixture = await setUpPairedFixture(testInfo, testRepoPath)
+
   try {
     const { client, rootGroupId, worktreeId } = fixture
     const leftBefore = requireGroup(await readPanes(client.page, worktreeId), rootGroupId)
@@ -57,14 +61,19 @@ test('creates paired split-pane tabs in the focused pane without disturbing the 
     const rightGroupId = await client.page.evaluate(
       ({ sourceGroupId, worktreeId }) => {
         const state = window.__store?.getState()
+
         if (!state) {
           throw new Error('Paired client store unavailable')
         }
+
         const groupId = state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right')
+
         if (!groupId) {
           throw new Error('Right split group unavailable')
         }
+
         state.focusGroup(worktreeId, groupId)
+
         return groupId
       },
       { sourceGroupId: rootGroupId, worktreeId }
@@ -72,6 +81,7 @@ test('creates paired split-pane tabs in the focused pane without disturbing the 
 
     // Scenario B: a browser created from the right pane must land there and leave the left alone.
     await openRemoteBrowserTab(client.page, fixture.url, rightGroupId)
+
     const withBrowser = await waitForGroupTabCount(
       client.page,
       worktreeId,
@@ -79,6 +89,7 @@ test('creates paired split-pane tabs in the focused pane without disturbing the 
       1,
       'paired client never materialized the remote browser tab in the right pane'
     )
+
     const browserTabId = requireGroup(withBrowser, rightGroupId).tabOrder[0]
     expect(withBrowser.tabs.find((tab) => tab.id === browserTabId)?.contentType).toBe('browser')
     expect(withBrowser.tabs.find((tab) => tab.id === browserTabId)?.groupId).toBe(rightGroupId)
@@ -125,21 +136,28 @@ test('collapses the split pane when its last paired browser tab is closed from t
 }, testInfo) => {
   test.setTimeout(300_000)
   const fixture = await setUpPairedFixture(testInfo, testRepoPath)
+
   try {
     const { client, rootGroupId, worktreeId } = fixture
+
     const rightGroupId = await client.page.evaluate(
       ({ sourceGroupId, worktreeId }) => {
         const state = window.__store?.getState()
         const groupId = state?.createEmptySplitGroup(worktreeId, sourceGroupId, 'right')
+
         if (!groupId) {
           throw new Error('Right split group unavailable')
         }
+
         state?.focusGroup(worktreeId, groupId)
+
         return groupId
       },
       { sourceGroupId: rootGroupId, worktreeId }
     )
+
     await openRemoteBrowserTab(client.page, fixture.url, rightGroupId)
+
     const split = await waitForGroupTabCount(
       client.page,
       worktreeId,
@@ -147,10 +165,13 @@ test('collapses the split pane when its last paired browser tab is closed from t
       1,
       'paired client never materialized the remote browser tab in the right pane'
     )
+
     expect(split.layoutGroupIds).toEqual([rootGroupId, rightGroupId])
+
     const browserTab = split.tabs.find(
       (tab) => tab.id === requireGroup(split, rightGroupId).tabOrder[0]
     )
+
     expect(browserTab?.contentType).toBe('browser')
 
     // Why: a local-only close would collapse the pane on its own, so this test only guards the
@@ -170,6 +191,7 @@ test('collapses the split pane when its last paired browser tab is closed from t
         .poll(
           async () => {
             const panes = await readPanes(client.page, worktreeId)
+
             return {
               browserTabs: panes.tabs.filter((tab) => tab.contentType === 'browser').length,
               groupIds: panes.groups.map((group) => group.id),
@@ -188,6 +210,7 @@ test('collapses the split pane when its last paired browser tab is closed from t
         { cause: error }
       )
     }
+
     const collapsed = await readPanes(client.page, worktreeId)
     expect(collapsed.activeGroupId).toBe(rootGroupId)
     // Why: the pane collapsing proves the client removed its mirror; only the host's own tab list
@@ -210,20 +233,26 @@ test('places a paired split-pane terminal in the pane that asked for it', async 
 }, testInfo) => {
   test.setTimeout(300_000)
   const fixture = await setUpPairedFixture(testInfo, testRepoPath)
+
   try {
     const { client, rootGroupId, worktreeId } = fixture
+
     const rightGroupId = await client.page.evaluate(
       ({ sourceGroupId, worktreeId }) => {
         const state = window.__store?.getState()
         const groupId = state?.createEmptySplitGroup(worktreeId, sourceGroupId, 'right')
+
         if (!groupId) {
           throw new Error('Right split group unavailable')
         }
+
         state?.focusGroup(worktreeId, groupId)
+
         return groupId
       },
       { sourceGroupId: rootGroupId, worktreeId }
     )
+
     await openRemoteBrowserTab(client.page, fixture.url, rightGroupId)
     await waitForGroupTabCount(
       client.page,
@@ -238,14 +267,17 @@ test('places a paired split-pane terminal in the pane that asked for it', async 
         .filter((tab) => tab.contentType === 'terminal')
         .map((tab) => tab.id)
     )
+
     // Why: this is what the tab strip's "+" → Terminal item calls for that panel's group.
     await client.page.evaluate(async (groupId) => {
       await window.__store?.getState().openNewTerminalTabInActiveWorkspace(groupId)
     }, rightGroupId)
+
     const findCreatedTerminal = async () =>
       (await readPanes(client.page, worktreeId)).tabs.find(
         (tab) => tab.contentType === 'terminal' && !terminalsBefore.has(tab.id)
       ) ?? null
+
     await expect
       .poll(findCreatedTerminal, {
         timeout: 90_000,

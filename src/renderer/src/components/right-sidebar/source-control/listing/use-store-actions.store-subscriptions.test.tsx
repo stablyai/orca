@@ -10,6 +10,7 @@ import { useSourceControlStoreActions, type SourceControlStoreActions } from './
 const originalState = useAppStore.getState()
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function mount(node: ReactNode): void {
@@ -23,6 +24,7 @@ function unmount(): void {
   if (root) {
     act(() => root?.unmount())
   }
+
   root = null
   container?.remove()
   container = null
@@ -30,9 +32,11 @@ function unmount(): void {
 
 function listenerCount(): number {
   const count = readStoreListenerCount()
+
   if (count === null) {
     throw new Error('store listener census unavailable')
   }
+
   return count
 }
 
@@ -52,8 +56,10 @@ describe('useSourceControlStoreActions store subscriptions', () => {
 
     function Probe(): null {
       useSourceControlStoreActions()
+
       return null
     }
+
     mount(<Probe />)
 
     // Why 2: `pullRequestGenerationRecords` and `commitMessageGenerationRecords` are the only
@@ -72,8 +78,10 @@ describe('useSourceControlStoreActions store subscriptions', () => {
       const [, setTick] = useState(0)
       rerender = () => setTick((t) => t + 1)
       latest = useSourceControlStoreActions()
+
       return null
     }
+
     mount(<Probe />)
 
     const first = latest
@@ -91,16 +99,21 @@ describe('useSourceControlStoreActions store subscriptions', () => {
 
   it('still tracks the generation-record maps it subscribes to', () => {
     let latest: SourceControlStoreActions | null = null
+
     function Probe(): null {
       latest = useSourceControlStoreActions()
+
       return null
     }
+
     function read(): SourceControlStoreActions {
       if (!latest) {
         throw new Error('probe did not render')
       }
+
       return latest
     }
+
     mount(<Probe />)
 
     const before = read()
@@ -126,19 +139,24 @@ describe('useSourceControlStoreActions store subscriptions', () => {
 
   it('hands back the live store action references', () => {
     let latest: SourceControlStoreActions | null = null
+
     function Probe(): null {
       latest = useSourceControlStoreActions()
+
       return null
     }
+
     mount(<Probe />)
 
     const state = useAppStore.getState() as unknown as Record<string, unknown>
     const returned = latest as unknown as Record<string, unknown>
+
     const returnedActionKeys = Object.keys(returned).filter(
       (key) => typeof returned[key] === 'function'
     )
 
     expect(returnedActionKeys.length).toBe(40)
+
     for (const key of returnedActionKeys) {
       expect(returned[key]).toBe(state[key])
     }

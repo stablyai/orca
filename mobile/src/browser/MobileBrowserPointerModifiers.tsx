@@ -25,6 +25,7 @@ export function MobileBrowserPointerModifiers({
     <View style={styles.modifierRow}>
       {BROWSER_POINTER_MODIFIERS.map((modifier) => {
         const selected = selectedModifiers.includes(modifier.id)
+
         return (
           <Pressable
             key={modifier.id}

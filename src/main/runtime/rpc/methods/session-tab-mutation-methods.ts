@@ -21,8 +21,10 @@ export const SESSION_TAB_MUTATION_METHODS = [
           clientCapabilities,
           isStructuredNativeChatEnabled(runtime)
         )
+
         assertProjectedSessionTabVisible(visible, params.tabId)
       }
+
       const result = await runtime.activateMobileSessionTab(
         params.worktree,
         params.tabId,
@@ -38,6 +40,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
           })
         }
       )
+
       return projectSessionTabsForMutationClient(
         result,
         clientKind,
@@ -51,17 +54,22 @@ export const SESSION_TAB_MUTATION_METHODS = [
     params: MoveTab,
     handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
       let translated: Parameters<typeof translateProjectedSessionTabMove>[2] = params
+
       if (clientKind) {
         const raw = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
+
         const projected = projectSessionTabsForClient(
           raw,
           clientKind,
           clientCapabilities,
           isStructuredNativeChatEnabled(runtime)
         )
+
         translated = translateProjectedSessionTabMove(raw, projected, params)
       }
+
       const base = { tabId: translated.tabId, targetGroupId: translated.targetGroupId }
+
       if (translated.kind === 'reorder') {
         return runtime.moveMobileSessionTab(params.worktree, {
           ...base,
@@ -69,6 +77,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
           tabOrder: translated.tabOrder
         })
       }
+
       if (translated.kind === 'split') {
         return runtime.moveMobileSessionTab(params.worktree, {
           ...base,
@@ -76,6 +85,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
           splitDirection: translated.splitDirection
         })
       }
+
       return runtime.moveMobileSessionTab(params.worktree, {
         ...base,
         kind: 'move-to-group',
@@ -95,6 +105,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
         clientKind,
         clientCapabilities
       )
+
       return runtime.updateMobileSessionPaneLayout(params.worktree, {
         tabId: params.tabId,
         root: params.root,
@@ -115,6 +126,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
         clientKind,
         clientCapabilities
       )
+
       return runtime.setMobileSessionTabProps(params.worktree, {
         tabId: params.tabId,
         ...(params.color !== undefined ? { color: params.color } : {}),
@@ -138,11 +150,13 @@ async function assertVisibleMutationTab(
   if (!clientKind) {
     return
   }
+
   const visible = projectSessionTabsForClient(
     await runtime.listMobileSessionTabs(worktree, pairedDeviceId),
     clientKind,
     clientCapabilities,
     isStructuredNativeChatEnabled(runtime)
   )
+
   assertProjectedSessionTabVisible(visible, tabId)
 }

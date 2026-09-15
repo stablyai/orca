@@ -19,6 +19,7 @@ function projectOutcome(
   freshAfterMs?: number
 ): ReturnType<typeof projectAttemptOutcome> {
   const dispatch = db.getDispatchContextById(dispatchId)!
+
   const activeSibling = Boolean(
     db.db
       .prepare(
@@ -31,6 +32,7 @@ function projectOutcome(
       )
       .get(dispatch.task_id, dispatchId)
   )
+
   return projectAttemptOutcome({
     dispatchId,
     taskId: dispatch.task_id,
@@ -50,6 +52,7 @@ describe('durable Attempt observation and outcome projection', () => {
     db = new OrchestrationDb(':memory:')
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'observe outcome' })
     const dispatch = createRootDispatch(db, task.id, 'term_observed')
+
     return { taskId: task.id, dispatchId: dispatch.id }
   }
 
@@ -68,6 +71,7 @@ describe('durable Attempt observation and outcome projection', () => {
     }
   ): Extract<AttemptObservationFactInput, { facet: F }> {
     const { facet, payload, ...rest } = overrides
+
     return {
       id: `fact_${overrides.sequence ?? 1}`,
       dispatchId,
@@ -85,6 +89,7 @@ describe('durable Attempt observation and outcome projection', () => {
 
   it('persists separated evidence facets and additive uncertain outcomes', () => {
     const { dispatchId } = createAttempt()
+
     const facts: AttemptObservationFactInput[] = [
       fact(dispatchId, {
         id: 'process',
@@ -123,6 +128,7 @@ describe('durable Attempt observation and outcome projection', () => {
         payload: { outcome: 'finished_unverified', reason: 'missing worker report' }
       })
     ]
+
     for (const observation of facts) {
       db!.recordAttemptObservation(observation)
     }
@@ -142,6 +148,7 @@ describe('durable Attempt observation and outcome projection', () => {
 
   it('stores valid JSON when an optional payload field is explicitly undefined', () => {
     const { dispatchId } = createAttempt()
+
     const observation = fact(dispatchId, {
       id: 'undefined-quiet',
       sequence: 1,
@@ -160,12 +167,15 @@ describe('durable Attempt observation and outcome projection', () => {
   it('retains facts and the same projection after a database reopen', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-attempt-observation-'))
     const path = join(dir, 'orchestration.sqlite')
+
     try {
       db = new OrchestrationDb(path)
+
       const task = db.createTask({
         runId: 'run_legacy_local',
         spec: 'durable observation'
       })
+
       const dispatch = createRootDispatch(db, task.id, 'term_durable')
       db.recordAttemptObservation(
         fact(dispatch.id, {
@@ -192,16 +202,19 @@ describe('durable Attempt observation and outcome projection', () => {
 
   it('keeps worker_done settlement as the atomic success fast path', () => {
     db = new OrchestrationDb(':memory:')
+
     const task = db.createTask({
       runId: 'run_legacy_local',
       spec: 'worker_done fast path'
     })
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
+
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_fast_path',
@@ -213,6 +226,7 @@ describe('durable Attempt observation and outcome projection', () => {
       terminalOwnership: 'created'
     })
     db.markWorkerDispatchReady(started.dispatch.id)
+
     const report = {
       taskId: task.id,
       dispatchId: started.dispatch.id,
@@ -238,12 +252,14 @@ describe('durable Attempt observation and outcome projection', () => {
 
   it('is replay-idempotent, rejects changed replays, and reduces reordered facts by sequence', () => {
     const { dispatchId } = createAttempt()
+
     const later = fact(dispatchId, {
       id: 'later',
       sequence: 3,
       facet: 'process_turn',
       payload: { process: 'running', turn: 'working' }
     })
+
     const earlier = fact(dispatchId, {
       id: 'earlier',
       sequence: 1,
@@ -271,12 +287,14 @@ describe('durable Attempt observation and outcome projection', () => {
   it('keeps a late accepted report on its Attempt without settling an active sibling Task', () => {
     const { taskId, dispatchId } = createAttempt()
     db!.failDispatch(dispatchId, 'first attempt ended')
+
     const sibling = db!.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId,
       startOptions: {}
     })
+
     db!.recordAttemptObservation(
       fact(dispatchId, {
         id: 'late_report',
@@ -323,6 +341,7 @@ describe('durable Attempt observation and outcome projection', () => {
 
   it('never infers success from a quiet PTY, clean Git, or coordinator acknowledgment', () => {
     const { dispatchId } = createAttempt()
+
     for (const observation of [
       fact(dispatchId, {
         id: 'quiet',

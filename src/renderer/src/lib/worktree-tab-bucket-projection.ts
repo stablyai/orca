@@ -18,8 +18,10 @@ export function createWorktreeTabBucketProjection<T, P>(args: {
       }
 
       const sourceKeys = Object.keys(source)
+
       let changed =
         previousProjection === null || sourceKeys.length !== Object.keys(previousProjection).length
+
       const nextProjection: Record<string, P[]> = {}
 
       for (const worktreeId of sourceKeys) {
@@ -32,6 +34,7 @@ export function createWorktreeTabBucketProjection<T, P>(args: {
         } else {
           args.onInspectBucket?.(worktreeId)
           const cached = projectionBySourceBucket.get(sourceTabs)
+
           if (cached) {
             projectedTabs = cached
           } else if (
@@ -39,6 +42,7 @@ export function createWorktreeTabBucketProjection<T, P>(args: {
             previousTabs.length === sourceTabs.length &&
             sourceTabs.every((tab, index) => {
               const previousTab = previousTabs[index]
+
               return previousTab !== undefined && args.isSameProjectedTab(previousTab, tab)
             })
           ) {
@@ -46,20 +50,25 @@ export function createWorktreeTabBucketProjection<T, P>(args: {
           } else {
             projectedTabs = sourceTabs.map(args.projectTab)
           }
+
           projectionBySourceBucket.set(sourceTabs, projectedTabs)
         }
 
         nextProjection[worktreeId] = projectedTabs
+
         if (projectedTabs !== previousTabs) {
           changed = true
         }
       }
 
       previousSource = source
+
       if (!changed && previousProjection) {
         return previousProjection
       }
+
       previousProjection = nextProjection
+
       return nextProjection
     }
   }

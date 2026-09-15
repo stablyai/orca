@@ -20,23 +20,30 @@ export async function teardownMissingWorktreeTerminalsBestEffort(
   if (!detected.authoritative || !knownWorktreeIds || knownWorktreeIds.length === 0) {
     return
   }
+
   const detectedIds = new Set(detected.worktrees.map((worktree) => worktree.id))
   const missingIds = knownWorktreeIds.filter((worktreeId) => !detectedIds.has(worktreeId))
+
   if (missingIds.length === 0) {
     return
   }
+
   const target = getActiveRuntimeTarget(settings)
   const normalizedConnectionId = connectionId ?? null
+
   const key = [
     target.kind === 'local' ? 'local' : `runtime:${target.environmentId}`,
     repoId,
     normalizedConnectionId ?? '',
     [...missingIds].sort().join('\n')
   ].join('\0')
+
   const existing = missingWorktreeTeardownsInFlight.get(key)
+
   if (existing) {
     return existing
   }
+
   const teardown = (async () => {
     try {
       await callRuntimeRpc(
@@ -51,7 +58,9 @@ export async function teardownMissingWorktreeTerminalsBestEffort(
       }
     }
   })()
+
   missingWorktreeTeardownsInFlight.set(key, teardown)
+
   try {
     await teardown
   } finally {

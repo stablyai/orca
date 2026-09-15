@@ -15,12 +15,17 @@ import {
 const GROK_CLI_PROXY_BASE =
   process.env.GROK_CLI_CHAT_PROXY_BASE_URL?.trim().replace(/\/$/, '') ||
   'https://cli-chat-proxy.grok.com/v1'
+
 const BILLING_CREDITS_URL = `${GROK_CLI_PROXY_BASE}/billing?format=credits`
+
 // Why: some unified-billing accounts expose only a monthly included budget,
 // which is present in the default (format-less) billing view.
 const BILLING_DEFAULT_URL = `${GROK_CLI_PROXY_BASE}/billing`
+
 const API_TIMEOUT_MS = 10_000
+
 const WEEKLY_WINDOW_MINUTES = 10_080
+
 const MONTHLY_WINDOW_MINUTES = 43_200
 
 const GROK_CLI_AUTH_HEADER = 'xai-grok-cli'
@@ -71,11 +76,15 @@ function parseResetDescription(isoString: string | undefined): string | null {
   if (!isoString) {
     return null
   }
+
   const date = new Date(isoString)
+
   if (Number.isNaN(date.getTime())) {
     return null
   }
+
   const isToday = date.toDateString() === new Date().toDateString()
+
   return isToday
     ? date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
     : date.toLocaleDateString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
@@ -84,11 +93,13 @@ function parseResetDescription(isoString: string | undefined): string | null {
 function timestampsMatch(left: string | undefined, right: string | undefined): boolean {
   const leftTimestamp = left ? Date.parse(left) : Number.NaN
   const rightTimestamp = right ? Date.parse(right) : Number.NaN
+
   return Number.isFinite(leftTimestamp) && leftTimestamp === rightTimestamp
 }
 
 function hasConfirmedWeeklyPeriod(config: GrokBillingConfig): boolean {
   const period = config.currentPeriod
+
   // Why: matching billing bounds only prove the current period IS the billing
   // period; they say nothing about consumption (#15740), so resolveWeeklyPercent
   // rules out the other consumption evidence before trusting this.
@@ -124,28 +135,35 @@ function reportsAnyUsageScalar(config: GrokBillingConfig): boolean {
 
 function resolveWeeklyPercent(config: GrokBillingConfig): number | null {
   const reported = config.creditUsagePercent
+
   if (typeof reported === 'number' && Number.isFinite(reported)) {
     return reported
   }
+
   if (reported !== undefined) {
     return null
   }
+
   // Why: infer the dropped zero only when nothing else in the payload speaks
   // for consumption — an explicit zero proves the encoder keeps defaults, and a
   // computable budget pair is a real monthly number this must not shadow.
   if (emitsExplicitZeroScalar(config) || mapMonthlyUsage(config) !== null) {
     return null
   }
+
   return hasConfirmedWeeklyPeriod(config) ? 0 : null
 }
 
 function mapWeeklyCredits(config: GrokBillingConfig): RateLimitWindow | null {
   const usedPercent = resolveWeeklyPercent(config)
+
   if (usedPercent === null) {
     return null
   }
+
   const periodEnd = config.currentPeriod?.end ?? config.billingPeriodEnd
   const resetsAt = periodEnd ? Date.parse(periodEnd) : null
+
   return {
     usedPercent: Math.min(100, Math.max(0, usedPercent)),
     windowMinutes: WEEKLY_WINDOW_MINUTES,
@@ -157,20 +175,24 @@ function mapWeeklyCredits(config: GrokBillingConfig): RateLimitWindow | null {
 function parseMoneyVal(value: GrokMoneyVal | undefined): number | null {
   const raw = value?.val
   const num = typeof raw === 'string' ? Number.parseFloat(raw) : raw
+
   return typeof num === 'number' && Number.isFinite(num) ? num : null
 }
 
 function mapMonthlyUsage(config: GrokBillingConfig): RateLimitWindow | null {
   const limit = parseMoneyVal(config.monthlyLimit)
   const used = parseMoneyVal(config.used)
+
   // Why: a zero, missing or unparseable denominator yields no window rather
   // than NaN/Infinity or a fabricated 0%.
   if (limit === null || used === null || limit <= 0) {
     return null
   }
+
   const usedPercent = Math.min(100, Math.max(0, (used / limit) * 100))
   const periodEnd = config.currentPeriod?.end ?? config.billingPeriodEnd
   const resetsAt = periodEnd ? Date.parse(periodEnd) : null
+
   return {
     usedPercent,
     windowMinutes: MONTHLY_WINDOW_MINUTES,
@@ -185,9 +207,11 @@ function grokRequestHeaders(session: GrokAuthSession): Record<string, string> {
     'X-XAI-Token-Auth': GROK_CLI_AUTH_HEADER,
     Accept: 'application/json'
   }
+
   if (session.userId) {
     headers['x-userid'] = session.userId
   }
+
   return headers
 }
 
@@ -210,6 +234,7 @@ function resolveBillingConfig(data: GrokBillingResponse): GrokBillingConfig | nu
   if (data.config) {
     return data.config
   }
+
   return FLAT_BILLING_FIELDS.some((field) => data[field] !== undefined) ? data : null
 }
 
@@ -221,6 +246,7 @@ function billingUsageResult(
   const tier = config.subscriptionTier?.trim()
   const authLabel = session.email?.trim() || session.userId || 'Grok account'
   const provenance = tier ? `${authLabel} (${tier})` : authLabel
+
   return {
     provider: 'grok',
     session: null,
@@ -248,23 +274,28 @@ async function fetchBillingData(
   const requestSignal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(API_TIMEOUT_MS)])
     : AbortSignal.timeout(API_TIMEOUT_MS)
+
   const res = await net.fetch(url, {
     headers: grokRequestHeaders(session),
     signal: requestSignal
   })
+
   if (res.status === 401 || res.status === 403) {
     return {
       kind: 'result',
       result: result('error', `Grok usage request unauthorized (HTTP ${res.status})`)
     }
   }
+
   if (!res.ok) {
     return {
       kind: 'result',
       result: result('error', `Grok usage request failed (HTTP ${res.status})`)
     }
   }
+
   const data: unknown = await res.json()
+
   return {
     kind: 'data',
     data: typeof data === 'object' && data !== null ? (data as GrokBillingResponse) : {}
@@ -284,10 +315,13 @@ async function fetchMonthlyUsageFallback(
   signal?: AbortSignal
 ): Promise<GrokMonthlyFallbackOutcome> {
   const outcome = await fetchBillingData(BILLING_DEFAULT_URL, session, signal)
+
   if (outcome.kind === 'result') {
     return outcome
   }
+
   const config = outcome.data.config ?? outcome.data
+
   return { kind: 'window', window: mapMonthlyUsage(config), config }
 }
 
@@ -296,13 +330,17 @@ export async function fetchGrokRateLimits(
   options: { signal?: AbortSignal; authReadResult?: GrokAuthReadResult } = {}
 ): Promise<ProviderRateLimits> {
   const readResult = options.authReadResult ?? readGrokAuthSession()
+
   if (readResult.status === 'missing') {
     return result('unavailable', 'Not signed in to Grok — run grok login')
   }
+
   if (readResult.status === 'error') {
     return result('error', readResult.error)
   }
+
   const session = readResult.session
+
   if (!isGrokAccessTokenFresh(session)) {
     // Why: a genuine sign-out returns 'missing' earlier, so reaching here always
     // means a stored, refreshable session — Grok CLI refreshes the access token
@@ -316,36 +354,47 @@ export async function fetchGrokRateLimits(
 
   try {
     const outcome = await fetchBillingData(BILLING_CREDITS_URL, session, options.signal)
+
     if (outcome.kind === 'result') {
       return outcome.result
     }
+
     const config = resolveBillingConfig(outcome.data)
+
     // Why: a 200 without credit usage means the plan has no weekly credits —
     // 'unavailable' hides the bar (like Claude on API-key billing); 'error'
     // would paint a permanent alert for a signed-in account that has no quota.
     if (!config) {
       return result('unavailable', 'Grok billing response did not include config')
     }
+
     const weekly = mapWeeklyCredits(config)
+
     if (weekly) {
       return billingUsageResult({ weekly }, config, session)
     }
+
     // Why: the credits view can already carry the monthly budget pair; that pair
     // is a monthly window, so publish it as one rather than mislabelling it
     // weekly — and skip the redundant second request.
     const creditsMonthly = mapMonthlyUsage(config)
+
     if (creditsMonthly) {
       return billingUsageResult({ monthly: creditsMonthly }, config, session)
     }
+
     // Why: some unified-billing accounts expose only a monthly included budget;
     // their credits view omits creditUsagePercent, so read the default view.
     const fallback = await fetchMonthlyUsageFallback(session, options.signal)
+
     if (fallback.kind === 'result') {
       return fallback.result
     }
+
     if (fallback.window) {
       return billingUsageResult({ monthly: fallback.window }, config, session)
     }
+
     // Why: an account that reports spend fields but no computable percentage is
     // not a quota-less plan — say the usage is unknown instead of implying zero.
     return reportsAnyUsageScalar(config) || reportsAnyUsageScalar(fallback.config)

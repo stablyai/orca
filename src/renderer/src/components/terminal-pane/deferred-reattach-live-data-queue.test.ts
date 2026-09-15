@@ -29,9 +29,11 @@ class ReferenceDeferredQueue {
   enqueue(chunk: DeferredReattachLiveDataChunk): void {
     this.chunks = this.chunks.filter((queued) => {
       const keep = queued.streamGeneration === chunk.streamGeneration
+
       if (!keep) {
         queued.ackCredit?.()
       }
+
       return keep
     })
     this.retainedChars = this.chunks.reduce((total, queued) => total + queued.data.length, 0)
@@ -43,6 +45,7 @@ class ReferenceDeferredQueue {
     this.retainedChars += this.chunks.at(-1)?.data.length ?? 0
 
     let dropped = oversized
+
     while (
       this.chunks.length > 1 &&
       (this.chunks.length > MAX_DEFERRED_REATTACH_LIVE_CHUNKS ||
@@ -53,6 +56,7 @@ class ReferenceDeferredQueue {
       removed?.ackCredit?.()
       dropped = true
     }
+
     if (dropped && this.chunks[0]) {
       this.chunks[0].meta = { ...this.chunks[0].meta, droppedOutput: true }
     }
@@ -62,6 +66,7 @@ class ReferenceDeferredQueue {
     const chunks = this.chunks
     this.chunks = []
     this.retainedChars = 0
+
     return chunks
   }
 
@@ -78,10 +83,12 @@ function normalizedChunks(chunks: DeferredReattachLiveDataChunk[]): unknown[] {
 
 function createSeededRandom(seed: number): () => number {
   let state = seed >>> 0
+
   return () => {
     state ^= state << 13
     state ^= state >>> 17
     state ^= state << 5
+
     return state >>> 0
   }
 }
@@ -103,6 +110,7 @@ describe('deferred reattach live data queue', () => {
           }
         })
       }
+
       for (let index = 0; index < MAX_DEFERRED_REATTACH_LIVE_CHUNKS * 2; index += 1) {
         queue.enqueue(createChunk('x'.repeat(512)))
       }
@@ -120,6 +128,7 @@ describe('deferred reattach live data queue', () => {
   it('evicts whole chunks only after the count and character boundaries are exceeded', () => {
     const countQueue = new DeferredReattachLiveDataQueue()
     const countAcks = Array.from({ length: MAX_DEFERRED_REATTACH_LIVE_CHUNKS + 1 }, () => vi.fn())
+
     for (let index = 0; index < MAX_DEFERRED_REATTACH_LIVE_CHUNKS; index += 1) {
       countQueue.enqueue(
         createChunk('', 1, { ptyId: 'pty-1', meta: { seq: index }, ackCredit: countAcks[index] })
@@ -222,6 +231,7 @@ describe('deferred reattach live data queue', () => {
     const queue = new DeferredReattachLiveDataQueue()
     const acks = Array.from({ length: 513 }, () => vi.fn())
     const fullChunk = 'x'.repeat(MAX_DEFERRED_REATTACH_LIVE_CHARS)
+
     for (let index = 0; index < acks.length; index += 1) {
       queue.enqueue(
         createChunk(fullChunk, 1, {
@@ -281,12 +291,16 @@ describe('deferred reattach live data queue', () => {
       () => {
         acks.set(index, (acks.get(index) ?? 0) + 1)
       }
+
     for (let index = 0; index < 5_000; index += 1) {
       const value = random()
+
       if (index > 0 && value % 997 === 0) {
         generation += 1
       }
+
       const bucket = value % 100
+
       const length =
         index < 1_500
           ? value % 3
@@ -299,7 +313,9 @@ describe('deferred reattach live data queue', () => {
                 : bucket < 99
                   ? 300 * 1024
                   : MAX_DEFERRED_REATTACH_LIVE_CHARS + 1
+
       const data = String.fromCharCode(65 + (index % 26)).repeat(length)
+
       const base = {
         data,
         ptyId: `pty-${generation % 3}`,
@@ -310,12 +326,14 @@ describe('deferred reattach live data queue', () => {
           ...(value % 7 === 0 ? { background: true } : {})
         }
       }
+
       queue.enqueue({ ...base, ackCredit: recordAck(queueAcks, index) })
       reference.enqueue({ ...base, ackCredit: recordAck(referenceAcks, index) })
 
       if ((index + 1) % 1_000 !== 0) {
         continue
       }
+
       if ((index + 1) % 2_000 === 0) {
         queue.discard()
         reference.discard()
@@ -326,6 +344,7 @@ describe('deferred reattach live data queue', () => {
         releaseTransferred(actual)
         releaseTransferred(expected)
       }
+
       expect(queueAcks).toEqual(referenceAcks)
     }
 

@@ -27,17 +27,24 @@ export function buildSuppressedProcessGoneBreadcrumbData({
     exitCode,
     expectedTeardown
   }
+
   const name = safeString(details.name)
+
   if (name) {
     breadcrumb.name = name
   }
+
   const serviceName = safeString(details.serviceName)
+
   if (serviceName) {
     breadcrumb.serviceName = serviceName
   }
+
   const type = safeString(details.type)
+
   if (type) {
     breadcrumb.type = type
   }
+
   return breadcrumb
 }

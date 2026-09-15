@@ -13,10 +13,12 @@ function deferredPromise<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((innerResolve, innerReject) => {
     resolve = innerResolve
     reject = innerReject
   })
+
   return { promise, resolve, reject }
 }
 
@@ -36,6 +38,7 @@ describe('SshGitProvider upstream status read leases', () => {
       ahead: number
       behind: number
     }>()
+
     mux.request.mockReturnValue(pending.promise)
 
     const reads = Array.from({ length: 10 }, () => provider.getUpstreamStatus('/home/user/repo'))
@@ -119,15 +122,18 @@ describe('SshGitProvider upstream status read leases', () => {
     const upstreamRequests = Array.from({ length: 3 }, () =>
       deferredPromise<{ hasUpstream: false; ahead: 0; behind: 0 }>()
     )
+
     const mutation = deferredPromise<void>()
     let upstreamRequestIndex = 0
     mux.request.mockImplementation((method) => {
       if (method === 'git.upstreamStatus') {
         return upstreamRequests[upstreamRequestIndex++]?.promise
       }
+
       if (method === 'git.stage') {
         return mutation.promise
       }
+
       return Promise.resolve(undefined)
     })
 

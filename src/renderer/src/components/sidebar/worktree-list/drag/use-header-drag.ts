@@ -24,21 +24,25 @@ export type WorktreeSidebarHeaderDrag = ReturnType<typeof useWorktreeSidebarHead
 
 function indexById(byBucket: ReadonlyMap<string, readonly string[]>): Map<string, number> {
   const map = new Map<string, number>()
+
   for (const ids of byBucket.values()) {
     ids.forEach((id, index) => {
       map.set(id, index)
     })
   }
+
   return map
 }
 
 function bucketById(byBucket: ReadonlyMap<string, readonly string[]>): Map<string, string> {
   const map = new Map<string, string>()
+
   for (const [bucketKey, ids] of byBucket) {
     for (const id of ids) {
       map.set(id, bucketKey)
     }
   }
+
   return map
 }
 
@@ -74,24 +78,29 @@ export function useWorktreeSidebarHeaderDrag(args: {
     suppressMeasurementAdjustmentUntilRef,
     directScrollInputUntilRef
   } = args
+
   const reorderRepos = useAppStore((s) => s.reorderRepos)
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
   const hasProjectGroups = projectGroups.length > 0
   const canReorderRepoHeaders = groupBy === 'repo' && projectOrderBy === 'manual'
   const canReorderProjectGroupHeaders = groupBy === 'repo' && hasProjectGroups
+
   const projectGroupByIdForHeaderDrag = useMemo(
     () => new Map(projectGroups.map((group) => [group.id, group])),
     [projectGroups]
   )
+
   // Why: an id shared by two hosts has no single owner, so leave it unrouted rather than guess.
   const projectGroupOwnerHostIdByGroupId = useMemo(() => {
     const byGroupId = new Map<string, ExecutionHostId | null>()
+
     for (const group of projectGroups) {
       const hostId = getProjectGroupHostId(group)
       const existing = byGroupId.get(group.id)
       byGroupId.set(group.id, existing === undefined || existing === hostId ? hostId : null)
     }
+
     return byGroupId
   }, [projectGroups])
 
@@ -101,6 +110,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     suppressMeasurementAdjustmentUntilRef.current = suppressUntil
     directScrollInputUntilRef.current = suppressUntil
   }, [directScrollInputUntilRef, suppressMeasurementAdjustmentUntilRef])
+
   const commitRepoReorder = useCallback(
     (orderedIds: string[]) => {
       suppressScrollCorrectionForHeaderCommit()
@@ -108,6 +118,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     },
     [reorderRepos, suppressScrollCorrectionForHeaderCommit]
   )
+
   const orderedHostIds = useMemo(
     () =>
       rows
@@ -115,11 +126,13 @@ export function useWorktreeSidebarHeaderDrag(args: {
         .map((row) => row.hostId),
     [rows]
   )
+
   const hostDrag = useHostHeaderDrag({
     orderedHostIds,
     onCommit: onReorderHostSections,
     getScrollContainer: () => scrollRef.current
   })
+
   useEffect(() => {
     onHostDragActiveChange(hostDrag.state.draggingHostId !== null)
   }, [hostDrag.state.draggingHostId, onHostDragActiveChange])
@@ -132,6 +145,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
       ),
     [rows]
   )
+
   const sidebarProjectGroupHeaderIdsByBucket = useMemo(
     () =>
       getSidebarOrderedProjectGroupHeaderIdsByBucket(
@@ -140,33 +154,40 @@ export function useWorktreeSidebarHeaderDrag(args: {
       ),
     [projectGroupByIdForHeaderDrag, rows]
   )
+
   const repoHeaderIndexByRepoId = useMemo(
     () => indexById(sidebarRepoHeaderIdsByBucket),
     [sidebarRepoHeaderIdsByBucket]
   )
+
   const repoHeaderBucketByRepoId = useMemo(
     () => bucketById(sidebarRepoHeaderIdsByBucket),
     [sidebarRepoHeaderIdsByBucket]
   )
+
   const projectGroupHeaderIndexByGroupId = useMemo(
     () => indexById(sidebarProjectGroupHeaderIdsByBucket),
     [sidebarProjectGroupHeaderIdsByBucket]
   )
+
   const projectGroupHeaderBucketByGroupId = useMemo(
     () => bucketById(sidebarProjectGroupHeaderIdsByBucket),
     [sidebarProjectGroupHeaderIdsByBucket]
   )
+
   const commitProjectGroupOrder = useCallback(
     (repoId: string, projectGroupId: string | null, order: number) => {
       void moveProjectToGroup(repoId, projectGroupId, order)
     },
     [moveProjectToGroup]
   )
+
   const commitProjectGroupHeaderOrder = useCallback(
     (groupId: string, tabOrder: number) => {
       if (!Number.isFinite(tabOrder)) {
         return
       }
+
       suppressScrollCorrectionForHeaderCommit()
       // Why: manual order persists on the group's own host; the focused host may not hold this row.
       const ownerHostId = projectGroupOwnerHostIdByGroupId.get(groupId)
@@ -174,6 +195,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     },
     [projectGroupOwnerHostIdByGroupId, suppressScrollCorrectionForHeaderCommit, updateProjectGroup]
   )
+
   // Drag applies only in manual order; still construct the controller inert for stable hook order.
   const repoDrag = useRepoHeaderDrag({
     orderedRepoIds: allRepoIds,
@@ -184,12 +206,14 @@ export function useWorktreeSidebarHeaderDrag(args: {
     onCommitProjectGroupOrder: commitProjectGroupOrder,
     getScrollContainer: () => scrollRef.current
   })
+
   const projectGroupDrag = useProjectGroupHeaderDrag({
     sidebarProjectGroupHeaderIdsByBucket,
     projectGroupById: projectGroupByIdForHeaderDrag,
     onCommitProjectGroupTabOrder: commitProjectGroupHeaderOrder,
     getScrollContainer: () => scrollRef.current
   })
+
   const repoHeaderSectionEndByRepoId = useMemo(
     () =>
       getRepoHeaderSectionEndByRepoId({
@@ -200,6 +224,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
       }),
     [firstHeaderIndex, renderRows, repoHeaderBucketByRepoId, sidebarRepoHeaderIdsByBucket]
   )
+
   const projectGroupHeaderSectionEndByGroupId = useMemo(
     () =>
       getProjectGroupHeaderSectionEndByGroupId({

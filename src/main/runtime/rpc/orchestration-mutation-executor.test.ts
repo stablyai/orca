@@ -37,13 +37,16 @@ function createHarness() {
   const db = new OrchestrationDb(':memory:')
   const runtime = new OrcaRuntimeService()
   runtime.setOrchestrationDb(db)
+
   const binding = vi.spyOn(runtime, 'getTerminalPromptRequestBinding').mockReturnValue({
     ptyId: 'pty-prompt',
     processIncarnation: 'incarnation-1',
     generation: 1
   })
+
   // Every handle for this PTY resolves to one pane, so a re-minted handle is the same terminal.
   vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('window-1:leaf-prompt')
+
   return {
     db,
     executor: new OrchestrationMutationExecutor(runtime),
@@ -60,6 +63,7 @@ describe('terminal prompt mutation receipt retry boundary', () => {
     for (const db of databases.splice(0)) {
       db.close()
     }
+
     vi.restoreAllMocks()
   })
 
@@ -69,6 +73,7 @@ describe('terminal prompt mutation receipt retry boundary', () => {
       const harness = createHarness()
       databases.push(harness.db)
       const requestId = `pre-write-${errorCode}`
+
       const invoke = vi
         .fn()
         .mockRejectedValueOnce(new Error(errorCode))
@@ -94,6 +99,7 @@ describe('terminal prompt mutation receipt retry boundary', () => {
   it('keeps a failed receipt after the write boundary becomes ambiguous', async () => {
     const harness = createHarness()
     databases.push(harness.db)
+
     const invoke = vi.fn((mutation) => {
       mutation?.markEffectPossible()
       throw new Error('terminal_not_writable')
@@ -114,6 +120,7 @@ describe('terminal prompt mutation receipt retry boundary', () => {
     const requestId = 'observe-replay-rejected'
     const params = { ...promptParams, waitSubmitMs: 100 }
     const request = { ...promptRequest(requestId), params }
+
     const invoke = vi
       .fn()
       .mockResolvedValueOnce({
@@ -136,6 +143,7 @@ describe('terminal prompt mutation receipt retry boundary', () => {
     const harness = createHarness()
     databases.push(harness.db)
     const requestId = 'stale-binding-replay'
+
     const invoke = vi.fn().mockResolvedValue({
       send: { prompt: { stages: ['input_accepted', 'turn_started'], observation: 'supported' } }
     })
@@ -158,6 +166,7 @@ describe('terminal prompt mutation receipt retry boundary', () => {
     const harness = createHarness()
     databases.push(harness.db)
     const requestId = 'rebound-handle-replay'
+
     const invoke = vi.fn().mockResolvedValue({
       send: { prompt: { stages: ['input_accepted', 'turn_started'], observation: 'supported' } }
     })
@@ -177,6 +186,7 @@ describe('terminal prompt mutation receipt retry boundary', () => {
     const harness = createHarness()
     databases.push(harness.db)
     const params = { type: 'worker_done' }
+
     const request: RpcRequest = {
       id: 'rpc-uncheckpointed-worker-done',
       authToken: 'token',
@@ -184,6 +194,7 @@ describe('terminal prompt mutation receipt retry boundary', () => {
       orchestrationRequestId: 'uncheckpointed-worker-done',
       params
     }
+
     harness.db.beginMutationReceipt({
       callerFingerprint: harness.db.getOrCreateLocalMutationCallerFingerprint(),
       requestId: 'uncheckpointed-worker-done',
@@ -208,6 +219,7 @@ describe('worker start mutation coalescing', () => {
     for (const db of databases.splice(0)) {
       db.close()
     }
+
     vi.restoreAllMocks()
   })
 
@@ -219,15 +231,19 @@ describe('worker start mutation coalescing', () => {
       const requestId = `concurrent-${method}`
       const params = { taskId: 'task-1', taskSpec: 'specification' }
       let release!: () => void
+
       const gate = new Promise<void>((resolve) => {
         release = resolve
       })
+
       const invoke = vi.fn(
         async (mutation?: { identity: Parameters<OrchestrationDb['beginMutationReceipt']>[0] }) => {
           if (mutation) {
             harness.db.beginMutationReceipt(mutation.identity)
           }
+
           await gate
+
           return { accepted: { dispatchId: 'dispatch-1' } }
         }
       )
@@ -236,6 +252,7 @@ describe('worker start mutation coalescing', () => {
         harness.executor.run(workerStartRequest(method, requestId, params), params, invoke),
         harness.executor.run(workerStartRequest(method, requestId, params), params, invoke)
       ])
+
       release()
       const [first, replay] = await calls
 
@@ -255,20 +272,26 @@ describe('worker start mutation coalescing', () => {
     const harness = createHarness()
     databases.push(harness.db)
     let release!: () => void
+
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
+
     const invoke = vi.fn(
       async (mutation?: { identity: Parameters<OrchestrationDb['beginMutationReceipt']>[0] }) => {
         if (mutation) {
           harness.db.beginMutationReceipt(mutation.identity)
         }
+
         await gate
+
         return { accepted: true }
       }
     )
+
     const firstParams = { taskId: 'task-1', taskSpec: 'first' }
     const secondParams = { taskId: 'task-1', taskSpec: 'second' }
+
     const first = harness.executor.run(
       workerStartRequest('orchestration.workerStart', 'payload-mismatch', firstParams),
       firstParams,

@@ -12,20 +12,25 @@ const { resetTransport, subscriptions, transport } = vi.hoisted(() => {
     onFrame: (frame: unknown) => void
     unsubscribe: ReturnType<typeof vi.fn>
   }
+
   const subscriptions: Subscription[] = []
+
   const transport = {
     readSession: vi.fn(),
     subscribe: vi.fn()
   }
+
   const resetTransport = (): void => {
     subscriptions.splice(0)
     transport.readSession.mockReset().mockImplementation(() => new Promise(() => {}))
     transport.subscribe.mockReset().mockImplementation((_args, onFrame) => {
       const subscription = { onFrame, unsubscribe: vi.fn() }
       subscriptions.push(subscription)
+
       return subscription.unsubscribe
     })
   }
+
   return { resetTransport, subscriptions, transport }
 })
 
@@ -64,11 +69,14 @@ function deferred<T>(): {
   reject: (reason: unknown) => void
 } {
   let resolve = (_value: T): void => {}
+
   let reject = (_reason: unknown): void => {}
+
   const promise = new Promise<T>((promiseResolve, promiseReject) => {
     resolve = promiseResolve
     reject = promiseReject
   })
+
   return { promise, reject, resolve }
 }
 
@@ -80,6 +88,7 @@ describe('useNativeChatLiveSession visibility', () => {
   function Probe(props: UseNativeChatLiveSessionArgs): null {
     renders()
     latest = useNativeChatRetainedSession(props)
+
     return null
   }
 
@@ -154,6 +163,7 @@ describe('useNativeChatLiveSession visibility', () => {
           messages: [assistant(`stale-hidden-${index}`, index + 2)]
         })
       }
+
       await Promise.resolve()
     })
     expect(renders).toHaveBeenCalledTimes(rendersAfterHide)
@@ -222,6 +232,7 @@ describe('useNativeChatLiveSession visibility', () => {
     const oldUnsubscribe = vi.fn()
     transport.subscribe.mockImplementationOnce((_args, onFrame) => {
       subscriptions.push({ onFrame, unsubscribe: oldUnsubscribe })
+
       return deferredTeardown.promise
     })
 
@@ -247,6 +258,7 @@ describe('useNativeChatLiveSession visibility', () => {
     const deferredTeardown = deferred<() => void>()
     transport.subscribe.mockImplementationOnce((_args, onFrame) => {
       subscriptions.push({ onFrame, unsubscribe: vi.fn() })
+
       return deferredTeardown.promise
     })
 
@@ -269,6 +281,7 @@ describe('useNativeChatLiveSession visibility', () => {
       hasMore: false
     })
     await render({ ...BASE_ARGS, enabled: false })
+
     const hiddenSessionB = {
       ...BASE_ARGS,
       enabled: false,
@@ -300,6 +313,7 @@ describe('useNativeChatLiveSession visibility', () => {
   it('reveals with the paged window and restarts it only on a source change', async () => {
     const pagedLimit = nextNativeChatLimit(NATIVE_CHAT_INITIAL_LIMIT)
     transport.readSession.mockResolvedValue({ messages: [assistant('read', 0)] })
+
     const initialMessages = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, index) =>
       assistant(`old-${index}`, index)
     )
@@ -369,6 +383,7 @@ describe('useNativeChatLiveSession visibility', () => {
       .mockImplementationOnce(() => initialSeed.promise)
       .mockImplementationOnce(() => oldPage.promise)
       .mockImplementationOnce(() => revealSeed.promise)
+
     const initialMessages = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, index) =>
       assistant(`old-${index}`, index)
     )

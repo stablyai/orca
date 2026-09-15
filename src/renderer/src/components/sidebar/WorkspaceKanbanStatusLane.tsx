@@ -81,18 +81,22 @@ function WorkspaceKanbanStatusLane({
   // only a lane whose cards were filtered away has anything to say about matches.
   const laneTotalCount = totalCount ?? items.length
   const isFiltered = hasQuery && laneTotalCount > 0
+
   // Why: this joins every id in the lane, so it must not rerun on unrelated
   // board re-renders — at a few hundred cards it is ~25KB of string per pass.
   const laneFullIdsAttribute = useMemo(() => {
     if (!hasQuery) {
       return undefined
     }
+
     return (
       serializeWorkspaceLaneFullIds(fullWorktreeIds ?? items.map((worktree) => worktree.id)) ??
       undefined
     )
   }, [fullWorktreeIds, hasQuery, items])
+
   const createTooltip = `New workspace in ${status.label}`
+
   const createButton = (
     <Button
       type="button"

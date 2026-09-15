@@ -49,6 +49,7 @@ function dispatchCommandFinished(worktreeId: string, exitCode: number | null): v
 }
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
@@ -71,6 +72,7 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
         root?.unmount()
       })
     }
+
     root = null
     container?.remove()
     container = null
@@ -83,13 +85,17 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
     mocks.createTab
       .mockReturnValueOnce({ id: 'tab-1', shellOverride: 'wsl.exe' })
       .mockReturnValueOnce({ id: 'tab-2', shellOverride: 'powershell.exe' })
+
     const prepareCommandForShell = vi.fn(
       (command: string, shellOverride: string | undefined) => `${shellOverride}:${command}`
     )
+
     const pasted: PasteTerminalTextDetail[] = []
+
     const handlePaste = (event: Event): void => {
       pasted.push((event as CustomEvent<PasteTerminalTextDetail>).detail)
     }
+
     window.addEventListener(PASTE_TERMINAL_TEXT_EVENT, handlePaste)
     container = document.createElement('div')
     document.body.appendChild(container)

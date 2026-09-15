@@ -34,6 +34,7 @@ describe('AgentHookServer ingestRemote', () => {
   it('caches and replays Pi session identity without exposing a turn-status change', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       const rendererListener = vi.fn()
@@ -170,12 +171,15 @@ describe('AgentHookServer ingestRemote', () => {
 
   it('stamps connectionId and forwards a valid relay envelope to the listener', () => {
     const server = new AgentHookServer()
+
     const payload = parseAgentStatusPayload(
       JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
     )
+
     if (!payload) {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
+
     const listener = vi.fn()
     server.setListener(listener)
     server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, 'conn-1')
@@ -196,6 +200,7 @@ describe('AgentHookServer ingestRemote', () => {
   it('preserves active pane identity when a nested remote hook reports another agent', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()
@@ -257,6 +262,7 @@ describe('AgentHookServer ingestRemote', () => {
   it('ignores nested remote done while the parent pane agent is still active', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()
@@ -323,6 +329,7 @@ describe('AgentHookServer ingestRemote', () => {
   it('allows remote pane identity to change after the prior turn is done', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -362,6 +369,7 @@ describe('AgentHookServer ingestRemote', () => {
   it('allows stale active remote pane identity to change', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -400,6 +408,7 @@ describe('AgentHookServer ingestRemote', () => {
 
   it('lets remote Claude permission clear when matching approved tool execution starts', () => {
     const server = new AgentHookServer()
+
     const waiting = parseAgentStatusPayload(
       JSON.stringify({
         state: 'waiting',
@@ -408,6 +417,7 @@ describe('AgentHookServer ingestRemote', () => {
         toolInput: 'pnpm test'
       })
     )
+
     const working = parseAgentStatusPayload(
       JSON.stringify({
         state: 'working',
@@ -416,6 +426,7 @@ describe('AgentHookServer ingestRemote', () => {
         toolInput: 'pnpm test'
       })
     )
+
     if (!waiting || !working) {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
@@ -477,12 +488,15 @@ describe('AgentHookServer ingestRemote', () => {
 
   it('drops envelopes whose paneKey exceeds MAX_PANE_KEY_LEN', () => {
     const server = new AgentHookServer()
+
     const payload = parseAgentStatusPayload(
       JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
     )
+
     if (!payload) {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
+
     const listener = vi.fn()
     server.setListener(listener)
     // 201 chars — one past the listener's 200-char cap.
@@ -496,12 +510,15 @@ describe('AgentHookServer ingestRemote', () => {
 
   it('drops remote relay envelopes with legacy numeric paneKeys before cache mutation', () => {
     const server = new AgentHookServer()
+
     const payload = parseAgentStatusPayload(
       JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
     )
+
     if (!payload) {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
+
     const listener = vi.fn()
     server.setListener(listener)
     server.ingestRemote(
@@ -514,12 +531,15 @@ describe('AgentHookServer ingestRemote', () => {
 
   it('maps registered legacy numeric relay pane keys to stable pane keys', () => {
     const server = new AgentHookServer()
+
     const payload = parseAgentStatusPayload(
       JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
     )
+
     if (!payload) {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
+
     const listener = vi.fn()
     server.registerPaneKeyAlias('tab-1:0', PANE)
     server.setListener(listener)
@@ -548,12 +568,15 @@ describe('AgentHookServer ingestRemote', () => {
 
   it('drops remote relay envelopes whose tabId disagrees with the paneKey tab', () => {
     const server = new AgentHookServer()
+
     const payload = parseAgentStatusPayload(
       JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
     )
+
     if (!payload) {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
+
     const listener = vi.fn()
     server.setListener(listener)
     server.ingestRemote(
@@ -566,12 +589,15 @@ describe('AgentHookServer ingestRemote', () => {
 
   it('rejects empty connectionId', () => {
     const server = new AgentHookServer()
+
     const payload = parseAgentStatusPayload(
       JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
     )
+
     if (!payload) {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
+
     const listener = vi.fn()
     server.setListener(listener)
     server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, '')
@@ -580,12 +606,15 @@ describe('AgentHookServer ingestRemote', () => {
 
   it('rejects whitespace-only connectionId', () => {
     const server = new AgentHookServer()
+
     const payload = parseAgentStatusPayload(
       JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
     )
+
     if (!payload) {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
+
     const listener = vi.fn()
     server.setListener(listener)
     server.ingestRemote({ paneKey: PANE, tabId: 'tab-1', worktreeId: 'wt-1', payload }, '   ')
@@ -594,12 +623,15 @@ describe('AgentHookServer ingestRemote', () => {
 
   it('rejects non-string tabId', () => {
     const server = new AgentHookServer()
+
     const payload = parseAgentStatusPayload(
       JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
     )
+
     if (!payload) {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
+
     const listener = vi.fn()
     server.setListener(listener)
     server.ingestRemote(
@@ -611,12 +643,15 @@ describe('AgentHookServer ingestRemote', () => {
 
   it('rejects empty paneKey after trim', () => {
     const server = new AgentHookServer()
+
     const payload = parseAgentStatusPayload(
       JSON.stringify({ state: 'working', prompt: 'p', agentType: 'claude' })
     )
+
     if (!payload) {
       throw new Error('parseAgentStatusPayload returned null for a known-good fixture')
     }
+
     const listener = vi.fn()
     server.setListener(listener)
     server.ingestRemote({ paneKey: '   ', tabId: 'tab-1', worktreeId: 'wt-1', payload }, 'conn-1')

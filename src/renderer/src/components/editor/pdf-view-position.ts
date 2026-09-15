@@ -21,15 +21,19 @@ export function readPdfViewPosition(location: unknown): PdfViewPosition | null {
   if (typeof location !== 'object' || location === null) {
     return null
   }
+
   const { pageNumber, top, left } = location as Record<string, unknown>
+
   // Why: scrollPageIntoView itself guards on Number.isInteger and silently
   // logs-and-returns, so a fractional page would fail the restore invisibly.
   if (!isFiniteNumber(pageNumber) || !Number.isInteger(pageNumber) || pageNumber < 1) {
     return null
   }
+
   if (!isFiniteNumber(top) || !isFiniteNumber(left)) {
     return null
   }
+
   return { pageNumber, top, left }
 }
 
@@ -62,7 +66,9 @@ export function clampPdfViewPosition(
   if (!isFiniteNumber(pagesCount) || pagesCount < 1) {
     return null
   }
+
   const pageNumber = Math.min(Math.max(position.pageNumber, 1), Math.floor(pagesCount))
+
   return pageNumber === position.pageNumber ? position : { ...position, pageNumber }
 }
 
@@ -115,14 +121,19 @@ export function createPdfViewPositionRecorder({
       if (!armed || disposed) {
         return
       }
+
       const position = readPdfViewPosition(location)
+
       if (!position) {
         return
       }
+
       pending = position
+
       if (timer !== null) {
         return
       }
+
       // Why: the debounced write only refreshes LRU recency — teardown is what
       // actually persists the position — so a pending timer need not restart.
       timer = setTimeout(() => {
@@ -135,11 +146,14 @@ export function createPdfViewPositionRecorder({
       if (disposed) {
         return
       }
+
       disposed = true
+
       if (timer !== null) {
         clearTimeout(timer)
         timer = null
       }
+
       flush()
     }
   }

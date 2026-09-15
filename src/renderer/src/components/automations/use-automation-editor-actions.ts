@@ -33,6 +33,7 @@ export function useAutomationEditorActions({
   destinationForm: AutomationsPageDestinationFormState
 }) {
   const { defaultAgent, worktreesByRepo, repoMap, fetchWorktrees, repos } = store
+
   const {
     editRequestRef,
     setEditingAutomationId,
@@ -48,6 +49,7 @@ export function useAutomationEditorActions({
     editingAutomationId,
     editingHostStableKey
   } = local
+
   const { getDefaultTarget, automationDispatchContext, rowRecoveryHost } = destination
   const { destinationForProject, editHostResolution } = destinationForm
 
@@ -59,6 +61,7 @@ export function useAutomationEditorActions({
     setEditingDestination(null)
     setEditingHostStableKey(null)
     setCreateTarget('orca')
+
     const baseDraft: AutomationDraft = {
       name: '',
       prompt: '',
@@ -79,6 +82,7 @@ export function useAutomationEditorActions({
       savedSchedule: null,
       scheduleWarning: null
     }
+
     const nextDraft = template
       ? {
           ...baseDraft,
@@ -91,6 +95,7 @@ export function useAutomationEditorActions({
           missedRunGraceMinutes: template.missedRunGraceMinutes ?? baseDraft.missedRunGraceMinutes
         }
       : baseDraft
+
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
     setCreateOpen(true)
@@ -101,6 +106,7 @@ export function useAutomationEditorActions({
     setEditingExternalTarget(null)
     setCreateTarget('orca')
     const automationId = row.automation.id
+
     const reread = await dispatchAutomationReread(
       automationDispatchContext,
       { rowKey: row.key, automationId },
@@ -109,14 +115,19 @@ export function useAutomationEditorActions({
           (entry) => entry.id === automationId
         ) ?? null
     )
+
     if (!reread.ok && reread.notice.severity === 'owner') {
       destination.reportOwnerAction(row.key, reread.notice)
+
       return
     }
+
     const latest = (reread.ok ? reread.value : null) ?? row.automation
+
     if (requestId !== editRequestRef.current) {
       return
     }
+
     setEditingAutomationId(latest.id)
     setEditingRowKey(row.key)
     const initialHostStableKey = rowRecoveryHost(row.key)?.stableKey ?? null
@@ -137,10 +148,12 @@ export function useAutomationEditorActions({
     scope: ExternalAutomationScope
   ): void => {
     editRequestRef.current += 1
+
     const targetWorktree = Object.values(worktreesByRepo)
       .flat()
       .find((worktree) => {
         const repo = repoMap.get(worktree.repoId)
+
         return (
           repo !== undefined &&
           repoMatchesExternalAutomationTarget(repo, manager.target) &&
@@ -148,11 +161,14 @@ export function useAutomationEditorActions({
           worktree.path === job.workdir
         )
       })
+
     const localRepos = getAutomationCreateRepos(repos, { kind: 'local' })
     const fallbackRepo = localRepos[0] ?? null
+
     const fallbackWorktree = fallbackRepo
       ? getDefaultWorktree(worktreesByRepo[fallbackRepo.id] ?? [])
       : null
+
     const projectId = targetWorktree?.repoId ?? fallbackRepo?.id ?? ''
     const workspaceId = targetWorktree?.id ?? fallbackWorktree?.id ?? ''
     const nextDraft = buildExternalAutomationEditDraft(job, { projectId, workspaceId })
@@ -171,12 +187,14 @@ export function useAutomationEditorActions({
     (projectId: string): void => {
       const currentWorktrees = worktreesByRepo[projectId] ?? []
       const currentDefaultWorktree = getDefaultWorktree(currentWorktrees)
+
       const selectedEditDestination =
         editingAutomationId !== null && editingHostStableKey
           ? editHostResolution.status === 'ready'
             ? editHostResolution
             : null
           : null
+
       const worktreeFetchOptions =
         selectedEditDestination?.status === 'ready' &&
         selectedEditDestination.authority.kind === 'runtime'
@@ -186,13 +204,16 @@ export function useAutomationEditorActions({
               )
             }
           : undefined
+
       if (editingAutomationId !== null) {
         const target = destinationForProject(projectId, editingHostStableKey)
         setEditingDestination(target ? { projectId, destination: target } : null)
+
         if (target) {
           setEditingHostStableKey(target.entry.stableKey)
         }
       }
+
       setDraft((current) => ({
         ...current,
         projectId,
@@ -202,9 +223,11 @@ export function useAutomationEditorActions({
       void fetchWorktrees(projectId, worktreeFetchOptions).then(() => {
         const latestWorktrees = useAppStore.getState().worktreesByRepo[projectId] ?? []
         const latestWorktree = getDefaultWorktree(latestWorktrees)
+
         if (!latestWorktree) {
           return
         }
+
         setDraft((current) =>
           current.projectId === projectId && !current.workspaceId
             ? { ...current, workspaceId: latestWorktree.id }
@@ -224,18 +247,21 @@ export function useAutomationEditorActions({
       worktreesByRepo
     ]
   )
+
   const handleDraftChange = useCallback(
     (updater: (current: AutomationDraft) => AutomationDraft): void => {
       const current = draftRef.current
       const next = updater(current)
       draftRef.current = next
       setDraft(next)
+
       if (
         editingAutomationId !== null &&
         (next.projectId !== current.projectId || next.workspaceId !== current.workspaceId)
       ) {
         const target = destinationForProject(next.projectId, editingHostStableKey)
         setEditingDestination(target ? { projectId: next.projectId, destination: target } : null)
+
         if (target) {
           setEditingHostStableKey(target.entry.stableKey)
         }

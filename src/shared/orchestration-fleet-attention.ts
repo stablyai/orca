@@ -43,21 +43,27 @@ export function projectOrchestrationFleetAttention(
   facts: OrchestrationFleetAttentionFacts
 ): OrchestrationFleetAttention {
   const categories: OrchestrationFleetAttentionCategory[] = []
+
   if (facts.pendingGuidance) {
     categories.push('guidance')
   }
+
   if (facts.pendingInput) {
     categories.push('input')
   }
+
   if (facts.pendingApproval) {
     categories.push('approval')
   }
+
   if (facts.outcome === 'failed') {
     categories.push('failure')
   }
+
   if (facts.interrupted) {
     categories.push('interruption')
   }
+
   // A Dispatch that settled with no worker row has no process to wait on, so its unverifiable
   // verdict is a statement about supervision that never existed, not work owed to a coordinator.
   if (
@@ -66,6 +72,7 @@ export function projectOrchestrationFleetAttention(
   ) {
     categories.push(facts.liveness.reason === 'stale_status' ? 'stale' : 'unverifiable')
   }
+
   // A proven exit is evidence, not absence: `unverifiable` beside an `exited` verdict told a
   // reader to keep waiting on a worker the execution host had already reported gone.
   if (
@@ -76,9 +83,11 @@ export function projectOrchestrationFleetAttention(
       categories.push('unverifiable')
     }
   }
+
   if (facts.isRoot && facts.outcome === 'succeeded') {
     categories.push('root_completion')
   }
+
   return {
     categories,
     requiresAction: categories.some((category) => ACTION_CATEGORIES.has(category))
@@ -92,9 +101,11 @@ export function orchestrationFleetAttentionEqual(
   if (left === right) {
     return true
   }
+
   if (!left || !right || left.requiresAction !== right.requiresAction) {
     return false
   }
+
   return (
     left.categories.length === right.categories.length &&
     left.categories.every((category, index) => right.categories[index] === category)

@@ -57,11 +57,16 @@ vi.mock('../store', () => ({
 }))
 
 const WT = 'repo1::/path/wt1'
+
 const ENV = 'web-env-1'
+
 const HOST_EPOCH = 'host-epoch-1'
+
 const T0 = 1_700_000_000_000
+
 /** The laptop was closed well past the agent-status freshness boundary. */
 const LONG_SLEEP_MS = AGENT_STATUS_STALE_AFTER_MS * 6
+
 /** A blip the client rides out without its own status going stale. */
 const BRIEF_DROP_MS = 5_000
 
@@ -215,6 +220,7 @@ function replayClientByteStatus(store: TestStore, pane: PaneSpec, clientNow: num
       undefined,
       { tabId: mirrorTabId(pane), worktreeId: WT }
     )
+
   return release
 }
 
@@ -225,6 +231,7 @@ function seedPairedClientStore(): TestStore {
     worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })] },
     activeWorktreeId: WT
   } as Partial<AppState>)
+
   return store
 }
 
@@ -238,6 +245,7 @@ type SidebarObservation = {
 function observeSidebar(store: TestStore, now: number): SidebarObservation {
   const state = store.getState()
   const tabs = state.tabsByWorktree[WT] ?? []
+
   const rows = buildWorktreeAgentRows({
     tabs,
     entries: selectLiveAgentStatusEntriesForWorktree(state, WT),
@@ -249,6 +257,7 @@ function observeSidebar(store: TestStore, now: number): SidebarObservation {
     ),
     now
   })
+
   return {
     tabIds: tabs.map((tab) => tab.id),
     rowPaneKeys: rows.filter((row) => row.rowSource !== 'subagent').map((row) => row.paneKey),
@@ -260,9 +269,11 @@ function observeSidebar(store: TestStore, now: number): SidebarObservation {
  *  and lets the host republish its live state on reconnect. */
 function runSleepWakeReconnect(store: TestStore, awayMs: number): SidebarObservation {
   applyHostSnapshot(store, makeHostSnapshot({ snapshotVersion: 1, hostNow: T0 - 1_000 }), T0)
+
   for (const pane of CLIENT_OWNED_PANES) {
     replayClientByteStatus(store, pane, T0)
   }
+
   const attached = observeSidebar(store, T0)
   expect(attached.rowPaneKeys, 'precondition: every pane has a row while attached').toHaveLength(
     PANES.length
@@ -274,6 +285,7 @@ function runSleepWakeReconnect(store: TestStore, awayMs: number): SidebarObserva
     makeHostSnapshot({ snapshotVersion: 2, hostNow: wakeAt - 1_000 }),
     wakeAt
   )
+
   return observeSidebar(store, wakeAt)
 }
 
@@ -314,6 +326,7 @@ describe('STA-3107: sidebar agent rows survive a paired-client sleep/wake reconn
   it('the erased rows are exactly the panes whose status only the client wrote', () => {
     const store = seedPairedClientStore()
     const reconnected = runSleepWakeReconnect(store, LONG_SLEEP_MS)
+
     const missing = PANES.map(mirrorPaneKey).filter(
       (paneKey) => !reconnected.rowPaneKeys.includes(paneKey)
     )
@@ -353,6 +366,7 @@ describe('STA-3107: sidebar agent rows survive a paired-client sleep/wake reconn
     const store = seedPairedClientStore()
     applyHostSnapshot(store, makeHostSnapshot({ snapshotVersion: 1, hostNow: T0 - 1_000 }), T0)
     const releases = CLIENT_OWNED_PANES.map((pane) => replayClientByteStatus(store, pane, T0))
+
     for (const release of releases) {
       release()
     }

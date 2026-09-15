@@ -11,45 +11,61 @@ import {
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -61,6 +77,7 @@ describe('registerPtyHandlers', () => {
   // Why: the cap/flag must never fire in the common case (renderer keeps up), so small output carries no droppedBacklog.
   it('does not flag droppedBacklog for ordinary small output under the cap', async () => {
     vi.useFakeTimers()
+
     const runtime = {
       setPtyController: vi.fn(),
       registerPty: vi.fn(),
@@ -70,6 +87,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-small'),
       registerPreAllocatedHandleForPty: vi.fn()
     }
+
     try {
       registerPtyHandlers(
         mainWindow as never,
@@ -80,11 +98,13 @@ describe('registerPtyHandlers', () => {
         undefined,
         { awaitLocalPtyStartup: () => Promise.resolve() }
       )
+
       const pendingSpawn = handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         sessionId: 'small-output-session'
       }) as Promise<{ id: string }>
+
       await Promise.resolve()
       const daemon = installObservableDaemonTestProvider()
       rebindLocalProviderListeners()
@@ -96,7 +116,9 @@ describe('registerPtyHandlers', () => {
       const dataSends = mainWindow.webContents.send.mock.calls.filter(
         (call) => call[0] === 'pty:data' && (call[1] as { id: string }).id === result.id
       )
+
       expect(dataSends.length).toBeGreaterThan(0)
+
       for (const call of dataSends) {
         expect((call[1] as { droppedBacklog?: boolean }).droppedBacklog).toBeUndefined()
       }
@@ -106,6 +128,7 @@ describe('registerPtyHandlers', () => {
   })
   it('waits for the desktop startup barrier before runtime local spawns resolve the provider', async () => {
     const barrier = makeDeferred()
+
     const runtime = {
       setPtyController: vi.fn(),
       registerPty: vi.fn(),
@@ -114,6 +137,7 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
+
     registerPtyHandlers(
       mainWindow as never,
       runtime as never,
@@ -125,6 +149,7 @@ describe('registerPtyHandlers', () => {
         awaitLocalPtyStartup: () => barrier.promise
       }
     )
+
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       spawn: (args: { cols: number; rows: number; env?: Record<string, string> }) => Promise<{
         id: string
@@ -200,9 +225,11 @@ describe('registerPtyHandlers', () => {
   })
   it('lists sessions from both local and SSH providers', async () => {
     registerPtyHandlers(mainWindow as never)
+
     const sshListProcesses = vi.fn(async () => [
       { id: 'remote-pty', cwd: '/remote', title: 'ssh-shell' }
     ])
+
     const sshShutdown = vi.fn(async () => undefined)
     registerSshPtyProvider('ssh-1', {
       spawn: vi.fn(),
@@ -225,6 +252,7 @@ describe('registerPtyHandlers', () => {
     } as never)
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
+
     const sessions = (await handlers.get('pty:listSessions')!(null, undefined)) as {
       id: string
       cwd: string
@@ -246,16 +274,20 @@ describe('registerPtyHandlers', () => {
   })
   it('starts local and SSH session inventories concurrently', async () => {
     let resolveLocal!: (sessions: { id: string; cwd: string; title: string }[]) => void
+
     const localSessions = new Promise<{ id: string; cwd: string; title: string }[]>((resolve) => {
       resolveLocal = resolve
     })
+
     vi.spyOn(getLocalPtyProvider(), 'listProcesses').mockReturnValue(localSessions)
     registerPtyHandlers(mainWindow as never)
 
     let resolveSsh!: (sessions: { id: string; cwd: string; title: string }[]) => void
+
     const sshSessions = new Promise<{ id: string; cwd: string; title: string }[]>((resolve) => {
       resolveSsh = resolve
     })
+
     const sshListProcesses = vi.fn(() => sshSessions)
     registerSshPtyProvider('ssh-1', {
       spawn: vi.fn(),
@@ -292,8 +324,10 @@ describe('registerPtyHandlers', () => {
         return this.authoritativeIds.has(id)
       }
     }
+
     registerPtyHandlers(mainWindow as never)
     setLocalPtyProvider(capabilityProvider as never)
+
     const result = await handlers.get('pty:getAuthoritativeBufferSnapshotCapabilities')?.(null, {
       ids: ['current-pty', 'legacy-pty', 'current-pty', 42]
     })
@@ -315,11 +349,13 @@ describe('registerPtyHandlers', () => {
       undefined,
       { awaitLocalPtyProviderStartup }
     )
+
     const pending = Promise.resolve(
       handlers.get('pty:getAuthoritativeBufferSnapshotCapabilities')?.(null, {
         ids: ['restored-local-pty']
       })
     )
+
     let settled = false
     void pending.then(() => {
       settled = true
@@ -372,9 +408,11 @@ describe('registerPtyHandlers', () => {
   })
   it('checks single-PTY liveness without listing every session', async () => {
     const hasPty = vi.fn((id: string) => id === 'live-pty')
+
     const listProcesses = vi.fn(async () => {
       throw new Error('listProcesses should not be called')
     })
+
     setLocalPtyProvider({
       spawn: vi.fn(),
       write: vi.fn(),
@@ -437,6 +475,7 @@ describe('registerPtyHandlers', () => {
     const hasPty = vi.fn(() => {
       throw new Error('provider unavailable')
     })
+
     setLocalPtyProvider({
       spawn: vi.fn(),
       write: vi.fn(),

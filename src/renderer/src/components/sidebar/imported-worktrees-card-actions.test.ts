@@ -13,6 +13,7 @@ const projectId = 'repo-1'
 describe('imported worktrees card actions', () => {
   const updateRepo = vi.fn()
   const fetchWorktrees = vi.fn()
+
   const setCardState =
     vi.fn<(projectId: string, state: ImportedWorktreeCardActionState | null) => void>()
 

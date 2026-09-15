@@ -7,7 +7,9 @@ export type FederationAckIdentity = {
 }
 
 type FederationAckCheckpoint = FederationAckIdentity & { throughSequence: number }
+
 type FederationAckDispatchState = { checkpoint: FederationAckCheckpoint | null }
+
 type FederationAckRuntimeState = { byDispatch: Map<string, FederationAckDispatchState> }
 
 export type FederationAckLease = {
@@ -34,15 +36,19 @@ export function acquireFederationAckLease(
   dispatchId: string
 ): FederationAckLease {
   let runtimeState = federationAckStates.get(runtime)
+
   if (!runtimeState) {
     runtimeState = { byDispatch: new Map() }
     federationAckStates.set(runtime, runtimeState)
   }
+
   let dispatchState = runtimeState.byDispatch.get(dispatchId)
+
   if (!dispatchState) {
     dispatchState = { checkpoint: null }
     runtimeState.byDispatch.set(dispatchId, dispatchState)
   }
+
   return { runtimeState, dispatchState }
 }
 
@@ -51,6 +57,7 @@ export function getFederationAckedThrough(
   identity: FederationAckIdentity
 ): number {
   const checkpoint = lease.dispatchState.checkpoint
+
   return checkpoint?.environmentId === identity.environmentId &&
     checkpoint.peerFingerprint === identity.peerFingerprint &&
     checkpoint.remoteRuntimeEpoch === identity.remoteRuntimeEpoch
@@ -66,7 +73,9 @@ export function recordFederationAckCheckpoint(
   if (federationAckStates.get(runtime) !== lease.runtimeState) {
     return
   }
+
   const current = lease.dispatchState.checkpoint
+
   if (
     current?.environmentId === checkpoint.environmentId &&
     current.peerFingerprint === checkpoint.peerFingerprint &&
@@ -75,5 +84,6 @@ export function recordFederationAckCheckpoint(
   ) {
     return
   }
+
   lease.dispatchState.checkpoint = checkpoint
 }

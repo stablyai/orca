@@ -32,6 +32,7 @@ export function buildDirectWorkItemStartup(args: {
       worktreePath: args.worktreePath,
       projectRuntime: args.repoProjectRuntime
     })
+
   return buildDirectWorkItemAgentStartupPlan({
     agent: args.agent,
     agentArgs: args.agentArgs,
@@ -66,6 +67,7 @@ export async function resolveDirectWorkItemAgent(args: {
         : args.launchConnectionId
           ? await args.latestStore.ensureRemoteDetectedAgents(args.launchConnectionId)
           : await args.latestStore.ensureDetectedAgents()
+
   if (args.agentOverride !== undefined) {
     return {
       agent: args.agentOverride,
@@ -74,6 +76,7 @@ export async function resolveDirectWorkItemAgent(args: {
         !isTuiAgentEnabled(args.agentOverride, args.latestStore.settings?.disabledTuiAgents)
     }
   }
+
   return {
     agent: pickTuiAgent(
       args.latestStore.settings?.defaultTuiAgent,
@@ -95,6 +98,7 @@ export async function markDirectWorkItemAgentTrusted(args: {
   if (args.structuredLaunch) {
     return
   }
+
   await preflightAgentTrust({
     agent: args.agent,
     workspacePath: args.workspacePath,
@@ -119,6 +123,7 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
   primaryTabId: string | null
 }> {
   const { plan } = args
+
   const notLaunched = (structuredLaunch: boolean) => ({
     completed: false,
     structuredLaunch,
@@ -126,10 +131,13 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
     failed: false,
     primaryTabId: args.primaryTabId
   })
+
   if (plan?.route !== 'structured-native-chat') {
     return notLaunched(false)
   }
+
   const { agent } = plan
+
   // Why no tab: the pre-launch tab is the setup shell or default tab, never an agent tab, so
   // handing it back would paste the prompt there.
   const withoutAgentSurface = {
@@ -139,7 +147,9 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
     failed: true,
     primaryTabId: null
   }
+
   let settlement: Awaited<ReturnType<typeof plan.launch>>
+
   try {
     settlement = await plan.launch({
       legacyFallback: async () => {
@@ -148,6 +158,7 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
           workspacePath: args.workspacePath,
           connectionId: args.connectionId
         })
+
         const activation = activateAndRevealWorktree(args.worktreeId, {
           sidebarRevealBehavior: 'auto',
           createNewTerminalForStartup: true,
@@ -158,6 +169,7 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
             plan.promptDelivery === 'draft' ? plan.prompt : undefined
           )
         })
+
         return { activation, primaryTabId: activation === false ? null : activation.primaryTabId }
       }
     })
@@ -166,9 +178,11 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
     // rejection rather than the failure the caller already knows how to report.
     return withoutAgentSurface
   }
+
   if (!settlement) {
     return notLaunched(true)
   }
+
   switch (settlement.kind) {
     case 'structured':
       return {

@@ -8,6 +8,7 @@ const electronMocks = vi.hoisted(() => ({
   getPath: vi.fn(),
   getVersion: vi.fn()
 }))
+
 const materializerMocks = vi.hoisted(() => ({
   materializeServeSimRuntime: vi.fn()
 }))
@@ -19,12 +20,15 @@ vi.mock('electron', () => ({
     getVersion: electronMocks.getVersion
   }
 }))
+
 vi.mock('./serve-sim-runtime-materializer', () => materializerMocks)
 
 import { resolveServeSimExecutable } from './serve-sim-execution'
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
 const originalResourcesPath = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
+
 const cleanupPaths: string[] = []
 
 function setProcessProperty(name: 'platform' | 'resourcesPath', value: string): void {
@@ -46,6 +50,7 @@ async function createServeSimPackage(packageDir: string): Promise<string> {
   const entry = join(packageDir, 'dist', 'serve-sim.js')
   await mkdir(join(packageDir, 'dist'), { recursive: true })
   await writeFile(entry, 'console.log("serve-sim")')
+
   return entry
 }
 

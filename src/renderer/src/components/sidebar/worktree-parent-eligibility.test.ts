@@ -61,6 +61,7 @@ describe('canAssignWorktreeParent', () => {
     const grandchild = makeWorktree('grandchild')
     const sibling = makeWorktree('sibling')
     const worktrees = [parent, child, grandchild, sibling]
+
     const lineageById = {
       [child.id]: makeLineage(child, parent),
       [grandchild.id]: makeLineage(grandchild, child)
@@ -104,6 +105,7 @@ describe('canAssignWorktreeParent', () => {
     const child = makeWorktree('child')
     const descendant = makeWorktree('descendant')
     const staleParent = makeWorktree('stale-parent')
+
     const lineageById = {
       [descendant.id]: {
         ...makeLineage(descendant, child),
@@ -125,6 +127,7 @@ describe('canAssignWorktreeParent', () => {
   it('allows a raw current parent candidate when the child lineage is stale', () => {
     const parent = makeWorktree('parent')
     const child = makeWorktree('child')
+
     const lineageById = {
       [child.id]: {
         ...makeLineage(child, parent),
@@ -146,6 +149,7 @@ describe('canAssignWorktreeParent', () => {
     const child = makeWorktree('child')
     const firstLoopParent = makeWorktree('first-loop-parent')
     const secondLoopParent = makeWorktree('second-loop-parent')
+
     const lineageById = {
       [firstLoopParent.id]: makeLineage(firstLoopParent, secondLoopParent),
       [secondLoopParent.id]: makeLineage(secondLoopParent, firstLoopParent)

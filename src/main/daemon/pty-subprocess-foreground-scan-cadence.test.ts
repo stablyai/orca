@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
+
 const { spawnMock, isPwshAvailableMock, resolveAgentForegroundProcessMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
@@ -28,8 +29,11 @@ vi.mock('../pwsh', () => ({
 // Resolve PowerShell family names to deterministic absolute paths so these
 // tests run on non-Windows CI (mirrors pty-subprocess.test.ts).
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('../providers/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -42,6 +46,7 @@ vi.mock('../providers/windows-powershell-executable', () => ({
 
 vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
+
   return {
     ...actual,
     getNodePtySpawnHelperCandidates: () => [import.meta.filename]
@@ -51,6 +56,7 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
 vi.mock('../providers/agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
     const value = await resolveAgentForegroundProcessMock(...args)
+
     return value && typeof value === 'object' && 'available' in value
       ? value
       : { available: true, processName: value }
@@ -64,6 +70,7 @@ const BASE_TIME_MS = 1_000_000
 
 function mockPtyProcess(processName: string, pid = 12345) {
   const onDataListeners: ((data: string) => void)[] = []
+
   return {
     pid,
     write: vi.fn(),
@@ -72,6 +79,7 @@ function mockPtyProcess(processName: string, pid = 12345) {
     process: processName,
     onData: vi.fn((cb: (data: string) => void) => {
       onDataListeners.push(cb)
+
       return { dispose: vi.fn() }
     }),
     onExit: vi.fn(() => ({ dispose: vi.fn() })),
@@ -94,6 +102,7 @@ async function readForegroundAt(
   vi.setSystemTime(BASE_TIME_MS + atMs)
   const foreground = handle.getForegroundProcess()
   await flushAsyncTicks()
+
   return foreground
 }
 
@@ -117,14 +126,17 @@ describe('daemon pty foreground scan cadence', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
+
     if (previousUserDataPath === undefined) {
       delete process.env.ORCA_USER_DATA_PATH
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
     }
+
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
@@ -136,6 +148,7 @@ describe('daemon pty foreground scan cadence', () => {
     const proc = mockPtyProcess(shellProcessName)
     spawnMock.mockReturnValue(proc)
     const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+
     return { proc, handle }
   }
 
@@ -207,6 +220,7 @@ describe('daemon pty foreground scan cadence', () => {
       const { handle } = await spawnShellSubprocess('pi', targetPlatform)
 
       const reads: (string | null)[] = []
+
       for (let atMs = 0; atMs <= 3_000; atMs += 250) {
         reads.push(await readForegroundAt(handle, atMs))
       }
@@ -233,6 +247,7 @@ describe('daemon pty foreground scan cadence', () => {
       for (let atMs = 0; atMs <= 3_000; atMs += 250) {
         expect(await readForegroundAt(handle, atMs)).toBe('omp')
       }
+
       expect(resolveAgentForegroundProcessMock).not.toHaveBeenCalled()
     }
   )

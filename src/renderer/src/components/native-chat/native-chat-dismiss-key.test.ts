@@ -16,6 +16,7 @@ describe('nativeChatCardDismissKey', () => {
         ]
       }
     })
+
     expect(key).toContain('Pick a color')
     expect(key).toContain('Pick a size')
   })
@@ -26,6 +27,7 @@ describe('nativeChatCardDismissKey', () => {
         kind: 'question',
         prompt: { questions: [{ question: 'Continue?', multiSelect: false, options: [] }] }
       })
+
     expect(make()).toBe(make())
   })
 
@@ -54,6 +56,7 @@ describe('nativeChatCardDismissKey', () => {
         options: [{ label: 'Allow', send: '1' }]
       }
     })
+
     expect(key).toBe('approval:Allow Bash?:rm -rf build')
   })
 
@@ -62,10 +65,12 @@ describe('nativeChatCardDismissKey', () => {
       kind: 'approval',
       approval: { title: 'Allow Bash?', options: [] }
     })
+
     const b = nativeChatCardDismissKey({
       kind: 'approval',
       approval: { title: 'Allow Write?', options: [] }
     })
+
     expect(a).not.toBe(b)
   })
 })

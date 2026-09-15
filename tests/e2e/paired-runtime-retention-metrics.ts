@@ -18,26 +18,35 @@ export async function readPairedRetentionSample(
   } catch {
     // GC only improves measurement fidelity.
   }
+
   return page.evaluate((targets) => {
     let bufferCells = 0
     let mountedTargetManagers = 0
     let targetPanes = 0
+
     for (const tabId of targets) {
       const manager = window.__paneManagers?.get(tabId)
+
       if (!manager) {
         continue
       }
+
       mountedTargetManagers += 1
+
       for (const pane of manager.getPanes?.() ?? []) {
         const buffer = pane.terminal?.buffer?.active
+
         if (!buffer) {
           continue
         }
+
         targetPanes += 1
         bufferCells += buffer.length * pane.terminal.cols
       }
     }
+
     const memory = (performance as Performance & { memory?: { usedJSHeapSize?: number } }).memory
+
     return {
       bufferCells,
       heapBytes: memory?.usedJSHeapSize ?? null,
@@ -52,14 +61,17 @@ export async function startRendererLagProbe(page: Page): Promise<JSHandle<{ stop
     const sampleMs = 16
     let lastAt = performance.now()
     let maxDriftMs = 0
+
     const timer = window.setInterval(() => {
       const now = performance.now()
       maxDriftMs = Math.max(maxDriftMs, now - lastAt - sampleMs)
       lastAt = now
     }, sampleMs)
+
     return {
       stop: () => {
         window.clearInterval(timer)
+
         return maxDriftMs
       }
     }

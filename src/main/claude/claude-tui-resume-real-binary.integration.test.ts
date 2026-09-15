@@ -19,21 +19,28 @@ import { createClaudeTuiResumeLaunchBuilder } from './claude-tui-resume-launch'
 import { proveClaudeTuiResume } from './claude-tui-resume-proof'
 
 const command = resolveClaudeCommand()
+
 const claudeAvailable =
   spawnSync(command, ['--version'], { stdio: 'ignore', timeout: 5_000 }).status === 0
+
 const authStatusLaunch = getSpawnArgsForWindows(command, ['auth', 'status', '--json'])
+
 const claudeAuthenticated = (() => {
   if (!claudeAvailable) {
     return false
   }
+
   const result = spawnSync(authStatusLaunch.spawnCmd, authStatusLaunch.spawnArgs, {
     encoding: 'utf8',
     windowsHide: true,
     timeout: 5_000
   })
+
   return result.status === 0 && /"loggedIn"\s*:\s*true/.test(result.stdout)
 })()
+
 const roots: string[] = []
+
 const transcripts: string[] = []
 
 function shellQuote(value: string): string {
@@ -81,6 +88,7 @@ async function installCaptureHook(
       }
     })
   )
+
   return { eventsPath, settingsPath }
 }
 
@@ -89,19 +97,25 @@ async function waitForHook(
   source: 'startup' | 'resume'
 ): Promise<Record<string, unknown>> {
   const deadline = Date.now() + 15_000
+
   while (Date.now() < deadline) {
     const contents = await readFile(eventsPath, 'utf8').catch(() => '')
+
     for (const line of contents.split(/\r?\n/)) {
       if (!line.trim()) {
         continue
       }
+
       const event = JSON.parse(line) as Record<string, unknown>
+
       if (event.hook_event_name === 'SessionStart' && event.source === source) {
         return event
       }
     }
+
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
+
   throw new Error(`Claude did not emit a ${source} SessionStart hook`)
 }
 
@@ -109,6 +123,7 @@ type RunningTui = { proc: pty.IPty; exited: Promise<void> }
 
 function spawnResumeTui(args: string[], env: Record<string, string>): RunningTui {
   const direct = process.platform === 'win32'
+
   const proc = pty.spawn(
     direct ? command : process.env.SHELL || '/bin/zsh',
     direct ? args : ['-l'],
@@ -120,11 +135,13 @@ function spawnResumeTui(args: string[], env: Record<string, string>): RunningTui
       env: { ...env, TERM: 'xterm-256color' }
     }
   )
+
   if (!direct) {
     setTimeout(() => {
       proc.write(`${[command, ...args].map(shellQuote).join(' ')}\r`)
     }, 100).unref()
   }
+
   return { proc, exited: new Promise<void>((resolve) => proc.onExit(() => resolve())) }
 }
 
@@ -140,12 +157,15 @@ function structuredIdentity(providerSessionId: string): AgentSessionJournalIdent
 
 async function waitForStructuredResult(events: ClaudeStructuredSessionEvent[]): Promise<void> {
   const deadline = Date.now() + 30_000
+
   while (Date.now() < deadline) {
     if (events.some((event) => event.type === 'message' && event.message.type === 'result')) {
       return
     }
+
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
+
   throw new Error('Claude structured session did not finish its product-path turn')
 }
 
@@ -155,6 +175,7 @@ async function stopTui(tui: RunningTui): Promise<void> {
   } catch {
     return
   }
+
   await Promise.race([
     tui.exited,
     new Promise<never>((_resolve, reject) =>
@@ -177,6 +198,7 @@ describe.skipIf(!claudeAuthenticated)('real Claude TUI resume proof', () => {
     const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
     const events: ClaudeStructuredSessionEvent[] = []
     const settlements: { clientMessageId: string }[] = []
+
     const adapter = new ClaudeStructuredSessionAdapter({
       resolveLaunch: async () => ({
         pathToClaudeCodeExecutable: command,
@@ -195,13 +217,16 @@ describe.skipIf(!claudeAuthenticated)('real Claude TUI resume proof', () => {
       onDispatchSettledLate: (settlement) => settlements.push(settlement),
       readProcessStartTime: async () => 1
     })
+
     let resumed: RunningTui | null = null
+
     try {
       const acquisition = await adapter.acquire({
         identity: structuredIdentity(providerSessionId),
         fence: 1,
         spawnToken: 'real-create'
       })
+
       await expect(
         adapter.dispatch({
           sessionId: 'orca-real-claude-resume',
@@ -240,6 +265,7 @@ describe.skipIf(!claudeAuthenticated)('real Claude TUI resume proof', () => {
           }
         ]
       } as AgentSessionRecord
+
       const launch = await createClaudeTuiResumeLaunchBuilder({
         resolveWorkspacePath: async () => process.cwd(),
         resolveCommand: () => command,
@@ -247,6 +273,7 @@ describe.skipIf(!claudeAuthenticated)('real Claude TUI resume proof', () => {
         // which is the system-auth case: stripping it would sign the resume out.
         resolveAuthPolicy: () => ({ stripAuthEnv: false })
       })({ record, spawnToken: 'real-resume' })
+
       resumed = spawnResumeTui([...launch.args, '--settings', settingsPath], launch.env)
       let resumedOutput = ''
       resumed.proc.onData((data) => {
@@ -269,6 +296,7 @@ describe.skipIf(!claudeAuthenticated)('real Claude TUI resume proof', () => {
           throw new Error(`${String(error)}\nClaude output: ${resumedOutput}`)
         })
       ])
+
       expect(processIdentity).toMatchObject({
         hostId: 'local',
         spawnToken: 'real-resume',
@@ -277,6 +305,7 @@ describe.skipIf(!claudeAuthenticated)('real Claude TUI resume proof', () => {
       expect(proof).toMatchObject({ sessionId: providerSessionId, transcriptPath })
     } finally {
       await adapter.closeAll()
+
       if (resumed) {
         await stopTui(resumed)
       }

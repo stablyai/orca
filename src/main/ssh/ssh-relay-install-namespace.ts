@@ -55,13 +55,16 @@ export function remoteInstallDirSegments(
   pathFlavor: RemotePathFlavor
 ): string[] {
   const segments = [RELAY_REMOTE_DIR, remoteInstallDirName(model, fullVersion)]
+
   for (const segment of segments) {
     assertSafeRemotePathSegment(segment, pathFlavor)
+
     // Why: the version reaches logs and diagnostics, where an embedded CR/LF can forge lines.
     if (segment.includes('\r') || segment.includes('\n')) {
       throw new Error(`Unsafe remote path segment: ${JSON.stringify(segment)}`)
     }
   }
+
   return segments
 }
 
@@ -107,11 +110,14 @@ export function relaySftpNamespaceMapping(
 ): SftpNamespacePathMapping {
   if (relativeFileName !== undefined) {
     assertSafeRemotePathSegment(relativeFileName, 'posix')
+
     if (relativeFileName.includes('\r') || relativeFileName.includes('\n')) {
       throw new Error('Unsafe remote path segment in relay SFTP mapping')
     }
   }
+
   const homeRelativeLockDir = `${namespace.homeRelativeRelayDir}/${RELAY_INSTALL_LOCK_NAME}`
+
   return {
     homeRelativeNamespaceRoot: namespace.homeRelativeRelayDir,
     homeRelativePath:
@@ -132,7 +138,9 @@ export function relayUploadStageSftpNamespaceMapping(
   if (relativeFileName !== undefined) {
     assertSafeRemotePathSegment(relativeFileName, 'posix')
   }
+
   const homeRelativePayloadDir = `${namespace.homeRelativeStageDir}/payload`
+
   return {
     homeRelativeNamespaceRoot: namespace.homeRelativeStageDir,
     homeRelativePath:
@@ -151,6 +159,7 @@ export function makeRelayUploadStageDirectoryCommand(
 ): string {
   const payloadDir = joinRemotePath(host, shellStageDir, 'payload')
   const markerPath = joinRemotePath(host, shellStageDir, namespace.markerFileName)
+
   return `${makeRemoteDirectoryCommand(host, payloadDir)} && umask 077 && touch ${shellEscape(markerPath)}`
 }
 
@@ -173,6 +182,7 @@ export function createRelayInstallMarkerCommand(
 ): string {
   const lockDir = joinRemotePath(host, shellRelayDir, RELAY_INSTALL_LOCK_NAME)
   const markerPath = relayInstallMarkerShellPath(namespace, host, shellRelayDir)
+
   return `${makeRemoteDirectoryCommand(host, lockDir)} && umask 077 && touch ${shellEscape(markerPath)}`
 }
 
@@ -186,8 +196,10 @@ export function makeRelayInstallDirectoryCommand(
   namespace?: RelayInstallNamespace
 ): string {
   const makeDir = makeRemoteDirectoryCommand(host, shellRelayDir)
+
   if (!namespace) {
     return makeDir
   }
+
   return `${makeDir} && ${createRelayInstallMarkerCommand(namespace, host, shellRelayDir)}`
 }

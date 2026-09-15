@@ -52,13 +52,16 @@ export function getTerminalPtyOwnershipIdentity(
   worktreeId: string | null
 ): string {
   const remote = parseRemoteRuntimePtyId(ptyId)
+
   if (!remote?.handle) {
     return `pty:${ptyId}`
   }
+
   // Why: hydrated legacy runtime IDs omit their owner, but still refer to the
   // same provider terminal as a scoped ID in the owning worktree.
   const environmentId =
     remote.environmentId?.trim() || getRuntimeEnvironmentIdForWorktree(state, worktreeId) || ''
+
   return JSON.stringify(['runtime', environmentId, remote.handle])
 }
 
@@ -68,16 +71,21 @@ function collectPtyIdsForTab(
   rowPtyId: string | null | undefined
 ): string[] {
   const ids = new Set<string>()
+
   for (const ptyId of state.ptyIdsByTabId[tabId] ?? []) {
     appendPtyId(ids, ptyId)
   }
+
   appendPtyId(ids, rowPtyId)
+
   for (const ptyId of Object.values(state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {})) {
     appendPtyId(ids, ptyId)
   }
+
   appendPtyId(ids, state.lastKnownRelayPtyIdByTabId[tabId])
   appendPtyId(ids, state.deferredSshSessionIdsByTabId[tabId])
   appendPtyId(ids, state.pendingReconnectPtyIdByTabId[tabId])
+
   return [...ids]
 }
 
@@ -85,11 +93,13 @@ function collectLiveTerminalTabs(
   state: TerminalTabRetirementState
 ): Map<string, { worktreeId: string; rowPtyId: string | null }> {
   const liveTabs = new Map<string, { worktreeId: string; rowPtyId: string | null }>()
+
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     for (const tab of tabs) {
       liveTabs.set(tab.id, { worktreeId, rowPtyId: tab.ptyId })
     }
   }
+
   for (const [worktreeId, tabs] of Object.entries(state.unifiedTabsByWorktree)) {
     for (const tab of tabs) {
       if (tab.contentType === 'terminal' && !liveTabs.has(tab.entityId)) {
@@ -97,6 +107,7 @@ function collectLiveTerminalTabs(
       }
     }
   }
+
   return liveTabs
 }
 
@@ -109,6 +120,7 @@ function hasOwnerOutsideTargets(
       return true
     }
   }
+
   return false
 }
 
@@ -119,12 +131,15 @@ export function classifyTerminalRetirementWorktree(
   if (!worktreeId) {
     return 'absent'
   }
+
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return 'floating'
   }
+
   if (isEphemeralSetupTerminalWorktreeId(worktreeId)) {
     return 'ephemeral-setup'
   }
+
   return parseWorkspaceKey(worktreeId)?.type === 'folder' ? 'folder-workspace' : 'worktree'
 }
 
@@ -157,6 +172,7 @@ export function buildTerminalTabRetirementPlans(
   for (const [tabId, owner] of liveTabs) {
     const ptyIds = collectPtyIdsForTab(state, tabId, owner.rowPtyId)
     ptyIdsByLiveTab.set(tabId, ptyIds)
+
     for (const ptyId of ptyIds) {
       const identity = getTerminalPtyOwnershipIdentity(state, ptyId, owner.worktreeId)
       const owners = ownerTabIdsByIdentity.get(identity) ?? new Set<string>()
@@ -167,11 +183,14 @@ export function buildTerminalTabRetirementPlans(
 
   const plans = new Map<string, TerminalTabRetirementPlan>()
   const scheduledPtyOwners = new Set<string>()
+
   for (const tabId of targetIds) {
     const owner = liveTabs.get(tabId)
     const worktreeId = owner?.worktreeId ?? null
+
     const ptyIds =
       ptyIdsByLiveTab.get(tabId) ?? collectPtyIdsForTab(state, tabId, owner?.rowPtyId ?? null)
+
     const sharedPtyIds: string[] = []
     const localOrSshPtyIds: string[] = []
     const runtimeTerminals: TerminalTabRetirementPlan['runtimeTerminals'] = []
@@ -182,23 +201,28 @@ export function buildTerminalTabRetirementPlans(
     for (const ptyId of ptyIds) {
       const ownerIdentity = getTerminalPtyOwnershipIdentity(state, ptyId, worktreeId)
       const ownerTabIds = ownerTabIdsByIdentity.get(ownerIdentity)
+
       if (hasOwnerOutsideTargets(ownerTabIds, targetIdSet)) {
         sharedPtyIds.push(ptyId)
         continue
       }
+
       if (scheduledPtyOwners.has(ownerIdentity)) {
         // Why: another closing tab already owns provider teardown, but this
         // tab can still hold alias-keyed snapshots that must be discarded.
         cleanupOnlyPtyIds.push(ptyId)
         continue
       }
+
       scheduledPtyOwners.add(ownerIdentity)
       const remote = parseRemoteRuntimePtyId(ptyId)
+
       if (remote) {
         if (!remote.handle) {
           unroutablePtyIds.push(ptyId)
           continue
         }
+
         runtimeTerminals.push({
           ptyId,
           environmentId: remote.environmentId?.trim() || null,
@@ -225,6 +249,7 @@ export function buildTerminalTabRetirementPlans(
       unroutablePtyIds
     })
   }
+
   return plans
 }
 
@@ -233,14 +258,18 @@ export function removeSleepingAgentSessionsForTab(
   tabId: string
 ): Record<string, SleepingAgentSessionRecord> {
   let next = records
+
   for (const [paneKey, record] of Object.entries(records)) {
     if (!paneKey.startsWith(`${tabId}:`) && record.tabId !== tabId) {
       continue
     }
+
     if (next === records) {
       next = { ...records }
     }
+
     delete next[paneKey]
   }
+
   return next
 }

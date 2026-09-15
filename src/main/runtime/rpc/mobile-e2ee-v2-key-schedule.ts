@@ -1,6 +1,7 @@
 import { createHash, hkdfSync } from 'node:crypto'
 
 const SALT_LABEL = new TextEncoder().encode('orca-mobile-e2ee/v2/salt\0')
+
 const INFO_LABEL = new TextEncoder().encode('orca-mobile-e2ee/v2/session\0')
 
 export type MobileE2EEV2KeySchedule = {
@@ -24,6 +25,7 @@ export function deriveMobileE2EEV2KeySchedule(args: {
   const salt = sha256(concatBytes([SALT_LABEL, args.clientNonce, args.desktopNonce]))
   const info = concatBytes([INFO_LABEL, transcriptHash])
   const expanded = new Uint8Array(hkdfSync('sha256', args.sharedSecret, salt, info, 96))
+
   return {
     mobileToDesktopKey: expanded.slice(0, 32),
     desktopToMobileKey: expanded.slice(32, 64),
@@ -39,10 +41,12 @@ function sha256(bytes: Uint8Array): Uint8Array {
 function concatBytes(parts: readonly Uint8Array[]): Uint8Array {
   const result = new Uint8Array(parts.reduce((total, part) => total + part.length, 0))
   let offset = 0
+
   for (const part of parts) {
     result.set(part, offset)
     offset += part.length
   }
+
   return result
 }
 

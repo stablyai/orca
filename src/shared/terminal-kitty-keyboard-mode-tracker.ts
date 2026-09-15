@@ -127,9 +127,11 @@ export class TerminalKittyKeyboardModeTracker {
    */
   restoreSnapshotFlags(flags: number): void {
     const parsed = parseTerminalKittyKeyboardFlags(flags)
+
     if (parsed === undefined) {
       return
     }
+
     this.currentFlags = parsed
     this.currentKnown = true
     this.baselineProven = true
@@ -160,6 +162,7 @@ export class TerminalKittyKeyboardModeTracker {
     // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
     const kittyModeRe = /\x1bc|(?:\x1b\[|\x9b)(?:!p|\?([0-9;]+)([hl])|([<>=])([0-9;]*)u)/g
     let match: RegExpExecArray | null
+
     while ((match = kittyModeRe.exec(input)) !== null) {
       if (match[0] === '\x1bc') {
         // RIS resets kitty state and returns to the main screen.
@@ -169,14 +172,17 @@ export class TerminalKittyKeyboardModeTracker {
         this.alternateScreenSwitchObserved = true
         continue
       }
+
       if (match[0].endsWith('!p')) {
         this.applySoftReset()
         continue
       }
+
       if (match[1] !== undefined) {
         this.applyScreenSwitch(match[1], match[2] === 'h')
         continue
       }
+
       this.applyKittySequence(match[3], match[4] ?? '', replay)
     }
   }
@@ -201,10 +207,13 @@ export class TerminalKittyKeyboardModeTracker {
   private applyScreenSwitch(params: string, enabled: boolean): void {
     for (const rawParam of params.split(';')) {
       const param = Number(rawParam)
+
       if (param !== 47 && param !== 1047 && param !== 1049) {
         continue
       }
+
       this.alternateScreenSwitchObserved = true
+
       // Why: xterm swaps the current flags with the inactive screen's slot on
       // every 47/1047/1049 transition, without an already-active guard —
       // mirror it exactly so this state matches what the renderer encodes.
@@ -229,33 +238,42 @@ export class TerminalKittyKeyboardModeTracker {
   private applyKittySequence(prefix: string, params: string, replay: boolean): void {
     const parsed = params.split(';').map((entry) => Number(entry))
     const stack = this.alternateScreenActive ? this.altStack : this.mainStack
+
     if (prefix === '>') {
       if (!replay) {
         if (stack.length >= KITTY_STACK_LIMIT) {
           stack.shift()
         }
+
         stack.push({ flags: this.currentFlags, known: this.currentKnown })
       }
+
       // A push states the new effective flags absolutely, so they are proven
       // even when the value it displaced was not.
       this.currentFlags = parsed[0] || 0
       this.currentKnown = true
       this.baselineProven = true
+
       return
     }
+
     if (prefix === '<') {
       const count = Math.max(1, parsed[0] || 1)
       let lastPopped: KittyStackFrame | null = null
+
       for (let i = 0; i < count; i++) {
         const frame = stack.pop()
+
         if (!frame) {
           lastPopped = null
           break
         }
+
         lastPopped = frame
         this.currentFlags = frame.flags
         this.currentKnown = frame.known
       }
+
       if (stack.length === 0) {
         // Why: xterm zeroes an exhausted stack even over a just-popped value.
         // With complete history that matches the app's emulator exactly, but a
@@ -265,16 +283,21 @@ export class TerminalKittyKeyboardModeTracker {
         // below it); landing at empty on any other frame, or past it, proves
         // nothing about the older history.
         this.currentFlags = 0
+
         const stackComplete = this.alternateScreenActive
           ? this.altStackComplete
           : this.mainStackComplete
+
         this.currentKnown =
           stackComplete || (lastPopped !== null && lastPopped.known && lastPopped.flags === 0)
       }
+
       return
     }
+
     const flags = parsed[0] || 0
     const mode = parsed.length > 1 && parsed[1] ? parsed[1] : 1
+
     if (mode === 1) {
       // An absolute set re-proves the active screen regardless of its baseline.
       this.currentFlags = flags
@@ -290,24 +313,31 @@ export class TerminalKittyKeyboardModeTracker {
 
   private extractScanTail(input: string): string {
     const start = Math.max(input.lastIndexOf('\x1b'), input.lastIndexOf('\x9b'))
+
     if (start === -1) {
       return ''
     }
+
     const tail = input.slice(start)
+
     if (tail.length > KITTY_SCAN_TAIL_LIMIT) {
       return ''
     }
+
     if (tail === '\x1b' || tail === '\x1b[' || tail === '\x9b') {
       return tail
     }
+
     const body = tail.startsWith('\x1b[')
       ? tail.slice(2)
       : tail.startsWith('\x9b')
         ? tail.slice(1)
         : null
+
     if (body === null) {
       return ''
     }
+
     return this.isIncompleteSequenceBody(body) ? tail : ''
   }
 

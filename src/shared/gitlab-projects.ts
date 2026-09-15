@@ -21,5 +21,6 @@ export function computeNextGitLabRecents(
   // Why: filter before prepend so re-opening an already-recent project
   // moves it to the front rather than producing a duplicate.
   const filtered = existing.filter((entry) => !(entry.host === host && entry.path === path))
+
   return [{ host, path, lastOpenedAt: now.toISOString() }, ...filtered].slice(0, max)
 }

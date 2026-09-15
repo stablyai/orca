@@ -22,11 +22,17 @@ import { projectFleetWorkerPage } from './worker-observation'
  * make them fail closed.
  */
 const PANE_KEY = 'tab-observed:11111111-1111-4111-8111-111111111111'
+
 const REMINTED_PANE_KEY = 'tab-observed:22222222-2222-4222-8222-222222222222'
+
 const TERMINAL_HANDLE = 'term_observed'
+
 const INCARNATION_ONE = 'pty-observed:inc-1'
+
 const INCARNATION_TWO = 'pty-observed:inc-2'
+
 const DISPATCH_OLD = 'disp-observed-old'
+
 const DISPATCH_NEW = 'disp-observed-new'
 
 type ObservedWorld = {
@@ -42,32 +48,39 @@ function createWorld(): ObservedWorld {
   const handleByPane = new Map<string, string>()
   const incarnationByHandle = new Map<string, string>()
   const dispatchByPane = new Map<string, string>()
+
   const identity = {
     getAgentStatusTerminalHandleForPaneKey: (paneKey: string) => handleByPane.get(paneKey),
     getTerminalProcessIncarnation: (handle: string) => incarnationByHandle.get(handle) ?? null,
     getAgentStatusOrchestrationContextForPaneKey: (paneKey: string) => {
       const dispatchId = dispatchByPane.get(paneKey)
+
       return dispatchId ? ({ dispatchId } as AgentStatusOrchestrationContext) : undefined
     }
   }
+
   const server = new AgentHookServer()
   const observed = new AgentStatusObservedPaneIdentities()
   server.subscribeEnrichedStatus((entry) =>
     recordObservedAgentStatusPaneIdentity(observed, entry.paneKey, identity)
   )
+
   const host = {
     ...identity,
     getAgentStatusSnapshotFn: () => server.getStatusSnapshot(),
     readObservedAgentStatusPaneIdentityFn: (paneKey: string) => observed.read(paneKey)
   }
+
   return {
     bindPane: (paneKey, handle) => handleByPane.set(paneKey, handle),
     runProcess: (handle, incarnation) => incarnationByHandle.set(handle, incarnation),
     dispatchPane: (paneKey, dispatchId) => {
       if (dispatchId === null) {
         dispatchByPane.delete(paneKey)
+
         return
       }
+
       dispatchByPane.set(paneKey, dispatchId)
     },
     ingest: (paneKey, state) =>
@@ -140,11 +153,13 @@ describe('fleet evidence keeps the identity it was observed under', () => {
   it('buffers startup observations until terminal recovery is ready', () => {
     const identities = new AgentStatusObservedPaneIdentities()
     const capture = new AgentStatusObservedPaneIdentityCapture(identities)
+
     const runtime = {
       getAgentStatusTerminalHandleForPaneKey: () => TERMINAL_HANDLE,
       getTerminalProcessIncarnation: () => INCARNATION_ONE,
       getAgentStatusOrchestrationContextForPaneKey: () => undefined
     }
+
     const entry = {
       paneKey: PANE_KEY,
       payload: { state: 'working', prompt: 'startup', agentType: 'claude' },

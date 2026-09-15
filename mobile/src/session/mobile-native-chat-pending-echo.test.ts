@@ -18,6 +18,7 @@ function sendOrigin(
   messages: readonly NativeChatMessage[]
 ): MobileNativeChatSendOrigin {
   const normalizedText = normalizeReconcileText(text)
+
   return {
     draftKey: 'host\0worktree\0tab',
     draftEditGeneration: 0,
@@ -47,6 +48,7 @@ describe('appendMobileNativeChatPending ordinals for repeated sends', () => {
 
   it('gives a repeated multi-line send the next ordinal', () => {
     const baseline = [userTurn('m1', 'unrelated')]
+
     const first = appendMobileNativeChatPending(
       {},
       KEY,
@@ -54,6 +56,7 @@ describe('appendMobileNativeChatPending ordinals for repeated sends', () => {
       sendOrigin(MULTILINE, baseline),
       MULTILINE
     )
+
     const both = appendMobileNativeChatPending(
       first,
       KEY,
@@ -67,6 +70,7 @@ describe('appendMobileNativeChatPending ordinals for repeated sends', () => {
 
   it('retires only the first echo when the first of two identical rows lands', () => {
     const baseline = [userTurn('m1', 'unrelated')]
+
     const pending = appendMobileNativeChatPending(
       appendMobileNativeChatPending({}, KEY, 'p1', sendOrigin(MULTILINE, baseline), MULTILINE),
       KEY,
@@ -74,6 +78,7 @@ describe('appendMobileNativeChatPending ordinals for repeated sends', () => {
       sendOrigin(MULTILINE, baseline),
       MULTILINE
     )[KEY]!
+
     const landedOnce = [...baseline, userTurn('m2', MULTILINE)]
 
     expect(
@@ -85,6 +90,7 @@ describe('appendMobileNativeChatPending ordinals for repeated sends', () => {
 
   it('still counts a single-line repeat, which never regressed', () => {
     const baseline = [userTurn('m1', 'unrelated')]
+
     const both = appendMobileNativeChatPending(
       appendMobileNativeChatPending({}, KEY, 'p1', sendOrigin('ping', baseline), 'ping'),
       KEY,
@@ -111,6 +117,7 @@ describe('mobile pending echoes whose text normalizes to nothing', () => {
         baselineResolved: true
       }
     ]
+
     const landed = [userTurn('m1', 'hi'), userTurn('m2', '[Image #1]')]
 
     expect(retireLandedMobileNativeChatPending(landed, stranded, NO_IMAGE_ECHOES)).toEqual(stranded)
@@ -125,6 +132,7 @@ describe('mobile pending echoes whose text normalizes to nothing', () => {
       '[Image #1]',
       ['file:///a.jpg']
     )
+
     const both = appendMobileNativeChatPending(first, KEY, 'p2', sendOrigin('', []), '', [
       'file:///b.jpg'
     ])

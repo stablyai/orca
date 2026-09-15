@@ -20,15 +20,19 @@ export function useSidebarWorktreeFilters() {
 
   const setShowSleepingWorkspaces = useAppStore((s) => s.setShowSleepingWorkspaces)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
+
   const setHideAutomationGeneratedWorkspaces = useAppStore(
     (s) => s.setHideAutomationGeneratedWorkspaces
   )
+
   const setHideCliCreatedWorkspaces = useAppStore((s) => s.setHideCliCreatedWorkspaces)
   const setHideDetachedHeadWorkspaces = useAppStore((s) => s.setHideDetachedHeadWorkspaces)
   const setHideWorkspacesFromOtherDevices = useAppStore((s) => s.setHideWorkspacesFromOtherDevices)
+
   const setAlwaysShowDefaultBranchWorkspace = useAppStore(
     (s) => s.setAlwaysShowDefaultBranchWorkspace
   )
+
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
 
@@ -62,30 +66,39 @@ export function useSidebarWorktreeFilters() {
 
   const clearFilters = useCallback(() => {
     const actions = computeClearFilterActions(filterState)
+
     if (actions.resetShowSleepingWorkspaces) {
       setShowSleepingWorkspaces(DEFAULT_SHOW_SLEEPING_WORKSPACES)
     }
+
     if (actions.resetFilterRepoIds) {
       setFilterRepoIds([])
     }
+
     if (actions.resetHideDefaultBranchWorkspace) {
       setHideDefaultBranchWorkspace(false)
     }
+
     if (actions.resetHideAutomationGeneratedWorkspaces) {
       setHideAutomationGeneratedWorkspaces(false)
     }
+
     if (actions.resetHideCliCreatedWorkspaces) {
       setHideCliCreatedWorkspaces(false)
     }
+
     if (actions.resetHideDetachedHeadWorkspaces) {
       setHideDetachedHeadWorkspaces(false)
     }
+
     if (actions.resetHideWorkspacesFromOtherDevices) {
       setHideWorkspacesFromOtherDevices(false)
     }
+
     if (actions.resetAlwaysShowDefaultBranchWorkspace) {
       setAlwaysShowDefaultBranchWorkspace(true)
     }
+
     if (actions.resetVisibleWorkspaceHostIds) {
       setVisibleWorkspaceHostIds(null)
     }

@@ -16,11 +16,14 @@ export function resolveBottomDrawerKeyboardInset(input: {
   platform: 'ios' | 'android' | 'windows' | 'macos' | 'web'
 }): number {
   const keyboardHeight = Math.max(0, input.keyboardHeight)
+
   if (input.fillAvailable) {
     return keyboardHeight
   }
+
   if (input.platform === 'ios') {
     return Math.max(0, keyboardHeight - Math.max(0, input.bottomInset))
   }
+
   return keyboardHeight
 }

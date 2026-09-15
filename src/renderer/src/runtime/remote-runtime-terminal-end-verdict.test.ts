@@ -18,6 +18,7 @@ describe('remote runtime terminal end verdict', () => {
             queueMicrotask(() => {
               callbacks?.onResponse({ ok: true, result: { type: 'ready' } })
             })
+
             return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
           })
         }
@@ -36,7 +37,9 @@ describe('remote runtime terminal end verdict', () => {
   ])('maps %s to %s', async (_case, fields, expected) => {
     const { getRemoteRuntimeTerminalMultiplexer } =
       await import('./remote-runtime-terminal-multiplexer')
+
     const onEnd = vi.fn()
+
     const stream = await getRemoteRuntimeTerminalMultiplexer('env-1').subscribeTerminal({
       terminal: 'terminal-1',
       client: { id: 'desktop-1', type: 'desktop' },

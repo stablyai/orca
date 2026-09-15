@@ -93,6 +93,7 @@ export class DevinHookService {
     const configPath = getDevinConfigPath()
     const scriptPath = getDevinManagedScriptPath()
     const config = readDevinHooksConfig(configPath)
+
     if (!config) {
       return {
         agent: 'devin',
@@ -107,22 +108,27 @@ export class DevinHookService {
     const command = getDevinManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
+
     for (const event of DEVIN_EVENTS) {
       const definitions = Array.isArray(config.hooks?.[event.eventName])
         ? config.hooks![event.eventName]!
         : []
+
       const hasCommand = definitions.some((definition) =>
         (definition.hooks ?? []).some((hook) => hook.command === command)
       )
+
       if (hasCommand) {
         presentCount += 1
       } else {
         missing.push(event.eventName)
       }
     }
+
     const managedHooksPresent = presentCount > 0
     let state: AgentHookInstallState
     let detail: string | null
+
     if (missing.length === 0) {
       state = 'installed'
       detail = null
@@ -133,6 +139,7 @@ export class DevinHookService {
       state = 'partial'
       detail = `Managed hook missing for events: ${missing.join(', ')}`
     }
+
     return {
       agent: 'devin',
       state,
@@ -146,6 +153,7 @@ export class DevinHookService {
     const configPath = getDevinConfigPath()
     const scriptPath = getDevinManagedScriptPath()
     const source = readDevinHooksSource(configPath)
+
     if (!source) {
       return {
         agent: 'devin',
@@ -157,15 +165,18 @@ export class DevinHookService {
     }
 
     const command = getDevinManagedCommand(scriptPath)
+
     const nextConfig = applyDevinManagedHooks(
       source.config,
       command,
       getDevinManagedScriptFileName()
     )
+
     writeManagedScript(scriptPath, getManagedScript())
     writeHooksJson(configPath, nextConfig, {
       serialized: serializeDevinHooksConfig(source.text, nextConfig)
     })
+
     return this.getStatus()
   }
 
@@ -175,12 +186,15 @@ export class DevinHookService {
     const remoteConfigPath = getDevinRemoteConfigPath(remoteHome)
     const remoteScriptFileName = getDevinPosixManagedScriptFileName()
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/${remoteScriptFileName}`
+
     // Why: SFTP I/O fails far more often than local fs; wrap the flow so failures surface as a structured error, not an unhandled rejection.
     try {
       // Why: Devin config.json is JSONC (comments), so JSON.parse rejects it; parse via jsonc-parser.
       const body = await readTextFileRemote(sftp, remoteConfigPath)
+
       const config =
         body === null ? {} : parseDevinHooksConfigText(body, 'remote Devin config.json')
+
       if (!config) {
         return {
           agent: 'devin',
@@ -223,6 +237,7 @@ export class DevinHookService {
   remove(): AgentHookInstallStatus {
     const configPath = getDevinConfigPath()
     const source = readDevinHooksSource(configPath)
+
     if (!source) {
       return {
         agent: 'devin',
@@ -232,15 +247,18 @@ export class DevinHookService {
         detail: 'Could not parse Devin config.json'
       }
     }
+
     const { config: nextConfig, changed } = removeDevinManagedHooks(
       source.config,
       getDevinManagedScriptFileName()
     )
+
     if (changed) {
       writeHooksJson(configPath, nextConfig, {
         serialized: serializeDevinHooksConfig(source.text, nextConfig)
       })
     }
+
     return this.getStatus()
   }
 }

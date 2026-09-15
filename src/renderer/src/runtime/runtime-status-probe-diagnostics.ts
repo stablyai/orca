@@ -7,6 +7,7 @@ export function extractRuntimeTransportDiagnostics(
   if (!(error instanceof RuntimeRpcCallError)) {
     return null
   }
+
   const remoteControl =
     typeof error.response.error.data === 'object' && error.response.error.data !== null
       ? ((
@@ -15,5 +16,6 @@ export function extractRuntimeTransportDiagnostics(
           }
         ).remoteControl ?? null)
       : null
+
   return remoteControl
 }

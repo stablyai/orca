@@ -30,6 +30,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -44,9 +45,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -87,6 +90,7 @@ describe('Store', () => {
 
   it('flush remains safe when a debounced save is also pending', async () => {
     vi.useFakeTimers()
+
     try {
       const store = await createStore()
       store.addRepo(makeRepo())
@@ -105,6 +109,7 @@ describe('Store', () => {
 
   it('debounced save writes data after the delay', async () => {
     vi.useFakeTimers()
+
     try {
       const store = await createStore()
       store.addRepo(makeRepo())
@@ -130,6 +135,7 @@ describe('Store', () => {
 
   it('skips the disk write when a mutation burst nets out to already-persisted state', async () => {
     vi.useFakeTimers()
+
     try {
       const store = await createStore()
       store.updateUI({ sidebarWidth: 400 })
@@ -150,6 +156,7 @@ describe('Store', () => {
 
   it('skips the sync flush when state already matches the last write', async () => {
     vi.useFakeTimers()
+
     try {
       const store = await createStore()
       store.updateUI({ sidebarWidth: 420 })
@@ -167,14 +174,17 @@ describe('Store', () => {
 
   it('bounds save postponement under sustained mutation bursts (max-wait)', async () => {
     vi.useFakeTimers()
+
     try {
       const store = await createStore()
       // Mutations every 500ms reset the 1s debounce; the 5s max-wait must force a write anyway.
       let width = 400
+
       for (let i = 0; i < 11; i++) {
         store.updateUI({ sidebarWidth: width++ })
         vi.advanceTimersByTime(500)
       }
+
       await store.waitForPendingWrite()
 
       expect(existsSync(dataFile())).toBe(true)
@@ -220,6 +230,7 @@ describe('Store', () => {
       leafId: TEST_LEAF_1,
       ptyId: 'daemon-pty'
     }
+
     store.persistPtyBinding(binding)
     const inoBefore = statSync(dataFile()).ino
 
@@ -235,12 +246,14 @@ describe('Store', () => {
     const OLD = Date.now() - 40 * 24 * 60 * 60 * 1000
     const RECENT = Date.now() - 1 * 24 * 60 * 60 * 1000
     const missing = (name: string): string => join(testState.dir, 'gone', name)
+
     const meta = (lastActivityAt: number, extra: Record<string, unknown> = {}) => ({
       displayName: '',
       comment: '',
       lastActivityAt,
       ...extra
     })
+
     const liveKey = `r1::${testState.dir}`
     const deadKey = `r1::${missing('dead')}`
     const recentKey = `r1::${missing('recent')}`
@@ -321,6 +334,7 @@ describe('Store', () => {
 
   it('cache refreshes never rewrite the durable state file', async () => {
     vi.useFakeTimers()
+
     try {
       const store = await createStore()
       store.updateUI({ sidebarWidth: 411 })
@@ -417,6 +431,7 @@ describe('Store', () => {
 
     const runtimeCounters = (store: ReturnType<typeof createStore>) => {
       const runtime = store['runtime']
+
       return {
         writeGeneration: runtime.writeGeneration,
         lastDurableWriteGeneration: runtime.lastDurableWriteGeneration
@@ -548,8 +563,10 @@ describe('Store', () => {
         boundSession({ terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' } })
       )
       store.persistPtyBinding({ ...binding, incarnationId: 'inc-stale' })
+
       const revisionBefore =
         store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo1 ?? 0
+
       const flushSpy = vi.spyOn(store, 'flushOrThrow')
 
       expect(
@@ -582,9 +599,11 @@ describe('Store', () => {
         { ...binding, incarnationId: 'inc-1', expectedBinding: { ptyId: 'pty-other' } },
         { ...binding, tabId: 'missing-tab', mayCreate: false }
       ]
+
       for (const refusal of refusals) {
         expect(store.persistPtyBinding(refusal)).toBe(false)
       }
+
       expect(flushSpy).not.toHaveBeenCalled()
     })
 
@@ -727,6 +746,7 @@ describe('Store', () => {
           'name' in record &&
           record.name === 'persistence.pty-binding'
       )
+
       expect(spans).toMatchObject([
         {
           attributes: {

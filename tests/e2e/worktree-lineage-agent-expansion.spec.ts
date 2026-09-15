@@ -9,12 +9,14 @@ import { worktreeRow } from './worktree-row-locators'
 // Set ORCA_CAPTURE_EVIDENCE=1 to also write before/after screenshots to
 // pr-evidence/. Off by default so CI just runs the behavioral assertions.
 const CAPTURE_EVIDENCE = process.env.ORCA_CAPTURE_EVIDENCE === '1'
+
 const SHOT_DIR = resolve(process.cwd(), 'pr-evidence')
 
 async function captureSidebar(page: Page, name: string): Promise<void> {
   if (!CAPTURE_EVIDENCE) {
     return
   }
+
   mkdirSync(SHOT_DIR, { recursive: true })
   await sidebar(page).screenshot({ path: resolve(SHOT_DIR, name) })
 }
@@ -24,22 +26,29 @@ async function captureSidebar(page: Page, name: string): Promise<void> {
 async function seedTwoParentAgents(page: Page, worktreeId: string): Promise<void> {
   await page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const state = store.getState()
+
     if (!state.worktreeCardProperties.includes('inline-agents')) {
       state.toggleWorktreeCardProperty('inline-agents')
     }
+
     while ((store.getState().tabsByWorktree[worktreeId] ?? []).length < 2) {
       store.getState().createTab(worktreeId)
     }
+
     const tabs = (store.getState().tabsByWorktree[worktreeId] ?? []).slice(0, 2)
     const now = Date.now()
+
     const specs = [
       { state: 'working' as const, prompt: 'Refactor auth middleware', agentType: 'claude' },
       { state: 'done' as const, prompt: 'Write unit tests for parser', agentType: 'codex' }
     ]
+
     tabs.forEach((tab, index) => {
       const spec = specs[index]!
       const leafId = crypto.randomUUID()

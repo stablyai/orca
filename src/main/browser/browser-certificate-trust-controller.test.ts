@@ -7,13 +7,16 @@ import {
 } from '../network/proxy-settings'
 
 const FIRST_CERTIFICATE = certificate('first certificate')
+
 const SECOND_CERTIFICATE = certificate('replacement certificate')
+
 let beforeRequestListener:
   | ((
       details: Electron.OnBeforeRequestListenerDetails,
       callback: (response: Electron.CallbackResponse) => void
     ) => void)
   | null = null
+
 const browserSession = {
   resolveProxy: vi.fn(async () => 'DIRECT'),
   setProxy: vi.fn(async () => {}),
@@ -68,6 +71,7 @@ function beforeRequest(args: {
     },
     callback
   )
+
   return callback
 }
 
@@ -90,6 +94,7 @@ function certificateEvent(args: {
     callback,
     isMainFrame: args.isMainFrame ?? true
   })
+
   return { preventDefault, callback }
 }
 
@@ -130,6 +135,7 @@ describe('BrowserCertificateTrustController', () => {
         if (!pageByGuestId.has(webContentsId)) {
           return null
         }
+
         return {
           browserPageId: pageByGuestId.get(webContentsId) ?? null,
           worktreeId: 'worktree-1',
@@ -151,11 +157,13 @@ describe('BrowserCertificateTrustController', () => {
     vi.mocked(browserSession.setProxy).mockImplementationOnce(
       () => new Promise<void>((resolve) => (finishWrite = resolve))
     )
+
     const applying = applyProxySettingsToSession(
       browserSession,
       { httpProxyUrl: 'http://proxy.example:8080' },
       { env: {} }
     )
+
     const callback = beforeRequest({ url: 'http://proxy-only.invalid/', webContentsId: guest.id })
 
     await vi.waitFor(() => expect(browserSession.setProxy).toHaveBeenCalledOnce())
@@ -206,6 +214,7 @@ describe('BrowserCertificateTrustController', () => {
       guest,
       url: 'wss://localhost:3443/socket'
     })
+
     expect(sameEndpoint.preventDefault).toHaveBeenCalledOnce()
     expect(sameEndpoint.callback).toHaveBeenCalledOnce()
     expect(sameEndpoint.callback).toHaveBeenCalledWith(true)
@@ -219,6 +228,7 @@ describe('BrowserCertificateTrustController', () => {
       guest,
       url: 'https://localhost:3444/'
     })
+
     expect(otherPort.callback).toHaveBeenCalledWith(false)
     expect(otherPort.preventDefault).not.toHaveBeenCalled()
 
@@ -227,6 +237,7 @@ describe('BrowserCertificateTrustController', () => {
       guest,
       certificate: SECOND_CERTIFICATE
     })
+
     expect(otherCertificate.callback).toHaveBeenCalledWith(false)
     expect(otherCertificate.preventDefault).not.toHaveBeenCalled()
   })
@@ -298,6 +309,7 @@ describe('BrowserCertificateTrustController', () => {
       expect(event.callback).toHaveBeenCalledWith(false)
       expect(event.preventDefault).not.toHaveBeenCalled()
     }
+
     expect(controller.getFailure('page-1')).toBeNull()
     expect(onFailureChanged).not.toHaveBeenCalled()
   })
@@ -364,6 +376,7 @@ describe('BrowserCertificateTrustController', () => {
     pageByGuestId.delete(guest.id)
     const unmanaged = certificateEvent({ controller, guest })
     const malformedUrl = certificateEvent({ controller, guest: otherGuest, url: 'not a URL' })
+
     const malformedCertificate = certificateEvent({
       controller,
       guest: otherGuest,

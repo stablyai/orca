@@ -5,12 +5,14 @@ describe('runSkillCandidateTasks', () => {
   it('bounds concurrency and preserves task order', async () => {
     let active = 0
     let maxActive = 0
+
     const results = await runSkillCandidateTasks(
       Array.from({ length: 12 }, (_, index) => async () => {
         active += 1
         maxActive = Math.max(maxActive, active)
         await new Promise((resolve) => setTimeout(resolve, 12 - index))
         active -= 1
+
         return index
       })
     )

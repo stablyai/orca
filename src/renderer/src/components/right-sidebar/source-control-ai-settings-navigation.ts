@@ -24,5 +24,6 @@ export function openSourceControlAiSettingsTarget({
       sectionId: 'source-control-ai-settings'
     })
   }
+
   openSettingsPage()
 }

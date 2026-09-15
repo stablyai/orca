@@ -20,6 +20,7 @@ export function useTroubleshootDiagnostics() {
     if (node !== null) {
       return
     }
+
     // Why: diagnostics can outlive the screen; cancel the active run when the
     // route detaches without a passive cleanup-only Effect.
     abortRef.current = true
@@ -54,17 +55,21 @@ export function useTroubleshootDiagnostics() {
     if (!isCurrentRun()) {
       return
     }
+
     setChecks([...results])
 
     const internetCheck = startDiagnosticFetchTimeout(5000)
     activeInternetCheckRef.current = internetCheck
+
     try {
       const resp = await fetch('https://dns.google/resolve?name=example.com&type=A', {
         signal: internetCheck.signal
       })
+
       if (!isCurrentRun()) {
         return
       }
+
       results.push(
         resp.ok
           ? { label: 'Internet', status: 'pass', detail: 'Connected' }
@@ -74,9 +79,11 @@ export function useTroubleshootDiagnostics() {
       if (!isCurrentRun()) {
         return
       }
+
       results.push({ label: 'Internet', status: 'fail', detail: 'No connection' })
     } finally {
       internetCheck.dispose()
+
       if (activeInternetCheckRef.current === internetCheck) {
         activeInternetCheckRef.current = null
       }
@@ -85,18 +92,23 @@ export function useTroubleshootDiagnostics() {
     if (!isCurrentRun()) {
       return
     }
+
     setChecks([...results])
 
     try {
       const hosts = await loadHosts()
+
       for (const host of hosts) {
         if (!isCurrentRun()) {
           return
         }
+
         const reachable = await testHostReachability(host.endpoint)
+
         if (!isCurrentRun()) {
           return
         }
+
         results.push({
           label: host.name,
           status: reachable ? 'pass' : 'fail',

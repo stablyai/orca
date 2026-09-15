@@ -11,6 +11,7 @@ export function isOrcaWindowForegroundFocused(): boolean {
   if (typeof document === 'undefined') {
     return true
   }
+
   return document.visibilityState === 'visible' && document.hasFocus()
 }
 
@@ -24,6 +25,7 @@ export function isVisibleForegroundPaneKey(
   }
 
   const parsed = parsePaneKey(paneKey)
+
   if (!parsed || state.activeTabId !== parsed.tabId) {
     return false
   }

@@ -46,6 +46,7 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
     liveInputEnabled,
     reopenFocusedInputWhenKeyboardHidden
   })
+
   useLayoutEffect(() => {
     contextRef.current = {
       canSend,
@@ -65,9 +66,11 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
 
   const focusLiveInput = useCallback(() => {
     const context = contextRef.current
+
     if (!context.canSend || !context.liveInputEnabled) {
       return
     }
+
     focusTerminalLiveInputTarget(inputRef.current, {
       keyboardHeight: context.keyboardHeight,
       reopenFocusedInputWhenKeyboardHidden: context.reopenFocusedInputWhenKeyboardHidden,
@@ -78,9 +81,11 @@ export function useTerminalLiveInputFocus<T extends TerminalLiveInputFocusTarget
   const handleTerminalTap = useCallback(
     (handle: string) => {
       const context = contextRef.current
+
       if (handle !== activeHandleRef.current || !context.canSend || !context.liveInputEnabled) {
         return
       }
+
       // WKWebView still owns first responder during its touchend notification.
       scheduleTerminalLiveInputFocus(timerRef, () => {
         if (activeHandleRef.current === handle) {

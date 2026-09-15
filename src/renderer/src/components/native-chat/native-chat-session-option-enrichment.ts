@@ -29,6 +29,7 @@ export function readNativeChatEnrichedModels(
   hostKey: string
 ): CatalogModel[] | null {
   const models = enrichmentByAgentHost.get(enrichmentKey(agent, hostKey))?.models
+
   return models ? [...models] : null
 }
 
@@ -38,14 +39,17 @@ export function subscribeNativeChatEnrichedModels(
   listener: (models: CatalogModel[]) => void
 ): () => void {
   const key = enrichmentKey(agent, hostKey)
+
   const entry = enrichmentByAgentHost.get(key) ?? {
     agent,
     state: 'idle' as const,
     models: null,
     listeners: new Set<(models: CatalogModel[]) => void>()
   }
+
   entry.listeners.add(listener)
   enrichmentByAgentHost.set(key, entry)
+
   return () => entry.listeners.delete(listener)
 }
 
@@ -54,18 +58,23 @@ export function resolveNativeChatLaunchSessionOptions(
   agent: AgentType
 ): Record<string, SessionOptionValue> | undefined {
   const values = resolveNativeChatSessionOptionDefaults(persisted, agent)
+
   if (!values || !getAgentSessionOptionCatalog(agent)?.discoveredModelsAreAuthoritative) {
     return values
   }
+
   let probed = false
+
   for (const entry of enrichmentByAgentHost.values()) {
     if (entry.agent === agent && entry.models) {
       probed = true
+
       if (entry.models.some((model) => model.id === values.model)) {
         return values
       }
     }
   }
+
   return probed ? undefined : values
 }
 
@@ -75,20 +84,25 @@ export function ensureNativeChatModelEnrichment(args: {
   discover: () => Promise<readonly CatalogModel[] | null>
 }): void {
   const catalog = getAgentSessionOptionCatalog(args.agent)
+
   if (!catalog?.listModels) {
     return
   }
+
   const key = enrichmentKey(args.agent, args.hostKey)
   const existing = enrichmentByAgentHost.get(key)
+
   if (existing?.state === 'pending' || existing?.state === 'settled') {
     return
   }
+
   const entry: CatalogEnrichmentEntry = existing ?? {
     agent: args.agent,
     state: 'idle',
     models: null,
     listeners: new Set()
   }
+
   entry.state = 'pending'
   enrichmentByAgentHost.set(key, entry)
 
@@ -98,15 +112,18 @@ export function ensureNativeChatModelEnrichment(args: {
     .discover()
     .then((discovered) => {
       entry.state = 'settled'
+
       if (!discovered || discovered.length === 0) {
         return
       }
+
       entry.models =
         args.agent === 'claude'
           ? [...discovered]
           : catalog.discoveredModelsAreAuthoritative
             ? mergeDiscoveredAuthoritativeModels(catalog.models, discovered)
             : mergeCatalogModels(catalog.models, discovered)
+
       for (const listener of entry.listeners) {
         listener([...entry.models])
       }

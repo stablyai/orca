@@ -55,30 +55,37 @@ export function createAutomation(
     const existing = (operations.state.automations ?? []).find(
       (automation) => automation.creationKey === input.creationKey
     )
+
     if (existing) {
       return existing
     }
   }
+
   const repo = operations.state.repos.find((entry) => entry.id === input.projectId)
   const now = Date.now()
   const workspaceId = input.workspaceMode === 'existing' ? (input.workspaceId ?? null) : null
   const workspaceSshPin = automationWorkspaceSshPin(operations.state, workspaceId)
+
   const executionTarget = deriveAutomationExecutionTargetForCreate({
     repo,
     sshTargetGeneration: sshTargetGenerationForConnection(operations.state, repo?.connectionId),
     workspaceSshPin
   })
+
   if (options?.destination) {
     const context = automationProjectionContext(
       operations.state,
       operations.storageAuthority,
       false
     )
+
     assertAutomationDestination(options.destination, context)
     assertExecutionTargetMatchesDestination(executionTarget, options.destination, workspaceSshPin)
   }
+
   const schedulerOwner = getAutomationSchedulerOwner(repo)
   const contexts = getAutomationContextsForRepo(repo, operations.state.projectHostSetups ?? [])
+
   const automation: Automation = {
     id: randomUUID(),
     ...(input.creationKey ? { creationKey: input.creationKey } : {}),
@@ -112,9 +119,11 @@ export function createAutomation(
     createdAt: now,
     updatedAt: now
   }
+
   operations.state.automations = [...(operations.state.automations ?? []), automation]
   operations.recordCreated()
   operations.flush()
+
   return automation
 }
 
@@ -125,40 +134,51 @@ export function updateAutomation(
   options?: { expectedOwner?: AutomationOwnerPrecondition; destination?: AutomationDestination }
 ): Automation {
   const index = (operations.state.automations ?? []).findIndex((entry) => entry.id === id)
+
   if (index === -1) {
     throw new Error('Automation not found.')
   }
+
   const current = operations.state.automations[index]
+
   const projectionContext = automationProjectionContext(
     operations.state,
     operations.storageAuthority,
     false
   )
+
   assertAutomationOwnerFence({
     automation: current,
     expectedOwner: options?.expectedOwner,
     operation: 'mutate',
     context: projectionContext
   })
+
   if (options?.destination) {
     assertAutomationDestination(options.destination, projectionContext)
   }
+
   // Why: the renderer forwards a Partial verbatim, so `{ enabled: undefined }` survives structuredClone
   // and would blank the stored value in the spread below. Explicit clears go through the `null` branches.
   const definedUpdates = Object.fromEntries(
     Object.entries(updates).filter(([, value]) => value !== undefined)
   ) as AutomationUpdateInput
+
   const repoId = updates.projectId ?? current.projectId
   const repo = operations.state.repos.find((entry) => entry.id === repoId)
+
   const selectorMoveRequested =
     updates.projectId !== undefined || options?.destination !== undefined
+
   const schedulerOwner =
     selectorMoveRequested && repo ? getAutomationSchedulerOwner(repo) : current.schedulerOwner
+
   const contexts = getAutomationContextsForRepo(repo, operations.state.projectHostSetups ?? [])
   const rrule = updates.rrule ?? current.rrule
   const dtstart = updates.dtstart ?? current.dtstart
   const scheduleChanged = updates.rrule !== undefined || updates.dtstart !== undefined
   const workspaceMode = updates.workspaceMode ?? current.workspaceMode
+
   const merged: Automation = {
     ...current,
     ...definedUpdates,
@@ -216,9 +236,11 @@ export function updateAutomation(
       : current.nextRunAt,
     updatedAt: Date.now()
   }
+
   const previousPin = automationWorkspaceSshPin(operations.state, current.workspaceId)
   const workspaceSshPin = automationWorkspaceSshPin(operations.state, merged.workspaceId)
   const workspaceSshPinMoved = previousPin?.targetId !== workspaceSshPin?.targetId
+
   const executionTarget = deriveAutomationExecutionTargetForUpdate({
     current,
     repo,
@@ -227,19 +249,23 @@ export function updateAutomation(
     workspaceSshPin,
     workspaceSshPinMoved
   })
+
   if (options?.destination) {
     assertExecutionTargetMatchesDestination(executionTarget, options.destination, workspaceSshPin)
   }
+
   const updated = applyAutomationExecutionTarget(
     merged,
     executionTarget,
     workspaceSshPinMoved ? undefined : workspaceSshPin
   )
+
   // Replaced, not patched in place: the list projection caches on array identity.
   operations.state.automations = operations.state.automations.map((entry) =>
     entry.id === id ? updated : entry
   )
   operations.flush()
+
   return updated
 }
 
@@ -249,6 +275,7 @@ export function deleteAutomation(
   options?: { expectedOwner?: AutomationOwnerPrecondition }
 ): void {
   const automation = (operations.state.automations ?? []).find((entry) => entry.id === id)
+
   if (automation) {
     assertAutomationOwnerFence({
       automation,
@@ -257,6 +284,7 @@ export function deleteAutomation(
       context: automationProjectionContext(operations.state, operations.storageAuthority, false)
     })
   }
+
   operations.state.automations = (operations.state.automations ?? []).filter(
     (entry) => entry.id !== id
   )

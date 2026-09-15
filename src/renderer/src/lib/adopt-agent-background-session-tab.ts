@@ -8,6 +8,7 @@ import { isTerminalTabPresent } from '@/store/slices/terminal-tab-retirement'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 
 type Store = ReturnType<typeof useAppStore.getState>
+
 type RegisterArgs = Parameters<Store['registerAgentLaunchConfig']>
 
 /** Reserves env-stable tab and pane identities before spawning the PTY. */
@@ -29,13 +30,16 @@ export function reserveAgentBackgroundSessionIdentity(args: {
   const leafId = createBrowserUuid()
   const paneKey = makePaneKey(reservedTabId, leafId)
   const launchToken = createBrowserUuid()
+
   const launchRegistration = {
     agentType: args.agentType,
     launchToken,
     tabId: reservedTabId,
     leafId
   }
+
   args.store.registerAgentLaunchConfig(paneKey, args.launchConfig, launchRegistration)
+
   return {
     reservedTabId,
     leafId,
@@ -71,6 +75,7 @@ export async function adoptAgentBackgroundSessionTab(args: {
   terminalOwnership: ReturnType<typeof bindAutomationTerminal>
 } | null> {
   const { store, reservedTabId, ptyId, launchRegistration } = args
+
   // The worktree can disappear while its PTY spawn is pending.
   if (
     await retireUnownedTerminal({
@@ -83,6 +88,7 @@ export async function adoptAgentBackgroundSessionTab(args: {
   ) {
     return null
   }
+
   // Re-keying would desynchronize env-baked routing identities; fail closed.
   if (isTerminalTabPresent(useAppStore.getState(), reservedTabId)) {
     store.clearAgentLaunchConfig(args.paneKey)
@@ -92,16 +98,20 @@ export async function adoptAgentBackgroundSessionTab(args: {
       runtimeTarget: args.runtimeTarget,
       runtimeTerminalHandle: args.runtimeTerminalHandle
     })
+
     return null
   }
+
   const tab = store.createTab(args.worktreeId, undefined, undefined, {
     id: reservedTabId,
     initialPtyId: ptyId,
     activate: false,
     recordInteraction: false
   })
+
   const paneKey = args.paneKey
   store.registerAgentLaunchConfig(paneKey, args.launchConfig, launchRegistration)
+
   const terminalOwnership = bindAutomationTerminal(
     tab,
     paneKey,
@@ -109,5 +119,6 @@ export async function adoptAgentBackgroundSessionTab(args: {
     args.runtimeTarget.kind,
     args.title
   )
+
   return { tab, paneKey, terminalOwnership }
 }

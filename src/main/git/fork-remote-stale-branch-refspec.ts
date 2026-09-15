@@ -33,10 +33,12 @@ export async function fetchForkRemoteWithStaleRefspecRepair(
   for (let attempt = 0; attempt < MAX_STALE_REFSPEC_REPAIR_ATTEMPTS; attempt += 1) {
     try {
       await runFetch()
+
       return
     } catch (error) {
       const staleRef = parseMissingForkBranchRef(extractExecError(error).stderr)
       const staleBranch = staleRef?.replace(/^refs\/heads\//, '')
+
       if (
         !staleBranch ||
         !(await removeStaleForkFetchRefspec(execGit, repoPath, remoteName, staleBranch))
@@ -46,5 +48,6 @@ export async function fetchForkRemoteWithStaleRefspecRepair(
       // loop: retry now that the dead refspec is gone
     }
   }
+
   throw new Error(`Exceeded stale fork-remote refspec repair attempts for "${remoteName}"`)
 }

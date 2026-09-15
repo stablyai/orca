@@ -33,12 +33,16 @@ export function createBrowserNetworkTunnelClientStream(
   callbacks: BrowserNetworkTunnelClientStreamCallbacks
 ): { stream: BrowserNetworkTunnelClientStream; opening: Promise<BrowserNetworkTunnelDuplex> } {
   let resolveOpen = (_socket: BrowserNetworkTunnelDuplex): void => {}
+
   let rejectOpen = (_error: Error): void => {}
+
   const opening = new Promise<BrowserNetworkTunnelDuplex>((resolve, reject) => {
     resolveOpen = resolve
     rejectOpen = reject
   })
+
   const socket = new BrowserNetworkTunnelDuplex(callbacks)
+
   const stream: BrowserNetworkTunnelClientStream = {
     id,
     socket,
@@ -64,5 +68,6 @@ export function createBrowserNetworkTunnelClientStream(
     resolveOpen,
     rejectOpen
   }
+
   return { stream, opening }
 }

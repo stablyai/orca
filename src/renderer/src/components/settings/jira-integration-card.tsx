@@ -38,6 +38,7 @@ export function JiraIntegrationCard(): React.JSX.Element {
   const sites = jiraStatus.sites ?? []
   const siteCount = sites.length || (connected ? 1 : 0)
   const accountScope = getProviderAccountScope(settings)
+
   const credentialCopy = hasRemoteProviderRuntime(settings)
     ? translate(
         'auto.components.settings.task.tracker.integration.cards.2d60ec7921',
@@ -47,11 +48,13 @@ export function JiraIntegrationCard(): React.JSX.Element {
         'auto.components.settings.task.tracker.integration.cards.977e360b71',
         'Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it.'
       )
+
   const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
   const accountScopeRowClass = useIntegrationSubordinateRowClass('text-xs')
 
   const handleDisconnect = async (siteId?: string): Promise<void> => {
     await disconnectJira(siteId)
+
     if (mountedRef.current) {
       setTestResultBySite({})
     }
@@ -62,12 +65,15 @@ export function JiraIntegrationCard(): React.JSX.Element {
     setTestResultBySite((prev) => {
       const next = { ...prev }
       delete next[siteId]
+
       return next
     })
     const result = await testJiraConnection(siteId)
+
     if (!mountedRef.current) {
       return
     }
+
     setTestResultBySite((prev) => ({
       ...prev,
       [siteId]: result.ok ? { state: 'ok' } : { state: 'error', error: result.error }
@@ -141,6 +147,7 @@ export function JiraIntegrationCard(): React.JSX.Element {
             {sites.map((site) => {
               const testResult = testResultBySite[site.id]
               const testing = testingSiteId === site.id
+
               return (
                 <div key={site.id} className={subordinateRowClass}>
                   <div className="min-w-0 flex-1">

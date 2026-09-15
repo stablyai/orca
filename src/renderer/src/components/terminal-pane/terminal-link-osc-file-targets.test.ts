@@ -9,6 +9,7 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
+
 const {
   storeState,
   deps,

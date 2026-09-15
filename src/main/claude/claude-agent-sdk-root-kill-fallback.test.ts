@@ -8,7 +8,9 @@ import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
 import { mergeClaudeCapturedTrees } from './claude-child-tree-snapshot'
 
 const ROOT_PID = 424242
+
 const ROOT_STARTED_AT = 'Mon Jan 1 00:00:00 2026'
+
 const ROOT_FORK_MS = Date.parse(ROOT_STARTED_AT)
 
 function mockChild(): EventEmitter &
@@ -46,6 +48,7 @@ describe('Claude root kill fallback', () => {
     // The production POSIX verifier declines a root born in its capture second,
     // and that verdict must not cost the tree the kill on Node's own handle.
     const child = mockChild()
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       exited: () => false,
@@ -58,6 +61,7 @@ describe('Claude root kill fallback', () => {
 
   it('kills the root after a recycled descendant pid voided the snapshot', async () => {
     const child = mockChild()
+
     const captureDescendants = vi
       .fn()
       .mockResolvedValueOnce(
@@ -74,6 +78,7 @@ describe('Claude root kill fallback', () => {
           ]
         })
       )
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       exited: () => false,
@@ -91,6 +96,7 @@ describe('Claude root kill fallback', () => {
 
   it('keeps an observed live descendant when the root identity probe declined', async () => {
     const child = mockChild()
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       exited: () => false,
@@ -113,6 +119,7 @@ describe('Claude root kill fallback', () => {
     const child = mockChild()
     // Probe 1 gates taskkill; a later probe correctly finds the root already dead.
     const verifyRootIdentity = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'win32',
       exited: () => false,
@@ -127,6 +134,7 @@ describe('Claude root kill fallback', () => {
 
   it('kills the root when no POSIX snapshot could be read', async () => {
     const child = mockChild()
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       exited: () => false,
@@ -141,6 +149,7 @@ describe('Claude root kill fallback', () => {
   it('kills the root when the Windows process table is unreadable', async () => {
     const child = mockChild()
     const terminateWindowsTree = vi.fn(async () => {})
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'win32',
       exited: () => false,
@@ -157,6 +166,7 @@ describe('Claude root kill fallback', () => {
 
   it('never signals a root the reaper already saw exit', async () => {
     const child = mockChild()
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       exited: () => true,
@@ -169,6 +179,7 @@ describe('Claude root kill fallback', () => {
 
   it('chains per-pid Windows boundaries across a second merge', async () => {
     const first = windowsSnapshot(1_000)
+
     const second: WindowsDescendantSnapshot = {
       ...windowsSnapshot(2_000),
       descendants: [
@@ -176,12 +187,14 @@ describe('Claude root kill fallback', () => {
         { pid: 4244, creationTimeMs: 1_700_000_000_002 }
       ]
     }
+
     const third: WindowsDescendantSnapshot = { ...second, capturedAtMs: 3_000 }
 
     const merged = mergeClaudeCapturedTrees(
       { platform: 'win32', tree: first },
       { platform: 'win32', tree: second }
     )
+
     expect(merged?.tree.capturedAtMsByPid).toEqual({ '4243': 1_000, '4244': 2_000 })
     const rechained = mergeClaudeCapturedTrees(merged!, { platform: 'win32', tree: third })
 

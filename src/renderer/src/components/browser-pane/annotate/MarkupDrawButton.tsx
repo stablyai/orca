@@ -47,7 +47,9 @@ export function MarkupDrawButton({
     if (!showHint) {
       return
     }
+
     window.addEventListener('blur', dismissHint)
+
     return () => window.removeEventListener('blur', dismissHint)
   }, [dismissHint, showHint])
 

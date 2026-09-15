@@ -14,20 +14,26 @@ import {
 } from './relay-bench-invocation.mjs'
 
 const require = createRequire(import.meta.url)
+
 const WebSocket = require('ws')
 
 const USAGE = `${LIVE_ENV_VAR}=1 node relay-hop-latency.mjs --cell=<origin> --director=<origin> [--host=<relayHostId>] [--runs=N]`
 
 // A 16-character base64url id that no desktop owns, so the probe stops at the cell.
 const UNROUTABLE_HOST_ID = 'AAAAAAAAAAAAAAAA'
+
 const BOGUS_CREDENTIAL = 'A'.repeat(43)
+
 const CELL_TIMEOUT_MS = 15_000
+
 // Without this a director that accepts the connection and never answers stalls the whole run loop.
 const RESOLVE_TIMEOUT_MS = 10_000
+
 const MAX_RUNS = 1000
 
 async function timeResolve(director, relayHostId) {
   const started = performance.now()
+
   try {
     const res = await fetch(`${director}/v1/resolve`, {
       method: 'POST',
@@ -35,7 +41,9 @@ async function timeResolve(director, relayHostId) {
       body: JSON.stringify({ v: 1, relayHostId, resumeToken: BOGUS_CREDENTIAL }),
       signal: AbortSignal.timeout(RESOLVE_TIMEOUT_MS)
     })
+
     const body = await res.text()
+
     return {
       ms: Math.round(performance.now() - started),
       status: res.status,
@@ -43,6 +51,7 @@ async function timeResolve(director, relayHostId) {
     }
   } catch (err) {
     const timedOut = err.name === 'TimeoutError' || err.cause?.name === 'TimeoutError'
+
     return {
       ms: Math.round(performance.now() - started),
       status: null,
@@ -60,12 +69,14 @@ function timeCellHello(cell, relayHostId) {
     url.pathname = `/v1/connect/${encodeURIComponent(relayHostId)}`
     const ws = new WebSocket(url.toString(), { perMessageDeflate: false })
     let settled = false
+
     const done = (extra) => {
       // One-shot: a socket normally emits close after error, and an uncleared timer keeps Node
       // alive for the full CELL_TIMEOUT_MS after the last run.
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
       ws.terminate()
@@ -77,6 +88,7 @@ function timeCellHello(cell, relayHostId) {
         ...extra
       })
     }
+
     const timer = setTimeout(() => done({ error: 'timeout' }), CELL_TIMEOUT_MS)
     ws.on('open', () => {
       openedAt = performance.now()
@@ -101,6 +113,7 @@ async function main() {
   const director = requireDirector(options, USAGE)
   const cell = requireOrigin(options.get('--cell'), 'cell origin (--cell=<origin>)', USAGE)
   const relayHostId = options.get('--host') ?? UNROUTABLE_HOST_ID
+
   const runs = requireBoundedInteger(options.get('--runs'), '--runs', USAGE, {
     min: 1,
     max: MAX_RUNS,

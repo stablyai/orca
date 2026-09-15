@@ -18,14 +18,17 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
     setItems,
     setMutatingStatus
   } = model
+
   const toggleGitLabStatus = useCallback(
     async (item: Extract<TaskItem, { provider: 'gitlab' }>): Promise<void> => {
       if (!client || mutatingStatus || item.source.state === 'merged') {
         return
       }
+
       setMutatingStatus(true)
       setError('')
       const nextState = item.source.state === 'closed' ? 'opened' : 'closed'
+
       try {
         const response =
           item.source.type === 'issue'
@@ -41,13 +44,17 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
                 state: nextState,
                 projectRef: item.source.projectRef
               })
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as { ok?: boolean; error?: string }
+
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to update GitLab item')
         }
+
         setActionItem(null)
         await loadTasks({ silent: true })
       } catch (err) {
@@ -74,8 +81,10 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
       if (!client || mutatingStatus) {
         return
       }
+
       setMutatingStatus(true)
       setError('')
+
       try {
         const response = await client.sendRequest(
           'github.updateIssue',
@@ -86,10 +95,13 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
           },
           { timeoutMs: 30_000 }
         )
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as { ok?: boolean; error?: string }
+
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to update GitHub issue')
         }
@@ -106,6 +118,7 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
             ...(updates.addLabels ?? [])
           ])
         ]
+
         const nextAssignees =
           detailPayload?.provider === 'github'
             ? [
@@ -117,6 +130,7 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
                 ])
               ]
             : undefined
+
         const nextTitle = updates.title?.trim()
         setActionItem((current) =>
           current?.provider === 'github' && current.source.id === item.source.id
@@ -169,6 +183,7 @@ export function useMobileTasksGitlabGithubStatusActions(model: ProjectFileMergeA
     },
     [client, detailPayload, loadTasks, mutatingStatus]
   )
+
   return Object.assign(model, { toggleGitLabStatus, updateGitHubIssueMetadata })
 }
 

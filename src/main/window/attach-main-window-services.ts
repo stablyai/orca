@@ -42,8 +42,11 @@ import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
 export { ensureAutoUpdaterConfigured, registerUpdaterHandlers } from './main-window-updater'
 
 let appReloadHandlerTokenCounter = 0
+
 let activeAppReloadHandlerToken: number | null = null
+
 let tccPromptHandlerTokenCounter = 0
+
 let activeTccPromptHandlerToken: number | null = null
 
 export function attachMainWindowServices(
@@ -106,6 +109,7 @@ export function attachMainWindowServices(
     return getKnownWorktreeIdsForHistoryGc(store)
   })
   const localPtyProviderStartupReady = options?.awaitLocalPtyProviderStartup?.()
+
   if (localPtyProviderStartupReady) {
     void localPtyProviderStartupReady
       .then(() => hydrateLocalPtyRegistryAtBoot(store))
@@ -118,6 +122,7 @@ export function attachMainWindowServices(
   } else {
     void hydrateLocalPtyRegistryAtBoot(store)
   }
+
   registerSshHandlers(store, () => mainWindow, runtime)
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
@@ -133,8 +138,10 @@ export function attachMainWindowServices(
           console.error('[permissions] Failed to request media access:', error)
           callback(false)
         })
+
         return
       }
+
       callback(allowedPermissions.has(permission))
     }
   )
@@ -143,6 +150,7 @@ export function attachMainWindowServices(
       if (permission !== 'media') {
         return allowedPermissions.has(permission)
       }
+
       return hasSystemMediaAccess(details?.mediaType)
     }
   )
@@ -155,9 +163,11 @@ export function attachMainWindowServices(
 
 function registerTccPromptNoticeHandlers(mainWindow: BrowserWindow): void {
   const handlerToken = ++tccPromptHandlerTokenCounter
+
   if (activeTccPromptHandlerToken !== null) {
     releasePendingTccPromptNotice(activeTccPromptHandlerToken)
   }
+
   activeTccPromptHandlerToken = handlerToken
   const consumeChannel = 'macosTccPrompts:consumePending'
   const acknowledgeChannel = 'macosTccPrompts:acknowledgePending'
@@ -176,8 +186,10 @@ function registerTccPromptNoticeHandlers(mainWindow: BrowserWindow): void {
     }
   })
   mainWebContents.on('render-process-gone', releaseOwnerClaim)
+
   const ownsNotice = (event: IpcMainInvokeEvent): boolean =>
     !mainWindow.isDestroyed() && !mainWebContents.isDestroyed() && event.sender === mainWebContents
+
   ipcMain.handle(consumeChannel, (event) =>
     ownsNotice(event) ? consumePendingTccPromptNotice(handlerToken) : null
   )
@@ -201,6 +213,7 @@ function registerTccPromptNoticeHandlers(mainWindow: BrowserWindow): void {
     if (activeTccPromptHandlerToken !== handlerToken) {
       return
     }
+
     releaseOwnerClaim()
     ipcMain.removeHandler(consumeChannel)
     ipcMain.removeHandler(acknowledgeChannel)
@@ -227,6 +240,7 @@ function registerAppReloadHandler(
     ) {
       return
     }
+
     onBeforeRendererReload?.({ webContentsId: mainWebContents.id, ignoreCache: false })
     mainWebContents.reload()
   })
@@ -234,6 +248,7 @@ function registerAppReloadHandler(
     if (activeAppReloadHandlerToken !== handlerToken) {
       return
     }
+
     // Why: macOS keeps the process alive with no window; this handler would otherwise retain the closed window until reopen.
     ipcMain.removeHandler('app:reload')
     activeAppReloadHandlerToken = null
@@ -244,6 +259,7 @@ function registerFileDropRelay(mainWindow: BrowserWindow): void {
   const channel = 'terminal:file-dropped-from-preload'
   const mainWebContents = mainWindow.webContents
   ipcMain.removeAllListeners(channel)
+
   const relayFileDrop = (event: Electron.IpcMainEvent, args: NativeFileDropPayload): void => {
     if (
       mainWindow.isDestroyed() ||
@@ -252,6 +268,7 @@ function registerFileDropRelay(mainWindow: BrowserWindow): void {
     ) {
       return
     }
+
     if (!isNativeFileDropPayload(args)) {
       return
     }
@@ -259,6 +276,7 @@ function registerFileDropRelay(mainWindow: BrowserWindow): void {
     // Why: one IPC event per drop gesture so the renderer gets the full path batch without timer-based reconstruction.
     mainWindow.webContents.send('terminal:file-drop', args)
   }
+
   ipcMain.on(channel, relayFileDrop)
   mainWindow.on('closed', () => {
     // Why: macOS keeps the process alive after window close; drop the closure so the destroyed window isn't retained.

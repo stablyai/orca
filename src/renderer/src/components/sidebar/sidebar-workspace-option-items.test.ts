@@ -41,6 +41,7 @@ describe('worktree card property options', () => {
 
   it('uses branch-only copy by default and without project groups', () => {
     const defaultOptions = getWorktreeCardPropertyOptions()
+
     const newCardOptions = getWorktreeCardPropertyOptions({
       newCardStyle: true,
       hasProjectGroups: false

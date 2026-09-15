@@ -8,12 +8,14 @@ import { DEFAULT_REPO_HOOK_SETTINGS } from './SettingsConstants'
 import { translate } from '@/i18n/i18n'
 
 export type LocalHookName = 'setup' | 'archive'
+
 export type LocalHookField = {
   name: LocalHookName
   label: string
   description: string
   placeholder: string
 }
+
 export type HookSettingsPolicyDraft = Partial<
   Pick<RepoHookSettings, 'setupRunPolicy' | 'setupAgentStartupPolicy' | 'commandSourcePolicy'>
 >
@@ -95,9 +97,11 @@ export function getLocalCommandSourcePolicyNotice({
   if ((!setupScript?.trim() && !archiveScript?.trim()) || currentPolicy !== 'shared-only') {
     return null
   }
+
   if (!hooksInspectionReady) {
     return { kind: 'checking' }
   }
+
   return hasSharedScript
     ? {
         kind: 'action',
@@ -117,8 +121,10 @@ export function getLocalCommandSourcePolicyNotice({
 export function renderYamlScriptPreview(hooks: OrcaHooks | null): string {
   const formatScript = (key: string, command?: string): string =>
     command ? `\n  ${key}: |\n${command.replace(/^/gm, '    ')}` : ''
+
   const issueCommand = hooks?.issueCommand
     ? `\nissueCommand: |\n${hooks.issueCommand.replace(/^/gm, '  ')}`
     : ''
+
   return `scripts:${formatScript('setup', hooks?.scripts.setup)}${formatScript('archive', hooks?.scripts.archive)}${issueCommand}`
 }

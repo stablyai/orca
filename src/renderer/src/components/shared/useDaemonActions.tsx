@@ -58,6 +58,7 @@ function showKillAllTerminalSurfacesResult(summary: KillAllTerminalSurfacesSumma
           }
         )
       : null
+
   const daemonDescription =
     summary.daemon.status === 'rejected'
       ? translate(
@@ -73,7 +74,9 @@ function showKillAllTerminalSurfacesResult(summary: KillAllTerminalSurfacesSumma
             value2: summary.daemon.remainingCount
           }
         )
+
   const description = [surfaceDescription, daemonDescription].filter(Boolean).join(' ')
+
   if (summary.daemon.status === 'rejected') {
     toast.error(
       translate(
@@ -82,8 +85,10 @@ function showKillAllTerminalSurfacesResult(summary: KillAllTerminalSurfacesSumma
       ),
       { description }
     )
+
     return
   }
+
   if (summary.failedCloseAttemptCount > 0 || summary.exactKillRejectedCount > 0) {
     toast.error(
       translate(
@@ -92,8 +97,10 @@ function showKillAllTerminalSurfacesResult(summary: KillAllTerminalSurfacesSumma
       ),
       { description }
     )
+
     return
   }
+
   if (summary.daemon.remainingCount > 0) {
     toast.warning(
       translate(
@@ -102,8 +109,10 @@ function showKillAllTerminalSurfacesResult(summary: KillAllTerminalSurfacesSumma
       ),
       { description }
     )
+
     return
   }
+
   if (summary.targetCount === 0 && summary.daemon.killedCount === 0) {
     toast.info(
       translate(
@@ -111,8 +120,10 @@ function showKillAllTerminalSurfacesResult(summary: KillAllTerminalSurfacesSumma
         'No sessions or terminal tabs were reported.'
       )
     )
+
     return
   }
+
   toast.success(
     summary.targetCount > 0
       ? translate(
@@ -136,14 +147,17 @@ export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActio
     if (!mountedRef.current) {
       return
     }
+
     setBusyKind(null)
     setPending(null)
   }, [mountedRef])
 
   const runRestart = useCallback(async () => {
     setBusyKind('restart')
+
     try {
       const { success } = await window.api.pty.management.restart()
+
       if (success) {
         toast.success(
           translate('auto.components.shared.useDaemonActions.0e9da1b98e', 'Daemon restarted.')
@@ -165,6 +179,7 @@ export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActio
       )
     } finally {
       clearPendingAction()
+
       if (mountedRef.current) {
         callbacks?.onRestartSettled?.()
       }
@@ -177,16 +192,20 @@ export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActio
     const targetSurfaceIds = snapshotKillAllTerminalSurfaceIds()
     setBusyKind('killAll')
     callbacks?.onKillAllStart?.()
+
     try {
       const summary = await runKillAllTerminalSurfaces(targetSurfaceIds)
+
       if (summary.daemon.status === 'rejected' && mountedRef.current) {
         callbacks?.onKillAllError?.()
       }
+
       showKillAllTerminalSurfacesResult(summary)
     } catch (err) {
       if (mountedRef.current) {
         callbacks?.onKillAllError?.()
       }
+
       toast.error(
         translate(
           'auto.components.shared.useDaemonActions.e8f25bd903',
@@ -198,6 +217,7 @@ export function useDaemonActions(callbacks?: DaemonActionCallbacks): DaemonActio
       )
     } finally {
       clearPendingAction()
+
       if (mountedRef.current) {
         callbacks?.onKillAllSettled?.()
       }
@@ -249,6 +269,7 @@ function getCopy(kind: DaemonActionKind): CopyShape {
       busyLabel: 'Restarting…'
     }
   }
+
   return {
     title: translate(
       'auto.components.shared.useDaemonActions.1bbea41a77',
@@ -278,6 +299,7 @@ export function DaemonActionDialog({
 }): React.JSX.Element {
   const { pending, setPending, busyKind, isBusy, runConfirmed } = api
   const copy = pending ? getCopy(pending) : null
+
   return (
     <Dialog
       open={pending !== null}
@@ -285,9 +307,11 @@ export function DaemonActionDialog({
         if (open) {
           return
         }
+
         if (isBusy) {
           return
         }
+
         setPending(null)
       }}
     >

@@ -47,15 +47,19 @@ function buildHostLabelLookup(
   state: DashboardWorkspaceState
 ): ReadonlyMap<ExecutionHostId, string> {
   const labels = new Map<ExecutionHostId, string>()
+
   for (const [targetId, label] of state.sshTargetLabels ?? []) {
     labels.set(toSshExecutionHostId(targetId), label)
   }
+
   for (const environment of state.runtimeEnvironments ?? []) {
     labels.set(toRuntimeExecutionHostId(environment.id), environment.name)
   }
+
   for (const [hostId, label] of getHostDisplayLabelOverrides(state.settings)) {
     labels.set(hostId, label)
   }
+
   return labels
 }
 
@@ -66,6 +70,7 @@ function remoteHostKind(
   if (connectionId || executionHostId?.startsWith('ssh:')) {
     return 'ssh'
   }
+
   return executionHostId && executionHostId !== 'local' ? 'remote' : null
 }
 
@@ -76,15 +81,20 @@ export function collectActiveDashboardWorkspaces(
   const workspaces: ActiveDashboardWorkspace[] = []
   const seenWorkspaceIds = new Set<string>()
   let hostLabels: ReadonlyMap<ExecutionHostId, string> | null = null
+
   const resolveHostLabel = (executionHostId: ExecutionHostId): string | undefined => {
     const parsed = includeMapMetadata ? parseExecutionHostId(executionHostId) : null
+
     if (parsed?.kind !== 'ssh' && parsed?.kind !== 'runtime') {
       return undefined
     }
+
     hostLabels ??= buildHostLabelLookup(state)
+
     const label =
       hostLabels.get(executionHostId) ??
       (parsed.kind === 'ssh' ? parsed.targetId : parsed.environmentId)
+
     return label.length > DASHBOARD_MAX_LABEL_LENGTH
       ? label.slice(0, DASHBOARD_MAX_LABEL_LENGTH)
       : label
@@ -95,10 +105,13 @@ export function collectActiveDashboardWorkspaces(
       if (worktree.isArchived) {
         continue
       }
+
       seenWorkspaceIds.add(worktree.id)
+
       const workspaceHostLabel = includeMapMetadata
         ? resolveHostLabel(getWorktreeExecutionHostId(worktree, repo))
         : undefined
+
       workspaces.push({
         projectId: repo.id,
         projectName: repo.displayName,
@@ -117,15 +130,20 @@ export function collectActiveDashboardWorkspaces(
   const projectGroupsById = new Map(
     (state.projectGroups ?? []).map((projectGroup) => [projectGroup.id, projectGroup])
   )
+
   for (const folderWorkspace of state.folderWorkspaces ?? []) {
     const worktree = folderWorkspaceToWorktree(folderWorkspace)
+
     if (folderWorkspace.isArchived || seenWorkspaceIds.has(worktree.id)) {
       continue
     }
+
     const projectGroup = projectGroupsById.get(folderWorkspace.projectGroupId)
+
     const workspaceHostLabel = includeMapMetadata
       ? resolveHostLabel(getWorktreeExecutionHostId(worktree, undefined))
       : undefined
+
     workspaces.push({
       projectId: `folder-workspace:${folderWorkspace.projectGroupId}`,
       projectName: projectGroup?.name ?? folderWorkspace.name,
@@ -142,6 +160,7 @@ export function collectActiveDashboardWorkspaces(
       ...(workspaceHostLabel ? { hostLabel: workspaceHostLabel } : {})
     })
   }
+
   return workspaces
 }
 
@@ -154,12 +173,15 @@ export function dashboardCardHostKind(
   if (workspace.remoteHostKind) {
     return workspace.remoteHostKind
   }
+
   if (ptyId && parseAppSshPtyId(ptyId)) {
     return 'ssh'
   }
+
   if (ptyId && getRemoteRuntimePtyEnvironmentId(ptyId)) {
     return 'remote'
   }
+
   return clientPlatform === 'win32' && terminalInput?.hostPlatform === 'linux' ? 'wsl' : 'local'
 }
 

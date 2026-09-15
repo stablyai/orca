@@ -9,4 +9,5 @@ export type {
   RpcMethodName,
   RpcParams
 } from '../../../src/shared/rpc-contract/rpc-params-catalog.generated'
+
 export type { RpcSendParams } from '../../../src/shared/rpc-contract/rpc-send-params'

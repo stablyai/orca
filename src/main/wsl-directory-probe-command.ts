@@ -4,6 +4,7 @@ import type { WslUncPathInfo } from '../shared/wsl-paths'
 // and host failures, so only a marker on stdout distinguishes "directory missing" from
 // "wsl.exe could not answer".
 const WSL_DIRECTORY_EXISTS_MARKER = '__ORCA_DIRECTORY_EXISTS__'
+
 const WSL_DIRECTORY_MISSING_MARKER = '__ORCA_DIRECTORY_MISSING__'
 
 /** Argv after the wsl.exe binary for the guest directory-existence probe. */
@@ -23,11 +24,14 @@ export function getWslDirectoryProbeArgs(info: WslUncPathInfo): string[] {
 /** Null when neither marker appears, i.e. the guest never ran the test. */
 export function parseWslDirectoryProbeOutput(stdout: unknown): boolean | null {
   const output = String(stdout)
+
   if (output.includes(WSL_DIRECTORY_EXISTS_MARKER)) {
     return true
   }
+
   if (output.includes(WSL_DIRECTORY_MISSING_MARKER)) {
     return false
   }
+
   return null
 }

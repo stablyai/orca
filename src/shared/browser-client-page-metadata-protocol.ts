@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 const Identity = z.string().min(1).max(256)
+
 const Generation = z.number().int().min(1).max(0xffff_ffff)
 
 export const BROWSER_CLIENT_PAGE_METADATA_METHOD = 'browser.clientHost.pageMetadata' as const
@@ -21,6 +22,7 @@ export const BrowserClientPageMetadataParams = z.object({
 export type BrowserClientPageMetadataParams = z.infer<typeof BrowserClientPageMetadataParams>
 
 export const BrowserClientPageMetadataAck = z.object({ accepted: z.boolean() })
+
 export type BrowserClientPageMetadataAck = z.infer<typeof BrowserClientPageMetadataAck>
 
 /**

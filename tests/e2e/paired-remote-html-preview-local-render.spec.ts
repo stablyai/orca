@@ -25,20 +25,32 @@ import { focusPairedClientWindow } from './helpers/paired-client-window-reveal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const FIXTURE_NAME = 'paired-html-focus.html'
+
 const FIXTURE_HEADING = 'paired html preview'
+
 /** The document names its own tab, exactly as a URL page's `<title>` does. */
 const FIXTURE_TITLE = 'Paired Preview Document Title'
+
 const RESTORE_FIXTURE_NAME = 'paired-html-restore.html'
+
 const RESTORE_FIXTURE_HEADING = 'preview survives a relaunch'
+
 const RESTORE_FIXTURE_TITLE = 'Restored Preview Document'
+
 const EXTERNAL_LINK_URL = 'https://example.com/from-preview'
+
 /** Stands in for the exfiltration a previewed document would attempt on its own, with no one at the keyboard. */
 const SCRIPTED_EGRESS_URL = 'https://exfil.test/?d=scripted'
+
 /** The same exfiltration, but riding a press the reader really made somewhere else in the document. */
 const POST_INPUT_EGRESS_URL = 'https://exfil.test/?d=after-input'
+
 const BLANK_PAGE_URL = 'data:text/html,'
+
 const SCOPED_FIXTURE_NAME = 'scoped-preview.html'
+
 const SCOPED_FIXTURE_HEADING = 'scoped preview rendered'
+
 const SCOPED_ASSET_TEXT = 'approved sibling asset loaded'
 
 type PreparedPairedClient = {
@@ -56,6 +68,7 @@ async function preparePairedClient(
   options: { reuseUserDataDir?: string } = {}
 ): Promise<PreparedPairedClient> {
   const client = await launchPairedElectronClient(offer, testInfo, name, options)
+
   try {
     await expect
       .poll(() => findWorktreeId(client.page, testRepoPath), {
@@ -63,22 +76,27 @@ async function preparePairedClient(
         message: 'paired client never received the host worktree'
       })
       .not.toBeNull()
+
     const worktree = await client.page.evaluate((repoPath) => {
       const match = window.__store
         ?.getState()
         .allWorktrees()
         .find((candidate) => candidate.path === repoPath)
+
       return match ? { id: match.id, path: match.path } : null
     }, testRepoPath)
+
     if (!worktree) {
       throw new Error('paired client worktree disappeared after discovery')
     }
+
     await client.page.evaluate(
       ({ environmentId, worktreeId }) => {
         window.__store?.getState().setActiveWorktree(worktreeId, `runtime:${environmentId}`)
       },
       { environmentId: client.environmentId, worktreeId: worktree.id }
     )
+
     return { client, worktreeId: worktree.id, worktreePath: worktree.path }
   } catch (error) {
     await client.dispose()
@@ -105,6 +123,7 @@ async function revealPreviewAction(page: Page, fixtureName: string): Promise<Loc
   await fixtureRow.click()
   const openPreviewToSide = page.getByRole('button', { name: 'Open Preview to the Side' })
   await expect(openPreviewToSide).toBeVisible({ timeout: 30_000 })
+
   return openPreviewToSide
 }
 
@@ -188,6 +207,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const marker = await startClientHostedMarkerFixture()
   let prepared: PreparedPairedClient | null = null
+
   try {
     prepared = await preparePairedClient(offer, testInfo, 'Remote HTML preview', testRepoPath)
     const { client, worktreeId, worktreePath } = prepared
@@ -196,20 +216,26 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     const inventoryArgs = { environmentId: client.environmentId, docFilePath, worktreeId }
 
     const openPreviewToSide = await revealPreviewAction(page, FIXTURE_NAME)
+
     const sourceEditor = await page.evaluate((targetWorktreeId) => {
       const state = window.__store?.getState()
       const groupId = state?.activeGroupIdByWorktree[targetWorktreeId]
+
       const group = (state?.groupsByWorktree[targetWorktreeId] ?? []).find(
         (candidate) => candidate.id === groupId
       )
+
       const tab = (state?.unifiedTabsByWorktree[targetWorktreeId] ?? []).find(
         (candidate) => candidate.id === group?.activeTabId && candidate.contentType === 'editor'
       )
+
       return groupId && tab ? { groupId, tabId: tab.id } : null
     }, worktreeId)
+
     if (!sourceEditor) {
       throw new Error('paired client editor had no source identity before side preview')
     }
+
     const sourceGroupId = sourceEditor.groupId
 
     await expect
@@ -296,6 +322,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     const hostBadge = pathChip.locator('[data-slot="badge"]')
     const pathChipBox = await pathChip.boundingBox()
     expect(pathChipBox).not.toBeNull()
+
     if (await hostBadge.isVisible()) {
       const hostBadgeBox = await hostBadge.boundingBox()
       expect(hostBadgeBox).not.toBeNull()
@@ -321,9 +348,11 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
             ({ previewGroupId, worktreeId: targetWorktreeId }) => {
               const state = window.__store?.getState()
               const groups = state?.groupsByWorktree[targetWorktreeId] ?? []
+
               const activeGroup = groups.find(
                 (group) => group.id === state?.activeGroupIdByWorktree[targetWorktreeId]
               )
+
               return {
                 activeGroupId: activeGroup?.id ?? null,
                 activeTabId: activeGroup?.activeTabId ?? null,
@@ -345,17 +374,21 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
 
     const terminalTabId = await page.evaluate((targetWorktreeId) => {
       const state = window.__store?.getState()
+
       return state?.tabsByWorktree[targetWorktreeId]?.[0]?.id ?? null
     }, worktreeId)
+
     if (!terminalTabId) {
       throw new Error('paired client lost its terminal tab')
     }
+
     await page.locator(`[data-tab-id="${terminalTabId}"]`).click()
     await expect
       .poll(
         () =>
           page.evaluate((targetWorktreeId) => {
             const state = window.__store?.getState()
+
             return state?.activeTabTypeByWorktree[targetWorktreeId] ?? null
           }, worktreeId),
         { message: 'terminal tab never became active before returning to the preview' }
@@ -372,9 +405,11 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
           page.evaluate(
             ({ previewTabId, worktreeId: targetWorktreeId }) => {
               const state = window.__store?.getState()
+
               const activeGroup = (state?.groupsByWorktree[targetWorktreeId] ?? []).find(
                 (group) => group.id === state?.activeGroupIdByWorktree[targetWorktreeId]
               )
+
               return activeGroup?.activeTabId === previewTabId
             },
             { previewTabId: previewRow.unifiedTabId, worktreeId }
@@ -390,9 +425,11 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId
       const groupId = worktreeId ? state?.activeGroupIdByWorktree[worktreeId] : null
+
       if (!state || !groupId) {
         throw new Error('paired client had no active group to open a browser tab in')
       }
+
       state.setBrowserDefaultUrl(url)
       await state.openNewBrowserTabInActiveWorkspace(groupId)
     }, marker.markerUrl)
@@ -434,8 +471,10 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
     await page.evaluate((origin) => {
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId
+
       for (const workspace of state?.browserTabsByWorktree[worktreeId ?? ''] ?? []) {
         const pages = state?.browserPagesByWorkspace[workspace.id] ?? []
+
         if (pages.some((browserPage) => browserPage.url.startsWith(origin))) {
           state?.closeBrowserTab(workspace.id)
         }
@@ -456,6 +495,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       .poll(
         async () => {
           const closed = await readPairedHtmlPreviewInventory(page, inventoryArgs)
+
           return {
             docWorkspaces: closed.docWorkspaces.length,
             hostBrowserPages: closed.hostBrowserPages.length,
@@ -497,11 +537,13 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
         { timeout: 60_000, message: 'the preview never came back after being closed' }
       )
       .toBe(1)
+
     // Why the explicit focus: the preview opens beside the editor without taking focus, so its pane
     // has no layout yet — and a press needs a rect, not just a rendered document.
     const reopenedRow = requireSingleDocWorkspace(
       await readPairedHtmlPreviewInventory(page, inventoryArgs)
     )
+
     await focusBrowserWorkspace(page, worktreeId, reopenedRow.workspaceId)
     await page.locator(`[data-tab-id="${reopenedRow.workspaceId}"]`).click()
     await expect
@@ -550,10 +592,12 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
         async () => {
           if ((await readDocPreviewRenderedText(page, '#post-input-egress')) !== 'attempted') {
             const headingPoint = await readDocPreviewElementCenter(page, 'h1')
+
             if (headingPoint) {
               await page.mouse.click(headingPoint.x, headingPoint.y)
             }
           }
+
           return readDocPreviewRenderedText(page, '#post-input-egress')
         },
         {
@@ -574,27 +618,34 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       hostBrowserPages: linkBaseline.hostBrowserPages.length,
       routedCalls: []
     })
+
     const guestFocus = await page.evaluate(() => {
       const active = document.activeElement
       const guest = document.querySelector('webview[src^="orca-preview://"]') as HTMLElement | null
       const before = active?.tagName ?? null
       guest?.focus()
+
       return { before, after: document.activeElement?.tagName ?? null }
     })
+
     console.log(`[preview-e2e] before-focus ${JSON.stringify(guestFocus)}`)
     const confirmation = page.getByRole('dialog', { name: 'Open link to example.com?' })
+
     const confirmationTitle = confirmation.getByRole('heading', {
       name: 'Open link to example.com?'
     })
+
     await expect
       .poll(
         async () => {
           if (!(await confirmationTitle.isVisible())) {
             const point = await readDocPreviewElementCenter(page, '#external')
+
             if (point) {
               await page.mouse.click(point.x, point.y)
             }
           }
+
           return confirmationTitle.isVisible()
         },
         {
@@ -618,9 +669,11 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
 
     try {
       const point = await readDocPreviewElementCenter(page, '#external')
+
       if (!point) {
         throw new Error('external link lost its clickable point after cancellation')
       }
+
       await page.mouse.click(point.x, point.y)
       await expect(confirmationTitle).toBeVisible({ timeout: 30_000 })
       await confirmation.getByRole('button', { name: 'Open link', exact: true }).click()
@@ -628,6 +681,7 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
         .poll(
           async () => {
             const opened = await readPairedHtmlPreviewInventory(page, inventoryArgs)
+
             return {
               routedCalls: await readPairedHtmlPreviewLinkRouting(page),
               docWorkspaces: opened.docWorkspaces.length,
@@ -686,6 +740,7 @@ test('asks before a paired preview reads a sibling directory', async ({
 
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   let prepared: PreparedPairedClient | null = null
+
   try {
     prepared = await preparePairedClient(offer, testInfo, 'Scoped HTML preview', testRepoPath)
     const { client, worktreeId, worktreePath } = prepared
@@ -724,13 +779,16 @@ test('asks before a paired preview reads a sibling directory', async ({
 
     const workspace = await page.evaluate((targetWorktreeId) => {
       const state = window.__store?.getState()
+
       return (state?.browserTabsByWorktree[targetWorktreeId] ?? []).find((candidate) =>
         candidate.docLocation?.filePath.endsWith('/scoped-preview.html')
       )?.id
     }, worktreeId)
+
     if (!workspace) {
       throw new Error('scoped preview had no document browser workspace')
     }
+
     await focusBrowserWorkspace(page, worktreeId, workspace)
     await page.locator(`[data-tab-id="${workspace}"]`).click()
 
@@ -777,11 +835,13 @@ test('restores the document tab, on a fresh grant, after the client quits and re
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   let prepared: PreparedPairedClient | null = null
   let abandonedProfile: string | null = null
+
   try {
     prepared = await preparePairedClient(offer, testInfo, 'Preview restore', testRepoPath)
     const profileDir = prepared.client.userDataDir
     const { worktreeId, worktreePath } = prepared
     const docFilePath = path.join(worktreePath, RESTORE_FIXTURE_NAME)
+
     const inventoryArgs = {
       environmentId: prepared.client.environmentId,
       docFilePath,
@@ -812,11 +872,13 @@ test('restores the document tab, on a fresh grant, after the client quits and re
     })
     abandonedProfile = null
     const relaunched = prepared.client.page
+
     const relaunchedArgs = {
       environmentId: prepared.client.environmentId,
       docFilePath,
       worktreeId: prepared.worktreeId
     }
+
     await expect
       .poll(
         async () =>
@@ -824,9 +886,11 @@ test('restores the document tab, on a fresh grant, after the client quits and re
         { timeout: 120_000, message: 'the relaunched client never restored the document tab' }
       )
       .toBe(1)
+
     const restored = requireSingleDocWorkspace(
       await readPairedHtmlPreviewInventory(relaunched, relaunchedArgs)
     )
+
     expect({
       pageUrl: restored.pageUrl,
       title: restored.title,
@@ -862,6 +926,7 @@ test('restores the document tab, on a fresh grant, after the client quits and re
     ).toEqual([])
   } finally {
     await prepared?.client.dispose()
+
     if (abandonedProfile) {
       await cleanupE2EDaemons(abandonedProfile).catch(() => undefined)
     }

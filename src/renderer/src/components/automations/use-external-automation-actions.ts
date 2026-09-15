@@ -35,6 +35,7 @@ export function useExternalAutomationActions({
     setIsDetailOpen,
     setActivePaneTab
   } = local
+
   const { scopedExternal } = list
   const fetchScopedExternalRuns = scopedExternal.fetchRuns
 
@@ -44,20 +45,26 @@ export function useExternalAutomationActions({
     action: ExternalAutomationAction
   ): Promise<void> => {
     setExternalActionKey(externalAutomationActionKey(scope, job.id, action))
+
     try {
       await scopedExternal.runExternalAction(scope, job.id, action)
+
       if (action === 'run') {
         useAppStore.getState().recordFeatureInteraction('automation-run')
       }
+
       await pageRefresh.refresh({ awaitExternalManagers: true })
+
       if (action === 'delete') {
         const deletedKey = externalAutomationJobKey(scope, job.id)
+
         if (selectedExternalKeyRef.current === deletedKey) {
           selectExternalKey(null)
           setIsDetailOpen(false)
           setActivePaneTab('overview')
         }
       }
+
       toast.success(
         action === 'delete'
           ? translate(
@@ -98,6 +105,7 @@ export function useExternalAutomationActions({
     async ({ scope, job, page, pageSize }) => {
       try {
         const result = await fetchScopedExternalRuns(scope, job, page, pageSize)
+
         return { runs: [...result.runs], totalCount: result.totalCount }
       } catch (error) {
         if (isMissingExternalRunsApiError(error)) {
@@ -106,11 +114,13 @@ export function useExternalAutomationActions({
             totalCount: job.runCount
           }
         }
+
         throw error
       }
     },
     [fetchScopedExternalRuns]
   )
+
   const openExternalRunPage = (
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
@@ -118,9 +128,11 @@ export function useExternalAutomationActions({
   ): void => {
     setSelectedExternalRunPage({ manager, job, run })
   }
+
   const openAutomationRunPage = (run: AutomationRun): void => {
     setSelectedAutomationRunPageId(run.id)
   }
+
   const requestExternalAction = (
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
@@ -129,14 +141,18 @@ export function useExternalAutomationActions({
   ): void => {
     if (action === 'delete') {
       setExternalDeleteTarget({ manager, job, scope })
+
       return
     }
+
     void runExternalAction(scope, job, action)
   }
+
   const confirmDeleteExternalAutomation = async (): Promise<void> => {
     if (!externalDeleteTarget) {
       return
     }
+
     const target = externalDeleteTarget
     setExternalDeleteTarget(null)
     await runExternalAction(target.scope, target.job, 'delete')

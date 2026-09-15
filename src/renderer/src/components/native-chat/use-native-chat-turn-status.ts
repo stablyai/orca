@@ -38,6 +38,7 @@ export function useNativeChatTurnStatus({
     const validTurnKeys = new Set(
       messages.filter((message) => message.role === 'user').map((message) => message.id)
     )
+
     setTimingByTurn((current) =>
       reduceNativeChatTurnTiming(current, {
         activeTurnKey,

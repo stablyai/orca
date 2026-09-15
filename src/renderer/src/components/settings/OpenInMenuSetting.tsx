@@ -92,6 +92,7 @@ function OpenInMenuRow({
   onCommit: () => void
 }): React.JSX.Element {
   const preset = getOpenInAppPreset(application)
+
   const isPreset =
     preset !== null &&
     (application.id === preset.id ||
@@ -241,14 +242,17 @@ export function OpenInMenuSetting({
   const [draftState, setDraftState] = useState(() =>
     createOpenInApplicationsDraftState(applications)
   )
+
   const [editingIds, setEditingIds] = useState<ReadonlySet<string>>(new Set())
 
   const resolvedDraftState = resolveOpenInApplicationsDraftState(draftState, applications)
+
   if (resolvedDraftState !== draftState) {
     // Why: the Open menu rows are editable local drafts, but Settings can
     // reload from persistence while this pane is mounted.
     setDraftState(resolvedDraftState)
   }
+
   const draft = resolvedDraftState.draft
   const isAtLimit = draft.length >= OPEN_IN_APPLICATIONS_MAX
 
@@ -256,6 +260,7 @@ export function OpenInMenuSetting({
     if (!shouldCommitOpenInApplicationsDraft(nextDraft)) {
       return
     }
+
     updateSettings({ openInApplications: nextDraft })
   }
 
@@ -275,6 +280,7 @@ export function OpenInMenuSetting({
     if (isAtLimit || isOpenInAppPresetAdded(draft, preset)) {
       return
     }
+
     applyDraft([...draft, createPresetOpenInApplication(preset)])
   }
 
@@ -282,6 +288,7 @@ export function OpenInMenuSetting({
     if (isAtLimit) {
       return
     }
+
     const application = createOpenInApplication()
     updateDraft([...draft, application])
     setEditingIds((current) => new Set([...current, application.id]))
@@ -318,6 +325,7 @@ export function OpenInMenuSetting({
           <DropdownMenuContent align="end" className="w-64">
             {getOpenInAppPresets().map((preset) => {
               const isAdded = isOpenInAppPresetAdded(draft, preset)
+
               return (
                 <DropdownMenuItem
                   key={preset.id}
@@ -353,6 +361,7 @@ export function OpenInMenuSetting({
               editingIds.has(application.id) ||
               application.label.trim() === '' ||
               application.command.trim() === ''
+
             return (
               <OpenInMenuRow
                 key={application.id}
@@ -361,11 +370,13 @@ export function OpenInMenuSetting({
                 onEditToggle={() =>
                   setEditingIds((current) => {
                     const next = new Set(current)
+
                     if (next.has(application.id)) {
                       next.delete(application.id)
                     } else {
                       next.add(application.id)
                     }
+
                     return next
                   })
                 }
@@ -375,6 +386,7 @@ export function OpenInMenuSetting({
                   setEditingIds((current) => {
                     const nextEditing = new Set(current)
                     nextEditing.delete(application.id)
+
                     return nextEditing
                   })
                 }}

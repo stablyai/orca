@@ -8,6 +8,7 @@ import {
   joinDrivePath,
   parentOfDrivePath
 } from './remote-file-browser-drive-paths'
+
 export type DirEntry = {
   name: string
   isDirectory: boolean
@@ -26,11 +27,15 @@ export function filterEntries(entries: DirEntry[], filter: string): DirEntry[] {
   if (isRemoteFileBrowserFilterQueryTooLarge(filter)) {
     return []
   }
+
   const trimmedFilter = filter.trim()
+
   if (!trimmedFilter) {
     return entries
   }
+
   const q = trimmedFilter.toLowerCase()
+
   return entries.filter((e) => e.name.toLowerCase().includes(q))
 }
 
@@ -46,12 +51,15 @@ export type EnterAction =
 
 export function decideEnterAction(filteredEntries: DirEntry[]): EnterAction {
   const folders = filteredEntries.filter((e) => e.isDirectory)
+
   if (folders.length === 1) {
     return { type: 'navigate', name: folders[0].name }
   }
+
   if (folders.length === 0 && filteredEntries.length > 0) {
     return { type: 'fileHint' }
   }
+
   return { type: 'noop' }
 }
 
@@ -70,9 +78,11 @@ export function joinPath(
   if (pathFlavor === 'win32' && resolvedPath === '/' && isDrivePath(name)) {
     return driveRootOf(name)
   }
+
   if (pathFlavor === 'win32' && isDrivePath(resolvedPath)) {
     return joinDrivePath(resolvedPath, name)
   }
+
   return resolvedPath === '/' ? `/${name}` : `${resolvedPath}/${name}`
 }
 
@@ -80,10 +90,13 @@ export function parentPath(p: string, pathFlavor: FilesystemPathFlavor = 'posix'
   if (pathFlavor === 'win32' && isDrivePath(p)) {
     return parentOfDrivePath(p)
   }
+
   if (p === '/' || p === '') {
     return '/'
   }
+
   const parent = p.replace(/\/[^/]+\/?$/, '')
+
   return parent || '/'
 }
 
@@ -114,9 +127,11 @@ export function isPathMode(raw: string, pathFlavor: FilesystemPathFlavor = 'posi
   if (raw.includes('/')) {
     return true
   }
+
   if (pathFlavor === 'win32' && isDrivePath(raw)) {
     return true
   }
+
   return raw === '~' || raw === '.' || raw === '..'
 }
 
@@ -143,9 +158,11 @@ export function parsePathInput(
   if (raw === '~') {
     return { mode: 'path', base: 'home', committedSegments: [], trailingFilter: '' }
   }
+
   if (raw === '.') {
     return { mode: 'path', base: 'cwd', committedSegments: [], trailingFilter: '' }
   }
+
   if (raw === '..') {
     return { mode: 'path', base: 'cwd', committedSegments: ['..'], trailingFilter: '' }
   }
@@ -153,6 +170,7 @@ export function parsePathInput(
   let base: 'root' | 'home' | 'cwd' | 'drive'
   let driveRoot: string | undefined
   let remainder: string
+
   if (pathFlavor === 'win32' && isDrivePath(raw)) {
     base = 'drive'
     driveRoot = driveRootOf(raw)
@@ -173,6 +191,7 @@ export function parsePathInput(
   // resolved. Report it as invalid and let the caller surface the error.
   const hasRepeatedSeparators =
     base === 'drive' ? /[\\/]{2,}/.test(remainder) : remainder.includes('//')
+
   if (hasRepeatedSeparators) {
     return {
       mode: 'path',
@@ -206,6 +225,7 @@ export function parsePathInput(
   // is the only legal "empty tail" and simply means "no trailing filter".
   const parts =
     remainder === '' ? [''] : base === 'drive' ? remainder.split(/[\\/]/) : remainder.split('/')
+
   const trailingFilter = parts.at(-1) ?? ''
   const committedSegments = parts.slice(0, -1)
 
@@ -227,17 +247,21 @@ export function resolveSegmentStep(
   if (segment === '.') {
     return { type: 'stay' }
   }
+
   if (segment === '..') {
     return { type: 'stay' } // caller turns this into parent navigation
   }
+
   // Exact (case-sensitive) match wins. When both `Documents` and `documents`
   // exist on a case-sensitive POSIX filesystem, the user's literal spelling
   // must be authoritative.
   const exact = baseEntries.find((e) => e.name === segment)
+
   if (exact) {
     if (exact.isDirectory) {
       return { type: 'descend', name: exact.name }
     }
+
     // Stop resolution: prefix-matching to a similarly-named folder here would
     // silently bypass a real file the user pointed at.
     return {
@@ -249,6 +273,7 @@ export function resolveSegmentStep(
       )
     }
   }
+
   // Fall back to case-insensitive matching so segment resolution agrees with
   // the case-insensitive filter input. Without this, typing `documents/`
   // errors while typing `documents` finds `Documents` via the filter — the
@@ -256,10 +281,12 @@ export function resolveSegmentStep(
   // we only accept CI matches when the case-sensitive match is absent.
   const segLower = segment.toLowerCase()
   const ciExact = baseEntries.find((e) => e.name.toLowerCase() === segLower)
+
   if (ciExact) {
     if (ciExact.isDirectory) {
       return { type: 'descend', name: ciExact.name }
     }
+
     return {
       type: 'error',
       message: translate(
@@ -269,12 +296,15 @@ export function resolveSegmentStep(
       )
     }
   }
+
   const dirMatches = baseEntries.filter(
     (e) => e.isDirectory && e.name.toLowerCase().startsWith(segLower)
   )
+
   if (dirMatches.length === 1) {
     return { type: 'descend', name: dirMatches[0].name }
   }
+
   if (dirMatches.length > 1) {
     return {
       type: 'error',
@@ -285,6 +315,7 @@ export function resolveSegmentStep(
       )
     }
   }
+
   return {
     type: 'error',
     message: translate(

@@ -27,6 +27,7 @@ export function buildWorkspaceTerminalRowPlan(
   const remoteSnapshotWorkspaceKeys = new Set(
     options?.directSshAuthority ? (options.replaceWorkspaceKeys ?? []) : []
   )
+
   const rowHydrationByWorktree = Object.entries(session.tabsByWorktree)
     .filter(([worktreeId]) => validWorktreeIds.has(worktreeId))
     .map(
@@ -38,6 +39,7 @@ export function buildWorkspaceTerminalRowPlan(
           })
         ] as const
     )
+
   const tabsByWorktree: Record<string, TerminalTab[]> = Object.fromEntries(
     rowHydrationByWorktree
       .map(([worktreeId, hydration]) => [worktreeId, hydration.rows] as const)
@@ -45,20 +47,25 @@ export function buildWorkspaceTerminalRowPlan(
         ([worktreeId, tabs]) => tabs.length > 0 || session.tabsByWorktree[worktreeId]?.length === 0
       )
   )
+
   const releasedPtyIdsByTabId = new Map<string, Set<string>>(
     rowHydrationByWorktree.flatMap(([, hydration]) => [...hydration.releasedPtyIdsByTabId])
   )
+
   const reconnectPtyIdByRetainedTabId = new Map<string, string>(
     rowHydrationByWorktree.flatMap(([, hydration]) => [...hydration.reconnectPtyIdByRetainedTabId])
   )
+
   const canonicalTabIdBySubsumedTabId = new Map<string, string>(
     rowHydrationByWorktree.flatMap(([, hydration]) => [...hydration.canonicalTabIdBySubsumedTabId])
   )
+
   const validTabIds = new Set(
     Object.values(tabsByWorktree)
       .flat()
       .map((tab) => tab.id)
   )
+
   let sleepingAgentSessionsByPaneKey = Object.fromEntries(
     Object.entries(session.sleepingAgentSessionsByPaneKey ?? {}).filter(([, record]) =>
       validWorktreeIds.has(record.worktreeId)
@@ -74,6 +81,7 @@ export function buildWorkspaceTerminalRowPlan(
       )
     }
   }
+
   // Released leaves transferred to canonical rows and must not retain a duplicate sleeping owner.
   const releasedPaneKeys = new Set<string>(
     [...releasedPtyIdsByTabId].flatMap(([tabId, releasedPtyIds]) =>
@@ -82,6 +90,7 @@ export function buildWorkspaceTerminalRowPlan(
         .map((leafId) => makePaneKey(tabId, leafId))
     )
   )
+
   if (releasedPaneKeys.size > 0) {
     sleepingAgentSessionsByPaneKey = Object.fromEntries(
       Object.entries(sleepingAgentSessionsByPaneKey).filter(

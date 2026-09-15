@@ -20,6 +20,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -38,12 +39,14 @@ describe('CodexAccountService config sync', () => {
       const rateLimits = createRateLimits()
       const runtimeHome = createRuntimeHome()
       const { CodexAccountService } = await import('./service')
+
       return new CodexAccountService(store as never, rateLimits as never, runtimeHome as never)
     }
 
     function withoutEnvApiKey<T>(run: () => T): T {
       const previous = process.env.OPENAI_API_KEY
       delete process.env.OPENAI_API_KEY
+
       try {
         return run()
       } finally {
@@ -129,15 +132,18 @@ describe('CodexAccountService config sync', () => {
 
     it('fails a corrupt managed auth.json without echoing credential bytes', async () => {
       const secret = 'sk-managed-secret-never-log'
+
       const managedHomePath = createManagedHome(
         testState.userDataDir,
         'account-1',
         '',
         `{"tokens": {"refresh_token": "${secret}"`
       )
+
       const service = await newService()
 
       let thrown: Error | null = null
+
       try {
         ;(
           service as unknown as {
@@ -176,6 +182,7 @@ describe('CodexAccountService config sync', () => {
       const service = await newService()
       const previous = process.env.OPENAI_API_KEY
       process.env.OPENAI_API_KEY = 'sk-env-test'
+
       try {
         const state = service.listAccounts()
         expect(state.systemDefault).toEqual({
@@ -197,12 +204,14 @@ describe('CodexAccountService config sync', () => {
     it('never mutates ~/.codex when selecting or deselecting a managed account', async () => {
       const systemAuth = createCodexAuthJson('real@home.dev', 'acct-real', 'refresh-real')
       writeFileSync(systemAuthPath(), systemAuth, 'utf-8')
+
       const managedHomePath = createManagedHome(
         testState.userDataDir,
         'account-1',
         'approval_policy = "on-request"\n',
         createCodexAuthJson('managed@example.com', 'acct-managed', 'refresh-managed')
       )
+
       const store = createStore(
         createSettings({
           codexManagedAccounts: [
@@ -220,9 +229,11 @@ describe('CodexAccountService config sync', () => {
           ]
         })
       )
+
       const rateLimits = createRateLimits()
       const runtimeHome = createRuntimeHome()
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,

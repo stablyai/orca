@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }))
+
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
 
 import {
@@ -11,7 +12,9 @@ import {
 import { parseShellForegroundRows } from './process-table-snapshot'
 
 type Callback = (error: Error | null, result: { stdout: string; stderr: string }) => void
+
 const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+
 const shell = '100 99 100 100 Ss+ /bin/zsh -l'
 
 beforeEach(() => {
@@ -19,6 +22,7 @@ beforeEach(() => {
   execFileMock.mockReset()
   resetProcessTableSnapshotForTests()
 })
+
 afterEach(() => Object.defineProperty(process, 'platform', platform))
 
 it('answers concurrent shell proofs without waiting for a pending full capture', async () => {
@@ -32,10 +36,12 @@ it('answers concurrent shell proofs without waiting for a pending full capture',
     }
   })
   const full = getProcessTableSnapshot()
+
   const [first, second] = await Promise.all([
     getFreshShellForegroundSnapshot(),
     getFreshShellForegroundSnapshot()
   ])
+
   expect(first).toEqual([
     { pid: 100, ppid: 99, pgid: 100, tpgid: 100, stat: 'Ss+', command: '/bin/zsh -l' }
   ])

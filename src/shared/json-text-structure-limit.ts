@@ -25,19 +25,25 @@ export function assertJsonTextStructureWithinLimits(
   assertLimit(limits.nestingDepth)
   let structuralTokens = 0
   let depth = 0
+
   for (let index = 0; index < content.length; index += 1) {
     const character = content[index]
+
     if (character === '"') {
       let quote = content.indexOf('"', index + 1)
+
       if (quote !== -1) {
         // Only an odd backslash run escapes the quote.
         let backslashes = 0
+
         for (let at = quote - 1; at > index && content[at] === '\\'; at -= 1) {
           backslashes += 1
         }
+
         if (backslashes % 2 !== 0) {
           // Escape-heavy strings use the linear scan to avoid repeated native searches.
           let escaped = false
+
           for (quote += 1; quote < content.length; quote += 1) {
             if (escaped) {
               escaped = false
@@ -47,26 +53,34 @@ export function assertJsonTextStructureWithinLimits(
               break
             }
           }
+
           if (quote === content.length) {
             quote = -1
           }
         }
       }
+
       if (quote === -1) {
         return
       }
+
       index = quote
       continue
     }
+
     if (!isStructuralToken(character)) {
       continue
     }
+
     structuralTokens += 1
+
     if (structuralTokens > limits.structuralTokens) {
       throw new JsonTextStructureCapacityError('structuralTokens', limits.structuralTokens)
     }
+
     if (character === '{' || character === '[') {
       depth += 1
+
       if (depth > limits.nestingDepth) {
         throw new JsonTextStructureCapacityError('nestingDepth', limits.nestingDepth)
       }

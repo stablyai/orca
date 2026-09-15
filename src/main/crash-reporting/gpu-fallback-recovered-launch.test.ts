@@ -26,10 +26,12 @@ function createHandlers(
   overrides: Partial<GpuFallbackRecoveredLaunchHandlers> = {}
 ): { handlers: GpuFallbackRecoveredLaunchHandlers; order: string[] } {
   const order: string[] = []
+
   const handlers: GpuFallbackRecoveredLaunchHandlers = {
     isQuitting: () => false,
     prompt: vi.fn(async () => {
       order.push('prompt')
+
       return decision
     }),
     confirmSafeGraphics: vi.fn(() => order.push('confirm')),
@@ -39,6 +41,7 @@ function createHandlers(
     restartWithHardware: vi.fn(() => order.push('restart')),
     ...overrides
   }
+
   return { handlers, order }
 }
 
@@ -86,11 +89,13 @@ describe('handleGpuFallbackRecoveredLaunch', () => {
 
   it('leaves the unconfirmed marker intact when the prompt fails', async () => {
     const error = new Error('dialog failed')
+
     const { handlers } = createHandlers('keep-safe', {
       prompt: vi.fn(async () => {
         throw error
       })
     })
+
     await handleGpuFallbackRecoveredLaunch(handlers)
     expect(handlers.onPromptFailed).toHaveBeenCalledWith(error)
     expect(handlers.confirmSafeGraphics).not.toHaveBeenCalled()
@@ -112,10 +117,12 @@ describe('recovered safe-graphics production wiring', () => {
       join(__dirname, '..', 'startup', 'main-window-controller.ts'),
       'utf8'
     )
+
     const lifecycleSource = readFileSync(
       join(__dirname, '..', 'startup', 'gpu-lifecycle.ts'),
       'utf8'
     )
+
     expect(windowSource).toMatch(
       /window\.once\('show',[\s\S]*?presentGpuFallbackRecoveredLaunchPrompt\(window\)/
     )

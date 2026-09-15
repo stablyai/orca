@@ -29,6 +29,7 @@ export function useMobileSessionFoundation() {
     created?: string
     warning?: string
   }>()
+
   const isFolderWorkspaceRoute = worktreeId.startsWith('folder:') // Synthetic ids have no repo scope.
   // Why: the floating sentinel has no repo/worktree, so repo-backed surfaces hide.
   const isFloatingWorkspaceRoute = isFloatingWorkspaceWorktreeId(worktreeId)
@@ -39,12 +40,14 @@ export function useMobileSessionFoundation() {
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const forceReconnectHost = useForceReconnect()
+
   const { name: worktreeName, resolution: worktreeResolution } = useLiveWorktreeName({
     client,
     connState,
     routeName: routeWorktreeName,
     worktreeId
   })
+
   // Why: a workspace deleted on the desktop leaves every RPC on this route failing forever.
   useMissingWorktreeBounce({
     hostId,
@@ -56,6 +59,7 @@ export function useMobileSessionFoundation() {
   const { isWideLayout } = useResponsiveLayout()
   const [activePanel, setActivePanel] = useState<ActivePanel>(null)
   const [sessionContentRowWidth, setSessionContentRowWidth] = useState(0)
+
   const canDockPanel =
     !isFloatingWorkspaceRoute &&
     canDockSessionPanel({
@@ -63,12 +67,14 @@ export function useMobileSessionFoundation() {
       availableWidth: sessionContentRowWidth,
       dockWidth: HOST_DOCK_MIN_WIDTH
     })
+
   // Why: if rotation/split-screen makes the docked row too narrow, clear activePanel so it doesn't survive into overlay/push mode.
   useEffect(() => {
     if (!canDockPanel && activePanel !== null) {
       setActivePanel(null)
     }
   }, [canDockPanel, activePanel])
+
   // GitHub remote probe gates the PR dock icon so non-GitHub providers can't open the hosted-review surface; skip the unused identity RPCs.
   const { isGithubRepo: prIsGithubRepo, repoLoaded: prRepoContextLoaded } =
     useMobilePrBranchContext({
@@ -79,12 +85,14 @@ export function useMobileSessionFoundation() {
       worktreeId,
       includeBranchIdentity: false
     })
+
   useEffect(() => {
     if (prRepoContextLoaded && !prIsGithubRepo && activePanel === 'pr') {
       setActivePanel(null)
     }
   }, [activePanel, prRepoContextLoaded, prIsGithubRepo])
   const initialCreateWarning = typeof createdWarning === 'string' ? createdWarning.trim() : ''
+
   return {
     hostId,
     worktreeId,

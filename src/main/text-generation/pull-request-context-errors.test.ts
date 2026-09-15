@@ -24,27 +24,35 @@ describe('getPullRequestDraftContext error handling', () => {
       if (args[0] === 'fetch') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       if (args[0] === 'rebase') {
         throw new Error('Generate must not rebase the live worktree')
       }
+
       if (args[0] === 'merge-base') {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       if (args[0] === 'log') {
         return { stdout: '- feat: change\n', stderr: '' }
       }
+
       if (args[0] === 'diff') {
         return { stdout: 'M\tREADME.md\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -59,17 +67,21 @@ describe('getPullRequestDraftContext error handling', () => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\nstale-fork\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         throw Object.assign(new Error('missing exact ref'), { code: 1 })
       }
+
       if (args[0] === 'fetch') {
         if (args[2] !== 'origin') {
           throw new Error(`Fetched unrelated remote: ${args.join(' ')}`)
         }
+
         throw new Error(
           'Command failed: git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main\nfatal: unable to access origin'
         )
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -80,18 +92,22 @@ describe('getPullRequestDraftContext error handling', () => {
 
   it('handles newline-heavy remote state and fetch errors without line-array splitting', async () => {
     const splitSpy = vi.spyOn(String.prototype, 'split')
+
     const execGit = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'remote') {
         return { stdout: `${'\r\n'.repeat(10_000)}origin\r\n`, stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         throw Object.assign(new Error('missing exact ref'), { code: 1 })
       }
+
       if (args[0] === 'fetch') {
         throw new Error(
           `Command failed: git fetch\r\n${'remote: progress\r\n'.repeat(10_000)}fatal: unable to access origin\r\n`
         )
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -104,6 +120,7 @@ describe('getPullRequestDraftContext error handling', () => {
         (typeof separator === 'string' && separator === '\n') ||
         (separator instanceof RegExp && separator.source === '\\r?\\n')
     )
+
     expect(usedLineSplit).toBe(false)
   })
 
@@ -133,22 +150,29 @@ describe('getPullRequestDraftContext error handling', () => {
       if (args[0] === 'remote') {
         return { stdout: '--upload-pack=x\n' }
       }
+
       if (args[0] === 'show-ref' && args.includes('--verify')) {
         throw Object.assign(new Error('missing exact ref'), { code: 1 })
       }
+
       if (args[0] === 'show-ref') {
         return { stdout: 'abc refs/remotes/--upload-pack=x/main\n' }
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature\n' }
       }
+
       if (args[0] === 'merge-base') {
         expect(args[1]).toBe('main')
+
         return { stdout: 'abc123\n' }
       }
+
       if (args[0] === 'log' || args[0] === 'diff') {
         return { stdout: 'change\n' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -163,22 +187,29 @@ describe('getPullRequestDraftContext error handling', () => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n' }
       }
+
       if (args[0] === 'show-ref') {
         throw Object.assign(new Error('missing exact ref'), { code: 1 })
       }
+
       if (args[0] === 'fetch') {
         return { stdout: '' }
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature\n' }
       }
+
       if (args[0] === 'merge-base') {
         expect(args[1]).toBe('origin/HEAD')
+
         return { stdout: 'abc123\n' }
       }
+
       if (args[0] === 'log' || args[0] === 'diff') {
         return { stdout: 'change\n' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -196,23 +227,31 @@ describe('getPullRequestDraftContext error handling', () => {
       if (args[0] === 'remote') {
         return { stdout: 'fork\n' }
       }
+
       if (args[0] === 'show-ref' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
         throw Object.assign(new Error('missing exact ref'), { code: 1 })
       }
+
       if (args[0] === 'show-ref') {
         expect(args).toEqual(['show-ref', '--', 'HEAD'])
+
         return { stdout: 'abc123 refs/remotes/fork/feature/HEAD\n' }
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature\n' }
       }
+
       if (args[0] === 'merge-base') {
         expect(args[1]).toBe('HEAD')
+
         return { stdout: 'abc123\n' }
       }
+
       if (args[0] === 'log' || args[0] === 'diff') {
         return { stdout: 'change\n' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -230,24 +269,31 @@ describe('getPullRequestDraftContext error handling', () => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n' }
       }
+
       if (args[0] === 'show-ref') {
         return args.at(-1) === 'refs/remotes/origin/HEAD'
           ? { stdout: '' }
           : Promise.reject(Object.assign(new Error('missing exact ref'), { code: 1 }))
       }
+
       if (args[0] === 'fetch') {
         return { stdout: '' }
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature\n' }
       }
+
       if (args[0] === 'merge-base') {
         expect(args[1]).toBe('origin/HEAD')
+
         return { stdout: 'abc123\n' }
       }
+
       if (args[0] === 'log' || args[0] === 'diff') {
         return { stdout: 'change\n' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 

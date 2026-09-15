@@ -16,10 +16,12 @@ import { spawnProcess } from '../../shared/child-process/run-process'
  * keeps the next static import from quietly restoring it.
  */
 const SDK_PACKAGE = '@anthropic-ai/claude-agent-sdk'
+
 const REPO_ROOT = resolve(__dirname, '..', '..', '..')
 
 /** The Electron main entry: everything the app loads before any session exists. */
 const ROOT = 'src/main/index.ts'
+
 /** Proof the walk goes all the way into the Claude transport rather than stopping short. */
 const TRANSPORT_MODULE = 'src/main/claude/claude-stream-json-connection.ts'
 
@@ -30,47 +32,61 @@ const TRANSPORT_MODULE = 'src/main/claude/claude-stream-json-connection.ts'
  * neither is an edge the runtime traverses at load time.
  */
 const STATEMENT_START = /^\s*(?:import|export)\b/
+
 const TYPE_ONLY = /^\s*(?:import|export)\s+type\b/
+
 const FROM_SPECIFIER = /(?:^|\s)from\s*['"]([^'"]+)['"]/
+
 const SIDE_EFFECT_IMPORT = /^\s*import\s*['"]([^'"]+)['"]/
+
 /** An import statement never spans more lines than its longest specifier list. */
 const MAX_STATEMENT_LINES = 60
 
 function readSpecifiers(source: string): string[] {
   const lines = source.split('\n')
   const found: string[] = []
+
   for (let index = 0; index < lines.length; index += 1) {
     const first = lines[index] as string
+
     if (!STATEMENT_START.test(first) || TYPE_ONLY.test(first)) {
       continue
     }
+
     const sideEffect = SIDE_EFFECT_IMPORT.exec(first)
+
     if (sideEffect) {
       found.push(sideEffect[1] as string)
       continue
     }
+
     for (let scan = index; scan < Math.min(lines.length, index + MAX_STATEMENT_LINES); scan += 1) {
       if (scan > index && STATEMENT_START.test(lines[scan] as string)) {
         break
       }
+
       const specifier = FROM_SPECIFIER.exec(lines[scan] as string)
+
       if (specifier) {
         found.push(specifier[1] as string)
         break
       }
     }
   }
+
   return found
 }
 
 /** Resolve a relative specifier the way the bundler does; unresolvable means not a module. */
 function resolveRelative(fromFile: string, specifier: string): string | null {
   const base = join(dirname(fromFile), specifier)
+
   for (const candidate of [base, `${base}.ts`, `${base}.tsx`, join(base, 'index.ts')]) {
     if (existsSync(candidate) && statSync(candidate).isFile()) {
       return candidate
     }
   }
+
   return null
 }
 
@@ -78,27 +94,35 @@ function walkStaticImports(rootFile: string): { visited: Set<string>; sdkImporte
   const visited = new Set<string>()
   const sdkImporters: string[] = []
   const queue = [resolve(REPO_ROOT, rootFile)]
+
   while (queue.length > 0) {
     const file = queue.pop() as string
     const key = relative(REPO_ROOT, file).split('\\').join('/')
+
     if (visited.has(key)) {
       continue
     }
+
     visited.add(key)
+
     for (const specifier of readSpecifiers(readFileSync(file, 'utf8'))) {
       if (specifier === SDK_PACKAGE || specifier.startsWith(`${SDK_PACKAGE}/`)) {
         sdkImporters.push(key)
         continue
       }
+
       if (!specifier.startsWith('.')) {
         continue
       }
+
       const target = resolveRelative(file, specifier)
+
       if (target) {
         queue.push(target)
       }
     }
   }
+
   return { visited, sdkImporters }
 }
 
@@ -131,6 +155,7 @@ describe('claude agent SDK import boundary', () => {
     // A separate process, not this fork: the assertion has to be about a first
     // evaluation of the package, which a cached module registry cannot give.
     const { NoDefaultCurrentDirectoryInExePath: _cleared, ...env } = process.env
+
     const probe = spawnProcess({
       program: process.execPath,
       args: [
@@ -141,6 +166,7 @@ describe('claude agent SDK import boundary', () => {
       env: env as Record<string, string>,
       stdio: ['ignore', 'pipe', 'ignore']
     })
+
     const observed = await new Promise<string>((settle) => {
       let output = ''
       probe.stdout?.setEncoding('utf8').on('data', (chunk: string) => {

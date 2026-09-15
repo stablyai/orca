@@ -12,15 +12,18 @@ import {
 } from './renderer-boot-graph.mjs'
 
 const rendererDir = path.join(process.cwd(), RENDERER_BUILD_DIR)
+
 const built = fs.existsSync(path.join(rendererDir, 'index.html'))
 
 describe('renderer boot graph', () => {
   it('derives an English probe the runtime-required catalog does not ship', () => {
     const signature = prunedAwayEnglishSignature()
+
     const runtimeRequired = fs.readFileSync(
       'src/renderer/src/i18n/en-runtime-required.json',
       'utf8'
     )
+
     const full = fs.readFileSync('src/renderer/src/i18n/locales/en.json', 'utf8')
 
     expect(full).toContain(JSON.stringify(signature).slice(1, -1))

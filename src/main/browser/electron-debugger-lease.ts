@@ -18,6 +18,7 @@ export function acquireElectronDebugger(webContents: WebContents): ElectronDebug
 
   const dbg = webContents.debugger
   let state = debuggerLeases.get(webContents)
+
   if (!state) {
     state = { attachedByLease: false, owners: new Set() }
     debuggerLeases.set(webContents, state)
@@ -37,15 +38,20 @@ export function acquireElectronDebugger(webContents: WebContents): ElectronDebug
       if (released) {
         return
       }
+
       released = true
       state.owners.delete(owner)
+
       if (state.owners.size > 0) {
         return
       }
+
       debuggerLeases.delete(webContents)
+
       if (!state.attachedByLease || !dbg.isAttached()) {
         return
       }
+
       try {
         dbg.detach()
       } catch {

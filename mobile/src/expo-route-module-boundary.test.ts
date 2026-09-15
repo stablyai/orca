@@ -5,20 +5,24 @@ import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 
 const appDirectory = fileURLToPath(new URL('../app', import.meta.url))
+
 const routeSourceExtensions = new Set(['.js', '.jsx', '.ts', '.tsx'])
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = join(directory, entry.name)
+
     return entry.isDirectory() ? sourceFiles(path) : [path]
   })
 }
 
 function isNonScreenExpoModule(path: string): boolean {
   const fileName = basename(path)
+
   if (/\+api\.[jt]sx?$/.test(fileName)) {
     return true
   }
+
   return (
     dirname(relative(appDirectory, path)) === '.' &&
     /^\+(?:html|middleware|native-intent)\.[jt]sx?$/.test(fileName)
@@ -31,6 +35,7 @@ function isPlatformSpecificApiRoute(path: string): boolean {
 
 function hasDefaultExport(path: string, source: string): boolean {
   const extension = extname(path)
+
   const sourceFile = ts.createSourceFile(
     path,
     source,
@@ -49,15 +54,19 @@ function hasDefaultExport(path: string, source: string): boolean {
     if (ts.isExportAssignment(statement)) {
       return !statement.isExportEquals
     }
+
     if (ts.isExportDeclaration(statement) && !statement.isTypeOnly && statement.exportClause) {
       if (ts.isNamespaceExport(statement.exportClause)) {
         return statement.exportClause.name.text === 'default'
       }
+
       return statement.exportClause.elements.some(
         (element) => !element.isTypeOnly && element.name.text === 'default'
       )
     }
+
     const modifiers = ts.canHaveModifiers(statement) ? ts.getModifiers(statement) : undefined
+
     return (
       !ts.isInterfaceDeclaration(statement) &&
       !ts.isTypeAliasDeclaration(statement) &&
@@ -104,6 +113,7 @@ describe('Expo route module boundary', () => {
 
   it('rejects platform-specific API routes even with a default export', () => {
     expect(isPlatformSpecificApiRoute(join(appDirectory, 'health+api.ts'))).toBe(false)
+
     for (const platform of ['android', 'ios', 'native', 'web']) {
       const path = join(appDirectory, `health+api.${platform}.ts`)
       expect(isInvalidRouteModule(path, 'export default function Route() {}')).toBe(true)

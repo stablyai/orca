@@ -113,18 +113,23 @@ export const skillsApi = {
   onInstallProgress: (callback: (progress: SkillInstallProgress) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: SkillInstallProgress): void =>
       callback(progress)
+
     ipcRenderer.on('skills:installProgress', listener)
+
     return () => ipcRenderer.removeListener('skills:installProgress', listener)
   },
   onShareProgress: (callback: (progress: SkillShareProgress) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: SkillShareProgress): void =>
       callback(progress)
+
     ipcRenderer.on('skills:shareProgress', listener)
+
     return () => ipcRenderer.removeListener('skills:shareProgress', listener)
   },
   onUpdateRun: (callback: (run: SkillUpdateRun) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, run: SkillUpdateRun): void => callback(run)
     ipcRenderer.on('skills:updateRun', listener)
+
     return () => ipcRenderer.removeListener('skills:updateRun', listener)
   }
 } satisfies PreloadApi['skills']

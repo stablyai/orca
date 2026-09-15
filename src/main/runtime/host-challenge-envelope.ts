@@ -6,13 +6,16 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import nacl from 'tweetnacl'
 
 const textEncoder = new TextEncoder()
+
 const textDecoder = new TextDecoder()
 
 export function decodeCanonicalBase64(value: string, expectedBytes: number): Uint8Array | null {
   if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
     return null
   }
+
   const decoded = Buffer.from(value, 'base64')
+
   return decoded.byteLength === expectedBytes && decoded.toString('base64') === value
     ? decoded
     : null
@@ -21,6 +24,7 @@ export function decodeCanonicalBase64(value: string, expectedBytes: number): Uin
 export function encodeUint64(value: number): Uint8Array {
   const bytes = new Uint8Array(8)
   new DataView(bytes.buffer).setBigUint64(0, BigInt(value), false)
+
   return bytes
 }
 
@@ -39,6 +43,7 @@ export function parseHostChallengeTranscript(
   const fields = new Map<string, Uint8Array>()
   const view = new DataView(transcript.buffer, transcript.byteOffset, transcript.byteLength)
   let offset = 0
+
   try {
     while (offset < transcript.byteLength) {
       const nameLength = view.getUint32(offset, false)
@@ -47,15 +52,18 @@ export function parseHostChallengeTranscript(
       offset += nameLength
       const valueLength = view.getUint32(offset, false)
       offset += 4
+
       if (fields.has(name) || offset + valueLength > transcript.byteLength) {
         return null
       }
+
       fields.set(name, transcript.slice(offset, offset + valueLength))
       offset += valueLength
     }
   } catch {
     return null
   }
+
   return offset === transcript.byteLength ? fields : null
 }
 
@@ -63,10 +71,12 @@ export function readTranscriptUint64(value: Uint8Array | undefined): number | nu
   if (!value || value.byteLength !== 8) {
     return null
   }
+
   const parsed = new DataView(value.buffer, value.byteOffset, value.byteLength).getBigUint64(
     0,
     false
   )
+
   return parsed <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(parsed) : null
 }
 
@@ -94,31 +104,41 @@ export function openHostChallengeEnvelope(input: {
   const peerKey = decodeCanonicalBase64(input.peerEphemeralPublicKeyB64, 32)
   const nonce = decodeCanonicalBase64(input.nonceB64, 24)
   const ciphertext = Buffer.from(input.ciphertextB64, 'base64')
+
   if (!peerKey || !nonce || ciphertext.toString('base64') !== input.ciphertextB64) {
     return null
   }
+
   const plaintext = nacl.box.open(ciphertext, nonce, peerKey, input.hostSecretKey)
+
   if (!plaintext) {
     input.onInvalid?.('challenge-box-open')
+
     return null
   }
+
   const domain = textEncoder.encode(`${input.plaintextDomain}\0`)
+
   if (
     !equalBytes(plaintext.slice(0, domain.byteLength), domain) ||
     plaintext.byteLength < domain.byteLength + 36
   ) {
     return null
   }
+
   const transcriptLength = new DataView(
     plaintext.buffer,
     plaintext.byteOffset + domain.byteLength,
     4
   ).getUint32(0, false)
+
   const transcriptStart = domain.byteLength + 4
   const secretStart = transcriptStart + transcriptLength
+
   if (secretStart + 32 !== plaintext.byteLength) {
     return null
   }
+
   return {
     transcript: plaintext.slice(transcriptStart, secretStart),
     secret: plaintext.slice(secretStart),

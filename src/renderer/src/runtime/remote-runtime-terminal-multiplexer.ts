@@ -10,7 +10,9 @@ export {
   REMOTE_TERMINAL_SNAPSHOT_REQUEST_TIMEOUT_MS,
   REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE
 } from './remote-runtime-terminal-snapshot-state'
+
 export { isHostAnsweredSnapshotRetryCause } from './remote-runtime-terminal-multiplexer-types'
+
 export type {
   RemoteRuntimeMultiplexedTerminal,
   RemoteRuntimeMultiplexedTerminalCallbacks,
@@ -39,10 +41,12 @@ export function getRemoteRuntimeTerminalMultiplexer(
 ): RemoteRuntimeTerminalMultiplexer {
   exposeE2eRemoteTerminalMultiplexAckGate(multiplexers)
   let multiplexer = multiplexers.get(environmentId)
+
   if (multiplexer && !multiplexer.matchesCurrentEnvironmentRevision()) {
     multiplexer.closeForEnvironmentReplacement()
     multiplexer = undefined
   }
+
   if (!multiplexer) {
     multiplexer = new RemoteRuntimeTerminalMultiplexer(
       environmentId,
@@ -51,6 +55,7 @@ export function getRemoteRuntimeTerminalMultiplexer(
     )
     multiplexers.set(environmentId, multiplexer)
   }
+
   return multiplexer
 }
 

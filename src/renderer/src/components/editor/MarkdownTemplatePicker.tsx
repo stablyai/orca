@@ -22,6 +22,7 @@ export function MarkdownTemplatePicker(): JSX.Element {
 
   const resolveRequest = useCallback((selection: MarkdownTemplateSelection): void => {
     const request = activeRequestRef.current
+
     if (!request) {
       return
     }

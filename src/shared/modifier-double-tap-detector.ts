@@ -56,6 +56,7 @@ export function modifierFromKeyEvent(
   if (code && MODIFIER_BY_CODE[code]) {
     return MODIFIER_BY_CODE[code]
   }
+
   return key ? (MODIFIER_BY_KEY[key] ?? null) : null
 }
 
@@ -63,21 +64,26 @@ function otherModifierHeld(event: ModifierKeyEventLike, modifier: PhysicalModifi
   if (modifier !== 'Shift' && event.shift) {
     return true
   }
+
   if (modifier !== 'Ctrl' && event.control) {
     return true
   }
+
   if (modifier !== 'Alt' && event.alt) {
     return true
   }
+
   if (modifier !== 'Cmd' && event.meta) {
     return true
   }
+
   return false
 }
 
 // Normalizes a platform key event (DOM or Electron) into the detector input.
 export function toModifierDoubleTapEvent(event: ModifierKeyEventLike): ModifierDoubleTapEvent {
   const modifier = modifierFromKeyEvent(event.code, event.key)
+
   return {
     type: event.type,
     modifier,
@@ -100,12 +106,16 @@ export class ModifierDoubleTapDetector {
     // gesture was already reset at that modifier's keyDown.)
     if (event.modifier === null || !event.isModifierOnly) {
       this.state = { phase: 'idle' }
+
       return null
     }
+
     if (event.type === 'keyUp') {
       this.onModifierUp(event.modifier, timestampMs)
+
       return null
     }
+
     return this.onModifierDown(event.modifier, event.isAutoRepeat, timestampMs)
   }
 
@@ -125,23 +135,30 @@ export class ModifierDoubleTapDetector {
       timestampMs <= this.state.deadlineMs
     ) {
       this.state = { phase: 'idle' }
+
       return { modifier }
     }
+
     // Auto-repeat means the key is being held, not tapped.
     if (isAutoRepeat) {
       this.state = { phase: 'idle' }
+
       return null
     }
+
     // Any other fresh bare-modifier press (re)starts from the first tap.
     this.state = { phase: 'down1', modifier }
+
     return null
   }
 
   private onModifierUp(modifier: PhysicalModifierToken, timestampMs: number): void {
     if (this.state.phase === 'down1' && this.state.modifier === modifier) {
       this.state = { phase: 'armed', modifier, deadlineMs: timestampMs + DOUBLE_TAP_WINDOW_MS }
+
       return
     }
+
     // Why: a keyup of the armed modifier with no intervening second keydown means
     // the second press was consumed elsewhere (the main process suppresses it for
     // an allowlisted action). Clear armed so a later lone press of the same

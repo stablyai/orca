@@ -11,6 +11,7 @@ export function registerAgentHookTerminalLifecycleHandler(
   handler: AgentHookTerminalLifecycleHandler
 ): () => void {
   handlersByPaneKey.set(paneKey, handler)
+
   return () => {
     if (handlersByPaneKey.get(paneKey) === handler) {
       handlersByPaneKey.delete(paneKey)

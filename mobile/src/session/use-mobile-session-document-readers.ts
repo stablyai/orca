@@ -10,17 +10,21 @@ import type { MobileSessionTabApplicationModel } from './use-mobile-session-tab-
 
 export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicationModel) {
   const { worktreeId, client, setMarkdownDocs, setFileDocs } = scope
+
   const readMarkdownTab = useCallback(
     async (tab: Extract<MobileSessionTab, { type: 'markdown' }>) => {
       if (!client) {
         return
       }
+
       setMarkdownDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
+
       try {
         const response = await client.sendRequest('markdown.readTab', {
           worktree: `id:${worktreeId}`,
           tabId: tab.id
         })
+
         if (response.ok) {
           const result = (response as RpcSuccess).result as {
             content: string
@@ -29,6 +33,7 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
             editable?: boolean
             readOnlyReason?: string
           }
+
           setMarkdownDocs((prev) =>
             new Map(prev).set(tab.id, {
               status: 'ready',
@@ -41,24 +46,30 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
               readOnlyReason: result.readOnlyReason
             })
           )
+
           return
         }
+
         if (!shouldReadMarkdownFromDiskAfterReadTabFailure(response as RpcFailure)) {
           throw new Error((response as RpcFailure).error.message)
         }
+
         // Why: a headless host fails markdown.readTab (renderer_unavailable); fall back to the on-disk file for read-only render.
         const fallback = await client.sendRequest('files.read', {
           worktree: `id:${worktreeId}`,
           relativePath: tab.relativePath
         })
+
         if (!fallback.ok) {
           throw new Error('Unable to read markdown')
         }
+
         const fileResult = (fallback as RpcSuccess).result as {
           content: string
           truncated: boolean
           byteLength: number
         }
+
         setMarkdownDocs((prev) =>
           new Map(prev).set(
             tab.id,
@@ -86,16 +97,20 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
       if (!client) {
         return
       }
+
       setFileDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
+
       try {
         const doc = await resolveMobileFileTabDoc(client, {
           worktreeId,
           relativePath: tab.relativePath,
           diffSource: tab.diffSource
         })
+
         setFileDocs((prev) => new Map(prev).set(tab.id, doc))
       } catch (err) {
         const message = err instanceof Error ? err.message : ''
+
         const previewMessage =
           message === 'binary_file'
             ? 'Binary preview unavailable'
@@ -104,6 +119,7 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
               : tab.diffSource === 'staged' || tab.diffSource === 'unstaged'
                 ? "Couldn't load diff preview"
                 : "Couldn't load file preview"
+
         setFileDocs((prev) =>
           new Map(prev).set(tab.id, {
             status: 'error',
@@ -114,6 +130,7 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
     },
     [client, worktreeId]
   )
+
   return {
     readMarkdownTab,
     readFileTab

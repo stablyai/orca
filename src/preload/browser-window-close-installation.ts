@@ -1,5 +1,6 @@
 export function installBrowserWindowCloseGuard(): void {
   const ignoreWindowClose = (): void => {}
+
   try {
     Object.defineProperty(window, 'close', {
       configurable: false,

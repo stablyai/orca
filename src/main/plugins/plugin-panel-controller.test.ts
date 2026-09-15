@@ -17,6 +17,7 @@ async function createPlugin(): Promise<ValidDiscoveredPlugin> {
   const rootDir = await mkdtemp(join(tmpdir(), 'orca-plugin-panel-controller-'))
   roots.push(rootDir)
   await writeFile(join(rootDir, 'panel.html'), '<h1>Panel</h1>')
+
   return {
     pluginKey: 'orca-samples.demo',
     rootDir,
@@ -45,12 +46,14 @@ describe('PluginPanelController identity binding', () => {
   it('uses the session identity and rejects caller-supplied plugin claims', async () => {
     const plugin = await createPlugin()
     const executeHostCall = vi.fn().mockResolvedValue({ ok: true, value: { delivered: true } })
+
     const controller = new PluginPanelController({
       resolveApprovedPlugin: (pluginKey) => (pluginKey === plugin.pluginKey ? plugin : null),
       contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
       executeHostCall,
       log: vi.fn()
     })
+
     const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
     expect(entry).not.toBeNull()
 
@@ -86,6 +89,7 @@ describe('PluginPanelController identity binding', () => {
   it('charges raw malformed and oversized calls before strict parsing', async () => {
     const plugin = await createPlugin()
     const executeHostCall = vi.fn()
+
     const controller = new PluginPanelController({
       resolveApprovedPlugin: () => plugin,
       contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
@@ -96,6 +100,7 @@ describe('PluginPanelController identity binding', () => {
         now: () => 0
       })
     })
+
     const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
 
     await expect(
@@ -134,9 +139,11 @@ describe('PluginPanelController identity binding', () => {
     const plugin = await createPlugin()
     let approved = true
     let finishVerification!: () => void
+
     const verification = new Promise<void>((resolve) => {
       finishVerification = resolve
     })
+
     const controller = new PluginPanelController({
       resolveApprovedPlugin: () => (approved ? plugin : null),
       contentVerifier: { verify: () => verification },
@@ -155,12 +162,14 @@ describe('PluginPanelController identity binding', () => {
     const plugin = await createPlugin()
     let current = plugin
     const executeHostCall = vi.fn().mockResolvedValue({ ok: true, value: { delivered: true } })
+
     const controller = new PluginPanelController({
       resolveApprovedPlugin: () => current,
       contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
       executeHostCall,
       log: vi.fn()
     })
+
     const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
     current = {
       ...plugin,

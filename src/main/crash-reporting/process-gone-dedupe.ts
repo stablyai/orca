@@ -1,4 +1,5 @@
 const DEFAULT_PROCESS_GONE_DEDUPE_WINDOW_MS = 2_000
+
 const DEFAULT_PROCESS_GONE_DEDUPE_MAX_KEYS = 128
 
 type ProcessGoneDedupeOptions = {
@@ -33,6 +34,7 @@ export class ProcessGoneDedupe {
     this.prune(now)
 
     const previous = this.recentKeys.get(key)
+
     if (previous && now - previous.recordedAt < this.windowMs) {
       return null
     }
@@ -43,11 +45,13 @@ export class ProcessGoneDedupe {
     this.recentKeys.delete(key)
     this.recentKeys.set(key, { recordedAt: now, claim })
     this.prune(now)
+
     return claim
   }
 
   release(claim: ProcessGoneDedupeClaim): void {
     const current = this.recentKeys.get(claim.key)
+
     // Why: an old failed write must not erase a newer claim for the same
     // renderer after the dedupe window expires or bounded entries are evicted.
     if (current?.claim === claim) {
@@ -68,9 +72,11 @@ export class ProcessGoneDedupe {
 
     while (this.recentKeys.size > this.maxKeys) {
       const oldest = this.recentKeys.keys().next()
+
       if (oldest.done) {
         break
       }
+
       this.recentKeys.delete(oldest.value)
     }
   }
@@ -89,6 +95,7 @@ export function getProcessGoneDedupeKey(
   if (source === 'renderer') {
     return `${source}:${processType}:${webContentsId ?? 'global'}`
   }
+
   return `${source}:${processType}:${reason}:${exitCode ?? 'null'}`
 }
 

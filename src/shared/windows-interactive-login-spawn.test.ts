@@ -6,6 +6,7 @@ import { buildWindowsHostInteractiveLoginSpawn } from './windows-interactive-log
 function withWindows<T>(fn: () => T): T {
   const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
   try {
     return fn()
   } finally {
@@ -20,17 +21,21 @@ function encodedValue(value: string): string {
 /** Positional-independent so the argv shape can change without silently reading the wrong slot. */
 function decodedScript(args: string[]): string {
   const payload = args[args.indexOf('-EncodedCommand') + 1] ?? ''
+
   return Buffer.from(payload, 'base64').toString('utf16le')
 }
 
 function pidFilePathFromSpawnArgs(args: string[]): string {
   const script = decodedScript(args)
+
   const encodedPath = script.match(
     /WriteAllText\(\(Read-OrcaValue '([^']+)'\), \[string\]\$PID\)/
   )?.[1]
+
   if (!encodedPath) {
     throw new Error('PID relay path is missing')
   }
+
   return Buffer.from(encodedPath, 'base64').toString('utf8')
 }
 
@@ -43,6 +48,7 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
         '--claudeai'
       ])
     )
+
     expect(spawn.command).toBe(getCmdExePath())
     expect(spawn.args.slice(0, 5)).toEqual(['/d', '/c', 'start', '', '/wait'])
     expect(spawn.args[5]).toMatch(/WindowsPowerShell\\v1\.0\\powershell\.exe$/i)
@@ -74,6 +80,7 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
     const spawn = withWindows(() =>
       buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\codex.exe', ['login'])
     )
+
     const script = decodedScript(spawn.args)
     expect(script).toContain(encodedValue('C:\\Tools\\codex.exe'))
     expect(script).toContain(encodedValue('login'))
@@ -82,9 +89,11 @@ describe('buildWindowsHostInteractiveLoginSpawn', () => {
 
   it('waits for the relay PID when cancellation races console startup', async () => {
     vi.useFakeTimers()
+
     const spawn = withWindows(() =>
       buildWindowsHostInteractiveLoginSpawn('C:\\Tools\\claude.exe', ['auth', 'login'])
     )
+
     try {
       const pendingPid = spawn.waitForTerminationPid()
       expect(spawn.getTerminationPid()).toBeNull()

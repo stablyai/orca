@@ -7,18 +7,24 @@ import {
 export type WslGitReadEnvironment = { gitPath: string; home: string; path: string }
 
 const PROBE_TIMEOUT_MS = 10_000
+
 /**
  * How long a read may wait for a cold probe before taking the login shell.
  * Short enough that a wedged distro cannot stall the panel, long enough that a
  * healthy one resolves and every later read runs shell-free.
  */
 export const WSL_GIT_READ_ENVIRONMENT_WAIT_MS = 1_500
+
 const PROBE_MAX_BUFFER = 64 * 1024
+
 const TRANSIENT_PROBE_RETRY_MS = 30_000
+
 const environmentByDistro = new Map<string, Promise<WslGitReadEnvironment | null>>()
+
 // Why the null entries matter: a settled "no direct route" answer is what lets a read skip the
 // bounded probe wait entirely instead of racing an already-decided promise on every call.
 const settledEnvironmentByDistro = new Map<string, WslGitReadEnvironment | null>()
+
 const transientRetryAfterByDistro = new Map<string, number>()
 
 type ProbeOutcome =
@@ -30,10 +36,12 @@ function parseProbe(payload: string | null): WslGitReadEnvironment | null {
   if (payload === null) {
     return null
   }
+
   const fields = payload.split('\0')
   const path = fields[0] ?? ''
   const gitPath = fields[1] ?? ''
   const home = fields[2] ?? ''
+
   if (
     !path.includes('/') ||
     path.length > 32_768 ||
@@ -46,6 +54,7 @@ function parseProbe(payload: string | null): WslGitReadEnvironment | null {
   ) {
     return null
   }
+
   return { gitPath, home, path }
 }
 
@@ -56,7 +65,9 @@ function probeWslGitReadEnvironment(distro: string): Promise<ProbeOutcome> {
     'if [ -n "${XDG_CONFIG_HOME:-}" ] || [ -n "${LD_LIBRARY_PATH:-}" ] || env | grep -q \'^GIT_\'; then exit 78; fi',
     `printf '%s\\0%s\\0%s' "$PATH" "$_orca_git_path" "$HOME"`
   ].join('\n')
+
   const captured = buildWslCapturedLoginShellCommand(probeCommand)
+
   return new Promise((resolve) => {
     execFile(
       'wsl.exe',
@@ -71,8 +82,10 @@ function probeWslGitReadEnvironment(distro: string): Promise<ProbeOutcome> {
         if (error) {
           const code = (error as { code?: unknown }).code
           resolve(code === 78 || code === 127 ? { kind: 'rejected' } : { kind: 'transient' })
+
           return
         }
+
         const environment = parseProbe(captured.readStdout(String(stdout)))
         resolve(environment ? { kind: 'resolved', environment } : { kind: 'rejected' })
       }
@@ -82,30 +95,39 @@ function probeWslGitReadEnvironment(distro: string): Promise<ProbeOutcome> {
 
 export function getWslGitReadEnvironment(distro: string): Promise<WslGitReadEnvironment | null> {
   const retryAfter = transientRetryAfterByDistro.get(distro)
+
   if (retryAfter !== undefined && Date.now() >= retryAfter) {
     environmentByDistro.delete(distro)
     settledEnvironmentByDistro.delete(distro)
     transientRetryAfterByDistro.delete(distro)
   }
+
   let environment = environmentByDistro.get(distro)
+
   if (!environment) {
     environment = probeWslGitReadEnvironment(distro).then((outcome) => {
       if (environmentByDistro.get(distro) !== environment) {
         return outcome.kind === 'resolved' ? outcome.environment : null
       }
+
       if (outcome.kind === 'resolved') {
         settledEnvironmentByDistro.set(distro, outcome.environment)
         transientRetryAfterByDistro.delete(distro)
+
         return outcome.environment
       }
+
       settledEnvironmentByDistro.set(distro, null)
+
       if (outcome.kind === 'transient') {
         transientRetryAfterByDistro.set(distro, Date.now() + TRANSIENT_PROBE_RETRY_MS)
       }
+
       return null
     })
     environmentByDistro.set(distro, environment)
   }
+
   return environment
 }
 

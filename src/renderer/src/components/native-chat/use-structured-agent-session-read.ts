@@ -16,7 +16,9 @@ function useReadOwnerSnapshot(
     () => getStructuredAgentSessionReadOwner(sessionId, target),
     [sessionId, target]
   )
+
   const snapshot = useSyncExternalStore(owner.subscribe, owner.getSnapshot, owner.getSnapshot)
+
   return { owner, snapshot }
 }
 

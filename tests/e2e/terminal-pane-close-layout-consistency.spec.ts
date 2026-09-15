@@ -48,15 +48,18 @@ type ParkingDebugWindow = Window & {
 
 async function skipUnlessParkingWired(page: Page): Promise<void> {
   const deadline = Date.now() + 2_000
+
   let present = await page.evaluate(
     () => (window as ParkingDebugWindow).__terminalParkingDebug !== undefined
   )
+
   while (!present && Date.now() < deadline) {
     await page.waitForTimeout(250)
     present = await page.evaluate(
       () => (window as ParkingDebugWindow).__terminalParkingDebug !== undefined
     )
   }
+
   test.skip(!present, 'terminal hidden view parking wiring is not compiled in')
 }
 
@@ -72,29 +75,38 @@ type LayoutConsistency = {
 async function readLayoutConsistency(page: Page, tabId: string): Promise<LayoutConsistency> {
   return page.evaluate((tabId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store unavailable')
     }
+
     const layout = store.getState().terminalLayoutsByTabId[tabId]
     const rootLeafIds: string[] = []
+
     type LayoutNode =
       | { type: 'leaf'; leafId: string }
       | { type: 'split'; first: LayoutNode; second: LayoutNode }
+
     const walk = (node: LayoutNode | null | undefined): void => {
       if (!node) {
         return
       }
+
       if (node.type === 'leaf') {
         rootLeafIds.push(node.leafId)
+
         return
       }
+
       walk(node.first)
       walk(node.second)
     }
+
     walk((layout?.root ?? null) as LayoutNode | null)
     const manager = window.__paneManagers?.get(tabId)
     const managerPanes = manager?.getPanes?.() ?? null
     const paneElements = managerPanes ? new Set(managerPanes.map((pane) => pane.container)) : null
+
     return {
       rootLeafIds,
       boundLeafIds: Object.keys(layout?.ptyIdsByLeafId ?? {}),
@@ -128,6 +140,7 @@ async function expectLayoutConsistent(
     .poll(
       async () => {
         const state = await readLayoutConsistency(page, tabId)
+
         return {
           hasManager: state.hasManager,
           livePaneCount: state.livePaneCount,
@@ -159,13 +172,17 @@ async function expectLayoutConsistent(
 async function closeLastPaneOnTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((tabId) => {
     const manager = window.__paneManagers?.get(tabId)
+
     if (!manager) {
       throw new Error(`closeLastPaneOnTab: no mounted pane manager for tab ${tabId}`)
     }
+
     const target = manager.getPanes().at(-1)
+
     if (!target) {
       throw new Error('closeLastPaneOnTab: tab has no panes')
     }
+
     manager.closePane(target.id)
   }, tabId)
 }
@@ -173,15 +190,19 @@ async function closeLastPaneOnTab(page: Page, tabId: string): Promise<void> {
 async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<string> {
   const tabId = await page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('createActiveTerminalTab: window.__store is unavailable')
     }
+
     const state = store.getState()
     const tab = state.createTab(worktreeId, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
     state.setActiveTabType('terminal')
+
     return tab.id
   }, worktreeId)
+
   await expect
     .poll(() => getActiveTabId(page), {
       timeout: 5_000,
@@ -190,15 +211,18 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
     .toBe(tabId)
   await waitForActiveTerminalManager(page, 30_000)
   await waitForPaneIdentitySnapshot(page, 1)
+
   return tabId
 }
 
 async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((targetTabId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('activateTerminalTab: window.__store is unavailable')
     }
+
     const state = store.getState()
     state.setActiveTabType('terminal')
     state.setActiveTab(targetTabId)
@@ -237,15 +261,19 @@ async function setUpSplitTab(page: Page): Promise<SplitTabSetup> {
   await waitForActiveTerminalManager(page, 30_000)
   await waitForPaneIdentitySnapshot(page, 1)
   const tabId = await getActiveTabId(page)
+
   if (!tabId) {
     throw new Error('setUpSplitTab: no active terminal tab')
   }
+
   await splitActiveTerminalPane(page, 'vertical')
   const snapshot = await waitForPaneIdentitySnapshot(page, 2)
   const splitPane = snapshot.panes.at(-1)
+
   if (!splitPane?.ptyId) {
     throw new Error('setUpSplitTab: split pane did not bind a PTY')
   }
+
   return { worktreeId, tabId, splitLeafId: splitPane.leafId, splitPtyId: splitPane.ptyId }
 }
 
@@ -262,13 +290,17 @@ test.describe('terminal pane close vs hidden/park lifecycle keeps layout consist
       ({ tabId, worktreeId }) => {
         const store = window.__store
         const manager = window.__paneManagers?.get(tabId)
+
         if (!store || !manager) {
           throw new Error('close+hide: store/manager unavailable')
         }
+
         const target = manager.getPanes().at(-1)
+
         if (!target) {
           throw new Error('close+hide: no split pane')
         }
+
         manager.closePane(target.id)
         // Hide tab A before any deferred post-close work can run.
         const state = store.getState()
@@ -308,6 +340,7 @@ test.describe('terminal pane close vs hidden/park lifecycle keeps layout consist
     await orcaPage.evaluate((tabId) => {
       const manager = window.__paneManagers?.get(tabId)
       const target = manager?.getPanes().at(-1)
+
       if (manager && target) {
         manager.closePane(target.id)
       }

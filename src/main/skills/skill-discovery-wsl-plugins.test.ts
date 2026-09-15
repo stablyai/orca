@@ -20,9 +20,11 @@ function wslResult(stdout: string): WslResult {
 
 function recordedScript(index: number): string {
   const script: unknown = runWslProcessMock.mock.calls[index]?.[0].script
+
   if (typeof script !== 'string') {
     throw new Error('Expected a generated WSL script')
   }
+
   return script
 }
 
@@ -43,6 +45,7 @@ describe('WSL Claude plugin skill discovery', () => {
     const scanScript = recordedScript(0)
     expect(scanScript.match(/'\/home\/alice\/\.agents\/skills'/g)).toHaveLength(1)
     expect(scanScript.match(/'\/home\/alice\/\.claude\/skills'/g)).toHaveLength(1)
+
     const expectedRoots = buildSkillDiscoverySources({
       homeDir: '/home/alice',
       cwd: undefined,
@@ -50,6 +53,7 @@ describe('WSL Claude plugin skill discovery', () => {
       includeCwd: false,
       pathApi: pathPosix
     })
+
     expect(result.sources).toHaveLength(
       expectedRoots.filter((root) => rootMayContainSourceKind(root, ['home'])).length
     )
@@ -70,6 +74,7 @@ describe('WSL Claude plugin skill discovery', () => {
     const scanScript = recordedScript(0)
     expect(scanScript).not.toContain('/work/orca')
     expect(scanScript).not.toContain("'/home/alice/.codex/plugins/cache'")
+
     const expectedRoots = buildSkillDiscoverySources({
       homeDir: '/home/alice',
       cwd: '/work/orca',
@@ -77,6 +82,7 @@ describe('WSL Claude plugin skill discovery', () => {
       includeCwd: true,
       pathApi: pathPosix
     }).filter((root) => rootMayContainSourceKind(root, ['home']))
+
     expect(result.sources).toHaveLength(expectedRoots.length)
   })
 
@@ -91,32 +97,40 @@ describe('WSL Claude plugin skill discovery', () => {
       vi.stubEnv('LOCALAPPDATA', 'C:\\Users\\alice\\AppData\\Local')
       const pluginId = 'compound-engineering@compound-engineering-plugin'
       const installPath = '/home/alice/.claude/plugins/cache/compound/3.14.3'
+
       const installed = JSON.stringify({
         plugins: {
           [pluginId]: [{ scope: 'project', projectPath: cwd, installPath }]
         }
       })
+
       const settings = JSON.stringify({ enabledPlugins: { [pluginId]: true } })
+
       const metadataOutput = [
         record('F', '0', '1', Buffer.from(installed).toString('base64')),
         record('F', '1', '1', Buffer.from(settings).toString('base64')),
         record('F', '2', '0', ''),
         record('F', '3', '0', '')
       ].join('')
+
       const baseRootCount = buildSkillDiscoverySources({
         homeDir,
         cwd,
         repos: [],
         pathApi: pathPosix
       }).length
+
       const skillPath = `${installPath}/skills/ce-plan/SKILL.md`
+
       const markdown = Buffer.from('---\nname: ce-plan\ndescription: Plan work.\n---\n').toString(
         'base64'
       )
+
       const scanOutput = [
         record('R', String(baseRootCount), '1'),
         record('S', String(baseRootCount), skillPath, skillPath, '1700000000', markdown)
       ].join('')
+
       runWslProcessMock.mockResolvedValueOnce(wslResult(metadataOutput))
       runWslProcessMock.mockResolvedValueOnce(wslResult(scanOutput))
 

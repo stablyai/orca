@@ -6,10 +6,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => {
   const rateLimits: Record<string, unknown> = { claude: null, codex: null }
+
   return { claudeList: vi.fn(), codexList: vi.fn(), rateLimits }
 })
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -22,10 +24,13 @@ vi.mock('@/store', () => ({
 import { UsageAccountsCard } from './UsageAccountsCard'
 
 const EMPTY_ACCOUNTS = { accounts: [], activeAccountId: null }
+
 const UNKNOWN_TEXT = 'Account status unknown'
+
 const NOT_SET_UP_TEXT = 'Tracking not set up'
 
 let container: HTMLDivElement
+
 let root: Root
 
 async function renderCard(): Promise<void> {
@@ -89,6 +94,7 @@ describe('UsageAccountsCard account-list failures', () => {
 
   it('does not claim tracking is unset while the account read is pending', async () => {
     let rejectClaude: (reason: Error) => void = () => {}
+
     mocks.claudeList.mockReturnValue(
       new Promise((_resolve, reject) => {
         rejectClaude = reject

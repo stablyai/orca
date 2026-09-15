@@ -48,6 +48,7 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
       nextGroups?.find((group) => group.id === snapshot.activeGroupId)?.id ??
       nextGroups?.[0]?.id ??
       null)
+
   const nextActiveGroupIdByWorktree =
     nextGroups && state.activeGroupIdByWorktree[worktreeId] !== nextActiveGroupId
       ? withWorktreeEntry(
@@ -64,13 +65,16 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
     if (!nextGroups) {
       return state.layoutByWorktree
     }
+
     if (clientOwnedPlacement) {
       const clientLayout =
         clientOwnedPlacement.layout ??
         (nextActiveGroupId ? { type: 'leaf' as const, groupId: nextActiveGroupId } : null)
+
       if (!clientLayout || tabGroupLayoutEqual(state.layoutByWorktree[worktreeId], clientLayout)) {
         return state.layoutByWorktree
       }
+
       return withWorktreeEntry(
         state,
         'layoutByWorktree',
@@ -80,14 +84,17 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
         context.batchContext
       )
     }
+
     if (options?.preserveLocalLayout) {
       return state.layoutByWorktree
     }
+
     const validGroupIds = new Set(nextGroups.map((group) => group.id))
     const hostLayout = pruneTabGroupLayout(snapshot.tabGroupLayout, validGroupIds)
     const defaultLeafLayout = { type: 'leaf' as const, groupId: nextActiveGroupId ?? targetGroupId }
     const hostLayoutGroupIds = collectLayoutGroupIds(hostLayout ?? undefined)
     const hostGroupIds = new Set(snapshot.tabGroups?.map((group) => group.id) ?? [])
+
     const extraGroupIds = new Set(
       nextGroups
         .map((group) => group.id)
@@ -99,9 +106,12 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
               : false
         )
     )
+
     const localExtraLayout = pruneTabGroupLayout(state.layoutByWorktree[worktreeId], extraGroupIds)
+
     const hostBaseLayout =
       hostLayout ?? (snapshot.tabGroups && snapshot.tabGroups.length > 0 ? defaultLeafLayout : null)
+
     const fallbackLayout =
       appendTabGroupLayout(hostBaseLayout, localExtraLayout) ??
       (snapshot.tabGroups && snapshot.tabGroups.length > 0
@@ -109,12 +119,14 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
         : state.layoutByWorktree[worktreeId]
           ? null
           : defaultLeafLayout)
+
     if (
       !fallbackLayout ||
       tabGroupLayoutEqual(state.layoutByWorktree[worktreeId], fallbackLayout)
     ) {
       return state.layoutByWorktree
     }
+
     return withWorktreeEntry(
       state,
       'layoutByWorktree',
@@ -133,6 +145,7 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
     (a, b) => sameStringArray(a ?? [], b ?? []),
     context.batchContext
   )
+
   const nextActiveTabIdByWorktree =
     (state.activeTabIdByWorktree[worktreeId] ?? null) !==
     (intentMirroredAgent?.unifiedTab.id ?? currentVisibleStructuredTabId ?? nextActiveTerminalId)
@@ -148,6 +161,7 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
           false
         )
       : state.activeTabIdByWorktree
+
   const nextActiveBrowserTabIdByWorktree =
     (state.activeBrowserTabIdByWorktree[worktreeId] ?? null) !== nextActiveBrowserWorkspaceId
       ? withWorktreeEntry(
@@ -160,6 +174,7 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
           false
         )
       : state.activeBrowserTabIdByWorktree
+
   const nextActiveFileIdByWorktree =
     (state.activeFileIdByWorktree[worktreeId] ?? null) !== nextActiveEditorFileId
       ? withWorktreeEntry(
@@ -174,6 +189,7 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
       : state.activeFileIdByWorktree
 
   const isActiveWorktree = state.activeWorktreeId === worktreeId
+
   const focusIntentVisibleTabType =
     navigationIntentTab?.type === 'agent-session' && intentMirroredAgent
       ? ('agent-session' as const)
@@ -184,6 +200,7 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
           : intentEditorFileId
             ? ('editor' as const)
             : null
+
   const snapshotVisibleTabType =
     snapshot.activeTabType === 'agent-session' && activeMirroredAgentTabId
       ? ('agent-session' as const)
@@ -195,8 +212,10 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
               nextActiveEditorFileId
             ? ('editor' as const)
             : null
+
   const currentVisibleTabType =
     state.activeTabTypeByWorktree[worktreeId] ?? (isActiveWorktree ? state.activeTabType : null)
+
   const currentVisibleTabTypeStillValid =
     currentVisibleStructuredTabId !== null
       ? ('agent-session' as const)
@@ -213,10 +232,12 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
             : currentVisibleTabType === 'terminal' && currentActiveTerminalStillExists
               ? ('terminal' as const)
               : null
+
   const activeUnifiedTab =
     nextActiveUnifiedTabId && nextUnifiedTabs
       ? (nextUnifiedTabs.find((tab) => tab.id === nextActiveUnifiedTabId) ?? null)
       : null
+
   const fallbackVisibleTabType =
     activeUnifiedTab !== null
       ? toVisibleTabType(activeUnifiedTab)
@@ -227,6 +248,7 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
           : nextActiveEditorFileId
             ? ('editor' as const)
             : ('terminal' as const)
+
   const nextVisibleTabType = honorSnapshotActiveFocus
     ? (focusIntentVisibleTabType ??
       currentVisibleTabTypeStillValid ??
@@ -238,25 +260,31 @@ export function applyActiveStateUpdates(context: ActiveStateContext) {
     state.activeTabId && (nextTerminalTabs ?? []).some((tab) => tab.id === state.activeTabId)
       ? state.activeTabId
       : null
+
   const currentActiveEditorStillValid =
     state.activeFileId && nextWorktreeOpenFileIds.has(state.activeFileId)
       ? state.activeFileId
       : null
+
   const nextActiveTabId = isActiveWorktree
     ? (intentMirroredAgent?.unifiedTab.id ??
       (snapshot.activeTabType === 'terminal'
         ? nextActiveTerminalId
         : (currentActiveTerminalStillValid ?? nextActiveTerminalId)))
     : state.activeTabId
+
   const nextActiveBrowserTabId = isActiveWorktree
     ? nextActiveBrowserWorkspaceId
     : state.activeBrowserTabId
+
   const nextActiveFileId = isActiveWorktree
     ? snapshot.activeTabType === 'markdown' || snapshot.activeTabType === 'file'
       ? nextActiveEditorFileId
       : (currentActiveEditorStillValid ?? nextActiveEditorFileId)
     : state.activeFileId
+
   const nextActiveTabType = isActiveWorktree ? nextVisibleTabType : state.activeTabType
+
   const nextActiveTabTypeByWorktree =
     state.activeTabTypeByWorktree[worktreeId] !== nextVisibleTabType
       ? withWorktreeEntry(

@@ -55,6 +55,7 @@ describe('getMobileTerminalActionSheetActions', () => {
     const onClose = vi.fn()
     const onCloseSessionTab = vi.fn()
     const tab = terminalTab('tab-1::leaf-1', 'terminal-1')
+
     const actions = buildActions({
       target: { handle: 'terminal-1' },
       tabs: [tab],
@@ -71,6 +72,7 @@ describe('getMobileTerminalActionSheetActions', () => {
     const onCloseSessionTab = vi.fn()
     const first = terminalTab('tab-1::leaf-1', 'terminal-1')
     const second = terminalTab('tab-1::leaf-2', 'terminal-2')
+
     const actions = buildActions({
       target: { handle: 'terminal-2' },
       tabs: [first, second],
@@ -85,6 +87,7 @@ describe('getMobileTerminalActionSheetActions', () => {
     const onClose = vi.fn()
     const onCloseSessionTab = vi.fn()
     const target = { handle: 'terminal-9' }
+
     const actions = buildActions({
       target,
       tabs: [terminalTab('tab-1::leaf-1', 'terminal-1'), terminalTab('tab-2::leaf-1', null)],

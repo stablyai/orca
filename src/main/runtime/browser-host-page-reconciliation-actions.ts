@@ -33,6 +33,7 @@ export class BrowserHostPageReconciliationActions {
     ]) {
       this.closePlacements.set(page.browserPageId, this.placements.getPlacement(page.browserPageId))
     }
+
     this.reserveTargetPlacements()
     this.handlers = {
       reclaimPage: (pair, signal) => this.reclaimPage(pair, signal),
@@ -53,6 +54,7 @@ export class BrowserHostPageReconciliationActions {
       ...this.plan.restore,
       ...this.plan.closeThenRestore.map(({ intent }) => intent)
     ].toSorted((left, right) => left.pageHostGeneration - right.pageHostGeneration)
+
     try {
       for (const intent of targets) {
         const reservation = this.placements.reserveClientPage(
@@ -63,6 +65,7 @@ export class BrowserHostPageReconciliationActions {
           },
           intent.pageHostGeneration
         )
+
         this.reservations.set(intent.browserPageId, reservation)
       }
     } catch (error) {
@@ -101,12 +104,15 @@ export class BrowserHostPageReconciliationActions {
       signal
     )
     const placement = this.closePlacements.get(page.browserPageId)
+
     if (!placement) {
       return
     }
+
     if (this.placements.getPlacement(page.browserPageId) !== placement) {
       throw new Error('browser_page_placement_stale')
     }
+
     const retirement = this.placements.beginPageRetirement(page.browserPageId, placement)
     this.placements.completePageRetirement(retirement)
   }
@@ -118,6 +124,7 @@ export class BrowserHostPageReconciliationActions {
     const url = this.plan.closeThenRestore.find(
       (pair) => pair.intent.browserPageId === intent.browserPageId
     )?.page.currentUrl
+
     await this.issueCommand(
       intent.browserPageId,
       intent.pageHostGeneration,
@@ -144,27 +151,34 @@ export class BrowserHostPageReconciliationActions {
       this.state.executionHostGrants.require(executionHostKey)
     )
     const ledger = this.state.commandLedger
+
     if (!ledger) {
       throw new Error('browser_host_command_protocol_required')
     }
+
     const issued = ledger.issue({
       browserPageId,
       pageHostGeneration,
       command,
       resultAdmission: 'reconciliation'
     })
+
     const result = await waitForCommandResult(issued.result, signal)
+
     if (result.status === 'failed') {
       throw new Error(result.errorCode)
     }
+
     assertNotAborted(signal)
   }
 
   private commitReservation(browserPageId: string): void {
     const reservation = this.reservations.get(browserPageId)
+
     if (!reservation) {
       throw new Error('browser_page_reconciliation_reservation_required')
     }
+
     this.placements.commitClientPageReservation(reservation)
     this.reservations.delete(browserPageId)
   }
@@ -191,16 +205,21 @@ async function waitForCommandResult(
   signal: AbortSignal
 ): Promise<BrowserClientHostCommandResult> {
   let removeAbort = (): void => {}
+
   const aborted = new Promise<never>((_resolve, reject) => {
     const abort = (): void =>
       reject(new Error('browser_host_page_reconciliation_aborted', { cause: signal.reason }))
+
     if (signal.aborted) {
       abort()
+
       return
     }
+
     signal.addEventListener('abort', abort, { once: true })
     removeAbort = () => signal.removeEventListener('abort', abort)
   })
+
   try {
     return await Promise.race([result, aborted])
   } finally {

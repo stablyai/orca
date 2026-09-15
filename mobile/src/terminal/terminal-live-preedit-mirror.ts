@@ -4,6 +4,7 @@
 export const TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS = 300
 
 const TERMINAL_DEL_BYTE = '\x7f'
+
 const LAST_ASCII_CODE_POINT = 0x7f
 
 export type TerminalLiveMirrorStep = {
@@ -33,7 +34,9 @@ function heldPreeditLength(
   if (composing !== undefined) {
     return composing ? fieldCodePoints.length - stableLength : 0
   }
+
   let held = 0
+
   while (
     held < fieldCodePoints.length &&
     (fieldCodePoints[fieldCodePoints.length - 1 - held]?.codePointAt(0) ?? 0) >
@@ -41,6 +44,7 @@ function heldPreeditLength(
   ) {
     held += 1
   }
+
   // Why the bound: the run can reach back over code points already delivered to the pty, and
   // holding those makes the caller erase them with DEL and retype them. The reported branch above
   // subtracts `stableLength` for the same reason; without it a settle-timer commit followed by
@@ -50,9 +54,11 @@ function heldPreeditLength(
 
 function commonPrefixLength(left: readonly string[], right: readonly string[]): number {
   let length = 0
+
   while (length < left.length && length < right.length && left[length] === right[length]) {
     length += 1
   }
+
   return length
 }
 
@@ -64,9 +70,11 @@ export function computeTerminalLiveMirrorStep(
   const fieldCodePoints = Array.from(fieldText)
   const sentCodePoints = Array.from(sentText)
   const stableLength = commonPrefixLength(sentCodePoints, fieldCodePoints)
+
   const heldLength = options.commitHeld
     ? 0
     : heldPreeditLength(fieldCodePoints, stableLength, options.composing)
+
   const targetCodePoints = fieldCodePoints.slice(0, fieldCodePoints.length - heldLength)
   const keptLength = Math.min(stableLength, targetCodePoints.length)
 

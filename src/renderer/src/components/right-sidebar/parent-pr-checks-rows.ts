@@ -42,11 +42,13 @@ export function buildParentPrChecksProjection(
 ): ParentPrChecksProjection {
   const repoById = new Map(args.repos.map((repo) => [repo.id, repo]))
   const rows = buildParentPrChecksRows({ ...args, repoById })
+
   const groups = PARENT_PR_CHECKS_GROUP_ORDER.map((key) => ({
     key,
     label: PARENT_PR_CHECKS_GROUP_LABELS[key],
     rows: rows.filter((row) => row.group === key)
   })).filter((group) => group.rows.length > 0)
+
   return { rows, groups, summary: summarizeParentPrChecksRows(rows) }
 }
 
@@ -106,6 +108,7 @@ function buildParentPrChecksRow(
   const refreshIdentity = getParentPrChecksRefreshIdentity(args.worktree, args.repo, branch)
   const outcome = args.refreshOutcomes?.get(refreshIdentity)
   const reviewSnapshot = getReviewSnapshot(args, branch, outcome)
+
   const fallbackDisplay = getWorktreeCardPrDisplay(
     reviewSnapshot.review,
     args.worktree.linkedPR,
@@ -115,7 +118,9 @@ function buildParentPrChecksRow(
     args.worktree.linkedGiteaPR ?? null,
     { suppressedGitHubPR: args.worktree.suppressedGitHubPR ?? null }
   )
+
   const review = reviewSnapshot.review
+
   const status = classifyParentPrChecksRowStatus({
     isUnavailable: !args.repo || isFolderRepo(args.repo) || args.worktree.isBare || !branch,
     review,
@@ -123,6 +128,7 @@ function buildParentPrChecksRow(
     outcome,
     hasFallbackReview: fallbackDisplay !== null
   })
+
   const checkDetails = getCheckDetails(args, review, branch)
   const detailNames = getCheckDetailNames(checkDetails)
 
@@ -163,11 +169,14 @@ function getReviewSnapshot(
   ) {
     return { review: outcome.review, hasCacheEntry: true }
   }
+
   if (!args.repo || !branch) {
     return { review: undefined, hasCacheEntry: false }
   }
+
   const scopedArgs = { ...args, repo: args.repo }
   const hostedReviewEntry = args.hostedReviewCache[getHostedReviewKey(scopedArgs, branch)]
+
   if (
     hostedReviewEntry?.data &&
     canUseParentPrChecksHostedReviewCacheEntry(
@@ -178,18 +187,21 @@ function getReviewSnapshot(
   ) {
     return { review: hostedReviewEntry.data, hasCacheEntry: true }
   }
+
   const prEntry = getParentPrChecksGitHubPRCacheEntry({
     prCache: args.prCache,
     repo: args.repo,
     branch,
     settings: args.settings
   })
+
   if (canUseParentPrChecksGitHubPRCacheEntry(args.worktree, prEntry, hostedReviewEntry)) {
     return {
       review: hostedReviewInfoFromGitHubPRInfo(prEntry.data),
       hasCacheEntry: true
     }
   }
+
   return {
     review: hostedReviewEntry?.data === null ? null : undefined,
     hasCacheEntry: hostedReviewEntry !== undefined
@@ -202,9 +214,11 @@ function getReviewLabel(
 ): string | null {
   const provider = review?.provider ?? fallback?.provider
   const number = review?.number ?? fallback?.number
+
   if (provider === undefined || number === undefined) {
     return null
   }
+
   return provider === 'gitlab' ? `!${number}` : `#${number}`
 }
 
@@ -216,6 +230,7 @@ function getCheckDetails(
   if (!args.repo || !branch || review?.provider !== 'github') {
     return []
   }
+
   return getGitHubChecksEntry({ ...args, repo: args.repo }, review)?.data ?? []
 }
 
@@ -231,10 +246,12 @@ function getCheckDetailNames(checks: readonly PRCheckDetail[]): string[] {
       check.status === 'queued' ||
       check.status === 'in_progress'
   )
+
   const ordered = [
     ...interesting.filter((check) => check.conclusion === 'action_required'),
     ...interesting.filter((check) => check.conclusion !== 'action_required')
   ]
+
   return ordered.slice(0, 2).map((check) => check.name)
 }
 
@@ -243,6 +260,7 @@ function getGitHubChecksEntry(
   review: HostedReviewInfo
 ): ParentPrChecksCacheEntry<PRCheckDetail[]> | undefined {
   const prRepo = review.githubRepository ?? null
+
   const withHead = getGitHubRepoCacheKey(
     args.repo.path,
     args.repo.id,
@@ -252,6 +270,7 @@ function getGitHubChecksEntry(
     args.repo.executionHostId,
     true
   )
+
   const withoutHead = getGitHubRepoCacheKey(
     args.repo.path,
     args.repo.id,
@@ -261,6 +280,7 @@ function getGitHubChecksEntry(
     args.repo.executionHostId,
     true
   )
+
   return args.checksCache[withHead] ?? args.checksCache[withoutHead]
 }
 
@@ -281,6 +301,7 @@ function getHostedReviewKey(
 
 function getBranchName(worktree: Worktree): string | null {
   const identity = getWorktreeGitIdentityDisplay(worktree)
+
   return identity?.kind === 'branch' ? identity.branchName : null
 }
 

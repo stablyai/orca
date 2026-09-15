@@ -36,6 +36,7 @@ export function changeIssueState(args: {
   if (args.newState === args.localState) {
     return
   }
+
   const prevState = args.localState
   args.run('state', {
     mutate: () =>
@@ -92,6 +93,7 @@ export function toggleIssueLabel(args: {
 }): void {
   const isAdding = !args.localLabels.includes(args.label)
   const prevLabels = args.localLabels
+
   const newLabels = isAdding
     ? [...prevLabels, args.label]
     : prevLabels.filter((l) => l !== args.label)
@@ -139,6 +141,7 @@ export function toggleIssueAssignee(args: {
 }): void {
   const isAssigned = args.localAssignees.includes(args.login)
   const prevAssignees = args.localAssignees
+
   const newAssignees = isAssigned
     ? prevAssignees.filter((l) => l !== args.login)
     : [...prevAssignees, args.login]

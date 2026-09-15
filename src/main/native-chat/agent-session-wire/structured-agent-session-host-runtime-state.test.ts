@@ -55,6 +55,7 @@ function runtimeState(
     claimKeyId: 'key-1',
     probeOwner
   } as StructuredAgentSessionHostDeps
+
   return new StructuredAgentSessionHostRuntimeState(deps)
 }
 
@@ -68,6 +69,7 @@ function liveRecord(): AgentSessionRecord {
     spawnToken: 'spawn-probe'
   }
   record.lease.handoffStage = null
+
   return record
 }
 
@@ -79,6 +81,7 @@ describe('host runtime-state owner probe', () => {
       outcome: 'indeterminate' as const,
       reason: 'reservation named no process'
     }))
+
     const state = runtimeState(reservedRecord(), probeOwner)
 
     await expect(state.probeOwner('session-probe')).resolves.toEqual({
@@ -115,10 +118,13 @@ describe('host runtime-state owner probe', () => {
   it('does not force-close a provider for transient lease probe errors', async () => {
     const onEventSinkFailure = vi.fn()
     const onEventSinkError = vi.fn()
+
     const probeOwner = vi.fn(async () => {
       throw new Error('lease probe unavailable')
     })
+
     const record = liveRecord()
+
     const deps = {
       store: {
         listRecords: () => [record],
@@ -130,6 +136,7 @@ describe('host runtime-state owner probe', () => {
       probeOwner,
       onEventSinkError
     } as unknown as StructuredAgentSessionHostDeps
+
     const state = new StructuredAgentSessionHostRuntimeState(
       deps,
       undefined,

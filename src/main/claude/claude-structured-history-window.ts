@@ -28,6 +28,7 @@ import { proveClaudeTranscriptBranchFromJsonl } from './claude-transcript-branch
 
 /** Matches the legacy-import bound: a prefix read would make absence meaningless. */
 const MAX_HISTORY_WINDOW_SOURCE_BYTES = 16 * 1024 * 1024
+
 const MAX_HISTORY_WINDOW_WALK = 10_000
 
 const INCONSISTENT: ProviderHistoryWindow = {
@@ -42,7 +43,9 @@ function stringField(source: unknown, key: string): string | null {
   if (!source || typeof source !== 'object') {
     return null
   }
+
   const value = (source as Record<string, unknown>)[key]
+
   return typeof value === 'string' && value.trim() ? value : null
 }
 
@@ -50,6 +53,7 @@ function isPlainTextPart(part: unknown): boolean {
   if (typeof part === 'string') {
     return true
   }
+
   return Boolean(part) && typeof part === 'object' && (part as TranscriptRecord).type === 'text'
 }
 
@@ -58,25 +62,33 @@ function rawTextParts(content: unknown): string[] | null {
   if (typeof content === 'string') {
     return content.trim() ? [content] : []
   }
+
   if (!Array.isArray(content)) {
     return []
   }
+
   const parts: string[] = []
+
   for (const part of content) {
     if (typeof part === 'string') {
       if (part.trim()) {
         parts.push(part)
       }
+
       continue
     }
+
     const record = part && typeof part === 'object' ? (part as TranscriptRecord) : null
+
     if (!record || record.type !== 'text' || typeof record.text !== 'string') {
       return null
     }
+
     if (record.text.trim()) {
       parts.push(record.text)
     }
   }
+
   return parts
 }
 
@@ -102,31 +114,42 @@ function claudePromptBlocks(record: TranscriptRecord): NativeChatBlock[] | null 
   ) {
     return null
   }
+
   const message = record.message
+
   const content =
     message && typeof message === 'object' ? (message as TranscriptRecord).content : undefined
+
   // Read the RAW parts, not the decoded ones: a base64 image decodes to nothing
   // at all, so a prompt with an attachment would otherwise pass as text-only and
   // be fingerprinted as if the attachment had never been sent.
   if (Array.isArray(content) && !content.every((part) => isPlainTextPart(part))) {
     return null
   }
+
   const blocks = claudeContentBlocks(content)
+
   if (blocks.length === 0 || blocks.some((block) => block.type !== 'text')) {
     return null
   }
+
   const rawTexts = rawTextParts(content)
+
   if (rawTexts === null || rawTexts.length !== blocks.length) {
     return null
   }
+
   const preservedBlocks = blocks.map((block, index) => ({
     ...block,
     text: rawTexts[index]!
   }))
+
   const [first] = preservedBlocks
+
   if (first?.type !== 'text' || isKnownHarnessInjectedUserTurnText(first.text)) {
     return null
   }
+
   return preservedBlocks
 }
 
@@ -148,25 +171,32 @@ function promptFingerprint(sessionId: string, blocks: NativeChatBlock[]): string
 
 function indexRecords(contents: string): Map<string, TranscriptRecord> {
   const byUuid = new Map<string, TranscriptRecord>()
+
   for (const line of contents.split('\n')) {
     if (!line.trim()) {
       continue
     }
+
     let parsed: unknown
+
     try {
       parsed = JSON.parse(line)
     } catch {
       continue
     }
+
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       continue
     }
+
     const record = parsed as TranscriptRecord
     const uuid = stringField(record, 'uuid')
+
     if (uuid && !byUuid.has(uuid)) {
       byUuid.set(uuid, record)
     }
   }
+
   return byUuid
 }
 
@@ -179,17 +209,22 @@ function walkFromLeaf(
 ): TranscriptRecord[] {
   const collected: TranscriptRecord[] = []
   let cursor: string | null = leafUuid
+
   for (let depth = 0; cursor !== null && cursor !== anchorUuid; depth += 1) {
     if (depth >= MAX_HISTORY_WINDOW_WALK) {
       return []
     }
+
     const record = byUuid.get(cursor)
+
     if (!record) {
       return []
     }
+
     collected.push(record)
     cursor = stringField(record, 'parentUuid')
   }
+
   return collected.toReversed()
 }
 
@@ -206,7 +241,9 @@ export function claudeProviderHistoryWindowFromJsonl(input: {
   if (!input.previousLeafUuid) {
     return INCONSISTENT
   }
+
   let leafUuid: string
+
   try {
     leafUuid = proveClaudeTranscriptBranchFromJsonl({
       contents: input.contents,
@@ -218,14 +255,18 @@ export function claudeProviderHistoryWindowFromJsonl(input: {
     // cursor, torn tail — is a boundary we cannot vouch for.
     return INCONSISTENT
   }
+
   const byUuid = indexRecords(input.contents)
   const items: ProviderHistoryItem[] = []
+
   for (const record of walkFromLeaf(byUuid, leafUuid, input.previousLeafUuid)) {
     const blocks = claudePromptBlocks(record)
     const uuid = stringField(record, 'uuid')
+
     if (!blocks || !uuid) {
       continue
     }
+
     items.push({
       providerItemId: uuid,
       // Claude echoes no client message id, so identity matching reduces to the
@@ -239,6 +280,7 @@ export function claudeProviderHistoryWindowFromJsonl(input: {
       }
     })
   }
+
   return { items, boundaryConsistent: true, turnInFlight: input.turnInFlight }
 }
 
@@ -254,15 +296,19 @@ export async function resolveClaudeProviderHistoryWindow(input: {
   hasLiveSession: boolean
 }): Promise<ProviderHistoryWindow | null> {
   const handle = input.identity.providerHandle
+
   if (handle.kind !== 'claude') {
     return null
   }
+
   const transcriptPath = await resolveSessionFilePath('claude', handle.sessionId, {
     claudeProjectsDir: join(input.accountHomePath, 'projects')
   })
+
   if (!transcriptPath) {
     return null
   }
+
   return readClaudeProviderHistoryWindow({
     transcriptPath,
     providerSessionId: handle.sessionId,
@@ -282,14 +328,18 @@ export async function readClaudeProviderHistoryWindow(input: {
   if (!input.previousLeafUuid) {
     return INCONSISTENT
   }
+
   let contents: string
+
   try {
     if ((await stat(input.transcriptPath)).size > MAX_HISTORY_WINDOW_SOURCE_BYTES) {
       return INCONSISTENT
     }
+
     contents = await readFile(input.transcriptPath, 'utf8')
   } catch {
     return INCONSISTENT
   }
+
   return claudeProviderHistoryWindowFromJsonl({ ...input, contents })
 }

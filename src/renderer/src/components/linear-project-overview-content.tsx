@@ -39,9 +39,11 @@ export function LinearProjectOverviewContent({
   const members = linearProjectMetadataLabels(presentation?.members, 4)
   const milestones = linearProjectMetadataLabels(presentation?.milestones, 4)
   const resources = linearProjectMetadataLabels(presentation?.resources, 4)
+
   const latestUpdate = linearProjectUnknownText(
     presentation?.latestUpdate ?? presentation?.lastUpdate
   )
+
   const body = presentation?.content || presentation?.description || presentation?.summary || ''
 
   return (

@@ -36,6 +36,7 @@ describe('attachment image cache', () => {
   it('singleflights concurrent loads and does not cache failures', async () => {
     let calls = 0
     let resolveLoad: (value: { dataUrl: string; byteSize: number } | null) => void = () => {}
+
     const load = () =>
       new Promise<{ dataUrl: string; byteSize: number } | null>((resolve) => {
         calls += 1
@@ -55,6 +56,7 @@ describe('attachment image cache', () => {
       attachmentId: '1',
       load: async () => ({ dataUrl: 'data:image/png;base64,OK==', byteSize: 2 })
     })
+
     expect(await p3).toBe('data:image/png;base64,OK==')
     expect(_getAttachmentImageCacheSize()).toBe(1)
   })
@@ -64,6 +66,7 @@ describe('attachment image cache', () => {
     clearAttachmentImagesForSite('site-a')
 
     let resolveLoad: (value: { dataUrl: string; byteSize: number } | null) => void = () => {}
+
     const inFlight = loadAttachmentDataUrlWithCache({
       siteId: 'site-a',
       attachmentId: '1',

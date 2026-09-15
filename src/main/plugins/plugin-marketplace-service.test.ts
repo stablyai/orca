@@ -21,6 +21,7 @@ const roots: string[] = []
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-marketplace-service-'))
   roots.push(root)
+
   return root
 }
 
@@ -62,6 +63,7 @@ describe('PluginMarketplaceService', () => {
         (registration: PluginMarketplaceRegisteredSource) => Promise<PluginMarketplaceFetchResult>
       >()
       .mockResolvedValue(fetched())
+
     const service = new PluginMarketplaceService({ pluginsDataDir: await tempRoot(), fetcher })
 
     const added = await service.addSource(source())
@@ -87,6 +89,7 @@ describe('PluginMarketplaceService', () => {
       >()
       .mockResolvedValueOnce(fetched())
       .mockRejectedValueOnce(new Error('offline'))
+
     const service = new PluginMarketplaceService({ pluginsDataDir: await tempRoot(), fetcher })
     const added = await service.addSource(source())
 
@@ -107,6 +110,7 @@ describe('PluginMarketplaceService', () => {
       >()
       .mockResolvedValueOnce(fetched())
       .mockResolvedValueOnce(fetched(marketplace('Updated'), 'b'.repeat(40)))
+
     const root = await tempRoot()
     const service = new PluginMarketplaceService({ pluginsDataDir: root, fetcher })
     const added = await service.addSource(source())
@@ -163,6 +167,7 @@ describe('PluginMarketplaceService', () => {
         }
       ]
     }
+
     const service = new PluginMarketplaceService({
       pluginsDataDir: await tempRoot(),
       fetcher: async () => fetched(officialMarketplace)
@@ -192,6 +197,7 @@ describe('PluginMarketplaceService', () => {
         }
       ]
     }
+
     const service = new PluginMarketplaceService({
       pluginsDataDir: await tempRoot(),
       fetcher: async () => fetched(mixed)
@@ -214,11 +220,13 @@ describe('PluginMarketplaceService', () => {
 
   it('seeds the official marketplace once and keeps it configured across restarts', async () => {
     const root = await tempRoot()
+
     const officialMarketplace = marketplace(
       'Orca Plugins',
       'stablyai.orca-notes',
       'https://github.com/stablyai/orca-notes.git'
     )
+
     officialMarketplace.owner = 'stablyai'
     const fetcher = vi.fn(async () => fetched(officialMarketplace))
     const first = new PluginMarketplaceService({ pluginsDataDir: root, fetcher })
@@ -257,16 +265,20 @@ describe('PluginMarketplaceService', () => {
       source: OFFICIAL_MARKETPLACE_GIT_SOURCE,
       addedAt: 1
     }
+
     const officialMarketplace = marketplace(
       'Orca Plugins',
       'stablyai.orca-notes',
       'https://github.com/stablyai/orca-notes.git'
     )
+
     officialMarketplace.owner = 'stablyai'
+
     const listSources = vi
       .fn<() => Promise<readonly PluginMarketplaceRegisteredSource[]>>()
       .mockRejectedValueOnce(new Error('source store temporarily unavailable'))
       .mockResolvedValue([registered])
+
     const store = {
       listSources,
       readSnapshot: vi.fn().mockResolvedValue(null),
@@ -278,6 +290,7 @@ describe('PluginMarketplaceService', () => {
         ...snapshot
       }))
     } as unknown as PluginMarketplaceStore
+
     const service = new PluginMarketplaceService({
       pluginsDataDir: await tempRoot(),
       store,
@@ -297,17 +310,21 @@ describe('PluginMarketplaceService', () => {
   it('recovers the managed source after a full existing store frees a slot', async () => {
     const root = await tempRoot()
     const store = new PluginMarketplaceStore(root)
+
     const registrations = await Promise.all(
       Array.from({ length: PLUGIN_MARKETPLACE_SOURCE_LIMIT }, (_, index) =>
         store.addSource(source(`https://example.com/community-${index}.git`), index + 1)
       )
     )
+
     const officialMarketplace = marketplace(
       'Orca Plugins',
       'stablyai.orca-notes',
       'https://github.com/stablyai/orca-notes.git'
     )
+
     officialMarketplace.owner = 'stablyai'
+
     const service = new PluginMarketplaceService({
       pluginsDataDir: root,
       store,
@@ -327,6 +344,7 @@ describe('PluginMarketplaceService', () => {
       pluginsDataDir: await tempRoot(),
       fetcher: async () => fetched()
     })
+
     const added = await service.addSource(source())
 
     await expect(service.removeSource(added.id)).resolves.toBe(true)

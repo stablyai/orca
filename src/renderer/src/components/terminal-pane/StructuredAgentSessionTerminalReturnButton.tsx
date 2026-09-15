@@ -8,6 +8,7 @@ export function StructuredAgentSessionTerminalReturnButton(props: {
   if (!props.enabled) {
     return null
   }
+
   return (
     <Button
       type="button"

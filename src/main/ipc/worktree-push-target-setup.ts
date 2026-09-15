@@ -21,6 +21,7 @@ export async function findRemoteForUrl(
 ): Promise<string | null> {
   try {
     const { stdout } = await execGit(['remote', '-v'], repoPath)
+
     return findGitRemoteNameByFetchUrl(stdout, (candidateUrl) =>
       sameGitHubRemoteUrl(candidateUrl, remoteUrl)
     )
@@ -40,6 +41,7 @@ export async function remoteAlreadyMatchesUrl(
 ): Promise<boolean> {
   try {
     const { stdout } = await execGit(['remote', 'get-url', remoteName], repoPath)
+
     return sameGitHubRemoteUrl(stdout.trim(), remoteUrl)
   } catch {
     return false
@@ -59,6 +61,7 @@ export async function resolveCheckedOutBranchName(
   try {
     const { stdout } = await execGit(['symbolic-ref', '--short', 'HEAD'], repoPath)
     const branch = stdout.trim()
+
     return branch.length > 0 ? branch : null
   } catch {
     // Detached HEAD or an unreadable ref -- nothing to point upstream.
@@ -72,21 +75,26 @@ export async function ensureUniqueRemoteName(
   preferred: string
 ): Promise<string> {
   const { stdout } = await execGit(['remote'], repoPath)
+
   const existing = new Set(
     stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean)
   )
+
   if (!existing.has(preferred)) {
     return preferred
   }
+
   for (let suffix = 2; suffix < 100; suffix += 1) {
     const candidate = `${preferred}-${suffix}`
+
     if (!existing.has(candidate)) {
       return candidate
     }
   }
+
   throw new Error(`Could not find an available remote name for ${preferred}.`)
 }
 
@@ -105,8 +113,10 @@ export async function prepareWorktreePushTargetWithExec(
   // Why: ownership above is inherited from sibling worktrees, so it can be true
   // for a remote this call did not create. Only rollback needs that distinction.
   let remoteAddedHere = false
+
   if (target.remoteUrl) {
     const existingRemote = await findRemoteForUrl(execGit, repoPath, target.remoteUrl)
+
     if (existingRemote) {
       remoteName = existingRemote
       // Why: if a later PR worktree reuses an Orca-created fork remote, it
@@ -125,6 +135,7 @@ export async function prepareWorktreePushTargetWithExec(
         repoPath
       )
       remoteAddedHere = true
+
       try {
         // `-t` itself writes a literal (non-wildcard-suffixed) refspec, so immediately
         // rewrite it to the trailing-`*` form via `ensureRemoteTracksBranchNarrowly`
@@ -139,6 +150,7 @@ export async function prepareWorktreePushTargetWithExec(
         await execGit(['remote', 'remove', remoteName], repoPath).catch(() => {})
         throw error
       }
+
       remoteCreated = true
     }
   }
@@ -156,8 +168,10 @@ export async function prepareWorktreePushTargetWithExec(
     if (remoteAddedHere) {
       await execGit(['remote', 'remove', remoteName], repoPath).catch(() => {})
     }
+
     throw error
   }
+
   return {
     ...sanitizedTarget,
     remoteName,
@@ -183,10 +197,13 @@ export async function restoreUpstreamAfterMaterialize(
   if (!target.remoteUrl) {
     return target
   }
+
   const checkedOutBranch = await resolveCheckedOutBranchName(execGit, worktreePath)
+
   if (!checkedOutBranch) {
     return target
   }
+
   return configureCreatedWorktreePushTargetWithExec(execGit, worktreePath, checkedOutBranch, target)
 }
 
@@ -200,5 +217,6 @@ export async function configureCreatedWorktreePushTargetWithExec(
     ['branch', '--set-upstream-to', `${target.remoteName}/${target.branchName}`, branchName],
     worktreePath
   )
+
   return target
 }

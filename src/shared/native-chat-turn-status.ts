@@ -14,15 +14,20 @@ export const NATIVE_CHAT_TURN_STATUS_COPY = {
 /** Format turn time without exposing an ever-growing raw seconds count. */
 export function formatNativeChatDuration(seconds: number): string {
   const totalSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0
+
   if (totalSeconds < 60) {
     return `${totalSeconds}s`
   }
+
   const minutes = Math.floor(totalSeconds / 60)
   const remainingSeconds = totalSeconds % 60
+
   if (minutes < 60) {
     return `${minutes}m ${remainingSeconds}s`
   }
+
   const hours = Math.floor(minutes / 60)
+
   return `${hours}h ${minutes % 60}m ${remainingSeconds}s`
 }
 
@@ -40,9 +45,11 @@ export function describeNativeChatTurnStatus({
   if (workedSeconds != null) {
     return { key: 'workedFor', duration: formatNativeChatDuration(workedSeconds) }
   }
+
   if (thinking) {
     return { key: 'thinking', duration: null }
   }
+
   return { key: 'workingFor', duration: formatNativeChatDuration(elapsedSeconds) }
 }
 
@@ -70,9 +77,11 @@ export function describeNativeChatActiveTurnLabel({
   elapsedSeconds: number
 }): NativeChatActiveTurnLabel {
   const text = activityText?.trim()
+
   if (text) {
     return { source: 'activity', text }
   }
+
   return thinking
     ? { source: 'status', key: 'thinking', duration: null }
     : { source: 'status', key: 'workingFor', duration: formatNativeChatDuration(elapsedSeconds) }
@@ -85,10 +94,13 @@ export function formatNativeChatActiveTurnLabel(input: {
   elapsedSeconds: number
 }): string {
   const label = describeNativeChatActiveTurnLabel(input)
+
   if (label.source === 'activity') {
     return label.text
   }
+
   const copy = NATIVE_CHAT_TURN_STATUS_COPY[label.key]
+
   return label.duration == null ? copy : copy.replaceAll('{{value0}}', label.duration)
 }
 
@@ -100,6 +112,7 @@ export function formatNativeChatTurnStatusLabel(input: {
 }): string {
   const { key, duration } = describeNativeChatTurnStatus(input)
   const copy = NATIVE_CHAT_TURN_STATUS_COPY[key]
+
   return duration == null ? copy : copy.replaceAll('{{value0}}', duration)
 }
 
@@ -151,35 +164,44 @@ export function reduceNativeChatTurnTiming(
     current[activeTurnKey] === undefined
       ? current[previousActiveTurnKey]
       : undefined
+
   let retained = replacedTiming ? { ...current, [activeTurnKey]: replacedTiming } : current
+
   for (const turnKey of Object.keys(retained)) {
     if (turnKey !== activeTurnKey && !validTurnKeys.has(turnKey)) {
       if (retained === current) {
         retained = { ...current }
       }
+
       delete (retained as Record<string, NativeChatTurnTiming>)[turnKey]
     }
   }
 
   const timing = retained[activeTurnKey]
+
   if (isWorking) {
     // An in-flight turn keeps the start it already had; only a fresh turn (or an
     // authoritative host timestamp) restamps it.
     const startedAt =
       workingStartedAt ?? (timing && timing.workedSeconds == null ? timing.startedAt : now)
+
     if (timing?.startedAt === startedAt && timing.workedSeconds == null) {
       return retained
     }
+
     return { ...retained, [activeTurnKey]: { startedAt, workedSeconds: null } }
   }
 
   if (timing?.workedSeconds != null) {
     return retained
   }
+
   const startedAt = timing?.startedAt ?? workingStartedAt
+
   if (startedAt == null) {
     return retained
   }
+
   return {
     ...retained,
     [activeTurnKey]: {
@@ -226,17 +248,20 @@ export function selectNativeChatTurnStatuses(
         { startedAt: timing.startedAt, thinking: false, workedSeconds: timing.workedSeconds }
       ])
   ) as Record<string, NativeChatTurnStatus>
+
   for (const [turnKey, settled] of settledByTurn ?? []) {
     if (settled === null) {
       delete completedByTurn[turnKey]
       continue
     }
+
     completedByTurn[turnKey] = {
       startedAt: settled.startedAt,
       thinking: false,
       workedSeconds: settled.workedSeconds
     }
   }
+
   return {
     active: isWorking
       ? {

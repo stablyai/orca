@@ -9,6 +9,7 @@ export const LINEAR_ISSUE_LIST_METHOD = defineMethod({
     if (isMcpIssueListRequest(params)) {
       return runtime.linearMcpIssueList(params)
     }
+
     return runtime.linearListIssues(params?.filter, params?.limit, params?.workspaceId, {
       attributeFilter: params?.attributeFilter
     })

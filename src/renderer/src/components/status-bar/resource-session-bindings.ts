@@ -31,6 +31,7 @@ function addBinding(
   if (!ptyId || ptyIdToTabId.has(ptyId)) {
     return
   }
+
   ptyIdToTabId.set(ptyId, tabId)
 }
 
@@ -46,6 +47,7 @@ export function buildResourceSessionBindingIndex(
     tabs.forEach((tab, index) => {
       const id = tab.id
       tabIdToWorktreeId.set(id, worktreeId)
+
       // First tab wins, matching the findIndex scan this index replaces.
       if (!byId.has(id)) {
         byId.set(id, { tab, index })
@@ -73,6 +75,7 @@ export function buildResourceSessionBindingIndex(
     if (!tabIdToWorktreeId.has(tabId)) {
       continue
     }
+
     for (const ptyId of Object.values(layout.ptyIdsByLeafId ?? {})) {
       addBinding(ptyIdToTabId, tabId, ptyId)
     }
@@ -84,6 +87,7 @@ export function buildResourceSessionBindingIndex(
     if (!tabIdToWorktreeId.has(tabId)) {
       continue
     }
+
     addBinding(ptyIdToTabId, tabId, sessionId)
   }
 
@@ -107,7 +111,9 @@ export function selectUnboundDaemonSessions(
   if (!inputs.workspaceSessionReady) {
     return []
   }
+
   const { boundPtyIds } = buildResourceSessionBindingIndex(inputs)
+
   // Why the ownership check: this renderer's binding map is empty during restore, so it cannot
   // decide alone. Only proven absence of an owner qualifies — 'unknown' protects.
   return sessions.filter(

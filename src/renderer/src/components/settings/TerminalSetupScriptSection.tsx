@@ -67,6 +67,7 @@ export function TerminalSetupScriptSection({
                   if (!value) {
                     return
                   }
+
                   updateSettings({
                     setupScriptLaunchMode: value as SetupScriptLaunchMode
                   })

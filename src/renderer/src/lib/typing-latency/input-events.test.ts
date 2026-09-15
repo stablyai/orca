@@ -92,6 +92,7 @@ describe('installTypingLatencyInputEvents', () => {
         })
       )
     }
+
     dispatchSessionEnd()
 
     terminalElement.addEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, (event) =>

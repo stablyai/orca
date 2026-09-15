@@ -24,9 +24,11 @@ describe('PtySourceSentBoundaries', () => {
 
   it('drops every boundary below the credit and keeps the credit itself', () => {
     const boundaries = new PtySourceSentBoundaries(0)
+
     for (const boundary of [1, 2, 3, 4, 5]) {
       boundaries.add(boundary)
     }
+
     boundaries.dropBelow(3)
     expect([...boundaries]).toEqual([3, 4, 5])
     expect(boundaries.has(2)).toBe(false)
@@ -35,12 +37,14 @@ describe('PtySourceSentBoundaries', () => {
 
   it('stays correct across the compaction that follows a long interleaved drain', () => {
     const boundaries = new PtySourceSentBoundaries(0)
+
     for (let boundary = 1; boundary <= 4_096; boundary += 1) {
       boundaries.add(boundary)
       boundaries.dropBelow(boundary - 1)
       expect(boundaries.has(boundary - 1)).toBe(true)
       expect(boundaries.has(boundary - 2)).toBe(false)
     }
+
     expect([...boundaries]).toEqual([4_095, 4_096])
   })
 })

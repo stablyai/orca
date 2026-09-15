@@ -57,8 +57,10 @@ export function createDirectSshCoordinatorTelemetryReporter(args: {
     options: TelemetryOptions = {}
   ): void => {
     const inputMetrics = input.telemetry
+
     const outcomeMetrics =
       outcome.metrics ?? createTerminalOnlyDirectSshReconnectOutcome('stale').metrics!
+
     emit({
       mode,
       reason: input.reason,

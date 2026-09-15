@@ -8,13 +8,19 @@ import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 const fetchHostedReviewForBranch = vi.fn()
+
 const fetchIssue = vi.fn()
+
 const fetchLinearIssue = vi.fn()
+
 const openModal = vi.fn()
+
 const updateWorktreeMeta = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
+
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 vi.mock('@/store', () => ({
@@ -123,6 +129,7 @@ describe('WorktreeCard hosted review refresh', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null

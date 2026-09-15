@@ -74,17 +74,20 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
   options?: RemoteRuntimeSubscriptionOptions
 ): Promise<RemoteRuntimeTransportSubscription> {
   const requestId = randomUUID()
+
   const serializedRequest = serializeRemoteRuntimeRpcRequest({
     requestId,
     deviceToken: pairing.deviceToken,
     method,
     params
   })
+
   const serializedAuth = serializeRemoteRuntimePayload({
     type: 'e2ee_auth',
     deviceToken: pairing.deviceToken,
     clientCapabilities: remoteRuntimeClientCapabilities(options?.clientCapabilities)
   })
+
   return await new Promise((resolve, reject) => {
     const keyPair = generateKeyPair()
     const serverPublicKey = publicKeyFromBase64(pairing.publicKeyB64)
@@ -94,11 +97,13 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
     let terminalFailure = false
     let ws: WebSocket | null = null
     let liveness: RemoteRuntimeSocketLivenessMonitor | null = null
+
     const outbound = new RemoteRuntimeSubscriptionOutbound({
       memoryBudget: options?.outboundMemoryBudget,
       binaryQueue: options?.outboundQueue,
       fail: (error) => fail(error)
     })
+
     const requestChannel = new RemoteRuntimeSubscriptionRequestChannel({
       pairing,
       sharedKey,
@@ -107,6 +112,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       enqueue: (socket, frame) => outbound.enqueueRequest(socket, frame),
       fail: (error) => fail(error)
     })
+
     const frameRouter = new RemoteRuntimeSubscriptionFrameRouter({
       sharedKey,
       serializedAuth,
@@ -124,12 +130,15 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       liveness = null
       outbound.releaseQueues()
       const socket = ws
+
       if (!socket) {
         if (!outbound.hasRetainedCloseSource) {
           outbound.releaseSocketMemory()
         }
+
         return null
       }
+
       socket.off('open', onOpen)
       socket.off('error', onError)
       socket.off('close', onClose)
@@ -138,14 +147,17 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       socket.off('ping', onLivenessSignal)
       ws = null
       outbound.retainSocketMemoryUntilClose(socket)
+
       if (socket.readyState !== WebSocket.CLOSED) {
         socket.on('error', ignoreSettledRemoteRuntimeSocketError)
       }
+
       return socket
     }
 
     const closeSocketAfterCleanup = (): void => {
       const socket = cleanupSocketListeners()
+
       try {
         socket?.close()
       } catch {
@@ -166,6 +178,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       if (closing) {
         return
       }
+
       closing = true
       requestChannel.rejectAll(
         new RemoteRuntimeClientError(
@@ -174,11 +187,13 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
         )
       )
       outbound.releaseQueues()
+
       if (ws) {
         outbound.retainSocketMemoryUntilClose(ws)
       } else if (!outbound.hasRetainedCloseSource) {
         outbound.releaseSocketMemory()
       }
+
       try {
         ws?.close()
       } catch {
@@ -195,6 +210,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       ) {
         return false
       }
+
       return outbound.enqueueBinary(ws, Buffer.from(encryptBytes(bytes, sharedKey)))
     }
 
@@ -202,6 +218,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timeout)
       resolve({ requestId, close, sendBinary, sendRequest: requestChannel.send })
@@ -211,15 +228,19 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       if (terminalFailure || closing) {
         return
       }
+
       terminalFailure = true
       requestChannel.rejectAll(error)
+
       if (!settled) {
         settled = true
         clearTimeout(timeout)
         closeSocketAfterCleanup()
         reject(error)
+
         return
       }
+
       callbacks.onError(error)
       closeSocketAfterCleanup()
       callbacks.onClose?.()
@@ -233,6 +254,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       fail(new RemoteRuntimeClientError('invalid_argument', `Invalid remote endpoint: ${message}`))
+
       return
     }
 
@@ -260,6 +282,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
           formatRemoteRuntimeCloseMessage(code, reason)
         )
       )
+
       if (!settled) {
         settled = true
         reject(
@@ -268,8 +291,10 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
             formatRemoteRuntimeCloseMessage(code, reason)
           )
         )
+
         return
       }
+
       callbacks.onClose?.()
     }
 
@@ -277,6 +302,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
       if (closing) {
         return
       }
+
       liveness?.noteActivity()
       frameRouter.handleFrame(data, isBinary)
     }
@@ -306,6 +332,7 @@ export async function subscribeRemoteRuntimeTransport<TResult>(
             'Remote Orca runtime stopped responding; the stream connection was reset.'
           )
         )
+
         try {
           monitoredWs.terminate()
         } catch {

@@ -129,6 +129,7 @@ export function AutomationEditorDialog({
   const isCreateMode = !isEditing && !isEditingExternal
   const isHermesCreate = isCreateMode && isHermesTarget
   const destination = isCreateMode ? createDestination : editDestination
+
   const visibleAgents = React.useMemo(() => {
     const enabledIds = new Set(
       filterEnabledTuiAgents(
@@ -136,6 +137,7 @@ export function AutomationEditorDialog({
         settings?.disabledTuiAgents
       )
     )
+
     return getAgentCatalog().filter(
       (agent) => enabledIds.has(agent.id) || agent.id === draft.agentId
     )
@@ -158,6 +160,7 @@ export function AutomationEditorDialog({
             (event.target instanceof Element
               ? event.target.closest('[data-slot="dialog-content"]')
               : null)
+
           if (
             closeUnfocusedMonacoFindOrPreventDialogDismiss({
               root: getAutomationPromptEditorRoot(dialog),

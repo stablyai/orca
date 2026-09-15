@@ -17,6 +17,7 @@ export const FEATURE_INTERACTION_CATEGORIES = [
   'voice',
   'source_control'
 ] as const
+
 export type FeatureInteractionCategory = (typeof FEATURE_INTERACTION_CATEGORIES)[number]
 
 export const FEATURE_INTERACTION_CATEGORY_BY_ID = {

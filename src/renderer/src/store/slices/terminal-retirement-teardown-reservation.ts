@@ -11,16 +11,22 @@ export function reserveTerminalRetirementTeardowns(
 ): { plan: TerminalTabRetirementPlan; newlyScheduledPtyOwners: string[] } {
   const cleanupOnlyPtyIds = new Set(plan.cleanupOnlyPtyIds)
   const newlyScheduledPtyOwners: string[] = []
+
   const reserve = (ptyId: string): boolean => {
     const owner = getTerminalPtyOwnershipIdentity(state, ptyId, plan.worktreeId)
+
     if (scheduledPtyOwners.has(owner)) {
       cleanupOnlyPtyIds.add(ptyId)
+
       return false
     }
+
     scheduledPtyOwners.add(owner)
     newlyScheduledPtyOwners.push(owner)
+
     return true
   }
+
   return {
     plan: {
       ...plan,

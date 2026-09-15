@@ -3,6 +3,7 @@ import {
   titleHasExplicitAgentIdentity,
   titleIsInconclusiveNativeDroidTitle
 } from './title-agent-identity'
+
 type TitleObserverOptions = {
   getLastStatus: () => AgentStatus | null
   setLastStatus: (status: AgentStatus | null) => void
@@ -32,33 +33,43 @@ export function createAgentCompletionTitleObserver({
 }: TitleObserverOptions) {
   function titleCompletionAgentIdentity(title: string): string | null {
     const normalized = title.toLowerCase()
+
     if (/\bcodex\b/.test(normalized)) {
       return 'codex'
     }
+
     if (/\bclaude\b/.test(normalized)) {
       return 'claude'
     }
+
     if (/\bgemini\b/.test(normalized)) {
       return 'gemini'
     }
+
     if (/\bcursor(?: agent)?\b/.test(normalized)) {
       return 'cursor'
     }
+
     if (/\bopencode\b/.test(normalized)) {
       return 'opencode'
     }
+
     if (/\bdroid\b/.test(normalized)) {
       return 'droid'
     }
+
     if (/\bhermes\b/.test(normalized)) {
       return 'hermes'
     }
+
     if (/\baider\b/.test(normalized)) {
       return 'aider'
     }
+
     if (/\bpi\b/.test(normalized) || normalized.includes('\u03c0')) {
       return 'pi'
     }
+
     return null
   }
 
@@ -73,6 +84,7 @@ export function createAgentCompletionTitleObserver({
     const inconclusiveDroidTitle = titleIsInconclusiveNativeDroidTitle(title)
     const explicitIdentity = titleHasExplicitAgentIdentity(title) && !inconclusiveDroidTitle
     const hadPendingTitle = hasPendingTitle()
+
     if (explicitIdentity) {
       establishAgentEvidence()
     }
@@ -85,13 +97,17 @@ export function createAgentCompletionTitleObserver({
     } else if (getLastStatus() === 'working') {
       if (inconclusiveDroidTitle) {
         setLastStatus(status)
+
         return
       }
+
       if (status === null && !titleHasExplicitAgentIdentity(title)) {
         holdTitleCompletionPending(title)
         setLastStatus(status)
+
         return
       }
+
       if (hasAgentEvidence()) {
         dispatchTitle(title)
       } else {
@@ -101,6 +117,7 @@ export function createAgentCompletionTitleObserver({
       dropPendingTitle()
       dispatchTitle(title)
     }
+
     setLastStatus(status)
   }
 
@@ -108,6 +125,7 @@ export function createAgentCompletionTitleObserver({
     if (titleHasExplicitAgentIdentity(title)) {
       establishAgentEvidence()
     }
+
     if (hasAgentEvidence()) {
       dispatchTitle(title)
     } else {

@@ -15,14 +15,18 @@ import { reconcileOrphanedPrRemotesWithExec } from './worktree-push-target-recon
 const execFileAsync = promisify(execFile)
 
 const REPO_ID = 'repo-1'
+
 const FORK_REMOTE = 'pr-contributor-orca'
 
 let scratchDir = ''
+
 let repoPath = ''
+
 let forkPath = ''
 
 async function git(args: string[], cwd: string): Promise<string> {
   const { stdout } = await execFileAsync('git', args, { cwd })
+
   return stdout
 }
 
@@ -44,9 +48,11 @@ function forkTarget(overrides: Partial<GitPushTarget> = {}): GitPushTarget {
 
 function storeOf(entries: Record<string, GitPushTarget | undefined>): WorktreePushTargetStore {
   const meta: Record<string, WorktreeMeta> = {}
+
   for (const [id, pushTarget] of Object.entries(entries)) {
     meta[id] = { pushTarget } as unknown as WorktreeMeta
   }
+
   return { getAllWorktreeMeta: () => meta }
 }
 
@@ -100,6 +106,7 @@ describe('reconcileOrphanedPrRemotesWithExec against the real Git binary', () =>
       execGit,
       []
     )
+
     expect(reclaimed).toEqual([])
     await expect(git(['remote'], repoPath)).resolves.toContain(FORK_REMOTE)
   })
@@ -115,6 +122,7 @@ describe('reconcileOrphanedPrRemotesWithExec against the real Git binary', () =>
       execGit,
       [worktreePath]
     )
+
     expect(reclaimed).toEqual([])
     await expect(git(['remote'], repoPath)).resolves.toContain(FORK_REMOTE)
   })
@@ -130,6 +138,7 @@ describe('reconcileOrphanedPrRemotesWithExec against the real Git binary', () =>
       execGit,
       [] // the worktree that created it is gone, but the branch it preserved is not
     )
+
     expect(reclaimed).toEqual([])
     await expect(git(['remote'], repoPath)).resolves.toContain(FORK_REMOTE)
   })
@@ -148,6 +157,7 @@ describe('reconcileOrphanedPrRemotesWithExec against the real Git binary', () =>
       execGit,
       []
     )
+
     expect(reclaimed).toEqual([FORK_REMOTE])
     await expect(git(['remote'], repoPath)).resolves.not.toContain(FORK_REMOTE)
   })
@@ -167,6 +177,7 @@ describe('reconcileOrphanedPrRemotesWithExec against the real Git binary', () =>
       execGit,
       [] // listWorktrees no longer reports it
     )
+
     expect(reclaimed).toEqual([FORK_REMOTE])
     await expect(git(['remote'], repoPath)).resolves.not.toContain(FORK_REMOTE)
   })

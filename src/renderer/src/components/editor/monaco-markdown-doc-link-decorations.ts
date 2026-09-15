@@ -3,6 +3,7 @@ import { getMarkdownDocLinkTarget } from './markdown-doc-links'
 import { forEachLine } from './text-line-offsets'
 
 const BACKTICK = 96
+
 const BACKSLASH = 92
 
 // Why: spans are stored as flat [start, end, start, end, …] absolute offsets so
@@ -23,6 +24,7 @@ function collectInlineCodeSpans(
     ) {
       continue
     }
+
     if (start === -1) {
       start = index
     } else {
@@ -38,6 +40,7 @@ function isInsideSpan(index: number, spans: number[]): boolean {
       return true
     }
   }
+
   return false
 }
 
@@ -45,6 +48,7 @@ const FENCE_PREFIX_RE = /[^\S\n]*(?:```|~~~)/y
 
 function startsCodeFence(content: string, lineStart: number, lineEnd: number): boolean {
   FENCE_PREFIX_RE.lastIndex = lineStart
+
   // Bound whitespace to this line so blank runs cannot trigger repeated suffix scans.
   return FENCE_PREFIX_RE.test(content) && FENCE_PREFIX_RE.lastIndex <= lineEnd
 }
@@ -62,37 +66,48 @@ export function getMarkdownDocLinkDecorationRanges(content: string): IRange[] {
   forEachLine(content, (lineStart, lineEnd, lineNumber) => {
     if (startsCodeFence(content, lineStart, lineEnd)) {
       insideFence = !insideFence
+
       return
     }
+
     if (insideFence) {
       return
     }
 
     let spansCollected = false
     let searchFrom = lineStart
+
     while (searchFrom < lineEnd) {
       if (nextOpen !== -1 && nextOpen < searchFrom) {
         nextOpen = content.indexOf('[[', searchFrom)
       }
+
       const start = nextOpen
+
       if (start === -1 || start + 2 > lineEnd) {
         break
       }
+
       if (nextClose !== -1 && nextClose < start + 2) {
         nextClose = content.indexOf(']]', start + 2)
       }
+
       const end = nextClose
+
       if (end === -1 || end + 2 > lineEnd) {
         break
       }
+
       // Why: most lines hold no wiki link, so the inline-code scan is deferred
       // until one is actually found.
       if (!spansCollected) {
         collectInlineCodeSpans(content, lineStart, lineEnd, inlineCodeSpans)
         spansCollected = true
       }
+
       if (!isInsideSpan(start, inlineCodeSpans)) {
         const target = getMarkdownDocLinkTarget(content.slice(start + 2, end))
+
         if (target) {
           ranges.push({
             startLineNumber: lineNumber,
@@ -102,6 +117,7 @@ export function getMarkdownDocLinkDecorationRanges(content: string): IRange[] {
           })
         }
       }
+
       searchFrom = end + 2
     }
   })
@@ -127,6 +143,7 @@ export function createMarkdownDocLinkDecorationController(
     if (refreshTimer === null) {
       return
     }
+
     clearTimeout(refreshTimer)
     refreshTimer = null
   }
@@ -134,10 +151,13 @@ export function createMarkdownDocLinkDecorationController(
   const refreshNow = (): void => {
     cancelPendingRefresh()
     const model = editorInstance.getModel()
+
     if (!model || getLanguage() !== 'markdown') {
       collection.clear()
+
       return
     }
+
     collection.set(
       getMarkdownDocLinkDecorationRanges(model.getValue()).map((range) => ({
         range,
@@ -152,8 +172,10 @@ export function createMarkdownDocLinkDecorationController(
   const refresh = (): void => {
     if (getLanguage() !== 'markdown') {
       refreshNow()
+
       return
     }
+
     cancelPendingRefresh()
     // Why: wiki-link decoration scans read the full Monaco model. During typing
     // the exact highlight can lag briefly; coalescing avoids one full scan per key.

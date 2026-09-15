@@ -64,11 +64,14 @@ function collectTypeScriptFiles(directory: string, found: string[]): void {
     if (entry === '__fixtures__' || entry === 'node_modules') {
       continue
     }
+
     const absolute = join(directory, entry)
+
     if (statSync(absolute).isDirectory()) {
       collectTypeScriptFiles(absolute, found)
       continue
     }
+
     if (absolute.endsWith('.ts') && !isTestFile(absolute)) {
       found.push(absolute)
     }
@@ -78,6 +81,7 @@ function collectTypeScriptFiles(directory: string, found: string[]): void {
 function findSwallowingFiles(): string[] {
   const candidates: string[] = []
   collectTypeScriptFiles(SRC_ROOT, candidates)
+
   return candidates
     .map((absolute) => relative(SRC_ROOT, absolute).split('\\').join('/'))
     .filter(isScanned)
@@ -88,6 +92,7 @@ function findSwallowingFiles(): string[] {
 }
 
 const ALLOWLIST_PATH = 'src/main/wsl/__fixtures__/wsl-probe-failure-swallow-allowlist.txt'
+
 const GUIDANCE = `See docs/reference/wsl-probe-failure-semantics.md`
 
 describe('WSL probe failure semantics', () => {

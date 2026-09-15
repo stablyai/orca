@@ -142,15 +142,18 @@ export class RelayRuntimeServices {
   private registerSessionHandlers(context: RelayContext): void {
     this.dispatcher.onNotification('session.registerRoot', (params) => {
       const rootPath = params.rootPath as string
+
       if (rootPath) {
         context.registerRoot(rootPath)
       }
     })
     this.dispatcher.onRequest('session.registerRoot', async (params) => {
       const rootPath = params.rootPath as string
+
       if (rootPath) {
         context.registerRoot(rootPath)
       }
+
       return { ok: true }
     })
     this.dispatcher.onRequest('session.resolveHome', async (params) => ({

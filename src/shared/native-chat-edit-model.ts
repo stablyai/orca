@@ -28,7 +28,9 @@ export type NativeChatEditFile = {
 }
 
 export const MAX_EDIT_LINES = 2_000
+
 export const MAX_EDIT_CHARS = 96_000
+
 /** The LCS table is quadratic; above this a linear prefix/suffix diff is used. */
 export const MAX_EDIT_DIFF_CELLS = 200_000
 
@@ -42,14 +44,17 @@ export function splitEditContent(content: string): EditContentLines {
   if (content.length === 0) {
     return { lines: [], truncated: false }
   }
+
   const truncated = content.length > MAX_EDIT_CHARS
   const body = truncated ? content.slice(0, MAX_EDIT_CHARS) : content
   const lines = body.split(/\r?\n/)
+
   // Tested against the clipped body: on the un-clipped string this popped a
   // real line whenever the slice fired.
   if (body.endsWith('\n')) {
     lines.pop()
   }
+
   return { lines, truncated }
 }
 
@@ -84,18 +89,23 @@ export function finalizeEditFile(
   // A gap marks a break between regions, so one at the end marks nothing. The
   // row cap can leave one behind even when the source did not.
   let end = capped.length
+
   while (end > 0 && capped[end - 1]?.kind === 'gap') {
     end -= 1
   }
+
   const trimmed = end === capped.length ? capped : capped.slice(0, end)
+
   // Without resolved ranges the numbers locate a row inside a snippet; dropping
   // them keeps a plausible-looking wrong position out of the gutter, the copy
   // text, and the row keys.
   const lines = input.lineNumbersKnown
     ? trimmed
     : trimmed.map((line) => ({ ...line, oldLineNumber: null, newLineNumber: null }))
+
   let added = 0
   let removed = 0
+
   for (const line of lines) {
     if (line.kind === 'add') {
       added += 1
@@ -103,5 +113,6 @@ export function finalizeEditFile(
       removed += 1
     }
   }
+
   return { ...input, lines, added, removed, truncated }
 }

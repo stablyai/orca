@@ -17,9 +17,11 @@ export function resolveProxyPolicyWithoutSession(
   env: Record<string, string | undefined>
 ): ProxyApplyResult {
   const configured = normalizeProxyUrl(settings.httpProxyUrl)
+
   if (configured.ok && configured.value) {
     const { proxyRules } = separateElectronProxyCredentials(configured.value)
     const bypassRules = normalizeProxyBypassRules(settings.httpProxyBypassRules)
+
     return {
       source: 'settings',
       proxyRules,
@@ -28,17 +30,21 @@ export function resolveProxyPolicyWithoutSession(
   }
 
   const envProxy = getProxyUrlFromEnvironment(env)
+
   if (envProxy.ok && envProxy.value) {
     const { proxyRules } = separateElectronProxyCredentials(envProxy.value)
     const bypassRules = normalizeProxyBypassRules(getProxyBypassRulesFromEnvironment(env))
+
     return {
       source: 'env',
       proxyRules,
       ...(bypassRules ? { proxyBypassRules: bypassRules } : {})
     }
   }
+
   if (!configured.ok) {
     return { source: 'invalid-settings' }
   }
+
   return { source: envProxy.ok ? 'none' : 'invalid-env' }
 }

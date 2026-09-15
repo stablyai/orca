@@ -46,9 +46,11 @@ export function getProjectAgentSkillTerminalShellOverride(
   if (currentPlatform !== 'win32') {
     return undefined
   }
+
   if (runtime?.runtime === 'wsl') {
     return 'powershell.exe'
   }
+
   // Why: generated skill commands are PowerShell/cmd syntax, so a POSIX-family
   // Windows shell (wsl.exe, Git Bash) would mangle the wrapper we hand it.
   return resolveWindowsShellStartupFamily(settings?.terminalWindowsShell) === 'posix'

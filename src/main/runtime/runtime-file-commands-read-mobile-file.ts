@@ -16,17 +16,21 @@ export class RuntimeFileCommandsWithReadMobileFile extends RuntimeFileCommandsWi
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
     const provider = requireRuntimeFileProvider(target)
+
     if (!isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
+
     if (isMobileBinaryPath(relativePath)) {
       throw new Error('binary_file')
     }
 
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
+
     const content = provider
       ? await this.readRemoteMobileFile(filePath, provider)
       : await readLocalMobileFile(filePath, store)
+
     const truncated = truncateMobileFilePreview(content)
 
     return {

@@ -10,6 +10,7 @@ export function mergeBrowserScreencastFrameBudgets(
   budgets: readonly BrowserScreencastFrameBudget[]
 ): BrowserScreencastFrameBudget | null {
   let merged: BrowserScreencastFrameBudget | null = null
+
   for (const budget of budgets) {
     merged = merged
       ? {
@@ -21,6 +22,7 @@ export function mergeBrowserScreencastFrameBudgets(
         }
       : { ...budget }
   }
+
   return merged
 }
 

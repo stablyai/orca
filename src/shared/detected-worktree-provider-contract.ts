@@ -3,7 +3,9 @@ import type { DirectSshAuthority } from './ssh-types'
 import type { DetectedWorktreeListResult } from './worktree/types'
 
 export const PROVIDER_REQUEST_ID_MAX_UTF8_BYTES = 128
+
 export type ProviderRequestId = string & { readonly __providerRequestId: unique symbol }
+
 export type SshExecutionHostId = Extract<ExecutionHostId, `ssh:${string}`>
 
 export type LocalDetectedWorktreeRequest = {

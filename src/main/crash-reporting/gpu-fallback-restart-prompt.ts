@@ -19,5 +19,6 @@ export async function promptForGpuFallbackRestart(
   const { response } = parentWindow
     ? await dialog.showMessageBox(parentWindow, GPU_FALLBACK_RESTART_OPTIONS)
     : await dialog.showMessageBox(GPU_FALLBACK_RESTART_OPTIONS)
+
   return response === 0 ? 'restart' : 'continue'
 }

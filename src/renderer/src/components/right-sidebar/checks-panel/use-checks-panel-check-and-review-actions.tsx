@@ -55,6 +55,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
     sourceControlAiActionsVisible,
     stateRequestKey
   } = model
+
   const handleFixChecksWithAI = useCallback(async (): Promise<void> => {
     if (
       !sourceControlAiActionsVisible ||
@@ -65,7 +66,9 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
     ) {
       return
     }
+
     const broken = getBrokenChecks(checks)
+
     if (broken.length === 0) {
       toast.message(
         translate(
@@ -73,21 +76,26 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
           'No broken checks to fix.'
         )
       )
+
       return
     }
+
     const requestKey = stateRequestKey
     setIsFixingChecksWithAI(true)
+
     try {
       const checkRunDetailsByCheckKey: Record<string, PRCheckRunDetails> = {}
       await Promise.all(
         broken.slice(0, 5).map(async (check, index) => {
           const isGitLabJob = Boolean(check.gitlabJobId)
+
           if (
             !isGitLabJob &&
             (activeReview.provider === 'gitlab' || !hasGitHubCheckHandle(check))
           ) {
             return
           }
+
           try {
             // Why: GitLab job logs are now loadable, so the fix prompt gets the same
             // failure context the sidebar shows instead of check names alone.
@@ -110,6 +118,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
                   },
                   { repoId: repo.id }
                 )
+
             if (details) {
               checkRunDetailsByCheckKey[getCheckDetailsPromptKey(check, index)] = details
             }
@@ -118,9 +127,11 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
           }
         })
       )
+
       if (!isCurrentAsyncResult(requestKey)) {
         return
       }
+
       const basePrompt = buildFixBrokenChecksPrompt({
         reviewKind: activeReview.provider === 'gitlab' ? 'MR' : 'PR',
         reviewNumber: activeReview.number,
@@ -129,6 +140,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
         checks,
         checkRunDetailsByCheckKey
       })
+
       const started = await startFixChecksAgent({
         repoId: repo.id,
         basePrompt,
@@ -136,6 +148,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
         groupId: activeWorktreeId,
         launchSource: 'task_page'
       })
+
       if (started) {
         toast.success(
           translate(
@@ -168,17 +181,22 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
       if (!repo || !branch) {
         return
       }
+
       const requestContextKey = panelContextKey
+
       const isCurrentRequestContext = (): boolean =>
         panelContextKeyRef.current === requestContextKey
+
       if (!isCurrentRequestContext()) {
         return
       }
+
       setChecks([])
       setComments([])
       setChecksLoading(true)
       setCommentsLoading(true)
       let requestKey: string | null = null
+
       try {
         const refreshedPR = await fetchPRForBranch(repo.path, branch, {
           force: true,
@@ -186,9 +204,11 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
           worktreeId: activeWorktreeId ?? undefined,
           linkedPRNumber
         })
+
         if (!isCurrentRequestContext()) {
           return
         }
+
         await refreshHostedReviewCard(fetchHostedReviewForBranch, {
           repoPath: repo.path,
           repoId: repo.id,
@@ -199,12 +219,15 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
           linkedAzureDevOpsPR,
           linkedGiteaPR
         })
+
         if (!isCurrentRequestContext()) {
           return
         }
+
         if (!refreshedPR) {
           return
         }
+
         const refreshedRequestKey = checksPanelAsyncResultKey(
           prCacheKey,
           branch,
@@ -212,10 +235,13 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
           refreshedPR.prRepo,
           refreshedPR.headSha
         )
+
         requestKey = refreshedRequestKey
+
         if (!isCurrentRequestContext()) {
           return
         }
+
         asyncResultKeyRef.current = refreshedRequestKey
         await Promise.all([
           fetchPRChecks(
@@ -239,6 +265,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
                 if (!isCurrentAsyncResult(refreshedRequestKey)) {
                   return
                 }
+
                 console.warn('Failed to fetch PR checks:', err)
                 setChecks([])
               }
@@ -263,6 +290,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
                 if (!isCurrentAsyncResult(refreshedRequestKey)) {
                   return
                 }
+
                 console.warn('Failed to fetch PR comments:', err)
                 setComments([])
               }
@@ -287,6 +315,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
           setChecksLoading(false)
           setCommentsLoading(false)
         }
+
         if (requestKey !== null && isCurrentAsyncResult(requestKey)) {
           setChecksLoading(false)
           setCommentsLoading(false)
@@ -347,6 +376,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
 
   const { handleUnlinkReview, handleLinkAnotherReview, handleLinkSuppressedPullRequest } =
     useChecksPanelReviewLinkActions(model, refreshLinkedGitHubPullRequest)
+
   return {
     handleFixChecksWithAI,
     refreshLinkedGitHubPullRequest,

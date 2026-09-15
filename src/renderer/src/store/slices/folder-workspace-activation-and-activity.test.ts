@@ -11,8 +11,11 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 import { createTestStore } from './store-test-helpers'
 
 const folderWorkspacesUpdate = vi.fn()
+
 const folderWorkspacesList = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 const projectGroup: ProjectGroup = {
@@ -102,6 +105,7 @@ function seedLocalFolderStore(folderWorkspace: FolderWorkspace) {
     folderWorkspaces: [folderWorkspace],
     refreshGitHubForWorktreeIfStale: vi.fn()
   } as Partial<AppState>)
+
   return store
 }
 

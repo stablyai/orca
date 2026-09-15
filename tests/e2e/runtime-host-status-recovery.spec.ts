@@ -15,12 +15,16 @@ async function interruptibleHost(offer: RuntimeDesktopPairingOffer) {
   const endpoint = new URL(pairing.endpoint)
   const sockets = new Set<Socket>()
   let online = true
+
   const server = createServer((client) => {
     if (!online) {
       client.destroy()
+
       return
     }
+
     const host = createConnection({ host: endpoint.hostname, port: Number(endpoint.port) })
+
     for (const socket of [client, host]) {
       sockets.add(socket)
       socket.on('error', () => {
@@ -33,22 +37,27 @@ async function interruptibleHost(offer: RuntimeDesktopPairingOffer) {
         host.destroy()
       })
     }
+
     client.pipe(host).pipe(client)
   })
+
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const address = server.address() as AddressInfo
   const pairingUrl = encodePairingOffer({ ...pairing, endpoint: `ws://127.0.0.1:${address.port}` })
   let webClientUrl: string | undefined
+
   if (offer.webClientUrl) {
     const url = new URL(offer.webClientUrl)
     url.search = ''
     url.hash = new URLSearchParams({ pairing: pairingUrl }).toString()
     webClientUrl = url.href
   }
+
   return {
     offer: { pairingUrl, webClientUrl },
     setOnline(value: boolean) {
       online = value
+
       if (!online) {
         sockets.forEach((socket) => socket.destroy())
       }
@@ -64,6 +73,7 @@ async function statusEvidence(page: Page, environmentId?: string) {
   return page.evaluate((id) => {
     const entries = window.__store?.getState().runtimeStatusByEnvironmentId
     const entry = id ? entries?.get(id) : entries?.values().next().value
+
     return entry?.snapshot
       ? {
           verification: entry.snapshot.verification,
@@ -81,9 +91,11 @@ async function expectWorkspaceHostAppearance(
   hostLabel?: string
 ) {
   const cards = page.locator('[data-worktree-card-surface="true"]')
+
   const card = (
     hostLabel ? cards.filter({ has: page.getByText(hostLabel, { exact: true }) }) : cards
   ).first()
+
   await expect(card).toBeVisible()
   await expect(card).toHaveCSS('opacity', disconnected ? '0.6' : '1')
   const icon = card.locator(disconnected ? 'svg.lucide-server-off' : 'svg.lucide-server').first()
@@ -110,6 +122,7 @@ for (const topology of ['desktop', 'headless'] as const) {
     let proxy: Awaited<ReturnType<typeof interruptibleHost>> | undefined
     let client: Awaited<ReturnType<typeof launchPairedElectronClient>> | undefined
     let browser: Awaited<ReturnType<typeof launchPairedWebClient>> | undefined
+
     try {
       headless =
         topology === 'headless'
@@ -125,16 +138,20 @@ for (const topology of ['desktop', 'headless'] as const) {
       proxy = await interruptibleHost(offer)
       client = await launchPairedElectronClient(offer, testInfo, 'Direct host')
       proxy.setOnline(false)
+
       const offlineId = await client.page.evaluate(async (pairingCode) => {
         const { environment } = await window.api.runtimeEnvironments.addFromPairingCode({
           name: 'Recovering host',
           pairingCode
         })
+
         const store = window.__store!.getState()
         store.setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
         await store.refreshRuntimeEnvironmentStatus(environment.id, 1_000)
+
         return environment.id
       }, proxy.offer.pairingUrl)
+
       await expect
         .poll(() => statusEvidence(client!.page, offlineId))
         .toMatchObject({ verification: 'unavailable' })

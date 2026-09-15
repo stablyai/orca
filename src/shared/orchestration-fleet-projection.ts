@@ -131,6 +131,7 @@ export type OrchestrationFleetPage = {
 export function refreshOrchestrationFleetLivenessAttention(worker: OrchestrationFleetWorker): void {
   const had = (category: OrchestrationFleetAttentionCategory): boolean =>
     worker.attention.categories.includes(category)
+
   worker.attention = projectOrchestrationFleetAttention({
     isRoot: worker.parent === null,
     outcome: worker.outcome,
@@ -153,17 +154,22 @@ export function projectOrchestrationFleet(args: {
     ORCHESTRATION_FLEET_PAGE_MAX,
     Math.max(1, Math.floor(args.limit ?? ORCHESTRATION_FLEET_PAGE_MAX))
   )
+
   const cursorIndex = args.cursor
     ? args.workers.findIndex((worker) => worker.dispatchId === args.cursor)
     : -1
+
   const start = cursorIndex >= 0 ? cursorIndex + 1 : 0
   const rows = args.workers.slice(start, start + limit)
   const statusIndex = createFleetStatusIndex(args.statuses, rows)
   const now = args.now ?? Date.now()
+
   const workers = rows.map((worker) =>
     projectOrchestrationFleetWorker(worker, statusForFleetWorker(worker, statusIndex), now)
   )
+
   const hasMore = start + workers.length < args.workers.length
+
   return {
     workers,
     page: {

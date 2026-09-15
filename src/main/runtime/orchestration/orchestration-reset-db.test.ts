@@ -8,12 +8,15 @@ describe('OrchestrationDb reset scopes', () => {
 
   function createState() {
     db = new OrchestrationDb(':memory:')
+
     const run = db.createRun({
       objective: 'Reset contract',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:11111111-1111-4111-8111-111111111111'
     })
+
     const task = db.createTask({ spec: 'work', runId: run.id })
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -33,18 +36,21 @@ describe('OrchestrationDb reset scopes', () => {
         payloadHash: 'hash_1'
       }
     })
+
     const message = db.insertMessage({
       runId: run.id,
       from: 'worker',
       to: `run:${run.id}`,
       subject: 'status'
     })
+
     const localQuestion = db.createQuestion({
       runId: run.id,
       dispatchId: started.dispatch.id,
       askerHandle: 'worker',
       question: 'Continue?'
     })
+
     db.enqueueFederationRelay({
       dispatchId: started.dispatch.id,
       direction: 'to_home',
@@ -60,6 +66,7 @@ describe('OrchestrationDb reset scopes', () => {
       batch_fingerprint: 'fingerprint_1',
       minted_at_ms: 1_700_000_000_000
     })
+
     return { run, task, started, message, localQuestion }
   }
 
@@ -72,8 +79,10 @@ describe('OrchestrationDb reset scopes', () => {
     expect(db!.getTask(state.task.id)).toBeUndefined()
     expect(db!.getWorkerDispatch(state.started.dispatch.id)).toBeUndefined()
     expect(db!.getFederatedDispatch(state.started.dispatch.id)).toBeUndefined()
+
     const sqlite = (db as unknown as { db: { prepare: (sql: string) => { all: () => unknown[] } } })
       .db
+
     expect(sqlite.prepare('SELECT * FROM run_coordinator_handles').all()).toEqual([])
     // The ledger survives so a lost reset response cannot replay as a new mutation.
     expect(db!.getMutationReceipt('caller_1', 'request_1')).toBeDefined()

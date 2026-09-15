@@ -26,6 +26,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     if (!startup) {
       return false
     }
+
     const state = useAppStore.getState()
     state.registerAgentLaunchConfig(session.cacheKey, startup.launchConfig, {
       agentType: startup.agent,
@@ -33,8 +34,10 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
       tabId: session.deps.tabId,
       leafId: session.pane.leafId
     })
+
     return true
   }
+
   session.clearSleepingRecordAfterColdRestoreSpawn = (
     startup: ColdRestoreAgentResumeStartup | null
   ): void => {
@@ -45,6 +48,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
       )
     }
   }
+
   session.mergeStartupEnvWithPaneIdentity = (
     env: Record<string, string> | undefined
   ): Record<string, string> | undefined =>
@@ -62,17 +66,22 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     options: FreshSpawnOptions = {}
   ): Promise<string | null> => {
     session.applyColdRestoreAgentResumeStartup(startup)
+
     return session.startFreshSpawn(startup, options)
   }
+
   // Why: the hibernation wake fires from noteVisibilityResume in the outer
   // connection scope, long after this deferred-connect closure has run.
   session.wakeHibernatedAgentPane = () => session.startFreshColdRestoreAgentResume()
+
   const isStartupPasteTargetCurrent = (ptyId: string | null): boolean =>
     !session.disposed &&
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
     session.transport.getPtyId() === ptyId
+
   const runTerminalPasteStartupCommand = async (command: string): Promise<boolean> => {
     const ptyId = session.transport.getPtyId()
+
     const result = await executeTerminalStartupCommandPaste({
       command,
       pane: session.pane,
@@ -88,40 +97,52 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
       transport: session.transport,
       isTargetCurrent: isStartupPasteTargetCurrent
     })
+
     if (result.status !== 'pasted' || !isStartupPasteTargetCurrent(ptyId)) {
       return false
     }
+
     return session.transport.sendInput('\r')
   }
+
   session.schedulePendingStartupCommandDelivery = (): void => {
     const startup = session.pendingStartupCommand
+
     if (!startup) {
       return
     }
+
     if (session.startupInjectTimer !== null) {
       clearTimeout(session.startupInjectTimer)
     }
+
     session.startupInjectTimer = setTimeout(() => {
       session.startupInjectTimer = null
       void (async () => {
         if (session.pendingStartupCommand !== startup || session.disposed) {
           return
         }
+
         if (session.shouldDeliverStartupViaTerminalPaste) {
           await waitForTerminalOutputParsed(session.pane.terminal)
         }
+
         if (session.pendingStartupCommand !== startup || session.disposed) {
           return
         }
+
         const command = startup.command
+
         const submitted = session.shouldDeliverStartupViaTerminalPaste
           ? await runTerminalPasteStartupCommand(command)
           : session.transport.sendInput(`${command}\r`)
+
         if (submitted) {
           session.armStartupDraftReadinessObservation()
         } else {
           session.releaseUnattemptedStartupDraftPasteDelivery()
         }
+
         session.pendingStartupCommand = null
       })()
     }, 50)
@@ -132,8 +153,10 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     for (const disposable of session.freshSpawnFollowResetDisposables) {
       disposable.dispose()
     }
+
     session.freshSpawnFollowResetDisposables = []
   }
+
   bindFreshSpawnFollowReset(session)
   bindStartFreshSpawn(session)
   bindReplayDataDrain(session)
@@ -172,18 +195,23 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
   ): void {
     if (typeof snapshot.seq !== 'number') {
       session.clearRestoredSnapshotBaseline()
+
       return
     }
+
     // Why: arming drops the redelivery permanently, so the snapshot's painted
     // content must be able to back the seq it claims; a blank image cannot (STA-5179).
     if (snapshot.seq > 0 && !paintsContent) {
       session.clearRestoredSnapshotBaseline()
+
       return
     }
+
     const windowStartSeq =
       typeof snapshot.pendingDeliveryStartSeq === 'number'
         ? Math.min(snapshot.pendingDeliveryStartSeq, snapshot.seq)
         : null
+
     if (windowStartSeq !== null && windowStartSeq >= snapshot.seq) {
       // Why: main reported an empty undelivered backlog — no chunk at or
       // below the snapshot seq can ever arrive again (delivery is once and
@@ -192,8 +220,10 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
       // foreign seq domain (restarted counter / synthetic injection) as
       // duplicates or trim gaps and silently drop genuinely-new output.
       session.clearRestoredSnapshotBaseline()
+
       return
     }
+
     session.restoredSnapshotBaselineSeq = snapshot.seq
     session.restoredSnapshotBaselinePtyId = ptyId
     session.restoredSnapshotExpectedStartSeq = snapshot.seq
@@ -206,6 +236,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     session.restoredSnapshotExpectedStartSeq = null
     session.restoredSnapshotDeliveryWindowStartSeq = null
   }
+
   session.foregroundImmediateBudget = createForegroundImmediateBudget()
   session.foregroundRewriteChunkEndedWithCarriageReturn = false
   session.foregroundRewriteCsiScanTail = ''

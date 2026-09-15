@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: (props: { installed?: boolean }) => {
     mocks.panelProps.push(props)
+
     return <div data-testid="skill-panel">{props.installed ? 'Installed' : 'Not installed'}</div>
   }
 }))

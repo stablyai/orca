@@ -46,16 +46,19 @@ describe('xterm composition transaction ownership', () => {
   it('leaves every immediate native remap with an accepted composition transaction', () => {
     const sendInput = vi.fn()
     const downstream = vi.fn()
+
     const forwarder = installTerminalImeNativeTextForwarder({
       terminalElement: element,
       isComposing: () => false,
       sendInput
     })
+
     element.addEventListener('input', downstream, true)
 
     textarea.dispatchEvent(
       new CustomEvent(XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT, { bubbles: true })
     )
+
     for (const [value, data] of [
       ['한`', '`'],
       ['한`₩', '₩']
@@ -82,6 +85,7 @@ describe('xterm composition transaction ownership', () => {
 
   it('does not let repeated rejected composition ends steal an immediate remap', () => {
     const sendInput = vi.fn()
+
     const forwarder = installTerminalImeNativeTextForwarder({
       terminalElement: element,
       isComposing: () => false,
@@ -91,6 +95,7 @@ describe('xterm composition transaction ownership', () => {
     for (let index = 0; index < 3; index++) {
       textarea.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }))
     }
+
     expect(forwarder.claimKeyEvent(wonKeydown())).toBe(true)
     dispatchInsertText(textarea)
 
@@ -99,6 +104,7 @@ describe('xterm composition transaction ownership', () => {
 
   it('restarts ownership when another composition transaction is accepted', () => {
     const sendInput = vi.fn()
+
     const forwarder = installTerminalImeNativeTextForwarder({
       terminalElement: element,
       isComposing: () => false,
@@ -112,6 +118,7 @@ describe('xterm composition transaction ownership', () => {
       expect(forwarder.claimKeyEvent(wonKeydown())).toBe(true)
       dispatchInsertText(textarea)
     }
+
     textarea.dispatchEvent(
       new CustomEvent(XTERM_COMPOSITION_TRANSACTION_SETTLED_EVENT, { bubbles: true })
     )
@@ -123,6 +130,7 @@ describe('xterm composition transaction ownership', () => {
 
   it('drops composition ownership on blur and unmount', () => {
     const sendInput = vi.fn()
+
     const forwarder = installTerminalImeNativeTextForwarder({
       terminalElement: element,
       isComposing: () => false,

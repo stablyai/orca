@@ -28,6 +28,7 @@ export function sleepingRecordFromEntry(args: {
   origin?: SleepingAgentSessionRecord['origin']
 }): SleepingAgentSessionRecord | null {
   const agent = args.entry.agentType
+
   if (
     args.entry.terminalResumeEligible === false ||
     !isResumableTuiAgent(agent) ||
@@ -35,10 +36,13 @@ export function sleepingRecordFromEntry(args: {
   ) {
     return null
   }
+
   if (!getAgentResumeArgv(agent, args.entry.providerSession)) {
     return null
   }
+
   const tab = args.tab ?? findTabForAgentEntry(args.state, args.worktreeId, args.entry)
+
   return {
     paneKey: args.entry.paneKey,
     ...(tab ? { tabId: tab.id } : {}),
@@ -73,6 +77,7 @@ export function normalizeSleepingAgentSessionCollectOptions(
   if (!options) {
     return {}
   }
+
   return Array.isArray(options)
     ? { paneKeys: options }
     : (options as CollectSleepingAgentSessionRecordsOptions)
@@ -117,20 +122,25 @@ export function removeSleepingRecordsReplacedByManualWorktreeSleep(
   const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
   let next = records
   let changed = false
+
   for (const [paneKey, record] of Object.entries(records)) {
     if (record.worktreeId !== worktreeId || (allowedPaneKeys && !allowedPaneKeys.has(paneKey))) {
       continue
     }
+
     // Why: a repeat sleep must not delete a durable record this capture cannot re-derive — the
     // pane was never woken, so it has no live status row to rebuild it from (#11598).
     if (!replacements?.[paneKey] && isDurableSleepingCapture(record)) {
       continue
     }
+
     if (next === records) {
       next = { ...records }
     }
+
     delete next[paneKey]
     changed = true
   }
+
   return { records: next, changed }
 }

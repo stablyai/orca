@@ -33,14 +33,17 @@ function formatOwnerSelector(selector: AutomationOwnerPrecondition['selector']):
   if (selector.kind === 'ssh') {
     return `ssh:${selector.targetId} (generation ${selector.targetGeneration})`
   }
+
   return selector.kind === 'orphan' ? ORPHAN_HOST_LABEL : 'self'
 }
 
 function formatListItemSelector(item: AutomationListItem): string {
   const selector = item.selector
+
   if (selector.kind === 'ssh') {
     return `ssh:${selector.targetId} (generation ${selector.targetGeneration})`
   }
+
   return selector.kind === 'orphan' ? `orphan — ${selector.issue}` : 'self'
 }
 
@@ -48,12 +51,15 @@ export function formatAutomationList(result: AutomationListPayload): string {
   if (result.automations.length === 0) {
     return 'No automations found.'
   }
+
   const hosts = new Map(result.items?.map((item) => [item.automationId, item]) ?? [])
+
   return result.automations
     .map((automation) => {
       const status = automation.enabled ? 'enabled' : 'disabled'
       const item = hosts.get(automation.id)
       const host = item ? `\nhost: ${formatListItemSelector(item)}` : ''
+
       return `${automation.id}  ${automation.name}  ${automation.agentId}  ${status}\n${formatAutomationSchedule(automation.rrule)}  next: ${new Date(automation.nextRunAt).toISOString()}${host}`
     })
     .join('\n\n')
@@ -62,6 +68,7 @@ export function formatAutomationList(result: AutomationListPayload): string {
 export function formatAutomationShow(result: AutomationShowPayload): string {
   const automation = result.automation
   const runContext = automation.runContext ?? null
+
   const projectLines = runContext
     ? [
         `runProjectId: ${runContext.projectId}`,
@@ -72,6 +79,7 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
         `legacyRepoId: ${getAutomationLegacyRepoId(automation)}`
       ]
     : [`legacyRepoId: ${getAutomationLegacyRepoId(automation)}`]
+
   return [
     `id: ${automation.id}`,
     `name: ${automation.name}`,
@@ -121,15 +129,19 @@ export function formatAutomationRun(result: { run: AutomationRun }): string {
 
 function formatAutomationRunPrecheck(run: AutomationRun): string {
   const result = run.precheckResult
+
   if (!result) {
     return 'none'
   }
+
   const outcome = result.timedOut
     ? 'timed out'
     : result.error
       ? 'error'
       : `exit ${result.exitCode ?? 'unknown'}`
+
   const output = result.stderr.trim() || result.stdout.trim()
+
   return output ? `${outcome}; ${output}` : outcome
 }
 
@@ -137,6 +149,7 @@ export function formatAutomationRuns(result: { runs: AutomationRun[] }): string 
   if (result.runs.length === 0) {
     return 'No automation runs found.'
   }
+
   return result.runs
     .map(
       (run) =>

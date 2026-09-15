@@ -41,6 +41,7 @@ export function getBrowserClientDownloadTransferStore(
   runtime: RuntimeFileChannelHost
 ): BrowserClientDownloadTransferStore {
   let store = stores.get(runtime)
+
   if (!store) {
     store = new BrowserClientDownloadTransferStore({
       writeChunk: async ({ workspaceId, relativePath, contentBase64, append }) => {
@@ -63,6 +64,7 @@ export function getBrowserClientDownloadTransferStore(
       exists: async ({ workspaceId, relativePath }) => {
         try {
           await runtime.statRuntimeFile(workspaceId, relativePath)
+
           return true
         } catch {
           return false
@@ -71,5 +73,6 @@ export function getBrowserClientDownloadTransferStore(
     })
     stores.set(runtime, store)
   }
+
   return store
 }

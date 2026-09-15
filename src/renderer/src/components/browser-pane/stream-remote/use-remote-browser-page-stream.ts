@@ -76,14 +76,17 @@ export function useRemoteBrowserPageStream({
   const rememberRemoteViewportSize = useCallback(
     (next: RemoteBrowserViewportSize): RemoteBrowserViewportSize => {
       const prev = remoteViewportSizeRef.current
+
       if (
         !prev ||
         Math.abs(prev.width - next.width) > 3 ||
         Math.abs(prev.height - next.height) > 3
       ) {
         remoteViewportSizeRef.current = next
+
         return next
       }
+
       return prev
     },
     [remoteViewportSizeRef]
@@ -91,13 +94,17 @@ export function useRemoteBrowserPageStream({
 
   const readCurrentRemoteViewportSize = useCallback((): RemoteBrowserViewportSize | null => {
     const element = remoteViewportRef.current
+
     if (!element) {
       return null
     }
+
     const rect = element.getBoundingClientRect()
+
     if (rect.width <= 0 || rect.height <= 0) {
       return null
     }
+
     return {
       width: Math.max(320, Math.round(rect.width)),
       height: Math.max(240, Math.round(rect.height))
@@ -106,6 +113,7 @@ export function useRemoteBrowserPageStream({
 
   const readRemoteViewportSize = useCallback((): RemoteBrowserViewportSize | null => {
     const next = readCurrentRemoteViewportSize()
+
     return next ? rememberRemoteViewportSize(next) : remoteViewportSizeRef.current
   }, [readCurrentRemoteViewportSize, rememberRemoteViewportSize, remoteViewportSizeRef])
 
@@ -113,13 +121,16 @@ export function useRemoteBrowserPageStream({
     useCallback(async (): Promise<RemoteBrowserViewportSize | null> => {
       for (let i = 0; i < 3; i += 1) {
         const next = readCurrentRemoteViewportSize()
+
         if (next) {
           return rememberRemoteViewportSize(next)
         }
+
         await new Promise<void>((resolve) => {
           window.requestAnimationFrame(() => resolve())
         })
       }
+
       return readRemoteViewportSize()
     }, [readCurrentRemoteViewportSize, readRemoteViewportSize, rememberRemoteViewportSize])
 
@@ -127,9 +138,11 @@ export function useRemoteBrowserPageStream({
     async (pageId: string): Promise<void> => {
       const target = runtimeTarget()
       const size = readRemoteViewportSize()
+
       if (!target || !size) {
         return
       }
+
       await callRuntimeRpc(
         target,
         'browser.viewport',
@@ -143,6 +156,7 @@ export function useRemoteBrowserPageStream({
         },
         { timeoutMs: 15_000, suppressFeatureInteraction: true }
       )
+
       try {
         // Why: the streamed bitmap can include the host compositor surface, but CDP input wants the guest page's CSS viewport coords.
         const viewport = await callRuntimeRpc(
@@ -155,6 +169,7 @@ export function useRemoteBrowserPageStream({
           },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
+
         remoteCssViewportSizeRef.current = readRemoteCssViewportSize(viewport) ?? size
       } catch {
         remoteCssViewportSizeRef.current = size
@@ -167,31 +182,41 @@ export function useRemoteBrowserPageStream({
     if (!isActive) {
       return
     }
+
     const element = remoteViewportRef.current
+
     if (!element) {
       return
     }
+
     const scheduleSync = (): void => {
       readRemoteViewportSize()
+
       if (remoteViewportTimerRef.current !== null) {
         window.clearTimeout(remoteViewportTimerRef.current)
       }
+
       remoteViewportTimerRef.current = window.setTimeout(() => {
         remoteViewportTimerRef.current = null
         const pageId = lifecycle.tokens.remotePage
+
         if (!pageId || !isActiveRef.current) {
           return
         }
+
         void syncRemoteViewport(pageId)
           .then(() => lifecycle.restartForViewport(pageId))
           .catch(() => {})
       }, 150)
     }
+
     scheduleSync()
     const observer = new ResizeObserver(scheduleSync)
     observer.observe(element)
+
     return () => {
       observer.disconnect()
+
       if (remoteViewportTimerRef.current !== null) {
         window.clearTimeout(remoteViewportTimerRef.current)
         remoteViewportTimerRef.current = null
@@ -212,17 +237,22 @@ export function useRemoteBrowserPageStream({
       if (!lifecycle.tokens.isCurrentStreamToken(token)) {
         return
       }
+
       const frame = decodeBrowserScreencastFrame(bytes)
+
       if (!frame) {
         return
       }
+
       const imageBuffer = frame.image.buffer.slice(
         frame.image.byteOffset,
         frame.image.byteOffset + frame.image.byteLength
       ) as ArrayBuffer
+
       const nextUrl = URL.createObjectURL(
         new Blob([imageBuffer], { type: `image/${frame.format}` })
       )
+
       const decodeGeneration = pendingFrameDecodeRef.current + 1
       pendingFrameDecodeRef.current = decodeGeneration
       void decodeRemoteBrowserFrameUrl(nextUrl)
@@ -232,13 +262,16 @@ export function useRemoteBrowserPageStream({
             !lifecycle.tokens.isCurrentStreamToken(token)
           ) {
             URL.revokeObjectURL(nextUrl)
+
             return
           }
+
           const prevUrl = streamFrameUrlRef.current
           streamFrameUrlRef.current = nextUrl
           setFrameMetadata(frame.metadata)
           setFrameUrl(nextUrl)
           setPaneBusy(false)
+
           if (prevUrl) {
             URL.revokeObjectURL(prevUrl)
           }

@@ -18,6 +18,7 @@ export function getChecksTabSummaryPresentation(counts: ReturnType<typeof getChe
           : counts.passing > 0
             ? CHECK_ICON.success
             : CircleDashed
+
   const summaryColor =
     counts.failing > 0
       ? CHECK_COLOR.failure
@@ -28,5 +29,6 @@ export function getChecksTabSummaryPresentation(counts: ReturnType<typeof getChe
           : counts.passing > 0
             ? CHECK_COLOR.success
             : 'text-muted-foreground'
+
   return { SummaryIcon, summaryColor }
 }

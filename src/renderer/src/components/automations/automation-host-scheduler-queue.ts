@@ -44,6 +44,7 @@ export function createAutomationHostRequestPool(
     if (active > 0 || pending() > 0) {
       return
     }
+
     for (const waiter of idleWaiters.splice(0)) {
       waiter()
     }
@@ -52,9 +53,11 @@ export function createAutomationHostRequestPool(
   const pump = (): void => {
     while (active < concurrency && pending() > 0) {
       const next = urgent.shift() ?? waiting.shift()
+
       if (!next) {
         break
       }
+
       active += 1
       void next.job.run().then(
         () => {
@@ -72,6 +75,7 @@ export function createAutomationHostRequestPool(
         }
       )
     }
+
     releaseIdle()
   }
 
@@ -88,6 +92,7 @@ export function createAutomationHostRequestPool(
         entry.job.cancel?.()
         entry.settle()
       }
+
       releaseIdle()
     },
     inFlight: () => active,

@@ -13,6 +13,7 @@ export const RichMarkdownOrderedList = OrderedList.extend({
       if (!orderedListStart.test(src)) {
         return undefined
       }
+
       return baseTokenizer.tokenize(src, tokens, lexer)
     }
   }

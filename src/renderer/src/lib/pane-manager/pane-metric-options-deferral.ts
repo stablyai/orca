@@ -33,22 +33,28 @@ export function applyOrDeferPaneMetricOptions(
   if (!measurable) {
     // Latest wins: a newer settings change while hidden supersedes the pending one.
     deferredMetricOptions.set(pane.terminal, options)
+
     return 'deferred'
   }
+
   deferredMetricOptions.delete(pane.terminal)
   writePaneMetricOptions(pane, options, reason)
+
   return 'applied'
 }
 
 /** Applies a pending deferral. Callers must ensure the pane is measurable. */
 export function flushDeferredPaneMetricOptions(pane: ManagedPane): boolean {
   const pending = deferredMetricOptions.get(pane.terminal)
+
   if (!pending) {
     return false
   }
+
   deferredMetricOptions.delete(pane.terminal)
   writePaneMetricOptions(pane, pending, 'deferred-flush')
   recordTerminalWebglDiagnostic('metric-options-deferred-flush', { paneId: pane.id })
+
   return true
 }
 
@@ -69,7 +75,9 @@ export function paneMetricOptionsAlreadySettled(
   if (deferredMetricOptions.has(pane.terminal)) {
     return false
   }
+
   const target = pane.terminal.options
+
   return (
     (options.fontSize === undefined || target.fontSize === options.fontSize) &&
     (options.fontFamily === undefined || target.fontFamily === options.fontFamily) &&
@@ -88,9 +96,11 @@ export function overridePendingPaneMetricOptions(
   options: PaneMetricOptions
 ): void {
   const pending = deferredMetricOptions.get(pane.terminal)
+
   if (!pending) {
     return
   }
+
   deferredMetricOptions.set(pane.terminal, { ...pending, ...options })
 }
 
@@ -100,16 +110,20 @@ function writePaneMetricOptions(
   reason: string
 ): void {
   const target = pane.terminal.options
+
   if (options.fontSize !== undefined) {
     target.fontSize = options.fontSize
   }
+
   if (options.fontFamily !== undefined) {
     target.fontFamily = options.fontFamily
   }
+
   if (options.fontWeight !== undefined) {
     recordMetricWeightChange(pane, 'fontWeight', target.fontWeight, options.fontWeight, reason)
     target.fontWeight = options.fontWeight as typeof target.fontWeight
   }
+
   if (options.fontWeightBold !== undefined) {
     recordMetricWeightChange(
       pane,
@@ -120,6 +134,7 @@ function writePaneMetricOptions(
     )
     target.fontWeightBold = options.fontWeightBold as typeof target.fontWeightBold
   }
+
   if (options.lineHeight !== undefined) {
     target.lineHeight = options.lineHeight
   }
@@ -140,6 +155,7 @@ function recordMetricWeightChange(
   if (prev === next) {
     return
   }
+
   recordTerminalWebglDiagnostic('metric-weight-change', {
     paneId: pane.id,
     key,

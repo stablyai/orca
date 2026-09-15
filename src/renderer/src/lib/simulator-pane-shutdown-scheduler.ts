@@ -37,19 +37,24 @@ export async function shutdownManagedSimulatorIfNoPane(
   options: SimulatorPaneShutdownOptions = {}
 ): Promise<boolean> {
   const getTabsForWorktree = options.getTabsForWorktree ?? getUnifiedTabsForWorktree
+
   if (!shouldShutdownSimulatorForPaneUnmountFromTabs(getTabsForWorktree(worktreeId), tabId)) {
     return false
   }
+
   const shutdown = options.shutdownManagedSimulator ?? shutdownManagedSimulator
   await Promise.resolve(shutdown(worktreeId)).catch(() => {})
+
   return true
 }
 
 export function cancelPendingSimulatorPaneShutdown(worktreeId: string): void {
   const timer = pendingShutdownTimersByWorktree.get(worktreeId)
+
   if (!timer) {
     return
   }
+
   clearTimeout(timer)
   pendingShutdownTimersByWorktree.delete(worktreeId)
 }
@@ -60,6 +65,7 @@ export function scheduleSimulatorPaneManagedShutdown(
   options: ScheduleSimulatorPaneShutdownOptions = {}
 ): boolean {
   const getTabsForWorktree = options.getTabsForWorktree ?? getUnifiedTabsForWorktree
+
   if (!shouldShutdownSimulatorForPaneUnmountFromTabs(getTabsForWorktree(worktreeId), tabId)) {
     return false
   }
@@ -67,11 +73,14 @@ export function scheduleSimulatorPaneManagedShutdown(
   cancelPendingSimulatorPaneShutdown(worktreeId)
   const delayMs = options.delayMs ?? DEFAULT_SHUTDOWN_GRACE_MS
   const shutdown = options.shutdownManagedSimulator ?? shutdownManagedSimulator
+
   const timer = setTimeout(() => {
     pendingShutdownTimersByWorktree.delete(worktreeId)
+
     if (!shouldShutdownSimulatorForPaneUnmountFromTabs(getTabsForWorktree(worktreeId))) {
       return
     }
+
     // Why: closing/reopening or moving a simulator tab briefly unmounts the pane.
     // Delaying avoids killing a stream that the replacement pane is about to reuse.
     void shutdownManagedSimulatorIfNoPane(worktreeId, undefined, {
@@ -79,6 +88,8 @@ export function scheduleSimulatorPaneManagedShutdown(
       shutdownManagedSimulator: shutdown
     })
   }, delayMs)
+
   pendingShutdownTimersByWorktree.set(worktreeId, timer)
+
   return true
 }

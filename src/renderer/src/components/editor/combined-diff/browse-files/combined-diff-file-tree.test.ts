@@ -33,6 +33,7 @@ describe('CombinedDiffFileTree navigation mapping', () => {
   it('disambiguates uncommitted entries with the same path by area', () => {
     const staged: GitStatusEntry = { path: 'src/App.tsx', status: 'modified', area: 'staged' }
     const unstaged: GitStatusEntry = { path: 'src/App.tsx', status: 'modified', area: 'unstaged' }
+
     const sectionIndexByKey = createCombinedDiffSectionIndexMap([
       { key: 'unstaged:src/App.tsx' },
       { key: 'staged:src/App.tsx' }
@@ -69,6 +70,7 @@ describe('CombinedDiffFileTree navigation mapping', () => {
       status: 'modified',
       area: 'unstaged'
     }
+
     const branchEntry: GitBranchChangeEntry = { path: 'src/view.ts', status: 'modified' }
 
     expect(getCombinedDiffFileTreeSectionKey('all', localEntry)).toBe('unstaged:src/view.ts')
@@ -95,6 +97,7 @@ describe('CombinedDiffFileTree navigation mapping', () => {
     const toggleSection = vi.fn()
     const loadSection = vi.fn()
     const scrollToIndex = vi.fn()
+
     const index = handleCombinedDiffFileTreeNavigation({
       mode: 'branch',
       entry,
@@ -116,6 +119,7 @@ describe('CombinedDiffFileTree navigation mapping', () => {
 
   it('rejects oversized pasted filters before reading diff entries', () => {
     const oversizedQuery = 'secret-diff-filter'.repeat(COMBINED_DIFF_FILE_TREE_QUERY_MAX_BYTES)
+
     const entry = {
       get path(): string {
         throw new Error('oversized diff filters must not scan paths')
@@ -172,7 +176,9 @@ describe('CombinedDiffFileTree navigation mapping', () => {
       { path: 'src/nested/b.ts', status: 'modified' },
       { path: 'docs/readme.md', status: 'modified' }
     ]
+
     const roots = buildCombinedDiffBranchTreeRoots('branch', entries)
+
     const visibility = getViewedCombinedDiffTreeVisibility({
       roots,
       collapsedDirectoryKeys: new Set(),
@@ -198,7 +204,9 @@ describe('CombinedDiffFileTree navigation mapping', () => {
       { path: 'src/a/one.ts', status: 'modified' },
       { path: 'src/b/two.ts', status: 'modified' }
     ]
+
     const roots = buildCombinedDiffBranchTreeRoots('branch', entries)
+
     const visibility = getViewedCombinedDiffTreeVisibility({
       roots,
       collapsedDirectoryKeys: new Set(['dir::combined-branch::src']),

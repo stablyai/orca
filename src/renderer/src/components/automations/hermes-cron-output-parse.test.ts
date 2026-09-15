@@ -60,9 +60,11 @@ describe('parseHermesOutput', () => {
 
     expect(parsed.sections[0]?.body.startsWith('line 1\nline 2')).toBe(true)
     expect(parsed.sections[0]?.body.endsWith('line 10000')).toBe(true)
+
     const usedCrlfReplace = replace.mock.calls.some(
       ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r\\n'
     )
+
     expect(usedCrlfReplace).toBe(false)
   })
 })

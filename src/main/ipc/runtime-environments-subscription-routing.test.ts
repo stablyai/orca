@@ -58,6 +58,7 @@ vi.mock('../../shared/remote-runtime-client', () => ({
 
 vi.mock('./runtime-environment-request-connections', async () => {
   const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+
   return withRuntimeStatusOwners({
     sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
     sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
@@ -82,6 +83,7 @@ const handler = channelHandlerLookup(handleMock)
 describe('registerRuntimeEnvironmentHandlers', () => {
   let userDataPath: string
   let activeRuntimeEnvironmentId: string | null
+
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
@@ -141,12 +143,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const subscribe = handler<
       { selector: string; method: string; params?: unknown; subscriptionId?: string },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
+
     await subscribe(
       {
         sender: {
@@ -212,12 +216,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const subscribe = handler<
       { selector: string; method: string; params?: unknown; subscriptionId?: string },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
+
     await expect(
       subscribe(
         {
@@ -268,12 +274,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const subscribe = handler<
       { selector: string; method: string; params?: unknown; subscriptionId?: string },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
+
     const result = await subscribe(
       {
         sender: {
@@ -295,6 +303,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       onError: (error: { code: string; message: string }) => void
       onClose: () => void
     }
+
     callbacks.onError({ code: 'reconnecting', message: 'temporary drop' })
 
     expect(senderSend).toHaveBeenCalledWith('runtimeEnvironments:subscriptionEvent', {
@@ -315,6 +324,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
       'runtimeEnvironments:unsubscribe'
     )
+
     expect(
       await unsubscribe({ sender: { id: 1 } }, { subscriptionId: result.subscriptionId })
     ).toEqual({
@@ -341,12 +351,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const subscribe = handler<
       { selector: string; method: string; params?: unknown; subscriptionId?: string },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
+
     await expect(
       subscribe(
         {

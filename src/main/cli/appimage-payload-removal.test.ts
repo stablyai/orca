@@ -17,6 +17,7 @@ async function makePayloadTree(): Promise<string> {
   // The real leak: Electron's fs patch reports a *.asar file as a directory.
   await writeFile(join(root, 'resources', 'app.asar'), 'asar-payload')
   await writeFile(join(root, 'AppRun'), '#!/bin/sh\n')
+
   return root
 }
 
@@ -38,6 +39,7 @@ describe('removeExtractedAppImagePayload', () => {
         observed ??= value
       }
     })
+
     try {
       await removeExtractedAppImagePayload(root)
     } finally {
@@ -47,6 +49,7 @@ describe('removeExtractedAppImagePayload', () => {
         value: originalRealpath
       })
     }
+
     expect(observed).toBe(true)
   })
 

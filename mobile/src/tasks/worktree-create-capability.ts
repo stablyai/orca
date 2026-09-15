@@ -39,19 +39,25 @@ export async function readNewWorktreeRuntimeCapabilities(
       const status = worktreeCreateCapabilityRead.interpret(
         await worktreeCreateCapabilityRead.request(client)
       )
+
       if (!status.accepted) {
         return UNSUPPORTED_CAPABILITIES
       }
+
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
       const result = status.value as {
         capabilities?: string[]
         worktreeCreateIdempotency?: unknown
       }
+
       const capabilities = result.capabilities ?? []
+
       const supportsIdempotency = capabilities.includes(
         MOBILE_WORKTREE_CREATE_IDEMPOTENCY_CAPABILITY
       )
+
       const advertisedIdempotency = result.worktreeCreateIdempotency
+
       return {
         tasksSupported: capabilities.includes(MOBILE_TASKS_CAPABILITY),
         worktreeCreateIdempotency: supportsIdempotency
@@ -85,10 +91,12 @@ export function useNewWorktreeRuntimeCapabilities(
 } {
   const [tasksSupported, setTasksSupported] = useState(false)
   const [hostPlatform, setHostPlatform] = useState<NodeJS.Platform | null>(null)
+
   const capabilityProbeRef = useRef<{
     client: RpcClient | null
     promise: Promise<NewWorktreeRuntimeCapabilities>
   } | null>(null)
+
   const getCapabilities = useCallback((): Promise<NewWorktreeRuntimeCapabilities> => {
     if (!capabilityProbeRef.current || capabilityProbeRef.current.client !== client) {
       // Why: a queued tap can reach Create before passive effects run; lazily
@@ -100,6 +108,7 @@ export function useNewWorktreeRuntimeCapabilities(
           : Promise.resolve(UNSUPPORTED_CAPABILITIES)
       }
     }
+
     return capabilityProbeRef.current.promise
   }, [client])
 
@@ -107,6 +116,7 @@ export function useNewWorktreeRuntimeCapabilities(
     if (!enabled || !client) {
       return
     }
+
     let stale = false
     void getCapabilities().then((capabilities) => {
       if (!stale) {
@@ -114,6 +124,7 @@ export function useNewWorktreeRuntimeCapabilities(
         setHostPlatform(capabilities.hostPlatform)
       }
     })
+
     return () => {
       stale = true
     }
@@ -123,5 +134,6 @@ export function useNewWorktreeRuntimeCapabilities(
     () => getCapabilities().then((capabilities) => capabilities.worktreeCreateIdempotency),
     [getCapabilities]
   )
+
   return { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport }
 }

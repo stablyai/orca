@@ -50,15 +50,18 @@ export function NativeChatComposerActions({
     if (event.detail > 1) {
       return
     }
+
     if (isWorking) {
       onStop?.()
     } else {
       onSend()
     }
   }
+
   const dictationLabel = isDictating
     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
     : translate('components.native-chat.composer.startDictation', 'Start dictation')
+
   return (
     <div className="flex w-full items-center justify-between gap-2">
       <div className="flex min-w-0 items-center gap-0.5">
@@ -103,6 +106,7 @@ export function NativeChatComposerActions({
                 if (!isDictationHoldMode || dictationDisabled) {
                   return
                 }
+
                 event.preventDefault()
                 onDictationHoldStart()
               }}

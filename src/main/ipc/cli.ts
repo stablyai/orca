@@ -15,6 +15,7 @@ import { getDefaultWslDistro } from '../wsl'
 import { resolveAppImageRuntimeIdentity } from '../appimage-runtime-identity'
 
 const APPIMAGE_REPAIR_RETRY_MS = 30_000
+
 const localCliRegistrationQueues = new Map<string, Promise<void>>()
 
 function runLocalCliRegistrationOperation<T>(operation: () => Promise<T>): Promise<T> {
@@ -25,14 +26,19 @@ function resolveStaleAppImageRepairKey(status: CliInstallStatus): string | null 
   if (status.state !== 'stale') {
     return null
   }
+
   const runtimeIdentity = resolveAppImageRuntimeIdentity()
+
   if (!runtimeIdentity) {
     return null
   }
+
   const cacheKey = resolveAppImageCacheKey(runtimeIdentity.appImagePath)
+
   if (!cacheKey) {
     return null
   }
+
   return [status.commandPath, status.launcherPath, runtimeIdentity.appImagePath, cacheKey].join(
     '\0'
   )
@@ -75,9 +81,11 @@ async function hydrateLocalShellPathForCli(force = false): Promise<void> {
   if (process.platform === 'win32') {
     return
   }
+
   // Why: CLI registration must match `which orca` in the user's terminal, not
   // the sparse PATH a GUI-launched Electron process inherited from launchd.
   const hydration = await hydrateShellPath(force ? { force: true } : undefined)
+
   if (hydration.ok) {
     mergePathSegments(hydration.segments)
   }
@@ -95,6 +103,7 @@ export function registerCliHandlers(): void {
     const status = await installer.getStatus()
     // Why: an AppImage update replaces the outer file while the managed symlink still targets the prior extracted payload.
     const repairKey = resolveStaleAppImageRepairKey(status)
+
     if (!repairKey || installer.isAppImageRegistrationOwnedBySibling(status)) {
       return status
     }
@@ -103,6 +112,7 @@ export function registerCliHandlers(): void {
       const promise = runLocalCliRegistrationOperation(async () => {
         const currentInstaller = new CliInstaller()
         const currentStatus = await currentInstaller.getStatus()
+
         return resolveStaleAppImageRepairKey(currentStatus) === repairKey &&
           !currentInstaller.isAppImageRegistrationOwnedBySibling(currentStatus)
           ? currentInstaller.install()
@@ -112,28 +122,34 @@ export function registerCliHandlers(): void {
           '[cli] Failed to repair stale AppImage registration:',
           error instanceof Error ? error.message : String(error)
         )
+
         return null
       })
+
       staleAppImageRepairAttempt = { promise, retryAfter: Number.POSITIVE_INFINITY }
       void promise.then((result) => {
         if (staleAppImageRepairAttempt?.promise !== promise) {
           return
         }
+
         staleAppImageRepairAttempt = result
           ? null
           : { ...staleAppImageRepairAttempt, retryAfter: Date.now() + APPIMAGE_REPAIR_RETRY_MS }
       })
     }
+
     return (await staleAppImageRepairAttempt.promise) ?? status
   })
 
   ipcMain.handle('cli:install', async (): Promise<CliInstallStatus> => {
     await hydrateLocalShellPathForCli(true)
+
     return runLocalCliRegistrationOperation(() => new CliInstaller().install())
   })
 
   ipcMain.handle('cli:remove', async (): Promise<CliInstallStatus> => {
     await hydrateLocalShellPathForCli()
+
     return runLocalCliRegistrationOperation(() => new CliInstaller().remove())
   })
 
@@ -151,14 +167,17 @@ export function registerCliHandlers(): void {
     'cli:installWsl',
     async (_event, args?: { distro?: string | null }): Promise<CliInstallStatus> => {
       const distro = resolveWslCliDistro(args)
+
       return runWslCliRegistrationOperation(distro, async () => {
         const status = await new WslCliInstaller({ distro }).install()
+
         if (distro && status.state === 'installed') {
           await persistWslCliRegistration(
             () => recordWslCliRegistrationInstalled(getCanonicalUserDataPath(), distro),
             'install'
           )
         }
+
         return status
       })
     }
@@ -168,14 +187,17 @@ export function registerCliHandlers(): void {
     'cli:removeWsl',
     async (_event, args?: { distro?: string | null }): Promise<CliInstallStatus> => {
       const distro = resolveWslCliDistro(args)
+
       return runWslCliRegistrationOperation(distro, async () => {
         const status = await new WslCliInstaller({ distro }).remove()
+
         if (distro && status.state === 'not_installed') {
           await persistWslCliRegistration(
             () => recordWslCliRegistrationRemoved(getCanonicalUserDataPath(), distro),
             'remove'
           )
         }
+
         return status
       })
     }

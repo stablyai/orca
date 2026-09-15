@@ -21,9 +21,11 @@ export async function prepareCodexSessionResumeForLaunch(args: {
 }): Promise<CodexSessionResumePreparation | null> {
   const runtimeHome = state.codexRuntimeHome
   const store = state.store
+
   if (args.target.runtime === 'wsl' || !runtimeHome || !store) {
     return null
   }
+
   const systemHomePath = getSystemCodexHomePath()
   // Why: codexSessionSourceHome is import-only; treating it as CODEX_HOME would mutate history sources and bypass account auth.
   const trustedHomes = [systemHomePath, ...runtimeHome.getHostCodexHomePathsForSessionDiscovery()]
@@ -35,6 +37,7 @@ export async function prepareCodexSessionResumeForLaunch(args: {
   // readable alias wins. A throw here refuses the whole resume instead
   // (#STA-4422).
   const selectedAccountCodexHome = runtimeHome.resolveSelectedHostAccountCodexHomePathForResume()
+
   // Why: a `fresh` outcome must skip migration, trust and hook repair entirely — there is
   // no verified origin home to prepare, so the PTY layer drops the resume argv (#10793).
   const preparation = await prepareCodexSessionResume({
@@ -50,6 +53,7 @@ export async function prepareCodexSessionResumeForLaunch(args: {
     sharedRuntimeCodexHomePath: getOrcaManagedCodexHomePath(),
     resolveVerifiedResumeHome: async (sessionSource) => {
       let migrated = { useRealCodexHome: false }
+
       try {
         migrated = await prepareLegacySharedCodexSessionResume(
           {
@@ -73,13 +77,16 @@ export async function prepareCodexSessionResumeForLaunch(args: {
         if (error instanceof ManagedCodexHomeTemporarilyUnavailableError) {
           throw error
         }
+
         // Why: migration is a compatibility repair; its failure must not prevent the PTY from resuming from its trusted origin home.
         console.warn(
           '[codex-session-resume] Legacy rollout migration failed; using origin home:',
           error
         )
       }
+
       const resumeHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
+
       if (args.workspacePath) {
         try {
           await markCodexProjectTrusted(args.workspacePath)
@@ -87,10 +94,13 @@ export async function prepareCodexSessionResumeForLaunch(args: {
           console.warn('[codex-project-trust] failed to pre-mark resumed workspace:', error)
         }
       }
+
       const isSystemHome =
         normalizeRuntimePathForComparison(resumeHome) ===
         normalizeRuntimePathForComparison(systemHomePath)
+
       const hooksEnabled = isAgentStatusHooksEnabled(store.getSettings())
+
       try {
         if (isSystemHome) {
           await ensureRealHomeCodexHookState({
@@ -106,9 +116,11 @@ export async function prepareCodexSessionResumeForLaunch(args: {
         // Why: hook repair is best-effort; session provenance must still win over the currently selected home.
         console.warn('[codex-hook-service] failed to prepare automatic resume home:', error)
       }
+
       return resumeHome
     }
   })
+
   return preparation.outcome === 'resume'
     ? {
         ...preparation,

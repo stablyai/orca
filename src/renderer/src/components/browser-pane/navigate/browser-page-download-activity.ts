@@ -6,6 +6,7 @@
 type TrackedDownload = { browserPageId: string; active: boolean }
 
 const trackedDownloadsById = new Map<string, TrackedDownload>()
+
 const activeDownloadCountByPageId = new Map<string, number>()
 
 export function hasActiveBrowserPageDownload(browserPageId: string): boolean {
@@ -20,13 +21,16 @@ function setDownloadActive(
   if (download.active === active) {
     return
   }
+
   download.active = active
   const count = (activeDownloadCountByPageId.get(download.browserPageId) ?? 0) + (active ? 1 : -1)
+
   if (count <= 0) {
     activeDownloadCountByPageId.delete(download.browserPageId)
   } else {
     activeDownloadCountByPageId.set(download.browserPageId, count)
   }
+
   onEvictionVetoChange()
 }
 
@@ -38,6 +42,7 @@ function trackDownloadStarted(
   if (trackedDownloadsById.has(downloadId)) {
     return
   }
+
   const download: TrackedDownload = { browserPageId, active: false }
   trackedDownloadsById.set(downloadId, download)
   setDownloadActive(download, true, onEvictionVetoChange)
@@ -53,17 +58,21 @@ function trackDownloadProgress(
   onEvictionVetoChange: () => void
 ): void {
   const download = trackedDownloadsById.get(downloadId)
+
   if (!download || state === null) {
     return
   }
+
   setDownloadActive(download, state === 'progressing', onEvictionVetoChange)
 }
 
 function trackDownloadFinished(downloadId: string, onEvictionVetoChange: () => void): void {
   const download = trackedDownloadsById.get(downloadId)
+
   if (!download) {
     return
   }
+
   setDownloadActive(download, false, onEvictionVetoChange)
   trackedDownloadsById.delete(downloadId)
 }
@@ -77,12 +86,15 @@ export function installBrowserPageDownloadActivityTracking(
   const removeRequested = window.api.browser.onDownloadRequested((event) => {
     trackDownloadStarted(event.downloadId, event.browserPageId, onEvictionVetoChange)
   })
+
   const removeProgress = window.api.browser.onDownloadProgress((event) => {
     trackDownloadProgress(event.downloadId, event.state, onEvictionVetoChange)
   })
+
   const removeFinished = window.api.browser.onDownloadFinished((event) => {
     trackDownloadFinished(event.downloadId, onEvictionVetoChange)
   })
+
   return () => {
     removeRequested()
     removeProgress()

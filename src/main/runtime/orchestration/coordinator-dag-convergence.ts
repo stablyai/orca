@@ -8,11 +8,13 @@ export function evaluateDagConvergence(
   onLog: (msg: string) => void
 ): DagConvergence {
   const tasks = db.listTasks()
+
   if (tasks.length === 0) {
     return 'empty'
   }
 
   const allDone = tasks.every((t) => t.status === 'completed' || t.status === 'failed')
+
   if (allDone) {
     return 'all-done'
   }
@@ -21,7 +23,9 @@ export function evaluateDagConvergence(
   const active = tasks.filter(
     (t) => t.status === 'ready' || t.status === 'dispatched' || t.status === 'pending'
   )
+
   const blocked = tasks.filter((t) => t.status === 'blocked')
+
   if (active.length === 0 && blocked.length > 0) {
     onLog(
       `Stuck: ${blocked.length} tasks blocked with no active tasks. Resolve decision gates to continue.`

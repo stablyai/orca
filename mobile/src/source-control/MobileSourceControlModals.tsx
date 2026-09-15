@@ -61,6 +61,7 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
               filePath: discardTarget.path
             })
           }
+
           // Modal visibility is derived from discardTarget — clear it so it dismisses.
           setDiscardTarget(null)
         }}
@@ -99,6 +100,7 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
           if (createdPrUrl) {
             openMobilePrUrl(createdPrUrl)
           }
+
           setCreatedPrUrl(null)
           setCreatedPrWarning(null)
         }}

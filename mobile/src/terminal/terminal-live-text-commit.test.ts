@@ -29,6 +29,7 @@ describe('terminal live special key decision', () => {
       heldText: '',
       sentText: ''
     })
+
     expect(decision.kind).toBe('send-now')
   })
 
@@ -38,6 +39,7 @@ describe('terminal live special key decision', () => {
       heldText: '글',
       sentText: '한'
     })
+
     expect(decision.kind).toBe('commit-held-then-send')
   })
 
@@ -47,6 +49,7 @@ describe('terminal live special key decision', () => {
       heldText: '',
       sentText: 'ls'
     })
+
     expect(decision.kind).toBe('send-now')
   })
 })
@@ -77,6 +80,7 @@ describe('terminal live accessory bytes decision', () => {
       heldText: '한',
       sentText: ''
     })
+
     expect(decision).toEqual({ kind: 'commit-held-then-send', bytes: '\x1b' })
   })
 
@@ -86,6 +90,7 @@ describe('terminal live accessory bytes decision', () => {
       heldText: '',
       sentText: 'abc'
     })
+
     expect(decision).toEqual({ kind: 'send-now', bytes: '\x1b' })
   })
 
@@ -96,6 +101,7 @@ describe('terminal live accessory bytes decision', () => {
       heldText: '',
       sentText: ''
     })
+
     expect(decision).toEqual({ kind: 'send-now', bytes: '\x7f' })
   })
 })
@@ -127,6 +133,7 @@ describe('terminal live accessory local edit text', () => {
     const fieldText = `${'a'.repeat(100_000)}🙂`
     const originalIterator = String.prototype[Symbol.iterator]
     let visits = 0
+
     const iterator = vi
       .spyOn(String.prototype, Symbol.iterator)
       .mockImplementation(function* (this: string) {
@@ -135,12 +142,15 @@ describe('terminal live accessory local edit text', () => {
           yield codePoint
         }
       })
+
     let result: string
+
     try {
       result = getTerminalLiveAccessoryLocalEditText({ localEdit: 'backspace', fieldText })
     } finally {
       iterator.mockRestore()
     }
+
     expect(result).toBe('a'.repeat(100_000))
     expect(visits).toBeLessThanOrEqual(2)
   })

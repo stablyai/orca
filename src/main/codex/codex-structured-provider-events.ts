@@ -23,9 +23,11 @@ export function translateCodexNotification(input: {
 }): CodexJournalTranslationAdmission {
   const { sessionId, session, method, params, observedAt } = input
   codexRewind.observeCodexRewindActivity(session, method, params)
+
   if (input.turnCancellation.handleNotification(sessionId, session, method, params, observedAt)) {
     return { accepted: true }
   }
+
   return deliverCodexNotification(sessionId, session, method, params, input.emit, observedAt)
 }
 
@@ -40,7 +42,9 @@ export function deliverCodexNotification(
   if (!session) {
     return { accepted: true }
   }
+
   const threadId = readCodexThreadId(params) ?? session.threadId
+
   // Dispatch identity settles on the user-message echo inside the translator,
   // which is where the ordinal a replay will compute is minted.
   return emit(session, {
@@ -62,8 +66,10 @@ export function deliverCodexServerRequest(
   if (!session) {
     return { accepted: true }
   }
+
   const disposition = disposeCodexServerRequest(session.prompts, session.connection, request)
   const threadId = readCodexThreadId(request.params) ?? session.threadId
+
   if (disposition.kind === 'responded') {
     const admission = emit(session, {
       type: 'server-request',
@@ -72,6 +78,7 @@ export function deliverCodexServerRequest(
       method: request.method,
       params: request.params
     })
+
     if (!admission.accepted) {
       void session.forceCloseUnexpected?.(
         new Error(
@@ -79,9 +86,12 @@ export function deliverCodexServerRequest(
         )
       )
     }
+
     return admission
   }
+
   const prompt = disposition.prompt
+
   const admission = emit(session, {
     type: 'prompt',
     sessionId,
@@ -91,6 +101,7 @@ export function deliverCodexServerRequest(
     codexItemId: prompt.codexItemId,
     promptKey: prompt.promptKey
   })
+
   if (!admission.accepted) {
     session.prompts.forget(prompt)
     session.connection.respondWithError(
@@ -99,6 +110,7 @@ export function deliverCodexServerRequest(
       `Orca could not durably record ${request.method} prompt (${admission.reason})`
     )
   }
+
   return admission
 }
 
@@ -112,6 +124,7 @@ export function deliverCodexUnhandledFrame(
   if (!session) {
     return { accepted: true }
   }
+
   const admission = emit(session, {
     type: 'provider-frame',
     sessionId,
@@ -119,6 +132,7 @@ export function deliverCodexUnhandledFrame(
     kind,
     payload
   })
+
   if (!admission.accepted) {
     // There is no safe replay cursor for malformed/unhandled frames. Close the
     // provider so host recovery records a truthful terminal failure instead of
@@ -127,5 +141,6 @@ export function deliverCodexUnhandledFrame(
       new Error(`Codex provider frame ${kind} could not be durably recorded (${admission.reason})`)
     )
   }
+
   return admission
 }

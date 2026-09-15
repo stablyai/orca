@@ -11,6 +11,7 @@ export async function seedLineageScenario(
 ): Promise<LineageScenario> {
   return page.evaluate(({ inlineOnly }) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
@@ -30,14 +31,17 @@ export async function seedLineageScenario(
     const worktrees = Object.values(state.worktreesByRepo)
       .flat()
       .filter((worktree) => !worktree.isArchived)
+
     if (worktrees.length < 2) {
       throw new Error('Worktree lineage E2E needs at least two worktrees')
     }
 
     const [parent, child] = worktrees
+
     if (!parent.instanceId || !child.instanceId) {
       throw new Error('Worktree lineage E2E needs instance-stamped worktrees')
     }
+
     const lineage = {
       worktreeId: child.id,
       worktreeInstanceId: child.instanceId,
@@ -47,6 +51,7 @@ export async function seedLineageScenario(
       capture: { source: 'manual-action' as const, confidence: 'explicit' as const },
       createdAt: Date.now()
     }
+
     store.setState((current) => ({
       worktreesByRepo: Object.fromEntries(
         Object.entries(current.worktreesByRepo).map(([repoId, repoWorktrees]) => [
@@ -62,6 +67,7 @@ export async function seedLineageScenario(
                   : {})
               }
             }
+
             if (worktree.id === child.id) {
               return {
                 ...worktree,
@@ -72,6 +78,7 @@ export async function seedLineageScenario(
                   : {})
               }
             }
+
             return worktree
           })
         ])
@@ -80,6 +87,7 @@ export async function seedLineageScenario(
     }))
 
     store.getState().setActiveWorktree(parent.id)
+
     return { parentId: parent.id, childId: child.id }
   }, options)
 }
@@ -92,20 +100,24 @@ export async function seedWorkspaceAgentStatus(
   return page.evaluate(
     ({ worktreeId, label }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
 
       const state = store.getState()
+
       if (!state.worktreeCardProperties.includes('inline-agents')) {
         state.toggleWorktreeCardProperty('inline-agents')
       }
+
       if ((state.tabsByWorktree[worktreeId] ?? []).length === 0) {
         state.createTab(worktreeId)
       }
 
       const next = store.getState()
       const tab = next.tabsByWorktree[worktreeId]?.[0]
+
       if (!tab) {
         throw new Error(`Worktree lineage E2E failed to create a ${label} workspace tab`)
       }
@@ -119,6 +131,7 @@ export async function seedWorkspaceAgentStatus(
         'codex',
         { updatedAt: now, stateStartedAt: now }
       )
+
       return prompt
     },
     { worktreeId, label }
@@ -128,17 +141,20 @@ export async function seedWorkspaceAgentStatus(
 export async function seedWorkspaceLiveTerminal(page: Page, worktreeId: string): Promise<string> {
   return page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
 
     const state = store.getState()
+
     if ((state.tabsByWorktree[worktreeId] ?? []).length === 0) {
       state.createTab(worktreeId)
     }
 
     const next = store.getState()
     const tab = next.tabsByWorktree[worktreeId]?.[0]
+
     if (!tab) {
       throw new Error('Worktree lineage E2E failed to create a live terminal tab')
     }
@@ -154,6 +170,7 @@ export async function seedWorkspaceLiveTerminal(page: Page, worktreeId: string):
         [worktreeId]: []
       }
     }))
+
     return tab.id
   }, worktreeId)
 }
@@ -164,6 +181,7 @@ export async function markWorkspaceTerminalSlept(
 ): Promise<void> {
   await page.evaluate(({ worktreeId, tabId }) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }

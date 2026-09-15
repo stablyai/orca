@@ -29,15 +29,20 @@ export function recoverWatcherRecordsAfterChildGone(
       `[parcel-watcher-process] watcher process exited (code=${code}, signal=${signal})`
     )
   }
+
   if (shutdownRequested || records.size === 0) {
     return
   }
+
   crashFuse.recordCrash()
+
   for (const record of records.values()) {
     record.interrupted = true
     resetPendingSubscribeAttempt(record)
   }
+
   const replacement = ensureWatcherProcess()
+
   if (!replacement) {
     console.error(
       '[parcel-watcher-process] watcher process crashed repeatedly; disabling file watching'
@@ -51,11 +56,14 @@ export function recoverWatcherRecordsAfterChildGone(
       )
     )
     removeCanary()
+
     return
   }
+
   console.error(
     `[parcel-watcher-process] watcher process crashed; resubscribing ${records.size} root(s)`
   )
+
   for (const record of records.values()) {
     sendSubscribe(replacement, record)
   }
@@ -77,10 +85,12 @@ export async function terminateDisconnectedWatcherChild(
   cancelledSubscribes.completeForChild(child, error)
   const shouldRestore = onTerminationFinished(exited)
   resolvePendingWatcherUnsubscribes(pendingUnsubscribes, error)
+
   if (error) {
     failAllWatcherSubscriptions(records, error)
     throw error
   }
+
   if (shouldRestore) {
     recoverWatcherRecordsAfterChildGone(
       records,

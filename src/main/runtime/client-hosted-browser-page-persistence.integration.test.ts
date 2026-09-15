@@ -59,6 +59,7 @@ function createProfile() {
       terminalLayoutsByTabId: {}
     } as WorkspaceSessionState
   }
+
   return {
     get session() {
       return state.session
@@ -76,14 +77,17 @@ function createProfile() {
 function startRuntime(profile: ReturnType<typeof createProfile>): OrcaRuntimeService {
   const runtime = new OrcaRuntimeService(profile.store, undefined, {})
   runtime.rehydrateClientHostedBrowserPages()
+
   return runtime
 }
 
 function placeAndPublish(runtime: OrcaRuntimeService, browserPageId: string): void {
   const placement = getBrowserHostLeaseRegistry(runtime).placeClientPage(browserPageId, 'host-a')
+
   if (placement.kind !== 'client') {
     throw new Error('expected client placement')
   }
+
   getRuntimeBrowserPageRegistry(runtime).publishClientPage({
     browserPageId,
     workspaceId: WT,

@@ -47,6 +47,7 @@ describe('selectGluedPendingIds', () => {
       assistantTurn('m1', 'ready', 1000),
       userTurn('m2', 'run the tests again', 5000)
     ]
+
     const pending = [pendingSend('p1', 'run the tests', 'm1'), pendingSend('p2', 'again', 'm1')]
     expect(retiredIds(messages, pending)).toEqual(['p1', 'p2'])
   })
@@ -56,17 +57,20 @@ describe('selectGluedPendingIds', () => {
       assistantTurn('m1', 'ready', 1000),
       userTurn('m2', 'run the testsagain', 5000)
     ]
+
     const pending = [pendingSend('p1', 'run the tests', 'm1'), pendingSend('p2', 'again', 'm1')]
     expect(retiredIds(messages, pending)).toEqual(['p1', 'p2'])
   })
 
   it('retires three collapsed prompts in one row', () => {
     const messages = [assistantTurn('m1', 'ready', 1000), userTurn('m2', 'one two three', 5000)]
+
     const pending = [
       pendingSend('p1', 'one', 'm1'),
       pendingSend('p2', 'two', 'm1'),
       pendingSend('p3', 'three', 'm1')
     ]
+
     expect(retiredIds(messages, pending)).toEqual(['p1', 'p2', 'p3'])
   })
 
@@ -75,10 +79,12 @@ describe('selectGluedPendingIds', () => {
       assistantTurn('m1', 'ready', 1000),
       userTurn('m2', 'run the tests\t\n  again', 5000)
     ]
+
     const pending = [
       pendingSend('p1', ' run the tests\n', 'm1'),
       pendingSend('p2', '\tagain ', 'm1')
     ]
+
     expect(retiredIds(messages, pending)).toEqual(['p1', 'p2'])
   })
 
@@ -87,10 +93,12 @@ describe('selectGluedPendingIds', () => {
       assistantTurn('m1', 'ready', 1000),
       userTurn('m2', 'fix the bug and run the tests', 5000)
     ]
+
     const pending = [
       pendingSend('p1', 'fix the bug', 'm1'),
       pendingSend('p2', 'and run the tests', 'm1')
     ]
+
     expect(retiredIds(messages, pending)).toEqual(['p1', 'p2'])
   })
 
@@ -122,12 +130,14 @@ describe('selectGluedPendingIds', () => {
       userTurn('m2', 'one two', 5000),
       userTurn('m3', 'three four', 6000)
     ]
+
     const pending = [
       pendingSend('p1', 'one', 'm1'),
       pendingSend('p2', 'two', 'm1'),
       pendingSend('p3', 'three', 'm2'),
       pendingSend('p4', 'four', 'm2')
     ]
+
     expect(retiredIds(messages, pending)).toEqual(['p1', 'p2', 'p3', 'p4'])
   })
 
@@ -138,6 +148,7 @@ describe('selectGluedPendingIds', () => {
       assistantTurn('m2', 'done', 2),
       assistantTurn('m3', 'anything else?', 3)
     ]
+
     const pending = [pendingSend('p1', 'run the tests', 'm3'), pendingSend('p2', 'again', 'm3')]
     expect(retiredIds(messages, pending)).toEqual([])
   })
@@ -154,6 +165,7 @@ describe('selectGluedPendingIds', () => {
       assistantTurn('m1', 'ready', 1000),
       userTurn('m2', 'run the tests again with coverage', 5000)
     ]
+
     const pending = [pendingSend('p1', 'run the tests', 'm1'), pendingSend('p2', 'again', 'm1')]
     expect(retiredIds(messages, pending)).toEqual([])
   })
@@ -181,10 +193,12 @@ describe('selectGluedPendingIds', () => {
   // them onto the first authoritative read — see mobile-native-chat-pending-baseline.
   it('holds out sends whose baseline has not been rebased onto a real transcript', () => {
     const messages = [userTurn('m1', 'one two', 1000)]
+
     const pending = [
       pendingSend('p1', 'one', null, 1, false),
       pendingSend('p2', 'two', null, 1, false)
     ]
+
     expect(retiredIds(messages, pending)).toEqual([])
   })
 
@@ -196,6 +210,7 @@ describe('selectGluedPendingIds', () => {
       userTurn('m1', 'fix the bug', 5000),
       userTurn('m2', 'ship the fix', 6000)
     ]
+
     const stuckHead = pendingSend('p0', 'bug', 'm0')
     const pair = [pendingSend('p1', 'ship the', 'm0'), pendingSend('p2', 'fix', 'm0')]
     expect(retiredIds(messages, [stuckHead, ...pair])).toEqual(['p1', 'p2'])
@@ -212,20 +227,24 @@ describe('selectGluedPendingIds', () => {
 
   it('skips a caption-less image echo instead of gluing it', () => {
     const messages = [assistantTurn('m1', 'ready', 1000), userTurn('m2', 'one two', 5000)]
+
     const pending = [
       pendingSend('p1', '', 'm1'),
       pendingSend('p2', 'one', 'm1'),
       pendingSend('p3', 'two', 'm1')
     ]
+
     expect(retiredIds(messages, pending)).toEqual(['p2', 'p3'])
   })
 
   it('keeps a captioned image echo and its neighbors until the preview is rebound', () => {
     const messages = [assistantTurn('m1', 'ready', 1000), userTurn('m2', 'one two', 5000)]
+
     const pending = [
       { ...pendingSend('p1', 'one', 'm1'), images: ['file:///a.png'] },
       pendingSend('p2', 'two', 'm1')
     ]
+
     expect(retiredIds(messages, pending)).toEqual([])
     expect(
       retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES).map((item) => item.id)
@@ -240,10 +259,12 @@ describe('selectGluedPendingIds', () => {
     // which `matchGluedRun` rejects. Neither echo could ever retire, so the message
     // rendered twice over, with the image copy sorting below the reply it preceded.
     const messages = [assistantTurn('m1', 'ready', 1000), userTurn('m2', 'one two', 5000)]
+
     const pending = [
       { ...pendingSend('p1', 'one', 'm1'), images: ['file:///a.png'] },
       pendingSend('p2', 'two', 'm1')
     ]
+
     const rebound: ReadonlySet<string> = new Set(['p1'])
     expect([...selectGluedPendingIds(messages, pending, new Set(), rebound)].sort()).toEqual([
       'p1',
@@ -257,10 +278,12 @@ describe('selectGluedPendingIds', () => {
   it('still strands nothing when the glued row belongs to an older baseline', () => {
     // The per-send boundary still applies to a rebound image echo.
     const messages = [userTurn('m1', 'one two', 1000), assistantTurn('m2', 'ready', 5000)]
+
     const pending = [
       { ...pendingSend('p1', 'one', 'm2'), images: ['file:///a.png'] },
       pendingSend('p2', 'two', 'm2')
     ]
+
     expect([...selectGluedPendingIds(messages, pending, new Set(), new Set(['p1']))]).toEqual([])
   })
 
@@ -278,21 +301,26 @@ describe('selectGluedPendingIds', () => {
     const pendingCount = 96
     const turnCount = 12
     const text = `${'a '.repeat(pendingCount)}x`
+
     const messages = [
       assistantTurn('tail', 'ready', 1000),
       ...Array.from({ length: turnCount }, (_, index) => userTurn(`m${index}`, text, 2000 + index))
     ]
+
     const pending = Array.from({ length: pendingCount }, (_, index) =>
       pendingSend(`p${index}`, 'a', 'tail', index + 1)
     )
+
     const startsWith = vi.spyOn(String.prototype, 'startsWith')
     let segmentChecks = 0
+
     try {
       expect(retiredIds(messages, pending)).toEqual([])
       segmentChecks = startsWith.mock.calls.length
     } finally {
       startsWith.mockRestore()
     }
+
     expect(segmentChecks).toBeLessThanOrEqual(turnCount * (2 * pendingCount + GLUE_SLIDE_BUDGET))
   })
 })
@@ -304,11 +332,13 @@ describe('retireLandedMobileNativeChatPending', () => {
       userTurn('m2', 'standalone', 4000),
       userTurn('m3', 'run the tests again', 5000)
     ]
+
     const pending = [
       pendingSend('p0', 'standalone', 'm1'),
       pendingSend('p1', 'run the tests', 'm2'),
       pendingSend('p2', 'again', 'm2')
     ]
+
     expect(retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES)).toEqual([])
   })
 
@@ -334,11 +364,13 @@ describe('retireLandedMobileNativeChatPending', () => {
       userTurn('m1', 'middle', 2000),
       userTurn('m2', 'one two', 3000)
     ]
+
     const pending = [
       pendingSend('p1', 'one', 'm0'),
       pendingSend('p2', 'middle', 'm0'),
       pendingSend('p3', 'two', 'm0')
     ]
+
     expect(
       retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES).map((item) => item.id)
     ).toEqual(['p1', 'p3'])
@@ -365,6 +397,7 @@ describe('retireLandedMobileNativeChatPending on a PTY-typed send', () => {
       userTurn('m2', TRANSCRIPT_ROW, 5000),
       assistantTurn('m3', 'on it', 6000)
     ]
+
     const pending = [pendingSend('p1', COMPOSER_TEXT, 'm1')]
 
     expect(retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES)).toEqual([])

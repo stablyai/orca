@@ -9,9 +9,13 @@ import { useNativeChatPaneFileDropClaim } from './NativeChatPaneFileDropSurface'
 const drop = vi.hoisted(() => ({ onDrop: vi.fn() }))
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+
 vi.mock('./NativeChatSessionGate', () => ({ NativeChatSessionGate: () => null }))
+
 vi.mock('./NativeChatResolvedView', () => ({ NativeChatResolvedView: () => null }))
+
 vi.mock('./use-native-chat-status-entry', () => ({ useNativeChatStatusEntry: vi.fn() }))
+
 vi.mock('./NativeChatStructuredSession', () => ({
   NativeChatStructuredSession: () => {
     useNativeChatPaneFileDropClaim({
@@ -20,6 +24,7 @@ vi.mock('./NativeChatStructuredSession', () => ({
       onDragOverCapture: (event) => event.preventDefault(),
       onDropCapture: drop.onDrop
     })
+
     return <div data-testid="transcript">Conversation above the composer</div>
   }
 }))
@@ -38,6 +43,7 @@ it('owns pane drops for standalone structured sessions without a terminal portal
       isFocusedGroup
     />
   )
+
   const transcript = screen.getByTestId('transcript')
   const dataTransfer = { types: [WORKSPACE_FILE_PATH_MIME] }
 

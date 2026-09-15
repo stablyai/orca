@@ -8,6 +8,7 @@ const WIDE_LAYOUT_MIN_WIDTH = 700
 const TABLET_LAYOUT_MIN_SHORT_SIDE = 600
 
 const CONTENT_MAX_WIDTH = 720
+
 const MODAL_MAX_WIDTH = 480
 
 export type ResponsiveLayoutMetrics = {

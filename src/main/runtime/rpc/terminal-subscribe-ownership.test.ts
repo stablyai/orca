@@ -38,6 +38,7 @@ function stubRuntime(
     cleanupSubscriptionIfOwnedByConnection: vi.fn(registry.cleanupSubscriptionIfOwnedByConnection),
     subscribeToPtyExit: vi.fn((_ptyId: string, listener: () => void) => {
       waiters.push({ resolve: listener })
+
       return vi.fn()
     }),
     ...overrides
@@ -119,12 +120,15 @@ describe('terminal.subscribe teardown ownership', () => {
   it('disposes an already-exited PTY observer before binding socket abort', async () => {
     const registry = createSubscriptionRegistryDouble()
     const unsubscribeExit = vi.fn()
+
     const runtime = stubRuntime(registry, [], {
       subscribeToPtyExit: vi.fn((_ptyId: string, listener: () => void) => {
         listener()
+
         return unsubscribeExit
       })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
     const conn = new AbortController()
     const addAbort = vi.spyOn(conn.signal, 'addEventListener')
@@ -139,12 +143,15 @@ describe('terminal.subscribe teardown ownership', () => {
   // Why: the synchronous release runs cleanup before setup, so anything registered after it never gets torn down.
   it('registers nothing after an already-exited PTY releases the subscription', async () => {
     const registry = createSubscriptionRegistryDouble()
+
     const runtime = stubRuntime(registry, [], {
       subscribeToPtyExit: vi.fn((_ptyId: string, listener: () => void) => {
         listener()
+
         return vi.fn()
       })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
     const options = streamOptions('conn-a')
 
@@ -160,13 +167,16 @@ describe('terminal.subscribe teardown ownership', () => {
   it('registers no remote-desktop viewer when an already-exited PTY releases the legacy JSON stream', async () => {
     const registry = createSubscriptionRegistryDouble()
     const updateRemoteDesktopViewer = vi.fn().mockResolvedValue(true)
+
     const runtime = stubRuntime(registry, [], {
       updateRemoteDesktopViewer,
       subscribeToPtyExit: vi.fn((_ptyId: string, listener: () => void) => {
         listener()
+
         return vi.fn()
       })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -189,6 +199,7 @@ describe('terminal.subscribe teardown ownership', () => {
     const registry = createSubscriptionRegistryDouble()
     const waiters: Waiter[] = []
     let failFirstSubscribe = (): void => {}
+
     const handleMobileSubscribe = vi
       .fn()
       .mockImplementationOnce(
@@ -198,6 +209,7 @@ describe('terminal.subscribe teardown ownership', () => {
           })
       )
       .mockResolvedValue(true)
+
     const runtime = stubRuntime(registry, waiters, { handleMobileSubscribe })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
@@ -224,6 +236,7 @@ describe('terminal.subscribe teardown ownership', () => {
     const registry = createSubscriptionRegistryDouble()
     const waiters: Waiter[] = []
     let releaseFirstRead = (): void => {}
+
     const readTerminal = vi
       .fn()
       .mockImplementationOnce(
@@ -233,6 +246,7 @@ describe('terminal.subscribe teardown ownership', () => {
           })
       )
       .mockResolvedValue({ tail: [], truncated: false })
+
     const runtime = stubRuntime(registry, waiters, { readTerminal })
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 

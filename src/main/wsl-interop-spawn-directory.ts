@@ -27,6 +27,7 @@ function isExistingDirectory(path: string | undefined | null): path is string {
   if (!path) {
     return false
   }
+
   try {
     return statSync(path).isDirectory()
   } catch {
@@ -45,7 +46,9 @@ export function resolveWslInteropSpawnCwd(): string | undefined {
   if (isExistingDirectory(cachedSpawnCwd)) {
     return cachedSpawnCwd
   }
+
   const env = process.env
+
   // Why this order: an app-owned directory first (it outlives every worktree),
   // then the user's profile, then the system root as a floor that always exists.
   // A root is fine here — nothing scans this directory, it is only the value
@@ -57,13 +60,17 @@ export function resolveWslInteropSpawnCwd(): string | undefined {
     homedir(),
     env.SystemDrive ? `${env.SystemDrive}\\` : 'C:\\'
   ]
+
   for (const candidate of candidates) {
     if (isExistingDirectory(candidate)) {
       cachedSpawnCwd = candidate
+
       return candidate
     }
   }
+
   cachedSpawnCwd = null
+
   // Why undefined rather than a guess: inheriting is still better than naming a
   // directory we just proved does not exist.
   return undefined

@@ -14,13 +14,17 @@ import {
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const posix = getRemoteHostPlatform('linux-x64')
+
 const windows = getRemoteHostPlatform('win32-x64')
+
 const ROOT = '/home/u/.orca'
+
 const SNAP = '/home/u/.orca-remote/orcad-state-snapshots/pre-0.2.0+bb01-1000'
 
 describe('capturing the pre-activation snapshot', () => {
   it('captures the profile state a rollback needs', () => {
     const command = captureOrcadStateSnapshotCommand(posix, ROOT, SNAP)
+
     for (const member of ORCAD_SNAPSHOT_MEMBERS) {
       expect(command).toContain(`'${member}'`)
     }
@@ -83,6 +87,7 @@ describe('detecting writes since activation', () => {
 
   it('looks at the same members the snapshot covers', () => {
     const command = newestStateMtimeCommand(posix, ROOT)
+
     for (const member of ORCAD_SNAPSHOT_MEMBERS) {
       expect(command).toContain(`'${member}'`)
     }

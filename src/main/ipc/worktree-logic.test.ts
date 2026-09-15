@@ -589,6 +589,7 @@ describe('mergeWorktree', () => {
         hostId: 'ssh:openclaw-2' as const
       }
     }
+
     const result = mergeWorktree('repo1', baseGit, meta)
     expect(result).toEqual({
       id: 'repo1::/workspaces/feature',
@@ -668,6 +669,7 @@ describe('mergeWorktree', () => {
       isBare: true,
       isMainWorktree: false
     }
+
     const result = mergeWorktree('repo1', bareGit, undefined)
     expect(result.displayName).toBe('bare-repo')
   })
@@ -736,6 +738,7 @@ describe('isOrphanedWorktreeError', () => {
     const error = Object.assign(new Error('git failed'), {
       stderr: "fatal: '/some/path' is not a working tree"
     })
+
     expect(isOrphanedWorktreeError(error)).toBe(true)
   })
 
@@ -748,6 +751,7 @@ describe('isOrphanedWorktreeError', () => {
     const error = Object.assign(new Error('git failed'), {
       stderr: 'fatal: contains modified or untracked files'
     })
+
     expect(isOrphanedWorktreeError(error)).toBe(false)
   })
 

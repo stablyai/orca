@@ -44,7 +44,9 @@ const secondRepo: Repo = {
 }
 
 const reposList = vi.fn()
+
 const projectsList = vi.fn()
+
 const listHostSetups = vi.fn()
 
 // Why: catalogs arrive over IPC, so every fetch must hand back freshly allocated objects —
@@ -59,6 +61,7 @@ function mockRepos(...rows: readonly (Repo | Omit<Repo, 'addedAt'>)[]): void {
 
 function omitAddedAt(row: Repo): Omit<Repo, 'addedAt'> {
   const { addedAt: _addedAt, ...rest } = row
+
   return rest
 }
 
@@ -151,10 +154,12 @@ describe('repo catalog refresh identity', () => {
     const store = createTestStore()
     await store.getState().fetchRepos()
     const projectId = store.getState().projects[0]!.id
+
     const withPreference: Project = {
       ...store.getState().projects[0]!,
       localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
     }
+
     store.setState({ projects: [withPreference] })
 
     await store.getState().fetchRepos()
@@ -238,6 +243,7 @@ describe('repo catalog refresh identity', () => {
     mockRepos(repo, sshRepo)
     const store = createTestStore()
     await store.getState().fetchRepos()
+
     const sshOwned: Project = {
       id: 'ssh-owned',
       displayName: 'SSH Owned',
@@ -246,6 +252,7 @@ describe('repo catalog refresh identity', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     store.setState({
       projects: [...store.getState().projects, sshOwned],
       projectHostSetups: []
@@ -263,6 +270,7 @@ describe('repo catalog refresh identity', () => {
     mockRepos(repo, sshRepo)
     const store = createTestStore()
     await store.getState().fetchRepos()
+
     const dualHostOwned: Project = {
       id: 'dual-host-owned',
       displayName: 'Dual Host Owned',
@@ -271,6 +279,7 @@ describe('repo catalog refresh identity', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     store.setState({
       projects: [...store.getState().projects, dualHostOwned],
       projectHostSetups: []
@@ -396,6 +405,7 @@ describe('repo filter identity across catalog refreshes', () => {
     expect(store.getState().filterRepoIds).toBe(first)
   })
 })
+
 describe('setup-script dismissal identity across catalog refreshes', () => {
   it('keeps the dismissal array when a refetch prunes nothing', async () => {
     const store = createTestStore()
@@ -458,11 +468,13 @@ describe('SSH readoption catalog identity', () => {
       connectionId: 'ssh-old',
       executionHostId: 'ssh:ssh-old'
     }
+
     const newHostRepo: Repo = {
       ...repo,
       connectionId: 'ssh-new',
       executionHostId: 'ssh:ssh-new'
     }
+
     mockRepos(oldHostRepo, newHostRepo)
     const store = createTestStore()
     await store.getState().fetchRepos()

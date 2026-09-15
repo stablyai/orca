@@ -10,6 +10,7 @@ import type { SettingsRenderContext } from './settings-render-context'
 
 export function renderAgentsSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { model, navigation, terminal, view } = context
+
   return (
     <SettingsSection
       id="agents"
@@ -36,6 +37,7 @@ export function renderAgentsSettingsSection(context: SettingsRenderContext): Rea
 
 export function renderAccountsSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { model, navigation, terminal, view } = context
+
   return (
     <SettingsSection
       id="accounts"
@@ -66,6 +68,7 @@ export function renderOrchestrationSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element {
   const { model, navigation, view } = context
+
   return (
     <SettingsSection
       id="orchestration"
@@ -87,6 +90,7 @@ export function renderLinearSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
+
   return model.linearConnected ? (
     <SettingsSection
       id="linear"
@@ -106,6 +110,7 @@ export function renderDesktopCapabilitySettingsSections(
   context: SettingsRenderContext
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
+
   return model.showDesktopOnlySettings ? (
     <>
       <SettingsSection

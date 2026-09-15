@@ -18,10 +18,13 @@ import {
 // The base URL is overridable via the same env var the CLI honours so Orca
 // stays aligned with a user's self-hosted/staging config.
 const KIMI_BASE_URL = process.env.KIMI_CODE_BASE_URL ?? 'https://api.kimi.com/coding/v1'
+
 const API_TIMEOUT_MS = 10_000
+
 const CREDENTIALS_READ_TIMEOUT_MS = 5_000
 
 const SESSION_WINDOW_MINUTES = 300 // 5h
+
 const WEEKLY_WINDOW_MINUTES = 10080 // 7d
 
 function getCredentialsPath(kimiHome: string): string {
@@ -45,13 +48,17 @@ function parseCredentials(value: unknown): KimiCredentials | null {
   if (typeof value !== 'object' || value === null) {
     return null
   }
+
   const credentials: KimiCredentials = {}
+
   if ('access_token' in value && typeof value.access_token === 'string') {
     credentials.access_token = value.access_token
   }
+
   if ('expires_at' in value && typeof value.expires_at === 'number') {
     credentials.expires_at = value.expires_at
   }
+
   return credentials
 }
 
@@ -62,24 +69,29 @@ const credentialsReadByPath = new Map<
 
 function isMissingPathError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | null)?.code
+
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
 function readErrorMessage(err: unknown): string {
   // Why: AbortSignal timeouts reject with a DOMException, not an Error.
   const message = (err as { message?: unknown } | null)?.message
+
   return typeof message === 'string' ? message : 'Unable to read Kimi credentials'
 }
 
 function getCredentialsRead(path: string): SharedAuthFilesystemOperation<CredentialsReadResult> {
   const existing = credentialsReadByPath.get(path)
+
   if (existing) {
     return existing
   }
+
   // Why: aborting an fs promise does not cancel an already issued UNC request, so
   // share one raw read per path until it settles (mirrors codex-fetcher's auth read).
   const read = createAuthFilesystemOperation(path, async (): Promise<CredentialsReadResult> => {
     let raw: string
+
     try {
       raw = await readFile(path, 'utf-8')
     } catch (err) {
@@ -87,8 +99,10 @@ function getCredentialsRead(path: string): SharedAuthFilesystemOperation<Credent
         ? { status: 'missing' }
         : { status: 'error', error: readErrorMessage(err) }
     }
+
     try {
       const credentials = parseCredentials(JSON.parse(raw))
+
       return credentials
         ? { status: 'ok', credentials }
         : { status: 'error', error: 'Kimi credentials file is invalid' }
@@ -96,18 +110,23 @@ function getCredentialsRead(path: string): SharedAuthFilesystemOperation<Credent
       return { status: 'error', error: readErrorMessage(err) }
     }
   })
+
   credentialsReadByPath.set(path, read)
+
   const clearRead = (): void => {
     if (credentialsReadByPath.get(path) === read) {
       credentialsReadByPath.delete(path)
     }
   }
+
   void read.result.then(clearRead, clearRead)
+
   return read
 }
 
 async function readCredentials(kimiHome: string): Promise<CredentialsReadResult> {
   const path = getCredentialsPath(kimiHome)
+
   try {
     // Why: a stopped distro parks a UNC read for minutes; bound it so a WSL home
     // degrades to an error instead of stalling the poll cycle.
@@ -159,31 +178,41 @@ function toInt(value: string | number | undefined): number | null {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : null
   }
+
   if (typeof value === 'string') {
     const parsed = Number(value)
+
     return Number.isFinite(parsed) ? parsed : null
   }
+
   return null
 }
 
 function windowToMinutes(window: KimiUsageWindow | undefined): number | null {
   const duration = toInt(window?.duration)
+
   if (duration === null) {
     return null
   }
+
   const unit = (window?.timeUnit ?? '').toUpperCase()
+
   if (unit.includes('MINUTE')) {
     return duration
   }
+
   if (unit.includes('HOUR')) {
     return duration * 60
   }
+
   if (unit.includes('DAY')) {
     return duration * 60 * 24
   }
+
   if (unit.includes('SECOND')) {
     return Math.round(duration / 60)
   }
+
   return duration
 }
 
@@ -191,11 +220,15 @@ function parseResetDescription(isoString: string | undefined): string | null {
   if (!isoString) {
     return null
   }
+
   const date = new Date(isoString)
+
   if (Number.isNaN(date.getTime())) {
     return null
   }
+
   const isToday = date.toDateString() === new Date().toDateString()
+
   return isToday
     ? date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
     : date.toLocaleDateString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
@@ -208,18 +241,24 @@ function mapWindow(
   if (!detail) {
     return null
   }
+
   const limit = toInt(detail.limit)
   let used = toInt(detail.used)
+
   if (used === null) {
     const remaining = toInt(detail.remaining)
+
     if (remaining !== null && limit !== null) {
       used = limit - remaining
     }
   }
+
   if (limit === null || limit <= 0 || used === null) {
     return null
   }
+
   const reset = detail.resetTime ?? detail.resetAt
+
   return {
     usedPercent: Math.min(100, Math.max(0, (used / limit) * 100)),
     windowMinutes,
@@ -233,12 +272,15 @@ function mapUsageResponse(data: KimiUsageResponse): ProviderRateLimits {
   // in `limits` carry shorter rolling windows — the 5h one is the session view.
   const weekly = mapWindow(data.usage, WEEKLY_WINDOW_MINUTES)
   let session: RateLimitWindow | null = null
+
   for (const limit of data.limits ?? []) {
     const minutes = windowToMinutes(limit.window) ?? SESSION_WINDOW_MINUTES
     const mapped = mapWindow(limit.detail, minutes)
+
     if (!mapped) {
       continue
     }
+
     // Prefer the window closest to a 5h session; otherwise keep the first seen.
     if (
       session === null ||
@@ -248,6 +290,7 @@ function mapUsageResponse(data: KimiUsageResponse): ProviderRateLimits {
       session = mapped
     }
   }
+
   return {
     provider: 'kimi',
     session,
@@ -268,6 +311,7 @@ function expiredSessionMessage(home: KimiHomeResolution): string {
     home.runtime === 'wsl'
       ? `inside WSL (${home.wslDistro ?? 'default distro'})`
       : 'on the computer running Orca'
+
   return `Kimi session expired — run kimi ${where}, then retry usage.`
 }
 
@@ -310,20 +354,27 @@ export async function fetchKimiRateLimits(options?: {
     wslDistro: null,
     path: getHostKimiHome()
   }
+
   if (home.path === null) {
     return result('error', `WSL Kimi home unavailable for ${home.wslDistro ?? 'default distro'}`)
   }
+
   const readResult = await readCredentials(home.path)
+
   if (readResult.status === 'missing') {
     return result('unavailable', 'Not signed in to Kimi Code')
   }
+
   if (readResult.status === 'error') {
     return result('error', readErrorContext(home, readResult.error))
   }
+
   const creds = readResult.credentials
+
   if (typeof creds.access_token !== 'string' || creds.access_token.length === 0) {
     return result('error', 'Kimi credentials file is missing an access token')
   }
+
   if (!isAccessTokenFresh(creds)) {
     // Why: don't refresh — the CLI owns the token lifecycle. Report a transient
     // error so the rate-limit service keeps the last good snapshot (stale
@@ -341,13 +392,17 @@ export async function fetchKimiRateLimits(options?: {
       headers: { Authorization: `Bearer ${creds.access_token}`, Accept: 'application/json' },
       signal: AbortSignal.timeout(API_TIMEOUT_MS)
     })
+
     if (res.status === 401 || res.status === 403) {
       return result('error', `Kimi usage request unauthorized (HTTP ${res.status})`)
     }
+
     if (!res.ok) {
       return result('error', `Kimi usage request failed (HTTP ${res.status})`)
     }
+
     const data: unknown = await res.json()
+
     return mapUsageResponse(typeof data === 'object' && data !== null ? data : {})
   } catch (err) {
     return result('error', err instanceof Error ? err.message : 'Kimi usage request failed')

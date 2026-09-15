@@ -20,15 +20,20 @@ test.describe('Settings search responsiveness', () => {
     await orcaPage.evaluate(
       ({ projectPaths, projectCount }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('window.__store is not available')
         }
+
         const state = store.getState()
         const seedRepo = state.repos[0]
+
         if (!seedRepo) {
           throw new Error('Expected seeded repo for settings search regression')
         }
+
         const now = Date.now()
+
         const repos: Repo[] = Array.from({ length: projectCount }, (_, index) => ({
           ...seedRepo,
           id: `settings-search-repo-${index}`,
@@ -38,6 +43,7 @@ test.describe('Settings search responsiveness', () => {
           upstream: null,
           hookSettings: undefined
         }))
+
         store.setState({ repos })
         state.openSettingsPage()
       },
@@ -67,6 +73,7 @@ test.describe('Settings search responsiveness', () => {
       .locator('section.scroll-mt-8[data-settings-section]')
       .first()
       .getAttribute('data-settings-section')
+
     expect(renderedSectionId).toBe('repo-settings-search-repo-0')
   })
 })

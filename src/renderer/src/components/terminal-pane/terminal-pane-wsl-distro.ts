@@ -20,15 +20,19 @@ export function resolvePaneWslDistro(
   const capabilities = hasCachedWindowsTerminalCapabilities()
     ? getCachedWindowsTerminalCapabilities()
     : null
+
   const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId, undefined, {
     wslAvailable: capabilities?.wslAvailable,
     availableWslDistros: capabilities?.wslDistros ?? null
   })
+
   if (projectRuntime?.status === 'resolved') {
     return projectRuntime.runtime.kind === 'wsl' ? projectRuntime.runtime.distro : null
   }
+
   if (projectRuntime?.status === 'repair-required') {
     return projectRuntime.repair.preferredRuntime.distro
   }
+
   return parseWslUncPath(worktreePath)?.distro ?? null
 }

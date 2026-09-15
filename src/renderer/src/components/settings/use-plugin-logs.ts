@@ -22,8 +22,10 @@ export function usePluginLogs(
       setOpenLogs(new Set())
       setLogsByPlugin({})
       requestsRef.current = {}
+
       return
     }
+
     const installedKeys = new Set(plugins.map((plugin) => plugin.pluginKey))
     setOpenLogs(
       (current) => new Set([...current].filter((pluginKey) => installedKeys.has(pluginKey)))
@@ -33,6 +35,7 @@ export function usePluginLogs(
         Object.entries(current).filter(([pluginKey]) => installedKeys.has(pluginKey))
       )
     )
+
     for (const pluginKey of Object.keys(requestsRef.current)) {
       if (!installedKeys.has(pluginKey)) {
         delete requestsRef.current[pluginKey]
@@ -45,14 +48,19 @@ export function usePluginLogs(
       setOpenLogs((current) => {
         const next = new Set(current)
         next.delete(pluginKey)
+
         return next
       })
+
       return
     }
+
     setOpenLogs((current) => new Set(current).add(pluginKey))
+
     if (logsByPlugin[pluginKey]?.lines) {
       return
     }
+
     const requestId = ++nextRequestRef.current
     requestsRef.current[pluginKey] = requestId
     setLogsByPlugin((current) => ({ ...current, [pluginKey]: { loading: true } }))
@@ -68,6 +76,7 @@ export function usePluginLogs(
       })
       .catch((cause: unknown) => {
         console.warn('[plugins] log request failed:', cause)
+
         if (mountedRef.current && requestsRef.current[pluginKey] === requestId) {
           setLogsByPlugin((current) => ({
             ...current,

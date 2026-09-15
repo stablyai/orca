@@ -37,6 +37,8 @@ export function readIndexGeneration(db: SyncDatabase): number {
   const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(GENERATION_KEY) as
     | { value: string }
     | undefined
+
   const parsed = row ? Number(row.value) : Number.NaN
+
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0
 }

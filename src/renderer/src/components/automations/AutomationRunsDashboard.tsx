@@ -70,8 +70,10 @@ export function AutomationRunsDashboard({
   const deferredQuery = useDeferredValue(query)
   const [status, setStatus] = useState<AutomationRunsStatusFilter>('all')
   const [hostKeys, setHostKeys] = useState<string[]>([])
+
   const hostOptions = useMemo(() => {
     const options = new Map<string, string>()
+
     for (const row of rows) {
       const scope = getAutomationRunsScope(row)
       options.set(
@@ -83,20 +85,26 @@ export function AutomationRunsDashboard({
           )
       )
     }
+
     return [...options].map(([key, label]) => ({ key, label }))
   }, [rows])
+
   const hostEntries = useMemo(
     () => filterAutomationRunsDashboardEntries({ entries, status: 'all', query: '', hostKeys }),
     [entries, hostKeys]
   )
+
   const visibleEntries = useMemo(
     () => filterAutomationRunsDashboardEntries({ entries, status, query: deferredQuery, hostKeys }),
     [deferredQuery, entries, hostKeys, status]
   )
+
   const counts = useMemo(() => countAutomationRunOutcomes(hostEntries, now), [hostEntries, now])
+
   const visibleFailures = failures.filter(
     (failure) => hostKeys.length === 0 || hostKeys.includes(getAutomationRunsHostKey(failure.row))
   )
+
   const activeFilterCount = (status === 'all' ? 0 : 1) + (hostKeys.length > 0 ? 1 : 0)
 
   const toggleHost = (hostKey: string): void => {

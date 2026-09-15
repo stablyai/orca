@@ -4,6 +4,7 @@ import { buildPushChallengeFixture, createPushHostKeypair } from './push-host-ch
 import { PushGatewayClient } from './push-gateway-client'
 
 const GATEWAY_URL = 'https://push.onorca.dev'
+
 const NOW = 1_770_000_000_000
 
 type Recorded = {
@@ -53,6 +54,7 @@ function createFakeGateway(
       body,
       redirect: init?.redirect
     })
+
     if (url.endsWith('/v1/host/challenge')) {
       const built = buildPushChallengeFixture({
         hostKeypair,
@@ -61,43 +63,59 @@ function createFakeGateway(
         issuedAt: now.value,
         challengeId: `challenge-${++issued}`
       })
+
       pendingProof = built.proof
+
       return jsonResponse(200, built.challenge)
     }
+
     if (url.endsWith('/v1/host/session')) {
       const params = body as { proofB64: string }
+
       if (params.proofB64 !== pendingProof) {
         return jsonResponse(401, { error: 'bad_proof' })
       }
+
       const sessionToken = `session-${issued}`
       liveTokens.add(sessionToken)
+
       return jsonResponse(200, {
         sessionToken,
         expiresAt: now.value + (options.sessionTtlMs ?? 24 * 60 * 60_000),
         hostFingerprint
       })
     }
+
     const bearer = headers.get('authorization')?.replace('Bearer ', '') ?? ''
+
     if (options.rejectBearer || !liveTokens.has(bearer)) {
       return jsonResponse(401, { error: 'session_expired' })
     }
+
     if (url.endsWith('/v1/devices')) {
       if (options.devicesStatus) {
         return jsonResponse(options.devicesStatus, { error: 'nope' })
       }
+
       knownRegistrations.add('reg-1')
+
       return jsonResponse(200, { registrationId: 'reg-1' })
     }
+
     if (url.endsWith('/v1/send')) {
       return jsonResponse(200, { results: [{ registrationId: 'reg-1', status: 'queued' }] })
     }
+
     // Why explicit: a catch-all 204 would report every delete as accepted and
     // leave the 404 branch of deleteDevice untested.
     const deleted = /\/v1\/devices\/([^/]+)$/.exec(url)
+
     if (deleted && init?.method === 'DELETE') {
       const registrationId = decodeURIComponent(deleted[1] ?? '')
+
       return new Response(null, { status: knownRegistrations.has(registrationId) ? 204 : 404 })
     }
+
     throw new Error(`unexpected request: ${init?.method ?? 'GET'} ${url}`)
   }) as unknown as typeof globalThis.fetch
 
@@ -181,6 +199,7 @@ describe('PushGatewayClient', () => {
 
   it('reports an unreachable gateway instead of throwing', async () => {
     const keypair = createPushHostKeypair()
+
     const client = new PushGatewayClient({
       gatewayUrl: GATEWAY_URL,
       keypair,
@@ -189,6 +208,7 @@ describe('PushGatewayClient', () => {
       }) as unknown as typeof globalThis.fetch,
       now: () => NOW
     })
+
     expect(await client.registerDevice(REGISTER_INPUT)).toEqual({
       ok: false,
       reason: 'unreachable'

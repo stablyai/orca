@@ -13,6 +13,7 @@ export function resolveComposerBranchSelection(args: {
   lastAutoName: string
 }): ComposerBranchSelection {
   const shouldAutoName = !args.currentName.trim() || args.currentName === args.lastAutoName
+
   if (!shouldAutoName) {
     return {
       baseBranch: args.refName,
@@ -22,6 +23,7 @@ export function resolveComposerBranchSelection(args: {
       lastAutoName: undefined
     }
   }
+
   return {
     baseBranch: args.refName,
     branchNameOverride: args.localBranchName,

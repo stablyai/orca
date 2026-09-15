@@ -73,26 +73,33 @@ function codeText(contents) {
 function collectScripts(directory, repoRoot, found = []) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const full = path.join(directory, entry.name)
+
     if (entry.isDirectory()) {
       if (entry.name !== 'node_modules') {
         collectScripts(full, repoRoot, found)
       }
+
       continue
     }
+
     if (/\.[cm]?js$/.test(entry.name)) {
       found.push(path.relative(repoRoot, full).split(path.sep).join('/'))
     }
   }
+
   return found
 }
 
 describe('windows batch shim spawn boundary', () => {
   const repoRoot = path.resolve(import.meta.dirname, '..', '..')
+
   const scripts = SCANNED_ROOTS.flatMap((root) =>
     collectScripts(path.join(repoRoot, root), repoRoot)
   )
+
   const offenders = scripts.filter((relativePath) => {
     const contents = readFileSync(path.join(repoRoot, relativePath), 'utf8')
+
     return WINDOWS_SHIM_LITERAL.test(codeText(contents)) || hasNodeModulesBinSpawn(contents)
   })
 

@@ -30,21 +30,27 @@ export function useMobilePrAiTriage(input: Input) {
       if (inFlightRef.current || busyKey !== null) {
         return false
       }
+
       if (!client || connState !== 'connected') {
         setError('Waiting for desktop…')
         triggerError()
+
         return false
       }
+
       inFlightRef.current = true
       setBusyKey(key)
       setError(null)
+
       try {
         await createTerminalAndSendPrompt(client, worktreeId, buildPrompt())
         triggerSuccess()
+
         return true
       } catch (err) {
         triggerError()
         setError(err instanceof Error ? err.message : 'Failed to launch agent')
+
         return false
       } finally {
         inFlightRef.current = false

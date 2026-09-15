@@ -35,6 +35,7 @@ export function getDominantStatus(statuses: Iterable<GitFileStatus>): GitFileSta
 
   for (const status of statuses) {
     const priority = STATUS_PRIORITY[status]
+
     if (priority > dominantPriority) {
       dominantStatus = status
       dominantPriority = priority
@@ -50,9 +51,11 @@ export function buildStatusMap(entries: GitStatusEntry[]): Map<string, GitFileSt
   for (const entry of entries) {
     const path = normalizeRelativePath(entry.path)
     const existing = statusByPath.get(path)
+
     const resolved = existing
       ? (getDominantStatus([existing, entry.status]) ?? entry.status)
       : entry.status
+
     statusByPath.set(path, resolved)
   }
 
@@ -68,14 +71,17 @@ export function buildFolderStatusMap(entries: GitStatusEntry[]): Map<string, Git
     }
 
     const segments = splitPathSegments(entry.path)
+
     if (segments.length <= 1) {
       continue
     }
 
     let currentPath = ''
+
     for (const segment of segments.slice(0, -1)) {
       currentPath = currentPath ? joinPath(currentPath, segment) : segment
       const statuses = folderStatuses.get(currentPath)
+
       if (statuses) {
         statuses.push(entry.status)
       } else {
@@ -100,16 +106,22 @@ export function isPathIgnored(ignored: Set<string>, relativePath: string): boole
   if (ignored.size === 0) {
     return false
   }
+
   if (ignored.has(relativePath)) {
     return true
   }
+
   let candidate = relativePath
+
   for (;;) {
     const idx = candidate.lastIndexOf('/')
+
     if (idx <= 0) {
       return false
     }
+
     candidate = candidate.slice(0, idx)
+
     if (ignored.has(candidate)) {
       return true
     }
@@ -126,12 +138,15 @@ export function shouldShowIgnoredDecoration(
 
 export function buildIgnoredSet(ignoredPaths: readonly string[] | undefined): Set<string> {
   const set = new Set<string>()
+
   if (!ignoredPaths) {
     return set
   }
+
   for (const rawPath of ignoredPaths) {
     const trimmed = rawPath.endsWith('/') ? rawPath.slice(0, -1) : rawPath
     set.add(normalizeRelativePath(trimmed))
   }
+
   return set
 }

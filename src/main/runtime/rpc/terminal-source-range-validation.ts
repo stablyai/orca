@@ -32,9 +32,11 @@ export function validateTerminalSourceRangeFrame(
   if (!Number.isSafeInteger(displayLength) || displayLength < 0) {
     return false
   }
+
   if (ranges.length === 0) {
     return true
   }
+
   try {
     for (const range of ranges) {
       assertTerminalOutputSourceRange(range)
@@ -42,8 +44,10 @@ export function validateTerminalSourceRangeFrame(
   } catch {
     return false
   }
+
   const first = ranges[0]!
   let previous = first
+
   for (const range of ranges.slice(1)) {
     if (
       !sameTerminalOutputSourceIdentity(first, range) ||
@@ -52,8 +56,10 @@ export function validateTerminalSourceRangeFrame(
     ) {
       return false
     }
+
     previous = range
   }
+
   return previous.displayEnd - first.displayStart === displayLength
 }
 
@@ -72,8 +78,10 @@ export function replaceTerminalSourceRangeFrames(
       ? Object.freeze({ ...frame, sourceRanges: Object.freeze([]) })
       : frame
   )
+
   const remainingRanges = replaced.flatMap((frame) => frame.sourceRanges)
   const last = remainingRanges.at(-1)
+
   return Object.freeze({
     frames: replaced,
     mappingMode: remainingRanges.length > 0 ? 'mapped' : null,

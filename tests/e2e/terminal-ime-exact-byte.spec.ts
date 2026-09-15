@@ -46,6 +46,7 @@ async function runExactByteScenario(
   const reader = createTerminalImeByteReader(testRepoPath, 1)
   let completed = false
   let receivedBytes: string[] = []
+
   try {
     await startTerminalImeByteReader(page, ptyId, reader)
     await focusActiveTerminalInput(page)
@@ -66,9 +67,11 @@ async function runExactByteScenario(
       receivedBytes
     }).catch(() => undefined)
     await disposeTerminalImeBoundaryProbe(page).catch(() => undefined)
+
     if (!completed) {
       await sendToTerminal(page, ptyId, '\x03').catch(() => undefined)
     }
+
     removeTerminalImeByteReader(reader)
   }
 }
@@ -79,6 +82,7 @@ async function dispatchRepeatedConversion(
   committedText: string
 ): Promise<void> {
   const session: CDPSession = await page.context().newCDPSession(page)
+
   try {
     for (let repetition = 0; repetition < 2; repetition += 1) {
       for (const frame of frames) {
@@ -88,8 +92,10 @@ async function dispatchRepeatedConversion(
           selectionEnd: frame.length
         })
       }
+
       await session.send('Input.insertText', { text: committedText })
     }
+
     await page.keyboard.press('Enter')
   } finally {
     await session.detach()
@@ -113,6 +119,7 @@ test.describe('Terminal IME exact-byte forwarding', () => {
         const commits = trace.dom
           .filter((event) => event.type === 'input' && event.inputType === 'insertText')
           .map((event) => event.data)
+
         expect(commits).toEqual(expect.arrayContaining(['한', '글']))
       }
     )
@@ -154,6 +161,7 @@ test.describe('Terminal IME exact-byte forwarding', () => {
           const commits = trace.dom.filter(
             (event) => event.type === 'compositionend' && event.data === scenario.committedText
           )
+
           expect(commits).toHaveLength(2)
         }
       )

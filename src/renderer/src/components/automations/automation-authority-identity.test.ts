@@ -17,6 +17,7 @@ function repo(overrides: Partial<Repo> & { id: string }): Repo {
 }
 
 const DESKTOP = { kind: 'desktop' } as const
+
 const RUNTIME = { kind: 'runtime', environmentId: 'env-1' } as const
 
 describe('automationAuthorityPartitionContext', () => {
@@ -26,6 +27,7 @@ describe('automationAuthorityPartitionContext', () => {
       repo({ id: 'p2', connectionId: 'devbox' }),
       repo({ id: 'p3', executionHostId: 'runtime:env-1' })
     ])
+
     const context = automationAuthorityPartitionContext(tables, DESKTOP)
     expect(context.repoConnectionId('p1')).toBeNull()
     expect(context.repoConnectionId('p2')).toBe('devbox')
@@ -40,6 +42,7 @@ describe('automationAuthorityPartitionContext', () => {
       // Same ID under the desktop, hosted over SSH: legal, and not this authority's answer.
       repo({ id: 'shared', connectionId: 'devbox' })
     ])
+
     const context = automationAuthorityPartitionContext(tables, RUNTIME)
     expect(context.repoConnectionId('shared')).toBeNull()
     expect(context.repoConnectionId('other')).toBeUndefined()
@@ -48,10 +51,12 @@ describe('automationAuthorityPartitionContext', () => {
 
   it('reports an unmirrored authority as empty rather than borrowing another table', () => {
     const tables = groupReposByAutomationAuthority([repo({ id: 'p1' })])
+
     const context = automationAuthorityPartitionContext(tables, {
       kind: 'runtime',
       environmentId: 'never-connected'
     })
+
     expect(context.repoConnectionId('p1')).toBeUndefined()
     expect(context.projectsAuthoritative).toBe(false)
   })
@@ -63,6 +68,7 @@ describe('automationRuntimePairingRevision', () => {
       { id: 'env-1', createdAt: 10, pairingRevision: 4 },
       { id: 'env-2', createdAt: 7 }
     ]
+
     expect(automationRuntimePairingRevision(environments, 'env-1')).toBe(4)
     expect(automationRuntimePairingRevision(environments, 'env-2')).toBe(7)
     expect(automationRuntimePairingRevision(environments, 'env-3')).toBe(-1)

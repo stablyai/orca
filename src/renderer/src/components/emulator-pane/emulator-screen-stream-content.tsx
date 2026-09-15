@@ -47,6 +47,7 @@ export function EmulatorScreenStreamContent({
     showStream && Boolean(androidDeviceId),
     onStreamSize
   )
+
   const frameStream = useEmulatorFrameStream(
     androidDeviceId ? undefined : previewUrl,
     streamKey,
@@ -60,6 +61,7 @@ export function EmulatorScreenStreamContent({
   }, [frameStream.error, video.error, onStreamError])
 
   const mediaStyle = resolveStreamMediaStyle(streamRotation, screenAspectRatio)
+
   const mediaClassName =
     streamRotation === 0
       ? 'block h-full w-full bg-black object-contain'
@@ -94,9 +96,11 @@ export function EmulatorScreenStreamContent({
         onError={onStreamError}
         onLoad={(event) => {
           const { naturalWidth, naturalHeight } = event.currentTarget
+
           if (naturalWidth <= 0 || naturalHeight <= 0) {
             return
           }
+
           onStreamSize({ width: naturalWidth, height: naturalHeight })
         }}
       />
@@ -144,6 +148,7 @@ function resolveStreamMediaStyle(
   if (streamRotation === 0 || screenAspectRatio <= 0) {
     return undefined
   }
+
   return {
     height: `${100 * screenAspectRatio}%`,
     transform: `translate(-50%, -50%) rotate(${streamRotation}deg)`,

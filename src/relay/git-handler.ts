@@ -36,6 +36,7 @@ function execFileWithStdin(
 ): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
     let settled = false
+
     const finish = (
       error: Error | null,
       stdout: string | Buffer = '',
@@ -44,20 +45,28 @@ function execFileWithStdin(
       if (settled) {
         return
       }
+
       settled = true
+
       if (error) {
         reject(Object.assign(error, { stdout, stderr }))
+
         return
       }
+
       resolve({ stdout: String(stdout), stderr: String(stderr) })
     }
+
     const child = execFile(command, args, options, (error, stdout, stderr) => {
       if (error) {
         finish(error, stdout, stderr)
+
         return
       }
+
       finish(null, stdout, stderr)
     })
+
     child.once('error', (error) => finish(error))
     endSubprocessStdin(child.stdin, stdin)
   })
@@ -82,6 +91,7 @@ export class GitHandler {
     private readonly responseStreams: GitResponseStreamRegistry = new GitResponseStreamRegistry()
   ) {
     this.dispatcher = dispatcher
+
     const handlers = createGitHandlerOperationSet({
       gitDiffReadDedupe: this.gitDiffReadDedupe,
       gitCapabilities: this.gitCapabilities,
@@ -97,6 +107,7 @@ export class GitHandler {
       maybeStreamResponse: (result, params, context) =>
         this.maybeStreamResponse(result, params, context)
     })
+
     registerGitHandlers(
       this.dispatcher,
       handlers,
@@ -115,6 +126,7 @@ export class GitHandler {
   private responseAck(params: Record<string, unknown>, context: RequestContext): void {
     const streamId = params.streamId
     const seq = params.seq
+
     if (typeof streamId === 'number' && typeof seq === 'number') {
       this.responseStreams.recordAck(streamId, seq, context.clientId)
     }
@@ -122,6 +134,7 @@ export class GitHandler {
 
   private cancelResponseStream(params: Record<string, unknown>, context: RequestContext): void {
     const streamId = params.streamId
+
     if (typeof streamId === 'number') {
       this.responseStreams.abort(streamId, context.clientId)
     }
@@ -146,6 +159,7 @@ export class GitHandler {
   private async runWithGitReadCacheClear<T>(run: () => Promise<T>): Promise<T> {
     // Why: git mutations can stale in-flight diff/.gitmodules reads; clear before and after so later reads cannot join them.
     this.clearGitMutationReadCaches()
+
     try {
       return await run()
     } finally {
@@ -159,11 +173,14 @@ export class GitHandler {
     opts?: GitHandlerCommandOptions
   ): Promise<GitHandlerCommandResult> {
     const expandedCwd = expandTilde(cwd)
+
     const run = async (): Promise<{ stdout: string; stderr: string }> => {
       const env = opts?.nonInteractive ? buildRelayUnattendedGitEnv() : buildRelayGitEnv()
+
       if (opts?.disableOptionalLocks) {
         env.GIT_OPTIONAL_LOCKS = '0'
       }
+
       const execOptions = {
         cwd: expandedCwd,
         env,
@@ -172,16 +189,22 @@ export class GitHandler {
         timeout: opts?.timeout,
         signal: opts?.signal
       } satisfies ExecFileOptions
+
       if (opts?.terminationBarrier) {
         return runGitToTermination(args, execOptions, opts.stdin)
       }
+
       if (opts?.stdin !== undefined) {
         return execFileWithStdin('git', args, execOptions, opts.stdin)
       }
+
       const { stdout, stderr } = await execFileAsync('git', args, execOptions)
+
       return { stdout: String(stdout), stderr: String(stderr) }
     }
+
     const command = resolveGitFetchHeadCommand(args, expandedCwd)
+
     return command.needsLock
       ? runWithGitFetchHeadLock(command.cwd, opts?.signal, run, command.gitDir)
       : run()
@@ -194,6 +217,7 @@ export class GitHandler {
       encoding: 'buffer',
       maxBuffer: MAX_GIT_BUFFER
     })) as { stdout: Buffer }
+
     return stdout
   }
 
@@ -209,15 +233,19 @@ export class GitHandler {
         env: buildRelayUnattendedGitEnv(),
         stdio: ['ignore', 'pipe', 'pipe']
       })
+
       let stdout = ''
       let stderr = ''
       let settled = false
+
       const cleanup = (): void => {
         context?.signal?.removeEventListener('abort', onAbort)
       }
+
       const onAbort = (): void => {
         child.kill()
       }
+
       context?.signal?.addEventListener('abort', onAbort, { once: true })
       child.stdout?.on('data', (chunk: Buffer) => {
         stdout = (stdout + chunk.toString('utf-8')).slice(-4096)
@@ -225,8 +253,10 @@ export class GitHandler {
       child.stderr?.on('data', (chunk: Buffer) => {
         const text = chunk.toString('utf-8')
         stderr = (stderr + text).slice(-4096)
+
         for (const line of text.split(/[\r\n]+/)) {
           const match = line.match(/^([\w\s]+):\s+(\d+)%/)
+
           if (match) {
             this.dispatcher.notify('git.cloneProgress', {
               progressId,
@@ -240,6 +270,7 @@ export class GitHandler {
         if (settled) {
           return
         }
+
         settled = true
         cleanup()
         reject(error)
@@ -248,16 +279,22 @@ export class GitHandler {
         if (settled) {
           return
         }
+
         settled = true
         cleanup()
+
         if (context?.signal?.aborted) {
           reject(new Error('Clone aborted'))
+
           return
         }
+
         if (code === 0 && !signal) {
           resolve({ stdout, stderr })
+
           return
         }
+
         reject(new Error(`Clone failed: ${getGitCloneFailureMessage(stderr)}`))
       })
     })

@@ -20,6 +20,7 @@ function getCompactAgentPrimary(
   conversationName: string | null
 ): string {
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
+
   return prompt || agentStateLabel(getAgentDotState(agent))
 }
 
@@ -31,37 +32,48 @@ export function getCompactAgentSecondary(
   if (agent.entry.interrupted === true) {
     return 'Interrupted by user'
   }
+
   // Why: the only honest thing to say about a pane Orca still holds but no longer hears
   // from is how long the silence has run; the user supplies the meaning.
   if (agent.state === 'unverifiable') {
     return agentNoUpdateLabel(agent.entry, now)
   }
+
   // Why: the lead turn is over in monitoring, so its last tool line is stale; name the state instead.
   if (agent.state === 'working' && agent.entry.workingMode === 'monitoring') {
     return agentStateLabel('monitoring')
   }
+
   const toolPreview = formatAgentToolPreview(agent.entry, agent.state)
+
   if (toolPreview) {
     return toolPreview
   }
+
   const lastAssistantMessage =
     lastAssistantMessageOverride ?? agent.entry.lastAssistantMessage?.trim()
+
   if (lastAssistantMessage) {
     return lastAssistantMessage
   }
+
   // Why: child rows without descriptions use their role as primary text; repeating its formatted label adds no information.
   if (agent.rowSource === 'subagent' && agent.entry.prompt?.trim() === agent.agentType.trim()) {
     return ''
   }
+
   return formatAgentTypeLabel(agent.agentType)
 }
 
 function getCompactAgentTime(agent: DashboardAgentRowData, now: number): string | null {
   const doneAt = lastEnteredDoneAt(agent)
+
   if (doneAt !== null) {
     return formatShortTimeAgo(doneAt, now)
   }
+
   const startedAt = agent.startedAt > 0 ? agent.startedAt : agent.entry.stateStartedAt
+
   return startedAt > 0 ? formatShortTimeAgo(startedAt, now) : null
 }
 
@@ -110,6 +122,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     typeof childAgentCount === 'number' &&
     childAgentCount > 0 &&
     typeof onToggleChildAgents === 'function'
+
   // Why: subagent child rows carry the child's NAME (e.g. "pr-reviewer") in
   // agentType, which is not an iconable agent and would render the unknown
   // "?" glyph. Nesting under the parent already conveys identity.
@@ -135,13 +148,17 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     }
   }, [turnHoldable, turn, currentMessage])
   const held = heldMessageRef.current
+
   const stableMessage =
     turnHoldable && !currentMessage && held?.turn === turn ? held.message : undefined
+
   const secondary = getCompactAgentSecondary(agent, now, stableMessage)
   // Why: sidebar truncation must preserve the passive-vs-active distinction.
   const leadingText = dotState === 'monitoring' ? secondary : primary
+
   const trailingText =
     dotState === 'monitoring' ? (primary === secondary ? '' : primary) : secondary
+
   const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
@@ -156,26 +173,32 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     },
     [agent.activationPaneKey, agent.paneKey, agent.tab.id, onActivate]
   )
+
   const handleSendTargetClickCapture = useCallback(
     (e: React.MouseEvent) => {
       if (!sendTargetStatus) {
         return
       }
+
       const target = e.target
+
       if (
         target instanceof Element &&
         target.closest('button, a, input, textarea, select, [role="button"]')
       ) {
         return
       }
+
       e.preventDefault()
       e.stopPropagation()
+
       if (sendTargetStatus === 'eligible') {
         onSendTargetClick?.(agent.paneKey)
       }
     },
     [agent.paneKey, onSendTargetClick, sendTargetStatus]
   )
+
   const handleToggleChildren = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
       e.preventDefault()

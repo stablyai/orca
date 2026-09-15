@@ -90,6 +90,7 @@ describe('createUISlice feature interactions', () => {
       const expected: FeatureInteractionState = {
         tasks: { firstInteractedAt: now, interactionCount: 2 }
       }
+
       expect(store.getState().featureInteractions).toEqual(expected)
       expect(setMock).toHaveBeenCalledTimes(2)
       expect(setMock).toHaveBeenCalledWith({ featureInteractions: expected })
@@ -109,6 +110,7 @@ describe('createUISlice feature interactions', () => {
         })
       )
     )
+
     const setMock = vi.fn(() => Promise.resolve())
     vi.stubGlobal('window', {
       api: {
@@ -143,12 +145,14 @@ describe('createUISlice feature interactions', () => {
 
   it('keeps newer optimistic interaction counts when persistence responses resolve out of order', async () => {
     const pending: ((ui: PersistedUIState) => void)[] = []
+
     const recordFeatureInteractionMock = vi.fn(
       () =>
         new Promise<PersistedUIState>((resolve) => {
           pending.push(resolve)
         })
     )
+
     vi.stubGlobal('window', {
       api: {
         ui: {

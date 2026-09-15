@@ -4,6 +4,7 @@ import { SharedControlRetiredRequestIds } from './remote-runtime-shared-control-
 describe('SharedControlRetiredRequestIds', () => {
   it('retains recent ids through repeated late frames and expires them', () => {
     let now = 1_000
+
     const ids = new SharedControlRetiredRequestIds({
       ttlMs: 100,
       now: () => now
@@ -46,6 +47,7 @@ describe('SharedControlRetiredRequestIds', () => {
 
   it('expires ids correctly after the clock moves backward', () => {
     let now = 1_000
+
     const ids = new SharedControlRetiredRequestIds({
       ttlMs: 100,
       now: () => now

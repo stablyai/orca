@@ -13,8 +13,11 @@ import { rememberOwnerType } from './project-view-cache'
 
 // Why: defaults deliberately shrunk to cut quota spend in discovery — the org loop dominates and produced the HTTP 504; overflow owners can paste a URL.
 const DISCOVERY_PROJECTS_PER_OWNER = 40
+
 const DISCOVERY_MAX_ORGS = 20
+
 const DISCOVERY_ORG_PAGE_SIZE = 20
+
 const DISCOVERY_PROJECTS_PER_ORG = 20
 
 type RawViewerDiscovery = {
@@ -59,9 +62,11 @@ export async function listAccessibleProjects(
   let viewerCursor: string | null = null
   let viewerMore = true
   let viewerFetched = 0
+
   while (viewerMore && viewerFetched < DISCOVERY_PROJECTS_PER_OWNER) {
     const afterArg = viewerCursor ? ', after: $after' : ''
     const afterVar = viewerCursor ? '$after:String!' : ''
+
     const query = `
       query${afterVar ? `(${afterVar})` : ''} {
         viewer {
@@ -76,29 +81,40 @@ export async function listAccessibleProjects(
         }
       }
     `
+
     const vars: GraphqlVars = {}
+
     if (viewerCursor) {
       vars.after = viewerCursor
     }
+
     const res = await runGraphql<RawViewerDiscovery>(query, vars, projectGhExecOptions(host))
+
     if (!res.ok) {
       // Why: viewer-level failure is structural (no projects to build on), so propagate hard; org-level errors below are non-fatal.
       return { ok: false, error: res.error }
     }
+
     if (!res.data.viewer) {
       return { ok: false, error: driftError('viewer missing') }
     }
+
     if (viewerLogin === null) {
       viewerLogin = res.data.viewer.login ?? null
     }
+
     const nodes = res.data.viewer.projectsV2?.nodes ?? []
+
     for (const n of nodes) {
       if (!n || typeof n.id !== 'string' || typeof n.number !== 'number') {
         continue
       }
+
       const ownerLogin = n.owner?.login ?? viewerLogin ?? ''
+
       const ownerType: GitHubProjectOwnerType =
         n.owner?.__typename === 'Organization' ? 'organization' : 'user'
+
       viewerProjects.push({
         id: n.id,
         host,
@@ -110,10 +126,12 @@ export async function listAccessibleProjects(
         source: 'viewer'
       })
       viewerFetched++
+
       if (viewerFetched >= DISCOVERY_PROJECTS_PER_OWNER) {
         break
       }
     }
+
     const pi = res.data.viewer.projectsV2?.pageInfo
     viewerMore = pi?.hasNextPage === true && typeof pi.endCursor === 'string'
     viewerCursor = viewerMore ? (pi?.endCursor ?? null) : null
@@ -124,9 +142,11 @@ export async function listAccessibleProjects(
   let orgCursor: string | null = null
   let orgMore = true
   let orgsSeen = 0
+
   while (orgMore && orgsSeen < DISCOVERY_MAX_ORGS) {
     const afterArg = orgCursor ? ', after: $orgAfter' : ''
     const afterVar = orgCursor ? '$orgAfter:String!' : ''
+
     const query = `
       query${afterVar ? `(${afterVar})` : ''} {
         viewer {
@@ -143,37 +163,48 @@ export async function listAccessibleProjects(
         }
       }
     `
+
     const vars: GraphqlVars = {}
+
     if (orgCursor) {
       vars.orgAfter = orgCursor
     }
+
     const res = await runGraphql<RawViewerDiscovery>(query, vars, projectGhExecOptions(host))
+
     if (!res.ok) {
       // Why: org-listing failed; record a synthetic '*' partial failure so the banner explains it, but keep collected viewer projects (the reported 504 path).
       partialFailures.push({ owner: '*', message: res.error.message })
       break
     }
+
     const orgs = res.data.viewer?.organizations?.nodes ?? []
+
     for (const org of orgs) {
       if (!org || typeof org.login !== 'string') {
         continue
       }
+
       if (orgsSeen >= DISCOVERY_MAX_ORGS) {
         break
       }
+
       orgsSeen++
       const login = org.login
       // Cache for paste/resolve even when the nested projects query was empty or partially failed.
       rememberOwnerType(login, 'organization', host)
       const nodes = org.projectsV2?.nodes ?? []
       let ownerCount = 0
+
       for (const n of nodes) {
         if (!n || typeof n.id !== 'string' || typeof n.number !== 'number') {
           continue
         }
+
         if (ownerCount >= DISCOVERY_PROJECTS_PER_OWNER) {
           break
         }
+
         orgProjects.push({
           id: n.id,
           host,
@@ -187,6 +218,7 @@ export async function listAccessibleProjects(
         ownerCount++
       }
     }
+
     const pi = res.data.viewer?.organizations?.pageInfo
     orgMore = pi?.hasNextPage === true && typeof pi.endCursor === 'string'
     orgCursor = orgMore ? (pi?.endCursor ?? null) : null

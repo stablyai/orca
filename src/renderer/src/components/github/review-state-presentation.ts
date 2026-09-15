@@ -13,15 +13,19 @@ export function getReviewStateTone(state: ReviewStateForDisplay): string {
   if (state === 'merged') {
     return 'border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-300'
   }
+
   if (state === 'draft') {
     return 'border-slate-500/30 bg-slate-500/10 text-slate-600 dark:text-slate-300'
   }
+
   if (state === 'closed') {
     return 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300'
   }
+
   if (state === 'open') {
     return OPEN_REVIEW_STATE_TONE
   }
+
   return 'border-border bg-background text-muted-foreground'
 }
 
@@ -31,11 +35,14 @@ export function getReviewStateIcon(state: ReviewStateForDisplay): LucideIcon | n
   if (state === 'merged') {
     return GitMerge
   }
+
   if (state === 'closed') {
     return GitPullRequestClosed
   }
+
   if (state === 'draft') {
     return GitPullRequestDraft
   }
+
   return null
 }

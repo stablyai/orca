@@ -14,9 +14,11 @@ const { muxRequestMock, openConsumerSessionMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: openConsumerSessionMock
 }))
+
 vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   acceptSshPtyOutputData: vi.fn().mockResolvedValue(undefined),
   acceptSshPtyOutputExit: vi.fn().mockResolvedValue(undefined),
@@ -31,10 +33,13 @@ vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   installSshPtySourceAckPublisher: vi.fn(() => () => {}),
   installSshPtySourceCancellationPublisher: vi.fn(() => () => {})
 }))
+
 vi.mock('./ssh-relay-deploy-helpers', () => ({ execCommand: vi.fn().mockResolvedValue('') }))
+
 vi.mock('./ssh-remote-orca-cli', () => ({
   runRemoteOrcaCli: vi.fn().mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' })
 }))
+
 vi.mock('./ssh-channel-multiplexer', () => ({
   SshChannelMultiplexer: class MockSshChannelMultiplexer {
     notify = vi.fn()
@@ -48,9 +53,11 @@ vi.mock('./ssh-channel-multiplexer', () => ({
     isDisposed = vi.fn().mockReturnValue(false)
   }
 }))
+
 vi.mock('../agent-hooks/remote-managed-hook-installers', () => ({
   installRemoteManagedAgentHooks: vi.fn()
 }))
+
 vi.mock('../providers/ssh-pty-provider', () => ({
   SshPtyProvider: class MockSshPtyProvider {
     onData = vi.fn().mockReturnValue(() => {})
@@ -61,14 +68,17 @@ vi.mock('../providers/ssh-pty-provider', () => ({
     dispose = vi.fn()
   }
 }))
+
 vi.mock('../providers/ssh-filesystem-provider', () => ({
   SshFilesystemProvider: class MockSshFilesystemProvider {
     dispose = vi.fn()
   }
 }))
+
 vi.mock('../providers/ssh-git-provider', () => ({
   SshGitProvider: class MockSshGitProvider {}
 }))
+
 vi.mock('../ipc/pty', () => ({
   registerSshPtyProvider: vi.fn(),
   unregisterSshPtyProvider: vi.fn(),
@@ -82,11 +92,13 @@ vi.mock('../ipc/pty', () => ({
   isCurrentPtyExit: vi.fn(() => true),
   answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data)
 }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
   unregisterSshFilesystemProvider: vi.fn(),
   getSshFilesystemProvider: vi.fn().mockReturnValue({ dispose: vi.fn() })
 }))
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   registerSshGitProvider: vi.fn(),
   unregisterSshGitProvider: vi.fn()
@@ -96,6 +108,7 @@ const { getSshPtyProvider, getPtyIdsForConnection, clearProviderPtyState, delete
   await import('../ipc/pty')
 
 const APP_PTY_ID = 'ssh:target-1@@pty-live'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 function detachedLease() {
@@ -142,6 +155,7 @@ describe('SshRelaySession abandoned remote PTYs', () => {
       typeof deps.mockStore.getSshRemotePtyLeases
     >)
     const runtime = { onPtyExit: vi.fn(), registerPty: vi.fn() }
+
     const session = new SshRelaySession(
       'target-1',
       deps.getMainWindow,
@@ -217,12 +231,15 @@ describe('SshRelaySession abandoned remote PTYs', () => {
       code: -1,
       ptySourceDisowned: true
     })
+
     const exitCall = vi
       .mocked(deps.mockWindow.webContents.send)
       .mock.calls.find(([channel]) => channel === 'pty:exit')
+
     if (!exitCall) {
       throw new Error('expected a pty:exit publication')
     }
+
     // The ratchet: the verdict rides its own field, never the code. Swapping -1 for a provable
     // status would make every reader that keys off the code close the tab and drop its leaf↔PTY
     // binding, which is a far wider claim than "this id is gone from this relay".
@@ -241,6 +258,7 @@ describe('SshRelaySession abandoned remote PTYs', () => {
       typeof deps.mockStore.getSshRemotePtyLeases
     >)
     const runtime = { onPtySpawned: vi.fn(), registerPty: vi.fn() }
+
     const session = new SshRelaySession(
       'target-1',
       deps.getMainWindow,

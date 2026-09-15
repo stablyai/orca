@@ -13,6 +13,7 @@ export class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaRuntimeWit
     // Cancel pending restore timer for this ptyId — any new subscriber
     // supersedes any old client's pending restore.
     const pendingRestore = this.pendingRestoreTimers.get(ptyId)
+
     if (pendingRestore) {
       clearTimeout(pendingRestore.timer)
       this.pendingRestoreTimers.delete(ptyId)
@@ -22,29 +23,37 @@ export class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaRuntimeWit
     // window restores prior record (preserving baseline so we don't capture
     // phone-fitted dims as the new baseline).
     const softLeaver = this.pendingSoftLeavers.get(ptyId)
+
     if (softLeaver && softLeaver.clientId === clientId) {
       clearTimeout(softLeaver.timer)
       this.pendingSoftLeavers.delete(ptyId)
       let inner = this.mobileSubscribers.get(ptyId)
+
       if (!inner) {
         inner = new Map()
         this.mobileSubscribers.set(ptyId, inner)
       }
+
       inner.set(clientId, {
         ...softLeaver.record,
         viewport: viewport ?? null,
         lastActedAt: Date.now()
       })
+
       if (!viewport) {
         return false
       }
+
       this.setDriver(ptyId, { kind: 'mobile', clientId })
+
       if (mode !== 'desktop') {
         const { cols: clampedCols, rows: clampedRows } = clampTerminalViewport(
           viewport.cols,
           viewport.rows
         )
+
         this.freshSubscribeGuard.add(ptyId)
+
         try {
           await this.enqueueLayout(ptyId, {
             kind: 'phone',
@@ -56,10 +65,12 @@ export class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaRuntimeWit
           this.freshSubscribeGuard.delete(ptyId)
         }
       }
+
       return true
     }
 
     let inner = this.mobileSubscribers.get(ptyId)
+
     if (!inner) {
       inner = new Map()
       this.mobileSubscribers.set(ptyId, inner)
@@ -80,14 +91,17 @@ export class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaRuntimeWit
     const someoneAlreadyFitted = [...inner.values()].some((s) => s.wasResizedToPhone)
     const currentSize = this.getTerminalSize(ptyId)
     const rendererSize = this.lastRendererSizes.get(ptyId)
+
     const previousCols =
       existing?.previousCols ??
       heldOverride?.previousCols ??
       (someoneAlreadyFitted ? null : (rendererSize?.cols ?? currentSize?.cols ?? null))
+
     const previousRows =
       existing?.previousRows ??
       heldOverride?.previousRows ??
       (someoneAlreadyFitted ? null : (rendererSize?.rows ?? currentSize?.rows ?? null))
+
     const now = Date.now()
     const subscribedAt = existing?.subscribedAt ?? now
 
@@ -104,6 +118,7 @@ export class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaRuntimeWit
         subscribedAt,
         lastActedAt: now
       })
+
       return false
     }
 
@@ -125,6 +140,7 @@ export class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaRuntimeWit
         subscribedAt,
         lastActedAt: now
       })
+
       return false
     }
 
@@ -145,6 +161,7 @@ export class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaRuntimeWit
     // gate lets enqueueLayout's "no layouts entry" short-circuit pass on
     // the very first transition for this PTY.
     this.freshSubscribeGuard.add(ptyId)
+
     try {
       await this.enqueueLayout(ptyId, {
         kind: 'phone',

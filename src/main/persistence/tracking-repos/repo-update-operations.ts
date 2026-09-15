@@ -78,10 +78,13 @@ export class RepoUpdatePersistenceOperations {
       (candidate) =>
         candidate.id === id && (!hostId || getRepoExecutionHostId(candidate) === hostId)
     )
+
     if (!repo) {
       return null
     }
+
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
+
     if (
       'executionHostId' in updates &&
       getRepoExecutionHostId({ ...repo, ...updates }) !== getRepoExecutionHostId(repo)
@@ -89,6 +92,7 @@ export class RepoUpdatePersistenceOperations {
       delete repo.folderUpgradeGitRootPath
       delete sanitizedUpdates.folderUpgradeGitRootPath
     }
+
     if (
       'agentWorktreeVisibility' in sanitizedUpdates &&
       !('worktreeVisibilitySourcePreferences' in sanitizedUpdates) &&
@@ -104,12 +108,15 @@ export class RepoUpdatePersistenceOperations {
           gsd: sanitizedUpdates.agentWorktreeVisibility
         }
       })
+
       if (preferences) {
         sanitizedUpdates.worktreeVisibilitySourcePreferences = preferences
       }
     }
+
     if ('projectGroupId' in sanitizedUpdates) {
       const nextGroupId = sanitizedUpdates.projectGroupId
+
       if (
         typeof nextGroupId !== 'string' ||
         nextGroupId.trim().length === 0 ||
@@ -118,6 +125,7 @@ export class RepoUpdatePersistenceOperations {
         sanitizedUpdates.projectGroupId = null
       }
     }
+
     if (
       'projectGroupOrder' in sanitizedUpdates &&
       (typeof sanitizedUpdates.projectGroupOrder !== 'number' ||
@@ -125,11 +133,13 @@ export class RepoUpdatePersistenceOperations {
     ) {
       delete sanitizedUpdates.projectGroupOrder
     }
+
     const externalWorktreeVisibilityLegacy =
       'externalWorktreeVisibility' in sanitizedUpdates &&
       repo.externalWorktreeVisibilityLegacy === undefined
         ? isLegacyRepoForExternalWorktreeVisibility(repo)
         : undefined
+
     // Why: selected repo fields use `undefined` as an explicit clear signal, so delete them before assigning the patch.
     if (
       'issueSourcePreference' in sanitizedUpdates &&
@@ -138,10 +148,12 @@ export class RepoUpdatePersistenceOperations {
       delete repo.issueSourcePreference
       delete sanitizedUpdates.issueSourcePreference
     }
+
     if ('worktreeBasePath' in sanitizedUpdates && sanitizedUpdates.worktreeBasePath === undefined) {
       delete repo.worktreeBasePath
       delete sanitizedUpdates.worktreeBasePath
     }
+
     if (
       'externalWorktreeVisibility' in sanitizedUpdates &&
       (sanitizedUpdates.externalWorktreeVisibility === undefined ||
@@ -151,6 +163,7 @@ export class RepoUpdatePersistenceOperations {
       repo.externalWorktreeVisibilityLegacy = false
       delete sanitizedUpdates.externalWorktreeVisibility
     }
+
     if (
       'agentWorktreeVisibility' in sanitizedUpdates &&
       sanitizedUpdates.agentWorktreeVisibility === null
@@ -158,6 +171,7 @@ export class RepoUpdatePersistenceOperations {
       delete repo.agentWorktreeVisibility
       delete sanitizedUpdates.agentWorktreeVisibility
     }
+
     if (
       'externalWorktreeVisibility' in sanitizedUpdates &&
       repo.externalWorktreeVisibilityLegacy === undefined
@@ -165,6 +179,7 @@ export class RepoUpdatePersistenceOperations {
       // Why: old persisted repos have no marker; stamp it on first visibility change so later hide/show keeps legacy safety.
       repo.externalWorktreeVisibilityLegacy = externalWorktreeVisibilityLegacy
     }
+
     if (
       'externalWorktreeDiscoverySuppressedAt' in sanitizedUpdates &&
       (sanitizedUpdates.externalWorktreeDiscoverySuppressedAt === undefined ||
@@ -173,6 +188,7 @@ export class RepoUpdatePersistenceOperations {
       delete repo.externalWorktreeDiscoverySuppressedAt
       delete sanitizedUpdates.externalWorktreeDiscoverySuppressedAt
     }
+
     if (
       'sourceControlAi' in sanitizedUpdates &&
       (sanitizedUpdates.sourceControlAi === undefined || sanitizedUpdates.sourceControlAi === null)
@@ -183,16 +199,19 @@ export class RepoUpdatePersistenceOperations {
       const normalizedSourceControlAi = normalizeRepoSourceControlAiOverrides(
         sanitizedUpdates.sourceControlAi
       )
+
       if (normalizedSourceControlAi === undefined) {
         delete sanitizedUpdates.sourceControlAi
       } else {
         sanitizedUpdates.sourceControlAi = normalizedSourceControlAi
       }
     }
+
     Object.assign(repo, sanitizedUpdates)
     this.bumpLocalWorktreeScanGeneration(id)
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
+
     return this.hydrateRepo(repo)
   }
 }

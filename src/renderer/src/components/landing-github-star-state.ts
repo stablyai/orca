@@ -24,12 +24,14 @@ export function useLandingOrcaStarState(): [
       if (cancelled) {
         return
       }
+
       if (result === null) {
         setState('web-fallback')
       } else {
         setState(result ? 'starred' : 'not-starred')
       }
     })
+
     return () => {
       cancelled = true
     }

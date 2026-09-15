@@ -48,6 +48,7 @@ async function installManagedHooksIntoWslRuntimeExclusively(
   plan: CodexWslRuntimeHookInstallPlan
 ): Promise<AgentHookInstallStatus> {
   const config = readHooksJson(plan.configPath)
+
   if (!config) {
     return {
       agent: 'codex',
@@ -62,11 +63,14 @@ async function installManagedHooksIntoWslRuntimeExclusively(
   const command = wrapReadablePosixHookCommand(plan.commandScriptPath)
   const nextHooks = { ...config.hooks }
   const managedEvents = new Set<string>(CODEX_EVENTS)
+
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if (managedEvents.has(eventName) || !Array.isArray(definitions)) {
       continue
     }
+
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
     if (cleaned.length === 0) {
       delete nextHooks[eventName]
     } else {
@@ -75,12 +79,15 @@ async function installManagedHooksIntoWslRuntimeExclusively(
   }
 
   const trustEntries: CodexTrustEntry[] = []
+
   for (const eventName of CODEX_EVENTS) {
     const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
+
     const definition: HookDefinition = {
       hooks: [buildManagedCommandHook(command)]
     }
+
     nextHooks[eventName] = [definition, ...cleaned]
     trustEntries.push({
       sourcePath: plan.trustConfigPath,
@@ -95,6 +102,7 @@ async function installManagedHooksIntoWslRuntimeExclusively(
   config.hooks = nextHooks
   writeManagedScript(plan.scriptPath, getManagedScript('posix'))
   writeCodexHooksJson(plan.configPath, nextHooks)
+
   try {
     // Why: same grant-then-fallback split as the host install — codex runs
     // inside the distro so the hash authority matches the codex the pane runs.
@@ -109,6 +117,7 @@ async function installManagedHooksIntoWslRuntimeExclusively(
       trustEntries,
       previousLedgerHome ? [previousLedgerHome] : []
     )
+
     const grant = await grantManagedCodexHookTrust({
       runtimeHomePath,
       tomlPath: plan.tomlPath,
@@ -117,6 +126,7 @@ async function installManagedHooksIntoWslRuntimeExclusively(
       host: { kind: 'wsl', distro: plan.wslDistro, linuxRuntimeHome: plan.linuxRuntimeHome },
       telemetryLane: 'managed'
     })
+
     if (grant.lane === 'fallback') {
       // Why: WSL runtime homes may carry user hook approvals we did not rebuild
       // here; only upsert Orca's entries instead of sweeping the whole source.
@@ -145,6 +155,7 @@ export function refreshWslRuntimeUserHooks(
   plan: CodexWslRuntimeHookInstallPlan
 ): AgentHookInstallStatus {
   const config = readHooksJson(plan.configPath)
+
   if (!config) {
     return {
       agent: 'codex',
@@ -157,25 +168,31 @@ export function refreshWslRuntimeUserHooks(
 
   const isManagedCommand = createManagedCommandMatcher('codex-hook.sh')
   const nextHooks = { ...config.hooks }
+
   for (const [eventName, definitions] of Object.entries(nextHooks)) {
     if (!Array.isArray(definitions)) {
       continue
     }
+
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
     if (cleaned.length === 0) {
       delete nextHooks[eventName]
     } else {
       nextHooks[eventName] = cleaned
     }
   }
+
   writeCodexHooksJson(plan.configPath, nextHooks)
   removeWslRuntimeManagedHookTrustEntries(plan)
+
   try {
     // Why: the disabled path may run after the WSL mount root changed, so cleanup can't be scoped to the plan's current source path.
     removeStaleWslRuntimeManagedHookTrustEntries(plan.tomlPath, [])
   } catch (error) {
     console.warn('[codex-hook-service] failed to clean stale WSL trust entries', error)
   }
+
   return {
     agent: 'codex',
     state: 'not_installed',
@@ -197,6 +214,7 @@ export function getWslHookReconciliationAction(args: {
   if (!args.isCurrentGeneration) {
     return 'none'
   }
+
   if (args.settlement.status === 'missing') {
     // Why: a `missing` directory probe right after a verified install/grant is
     // a false negative — the RPC (or fallback) just wrote and read trust in
@@ -205,6 +223,7 @@ export function getWslHookReconciliationAction(args: {
     // home resolves to a different path and takes the `reinstall` branch below.
     return args.installSucceeded ? 'none' : 'remove'
   }
+
   if (
     args.settlement.status !== 'resolved' ||
     !args.resolvedTrustConfigPath ||
@@ -212,6 +231,7 @@ export function getWslHookReconciliationAction(args: {
   ) {
     return 'none'
   }
+
   return 'reinstall'
 }
 

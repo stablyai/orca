@@ -73,10 +73,13 @@ export class RelayAuthCoordinator {
     if (this.stopped) {
       return
     }
+
     this.cancelRetry()
+
     if (resetRetry) {
       this.retryAttempt = 0
     }
+
     const epoch = ++this.authEpoch
     this.invalidatePendingOwnerships()
     const reconcile = this.reconcileEpoch(epoch, expectedIdentityKey)
@@ -116,6 +119,7 @@ export class RelayAuthCoordinator {
   // apply the same liveness gate reconcile does; unprovable liveness stays usable.
   getLiveBroker(): CoordinatedRelayBroker | null {
     const broker = this.getActiveBroker()
+
     return broker && (broker.isLive?.() ?? true) ? broker : null
   }
 
@@ -128,25 +132,32 @@ export class RelayAuthCoordinator {
     if (this.stopped || this.retryTimer || this.pendingOwnerships.size > 0) {
       return
     }
+
     const ownership = this.ownership
+
     if (ownership?.valid && (ownership.broker?.isLive?.() ?? true)) {
       return
     }
+
     this.beginReconcile(false)
   }
 
   async waitForLiveBroker(): Promise<CoordinatedRelayBroker | null> {
     while (!this.stopped) {
       const broker = this.getLiveBroker()
+
       if (broker) {
         return broker
       }
+
       const pending = this.latestReconcile
       await pending
+
       if (pending === this.latestReconcile) {
         return this.getLiveBroker()
       }
     }
+
     return null
   }
 
@@ -157,11 +168,14 @@ export class RelayAuthCoordinator {
 
   private async reconcileEpoch(epoch: number, expectedIdentityKey?: string): Promise<void> {
     let retryIdentityKey: string | undefined
+
     try {
       const context = await this.options.readContext()
+
       if (!this.isEpochCurrent(epoch)) {
         return
       }
+
       if (!context || !context.relayEntitled) {
         this.cancelLinger()
         this.retryAttempt = 0
@@ -171,26 +185,36 @@ export class RelayAuthCoordinator {
         // desktop, and "sign in to reconnect" would be wrong advice for it.
         this.invalidateOwnership(context ? undefined : RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
         this.publish('offline')
+
         return
       }
+
       const nextIdentityKey = identityKey(context.identity)
+
       if (expectedIdentityKey && nextIdentityKey !== expectedIdentityKey) {
         this.retryAttempt = 0
         this.publish('offline')
+
         return
       }
+
       if (!(this.options.hasDemand?.(context) ?? true)) {
         this.retryAttempt = 0
+
         if (this.ownership?.valid && this.ownership.identityKey !== nextIdentityKey) {
           this.cancelLinger()
           this.invalidateOwnership()
         } else if (this.ownership?.valid) {
           this.scheduleLinger(context, this.ownership)
         }
+
         this.publish('standby')
+
         return
       }
+
       this.cancelLinger()
+
       if (
         this.ownership?.valid &&
         this.ownership.identityKey === nextIdentityKey &&
@@ -200,22 +224,29 @@ export class RelayAuthCoordinator {
       ) {
         this.retryAttempt = 0
         this.publish('registered')
+
         return
       }
+
       retryIdentityKey = nextIdentityKey
       this.invalidateOwnership()
       this.publish('connecting')
+
       const ownership: BrokerOwnership = {
         identityKey: nextIdentityKey,
         broker: null,
         valid: true
       }
+
       this.pendingOwnerships.add(ownership)
+
       const isCurrent = (): boolean =>
         ownership.valid &&
         !this.stopped &&
         (ownership.broker ? this.ownership === ownership : this.isEpochCurrent(epoch))
+
       let broker: CoordinatedRelayBroker
+
       try {
         broker = await this.options.openBroker({
           context,
@@ -225,11 +256,15 @@ export class RelayAuthCoordinator {
       } finally {
         this.pendingOwnerships.delete(ownership)
       }
+
       ownership.broker = broker
+
       if (!this.isEpochCurrent(epoch) || !ownership.valid) {
         broker.closeNow()
+
         return
       }
+
       this.ownership = ownership
       this.retryAttempt = 0
       this.publish('registered')
@@ -242,6 +277,7 @@ export class RelayAuthCoordinator {
           error instanceof Error ? error.message : String(error)
         )
         this.publish('offline')
+
         if (shouldRetryRelayConnectionError(error)) {
           const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0
           this.scheduleRetry(epoch, retryIdentityKey, retryAfterMs)
@@ -254,19 +290,23 @@ export class RelayAuthCoordinator {
     if (this.retryTimer || !this.isEpochCurrent(epoch)) {
       return
     }
+
     const exponent = Math.min(
       this.retryAttempt,
       Math.ceil(Math.log2(RelayAuthCoordinator.RETRY_MAX_MS / RelayAuthCoordinator.RETRY_BASE_MS))
     )
+
     const capMs = Math.min(
       RelayAuthCoordinator.RETRY_MAX_MS,
       RelayAuthCoordinator.RETRY_BASE_MS * 2 ** exponent
     )
+
     this.retryAttempt++
     const random = this.options.random ?? Math.random
     const delayMs = Math.max(Math.floor(random() * (capMs + 1)), retryAfterMs)
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null
+
       if (this.isEpochCurrent(epoch)) {
         // Retry still re-reads entitlement and demand; the timer grants no authority.
         this.beginReconcile(false, expectedIdentityKey)
@@ -281,8 +321,10 @@ export class RelayAuthCoordinator {
     if (!ownership.valid || this.stopped) {
       return null
     }
+
     const epoch = this.authEpoch
     const context = await this.options.readContext()
+
     if (
       !ownership.valid ||
       !this.isEpochCurrent(epoch) ||
@@ -291,12 +333,14 @@ export class RelayAuthCoordinator {
     ) {
       return null
     }
+
     return context.accessToken
   }
 
   private invalidateOwnership(hostCloseReason?: RelayHostCloseReason): void {
     const ownership = this.ownership
     this.ownership = null
+
     if (ownership) {
       ownership.valid = false
       ownership.broker?.closeNow(hostCloseReason)
@@ -307,9 +351,11 @@ export class RelayAuthCoordinator {
     if (this.lingerTimer) {
       return
     }
+
     const lingerMs = this.options.lingerMs ?? 10 * 60_000
     this.lingerTimer = setTimeout(() => {
       this.lingerTimer = null
+
       if (
         this.ownership === ownership &&
         ownership.valid &&
@@ -339,6 +385,7 @@ export class RelayAuthCoordinator {
     for (const ownership of this.pendingOwnerships) {
       ownership.valid = false
     }
+
     this.pendingOwnerships.clear()
   }
 

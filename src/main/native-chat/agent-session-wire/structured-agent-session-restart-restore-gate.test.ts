@@ -14,6 +14,7 @@ describe('StructuredAgentSessionRestartRestoreGate', () => {
 
   it('allows a failed restore to be retried', async () => {
     const gate = new StructuredAgentSessionRestartRestoreGate()
+
     const restore = vi
       .fn<() => Promise<void>>()
       .mockRejectedValueOnce(new Error('restore failed'))

@@ -72,10 +72,12 @@ export function registerPtyHandlers(
 ): void {
   if (process.platform === 'linux') {
     const appEnvironment = getAppEnvironment()
+
     if (appEnvironment.isPackaged()) {
       ensureLinuxTerminalOrcaCliShimDir({ userDataPath: appEnvironment.getPath('userData') })
     }
   }
+
   const ipcMain = getPtyIpc()
   // Why first: the outgoing session owns the producer pauses, so its real reset must run
   // before the bridge is neutralized or a PTY paused during re-registration stays paused.
@@ -93,6 +95,7 @@ export function registerPtyHandlers(
     if (connectionId) {
       return undefined
     }
+
     // Why: during cold start the daemon provider swap overlaps first paint, so local spawns must wait; SSH/headless don't use the desktop daemon.
     return options?.awaitLocalPtyStartup?.()
   }
@@ -103,6 +106,7 @@ export function registerPtyHandlers(
     if (connectionId) {
       return undefined
     }
+
     return options?.awaitLocalPtyProviderStartup?.() ?? options?.awaitLocalPtyStartup?.()
   }
 
@@ -141,6 +145,7 @@ export function registerPtyHandlers(
     getSettings,
     options
   })
+
   wirePtyIpcSession(session)
   configureLocalPtyProvider({
     runtime,
@@ -155,15 +160,19 @@ export function registerPtyHandlers(
 
   // Why: reload/crash orphans delivery-interest holds and hidden marks; reset so surviving PTYs aren't stuck force-fed or gated — each pane's first sync re-marks.
   clearRendererGateResetHandlers()
+
   const resetRendererPtyDeliveryGateState = (): void => {
     const gateDebug = getHiddenRendererPtyDeliveryDebug()
     resetRendererScopedHiddenPtyDeliveryState()
+
     if (gateDebug.hiddenDeliveryGatedPtyCount > 0 || gateDebug.deliveryInterestPtyCount > 0) {
       invalidatePendingPtyDrainPolicy()
     }
+
     // Why: the daemon pacer must not keep throttling ptys whose hidden marks died with the renderer; the fresh renderer's sync re-marks the still-hidden ones.
     session.resyncBackgroundedDeliveriesAfterGateReset()
   }
+
   setRendererGateResetState({
     contents: mainWindow.webContents,
     load: resetRendererPtyDeliveryGateState,
@@ -174,17 +183,22 @@ export function registerPtyHandlers(
 
   // Why: only LocalPtyProvider PTYs (main-process) can be orphaned on reload; daemon sessions survive by design and cleanup would kill them.
   clearDidFinishLoadHandler()
+
   if (localProvider instanceof LocalPtyProvider) {
     const lp = localProvider
+
     const finishLoadHandler = () => {
       // Why: always advance to keep the generation monotonic, but skip the sweep on crash/freeze-recovery reload — it would kill live local PTYs before session restore (#5787).
       const generation = lp.advanceGeneration()
+
       if (options?.isRecoveryReloadInFlight?.(mainWindow.webContents.id)) {
         return
       }
+
       // Why: the retained provider onExit callback is the only physical-exit proof; it clears ownership after the OS reaps it.
       lp.killOrphanedPtys(generation - 1)
     }
+
     setDidFinishLoadHandler(finishLoadHandler, mainWindow.webContents)
     mainWindow.webContents.on('did-finish-load', finishLoadHandler)
   }
@@ -192,15 +206,18 @@ export function registerPtyHandlers(
   const assertFolderWorkspacePtyPathUsable = (
     worktreeId: string | undefined
   ): Promise<void> | void => assertFolderWorkspacePtyPathUsableImpl(store, worktreeId)
+
   const resolvePtySpawnStartupCwd = (
     worktreeId: string | undefined,
     cwd: string | undefined,
     missingDirFallback?: TerminalStartupCwdMissingDirFallback
   ): string | undefined => resolvePtySpawnStartupCwdImpl(store, worktreeId, cwd, missingDirFallback)
+
   const prepareCodexResumeHomeBound = (
     args: Parameters<typeof prepareCodexResumeHome>[1]
   ): ReturnType<typeof prepareCodexResumeHome> =>
     prepareCodexResumeHome(options?.prepareCodexSessionResume, args)
+
   const adoptStablePaneBound = (args: Parameters<typeof adoptStablePane>[2]) =>
     adoptStablePane(runtime, store, args)
 

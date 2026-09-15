@@ -4,27 +4,34 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
 const DEFAULT_REPORT_PATH = 'test-results/terminal-scale-perf-report.json'
+
 const DEFAULT_HTML_REPORT_PATH = 'test-results/terminal-perf-impact-report.html'
 
 export function parseReportGateArgs(argv, env = process.env) {
   const forwardedArgs = [...argv]
+
   if (forwardedArgs[0] === '--') {
     forwardedArgs.shift()
   }
 
   let reportPath = env.ORCA_E2E_TERMINAL_PERF_REPORT_PATH || DEFAULT_REPORT_PATH
   const passthroughArgs = []
+
   for (let index = 0; index < forwardedArgs.length; index += 1) {
     const arg = forwardedArgs[index]
+
     if (arg === '--report' || arg === '--report-path' || arg === '--output') {
       const next = forwardedArgs[index + 1]
+
       if (!next || next.startsWith('-')) {
         throw new Error(`${arg} requires a path`)
       }
+
       reportPath = next
       index += 1
       continue
     }
+
     if (
       arg.startsWith('--report=') ||
       arg.startsWith('--report-path=') ||
@@ -33,9 +40,11 @@ export function parseReportGateArgs(argv, env = process.env) {
       reportPath = arg.slice(arg.indexOf('=') + 1)
       continue
     }
+
     if (arg === '--reporter' || arg.startsWith('--reporter=')) {
       throw new Error('test:e2e:terminal-perf:scale:report always uses --reporter=json')
     }
+
     passthroughArgs.push(arg)
   }
 
@@ -53,8 +62,10 @@ function runNodeScript(scriptPath, args, stdio, spawnSyncImpl, env) {
 function exitCode(result) {
   if (result.signal) {
     console.error(`Terminal scale perf command exited with signal ${result.signal}`)
+
     return 1
   }
+
   return result.status ?? 1
 }
 
@@ -68,9 +79,11 @@ export function runTerminalScalePerfReportGate({
   const tempReportPath = join(tempDir, 'report.json')
 
   let scaleExitCode
+
   try {
     const reportFd = openSync(tempReportPath, 'w')
     let scaleResult
+
     try {
       scaleResult = runNodeScript(
         'config/scripts/run-terminal-scale-perf-e2e.mjs',
@@ -92,10 +105,12 @@ export function runTerminalScalePerfReportGate({
 
   if (scaleExitCode !== 0) {
     console.error(`Terminal scale perf report saved to ${reportPath}`)
+
     return scaleExitCode
   }
 
   console.log(`Terminal scale perf report saved to ${reportPath}`)
+
   const summaryResult = runNodeScript(
     'config/scripts/summarize-terminal-perf-report.mjs',
     [reportPath],
@@ -103,7 +118,9 @@ export function runTerminalScalePerfReportGate({
     spawnSyncImpl,
     env
   )
+
   const summaryExitCode = exitCode(summaryResult)
+
   if (summaryExitCode !== 0) {
     return summaryExitCode
   }
@@ -115,12 +132,15 @@ export function runTerminalScalePerfReportGate({
     spawnSyncImpl,
     env
   )
+
   const budgetExitCode = exitCode(budgetResult)
+
   if (budgetExitCode !== 0) {
     return budgetExitCode
   }
 
   const htmlReportPath = env.ORCA_E2E_TERMINAL_PERF_HTML_REPORT_PATH || DEFAULT_HTML_REPORT_PATH
+
   const htmlResult = runNodeScript(
     'config/scripts/generate-terminal-perf-html-report.mjs',
     [reportPath, '--output', htmlReportPath],
@@ -128,6 +148,7 @@ export function runTerminalScalePerfReportGate({
     spawnSyncImpl,
     env
   )
+
   return exitCode(htmlResult)
 }
 

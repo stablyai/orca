@@ -103,6 +103,7 @@ describe('Orca cloud dev auth service', () => {
     await connectCurrentOrcaProfile(userDataPath)
 
     const selected = await selectCurrentOrcaProfileOrg(userDataPath, 'dev-acme')
+
     const created = await createCloudLinkedOrcaProfile(userDataPath, {
       orgId: 'dev-acme',
       name: 'Acme Dev'
@@ -114,6 +115,7 @@ describe('Orca cloud dev auth service', () => {
       activeOrgName: 'Acme Dev'
     })
     expect(created.status).toBe('created')
+
     if (created.status === 'created') {
       expect(created.profile).toMatchObject({
         name: 'Acme Dev',

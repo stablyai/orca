@@ -9,6 +9,7 @@ const { grantDirAclAsyncMock } = vi.hoisted(() => ({
 
 vi.mock('../win32-utils', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return { ...actual, grantDirAclAsync: grantDirAclAsyncMock }
 })
 
@@ -21,6 +22,7 @@ async function createStore(): Promise<{ store: CrashReportStore; filePath: strin
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'orca-crash-reports-'))
   tempDirs.push(dir)
   const filePath = path.join(dir, 'crash-reports.json')
+
   return { store: new CrashReportStore(filePath), filePath }
 }
 
@@ -185,6 +187,7 @@ describe('CrashReportStore', () => {
       await expect(reloaded.getLatestPending()).resolves.toMatchObject({ id: report.id })
 
       expect(readFileSpy).toHaveBeenCalledTimes(2)
+
       if (code === 'EBUSY') {
         expect(grantDirAclAsyncMock).not.toHaveBeenCalled()
       } else {

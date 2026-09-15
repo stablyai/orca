@@ -28,46 +28,59 @@ export default function ProjectAddedDialog(): null {
       : typeof modalData?.projectId === 'string'
         ? modalData.projectId
         : ''
+
   const repo = repos.find((candidate) => candidate.id === repoId) ?? null
 
   useEffect(() => {
     if (activeModal !== 'project-added') {
       handoffRunRef.current++
       pendingRepoHydrationRef.current = null
+
       return
     }
+
     if (!repoId) {
       closeModal()
+
       return
     }
+
     if (!repo) {
       if (pendingRepoHydrationRef.current === repoId) {
         return
       }
+
       pendingRepoHydrationRef.current = repoId
       let cancelled = false
       void (async () => {
         await fetchRepos()
+
         if (cancelled) {
           return
         }
+
         const hydratedRepo = useAppStore
           .getState()
           .repos.find((candidate) => candidate.id === repoId)
+
         if (!hydratedRepo) {
           closeModal()
         }
+
         pendingRepoHydrationRef.current = null
       })()
+
       return () => {
         cancelled = true
         pendingRepoHydrationRef.current = null
       }
     }
+
     pendingRepoHydrationRef.current = null
     const runId = ++handoffRunRef.current
 
     let cancelled = false
+
     if (isFolderRepo(repo)) {
       void (async () => {
         try {
@@ -76,15 +89,20 @@ export default function ProjectAddedDialog(): null {
           // Why: folder compatibility exists to clear stale modal state; close
           // even if the best-effort synthetic workspace refresh fails.
         }
+
         if (cancelled) {
           return
         }
+
         const folderWorktree = useAppStore.getState().worktreesByRepo[repoId]?.[0]
+
         if (folderWorktree) {
           activateAndRevealWorktree(folderWorktree.id, { sidebarRevealBehavior: 'auto' })
         }
+
         closeModal()
       })()
+
       return () => {
         cancelled = true
       }
@@ -97,6 +115,7 @@ export default function ProjectAddedDialog(): null {
         // Why: this is a compatibility handoff; fall back to whatever worktree
         // state is already loaded rather than leaving a stale modal active.
       }
+
       if (!cancelled && handoffRunRef.current === runId) {
         await finishProjectAddWithDefaultCheckout({
           repoId,
@@ -106,6 +125,7 @@ export default function ProjectAddedDialog(): null {
         })
       }
     })()
+
     return () => {
       cancelled = true
     }

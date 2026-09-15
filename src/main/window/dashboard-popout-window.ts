@@ -16,10 +16,15 @@ import {
 } from '../../shared/keybindings'
 
 const MIN_WIDTH = 480
+
 const MIN_HEIGHT = 360
+
 const DEFAULT_WIDTH = 960
+
 const DEFAULT_HEIGHT = 720
+
 const DEFAULT_VIEW = 'board'
+
 const DASHBOARD_POPOUT_PARTITION = 'orca-dashboard-popout'
 
 // Why: singleton — the dashboard is a companion surface, so a second "Pop Out"
@@ -63,6 +68,7 @@ function resolveZoomShortcut(
       return direction
     }
   }
+
   return null
 }
 
@@ -74,10 +80,13 @@ function resolveZoomShortcut(
  */
 export function zoomDashboardPopoutIfFocused(direction: UIZoomDirection): boolean {
   const popout = getDashboardPopoutWindow()
+
   if (!popout || !popout.isFocused()) {
     return false
   }
+
   zoomDashboardPopout(popout, direction)
+
   return true
 }
 
@@ -87,6 +96,7 @@ const popoutOpenListeners = new Set<(open: boolean) => void>()
 /** Subscribe to pop-out open/close transitions in the main process. */
 export function onDashboardPopoutOpenChanged(listener: (open: boolean) => void): () => void {
   popoutOpenListeners.add(listener)
+
   return () => popoutOpenListeners.delete(listener)
 }
 
@@ -94,6 +104,7 @@ export function onDashboardPopoutOpenChanged(listener: (open: boolean) => void):
 // open. Tell that exact window when the state flips, then notify listeners.
 function broadcastPopoutOpenChanged(open: boolean): void {
   sendToTrustedUIRenderer('dashboard:popoutOpenChanged', open)
+
   for (const listener of popoutOpenListeners) {
     listener(open)
   }
@@ -101,6 +112,7 @@ function broadcastPopoutOpenChanged(open: boolean): void {
 
 function loadDashboardPopout(window: BrowserWindow, view: string): void {
   const search = `view=${encodeURIComponent(view)}`
+
   // Why: mirror loadMainWindow's dev/prod branch — the dev server serves the
   // second HTML entry, prod loads the emitted file.
   if (is.dev && process.env.ELECTRON_RENDERER_URL) {
@@ -117,6 +129,7 @@ function resolveRestoredBounds(store: Store | null): {
   height: number
 } | null {
   const raw = store?.getUI().dashboardPopoutBounds ?? null
+
   if (
     raw &&
     raw.width >= MIN_WIDTH &&
@@ -125,9 +138,11 @@ function resolveRestoredBounds(store: Store | null): {
   ) {
     return raw
   }
+
   if (raw) {
     console.warn('[dashboard-popout] Discarding off-screen/near-min popout bounds:', raw)
   }
+
   return null
 }
 
@@ -146,12 +161,15 @@ export function createOrFocusDashboardPopout(
     if (dashboardPopoutWindow.isMinimized()) {
       dashboardPopoutWindow.restore()
     }
+
     if (!isBackgroundLaunch()) {
       dashboardPopoutWindow.focus()
     }
+
     if (view) {
       dashboardPopoutWindow.webContents.send('dashboard:viewRequested', view)
     }
+
     return dashboardPopoutWindow
   }
 
@@ -186,6 +204,7 @@ export function createOrFocusDashboardPopout(
       webviewTag: false
     }
   })
+
   installPrivilegedWindowNavigationPolicy(window.webContents)
   // Why: isolated sessions do not inherit the main session's deny-by-default permission policy.
   window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) =>
@@ -207,12 +226,16 @@ export function createOrFocusDashboardPopout(
   // not the live webContents level, so a window-local zoom via the menu/chords
   // is not snapped back until the app-wide level actually changes.
   let lastFollowedZoomLevel = store?.getUI().uiZoomLevel ?? 0
+
   const unsubscribeUIChanged = store?.onUIChanged((ui) => {
     const level = ui.uiZoomLevel ?? 0
+
     if (level === lastFollowedZoomLevel) {
       return
     }
+
     lastFollowedZoomLevel = level
+
     if (!window.isDestroyed()) {
       window.webContents.setZoomLevel(level)
     }
@@ -224,7 +247,9 @@ export function createOrFocusDashboardPopout(
     if (input.type !== 'keyDown') {
       return
     }
+
     const direction = resolveZoomShortcut(input, options.getKeybindings?.())
+
     if (direction) {
       event.preventDefault()
       zoomDashboardPopout(window, direction)
@@ -253,45 +278,57 @@ export function createOrFocusDashboardPopout(
   // near-minimum bounds.
   let boundsTimer: ReturnType<typeof setTimeout> | null = null
   let windowClosing = false
+
   const saveBounds = (): void => {
     if (boundsTimer) {
       clearTimeout(boundsTimer)
     }
+
     boundsTimer = setTimeout(() => {
       boundsTimer = null
+
       if (windowClosing || window.isDestroyed() || window.isMinimized() || window.isFullScreen()) {
         return
       }
+
       const bounds = window.getBounds()
+
       if (bounds.width < MIN_WIDTH || bounds.height < MIN_HEIGHT) {
         return
       }
+
       store?.updateUI({ dashboardPopoutBounds: bounds })
     }, 500)
   }
+
   window.on('resize', saveBounds)
   window.on('move', saveBounds)
 
   const freezeBounds = (): void => {
     windowClosing = true
+
     if (boundsTimer) {
       clearTimeout(boundsTimer)
       boundsTimer = null
     }
   }
+
   window.on('close', freezeBounds)
   app.on('before-quit', freezeBounds)
 
   window.on('closed', () => {
     app.removeListener('before-quit', freezeBounds)
     unsubscribeUIChanged?.()
+
     if (dashboardPopoutWindow === window) {
       dashboardPopoutWindow = null
     }
+
     broadcastPopoutOpenChanged(false)
   })
 
   loadDashboardPopout(window, initialView)
+
   return window
 }
 
@@ -301,5 +338,6 @@ export function closeDashboardPopout(): void {
   if (dashboardPopoutWindow && !dashboardPopoutWindow.isDestroyed()) {
     dashboardPopoutWindow.close()
   }
+
   dashboardPopoutWindow = null
 }

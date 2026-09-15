@@ -36,6 +36,7 @@ import { clearKimiSessionIndexCache } from './session-scanner-kimi-paths'
 const PARSE_FAILURE = 'parser failed mid-transcript'
 
 const opened: { path: string; stream: Readable }[] = []
+
 const interfaces: { close: ReturnType<typeof vi.fn> }[] = []
 
 function file(path: string): FileWithMtime {
@@ -44,9 +45,11 @@ function file(path: string): FileWithMtime {
 
 function lastOpened(): { path: string; stream: Readable } {
   const entry = opened.at(-1)
+
   if (!entry) {
     throw new Error('no transcript stream was opened')
   }
+
   return entry
 }
 
@@ -70,7 +73,9 @@ beforeEach(() => {
         this.push(null)
       }
     })
+
     opened.push({ path, stream })
+
     return stream
   })
   // One line, then a consumer-side throw: the parser must still tear the
@@ -83,7 +88,9 @@ beforeEach(() => {
         throw new Error(PARSE_FAILURE)
       }
     }
+
     interfaces.push(lines)
+
     return lines
   })
 })

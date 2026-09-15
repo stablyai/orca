@@ -57,9 +57,11 @@ describe('prRefreshSequences stays bounded (leak regression)', () => {
     // Seed more sequence entries than the cap allows.
     const seeded: Record<string, number> = {}
     const seedCount = MAX_CACHE_ENTRIES + 100
+
     for (let i = 0; i < seedCount; i++) {
       seeded[`seed-${i}`] = 1
     }
+
     store.setState({ prRefreshSequences: seeded })
 
     // One more refresh event for a brand-new PR cache key pushes over the cap.
@@ -93,9 +95,11 @@ describe('prRefreshSequences stays bounded (leak regression)', () => {
     const store = createTestStore()
     const seeded: Record<string, number> = {}
     const seedCount = MAX_CACHE_ENTRIES + 100
+
     for (let i = 0; i < seedCount; i++) {
       seeded[`seed-${i}`] = 1
     }
+
     store.setState({ prRefreshSequences: seeded })
 
     // Refresh the OLDEST key. The writer moves it to most-recent (delete+set),

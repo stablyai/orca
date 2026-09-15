@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { minidumpSignatureDetails, parseMinidumpCrashSignature } from './minidump-crash-signature'
 
 const STREAM_TYPE_MODULE_LIST = 4
+
 const STREAM_TYPE_EXCEPTION = 6
+
 const STREAM_TYPE_CRASHPAD_INFO = 0x43500001
 
 /**
@@ -22,6 +24,7 @@ class MinidumpBuilder {
     const rva = this.cursor
     this.regions.push(buf)
     this.cursor += buf.length
+
     return rva
   }
 
@@ -30,6 +33,7 @@ class MinidumpBuilder {
     const buf = Buffer.alloc(4 + data.length + 1)
     buf.writeUInt32LE(data.length, 0)
     data.copy(buf, 4)
+
     return this.append(buf)
   }
 
@@ -38,6 +42,7 @@ class MinidumpBuilder {
     const buf = Buffer.alloc(4 + data.length + 2)
     buf.writeUInt32LE(data.length, 0)
     data.copy(buf, 4)
+
     return this.append(buf)
   }
 
@@ -46,6 +51,7 @@ class MinidumpBuilder {
     const buf = Buffer.alloc(4 + data.length)
     buf.writeUInt32LE(data.length, 0)
     data.copy(buf, 4)
+
     return this.append(buf)
   }
 
@@ -64,6 +70,7 @@ class MinidumpBuilder {
     const body = Buffer.concat(this.regions)
     const prefix = Buffer.concat([header, directory])
     expect(prefix.length).toBe(this.headerAndDirectoryBytes)
+
     return Buffer.concat([prefix, body])
   }
 }
@@ -72,6 +79,7 @@ function location(size: number, rva: number): Buffer {
   const buf = Buffer.alloc(8)
   buf.writeUInt32LE(size, 0)
   buf.writeUInt32LE(rva, 4)
+
   return buf
 }
 
@@ -92,15 +100,18 @@ function buildDump(options: {
 }): BuiltDump {
   const streamCount =
     1 + (options.exception ? 1 : 0) + (options.modules && options.modules.length > 0 ? 1 : 0)
+
   const builder = new MinidumpBuilder(32 + streamCount * 12)
   const streams: { type: number; size: number; rva: number }[] = []
 
   // Module-level annotation objects.
   const annotationEntries = Object.entries(options.annotations ?? {})
+
   const annotationRecords = annotationEntries.map(([name, value]) => ({
     nameRva: builder.utf8String(name),
     valueRva: builder.byteArray(value)
   }))
+
   const annotationListBuf = Buffer.alloc(4 + annotationRecords.length * 12)
   annotationListBuf.writeUInt32LE(annotationRecords.length, 0)
   annotationRecords.forEach((record, index) => {
@@ -114,10 +125,12 @@ function buildDump(options: {
 
   // Process-level simple string dictionary.
   const simpleEntries = Object.entries(options.simpleAnnotations ?? {})
+
   const simplePairs = simpleEntries.map(([key, value]) => ({
     keyRva: builder.utf8String(key),
     valueRva: builder.utf8String(value)
   }))
+
   const simpleBuf = Buffer.alloc(4 + simplePairs.length * 8)
   simpleBuf.writeUInt32LE(simplePairs.length, 0)
   simplePairs.forEach((pair, index) => {
@@ -131,12 +144,14 @@ function buildDump(options: {
     (() => {
       const v = Buffer.alloc(4)
       v.writeUInt32LE(1, 0)
+
       return v
     })(),
     EMPTY_LOCATION,
     EMPTY_LOCATION,
     location(annotationListBuf.length, annotationListRva)
   ])
+
   const moduleInfoRva = builder.append(moduleInfoBuf)
 
   const moduleLinkBuf = Buffer.alloc(4 + 12)
@@ -150,11 +165,13 @@ function buildDump(options: {
     (() => {
       const v = Buffer.alloc(4 + 16 + 16)
       v.writeUInt32LE(1, 0)
+
       return v
     })(),
     location(simpleBuf.length, simpleRva),
     location(moduleLinkBuf.length, moduleLinkRva)
   ])
+
   const crashpadInfoRva = builder.append(crashpadInfoBuf)
   streams.push({
     type: STREAM_TYPE_CRASHPAD_INFO,
@@ -197,12 +214,15 @@ function buildDump(options: {
 /** Offset of a stream's directory entry: `{type, size, rva}`. */
 function streamEntry(dump: Buffer, type: number): number {
   const directoryRva = dump.readUInt32LE(12)
+
   for (let index = 0; index < dump.readUInt32LE(8); index += 1) {
     const entry = directoryRva + index * 12
+
     if (dump.readUInt32LE(entry) === type) {
       return entry
     }
   }
+
   throw new Error(`no stream of type ${type}`)
 }
 
@@ -232,6 +252,7 @@ describe('parseMinidumpCrashSignature', () => {
 
   it('recovers a CHECK line from Electron 43 dump memory without LOG_FATAL', () => {
     const { dump } = buildDump({ annotations: { ptype: 'renderer' } })
+
     const dumpWithMemory = Buffer.concat([
       dump,
       Buffer.from(`\0${ELECTRON_43_CHECK_LINE}\0`, 'utf8')
@@ -247,6 +268,7 @@ describe('parseMinidumpCrashSignature', () => {
 
   it('stops at the process type when the dump belongs to another process', () => {
     const { dump } = buildDump({ annotations: { ptype: 'gpu-process' } })
+
     const dumpWithMemory = Buffer.concat([
       dump,
       Buffer.from(`\0${ELECTRON_43_CHECK_LINE}\0`, 'utf8')
@@ -263,6 +285,7 @@ describe('parseMinidumpCrashSignature', () => {
 
   it('still parses fully when the process type matches', () => {
     const { dump } = buildDump({ annotations: { ptype: 'renderer' } })
+
     const dumpWithMemory = Buffer.concat([
       dump,
       Buffer.from(`\0${ELECTRON_43_CHECK_LINE}\0`, 'utf8')
@@ -286,8 +309,10 @@ describe('parseMinidumpCrashSignature', () => {
 
   it('does not promote an unrelated Chromium ERROR line containing CHECK', () => {
     const { dump } = buildDump({})
+
     const unrelated =
       '[29136:0815/232206.330:ERROR:settings.cc:44] Opened the CHECK settings panel.'
+
     const dumpWithMemory = Buffer.concat([dump, Buffer.from(`\0${unrelated}\0`, 'utf8')])
 
     expect(parseMinidumpCrashSignature(dumpWithMemory)?.checkMessage).toBeUndefined()
@@ -295,6 +320,7 @@ describe('parseMinidumpCrashSignature', () => {
 
   it('prefers the structured annotation over a dump-memory candidate', () => {
     const { dump } = buildDump({ annotations: { LOG_FATAL: FATAL_LINE } })
+
     const dumpWithMemory = Buffer.concat([
       dump,
       Buffer.from(`\0${ELECTRON_43_CHECK_LINE}\0`, 'utf8')
@@ -364,6 +390,7 @@ describe('parseMinidumpCrashSignature', () => {
       size: 0x1000,
       name: `/Applications/Orca.app/Contents/Frameworks/lib${index}.dylib`
     }))
+
     const { dump } = buildDump({
       exception: { code: 11, address: 0x1_0000_0000n + 1030n * 0x1_0000n + 0x24n },
       modules
@@ -380,6 +407,7 @@ describe('parseMinidumpCrashSignature', () => {
       exception: { code: 11, address: 0x7ff7_0000_0010n },
       modules: [{ base: 0x7ff7_0000_0000n, size: 0x1000, name: '/opt/orca/orca' }]
     })
+
     const corrupt = Buffer.from(dump)
     corrupt.writeUInt32LE(0xffff_ffff, moduleListRva(corrupt))
 

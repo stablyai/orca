@@ -13,6 +13,7 @@ function getParserWorkerPath(): string {
   if (app.isPackaged) {
     return join(process.resourcesPath, 'app.asar', 'out', 'main', 'warp-theme-parser-worker.js')
   }
+
   return join(__dirname, 'warp-theme-parser-worker.js')
 }
 
@@ -20,7 +21,9 @@ function isParsedWarpThemeResult(value: unknown): value is ParsedWarpThemeResult
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const record = value as Record<string, unknown>
+
   return record.ok === true || record.ok === false
 }
 
@@ -34,23 +37,28 @@ export function parseWarpThemeYamlWithTimeout(
     const worker = new Worker(getParserWorkerPath(), {
       workerData: { content, fileLabel, options }
     })
+
     let settled = false
+
     // Why: callers may shorten the parse timeout (preview budget) but never
     // extend it past the default cap, keeping untrusted-input parse time bounded.
     const timeoutMs = Math.max(
       0,
       Math.min(WARP_THEME_PARSE_TIMEOUT_MS, timeoutOptions.timeoutMs ?? WARP_THEME_PARSE_TIMEOUT_MS)
     )
+
     const timeout = setTimeout(() => {
       settle({ ok: false, reason: 'Theme file took too long to parse.' })
       void worker.terminate()
     }, timeoutMs)
+
     timeout.unref?.()
 
     function settle(result: ParsedWarpThemeResult): void {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timeout)
       worker.removeAllListeners()

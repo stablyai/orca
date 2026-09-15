@@ -3,6 +3,7 @@ import type * as pty from 'node-pty'
 import { writeStartupCommandWhenShellReady } from './local-pty-shell-ready-startup-command'
 
 type DataCb = (data: string) => void
+
 type ExitCb = (info: { exitCode: number }) => void
 
 function createMockProc(): pty.IPty & {
@@ -11,6 +12,7 @@ function createMockProc(): pty.IPty & {
 } {
   let onDataCbs: DataCb[] = []
   const writes: string[] = []
+
   const fake = {
     pid: 1,
     cols: 80,
@@ -27,6 +29,7 @@ function createMockProc(): pty.IPty & {
     resume: () => {},
     onData: (cb: DataCb) => {
       onDataCbs.push(cb)
+
       return {
         dispose: () => {
           onDataCbs = onDataCbs.filter((c) => c !== cb)

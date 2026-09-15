@@ -23,25 +23,32 @@ export class StatsSnapshotWriter {
   write(serialize: () => string): Promise<void> {
     this.writeRequested = true
     this.pendingSerialize = serialize
+
     if (this.pendingWrite) {
       return this.pendingWrite
     }
+
     const run = this.drainWrites()
+
     const tracked = run.finally(() => {
       if (this.pendingWrite === tracked) {
         this.pendingWrite = null
       }
     })
+
     this.pendingWrite = tracked
+
     return tracked
   }
 
   writeSync(serialize: () => string): void {
     const statsFile = this.resolveFile()
     const dir = dirname(statsFile)
+
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
     }
+
     if (this.inFlightAsyncTmpFile) {
       try {
         unlinkSync(this.inFlightAsyncTmpFile)
@@ -55,6 +62,7 @@ export class StatsSnapshotWriter {
         }
       }
     }
+
     const { tmpFile, json, generation } = this.preparePayload(statsFile, serialize)
     writeFileSync(tmpFile, json, 'utf-8')
     renameSync(tmpFile, statsFile)
@@ -74,6 +82,7 @@ export class StatsSnapshotWriter {
     generation: number
   } {
     const generation = ++this.writeGeneration
+
     return {
       tmpFile: durableWriteTempPath(finalPath),
       json: serialize(),
@@ -84,18 +93,22 @@ export class StatsSnapshotWriter {
   private async drainWrites(): Promise<void> {
     await this.staleTempCleanup
     let firstError: unknown = null
+
     while (this.writeRequested) {
       this.writeRequested = false
       const serialize = this.pendingSerialize!
+
       try {
         await this.writeToDiskAsync(serialize)
       } catch (error) {
         firstError ??= error
+
         if (!this.writeRequested) {
           throw error
         }
       }
     }
+
     if (firstError) {
       throw firstError
     }
@@ -106,12 +119,16 @@ export class StatsSnapshotWriter {
     await mkdir(dirname(statsFile), { recursive: true }).catch(() => {})
     const { tmpFile, json, generation } = this.preparePayload(statsFile, serialize)
     let renamed = false
+
     try {
       await writeFile(tmpFile, json, 'utf-8')
+
       if (this.lastCommittedGeneration >= generation) {
         return
       }
+
       this.inFlightAsyncTmpFile = tmpFile
+
       try {
         await rename(tmpFile, statsFile)
         renamed = true

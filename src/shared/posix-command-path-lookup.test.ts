@@ -22,8 +22,11 @@ type ShellCase = {
 }
 
 const isWindows = process.platform === 'win32'
+
 const WSL_TEST_COMMAND_TIMEOUT_MS = 10_000
+
 let wslShAvailable: boolean | null = null
+
 const shellCases: ShellCase[] = [
   { name: 'sh', path: executablePath(['/bin/sh']) },
   { name: 'bash', path: executablePath(['/bin/bash', '/usr/bin/bash']) },
@@ -37,6 +40,7 @@ describe('buildPosixCommandPathLookupScript', () => {
       `resolves without mutating alias and function masks in ${shell.name}`,
       () => {
         const commandName = basename(process.execPath)
+
         const script = [
           `${commandName}() { printf '%s\\n' masked-function; }`,
           `alias ${commandName}='printf "%s\\n" masked-alias'`,
@@ -68,6 +72,7 @@ describe('buildPosixCommandPathLookupScript', () => {
     'resolves a command held in a validated shell variable',
     () => {
       const commandName = basename(process.execPath)
+
       const script = [
         `cmd='${commandName}'`,
         `${commandName}() { printf '%s\\n' masked-function; }`,
@@ -93,6 +98,7 @@ describe('buildPosixCommandPathLookupScript', () => {
     'resolves past a readonly bash function mask',
     () => {
       const commandName = basename(process.execPath)
+
       const script = [
         `${commandName}() { printf '%s\\n' masked-function; }`,
         `readonly -f ${commandName}`,
@@ -125,10 +131,12 @@ describe('buildPosixCommandPathLookupScript', () => {
         mkdirSync(secondDirectory)
         writeFileSync(secondExecutable, '#!/bin/sh\nexit 0\n')
         chmodSync(secondExecutable, 0o755)
+
         const script = [
           buildPosixCommandPathLookupScript({ kind: 'literal', value: 'printf' }),
           `printf '%s\\n' "$resolved"`
         ].join('\n')
+
         const resolved = execFileSync('/bin/sh', ['-c', script], {
           encoding: 'utf8',
           env: { ...process.env, PATH: `${directory}:${secondDirectory}` }
@@ -144,20 +152,24 @@ describe('buildPosixCommandPathLookupScript', () => {
     () => {
       withExecutableFixture('relative-agent', (directory, executable, root) => {
         const relativeDirectory = basename(directory)
+
         const script = [
           buildPosixCommandPathLookupScript({ kind: 'literal', value: 'relative-agent' }),
           `printf '%s\\n' "$resolved"`
         ].join('\n')
+
         const relativeResolved = execFileSync('/bin/sh', ['-c', script], {
           cwd: root,
           encoding: 'utf8',
           env: { ...process.env, PATH: `${relativeDirectory}:` }
         }).trim()
+
         const trailingResolved = execFileSync('/bin/sh', ['-c', script], {
           cwd: directory,
           encoding: 'utf8',
           env: { ...process.env, PATH: '/missing:' }
         }).trim()
+
         const emptyResolved = execFileSync('/bin/sh', ['-c', script], {
           cwd: directory,
           encoding: 'utf8',
@@ -181,6 +193,7 @@ describe('buildPosixCommandPathLookupScript', () => {
           buildPosixCommandPathLookupScript({ kind: 'literal', value: './-agent' }),
           `printf '%s\\n' "$resolved"`
         ].join('\n')
+
         const output = execFileSync('/bin/sh', ['-c', script], {
           cwd: directory,
           encoding: 'utf8',
@@ -233,6 +246,7 @@ describe('buildPosixCommandPathLookupScript', () => {
     'resolves through the Windows-to-WSL login-shell boundary with inline masks',
     () => {
       const lookup = buildPosixCommandPathLookupScript({ kind: 'literal', value: 'sh' })
+
       // Why the captured form: an interactive login shell also prints the distro's
       // rc/motd to stdout, which would land in front of the resolved path.
       const captured = buildWslCapturedLoginShellCommand(
@@ -243,6 +257,7 @@ describe('buildPosixCommandPathLookupScript', () => {
           `printf '%s' "$resolved"`
         ].join('\n')
       )
+
       const stdout = execFileSync(
         'wsl.exe',
         buildWslExecArgs(undefined, ['sh', '-lc', captured.command]),
@@ -264,9 +279,11 @@ function canRunWslSh(): boolean {
   if (!isWindows) {
     return false
   }
+
   if (wslShAvailable !== null) {
     return wslShAvailable
   }
+
   try {
     execFileSync('wsl.exe', ['--exec', 'sh', '-lc', 'true'], {
       timeout: WSL_TEST_COMMAND_TIMEOUT_MS
@@ -275,6 +292,7 @@ function canRunWslSh(): boolean {
   } catch {
     wslShAvailable = false
   }
+
   return wslShAvailable
 }
 
@@ -285,6 +303,7 @@ function withExecutableFixture(
   const root = mkdtempSync(join(tmpdir(), 'orca-path-lookup-'))
   const directory = join(root, 'bin')
   const executable = join(directory, name)
+
   try {
     mkdirSync(directory)
     writeFileSync(executable, '#!/bin/sh\nexit 0\n')
@@ -299,16 +318,20 @@ function executablePath(candidates: readonly string[]): string | null {
   if (isWindows) {
     return null
   }
+
   for (const candidate of candidates) {
     if (!existsSync(candidate)) {
       continue
     }
+
     try {
       accessSync(candidate, constants.X_OK)
+
       return candidate
     } catch {
       // Keep checking alternate standard locations when this entry is not executable.
     }
   }
+
   return null
 }

@@ -6,7 +6,9 @@ function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false
   }
+
   const tag = target.tagName
+
   return tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable
 }
 
@@ -24,6 +26,7 @@ export function useMarkupKeyboardShortcuts(params: MarkupKeyboardParams): void {
   const { pendingText, setPendingText, undo, redo, onCancel } = params
   useEffect(() => {
     const isMac = navigator.userAgent.includes('Mac')
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         if (pendingText) {
@@ -31,14 +34,19 @@ export function useMarkupKeyboardShortcuts(params: MarkupKeyboardParams): void {
         } else {
           onCancel()
         }
+
         return
       }
+
       if (isTypingTarget(event.target)) {
         return
       }
+
       const mod = isMac ? event.metaKey : event.ctrlKey
+
       if (mod && event.key.toLowerCase() === 'z') {
         event.preventDefault()
+
         if (event.shiftKey) {
           redo()
         } else {
@@ -46,7 +54,9 @@ export function useMarkupKeyboardShortcuts(params: MarkupKeyboardParams): void {
         }
       }
     }
+
     window.addEventListener('keydown', onKeyDown)
+
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [pendingText, setPendingText, undo, redo, onCancel])
 }

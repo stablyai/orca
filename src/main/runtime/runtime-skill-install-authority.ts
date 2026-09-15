@@ -28,25 +28,33 @@ export async function resolveSkillSshTarget(
 ): Promise<{ provider: () => IPtyProvider; workspace?: SkillSshWorkspaceAuthority } | null> {
   if (destination.scope === 'global') {
     const target = destination.executionTarget
+
     return target?.kind === 'ssh' ? { provider: () => requireSsh(target.connectionId) } : null
   }
+
   if (destination.worktreeId) {
     const repos = host
       .listRepos()
       .filter((candidate) => candidate.id === getRepoIdFromWorktreeId(destination.worktreeId!))
+
     const hostIds = new Set(repos.map((repo) => getRepoExecutionHostId(repo)))
+
     if (hostIds.size > 1) {
       throw new Error('skill-install-workspace-host-ambiguous')
     }
+
     const executionHost = parseExecutionHostId([...hostIds][0])
+
     if (!executionHost || executionHost.kind === 'local') {
       return null
     }
+
     // Why null and not a throw: base treated any non-ssh host as "not an SSH install" and
     // fell through to the local path; a runtime-owned repo must not hard-error here.
     if (executionHost.kind !== 'ssh') {
       return null
     }
+
     // Why the resolved inventory and not showManagedWorktree: a worktree id can collide across
     // hosts, and only this list carries the hostId needed to pick the SSH-owned row.
     const worktrees = (await host.listResolvedWorktrees()).filter(
@@ -54,6 +62,7 @@ export async function resolveSkillSshTarget(
         candidate.id === destination.worktreeId &&
         (!candidate.hostId || candidate.hostId === executionHost.id)
     )
+
     if (worktrees.length !== 1) {
       throw new Error(
         worktrees.length > 1
@@ -61,29 +70,38 @@ export async function resolveSkillSshTarget(
           : 'skill-install-workspace-not-found'
       )
     }
+
     const worktree = worktrees[0]
+
     return {
       provider: () => requireSsh(executionHost.targetId),
       workspace: { kind: 'worktree', id: worktree.id, path: worktree.path }
     }
   }
+
   const folders = host
     .listFolderWorkspaces()
     .filter((candidate) => candidate.id === destination.folderWorkspaceId)
+
   const folderHosts = new Set(folders.map((folder) => folderExecutionHostId(folder)))
+
   if (folders.length > 1 || folderHosts.size > 1) {
     throw new Error('skill-install-workspace-host-ambiguous')
   }
+
   const folder = folders[0]
   const executionHost = parseExecutionHostId([...folderHosts][0])
+
   if (!folder || !executionHost || executionHost.kind === 'local') {
     return null
   }
+
   // Why null: base gated this branch on `folder.connectionId`, so any non-ssh host simply
   // was not an SSH install and fell through to the local path.
   if (executionHost.kind !== 'ssh') {
     return null
   }
+
   return {
     provider: () => requireSsh(executionHost.targetId),
     workspace: { kind: 'folder', id: folder.id, path: folder.folderPath }
@@ -102,19 +120,23 @@ export async function resolveSkillProviderRoots(
   if (destination.scope !== 'global') {
     return {}
   }
+
   const grok = destination.wslDistro
     ? await resolveWslGrokSkillProviderRoot(destination.wslDistro)
     : null
+
   const roots = destination.wslDistro
     ? grok
       ? { grok }
       : {}
     : resolveEnvironmentSkillProviderRoots()
+
   const config = host.getClaudeConfigDirectory?.(
     destination.wslDistro
       ? { runtime: 'wsl', wslDistro: destination.wslDistro }
       : { runtime: 'host' }
   )
+
   return withClaudeSkillProviderRoot(roots, config)
 }
 
@@ -138,20 +160,27 @@ export function createSkillInstallAuthority(
       const repos = host
         .listRepos()
         .filter((candidate) => candidate.id === getRepoIdFromWorktreeId(id))
+
       const hostIds = new Set(repos.map((repo) => getRepoExecutionHostId(repo)))
+
       if (hostIds.size > 1) {
         throw new Error('skill-install-workspace-host-ambiguous')
       }
+
       if (hostIds.size === 1 && !hostIds.has(LOCAL_EXECUTION_HOST_ID)) {
         throw new Error('skill-install-ssh-dispatch-required')
       }
+
       // Why no catch: swallowing here reports a transient git/IO failure as a missing
       // workspace and loses the real cause.
       const worktree = await host.showManagedWorktree(`id:${id}`)
+
       if (worktree.id !== id) {
         return null
       }
+
       const projectRuntime = host.resolveProjectRuntimeForWorktree?.(id)
+
       return {
         id,
         path: worktree.path,
@@ -164,17 +193,23 @@ export function createSkillInstallAuthority(
     },
     resolveFolderWorkspace: async (id) => {
       const workspaces = host.listFolderWorkspaces().filter((candidate) => candidate.id === id)
+
       if (workspaces.length > 1) {
         throw new Error('skill-install-workspace-host-ambiguous')
       }
+
       const workspace = workspaces[0]
+
       if (!workspace) {
         return null
       }
+
       if (folderExecutionHostId(workspace) !== LOCAL_EXECUTION_HOST_ID) {
         throw new Error('skill-install-ssh-dispatch-required')
       }
+
       const wsl = parseWslUncPath(workspace.folderPath)
+
       return { id, path: workspace.folderPath, ...(wsl ? { wslDistro: wsl.distro } : {}) }
     },
     resolveWsl: async (distro) =>

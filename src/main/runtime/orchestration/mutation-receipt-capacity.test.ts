@@ -50,6 +50,7 @@ describe('mutation receipt capacity schema', () => {
   afterEach(() => {
     secondDb?.close()
     db?.close()
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
     }
@@ -68,6 +69,7 @@ describe('mutation receipt capacity schema', () => {
            AND updated_at < datetime('now', ?)`
       )
       .all('-30 days') as { detail: string }[]
+
     const capacityPlan = sqlite
       .prepare(
         `EXPLAIN QUERY PLAN
@@ -77,6 +79,7 @@ describe('mutation receipt capacity schema', () => {
          LIMIT ?`
       )
       .all(64) as { detail: string }[]
+
     const details = [...agePlan, ...capacityPlan].map((row) => row.detail).join('\n')
 
     expect(details).toContain('idx_mutation_receipts_completed_updated')
@@ -130,10 +133,13 @@ describe('mutation receipt capacity schema', () => {
     insertReceipts(sqlite, MUTATION_RECEIPT_MAX_ROWS, 'completed')
 
     beginReceipt(db, 'first')
+
     const afterFirst = sqlite
       .prepare('SELECT receipt_count FROM mutation_receipt_ledger')
       .get() as { receipt_count: number }
+
     beginReceipt(db, 'second')
+
     const afterSecond = sqlite
       .prepare('SELECT receipt_count FROM mutation_receipt_ledger')
       .get() as { receipt_count: number }

@@ -42,6 +42,7 @@ export function setupGuestShortcutForwarding(args: {
     resolveWorktreeId,
     resolveWorkspaceId
   } = args
+
   let ctrlTabSwitching = false
   const doubleTapDetector = new ModifierDoubleTapDetector()
   const resetDoubleTapDetector = (): void => doubleTapDetector.reset()
@@ -68,6 +69,7 @@ export function setupGuestShortcutForwarding(args: {
 
   const handler = (event: Electron.Event, input: Electron.Input): void => {
     const keybindings = getKeybindings?.()
+
     if (
       input.type === 'keyDown' &&
       matchesRecentTabSwitcherChord(input, process.platform, keybindings)
@@ -77,6 +79,7 @@ export function setupGuestShortcutForwarding(args: {
       ctrlTabSwitching = true
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:ctrlTabKeyDown', { shiftKey: input.shift === true })
+
       return
     }
 
@@ -85,6 +88,7 @@ export function setupGuestShortcutForwarding(args: {
       ctrlTabSwitching = false
       const renderer = resolveRenderer(browserTabId)
       renderer?.send('ui:ctrlTabKeyUp')
+
       return
     }
 
@@ -102,6 +106,7 @@ export function setupGuestShortcutForwarding(args: {
         }),
         Date.now()
       )
+
       if (detected) {
         const doubleTapInput: GuestShortcutInput = { doubleTapModifier: detected.modifier }
         forwardGuestShortcutInput(
@@ -112,6 +117,7 @@ export function setupGuestShortcutForwarding(args: {
             context: 'app'
           })
         )
+
         return
       }
     }
@@ -119,6 +125,7 @@ export function setupGuestShortcutForwarding(args: {
     if (input.type !== 'keyDown') {
       return
     }
+
     // Why: Cmd/Ctrl+Alt+Arrow is the only allowlisted chord carrying Alt, so resolve it before the Alt-rejecting chord gate below.
     const action = resolveWindowShortcutAction(input, process.platform, keybindings)
     forwardGuestShortcutInput(forwardContext, event, input, action)
@@ -131,20 +138,25 @@ export function setupGuestShortcutForwarding(args: {
     if (zoomDirection !== 'in' && zoomDirection !== 'out') {
       return
     }
+
     // Why: some layouts/platforms turn Ctrl/Cmd +/- into Electron's native zoom before before-input-event reaches the guest.
     if (consumeRecentGuestWheelZoom(guest, zoomDirection)) {
       event.preventDefault()
+
       return
     }
+
     if (!nativeZoomCommandMatchesKeybindings(zoomDirection, process.platform, getKeybindings?.())) {
       return
     }
+
     forwardBrowserPageZoom(event, zoomDirection)
   }
 
   guest.on('before-input-event', handler)
   guest.on('zoom-changed', zoomCommandHandler)
   guest.on('blur', resetDoubleTapDetector)
+
   return () => {
     try {
       guest.off('before-input-event', handler)

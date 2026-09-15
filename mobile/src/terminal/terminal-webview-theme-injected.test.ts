@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { TERMINAL_WEBVIEW_THEME_JS } from './terminal-webview-theme-injected'
 
 const DARK_FLOOR = 3
+
 const LIGHT_FLOOR = 4.5
 
 // Eval the injected theme JS in a bare context so the declared helpers become
@@ -13,7 +14,9 @@ function loadThemeInjected(extra: Record<string, unknown> = {}): Record<string, 
     defaultTheme: { background: '#1a1b26', foreground: '#c0caf5' },
     ...extra
   }
+
   new Script(TERMINAL_WEBVIEW_THEME_JS).runInNewContext(context)
+
   return context
 }
 
@@ -26,6 +29,7 @@ describe('mobile terminal-webview contrast floor gate', () => {
     const { resolveTerminalContrastFloor } = loadThemeInjected() as {
       resolveTerminalContrastFloor: (bg: unknown) => number
     }
+
     for (const bg of ['#1a1b26', '#1e242a', '#282828', '#000000', 'black']) {
       expect(resolveTerminalContrastFloor(bg)).toBe(DARK_FLOOR)
     }
@@ -35,6 +39,7 @@ describe('mobile terminal-webview contrast floor gate', () => {
     const { resolveTerminalContrastFloor } = loadThemeInjected() as {
       resolveTerminalContrastFloor: (bg: unknown) => number
     }
+
     for (const bg of ['#ffffff', '#fbf1c7', 'white', 'rgb(240 240 240)']) {
       expect(resolveTerminalContrastFloor(bg)).toBe(LIGHT_FLOOR)
     }
@@ -44,6 +49,7 @@ describe('mobile terminal-webview contrast floor gate', () => {
     const { resolveTerminalContrastFloor } = loadThemeInjected() as {
       resolveTerminalContrastFloor: (bg: unknown) => number
     }
+
     // Fully transparent → app surface (dark) → dark floor.
     expect(resolveTerminalContrastFloor('transparent')).toBe(DARK_FLOOR)
     // Faint white over the dark surface stays dark; opaque-enough white flips light.
@@ -55,6 +61,7 @@ describe('mobile terminal-webview contrast floor gate', () => {
     const { resolveTerminalContrastFloor } = loadThemeInjected() as {
       resolveTerminalContrastFloor: (bg: unknown) => number
     }
+
     for (const bg of [undefined, null, '', 'not-a-color', '#12', 42]) {
       expect(resolveTerminalContrastFloor(bg)).toBe(DARK_FLOOR)
     }
@@ -62,6 +69,7 @@ describe('mobile terminal-webview contrast floor gate', () => {
 
   it('writes the resolved floor onto a live terminal when the theme changes', () => {
     const term = { options: { theme: undefined as unknown, minimumContrastRatio: 1 } }
+
     const context = loadThemeInjected({
       term,
       document: {
@@ -88,6 +96,7 @@ describe('mobile terminal-webview contrast floor gate', () => {
           body: { style: { background: '' } }
         }
       }) as Record<string, unknown> & { applyTerminalTheme: (input: unknown) => void }
+
       context.applyTerminalTheme(input)
     }
 
@@ -107,6 +116,7 @@ describe('mobile terminal-webview contrast floor gate', () => {
 
     it('falls back to the luminance gate for an older host that omits the field', () => {
       const term = { options: { minimumContrastRatio: 0 } }
+
       for (const published of [undefined, null, 'off', Number.NaN]) {
         applyOn(term, { theme: { background: '#1e242a' }, minimumContrastRatio: published })
         expect(term.options.minimumContrastRatio).toBe(DARK_FLOOR)

@@ -30,10 +30,12 @@ type Deferred<T> = {
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, resolve, reject }
 }
 
@@ -79,9 +81,11 @@ function createFakeScheduler(): {
   complete: (index: number, status?: DirectSshWorktreeRefreshOutcome['status']) => void
 } {
   const leases: FakeLease[] = []
+
   const request = vi.fn((key: DirectSshWorktreeRefreshKey) => {
     const leaseDeferred = deferred<DirectSshWorktreeRefreshOutcome>()
     let released = false
+
     const lease: DirectSshWorktreeRefreshLease = {
       waiterLeaseId: `lease-${leases.length + 1}` as WaiterLeaseId,
       result: leaseDeferred.promise,
@@ -92,9 +96,12 @@ function createFakeScheduler(): {
         }
       })
     }
+
     leases.push({ key, deferred: leaseDeferred, lease })
+
     return lease
   })
+
   const scheduler: DirectSshWorktreeRefreshScheduler = {
     request,
     invalidateAuthority: vi.fn(),
@@ -110,6 +117,7 @@ function createFakeScheduler(): {
     })),
     stop: vi.fn()
   }
+
   return {
     scheduler,
     leases,
@@ -120,16 +128,20 @@ function createFakeScheduler(): {
 function createCoordinatorHarness(fakeScheduler = createFakeScheduler()) {
   const current = new Map<string, DirectSshAuthority>()
   const events: string[] = []
+
   const capturePreparationInput = vi.fn(
     async (owner: DirectSshAuthority, reason: DirectSshPreparationInput['reason']) => {
       events.push(`capture:${owner.targetId}`)
+
       return preparationInput(owner, ['repo'], { reason })
     }
   )
+
   const deps: DirectSshReconnectCoordinatorDeps = {
     scheduler: fakeScheduler.scheduler,
     isCurrentConnectedAuthority: (owner) => {
       const active = current.get(owner.targetId)
+
       return (
         active?.providerEpoch === owner.providerEpoch &&
         active.connectionGeneration === owner.connectionGeneration
@@ -139,10 +151,12 @@ function createCoordinatorHarness(fakeScheduler = createFakeScheduler()) {
     readHostScopedLineage: vi.fn(async (): Promise<DirectSshLineageOutcome> => 'complete'),
     invalidateStaleTerminalBindings: vi.fn((owner) => {
       events.push(`invalidate:${owner.targetId}`)
+
       return 1
     }),
     retryTargetPanes: vi.fn((owner) => {
       events.push(`retry:${owner.targetId}`)
+
       return 2
     }),
     finalizeHydratedTerminalPanes: vi.fn(() => 1),
@@ -150,7 +164,9 @@ function createCoordinatorHarness(fakeScheduler = createFakeScheduler()) {
     syncRemoteWorkspaceAfterConnect: vi.fn(),
     onTelemetry: vi.fn()
   }
+
   const coordinator = createDirectSshReconnectCoordinator(deps)
+
   return { coordinator, deps, current, events, ...fakeScheduler }
 }
 
@@ -285,10 +301,12 @@ describe('createDirectSshReconnectCoordinator', () => {
     const input = preparationInput(owner)
 
     const first = harness.coordinator.prepareOnly(input)
+
     const joined = harness.coordinator.prepareOnly({
       ...input,
       repoRefs: input.repoRefs.toReversed()
     })
+
     expect(joined).toBe(first)
     expect(harness.leases).toHaveLength(1)
 
@@ -342,19 +360,23 @@ describe('createDirectSshReconnectCoordinator', () => {
       deferred: Deferred<HostQualifiedDetectedWorktreeResult>
       key: DirectSshWorktreeRefreshKey
     }[] = []
+
     const scheduler = createDirectSshWorktreeRefreshScheduler({
       startAttempt: (attemptKey) => {
         const result = deferred<HostQualifiedDetectedWorktreeResult>()
         const id = `provider-${attempts.length + 1}` as ProviderRequestId
         attempts.push({ id, deferred: result, key: attemptKey })
+
         return { providerRequestId: id, result: result.promise, cancel: vi.fn() }
       }
     })
+
     const harness = createCoordinatorHarness({
       scheduler,
       leases: [],
       complete: () => {}
     })
+
     const owner = authority('target-a')
     harness.current.set(owner.targetId, owner)
     harness.coordinator.replaceAuthority(owner)
@@ -389,12 +411,14 @@ describe('createDirectSshReconnectCoordinator', () => {
     const owner = authority('target-a')
     harness.current.set(owner.targetId, owner)
     harness.coordinator.replaceAuthority(owner)
+
     const pending = harness.coordinator.prepareOnly(
       preparationInput(owner, ['repo-b', 'repo-a'], {
         catalogRevision: 7,
         snapshotRevision: 11
       })
     )
+
     expect(harness.leases.map((lease) => lease.key.repoId)).toEqual(['repo-a', 'repo-b'])
 
     harness.complete(0)
@@ -419,9 +443,11 @@ describe('createDirectSshReconnectCoordinator', () => {
     const owner = authority('target-a')
     harness.current.set(owner.targetId, owner)
     harness.coordinator.replaceAuthority(owner)
+
     const pending = harness.coordinator.prepareOnly(
       preparationInput(owner, [], { snapshotRevision: 5 })
     )
+
     const prepared = await pending
     const token = prepared.token!
 
@@ -501,6 +527,7 @@ describe('createDirectSshReconnectCoordinator', () => {
     const owner = authority('target-a')
     harness.current.set(owner.targetId, owner)
     harness.coordinator.replaceAuthority(owner)
+
     const input = preparationInput(owner, ['repo'], {
       telemetry: {
         catalogOutcome: 'degraded',

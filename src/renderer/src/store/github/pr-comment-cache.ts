@@ -2,6 +2,7 @@ import type { GitHubCommentResult, PRComment } from '../../../../shared/github/c
 
 function commentTimestamp(comment: PRComment): number {
   const timestamp = new Date(comment.createdAt).getTime()
+
   return Number.isFinite(timestamp) ? timestamp : 0
 }
 
@@ -10,9 +11,11 @@ export function mergePRCommentIntoList(
   incoming: PRComment
 ): PRComment[] {
   const byId = new Map<number, PRComment>()
+
   for (const comment of comments ?? []) {
     byId.set(comment.id, comment)
   }
+
   const previous = byId.get(incoming.id)
   byId.set(incoming.id, {
     ...previous,
@@ -24,6 +27,7 @@ export function mergePRCommentIntoList(
     isResolved: incoming.isResolved ?? previous?.isResolved,
     isOutdated: incoming.isOutdated ?? previous?.isOutdated
   })
+
   return Array.from(byId.values()).sort((a, b) => commentTimestamp(a) - commentTimestamp(b))
 }
 

@@ -32,22 +32,28 @@ import {
 // A subagent writing nothing for this long without a terminal notification is
 // treated as no longer running (its status stays unknown rather than stale).
 const SUBAGENT_RUNNING_RECENCY_MS = 5 * 60_000
+
 // Match the main scanner's deliberate parse batching (SESSION_PARSE_CONCURRENCY):
 // opening every subagent read stream at once stalls over SSH/WSL UNC paths.
 const SUBAGENT_PARSE_CONCURRENCY = 8
+
 // 'scan', not 'exact', even though a user expands this on demand: it is bulk
 // directory work feeding the same parsers as the main scan, and the exact lane
 // stays reserved for live transcript probes.
 const SUBAGENT_FS_PRIORITY = 'scan'
 
 const TASK_NOTIFICATION_MARKER = '<task-notification>'
+
 const TOOL_USE_RESULT_MARKER = '"toolUseResult"'
+
 // A sync-Task toolUseResult sets a status only when it carries an agentId. Tool
 // output records (Read/Bash) also carry "toolUseResult" and are the largest lines
 // in a transcript, so gating on this second marker keeps the status pass from
 // JSON-parsing ~all of the file's bytes on every on-demand fetch.
 const TOOL_USE_RESULT_AGENT_ID_MARKER = '"agentId"'
+
 const TASK_ID_PATTERN = /<task-id>([^<]+)<\/task-id>/
+
 const TASK_STATUS_PATTERN = /<status>([a-z_]+)<\/status>/
 
 // Statuses reported by parent-transcript <task-notification> records
@@ -80,6 +86,7 @@ export async function listClaudeSubagentSessions(args: {
   const subagentsDir = subagentTranscriptsDirFor(args.parentFilePath)
 
   let entries
+
   try {
     entries = await wslGatedReaddir(subagentsDir, SUBAGENT_FS_PRIORITY)
   } catch (err) {
@@ -88,12 +95,14 @@ export async function listClaudeSubagentSessions(args: {
     if (err instanceof WslTranscriptFsError) {
       recordSessionScanIssue(issues, { agent: 'claude', path: subagentsDir, message: err.message })
     }
+
     return { sessions: [], issues }
   }
 
   const transcriptNames = entries
     .filter((entry) => isSubagentTranscriptFileName(entry.name, entry.isFile()))
     .map((entry) => entry.name)
+
   if (transcriptNames.length === 0) {
     return { sessions: [], issues }
   }
@@ -105,8 +114,10 @@ export async function listClaudeSubagentSessions(args: {
   // linking to its own filename-derived id instead of the parent.
   const parentSessionId = sessionIdFromFileName(args.parentFilePath)
   const parsed: (AiVaultSession | null)[] = []
+
   for (let index = 0; index < transcriptNames.length; index += SUBAGENT_PARSE_CONCURRENCY) {
     const batch = transcriptNames.slice(index, index + SUBAGENT_PARSE_CONCURRENCY)
+
     const batchResults = await Promise.all(
       batch.map((name) =>
         parseSubagentTranscript({
@@ -120,6 +131,7 @@ export async function listClaudeSubagentSessions(args: {
         })
       )
     )
+
     parsed.push(...batchResults)
   }
 
@@ -146,6 +158,7 @@ async function parseSubagentTranscript(args: {
 }): Promise<AiVaultSession | null> {
   try {
     const fileStat = await wslGatedStat(args.filePath, SUBAGENT_FS_PRIORITY)
+
     const session = await parseClaudeSessionFile(
       {
         path: args.filePath,
@@ -154,10 +167,13 @@ async function parseSubagentTranscript(args: {
       },
       args.platform
     )
+
     if (!session) {
       return null
     }
+
     const meta = await readSubagentMeta(args.filePath)
+
     return {
       ...session,
       // Why: the spawn description is the name the main agent gave this Task;
@@ -181,6 +197,7 @@ async function parseSubagentTranscript(args: {
       path: args.filePath,
       message: errorMessage(err)
     })
+
     return null
   }
 }
@@ -191,9 +208,11 @@ function resolveSubagentStatus(args: {
   now: number
 }): AiVaultSubagentRunStatus | null {
   const terminal = args.reportedStatus ? TERMINAL_TASK_STATUSES[args.reportedStatus] : undefined
+
   if (terminal) {
     return terminal
   }
+
   // No terminal notification yet: a recently-written transcript is running;
   // a stale one has no trustworthy status (e.g. the parent was interrupted).
   return args.now - args.mtimeMs <= SUBAGENT_RUNNING_RECENCY_MS ? 'running' : null
@@ -206,24 +225,32 @@ function resolveSubagentStatus(args: {
 // 'async_launched', notification 'running') are superseded by terminal ones.
 async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<string, string>> {
   const statuses = new Map<string, string>()
+
   const input = openTranscriptReadStream(
     parentFilePath,
     { encoding: 'utf-8' },
     SUBAGENT_FS_PRIORITY
   )
+
   const lines = createInterface({ input, crlfDelay: Infinity })
+
   try {
     for await (const line of lines) {
       const hasNotification = line.includes(TASK_NOTIFICATION_MARKER)
+
       const hasTaskResult =
         line.includes(TOOL_USE_RESULT_MARKER) && line.includes(TOOL_USE_RESULT_AGENT_ID_MARKER)
+
       if (!hasNotification && !hasTaskResult) {
         continue
       }
+
       const record = parseJsonObject(line)
+
       if (!record) {
         continue
       }
+
       // Only records whose text IS the notification set a status; a user prompt
       // (or a sync-Task toolUseResult report) that merely quotes one also trips
       // the raw-line prefilter, so it must not consume the record — fall through
@@ -235,18 +262,23 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
       // would risk dropping genuine harness-delivered statuses).
       if (hasNotification) {
         const text = taskNotificationText(record)
+
         if (text.startsWith(TASK_NOTIFICATION_MARKER)) {
           const taskId = TASK_ID_PATTERN.exec(text)?.[1]?.trim()
           const status = TASK_STATUS_PATTERN.exec(text)?.[1]
+
           if (taskId && status) {
             statuses.set(taskId, status)
           }
+
           continue
         }
       }
+
       const result = asRecord(record.toolUseResult)
       const agentId = extractString(result?.agentId)
       const status = extractString(result?.status)
+
       if (agentId && status) {
         statuses.set(agentId, status)
       }
@@ -259,6 +291,7 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
     lines.close()
     input.destroy()
   }
+
   return statuses
 }
 
@@ -269,16 +302,21 @@ async function collectSubagentTaskStatuses(parentFilePath: string): Promise<Map<
 // records under `message.content` (a string, or text content blocks).
 function taskNotificationText(record: Record<string, unknown>): string {
   const direct = extractString(record.content)
+
   if (direct) {
     return direct
   }
+
   const content = asRecord(record.message)?.content
+
   if (typeof content === 'string') {
     return content.trim()
   }
+
   if (Array.isArray(content)) {
     return content.map(taskNotificationBlockText).filter(Boolean).join(' ').trim()
   }
+
   return ''
 }
 
@@ -286,7 +324,9 @@ function taskNotificationBlockText(block: unknown): string {
   if (typeof block === 'string') {
     return block
   }
+
   const record = asRecord(block)
+
   return extractString(record?.text) ?? extractString(record?.content) ?? ''
 }
 
@@ -294,9 +334,11 @@ function taskNotificationBlockText(block: unknown): string {
 // carrying the Task tool's spawn `description` and its resolved `agentType`.
 async function readSubagentMeta(transcriptPath: string): Promise<ClaudeSubagentMeta> {
   const metaPath = `${transcriptPath.slice(0, -extname(transcriptPath).length)}.meta.json`
+
   try {
     const raw = await wslGatedReadFile(metaPath, 'utf-8', SUBAGENT_FS_PRIORITY)
     const record = asRecord(JSON.parse(raw) as unknown)
+
     return {
       description: normalizeTitleText(extractString(record?.description) ?? ''),
       agentType: extractString(record?.agentType)

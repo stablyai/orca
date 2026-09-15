@@ -17,6 +17,7 @@ describe('remote drift real Git contract', () => {
   it('preserves clean, diverged, and missing-ref results', async () => {
     const repoPath = mkdtempSync(join(tmpdir(), 'orca-remote-drift-'))
     tempPaths.push(repoPath)
+
     const git = (...args: string[]): string =>
       execFileSync('git', args, { cwd: repoPath, encoding: 'utf8' })
 

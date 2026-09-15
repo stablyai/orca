@@ -14,5 +14,6 @@
  */
 export function shellReadyMarkerComesFromLineEditor(shellPath: string): boolean {
   const shellName = shellPath.replace(/\\/g, '/').split('/').pop()?.toLowerCase() ?? ''
+
   return shellName === 'bash' || shellName === 'zsh'
 }

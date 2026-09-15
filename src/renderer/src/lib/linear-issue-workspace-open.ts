@@ -23,16 +23,20 @@ export function openLinearIssueWorkspaceOrStart(
   startWorkspace: () => void
 ): 'opened' | 'started' | 'failed' {
   const state = useAppStore.getState()
+
   const attached = findLinearIssueWorkspaceAttachment(
     [...state.allWorktrees(), ...state.folderWorkspaces.map(folderWorkspaceToWorktree)],
     issue
   )
+
   if (!attached) {
     startWorkspace()
+
     return 'started'
   }
 
   const workspaceScope = parseWorkspaceKey(attached.id)
+
   const activation =
     workspaceScope?.type === 'folder'
       ? activateAndRevealFolderWorkspace(
@@ -43,6 +47,7 @@ export function openLinearIssueWorkspaceOrStart(
           attached.id,
           attached.hostId ? { executionHostId: attached.hostId } : {}
         )
+
   if (activation === false) {
     toast.error(
       translate(
@@ -50,7 +55,9 @@ export function openLinearIssueWorkspaceOrStart(
         'Unable to open the workspace attached to this issue.'
       )
     )
+
     return 'failed'
   }
+
   return 'opened'
 }

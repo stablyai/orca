@@ -40,6 +40,7 @@ vi.mock('emoji-picker-react', () => ({
   default: (props: { onEmojiClick: MockEmojiClickHandler; searchPlaceholder: string }) => {
     emojiPickerMocks.onEmojiClick = props.onEmojiClick
     emojiPickerMocks.searchPlaceholder = props.searchPlaceholder
+
     return null
   },
   EmojiStyle: { NATIVE: 'native' },
@@ -47,6 +48,7 @@ vi.mock('emoji-picker-react', () => ({
 }))
 
 let container: HTMLDivElement
+
 let root: Root
 
 /** Renders RepositoryIconEmojiPicker with default props and returns the spy callback. */
@@ -55,6 +57,7 @@ function renderPicker(overrides: Partial<Parameters<typeof RepositoryIconEmojiPi
   act(() => {
     root.render(<RepositoryIconEmojiPicker selectedEmoji="" onSetIcon={onSetIcon} {...overrides} />)
   })
+
   return { onSetIcon }
 }
 

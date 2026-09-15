@@ -32,6 +32,7 @@ describe('selectedExplorerFolderRelativePath', () => {
     const shell = {
       getAttribute: (name: string) => (name === 'data-selected-folder-relative-path' ? 'src' : null)
     } as Element
+
     const child = {
       closest: (selector: string) => (selector === '[data-orca-explorer-shell]' ? shell : null)
     } as Element
@@ -43,6 +44,7 @@ describe('selectedExplorerFolderRelativePath', () => {
     const shell = {
       getAttribute: (name: string) => (name === 'data-selected-folder-relative-path' ? '' : null)
     } as Element
+
     const child = {
       closest: (selector: string) => (selector === '[data-orca-explorer-shell]' ? shell : null)
     } as Element
@@ -54,9 +56,11 @@ describe('selectedExplorerFolderRelativePath', () => {
     const outside = {
       closest: () => null
     } as unknown as Element
+
     const shellWithoutFolder = {
       getAttribute: () => null
     } as unknown as Element
+
     const child = {
       closest: () => shellWithoutFolder
     } as unknown as Element

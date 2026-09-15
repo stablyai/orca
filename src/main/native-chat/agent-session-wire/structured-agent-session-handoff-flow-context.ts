@@ -25,6 +25,7 @@ export function createStructuredHandoffFlowContext(input: {
       switchingStructuredHandoffStatus(record, direction, input.deps.transport?.hostLabel)
     )
   }
+
   return {
     ...input,
     publishStage,
@@ -36,6 +37,7 @@ export function createStructuredHandoffFlowContext(input: {
         handoffOperationId: operationId,
         now: input.deps.now()
       })
+
       publishStage(prepared, direction)
     }
   }
@@ -46,9 +48,11 @@ export function requireStructuredHandoffRecord(
   sessionId: string
 ): AgentSessionRecord {
   const record = deps.store.getRecord(sessionId)
+
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
+
   return record
 }
 
@@ -78,9 +82,12 @@ export async function stopStructuredNativeTurn(
   turnId: string
 ): Promise<boolean> {
   const record = deps.store.getRecord(sessionId)
+
   if (!record || record.lease.runtimeKind !== 'native') {
     return false
   }
+
   const session = deps.session(sessionId)
+
   return (await deps.acquireNativeStop?.(sessionId, turnId, session.fence)) ?? false
 }

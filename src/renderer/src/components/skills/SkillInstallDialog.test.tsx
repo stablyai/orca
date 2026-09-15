@@ -9,6 +9,7 @@ import { useAppStore } from '@/store'
 import { SkillInstallDialog } from './SkillInstallDialog'
 
 const DIGEST = 'a'.repeat(64)
+
 const ARCHIVE_SHA = 'b'.repeat(64)
 
 function version(): SkillCloudVersion {
@@ -61,6 +62,7 @@ function bundleVersion(): SkillCloudVersion {
       }
     ]
   })
+
   return {
     ...version(),
     name: 'team-bundle',
@@ -89,6 +91,7 @@ function detectionApi(agents: string[]) {
 
 function installApi(previewInstall: ReturnType<typeof vi.fn>) {
   let progressListener: ((progress: SkillInstallProgress) => void) | null = null
+
   return {
     resolveShare: vi
       .fn()
@@ -110,6 +113,7 @@ function installApi(previewInstall: ReturnType<typeof vi.fn>) {
     listWslDistros: vi.fn().mockResolvedValue([]),
     onInstallProgress: vi.fn((listener) => {
       progressListener = listener
+
       return () => {
         progressListener = null
       }
@@ -186,6 +190,7 @@ describe('SkillInstallDialog', () => {
         }
       })
     )
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills, preflight: detectionApi(['claude', 'codex', 'droid']) }
@@ -217,6 +222,7 @@ describe('SkillInstallDialog', () => {
         }
       })
     )
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills, preflight: detectionApi(['codex']) }
@@ -247,6 +253,7 @@ describe('SkillInstallDialog', () => {
         }
       })
     )
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills, preflight: detectionApi(['codex']) }
@@ -328,9 +335,11 @@ describe('SkillInstallDialog', () => {
 
   it('warns about supporting files without blocking installation', async () => {
     const sharedVersion = version()
+
     if (!('files' in sharedVersion.manifest)) {
       throw new Error('expected single skill')
     }
+
     sharedVersion.manifest.files.push({
       path: 'references/guide.md',
       size: 12,
@@ -363,9 +372,11 @@ describe('SkillInstallDialog', () => {
 
   it('describes selected bundle skills with runnable files without blocking installation', async () => {
     const sharedVersion = bundleVersion()
+
     if (!('skills' in sharedVersion.manifest)) {
       throw new Error('expected bundle')
     }
+
     sharedVersion.manifest.skills[0].files.push({
       path: 'release.py',
       size: 12,
@@ -401,6 +412,7 @@ describe('SkillInstallDialog', () => {
   it('focuses the link first and programmatically names destination controls', async () => {
     const user = userEvent.setup()
     const onOpenChange = vi.fn()
+
     const skills = installApi(
       vi.fn().mockResolvedValue({
         status: 'ok',
@@ -413,6 +425,7 @@ describe('SkillInstallDialog', () => {
         }
       })
     )
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills, preflight: detectionApi(['codex']) }
@@ -420,11 +433,13 @@ describe('SkillInstallDialog', () => {
     render(<SkillInstallDialog open onOpenChange={onOpenChange} />)
 
     expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Orca skill link' }))
+
     // Why: the submit sits in the footer beside Close, so Enter in the field is
     // the keyboard path rather than tabbing past the back-out action.
     const footerButtons = screen
       .getAllByRole('button')
       .filter((button) => button.getAttribute('data-slot') !== 'dialog-close')
+
     expect(footerButtons.map((button) => button.textContent?.trim())).toEqual([
       'Close',
       'Inspect skill'
@@ -571,6 +586,7 @@ describe('SkillInstallDialog', () => {
         providers: []
       }
     })
+
     const skills = installApi(previewInstall)
     Object.defineProperty(window, 'api', { configurable: true, value: { skills } })
     render(<SkillInstallDialog open onOpenChange={() => undefined} />)
@@ -592,6 +608,7 @@ describe('SkillInstallDialog', () => {
       status: 'unsupported',
       message: 'Update the selected Orca host to install shared skills.'
     })
+
     const skills = installApi(previewInstall)
     Object.defineProperty(window, 'api', { configurable: true, value: { skills } })
     render(<SkillInstallDialog open onOpenChange={() => undefined} />)
@@ -616,6 +633,7 @@ describe('SkillInstallDialog', () => {
         providers: []
       }
     })
+
     const skills = installApi(previewInstall)
     Object.defineProperty(window, 'api', { configurable: true, value: { skills } })
     const changed = vi.fn()
@@ -641,6 +659,7 @@ describe('SkillInstallDialog', () => {
         providers: []
       }
     })
+
     let settleInstall: ((value: unknown) => void) | undefined
     const skills = installApi(previewInstall)
     skills.installShare.mockImplementation(
@@ -683,6 +702,7 @@ describe('SkillInstallDialog', () => {
         providers: []
       }
     })
+
     let settleInstall: ((value: unknown) => void) | undefined
     const skills = installApi(previewInstall)
     skills.installShare.mockImplementation(

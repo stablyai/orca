@@ -26,6 +26,7 @@ describe('current orchestration authority precedence', () => {
     '%s uses an attested current coordinator binding before legacy fallback',
     async (transport) => {
       const harness = createHarness()
+
       const run = harness.db.createRun({
         objective: 'current work',
         coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
@@ -56,6 +57,7 @@ describe('current orchestration authority precedence', () => {
 
   it('prefers a different current Run even for the retained coordinator terminal', async () => {
     const harness = createHarness()
+
     const run = harness.db.createRun({
       objective: 'intentional current work',
       coordinatorHandle: COORDINATOR_HANDLE,
@@ -76,11 +78,13 @@ describe('current orchestration authority precedence', () => {
 
   it('checks a different current Run before retained coordinator mail', async () => {
     const harness = createHarness()
+
     const run = harness.db.createRun({
       objective: 'intentional current work',
       coordinatorHandle: COORDINATOR_HANDLE,
       coordinatorPaneKey: COORDINATOR_PANE
     })
+
     const message = harness.db.insertMessage({
       runId: run.id,
       from: CURRENT_WORKER_HANDLE,
@@ -107,6 +111,7 @@ describe('current orchestration authority precedence', () => {
 
   it('preserves legacy fallback for a retained coordinator without a current binding', async () => {
     const harness = createHarness()
+
     const response = await harness.dispatcher.dispatch(
       request(
         'orchestration.taskCreate',
@@ -130,11 +135,13 @@ describe('current orchestration authority precedence', () => {
     async (type, outcome) => {
       const harness = createHarness()
       const { taskId, dispatchId, capability } = createCurrentDispatch(harness)
+
       const payload = JSON.stringify({
         taskId,
         dispatchId,
         ...(outcome ? { outcome } : {})
       })
+
       const response = await harness.dispatcher.dispatch({
         ...request(
           'orchestration.send',
@@ -171,6 +178,7 @@ describe('current orchestration authority precedence', () => {
   it('routes a current worker mailbox check before legacy fallback', async () => {
     const harness = createHarness()
     const { runId, dispatchId } = createCurrentDispatch(harness)
+
     const message = harness.db.insertMessage({
       runId,
       from: CURRENT_COORDINATOR_HANDLE,
@@ -201,6 +209,7 @@ describe('current orchestration authority precedence', () => {
     expect(harness.db.getMessageById(message.id)?.read).toBe(0)
 
     const deliveryId = (response as { result: { deliveryId: string } }).result.deliveryId
+
     const replayed = await harness.dispatcher.dispatch(
       request(
         'orchestration.check',
@@ -237,6 +246,7 @@ describe('current orchestration authority precedence', () => {
     async (transport) => {
       const harness = createHarness()
       const { runId, dispatchId } = await createReusedCurrentDispatch(harness, transport)
+
       const message = harness.db.insertMessage({
         runId,
         from: CURRENT_COORDINATOR_HANDLE,
@@ -319,18 +329,22 @@ function createCurrentDispatch(harness: ReturnType<typeof createHarness>): {
     coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
     coordinatorPaneKey: CURRENT_COORDINATOR_PANE
   })
+
   const task = harness.db.createTask({ spec: 'current assignment', runId: run.id })
+
   const dispatch = createRootDispatch(
     harness.db,
     task.id,
     CURRENT_WORKER_HANDLE,
     CURRENT_WORKER_PANE
   )
+
   const capability = harness.db.mintDispatchCapability({
     dispatchId: dispatch.id,
     paneKey: CURRENT_WORKER_PANE,
     processIncarnation: 'process-1'
   })
+
   return { runId: run.id, taskId: task.id, dispatchId: dispatch.id, capability }
 }
 
@@ -351,6 +365,7 @@ async function createReusedCurrentDispatch(
       `attest-legacy-worker-${suffix}`
     )
   )
+
   expect(legacyCheck).toHaveProperty('result.legacyCompatibility')
   harness.db.completeDispatch(harness.dispatchId)
 
@@ -359,12 +374,15 @@ async function createReusedCurrentDispatch(
     coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
     coordinatorPaneKey: CURRENT_COORDINATOR_PANE
   })
+
   const task = harness.db.createTask({ spec: 'reused terminal assignment', runId: run.id })
   const dispatch = createRootDispatch(harness.db, task.id, WORKER_HANDLE, WORKER_PANE)
+
   const capability = harness.db.mintDispatchCapability({
     dispatchId: dispatch.id,
     paneKey: WORKER_PANE,
     processIncarnation: 'process-1'
   })
+
   return { runId: run.id, taskId: task.id, dispatchId: dispatch.id, capability }
 }

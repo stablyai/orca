@@ -28,17 +28,21 @@ async function setActiveTerminalTheme(page: Page, theme: TerminalTheme): Promise
   await page.evaluate((nextTheme) => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('No active terminal pane to theme')
     }
+
     pane.terminal.options.theme = nextTheme
   }, theme)
 }

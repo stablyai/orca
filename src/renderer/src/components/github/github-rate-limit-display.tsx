@@ -54,10 +54,13 @@ const BUCKETS: BucketMeta[] = [
 
 export function formatGitHubRateLimitReset(resetAt: number): string {
   const deltaSec = Math.max(0, resetAt - Math.floor(Date.now() / 1000))
+
   if (deltaSec < 60) {
     return `${deltaSec}s`
   }
+
   const mins = Math.round(deltaSec / 60)
+
   return `${mins}m`
 }
 
@@ -65,13 +68,17 @@ export function toneForGitHubBucket(remaining: number, limit: number): 'ok' | 'w
   if (limit <= 0) {
     return 'ok'
   }
+
   const pct = remaining / limit
+
   if (pct < 0.1) {
     return 'crit'
   }
+
   if (pct < 0.25) {
     return 'warn'
   }
+
   return 'ok'
 }
 
@@ -92,18 +99,22 @@ export function useGitHubRateLimitSnapshot(options?: { autoRefresh?: boolean }):
     async (force = false): Promise<void> => {
       const token = ++latestToken.current
       setIsFetching(true)
+
       try {
         const target = getActiveRuntimeTarget(settings)
         const params = force ? { force: true } : undefined
+
         const res =
           target.kind === 'environment'
             ? await callRuntimeRpc<GetRateLimitResult>(target, 'github.rateLimit', params ?? {}, {
                 timeoutMs: 30_000
               })
             : ((await window.api.gh.rateLimit(params)) as GetRateLimitResult | undefined)
+
         if (token !== latestToken.current) {
           return
         }
+
         if (res?.ok) {
           setSnapshot(res.snapshot)
           setHasError(false)
@@ -127,6 +138,7 @@ export function useGitHubRateLimitSnapshot(options?: { autoRefresh?: boolean }):
     if (!autoRefresh) {
       return
     }
+
     return installWindowVisibilityInterval({
       run: () => void refresh(false),
       intervalMs: REFRESH_INTERVAL_MS
@@ -146,6 +158,7 @@ function GitHubRateLimitRows({
       {BUCKETS.map((b) => {
         const v = snapshot[b.key]
         const tone = toneForGitHubBucket(v.remaining, v.limit)
+
         return (
           <div key={b.key} className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground">{b.description}</span>

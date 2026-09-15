@@ -19,6 +19,7 @@ import {
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const { createReactHookOverrides } = await import('./floating-terminal-panel-test-module-mocks')
+
   return { ...actual, ...createReactHookOverrides() }
 })
 
@@ -241,6 +242,7 @@ describe('FloatingTerminalPanel close behavior', () => {
   it('targets the empty-state actions without co-mounting the surface fallback', async () => {
     const element = await renderPanel(true)
     const emptyState = findByTypeName(element, 'FloatingTerminalEmptyState')
+
     const renderedEmptyState = (
       emptyState.type as (props: Record<string, unknown>) => ReactElementLike
     )(emptyState.props)
@@ -278,6 +280,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const element = await renderPanel(true, onOpenChange)
 
     const emptyState = findByTypeName(element, 'FloatingTerminalEmptyState')
+
     ;(emptyState.props.onClose as () => void)()
 
     expect(onOpenChange).toHaveBeenCalledWith(false)

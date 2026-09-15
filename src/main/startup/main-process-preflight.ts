@@ -102,24 +102,30 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
     resourcesPath: process.resourcesPath,
     execPath: process.execPath
   })
+
   if (cliLaunchRedirect.redirected) {
     app.exit(cliLaunchRedirect.status)
   }
+
   // Why: extracted AppRun / binary launches can land CLI-form `serve` args on the
   // Electron process without the CLI rewrite that injects `--serve` (#12677).
   // Guarded so a normal GUI launch keeps its original argv array identity.
   if (argvRequestsServeMode(process.argv)) {
     process.argv = normalizeServeModeArgv(process.argv)
   }
+
   state.isServeMode = process.argv.includes('--serve')
+
   // Fail before Chromium's missing-display teardown can segfault (#13719).
   if (app.isPackaged && !state.isServeMode && !hasUsableLinuxDisplay()) {
     process.stderr.write(`${MISSING_LINUX_DISPLAY_MESSAGE}\n`)
     app.exit(1)
   }
+
   if (state.isServeMode) {
     reserveServeStdoutForReadiness()
   }
+
   state.devInstanceIdentity = getDevInstanceIdentity(is.dev)
   state.devAgentHookEndpointNamespace = state.devInstanceIdentity.isDev
     ? state.devInstanceIdentity.appUserModelId
@@ -146,6 +152,7 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
     install: installRemoteServerUpdate
   })
   patchPackagedProcessPath()
+
   // Why: the sync seed above covers early IPC (homebrew/nix); the async login-shell probe below (packaged only) then adds the user's rc PATH.
   if (app.isPackaged && process.platform !== 'win32') {
     void hydrateShellPath().then((result) => {
@@ -162,6 +169,7 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
       }
     })
   }
+
   // Why before any spawn: `signalProcessTree` is shared with the CLI and relay, so
   // it can only reach the main-process guard and breadcrumb store once this is registered.
   installMainProcessTreeKillGate()
@@ -179,6 +187,7 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   // changes how userData resolves on a case-sensitive filesystem. See persistence.ts:20-28.
   initDataPath()
   state.startupDiagnosticsEnabled = isStartupDiagnosticsEnabled()
+
   if (state.startupDiagnosticsEnabled) {
     logStartupDiagnostic('before-single-instance-lock', {
       version: app.getVersion(),
@@ -190,6 +199,7 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
     })
     startEventLoopStallProbe()
   }
+
   // Self-gated on ORCA_MAIN_THREAD_DIAGNOSTICS; runs the whole session to catch steady-state churn (issue #7576).
   // Why the diff-cache counters ride along: a stamp the filesystem reports unstably makes the cache
   // look exactly like a cold start, and only the hit/miss/unprovable split tells the two apart.
@@ -198,11 +208,14 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Why skip in dev: parallel `pnpm dev` from multiple worktrees would make the second exit silently; packaged keeps the lock (corruption PR #1326 / #1312).
   const bypass = shouldBypassSingleInstanceLock({ isDev, isServeMode: state.isServeMode })
   const skip = shouldSkipSingleInstanceLock({ isDev, isServeMode: state.isServeMode })
+
   if (bypass) {
     // Why: diagnostic escape hatch for macOS builds where Electron reports a false lock loss before any app logs exist.
     logSingleInstanceLockBypass()
   }
+
   const hasLock = skip || bypass || acquireSingleInstanceLock(app, options.requestDesktopActivation)
+
   if (state.startupDiagnosticsEnabled) {
     logStartupDiagnostic('single-instance-lock-result', {
       acquired: hasLock,
@@ -210,13 +223,16 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
       skippedForDev: skip
     })
   }
+
   if (!hasLock) {
     // Why: a false-negative lock loss otherwise looks like a silent crash on packaged macOS; `open --stderr` can capture this line.
     logSingleInstanceLockFailure()
     // Why: a graceful quit is deferred pre-ready, so this launch would still walk into Linux display init and SIGSEGV (#11935).
     app.exit(SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE)
+
     return false
   }
+
   // Why first in this block: the accessor throws until installed and everything below may read a
   // credential. The constructor does not touch `safeStorage` — it resolves lazily per call — so
   // installing here changes no timing, in particular not the pre-ready Keychain service-name
@@ -275,6 +291,7 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   initClaudeUsagePath()
   initCodexUsagePath()
   initOpenCodeUsagePath()
+
   // Why: Electron resolves the macOS safeStorage Keychain service name
   // ("<app name> Safe Storage") before `ready`, so the setName in whenReady is
   // too late to move it — dev otherwise lands on the package.json name. Dev-only
@@ -284,6 +301,7 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   if (state.devInstanceIdentity && shouldApplyPreReadyAppName(state.devInstanceIdentity)) {
     app.setName(state.devInstanceIdentity.appName)
   }
+
   // Why: Electron freezes the privileged scheme table at ready, so the doc-preview
   // scheme must be declared here or its webview loses fetch/secure-origin privileges.
   registerDocPreviewSchemePrivileges()
@@ -312,19 +330,24 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   configureElectronNetworkCompatibility()
   enableRendererHeapHeadroom()
   maybeApplyGpuFallbackForThisLaunch()
+
   if (!state.gpuFallbackActiveThisLaunch) {
     enableMainProcessGpuFeatures()
   }
+
   // Why: headless serve's offscreen BrowserWindows need an X display (Xvfb) on Linux; the result gates whether the offscreen backend is installed.
   state.headlessBrowserDisplayAvailable = ensureVirtualDisplayForHeadlessServe({
     isServeMode: state.isServeMode
   })
+
   // Why: continuing without Xvfb lets Ozone initialize without a display and SIGSEGV (#17615).
   if (state.isServeMode && !state.headlessBrowserDisplayAvailable) {
     process.stderr.write(`${MISSING_LINUX_DISPLAY_MESSAGE}\n`)
     app.exit(1)
   }
+
   initializeSyntheticTitleRuntime()
   registerGpuLifecycleHandlers()
+
   return true
 }

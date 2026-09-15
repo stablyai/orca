@@ -17,9 +17,11 @@ type PtyExitDelivery = {
 export function deliverPtyExitToHandlers(delivery: PtyExitDelivery): void {
   let firstError: unknown
   let hasError = false
+
   try {
     if (delivery.primary) {
       clearPreHandlerPtyState(delivery.ptyId)
+
       try {
         delivery.primary(delivery.code)
       } finally {
@@ -45,6 +47,7 @@ export function deliverPtyExitToHandlers(delivery: PtyExitDelivery): void {
       }
     }
   }
+
   if (hasError) {
     throw firstError
   }

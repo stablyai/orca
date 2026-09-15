@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FilterToggleRow } from './FilterToggleRow'
 
 let container: HTMLDivElement
+
 let root: Root
 
 function renderRow(indented: boolean): HTMLElement {
@@ -26,9 +27,11 @@ function renderRow(indented: boolean): HTMLElement {
     )
   })
   const row = container.querySelector('[role="switch"]')
+
   if (!(row instanceof HTMLElement)) {
     throw new Error('FilterToggleRow did not render a switch')
   }
+
   return row
 }
 

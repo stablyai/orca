@@ -13,14 +13,17 @@ export async function copyTerminalSelection({
   clearSelectionOnSuccess = false
 }: TerminalSelectionCopyOptions): Promise<boolean> {
   const selection = readTerminalClipboardSelection(terminal)
+
   if (!selection) {
     return false
   }
 
   await writeClipboardText(selection)
+
   // Keep failed-copy text selected for retry.
   if (clearSelectionOnSuccess) {
     terminal.clearSelection()
   }
+
   return true
 }

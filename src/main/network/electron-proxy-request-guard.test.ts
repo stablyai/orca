@@ -10,6 +10,7 @@ function createSession() {
   let listener:
     | ((details: unknown, callback: (result: { cancel?: boolean }) => void) => void)
     | null = null
+
   const proxySession = {
     resolveProxy: vi.fn(async () => 'DIRECT'),
     setProxy: vi.fn(async () => {}),
@@ -26,6 +27,7 @@ function createSession() {
       )
     }
   }
+
   return {
     proxySession,
     request: (callback: (result: { cancel?: boolean }) => void) => listener?.({}, callback)
@@ -49,6 +51,7 @@ describe('default-session proxy request guard', () => {
       { httpProxyUrl: 'http://proxy.example:8080' },
       { env: {} }
     )
+
     const callback = vi.fn()
     request(callback)
     expect(callback).not.toHaveBeenCalled()
@@ -73,6 +76,7 @@ describe('default-session proxy request guard', () => {
       { httpProxyUrl: 'http://proxy.example:8080' },
       { env: {} }
     )
+
     const callback = vi.fn()
     request(callback)
 
@@ -96,6 +100,7 @@ describe('default-session proxy request guard', () => {
       { httpProxyUrl: 'http://proxy.example:8080' },
       { env: {} }
     )
+
     const callback = vi.fn()
     request(callback)
 

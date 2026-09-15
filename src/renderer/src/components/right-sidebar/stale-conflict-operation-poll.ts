@@ -36,29 +36,38 @@ export function useStaleConflictOperationPolling(args: {
     isConnectionReady,
     slowTaskBackoff
   } = args
+
   // Why: only non-active worktrees with a known conflict operation need this
   // probe — the full git status refresh already covers the active worktree.
   const staleConflictWorktrees = useMemo(() => {
     const result: { id: string; path: string }[] = []
+
     for (const [worktreeId, op] of Object.entries(conflictOperationByWorktree)) {
       if (worktreeId === activeWorktreeId || op === 'unknown') {
         continue
       }
+
       const worktree = allWorktrees.find((entry) => entry.id === worktreeId)
+
       if (worktree) {
         const repo = repoMap.get(worktree.repoId)
+
         if (repo && !isGitRepoKind(repo)) {
           continue
         }
+
         result.push({ id: worktree.id, path: worktree.path })
       }
     }
+
     return result
   }, [allWorktrees, conflictOperationByWorktree, activeWorktreeId, repoMap])
+
   useEffect(() => {
     if (!enabled) {
       return
     }
+
     if (staleConflictWorktrees.length === 0) {
       return
     }
@@ -74,23 +83,28 @@ export function useStaleConflictOperationPolling(args: {
       if (!isWindowVisible()) {
         return
       }
+
       for (const { id, path } of staleConflictWorktrees) {
         try {
           const connectionId = getConnectionId(id) ?? undefined
+
           // Why: after explicit SSH disconnect the provider is intentionally
           // gone; keep remote polling quiet until the target reconnects.
           if (!isConnectionReady(connectionId)) {
             continue
           }
+
           const op = (await getRuntimeGitConflictOperation({
             settings: getRightSidebarWorktreeRuntimeSettings(id),
             worktreeId: id,
             worktreePath: path,
             connectionId
           })) as GitConflictOperation
+
           if (!active) {
             return
           }
+
           setConflictOperation(id, op)
         } catch {
           // ignore — worktree may have been removed
@@ -104,6 +118,7 @@ export function useStaleConflictOperationPolling(args: {
     const pollRunner = createCoalescedPollRunner(pollStale, {
       slowTaskBackoff
     })
+
     // Why: conflict badges are visible sidebar state; keep them fresh in
     // visible unfocused windows, but do not poll disconnected hidden windows.
     // The becoming-visible run rides the short-backoff lane so badges catch
@@ -113,6 +128,7 @@ export function useStaleConflictOperationPolling(args: {
       runOnVisible: () => pollRunner.run({ changeSignal: true }),
       intervalMs: CONFLICT_POLL_INTERVAL_MS
     })
+
     return () => {
       active = false
       pollRunner.dispose()

@@ -13,22 +13,28 @@ type SubscribeRecord = {
 function makeHarness(initialDesired: string[]) {
   let desired = initialDesired
   const records: SubscribeRecord[] = []
+
   const subscribe = vi.fn(
     (environmentId: string): Promise<RuntimeClientEventSubscriptionHandle> => {
       const unsubscribe = vi.fn()
       let resolveFn!: (handle: RuntimeClientEventSubscriptionHandle) => void
+
       const promise = new Promise<RuntimeClientEventSubscriptionHandle>((resolve) => {
         resolveFn = resolve
       })
+
       records.push({ environmentId, resolveWith: () => resolveFn({ unsubscribe }), unsubscribe })
+
       return promise
     }
   )
+
   const sync = createRuntimeClientEventsSync({
     getDesiredEnvironmentIds: () => desired,
     subscribe,
     onEvent: vi.fn()
   })
+
   return {
     sync,
     records,
@@ -62,16 +68,22 @@ describe('createRuntimeClientEventsSync', () => {
       ['A', 'A:1'],
       ['B', 'B:1']
     ])
+
     const records: SubscribeRecord[] = []
+
     const subscribe = vi.fn((environmentId: string) => {
       const unsubscribe = vi.fn()
       let resolveFn!: (handle: RuntimeClientEventSubscriptionHandle) => void
+
       const promise = new Promise<RuntimeClientEventSubscriptionHandle>((resolve) => {
         resolveFn = resolve
       })
+
       records.push({ environmentId, resolveWith: () => resolveFn({ unsubscribe }), unsubscribe })
+
       return promise
     })
+
     const sync = createRuntimeClientEventsSync({
       getDesiredEnvironmentIds: () => ['A', 'B'],
       getSubscriptionKey: (environmentId) => keys.get(environmentId) ?? environmentId,
@@ -101,6 +113,7 @@ describe('createRuntimeClientEventsSync', () => {
   it('discards an in-flight subscription after its transport generation changes', async () => {
     let subscriptionKey = 'A:1'
     const h = makeHarness(['A'])
+
     const sync = createRuntimeClientEventsSync({
       getDesiredEnvironmentIds: () => ['A'],
       getSubscriptionKey: () => subscriptionKey,
@@ -158,6 +171,7 @@ describe('createRuntimeClientEventsSync', () => {
     const aUnsubscribed = aRecords.filter(
       (record) => record.unsubscribe.mock.calls.length > 0
     ).length
+
     expect(aUnsubscribed).toBe(1)
 
     // 'B' is untouched.
@@ -184,17 +198,22 @@ describe('createRuntimeClientEventsSync', () => {
 
   it('retries failed desired subscriptions without another store-driven sync', async () => {
     vi.useFakeTimers()
+
     try {
       let desired = ['A']
       let attempt = 0
       const unsubscribe = vi.fn()
+
       const subscribe = vi.fn((): Promise<RuntimeClientEventSubscriptionHandle> => {
         attempt += 1
+
         if (attempt === 1) {
           return Promise.reject(new Error('temporary subscribe failure'))
         }
+
         return Promise.resolve({ unsubscribe })
       })
+
       const sync = createRuntimeClientEventsSync({
         getDesiredEnvironmentIds: () => desired,
         subscribe,
@@ -224,10 +243,12 @@ describe('createRuntimeClientEventsSync', () => {
 
   it('backs off exponentially with a cap while an environment keeps failing', async () => {
     vi.useFakeTimers()
+
     try {
       const subscribe = vi.fn((): Promise<RuntimeClientEventSubscriptionHandle> =>
         Promise.reject(new Error('unreachable'))
       )
+
       const sync = createRuntimeClientEventsSync({
         getDesiredEnvironmentIds: () => ['A'],
         subscribe,
@@ -264,10 +285,12 @@ describe('createRuntimeClientEventsSync', () => {
 
   it('applies jitter below the full backoff delay', async () => {
     vi.useFakeTimers()
+
     try {
       const subscribe = vi.fn((): Promise<RuntimeClientEventSubscriptionHandle> =>
         Promise.reject(new Error('unreachable'))
       )
+
       const sync = createRuntimeClientEventsSync({
         getDesiredEnvironmentIds: () => ['A'],
         subscribe,
@@ -290,16 +313,20 @@ describe('createRuntimeClientEventsSync', () => {
 
   it('starts a fresh backoff epoch after a successful subscribe', async () => {
     vi.useFakeTimers()
+
     try {
       let desired = ['A']
       let failing = true
       const unsubscribe = vi.fn()
+
       const subscribe = vi.fn((): Promise<RuntimeClientEventSubscriptionHandle> => {
         if (failing) {
           return Promise.reject(new Error('unreachable'))
         }
+
         return Promise.resolve({ unsubscribe })
       })
+
       const sync = createRuntimeClientEventsSync({
         getDesiredEnvironmentIds: () => desired,
         subscribe,
@@ -340,11 +367,14 @@ describe('createRuntimeClientEventsSync', () => {
 
   it('starts a fresh backoff epoch after the transport generation changes', async () => {
     vi.useFakeTimers()
+
     try {
       let subscriptionKey = 'A:1'
+
       const subscribe = vi.fn((): Promise<RuntimeClientEventSubscriptionHandle> =>
         Promise.reject(new Error('unreachable'))
       )
+
       const sync = createRuntimeClientEventsSync({
         getDesiredEnvironmentIds: () => ['A'],
         getSubscriptionKey: () => subscriptionKey,
@@ -375,10 +405,12 @@ describe('createRuntimeClientEventsSync', () => {
 
   it('an external sync retries a waiting environment immediately (recovery path)', async () => {
     vi.useFakeTimers()
+
     try {
       const subscribe = vi.fn((): Promise<RuntimeClientEventSubscriptionHandle> =>
         Promise.reject(new Error('unreachable'))
       )
+
       const sync = createRuntimeClientEventsSync({
         getDesiredEnvironmentIds: () => ['A'],
         subscribe,
@@ -405,6 +437,7 @@ describe('createRuntimeClientEventsSync', () => {
 
   it('does not carry a stale failure count when a rejection lands after the env left the set', async () => {
     vi.useFakeTimers()
+
     try {
       // 'B' stays pending forever so the desired set is never empty and the
       // generation never bumps — this is what lets A's late rejection still be
@@ -412,17 +445,21 @@ describe('createRuntimeClientEventsSync', () => {
       let desired = ['A', 'B']
       const aRejecters: ((error: Error) => void)[] = []
       let aAttempts = 0
+
       const subscribe = vi.fn(
         (environmentId: string): Promise<RuntimeClientEventSubscriptionHandle> => {
           if (environmentId === 'B') {
             return new Promise(() => {})
           }
+
           aAttempts += 1
+
           return new Promise((_resolve, reject) => {
             aRejecters.push(reject)
           })
         }
       )
+
       const sync = createRuntimeClientEventsSync({
         getDesiredEnvironmentIds: () => desired,
         subscribe,

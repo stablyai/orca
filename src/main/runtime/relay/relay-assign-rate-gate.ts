@@ -3,10 +3,13 @@
 // the Retry-After timer) can fire immediately, so hosts sit permanently limited.
 // The gate lives below all of them, at the single call site that issues assigns.
 const ASSIGN_MIN_INTERVAL_MS = 5_000
+
 const ASSIGN_INTERVAL_JITTER_MS = 500
+
 // Sleep in slices so a raise landing mid-wait is honored and a superseded
 // caller aborts promptly instead of holding its IPC path for the full wait.
 const ASSIGN_WAIT_SLICE_MS = 1_000
+
 // Beyond this, fail fast with the remaining wait instead of parking the caller
 // (pairing IPC awaits reconcile inline): a Retry-After can legitimately reach
 // minutes, and the gate keeps the deadline for the scheduled retry.
@@ -60,41 +63,54 @@ export class RelayAssignRateGate {
   async reserve(key: string, isCurrent?: () => boolean): Promise<void> {
     const prior = this.tails.get(key)
     let release = (): void => {}
+
     const link = new Promise<void>((resolve) => {
       release = resolve
     })
+
     const tail = prior ? prior.then(() => link) : link
     this.tails.set(key, tail)
     let stale = false
+
     try {
       await prior
+
       // Re-read the deadline every slice: a sibling's Retry-After can raise it
       // mid-wait, and a caller superseded mid-wait must not spend the slot.
       for (;;) {
         stale = isCurrent ? !isCurrent() : false
+
         if (stale) {
           break
         }
+
         const waitMs = (this.nextPermittedAt.get(key) ?? 0) - this.now()
+
         if (waitMs <= 0) {
           break
         }
+
         if (waitMs > ASSIGN_MAX_INLINE_WAIT_MS) {
           this.pruneExpired()
           throw new RelayAssignRateLimitedError(waitMs)
         }
+
         await this.sleep(Math.min(waitMs, ASSIGN_WAIT_SLICE_MS))
       }
+
       if (!stale) {
         this.book(key)
       }
+
       this.pruneExpired()
     } finally {
       release()
+
       if (this.tails.get(key) === tail) {
         this.tails.delete(key)
       }
     }
+
     if (stale) {
       throw new RelayAssignAbortedError()
     }
@@ -105,7 +121,9 @@ export class RelayAssignRateGate {
     if (retryAfterMs <= 0) {
       return
     }
+
     const until = this.now() + retryAfterMs
+
     if (until > (this.nextPermittedAt.get(key) ?? 0)) {
       this.nextPermittedAt.set(key, until)
     }
@@ -114,6 +132,7 @@ export class RelayAssignRateGate {
   private book(key: string): void {
     const until =
       this.now() + ASSIGN_MIN_INTERVAL_MS + Math.floor(this.random() * ASSIGN_INTERVAL_JITTER_MS)
+
     if (until > (this.nextPermittedAt.get(key) ?? 0)) {
       this.nextPermittedAt.set(key, until)
     }
@@ -121,6 +140,7 @@ export class RelayAssignRateGate {
 
   private pruneExpired(): void {
     const now = this.now()
+
     for (const [key, until] of this.nextPermittedAt) {
       if (until <= now) {
         this.nextPermittedAt.delete(key)

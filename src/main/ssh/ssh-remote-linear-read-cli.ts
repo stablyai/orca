@@ -26,6 +26,7 @@ export async function tryDispatchRemoteLinearReadCli(
   if (isRemoteCommand(parsed, 'linear', 'list-issues')) {
     return await dispatchRemoteLinearListIssues(dispatcher, parsed)
   }
+
   if (isRemoteCommand(parsed, 'linear', 'issue')) {
     validateLinearRemoteArgs(parsed, {
       command: ['linear', 'issue'],
@@ -33,8 +34,10 @@ export async function tryDispatchRemoteLinearReadCli(
       positionalFlag: 'id',
       maxPositionals: 1
     })
+
     return await call(dispatcher, 'linear.issueContext', buildRemoteLinearIssueRequest(parsed, env))
   }
+
   if (isRemoteCommand(parsed, 'linear', 'search')) {
     validateLinearRemoteArgs(parsed, {
       command: ['linear', 'search'],
@@ -42,12 +45,14 @@ export async function tryDispatchRemoteLinearReadCli(
       positionalFlag: 'query',
       maxPositionals: 1
     })
+
     return await call(dispatcher, 'linear.agentSearchIssues', {
       query: remotePositional(parsed, 2) ?? requiredString(parsed.flags, 'query'),
       limit: clampLinearSearchLimit(optionalPositiveInteger(parsed.flags, 'limit')),
       workspaceId: optionalString(parsed.flags, 'workspace')
     })
   }
+
   if (isRemoteCommand(parsed, 'linear', 'team', 'list')) {
     validateLinearRemoteArgs(parsed, {
       command: ['linear', 'team', 'list'],
@@ -55,10 +60,12 @@ export async function tryDispatchRemoteLinearReadCli(
       positionalFlag: 'id',
       maxPositionals: 0
     })
+
     return await call(dispatcher, 'linear.agentTeamList', {
       workspaceId: optionalString(parsed.flags, 'workspace')
     })
   }
+
   if (isRemoteCommand(parsed, 'linear', 'team', 'members')) {
     return await dispatchRemoteLinearTeamLookup(
       dispatcher,
@@ -67,6 +74,7 @@ export async function tryDispatchRemoteLinearReadCli(
       'linear.agentTeamMembers'
     )
   }
+
   if (isRemoteCommand(parsed, 'linear', 'team', 'states')) {
     return await dispatchRemoteLinearTeamLookup(
       dispatcher,
@@ -75,6 +83,7 @@ export async function tryDispatchRemoteLinearReadCli(
       'linear.agentTeamStates'
     )
   }
+
   if (isRemoteCommand(parsed, 'linear', 'team', 'labels')) {
     return await dispatchRemoteLinearTeamLookup(
       dispatcher,
@@ -83,6 +92,7 @@ export async function tryDispatchRemoteLinearReadCli(
       'linear.agentTeamLabels'
     )
   }
+
   if (isRemoteCommand(parsed, 'linear', 'project', 'list')) {
     validateLinearRemoteArgs(parsed, {
       command: ['linear', 'project', 'list'],
@@ -90,12 +100,14 @@ export async function tryDispatchRemoteLinearReadCli(
       positionalFlag: 'id',
       maxPositionals: 0
     })
+
     return await call(dispatcher, 'linear.agentProjectList', {
       query: optionalString(parsed.flags, 'query'),
       limit: clampLinearSearchLimit(optionalPositiveInteger(parsed.flags, 'limit')),
       workspaceId: optionalString(parsed.flags, 'workspace')
     })
   }
+
   if (isRemoteCommand(parsed, 'linear', 'list')) {
     validateLinearRemoteArgs(parsed, {
       command: ['linear', 'list'],
@@ -103,6 +115,7 @@ export async function tryDispatchRemoteLinearReadCli(
       positionalFlag: 'id',
       maxPositionals: 0
     })
+
     return await call(dispatcher, 'linear.agentIssueList', {
       filter: linearListFilter(parsed.flags),
       teamInput: optionalString(parsed.flags, 'team'),
@@ -110,6 +123,7 @@ export async function tryDispatchRemoteLinearReadCli(
       workspaceId: optionalString(parsed.flags, 'workspace')
     })
   }
+
   return null
 }
 
@@ -125,6 +139,7 @@ async function dispatchRemoteLinearTeamLookup(
     positionalFlag: 'team',
     maxPositionals: 0
   })
+
   return await call(dispatcher, method, {
     teamInput: requiredString(parsed.flags, 'team'),
     workspaceId: optionalString(parsed.flags, 'workspace')
@@ -150,12 +165,14 @@ function validateLinearRemoteArgs(
   }
 
   const positionals = parsed.commandPath.slice(options.command.length)
+
   if (positionals.length > options.maxPositionals) {
     throw new RemoteCliArgumentError(
       'invalid_argument',
       `Unknown command: ${parsed.commandPath.join(' ')}`
     )
   }
+
   if (positionals.length > 0 && parsed.flags.has(options.positionalFlag)) {
     throw new RemoteCliArgumentError(
       'invalid_argument',
@@ -170,6 +187,7 @@ function isRemoteCommand(parsed: ParsedRemoteCli, ...command: string[]): boolean
 
 function remotePositional(parsed: ParsedRemoteCli, startIndex: number): string | undefined {
   const value = parsed.commandPath.slice(startIndex).join(' ').trim()
+
   return value || undefined
 }
 
@@ -178,6 +196,7 @@ function buildRemoteLinearIssueRequest(
   env: Record<string, string>
 ): Record<string, unknown> {
   const full = parsed.flags.get('full') === true
+
   const include: Record<LinearIssueInclude, boolean> = {
     comments: full || parsed.flags.get('comments') === true,
     children: full || parsed.flags.get('children') === true,
@@ -185,24 +204,31 @@ function buildRemoteLinearIssueRequest(
     relations: full || parsed.flags.get('relations') === true,
     activity: full || parsed.flags.get('activity') === true
   }
+
   if (parsed.flags.has('depth') && !include.children) {
     throw new RemoteCliArgumentError('invalid_argument', '--depth requires --children or --full')
   }
+
   const requestedDepth = optionalNonNegativeInteger(parsed.flags, 'depth')
+
   if (requestedDepth !== undefined && requestedDepth > LINEAR_CHILDREN_MAX_DEPTH) {
     throw new RemoteCliArgumentError(
       'invalid_argument',
       `--depth must be at most ${LINEAR_CHILDREN_MAX_DEPTH}`
     )
   }
+
   const workspaceId = optionalString(parsed.flags, 'workspace')
+
   if (workspaceId === 'all') {
     throw new RemoteCliArgumentError(
       'linear_invalid_workspace',
       '--workspace all is not valid for issue'
     )
   }
+
   const input = optionalString(parsed.flags, 'id') ?? remotePositional(parsed, 2)
+
   return {
     input,
     current: input ? false : parsed.flags.get('current') === true,
@@ -232,26 +258,33 @@ async function call(
 
 function requiredString(flags: Map<string, string | boolean>, name: string): string {
   const value = optionalString(flags, name)
+
   if (!value) {
     throw new RemoteCliArgumentError('invalid_argument', `Missing --${name}`)
   }
+
   return value
 }
 
 function optionalString(flags: Map<string, string | boolean>, name: string): string | undefined {
   const value = flags.get(name)
+
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
 function optionalNumber(flags: Map<string, string | boolean>, name: string): number | undefined {
   const value = optionalString(flags, name)
+
   if (value === undefined) {
     return undefined
   }
+
   const parsed = Number(value)
+
   if (!Number.isFinite(parsed)) {
     throw new RemoteCliArgumentError('invalid_argument', `Invalid numeric value for --${name}`)
   }
+
   return parsed
 }
 
@@ -260,12 +293,15 @@ function optionalPositiveInteger(
   name: string
 ): number | undefined {
   const value = optionalNumber(flags, name)
+
   if (value === undefined) {
     return undefined
   }
+
   if (!Number.isInteger(value) || value <= 0) {
     throw new RemoteCliArgumentError('invalid_argument', `Invalid positive integer for --${name}`)
   }
+
   return value
 }
 
@@ -273,12 +309,15 @@ function linearListFilter(
   flags: Map<string, string | boolean>
 ): 'assigned' | 'created' | 'all' | 'completed' | 'open' | undefined {
   const filter = optionalString(flags, 'filter')
+
   if (filter === undefined) {
     return undefined
   }
+
   if (['assigned', 'created', 'all', 'completed', 'open'].includes(filter)) {
     return filter as 'assigned' | 'created' | 'all' | 'completed' | 'open'
   }
+
   throw new RemoteCliArgumentError(
     'invalid_argument',
     '--filter must be assigned, created, all, completed, or open'
@@ -290,14 +329,17 @@ function optionalNonNegativeInteger(
   name: string
 ): number | undefined {
   const value = optionalNumber(flags, name)
+
   if (value === undefined) {
     return undefined
   }
+
   if (!Number.isInteger(value) || value < 0) {
     throw new RemoteCliArgumentError(
       'invalid_argument',
       `Invalid non-negative integer for --${name}`
     )
   }
+
   return value
 }

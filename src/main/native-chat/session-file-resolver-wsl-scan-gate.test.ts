@@ -3,7 +3,9 @@ import type * as WslRunningPathFilterModule from '../wsl-running-path-filter'
 import type * as WslTranscriptFsGateModule from './wsl-transcript-fs-gate'
 
 const WSL_SESSIONS_DIR = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions'
+
 const DEBIAN_SESSIONS_DIR = '\\\\wsl.localhost\\Debian\\home\\ada\\.codex\\sessions'
+
 const LOCAL_SESSIONS_DIR = 'C:\\Users\\ada\\.codex\\sessions'
 
 const mocks = vi.hoisted(() => ({
@@ -17,6 +19,7 @@ const mocks = vi.hoisted(() => ({
       options: { readDirectory?: (dirPath: string) => Promise<unknown[]> }
     ) => {
       await options.readDirectory?.(dir)
+
       return [] as string[]
     }
   )
@@ -26,14 +29,17 @@ vi.mock('./wsl-transcript-fs-gate', async (importOriginal) => ({
   ...(await importOriginal<typeof WslTranscriptFsGateModule>()),
   runWslTranscriptFsTask: mocks.gate
 }))
+
 vi.mock('../ai-vault/session-scanner-discovery', () => ({
   walkSessionFiles: mocks.walk
 }))
+
 vi.mock('../wsl', () => ({
   getWslHomeAsync: vi.fn(async () => '\\\\wsl.localhost\\Ubuntu\\home\\ada'),
   listRunningWslDistrosAsync: vi.fn(async () => ['Ubuntu']),
   listRunningWslHomeDirsAsync: vi.fn(async () => ['\\\\wsl.localhost\\Ubuntu\\home\\ada'])
 }))
+
 vi.mock('../wsl-running-path-filter', async (importOriginal) => ({
   ...(await importOriginal<typeof WslRunningPathFilterModule>()),
   filterPathsToRunningWslDistrosAsync: mocks.filterPathsToRunningWslDistrosAsync
@@ -85,10 +91,12 @@ describe('Codex WSL scan gate', () => {
       if (options.path.includes('Ubuntu')) {
         throw new WslTranscriptFsError('timeout', 'slow share')
       }
+
       return []
     })
     mocks.walk.mockImplementation(async (dir, _agent, _issues, options) => {
       await options.readDirectory?.(dir)
+
       return dir === DEBIAN_SESSIONS_DIR ? [hit] : []
     })
 
@@ -116,6 +124,7 @@ describe('Codex WSL scan gate', () => {
       if (options.operation === 'access') {
         throw refusal
       }
+
       return []
     })
 
@@ -135,10 +144,12 @@ describe('Codex WSL scan gate', () => {
       if (options.operation === 'access') {
         throw refusal
       }
+
       return []
     })
     mocks.walk.mockImplementation(async (dir, _agent, _issues, options) => {
       await options.readDirectory?.(dir)
+
       return []
     })
 
@@ -158,6 +169,7 @@ describe('Codex WSL scan gate', () => {
         controller.abort(abortReason)
         throw new WslTranscriptFsError('timeout', 'slow share')
       }
+
       return []
     })
 

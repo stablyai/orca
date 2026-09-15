@@ -8,6 +8,7 @@ describe('AiVaultScanCoordinator', () => {
     const coordinator = new AiVaultScanCoordinator()
     let resolveScan: ((result: typeof EMPTY_RESULT) => void) | undefined
     let sharedSignal: AbortSignal | undefined
+
     const start = vi.fn(
       (signal: AbortSignal) =>
         new Promise<typeof EMPTY_RESULT>((resolve) => {
@@ -15,6 +16,7 @@ describe('AiVaultScanCoordinator', () => {
           resolveScan = resolve
         })
     )
+
     const controller = new AbortController()
     const first = coordinator.run({ key: 'scope', signal: controller.signal, start })
     const second = coordinator.run({ key: 'scope', start })
@@ -33,8 +35,10 @@ describe('AiVaultScanCoordinator', () => {
     const coordinator = new AiVaultScanCoordinator()
     const signals: AbortSignal[] = []
     let resolveForced: ((result: typeof EMPTY_RESULT) => void) | undefined
+
     const start = vi.fn((signal: AbortSignal) => {
       signals.push(signal)
+
       return new Promise<typeof EMPTY_RESULT>((resolve) => {
         if (signals.length === 1) {
           signal.addEventListener('abort', () => resolve(EMPTY_RESULT), { once: true })
@@ -43,6 +47,7 @@ describe('AiVaultScanCoordinator', () => {
         }
       })
     })
+
     const first = coordinator.run({ key: 'scope', start })
     await Promise.resolve()
 
@@ -64,15 +69,18 @@ describe('AiVaultScanCoordinator', () => {
 
   it('keeps coalescing forced callers onto a forced scan that is still fresh', async () => {
     vi.useFakeTimers()
+
     try {
       const coordinator = new AiVaultScanCoordinator()
       let resolveScan: ((result: typeof EMPTY_RESULT) => void) | undefined
+
       const start = vi.fn(
         () =>
           new Promise<typeof EMPTY_RESULT>((resolve) => {
             resolveScan = resolve
           })
       )
+
       const first = coordinator.run({ key: 'scope', force: true, start })
       await Promise.resolve()
 
@@ -91,18 +99,22 @@ describe('AiVaultScanCoordinator', () => {
 
   it('lets a forced refresh preempt a forced scan that hung past the coalescing window', async () => {
     vi.useFakeTimers()
+
     try {
       const coordinator = new AiVaultScanCoordinator()
       const signals: AbortSignal[] = []
       let resolveSecond: ((result: typeof EMPTY_RESULT) => void) | undefined
+
       const start = vi.fn((signal: AbortSignal) => {
         signals.push(signal)
+
         return new Promise<typeof EMPTY_RESULT>((resolve) => {
           if (signals.length > 1) {
             resolveSecond = resolve
           }
         })
       })
+
       const stuck = coordinator.run({ key: 'scope', force: true, start })
       await Promise.resolve()
 
@@ -124,15 +136,19 @@ describe('AiVaultScanCoordinator', () => {
   it('starts a fresh scan after every waiter cancels', async () => {
     const coordinator = new AiVaultScanCoordinator()
     const signals: AbortSignal[] = []
+
     const start = vi.fn((signal: AbortSignal) => {
       signals.push(signal)
+
       if (signals.length > 1) {
         return Promise.resolve(EMPTY_RESULT)
       }
+
       return new Promise<typeof EMPTY_RESULT>((resolve) => {
         signal.addEventListener('abort', () => resolve(EMPTY_RESULT), { once: true })
       })
     })
+
     const controller = new AbortController()
     const first = coordinator.run({ key: 'scope', signal: controller.signal, start })
     await Promise.resolve()

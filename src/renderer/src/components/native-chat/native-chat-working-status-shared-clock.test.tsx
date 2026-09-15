@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatNativeChatDuration, NativeChatWorkingStatus } from './NativeChatWorkingStatus'
 
 let container: HTMLDivElement
+
 let root: Root
 
 function setDocumentVisibility(state: 'visible' | 'hidden'): void {

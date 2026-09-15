@@ -7,6 +7,7 @@ import {
 } from './codex-stale-pane-sweep'
 
 const ACCOUNT_A = 'account-a@example.com'
+
 const ACCOUNT_B = 'account-b@example.com'
 
 const STALE_PANE = {
@@ -73,6 +74,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
   afterEach(() => {
     resetCodexStalePaneSweepForTests()
     vi.useRealTimers()
+
     if (originalWindow) {
       ;(globalThis as { window: typeof window }).window = originalWindow
     } else {
@@ -255,6 +257,7 @@ describe('notifyCodexPaneBoundForStaleSweep', () => {
       if (ptyIds.includes('pty-2')) {
         throw new Error('registry unreadable')
       }
+
       return [STALE_PANE]
     })
 

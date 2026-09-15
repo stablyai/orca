@@ -39,18 +39,24 @@ export async function moveWorktreeDirectoryToTrash(
 ): Promise<string | undefined> {
   const trashRoot = getWorktreeTrashRoot(worktreePath)
   const trashPath = join(trashRoot, `wt-${Date.now()}-${randomBytes(4).toString('hex')}`)
+
   try {
     // A malformed Git registration can name the checkout's .git file.
     const worktreeStat = await lstat(worktreePath)
+
     if (!worktreeStat.isDirectory() || worktreeStat.isSymbolicLink()) {
       return undefined
     }
+
     await mkdir(trashRoot, { recursive: true })
     const trashRootStat = await lstat(trashRoot)
+
     if (!trashRootStat.isDirectory() || trashRootStat.isSymbolicLink()) {
       throw new Error(`Refusing non-directory worktree trash root: ${trashRoot}`)
     }
+
     await rename(worktreePath, trashPath)
+
     return trashPath
   } catch (error) {
     console.warn(
@@ -59,6 +65,7 @@ export async function moveWorktreeDirectoryToTrash(
     )
     // Leave no empty trash root behind when the rename never happened; rmdir keeps queued entries.
     await rmdir(trashRoot).catch(() => {})
+
     return undefined
   }
 }
@@ -70,9 +77,11 @@ export async function restoreWorktreeDirectoryFromTrash(
 ): Promise<boolean> {
   try {
     await rename(trashPath, worktreePath)
+
     return true
   } catch (error) {
     console.warn(`[worktrees] Failed to restore ${worktreePath} from ${trashPath}`, error)
+
     return false
   }
 }
@@ -105,21 +114,27 @@ export async function sweepStaleWorktreeTrash(
   workspaceRoots: readonly string[]
 ): Promise<{ removed: number }> {
   let removed = 0
+
   for (const trashRoot of await collectExistingTrashRoots(workspaceRoots)) {
     let entries: string[]
+
     try {
       const trashRootStat = await lstat(trashRoot)
+
       if (!trashRootStat.isDirectory() || trashRootStat.isSymbolicLink()) {
         continue
       }
+
       entries = await readdir(trashRoot)
     } catch {
       continue
     }
+
     for (const entry of entries) {
       if (!isWorktreeTrashEntryName(entry)) {
         continue
       }
+
       try {
         await removeHostTree(join(trashRoot, entry))
         removed += 1
@@ -131,18 +146,22 @@ export async function sweepStaleWorktreeTrash(
       }
     }
   }
+
   if (removed > 0) {
     console.log(`[worktrees] Swept ${removed} leftover worktree director(ies) from a previous run`)
   }
+
   return { removed }
 }
 
 /** Trash roots live beside worktrees, so they sit at the workspace root (flat) or one level in (nested). */
 async function collectExistingTrashRoots(workspaceRoots: readonly string[]): Promise<string[]> {
   const trashRoots = new Set<string>()
+
   for (const workspaceRoot of new Set(workspaceRoots)) {
     trashRoots.add(join(workspaceRoot, WORKTREE_TRASH_DIR_NAME))
     let containers: string[] = []
+
     try {
       containers = (await readdir(workspaceRoot, { withFileTypes: true }))
         .filter((entry) => entry.isDirectory() && entry.name !== WORKTREE_TRASH_DIR_NAME)
@@ -151,10 +170,12 @@ async function collectExistingTrashRoots(workspaceRoots: readonly string[]): Pro
     } catch {
       continue
     }
+
     for (const container of containers) {
       trashRoots.add(join(workspaceRoot, container, WORKTREE_TRASH_DIR_NAME))
     }
   }
+
   return [...trashRoots]
 }
 
@@ -164,12 +185,15 @@ export function collectWorktreeTrashSweepRoots(
   settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'>
 ): string[] {
   const roots = new Set<string>()
+
   for (const repo of repos) {
     if (repo.connectionId || isFolderRepo(repo) || parseWslPath(repo.path)) {
       continue
     }
+
     try {
       const workspaceRoot = computeWorkspaceRoot(repo.path, getWorktreePathSettings(repo, settings))
+
       if (!parseWslPath(workspaceRoot)) {
         roots.add(workspaceRoot)
       }
@@ -177,5 +201,6 @@ export function collectWorktreeTrashSweepRoots(
       // A repo with an unusable configured base path simply has no trash root to sweep.
     }
   }
+
   return [...roots]
 }

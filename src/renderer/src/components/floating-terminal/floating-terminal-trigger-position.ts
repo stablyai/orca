@@ -1,7 +1,11 @@
 const TRIGGER_SIZE = 36
+
 const DEFAULT_RIGHT_GAP = 24
+
 const DEFAULT_BOTTOM_GAP = 72
+
 const DRAG_MARGIN = 8
+
 const TITLEBAR_SAFE_TOP = 36
 
 export const FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY =
@@ -13,6 +17,7 @@ export type FloatingTerminalTriggerPosition = {
 }
 
 export type FloatingTerminalAnchorX = 'left' | 'right'
+
 export type FloatingTerminalAnchorY = 'top' | 'bottom'
 
 export type FloatingTerminalAnchoredTriggerPosition = {
@@ -82,6 +87,7 @@ export function clampFloatingTerminalTriggerPosition(
   const viewport = getViewport()
   const maxLeft = Math.max(DRAG_MARGIN, viewport.width - TRIGGER_SIZE - DRAG_MARGIN)
   const maxTop = Math.max(TITLEBAR_SAFE_TOP, viewport.height - TRIGGER_SIZE - DRAG_MARGIN)
+
   return {
     left: Math.min(Math.max(DRAG_MARGIN, position.left), maxLeft),
     top: Math.min(Math.max(TITLEBAR_SAFE_TOP, position.top), maxTop)
@@ -90,6 +96,7 @@ export function clampFloatingTerminalTriggerPosition(
 
 export function hasUsableFloatingTerminalTriggerViewport(): boolean {
   const viewport = getViewport()
+
   return (
     viewport.width >= TRIGGER_SIZE + DRAG_MARGIN * 2 &&
     viewport.height >= TRIGGER_SIZE + TITLEBAR_SAFE_TOP + DRAG_MARGIN
@@ -102,7 +109,9 @@ export function resolveFloatingTerminalTriggerCommittedPosition(
   if (!isAnchoredTriggerPosition(position)) {
     return position
   }
+
   const viewport = getViewport()
+
   return {
     left:
       position.anchorX === 'left'
@@ -121,11 +130,15 @@ export function anchorFloatingTerminalTriggerPosition(
   if (!hasUsableFloatingTerminalTriggerViewport()) {
     return null
   }
+
   const viewport = getViewport()
+
   const anchorX: FloatingTerminalAnchorX =
     position.left + TRIGGER_SIZE / 2 <= viewport.width / 2 ? 'left' : 'right'
+
   const anchorY: FloatingTerminalAnchorY =
     position.top + TRIGGER_SIZE / 2 <= viewport.height / 2 ? 'top' : 'bottom'
+
   return {
     anchorX,
     anchorY,
@@ -147,6 +160,7 @@ export function resolveFloatingTerminalTriggerPosition(
   if (source === 'default') {
     return getDefaultFloatingTerminalTriggerPosition()
   }
+
   return clampFloatingTerminalTriggerPosition(
     resolveFloatingTerminalTriggerCommittedPosition(position)
   )
@@ -158,12 +172,16 @@ export function parseFloatingTerminalTriggerPosition(
   if (!serialized) {
     return null
   }
+
   try {
     const parsed: unknown = JSON.parse(serialized)
+
     if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null
     }
+
     const record = parsed as Record<string, unknown>
+
     if (
       isAnchorX(record.anchorX) &&
       isAnchorY(record.anchorY) &&
@@ -177,9 +195,11 @@ export function parseFloatingTerminalTriggerPosition(
         offsetY: record.offsetY
       }
     }
+
     if (!isFiniteCoordinate(record.left) || !isFiniteCoordinate(record.top)) {
       return null
     }
+
     return { left: record.left, top: record.top }
   } catch {
     return null

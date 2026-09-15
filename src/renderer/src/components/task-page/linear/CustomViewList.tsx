@@ -4,6 +4,7 @@ import {
   LinearCustomViewTable,
   LinearCollectionNotice
 } from '@/components/linear-project-view-surfaces'
+
 export function TaskPageLinearCustomViewList({
   model
 }: {
@@ -16,6 +17,7 @@ export function TaskPageLinearCustomViewList({
     linearCustomViewsError,
     openLinearCustomViewContext
   } = model
+
   return (
     <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
       <div className="grid h-8 flex-none items-center gap-3 border-b border-border/50 bg-muted/25 px-3 text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground grid-cols-[minmax(220px,1.5fr)_120px_120px_120px_130px_60px]">

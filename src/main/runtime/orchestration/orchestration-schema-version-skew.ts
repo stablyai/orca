@@ -77,6 +77,7 @@ const POST_V6_INDEXES = [
 
 function hasOrchestrationColumn(db: Database.Database, table: string, column: string): boolean {
   const rows = db.pragma(`table_info(${table})`) as { name: string }[]
+
   return rows.some((row) => row.name === column)
 }
 
@@ -86,6 +87,7 @@ function hasNotNullOrchestrationColumn(
   column: string
 ): boolean {
   const rows = db.pragma(`table_info(${table})`) as { name: string; notnull: number }[]
+
   return rows.some((row) => row.name === column && row.notnull === 1)
 }
 
@@ -96,6 +98,7 @@ function hasOrchestrationColumnDefault(
   defaultValue: string
 ): boolean {
   const rows = db.pragma(`table_info(${table})`) as { name: string; dflt_value: unknown }[]
+
   return rows.some((row) => row.name === column && row.dflt_value === defaultValue)
 }
 
@@ -111,6 +114,7 @@ function hasOrchestrationIndexPredicate(
   const row = db
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?")
     .get(index) as { sql: string | null } | undefined
+
   return !!row?.sql?.includes(predicate)
 }
 
@@ -118,18 +122,22 @@ function messagesAllowQuestions(db: Database.Database): boolean {
   const row = db
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'messages'")
     .get() as { sql: string } | undefined
+
   return !!row && row.sql.includes("'question'")
 }
 
 function hasConsistentLegacyAdoption(db: Database.Database): boolean {
   const sourceRunId = 'run_legacy_local'
+
   // Misfiled federated mail is not evidence of a pre-Runs database.
   const notFederatedMailbox = (handle: string): string =>
     `NOT EXISTS (SELECT 1 FROM remote_dispatch_attachments AS attachment
       WHERE 'dispatch:' || attachment.dispatch_id = ${handle})`
+
   const deliveryFilter = hasOrchestrationColumn(db, 'deliveries', 'mailbox_handle')
     ? ` AND ${notFederatedMailbox('mailbox_handle')}`
     : ''
+
   const sourceGraph = db
     .prepare(
       `SELECT 1
@@ -141,17 +149,21 @@ function hasConsistentLegacyAdoption(db: Database.Database): boolean {
           OR EXISTS(SELECT 1 FROM deliveries WHERE run_id = ?${deliveryFilter})`
     )
     .get(sourceRunId, sourceRunId, sourceRunId, sourceRunId, sourceRunId, sourceRunId)
+
   const adoption = db
     .prepare('SELECT adopted_run_id FROM legacy_adoptions WHERE source_run_id = ?')
     .get(sourceRunId) as { adopted_run_id: string } | undefined
+
   if (sourceGraph) {
     return false
   }
+
   if (adoption) {
     return Boolean(
       db.prepare('SELECT 1 FROM runs WHERE id = ? AND legacy = 0').get(adoption.adopted_run_id)
     )
   }
+
   return true
 }
 
@@ -185,9 +197,11 @@ export function resolveOrchestrationMigrationStartVersion(
   if (storedVersion > schemaVersion) {
     return storedVersion
   }
+
   if (hasCompletePostV6Schema(db, storedVersion)) {
     return storedVersion
   }
+
   // Why: version-skewed pre-Run databases can claim the post-v6 range while retaining v6 tables.
   return Math.min(storedVersion, schemaVersion, 6)
 }

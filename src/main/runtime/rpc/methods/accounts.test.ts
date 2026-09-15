@@ -7,9 +7,11 @@ import { ACCOUNT_METHODS } from './accounts'
 
 function method(name: string) {
   const found = eraseRpcMethods(ACCOUNT_METHODS).find((candidate) => candidate.name === name)
+
   if (!found) {
     throw new Error(`Missing method ${name}`)
   }
+
   return found
 }
 
@@ -40,6 +42,7 @@ describe('account RPC methods', () => {
     const add = vi.fn().mockResolvedValue({ accounts: [] })
     const runtime = { [testCase.runtimeMethod]: add } as unknown as OrcaRuntimeService
     const addMethod = method(testCase.methodName)
+
     if (isStreamingMethod(addMethod)) {
       throw new Error(`${testCase.methodName} must be a request method`)
     }
@@ -57,7 +60,9 @@ describe('account RPC methods', () => {
       addClaudeAccountFromConfigDir: vi.fn(),
       addCodexAccountFromHome: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const addMethod = method(methodName)
+
     if (isStreamingMethod(addMethod)) {
       throw new Error(`${methodName} must be a request method`)
     }
@@ -67,17 +72,21 @@ describe('account RPC methods', () => {
         /only available on the Orca host runtime/
       )
     }
+
     expect(runtime.addClaudeAccountFromConfigDir).not.toHaveBeenCalled()
     expect(runtime.addCodexAccountFromHome).not.toHaveBeenCalled()
   })
 
   it('keeps explicit account-list refreshes on the forced refresh lane', async () => {
     const snapshot = { claude: null, codex: null }
+
     const runtime = {
       refreshAccountsForMobile: vi.fn().mockResolvedValue(undefined),
       getAccountsSnapshot: vi.fn(() => snapshot)
     } as unknown as OrcaRuntimeService
+
     const list = method('accounts.list')
+
     if (isStreamingMethod(list)) {
       throw new Error('accounts.list must be a request method')
     }
@@ -89,11 +98,14 @@ describe('account RPC methods', () => {
 
   it('skips the forced provider refresh when the caller opts out', async () => {
     const snapshot = { claude: null, codex: null }
+
     const runtime = {
       refreshAccountsForMobile: vi.fn().mockResolvedValue(undefined),
       getAccountsSnapshot: vi.fn(() => snapshot)
     } as unknown as OrcaRuntimeService
+
     const list = method('accounts.list')
+
     if (isStreamingMethod(list)) {
       throw new Error('accounts.list must be a request method')
     }
@@ -106,20 +118,24 @@ describe('account RPC methods', () => {
 
   it('forwards a client idempotency key when consuming a Codex reset credit', async () => {
     const idempotencyKey = '11111111-1111-4111-8111-111111111111'
+
     const expectedScope = {
       target: { runtime: 'host' as const, wslDistro: null },
       accountId: 'codex-account',
       accountRevision: 42,
       offerRevision: 'v1:offer'
     }
+
     const result = {
       outcome: 'reset',
       scope: expectedScope,
       snapshot: { claude: null, codex: null }
     }
+
     const consumeCodexRateLimitResetCredit = vi.fn().mockResolvedValue(result)
     const runtime = { consumeCodexRateLimitResetCredit } as unknown as OrcaRuntimeService
     const reset = method('accounts.consumeCodexResetCredit')
+
     if (isStreamingMethod(reset)) {
       throw new Error('accounts.consumeCodexResetCredit must be a request method')
     }
@@ -158,11 +174,14 @@ describe('account RPC methods', () => {
     const selectCodexAccountForTarget = vi
       .fn()
       .mockResolvedValue({ accounts: [], activeAccountId: null })
+
     const runtime = { selectCodexAccountForTarget } as unknown as OrcaRuntimeService
     const select = method('accounts.selectCodexForTarget')
+
     if (isStreamingMethod(select)) {
       throw new Error('accounts.selectCodexForTarget must be a request method')
     }
+
     const params = {
       accountId: null,
       target: { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
@@ -197,6 +216,7 @@ describe('account RPC methods', () => {
   it('uses a stale-aware refresh when a connection replays the subscription', async () => {
     const snapshot = { claude: null, codex: null }
     let cleanup: (() => void) | undefined
+
     const runtime = {
       getAccountsSnapshot: vi.fn(() => snapshot),
       onAccountsChanged: vi.fn(() => vi.fn()),
@@ -206,10 +226,13 @@ describe('account RPC methods', () => {
       refreshAccountsForMobile: vi.fn().mockResolvedValue(undefined),
       refreshAccountsForMobileSubscriber: vi.fn().mockResolvedValue(undefined)
     } as unknown as OrcaRuntimeService
+
     const subscribe = method('accounts.subscribe')
+
     if (!isStreamingMethod(subscribe)) {
       throw new Error('accounts.subscribe must be a streaming method')
     }
+
     const emit = vi.fn()
 
     const running = subscribe.handler(undefined, { runtime, connectionId: 'connection-1' }, emit)

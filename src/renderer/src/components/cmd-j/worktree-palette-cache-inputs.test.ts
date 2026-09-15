@@ -12,6 +12,7 @@ describe('selectWorktreePaletteCacheInputs', () => {
       issueCache: {},
       hostedReviewCache: {}
     }
+
     const filledState: Pick<AppState, 'prCache' | 'issueCache' | 'hostedReviewCache'> = {
       prCache: { pr: { data: null, fetchedAt: 1 } },
       issueCache: { issue: { data: null, fetchedAt: 1 } },

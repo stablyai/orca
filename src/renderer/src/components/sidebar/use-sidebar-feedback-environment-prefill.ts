@@ -20,6 +20,7 @@ function insertClientEnvironmentFooter(params: {
     message: params.feedback,
     info: params.environmentInfo
   })
+
   return params.feedback.trim() === '' ? `\n\n${withFooter}` : withFooter
 }
 
@@ -36,14 +37,19 @@ export function useSidebarFeedbackEnvironmentPrefill(params: {
 
   useLayoutEffect(() => {
     const pending = pendingFeedbackSelectionRef.current
+
     if (!pending) {
       return
     }
+
     pendingFeedbackSelectionRef.current = null
+
     if (pending.feedback !== feedback) {
       return
     }
+
     const textarea = textareaRef.current
+
     if (textarea && document.activeElement === textarea) {
       textarea.setSelectionRange(pending.start, pending.end, pending.direction)
     }
@@ -60,7 +66,9 @@ export function useSidebarFeedbackEnvironmentPrefill(params: {
       if (cancelled || !mountedRef.current) {
         return
       }
+
       const textarea = textareaRef.current
+
       if (textarea && document.activeElement === textarea) {
         pendingFeedbackSelectionRef.current = {
           feedback: insertClientEnvironmentFooter({
@@ -72,6 +80,7 @@ export function useSidebarFeedbackEnvironmentPrefill(params: {
           direction: textarea.selectionDirection
         }
       }
+
       setFeedback((current) =>
         insertClientEnvironmentFooter({ feedback: current, environmentInfo })
       )

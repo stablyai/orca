@@ -4,9 +4,11 @@ import { Terminal as EsmTerminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const requireFromHere = createRequire(import.meta.url)
+
 const { Terminal: CjsTerminal } = requireFromHere('@xterm/xterm') as {
   Terminal: typeof EsmTerminal
 }
+
 const openTerminals: EsmTerminal[] = []
 
 function nextEventLoop(): Promise<void> {
@@ -23,15 +25,20 @@ function openTerminal(TerminalType: typeof EsmTerminal): {
   const terminal = new TerminalType()
   openTerminals.push(terminal)
   terminal.open(container)
+
   if (!terminal.textarea) {
     throw new Error('xterm textarea was not created')
   }
+
   const compositionView = container.querySelector<HTMLElement>('.composition-view')
+
   if (!compositionView) {
     throw new Error('xterm composition view was not created')
   }
+
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
+
   return { compositionView, emitted, textarea: terminal.textarea }
 }
 
@@ -41,9 +48,11 @@ function composition(
   data?: string
 ): void {
   const event = new CompositionEvent(type, { bubbles: true })
+
   if (data !== undefined) {
     Object.defineProperty(event, 'data', { value: data })
   }
+
   textarea.dispatchEvent(event)
 }
 
@@ -62,6 +71,7 @@ function keydown(textarea: HTMLTextAreaElement, key: string, code: string, keyCo
 function composeSyllable(textarea: HTMLTextAreaElement, prefix: string, steps: string[]): void {
   textarea.setSelectionRange(prefix.length, prefix.length)
   composition(textarea, 'compositionstart')
+
   for (const step of steps) {
     composition(textarea, 'compositionupdate', step)
     textarea.value = `${prefix}${step}`
@@ -83,6 +93,7 @@ describe.each([
     while (openTerminals.length > 0) {
       openTerminals.pop()?.dispose()
     }
+
     vi.useRealTimers()
     vi.restoreAllMocks()
     document.body.replaceChildren()

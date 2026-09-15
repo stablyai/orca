@@ -15,34 +15,46 @@ type StoreState = {
 
 const mocks = vi.hoisted(() => {
   const holder: { state: StoreState } = { state: {} as StoreState }
+
   const useAppStore = Object.assign(
     (selector: (state: StoreState) => unknown) => selector(holder.state),
     { getState: () => holder.state }
   )
+
   return { holder, useAppStore }
 })
 
 vi.mock('@/store', () => ({ useAppStore: mocks.useAppStore }))
+
 vi.mock('../../store', () => ({ useAppStore: mocks.useAppStore }))
+
 // `i18n` is read by the localized search catalogs the pane consults to decide
 // whether a query targets the address picker.
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback,
   i18n: { language: 'en' }
 }))
+
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+
 vi.mock('./mobile-pairing-device-polling', () => ({ useMobilePairingDevicePolling: vi.fn() }))
+
 vi.mock('./MobilePairingSetupSection', () => ({
   MobilePairingSetupSection: (props: { addressDisclosureForcedOpen?: boolean }) => (
     <div data-testid="address-forced-open">{String(props.addressDisclosureForcedOpen)}</div>
   )
 }))
+
 vi.mock('./MobilePairingConnectionOptions', () => ({
   MobilePairingConnectionOptions: () => <div />
 }))
+
 vi.mock('./MobilePairingQrSection', () => ({ MobilePairingQrSection: () => <div /> }))
+
 vi.mock('./MobilePairedDevicesSection', () => ({ MobilePairedDevicesSection: () => <div /> }))
+
 vi.mock('./MobileAutoRestoreFitSection', () => ({ MobileAutoRestoreFitSection: () => <div /> }))
+
 vi.mock('../mobile/WindowsFirewallNotice', () => ({ WindowsFirewallNotice: () => <div /> }))
 
 import { MobilePane } from './MobilePane'

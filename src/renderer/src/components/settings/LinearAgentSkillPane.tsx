@@ -62,6 +62,7 @@ export function LinearAgentSkillPane(): React.JSX.Element {
   const visibleInTasks = normalizeVisibleTaskProviders(settings?.visibleTaskProviders).includes(
     'linear'
   )
+
   const connectionChecking =
     linearStatusContextKey !== getProviderRuntimeContextKey(settings) || !linearStatusChecked
 

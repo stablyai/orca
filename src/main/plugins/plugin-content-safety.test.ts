@@ -19,6 +19,7 @@ const roots: string[] = []
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-plugin-content-test-'))
   roots.push(root)
+
   return root
 }
 
@@ -28,6 +29,7 @@ type ManifestOverrides = Omit<Partial<PluginManifest>, 'contributes'> & {
 
 function manifest(overrides: ManifestOverrides = {}): PluginManifest {
   const { contributes, ...manifestOverrides } = overrides
+
   return pluginManifestSchema.parse({
     manifestVersion: 1,
     id: 'demo',
@@ -62,6 +64,7 @@ describe('declared plugin artifacts', () => {
       writeFile(join(root, 'locales', 'pt-BR.json'), '{}'),
       writeFile(join(root, 'recipes', 'vm.json'), '{}')
     ])
+
     const pluginManifest = manifest({
       contributes: {
         languagePacks: [{ locale: 'pt-BR', path: 'locales/pt-BR.json' }],
@@ -104,6 +107,7 @@ describe('declared plugin artifacts', () => {
       join(root, 'escape'),
       process.platform === 'win32' ? 'junction' : 'dir'
     )
+
     const pluginManifest = manifest({
       contributes: {
         panels: [{ id: 'panel', title: 'Panel', entry: 'escape/panel.html' }],
@@ -111,6 +115,7 @@ describe('declared plugin artifacts', () => {
         events: []
       }
     })
+
     await writeFile(join(root, 'orca-plugin.json'), JSON.stringify(pluginManifest))
 
     await expect(validateDeclaredPluginArtifacts(root, pluginManifest)).resolves.toMatchObject({
@@ -118,6 +123,7 @@ describe('declared plugin artifacts', () => {
     })
 
     const pluginKey = `${pluginManifest.publisher}.${pluginManifest.id}`
+
     const service = new PluginService({
       userDataPath,
       hostVersion: '1.4.0',
@@ -128,6 +134,7 @@ describe('declared plugin artifacts', () => {
       }),
       getDevPluginPaths: () => [root]
     })
+
     try {
       await service.initialize()
       await expect(service.panels.readEntry(pluginKey, 'panel')).resolves.toBeNull()
@@ -141,6 +148,7 @@ describe('declared plugin artifacts', () => {
     const panelPath = join(root, 'panel.html')
     await writeFile(panelPath, '')
     await truncate(panelPath, PLUGIN_PANEL_ENTRY_MAX_BYTES + 1)
+
     const pluginManifest = manifest({
       contributes: {
         panels: [{ id: 'panel', title: 'Panel', entry: 'panel.html' }],
@@ -168,6 +176,7 @@ describe('declared plugin artifacts', () => {
         suspend: 'suspend'
       })
     )
+
     const pluginManifest = manifest({
       contributes: { vmRecipes: [{ path: 'recipes/invalid.json' }] }
     })
@@ -184,16 +193,19 @@ describe('declared plugin artifacts', () => {
   it('rejects duplicate VM recipe ids at the immutable install boundary', async () => {
     const root = await tempRoot()
     await mkdir(join(root, 'recipes'))
+
     const recipe = JSON.stringify({
       schemaVersion: 1,
       id: 'cloud',
       name: 'Cloud',
       create: 'create'
     })
+
     await Promise.all([
       writeFile(join(root, 'recipes', 'one.json'), recipe),
       writeFile(join(root, 'recipes', 'two.json'), recipe)
     ])
+
     const pluginManifest = manifest({
       contributes: {
         vmRecipes: [{ path: 'recipes/one.json' }, { path: 'recipes/two.json' }]
@@ -221,6 +233,7 @@ describe('hash-addressed plugin content', () => {
 
     expect(firstHash).toMatchObject({ ok: true })
     expect(secondHash).toMatchObject({ ok: true })
+
     if (firstHash.ok && secondHash.ok) {
       expect(firstHash.hash).not.toBe(secondHash.hash)
     }
@@ -238,6 +251,7 @@ describe('hash-addressed plugin content', () => {
 
     expect(initial).toMatchObject({ ok: true })
     expect(changed).toMatchObject({ ok: true })
+
     if (initial.ok && changed.ok) {
       expect(changed.hash).not.toBe(initial.hash)
     }
@@ -277,9 +291,11 @@ describe('hash-addressed plugin content', () => {
     await writeFile(entry, '<h1>original</h1>')
     const initial = await hashPluginTree(root)
     expect(initial.ok).toBe(true)
+
     if (!initial.ok) {
       return
     }
+
     expect(initial.hash).toMatch(/^[0-9a-f]{64}$/)
     await expect(
       verifyHashAddressedPluginContent({

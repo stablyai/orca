@@ -47,6 +47,7 @@ export class BrowserClientFileChannelTransport {
     if (this.available) {
       return 'negotiated'
     }
+
     return this.sender?.fileChannelAvailability ?? 'unavailable'
   }
 
@@ -56,13 +57,17 @@ export class BrowserClientFileChannelTransport {
     timeoutMs = BROWSER_CLIENT_FILE_CHANNEL_REQUEST_TIMEOUT_MS
   ): Promise<unknown> {
     const sender = this.sender
+
     if (!sender?.fileChannelNegotiated) {
       throw new Error(BROWSER_CLIENT_FILE_CHANNEL_REQUIRED_ERROR)
     }
+
     const response = await sender.sendFileChannelRequest(method, params, timeoutMs)
+
     if (!response.ok) {
       throw new RemoteRuntimeClientError(response.error.code, response.error.message)
     }
+
     return response.result
   }
 }

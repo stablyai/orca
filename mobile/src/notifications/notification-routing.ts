@@ -25,6 +25,7 @@ export function notificationCredentialRecoveryRoute(
   if (target.credentialRecovery === 're-pair') {
     return '/pair-scan'
   }
+
   return target.credentialRecovery === 'retry' ? '/' : null
 }
 
@@ -38,15 +39,18 @@ export function getNotificationNavigationTarget(
 
   const record = data as Record<string, unknown>
   const hostId = readNonEmptyString(record.hostId)
+
   if (!hostId) {
     return null
   }
+
   if (options.knownHostIds && !options.knownHostIds.has(hostId)) {
     return null
   }
 
   const worktreeId = readNonEmptyString(record.worktreeId)
   const credentialStatus = options.credentialStatusByHostId?.get(hostId)
+
   return {
     hostId,
     sessionTarget: worktreeId

@@ -17,8 +17,10 @@ import { translate } from '@/i18n/i18n'
 
 const LOCAL_PORT_MENU_CONTENT_CLASS =
   '!rounded-md !border-border/60 !bg-popover !text-popover-foreground !shadow-[0_10px_24px_rgba(0,0,0,0.18)] !backdrop-blur-none'
+
 const LOCAL_PORT_MENU_ITEM_CLASS =
   'rounded-md focus:bg-accent focus:text-accent-foreground dark:focus:bg-accent'
+
 const LOCAL_PORT_MENU_LABEL_CLASS = 'px-2 py-1 text-[11px] font-semibold text-muted-foreground'
 
 export function LocalPortRow({
@@ -46,6 +48,7 @@ export function LocalPortRow({
   const handleCopyButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       handleCopy()
+
       if (event.detail > 0) {
         event.currentTarget.blur()
       }
@@ -58,6 +61,7 @@ export function LocalPortRow({
       // Why: keyboard activations have detail=0; only pointer clicks carry
       // the modifier intent for the system-browser escape hatch.
       handleOpenBrowser(event.detail > 0 ? event : undefined)
+
       if (event.detail > 0) {
         event.currentTarget.blur()
       }
@@ -68,6 +72,7 @@ export function LocalPortRow({
   const handleStopButtonClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       onStop(port)
+
       if (event.detail > 0) {
         event.currentTarget.blur()
       }
@@ -77,18 +82,22 @@ export function LocalPortRow({
 
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
   const address = addressForPort(port)
+
   const ownerLabel =
     port.kind === 'workspace'
       ? port.owner.displayName
       : port.kind === 'container'
         ? 'Container or forwarded service'
         : 'Unassigned'
+
   const openBrowserLabel = translate(
     'auto.components.right.sidebar.PortsPanel.b22b128b2a',
     'Open in Browser'
   )
+
   const confidenceLabel =
     port.kind === 'workspace' ? (port.owner.confidence === 'cwd' ? 'cwd' : 'command') : null
+
   const canStopProcess =
     port.kind === 'workspace' && Boolean(port.pid) && port.processName !== 'Electron'
 

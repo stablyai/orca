@@ -45,6 +45,7 @@ const sampleTarget: RichMarkdownAnnotationTarget = {
 describe('useRichMarkdownReviewController openAnnotationPopover draft guard', () => {
   it('returns true without replacing an open draft (product B)', () => {
     const dispatch = vi.fn()
+
     const editorRef = {
       current: {
         view: { dispatch },
@@ -57,6 +58,7 @@ describe('useRichMarkdownReviewController openAnnotationPopover draft guard', ()
         }
       } as unknown as Editor
     }
+
     const rootRef = { current: document.createElement('div') }
     const scrollContainerRef = { current: document.createElement('div') }
 
@@ -95,6 +97,7 @@ describe('useRichMarkdownReviewController openAnnotationPopover draft guard', ()
   it('flushes the pending ProseMirror selection before reading the target', () => {
     const flush = vi.fn()
     const setSelection = vi.fn()
+
     // Why: an empty selection makes getRichMarkdownAnnotationTarget return null,
     // so the open no-ops; we only assert the flush ran first (drag-race fix).
     const editorRef = {
@@ -106,6 +109,7 @@ describe('useRichMarkdownReviewController openAnnotationPopover draft guard', ()
         state: { selection: { empty: true } }
       } as unknown as Editor
     }
+
     const rootRef = { current: document.createElement('div') }
     const scrollContainerRef = { current: document.createElement('div') }
 

@@ -10,6 +10,7 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const {
@@ -38,6 +39,7 @@ describe('createRemoteRuntimePtyTransport', () => {
   it('does not publish a spawn callback while reconnecting a mirrored web terminal', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtySpawn = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-tab-1',
@@ -80,9 +82,11 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         }
       }
+
       throw new Error(`Unexpected method ${request.method}`)
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('hub-env', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -137,6 +141,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         }
       }
+
       if (request.method === 'session.tabs.list') {
         return {
           ok: true,
@@ -162,9 +167,11 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         }
       }
+
       throw new Error(`Unexpected method ${request.method}`)
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('legacy-env', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -205,6 +212,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         }
       }
+
       if (request.method === 'session.tabs.list') {
         return {
           ok: true,
@@ -230,10 +238,12 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         }
       }
+
       throw new Error(`Unexpected method ${request.method}`)
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('legacy-env', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -252,11 +262,13 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('scopes the same legacy handle independently for each runtime environment', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const first = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId: 'leaf-1'
     })
+
     const second = createRemoteRuntimePtyTransport('env-2', {
       worktreeId: 'wt-2',
       tabId: 'tab-2',
@@ -274,8 +286,10 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('parks passive peers when another remote desktop owns the grid', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const { getFitOverrideForPty, setFitOverride } =
       await import('@/lib/pane-manager/mobile-fit-overrides')
+
     const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
     await transport.connect({ url: '', cols: 120, rows: 40, callbacks: {} })
     const { streamId } = latestSubscribePayload()
@@ -298,6 +312,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       cols: 96,
       rows: 32
     })
+
     if (ptyId) {
       setFitOverride(ptyId, 'desktop-fit', 0, 0)
     }
@@ -305,11 +320,13 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('gives separate paired viewers of the same host pane distinct refresh identities', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const first = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId: 'pane:1'
     })
+
     const second = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -323,13 +340,17 @@ describe('createRemoteRuntimePtyTransport', () => {
       const subscribeFrames = subscriptionSendBinary.mock.calls
         .map((call) => decodeTerminalStreamFrame(call[0]))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe)
+
       expect(subscribeFrames).toHaveLength(2)
+
       const clientIds = subscribeFrames.map((frame) => {
         const payload = frame
           ? decodeTerminalStreamJson<{ client: { id: string } }>(frame.payload)
           : null
+
         return payload?.client.id
       })
+
       expect(clientIds[0]).toMatch(/^desktop:tab-1:pane:1:/)
       expect(clientIds[1]).toMatch(/^desktop:tab-1:pane:1:/)
       expect(clientIds[0]).not.toBe(clientIds[1])
@@ -341,6 +362,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('does not let an encoded restored terminal id override the current worktree owner', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-2', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -380,9 +402,11 @@ describe('createRemoteRuntimePtyTransport', () => {
           error: { code: 'method_not_found', message: 'Unknown method: terminal.resolvePane' }
         }
       }
+
       return { ok: true, result: {} }
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('legacy-env', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -408,12 +432,16 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('re-derives the host session handle after a transport close instead of resubscribing the stale one', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const { getAllOverrides, setFitOverride } =
       await import('@/lib/pane-manager/mobile-fit-overrides')
+
     const { getAllDrivers, setDriverForPty } =
       await import('@/lib/pane-manager/mobile-driver-state')
+
     const onPtySpawn = vi.fn()
     const onPtyRebind = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-tab-1',
@@ -488,6 +516,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtyExit = vi.fn()
     const onError = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-tab-1',
@@ -531,6 +560,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('does not close host-owned terminal handles attached from session snapshots', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-tab-1',
@@ -558,6 +588,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('detaches laptop-created remote runtime terminals without closing the server session', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',

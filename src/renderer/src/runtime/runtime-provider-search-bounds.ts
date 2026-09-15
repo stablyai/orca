@@ -9,5 +9,6 @@ export function isRuntimeProviderSearchQueryWithinLimit(
   if (query === null || query === undefined) {
     return true
   }
+
   return isUtf8ByteLengthWithinLimit(query, maxBytes)
 }

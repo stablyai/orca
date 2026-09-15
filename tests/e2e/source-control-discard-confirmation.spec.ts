@@ -22,15 +22,18 @@ async function seedUntrackedFile(
 ): Promise<SeededUntrackedFile> {
   return page.evaluate(async (requestedFileName) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
 
     const state = store.getState()
     const worktreeId = state.activeWorktreeId
+
     const worktree = Object.values(state.worktreesByRepo)
       .flat()
       .find((entry) => entry.id === worktreeId)
+
     if (!worktree) {
       throw new Error('active worktree not found')
     }
@@ -46,6 +49,7 @@ async function seedUntrackedFile(
     const status = await window.api.git.status({ worktreePath: worktree.path })
     state.setGitStatus(worktree.id, status)
     const statusEntry = status.entries.find((entry) => entry.path.endsWith(fileName))
+
     if (!statusEntry) {
       throw new Error(`git status did not include ${fileName}`)
     }
@@ -59,17 +63,22 @@ async function seedUntrackedFile(
 async function refreshGitStatus(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const store = window.__store
+
     if (!store) {
       return
     }
+
     const state = store.getState()
     const worktreeId = state.activeWorktreeId
+
     const worktree = Object.values(state.worktreesByRepo)
       .flat()
       .find((entry) => entry.id === worktreeId)
+
     if (!worktree) {
       return
     }
+
     state.setGitStatus(worktree.id, await window.api.git.status({ worktreePath: worktree.path }))
   })
 }
@@ -103,16 +112,21 @@ async function expectDeleteDialogLayout(page: Page, fileName: string): Promise<v
           const panel = element.getBoundingClientRect()
           const title = element.querySelector<HTMLElement>('[data-slot="dialog-title"]')
           const footer = element.querySelector<HTMLElement>('[data-slot="dialog-footer"]')
+
           if (!title || !footer) {
             return false
           }
+
           const titleRect = title.getBoundingClientRect()
           const footerRect = footer.getBoundingClientRect()
           const lineHeight = Number.parseFloat(getComputedStyle(title).lineHeight) || 16
+
           const buttonsFit = [...footer.querySelectorAll<HTMLElement>('button')].every((button) => {
             const rect = button.getBoundingClientRect()
+
             return rect.left >= panel.left && rect.right <= panel.right
           })
+
           return (
             titleRect.height > lineHeight * 1.5 &&
             titleRect.left >= panel.left &&
@@ -141,11 +155,13 @@ test.describe('Source Control discard confirmation', () => {
       orcaPage,
       `orca-discard-confirm-${'x'.repeat(96)}.txt`
     )
+
     await openSourceControl(orcaPage)
 
     const row = orcaPage
       .locator('[data-testid="source-control-entry"]')
       .filter({ hasText: seededFile.fileName })
+
     await expect(row).toBeVisible()
 
     await deleteUntrackedFileFromRow(row)

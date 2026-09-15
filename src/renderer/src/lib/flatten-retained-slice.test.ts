@@ -5,16 +5,21 @@ import { flattenRetainedSlice } from './flatten-retained-slice'
 // Why 1 MB: comfortably above V8's SlicedString threshold, so a raw slice really does keep the
 // parent alive and the difference between flattened and not is unmistakable in heapUsed.
 const PARENT_CHARS = 1024 * 1024
+
 const TAIL_CHARS = 512
+
 const PARENTS = 8
 
 function collect(): number {
   const gc = (globalThis as { gc?: () => void }).gc
+
   if (!gc) {
     throw new Error('global.gc unavailable - config/vitest.config.ts must pass --expose-gc')
   }
+
   gc()
   gc()
+
   return process.memoryUsage().heapUsed
 }
 
@@ -32,6 +37,7 @@ function retainedBytesForTails(filler: string, transform: (value: string) => str
   const retained = collect() - baseline
   expect(tails).toHaveLength(PARENTS)
   expect(tails.every((tail) => tail.length === TAIL_CHARS)).toBe(true)
+
   return retained
 }
 

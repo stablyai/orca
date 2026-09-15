@@ -6,8 +6,11 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const cleanupPaths: string[] = []
+
 const tripwireScriptPath = path.resolve('config/scripts/codex-primary-home-tripwire.mjs')
+
 const tripwireModuleUrl = pathToFileURL(tripwireScriptPath).href
+
 // Why: native Windows process startup can exceed two seconds under a loaded test worker.
 const STANDALONE_START_TIMEOUT_MS = 10_000
 
@@ -21,12 +24,14 @@ async function createPrimaryHome(): Promise<string> {
   const primaryHome = await mkdtemp(path.join(os.tmpdir(), 'orca-codex-tripwire-'))
   cleanupPaths.push(primaryHome)
   await mkdir(path.join(primaryHome, '.codex'))
+
   return primaryHome
 }
 
 describe('Codex primary-home tripwire', () => {
   it('keeps the standalone monitor alive until it is stopped', async () => {
     const primaryHome = await createPrimaryHome()
+
     const child = spawn(process.execPath, [tripwireScriptPath, '--primary-home', primaryHome], {
       stdio: ['ignore', 'pipe', 'pipe']
     })
@@ -42,6 +47,7 @@ describe('Codex primary-home tripwire', () => {
 
   it('detects a write without reading file contents', async () => {
     const primaryHome = await createPrimaryHome()
+
     const status = runTripwireModule<{
       clean: boolean
       events: { changedPaths: string[] }[]
@@ -60,6 +66,7 @@ describe('Codex primary-home tripwire', () => {
       `,
       [primaryHome]
     )
+
     expect(status.clean).toBe(false)
     expect(status.events[0].changedPaths).toContain('hooks.json')
     expect(JSON.stringify(status)).not.toContain('not-read')
@@ -92,6 +99,7 @@ function runTripwireModule<T>(source: string, args: string[]): T {
     ['--input-type=module', '--eval', source, tripwireModuleUrl, ...args],
     { encoding: 'utf8' }
   )
+
   return JSON.parse(stdout.trim()) as T
 }
 
@@ -111,16 +119,21 @@ function waitForStdout(child: ReturnType<typeof spawn>, expectedText: string): P
       () => reject(new Error(`Timed out waiting for ${expectedText}`)),
       STANDALONE_START_TIMEOUT_MS
     )
+
     let output = ''
     const stdout = child.stdout
+
     if (!stdout) {
       clearTimeout(timeout)
       reject(new Error('Tripwire child stdout is unavailable'))
+
       return
     }
+
     stdout.setEncoding('utf8')
     stdout.on('data', (chunk) => {
       output += chunk
+
       if (output.includes(expectedText)) {
         clearTimeout(timeout)
         resolve()
@@ -158,6 +171,7 @@ describe('lane-aware tripwire event classification', () => {
       `,
       []
     )
+
     expect(verdicts).toEqual([
       'designed-system-default',
       'designed-system-default',

@@ -31,6 +31,7 @@ describe('SshGitProvider', () => {
         phase: 'Receiving objects',
         percent: 99
       })
+
       return { stdout: '', stderr: '' }
     })
 
@@ -76,6 +77,7 @@ describe('SshGitProvider', () => {
       exitCode: 0,
       timedOut: false
     }
+
     mux.request.mockResolvedValue(execResult)
 
     const result = await provider.execNonInteractive('pnpm', ['--version'], '/home/user/repo', 8000)
@@ -101,6 +103,7 @@ describe('SshGitProvider', () => {
       exitCode: 0,
       timedOut: false
     }
+
     mux.request.mockResolvedValue(execResult)
 
     await provider.execNonInteractive(
@@ -282,6 +285,7 @@ describe('SshGitProvider', () => {
       if (method === 'agent.cancelExec') {
         return Promise.resolve({ canceled: true })
       }
+
       return new Promise((resolve) => {
         completeRequests.push(() =>
           resolve({
@@ -295,6 +299,7 @@ describe('SshGitProvider', () => {
     })
 
     const controller = new AbortController()
+
     const first = provider.execNonInteractive(
       'pnpm',
       ['store', 'prune'],
@@ -302,6 +307,7 @@ describe('SshGitProvider', () => {
       8000,
       controller.signal
     )
+
     const second = provider.execNonInteractive('pnpm', ['install'], '/home/user/repo', 8000)
 
     await waitForRequestCount(mux.request, 1)

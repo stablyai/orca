@@ -21,6 +21,7 @@ export class RuntimeFileCommandsWithSearchRemoteQuickOpenFilePaths extends Runti
     if (!provider) {
       return { paths: [], totalCount: 0, truncated: false }
     }
+
     if (!(await provider.supportsQuickOpenSearch?.({ signal }))) {
       // Old relays ignore searchQuery. Keep the compatibility request below the
       // 4 MiB frame ceiling even when legacy paths are near the 64 KiB path cap.
@@ -29,23 +30,29 @@ export class RuntimeFileCommandsWithSearchRemoteQuickOpenFilePaths extends Runti
         maxResults: QUICK_OPEN_LEGACY_REMOTE_RESULT_LIMIT,
         signal
       })
+
       const ranker = new QuickOpenPathRanker(query, limit)
+
       for (const file of legacyFiles) {
         ranker.consider(file)
       }
+
       const result = ranker.result()
+
       return {
         ...result,
         truncated:
           legacyFiles.length >= QUICK_OPEN_LEGACY_REMOTE_RESULT_LIMIT || result.totalCount > limit
       }
     }
+
     const files = await provider.listFiles(rootPath, {
       excludePaths,
       maxResults: limit + 1,
       searchQuery: query,
       signal
     })
+
     return {
       paths: files.slice(0, limit),
       totalCount: files.length,
@@ -58,14 +65,18 @@ export class RuntimeFileCommandsWithSearchRemoteQuickOpenFilePaths extends Runti
     provider: IFilesystemProvider
   ): Promise<string> {
     const fileStat = await provider.stat(filePath)
+
     // Why: no ranged reads over SSH here, so reject oversized previews instead of streaming a whole file just to trim it.
     if (fileStat.size > MOBILE_FILE_READ_MAX_BYTES) {
       throw new Error('file_too_large')
     }
+
     const result = await provider.readFile(filePath)
+
     if (result.isBinary) {
       throw new Error('binary_file')
     }
+
     return result.content
   }
 }

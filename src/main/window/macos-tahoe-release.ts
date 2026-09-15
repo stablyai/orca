@@ -4,5 +4,6 @@ import os from 'node:os'
 // re-entrant frame updates can self-deadlock the main thread in FrontBoardServices.
 export function isMacosTahoeOrNewer(darwinRelease: string = os.release()): boolean {
   const major = Number.parseInt(darwinRelease, 10)
+
   return Number.isFinite(major) && major >= 25
 }

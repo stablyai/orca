@@ -30,12 +30,14 @@ export type DaemonGenerationRuntime = {
 
 function normalizeForContainment(candidate: string): string {
   const normalized = path.resolve(candidate)
+
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
 function isEqualToOrInside(candidate: string, parent: string): boolean {
   const normalizedCandidate = normalizeForContainment(candidate)
   const normalizedParent = normalizeForContainment(parent)
+
   return (
     normalizedCandidate === normalizedParent ||
     normalizedCandidate.startsWith(`${normalizedParent}${path.sep}`)
@@ -45,24 +47,32 @@ function isEqualToOrInside(candidate: string, parent: string): boolean {
 function knownOrcaUserDataDirs(): string[] {
   if (process.platform === 'darwin') {
     const appSupport = path.join(homedir(), 'Library', 'Application Support')
+
     return [path.join(appSupport, 'orca'), path.join(appSupport, 'orca-dev')]
   }
+
   if (process.platform === 'win32') {
     const roaming = process.env.APPDATA ?? path.join(homedir(), 'AppData', 'Roaming')
+
     return [path.join(roaming, 'orca'), path.join(roaming, 'orca-dev')]
   }
+
   const config = process.env.XDG_CONFIG_HOME ?? path.join(homedir(), '.config')
+
   return [path.join(config, 'orca'), path.join(config, 'orca-dev')]
 }
 
 function assertDisposableRoot(rootDir: string): void {
   const tempRoot = process.platform === 'darwin' ? path.join(path.sep, 'tmp') : tmpdir()
+
   if (!path.basename(rootDir).startsWith(TEMP_PREFIX)) {
     throw new Error('Refusing daemon-generation cleanup without its fixture prefix')
   }
+
   if (!isEqualToOrInside(rootDir, tempRoot)) {
     throw new Error('Daemon-generation fixture escaped the OS temporary directory')
   }
+
   for (const userDataDir of knownOrcaUserDataDirs()) {
     if (isEqualToOrInside(rootDir, userDataDir)) {
       throw new Error('Refusing daemon-generation fixture inside real Orca user data')
@@ -75,10 +85,13 @@ function resolveElectronExecutable(repoRoot: string): string {
     path.join(repoRoot, 'node_modules', 'electron', 'path.txt'),
     'utf8'
   ).trim()
+
   const executable = path.join(repoRoot, 'node_modules', 'electron', 'dist', relativePath)
+
   if (!existsSync(executable)) {
     throw new Error(`Local Electron executable is missing: ${executable}`)
   }
+
   return executable
 }
 
@@ -121,6 +134,7 @@ export async function createDaemonGenerationRuntime(
     path.join(repoRoot, 'tests/e2e/fixtures/daemon-generation-legacy-close-client.ts'),
     legacyCloseClientEntryPath
   )
+
   return {
     rootDir,
     userDataDir,

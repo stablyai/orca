@@ -72,6 +72,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     taskUiReady,
     tasksSupported
   } = model
+
   const refreshGitHubProject = useCallback(() => {
     setGithubRepoSlugCache(dropFailedGitHubRepoSlugEntries)
     refreshTasks()
@@ -82,11 +83,13 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     if (!taskStateHydrated) {
       return
     }
+
     const timer = setTimeout(() => {
       setAppliedQuery(
         provider === 'github' ? scopeGitHubTaskSearch(query, githubKind) : query.trim()
       )
     }, 300)
+
     return () => clearTimeout(timer)
   }, [githubKind, provider, query, taskStateHydrated])
 
@@ -94,6 +97,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     if (node !== null) {
       return
     }
+
     // Why: copied-link feedback is screen-local; clear the pending reset when
     // the Tasks screen detaches without a passive cleanup-only Effect.
     clearMobileTaskCopyFeedbackTimer(copiedLinkResetTimerRef)
@@ -103,6 +107,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     if (!taskUiReady || provider !== 'github' || githubMode !== 'items') {
       return
     }
+
     const trimmed = appliedQuery.trim()
     persistTaskResumeState({
       githubMode: 'items',
@@ -115,6 +120,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     if (!taskUiReady || provider !== 'linear') {
       return
     }
+
     persistTaskResumeState({
       linearPreset: linearFilter,
       linearQuery: appliedQuery.trim()
@@ -125,6 +131,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     if (connState !== 'connected' || !taskStateHydrated) {
       return
     }
+
     void loadTasks()
   }, [connState, loadTasks, taskStateHydrated])
 
@@ -132,6 +139,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     if (!taskStateHydrated || provider !== 'linear' || !linearConnected) {
       return
     }
+
     void loadLinearContext().catch((err) => {
       setError(err instanceof Error ? err.message : 'Failed to load Linear context')
     })
@@ -141,7 +149,9 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     if (!taskUiReady || provider !== 'github' || githubMode !== 'project') {
       return
     }
+
     persistTaskResumeState({ githubMode: 'project' })
+
     if (activeGitHubProject && activeGitHubProjectViewId) {
       void loadGitHubProjectTable({ queryOverride: appliedGithubProjectSearch })
     } else if (activeGitHubProject) {
@@ -168,6 +178,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     if (!taskUiReady || !showGitHubProjectPicker) {
       return
     }
+
     void loadGitHubProjects().catch((err) => {
       setGithubProjectError(err instanceof Error ? err.message : 'Failed to load projects')
     })
@@ -177,18 +188,23 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     if (!tasksSupported || !taskStateHydrated || !showCreateTask) {
       return
     }
+
     setCreatingTask(false)
+
     if (provider === 'github' || provider === 'gitlab') {
       setCreateRepoId((current) =>
         current && hostedRepos.some((repo) => repo.id === current)
           ? current
           : (hostedRepos[0]?.id ?? null)
       )
+
       return
     }
+
     if (!client) {
       return
     }
+
     let stale = false
     setCreateTeamId(null)
     void client
@@ -197,6 +213,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
         if (stale) {
           return
         }
+
         if (isSuccess(response)) {
           const teams = response.result as LinearTeam[]
           setLinearTeams(teams)
@@ -212,6 +229,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
           setCreateTeamId(null)
         }
       })
+
     return () => {
       stale = true
     }
@@ -222,22 +240,27 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
       setLinearStates([])
       setLinearCommentDraft('')
       setLinearSubIssueTitle('')
+
       return
     }
+
     let stale = false
     setLinearStatesLoading(true)
     setLinearCommentDraft('')
     setLinearSubIssueTitle('')
+
     const baseParams = {
       teamId: linearMetadataItem.source.team.id,
       workspaceId: linearMetadataItem.source.workspaceId
     }
+
     void client
       .sendRequest('linear.teamStates', baseParams)
       .then((statesResponse) => {
         if (stale) {
           return
         }
+
         if (isSuccess(statesResponse)) {
           setLinearStates(statesResponse.result as LinearState[])
         } else {
@@ -254,6 +277,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
           setLinearStatesLoading(false)
         }
       })
+
     return () => {
       stale = true
     }
@@ -275,8 +299,10 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
       setPrFileLoadingPath(null)
       setPrFileCommentDrafts({})
       setExpandedResolvedCommentGroups(new Set())
+
       return
     }
+
     setItemTitleDraft(actionItem.title)
     setItemBodyDraft('')
     setItemCommentDraft('')
@@ -292,6 +318,7 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     setPrFileCommentDrafts({})
     setExpandedResolvedCommentGroups(new Set())
   }, [actionItem])
+
   return Object.assign(model, { refreshGitHubProject, setTaskCopyFeedbackRootRef })
 }
 

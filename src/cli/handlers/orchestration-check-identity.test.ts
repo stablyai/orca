@@ -1,12 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.hoisted(() => vi.fn())
+
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
+
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
+
 const originalPaneKey = process.env.ORCA_PANE_KEY
 
 const printResultMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../format', () => ({ printResult: printResultMock }))
+
 vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
@@ -26,6 +31,7 @@ describe('orchestration check identity', () => {
     } else {
       process.env.ORCA_TERMINAL_HANDLE = originalTerminalHandle
     }
+
     if (originalPaneKey === undefined) {
       delete process.env.ORCA_PANE_KEY
     } else {

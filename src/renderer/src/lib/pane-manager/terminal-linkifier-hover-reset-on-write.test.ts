@@ -8,6 +8,7 @@ import { installTerminalLinkifierHoverResetOnWrite } from './terminal-linkifier-
 // invisible (the reset writes idempotent cache state).
 vi.mock('./terminal-linkifier-hover-reset', async (importOriginal) => {
   const actual = await importOriginal<typeof hoverReset>()
+
   return {
     ...actual,
     resetTerminalLinkifierHoverState: vi.fn(actual.resetTerminalLinkifierHoverState)
@@ -24,14 +25,17 @@ function createFakeTerminal(): {
 } {
   const listeners = new Set<() => void>()
   let disposed = false
+
   const linkifier: LinkifierCache = {
     _lastBufferCell: { x: 3, y: 4 },
     _activeLine: 4,
     _currentLink: undefined
   }
+
   const terminal = {
     onWriteParsed: (handler: () => void) => {
       listeners.add(handler)
+
       return {
         dispose: () => {
           disposed = true
@@ -41,6 +45,7 @@ function createFakeTerminal(): {
     },
     _core: { linkifier }
   } as unknown as Terminal
+
   return {
     terminal,
     emitWriteParsed: () => listeners.forEach((handler) => handler()),
@@ -83,6 +88,7 @@ describe('installTerminalLinkifierHoverResetOnWrite', () => {
       fake.emitWriteParsed()
       vi.advanceTimersByTime(5)
     }
+
     vi.advanceTimersByTime(150)
     expect(resetSpy).toHaveBeenCalledTimes(1)
   })
@@ -98,6 +104,7 @@ describe('installTerminalLinkifierHoverResetOnWrite', () => {
       fake.emitWriteParsed()
       vi.advanceTimersByTime(50)
     }
+
     expect(resetSpy.mock.calls.length).toBeGreaterThanOrEqual(3)
   })
 

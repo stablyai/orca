@@ -14,8 +14,11 @@ import { ORCHESTRATION_METHODS } from './methods/orchestration'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 const COORDINATOR_HANDLE = 'term_legacy_coord'
+
 const COORDINATOR_PANE = 'tab_coord:44444444-4444-4444-8444-444444444444'
+
 const WORKER_HANDLE = 'term_legacy_worker'
+
 const WORKER_PANE = 'tab_worker:33333333-3333-4333-8333-333333333333'
 
 type Transport = 'dispatch' | 'websocket'
@@ -30,6 +33,7 @@ type Harness = {
 }
 
 const tempDirs: string[] = []
+
 const databases: OrchestrationDb[] = []
 
 afterEach(() => {
@@ -42,11 +46,13 @@ function createHarness(): Harness {
   tempDirs.push(dir)
   const dbPath = join(dir, 'orchestration.db')
   const before = new OrchestrationDb(dbPath)
+
   const task = before.createTask({
     runId: 'run_legacy_local',
     spec: 'legacy assignment',
     createdByTerminalHandle: COORDINATOR_HANDLE
   })
+
   const dispatch = createRootDispatch(before, task.id, WORKER_HANDLE, WORKER_PANE)
   before.close()
 
@@ -79,10 +85,12 @@ function createHarness(): Harness {
         compatibilityEvidence?.terminalHandle === COORDINATOR_HANDLE &&
         compatibilityEvidence.paneKey === COORDINATOR_PANE &&
         compatibilityEvidence.launchToken === 'coordinator-token'
+
       const worker =
         compatibilityEvidence?.terminalHandle === WORKER_HANDLE &&
         compatibilityEvidence.paneKey === WORKER_PANE &&
         compatibilityEvidence.launchToken === 'worker-token'
+
       return coordinator || worker
         ? {
             hostScope: { kind: 'local', hostId: 'local' },
@@ -96,6 +104,7 @@ function createHarness(): Harness {
         : null
     }
   )
+
   return {
     db,
     dispatcher: new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS }),
@@ -142,9 +151,11 @@ async function invoke(
   if (transport === 'dispatch') {
     return await dispatcher.dispatch(rpcRequest)
   }
+
   const replies: string[] = []
   await dispatcher.dispatchStreaming(rpcRequest, (reply) => replies.push(reply))
   expect(replies).toHaveLength(1)
+
   return JSON.parse(replies[0]) as RpcResponse
 }
 
@@ -153,6 +164,7 @@ function installTakeoverDuringMutationPreflight(harness: Harness): void {
   vi.spyOn(harness.db, 'beginMutationReceipt').mockImplementation((identity) => {
     const begun = originalBegin(identity)
     settleLegacyWorkerAndTakeOver(harness, 'settled during takeover')
+
     return begun
   })
 }
@@ -173,6 +185,7 @@ function settleLegacyWorkerAndTakeOver(harness: Harness, result: string): void {
 
 function mutationReceiptCount(db: OrchestrationDb): number {
   const sqlite = (db as unknown as { db: Database.Database }).db
+
   return (
     sqlite.prepare('SELECT COUNT(*) AS count FROM mutation_receipts').get() as { count: number }
   ).count
@@ -180,6 +193,7 @@ function mutationReceiptCount(db: OrchestrationDb): number {
 
 function messageCount(db: OrchestrationDb): number {
   const sqlite = (db as unknown as { db: Database.Database }).db
+
   return (sqlite.prepare('SELECT COUNT(*) AS count FROM messages').get() as { count: number }).count
 }
 
@@ -209,6 +223,7 @@ describe('legacy coordinator takeover races', () => {
           }
         }
       })
+
       const workerCheck = await harness.dispatcher.dispatch(
         request(
           'orchestration.check',
@@ -217,6 +232,7 @@ describe('legacy coordinator takeover races', () => {
           evidence('worker')
         )
       )
+
       expect(workerCheck).toMatchObject({
         ok: true,
         result: {
@@ -238,18 +254,22 @@ describe('legacy coordinator takeover races', () => {
 
   it('replays coordinator mutations after transport authentication rotates', async () => {
     const harness = createHarness()
+
     const mutation = request(
       'orchestration.send',
       { from: COORDINATOR_HANDLE, to: WORKER_HANDLE, subject: 'send once' },
       'coordinator-restart-send'
     )
+
     mutation.authToken = 'before-restart'
 
     const first = await harness.dispatcher.dispatch(mutation)
+
     const restartedDispatcher = new RpcDispatcher({
       runtime: harness.runtime,
       methods: ORCHESTRATION_METHODS
     })
+
     const replay = await restartedDispatcher.dispatch({
       ...mutation,
       id: 'rpc_coordinator-restart-send-retry',
@@ -299,6 +319,7 @@ describe('legacy coordinator takeover races', () => {
         }
       }
     })
+
     const workerCheck = await harness.dispatcher.dispatch(
       request(
         'orchestration.check',
@@ -307,6 +328,7 @@ describe('legacy coordinator takeover races', () => {
         evidence('worker')
       )
     )
+
     expect(workerCheck).toMatchObject({
       ok: true,
       result: { messages: [{ subject: 'dispatch guidance' }] }
@@ -315,6 +337,7 @@ describe('legacy coordinator takeover races', () => {
 
   it('partitions a coordinator group send by legacy recipient contract', async () => {
     const harness = createHarness()
+
     // A second worker on the CURRENT contract in the same adopted Run. Group addresses reach a
     // Run's Dispatches, so the partition needs two Dispatches, not a Dispatch and a loose pane.
     const currentTask = harness.db.createTask({
@@ -322,12 +345,14 @@ describe('legacy coordinator takeover races', () => {
       spec: 'current-contract assignment',
       createdByTerminalHandle: COORDINATOR_HANDLE
     })
+
     const currentDispatch = createRootDispatch(
       harness.db,
       currentTask.id,
       'term_current_worker',
       'tab_current_worker:22222222-2222-4222-8222-222222222222'
     )
+
     vi.mocked(harness.runtime.getTerminalPaneKey).mockImplementation((handle) =>
       handle === COORDINATOR_HANDLE
         ? COORDINATOR_PANE
@@ -356,9 +381,11 @@ describe('legacy coordinator takeover races', () => {
     )
 
     expect(response).toMatchObject({ ok: true, result: { recipients: 2 } })
+
     const messages = harness.db
       .getInbox(100)
       .filter((message) => message.subject === 'group guidance')
+
     expect(messages).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -400,6 +427,7 @@ describe('legacy coordinator takeover races', () => {
 
   it('revalidates a group send after asynchronous terminal discovery', async () => {
     const harness = createHarness()
+
     let resolveTerminals:
       | ((value: {
           terminals: { handle: string }[]
@@ -407,10 +435,13 @@ describe('legacy coordinator takeover races', () => {
           truncated: boolean
         }) => void)
       | undefined
+
     let signalListingStarted: (() => void) | undefined
+
     const listingStarted = new Promise<void>((resolve) => {
       signalListingStarted = resolve
     })
+
     vi.spyOn(harness.runtime, 'listTerminals').mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -419,6 +450,7 @@ describe('legacy coordinator takeover races', () => {
         }) as never
     )
     const before = messageCount(harness.db)
+
     const pending = harness.dispatcher.dispatch(
       request(
         'orchestration.send',
@@ -426,6 +458,7 @@ describe('legacy coordinator takeover races', () => {
         'send-group-takeover'
       )
     )
+
     await listingStarted
     settleLegacyWorkerAndTakeOver(harness, 'settled during terminal discovery')
     resolveTerminals?.({
@@ -444,12 +477,14 @@ describe('legacy coordinator takeover races', () => {
 
   it('reports a committed ACK when coordinator takeover interrupts its wait', async () => {
     const harness = createHarness()
+
     const incoming = harness.db.insertMessage({
       runId: harness.adoptedRunId,
       from: WORKER_HANDLE,
       to: `run:${harness.adoptedRunId}`,
       subject: 'ready to acknowledge'
     })
+
     const first = await harness.dispatcher.dispatch(
       request(
         'orchestration.check',
@@ -457,6 +492,7 @@ describe('legacy coordinator takeover races', () => {
         'check-delivery-before-takeover'
       )
     )
+
     expect(first).toMatchObject({
       ok: true,
       result: { deliveryId: expect.any(String), messages: [{ id: incoming.id }] }
@@ -464,9 +500,11 @@ describe('legacy coordinator takeover races', () => {
     const deliveryId = (first as { result: { deliveryId: string } }).result.deliveryId
     let resolveWait: (() => void) | undefined
     let signalWaitStarted: (() => void) | undefined
+
     const waitStarted = new Promise<void>((resolve) => {
       signalWaitStarted = resolve
     })
+
     vi.spyOn(harness.runtime, 'waitForMessage').mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -474,6 +512,7 @@ describe('legacy coordinator takeover races', () => {
           signalWaitStarted?.()
         })
     )
+
     const pending = harness.dispatcher.dispatch(
       request(
         'orchestration.check',
@@ -487,6 +526,7 @@ describe('legacy coordinator takeover races', () => {
         'check-ack-takeover'
       )
     )
+
     await waitStarted
     expect(harness.db.getMessageById(incoming.id)?.read).toBe(1)
     settleLegacyWorkerAndTakeOver(harness, 'settled during acknowledged wait')
@@ -515,6 +555,7 @@ describe('legacy coordinator takeover races', () => {
       to: `run:${harness.adoptedRunId}`,
       subject: 'first delivery'
     })
+
     const firstCheck = await harness.dispatcher.dispatch(
       request(
         'orchestration.check',
@@ -522,12 +563,15 @@ describe('legacy coordinator takeover races', () => {
         'check-first-delivery'
       )
     )
+
     const deliveryId = (firstCheck as { result: { deliveryId: string } }).result.deliveryId
     let resolveWait: (() => void) | undefined
     let signalWaitStarted: (() => void) | undefined
+
     const waitStarted = new Promise<void>((resolve) => {
       signalWaitStarted = resolve
     })
+
     vi.spyOn(harness.runtime, 'waitForMessage').mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -535,6 +579,7 @@ describe('legacy coordinator takeover races', () => {
           signalWaitStarted?.()
         })
     )
+
     const ackRequest = request(
       'orchestration.check',
       {
@@ -546,16 +591,20 @@ describe('legacy coordinator takeover races', () => {
       },
       'check-ack-concurrent'
     )
+
     const original = harness.dispatcher.dispatch(ackRequest)
     await waitStarted
+
     const secondLiveDispatcher = new RpcDispatcher({
       runtime: harness.runtime,
       methods: ORCHESTRATION_METHODS
     })
+
     const duplicate = secondLiveDispatcher.dispatch({
       ...ackRequest,
       id: 'rpc_check-ack-concurrent-duplicate'
     })
+
     let duplicateSettled = false
     void duplicate.then(() => {
       duplicateSettled = true
@@ -569,6 +618,7 @@ describe('legacy coordinator takeover races', () => {
       to: `run:${harness.adoptedRunId}`,
       subject: 'arrived while waiting'
     })
+
     resolveWait?.()
     const [originalResult, duplicateResult] = await Promise.all([original, duplicate])
     expect(originalResult).toMatchObject({
@@ -617,10 +667,12 @@ describe('legacy coordinator takeover races', () => {
     '%s rejects a mutation after takeover during durable preflight',
     async (transport) => {
       const harness = createHarness()
+
       const target = harness.db.createTask({
         spec: 'must remain ready',
         runId: harness.adoptedRunId
       })
+
       installTakeoverDuringMutationPreflight(harness)
 
       const response = await invoke(
@@ -645,10 +697,12 @@ describe('legacy coordinator takeover races', () => {
 
   it('revalidates after asynchronous agent detection', async () => {
     const harness = createHarness()
+
     const target = harness.db.createTask({
       spec: 'must not dispatch after takeover',
       runId: harness.adoptedRunId
     })
+
     const targetHandle = 'term_current_worker'
     const targetPane = 'tab_current_worker:77777777-7777-4777-8777-777777777777'
     vi.spyOn(harness.runtime, 'getTerminalPaneKey').mockImplementation((handle: string) =>
@@ -667,14 +721,17 @@ describe('legacy coordinator takeover races', () => {
     )
     let resolveDetection: ((detected: boolean) => void) | undefined
     let signalDetectionStarted: (() => void) | undefined
+
     const detectionStarted = new Promise<void>((resolve) => {
       signalDetectionStarted = resolve
     })
+
     let detectionCalls = 0
     vi.spyOn(harness.runtime, 'isTerminalRunningAgent').mockImplementation(
       () =>
         new Promise<boolean>((resolve, reject) => {
           detectionCalls += 1
+
           // Why reject instead of re-arming: a second call would overwrite resolveDetection and
           // strand the first promise, hanging to a timeout instead of naming what changed.
           if (detectionCalls > 1) {
@@ -683,12 +740,15 @@ describe('legacy coordinator takeover races', () => {
                 `isTerminalRunningAgent was called ${detectionCalls} times; this test drives exactly one detection.`
               )
             )
+
             return
           }
+
           resolveDetection = resolve
           signalDetectionStarted?.()
         })
     )
+
     const sendPrompt = vi
       .spyOn(harness.runtime, 'sendTerminalAgentPrompt')
       .mockResolvedValue({ handle: targetHandle, accepted: true, bytesWritten: 1 })
@@ -700,6 +760,7 @@ describe('legacy coordinator takeover races', () => {
         'dispatch-detection-takeover'
       )
     )
+
     await detectionStarted
     settleLegacyWorkerAndTakeOver(harness, 'settled during detection')
     resolveDetection?.(true)

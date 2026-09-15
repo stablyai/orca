@@ -58,6 +58,7 @@ export function UpdateCardStateContent({
       />
     )
   }
+
   if (status.state === 'not-available') {
     return (
       <UpdateCheckFeedback
@@ -66,6 +67,7 @@ export function UpdateCardStateContent({
       />
     )
   }
+
   if (linuxPackageRecovery) {
     return (
       <LinuxPackageInstallRecoveryCard
@@ -81,9 +83,11 @@ export function UpdateCardStateContent({
       />
     )
   }
+
   if (errorCard) {
     return <UpdateErrorCardContent {...errorCard} onClose={onCollapse} />
   }
+
   if (status.state === 'downloaded') {
     return hasStartedDownload ? (
       <div className="p-4">
@@ -99,6 +103,7 @@ export function UpdateCardStateContent({
       />
     )
   }
+
   if (status.state === 'downloading') {
     return (
       <UpdateDownloadingContent
@@ -115,12 +120,15 @@ export function UpdateCardStateContent({
       />
     )
   }
+
   if (status.state !== 'available') {
     return null
   }
+
   const releaseUrl = isLocalBuild
     ? undefined
     : (status.releaseUrl ?? getReleaseNotesUrlForVersion(status.version))
+
   return changelog?.release ? (
     <UpdateAvailableRichContent
       release={changelog.release}

@@ -6,9 +6,13 @@ import { expect, test } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const LOCAL_PROJECT = 'E2E Palette Local Project'
+
 const REMOTE_PROJECT = 'E2E Palette Remote Project'
+
 const REMOTE_WORKSPACE = 'E2E Palette Remote Workspace'
+
 const REMOTE_HOST = 'E2E Palette Builder'
+
 const SEARCH_PLACEHOLDER = 'Search chats, terminals, worktrees, settings, and actions...'
 
 type PaletteFilterFixture = {
@@ -22,21 +26,26 @@ async function seedPaletteFilterFixture(page: Page): Promise<PaletteFilterFixtur
   return page.evaluate(
     async ({ localProject, remoteHost, remoteProject, remoteWorkspace }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is unavailable')
       }
 
       const sourceRepo = store.getState().repos[0]
+
       if (
         !sourceRepo ||
         !(await store.getState().updateRepo(sourceRepo.id, { displayName: localProject }))
       ) {
         throw new Error('Failed to persist the local palette fixture name')
       }
+
       const state = store.getState()
+
       const sourceWorktree = Object.values(state.worktreesByRepo)
         .flat()
         .find((worktree) => worktree.repoId === sourceRepo?.id && !worktree.isArchived)
+
       if (!sourceRepo || !sourceWorktree) {
         throw new Error('Palette filter E2E needs the seeded local repository')
       }
@@ -46,6 +55,7 @@ async function seedPaletteFilterFixture(page: Page): Promise<PaletteFilterFixtur
       const remoteRepoId = `e2e-palette-remote-repo-${token}`
       const remoteWorktreeId = `e2e-palette-remote-worktree-${token}`
       const remoteHostId = `ssh:${remoteConnectionId}` as const
+
       const remoteRepo = {
         ...sourceRepo,
         id: remoteRepoId,
@@ -54,6 +64,7 @@ async function seedPaletteFilterFixture(page: Page): Promise<PaletteFilterFixtur
         connectionId: remoteConnectionId,
         executionHostId: remoteHostId
       }
+
       const remoteWorktree = {
         ...sourceWorktree,
         id: remoteWorktreeId,
@@ -102,6 +113,7 @@ function worktreeRow(page: Page, worktreeId: string, hostId: ExecutionHostId = '
     'worktree',
     getPaletteWorktreeIdentity({ id: worktreeId, hostId })
   ])
+
   return palette(page).locator(`[cmdk-item][data-value=${JSON.stringify(rowId)}]`)
 }
 
@@ -157,6 +169,7 @@ async function openComposerFromTypedName(page: Page): Promise<Locator> {
   // lands on an input the user never chose. A page-style "blur the field first"
   // handler reachable from here would silently cost a second press.
   await expect(createDialog.locator('[data-workspace-name-input="true"]')).toBeFocused()
+
   return createDialog
 }
 

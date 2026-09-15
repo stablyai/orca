@@ -25,6 +25,7 @@ const {
 
 vi.mock('fs', async () => {
   const actual = await vi.importActual<typeof Fs>('fs')
+
   return {
     ...actual,
     watch: watchMock
@@ -33,6 +34,7 @@ vi.mock('fs', async () => {
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
+
   return {
     ...actual,
     stat: statMock
@@ -47,6 +49,7 @@ vi.mock('./file-watcher-host', () => ({
 
 vi.mock('../ipc/filesystem-auth', async () => {
   const actual = await vi.importActual<typeof FilesystemAuth>('../ipc/filesystem-auth')
+
   return {
     ...actual,
     resolveAuthorizedPath: resolveAuthorizedPathMock
@@ -69,11 +72,13 @@ import {
 function createWindowsWatcher(close: () => void) {
   const watcher = new EventEmitter() as EventEmitter & { close: ReturnType<typeof vi.fn> }
   watcher.close = vi.fn(close)
+
   return watcher
 }
 
 function createRuntimeFileCommands(rootPath: string) {
   const store = { getRepo: vi.fn(() => undefined) }
+
   const commands = new RuntimeFileCommands({
     getRuntimeId: () => 'runtime-1',
     requireStore: () => store,
@@ -93,6 +98,7 @@ function createRuntimeFileCommands(rootPath: string) {
     resolveRuntimeGitTarget: vi.fn(),
     openFile: vi.fn()
   } as never)
+
   return { commands, store }
 }
 
@@ -134,9 +140,11 @@ describe('RuntimeFileCommands file watching', () => {
     const watcher = createWindowsWatcher(() => {
       queueMicrotask(() => watcher.emit('close'))
     })
+
     let listener: (() => void) | null = null
     watchMock.mockImplementation((_rootPath, _options, callback) => {
       listener = callback
+
       return watcher
     })
     resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
@@ -175,9 +183,11 @@ describe('RuntimeFileCommands file watching', () => {
     await commands.watchFileExplorer('id:wt-1', vi.fn())
 
     let settled = false
+
     const closePromise = commands.closeFileExplorerWatchersForPath('C:\\repo').then(() => {
       settled = true
     })
+
     await Promise.resolve()
     expect(settled).toBe(false)
 
@@ -235,6 +245,7 @@ describe('RuntimeFileCommands file watching', () => {
     const retries = await Promise.allSettled(
       Array.from({ length: 100 }, () => commands.closeFileExplorerWatchersForPath('C:\\repo'))
     )
+
     expect(retries.every((result) => result.status === 'rejected')).toBe(true)
     expect(watcher.close).toHaveBeenCalledTimes(1)
     expect(watcher.listenerCount('close')).toBe(1)
@@ -253,12 +264,15 @@ describe('RuntimeFileCommands file watching', () => {
   it('retries a failed Windows watcher close before allowing deletion', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const closeError = new Error('Windows watcher handle still active')
+
     const watcher = createWindowsWatcher(() => {
       if (watcher.close.mock.calls.length === 1) {
         throw closeError
       }
+
       queueMicrotask(() => watcher.emit('close'))
     })
+
     watchMock.mockReturnValue(watcher)
     resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
@@ -280,12 +294,14 @@ describe('RuntimeFileCommands file watching', () => {
     const watcherDispose = vi.fn()
     watchInWatcherProcessMock.mockImplementation((_rootPath, cb) => {
       captured.cb = cb
+
       return Promise.resolve(watcherDispose)
     })
 
     const onEvents = vi.fn()
     const { commands } = createRuntimeFileCommands('/home5/Brian')
     const controller = new AbortController()
+
     const unsubscribe = await commands.watchFileExplorer(
       'id:wt-1',
       onEvents,
@@ -330,15 +346,18 @@ describe('RuntimeFileCommands file watching', () => {
       resolveAuthorizedPathMock.mockResolvedValue('/repo')
       statMock.mockResolvedValue({ isDirectory: () => true })
       let resolvePhysicalExit: () => void = () => undefined
+
       const physicalExit = new Promise<void>((resolve) => {
         resolvePhysicalExit = resolve
       })
+
       const teardownError = new WatcherProcessFailure(
         'file watcher process did not exit after termination deadline',
         'supervisor',
         'process_unavailable',
         physicalExit
       )
+
       watchInWatcherProcessMock.mockRejectedValue(teardownError)
       closeWatcherInWatcherProcessMock.mockRejectedValueOnce(teardownError)
       const { commands } = createRuntimeFileCommands('/repo')
@@ -418,15 +437,18 @@ describe('RuntimeFileCommands file watching', () => {
       resolveAuthorizedPathMock.mockResolvedValue('/repo')
       statMock.mockResolvedValue({ isDirectory: () => true })
       let resolvePhysicalExit: () => void = () => {}
+
       const physicalExit = new Promise<void>((resolve) => {
         resolvePhysicalExit = resolve
       })
+
       const teardownError = new WatcherProcessFailure(
         'file watcher process did not exit after termination deadline',
         'supervisor',
         'process_unavailable',
         physicalExit
       )
+
       const firstDispose = vi.fn().mockRejectedValue(teardownError)
       const replacementDispose = vi.fn().mockResolvedValue(undefined)
       watchInWatcherProcessMock
@@ -454,15 +476,18 @@ describe('RuntimeFileCommands file watching', () => {
       resolveAuthorizedPathMock.mockResolvedValue('/repo')
       statMock.mockResolvedValue({ isDirectory: () => true })
       let resolvePhysicalExit: () => void = () => {}
+
       const physicalExit = new Promise<void>((resolve) => {
         resolvePhysicalExit = resolve
       })
+
       const teardownError = new WatcherProcessFailure(
         'file watcher process did not exit after termination deadline',
         'supervisor',
         'process_unavailable',
         physicalExit
       )
+
       const firstDispose = vi.fn().mockRejectedValue(teardownError)
       watchInWatcherProcessMock.mockResolvedValue(firstDispose)
       const { commands } = createRuntimeFileCommands('/repo')
@@ -485,15 +510,18 @@ describe('RuntimeFileCommands file watching', () => {
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     statMock.mockResolvedValue({ isDirectory: () => true })
     let resolvePhysicalExit: () => void = () => {}
+
     const physicalExit = new Promise<void>((resolve) => {
       resolvePhysicalExit = resolve
     })
+
     const teardownError = new WatcherProcessFailure(
       'file watcher process did not exit after termination deadline',
       'supervisor',
       'process_unavailable',
       physicalExit
     )
+
     const watcherDispose = vi.fn().mockRejectedValue(teardownError)
     watchInWatcherProcessMock.mockResolvedValue(watcherDispose)
     const { commands } = createRuntimeFileCommands('/repo')
@@ -517,12 +545,14 @@ describe('RuntimeFileCommands file watching', () => {
     statMock.mockResolvedValue({ isDirectory: () => true })
 
     let resolveDispose: () => void = () => {}
+
     const disposeMock = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveDispose = resolve
         })
     )
+
     watchInWatcherProcessMock.mockResolvedValue(disposeMock)
     const { commands } = createRuntimeFileCommands('/repo')
 
@@ -530,9 +560,11 @@ describe('RuntimeFileCommands file watching', () => {
     unsubscribe()
 
     let drained = false
+
     const drainPromise = awaitRuntimeFileWatcherUnsubscribes().then(() => {
       drained = true
     })
+
     await Promise.resolve()
 
     expect(disposeMock).toHaveBeenCalledTimes(1)
@@ -547,6 +579,7 @@ describe('RuntimeFileCommands file watching', () => {
     const watch = vi.fn(async () => () => {})
     getSshFilesystemProviderMock.mockReturnValue({ watch })
     const store = { getRepo: vi.fn(() => ({ connectionId: 'ssh-1' })) }
+
     const commands = new RuntimeFileCommands({
       getRuntimeId: () => 'runtime-1',
       requireStore: () => store,
@@ -566,6 +599,7 @@ describe('RuntimeFileCommands file watching', () => {
       resolveRuntimeGitTarget: vi.fn(),
       openFile: vi.fn()
     } as never)
+
     const controller = new AbortController()
     const onTerminalError = vi.fn()
 

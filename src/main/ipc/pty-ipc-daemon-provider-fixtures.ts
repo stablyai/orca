@@ -19,6 +19,7 @@ export function createDaemonActiveProviderFixtures(ctx: {
   mainWindow: unknown
 }) {
   const { handlers, mainWindow } = ctx
+
   function setupDaemonAdapter(
     supportsGitCredentialGuardHost = true,
     reportedWslDistro?: string | null,
@@ -37,6 +38,7 @@ export function createDaemonActiveProviderFixtures(ctx: {
         ...(reportedWslDistro !== undefined ? { wslDistro: reportedWslDistro } : {})
       })
     )
+
     setLocalPtyProvider({
       spawn: daemonSpawn,
       supportsGitCredentialGuardHost: () => supportsGitCredentialGuardHost,
@@ -51,14 +53,17 @@ export function createDaemonActiveProviderFixtures(ctx: {
       listProcesses: vi.fn(async () => []),
       getForegroundProcess: vi.fn(async () => null)
     } as never)
+
     return daemonSpawn
   }
+
   async function withWin32Platform<T>(fn: () => Promise<T>): Promise<T> {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
     })
+
     try {
       return await fn()
     } finally {
@@ -76,6 +81,7 @@ export function createDaemonActiveProviderFixtures(ctx: {
       localWindowsRuntimeDefault: { kind: 'windows-host' },
       ...args.settings
     }
+
     return {
       getRepo: vi.fn((repoId: string) =>
         repoId === 'repo-1' ? { id: 'repo-1', path: 'C:\\repo' } : undefined
@@ -116,9 +122,11 @@ export function createDaemonActiveProviderFixtures(ctx: {
   ): Promise<DaemonSpawnCall> {
     const daemonSpawn = setupDaemonAdapter(supportsGitCredentialGuardHost)
     const savedEnv: Record<string, string | undefined> = {}
+
     if (processEnvOverrides) {
       for (const [k, v] of Object.entries(processEnvOverrides)) {
         savedEnv[k] = process.env[k]
+
         if (v === undefined) {
           delete process.env[k]
         } else {
@@ -126,6 +134,7 @@ export function createDaemonActiveProviderFixtures(ctx: {
         }
       }
     }
+
     try {
       handlers.clear()
       registerPtyHandlers(
@@ -140,6 +149,7 @@ export function createDaemonActiveProviderFixtures(ctx: {
         ...spawnArgs,
         ...(argsEnv ? { env: argsEnv } : {})
       })
+
       return daemonSpawn.mock.calls.at(-1)![0] as DaemonSpawnCall
     } finally {
       for (const [k, v] of Object.entries(savedEnv)) {

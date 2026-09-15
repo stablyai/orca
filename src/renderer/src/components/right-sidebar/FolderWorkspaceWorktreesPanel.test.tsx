@@ -82,6 +82,7 @@ vi.mock('@/components/sidebar/WorktreeCard', () => ({
     onLineageToggle?: (event: MouseEvent<HTMLButtonElement>) => void
   }) => {
     testState.cardProps.push(props)
+
     return (
       <div
         data-testid="worktree-card"
@@ -111,6 +112,7 @@ vi.mock('@/components/sidebar/WorktreeCard', () => ({
 import FolderWorkspaceWorktreesPanel from './FolderWorkspaceWorktreesPanel'
 
 let container: HTMLDivElement
+
 let root: Root
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -229,6 +231,7 @@ describe('FolderWorkspaceWorktreesPanel', () => {
       displayName: 'Workspace-key child',
       instanceId: 'child-instance'
     })
+
     testState.store.activeWorktreeId = null
     testState.store.activeWorkspaceKey = folderWorkspaceKey('folder-1')
     testState.store.worktreesByRepo = { 'repo-1': [child] }
@@ -248,24 +251,28 @@ describe('FolderWorkspaceWorktreesPanel', () => {
       instanceId: 'old-instance',
       lastActivityAt: 10
     })
+
     const recentChild = makeWorktree({
       id: 'repo-1::/recent',
       displayName: 'Recent child',
       instanceId: 'recent-instance',
       lastActivityAt: 50
     })
+
     const otherFolderChild = makeWorktree({
       id: 'repo-1::/other-folder',
       displayName: 'Other folder child',
       instanceId: 'other-instance',
       lastActivityAt: 100
     })
+
     const staleChild = makeWorktree({
       id: 'repo-1::/stale',
       displayName: 'Stale child',
       instanceId: 'fresh-instance',
       lastActivityAt: 200
     })
+
     testState.store.worktreesByRepo = {
       'repo-1': [oldChild, recentChild, otherFolderChild, staleChild]
     }
@@ -302,12 +309,14 @@ describe('FolderWorkspaceWorktreesPanel', () => {
       instanceId: 'parent-instance',
       lastActivityAt: 50
     })
+
     const nested = makeWorktree({
       id: 'repo-1::/nested',
       displayName: 'Nested child',
       instanceId: 'nested-instance',
       lastActivityAt: 10
     })
+
     testState.store.worktreesByRepo = {
       'repo-1': [parent, nested]
     }
@@ -358,6 +367,7 @@ describe('FolderWorkspaceWorktreesPanel', () => {
       instanceId: 'visible-instance',
       lastActivityAt: 50
     })
+
     const archivedDirect = makeWorktree({
       id: 'repo-1::/archived-direct',
       displayName: 'Archived direct',
@@ -365,6 +375,7 @@ describe('FolderWorkspaceWorktreesPanel', () => {
       isArchived: true,
       lastActivityAt: 100
     })
+
     const archivedNested = makeWorktree({
       id: 'repo-1::/archived-nested',
       displayName: 'Archived nested',
@@ -372,6 +383,7 @@ describe('FolderWorkspaceWorktreesPanel', () => {
       isArchived: true,
       lastActivityAt: 10
     })
+
     testState.store.worktreesByRepo = {
       'repo-1': [visible, archivedDirect, archivedNested]
     }

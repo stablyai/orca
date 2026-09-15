@@ -29,6 +29,7 @@ function preservedBranchResult(
   if (!deleteBranch || !registeredWorktree.branch || !registeredWorktree.head) {
     return {}
   }
+
   return {
     preservedBranch: {
       branchName: registeredWorktree.branch.replace(/^refs\/heads\//, ''),
@@ -59,6 +60,7 @@ async function verifyGitWorktreeRegistrationRemoved(
 ): Promise<void> {
   try {
     const remainingWorktrees = await listWorktreesStrict(repoPath, localWorktreeGitOptions)
+
     if (
       remainingWorktrees.some((worktree) =>
         areWorktreePathsEqual(worktree.path, canonicalWorktreePath)
@@ -79,6 +81,7 @@ async function removeRequiredGitWorktreeRegistration(
 
   let result: RemoveWorktreeResult | undefined
   let removalError: unknown
+
   try {
     await gitExecFileAsync(['worktree', 'prune'], {
       cwd: args.repoPath,
@@ -103,6 +106,7 @@ async function removeRequiredGitWorktreeRegistration(
       ? staleRegistrationRecoveryError(removalError, args.canonicalWorktreePath, forceForError)
       : verificationError
   }
+
   // Why: if Git detached the row before reporting its filesystem error, keep
   // the branch rather than guessing whether the normal branch cleanup ran.
   return result ?? preservedBranchResult(args.registeredWorktree, args.deleteBranch)
@@ -124,11 +128,13 @@ export async function recoverLocalWindowsWorktreeRemoval(
   // Why: Windows recovery recursively deletes the remaining directory, so it
   // must fail closed while a watcher process may still own a native handle.
   await args.closeWatcher(args.canonicalWorktreePath)
+
   try {
     await removeLocalWorktreePath(args.canonicalWorktreePath, args.localWorktreeGitOptions)
   } catch (error) {
     throw new Error(formatWorktreeRemovalError(error, args.canonicalWorktreePath, args.force))
   }
+
   return removeRequiredGitWorktreeRegistration(args, args.force)
 }
 
@@ -141,6 +147,7 @@ async function isRecoverableWindowsFilesystemRemovalFailure(
 
   try {
     const worktrees = await listWorktreesStrict(args.repoPath, args.localWorktreeGitOptions)
+
     // Why: error prose can be localized or ambiguous. Only a missing Git row
     // proves removal started and makes recursive Windows cleanup safe.
     return !worktrees.some((worktree) =>

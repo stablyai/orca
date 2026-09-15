@@ -12,13 +12,19 @@ const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = 
 }))
 
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
+
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
+
 vi.mock('../codex-cli/command', () => ({ resolveCodexCommand: resolveCodexCommandMock }))
+
 vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
+
 vi.mock('../codex/codex-state-db', () => ({ isCodexStateDbBackfillPending: vi.fn(() => false) }))
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
   startCodexStateDbBackfillRecoveryInBackground: vi.fn(() => Promise.resolve(null))
 }))
+
 vi.mock('./codex-auth-presence', () => ({ probeCodexAuthPresence: vi.fn(() => 'present') }))
 
 import { fetchCodexRateLimits } from './codex-fetcher'
@@ -31,19 +37,24 @@ function makeRpcChild() {
     kill: ReturnType<typeof vi.fn>
     exitCode: number | null
   }
+
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
+
   const exitNow = (): void => {
     child.exitCode = 0
     child.emit('exit', 0, null)
     child.emit('close', 0, null)
   }
+
   child.stdin = Object.assign(new EventEmitter(), { write: vi.fn(), end: vi.fn(exitNow) })
   child.exitCode = null
   child.kill = vi.fn(() => {
     exitNow()
+
     return true
   })
+
   return child
 }
 
@@ -52,10 +63,12 @@ function makeVersionManagerCli(cliName = 'codex'): { bin: string; cli: string } 
   const root = mkdtempSync(join(tmpdir(), 'orca-fetch-pair-'))
   const bin = join(root, '.nvm', 'versions', 'node', 'v20.11.0', 'bin')
   mkdirSync(bin, { recursive: true })
+
   for (const name of ['node', 'node.exe', cliName]) {
     writeFileSync(join(bin, name), '')
     chmodSync(join(bin, name), 0o755)
   }
+
   return { bin, cli: join(bin, cliName) }
 }
 
@@ -93,6 +106,7 @@ describe('codex rate-limit spawn runtime pairing', () => {
     // indistinguishable. Only here does the wrong argument become cmd.exe.
     const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       const { bin, cli } = makeVersionManagerCli('codex.cmd')
       resolveCodexCommandMock.mockReturnValue(cli)

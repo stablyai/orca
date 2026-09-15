@@ -21,6 +21,7 @@ describe('WorktreeWatcherRemoval port', () => {
   it('defaults to inert so a renderer-less host is honest, not broken', async () => {
     setWorktreeWatcherRemoval(null)
     const inert = getWorktreeWatcherRemoval()
+
     for (const method of METHODS) {
       await expect(
         Promise.resolve(inert[method]('repo::/tmp/w', '/tmp/w' as never))
@@ -38,9 +39,11 @@ describe('WorktreeWatcherRemoval port', () => {
       restoreRemote: async () => void calls.push('restoreRemote'),
       forgetRemote: () => void calls.push('forgetRemote')
     })
+
     for (const method of METHODS) {
       await getWorktreeWatcherRemoval()[method]('conn', '/tmp/w' as never)
     }
+
     expect(calls).toEqual([...METHODS])
     setWorktreeWatcherRemoval(null)
   })
@@ -49,6 +52,7 @@ describe('WorktreeWatcherRemoval port', () => {
     // Why import lazily: filesystem-watcher pulls electron, so it must not load in the
     // inert-default case above.
     const { desktopWorktreeWatcherRemoval } = await import('./filesystem-watcher')
+
     for (const method of METHODS) {
       expect(typeof desktopWorktreeWatcherRemoval[method], method).toBe('function')
       // An inert stub is an empty arrow; a real delegation is not.

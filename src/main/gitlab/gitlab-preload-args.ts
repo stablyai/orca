@@ -10,6 +10,7 @@ export function normalizeGitLabPositiveInteger(
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return fallback
   }
+
   return Math.min(Math.max(1, Math.trunc(value)), max)
 }
 
@@ -31,10 +32,13 @@ export function normalizeGitLabSearchQuery(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined
   }
+
   const trimmed = value.trim()
+
   if (!trimmed) {
     return undefined
   }
+
   return Buffer.byteLength(trimmed, 'utf8') > GITLAB_SEARCH_QUERY_MAX_BYTES ? undefined : trimmed
 }
 

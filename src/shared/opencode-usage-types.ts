@@ -1,5 +1,7 @@
 export type OpenCodeUsageScope = 'orca' | 'all'
+
 export type OpenCodeUsageRange = '7d' | '30d' | '90d' | 'all'
+
 export type OpenCodeUsageBreakdownKind = 'model' | 'project'
 
 export type OpenCodeUsageScanState = {

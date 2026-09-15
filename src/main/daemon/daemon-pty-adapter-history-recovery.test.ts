@@ -44,6 +44,7 @@ const itOnUnprivilegedPosix = it.skipIf(process.platform === 'win32' || process.
 
 vi.mock('./daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
+
   return {
     ...actual,
     getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock
@@ -101,12 +102,14 @@ describe('DaemonPtyAdapter history recovery', () => {
       log: () => {},
       close() {}
     }
+
     server = new DaemonServer({
       socketPath,
       tokenPath,
       log: daemonLog,
       spawnSubprocess: () => {
         lastSubprocess = createMockSubprocess()
+
         return lastSubprocess
       }
     })
@@ -126,11 +129,13 @@ describe('DaemonPtyAdapter history recovery', () => {
 
   it('suspends history when keepHistory cannot read its final checkpoint', async () => {
     historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
     const { id } = await historyAdapter.spawn({
       cols: 80,
       rows: 24,
       sessionId: 'sleep-unreadable'
     })
+
     const manager = historyAdapter.getHistoryManager()!
     const suspend = vi.spyOn(manager, 'suspendSession')
     const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
@@ -148,11 +153,13 @@ describe('DaemonPtyAdapter history recovery', () => {
 
   it('suspends an empty final checkpoint with unreadable post-checkpoint recovery', async () => {
     historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
     const { id } = await historyAdapter.spawn({
       cols: 80,
       rows: 24,
       sessionId: 'sleep-empty-mixed-recovery'
     })
+
     const manager = historyAdapter.getHistoryManager()!
     const suspend = vi.spyOn(manager, 'suspendSession')
     const originalCheckpoint = manager.checkpoint.bind(manager)
@@ -169,6 +176,7 @@ describe('DaemonPtyAdapter history recovery', () => {
         ])
       ])
       writeFileSync(join(sessionDir, 'output.log'), malformedLog)
+
       return result
     })
 
@@ -184,13 +192,16 @@ describe('DaemonPtyAdapter history recovery', () => {
     const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
     const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
     adapterClass.CHECKPOINT_INTERVAL_MS = 5
+
     try {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const { id } = await historyAdapter.spawn({
         cols: 80,
         rows: 24,
         sessionId: 'sleep-checkpoint-exclusive'
       })
+
       const manager = historyAdapter.getHistoryManager()!
       const originalCheckpoint = manager.checkpoint.bind(manager)
       let releaseCheckpoint!: () => void
@@ -201,6 +212,7 @@ describe('DaemonPtyAdapter history recovery', () => {
             releaseCheckpoint = resolve
           })
         }
+
         return originalCheckpoint(...args)
       })
 
@@ -208,6 +220,7 @@ describe('DaemonPtyAdapter history recovery', () => {
         immediate: true,
         keepHistory: true
       })
+
       await waitFor(() => releaseCheckpoint !== undefined)
       lastSubprocess._simulateData('arrived during final checkpoint')
       await new Promise((resolve) => setTimeout(resolve, 20))
@@ -223,6 +236,7 @@ describe('DaemonPtyAdapter history recovery', () => {
 
   it('serializes concurrent keepHistory and disconnectOnly checkpoints', async () => {
     historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
     const sessionIds = await Promise.all(
       ['queued-checkpoint-a', 'queued-checkpoint-b', 'queued-checkpoint-c'].map(
         async (sessionId) =>
@@ -235,6 +249,7 @@ describe('DaemonPtyAdapter history recovery', () => {
           ).id
       )
     )
+
     const internals = historyAdapter as unknown as {
       checkpointSessions(
         sessionIds: Iterable<string>,
@@ -242,6 +257,7 @@ describe('DaemonPtyAdapter history recovery', () => {
       ): Promise<Set<string>>
       runExclusiveCheckpoint(operation: () => Promise<void>, options?: object): Promise<void>
     }
+
     const originalCheckpointSessions = internals.checkpointSessions.bind(historyAdapter)
     // Call-through spy: entering the exclusive gate is the observable "queued behind the in-flight checkpoint" moment.
     const exclusiveEntries = vi.spyOn(internals, 'runExclusiveCheckpoint')
@@ -250,21 +266,26 @@ describe('DaemonPtyAdapter history recovery', () => {
     let checkpointCalls = 0
     let releaseFirstCheckpoint!: () => void
     let firstCheckpointStarted!: () => void
+
     const firstStarted = new Promise<void>((resolve) => {
       firstCheckpointStarted = resolve
     })
+
     const firstRelease = new Promise<void>((resolve) => {
       releaseFirstCheckpoint = resolve
     })
+
     vi.spyOn(internals, 'checkpointSessions').mockImplementation(async (...args) => {
       checkpointCalls++
       activeCheckpoints++
       maxActiveCheckpoints = Math.max(maxActiveCheckpoints, activeCheckpoints)
+
       try {
         if (checkpointCalls === 1) {
           firstCheckpointStarted()
           await firstRelease
         }
+
         return await originalCheckpointSessions(...args)
       } finally {
         activeCheckpoints--
@@ -275,12 +296,15 @@ describe('DaemonPtyAdapter history recovery', () => {
       immediate: true,
       keepHistory: true
     })
+
     await firstStarted
+
     const queuedOperations = [
       historyAdapter.shutdown(sessionIds[1], { immediate: true, keepHistory: true }),
       historyAdapter.shutdown(sessionIds[2], { immediate: true, keepHistory: true }),
       historyAdapter.disconnectOnly()
     ]
+
     // Why not a fixed sleep: releasing before both queued shutdowns enter the gate makes maxActiveCheckpoints===1 vacuous.
     // (disconnectOnly's own entry lands after it drains the keepHistory shutdowns, so it can't be waited on here.)
     await waitFor(() => exclusiveEntries.mock.calls.length >= 3)
@@ -295,18 +319,22 @@ describe('DaemonPtyAdapter history recovery', () => {
     const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
     const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
     adapterClass.CHECKPOINT_INTERVAL_MS = 25
+
     try {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const sleeping = await historyAdapter.spawn({
         cols: 80,
         rows: 24,
         sessionId: 'sleep-with-dirty-peer'
       })
+
       const peer = await historyAdapter.spawn({
         cols: 80,
         rows: 24,
         sessionId: 'dirty-peer'
       })
+
       const appendSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'appendIncrements')
       lastSubprocess._simulateData('peer output before sleep\r\n')
 
@@ -424,6 +452,7 @@ describe('DaemonPtyAdapter history recovery', () => {
         checkpointedAt: '2026-07-25T10:01:00Z'
       })
     )
+
     const log = Buffer.concat([
       encodeLogHeader(1),
       encodeLogBatch(1, [
@@ -431,6 +460,7 @@ describe('DaemonPtyAdapter history recovery', () => {
         { kind: 'resize', cols: 1_001, rows: 24 }
       ])
     ])
+
     writeFileSync(join(sessionDir, 'output.log'), log)
     historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
 
@@ -547,6 +577,7 @@ describe('DaemonPtyAdapter history recovery', () => {
       const failedManager = new HistoryManager(historyDir)
       const recoveryFreeze = await failedManager.freezeForRecovery(sessionId)
       chmodSync(sessionDir, 0o500)
+
       try {
         await failedManager.openSession(sessionId, {
           cwd: '/replacement',
@@ -559,6 +590,7 @@ describe('DaemonPtyAdapter history recovery', () => {
         // Why finally: a leaked 0o500 dir turns teardown into a confusing EACCES instead of the real assertion failure.
         chmodSync(sessionDir, 0o700)
       }
+
       expect(failedManager.isSessionDisabled(sessionId)).toBe(true)
       expect(existsSync(join(sessionDir, '.unreadable-recovery'))).toBe(false)
       historyAdapter = new DaemonPtyAdapter({
@@ -582,12 +614,14 @@ describe('DaemonPtyAdapter history recovery', () => {
       worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       agent: 'codex' as const
     }
+
     const surface = {
       worktreeId: 'worktree',
       tabId: 'tab',
       leafId: '11111111-1111-4111-8111-111111111111',
       terminalHandle: 'term_history_claim'
     }
+
     const canonicalId = 'canonical-history-claim'
     await adapter.spawn({
       cols: 80,
@@ -660,14 +694,17 @@ describe('DaemonPtyAdapter history recovery', () => {
     const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
     const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
     adapterClass.CHECKPOINT_INTERVAL_MS = 100
+
     try {
       const worktreeId = 'repo-a::/wt/reconciled-history'
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const { id: sessionId } = await historyAdapter.spawn({
         cols: 80,
         rows: 24,
         worktreeId
       })
+
       lastSubprocess._simulateData('before adapter restart\r\n')
       await historyAdapter.disconnectOnly()
 
@@ -675,6 +712,7 @@ describe('DaemonPtyAdapter history recovery', () => {
       const manager = historyAdapter.getHistoryManager()!
       const checkpointSpy = vi.spyOn(manager, 'checkpoint')
       const reconciled = await historyAdapter.reconcileOnStartup(new Set([worktreeId]))
+
       const internals = historyAdapter as unknown as {
         sessionsNeedingFullCheckpoint: Set<string>
       }
@@ -696,6 +734,7 @@ describe('DaemonPtyAdapter history recovery', () => {
           'utf8'
         )
       )
+
       expect(checkpoint.snapshotAnsi).toContain('before adapter restart')
     } finally {
       adapterClass.CHECKPOINT_INTERVAL_MS = previousInterval
@@ -726,6 +765,7 @@ describe('DaemonPtyAdapter history recovery', () => {
       if (detectCalls++ > 0) {
         return Promise.resolve({ status: 'none' })
       }
+
       return new Promise((resolve) => {
         releaseDetection = () => resolve({ status: 'none' })
       })
@@ -734,9 +774,11 @@ describe('DaemonPtyAdapter history recovery', () => {
     const spawning = historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
     await waitFor(() => releaseDetection !== undefined)
     let shutdownSettled = false
+
     const shuttingDown = historyAdapter
       .shutdown(sessionId, { immediate: true })
       .then(() => (shutdownSettled = true))
+
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(shutdownSettled).toBe(false)
 
@@ -763,6 +805,7 @@ describe('DaemonPtyAdapter history recovery', () => {
       })
     )
     writeFileSync(join(sessionDir, 'scrollback.bin'), 'raced claimed output\r\n')
+
     const claim = {
       digestVersion: 1 as const,
       keyId: 'key',
@@ -770,26 +813,32 @@ describe('DaemonPtyAdapter history recovery', () => {
       worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       agent: 'codex' as const
     }
+
     const surface = {
       worktreeId: 'worktree',
       tabId: 'tab',
       leafId: '11111111-1111-4111-8111-111111111111',
       terminalHandle: 'term_claim_race'
     }
+
     historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
     const client = (
       historyAdapter as unknown as {
         client: { request: (type: string, payload?: unknown) => Promise<unknown> }
       }
     ).client
+
     const originalRequest = client.request.bind(client)
     let createCalls = 0
     vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
       if (type === 'getSize') {
         return { size: { cols: 100, rows: 30 } }
       }
+
       if (type === 'createOrAttach') {
         createCalls++
+
         if (createCalls === 2) {
           await adapter.spawn({
             cols: 80,
@@ -802,6 +851,7 @@ describe('DaemonPtyAdapter history recovery', () => {
           })
         }
       }
+
       return await originalRequest(type, payload)
     })
 

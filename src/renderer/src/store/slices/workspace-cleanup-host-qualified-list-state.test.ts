@@ -143,6 +143,7 @@ describe('workspace cleanup removal targets', () => {
     const [target] = resolveWorkspaceCleanupRemovalTargets([WORKTREE_ID], emptyState, {
       approvedCandidates: [makeCandidate('ssh:ssh-1', 'ssh-1')]
     })
+
     expect(target).toMatchObject({ kind: 'target', executionHostId: 'ssh:ssh-1' })
   })
 
@@ -150,6 +151,7 @@ describe('workspace cleanup removal targets', () => {
     const [target] = resolveWorkspaceCleanupRemovalTargets([WORKTREE_ID], emptyState, {
       approvedCandidates: [makeCandidate('local'), makeCandidate('ssh:ssh-1', 'ssh-1')]
     })
+
     expect(target?.kind).toBe('unresolved')
   })
 
@@ -158,9 +160,11 @@ describe('workspace cleanup removal targets', () => {
       worktreesByRepo: { repo1: [{ id: WORKTREE_ID, repoId: 'repo1', hostId: 'ssh:ssh-1' }] },
       detectedWorktreesByRepo: {}
     } as unknown as AppState
+
     const [target] = resolveWorkspaceCleanupRemovalTargets([WORKTREE_ID], state, {
       approvedCandidates: [makeCandidate(undefined)]
     })
+
     expect(target?.kind).toBe('unresolved')
   })
 
@@ -168,6 +172,7 @@ describe('workspace cleanup removal targets', () => {
     const [target] = resolveWorkspaceCleanupRemovalTargets([WORKTREE_ID], emptyState, {
       approvedCandidates: [makeCandidate(undefined)]
     })
+
     expect(target?.kind).toBe('unresolved')
   })
 })

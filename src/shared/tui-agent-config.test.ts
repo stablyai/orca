@@ -25,6 +25,7 @@ describe('TUI_AGENT_CONFIG', () => {
       'command-code': { launchCmd: 'command-code --trust' },
       hermes: { launchCmd: 'hermes --tui' }
     }
+
     for (const [agent, expected] of Object.entries(overrides)) {
       expect(TUI_AGENT_CONFIG[agent as TuiAgent]).toMatchObject(expected)
     }

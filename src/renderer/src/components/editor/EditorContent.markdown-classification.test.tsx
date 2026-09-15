@@ -28,6 +28,7 @@ vi.mock('./markdown-rich-mode', () => ({
 
 vi.mock('./editor-lazy-views', () => {
   const view = (name: string) => () => <div data-editor-view={name} />
+
   return {
     MonacoEditor: view('source'),
     DiffViewer: view('diff'),
@@ -65,6 +66,7 @@ vi.mock('@/store', () => {
     setMarkdownRichModeSizeOverride: () => {},
     reloadOpenCheckRunDetailsTab: () => {}
   }
+
   return {
     useAppStore: Object.assign(
       (selector: (storeState: typeof state) => unknown) => selector(state),
@@ -82,6 +84,7 @@ function openFile(
   mode: 'edit' | 'markdown-preview' = 'edit'
 ): OpenFile {
   const extension = language === 'markdown' ? 'md' : 'ts'
+
   return {
     id: `/repo/notes.${extension}`,
     filePath: `/repo/notes.${extension}`,
@@ -105,10 +108,13 @@ function renderEditPath({
   mode?: 'edit' | 'markdown-preview'
 }) {
   const activeFile = openFile(language, mode)
+
   const fileContents = {
     [activeFile.id]: { content: '# Saved', isBinary: false }
   }
+
   const editorDrafts = { [activeFile.id]: content }
+
   const model = getEditorPanelRenderModel({
     activeFile,
     fileContents,
@@ -120,6 +126,7 @@ function renderEditPath({
     isChangesMode: false,
     canOpenWorkspaceFileBrowser: true
   })
+
   const view = render(
     <EditorContent
       activeFile={activeFile}
@@ -163,6 +170,7 @@ function getGuardedRenderModel({
   isChangesMode?: boolean
 }) {
   const activeFile = { ...openFile(), ...activeFileOverrides }
+
   return getEditorPanelRenderModel({
     activeFile,
     fileContents: includeFileContent ? { [activeFile.id]: fileContent } : {},

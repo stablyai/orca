@@ -55,32 +55,42 @@ export default function ImageViewer({
   const cleanedContent = useMemo(() => content.replace(/\s/g, ''), [content])
   const imageStateKey = `${filePath}\n${mimeType}\n${cleanedContent}`
   const [lastImageStateKey, setLastImageStateKey] = useState(imageStateKey)
+
   if (lastImageStateKey !== imageStateKey) {
     setLastImageStateKey(imageStateKey)
     setInlineZoom(1)
     setPopupZoom(1)
     setImageDimensions(null)
   }
+
   const isPdf = mimeType === 'application/pdf'
   const isIntrinsicLayout = layout === 'intrinsic'
+
   const previewSrc = useMemo(
     () => buildImageDataUri(mimeType, cleanedContent),
     [cleanedContent, mimeType]
   )
+
   const imageError =
     (previewSrc === null && cleanedContent.length > 0) ||
     (previewSrc !== null && failedPreviewSrc === previewSrc)
+
   const estimatedSize = useMemo(() => {
     const bytes = Math.floor((cleanedContent.length * 3) / 4)
+
     if (bytes < 1024) {
       return `${bytes} B`
     }
+
     if (bytes < 1024 * 1024) {
       return `${(bytes / 1024).toFixed(1)} KB`
     }
+
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }, [cleanedContent])
+
   const inlineZoomPercent = Math.round(inlineZoom * 100)
+
   const inlineImageLayoutSize = useMemo(
     () =>
       isIntrinsicLayout
@@ -92,6 +102,7 @@ export default function ImageViewer({
           }),
     [imageDimensions, inlineSurfaceSize, inlineZoom, isIntrinsicLayout]
   )
+
   const popupImageLayoutSize = useMemo(
     () =>
       getZoomedImageLayoutSize({
@@ -101,51 +112,63 @@ export default function ImageViewer({
       }),
     [imageDimensions, popupSurfaceSize, popupZoom]
   )
+
   const inlineImageLayoutStyle = useMemo(
     () => getImageLayoutStyle(inlineImageLayoutSize),
     [inlineImageLayoutSize]
   )
+
   const popupImageLayoutStyle = useMemo(
     () => getImageLayoutStyle(popupImageLayoutSize),
     [popupImageLayoutSize]
   )
+
   const applyInlineZoomChange = useCallback<ApplyImageViewerZoomChange>((getNextZoom, anchor) => {
     applyAnchoredImageViewerZoomChange(inlineSurfaceRef.current, setInlineZoom, getNextZoom, anchor)
   }, [])
+
   const applyPopupZoomChange = useCallback<ApplyImageViewerZoomChange>((getNextZoom, anchor) => {
     applyAnchoredImageViewerZoomChange(popupSurfaceRef.current, setPopupZoom, getNextZoom, anchor)
   }, [])
+
   const openPopup = useCallback(() => {
     setPopupZoom(inlineZoom)
     setIsPopupOpen(true)
   }, [inlineZoom])
+
   const handlePopupOpenChange = useCallback(
     (open: boolean) => {
       if (open) {
         setPopupZoom(inlineZoom)
       }
+
       setIsPopupOpen(open)
     },
     [inlineZoom]
   )
+
   const handleInlineImageSurfaceWheel = useCallback(
     (event: WheelEvent) => {
       applyImageSurfaceWheel(event, applyInlineZoomChange)
     },
     [applyInlineZoomChange]
   )
+
   const handlePopupImageSurfaceWheel = useCallback(
     (event: WheelEvent) => {
       applyImageSurfaceWheel(event, applyPopupZoomChange)
     },
     [applyPopupZoomChange]
   )
+
   const setInlineSurfaceRef = useCallback(
     (surface: HTMLDivElement | null) => {
       if (inlineSurfaceRef.current) {
         inlineSurfaceRef.current.removeEventListener('wheel', handleInlineImageSurfaceWheel)
       }
+
       inlineSurfaceRef.current = surface
+
       if (surface) {
         setInlineSurfaceSize(getElementSurfaceSize(surface))
         // Why: Chromium exposes trackpad pinch as ctrl-wheel and requires a
@@ -157,12 +180,15 @@ export default function ImageViewer({
     },
     [handleInlineImageSurfaceWheel]
   )
+
   const setPopupSurfaceRef = useCallback(
     (surface: HTMLDivElement | null) => {
       if (popupSurfaceRef.current) {
         popupSurfaceRef.current.removeEventListener('wheel', handlePopupImageSurfaceWheel)
       }
+
       popupSurfaceRef.current = surface
+
       if (surface) {
         setPopupSurfaceSize(getElementSurfaceSize(surface))
         surface.addEventListener('wheel', handlePopupImageSurfaceWheel, { passive: false })
@@ -175,41 +201,49 @@ export default function ImageViewer({
 
   useEffect(() => {
     const surface = inlineSurfaceRef.current
+
     if (!surface) {
       setInlineSurfaceSize(null)
+
       return
     }
 
     const updateSize = () => setInlineSurfaceSize(getElementSurfaceSize(surface))
     updateSize()
+
     if (typeof ResizeObserver === 'undefined') {
       return
     }
 
     const observer = new ResizeObserver(updateSize)
     observer.observe(surface)
+
     return () => observer.disconnect()
   }, [previewSrc])
 
   useEffect(() => {
     if (!isPopupOpen) {
       setPopupSurfaceSize(null)
+
       return
     }
 
     const surface = popupSurfaceRef.current
+
     if (!surface) {
       return
     }
 
     const updateSize = () => setPopupSurfaceSize(getElementSurfaceSize(surface))
     updateSize()
+
     if (typeof ResizeObserver === 'undefined') {
       return
     }
 
     const observer = new ResizeObserver(updateSize)
     observer.observe(surface)
+
     return () => observer.disconnect()
   }, [isPopupOpen])
 

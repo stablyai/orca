@@ -39,10 +39,12 @@ export async function runBrowserRouteTcpEgressProbe(
   let socks: Server | null = null
   let result: BrowserRouteTcpEgressProbeResult | null = null
   let primaryFailure: unknown = null
+
   try {
     if (protectedSession) {
       await assertLocallyUnresolvable(REMOTE_HOST)
     }
+
     const [httpPort, httpsPort] = await Promise.all([listen(http, sockets), listen(https, sockets)])
     socks = createBrowserRouteTcpEgressSocksRecorder(
       new Set([httpPort, httpsPort]),
@@ -64,21 +66,25 @@ export async function runBrowserRouteTcpEgressProbe(
   } catch (error) {
     primaryFailure = error
   }
+
   const cleanupFailures = await cleanupBrowserRouteTcpEgressFixture(
     root,
     [socks, https, http],
     webSocket,
     sockets
   )
+
   if (primaryFailure || cleanupFailures.length > 0) {
     throw new AggregateError(
       [...(primaryFailure ? [primaryFailure] : []), ...cleanupFailures],
       primaryFailure instanceof Error ? primaryFailure.message : 'browser_route_tcp_probe_failed'
     )
   }
+
   if (!result) {
     throw new Error('browser_route_tcp_probe_result_missing')
   }
+
   return result
 }
 
@@ -88,6 +94,7 @@ async function assertLocallyUnresolvable(host: string): Promise<void> {
   } catch {
     return
   }
+
   throw new Error(`browser_route_tcp_probe_host_resolved_locally:${host}`)
 }
 
@@ -171,29 +178,38 @@ function createHttpTarget(
 ): HttpServer {
   return createHttpServer((request, response) => {
     observeRequest(observations, request.url, request.socket.remotePort, routedSourcePorts)
+
     if (request.url === '/redirect') {
       response.writeHead(302, { Location: '/page' })
       response.end()
+
       return
     }
+
     if (request.url === '/page') {
       response.writeHead(200, { 'Content-Type': 'text/html' })
       response.end('<!doctype html><title>TCP probe</title><img src="/asset">')
+
       return
     }
+
     if (request.url === '/asset') {
       response.writeHead(200, { 'Content-Type': 'image/svg+xml' })
       response.end('<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>')
+
       return
     }
+
     if (request.url === '/download') {
       response.writeHead(200, {
         'Content-Disposition': 'attachment; filename="probe.txt"',
         'Content-Type': 'text/plain'
       })
       response.end('download probe')
+
       return
     }
+
     response.writeHead(404)
     response.end()
   })
@@ -224,12 +240,16 @@ function attachWebSocketTarget(
   const webSocket = new WebSocketServer({ noServer: true })
   server.on('upgrade', (request, socket, head) => {
     observeRequest(observations, request.url, request.socket.remotePort, routedSourcePorts)
+
     if (request.url !== '/socket') {
       socket.destroy()
+
       return
     }
+
     webSocket.handleUpgrade(request, socket, head, (client) => client.send('ready'))
   })
+
   return webSocket
 }
 
@@ -252,24 +272,30 @@ function classifyObservations(
 ): Pick<BrowserRouteTcpEgressProbeResult, 'directPaths' | 'routedPaths'> {
   const directPaths = new Set<string>()
   const routedPaths = new Set<string>()
+
   for (const observation of observations) {
     const target = observation.routed ? routedPaths : directPaths
     target.add(observation.path)
   }
+
   return { directPaths: [...directPaths].sort(), routedPaths: [...routedPaths].sort() }
 }
 
 function listen(server: Server | HttpServer, sockets: Set<Socket>): Promise<number> {
   server.on('connection', (socket) => trackSocket(socket, sockets))
+
   return new Promise((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
       server.off('error', reject)
       const address = server.address()
+
       if (!address || typeof address === 'string') {
         reject(new Error('browser_route_tcp_probe_listener_unavailable'))
+
         return
       }
+
       resolve(address.port)
     })
   })

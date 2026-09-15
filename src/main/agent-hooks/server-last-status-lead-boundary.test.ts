@@ -11,6 +11,7 @@ const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: getCohortAtEmitMock }))
 
 beforeEach(() => {
@@ -47,6 +48,7 @@ describe('Persisted Claude lead boundaries', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       await postHookEvent(
         server,
@@ -106,6 +108,7 @@ describe('Persisted Claude lead boundaries', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       await postHookEvent(
         server,
@@ -153,6 +156,7 @@ describe('Persisted Claude lead boundaries', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       await postHookEvent(
         server,
@@ -209,6 +213,7 @@ describe('Persisted Claude lead boundaries', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       await postHookEvent(
         server,
@@ -269,6 +274,7 @@ describe('Persisted Claude lead boundaries', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       await postHookEvent(
         server,
@@ -302,6 +308,7 @@ describe('Persisted Claude lead boundaries', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       await postHookEvent(
         server,
@@ -372,6 +379,7 @@ describe('Persisted Claude lead boundaries', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       await postHookEvent(
         server,
@@ -414,6 +422,7 @@ describe('Persisted Claude lead boundaries', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       await postHookEvent(
         server,

@@ -6,9 +6,11 @@ import { isRendererDocumentNavigation } from './renderer-document-navigation'
 export function installPrivilegedWindowNavigationPolicy(contents: WebContents): void {
   contents.setWindowOpenHandler(({ url }) => {
     const externalUrl = normalizeExternalBrowserUrl(url)
+
     if (externalUrl) {
       void shell.openExternal(externalUrl)
     }
+
     return { action: 'deny' }
   })
 
@@ -18,10 +20,13 @@ export function installPrivilegedWindowNavigationPolicy(contents: WebContents): 
     if (isRendererDocumentNavigation(contents.getURL(), url)) {
       return
     }
+
     const externalUrl = normalizeExternalBrowserUrl(url)
+
     if (externalUrl) {
       void shell.openExternal(externalUrl)
     }
+
     event.preventDefault()
   })
 }

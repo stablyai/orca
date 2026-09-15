@@ -22,6 +22,7 @@ type PluginsSettingsSectionProps = {
 
 function errorMessage(cause: unknown, fallback: string): string {
   console.warn('[plugins] settings action failed:', cause)
+
   return fallback
 }
 
@@ -71,17 +72,22 @@ export function PluginsSettingsSection({
     request: Promise<PluginHostListEntry[]>
   ): Promise<PluginHostListEntry[] | null> => {
     const requestId = ++listRequestRef.current
+
     try {
       const nextPlugins = await request
+
       if (!mountedRef.current || requestId !== listRequestRef.current) {
         return null
       }
+
       applyPluginList(nextPlugins)
+
       return nextPlugins
     } catch (cause) {
       if (mountedRef.current && requestId === listRequestRef.current) {
         setPluginListError(cause)
       }
+
       return null
     }
   }
@@ -90,6 +96,7 @@ export function PluginsSettingsSection({
     if (!mountedRef.current) {
       return
     }
+
     // Why: a mutation result is authoritative at completion time, even when an earlier action
     // finishes after a later-started action or a passive refresh is still in flight.
     listRequestRef.current += 1
@@ -98,6 +105,7 @@ export function PluginsSettingsSection({
 
   useEffect(() => {
     mountedRef.current = mounted
+
     if (!mounted) {
       // Why: hidden lazy panes must not resurrect dialogs or unresolved async state when reopened.
       setPlugins([])
@@ -111,6 +119,7 @@ export function PluginsSettingsSection({
       setDevPathsBusy(false)
       setSettingsError(null)
     }
+
     return () => {
       mountedRef.current = false
       listRequestRef.current += 1
@@ -121,17 +130,23 @@ export function PluginsSettingsSection({
     if (!mounted || !settings.pluginSystemEnabled) {
       return
     }
+
     setLoading(true)
+
     const load = async (): Promise<void> => {
       await loadPluginList(window.api.plugins.list())
+
       if (mountedRef.current) {
         setLoading(false)
       }
     }
+
     void load()
+
     const unsubscribe = window.api.plugins.onChanged(() => {
       void loadPluginList(window.api.plugins.list())
     })
+
     return () => {
       listRequestRef.current += 1
       unsubscribe()
@@ -147,6 +162,7 @@ export function PluginsSettingsSection({
     setConsentPluginId,
     setBusyPluginKeys
   })
+
   const pluginLogs = usePluginLogs(mounted, mountedRef, plugins)
 
   const sectionPresentation = getPluginsSectionPresentation()
@@ -157,6 +173,7 @@ export function PluginsSettingsSection({
 
   const selectedConsentPlugin =
     plugins.find((plugin) => plugin.pluginKey === consentPluginId) ?? null
+
   const consentPlugin = selectedConsentPlugin?.consentFingerprint ? selectedConsentPlugin : null
   const removePlugin = plugins.find((plugin) => plugin.pluginKey === removePluginId) ?? null
 
@@ -164,6 +181,7 @@ export function PluginsSettingsSection({
     setFeatureBusy(true)
     setSettingsError(null)
     setError(null)
+
     try {
       await updateSettings({ pluginSystemEnabled: !settings.pluginSystemEnabled })
       await loadPluginList(window.api.plugins.refresh())
@@ -185,9 +203,11 @@ export function PluginsSettingsSection({
 
   const install = async (source: PluginHostInstallSource): Promise<void> => {
     const result = await window.api.plugins.install(source)
+
     if (!result.ok) {
       throw new Error(result.error)
     }
+
     // Why: installation is not consent; select by id and wait for the authoritative list.
     setInstallOpen(false)
     setConsentPluginId(result.pluginKey)
@@ -200,13 +220,16 @@ export function PluginsSettingsSection({
     decision: 'approve' | 'keep-disabled'
   ): Promise<void> => {
     setBusyPluginKeys((current) => new Set(current).add(pluginKey))
+
     try {
       const nextPlugins = await window.api.plugins.consent({
         pluginKey,
         reviewedFingerprint,
         decision
       })
+
       applyCompletedMutation(nextPlugins)
+
       if (mountedRef.current) {
         setConsentPluginId(null)
       }
@@ -215,6 +238,7 @@ export function PluginsSettingsSection({
         setBusyPluginKeys((current) => {
           const next = new Set(current)
           next.delete(pluginKey)
+
           return next
         })
       }
@@ -227,13 +251,17 @@ export function PluginsSettingsSection({
       plugin.status === 'restarting' ||
       plugin.status === 'idle' ||
       plugin.status === 'errored'
+
     setBusyPluginKeys((current) => new Set(current).add(plugin.pluginKey))
+
     try {
       const nextEnabled = !enabled
+
       const nextPlugins = await window.api.plugins.setEnabled({
         pluginKey: plugin.pluginKey,
         enabled: nextEnabled
       })
+
       applyCompletedMutation(nextPlugins)
     } catch (cause) {
       if (mountedRef.current) {
@@ -244,6 +272,7 @@ export function PluginsSettingsSection({
         setBusyPluginKeys((current) => {
           const next = new Set(current)
           next.delete(plugin.pluginKey)
+
           return next
         })
       }
@@ -252,9 +281,11 @@ export function PluginsSettingsSection({
 
   const remove = async (pluginKey: string): Promise<void> => {
     setBusyPluginKeys((current) => new Set(current).add(pluginKey))
+
     try {
       const nextPlugins = await window.api.plugins.remove({ pluginKey })
       applyCompletedMutation(nextPlugins)
+
       if (mountedRef.current) {
         setRemovePluginId(null)
       }
@@ -267,6 +298,7 @@ export function PluginsSettingsSection({
         setBusyPluginKeys((current) => {
           const next = new Set(current)
           next.delete(pluginKey)
+
           return next
         })
       }
@@ -280,6 +312,7 @@ export function PluginsSettingsSection({
   const updateDevPaths = async (paths: string[]): Promise<void> => {
     setDevPathsBusy(true)
     setSettingsError(null)
+
     try {
       await updateSettings({ devPluginPaths: paths })
       await loadPluginList(window.api.plugins.refresh())
@@ -288,9 +321,11 @@ export function PluginsSettingsSection({
         'auto.components.settings.PluginsSettingsSection.settingsUpdateFailed',
         'Could not save plugin settings.'
       )
+
       if (mountedRef.current) {
         setSettingsError(message)
       }
+
       throw new Error(message)
     } finally {
       if (mountedRef.current) {
@@ -300,6 +335,7 @@ export function PluginsSettingsSection({
   }
 
   const featureEnabled = settings.pluginSystemEnabled
+
   return (
     <SettingsSection
       id="plugins"

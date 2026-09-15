@@ -3,6 +3,7 @@ import type { CodexConfigSyncStatus } from '../../../../shared/codex-config-sync
 // Why: bounded so a permanently unreadable home cannot poll forever; ~5 minutes
 // total is long enough to outlast an antivirus scan or backup pass.
 const CODEX_CONFIG_SYNC_RETRY_MS = 30_000
+
 const CODEX_CONFIG_SYNC_RETRY_LIMIT = 10
 
 export function watchCodexConfigSyncStatus(
@@ -11,6 +12,7 @@ export function watchCodexConfigSyncStatus(
   let cancelled = false
   let attempts = 0
   let retryTimer: ReturnType<typeof setTimeout> | null = null
+
   const poll = (): void => {
     void window.api.codexConfigSync
       .status()
@@ -18,7 +20,9 @@ export function watchCodexConfigSyncStatus(
         if (cancelled) {
           return
         }
+
         onStatus(status)
+
         if (
           status.state === 'stalled' &&
           status.reason === 'managed-home-unavailable' &&
@@ -34,9 +38,12 @@ export function watchCodexConfigSyncStatus(
         }
       })
   }
+
   poll()
+
   return () => {
     cancelled = true
+
     if (retryTimer !== null) {
       clearTimeout(retryTimer)
     }

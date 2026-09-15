@@ -17,6 +17,7 @@ const diffViewerMock = vi.hoisted(() => ({
 vi.mock('./DiffViewer', () => ({
   default: (props: DiffViewerProps) => {
     diffViewerMock.latestProps = props
+
     return <div data-testid="diff-viewer-probe" />
   }
 }))
@@ -56,6 +57,7 @@ describe('ChangesModeView', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     container = null
     root = null

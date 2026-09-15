@@ -50,6 +50,7 @@ export function getInactiveProviderUsage(
     provider === 'claude'
       ? snapshot.rateLimits.inactiveClaudeAccounts
       : snapshot.rateLimits.inactiveCodexAccounts
+
   return list.find((u) => u.accountId === accountId) ?? null
 }
 
@@ -62,6 +63,7 @@ export function hasActiveProviderUsage(limits: ProviderRateLimits | null): boole
   if (!limits) {
     return false
   }
+
   if (
     limits.session != null ||
     limits.weekly != null ||
@@ -70,6 +72,7 @@ export function hasActiveProviderUsage(limits: ProviderRateLimits | null): boole
   ) {
     return true
   }
+
   return limits.status === 'ok'
 }
 
@@ -81,8 +84,10 @@ export function getUsageBarState(
   isFetchingOverride?: boolean
 ): UsageBarState {
   const window = limits?.[windowKey] ?? null
+
   const fetching =
     isFetchingOverride ?? (limits?.status === 'fetching' || limits?.status === 'idle')
+
   return {
     usedPercent: window?.usedPercent ?? null,
     unavailable: window == null && !fetching,
@@ -105,9 +110,11 @@ export function getWindowResetLabel(
   now: number
 ): string | null {
   const resetsAt = limits?.[windowKey]?.resetsAt
+
   if (resetsAt == null) {
     return null
   }
+
   return formatResetCountdown(resetsAt - now)
 }
 
@@ -116,8 +123,10 @@ export function getWindowResetLabel(
 // account OR active rate-limit data for the system-default target.
 export function hasRenderableUsage(snapshot: AccountsSnapshot, provider: ProviderKey): boolean {
   const accounts = provider === 'claude' ? snapshot.claude.accounts : snapshot.codex.accounts
+
   if (accounts.length > 0) {
     return true
   }
+
   return hasActiveProviderUsage(getActiveProviderRateLimits(snapshot, provider))
 }

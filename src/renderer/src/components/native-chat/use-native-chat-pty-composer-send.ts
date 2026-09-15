@@ -45,25 +45,33 @@ export function useNativeChatPtyComposerSend(args: {
   return useCallback(() => {
     const text = args.draft
     const imagePaths = args.imageAttachments.map((attachment) => attachment.path)
+
     if ((text.trim() === '' && imagePaths.length === 0) || args.disabled) {
       return
     }
+
     // Why: keep option-command and prompt writes from interleaving on the PTY input line.
     if (args.isDispatchingSessionOption) {
       return
     }
+
     const target = args.resolveTarget()
+
     if (!target) {
       return
     }
+
     const classification = args.classifySend(text)
+
     const { sendOptions } = resolveNativeChatLaunchDraftSend({
       launchDraft: args.launchDraft,
       launchDraftResolved: args.launchDraftResolved,
       agent: args.agent,
       readScreen: () => args.readTerminalScreen?.()
     })
+
     let pendingHandle: NativeChatSendHandle | null = null
+
     // Why: slash-like text must not silently drop its attached images.
     if (classification !== 'chat' && imagePaths.length === 0) {
       pendingHandle =
@@ -83,20 +91,24 @@ export function useNativeChatPtyComposerSend(args: {
     } else {
       submitNativeChatPrompt(target.settings, target.ptyId)
     }
+
     if (classification !== 'chat') {
       if (pendingHandle) {
         args.trackPendingSend(pendingHandle)
       }
+
       if (classification === 'command') {
         args.onSlashCommand?.(text.trim())
         args.sessionOptionsSurface?.recordOutgoingCommand(text.trim())
       }
     } else {
       const pendingId = args.onOptimisticSend?.(text, imagePaths)
+
       if (pendingHandle) {
         args.trackPendingSend(pendingHandle, pendingId)
       }
     }
+
     emitNativeChatMessageSent({
       agent: args.agent,
       runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'

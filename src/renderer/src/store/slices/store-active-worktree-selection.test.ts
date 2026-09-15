@@ -13,6 +13,7 @@ import {
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
+
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
 // Mock sonner (imported by repos.ts)
@@ -28,6 +29,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)

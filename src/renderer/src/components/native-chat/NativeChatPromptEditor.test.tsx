@@ -12,6 +12,7 @@ afterEach(cleanup)
 function setup(value = '') {
   const inputRef = createRef<NativeChatComposerInput>()
   const onChange = vi.fn()
+
   const view = render(
     <NativeChatPromptEditor
       inputRef={inputRef}
@@ -22,6 +23,7 @@ function setup(value = '') {
       onSelect={vi.fn()}
     />
   )
+
   return {
     ...view,
     input: inputRef.current!,
@@ -90,6 +92,7 @@ describe('native chat skill editor', () => {
 
   it('restores selected nodes only in their owning pane draft', async () => {
     const inputRef = createRef<NativeChatComposerInput>()
+
     const props = {
       inputRef,
       scopeKey: 'pill-pane',
@@ -99,6 +102,7 @@ describe('native chat skill editor', () => {
       onChange: vi.fn(),
       onSelect: vi.fn()
     }
+
     const first = render(<NativeChatPromptEditor {...props} />)
     act(() => inputRef.current!.insertSkill!(0, 4, '$review'))
     expect(
@@ -110,9 +114,11 @@ describe('native chat skill editor', () => {
       expect(second.container.querySelector('[data-native-chat-skill]')).not.toBeNull()
     )
     second.unmount()
+
     const other = render(
       <NativeChatPromptEditor {...props} scopeKey="other-pane" initialValue="$review " />
     )
+
     expect(other.container.querySelector('[data-native-chat-skill]')).toBeNull()
   })
 

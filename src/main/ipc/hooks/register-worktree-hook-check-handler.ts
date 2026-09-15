@@ -15,8 +15,10 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
     'hooks:check',
     async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
+
       if (!repo) {
         const repoIdExists = store.getRepos().some((candidate) => candidate.id === args.repoId)
+
         // Why: callers treat inspection errors as "skip", so a requested/ambiguous host must report error (fail closed), not hook-free.
         return {
           status: args.hostId || repoIdExists ? 'error' : 'ok',
@@ -25,17 +27,21 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
           mayNeedUpdate: false
         }
       }
+
       if (isFolderRepo(repo)) {
         return { status: 'ok', hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
 
       if (repo.connectionId) {
         const fsProvider = getSshFilesystemProvider(repo.connectionId)
+
         if (!fsProvider) {
           return { status: 'error', hasHooks: false, hooks: null, mayNeedUpdate: false }
         }
+
         try {
           const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
+
           return {
             status: 'ok',
             hasHooks: !result.isBinary,
@@ -56,6 +62,7 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
       const hooks = has ? loadHooks(repo.path) : null
       // Why: unrecognised top-level keys mean the file is well-formed but from a newer Orca; suggest updating rather than "could not be parsed".
       const mayNeedUpdate = has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
+
       return {
         status: 'ok',
         hasHooks: has,

@@ -12,24 +12,32 @@ export async function resolveOrchestrationTerminalHandle(
   options: { validateEnvHandle?: boolean } = {}
 ): Promise<string> {
   const explicit = getOptionalStringFlag(flags, flagName)
+
   if (explicit) {
     return explicit
   }
+
   const envHandle = process.env.ORCA_TERMINAL_HANDLE
+
   if (envHandle && envHandle.length > 0) {
     if (flagName === 'from' && options.validateEnvHandle) {
       // Why: long-lived shells can retain a stale ORCA_TERMINAL_HANDLE after remint; don't bake it into coordinator preambles.
       const live = await isLiveTerminalHandle(envHandle, client)
+
       if (!live) {
         const reminted = await resolveOrchestrationPaneTerminalHandle(client)
+
         if (reminted) {
           return reminted
         }
+
         throwNoActiveSenderTerminal()
       }
     }
+
     return envHandle
   }
+
   // Past this point every remaining route GUESSES an implicit terminal, and a structured session
   // has no pane for the guess to land on — so it lands on a sibling. `check` is destructive by
   // default, so that guess consumed another pane's oldest unread batch and marked it read, and the
@@ -42,9 +50,11 @@ export async function resolveOrchestrationTerminalHandle(
         `Pass --${flagName} <terminal-handle> explicitly; guessing would act on another pane's mailbox.`
     )
   }
+
   if (flagName === 'from') {
     return await resolveImplicitOrchestrationSender(flags, cwd, client)
   }
+
   return await getTerminalHandle(flags, cwd, client)
 }
 
@@ -62,19 +72,23 @@ async function isLiveTerminalHandle(handle: string, client: RuntimeClient): Prom
       'terminal.resolveIdentity',
       { terminal: handle }
     )
+
     const live = response.result?.identity?.live
+
     // An unrecognised shape is an older host answering something else, not a dead handle.
     return typeof live === 'boolean' ? live : await showResolvesTerminalHandle(handle, client)
   } catch (err) {
     if (isStaleTerminalIdentityError(err)) {
       return false
     }
+
     if (getClientErrorCode(err) === 'method_not_found') {
       // Clients and remote hosts update independently, so a host that predates the identity probe
       // is the normal mixed-version state. Fall back to what it does have — which is correct for
       // that host, because a host without the probe also has no structured workers to miss.
       return await showResolvesTerminalHandle(handle, client)
     }
+
     throw err
   }
 }
@@ -82,11 +96,13 @@ async function isLiveTerminalHandle(handle: string, client: RuntimeClient): Prom
 async function showResolvesTerminalHandle(handle: string, client: RuntimeClient): Promise<boolean> {
   try {
     await client.call('terminal.show', { terminal: handle })
+
     return true
   } catch (err) {
     if (isStaleTerminalIdentityError(err)) {
       return false
     }
+
     throw err
   }
 }
@@ -95,12 +111,15 @@ function getClientErrorCode(err: unknown): string | undefined {
   if (!err || typeof err !== 'object') {
     return undefined
   }
+
   const code = (err as { code?: unknown }).code
+
   return typeof code === 'string' ? code : undefined
 }
 
 function isStaleTerminalIdentityError(err: unknown): boolean {
   const code = getClientErrorCode(err)
+
   return code === 'terminal_handle_stale' || code === 'terminal_gone'
 }
 
@@ -113,14 +132,17 @@ async function resolveOrchestrationPaneTerminalHandle(
   options: { optional?: boolean } = {}
 ): Promise<string | undefined> {
   const paneKey = process.env.ORCA_PANE_KEY
+
   if (!paneKey || paneKey.length === 0) {
     return undefined
   }
+
   try {
     // Why: pane-key reminting preserves caller identity; focus-based active-terminal fallback can point at a different pane.
     const response = await client.call<{ terminal: { handle: string } }>('terminal.resolvePane', {
       paneKey
     })
+
     return response.result.terminal.handle
   } catch (err) {
     if (
@@ -129,6 +151,7 @@ async function resolveOrchestrationPaneTerminalHandle(
     ) {
       return undefined
     }
+
     throw err
   }
 }
@@ -136,6 +159,7 @@ async function resolveOrchestrationPaneTerminalHandle(
 function isPaneRemintUnavailableError(err: unknown): boolean {
   const code = getClientErrorCode(err)
   const message = getClientErrorMessage(err)
+
   return (
     code === 'terminal_not_found' ||
     code === 'terminal_handle_stale' ||
@@ -154,10 +178,13 @@ function getClientErrorMessage(err: unknown): string | undefined {
   if (err instanceof Error) {
     return err.message
   }
+
   if (!err || typeof err !== 'object') {
     return undefined
   }
+
   const message = (err as { message?: unknown }).message
+
   return typeof message === 'string' ? message : undefined
 }
 
@@ -184,6 +211,7 @@ async function resolveImplicitOrchestrationSender(
     if (!isNoActiveTerminalError(err)) {
       throw err
     }
+
     throwNoActiveSenderTerminal()
   }
 }

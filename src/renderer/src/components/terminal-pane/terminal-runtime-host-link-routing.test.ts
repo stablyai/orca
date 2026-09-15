@@ -9,20 +9,28 @@ import { handleTerminalWebLinkClick } from './terminal-web-link-click'
 import { installHttpLinkClickFallback } from './terminal-url-link-hit-testing'
 
 const URL = 'http://example.com/'
+
 const COLS = 80
+
 const ROWS = 24
 
 const openUrlMock = vi.fn()
+
 const setActiveWorktreeMock = vi.fn()
+
 const createBrowserTabMock = vi.fn()
+
 const openRuntimeBrowserTabMock = vi.fn(() => Promise.resolve())
+
 const runtimeSourceOwner = { kind: 'runtime', runtimeEnvironmentId: 'env-1' } as const
+
 const sshSourceOwner = { kind: 'ssh', connectionId: 'ssh-1' } as const
 
 type ListenerRegistration = [string, EventListener, AddEventListenerOptions | boolean | undefined]
 
 function makeBufferLine(text: string): IBufferLine {
   const padded = text.padEnd(COLS)
+
   return {
     isWrapped: false,
     length: COLS,
@@ -42,6 +50,7 @@ function makeBufferLine(text: string): IBufferLine {
           )
         )
       }
+
       return padded.slice(startColumn, endColumn)
     }
   } as IBufferLine
@@ -49,9 +58,11 @@ function makeBufferLine(text: string): IBufferLine {
 
 function makeTerminal(): { terminal: Terminal; registrations: ListenerRegistration[] } {
   const registrations: ListenerRegistration[] = []
+
   const screen = {
     getBoundingClientRect: () => ({ left: 0, top: 0, width: COLS * 10, height: ROWS * 10 })
   }
+
   return {
     terminal: {
       cols: COLS,
@@ -155,6 +166,7 @@ describe('terminal HTTP links on a runtime-hosted pane', () => {
 
   it('opens a click-fallback activation on the owning runtime', () => {
     const { terminal, registrations } = makeTerminal()
+
     const disposable = installHttpLinkClickFallback(terminal, {
       worktreeId: 'wt-1',
       getSourceOwner: () => runtimeSourceOwner
@@ -226,6 +238,7 @@ describe('terminal HTTP links on a direct SSH pane', () => {
 
   it('opens a click-fallback activation through the owning SSH workspace', () => {
     const { terminal, registrations } = makeTerminal()
+
     const disposable = installHttpLinkClickFallback(terminal, {
       worktreeId: 'wt-1',
       getSourceOwner: () => sshSourceOwner

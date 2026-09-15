@@ -48,10 +48,15 @@ const SidebarFeedbackDialog = lazyWithRetry(
 )
 
 const DOCS_URL = 'https://www.onorca.dev/docs'
+
 const CHANGELOG_URL = 'https://onorca.dev/changelog'
+
 const GITHUB_URL = 'https://github.com/stablyai/orca'
+
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
+
 const X_URL = 'https://x.com/orca_build'
+
 const NO_UPDATE_CHECK_MODIFIERS = {
   altKey: false,
   ctrlKey: false,
@@ -121,6 +126,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
   const handleMenuOpenChange = (open: boolean): void => {
     setMenuOpen(open)
     updateCheckModifiersRef.current = NO_UPDATE_CHECK_MODIFIERS
+
     if (open) {
       // Warm on the precursor: reading the menu and clicking Send Feedback takes hundreds of ms,
       // so the chunk is already in the module map by the time the item is selected.
@@ -135,9 +141,11 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
 
   const handleShowOnboarding = (): void => {
     const now = Date.now()
+
     if (now - lastShowOnboardingAtRef.current < 500) {
       return
     }
+
     lastShowOnboardingAtRef.current = now
     void showOnboardingFromRenderer()
   }
@@ -146,6 +154,7 @@ export function SidebarSettingsHelpMenu(): React.JSX.Element {
     if (isRestartingOrca) {
       return
     }
+
     setIsRestartingOrca(true)
     toast.info(
       translate('auto.components.sidebar.SidebarSettingsHelpMenu.5161eef55d', 'Restarting Orca…')

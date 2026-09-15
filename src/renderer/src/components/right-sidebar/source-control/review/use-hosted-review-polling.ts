@@ -47,9 +47,11 @@ export function useSourceControlHostedReviewPolling({
     if (!isBranchVisible || isFolder || !activeWorktreeId || activeWorktree?.pushTarget) {
       return
     }
+
     if (!hasResolvableReviewPushTargetLink) {
       return
     }
+
     void ensureHostedReviewPushTarget(activeWorktreeId)
   }, [
     activeWorktree?.pushTarget,
@@ -71,6 +73,7 @@ export function useSourceControlHostedReviewPolling({
     ) {
       return
     }
+
     // Why: fetch review immediately on branch change; carry a known PR number because branch lookup is lossy for fork/deleted-head PRs.
     void fetchHostedReviewForBranch(activeRepo.path, branchName, {
       repoId: activeRepo.id,

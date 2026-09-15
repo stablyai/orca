@@ -95,6 +95,7 @@ describe('Claude TUI exit', () => {
       exitCode: number | null
       signal: string | null
     }) => void
+
     const exitPromise = new Promise<{
       pid: number
       exitCode: number | null
@@ -102,7 +103,9 @@ describe('Claude TUI exit', () => {
     }>((resolve) => {
       resolveExit = resolve
     })
+
     const persistHandle = vi.fn(async () => undefined)
+
     const completion = completeClaudeTuiExit({
       childPid: 4210,
       waitForChildExit: () => exitPromise,

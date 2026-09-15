@@ -45,6 +45,7 @@ vi.mock('../telemetry/cohort-classifier', () => ({
 }))
 
 const { browserWindowMock, checkOrcaStarredMock, ipcMainHandleMock, trackMock } = mocks
+
 const getIpcHandler = createIpcHandlerLookup(mocks.ipcMainHandleMock)
 
 describe('StarNagService', () => {
@@ -159,6 +160,7 @@ describe('StarNagService', () => {
       ([name, payload]) =>
         name === 'star_nag_outcome' && (payload as { outcome?: string }).outcome === 'opened_repo'
     )
+
     expect(openedRepoOutcomes).toHaveLength(1)
   })
 

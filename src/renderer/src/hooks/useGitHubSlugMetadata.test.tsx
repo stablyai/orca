@@ -76,10 +76,13 @@ describe('useGitHubSlugMetadata', () => {
 
     function LabelsProbe(): null {
       renders += 1
+
       const metadata = useRepoLabelsBySlug('stablyai', 'orca', {
         activeRuntimeEnvironmentId: null
       })
+
       labels = metadata.data
+
       return null
     }
 
@@ -105,10 +108,13 @@ describe('useGitHubSlugMetadata', () => {
 
     function AssigneesProbe(): null {
       renders += 1
+
       const metadata = useRepoAssigneesBySlug('stablyai', 'orca', ['jinwoo'], {
         activeRuntimeEnvironmentId: null
       })
+
       assigneeLogins = metadata.data.map((user) => user.login)
+
       return null
     }
 
@@ -135,10 +141,13 @@ describe('useGitHubSlugMetadata', () => {
 
     function FailingLabelsProbe(): null {
       renders += 1
+
       const metadata = useRepoLabelsBySlug('stablyai', 'orca', {
         activeRuntimeEnvironmentId: null
       })
+
       error = metadata.error
+
       return null
     }
 
@@ -163,6 +172,7 @@ describe('useGitHubSlugMetadata', () => {
         { activeRuntimeEnvironmentId: null },
         'ghe.example.com'
       )
+
       return null
     }
 
@@ -183,10 +193,13 @@ describe('useGitHubSlugMetadata', () => {
 
     function FailingAssigneesProbe(): null {
       renders += 1
+
       const metadata = useRepoAssigneesBySlug('stablyai', 'orca', ['jinwoo'], {
         activeRuntimeEnvironmentId: null
       })
+
       error = metadata.error
+
       return null
     }
 

@@ -35,6 +35,7 @@ export function useHostWorktreeActions(args: {
     router,
     state
   } = args
+
   const {
     newWorktreeModalRef,
     newWorktreeModalVisibleRef,
@@ -54,9 +55,11 @@ export function useHostWorktreeActions(args: {
 
   const openNewWorktreeModal = useCallback(() => {
     const modal = newWorktreeModalRef.current
+
     if (!modal) {
       return
     }
+
     newWorktreeModalVisibleRef.current = true
     modal.open()
   }, [])
@@ -69,14 +72,17 @@ export function useHostWorktreeActions(args: {
     (worktreeId: string, pinned: boolean) => {
       setPinnedIds((prev) => {
         const next = new Set(prev)
+
         if (pinned) {
           next.add(worktreeId)
         } else {
           next.delete(worktreeId)
         }
+
         if (hostId) {
           void savePinnedIds(hostId, next)
         }
+
         return next
       })
     },
@@ -86,9 +92,11 @@ export function useHostWorktreeActions(args: {
   const togglePin = useCallback(
     (worktreeId: string) => {
       const worktree = worktrees.find((w) => w.worktreeId === worktreeId)
+
       const currentlyPinned = worktree
         ? isWorktreePinned(worktree, pinnedIds)
         : pinnedIds.has(worktreeId)
+
       const newPinned = !currentlyPinned
 
       setWorktrees((prev) =>
@@ -127,10 +135,12 @@ export function useHostWorktreeActions(args: {
           worktree: `id:${item.worktreeId}`,
           force: true
         })
+
         if (!response.ok) {
           setWorktrees((prev) => [...prev, item])
           setLastKnownWorktrees((prev) => [...prev, item])
         }
+
         void fetchWorktrees()
       } catch {
         setWorktrees((prev) => [...prev, item])
@@ -144,6 +154,7 @@ export function useHostWorktreeActions(args: {
     if (!hostId) {
       return
     }
+
     try {
       await removeHostAndCloseClient(hostId, forgetHostClient)
       leaveHost()
@@ -158,15 +169,20 @@ export function useHostWorktreeActions(args: {
     (target: string) => {
       if (!embedded) {
         router.push(target)
+
         return
       }
+
       if (pathname === (target.split('?')[0] ?? target)) {
         return
       }
+
       if (pathname === `/h/${hostId}`) {
         router.push(target)
+
         return
       }
+
       router.replace(target)
     },
     [embedded, hostId, pathname, router]
@@ -175,6 +191,7 @@ export function useHostWorktreeActions(args: {
   const openWorktreeSession = useCallback(
     (item: Worktree) => {
       setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
+
       if (client && connState === 'connected') {
         void client
           .sendRequest('worktree.activate', {
@@ -184,6 +201,7 @@ export function useHostWorktreeActions(args: {
           })
           .catch(() => null)
       }
+
       const target = `/h/${hostId}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}`
       navigateFromHostList(target)
     },

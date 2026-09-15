@@ -20,6 +20,7 @@ import {
 import { GROK_INLINE_STARTUP_PTY_TRACE } from './__fixtures__/grok-inline-startup-pty-trace'
 
 const QUIET_WINDOW_MS = 1500
+
 const HARD_TIMEOUT_MS = 8000
 
 function chunkData(chunk: GrokStartupTraceChunk): string {
@@ -43,21 +44,28 @@ function replayReadyAtMs(
 ): number | null {
   const scanner = createDraftPasteReadyScanner(signal)
   let quietDeadline: number | null = null
+
   for (const [index, chunk] of trace.entries()) {
     const settledAt =
       quietDeadline !== null ? Math.min(quietDeadline, HARD_TIMEOUT_MS) : HARD_TIMEOUT_MS
+
     if (chunk.t >= settledAt) {
       return quietDeadline !== null && quietDeadline <= HARD_TIMEOUT_MS ? quietDeadline : null
     }
+
     const scanned = scanner.observe(chunkData(chunk))
+
     if (scanned.ready) {
       return chunk.t
     }
+
     quietDeadline = scanned.armQuietTimer ? chunk.t + QUIET_WINDOW_MS : quietDeadline
+
     if (index === trace.length - 1 && quietDeadline !== null && quietDeadline < HARD_TIMEOUT_MS) {
       return quietDeadline
     }
   }
+
   return null
 }
 
@@ -105,6 +113,7 @@ describe('grok startup trace replay (inline mode, no alternate screen)', () => {
       { t: 0, data: '\x1b[?1049h' },
       { t: 8500, data: '\x1b[38;2;200;200;200m❯ ' }
     ]
+
     expect(replayReadyAtMs('grok-composer-prompt', lateMarker)).toBeNull()
   })
 

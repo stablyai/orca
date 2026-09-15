@@ -75,16 +75,19 @@ export function createBrowserPageWebviewNavigationHandlers({
     if (!event.isMainFrame || event.isInPlace || !event.url) {
       return
     }
+
     const browserStartedUrl = redactKagiSessionToken(event.url)
     const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl
     // Why getURL() and not lastKnownWebviewUrlRef: Orca-driven navigations point that ref at the
     // destination before assigning src, so it can't identify the document being left.
     let committedUrl: string | null = null
+
     try {
       committedUrl = webview.getURL() || null
     } catch {
       // Why: a guest that hasn't attached yet rejects getURL(); an unknown origin keeps the icon.
     }
+
     if (browserNavigationLeavesFaviconOrigin(committedUrl, startedUrl)) {
       faviconUrlRef.current = null
       onUpdatePageStateRef.current(browserTabId, { faviconUrl: null })
@@ -95,12 +98,15 @@ export function createBrowserPageWebviewNavigationHandlers({
     if (!event.isMainFrame || event.isInPlace || !event.url) {
       return
     }
+
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
     const browserStartedUrl = redactKagiSessionToken(event.url)
     const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl
+
     if (pendingRecoveryNavigation?.targetUrl === startedUrl) {
       pendingRecoveryNavigation.started = true
     }
+
     // Why here and not on did-start-loading: Chromium re-announces a favicon only when the icon URL
     // list changes, so clearing on every load strands same-origin navigations with no icon and no
     // event that would ever restore one.
@@ -119,22 +125,30 @@ export function createBrowserPageWebviewNavigationHandlers({
     if (event.isMainFrame === false) {
       return
     }
+
     const currentUrl = event.url ?? webview.getURL() ?? webview.src ?? 'about:blank'
+
     if (isChromiumErrorPage(currentUrl)) {
       return
     }
+
     const browserModelUrl = redactKagiSessionToken(currentUrl)
+
     const normalizedBrowserModelUrl =
       normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
+
     lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl
     rememberLiveBrowserUrl(browserTabId, browserModelUrl)
+
     // Why: don't overwrite in-progress typing (see above).
     if (document.activeElement !== addressBarInputRef.current) {
       setAddressBarValue(toDisplayUrl(browserModelUrl))
     }
+
     if (persistUrl) {
       onSetUrlRef.current(browserTabId, browserModelUrl, { preserveLoadError })
     }
+
     onUpdatePageStateRef.current(browserTabId, {
       title: webview.getTitle() || browserModelUrl,
       canGoBack: webview.canGoBack(),
@@ -144,17 +158,21 @@ export function createBrowserPageWebviewNavigationHandlers({
 
   const handleFullDidNavigate = (event: { url?: string; isMainFrame?: boolean }): void => {
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
+
     if (event.isMainFrame !== false && pendingRecoveryNavigation?.started) {
       pendingRecoveryNavigation.committed = true
     }
+
     const preserveRecoveryError =
       activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
+
     handleDidNavigate(event, true, preserveRecoveryError)
   }
 
   const handleDidNavigateInPage = (event: { url?: string; isMainFrame?: boolean }): void => {
     const preserveRecoveryError =
       activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
+
     handleDidNavigate(event, !preserveRecoveryError)
   }
 
@@ -178,22 +196,28 @@ export function createBrowserPageWebviewNavigationHandlers({
   const handleAnnotationViewportMessage = (event: { message?: string }): void => {
     const message = typeof event.message === 'string' ? event.message : ''
     const prefix = `${BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX}${annotationViewportBridgeTokenRef.current}:`
+
     if (!message.startsWith(prefix)) {
       return
     }
+
     try {
       const next = JSON.parse(message.slice(prefix.length)) as {
         scrollX?: unknown
         scrollY?: unknown
       }
+
       const scrollX =
         typeof next.scrollX === 'number' && Number.isFinite(next.scrollX) ? next.scrollX : 0
+
       const scrollY =
         typeof next.scrollY === 'number' && Number.isFinite(next.scrollY) ? next.scrollY : 0
+
       setBrowserOverlayViewport((current) => {
         if (current.scrollX === scrollX && current.scrollY === scrollY) {
           return current.version === 0 ? { ...current, version: 1 } : current
         }
+
         return { scrollX, scrollY, version: current.version + 1 }
       })
     } catch {

@@ -16,8 +16,11 @@ import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-cl
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 const detectAgents = vi.fn()
+
 const refreshAgents = vi.fn()
+
 const detectRemoteAgents = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
 
 globalThis.window = {
@@ -44,6 +47,7 @@ function createTestStore(initial?: Partial<AppState>) {
         ...createRuntimeDetectedAgentsSlice(...a)
       }) as AppState
   )
+
   store.setState({
     repos: [],
     worktreesByRepo: {},
@@ -51,6 +55,7 @@ function createTestStore(initial?: Partial<AppState>) {
     activeWorktreeId: null,
     ...initial
   } as Partial<AppState>)
+
   return store
 }
 
@@ -143,6 +148,7 @@ describe('createDetectedAgentsSlice WSL context', () => {
 
   it('publishes a Floating-first host probe to a later ordinary local caller', async () => {
     let resolveDetection: (agents: string[]) => void = () => {}
+
     detectAgents.mockReturnValueOnce(
       new Promise<string[]>((resolve) => {
         resolveDetection = resolve
@@ -165,6 +171,7 @@ describe('createDetectedAgentsSlice WSL context', () => {
     detectAgents.mockImplementation(async (context) =>
       context?.projectRuntime?.runtime.kind === 'wsl' ? ['claude'] : ['codex']
     )
+
     const store = createTestStore({
       repos: [makeRepo({ id: 'repo-1', path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo' })],
       activeRepoId: 'repo-1',
@@ -224,8 +231,10 @@ describe('createDetectedAgentsSlice WSL context', () => {
       if (context?.projectRuntime?.status === 'repair-required') {
         throw new Error('Project runtime requires repair before agent detection')
       }
+
       return ['claude']
     })
+
     const store = createTestStore({
       repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
       activeRepoId: 'repo-1',
@@ -416,6 +425,7 @@ describe('createDetectedAgentsSlice WSL context', () => {
       .mockReset()
       .mockResolvedValueOnce(['claude'])
       .mockRejectedValueOnce(new Error('probe failed'))
+
     const store = createTestStore({
       repos: [makeRepo({ id: 'repo-1', path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo' })],
       activeRepoId: 'repo-1',
@@ -456,11 +466,13 @@ describe('createDetectedAgentsSlice WSL context', () => {
 
   it('ignores in-flight local detection results after a project runtime switch', async () => {
     let resolveDetection: (agents: string[]) => void = () => {}
+
     detectAgents.mockReturnValueOnce(
       new Promise<string[]>((resolve) => {
         resolveDetection = resolve
       })
     )
+
     const store = createTestStore({
       repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
       activeRepoId: 'repo-1',
@@ -503,6 +515,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
               minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
             }
           : ['codex']
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -515,6 +528,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
   it('retains remote detection promises only while requests are in flight', async () => {
     const store = createTestStore()
     let resolveRemote: (ids: string[]) => void = () => {}
+
     detectRemoteAgents.mockReturnValueOnce(
       new Promise<string[]>((resolve) => {
         resolveRemote = resolve
@@ -542,6 +556,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
     const store = createTestStore()
     store.setState({ remoteDetectedAgentIds: { 'ssh-1': ['claude'] } } as Partial<AppState>)
     let resolveRemote: (ids: string[]) => void = () => {}
+
     detectRemoteAgents.mockReturnValueOnce(
       new Promise<string[]>((resolve) => {
         resolveRemote = resolve
@@ -563,6 +578,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
   it('does not restore an SSH cache entry after it is cleared mid-detection', async () => {
     const store = createTestStore()
     let resolveRemote: (ids: string[]) => void = () => {}
+
     detectRemoteAgents.mockReturnValueOnce(
       new Promise<string[]>((resolve) => {
         resolveRemote = resolve
@@ -631,6 +647,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
     let detectCalls = 0
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       let result: unknown
+
       if (method === 'status.get') {
         result = {
           runtimeId: 'remote-runtime',
@@ -646,6 +663,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
         detectCalls += 1
         result = detectCalls === 1 ? [] : ['kilo']
       }
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -666,6 +684,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
     const store = createTestStore()
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       let result: unknown
+
       if (method === 'status.get') {
         result = {
           runtimeId: 'remote-runtime',
@@ -688,6 +707,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
       } else {
         result = ['codex']
       }
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -714,7 +734,9 @@ describe('createDetectedAgentsSlice remote detection', () => {
   it('keeps a late initial detect from overwriting a runtime refresh', async () => {
     const store = createTestStore()
     let resolveDetect: (value: unknown) => void = () => {}
+
     let resolveRefresh: (value: unknown) => void = () => {}
+
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       if (method === 'status.get') {
         return Promise.resolve({
@@ -733,6 +755,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return new Promise((resolve) => {
         if (method === 'preflight.detectAgents') {
           resolveDetect = resolve
@@ -805,6 +828,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       const result =
         method === 'status.get'
           ? {
@@ -818,6 +842,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
               minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
             }
           : ['kilo']
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -852,6 +877,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       if (method === 'preflight.refreshAgents') {
         return Promise.resolve({
           id: method,
@@ -860,6 +886,7 @@ describe('createDetectedAgentsSlice remote detection', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return Promise.resolve({
         id: method,
         ok: true,

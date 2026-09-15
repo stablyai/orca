@@ -41,7 +41,9 @@ function createRichMarkdownEditor(markdown: string): Editor {
     content: markdown,
     contentType: 'markdown'
   })
+
   openEditors.push(editor)
+
   return editor
 }
 
@@ -53,6 +55,7 @@ function editorWithRunResult(runResult: boolean, markdown = 'hello world') {
   // Why: the insert path reads the real schema and document to decide whether an
   // inline image fits at the target position, so the stub borrows both.
   const { schema, state } = createRichMarkdownEditor(markdown)
+
   return { editor: { chain, schema, state }, chain, focus, insertContentAt, run }
 }
 

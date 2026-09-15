@@ -46,6 +46,7 @@ export function createBrowserScreencastSnapshotCapture(
     if (isClosed() || isStopping()) {
       return
     }
+
     clearNavigationCaptureTimer()
     const generation = ++snapshotGeneration
     // Why: static pages can finish navigation without producing a live
@@ -66,14 +67,17 @@ export function createBrowserScreencastSnapshotCapture(
     if (isSnapshotStale(initialOnly, generation)) {
       return
     }
+
     try {
       const viewportWidth = positiveInteger(options.viewportWidth)
       const viewportHeight = positiveInteger(options.viewportHeight)
       let image: Uint8Array | null = null
       await applyDeviceMetricsOverride()
+
       if (isSnapshotStale(initialOnly, generation)) {
         return
       }
+
       if (viewportWidth && viewportHeight && typeof webContents.capturePage === 'function') {
         try {
           // Why: CDP captureScreenshot can tile BrowserView surfaces under
@@ -84,9 +88,12 @@ export function createBrowserScreencastSnapshotCapture(
             width: viewportWidth,
             height: viewportHeight
           })
+
           const capture = scaleSnapshotToFit(nativeImage, options)
+
           const buffer =
             options.format === 'png' ? capture.toPNG() : capture.toJPEG(options.quality)
+
           if (buffer.byteLength > 0) {
             image = new Uint8Array(buffer)
           }
@@ -94,6 +101,7 @@ export function createBrowserScreencastSnapshotCapture(
           image = null
         }
       }
+
       // Why: Page.startScreencast may not produce a frame for an already-painted
       // blank/static page, which leaves remote browser clients showing only the shell.
       if (!image) {
@@ -116,27 +124,36 @@ export function createBrowserScreencastSnapshotCapture(
             : {}),
           captureBeyondViewport: false
         })
+
         if (isSnapshotStale(initialOnly, generation)) {
           return
         }
+
         const payload =
           result && typeof result === 'object' ? (result as Record<string, unknown>) : {}
+
         const data = typeof payload.data === 'string' ? payload.data : null
+
         if (!data) {
           return
         }
+
         image = new Uint8Array(Buffer.from(data, 'base64'))
       }
+
       if (isSnapshotStale(initialOnly, generation)) {
         return
       }
+
       const imageSize = readBrowserScreencastImageSize(image, options.format)
+
       const baseMetadata =
         viewportWidth && viewportHeight
           ? { deviceWidth: viewportWidth, deviceHeight: viewportHeight }
           : imageSize
             ? { deviceWidth: imageSize.width, deviceHeight: imageSize.height }
             : {}
+
       queueFrame({
         // Why: static pages may only produce this fallback capture. Without
         // dimensions, mobile clients stretch it to the phone aspect ratio.

@@ -25,6 +25,7 @@ describe('readRetiredNameRegistryForRepo', () => {
       retiredNamesByRepo: { 'repo-1': ['nautilus-2'] },
       retiredNameTiersByRepo: { 'repo-1': 1, 'repo-2': 3 }
     }
+
     expect(readRetiredNameRegistryForRepo(result, 'repo-1')).toEqual({
       exhaustedTiers: 1,
       names: ['nautilus-2']

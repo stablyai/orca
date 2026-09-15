@@ -48,6 +48,7 @@ function LinearProjectStatusBadge({
   project: LinearProjectPresentation
 }): React.JSX.Element {
   const label = linearProjectUnknownText(project.status) ?? 'Backlog'
+
   return (
     <Badge variant="outline" className="max-w-full truncate text-[11px] font-medium">
       {label}
@@ -119,6 +120,7 @@ export function LinearProjectTableContent({
   if (loading && projects.length === 0) {
     return <LinearProjectTableSkeleton />
   }
+
   if (projects.length === 0) {
     return <LinearProjectTableEmpty hasError={hasError} />
   }
@@ -131,6 +133,7 @@ export function LinearProjectTableContent({
         const labels = linearProjectMetadataLabels(presentation.labels, 2)
         const workspace = linearProjectWorkspaceLabel(workspaceSelection, project.workspaceName)
         const progress = linearProjectProgressPercent(presentation)
+
         return (
           <div
             key={`${project.workspaceId ?? 'workspace'}-${project.id}`}
@@ -143,6 +146,7 @@ export function LinearProjectTableContent({
               if (event.target !== event.currentTarget) {
                 return
               }
+
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault()
                 onSelectProject(project)

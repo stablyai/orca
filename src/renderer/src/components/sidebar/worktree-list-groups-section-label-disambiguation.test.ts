@@ -34,6 +34,7 @@ function buildHeaders(repos: Repo[], projects: Project[], setups: ProjectHostSet
     id: `wt-${entry.id}`,
     repoId: entry.id
   }))
+
   const rows = buildRows(
     'repo',
     worktrees,
@@ -54,6 +55,7 @@ function buildHeaders(repos: Repo[], projects: Project[], setups: ProjectHostSet
     [],
     { projects, projectHostSetups: setups }
   )
+
   return rows.filter((row) => row.type === 'header')
 }
 

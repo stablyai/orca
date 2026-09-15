@@ -24,12 +24,15 @@ export function getPaletteOwnershipWorktreeIds(
 export function findDuplicateIds(items: readonly { id: string }[]): ReadonlySet<string> {
   const seen = new Set<string>()
   const duplicates = new Set<string>()
+
   for (const item of items) {
     if (seen.has(item.id)) {
       duplicates.add(item.id)
     }
+
     seen.add(item.id)
   }
+
   return duplicates
 }
 
@@ -59,9 +62,11 @@ export function isUnifiedTabOwnedByWorktree(
   if (!tab || tab.worktreeId !== worktree.id) {
     return false
   }
+
   if (tab.executionHostId) {
     return isExecutionHostAliasForWorktree(tab.executionHostId, worktree)
   }
+
   return !ambiguousWorktreeIds.has(worktree.id)
 }
 
@@ -75,19 +80,24 @@ export function isOpenFileOwnedByWorktree(
   if (file.worktreeId !== worktree.id) {
     return false
   }
+
   const operationHost = file.operationProvenance?.generation.route.executionHostId
+
   if (operationHost) {
     return isExecutionHostAliasForWorktree(operationHost, worktree)
   }
+
   if (file.externalSshTargetId) {
     return isExecutionHostAliasForWorktree(toSshExecutionHostId(file.externalSshTargetId), worktree)
   }
+
   if (file.runtimeEnvironmentId) {
     return isExecutionHostAliasForWorktree(
       toRuntimeExecutionHostId(file.runtimeEnvironmentId),
       worktree
     )
   }
+
   return isExecutionHostAliasForWorktree(LOCAL_EXECUTION_HOST_ID, worktree)
 }
 
@@ -104,8 +114,10 @@ export function getUnifiedTabPaletteExecutionHostId(
   if (!tab) {
     return worktree.hostId
   }
+
   if (tab.executionHostId && isExecutionHostAliasForWorktree(tab.executionHostId, worktree)) {
     return tab.executionHostId
   }
+
   return worktree.hostId
 }

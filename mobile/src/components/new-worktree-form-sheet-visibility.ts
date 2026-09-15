@@ -10,6 +10,7 @@ export function resolveNewWorktreeFormSheetVisible(input: {
   if (!input.modalVisible) {
     return false
   }
+
   return (
     input.drawerView === 'form' ||
     input.drawerView === 'source' ||

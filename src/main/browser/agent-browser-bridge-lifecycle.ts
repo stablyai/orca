@@ -8,10 +8,13 @@ import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-bridge-types'
 export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawProcess {
   async onTabClosed(webContentsId: number): Promise<void> {
     const browserPageId = this.resolveTabIdSafe(webContentsId)
+
     const owningWorktreeId = browserPageId
       ? this.browserManager.getWorktreeIdForTab(browserPageId)
       : undefined
+
     let nextWorktreeActiveWebContentsId: number | null = null
+
     if (
       owningWorktreeId &&
       this.activeWebContentsPerWorktree.get(owningWorktreeId) === webContentsId
@@ -21,12 +24,15 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
         webContentsId
       )
     }
+
     if (this.activeWebContentsId === webContentsId) {
       this.activeWebContentsId = nextWorktreeActiveWebContentsId
     }
+
     if (browserPageId) {
       await this.onPageClosed(browserPageId)
     }
+
     this.options.onTabsChanged?.(owningWorktreeId)
   }
 
@@ -53,14 +59,18 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     const session = this.sessions.get(sessionName)
     const oldWebContentsId = previousWebContentsId ?? session?.webContentsId
     const owningWorktreeId = this.browserManager.getWorktreeIdForTab(browserPageId)
+
     // Why: save intercept patterns before destroy so the new session can restore them after init.
     if (session && session.activeInterceptPatterns.length > 0) {
       this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
     }
+
     await this.destroySession(sessionName)
+
     if (oldWebContentsId != null && this.activeWebContentsId === oldWebContentsId) {
       this.activeWebContentsId = newWebContentsId
     }
+
     if (
       owningWorktreeId &&
       oldWebContentsId != null &&
@@ -68,6 +78,7 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     ) {
       this.activeWebContentsPerWorktree.set(owningWorktreeId, newWebContentsId)
     }
+
     this.options.onTabsChanged?.(owningWorktreeId ?? undefined)
   }
   protected async ensureSession(
@@ -76,9 +87,11 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     webContentsId: number
   ): Promise<void> {
     const pendingDestruction = this.pendingSessionDestruction.get(sessionName)
+
     if (pendingDestruction) {
       await pendingDestruction
     }
+
     this.assertCommandAdmission()
 
     if (this.sessions.has(sessionName)) {
@@ -87,14 +100,17 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
 
     // Why: without this lock, two concurrent calls both create proxies and the second leaks the first's server/debugger.
     const pending = this.pendingSessionCreation.get(sessionName)
+
     if (pending) {
       await pending
       this.assertCommandAdmission()
+
       return
     }
 
     const createSession = async (): Promise<void> => {
       const wc = this.getWebContents(webContentsId)
+
       if (!wc) {
         // Why: the webview can be destroyed between target resolution and session creation — keep the same closed-tab error shape.
         throw new BrowserError(
@@ -124,6 +140,7 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
 
     const promise = createSession()
     this.pendingSessionCreation.set(sessionName, promise)
+
     try {
       await promise
     } finally {
@@ -138,24 +155,30 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     options: { recreate: boolean } = { recreate: true }
   ): Promise<void> {
     const pendingCreation = this.pendingSessionCreation.get(sessionName)
+
     if (pendingCreation) {
       await pendingCreation.catch(() => {})
     }
 
     const session = this.sessions.get(sessionName)
+
     if (session) {
       if (session.activeInterceptPatterns.length > 0) {
         this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
       }
+
       this.sessions.delete(sessionName)
       this.pendingSessionCreation.delete(sessionName)
+
       if (session.activeProcess) {
         this.cancelledProcesses.add(session.activeProcess)
+
         try {
           session.activeProcess.kill()
         } catch {
           // Process may already be exiting.
         }
+
         session.activeProcess = null
       }
 
@@ -167,9 +190,12 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
         } catch {
           // Session may already be dead.
         }
+
         await session.proxy.stop()
       })()
+
       this.pendingSessionDestruction.set(sessionName, destroy)
+
       try {
         await destroy
       } finally {
@@ -187,12 +213,15 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     options: AgentBrowserCleanupOptions = { closeTimeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS }
   ): Promise<void> {
     const pendingDestruction = this.pendingSessionDestruction.get(sessionName)
+
     if (pendingDestruction) {
       await pendingDestruction
+
       return
     }
 
     const pendingCreation = this.pendingSessionCreation.get(sessionName)
+
     if (pendingCreation) {
       // Why: tab close can race session creation before sessions.set(); await it so no late proxy survives the close.
       try {
@@ -203,8 +232,10 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     }
 
     const session = this.sessions.get(sessionName)
+
     if (!session) {
       this.rejectQueuedCommandsForClosedSession(sessionName)
+
       return
     }
 
@@ -217,11 +248,13 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     if (session.activeProcess) {
       // Why: rejecting the queue isn't enough for an in-flight command — kill the process so callers don't wait out the exec timeout.
       this.cancelledProcesses.add(session.activeProcess)
+
       try {
         session.activeProcess.kill()
       } catch {
         // Process may already be exiting.
       }
+
       session.activeProcess = null
     }
 
@@ -240,7 +273,9 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
 
       await session.proxy.stop()
     })()
+
     this.pendingSessionDestruction.set(sessionName, destroy)
+
     try {
       await destroy
     } finally {
@@ -252,14 +287,17 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     const queue = this.commandQueues.get(sessionName)
     this.commandQueues.delete(sessionName)
     this.processingQueues.delete(sessionName)
+
     if (queue) {
       const err = new BrowserError(
         'browser_tab_closed',
         'Tab was closed while commands were queued'
       )
+
       for (const cmd of queue) {
         cmd.reject(err)
       }
+
       queue.length = 0
     }
   }

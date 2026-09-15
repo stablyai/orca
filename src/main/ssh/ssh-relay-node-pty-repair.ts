@@ -46,14 +46,19 @@ export function relayNodePtyRepairAttempts(targetId: string): ReadonlySet<string
 /** False when this host has already spent its attempt on this reason. Marks on success. */
 function claimRepairAttempt(targetId: string, reason: string): boolean {
   const spent = attemptedRepairsByTarget.get(targetId)
+
   if (spent) {
     if (spent.has(reason)) {
       return false
     }
+
     spent.add(reason)
+
     return true
   }
+
   attemptedRepairsByTarget.set(targetId, new Set([reason]))
+
   return true
 }
 
@@ -79,27 +84,33 @@ export async function recoverRelayNodePtyForSpawn<TProvider>(
   request: RelayNodePtyRepairRequest<TProvider>
 ): Promise<{ outcome: RelayNodePtyRepairOutcome; provider: TProvider | null }> {
   const { targetId, cause } = request
+
   if (!mayRepairFromCause(cause) || !cause) {
     return { outcome: 'not-repairable', provider: null }
   }
+
   // Why check before claiming: a live PTY means the rebuild's blast radius is unaccounted for, and
   // that is a reason to wait, not a spent attempt. Costs nothing remote, so it cannot loop.
   if (request.hasLivePtys()) {
     console.warn(
       `[ssh-relay-repair] Not rebuilding node-pty on ${targetId} for ${cause.reason}: the relay is still serving PTYs`
     )
+
     return { outcome: 'ptys-live', provider: null }
   }
+
   if (!claimRepairAttempt(targetId, cause.reason)) {
     console.warn(
       `[ssh-relay-repair] node-pty repair for ${cause.reason} on ${targetId} already ran; not retrying`
     )
+
     return { outcome: 'already-attempted', provider: null }
   }
 
   console.warn(
     `[ssh-relay-repair] Reconnecting ${targetId} once to rebuild node-pty (${cause.reason}): ${cause.detail}`
   )
+
   try {
     await request.reconnect()
   } catch (error) {
@@ -108,8 +119,11 @@ export async function recoverRelayNodePtyForSpawn<TProvider>(
         error instanceof Error ? error.message : String(error)
       }`
     )
+
     return { outcome: 'reconnect-failed', provider: null }
   }
+
   const provider = request.resolveProvider()
+
   return provider ? { outcome: 'repaired', provider } : { outcome: 'no-provider', provider: null }
 }

@@ -16,13 +16,16 @@ describe('OrcaRuntimeService', () => {
       source: 'headless'
       alternateScreen: boolean
     }
+
     let resolveSnapshot!: (snapshot: Snapshot) => void
+
     const serializeProviderBuffer = vi.fn(
       () =>
         new Promise<Snapshot>((resolve) => {
           resolveSnapshot = resolve
         })
     )
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -67,7 +70,9 @@ describe('OrcaRuntimeService', () => {
       source: 'headless'
       alternateScreen: boolean
     }
+
     let resolveSnapshot!: (snapshot: Snapshot) => void
+
     const serializeProviderBuffer = vi
       .fn()
       .mockResolvedValueOnce(null)
@@ -77,6 +82,7 @@ describe('OrcaRuntimeService', () => {
             resolveSnapshot = resolve
           })
       )
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -121,13 +127,16 @@ describe('OrcaRuntimeService', () => {
       source: 'headless'
       alternateScreen: boolean
     }
+
     let resolveSnapshot!: (snapshot: Snapshot) => void
+
     const serializeProviderBuffer = vi.fn(
       () =>
         new Promise<Snapshot>((resolve) => {
           resolveSnapshot = resolve
         })
     )
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -226,11 +235,13 @@ describe('OrcaRuntimeService', () => {
         alternateScreen: true
       })
       .mockRejectedValue(new Error('provider unavailable'))
+
     const serializeBuffer = vi.fn().mockResolvedValue({
       data: '\x1b[?1049h\x1b[2J\x1b[HRenderer TUI\r\n',
       cols: 80,
       rows: 24
     })
+
     let rendererMounted = false
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -263,6 +274,7 @@ describe('OrcaRuntimeService', () => {
 
   it('bounds a stuck provider snapshot and shares the timed-out request', async () => {
     vi.useFakeTimers()
+
     try {
       const serializeProviderBuffer = vi.fn(() => new Promise<never>(() => undefined))
       const runtime = new OrcaRuntimeService(store)
@@ -286,6 +298,7 @@ describe('OrcaRuntimeService', () => {
         runtime.readTerminal(terminal.handle),
         runtime.showTerminal(terminal.handle)
       ])
+
       await vi.advanceTimersByTimeAsync(750)
       const [read, shown] = await reads
 
@@ -306,13 +319,16 @@ describe('OrcaRuntimeService', () => {
       source: 'headless'
       alternateScreen: boolean
     }
+
     let resolveSnapshot!: (snapshot: Snapshot) => void
+
     const serializeProviderBuffer = vi.fn(
       () =>
         new Promise<Snapshot>((resolve) => {
           resolveSnapshot = resolve
         })
     )
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -360,13 +376,16 @@ describe('OrcaRuntimeService', () => {
       source: 'headless'
       alternateScreen: boolean
     }
+
     let resolveSnapshot!: (snapshot: Snapshot) => void
+
     const serializeProviderBuffer = vi.fn(
       () =>
         new Promise<Snapshot>((resolve) => {
           resolveSnapshot = resolve
         })
     )
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -409,7 +428,9 @@ describe('OrcaRuntimeService', () => {
       'E'.repeat(49),
       'F'.repeat(50)
     ]
+
     const expectedTail = visibleLines.slice(-6)
+
     const serializeProviderBuffer = vi.fn().mockResolvedValue({
       data: `\x1b[?1049h\x1b[2J\x1b[H${visibleLines.join('\r\n')}\r\n`,
       cols: 80,
@@ -418,6 +439,7 @@ describe('OrcaRuntimeService', () => {
       source: 'headless',
       alternateScreen: true
     })
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -450,6 +472,7 @@ describe('OrcaRuntimeService', () => {
       cols: 80,
       rows: 24
     })
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -469,9 +492,11 @@ describe('OrcaRuntimeService', () => {
     )
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(response.result).toMatchObject({
       terminal: {
         handle: terminal.handle,
@@ -512,6 +537,7 @@ describe('OrcaRuntimeService', () => {
       cols: 80,
       rows: 24
     })
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -545,6 +571,7 @@ describe('OrcaRuntimeService', () => {
       source: 'headless',
       alternateScreen: true
     })
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -577,6 +604,7 @@ describe('OrcaRuntimeService', () => {
       cols: 80,
       rows: 24
     })
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -604,6 +632,7 @@ describe('OrcaRuntimeService', () => {
       cols: 80,
       rows: 24
     })
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,

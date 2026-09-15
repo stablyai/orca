@@ -15,16 +15,20 @@ import type { AppPathName } from '../../shared/app-environment'
 /** Empty is unset: a supervisor that exports `APPDATA=` has configured nothing. */
 function env(name: string): string | null {
   const value = process.env[name]
+
   return value ? value : null
 }
 
 /** XDG-ish data root. `$ORCA_USER_DATA` wins so a smoke test can isolate state. */
 export function resolveUserDataPath(): string {
   const explicit = env('ORCA_USER_DATA')
+
   if (explicit) {
     return explicit
   }
+
   const xdg = env('XDG_DATA_HOME')
+
   return xdg ? join(xdg, 'Orca') : join(homedir(), '.orca')
 }
 
@@ -33,9 +37,11 @@ function resolveAppDataPath(): string {
   if (process.platform === 'darwin') {
     return join(homedir(), 'Library', 'Application Support')
   }
+
   if (process.platform === 'win32') {
     return env('APPDATA') ?? join(homedir(), 'AppData', 'Roaming')
   }
+
   return env('XDG_CONFIG_HOME') ?? join(homedir(), '.config')
 }
 
@@ -54,6 +60,7 @@ export function resolveOrcadInstallRoot(scriptPath = process.argv[1]): string {
         'bundle root to resolve sibling entry points against'
     )
   }
+
   return dirname(resolve(scriptPath))
 }
 

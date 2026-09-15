@@ -2,22 +2,27 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(new URL('./use-mobile-dictation.ts', import.meta.url), 'utf8')
+
 const audioChunkSource = readFileSync(
   new URL('./mobile-dictation-audio-chunk.ts', import.meta.url),
   'utf8'
 )
+
 const keepAwakeSource = readFileSync(
   new URL('./mobile-dictation-keep-awake.ts', import.meta.url),
   'utf8'
 )
+
 const desktopStartSource = readFileSync(
   new URL('./mobile-dictation-desktop-start.ts', import.meta.url),
   'utf8'
 )
+
 const sessionStateSource = readFileSync(
   new URL('./mobile-dictation-session-state.ts', import.meta.url),
   'utf8'
 )
+
 const foregroundKeepAwakeSource = readFileSync(
   new URL('./mobile-dictation-foreground-keep-awake.ts', import.meta.url),
   'utf8'
@@ -28,6 +33,7 @@ function sliceSource(sourceText: string, startPattern: string, endPattern: strin
   expect(start).toBeGreaterThanOrEqual(0)
   const end = sourceText.indexOf(endPattern, start)
   expect(end).toBeGreaterThan(start)
+
   return sourceText.slice(start, end)
 }
 
@@ -45,6 +51,7 @@ describe('useMobileDictation source invariants', () => {
       'const clientRef = useRef(client)',
       'useLayoutEffect(() => {'
     )
+
     expect(refDeclarations).not.toContain('.current =')
 
     const mirrorEffect = sliceBetween('useLayoutEffect(() => {', 'const reportError =')
@@ -104,13 +111,16 @@ describe('useMobileDictation source invariants', () => {
 
   it('acquires keep-awake only after desktop start and stale-start guards', () => {
     const hookStartBody = sliceBetween('const start = useCallback(async () => {', 'const stop =')
+
     const startBody = sliceDesktopStartBetween(
       'export async function startMobileDictationDesktopSession',
       '  return true'
     )
+
     const desktopStartIndex = startBody.indexOf(
       "client.sendRequest('speech.dictation.start', { dictationId })"
     )
+
     const acquireIndex = startBody.indexOf('.acquire(dictationId)')
     const desktopSessionIndex = hookStartBody.indexOf('await startMobileDictationDesktopSession')
     const toggleRecordingIndex = hookStartBody.indexOf('toggleRecording(true)')
@@ -137,6 +147,7 @@ describe('useMobileDictation source invariants', () => {
       'export async function startMobileDictationDesktopSession',
       '  return true'
     )
+
     const acquireIndex = startBody.indexOf('.acquire(dictationId)')
     const returnStartedIndex = startBody.indexOf('return true')
     const afterAcquire = startBody.slice(acquireIndex, returnStartedIndex)
@@ -153,6 +164,7 @@ describe('useMobileDictation source invariants', () => {
       'async function cancelStaleStart',
       'export async function startMobileDictationDesktopSession'
     )
+
     expect(cancelStaleStartBody).toContain(
       "client.sendRequest('speech.dictation.cancel', { dictationId })"
     )
@@ -165,6 +177,7 @@ describe('useMobileDictation source invariants', () => {
       'export async function startMobileDictationDesktopSession',
       '  return true'
     )
+
     const acquireIndex = startBody.indexOf('.acquire(dictationId)')
     expect(acquireIndex).toBeGreaterThanOrEqual(0)
     const staleCheckIndex = startBody.indexOf('isCurrentStart(options)', acquireIndex)
@@ -181,6 +194,7 @@ describe('useMobileDictation source invariants', () => {
       'const closeDictationAudio = useCallback(',
       'const failActiveDictation ='
     )
+
     expect(closeAudio.indexOf('toggleRecording(false)')).toBeLessThan(
       closeAudio.indexOf('void keepAwakeOwner.release')
     )
@@ -228,6 +242,7 @@ describe('useMobileDictation source invariants', () => {
       'reacquire(dictationId: string)',
       'release(dictationId?: string)'
     )
+
     expect(reacquireBody.indexOf('await activateTrackedTag(tag,')).toBeGreaterThanOrEqual(0)
     expect(reacquireBody.indexOf('deactivateTrackedTag(tag)')).toBeGreaterThanOrEqual(0)
     expect(reacquireBody.indexOf('deactivateTrackedTag(tag)')).toBeLessThan(
@@ -240,6 +255,7 @@ describe('useMobileDictation source invariants', () => {
       'const closeDictationAudio = useCallback(',
       'const failActiveDictation ='
     )
+
     const toggleIndex = closeAudio.indexOf('toggleRecording(false)')
     const catchIndex = closeAudio.indexOf('} catch', toggleIndex)
     const releaseIndex = closeAudio.indexOf('void keepAwakeOwner.release')
@@ -259,6 +275,7 @@ describe('useMobileDictation source invariants', () => {
       "addExpoTwoWayAudioEventListener('onAudioInterruption'",
       'return () => sub.remove()'
     )
+
     const disabledEffect = sliceBetween(
       'useEffect(() => {\n    if (!enabled) {',
       '  }, [cancel, enabled])'

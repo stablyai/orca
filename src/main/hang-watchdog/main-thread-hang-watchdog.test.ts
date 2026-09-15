@@ -18,9 +18,11 @@ vi.mock('node:worker_threads', () => ({
   Worker: class WorkerMock {
     constructor(...args: unknown[]) {
       workerState.calls.push(args)
+
       if (workerState.error) {
         throw workerState.error
       }
+
       return workerState.instance as WorkerMock
     }
   }
@@ -35,6 +37,7 @@ import { installMainThreadHangWatchdog } from './main-thread-hang-watchdog'
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return run()
   } finally {
@@ -98,11 +101,14 @@ describe('installMainThreadHangWatchdog', () => {
   it('starts a worker with pid, marker, and timing config', () => {
     const worker = fakeWorker()
     workerState.instance = worker
+
     const handle = withPlatform('darwin', () =>
       installMainThreadHangWatchdog({ userDataPath: '/ud' })
     )
+
     expect(handle).not.toBeNull()
     const [workerPath, rawOptions] = workerState.calls[0]
+
     const options = rawOptions as {
       name: string
       workerData: {
@@ -112,6 +118,7 @@ describe('installMainThreadHangWatchdog', () => {
         checkIntervalMs: number
       }
     }
+
     expect(workerPath).toBe(
       join('/apps/orca/app.asar', 'out', 'main', 'main-thread-hang-watchdog-entry.js')
     )
@@ -128,9 +135,11 @@ describe('installMainThreadHangWatchdog', () => {
   it('sends heartbeats on an interval and shutdown on stop', () => {
     const worker = fakeWorker()
     workerState.instance = worker
+
     const handle = withPlatform('darwin', () =>
       installMainThreadHangWatchdog({ userDataPath: '/ud' })
     )
+
     vi.advanceTimersByTime(6_000)
     const heartbeats = worker.postMessage.mock.calls.filter(([m]) => m.type === 'heartbeat')
     expect(heartbeats.length).toBe(3)
@@ -143,9 +152,11 @@ describe('installMainThreadHangWatchdog', () => {
     expect(shutdowns.length).toBe(1)
 
     vi.advanceTimersByTime(10_000)
+
     const heartbeatsAfterStop = worker.postMessage.mock.calls.filter(
       ([m]) => m.type === 'heartbeat'
     )
+
     expect(heartbeatsAfterStop.length).toBe(3)
   })
 
@@ -154,9 +165,11 @@ describe('installMainThreadHangWatchdog', () => {
     process.env.ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS = '100'
     workerState.instance = fakeWorker()
     withPlatform('darwin', () => installMainThreadHangWatchdog({ userDataPath: '/ud' }))
+
     const options = workerState.calls[0][1] as {
       workerData: { timeoutMs: number; checkIntervalMs: number }
     }
+
     expect(options.workerData).toMatchObject({ timeoutMs: 900, checkIntervalMs: 100 })
   })
 

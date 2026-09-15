@@ -21,20 +21,25 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('node:fs/promises', () => ({ mkdir: mocks.mkdir }))
+
 vi.mock('./git/worktree', () => ({ listWorktreeGraph: mocks.listWorktreeGraph }))
+
 vi.mock('./git/worktree-create-preparation', () => ({
   prepareWorktreeCreateCheckout: mocks.prepareCheckout,
   finalizePreparedWorktree: mocks.finalize,
   discardPreparedWorktree: mocks.discard,
   unlockPreparedWorktree: mocks.unlock
 }))
+
 vi.mock('./git/worktree-base-ref-probe', () => ({
   resolveLocalWorktreeBaseRef: mocks.resolveBaseRef
 }))
+
 vi.mock('./project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: mocks.getWorktreeOptions,
   getWorktreeMirrorDistro: mocks.getMirrorDistro
 }))
+
 vi.mock('./wsl', async (importOriginal) => ({
   ...(await importOriginal<typeof WslModule>()),
   getWslHome: mocks.getWslHome,
@@ -54,11 +59,17 @@ import {
 } from './worktree-create-preparation'
 
 const WSL_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\jin'
+
 const MIRRORED_ROOT = `${WSL_HOME}\\orca\\workspaces`
+
 const repo = { id: 'repo-1', path: `${WSL_HOME}\\src\\repo` } as Repo
+
 const windowsRepo = { id: 'repo-2', path: 'C:\\src\\repo' } as Repo
+
 const settings = { workspaceDir: 'C:\\workspaces', nestWorkspaces: false }
+
 const store = { getSettings: () => settings } as unknown as Store
+
 const originalPlatform = process.platform
 
 /** The consume side exactly as createLocalWorktree builds it (worktree-remote.ts). */
@@ -68,6 +79,7 @@ function consumeSideRoots(target: Repo): { workspaceRoot: string; worktreePath: 
     settings,
     getWorktreeMirrorDistro(store as never, target)
   )
+
   return {
     workspaceRoot: computeWorkspaceRoot(target.path, pathSettings),
     worktreePath: computeWorktreePath('feature', target.path, pathSettings)
@@ -110,6 +122,7 @@ describe('worktree create preparation with the real WSL workspace-root resolver'
 
     // createLocalWorktree still resolves the root synchronously, off the cache the probe warmed.
     mocks.getWslHome.mockReturnValue(WSL_HOME)
+
     const result = await consumePreparedWorktreeCreate({
       repoPath: repo.path,
       ...consumeSideRoots(repo),
@@ -130,6 +143,7 @@ describe('worktree create preparation with the real WSL workspace-root resolver'
     expect(mocks.prepareCheckout.mock.calls[0]?.[1]).toContain(MIRRORED_ROOT)
 
     mocks.getWslHome.mockReturnValue(WSL_HOME)
+
     const result = await consumePreparedWorktreeCreate({
       repoPath: windowsRepo.path,
       ...consumeSideRoots(windowsRepo),

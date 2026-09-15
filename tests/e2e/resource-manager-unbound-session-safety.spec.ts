@@ -46,12 +46,15 @@ async function collectBoundSessionIds(page: Page): Promise<string[]> {
     ),
     getStoreState<Record<string, string>>(page, 'deferredSshSessionIdsByTabId')
   ])
+
   const bound = new Set<string>()
+
   for (const ids of Object.values(ptyIdsByTabId ?? {})) {
     for (const id of ids ?? []) {
       bound.add(id)
     }
   }
+
   for (const tabs of Object.values(tabsByWorktree ?? {})) {
     for (const tab of tabs ?? []) {
       if (tab.ptyId) {
@@ -59,14 +62,17 @@ async function collectBoundSessionIds(page: Page): Promise<string[]> {
       }
     }
   }
+
   for (const layout of Object.values(layouts ?? {})) {
     for (const id of Object.values(layout?.ptyIdsByLeafId ?? {})) {
       bound.add(id)
     }
   }
+
   for (const id of Object.values(deferredSsh ?? {})) {
     bound.add(id)
   }
+
   return [...bound]
 }
 
@@ -76,8 +82,10 @@ test.describe('Resource Manager unbound-session safety', () => {
   test('a warm-reattached session is bound after restore, so orphan cleanup cannot target it', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
   {}, testInfo) => {
     const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+
     if (!repoPath || !existsSync(repoPath)) {
       test.skip(true, 'Global setup did not produce a seeded test repo')
+
       return
     }
 
@@ -96,6 +104,7 @@ test.describe('Resource Manager unbound-session safety', () => {
       const hasPaneManager = await waitForActiveTerminalManager(firstLaunch.page, 30_000)
         .then(() => true)
         .catch(() => false)
+
       test.skip(
         !hasPaneManager,
         'Electron automation in this environment never mounts the TerminalPane manager.'
@@ -106,6 +115,7 @@ test.describe('Resource Manager unbound-session safety', () => {
       const firstLaunchSessions = await firstLaunch.page.evaluate(async () =>
         window.api.pty.listSessions()
       )
+
       expect(firstLaunchSessions.some((s) => s.id === ptyId)).toBe(true)
 
       // The daemon is a detached fork, so this PTY outlives the GUI — the #8459 precondition.
@@ -123,6 +133,7 @@ test.describe('Resource Manager unbound-session safety', () => {
           async () =>
             secondLaunch.page.evaluate(async (expected: string) => {
               const sessions = await window.api.pty.listSessions()
+
               return sessions.some((s) => s.id === expected)
             }, ptyId),
           {
@@ -155,8 +166,10 @@ test.describe('Resource Manager unbound-session safety', () => {
       // Asserting the exact arm matters — a stub returning a constant would satisfy a typeof check.
       const ownership = await secondLaunch.page.evaluate(async (expected: string) => {
         const sessions = await window.api.pty.listSessions()
+
         return sessions.filter((s) => s.id === expected).map((s) => s.agentOwnership)
       }, ptyId)
+
       expect(
         ownership,
         'pty:listSessions did not report a valid agentOwnership arm across the real IPC boundary'
@@ -176,9 +189,11 @@ test.describe('Resource Manager unbound-session safety', () => {
       if (firstApp) {
         await session.close(firstApp).catch(() => {})
       }
+
       if (secondApp) {
         await session.close(secondApp).catch(() => {})
       }
+
       await session.dispose()
     }
   })

@@ -49,6 +49,7 @@ function createDividerDragHarness(): DividerDragHarness {
   const animationFrames = new Map<number, FrameRequestCallback>()
   const previousPane = createPaneElement(100)
   const nextPane = createPaneElement(300)
+
   const divider = {
     style: { setProperty: vi.fn() },
     classList: { add: vi.fn(), remove: vi.fn() },
@@ -66,6 +67,7 @@ function createDividerDragHarness(): DividerDragHarness {
     previousElementSibling: previousPane,
     nextElementSibling: nextPane
   } as unknown as HTMLElement
+
   vi.stubGlobal('document', { createElement: vi.fn(() => divider) })
   vi.stubGlobal('window', {
     addEventListener: vi.fn((event: string, listener: EventListener) => {
@@ -83,6 +85,7 @@ function createDividerDragHarness(): DividerDragHarness {
     vi.fn((callback: FrameRequestCallback) => {
       nextFrameId += 1
       animationFrames.set(nextFrameId, callback)
+
       return nextFrameId
     })
   )
@@ -126,6 +129,7 @@ function startMouseDrag(harness: DividerDragHarness): void {
 // The mirror of STRAY_TOUCH: a mouse keeps its own primary while a finger
 // already owns the divider, and needs no contact with the divider strip.
 const TOUCH_DRAG = { pointerId: 7, pointerType: 'touch', isPrimary: true } as const
+
 const STRAY_MOUSE = { pointerId: 51, pointerType: 'mouse', isPrimary: true } as const
 
 function startTouchDrag(harness: DividerDragHarness): void {

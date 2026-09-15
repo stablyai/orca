@@ -1,6 +1,7 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { TaskPageListChrome } from './ListChrome'
 import { TaskPageContent } from './Content'
+
 export function TaskPageFrame({
   model
 }: {

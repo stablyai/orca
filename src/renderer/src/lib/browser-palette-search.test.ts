@@ -99,11 +99,13 @@ describe('browser-palette-search', () => {
       ],
       ''
     )
+
     expect(result.executionHostId).toBe('ssh:box')
   })
 
   it('carries the page favicon into palette results', () => {
     const faviconUrl = 'https://example.com/favicon.ico'
+
     const [result] = searchBrowserPages(
       [
         makeEntry({
@@ -445,6 +447,7 @@ describe('browser-palette-search', () => {
 
   it('rejects a query with more unique tokens than the matcher accepts', () => {
     const query = Array.from({ length: PALETTE_QUERY_MAX_TOKENS + 1 }, (_, i) => `t${i}`).join(' ')
+
     const entries = [
       makeEntry({
         page: makePage({ id: 'page-1', title: 'Docs' }),
@@ -462,6 +465,7 @@ describe('browser-palette-search', () => {
 
   it('rejects oversized pasted queries before scanning browser pages', () => {
     const oversizedQuery = 'secret-browser-palette'.repeat(BROWSER_PALETTE_QUERY_MAX_BYTES)
+
     const entry = {
       get page(): BrowserPage {
         throw new Error('oversized browser palette queries must not scan pages')
@@ -495,6 +499,7 @@ describe('browser-palette-search', () => {
       displayName: undefined as unknown as string,
       branch: 'refs/heads/feature/browser-search'
     })
+
     const entries = [
       makeEntry({
         page: makePage(),
@@ -520,6 +525,7 @@ describe('browser-palette-search', () => {
       branch: undefined as unknown as string,
       path: '/repos/design-review'
     })
+
     const entries = [
       makeEntry({
         page: makePage(),

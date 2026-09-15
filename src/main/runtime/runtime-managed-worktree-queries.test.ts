@@ -61,6 +61,7 @@ describe('RuntimeManagedWorktreeQueries.listDetected', () => {
     const remote = folderRepo({ connectionId: 'build-box', displayName: 'Remote app' })
     const rootId = `${local.id}::${local.path}`
     const foreignMeta = metadata({ displayName: 'Wrong host', hostId: 'ssh:build-box' })
+
     const store = {
       getRepos: () => [local, remote],
       getRepo: () => local,
@@ -83,6 +84,7 @@ describe('RuntimeManagedWorktreeQueries.listDetected', () => {
 
   it('omits host-owned source defaults for clients that do not support them', async () => {
     const repo = folderRepo({ path: '/source/app' })
+
     const store = {
       getRepos: () => [repo],
       getRepo: () => repo,
@@ -123,6 +125,7 @@ describe('RuntimeManagedWorktreeQueries.list host scope', () => {
       connectionId: 'conn-1',
       path: '/home/dev/app'
     })
+
     return {
       getRepos: () => [repo],
       getRepo: () => repo,
@@ -146,6 +149,7 @@ describe('RuntimeManagedWorktreeQueries.list host scope', () => {
 
   it('does not report the scoped host as omitted once it contributes rows', async () => {
     const store = sshStore()
+
     const result = await queries(store, {
       listResolved: async () =>
         [
@@ -175,6 +179,7 @@ describe('RuntimeManagedWorktreeQueries.list host scope', () => {
   // the wrong one would be worse than naming none. These pin both.
   it('names the local host for a scoped local repo', async () => {
     const repo = folderRepo({ id: 'repo-local', kind: 'git', path: '/workspace/local' })
+
     const store = {
       getRepos: () => [repo],
       getRepo: () => repo,
@@ -198,6 +203,7 @@ describe('RuntimeManagedWorktreeQueries.list host scope', () => {
       executionHostId: 'runtime:env-1',
       path: '/workspace/runtime'
     })
+
     const store = {
       getRepos: () => [repo],
       getRepo: () => repo,

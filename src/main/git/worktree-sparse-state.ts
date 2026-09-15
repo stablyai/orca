@@ -14,9 +14,11 @@ export async function detectSparseCheckout(
   try {
     const gitDir = await resolveGitDir(worktreePath, options)
     const stats = await stat(join(gitDir, 'info', 'sparse-checkout'))
+
     if (!stats.isFile() || stats.size === 0) {
       return false
     }
+
     // Why the extra config read: `git sparse-checkout disable` restores every file to the
     // working tree and sets core.sparseCheckout=false, but it deliberately LEAVES
     // <gitdir>/info/sparse-checkout in place so the checkout can be re-enabled with the same
@@ -38,12 +40,14 @@ export async function detectSparseCheckout(
 export async function resolveGitCommonDir(gitDir: string): Promise<string> {
   try {
     const raw = (await readFile(join(gitDir, 'commondir'), 'utf-8')).trim()
+
     if (raw.length > 0) {
       return isAbsolute(raw) ? raw : resolve(gitDir, raw)
     }
   } catch {
     // No `commondir` file: this gitdir is already the common dir.
   }
+
   return gitDir
 }
 
@@ -54,12 +58,15 @@ async function isSparseCheckoutEnabled(gitDir: string): Promise<boolean> {
   const commonDir = await resolveGitCommonDir(gitDir)
   const sharedConfig = await readGitConfigText(join(commonDir, 'config'))
   const sharedFlag = parseCoreSparseCheckoutFlag(sharedConfig)
+
   // Git reads `config.worktree` only while extensions.worktreeConfig is on; without that gate a
   // stale worktree config left behind by an earlier sparse checkout overrides the real repo value.
   if (parseGitConfigFlag(sharedConfig, 'extensions', 'worktreeconfig') !== true) {
     return sharedFlag ?? false
   }
+
   const worktreeConfig = await readGitConfigText(join(gitDir, 'config.worktree'))
+
   return parseCoreSparseCheckoutFlag(worktreeConfig) ?? sharedFlag ?? false
 }
 
@@ -83,6 +90,7 @@ export function parseCoreSparseCheckoutFlag(configContent: string): boolean | un
 // (`[core] sparseCheckout = true` is legal git config); the value runs to end of line, so at most
 // one assignment can share a line and the last header before it decides the section.
 const GIT_CONFIG_SECTION_HEADER = /^\[\s*([A-Za-z0-9.-]+)(\s+"(?:[^"\\]|\\.)*")?\s*\]/
+
 const GIT_CONFIG_ASSIGNMENT = /^([A-Za-z][A-Za-z0-9-]*)\s*(?:=\s*(.*))?$/
 
 // `section` and `key` must be lowercase: git config names are case-insensitive.
@@ -93,8 +101,10 @@ function parseGitConfigFlag(
 ): boolean | undefined {
   let inSection = false
   let value: boolean | undefined
+
   for (const rawLine of configContent.split(/\r?\n/)) {
     let rest = stripGitConfigComment(rawLine).trim()
+
     for (
       let header = rest.match(GIT_CONFIG_SECTION_HEADER);
       header;
@@ -103,29 +113,37 @@ function parseGitConfigFlag(
       inSection = header[1].toLowerCase() === section && header[2] === undefined
       rest = rest.slice(header[0].length).trim()
     }
+
     if (!inSection || rest.length === 0) {
       continue
     }
+
     const assignment = rest.match(GIT_CONFIG_ASSIGNMENT)
+
     if (!assignment || assignment[1].toLowerCase() !== key) {
       continue
     }
+
     value = parseGitConfigBoolean(assignment[2])
   }
+
   return value
 }
 
 // Drop a trailing `#`/`;` comment that is not inside a double-quoted value.
 function stripGitConfigComment(line: string): string {
   let inQuotes = false
+
   for (let index = 0; index < line.length; index += 1) {
     const char = line[index]
+
     if (char === '"' && line[index - 1] !== '\\') {
       inQuotes = !inQuotes
     } else if ((char === '#' || char === ';') && !inQuotes) {
       return line.slice(0, index)
     }
   }
+
   return line
 }
 
@@ -135,9 +153,11 @@ function parseGitConfigBoolean(raw: string | undefined): boolean {
   if (raw === undefined) {
     return true
   }
+
   const value = raw
     .trim()
     .replace(/^"(.*)"$/, '$1')
     .toLowerCase()
+
   return value === 'true' || value === 'yes' || value === 'on' || value === '1'
 }

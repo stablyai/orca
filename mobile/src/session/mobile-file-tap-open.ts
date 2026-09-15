@@ -74,6 +74,7 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   options: OpenMobileFileTapOptions<T>
 ): Promise<void> {
   const worktree = `id:${options.worktreeId}`
+
   const response = await options.client.sendRequest(
     'files.resolveTerminalPath',
     {
@@ -89,21 +90,29 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     },
     { timeoutMs: 10_000 }
   )
+
   if (!response.ok) {
     reportOpenFailure(options)
+
     return
   }
+
   const resolved = (response as RpcSuccess).result as RuntimeTerminalPathResolution
+
   if (!resolved.exists || resolved.isDirectory) {
     reportOpenFailure(options)
+
     return
   }
+
   // Not a failure: the user moved off the source tab mid-resolve.
   if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(false))) {
     return
   }
+
   const resolvedWorktreeId = resolved.worktree?.trim() || options.worktreeId
   const resolvedWorktree = `id:${resolvedWorktreeId}`
+
   const resolvedWorktreeName =
     resolvedWorktreeId === options.worktreeId ? options.worktreeName : undefined
 
@@ -133,6 +142,7 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
         ...(resolvedWorktreeName ? { worktreeName: resolvedWorktreeName } : {})
       })
     )
+
     return
   }
 
@@ -140,11 +150,15 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
     resolved.openTarget?.kind === 'worktree-file'
       ? resolved.openTarget.relativePath
       : resolved.relativePath
+
   if (!openedPath) {
     reportOpenFailure(options)
+
     return
   }
+
   options.triggerOpenFeedback()
+
   if (
     resolvedWorktreeId !== options.worktreeId ||
     options.line !== null ||
@@ -162,30 +176,40 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
         ...(resolvedWorktreeName ? { worktreeName: resolvedWorktreeName } : {})
       })
     )
+
     return
   }
+
   if (
     classifyMobileArtifact(openedPath) === 'html' &&
     resolved.openTarget?.kind === 'worktree-file' &&
     resolved.openTarget.provider === 'local'
   ) {
     options.openBrowser(filesystemPathToFileUri(resolved.openTarget.absolutePath))
+
     return
   }
+
   const openResponse = await options.client.sendRequest(
     'files.open',
     { worktree: resolvedWorktree, relativePath: openedPath },
     { timeoutMs: 15_000 }
   )
+
   if (!openResponse.ok) {
     reportOpenFailure(options)
+
     return
   }
+
   const openResult = (openResponse as RpcSuccess).result as RuntimeFileOpenResult
+
   if (!openResult.opened) {
     reportOpenFailure(options)
+
     return
   }
+
   scheduleOpenedWorktreeTabActivation(options, openedPath)
 }
 
@@ -194,21 +218,28 @@ function scheduleOpenedWorktreeTabActivation<T extends FileTapSessionTab>(
   openedPath: string
 ): void {
   let activated = false
+
   const activateOpenedTab = async (): Promise<void> => {
     if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(activated))) {
       return
     }
+
     await options.fetchSessionTabs()
+
     if (!shouldActivateOpenedMobileSessionTab(options.getActivationState(activated))) {
       return
     }
+
     const opened = options.getSessionTabs().find((tab) => tab.relativePath === openedPath)
+
     if (!opened) {
       return
     }
+
     if (options.getActiveSessionTabId() !== opened.id) {
       options.switchSessionTab(opened)
     }
+
     activated = true
   }
 

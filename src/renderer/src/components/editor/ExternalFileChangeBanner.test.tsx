@@ -3,21 +3,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 
 const toastMock = vi.hoisted(() => vi.fn())
+
 const readRuntimeFileContentMock = vi.hoisted(() => vi.fn())
+
 vi.mock('sonner', () => ({
   toast: toastMock
 }))
+
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: vi.fn()
   }
 }))
+
 vi.mock('@/runtime/runtime-file-client', () => ({
   readRuntimeFileContent: readRuntimeFileContentMock
 }))
+
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   settingsForRuntimeOwner: () => null
 }))
+
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: () => undefined
 }))
@@ -70,6 +76,7 @@ describe('ExternalFileChangeBanner', () => {
     const html = renderToStaticMarkup(
       <ExternalFileChangeBanner file={file} currentContent="buffer" reloadContent={vi.fn()} />
     )
+
     expect(html).toContain('role="alert"')
     expect(html).toContain('changed on disk')
     expect(html).toContain('Saving will overwrite')
@@ -108,9 +115,11 @@ describe('ExternalFileChangeBanner', () => {
     reloadTabContentFromDisk(file, vi.fn())
 
     expect(toastMock).toHaveBeenCalledTimes(1)
+
     const options = toastMock.mock.calls[0][1] as {
       action: { label: string; onClick: () => void }
     }
+
     vi.clearAllMocks()
     // Why: after a real reload the tab is clean with no draft — the undo
     // guard only restores over that untouched state.
@@ -133,6 +142,7 @@ describe('ExternalFileChangeBanner', () => {
     const options = toastMock.mock.calls[0][1] as {
       action: { label: string; onClick: () => void }
     }
+
     vi.clearAllMocks()
     mockStoreState({}, [])
 
@@ -151,6 +161,7 @@ describe('ExternalFileChangeBanner', () => {
     const options = toastMock.mock.calls[0][1] as {
       action: { label: string; onClick: () => void }
     }
+
     vi.clearAllMocks()
     // Why: post-reload edits are newer intent than the discarded draft —
     // undoing over them would be a second silent discard.
@@ -185,6 +196,7 @@ describe('ExternalFileChangeBanner', () => {
     const options = toastMock.mock.calls[0][1] as {
       action: { label: string; onClick: () => void }
     }
+
     vi.clearAllMocks()
     mockStoreState({}, [{ ...file, isDirty: false, externalMutation: undefined } as OpenFile])
 

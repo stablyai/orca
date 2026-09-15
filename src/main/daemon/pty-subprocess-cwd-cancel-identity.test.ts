@@ -21,10 +21,12 @@ const {
 }))
 
 vi.mock('node-pty', () => ({ spawn: spawnMock }))
+
 vi.mock('../pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))
 
 vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
+
   return {
     ...actual,
     resolveUnixShellPath: resolveUnixShellPathMock,
@@ -36,6 +38,7 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
 vi.mock('../providers/agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
     const value = await resolveAgentForegroundProcessMock(...args)
+
     return value && typeof value === 'object' && 'available' in value
       ? value
       : { available: true, processName: value }

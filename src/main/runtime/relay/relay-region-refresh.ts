@@ -33,6 +33,7 @@ export class RelayRegionRefresh {
 
   start(assignment: RelayAssignment): void {
     this.window = assignment.regionCorrection?.window ?? null
+
     if (this.window) {
       this.checkDeadline()
     } else {
@@ -44,16 +45,21 @@ export class RelayRegionRefresh {
     if (!this.isCurrent() || this.pending) {
       return
     }
+
     if (this.now() < this.nextDeadline) {
       if (!this.timer) {
         this.schedule(Math.min(HOUR, this.nextDeadline - this.now()))
       }
+
       return
     }
+
     if (!this.options.isOnline()) {
       this.schedule(60_000)
+
       return
     }
+
     this.pending = this.refresh().finally(() => {
       this.pending = null
     })
@@ -61,9 +67,11 @@ export class RelayRegionRefresh {
 
   close(): void {
     this.closed = true
+
     if (this.timer) {
       clearTimeout(this.timer)
     }
+
     this.timer = null
     this.report = null
     this.window = null
@@ -71,9 +79,11 @@ export class RelayRegionRefresh {
 
   private async exchange(regionCorrection: RelayRegionCorrectionRequest): Promise<RelayAssignment> {
     const token = this.options.token()
+
     if (!token) {
       throw new Error('relay_region_authorization_unavailable')
     }
+
     const assignment = await requestRelayAssignment({
       directorUrl: this.options.directorUrl,
       relayHostId: this.options.relayHostId,
@@ -83,21 +93,27 @@ export class RelayRegionRefresh {
       isCurrent: () => this.isCurrent(),
       fetch: this.options.fetch
     })
+
     if (!this.isCurrent()) {
       throw new Error('stale_relay_region_refresh')
     }
+
     // The mode-bearing source drain owns migration activation; reports never rebind controls.
     this.options.applyAssignment(assignment)
+
     return assignment
   }
 
   private async refresh(): Promise<void> {
     try {
       const assignment = this.options.assignment()
+
       if (!assignment) {
         this.schedule(60_000)
+
         return
       }
+
       if (
         this.window &&
         (this.window.expiresAt <= this.now() ||
@@ -106,20 +122,27 @@ export class RelayRegionRefresh {
         this.window = null
         this.report = null
       }
+
       if (!this.window) {
         this.window =
           (await this.exchange({ v: 1, action: 'issue-window' })).regionCorrection?.window ?? null
       }
+
       const window = this.window
+
       if (!window) {
         this.schedule(HOUR)
+
         return
       }
+
       if (!this.report) {
         const decision = await this.options.measure(window)
+
         if (!this.isCurrent()) {
           return
         }
+
         this.report = {
           v: 1,
           action: 'report',
@@ -129,6 +152,7 @@ export class RelayRegionRefresh {
           ...decision
         }
       }
+
       const report = this.report
       const response = await this.exchange(report)
       const accepted = response.regionCorrection?.reportStatus
@@ -150,9 +174,11 @@ export class RelayRegionRefresh {
     if (!this.isCurrent()) {
       return
     }
+
     if (this.timer) {
       clearTimeout(this.timer)
     }
+
     const jitter = 0.9 + (this.options.random ?? Math.random)() * 0.2
     const scheduledDelay = Math.max(minimumDelay, Math.ceil(delay * jitter))
     this.nextDeadline = this.now() + scheduledDelay

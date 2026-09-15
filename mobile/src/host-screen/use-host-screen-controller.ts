@@ -64,6 +64,7 @@ export function useHostScreenController({
 
   useHostScreenIdentity({ client, hostId, state })
   const fetchRepoMetadata = useHostRepoMetadata({ client, connState, hostId, state })
+
   const catalog = useHostWorktreeCatalog({
     client,
     connState,
@@ -73,6 +74,7 @@ export function useHostScreenController({
     state,
     syncViewSettingsFromDesktop: settings.syncViewSettingsFromDesktop
   })
+
   const actions = useHostWorktreeActions({
     client,
     connState,
@@ -86,16 +88,19 @@ export function useHostScreenController({
   })
 
   const resolvedRouteActionState = resolveHostRouteActionState(state.routeActionState, action)
+
   // Why: resolve `action=newWorktree` before commit, but don't reopen after the user closes while the URL persists.
   if (resolvedRouteActionState !== state.routeActionState) {
     state.setRouteActionState(resolvedRouteActionState)
   }
+
   const showNewWorktree = resolvedRouteActionState.showNewWorktree
 
   const displayWorktrees = useMemo(() => {
     // Why: live `worktrees` is authoritative only while connected; under the amber
     // mount default, connecting/handshaking must keep the pre-reconnect list too.
     const base = connState === 'connected' ? state.worktrees : state.lastKnownWorktrees
+
     return applyWorktreeHostContextLabels(
       applyWorktreeRowDisplayState(base, state.sleptIds, state.optimisticActiveWorktreeIdentity),
       {
@@ -114,6 +119,7 @@ export function useHostScreenController({
     state.hostLabelById,
     state.hostPlatform
   ])
+
   const sectionsResult = useWorkspaceSections({
     displayWorktrees,
     sortMode: state.sortMode,
@@ -126,6 +132,7 @@ export function useHostScreenController({
     collapsedGroups: state.collapsedGroups,
     workspaceStatuses: state.workspaceStatuses
   })
+
   const existingWorktreePaths = useMemo(() => state.worktrees.map((w) => w.path), [state.worktrees])
   const activeWorktreeScroll = useActiveWorktreeScroll(sectionsResult.sections)
 

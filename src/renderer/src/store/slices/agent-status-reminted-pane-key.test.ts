@@ -3,6 +3,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { createTestStore, makeTab, seedStore } from './store-test-helpers'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const PANE = makePaneKey('tab-1', LEAF)
 
 afterEach(() => {

@@ -22,10 +22,12 @@ function admitPayload(operation: AnyRpcOperation, response: RpcResponse): Admitt
   switch (operation.acceptance) {
     case 'object-result-or-null': {
       const object = rpcObjectResultOrNull(response)
+
       return object === null
         ? { admitted: false, issues: [{ path: 'result', message: 'not a non-null object' }] }
         : { admitted: true, value: object }
     }
+
     case 'streaming-opener':
       return isStreamingOpenerReply(response)
         ? { admitted: true, value: response }
@@ -48,11 +50,15 @@ export function classifyRpcReply(
   if (!response.ok) {
     return { kind: 'outer-refused', error: response.error, raw: response }
   }
+
   const payload = admitPayload(operation, response)
+
   if (!payload.admitted) {
     return { kind: 'incompatible', raw: response, issues: payload.issues }
   }
+
   const read = operation.read
+
   if (!read) {
     return {
       kind: 'decoded',
@@ -62,7 +68,9 @@ export function classifyRpcReply(
       salvage: NOTHING_SALVAGED
     }
   }
+
   let result: ReturnType<typeof read>
+
   try {
     result = read(payload.value)
   } catch (error) {
@@ -73,15 +81,18 @@ export function classifyRpcReply(
     ) {
       throw error
     }
+
     return {
       kind: 'incompatible',
       raw: response,
       issues: [{ path: '', message: error instanceof Error ? error.message : String(error) }]
     }
   }
+
   if (!result.compatible) {
     return { kind: 'incompatible', raw: response, issues: result.issues }
   }
+
   return {
     kind: 'decoded',
     variant: result.variant,

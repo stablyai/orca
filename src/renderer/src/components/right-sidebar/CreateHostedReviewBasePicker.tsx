@@ -62,6 +62,7 @@ export function CreateHostedReviewBasePicker({
   // Why: emptying the field is how you say "not this branch"; name where it lands so
   // the reset isn't an invisible behaviour.
   const showRepoDefaultHint = editing && trimmedQuery.length === 0 && trimmedRepoDefault.length > 0
+
   // Why: only claim "no branches match" once a search has actually settled, so the
   // debounce window can't report an absence the app hasn't observed yet.
   const showNoResults =
@@ -83,9 +84,11 @@ export function CreateHostedReviewBasePicker({
     // the branch the user just cleared. With no default resolved yet there is nothing
     // honest to fall back to, so the committed base stands.
     const nextBase = value.trim() || trimmedRepoDefault
+
     if (nextBase) {
       setBase(nextBase)
     }
+
     settledRef.current = true
     closeSearch()
     inputRef.current?.blur()
@@ -103,14 +106,17 @@ export function CreateHostedReviewBasePicker({
     if (settledRef.current) {
       settledRef.current = false
       closeSearch()
+
       return
     }
+
     // Why: clicking away from an emptied field means what pressing Enter on it
     // means — land on the repo default instead of restoring what was cleared.
     // A partial query still cancels; only an empty one is an instruction.
     if (trimmedQuery.length === 0 && trimmedRepoDefault) {
       setBase(trimmedRepoDefault)
     }
+
     closeSearch()
   }
 
@@ -118,11 +124,14 @@ export function CreateHostedReviewBasePicker({
     if (baseResults.length === 0) {
       return
     }
+
     setActiveResult((current) => {
       const next = current + delta
+
       if (next < 0) {
         return baseResults.length - 1
       }
+
       return next >= baseResults.length ? 0 : next
     })
   }
@@ -131,13 +140,17 @@ export function CreateHostedReviewBasePicker({
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
       moveActiveResult(event.key === 'ArrowDown' ? 1 : -1)
+
       return
     }
+
     if (event.key === 'Enter') {
       event.preventDefault()
       commitSearch(baseResults[activeResult] ?? baseQuery)
+
       return
     }
+
     if (event.key === 'Escape') {
       event.preventDefault()
       cancelSearch()
@@ -227,6 +240,7 @@ export function CreateHostedReviewBasePicker({
         >
           {baseResults.map((ref, index) => {
             const selected = stripBaseRef(base) === ref
+
             return (
               <button
                 key={ref}

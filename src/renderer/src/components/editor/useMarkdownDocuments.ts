@@ -23,10 +23,13 @@ export async function saveMarkdownAndRefreshDocuments(
   refresh: () => Promise<void>
 ): Promise<boolean> {
   const didSave = await save(content)
+
   if (!didSave) {
     return false
   }
+
   await refresh()
+
   return true
 }
 
@@ -59,9 +62,11 @@ export function useMarkdownDocuments(
   const worktreePath = useAppStore((s) => selectMarkdownDocumentWorktreePath(s, worktreeId))
   const openFile = useAppStore((s) => s.openFile)
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
+
   const [markdownDocumentsByWorktree, setMarkdownDocumentsByWorktree] = useState<
     Record<string, MarkdownDocument[]>
   >({})
+
   const requestRef = useRef(0)
 
   const connectionId = getConnectionId(worktreeId)
@@ -74,6 +79,7 @@ export function useMarkdownDocuments(
 
       const requestId = requestRef.current + 1
       requestRef.current = requestId
+
       try {
         const documents = await requestSharedMarkdownDocumentList(
           {
@@ -88,15 +94,18 @@ export function useMarkdownDocuments(
           worktreePath,
           { requireFresh }
         )
+
         if (requestRef.current !== requestId) {
           return
         }
+
         setMarkdownDocumentsByWorktree((prev) => ({
           ...prev,
           [worktreeId]: documents
         }))
       } catch (err) {
         console.error('Failed to list markdown documents:', err)
+
         if (requestRef.current === requestId) {
           setMarkdownDocumentsByWorktree((prev) => ({
             ...prev,
@@ -116,6 +125,7 @@ export function useMarkdownDocuments(
       if (!worktreeId || !worktreePath) {
         return
       }
+
       try {
         const stats = await statRuntimePath(
           {
@@ -129,12 +139,15 @@ export function useMarkdownDocuments(
           },
           document.filePath
         )
+
         if (stats.isDirectory) {
           await refreshMarkdownDocuments(true)
+
           return
         }
       } catch {
         await refreshMarkdownDocuments(true)
+
         return
       }
 
@@ -151,6 +164,7 @@ export function useMarkdownDocuments(
           },
           { anchor: options.anchor }
         )
+
         return
       }
 
@@ -178,6 +192,7 @@ export function useMarkdownDocuments(
     if (!isMarkdown) {
       return
     }
+
     void refreshMarkdownDocuments()
   }, [activeFile.id, isMarkdown, viewMode, refreshMarkdownDocuments])
 
@@ -205,6 +220,7 @@ export function useMarkdownDocuments(
   const onOpenDocLink = useCallback(
     (target: string) => {
       const resolution = resolveMarkdownDocLink(target, docIndex)
+
       if (resolution.status === 'resolved') {
         void openMarkdownDocument(resolution.document, {
           anchor: getMarkdownDocLinkAnchor(target)

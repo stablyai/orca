@@ -1,4 +1,5 @@
 const REQUIRED_EXPORTS = ['assignCurrentProcessToJob', 'listJobProcessIds', 'terminateJob']
+
 const FIXTURE_TOKEN_PATTERN = /^[a-f0-9]{64}$/
 
 function isFixtureObservation(value, expected) {
@@ -34,12 +35,15 @@ export function evaluatePackagedNodePtyCapability(evidence) {
   if (REQUIRED_EXPORTS.some((name) => !exports.has(name))) {
     failures.push('the packaged node-pty addon is missing a required patched export')
   }
+
   if (!FIXTURE_TOKEN_PATTERN.test(fixtureToken) || !channel?.includes(fixtureToken)) {
     failures.push('the fixture channel is not bound to the per-run unguessable token')
   }
+
   if (!isFixtureObservation(target?.shell, { fixtureToken, channel, role: 'target-shell' })) {
     failures.push('the target shell was not observed on its unique fixture channel')
   }
+
   if (
     !isFixtureObservation(target?.launcherExited, {
       fixtureToken,
@@ -49,6 +53,7 @@ export function evaluatePackagedNodePtyCapability(evidence) {
   ) {
     failures.push('the transient launcher exit was not observed')
   }
+
   if (
     !isFixtureObservation(target?.grandchild, {
       fixtureToken,
@@ -58,15 +63,18 @@ export function evaluatePackagedNodePtyCapability(evidence) {
   ) {
     failures.push('the grandchild was not observed after its launcher exited')
   }
+
   if (!isFixtureObservation(canary?.process, { fixtureToken, channel, role: 'canary-shell' })) {
     failures.push('the unrelated canary was not observed on its unique fixture channel')
   }
+
   const observedPids = [
     target?.shell?.pid,
     target?.launcherExited?.pid,
     target?.grandchild?.pid,
     canary?.process?.pid
   ]
+
   if (observedPids.every((pid) => Number.isInteger(pid)) && new Set(observedPids).size !== 4) {
     failures.push('target shell, launcher, grandchild, and canary must be distinct processes')
   }
@@ -80,7 +88,9 @@ export function evaluatePackagedNodePtyCapability(evidence) {
   } else if (target.jobProcessIds.includes(target?.launcherExited?.pid)) {
     failures.push('the transient launcher is still live in the target job')
   }
+
   const close = evidence?.close
+
   if (
     close?.method !== 'terminate-job' ||
     close?.requestedHandle !== target?.terminalHandle ||
@@ -88,6 +98,7 @@ export function evaluatePackagedNodePtyCapability(evidence) {
   ) {
     failures.push('close must complete for the one requested PTY job handle')
   }
+
   if (
     !isPtyExit(close?.targetExit, target?.terminalHandle) ||
     !isFixtureClosure(close?.targetShellClosed, {
@@ -107,15 +118,18 @@ export function evaluatePackagedNodePtyCapability(evidence) {
   if (canary?.connectedAfterTargetClose !== true) {
     failures.push('the unrelated canary fixture connection was lost during target close')
   }
+
   if (
     !Array.isArray(canary?.jobProcessIdsAfterTargetClose) ||
     !canary.jobProcessIdsAfterTargetClose.includes(canary?.process?.pid)
   ) {
     failures.push('the unrelated canary PID is not live in its job after target close')
   }
+
   if (!isPtyExit(canary?.exit, canary?.terminalHandle)) {
     failures.push('the unrelated canary PTY exit was not observed')
   }
+
   if (
     !isFixtureClosure(canary?.socketClosed, {
       fixtureToken,
@@ -131,6 +145,7 @@ export function evaluatePackagedNodePtyCapability(evidence) {
 
 export function assertPackagedNodePtyCapability(evidence) {
   const result = evaluatePackagedNodePtyCapability(evidence)
+
   if (!result.pass) {
     throw new Error(
       `Packaged node-pty native capability failed:\n- ${result.failures.join('\n- ')}`

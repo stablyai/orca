@@ -15,15 +15,19 @@ const TAB_COUNT = 8
 async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<string> {
   const tabId = await page.evaluate((id) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('createActiveTerminalTab: window.__store is unavailable')
     }
+
     const state = store.getState()
     const tab = state.createTab(id, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
     state.setActiveTabType('terminal')
+
     return tab.id
   }, worktreeId)
+
   await expect
     .poll(() => getActiveTabId(page), {
       timeout: 5_000,
@@ -32,6 +36,7 @@ async function createActiveTerminalTab(page: Page, worktreeId: string): Promise<
     .toBe(tabId)
   await waitForActiveTerminalManager(page, 30_000)
   await waitForPaneIdentitySnapshot(page, 1)
+
   return tabId
 }
 
@@ -41,6 +46,7 @@ async function getTerminalTabSnapshots(
 ): Promise<{ id: string; ptyId: string | null }[]> {
   return page.evaluate((id) => {
     const state = window.__store?.getState()
+
     return (state?.tabsByWorktree[id] ?? []).map((tab) => ({ id: tab.id, ptyId: tab.ptyId }))
   }, worktreeId)
 }
@@ -56,9 +62,11 @@ async function enableTerminalAccessibilityDom(page: Page, tabId: string): Promis
   await page.evaluate((id) => {
     const manager = window.__paneManagers?.get(id)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error(`Terminal pane for ${id} is unavailable`)
     }
+
     // Why: xterm paints to canvas by default; screen-reader mode mirrors the
     // visible buffer into DOM rows so the reveal oracle is user-observable.
     pane.terminal.options.screenReaderMode = true
@@ -83,27 +91,35 @@ test.describe('cold worktree activation deferral', () => {
     // primary-worktree tabs are conservatively never deferred.
     const worktreeId = await page.evaluate(async (name) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is unavailable')
       }
+
       const state = store.getState()
       const activeWorktreeId = state.activeWorktreeId
+
       const activeWorktree = Object.values(state.worktreesByRepo)
         .flat()
         .find((worktree) => worktree.id === activeWorktreeId)
+
       if (!activeWorktree) {
         throw new Error('active worktree not found')
       }
+
       const result = await state.createWorktree(activeWorktree.repoId, name)
       await state.fetchWorktrees(activeWorktree.repoId)
       state.setActiveWorktree(result.worktree.id)
+
       return result.worktree.id
     }, `e2e-cold-defer-${Date.now()}`)
+
     await expect.poll(() => waitForActiveWorktree(page), { timeout: 30_000 }).toBe(worktreeId)
 
     while ((await getTerminalTabSnapshots(page, worktreeId)).length < TAB_COUNT) {
       await createActiveTerminalTab(page, worktreeId)
     }
+
     // Why: deferral only covers tabs whose PTYs the parked byte watchers can
     // own, which requires a daemon session id on every tab.
     await expect
@@ -126,9 +142,11 @@ test.describe('cold worktree activation deferral', () => {
           page.evaluate(
             async ({ id, expectedTabIds }) => {
               const session = await window.api.session.get()
+
               const persistedTabIds = new Set(
                 (session.tabsByWorktree[id] ?? []).map((tab) => tab.id)
               )
+
               return expectedTabIds.every(
                 (tabId) => persistedTabIds.has(tabId) && session.terminalLayoutsByTabId[tabId]
               )
@@ -156,6 +174,7 @@ test.describe('cold worktree activation deferral', () => {
     await waitForActiveTerminalManager(page, 30_000)
     const mountedAfterActivation = await getMountedTabIds(page, tabIds)
     expect(mountedAfterActivation.length).toBeLessThanOrEqual(3)
+
     if (lastActiveTabId) {
       expect(mountedAfterActivation).toContain(lastActiveTabId)
     }
@@ -174,6 +193,7 @@ test.describe('cold worktree activation deferral', () => {
               ).__terminalParkingDebug?.parkedTabIds?.() ?? []
           )
           const mounted = await getMountedTabIds(page, tabIds)
+
           return tabIds.every(
             (tabId) => mounted.includes(tabId) || watcherCoveredTabIds.includes(tabId)
           )
@@ -183,6 +203,7 @@ test.describe('cold worktree activation deferral', () => {
       .toBe(true)
     const mountedAfterSettle = await getMountedTabIds(page, tabIds)
     expect(mountedAfterSettle).toEqual(mountedAfterActivation)
+
     for (const tabId of tabIds) {
       if (!mountedAfterSettle.includes(tabId)) {
         expect(watcherCoveredTabIds).toContain(tabId)
@@ -192,9 +213,11 @@ test.describe('cold worktree activation deferral', () => {
     // Revealing a deferred tab mounts it on demand.
     const deferredTabId = tabIds.find((tabId) => !mountedAfterSettle.includes(tabId))
     expect(deferredTabId).toBeDefined()
+
     if (!deferredTabId) {
       throw new Error('cold activation left no deferred tab to reveal')
     }
+
     await page.evaluate((tabId) => {
       const state = window.__store?.getState()
       state?.setActiveTab(tabId)
@@ -215,6 +238,7 @@ test.describe('cold worktree activation deferral', () => {
               (
                 window as Window & { __terminalParkingDebug?: { parkedTabIds?: () => string[] } }
               ).__terminalParkingDebug?.parkedTabIds?.() ?? []
+
             return !parkedTabIds.includes(tabId)
           }, deferredTabId),
         { timeout: 10_000, message: 'revealed tab retained its parked watcher' }

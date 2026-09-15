@@ -13,6 +13,7 @@ import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../shared/protocol
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { PreflightStatus } from '../../../preload/api-types'
 import { getTaskPageRepoSourceContext } from './task-page-source-context'
+
 export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
   const {
     settings,
@@ -26,24 +27,30 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
     defaultTaskSource,
     visibleTaskProviders
   } = model
+
   // Why: seed preset + query synchronously so the first fetch issues one request; a prior post-mount re-seed caused a throwaway empty-query fetch, doubling time-to-first-paint.
   const defaultTaskViewPreset = normalizeGitHubTaskPreset(settings?.defaultTaskViewPreset ?? 'all')
   const initialTaskQuery = getTaskPresetQuery(defaultTaskViewPreset)
   const preferredTaskSource = pageData.taskSource ?? defaultTaskSource
+
   const [taskSource, setTaskSource] = useState<TaskProvider>(
     resolveVisibleTaskProvider(preferredTaskSource, visibleTaskProviders)
   )
+
   const runtimePreflightMountedRef = useRef(true)
   const runtimePreflightRequestedHostIdsRef = useRef<Set<TaskSourceContext['hostId']>>(new Set())
+
   const [runtimePreflightStatusByHostId, setRuntimePreflightStatusByHostId] = useState<
     ReadonlyMap<TaskSourceContext['hostId'], RuntimeProviderPreflightStatus>
   >(() => new Map())
+
   useEffect(
     () => () => {
       runtimePreflightMountedRef.current = false
     },
     []
   )
+
   const taskSourceRepoContexts = useMemo(
     () =>
       taskSource === 'github' || taskSource === 'gitlab'
@@ -53,6 +60,7 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
         : [],
     [selectedRepos, taskSource]
   )
+
   const hostRegistryById = useMemo(
     () =>
       new Map(
@@ -75,21 +83,28 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
       runtimeStatusByEnvironmentId
     ]
   )
+
   const hostLabelById = useMemo(
     () => new Map([...hostRegistryById].map(([hostId, host]) => [hostId, host.label])),
     [hostRegistryById]
   )
+
   const runtimeTaskSourceHostIds = useMemo(() => {
     if (taskSource !== 'github' && taskSource !== 'gitlab') {
       return []
     }
+
     const hostIds = new Set<TaskSourceContext['hostId']>()
+
     for (const context of taskSourceRepoContexts) {
       const parsed = parseExecutionHostId(context.hostId)
+
       if (parsed?.kind !== 'runtime') {
         continue
       }
+
       const host = hostRegistryById.get(context.hostId)
+
       if (
         host?.kind !== 'runtime' ||
         host.health !== 'available' ||
@@ -97,33 +112,43 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
       ) {
         continue
       }
+
       hostIds.add(parsed.id)
     }
+
     return [...hostIds].sort()
   }, [hostRegistryById, taskSource, taskSourceRepoContexts])
+
   useEffect(() => {
     const unrequestedHostIds = runtimeTaskSourceHostIds.filter(
       (hostId) => !runtimePreflightRequestedHostIdsRef.current.has(hostId)
     )
+
     if (unrequestedHostIds.length === 0) {
       return
     }
+
     setRuntimePreflightStatusByHostId((current) => {
       const next = new Map(current)
+
       for (const hostId of unrequestedHostIds) {
         next.set(hostId, {
           checked: false,
           status: null
         })
       }
+
       return next
     })
+
     for (const hostId of unrequestedHostIds) {
       runtimePreflightRequestedHostIdsRef.current.add(hostId)
       const parsed = parseExecutionHostId(hostId)
+
       if (parsed?.kind !== 'runtime') {
         continue
       }
+
       // Why: task sources can span multiple runtime hosts; each runtime owns its own gh/glab install and auth state.
       void callRuntimeRpc<PreflightStatus>(
         {
@@ -140,12 +165,14 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
           if (!runtimePreflightMountedRef.current) {
             return
           }
+
           setRuntimePreflightStatusByHostId((current) => {
             const next = new Map(current)
             next.set(hostId, {
               checked: true,
               status
             })
+
             return next
           })
         })
@@ -153,17 +180,20 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
           if (!runtimePreflightMountedRef.current) {
             return
           }
+
           setRuntimePreflightStatusByHostId((current) => {
             const next = new Map(current)
             next.set(hostId, {
               checked: true,
               status: null
             })
+
             return next
           })
         })
     }
   }, [runtimeTaskSourceHostIds])
+
   const nextModel = model as typeof model & {
     defaultTaskViewPreset: typeof defaultTaskViewPreset
     initialTaskQuery: typeof initialTaskQuery
@@ -179,6 +209,7 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
     hostLabelById: typeof hostLabelById
     runtimeTaskSourceHostIds: typeof runtimeTaskSourceHostIds
   }
+
   nextModel.defaultTaskViewPreset = defaultTaskViewPreset
   nextModel.initialTaskQuery = initialTaskQuery
   nextModel.preferredTaskSource = preferredTaskSource
@@ -192,6 +223,8 @@ export function useTaskPageRuntimeHosts(model: TaskPageRepoSelectionModel) {
   nextModel.hostRegistryById = hostRegistryById
   nextModel.hostLabelById = hostLabelById
   nextModel.runtimeTaskSourceHostIds = runtimeTaskSourceHostIds
+
   return nextModel
 }
+
 export type TaskPageRuntimeHostsModel = ReturnType<typeof useTaskPageRuntimeHosts>

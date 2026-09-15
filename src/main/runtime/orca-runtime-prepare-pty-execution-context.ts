@@ -11,6 +11,7 @@ export class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRuntimeWithRe
   ): boolean {
     const pty = this.ptysById.get(ptyId)
     const hadExistingContext = this.wslDistroByPtyId.has(ptyId) || pty !== undefined
+
     if (options.preserveExisting && hadExistingContext) {
       // Why: attach-time settings are only a fallback; a live PTY's recorded
       // execution namespace remains authoritative until its provider replies.
@@ -28,20 +29,24 @@ export class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRuntimeWithRe
     }
 
     const previous = this.wslDistroByPtyId.get(ptyId) ?? null
+
     if (wslDistro) {
       this.wslDistroByPtyId.set(ptyId, wslDistro)
     } else {
       this.wslDistroByPtyId.delete(ptyId)
     }
+
     if (pty) {
       pty.wslDistro = wslDistro
     }
+
     if (!options.resetIncarnation && previous !== wslDistro && this.headlessTerminals.has(ptyId)) {
       // Why: bytes parsed with two distro namespaces would leave an internally
       // inconsistent CWD; rebuild from the provider's authoritative snapshot.
       this.terminalCwdByPtyId.delete(ptyId)
       this.replaceHeadlessTerminalAfterExecutionContextChange(ptyId)
     }
+
     return options.resetIncarnation === true || !hadExistingContext || previous !== wslDistro
   }
 
@@ -50,6 +55,7 @@ export class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRuntimeWithRe
    *  beats this call falls back to the detector's banner arming. */
   noteTerminalSpawnCommand(ptyId: string, command: string | null | undefined): void {
     const trimmed = typeof command === 'string' ? command.trim() : ''
+
     if (trimmed.length > 0) {
       this.terminalSpawnCommandsByPtyId.set(ptyId, trimmed)
     }
@@ -73,6 +79,7 @@ export class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRuntimeWithRe
     sourceRanges?: readonly TerminalOutputSourceRange[]
   ): RuntimePtyDataAdmission {
     let completion: Promise<void> | null = null
+
     const sequence = this.onPtyData(
       ptyId,
       data,
@@ -84,9 +91,11 @@ export class OrcaRuntimeWithPreparePtyExecutionContext extends OrcaRuntimeWithRe
       },
       sourceRanges
     )
+
     if (!completion) {
       throw new Error('PTY model admission receipt was not captured')
     }
+
     return Object.freeze({ sequence, completion })
   }
 }

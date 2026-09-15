@@ -10,16 +10,20 @@ export function applyRuntimeHostStatusSnapshot(
   publishEvidence: (entry: RuntimeEnvironmentStatus) => void
 ): void {
   const environment = state.runtimeEnvironments.find((entry) => entry.id === snapshot.environmentId)
+
   if (
     !environment ||
     (environment.pairingRevision ?? environment.createdAt) !== snapshot.pairingRevision
   ) {
     return
   }
+
   const previous = state.runtimeStatusByEnvironmentId.get(snapshot.environmentId)
+
   if (previous?.snapshot && previous.snapshot.sequence >= snapshot.sequence) {
     return
   }
+
   const entry: RuntimeEnvironmentStatus = {
     snapshot,
     checkedAt: snapshot.checkedAt,
@@ -27,11 +31,14 @@ export function applyRuntimeHostStatusSnapshot(
     status: snapshot.verification === 'verified' && !snapshot.retired ? snapshot.status : null,
     remoteControl: snapshot.remoteControl
   }
+
   if (entry.status) {
     if (snapshot.remoteControl) {
       entry.status = { ...entry.status, remoteControl: snapshot.remoteControl }
     }
+
     state.setRuntimeEnvironmentStatus(snapshot.environmentId, entry)
+
     if (previous?.status == null) {
       void ensureBrowserClientHostsForRestoredPages(state)
       void replayClientHostedBrowserCloseIntents(snapshot.environmentId, state)

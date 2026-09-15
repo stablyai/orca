@@ -13,6 +13,7 @@ export function addTerminalFollowOutputWaiter(
   const waiters = followOutputWaitersByTerminal.get(terminal) ?? new Set<() => void>()
   followOutputWaitersByTerminal.set(terminal, waiters)
   waiters.add(listener)
+
   return () => {
     waiters.delete(listener)
   }
@@ -20,10 +21,13 @@ export function addTerminalFollowOutputWaiter(
 
 export function notifyTerminalFollowOutputWaiters(terminal: TerminalScrollIntentTarget): void {
   const waiters = followOutputWaitersByTerminal.get(terminal)
+
   if (!waiters?.size) {
     return
   }
+
   followOutputWaitersByTerminal.delete(terminal)
+
   for (const waiter of waiters) {
     waiter()
   }

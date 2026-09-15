@@ -25,11 +25,13 @@ export function isCommandCodeNewTurnWhileWorking({
   if (agentType !== 'command-code') {
     return false
   }
+
   if (previousState !== 'working' || incomingState !== 'working') {
     return false
   }
 
   const nextPrompt = incomingPrompt.trim()
+
   if (nextPrompt.length === 0) {
     return false
   }

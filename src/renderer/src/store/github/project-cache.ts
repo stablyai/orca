@@ -12,10 +12,12 @@ export function optimisticFieldValueFromMutation(
   value: GitHubProjectFieldMutationValue
 ): GitHubProjectTable['rows'][number]['fieldValuesByFieldId'][string] | null {
   const field = table.selectedView.fields.find((f) => f.id === fieldId)
+
   switch (value.kind) {
     case 'single-select': {
       if (field?.kind === 'single-select') {
         const option = field.options.find((o) => o.id === value.optionId)
+
         if (option) {
           return {
             kind: 'single-select',
@@ -26,6 +28,7 @@ export function optimisticFieldValueFromMutation(
           }
         }
       }
+
       return {
         kind: 'single-select',
         fieldId,
@@ -34,9 +37,11 @@ export function optimisticFieldValueFromMutation(
         color: ''
       }
     }
+
     case 'iteration': {
       if (field?.kind === 'iteration') {
         const iteration = field.iterations.find((i) => i.id === value.iterationId)
+
         if (iteration) {
           return {
             kind: 'iteration',
@@ -48,6 +53,7 @@ export function optimisticFieldValueFromMutation(
           }
         }
       }
+
       return {
         kind: 'iteration',
         fieldId,
@@ -57,6 +63,7 @@ export function optimisticFieldValueFromMutation(
         duration: 0
       }
     }
+
     case 'text':
       return { kind: 'text', fieldId, text: value.text }
     case 'number':
@@ -64,6 +71,7 @@ export function optimisticFieldValueFromMutation(
     case 'date':
       return { kind: 'date', fieldId, date: value.date }
   }
+
   return null
 }
 
@@ -75,15 +83,20 @@ export function applyRowPatch(
 ): void {
   set((s) => {
     const entry = s.projectViewCache[cacheKey]
+
     if (!entry?.data) {
       return s
     }
+
     const rowIndex = entry.data.rows.findIndex((r) => r.id === rowId)
+
     if (rowIndex === -1) {
       return s
     }
+
     const rows = [...entry.data.rows]
     rows[rowIndex] = nextRow
+
     return {
       projectViewCache: {
         ...s.projectViewCache,
@@ -105,13 +118,17 @@ export function rollbackRowIfPresent(
 ): void {
   // Why: skip rollback when the entry moved (rapid project switch) or the row is gone, else stale data would surface in the newly selected project.
   const entry = get().projectViewCache[cacheKey]
+
   if (!entry?.data) {
     return
   }
+
   const stillPresent = entry.data.rows.some((r) => r.id === rowId)
+
   if (!stillPresent) {
     return
   }
+
   applyRowPatch(set, cacheKey, rowId, previousRow)
 }
 
@@ -121,9 +138,12 @@ export function parseSlugAndNumber(
   if (!row.content.repository || row.content.number == null) {
     return null
   }
+
   const parts = row.content.repository.split('/')
+
   if (parts.length !== 2 || !parts[0] || !parts[1]) {
     return null
   }
+
   return { owner: parts[0], repo: parts[1], number: row.content.number }
 }

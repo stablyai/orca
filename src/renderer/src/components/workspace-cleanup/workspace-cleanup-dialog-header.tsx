@@ -31,6 +31,7 @@ export function WorkspaceCleanupDialogHeader({
     'auto.components.workspace.cleanup.WorkspaceCleanupDialog.7ae2ad30f4',
     'Refresh'
   )
+
   return (
     <DialogHeader className="border-b border-border px-5 py-4">
       <div className="flex items-center justify-between gap-4">

@@ -9,8 +9,10 @@ export async function executePluginCommand(
     if (!dispatchAppCommand(command.handler.action, source)) {
       throw new Error('built-in action is unavailable in the current context')
     }
+
     return
   }
+
   await window.api.plugins.invokeCommand({
     pluginKey: command.pluginKey,
     commandId: command.id

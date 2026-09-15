@@ -149,6 +149,7 @@ describe('resource session bindings', () => {
       terminalLayoutsByTabId: {},
       workspaceSessionReady: true
     }
+
     const sessions = [
       { id: 'pty-agent', cwd: '/workspace', title: 'codex', agentOwnership: 'present' as const },
       { id: 'pty-shell', cwd: '/tmp', title: 'shell', agentOwnership: 'absent' as const }
@@ -166,6 +167,7 @@ describe('resource session bindings', () => {
       deferredSshSessionIdsByTabId: { 'tab-ssh': 'pty-deferred' },
       workspaceSessionReady: true
     }
+
     const sessions = [
       { id: 'pty-live', cwd: '/workspace', title: 'live', agentOwnership: 'absent' as const },
       {
@@ -193,6 +195,7 @@ describe('resource session bindings', () => {
       terminalLayoutsByTabId: {},
       workspaceSessionReady: true
     }
+
     const sessions = [
       { id: 'pty-legacy', cwd: '/workspace', title: 'shell', agentOwnership: 'unknown' as const },
       { id: 'pty-known', cwd: '/tmp', title: 'shell', agentOwnership: 'absent' as const }
@@ -206,6 +209,7 @@ describe('resource session bindings', () => {
     const sessions = [
       { id: 'pty-any', cwd: '/tmp', title: 'shell', agentOwnership: 'absent' as const }
     ]
+
     const inputs = {
       ptyIdsByTabId: {},
       tabsByWorktree: {},

@@ -12,6 +12,7 @@ describe('commonPropsSchema', () => {
       session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
       orca_channel: 'stable'
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -25,6 +26,7 @@ describe('commonPropsSchema', () => {
       session_id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
       orca_channel: 'stable'
     })
+
     expect(parsed.success).toBe(false)
   })
 

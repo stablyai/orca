@@ -16,6 +16,7 @@ export async function pinnedAgentSessionLaunchEnv(
   if (!resolver) {
     return {}
   }
+
   return {
     launchEnv: {
       ...(await resolver(params.provider)),
@@ -29,5 +30,6 @@ export async function pinnedAgentSessionLaunchArgs(
   params: AgentSessionAttachParams
 ): Promise<{ launchArgs: string[] } | Record<string, never>> {
   const launchArgs = params.launchArgs ?? (await resolver?.(params.provider))
+
   return launchArgs ? { launchArgs: [...launchArgs] } : {}
 }

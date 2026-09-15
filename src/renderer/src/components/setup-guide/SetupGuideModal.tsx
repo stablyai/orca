@@ -30,15 +30,19 @@ export default function SetupGuideModal(): JSX.Element | null {
   useEffect(() => {
     if (open) {
       setLingering(true)
+
       return
     }
+
     const timer = window.setTimeout(() => setLingering(false), SETUP_GUIDE_CLOSE_LINGER_MS)
+
     return () => window.clearTimeout(timer)
   }, [open])
 
   if (!open && !lingering) {
     return null
   }
+
   return <SetupGuideModalContent open={open} lingering={lingering} />
 }
 
@@ -59,23 +63,28 @@ function SetupGuideModalContent({
   // Why: keep progress inputs live through the close-animation linger; dropping
   // them mid-fade flips completed rows back to "not done yet" on screen.
   const progressInputsActive = open || lingering
+
   const progress = useSetupGuideProgress(
     progressInputsActive,
     orchestrationSkillInstalled,
     browserUseSkillInstalled
   )
+
   const [activeStepId, setActiveStepId] = useState<FeatureWallSetupStepId>(() =>
     getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)
   )
+
   const requestedStepId = isFeatureWallSetupStepId(modalData.setupStepId)
     ? modalData.setupStepId
     : null
+
   const telemetrySource =
     typeof modalData.setupGuideSource === 'string'
       ? modalData.setupGuideSource
       : typeof modalData.telemetrySource === 'string'
         ? modalData.telemetrySource
         : 'unknown'
+
   const activeStep = setupSteps.find((step) => step.id === activeStepId) ?? setupSteps[0] ?? null
 
   useSetupGuideOpenCloseTelemetry({
@@ -88,11 +97,14 @@ function SetupGuideModalContent({
   useEffect(() => {
     if (!open) {
       setUserSelectedStep(false)
+
       return
     }
+
     if (requestedStepId === null) {
       return
     }
+
     setUserSelectedStep(false)
     setActiveStepId(requestedStepId)
   }, [open, requestedStepId])
@@ -101,6 +113,7 @@ function SetupGuideModalContent({
     if (!open || userSelectedStep || requestedStepId !== null) {
       return
     }
+
     setActiveStepId(getFirstIncompleteFeatureWallSetupStepId(progress.stepDone))
   }, [open, progress.stepDone, requestedStepId, userSelectedStep])
 
@@ -114,7 +127,9 @@ function SetupGuideModalContent({
     ) {
       return
     }
+
     const nextUnfinishedCoreStepId = getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)
+
     if (nextUnfinishedCoreStepId !== activeStep.id) {
       setActiveStepId(nextUnfinishedCoreStepId)
     }

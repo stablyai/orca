@@ -9,6 +9,7 @@ const REPO: Repo = { id: 'r', path: '/repo', displayName: 'r', badgeColor: '#000
 const alive = (pid: number): boolean => {
   try {
     process.kill(pid, 0)
+
     return true
   } catch {
     return false
@@ -27,6 +28,7 @@ async function survivorsAfterDeadline(
     `scripts:\n  archive: |\n${script.replace(/^/gm, '    ')}\n`
   )
   let pids: number[] = []
+
   try {
     const result = await runHook('archive', dir, REPO, dir, undefined, 400)
     expect(result.success).toBe(false)
@@ -38,6 +40,7 @@ async function survivorsAfterDeadline(
     // throws, and the missing descendant reads as dead — a test that passes on nothing.
     expect(pids).toHaveLength(2)
     expect(pids.every((pid) => Number.isSafeInteger(pid) && pid > 0)).toBe(true)
+
     return { shell: alive(pids[0]!), child: alive(pids[1]!), output: result.output, pids }
   } finally {
     for (const pid of pids) {
@@ -47,6 +50,7 @@ async function survivorsAfterDeadline(
         /* already gone */
       }
     }
+
     rmSync(dir, { recursive: true, force: true })
   }
 }
@@ -60,6 +64,7 @@ describe.skipIf(process.platform === 'win32')('hook termination against real pro
     const { shell, child, output } = await survivorsAfterDeadline(
       'echo "archive step 3 of 7"\nsleep 120 &\necho "$$ $!" > "$PWD/pids"\nwait'
     )
+
     expect({ shell, child }).toEqual({ shell: false, child: false })
     // The gate reports this run as `unverifiable`; what the hook printed is the only clue why.
     expect(output).toContain('archive step 3 of 7')
@@ -70,6 +75,7 @@ describe.skipIf(process.platform === 'win32')('hook termination against real pro
     const { child } = await survivorsAfterDeadline(
       '(trap "" TERM; sleep 120) &\necho "$$ $!" > "$PWD/pids"\nwait'
     )
+
     expect(child).toBe(false)
   }, 30_000)
 })

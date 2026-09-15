@@ -90,6 +90,7 @@ describe('buildMobileAiVaultResumeCommand', () => {
       hostPlatform: 'win32',
       hostTerminalWindowsShell: 'cmd.exe'
     })
+
     expect(command).toBe(
       'cd /d "C:\\repo app" && set "CODEX_HOME=C:\\Users\\Ada\\.codex" && codex resume "codex-1"'
     )
@@ -177,6 +178,7 @@ describe('buildMobileAiVaultResumeLaunch', () => {
       ompResumeFilePath: launch.launchConfig?.ompResumeFilePath,
       platform: 'linux'
     })
+
     expect(coldLaunch).toMatchObject({
       launchCommand:
         "omp '--model' 'custom' '--resume' '/custom/omp-sessions/project/session.jsonl'",
@@ -198,6 +200,7 @@ describe('buildMobileAiVaultResumeLaunch', () => {
         agentDefaultEnv: { claude: { ANTHROPIC_BASE_URL: 'http://localhost:3000' } }
       }
     })
+
     expect(launch.command).toBe(
       "cd '/Users/ada/repo' && claude-dev '--model' 'opus' '--resume' 'abc 123'"
     )
@@ -223,6 +226,7 @@ describe('buildMobileAiVaultResumeLaunch', () => {
         agentDefaultEnv: { codex: { CODEX_HOME: '/Users/ada/.codex-pinned' } }
       }
     })
+
     expect(launch.command).not.toContain('CODEX_HOME=')
     expect(launch.envToDelete).toEqual(['CODEX_HOME', 'ORCA_CODEX_HOME'])
   })
@@ -236,6 +240,7 @@ describe('buildMobileAiVaultResumeLaunch', () => {
       }),
       hostPlatform: 'darwin'
     })
+
     expect(launch.command).toContain("CODEX_HOME='/Users/ada/.orca/codex-runtime-home/home'")
     expect(launch.envToDelete).toBeUndefined()
   })
@@ -307,6 +312,7 @@ describe('resumeAiVaultSessionInTerminal', () => {
       ok: false,
       error: { message: 'no terminal' }
     })
+
     await expect(
       resumeAiVaultSessionInTerminal({ sendRequest }, 'worktree-1', { command: 'command' })
     ).rejects.toThrow('no terminal')
@@ -327,6 +333,7 @@ describe('resumeAiVaultSessionInTerminal', () => {
         result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1' } }
       })
       .mockResolvedValueOnce({ ok: false, error: { message: 'send failed' } })
+
     await expect(
       resumeAiVaultSessionInTerminal({ sendRequest: failedSend }, 'worktree-1', {
         command: 'command'
@@ -340,6 +347,7 @@ describe('resumeAiVaultSessionInTerminal', () => {
         result: { tab: { type: 'terminal', id: 'tab-1', terminal: 'pty-1' } }
       })
       .mockResolvedValueOnce({ ok: true, result: { send: { accepted: false } } })
+
     await expect(
       resumeAiVaultSessionInTerminal({ sendRequest: lockedSend }, 'worktree-1', {
         command: 'command'
@@ -351,8 +359,10 @@ describe('resumeAiVaultSessionInTerminal', () => {
 describe('createMobileAiVaultResumeMutationRegistry', () => {
   it('reuses the claimed id across retries until a success releases it', () => {
     let mints = 0
+
     const registry = createMobileAiVaultResumeMutationRegistry((sessionId) => {
       mints += 1
+
       return `${sessionId}:mutation-${mints}`
     })
 

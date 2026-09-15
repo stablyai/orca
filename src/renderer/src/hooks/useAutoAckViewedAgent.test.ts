@@ -15,6 +15,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
 const CODEX_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 type TestStore = ReturnType<typeof createTestStore>
@@ -22,6 +23,7 @@ type TestStore = ReturnType<typeof createTestStore>
 /** Subject-keyed turn view the neutral acknowledgement policy reads. */
 function ackTargets(store: TestStore, tabId: string, leafId: string): string[] {
   const state = store.getState()
+
   return computeAgentAcknowledgementTargets(
     {
       liveTurns: state.agentStatusByPaneKey,
@@ -89,6 +91,7 @@ describe('computeAgentAcknowledgementTargets — codex retain race regression', 
       agentType: 'codex',
       startedAt: liveDone.stateStartedAt
     }
+
     store.getState().removeAgentStatus(paneKey)
     expect(store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
     expect(store.getState().acknowledgedAgentsByPaneKey[paneKey]).toBeUndefined()
@@ -231,6 +234,7 @@ describe('applyAgentAttentionAcknowledgement', () => {
       clearGroupUnread: vi.fn(),
       clearSubjectUnread: vi.fn()
     }
+
     const paneKey = makePaneKey('tab-1', CODEX_LEAF_ID)
 
     applyAgentAttentionAcknowledgement(actions, {
@@ -272,6 +276,7 @@ describe('applyAgentAttentionAcknowledgement', () => {
       clearGroupUnread: vi.fn(),
       clearSubjectUnread: vi.fn()
     }
+
     const paneKey = makePaneKey('tab-1', CODEX_LEAF_ID)
 
     applyAgentAttentionAcknowledgement(actions, {
@@ -342,11 +347,13 @@ describe('shouldClearWorkspaceAttention through the terminal surface', () => {
       unreadAgentCompletionPanes: seed.unreadAgentCompletionPanes,
       unreadTerminalTabs: seed.unreadTerminalTabs ?? {}
     })
+
     return store
   }
 
   function clearsWorkspace(store: TestStore, clearedSubjectKeys: Set<string>): boolean {
     const surface = createTerminalAttentionSurface(store.getState())
+
     return shouldClearWorkspaceAttention(surface.collectWorkspaceAttentionRemainder('wt-1'), {
       viewedGroupId: 'tab-1',
       clearedSubjectKeys
@@ -355,6 +362,7 @@ describe('shouldClearWorkspaceAttention through the terminal surface', () => {
 
   it('clears worktree unread when the visible pane owns the only agent source', () => {
     const paneKey = makePaneKey('tab-1', CODEX_LEAF_ID)
+
     const store = seedWorkspace({
       tabIds: ['tab-1'],
       unreadAgentCompletionPanes: { [paneKey]: 'agent-completion' }
@@ -366,6 +374,7 @@ describe('shouldClearWorkspaceAttention through the terminal surface', () => {
   it('keeps worktree unread when a hidden tab still owns agent attention', () => {
     const activePaneKey = makePaneKey('tab-1', CODEX_LEAF_ID)
     const hiddenPaneKey = makePaneKey('tab-2', OTHER_LEAF_ID)
+
     const store = seedWorkspace({
       tabIds: ['tab-1', 'tab-2'],
       unreadAgentCompletionPanes: {
@@ -379,6 +388,7 @@ describe('shouldClearWorkspaceAttention through the terminal surface', () => {
 
   it('keeps worktree unread when a hidden tab has terminal unread attention', () => {
     const activePaneKey = makePaneKey('tab-1', CODEX_LEAF_ID)
+
     const store = seedWorkspace({
       tabIds: ['tab-1', 'tab-2'],
       unreadAgentCompletionPanes: { [activePaneKey]: 'agent-completion' },
@@ -391,6 +401,7 @@ describe('shouldClearWorkspaceAttention through the terminal surface', () => {
   it('ignores unread panes owned by another workspace', () => {
     const activePaneKey = makePaneKey('tab-1', CODEX_LEAF_ID)
     const foreignPaneKey = makePaneKey('tab-elsewhere', OTHER_LEAF_ID)
+
     const store = seedWorkspace({
       tabIds: ['tab-1'],
       unreadAgentCompletionPanes: {
@@ -405,6 +416,7 @@ describe('shouldClearWorkspaceAttention through the terminal surface', () => {
 
 describe('resolveAutoAckTabTargets', () => {
   const FLOATING_TAB_ID = 'tab-floating'
+
   const baseState = {
     activeView: 'terminal',
     activeTabId: 'tab-1',
@@ -480,18 +492,22 @@ describe('floating workspace auto-ack against the attention dot', () => {
       }
     })
     store.getState().markAgentCompletionPaneUnread(floatingPaneKey, 'agent-completion')
+
     return store
   }
 
   function runAutoAckScan(store: TestStore, floatingPanelVisible: boolean): void {
     const state = store.getState()
+
     for (const target of resolveAutoAckTabTargets(state, { floatingPanelVisible })) {
       const current = store.getState()
       const surface = createTerminalAttentionSurface(current)
+
       const viewedUnreadSubjectKey = resolveViewedUnreadSubjectKey(
         current.unreadAgentCompletionPanes,
         makePaneKey(target.tabId, CODEX_LEAF_ID)
       )
+
       const clearedSubjectKeys = new Set(viewedUnreadSubjectKey ? [viewedUnreadSubjectKey] : [])
       const workspaceId = target.worktreeId
       applyAgentAttentionAcknowledgement(
@@ -551,6 +567,7 @@ describe('computeLapsedManualUnreadProtections', () => {
       },
       new Set([paneKey])
     )
+
     expect(lapsed).toEqual([])
   })
 
@@ -558,6 +575,7 @@ describe('computeLapsedManualUnreadProtections', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(paneKey, { state: 'done', prompt: 'p', agentType: 'claude' })
     const turn = store.getState().agentStatusByPaneKey[paneKey]!.stateStartedAt
+
     const lapsed = computeLapsedManualUnreadProtections(
       {
         liveTurns: store.getState().agentStatusByPaneKey,
@@ -566,6 +584,7 @@ describe('computeLapsedManualUnreadProtections', () => {
       },
       new Set([paneKey])
     )
+
     expect(lapsed.sort()).toEqual([paneKey, otherPaneKey].sort())
   })
 
@@ -573,6 +592,7 @@ describe('computeLapsedManualUnreadProtections', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(paneKey, { state: 'done', prompt: 'p', agentType: 'claude' })
     const turn = store.getState().agentStatusByPaneKey[paneKey]!.stateStartedAt
+
     const lapsed = computeLapsedManualUnreadProtections(
       {
         liveTurns: store.getState().agentStatusByPaneKey,
@@ -581,6 +601,7 @@ describe('computeLapsedManualUnreadProtections', () => {
       },
       new Set([paneKey])
     )
+
     expect(lapsed).toEqual([])
   })
 })

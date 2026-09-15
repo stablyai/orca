@@ -43,9 +43,11 @@ export function ProviderDetailsMenu({
   triggerContent?: React.ReactNode
 }): React.JSX.Element {
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+
   const usagePercentageDisplay = normalizeUsagePercentageDisplay(
     useAppStore((s) => s.usagePercentageDisplay)
   )
+
   const menuFocusHandoff = useStatusBarMenuFocusHandoff()
 
   const handleOpenChange = (nextOpen: boolean): void => {
@@ -53,6 +55,7 @@ export function ProviderDetailsMenu({
       menuFocusHandoff.reset()
       recordFeatureInteraction('usage-tracking')
     }
+
     onOpenChange?.(nextOpen)
   }
 
@@ -131,6 +134,7 @@ export function useStatusBarMenuFocusHandoff(): {
   onCloseAutoFocus: (event: Event) => void
 } {
   const skipCloseAutoFocusRef = useRef(false)
+
   return {
     reset: () => {
       skipCloseAutoFocusRef.current = false
@@ -142,6 +146,7 @@ export function useStatusBarMenuFocusHandoff(): {
       if (!skipCloseAutoFocusRef.current) {
         return
       }
+
       skipCloseAutoFocusRef.current = false
       // Why: Radix trigger restoration steals the first click from surfaces such as xterm.
       event.preventDefault()

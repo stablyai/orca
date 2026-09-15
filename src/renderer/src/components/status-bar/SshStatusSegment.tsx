@@ -52,6 +52,7 @@ export async function connectRuntimeHostForNavigation(args: {
   if (!(await args.refreshStatus(args.environmentId, 5_000))) {
     return false
   }
+
   const repos = await args.fetchRepos(args.environmentId)
   await refreshRuntimeProjectWorktreesAndLineage(
     args.environmentId,
@@ -59,6 +60,7 @@ export async function connectRuntimeHostForNavigation(args: {
     args.fetchWorktrees,
     args.fetchLineage
   )
+
   return true
 }
 
@@ -76,20 +78,24 @@ export function SshStatusSegment({
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const readRuntimeHostStatusSnapshots = useAppStore((s) => s.readRuntimeHostStatusSnapshots)
   const hydrateRuntimeEnvironmentStatuses = useAppStore((s) => s.hydrateRuntimeEnvironmentStatuses)
+
   const remoteWorkspaceSyncStatusByTargetId = useAppStore(
     (s) => s.remoteWorkspaceSyncStatusByTargetId
   )
+
   const setActiveView = useAppStore((s) => s.setActiveView)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
+
   const targets = Array.from(sshTargetLabels.entries())
     // Why: runtime-owned (per-workspace-env) SSH targets are hidden — never list them
     // as a user-facing SSH host in the status bar.
     .filter(([id]) => !isRuntimeOwnedSshTargetId(id))
     .map(([id, label]) => {
       const state = sshConnectionStates.get(id)
+
       return {
         id,
         label,
@@ -97,11 +103,13 @@ export function SshStatusSegment({
         syncStatus: remoteWorkspaceSyncStatusByTargetId[id]
       }
     })
+
   const runtimeHosts = runtimeEnvironments
     .filter(isUserManagedRuntimeEnvironment)
     .map((environment) => {
       const statusEntry = runtimeStatusByEnvironmentId.get(environment.id)
       const override = hostLabelOverrides.get(toRuntimeExecutionHostId(environment.id))
+
       return {
         id: environment.id,
         label: override || environment.name || environment.id,
@@ -111,23 +119,29 @@ export function SshStatusSegment({
         remoteControl: statusEntry?.remoteControl ?? statusEntry?.status?.remoteControl ?? null
       }
     })
+
   const runtimeHostRows = runtimeHosts.map((host) => ({
     ...host,
     state: runtimeHostConnectionStateForEntry(runtimeStatusByEnvironmentId.get(host.id))
   }))
+
   // Available remote servers are online even when they are not the active runtime.
   // Keep host health separate from the advanced active-server selection.
   const connectedRuntimeHosts = runtimeHostRows.filter((host) =>
     isConnectedRuntimeHostState(host.state)
   )
+
   const inactiveRuntimeHosts = runtimeHostRows.filter(
     (host) => !isConnectedRuntimeHostState(host.state)
   )
+
   const connectedTargets = targets.filter((target) => target.status === 'connected')
   const disconnectedTargets = targets.filter((target) => target.status !== 'connected')
+
   const connectRuntimeHost = useCallback(
     async (environmentId: string): Promise<void> => {
       const store = useAppStore.getState()
+
       const reachable = await connectRuntimeHostForNavigation({
         environmentId,
         refreshStatus: connectRuntimeEnvironmentAndRecordStatus,
@@ -135,6 +149,7 @@ export function SshStatusSegment({
         fetchWorktrees: store.fetchWorktrees,
         fetchLineage: store.fetchWorktreeLineage
       })
+
       if (!reachable) {
         toast.error(
           translate(
@@ -142,12 +157,15 @@ export function SshStatusSegment({
             'Remote host is not reachable'
           )
         )
+
         return
       }
+
       recordFeatureInteraction('ssh')
     },
     [recordFeatureInteraction]
   )
+
   const disconnectRuntimeHost = useCallback(
     async (environmentId: string): Promise<void> => {
       try {
@@ -176,15 +194,19 @@ export function SshStatusSegment({
     ...targets.map((t) => sshStatusForOverall(t.status)),
     ...runtimeHostRows.map((host) => runtimeStatusForOverall(host.state))
   ]
+
   const overall = overallStatus(statuses)
   const connectedHostCount = statuses.filter((status) => status === 'connected').length
   const anyConnecting = overall === 'connecting'
+
   const syncProblem = targets.find(
     (t) => t.syncStatus?.phase === 'conflict' || t.syncStatus?.phase === 'error'
   )
+
   const syncProblemLabel = syncProblem
     ? workspaceSyncProblemLabel(syncProblem.syncStatus?.phase)
     : null
+
   return (
     <DropdownMenu
       onOpenChange={(open) => {

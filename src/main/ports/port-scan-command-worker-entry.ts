@@ -17,6 +17,7 @@ import {
 if (!parentPort) {
   throw new Error('Port scan command worker must run with a parent port.')
 }
+
 const port = parentPort
 
 process.once('exit', killActivePortScanCommands)
@@ -24,6 +25,7 @@ process.once('exit', killActivePortScanCommands)
 async function handleRequest(request: PortScanCommandRequest): Promise<PortScanCommandResponse> {
   try {
     const { stdout, spawnMs } = await runPortScanCommandInProcess(request.command, request.args)
+
     return { id: request.id, ok: true, stdout, spawnMs }
   } catch (err) {
     return {

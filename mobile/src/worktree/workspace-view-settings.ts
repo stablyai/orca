@@ -7,6 +7,7 @@ import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/typ
 import { coerceMobileWorkspaceStatuses } from './mobile-workspace-statuses'
 
 export type MobileGroupMode = 'none' | 'workspaceStatus' | 'repo' | 'prStatus'
+
 // Desktop sort adds 'manual'; mobile renders it but sorts by server order.
 export type MobileSortMode = 'smart' | 'name' | 'recent' | 'repo' | 'manual'
 
@@ -72,30 +73,39 @@ export function buildWorkspaceViewSettingsUpdate(
   next: MobileViewState
 ): WorkspaceViewSettings {
   const update: WorkspaceViewSettings = {}
+
   if ('groupMode' in patch) {
     update.groupBy = groupModeToDesktop(next.groupMode)
   }
+
   if ('sortMode' in patch) {
     update.sortBy = next.sortMode
   }
+
   if ('hideSleeping' in patch) {
     update.hideSleepingWorkspaces = next.hideSleeping
   }
+
   if ('hideDefaultBranch' in patch) {
     update.hideDefaultBranchWorkspace = next.hideDefaultBranch
   }
+
   if ('alwaysShowDefaultBranch' in patch) {
     update.alwaysShowDefaultBranchWorkspace = next.alwaysShowDefaultBranch
   }
+
   if ('filterRepoIds' in patch) {
     update.filterRepoIds = next.filterRepoIds
   }
+
   if ('collapsedGroups' in patch) {
     update.collapsedGroups = next.collapsedGroups
   }
+
   if ('workspaceStatuses' in patch) {
     update.workspaceStatuses = [...next.workspaceStatuses]
   }
+
   return update
 }
 
@@ -118,11 +128,13 @@ export function applyDesktopViewSettings(
 ): MobileViewState {
   const groupMode = groupModeFromDesktop(settings.groupBy)
   const sortMode = sortModeFromDesktop(settings.sortBy)
+
   // Why: a partially hydrated desktop settings payload may carry an empty
   // status catalog; mobile must keep renderable groups instead of hiding rows.
   const workspaceStatuses = settings.workspaceStatuses
     ? coerceMobileWorkspaceStatuses(settings.workspaceStatuses)
     : current.workspaceStatuses
+
   const next: MobileViewState = {
     groupMode: groupMode ?? current.groupMode,
     sortMode: sortMode ?? current.sortMode,
@@ -134,5 +146,6 @@ export function applyDesktopViewSettings(
     collapsedGroups: settings.collapsedGroups ?? current.collapsedGroups,
     workspaceStatuses
   }
+
   return next
 }

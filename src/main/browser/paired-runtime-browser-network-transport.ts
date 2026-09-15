@@ -19,6 +19,7 @@ import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
 import type { BrowserNetworkTunnelOutboundMemoryLease } from './browser-network-tunnel-outbound-memory-budget'
 
 const BROWSER_TUNNEL_WS_SOFT_CAP_BYTES = 1024 * 1024
+
 const BROWSER_TUNNEL_WS_MAX_QUEUED_BYTES = 7 * 1024 * 1024
 
 type PairedRuntimeBrowserNetworkTransportOptions = {
@@ -56,6 +57,7 @@ export class PairedRuntimeBrowserNetworkTransport {
 
   start(): Promise<BrowserNetworkTunnelClient> {
     this.startPromise ??= this.startTransport()
+
     return this.startPromise
   }
 
@@ -63,35 +65,45 @@ export class PairedRuntimeBrowserNetworkTransport {
     if (this.closed) {
       return []
     }
+
     this.closed = true
     this.rejectReady?.(error)
     this.rejectReady = null
     const failures: Error[] = []
+
     try {
       this.tunnelValue?.close(error)
     } catch (closeError) {
       failures.push(asError(closeError))
     }
+
     this.tunnelValue = null
+
     try {
       this.subscription?.close()
     } catch (closeError) {
       failures.push(asError(closeError))
     }
+
     this.subscription = null
+
     return failures
   }
 
   private async startTransport(): Promise<BrowserNetworkTunnelClient> {
     let resolveReady = (): void => {}
+
     let rejectReady = (_error: Error): void => {}
+
     const ready = new Promise<void>((resolve, reject) => {
       resolveReady = resolve
       rejectReady = reject
     })
+
     void ready.catch(() => undefined)
     this.rejectReady = rejectReady
     let readyTimeout: ReturnType<typeof setTimeout> | null = null
+
     try {
       const subscription = await subscribeRemoteRuntimeRequest(
         this.options.pairing,
@@ -109,30 +121,41 @@ export class PairedRuntimeBrowserNetworkTransport {
             if (this.closed) {
               return
             }
+
             if (!response.ok) {
               this.fail(
                 new RemoteRuntimeClientError(response.error.code, response.error.message),
                 rejectReady
               )
+
               return
             }
+
             const parsed = BrowserNetworkTunnelEvent.safeParse(response.result)
+
             if (
               !parsed.success ||
               response._meta.runtimeId !== this.options.lease.authorityRuntimeId
             ) {
               this.fail(new Error('Invalid browser network route response'), rejectReady)
+
               return
             }
+
             const result = parsed.data
+
             if (result.type === 'ready') {
               this.acceptReady(result.tunnelGeneration, resolveReady, rejectReady)
+
               return
             }
+
             if (this.tunnelValue?.generation === result.tunnelGeneration) {
               this.fail(new Error('Browser network route closed by the runtime'), rejectReady)
+
               return
             }
+
             this.fail(
               new Error('Browser network route closed with an unknown generation'),
               rejectReady
@@ -142,13 +165,16 @@ export class PairedRuntimeBrowserNetworkTransport {
             if (this.closed) {
               return
             }
+
             if (!this.tunnelValue) {
               this.fail(
                 new Error('Browser network route received binary data before readiness'),
                 rejectReady
               )
+
               return
             }
+
             this.tunnelValue.handleBinary(bytes)
           },
           onError: (error) => this.fail(error, rejectReady),
@@ -174,10 +200,12 @@ export class PairedRuntimeBrowserNetworkTransport {
           ]
         }
       )
+
       if (this.closed) {
         subscription.close()
         throw new Error('Browser network route closed during startup')
       }
+
       this.subscription = subscription
       readyTimeout = setTimeout(
         () =>
@@ -188,20 +216,25 @@ export class PairedRuntimeBrowserNetworkTransport {
         this.options.timeoutMs
       )
       await ready
+
       if (this.closed || !this.tunnelValue) {
         throw new Error('Browser network route transport was not retained')
       }
+
       return this.tunnelValue
     } catch (error) {
       const transportError = asError(error)
+
       if (!this.closed) {
         this.fail(transportError, rejectReady)
       }
+
       throw transportError
     } finally {
       if (readyTimeout) {
         clearTimeout(readyTimeout)
       }
+
       this.rejectReady = null
     }
   }
@@ -215,12 +248,16 @@ export class PairedRuntimeBrowserNetworkTransport {
       if (this.tunnelValue.generation !== tunnelGeneration) {
         this.fail(new Error('Browser network route generation changed in place'), rejectReady)
       }
+
       return
     }
+
     if (tunnelGeneration <= this.options.minimumTunnelGeneration) {
       this.fail(new Error('Browser network route generation did not advance'), rejectReady)
+
       return
     }
+
     try {
       this.tunnelValue = new BrowserNetworkTunnelClient({
         tunnelGeneration,
@@ -240,8 +277,10 @@ export class PairedRuntimeBrowserNetworkTransport {
     if (this.closed) {
       return
     }
+
     rejectReady(error)
     const cleanupFailures = this.close(error)
+
     try {
       this.options.onFailure(this, error, cleanupFailures)
     } catch {

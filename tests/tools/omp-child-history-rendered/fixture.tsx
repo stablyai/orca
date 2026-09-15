@@ -27,6 +27,7 @@ const parent: AiVaultSession = {
   resumeCommand: 'omp --resume parent',
   subagent: null
 }
+
 const children: AiVaultSession[] = [
   {
     ...parent,
@@ -67,8 +68,11 @@ const descendants = Array.from({ length: 7 }, (_, index): AiVaultSession => ({
   subagentTranscriptCount: index === 6 ? 0 : 1,
   subagent: { parentSessionId: 'child', agentType: 'researcher', status: 'completed' }
 }))
+
 const requests: string[] = []
+
 Object.defineProperty(window, 'nestedRequests', { value: requests })
+
 Object.defineProperty(window, 'api', {
   value: {
     aiVault: {
@@ -76,6 +80,7 @@ Object.defineProperty(window, 'api', {
         requests.push(parentFilePath)
         await new Promise((resolve) => setTimeout(resolve, 250))
         const index = descendants.findIndex((session) => session.filePath === parentFilePath)
+
         return {
           sessions:
             parentFilePath === parent.filePath
@@ -91,6 +96,7 @@ Object.defineProperty(window, 'api', {
     }
   }
 })
+
 const sessions = [
   parent,
   ...Array.from({ length: 100 }, (_, index) => ({
@@ -102,9 +108,12 @@ const sessions = [
     subagentTranscriptCount: 0
   }))
 ]
+
 const ignore = () => {}
+
 function App() {
   const [result, setResult] = useState('No resume requested')
+
   return (
     <TooltipProvider>
       <main className="p-6 bg-background text-foreground space-y-4">
@@ -153,4 +162,5 @@ function App() {
     </TooltipProvider>
   )
 }
+
 createRoot(document.getElementById('root')!).render(<App />)

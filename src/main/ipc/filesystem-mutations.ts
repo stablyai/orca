@@ -45,12 +45,16 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
+
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
+
         return provider.createFile(args.filePath)
       }
+
       const filePath = await resolveAuthorizedPath(args.filePath, store)
       await mkdir(dirname(filePath), { recursive: true })
+
       try {
         // Use the 'wx' flag for atomic create-if-not-exists, avoiding TOCTOU races
         await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
@@ -72,10 +76,13 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
+
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
+
         return provider.createDir(args.dirPath)
       }
+
       const dirPath = await resolveAuthorizedPath(args.dirPath, store)
       await assertNotExists(dirPath)
       await mkdir(dirPath, { recursive: true })
@@ -97,10 +104,13 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
+
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
+
         return provider.renameNoClobber(args.oldPath, args.newPath)
       }
+
       // Why: rename() operates on directory entries, not file contents. If
       // oldPath is a symlink, we must rename the link itself rather than
       // resolving it to its target — following the link would rename the
@@ -129,16 +139,21 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
+
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
+
         return provider.copy(args.sourcePath, args.destinationPath)
       }
+
       const sourcePath = await resolveAuthorizedPath(args.sourcePath, store, {
         preserveSymlink: true
       })
+
       const destinationPath = await resolveAuthorizedPath(args.destinationPath, store, {
         preserveSymlink: true
       })
+
       await mkdir(dirname(destinationPath), { recursive: true })
       // Why: duplicate/copy callers deconflict before copying. COPYFILE_EXCL
       // keeps a late race from silently overwriting an existing file.
@@ -163,6 +178,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
+
       if (args.connectionId) {
         return importExternalPathsSsh(args.sourcePaths, args.destDir, args.connectionId, {
           ensureDir: args.ensureDir,
@@ -188,6 +204,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       for (const sourcePath of args.sourcePaths) {
         const result = await importOneSource(sourcePath, resolvedDest, reservedNames)
         results.push(result)
+
         if (result.status === 'imported') {
           reservedNames.add(basename(result.destPath))
         }
@@ -207,11 +224,13 @@ export function registerFilesystemMutationHandlers(store: Store): void {
       // Why: one budget for the whole drop — per-source counters would let five
       // 2 GB files through a ceiling meant to cap the drop.
       let totalBytes = 0
+
       for (const sourcePath of args.sourcePaths) {
         const source = await stageOneSourceForRuntimeUpload(sourcePath, totalBytes)
         totalBytes += stagedRuntimeUploadByteLength(source)
         sources.push(source)
       }
+
       return { sources }
     }
   )
@@ -223,16 +242,19 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:uploadExternalFileToRuntime',
     async (event, args: RuntimeUploadFileStreamRequest): Promise<{ byteLength: number }> => {
       const userDataPath = app.getPath('userData')
+
       // Why: the streamer's manual-disconnect check keys on the environment id,
       // and the renderer may pass any selector the store resolves.
       const request = {
         ...args,
         environmentId: resolveEnvironment(userDataPath, args.environmentId).id
       }
+
       // Why: the renderer's own loop died with its window. Now that the bytes
       // move in main, a reload or close has to stop the transfer explicitly,
       // or a multi-GB upload outlives the window that asked for it.
       const lifetime = abortWhenRendererGone(event.sender)
+
       try {
         return await streamExternalFileToRuntime({
           ...request,
@@ -245,6 +267,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
           // abandoned temp path is only collectable from here.
           await sweepAbandonedRuntimeUploadTempPath(userDataPath, request)
         }
+
         throw error
       } finally {
         lifetime.dispose()
@@ -274,6 +297,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         args.expectedSshConnectionGeneration,
         args.expectedExecutionHostId
       )
+
       // Why: `== null` (not `!args.connectionId`) so an empty string is
       // treated as a renderer error, not silently routed to the local branch.
       if (args.connectionId == null) {
@@ -283,8 +307,10 @@ export function registerFilesystemMutationHandlers(store: Store): void {
           failed: []
         }
       }
+
       const worktreePath = args.worktreePath.replace(/\/+$/, '')
       const destDir = `${worktreePath}/.orca/drops`
+
       const { results } = await importExternalPathsSsh(args.paths, destDir, args.connectionId, {
         ensureDir: true,
         assertCurrent: () =>
@@ -295,9 +321,11 @@ export function registerFilesystemMutationHandlers(store: Store): void {
             args.expectedExecutionHostId
           )
       })
+
       const resolvedPaths: string[] = []
       const skipped: { sourcePath: string; reason: ImportSkipReason }[] = []
       const failed: { sourcePath: string; reason: string }[] = []
+
       // Iterate in input order so injected paths align with the user's drop order.
       for (const r of results) {
         if (r.status === 'imported') {
@@ -308,6 +336,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
           failed.push({ sourcePath: r.sourcePath, reason: r.reason })
         }
       }
+
       return { resolvedPaths, skipped, failed }
     }
   )

@@ -30,6 +30,7 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
     cached: RuntimeWorktreeScanCache | null
   ): Promise<RuntimeWorktreeScanRefresh> {
     const scannedAt = Date.now()
+
     // SSH and WSL-routed repos run Git off-host, so a local admin-dir read cannot describe them.
     // Resolve the execution host rather than reading `connectionId`: a row stamped only
     // `executionHostId: 'ssh:*'` is just as off-host, and fingerprinting it stats client paths.
@@ -39,18 +40,22 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
       // fingerprint, so reading one would be pure work. Agent-scratch roots are that case today.
       resolveWorktreeScanCacheTtlMs(repo) < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS &&
       !getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime).wslDistro
+
     // Why issue it before the scan: a change landing while the scan runs must not be stamped as
     // already-observed, or the next probe would mask it until the reconciliation deadline.
     const probe = fingerprintCapable ? this.startRepoWorktreeAdminFingerprintProbe(repo) : null
+
     const reusable =
       cached?.result.ok === true &&
       scannedAt - cached.scannedAt < WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
         ? cached
         : null
+
     if (probe && reusable) {
       // Why await only here: this is the one branch whose decision needs the probe. A scan-bound
       // caller must never wait on it, or every cold read pays filesystem latency it cannot use.
       const probed = await withTimeoutResult(probe, WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS)
+
       if (!probed.ok) {
         // Why log: expiry and "fingerprint unavailable" both surface as `null`, so a wedged mount is
         // otherwise indistinguishable from a repo that simply cannot be fingerprinted.
@@ -59,7 +64,9 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
           timeoutMs: WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS
         })
       }
+
       const current = probed.ok ? probed.value : null
+
       if (current !== null && current === reusable.adminFingerprint) {
         return {
           result: reusable.result,
@@ -69,7 +76,9 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
         }
       }
     }
+
     const result = await this.listRepoWorktreesForResolutionUncached(repo, projectRuntime)
+
     return { result, adminFingerprint: null, adminFingerprintProbe: probe, scannedAt }
   }
 
@@ -82,7 +91,9 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
     if (this.worktreeAdminFingerprintProbes.has(repo.id)) {
       return null
     }
+
     this.worktreeAdminFingerprintProbes.add(repo.id)
+
     return readRepoWorktreeAdminFingerprint(repo.path)
       .catch(() => null)
       .finally(() => {
@@ -98,16 +109,20 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
     // `executionHostId: 'ssh:*'` would otherwise be scanned on the client against a remote path —
     // `git worktree list` then reports nothing, so the remote worktrees never resolve at all.
     const sshConnectionId = getRepoSshConnectionId(repo)
+
     if (!sshConnectionId) {
       return await scanLocalRepoWorktreesForResolution(
         repo.path,
         getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
       )
     }
+
     const provider = getSshGitProvider(sshConnectionId)
+
     if (!provider) {
       return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
+
     try {
       return { ok: true, worktrees: await provider.listWorktrees(repo.path) }
     } catch {
@@ -129,12 +144,14 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
 
   protected invalidateWorktreeScanCacheForRepo(repoId: string): void {
     const prefix = `${repoId}\0`
+
     const scopeKeys = new Set(
       this.store
         ?.getRepos()
         .filter((repo) => repo.id === repoId)
         .map((repo) => `${repoId}\0${getRepoExecutionHostId(repo)}`) ?? []
     )
+
     for (const keys of [
       this.worktreeScanGenerations.keys(),
       this.worktreeScanCache.keys(),
@@ -146,6 +163,7 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
         }
       }
     }
+
     for (const key of scopeKeys) {
       this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
       this.worktreeScanCache.delete(key)
@@ -161,14 +179,17 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
   protected invalidateSshWorktreeScanCacheInternal(targetId: string): void {
     const repos = this.store?.getRepos() ?? []
     const affectedRepos = repos.filter((repo) => getRepoSshConnectionId(repo) === targetId)
+
     const affectedScopeKeys = new Set(
       affectedRepos.map((repo) => `${repo.id}\0${getRepoExecutionHostId(repo)}`)
     )
+
     for (const key of affectedScopeKeys) {
       this.worktreeScanGenerations.set(key, (this.worktreeScanGenerations.get(key) ?? 0) + 1)
       this.worktreeScanCache.delete(key)
       this.worktreeScanInFlight.delete(key)
     }
+
     if (affectedScopeKeys.size > 0) {
       this.resolvedWorktrees.invalidateResolved()
     }

@@ -16,6 +16,7 @@ export function rpcReadUnchecked<Variant extends string, Value>(
  */
 export function rpcPayloadMember(raw: unknown, key: string): unknown {
   const boxed: Record<string, unknown> | null | undefined = raw == null ? raw : Object(raw)
+
   return boxed![key]
 }
 

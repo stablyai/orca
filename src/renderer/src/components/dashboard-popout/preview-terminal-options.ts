@@ -19,10 +19,12 @@ export function buildPreviewAppearanceOptions(
   macOptionIsMeta: boolean
 ): Partial<ITerminalOptions> {
   const cursorStyle = settings?.terminalCursorStyle ?? 'block'
+
   const fontWeights = resolveTerminalFontWeights(
     settings?.terminalFontWeight,
     settings?.terminalFontWeightBold
   )
+
   return {
     fontSize: settings?.terminalFontSize ?? 14,
     fontFamily: buildFontFamily(settings?.terminalFontFamily ?? ''),
@@ -70,6 +72,7 @@ export function buildPreviewTerminalOptions(args: {
       ? { vtExtensions: { kittyKeyboard: false } }
       : {})
   }
+
   return {
     ...buildDefaultTerminalOptions(),
     ...buildPreviewAppearanceOptions(args.settings, args.macOptionIsMeta),

@@ -52,49 +52,61 @@ export async function pasteTerminalClipboard({
   onImagePasteError
 }: PasteTerminalClipboardDeps): Promise<TerminalClipboardPasteResult> {
   let text = ''
+
   try {
     text = await readClipboardText({ maxBytes: TERMINAL_PASTE_MAX_BYTES })
   } catch (error) {
     if (isClipboardTextTooLargeError(error)) {
       onTextPasteError?.(error)
+
       return { status: 'skipped', reason: 'text-too-large' }
     }
     // Why: browser clipboard text reads can fail for image-only clipboards.
     // Still try the image path so Cmd/Ctrl+V works for screenshots.
   }
+
   if (text) {
     try {
       const textOptions =
         protectedMultilineTextPasteOptions ??
         (forceBracketedMultilineTextPaste ? { forceBracketedPasteForMultiline: true } : undefined)
+
       const result = await (textOptions ? pasteText(text, textOptions) : pasteText(text))
+
       if (result === false) {
         return { status: 'skipped', reason: 'text-paste-rejected' }
       }
+
       return { status: 'pasted', kind: 'text' }
     } catch (error) {
       onTextPasteError?.(error)
+
       return { status: 'skipped', reason: 'text-paste-failed' }
     }
   }
 
   try {
     const filePath = await saveClipboardImageAsTempFile({ connectionId, runtimeEnvironmentId })
+
     if (!filePath) {
       return { status: 'skipped', reason: 'empty' }
     }
+
     const result = await pasteText(filePath, {
       // Why: a generated clipboard-image path is terminal image injection, not
       // ordinary one-line text. Keep it off the Ctrl+C stale-text paste path.
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
     })
+
     if (result === false) {
       return { status: 'skipped', reason: 'image-paste-rejected' }
     }
+
     return { status: 'pasted', kind: 'image-path' }
   } catch (error) {
     onImagePasteError?.(error)
+
     return { status: 'skipped', reason: 'image-paste-failed' }
   }
 }

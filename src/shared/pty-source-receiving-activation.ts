@@ -14,10 +14,13 @@ export function parsePtySourceReceivingActivation(
   if (value === undefined) {
     return undefined
   }
+
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('Invalid SSH PTY source activation response')
   }
+
   const input = value as Record<string, unknown>
+
   if (
     input.status !== 'pending' ||
     typeof input.deliveryToken !== 'string' ||
@@ -32,6 +35,7 @@ export function parsePtySourceReceivingActivation(
   ) {
     throw new Error('Invalid SSH PTY source activation response')
   }
+
   return Object.freeze({
     status: 'pending',
     clientGeneration: Number(input.clientGeneration),

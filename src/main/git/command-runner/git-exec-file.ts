@@ -44,16 +44,21 @@ async function gitExecFileAsyncUnlocked(
           signal: options.signal
         })
       }
+
       const readEnvironmentReady = pendingWslDirectGitReadEnvironment(args, options)
+
       if (readEnvironmentReady) {
         await readEnvironmentReady
       }
+
       let resolved = resolveGitCommand(args, options, false, options.captureWslLoginShellOutput)
+
       const environmentReady = prepareWindowsHostGitEnvironment(
         resolved,
         options.env,
         options.signal
       )
+
       const env = environmentReady ? await environmentReady : options.env
       const effectiveOptions = env === options.env ? options : { ...options, env }
       resolved = resolveGitCommand(
@@ -62,9 +67,11 @@ async function gitExecFileAsyncUnlocked(
         false,
         effectiveOptions.captureWslLoginShellOutput
       )
+
       const policy = effectiveOptions.useConfiguredSshCommandForNetwork
         ? await buildNetworkSshPolicyEnv(effectiveOptions)
         : { env: nonInteractiveGitEnv(effectiveOptions.env), mode: 'default' as const }
+
       const grant = await acquireGitAdmission({
         args,
         cwd: options.cwd,
@@ -72,16 +79,20 @@ async function gitExecFileAsyncUnlocked(
         tier: options.admissionTier,
         signal: options.signal
       })
+
       span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
       const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
       const terminationState: { current: Promise<void> | null } = { current: null }
+
       const capture = (
         command: ResolvedCommand
       ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> => {
         let reportTerminated: () => void = () => {}
+
         terminationState.current = new Promise<void>((resolve) => {
           reportTerminated = resolve
         })
+
         const captureOptions = {
           cwd: command.cwd,
           encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
@@ -97,6 +108,7 @@ async function gitExecFileAsyncUnlocked(
             ? {}
             : { createTimeoutError: () => new GitCommandTimeoutError(timeoutMs) })
         }
+
         const captured = options.terminationBarrier
           ? execFileCaptureToTermination(
               command.binary,
@@ -105,13 +117,16 @@ async function gitExecFileAsyncUnlocked(
               command.termination
             )
           : execFileCapture(command.binary, command.args, captureOptions)
+
         // Why: a dead WSL distro fails with an empty stderr, so the span would carry no cause at all.
         return captured.catch((error: unknown) => {
           throw annotateWslHostFailure(error, command)
         })
       }
+
       const runCapturedCommand = async (): Promise<{ stdout: string; stderr: string }> => {
         let result: { stdout: string | Buffer; stderr: string | Buffer }
+
         try {
           result = await capture(resolved)
         } catch (error) {
@@ -122,36 +137,45 @@ async function gitExecFileAsyncUnlocked(
           ) {
             await terminationState.current
             const wasMissing = invalidateMissingDirectWslGit(error, resolved)
+
             const fallback = resolveGitCommand(
               args,
               effectiveOptions,
               true,
               effectiveOptions.captureWslLoginShellOutput
             )
+
             result = await capture(fallback)
             // Why: matching failures can be normal Git control flow; only a successful login retry proves the direct environment was insufficient.
             disableDirectWslGitAfterSuccessfulFallback(wasMissing, resolved)
             const { stdout, stderr } = result
+
             return {
               stdout: readCapturedGitString(stdout as string, fallback),
               stderr: stderr as string
             }
           }
+
           if (options.useConfiguredSshCommandForNetwork && error && typeof error === 'object') {
             Object.assign(error, { gitSshPolicyMode: policy.mode })
           }
+
           throw error
         }
+
         const { stdout, stderr } = result
+
         return {
           stdout: readCapturedGitString(stdout as string, resolved),
           stderr: stderr as string
         }
       }
+
       try {
         return await runCapturedCommand()
       } finally {
         const termination = terminationState.current
+
         if (termination) {
           void termination.then(grant.release)
         } else {
@@ -167,6 +191,7 @@ export function gitExecFileAsync(
   options: GitExecOptions
 ): Promise<{ stdout: string; stderr: string }> {
   const command = resolveGitFetchHeadCommand(args, options.cwd)
+
   return command.needsLock
     ? runWithGitFetchHeadLock(
         command.cwd,
@@ -198,33 +223,43 @@ export async function gitExecFileAsyncBuffer(
     if (isWslLinkedWorktreeGitRoutingCandidate(options.cwd, options.wslDistro)) {
       await prepareWslLinkedWorktreeGitRouting(options.cwd, options.wslDistro)
     }
+
     const readEnvironmentReady = pendingWslDirectGitReadEnvironment(args, options)
+
     if (readEnvironmentReady) {
       await readEnvironmentReady
     }
+
     // `git show` is a read, so this normally runs with no shell at all. The fence
     // still matters for the login-shell fallback: these are raw blob bytes going
     // straight to the diff/blob viewer, where a banner becomes file content.
     let resolved = resolveGitCommand(args, options, false, true)
     const environmentReady = prepareWindowsHostGitEnvironment(resolved, undefined)
+
     if (environmentReady) {
       await environmentReady
     }
+
     resolved = resolveGitCommand(args, options, false, true)
+
     const grant = await acquireGitAdmission({
       args,
       cwd: options.cwd,
       wslDistro: options.wslDistro,
       tier: options.admissionTier
     })
+
     span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
     const timeoutMs = gitCommandTimeoutMs(args, options.timeout, options.timeoutMsForTest)
     let termination: Promise<void> | null = null
+
     try {
       let reportTerminated: () => void = () => {}
+
       termination = new Promise<void>((resolve) => {
         reportTerminated = resolve
       })
+
       const { stdout } = (await execFileCapture(resolved.binary, resolved.args, {
         cwd: resolved.cwd,
         encoding: 'buffer',
@@ -237,6 +272,7 @@ export async function gitExecFileAsyncBuffer(
           ? {}
           : { createTimeoutError: () => new GitCommandTimeoutError(timeoutMs) })
       })) as { stdout: Buffer }
+
       return { stdout: readCapturedGitBuffer(stdout, resolved) }
     } finally {
       if (termination) {
@@ -257,29 +293,39 @@ export async function gitExecFileAsyncBuffer(
  */
 function readCapturedGitBuffer(stdout: Buffer, resolved: ResolvedCommand): Buffer {
   const captured = resolved.captured
+
   if (!captured) {
     return stdout
   }
+
   const beginIndex = stdout.lastIndexOf(captured.beginMarker, undefined, 'utf8')
+
   if (beginIndex === -1) {
     return stdout
   }
+
   const payloadStart = beginIndex + Buffer.byteLength(captured.beginMarker, 'utf8')
   const endIndex = stdout.indexOf(captured.endMarker, payloadStart, 'utf8')
+
   return endIndex === -1 ? stdout.subarray(payloadStart) : stdout.subarray(payloadStart, endIndex)
 }
 
 function readCapturedGitString(stdout: string, resolved: ResolvedCommand): string {
   const captured = resolved.captured
+
   if (!captured) {
     return stdout
   }
+
   const beginIndex = stdout.lastIndexOf(captured.beginMarker)
+
   if (beginIndex === -1) {
     return stdout
   }
+
   const payloadStart = beginIndex + captured.beginMarker.length
   const endIndex = stdout.indexOf(captured.endMarker, payloadStart)
+
   return endIndex === -1 ? stdout.slice(payloadStart) : stdout.slice(payloadStart, endIndex)
 }
 
@@ -303,6 +349,7 @@ export function gitExecFileSync(
 ): string {
   const resolved = resolveCommand('git', args, options.cwd)
   const spawnStartedAt = performance.now()
+
   try {
     return execFileSync(resolved.binary, resolved.args, {
       cwd: resolved.cwd,

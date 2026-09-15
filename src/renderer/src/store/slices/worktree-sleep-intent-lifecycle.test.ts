@@ -5,7 +5,9 @@ import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 
 const { clearWorktreeSleepIntent, hasWorktreeSleepIntent, markWorktreeSleepIntent } = intent
+
 const WORKTREE_ID = 'repo1::/path/wt1'
+
 const FOLDER_KEY = 'folder:folder-1'
 
 createStoreCascadesMockApi()

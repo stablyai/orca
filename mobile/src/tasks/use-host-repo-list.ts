@@ -34,6 +34,7 @@ export function useHostRepoList<Repo>(
     undefined,
     initialHostRepoList<Repo>
   )
+
   const boundKeyRef = useRef(clientKey)
   const reposRef = useRef<Repo[]>([])
   const inFlightRef = useRef<Promise<Repo[]> | null>(null)
@@ -46,6 +47,7 @@ export function useHostRepoList<Repo>(
   // render is the supported way to do that; a ref write here is not, because a
   // concurrent render React abandons would still have mutated it.
   const [boundKey, setBoundKey] = useState(clientKey)
+
   if (boundKey !== clientKey) {
     setBoundKey(clientKey)
     dispatch({ type: 'reset' })
@@ -62,6 +64,7 @@ export function useHostRepoList<Repo>(
     if (boundKeyRef.current === clientKey) {
       return
     }
+
     boundKeyRef.current = clientKey
     reposRef.current = []
     inFlightRef.current = null
@@ -73,29 +76,37 @@ export function useHostRepoList<Repo>(
   // identity. Everything they read lives in refs, so they never need to.
   const reload = useCallback(async (): Promise<Repo[]> => {
     const fetchNow = fetchRef.current
+
     if (!fetchNow) {
       return []
     }
+
     if (inFlightRef.current) {
       return inFlightRef.current
     }
+
     // Why: only the request issued for the currently bound client may commit.
     // A slow response from the previous host would otherwise land afterwards
     // and pin its repos as this host's authoritative list.
     const requestKey = boundKeyRef.current
     const requestId = requestIdRef.current + 1
     requestIdRef.current = requestId
+
     const request = (async (): Promise<Repo[]> => {
       dispatch({ type: 'requested' })
+
       try {
         const repos = await fetchNow()
+
         // Why: A -> B -> A reuses the same client, so matching the key alone
         // would let a stale request for A overwrite a newer result for A.
         if (boundKeyRef.current !== requestKey || requestIdRef.current !== requestId) {
           return []
         }
+
         reposRef.current = repos
         dispatch({ type: 'resolved', repos })
+
         return repos
       } catch (err) {
         if (boundKeyRef.current === requestKey && requestIdRef.current === requestId) {
@@ -104,6 +115,7 @@ export function useHostRepoList<Repo>(
             error: err instanceof Error ? err.message : 'Unknown error'
           })
         }
+
         throw err
       } finally {
         if (requestIdRef.current === requestId) {
@@ -111,7 +123,9 @@ export function useHostRepoList<Repo>(
         }
       }
     })()
+
     inFlightRef.current = request
+
     return request
   }, [])
 

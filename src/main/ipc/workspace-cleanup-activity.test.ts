@@ -61,6 +61,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const gitDirHeadPath = path.join(gitDirPath, 'HEAD')
     const commitEditMsgPath = path.join(gitDirPath, 'COMMIT_EDITMSG')
     const origHeadPath = path.join(gitDirPath, 'ORIG_HEAD')
+
     const statPath = vi.fn(async (targetPath: string) => {
       const mtimes: Record<string, number> = {
         '/repo-feature': 10_000,
@@ -69,8 +70,10 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
         [origHeadPath]: 65_000,
         [commitEditMsgPath]: 70_000
       }
+
       return { mtimeMs: mtimes[targetPath] ?? 0 }
     })
+
     const readTextFile = vi.fn(async () => `gitdir: ${gitDirPath}\n`)
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
@@ -89,6 +92,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
 
   it('ignores gitdir metadata that git maintenance and git status restamp', async () => {
     const gitDirPath = path.join('/repo', '.git', 'worktrees', 'repo-feature')
+
     const statPath = vi.fn(async (targetPath: string) => {
       const mtimes: Record<string, number> = {
         '/repo-feature': 10_000,
@@ -97,8 +101,10 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
         [path.join(gitDirPath, 'index')]: 90_000,
         [path.join(gitDirPath, 'logs', 'HEAD')]: 90_000
       }
+
       return { mtimeMs: mtimes[targetPath] ?? 0 }
     })
+
     const readTextFile = vi.fn(async () => `gitdir: ${gitDirPath}\n`)
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
@@ -118,6 +124,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const gitDirPath = path.join('/repo', '.git', 'worktrees', 'repo-feature')
     const reflogPath = path.join(gitDirPath, 'logs', 'HEAD')
     const statPath = vi.fn(async () => ({ mtimeMs: 10_000 }))
+
     const readTextFile = vi.fn(async (targetPath: string) =>
       targetPath === reflogPath
         ? [
@@ -142,6 +149,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
 
   it('falls back to a full reflog read when the newest entry exceeds the tail window', async () => {
     const dir = await mkdtemp(path.join(os.tmpdir(), 'cleanup-activity-'))
+
     try {
       const gitDir = path.join(dir, 'gitdir')
       await mkdir(path.join(gitDir, 'logs'), { recursive: true })
@@ -172,6 +180,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
   it('degrades to other probes when the reflog was expired to an empty file', async () => {
     const gitDirPath = path.join('/repo', '.git', 'worktrees', 'repo-feature')
     const statPath = vi.fn(async () => ({ mtimeMs: 10_000 }))
+
     const readTextFile = vi.fn(async (targetPath: string) =>
       targetPath === path.join(gitDirPath, 'logs', 'HEAD') ? '' : `gitdir: ${gitDirPath}\n`
     )
@@ -189,9 +198,11 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
   it('resolves relative linked worktree gitdir pointers from the worktree path', async () => {
     const gitDirPath = path.resolve('/repo-feature', '.repo/gitdir')
     const commitEditMsgPath = path.join(gitDirPath, 'COMMIT_EDITMSG')
+
     const statPath = vi.fn(async (targetPath: string) => ({
       mtimeMs: targetPath === commitEditMsgPath ? 40_000 : 10_000
     }))
+
     const readTextFile = vi.fn(async () => 'gitdir: .repo/gitdir\n')
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
@@ -210,6 +221,7 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
     const gitDirPath = String.raw`\\wsl.localhost\Ubuntu\home\me\repo\.git\worktrees\repo-feature`
     const gitDirHeadPath = path.join(gitDirPath, 'HEAD')
     const commitEditMsgPath = path.join(gitDirPath, 'COMMIT_EDITMSG')
+
     const statPath = vi.fn(async (targetPath: string) => {
       const mtimes: Record<string, number> = {
         [worktreePath]: 10_000,
@@ -217,8 +229,10 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
         [gitDirHeadPath]: 60_000,
         [commitEditMsgPath]: 70_000
       }
+
       return { mtimeMs: mtimes[targetPath] ?? 0 }
     })
+
     const readTextFile = vi.fn(async () => 'gitdir: /home/me/repo/.git/worktrees/repo-feature\n')
 
     const worktree = await resolveWorkspaceCleanupActivityWorktree(
@@ -240,10 +254,12 @@ describe('resolveWorkspaceCleanupActivityWorktree', () => {
   it('maps a drvfs gitdir pointer to its drive spelling on a Windows host', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       const statPath = vi.fn(async (targetPath: string) => ({
         mtimeMs: targetPath.endsWith('COMMIT_EDITMSG') ? 70_000 : 10_000
       }))
+
       // A WSL git writes the pointer in the guest namespace even for a drive-path worktree.
       const readTextFile = vi.fn(
         async (_targetPath: string) => 'gitdir: /mnt/c/Users/me/repo/.git/worktrees/repo-feature\n'

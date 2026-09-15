@@ -77,6 +77,7 @@ function makeDispatcher(): RpcDispatcher {
     resolveAiVaultSessionTitles: (requests: unknown[], signal?: AbortSignal) =>
       resolveAiVaultSessionTitlesInWorker(requests, signal)
   } as unknown as OrcaRuntimeService
+
   return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
 }
 
@@ -86,6 +87,7 @@ function makeFailingDispatcher(error: Error): RpcDispatcher {
     ensureStructuredAgentSessionHost: vi.fn(async () => undefined),
     listAiVaultSessions: vi.fn().mockRejectedValue(error)
   } as unknown as OrcaRuntimeService
+
   return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
 }
 
@@ -99,6 +101,7 @@ describe('aiVault.resolveSessionTitles handler', () => {
       titles: [{ agent: 'codex', sessionId: 'session-1', title: 'Exact title' }]
     })
     const dispatcher = makeDispatcher()
+
     const requests = [
       { agent: 'codex', sessionId: 'session-1', transcriptPath: '/tmp/session.jsonl' }
     ]
@@ -128,6 +131,7 @@ describe('aiVault.resolveSessionTitles handler', () => {
 
   it('rejects more than 64 title identities before reaching the host', async () => {
     const dispatcher = makeDispatcher()
+
     const requests = Array.from({ length: 65 }, (_, index) => ({
       agent: 'codex',
       sessionId: `session-${index}`
@@ -147,6 +151,7 @@ describe('aiVault.listSessions params schema', () => {
       force: true,
       scopePaths: ['/home/user/repo']
     })
+
     expect(parsed.success).toBe(true)
   })
 
@@ -195,11 +200,13 @@ describe('aiVault.prepareSessionResume', () => {
       }).success
     ).toBe(true)
     const prepareAiVaultSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       ensureStructuredAgentSessionHost: vi.fn(async () => undefined),
       prepareAiVaultSessionResume
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -256,6 +263,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
       code: 'runtime_timeout',
       data: { retryAfterMs: 5000 }
     })
+
     const dispatcher = makeFailingDispatcher(error)
 
     await expect(
@@ -291,6 +299,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
 
   it('keeps completed scans cached for one minute', async () => {
     vi.useFakeTimers({ now: new Date('2026-08-05T00:00:00.000Z') })
+
     try {
       await listAiVaultSessions({ limit: 500 })
       await vi.advanceTimersByTimeAsync(59_999)
@@ -322,6 +331,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
 
   it('forwards Unlimited without a numeric limit', async () => {
     const dispatcher = makeDispatcher()
+
     const response = await dispatcher.dispatch(
       makeRequest('aiVault.listSessions', { limit: 5000, unlimited: true })
     )
@@ -367,10 +377,12 @@ describe('aiVault.listSessions handler + shared cache', () => {
       scannedAt: SCANNED_AT
     })
     const dispatcher = makeDispatcher()
+
     // A mobile-style caller (no executionHostId) primes the shared cache…
     const localResponse = (await dispatcher.dispatch(
       makeRequest('aiVault.listSessions', { limit: 500 })
     )) as { ok: boolean; result: AiVaultListResult }
+
     // …then a desktop/web caller addressing this host by runtime id reuses it.
     const runtimeResponse = (await dispatcher.dispatch(
       makeRequest('aiVault.listSessions', {
@@ -414,6 +426,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
     const runtime = new OrcaRuntimeService(null, undefined, {
       getAdditionalAiVaultCodexHomePaths: () => ['/ctor/codex/home']
     })
+
     await runtime.listAiVaultSessions({})
     const options = scanAiVaultSessionsInWorker.mock.calls[0]?.[0] as AiVaultScanOptions
     expect(options.additionalCodexSessionsDirs).toContain('/ctor/codex/home/sessions')

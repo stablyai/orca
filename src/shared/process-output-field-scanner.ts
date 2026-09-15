@@ -6,14 +6,17 @@ export function* iterateProcessOutputLines(output: string): Generator<string> {
 
   for (let index = 0; index < output.length; index += 1) {
     const code = output.charCodeAt(index)
+
     if (code !== 10 && code !== 13) {
       continue
     }
 
     yield output.slice(lineStart, index)
+
     if (code === 13 && output.charCodeAt(index + 1) === 10) {
       index += 1
     }
+
     lineStart = index + 1
   }
 
@@ -34,10 +37,12 @@ export function getProcessOutputFields(line: string, maxFields: number): string[
 
   for (let index = 0; index <= scanLimit; index += 1) {
     const isEnd = index === scanLimit
+
     if (!isEnd && !isProcessOutputWhitespace(line.charCodeAt(index))) {
       if (tokenStart === -1) {
         tokenStart = index
       }
+
       continue
     }
 
@@ -47,6 +52,7 @@ export function getProcessOutputFields(line: string, maxFields: number): string[
 
     fields.push(line.slice(tokenStart, index))
     tokenStart = -1
+
     if (fields.length >= maxFields) {
       break
     }

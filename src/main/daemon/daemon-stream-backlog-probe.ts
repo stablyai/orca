@@ -28,9 +28,11 @@ export function recordDaemonStreamBacklogEvent(
   detail: Record<string, unknown>
 ): void {
   const filePath = process.env.ORCA_DAEMON_STREAM_BACKLOG_FILE
+
   if (!filePath) {
     return
   }
+
   try {
     appendFileSync(filePath, `${JSON.stringify({ atMs: Date.now(), event, ...detail })}\n`)
   } catch {
@@ -40,9 +42,11 @@ export function recordDaemonStreamBacklogEvent(
 
 export function startDaemonStreamBacklogProbe(sample: () => StreamBacklogSample): () => void {
   const filePath = process.env.ORCA_DAEMON_STREAM_BACKLOG_FILE
+
   if (!filePath) {
     return () => {}
   }
+
   const timer = setInterval(() => {
     try {
       appendFileSync(filePath, `${JSON.stringify({ atMs: Date.now(), ...sample() })}\n`)
@@ -50,6 +54,8 @@ export function startDaemonStreamBacklogProbe(sample: () => StreamBacklogSample)
       // Diagnostics must never break the daemon.
     }
   }, SAMPLE_INTERVAL_MS)
+
   timer.unref?.()
+
   return () => clearInterval(timer)
 }

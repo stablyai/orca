@@ -59,8 +59,11 @@ const CODEX_LINES = [
 ]
 
 let root: string
+
 let journalDir: string
+
 let historyFilePath: string
+
 const journals = createTrackedJournalOpener()
 
 function item(ordinal: number): AgentJournalItemIdentity {
@@ -70,6 +73,7 @@ function item(ordinal: number): AgentJournalItemIdentity {
 /** Fills a journal with `count` items and hands back its epoch. */
 async function seedJournal(count: number): Promise<string> {
   const journal = await journals.open({ identity: IDENTITY, journalDir })
+
   for (let ordinal = 1; ordinal <= count; ordinal += 1) {
     await journal.appendItem(
       item(ordinal),
@@ -77,8 +81,10 @@ async function seedJournal(count: number): Promise<string> {
       { fence: 1 }
     )
   }
+
   const epoch = journal.epoch
   await journal.close()
+
   return epoch
 }
 
@@ -107,6 +113,7 @@ async function withJournalDatabase(
   run: (db: Database.Database) => void
 ): Promise<void> {
   const opened = openJournalDatabase(journalDatabaseFile(directory))
+
   try {
     run(opened.db)
   } finally {
@@ -149,6 +156,7 @@ describe('providerHistoryId', () => {
 describe('openAgentSessionJournalWithRecovery', () => {
   it('opens a healthy journal untouched', async () => {
     await seedJournal(2)
+
     const opened = journals.track(
       await openAgentSessionJournalWithRecovery({
         identity: IDENTITY,
@@ -157,6 +165,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
         historyFilePath
       }).then((result) => result.journal)
     )
+
     expect(opened.snapshot().items).toHaveLength(2)
   })
 
@@ -170,6 +179,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
       fence: 1,
       historyFilePath
     })
+
     journals.track(opened.journal)
     expect(opened.recovery).toMatchObject({ trigger: 'journal_corrupt', reset: 'epoch_changed' })
     expect(opened.recovery?.imported).toBeGreaterThan(0)
@@ -229,6 +239,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
       fence: 1,
       historyFilePath
     })
+
     journals.track(opened.journal)
     expect(opened.recovery).toMatchObject({
       trigger: 'schema_unreadable',
@@ -283,6 +294,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
       fence: 1,
       historyFilePath
     })
+
     journals.track(opened.journal)
     expect(opened.recovery).toMatchObject({ trigger: 'journal_corrupt' })
     expect(opened.recovery?.imported).toBeGreaterThan(0)
@@ -301,6 +313,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
       fence: 1,
       historyFilePath: join(root, 'missing.jsonl')
     })
+
     journals.track(opened.journal)
     expect(opened.recovery).toMatchObject({ trigger: 'journal_corrupt', imported: 0 })
     expect(opened.recovery?.error).toBeTruthy()
@@ -324,6 +337,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
       fence: 1,
       historyFilePath: empty
     })
+
     journals.track(first.journal)
     expect(first.recovery).toMatchObject({ trigger: 'journal_corrupt', imported: 0 })
     expect(first.recovery?.error).toBeTruthy()
@@ -341,6 +355,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
       fence: 1,
       historyFilePath
     })
+
     journals.track(retried.journal)
     expect(retried.recovery?.imported).toBeGreaterThan(0)
     await retried.journal.close()
@@ -362,6 +377,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
       fence: 1,
       historyFilePath: missing
     })
+
     journals.track(first.journal)
     expect(first.recovery?.error).toBeTruthy()
     expect(first.recovery?.imported).toBe(0)
@@ -369,12 +385,14 @@ describe('openAgentSessionJournalWithRecovery', () => {
 
     // Reopen: the epoch still holds nothing but the repair, so recovery runs again.
     expect(await loadJournal(journalDir, CODEX_SESSION)).toMatchObject({ corrupt: true })
+
     const reopened = await openAgentSessionJournalWithRecovery({
       identity: IDENTITY,
       journalDir,
       fence: 1,
       historyFilePath: missing
     })
+
     journals.track(reopened.journal)
     expect(reopened.recovery).toMatchObject({ trigger: 'journal_corrupt', imported: 0 })
     // Nothing but the anchor: the repair rebuilt no history of its own.
@@ -409,6 +427,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
       fence: 1,
       historyFilePath: empty
     })
+
     journals.track(first.journal)
     expect(first.recovery).toMatchObject({ trigger: 'journal_corrupt', imported: 0 })
     expect(first.recovery?.error).toBeTruthy()
@@ -436,6 +455,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
       fence: 1,
       historyFilePath
     })
+
     journals.track(retried.journal)
     expect(retried.recovery?.imported).toBeGreaterThan(0)
     expect(JSON.stringify(retried.journal.snapshot().items.map((entry) => entry.body))).toContain(
@@ -452,6 +472,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
       fence: 1,
       historyFilePath: join(root, 'missing.jsonl')
     })
+
     journals.track(first.journal)
     await first.journal.close()
 
@@ -461,6 +482,7 @@ describe('openAgentSessionJournalWithRecovery', () => {
       fence: 1,
       historyFilePath
     })
+
     journals.track(retried.journal)
     expect(retried.recovery?.imported).toBeGreaterThan(0)
     expect(JSON.stringify(retried.journal.snapshot().items.map((entry) => entry.body))).toContain(

@@ -11,6 +11,7 @@ export const AGENT_SKILL_CLI_PREREQUISITE_NOTICE =
   'Before opening setup, Orca may show a system prompt to register the Orca CLI command on PATH.'
 
 export const CLI_PREREQUISITE_REGISTRATION_TOAST = 'Orca needs to register its CLI on PATH.'
+
 export const CLI_PREREQUISITE_REGISTRATION_TOAST_DESCRIPTION =
   'Approve the system prompt so skill setup can use the Orca CLI command.'
 
@@ -28,11 +29,13 @@ export async function ensureOrcaCliAvailableForAgentSkillTerminal({
 
     if (!status.supported) {
       showCliPrerequisiteWarning(status)
+
       return status
     }
 
     if (status.pathConfigured === null) {
       showCliPrerequisiteWarning(status)
+
       return status
     }
 
@@ -43,6 +46,7 @@ export async function ensureOrcaCliAvailableForAgentSkillTerminal({
       const next = await window.api.cli.install()
       onStatusChange?.(next)
       showCliPrerequisiteWarning(next)
+
       return next
     }
 
@@ -56,6 +60,7 @@ export async function ensureOrcaCliAvailableForAgentSkillTerminal({
             'Failed to register the Orca CLI in PATH.'
           )
     )
+
     return null
   }
 }
@@ -71,6 +76,7 @@ function delay(ms: number): Promise<void> {
   if (ms <= 0) {
     return Promise.resolve()
   }
+
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
 
@@ -90,6 +96,7 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
           )
       }
     )
+
     return
   }
 
@@ -108,6 +115,7 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
           )
       }
     )
+
     return
   }
 
@@ -126,6 +134,7 @@ function showCliPrerequisiteWarning(status: CliInstallStatus): void {
           )
       }
     )
+
     return
   }
 

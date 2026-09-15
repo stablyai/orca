@@ -103,6 +103,7 @@ export class SessionSearchEngine {
     // that no tokenizer can match and that a caller cannot echo back.
     const capped = sliceAtCodeUnitLimit(request.query, SESSION_SEARCH_QUERY_MAX_LENGTH)
     const split = splitAiVaultSearchQuery(capped)
+
     const retrievalScope: RetrievalScope = {
       scope,
       sort,
@@ -110,14 +111,17 @@ export class SessionSearchEngine {
       matchesOperators: operatorPredicate(split),
       candidateLimit: this.candidateLimit
     }
+
     // Decoded before any retrieval: a cursor the engine will refuse must not
     // cost a query, and the caller has to hear about it either way.
     const pageKey = sessionSearchPageKey(request)
+
     const offset = request.cursor
       ? decodeSessionSearchCursor(request.cursor, generation, pageKey)
       : 0
 
     const plan = planSessionSearchQuery(split.text)
+
     const { ranked, retrieved, incomplete } =
       plan.terms.length === 0
         ? this.operatorOnly(split, retrievalScope)
@@ -127,10 +131,13 @@ export class SessionSearchEngine {
     const page = ranked.slice(offset, offset + limit)
     const hits = this.hits(page, scope, retrieved)
     const actualGeneration = readIndexGeneration(this.db)
+
     if (actualGeneration !== generation) {
       throw new SessionSearchCursorError('stale-generation', actualGeneration, generation)
     }
+
     const hasMore = ranked.length > offset + limit
+
     const response: SessionSearchResponse = {
       hits,
       planner: {
@@ -154,6 +161,7 @@ export class SessionSearchEngine {
       generation,
       durationMs: performance.now() - startedAt
     }
+
     return response
   }
 
@@ -168,7 +176,9 @@ export class SessionSearchEngine {
     if (!hasAiVaultSearchQueryOperators(split)) {
       return { ranked: [], retrieved: null, incomplete: false }
     }
+
     const { sessions, incomplete } = this.retrieval.recent(scope)
+
     return { ranked: rankSessionHits(sessions, new Map(), 'newest'), retrieved: null, incomplete }
   }
 
@@ -180,6 +190,7 @@ export class SessionSearchEngine {
     const retrieved = this.retrieval.run(plan, scope)
     // `match` already grouped to one best row per session.
     const best = new Map<number, MessageRow>(retrieved.rows.map((row) => [row.session_row_id, row]))
+
     return {
       ranked: rankSessionHits(retrieved.sessions, best, sort),
       retrieved,
@@ -197,6 +208,7 @@ export class SessionSearchEngine {
       this.db,
       page.map((entry) => entry.session.id)
     )
+
     return page.map((entry) => this.hit(entry, scope, retrieved, presence))
   }
 
@@ -207,10 +219,12 @@ export class SessionSearchEngine {
     presence: ReadonlyMap<number, SessionSearchSourcePresence>
   ): SessionSearchHit {
     const { session, message } = entry
+
     const snippet =
       message && retrieved
         ? sessionSearchSnippet(this.db, scope, message.rowid, retrieved.plan)
         : EMPTY_SNIPPET
+
     return {
       ...sessionFields(session),
       score: entry.score,
@@ -238,6 +252,7 @@ function operatorPredicate(split: AiVaultSearchQuerySplit): (session: SessionRow
   if (!hasAiVaultSearchQueryOperators(split)) {
     return () => true
   }
+
   return (session) =>
     matchesAiVaultQueryOperators(
       { cwd: session.cwd, filePath: session.file_path },

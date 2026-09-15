@@ -14,6 +14,7 @@ function makeAgent(
   entryOverrides: Partial<AgentStatusEntry> = {}
 ): DashboardAgentRowData {
   const paneKey = overrides.paneKey ?? 'tab-1:leaf-1'
+
   const tab: TerminalTab = {
     id: 'tab-1',
     ptyId: null,
@@ -24,6 +25,7 @@ function makeAgent(
     sortOrder: 0,
     createdAt: 1
   }
+
   const entry: AgentStatusEntry = {
     state: 'working',
     prompt: 'Fix hover scope',
@@ -99,9 +101,11 @@ function hoverSwapClasses(markup: string): string[] {
 
 function dismissButtonClass(markup: string): string {
   const match = markup.match(/<button\b(?=[^>]*aria-label="Dismiss agent")[^>]*class="([^"]*)"/)
+
   if (!match) {
     throw new Error('Expected dismiss agent button in rendered markup')
   }
+
   return match[1]
 }
 
@@ -115,13 +119,17 @@ function tokenCount(markup: string, token: string): number {
 
 function classTokensForTaggedElement(markup: string, dataAttribute: string): string[] {
   const tagMatch = markup.match(new RegExp(`<[^>]+${dataAttribute}[^>]*>`))
+
   if (!tagMatch) {
     throw new Error(`Expected tagged element for ${dataAttribute}`)
   }
+
   const classMatch = tagMatch[0].match(/class="([^"]*)"/)
+
   if (!classMatch) {
     throw new Error(`Expected class attribute for ${dataAttribute}`)
   }
+
   return classMatch[1].split(/\s+/).filter(Boolean)
 }
 
@@ -195,6 +203,7 @@ describe('DashboardAgentRow', () => {
       sendTargetStatus: 'disabled',
       sendTargetDisabledReason: 'Terminal is no longer available'
     })
+
     const tokens = classTokens(markup)
 
     expect(markup).toContain('data-agent-send-target="disabled"')
@@ -211,6 +220,7 @@ describe('DashboardAgentRow', () => {
       sendTargetStatus: 'sending',
       sendTargetDisabledReason: 'Sending...'
     })
+
     const tokens = classTokens(markup)
 
     expect(markup).toContain('data-agent-send-target="sending"')
@@ -240,6 +250,7 @@ describe('DashboardAgentRow', () => {
     const markup = renderRow(
       makeAgent({ startedAt: 0 }, { updatedAt: 0, stateStartedAt: 0, stateHistory: [] })
     )
+
     const classes = hoverSwapClasses(markup)
 
     expect(dismissButtonClassTokens(markup)).toContain('group-hover/agent-row:opacity-100')
@@ -290,6 +301,7 @@ describe('DashboardAgentRow', () => {
         </div>
       </TooltipProvider>
     )
+
     const classes = hoverSwapClasses(markup)
 
     expect(markup).toContain('class="group"')
@@ -313,6 +325,7 @@ describe('DashboardAgentRow', () => {
         }
       )
     )
+
     const promptIndex = markup.indexOf('Give me a quick update')
     const interruptedIndex = markup.indexOf('>interrupted<')
 
@@ -329,6 +342,7 @@ describe('DashboardAgentRow', () => {
 
   it('reserves a real working tool line before tool metadata arrives', () => {
     const emptyToolMarkup = renderRow(makeAgent())
+
     const activeToolMarkup = renderRow(
       makeAgent({}, { toolName: 'ListDir', toolInput: '/Users/nwparker/orca' })
     )

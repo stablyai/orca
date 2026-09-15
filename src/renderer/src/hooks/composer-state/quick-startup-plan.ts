@@ -33,6 +33,7 @@ export type QuickComposerStartup = {
 
 export function buildQuickComposerStartup(input: QuickComposerStartupInput): QuickComposerStartup {
   const { agent, draftPrompt, prompt, settings } = input
+
   const sessionOptions =
     agent === null
       ? undefined
@@ -52,6 +53,7 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
             )
           }
         )
+
   const draftLaunchPlan =
     agent === null || !draftPrompt
       ? null
@@ -66,7 +68,9 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
           shell: input.shell ?? undefined,
           isRemote: input.isRemote
         })
+
   let startupPlan: AgentStartupPlan | null = null
+
   if (draftLaunchPlan) {
     startupPlan = {
       agent: draftLaunchPlan.agent,
@@ -93,10 +97,12 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
       isRemote: input.isRemote,
       allowEmptyPromptLaunch: true
     })
+
     if (startupPlan && draftPrompt) {
       startupPlan.draftPrompt = draftPrompt
     }
   }
+
   const telemetry: AgentStartedTelemetry | null =
     agent === null
       ? null
@@ -106,6 +112,7 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
             input.telemetrySource === 'onboarding' ? 'onboarding' : 'new_workspace_composer',
           request_kind: 'new'
         }
+
   const backendStartup =
     startupPlan && !startupPlan.draftPrompt && !startupPlan.followupPrompt
       ? {
@@ -119,5 +126,6 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
           ...(telemetry ? { telemetry } : {})
         }
       : undefined
+
   return { startupPlan, backendStartup, telemetry }
 }

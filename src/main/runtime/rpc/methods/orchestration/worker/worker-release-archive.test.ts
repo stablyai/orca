@@ -30,11 +30,13 @@ describe('orchestration worker release archive', () => {
       truncated: false,
       nextCursor: null
     })
+
     const receipt = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
       state: string
       processAction: string
       archive: { status: string | null } | null
     }
+
     expect(receipt).toMatchObject({
       state: 'released',
       processAction: 'closed_exited_terminal',
@@ -57,6 +59,7 @@ describe('orchestration worker release archive', () => {
     const release = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
       archive: { status: string | null } | null
     }
+
     const read = (await h.call('orchestration.workerRead', { dispatch: dispatchId })) as {
       terminal: { tail: string[]; truncated: boolean }
       warnings: string[]
@@ -93,6 +96,7 @@ describe('orchestration worker release archive', () => {
       terminal: { tail: string[]; draft?: string }
       cursor: string | null
     }
+
     expect(page1.terminal.tail).toEqual([
       'first line',
       'capability [dispatch capability redacted] leaked'
@@ -104,6 +108,7 @@ describe('orchestration worker release archive', () => {
       dispatch: dispatchId,
       cursor: page1.cursor as string
     })) as { terminal: { tail: string[]; draft?: string }; cursor: string | null }
+
     expect(page2.terminal.tail).toEqual(['last line'])
     expect(page2.terminal.draft).toBeUndefined()
     expect(page2.cursor).toBeNull()
@@ -115,6 +120,7 @@ describe('orchestration worker release archive', () => {
     h.setup()
     const directory = await mkdtemp(join(tmpdir(), 'orca-worker-release-snapshot-'))
     const transcriptPath = join(directory, 'rollout.jsonl')
+
     try {
       await writeFile(
         transcriptPath,
@@ -137,6 +143,7 @@ describe('orchestration worker release archive', () => {
         dispatch: dispatchId,
         limit: 1
       })) as { cursor: string }
+
       expect(page).toMatchObject({
         archived: true,
         source: 'transcript',
@@ -160,6 +167,7 @@ describe('orchestration worker release archive', () => {
     h.setup()
     const directory = await mkdtemp(join(tmpdir(), 'orca-worker-release-clipped-snapshot-'))
     const transcriptPath = join(directory, 'rollout.jsonl')
+
     try {
       await writeFile(
         transcriptPath,
@@ -219,9 +227,11 @@ describe('orchestration worker release archive', () => {
     const { dispatchId } = await h.startSettledWorker()
     const requested = h.db.requestWorkerTerminalRelease(dispatchId)
     expect(requested.disposition).toBe('requested')
+
     if (requested.disposition !== 'requested') {
       throw new Error('release request was not recorded')
     }
+
     h.db.storeWorkerTerminalArchive({
       dispatchId,
       resourceId: requested.resource.id,

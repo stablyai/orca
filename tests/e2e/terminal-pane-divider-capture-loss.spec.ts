@@ -25,27 +25,36 @@ test.use({ seedTestRepo: false })
 async function addTestRepo(page: Page, repoPath: string): Promise<void> {
   const repoId = await page.evaluate(async (path) => {
     const result = await window.api.repos.add({ path })
+
     if ('error' in result) {
       throw new Error(result.error)
     }
+
     return result.repo.id
   }, repoPath)
+
   await expect
     .poll(() =>
       page.evaluate(async (id) => {
         const store = window.__store
+
         if (!store) {
           return false
         }
+
         await store.getState().fetchRepos()
         await store.getState().fetchWorktrees(id)
+
         const worktree = store
           .getState()
           .worktreesByRepo[id]?.find((candidate) => candidate.isMainWorktree)
+
         if (!worktree) {
           return false
         }
+
         store.getState().setActiveWorktree(worktree.id)
+
         return true
       }, repoId)
     )
@@ -57,25 +66,32 @@ async function readDividerGeometry(page: Page): Promise<DividerGeometry> {
     const divider = document.querySelector<HTMLElement>('.pane-divider.is-vertical')
     const firstElement = divider?.previousElementSibling as HTMLElement | null
     const secondElement = divider?.nextElementSibling as HTMLElement | null
+
     if (!divider || !firstElement || !secondElement) {
       throw new Error('Divider unavailable')
     }
+
     const readPane = (element: HTMLElement): PaneGeometry => {
       const paneElement = element.matches('.pane[data-pty-id]')
         ? element
         : element.querySelector<HTMLElement>('.pane[data-pty-id]')
+
       const ptyId = paneElement?.dataset.ptyId
+
       const pane = ptyId
         ? Array.from(window.__paneManagers?.values() ?? [])
             .flatMap((manager) => manager.getPanes())
             .find((candidate) => candidate.container.dataset.ptyId === ptyId)
         : null
+
       let proposed = null
+
       try {
         proposed = pane?.fitAddon.proposeDimensions() ?? null
       } catch {
         proposed = null
       }
+
       return {
         width: element.getBoundingClientRect().width,
         flex: element.style.flex,
@@ -84,6 +100,7 @@ async function readDividerGeometry(page: Page): Promise<DividerGeometry> {
         proposed
       }
     }
+
     return { first: readPane(firstElement), second: readPane(secondElement) }
   })
 }
@@ -114,9 +131,11 @@ test('@headful keeps resizing after the divider loses pointer capture', async ({
   const divider = orcaPage.locator('.pane-divider.is-vertical').first()
   await expect(divider).toBeVisible()
   const box = await divider.boundingBox()
+
   if (!box) {
     throw new Error('Divider has no bounding box')
   }
+
   await divider.evaluate((element) => {
     element.dataset.captureLossCount = '0'
     element.addEventListener('pointerdown', (event) => {
@@ -143,9 +162,11 @@ test('@headful keeps resizing after the divider loses pointer capture', async ({
   // window-level pointer events must remain authoritative after capture drops.
   await divider.evaluate((element) => {
     const pointerId = Number(element.dataset.captureLossPointerId)
+
     if (!Number.isInteger(pointerId) || !element.hasPointerCapture(pointerId)) {
       throw new Error('Divider did not acquire pointer capture')
     }
+
     element.releasePointerCapture(pointerId)
   })
   // Pending capture changes are dispatched with the next pointer event.

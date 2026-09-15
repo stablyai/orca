@@ -147,6 +147,7 @@ describe('offered create hosts', () => {
       querySupport: 'legacy-unscoped',
       scopeGap: 'authority-unscoped'
     })
+
     const legacySshChild = entry({
       stableKey: 'runtime:r1:ssh:box',
       kind: 'ssh',
@@ -154,11 +155,13 @@ describe('offered create hosts', () => {
       querySupport: 'legacy-unscoped',
       scopeGap: 'authority-unscoped'
     })
+
     const incompatible = entry({
       stableKey: 'runtime:r2:self',
       authorityLabel: 'older-box',
       querySupport: 'incompatible'
     })
+
     expect(
       automationCreateUpdateRequiredAuthorityLabels([
         entry(),
@@ -177,6 +180,7 @@ describe('offered create hosts', () => {
       querySupport: 'legacy-unscoped',
       scopeGap: 'target-unverified'
     })
+
     // Scoped but not yet hydrated: disabled, and no repair to name.
     const unhydrated = entry({
       stableKey: 'desktop:ssh:warm',
@@ -184,6 +188,7 @@ describe('offered create hosts', () => {
       owner: null,
       catalogState: 'unhydrated'
     })
+
     expect(automationCreateUpdateRequiredAuthorityLabels([unverified, unhydrated])).toEqual([])
   })
 })
@@ -246,6 +251,7 @@ describe('create project mismatch', () => {
       ...overrides
     } as Repo
   }
+
   const desktopSelf = {
     authority: { kind: 'desktop' } as const,
     destination: { selector: { kind: 'self' as const } },
@@ -257,6 +263,7 @@ describe('create project mismatch', () => {
       repo({ id: 'runtime-repo', executionHostId: 'runtime:gpu' }),
       repo({ id: 'ssh-repo', connectionId: 'box' })
     ])
+
     // No connection ID is not evidence of local: this repo is the runtime's.
     expect(automationCreateProjectMismatch(tables, desktopSelf, 'runtime-repo')).toBe(true)
     expect(automationCreateProjectMismatch(tables, desktopSelf, 'ssh-repo')).toBe(true)
@@ -280,11 +287,13 @@ describe('create project mismatch', () => {
       repo({ id: 'repo-1' }),
       repo({ id: 'runtime-repo', executionHostId: 'runtime:gpu' })
     ])
+
     const runtimeSelf = {
       authority: { kind: 'runtime' as const, environmentId: 'gpu', pairingRevision: 4 },
       destination: { selector: { kind: 'self' as const } },
       entry: entry()
     }
+
     expect(automationCreateProjectMismatch(tables, runtimeSelf, 'repo-1')).toBe(true)
     expect(automationCreateProjectMismatch(tables, runtimeSelf, 'runtime-repo')).toBe(false)
     // An id in no table at all fails closed for every destination.

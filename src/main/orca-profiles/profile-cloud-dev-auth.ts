@@ -6,6 +6,7 @@ const DEV_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 function cleanEnvString(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim()
+
   return trimmed || fallback
 }
 
@@ -44,6 +45,7 @@ export function createDevOrcaCloudSession(
 ): OrcaCloudSessionExchangeResponse {
   const organizations = defaultDevOrganizations()
   const selectedOrg = organizations.find((organization) => organization.orgId === args.orgId)
+
   const cloudProfileId =
     args.cloudProfileId ??
     (args.localProfileId ? `dev-cloud-${args.localProfileId}` : `dev-cloud-${randomUUID()}`)

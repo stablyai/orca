@@ -23,9 +23,11 @@ export function getProjectHostIds(
   repos: readonly Repo[]
 ): Set<string> {
   const hostIds = getExplicitProjectHostIds(project, setups, repos)
+
   if (hostIds.size === 0) {
     hostIds.add(LOCAL_EXECUTION_HOST_ID)
   }
+
   return hostIds
 }
 
@@ -36,16 +38,19 @@ export function getExplicitProjectHostIds(
 ): Set<string> {
   const hostIds = new Set<string>()
   const sourceRepoIds = new Set(project.sourceRepoIds)
+
   for (const setup of setups) {
     if (setup.projectId === project.id) {
       hostIds.add(setup.hostId)
     }
   }
+
   for (const repo of repos) {
     if (sourceRepoIds.has(repo.id)) {
       hostIds.add(getRepoExecutionHostId(repo))
     }
   }
+
   return hostIds
 }
 
@@ -53,14 +58,17 @@ export function indexProjectHostSetupsByProjectId(
   setups: readonly ProjectHostSetup[]
 ): Map<string, ProjectHostSetup[]> {
   const setupsByProjectId = new Map<string, ProjectHostSetup[]>()
+
   for (const setup of setups) {
     const existing = setupsByProjectId.get(setup.projectId)
+
     if (existing) {
       existing.push(setup)
     } else {
       setupsByProjectId.set(setup.projectId, [setup])
     }
   }
+
   return setupsByProjectId
 }
 
@@ -69,11 +77,13 @@ export function getProjectSourceRepos(
   reposById: ReadonlyMap<string, readonly Repo[]>
 ): Repo[] {
   const sourceRepos: Repo[] = []
+
   for (const repoId of project.sourceRepoIds) {
     for (const repo of reposById.get(repoId) ?? []) {
       sourceRepos.push(repo)
     }
   }
+
   return sourceRepos
 }
 
@@ -90,18 +100,24 @@ export function createProjectHostIdIndex(
   const noSetups: readonly ProjectHostSetup[] = []
   const hostIdsByProject = new Map<Project, ReadonlySet<string>>()
   let setupsByProjectId: Map<string, ProjectHostSetup[]> | null = null
+
   return (project) => {
     const cached = hostIdsByProject.get(project)
+
     if (cached) {
       return cached
     }
+
     setupsByProjectId ??= indexProjectHostSetupsByProjectId(setups)
+
     const hostIds = resolveHostIds(
       project,
       setupsByProjectId.get(project.id) ?? noSetups,
       getProjectSourceRepos(project, reposById)
     )
+
     hostIdsByProject.set(project, hostIds)
+
     return hostIds
   }
 }
@@ -113,14 +129,17 @@ export function restrictReposToProjectPair(
   reposById: ReadonlyMap<string, readonly Repo[]>
 ): Map<string, readonly Repo[]> {
   const restricted = new Map<string, readonly Repo[]>()
+
   for (const project of [previous, current]) {
     for (const repoId of project.sourceRepoIds) {
       const matches = reposById.get(repoId)
+
       if (matches) {
         restricted.set(repoId, matches)
       }
     }
   }
+
   return restricted
 }
 
@@ -139,44 +158,56 @@ export function mergeFetchedProjectCompatibilityForHost({
     if (hostId !== LOCAL_EXECUTION_HOST_ID) {
       return setup.hostId === hostId
     }
+
     const owner = parseExecutionHostId(setup.hostId)
+
     // Why: desktop persistence owns local and direct-SSH setups; runtime setups stay authoritative on their remote Orca server.
     return setup.hostId === LOCAL_EXECUTION_HOST_ID || owner?.kind === 'ssh'
   }
+
   const fetchedSetupsForHost = fetched.projectHostSetups.filter(setupBelongsToFetchedCatalog)
+
   const preservedSetups = previous.projectHostSetups.filter(
     (setup) => !setupBelongsToFetchedCatalog(setup)
   )
+
   const projectHostSetups = mergeProjectHostSetupsByOwner(preservedSetups, fetchedSetupsForHost)
   const previousProjectById = new Map(previous.projects.map((project) => [project.id, project]))
   const reposById = getReposById(repos)
   const currentRepoIds = new Set(repos.map((repo) => repo.id))
+
   const fetchedProjectHostIds = createProjectHostIdIndex(
     fetched.projectHostSetups,
     reposById,
     getProjectHostIds
   )
+
   const previousProjectHostIds = createProjectHostIdIndex(
     previous.projectHostSetups,
     reposById,
     getProjectHostIds
   )
+
   const currentProjectOwnerHostIds = createProjectHostIdIndex(
     projectHostSetups,
     reposById,
     getExplicitProjectHostIds
   )
+
   const projectHasCurrentOwnerOutsideHost = (project: Project): boolean => {
     for (const ownerHostId of currentProjectOwnerHostIds(project)) {
       if (ownerHostId !== hostId) {
         return true
       }
     }
+
     return false
   }
+
   const fetchedProjects = fetched.projects
     .filter((project) => {
       const previousProject = previousProjectById.get(project.id)
+
       // Why: repo-derived compatibility projects include every host; a one-host refresh should only reconcile or prune that host's ownership.
       return (
         fetchedProjectHostIds(project).has(hostId) ||
@@ -185,6 +216,7 @@ export function mergeFetchedProjectCompatibilityForHost({
     })
     .map((project) => {
       const previousProject = previousProjectById.get(project.id)
+
       return previousProject
         ? mergePreviousProjectMetadata(
             previousProject,
@@ -194,12 +226,15 @@ export function mergeFetchedProjectCompatibilityForHost({
           )
         : projectWithCurrentSourceRepoIds(project, currentRepoIds)
     })
+
   const fetchedProjectIds = new Set(fetchedProjects.map((project) => project.id))
+
   const preservedProjects = previous.projects.filter(
     (project) =>
       !fetchedProjectIds.has(project.id) &&
       (!previousProjectHostIds(project).has(hostId) || projectHasCurrentOwnerOutsideHost(project))
   )
+
   // Why: both merges always allocate (sourceRepoIds is rebuilt per project, and fetched setups
   // arrive freshly cloned over IPC), so reconcile against `previous` to recover identity when a
   // refresh changed nothing. Each key is what the producing merge already dedups by.
@@ -209,6 +244,7 @@ export function mergeFetchedProjectCompatibilityForHost({
       mergeProjectCompatibilityProjects(
         preservedProjects.map((project) => {
           const sourceRepoIds = getSourceRepoIdsOutsideHost(project, reposById, hostId)
+
           return sourceRepoIds.length === project.sourceRepoIds.length
             ? project
             : { ...project, sourceRepoIds }

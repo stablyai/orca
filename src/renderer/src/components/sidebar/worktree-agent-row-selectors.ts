@@ -19,12 +19,16 @@ import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-typ
 // Why frozen and exported: card hooks return these from their inactive branch,
 // so the identity has to be shared app-wide and safe from stray writes.
 export const EMPTY_LIVE_ENTRIES = Object.freeze([]) as unknown as AgentStatusEntry[]
+
 export const EMPTY_MIGRATION_UNSUPPORTED_ENTRIES = Object.freeze(
   []
 ) as unknown as MigrationUnsupportedPtyEntry[]
+
 export const EMPTY_RETAINED = Object.freeze([]) as unknown as RetainedAgentEntry[]
+
 export const EMPTY_TERMINAL_LAYOUTS: Record<string, TerminalLayoutSnapshot | undefined> =
   Object.freeze({})
+
 // Why: selector unit tests often pass partial store mocks; production state
 // owns these maps, but missing mock maps should behave like empty slices.
 const EMPTY_RECORD = {}
@@ -60,9 +64,13 @@ type RetainedEntriesByWorktreeCache = {
 }
 
 let tabWorktreeIndexCache: TabWorktreeIndexCache | null = null
+
 let liveTabWorktreeIndexCache: LiveTabWorktreeIndexCache | null = null
+
 let liveEntriesByWorktreeCache: LiveEntriesByWorktreeCache | null = null
+
 let migrationUnsupportedByWorktreeCache: MigrationUnsupportedByWorktreeCache | null = null
+
 let retainedEntriesByWorktreeCache: RetainedEntriesByWorktreeCache | null = null
 
 // Why exported: WorktreeList reuses this exact-equality identity check to keep
@@ -72,11 +80,13 @@ export function reuseArrayIfEqual<T>(previous: T[] | undefined, next: T[]): T[] 
   if (!previous || previous.length !== next.length) {
     return next
   }
+
   for (let i = 0; i < next.length; i += 1) {
     if (previous[i] !== next[i]) {
       return next
     }
   }
+
   return previous
 }
 
@@ -89,13 +99,17 @@ export function getTabIdToWorktreeId(
   if (tabWorktreeIndexCache?.tabsByWorktree === tabsByWorktree) {
     return tabWorktreeIndexCache.tabIdToWorktreeId
   }
+
   const tabIdToWorktreeId = new Map<string, string>()
+
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     for (const tab of tabs) {
       tabIdToWorktreeId.set(tab.id, worktreeId)
     }
   }
+
   tabWorktreeIndexCache = { tabsByWorktree, tabIdToWorktreeId }
+
   return tabIdToWorktreeId
 }
 
@@ -109,7 +123,9 @@ function getLiveTabIdToWorktreeId(
   ) {
     return liveTabWorktreeIndexCache.tabIdToWorktreeId
   }
+
   const tabIdToWorktreeId = new Map(getTabIdToWorktreeId(tabsByWorktree))
+
   for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
     for (const tab of tabs) {
       if (tab.contentType === 'agent-session') {
@@ -117,7 +133,9 @@ function getLiveTabIdToWorktreeId(
       }
     }
   }
+
   liveTabWorktreeIndexCache = { tabsByWorktree, unifiedTabsByWorktree, tabIdToWorktreeId }
+
   return tabIdToWorktreeId
 }
 
@@ -125,6 +143,7 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
   const agentStatusByPaneKey = state.agentStatusByPaneKey ?? EMPTY_RECORD
   const tabsByWorktree = state.tabsByWorktree ?? EMPTY_RECORD
   const unifiedTabsByWorktree = state.unifiedTabsByWorktree
+
   if (
     liveEntriesByWorktreeCache?.tabsByWorktree === tabsByWorktree &&
     liveEntriesByWorktreeCache.unifiedTabsByWorktree === unifiedTabsByWorktree &&
@@ -134,6 +153,7 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
   }
 
   const tabIdToWorktreeId = getLiveTabIdToWorktreeId(tabsByWorktree, unifiedTabsByWorktree)
+
   if (
     liveEntriesByWorktreeCache?.tabsByWorktree === tabsByWorktree &&
     liveEntriesByWorktreeCache.unifiedTabsByWorktree === unifiedTabsByWorktree
@@ -143,6 +163,7 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
       agentStatusByPaneKey,
       tabIdToWorktreeId
     )
+
     if (patched) {
       liveEntriesByWorktreeCache = {
         tabsByWorktree,
@@ -150,33 +171,42 @@ function getLiveEntriesByWorktree(state: WorktreeAgentRowsState): Map<string, Ag
         agentStatusByPaneKey,
         entriesByWorktree: patched
       }
+
       return patched
     }
   }
+
   recordLiveEntriesFullRebuild()
   const previous = liveEntriesByWorktreeCache?.entriesByWorktree
   const entriesByWorktree = new Map<string, AgentStatusEntry[]>()
+
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey)) {
     const worktreeId = liveEntryWorktreeId(paneKey, entry, tabIdToWorktreeId)
+
     if (!worktreeId) {
       continue
     }
+
     const bucket = entriesByWorktree.get(worktreeId)
+
     if (bucket) {
       bucket.push(entry)
     } else {
       entriesByWorktree.set(worktreeId, [entry])
     }
   }
+
   for (const [worktreeId, entries] of entriesByWorktree) {
     entriesByWorktree.set(worktreeId, reuseArrayIfEqual(previous?.get(worktreeId), entries))
   }
+
   liveEntriesByWorktreeCache = {
     tabsByWorktree,
     unifiedTabsByWorktree,
     agentStatusByPaneKey,
     entriesByWorktree
   }
+
   return entriesByWorktree
 }
 
@@ -185,6 +215,7 @@ function getMigrationUnsupportedByWorktree(
 ): Map<string, MigrationUnsupportedPtyEntry[]> {
   const migrationUnsupportedByPtyId = state.migrationUnsupportedByPtyId ?? EMPTY_RECORD
   const tabsByWorktree = state.tabsByWorktree ?? EMPTY_RECORD
+
   if (
     migrationUnsupportedByWorktreeCache?.tabsByWorktree === tabsByWorktree &&
     migrationUnsupportedByWorktreeCache.migrationUnsupportedByPtyId === migrationUnsupportedByPtyId
@@ -195,30 +226,38 @@ function getMigrationUnsupportedByWorktree(
   const tabIdToWorktreeId = getTabIdToWorktreeId(tabsByWorktree)
   const previous = migrationUnsupportedByWorktreeCache?.entriesByWorktree
   const entriesByWorktree = new Map<string, MigrationUnsupportedPtyEntry[]>()
+
   for (const unsupported of Object.values(migrationUnsupportedByPtyId)) {
     if (!unsupported.paneKey) {
       continue
     }
+
     const parsed = parsePaneKey(unsupported.paneKey)
     const worktreeId = parsed ? tabIdToWorktreeId.get(parsed.tabId) : undefined
+
     if (!worktreeId) {
       continue
     }
+
     const bucket = entriesByWorktree.get(worktreeId)
+
     if (bucket) {
       bucket.push(unsupported)
     } else {
       entriesByWorktree.set(worktreeId, [unsupported])
     }
   }
+
   for (const [worktreeId, entries] of entriesByWorktree) {
     entriesByWorktree.set(worktreeId, reuseArrayIfEqual(previous?.get(worktreeId), entries))
   }
+
   migrationUnsupportedByWorktreeCache = {
     tabsByWorktree,
     migrationUnsupportedByPtyId,
     entriesByWorktree
   }
+
   return entriesByWorktree
 }
 
@@ -226,27 +265,33 @@ function getRetainedEntriesByWorktree(
   state: WorktreeAgentRowsState
 ): Map<string, RetainedAgentEntry[]> {
   const retainedAgentsByPaneKey = state.retainedAgentsByPaneKey ?? EMPTY_RECORD
+
   if (retainedEntriesByWorktreeCache?.retainedAgentsByPaneKey === retainedAgentsByPaneKey) {
     return retainedEntriesByWorktreeCache.entriesByWorktree
   }
 
   const previous = retainedEntriesByWorktreeCache?.entriesByWorktree
   const entriesByWorktree = new Map<string, RetainedAgentEntry[]>()
+
   for (const retained of Object.values(retainedAgentsByPaneKey)) {
     const bucket = entriesByWorktree.get(retained.worktreeId)
+
     if (bucket) {
       bucket.push(retained)
     } else {
       entriesByWorktree.set(retained.worktreeId, [retained])
     }
   }
+
   for (const [worktreeId, entries] of entriesByWorktree) {
     entriesByWorktree.set(worktreeId, reuseArrayIfEqual(previous?.get(worktreeId), entries))
   }
+
   retainedEntriesByWorktreeCache = {
     retainedAgentsByPaneKey,
     entriesByWorktree
   }
+
   return entriesByWorktree
 }
 
@@ -301,9 +346,11 @@ export const selectTerminalLayoutsForWorktree = createWorktreeRecordSelector<
   empty: EMPTY_TERMINAL_LAYOUTS,
   build: (state, worktreeId) => {
     const out: Record<string, TerminalLayoutSnapshot | undefined> = {}
+
     for (const tab of (state.tabsByWorktree ?? EMPTY_RECORD)[worktreeId] ?? []) {
       out[tab.id] = (state.terminalLayoutsByTabId ?? EMPTY_RECORD)[tab.id]
     }
+
     return out
   }
 })

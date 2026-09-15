@@ -10,28 +10,37 @@ function toWslDiscoveryPath(path: string, distro: string): string {
   if (path.includes('\0')) {
     throw new Error('skill-install-wsl-path-invalid')
   }
+
   const parsed = parseWslUncPath(path)
+
   if (parsed) {
     if (parsed.distro.toLocaleLowerCase('en-US') !== distro.toLocaleLowerCase('en-US')) {
       throw new Error('skill-install-wsl-distro-mismatch')
     }
+
     return posix.normalize(parsed.linuxPath)
   }
+
   const slashed = path.replace(/\\/g, '/')
   const drive = slashed.match(/^([A-Za-z]):\/(.*)$/)
+
   if (drive) {
     return posix.join('/mnt', drive[1].toLocaleLowerCase('en-US'), drive[2])
   }
+
   if (!posix.isAbsolute(slashed)) {
     throw new Error('skill-install-wsl-path-invalid')
   }
+
   return posix.normalize(slashed)
 }
 
 function normalizedPath(path: string, wslDistro?: string): string {
   const normalized = wslDistro ? toWslDiscoveryPath(path, wslDistro) : resolve(path)
+
   const withoutTrailingSlash =
     wslDistro && normalized !== '/' ? normalized.replace(/\/+$/, '') : normalized
+
   return !wslDistro && process.platform === 'win32'
     ? withoutTrailingSlash.toLocaleLowerCase('en-US')
     : withoutTrailingSlash
@@ -62,6 +71,7 @@ function isAnsweredSkill(
   if (unreadableRoots.size === 0) {
     return true
   }
+
   return (skill.rootPaths ?? [skill.rootPath]).some(
     (rootPath) => !unreadableRoots.has(normalizedPath(rootPath, wslDistro))
   )
@@ -74,21 +84,27 @@ function placementIsDiscovered(
   wslDistro?: string
 ): boolean {
   const placementPath = normalizedPath(placement.path, wslDistro)
+
   const placementRoot = normalizedPath(
     wslDistro ? posix.dirname(placementPath) : dirname(placement.path),
     wslDistro
   )
+
   const unreadableRoots = unreadableRootPaths(discovery, wslDistro)
+
   return discovery.skills.some((skill) => {
     if (skill.name !== skillName) {
       return false
     }
+
     if (!isAnsweredSkill(skill, unreadableRoots, wslDistro)) {
       return false
     }
+
     if (normalizedPath(skill.directoryPath, wslDistro) === placementPath) {
       return true
     }
+
     return (skill.rootPaths ?? [skill.rootPath]).some(
       (root) => normalizedPath(root, wslDistro) === placementRoot
     )
@@ -104,6 +120,7 @@ async function discoverInstalledSkill(input: {
 }): Promise<SkillDiscoveryResult> {
   if (input.wslDistro) {
     const wslDistro = input.wslDistro
+
     const providerRootOverrides = input.providerRootOverrides
       ? Object.fromEntries(
           Object.entries(input.providerRootOverrides).map(([provider, root]) => [
@@ -112,6 +129,7 @@ async function discoverInstalledSkill(input: {
           ])
         )
       : undefined
+
     return discoverSkillsInWsl({
       distro: wslDistro,
       homeDir: toWslDiscoveryPath(input.homeDirectory, wslDistro),
@@ -119,6 +137,7 @@ async function discoverInstalledSkill(input: {
       ...(providerRootOverrides ? { providerRootOverrides } : {})
     })
   }
+
   return discoverSkills({
     homeDir: input.homeDirectory,
     repos: [],
@@ -140,6 +159,7 @@ export async function verifySkillInstallDiscovery(input: {
   discover?: () => Promise<SkillDiscoveryResult>
 }): Promise<SkillInstallResult> {
   const discovery = await (input.discover?.() ?? discoverInstalledSkill(input)).catch(() => null)
+
   if (!discovery) {
     return {
       ...input.result,
@@ -160,6 +180,7 @@ export async function verifySkillInstallDiscovery(input: {
     ) {
       return placement
     }
+
     return {
       ...placement,
       status: 'failed' as const,
@@ -171,7 +192,9 @@ export async function verifySkillInstallDiscovery(input: {
       }
     }
   })
+
   const canonical = placements.find((placement) => placement.topology === 'canonical-copy')
+
   if (!canonical || canonical.status === 'failed') {
     return {
       ...input.result,
@@ -185,6 +208,7 @@ export async function verifySkillInstallDiscovery(input: {
       }
     }
   }
+
   return {
     ...input.result,
     status: placements.some(

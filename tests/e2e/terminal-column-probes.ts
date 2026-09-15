@@ -40,18 +40,23 @@ export async function waitForRenderedTerminalColumnsAtMost(
         observedCols = await page.evaluate(() => {
           const { __paneManagers: paneManagers, __store: store } =
             window as TerminalColumnProbeWindow
+
           const state = store?.getState()
           const worktreeId = state?.activeWorktreeId
+
           const tabId =
             state?.activeTabType === 'terminal'
               ? state.activeTabId
               : worktreeId
                 ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
                 : null
+
           const manager = tabId ? paneManagers?.get(tabId) : null
           const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
           return pane?.terminal?.cols ?? 0
         })
+
         return observedCols > 0 ? observedCols : maxCols + 1
       },
       {
@@ -60,6 +65,7 @@ export async function waitForRenderedTerminalColumnsAtMost(
       }
     )
     .toBeLessThanOrEqual(maxCols)
+
   return observedCols
 }
 
@@ -76,9 +82,11 @@ export async function waitForPtyColumnsAtMost(
   let lastObservedCols: number | null = null
   let lastMarker = ''
   let lastTerminalTail = ''
+
   while (Date.now() < deadline) {
     const marker = `ORCA_PTY_COLUMNS_${randomUUID()}`
     lastMarker = marker
+
     for (const input of buildFreshShellProbeInputSequence(
       `${nodeTerminalCommand([
         '-e',
@@ -87,28 +95,37 @@ export async function waitForPtyColumnsAtMost(
     )) {
       await sendToTerminal(page, ptyId, input)
     }
+
     const probeDeadline = Date.now() + Math.min(5_000, Math.max(0, deadline - Date.now()))
+
     while (Date.now() < probeDeadline) {
       const content = await getTerminalContentForPtyId(page, ptyId, 30_000)
       lastTerminalTail = content
       const match = content.match(new RegExp(`${marker}:(\\d+)`))
       const observedCols = Number(match?.[1] ?? 0)
+
       if (observedCols > 0) {
         markerObserved = true
         lastObservedCols = observedCols
         break
       }
+
       await page.waitForTimeout(100)
     }
+
     if (lastObservedCols !== null && lastObservedCols <= maxCols) {
       return lastObservedCols
     }
+
     const retryDelayMs = Math.min(250, Math.max(0, deadline - Date.now()))
+
     if (retryDelayMs > 0) {
       await page.waitForTimeout(retryDelayMs)
     }
   }
+
   lastTerminalTail = await getTerminalContentForPtyId(page, ptyId, 30_000)
+
   const finalState = {
     lastMarker,
     markerObserved,
@@ -116,6 +133,7 @@ export async function waitForPtyColumnsAtMost(
     maxCols,
     terminalTail: lastTerminalTail.slice(-4_000)
   }
+
   if (!markerObserved) {
     throw new Error(
       `PTY column probe never observed a marker within ${timeoutMs}ms; final state ${JSON.stringify(
@@ -123,6 +141,7 @@ export async function waitForPtyColumnsAtMost(
       )}`
     )
   }
+
   throw new Error(
     `PTY columns stayed above ${maxCols}; last observed ${lastObservedCols}; final state ${JSON.stringify(
       finalState

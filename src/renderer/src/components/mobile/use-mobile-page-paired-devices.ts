@@ -43,6 +43,7 @@ export function useMobilePagePairedDevices({
   const setPairingDeviceBaseline = useCallback(
     (count: number | null): void => {
       deviceCountAtPairStartRef.current = count
+
       if (mountedRef.current) {
         setDeviceCountAtPairStart(count)
       }
@@ -53,6 +54,7 @@ export function useMobilePagePairedDevices({
   const showStage = useCallback(
     (nextStage: FlowStage | null): void => {
       stageRef.current = nextStage
+
       if (mountedRef.current) {
         setStage(nextStage)
       }
@@ -78,6 +80,7 @@ export function useMobilePagePairedDevices({
     ): Promise<readonly PairedDevice[]> => {
       try {
         const nextDevices = await refreshDevices(opts)
+
         if (mountedRef.current) {
           if (
             shouldShowPairedAfterDeviceRefresh({
@@ -89,11 +92,13 @@ export function useMobilePagePairedDevices({
             showPairedDevices(nextDevices.length)
           }
         }
+
         return nextDevices
       } catch (err) {
         // Log so a transient IPC failure (which routes the user to 'intro') is
         // observable; keep returning [] so callers' behavior is unchanged.
         console.error('mobile.listDevices failed', err)
+
         return []
       }
     },
@@ -106,15 +111,18 @@ export function useMobilePagePairedDevices({
     let cancelled = false
     void (async () => {
       const initialDevices = await loadDevices()
+
       if (cancelled) {
         return
       }
+
       if (initialDevices.length > 0) {
         showPairedDevices(initialDevices.length)
       } else {
         showStage('intro')
       }
     })()
+
     return () => {
       cancelled = true
     }
@@ -128,27 +136,34 @@ export function useMobilePagePairedDevices({
       setRevokingDeviceIds((prev) => {
         if (prev.includes(deviceId)) {
           alreadyRevoking = true
+
           return prev
         }
+
         return [...prev, deviceId]
       })
+
       if (alreadyRevoking) {
         return
       }
+
       try {
         const { revoked } = await window.api.mobile.revokeDevice({ deviceId })
+
         // Why: the backend can resolve revoked=false without removing anything;
         // treat it as a failure BEFORE refreshing or routing, so a revoke that
         // didn't happen can't flash a success toast or drop the user to intro.
         if (!revoked) {
           throw new Error('mobile.revokeDevice returned revoked=false')
         }
+
         // Why: revoke already succeeded server-side, so a failed post-revoke
         // reload must not flash "Failed to revoke". Optimistically drop the
         // revoked device from the last-known list (not loadDevices' bogus [] from
         // a failed reload), keeping success + intro-routing correct. Mirrors
         // MobilePane's revoke fallback.
         let remaining: readonly PairedDevice[]
+
         try {
           remaining = await refreshDevices({ force: true })
         } catch (err) {
@@ -156,9 +171,11 @@ export function useMobilePagePairedDevices({
           remaining = getPairedMobileDevicesSnapshot().filter((d) => d.deviceId !== deviceId)
           replacePairedMobileDevices(remaining)
         }
+
         if (mountedRef.current) {
           toast.success(translate('auto.components.mobile.MobilePage.255372e6e8', 'Device revoked'))
         }
+
         if (remaining.length === 0 && mountedRef.current) {
           showStage('intro')
         }

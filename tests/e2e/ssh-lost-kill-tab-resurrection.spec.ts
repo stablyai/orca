@@ -19,6 +19,7 @@ import {
 } from './helpers/docker-ssh-relay-connection'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const DROP_CYCLES = 3
 
 test.use({ seedTestRepo: false })
@@ -42,11 +43,13 @@ async function waitForSettledTabIds(page: Page, worktreeId: string): Promise<str
         const key = latest.join()
         agreements = key === previousKey ? agreements + 1 : 0
         previousKey = key
+
         return agreements
       },
       { timeout: 60_000, intervals: [1_000], message: 'the tab set never stopped changing' }
     )
     .toBeGreaterThanOrEqual(3)
+
   return latest
 }
 
@@ -60,9 +63,11 @@ async function waitForSettledTabIds(page: Page, worktreeId: string): Promise<str
  */
 function dropRelayTransport(target: DockerSshRelayTarget): void {
   const snapshot = readDockerSshRelayProcessSnapshot(target)
+
   if (!snapshot) {
     throw new Error('No Docker SSH relay process group to terminate')
   }
+
   terminateDockerSshRelay(target, snapshot)
 }
 
@@ -70,9 +75,11 @@ async function dumpAuthority(page: Page, worktreeId: string, label: string): Pro
   const d = await page.evaluate(async (id) => {
     const persisted = await window.api.session.get()
     const state = window.__store?.getState()
+
     const repoId = Object.entries(state?.worktreesByRepo ?? {}).find(([, ws]) =>
       ws.some((w) => w.id === id)
     )?.[0]
+
     return {
       repoId: repoId?.slice(0, 8) ?? null,
       topologyRev: persisted.terminalTopologyRevisionByRepoId ?? null,
@@ -80,15 +87,18 @@ async function dumpAuthority(page: Page, worktreeId: string, label: string): Pro
       storeTabs: (state?.tabsByWorktree[id] ?? []).length
     }
   }, worktreeId)
+
   console.log(`[auth ${label}] ${JSON.stringify(d)}`)
 }
 
 async function closeTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((id) => {
     const state = window.__store?.getState()
+
     if (!state) {
       throw new Error('Store unavailable')
     }
+
     state.closeTab(id)
   }, tabId)
 }
@@ -105,6 +115,7 @@ async function runResurrectionCycles(
   disrupt: (target: DockerSshRelayTarget, targetId: string) => Promise<void> | void
 ): Promise<void> {
   let target: DockerSshRelayTarget | null = null
+
   try {
     target = startDockerSshRelayTarget(testInfo)
     await waitForSessionReady(page)
@@ -117,6 +128,7 @@ async function runResurrectionCycles(
     const baseline = await waitForSettledTabIds(page, remote.worktreeId)
 
     const perCycle: { closedTabId: string; afterIds: string[] }[] = []
+
     for (let cycle = 0; cycle < DROP_CYCLES; cycle += 1) {
       // Created while the transport is healthy — the disruption has to land between close and
       // reattach, not before the tab has a PTY to leave a lease behind.
@@ -127,6 +139,7 @@ async function runResurrectionCycles(
       // a baseline diff picks that survivor instead of the tab this cycle just made, and every
       // later cycle would close the same stale tab and measure nothing.
       const closedTabId = withExtra.find((tabId) => !beforeCreate.includes(tabId))
+
       if (!closedTabId) {
         throw new Error('The extra SSH tab was never added')
       }
@@ -149,13 +162,16 @@ async function runResurrectionCycles(
           `drop${index + 1}=${entry.afterIds.length}${entry.afterIds.includes(entry.closedTabId) ? ' (closed tab returned)' : ''}`
       )
       .join(' ')
+
     const summary = `baseline=${baseline.length} ${growth}`
+
     for (const [index, entry] of perCycle.entries()) {
       expect(
         entry.afterIds,
         `drop ${index + 1} resurrected the closed tab ${entry.closedTabId}: ${summary}`
       ).not.toContain(entry.closedTabId)
     }
+
     expect(
       perCycle.map((entry) => entry.afterIds.length),
       `tabs accumulated across dropped-transport closes: ${summary}`

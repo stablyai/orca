@@ -76,6 +76,7 @@ describe('keybindings', () => {
       alt: false,
       shift: false
     }
+
     const dvorakPhysicalComma = {
       key: 'w',
       code: 'Comma',
@@ -111,6 +112,7 @@ describe('keybindings', () => {
       alt: false,
       shift: false
     }
+
     expect(keybindingMatchesAction('browser.grabElement', cyrillicCtrlC, 'win32')).toBe(true)
     expect(keybindingMatchesAction('browser.grabElement', cyrillicCtrlC, 'linux')).toBe(true)
 
@@ -193,6 +195,7 @@ describe('keybindings', () => {
       alt: false,
       shift: false
     }
+
     const jisRightBracket = {
       key: ']',
       code: 'Backslash',
@@ -201,6 +204,7 @@ describe('keybindings', () => {
       alt: false,
       shift: false
     }
+
     const jisLeftBracketShifted = { ...jisLeftBracket, key: '{', shift: true }
     const jisRightBracketShifted = { ...jisRightBracket, key: '}', shift: true }
 
@@ -323,6 +327,7 @@ describe('keybindings', () => {
       alt: true,
       shift: false
     }
+
     const macOptionRightBracket = {
       key: '\u2018',
       code: 'BracketRight',

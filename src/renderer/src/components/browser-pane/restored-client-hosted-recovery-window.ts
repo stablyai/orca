@@ -38,26 +38,32 @@ export function useRestoredClientHostedRecoveryWindow({
   const restoredFromSession = useAppStore(
     (s) => s.remoteBrowserPageHandlesByPageId[browserPageId]?.restoredFromSession === true
   )
+
   const environmentReachable = useAppStore(
     (s) => s.runtimeStatusByEnvironmentId.get(environmentId)?.status != null
   )
+
   const awaitingRecovery = restoredFromSession && placementPending
   const [windowElapsed, setWindowElapsed] = useState(false)
 
   useEffect(() => {
     if (!awaitingRecovery) {
       setWindowElapsed(false)
+
       return
     }
+
     // Why the clock starts at reachable rather than at mount: an unreachable environment has not
     // been asked yet, and its own disconnected state already explains the wait.
     if (!environmentReachable) {
       return
     }
+
     const timer = setTimeout(
       () => setWindowElapsed(true),
       RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS
     )
+
     return () => clearTimeout(timer)
   }, [awaitingRecovery, environmentReachable])
 

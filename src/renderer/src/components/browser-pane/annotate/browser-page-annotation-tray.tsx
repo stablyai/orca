@@ -76,9 +76,11 @@ export function BrowserPageAnnotationTray({
 
   const handleSaveEdit = (): void => {
     const trimmed = editComment.trim()
+
     if (!trimmed || !editingAnnotationId) {
       return
     }
+
     handleUpdateBrowserAnnotation(editingAnnotationId, trimmed, editIntent)
     setEditingAnnotationId(null)
   }
@@ -173,6 +175,7 @@ export function BrowserPageAnnotationTray({
       <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto p-1.5">
         {browserAnnotations.map((annotation, index) => {
           const isEditing = annotation.id === editingAnnotationId
+
           return (
             <div
               key={annotation.id}
@@ -230,6 +233,7 @@ export function BrowserPageAnnotationTray({
                   >
                     {BROWSER_ANNOTATION_INTENT_OPTIONS.map((option) => {
                       const Icon = option.icon
+
                       return (
                         <ToggleGroupItem
                           key={option.value}

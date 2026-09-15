@@ -18,6 +18,7 @@ describe('palette field quality allocation', () => {
         'prose',
         'exact-alias'
       ]
+
       const fields = Array.from({ length: 1_000 }, (_, i) =>
         indexPaletteField({
           id: String(i),
@@ -28,16 +29,20 @@ describe('palette field quality allocation', () => {
           ...(i % 2 === 0 ? { identifier: { kind: 'number' as const } } : {})
         })!
       )
+
       const token = createPaletteQueryToken(query, 0)
       let allocations = 0
       const NativeSet = globalThis.Set
+
       class CountedSet<T> extends NativeSet<T> {
         constructor(values?: Iterable<T> | null) {
           super(values)
           allocations++
         }
       }
+
       vi.stubGlobal('Set', CountedSet)
+
       try {
         for (const field of fields) {
           matchPaletteField(field, token)
@@ -45,6 +50,7 @@ describe('palette field quality allocation', () => {
       } finally {
         vi.unstubAllGlobals()
       }
+
       expect(allocations).toBe(0)
     }
   )
@@ -62,11 +68,14 @@ describe('palette quality restrictions remain local to each match', () => {
         destinationEligible: true,
         identifier: { kind }
       })!
+
       const prefix = createPaletteQueryToken('123', 0)
       const exact = createPaletteQueryToken('12345', 0)
+
       const expected = ['port', 'sha', 'key'].includes(kind)
         ? { quality: 'field-prefix', ranges: [{ start: 0, end: 3 }] }
         : null
+
       expect(matchPaletteField(field, prefix)).toEqual(expected)
       expect(matchPaletteField(field, exact)).toEqual({
         quality: 'field-exact',
@@ -86,6 +95,7 @@ describe('palette quality restrictions remain local to each match', () => {
         role: 'primary',
         destinationEligible: true
       })!
+
       expect(matchPaletteField(field, createPaletteQueryToken('s', 0))).toEqual({
         quality: 'field-prefix',
         ranges: [{ start: 0, end: 1 }]

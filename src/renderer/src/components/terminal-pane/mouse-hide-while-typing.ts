@@ -13,6 +13,7 @@ export function installMouseHideWhileTyping(
   const showOnMove = (): void => {
     container.style.cursor = ''
   }
+
   container.addEventListener('mousemove', showOnMove)
 
   return {

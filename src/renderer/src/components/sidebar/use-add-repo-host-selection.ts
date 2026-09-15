@@ -37,6 +37,7 @@ export function useAddRepoHostSelection({
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const { hostOptions } = useSidebarHostScopeOptions()
   const isWebClient = isWebClientLocation()
+
   const ephemeralRuntimeEnvironmentIds = useMemo(
     () =>
       new Set(
@@ -46,10 +47,12 @@ export function useAddRepoHostSelection({
       ),
     [runtimeEnvironments]
   )
+
   const selectableHostOptions = useMemo(
     () =>
       hostOptions.filter((host) => {
         const parsed = parseExecutionHostId(host.id)
+
         return (
           !(isWebClient && parsed?.kind === 'local') &&
           (parsed?.kind !== 'runtime' || !ephemeralRuntimeEnvironmentIds.has(parsed.environmentId))
@@ -57,10 +60,13 @@ export function useAddRepoHostSelection({
       }),
     [ephemeralRuntimeEnvironmentIds, hostOptions, isWebClient]
   )
+
   const [selectedAddProjectHostId, setSelectedAddProjectHostId] =
     useState<ExecutionHostId>(LOCAL_EXECUTION_HOST_ID)
+
   const [hostSelectorOpen, setHostSelectorOpen] = useState(false)
   const previousOpenRef = useRef(false)
+
   const pairedWebRuntimeHost = isWebClient
     ? selectableHostOptions.find((host) => host.kind === 'runtime' && canSelectAddRepoHost(host))
     : undefined
@@ -74,35 +80,43 @@ export function useAddRepoHostSelection({
       (host) => host.id === LOCAL_EXECUTION_HOST_ID && canSelectAddRepoHost(host)
     ) ??
     selectableHostOptions.find((host) => canSelectAddRepoHost(host))
+
   const selectedHostId = selectedHost?.id ?? (isWebClient ? null : LOCAL_EXECUTION_HOST_ID)
   const selectedParsedHost = parseExecutionHostId(selectedHostId)
+
   const selectedSshTargetId =
     selectedParsedHost?.kind === 'ssh' ? selectedParsedHost.targetId : null
 
   useEffect(() => {
     if (isOpen && !previousOpenRef.current) {
       const focusedHostId = getSettingsFocusedExecutionHostId(settings)
+
       const nextHostId = selectableHostOptions.some(
         (host) => host.id === focusedHostId && canSelectAddRepoHost(host)
       )
         ? focusedHostId
         : (pairedWebRuntimeHost?.id ?? (isWebClient ? null : LOCAL_EXECUTION_HOST_ID))
+
       if (nextHostId) {
         setSelectedAddProjectHostId(nextHostId)
       }
     }
+
     if (!isOpen) {
       setHostSelectorOpen(false)
     }
+
     previousOpenRef.current = isOpen
   }, [isOpen, isWebClient, pairedWebRuntimeHost?.id, selectableHostOptions, settings])
 
   const handleSelectAddProjectHost = useCallback(
     async (hostId: ExecutionHostId): Promise<void> => {
       const host = selectableHostOptions.find((candidate) => candidate.id === hostId)
+
       if (!host || !canSelectAddRepoHost(host)) {
         return
       }
+
       setSelectedAddProjectHostId(hostId)
       setStep('add')
     },
@@ -113,6 +127,7 @@ export function useAddRepoHostSelection({
     async (hostId: ExecutionHostId): Promise<void> => {
       const host = selectableHostOptions.find((candidate) => candidate.id === hostId)
       const parsed = parseExecutionHostId(hostId)
+
       if (!host || parsed?.kind !== 'ssh') {
         return
       }
@@ -132,17 +147,21 @@ export function useAddRepoHostSelection({
         const connectResult = (await window.api.ssh.connect({
           targetId: parsed.targetId
         })) as SshConnectionState | null | undefined
+
         const state =
           connectResult ??
           ((await window.api.ssh.getState({
             targetId: parsed.targetId
           })) as SshConnectionState | null)
+
         if (state) {
           setSshConnectionState(parsed.targetId, state)
         }
+
         if (state?.status !== 'connected') {
           return
         }
+
         setSelectedAddProjectHostId(hostId)
         setStep('add')
         setHostSelectorOpen(false)

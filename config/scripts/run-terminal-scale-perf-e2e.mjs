@@ -13,7 +13,9 @@ const env = {
     process.env.ORCA_E2E_OPENCODE_SCALE_HIDDEN_PRESSURE_PANES ?? '25',
   ORCA_E2E_OPENCODE_FRAME_COUNT: process.env.ORCA_E2E_OPENCODE_FRAME_COUNT ?? '60'
 }
+
 const extraArgs = process.argv.slice(2)
+
 if (extraArgs[0] === '--') {
   extraArgs.shift()
 }
@@ -40,7 +42,9 @@ const child = spawn(
 child.on('exit', (code, signal) => {
   if (signal) {
     process.kill(process.pid, signal)
+
     return
   }
+
   process.exit(code ?? 1)
 })

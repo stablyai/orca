@@ -11,6 +11,7 @@ import {
 function setup() {
   const rows = new Map<string, AgentJournalItemBody>()
   let writes = 0
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity, body) => {
       writes += 1
@@ -19,7 +20,9 @@ function setup() {
     appendTombstone: (identity) => rows.delete(agentJournalItemKey(identity)),
     publish: () => {}
   }
+
   const translator = createCodexJournalTranslator({ sink })
+
   const send = (method: string, turnId = 'turn', threadId = 'thread') =>
     translator.handle({
       type: 'notification',
@@ -28,6 +31,7 @@ function setup() {
       method,
       params: { turnId, item: { id: `compact-${turnId}`, type: 'contextCompaction' } }
     })
+
   return { rows, sink, translator, send, writes: () => writes }
 }
 
@@ -41,9 +45,11 @@ describe('compaction provider generation compatibility', () => {
     const { rows, translator, send } = setup()
     expect(send('item/started')).toEqual({ accepted: true })
     expect(rows.size).toBe(0)
+
     for (const method of methods) {
       expect(send(method)).toEqual({ accepted: true })
     }
+
     const messages = projectStructuredItemsToNativeChat(
       [...rows].map(([itemId, body], index) => ({
         itemId,
@@ -53,6 +59,7 @@ describe('compaction provider generation compatibility', () => {
         observedAt: 1
       }))
     )
+
     expect(messages).toHaveLength(1)
     expect(messages[0]?.blocks).toEqual([
       { type: 'text', text: 'Context compacted', presentation: 'compaction' }
@@ -82,15 +89,20 @@ describe('compaction provider generation compatibility', () => {
       if (stage === 'append' && reject) {
         return { accepted: false, reason: 'backpressure' }
       }
+
       sink.appendItem(identity, body)
+
       return { accepted: true }
     }
+
     sink.tryPublish = () => {
       publishes += 1
+
       return stage === 'publish' && reject
         ? { accepted: false, reason: 'backpressure' }
         : { accepted: true }
     }
+
     expect(send('item/completed')).toEqual({ accepted: false, reason: 'backpressure' })
     reject = false
     expect(send('item/completed')).toEqual({ accepted: true })
@@ -102,9 +114,11 @@ describe('compaction provider generation compatibility', () => {
   it('bounds retained turns and keeps the same journal identity after eviction', () => {
     const { rows, translator, send, writes } = setup()
     send('item/completed', 'oldest')
+
     for (let index = 0; index < MAX_CODEX_GENERIC_TURN_BUCKETS; index += 1) {
       send('item/completed', `turn-${index}`)
     }
+
     const before = writes()
     send('thread/compacted', 'oldest')
     expect(writes()).toBe(before + 1)

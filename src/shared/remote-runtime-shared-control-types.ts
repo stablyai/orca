@@ -72,6 +72,7 @@ export type RemoteRuntimeSharedConnectionDiagnostics = {
   lastClose: { code: number; reason: string } | null
   lastError: string | null
 }
+
 export type RemoteRuntimeSharedControlConnectionOptions = {
   environmentId?: string
   clientCapabilities?: readonly RuntimeCapability[]

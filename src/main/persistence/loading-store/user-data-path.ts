@@ -8,6 +8,7 @@ import { MOBILE_PAIRING_USERDATA_FILES } from '../../runtime/mobile-pairing-file
 // Why capture once (not a module const, not per-call): a const resolves before configureDevUserDataPath() redirects userData (dev/prod collide);
 // per-call resolves after app.setName('Orca') flips path case and loses data on case-sensitive FS. index.ts calls initDataPath() at the right moment.
 let _dataFile: string | null = null
+
 let _userDataDir: string | null = null
 
 export function initDataPath(): void {
@@ -23,6 +24,7 @@ export function getDataFile(): string {
     _userDataDir = userDataDir
     _dataFile = join(userDataDir, 'orca-data.json')
   }
+
   return _dataFile
 }
 
@@ -35,8 +37,10 @@ export function getGithubCacheFile(dataFile = getDataFile()): string {
 export function readGithubCacheSnapshot(dataFile: string): PersistedState['githubCache'] | null {
   try {
     const parsed = JSON.parse(readFileSync(getGithubCacheFile(dataFile), 'utf-8')) as unknown
+
     const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
       typeof value === 'object' && value !== null && !Array.isArray(value)
+
     if (
       isPlainRecord(parsed) &&
       isPlainRecord((parsed as { pr?: unknown }).pr) &&
@@ -47,6 +51,7 @@ export function readGithubCacheSnapshot(dataFile: string): PersistedState['githu
   } catch {
     // Missing or corrupt snapshot: start with an empty cache and refetch.
   }
+
   return null
 }
 
@@ -60,6 +65,7 @@ export function getCanonicalUserDataPath(): string {
     // Safety fallback — should not be hit in normal startup.
     _userDataDir = getAppEnvironment().getPath('userData')
   }
+
   return _userDataDir
 }
 
@@ -74,6 +80,7 @@ export function getCanonicalUserDataPath(): string {
  */
 export function migrateMobilePairingDataToCanonicalUserDataPath(sourceUserDataDir: string): void {
   const targetUserDataDir = getCanonicalUserDataPath()
+
   if (resolve(sourceUserDataDir) === resolve(targetUserDataDir)) {
     return
   }
@@ -82,15 +89,18 @@ export function migrateMobilePairingDataToCanonicalUserDataPath(sourceUserDataDi
     sourcePath: join(sourceUserDataDir, fileName),
     targetPath: join(targetUserDataDir, fileName)
   }))
+
   if (migrations.some(({ sourcePath }) => !existsSync(sourcePath))) {
     return
   }
+
   if (migrations.some(({ targetPath }) => existsSync(targetPath))) {
     return
   }
 
   mkdirSync(targetUserDataDir, { recursive: true })
   const copied: string[] = []
+
   try {
     for (const { sourcePath, targetPath } of migrations) {
       copyFileSync(sourcePath, targetPath)
@@ -107,6 +117,7 @@ export function migrateMobilePairingDataToCanonicalUserDataPath(sourceUserDataDi
         // Best effort — leave the retry guard to the next launch.
       }
     }
+
     console.error('[persistence] Failed to migrate mobile pairing files forward:', error)
   }
 }

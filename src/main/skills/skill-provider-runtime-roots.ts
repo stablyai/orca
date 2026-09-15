@@ -5,8 +5,11 @@ import { runWslProcess } from '../wsl/wsl-runner'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 
 const PROVIDER_ROOT_MAX_LENGTH = 32_768
+
 const WSL_ENV_PROBE_TIMEOUT_MS = 8_000
+
 const WSL_ENV_PROBE_MAX_BYTES = 4_097
+
 const WSL_GROK_HOME_SCRIPT = [
   'entry=$(getent passwd "$(id -u)" 2>/dev/null || true)',
   'login_shell=${entry##*:}',
@@ -16,6 +19,7 @@ const WSL_GROK_HOME_SCRIPT = [
 
 function normalizedRoot(value: string | undefined): string | null {
   const candidate = value?.trim()
+
   if (
     !candidate ||
     candidate.length > PROVIDER_ROOT_MAX_LENGTH ||
@@ -24,6 +28,7 @@ function normalizedRoot(value: string | undefined): string | null {
   ) {
     return null
   }
+
   return resolve(candidate)
 }
 
@@ -32,6 +37,7 @@ export function resolveEnvironmentSkillProviderRoots(
 ): SkillProviderRootOverrides {
   const claudeConfig = normalizedRoot(env.CLAUDE_CONFIG_DIR)
   const grokHome = normalizedRoot(env.GROK_HOME)
+
   return {
     ...(claudeConfig ? { claude: join(claudeConfig, 'skills') } : {}),
     ...(grokHome ? { grok: join(grokHome, 'skills') } : {})
@@ -45,6 +51,7 @@ export function resolveEnvironmentHermesSkillsRoot(
   env: NodeJS.ProcessEnv = process.env
 ): string | null {
   const hermesHome = normalizedRoot(env.HERMES_HOME)
+
   return hermesHome ? join(hermesHome, 'skills') : null
 }
 
@@ -66,15 +73,20 @@ export function resolveDefaultHermesSkillsRoot(input: {
   directoryExists?: (candidate: string) => boolean
 }): string {
   const dotfolderHome = join(input.homeDir, '.hermes')
+
   if ((input.platform ?? process.platform) !== 'win32') {
     return join(dotfolderHome, 'skills')
   }
+
   const localAppData = normalizedRoot((input.env ?? process.env).LOCALAPPDATA)
+
   if (!localAppData) {
     return join(dotfolderHome, 'skills')
   }
+
   const localAppDataHome = join(localAppData, 'hermes')
   const directoryExists = input.directoryExists ?? isExistingDirectory
+
   return !directoryExists(localAppDataHome) && directoryExists(dotfolderHome)
     ? join(dotfolderHome, 'skills')
     : join(localAppDataHome, 'skills')
@@ -85,6 +97,7 @@ export function withClaudeSkillProviderRoot(
   claudeConfigDirectory: string | null | undefined
 ): SkillProviderRootOverrides {
   const configDirectory = normalizedRoot(claudeConfigDirectory ?? undefined)
+
   return configDirectory ? { ...roots, claude: join(configDirectory, 'skills') } : roots
 }
 
@@ -103,10 +116,12 @@ async function probeWslGrokHome(distro: string): Promise<string> {
     timeoutMs: WSL_ENV_PROBE_TIMEOUT_MS,
     maxOutputBytes: WSL_ENV_PROBE_MAX_BYTES
   })
+
   // A timeout mid-write can leave a truncated but shape-valid absolute path.
   if (result.code !== 0 || result.timedOut) {
     return ''
   }
+
   return result.stdout
 }
 
@@ -117,6 +132,7 @@ export async function resolveWslGrokSkillProviderRoot(
   try {
     const value = await probe(distro)
     const candidate = value.trim()
+
     if (
       !candidate ||
       candidate.length >= WSL_ENV_PROBE_MAX_BYTES ||
@@ -124,12 +140,15 @@ export async function resolveWslGrokSkillProviderRoot(
       candidate.includes('\\') ||
       Array.from(candidate).some((character) => {
         const code = character.charCodeAt(0)
+
         return code <= 0x1f || code === 0x7f
       })
     ) {
       return null
     }
+
     const grokHome = candidate.replace(/\/+$/u, '') || '/'
+
     return toWindowsWslPath(`${grokHome === '/' ? '' : grokHome}/skills`, distro)
   } catch {
     return null

@@ -14,8 +14,11 @@ import {
 } from './structured-agent-session-dead-generation-settlement'
 
 const SESSION = 'session-dead-generation'
+
 const THREAD = 'thread-1'
+
 let root: string
+
 let journal: AgentSessionJournal
 
 beforeEach(async () => {
@@ -117,6 +120,7 @@ describe('dead structured-session generation settlement', () => {
 
   it('adds one actionable outcome for observed active-work failure and is idempotent', async () => {
     await seedUnfinishedWork()
+
     const input = {
       journal,
       sessionId: SESSION,
@@ -161,6 +165,7 @@ describe('dead structured-session generation settlement', () => {
     const statuses = journal
       .snapshot()
       .items.flatMap((item) => (item.body.kind === 'status' ? [item.body.text] : []))
+
     expect(statuses).toHaveLength(1)
     // The cause is bounded before composing, so the row never reaches the byte cap that would
     // truncate the sentence telling the user the conversation is still usable.
@@ -182,7 +187,9 @@ describe('dead structured-session generation settlement', () => {
         completedAt: 1_000
       }
     }
+
     const settledSnapshot = journal.snapshot()
+
     const closedJournal: Pick<
       AgentSessionJournal,
       'snapshot' | 'submissions' | 'markPendingSubmissionsUnknown' | 'appendLifecycleBatch'

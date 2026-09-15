@@ -12,7 +12,9 @@ import { COMMAND_SPECS } from './specs'
 // Why __dirname: it works under both Vitest and the CommonJS tsc emit that build:cli type-checks
 // this file against; import.meta.dirname does not (TS1470).
 const projectDir = resolve(__dirname, '..', '..')
+
 const guideRoot = join(projectDir, 'skill-guides')
+
 const MAX_COMMAND_DEPTH = 3
 
 type Invocation = { file: string; line: number; text: string }
@@ -20,9 +22,11 @@ type Invocation = { file: string; line: number; text: string }
 function guideFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const full = join(directory, entry.name)
+
     if (entry.isDirectory()) {
       return guideFiles(full)
     }
+
     return entry.isFile() && entry.name.endsWith('.md') ? [full] : []
   })
 }
@@ -38,9 +42,12 @@ function invocationSpans(contents: string, file: string): Invocation[] {
   contents.split(/\r?\n/u).forEach((line, index) => {
     if (/^\s*(?:```|~~~)/u.test(line)) {
       inFence = !inFence
+
       return
     }
+
     const spans = inFence ? [line] : [...line.matchAll(/`([^`]+)`/gu)].map((match) => match[1])
+
     for (const span of spans) {
       const starts = [...span.matchAll(/\bORCA\b/gu)].map((match) => match.index)
       starts.forEach((start, position) => {
@@ -52,6 +59,7 @@ function invocationSpans(contents: string, file: string): Invocation[] {
       })
     }
   })
+
   return found
 }
 
@@ -59,9 +67,11 @@ function invocationSpans(contents: string, file: string): Invocation[] {
 function maskQuotedValues(text: string): string {
   let masked = ''
   let quote: string | null = null
+
   for (const character of text) {
     if (quote) {
       masked += character === quote ? character : ' '
+
       if (character === quote) {
         quote = null
       }
@@ -72,14 +82,18 @@ function maskQuotedValues(text: string): string {
       masked += character
     }
   }
+
   return masked
 }
 
 const specByPath = new Map<string, (typeof COMMAND_SPECS)[number]>()
+
 const pathPrefixes = new Set<string>()
+
 for (const spec of COMMAND_SPECS) {
   for (const path of specPaths(spec)) {
     specByPath.set(path.join(' '), spec)
+
     for (let length = 1; length < path.length; length += 1) {
       pathPrefixes.add(path.slice(0, length).join(' '))
     }
@@ -89,55 +103,67 @@ for (const spec of COMMAND_SPECS) {
 function longestKnownPrefix(tokens: string[]): string | null {
   for (let length = tokens.length; length >= 1; length -= 1) {
     const candidate = tokens.slice(0, length).join(' ')
+
     if (specByPath.has(candidate) || pathPrefixes.has(candidate)) {
       return candidate
     }
   }
+
   return null
 }
 
 function allowedFlagsFor(prefix: string): Set<string> {
   const exact = specByPath.get(prefix)
   const flags = new Set<string>(CLI_GLOBAL_FLAGS)
+
   const specs = exact
     ? [exact]
     : COMMAND_SPECS.filter((spec) =>
         specPaths(spec).some((path) => path.join(' ').startsWith(`${prefix} `))
       )
+
   for (const spec of specs) {
     for (const flag of spec.allowedFlags) {
       flags.add(flag)
     }
   }
+
   return flags
 }
 
 function describeFailure(invocation: Invocation, detail: string): string {
   const location = `${relative(projectDir, invocation.file)}:${invocation.line}`
+
   return `${location}: ${detail}\n    ${invocation.text}`
 }
 
 function parityFailures(invocation: Invocation): string[] {
   const masked = maskQuotedValues(invocation.text).replace(/\s#.*$/u, '')
   const tokens: string[] = []
+
   for (const token of masked.slice('ORCA'.length).trim().split(/\s+/u)) {
     if (!/^[a-z][a-z0-9-]*$/u.test(token) || tokens.length === MAX_COMMAND_DEPTH) {
       break
     }
+
     tokens.push(token)
   }
+
   if (tokens.length === 0) {
     return []
   }
 
   const failures: string[] = []
   let command: string | null = null
+
   for (let length = tokens.length; length >= 1 && command === null; length -= 1) {
     const candidate = tokens.slice(0, length).join(' ')
+
     if (specByPath.has(candidate)) {
       command = candidate
     }
   }
+
   if (command === null) {
     // A prefix reference such as `ORCA emulator ...` or `ORCA linear --help` names no exact
     // path, but its flags still have to belong to some command under that prefix.
@@ -145,22 +171,26 @@ function parityFailures(invocation: Invocation): string[] {
       command = tokens.join(' ')
     }
   }
+
   if (command === null) {
     failures.push(
       describeFailure(invocation, `no COMMAND_SPECS path or alias for "${tokens.join(' ')}"`)
     )
     command = longestKnownPrefix(tokens)
+
     if (command === null) {
       return failures
     }
   }
 
   const allowed = allowedFlagsFor(command)
+
   for (const match of masked.matchAll(/--([a-z][a-z0-9-]*)/gu)) {
     if (!allowed.has(match[1])) {
       failures.push(describeFailure(invocation, `--${match[1]} is not a flag of "${command}"`))
     }
   }
+
   return failures
 }
 

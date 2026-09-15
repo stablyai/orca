@@ -23,6 +23,7 @@ function runtimeObserving(result: RuntimeTerminalPromptDelivery): {
   observe: ReturnType<typeof vi.fn>
 } {
   const observe = vi.fn().mockResolvedValue(result)
+
   return {
     runtime: { observeTerminalAgentPrompt: observe } as unknown as OrcaRuntimeService,
     observe

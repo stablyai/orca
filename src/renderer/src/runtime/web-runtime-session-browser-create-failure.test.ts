@@ -48,6 +48,7 @@ vi.mock('./web-session-tabs-sync', () => ({
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     // The production caller invokes the returned settle receipt.
     return () => {}
   },
@@ -114,6 +115,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       ok: false,
       error: { code, message: 'response lost' }
     })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(
@@ -141,6 +143,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         ]
       ])
     })
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -153,6 +156,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         ok: false,
         error: { code: 'browser_tab_not_found', message: 'page was not created' }
       })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(
@@ -189,9 +193,11 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       ])
     })
     let resolveNavigation!: (value: unknown) => void
+
     const navigation = new Promise<unknown>((resolve) => {
       resolveNavigation = resolve
     })
+
     const runtimeCall = vi.fn((request: { method: string; params: { page?: string } }) => {
       if (request.method === 'browser.tabCreate') {
         return Promise.resolve({
@@ -200,11 +206,14 @@ describe('createWebRuntimeSessionBrowserTab', () => {
           result: { browserPageId: request.params.page }
         })
       }
+
       if (request.method === 'browser.goto') {
         return navigation
       }
+
       return Promise.resolve({ id: 'list', ok: true, result: makeSnapshot() })
     })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     const created = createWebRuntimeSessionBrowserTab({
@@ -238,6 +247,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         ok: false,
         error: { code, message: 'host rejected before creation' }
       })
+
       vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
       await expect(
@@ -262,6 +272,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         ok: false,
         error: { code: 'remote_runtime_timeout', message: 'session tabs timed out' }
       })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })).resolves.toBe(true)
@@ -283,11 +294,13 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     mocks.getState.mockImplementation(() => currentState)
     mocks.subscribe.mockImplementation((listener: (state: typeof currentState) => void) => {
       publishStoreState = listener
+
       return unsubscribe
     })
     mocks.hasMaterializedWebRuntimeBrowserPage.mockImplementation(
       (state: typeof currentState) => state.materialized
     )
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -296,12 +309,14 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         result: { browserPageId: 'remote-browser-page-1' }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     const creation = createWebRuntimeSessionBrowserTab({
       worktreeId: WORKTREE_ID,
       focusOnCreate: false
     })
+
     await vi.waitFor(() => expect(publishStoreState).toBeTypeOf('function'))
     currentState = { ...currentState, materialized: true }
     publishStoreState?.(currentState)
@@ -316,6 +331,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
 
   it('reports ambiguous failure when exact host cleanup is not confirmed', async () => {
     mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(false)
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -333,6 +349,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         ok: false,
         error: { code: 'remote_runtime_timeout', message: 'close timed out' }
       })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(
@@ -352,6 +369,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     mocks.applyWebSessionTabsSnapshot.mockImplementationOnce(() => {
       throw new Error('store reconcile failed')
     })
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -362,6 +380,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
       .mockResolvedValueOnce({ id: 'close', ok: true, result: { closed: true } })
       .mockResolvedValueOnce({ id: 'list-after-close', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })).resolves.toBe(
@@ -385,6 +404,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         result: { browserPageId: 'remote-browser-page-1' }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', webRuntimeSessionWindowApi(runtimeCall))
 
     await expect(

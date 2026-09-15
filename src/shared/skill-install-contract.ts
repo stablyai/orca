@@ -87,9 +87,13 @@ export const SkillRemoveRequestSchema = z
   .strict()
 
 export type SkillInstallRequest = z.infer<typeof SkillInstallRequestSchema>
+
 export type SkillInstallDestination = z.infer<typeof SkillInstallDestinationSchema>
+
 export type SkillPackageIdentity = z.infer<typeof SkillPackageIdentitySchema>
+
 export type SkillInstallPreviewRequest = z.infer<typeof SkillInstallPreviewRequestSchema>
+
 export type SkillRemoveRequest = z.infer<typeof SkillRemoveRequestSchema>
 
 export type SkillInstallPreview = {

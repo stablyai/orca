@@ -11,45 +11,61 @@ import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers, buildPtyHostEnv, clearProviderPtyState } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -61,6 +77,7 @@ describe('registerPtyHandlers', () => {
     it('routes headless browser launches through the owning Orca workspace', () => {
       const inheritedBrowser = process.env.BROWSER
       delete process.env.BROWSER
+
       try {
         const env = buildPtyHostEnv(
           'pty-headless',
@@ -103,6 +120,7 @@ describe('registerPtyHandlers', () => {
     it('uses the registered WSL CLI name for headless browser launches', () => {
       const inheritedBrowser = process.env.BROWSER
       delete process.env.BROWSER
+
       try {
         const env = buildPtyHostEnv(
           'pty-headless-wsl',
@@ -130,6 +148,7 @@ describe('registerPtyHandlers', () => {
     it('passes the PTY-resolved Codex home to the WSL relay lane', () => {
       const runtimeHome =
         '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-runtime-home\\home'
+
       const ensureForDistro = vi
         .spyOn(wslHookRelayManager, 'ensureForDistro')
         .mockImplementation(() => {})
@@ -182,6 +201,7 @@ describe('registerPtyHandlers', () => {
               wslDistro: context?.wslDistro
             })
         })
+
         await provider.spawn({
           cols: 80,
           rows: 24,
@@ -199,9 +219,11 @@ describe('registerPtyHandlers', () => {
         expect(options.env.PATH).toBe(
           'C:\\Orca\\bin;C:\\Windows\\System32;C:\\Python314;C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps'
         )
+
         const forwardedKeys = options.env.WSLENV.split(':').map((entry) =>
           entry.split('/')[0]!.toLowerCase()
         )
+
         expect(options.env.WSLENV).toContain('ORCA_TERMINAL_HANDLE/u')
         expect(forwardedKeys).not.toContain('path')
       } finally {
@@ -223,6 +245,7 @@ describe('registerPtyHandlers', () => {
         onData: vi.fn(() => makeDisposable()),
         onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
           exitCb = cb
+
           return makeDisposable()
         }),
         write: vi.fn(),
@@ -231,12 +254,14 @@ describe('registerPtyHandlers', () => {
         process: 'zsh',
         pid: 12345
       })
+
       const prepareClaudeAuth = vi.fn(async () => ({
         configDir: '/tmp/claude',
         envPatch: {},
         stripAuthEnv: false,
         provenance: 'managed:account-1'
       }))
+
       registerPtyHandlers(mainWindow as never, undefined, undefined, undefined, prepareClaudeAuth)
 
       const spawnResult = (await handlers.get('pty:spawn')!(null, {
@@ -281,6 +306,7 @@ describe('registerPtyHandlers', () => {
         CLAUDE_CODE_SESSION_ID: '85935aed-98a7-4094-89a8-85c75e1a5a95',
         CLAUDE_CODE_BRIDGE_SESSION_ID: 'session_01UCkWN5nDXNyD1V7cfamCxa'
       })
+
       expect(env.CLAUDE_CODE_CHILD_SESSION).toBeUndefined()
       expect(env.CLAUDE_CODE_SESSION_ID).toBeUndefined()
       expect(env.CLAUDE_CODE_BRIDGE_SESSION_ID).toBeUndefined()
@@ -290,6 +316,7 @@ describe('registerPtyHandlers', () => {
         { CLAUDE_CODE_CHILD_SESSION: '1' },
         { CLAUDE_CODE_CHILD_SESSION: '1' }
       )
+
       expect(env.CLAUDE_CODE_CHILD_SESSION).toBe('1')
     })
     it('always sets TERM and COLORTERM regardless of env', async () => {
@@ -314,6 +341,7 @@ describe('registerPtyHandlers', () => {
         'cd /repo && custom-agent-wrapper',
         'claude'
       )
+
       expect(env.GIT_TERMINAL_PROMPT).toBe('0')
       expect(env.GCM_INTERACTIVE).toBe('never')
     })
@@ -334,6 +362,7 @@ describe('registerPtyHandlers', () => {
       const env = await withBundledCli(() =>
         spawnAndGetEnv(undefined, undefined, () => TEST_CODEX_HOME)
       )
+
       expect(env.CODEX_HOME).toBe(TEST_CODEX_HOME)
       expect(env.ORCA_CODEX_HOME).toBe(TEST_CODEX_HOME)
       // Why (STA-4270): a bare name would be resolved by the post-profile PATH the codex()
@@ -377,10 +406,12 @@ describe('registerPtyHandlers', () => {
     })
     it('resumes an automatic Codex session from its prepared originating home', async () => {
       const selectedHome = vi.fn(() => '/managed/current/home')
+
       const prepareResume = vi.fn(async () => ({
         outcome: 'resume' as const,
         codexHomePath: '/managed/origin/home'
       }))
+
       registerPtyHandlers(
         mainWindow as never,
         undefined,
@@ -418,6 +449,7 @@ describe('registerPtyHandlers', () => {
       const selectedHome = vi.fn(() => {
         throw new Error('Cannot safely launch Codex while stale runtime auth remains.')
       })
+
       registerPtyHandlers(
         mainWindow as never,
         undefined,

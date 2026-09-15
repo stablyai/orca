@@ -60,6 +60,7 @@ function page(
   const cursor = (sequence: number): AgentJournalCursor => ({ epoch, sequence })
   const oldest = items[0]?.sequence ?? 0
   const newest = items.at(-1)?.sequence ?? oldest
+
   return {
     sessionId: 'session-a',
     epoch,
@@ -92,11 +93,14 @@ describe('useStructuredAgentSessionRead history window', () => {
       message(`user-${turn}`, turn * 2 + 1, 'user'),
       message(`assistant-${turn}`, turn * 2 + 2, 'assistant')
     ]).flat()
+
     const olderItems = items.slice(0, 12)
+
     const tailItems = [
       ...Array.from({ length: 170 }, (_, index) => providerFrame(`delta-${index}`, 43 + index)),
       ...items.slice(12).map((item, index) => ({ ...item, sequence: 213 + index }))
     ]
+
     mocks.call
       .mockResolvedValueOnce({ ok: true, page: page('tail', tailItems, true) })
       .mockResolvedValueOnce({ ok: true, page: page('before', olderItems, false) })
@@ -138,9 +142,11 @@ describe('useStructuredAgentSessionRead history window', () => {
     const tailItems = Array.from({ length: 200 }, (_, index) =>
       message(`tail-${index}`, 301 + index, 'assistant')
     )
+
     const initialOlderItems = Array.from({ length: 100 }, (_, index) =>
       message(`middle-${index}`, 201 + index, 'assistant')
     )
+
     mocks.call
       .mockResolvedValueOnce({
         ok: true,
@@ -158,6 +164,7 @@ describe('useStructuredAgentSessionRead history window', () => {
     const { result } = renderHook(() =>
       useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
     )
+
     await waitFor(() => expect(result.current.state.hasOlder).toBe(true))
 
     await act(async () => result.current.loadOlder())
@@ -175,6 +182,7 @@ describe('useStructuredAgentSessionRead history window', () => {
   it('does no host work when the app regains focus', async () => {
     const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
     mocks.call.mockResolvedValue({ ok: true, page: page('tail', [], false) })
+
     const visible = renderHook(() =>
       useStructuredAgentSessionRead({
         sessionId: 'session-visible',
@@ -182,6 +190,7 @@ describe('useStructuredAgentSessionRead history window', () => {
         isVisible: true
       })
     )
+
     const hidden = renderHook(() =>
       useStructuredAgentSessionRead({
         sessionId: 'session-hidden',
@@ -189,6 +198,7 @@ describe('useStructuredAgentSessionRead history window', () => {
         isVisible: false
       })
     )
+
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(1))
     expect(mocks.subscribe).toHaveBeenCalledTimes(1)
 
@@ -209,6 +219,7 @@ describe('useStructuredAgentSessionRead history window', () => {
         isVisible: false
       })
     )
+
     const second = renderHook(() =>
       useStructuredAgentSessionRead({
         sessionId: 'session-inactive-b',
@@ -229,6 +240,7 @@ describe('useStructuredAgentSessionRead history window', () => {
     const unsubscribe = vi.fn()
     mocks.call.mockImplementation((_target, _method, params) => {
       const sessionId = (params as { sessionId: string }).sessionId
+
       return Promise.resolve({
         ok: true,
         page: {
@@ -238,6 +250,7 @@ describe('useStructuredAgentSessionRead history window', () => {
       })
     })
     mocks.subscribe.mockResolvedValue({ unsubscribe })
+
     const view = renderHook(
       ({ active }: { active: 'first' | 'second' | null }) => ({
         first: useStructuredAgentSessionRead({
@@ -253,6 +266,7 @@ describe('useStructuredAgentSessionRead history window', () => {
       }),
       { initialProps: { active: null as 'first' | 'second' | null } }
     )
+
     expect(mocks.call).not.toHaveBeenCalled()
 
     view.rerender({ active: 'first' })
@@ -291,6 +305,7 @@ describe('useStructuredAgentSessionRead unattached page refusals', () => {
     const error = new Error(code) as Error & { code: string }
     error.name = 'RuntimeRpcCallError'
     error.code = code
+
     return error
   }
 
@@ -298,14 +313,18 @@ describe('useStructuredAgentSessionRead unattached page refusals', () => {
     const tailItems = Array.from({ length: 300 }, (_, index) =>
       message(`tail-${index}`, 301 + index, 'assistant')
     )
+
     mocks.call
       .mockResolvedValueOnce({ ok: true, page: page('tail', tailItems, true) })
       .mockRejectedValueOnce(error)
+
     const { result } = renderHook(() =>
       useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
     )
+
     await waitFor(() => expect(result.current.state.hasOlder).toBe(true))
     await act(async () => result.current.loadOlder())
+
     return result
   }
 

@@ -31,6 +31,7 @@ export function AppearanceSection({
   children
 }: AppearanceSectionProps): React.JSX.Element {
   const contentId = `appearance-section-${id}`
+
   return (
     <div
       className={cn(

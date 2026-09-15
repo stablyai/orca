@@ -38,6 +38,7 @@ function makeTree(): { root: string; source: string } {
   mkdirSync(path.join(source, 'nested'), { recursive: true })
   writeFileSync(path.join(source, 'nested', 'file'), 'contents')
   symlinkSync(path.join('nested', 'file'), path.join(source, 'relative-link'))
+
   return { root, source }
 }
 
@@ -47,6 +48,7 @@ describe('shareTree', () => {
   it('prefers the strongest isolation each platform offers', () => {
     const stub = () =>
       vi.fn((_source: string, target: string) => mkdirSync(target, { recursive: true }))
+
     const stubs = { clone: stub(), reflink: stub(), hardlink: stub() }
     const { root, source } = makeTree()
     expect(shareTree(source, path.join(root, 'a'), { platform: 'darwin', ...stubs })).toBe('clone')
@@ -67,9 +69,11 @@ describe('shareTree', () => {
   it('falls from reflink to hardlink on Linux, where ext4 has no reflinks', () => {
     const { root, source } = makeTree()
     const destination = path.join(root, 'shared')
+
     const reflink = vi.fn(() => {
       throw new Error('failed to clone: Invalid cross-device link')
     })
+
     expect(shareTree(source, destination, { platform: 'linux', reflink })).toBe('hardlink')
     expect(reflink).toHaveBeenCalledOnce()
     expect(statSync(path.join(destination, 'nested', 'file')).ino).toBe(
@@ -85,11 +89,13 @@ describe('shareTree', () => {
   it('clears a part-way tree before trying the next mechanism', () => {
     const { root, source } = makeTree()
     const destination = path.join(root, 'shared')
+
     const reflink = (_source: string, target: string) => {
       mkdirSync(target, { recursive: true })
       writeFileSync(path.join(target, 'half-written'), 'partial')
       throw new Error('reflink failed midway')
     }
+
     expect(shareTree(source, destination, { platform: 'linux', reflink })).toBe('hardlink')
     expect(existsSync(path.join(destination, 'half-written'))).toBe(false)
   })
@@ -245,9 +251,11 @@ describe('copyPrivateTree', () => {
   it('falls back to a byte copy when the private mechanism fails', () => {
     const { root, source } = makeTree()
     const destination = path.join(root, 'private')
+
     const clone = () => {
       throw new Error('clonefile unsupported')
     }
+
     const result = copyPrivateTree(source, destination, { platform: 'darwin', clone })
     expect(result.mechanism).toBeNull()
     expect(result.copyError).toBeInstanceOf(Error)

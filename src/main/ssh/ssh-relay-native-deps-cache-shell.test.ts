@@ -39,7 +39,9 @@ import {
 } from './ssh-relay-native-deps-cache-commands'
 
 const HOST = getRemoteHostPlatform('linux-x64')
+
 const DEPS = { 'node-pty': '1.1.0', '@parcel/watcher': '2.5.6' } as const
+
 const KEY = computeRelayNativeDepsCacheKey({ platform: 'linux-x64', deps: DEPS })
 
 // Debian and Ubuntu point /bin/sh at dash, which is stricter than the bash-in-sh-mode that macOS
@@ -64,6 +66,7 @@ describe.runIf(process.platform !== 'win32').each(SHELLS)(
       mkdirSync(join(dir, 'node_modules', '@parcel', 'watcher'), { recursive: true })
       writeFileSync(join(dir, 'node_modules', 'node-pty', 'build', 'pty.node'), 'binary')
       writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: deps }))
+
       return dir
     }
 

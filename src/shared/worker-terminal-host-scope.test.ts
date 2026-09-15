@@ -17,7 +17,9 @@ import {
  * `unverifiable` while running on this machine.
  */
 const PANE_KEY = 'tab-host:leaf-host'
+
 const TERMINAL_HANDLE = 'term_host'
+
 const NOW = 100_000
 
 type HostScopeCase = {
@@ -154,6 +156,7 @@ function acceptsConnection(hostScope: string | null, connectionId: string | null
     statuses: [evidence(connectionId)],
     now: NOW
   })
+
   return page.workers[0]?.liveness.verdict === 'live'
 }
 
@@ -171,11 +174,13 @@ describe('worker terminal host scope', () => {
         statuses: [evidence(null)],
         now: NOW
       })
+
       expect(page.workers[0]?.host).toEqual(testCase.host)
 
       // The fence and the host label come from one read: a row the projection calls local
       // must not demand a remote connection id, and vice versa.
       expect(acceptsConnection(testCase.hostScope, testCase.accepts)).toBe(true)
+
       if (testCase.rejects) {
         expect(acceptsConnection(testCase.hostScope, testCase.rejects)).toBe(false)
       }

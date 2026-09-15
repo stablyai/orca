@@ -5,11 +5,13 @@ import { TerminalHost, type TerminalHostOptions } from './terminal-host'
 // Why mocked: the win32 plain-shell teardown sweeps for real, and an unmocked run would put a
 // live process-table probe -- and, on a recycled pid, a taskkill /T /F -- behind these tests.
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
 
 type SpawnSubprocess = TerminalHostOptions['spawnSubprocess']
+
 type ExitableSubprocess = SubprocessHandle & { exit: (code: number) => void }
 
 /** Shells that report their exit only after `exitDelayMs`, holding the teardown claim open the
@@ -20,8 +22,10 @@ function spawnSubprocessWithSlowExit(exitDelayMs: number): {
   handles: ExitableSubprocess[]
 } {
   const handles: ExitableSubprocess[] = []
+
   const spawnSubprocess = vi.fn<SpawnSubprocess>(() => {
     let onExit: ((code: number) => void) | undefined
+
     const handle = {
       pid: 4242,
       exit: (code: number) => onExit?.(code),
@@ -42,9 +46,12 @@ function spawnSubprocessWithSlowExit(exitDelayMs: number): {
       }),
       dispose: vi.fn()
     } as unknown as ExitableSubprocess
+
     handles.push(handle)
+
     return handle
   })
+
   return { spawnSubprocess, handles }
 }
 
@@ -62,6 +69,7 @@ describe('TerminalHost recreate during teardown', () => {
 
     // The pane closes and immediately respawns onto its own stable id (#18046).
     const killed = host.kill(sessionId, { immediate: true })
+
     const recreated = await host.createOrAttach({
       sessionId,
       cols: 80,
@@ -105,12 +113,14 @@ describe('TerminalHost recreate during teardown', () => {
     await host.createOrAttach({ sessionId, cols: 80, rows: 24, streamClient: streamClient() })
 
     const killed = host.kill(sessionId, { immediate: true })
+
     const create = host.createOrAttach({
       sessionId,
       cols: 80,
       rows: 24,
       streamClient: streamClient()
     })
+
     // Why: dispose joins pending creations, so a create that waited out teardown must re-read the
     // fence rather than publish a session nothing will shut down.
     const disposed = host.dispose()
@@ -131,6 +141,7 @@ describe('TerminalHost recreate during teardown', () => {
 
     const killed = host.kill(sessionId, { immediate: true })
     const canceled = new AbortController()
+
     const create = host.createOrAttach({
       sessionId,
       cols: 80,
@@ -139,6 +150,7 @@ describe('TerminalHost recreate during teardown', () => {
       isCanceled: () => canceled.signal.aborted,
       streamClient: streamClient()
     })
+
     canceled.abort()
 
     await expect(create).rejects.toThrow(`Attach canceled for session ${sessionId}`)

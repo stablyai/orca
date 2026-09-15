@@ -34,10 +34,12 @@ export function reconcileSourceControlSelectionState(args: {
   flatEntries: FlatEntry[]
 }): { selectedKeys: ReadonlySet<string>; anchorKey: string | null } {
   const { anchorKey, flatEntries, selectedKeys } = args
+
   // Nothing to prune and no anchor to invalidate: skip building the key set over every visible row.
   if (selectedKeys.size === 0 && anchorKey === null) {
     return { selectedKeys, anchorKey }
   }
+
   const validKeys = new Set(flatEntries.map((e) => e.key))
   const nextSelected = new Set<string>()
   let selectedChanged = false
@@ -63,6 +65,7 @@ export function getSelectionRangeKeys(
 ): Set<string> | null {
   const anchorIndex = flatEntries.findIndex((e) => e.key === anchorKey)
   const currentIndex = flatEntries.findIndex((e) => e.key === currentKey)
+
   if (anchorIndex === -1 || currentIndex === -1) {
     return null
   }
@@ -70,9 +73,11 @@ export function getSelectionRangeKeys(
   const start = Math.min(anchorIndex, currentIndex)
   const end = Math.max(anchorIndex, currentIndex)
   const nextSelected = new Set<string>()
+
   for (let i = start; i <= end; i++) {
     nextSelected.add(flatEntries[i].key)
   }
+
   return nextSelected
 }
 
@@ -121,11 +126,13 @@ export function useSourceControlSelection({
     () => reconcileSourceControlSelectionState({ selectedKeys, anchorKey, flatEntries }),
     [selectedKeys, anchorKey, flatEntries]
   )
+
   if (reconciledSelection.selectedKeys !== selectedKeys) {
     // Why: visible source-control rows can disappear after filtering, staging,
     // or status refresh; prune stale bulk-action keys before children see them.
     setSelectedKeys(new Set(reconciledSelection.selectedKeys))
   }
+
   if (reconciledSelection.anchorKey !== anchorKey) {
     setAnchorKey(reconciledSelection.anchorKey)
   }
@@ -135,6 +142,7 @@ export function useSourceControlSelection({
       setSelectedKeys((prev) => (prev.size > 0 ? new Set() : prev))
       setAnchorKey(null)
       onOpenDiffRef.current(entry, e)
+
       return
     }
 
@@ -143,8 +151,10 @@ export function useSourceControlSelection({
 
     if (isShift) {
       const nextSelected = getSelectionRangeKeys(flatEntriesRef.current, anchorKeyRef.current, key)
+
       if (nextSelected) {
         setSelectedKeys(nextSelected)
+
         return
       }
 
@@ -160,12 +170,14 @@ export function useSourceControlSelection({
         setSelectedKeys((prev) => {
           const next = new Set(prev)
           next.delete(key)
+
           return next
         })
       } else {
         setSelectedKeys((prev) => {
           const next = new Set(prev)
           next.add(key)
+
           return next
         })
         setAnchorKey(key)
@@ -176,6 +188,7 @@ export function useSourceControlSelection({
         if (prev.size > 0) {
           return new Set()
         }
+
         return prev
       })
       setAnchorKey(key)
@@ -202,7 +215,9 @@ export function useSourceControlSelection({
         clearSelection()
       }
     }
+
     document.addEventListener('keydown', handleKeyDown)
+
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [selectedKeys.size, clearSelection])
 
@@ -214,6 +229,7 @@ export function useSourceControlSelection({
 
       const container = containerRef.current
       const target = e.target
+
       if (!container || !(target instanceof Node) || container.contains(target)) {
         return
       }
@@ -224,6 +240,7 @@ export function useSourceControlSelection({
     // Why: use capture so outside clicks clear the selection before the next
     // UI surface handles the pointer event, matching standard desktop list UX.
     document.addEventListener('pointerdown', handlePointerDown, true)
+
     return () => document.removeEventListener('pointerdown', handlePointerDown, true)
   }, [selectedKeys.size, containerRef, clearSelection])
 

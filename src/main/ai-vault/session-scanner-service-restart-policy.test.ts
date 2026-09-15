@@ -51,6 +51,7 @@ describe('AiVaultServiceRestartPolicy', () => {
     const policy = new AiVaultServiceRestartPolicy(() => now)
 
     expect(policy.startError()).toBeNull()
+
     for (let index = 0; index < 3; index += 1) {
       policy.recordFault(() => undefined)
       now += 1_000

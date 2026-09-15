@@ -49,6 +49,7 @@ function stopTailSession(session: TailSession): void {
   if (session.closed) {
     return
   }
+
   session.closed = true
   // Why: start IPC can still be resolving when a tab closes. Stop only after
   // start settles so a late-created main-process watcher cannot escape cleanup.
@@ -68,6 +69,7 @@ export function useLocalLogTail({
   openFilesRef.current = openFiles
   const reloadContentRef = useRef(reloadContent)
   reloadContentRef.current = reloadContent
+
   const hasLocalLiveTailFile = openFiles.some(
     (file) => file.readOnly === true && file.liveTail === true
   )
@@ -76,6 +78,7 @@ export function useLocalLogTail({
     const file = openFilesRef.current.find((candidate) => candidate.id === session.fileId)
     stopTailSession(session)
     sessionsRef.current.delete(session.fileId)
+
     if (file) {
       reloadContentRef.current(file)
     }
@@ -86,31 +89,41 @@ export function useLocalLogTail({
       if (session.closed || session.limited) {
         return
       }
+
       if (session.reading) {
         session.pendingRead = true
+
         return
       }
+
       session.reading = true
       let appendedContent = ''
       let discardAppends = false
+
       try {
         do {
           session.pendingRead = false
+
           for (;;) {
             const result = await window.api.fs.readLocalLogTail({
               filePath: session.filePath,
               fromByteOffset: session.decoder.nextByteOffset,
               expectedIdentity: session.decoder.expectedIdentity
             })
+
             if (session.closed) {
               return
             }
+
             const decoded = session.decoder.apply(result)
+
             if (decoded.kind === 'reset') {
               discardAppends = true
               restartFromSnapshot(session)
+
               return
             }
+
             if (decoded.kind === 'limit') {
               session.limited = true
               void session.startPromise
@@ -119,9 +132,12 @@ export function useLocalLogTail({
                 )
                 .catch(() => {})
               console.warn('[ai-vault] stopped live tail at the editor file-size limit')
+
               return
             }
+
             appendedContent += decoded.content
+
             if (!decoded.hasMore) {
               break
             }
@@ -133,12 +149,15 @@ export function useLocalLogTail({
         }
       } finally {
         session.reading = false
+
         if (appendedContent && !discardAppends && !session.closed) {
           setFileContents((previous) => {
             const current = previous[session.fileId]
+
             if (!current || current.isBinary || current.loadError) {
               return previous
             }
+
             return {
               ...previous,
               [session.fileId]: { ...current, content: current.content + appendedContent }
@@ -154,38 +173,49 @@ export function useLocalLogTail({
     if (!hasLocalLiveTailFile) {
       return
     }
+
     const unsubscribe = window.api.fs.onLocalLogTailChanged(
       ({ subscriptionId, eventType }: LocalLogTailChangedPayload) => {
         const session = Array.from(sessionsRef.current.values()).find(
           (candidate) => candidate.subscriptionId === subscriptionId
         )
+
         if (!session) {
           return
         }
+
         if (eventType === 'rename') {
           restartFromSnapshot(session)
+
           return
         }
+
         void drain(session)
       }
     )
+
     return unsubscribe
   }, [drain, hasLocalLiveTailFile, restartFromSnapshot])
 
   useEffect(() => {
     const liveFileIds = new Set<string>()
+
     for (const file of openFiles) {
       const content = fileContents[file.id]
+
       if (!isLocalLiveLog(file, content)) {
         continue
       }
+
       liveFileIds.add(file.id)
+
       if (sessionsRef.current.has(file.id)) {
         continue
       }
 
       const decoder = new LocalLogTailDecoder(content.content, content.fileIdentity)
       const subscriptionId = `local-log-tail-${++nextSubscriptionId}`
+
       const session: TailSession = {
         fileId: file.id,
         filePath: file.filePath,
@@ -197,11 +227,13 @@ export function useLocalLogTail({
         limited: false,
         startPromise: Promise.resolve()
       }
+
       sessionsRef.current.set(file.id, session)
 
       if (decoder.initialVisibleContent !== content.content) {
         setFileContents((previous) => {
           const current = previous[file.id]
+
           return current
             ? {
                 ...previous,
@@ -220,6 +252,7 @@ export function useLocalLogTail({
           if (session.closed) {
             return
           }
+
           // Why: this first drain closes the snapshot/watch installation race.
           return drain(session)
         })
@@ -243,6 +276,7 @@ export function useLocalLogTail({
       for (const session of sessionsRef.current.values()) {
         stopTailSession(session)
       }
+
       sessionsRef.current.clear()
     },
     []

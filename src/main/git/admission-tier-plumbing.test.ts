@@ -43,6 +43,7 @@ describe('git admission tier plumbing', () => {
       },
       reason
     )
+
     expect(options?.localGitExecOptions).toEqual({ wslDistro: 'Ubuntu', admissionTier })
   })
 })

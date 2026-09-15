@@ -19,21 +19,26 @@ import { openClaudeHookService } from '../openclaude/hook-service'
 // instead of blocking the main thread on spawnSync. Widening the tuple keeps the
 // other thirteen agent services synchronous — the shared loop already awaits.
 export type ManagedAgentHookInstallOptions = { userInitiated?: boolean; cliVersion?: string }
+
 export type ManagedAgentHookInstaller = readonly [
   HookInstallAgent,
   (
     options?: ManagedAgentHookInstallOptions
   ) => AgentHookInstallStatus | Promise<AgentHookInstallStatus>
 ]
+
 export type ManagedAgentHookScriptRefresher = readonly [HookInstallAgent, () => Promise<void>]
+
 export type ManagedAgentHookRemover = readonly [
   HookInstallAgent,
   () => AgentHookInstallStatus | Promise<AgentHookInstallStatus>
 ]
+
 export type ManagedAgentHookAsyncRemover = readonly [
   HookInstallAgent,
   () => Promise<AgentHookInstallStatus>
 ]
+
 export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [

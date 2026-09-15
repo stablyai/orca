@@ -29,10 +29,12 @@ function createRecordingQueue(options: { writable?: () => boolean } = {}): {
   queue: ReturnType<typeof createPtyInputWriteQueue>
 } {
   const writes: WriteRecord[] = []
+
   const queue = createPtyInputWriteQueue({
     isWritable: () => options.writable?.() ?? true,
     write: (id, data) => writes.push({ id, data })
   })
+
   return { writes, queue }
 }
 
@@ -43,6 +45,7 @@ function createParkedQueue(): {
 } {
   const writes: WriteRecord[] = []
   const pendingYields: (() => void)[] = []
+
   const queue = createPtyInputWriteQueue({
     isWritable: () => true,
     write: (id, data) => writes.push({ id, data }),
@@ -51,6 +54,7 @@ function createParkedQueue(): {
         pendingYields.push(resolve)
       })
   })
+
   return { writes, pendingYields, queue }
 }
 
@@ -83,6 +87,7 @@ describe('pty input write queue', () => {
     for (let i = 0; i < 240; i += 1) {
       expect(queue.enqueue('pty-1', WHEEL_UP_REPORT)).toBe(true)
     }
+
     await queue.waitForDrain()
 
     // First report flushes immediately (keystroke latency); everything queued
@@ -97,9 +102,11 @@ describe('pty input write queue', () => {
     const { writes, queue } = createRecordingQueue()
 
     const inputs = ['a', '\x1b[<65;1;1M', 'bc', '\x1b[A', 'd']
+
     for (const input of inputs) {
       queue.enqueue('pty-1', input)
     }
+
     await queue.waitForDrain()
 
     expect(writes.map((write) => write.data).join('')).toBe(inputs.join(''))
@@ -107,6 +114,7 @@ describe('pty input write queue', () => {
 
   it('does not coalesce across different PTY ids', async () => {
     const writes: WriteRecord[] = []
+
     const queue = createPtyInputWriteQueue({
       isWritable: () => true,
       write: (id, data) => writes.push({ id, data })
@@ -130,15 +138,19 @@ describe('pty input write queue', () => {
     const { writes, queue } = createRecordingQueue()
 
     const piece = 'x'.repeat(1000)
+
     for (let i = 0; i < 12; i += 1) {
       queue.enqueue('pty-1', piece)
     }
+
     await queue.waitForDrain()
 
     expect(writes.map((write) => write.data).join('')).toBe(piece.repeat(12))
+
     for (const write of writes) {
       expect(write.data.length).toBeLessThanOrEqual(TERMINAL_INPUT_COALESCE_MAX_CODE_UNITS)
     }
+
     expect(writes.length).toBeGreaterThan(1)
   })
 
@@ -153,6 +165,7 @@ describe('pty input write queue', () => {
 
     expect(writes.map((write) => write.data).join('')).toBe(`before${large}after`)
     expect(writes.at(-1)?.data).toBe('after')
+
     for (const write of writes) {
       expect(write.data.length).toBeLessThanOrEqual(TERMINAL_INPUT_CHUNK_MAX_BYTES)
     }
@@ -200,6 +213,7 @@ describe('pty input write queue', () => {
     for (const reply of replies) {
       expect(queue.enqueueQueryReply('pty-1', reply)).toBe(true)
     }
+
     await queue.waitForDrain()
 
     expect(writes.map((write) => write.data)).toEqual(replies)
@@ -230,14 +244,17 @@ describe('pty input write queue', () => {
       replies.push(reply)
       allAccepted = queue.enqueueQueryReply('pty-1', reply) && allAccepted
     }
+
     expect(allAccepted).toBe(true)
     expect(queue.enqueue('pty-1', 'k')).toBe(true)
 
     await Promise.resolve()
     expect(pendingYields).toHaveLength(1)
+
     for (let turn = 0; turn < PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES; turn += 1) {
       await releaseNextWrite(writes, pendingYields)
     }
+
     await queue.waitForDrain()
 
     const replyWrites = writes.filter((write) => write.data.startsWith('\x1b]'))
@@ -256,12 +273,15 @@ describe('pty input write queue', () => {
     for (const reply of replies) {
       expect(queue.enqueueQueryReply('pty-1', reply)).toBe(true)
     }
+
     expect(queue.enqueue('pty-1', 'k')).toBe(true)
 
     await Promise.resolve()
+
     for (let turn = 0; turn < PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES; turn += 1) {
       await releaseNextWrite(writes, pendingYields)
     }
+
     await queue.waitForDrain()
 
     expect(writes.map((write) => write.data)).toEqual([
@@ -274,6 +294,7 @@ describe('pty input write queue', () => {
   it('drops the oldest reply-only payload when the reply text budget fills', async () => {
     const reply = (slot: 10 | 11, marker: string): string =>
       `\x1b]${slot};${marker.repeat(1_400)}\x1b\\`
+
     const first = reply(10, '1')
     const dropped = reply(11, '2')
     const second = reply(10, '3')
@@ -293,9 +314,11 @@ describe('pty input write queue', () => {
 
     await Promise.resolve()
     expect(pendingYields).toHaveLength(1)
+
     for (let turn = 0; turn < 3; turn += 1) {
       await releaseNextWrite(writes, pendingYields)
     }
+
     await queue.waitForDrain()
 
     expect(writes).toEqual([
@@ -312,6 +335,7 @@ describe('pty input write queue', () => {
     term.options.theme = { foreground: '#2e3434', background: '#ffffff' }
     const { writes, queue } = createRecordingQueue()
     const generated: string[] = []
+
     const disposable = installTerminalCapabilityReplyHandlers({
       terminal: {
         cols: term.cols,
@@ -322,6 +346,7 @@ describe('pty input write queue', () => {
       parser: term.parser,
       sendInput: (data) => {
         generated.push(data)
+
         return queue.enqueueQueryReply('pty-1', data)
       },
       isReplaying: () => false
@@ -348,6 +373,7 @@ describe('pty input write queue', () => {
     const { writes, queue } = createRecordingQueue()
     const prefix = '\x1b]10;'
     const suffix = '\x1b\\'
+
     const input = `${prefix}${'x'.repeat(
       TERMINAL_INPUT_COALESCE_MAX_CODE_UNITS + 1 - prefix.length - suffix.length
     )}${suffix}`
@@ -367,9 +393,11 @@ describe('pty input write queue', () => {
     for (const input of ordinary) {
       expect(queue.enqueue('pty-1', input)).toBe(true)
     }
+
     for (const reply of replies) {
       expect(queue.enqueueQueryReply('pty-1', reply)).toBe(true)
     }
+
     await queue.waitForDrain()
 
     expect(writes.map((write) => write.data).join('')).toBe(
@@ -387,9 +415,11 @@ describe('pty input write queue', () => {
 
     expect(queue.enqueueQueryReply('pty-1', '\x1b[?10000;1n')).toBe(true)
     expect(queue.enqueue('pty-1', ordinary)).toBe(true)
+
     for (const reply of replies) {
       expect(queue.enqueueQueryReply('pty-1', reply)).toBe(true)
     }
+
     await queue.waitForDrain()
 
     expect(writes.map((write) => write.data).join('')).toContain(ordinary)
@@ -401,12 +431,14 @@ describe('pty input write queue', () => {
     let shouldThrow = true
     const onDrainFailure = vi.fn()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
     const queue = createPtyInputWriteQueue({
       isWritable: () => true,
       write: (id, data) => {
         if (shouldThrow) {
           throw failure
         }
+
         writes.push({ id, data })
       },
       onDrainFailure
@@ -434,11 +466,13 @@ describe('pty input write queue', () => {
   it('serializes accepted input at its invocation position', async () => {
     const acceptedWrite = createDeferred<boolean>()
     const delivered: string[] = []
+
     const queue = createPtyInputWriteQueue({
       isWritable: () => true,
       write: (_id, data) => delivered.push(`ordinary:${data}`),
       writeAccepted: async (_id, data) => {
         delivered.push(`accepted:${data}`)
+
         return acceptedWrite.promise
       }
     })
@@ -473,10 +507,12 @@ describe('pty input write queue', () => {
       write: (_id, data) => delivered.push(`ordinary:${data}`),
       writeAccepted: async (_id, data) => {
         delivered.push(`accepted:${data}`)
+
         if (!reentered) {
           reentered = true
           queue.enqueue('pty-1', 'later')
         }
+
         return acceptedWrite.promise
       }
     })
@@ -504,6 +540,7 @@ describe('pty input write queue', () => {
         delivered.push(`accepted:${data}`)
         queue.clear()
         queue.enqueue('pty-1', 'fresh')
+
         return acceptedWrite.promise
       }
     })
@@ -524,15 +561,18 @@ describe('pty input write queue', () => {
     const acceptedWrite = createDeferred<boolean>()
     const acceptedStarted = createDeferred<void>()
     const delivered: string[] = []
+
     const queue = createPtyInputWriteQueue({
       isWritable: () => true,
       write: (_id, data) => delivered.push(`ordinary:${data}`),
       writeAccepted: async (_id, data) => {
         delivered.push(`accepted:${data}`)
         acceptedStarted.resolve()
+
         return acceptedWrite.promise
       }
     })
+
     const active = queue.enqueueAccepted('pty-1', 'stale-active')
     const pending = queue.enqueueAccepted('pty-1', 'stale-pending')
     await acceptedStarted.promise
@@ -556,6 +596,7 @@ describe('pty input write queue', () => {
     const onDrainFailure = vi.fn()
     let rejectYield: ((error: Error) => void) | undefined
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
     const queue = createPtyInputWriteQueue({
       isWritable: () => true,
       write: () => undefined,
@@ -592,6 +633,7 @@ describe('pty input write queue', () => {
     let rejectNextYield = true
     const onDrainFailure = vi.fn()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
     const queue = createPtyInputWriteQueue({
       isWritable: () => true,
       write: (id, data) => writes.push({ id, data }),
@@ -599,6 +641,7 @@ describe('pty input write queue', () => {
         if (!rejectNextYield) {
           return Promise.resolve()
         }
+
         return new Promise<void>((_resolve, reject) => {
           rejectYield = reject
         })
@@ -630,6 +673,7 @@ describe('pty input write queue', () => {
     // → ingress echo strip, and assert no `997;1n` emission at the confirm prompt.
     vi.useFakeTimers()
     const reply = mode2031SequenceFor('dark')
+
     // ECHOCTL carets every control, not just ESC. Identical for this reply (it carries no
     // other control), but modelled correctly so this does not drift from the encoder.
     const caretEcho = (data: string): string =>
@@ -638,6 +682,7 @@ describe('pty input write queue', () => {
           ch.charCodeAt(0) < 0x20 ? `^${String.fromCharCode(ch.charCodeAt(0) + 0x40)}` : ch
         )
         .join('')
+
     const masterWrites: string[] = []
     const emissions: PtyIngressEmission[] = []
     let ingress!: PtyStartupIngress
@@ -655,6 +700,7 @@ describe('pty input write queue', () => {
       if (ingress.answerLiveQueryReply(data)) {
         return
       }
+
       masterWrites.push(`RAW:${data}`)
       ingress.accept(caretEcho(data))
     }
@@ -687,6 +733,7 @@ describe('pty input write queue', () => {
   it('clear() drops pending input that has not been written yet', async () => {
     const writes: WriteRecord[] = []
     const pendingYields: (() => void)[] = []
+
     const queue = createPtyInputWriteQueue({
       isWritable: () => true,
       write: (id, data) => writes.push({ id, data }),
@@ -736,6 +783,7 @@ describe('pty input write queue', () => {
     for (let index = 0; index <= PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES; index += 1) {
       expect(queue.enqueueQueryReply('pty-1', reply)).toBe(true)
     }
+
     queue.clear()
     expect(queue.enqueueQueryReply('pty-1', reply)).toBe(true)
     await queue.waitForDrain()
@@ -752,11 +800,14 @@ describe('pty input write queue', () => {
       writeAccepted: async () => true,
       yieldBetweenWrites: async () => undefined
     })
+
     globalThis.gc?.()
     const heapBefore = process.memoryUsage().heapUsed
+
     for (let index = 0; index < 20_000; index += 1) {
       await queue.enqueueAccepted('pty-1', 'x')
     }
+
     await queue.waitForDrain()
     globalThis.gc?.()
     const growthMb = (process.memoryUsage().heapUsed - heapBefore) / 1024 / 1024

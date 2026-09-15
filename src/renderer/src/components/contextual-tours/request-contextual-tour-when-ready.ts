@@ -26,17 +26,22 @@ export function requestContextualTourWhenReady(
     if (cancelled) {
       return
     }
+
     if (args.shouldContinue && !args.shouldContinue()) {
       cancelled = true
+
       return
     }
+
     attempts += 1
 
     const before = useAppStore.getState()
+
     if (before.activeContextualTourId && before.activeContextualTourId !== args.id) {
       if (args.waitForActiveTourToClear && attempts < maxAttempts) {
         timeoutId = setTimeout(attempt, retryDelayMs)
       }
+
       return
     }
 
@@ -45,9 +50,11 @@ export function requestContextualTourWhenReady(
     })
 
     const after = useAppStore.getState()
+
     if (after.activeContextualTourId === args.id || attempts >= maxAttempts) {
       return
     }
+
     timeoutId = setTimeout(attempt, retryDelayMs)
   }
 
@@ -57,6 +64,7 @@ export function requestContextualTourWhenReady(
 
   return () => {
     cancelled = true
+
     if (timeoutId !== null) {
       clearTimeout(timeoutId)
     }

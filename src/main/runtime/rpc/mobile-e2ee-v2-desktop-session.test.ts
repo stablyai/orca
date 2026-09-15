@@ -14,6 +14,7 @@ import {
 } from './mobile-e2ee-v2-desktop-session'
 
 const server = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
+
 const client = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
 
 function hello(): MobileE2EEV2Hello {
@@ -41,6 +42,7 @@ describe('desktop mobile E2EE v2 session', () => {
       expectedContext: { transport: 'relay', relayHostId: 'AbCdEf0123_-xyZ9' },
       randomBytes: () => new Uint8Array(32).fill(4)
     })!
+
     const decode = vi.spyOn(Buffer, 'from')
 
     expect(
@@ -52,25 +54,30 @@ describe('desktop mobile E2EE v2 session', () => {
 
   it('creates a fresh ready message and opens exact-next auth counter zero', () => {
     const clientHello = hello()
+
     const session = DesktopMobileE2EEV2Session.create({
       hello: clientHello,
       serverSecretKey: server.secretKey,
       expectedContext: { transport: 'relay', relayHostId: 'AbCdEf0123_-xyZ9' },
       randomBytes: () => new Uint8Array(32).fill(4)
     })!
+
     const handshake = validateMobileE2EEV2Handshake(clientHello, session.ready)!
+
     const schedule = deriveMobileE2EEV2KeySchedule({
       sharedSecret: deriveSharedKey(client.secretKey, server.publicKey),
       transcript: encodeMobileE2EEV2Transcript(handshake),
       clientNonce: handshake.clientNonce,
       desktopNonce: handshake.desktopNonce
     })
+
     const auth = JSON.stringify({
       type: 'e2ee_auth',
       v: 2,
       transcriptHashB64: session.transcriptHashB64,
       deviceToken: 'token'
     })
+
     const frame = sealMobileE2EEV2Frame({
       payload: new TextEncoder().encode(auth),
       key: schedule.mobileToDesktopKey,

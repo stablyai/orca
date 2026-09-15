@@ -17,11 +17,13 @@ export const createIssueActions = (
   fetchIssue: async (repoPath, number, options) => {
     const repo = findRepoForGitHubOwner(get(), options?.repoId, repoPath)
     const repoId = options?.repoId ?? repo?.id
+
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
       repo,
       options?.sourceContext
     )
+
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
@@ -32,12 +34,15 @@ export const createIssueActions = (
       options?.sourceContext,
       repo !== undefined
     )
+
     const cached = get().issueCache[cacheKey]
+
     if (isFresh(cached)) {
       return cached.data
     }
 
     const inflightRequest = inflightIssueRequests.get(cacheKey)
+
     if (inflightRequest) {
       return inflightRequest
     }
@@ -51,6 +56,7 @@ export const createIssueActions = (
           repoPath,
           options?.sourceContext
         )
+
         const issue =
           requestContext.target.kind === 'environment'
             ? await callRuntimeRpc<IssueInfo | null>(
@@ -65,6 +71,7 @@ export const createIssueActions = (
                 number,
                 sourceContext: options?.sourceContext
               })
+
         set((s) => ({
           issueCache: withBoundedCacheEntry(s.issueCache, cacheKey, {
             data: issue,
@@ -72,6 +79,7 @@ export const createIssueActions = (
           })
         }))
         debouncedSaveCache(get())
+
         return issue
       } catch (err) {
         console.error('Failed to fetch issue:', err)
@@ -82,6 +90,7 @@ export const createIssueActions = (
           })
         }))
         debouncedSaveCache(get())
+
         return null
       } finally {
         inflightIssueRequests.delete(cacheKey)
@@ -89,6 +98,7 @@ export const createIssueActions = (
     })()
 
     inflightIssueRequests.set(cacheKey, request)
+
     return request
   }
 })

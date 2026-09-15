@@ -5,16 +5,19 @@ import { moveFocusToRendererBeforeWebviewDetach } from '@/components/browser-pan
 import { translate } from '@/i18n/i18n'
 
 type PreviewState = 'loading' | 'ready' | 'unavailable'
+
 const ARTIFACT_PREVIEW_LOAD_TIMEOUT_MS = 20_000
 
 function scheduleArtifactPreviewTimeout(onTimeout: () => void): () => void {
   const timeout = setTimeout(onTimeout, ARTIFACT_PREVIEW_LOAD_TIMEOUT_MS)
+
   return () => clearTimeout(timeout)
 }
 
 function artifactPreviewUrl(shareUrl: string): string {
   const url = new URL(shareUrl)
   url.searchParams.set('embed', '1')
+
   return url.toString()
 }
 
@@ -69,10 +72,12 @@ export function ArtifactPreview({ shareUrl }: { shareUrl: string }): React.JSX.E
     let detachPreview: (() => void) | undefined
     let cancelLoadTimeout: (() => void) | undefined
     let loadFailed = false
+
     const clearLoadTimeout = (): void => {
       cancelLoadTimeout?.()
       cancelLoadTimeout = undefined
     }
+
     const startLoadTimeout = (): void => {
       clearLoadTimeout()
       cancelLoadTimeout = scheduleArtifactPreviewTimeout(() => {
@@ -80,21 +85,26 @@ export function ArtifactPreview({ shareUrl }: { shareUrl: string }): React.JSX.E
         setState('unavailable')
       })
     }
+
     const onLoadStarted = (): void => {
       loadFailed = false
       setState('loading')
       startLoadTimeout()
     }
+
     const onLoadStopped = (): void => {
       clearLoadTimeout()
+
       if (!loadFailed) {
         setState('ready')
       }
     }
+
     const onLoadFailed = (event: Electron.DidFailLoadEvent): void => {
       if (!event.isMainFrame || event.errorCode === -3) {
         return
       }
+
       clearLoadTimeout()
       loadFailed = true
       setState('unavailable')
@@ -110,6 +120,7 @@ export function ArtifactPreview({ shareUrl }: { shareUrl: string }): React.JSX.E
             clearLoadTimeout()
             setState('unavailable')
           }
+
           return
         }
 

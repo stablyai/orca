@@ -109,6 +109,7 @@ export abstract class RateLimitServiceState {
 
   onStateChange(listener: (state: RateLimitState) => void): () => void {
     this.stateListeners.add(listener)
+
     return () => {
       this.stateListeners.delete(listener)
     }
@@ -121,6 +122,7 @@ export abstract class RateLimitServiceState {
     fetching: Set<string>
   ): InactiveAccountUsage[] {
     const result: InactiveAccountUsage[] = []
+
     for (const [accountId, limits] of cache) {
       result.push({
         accountId,
@@ -129,6 +131,7 @@ export abstract class RateLimitServiceState {
         isFetching: fetching.has(accountId)
       })
     }
+
     // Why: include fetching-but-uncached accounts so the renderer shows a loading indicator for newly added accounts.
     for (const accountId of fetching) {
       if (!cache.has(accountId)) {
@@ -140,6 +143,7 @@ export abstract class RateLimitServiceState {
         })
       }
     }
+
     return result
   }
 
@@ -150,6 +154,7 @@ export abstract class RateLimitServiceState {
 
   protected pushToRenderer(): void {
     const state = this.getState()
+
     for (const listener of this.stateListeners) {
       try {
         listener(state)
@@ -157,9 +162,11 @@ export abstract class RateLimitServiceState {
         // ignore — one bad listener must not break the others
       }
     }
+
     if (!this.mainWindow || this.mainWindow.isDestroyed()) {
       return
     }
+
     this.mainWindow.webContents.send('rateLimits:update', state)
   }
 }

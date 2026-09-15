@@ -11,6 +11,7 @@ import {
 } from './helpers/paired-electron-client'
 
 const CLIENT_NAME = 'STA-4150 client-hosted quit survival'
+
 /** Longer than the runtime's 15s reconnect grace, so the relaunch is a cold one. */
 const RECONNECT_GRACE_OVERSHOOT_MS = 25_000
 
@@ -35,6 +36,7 @@ async function startMarkerFixture(): Promise<MarkerFixture> {
         `<body><h1 id="marker">${marker}</h1></body></html>`
     )
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
@@ -43,6 +45,7 @@ async function startMarkerFixture(): Promise<MarkerFixture> {
     })
   })
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+
   return {
     close: () =>
       new Promise<void>((resolve, reject) => {
@@ -61,20 +64,25 @@ async function navigateGuest(page: Page, fromUrl: string, toUrl: string): Promis
     async ({ fromUrl, toUrl }) => {
       for (const candidate of document.querySelectorAll('webview')) {
         const webview = candidate as Electron.WebviewTag
+
         try {
           if (!webview.getURL().startsWith(fromUrl)) {
             continue
           }
+
           await webview.loadURL(toUrl)
+
           return true
         } catch {
           // The guest may still be attaching.
         }
       }
+
       return false
     },
     { fromUrl, toUrl }
   )
+
   if (!navigated) {
     throw new Error(`No client-hosted guest was showing ${fromUrl} to navigate`)
   }
@@ -106,9 +114,11 @@ async function waitForPairedWorktreeId(page: Page, repoPath: string): Promise<st
     })
     .not.toBeNull()
   const worktreeId = await findPairedWorktreeId(page, repoPath)
+
   if (!worktreeId) {
     throw new Error('Paired worktree disappeared after discovery')
   }
+
   return worktreeId
 }
 
@@ -124,6 +134,7 @@ async function selectPairedWorktreeGroup(
           ({ environmentId, worktreeId }) => {
             const state = window.__store?.getState()
             state?.setActiveWorktree(worktreeId, `runtime:${environmentId}`)
+
             return state?.activeGroupIdByWorktree[worktreeId] ?? null
           },
           { environmentId, worktreeId }
@@ -144,12 +155,15 @@ async function findMirroredBrowserPage(
   return page.evaluate(
     ({ url, worktreeId }) => {
       const state = window.__store?.getState()
+
       for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
         for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
           if (!browserPage.url.startsWith(url)) {
             continue
           }
+
           const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
+
           return {
             localPageId: browserPage.id,
             placementKind: handle?.placement?.kind ?? null,
@@ -158,6 +172,7 @@ async function findMirroredBrowserPage(
           }
         }
       }
+
       return null
     },
     { url, worktreeId }
@@ -171,12 +186,14 @@ async function readClientBrowserRows(
 ): Promise<{ pageId: string; placementKind: string | null; url: string; workspaceId: string }[]> {
   return page.evaluate((worktreeId) => {
     const state = window.__store?.getState()
+
     const rows: {
       pageId: string
       placementKind: string | null
       url: string
       workspaceId: string
     }[] = []
+
     for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
       for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
         rows.push({
@@ -188,6 +205,7 @@ async function readClientBrowserRows(
         })
       }
     }
+
     return rows
   }, worktreeId)
 }
@@ -204,9 +222,11 @@ async function readClientHostedPaneResolution(
     if (document.querySelector('webview')) {
       return 'guest'
     }
+
     const heading = [...document.querySelectorAll('div')].some(
       (node) => node.textContent === 'Client-hosted browser unavailable'
     )
+
     return heading ? 'unavailable' : 'waiting'
   })
 }
@@ -214,13 +234,17 @@ async function readClientHostedPaneResolution(
 async function createProductBrowserPage(page: Page, url: string): Promise<void> {
   await page.evaluate(async (url) => {
     const state = window.__store?.getState()
+
     if (!state?.activeWorktreeId) {
       throw new Error('Paired client has no active worktree')
     }
+
     const groupId = state.activeGroupIdByWorktree[state.activeWorktreeId]
+
     if (!groupId) {
       throw new Error('Paired client has no active tab group')
     }
+
     state.setBrowserDefaultUrl(url)
     await state.openNewBrowserTabInActiveWorkspace(groupId)
   }, url)
@@ -239,9 +263,11 @@ async function openClientHostedFixturePage(
     })
     .not.toBeNull()
   const mirrored = await findMirroredBrowserPage(client.page, worktreeId, url)
+
   if (!mirrored) {
     throw new Error(`Mirrored browser page disappeared for ${url}`)
   }
+
   expect(mirrored.placementKind, 'fixture page must be hosted on the viewing desktop').toBe(
     'client'
   )
@@ -253,6 +279,7 @@ async function openClientHostedFixturePage(
     },
     { browserPageId: mirrored.localPageId, worktreeId }
   )
+
   return mirrored
 }
 
@@ -260,10 +287,12 @@ async function readClientWebviewMarker(page: Page, url: string): Promise<string 
   return page.evaluate(async (prefix) => {
     for (const candidate of document.querySelectorAll('webview')) {
       const webview = candidate as Electron.WebviewTag
+
       try {
         if (!webview.getURL().startsWith(prefix)) {
           continue
         }
+
         return (await webview.executeJavaScript(
           'document.querySelector("#marker")?.textContent ?? null'
         )) as string | null
@@ -271,6 +300,7 @@ async function readClientWebviewMarker(page: Page, url: string): Promise<string 
         // The guest may still be attaching.
       }
     }
+
     return null
   }, url)
 }
@@ -284,9 +314,11 @@ async function waitForRenderedClientWebview(
     .poll(() => readClientWebviewMarker(page, url), { timeout: 120_000, message })
     .not.toBeNull()
   const marker = await readClientWebviewMarker(page, url)
+
   if (!marker) {
     throw new Error(`Client-hosted guest for ${url} lost its marker`)
   }
+
   return marker
 }
 
@@ -298,6 +330,7 @@ test('keeps a client-hosted browser tab across a client quit and relaunch', asyn
   const host = await launchHeadlessPairedRuntimeHost()
   let client: PairedElectronClient | null = null
   let abandonedProfile: string | null = null
+
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
     client = await launchPairedElectronClient(host.offer, testInfo, CLIENT_NAME)
@@ -388,6 +421,7 @@ test('keeps a client-hosted browser tab across a client quit and relaunch', asyn
       relaunchedWorktreeId,
       fixture.movedUrl
     )
+
     expect(restored?.remotePageId, 'recovery must keep the page identity it was created with').toBe(
       opened.remotePageId
     )
@@ -410,9 +444,11 @@ test('keeps a client-hosted browser tab across a client quit and relaunch', asyn
     ).toBe('moved-on')
   } finally {
     await client?.dispose()
+
     if (abandonedProfile) {
       await cleanupE2EDaemons(abandonedProfile).catch(() => undefined)
     }
+
     await host.dispose()
     await fixture.close()
   }
@@ -429,6 +465,7 @@ test('closes a retained client-hosted tab while its host is gone', async ({
   const host = await launchHeadlessPairedRuntimeHost()
   let client: PairedElectronClient | null = null
   let abandonedProfile: string | null = null
+
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
     client = await launchPairedElectronClient(host.offer, testInfo, CLIENT_NAME)
@@ -479,11 +516,13 @@ test('closes a retained client-hosted tab while its host is gone', async ({
         message: 'the relaunched client never restored the row its own session persisted'
       })
       .not.toBeNull()
+
     const orphaned = await findMirroredBrowserPage(
       client.page,
       relaunchedWorktreeId,
       fixture.markerUrl
     )
+
     await client.page.evaluate(
       ({ browserPageId, worktreeId }) => {
         window.__store?.getState().focusBrowserTabInWorktree(worktreeId, browserPageId, {
@@ -514,9 +553,11 @@ test('closes a retained client-hosted tab while its host is gone', async ({
       .toBe(0)
   } finally {
     await client?.dispose()
+
     if (abandonedProfile) {
       await cleanupE2EDaemons(abandonedProfile).catch(() => undefined)
     }
+
     await host.dispose()
     await fixture.close()
   }

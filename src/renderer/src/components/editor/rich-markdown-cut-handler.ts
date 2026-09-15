@@ -26,13 +26,17 @@ function deleteBlockAndRestoreSelection(view: EditorView, from: number, to: numb
  */
 export function handleRichMarkdownCut(view: EditorView, event: ClipboardEvent): boolean {
   const { selection } = view.state
+
   if (!selection.empty) {
     const status = inspectRichMarkdownSourceOwningSlice(selection.content())
+
     if (status.containsSourceOwningNode && !status.canPreserve) {
       event.preventDefault()
       showRichMarkdownSourceOwningCutLimitError()
+
       return true
     }
+
     return false
   }
 
@@ -51,12 +55,15 @@ export function handleRichMarkdownCut(view: EditorView, event: ClipboardEvent): 
   // items and task items, cut the whole item rather than just its inner
   // paragraph. Stop at table cells to avoid breaking table structure.
   let cutDepth = $from.depth
+
   for (let d = $from.depth - 1; d >= 1; d--) {
     const name = $from.node(d).type.name
+
     if (name === 'listItem' || name === 'taskItem') {
       cutDepth = d
       break
     }
+
     if (name === 'tableCell' || name === 'tableHeader') {
       break
     }
@@ -75,6 +82,7 @@ export function handleRichMarkdownCut(view: EditorView, event: ClipboardEvent): 
     const paraStart = $from.start(cutDepth)
     const paraEnd = $from.end(cutDepth)
     const lineRange = getVisualLineRange(view, selection.from, paraStart, paraEnd)
+
     if (lineRange) {
       return cutVisualLine(view, event, lineRange)
     }
@@ -85,6 +93,7 @@ export function handleRichMarkdownCut(view: EditorView, event: ClipboardEvent): 
     // Still delete the empty block, matching VS Code behavior
     event.preventDefault()
     deleteBlockAndRestoreSelection(view, $from.before(cutDepth), $from.after(cutDepth))
+
     return true
   }
 
@@ -94,9 +103,11 @@ export function handleRichMarkdownCut(view: EditorView, event: ClipboardEvent): 
   if (!event.clipboardData) {
     return false
   }
+
   event.preventDefault()
 
   const slice = view.state.doc.slice($from.before(cutDepth), $from.after(cutDepth))
+
   if (!writeRichMarkdownSliceToClipboard(event.clipboardData, view, slice, text)) {
     return true
   }

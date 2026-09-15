@@ -9,12 +9,15 @@ describe('hostile panel fixture', () => {
       join(process.cwd(), 'examples', 'plugins', 'hostile-panel', 'panel.html'),
       'utf8'
     )
+
     const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1]
 
     expect(script).toBeTruthy()
+
     if (!script) {
       throw new Error('hostile fixture script is missing')
     }
+
     expect(() => new Script(script)).not.toThrow()
     expect(html).toContain('self-navigation')
     expect(html).toContain('meta-refresh-navigation')

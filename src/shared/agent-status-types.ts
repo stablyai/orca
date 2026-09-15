@@ -16,6 +16,7 @@ import {
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
 export { AGENT_STATUS_MAX_FIELD_LENGTH } from './agent-status-field-normalization'
+
 export type {
   AgentStatusCacheIdentity,
   AgentStatusClearIpcPayload,
@@ -24,12 +25,16 @@ export type {
 } from './agent-status-ipc-payload'
 
 export const AGENT_STATUS_STATES = ['working', 'blocked', 'waiting', 'done'] as const
+
 export type AgentStatusState = (typeof AGENT_STATUS_STATES)[number]
+
 export type AgentWorkingMode = 'monitoring'
+
 // Why: agent types aren't a fixed set (custom agents exist); any non-empty string is
 // accepted — the well-known names are the launchable TuiAgent ids plus the 'unknown'
 // sentinel (no agent identified yet), a convenience union for pattern-matching.
 export type WellKnownAgentType = TuiAgent | 'unknown'
+
 export type AgentType = WellKnownAgentType | (string & {})
 
 /** A snapshot of a previous agent state, used to render activity blocks.
@@ -236,14 +241,18 @@ export function pickParsedAgentStatusPayload(
  */
 /** Maximum character length for the toolName field. */
 export const AGENT_STATUS_TOOL_NAME_MAX_LENGTH = 60
+
 /** Maximum character length for the toolInput preview. */
 export const AGENT_STATUS_TOOL_INPUT_MAX_LENGTH = 160
+
 /** Maximum character length for the lastAssistantMessage preview.
  *  Why: 8 KB fits a multi-paragraph summary while bounding per-pane cache against a buggy/malicious agent spamming huge strings. */
 export const AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH = 8000
+
 /** Maximum character length for the interactivePrompt field.
  *  Why: holds full AskUserQuestion JSON — truncating to a preview like toolInput would corrupt it and drop options; capped to still bound cache growth. */
 export const AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH = 16000
+
 // Re-exported here because every consumer reaches for the entry type and its freshness gate
 // together; the clock rules themselves live in agent-status-freshness.ts.
 export {
@@ -255,31 +264,40 @@ export {
 
 // Why: ReadonlySet<string> so .has() accepts any string without a cast here; the narrowing cast stays on the return line where it's proven safe.
 const VALID_STATES: ReadonlySet<string> = new Set<string>(AGENT_STATUS_STATES)
+
 /** Maximum character length for the agentType label. Truncated on parse. */
 export const AGENT_TYPE_MAX_LENGTH = 40
+
 export const AGENT_MODEL_MAX_LENGTH = 120
 
 /** Maximum subagent child rows carried per status entry. Bounds per-pane cache
  *  and IPC fanout against a runaway spawner. */
 export const AGENT_STATUS_MAX_SUBAGENTS = 32
+
 export const AGENT_STATUS_JSON_STRUCTURE_LIMITS = {
   structuralTokens: 4096,
   nestingDepth: 16
 } as const
+
 const AGENT_SUBAGENT_ID_MAX_LENGTH = 64
 
 function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null {
   if (typeof value !== 'object' || value === null) {
     return null
   }
+
   const obj = value as Record<string, unknown>
+
   if (typeof obj.id !== 'string') {
     return null
   }
+
   const id = obj.id.trim()
+
   if (id.length === 0 || id.length > AGENT_SUBAGENT_ID_MAX_LENGTH) {
     return null
   }
+
   if (
     obj.state !== 'working' &&
     obj.state !== 'blocked' &&
@@ -289,6 +307,7 @@ function normalizeSubagentSnapshot(value: unknown): AgentSubagentSnapshot | null
   ) {
     return null
   }
+
   return {
     id,
     state: obj.state,
@@ -304,16 +323,21 @@ function normalizeSubagentsField(value: unknown): AgentSubagentSnapshot[] | unde
   if (!Array.isArray(value) || value.length === 0) {
     return undefined
   }
+
   const normalized: AgentSubagentSnapshot[] = []
+
   for (const item of value) {
     const snapshot = normalizeSubagentSnapshot(item)
+
     if (snapshot) {
       normalized.push(snapshot)
+
       if (normalized.length >= AGENT_STATUS_MAX_SUBAGENTS) {
         break
       }
     }
   }
+
   return normalized.length > 0 ? normalized : undefined
 }
 
@@ -326,12 +350,15 @@ export function agentSubagentsEqual(
   if (a === b) {
     return true
   }
+
   if (!a || !b || a.length !== b.length) {
     return !a && !b
   }
+
   for (let i = 0; i < a.length; i++) {
     const x = a[i]
     const y = b[i]
+
     if (
       x.id !== y.id ||
       x.state !== y.state ||
@@ -343,6 +370,7 @@ export function agentSubagentsEqual(
       return false
     }
   }
+
   return true
 }
 
@@ -356,15 +384,20 @@ function normalizeAgentStatusObject(parsed: unknown): ParsedAgentStatusPayload |
   if (typeof parsed !== 'object' || parsed === null) {
     return null
   }
+
   const obj = parsed as Record<string, unknown>
+
   // Why: explicit typeof guard rejects non-string values instead of leaning on Set.has to return false for mismatched types.
   if (typeof obj.state !== 'string') {
     return null
   }
+
   const state = obj.state
+
   if (!VALID_STATES.has(state)) {
     return null
   }
+
   return {
     state: state as AgentStatusState,
     workingMode: state === 'working' && obj.workingMode === 'monitoring' ? 'monitoring' : undefined,
@@ -411,6 +444,7 @@ export function normalizeAgentStatusPayload(payload: unknown): ParsedAgentStatus
 export function parseAgentStatusPayload(json: string): ParsedAgentStatusPayload | null {
   try {
     assertJsonTextStructureWithinLimits(json, AGENT_STATUS_JSON_STRUCTURE_LIMITS)
+
     return normalizeAgentStatusObject(JSON.parse(json))
   } catch {
     return null

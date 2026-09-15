@@ -17,6 +17,7 @@ vi.mock('sonner', () => ({
 // Why: production rows carry nested endpoints. A scalar-only fixture reconciles even
 // when the walker is broken, which is how a redact-only or Object.is fix stays green.
 const pairingRevision = 1_700_000_000_000
+
 const knownEndpoint: KnownRuntimeEnvironment['endpoints'][number] = {
   id: 'ws-a',
   kind: 'websocket',
@@ -25,6 +26,7 @@ const knownEndpoint: KnownRuntimeEnvironment['endpoints'][number] = {
   deviceToken: 'device-token-a',
   publicKeyB64: 'public-key-a'
 }
+
 const knownEnvironment: KnownRuntimeEnvironment = {
   id: 'env-a',
   name: 'Dev Box',

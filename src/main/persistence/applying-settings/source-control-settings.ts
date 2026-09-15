@@ -17,8 +17,10 @@ export function retireLegacyInstructionsForClearedTextActionRecipes(
     previousSettings.sourceControlAi,
     previousSettings.commitMessageAi
   )
+
   let instructionsByOperation = sourceControlAi.instructionsByOperation
   let changed = false
+
   for (const actionId of SOURCE_CONTROL_TEXT_ACTION_IDS) {
     if (
       sourceControlAi.actions[actionId]?.commandInputTemplate !==
@@ -26,6 +28,7 @@ export function retireLegacyInstructionsForClearedTextActionRecipes(
     ) {
       continue
     }
+
     if (
       previousSourceControlAi.actions?.[actionId]?.commandInputTemplate ===
         DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId] ||
@@ -34,9 +37,11 @@ export function retireLegacyInstructionsForClearedTextActionRecipes(
     ) {
       continue
     }
+
     if (instructionsByOperation?.[actionId] === '') {
       continue
     }
+
     // Why: {basePrompt} is the explicit clear state; an empty instruction shadows rollback commitMessageAi.customPrompt on normalize/project.
     instructionsByOperation = { ...instructionsByOperation, [actionId]: '' }
     changed = true

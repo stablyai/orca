@@ -22,28 +22,36 @@ export async function handoffStructuredSessionToNative(
   let record = context.requireRecord(sessionId)
   let owner = context.owner(sessionId)
   let transcriptPath = owner?.transcriptPath
+
   if (!retry || record.lease.handoffStage === 'preparing' || record.lease.handoffStage === null) {
     if (record.lease.handoffStage === null) {
       await context.enterPreparing(record, operationId, 'to-native')
     }
+
     record = context.requireRecord(sessionId)
+
     try {
       if (!owner) {
         throw new Error('The owning agent terminal could not be identified.')
       }
+
       if (!tuiAlreadyExited) {
         owner = await deps.transport!.reproveTuiOwner({ record, owner })
         context.retainOwner(sessionId, owner)
+
         if (owner.link.origin === 'resumed') {
           await deps.persistTuiProviderHandle?.({ sessionId, link: owner.link, now: deps.now() })
         }
       }
+
       transcriptPath = owner.transcriptPath ?? transcriptPath
+
       if (owner.link.handle.provider === 'codex' && !transcriptPath) {
         throw new Error(
           'The Codex terminal has not written a durable rollout yet. Send a prompt before switching to structured chat.'
         )
       }
+
       context.setStatus(sessionId, {
         owner: 'tui',
         direction: 'to-native',
@@ -53,12 +61,15 @@ export async function handoffStructuredSessionToNative(
         terminal: owner.terminal,
         hostLabel: deps.transport?.hostLabel
       })
+
       const exited = deps.transport!.closeTuiOwner
         ? await deps.transport!.closeTuiOwner(owner)
         : await deps.transport!.waitForTuiExit(owner)
+
       transcriptPath = exited.transcriptPath ?? owner.transcriptPath
     } catch (error) {
       const current = context.requireRecord(sessionId)
+
       if (
         current.lease.handoffStage === 'preparing' &&
         current.lease.handoffOperationId === operationId &&
@@ -72,8 +83,10 @@ export async function handoffStructuredSessionToNative(
           now: deps.now()
         })
       }
+
       throw error
     }
+
     record = await stopStoredAgentSessionOwnerForHandoff(deps.store, {
       sessionId,
       expectedFence: record.lease.runtimeFence,
@@ -87,7 +100,9 @@ export async function handoffStructuredSessionToNative(
   ) {
     throw new Error('agent_session_operation_conflict')
   }
+
   deps.stopTuiHistoryCatchup?.(sessionId)
+
   if (owner?.historySource !== 'provider-resume') {
     await deps.importTuiHistory({
       sessionId,
@@ -95,13 +110,17 @@ export async function handoffStructuredSessionToNative(
       ...(transcriptPath ? { transcriptPath } : {})
     })
   }
+
   if (record.lease.settlementRetryRequired) {
     const settled = await deps.retryPendingSettlement(sessionId)
+
     if (!settled) {
       throw new Error('The provider-exit terminal journal settlement is still pending.')
     }
+
     record = context.requireRecord(sessionId)
   }
+
   const spawnToken = randomUUID()
   record = await reserveStoredAgentSessionHandoffOwner(deps.store, {
     sessionId,
@@ -113,6 +132,7 @@ export async function handoffStructuredSessionToNative(
     now: deps.now()
   })
   context.publishStage(record, 'to-native')
+
   try {
     record = await deps.acquireNative({
       sessionId,
@@ -124,7 +144,9 @@ export async function handoffStructuredSessionToNative(
       await markStructuredHandoffManualRecovery(context, sessionId, operationId)
       throw error
     }
+
     const current = context.requireRecord(sessionId)
+
     if (current.lease.handoffStage === 'new-owner-proving') {
       await abandonStoredAgentSessionHandoffAttempt(deps.store, {
         sessionId,
@@ -134,8 +156,10 @@ export async function handoffStructuredSessionToNative(
         now: deps.now()
       })
     }
+
     throw error
   }
+
   context.releaseOwner(sessionId)
   // Why status lands before the reveal: the native owner is already proven here, and a
   // reveal that rejects must not leave the session released but never marked native.

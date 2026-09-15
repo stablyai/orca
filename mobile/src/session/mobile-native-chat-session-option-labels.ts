@@ -30,10 +30,13 @@ function selectedChoiceLabel(descriptor: SessionOptionDescriptor): string | null
   ) {
     return null
   }
+
   const current = descriptor.kind.currentValue
+
   const choice: SessionOptionSelectChoice = descriptor.kind.choices.find(
     (candidate) => candidate.value === current
   ) ?? { value: current, label: current }
+
   return choice.label
 }
 
@@ -49,20 +52,25 @@ export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescrip
   if (descriptor.kind.type === 'boolean') {
     return descriptor.kind.currentValue ? 'On' : 'Off'
   }
+
   if (descriptor.valueSource === 'unknown') {
     return 'Not set'
   }
+
   return selectedChoiceLabel(descriptor) ?? 'Not set'
 }
 
 export function mobileOptionsPillLabel(descriptors: readonly SessionOptionDescriptor[]): string {
   const labels: string[] = []
+
   for (const descriptor of descriptors) {
     if (descriptor.valueSource === 'unknown') {
       continue
     }
+
     if (descriptor.kind.type === 'select') {
       const label = selectedChoiceLabel(descriptor)
+
       if (label) {
         labels.push(label)
       }
@@ -70,9 +78,12 @@ export function mobileOptionsPillLabel(descriptors: readonly SessionOptionDescri
       labels.push(descriptor.id === 'fastMode' ? 'Fast' : descriptor.label)
     }
   }
+
   if (labels.length > 0) {
     return labels.join(' · ')
   }
+
   const effort = descriptors.find((descriptor) => descriptor.id === 'effort')
+
   return effort ? effort.label : 'Options'
 }

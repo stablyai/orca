@@ -12,6 +12,7 @@ import type { DaemonSessionInfo } from '../daemon/types'
 
 // Why: poll past the daemon's 5s SIGTERM→SIGKILL ladder (KILL_TIMEOUT_MS in session.ts), else slow-exiting shells falsely look "refused".
 const MAX_POLL_ATTEMPTS = 65
+
 const POLL_INTERVAL_MS = 100
 
 function sleep(ms: number): Promise<void> {
@@ -20,18 +21,22 @@ function sleep(ms: number): Promise<void> {
 
 function getDaemonAdapters(): DaemonPtyAdapter[] {
   const provider = getDaemonProvider()
+
   if (!provider) {
     return []
   }
+
   if (provider instanceof DaemonPtyRouter || provider instanceof DegradedDaemonPtyProvider) {
     return [...provider.getAllAdapters()]
   }
+
   return [provider]
 }
 
 // Why: surface degraded mode (daemon alive but cannot spawn fresh PTYs) so the UI can warn new terminals lack persistence.
 function isDaemonDegraded(): boolean {
   const provider = getDaemonProvider()
+
   return (
     provider instanceof DegradedDaemonPtyProvider &&
     provider.routesFreshSpawnsToLocalProvider === true
@@ -42,12 +47,14 @@ async function collectSessions(adapters: DaemonPtyAdapter[]): Promise<DaemonSess
   const results = await Promise.allSettled(
     adapters.map(async (adapter) => {
       const sessions = await adapter.listSessions()
+
       return sessions.map<DaemonSessionInfo>((s) => ({
         ...s,
         protocolVersion: adapter.protocolVersion
       }))
     })
   )
+
   return results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
 }
 
@@ -74,6 +81,7 @@ export function registerDaemonManagementHandlers(): void {
     'pty:management:listSessions',
     async (): Promise<{ sessions: DaemonSessionInfo[]; degraded: boolean }> => {
       const sessions = await collectSessions(getDaemonAdapters())
+
       return { sessions, degraded: isDaemonDegraded() }
     }
   )
@@ -101,9 +109,11 @@ export function registerDaemonManagementHandlers(): void {
         initial.map(async (session) => {
           // Why: assumes PROTOCOL_VERSION stays distinct from PREVIOUS_DAEMON_PROTOCOL_VERSIONS (types.ts), else legacy sessions misroute here.
           const owner = adapters.find((a) => a.protocolVersion === session.protocolVersion)
+
           if (!owner) {
             return
           }
+
           // Why: immediate=true only matters to legacy/future adapters; swallow rejections since remainingCount reports stuck sessions.
           await owner.shutdown(session.sessionId, { immediate: true }).catch(() => {})
         })
@@ -112,6 +122,7 @@ export function registerDaemonManagementHandlers(): void {
       // Why: count only the initial-snapshot intersection so renderer respawns mid-kill aren't counted as remaining.
       let remainingOriginalCount = initialCount
       let remainingOriginalIds = initialIds
+
       for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
         await sleep(POLL_INTERVAL_MS)
         const current = await collectSessions(adapters)
@@ -121,12 +132,14 @@ export function registerDaemonManagementHandlers(): void {
             .map((session) => session.sessionId)
         )
         remainingOriginalCount = remainingOriginalIds.size
+
         if (remainingOriginalCount === 0) {
           break
         }
       }
 
       const killedCount = initialCount - remainingOriginalCount
+
       return {
         killedCount,
         remainingCount: remainingOriginalCount,
@@ -143,18 +156,24 @@ export function registerDaemonManagementHandlers(): void {
       if (typeof args?.sessionId !== 'string' || args.sessionId.length === 0) {
         return { success: false }
       }
+
       const adapters = getDaemonAdapters()
       const sessions = await collectSessions(adapters)
       const match = sessions.find((s) => s.sessionId === args.sessionId)
+
       if (!match) {
         return { success: false }
       }
+
       const owner = adapters.find((a) => a.protocolVersion === match.protocolVersion)
+
       if (!owner) {
         return { success: false }
       }
+
       try {
         await owner.shutdown(args.sessionId, { immediate: true })
+
         return { success: true }
       } catch {
         return { success: false }
@@ -165,9 +184,11 @@ export function registerDaemonManagementHandlers(): void {
   ipcMain.handle('pty:management:restart', async (): Promise<{ success: boolean }> => {
     try {
       await restartDaemon()
+
       return { success: true }
     } catch (err) {
       console.error('[pty:management] restart failed', err)
+
       return { success: false }
     }
   })

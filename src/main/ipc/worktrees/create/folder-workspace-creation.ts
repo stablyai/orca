@@ -15,6 +15,7 @@ export function createFolderWorkspace(
   const now = Date.now()
   const instanceId = randomUUID()
   const worktreeId = getFolderWorkspaceInstanceId(repo, instanceId)
+
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
     args.displayName,
     args.displayNameKind,
@@ -22,6 +23,7 @@ export function createFolderWorkspace(
     args.cliProvenance?.kind === 'created-by-cli',
     args.nameWasGenerated === true
   )
+
   const meta = store.setWorktreeMeta(worktreeId, {
     instanceId,
     ...(store.getProjectHostSetups
@@ -62,5 +64,6 @@ export function createFolderWorkspace(
       ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
       : {})
   })
+
   return { worktree: mergeFolderWorkspace(repo, worktreeId, meta) }
 }

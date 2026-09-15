@@ -62,6 +62,7 @@ async function render(
       </TooltipProvider>
     )
   })
+
   return container
 }
 
@@ -69,6 +70,7 @@ function hostMetric(container: HTMLDivElement): string | null {
   const label = [...container.querySelectorAll('div')].find(
     (node) => node.textContent === 'Host' && node.className.includes('uppercase')
   )
+
   return label?.nextElementSibling?.textContent ?? null
 }
 

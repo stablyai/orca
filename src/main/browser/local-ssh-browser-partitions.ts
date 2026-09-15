@@ -27,6 +27,7 @@ import {
 } from './local-ssh-browser-route'
 
 const AUTHORITY_CONNECTION_IDENTITY_TAG = 'orca-local-ssh-browser'
+
 const AUTHORITY_CONNECTION_IDENTITY_VERSION = 1
 
 type PreparedLocalSshPartition = {
@@ -37,7 +38,9 @@ type PreparedLocalSshPartition = {
 }
 
 const preparedByIdentityKey = new Map<string, Promise<PreparedLocalSshPartition>>()
+
 const preparedByPartition = new Map<string, PreparedLocalSshPartition>()
+
 const partitionBySession = new WeakMap<Session, string>()
 
 /**
@@ -85,7 +88,9 @@ export async function prepareLocalSshBrowserPartition(input: {
     input.browserProfileId,
     input.skipProbe === true
   ])
+
   let pending = preparedByIdentityKey.get(identityKey)
+
   if (!pending) {
     pending = prepareFresh(input)
     preparedByIdentityKey.set(identityKey, pending)
@@ -95,7 +100,9 @@ export async function prepareLocalSshBrowserPartition(input: {
       }
     })
   }
+
   const prepared = await pending
+
   return { partition: prepared.partition }
 }
 
@@ -105,39 +112,49 @@ async function prepareFresh(input: {
   skipProbe?: boolean
 }): Promise<PreparedLocalSshPartition> {
   const orcaProfileId = activeBrowserRoutePartitionOrcaProfileId()
+
   if (!orcaProfileId) {
     throw new Error('browser_local_route_profile_unavailable')
   }
+
   browserSessionRegistry.requireRouteBrowserProfile(input.browserProfileId)
   const proxyEndpoint = await retainLocalSshBrowserRoute(input.targetId)
+
   if (!input.skipProbe) {
     // Why: AllowTcpForwarding no is the one enterprise config that breaks every
     // page while the terminal works; catching it here puts a plain-language
     // explanation on the gate card instead of opaque per-page SOCKS errors.
     const verdict = await probeLocalSshBrowserRouteForwarding(input.targetId)
+
     if (verdict === 'forwarding-blocked') {
       throw new Error('browser_local_route_forwarding_blocked')
     }
+
     if (verdict === 'ssh-unavailable') {
       throw new Error('browser_local_route_ssh_unavailable')
     }
   }
+
   const derived = deriveBrowserRoutePartition({
     orcaProfileId,
     browserProfileId: input.browserProfileId,
     authorityConnectionIdentity: localSshBrowserAuthorityConnectionIdentity(orcaProfileId),
     executionHostIdentity: sshExecutionHostStorageIdentity(input.targetId)
   })
+
   const bindings = currentBrowserRoutePartitionBindingStore({
     isPartitionRetained: isBrowserRoutePartitionRetainedByAnyOwner
   })
+
   const persistedFingerprint = bindings.get(derived.partition)
+
   if (persistedFingerprint === null) {
     const evicted = bindings.set(
       derived.partition,
       derived.bindingFingerprint,
       deriveLocalSshBrowserRoutePartitionStorageScope({ orcaProfileId, targetId: input.targetId })
     )
+
     if (evicted.length > 0) {
       void releaseEvictedBrowserRoutePartitionStorage(
         evicted,
@@ -149,6 +166,7 @@ async function prepareFresh(input: {
   } else {
     bindings.touch(derived.partition)
   }
+
   await prepareBrowserRouteSessionPolicy({
     partition: derived.partition,
     browserProfileId: input.browserProfileId,
@@ -163,15 +181,18 @@ async function prepareFresh(input: {
       }
     }
   })
+
   const prepared: PreparedLocalSshPartition = {
     partition: derived.partition,
     targetId: input.targetId,
     browserProfileId: input.browserProfileId,
     proxyEndpoint
   }
+
   preparedByPartition.set(derived.partition, prepared)
   partitionBySession.set(session.fromPartition(derived.partition), derived.partition)
   ensureLocalSshWebRtcGuard()
+
   return prepared
 }
 
@@ -180,14 +201,17 @@ export function enforceLocalSshWebRtcPolicyForGuest(guest: WebContents): void {
   if (!localSshBrowserPartitionForSession(guest.session)) {
     return
   }
+
   enforceBrowserRouteWebRtcPolicy(guest, () => {})
 }
 
 let webRtcGuardInstalled = false
+
 function ensureLocalSshWebRtcGuard(): void {
   if (webRtcGuardInstalled) {
     return
   }
+
   webRtcGuardInstalled = true
   // Why: the route path relies on exact attach call sites for this guard; a
   // session-scoped backstop closes the WebRTC UDP leak for every future guest.
@@ -199,8 +223,10 @@ function ensureLocalSshWebRtcGuard(): void {
 /** Route + partition records for a removed target; storage clearing is the caller's second step. */
 export async function releaseLocalSshBrowserPartitionsForTarget(targetId: string): Promise<void> {
   await closeLocalSshBrowserRouteForTarget(targetId)
+
   for (const [identityKey, pending] of preparedByIdentityKey) {
     const prepared = await pending.catch(() => null)
+
     if (prepared?.targetId === targetId) {
       preparedByIdentityKey.delete(identityKey)
       preparedByPartition.delete(prepared.partition)
@@ -208,11 +234,13 @@ export async function releaseLocalSshBrowserPartitionsForTarget(targetId: string
       // cookies back after the clear, resurrecting an unsweepable directory
       // (its binding is gone, and the orphan scan only walks bindings).
       const partitionSession = session.fromPartition(prepared.partition)
+
       for (const contents of webContents.getAllWebContents()) {
         if (!contents.isDestroyed() && contents.session === partitionSession) {
           closeRouteGuest(contents)
         }
       }
+
       browserSessionRegistry.clearRoutePartitionPolicies(prepared.partition)
     }
   }

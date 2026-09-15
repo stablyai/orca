@@ -37,6 +37,7 @@ export class SshGitReadProvider {
 
   protected async runWithGitReadInvalidation<T>(run: () => Promise<T>): Promise<T> {
     this.invalidateGitReads()
+
     try {
       return await run()
     } finally {
@@ -56,6 +57,7 @@ export class SshGitReadProvider {
     options?: GitProviderStatusOptions
   ): Promise<GitStatusResult> {
     this.gitDiffReadDedupe.clear()
+
     const request = {
       worktreePath,
       ...(options?.admissionTier ? { admissionTier: options.admissionTier } : {}),
@@ -69,6 +71,7 @@ export class SshGitReadProvider {
         ? {}
         : { branchLineTotalMergeBase: options.branchLineTotalMergeBase })
     }
+
     const key = stableInFlightKey([
       worktreePath,
       options?.admissionTier ?? 'status',
@@ -78,6 +81,7 @@ export class SshGitReadProvider {
       options?.reuseLineStats === true,
       options?.branchLineTotalMergeBase ?? ''
     ])
+
     return this.statusReadLeaseOwner.lease(key, options?.signal, async (sharedSignal) => {
       return (await this.mux.request('git.status', request, {
         signal: sharedSignal
@@ -91,6 +95,7 @@ export class SshGitReadProvider {
     area: GitStagingArea = 'unstaged'
   ): Promise<GitStatusResult> {
     this.gitDiffReadDedupe.clear()
+
     try {
       return (await this.mux.request('git.submoduleStatus', {
         worktreePath,
@@ -103,6 +108,7 @@ export class SshGitReadProvider {
           'SSH submodule diff support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
         )
       }
+
       throw error
     }
   }
@@ -133,6 +139,7 @@ export class SshGitReadProvider {
     const keyOptions = options ?? {}
     const { headOid: rawHeadOid, ...relayOptions } = keyOptions
     const headOid = rawHeadOid == null ? undefined : rawHeadOid
+
     return this.gitDiffReadDedupe.run(
       stableInFlightKey([
         'branchDiff',

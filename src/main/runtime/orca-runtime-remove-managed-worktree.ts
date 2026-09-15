@@ -38,22 +38,28 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+
     const store = this.store
     const cleanupHostId = parseExecutionHostId(hostId)?.id
     const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector, cleanupHostId)
+
     const cleanupScopeKey = preservedBranchCleanupScopeKey({
       worktreeId: removalTarget.id,
       hostId: cleanupHostId
     })
+
     const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks, allowUnverifiedPtyStop)
+
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(
       cleanupScopeKey,
       removalTarget.id,
       optionsKey
     )
+
     if (inFlightRemoval) {
       return inFlightRemoval
     }
+
     const removal = (async (): Promise<RemoveWorktreeResult & { warning?: string }> => {
       return withWorktreeSpan({ stage: 'remove', path: removalTarget.path }, async () => {
         const repoOwner = resolveWorktreeRemovalRepoOwner(
@@ -61,13 +67,16 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
           removalTarget.repoId,
           cleanupHostId
         )
+
         if (repoOwner.kind === 'ambiguous') {
           throw new Error(
             `Workspace identity is ambiguous across hosts: ${removalTarget.id}. Retry with an explicit host.`
           )
         }
+
         const repo = repoOwner.kind === 'resolved' ? repoOwner.repo : undefined
         const removalHostId = repo ? (cleanupHostId ?? getRepoExecutionHostId(repo)) : cleanupHostId
+
         const orphanOrFolderResult = await removeOrphanOrFolderWorktree({
           runtime: this,
           store,
@@ -76,34 +85,43 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
           removalHostId,
           repo
         })
+
         if (orphanOrFolderResult) {
           return orphanOrFolderResult
         }
+
         // One host for the whole removal. Listing on a different host from the one the prune and
         // the delete use is how an `executionHostId: 'ssh:*'`-only row got listed remotely and
         // deleted here; the route refuses rather than falling back to this machine.
         const route = resolveWorktreeRemovalRoute(removalHostId)
+
         const localWorktreeGitOptions =
           route.kind === 'ssh' ? {} : getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
+
         const hasLocalWorktreeGitOptions = Object.keys(localWorktreeGitOptions).length > 0
+
         const registeredWorktrees =
           route.kind === 'ssh'
             ? await route.provider.listWorktrees(repo.path)
             : hasLocalWorktreeGitOptions
               ? await listWorktreesStrict(repo.path, localWorktreeGitOptions)
               : await listWorktreesStrict(repo.path)
+
         const removedMeta = resolveWorktreeRemovalMetadata(
           store,
           removalTarget.repoId,
           removalTarget.id,
           removalHostId
         )
+
         const removedPushTarget = removedMeta?.pushTarget ?? removalTarget.pushTarget
+
         const registeredWorktree = findRegisteredDeletableWorktree(
           repo.path,
           removalTarget.path,
           registeredWorktrees
         )
+
         if (!registeredWorktree) {
           return removeRuntimeUnregisteredWorktree({
             repo,
@@ -138,13 +156,16 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
             }
           })
         }
+
         const canonicalWorktreePath = registeredWorktree.path
         const deleteBranch = removedMeta?.preserveBranchOnDelete !== true
+
         try {
           assertWorktreeUnlockedForRemoval(registeredWorktree)
         } catch (error) {
           throw new Error(formatWorktreeRemovalError(error, canonicalWorktreePath, force))
         }
+
         if (
           route.kind === 'local' &&
           ((await isPrunableGitFileWorktree(registeredWorktree, localWorktreeGitOptions)) ||
@@ -166,6 +187,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
             registeredWorktree,
             deleteBranch
           })
+
           await cleanupUnusedWorktreePushTargetRemote(
             repo.path,
             removalTarget.id,
@@ -186,8 +208,10 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
           this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
           invalidateAuthorizedRootsCache()
           this.notifyWorktreesChanged(repo.id)
+
           return removalResult ?? {}
         }
+
         if (route.kind === 'ssh') {
           return removeRuntimeRegisteredRemoteWorktree({
             repo,
@@ -230,6 +254,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
             }
           })
         }
+
         return removeRuntimeRegisteredLocalWorktree({
           repo,
           target: removalTarget,
@@ -262,6 +287,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
             } else {
               this.preservedBranchCleanup.delete(removalTarget.id, cleanupHostId)
             }
+
             this.clearOptimisticReconcileToken(removalTarget.id)
             this.removeWorktreeMetadataAndHistory(store, removalTarget.id, removalHostId)
             this.invalidateResolvedWorktreeCache()
@@ -272,7 +298,9 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
         })
       })
     })()
+
     this.removeManagedWorktreeInFlight.track(cleanupScopeKey, optionsKey, removal)
+
     try {
       const result = await removal
       this.emitWorktreeLifecycle({
@@ -280,6 +308,7 @@ export class OrcaRuntimeWithRemoveManagedWorktree extends OrcaRuntimeWithCreateM
         worktreeId: removalTarget.id,
         path: removalTarget.path
       })
+
       return result
     } finally {
       this.removeManagedWorktreeInFlight.release(cleanupScopeKey, removal)

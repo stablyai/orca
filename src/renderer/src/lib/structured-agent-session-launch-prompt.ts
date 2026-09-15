@@ -47,6 +47,7 @@ async function dispatchStructuredLaunchPrompt(
   ) {
     return false
   }
+
   try {
     const result = await callStructuredAgentSession<
       AgentSessionMutationResult<AgentSessionSendResult>
@@ -55,6 +56,7 @@ async function dispatchStructuredLaunchPrompt(
       'agentSession.send',
       structuredAgentSessionSendRequest(entry, receipt.fence)
     )
+
     if (!result.ok) {
       mutateEntry(entry, (current) =>
         requeueStructuredAgentSessionSendRefusal(
@@ -64,8 +66,10 @@ async function dispatchStructuredLaunchPrompt(
           entry.lastAttemptAt !== null
         )
       )
+
       return false
     }
+
     const dispatchState = result.value.submission.dispatchState
     mutateEntry(entry, (current) =>
       dispatchState === 'accepted'
@@ -80,9 +84,11 @@ async function dispatchStructuredLaunchPrompt(
                   : 'queued'
           }
     )
+
     return dispatchState === 'accepted' || dispatchState === 'pending'
   } catch {
     mutateEntry(entry, (current) => ({ ...current, state: 'unconfirmed' }))
+
     return false
   }
 }
@@ -97,14 +103,18 @@ export function settleStructuredAgentLaunchPrompt(args: {
   if (args.options.promptDelivery === 'draft' || !args.options.prompt?.trim()) {
     return undefined
   }
+
   return args.launchResult.then(async (receipt) => {
     if (!args.stagedEntry) {
       return { delivered: false, failureNotified: true }
     }
+
     const delivered = await dispatchStructuredLaunchPrompt(args.stagedEntry, receipt)
+
     if (delivered) {
       args.options.onPromptDelivered?.()
     }
+
     return { delivered, failureNotified: false }
   })
 }

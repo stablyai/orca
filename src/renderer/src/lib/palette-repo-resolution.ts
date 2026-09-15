@@ -14,6 +14,7 @@ export function getPaletteWorktreeExecutionHostId(
   worktree: PaletteWorktreeIdentity
 ): ExecutionHostId | undefined {
   const runtimeOwner = worktree.runtimeOwnerEnvironmentId?.trim()
+
   return runtimeOwner ? toRuntimeExecutionHostId(runtimeOwner) : worktree.hostId
 }
 
@@ -30,9 +31,11 @@ export function dedupePaletteWorktrees<T extends PaletteWorktreeIdentity>(
   worktrees: readonly T[]
 ): T[] {
   const byIdentity = new Map<string, T>()
+
   for (const worktree of worktrees) {
     byIdentity.set(getPaletteWorktreeIdentity(worktree), worktree)
   }
+
   return [...byIdentity.values()]
 }
 
@@ -42,22 +45,27 @@ export function buildPaletteWorktreeIndex<T extends PaletteWorktreeIdentity>(
   const byHostIdentity = new Map<string, T>()
   const byBareId = new Map<string, T>()
   const byPhysicalHostIdentity = new Map<string, T | null>()
+
   for (const worktree of worktrees) {
     byHostIdentity.set(getPaletteWorktreeIdentity(worktree), worktree)
+
     if (!byBareId.has(worktree.id)) {
       byBareId.set(worktree.id, worktree)
     }
+
     const physicalIdentity = composeWorktreeHostIdentity(worktree.hostId, worktree.id)
     byPhysicalHostIdentity.set(
       physicalIdentity,
       byPhysicalHostIdentity.has(physicalIdentity) ? null : worktree
     )
   }
+
   for (const [physicalIdentity, worktree] of byPhysicalHostIdentity) {
     if (worktree && !byHostIdentity.has(physicalIdentity)) {
       byHostIdentity.set(physicalIdentity, worktree)
     }
   }
+
   return { byHostIdentity, byBareId }
 }
 
@@ -69,6 +77,7 @@ export function resolvePaletteWorktree<T extends PaletteWorktreeIdentity>(
   if (!executionHostId) {
     return index.byBareId.get(worktreeId)
   }
+
   return (
     index.byHostIdentity.get(composeWorktreeHostIdentity(executionHostId, worktreeId)) ??
     (executionHostId === LOCAL_EXECUTION_HOST_ID
@@ -91,6 +100,7 @@ export function resolvePaletteRepoForWorktree<T extends { displayName?: string |
       )
     )
   }
+
   return (
     repoMapByHostIdentity?.get(
       getRepoHostIdentityForParts(worktree.repoId, worktree.hostId ?? LOCAL_EXECUTION_HOST_ID)
@@ -106,6 +116,7 @@ export function isPaletteCurrentWorktree(
   if (activeWorkspaceExecutionHostId === undefined) {
     return activeWorktreeId === worktree.id
   }
+
   return (
     activeWorktreeId === worktree.id &&
     isExecutionHostAliasForWorktree(

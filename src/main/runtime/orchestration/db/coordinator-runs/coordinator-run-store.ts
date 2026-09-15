@@ -18,6 +18,7 @@ export function createCoordinatorRun(
       "INSERT INTO coordinator_runs (id, spec, status, coordinator_handle, poll_interval_ms) VALUES (?, ?, 'running', ?, ?)"
     )
     .run(id, run.spec, run.coordinatorHandle, run.pollIntervalMs ?? 2000)
+
   return this.db.prepare('SELECT * FROM coordinator_runs WHERE id = ?').get(id) as CoordinatorRun
 }
 
@@ -34,11 +35,13 @@ export function updateCoordinatorRun(
 ): CoordinatorRun | undefined {
   const completedAt =
     status === 'completed' || status === 'failed' ? new Date().toISOString() : null
+
   this.db
     .prepare(
       'UPDATE coordinator_runs SET status = ?, completed_at = COALESCE(?, completed_at) WHERE id = ?'
     )
     .run(status, completedAt, id)
+
   return this.getCoordinatorRun(id)
 }
 
@@ -58,10 +61,13 @@ export function getIdleTerminals(this: OrchestrationDb, excludeHandles: string[]
       "SELECT DISTINCT assignee_handle FROM dispatch_contexts WHERE status IN ('pending', 'dispatched')"
     )
     .all() as { assignee_handle: string }[]
+
   const busyHandles = new Set(active.map((r) => r.assignee_handle))
+
   for (const h of excludeHandles) {
     busyHandles.add(h)
   }
+
   // Return handles from message history that aren't busy
   const allHandles = this.db
     .prepare(
@@ -69,6 +75,7 @@ export function getIdleTerminals(this: OrchestrationDb, excludeHandles: string[]
       'SELECT DISTINCT to_handle AS handle FROM messages UNION SELECT DISTINCT from_handle FROM messages'
     )
     .all() as { handle: string }[]
+
   return [...new Set(allHandles.map((r) => r.handle))].filter((h) => !busyHandles.has(h))
 }
 

@@ -23,10 +23,12 @@ export function createLinearInvalidationActions(
     invalidateLinearIssueLists: (options?: Pick<LinearFetchOptions, 'sourceContext'>) => {
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const tokenScope = scope.cachePrefix ?? 'local'
+
       const nextVersion =
         linearListInvalidationToken.scope === tokenScope
           ? (linearListInvalidationToken.version + 1) % LINEAR_LIST_INVALIDATION_VERSION_CAP || 1
           : 1
+
       const nextToken = { scope: tokenScope, version: nextVersion }
       setLinearListInvalidationToken(nextToken)
 
@@ -36,13 +38,16 @@ export function createLinearInvalidationActions(
       set((s) => {
         const nextListCache = { ...s.linearListCache }
         let changed = false
+
         for (const key of Object.keys(nextListCache)) {
           const parts = key.split('::')
           // Cache keys end with the attribute signature; unfiltered entries end empty.
           const attributeSignature = parts.at(-1) ?? ''
+
           if (!attributeSignature) {
             continue
           }
+
           if (scope.cachePrefix) {
             if (!key.startsWith(`${scope.cachePrefix}::`)) {
               continue
@@ -51,13 +56,16 @@ export function createLinearInvalidationActions(
             // Why: unscoped invalidation must not touch other runtimes' scoped list keys.
             continue
           }
+
           delete nextListCache[key]
           inflightListRequests.delete(key)
           changed = true
         }
+
         if (!changed) {
           return { linearListInvalidationToken: nextToken }
         }
+
         return {
           linearListCache: nextListCache,
           linearListInvalidationToken: nextToken
@@ -70,16 +78,20 @@ export function createLinearInvalidationActions(
         options?.sourceContext?.provider === 'linear'
           ? getTaskSourceCacheScope(options.sourceContext)
           : null
+
       const canPatchCacheKey = (key: string): boolean =>
         sourceScope === null || key.startsWith(`${sourceScope}::`)
+
       set((s) => {
         let changed = false
 
         const nextIssueCache = { ...s.linearIssueCache }
+
         for (const [key, issueEntry] of Object.entries(nextIssueCache)) {
           if (!canPatchCacheKey(key) || issueEntry?.data?.id !== issueId) {
             continue
           }
+
           // Why: set fetchedAt to 0 so the next fetchLinearIssue call
           // actually hits IPC instead of returning the stale optimistic data.
           nextIssueCache[key] = {
@@ -91,15 +103,20 @@ export function createLinearInvalidationActions(
         }
 
         const nextSearchCache = { ...s.linearSearchCache }
+
         for (const key of Object.keys(nextSearchCache)) {
           const entry = nextSearchCache[key]
+
           if (!canPatchCacheKey(key) || !entry?.data) {
             continue
           }
+
           const idx = entry.data.findIndex((item) => item.id === issueId)
+
           if (idx === -1) {
             continue
           }
+
           const updatedItems = [...entry.data]
           updatedItems[idx] = { ...updatedItems[idx], ...patch }
           nextSearchCache[key] = { ...entry, data: updatedItems }
@@ -112,6 +129,7 @@ export function createLinearInvalidationActions(
           patch,
           canPatchCacheKey
         )
+
         if (nextListCache.changed) {
           changed = true
         }
@@ -122,6 +140,7 @@ export function createLinearInvalidationActions(
           patch,
           canPatchCacheKey
         )
+
         if (nextProjectIssueCache.changed) {
           changed = true
         }
@@ -132,6 +151,7 @@ export function createLinearInvalidationActions(
           patch,
           canPatchCacheKey
         )
+
         if (nextCustomViewIssueCache.changed) {
           changed = true
         }

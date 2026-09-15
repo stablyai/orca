@@ -15,7 +15,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 let persistedUIReady = true
+
 let activeModal = 'none'
+
 let setupGuideSidebarDismissed = false
 
 vi.mock('@/store', () => ({
@@ -104,12 +106,15 @@ async function renderSetupGuideSidebarEntry(): Promise<{
   document.body.appendChild(container)
   const root = createRoot(container)
   mountedRoots.push(root)
+
   const rerender = async (): Promise<void> => {
     await act(async () => {
       root.render(<SetupGuideSidebarEntry />)
     })
   }
+
   await rerender()
+
   return { container, rerender }
 }
 

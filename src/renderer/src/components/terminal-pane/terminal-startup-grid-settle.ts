@@ -21,8 +21,11 @@ export type TerminalStartupGridSettleHandle = {
 }
 
 const DEFAULT_MIN_FRAMES = 6
+
 const DEFAULT_STABLE_FRAMES = 2
+
 const DEFAULT_MAX_FRAMES = 12
+
 // Why: ten settle windows tolerate slow split layout without permitting permanent polling.
 const DEFAULT_MAX_READINESS_WAIT_FRAMES = DEFAULT_MAX_FRAMES * 10
 
@@ -45,10 +48,12 @@ export function waitForStableStartupGrid(
   const minFrames = Math.max(1, options.minFrames ?? DEFAULT_MIN_FRAMES)
   const stableFrames = Math.max(1, options.stableFrames ?? DEFAULT_STABLE_FRAMES)
   const maxFrames = Math.max(minFrames, options.maxFrames ?? DEFAULT_MAX_FRAMES)
+
   const maxReadinessWaitFrames = Math.max(
     1,
     options.maxReadinessWaitFrames ?? DEFAULT_MAX_READINESS_WAIT_FRAMES
   )
+
   let frame = 0
   let stableFrameCount = 0
   let previous: TerminalStartupGridDimensions | null = null
@@ -64,8 +69,10 @@ export function waitForStableStartupGrid(
     if (cancelled) {
       return
     }
+
     cancelled = true
     pendingFrame = null
+
     if (options.isAlive()) {
       options.onSettled(dimensions)
     }
@@ -73,6 +80,7 @@ export function waitForStableStartupGrid(
 
   const tick = (): void => {
     pendingFrame = null
+
     if (cancelled || !options.isAlive()) {
       return
     }
@@ -82,24 +90,31 @@ export function waitForStableStartupGrid(
     // fit that makes a newly mounted split's grid eligible for the predicate.
     const measured = options.measure()
     const readyToSettle = options.isReadyToSettle?.() ?? true
+
     if (!readyToSettle) {
       if (usableDimensions(measured)) {
         latestReadinessWaitUsable = measured
       }
+
       if (frame >= maxReadinessWaitFrames) {
         settle(latestReadinessWaitUsable)
+
         return
       }
+
       previous = null
       stableFrameCount = 0
       observedGridChange = false
       pendingFrame = options.requestFrame(tick)
+
       return
     }
 
     readyFrame += 1
+
     if (usableDimensions(measured)) {
       latestUsable = measured
+
       if (dimensionsEqual(previous, measured)) {
         stableFrameCount += 1
       } else {
@@ -113,12 +128,15 @@ export function waitForStableStartupGrid(
 
     const settleFrame = usesReadinessGate ? readyFrame : frame
     const heldMinimumWindow = settleFrame >= minFrames
+
     const stableAfterChange =
       (observedGridChange || usesReadinessGate) &&
       heldMinimumWindow &&
       stableFrameCount >= stableFrames
+
     if ((latestUsable && stableAfterChange) || settleFrame >= maxFrames) {
       settle(latestUsable)
+
       return
     }
 
@@ -130,6 +148,7 @@ export function waitForStableStartupGrid(
   return {
     cancel: () => {
       cancelled = true
+
       if (pendingFrame !== null) {
         options.cancelFrame(pendingFrame)
         pendingFrame = null

@@ -53,6 +53,7 @@ export function appendFederationSetupEffect(
   const setupTerminal = effects.find(
     (effect) => effect.kind === 'terminal' && effect.role === 'setup'
   )
+
   effects.push({
     kind: 'setup',
     action: setup.requested,
@@ -70,12 +71,16 @@ export function isFederationEffectUnknown(error: unknown, stage: string): boolea
     error && typeof error === 'object' && typeof (error as { code?: unknown }).code === 'string'
       ? (error as { code: string }).code
       : ''
+
   if (code === 'operation_unknown') {
     return true
   }
+
   if (!['worktree_create', 'terminal_create', 'dispatch_input'].includes(stage)) {
     return false
   }
+
   const message = error instanceof Error ? error.message : String(error)
+
   return /connection|disconnect|timed?\s*out|runtime changed|outcome unknown/i.test(message)
 }

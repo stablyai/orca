@@ -44,11 +44,13 @@ const RESTRICTED_ENV_KEYS = [
   'ENV',
   'ELECTRON_RUN_AS_NODE'
 ]
+
 const VALID_SCENARIOS = new Set(['mixed', 'managed-only', 'codex-lb'])
 
 function samePath(left, right) {
   const normalizedLeft = path.resolve(left)
   const normalizedRight = path.resolve(right)
+
   return process.platform === 'win32'
     ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
     : normalizedLeft === normalizedRight
@@ -56,6 +58,7 @@ function samePath(left, right) {
 
 function isWithin(candidate, parent) {
   const relative = path.relative(path.resolve(parent), path.resolve(candidate))
+
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
 }
 
@@ -70,9 +73,11 @@ async function resolveRealPath(candidate) {
 
 export function createValidationEnv(inheritedEnv, layout) {
   const env = { ...inheritedEnv }
+
   for (const key of RESTRICTED_ENV_KEYS) {
     delete env[key]
   }
+
   return {
     ...env,
     HOME: layout.homeDir,
@@ -88,12 +93,14 @@ export async function createValidationLayout(options = {}) {
   const primaryHome = path.resolve(options.primaryHome ?? os.homedir())
   const envTempParent = process.env.ORCA_CODEX_VALIDATION_TEMP_PARENT?.trim()
   const tempParent = path.resolve(options.tempParent ?? (envTempParent || os.tmpdir()))
+
   // Why: guards must compare canonical paths — a symlinked temp parent must
   // not smuggle the disposable root inside the primary home.
   const [primaryHomeReal, tempParentReal] = await Promise.all([
     resolveRealPath(primaryHome),
     resolveRealPath(tempParent)
   ])
+
   // Why: on Windows the default %TEMP% lives inside %USERPROFILE%, which the
   // disposable-home guard below rightly refuses. Fail before creating anything
   // and point at the overrides instead of aborting with an opaque guard error.
@@ -103,6 +110,7 @@ export async function createValidationLayout(options = {}) {
         'Pass --temp-parent <dir> or set ORCA_CODEX_VALIDATION_TEMP_PARENT to a directory outside it.'
     )
   }
+
   const tempRoot = await mkdtemp(path.join(tempParent, 'orca-codex-real-'))
   const homeDir = path.join(tempRoot, 'home')
   const userDataDir = path.join(tempRoot, 'user-data')
@@ -111,9 +119,11 @@ export async function createValidationLayout(options = {}) {
     mkdir(userDataDir, { recursive: true, mode: 0o700 })
   ])
   const homeDirReal = await resolveRealPath(homeDir)
+
   if (samePath(primaryHomeReal, homeDirReal) || isWithin(homeDirReal, primaryHomeReal)) {
     throw new Error('Refusing to place the disposable validation home inside the primary home')
   }
+
   return { primaryHome, tempRoot, homeDir, userDataDir }
 }
 
@@ -131,6 +141,7 @@ async function seedCompletedProfile(layout) {
     onboarding: { flowVersion: 2, closedAt: 1, outcome: 'completed', lastCompletedStep: 3 },
     ui: { contextualToursAutoEligible: false, projectOrderManualDefaultNoticeDismissed: true }
   }
+
   await writeFile(
     path.join(layout.userDataDir, 'orca-data.json'),
     `${JSON.stringify(profile, null, 2)}\n`
@@ -141,13 +152,16 @@ async function installCodexConfigTemplate(layout, templatePath) {
   if (!templatePath) {
     return
   }
+
   const resolvedTemplate = await realpath(path.resolve(templatePath))
   const primaryCodexHome = path.join(layout.primaryHome, '.codex')
+
   // Why: validation must never bootstrap itself from the user's live Codex
   // configuration, even when a caller passes that path accidentally.
   if (isWithin(resolvedTemplate, primaryCodexHome)) {
     throw new Error('Refusing to copy a config template from the primary ~/.codex')
   }
+
   await mkdir(path.join(layout.homeDir, '.codex'), { recursive: true, mode: 0o700 })
   await copyFile(resolvedTemplate, path.join(layout.homeDir, '.codex', 'config.toml'))
 }
@@ -155,10 +169,13 @@ async function installCodexConfigTemplate(layout, templatePath) {
 async function fingerprintFile(filePath) {
   try {
     const stat = await lstat(filePath)
+
     if (!stat.isFile()) {
       return { exists: true, type: stat.isSymbolicLink() ? 'symlink' : 'other' }
     }
+
     const contents = await readFile(filePath)
+
     return {
       exists: true,
       type: 'file',
@@ -170,14 +187,17 @@ async function fingerprintFile(filePath) {
     if (error?.code === 'ENOENT') {
       return { exists: false }
     }
+
     throw error
   }
 }
 
 async function inventoryTree(rootPath) {
   const entries = []
+
   async function visit(absolutePath, relativePath) {
     const stat = await lstat(absolutePath)
+
     const type = stat.isDirectory()
       ? 'directory'
       : stat.isFile()
@@ -185,12 +205,16 @@ async function inventoryTree(rootPath) {
         : stat.isSymbolicLink()
           ? 'symlink'
           : 'other'
+
     entries.push({ path: relativePath || '.', type, size: stat.size, mtimeMs: stat.mtimeMs })
+
     if (type !== 'directory') {
       return
     }
+
     const children = await readdir(absolutePath)
     children.sort((left, right) => left.localeCompare(right))
+
     for (const child of children) {
       await visit(
         path.join(absolutePath, child),
@@ -198,20 +222,24 @@ async function inventoryTree(rootPath) {
       )
     }
   }
+
   try {
     await visit(rootPath, '')
   } catch (error) {
     if (error?.code === 'ENOENT') {
       return []
     }
+
     throw error
   }
+
   return entries
 }
 
 async function snapshotManagedHomes(userDataDir) {
   const accountsRoot = path.join(userDataDir, 'codex-accounts')
   let accountNames = []
+
   try {
     accountNames = (await readdir(accountsRoot, { withFileTypes: true }))
       .filter((entry) => entry.isDirectory())
@@ -222,9 +250,11 @@ async function snapshotManagedHomes(userDataDir) {
       throw error
     }
   }
+
   return Promise.all(
     accountNames.map(async (accountId) => {
       const homePath = path.join(accountsRoot, accountId, 'home')
+
       return {
         accountId,
         homePath,
@@ -237,6 +267,7 @@ async function snapshotManagedHomes(userDataDir) {
 
 export async function snapshotValidationState(layout) {
   const throwawayCodexHome = path.join(layout.homeDir, '.codex')
+
   return {
     capturedAt: new Date().toISOString(),
     throwawayCodex: {
@@ -264,16 +295,22 @@ function parseArgs(argv) {
     tempParent: null,
     laneAwareContainment: false
   }
+
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
+
     const readValue = () => {
       const value = argv[index + 1]
+
       if (!value || value.startsWith('--')) {
         throw new Error(`Missing value for ${arg}`)
       }
+
       index += 1
+
       return value
     }
+
     if (arg === '--scenario') {
       options.scenario = readValue()
     } else if (arg === '--report') {
@@ -308,12 +345,15 @@ function parseArgs(argv) {
       throw new Error(`Unknown argument: ${arg}`)
     }
   }
+
   if (!VALID_SCENARIOS.has(options.scenario)) {
     throw new Error(`Invalid scenario: ${options.scenario}`)
   }
+
   if (options.scenario === 'codex-lb' && !options.configTemplate) {
     throw new Error('The codex-lb scenario requires --config-template outside primary ~/.codex')
   }
+
   return options
 }
 
@@ -330,29 +370,35 @@ export function resolveElectronViteBuildCommand(repoRoot) {
     'bin',
     'electron-vite.js'
   )
+
   if (!existsSync(electronViteEntry)) {
     throw new Error(
       `Cannot build the validation app: electron-vite entry not found at ${electronViteEntry}. ` +
         'Install dependencies (pnpm install) or pass --skip-build with a prebuilt out/main/index.js.'
     )
   }
+
   return { command: process.execPath, args: [electronViteEntry, 'build', '--mode', 'e2e'] }
 }
 
 function buildAppIfNeeded(repoRoot, skipBuild) {
   const mainPath = path.join(repoRoot, 'out', 'main', 'index.js')
+
   if (skipBuild) {
     if (!existsSync(mainPath)) {
       throw new Error(`--skip-build requested, but ${mainPath} does not exist`)
     }
+
     return mainPath
   }
+
   const { command, args } = resolveElectronViteBuildCommand(repoRoot)
   execFileSync(command, args, {
     cwd: repoRoot,
     stdio: 'inherit',
     env: { ...process.env, VITE_EXPOSE_STORE: 'true' }
   })
+
   return mainPath
 }
 
@@ -360,35 +406,44 @@ function validationCliCommand() {
   if (process.env.ORCA_VALIDATION_CLI) {
     return process.env.ORCA_VALIDATION_CLI
   }
+
   if (process.env.ORCA_CLI_COMMAND) {
     return process.env.ORCA_CLI_COMMAND
   }
+
   return process.platform === 'linux' ? 'orca-ide' : 'orca'
 }
 
 async function probeTerminalEnvironment(terminalHandle, launchEnv) {
   const marker = `__ORCA_CODEX_VALIDATION_${randomUUID()}__`
+
   const command = [
     'node -e',
     `"console.log('${marker}:' + JSON.stringify({home: require('node:os').homedir(), codexHome: process.env.CODEX_HOME || null, orcaCodexHome: process.env.ORCA_CODEX_HOME || null}))"`
   ].join(' ')
+
   const cli = validationCliCommand()
   execFileSync(
     cli,
     ['terminal', 'send', '--terminal', terminalHandle, '--text', command, '--enter', '--json'],
     { env: launchEnv, stdio: 'pipe' }
   )
+
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const output = execFileSync(cli, ['terminal', 'read', '--terminal', terminalHandle, '--json'], {
       env: launchEnv,
       encoding: 'utf8'
     })
+
     const match = new RegExp(`${marker}:(\\{[^\\r\\n]+\\})`).exec(output)
+
     if (match?.[1]) {
       return JSON.parse(match[1])
     }
+
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
+
   throw new Error(`Timed out waiting for environment probe in terminal ${terminalHandle}`)
 }
 
@@ -401,6 +456,7 @@ async function runInteractiveSession(context) {
   if (process.stdin.readableEnded) {
     return
   }
+
   const prompt = readline.createInterface({ input: process.stdin, output: process.stdout })
   const closePrompt = () => prompt.close()
   // Why: redirected stdin can close before `question()` consumes a command.
@@ -408,14 +464,18 @@ async function runInteractiveSession(context) {
   const inputClosed = new Promise((resolve) => prompt.once('close', () => resolve(null)))
   context.signal.addEventListener('abort', closePrompt, { once: true })
   console.log('Commands: checkpoint <label>, probe <terminal-handle>, status, done')
+
   try {
     while (!context.signal.aborted) {
       const answer = await Promise.race([prompt.question('codex-validation> '), inputClosed])
+
       if (answer === null) {
         return
       }
+
       const line = answer.trim()
       const [command, ...rest] = line.split(/\s+/)
+
       if (command === 'checkpoint') {
         const label = rest.join(' ') || `checkpoint-${context.report.checkpoints.length + 1}`
         context.report.checkpoints.push({
@@ -427,10 +487,12 @@ async function runInteractiveSession(context) {
         console.log(`Recorded ${label}`)
       } else if (command === 'probe') {
         const terminalHandle = rest[0]
+
         if (!terminalHandle) {
           console.log('Usage: probe <terminal-handle>')
           continue
         }
+
         const environment = await probeTerminalEnvironment(terminalHandle, context.launchEnv)
         context.report.terminalProbes.push({
           capturedAt: new Date().toISOString(),
@@ -460,13 +522,16 @@ async function runInteractiveSession(context) {
 async function main() {
   const options = parseArgs(process.argv.slice(2))
   const repoRoot = process.cwd()
+
   const layout = await createValidationLayout({
     primaryHome: options.primaryHome,
     tempParent: options.tempParent ?? undefined
   })
+
   const reportPath =
     options.reportPath ??
     path.join(os.tmpdir(), `orca-codex-real-account-${options.scenario}-${Date.now()}.json`)
+
   const launchEnv = createValidationEnv(process.env, layout)
   let app = null
   let tripwire = null
@@ -474,6 +539,7 @@ async function main() {
   const abortForSignal = () => abortController.abort()
   process.once('SIGINT', abortForSignal)
   process.once('SIGTERM', abortForSignal)
+
   const report = {
     scenario: options.scenario,
     startedAt: new Date().toISOString(),
@@ -501,8 +567,10 @@ async function main() {
             '[LANE-DESIGNED] Real ~/.codex volatile churn from the system-default codex lane (recorded, not a violation)'
           )
           console.warn(JSON.stringify(event, null, 2))
+
           return
         }
+
         console.error('\u001b[31;1m[VALIDATION ABORTED] Primary ~/.codex changed\u001b[0m')
         console.error(JSON.stringify(event, null, 2))
         abortController.abort()
@@ -530,6 +598,7 @@ async function main() {
         userData: electronApp.getPath('userData'),
         nodeHome: process.getBuiltinModule('node:os').homedir()
       }))
+
       if (
         !samePath(report.electronPaths.home, layout.homeDir) ||
         !samePath(report.electronPaths.nodeHome, layout.homeDir) ||
@@ -537,8 +606,10 @@ async function main() {
       ) {
         throw new Error('Electron escaped the disposable validation boundary')
       }
+
       app.process().once('exit', () => abortController.abort())
       await writeReport(reportPath, report)
+
       if (!options.closeAfterLaunch) {
         await runInteractiveSession({
           layout,
@@ -552,15 +623,18 @@ async function main() {
     }
   } finally {
     abortController.abort()
+
     try {
       await closeValidationElectronApp(app)
       await cleanupValidationDaemons(layout.userDataDir)
+
       if (tripwire) {
         const tripwireStatus = await tripwire.stop()
         report.tripwire = options.laneAwareContainment
           ? { ...tripwireStatus, laneAware: summarizeLaneAwareTripwire(tripwireStatus.events) }
           : tripwireStatus
       }
+
       report.checkpoints.push({ label: 'shutdown', ...(await snapshotValidationState(layout)) })
       report.completedAt = new Date().toISOString()
       await writeReport(reportPath, report)
@@ -591,6 +665,7 @@ async function main() {
       ? report.tripwire.laneAware.violations.length > 0
       : !report.tripwire.clean
     : false
+
   if (tripwireFailed) {
     process.exitCode = 2
   } else {
@@ -599,6 +674,7 @@ async function main() {
         `Lane-aware containment: ${report.tripwire.laneAware.designedLaneEvents.length} designed system-default event(s) recorded, 0 violations. Review them in the report.`
       )
     }
+
     console.log(`Validation harness complete. Report: ${reportPath}`)
   }
 }
@@ -606,6 +682,7 @@ async function main() {
 function summarizeLaneAwareTripwire(events) {
   const designedLaneEvents = []
   const violations = []
+
   for (const event of events) {
     if (classifyCodexHomeTripwireEvent(event) === 'designed-system-default') {
       designedLaneEvents.push(event)
@@ -613,10 +690,12 @@ function summarizeLaneAwareTripwire(events) {
       violations.push(event)
     }
   }
+
   return { designedLaneEvents, violations }
 }
 
 const invokedPath = process.argv[1] ? pathToFileURL(path.resolve(process.argv[1])).href : null
+
 if (invokedPath === import.meta.url) {
   main().catch((error) => {
     console.error(error)

@@ -5,16 +5,19 @@ import { SshPtyProvider } from './ssh-pty-provider'
 describe('SSH PTY provider session reattach incarnation', () => {
   it('remembers the authoritative incarnation before a legacy exit arrives', async () => {
     let notify: ((method: string, params: Record<string, unknown>) => void) | undefined
+
     const mux = {
       request: vi.fn().mockResolvedValue({ incarnationId: 'incarnation-reattached' }),
       notify: vi.fn(),
       onNotification: vi.fn(
         (callback: (method: string, params: Record<string, unknown>) => void) => {
           notify = callback
+
           return vi.fn()
         }
       )
     }
+
     const provider = new SshPtyProvider('conn-1', mux as never)
     const onExit = vi.fn()
     provider.onExit(onExit)
@@ -42,6 +45,7 @@ describe('SSH PTY provider session reattach incarnation', () => {
       notify: vi.fn(),
       onNotification: vi.fn().mockReturnValue(vi.fn())
     }
+
     const provider = new SshPtyProvider('conn-1', mux as never)
 
     // The relay proved the PTY alive before answering restoreRequired, so the rejection must not

@@ -9,6 +9,7 @@ const SEEN_FIRST_RUN_CONTEXTUAL_TOUR_IDS = [
   'automations',
   'workspace-creation'
 ] as const
+
 const SEEN_FIRST_RUN_FEATURE_INTERACTION_TIMESTAMP = Date.parse('2026-01-01T00:00:00.000Z')
 
 export function getE2ECompletedOnboardingProfile() {

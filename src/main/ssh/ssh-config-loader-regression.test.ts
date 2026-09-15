@@ -32,6 +32,7 @@ async function mockOs(
 ) {
   vi.doMock('os', async () => {
     const actual = await vi.importActual<typeof OsModule>('os')
+
     return {
       ...actual,
       homedir: () => home,
@@ -43,6 +44,7 @@ async function mockOs(
 
 async function loadUserSshConfig() {
   const mod = await import('./ssh-config-parser')
+
   return mod.loadUserSshConfig()
 }
 
@@ -74,6 +76,7 @@ describe('loadUserSshConfig regressions', () => {
     await mockOs('C:\\Users\\Test User', 'TestUser', -1, 'winbox.example.com')
     vi.doMock('fs', async () => {
       const actual = await vi.importActual<typeof FsModule>('fs')
+
       return {
         ...actual,
         existsSync: (filePath: string) => files.has(normalizeWin(filePath)),
@@ -86,9 +89,11 @@ describe('loadUserSshConfig regressions', () => {
             : [],
         readFileSync: (filePath: string) => {
           const content = files.get(normalizeWin(filePath))
+
           if (content === undefined) {
             throw new Error(`ENOENT: ${filePath}`)
           }
+
           return content
         },
         realpathSync: Object.assign((filePath: string) => normalizeWin(filePath), {
@@ -96,9 +101,11 @@ describe('loadUserSshConfig regressions', () => {
         }),
         statSync: (filePath: string) => {
           const content = files.get(normalizeWin(filePath))
+
           if (content === undefined) {
             throw new Error(`ENOENT: ${filePath}`)
           }
+
           return { isFile: () => true, size: content.length }
         }
       }
@@ -123,14 +130,17 @@ describe('loadUserSshConfig regressions', () => {
     await mockOs('C:\\Users\\Test User', 'TestUser', -1, 'winbox.example.com')
     vi.doMock('fs', async () => {
       const actual = await vi.importActual<typeof FsModule>('fs')
+
       return {
         ...actual,
         existsSync: (filePath: string) => files.has(normalizeWin(filePath)),
         readFileSync: (filePath: string) => {
           const content = files.get(normalizeWin(filePath))
+
           if (content === undefined) {
             throw new Error(`ENOENT: ${filePath}`)
           }
+
           return content
         },
         realpathSync: Object.assign((filePath: string) => normalizeWin(filePath), {
@@ -138,9 +148,11 @@ describe('loadUserSshConfig regressions', () => {
         }),
         statSync: (filePath: string) => {
           const content = files.get(normalizeWin(filePath))
+
           if (content === undefined) {
             throw new Error(`ENOENT: ${filePath}`)
           }
+
           return { isFile: () => true, size: content.length }
         }
       }
@@ -160,6 +172,7 @@ describe('loadUserSshConfig regressions', () => {
     await mockOs(home)
     vi.doMock('fs', async () => {
       const actual = await vi.importActual<typeof FsModule>('fs')
+
       return {
         ...actual,
         existsSync: (filePath: string) =>
@@ -169,12 +182,15 @@ describe('loadUserSshConfig regressions', () => {
             unsafeReadSpy()
             throw new Error(`unexpected read: ${filePath}`)
           }
+
           if (filePath === configPath) {
             return 'Include unsafe.conf safe.conf\n'
           }
+
           if (filePath === safePath) {
             return 'Host safe\n  HostName safe.example.com\n'
           }
+
           throw new Error(`ENOENT: ${filePath}`)
         },
         realpathSync: Object.assign((filePath: string) => filePath, {
@@ -193,14 +209,17 @@ describe('loadUserSshConfig regressions', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const home = platformSshHome()
     const configPath = platformSshPath(home, '.ssh/config')
+
     const includePaths = Array.from({ length: 2000 }, (_, index) => {
       return platformSshPath(home, `.ssh/conf.d/${String(index).padStart(4, '0')}.conf`)
     })
+
     const readPaths = new Set<string>()
 
     await mockOs(home)
     vi.doMock('fs', async () => {
       const actual = await vi.importActual<typeof FsModule>('fs')
+
       return {
         ...actual,
         existsSync: (filePath: string) =>
@@ -210,11 +229,14 @@ describe('loadUserSshConfig regressions', () => {
           if (filePath === configPath) {
             return 'Include conf.d/*.conf\n'
           }
+
           if (includePaths.includes(filePath)) {
             readPaths.add(filePath)
             const alias = filePath.match(/(\d+)\.conf$/)?.[1] ?? 'unknown'
+
             return `Host host-${alias}\n  HostName ${alias}.example.com\n`
           }
+
           throw new Error(`ENOENT: ${filePath}`)
         },
         realpathSync: Object.assign((filePath: string) => filePath, {
@@ -245,6 +267,7 @@ describe('loadUserSshConfig regressions', () => {
     await mockOs(home)
     vi.doMock('fs', async () => {
       const actual = await vi.importActual<typeof FsModule>('fs')
+
       return {
         ...actual,
         existsSync: (filePath: string) =>
@@ -254,12 +277,15 @@ describe('loadUserSshConfig regressions', () => {
             oversizedReadSpy()
             throw new Error(`unexpected read: ${filePath}`)
           }
+
           if (filePath === configPath) {
             return 'Include oversized.conf safe.conf\n'
           }
+
           if (filePath === safePath) {
             return 'Host safe\n  HostName safe.example.com\n'
           }
+
           throw new Error(`ENOENT: ${filePath}`)
         },
         realpathSync: Object.assign((filePath: string) => filePath, {

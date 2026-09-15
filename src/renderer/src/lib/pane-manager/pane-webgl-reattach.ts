@@ -6,10 +6,13 @@ export function clearPaneWebglContextLossForRetry(pane: ManagedPaneInternal): bo
   if (!pane.webglDisabledAfterContextLoss) {
     return true
   }
+
   if (!canRetryPaneWebglAfterContextLoss(pane)) {
     return false
   }
+
   pane.webglDisabledAfterContextLoss = false
+
   return true
 }
 
@@ -23,10 +26,13 @@ export function rebuildAttachedWebgl(pane: ManagedPaneInternal): void {
   if (!pane.webglAddon || pane.webglDisabledAfterContextLoss) {
     return
   }
+
   if (pane.webglAttachmentDeferred) {
     pane.webglRebuildDeferred = true
+
     return
   }
+
   pane.webglRebuildDeferred = false
   disposeWebgl(pane)
   // Why: the live addon just proved context creation works, so a stale attach

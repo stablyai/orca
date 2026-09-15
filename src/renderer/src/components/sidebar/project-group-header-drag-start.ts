@@ -25,28 +25,39 @@ export function createProjectGroupHeaderDragSession(args: {
   if (args.event.button !== 0) {
     return null
   }
+
   if (!isProjectGroupHeaderDragHandleTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
+
   if (isProjectGroupHeaderActionTarget(args.event.target, args.event.currentTarget)) {
     return null
   }
+
   const group = args.projectGroupById.get(args.groupId)
+
   if (!group) {
     return null
   }
+
   const bucketKey = getProjectGroupHeaderDragBucketKey(group, args.projectGroupById)
+
   const sidebarProjectGroupHeaderIds =
     args.sidebarProjectGroupHeaderIdsByBucket.get(bucketKey) ?? []
+
   // Why: a lone group in a parent bucket cannot move without reparenting.
   if (sidebarProjectGroupHeaderIds.length <= 1) {
     return null
   }
+
   const container = args.getScrollContainer()
+
   if (!container) {
     return null
   }
+
   const handleEl = args.event.currentTarget
+
   // Why: defer pointer capture until the threshold so ordinary group header
   // clicks still toggle collapse through the row handler.
   return {

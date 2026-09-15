@@ -16,10 +16,13 @@ export function SkillDescriptionDisclosure({
   className?: string
 }): React.JSX.Element | null {
   const [expanded, setExpanded] = useState(false)
+
   if (!description) {
     return null
   }
+
   const long = isLongSkillDescription(description)
+
   return (
     <div className={cn('space-y-0.5', className)}>
       <p

@@ -14,12 +14,15 @@ import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-l
 
 export function agentTypeToPromptSentAgentKind(agentType: AgentType | undefined): AgentKind {
   const normalized = agentType?.trim().toLowerCase()
+
   if (!normalized || normalized === 'unknown') {
     return 'other'
   }
+
   if (normalized === 'claude') {
     return 'claude-code'
   }
+
   return AGENT_PROMPT_SENT_AGENT_KINDS.has(normalized as AgentKind)
     ? (normalized as AgentKind)
     : 'other'
@@ -31,6 +34,7 @@ export function equivalentInterruptAgentType(
 ): boolean {
   const normalizedActual = actual === 'unknown' ? undefined : actual
   const normalizedBaseline = baseline === 'unknown' ? undefined : baseline
+
   return normalizedActual === normalizedBaseline
 }
 
@@ -78,15 +82,18 @@ export function isToolProgressWorkingAfterInterrupt(next: AgentHookEventPayload)
   if (next.payload.state !== 'working') {
     return false
   }
+
   if (next.payload.agentType !== 'claude' && next.payload.agentType !== 'codex') {
     return false
   }
+
   // Why: a same-prompt retry is another UserPromptSubmit, while late post-Ctrl+C progress arrives as tool lifecycle work.
   return next.hookEventName !== undefined && TOOL_PROGRESS_HOOK_EVENTS.has(next.hookEventName)
 }
 
 export function paneCacheKeyTabId(key: string): string | null {
   const paneKey = key.split('\0', 1)[0] ?? key
+
   return parsePaneKey(paneKey)?.tabId ?? parseLegacyNumericPaneKey(paneKey)?.tabId ?? null
 }
 

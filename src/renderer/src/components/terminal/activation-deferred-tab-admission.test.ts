@@ -18,6 +18,7 @@ function withoutIdleCallbacks(run: () => void): void {
   const originalRequest = globalThis.requestIdleCallback
   const originalCancel = globalThis.cancelIdleCallback
   vi.useFakeTimers()
+
   try {
     // @ts-expect-error -- exercising the no-requestIdleCallback environment
     globalThis.requestIdleCallback = undefined
@@ -82,14 +83,17 @@ describe('activation-deferred tab admission', () => {
     expect(deferredMountTabIdsByWorktree.get('wt-1')?.size).toBe(3)
 
     const admitted: string[] = []
+
     for (let step = 0; step < allTabIds.length; step += 1) {
       const nextTabId = pickNextActivationDeferredTabId(
         allTabIds,
         deferredMountTabIdsByWorktree.get('wt-1')
       )
+
       if (!nextTabId) {
         break
       }
+
       admitted.push(nextTabId)
       revealActivationDeferredTabs({
         restrictions,
@@ -121,6 +125,7 @@ describe('activation-deferred tab admission', () => {
       const cancel = scheduleActivationDeferredAdmission(() => {
         throw new Error('cancelled admission must not run')
       })
+
       cancel()
       vi.advanceTimersByTime(1_000)
     })

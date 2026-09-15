@@ -4,7 +4,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { tryDeleteWslUncPath } from './wsl-unc-delete'
 
 const execFileAsync = promisify(execFile)
+
 const DISTRO = process.env.ORCA_WSL_TEST_DISTRO ?? 'Ubuntu-24.04'
+
 const runRealWsl = process.platform === 'win32' && process.env.ORCA_REAL_WSL_DELETE_TEST === '1'
 
 function unc(linuxPath: string): string {
@@ -17,6 +19,7 @@ async function wsl(command: string, ...args: string[]): Promise<string> {
     ['-d', DISTRO, '--exec', 'sh', '-c', command, 'orca-wsl-test', ...args],
     { encoding: 'utf-8', timeout: 30000 }
   )
+
   return result.stdout.trim()
 }
 

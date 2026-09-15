@@ -3,6 +3,7 @@ import type * as NodeFsPromisesModule from 'node:fs/promises'
 import type { SessionFileCandidate } from './session-scanner-types'
 
 const STALLED_PATH = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\p\\a.jsonl'
+
 const SIBLING_PATH = '\\\\wsl.localhost\\Debian\\home\\ada\\.claude\\projects\\p\\b.jsonl'
 
 const mocks = vi.hoisted(() => ({ open: vi.fn(), readdir: vi.fn() }))
@@ -43,6 +44,7 @@ function servingHandle(body: Buffer) {
     read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
       const slice = body.subarray(position, Math.min(position + length, body.length))
       slice.copy(buffer, offset)
+
       return { bytesRead: slice.length, buffer }
     }),
     close: vi.fn(async () => {})
@@ -108,6 +110,7 @@ afterEach(async () => {
 describe('AI Vault session parse with a stalled WSL transcript body read', () => {
   it('refuses the stalled candidate and still parses a sibling on a healthy distro', async () => {
     mocks.open.mockResolvedValue({ read: vi.fn(stalls), close: vi.fn(async () => {}) })
+
     // Rejecting (not resolving null) is what lets `parseSessionCandidate`
     // report it as an issue instead of silently dropping the session. The
     // assertion is attached before the clock moves so the rejection is never
@@ -115,6 +118,7 @@ describe('AI Vault session parse with a stalled WSL transcript body read', () =>
     const refusal = expect(
       parseAgentSessionFileCached(candidate(STALLED_PATH, body(2), 1), 'linux')
     ).rejects.toBeInstanceOf(WslTranscriptFsError)
+
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
     await refusal
 
@@ -126,6 +130,7 @@ describe('AI Vault session parse with a stalled WSL transcript body read', () =>
       candidate(SIBLING_PATH, siblingBytes, 1),
       'linux'
     )
+
     expect(sibling?.messageCount).toBe(2)
   })
 
@@ -144,9 +149,11 @@ describe('AI Vault session parse with a stalled WSL transcript body read', () =>
       ),
       close: vi.fn(async () => {})
     })
+
     const refused = expect(
       parseAgentSessionFileCached(candidate(STALLED_PATH, grown, 2), 'linux')
     ).rejects.toBeInstanceOf(WslTranscriptFsError)
+
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
     await refused
 

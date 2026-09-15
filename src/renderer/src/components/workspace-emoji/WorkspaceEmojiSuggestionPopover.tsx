@@ -38,18 +38,22 @@ export function WorkspaceEmojiSuggestionPopover({
     if (!open || !commandValue) {
       return
     }
+
     const item = Array.from(
       listRef.current?.querySelectorAll<HTMLElement>('[cmdk-item=""]') ?? []
     ).find((node) => node.getAttribute('data-value') === commandValue)
+
     if (!item) {
       return
     }
+
     if (item.parentElement?.firstElementChild === item) {
       item
         .closest('[cmdk-group=""]')
         ?.querySelector('[cmdk-group-heading=""]')
         ?.scrollIntoView({ block: 'nearest' })
     }
+
     item.scrollIntoView({ block: 'nearest' })
   }, [commandValue, open, suggestions])
 

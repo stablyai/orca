@@ -21,10 +21,12 @@ type Deferred<T> = {
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
   let reject!: (error: Error) => void
+
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, resolve, reject }
 }
 
@@ -60,24 +62,31 @@ function makeHarness(options?: {
   getApplicationRevision?: () => number
 }) {
   const requests: Deferred<RpcResponse>[] = []
+
   const sendRequest = vi.fn(() => {
     const request = deferred<RpcResponse>()
     requests.push(request)
+
     return request.promise
   })
+
   const generation = options?.generation ?? { current: 1 }
+
   const client = {
     sendRequest,
     getGeneration: () => generation.current
   } as unknown as RpcClient
+
   const apply =
     options?.apply ??
     vi.fn((value: TestResult): SessionTabsApplyOutcome<string> => ({
       accepted: true,
       effectiveTabs: value.tabs
     }))
+
   const consumeAccepted = vi.fn()
   let recoveryNeeded = false
+
   const controller = new MobileSessionTabsStreamHealth<TestResult, string>({
     client,
     scope: 'id:repo::worktree',
@@ -86,6 +95,7 @@ function makeHarness(options?: {
     hasRecoveryNeed: () => recoveryNeeded,
     getApplicationRevision: options?.getApplicationRevision
   })
+
   return {
     apply,
     client,
@@ -279,12 +289,15 @@ describe('MobileSessionTabsStreamHealth', () => {
   it('lets an accepted update satisfy only requirements raised before apply', async () => {
     let controller: MobileSessionTabsStreamHealth<TestResult, string>
     let raisedRequirement: Promise<void> | null = null
+
     const apply = vi.fn((value: TestResult): SessionTabsApplyOutcome<string> => {
       if (value.type === 'updated') {
         raisedRequirement = controller.requestReconciliation()
       }
+
       return { accepted: true, effectiveTabs: value.tabs }
     })
+
     const harness = makeHarness({ apply })
     controller = harness.controller
     controller.setReconciliationActive(true)
@@ -307,6 +320,7 @@ describe('MobileSessionTabsStreamHealth', () => {
     const apply = vi.fn((value: TestResult): SessionTabsApplyOutcome<string> =>
       value.type ? { accepted: false } : { accepted: true, effectiveTabs: value.tabs }
     )
+
     const harness = makeHarness({ apply })
     const subscription = harness.controller.beginSubscription()
 
@@ -396,9 +410,11 @@ describe('MobileSessionTabsStreamHealth', () => {
 
   it('discards a list after a newer accepted application outside the controller', async () => {
     let applicationRevision = 0
+
     const harness = makeHarness({
       getApplicationRevision: () => applicationRevision
     })
+
     harness.controller.setReconciliationActive(true)
     const pending = harness.controller.requestReconciliation()
 

@@ -102,11 +102,14 @@ describe('resolveTerminalViewportResubscribe', () => {
         viewport: PHONE,
         attempts
       })
+
       if (decision.kind !== 'resubscribe') {
         throw new Error(`expected resubscribe at attempt ${attempts}, got ${decision.kind}`)
       }
+
       return decision.delayMs
     })
+
     expect(delays[0]).toBe(0)
     expect(delays[1]).toBeGreaterThan(0)
     expect(delays[2]).toBeGreaterThan(delays[1])
@@ -192,9 +195,11 @@ describe('TerminalViewportResubscribeBudget', () => {
   it('does not refill an exhausted handle that stayed listed', () => {
     const budget = new TerminalViewportResubscribeBudget()
     exhaust(budget, 't1')
+
     for (let refresh = 0; refresh < 5; refresh += 1) {
       budget.notifyListedHandles(new Set(['t1']))
     }
+
     expect(budget.attempts('t1')).toBe(MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS)
   })
 
@@ -242,25 +247,32 @@ describe('runTerminalViewportFitPass', () => {
     budget?: TerminalViewportResubscribeBudget
   }) {
     const budget = overrides.budget ?? new TerminalViewportResubscribeBudget()
+
     const diagnostics = {
       streamResubscribing: vi.fn(),
       streamResubscribeHeld: vi.fn(),
       streamResubscribeExhausted: vi.fn()
     }
+
     const terminalUnsubsRef = { current: new Map<string, () => void>([[HANDLE, () => {}]]) }
     const scheduled: { fn: () => void; ms: number }[] = []
+
     const webView = {
       awaitReady: () => Promise.resolve(),
       measureFitDimensions: () => Promise.resolve(overrides.measured ?? PHONE)
     }
+
     const unsubscribeTerminal = vi.fn((handle: string) => {
       terminalUnsubsRef.current.delete(handle)
     })
+
     // Mimic the real subscribe path: arming registers an unsubscribe handle.
     const subscribeToTerminal = vi.fn((handle: string) => {
       terminalUnsubsRef.current.set(handle, () => {})
     })
+
     const showToast = vi.fn()
+
     const args: TerminalViewportFitPassArgs = {
       handle: HANDLE,
       seq: 1,
@@ -280,6 +292,7 @@ describe('runTerminalViewportFitPass', () => {
       scheduleDelayedAction: (fn, ms) => scheduled.push({ fn, ms }),
       showToast
     }
+
     return {
       args,
       budget,
@@ -316,6 +329,7 @@ describe('runTerminalViewportFitPass', () => {
   it('treats an equal fresh measure as convergence instead of resubscribing', async () => {
     const budget = new TerminalViewportResubscribeBudget()
     budget.chargeAttempt(HANDLE)
+
     // Stale cached viewport disagrees with the host, but the fresh measure matches it.
     const h = makeHarness({
       hostCols: PHONE.cols,
@@ -325,6 +339,7 @@ describe('runTerminalViewportFitPass', () => {
       measured: PHONE,
       budget
     })
+
     runTerminalViewportFitPass(h.args)
     await settle()
     expect(h.subscribeToTerminal).not.toHaveBeenCalled()
@@ -334,6 +349,7 @@ describe('runTerminalViewportFitPass', () => {
   it('defers later attempts through the backoff scheduler while keeping the stream up', async () => {
     const budget = new TerminalViewportResubscribeBudget()
     budget.chargeAttempt(HANDLE)
+
     const h = makeHarness({
       hostCols: 80,
       hostRows: 24,
@@ -341,6 +357,7 @@ describe('runTerminalViewportFitPass', () => {
       viewport: PHONE,
       budget
     })
+
     runTerminalViewportFitPass(h.args)
     await settle()
     expect(h.scheduled).toHaveLength(1)
@@ -356,6 +373,7 @@ describe('runTerminalViewportFitPass', () => {
   it('drops a deferred retry whose subscribe generation went stale', async () => {
     const budget = new TerminalViewportResubscribeBudget()
     budget.chargeAttempt(HANDLE)
+
     const h = makeHarness({
       hostCols: 80,
       hostRows: 24,
@@ -363,6 +381,7 @@ describe('runTerminalViewportFitPass', () => {
       viewport: PHONE,
       budget
     })
+
     runTerminalViewportFitPass(h.args)
     await settle()
     expect(h.scheduled).toHaveLength(1)
@@ -375,6 +394,7 @@ describe('runTerminalViewportFitPass', () => {
   it('drops a deferred retry after the live stream converges', async () => {
     const budget = new TerminalViewportResubscribeBudget()
     budget.chargeAttempt(HANDLE)
+
     const h = makeHarness({
       hostCols: 80,
       hostRows: 24,
@@ -382,6 +402,7 @@ describe('runTerminalViewportFitPass', () => {
       viewport: PHONE,
       budget
     })
+
     runTerminalViewportFitPass(h.args)
     await settle()
     expect(h.scheduled).toHaveLength(1)
@@ -394,9 +415,11 @@ describe('runTerminalViewportFitPass', () => {
 
   it('announces exhaustion once and stops touching the stream', async () => {
     const budget = new TerminalViewportResubscribeBudget()
+
     for (let i = 0; i < MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS; i += 1) {
       budget.chargeAttempt(HANDLE)
     }
+
     const h = makeHarness({
       hostCols: 80,
       hostRows: 24,
@@ -404,6 +427,7 @@ describe('runTerminalViewportFitPass', () => {
       viewport: PHONE,
       budget
     })
+
     runTerminalViewportFitPass(h.args)
     runTerminalViewportFitPass(h.args)
     await settle()
@@ -417,6 +441,7 @@ describe('runTerminalViewportFitPass', () => {
 describe('STA-3337 stream shapes', () => {
   it('empty scrollback with absent dims settles after a single register pass', () => {
     const budget = new TerminalViewportResubscribeBudget()
+
     // Pass 1: no viewport yet — measure and resubscribe so the server learns it.
     const first = resolveTerminalViewportResubscribe({
       hostCols: null,
@@ -425,8 +450,10 @@ describe('STA-3337 stream shapes', () => {
       viewport: null,
       attempts: budget.attempts('t1')
     })
+
     expect(first).toEqual({ kind: 'resubscribe', delayMs: 0 })
     budget.chargeAttempt('t1')
+
     // Pass 2+: host still reports no dims — the stream must be left alone.
     for (let frame = 0; frame < 10; frame += 1) {
       expect(
@@ -439,12 +466,14 @@ describe('STA-3337 stream shapes', () => {
         }).kind
       ).toBe('hold')
     }
+
     expect(budget.attempts('t1')).toBe(1)
   })
 
   it('non-converging numeric dims degrade after the bounded backoff run', () => {
     const budget = new TerminalViewportResubscribeBudget()
     const kinds: string[] = []
+
     for (let frame = 0; frame < 6; frame += 1) {
       const decision = resolveTerminalViewportResubscribe({
         hostCols: 80,
@@ -453,11 +482,14 @@ describe('STA-3337 stream shapes', () => {
         viewport: frame > 0 ? PHONE : null,
         attempts: budget.attempts('t1')
       })
+
       kinds.push(decision.kind)
+
       if (decision.kind === 'resubscribe') {
         budget.chargeAttempt('t1')
       }
     }
+
     expect(kinds).toEqual([
       'resubscribe',
       'resubscribe',

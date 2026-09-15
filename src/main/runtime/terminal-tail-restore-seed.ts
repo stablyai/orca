@@ -61,6 +61,7 @@ export function applyRestoredTerminalTailSeed(
 export function buildRestoredTerminalTailSeed(text: string): RestoredTerminalTailSeed | null {
   let bounded = text
   let sliced = false
+
   if (bounded.length > MAX_RESTORE_TAIL_SEED_CHARS) {
     bounded = bounded.slice(-MAX_RESTORE_TAIL_SEED_CHARS)
     // Why: an arbitrary suffix can start mid-escape; restarting after the first
@@ -68,26 +69,32 @@ export function buildRestoredTerminalTailSeed(text: string): RestoredTerminalTai
     // \r covers newline-free CR-redraw streams). Consume a full \r\n pair so
     // the seed does not begin with a phantom blank line.
     const anchor = bounded.search(/[\r\n]/)
+
     if (anchor !== -1) {
       bounded = bounded.slice(
         bounded[anchor] === '\r' && bounded[anchor + 1] === '\n' ? anchor + 2 : anchor + 1
       )
     }
+
     sliced = true
   }
+
   // Why: the live-path pipeline, so seeded records equal what streaming the
   // same bytes through onPtyData would have produced.
   const normalized = normalizeTerminalChunk(bounded)
   const tail = appendNormalizedToTailBuffer([], '', normalized.text, null)
+
   if (tail.lines.length === 0 && tail.partialLine.length === 0) {
     return null
   }
+
   const transcript = appendCompletedTerminalTranscript(
     [],
     0,
     tail.newlyCompletedLines,
     tail.newCompleteLines
   )
+
   return {
     lines: tail.lines,
     transcriptLines: transcript.lines,

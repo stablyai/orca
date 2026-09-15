@@ -30,12 +30,15 @@ export function skillUpdateFailedNames(
 ): string[] {
   return names.filter((name) => {
     const lockHash = globalSkillLocks.get(name)
+
     const convergent = installations.filter(
       (entry) => entry.name === name && SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(entry.topology)
     )
+
     if (convergent.length === 0) {
       return true
     }
+
     return convergent.some((entry) => !skillPlacementLanded(entry, lockHash))
   })
 }
@@ -47,6 +50,7 @@ function skillPlacementLanded(
   if (entry.status === 'current' || entry.status === 'newer-known') {
     return true
   }
+
   // Why: the CLI installs source-repo HEAD, which runs ahead of the revisions this
   // build bundles, so a clean update routinely hashes `unrecognized`. The lock is
   // the CLI's own record of what it installed — disk matching lock means the

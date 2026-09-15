@@ -33,6 +33,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('hydrates multiple initial host snapshots in one merged patch', () => {
     const secondWorktree = 'repo::/other-worktree'
+
     const patch = applyWebSessionTabsSnapshots(
       makeState({ activeWorktreeId: null }),
       [
@@ -85,6 +86,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('matches sequential reconciliation across duplicate-worktree mixed snapshots', () => {
     const secondWorktree = 'repo::/other-worktree'
+
     const snapshots: RuntimeMobileSessionTabsResult[] = [
       makeSnapshot([
         {
@@ -186,6 +188,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         }
       )
     ]
+
     const provisionalTab: TerminalTab = {
       id: 'host-tab-1',
       ptyId: null,
@@ -198,6 +201,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       createdAt: NOW,
       launchAgent: 'codex'
     }
+
     const initial = makeState({
       activeWorktreeId: null,
       tabsByWorktree: { [WT]: [provisionalTab] },
@@ -212,10 +216,13 @@ describe('applyWebSessionTabsSnapshot', () => {
         }
       }
     })
+
     const initialCopy = structuredClone(initial)
     let sequential = initial
+
     for (const snapshot of snapshots) {
       const patch = applyWebSessionTabsSnapshot(sequential, snapshot, ENV, NOW)
+
       if (patch !== sequential) {
         sequential = { ...sequential, ...patch }
       }
@@ -231,6 +238,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('matches sequential open-file reconciliation across an editor-heavy batch', () => {
     const secondWorktree = 'repo::/other-worktree'
+
     const editorSurface = (
       id: string,
       path: string,
@@ -246,6 +254,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         isDirty: overrides.isDirty ?? false,
         isActive: true
       }) as RuntimeMobileSessionTabsResult['tabs'][number]
+
     const mirroredFile = (path: string, worktree: string): OpenFile =>
       ({
         id: path,
@@ -258,6 +267,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         mode: 'edit',
         mirroredFromRuntimeSession: true
       }) as OpenFile
+
     const initial = makeState({
       activeWorktreeId: WT,
       activeFileId: '/repo/a.ts',
@@ -282,6 +292,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         mirroredFile('/repo/second.ts', secondWorktree)
       ]
     })
+
     const snapshots: RuntimeMobileSessionTabsResult[] = [
       // Drops /repo/dropped.ts and flips a.ts dirty.
       makeSnapshot([editorSurface('host-a', '/repo/a.ts', { isDirty: true })], {
@@ -311,17 +322,21 @@ describe('applyWebSessionTabsSnapshot', () => {
         activeTabType: null
       })
     ]
+
     const initialCopy = structuredClone(initial)
 
     let sequential = initial
+
     for (const snapshot of snapshots) {
       const patch = applyWebSessionTabsSnapshot(sequential, snapshot, ENV, NOW)
+
       if (patch !== sequential) {
         sequential = { ...sequential, ...patch }
       }
     }
 
     resetWebSessionTabsSnapshotFreshnessForTests()
+
     const batched = {
       ...initial,
       ...applyWebSessionTabsSnapshots(initial, snapshots, ENV, NOW)
@@ -364,6 +379,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         mirroredFromRuntimeSession: true,
         lastKnownDiskSignature: signature
       }) as OpenFile
+
     const snapshot = makeSnapshot(
       [
         {
@@ -384,17 +400,21 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     for (const label of ['single', 'batch'] as const) {
       resetWebSessionTabsSnapshotFreshnessForTests()
+
       const state = makeState({
         openFiles: [duplicate('winner', 'other-env'), duplicate('loser', ENV)]
       })
+
       const patch = (
         label === 'single'
           ? applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW)
           : applyWebSessionTabsSnapshots(state, [snapshot], ENV, NOW)
       ) as Partial<WebSessionTabsSyncState>
+
       const mirrored = patch.openFiles?.find(
         (file) => file.id === '/repo/dup.ts' && file.runtimeEnvironmentId === ENV
       )
+
       expect(mirrored?.lastKnownDiskSignature, label).toBe('winner')
     }
   })
@@ -414,6 +434,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       mode: 'edit',
       mirroredFromRuntimeSession: true
     } as OpenFile
+
     const snapshot = makeSnapshot(
       [
         {
@@ -442,6 +463,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     for (const label of ['single', 'batch'] as const) {
       resetWebSessionTabsSnapshotFreshnessForTests()
+
       const state = makeState({
         activeWorktreeId: WT,
         activeFileId: activeFile.id,
@@ -450,11 +472,13 @@ describe('applyWebSessionTabsSnapshot', () => {
         activeTabType: 'editor',
         openFiles: [activeFile]
       })
+
       const patch = (
         label === 'single'
           ? applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW)
           : applyWebSessionTabsSnapshots(state, [snapshot], ENV, NOW)
       ) as Partial<WebSessionTabsSyncState>
+
       const nextTabType = patch.activeTabTypeByWorktree?.[WT] ?? state.activeTabTypeByWorktree[WT]
       expect(nextTabType, label).toBe('editor')
       expect(patch.activeFileIdByWorktree?.[WT] ?? state.activeFileIdByWorktree[WT], label).toBe(
@@ -479,6 +503,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       mirroredFromRuntimeSession: true,
       lastKnownDiskSignature: 'stale-signature'
     } as OpenFile
+
     const editorSnapshot = (path: string, version: number): RuntimeMobileSessionTabsResult =>
       makeSnapshot(
         [
@@ -495,14 +520,17 @@ describe('applyWebSessionTabsSnapshot', () => {
         ],
         { snapshotVersion: version, activeTabId: `host-${path}`, activeTabType: 'file' }
       )
+
     // Closes a.ts, then reopens it — net content is equal, but the object is new.
     const snapshots = [editorSnapshot('/repo/b.ts', 1), editorSnapshot('/repo/a.ts', 2)]
     const state = makeState({ openFiles: [beforeBatch] })
 
     resetWebSessionTabsSnapshotFreshnessForTests()
     let sequential = state
+
     for (const snapshot of snapshots) {
       const patch = applyWebSessionTabsSnapshot(sequential, snapshot, ENV, NOW)
+
       if (patch !== sequential) {
         sequential = { ...sequential, ...patch }
       }
@@ -533,9 +561,11 @@ describe('applyWebSessionTabsSnapshot', () => {
         mirroredFromRuntimeSession: true,
         lastKnownDiskSignature: signature
       }) as OpenFile
+
     const state = makeState({
       openFiles: [duplicate('other-env', 'sig-other-env'), duplicate(ENV, 'sig-this-env')]
     })
+
     const republish = makeSnapshot(
       [
         {
@@ -551,6 +581,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       ],
       { activeTabId: 'host-b', activeTabType: 'file' }
     )
+
     // A second worktree changes, so the batch cannot stay a whole-array no-op.
     const otherWorktree = makeSnapshot(
       [
@@ -572,12 +603,15 @@ describe('applyWebSessionTabsSnapshot', () => {
         activeTabType: 'file'
       }
     )
+
     const snapshots = [republish, otherWorktree]
 
     resetWebSessionTabsSnapshotFreshnessForTests()
     let sequential = state
+
     for (const snapshot of snapshots) {
       const patch = applyWebSessionTabsSnapshot(sequential, snapshot, ENV, NOW)
+
       if (patch !== sequential) {
         sequential = { ...sequential, ...patch }
       }
@@ -609,6 +643,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         mode: 'edit',
         mirroredFromRuntimeSession: true
       }) as OpenFile
+
     // Publishes a terminal and no editors, so this environment culls /repo/shared.ts.
     const snapshot = makeSnapshot([
       {
@@ -625,6 +660,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     for (const label of ['single', 'batch'] as const) {
       resetWebSessionTabsSnapshotFreshnessForTests()
+
       const state = makeState({
         activeWorktreeId: WT,
         activeFileId: '/repo/shared.ts',
@@ -633,11 +669,13 @@ describe('applyWebSessionTabsSnapshot', () => {
         activeTabType: 'editor',
         openFiles: [duplicate('other-env'), duplicate(ENV)]
       })
+
       const patch = (
         label === 'single'
           ? applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW)
           : applyWebSessionTabsSnapshots(state, [snapshot], ENV, NOW)
       ) as Partial<WebSessionTabsSyncState>
+
       const nextOpenFiles = patch.openFiles ?? state.openFiles
       expect(
         nextOpenFiles.map((file) => file.runtimeEnvironmentId),
@@ -661,7 +699,9 @@ describe('applyWebSessionTabsSnapshot', () => {
       mode: 'edit',
       mirroredFromRuntimeSession: true
     } as OpenFile
+
     const state = makeState({ openFiles: [unchanged] })
+
     const snapshot = makeSnapshot(
       [
         {

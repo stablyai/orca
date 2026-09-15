@@ -19,7 +19,9 @@ import {
 import { resolvePaneKey } from './agent-status-routing'
 
 const WORKTREE_COUNT = 100
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 function seedLineage(store: ReturnType<typeof createTestStore>): {
@@ -29,6 +31,7 @@ function seedLineage(store: ReturnType<typeof createTestStore>): {
   const tabsByWorktree: AppState['tabsByWorktree'] = {}
   const unifiedTabsByWorktree: AppState['unifiedTabsByWorktree'] = {}
   const paneKeys: string[] = []
+
   for (let index = 0; index < WORKTREE_COUNT; index += 1) {
     const worktreeId = `wt-${index}`
     const tabId = `tab-${index}`
@@ -38,6 +41,7 @@ function seedLineage(store: ReturnType<typeof createTestStore>): {
     ]
     paneKeys.push(makePaneKey(tabId, LEAF_ID))
   }
+
   store.setState({
     repos: [TEST_REPO],
     worktreesByRepo: {
@@ -49,6 +53,7 @@ function seedLineage(store: ReturnType<typeof createTestStore>): {
     unifiedTabsByWorktree,
     terminalLayoutsByTabId: {}
   } as Partial<AppState>)
+
   return { tabsByWorktree, paneKeys }
 }
 
@@ -119,6 +124,7 @@ describe('agent-status leading-edge and batched pane resolution', () => {
     const duplicateTabId = 'tab-duplicate'
     const splitTabId = 'tab-split'
     const orphanTabId = 'tab-orphan'
+
     const unifiedTabsByWorktree: AppState['unifiedTabsByWorktree'] = {
       'wt-a': [
         makeUnifiedTab({
@@ -151,6 +157,7 @@ describe('agent-status leading-edge and batched pane resolution', () => {
         })
       ]
     }
+
     store.setState({
       repos: [TEST_REPO],
       worktreesByRepo: {
@@ -197,6 +204,7 @@ describe('agent-status leading-edge and batched pane resolution', () => {
 
     const state = store.getState()
     const index = createAgentStatusPaneRoutingIndex(state)
+
     for (const paneKey of corpus) {
       expect({ paneKey, ...resolvePaneKeyFromRoutingIndex(index, paneKey) }).toEqual({
         paneKey,

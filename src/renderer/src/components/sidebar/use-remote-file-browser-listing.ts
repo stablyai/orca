@@ -28,20 +28,25 @@ export function useRemoteFileBrowserListing(
   const fetchListing = useCallback(
     async (dirPath: string): Promise<BrowseResult> => {
       const cached = listingCacheRef.current.get(dirPath)
+
       if (cached) {
         return cached
       }
+
       const result = targetId
         ? await window.api.ssh.browseDir({ targetId, dirPath })
         : await browseRuntimeServerDirectory(
             requireRuntimeEnvironmentId(runtimeEnvironmentId),
             dirPath
           )
+
       listingCacheRef.current.set(result.resolvedPath, result)
+
       // Also key by the requested dirPath (e.g. `~`, relative) so an identical request doesn't re-hit the SSH backend.
       if (dirPath !== result.resolvedPath) {
         listingCacheRef.current.set(dirPath, result)
       }
+
       return result
     },
     [runtimeEnvironmentId, targetId]
@@ -54,5 +59,6 @@ function requireRuntimeEnvironmentId(runtimeEnvironmentId: string | undefined): 
   if (!runtimeEnvironmentId) {
     throw new Error('Runtime environment is required')
   }
+
   return runtimeEnvironmentId
 }

@@ -74,6 +74,7 @@ export function createHarnessStoreState(
     },
     ...overrides
   }
+
   if (overrides.setTabLayout === undefined) {
     state.setTabLayout = vi.fn(
       (tabId: string, layout: HarnessStoreState['terminalLayoutsByTabId'][string]) => {
@@ -81,5 +82,6 @@ export function createHarnessStoreState(
       }
     )
   }
+
   return state
 }

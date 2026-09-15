@@ -31,6 +31,7 @@ async function reserveLocalFile(localPath: string, localName: string): Promise<v
     if (isEEXIST(error)) {
       throw new Error(`Remote entries map to the same local name '${localName}'`)
     }
+
     throw error
   }
 }
@@ -41,6 +42,7 @@ function remotePathsAreWindows(sourceDir: string, windowsRemotePaths?: boolean):
   if (windowsRemotePaths !== undefined) {
     return windowsRemotePaths
   }
+
   return isWindowsAbsolutePathLike(sourceDir)
 }
 
@@ -50,6 +52,7 @@ function joinSftpChildPath(
   windowsRemotePaths?: boolean
 ): string {
   const windowsPath = remotePathsAreWindows(sourceDir, windowsRemotePaths)
+
   if (
     !childName ||
     childName === '.' ||
@@ -59,7 +62,9 @@ function joinSftpChildPath(
   ) {
     throw new Error(`Invalid remote directory entry '${childName}'`)
   }
+
   const normalizedSource = windowsPath ? normalizeRuntimePathSeparators(sourceDir) : sourceDir
+
   return `${normalizedSource.replace(/\/+$/g, '')}/${childName}`
 }
 
@@ -69,12 +74,15 @@ function classifySftpEntry(entry: FileEntryWithStats): 'directory' | 'file' {
     // local symlink creation is also not portable across Orca's supported hosts.
     throw new Error(`Cannot download symbolic link '${entry.filename}'`)
   }
+
   if (entry.attrs.isDirectory()) {
     return 'directory'
   }
+
   if (entry.attrs.isFile()) {
     return 'file'
   }
+
   throw new Error(`Cannot download unsupported remote entry '${entry.filename}'`)
 }
 
@@ -86,21 +94,27 @@ async function downloadDirectoryTree(
   windowsRemotePaths?: boolean
 ): Promise<void> {
   signal?.throwIfAborted()
+
   const entries = (await readDirViaSftp(sftp, sourceDir, { signal })).filter(
     (entry) => entry.filename !== '.' && entry.filename !== '..'
   )
+
   signal?.throwIfAborted()
   const usedLocalNames = new Set<string>()
+
   const plannedEntries: {
     entry: FileEntryWithStats
     kind: 'directory' | 'file'
     localName: string
   }[] = []
+
   for (const entry of entries) {
     const localName = sanitizeLocalDownloadFilename(entry.filename)
+
     if (usedLocalNames.has(localName)) {
       throw new Error(`Remote entries map to the same local name '${localName}'`)
     }
+
     usedLocalNames.add(localName)
     plannedEntries.push({
       entry,
@@ -110,14 +124,17 @@ async function downloadDirectoryTree(
   }
 
   await mkdir(destinationDir, { recursive: false })
+
   for (const { entry, kind, localName } of plannedEntries) {
     signal?.throwIfAborted()
     const remotePath = joinSftpChildPath(sourceDir, entry.filename, windowsRemotePaths)
     const localPath = join(destinationDir, localName)
+
     if (kind === 'directory') {
       await downloadDirectoryTree(sftp, remotePath, localPath, signal, windowsRemotePaths)
       continue
     }
+
     // Why: filesystem semantics belong to the selected volume, not the host OS;
     // an exclusive placeholder prevents case/Unicode aliases from overwriting.
     await reserveLocalFile(localPath, localName)
@@ -133,7 +150,9 @@ export async function downloadFileViaSftp(
   if (!createSftp) {
     throw new Error('Remote file download is unavailable. Reconnect the SSH target and retry.')
   }
+
   const sftp = await createSftp()
+
   try {
     await fastGetViaSftp(sftp, sourcePath, destinationPath)
   } finally {
@@ -150,13 +169,16 @@ export async function downloadFolderViaSftp(
   if (!createSftp) {
     throw new Error(DOWNLOAD_UNAVAILABLE_MESSAGE)
   }
+
   const signal = options?.signal
   signal?.throwIfAborted()
   const sftp = await createSftp({ signal })
   let ended = false
+
   const endSftp = (): void => {
     if (!ended) {
       ended = true
+
       try {
         sftp.end()
       } catch {
@@ -164,12 +186,16 @@ export async function downloadFolderViaSftp(
       }
     }
   }
+
   signal?.addEventListener('abort', endSftp, { once: true })
+
   try {
     const rootStats = await statViaSftp(sftp, sourcePath, { signal })
+
     if (!rootStats.isDirectory()) {
       throw new Error('Cannot download a file as a folder')
     }
+
     await downloadDirectoryTree(
       sftp,
       sourcePath,

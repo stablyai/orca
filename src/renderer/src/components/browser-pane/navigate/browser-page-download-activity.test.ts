@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type DownloadRequestedCallback = (event: { downloadId: string; browserPageId: string }) => void
+
 type DownloadProgressCallback = (event: {
   downloadId: string
   state: 'progressing' | 'interrupted' | null
 }) => void
+
 type DownloadFinishedCallback = (event: { downloadId: string }) => void
 
 describe('browser page download activity', () => {
@@ -19,22 +21,27 @@ describe('browser page download activity', () => {
     progressCallbacks = []
     finishedCallbacks = []
     removedListenerCount = 0
+
     const removeListener = (): void => {
       removedListenerCount += 1
     }
+
     vi.stubGlobal('window', {
       api: {
         browser: {
           onDownloadRequested: (callback: DownloadRequestedCallback) => {
             requestedCallbacks.push(callback)
+
             return removeListener
           },
           onDownloadProgress: (callback: DownloadProgressCallback) => {
             progressCallbacks.push(callback)
+
             return removeListener
           },
           onDownloadFinished: (callback: DownloadFinishedCallback) => {
             finishedCallbacks.push(callback)
+
             return removeListener
           }
         }
@@ -49,6 +56,7 @@ describe('browser page download activity', () => {
   it('reports a page active from download start until its last download finishes', async () => {
     const { hasActiveBrowserPageDownload, installBrowserPageDownloadActivityTracking } =
       await import('./browser-page-download-activity')
+
     installBrowserPageDownloadActivityTracking()
 
     expect(hasActiveBrowserPageDownload('page-1')).toBe(false)
@@ -65,6 +73,7 @@ describe('browser page download activity', () => {
   it('scopes activity to the page that started the download', async () => {
     const { hasActiveBrowserPageDownload, installBrowserPageDownloadActivityTracking } =
       await import('./browser-page-download-activity')
+
     installBrowserPageDownloadActivityTracking()
 
     requestedCallbacks[0]({ downloadId: 'dl-1', browserPageId: 'page-1' })
@@ -74,6 +83,7 @@ describe('browser page download activity', () => {
   it('deactivates an interrupted download (no finished event ever fires) and reactivates on resume', async () => {
     const { hasActiveBrowserPageDownload, installBrowserPageDownloadActivityTracking } =
       await import('./browser-page-download-activity')
+
     const onEvictionVetoChange = vi.fn()
     installBrowserPageDownloadActivityTracking(onEvictionVetoChange)
 
@@ -99,6 +109,7 @@ describe('browser page download activity', () => {
   it('ignores duplicate start events, unknown progress and unknown finish events', async () => {
     const { hasActiveBrowserPageDownload, installBrowserPageDownloadActivityTracking } =
       await import('./browser-page-download-activity')
+
     installBrowserPageDownloadActivityTracking()
 
     requestedCallbacks[0]({ downloadId: 'dl-1', browserPageId: 'page-1' })
@@ -113,6 +124,7 @@ describe('browser page download activity', () => {
   it('finishing an already-interrupted download stays balanced', async () => {
     const { hasActiveBrowserPageDownload, installBrowserPageDownloadActivityTracking } =
       await import('./browser-page-download-activity')
+
     installBrowserPageDownloadActivityTracking()
 
     requestedCallbacks[0]({ downloadId: 'dl-1', browserPageId: 'page-1' })
@@ -127,6 +139,7 @@ describe('browser page download activity', () => {
   it('unsubscribes and clears tracked state on cleanup', async () => {
     const { hasActiveBrowserPageDownload, installBrowserPageDownloadActivityTracking } =
       await import('./browser-page-download-activity')
+
     const cleanup = installBrowserPageDownloadActivityTracking()
 
     requestedCallbacks[0]({ downloadId: 'dl-1', browserPageId: 'page-1' })

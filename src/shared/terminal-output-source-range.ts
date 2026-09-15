@@ -12,14 +12,17 @@ export type TerminalOutputSourceRange = Readonly<
 
 export function assertTerminalOutputSourceRange(range: TerminalOutputSourceRange): void {
   assertPtySourceIdentity(range)
+
   if (!range.spanId) {
     throw new Error('Terminal output source range requires a span ID')
   }
+
   assertNonNegativeSafeInteger(range.sourceStartSu, 'sourceStartSu')
   assertNonNegativeSafeInteger(range.sourceEndSu, 'sourceEndSu')
   assertNonNegativeSafeInteger(range.displayStart, 'displayStart')
   assertNonNegativeSafeInteger(range.displayEnd, 'displayEnd')
   assertNonNegativeSafeInteger(range.transform.rawLengthSu, 'rawLengthSu')
+
   if (
     range.sourceEndSu <= range.sourceStartSu ||
     range.displayEnd < range.displayStart ||

@@ -22,6 +22,7 @@ export function useFileExplorerManualRefresh(refreshTree: () => Promise<unknown>
 
   useEffect(() => {
     mountedRef.current = true
+
     return () => {
       mountedRef.current = false
       clearSpinnerTimer()
@@ -44,9 +45,11 @@ export function useFileExplorerManualRefresh(refreshTree: () => Promise<unknown>
     void refreshTree().finally(() => {
       clearSpinnerTimer()
       isRefreshingRef.current = false
+
       if (!mountedRef.current) {
         return
       }
+
       setShowRefreshSpinner(false)
       setIsRefreshing(false)
     })

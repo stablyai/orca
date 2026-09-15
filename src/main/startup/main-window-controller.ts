@@ -46,10 +46,12 @@ import {
 import { requireMainWindowServices } from './main-window-service-readiness'
 
 const TRAY_CREATE_FALLBACK_MS = 12_000
+
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 
 export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   logStartupMilestone('open-main-window-start')
+
   const { store, keybindings } = requireMainWindowServices({
     store: state.store,
     runtime: state.runtime,
@@ -65,16 +67,19 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     claudeRuntimeAuth: state.claudeRuntimeAuth,
     keybindings: state.keybindings
   })
+
   if (process.platform === 'win32') {
     logStartupMilestone('acl-grant-start')
     ensureWindowsUserDataAclGrant(app.getPath('userData'), {
       onDone: (result) => {
         logStartupMilestone('acl-grant-done', { mode: result.mode })
+
         if (result.mode === 'failed') {
           console.warn('[win32-acl] userData ACL grant failed:', result.reason)
         }
       }
     })
+
     // Why here: read-only, and the install DACL is the one thing a 0x80000003
     // child death cannot tell us about itself. See electron/electron#51761.
     const probeDispatched = probeWindowsInstallDirAcl({
@@ -86,6 +91,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
           appVersion: app.getVersion()
         })
     })
+
     // Why gated on the dispatch: the probe is once-per-process while openMainWindow
     // re-runs on every reopen, so arming this again would wait on a verdict that
     // already landed — and drop every GPU crash for the grace window.
@@ -93,6 +99,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       noteWindowsInstallDirAclProbePending()
     }
   }
+
   const window = createMainWindow(store, {
     getIsQuitting: () => state.isQuitting,
     onQuitAborted: () => {
@@ -135,11 +142,13 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       if (state.mainWindow?.webContents.id === webContentsId) {
         markExpectedRendererReload(webContentsId)
       }
+
       recordCrashBreadcrumb('manual_reload_requested', { ignoreCache })
     },
     // Manual retries also preserve PTYs, but have their own intent breadcrumb.
     onBeforeRecoveryReload: (webContentsId, trigger) => {
       markRecoveryReloadInFlight(webContentsId)
+
       if (trigger === 'automatic') {
         recordDurableCrashBreadcrumb('renderer_recovery_reload')
       }
@@ -149,6 +158,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
       recordDurableCrashBreadcrumb(`renderer_recovery_reload_${status}`, outcome)
     }
   })
+
   recordCrashBreadcrumb('main_window_created')
   logStartupMilestone('window-created')
   const createTray = createSystemTrayDeferred(window, () => logStartupMilestone('tray-created'))
@@ -163,6 +173,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   const trayCreateFallback = setTimeout(createTray, TRAY_CREATE_FALLBACK_MS)
   trayCreateFallback.unref?.()
   const rendererWebContentsId = window.webContents.id
+
   const onFirstWindowLoad = (): void => {
     clearExpectedRendererReload(rendererWebContentsId)
     recordCrashBreadcrumb('main_window_loaded')
@@ -171,10 +182,12 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     // renderer re-attaches by pulling. Pushing into the gap between would be silently lost.
     state.markdownFileOpenListenerReady = false
     const currentStore = state.store
+
     if (currentStore && resolveConsent(currentStore.getSettings()).effective === 'enabled') {
       trackAppOpenedOnce()
     }
   }
+
   window.webContents.on('did-finish-load', onFirstWindowLoad)
   attachMainWindowCoreServices(window, {
     markExpectedRendererReload,
@@ -205,12 +218,14 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
     if (state.mainWindow === window) {
       state.mainWindow = null
     }
+
     clearExpectedRendererReload(rendererWebContentsId)
     state.automations?.setWebContents(null)
     clearMainWindowAgentStatusListeners()
   })
   logStartupMilestone('load-start')
   loadMainWindow(window)
+
   return window
 }
 

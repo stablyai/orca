@@ -8,6 +8,7 @@ function createHeader(markup: string): HTMLElement {
   header.setAttribute('data-repo-header-id', 'repo-1')
   header.innerHTML = markup
   document.body.appendChild(header)
+
   return header
 }
 

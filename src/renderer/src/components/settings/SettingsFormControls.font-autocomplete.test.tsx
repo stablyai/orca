@@ -28,9 +28,11 @@ describe('FontAutocomplete', () => {
 
   function getInput(): HTMLInputElement {
     const input = container.querySelector<HTMLInputElement>('input[role="combobox"]')
+
     if (!input) {
       throw new Error('Font autocomplete input not found')
     }
+
     return input
   }
 
@@ -48,17 +50,21 @@ describe('FontAutocomplete', () => {
 
   function getScrollArea(): HTMLElement {
     const scrollArea = document.querySelector<HTMLElement>('[data-slot="scroll-area"]')
+
     if (!scrollArea) {
       throw new Error('Font autocomplete scroll area not found')
     }
+
     return scrollArea
   }
 
   function getScrollAreaViewport(): HTMLElement {
     const viewport = document.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
+
     if (!viewport) {
       throw new Error('Font autocomplete scroll area viewport not found')
     }
+
     return viewport
   }
 
@@ -75,6 +81,7 @@ describe('FontAutocomplete', () => {
   it('arrow keys move through the full list when the input shows the committed font', async () => {
     function Harness(): ReactNode {
       const [value, setValue] = useState('Geist')
+
       return (
         <FontAutocomplete
           value={value}
@@ -109,6 +116,7 @@ describe('FontAutocomplete', () => {
   it('shows the full list on focus when the committed font has multiple matching suggestions', async () => {
     function Harness(): ReactNode {
       const [value, setValue] = useState('Cascadia Mono')
+
       return (
         <FontAutocomplete
           value={value}
@@ -139,6 +147,7 @@ describe('FontAutocomplete', () => {
   it('bounds the portaled list to the available popover height', async () => {
     function Harness(): ReactNode {
       const [value, setValue] = useState('Cascadia Mono')
+
       return (
         <FontAutocomplete
           value={value}
@@ -165,6 +174,7 @@ describe('FontAutocomplete', () => {
   it('keeps typed searches filtered even after the value updates', async () => {
     function Harness(): ReactNode {
       const [value, setValue] = useState('Geist')
+
       return (
         <FontAutocomplete
           value={value}
@@ -193,6 +203,7 @@ describe('FontAutocomplete', () => {
 
     function Harness(): ReactNode {
       const [value, setValue] = useState('Geist')
+
       return (
         <FontAutocomplete
           value={value}
@@ -224,6 +235,7 @@ describe('FontAutocomplete', () => {
 
     function Harness(): ReactNode {
       const [value, setValue] = useState('System Font 0')
+
       return <FontAutocomplete value={value} suggestions={suggestions} onChange={setValue} />
     }
 
@@ -254,6 +266,7 @@ describe('FontAutocomplete', () => {
 
     function Harness(): ReactNode {
       const [value, setValue] = useState('Zed Mono')
+
       return <FontAutocomplete value={value} suggestions={suggestions} onChange={setValue} />
     }
 

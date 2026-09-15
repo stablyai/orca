@@ -9,6 +9,7 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 // xterm-write-buffer-stall.repro.test.ts. Same escape class as
 // terminal-link-provider-guard.ts, applied to parser handlers.
 const MAX_REPORTS_PER_HANDLER = 5
+
 const reportCountsByHandler = new Map<string, number>()
 
 /**
@@ -25,6 +26,7 @@ export function guardParserHandler<HandlerArgs extends unknown[]>(
       return handler(...args)
     } catch (error: unknown) {
       const reported = reportCountsByHandler.get(handlerName) ?? 0
+
       if (reported < MAX_REPORTS_PER_HANDLER) {
         reportCountsByHandler.set(handlerName, reported + 1)
         console.error(`[terminal] parser handler "${handlerName}" threw`, error)
@@ -34,6 +36,7 @@ export function guardParserHandler<HandlerArgs extends unknown[]>(
           errorMessage: error instanceof Error ? error.message : String(error)
         })
       }
+
       return false
     }
   }

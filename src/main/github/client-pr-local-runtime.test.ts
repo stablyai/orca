@@ -176,6 +176,7 @@ describe('GitHub PR local runtime routing', () => {
 
       if (args[0] === 'pr' && args[1] === 'view') {
         const jsonFields = args[args.indexOf('--json') + 1]
+
         if (jsonFields === 'id,headRefOid,baseRefName') {
           return {
             stdout: JSON.stringify({
@@ -185,6 +186,7 @@ describe('GitHub PR local runtime routing', () => {
             })
           }
         }
+
         return {
           stdout: JSON.stringify({
             id: 'PR_kwDO123',
@@ -205,6 +207,7 @@ describe('GitHub PR local runtime routing', () => {
           })
         }
       }
+
       if (query.includes('reviewThreads')) {
         return {
           stdout: JSON.stringify({
@@ -219,22 +222,27 @@ describe('GitHub PR local runtime routing', () => {
           })
         }
       }
+
       if (endpoint.endsWith('/issues/7/comments?per_page=100')) {
         return { stdout: '[]' }
       }
+
       if (endpoint.endsWith('/pulls/7/reviews?per_page=100')) {
         return { stdout: '[]' }
       }
+
       if (endpoint.endsWith('/pulls/7/comments/11/replies')) {
         return {
           stdout: JSON.stringify({ id: 12, node_id: 'PRRC_reply_12', user: null, body: 'Reply' })
         }
       }
+
       if (endpoint.endsWith('/pulls/7/comments')) {
         return {
           stdout: JSON.stringify({ id: 13, node_id: 'PRRC_inline_13', user: null, body: 'Inline' })
         }
       }
+
       if (args.length === 2 && endpoint === 'repos/acme/orca/pulls/7') {
         return {
           stdout: JSON.stringify({
@@ -244,6 +252,7 @@ describe('GitHub PR local runtime routing', () => {
           })
         }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -389,14 +398,17 @@ describe('GitHub PR local runtime routing', () => {
       repo: 'orca',
       host: 'github.acme-corp.com:8443'
     }
+
     getOwnerRepoMock.mockResolvedValue(null)
     getEnterpriseGitHubRepoSlugMock.mockResolvedValue(enterpriseRepo)
     ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       const endpoint = args.find((arg) => arg.startsWith('repos/team/orca/')) ?? ''
       const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+
       if (args[0] === 'pr' && args[1] === 'checks') {
         return { stdout: '[]' }
       }
+
       if (args[0] === 'pr' && args[1] === 'view') {
         if (args.includes('id,headRefOid,baseRefName')) {
           return {
@@ -407,6 +419,7 @@ describe('GitHub PR local runtime routing', () => {
             })
           }
         }
+
         return {
           stdout: JSON.stringify({
             number: 7,
@@ -421,6 +434,7 @@ describe('GitHub PR local runtime routing', () => {
           })
         }
       }
+
       if (query.includes('reviewThreads')) {
         return {
           stdout: JSON.stringify({
@@ -435,12 +449,14 @@ describe('GitHub PR local runtime routing', () => {
           })
         }
       }
+
       if (
         endpoint.endsWith('/issues/7/comments?per_page=100') ||
         endpoint.endsWith('/pulls/7/reviews?per_page=100')
       ) {
         return { stdout: '[]' }
       }
+
       if (endpoint.endsWith('/commits/head-sha/check-runs?per_page=100')) {
         return {
           stdout: JSON.stringify({
@@ -456,12 +472,15 @@ describe('GitHub PR local runtime routing', () => {
           })
         }
       }
+
       if (endpoint.endsWith('/commits/head-sha/status?per_page=100')) {
         return { stdout: JSON.stringify({ statuses: [] }) }
       }
+
       if (endpoint.endsWith('/commits/head-sha/check-suites?per_page=100')) {
         return { stdout: JSON.stringify({ check_suites: [] }) }
       }
+
       if (endpoint.endsWith('/check-runs/88')) {
         return {
           stdout: JSON.stringify({
@@ -474,9 +493,11 @@ describe('GitHub PR local runtime routing', () => {
           })
         }
       }
+
       if (endpoint.endsWith('/check-runs/88/annotations?per_page=20')) {
         return { stdout: '[]' }
       }
+
       if (args.length === 2 && endpoint === 'repos/team/orca/pulls/7') {
         return {
           stdout: JSON.stringify({
@@ -486,9 +507,11 @@ describe('GitHub PR local runtime routing', () => {
           })
         }
       }
+
       if (query) {
         return { stdout: JSON.stringify({ data: { repository: {} } }) }
       }
+
       return {
         stdout: JSON.stringify({
           id: 13,
@@ -583,6 +606,7 @@ describe('GitHub PR local runtime routing', () => {
     const prViewCall = ghExecFileAsyncMock.mock.calls.find(
       ([args]) => args[0] === 'pr' && args[1] === 'view'
     )
+
     // The runner host-qualifies argv at spawn time from options.host, so the
     // mocked call sees the unqualified --repo plus the host in exec options.
     expect(prViewCall?.[0]).toEqual(expect.arrayContaining(['--repo', 'team/orca']))

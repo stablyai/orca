@@ -28,6 +28,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const AGENT_BROWSER = 'agent-browser'
+
 const sleepBuffer = new Int32Array(new SharedArrayBuffer(4))
 
 function sleep(ms) {
@@ -44,6 +45,7 @@ function ab(port, args) {
     encoding: 'utf-8',
     timeout: 15_000
   })
+
   return result.trim()
 }
 
@@ -85,6 +87,7 @@ export class OrcaTerminal {
         return 'probed 1-${maxId}';
       })()
     `
+
     evalInRenderer(this.port, js)
 
     // Wait for output to render
@@ -106,15 +109,18 @@ export class OrcaTerminal {
         return JSON.stringify({text: text.slice(-2000)});
       })()
     `
+
     const bufferResult = evalInRenderer(this.port, bufferJs)
 
     // Parse the marker from the buffer
     let parsed
+
     try {
       parsed = JSON.parse(bufferResult.replace(/^"|"$/g, '').replace(/\\"/g, '"'))
     } catch {
       throw new Error(`discoverActivePtyId: failed to parse buffer result: ${bufferResult}`)
     }
+
     if (parsed.error) {
       throw new Error(`discoverActivePtyId: ${parsed.error}`)
     }
@@ -122,6 +128,7 @@ export class OrcaTerminal {
     // Find all markers, take the last one (most recent = the visible terminal)
     const markerRe = new RegExp(`${marker}_(\\d+)`, 'g')
     const matches = [...parsed.text.matchAll(markerRe)]
+
     if (matches.length === 0) {
       // Fallback: take screenshot and try OCR-free approach by probing write
       throw new Error(
@@ -130,6 +137,7 @@ export class OrcaTerminal {
           'Try using probePtyIdWithScreenshot() instead.'
       )
     }
+
     return matches.at(-1)[1]
   }
 
@@ -144,8 +152,10 @@ export class OrcaTerminal {
     for (let i = 1; i <= maxId; i++) {
       evalInRenderer(this.port, `window.api.pty.write('${i}', '\\x03\\x15echo PTY_ID_${i}\\r')`)
     }
+
     sleep(2_000)
     this.screenshot(screenshotPath)
+
     return screenshotPath
   }
 
@@ -189,6 +199,7 @@ export class OrcaTerminal {
    */
   screenshot(path = tempScreenshotPath('orca-terminal.png')) {
     ab(this.port, ['screenshot', path])
+
     return path
   }
 
@@ -210,6 +221,7 @@ export class OrcaTerminal {
   readLang(ptyId) {
     this.exec(ptyId, 'echo __LANG__=$LANG')
     sleep(1_000)
+
     // Screenshot and return for inspection
     return this.screenshot(tempScreenshotPath('orca-lang-check.png'))
   }
@@ -237,10 +249,12 @@ if (process.argv[1]?.endsWith('terminal-e2e-helpers.mjs')) {
 
   if (command) {
     const ptyId = args[args.indexOf('--pty') + 1]
+
     if (!ptyId) {
       console.error('--command requires --pty <id>. Use --discover first to find PTY IDs.')
       process.exit(1)
     }
+
     term.exec(ptyId, command)
     const shot = term.screenshot()
     console.log('Executed. Screenshot:', shot)

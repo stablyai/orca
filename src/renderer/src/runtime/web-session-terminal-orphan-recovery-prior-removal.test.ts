@@ -22,11 +22,14 @@ describe('post-adoption reconciliation of previously removed surfaces', () => {
     'preserves a newer host-published pending row after %s removed the old surface',
     async (evidence) => {
       const worktree = 'folder:post-adoption-prior-removal'
+
       const leaves = [
         { leafId: 'leaf-claim', handle: 'term-claim' },
         { leafId: 'leaf-old', handle: 'term-old' }
       ]
+
       const state = makeState(worktree, leaves)
+
       const snapshot = finalizeHostTerminalSnapshot({
         ...makeSnapshot(worktree, 'renderer:host:client-navigation', leaves),
         tabs: [pendingSurface('host-tab', 'leaf-claim', 'pty-claim')],
@@ -43,6 +46,7 @@ describe('post-adoption reconciliation of previously removed surfaces', () => {
               ]
             : []
       })
+
       const call = vi.fn(async () => ({
         id: 'inventory',
         ok: true as const,
@@ -56,6 +60,7 @@ describe('post-adoption reconciliation of previously removed surfaces', () => {
           }
         ])
       }))
+
       const inventoryArgs = {
         candidates: prepareTerminalOrphanRecovery(state, snapshot, ENVIRONMENT_ID).candidates,
         snapshot,
@@ -63,12 +68,15 @@ describe('post-adoption reconciliation of previously removed surfaces', () => {
         call,
         isCurrent: () => true
       }
+
       const oldSurfaceKey = surfaceKey('host-tab', 'leaf-old')
+
       if (evidence === 'confirmed-inventory-absence') {
         const first = await resolveTerminalOrphanInventory(inventoryArgs)
         expect(first?.removed.size).toBe(0)
         expect(first?.retained.map((surface) => surface.surfaceKey)).toEqual([oldSurfaceKey])
       }
+
       const inventory = await resolveTerminalOrphanInventory(inventoryArgs)
       expect(inventory?.removed).toEqual(new Set([oldSurfaceKey]))
       expect(inventory?.retained).toEqual([])
@@ -84,11 +92,13 @@ describe('post-adoption reconciliation of previously removed surfaces', () => {
       expect(call).toHaveBeenCalledTimes(evidence === 'exact-retirement' ? 1 : 2)
 
       const pending = pendingSurface('host-tab', 'leaf-old', 'pty-new')
+
       const projected = finalizeHostTerminalSnapshot({
         ...snapshot,
         snapshotVersion: snapshot.snapshotVersion + 1,
         tabs: [pendingSurface('host-tab', 'leaf-claim', 'pty-claim', 'term-claim'), pending]
       })
+
       expect(projected.retiredTerminalSurfaces).toEqual([])
       expect(projected.tabs[1]).toEqual(pending)
 

@@ -18,8 +18,11 @@ import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-
 import { waitForTabParked } from './helpers/terminal-hidden-parking'
 
 const PARK_DELAY_MS = 2_000
+
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-host-restart-background-'))
+
 const fixturePath = path.join(scratch, 'paired-host-restart-terminal.mjs')
+
 const backlogPath = path.join(scratch, 'daemon-stream-backlog.jsonl')
 
 writeFileSync(
@@ -53,6 +56,7 @@ function shellQuote(value: string): string {
 
 function fixtureCommand(sinkPath: string): string {
   const command = [process.execPath, fixturePath, sinkPath]
+
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
     : command.map(shellQuote).join(' ')
@@ -62,7 +66,9 @@ function seededRepoPathOrSkip(): string {
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
     : ''
+
   test.skip(!repoPath || !existsSync(repoPath), 'Global setup did not produce a seeded test repo')
+
   return repoPath
 }
 
@@ -70,9 +76,11 @@ function readDaemonPid(userDataDir: string): number {
   const value = JSON.parse(
     readFileSync(path.join(userDataDir, 'daemon', `daemon-v${PROTOCOL_VERSION}.pid`), 'utf8')
   ) as { pid?: unknown }
+
   if (typeof value.pid !== 'number') {
     throw new Error('Daemon pid file did not contain a numeric pid')
   }
+
   return value.pid
 }
 
@@ -122,9 +130,11 @@ async function callRuntime<TResult>(
         method,
         params
       })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { environmentId, method, params }
@@ -145,6 +155,7 @@ async function createHostTerminal(
   name: string
 ): Promise<HostTerminal> {
   const sinkPath = path.join(scratch, `${name}.log`)
+
   const created = await callRuntime<{
     tab: { id: string; parentTabId: string; terminal: string | null }
   }>(client.page, client.environmentId, 'session.tabs.createTerminal', {
@@ -154,20 +165,25 @@ async function createHostTerminal(
     select: false,
     navigation: 'caller'
   })
+
   if (!created.tab.terminal) {
     throw new Error('Host did not publish the fixture terminal')
   }
+
   const shown = await callRuntime<{ terminal: { ptyId: string | null } }>(
     client.page,
     client.environmentId,
     'terminal.show',
     { terminal: created.tab.terminal }
   )
+
   if (!shown.terminal.ptyId) {
     throw new Error('Host fixture terminal has no PTY')
   }
+
   const parentTabId =
     created.tab.parentTabId || created.tab.id.split(HOST_TERMINAL_SURFACE_SEPARATOR)[0]
+
   return {
     handle: created.tab.terminal,
     parentTabId,
@@ -191,17 +207,21 @@ async function findTerminalHandle(
         }>(client.page, client.environmentId, 'session.tabs.list', {
           worktree: `id:${worktreeId}`
         })
+
         terminal =
           snapshot.tabs.find((tab) => tab.type === 'terminal' && tab.parentTabId === parentTabId)
             ?.terminal ?? null
+
         return terminal
       },
       { timeout: 30_000, message: `Host did not republish terminal tab ${parentTabId}` }
     )
     .not.toBeNull()
+
   if (!terminal) {
     throw new Error(`Host did not republish terminal tab ${parentTabId}`)
   }
+
   return terminal
 }
 
@@ -241,6 +261,7 @@ async function readPaneContent(page: Page, webTabId: string): Promise<string> {
   return page.evaluate((id) => {
     const manager = window.__paneManagers?.get(id)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     return pane?.serializeAddon?.serialize?.() ?? ''
   }, webTabId)
 }
@@ -252,6 +273,7 @@ async function waitForPaneConnected(page: Page, webTabId: string): Promise<void>
         page.evaluate((id) => {
           const manager = window.__paneManagers?.get(id)
           const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
           return pane?.container.dataset.ptyRecoveryState ?? null
         }, webTabId),
       { timeout: 30_000, message: `Pane ${webTabId} never completed transport recovery` }
@@ -267,9 +289,11 @@ async function expectTerminalInteractive(
   await client.page.evaluate((id) => {
     const manager = window.__paneManagers?.get(id)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error(`No pane mounted for ${id}`)
     }
+
     pane.terminal.focus()
     const textarea = pane.container.querySelector('.xterm-helper-textarea') as HTMLTextAreaElement
     textarea.focus()
@@ -289,10 +313,13 @@ async function moveHostAwayFromWorktree(page: Page, targetWorktreeId: string): P
         page.evaluate(async (targetId) => {
           const state = window.__store?.getState()
           const target = state?.allWorktrees().find((worktree) => worktree.id === targetId)
+
           if (!state || !target) {
             return false
           }
+
           await state.fetchWorktrees(target.repoId)
+
           return window
             .__store!.getState()
             .allWorktrees()
@@ -301,22 +328,29 @@ async function moveHostAwayFromWorktree(page: Page, targetWorktreeId: string): P
       { message: 'Seeded alternate host worktree never loaded' }
     )
     .toBe(true)
+
   const alternateWorktreeId = await page.evaluate((targetId) => {
     const state = window.__store?.getState()
     const alternate = state?.allWorktrees().find((worktree) => worktree.id !== targetId)
+
     if (!state || !alternate) {
       return null
     }
+
     state.setActiveView('editor')
     state.setActiveWorktree(alternate.id)
+
     return alternate.id
   }, targetWorktreeId)
+
   if (!alternateWorktreeId) {
     throw new Error('Host fixture needs a second worktree for inactive-workspace restart coverage')
   }
+
   await expect
     .poll(() => page.evaluate(() => window.__store?.getState().activeWorktreeId ?? null))
     .toBe(alternateWorktreeId)
+
   return alternateWorktreeId
 }
 
@@ -327,13 +361,16 @@ test('foregrounds a preserved daemon PTY after the paired host relaunches', asyn
   writeFileSync(backlogPath, '')
   const previousParkDelay = process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS
   process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS = String(PARK_DELAY_MS)
+
   const session = createRestartSession(testInfo, {
     ORCA_DAEMON_STREAM_BACKLOG_FILE: backlogPath
   })
+
   let firstHost: ElectronApplication | null = null
   let secondHost: ElectronApplication | null = null
   let client: PairedElectronClient | null = null
   const terminals: HostTerminal[] = []
+
   try {
     const first = await session.launch()
     firstHost = first.app
@@ -404,6 +441,7 @@ test('foregrounds a preserved daemon PTY after the paired host relaunches', asyn
         () =>
           client!.page.evaluate(async (selector) => {
             const response = await window.api.runtimeEnvironments.connect({ selector })
+
             return response.ok
           }, client!.environmentId),
         { timeout: 60_000, message: 'Paired client never reconnected to the relaunched host' }
@@ -426,12 +464,14 @@ test('foregrounds a preserved daemon PTY after the paired host relaunches', asyn
       .toBe(true)
     await expectTerminalInteractive(client, target, 'x')
     target.handle = await findTerminalHandle(client, worktreeId, target.parentTabId)
+
     const restored = await callRuntime<{ terminal: { ptyId: string | null } }>(
       client.page,
       client.environmentId,
       'terminal.show',
       { terminal: target.handle }
     )
+
     expect(restored.terminal.ptyId, 'host inventory must preserve the daemon PTY identity').toBe(
       target.ptyId
     )
@@ -452,15 +492,20 @@ test('foregrounds a preserved daemon PTY after the paired host relaunches', asyn
           terminal: terminal.handle
         }).catch(() => undefined)
       }
+
       await client.dispose()
     }
+
     if (secondHost) {
       await session.close(secondHost)
     }
+
     if (firstHost) {
       await session.close(firstHost)
     }
+
     await session.dispose()
+
     if (previousParkDelay === undefined) {
       delete process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS
     } else {

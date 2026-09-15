@@ -11,16 +11,20 @@ export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onTerminalZoom((direction) => {
       const store = useAppStore.getState()
+
       const { activeView, activeTabType, editorFontZoomLevel, setEditorFontZoomLevel, settings } =
         store
+
       const target = resolveZoomTarget({
         activeView,
         activeTabType,
         activeElement: document.activeElement
       })
+
       if (target === 'terminal') {
         return
       }
+
       if (target === 'editor') {
         const next = nextEditorFontZoomLevel(editorFontZoomLevel, direction)
         setEditorFontZoomLevel(next)
@@ -31,6 +35,7 @@ export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
         const actual = computeEditorFontSize(baseFontSize, next)
         const percent = Math.round((actual / baseFontSize) * 100)
         dispatchZoomLevelChanged('editor', percent)
+
         return
       }
 

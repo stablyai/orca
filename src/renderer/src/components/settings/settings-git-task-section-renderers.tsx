@@ -8,6 +8,7 @@ import type { SettingsRenderContext } from './settings-render-context'
 
 export function renderGitSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { model, interactions, navigation, view } = context
+
   return (
     <SettingsSection
       id="git"
@@ -48,6 +49,7 @@ export function renderGitSettingsSection(context: SettingsRenderContext): React.
 
 export function renderTasksSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { model, navigation, view } = context
+
   return (
     <SettingsSection
       id="tasks"

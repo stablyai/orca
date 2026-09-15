@@ -20,6 +20,7 @@ vi.mock('@/components/ui/hover-card', () => ({
     onOpenChange?: (open: boolean) => void
   }) => {
     React.useEffect(() => onOpenChange?.(true), [onOpenChange])
+
     return <>{children}</>
   },
   HoverCardContent: ({ children, className }: { children: ReactNode; className?: string }) => (
@@ -34,6 +35,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 function createTestThread(overrides: Partial<AgentPaneThread> = {}): AgentPaneThread {
   const repo = makeRepo()
+
   const worktree: Worktree = {
     ...makeWorktree(),
     displayName: 'm4air-audit',
@@ -42,6 +44,7 @@ function createTestThread(overrides: Partial<AgentPaneThread> = {}): AgentPaneTh
     comment: 'Notes for performance audit',
     hostId: 'runtime:m4air-env-id' as const
   }
+
   const tab = makeTab()
 
   return {
@@ -141,6 +144,7 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     const markReadButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Mark thread as read"]'
     )
+
     expect(markReadButton).not.toBeNull()
 
     act(() => {
@@ -163,6 +167,7 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     const clearButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Clear notification"]'
     )
+
     expect(clearButton).not.toBeNull()
     expect(clearButton?.className).toContain('focus-visible:opacity-100')
     expect(clearButton?.className).toContain('can-hover:pointer-events-none')
@@ -254,6 +259,7 @@ describe('ActivityThreadHoverCard and ActivityThreadRow', () => {
     const jumpButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Jump to workspace"]'
     )
+
     expect(jumpButton).not.toBeNull()
 
     act(() => {

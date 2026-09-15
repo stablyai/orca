@@ -32,12 +32,14 @@ const DESKTOP_SELF = entry({
   stableRef: { authority: { kind: 'desktop' }, selector: { kind: 'self' } },
   owner: { authority: { kind: 'desktop' }, selector: { kind: 'self' } }
 })
+
 const DESKTOP_ORPHAN = entry({
   stableRef: { authority: { kind: 'desktop' }, selector: { kind: 'orphan' } },
   stableKey: 'host:desktop:orphan',
   label: 'Unassigned legacy automations',
   kind: 'orphan'
 })
+
 const RUNTIME_SELF = entry({
   stableRef: { authority: { kind: 'runtime', environmentId: 'gpu' }, selector: { kind: 'self' } },
   stableKey: 'host:runtime:gpu:self',
@@ -129,6 +131,7 @@ describe('automation host list rows', () => {
 
   it('keeps the owned copy when the orphan scope returns the same record', () => {
     const owned = row('a-1', DESKTOP_SELF.owner)
+
     const rows = resolveAutomationHostListRows({
       catalog: catalogOf([DESKTOP_SELF, DESKTOP_ORPHAN]),
       resolution: ALL_HOSTS,
@@ -196,9 +199,11 @@ describe('automation host list rows', () => {
             : row('gpu-1', RUNTIME_SELF.owner)
         ])
     })
+
     const visible = rows.rows
       .filter((item) => item.automation.id === 'gpu-1')
       .map((item) => item.key)
+
     const filtered = filterAutomationHostGroups(rows.groups, new Set(visible))
 
     // Why every host survives: a query hiding a host's rows is not the host going away.

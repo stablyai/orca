@@ -21,6 +21,7 @@ export function createTerminalPaneClosedHandler(
 ): (paneId: number, closedPane?: PaneClosedHandlerContext['closedPane']) => void {
   return (paneId, closedPane) => {
     const { deps, refs } = context
+
     const {
       tabId,
       worktreeId,
@@ -45,6 +46,7 @@ export function createTerminalPaneClosedHandler(
       updateTabTitle,
       managerRef
     } = deps
+
     onPtyRecoveryStateRef?.current?.(paneId, null)
     const isDetachedToTab = closedPane?.reason === 'detach'
     const isRetiredSurface = closedPane?.reason === 'retire'
@@ -61,10 +63,12 @@ export function createTerminalPaneClosedHandler(
     disposeMapEntry(refs.imeCompositionDisposablesRef.current, paneId)
     disposeMapEntry(refs.imeNativeTextForwarderDisposablesRef.current, paneId)
     const timer = refs.selectionCaptureTimersRef.current.get(paneId)
+
     if (timer !== undefined) {
       window.clearTimeout(timer)
       refs.selectionCaptureTimersRef.current.delete(paneId)
     }
+
     paneMode2031Ref.current.delete(paneId)
     paneKittyKeyboardModesRef.current.delete(paneId)
     paneLastThemeModeRef.current.delete(paneId)
@@ -75,17 +79,21 @@ export function createTerminalPaneClosedHandler(
 
     const transport = paneTransportsRef.current.get(paneId)
     const closedPtyId = transport?.getPtyId() ?? null
+
     const terminalTab = useAppStore
       .getState()
       .tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
+
     if (!isDetachedToTab && shouldClearLaunchAgentForClosedPane(terminalTab, closedPtyId)) {
       useAppStore.getState().clearTabLaunchAgent(tabId)
     }
+
     const binding = panePtyBindingsRef.current.get(paneId)
     binding?.dispose()
     panePtyBindingsRef.current.delete(paneId)
     const leafId = closedPane?.leafId
     const deferredSplitHandoff = context.deferredSplitHandoffs.get(paneId)
+
     if (deferredSplitHandoff) {
       // Explicit pane removal is terminal for the split intent; only a
       // whole-tab remount is allowed to retain this record.
@@ -96,6 +104,7 @@ export function createTerminalPaneClosedHandler(
       // durable leaf key still identifies the deferred split to discard.
       discardDeferredSplitPaneHandoffForKey(makePaneKey(tabId, leafId))
     }
+
     if (leafId && isRetiredSurface) {
       retireMountedTerminalPaneSurface({
         paneKey: makePaneKey(tabId, leafId),
@@ -113,6 +122,7 @@ export function createTerminalPaneClosedHandler(
     } else if (leafId && !isDetachedToTab) {
       useAppStore.getState().retireAgentPaneAuthority(makePaneKey(tabId, leafId))
     }
+
     if (transport && !isRetiredSurface) {
       if (isDetachedToTab) {
         transport.detach?.({ preserveExitObserver: false })
@@ -121,6 +131,7 @@ export function createTerminalPaneClosedHandler(
           transport,
           useAppStore.getState().suppressPtyExit
         )
+
         if (ptyId) {
           if (leafId && clearExitedPanePtyLayoutBindingForLeaf) {
             clearExitedPanePtyLayoutBindingForLeaf(leafId, ptyId)
@@ -129,12 +140,16 @@ export function createTerminalPaneClosedHandler(
           } else {
             syncPanePtyLayoutBinding(paneId, null)
           }
+
           clearTabPtyId(tabId, ptyId)
         }
+
         transport.destroy?.()
       }
+
       paneTransportsRef.current.delete(paneId)
     }
+
     clearRuntimePaneTitle(tabId, paneId)
     paneFontSizesRef.current.delete(paneId)
     replayingPanesRef.current.delete(paneId)
@@ -143,23 +158,29 @@ export function createTerminalPaneClosedHandler(
       if (!(paneId in current)) {
         return current
       }
+
       const next = { ...current }
       delete next[paneId]
+
       return next
     })
+
     if (paneId in paneTitlesRef.current) {
       const next = { ...paneTitlesRef.current }
       delete next[paneId]
       paneTitlesRef.current = next
     }
+
     setRenamingPaneId((current) => (current === paneId ? null : current))
     setPaneCount(managerRef.current?.getPanes().length ?? 0)
     const activePane = managerRef.current?.getActivePane()
+
     if (activePane) {
       reportActiveRendererPtyForPane(paneTransportsRef.current, activePane.id)
       const paneTitles = useAppStore.getState().runtimePaneTitlesByTabId[tabId] ?? {}
       updateTabTitle(tabId, resolveTabTitleAfterPaneClose(paneTitles, activePane.id))
     }
+
     scheduleRuntimeGraphSync()
   }
 }

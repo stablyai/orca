@@ -28,14 +28,19 @@ export async function dispatchMobileStructuredCommand(input: {
   if (input.pending.current) {
     return 'rejected'
   }
+
   if (!isStructuredAgentSessionComposerCommand(input.text, input.controller.agent)) {
     return null
   }
+
   if (input.hasAttachments) {
     input.onError('Remove attachments before using a chat-session command.')
+
     return 'rejected'
   }
+
   let unknown = false
+
   const outcome = await dispatchStructuredAgentSessionComposerCommand(input.text, {
     ...input.controller,
     runConversationCommand: async (command) => {
@@ -45,13 +50,16 @@ export async function dispatchMobileStructuredCommand(input: {
           error: 'Wait for pending work to finish before using this command.'
         }
       }
+
       input.pending.current = true
       const key = `${input.sessionKey}:agentSession.conversationCommand:${command}`
+
       const clientOperationId = retainStructuredSessionOperationId(
         input.operationIds,
         key,
         input.operationIds.get(key)
       )
+
       try {
         const result =
           await requestStructuredAgentSessionMutation<AgentSessionConversationCommandResult>({
@@ -64,17 +72,21 @@ export async function dispatchMobileStructuredCommand(input: {
             clientOperationId,
             timeoutMs: Math.max(input.timeoutMs, 195_000)
           })
+
         if (
           result.status === 'unknown' ||
           (result.status === 'accepted' && result.value.state === 'unknown')
         ) {
           unknown = true
+
           return {
             accepted: false,
             error: 'Conversation operation is unconfirmed; retry checks the same operation.'
           }
         }
+
         input.operationIds.delete(key)
+
         return result.status === 'accepted'
           ? { accepted: !result.value.error, error: result.value.error ?? null }
           : { accepted: false, error: result.message }
@@ -83,8 +95,10 @@ export async function dispatchMobileStructuredCommand(input: {
       }
     }
   })
+
   if (outcome.error) {
     input.onError(outcome.error)
   }
+
   return unknown ? 'unknown' : outcome.accepted ? 'accepted' : 'rejected'
 }

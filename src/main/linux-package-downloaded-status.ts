@@ -9,10 +9,13 @@ import type { LinuxPackageArtifact } from './linux-package-update-recovery'
 
 export const LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE =
   'Orca could not verify the installed Linux package format, so it will not install this update automatically. Download the update from the official release page and install it manually.'
+
 export const LINUX_PACKAGE_EXTERNALLY_MANAGED_MESSAGE =
   'This copy of Orca is managed by your system package manager, so Orca cannot install updates itself. Update Orca through your distribution instead.'
+
 export const LINUX_PACKAGE_MANUAL_INSTALL_MESSAGE =
   'Quit Orca before running the system package install command.'
+
 const PACKAGE_METADATA_UNUSABLE_MESSAGE =
   'The downloaded package metadata could not be verified. Quit Orca before downloading and installing the update from the official release page.'
 
@@ -33,6 +36,7 @@ export function createLinuxPackageManualInstallStatus(
 
 export function getRetainedLinuxPackageManualInstallStatus(): UpdateStatus | null {
   const artifact = getTrackedLinuxPackageArtifact()
+
   return artifact ? createLinuxPackageManualInstallStatus(artifact) : null
 }
 
@@ -40,9 +44,11 @@ function getActiveDownloadVersion(status: UpdateStatus): string | null {
   if (status.state === 'downloading' || status.state === 'downloaded') {
     return status.version
   }
+
   if (status.state === 'error' && status.recovery?.kind === 'linux-package-install') {
     return status.recovery.version
   }
+
   return null
 }
 
@@ -52,6 +58,7 @@ export function shouldIgnoreDownloadedUpdateEvent(
   pendingVersion: string
 ): boolean {
   const activeDownloadVersion = getActiveDownloadVersion(status)
+
   return (
     activeDownloadVersion === null ||
     infoVersion !== activeDownloadVersion ||
@@ -63,11 +70,14 @@ export function resolveLinuxPackageDownloadedStatus(info: {
   version: string
 }): UpdateStatus | null {
   const packageType = getLinuxPackageType()
+
   if (packageType === 'non-root') {
     return null
   }
+
   if (packageType === 'unusable') {
     clearTrackedLinuxPackageArtifact()
+
     return {
       state: 'error',
       message: LINUX_PACKAGE_MARKER_UNUSABLE_MESSAGE,
@@ -75,7 +85,9 @@ export function resolveLinuxPackageDownloadedStatus(info: {
       retryable: false
     }
   }
+
   const artifact = captureLinuxPackageArtifact(info)
+
   if (!artifact) {
     return {
       state: 'error',
@@ -84,5 +96,6 @@ export function resolveLinuxPackageDownloadedStatus(info: {
       retryable: false
     }
   }
+
   return createLinuxPackageManualInstallStatus(artifact)
 }

@@ -61,6 +61,7 @@ describe('repo-search', () => {
 
   it('rejects oversized pasted queries before reading repo names or paths', () => {
     const oversizedQuery = 'secret-repo-search'.repeat(REPO_SEARCH_QUERY_MAX_BYTES)
+
     const repos = [
       {
         id: 'secret',
@@ -81,6 +82,7 @@ describe('repo-search', () => {
 
   it('rejects multibyte pasted queries before reading repo names or paths', () => {
     const oversizedQuery = '😀'.repeat(Math.floor(REPO_SEARCH_QUERY_MAX_BYTES / 4) + 1)
+
     const repos = [
       {
         id: 'secret',

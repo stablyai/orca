@@ -14,6 +14,7 @@ export function resolveGitHubLinkCopyState(
   if (state.workItemId === workItemId) {
     return state
   }
+
   return createGitHubLinkCopyState(workItemId)
 }
 
@@ -28,5 +29,6 @@ export function clearGitHubLinkCopied(
   if (state.workItemId !== workItemId || !state.copied) {
     return state
   }
+
   return createGitHubLinkCopyState(workItemId)
 }

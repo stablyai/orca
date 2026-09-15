@@ -12,10 +12,13 @@ export async function preflightAgentTrust(args: {
   if (!args.agent || !args.workspacePath || !window.api.agentTrust?.markTrusted) {
     return
   }
+
   const preset = TUI_AGENT_CONFIG[args.agent].preflightTrust
+
   if (!preset) {
     return
   }
+
   try {
     await window.api.agentTrust.markTrusted({
       preset,

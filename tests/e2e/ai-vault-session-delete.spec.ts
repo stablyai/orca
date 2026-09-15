@@ -29,8 +29,10 @@ async function findSession(
       executionHostScope: 'local',
       force: true
     })
+
     return result.sessions
   })) as AiVaultSession[]
+
   return sessions.find((session) => session.agent === agent && session.title === title)
 }
 

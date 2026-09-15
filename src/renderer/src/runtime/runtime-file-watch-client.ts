@@ -47,22 +47,28 @@ export async function subscribeRuntimeFileChanges(
   onError?: (error: Error) => void
 ): Promise<() => void> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind !== 'environment' || !context.worktreeId || !context.worktreePath) {
     return window.api.fs.onFsChanged(onPayload)
   }
 
   const listener: RuntimeFileWatchListener = { onPayload, onError }
+
   const key = getSharedRuntimeFileWatchKey(
     target.environmentId,
     context.worktreeId,
     context.worktreePath
   )
+
   let shared = sharedRuntimeFileWatches.get(key)
+
   if (!shared) {
     shared = createSharedRuntimeFileWatch(key, target, context.worktreeId, context.worktreePath)
     sharedRuntimeFileWatches.set(key, shared)
   }
+
   shared.listeners.add(listener)
+
   try {
     await shared.start
   } catch (err) {
@@ -72,10 +78,13 @@ export async function subscribeRuntimeFileChanges(
 
   return () => {
     const current = sharedRuntimeFileWatches.get(key)
+
     if (!current) {
       return
     }
+
     current.listeners.delete(listener)
+
     if (current.listeners.size === 0) {
       closeSharedRuntimeFileWatch(key, current)
     }
@@ -98,6 +107,7 @@ function createSharedRuntimeFileWatch(
     keepStreamUntilReady: isWebRuntimeFileWatchSharedSocket(),
     closed: false
   }
+
   // Why: editor reloads and the Explorer can watch the same remote worktree.
   // Keep one runtime WebSocket/server watcher and fan out events in renderer.
   shared.start = window.api.runtimeEnvironments
@@ -119,6 +129,7 @@ function createSharedRuntimeFileWatch(
           if (sharedRuntimeFileWatches.get(key) === shared) {
             sharedRuntimeFileWatches.delete(key)
           }
+
           shared.closed = true
           shared.unsubscribe = null
         }
@@ -126,9 +137,11 @@ function createSharedRuntimeFileWatch(
     )
     .then((subscription) => {
       shared.unsubscribe = subscription.unsubscribe
+
       if (shared.closed || sharedRuntimeFileWatches.get(key) !== shared) {
         subscription.unsubscribe()
         shared.unsubscribe = null
+
         if (!shared.keepStreamUntilReady) {
           unwatchSharedRuntimeFileWatch(shared)
         }
@@ -138,6 +151,7 @@ function createSharedRuntimeFileWatch(
       failSharedRuntimeFileWatch(key, shared, err instanceof Error ? err : new Error(String(err)))
       throw err
     })
+
   return shared
 }
 
@@ -151,11 +165,14 @@ function handleSharedRuntimeFileWatchResponse(
     const event = unwrapRuntimeRpcResult<RuntimeFileWatchEvent>(
       response as RuntimeRpcResponse<RuntimeFileWatchEvent>
     )
+
     if (event.type === 'starting' || event.type === 'ready') {
       shared.remoteSubscriptionId = event.subscriptionId
+
       if (shared.closed) {
         shared.unsubscribe?.()
         shared.unsubscribe = null
+
         if (!shared.keepStreamUntilReady) {
           unwatchSharedRuntimeFileWatch(shared)
         }
@@ -174,6 +191,7 @@ function handleSharedRuntimeFileWatchResponse(
       if (sharedRuntimeFileWatches.get(key) === shared) {
         sharedRuntimeFileWatches.delete(key)
       }
+
       shared.closed = true
       const unsubscribe = shared.unsubscribe
       shared.unsubscribe = null
@@ -194,6 +212,7 @@ function failSharedRuntimeFileWatch(
   if (sharedRuntimeFileWatches.get(key) === shared) {
     sharedRuntimeFileWatches.delete(key)
   }
+
   shared.closed = true
   shared.remoteSubscriptionId = null
   const unsubscribe = shared.unsubscribe
@@ -201,6 +220,7 @@ function failSharedRuntimeFileWatch(
   const listeners = Array.from(shared.listeners)
   shared.listeners.clear()
   unsubscribe?.()
+
   for (const listener of listeners) {
     listener.onError?.(error)
   }
@@ -210,15 +230,19 @@ function closeSharedRuntimeFileWatch(key: string, shared: SharedRuntimeFileWatch
   if (shared.closed) {
     return
   }
+
   shared.closed = true
   sharedRuntimeFileWatches.delete(key)
+
   if (shared.keepStreamUntilReady) {
     // Why: WebRuntimeClient owns shared-socket file-watch cleanup, including
     // pre-ready cancellation ownership and late-ready files.unwatch.
     shared.unsubscribe?.()
     shared.unsubscribe = null
+
     return
   }
+
   shared.unsubscribe?.()
   shared.unsubscribe = null
   unwatchSharedRuntimeFileWatch(shared)
@@ -232,6 +256,7 @@ function unwatchSharedRuntimeFileWatch(shared: SharedRuntimeFileWatch): void {
   if (!shared.remoteSubscriptionId) {
     return
   }
+
   void callRuntimeRpc(
     shared.target,
     'files.unwatch',

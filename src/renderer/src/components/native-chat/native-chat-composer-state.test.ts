@@ -48,9 +48,11 @@ describe('deriveComposerAutocomplete — slash', () => {
   it('enters slash mode for `/` at the start and filters by query', () => {
     const result = deriveComposerAutocomplete('/cl', 3, COMMANDS)
     expect(result.mode).toBe('slash')
+
     if (result.mode !== 'slash') {
       return
     }
+
     expect(result.query).toBe('cl')
     expect(result.items.map((item) => item.name)).toEqual(['clear'])
   })
@@ -58,9 +60,11 @@ describe('deriveComposerAutocomplete — slash', () => {
   it('a bare `/` returns the full command list', () => {
     const result = deriveComposerAutocomplete('/', 1, COMMANDS)
     expect(result.mode).toBe('slash')
+
     if (result.mode !== 'slash') {
       return
     }
+
     expect(result.items).toHaveLength(3)
   })
 
@@ -77,18 +81,22 @@ describe('deriveComposerAutocomplete — mention', () => {
   it('enters mention mode with the query after `@`', () => {
     const result = deriveComposerAutocomplete('look at @src/ind', 16, COMMANDS)
     expect(result.mode).toBe('mention')
+
     if (result.mode !== 'mention') {
       return
     }
+
     expect(result.query).toBe('src/ind')
   })
 
   it('fires at the start of input too', () => {
     const result = deriveComposerAutocomplete('@foo', 4, COMMANDS)
     expect(result.mode).toBe('mention')
+
     if (result.mode !== 'mention') {
       return
     }
+
     expect(result.query).toBe('foo')
   })
 
@@ -102,14 +110,17 @@ describe('deriveComposerAutocomplete — one grammar for every agent', () => {
     skill({ name: 'typescript' }),
     skill({ name: 'react-useeffect', directoryPath: '/repo/.agents/skills/react-useeffect' })
   ]
+
   const codex = getNativeChatAgentProfile('codex')
 
   it('offers Codex skills under `/`, tokenised as the form Codex invokes', () => {
     const result = deriveComposerAutocomplete('use /type', 9, COMMANDS, skills, codex)
     expect(result.mode).toBe('slash')
+
     if (result.mode !== 'slash') {
       return
     }
+
     expect(result.query).toBe('type')
     expect(result.items.map((entry) => entry.token)).toEqual(['$typescript'])
   })
@@ -206,6 +217,7 @@ describe('apply suggestions', () => {
       description: null,
       sources: []
     })
+
     expect(result.draft).toBe('use $typescript  now')
     expect(result.caret).toBe('use $typescript '.length)
     expect(result.insertedToken).toBe('$typescript')
@@ -221,10 +233,13 @@ describe('native skill and command picker', () => {
       [skill({ name: 'browser' })],
       getNativeChatAgentProfile('codex')
     )
+
     expect(slash.mode).toBe('slash')
+
     if (slash.mode !== 'slash') {
       return
     }
+
     expect(slash.grouped).toBe(true)
     expect(slash.items.filter((item) => item.kind === 'command').map((item) => item.token)).toEqual(
       ['/clear', '/compact', '/help']
@@ -242,10 +257,13 @@ describe('native skill and command picker', () => {
       [skill({ name: 'clear' })],
       getNativeChatAgentProfile('codex')
     )
+
     expect(result.mode).toBe('slash')
+
     if (result.mode !== 'slash') {
       return
     }
+
     expect(result.items.map((item) => item.token)).toEqual(['/clear', '$clear'])
     expect(result.items.find((item) => item.kind === 'command')?.skillCollision).toBe(false)
   })
@@ -256,12 +274,15 @@ describe('native skill and command picker', () => {
       [skill({ name: 'electron' })],
       getNativeChatAgentProfile('claude')
     ] as const
+
     const leading = deriveComposerAutocomplete('/', 1, ...args)
     const midPrompt = deriveComposerAutocomplete('validate it with /', 18, ...args)
     expect(midPrompt.mode).toBe('slash')
+
     if (midPrompt.mode !== 'slash' || leading.mode !== 'slash') {
       return
     }
+
     expect(midPrompt.items).toEqual(leading.items)
     expect(midPrompt.items.map((item) => item.kind)).toContain('command')
     expect(midPrompt.items.map((item) => item.kind)).toContain('skill')
@@ -276,7 +297,9 @@ describe('native skill and command picker', () => {
       [skill({ name: 'electron' })],
       getNativeChatAgentProfile('claude')
     )
+
     expect(result.mode).toBe('slash')
+
     if (result.mode === 'slash') {
       expect(result.prefix).toBe('/')
       expect(result.items.map((item) => item.name)).toEqual(['electron'])
@@ -311,10 +334,13 @@ describe('native skill and command picker', () => {
       [skill({ name: 'electron' })],
       getNativeChatAgentProfile('codex')
     )
+
     expect(result.mode).toBe('slash')
+
     if (result.mode !== 'slash') {
       return
     }
+
     expect(result.dispatchable).toBe(false)
     expect(result.items.map((item) => item.token)).toEqual(['$electron'])
   })
@@ -340,6 +366,7 @@ describe('native skill and command picker', () => {
       description: null,
       sources: []
     })
+
     expect(result.draft).toBe('validate it with /electron  now')
     expect(result.caret).toBe('validate it with /electron '.length)
   })
@@ -352,7 +379,9 @@ describe('native skill and command picker', () => {
       [skill({ name: 'browser' })],
       getNativeChatAgentProfile('claude')
     )
+
     expect(result.mode).toBe('slash')
+
     if (result.mode === 'slash') {
       expect(result.grouped).toBe(true)
       expect(result.items.map((item) => item.kind)).toContain('command')
@@ -376,6 +405,7 @@ describe('native skill and command picker', () => {
       '/',
       ['dataviz', 'ref-oss']
     )
+
     // The scanned-but-unreported skill is gone; the reported-but-unscanned one is
     // offered without a scope, and sorts after the one the scan located.
     expect(items.map((item) => item.name)).toEqual(['ref-oss', 'dataviz'])
@@ -391,6 +421,7 @@ describe('native skill and command picker', () => {
       '/',
       undefined
     )
+
     expect(items.map((item) => item.name)).toEqual(['ref-oss'])
     expect(buildNativeChatPickerItems([], [skill({})], '', '/', [])).toEqual([])
   })
@@ -416,6 +447,7 @@ describe('native skill and command picker', () => {
       'deploy',
       '$'
     )
+
     expect(items.map((item) => item.name)).toEqual([
       'deploy',
       'deployment',
@@ -429,6 +461,7 @@ describe('native skill and command picker', () => {
       skill({ name: 'clear', skillFilePath: '/project/clear/SKILL.md', sourceKind: 'repo' }),
       skill({ name: 'clear', skillFilePath: '/home/clear/SKILL.md', sourceKind: 'home' })
     ]
+
     const skillOnly = buildNativeChatPickerItems([], duplicateSkills, '', '$')
     expect(skillOnly).toEqual([
       expect.objectContaining({ kind: 'skill', name: 'clear', sources: expect.any(Array) })
@@ -443,12 +476,14 @@ describe('native skill and command picker', () => {
 
   it('keeps a long token-safe name intact for insertion instead of truncating it', () => {
     const longName = `skill-${'x'.repeat(100)}`
+
     const items = buildNativeChatPickerItems(
       [],
       [skill({ name: longName, skillFilePath: '/long/SKILL.md' })],
       '',
       '$'
     )
+
     expect(items.map((item) => item.name)).toEqual([longName])
     const applied = applyPickerSuggestion('/sk', 3, items[0])
     expect(applied.draft).toBe(`$${longName} `)
@@ -467,6 +502,7 @@ describe('native skill and command picker', () => {
       '',
       '$'
     )
+
     expect(items.map((item) => item.name)).toEqual(['safe-dir'])
   })
 
@@ -483,6 +519,7 @@ describe('native skill and command picker', () => {
       '',
       '$'
     )
+
     expect(items.map((item) => item.name)).toEqual(['safe-name'])
   })
 
@@ -495,6 +532,7 @@ describe('native skill and command picker', () => {
       description: null,
       sources: []
     })
+
     expect(result.draft).toBe('/browser  trailing')
     expect(result.caret).toBe('/browser '.length)
   })
@@ -555,10 +593,12 @@ it('preserves known skill completion for unclassified session members only', () 
     { name: 'typescript', kind: 'command', kindUnspecified: true },
     { name: 'project-check', kind: 'command', kindUnspecified: true }
   ])
+
   const diskSkills = [
     skill({ description: 'TypeScript skill' }),
     skill({ name: 'not-loaded', skillFilePath: '/not-loaded/SKILL.md' })
   ]
+
   const items = buildNativeChatPickerItems(commands, diskSkills, '', '/', [])
   expect(items.map(({ name, kind }) => ({ name, kind }))).toEqual([
     { name: 'clear', kind: 'command' },
@@ -569,9 +609,11 @@ it('preserves known skill completion for unclassified session members only', () 
     description: 'TypeScript skill',
     sources: [{ sourceKind: 'repo' }]
   })
+
   const classified = sessionSlashCommandSuggestions('claude', [
     { name: 'typescript', kind: 'command' }
   ])
+
   expect(
     buildNativeChatPickerItems(classified, diskSkills, '', '/', []).map(({ kind }) => kind)
   ).toEqual(['command'])

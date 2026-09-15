@@ -22,12 +22,14 @@ const { popoverHandle, runWorkspacePortScanForTargetMock, storeState } = vi.hois
         ) => void
       >()
   }
+
   // Why: the real store writes back. A bare spy lets a publish and the notice
   // that reads it drift onto different scan keys with every assertion green.
   storeState.replaceWorkspacePortScans.mockImplementation((scansByKey, projection) => {
     storeState.workspacePortScansByKey = scansByKey
     storeState.workspacePortScan = projection
   })
+
   return {
     popoverHandle: { onOpenChange: null as ((open: boolean) => void) | null },
     runWorkspacePortScanForTargetMock: vi.fn(),
@@ -40,6 +42,7 @@ vi.mock('@/store', () => {
     (selector: (state: typeof storeState) => unknown) => selector(storeState),
     { getState: () => storeState }
   )
+
   return { useAppStore }
 })
 
@@ -48,15 +51,18 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
     if (worktreeId === 'runtime-repo::/srv/app') {
       return 'runtime:env-1'
     }
+
     if (worktreeId === 'ssh-repo::/srv/app') {
       return 'ssh:server-1'
     }
+
     return 'local'
   }
 }))
 
 vi.mock('@/runtime/runtime-rpc-client', async () => {
   const actual = await import('@/runtime/runtime-client-target')
+
   return {
     getActiveRuntimeTarget: actual.getActiveRuntimeTarget,
     callRuntimeRpc: vi.fn(),
@@ -84,6 +90,7 @@ vi.mock('@/components/ui/popover', () => ({
     onOpenChange: (open: boolean) => void
   }) => {
     popoverHandle.onOpenChange = onOpenChange
+
     return <>{children}</>
   },
   PopoverContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -202,6 +209,7 @@ describe('PortsStatusSegment popover host routing', () => {
       Record<string, WorkspacePortScanResult>,
       { key: string; result: WorkspacePortScanResult }
     ]
+
     expect(projection).toEqual({
       key: 'all-hosts:all',
       result: expect.objectContaining({
@@ -222,6 +230,7 @@ describe('PortsStatusSegment popover host routing', () => {
       Record<string, WorkspacePortScanResult>,
       { key: string; result: WorkspacePortScanResult }
     ]
+
     expect(projection.key).toBe('all-hosts:all')
     expect(projection.result.ports).toEqual([expect.objectContaining({ port: 5173 })])
     expect(storeState.workspacePortScansByKey['environment:env-1:all']).toEqual(
@@ -245,10 +254,12 @@ describe('PortsStatusSegment popover host routing', () => {
     expect(failed.unavailableReason).toBe('remote scan failed')
     expect(failed.platform).toBe('linux')
     expect(failed.ports).toEqual([expect.objectContaining({ port: 3000 })])
+
     const [, projection] = storeState.replaceWorkspacePortScans.mock.calls.at(-1) as [
       Record<string, WorkspacePortScanResult>,
       { key: string; result: WorkspacePortScanResult }
     ]
+
     expect(projection.key).toBe('all-hosts:all')
     expect(projection.result.ports.map((port) => port.port).sort()).toEqual([3000, 5173])
   })
@@ -303,10 +314,12 @@ describe('PortsStatusSegment popover host routing', () => {
       root.unmount()
     })
     storeState.activeWorktreeId = 'local-repo::/home/dev/app'
+
     const retained: WorkspacePortScanResult = {
       ...localHostScan,
       unavailableReason: 'lsof is unavailable'
     }
+
     storeState.workspacePortScansByKey = { 'local:all': retained }
     storeState.workspacePortScan = { key: 'local:all', result: retained }
     root = createRoot(container)
@@ -325,12 +338,14 @@ describe('PortsStatusSegment popover host routing', () => {
     act(() => {
       root.unmount()
     })
+
     const merged: WorkspacePortScanResult = {
       platform: 'unknown',
       scannedAt: 30,
       ports: [],
       unavailableReason: 'local:all: lsof is unavailable; environment:env-1:all: dropped'
     }
+
     storeState.workspacePortScansByKey = {
       'local:all': {
         platform: 'darwin',
@@ -377,10 +392,12 @@ describe('PortsStatusSegment popover host routing', () => {
     await openPopover()
 
     expect(runWorkspacePortScanForTargetMock).toHaveBeenCalledWith({ kind: 'local' }, undefined)
+
     const [nextScans, projection] = storeState.replaceWorkspacePortScans.mock.calls.at(-1) as [
       Record<string, WorkspacePortScanResult>,
       { key: string; result: WorkspacePortScanResult }
     ]
+
     expect(nextScans['local:all']).toBe(remoteHostScan)
     expect(projection).toEqual({
       key: 'local:all',

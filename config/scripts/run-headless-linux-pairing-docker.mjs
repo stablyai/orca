@@ -4,22 +4,33 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const STARTUP_TIMEOUT_MS = 20_000
+
 const APPIMAGE_EXTRACTION_TIMEOUT_MS = 60_000
+
 const commandArgs = process.argv.slice(2)
+
 const appImageArg = valueAfter('--appimage')
+
 const pairingOnly = commandArgs.includes('--pairing-only')
+
 if (!appImageArg) {
   fail('Usage: run-headless-linux-pairing-docker.mjs --appimage /path/to/orca.AppImage')
 }
+
 const appImage = resolve(appImageArg)
+
 if (!existsSync(appImage)) {
   fail(`AppImage not found: ${appImage}`)
 }
 
 const suffix = `${process.pid}-${Date.now()}`
+
 const artifactVolume = `orca-headless-pairing-artifact-${suffix}`
+
 const network = `orca-headless-pairing-${suffix}`
+
 const containers = new Set()
+
 const images = [
   {
     name: 'ubuntu-24.04',
@@ -44,14 +55,18 @@ const images = [
 try {
   docker(['volume', 'create', artifactVolume])
   docker(['network', 'create', network])
+
   for (const image of pairingOnly ? images.slice(0, 2) : images) {
     buildImage(image)
   }
+
   extractAppImage(images[0].tag)
+
   if (!pairingOnly) {
     await validateStartupMatrix()
     await validateUnavailableContracts()
   }
+
   await validateAuthenticatedPairing()
   await validateUnreachableOffer()
   console.log('Headless Linux pairing Docker validation passed.')
@@ -59,17 +74,20 @@ try {
   for (const container of containers) {
     docker(['rm', '-f', container], { allowFailure: true })
   }
+
   docker(['network', 'rm', network], { allowFailure: true })
   docker(['volume', 'rm', artifactVolume], { allowFailure: true })
 }
 
 function valueAfter(flag) {
   const index = commandArgs.indexOf(flag)
+
   return index === -1 ? null : (commandArgs[index + 1] ?? null)
 }
 
 function buildImage(image) {
   console.log(`Building ${image.name} fixture...`)
+
   const buildArgs = [
     'build',
     '--build-arg',
@@ -82,6 +100,7 @@ function buildImage(image) {
     image.tag,
     '.'
   ]
+
   // Why: apt fetches from archive.ubuntu.com stall or fail mid-sync; a second build usually lands on a healthy index.
   try {
     docker(buildArgs)
@@ -113,6 +132,7 @@ function extractAppImage(image) {
 
 async function validateStartupMatrix() {
   const required = images.slice(0, 2)
+
   for (const image of required) {
     for (const launch of ['direct', 'xvfb', 'dbus-xvfb', 'journal']) {
       for (const mode of ['human', 'json']) {
@@ -125,12 +145,14 @@ async function validateStartupMatrix() {
       }
     }
   }
+
   const baseline = await startAndWait({
     image: images[2],
     launch: 'xvfb',
     mode: 'json',
     address: '127.0.0.1'
   })
+
   validateReady(baseline.stdout, 'json', '127.0.0.1', { allowStdoutNoise: true })
   stopContainer(baseline.name)
   console.log(`PASS ${images[2].name} xvfb json`)
@@ -143,6 +165,7 @@ async function validateStartupMatrix() {
     appPath: '/artifacts/orca.AppImage',
     startupTimeoutMs: APPIMAGE_EXTRACTION_TIMEOUT_MS
   })
+
   validateReady(publicEntry.stdout, 'json', '127.0.0.1', { allowStdoutNoise: true })
   stopContainer(publicEntry.name)
   console.log('PASS AppImage --appimage-extract-and-run --no-sandbox serve')
@@ -155,6 +178,7 @@ async function validateUnavailableContracts() {
     mode: 'json',
     address: '0.0.0.0'
   })
+
   const invalidPayload = readyJson(invalid.stdout)
   assert(invalidPayload.pairing?.available === false, 'wildcard pairing must be unavailable')
   assert(
@@ -170,6 +194,7 @@ async function validateUnavailableContracts() {
     address: '127.0.0.1',
     noPairing: true
   })
+
   const disabledPayload = readyJson(disabled.stdout)
   assert(disabledPayload.pairing?.reason === 'disabled_by_operator', 'disabled reason is missing')
   stopContainer(disabled.name)
@@ -185,6 +210,7 @@ async function validateAuthenticatedPairing() {
     port: '6768',
     networkAlias: 'orca-pairing-server'
   })
+
   const payload = readyJson(server.stdout)
   const client = runPairingClient(payload.pairing.url)
   assert(client.status === 0, `pairing client failed:\n${client.stderr}\n${client.stdout}`)
@@ -229,6 +255,7 @@ async function validateUnreachableOffer() {
     port: '6768',
     networkAlias: 'orca-pairing-server'
   })
+
   const payload = readyJson(server.stdout)
   const client = runPairingClient(payload.pairing.url)
   assert(client.status !== 0, 'a deliberately mismatched advertised port unexpectedly connected')
@@ -248,6 +275,7 @@ async function startAndWait({
   startupTimeoutMs = STARTUP_TIMEOUT_MS
 }) {
   const name = `orca-pairing-${suffix}-${containers.size}`
+
   const args = [
     'run',
     '-d',
@@ -277,31 +305,39 @@ async function startAndWait({
     image.tag,
     launch
   ]
+
   docker(args)
   containers.add(name)
   const stdout = await waitForReady(name, startupTimeoutMs)
+
   return { name, stdout }
 }
 
 async function waitForReady(name, startupTimeoutMs) {
   const deadline = Date.now() + startupTimeoutMs
+
   while (Date.now() < deadline) {
     const logResult = docker(['logs', name], { allowFailure: true })
     const stdout = `${logResult.stdout}${logResult.stderr}`
+
     if (hasCompleteReadyContract(stdout)) {
       return stdout
     }
+
     const running = docker(['inspect', '-f', '{{.State.Running}}', name], {
       allowFailure: true
     }).stdout.trim()
+
     if (running === 'false') {
       const containerLogs = docker(['logs', name], { allowFailure: true })
       throw new Error(
         `${name} exited before readiness:\n${containerLogs.stdout}${containerLogs.stderr}`
       )
     }
+
     await new Promise((resolveWait) => setTimeout(resolveWait, 100))
   }
+
   const logResult = docker(['logs', name], { allowFailure: true })
   throw new Error(
     `${name} did not emit readiness within ${startupTimeoutMs}ms:\n${logResult.stdout}${logResult.stderr}`
@@ -315,6 +351,7 @@ function hasCompleteReadyContract(stdout) {
   ) {
     return true
   }
+
   return readyJsonObjects(stdout).length > 0
 }
 
@@ -330,8 +367,10 @@ function validateReady(logs, mode, expectedHost, options = {}) {
       'human advertised endpoint is missing'
     )
     assert(logs.includes('Pairing URL: orca://pair?code='), 'human pairing URL is missing')
+
     return
   }
+
   if (!options.allowStdoutNoise) {
     const stdoutLines = logs.split(/\r?\n/).filter(Boolean)
     assert(
@@ -339,6 +378,7 @@ function validateReady(logs, mode, expectedHost, options = {}) {
       `JSON stdout must contain exactly one line, found ${stdoutLines.length}:\n${logs}`
     )
   }
+
   const payload = readyJson(logs)
   assert(payload.schemaVersion === 1, 'ready JSON schemaVersion is missing')
   assert(payload.endpoint === payload.boundEndpoint, 'legacy JSON endpoint alias is inconsistent')
@@ -354,15 +394,18 @@ function validateReady(logs, mode, expectedHost, options = {}) {
 function readyJson(logs) {
   const matches = readyJsonObjects(logs)
   assert(matches.length === 1, `expected one ready JSON object, found ${matches.length}`)
+
   return matches[0]
 }
 
 function readyJsonObjects(logs) {
   const marker = '{"type":"orca_server_ready"'
+
   return logs
     .split(/\r?\n/)
     .map((line) => {
       const markerIndex = line.indexOf(marker)
+
       return markerIndex === -1 ? null : parseJson(line.slice(markerIndex))
     })
     .filter((value) => value?.type === 'orca_server_ready')
@@ -419,6 +462,7 @@ function docker(args, options = {}) {
       stdio: options.allowFailure ? 'pipe' : ['ignore', 'pipe', 'inherit'],
       timeout: options.timeout
     })
+
     return { status: 0, stdout, stderr: '' }
   } catch (error) {
     const result = {
@@ -426,9 +470,11 @@ function docker(args, options = {}) {
       stdout: String(error.stdout ?? ''),
       stderr: String(error.stderr ?? error.message)
     }
+
     if (!options.allowFailure) {
       throw new Error(`docker ${args[0]} failed:\n${result.stderr}\n${result.stdout}`)
     }
+
     return result
   }
 }

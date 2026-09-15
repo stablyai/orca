@@ -9,6 +9,7 @@ import { terminalQuickCommandMatchesWorkspaceProject } from './terminal-quick-co
 type ScopeSetup = Pick<ProjectHostSetup, 'hostId' | 'projectId' | 'repoId'>
 
 const LOCAL_REPO_ID = '32a0226d-9f33-42e8-8b7b-24867dea06d4'
+
 const WINDOWS_REPO_ID = 'a0a2b4a4-1bff-494c-b005-d77918abc6a7'
 
 function command(repoId: string): TerminalQuickCommand {
@@ -65,6 +66,7 @@ describe('terminalQuickCommandMatchesWorkspaceProject', () => {
       },
       ...(executionHostId ? { executionHostId } : {})
     })
+
     const projectHostSetups = projectHostSetupProjectionFromRepos([
       repo(LOCAL_REPO_ID, '/Users/alice/orca'),
       repo(WINDOWS_REPO_ID, 'C:\\Users\\alice\\orca', 'runtime:windows-2')
@@ -168,6 +170,7 @@ describe('terminalQuickCommandMatchesWorkspaceProject', () => {
       ...command(LOCAL_REPO_ID),
       scope: { type: 'global' }
     }
+
     const context = {
       commandHostId: 'local' as const,
       projectHostSetups: [],

@@ -28,14 +28,19 @@ const GC_MIN_AGE_MS = 5 * 60 * 1000
 // tens of thousands of libuv requests before the first completes. 16 is deep enough to
 // keep the default 4-thread pool saturated without monopolising the disk during startup.
 const HISTORY_GC_SCAN_CONCURRENCY = 16
+
 // Why yield at all when every step already awaits I/O: a fully cached root resolves each
 // await in a microtask, which never returns to the macrotask queue. This bounds that run.
 const HISTORY_GC_YIELD_EVERY = 32
 
 let scheduledHistoryGcTimer: ReturnType<typeof setTimeout> | null = null
+
 let historyGcStarting = false
+
 let historyGcCancelled = false
+
 let activeHistoryGc: Promise<void> | null = null
+
 let activeHistoryGcAbort: AbortController | null = null
 
 type GcRootScan = {
@@ -55,23 +60,28 @@ async function gcScanEntry(
   result: GcRootScan
 ): Promise<void> {
   const entryPath = join(root, entry.name)
+
   try {
     // Why stat only for links: a dirent describes the link itself, and the pre-dirent walk
     // stat'd every entry, so a symlink to a history directory was and stays a directory here.
     const isDirectory = entry.isSymbolicLink()
       ? (await stat(entryPath)).isDirectory()
       : entry.isDirectory()
+
     if (!isDirectory) {
       return
     }
+
     result.totalDirs++
 
     // A missing, truncated, oversized or malformed meta.json reads back as null, and a
     // null meta is never pruned — an entry whose ownership we cannot establish is kept.
     const meta = await readHistoryMetaAsync(entryPath)
+
     if (meta?.fishHistoryDir) {
       result.fishHistoryDirs.add(meta.fishHistoryDir)
     }
+
     if (!meta?.worktreeId) {
       return
     }
@@ -82,12 +92,14 @@ async function gcScanEntry(
       // GC_MIN_AGE_MS are presumed still live and skipped.
       if (meta.createdAt) {
         const ageMs = now - new Date(meta.createdAt).getTime()
+
         if (ageMs < GC_MIN_AGE_MS) {
           return
         }
       }
 
       result.orphaned++
+
       // Why: a large orphaned tree recursive-rm'd here would stall the main process ~10s after
       // launch — the same freeze the explicit-delete path already tombstones its way out of.
       if (scheduleWorktreeHistoryTreeDeletion(entryPath, root)) {
@@ -114,6 +126,7 @@ async function gcScanRoot(
   }
 
   let entries: Dirent[]
+
   try {
     // Why withFileTypes: the root listing already carries each entry's type, so asking for it
     // here removes one stat per history directory from the startup pass.
@@ -134,12 +147,15 @@ async function gcScanRoot(
       if (signal.aborted) {
         return
       }
+
       await gcScanEntry(root, entry, liveWorktreeIds, now, result)
+
       if (index % HISTORY_GC_YIELD_EVERY === HISTORY_GC_YIELD_EVERY - 1) {
         await yieldToEventLoop()
       }
     }
   )
+
   return result
 }
 
@@ -149,6 +165,7 @@ async function executeHistoryGc(liveWorktreeIds: Set<string>, signal: AbortSigna
     // Safe ahead of the guard below: these entries were already condemned by a
     // completed GC, and leaving them renamed-but-present strands disk forever.
     schedulePendingHistoryTreeRemovals(getHistoryRoot())
+
     // Why refuse rather than treat every entry as orphaned: an empty live set is
     // what a store that fell back to default state looks like, and it cannot be
     // told apart from a user who genuinely has no worktrees — who also has no
@@ -158,22 +175,27 @@ async function executeHistoryGc(liveWorktreeIds: Set<string>, signal: AbortSigna
     // this is the path that deletes more.
     if (liveWorktreeIds.size === 0) {
       console.log('[pty:history:gc] Skipped: live worktree set is empty')
+
       return
     }
+
     const main = await gcScanRoot(getHistoryRoot(), liveWorktreeIds, signal)
 
     // Also scan WSL history directories (each distro has its own subdirectory).
     const wslTotals = { totalDirs: 0, orphaned: 0, pruned: 0 }
     const liveFishHistoryDirs = new Set(main.fishHistoryDirs)
+
     for (const distroRoot of listWslHistoryRoots()) {
       if (signal.aborted) {
         break
       }
+
       schedulePendingHistoryTreeRemovals(distroRoot)
       const r = await gcScanRoot(distroRoot, liveWorktreeIds, signal)
       wslTotals.totalDirs += r.totalDirs
       wslTotals.orphaned += r.orphaned
       wslTotals.pruned += r.pruned
+
       for (const dir of r.fishHistoryDirs) {
         liveFishHistoryDirs.add(dir)
       }
@@ -181,6 +203,7 @@ async function executeHistoryGc(liveWorktreeIds: Set<string>, signal: AbortSigna
 
     if (signal.aborted) {
       console.log('[pty:history:gc] Cancelled mid-scan')
+
       return
     }
 
@@ -190,14 +213,17 @@ async function executeHistoryGc(liveWorktreeIds: Set<string>, signal: AbortSigna
     // one with nothing left to point at it. Collecting the dirs the live meta
     // files name covers a machine whose XDG_DATA_HOME changed between runs.
     const fishDirs = new Set([resolveFishHistoryDir()])
+
     for (const dir of liveFishHistoryDirs) {
       fishDirs.add(dir)
     }
+
     const fishOrphans = sweepOrphanedFishHistoryFiles(
       new Set([...liveWorktreeIds].map(hashWorktreeId)),
       fishDirs,
       GC_MIN_AGE_MS
     )
+
     if (fishOrphans > 0) {
       console.log(`[pty:history:gc] Swept ${fishOrphans} orphaned fish history file(s)`)
     }
@@ -221,12 +247,14 @@ export function runHistoryGc(liveWorktreeIds: Set<string>): Promise<void> {
   if (activeHistoryGc) {
     return activeHistoryGc
   }
+
   const controller = new AbortController()
   activeHistoryGcAbort = controller
   activeHistoryGc = executeHistoryGc(liveWorktreeIds, controller.signal).finally(() => {
     activeHistoryGc = null
     activeHistoryGcAbort = null
   })
+
   return activeHistoryGc
 }
 
@@ -236,6 +264,7 @@ export function cancelHistoryGc(): void {
     clearTimeout(scheduledHistoryGcTimer)
     scheduledHistoryGcTimer = null
   }
+
   // Why a flag as well: the timer has already fired while the live-worktree lookup is
   // in flight, and there is no controller to abort until the scan itself starts.
   historyGcCancelled = true
@@ -250,17 +279,21 @@ export function scheduleHistoryGc(getLiveWorktreeIds: () => Promise<Set<string>>
   if (scheduledHistoryGcTimer !== null || historyGcStarting || activeHistoryGc !== null) {
     return
   }
+
   historyGcCancelled = false
   // Why 10s: avoids competing with startup-critical I/O while still running
   // early enough to clean up before the user notices disk usage (§7.6).
   scheduledHistoryGcTimer = setTimeout(async () => {
     scheduledHistoryGcTimer = null
     historyGcStarting = true
+
     try {
       const liveIds = await getLiveWorktreeIds()
+
       if (historyGcCancelled) {
         return
       }
+
       await runHistoryGc(liveIds)
     } catch (err) {
       console.warn(

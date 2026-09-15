@@ -27,20 +27,26 @@ export function buildDocPreviewGrantRequest(
   const root = dirname(filePath)
   const requestBase = worktreeRoot && worktreeRelativePath ? worktreeRoot : root
   const entryRelativePath = worktreeRelativePath ?? basename(filePath)
+
   if (!requestBase || !root || !entryRelativePath) {
     return null
   }
+
   const connectionId = getConnectionIdForFileFromState(state, worktreeId, filePath)
+
   if (connectionId) {
     // Outside a workspace there is no broader request base: the document directory bounds
     // resolution, and main starts such a grant at the entry file alone — an out-of-workspace
     // directory is often a home directory, which is where secrets live.
     return { owner: { kind: 'ssh', connectionId }, requestBase, root, entryRelativePath }
   }
+
   const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+
   if (!environmentId || !worktreeRoot || !worktreeRelativePath) {
     return null
   }
+
   return {
     owner: {
       kind: 'runtime',
@@ -59,9 +65,11 @@ export function ensureDocPreviewGrant(
   location: DocPreviewGrantLocation
 ): Promise<DocPreviewGrantHandle> {
   const existing = grantsByPreviewId.get(previewId)
+
   if (existing) {
     return existing
   }
+
   const pending: Promise<DocPreviewGrantHandle> = window.api.docPreview
     .mintGrant({ ...location, browserPageId: previewId })
     .catch((error: unknown) => {
@@ -70,17 +78,22 @@ export function ensureDocPreviewGrant(
       if (grantsByPreviewId.get(previewId) === pending) {
         grantsByPreviewId.delete(previewId)
       }
+
       throw error
     })
+
   grantsByPreviewId.set(previewId, pending)
+
   return pending
 }
 
 export function releaseDocPreviewGrant(previewId: string): void {
   const pending = grantsByPreviewId.get(previewId)
+
   if (!pending) {
     return
   }
+
   grantsByPreviewId.delete(previewId)
   void pending.then((handle) => window.api.docPreview.revokeGrant(handle.grantId)).catch(() => {})
 }

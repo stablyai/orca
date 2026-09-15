@@ -81,6 +81,7 @@ export function claimDispatchContextRow(
   }
 ): { changes: number | bigint } {
   assertStampedDepth(params.depth)
+
   return db
     .prepare(DISPATCH_CONTEXT_CLAIM_SQL)
     .run(

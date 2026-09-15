@@ -28,6 +28,7 @@ import { reflowHeadlessTerminalToCommittedGrid } from '../delivery/attached-pty-
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   const args = ctx.args
+
   const { rendererPreSignaled, rendererAlreadyRegistered, committedSize } =
     await persistPtyIpcSpawnCommit(ctx)
 
@@ -38,6 +39,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       typeof ctx.result.snapshotCols === 'number' && typeof ctx.result.snapshotRows === 'number'
         ? { cols: ctx.result.snapshotCols, rows: ctx.result.snapshotRows }
         : undefined
+
     if (typeof ctx.result.snapshot === 'string' && ctx.result.snapshot.length > 0) {
       // Why kitty flags ride seed metadata: the snapshot omits them, but the re-seeded emulator must answer hidden `CSI ? u` with the running app's flags (terminal-query-authority.md).
       ctx.deps.runtime.seedHeadlessTerminal(ctx.result.id, ctx.result.snapshot, snapshotSeedSize, {
@@ -58,6 +60,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
         typeof ctx.result.coldRestore.rows === 'number'
           ? { cols: ctx.result.coldRestore.cols, rows: ctx.result.coldRestore.rows }
           : undefined
+
       ctx.deps.runtime.seedHeadlessTerminal(
         ctx.result.id,
         ctx.result.coldRestore.scrollback,
@@ -73,6 +76,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       ctx.deps.runtime.seedHeadlessTerminal(ctx.result.id, ctx.result.replay)
     }
   }
+
   // Why after the seed: a seed skips an existing model, and live bytes may have lazily created
   // one at the 80x24 default before the spawn reply revealed the session's real grid.
   reflowHeadlessTerminalToCommittedGrid({
@@ -82,6 +86,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       ctx.deps.runtime
     )
   })
+
   if (
     typeof args.worktreeId === 'string' &&
     args.worktreeId.length > 0 &&
@@ -96,11 +101,13 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       hasStablePaneOwner: ctx.stablePaneOwner !== null,
       incarnationId: ctx.result.incarnationId
     })
+
     const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity({
       isReattach: ctx.result.isReattach === true,
       launchAgent: ctx.result.launchAgent,
       incarnationId: ctx.result.incarnationId
     })
+
     ctx.deps.runtime?.registerPty(
       ctx.result.id,
       args.worktreeId,
@@ -131,10 +138,12 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     )
     ctx.pendingRegistrationPtyId = null
   }
+
   // Why: seed after registerPty binds the worktree — including on
   // desktop, where the renderer-authority gate above skips the emulator
   // seed but the list/read records still live main-side.
   seedTerminalRestoreRecordsFromSpawnResult(ctx.deps.runtime, ctx.result)
+
   // Why: arm main's per-PTY Command Code output detector from the launch command (startupCommand parity); banner detection covers PTYs without one.
   if (!ctx.stablePaneOwner) {
     ctx.deps.runtime?.noteTerminalSpawnCommand?.(
@@ -142,14 +151,17 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       typeof ctx.launchCommand === 'string' ? ctx.launchCommand : null
     )
   }
+
   if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
     markClaudePtySpawned(ctx.result.id)
   }
+
   // Why: record the paneKey mapping so clearProviderPtyState can clear the agent-hooks server's per-paneKey caches on exit.
   // Why: args.env is untrusted IPC JSON (type unenforced); bound the paneKey so malformed/oversized values can't pollute ptyPaneKey or clearPaneState.
   const rememberedPaneKey = ctx.validatedPaneKey
     ? rememberPaneKeyForPty(ctx.result.id, ctx.validatedPaneKey)
     : null
+
   if (ctx.legacySpawnPaneKey && ctx.migrationUnsupportedPaneKey) {
     agentHookServer.registerPaneKeyAlias(
       ctx.legacySpawnPaneKey.paneKey,
@@ -173,6 +185,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       clearMigrationUnsupportedPtysForPaneKey(ctx.validatedPaneKey)
     }
   }
+
   // Why: register only local PTYs with the memory collector — SSH PTYs run remotely and their process tree is invisible to our local `ps`.
   if (!args.connectionId) {
     // Why: record the spawn-result pid once here so the memory module needn't reach back into ipc/pty on a hot path (works for in-process and daemon-hosted PTYs).
@@ -199,11 +212,13 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
           : null
     })
   }
+
   // Why: telemetry-plan.md§Agent launch semantics — fire agent_started only after spawn resolved; safeParse each field so a spoofed IPC payload can't poison the event (missing required field skips it).
   if (args.telemetry && !ctx.stablePaneOwner) {
     const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
     const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
     const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
+
     if (agentKindParse.success && launchSourceParse.success && requestKindParse.success) {
       track('agent_started', {
         agent_kind: agentKindParse.data,
@@ -213,6 +228,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       })
     }
   }
+
   const response = {
     ...ctx.result,
     // Why both or neither: a pane can only adopt proven kitty flags together
@@ -235,8 +251,10 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       ? { agentResumeUnavailable: true as const }
       : {})
   }
+
   // Why: renderer tab state cannot reliably infer background and reattached PTYs in the daemon inventory.
   ctx.deps.sendPtySpawnedToRenderer(ctx.result.id)
+
   if (!args.connectionId) {
     ctx.deps.options?.onCodexHomePtySpawned?.({
       id: ctx.result.id,
@@ -255,6 +273,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
           : {})
     })
   }
+
   return resolvePaneSpawnReservation(
     ctx.paneSpawnReservationKey,
     ctx.paneSpawnReservation,

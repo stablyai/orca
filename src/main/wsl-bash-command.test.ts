@@ -11,6 +11,7 @@ describe('buildEncodedWslBashCommand', () => {
     ].join('\n')
 
     const wrapped = buildEncodedWslBashCommand(command)
+
     const encoded = wrapped.match(
       /^set -o pipefail; printf %s '([^']+)' \| base64 -d \| bash$/
     )?.[1]

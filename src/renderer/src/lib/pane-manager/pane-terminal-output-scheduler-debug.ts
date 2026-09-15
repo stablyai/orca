@@ -22,6 +22,7 @@ type TerminalOutputSchedulerDebugSnapshot = {
 }
 
 export const terminalOutputSchedulerDebugEnabled = e2eConfig.exposeStore
+
 export const terminalOutputSchedulerDebugState: TerminalOutputSchedulerDebugSnapshot = {
   backgroundEnqueueCount: 0,
   deferredForegroundEnqueueCount: 0,
@@ -69,14 +70,17 @@ export function recordTerminalOutputQueueDebugPressure(): void {
   if (!terminalOutputSchedulerDebugEnabled) {
     return
   }
+
   let queuedTerminalCount = 0
   let queuedChars = 0
   let queuedCharsByTerminal = 0
+
   for (const entry of readQueueEntries()) {
     queuedTerminalCount++
     queuedChars += entry.queuedChars
     queuedCharsByTerminal = Math.max(queuedCharsByTerminal, entry.queuedChars)
   }
+
   const state = terminalOutputSchedulerDebugState
   state.queuedTerminalCount = queuedTerminalCount
   state.queuedChars = queuedChars
@@ -89,6 +93,7 @@ export function exposeTerminalOutputSchedulerDebugApi(): void {
   if (!terminalOutputSchedulerDebugEnabled || typeof window === 'undefined') {
     return
   }
+
   // Why: the e2e repro must prove background output used the shared drain, but production must not accumulate diagnostic counters indefinitely.
   const target = window as unknown as {
     __terminalOutputSchedulerDebug?: {
@@ -96,10 +101,12 @@ export function exposeTerminalOutputSchedulerDebugApi(): void {
       snapshot: () => TerminalOutputSchedulerDebugSnapshot
     }
   }
+
   target.__terminalOutputSchedulerDebug ??= {
     reset: resetDebugState,
     snapshot: () => {
       recordTerminalOutputQueueDebugPressure()
+
       return {
         ...terminalOutputSchedulerDebugState,
         drainWrites: [...terminalOutputSchedulerDebugState.drainWrites],

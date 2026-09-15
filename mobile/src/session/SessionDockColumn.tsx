@@ -35,6 +35,7 @@ export function SessionDockColumn({
   onOpenedFileDiff
 }: Props) {
   const { dockWidth, panHandlers } = useMobileDockResize(availableWidth)
+
   return (
     <View style={[mobilePrSidebarStyles.dockColumn, { width: dockWidth }]}>
       {/* Dedicated drag handle over the dock's left border — a leaf overlay so the
@@ -82,6 +83,7 @@ const DockPanelContent = memo(function DockPanelContent({
       />
     )
   }
+
   return (
     <MobileFileExplorerPanel
       hostId={hostId}

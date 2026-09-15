@@ -89,24 +89,32 @@ export default function MonacoEditor({
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const setEditorCursorLine = useAppStore((s) => s.setEditorCursorLine)
+
   const editorFontSize = computeEditorFontSize(
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
   )
+
   const editorFontFamily = resolveEditorFontFamily(settings)
   const editorWordWrap = settings?.editorWordWrap
+
   const estimatedAutoHeight = useMemo(() => {
     if (!autoHeight) {
       return null
     }
+
     return getMonacoAutoHeightForContent(content, Math.ceil(editorFontSize * 1.45))
   }, [autoHeight, content, editorFontSize])
+
   const renderedEditorHeight = autoHeight
     ? (autoHeightContentHeight ?? estimatedAutoHeight ?? 80)
     : null
+
   const autoHeightLineHeight = Math.ceil(editorFontSize * 1.45)
+
   const autoHeightUsesInternalScroll =
     autoHeight && isMonacoAutoHeightCapped(renderedEditorHeight, autoHeightLineHeight)
+
   // Why: @monaco-editor/react skips its value→model sync on the first post-remount render, so retained models need an explicit sync or they show stale text.
   // Invariant: the mount path must read `contentRef.current` (guaranteed latest), never `lastSyncedContentRef.current` (may be stale pre-mount).
   const contentRef = useRef(content)
@@ -115,12 +123,14 @@ export default function MonacoEditor({
   const [gutterMenuOpen, setGutterMenuOpen] = useState(false)
   const [gutterMenuPoint, setGutterMenuPoint] = useState({ x: 0, y: 0 })
   const [gutterMenuLine, setGutterMenuLine] = useState(1)
+
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
 
   const { queueReveal, cancelScheduledReveal, clearTransientRevealHighlight } =
     useMonacoRevealScheduler()
+
   const contentSync = useMonacoContentSyncBridge({
     editorRef,
     content,
@@ -129,6 +139,7 @@ export default function MonacoEditor({
     filePath,
     onContentChange
   })
+
   const annotations = useMonacoMarkdownAnnotations({
     mountedEditor,
     editorContainerRef,
@@ -147,6 +158,7 @@ export default function MonacoEditor({
         clearTimeout(scrollThrottleTimerRef.current)
         scrollThrottleTimerRef.current = null
       }
+
       snapshotMonacoViewState(editorRef, viewStateKey)
       cancelScheduledReveal()
       clearTransientRevealHighlight()
@@ -160,6 +172,7 @@ export default function MonacoEditor({
     if (!editorRef.current) {
       return
     }
+
     editorRef.current.updateOptions({
       fontSize: editorFontSize,
       fontFamily: editorFontFamily,
@@ -207,6 +220,7 @@ export default function MonacoEditor({
     if (!revealLine || !editorRef.current) {
       return
     }
+
     queueReveal(editorRef.current, revealLine, revealColumn ?? 1, revealMatchLength ?? 0, () => {
       // Why: clear the pending payload only after the queued reveal runs, so navigation isn't lost if the editor unmounts first.
       setPendingEditorReveal(null)

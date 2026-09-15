@@ -21,6 +21,7 @@ describe('secret protection report deferral wiring', () => {
     join(process.cwd(), 'src/main/startup/main-process-ready-foundation.ts'),
     'utf8'
   )
+
   const entrySource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
 
   const SCHEDULE = 'scheduleSecretProtectionGapReport({'

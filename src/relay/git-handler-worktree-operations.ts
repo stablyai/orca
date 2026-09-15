@@ -26,6 +26,7 @@ function resolveRelayPath(repoPath: string, value: string): string {
   if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) {
     return value
   }
+
   // Old Git ignores `--path-format=absolute`; resolve relative paths against repoPath by path shape.
   return isWindowsAbsolutePath(repoPath)
     ? path.win32.resolve(repoPath, value)
@@ -41,10 +42,13 @@ function parseRelayRepoLocation(repoPath: string, output: string): RelayRepoLoca
     .split('\n')
     .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
     .filter((line) => line.length > 0 && !line.startsWith('-'))
+
   if (lines.length < 2) {
     return undefined
   }
+
   const [topLevel, commonDir] = lines.slice(-2)
+
   return {
     topLevel: resolveRelayPath(repoPath, topLevel),
     commonDir: resolveRelayPath(repoPath, commonDir)
@@ -54,8 +58,10 @@ function parseRelayRepoLocation(repoPath: string, output: string): RelayRepoLoca
 export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
   async isGitRepo(params: Record<string, unknown>) {
     const dirPath = params.dirPath as string
+
     try {
       const { stdout } = await this.git(['rev-parse', '--show-toplevel'], dirPath)
+
       return { isRepo: true, rootPath: stdout.trim() }
     } catch {
       return { isRepo: false, rootPath: null }
@@ -71,10 +77,12 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
             ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
             repoPath
           )
+
           if (hasUnsupportedRevParsePathFormatEcho(stdout)) {
             // Why: old Git echoes the unknown option and exits zero; remember the signal though the paths still parse.
             this.gitCapabilities.rememberUnsupported('rev-parse-path-format')
           }
+
           return parseRelayRepoLocation(repoPath, stdout)
         },
         async () => {
@@ -82,6 +90,7 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
             ['rev-parse', '--show-toplevel', '--git-common-dir'],
             repoPath
           )
+
           return parseRelayRepoLocation(repoPath, stdout)
         },
         isUnsupportedRevParsePathFormatError
@@ -100,11 +109,13 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
     const mainPath = mainWorktree?.path ?? ''
     // Expand `~` so legacy tilde SSH repo paths match git's absolute path, sparing a rev-parse per poll.
     const resolvedRepoPath = expandTilde(repoPath)
+
     if (!mainPath || areRelayWorktreePathsEqual(mainPath, resolvedRepoPath)) {
       return worktrees
     }
 
     const location = await this.readRepoLocation(resolvedRepoPath)
+
     if (!location) {
       return worktrees
     }
@@ -116,17 +127,20 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
 
     const normalized = [...worktrees]
     normalized[mainIndex] = { ...mainWorktree, path: location.topLevel }
+
     return normalized
   }
 
   async listWorktrees(params: Record<string, unknown>, context?: RequestContext) {
     const repoPath = params.repoPath as string
+
     return this.gitCapabilities.runWithFallback(
       'worktree-list-z',
       async () => {
         const { stdout } = await this.git(['worktree', 'list', '--porcelain', '-z'], repoPath, {
           signal: context?.signal
         })
+
         return this.normalizeMainWorktreePath(
           repoPath,
           parseWorktreeList(stdout, { nulDelimited: true })
@@ -139,7 +153,9 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
         const { stdout } = await this.git(['worktree', 'list', '--porcelain'], repoPath, {
           signal: context?.signal
         })
+
         const normalized = await this.normalizeMainWorktreePath(repoPath, parseWorktreeList(stdout))
+
         // Why: Git <2.31 emits no `prunable` annotation, so probe each linked worktree's existence instead of trusting stale registrations (issue #8389).
         return annotatePrunableWorktreesByExistence(normalized)
       },
@@ -156,7 +172,9 @@ export class GitHandlerWorktreeOperations extends GitHandlerOperationContext {
       this.runWithGitReadCacheClear(() =>
         removeWorktreeOp(this.git.bind(this), params, this.gitCapabilities)
       )
+
     const worktreePath = params.worktreePath
+
     return this.watcherRegistry && typeof worktreePath === 'string'
       ? this.watcherRegistry.runWithRemovalFence(expandTilde(worktreePath), remove)
       : remove()

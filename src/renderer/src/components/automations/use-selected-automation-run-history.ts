@@ -68,6 +68,7 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
   const automationId = input.selected?.automation.id ?? null
   const rowKey = input.selected?.key ?? null
   const reloadToken = input.reloadToken
+
   const fetchKey =
     automationId && rowKey
       ? [
@@ -76,10 +77,13 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
           navigationHostId(input.navigation, automationId) ?? ''
         ].join('|')
       : ''
+
   const captured = input.selected
     ? capturedAutomationOwner(input.context.capturedOwners, input.selected.key).owner
     : null
+
   const authority = captured?.authority ?? input.context.authority
+
   const rowAuthority = useMemo<AutomationAuthorityRef>(
     () => (authority?.kind === 'runtime' ? authority : { kind: 'desktop' }),
     [authority]
@@ -87,18 +91,25 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
 
   useEffect(() => {
     const { selected, context, legacyTarget, navigation, onSettled } = inputRef.current
+
     if (!selected || !automationId || !rowKey) {
       onSettled({ automationId: null, rowKey: null, ownerKey: null, runs: [], notice: null })
+
       return
     }
+
     let cancelled = false
+
     const owner = capturedAutomationOwnerKey(
       capturedAutomationOwner(context.capturedOwners, rowKey)
     )
+
     const navigationHost = navigationHostId(navigation, automationId)
+
     const target = navigationHost
       ? getAutomationTargetFromHostId(navigationHost)
       : (legacyTarget(selected) ?? { kind: 'local' })
+
     void dispatchAutomationRunHistory(
       context,
       { rowKey, automationId },
@@ -108,6 +119,7 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
       if (cancelled) {
         return
       }
+
       // A refused or failed read still settles: leaving the previous automation's
       // ID in place strands anything waiting on this one and shows its runs as zero.
       onSettled(
@@ -116,6 +128,7 @@ export function useSelectedAutomationRunHistory(input: SelectedAutomationRunHist
           : { automationId, rowKey, ownerKey: owner, runs: [], notice: result.notice }
       )
     })
+
     return () => {
       cancelled = true
     }

@@ -15,6 +15,7 @@ function decodeFirstFrame(buf: Buffer): { type: number; id: number; ack: number;
   const ack = buf.readUInt32BE(5)
   const len = buf.readUInt32BE(9)
   const payload = buf.subarray(13, 13 + len)
+
   return { type, id, ack, payload }
 }
 
@@ -56,6 +57,7 @@ describe('RelayDispatcher', () => {
       method: 'test.method',
       params: { foo: 'bar' }
     }
+
     const frame = encodeJsonRpcFrame(req, 1, 0)
     dispatcher.feed(frame)
 
@@ -70,16 +72,20 @@ describe('RelayDispatcher', () => {
     // Should have sent a response (after keepalive timer writes)
     const responses = written.filter((buf) => {
       const f = decodeFirstFrame(buf)
+
       if (f.type !== MessageType.Regular) {
         return false
       }
+
       try {
         const msg = JSON.parse(f.payload.toString('utf-8'))
+
         return 'id' in msg && 'result' in msg
       } catch {
         return false
       }
     })
+
     expect(responses.length).toBe(1)
 
     const resp = JSON.parse(decodeFirstFrame(responses[0]).payload.toString('utf-8'))
@@ -97,21 +103,26 @@ describe('RelayDispatcher', () => {
       id: 5,
       method: 'fail.method'
     }
+
     dispatcher.feed(encodeJsonRpcFrame(req, 1, 0))
     await vi.advanceTimersByTimeAsync(0)
 
     const errors = written.filter((buf) => {
       const f = decodeFirstFrame(buf)
+
       if (f.type !== MessageType.Regular) {
         return false
       }
+
       try {
         const msg = JSON.parse(f.payload.toString('utf-8'))
+
         return 'error' in msg
       } catch {
         return false
       }
     })
+
     expect(errors.length).toBe(1)
 
     const resp = JSON.parse(decodeFirstFrame(errors[0]).payload.toString('utf-8'))
@@ -125,21 +136,26 @@ describe('RelayDispatcher', () => {
       id: 10,
       method: 'unknown.method'
     }
+
     dispatcher.feed(encodeJsonRpcFrame(req, 1, 0))
     await vi.advanceTimersByTimeAsync(0)
 
     const errors = written.filter((buf) => {
       const f = decodeFirstFrame(buf)
+
       if (f.type !== MessageType.Regular) {
         return false
       }
+
       try {
         const msg = JSON.parse(f.payload.toString('utf-8'))
+
         return msg.error?.code === -32601
       } catch {
         return false
       }
     })
+
     expect(errors.length).toBe(1)
   })
 
@@ -152,6 +168,7 @@ describe('RelayDispatcher', () => {
       method: 'event.happened',
       params: { x: 1 }
     }
+
     dispatcher.feed(encodeJsonRpcFrame(notif, 1, 0))
 
     expect(handler).toHaveBeenCalledWith(
@@ -165,16 +182,20 @@ describe('RelayDispatcher', () => {
 
     const notifs = written.filter((buf) => {
       const f = decodeFirstFrame(buf)
+
       if (f.type !== MessageType.Regular) {
         return false
       }
+
       try {
         const msg = JSON.parse(f.payload.toString('utf-8'))
+
         return 'method' in msg && !('id' in msg)
       } catch {
         return false
       }
     })
+
     expect(notifs.length).toBe(1)
 
     const msg = JSON.parse(decodeFirstFrame(notifs[0]).payload.toString('utf-8'))
@@ -184,6 +205,7 @@ describe('RelayDispatcher', () => {
 
   it('broadcasts notifications to attached socket clients with independent frame state', () => {
     const socketWritten: Buffer[] = []
+
     const clientId = dispatcher.attachClient((data) => {
       socketWritten.push(Buffer.from(data))
     })
@@ -205,9 +227,11 @@ describe('RelayDispatcher', () => {
   it('targets terminal ownership notifications to one attached client', () => {
     const firstWritten: Buffer[] = []
     const secondWritten: Buffer[] = []
+
     const firstId = dispatcher.attachClient((data) => {
       firstWritten.push(Buffer.from(data))
     })
+
     dispatcher.attachClient((data) => {
       secondWritten.push(Buffer.from(data))
     })
@@ -222,9 +246,11 @@ describe('RelayDispatcher', () => {
   it('forwards relay-originated requests to an owning socket client instead of the caller', async () => {
     dispatcher.invalidateClient()
     const ownerWritten: Buffer[] = []
+
     const ownerId = dispatcher.attachClient((data) => {
       ownerWritten.push(Buffer.from(data))
     })
+
     const cliId = dispatcher.attachClient(() => {})
 
     const pending = dispatcher.requestAnyClient(
@@ -249,9 +275,11 @@ describe('RelayDispatcher', () => {
 
   it('prefers an owning socket client over the synthetic primary client', async () => {
     const ownerWritten: Buffer[] = []
+
     const ownerId = dispatcher.attachClient((data) => {
       ownerWritten.push(Buffer.from(data))
     })
+
     const cliId = dispatcher.attachClient(() => {})
 
     const pending = dispatcher.requestAnyClient(
@@ -276,9 +304,11 @@ describe('RelayDispatcher', () => {
 
   it('isolates failed socket-client writes from other clients', () => {
     const goodSocketWritten: Buffer[] = []
+
     const failingClientId = dispatcher.attachClient(() => {
       throw new Error('socket closed')
     })
+
     dispatcher.attachClient((data) => {
       goodSocketWritten.push(Buffer.from(data))
     })
@@ -303,16 +333,20 @@ describe('RelayDispatcher', () => {
     // The response frame should have ack=50
     const responseFrames = written.filter((buf) => {
       const f = decodeFirstFrame(buf)
+
       if (f.type !== MessageType.Regular) {
         return false
       }
+
       try {
         const msg = JSON.parse(f.payload.toString('utf-8'))
+
         return 'result' in msg
       } catch {
         return false
       }
     })
+
     expect(responseFrames.length).toBe(1)
     expect(decodeFirstFrame(responseFrames[0]).ack).toBe(50)
   })
@@ -335,12 +369,14 @@ describe('RelayDispatcher', () => {
 
   it('drops in-flight responses after client invalidation', async () => {
     let resolveHandler!: () => void
+
     const handler = vi.fn(
       (_params, context) =>
         new Promise((resolve) => {
           resolveHandler = () => resolve({ stale: context.isStale() })
         })
     )
+
     dispatcher.onRequest('slow.method', handler)
 
     const req: JsonRpcRequest = { jsonrpc: '2.0', id: 99, method: 'slow.method' }
@@ -350,14 +386,19 @@ describe('RelayDispatcher', () => {
     await vi.advanceTimersByTimeAsync(0)
 
     expect(handler).toHaveBeenCalled()
+
     const responses = written.filter((buf) => {
       const frame = decodeFirstFrame(buf)
+
       if (frame.type !== MessageType.Regular) {
         return false
       }
+
       const msg = JSON.parse(frame.payload.toString('utf-8'))
+
       return msg.id === 99
     })
+
     expect(responses).toHaveLength(0)
   })
 
@@ -422,12 +463,15 @@ describe('RelayDispatcher', () => {
     // owning Orca's reconnect + PTY-reattach path never engaged until the ~20s
     // keepalive timeout — output/pane-death were silently lost in the meantime.
     let throwOnWrite = false
+
     const detachDispatcher = new RelayDispatcher((data) => {
       if (throwOnWrite) {
         throw new Error('socket closed')
       }
+
       written.push(Buffer.from(data))
     })
+
     try {
       const detachListener = vi.fn()
       detachDispatcher.onClientDetached(detachListener)
@@ -457,12 +501,15 @@ describe('RelayDispatcher', () => {
 
   it('aborts in-flight primary requests when a client write throws', () => {
     let throwOnWrite = false
+
     const detachDispatcher = new RelayDispatcher(() => {
       if (throwOnWrite) {
         throw new Error('socket closed')
       }
     })
+
     let requestSignal: AbortSignal | undefined
+
     try {
       detachDispatcher.onRequest('slow.method', async (_params, context) => {
         requestSignal = context.signal
@@ -487,16 +534,22 @@ describe('RelayDispatcher', () => {
   it('preserves broadcast order when synchronous settlement re-enters production', () => {
     const primary: string[] = []
     const secondary: string[] = []
+
     const readData = (frame: Buffer): string => {
       const message = JSON.parse(decodeFirstFrame(frame).payload.toString()) as JsonRpcNotification
+
       return String(message.params?.data)
     }
+
     const orderedDispatcher = new RelayDispatcher((frame) => {
       primary.push(readData(frame))
+
       return true
     })
+
     orderedDispatcher.attachClient((frame) => {
       secondary.push(readData(frame))
+
       return true
     })
     let reentered = false
@@ -504,6 +557,7 @@ describe('RelayDispatcher', () => {
       if (reentered) {
         return
       }
+
       reentered = true
       orderedDispatcher.tryNotifyPtyData({ id: 'pty-2', data: 'second' })
     })
@@ -521,19 +575,26 @@ describe('RelayDispatcher', () => {
     const primary: string[] = []
     const secondary: string[] = []
     let secondaryId = 0
+
     const readData = (frame: Buffer): string => {
       const message = JSON.parse(decodeFirstFrame(frame).payload.toString()) as JsonRpcNotification
+
       return String(message.params?.data)
     }
+
     const dispatcher = new RelayDispatcher((frame) => {
       primary.push(readData(frame))
+
       if (secondaryId !== 0) {
         dispatcher.detachClient(secondaryId)
       }
+
       return true
     })
+
     secondaryId = dispatcher.attachClient((frame) => {
       secondary.push(readData(frame))
+
       return true
     })
 
@@ -548,9 +609,11 @@ describe('RelayDispatcher', () => {
 
   it('keeps a saturated legacy primary as required backpressure', () => {
     const callbacks: ((result: SinkWriteSettlement) => void)[] = []
+
     const legacyDispatcher = new RelayDispatcher(
       (_data, settle) => {
         callbacks.push(settle)
+
         return false
       },
       {
@@ -559,6 +622,7 @@ describe('RelayDispatcher', () => {
         writableHighWaterMark: () => 4 * 1024 * 1024
       }
     )
+
     const detached = vi.fn()
     legacyDispatcher.onClientDetached(detached)
     const payload = 'x'.repeat(128 * 1024)
@@ -592,10 +656,13 @@ describe('RelayDispatcher', () => {
   describe('notifyBulk (bulk lane backpressure)', () => {
     it('resolves immediately when the sink accepts the frame', async () => {
       const frames: Buffer[] = []
+
       const bulkDispatcher = new RelayDispatcher((data) => {
         frames.push(Buffer.from(data))
+
         return true
       })
+
       try {
         await bulkDispatcher.notifyBulk('bulk.event', { seq: 0 })
         expect(frames).toHaveLength(1)
@@ -610,23 +677,29 @@ describe('RelayDispatcher', () => {
     it('holds the next bulk frame until the saturated sink drains', async () => {
       const frames: Buffer[] = []
       const drainWaiters = new Set<() => void>()
+
       const bulkDispatcher = new RelayDispatcher(
         (data) => {
           frames.push(Buffer.from(data))
+
           return false
         },
         {
           waitWriteDrain: (callback) => {
             drainWaiters.add(callback)
+
             return () => drainWaiters.delete(callback)
           }
         }
       )
+
       try {
         let firstSettled = false
+
         const first = bulkDispatcher.notifyBulk('bulk.event', { seq: 0 }).then(() => {
           firstSettled = true
         })
+
         void bulkDispatcher.notifyBulk('bulk.event', { seq: 1 })
         await vi.advanceTimersByTimeAsync(0)
 
@@ -639,6 +712,7 @@ describe('RelayDispatcher', () => {
           drainWaiters.delete(cb)
           cb()
         }
+
         await first
         await vi.advanceTimersByTimeAsync(0)
         expect(frames).toHaveLength(2)
@@ -650,18 +724,22 @@ describe('RelayDispatcher', () => {
     it('does not write an interactive frame around a saturated bulk write', async () => {
       const frames: Buffer[] = []
       const drainWaiters = new Set<() => void>()
+
       const bulkDispatcher = new RelayDispatcher(
         (data) => {
           frames.push(Buffer.from(data))
+
           return false
         },
         {
           waitWriteDrain: (callback) => {
             drainWaiters.add(callback)
+
             return () => drainWaiters.delete(callback)
           }
         }
       )
+
       try {
         void bulkDispatcher.notifyBulk('bulk.event', { seq: 0 })
         void bulkDispatcher.notifyBulk('bulk.event', { seq: 1 })
@@ -670,15 +748,19 @@ describe('RelayDispatcher', () => {
 
         bulkDispatcher.notify('pty.data', { id: 'pty-1', data: 'x' })
         expect(frames).toHaveLength(1)
+
         for (const callback of Array.from(drainWaiters)) {
           drainWaiters.delete(callback)
           callback()
         }
+
         await vi.advanceTimersByTimeAsync(0)
         expect(frames.length).toBeGreaterThanOrEqual(2)
+
         const msg = JSON.parse(
           decodeFirstFrame(frames[1]).payload.toString()
         ) as JsonRpcNotification
+
         expect(msg.method).toBe('pty.data')
       } finally {
         bulkDispatcher.dispose()
@@ -696,13 +778,17 @@ describe('RelayDispatcher', () => {
     it('targets only the requested client and resolves for missing clients', async () => {
       const primaryFrames: Buffer[] = []
       const secondaryFrames: Buffer[] = []
+
       const bulkDispatcher = new RelayDispatcher((data) => {
         primaryFrames.push(Buffer.from(data))
+
         return true
       })
+
       try {
         const secondaryId = bulkDispatcher.attachClient((data) => {
           secondaryFrames.push(Buffer.from(data))
+
           return true
         })
 
@@ -750,22 +836,28 @@ describe('RelayDispatcher', () => {
       if (capacities.length === 0) {
         return Math.min(data.length, limit)
       }
+
       let low = 0
       let high = Math.min(data.length, limit)
+
       while (low < high) {
         const mid = Math.ceil((low + high) / 2)
+
         const msg: JsonRpcNotification = {
           jsonrpc: '2.0',
           method: 'pty.data',
           params: { ...params, data: data.slice(0, mid) }
         }
+
         const bytes = encodeJsonRpcFrame(msg, 0, 0).length
+
         if (capacities.every((capacity) => bytes <= capacity)) {
           low = mid
         } else {
           high = mid - 1
         }
       }
+
       return low
     }
 
@@ -774,16 +866,19 @@ describe('RelayDispatcher', () => {
       capacities: number[]
     } {
       const [primaryHwm, ...rest] = highWaterMarks
+
       const sized = new RelayDispatcher(() => true, {
         writableHighWaterMark: () => primaryHwm,
         writableLength: () => 0
       })
+
       for (const hwm of rest) {
         sized.attachClient(() => true, {
           writableHighWaterMark: () => hwm,
           writableLength: () => 0
         })
       }
+
       return {
         sized,
         capacities: highWaterMarks.map((hwm) => Math.max(0, hwm - relayWriterControlReserve(hwm)))
@@ -792,10 +887,12 @@ describe('RelayDispatcher', () => {
 
     function mulberry32(seed: number): () => number {
       let a = seed
+
       return () => {
         a = (a + 0x6d2b79f5) | 0
         let t = Math.imul(a ^ (a >>> 15), 1 | a)
         t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296
       }
     }
@@ -806,25 +903,32 @@ describe('RelayDispatcher', () => {
     it('matches the pre-optimization sizing loop across randomized inputs', () => {
       const random = mulberry32(0xc0ffee)
       const hwmChoices = [1030, 1100, 1250, 1400, 2048, 1024 * 1024]
+
       for (let trial = 0; trial < 300; trial++) {
         const length = Math.floor(random() * 240)
         let data = ''
+
         for (let i = 0; i < length; i++) {
           data += alphabet[Math.floor(random() * alphabet.length)]
         }
+
         const clientCount = 1 + Math.floor(random() * 2)
+
         const hwms = Array.from(
           { length: clientCount },
           () => hwmChoices[Math.floor(random() * hwmChoices.length)]
         )
+
         const params = { id: `pty-${trial}`, seq: trial }
         const { sized, capacities } = makeDispatcher(hwms)
+
         try {
           for (const limit of [0, 1, Math.floor(length / 2), length, length + 17]) {
             expect(sized.maxLegacyPtyDataChars(params, data, limit)).toBe(
               referenceMaxChars(capacities, params, data, limit)
             )
           }
+
           expect(sized.maxLegacyPtyDataChars(params, data)).toBe(
             referenceMaxChars(capacities, params, data, data.length)
           )
@@ -836,6 +940,7 @@ describe('RelayDispatcher', () => {
 
     it('sizes a chunk that fits every client with a single frame encode', () => {
       const { sized } = makeDispatcher([1024 * 1024])
+
       try {
         const spy = vi.spyOn(sized as unknown as DispatcherInternals, 'estimateFrameBytes')
         const data = 'x'.repeat(16 * 1024)
@@ -848,10 +953,13 @@ describe('RelayDispatcher', () => {
 
     it('publishes PTY data with a single frame preparation', () => {
       const frames: Buffer[] = []
+
       const publisher = new RelayDispatcher((data) => {
         frames.push(Buffer.from(data))
+
         return true
       })
+
       try {
         const spy = vi.spyOn(publisher as unknown as DispatcherInternals, 'prepareFrame')
         expect(publisher.tryNotifyPtyData({ id: 'pty-1', data: 'hello' })).toBe(true)
@@ -864,17 +972,22 @@ describe('RelayDispatcher', () => {
 
     it('a prepared enqueue matches the composition wrapper', () => {
       const frames: Buffer[] = []
+
       const publisher = new RelayDispatcher((data) => {
         frames.push(Buffer.from(data))
+
         return true
       })
+
       try {
         const internals = publisher as unknown as DispatcherInternals
+
         const msg: JsonRpcNotification = {
           jsonrpc: '2.0',
           method: 'pty.data',
           params: { id: 'pty-1', data: 'héllo "𝄞"\\\n\uD800' }
         }
+
         expect(internals.enqueueFrame(internals.primaryClient, msg, 'ordinary')).toBe(true)
         expect(
           internals.enqueuePreparedFrame(
@@ -894,13 +1007,16 @@ describe('RelayDispatcher', () => {
 
     it('a prepared enqueue rejects identically to the composition wrapper', () => {
       const { sized } = makeDispatcher([1030])
+
       try {
         const internals = sized as unknown as DispatcherInternals
+
         const msg: JsonRpcNotification = {
           jsonrpc: '2.0',
           method: 'pty.data',
           params: { id: 'pty-1', data: 'x'.repeat(512) }
         }
+
         expect(internals.enqueueFrame(internals.primaryClient, msg, 'ordinary')).toBe(false)
         expect(
           internals.enqueuePreparedFrame(

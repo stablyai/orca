@@ -47,6 +47,7 @@ type CertificateProceedAttempt = {
 function getLoadErrorMetadata(loadError: BrowserLoadError): LoadFailureMeta {
   try {
     const parsed = new URL(loadError.validatedUrl)
+
     return {
       host: parsed.host || null,
       isLocalhostLike:
@@ -64,6 +65,7 @@ function getMatchingCertificateFailure(args: {
   canProceed: boolean
 }): BrowserCertificateFailure | null {
   const { loadError, certificateFailure, expectedBrowserPageId, canProceed } = args
+
   const errorMatchesChallenge = Boolean(
     certificateFailure &&
     (loadError.code === -1 ||
@@ -71,6 +73,7 @@ function getMatchingCertificateFailure(args: {
         normalizeCertificateError(certificateFailure.error) ===
           normalizeCertificateError(loadError.description)))
   )
+
   if (
     !canProceed ||
     !certificateFailure?.canProceed ||
@@ -81,6 +84,7 @@ function getMatchingCertificateFailure(args: {
   ) {
     return null
   }
+
   try {
     return new URL(loadError.validatedUrl).origin === certificateFailure.origin
       ? certificateFailure
@@ -99,18 +103,21 @@ function formatCertificateProceedFailure(
       'This certificate approval expired. Retry the page to request a new one.'
     )
   }
+
   if (reason === 'changed' || reason === 'navigated') {
     return translate(
       'browser.loadFailure.certificateChallengeChanged',
       'The certificate request changed. Retry the page and review the new warning.'
     )
   }
+
   if (reason === 'request-failed') {
     return translate(
       'browser.loadFailure.certificateProceedFailed',
       'Orca could not approve this certificate request. Retry the page and try again.'
     )
   }
+
   return translate(
     'browser.loadFailure.certificateChallengeUnavailable',
     'This certificate request is no longer available. Retry the page to request a new one.'
@@ -136,13 +143,16 @@ export function BrowserLoadFailureOverlay({
     challengeId: string
     timer: ReturnType<typeof setTimeout>
   } | null>(null)
+
   const [proceedAttempt, setProceedAttempt] = useState<CertificateProceedAttempt | null>(null)
+
   const matchingCertificateFailure = getMatchingCertificateFailure({
     loadError,
     certificateFailure,
     expectedBrowserPageId,
     canProceed: Boolean(onProceedCertificate)
   })
+
   // Why: Chromium's error-page fallback can replace the diagnostic code with
   // -1 after main has already captured an exact live certificate challenge.
   const presentationLoadError =
@@ -153,12 +163,15 @@ export function BrowserLoadFailureOverlay({
           description: matchingCertificateFailure.error
         }
       : loadError
+
   const meta = getLoadErrorMetadata(presentationLoadError)
   const certificateError = isCertificateLoadError(presentationLoadError)
   const guestRecoveryError = presentationLoadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
   const recoveryHint = formatLoadFailureRecoveryHint(meta, presentationLoadError)
+
   const activeProceedAttempt =
     proceedAttempt?.challengeId === matchingCertificateFailure?.challengeId ? proceedAttempt : null
+
   const actionsDisabled = activeProceedAttempt?.state === 'submitting'
 
   useEffect(() => {
@@ -174,6 +187,7 @@ export function BrowserLoadFailureOverlay({
     if (!matchingCertificateFailure || !onProceedCertificate || actionsDisabled) {
       return
     }
+
     const challengeId = matchingCertificateFailure.challengeId
     setProceedAttempt({ challengeId, state: 'submitting', showConnecting: false })
     connectingTimerRef.current = {
@@ -192,6 +206,7 @@ export function BrowserLoadFailureOverlay({
           clearTimeout(connectingTimerRef.current.timer)
           connectingTimerRef.current = null
         }
+
         if (!result.ok) {
           setProceedAttempt((current) =>
             current?.challengeId === challengeId
@@ -210,6 +225,7 @@ export function BrowserLoadFailureOverlay({
           clearTimeout(connectingTimerRef.current.timer)
           connectingTimerRef.current = null
         }
+
         setProceedAttempt((current) =>
           current?.challengeId === challengeId
             ? {
@@ -222,6 +238,7 @@ export function BrowserLoadFailureOverlay({
         )
       })
   }
+
   const retryButton = (
     <Button
       size="sm"
@@ -234,6 +251,7 @@ export function BrowserLoadFailureOverlay({
       {translate('browser.loadFailure.retry', 'Retry')}
     </Button>
   )
+
   const copyButton = (
     <Button
       size="sm"
@@ -246,6 +264,7 @@ export function BrowserLoadFailureOverlay({
       {translate('browser.loadFailure.copyAddress', 'Copy Address')}
     </Button>
   )
+
   const externalButton =
     externalUrl && onOpenExternal ? (
       <Button

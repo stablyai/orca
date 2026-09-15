@@ -13,8 +13,10 @@ export function repoMatchesExternalAutomationTarget(
   target: ExternalAutomationTarget
 ): boolean {
   const repoHostId = getRepoExecutionHostId(repo)
+
   if (target.type === 'local') {
     return parseExecutionHostId(repoHostId)?.kind === 'local'
   }
+
   return repoHostId === toSshExecutionHostId(target.connectionId)
 }

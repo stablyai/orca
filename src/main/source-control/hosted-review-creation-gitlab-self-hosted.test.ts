@@ -80,6 +80,7 @@ function resetMocks(): void {
   ]) {
     mock.mockReset()
   }
+
   _resetKnownHostsCache()
   _resetProjectRefCache()
 }
@@ -112,6 +113,7 @@ describe('GitLab self-hosted hosted review creation eligibility', () => {
           stderr: ''
         }
       }
+
       if (args[0] === 'auth' && args[1] === 'status') {
         return {
           stdout: `gitlab.com
@@ -120,6 +122,7 @@ describe('GitLab self-hosted hosted review creation eligibility', () => {
           stderr: ''
         }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -161,12 +164,14 @@ describe('GitLab self-hosted hosted review creation eligibility', () => {
           stdout: string
           stderr: string
         }
+
         error.stdout = `gitlab.internal
   ! Invalid token provided
 `
         error.stderr = ''
         throw error
       }
+
       if (args[0] === 'auth' && args[1] === 'status') {
         return {
           stdout: `gitlab.com
@@ -177,6 +182,7 @@ gitlab.internal
           stderr: ''
         }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -190,6 +196,7 @@ gitlab.internal
       ahead: 0,
       behind: 0
     })
+
     expect(result).toMatchObject({
       provider: 'gitlab',
       canCreate: false,
@@ -216,11 +223,13 @@ gitlab.internal
         if (!selfHostedAuthenticated) {
           throw new Error('authentication required for gitlab.example.com')
         }
+
         return {
           stdout: '✓ Logged in to gitlab.example.com as user\n',
           stderr: ''
         }
       }
+
       return selfHostedAuthenticated
         ? {
             stdout: '✓ Logged in to gitlab.example.com as user\n',
@@ -242,6 +251,7 @@ gitlab.internal
       ahead: 0,
       behind: 0
     }
+
     await expect(getHostedReviewCreationEligibility(eligibilityInput)).resolves.toMatchObject({
       provider: 'gitea',
       blockedReason: 'auth_required'

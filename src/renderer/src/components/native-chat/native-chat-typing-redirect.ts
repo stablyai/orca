@@ -38,6 +38,7 @@ export function shouldRedirectNativeChatTyping(event: KeyboardRedirectEvent): bo
   ) {
     return false
   }
+
   return !isNativeChatInteractiveTarget(event.target)
 }
 
@@ -62,14 +63,17 @@ export function shouldFocusNativeChatComposerFromEditingKey(event: KeyboardRedir
   ) {
     return false
   }
+
   return !isNativeChatInteractiveTarget(event.target)
 }
 
 function isNativeChatInteractiveTarget(target: EventTarget | null): boolean {
   const element = eventTargetElement(target)
+
   if (!element) {
     return false
   }
+
   return element.closest(INTERACTIVE_TARGET_SELECTOR) !== null
 }
 
@@ -77,13 +81,16 @@ function eventTargetElement(target: EventTarget | null): Element | null {
   if (!target || typeof target !== 'object') {
     return null
   }
+
   const candidate = target as {
     nodeType?: number
     parentElement?: Element | null
     closest?: (selector: string) => Element | null
   }
+
   if (typeof candidate.closest === 'function') {
     return candidate as Element
   }
+
   return candidate.parentElement ?? null
 }

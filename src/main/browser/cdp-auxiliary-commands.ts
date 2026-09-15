@@ -56,12 +56,15 @@ export class CdpAuxiliaryCommands {
   cookieGet(url?: string): Promise<BrowserCookieGetResult> {
     return this.host.run(async ({ sender }) => {
       const params: Record<string, unknown> = {}
+
       if (url) {
         params.urls = [url]
       }
+
       const { cookies } = (await sender('Network.getCookies', params)) as {
         cookies: BrowserCookie[]
       }
+
       return { cookies }
     })
   }
@@ -78,13 +81,16 @@ export class CdpAuxiliaryCommands {
   }): Promise<BrowserCookieSetResult> {
     return this.host.run(async ({ sender }) => {
       let domain = cookie.domain
+
       if (!domain) {
         const { result } = (await sender('Runtime.evaluate', {
           expression: 'location.hostname',
           returnByValue: true
         })) as { result: { value: string } }
+
         domain = result.value
       }
+
       const params: Record<string, unknown> = {
         name: cookie.name,
         value: cookie.value,
@@ -94,10 +100,13 @@ export class CdpAuxiliaryCommands {
         httpOnly: cookie.httpOnly ?? false,
         sameSite: cookie.sameSite ?? 'Lax'
       }
+
       if (cookie.expires !== undefined) {
         params.expires = cookie.expires
       }
+
       const { success } = (await sender('Network.setCookie', params)) as { success: boolean }
+
       return { success }
     })
   }
@@ -105,20 +114,26 @@ export class CdpAuxiliaryCommands {
   cookieDelete(name: string, domain?: string, url?: string): Promise<BrowserCookieDeleteResult> {
     return this.host.run(async ({ sender }) => {
       const params: Record<string, unknown> = { name }
+
       if (domain) {
         params.domain = domain
       }
+
       if (url) {
         params.url = url
       }
+
       if (!domain && !url) {
         const { result } = (await sender('Runtime.evaluate', {
           expression: 'location.href',
           returnByValue: true
         })) as { result: { value: string } }
+
         params.url = result.value
       }
+
       await sender('Network.deleteCookies', params)
+
       return { deleted: true }
     })
   }
@@ -137,6 +152,7 @@ export class CdpAuxiliaryCommands {
         mobile
       })
       await Promise.resolve(sender('Emulation.setVisibleSize', { width, height })).catch(() => {})
+
       return { width, height, deviceScaleFactor, mobile }
     })
   }
@@ -148,6 +164,7 @@ export class CdpAuxiliaryCommands {
   ): Promise<BrowserGeolocationResult> {
     return this.host.run(async ({ sender }) => {
       await sender('Emulation.setGeolocationOverride', { latitude, longitude, accuracy })
+
       return { latitude, longitude, accuracy }
     })
   }
@@ -157,6 +174,7 @@ export class CdpAuxiliaryCommands {
       await sender('Fetch.enable', { patterns: patterns.map((urlPattern) => ({ urlPattern })) })
       state.intercepting = true
       state.interceptPatterns = patterns
+
       return { enabled: true, patterns }
     })
   }
@@ -167,12 +185,14 @@ export class CdpAuxiliaryCommands {
       state.intercepting = false
       state.interceptPatterns = []
       state.pausedRequests.clear()
+
       return { disabled: true }
     })
   }
 
   interceptList(): { requests: BrowserInterceptedRequest[] } {
     const { state } = this.host.current()
+
     return { requests: [...state.pausedRequests.values()] }
   }
 
@@ -183,6 +203,7 @@ export class CdpAuxiliaryCommands {
       state.consoleLog = []
       state.networkLog = []
       state.networkRequestMap.clear()
+
       return { capturing: true }
     })
   }
@@ -191,12 +212,14 @@ export class CdpAuxiliaryCommands {
     return this.host.runOnState(async ({ state }) => {
       state.capturing = false
       state.networkRequestMap.clear()
+
       return { stopped: true }
     })
   }
 
   consoleLog(limit = 100): BrowserConsoleResult {
     const { state } = this.host.current()
+
     return {
       entries: state.consoleLog.slice(-limit),
       truncated: state.consoleLog.length > limit
@@ -205,6 +228,7 @@ export class CdpAuxiliaryCommands {
 
   networkLog(limit = 100): BrowserNetworkLogResult {
     const { state } = this.host.current()
+
     return {
       entries: state.networkLog.slice(-limit),
       truncated: state.networkLog.length > limit

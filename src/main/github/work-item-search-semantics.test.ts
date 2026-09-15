@@ -35,8 +35,10 @@ it('passes every issue predicate to the server for both results and full counts'
   api.specialNodes = [
     { ...metadata[0].graphql, number: 7, state: 'CLOSED', title: 'old needle phrase' }
   ]
+
   const query =
     'is:issue is:closed assignee:"some user" author:"some author" label:"needs review" label:bug in:"title,body" "needle phrase"'
+
   expect((await listWorkItems('fixture/repo', 24, query)).items).toMatchObject([
     { number: 7, state: 'closed', title: 'old needle phrase' }
   ])
@@ -85,6 +87,7 @@ it.each([
 it('falls back with the original numbered query when GraphQL is unavailable', async () => {
   api.graphqlAvailable = false
   api.expectedSearch = 'repo:fixture/repo is:issue is:closed label:"needs review" "exact phrase"'
+
   const result = await listWorkItems(
     'fixture/repo',
     24,
@@ -94,6 +97,7 @@ it('falls back with the original numbered query when GraphQL is unavailable', as
     undefined,
     true
   )
+
   expect(result.items[0].number).toBe(9952)
   const call = api.calls.find((call) => call.args.some((arg) => arg.startsWith('search/issues?')))
   expect(call?.args).toEqual([

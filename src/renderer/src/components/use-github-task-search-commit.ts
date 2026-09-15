@@ -28,14 +28,18 @@ export function useGitHubTaskSearchCommit({
     if (!enabled) {
       return
     }
+
     const scheduledValue = value
+
     const timeout = window.setTimeout(() => {
       // A delayed cleanup must not commit a prefix that is no longer current.
       if (!latestEnabledRef.current || latestValueRef.current !== scheduledValue) {
         return
       }
+
       onCommitRef.current(scheduledValue)
     }, GITHUB_TASK_SEARCH_IDLE_MS)
+
     return () => window.clearTimeout(timeout)
   }, [enabled, value])
 }

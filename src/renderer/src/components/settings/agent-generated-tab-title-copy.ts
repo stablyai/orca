@@ -3,6 +3,7 @@ import { searchKeywords } from './settings-search-keywords'
 
 const AGENT_GENERATED_TAB_TITLES_TITLE_KEY =
   'auto.components.settings.agent-generated-tab-title-copy.19ad21615a'
+
 const AGENT_GENERATED_TAB_TITLES_DESCRIPTION_KEY =
   'auto.components.settings.agent-generated-tab-title-copy.b036c7a409'
 

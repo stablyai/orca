@@ -49,6 +49,7 @@ describe('recoverRelayNodePtyForSpawn', () => {
     const reconnect = vi.fn(overrides.reconnect ?? (async () => {}))
     const repaired = { name: 'post-repair-provider' }
     const resolveProvider = vi.fn(() => repaired)
+
     return {
       reconnect,
       resolveProvider,

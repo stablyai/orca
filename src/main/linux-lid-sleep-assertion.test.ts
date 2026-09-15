@@ -9,6 +9,7 @@ class FakeSystemdInhibitProcess extends EventEmitter {
   pid = 123
   kill = vi.fn(() => {
     this.emit('exit', null, 'SIGTERM')
+
     return true
   })
 }
@@ -24,6 +25,7 @@ describe('LinuxLidSleepAssertion', () => {
   it('spawns systemd-inhibit with sleep and lid-switch inhibitors on Linux', () => {
     const child = new FakeSystemdInhibitProcess()
     const spawn = vi.fn(() => child)
+
     const assertion = new LinuxLidSleepAssertion({
       logger: createLogger(),
       platform: 'linux',
@@ -51,6 +53,7 @@ describe('LinuxLidSleepAssertion', () => {
 
   it('is a no-op off Linux', () => {
     const spawn = vi.fn(() => new FakeSystemdInhibitProcess())
+
     const assertion = new LinuxLidSleepAssertion({
       logger: createLogger(),
       platform: 'darwin',
@@ -64,6 +67,7 @@ describe('LinuxLidSleepAssertion', () => {
 
   it('does not start a second inhibitor while one is live', () => {
     const spawn = vi.fn(() => new FakeSystemdInhibitProcess())
+
     const assertion = new LinuxLidSleepAssertion({
       logger: createLogger(),
       platform: 'linux',
@@ -78,6 +82,7 @@ describe('LinuxLidSleepAssertion', () => {
 
   it('stops only the child process it started', () => {
     const child = new FakeSystemdInhibitProcess()
+
     const assertion = new LinuxLidSleepAssertion({
       logger: createLogger(),
       platform: 'linux',
@@ -92,6 +97,7 @@ describe('LinuxLidSleepAssertion', () => {
 
   it('removes child listeners when stopped intentionally', () => {
     const child = new FakeSystemdInhibitProcess()
+
     const assertion = new LinuxLidSleepAssertion({
       logger: createLogger(),
       platform: 'linux',
@@ -111,6 +117,7 @@ describe('LinuxLidSleepAssertion', () => {
   it('does not report an intentional stop as a failed inhibitor', () => {
     const logger = createLogger()
     const child = new FakeSystemdInhibitProcess()
+
     const assertion = new LinuxLidSleepAssertion({
       logger,
       platform: 'linux',
@@ -126,11 +133,13 @@ describe('LinuxLidSleepAssertion', () => {
 
   it('logs missing systemd-inhibit once and degrades to no-op starts', () => {
     const logger = createLogger()
+
     const spawn = vi.fn(() => {
       const error = new Error('spawn systemd-inhibit ENOENT') as Error & { code: string }
       error.code = 'ENOENT'
       throw error
     })
+
     const assertion = new LinuxLidSleepAssertion({
       logger,
       platform: 'linux',
@@ -153,6 +162,7 @@ describe('LinuxLidSleepAssertion', () => {
     const logger = createLogger()
     let now = 1_000
     const onUnexpectedFailure = vi.fn()
+
     const assertion = new LinuxLidSleepAssertion({
       logger,
       now: () => now,
@@ -178,10 +188,13 @@ describe('LinuxLidSleepAssertion', () => {
   it('suppresses retry attempts until the shared retry gate expires', () => {
     vi.useFakeTimers()
     let now = 1_000
+
     const spawn = vi.fn(() => {
       throw new Error('dbus unavailable')
     })
+
     const onUnexpectedFailure = vi.fn()
+
     const assertion = new LinuxLidSleepAssertion({
       logger: createLogger(),
       now: () => now,
@@ -210,12 +223,15 @@ describe('LinuxLidSleepAssertion', () => {
 
   it('does not retry when systemd-inhibit is missing', () => {
     vi.useFakeTimers()
+
     const spawn = vi.fn(() => {
       const error = new Error('spawn systemd-inhibit ENOENT') as Error & { code: string }
       error.code = 'ENOENT'
       throw error
     })
+
     const onUnexpectedFailure = vi.fn()
+
     const assertion = new LinuxLidSleepAssertion({
       logger: createLogger(),
       onUnexpectedFailure,
@@ -234,10 +250,13 @@ describe('LinuxLidSleepAssertion', () => {
 
   it('logs repeated identical failures at debug until reset', () => {
     const logger = createLogger()
+
     const spawn = vi.fn(() => {
       throw new Error('dbus unavailable')
     })
+
     let now = 1_000
+
     const assertion = new LinuxLidSleepAssertion({
       logger,
       now: () => now,

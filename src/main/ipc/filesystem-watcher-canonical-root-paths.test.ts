@@ -24,6 +24,7 @@ vi.mock('node:fs', async (importOriginal) => {
   // Why: the supervisor resolves the watched root synchronously, so the fake
   // symlink target has to come from realpathSync rather than fs/promises.
   const actual = await importOriginal<typeof NodeFs>()
+
   return { ...actual, realpathSync: Object.assign(realpathMock, { native: realpathMock }) }
 })
 
@@ -54,9 +55,11 @@ describe('local filesystem watcher canonical root paths', () => {
     realpathMock.mockReset()
     vi.mocked(stat).mockReset()
     vi.mocked(subscribeParcelWatcher).mockReset()
+
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
+
     handleMock.mockImplementation((channel, handler) => {
       handlers[channel] = handler
     })
@@ -77,6 +80,7 @@ describe('local filesystem watcher canonical root paths', () => {
     let watcherCallback: ((err: Error | null, events: WatcherEvent[]) => void) | undefined
     vi.mocked(subscribeParcelWatcher).mockImplementation(async (_root, callback) => {
       watcherCallback = callback as typeof watcherCallback
+
       return { unsubscribe: vi.fn() } as never
     })
     const sendMock = vi.fn()
@@ -89,11 +93,13 @@ describe('local filesystem watcher canonical root paths', () => {
       },
       { timeout: WATCH_BATCH_TRAILING_MS + 2_000 }
     )
+
     return sendMock.mock.calls.find(([channel]) => channel === 'fs:changed')![1] as FsChangedPayload
   }
 
   it('reports symlink-resolved event paths under the subscribed root', async () => {
     const worktreePath = resolve('/tmp/orca-link')
+
     const payload = await emitAndCapture(worktreePath, resolve('/private/tmp/orca-real'), [
       { path: resolve('/private/tmp/orca-real/src/agent-edit.ts'), type: 'update' }
     ])
@@ -112,6 +118,7 @@ describe('local filesystem watcher canonical root paths', () => {
     'reports on-disk casing under the subscribed spelling',
     async () => {
       const worktreePath = resolve('/tmp/orca-case/repo')
+
       const payload = await emitAndCapture(worktreePath, worktreePath, [
         { path: resolve('/tmp/orca-case/Repo/src/agent-edit.ts'), type: 'update' }
       ])
@@ -123,6 +130,7 @@ describe('local filesystem watcher canonical root paths', () => {
   it('leaves already-matching event paths untouched', async () => {
     const worktreePath = resolve('/tmp/orca-plain')
     const eventPath = resolve('/tmp/orca-plain/src/agent-edit.ts')
+
     const payload = await emitAndCapture(worktreePath, worktreePath, [
       { path: eventPath, type: 'update' }
     ])

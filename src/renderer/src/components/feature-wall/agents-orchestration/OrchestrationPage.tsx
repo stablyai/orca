@@ -31,7 +31,9 @@ const INITIAL_CHILD_PENDING: RowPending = {
 }
 
 const CHILD_ONE_CREATE_MS = ORCHESTRATION_CLI_COMMAND_TIMINGS_MS[0]
+
 const CHILD_TWO_CREATE_MS = ORCHESTRATION_CLI_COMMAND_TIMINGS_MS[1]
+
 const FIRST_DISPATCH_MS = ORCHESTRATION_CLI_COMMAND_TIMINGS_MS[2]
 
 export function OrchestrationPage(props: {
@@ -50,6 +52,7 @@ export function OrchestrationPage(props: {
     loopMs,
     showResponseBeats = true
   } = props
+
   const stageRef = useRef<HTMLDivElement | null>(null)
   const arrowsRef = useRef<SVGSVGElement | null>(null)
   const bubbleLayerRef = useRef<HTMLDivElement | null>(null)
@@ -73,36 +76,46 @@ export function OrchestrationPage(props: {
   const drawArrow = useCallback((): void => {
     const arrows = arrowsRef.current
     const stage = stageRef.current
+
     if (!arrows || !stage) {
       return
     }
+
     arrows.removeAttribute('data-fading')
     const stageRect = stage.getBoundingClientRect()
     arrows.setAttribute('viewBox', `0 0 ${stageRect.width} ${stageRect.height}`)
     arrows.setAttribute('width', String(stageRect.width))
     arrows.setAttribute('height', String(stageRect.height))
     const coordEl = stage.querySelector('[data-feature-wall-card="coord"]')
+
     if (!(coordEl instanceof HTMLElement)) {
       arrows.innerHTML = ''
+
       return
     }
+
     const codexEl = stage.querySelector('[data-feature-wall-card="child"]')
     const claudeEl = stage.querySelector('[data-feature-wall-card="child-claude"]')
     const paths: string[] = []
+
     if (codexEl instanceof HTMLElement) {
       paths.push(arrowPathFromCoordTo(coordEl, codexEl, stageRect))
     }
+
     if (claudeEl instanceof HTMLElement) {
       paths.push(arrowPathFromCoordTo(coordEl, claudeEl, stageRect))
     }
+
     arrows.innerHTML = paths.map((d) => `<path d="${d}"/>`).join('')
   }, [])
 
   useEffect(() => {
     if (active && displayedChildCount >= 2) {
       const frameId = requestAnimationFrame(() => drawArrow())
+
       return () => cancelAnimationFrame(frameId)
     }
+
     return undefined
   }, [active, displayedChildCount, drawArrow])
 
@@ -117,13 +130,17 @@ export function OrchestrationPage(props: {
       setCreatedChildCount(0)
       pendingMirror.current = { ...INITIAL_CHILD_PENDING }
       const arrows = arrowsRef.current
+
       if (arrows) {
         arrows.innerHTML = ''
       }
+
       const layer = bubbleLayerRef.current
+
       if (layer) {
         layer.innerHTML = ''
       }
+
       return
     }
 
@@ -136,27 +153,33 @@ export function OrchestrationPage(props: {
       setCreatedChildCount(2)
       pendingMirror.current = {}
       const frameId = requestAnimationFrame(() => drawArrow())
+
       return () => cancelAnimationFrame(frameId)
     }
 
     let cancelled = false
     const timeouts: number[] = []
     const frames = new Set<number>()
+
     const later = (fn: () => void, ms: number): void => {
       timeouts.push(window.setTimeout(() => !cancelled && fn(), ms))
     }
+
     const nextFrame = (fn: () => void): void => {
       const frameId = requestAnimationFrame(() => {
         frames.delete(frameId)
+
         if (!cancelled) {
           fn()
         }
       })
+
       frames.add(frameId)
     }
 
     const clearArrows = (): void => {
       const arrows = arrowsRef.current
+
       if (arrows) {
         arrows.innerHTML = ''
       }
@@ -167,6 +190,7 @@ export function OrchestrationPage(props: {
       const toRow = rowRefs.current[beat.to]
       const stage = stageRef.current
       const layer = bubbleLayerRef.current
+
       if (!fromRow || !toRow || !stage || !layer) {
         return
       }
@@ -179,6 +203,7 @@ export function OrchestrationPage(props: {
       // still pending (collapsed), aim the bubble at its parent card center
       // — the row itself reveals only when the bubble lands.
       const wasPending = pendingMirror.current[beat.to] === true
+
       const targetForPath: HTMLElement = wasPending
         ? ((toRow.closest('[data-feature-wall-card]') as HTMLElement | null) ?? toRow)
         : toRow
@@ -203,12 +228,15 @@ export function OrchestrationPage(props: {
           pendingMirror.current = { ...pendingMirror.current, [beat.to]: false }
           setRowPending((p) => ({ ...p, [beat.to]: false }))
         }
+
         const replacement =
           beat.to === 'coord-claude' && beat.coordMsg ? beat.coordMsg : (beat.recipientMsg ?? '')
+
         if (replacement) {
           setRowMessages((m) => ({ ...m, [beat.to]: replacement }))
           setRowFlash((f) => ({ ...f, [beat.to]: (f[beat.to] ?? 0) + 1 }))
         }
+
         bubble.classList.remove('in-flight')
         bubble.classList.add('landed')
       }, BUBBLE_FLIGHT_MS)
@@ -223,6 +251,7 @@ export function OrchestrationPage(props: {
       setRowPending(INITIAL_CHILD_PENDING)
       setCreatedChildCount(0)
       pendingMirror.current = { ...INITIAL_CHILD_PENDING }
+
       if (!childCountControlledRef.current) {
         // Reveal each child workspace when the matching shell command appears,
         // so the CLI tip reads as Claude driving the exact Orca workflow shown.
@@ -234,17 +263,22 @@ export function OrchestrationPage(props: {
           later(() => drawArrow(), 360)
         }, CHILD_TWO_CREATE_MS)
       }
+
       const beats = showResponseBeats ? PHASE1_BEATS : PHASE1_BEATS.slice(0, 2)
       let beatIdx = 0
+
       const next = (): void => {
         if (beatIdx >= beats.length) {
           later(done, 800)
+
           return
         }
+
         fireBubble(beats[beatIdx])
         beatIdx += 1
         later(next, BUBBLE_GAP_MS)
       }
+
       later(next, FIRST_DISPATCH_MS)
     }
 
@@ -263,12 +297,14 @@ export function OrchestrationPage(props: {
     window.addEventListener('resize', onResize)
 
     const cleanupLayer = bubbleLayerRef.current
+
     return () => {
       cancelled = true
       timeouts.forEach((id) => window.clearTimeout(id))
       frames.forEach((id) => cancelAnimationFrame(id))
       frames.clear()
       window.removeEventListener('resize', onResize)
+
       if (cleanupLayer) {
         cleanupLayer.innerHTML = ''
       }

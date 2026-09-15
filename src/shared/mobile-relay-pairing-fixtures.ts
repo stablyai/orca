@@ -1,6 +1,7 @@
 import type { PairingOffer } from './pairing'
 
 const PUBLIC_KEY_B64 = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
+
 const INVITE_TOKEN = 'abcdefghijklmnopqrstuvwxyzABCDEFGH012345678'
 
 export type PairingFixture = {
@@ -16,6 +17,7 @@ export function createMobileRelayPairingFixtures(now: number): PairingFixture[] 
     deviceToken: 'device-token',
     publicKeyB64: PUBLIC_KEY_B64
   }
+
   const relay = {
     v: 1 as const,
     directorUrl: 'https://relay.onorca.dev',
@@ -26,6 +28,7 @@ export function createMobileRelayPairingFixtures(now: number): PairingFixture[] 
     inviteExpiresAt: now + 5 * 60 * 1000,
     e2eeFraming: 2 as const
   }
+
   return [
     { name: 'legacy direct offer', payload: directOffer, expected: directOffer },
     {
@@ -136,5 +139,6 @@ export function createMobileRelayPairingFixtures(now: number): PairingFixture[] 
 export function encodePairingFixturePayload(payload: unknown): string {
   const json = JSON.stringify(payload)
   const code = Buffer.from(json, 'utf8').toString('base64url')
+
   return `orca://pair?code=${code}`
 }

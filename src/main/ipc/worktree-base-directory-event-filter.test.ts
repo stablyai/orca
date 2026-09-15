@@ -64,6 +64,7 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
 
   it('classifies primary-checkout branch metadata as structural and index as status-only', () => {
     const target = makeGitCommonTarget()
+
     // A primary HEAD write can only move the primary checkout's head, while a
     // packed-refs rewrite can move any branch oid with no admin-dir event.
     for (const [file, headIdentityScope] of [
@@ -82,6 +83,7 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
         headIdentityScope
       })
     }
+
     expect(
       classifyWorktreeBaseChange(target, {
         type: 'update',
@@ -214,14 +216,17 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
       headIdentityRepoIds: [],
       headIdentityScope: EMPTY_HEAD_IDENTITY_SCOPE
     })
+
     const boundPaths = [
       join(COMMON_DIR, 'refs', 'remotes', 'origin', 'main'),
       // Branch names with slashes nest arbitrarily deep.
       join(COMMON_DIR, 'refs', 'remotes', 'team', 'fork', 'feature', 'nested'),
       join(COMMON_DIR, 'refs', 'custom', 'origin', 'main')
     ]
+
     for (const path of boundPaths) {
       target.gitStatusRefPaths = new Set([path])
+
       for (const type of ['create', 'update'] as const) {
         expect(classifyWorktreeBaseChange(target, { type, path })).toEqual({
           structureRepoIds: [],
@@ -231,6 +236,7 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
         })
       }
     }
+
     // Ref-lock churn from an in-flight or aborted ref update stays invisible.
     expect(
       classifyWorktreeBaseChange(target, {
@@ -258,12 +264,14 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
 
   it('classifies Windows-shaped linked metadata paths', () => {
     const commonDir = win32.join('C:\\', 'repos', 'project', '.git')
+
     const target: WorktreeBaseWatchTarget = {
       ...makeGitCommonTarget(),
       key: `git-common:local:${commonDir}`,
       path: commonDir,
       gitStatusRefPaths: new Set([win32.join(commonDir, 'refs', 'remotes', 'origin', 'main')])
     }
+
     expect(
       classifyWorktreeBaseChange(target, {
         type: 'update',
@@ -301,6 +309,7 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
 
   it('ignores non-status common-dir churn', () => {
     const target = makeGitCommonTarget()
+
     for (const path of [
       join(COMMON_DIR, 'FETCH_HEAD'),
       join(COMMON_DIR, 'COMMIT_EDITMSG'),
@@ -323,6 +332,7 @@ describe('matchingWorktreeBaseRepoIds (git-common)', () => {
 
   it('widens to a full head re-read when the worktrees admin root itself changes', () => {
     const target = makeGitCommonTarget()
+
     // `git worktree prune` can delete and a later add recreate this dir; the
     // watcher's stream is bound to the old inode, so no cached entry is trusted.
     for (const type of ['create', 'update', 'delete'] as const) {

@@ -27,6 +27,7 @@ type CrashReportSubmitFailureLike = {
 function normalizedFailureMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
   const sanitized = sanitizeCrashReportString(message).trim()
+
   return (
     sanitized ||
     translate(
@@ -55,6 +56,7 @@ export function getCrashReportCopySubmissionFailure(
             reason: normalizedFailureMessage(failure.diagnosticBundle.reason)
           }
         : undefined
+
   return {
     error: normalizedFailureMessage(failure.error),
     ...(diagnosticContext ? { diagnosticContext } : {})
@@ -73,6 +75,7 @@ export function getCrashReportSubmitFailureNotice(
           { value0: sanitizeCrashReportString(failure.diagnosticBundle.ticketId) }
         )
       : null
+
   const omittedDetail =
     failure.diagnosticBundle?.status === 'not_uploaded'
       ? asSentence(
@@ -83,7 +86,9 @@ export function getCrashReportSubmitFailureNotice(
           )
         )
       : null
+
   const attachmentAlreadyOmitted = failure.diagnosticBundle?.status === 'not_uploaded'
+
   const recovery =
     includeDiagnosticLogs && !attachmentAlreadyOmitted
       ? translate(

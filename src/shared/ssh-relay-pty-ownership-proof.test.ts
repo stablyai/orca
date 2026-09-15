@@ -213,6 +213,7 @@ describe('planRelayPtySweep', () => {
         [orphan({ foregroundProcessEvidence: { ...idleShell(), capturedAgeMs } })],
         context()
       )
+
       expect(plan.sweep, `capturedAgeMs=${capturedAgeMs}`).toEqual([])
       expect(reasonFor(plan, 'pty-1'), `capturedAgeMs=${capturedAgeMs}`).toBe(
         'host foreground observation is too old to authorize a stop'

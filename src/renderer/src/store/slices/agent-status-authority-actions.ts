@@ -27,6 +27,7 @@ export function createAgentStatusAuthorityActions(
   | 'transferAgentPaneAuthority'
 > {
   const { get, set, freshness } = runtime
+
   return {
     scheduleAgentStatusFreshness: () => freshness.schedule(),
 
@@ -34,26 +35,32 @@ export function createAgentStatusAuthorityActions(
       const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
       const retiredPaneKeys = retireAgentPaneAuthorityAliases(paneKey)
       const retiredPaneKeySet = new Set(retiredPaneKeys)
+
       for (const key of retiredPaneKeys) {
         rendererAgentStatusObservations.forget(key)
       }
+
       let hadLive = false
       set((s) => {
         const retiredLivePaneKeys = retiredPaneKeys.filter((key) => key in s.agentStatusByPaneKey)
         hadLive = retiredLivePaneKeys.length > 0
+
         let nextRetentionSuppressedPaneKeys = removePaneKeys(
           s.retentionSuppressedPaneKeys,
           retiredPaneKeySet
         )
+
         if (
           retiredLivePaneKeys.length > 0 &&
           nextRetentionSuppressedPaneKeys === s.retentionSuppressedPaneKeys
         ) {
           nextRetentionSuppressedPaneKeys = { ...nextRetentionSuppressedPaneKeys }
         }
+
         for (const key of retiredLivePaneKeys) {
           nextRetentionSuppressedPaneKeys[key] = true
         }
+
         return {
           agentStatusByPaneKey: removePaneKeys(s.agentStatusByPaneKey, retiredPaneKeySet),
           runtimeAgentOrchestrationByPaneKey: removePaneKeys(
@@ -103,9 +110,11 @@ export function createAgentStatusAuthorityActions(
           sortEpoch: hadLive ? s.sortEpoch + 1 : s.sortEpoch
         }
       })
+
       if (hadLive) {
         freshness.scheduleDeferred()
       }
+
       if (typeof window !== 'undefined') {
         window.api?.agentStatus?.retirePaneAuthority?.(ownerPaneKey)
       }
@@ -119,6 +128,7 @@ export function createAgentStatusAuthorityActions(
     // those are genuinely stale. It only re-opens the pane to future status.
     restoreAgentPaneAuthority: (paneKey) => {
       const ownerPaneKey = resolveAgentPaneAuthorityKey(paneKey)
+
       // Why: a closed tab is a stronger, separate claim — re-attach must not undo it.
       if (
         isRecentlyClosedAgentStatusTab(
@@ -128,19 +138,25 @@ export function createAgentStatusAuthorityActions(
       ) {
         return
       }
+
       set((s) => {
         const restorable = [paneKey, ownerPaneKey].filter(
           (key) => key in s.recentlyRetiredAgentStatusPaneKeys
         )
+
         if (restorable.length === 0) {
           return s
         }
+
         const next = { ...s.recentlyRetiredAgentStatusPaneKeys }
+
         for (const key of restorable) {
           delete next[key]
         }
+
         return { recentlyRetiredAgentStatusPaneKeys: next }
       })
+
       // Why: deliberately OUTSIDE the guard above, and not gated on having cleared
       // anything here. This map is not a mirror of main's — main fences panes the
       // renderer never hears about (retirePtyAgentLaunchAuthority on command-finished
@@ -154,9 +170,11 @@ export function createAgentStatusAuthorityActions(
     },
     transferAgentPaneAuthority: ({ fromPaneKey, toPaneKey, ptyId }) => {
       const transfer = transferAgentPaneAuthorityAlias({ fromPaneKey, toPaneKey, ptyId })
+
       if (!transfer || transfer.previousOwnerPaneKey === transfer.ownerPaneKey) {
         return
       }
+
       const from = transfer.previousOwnerPaneKey
       const to = transfer.ownerPaneKey
       // Why: the moved row carries the observation stamped for its OLD key; renderer-authored
@@ -216,6 +234,7 @@ export function createAgentStatusAuthorityActions(
         cacheTimerByKey: movePaneKeyedRecord(s.cacheTimerByKey, from, to),
         retentionSuppressedPaneKeys: movePaneKeyedRecord(s.retentionSuppressedPaneKeys, from, to)
       }))
+
       if (typeof window !== 'undefined') {
         window.api?.agentStatus?.transferPaneAuthority?.({
           fromPaneKey: from,

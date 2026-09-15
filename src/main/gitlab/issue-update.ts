@@ -41,6 +41,7 @@ export async function updateIssue(
         localGitOptions
       )
     ).source
+
   if (!projectRef) {
     return {
       ok: false,
@@ -54,6 +55,7 @@ export async function updateIssue(
   // State change requires a separate command (parallel to github's split).
   if (updates.state) {
     await acquire()
+
     try {
       const cmd = updates.state === 'closed' ? 'close' : 'reopen'
       await glabExecFileAsync(
@@ -69,6 +71,7 @@ export async function updateIssue(
       )
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
+
       // Treat "already closed/reopened" as a no-op (matches gh path).
       if (!stderr.toLowerCase().includes('already')) {
         errors.push(classifyGlabError(stderr).message)
@@ -80,6 +83,7 @@ export async function updateIssue(
 
   if (updates.body !== undefined) {
     await acquire()
+
     try {
       await glabExecFileAsync(
         [
@@ -110,24 +114,29 @@ export async function updateIssue(
     repoFlag,
     ...glabHostnameArgs(projectRef, connectionId)
   ]
+
   let hasEditArgs = false
 
   if (updates.title) {
     editArgs.push('--title', updates.title)
     hasEditArgs = true
   }
+
   for (const label of updates.addLabels ?? []) {
     editArgs.push('--label', label)
     hasEditArgs = true
   }
+
   for (const label of updates.removeLabels ?? []) {
     editArgs.push('--unlabel', label)
     hasEditArgs = true
   }
+
   for (const assignee of updates.addAssignees ?? []) {
     editArgs.push('--assignee', assignee)
     hasEditArgs = true
   }
+
   for (const assignee of updates.removeAssignees ?? []) {
     editArgs.push('--unassignee', assignee)
     hasEditArgs = true
@@ -135,6 +144,7 @@ export async function updateIssue(
 
   if (hasEditArgs) {
     await acquire()
+
     try {
       await glabExecFileAsync(
         editArgs,
@@ -151,5 +161,6 @@ export async function updateIssue(
   if (errors.length > 0) {
     return { ok: false, error: errors.join('; ') }
   }
+
   return { ok: true }
 }

@@ -15,31 +15,39 @@ import {
 import { SEARCH_TIMEOUT_MS } from '../../shared/text-search'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
+
 vi.mock('fs/promises', async () =>
   (await import('./orca-runtime-files-mock-registry')).fsPromisesModuleMock()
 )
+
 vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
+
 vi.mock('../ipc/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
+
 vi.mock(
   '../ipc/rg-availability',
   async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
 )
+
 vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
 )
+
 vi.mock(
   '../ipc/filesystem-search-git',
   async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
 )
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
@@ -57,6 +65,7 @@ function createRuntimeSearchChild(): MockRuntimeSearchChild {
   child.stdout.setEncoding = vi.fn()
   child.stderr = new EventEmitter()
   child.kill = vi.fn()
+
   return child
 }
 
@@ -72,6 +81,7 @@ describe('RuntimeFileCommands', () => {
   it('keeps byte-budgeted legacy listings count-bounded across an SSH hop', async () => {
     const listFiles = vi.fn().mockResolvedValue(['src/index.ts'])
     getSshFilesystemProviderMock.mockReturnValue({ listFiles })
+
     const { commands } = createRuntimeFileCommands({
       resolveRuntimeFileTarget: vi.fn(async () => ({
         worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
@@ -98,6 +108,7 @@ describe('RuntimeFileCommands', () => {
       },
       executionHostId: 'local'
     }))
+
     const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const child = createRuntimeSearchChild()
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
@@ -108,6 +119,7 @@ describe('RuntimeFileCommands', () => {
       query: 'needle',
       maxResults: 10
     })
+
     await vi.advanceTimersByTimeAsync(SEARCH_TIMEOUT_MS)
 
     await expect(resultPromise).resolves.toMatchObject({
@@ -130,6 +142,7 @@ describe('RuntimeFileCommands', () => {
         worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
         executionHostId: 'local'
       }))
+
       const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
       const child = createRuntimeSearchChild()
       Object.defineProperty(child, 'pid', { value: undefined })
@@ -142,8 +155,10 @@ describe('RuntimeFileCommands', () => {
         query: 'needle',
         maxResults: 10
       })
+
       await flushRuntimeSearchMicrotasks()
       const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
+
       if (order === 'error-first') {
         expect(() => child.emit('error', error)).not.toThrow()
         child.emit('close', -2, null)
@@ -165,6 +180,7 @@ describe('RuntimeFileCommands', () => {
       worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
       executionHostId: 'local'
     }))
+
     const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const child = createRuntimeSearchChild()
     Object.defineProperty(child, 'pid', { value: 1 })
@@ -177,6 +193,7 @@ describe('RuntimeFileCommands', () => {
       query: 'needle',
       maxResults: 10
     })
+
     await flushRuntimeSearchMicrotasks()
     child.emit('close', 127, null)
 
@@ -193,6 +210,7 @@ describe('RuntimeFileCommands', () => {
       },
       executionHostId: 'local'
     }))
+
     const { commands, store } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const child = createRuntimeSearchChild()
     Object.defineProperty(child, 'pid', { value: 1 })
@@ -205,6 +223,7 @@ describe('RuntimeFileCommands', () => {
       query: 'needle',
       maxResults: 10
     })
+
     await Promise.resolve()
     await Promise.resolve()
     await Promise.resolve()
@@ -233,6 +252,7 @@ describe('RuntimeFileCommands', () => {
       worktree: { id: 'wt-1', repoId: 'repo-1', path: 'C:\\repo' },
       executionHostId: 'local'
     }))
+
     const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const fallback = { files: [], totalMatches: 0, truncated: false }
     resolveAuthorizedPathMock.mockResolvedValue('C:\\repo')
@@ -252,6 +272,7 @@ describe('RuntimeFileCommands', () => {
       worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
       executionHostId: 'ssh:ssh-1'
     }))
+
     const { commands } = createRuntimeFileCommands({ resolveRuntimeFileTarget })
     const listFiles = vi.fn(async () => ['src/target.ts'])
     getSshFilesystemProviderMock.mockReturnValue({

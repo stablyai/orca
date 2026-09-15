@@ -18,9 +18,11 @@ export type Deferred<T> = {
 
 export function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((settle) => {
     resolve = settle
   })
+
   return { promise, resolve }
 }
 
@@ -141,15 +143,18 @@ export function createHarness(
       result: patchResult
     }
   ])
+
   let current = true
   let catalogRevision = 1
   const stateListeners = new Set<(current: AppState, previous: AppState) => void>()
   let peakStateListenerCount = 0
+
   const publishState = (): void => {
     for (const listener of stateListeners) {
       listener(state, state)
     }
   }
+
   const capturePreparationInput = vi.fn(
     async (
       authority: DirectSshAuthority,
@@ -164,6 +169,7 @@ export function createHarness(
       snapshotRevision
     })
   )
+
   const prepareOnly = vi.fn(async (input: DirectSshPreparationInput) => ({
     status: 'complete' as const,
     token: token(input.snapshotRevision ?? null, input.catalogRevision),
@@ -178,13 +184,16 @@ export function createHarness(
     },
     lineageOutcome: 'complete' as const
   }))
+
   const finalizeHydratedTerminals = vi.fn(() => 1)
+
   const sync = createRemoteWorkspaceTargetSync({
     store: {
       getState: () => state,
       subscribe: (listener) => {
         stateListeners.add(listener)
         peakStateListenerCount = Math.max(peakStateListenerCount, stateListeners.size)
+
         return () => stateListeners.delete(listener)
       }
     },
@@ -196,6 +205,7 @@ export function createHarness(
     prepareOnly,
     finalizeHydratedTerminals
   })
+
   return {
     sync,
     setForConnectedTargets,

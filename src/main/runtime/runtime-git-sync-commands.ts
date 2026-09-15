@@ -35,28 +35,36 @@ export class RuntimeGitSyncCommands {
   async abortRuntimeGitMerge(worktreeSelector: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       await provider.abortMerge(target.worktree.path)
+
       return { ok: true }
     }
+
     await abortMerge(target.worktree.path, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+
     return { ok: true }
   }
 
   async abortRuntimeGitRebase(worktreeSelector: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       await provider.abortRebase(target.worktree.path)
+
       return { ok: true }
     }
+
     await abortRebase(target.worktree.path, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+
     return { ok: true }
   }
 
@@ -66,9 +74,11 @@ export class RuntimeGitSyncCommands {
   ): Promise<GitUpstreamStatus> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return provider.getUpstreamStatus(target.worktree.path, pushTarget)
     }
+
     return getUpstreamStatus(target.worktree.path, pushTarget, localGitOptionsForTarget(target))
   }
 
@@ -78,14 +88,18 @@ export class RuntimeGitSyncCommands {
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       const materializedPushTarget = pushTarget
         ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
         : undefined
+
       this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
       await provider.fetchRemote(target.worktree.path, materializedPushTarget)
+
       return { ok: true }
     }
+
     const materializedPushTarget = pushTarget
       ? await materializeWorktreePushTargetRemote(
           target.worktree.path,
@@ -95,11 +109,13 @@ export class RuntimeGitSyncCommands {
           localGitOptionsForTarget(target)
         )
       : undefined
+
     this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
     await gitFetch(target.worktree.path, materializedPushTarget, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+
     return { ok: true }
   }
 
@@ -109,9 +125,11 @@ export class RuntimeGitSyncCommands {
   ): Promise<GitForkSyncResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return provider.syncForkDefaultBranch(target.worktree.path, expectedUpstream)
     }
+
     return gitSyncForkDefaultBranch(target.worktree.path, expectedUpstream, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
@@ -124,14 +142,18 @@ export class RuntimeGitSyncCommands {
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       const materializedPushTarget = pushTarget
         ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
         : undefined
+
       this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
       await provider.pullBranch(target.worktree.path, materializedPushTarget)
+
       return { ok: true }
     }
+
     const materializedPushTarget = pushTarget
       ? await materializeWorktreePushTargetRemote(
           target.worktree.path,
@@ -141,11 +163,13 @@ export class RuntimeGitSyncCommands {
           localGitOptionsForTarget(target)
         )
       : undefined
+
     this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
     await gitPull(target.worktree.path, materializedPushTarget, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+
     return { ok: true }
   }
 
@@ -155,14 +179,18 @@ export class RuntimeGitSyncCommands {
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       const materializedPushTarget = pushTarget
         ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
         : undefined
+
       this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
       await provider.fastForwardBranch(target.worktree.path, materializedPushTarget)
+
       return { ok: true }
     }
+
     const materializedPushTarget = pushTarget
       ? await materializeWorktreePushTargetRemote(
           target.worktree.path,
@@ -172,25 +200,31 @@ export class RuntimeGitSyncCommands {
           localGitOptionsForTarget(target)
         )
       : undefined
+
     this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
     await gitFastForward(target.worktree.path, materializedPushTarget, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+
     return { ok: true }
   }
 
   async rebaseRuntimeGitFromBase(worktreeSelector: string, baseRef: string): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       await provider.rebaseFromBase(target.worktree.path, baseRef)
+
       return { ok: true }
     }
+
     await gitPullRebaseFromBase(target.worktree.path, baseRef, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+
     return { ok: true }
   }
 
@@ -202,16 +236,20 @@ export class RuntimeGitSyncCommands {
   ): Promise<{ ok: true }> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       const materializedPushTarget = pushTarget
         ? await materializeWorktreePushTargetRemoteSsh(provider, target.worktree.path, pushTarget)
         : undefined
+
       this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
       await provider.pushBranch(target.worktree.path, publish === true, materializedPushTarget, {
         forceWithLease: forceWithLease === true
       })
+
       return { ok: true }
     }
+
     const materializedPushTarget = pushTarget
       ? await materializeWorktreePushTargetRemote(
           target.worktree.path,
@@ -221,12 +259,14 @@ export class RuntimeGitSyncCommands {
           localGitOptionsForTarget(target)
         )
       : undefined
+
     this.persistMaterializedPushTargetIfCreated(target, materializedPushTarget)
     await gitPush(target.worktree.path, publish === true, materializedPushTarget, {
       forceWithLease: forceWithLease === true,
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+
     return { ok: true }
   }
 
@@ -237,11 +277,14 @@ export class RuntimeGitSyncCommands {
     if (message.trim().length === 0) {
       throw new Error('Commit message is required')
     }
+
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return provider.commit(target.worktree.path, message)
     }
+
     return commitChanges(target.worktree.path, message, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'

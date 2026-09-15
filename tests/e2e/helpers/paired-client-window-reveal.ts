@@ -19,6 +19,7 @@ export function assertPairedClientWindowRevealed(report: PairedClientWindowRevea
   if (report.windowCount === 0) {
     throw new Error('Paired client has no BrowserWindow to reveal')
   }
+
   if (!report.isVisible) {
     throw new Error(
       `Paired client window stayed hidden after showInactive() (windows: ${report.windowCount})`
@@ -43,19 +44,24 @@ export async function focusPairedClientWindow(
   const revealed = await revealPairedClientWindow(client)
   const deadline = Date.now() + timeoutMs
   let isFocused = false
+
   while (!isFocused) {
     isFocused = await client.app.evaluate(({ app, BrowserWindow }) => {
       const window = BrowserWindow.getAllWindows()[0]
       // Native-focus coverage requires a dedicated foreground session.
       app.focus({ steal: true })
       window?.focus()
+
       return window?.isFocused() ?? false
     })
+
     if (isFocused || Date.now() >= deadline) {
       break
     }
+
     await client.page.waitForTimeout(250)
   }
+
   return { ...revealed, isFocused }
 }
 
@@ -66,25 +72,30 @@ export async function revealPairedClientWindow(
     if (process.env.ORCA_BACKGROUND_LAUNCH === '1') {
       throw new Error('Window reveal is forbidden by ORCA_BACKGROUND_LAUNCH')
     }
+
     const windows = BrowserWindow.getAllWindows()
     const window = windows[0]
     const wasVisible = window?.isVisible() ?? false
+
     // Why showInactive: the renderer only needs `visibilityState === 'visible'`;
     // show() would also raise the window over whatever the developer is doing.
     if (window && !wasVisible) {
       window.showInactive()
     }
+
     return {
       isVisible: window?.isVisible() ?? false,
       wasVisible,
       windowCount: windows.length
     }
   })
+
   assertPairedClientWindowRevealed(report)
   // Why: the renderer unparks on `visibilitychange`; clicking before it lands races a parked
   // host list.
   await client.page.waitForFunction(() => document.visibilityState === 'visible', null, {
     timeout: 30_000
   })
+
   return report
 }

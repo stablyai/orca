@@ -53,6 +53,7 @@ describe('parseEphemeralVmRecipeResult', () => {
     )
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.result.userData).toEqual({
         providerResourceId: 'sandbox-123',
@@ -196,6 +197,7 @@ describe('parseEphemeralVmRecipeResult', () => {
 
   it('rejects excessive nesting before JSON.parse', () => {
     const parseSpy = vi.spyOn(JSON, 'parse')
+
     try {
       const depth = EPHEMERAL_VM_RECIPE_JSON_STRUCTURE_LIMITS.nestingDepth + 1
       const amplified = `${'['.repeat(depth)}0${']'.repeat(depth)}`

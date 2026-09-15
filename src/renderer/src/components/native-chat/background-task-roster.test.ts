@@ -134,15 +134,18 @@ describe('backgroundTasksHeaderContent', () => {
         agent('s4', { state: 'done' })
       ]
     )
+
     expect(content).toEqual({
       segments: [{ text: '5 agents', kind: 'agent' }],
       detail: '1 working, 4 done'
     })
     // The headline count and its own breakdown must never contradict each other.
     const headline = Number(content.segments[0].text.split(' ')[0])
+
     const counted = (content.detail ?? '')
       .split(', ')
       .reduce((sum, part) => sum + Number(part.split(' ')[0]), 0)
+
     expect(counted).toBe(headline)
   })
 
@@ -171,6 +174,7 @@ describe('buildBackgroundTaskGroups', () => {
       ],
       [agent('settled', { state: 'done', startedAt: 0 })]
     )
+
     expect(built.map((group) => group.kind)).toEqual(['agent', 'monitor'])
     expect(built[0].tasks.map((entry) => entry.task.id)).toEqual(['settled', 'early', 'late'])
     expect(built[0].tasks[0].settled).toBe(true)
@@ -227,13 +231,16 @@ describe('resumed tasks from mixed-version hosts', () => {
   it('renders one live owner per id and counts only the two dispatched agents', () => {
     const live = agent('resumed', { totalTokens: 20000 })
     const settled = agent('resumed', { state: 'done', totalTokens: 19003 })
+
     const shells = Array.from({ length: 4 }, (_, index) =>
       agent(`shell-${index}`, { kind: 'command' })
     )
+
     const groups = buildBackgroundTaskGroups(
       [live, ...shells],
       [settled, agent('sibling', { state: 'done' })]
     )
+
     expect(
       groups.flatMap((group) => group.tasks).filter((entry) => entry.task.id === live.id)
     ).toEqual([{ task: live, settled: false, state: 'working', name: 'Background agent' }])

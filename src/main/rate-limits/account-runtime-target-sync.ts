@@ -30,15 +30,18 @@ export function createAccountRuntimeTargetSettingsSync(
     const claudePolicyChanged = !isSameTarget(settingsTargets.claude, nextSettingsTargets.claude)
     const codexPolicyChanged = !isSameTarget(settingsTargets.codex, nextSettingsTargets.codex)
     settingsTargets = nextSettingsTargets
+
     if (!claudePolicyChanged && !codexPolicyChanged) {
       return
     }
 
     const current = rateLimits.getState()
     const refreshes: Promise<RateLimitState>[] = []
+
     if (claudePolicyChanged && !isSameTarget(current.claudeTarget, nextSettingsTargets.claude)) {
       refreshes.push(rateLimits.refreshClaudeForTarget(nextSettingsTargets.claude))
     }
+
     if (codexPolicyChanged && !isSameTarget(current.codexTarget, nextSettingsTargets.codex)) {
       refreshes.push(rateLimits.refreshCodexForTarget(nextSettingsTargets.codex))
     }

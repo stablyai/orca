@@ -198,6 +198,7 @@ describe('mcp-config', () => {
   it('admits an exact-size command and rejects the field at +1', () => {
     const exact = 'x'.repeat(MCP_CONFIG_INSPECTION_MAX_FIELD_CODE_UNITS)
     const exactUtf8 = 'é'.repeat(MCP_CONFIG_INSPECTION_MAX_FIELD_BYTES / 2)
+
     const inspectCommand = (command: string) =>
       inspectMcpConfigContent(
         workspaceCandidate,
@@ -223,6 +224,7 @@ describe('mcp-config', () => {
         'value'
       ])
     )
+
     const inspectEnv = () =>
       inspectMcpConfigContent(
         workspaceCandidate,

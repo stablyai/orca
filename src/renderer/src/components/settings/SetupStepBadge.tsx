@@ -16,6 +16,7 @@ export function StepBadge({
       </div>
     )
   }
+
   if (state === 'in-progress') {
     return (
       <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
@@ -23,6 +24,7 @@ export function StepBadge({
       </div>
     )
   }
+
   return (
     <div className="flex size-6 shrink-0 items-center justify-center rounded-full border border-border/70 text-xs font-medium text-muted-foreground">
       {index}

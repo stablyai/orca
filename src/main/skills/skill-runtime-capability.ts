@@ -11,6 +11,7 @@ export async function supportsSkillRuntimeManagement(
   environmentId: string
 ): Promise<boolean> {
   const status = await getRuntimeEnvironmentStatus(userDataPath, environmentId, 15_000)
+
   return (
     status.ok === true && status.result.capabilities?.includes(SKILL_MANAGEMENT_CAPABILITY) === true
   )
@@ -21,6 +22,7 @@ export async function supportsSkillRuntimeBundleInstall(
   environmentId: string
 ): Promise<boolean> {
   const status = await getRuntimeEnvironmentStatus(userDataPath, environmentId, 15_000)
+
   return (
     status.ok === true &&
     status.result.capabilities?.includes(SKILL_BUNDLE_INSTALL_CAPABILITY) === true
@@ -32,6 +34,7 @@ export async function supportsSkillRuntimeCancellation(
   environmentId: string
 ): Promise<boolean> {
   const status = await getRuntimeEnvironmentStatus(userDataPath, environmentId, 15_000)
+
   return (
     status.ok === true &&
     status.result.capabilities?.includes(SKILL_INSTALL_CANCEL_CAPABILITY) === true
@@ -43,6 +46,7 @@ export async function supportsSkillRuntimeInstall(
   environmentId: string
 ): Promise<boolean> {
   const status = await getRuntimeEnvironmentStatus(userDataPath, environmentId, 15_000)
+
   return (
     status.ok === true && status.result.capabilities?.includes(SKILL_INSTALL_CAPABILITY) === true
   )

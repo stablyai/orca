@@ -15,6 +15,7 @@ export function isCurrentDetectedWorktreeRefresh(
       refresh.directSshAuthority
     )
   }
+
   if (refresh.runtimeAuthority) {
     return (
       getEnvironmentSshStateGeneration(refresh.runtimeAuthority.environmentId) ===
@@ -23,6 +24,7 @@ export function isCurrentDetectedWorktreeRefresh(
         refresh.runtimeAuthority.runtimeConnectionGeneration
     )
   }
+
   return true
 }
 

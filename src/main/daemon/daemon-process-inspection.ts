@@ -21,20 +21,24 @@ export type DaemonProcessInspectionDependencies = {
 export function inspectProcessSignal(pid: number): ProcessSignalEvidence {
   try {
     process.kill(pid, 0)
+
     return 'occupied'
   } catch (error) {
     if (hasErrorCode(error, 'ESRCH')) {
       return 'missing'
     }
+
     if (hasErrorCode(error, 'EPERM')) {
       return 'permission_denied'
     }
+
     return 'unavailable'
   }
 }
 
 export function inspectProcessLiveness(pid: number): ProcessLivenessVerdict {
   const signal = inspectProcessSignal(pid)
+
   switch (signal) {
     case 'occupied':
     case 'permission_denied':
@@ -75,10 +79,13 @@ export async function readProcessCommandLine(
 ): Promise<string | undefined> {
   const readTextFile =
     dependencies.readTextFile ?? (async (path: string) => await readFile(path, 'utf8'))
+
   const runCommand = dependencies.runCommand ?? runInspectionCommand
+
   if (platform === 'linux') {
     try {
       const procCommandLine = await readTextFile(`/proc/${pid}/cmdline`)
+
       if (procCommandLine.length > 0) {
         return procCommandLine
       }
@@ -86,8 +93,10 @@ export async function readProcessCommandLine(
       // Fall through to ps for procfs privilege or mount restrictions.
     }
   }
+
   try {
     const stdout = await runCommand('ps', ['-p', String(pid), '-o', 'command='], 2_000)
+
     return stdout.trim() || undefined
   } catch {
     return undefined
@@ -104,7 +113,9 @@ export async function queryWindowsProcess(
   if (!Number.isSafeInteger(pid) || pid <= 0) {
     return { status: 'unavailable' }
   }
+
   const runCommand = dependencies.runCommand ?? runInspectionCommand
+
   try {
     const stdout = await runCommand(
       'powershell.exe',
@@ -122,18 +133,22 @@ export async function queryWindowsProcess(
       ],
       3_000
     )
+
     const parsed = JSON.parse(stdout.trim()) as {
       status?: unknown
       cmd?: unknown
       start?: unknown
     }
+
     // Only a query that ran and found nothing proves absence; anything else stays indeterminate.
     if (parsed.status === 'missing') {
       return { status: 'missing' }
     }
+
     if (parsed.status !== 'present') {
       return { status: 'unavailable' }
     }
+
     return {
       status: 'present',
       commandLine: typeof parsed.cmd === 'string' && parsed.cmd ? parsed.cmd : null,
@@ -154,20 +169,25 @@ async function readClockTicksPerSecond(
   runCommand: InspectionCommandRunner
 ): Promise<number | null> {
   let pending = clockTicksPerSecondByRunner.get(runCommand)
+
   if (!pending) {
     pending = runCommand('getconf', ['CLK_TCK'], 1_000).then(
       (stdout) => {
         const ticks = Number(stdout.trim())
+
         return Number.isFinite(ticks) && ticks > 0 ? ticks : null
       },
       () => null
     )
     clockTicksPerSecondByRunner.set(runCommand, pending)
   }
+
   const ticksPerSecond = await pending
+
   if (ticksPerSecond === null && clockTicksPerSecondByRunner.get(runCommand) === pending) {
     clockTicksPerSecondByRunner.delete(runCommand)
   }
+
   return ticksPerSecond
 }
 
@@ -179,12 +199,15 @@ export async function readLinuxProcessStartedAtMs(
 ): Promise<number | null> {
   const readTextFile =
     dependencies.readTextFile ?? (async (path: string) => await readFile(path, 'utf8'))
+
   try {
     const startTicks = parseLinuxProcStartTicks(await readTextFile(`/proc/${pid}/stat`))
     const bootTimeSeconds = parseLinuxBootTimeSeconds(await readTextFile('/proc/stat'))
+
     const ticksPerSecond = await readClockTicksPerSecond(
       dependencies.runCommand ?? runInspectionCommand
     )
+
     if (
       ticksPerSecond === null ||
       !Number.isFinite(startTicks) ||
@@ -192,6 +215,7 @@ export async function readLinuxProcessStartedAtMs(
     ) {
       return null
     }
+
     return bootTimeSeconds * 1000 + (startTicks / ticksPerSecond) * 1000
   } catch {
     return null
@@ -205,9 +229,11 @@ export async function readMacosProcessStartedAtMs(
   dependencies: DaemonProcessInspectionDependencies = {}
 ): Promise<number | null> {
   const runCommand = dependencies.runCommand ?? runInspectionCommand
+
   try {
     const stdout = await runCommand('ps', ['-p', String(pid), '-o', 'lstart='], 2_000)
     const startedAtMs = Date.parse(stdout.trim())
+
     return Number.isFinite(startedAtMs) ? startedAtMs : null
   } catch {
     return null
@@ -226,6 +252,7 @@ async function runInspectionCommand(
     timeout: timeoutMs,
     windowsHide: true
   })
+
   return stdout
 }
 

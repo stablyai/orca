@@ -19,6 +19,7 @@ const IDENTITY: KimiSessionIndexIdentity = {
   mtimeMs: 1,
   sizeBytes: 1
 }
+
 let tempDirs: string[] = []
 
 afterEach(async () => {
@@ -36,6 +37,7 @@ describe('KimiSessionIndexCache', () => {
       const path = `home-${index}/session_index.jsonl`
       await cache.get(path, IDENTITY, cache.beginRead(), async () => new Map([[path, path]]))
     }
+
     const reusedPath = 'home-0/session_index.jsonl'
     await cache.get(reusedPath, IDENTITY, cache.beginRead(), async () => new Map())
 

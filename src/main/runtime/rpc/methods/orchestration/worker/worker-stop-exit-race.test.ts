@@ -6,7 +6,9 @@ import {
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
 const h = createOrchestrationWorkerReleaseHarness()
+
 beforeEach(() => h.setup())
+
 afterEach(() => h.cleanup())
 
 type StopReceipt = { state: string; alreadySettled: boolean; processAction: string }
@@ -30,18 +32,21 @@ describe('a worker whose process exits while its own stop is in flight', () => {
     // The PTY exit lands between beginWorkerStop and settleWorkerStop.
     vi.mocked(h.runtime.closeTerminal).mockImplementation(async (handle) => {
       fireExit(handle)
+
       return { handle, tabId: 'tab-worker', ptyKilled: true } as never
     })
 
     const receipt = (await h.call('orchestration.workerStop', {
       dispatch: dispatchId
     })) as StopReceipt
+
     expect(receipt).toMatchObject({ state: 'stopped', processAction: 'closed_agent_terminal' })
     expect(h.db.getWorkerDispatch(dispatchId)?.state).toBe('stopped')
 
     const second = (await h.call('orchestration.workerStop', {
       dispatch: dispatchId
     })) as StopReceipt
+
     expect(second).toMatchObject({ state: 'stopped', alreadySettled: true })
   })
 
@@ -55,6 +60,7 @@ describe('a worker whose process exits while its own stop is in flight', () => {
     const receipt = (await h.call('orchestration.workerStop', {
       dispatch: dispatchId
     })) as StopReceipt
+
     expect(receipt.state).toBe('stopped')
   })
 
@@ -62,6 +68,7 @@ describe('a worker whose process exits while its own stop is in flight', () => {
     const { dispatchId } = await h.startWorker()
     vi.mocked(h.runtime.showTerminal).mockImplementation(async (handle) => {
       fireExit(handle)
+
       return { handle, connected: false } as never
     })
     vi.spyOn(h.runtime, 'getTerminalLivenessVerdict').mockReturnValue({ status: 'exited' })

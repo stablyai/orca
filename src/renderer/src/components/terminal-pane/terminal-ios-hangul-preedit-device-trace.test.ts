@@ -43,6 +43,7 @@ import {
 } from './terminal-ios-hangul-preedit-fixture'
 
 const TRACE = loadIosDeviceTrace('ipados-hardware-2set-hangul-batchim-migration-trace.json')
+
 const KEYSTROKES = deviceTraceKeystrokes(TRACE)
 
 function pretendRecordedDevice(): void {

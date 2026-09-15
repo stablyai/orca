@@ -22,6 +22,7 @@ vi.mock('electron', () => ({
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof Os>()
+
   return {
     ...actual,
     homedir: homedirMock
@@ -45,6 +46,7 @@ function seedSystemUserHook(command: string): {
     'utf-8'
   )
   writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "system-model"\n', 'utf-8')
+
   return {
     systemHooksPath,
     managedHooksPath: join(homes.userDataDir, 'codex-runtime-home', 'home', 'hooks.json')
@@ -55,6 +57,7 @@ function readRuntimeHookCommands(managedHooksPath: string): string[] {
   const runtime = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
     hooks: Record<string, { hooks?: { command?: string }[] }[]>
   }
+
   return Object.values(runtime.hooks).flatMap((definitions) =>
     definitions.flatMap(
       (definition) => definition.hooks?.flatMap((hook) => hook.command ?? []) ?? []
@@ -69,6 +72,7 @@ function markHookTrustDisabled(toml: string, header: string): string {
   const blockEnd = nextHeaderIndex === -1 ? toml.length : nextHeaderIndex
   const block = toml.slice(headerIndex, blockEnd)
   expect(block).toContain('enabled = true')
+
   return `${toml.slice(0, headerIndex)}${block.replace('enabled = true', 'enabled = false')}${toml.slice(blockEnd)}`
 }
 
@@ -167,12 +171,14 @@ describe('CodexHookService', () => {
 
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
+
     const runtimeHooks = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
       hooks: Record<
         string,
         { matcher?: string; hooks?: { command?: string; statusMessage?: string }[] }[]
       >
     }
+
     expect(runtimeHooks.hooks.Stop?.[1]?.matcher).toBe('*')
     expect(runtimeHooks.hooks.Stop?.[1]?.hooks?.[0]?.command).toBe('user-hook')
     expect(runtimeHooks.hooks.Stop?.[1]?.hooks?.[0]?.statusMessage).toBe('Running user hook')
@@ -214,6 +220,7 @@ describe('CodexHookService', () => {
 
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
+
     const runtimeHooks = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
     }
@@ -291,6 +298,7 @@ describe('CodexHookService', () => {
       'node "${PLUGIN_ROOT}/scripts/on-stop.mjs"',
       'node "${PLUGIN_DATA}/scripts/on-stop.mjs"'
     ]
+
     const userCommand = 'user-stop-hook'
     const stopEventLabel = 'stop' as const
     const systemCodexHome = join(homes.tmpHome, '.codex')
@@ -345,9 +353,11 @@ describe('CodexHookService', () => {
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
     const runtimeHooksText = readFileSync(managedHooksPath, 'utf-8')
+
     const runtimeHooks = JSON.parse(runtimeHooksText) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
     }
+
     const stopCommands =
       runtimeHooks.hooks.Stop?.flatMap(
         (definition) => definition.hooks?.map((hook) => hook.command ?? '') ?? []
@@ -356,6 +366,7 @@ describe('CodexHookService', () => {
     expect(stopCommands).toContain(userCommand)
     expect(stopCommands.some((command) => isCodexManagedCommand(command))).toBe(true)
     expect(runtimeHooks.hooks.PreCompact).toBeUndefined()
+
     for (const command of pluginCommands) {
       expect(runtimeHooksText).not.toContain(command)
     }
@@ -363,6 +374,7 @@ describe('CodexHookService', () => {
     const runtimeToml = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:0:0`))
     expect(runtimeToml).toContain(hookTrustHeader(`${managedHooksPath}:stop:1:0`))
+
     for (const command of pluginCommands) {
       expect(runtimeToml).not.toContain(command)
     }
@@ -387,6 +399,7 @@ describe('CodexHookService', () => {
       'utf-8'
     )
     const disabledPostCompactHeader = hookTrustHeader(`${systemHooksPath}:post_compact:0:0`, true)
+
     const systemToml = upsertHookTrustEntriesInContent('model = "system-model"\n', [
       {
         sourcePath: systemHooksPath,
@@ -403,6 +416,7 @@ describe('CodexHookService', () => {
         command: 'post-compact-disabled'
       }
     ])
+
     writeFileSync(
       join(systemCodexHome, 'config.toml'),
       markHookTrustDisabled(systemToml, disabledPostCompactHeader),
@@ -413,9 +427,11 @@ describe('CodexHookService', () => {
 
     const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
     const managedHooksPath = join(managedCodexHome, 'hooks.json')
+
     const runtimeHooks = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
     }
+
     expect(runtimeHooks.hooks.PreCompact?.[0]?.hooks?.[0]?.command).toBe('pre-compact-user')
     expect(runtimeHooks.hooks.PostCompact?.[0]?.hooks?.[0]?.command).toBe('post-compact-disabled')
 
@@ -498,13 +514,16 @@ describe('CodexHookService', () => {
     expect((await service.install()).state).toBe('installed')
 
     const managedHooksPath = join(homes.userDataDir, 'codex-runtime-home', 'home', 'hooks.json')
+
     const runtimeHooks = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
     }
+
     const stopCommands =
       runtimeHooks.hooks.Stop?.flatMap(
         (definition) => definition.hooks?.map((hook) => hook.command ?? '') ?? []
       ) ?? []
+
     expect(stopCommands).toContain('user-hook-new')
     expect(stopCommands).not.toContain('user-hook-old')
   })
@@ -521,6 +540,7 @@ describe('CodexHookService', () => {
       'utf-8'
     )
     const disabledStopHeader = hookTrustHeader(`${systemHooksPath}:stop:0:0`, true)
+
     const systemToml = upsertHookTrustEntriesInContent('model = "system-model"\n', [
       {
         sourcePath: systemHooksPath,
@@ -530,6 +550,7 @@ describe('CodexHookService', () => {
         command: 'user-stop-hook'
       }
     ])
+
     writeFileSync(
       join(systemCodexHome, 'config.toml'),
       markHookTrustDisabled(systemToml, disabledStopHeader),
@@ -545,14 +566,17 @@ describe('CodexHookService', () => {
     const installedToml = readFileSync(runtimeTomlPath, 'utf-8')
     const permissionRequestIndex = installedToml.indexOf(permissionRequestHeader)
     expect(permissionRequestIndex).not.toBe(-1)
+
     const nextHeaderIndex = installedToml.indexOf(
       '\n[',
       permissionRequestIndex + permissionRequestHeader.length
     )
+
     const permissionRequestBlock = installedToml.slice(
       permissionRequestIndex,
       nextHeaderIndex === -1 ? installedToml.length : nextHeaderIndex
     )
+
     writeFileSync(
       runtimeTomlPath,
       `${installedToml.trimEnd()}\n\n${permissionRequestBlock.trimEnd()}\n`,
@@ -563,12 +587,15 @@ describe('CodexHookService', () => {
 
     expect(status.state).toBe('not_installed')
     expect(status.managedHooksPresent).toBe(false)
+
     const runtimeHooks = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
       hooks: Record<string, { hooks?: { command?: string }[] }[]>
     }
+
     const runtimeCommands = Object.values(runtimeHooks.hooks).flatMap((definitions) =>
       definitions.flatMap((definition) => definition.hooks?.map((hook) => hook.command ?? '') ?? [])
     )
+
     expect(runtimeCommands).toEqual(['user-stop-hook'])
     expect(runtimeCommands.some((command) => command.includes('codex-hook'))).toBe(false)
 

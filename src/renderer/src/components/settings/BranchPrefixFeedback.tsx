@@ -11,6 +11,7 @@ export function BranchPrefixFeedback({ rawPrefix }: BranchPrefixFeedbackProps): 
   const normalized = normalizeBranchPrefix(rawPrefix)
 
   let message: ReactNode = null
+
   if (issue) {
     message = (
       <span className="text-destructive">

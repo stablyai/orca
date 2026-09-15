@@ -14,6 +14,7 @@ function captureHandler(loadRuntime: () => ManagedHookRuntime): MethodHandler {
     },
     loadRuntime
   )
+
   return handler!
 }
 

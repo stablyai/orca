@@ -214,4 +214,5 @@ export type UISliceCore = {
 }
 
 export type UISliceSet = Parameters<StateCreator<AppState, [], [], UISliceCore>>[0]
+
 export type UISliceGet = Parameters<StateCreator<AppState, [], [], UISliceCore>>[1]

@@ -13,13 +13,18 @@ export function getAutomationSourceDisplay(
   if (!sourceContext) {
     return null
   }
+
   const providerLabel = getProviderLabel(sourceContext.provider)
+
   const hostLabel =
     hostLabelById?.get(sourceContext.hostId) ?? getExecutionHostLabel(sourceContext.hostId)
+
   const identityLabel = getSourceIdentityLabel(sourceContext)
+
   const label = [providerLabel, hostLabel, identityLabel]
     .filter((part): part is string => Boolean(part))
     .join(' · ')
+
   const title = [
     `${providerLabel} source`,
     `Host: ${hostLabel}`,
@@ -28,6 +33,7 @@ export function getAutomationSourceDisplay(
   ]
     .filter((part): part is string => Boolean(part))
     .join(' · ')
+
   return { label, title }
 }
 
@@ -46,6 +52,7 @@ function getProviderLabel(provider: TaskSourceContext['provider']): string {
 
 function getSourceIdentityLabel(sourceContext: TaskSourceContext): string | null {
   const identity = sourceContext.providerIdentity
+
   if (identity) {
     switch (identity.provider) {
       case 'github':
@@ -60,5 +67,6 @@ function getSourceIdentityLabel(sourceContext: TaskSourceContext): string | null
         return identity.siteUrl ?? identity.siteId ?? null
     }
   }
+
   return sourceContext.accountLabel ?? sourceContext.repoId ?? null
 }

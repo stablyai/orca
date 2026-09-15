@@ -41,6 +41,7 @@ describe('Activity terminal portal publication', () => {
     function Subscriber(): null {
       useActivityTerminalPortals(true)
       renders += 1
+
       return null
     }
 
@@ -59,6 +60,7 @@ describe('Activity terminal portal publication', () => {
     function Subscriber(): null {
       useActivityTerminalPortals(true)
       renders += 1
+
       return null
     }
 

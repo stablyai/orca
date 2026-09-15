@@ -16,6 +16,7 @@ import SkillsPage from './SkillsPage'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function skill(name: string, overrides: Partial<DiscoveredSkill> = {}): DiscoveredSkill {
@@ -49,9 +50,11 @@ function skillsApi(discover: ReturnType<typeof vi.fn>) {
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -98,9 +101,11 @@ function buttonNamed(name: string): HTMLButtonElement {
     (candidate) =>
       candidate.textContent?.trim() === name || candidate.getAttribute('aria-label') === name
   )
+
   if (!(button instanceof HTMLButtonElement)) {
     throw new Error(`Missing button: ${name}`)
   }
+
   return button
 }
 
@@ -108,9 +113,11 @@ function buttonStartingWith(prefix: string): HTMLButtonElement {
   const button = [...(container?.querySelectorAll('button') ?? [])].find((candidate) =>
     candidate.textContent?.trim().startsWith(prefix)
   )
+
   if (!(button instanceof HTMLButtonElement)) {
     throw new Error(`Missing button starting with: ${prefix}`)
   }
+
   return button
 }
 
@@ -118,17 +125,21 @@ function skillRow(name: string): HTMLElement {
   const row = [...(container?.querySelectorAll('[role="option"]') ?? [])].find(
     (candidate) => candidate.querySelector('[data-skill-name]')?.textContent === name
   )
+
   if (!(row instanceof HTMLElement)) {
     throw new Error(`Missing skill row: ${name}`)
   }
+
   return row
 }
 
 function selectionCheckbox(name: string): HTMLButtonElement {
   const checkbox = container?.querySelector(`[aria-label="Select ${name}"]`)
+
   if (!(checkbox instanceof HTMLButtonElement)) {
     throw new Error(`Missing selection checkbox: ${name}`)
   }
+
   return checkbox
 }
 
@@ -142,6 +153,7 @@ afterEach(async () => {
       root?.unmount()
     })
   }
+
   root = null
   container?.remove()
   container = null
@@ -168,9 +180,11 @@ describe('SkillsPage', () => {
     await flushMicrotasks()
 
     const search = container?.querySelector('input[placeholder="Search skills"]')
+
     if (!(search instanceof HTMLInputElement)) {
       throw new Error('Missing skill search')
     }
+
     await act(async () => {
       search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
     })
@@ -184,11 +198,13 @@ describe('SkillsPage', () => {
 
   it('contains long cross-platform skill paths while preserving the full path', async () => {
     const longPath = `C:\\Users\\orca\\${'nested-folder\\'.repeat(30)}SKILL.md`
+
     const discover = vi.fn().mockResolvedValue({
       skills: [skill('long-path', { skillFilePath: longPath })],
       sources: [],
       scannedAt: 1
     } satisfies SkillDiscoveryResult)
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: skillsApi(discover), runtimeEnvironments: { call: vi.fn() } }
@@ -201,15 +217,18 @@ describe('SkillsPage', () => {
     await act(async () => fireEvent.click(skillRow('long-path')))
 
     const dialog = document.querySelector('[role="dialog"]')
+
     const path = [...(dialog?.querySelectorAll('*') ?? [])].find(
       (element) => element.textContent === longPath && element.children.length === 0
     )
+
     expect(path?.classList.contains('break-all')).toBe(true)
     expect(path?.textContent).toBe(longPath)
   })
 
   it('scans the connected remote runtime instead of the client disk', async () => {
     const discover = vi.fn().mockResolvedValue(discoveryResult(['local-only']))
+
     const call = vi.fn(
       async (args: { method: string; selector?: string }) =>
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
@@ -218,6 +237,7 @@ describe('SkillsPage', () => {
           result: discoveryResult(['remote-only'])
         }
     )
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: skillsApi(discover), runtimeEnvironments: { call } }
@@ -237,6 +257,7 @@ describe('SkillsPage', () => {
   it('does not let a slow local scan overwrite a newer remote scan', async () => {
     const localScan = deferred<SkillDiscoveryResult>()
     const discover = vi.fn().mockReturnValue(localScan.promise)
+
     const call = vi.fn(
       async (args: { method: string; selector?: string }) =>
         createCompatibleRuntimeStatusResponseIfNeeded(args) ?? {
@@ -245,6 +266,7 @@ describe('SkillsPage', () => {
           result: discoveryResult(['remote-only'])
         }
     )
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: skillsApi(discover), runtimeEnvironments: { call } }
@@ -266,13 +288,17 @@ describe('SkillsPage', () => {
 
   it("does not show one runtime's skills when the next runtime scan fails", async () => {
     const discover = vi.fn().mockResolvedValue(discoveryResult(['local-only']))
+
     const call = vi.fn(async (args: { method: string; selector?: string }) => {
       const compatibilityResponse = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
       if (compatibilityResponse) {
         return compatibilityResponse
       }
+
       throw new Error('remote unavailable')
     })
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: skillsApi(discover), runtimeEnvironments: { call } }
@@ -322,9 +348,11 @@ describe('SkillsPage', () => {
     await act(async () => fireEvent.click(selectionCheckbox('alpha')))
 
     const search = container?.querySelector('input[placeholder="Search skills"]')
+
     if (!(search instanceof HTMLInputElement)) {
       throw new Error('Missing skill search')
     }
+
     await act(async () => fireEvent.input(search, { target: { value: 'beta' } }))
     expect(container?.textContent).toContain('1 selected')
 
@@ -345,6 +373,7 @@ describe('SkillsPage', () => {
       sources: [],
       scannedAt: 1
     } satisfies SkillDiscoveryResult)
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: skillsApi(discover), runtimeEnvironments: { call: vi.fn() } }
@@ -419,6 +448,7 @@ describe('SkillsPage', () => {
       sources: [],
       scannedAt: 1
     } satisfies SkillDiscoveryResult)
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: skillsApi(discover), runtimeEnvironments: { call: vi.fn() } }
@@ -443,6 +473,7 @@ describe('SkillsPage', () => {
           result: discoveryResult(['remote-one', 'remote-two'])
         }
     )
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: skillsApi(vi.fn()), runtimeEnvironments: { call } }
@@ -463,6 +494,7 @@ describe('SkillsPage', () => {
       .fn()
       .mockResolvedValueOnce(discoveryResult(['alpha', 'beta']))
       .mockResolvedValueOnce(discoveryResult(['beta']))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: skillsApi(discover), runtimeEnvironments: { call: vi.fn() } }
@@ -487,6 +519,7 @@ describe('SkillsPage', () => {
           "Error invoking remote method 'skills:discover': Error: EACCES: permission denied\nSSH host unavailable"
         )
       )
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: skillsApi(discover), runtimeEnvironments: { call: vi.fn() } }
@@ -509,6 +542,7 @@ describe('SkillsPage', () => {
       .fn()
       .mockRejectedValueOnce(new Error('EACCES: permission denied'))
       .mockResolvedValueOnce(discoveryResult(['alpha']))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: skillsApi(discover), runtimeEnvironments: { call: vi.fn() } }
@@ -529,6 +563,7 @@ describe('SkillsPage', () => {
       .fn()
       .mockResolvedValueOnce(discoveryResult([]))
       .mockRejectedValueOnce(new Error('host unavailable'))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: skillsApi(discover), runtimeEnvironments: { call: vi.fn() } }

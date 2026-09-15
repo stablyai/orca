@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { glob } from 'tinyglobby'
 
 const REPO_ROOT = join(import.meta.dirname, '../../..')
+
 const CENSUS_FILE = 'src/main/startup/secure-dns-census.test.ts'
 
 // Why: app.configureHostResolver is process-wide, so any non-'off' secureDnsMode sends DoH queries from the desktop
@@ -16,16 +17,20 @@ describe('secure DNS census', () => {
     })
 
     const offenders: string[] = []
+
     for (const file of files) {
       const source = readFileSync(join(REPO_ROOT, file), 'utf8')
+
       if (!source.includes('configureHostResolver')) {
         continue
       }
+
       for (const mode of source.matchAll(/secureDnsMode\s*:\s*'([^']*)'/g)) {
         if (mode[1] !== 'off') {
           offenders.push(`${file}: secureDnsMode: '${mode[1]}'`)
         }
       }
+
       if (!/secureDnsMode\s*:/.test(source)) {
         offenders.push(`${file}: configureHostResolver without an explicit secureDnsMode`)
       }

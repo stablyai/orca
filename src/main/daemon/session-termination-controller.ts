@@ -4,8 +4,11 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 const KILL_TIMEOUT_MS = 5_000
+
 export const IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS = 8_000
+
 export const SESSION_FORCE_KILL_RETRY_MS = 250
+
 const SESSION_FORCE_KILL_MAX_ATTEMPTS = 2
 
 export type SessionTerminationControllerDeps = {
@@ -45,9 +48,11 @@ export class SessionTerminationController {
     if (this.deps.isExited() || this._isTerminating) {
       return false
     }
+
     this._isTerminating = true
     // Why: a paused child can be blocked inside write(); resume before any async snapshot so it handles termination promptly.
     this.deps.releaseProducerPause({ resume: true })
+
     return true
   }
 
@@ -55,6 +60,7 @@ export class SessionTerminationController {
     if (!this.beginTermination()) {
       return
     }
+
     if (!this.deps.launchAgent) {
       this.signalTerminationRoot()
     } else {
@@ -75,9 +81,11 @@ export class SessionTerminationController {
         if (!this.deps.isExited()) {
           this.resetTerminationAfterSignalFailure()
         }
+
         console.warn('[Session] descendant-aware graceful kill failed:', error)
       })
     }
+
     this.scheduleForceDisposeFallback()
   }
 
@@ -86,6 +94,7 @@ export class SessionTerminationController {
     if (this.deps.isExited()) {
       return
     }
+
     try {
       this.deps.subprocess.kill()
     } catch (error) {
@@ -100,6 +109,7 @@ export class SessionTerminationController {
     if (this.killTimer) {
       return
     }
+
     this.armForceKillFallback(KILL_TIMEOUT_MS, SESSION_FORCE_KILL_MAX_ATTEMPTS)
   }
 
@@ -116,10 +126,12 @@ export class SessionTerminationController {
     if (this.deps.isExited()) {
       return
     }
+
     if (!this._isTerminating) {
       this._isTerminating = true
       this.deps.releaseProducerPause({ resume: true })
     }
+
     // Why: escalate a graceful termination now; waiting for the 5s timer would spend most of the physical-exit budget.
     await this.requestForceKillWithRetry()
     await this.waitForPhysicalExit(timeoutMs)
@@ -129,6 +141,7 @@ export class SessionTerminationController {
     if (this.deps.isExited()) {
       return
     }
+
     this.deps.subprocess.signal(sig)
   }
 
@@ -136,7 +149,9 @@ export class SessionTerminationController {
     if (this.subprocessDisposed) {
       return
     }
+
     this.subprocessDisposed = true
+
     try {
       this.deps.subprocess.dispose()
     } catch (err) {
@@ -153,11 +168,13 @@ export class SessionTerminationController {
   private armForceKillFallback(delayMs: number, attemptsRemaining: number): void {
     this.killTimer = setTimeout(() => {
       this.killTimer = null
+
       if (!this.deps.isExited()) {
         try {
           this.requestForceKill()
         } catch (error) {
           console.warn('[Session] failed to force-kill terminating subprocess:', error)
+
           // Why: a transient SIGKILL rejection must not consume the only fallback owner after graceful shutdown returned.
           if (attemptsRemaining > 1) {
             this.armForceKillFallback(SESSION_FORCE_KILL_RETRY_MS, attemptsRemaining - 1)
@@ -171,7 +188,9 @@ export class SessionTerminationController {
     if (this.deps.isExited() || this.forceKillSent) {
       return
     }
+
     this.forceKillSent = true
+
     try {
       this.deps.subprocess.forceKill()
     } catch (error) {
@@ -182,25 +201,30 @@ export class SessionTerminationController {
 
   private async requestForceKillWithRetry(): Promise<void> {
     let lastError: unknown
+
     for (let attempt = 0; attempt < SESSION_FORCE_KILL_MAX_ATTEMPTS; attempt++) {
       try {
         this.requestForceKill()
+
         return
       } catch (error) {
         lastError = error
       }
+
       if (attempt + 1 < SESSION_FORCE_KILL_MAX_ATTEMPTS) {
         try {
           await this.physicalExit.waitForExit(
             SESSION_FORCE_KILL_RETRY_MS,
             () => new Error(`Retrying force-kill for PTY ${this.deps.sessionId}`)
           )
+
           return
         } catch {
           // The bounded waiter detached; retry the still-owned subprocess.
         }
       }
     }
+
     throw lastError
   }
 

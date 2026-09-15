@@ -16,6 +16,7 @@ export class StructuredAgentSessionHandoffQueue {
     const controller = this.controllers.get(sessionId)
     controller?.abort()
     this.controllers.delete(sessionId)
+
     return controller !== undefined
   }
 
@@ -43,6 +44,7 @@ export class StructuredAgentSessionHandoffQueue {
       try {
         if (await isIdle(controller.signal)) {
           this.controllers.delete(sessionId)
+
           return true
         }
       } catch {
@@ -50,8 +52,10 @@ export class StructuredAgentSessionHandoffQueue {
           return false
         }
       }
+
       await new Promise((resolve) => setTimeout(resolve, 150))
     }
+
     return false
   }
 }
@@ -62,6 +66,7 @@ export function queuedStructuredHandoffCanBegin(
   params: AgentSessionHandoffRequest
 ): boolean {
   const expectedOwner = params.direction === 'to-tui' ? 'native' : 'tui'
+
   return (
     record.sessionId === params.envelope.sessionId &&
     status.phase === 'queued' &&
@@ -104,29 +109,39 @@ export function enqueueStructuredHandoffAfterTurn(input: {
       if (params.direction === 'to-tui') {
         return !activeStructuredAgentSessionTurnId(deps.session(sessionId).journal.snapshot().items)
       }
+
       if (!observedTuiQueue) {
         observedTuiQueue = true
+
         return false
       }
+
       tuiReadiness = tuiOwner
         ? ((await deps.transport?.waitForTuiIdleOrExit(tuiOwner, signal)) ?? null)
         : null
+
       if (tuiReadiness === 'exited') {
         return true
       }
+
       if (!activeStructuredAgentSessionTurnId(deps.session(sessionId).journal.snapshot().items)) {
         tuiReadiness = 'idle'
+
         return true
       }
+
       return false
     },
     () => {
       const record = input.requireRecord()
       const status = input.status()
+
       if (!queuedStructuredHandoffCanBegin(record, status, params)) {
         input.refuse(record)
+
         return
       }
+
       input.begin(params, tuiReadiness === 'exited')
     }
   )

@@ -36,13 +36,17 @@ export function resolveBrowserRoutePartitionBinding(
   const derive = migration.derivePartition ?? deriveBrowserRoutePartition
   const derived = derive(migration.identity)
   const bound = bindings.findPartitionByFingerprint(derived.bindingFingerprint)
+
   if (bound !== null) {
     return { partition: bound, bindingFingerprint: derived.bindingFingerprint }
   }
+
   if (legacyIdentity === null || bindings.get(derived.partition) !== null) {
     return derived
   }
+
   const legacy = derive(legacyIdentity)
+
   // Why: adopt only a partition this exact legacy identity minted -- any other binding
   // on that name belongs to a different route and must keep its own storage.
   if (
@@ -51,6 +55,8 @@ export function resolveBrowserRoutePartitionBinding(
   ) {
     return derived
   }
+
   bindings.rebind(legacy.partition, derived.bindingFingerprint, storageScope)
+
   return { partition: legacy.partition, bindingFingerprint: derived.bindingFingerprint }
 }

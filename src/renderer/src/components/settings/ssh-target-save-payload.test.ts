@@ -7,6 +7,7 @@ describe('buildSshTargetSavePayload', () => {
     const result = buildSshTargetSavePayload({ ...EMPTY_FORM, host: '' })
 
     expect(result.ok).toBe(false)
+
     if (!result.ok) {
       expect(result.error).toContain('Host or SSH config alias is required')
     }
@@ -22,9 +23,11 @@ describe('buildSshTargetSavePayload', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       throw new Error(result.error)
     }
+
     expect(result.payload.target).toMatchObject({
       label: 'Production',
       configHost: 'prod.example.com',
@@ -57,9 +60,11 @@ describe('buildSshTargetSavePayload', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       throw new Error(result.error)
     }
+
     expect(result.payload.target).toMatchObject({
       label: 'admin@appliance.example.com',
       host: 'appliance.example.com',
@@ -84,6 +89,7 @@ describe('buildSshTargetSavePayload', () => {
     })
 
     expect(result.ok).toBe(false)
+
     if (!result.ok) {
       expect(result.error).toContain('Terminal timeout')
     }

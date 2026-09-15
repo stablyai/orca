@@ -10,6 +10,7 @@ const homeRoot: SkillScanRoot = {
   providers: ['codex'],
   owner: 'codex'
 }
+
 const repoRoot: SkillScanRoot = {
   id: 'repo-agents',
   label: 'Repo project .agents',
@@ -29,6 +30,7 @@ describe('WSL skill discovery', () => {
       '---\nname: Review\ndescription: Review this change\n---\n',
       'utf8'
     ).toString('base64')
+
     const output = [
       record('R', '0', '1'),
       record('R', '1', '0'),
@@ -103,6 +105,7 @@ describe('WSL skill discovery', () => {
 
   it('filters classified source kinds while parsing', () => {
     const markdown = Buffer.from('---\nname: Bundled\n---\n').toString('base64')
+
     const output = [
       record('R', '0', '1'),
       record(
@@ -132,7 +135,9 @@ describe('WSL skill discovery', () => {
     const blockName = Buffer.from('\uFEFF---\nname: >-\n  Agent\n  Orchestration\n---\n').toString(
       'base64'
     )
+
     const headingName = Buffer.from('# Computer Use\n\nUse the computer.\n').toString('base64')
+
     const output = [
       record('R', '0', '1'),
       record(
@@ -177,16 +182,22 @@ it('reuses one source collator while preserving locale, lexical numbers, and sta
     (_, index) =>
       ['éclair', 'Eclair', 'item2', 'item10', 'Ångström', 'zebra', 'İstanbul'][index % 7]
   )
+
   const roots = labels.map((label, index) => ({ ...homeRoot, id: String(index), label }))
+
   const expected = [...roots].sort((a, b) =>
     // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
     a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
   )
+
   const NativeCollator = Intl.Collator
+
   const construct = vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
     return new NativeCollator(locales, options)
   })
+
   const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
+
   try {
     const result = parseWslSkillDiscoveryOutput('', roots, 42)
     expect(result.sources.map((source) => source.id)).toEqual(expected.map((root) => root.id))

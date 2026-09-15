@@ -47,6 +47,7 @@ export function recordCreatedWorktreeLineage(
   const warnings = resolution.kind === 'none' ? [...resolution.warnings] : []
   let lineage: WorktreeLineage | null = null
   let workspaceLineage: WorkspaceLineage | null = null
+
   if (resolution.kind !== 'lineage') {
     return { lineage, workspaceLineage, warnings }
   }
@@ -54,6 +55,7 @@ export function recordCreatedWorktreeLineage(
   const childInstanceId = worktree.instanceId
   const parentInstanceId = resolution.parent.instanceId
   const createdAt = Date.now()
+
   if (
     resolution.parent.type === 'worktree' &&
     childInstanceId &&
@@ -89,6 +91,7 @@ export function recordCreatedWorktreeLineage(
       }
     })
   }
+
   if (childInstanceId && store?.setWorkspaceLineage) {
     workspaceLineage = store.setWorkspaceLineage({
       childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
@@ -108,5 +111,6 @@ export function recordCreatedWorktreeLineage(
       createdAt
     })
   }
+
   return { lineage, workspaceLineage, warnings }
 }

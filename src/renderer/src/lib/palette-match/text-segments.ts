@@ -20,8 +20,11 @@ export type PaletteAtom = {
 }
 
 const ALPHANUMERIC = /[\p{L}\p{N}]/u
+
 const LETTER = /\p{L}/u
+
 const DIGIT = /\p{N}/u
+
 const UPPERCASE = /\p{Lu}/u
 
 function isAlphanumeric(char: string): boolean {
@@ -36,12 +39,15 @@ function isCamelBoundary(text: NormalizedText, index: number): boolean {
   if (index <= 0) {
     return false
   }
+
   const original = text.original
   const here = originalIndexAt(text, index)
   const before = originalIndexAt(text, index - 1)
+
   if (here === before) {
     return false
   }
+
   return UPPERCASE.test(original[here] ?? '') && !UPPERCASE.test(original[before] ?? '')
 }
 
@@ -49,18 +55,23 @@ function splitComponentIntoWords(text: NormalizedText, component: PaletteCompone
   const words: PaletteWord[] = []
   const normalized = text.normalized
   let start = component.start
+
   for (let index = component.start + 1; index < component.end; index += 1) {
     const previous = normalized[index - 1]
     const current = normalized[index]
+
     const classChanged =
       (LETTER.test(previous) && DIGIT.test(current)) ||
       (DIGIT.test(previous) && LETTER.test(current))
+
     if (classChanged || isCamelBoundary(text, index)) {
       words.push({ start, end: index, text: normalized.slice(start, index) })
       start = index
     }
   }
+
   words.push({ start, end: component.end, text: normalized.slice(start, component.end) })
+
   return words
 }
 
@@ -73,10 +84,12 @@ function buildAtom(text: NormalizedText, start: number, end: number): PaletteAto
 
   for (let index = start; index <= end; index += 1) {
     const inRun = index < end && isAlphanumeric(normalized[index])
+
     if (inRun) {
       if (runStart === -1) {
         runStart = index
       }
+
       compact += normalized[index]
       compactOffsets.push(index)
     } else if (runStart !== -1) {
@@ -102,18 +115,23 @@ export function segmentPaletteText(text: NormalizedText): PaletteTextSegments {
 
   for (let index = 0; index <= normalized.length; index += 1) {
     const isSpace = index === normalized.length || normalized[index] === ' '
+
     if (!isSpace) {
       if (start === -1) {
         start = index
       }
+
       continue
     }
+
     if (start !== -1) {
       const atom = buildAtom(text, start, index)
       atoms.push(atom)
+
       for (const component of atom.components) {
         words.push(...splitComponentIntoWords(text, component))
       }
+
       start = -1
     }
   }

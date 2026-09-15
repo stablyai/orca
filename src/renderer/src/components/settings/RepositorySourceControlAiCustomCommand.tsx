@@ -32,8 +32,10 @@ export function RepositorySourceControlAiCustomCommand({
   // Select back to inherit (empty is not a repo command). Keep a local intent so the user can type.
   const [forceRepoMode, setForceRepoMode] = useState(false)
   const hasRepoCommand = isRepoCommand(value)
+
   const mode =
     hasRepoCommand || forceRepoMode ? CUSTOM_COMMAND_MODE_REPO : CUSTOM_COMMAND_MODE_INHERIT
+
   return (
     <div className="space-y-2 rounded-md border border-border px-3 py-3">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -58,16 +60,21 @@ export function RepositorySourceControlAiCustomCommand({
               // Why: pre-populate from the current draft or the global command when available; when
               // both are empty, stay in local REPO mode so the Select does not snap back to inherit.
               const nextValue = value ?? source.customAgentCommand
+
               if (isRepoCommand(nextValue)) {
                 setForceRepoMode(false)
                 onChange(nextValue)
                 onCommit(nextValue)
+
                 return
               }
+
               setForceRepoMode(true)
               onChange(nextValue === '' ? undefined : nextValue)
+
               return
             }
+
             setForceRepoMode(false)
             onChange(undefined)
             onCommit(undefined)
@@ -103,10 +110,12 @@ export function RepositorySourceControlAiCustomCommand({
         }}
         onBlur={(event) => {
           const nextValue = event.target.value
+
           // Why: blur with an empty field exits local REPO intent and commits inherit (clear).
           if (!isRepoCommand(nextValue)) {
             setForceRepoMode(false)
           }
+
           onCommit(nextValue === '' ? undefined : nextValue)
         }}
         placeholder={

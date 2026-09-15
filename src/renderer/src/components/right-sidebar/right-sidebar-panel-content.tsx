@@ -4,12 +4,19 @@ import type { ActiveRightSidebarTab } from '@/store/slices/editor'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
 
 const FileExplorer = lazy(() => import('./FileExplorer'))
+
 const SourceControl = lazy(() => import('./SourceControl'))
+
 const ChecksPanel = lazy(() => import('./ChecksPanel'))
+
 const PortsPanel = lazy(() => import('./PortsPanel'))
+
 const AiVaultPanel = lazy(() => import('./AiVaultPanel'))
+
 const FolderWorkspaceWorktreesPanel = lazy(() => import('./FolderWorkspaceWorktreesPanel'))
+
 const FolderWorkspacePrChecksPanel = lazy(() => import('./FolderWorkspacePrChecksPanel'))
+
 const PluginPanel = lazy(() => import('./PluginPanel'))
 
 type RightSidebarPanelContentProps = {

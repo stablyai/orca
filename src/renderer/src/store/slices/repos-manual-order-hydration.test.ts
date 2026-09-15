@@ -8,10 +8,15 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 
 const reposList = vi.fn()
+
 const projectsList = vi.fn()
+
 const listHostSetups = vi.fn()
+
 const runtimeEnvironmentsList = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 const reposByEnvironment: Record<string, Repo[]> = {
@@ -62,7 +67,9 @@ async function loadWithCompletionOrder(completionOrder: string[]): Promise<strin
       if (args.method === 'repo.list' && args.selector) {
         return new Promise((resolve) => repoListResolvers.set(args.selector!, resolve))
       }
+
       const result = args.method === 'project.list' ? { projects: [] } : { setups: [] }
+
       return { id: `rpc-${args.method}`, ok: true, result, _meta: { runtimeId: 'runtime' } }
     }
   )
@@ -78,6 +85,7 @@ async function loadWithCompletionOrder(completionOrder: string[]): Promise<strin
 
   const load = store.getState().fetchReposForAllHosts()
   await vi.waitFor(() => expect(repoListResolvers.size).toBe(2))
+
   for (const environmentId of completionOrder) {
     repoListResolvers.get(environmentId)?.({
       id: `rpc-repo-${environmentId}`,
@@ -87,8 +95,10 @@ async function loadWithCompletionOrder(completionOrder: string[]): Promise<strin
     })
     await Promise.resolve()
   }
+
   await load
   expect(store.getState().manualRepoOrder).toHaveLength(4)
+
   return store.getState().repos.map((repo) => `${repo.executionHostId}:${repo.id}`)
 }
 

@@ -62,15 +62,19 @@ export function externalAutomationScopes(
   entries: readonly AutomationHostCatalogEntry[]
 ): ExternalAutomationScope[] {
   const scopes: ExternalAutomationScope[] = []
+
   for (const entry of entries) {
     const owner = resolveExternalAutomationScopeGate(entry).probeOwner
+
     if (!owner) {
       continue
     }
+
     for (const provider of EXTERNAL_AUTOMATION_PROVIDERS) {
       scopes.push({ owner, provider })
     }
   }
+
   return scopes
 }
 
@@ -81,8 +85,10 @@ export async function listScopedExternalAutomationManagers(
   if (scopes.length === 0) {
     return EMPTY_MANAGERS
   }
+
   const managers: ScopedExternalAutomationManager[] = []
   const failures: ScopedExternalAutomationFailure[] = []
+
   const results = await Promise.all(
     scopes.map(async (scope) => {
       try {
@@ -100,15 +106,19 @@ export async function listScopedExternalAutomationManagers(
       }
     })
   )
+
   for (const { scope, result } of results) {
     if (result.error) {
       failures.push({ scope, message: result.error })
     }
+
     if (!result.manager) {
       continue
     }
+
     managers.push({ scope, manager: result.manager })
   }
+
   return { managers, failures }
 }
 
@@ -124,15 +134,19 @@ export function desktopExternalAutomationOwner(
     if (entry.stableRef.authority.kind !== 'desktop' || !entry.owner) {
       continue
     }
+
     const selector = entry.stableRef.selector
+
     const matches =
       connectionId === null
         ? selector.kind === 'self'
         : selector.kind === 'ssh' && selector.targetId === connectionId
+
     if (matches) {
       return entry.owner
     }
   }
+
   return null
 }
 
@@ -177,5 +191,6 @@ export async function listScopedExternalAutomationRuns(
     page: page + 1,
     pageSize
   })
+
   return { runs: result.runs, totalCount: result.total }
 }

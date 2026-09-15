@@ -25,22 +25,29 @@ export function isSuccess(response: unknown): response is RpcSuccess {
 
 export function taskTime(value: string): number {
   const time = Date.parse(value)
+
   return Number.isFinite(time) ? time : 0
 }
 
 export function formatUpdatedAt(value: string): string {
   const time = taskTime(value)
+
   if (!time) {
     return ''
   }
+
   const minutes = Math.max(0, Math.floor((Date.now() - time) / 60_000))
+
   if (minutes < 60) {
     return `${minutes}m`
   }
+
   const hours = Math.floor(minutes / 60)
+
   if (hours < 24) {
     return `${hours}h`
   }
+
   return `${Math.floor(hours / 24)}d`
 }
 
@@ -84,9 +91,11 @@ export function githubKindFromQuery(query: string, fallbackPreset: GitHubPreset)
   if (/\bis:pr\b/i.test(query)) {
     return 'prs'
   }
+
   if (/\bis:issue\b/i.test(query)) {
     return 'issues'
   }
+
   return fallbackPreset === 'prs' || fallbackPreset === 'my-prs' || fallbackPreset === 'review'
     ? 'prs'
     : 'issues'
@@ -96,9 +105,11 @@ export function projectRowType(row: GitHubProjectRow): 'issue' | 'pr' | null {
   if (row.itemType === 'ISSUE') {
     return 'issue'
   }
+
   if (row.itemType === 'PULL_REQUEST') {
     return 'pr'
   }
+
   return null
 }
 
@@ -110,6 +121,7 @@ export function canCreateWorkspaceFromProjectRow(row: GitHubProjectRow): boolean
 
 export function splitRepositorySlug(slug: string | null): { owner: string; repo: string } | null {
   const [owner, repo] = slug?.split('/') ?? []
+
   return owner && repo ? { owner, repo } : null
 }
 
@@ -118,6 +130,7 @@ export function projectRowGitHubRepository(
   host: string
 ): GitHubOwnerRepo | null {
   const slug = splitRepositorySlug(row.content.repository)
+
   return slug ? { ...slug, host } : null
 }
 
@@ -136,12 +149,16 @@ export function githubProjectOptionColor(color: string | null | undefined): stri
   if (!color) {
     return colors.textMuted
   }
+
   const upper = color.toUpperCase()
   const mapped = GITHUB_PROJECT_OPTION_COLORS[upper]
+
   if (mapped) {
     return mapped
   }
+
   const hex = color.startsWith('#') ? color : `#${color}`
+
   return /^#[0-9a-fA-F]{6}$/.test(hex) ? hex : colors.textMuted
 }
 
@@ -149,29 +166,37 @@ export function projectRowStatusLabel(row: GitHubProjectRow): string {
   if (row.itemType === 'DRAFT_ISSUE') {
     return 'Draft'
   }
+
   if (row.itemType === 'REDACTED') {
     return 'Redacted'
   }
+
   if (row.content.isDraft) {
     return 'Draft'
   }
+
   if (row.content.state === 'MERGED') {
     return 'Merged'
   }
+
   if (row.content.state === 'CLOSED') {
     return 'Closed'
   }
+
   return 'Open'
 }
 
 export function scopeGitHubTaskSearch(query: string, kind: GitHubTaskKind): string {
   const trimmed = query.trim()
+
   if (!trimmed) {
     return getTaskPresetQuery(kind === 'prs' ? 'prs' : 'issues')
   }
+
   if (/\bis:(?:issue|pr)\b/i.test(trimmed)) {
     return trimmed
   }
+
   return `${kind === 'prs' ? 'is:pr' : 'is:issue'} ${trimmed}`
 }
 
@@ -179,9 +204,11 @@ export function gitHubStatusLabel(item: GitHubWorkItem): string {
   if (item.state === 'merged') {
     return 'Merged'
   }
+
   if (item.state === 'draft') {
     return 'Draft'
   }
+
   return item.state === 'closed' ? 'Closed' : 'Open'
 }
 
@@ -194,6 +221,7 @@ export function createGitHubTask(
   item: Omit<GitHubWorkItem, 'repoId' | 'repoName'>
 ) {
   const source: GitHubWorkItem = { ...item, repoId: repo.id, repoName: repo.displayName }
+
   return {
     key: `github:${repo.id}:${item.type}:${item.number}`,
     provider: 'github' as const,
@@ -209,12 +237,15 @@ export function gitLabStatusLabel(item: GitLabWorkItem): string {
   if (item.state === 'opened') {
     return 'Open'
   }
+
   if (item.state === 'merged') {
     return 'Merged'
   }
+
   if (item.state === 'draft') {
     return 'Draft'
   }
+
   return item.state === 'closed' ? 'Closed' : 'Locked'
 }
 
@@ -223,6 +254,7 @@ export function createGitLabTask(
   item: Omit<GitLabWorkItem, 'repoId' | 'repoName'>
 ) {
   const source: GitLabWorkItem = { ...item, repoId: repo.id, repoName: repo.displayName }
+
   return {
     key: `gitlab:${repo.id}:${item.type}:${item.number}`,
     provider: 'gitlab' as const,
@@ -238,9 +270,11 @@ export function gitLabTodoTargetLabel(todo: Pick<GitLabTodo, 'targetType'>): str
   if (todo.targetType === 'MergeRequest') {
     return 'Merge request'
   }
+
   if (todo.targetType === 'Issue') {
     return 'Issue'
   }
+
   return 'GitLab todo'
 }
 
@@ -248,17 +282,21 @@ export function gitLabTodoTargetRef(todo: Pick<GitLabTodo, 'targetType' | 'targe
   if (!todo.targetIid) {
     return ''
   }
+
   if (todo.targetType === 'MergeRequest') {
     return `!${todo.targetIid}`
   }
+
   if (todo.targetType === 'Issue') {
     return `#${todo.targetIid}`
   }
+
   return String(todo.targetIid)
 }
 
 export function createGitLabTodoTask(todo: GitLabTodo): TaskItem {
   const targetRef = gitLabTodoTargetRef(todo)
+
   return {
     key: `gitlab-todo:${todo.id}`,
     provider: 'gitlabTodo',
@@ -277,6 +315,7 @@ export async function mapWithConcurrency<T, R>(
 ): Promise<R[]> {
   const results: R[] = []
   let nextIndex = 0
+
   async function run(): Promise<void> {
     while (nextIndex < items.length) {
       const index = nextIndex
@@ -284,7 +323,9 @@ export async function mapWithConcurrency<T, R>(
       results[index] = await worker(items[index]!)
     }
   }
+
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => run()))
+
   return results
 }
 

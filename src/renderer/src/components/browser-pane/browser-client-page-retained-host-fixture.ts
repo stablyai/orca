@@ -31,6 +31,7 @@ const openFixtures: BrowserClientPageRetainedRegistry[] = []
 export function createRetainedHostFixture(): RetainedHostFixture {
   const webviews: Electron.WebviewTag[] = []
   let nextId = 40
+
   const registry = new BrowserClientPageRetainedRegistry({
     document,
     createWebview: () => {
@@ -41,22 +42,29 @@ export function createRetainedHostFixture(): RetainedHostFixture {
           if (webview.dataset.attached !== 'true') {
             throw new Error('guest not attached')
           }
+
           const current = Number(webview.dataset.webContentsId)
+
           if (Number.isInteger(current) && current > 0) {
             return current
           }
+
           const webContentsId = ++nextId
           webview.dataset.webContentsId = String(webContentsId)
+
           return webContentsId
         })
       })
       webviews.push(webview)
+
       return webview
     }
   })
+
   openFixtures.push(registry)
   const container = document.createElement('div')
   document.body.appendChild(container)
+
   return {
     registry,
     container,

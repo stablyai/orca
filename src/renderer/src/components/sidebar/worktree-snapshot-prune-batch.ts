@@ -7,18 +7,23 @@ export function beginWorktreeSnapshotPruneBatch(): Promise<WorktreeSnapshotPrune
   if (typeof window === 'undefined') {
     return null
   }
+
   const api = window.api.workspaceCleanup
   const begin = api.beginRemovalSnapshotPruneBatch
   const record = api.recordRemovalSnapshotPrune
   const finish = api.finishRemovalSnapshotPruneBatch
+
   if (typeof begin !== 'function' || typeof record !== 'function' || typeof finish !== 'function') {
     return null
   }
+
   const batchId = crypto.randomUUID()
+
   return begin({ batchId })
     .then(() => ({ batchId, finish: () => finish({ batchId }) }))
     .catch((error: unknown) => {
       console.warn('Failed to begin workspace snapshot prune batch:', error)
+
       return null
     })
 }

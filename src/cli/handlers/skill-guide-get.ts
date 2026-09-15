@@ -24,21 +24,26 @@ function resolveSelection(flags: Map<string, string | boolean>): GuideSelection 
   const listReferences = flags.get('references') === true
   const requested = flags.get('reference')
   const hasReference = flags.has('reference')
+
   if (listReferences && full) {
     throw new RuntimeClientError('invalid_argument', 'Use either --references or --full, not both.')
   }
+
   if (listReferences && hasReference) {
     throw new RuntimeClientError(
       'invalid_argument',
       'Use either --references or --reference, not both.'
     )
   }
+
   if (full && hasReference) {
     throw new RuntimeClientError('invalid_argument', 'Use either --full or --reference, not both.')
   }
+
   if (hasReference && (typeof requested !== 'string' || requested.trim().length === 0)) {
     throw new RuntimeClientError('invalid_argument', 'Missing required --reference')
   }
+
   return {
     full,
     reference: typeof requested === 'string' ? requested : null,
@@ -53,6 +58,7 @@ function requireReferences(guide: BundledSkillGuide): readonly BundledSkillGuide
       `Guide "${guide.name}" has no bundled references.`
     )
   }
+
   return guide.references
 }
 
@@ -60,6 +66,7 @@ function requireReference(guide: BundledSkillGuide, requested: string): BundledS
   const references = requireReferences(guide)
   const selector = normalizeReferenceSelector(requested)
   const match = references.find((reference) => reference.name === selector)
+
   if (!match) {
     const available = references.map((reference) => reference.name).join(', ')
     throw new RuntimeClientError(
@@ -67,6 +74,7 @@ function requireReference(guide: BundledSkillGuide, requested: string): BundledS
       `Unknown reference "${requested}" for ${guide.name}. Available: ${available}`
     )
   }
+
   return match
 }
 
@@ -81,6 +89,7 @@ export const SKILL_GUIDE_GET_HANDLER: Record<string, CommandHandler> = {
       writeStdoutLine(
         json ? JSON.stringify({ name: guide.name, references: names }, null, 2) : names.join('\n')
       )
+
       return
     }
 
@@ -95,6 +104,7 @@ export const SKILL_GUIDE_GET_HANDLER: Record<string, CommandHandler> = {
             )
           : reference.markdown
       )
+
       return
     }
 

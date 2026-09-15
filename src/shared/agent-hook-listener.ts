@@ -19,6 +19,7 @@ import { normalizeProviderEvent } from './agent-hook-listener/provider-dispatch'
 import { hasExplicitUserPrompt } from './agent-hook-listener/provider-event-routing'
 import { hasExplicitAmpPrompt } from './agent-hook-listener/providers/amp-events'
 import { readString } from './agent-hook-listener/tool-input-preview'
+
 /** Canonical transport-agnostic normalization entry shared by main and relay listeners. */
 export function normalizeHookPayload(
   state: HookListenerState,
@@ -28,34 +29,42 @@ export function normalizeHookPayload(
   options: { deferCompactOwnershipToClient?: boolean } = {}
 ): AgentHookEventPayload | null {
   const envelope = parseHookEnvelope(state, source, body, expectedEnv)
+
   if (!envelope) {
     return null
   }
+
   const { record, paneKey, hookPayloadRecord, tabId, worktreeId, launchToken } = envelope
+
   if (source === 'claude') {
     state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
   }
+
   const eventName =
     readFirstString(record, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType']) ??
     hookPayloadRecord.hook_event_name ??
     hookPayloadRecord.hookEventName
+
   // Codex child hooks expose the child's session_id on the parent's pane.
   const providerSession =
     source === 'codex' && readString(hookPayloadRecord, 'agent_id')
       ? null
       : extractAgentProviderSession(source, hookPayloadRecord)
+
   const providerPromptId =
     source === 'claude'
       ? normalizeClaudePromptId(hookPayloadRecord.prompt_id)
       : source === 'grok'
         ? normalizeGrokPromptId(hookPayloadRecord.promptId ?? hookPayloadRecord.prompt_id)
         : undefined
+
   const compactTrigger =
     source === 'claude' &&
     (eventName === 'PreCompact' || eventName === 'PostCompact') &&
     (hookPayloadRecord.trigger === 'manual' || hookPayloadRecord.trigger === 'auto')
       ? hookPayloadRecord.trigger
       : undefined
+
   // Why: fail closed for Claude only. A malformed compact payload must not reach the mapping, but
   // the old guard was source-BLIND and pre-empted every other provider's normalizer before it ran.
   if (
@@ -65,12 +74,15 @@ export function normalizeHookPayload(
   ) {
     return null
   }
+
   const previousStatus = state.lastStatusByPaneKey.get(paneKey)
+
   // Why: only a MANUAL completion claims anything, so only it may write compact-scoped state. An
   // auto compact runs inside a turn that resumes and emits its own Stop; running the ownership
   // guard for it would burn the pane's consumed-compact slot on an event that maps to nothing.
   const isCompactCompletion =
     source === 'claude' && eventName === 'PostCompact' && compactTrigger === 'manual'
+
   if (isCompactCompletion) {
     // Why: a relay is a forwarder, not the authority on pane identity — pane retirement, tab
     // closure and hydrated rows all live on the client, and the client re-runs this exact guard on
@@ -93,12 +105,14 @@ export function normalizeHookPayload(
       ) {
         return null
       }
+
       markClaudeCompactCompletionConsumed(
         state.claudeConsumedCompactPromptIdByPaneKey,
         paneKey,
         providerPromptId
       )
     }
+
     // Why: the compact's own event carries no prompt; keep the pane's label from the turn it
     // summarized rather than blanking the row as it clears.
     if (previousStatus?.payload.prompt && !state.lastPromptByPaneKey.has(paneKey)) {
@@ -108,6 +122,7 @@ export function normalizeHookPayload(
 
   const extractedPrompt = extractPromptText(hookPayloadRecord)
   const promptText = extractedPrompt.text
+
   const dispatched = normalizeProviderEvent({
     state,
     source,
@@ -118,21 +133,26 @@ export function normalizeHookPayload(
     envelope: record,
     extractedPrompt
   })
+
   const providerSessionOnly =
     (source === 'pi' || source === 'prime-agent') &&
     eventName === 'session_start' &&
     providerSession !== null
+
   // A transcript session_start carries resume identity while idle; receivers discard the placeholder row.
   const transportPayload =
     dispatched.payload ??
     (providerSessionOnly
       ? normalizeAgentStatusPayload({ state: 'done', prompt: '', agentType: source })
       : null)
+
   const restoredUnconfirmed =
     source === 'claude' && state.claudeUnconfirmedRestoredStatusPaneKeys.delete(paneKey)
+
   if (!transportPayload) {
     return null
   }
+
   const grokActiveTurn = source === 'grok' ? state.grokActiveTurnByPaneKey.get(paneKey) : undefined
 
   return {

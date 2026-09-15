@@ -48,10 +48,13 @@ function openedStream(
 ): void {
   if (stream.opened) {
     actions.closeTunnel(new Error('Browser tunnel received a duplicate opened frame'))
+
     return
   }
+
   stream.opened = true
   clearTimeout(stream.connectTimeout)
+
   if (
     !actions.send(
       BrowserNetworkTunnelOpcode.WindowUpdate,
@@ -60,8 +63,10 @@ function openedStream(
     )
   ) {
     actions.closeTunnel(new Error('Browser tunnel transport rejected initial credit'))
+
     return
   }
+
   stream.resolveOpen(stream.socket)
 }
 
@@ -71,14 +76,17 @@ function grantStreamCredit(
   actions: BrowserNetworkTunnelClientStreamFrameActions
 ): void {
   const credit = decodeBrowserNetworkTunnelWindowUpdate(payload)
+
   if (
     !stream.opened ||
     !credit ||
     stream.sendCredit + credit > BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
   ) {
     actions.closeTunnel(new Error('Browser tunnel received invalid stream credit'))
+
     return
   }
+
   stream.sendCredit += credit
   actions.flushWrites(stream)
 }
@@ -109,13 +117,17 @@ function closeStream(
 ): void {
   if (!stream.opened || stream.remoteClosed) {
     actions.closeTunnel(new Error('Browser tunnel received an invalid destination close'))
+
     return
   }
+
   stream.remoteClosed = true
   stream.localEnded = true
   stream.socket.once('end', () => actions.retire(stream))
+
   if (!stream.remoteEnded) {
     finishBrowserNetworkSourceData(stream)
   }
+
   stream.socket.end()
 }

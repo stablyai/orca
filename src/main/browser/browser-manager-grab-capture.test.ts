@@ -41,6 +41,7 @@ describe('browserManager grab operations', () => {
       const cropMock = vi.fn(() => ({
         toPNG: vi.fn(() => Buffer.from('png-data'))
       }))
+
       guestCapturePageMock.mockResolvedValue({
         isEmpty: vi.fn(() => false),
         getSize: vi.fn(() => ({ width: 2000, height: 1000 })),

@@ -17,13 +17,16 @@ export function resolveAiVaultTargetWorkspacePath(
   workspaceId: string
 ): string | null {
   const scope = parseWorkspaceKey(workspaceId)
+
   if (scope?.type === 'folder') {
     return (
       state.folderWorkspaces.find((workspace) => workspace.id === scope.folderWorkspaceId)
         ?.folderPath ?? null
     )
   }
+
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
+
   return findWorktreeById(state.worktreesByRepo, worktreeId)?.path ?? null
 }
 
@@ -43,6 +46,7 @@ export function resolveAiVaultSessionLaunchTarget(args: {
   targetState: AiVaultSessionResumeTargetState
 }): AiVaultSessionLaunchTarget {
   const targetWorktreeId = args.targetWorktreeId ?? args.activeWorktreeId
+
   if (
     !targetWorktreeId ||
     !isKnownAiVaultResumeWorkspaceTarget(args.targetState, targetWorktreeId)
@@ -51,10 +55,12 @@ export function resolveAiVaultSessionLaunchTarget(args: {
   }
 
   const targetStatus = getAiVaultResumeWorkspaceTargetStatus(args.targetState, targetWorktreeId)
+
   const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(
     args.targetState,
     targetWorktreeId
   )
+
   if (
     !canResumeAiVaultSessionOnTarget({
       sessionFilePath: args.sessionFilePath,
@@ -80,6 +86,7 @@ export function aiVaultResumeUnsupportedMessage(
       'This session belongs to a different host. Open a workspace on the same host to resume it.'
     )
   }
+
   return translate(
     'auto.components.right.sidebar.AiVaultPanel.openSupportedWorkspace',
     'Open a workspace before resuming a session.'

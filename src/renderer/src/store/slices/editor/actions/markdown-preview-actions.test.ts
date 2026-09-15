@@ -41,15 +41,18 @@ describe('createMarkdownPreviewActions', () => {
       isUntitled: true as const,
       mode: 'edit' as const
     }
+
     mocks.createUntitledMarkdownFileWithTemplateSelection.mockResolvedValue(fileInfo)
     const openFile = vi.fn()
     const recordFeatureInteraction = vi.fn()
+
     const state = {
       activeWorktreeId: 'wt-1',
       getKnownWorktreeById: vi.fn(() => ({ id: 'wt-1', path: '/repo' })),
       openFile,
       recordFeatureInteraction
     }
+
     const actions = createMarkdownPreviewActions(vi.fn() as never, (() => state) as never)
 
     await actions.openNewMarkdownInActiveWorkspace('group-2')

@@ -8,6 +8,7 @@ export async function removeHostAndCloseClient(
   // Why before removeHost: the unregister needs the still-authenticated client, and
   // the desktop's own revoke path covers the case where this call cannot land.
   const restorePushRegistration = await unregisterPushForRemovedHost(hostId)
+
   // Why: closing before the metadata commit can strand a still-paired host on
   // storage failure; closing immediately after success prevents socket leaks.
   try {
@@ -16,5 +17,6 @@ export async function removeHostAndCloseClient(
     restorePushRegistration()
     throw error
   }
+
   forgetHostClient(hostId)
 }

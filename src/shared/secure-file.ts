@@ -57,6 +57,7 @@ function hardenSecureDirectoryOnce(dirPath: string): void {
   if (hardenedDirectoryPathsThisProcess.get(dirPath)) {
     return
   }
+
   // Cache before the ACL lands so concurrent writes don't restorm; a failure drops it, under the retry budget.
   hardenedDirectoryPathsThisProcess.set(dirPath, true)
   applySecurePathRestriction(dirPath, true, process.platform, false, (restricted) => {
@@ -69,17 +70,22 @@ function hardenSecureDirectoryOnce(dirPath: string): void {
 function hardenSecurePathOnce(targetPath: string, isDirectory: boolean): boolean {
   if (isDirectory && process.platform === 'win32') {
     hardenSecureDirectoryOnce(targetPath)
+
     return true
   }
 
   const currentEntry = getHardenedPathCacheEntry(targetPath, isDirectory)
+
   if (!currentEntry) {
     hardenedPathsThisProcess.delete(targetPath)
   }
+
   const cachedEntry = hardenedPathsThisProcess.get(targetPath)
+
   if (currentEntry && cachedEntry && hardenedPathCacheEntriesMatch(currentEntry, cachedEntry)) {
     return true
   }
+
   // Why: async re-harden is safe here — read path hardens each file at most once/process; new files harden synchronously on the write path.
   const outcome = applySecurePathRestriction(
     targetPath,
@@ -92,10 +98,13 @@ function hardenSecurePathOnce(targetPath: string, isDirectory: boolean): boolean
       }
     }
   )
+
   if (outcome !== 'failed') {
     rememberHardenedPath(targetPath, isDirectory)
+
     return true
   }
+
   return false
 }
 
@@ -126,33 +135,41 @@ export function writeSecureFile(
   options: { durable?: boolean } = {}
 ): boolean {
   const dir = dirname(targetPath)
+
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
   }
+
   // Windows dir hardening stays async + path-cached (it stormed the main thread, #4901); POSIX keeps the metadata cache to catch chmod/ctime drift.
   hardenSecurePathOnce(dir, true)
 
   const tmpFile = `${targetPath}.${process.pid}.${Date.now()}.${randomBytes(4).toString('hex')}.tmp`
+
   try {
     writeFileSync(tmpFile, contents, {
       encoding: 'utf-8',
       mode: 0o600
     })
+
     if (options.durable) {
       fsyncFileSync(tmpFile)
     }
+
     // Why: writeFileSync mode is a no-op on Windows, so restrict the credential's ACL synchronously before the rename publishes it under inherited ACLs.
     const stagedOutcome = applySecurePathRestriction(tmpFile, false, process.platform, true)
     renameSync(tmpFile, targetPath)
     // Why: these hold auth credentials, so the published path must stay current-user only; cache only on confirmed success so failures retry.
     // The staged file's protected DACL survives the rename, so this pass usually just verifies it.
     const publishedOutcome = applySecurePathRestriction(targetPath, false, process.platform, true)
+
     if (publishedOutcome === 'applied') {
       rememberHardenedPath(targetPath, false)
     }
+
     if (options.durable) {
       bestEffortFsyncDirectorySync(dir)
     }
+
     return stagedOutcome === 'applied' && publishedOutcome === 'applied'
   } catch (error) {
     rmSync(tmpFile, { force: true })
@@ -162,6 +179,7 @@ export function writeSecureFile(
 
 function fsyncPathSync(path: string, flags: 'r' | 'r+'): void {
   const descriptor = openSync(path, flags)
+
   try {
     fsyncSync(descriptor)
   } finally {
@@ -178,6 +196,7 @@ export function bestEffortFsyncDirectorySync(directory: string): void {
   if (process.platform === 'win32') {
     return
   }
+
   try {
     fsyncPathSync(directory, 'r')
   } catch (error) {
@@ -187,6 +206,7 @@ export function bestEffortFsyncDirectorySync(directory: string): void {
     ) {
       return
     }
+
     throw error
   }
 }
@@ -209,6 +229,7 @@ export function bestEffortFsyncDirectorySync(directory: string): void {
  */
 export function isUnreadableError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | null)?.code
+
   return (
     code === 'EPERM' ||
     code === 'EACCES' ||
@@ -221,9 +242,11 @@ export function isUnreadableError(error: unknown): boolean {
 
 export function hardenExistingSecureFile(targetPath: string): void {
   const dir = dirname(targetPath)
+
   if (existsSync(dir)) {
     hardenSecurePathOnce(dir, true)
   }
+
   if (existsSync(targetPath)) {
     hardenSecurePathOnce(targetPath, false)
   }
@@ -266,33 +289,42 @@ function applySecurePathRestriction(
       // must still be retried on the next write of the same credential.
       // Why: apply the ACL synchronously so the credential file isn't briefly readable under inherited ACLs (writeFileSync mode is a no-op on Windows).
       const restricted = restrictWindowsPathSync(targetPath, isDirectory)
+
       if (restricted) {
         // Success only: this is how a recovered host clears the read path's backoff (and reports
         // `recovered`). Recording a failure here would put the exempt lane back under the budget.
         recordHardeningOutcome(targetPath, true)
       }
+
       return restricted ? 'applied' : 'failed'
     }
+
     // Why the floor: this is the read path, polled at ~2/s (#4901). Retrying every failure there
     // is the same storm the cache exists to prevent.
     if (!mayAttemptHardening(targetPath)) {
       onAsyncSettled?.(false)
+
       return 'failed'
     }
+
     // Why: dir/read-path re-harden runs async to avoid blocking the main thread (#4901).
     bestEffortRestrictWindowsPath(targetPath, isDirectory, (restricted) => {
       recordHardeningOutcome(targetPath, restricted)
       onAsyncSettled?.(restricted)
     })
+
     return 'pending'
   }
+
   chmodSync(targetPath, isDirectory ? 0o700 : 0o600)
+
   return 'applied'
 }
 
 /** Caches the current metadata snapshot for a just-hardened path, or clears it if the path is gone. */
 function rememberHardenedPath(targetPath: string, isDirectory: boolean): void {
   const entry = getHardenedPathCacheEntry(targetPath, isDirectory)
+
   if (entry) {
     hardenedPathsThisProcess.set(targetPath, entry)
   } else {
@@ -310,9 +342,11 @@ function getHardenedPathCacheEntry(
 ): HardenedPathCacheEntry | null {
   try {
     const stats = statSync(targetPath)
+
     if (stats.isDirectory() !== isDirectory) {
       return null
     }
+
     return {
       isDirectory,
       dev: stats.dev,

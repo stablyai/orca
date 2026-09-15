@@ -158,11 +158,13 @@ describe('registerNotificationHandlers', () => {
     )
 
     const handler = getDispatchHandler()
+
     const focusedNotification = {
       source: 'agent-task-complete' as const,
       worktreeId: 'repo::wt1',
       isActiveWorktree: true
     }
+
     expect(await handler({}, focusedNotification)).toEqual({
       delivered: false,
       reason: 'suppressed-focus'

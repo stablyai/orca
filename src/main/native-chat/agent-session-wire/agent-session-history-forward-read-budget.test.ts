@@ -27,12 +27,15 @@ const identity: AgentSessionJournalIdentity = {
   agent: 'codex',
   providerHandle: { kind: 'codex', threadId: 'thread-1' }
 }
+
 const journals = createTrackedJournalOpener()
+
 let root: string | undefined
 
 afterEach(async () => {
   vi.restoreAllMocks()
   await journals.closeAll()
+
   if (root) {
     await rm(root, { recursive: true, force: true })
   }
@@ -41,12 +44,14 @@ afterEach(async () => {
 async function seedJournal(count: number) {
   root = await mkdtemp(join(tmpdir(), 'orca-history-read-budget-'))
   const { db } = openJournalDatabase(journalDatabaseFile(root))
+
   const base = {
     v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
     epoch: 'epoch-1',
     fence: 1,
     ts: 1_000
   }
+
   try {
     db.exec('BEGIN IMMEDIATE')
     upsertJournalSessionRow(db, identity.sessionId, base.epoch, base.ts)
@@ -57,6 +62,7 @@ async function seedJournal(count: number) {
       reason: 'session_created',
       providerHandle: identity.providerHandle
     })
+
     for (let index = 0; index < count; index += 1) {
       insertJournalRow(db, identity.sessionId, {
         ...base,
@@ -71,10 +77,12 @@ async function seedJournal(count: number) {
         }
       })
     }
+
     db.exec('COMMIT')
   } finally {
     db.close()
   }
+
   return journals.open({ identity, journalDir: root })
 }
 
@@ -84,18 +92,22 @@ function observeForwardReads() {
   const prepare = Database.prototype.prepare
   vi.spyOn(Database.prototype, 'prepare').mockImplementation(function (this: Database, sql) {
     const statement = prepare.call(this, sql)
+
     if (sql.includes('seq > ?') && !observed.has(statement)) {
       observed.add(statement)
       const all = statement.all.bind(statement)
       vi.spyOn(statement, 'all').mockImplementation((...args) => {
         const rows = all(...args)
         returnedRows.push(rows.length)
+
         return rows
       })
     }
+
     return statement
   })
   const parse = vi.spyOn(rowSchema, 'parseJournalRow')
+
   return { returnedRows, parse }
 }
 
@@ -143,22 +155,27 @@ describe('forward history SQL read budget', () => {
     const journal = await seedJournal(6)
     const cursor = { epoch: journal.epoch, sequence: 1 }
     expect(journal.readSince(cursor)).toMatchObject({ ok: true, rows: expect.any(Array) })
+
     const first = readAgentSessionHistory(journal, {
       sessionId: identity.sessionId,
       direction: 'after',
       cursor,
       limit: 3
     })
+
     expect(first).toMatchObject({ ok: true, page: { hasNewer: true } })
+
     if (!first.ok) {
       throw new Error('Expected first page')
     }
+
     const last = readAgentSessionHistory(journal, {
       sessionId: identity.sessionId,
       direction: 'after',
       cursor: first.page.window.nextCursor,
       limit: 3
     })
+
     expect(last).toMatchObject({ ok: true, page: { hasNewer: false } })
     const unlimited = journal.readSince(cursor)
     expect(unlimited.ok && unlimited.rows).toHaveLength(6)
@@ -167,6 +184,7 @@ describe('forward history SQL read budget', () => {
   it('reports a sequence gap when the next page reaches it', async () => {
     const journal = await seedJournal(6)
     const { db } = openJournalDatabase(journalDatabaseFile(root!))
+
     try {
       db.prepare('DELETE FROM journal_rows WHERE session_id = ? AND seq = ?').run(
         identity.sessionId,
@@ -175,16 +193,20 @@ describe('forward history SQL read budget', () => {
     } finally {
       db.close()
     }
+
     const first = readAgentSessionHistory(journal, {
       sessionId: identity.sessionId,
       direction: 'after',
       cursor: { epoch: journal.epoch, sequence: 1 },
       limit: 2
     })
+
     expect(first).toMatchObject({ ok: true, page: { hasNewer: true } })
+
     if (!first.ok) {
       throw new Error('Expected first page')
     }
+
     expect(
       readAgentSessionHistory(journal, {
         sessionId: identity.sessionId,
@@ -200,6 +222,7 @@ describe('forward history SQL read budget', () => {
     async (rowJson) => {
       const journal = await seedJournal(6)
       const { db } = openJournalDatabase(journalDatabaseFile(root!))
+
       try {
         db.prepare('UPDATE journal_rows SET row_json = ? WHERE session_id = ? AND seq = ?').run(
           rowJson,
@@ -209,19 +232,23 @@ describe('forward history SQL read budget', () => {
       } finally {
         db.close()
       }
+
       const page = readAgentSessionHistory(journal, {
         sessionId: identity.sessionId,
         direction: 'after',
         cursor: { epoch: journal.epoch, sequence: 1 },
         limit: 2
       })
+
       expect(page).toMatchObject({
         ok: true,
         page: { hasNewer: false, window: { nextCursor: { sequence: 3 } } }
       })
+
       if (!page.ok) {
         throw new Error('Expected valid prefix')
       }
+
       expect(page.page.items.map((item) => item.itemId)).toEqual(['item-0', 'item-1'])
     }
   )

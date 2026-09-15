@@ -8,47 +8,62 @@ import type {
 } from '../../../shared/linear/project-types'
 import { LINEAR_ITEM_LIMIT } from './task-page-source-context'
 import { useTaskPageLinearContextActions } from './use-task-page-linear-context-actions'
+
 export function useTaskPageLinearContextStatePrelude(model: TaskPageLinearViewStatePreludeModel) {
   const [linearCustomViewsResult, setLinearCustomViewsResult] = useState<
     LinearCollectionResult<LinearCustomViewSummary>
   >({
     items: []
   })
+
   const [linearCustomViewsLoading, setLinearCustomViewsLoading] = useState(false)
   const [linearCustomViewsError, setLinearCustomViewsError] = useState<string | null>(null)
+
   const [selectedLinearCustomView, setSelectedLinearCustomView] =
     useState<LinearCustomViewSummary | null>(null)
+
   const [linearProjectParentView, setLinearProjectParentView] =
     useState<LinearCustomViewSummary | null>(null)
+
   const [linearCustomViewIssuesResult, setLinearCustomViewIssuesResult] = useState<
     LinearCollectionResult<LinearIssue>
   >({
     items: []
   })
+
   const [linearCustomViewIssueLimit, setLinearCustomViewIssueLimit] = useState(LINEAR_ITEM_LIMIT)
   const [linearCustomViewIssuePage, setLinearCustomViewIssuePage] = useState(0)
+
   const [linearCustomViewIssueLoadingTargetPage, setLinearCustomViewIssueLoadingTargetPage] =
     useState<number | null>(null)
+
   const [linearCustomViewProjectsResult, setLinearCustomViewProjectsResult] = useState<
     LinearCollectionResult<LinearProjectSummary>
   >({
     items: []
   })
+
   const [linearCustomViewContentsLoading, setLinearCustomViewContentsLoading] = useState(false)
+
   const [linearCustomViewContentsError, setLinearCustomViewContentsError] = useState<string | null>(
     null
   )
+
   const [linearBoardDraggingIssueId, setLinearBoardDraggingIssueId] = useState<string | null>(null)
   const [linearBoardDragOverKey, setLinearBoardDragOverKey] = useState<string | null>(null)
+
   const [linearBoardUpdatingIssueIds, setLinearBoardUpdatingIssueIds] = useState<
     ReadonlySet<string>
   >(() => new Set())
+
   const lastLinearRequestRef = useRef<{
     nonce: number
     signature: string
   } | null>(null)
+
   const landingLinearRefreshKeysRef = useRef<ReadonlySet<string>>(new Set())
   const linearContextResumeAttemptedRef = useRef(false)
+
   const nextModel = model as typeof model & {
     linearCustomViewsResult: typeof linearCustomViewsResult
     setLinearCustomViewsResult: typeof setLinearCustomViewsResult
@@ -84,6 +99,7 @@ export function useTaskPageLinearContextStatePrelude(model: TaskPageLinearViewSt
     landingLinearRefreshKeysRef: typeof landingLinearRefreshKeysRef
     linearContextResumeAttemptedRef: typeof linearContextResumeAttemptedRef
   }
+
   nextModel.linearCustomViewsResult = linearCustomViewsResult
   nextModel.setLinearCustomViewsResult = setLinearCustomViewsResult
   nextModel.linearCustomViewsLoading = linearCustomViewsLoading
@@ -117,13 +133,18 @@ export function useTaskPageLinearContextStatePrelude(model: TaskPageLinearViewSt
   nextModel.lastLinearRequestRef = lastLinearRequestRef
   nextModel.landingLinearRefreshKeysRef = landingLinearRefreshKeysRef
   nextModel.linearContextResumeAttemptedRef = linearContextResumeAttemptedRef
+
   return nextModel
 }
+
 export type TaskPageLinearContextStatePreludeModel = ReturnType<
   typeof useTaskPageLinearContextStatePrelude
 >
+
 export function useTaskPageLinearContextState(model: TaskPageLinearViewStatePreludeModel) {
   const stateModel = useTaskPageLinearContextStatePrelude(model)
+
   return useTaskPageLinearContextActions(stateModel)
 }
+
 export type TaskPageLinearContextStateModel = ReturnType<typeof useTaskPageLinearContextState>

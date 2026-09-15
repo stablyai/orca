@@ -17,11 +17,17 @@ vi.mock('node:child_process', () => ({
 }))
 
 const execFileMock = vi.mocked(execFile)
+
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
 const originalUser = process.env.USER
+
 const originalUsername = process.env.USERNAME
+
 const TEST_USER = 'orca-test-user'
+
 const SSO_USER = 'sso.user@example.com'
+
 let configDir: string
 
 function setPlatform(platform: NodeJS.Platform): void {
@@ -33,6 +39,7 @@ function setPlatform(platform: NodeJS.Platform): void {
 
 function serviceForConfigDir(configDir: string): string {
   const suffix = createHash('sha256').update(configDir).digest('hex').slice(0, 8)
+
   return `Claude Code-credentials-${suffix}`
 }
 
@@ -58,14 +65,17 @@ describe('Claude Keychain credentials', () => {
   afterEach(() => {
     rmSync(configDir, { recursive: true, force: true })
     vi.useRealTimers()
+
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
+
     if (originalUser === undefined) {
       delete process.env.USER
     } else {
       process.env.USER = originalUser
     }
+
     if (originalUsername === undefined) {
       delete process.env.USERNAME
     } else {
@@ -77,6 +87,7 @@ describe('Claude Keychain credentials', () => {
     const scopedService = serviceForConfigDir(configDir)
     execFileMock.mockImplementationOnce((_file, _args, _options, callback) => {
       invokeExecFileCallback(callback, null, '{"claudeAiOauth":{"accessToken":"scoped"}}\n', '')
+
       return null as never
     })
 
@@ -100,10 +111,12 @@ describe('Claude Keychain credentials', () => {
     execFileMock
       .mockImplementationOnce((_file, _args, _options, callback) => {
         invokeExecFileCallback(callback, notFound, '', 'could not be found')
+
         return null as never
       })
       .mockImplementationOnce((_file, _args, _options, callback) => {
         invokeExecFileCallback(callback, null, 'legacy\n', '')
+
         return null as never
       })
 
@@ -123,6 +136,7 @@ describe('Claude Keychain credentials', () => {
     const scopedService = serviceForConfigDir(configDir)
     execFileMock.mockImplementationOnce((_file, _args, _options, callback) => {
       invokeExecFileCallback(callback, null, '', '')
+
       return null as never
     })
 
@@ -144,6 +158,7 @@ describe('Claude Keychain credentials', () => {
     const scopedService = serviceForConfigDir(configDir)
     execFileMock.mockImplementation((_file, _args, _options, callback) => {
       invokeExecFileCallback(callback, null, '', '')
+
       return null as never
     })
 
@@ -177,6 +192,7 @@ describe('Claude Keychain credentials', () => {
     const scopedService = serviceForConfigDir(configDir)
     execFileMock.mockImplementationOnce((_file, _args, _options, callback) => {
       invokeExecFileCallback(callback, null, 'scoped\n', '')
+
       return null as never
     })
 
@@ -200,14 +216,17 @@ describe('Claude Keychain credentials', () => {
 
     let settled = false
     let rejected: unknown
+
     const readPromise = readActiveClaudeKeychainCredentialsStrict(configDir).then(
       (credentials) => {
         settled = true
+
         return credentials
       },
       (error: unknown) => {
         settled = true
         rejected = error
+
         return null
       }
     )
@@ -226,6 +245,7 @@ describe('Claude Keychain credentials', () => {
     const scopedService = serviceForConfigDir(configDir)
     execFileMock.mockImplementation((_file, _args, _options, callback) => {
       invokeExecFileCallback(callback, null, '', '')
+
       return null as never
     })
 
@@ -241,6 +261,7 @@ describe('Claude Keychain credentials', () => {
     process.env.USER = SSO_USER
     execFileMock.mockImplementationOnce((_file, _args, _options, callback) => {
       invokeExecFileCallback(callback, null, '{"claudeAiOauth":{"accessToken":"ok"}}\n', '')
+
       return null as never
     })
 
@@ -262,6 +283,7 @@ describe('Claude Keychain credentials', () => {
     const scopedService = serviceForConfigDir(configDir)
     execFileMock.mockImplementation((_file, _args, _options, callback) => {
       invokeExecFileCallback(callback, null, '', '')
+
       return null as never
     })
 

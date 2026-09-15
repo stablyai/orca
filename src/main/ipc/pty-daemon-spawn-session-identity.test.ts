@@ -18,45 +18,61 @@ import {
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -145,9 +161,11 @@ describe('registerPtyHandlers', () => {
       })
       it('reuses one attach-style daemon session for fresh-agent operation retries', async () => {
         const daemonSpawn = setupDaemonAdapter()
+
         let controller:
           | { spawn: (args: Record<string, unknown>) => Promise<{ id: string }> }
           | undefined
+
         const runtime = {
           setPtyController: vi.fn((next) => {
             controller = next
@@ -155,8 +173,10 @@ describe('registerPtyHandlers', () => {
           registerPreAllocatedHandleForPty: vi.fn(),
           registerPty: vi.fn()
         }
+
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
+
         const request = {
           cols: 80,
           rows: 24,
@@ -179,9 +199,11 @@ describe('registerPtyHandlers', () => {
       })
       it('does not downgrade a structured claim after dispatch reaches an old daemon', async () => {
         const daemonSpawn = setupDaemonAdapter(true, undefined, false)
+
         let controller:
           | { spawn: (args: Record<string, unknown>) => Promise<{ id: string }> }
           | undefined
+
         const runtime = {
           setPtyController: vi.fn((next) => {
             controller = next
@@ -189,6 +211,7 @@ describe('registerPtyHandlers', () => {
           registerPreAllocatedHandleForPty: vi.fn(),
           registerPty: vi.fn()
         }
+
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
 
@@ -214,6 +237,7 @@ describe('registerPtyHandlers', () => {
         const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
           PI_CODING_AGENT_DIR: '/ambient/pi/agent'
         })
+
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
           expect.any(String),
           '/ambient/pi/agent',
@@ -262,6 +286,7 @@ describe('registerPtyHandlers', () => {
         const daemonSpawn = vi.fn(async () => {
           throw new Error('spawn boom')
         })
+
         setLocalPtyProvider({
           spawn: daemonSpawn,
           write: vi.fn(),
@@ -273,12 +298,14 @@ describe('registerPtyHandlers', () => {
           listProcesses: vi.fn(async () => []),
           getForegroundProcess: vi.fn(async () => null)
         } as never)
+
         const runtime = {
           setPtyController: vi.fn(),
           createPreAllocatedTerminalHandle: vi.fn(() => null),
           preAllocateHandleForPty: vi.fn(),
           preparePtyExecutionContext: vi.fn().mockReturnValue(true)
         }
+
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
         await expect(
@@ -297,6 +324,7 @@ describe('registerPtyHandlers', () => {
         const daemonSpawn = vi.fn(async () => {
           throw new Error('spawn boom')
         })
+
         setLocalPtyProvider({
           spawn: daemonSpawn,
           write: vi.fn(),
@@ -308,12 +336,14 @@ describe('registerPtyHandlers', () => {
           listProcesses: vi.fn(async () => []),
           getForegroundProcess: vi.fn(async () => null)
         } as never)
+
         const runtime = {
           setPtyController: vi.fn(),
           createPreAllocatedTerminalHandle: vi.fn(() => null),
           preAllocateHandleForPty: vi.fn(),
           preparePtyExecutionContext: vi.fn().mockReturnValue(true)
         }
+
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
         await expect(
@@ -343,11 +373,13 @@ describe('registerPtyHandlers', () => {
             id: 'ssh-pty'
           })
         )
+
         const store = {
           upsertSshRemotePtyLease: vi.fn(),
           supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
           persistPtyBinding: vi.fn()
         }
+
         registerSshPtyProvider('ssh-1', {
           spawn: sshSpawn,
           write: vi.fn(),
@@ -466,10 +498,12 @@ describe('registerPtyHandlers', () => {
           // source stream needs restoring refuses with, and only this one is host-reported absence.
           throw new SshPtyAbsentFromRelayError('SSH_SESSION_EXPIRED: remote-pty')
         })
+
         const store = {
           markSshRemotePtyLease: vi.fn(),
           clearSshRemotePtyKillIntent: vi.fn()
         }
+
         registerSshPtyProvider('ssh-1', {
           spawn: sshSpawn,
           write: vi.fn(),
@@ -523,10 +557,12 @@ describe('registerPtyHandlers', () => {
         const sshSpawn = vi.fn(async () => {
           throw new Error('SSH_SESSION_EXPIRED: remote-pty')
         })
+
         const store = {
           markSshRemotePtyLease: vi.fn(),
           clearSshRemotePtyKillIntent: vi.fn()
         }
+
         registerSshPtyProvider('ssh-1', {
           spawn: sshSpawn,
           write: vi.fn(),
@@ -574,15 +610,18 @@ describe('registerPtyHandlers', () => {
       })
       it('marks a scoped SSH session expired using the raw relay lease id', async () => {
         const scopedPtyId = 'ssh:ssh-1@@remote-pty'
+
         const sshSpawn = vi.fn(async () => {
           // The class, not the message: `SSH_SESSION_EXPIRED` is also what a live PTY whose
           // source stream needs restoring refuses with, and only this one is host-reported absence.
           throw new SshPtyAbsentFromRelayError('SSH_SESSION_EXPIRED: remote-pty')
         })
+
         const store = {
           markSshRemotePtyLease: vi.fn(),
           clearSshRemotePtyKillIntent: vi.fn()
         }
+
         registerSshPtyProvider('ssh-1', {
           spawn: sshSpawn,
           write: vi.fn(),

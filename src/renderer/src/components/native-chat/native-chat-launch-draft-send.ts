@@ -12,22 +12,27 @@ export type NativeChatLaunchDraftSendPlan =
 
 /** Prompt glyphs both supported agent TUIs draw at the start of the input line. */
 const COMPOSER_PROMPT_LINE = /^\s*([❯›])\s?(.*)$/
+
 const CLAUDE_FRAME_LINE = /^\s*─{3,}\s*$/
+
 const CODEX_FOOTER_LINE = /^\s*\S.*\s[·•]\s.*$/
 
 function composerContinuationIsEmpty(lines: string[], promptIndex: number, glyph: string): boolean {
   for (let index = promptIndex + 1; index < lines.length; index += 1) {
     const line = lines[index]!
+
     if (
       (glyph === '❯' && CLAUDE_FRAME_LINE.test(line)) ||
       (glyph === '›' && CODEX_FOOTER_LINE.test(line))
     ) {
       return true
     }
+
     if (line.trim() !== '') {
       return false
     }
   }
+
   return true
 }
 
@@ -39,13 +44,17 @@ export function agentInputLineCleared(screen: string | null | undefined): boolea
   if (!screen) {
     return false
   }
+
   const lines = stripScrollbackAnsi(screen).split('\n')
+
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const match = COMPOSER_PROMPT_LINE.exec(lines[index]!)
+
     if (match) {
       return match[2]!.trim() === '' && composerContinuationIsEmpty(lines, index, match[1]!)
     }
   }
+
   return false
 }
 
@@ -58,9 +67,11 @@ export function planNativeChatLaunchDraftSend(args: {
   seededText: string | null | undefined
 }): NativeChatLaunchDraftSendPlan {
   const seededText = args.seededText
+
   if (!seededText || seededText.trim() === '') {
     return { kind: 'default' }
   }
+
   return {
     kind: 'replace-draft',
     clearInput: buildAgentTuiClearInputForText(seededText),
@@ -80,15 +91,19 @@ export function resolveNativeChatLaunchDraftSend(args: {
   sendOptions: { clearInput: string; confirmCleared: () => boolean } | undefined
 } {
   const { launchDraft, launchDraftResolved, agent, readScreen } = args
+
   // A resolved draft was already submitted or cleared TUI-side, so nothing of
   // ours is on the line any more — treating it as parked would clear or submit
   // a buffer that no longer holds it.
   const seededText =
     launchDraft && launchDraft.agent === agent && !launchDraftResolved ? launchDraft.text : null
+
   const plan = planNativeChatLaunchDraftSend({ seededText })
+
   if (plan.kind !== 'replace-draft') {
     return { plan, sendOptions: undefined }
   }
+
   return {
     plan,
     sendOptions: {

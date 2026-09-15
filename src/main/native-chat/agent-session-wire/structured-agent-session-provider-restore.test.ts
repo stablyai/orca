@@ -13,7 +13,9 @@ import {
 } from './structured-agent-session-host-test-data'
 
 const CLAUDE_SESSION = 'claude-session'
+
 const hosts: StructuredAgentSessionHost[] = []
+
 let root = ''
 
 function claudeAdapter(): StructuredAgentSessionAdapter {
@@ -54,7 +56,9 @@ function createHost(
     probeOwner,
     now: () => HOST_TEST_NOW
   })
+
   hosts.push(host)
+
   return host
 }
 
@@ -78,6 +82,7 @@ describe('structured session provider restore', () => {
     const storeDirectory = join(root, 'store')
     const store = await AgentSessionRecordStore.open({ directory: storeDirectory, hostId: 'local' })
     const host = createHost(store)
+
     const attached = await host.attach(
       { callerKey: 'client-1' },
       hostTestAttachParams(null, {
@@ -87,12 +92,14 @@ describe('structured session provider restore', () => {
         providerHandle: { kind: 'claude', sessionId: CLAUDE_SESSION, leafUuid: null }
       })
     )
+
     expect(attached).toMatchObject({ ok: true })
 
     const reopenedStore = await AgentSessionRecordStore.open({
       directory: storeDirectory,
       hostId: 'local'
     })
+
     const restarted = createHost(reopenedStore, async () => ({
       outcome: 'indeterminate',
       reason: 'read does not need ownership'

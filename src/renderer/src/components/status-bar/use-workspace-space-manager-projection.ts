@@ -21,7 +21,9 @@ import type { useWorkspaceSpaceDecisionProjection } from './use-workspace-space-
 import type { useWorkspaceSpaceGitRefreshAction } from './use-workspace-space-git-refresh-action'
 
 const GIT_STATUS_REFRESH_CONCURRENCY = 6
+
 type WorkspaceSpaceManagerBindings = ReturnType<typeof useWorkspaceSpaceManagerBindings>
+
 type WorkspaceSpaceDecisionProjection = ReturnType<typeof useWorkspaceSpaceDecisionProjection>
 
 export function useWorkspaceSpaceManagerProjection(args: {
@@ -51,6 +53,7 @@ export function useWorkspaceSpaceManagerProjection(args: {
     sortKey,
     treemapZoomWorktreeId
   } = args.bindings
+
   const { decisionDetailsByWorktreeId, isWorktreeDeleting, sourceRows } = args.decision
   const refreshWorkspaceGitStatus = args.refreshWorkspaceGitStatus
 
@@ -59,6 +62,7 @@ export function useWorkspaceSpaceManagerProjection(args: {
       if (isWorktreeDeleting(worktree)) {
         return true
       }
+
       return !isWorkspaceSpaceRowReadyToDelete(
         worktree,
         decisionDetailsByWorktreeId.get(getWorkspaceSpaceWorktreeIdentity(worktree))
@@ -81,21 +85,26 @@ export function useWorkspaceSpaceManagerProjection(args: {
     sourceRows,
     inspectedWorktreeId
   )
+
   const nextSelectedIds = pruneWorkspaceSpaceSelectedIds(sourceRows, selectedIds)
+
   const nextTreemapZoomWorktreeId = resolveWorkspaceSpaceTreemapZoomWorktreeId(
     sourceRows,
     treemapZoomWorktreeId
   )
+
   // Why: these ids are local UI state derived from the latest scan rows. Repair
   // them before commit so stale selections cannot flash after a scan changes.
   if (inspectedWorktreeId !== nextInspectedWorktreeId) {
     // react-doctor-disable-next-line react-doctor/no-prop-callback-in-render
     setInspectedWorktreeId(nextInspectedWorktreeId)
   }
+
   if (nextSelectedIds !== selectedIds) {
     // react-doctor-disable-next-line react-doctor/no-prop-callback-in-render
     setSelectedIds(nextSelectedIds)
   }
+
   if (treemapZoomWorktreeId !== nextTreemapZoomWorktreeId) {
     // react-doctor-disable-next-line react-doctor/no-prop-callback-in-render
     setTreemapZoomWorktreeId(nextTreemapZoomWorktreeId)
@@ -106,6 +115,7 @@ export function useWorkspaceSpaceManagerProjection(args: {
     if (gitStatusScanGenerationRef.current === scanGeneration) {
       return
     }
+
     gitStatusScanGenerationRef.current = scanGeneration
     gitStatusByWorktreeIdentityRef.current = new Map()
     inFlightGitStatusRefreshes.current.clear()
@@ -123,27 +133,33 @@ export function useWorkspaceSpaceManagerProjection(args: {
 
   useEffect(() => {
     const visibleWorktreeIdentities = new Set(rows.map(getWorkspaceSpaceWorktreeIdentity))
+
     const candidates = getWorkspaceSpaceGitStatusRefreshCandidates(sourceRows, {
       activeWorktreeId,
       activeExecutionHostId: activeWorkspaceExecutionHostId,
       visibleWorktreeIdentities
     })
+
     if (candidates.length === 0) {
       return
     }
 
     let cancelled = false
     let nextIndex = 0
+
     const runWorker = async (): Promise<void> => {
       while (!cancelled) {
         const worktree = candidates[nextIndex]
         nextIndex += 1
+
         if (!worktree) {
           return
         }
+
         await refreshWorkspaceGitStatus(worktree)
       }
     }
+
     const workerCount = Math.min(GIT_STATUS_REFRESH_CONCURRENCY, candidates.length)
     void Promise.all(Array.from({ length: workerCount }, () => runWorker()))
 
@@ -162,41 +178,52 @@ export function useWorkspaceSpaceManagerProjection(args: {
     rows.find((row) => getWorkspaceSpaceWorktreeIdentity(row) === nextInspectedWorktreeId) ??
     rows.find((row) => row.status === 'ok') ??
     null
+
   const zoomedWorktree =
     sourceRows.find(
       (row) =>
         getWorkspaceSpaceWorktreeIdentity(row) === nextTreemapZoomWorktreeId && row.status === 'ok'
     ) ?? null
+
   const maxSize = getLargestWorkspaceSpaceRowSize(rows)
+
   const selectedDeletableRows = useMemo(
     () => getSelectedDeletableWorkspaceRows(rows, nextSelectedIds, isWorktreeUnavailableForDelete),
     [isWorktreeUnavailableForDelete, nextSelectedIds, rows]
   )
+
   const selectedDeletableIdentities = useMemo(
     () => selectedDeletableRows.map(getWorkspaceSpaceWorktreeIdentity),
     [selectedDeletableRows]
   )
+
   const selectedDeletableIdSet = useMemo(
     () => new Set(selectedDeletableIdentities),
     [selectedDeletableIdentities]
   )
+
   const visibleDeletableIdentities = useMemo(
     () => getVisibleDeletableWorkspaceIdentities(rows, isWorktreeUnavailableForDelete),
     [isWorktreeUnavailableForDelete, rows]
   )
+
   const allVisibleSelected =
     visibleDeletableIdentities.length > 0 &&
     visibleDeletableIdentities.every((id) => nextSelectedIds.has(id))
+
   const someVisibleSelected = visibleDeletableIdentities.some((id) => nextSelectedIds.has(id))
+
   const visibleSelectionState: boolean | 'mixed' = allVisibleSelected
     ? true
     : someVisibleSelected
       ? 'mixed'
       : false
+
   const isInitialScan = isScanning && !analysis
   const hasRows = sourceRows.length > 0
   const progressLabel = getWorkspaceSpaceProgressLabel(progress)
   const repoErrors = analysis?.repos.filter((repo) => repo.error !== null) ?? []
+
   const selectedReclaimableBytes = useMemo(
     () =>
       rows

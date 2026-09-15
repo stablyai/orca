@@ -49,6 +49,7 @@ describe('Codex subagent roster', () => {
 
   it('bounds live storage while admitting a replacement after one child stops', () => {
     const roster: CodexSubagentRoster = new Map()
+
     for (let index = 0; index <= AGENT_STATUS_MAX_SUBAGENTS; index += 1) {
       upsertCodexSubagent(roster, `child-${index}`, { state: 'working' }, index)
     }

@@ -26,6 +26,7 @@ function hookPayload(envelope: Record<string, unknown>): Record<string, unknown>
       return null
     }
   }
+
   return record(envelope.payload) ?? envelope
 }
 
@@ -33,18 +34,23 @@ export function readClaudeTuiSessionStartEvidence(
   value: unknown
 ): ClaudeTuiSessionStartEvidence | null {
   const envelope = record(value)
+
   if (!envelope) {
     return null
   }
+
   const payload = hookPayload(envelope)
+
   if (!payload) {
     return null
   }
+
   const hookEventName = nonEmptyString(payload.hook_event_name ?? payload.hookEventName)
   const source = nonEmptyString(payload.source)
   const sessionId = nonEmptyString(payload.session_id ?? payload.sessionId)
   const transcriptPath = nonEmptyString(payload.transcript_path ?? payload.transcriptPath)
   const launchToken = nonEmptyString(envelope.launchToken ?? payload.launchToken)
+
   return hookEventName === 'SessionStart' &&
     source === 'resume' &&
     sessionId &&
@@ -58,11 +64,15 @@ function comparablePath(value: string, platform: NodeJS.Platform): string | null
   if (value.includes('\0')) {
     return null
   }
+
   const path = platform === 'win32' ? win32 : posix
+
   if (!path.isAbsolute(value)) {
     return null
   }
+
   const normalized = path.normalize(value)
+
   return platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
@@ -76,6 +86,7 @@ export async function proveClaudeTuiResume(input: {
 }): Promise<ClaudeTuiSessionStartEvidence> {
   const timeoutMs = input.timeoutMs ?? 15_000
   let timer: ReturnType<typeof setTimeout> | undefined
+
   try {
     const evidence = readClaudeTuiSessionStartEvidence(
       await Promise.race([
@@ -89,21 +100,27 @@ export async function proveClaudeTuiResume(input: {
         })
       ])
     )
+
     if (!evidence) {
       throw new Error('The agent terminal did not emit a Claude resume SessionStart proof.')
     }
+
     if (evidence.launchToken !== input.expectedLaunchToken) {
       throw new Error('The Claude resume proof came from a different launched process.')
     }
+
     if (evidence.sessionId !== input.expectedSessionId) {
       throw new Error('The agent terminal resumed a different Claude session.')
     }
+
     const platform = input.platform ?? process.platform
     const expectedPath = comparablePath(input.expectedTranscriptPath, platform)
     const observedPath = comparablePath(evidence.transcriptPath, platform)
+
     if (!expectedPath || !observedPath || observedPath !== expectedPath) {
       throw new Error('The agent terminal resumed a different Claude transcript.')
     }
+
     return evidence
   } finally {
     clearTimeout(timer)

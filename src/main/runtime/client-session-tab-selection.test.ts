@@ -44,6 +44,7 @@ function snapshot(activeTabId = 'terminal-a::leaf-a'): RuntimeMobileSessionTabsR
       isActive: activeTabId === 'browser-unified'
     }
   ]
+
   return {
     worktree: 'wt-1',
     publicationEpoch: 'renderer:1',
@@ -62,11 +63,13 @@ function snapshot(activeTabId = 'terminal-a::leaf-a'): RuntimeMobileSessionTabsR
 describe('client session-tab selection', () => {
   it('keeps a client selection when a later host snapshot activates another tab', () => {
     const initial = snapshot()
+
     const selected = activateClientSessionTabSelection(
       initial,
       deriveClientSessionTabSelection(initial),
       'browser-unified'
     )
+
     const hostChanged = snapshot('terminal-a::leaf-b')
 
     const projected = projectClientSessionTabSelection(hostChanged, selected)
@@ -78,6 +81,7 @@ describe('client session-tab selection', () => {
 
   it('tracks split-leaf focus while group selection uses the parent tab id', () => {
     const initial = snapshot()
+
     const selected = activateClientSessionTabSelection(
       initial,
       deriveClientSessionTabSelection(initial),
@@ -92,11 +96,13 @@ describe('client session-tab selection', () => {
 
   it('falls back within the selected group when the selected tab disappears', () => {
     const initial = snapshot()
+
     const selected = activateClientSessionTabSelection(
       initial,
       deriveClientSessionTabSelection(initial),
       'terminal-a::leaf-b'
     )
+
     const removed = {
       ...initial,
       activeGroupId: 'group-left',
@@ -246,6 +252,7 @@ describe('client session-tab selection', () => {
       tabGroups: [],
       tabs: []
     }
+
     expect(store.project(empty, 'device-a').activeTabId).toBeNull()
 
     expect(store.project(snapshot(), 'device-a').activeTabId).toBe('browser-unified')
@@ -263,6 +270,7 @@ describe('client session-tab selection', () => {
       activeTabType: 'terminal' as const,
       tabs: full.tabs.filter((tab) => tab.id !== 'browser-unified')
     }
+
     expect(store.project(withoutBrowser, 'device-a').activeTabId).toBe('terminal-a::leaf-a')
 
     expect(store.project(full, 'device-a').activeTabId).toBe('browser-unified')
@@ -289,6 +297,7 @@ describe('client session-tab selection', () => {
       tabGroups: full.tabGroups?.slice(0, 1),
       tabs: full.tabs.filter((tab) => tab.id !== 'browser-unified')
     }
+
     store.project(withoutBrowser, 'device-a')
     const reused = store.project(full, 'device-a')
     expect(reused.activeTabId).toBe('terminal-a::leaf-a')

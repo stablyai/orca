@@ -110,6 +110,7 @@ describe('validateNativeFileDropPaths', () => {
       reason: 'paths-too-large',
       status: 'rejected'
     })
+
     if (validation.status === 'rejected') {
       const payload = createRejectedNativeFileDropPayload(validation)
       expect(JSON.stringify(payload)).not.toContain('secret')

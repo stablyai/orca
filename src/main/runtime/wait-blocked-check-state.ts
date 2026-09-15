@@ -47,26 +47,34 @@ export function appendWaitBlockedCarry(carry: WaitBlockedAppendedCarry, chunk: s
   if (chunk.length === 0) {
     return
   }
+
   carry.chunks.push(chunk)
   carry.chars += chunk.length
+
   if (carry.chars <= MAX_TAIL_CHARS) {
     return
   }
+
   let excess = carry.chars - MAX_TAIL_CHARS
   let dropCount = 0
+
   while (excess > 0 && dropCount < carry.chunks.length) {
     const head = carry.chunks[dropCount]
+
     if (head.length <= excess) {
       excess -= head.length
       dropCount += 1
       continue
     }
+
     carry.chunks[dropCount] = head.slice(excess)
     excess = 0
   }
+
   if (dropCount > 0) {
     carry.chunks.splice(0, dropCount)
   }
+
   carry.chars = MAX_TAIL_CHARS
 }
 

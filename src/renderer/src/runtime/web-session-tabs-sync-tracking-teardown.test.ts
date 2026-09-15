@@ -46,6 +46,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       loadError: null,
       createdAt: NOW - 10
     }
+
     const page: BrowserPage = {
       id: 'local-browser-page',
       workspaceId: workspace.id,
@@ -59,6 +60,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       loadError: null,
       createdAt: NOW - 10
     }
+
     const unifiedTab: Tab = {
       id: 'local-browser-unified',
       entityId: workspace.id,
@@ -114,6 +116,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       ENV,
       NOW
     ) as Partial<WebSessionTabsSyncState>
+
     const afterHostSnapshot = {
       ...makeState(),
       ...patch
@@ -178,6 +181,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       ENV,
       NOW
     ) as Partial<WebSessionTabsSyncState>
+
     const afterFirstSnapshot = { ...makeState(), ...firstPatch } as WebSessionTabsSyncState
 
     expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
@@ -290,6 +294,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   it('clears one worktree mapping without dropping a sibling in the same environment', () => {
     // Why: POSIX paths may contain ':', so this sibling's worktree id is prefixed by WT's — the case a prefix scan wiped.
     const secondWorktree = `${WT}:2`
+
     const terminalSnapshot = makeSnapshot([
       {
         type: 'terminal',
@@ -302,6 +307,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         terminal: 'terminal-1'
       }
     ])
+
     const secondSnapshot = makeSnapshot(
       [
         {
@@ -317,6 +323,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       ],
       { worktree: secondWorktree }
     )
+
     applyFreshWebSessionTabsSnapshot(makeState(), terminalSnapshot, ENV, NOW)
     applyFreshWebSessionTabsSnapshot(makeState(), secondSnapshot, ENV, NOW)
 

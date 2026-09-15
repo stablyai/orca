@@ -12,6 +12,7 @@ const { existsSyncMock, spawnMock } = vi.hoisted(() => ({
 
 vi.mock('fs', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     existsSync: existsSyncMock
@@ -42,6 +43,7 @@ const SYSTEM_SSH_PATH =
 
 function decodePowerShellCommand(command: string): string {
   const encoded = command.match(/-EncodedCommand\s+(\S+)/)?.[1]
+
   return encoded ? Buffer.from(encoded, 'base64').toString('utf16le') : command
 }
 
@@ -85,8 +87,10 @@ function expectNoOrcaControlMasterArgs(args: string[]): void {
 function expectOrcaControlMasterArgs(args: string[]): void {
   if (process.platform === 'win32') {
     expectNoOrcaControlMasterArgs(args)
+
     return
   }
+
   expect(args).toContain('ControlMaster=auto')
   expect(args.some((arg) => arg.startsWith('ControlPath='))).toBe(true)
   expect(args).toContain('ControlPersist=300')
@@ -109,6 +113,7 @@ type EventedProcess = EventEmitter & {
 // after the call can beat the listener. Emit it from the spawn instead.
 function closeOnceSpawned(proc: EventedProcess): EventedProcess {
   setImmediate(() => proc.emit('close', 0, null))
+
   return proc
 }
 
@@ -124,6 +129,7 @@ function createEventedProcess(): EventedProcess {
   proc.kill = vi.fn()
   proc.exitCode = null
   proc.killed = false
+
   return proc
 }
 
@@ -145,6 +151,7 @@ function createMockChildProcess(): EventEmitter & {
     killed: boolean
     exitCode: number | null
   }
+
   child.stdin = new PassThrough()
   child.stdout = new PassThrough()
   child.stderr = new PassThrough()
@@ -153,8 +160,10 @@ function createMockChildProcess(): EventEmitter & {
   child.exitCode = null
   child.kill = vi.fn(() => {
     child.killed = true
+
     return true
   })
+
   return child
 }
 
@@ -481,6 +490,7 @@ describe('spawnSystemSsh', () => {
     const args = buildSshArgs(createTarget(), { resolvedConfig: createResolvedConfig() })
 
     expectOrcaControlMasterArgs(args)
+
     if (process.platform !== 'win32') {
       expect(args).toContain('ServerAliveInterval=15')
       expect(args).toContain('ServerAliveCountMax=3')
@@ -620,6 +630,7 @@ describe('spawnSystemSsh', () => {
     const promise = writeBufferViaSystemSsh(createTarget(), '/tmp/file', Buffer.from('png'), {
       exclusive: true
     })
+
     proc.emit('close', 0, null)
 
     await expect(promise).resolves.toBeUndefined()
@@ -642,6 +653,7 @@ describe('spawnSystemSsh', () => {
       const promise = uploadFileViaSystemSsh(createTarget(), source, '/remote/payload.bin', {
         exclusive: true
       })
+
       await new Promise<void>((resolve) => proc.stdin.once('finish', resolve))
       proc.emit('close', 0, null)
 
@@ -662,6 +674,7 @@ describe('spawnSystemSsh', () => {
     const promise = writeBufferViaSystemSsh(createTarget(), '/tmp/file', Buffer.from('more'), {
       append: true
     })
+
     proc.emit('close', 0, null)
 
     await expect(promise).resolves.toBeUndefined()
@@ -700,6 +713,7 @@ describe('spawnSystemSsh', () => {
     const promise = writeFileViaSystemSsh(createTarget(), '/tmp/file', 'contents', {
       disableControlMaster: true
     })
+
     proc.emit('close', 0, null)
 
     await expect(promise).resolves.toBeUndefined()
@@ -714,6 +728,7 @@ describe('spawnSystemSsh', () => {
     spawnMock.mockImplementation(() => {
       const proc = createEventedProcess()
       spawned.push(proc)
+
       return closeOnceSpawned(proc)
     })
     const hostPlatform = getRemoteHostPlatform('win32-x64')
@@ -772,6 +787,7 @@ describe('spawnSystemSsh', () => {
       const promise = downloadFileViaSystemSsh(createTarget(), 'C:/Users/me/payload.bin', dest, {
         hostPlatform
       })
+
       proc.stdout.emit('data', Buffer.from('payload'))
       proc.stdout.emit('end')
       proc.emit('close', 0, null)
@@ -819,6 +835,7 @@ describe('spawnSystemSsh', () => {
       const proc = createEventedProcess()
       spawned.push(proc)
       queueMicrotask(() => proc.emit('close', 0, null))
+
       return proc
     })
 
@@ -855,6 +872,7 @@ describe('spawnSystemSsh', () => {
     spawnMock.mockImplementation(() => {
       const proc = createEventedProcess()
       queueMicrotask(() => proc.emit('close', 0, null))
+
       return proc
     })
 
@@ -909,6 +927,7 @@ describe('system SSH operation aborts', () => {
       '/tmp/remote-relay',
       { signal: controller.signal }
     )
+
     controller.abort()
 
     const outcome = await Promise.race([
@@ -932,6 +951,7 @@ describe('system SSH operation aborts', () => {
     const writePromise = writeFileViaSystemSsh(createTarget(), '/tmp/remote-file', 'contents', {
       signal: controller.signal
     })
+
     controller.abort()
 
     const outcome = await Promise.race([

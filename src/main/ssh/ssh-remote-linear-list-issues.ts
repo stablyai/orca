@@ -13,14 +13,19 @@ export async function dispatchRemoteLinearListIssues(
       throw new RemoteCliArgumentError('invalid_argument', `Unknown flag: --${flag}`)
     }
   }
+
   if (parsed.commandPath.length !== 2) {
     throw new RemoteCliArgumentError('invalid_argument', 'list-issues does not accept positionals')
   }
+
   const priority = optionalInteger(parsed.flags, 'priority')
+
   if (priority !== undefined && (priority < 0 || priority > 4)) {
     throw new RemoteCliArgumentError('invalid_argument', '--priority must be between 0 and 4')
   }
+
   const limit = optionalPositiveInteger(parsed.flags, 'limit')
+
   const request: LinearMcpIssueListRequest = {
     team: optionalString(parsed.flags, 'team'),
     cycle: optionalString(parsed.flags, 'cycle'),
@@ -41,6 +46,7 @@ export async function dispatchRemoteLinearListIssues(
     includeArchived: parsed.flags.get('include-archived') === true,
     workspaceId: optionalString(parsed.flags, 'workspace')
   }
+
   return await dispatcher.dispatch({
     id: `remote-cli-${Date.now()}`,
     authToken: 'remote-cli',
@@ -51,18 +57,23 @@ export async function dispatchRemoteLinearListIssues(
 
 function optionalString(flags: Map<string, string | boolean>, name: string): string | undefined {
   const value = flags.get(name)
+
   return typeof value === 'string' && value ? value : undefined
 }
 
 function optionalInteger(flags: Map<string, string | boolean>, name: string): number | undefined {
   const raw = optionalString(flags, name)
+
   if (raw === undefined) {
     return undefined
   }
+
   const value = Number(raw)
+
   if (!Number.isInteger(value) || value < 0) {
     throw new RemoteCliArgumentError('invalid_argument', `--${name} must be an integer`)
   }
+
   return value
 }
 
@@ -71,20 +82,26 @@ function optionalPositiveInteger(
   name: string
 ): number | undefined {
   const raw = optionalString(flags, name)
+
   if (raw === undefined) {
     return undefined
   }
+
   const value = Number(raw)
+
   if (!Number.isInteger(value) || value <= 0) {
     throw new RemoteCliArgumentError('invalid_argument', `Invalid positive integer for --${name}`)
   }
+
   return value
 }
 
 function orderBy(flags: Map<string, string | boolean>): LinearMcpIssueListRequest['orderBy'] {
   const value = optionalString(flags, 'order-by')
+
   if (value === undefined || value === 'createdAt' || value === 'updatedAt') {
     return value
   }
+
   throw new RemoteCliArgumentError('invalid_argument', '--order-by must be createdAt or updatedAt')
 }

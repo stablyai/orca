@@ -16,6 +16,7 @@ export function resolveTerminalColorSchemeMode(
   systemPrefersDark: boolean
 ): TerminalColorSchemeMode {
   const theme = settings?.theme ?? 'system'
+
   return theme === 'system' ? (systemPrefersDark ? 'dark' : 'light') : theme
 }
 
@@ -65,8 +66,10 @@ export function scanMode2031Sequences(previousTail: string, data: string): Mode2
   if (!previousTail && !data.includes('\x1b') && !data.includes('\x9b')) {
     return NO_MODE_2031_SEQUENCE
   }
+
   const input = `${previousTail}${data}`
   const tail = extractPrivateModeScanTail(input)
+
   const result: Mode2031ScanResult = {
     subscribe: false,
     unsubscribe: false,
@@ -74,14 +77,18 @@ export function scanMode2031Sequences(previousTail: string, data: string): Mode2
     tail,
     tailMayResolveToMode2031: tailCouldStillBeMode2031(tail)
   }
+
   // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
   const privateModeRe = /\x1b\[\?([0-9;]+)([hl])|\x9b\?([0-9;]+)([hl])/g
   let match: RegExpExecArray | null
+
   while ((match = privateModeRe.exec(input)) !== null) {
     const params = match[1] ?? match[3]
+
     if (!hasMode2031(params)) {
       continue
     }
+
     if ((match[2] ?? match[4]) === 'h') {
       result.subscribe = true
       result.finalState = 'subscribed'
@@ -90,6 +97,7 @@ export function scanMode2031Sequences(previousTail: string, data: string): Mode2
       result.finalState = 'unsubscribed'
     }
   }
+
   return result
 }
 
@@ -105,6 +113,7 @@ export function scanMode2031ReplyDecision(
   ) {
     return NO_MODE_2031_REPLY_DECISION
   }
+
   const scan = scanMode2031Sequences(previous.tail, data)
   let decision = scan.finalState
   let pendingSubscribe = previous.pendingSubscribe
@@ -133,22 +142,29 @@ function hasMode2031(params: string): boolean {
 
 function extractPrivateModeScanTail(input: string): string {
   const start = Math.max(input.lastIndexOf('\x1b'), input.lastIndexOf('\x9b'))
+
   if (start === -1) {
     return ''
   }
+
   const tail = input.slice(start)
+
   if (tail.length > MODE_2031_SCAN_TAIL_LIMIT) {
     return ''
   }
+
   if (tail === '\x1b' || tail === '\x1b[' || tail === '\x9b') {
     return tail
   }
+
   if (tail.startsWith('\x1b[?')) {
     return isIncompletePrivateModeParams(tail.slice(3)) ? tail : ''
   }
+
   if (tail.startsWith('\x9b?')) {
     return isIncompletePrivateModeParams(tail.slice(2)) ? tail : ''
   }
+
   return ''
 }
 

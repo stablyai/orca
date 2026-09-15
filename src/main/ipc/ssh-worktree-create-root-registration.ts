@@ -21,8 +21,10 @@ async function registerSshWorktreeCreateRoots(
       for (const rootPath of rootPaths) {
         mux.notify('session.registerRoot', { rootPath })
       }
+
       return
     }
+
     throw err
   }
 }
@@ -32,9 +34,11 @@ export async function registerOptionalSshWorktreeCreateRoots(
   rootPaths: string[]
 ): Promise<void> {
   const mux = getActiveMultiplexer(connectionId)
+
   if (!mux) {
     return
   }
+
   await registerSshWorktreeCreateRoots(mux, rootPaths)
 }
 
@@ -43,8 +47,10 @@ export async function registerRequiredSshWorktreeCreateRoots(
   rootPaths: string[]
 ): Promise<void> {
   const mux = getActiveMultiplexer(connectionId)
+
   if (!mux) {
     throw new Error(SSH_CONNECTION_UNAVAILABLE_MESSAGE)
   }
+
   await registerSshWorktreeCreateRoots(mux, rootPaths)
 }

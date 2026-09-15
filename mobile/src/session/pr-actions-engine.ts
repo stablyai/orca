@@ -24,9 +24,11 @@ export function busyKeyEquals(a: PrActionBusyKey | null, b: PrActionBusyKey): bo
   if (!a || a.kind !== b.kind) {
     return false
   }
+
   if (a.kind === 'reviewer' && b.kind === 'reviewer') {
     return a.login === b.login
   }
+
   return true
 }
 
@@ -42,6 +44,7 @@ export type PrActionsEngineConfig = {
 
 function prActionsIdentity(cfg: PrActionsEngineConfig): string {
   const repo = cfg.prRepo ? githubRepoIdentityKey(cfg.prRepo) : ''
+
   return `${cfg.prNumber}:${repo}`
 }
 
@@ -69,6 +72,7 @@ export class PrActionsEngine {
   updateConfig(cfg: PrActionsEngineConfig): void {
     const nextIdentity = prActionsIdentity(cfg)
     this.cfg = cfg
+
     if (nextIdentity !== this.identity) {
       this.identity = nextIdentity
       this.resetForIdentityChange()
@@ -95,10 +99,12 @@ export class PrActionsEngine {
 
   private reviewerField(login: string): OptimisticField<boolean> {
     let f = this.reviewerFields.get(login)
+
     if (!f) {
       f = createOptimisticField<boolean>(this.cfg.onChange)
       this.reviewerFields.set(login, f)
     }
+
     return f
   }
 
@@ -108,6 +114,7 @@ export class PrActionsEngine {
     if (key === null ? this.busy === null : busyKeyEquals(this.busy, key)) {
       return
     }
+
     this.busy = key
     this.cfg.onChange()
   }
@@ -124,6 +131,7 @@ export class PrActionsEngine {
     if (this.error === message) {
       return
     }
+
     this.error = message
     this.cfg.onChange()
   }
@@ -142,10 +150,12 @@ export class PrActionsEngine {
     this.blocked = null
     changed = this.autoMergeField.reset() || changed
     changed = this.stateField.reset() || changed
+
     if (this.reviewerFields.size > 0) {
       this.reviewerFields.clear()
       changed = true
     }
+
     if (changed) {
       this.cfg.onChange()
     }
@@ -159,8 +169,10 @@ export class PrActionsEngine {
     if (this.identity !== identity) {
       return
     }
+
     if (outcome.ok) {
       handlers.onSuccess()
+
       // Why: void engine.merge() callers are fire-and-forget; refetch must not LogBox.
       try {
         await this.cfg.refetch()
@@ -169,15 +181,20 @@ export class PrActionsEngine {
           this.setError(err instanceof Error ? err.message : 'Failed to refresh pull request.')
         }
       }
+
       return
     }
+
     // Both failure classes clear optimism to authoritative; only the message
     // routing differs (blocked is persistent and not retry-encouraged).
     handlers.onRevert()
+
     if (classifyPrSidebarFailure(outcome.error) === 'blocked') {
       this.setBlocked(outcome.error)
+
       return
     }
+
     this.setError(outcome.error)
   }
 
@@ -186,12 +203,14 @@ export class PrActionsEngine {
     const identity = this.identity
     this.setBusy({ kind: 'merge' })
     this.setError(null)
+
     try {
       const outcome = await cfg.mutations.mergePR({
         prNumber: cfg.prNumber,
         method,
         prRepo: cfg.prRepo
       })
+
       await this.settle(identity, outcome, { onSuccess: () => {}, onRevert: () => {} })
     } catch (err) {
       if (this.identity === identity) {
@@ -208,6 +227,7 @@ export class PrActionsEngine {
     const seq = this.autoMergeField.begin(enabled)
     this.setBusy({ kind: 'autoMerge' })
     this.setError(null)
+
     try {
       const outcome = await cfg.mutations.setPRAutoMerge({
         prNumber: cfg.prNumber,
@@ -215,6 +235,7 @@ export class PrActionsEngine {
         method,
         prRepo: cfg.prRepo
       })
+
       await this.settle(identity, outcome, {
         onSuccess: () => this.autoMergeField.settleSuccess(seq),
         onRevert: () => this.autoMergeField.settleFailure(seq)
@@ -230,12 +251,14 @@ export class PrActionsEngine {
     const seq = this.stateField.begin(state === 'closed' ? 'closed' : 'open')
     this.setBusy({ kind: 'state' })
     this.setError(null)
+
     try {
       const outcome = await cfg.mutations.updatePRState({
         prNumber: cfg.prNumber,
         state,
         prRepo: cfg.prRepo
       })
+
       await this.settle(identity, outcome, {
         onSuccess: () => this.stateField.settleSuccess(seq),
         onRevert: () => this.stateField.settleFailure(seq)
@@ -252,12 +275,14 @@ export class PrActionsEngine {
     const seq = field.begin(true)
     this.setBusy({ kind: 'reviewer', login })
     this.setError(null)
+
     try {
       const outcome = await cfg.mutations.requestReviewers({
         prNumber: cfg.prNumber,
         reviewers: [login],
         prRepo: cfg.prRepo
       })
+
       await this.settle(identity, outcome, {
         onSuccess: () => field.settleSuccess(seq),
         onRevert: () => field.settleFailure(seq)
@@ -274,12 +299,14 @@ export class PrActionsEngine {
     const seq = field.begin(false)
     this.setBusy({ kind: 'reviewer', login })
     this.setError(null)
+
     try {
       const outcome = await cfg.mutations.removeReviewers({
         prNumber: cfg.prNumber,
         reviewers: [login],
         prRepo: cfg.prRepo
       })
+
       await this.settle(identity, outcome, {
         onSuccess: () => field.settleSuccess(seq),
         onRevert: () => field.settleFailure(seq)
@@ -294,6 +321,7 @@ export class PrActionsEngine {
     const identity = this.identity
     this.setBusy({ kind: 'rerun' })
     this.setError(null)
+
     try {
       const outcome = await cfg.mutations.rerunChecks({
         prNumber: cfg.prNumber,
@@ -301,6 +329,7 @@ export class PrActionsEngine {
         failedOnly: true,
         prRepo: cfg.prRepo
       })
+
       await this.settle(identity, outcome, { onSuccess: () => {}, onRevert: () => {} })
     } finally {
       this.clearBusyIfOwned(identity, { kind: 'rerun' })
@@ -317,6 +346,7 @@ export class PrActionsEngine {
 
   resolveReviewerRequested(login: string, authoritative: boolean): boolean {
     const f = this.reviewerFields.get(login)
+
     return f ? f.resolve(authoritative) : authoritative
   }
 }

@@ -12,6 +12,7 @@ import {
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const {
@@ -44,10 +45,12 @@ describe('createRemoteRuntimePtyTransport', () => {
       unsubscribe: () => void
       sendBinary: typeof subscriptionSendBinary
     }) => void = () => {}
+
     const unsubscribe = vi.fn()
     runtimeSubscribe.mockImplementation(
       (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
+
         return new Promise<{ unsubscribe: () => void; sendBinary: typeof subscriptionSendBinary }>(
           (resolve) => {
             resolveSubscribe = (value) => {
@@ -59,6 +62,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       }
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -83,6 +87,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onTitleChange = vi.fn()
     const onBell = vi.fn()
     const onAgentStatus = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       onTitleChange,
@@ -119,6 +124,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onTitleChange = vi.fn()
     const onBell = vi.fn()
     const onAgentStatus = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       onTitleChange,
@@ -150,6 +156,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onDisconnect = vi.fn()
     const onPtyExit = vi.fn()
     const onError = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -173,6 +180,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onReplayData = vi.fn()
     const onData = vi.fn()
     const onOutputPauseChanged = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -247,6 +255,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onReplayData = vi.fn()
     const onStreamRecovered = vi.fn()
     const onConnect = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -329,8 +338,10 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('backs off before retrying a capacity-rejected terminal stream', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -374,15 +385,19 @@ describe('createRemoteRuntimePtyTransport', () => {
         subscribeAttempt += 1
         transportCallbacks.push(callbacks)
         subscriptionCallbacks = callbacks
+
         if (subscribeAttempt === 2) {
           throw new Error('Could not connect to the remote Orca runtime.')
         }
+
         queueMicrotask(emitMultiplexReady)
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -413,6 +428,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
         subscriptionCallbacks = callbacks
         queueMicrotask(emitMultiplexReady)
+
         return { unsubscribe, sendBinary: subscriptionSendBinary }
       }
     )
@@ -444,12 +460,14 @@ describe('createRemoteRuntimePtyTransport', () => {
         const unsubscribe = vi.fn()
         unsubscribeByEpoch.push(unsubscribe)
         queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+
         return { unsubscribe, sendBinary: subscriptionSendBinary }
       }
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onData = vi.fn()
     const onError = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -497,6 +515,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('stops automatic retries and manually reattaches the same PTY in a new epoch', async () => {
     vi.useFakeTimers()
+
     try {
       let partitioned = false
       const callbacksByConnection: NonNullable<typeof subscriptionCallbacks>[] = []
@@ -507,15 +526,18 @@ describe('createRemoteRuntimePtyTransport', () => {
               code: 'remote_runtime_unavailable'
             })
           }
+
           callbacksByConnection.push(callbacks)
           subscriptionCallbacks = callbacks
           queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+
           return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
         }
       )
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onError = vi.fn()
       const recoveryStates: { phase: string; epoch: number; attempt: number }[] = []
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -555,6 +577,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         const subscribeFrames = subscriptionSendBinary.mock.calls
           .map((call) => decodeTerminalStreamFrame(call[0]))
           .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe)
+
         expect(subscribeFrames).toHaveLength(2)
       })
       const manualStream = latestSubscribePayload()
@@ -574,13 +597,16 @@ describe('createRemoteRuntimePtyTransport', () => {
   it('releases pending claimed input when reconnect subscription fails', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId: 'pane:1'
     })
+
     await transport.connect({ url: '', callbacks: { onError } })
     let rejectReconnect = (_error: Error): void => {}
+
     runtimeSubscribe.mockImplementationOnce(
       () =>
         new Promise((_, reject) => {
@@ -601,11 +627,13 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('releases pending claimed input when the remote terminal ends', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId: 'pane:1'
     })
+
     await transport.connect({ url: '', callbacks: {} })
     const { streamId } = latestSubscribePayload()
 
@@ -625,15 +653,18 @@ describe('createRemoteRuntimePtyTransport', () => {
       async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
         transportCallbacks.push(callbacks)
         subscriptionCallbacks = callbacks
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId: 'pane:1'
     })
+
     const connected = transport.connect({ url: '', callbacks: {} })
     await vi.waitFor(() => expect(transportCallbacks).toHaveLength(1))
     transportCallbacks[0].onResponse({ ok: true, result: { type: 'ready' } })

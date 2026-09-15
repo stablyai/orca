@@ -35,14 +35,17 @@ export class LocalhostWorktreeLabelProxy {
     const routeKey = getLocalhostWorktreeRouteKey(route)
     const previousLabel = this.routeKeys.get(routeKey)
     const label = previousLabel ?? this.nextAvailableLabel(baseLabel)
+
     const registered: RegisteredRoute = {
       ...route,
       label,
       routeKey,
       target
     }
+
     this.routes.set(label, registered)
     this.routeKeys.set(routeKey, label)
+
     return {
       label,
       url: this.buildLabeledUrl(label, target)
@@ -65,14 +68,17 @@ export class LocalhostWorktreeLabelProxy {
     if (this.server && this.listenPort !== null) {
       return
     }
+
     if (this.serverReady) {
       await this.serverReady
+
       return
     }
 
     const server = http.createServer((request, response) => {
       void this.handleRequest(request, response)
     })
+
     server.on('upgrade', (request, socket, head) => {
       this.handleUpgrade(request, socket, head)
     })
@@ -81,15 +87,19 @@ export class LocalhostWorktreeLabelProxy {
       server.listen(0, '127.0.0.1', () => {
         server.off('error', reject)
         const address = server.address()
+
         if (!address || typeof address === 'string') {
           reject(new Error('Failed to start localhost label proxy.'))
+
           return
         }
+
         this.listenPort = address.port
         this.server = server
         resolve()
       })
     })
+
     try {
       await this.serverReady
     } catch (error) {
@@ -102,12 +112,15 @@ export class LocalhostWorktreeLabelProxy {
     if (!this.routes.has(baseLabel)) {
       return baseLabel
     }
+
     for (let index = 2; index < 1000; index += 1) {
       const candidate = `${baseLabel}-${index}`
+
       if (!this.routes.has(candidate)) {
         return candidate
       }
     }
+
     throw new Error('No available localhost label.')
   }
 
@@ -115,21 +128,26 @@ export class LocalhostWorktreeLabelProxy {
     if (this.listenPort === null) {
       throw new Error('Localhost label proxy is not running.')
     }
+
     const url = new URL(target.toString())
     url.hostname = `${label}${ORCA_LOCALHOST_SUFFIX}`
     url.port = String(this.listenPort)
+
     return url.toString()
   }
 
   private async handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const route = this.routeForRequest(request)
+
     if (!route) {
       response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
       response.end('Unknown Orca localhost label.')
+
       return
     }
 
     const target = targetUrlForRequest(route.target, request)
+
     const proxyRequest = requestForTarget(target, {
       method: request.method,
       headers: requestHeadersForTarget(request, route.target)
@@ -153,8 +171,10 @@ export class LocalhostWorktreeLabelProxy {
       // socket down to avoid an ERR_HTTP_HEADERS_SENT crash.
       if (response.headersSent) {
         response.destroy(error)
+
         return
       }
+
       response.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' })
       response.end(`Proxy failed for ${route.label}: ${error.message}`)
     })
@@ -163,18 +183,22 @@ export class LocalhostWorktreeLabelProxy {
 
   private handleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer): void {
     const route = this.routeForRequest(request)
+
     if (!route) {
       socket.destroy()
+
       return
     }
 
     const target = targetUrlForRequest(route.target, request)
     const targetPort = Number(target.port || (target.protocol === 'https:' ? 443 : 80))
+
     const targetSocket = net.connect(targetPort, connectableLoopbackHost(target.hostname), () => {
       const headers = requestHeadersForTarget(request, route.target)
       targetSocket.write(
         `${request.method ?? 'GET'} ${target.pathname}${target.search} HTTP/${request.httpVersion}\r\n`
       )
+
       for (const [name, value] of Object.entries(headers)) {
         if (Array.isArray(value)) {
           for (const entry of value) {
@@ -184,13 +208,17 @@ export class LocalhostWorktreeLabelProxy {
           targetSocket.write(`${name}: ${value}\r\n`)
         }
       }
+
       targetSocket.write('\r\n')
+
       if (head.length > 0) {
         targetSocket.write(head)
       }
+
       targetSocket.pipe(socket)
       socket.pipe(targetSocket)
     })
+
     targetSocket.on('error', () => socket.destroy())
     socket.on('error', () => targetSocket.destroy())
   }
@@ -200,10 +228,13 @@ export class LocalhostWorktreeLabelProxy {
       String(request.headers.host ?? '')
         .split(':')[0]
         ?.toLowerCase() ?? ''
+
     if (!host.endsWith(ORCA_LOCALHOST_SUFFIX)) {
       return null
     }
+
     const label = host.slice(0, -ORCA_LOCALHOST_SUFFIX.length)
+
     return this.routes.get(label) ?? null
   }
 }
@@ -212,9 +243,11 @@ export const localhostWorktreeLabelProxy = new LocalhostWorktreeLabelProxy()
 
 function parseTargetUrl(rawUrl: string): URL {
   const url = new URL(rawUrl)
+
   if (url.protocol !== 'http:') {
     throw new Error('Only http workspace ports can be labeled.')
   }
+
   return url
 }
 
@@ -230,6 +263,7 @@ function requestForTarget(
     method: options.method,
     headers: options.headers
   }
+
   return target.protocol === 'https:' ? https.request(requestOptions) : http.request(requestOptions)
 }
 
@@ -238,11 +272,13 @@ function targetUrlForRequest(target: URL, request: IncomingMessage): URL {
   const incomingUrl = new URL(request.url || '/', target)
   url.pathname = incomingUrl.pathname
   url.search = incomingUrl.search
+
   return url
 }
 
 function requestHeadersForTarget(request: IncomingMessage, target: URL): http.OutgoingHttpHeaders {
   const headers: http.OutgoingHttpHeaders = { ...request.headers }
   headers.host = target.host
+
   return headers
 }

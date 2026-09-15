@@ -85,6 +85,7 @@ describe('prepareEphemeralVmWorkspaceTarget failure paths', () => {
   it('cleans up when the paired runtime rejects the returned projectRoot', async () => {
     provision.mockResolvedValue(makeProvisionedRuntime('/workspace/not-a-repo'))
     runtimeEnvironmentCall.mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-1'))
+
     const setupExistingFolder = vi.fn(async () => {
       throw new Error('Not a valid git repository: /workspace/not-a-repo')
     })

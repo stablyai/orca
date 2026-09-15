@@ -34,12 +34,14 @@ function buildEditor(
 describe('useRichMarkdownProgrammaticSync external-reload baseline adoption (#6080)', () => {
   it('adopts externally-canonicalized bytes as the reconciliation baseline without a reload', () => {
     const codec = createRichMarkdownEditorCodec()
+
     const htmlSuperscriptLinkContext = createRichMarkdownHtmlSuperscriptLinkContext({
       sourceFilePath: '',
       worktreeId: '',
       worktreeRoot: null,
       sourceOwner: { kind: 'unknown' as const }
     })
+
     // The editor currently shows emphasis loaded from the original `_old_` source;
     // its canonical (getMarkdown) form is `*old*` with no trailing newline.
     const canonical = '# T\n\n*old*'

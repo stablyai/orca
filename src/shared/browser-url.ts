@@ -8,8 +8,11 @@ const LOCAL_ADDRESS_PATTERN =
 // A single-word input containing a dot with a valid TLD-like suffix is treated as
 // a URL attempt, not a search query.
 const LOOKS_LIKE_URL_PATTERN = /^[^\s]+\.[a-z]{2,}(\/.*)?$/i
+
 const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/].*$/
+
 const WINDOWS_UNC_PATH_PATTERN = /^\\\\[^\s\\/]+[\\/][^\\/]+(?:[\\/].*)?$/
+
 const UNIX_ABSOLUTE_PATH_PATTERN = /^\/.*$/
 
 export type SearchEngine = 'google' | 'duckduckgo' | 'bing' | 'kagi'
@@ -36,9 +39,11 @@ export const DEFAULT_SEARCH_ENGINE: SearchEngine = 'google'
 
 export function classifySchemeLessLocalDevAddress(rawInput: string): URL | null {
   const trimmed = rawInput.trim()
+
   if (!LOCAL_ADDRESS_PATTERN.test(trimmed)) {
     return null
   }
+
   try {
     return new URL(`http://${trimmed}`)
   } catch {
@@ -49,6 +54,7 @@ export function classifySchemeLessLocalDevAddress(rawInput: string): URL | null 
 function normalizeCertificateHostname(hostname: string): string {
   const lower = hostname.trim().toLowerCase()
   const unbracketed = lower.startsWith('[') && lower.endsWith(']') ? lower.slice(1, -1) : lower
+
   return unbracketed.endsWith('.') ? unbracketed.slice(0, -1) : unbracketed
 }
 
@@ -56,6 +62,7 @@ function isValidDnsName(name: string): boolean {
   if (name.length === 0 || name.length > 253) {
     return false
   }
+
   return name
     .split('.')
     .every(
@@ -66,10 +73,13 @@ function isValidDnsName(name: string): boolean {
 
 function isIpv4Loopback(hostname: string): boolean {
   const octets = hostname.split('.')
+
   if (octets.length !== 4 || octets.some((octet) => !/^\d{1,3}$/.test(octet))) {
     return false
   }
+
   const values = octets.map(Number)
+
   return (
     values[0] === 127 &&
     values.every((value, index) => value >= 0 && value <= 255 && octets[index] === String(value))
@@ -78,27 +88,34 @@ function isIpv4Loopback(hostname: string): boolean {
 
 export function isEligibleLocalCertificateHost(hostname: string): boolean {
   const normalized = normalizeCertificateHostname(hostname)
+
   if (normalized === '::1' || isIpv4Loopback(normalized)) {
     return true
   }
+
   if (!isValidDnsName(normalized)) {
     return false
   }
+
   return normalized === 'localhost' || normalized.endsWith('.localhost')
 }
 
 function isWildcardBindHost(hostname: string): boolean {
   const normalized = normalizeCertificateHostname(hostname)
+
   return normalized === '0.0.0.0' || normalized === '::'
 }
 
 export function toHttpsRecoveryUrl(rawUrl: string): string | null {
   try {
     const parsed = new URL(rawUrl)
+
     if (parsed.protocol !== 'http:' || !isEligibleLocalCertificateHost(parsed.hostname)) {
       return null
     }
+
     parsed.protocol = 'https:'
+
     return parsed.toString()
   } catch {
     return null
@@ -108,16 +125,21 @@ export function toHttpsRecoveryUrl(rawUrl: string): string | null {
 export function toSecureCertificateEndpoint(rawUrl: string): string | null {
   try {
     const parsed = new URL(rawUrl)
+
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'wss:') {
       return null
     }
+
     const normalizedHostname = normalizeCertificateHostname(parsed.hostname)
+
     if (!normalizedHostname) {
       return null
     }
+
     const endpointHost = normalizedHostname.includes(':')
       ? `[${normalizedHostname}]`
       : normalizedHostname
+
     return `https://${endpointHost}:${parsed.port || '443'}`
   } catch {
     return null
@@ -130,20 +152,24 @@ export function toSecureCertificateEndpoint(rawUrl: string): string | null {
 export function resolveRemoteFailureExternalUrl(rawUrl: string): string | null {
   try {
     const parsed = new URL(rawUrl)
+
     if (isWildcardBindHost(parsed.hostname) || isEligibleLocalCertificateHost(parsed.hostname)) {
       return null
     }
   } catch {
     return null
   }
+
   return normalizeExternalBrowserUrl(rawUrl)
 }
 
 export function normalizeKagiSessionLink(rawLink: string): string | null {
   const trimmed = rawLink.trim()
+
   if (!trimmed) {
     return null
   }
+
   try {
     const parsed = new URL(trimmed)
     const hostname = parsed.hostname.toLowerCase()
@@ -153,6 +179,7 @@ export function normalizeKagiSessionLink(rawLink: string): string | null {
     // saved session URL. Accept /search and /search/ since Kagi's settings
     // page emits both.
     const pathOk = parsed.pathname === '/search' || parsed.pathname === '/search/'
+
     if (
       parsed.protocol !== 'https:' ||
       (hostname !== 'kagi.com' && hostname !== 'www.kagi.com') ||
@@ -164,11 +191,13 @@ export function normalizeKagiSessionLink(rawLink: string): string | null {
     ) {
       return null
     }
+
     parsed.searchParams.delete('q')
     // Why: collapse any duplicate token params so we don't echo two bearer
     // values back to Kagi on every search.
     parsed.searchParams.set('token', token)
     parsed.hash = ''
+
     return parsed.toString()
   } catch {
     return null
@@ -179,6 +208,7 @@ export function redactKagiSessionToken(rawUrl: string): string {
   try {
     const parsed = new URL(rawUrl)
     const hostname = parsed.hostname.toLowerCase()
+
     if (
       parsed.protocol === 'https:' &&
       (hostname === 'kagi.com' || hostname === 'www.kagi.com') &&
@@ -188,11 +218,13 @@ export function redactKagiSessionToken(rawUrl: string): string {
       // Why: Kagi private-session links carry an account bearer token. Strip it
       // before URLs reach display, history, or persisted browser-tab state.
       parsed.searchParams.delete('token')
+
       return parsed.toString()
     }
   } catch {
     // Keep non-URL inputs unchanged.
   }
+
   return rawUrl
 }
 
@@ -203,12 +235,16 @@ function buildKagiSessionSearchUrl(
   if (!sessionLink) {
     return null
   }
+
   const normalized = normalizeKagiSessionLink(sessionLink)
+
   if (!normalized) {
     return null
   }
+
   const parsed = new URL(normalized)
   parsed.searchParams.set('q', query)
+
   return parsed.toString()
 }
 
@@ -219,10 +255,12 @@ export function buildSearchUrl(
 ): string {
   if (engine === 'kagi') {
     const sessionSearchUrl = buildKagiSessionSearchUrl(query, options.kagiSessionLink)
+
     if (sessionSearchUrl) {
       return sessionSearchUrl
     }
   }
+
   return `${SEARCH_ENGINE_URLS[engine]}${encodeURIComponent(query.toWellFormed())}`
 }
 
@@ -230,12 +268,15 @@ export function looksLikeSearchQuery(input: string): boolean {
   if (input.includes(' ')) {
     return true
   }
+
   if (LOOKS_LIKE_URL_PATTERN.test(input)) {
     return false
   }
+
   if (input.includes('.') || input.includes(':')) {
     return false
   }
+
   return true
 }
 
@@ -250,12 +291,15 @@ export function isAbsoluteFilesystemPathInput(input: string): boolean {
 
 function absolutePathToFileUrl(filePath: string): string {
   const normalizedPath = filePath.replaceAll('\\', '/')
+
   const segments = normalizedPath.split('/').map((segment, index) => {
     if (index === 0 && /^[A-Za-z]:$/.test(segment)) {
       return segment
     }
+
     return encodeURIComponent(segment)
   })
+
   return normalizedPath.startsWith('/')
     ? `file://${segments.join('/')}`
     : `file:///${segments.join('/')}`
@@ -264,6 +308,7 @@ function absolutePathToFileUrl(filePath: string): string {
 function windowsUncPathToFileUrl(filePath: string): string {
   const normalizedPath = filePath.replaceAll('\\', '/').replace(/^\/+/, '')
   const [host, ...pathSegments] = normalizedPath.split('/')
+
   return `file://${host}/${pathSegments.map(encodeURIComponent).join('/')}`
 }
 
@@ -273,11 +318,13 @@ export function normalizeBrowserNavigationUrl(
   options: SearchUrlOptions = {}
 ): string | null {
   const trimmed = rawUrl.trim()
+
   if (trimmed.length === 0 || trimmed === 'about:blank' || trimmed === ORCA_BROWSER_BLANK_URL) {
     return ORCA_BROWSER_BLANK_URL
   }
 
   const localDevAddress = classifySchemeLessLocalDevAddress(trimmed)
+
   if (localDevAddress) {
     return localDevAddress.toString()
   }
@@ -292,6 +339,7 @@ export function normalizeBrowserNavigationUrl(
 
   try {
     const parsed = new URL(trimmed)
+
     // Why: file:// is allowed so the browser pane can render local files the
     // user already has access to via the editor (e.g. "Open Preview to the
     // Side" on an HTML file). The guest webview is still sandboxed
@@ -310,8 +358,10 @@ export function normalizeBrowserNavigationUrl(
     // must be rejected, not converted to a search query. Only the address bar
     // passes a search engine to enable the fallback.
     const searchEnabled = searchEngine !== undefined
+
     try {
       const withScheme = new URL(`https://${trimmed}`)
+
       if (!searchEnabled || !looksLikeSearchQuery(trimmed)) {
         return withScheme.toString()
       }
@@ -322,15 +372,18 @@ export function normalizeBrowserNavigationUrl(
     if (!searchEnabled) {
       return null
     }
+
     return buildSearchUrl(trimmed, searchEngine ?? DEFAULT_SEARCH_ENGINE, options)
   }
 }
 
 export function normalizeExternalBrowserUrl(rawUrl: string): string | null {
   const normalized = normalizeBrowserNavigationUrl(rawUrl)
+
   if (normalized === null || normalized === ORCA_BROWSER_BLANK_URL) {
     return null
   }
+
   // Why: external-link opening (shell.openExternal, will-navigate) must only
   // hand off http(s) targets to the OS. file:// is allowed for the in-app
   // browser pane (local HTML preview), but forwarding it to openExternal
@@ -338,5 +391,6 @@ export function normalizeExternalBrowserUrl(rawUrl: string): string | null {
   if (normalized.startsWith('file:')) {
     return null
   }
+
   return normalized
 }

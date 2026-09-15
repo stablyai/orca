@@ -28,16 +28,20 @@ export function registerPtySideEffectPendingGauge(gauge: PtySideEffectGauge): ()
   if (gaugeRefs.size >= MAX_TRACKED_GAUGES) {
     pruneCollectedGauges()
   }
+
   if (gaugeRefs.size >= MAX_TRACKED_GAUGES) {
     return () => undefined
   }
+
   gaugeRefs.add(new WeakRef(gauge))
+
   // Why delete by identity: this closure is handed to the processor, so closing over `gauge`
   // is what makes the processor — never this module — the gauge's strong owner.
   return () => {
     for (const ref of gaugeRefs) {
       if (ref.deref() === gauge) {
         gaugeRefs.delete(ref)
+
         return
       }
     }
@@ -51,15 +55,19 @@ registerRendererMemoryProfileContributor('ptySideEffects', () => {
   let pending = 0
   let retained = 0
   let processors = 0
+
   for (const ref of gaugeRefs) {
     const gauge = ref.deref()
+
     if (!gauge) {
       gaugeRefs.delete(ref)
       continue
     }
+
     pending += gauge.pending()
     retained += gauge.retained()
     processors += 1
   }
+
   return { pending, retained, processors }
 })

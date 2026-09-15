@@ -15,10 +15,13 @@ describe('guardMonacoDiffEditorDispose', () => {
       [new Error('inner dispose failed')],
       'Encountered errors while disposing of store'
     )
+
     const reportError = vi.fn()
+
     const originalDispose = vi.fn(() => {
       throw disposeError
     })
+
     const diffEditor = createMockDiffEditor(originalDispose)
 
     guardMonacoDiffEditorDispose(diffEditor, reportError)
@@ -46,11 +49,15 @@ describe('installMonacoDiffEditorDisposalGuard', () => {
       [new Error('inner dispose failed')],
       'Encountered errors while disposing of store'
     )
+
     const reportError = vi.fn()
+
     const originalDispose = vi.fn(() => {
       throw disposeError
     })
+
     const createDiffEditor = vi.fn((_element: HTMLElement) => createMockDiffEditor(originalDispose))
+
     const monaco = {
       editor: {
         createDiffEditor

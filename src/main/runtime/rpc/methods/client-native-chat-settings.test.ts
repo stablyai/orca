@@ -14,11 +14,14 @@ const request = (params: unknown): RpcRequest => ({
 describe('native-chat settings RPC', () => {
   it('routes option deltas to the runtime-owned atomic update', async () => {
     const updateClientNativeChatSessionOptions = vi.fn()
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateClientNativeChatSessionOptions
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
+
     const mutation = {
       type: 'apply-picks' as const,
       agent: 'codex' as const,
@@ -36,10 +39,12 @@ describe('native-chat settings RPC', () => {
 
   it('rejects malformed option deltas', async () => {
     const updateClientNativeChatSessionOptions = vi.fn()
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateClientNativeChatSessionOptions
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: CLIENT_UI_METHODS })
 
     for (const mutation of [
@@ -73,6 +78,7 @@ describe('native-chat settings RPC', () => {
       const response = await dispatcher.dispatch(request(mutation))
       expect(response).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     }
+
     expect(updateClientNativeChatSessionOptions).not.toHaveBeenCalled()
   })
 })

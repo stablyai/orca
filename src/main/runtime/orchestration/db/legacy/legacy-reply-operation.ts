@@ -20,29 +20,36 @@ export function commitLegacyReplyOperation(
   duplicate: boolean
 } {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const principal = this.requireCommittedLegacyPrincipal(params.principalId, 'coordinator')
     const receipt = this.requireMatchingLegacyOperationReceipt(params)
+
     if (receipt) {
       const response = JSON.parse(receipt.response_json) as {
         questionId: string
         messageId: string
       }
+
       const question = this.getQuestion(response.questionId)
       const message = this.getMessageById(response.messageId)
+
       if (!question || !message) {
         throw new OrchestrationError(
           'operation_unknown',
           `Legacy reply ${params.operationKey} lost its durable effect.`
         )
       }
+
       this.db.exec('COMMIT')
+
       return { receipt, question, message, duplicate: true }
     }
 
     const question = this.getQuestionRaw(params.questionId)
     const sourceMessage = this.getMessageById(params.questionId)
     const dispatch = question ? this.getDispatchContextById(question.dispatch_id) : undefined
+
     if (
       !question ||
       !sourceMessage ||
@@ -58,7 +65,9 @@ export function commitLegacyReplyOperation(
         `Question ${params.questionId} is not actionable in the adopted Run.`
       )
     }
+
     let message: MessageRow
+
     if (question.status === 'answered') {
       if (question.answer_body !== params.body || !question.answer_message_id) {
         throw new OrchestrationError(
@@ -66,7 +75,9 @@ export function commitLegacyReplyOperation(
           `Question ${params.questionId} already has a different answer.`
         )
       }
+
       message = this.getMessageById(question.answer_message_id) as MessageRow
+
       if (
         !message ||
         message.run_id !== principal.run_id ||
@@ -99,6 +110,7 @@ export function commitLegacyReplyOperation(
     }
 
     const answered = this.getQuestion(params.questionId) as QuestionRow
+
     const committedReceipt = this.insertLegacyOperationReceipt({
       principalId: principal.id,
       operationKey: params.operationKey,
@@ -110,7 +122,9 @@ export function commitLegacyReplyOperation(
         messageId: message.id
       })
     })
+
     this.db.exec('COMMIT')
+
     return {
       receipt: committedReceipt,
       question: answered,
@@ -133,6 +147,7 @@ export function requireMatchingLegacyOperationReceipt(
   }
 ): LegacyOperationReceiptRow | undefined {
   const receipt = this.getLegacyOperationReceipt(params.principalId, params.operationKey)
+
   if (
     receipt &&
     (receipt.method !== params.method || receipt.payload_hash !== params.payloadHash)
@@ -142,6 +157,7 @@ export function requireMatchingLegacyOperationReceipt(
       `Legacy operation ${params.operationKey} was already used with different input.`
     )
   }
+
   return receipt
 }
 
@@ -170,6 +186,7 @@ export function insertLegacyOperationReceipt(
       params.effectId,
       params.responseJson
     )
+
   return this.getLegacyOperationReceipt(
     params.principalId,
     params.operationKey

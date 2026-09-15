@@ -9,6 +9,7 @@ import {
 } from './closed-terminal-tab-tombstones'
 
 const NOW = 1_800_000_000_000
+
 const WT = 'repo-1::/srv/app'
 
 function reconcile(
@@ -52,6 +53,7 @@ describe('closed terminal tab tombstones', () => {
         { closedAt: NOW - index, worktreeId: WT }
       ])
     )
+
     const capped = pruneClosedTerminalTabTombstones(overflowing, NOW)
     expect(Object.keys(capped)).toHaveLength(MAX_CLOSED_TERMINAL_TAB_TOMBSTONES)
     expect(capped['tab-0']).toBeDefined()

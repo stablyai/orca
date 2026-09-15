@@ -29,12 +29,15 @@ describe('baseRefExistsOnRemote suffix fallback', () => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
         throw Object.assign(new Error('missing ref'), { code: 1, stderr: '' })
       }
+
       if (args[0] === 'show-ref') {
         return { stdout: 'abc123 refs/remotes/origin/feature/main\n', stderr: '' }
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -46,12 +49,15 @@ describe('baseRefExistsOnRemote suffix fallback', () => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
         throw Object.assign(new Error('missing ref'), { code: 1, stderr: '' })
       }
+
       if (args[0] === 'show-ref') {
         return { stdout: 'abc123 refs/remotes/orphan/main\n', stderr: '' }
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -64,9 +70,11 @@ describe('baseRefExistsOnRemote suffix fallback', () => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
         throw Object.assign(new Error('missing ref'), { code: 1, stderr: '' })
       }
+
       throw Object.assign(new Error('maxBuffer exceeded'), {
         code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
       })

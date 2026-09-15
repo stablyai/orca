@@ -17,6 +17,7 @@ export function useDictationSetupPoller({
 }: PollerOptions): () => Promise<void> {
   const refreshRef = useRef(refresh)
   refreshRef.current = refresh
+
   const poller = useMemo(
     () => new DictationSetupPollController(() => refreshRef.current(), intervalMs),
     [intervalMs]
@@ -34,15 +35,19 @@ export function useDictationSetupPoller({
 
   useEffect(() => {
     poller.setVisible(visible)
+
     if (!visible) {
       poller.setForeground(false)
+
       return undefined
     }
 
     poller.setForeground(AppState.currentState === 'active')
+
     const subscription = AppState.addEventListener('change', (state) => {
       poller.setForeground(state === 'active')
     })
+
     return () => {
       subscription.remove()
       poller.setVisible(false)

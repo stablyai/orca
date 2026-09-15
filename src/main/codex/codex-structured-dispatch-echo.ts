@@ -25,13 +25,16 @@ export type CodexDispatchEchoes = {
 
 export function createCodexDispatchEchoes(): CodexDispatchEchoes {
   const armed = new Set<string>()
+
   return {
     arm(clientMessageId) {
       if (!armed.has(clientMessageId) && armed.size >= MAX_CODEX_PENDING_DISPATCH_ECHOES) {
         return false
       }
+
       armed.delete(clientMessageId)
       armed.add(clientMessageId)
+
       return true
     },
     settle: (clientMessageId) => armed.delete(clientMessageId),
@@ -51,7 +54,9 @@ export function readCodexDispatchEcho(
   if (item.type !== 'userMessage' || identity.provider !== 'codex') {
     return null
   }
+
   const clientMessageId = item.clientId
+
   return typeof clientMessageId === 'string' && clientMessageId.length > 0
     ? { clientMessageId, providerIdentity: identity }
     : null

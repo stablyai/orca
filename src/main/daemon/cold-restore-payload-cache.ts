@@ -16,6 +16,7 @@ export const MAX_COLD_RESTORE_CACHE_BYTES = 16 * 1024 * 1024
 export function getColdRestorePayloadBytes(payload: ColdRestorePayload): number {
   const oscLinkBytes =
     payload.oscLinks?.reduce((bytes, link) => bytes + link.uri.length * 2 + 24, 0) ?? 0
+
   // Why: code-unit sizing bounds V8 string storage without rescanning or flattening multi-MB ropes.
   return (
     payload.scrollback.length * 2 +
@@ -41,11 +42,14 @@ export class ColdRestorePayloadCache {
 
   get(sessionId: string): ColdRestorePayload | undefined {
     const entry = this.entries.get(sessionId)
+
     if (!entry) {
       return undefined
     }
+
     this.entries.delete(sessionId)
     this.entries.set(sessionId, entry)
+
     return entry.payload
   }
 
@@ -61,9 +65,11 @@ export class ColdRestorePayloadCache {
 
     while (this.totalBytes > this.maxBytes) {
       const oldestSessionId = this.entries.keys().next().value
+
       if (oldestSessionId === undefined) {
         break
       }
+
       this.delete(oldestSessionId)
       this.onEvict?.(oldestSessionId)
     }
@@ -71,11 +77,14 @@ export class ColdRestorePayloadCache {
 
   delete(sessionId: string): boolean {
     const entry = this.entries.get(sessionId)
+
     if (!entry) {
       return false
     }
+
     this.entries.delete(sessionId)
     this.totalBytes -= entry.bytes
+
     return true
   }
 

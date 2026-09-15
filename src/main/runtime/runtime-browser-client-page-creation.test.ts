@@ -14,6 +14,7 @@ type ClientPageAuthority = Parameters<typeof closeRuntimeBrowserClientPage>[0]
 describe('runtime browser client page creation', () => {
   it('uses the stable page and exact execution host for create proof', async () => {
     const createProof = deferred<RuntimeBrowserClientPlacement>()
+
     const authority = createAuthority({
       createClientPage: vi.fn(() => createProof.promise),
       issueClientPageCommand: vi.fn()
@@ -114,6 +115,7 @@ describe('runtime browser client page creation', () => {
   it('retires a client page only after its exact close proof', async () => {
     const placement = clientPlacement()
     const retirement = { browserPageId: 'page-stable', placement }
+
     const authority = createAuthority({
       issueClientPageCommand: vi.fn(() => ({
         event: {} as never,
@@ -145,10 +147,12 @@ describe('runtime browser client page creation', () => {
       authorityRuntimeId: 'runtime-a',
       authorityEpoch: 'epoch-a'
     })
+
     const canonical = placements.placeClientPage('page-stable', {
       browserHostClientId: 'host-a',
       browserHostGeneration: 3
     })
+
     const authority = {
       authorityRuntimeId: 'runtime-a',
       authorityEpoch: 'epoch-a',
@@ -176,11 +180,14 @@ describe('runtime browser client page creation', () => {
       authorityRuntimeId: 'runtime-a',
       authorityEpoch: 'epoch-a'
     })
+
     const original = placements.placeClientPage('page-stable', {
       browserHostClientId: 'host-a',
       browserHostGeneration: 3
     })
+
     const closeProof = deferred<{ status: 'completed' }>()
+
     const authority = {
       authorityRuntimeId: 'runtime-a',
       authorityEpoch: 'epoch-a',
@@ -190,6 +197,7 @@ describe('runtime browser client page creation', () => {
       beginPageRetirement: placements.beginPageRetirement.bind(placements),
       completePageRetirement: placements.completePageRetirement.bind(placements)
     }
+
     const closing = closeRuntimeBrowserClientPage(authority, {
       browserPageId: 'page-stable',
       placement: { ...original }
@@ -197,10 +205,12 @@ describe('runtime browser client page creation', () => {
 
     const originalRetirement = placements.beginPageRetirement('page-stable', original)
     expect(placements.completePageRetirement(originalRetirement)).toBe(true)
+
     const replacement = placements.placeClientPage('page-stable', {
       browserHostClientId: 'host-a',
       browserHostGeneration: 3
     })
+
     closeProof.resolve({ status: 'completed' })
 
     await expect(closing).rejects.toThrow('browser_page_placement_stale')
@@ -249,8 +259,10 @@ function createAuthority(overrides: Partial<ClientPageAuthority>): ClientPageAut
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((innerResolve) => {
     resolve = innerResolve
   })
+
   return { promise, resolve }
 }

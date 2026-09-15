@@ -78,6 +78,7 @@ export function hasAppEnvironment(): boolean {
 
 export function getAppEnvironment(): AppEnvironment {
   const current = read()
+
   if (!current) {
     // Why throw rather than fall back: a silent default answers `userData` with the
     // wrong directory, and the caller writes real user state there before anyone
@@ -86,5 +87,6 @@ export function getAppEnvironment(): AppEnvironment {
       'AppEnvironment not initialized — call setAppEnvironment() during startup before resolving app paths'
     )
   }
+
   return current
 }

@@ -8,6 +8,7 @@ import type { LayoutMapLike } from '@/lib/keyboard-layout/detect-option-as-alt'
 import { normalizeLayoutBaseCharacter } from '@/lib/keyboard-layout/layout-base-character'
 
 type SystemChordReader = (win: Window) => Promise<MacCapturedDigitRowChord[]>
+
 type LayoutMapReader = (win: Window) => Promise<LayoutMapLike | null>
 
 type UseMacCapturedDigitChordsOptions = {
@@ -27,6 +28,7 @@ async function defaultLayoutMapReader(win: Window): Promise<LayoutMapLike | null
   const navigatorWithKeyboard = win.navigator as Navigator & {
     keyboard?: { getLayoutMap: () => Promise<LayoutMapLike> }
   }
+
   return navigatorWithKeyboard.keyboard?.getLayoutMap() ?? null
 }
 
@@ -40,9 +42,11 @@ async function readCapturedDigitChords(
       readSystemChords(win),
       readLayoutMap(win)
     ])
+
     if (!layoutMap) {
       return EMPTY_CHORDS
     }
+
     return resolveCapturedDigitChordsForLayout(physicalChords, (code) =>
       normalizeLayoutBaseCharacter(layoutMap.get(code))
     )
@@ -64,29 +68,39 @@ export function useMacCapturedDigitChords({
     if (!enabled) {
       return
     }
+
     let disposed = false
     let probing = false
     let refreshPending = false
+
     const refresh = async (): Promise<void> => {
       if (probing) {
         refreshPending = true
+
         return
       }
+
       probing = true
+
       do {
         refreshPending = false
         const next = await readCapturedDigitChords(win, readSystemChords, readLayoutMap)
+
         if (!disposed && !refreshPending) {
           setChords(next)
         }
       } while (!disposed && refreshPending)
+
       probing = false
     }
+
     const onFocus = (): void => {
       void refresh()
     }
+
     win.addEventListener('focus', onFocus)
     void refresh()
+
     return () => {
       disposed = true
       win.removeEventListener('focus', onFocus)

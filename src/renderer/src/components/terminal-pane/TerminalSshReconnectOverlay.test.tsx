@@ -182,11 +182,13 @@ describe('TerminalSshReconnectOverlay', () => {
 
   it('resyncs target metadata after a failed connect so a stale overlay converges', async () => {
     const connect = vi.fn().mockRejectedValue(new Error('SSH target "ssh-dead" not found'))
+
     const listTargets = vi
       .fn()
       .mockResolvedValue([
         { id: 'ssh-live', label: 'devbox', host: 'devbox', port: 22, username: 'me' }
       ])
+
     const listRemovedTargetLabels = vi.fn().mockResolvedValue({ 'ssh-dead': 'devbox (removed)' })
     installSshConnect(connect, { listTargets, listRemovedTargetLabels })
     const user = userEvent.setup()
@@ -207,11 +209,13 @@ describe('TerminalSshReconnectOverlay', () => {
 
   it('still applies the target list when the removed-labels refresh fails', async () => {
     const connect = vi.fn().mockRejectedValue(new Error('SSH target "ssh-dead" not found'))
+
     const listTargets = vi
       .fn()
       .mockResolvedValue([
         { id: 'ssh-live', label: 'devbox', host: 'devbox', port: 22, username: 'me' }
       ])
+
     const listRemovedTargetLabels = vi.fn().mockRejectedValue(new Error('unavailable'))
     installSshConnect(connect, { listTargets, listRemovedTargetLabels })
     const user = userEvent.setup()
@@ -361,6 +365,7 @@ describe('TerminalSshReconnectOverlay', () => {
       reconnectAttempt: 0,
       remotePlatform: 'linux'
     }
+
     const connect = vi.fn().mockResolvedValue(connectedState)
     installSshConnect(connect)
     const user = userEvent.setup()

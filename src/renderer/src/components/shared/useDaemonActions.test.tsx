@@ -66,9 +66,11 @@ function successfulSurfaceSummary(): KillAllTerminalSurfacesSummary {
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -86,12 +88,15 @@ describe('useDaemonActions kill-all cleanup', () => {
     const onKillAllSettled = vi.fn()
     snapshotMock.mockImplementation(() => {
       sequence.push('snapshot')
+
       return ['confirmed-tab']
     })
     runCleanupMock.mockImplementation(() => {
       sequence.push('cleanup')
+
       return cleanup.promise
     })
+
     const { result, unmount } = renderHook(() =>
       useDaemonActions({ onKillAllStart, onKillAllError, onKillAllSettled })
     )

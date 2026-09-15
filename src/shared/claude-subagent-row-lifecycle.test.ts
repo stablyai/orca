@@ -36,6 +36,7 @@ import { normalizeHookPayload } from './agent-hook-listener'
 import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
 
 describe('claude subagent sidebar row lifecycle', () => {
@@ -57,6 +58,7 @@ describe('claude subagent sidebar row lifecycle', () => {
     // A Workflow run spawns 21 one-shot agents over a long turn; each stops
     // shortly after starting. Pre-fix this accumulated 21 idle rows.
     let last: ReturnType<typeof claudeEvent>
+
     for (let i = 0; i < 21; i++) {
       claudeEvent({
         hook_event_name: 'SubagentStart',
@@ -76,11 +78,13 @@ describe('claude subagent sidebar row lifecycle', () => {
       agent_id: 'aworking0000000001',
       agent_type: 'general-purpose'
     })
+
     const working = claudeEvent({
       hook_event_name: 'SubagentStart',
       agent_id: 'aworking0000000002',
       agent_type: 'general-purpose'
     })
+
     expect(working?.payload.subagents).toHaveLength(2)
     expect(working?.payload.state).toBe('working')
   })
@@ -106,6 +110,7 @@ describe('claude subagent sidebar row lifecycle', () => {
         }
       ]
     })
+
     expect(stop?.payload.subagents).toEqual([
       expect.objectContaining({ id: 'aother00000000001', state: 'working' })
     ])
@@ -145,6 +150,7 @@ describe('claude subagent sidebar row lifecycle', () => {
       { id: 'tws2g167l', type: 'teammate', status: 'running', description: 'web research' },
       { id: 't6s2brfv7', type: 'teammate', status: 'running', description: 'oss hunt' }
     ]
+
     const midStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: teammateTasks })
     expect(midStop?.payload.state).toBe('working')
     expect(midStop?.payload.subagents).toHaveLength(2)
@@ -156,6 +162,7 @@ describe('claude subagent sidebar row lifecycle', () => {
       agent_id: 'aweb-research-8a76b7d7595ce04e',
       background_tasks: teammateTasks
     })
+
     expect(afterFirst?.payload.subagents).toHaveLength(2)
     expect(afterFirst?.payload.subagents).toEqual(
       expect.arrayContaining([
@@ -190,6 +197,7 @@ describe('claude subagent sidebar row lifecycle', () => {
       teammate_name: 'review-standards',
       team_name: 'orchestration'
     })
+
     expect(idled?.payload.subagents).toEqual([
       expect.objectContaining({ id: 'areview-standards-2750dacd', state: 'idle' })
     ])
@@ -200,6 +208,7 @@ describe('claude subagent sidebar row lifecycle', () => {
       hook_event_name: 'Stop',
       background_tasks: [{ id: 'tstd', type: 'teammate', status: 'running' }]
     })
+
     expect(stop?.payload.state).toBe('done')
     expect(stop?.payload.subagents).toEqual([
       expect.objectContaining({ id: 'areview-standards-2750dacd', state: 'idle' })
@@ -249,6 +258,7 @@ describe('claude subagent sidebar row lifecycle', () => {
       agent_id: 'apoll-map-74e71b7bd45975f7',
       agent_type: 'poll-map'
     })
+
     expect(revived?.payload.state).toBe('working')
     expect(revived?.payload.subagents).toEqual([
       expect.objectContaining({ id: 'apoll-map-74e71b7bd45975f7', state: 'working' })
@@ -277,6 +287,7 @@ describe('claude subagent sidebar row lifecycle', () => {
         }
       ]
     })
+
     expect(stop?.payload.subagents).toEqual([
       expect.objectContaining({ id: 'awf0000000000000zz', state: 'working' })
     ])
@@ -293,11 +304,13 @@ describe('claude subagent sidebar row lifecycle', () => {
     // Esc/Ctrl+C: claude emits SubagentStop for aborted children (verified
     // live), then Stop with is_interrupt. Both paths clean the roster.
     claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'aaborted000000001' })
+
     const stop = claudeEvent({
       hook_event_name: 'Stop',
       is_interrupt: true,
       background_tasks: []
     })
+
     expect(stop?.payload.state).toBe('done')
     expect(stop?.payload.interrupted).toBe(true)
     expect(stop?.payload.subagents).toBeUndefined()

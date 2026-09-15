@@ -62,11 +62,13 @@ export function useResourceUsageActions({
     (repoId: string): void => {
       setCollapsedRepos((prev) => {
         const next = new Set(prev)
+
         if (next.has(repoId)) {
           next.delete(repoId)
         } else {
           next.add(repoId)
         }
+
         return next
       })
     },
@@ -77,11 +79,13 @@ export function useResourceUsageActions({
     (worktreeId: string): void => {
       setCollapsedWorktrees((prev) => {
         const next = new Set(prev)
+
         if (next.has(worktreeId)) {
           next.delete(worktreeId)
         } else {
           next.add(worktreeId)
         }
+
         return next
       })
     },
@@ -93,18 +97,23 @@ export function useResourceUsageActions({
     if (worktreeId === ORPHAN_WORKTREE_ID || worktreeId.startsWith(`${UNATTRIBUTED_REPO_ID}::`)) {
       return
     }
+
     // Why: the target resolve below only knows worktrees, so a folder key never matched; the folder activator owns host and path-status gating.
     if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
       activateAndRevealWorkspace(worktreeId)
+
       return
     }
+
     const target = resolveResourceManagerWorktreeTarget(
       worktreeId,
       getAllWorktreesFromState(useAppStore.getState())
     )
+
     if (!target) {
       return
     }
+
     activateAndRevealWorktree(worktreeId, { executionHostId: target.hostId })
   }, [])
 
@@ -127,9 +136,11 @@ export function useResourceUsageActions({
         worktreeId,
         getAllWorktreesFromState(useAppStore.getState())
       )
+
       if (!target) {
         return
       }
+
       setOpen(false)
       runWorktreeDelete(worktreeId, { expectedHostId: target.hostId })
     },
@@ -152,10 +163,13 @@ export function useResourceUsageActions({
           } catch {
             /* already dead */
           }
+
           await refreshSessions()
         })()
+
         return
       }
+
       setKillConfirm(session)
     },
     [refreshSessions, removeSession, setKillConfirm]
@@ -165,12 +179,15 @@ export function useResourceUsageActions({
     if (!workspaceSessionReady) {
       return
     }
+
     // Why the shared selector: the button's count comes from the same function, so the set killed
     // is exactly the set advertised. Filtering separately here is how live sessions got killed.
     const orphans = selectUnboundDaemonSessions(sessions, resourceSessionBindings)
+
     if (orphans.length === 0) {
       return
     }
+
     // Why: optimistic removal so rows disappear immediately instead of waiting for the next daemon-side list refresh.
     const orphanIds = new Set(orphans.map((s) => s.id))
     removeSessions(orphanIds)
@@ -182,10 +199,12 @@ export function useResourceUsageActions({
     if (!killConfirm) {
       return
     }
+
     const target = killConfirm
     setKilling(true)
     // Why: optimistic removal avoids a flash where the dialog closes but the killed row lingers until the next list refresh.
     removeSession(target.sessionId)
+
     try {
       await window.api.pty.kill(target.sessionId)
     } catch {
@@ -196,12 +215,14 @@ export function useResourceUsageActions({
         setKillConfirm(null)
         // Why: killed row unmounts and focus would drop to <body>; park it on the popover body so keyboard users stay in the list.
         cancelPopoverBodyFocusFrame()
+
         if (popoverBodyRef.current) {
           popoverBodyFocusFrameRef.current = requestAnimationFrame(() => {
             popoverBodyFocusFrameRef.current = null
             popoverBodyRef.current?.focus()
           })
         }
+
         void refreshSessions()
       }
     }

@@ -16,9 +16,11 @@ export function describeUnknownValue(
   if (value === null) {
     return { [`${prefix}Type`]: 'null' }
   }
+
   if (value === undefined) {
     return { [`${prefix}Type`]: 'undefined' }
   }
+
   if (typeof value === 'object' || typeof value === 'function') {
     const candidate = value as {
       name?: unknown
@@ -26,6 +28,7 @@ export function describeUnknownValue(
       stack?: unknown
       constructor?: { name?: string }
     }
+
     return {
       [`${prefix}Type`]: typeof value === 'function' ? 'function' : candidate.constructor?.name,
       [`${prefix}Name`]: typeof candidate.name === 'string' ? candidate.name : undefined,
@@ -52,6 +55,7 @@ export function compactBreadcrumbData(
   data: Record<string, CrashReportDetailValue | undefined>
 ): CrashReportBreadcrumbData {
   const compacted: CrashReportBreadcrumbData = {}
+
   for (const [key, value] of Object.entries(data)) {
     if (typeof value === 'string' || typeof value === 'boolean' || value === null) {
       compacted[key] = value
@@ -59,6 +63,7 @@ export function compactBreadcrumbData(
       compacted[key] = value
     }
   }
+
   return compacted
 }
 

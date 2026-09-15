@@ -24,6 +24,7 @@ export function workspaceDocHistoryEntriesEqual(
   right: WorkspaceDocHistoryEntry
 ): boolean {
   const leftKeys = Object.keys(left) as (keyof WorkspaceDocHistoryEntry)[]
+
   return (
     leftKeys.length === Object.keys(right).length &&
     leftKeys.every((key) => Object.is(left[key], right[key]))
@@ -37,8 +38,10 @@ export function normalizeWorkspaceDocHistoryTitle(
 ): string {
   if (!title || isDocPreviewUrl(title)) {
     const fileName = docLocation.filePath.split(/[\\/]/).at(-1)
+
     return fileName || docLocation.filePath
   }
+
   return title
 }
 
@@ -48,6 +51,7 @@ export function normalizeWorkspaceDocHistoryEntries(
   const normalized: WorkspaceDocHistoryEntry[] = []
   const seenPathsByWorktree = new Map<string, Set<string>>()
   const candidates = [...entries].sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
+
   for (const entry of candidates) {
     if (
       entry.docLocation?.kind !== 'workspace-doc' ||
@@ -56,26 +60,32 @@ export function normalizeWorkspaceDocHistoryEntries(
     ) {
       continue
     }
+
     // Nested, not a joined key: any separator would collide with worktree ids or paths that
     // contain it. Must stay equivalent to `browserPageDocLocationsEqual`, which the store's
     // doc-history dedupe still uses — divergence would show up as duplicate dropdown rows.
     const { worktreeId, filePath } = entry.docLocation
     const seenPaths = seenPathsByWorktree.get(worktreeId)
+
     if (seenPaths?.has(filePath)) {
       continue
     }
+
     if (seenPaths) {
       seenPaths.add(filePath)
     } else {
       seenPathsByWorktree.set(worktreeId, new Set([filePath]))
     }
+
     normalized.push({
       ...entry,
       title: normalizeWorkspaceDocHistoryTitle(entry.title, entry.docLocation)
     })
+
     if (normalized.length >= MAX_WORKSPACE_DOC_HISTORY_ENTRIES) {
       break
     }
   }
+
   return normalized
 }

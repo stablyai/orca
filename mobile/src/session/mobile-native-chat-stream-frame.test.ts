@@ -16,6 +16,7 @@ function message(id: string): NativeChatMessage {
 describe('applyMobileNativeChatStreamFrame', () => {
   it('uses the first snapshot as the ordered base and carries pagination state', () => {
     const merger = createNativeChatMerger()
+
     const result = applyMobileNativeChatStreamFrame({
       merger,
       frame: {
@@ -39,6 +40,7 @@ describe('applyMobileNativeChatStreamFrame', () => {
 
   it('marks a pending snapshot so the caller can settle the view but not the read', () => {
     const merger = createNativeChatMerger()
+
     const result = applyMobileNativeChatStreamFrame({
       merger,
       frame: { type: 'snapshot', messages: [], hasMore: false, pending: true },
@@ -57,6 +59,7 @@ describe('applyMobileNativeChatStreamFrame', () => {
 
   it('leaves an ordinary snapshot unmarked', () => {
     const merger = createNativeChatMerger()
+
     const result = applyMobileNativeChatStreamFrame({
       merger,
       frame: { type: 'snapshot', messages: [message('a')], hasMore: false },

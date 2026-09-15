@@ -20,6 +20,7 @@ function createStoreWithState(state: CodexUsagePersistedState): CodexUsageStore 
   })
 
   ;(store as unknown as { state: CodexUsagePersistedState }).state = state
+
   return store
 }
 
@@ -39,6 +40,7 @@ function createLargeState(): CodexUsagePersistedState {
     totalTokens: 1_500,
     hasInferredPricing: false
   }))
+
   const sessions = Array.from({ length: 8_000 }, (_, index) => ({
     sessionId: `session-${index}`,
     firstTimestamp: `2026-04-${String((index % 30) + 1).padStart(2, '0')}T10:00:00.000Z`,

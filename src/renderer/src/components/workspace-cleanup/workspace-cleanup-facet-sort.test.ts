@@ -21,6 +21,7 @@ describe('absent values', () => {
       makeNamedFacets('small', { sizeBytes: 10 }),
       makeNamedFacets('big', { sizeBytes: 900 })
     ]
+
     expect(names(rows, 'size', 'desc')).toEqual(['big', 'small', 'unsized'])
     expect(names(rows, 'size', 'asc')).toEqual(['small', 'big', 'unsized'])
   })
@@ -31,6 +32,7 @@ describe('absent values', () => {
       makeNamedFacets('old', { lastVisitedAt: FACET_NOW - 50 * DAY }),
       makeNamedFacets('recent', { lastVisitedAt: FACET_NOW })
     ]
+
     expect(names(rows, 'last-visited', 'asc')).toEqual(['old', 'recent', 'never'])
     expect(names(rows, 'last-visited', 'desc')).toEqual(['recent', 'old', 'never'])
   })
@@ -41,12 +43,14 @@ describe('absent values', () => {
       makeNamedFacets('merged', { review: { state: 'merged' } }),
       makeNamedFacets('open', { review: { state: 'open' } })
     ]
+
     expect(names(rows, 'review', 'desc')).toEqual(['open', 'merged', 'none'])
 
     const ticketRows = [
       makeNamedFacets('untracked'),
       makeNamedFacets('linear', { worktree: { linkedLinearIssue: 'STA-1' } })
     ]
+
     expect(names(ticketRows, 'ticket', 'asc')).toEqual(['linear', 'untracked'])
   })
 
@@ -91,6 +95,7 @@ describe('ranked fields', () => {
         }
       })
     ]
+
     expect(names(rows, 'git', 'asc')).toEqual(['clean', 'unknown', 'dirty', 'unpushed'])
   })
 
@@ -100,6 +105,7 @@ describe('ranked fields', () => {
       makeNamedFacets('idle'),
       makeNamedFacets('working', { agentStatus: 'working' })
     ]
+
     expect(names(agentRows, 'agent', 'desc')).toEqual(['permission', 'working', 'idle'])
   })
 
@@ -112,6 +118,7 @@ describe('ranked fields', () => {
         candidate: { blockers: ['main-worktree'] }
       })
     ]
+
     expect(names(rows, 'blocker-count', 'desc')).toEqual(['hardest', 'softest'])
   })
 })
@@ -126,6 +133,7 @@ describe('tie-breaks', () => {
         candidate: { lastActivityAt: FACET_NOW - 2 * DAY }
       })
     ]
+
     // Same size on both sides, so only the tie-break chain can order them.
     expect(names(rows, 'size', 'desc')).toEqual(['alpha', 'zeta'])
   })
@@ -137,6 +145,7 @@ describe('tie-breaks', () => {
         candidate: { lastActivityAt: FACET_NOW - 2 * DAY }
       })
     ]
+
     expect(names(rows, 'git', 'asc')).toEqual(names(rows, 'git', 'desc'))
   })
 
@@ -159,6 +168,7 @@ describe('text fields', () => {
       makeNamedFacets('remote', { worktree: { hostId: 'ssh:builder' } }),
       makeNamedFacets('here', { worktree: { hostId: 'local' } })
     ]
+
     expect(names(hostRows, 'host', 'asc')).toEqual(['here', 'remote'])
   })
 })

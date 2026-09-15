@@ -29,6 +29,7 @@ export function createAutomationDispatchToken(automationId: string, runId: strin
     expiresAt: Date.now() + DISPATCH_TOKEN_TTL_MS,
     inFlight: false
   })
+
   return token
 }
 
@@ -40,21 +41,27 @@ export function beginAutomationDispatchTokenUse(args: {
 }): boolean {
   pruneExpiredDispatchTokens()
   const record = dispatchTokens.get(args.token)
+
   const valid =
     record?.automationId === args.automationId &&
     record.runId === args.runId &&
     record.expiresAt > Date.now()
+
   if (!valid) {
     return false
   }
+
   if (record.reservedBy !== undefined && record.reservedBy !== args.reservationId) {
     return false
   }
+
   if (record.inFlight) {
     return false
   }
+
   record.reservedBy = args.reservationId
   record.inFlight = true
+
   return true
 }
 
@@ -63,6 +70,7 @@ export function releaseAutomationDispatchTokenUse(args: {
   reservationId: string
 }): void {
   const record = dispatchTokens.get(args.token)
+
   if (record?.reservedBy === args.reservationId) {
     record.inFlight = false
   }
@@ -73,6 +81,7 @@ export function finishAutomationDispatchTokenUse(args: {
   reservationId: string
 }): void {
   const record = dispatchTokens.get(args.token)
+
   if (record?.reservedBy === args.reservationId) {
     dispatchTokens.delete(args.token)
   }

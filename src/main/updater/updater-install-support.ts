@@ -32,15 +32,18 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     if (this.availableVersion) {
       return this.availableVersion
     }
+
     if (this.currentStatus.state === 'downloading' || this.currentStatus.state === 'downloaded') {
       return this.currentStatus.version
     }
+
     if (
       this.currentStatus.state === 'error' &&
       this.currentStatus.recovery?.kind === 'linux-package-install'
     ) {
       return this.currentStatus.recovery.version
     }
+
     return ''
   }
 
@@ -48,7 +51,9 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     if (this.updateInstallMode !== 'unsupported-headless-serve') {
       return false
     }
+
     const diagnosticVersion = version || 'unknown'
+
     if (this.lastInstallDeferralVersion[phase] !== diagnosticVersion) {
       this.lastInstallDeferralVersion[phase] = diagnosticVersion
       recordUpdaterLifecycle(
@@ -60,10 +65,12 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
         }
       )
     }
+
     this.sendErrorStatus(
       'This orca serve process was not started by an update-capable supervisor. Keep it running and update Orca through its service manager.',
       true
     )
+
     return true
   }
 
@@ -106,14 +113,18 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
    */
   protected withInstallFailureCause(baseMessage: string, error: unknown): string {
     const raw = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+
     // Why: the retained-package card runs its text through this same sanitizer, so a home directory,
     // user name, or terminal escape must not reach the card merely because no artifact was tracked.
     const redacted =
       redactLinuxPackageInstallText(raw, getTrackedLinuxPackageArtifact()?.path ?? null) ?? ''
+
     const cause = redacted.slice(0, this.installFailureCauseMaxLength)
+
     if (!cause || cause === 'Unknown error') {
       return baseMessage
     }
+
     // Why: UpdateCard picks the whole card off this string, so a signature verdict must not be prefixed by contradictory restart advice.
     if (
       isWindowsSignatureCheckUnavailableFailure(cause) ||
@@ -121,6 +132,7 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     ) {
       return cause
     }
+
     return `${baseMessage} (${cause})`
   }
 
@@ -138,6 +150,7 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
     }
 
     let timeout: ReturnType<typeof setTimeout> | null = null
+
     const cleanup = Promise.resolve()
       .then(() => this.onBeforeQuitCleanup?.())
       .catch((error) => {
@@ -150,11 +163,13 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
           }
         )
       })
+
     const timeoutResult = new Promise<'timeout'>((resolve) => {
       timeout = setTimeout(() => resolve('timeout'), PRE_QUIT_CLEANUP_TIMEOUT_MS)
     })
 
     const result = await Promise.race([cleanup.then(() => 'done' as const), timeoutResult])
+
     if (result === 'timeout') {
       recordUpdaterLifecycle(
         'pre_quit_cleanup_timeout',
@@ -164,6 +179,7 @@ export abstract class UpdaterInstallSupport extends UpdaterCheckState {
           message: `Pre-quit cleanup exceeded ${PRE_QUIT_CLEANUP_TIMEOUT_MS}ms; continuing update install`
         }
       )
+
       return
     }
 

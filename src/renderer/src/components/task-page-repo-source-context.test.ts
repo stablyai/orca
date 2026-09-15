@@ -41,6 +41,7 @@ describe('getTaskPageRepoCacheInput', () => {
       path: '/tmp/orca',
       executionHostId: 'local'
     } as Repo
+
     const input = getTaskPageRepoCacheInput(repo)
     expect(input.id).toBe('repo-1')
     expect(input.path).toBe('/tmp/orca')

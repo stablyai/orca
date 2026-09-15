@@ -40,6 +40,7 @@ function parseRemoteTrackingLocalBaseRef(
   }
 
   const remoteRefPrefix = 'refs/remotes/'
+
   if (!remoteTrackingRef.startsWith(remoteRefPrefix)) {
     return undefined
   }
@@ -47,11 +48,13 @@ function parseRemoteTrackingLocalBaseRef(
   // Why: only proven remote-tracking refs get refresh status; slash-containing local branches (release/2026) must not fake a "not refreshed" warning.
   const shortRemoteRef = remoteTrackingRef.slice(remoteRefPrefix.length)
   const slashIndex = shortRemoteRef.indexOf('/')
+
   if (slashIndex <= 0) {
     return undefined
   }
 
   const localBranch = shortRemoteRef.slice(slashIndex + 1)
+
   return {
     baseRef: baseBranch,
     localBranch,
@@ -61,6 +64,7 @@ function parseRemoteTrackingLocalBaseRef(
 
 function parseRevListDrift(output: string): { ahead: number; behind: number } | null {
   const counts = parseGitRevListAheadBehindCounts(output)
+
   return counts.status === 'ok' ? { ahead: counts.ahead, behind: counts.behind } : null
 }
 
@@ -73,6 +77,7 @@ export async function evaluateLocalBaseRefRefreshability(
   shouldInspectOwner: (behind: number) => boolean = () => true
 ): Promise<LocalBaseRefRefreshability | undefined> {
   const parsed = parseRemoteTrackingLocalBaseRef(baseBranch, remoteTrackingRef, remoteTrackingBase)
+
   if (!parsed) {
     return undefined
   }
@@ -82,36 +87,47 @@ export async function evaluateLocalBaseRefRefreshability(
   let drift: { ahead: number; behind: number }
   let localOid = ''
   let remoteOid = ''
+
   try {
     // Why: advisory and mutating paths must agree on "safe to fast-forward"; `rev-list A...B` proves no local-only commits and how far behind.
     const { stdout } = await gitExecFileAsync(
       ['rev-list', '--left-right', '--count', `${parsed.fullRef}...${remoteTrackingRef}`],
       gitExecOptions(repoPath, options)
     )
+
     const parsedDrift = parseRevListDrift(stdout)
+
     if (!parsedDrift || parsedDrift.ahead !== 0) {
       return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
     }
+
     if (!shouldInspectOwner(parsedDrift.behind)) {
       // Why: a current local ref yields no update suggestion, so the advisory path skips OID resolution and owner inspection.
       return undefined
     }
+
     const { stdout: localOidOutput } = await gitExecFileAsync(
       ['rev-parse', '--verify', `${parsed.fullRef}^{commit}`],
       gitExecOptions(repoPath, options)
     )
+
     localOid = localOidOutput.trim()
+
     if (!localOid) {
       return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
     }
+
     const { stdout: remoteOidOutput } = await gitExecFileAsync(
       ['rev-parse', '--verify', `${remoteTrackingRef}^{commit}`],
       gitExecOptions(repoPath, options)
     )
+
     remoteOid = remoteOidOutput.trim()
+
     if (!remoteOid) {
       return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
     }
+
     await gitExecFileAsync(
       ['merge-base', '--is-ancestor', localOid, remoteOid],
       gitExecOptions(repoPath, options)
@@ -125,9 +141,11 @@ export async function evaluateLocalBaseRefRefreshability(
       (args) => gitExecFileAsync(args, gitExecOptions(repoPath, options)),
       parsed.fullRef
     )
+
     if (presence === 'absent') {
       return undefined
     }
+
     return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
   }
 
@@ -137,9 +155,11 @@ export async function evaluateLocalBaseRefRefreshability(
       ['worktree', 'list', '--porcelain'],
       gitExecOptions(repoPath, options)
     )
+
     const worktrees = parseWorktreeList(
       translateWslOutputPaths(worktreeListOutput, repoPath, options)
     )
+
     const ownerWorktree = worktrees.find((wt) => wt.branch === parsed.fullRef)
 
     if (ownerWorktree) {
@@ -147,6 +167,7 @@ export async function evaluateLocalBaseRefRefreshability(
         ['status', '--porcelain', '--untracked-files=no'],
         gitExecOptions(ownerWorktree.path, options)
       )
+
       if (status.trim()) {
         return {
           refreshable: false,
@@ -157,6 +178,7 @@ export async function evaluateLocalBaseRefRefreshability(
           }
         }
       }
+
       return {
         refreshable: true,
         ...resultBase,
@@ -199,9 +221,11 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
     options,
     (behind) => behind > 0
   )
+
   if (!evaluation?.refreshable || evaluation.behind <= 0) {
     return undefined
   }
+
   return {
     baseRef: evaluation.baseRef,
     localBranch: evaluation.localBranch,

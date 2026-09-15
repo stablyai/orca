@@ -4,6 +4,7 @@ import { extractIconHref } from './repo-icon-source-href'
 // Original production expressions are the compatibility oracle.
 const HTML_RE =
   /<link\b(?=[^>]*\brel=["'](?:icon|shortcut icon)["'])(?=[^>]*\bhref=["']([^"'?]+))[^>]*>/i
+
 const OBJECT_RE =
   /(?=[^}]*\brel\s*:\s*["'](?:icon|shortcut icon)["'])(?=[^}]*\bhref\s*:\s*["']([^"'?]+))[^}]*/i
 
@@ -55,13 +56,17 @@ describe('repo icon source href compatibility', () => {
       'href="a"',
       'href="b"'
     ]
+
     let seed = 97
+
     for (let sample = 0; sample < 3000; sample++) {
       let source = ''
+
       for (let token = 0; token < 12; token++) {
         seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
         source += tokens[seed % tokens.length]
       }
+
       expect(extractIconHref(source), source).toBe(originalIconHref(source))
     }
   })

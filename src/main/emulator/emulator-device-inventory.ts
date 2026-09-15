@@ -8,6 +8,7 @@ export async function listAvailableEmulatorDevices(
       if (!backend.isSupportedOnHost()) {
         return []
       }
+
       try {
         return await backend.listDevices()
       } catch {
@@ -15,5 +16,6 @@ export async function listAvailableEmulatorDevices(
       }
     })
   )
+
   return perBackend.flat()
 }

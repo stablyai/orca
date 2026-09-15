@@ -16,17 +16,21 @@ export function orderDeleteWorktreeStatusHydrationTargets({
   activeExecutionHostId: string | null
 }): Worktree[] {
   const visibleIdentities = new Set(visibleTargets.map(getWorktreeHostIdentity))
+
   return targets
     .map((target, index) => {
       const isActive =
         target.id === activeWorktreeId &&
         (!activeExecutionHostId || (target.hostId ?? 'local') === activeExecutionHostId)
+
       const rank = isActive ? 0 : visibleIdentities.has(getWorktreeHostIdentity(target)) ? 1 : 2
+
       return { target, index, rank }
     })
     .sort((left, right) => left.rank - right.rank || left.index - right.index)
     .map(({ target }) => target)
 }
+
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 
 export function getDeleteWorktreeDirtyChangeCounts({
@@ -43,20 +47,25 @@ export function getDeleteWorktreeDirtyChangeCounts({
   repoMap: ReadonlyMap<string, Repo>
 }): Map<string, number> {
   const result = new Map<string, number>()
+
   for (const item of deleteTargets) {
     if (item.isMainWorktree || isFolderWorkspaceDelete(repoMap, item)) {
       continue
     }
+
     const resultKey = item.hostId ? getWorktreeHostIdentity(item) : item.id
+
     const forceDeleteReason = getDeleteStateForWorktreeHost(
       item,
       deleteStateByWorktreeId
     )?.forceDeleteReason
+
     const changeCount = (
       item.hostId
         ? gitStatusByWorktreeIdentity?.get(getWorktreeHostIdentity(item))
         : gitStatusByWorktree[item.id]
     )?.length
+
     if ((changeCount ?? 0) > 0) {
       result.set(resultKey, changeCount ?? 0)
     } else if (forceDeleteReason === 'dirty') {
@@ -65,5 +74,6 @@ export function getDeleteWorktreeDirtyChangeCounts({
       result.set(resultKey, 0)
     }
   }
+
   return result
 }

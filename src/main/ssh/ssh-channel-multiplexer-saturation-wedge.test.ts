@@ -12,9 +12,11 @@ type WedgedTransport = MultiplexerTransport & { writes: Buffer[]; feed: (chunk: 
 function createWedgedTransport(): WedgedTransport {
   const writes: Buffer[] = []
   let onData: (chunk: Buffer) => void = () => {}
+
   return {
     write: (data) => {
       writes.push(data)
+
       return false
     },
     onData: (callback) => {
@@ -69,9 +71,11 @@ describe('SshChannelMultiplexer on a transport that saturates and never drains',
     // The regression guard for the fix above: backpressure on our uplink is not evidence of
     // death, and the relay's own keepalive is what proves it.
     let seq = 1
+
     const inbound = setInterval(() => {
       transport.feed(encodeKeepAliveFrame(seq++, 0))
     }, KEEPALIVE_SEND_MS)
+
     try {
       await vi.advanceTimersByTimeAsync(TIMEOUT_MS * 10 + KEEPALIVE_SEND_MS)
       expect(mux.isDisposed()).toBe(false)

@@ -11,6 +11,7 @@ export function getOptionalStructuredMessagePayload(
   const filesModified = getOptionalStringFlag(flags, 'files-modified')
   const reportPath = getOptionalStringFlag(flags, 'report-path')
   const phase = getOptionalStringFlag(flags, 'phase')
+
   const hasStructuredPayload =
     taskId !== undefined ||
     dispatchId !== undefined ||
@@ -18,23 +19,29 @@ export function getOptionalStructuredMessagePayload(
     filesModified !== undefined ||
     reportPath !== undefined ||
     phase !== undefined
+
   if (!hasStructuredPayload) {
     return rawPayload
   }
+
   if (rawPayload !== undefined) {
     throw new RuntimeClientError(
       'invalid_argument',
       'Use either --payload or structured payload flags, not both.'
     )
   }
+
   // Why: raw JSON args are fragile in Windows PowerShell; these flags avoid shell-specific quoting.
   const payload: Record<string, string | string[]> = {}
+
   if (taskId) {
     payload.taskId = taskId
   }
+
   if (dispatchId) {
     payload.dispatchId = dispatchId
   }
+
   if (outcome) {
     if (outcome !== 'succeeded' && outcome !== 'failed') {
       throw new RuntimeClientError(
@@ -42,19 +49,24 @@ export function getOptionalStructuredMessagePayload(
         'Invalid --outcome. Expected succeeded or failed.'
       )
     }
+
     payload.outcome = outcome
   }
+
   if (filesModified) {
     payload.filesModified = filesModified
       .split(',')
       .map((file) => file.trim())
       .filter(Boolean)
   }
+
   if (reportPath) {
     payload.reportPath = reportPath
   }
+
   if (phase) {
     payload.phase = phase
   }
+
   return JSON.stringify(payload)
 }

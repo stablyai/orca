@@ -28,29 +28,35 @@ class FakeSocket extends EventEmitter implements BrowserNetworkTunnelSocket {
 
   pause(): this {
     this.paused = true
+
     return this
   }
 
   resume(): this {
     this.paused = false
+
     return this
   }
 
   write(bytes: Uint8Array<ArrayBufferLike>, callback?: () => void): boolean {
     this.writes.push(bytes.slice())
+
     if (callback) {
       this.writeCallbacks.push(callback)
     }
+
     return true
   }
 
   end(): this {
     this.ended = true
+
     return this
   }
 
   destroy(): this {
     this.destroyed = true
+
     return this
   }
 }
@@ -69,11 +75,13 @@ describe('BrowserNetworkTunnelSession', () => {
     const socket = new FakeSocket()
     const connect = vi.fn(() => socket)
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
@@ -101,14 +109,17 @@ describe('BrowserNetworkTunnelSession', () => {
   it('replenishes client credit only after the destination write settles', () => {
     const socket = new FakeSocket()
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect: () => socket,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
+
     session.handleBinary(
       frame(
         BrowserNetworkTunnelOpcode.Open,
@@ -132,14 +143,17 @@ describe('BrowserNetworkTunnelSession', () => {
   it('does not read destination bytes before the client grants credit', () => {
     const socket = new FakeSocket()
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect: () => socket,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
+
     session.handleBinary(
       frame(
         BrowserNetworkTunnelOpcode.Open,
@@ -170,11 +184,13 @@ describe('BrowserNetworkTunnelSession', () => {
     const socket = new FakeSocket()
     const connect = vi.fn(() => socket)
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
@@ -205,14 +221,17 @@ describe('BrowserNetworkTunnelSession', () => {
     const secondSocket = new FakeSocket()
     const connect = vi.fn().mockReturnValueOnce(firstSocket).mockReturnValueOnce(secondSocket)
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
+
     const open = (host: string): void =>
       session.handleBinary(
         frame(BrowserNetworkTunnelOpcode.Open, encodeBrowserNetworkTunnelOpen({ host, port: 80 }))
@@ -233,14 +252,17 @@ describe('BrowserNetworkTunnelSession', () => {
     const socket = new FakeSocket()
     const sent: Uint8Array<ArrayBufferLike>[] = []
     const connect = vi.fn(() => socket)
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
+
     const open = frame(
       BrowserNetworkTunnelOpcode.Open,
       encodeBrowserNetworkTunnelOpen({ host: 'localhost', port: 80 })
@@ -257,11 +279,13 @@ describe('BrowserNetworkTunnelSession', () => {
     )
 
     const otherSocket = new FakeSocket()
+
     const unknownSession = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect: () => otherSocket,
       sendBinary: () => true
     })
+
     unknownSession.handleBinary(
       frame(
         BrowserNetworkTunnelOpcode.Open,
@@ -276,11 +300,13 @@ describe('BrowserNetworkTunnelSession', () => {
     const firstSocket = new FakeSocket()
     const secondSocket = new FakeSocket()
     const connect = vi.fn().mockReturnValueOnce(firstSocket).mockReturnValueOnce(secondSocket)
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect,
       sendBinary: () => true
     })
+
     const open = (streamId: number): void =>
       session.handleBinary(
         frame(
@@ -308,11 +334,13 @@ describe('BrowserNetworkTunnelSession', () => {
     const firstSocket = new FakeSocket()
     const secondSocket = new FakeSocket()
     const connect = vi.fn().mockReturnValueOnce(firstSocket).mockReturnValueOnce(secondSocket)
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect,
       sendBinary: () => true
     })
+
     const open = (streamId: number): void =>
       session.handleBinary(
         frame(
@@ -333,14 +361,17 @@ describe('BrowserNetworkTunnelSession', () => {
   it('fences invalid half-close transitions and emits destination EOF once', () => {
     const socket = new FakeSocket()
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect: () => socket,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
+
     session.handleBinary(
       frame(
         BrowserNetworkTunnelOpcode.Open,
@@ -355,14 +386,17 @@ describe('BrowserNetworkTunnelSession', () => {
 
     const responseSocket = new FakeSocket()
     const responseFrames: Uint8Array<ArrayBufferLike>[] = []
+
     const responseSession = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect: () => responseSocket,
       sendBinary: (bytes) => {
         responseFrames.push(bytes)
+
         return true
       }
     })
+
     responseSession.handleBinary(
       frame(
         BrowserNetworkTunnelOpcode.Open,
@@ -389,14 +423,17 @@ describe('BrowserNetworkTunnelSession', () => {
   it('flushes credited destination bytes before close', () => {
     const socket = new FakeSocket()
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect: () => socket,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
+
     session.handleBinary(
       frame(
         BrowserNetworkTunnelOpcode.Open,
@@ -427,11 +464,13 @@ describe('BrowserNetworkTunnelSession', () => {
 
   it('fails closed on pre-connect credit and synchronous transport failure', () => {
     const socket = new FakeSocket()
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect: () => socket,
       sendBinary: () => true
     })
+
     session.handleBinary(
       frame(
         BrowserNetworkTunnelOpcode.Open,
@@ -444,6 +483,7 @@ describe('BrowserNetworkTunnelSession', () => {
     expect(socket.destroyed).toBe(true)
 
     const throwingSocket = new FakeSocket()
+
     const throwingSession = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect: () => throwingSocket,
@@ -451,6 +491,7 @@ describe('BrowserNetworkTunnelSession', () => {
         throw new Error('transport closed')
       }
     })
+
     throwingSession.handleBinary(
       frame(
         BrowserNetworkTunnelOpcode.Open,
@@ -464,14 +505,17 @@ describe('BrowserNetworkTunnelSession', () => {
   it('closes a stream that exceeds its receive window', () => {
     const socket = new FakeSocket()
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect: () => socket,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
+
     session.handleBinary(
       frame(
         BrowserNetworkTunnelOpcode.Open,
@@ -481,9 +525,11 @@ describe('BrowserNetworkTunnelSession', () => {
     socket.emit('connect')
     sent.length = 0
     const chunk = new Uint8Array(64 * 1024)
+
     for (let index = 0; index < 4; index += 1) {
       session.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, chunk))
     }
+
     session.handleBinary(frame(BrowserNetworkTunnelOpcode.Data, new Uint8Array([1])))
 
     expect(socket.destroyed).toBe(true)
@@ -497,14 +543,17 @@ describe('BrowserNetworkTunnelSession', () => {
     let nextSocket = 0
     const connect = vi.fn(() => sockets[nextSocket++]!)
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       }
     })
+
     const open = (streamId: number): void =>
       session.handleBinary(
         frame(
@@ -517,6 +566,7 @@ describe('BrowserNetworkTunnelSession', () => {
     for (let streamId = 1; streamId <= 17; streamId += 1) {
       open(streamId)
     }
+
     expect(connect).toHaveBeenCalledTimes(16)
     expect(new TextDecoder().decode(decodeBrowserNetworkTunnelFrame(sent.at(-1)!)?.payload)).toBe(
       'pending_open_limit_exceeded'
@@ -534,21 +584,27 @@ describe('BrowserNetworkTunnelSession', () => {
   it('bounds the destination open rate with an injectable monotonic clock', () => {
     let now = 1_000
     const sockets: FakeSocket[] = []
+
     const connect = vi.fn(() => {
       const socket = new FakeSocket()
       sockets.push(socket)
+
       return socket
     })
+
     const sent: Uint8Array<ArrayBufferLike>[] = []
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect,
       sendBinary: (bytes) => {
         sent.push(bytes)
+
         return true
       },
       now: () => now
     })
+
     const openAndClose = (streamId: number): void => {
       const socketCount = sockets.length
       session.handleBinary(
@@ -558,6 +614,7 @@ describe('BrowserNetworkTunnelSession', () => {
           streamId
         )
       )
+
       if (sockets.length > socketCount) {
         sockets.at(-1)!.emit('connect')
         session.handleBinary(frame(BrowserNetworkTunnelOpcode.Close, new Uint8Array(), streamId))
@@ -567,6 +624,7 @@ describe('BrowserNetworkTunnelSession', () => {
     for (let streamId = 1; streamId <= 128; streamId += 1) {
       openAndClose(streamId)
     }
+
     openAndClose(129)
     expect(connect).toHaveBeenCalledTimes(128)
     expect(new TextDecoder().decode(decodeBrowserNetworkTunnelFrame(sent.at(-1)!)?.payload)).toBe(
@@ -580,15 +638,18 @@ describe('BrowserNetworkTunnelSession', () => {
 
   it('caps aggregate retained destination bytes and releases exact stream accounting', () => {
     const sockets: FakeSocket[] = []
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect: () => {
         const socket = new FakeSocket()
         sockets.push(socket)
+
         return socket
       },
       sendBinary: () => true
     })
+
     const openAndBuffer = (streamId: number): void => {
       session.handleBinary(
         frame(
@@ -604,6 +665,7 @@ describe('BrowserNetworkTunnelSession', () => {
     for (let streamId = 1; streamId <= 32; streamId += 1) {
       openAndBuffer(streamId)
     }
+
     session.handleBinary(frame(BrowserNetworkTunnelOpcode.Close, new Uint8Array(), 1))
     openAndBuffer(33)
     expect(sockets[32]!.destroyed).toBe(false)
@@ -617,15 +679,18 @@ describe('BrowserNetworkTunnelSession', () => {
 
   it('caps unsettled destination writes and releases retirement exactly once', () => {
     const sockets: FakeSocket[] = []
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect: () => {
         const socket = new FakeSocket()
         sockets.push(socket)
+
         return socket
       },
       sendBinary: () => true
     })
+
     const openAndWrite = (streamId: number): void => {
       session.handleBinary(
         frame(
@@ -635,6 +700,7 @@ describe('BrowserNetworkTunnelSession', () => {
         )
       )
       sockets.at(-1)!.emit('connect')
+
       for (let index = 0; index < 4; index += 1) {
         session.handleBinary(
           frame(
@@ -649,10 +715,13 @@ describe('BrowserNetworkTunnelSession', () => {
     for (let streamId = 1; streamId <= 32; streamId += 1) {
       openAndWrite(streamId)
     }
+
     session.handleBinary(frame(BrowserNetworkTunnelOpcode.Close, new Uint8Array(), 1))
+
     for (const callback of sockets[0]!.writeCallbacks) {
       callback()
     }
+
     openAndWrite(33)
     expect(sockets[32]!.destroyed).toBe(false)
 
@@ -663,11 +732,13 @@ describe('BrowserNetworkTunnelSession', () => {
 
   it('bounds unsettled destination write chunks independently of byte credit', () => {
     const socket = new FakeSocket()
+
     const session = new BrowserNetworkTunnelSession({
       tunnelGeneration: 7,
       connect: () => socket,
       sendBinary: () => true
     })
+
     session.handleBinary(
       frame(
         BrowserNetworkTunnelOpcode.Open,
@@ -698,6 +769,7 @@ describe('BrowserNetworkTunnelSession', () => {
         ) {
           session.close()
         }
+
         return true
       }
     })

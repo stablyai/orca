@@ -43,16 +43,20 @@ function stepMemoized(sim: TailSim, chunk: string, at: number, compute: Compute)
     sim.tailWaitState?.fromTail === true
       ? sim.tailWaitState
       : compute(sim.tailBuffer, sim.tailPartialLine, sim.preview)
+
   const nextTail = appendNormalizedToTailBuffer(
     sim.tailBuffer,
     sim.tailPartialLine,
     chunk,
     sim.tailRedrawCursor
   )
+
   const nextWaitState = compute(nextTail.lines, nextTail.partialLine, sim.preview)
+
   if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, chunk)) {
     sim.waitBlockedAt = at
   }
+
   sim.tailWaitState = nextWaitState
   sim.tailBuffer = nextTail.lines
   sim.tailPartialLine = nextTail.partialLine
@@ -64,16 +68,20 @@ function stepMemoized(sim: TailSim, chunk: string, at: number, compute: Compute)
 // from the current tail on every chunk (no cache).
 function stepReference(sim: TailSim, chunk: string, at: number, compute: Compute): void {
   const previousWaitState = compute(sim.tailBuffer, sim.tailPartialLine, sim.preview)
+
   const nextTail = appendNormalizedToTailBuffer(
     sim.tailBuffer,
     sim.tailPartialLine,
     chunk,
     sim.tailRedrawCursor
   )
+
   const nextWaitState = compute(nextTail.lines, nextTail.partialLine, sim.preview)
+
   if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, chunk)) {
     sim.waitBlockedAt = at
   }
+
   sim.tailBuffer = nextTail.lines
   sim.tailPartialLine = nextTail.partialLine
   sim.tailRedrawCursor = nextTail.redrawCursor
@@ -92,6 +100,7 @@ function runBoth(chunks: string[]): { memoized: (number | null)[]; reference: (n
     memoized.push(memoSim.waitBlockedAt)
     reference.push(refSim.waitBlockedAt)
   })
+
   return { memoized, reference }
 }
 
@@ -133,6 +142,7 @@ describe('onPtyData tail wait memoization', () => {
       '',
       ''
     )
+
     expect(blocked.fromTail).toBe(true)
     expect(blocked.signal?.reason).toBe('agent-update-prompt')
   })
@@ -161,9 +171,11 @@ describe('onPtyData tail wait memoization', () => {
 
   it('stays equivalent across tail eviction beyond the retained cap', () => {
     const chunks: string[] = []
+
     for (let i = 0; i < 2600; i += 1) {
       chunks.push(`line ${i} of streaming build output that keeps the tail busy\n`)
     }
+
     // Introduce a real blocked prompt well past the eviction boundary.
     chunks.push('Update available! Press Enter to continue.\n')
     chunks.push('trailing log after prompt\n')
@@ -186,11 +198,13 @@ describe('onPtyData tail wait memoization', () => {
       sim.waitBlockedAt = null
       sim.tailWaitState = undefined
     }
+
     const memoSim = newSim()
     const refSim = newSim()
     const memoOut: (number | null)[] = []
     const refOut: (number | null)[] = []
     let at = 0
+
     const feed = (chunk: string): void => {
       at += 1
       stepMemoized(memoSim, chunk, at, computeTerminalTailWaitState)
@@ -198,6 +212,7 @@ describe('onPtyData tail wait memoization', () => {
       memoOut.push(memoSim.waitBlockedAt)
       refOut.push(refSim.waitBlockedAt)
     }
+
     // Pre-prune: leave a stale blocked prompt in the tail.
     ;['building\n', 'Update available! Press Enter to continue.\n', 'more log\n'].forEach(feed)
     prune(memoSim)
@@ -211,18 +226,24 @@ describe('onPtyData tail wait memoization', () => {
 
   it('does roughly half the wait-state computations of the recompute reference', () => {
     const chunks: string[] = []
+
     for (let i = 0; i < 500; i += 1) {
       chunks.push(`streaming line ${i}\n`)
     }
 
     let memoCalls = 0
+
     const countingMemo: Compute = (lines, partial, preview) => {
       memoCalls += 1
+
       return computeTerminalTailWaitState(lines, partial, preview)
     }
+
     let refCalls = 0
+
     const countingRef: Compute = (lines, partial, preview) => {
       refCalls += 1
+
       return computeTerminalTailWaitState(lines, partial, preview)
     }
 

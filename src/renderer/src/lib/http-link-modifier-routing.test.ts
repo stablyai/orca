@@ -60,6 +60,7 @@ describe('modifier routing across link source owners', () => {
   const setActiveWorktreeMock = vi.fn()
   const createBrowserTabMock = vi.fn()
   const openRuntimeBrowserTabMock = vi.fn(() => Promise.resolve())
+
   const storeState = {
     settings: {} as {
       openLinksInApp?: boolean

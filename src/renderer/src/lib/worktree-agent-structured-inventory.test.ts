@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readWorktreeStructuredActivationInventory } from './worktree-agent-structured-inventory'
 
 const worktree = 'repo::/workspace'
+
 afterEach(() => vi.unstubAllGlobals())
 
 function install(result: unknown, ok = true) {
@@ -9,9 +10,12 @@ function install(result: unknown, ok = true) {
     if (method === 'agentSession.handoffStatus') {
       return { ok: true, result: { owner: 'native' } }
     }
+
     return { ok, result }
   })
+
   vi.stubGlobal('window', { api: { runtime: { call } } })
+
   return call
 }
 
@@ -24,6 +28,7 @@ describe('structured activation inventory scope', () => {
         { type: 'agent-session', sessionId: 'agent' }
       ]
     })
+
     const result = await readWorktreeStructuredActivationInventory(worktree)
     expect(call.mock.calls[0][0]).toEqual({
       method: 'session.tabs.list',

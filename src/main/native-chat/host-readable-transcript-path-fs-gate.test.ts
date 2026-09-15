@@ -2,9 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
+
 const firstGuestPath = '/home/ada/.codex/sessions/first.jsonl'
+
 const secondGuestPath = '/home/ada/.codex/sessions/second.jsonl'
+
 const firstUncPath = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions\\first.jsonl'
+
 const secondUncPath = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions\\second.jsonl'
 
 const fsMocks = vi.hoisted(() => ({
@@ -105,10 +109,12 @@ describe('WSL transcript filesystem gate', () => {
     vi.useFakeTimers()
     const DEBIAN_HOME = '\\\\wsl.localhost\\Debian\\home\\ada'
     const debianUncPath = '\\\\wsl.localhost\\Debian\\home\\ada\\.codex\\sessions\\first.jsonl'
+
     try {
       fsMocks.access.mockImplementation((path) =>
         path === firstUncPath ? new Promise<void>(() => {}) : Promise.resolve()
       )
+
       const resolved = toHostReadableTranscriptPath(firstGuestPath, {
         platform: 'win32',
         listWslHomeDirs: async () => [UBUNTU_HOME, DEBIAN_HOME]

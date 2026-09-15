@@ -17,9 +17,11 @@ describe('browser host page reconciliation preconditions', () => {
       authority,
       new BrowserHostPagePlacementRegistry(authority)
     )
+
     const state = leaseState({ pageInventory: [oldPage('page-a')] })
     state.executionHostGrants.grant('native:runtime-new:1')
     const controller = new AbortController()
+
     const inFlight = orchestrator
       .adopt(state, [reclaimIntent('page-a', 8)], { signal: controller.signal })
       .catch(() => undefined)

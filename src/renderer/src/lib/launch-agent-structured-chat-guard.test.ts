@@ -3,17 +3,29 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateTab = vi.fn()
+
 const mockSetTabViewMode = vi.fn()
+
 const mockWaitForAgentReady = vi.fn()
+
 const mockPasteDraftWhenAgentReady = vi.fn()
+
 const mockMarkNativeChatLaunchPromptFailed = vi.fn()
+
 const mockCreateStructuredCodexSessionLaunchIntent = vi.fn()
+
 const mockAbandonStructuredAgentSessionLaunchIntent = vi.fn()
+
 const mockLaunchStructuredCodexSession = vi.fn()
+
 const mockRefreshLocalStructuredSessionTabs = vi.fn()
+
 const mockToastError = vi.fn()
+
 const mockCallStructuredAgentSession = vi.fn()
+
 const STRUCTURED_HOST_CAPABILITIES = ['agent-session.structured.v1']
+
 let hostCapabilities: readonly string[] | null = STRUCTURED_HOST_CAPABILITIES
 
 function structuredLaunchIntent(worktreeId: string, sessionId = 'codex-session-1') {
@@ -84,24 +96,32 @@ const store = {
 }
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
+
 vi.mock('sonner', () => ({ toast: { message: vi.fn(), error: mockToastError } }))
+
 vi.mock('@/components/tab-bar/reconcile-order', () => ({ reconcileTabOrder: vi.fn(() => []) }))
+
 vi.mock('@/lib/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
+
 vi.mock('@/lib/agent-ready-wait', () => ({ waitForAgentReady: mockWaitForAgentReady }))
+
 vi.mock('@/lib/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
 }))
+
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionTerminal: vi.fn(),
   createWebRuntimeAgentSessionTerminalWithLaunchDraft: vi.fn(),
   isWebRuntimeSessionActive: vi.fn(() => false),
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
+
 vi.mock('@/lib/launch-structured-agent-session', () => {
   class StructuredAgentSessionCreateRefusalError extends Error {}
+
   return {
     createStructuredAgentSessionLaunchIntent: mockCreateStructuredCodexSessionLaunchIntent,
     abandonStructuredAgentSessionLaunchIntent: mockAbandonStructuredAgentSessionLaunchIntent,
@@ -109,18 +129,22 @@ vi.mock('@/lib/launch-structured-agent-session', () => {
     StructuredAgentSessionCreateRefusalError
   }
 })
+
 vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
   refreshLocalStructuredSessionTabs: mockRefreshLocalStructuredSessionTabs,
   LOCAL_STRUCTURED_SESSION_OWNER: 'local-structured-session'
 }))
+
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => hostCapabilities
 }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () =>
     store.repos[0]?.connectionId ? `ssh:${store.repos[0].connectionId}` : 'local',
   getRuntimeEnvironmentIdForWorktree: () => null
 }))
+
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mockCallStructuredAgentSession
 }))
@@ -226,6 +250,7 @@ describe('structured chat adoption guard on the launch path', () => {
   it('fails a Claude launch closed to the terminal when the host declines create support', async () => {
     const { StructuredAgentSessionCreateRefusalError } =
       await import('./launch-structured-agent-session')
+
     mockLaunchStructuredCodexSession.mockRejectedValueOnce(
       new StructuredAgentSessionCreateRefusalError('structured_agent_session_unsupported')
     )
@@ -277,6 +302,7 @@ describe('structured chat adoption guard on the launch path', () => {
   it('falls back to the preserved terminal launch on a definitive refusal', async () => {
     const { StructuredAgentSessionCreateRefusalError } =
       await import('./launch-structured-agent-session')
+
     mockLaunchStructuredCodexSession.mockRejectedValueOnce(
       new StructuredAgentSessionCreateRefusalError('provider unavailable')
     )
@@ -302,6 +328,7 @@ describe('structured chat adoption guard on the launch path', () => {
   it('logs a fallback that throws and never re-enters the terminal launch', async () => {
     const { StructuredAgentSessionCreateRefusalError } =
       await import('./launch-structured-agent-session')
+
     mockLaunchStructuredCodexSession.mockRejectedValueOnce(
       new StructuredAgentSessionCreateRefusalError('provider unavailable')
     )
@@ -335,6 +362,7 @@ describe('structured chat adoption guard on the launch path', () => {
   it('reports prompt delivery from the definitive-refusal terminal fallback', async () => {
     const { StructuredAgentSessionCreateRefusalError } =
       await import('./launch-structured-agent-session')
+
     mockLaunchStructuredCodexSession.mockRejectedValueOnce(
       new StructuredAgentSessionCreateRefusalError('provider unavailable')
     )
@@ -422,6 +450,7 @@ describe('structured chat adoption guard on the launch path', () => {
         store.unifiedTabsByWorktree['wt-1'] = [
           { contentType: 'agent-session', entityId: firstIntent.sessionId, worktreeId: 'wt-1' }
         ]
+
         return Promise.resolve([
           { worktree: 'wt-1', tabs: [{ type: 'agent-session', sessionId: firstIntent.sessionId }] }
         ])

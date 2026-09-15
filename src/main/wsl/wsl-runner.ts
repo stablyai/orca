@@ -110,6 +110,7 @@ function assertNotShellString(program: string): void {
   if (/[;&|<>$`\n\r]/.test(program) || /^\S+\s+-/.test(program)) {
     throw new Error(`WSL program must be a single binary, received ${program}`)
   }
+
   // After `env PATH=… HOME=…`, a name=value program is a third assignment: env
   // prints the environment and exits 0.
   if (program.includes('=')) {
@@ -128,6 +129,7 @@ function assertNotShellString(program: string): void {
  */
 function buildHostEnv(env: WslSpec['env']): NodeJS.ProcessEnv {
   const merged: NodeJS.ProcessEnv = { ...process.env, ...env, WSL_UTF8: '1' }
+
   // Never name a path-shaped variable in WSLENV. wsl.exe translates those
   // between Windows and Linux form, so forwarding PATH replaces the guest's
   // own PATH with a translated Windows one -- silently, and this runner exists
@@ -135,9 +137,11 @@ function buildHostEnv(env: WslSpec['env']): NodeJS.ProcessEnv {
   const crossable = Object.keys(env ?? {}).filter(
     (key) => !['PATH', 'HOME', 'TMP', 'TEMP'].includes(key)
   )
+
   if (crossable.length > 0) {
     addWslEnvKeys(merged, crossable)
   }
+
   return merged
 }
 
@@ -152,12 +156,15 @@ function withGuestCwd(cwd: string | undefined, argv: readonly string[]): string[
   if (!cwd) {
     return [...argv]
   }
+
   assertGuestPath(cwd)
+
   // Why: `exec` with no operands is a no-op, so the wrapper would cd and exit 0
   // having run nothing -- the one shape that turns it into a silent success.
   if (argv.length === 0) {
     throw new Error('WSL invocation has no command to run')
   }
+
   return ['sh', '-c', 'cd "$1" || exit 1; shift; exec "$@"', 'orca-wsl', cwd, ...argv]
 }
 
@@ -166,7 +173,9 @@ function guestCommandArgv(spec: WslSpec, delivery: 'argv' | 'stdin'): string[] {
   if (spec.script === undefined) {
     return [spec.program, ...(spec.args ?? [])]
   }
+
   const shell = spec.shell ?? 'sh'
+
   // `--` keeps positional args starting at $1 under both forms.
   return delivery === 'stdin'
     ? [shell, '-s', '--', ...(spec.args ?? [])]
@@ -180,9 +189,11 @@ function buildGuestArgv(
   delivery: 'argv' | 'stdin'
 ): string[] {
   const command = guestCommandArgv(spec, delivery)
+
   const argv = environment
     ? [environment.envBinary, `PATH=${environment.path}`, `HOME=${environment.home}`, ...command]
     : command
+
   return withGuestCwd(spec.cwd, argv)
 }
 
@@ -198,9 +209,11 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   if (spec.program !== undefined) {
     assertNotShellString(spec.program)
   }
+
   if (spec.cwd) {
     assertGuestPath(spec.cwd)
   }
+
   const deadline = Date.now() + (spec.timeoutMs ?? DEFAULT_WSL_TIMEOUT_MS)
 
   const wantsEnvironment = spec.loginPath === 'preferred'
@@ -209,6 +222,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   // the runner existed, which is how a cold distro read as "not installed".
   const remainingForProbe = deadline - Date.now()
   const probeBudgetMs = Math.max(1, Math.min(4_000, Math.floor(remainingForProbe / 2)))
+
   const environment = wantsEnvironment
     ? await getWslGuestEnvironment(spec.distro, probeBudgetMs)
     : null
@@ -225,6 +239,7 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   // Measure what is actually spawned: `wsl.exe` and `-d <distro> --exec` are
   // prepended after this point and are part of the same budget.
   const fullLine = [resolveWslExecutablePath(), ...buildWslExecArgs(spec.distro, argvForm)]
+
   // Argv is the default, but it has a hard ceiling that stdin does not. A user's
   // `orca.yaml` hook is the one unbounded script Orca runs, so past the cap the
   // choice is between failing to spawn at all and accepting the stdin caveat.
@@ -232,11 +247,13 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
     spec.script !== undefined && commandLineLength(fullLine) > MAX_COMMAND_LINE_CHARS
       ? 'stdin'
       : 'argv'
+
   const argv = delivery === 'argv' ? argvForm : buildGuestArgv(environment, spec, 'stdin')
 
   // One budget for the whole call: the probe used to run on its own 10s timer
   // ahead of the timed leg, so a 5s caller could wait 15s.
   const remainingMs = Math.max(1, deadline - Date.now())
+
   const result = await runProcess({
     program: resolveWslExecutablePath(),
     args: buildWslExecArgs(spec.distro, argv),

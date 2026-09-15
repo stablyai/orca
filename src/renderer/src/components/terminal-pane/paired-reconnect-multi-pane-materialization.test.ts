@@ -26,6 +26,7 @@ type SubscriptionCallbacks = {
 }
 
 const PANE_COUNT = 6
+
 const HOST_TAB_IDS = Array.from({ length: PANE_COUNT }, (_, index) => `host-tab-${index + 1}`)
 
 describe('paired client sleep/wake with several remote terminal tabs', () => {
@@ -43,13 +44,16 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
         if (frame?.opcode !== TerminalStreamOpcode.Subscribe) {
           return []
         }
+
         const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
+
         return payload ? [payload.terminal] : []
       })
   }
 
   function surfaceFor(hostTabId: string): Record<string, unknown> {
     const handle = hostHandleByTabId.get(hostTabId) ?? null
+
     return {
       type: 'terminal',
       id: `${hostTabId}::pane:1`,
@@ -92,21 +96,26 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
     runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
       if (request.method === 'session.tabs.activate') {
         const params = request.params as { tabId: string }
+
         // Why: activation is the only call that mints a PTY for a parked surface.
         if (!hostHandleByTabId.get(params.tabId)) {
           hostHandleByTabId.set(params.tabId, `${params.tabId}-respawned`)
         }
+
         return inventory()
       }
+
       if (request.method === 'session.tabs.list') {
         return inventory()
       }
+
       return { ok: true, result: {} }
     })
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: SubscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
         queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
@@ -119,21 +128,26 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
     { hostTabId: string; transport: { getPtyId: () => string | null; destroy?: () => void } }[]
   > {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const panes = HOST_TAB_IDS.map((hostTabId) => {
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: `web-terminal-${hostTabId}`,
         leafId: 'pane:1'
       })
+
       transport.attach({
         existingPtyId: `remote:env-1@@${hostHandleByTabId.get(hostTabId)}`,
         cols: 80,
         rows: 24,
         callbacks: {}
       })
+
       return { hostTabId, transport }
     })
+
     await vi.waitFor(() => expect(subscribedHandles()).toHaveLength(PANE_COUNT))
+
     return panes
   }
 
@@ -151,6 +165,7 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
     expect(new Set(afterReconnect).size, `resubscribes: ${JSON.stringify(afterReconnect)}`).toBe(
       PANE_COUNT
     )
+
     for (const pane of panes) {
       expect(pane.transport.getPtyId(), `pane ${pane.hostTabId} lost its handle`).not.toBeNull()
       pane.transport.destroy?.()
@@ -174,6 +189,7 @@ describe('paired client sleep/wake with several remote terminal tabs', () => {
     const afterReconnect = subscribedHandles().slice(before)
     const evidence = `resubscribes: ${JSON.stringify(afterReconnect)}`
     expect(afterReconnect, evidence).toContain(`${parked}-respawned`)
+
     for (const pane of panes) {
       expect(pane.transport.getPtyId(), `pane ${pane.hostTabId} lost its handle`).not.toBeNull()
       pane.transport.destroy?.()

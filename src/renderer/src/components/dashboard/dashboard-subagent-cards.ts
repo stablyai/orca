@@ -9,14 +9,18 @@ export function groupSubagentsByParentPaneKey(
   rows: readonly DashboardAgentRow[]
 ): Map<string, DashboardCardSubagent[]> {
   const byParentPaneKey = new Map<string, DashboardCardSubagent[]>()
+
   for (const row of rows) {
     if (row.rowSource !== 'subagent') {
       continue
     }
+
     const parentPaneKey = row.entry.orchestration?.parentPaneKey
+
     if (!parentPaneKey) {
       continue
     }
+
     const subagent: DashboardCardSubagent = {
       id: row.paneKey,
       name:
@@ -25,12 +29,15 @@ export function groupSubagentsByParentPaneKey(
         row.agentType,
       dotState: dashboardCardDotState(row.state)
     }
+
     const existing = byParentPaneKey.get(parentPaneKey)
+
     if (existing) {
       existing.push(subagent)
     } else {
       byParentPaneKey.set(parentPaneKey, [subagent])
     }
   }
+
   return byParentPaneKey
 }

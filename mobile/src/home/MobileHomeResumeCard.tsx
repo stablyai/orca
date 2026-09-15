@@ -7,9 +7,11 @@ const REPO_COLORS = ['#8b5cf6', '#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#ec
 
 function homeResumeRepoColor(name: string): string {
   let hash = 0
+
   for (let index = 0; index < name.length; index += 1) {
     hash = (hash * 31 + name.charCodeAt(index)) | 0
   }
+
   return REPO_COLORS[Math.abs(hash) % REPO_COLORS.length]
 }
 

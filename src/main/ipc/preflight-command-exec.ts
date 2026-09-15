@@ -8,7 +8,9 @@ import { runPreflightCommandInWsl } from './preflight-wsl-command'
 import type { WslPreflightTarget } from './preflight-wsl-agent-detection'
 
 const execFileAsync = promisify(execFile)
+
 export const PREFLIGHT_COMMAND_TIMEOUT_MS = 5000
+
 const WSL_COMMAND_PATH_SENTINEL = '__ORCA_PREFLIGHT_COMMAND_PATH__'
 
 export type PreflightCommandResult = { stdout: string; stderr: string }
@@ -19,6 +21,7 @@ export function shellQuote(value: string): string {
 
 async function withPreflightTimeout<T>(command: string, commandPromise: Promise<T>): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | null = null
+
   try {
     return await Promise.race([
       commandPromise,
@@ -27,8 +30,10 @@ async function withPreflightTimeout<T>(command: string, commandPromise: Promise<
           const error = Object.assign(new Error(`Timed out running ${command}`), {
             code: 'ETIMEDOUT'
           })
+
           reject(error)
         }, PREFLIGHT_COMMAND_TIMEOUT_MS)
+
         if (typeof timeout.unref === 'function') {
           timeout.unref()
         }
@@ -50,6 +55,7 @@ export async function execLocalPreflightCommandOrThrow(
   args: string[]
 ): Promise<PreflightCommandResult> {
   const env = buildLocalPreflightEnv()
+
   const commandPromise = execFileAsync(command, args, {
     encoding: 'utf-8',
     timeout: PREFLIGHT_COMMAND_TIMEOUT_MS,
@@ -70,6 +76,7 @@ export async function execCommandInWslOrThrow(
   command: string
 ): Promise<PreflightCommandResult> {
   const commandPromise = runPreflightCommandInWsl(target, command, PREFLIGHT_COMMAND_TIMEOUT_MS)
+
   // Label only (runPreflightCommandInWsl owns the actual wsl.exe invocation) —
   // not the literal 'wsl.exe' so the wsl-invocation-boundary guard doesn't
   // mistake this string for a spawn site.
@@ -84,6 +91,7 @@ export async function isCommandAvailable(
     await (wslTarget
       ? execCommandInWslOrThrow(wslTarget, `${shellQuote(command)} --version`)
       : execLocalPreflightCommandOrThrow(command, ['--version']))
+
     return true
   } catch {
     return false
@@ -102,6 +110,7 @@ export async function isCommandOnPath(
     // process.env), so the found/not-found result is identical.
     return isCommandOnLocalPath(command, { env: buildLocalPreflightEnv() })
   }
+
   try {
     // Why: preflight must validate the executable on PATH, not a shell alias or function.
     const { stdout } = await execCommandInWslOrThrow(
@@ -119,6 +128,7 @@ export async function isCommandOnPath(
         'fi'
       ].join('\n')
     )
+
     // Why: WSL startup chatter can contain unrelated absolute paths.
     return stdout
       .split(/\r?\n/)

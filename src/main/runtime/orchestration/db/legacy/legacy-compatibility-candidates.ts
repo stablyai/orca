@@ -20,6 +20,7 @@ export function resolveLegacyCompatibilityPrincipalByIdentity(
   if (!params.terminalHandle && !params.paneKey) {
     return undefined
   }
+
   const rows = (
     this.db
       .prepare(
@@ -33,12 +34,14 @@ export function resolveLegacyCompatibilityPrincipalByIdentity(
       ? isEquivalentPaneKey(principal.pane_key, params.paneKey)
       : principal.terminal_handle === params.terminalHandle
   )
+
   if (rows.length > 1) {
     throw new OrchestrationError(
       'operation_unknown',
       'Multiple legacy principals match this process identity.'
     )
   }
+
   return rows[0]
 }
 
@@ -55,6 +58,7 @@ export function resolveLegacyWorkerCandidate(
   if (!params.runId || (!params.terminalHandle && !params.paneKey)) {
     return undefined
   }
+
   const rows = (
     params.dispatchId
       ? [this.getDispatchContextById(params.dispatchId)].filter(
@@ -80,14 +84,17 @@ export function resolveLegacyWorkerCandidate(
           )
         : dispatch.assignee_handle === params.terminalHandle)
   )
+
   if (rows.length > 1) {
     throw new OrchestrationError(
       'operation_unknown',
       'Multiple active legacy Dispatches match this process identity.'
     )
   }
+
   if (params.dispatchId && rows.length === 0) {
     const target = this.getDispatchContextById(params.dispatchId)
+
     if (target?.contract_version === LEGACY_CONTRACT_VERSION) {
       throw new OrchestrationError(
         'legacy_read_only',
@@ -95,6 +102,7 @@ export function resolveLegacyWorkerCandidate(
       )
     }
   }
+
   return rows[0] ? { dispatch: rows[0] } : undefined
 }
 
@@ -109,8 +117,10 @@ export function resolveLegacyCoordinatorCandidate(
   if (!params.terminalHandle || !params.paneKey) {
     return undefined
   }
+
   const run = this.getRunRaw(params.runId)
   const principal = this.getLegacyCoordinatorPrincipal(params.runId)
+
   if (principal) {
     if (
       principal.status !== 'committed' ||
@@ -122,8 +132,10 @@ export function resolveLegacyCoordinatorCandidate(
     ) {
       return undefined
     }
+
     return { terminalHandle: params.terminalHandle, paneKey: params.paneKey }
   }
+
   // Why: the first current binding durably fences uncommitted legacy processes.
   if (
     !run ||
@@ -132,6 +144,7 @@ export function resolveLegacyCoordinatorCandidate(
   ) {
     return undefined
   }
+
   return { terminalHandle: params.terminalHandle, paneKey: params.paneKey }
 }
 
@@ -142,9 +155,11 @@ export function isLegacyCoordinatorHandle(
   terminalHandle: string
 ): boolean {
   const principal = this.getLegacyCoordinatorPrincipal(runId)
+
   if (principal) {
     return principal.terminal_handle === terminalHandle
   }
+
   return this.getUniqueLegacyCoordinatorHandle(runId) === terminalHandle
 }
 
@@ -158,9 +173,11 @@ export function isLegacyCoordinatorDeliveryTarget(
   if (this.isLegacyCoordinatorHandle(runId, terminalHandle)) {
     return true
   }
+
   if (this.getRunRaw(runId)?.coordinator_handle !== terminalHandle) {
     return false
   }
+
   // Why: must match resolveLegacyWorkerCoordinatorDelivery's takeover test. A still-committed
   // principal routes legacy_direct to this handle, and no reader can see that mailbox.
   return this.getLegacyCoordinatorPrincipal(runId)?.status !== 'committed'

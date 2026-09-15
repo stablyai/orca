@@ -40,16 +40,21 @@ export default function EditHostScreen() {
   const load = useCallback(async () => {
     if (!hostId) {
       setLoadError('Missing host.')
+
       return
     }
+
     try {
       const hosts = await loadHosts()
       const found = hosts.find((h) => h.id === hostId) ?? null
+
       if (!found) {
         setLoadError('This host was removed from this phone.')
         setHost(null)
+
         return
       }
+
       setHost(found)
       setName(found.name)
       setAddress(displayHostEndpoint(found.endpoint))
@@ -72,6 +77,7 @@ export default function EditHostScreen() {
   const nameTrimmed = name.trim()
   const nameChanged = host != null && nameTrimmed.length > 0 && nameTrimmed !== host.name
   const endpointChanged = endpointEdit?.kind === 'changed'
+
   const canSave =
     host != null &&
     endpointEdit != null &&
@@ -84,26 +90,34 @@ export default function EditHostScreen() {
     if (!host || !hostId || !endpointEdit || savingRef.current) {
       return
     }
+
     const nextName = name.trim()
+
     if (!nextName) {
       setSaveError('Enter a name.')
+
       return
     }
+
     if (endpointEdit.kind === 'invalid') {
       setSaveError(endpointEdit.error)
+
       return
     }
 
     const willRename = nextName !== host.name
     const nextEndpoint = endpointEdit.kind === 'changed' ? endpointEdit.endpoint : undefined
+
     if (!willRename && nextEndpoint === undefined) {
       router.back()
+
       return
     }
 
     savingRef.current = true
     setSaving(true)
     setSaveError(null)
+
     try {
       // Why: a single mutateStoredHosts pass so name + endpoint commit
       // atomically — a mid-save failure can never persist one without the
@@ -116,6 +130,7 @@ export default function EditHostScreen() {
       setSaveError(err instanceof Error ? err.message : 'Failed to save host.')
       savingRef.current = false
       setSaving(false)
+
       return
     }
 

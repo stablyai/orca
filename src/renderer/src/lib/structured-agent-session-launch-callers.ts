@@ -51,6 +51,7 @@ export type StructuredLaunchCallerGroup = {
 
 export function createStructuredLaunchCallerGroup(): StructuredLaunchCallerGroup {
   const refusalSettlement = Promise.withResolvers<boolean>()
+
   return {
     outcome: 'pending',
     entries: new Set(),
@@ -70,6 +71,7 @@ function settleCallerWithoutFallback(caller: StructuredLaunchCaller): void {
   if (caller.refusalFallback.settled) {
     return
   }
+
   caller.refusalFallback.settled = true
   caller.refusalFallback.resolve(false)
   caller.refusalFallback.resolvePromptDelivery(null)
@@ -83,12 +85,15 @@ function finalizeRefusalSettlement(group: StructuredLaunchCallerGroup): void {
   ) {
     return
   }
+
   group.refusalSettlement.settled = true
+
   if (group.refusalSettlement.failure) {
     group.refusalSettlement.reject(group.refusalSettlement.failure.error)
   } else {
     group.refusalSettlement.resolve([...group.entries].some((caller) => caller.refusalFallback.ran))
   }
+
   group.onSettled()
 }
 
@@ -99,13 +104,17 @@ function runCallerRefusalFallback(
   if (caller.refusalFallback.started || caller.refusalFallback.settled) {
     return
   }
+
   caller.refusalFallback.started = true
   const fallback = caller.refusalFallback.callback
+
   if (!fallback) {
     settleCallerWithoutFallback(caller)
     finalizeRefusalSettlement(group)
+
     return
   }
+
   void Promise.resolve()
     .then(fallback)
     .then(
@@ -131,10 +140,12 @@ function trackPromptDelivery(
   promptDeliveryResult: Promise<StructuredPromptDeliveryResult>
 ): void {
   group.promptDeliveryResults.add(promptDeliveryResult)
+
   const settled = (): void => {
     group.promptDeliveryResults.delete(promptDeliveryResult)
     group.onSettled()
   }
+
   void promptDeliveryResult.then(settled, settled)
 }
 
@@ -146,6 +157,7 @@ export function addStructuredLaunchCaller(args: {
 }): StructuredLaunchCaller {
   const fallback = Promise.withResolvers<boolean>()
   const fallbackPromptDelivery = Promise.withResolvers<StructuredPromptDeliveryResult | null>()
+
   const caller: StructuredLaunchCaller = {
     refusalFallback: {
       callback: null,
@@ -159,12 +171,15 @@ export function addStructuredLaunchCaller(args: {
       ran: false
     }
   }
+
   args.group.entries.add(caller)
+
   const promptDeliveryResult = settleStructuredAgentLaunchPrompt({
     launchResult: args.launchResult,
     options: args.options,
     stagedEntry: args.stagedEntry
   })
+
   caller.promptDeliveryResult = promptDeliveryResult?.catch(async (error) => {
     if (error instanceof StructuredAgentSessionCreateRefusalError) {
       return (
@@ -174,16 +189,20 @@ export function addStructuredLaunchCaller(args: {
         }
       )
     }
+
     return { delivered: false, failureNotified: true }
   })
+
   if (caller.promptDeliveryResult) {
     trackPromptDelivery(args.group, caller.promptDeliveryResult)
   }
+
   if (['published', 'failed', 'cancelled'].includes(args.group.outcome)) {
     settleCallerWithoutFallback(caller)
   } else if (args.group.outcome === 'refused') {
     queueMicrotask(() => runCallerRefusalFallback(args.group, caller))
   }
+
   return caller
 }
 
@@ -192,13 +211,16 @@ export function settleStructuredLaunchCallersWithoutFallback(
   outcome: 'published' | 'failed' | 'cancelled'
 ): void {
   group.outcome = outcome
+
   for (const caller of group.entries) {
     settleCallerWithoutFallback(caller)
   }
+
   if (!group.refusalSettlement.settled) {
     group.refusalSettlement.settled = true
     group.refusalSettlement.resolve(false)
   }
+
   group.onSettled()
 }
 
@@ -208,10 +230,13 @@ export function settleStructuredLaunchCallersWithFallback(
   if (group.outcome === 'refused') {
     return
   }
+
   group.outcome = 'refused'
+
   for (const caller of group.entries) {
     runCallerRefusalFallback(group, caller)
   }
+
   finalizeRefusalSettlement(group)
 }
 
@@ -221,9 +246,11 @@ export function claimStructuredLaunchCallerFallback(
   fallback: StructuredRefusalFallback
 ): Promise<boolean> {
   caller.refusalFallback.callback ??= fallback
+
   if (group.outcome === 'refused') {
     runCallerRefusalFallback(group, caller)
   }
+
   return caller.refusalFallback.promise
 }
 
@@ -234,8 +261,10 @@ export function releaseStructuredLaunchCallerAfterUnknownOutcome(
   if (group.outcome !== 'unknown' || !group.entries.delete(caller)) {
     return false
   }
+
   settleCallerWithoutFallback(caller)
   group.onSettled()
+
   return true
 }
 

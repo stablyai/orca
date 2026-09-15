@@ -17,6 +17,7 @@ const {
   getEnterpriseGitHubRepoSlugMock: vi.fn(),
   extractExecErrorMock: vi.fn((error: unknown) => {
     const value = error as { stderr?: string; stdout?: string; message?: string }
+
     return {
       stderr: value?.stderr ?? value?.message ?? '',
       stdout: value?.stdout ?? ''
@@ -375,6 +376,7 @@ describe('createGitHubPullRequest', () => {
     'reads PR templates from the SSH filesystem provider at %s',
     async (relativeTemplatePath, expectedRelativeLookups) => {
       const templateBody = `Remote template body from ${relativeTemplatePath}`
+
       const readRemoteFile = vi.fn(async (path: string) => {
         if (path === `/remote/repo-root/${relativeTemplatePath}`) {
           return {
@@ -382,14 +384,17 @@ describe('createGitHubPullRequest', () => {
             isBinary: false
           }
         }
+
         throw new Error('missing template')
       })
+
       getSshFilesystemProviderMock.mockReturnValue({ readFile: readRemoteFile })
       getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
       const writtenBodies: string[] = []
       ghExecFileAsyncMock.mockImplementationOnce(async (args: string[]) => {
         const bodyPath = args[args.indexOf('--body-file') + 1]
         writtenBodies.push(await readFile(bodyPath, 'utf8'))
+
         return {
           stdout: JSON.stringify({
             number: 46,

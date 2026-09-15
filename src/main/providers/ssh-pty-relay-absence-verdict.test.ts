@@ -13,11 +13,13 @@ function providerRejectingAttachWith(error: unknown): SshPtyProvider {
     notify: vi.fn(),
     onNotification: vi.fn().mockReturnValue(vi.fn())
   }
+
   return new SshPtyProvider('conn-1', mux as never)
 }
 
 async function reattachRejection(error: unknown): Promise<unknown> {
   const provider = providerRejectingAttachWith(error)
+
   return await provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-1' }).then(
     () => undefined,
     (rejection: unknown) => rejection
@@ -66,6 +68,7 @@ describe('SSH PTY relay absence verdict', () => {
       notify: vi.fn(),
       onNotification: vi.fn().mockReturnValue(vi.fn())
     }
+
     const provider = new SshPtyProvider('conn-1', mux as never)
 
     const rejection = await provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-1' }).then(

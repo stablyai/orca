@@ -94,13 +94,18 @@ export function CommentRow({
     async (event: React.MouseEvent): Promise<void> => {
       event.stopPropagation()
       const trimmedDraft = draft.trim()
+
       if (!onEditComment || !trimmedDraft || trimmedDraft === comment.body) {
         setEditing(false)
+
         return
       }
+
       setSubmittingEdit(true)
+
       try {
         const ok = await onEditComment(comment, trimmedDraft)
+
         if (ok) {
           setEditing(false)
         }
@@ -134,6 +139,7 @@ export function CommentRow({
       {comment.author}
     </span>
   )
+
   const queueButton =
     !isReply && onQueueForAgent ? <QueueForAgentButton onQueueForAgent={onQueueForAgent} /> : null
 

@@ -5,6 +5,7 @@ import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup
 type OpenFile = AppState['openFiles'][number]
 
 const REMOVED = 'repo-1::/repos/one/removed'
+
 const KEPT = 'repo-1::/repos/one/kept'
 
 function fileFor(worktreeId: string, id: string): OpenFile {
@@ -33,6 +34,7 @@ function removeWorktree(state: AppState): AppState {
     REMOVED,
     new Set<string>()
   )
+
   return current
 }
 

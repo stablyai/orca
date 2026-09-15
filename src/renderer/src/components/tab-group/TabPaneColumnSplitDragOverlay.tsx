@@ -47,6 +47,7 @@ export default function TabPaneColumnSplitDragOverlay({
   zone: Exclude<TabDropZone, 'center'>
 }): React.JSX.Element | null {
   const bounds = getOverlayBounds(panelRect, zone)
+
   return createPortal(
     <div aria-hidden="true" className="pointer-events-none fixed z-[10001]" style={bounds}>
       <TabGroupDropOverlay zone={zone} showPaneColumnLabel fillContainer />

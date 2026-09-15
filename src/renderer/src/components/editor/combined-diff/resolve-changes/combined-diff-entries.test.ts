@@ -57,6 +57,7 @@ describe('resolveCombinedUncommittedSnapshotEntries', () => {
     const snapshotEntries: GitStatusEntry[] = [
       { path: 'src/file.ts', status: 'modified', area: 'unstaged', added: 2, removed: 1 }
     ]
+
     const liveEntries: GitStatusEntry[] = [
       { path: 'src/file.ts', status: 'modified', area: 'staged', added: 2, removed: 1 }
     ]
@@ -70,6 +71,7 @@ describe('resolveCombinedUncommittedSnapshotEntries', () => {
     const snapshotEntries: GitStatusEntry[] = [
       { path: 'src/file.ts', status: 'modified', area: 'staged' }
     ]
+
     const liveEntries: GitStatusEntry[] = [
       { path: 'src/file.ts', status: 'modified', area: 'unstaged' }
     ]
@@ -83,6 +85,7 @@ describe('resolveCombinedUncommittedSnapshotEntries', () => {
     const snapshotEntries: GitStatusEntry[] = [
       { path: 'src/file.ts', status: 'modified', area: 'unstaged', added: 2 }
     ]
+
     const liveEntries: GitStatusEntry[] = [
       { path: 'src/file.ts', status: 'modified', area: 'staged' },
       { path: 'src/file.ts', status: 'modified', area: 'unstaged', added: 9 }
@@ -97,6 +100,7 @@ describe('resolveCombinedUncommittedSnapshotEntries', () => {
     const snapshotEntries: GitStatusEntry[] = [
       { path: 'src/file.ts', status: 'modified', area: 'unstaged' }
     ]
+
     const retained: GitStatusEntry[] = [{ path: 'src/file.ts', status: 'modified', area: 'staged' }]
 
     expect(resolveCombinedUncommittedSnapshotEntries(snapshotEntries, [], retained)).toEqual([
@@ -108,6 +112,7 @@ describe('resolveCombinedUncommittedSnapshotEntries', () => {
     const snapshotEntries: GitStatusEntry[] = [
       { path: 'src/new.ts', status: 'modified', area: 'unstaged', oldPath: 'src/old-copy.ts' }
     ]
+
     const liveEntries: GitStatusEntry[] = [
       {
         path: 'src/new.ts',
@@ -136,6 +141,7 @@ describe('resolveCombinedUncommittedSnapshotEntries', () => {
       { path: 'src/file.ts', status: 'modified', area: 'staged', added: 4 },
       { path: 'src/file.ts', status: 'modified', area: 'unstaged', added: 2 }
     ]
+
     const retained: GitStatusEntry[] = [
       { path: 'src/file.ts', status: 'modified', area: 'staged' },
       { path: 'src/file.ts', status: 'modified', area: 'unstaged' }
@@ -151,6 +157,7 @@ describe('resolveCombinedUncommittedSnapshotEntries', () => {
       { path: 'src/file.ts', status: 'modified', area: 'staged', added: 4 },
       { path: 'src/file.ts', status: 'modified', area: 'unstaged', added: 2 }
     ]
+
     const retained: GitStatusEntry[] = [{ path: 'src/file.ts', status: 'modified', area: 'staged' }]
 
     expect(resolveCombinedUncommittedSnapshotEntries(snapshotEntries, [], retained)).toEqual([
@@ -163,6 +170,7 @@ describe('resolveCombinedUncommittedSnapshotEntries', () => {
       { path: 'src/file.ts', status: 'modified', area: 'unstaged', added: 2 },
       { path: 'src/file.ts', status: 'modified', area: 'staged', added: 4 }
     ]
+
     const retained: GitStatusEntry[] = [{ path: 'src/file.ts', status: 'modified', area: 'staged' }]
 
     expect(resolveCombinedUncommittedSnapshotEntries(snapshotEntries, [], retained)).toEqual([
@@ -175,6 +183,7 @@ describe('resolveCombinedUncommittedSnapshotEntries', () => {
       { path: 'src/file.ts', status: 'modified', area: 'unstaged', added: 2 },
       { path: 'src/file.ts', status: 'modified', area: 'staged', added: 4 }
     ]
+
     const liveEntries: GitStatusEntry[] = [
       { path: 'src/file.ts', status: 'modified', area: 'staged', added: 6 }
     ]
@@ -189,6 +198,7 @@ describe('resolveCombinedUncommittedSnapshotEntries', () => {
       { path: 'src/file.ts', status: 'modified', area: 'staged', added: 4 },
       { path: 'src/file.ts', status: 'modified', area: 'unstaged', added: 2 }
     ]
+
     const liveEntries: GitStatusEntry[] = [
       { path: 'src/file.ts', status: 'modified', area: 'staged', added: 6 }
     ]

@@ -50,9 +50,11 @@ function sameEnv(
 ): boolean {
   const leftEntries = Object.entries(left ?? {})
   const rightEntries = Object.entries(right ?? {})
+
   if (leftEntries.length !== rightEntries.length) {
     return false
   }
+
   return leftEntries.every(([name, value]) => right?.[name] === value)
 }
 
@@ -60,6 +62,7 @@ function resolveAgentPermissionMode(args: string, yoloArgs: string): AgentPermis
   if (!args) {
     return 'manual'
   }
+
   return args === yoloArgs ? 'yolo' : 'mixed'
 }
 
@@ -70,6 +73,7 @@ function resolveAgentEnvPermissionMode(
   if (sameEnv(env, {})) {
     return 'manual'
   }
+
   return sameEnv(env, yoloEnv) ? 'yolo' : 'mixed'
 }
 
@@ -91,6 +95,7 @@ function combinePermissionModes(modes: AgentPermissionMode[]): AgentPermissionMo
   if (sawMixed || (sawYolo && sawManual)) {
     return 'mixed'
   }
+
   return sawYolo ? 'yolo' : 'manual'
 }
 
@@ -100,6 +105,7 @@ export function resolveTuiAgentPermissionMode(args: {
   agentEnv?: Record<string, string> | null
 }): AgentPermissionMode {
   const modes: AgentPermissionMode[] = []
+
   if (args.agent in YOLO_TUI_AGENT_ARGS) {
     modes.push(
       resolveAgentPermissionMode(
@@ -108,6 +114,7 @@ export function resolveTuiAgentPermissionMode(args: {
       )
     )
   }
+
   if (args.agent in YOLO_TUI_AGENT_ENV) {
     modes.push(resolveAgentEnvPermissionMode(args.agentEnv, YOLO_TUI_AGENT_ENV[args.agent]))
   }
@@ -149,6 +156,7 @@ export function applyAgentPermissionMode(args: {
     if (agent in YOLO_TUI_AGENT_ARGS) {
       const yoloArgs = YOLO_TUI_AGENT_ARGS[agent] ?? ''
       const currentArgs = normalizeArgs(nextArgs[agent])
+
       if (!currentArgs || currentArgs === yoloArgs) {
         nextArgs[agent] = args.mode === 'yolo' ? yoloArgs : ''
       }
@@ -157,6 +165,7 @@ export function applyAgentPermissionMode(args: {
     if (agent in YOLO_TUI_AGENT_ENV) {
       const yoloEnv = YOLO_TUI_AGENT_ENV[agent]
       const currentEnv = nextEnv[agent]
+
       if (sameEnv(currentEnv, {}) || sameEnv(currentEnv, yoloEnv)) {
         nextEnv[agent] = args.mode === 'yolo' ? { ...yoloEnv } : {}
       }

@@ -42,6 +42,7 @@ export type ShellScriptTestOptions = {
 
 function detectShellFromCommand(command: string, fallback: string): string {
   const shellMatch = command.match(/(?:^|\s)((?:\/[\w/-]+\/)?(?:zsh|bash|sh))\s/)
+
   return shellMatch ? shellMatch[1] : fallback
 }
 
@@ -60,6 +61,7 @@ export async function shellScriptTest(
     const runScript = hasRunMarker ? parts[1].trim() : script.trim()
 
     const wrapperShell = detectShellFromCommand(runScript, options.shell || '/bin/zsh')
+
     const config = getShellLaunchConfig(
       wrapperShell,
       selectShellStartupFeatures({
@@ -96,6 +98,7 @@ export async function shellScriptTest(
       const setupPath = join(testHome, '.setup.sh')
       writeFileSync(setupPath, setupScript, 'utf8')
       const setupResult = spawnSync('/bin/bash', [setupPath], spawnOptions)
+
       if (setupResult.status !== 0) {
         throw new Error(
           `Setup script failed with exit code ${setupResult.status}\nstderr: ${setupResult.stderr}`
@@ -122,6 +125,7 @@ export async function shellScriptTest(
     }
   } finally {
     rmSync(testHome, { recursive: true, force: true })
+
     if (cleanupUserDataPath) {
       rmSync(userDataPath, { recursive: true, force: true })
     }
@@ -130,6 +134,7 @@ export async function shellScriptTest(
 
 const TEMP_PATH_PATTERN =
   /\/(?:var\/folders|tmp)\/[^\s]+?\/(?:shell-test|orca|shell-ready)-[a-z]+-[a-z0-9-]+/g
+
 const PID_PATTERN = /\bpid:\s*\d+/gi
 
 function normalizeOutput(
@@ -168,6 +173,7 @@ function normalizeOutput(
     }))
 
   let normalized = output
+
   for (const { pattern, placeholder } of replacements) {
     normalized = normalized.replace(pattern, placeholder)
   }

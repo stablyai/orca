@@ -9,6 +9,7 @@ export class TerminalHistoryMutationTracker {
       () => this.finish(sessionId, operation),
       () => this.finish(sessionId, operation)
     )
+
     return operation
   }
 
@@ -21,6 +22,7 @@ export class TerminalHistoryMutationTracker {
   private finish(sessionId: string, operation: Promise<unknown>): void {
     const mutations = this.pending.get(sessionId)
     mutations?.delete(operation)
+
     if (mutations?.size === 0) {
       this.pending.delete(sessionId)
     }

@@ -26,9 +26,11 @@ type Deferred<T> = {
 
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
@@ -40,6 +42,7 @@ function createMockShellProcess(): ChildProcessWithoutNullStreams {
     stdin: new EventEmitter(),
     kill: vi.fn()
   })
+
   return proc
 }
 
@@ -54,6 +57,7 @@ describe('Windows shell PATH hydration', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+
     if (originalPath === undefined) {
       delete process.env.PATH
     } else {
@@ -151,10 +155,12 @@ describe('Windows shell PATH hydration', () => {
   it('converts a Git Bash PATH to Windows segments before parsing it', async () => {
     const proc = createMockShellProcess()
     spawnMock.mockReturnValue(proc)
+
     const resultPromise = hydrateShellPath({
       shellOverride: 'C:\\Program Files\\Git\\bin\\bash.exe',
       force: true
     })
+
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
 
     proc.stdout.emit(
@@ -196,20 +202,25 @@ describe('Windows shell PATH hydration', () => {
     const gitBashResult = deferred<HydrationResult>()
     let activeProbes = 0
     let maxActiveProbes = 0
+
     const powerShellSpawner = vi.fn<HydrationSpawner>(async () => {
       activeProbes += 1
       maxActiveProbes = Math.max(maxActiveProbes, activeProbes)
       const result = await powerShellResult.promise
       activeProbes -= 1
+
       return result
     })
+
     const gitBashSpawner = vi.fn<HydrationSpawner>(async () => {
       activeProbes += 1
       maxActiveProbes = Math.max(maxActiveProbes, activeProbes)
       const result = await gitBashResult.promise
       activeProbes -= 1
+
       return result
     })
+
     process.env.PATH = 'C:\\Windows'
     const powerShellReady = hydrateShellPath({ spawner: powerShellSpawner, force: true })
     const powerShellMerged = powerShellReady.then((result) => mergePathSegments(result.segments))

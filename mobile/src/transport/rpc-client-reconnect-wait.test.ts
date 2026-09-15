@@ -11,21 +11,26 @@ function fakeClient(
 ): { client: RpcClient; set: (next: ConnectionState) => void; listenerCount: () => number } {
   let state = initial
   const listeners = new Set<(next: ConnectionState) => void>()
+
   const client = {
     getState: () => state,
     onStateChange: (listener: (next: ConnectionState) => void) => {
       listeners.add(listener)
+
       if (options.notifyDuringSubscribe) {
         state = options.notifyDuringSubscribe
         listener(state)
       }
+
       return () => listeners.delete(listener)
     }
   } as unknown as RpcClient
+
   return {
     client,
     set: (next) => {
       state = next
+
       // Safe to delete during iteration: finish() unsubscribes the current listener.
       for (const listener of listeners) {
         listener(next)
@@ -54,6 +59,7 @@ describe('waitForRpcClientReconnected', () => {
 
   it('gives up at the timeout and unsubscribes', async () => {
     vi.useFakeTimers()
+
     try {
       const { client, listenerCount } = fakeClient('reconnecting')
       const pending = waitForRpcClientReconnected(client, 10_000)
@@ -75,6 +81,7 @@ describe('waitForRpcClientReconnected', () => {
 
   it('does not wait out the timeout when the pairing is revoked mid-wait', async () => {
     vi.useFakeTimers()
+
     try {
       const { client, set, listenerCount } = fakeClient('reconnecting')
       const pending = waitForRpcClientReconnected(client, 10_000)
@@ -92,10 +99,12 @@ describe('waitForRpcClientReconnected', () => {
 
   it('tears down cleanly when the state change fires synchronously during subscribe', async () => {
     vi.useFakeTimers()
+
     try {
       const { client, listenerCount } = fakeClient('reconnecting', {
         notifyDuringSubscribe: 'connected'
       })
+
       await expect(waitForRpcClientReconnected(client, 10_000)).resolves.toBe(true)
       expect(listenerCount()).toBe(0)
       expect(vi.getTimerCount()).toBe(0)

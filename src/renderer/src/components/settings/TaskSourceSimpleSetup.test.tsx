@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/components/jira-connect-dialog', () => ({
   JiraConnectDialog: ({ open }: { open: boolean }) => {
     mocks.dialogOpen.push(open)
+
     return null
   }
 }))
@@ -23,6 +24,7 @@ afterEach(() => {
 describe('JiraSetupSteps', () => {
   it('routes connected credential management to Integrations', () => {
     const onOpenIntegrations = vi.fn()
+
     const rendered = render(
       <JiraSetupSteps
         connected

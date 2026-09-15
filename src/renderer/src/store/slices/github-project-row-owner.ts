@@ -28,5 +28,6 @@ export function settingsForProjectRowOwner(
     `${owner}/${repo}`,
     host
   )[0]
+
   return matchedRepo ? getSettingsForRepoRuntimeOwner(state, matchedRepo.id) : fallbackSettings
 }

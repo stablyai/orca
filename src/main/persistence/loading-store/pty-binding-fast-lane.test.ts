@@ -4,8 +4,11 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const WORKTREE = 'repo1::/worktree'
+
 const request = { tabId: 'tab1', leafId: LEAF, ptyId: 'pty-1' }
+
 const paneKey = `tab1:${LEAF}`
 
 function session(overrides: Partial<WorkspaceSessionState> = {}): WorkspaceSessionState {
@@ -96,6 +99,7 @@ describe('evaluatePtyBindingFastLane', () => {
 
   it('accepts a sibling pane whose tab row names the first pane', () => {
     const LEAF_B = '22222222-2222-4222-8222-222222222222'
+
     const state = session({
       terminalLayoutsByTabId: {
         tab1: {
@@ -111,6 +115,7 @@ describe('evaluatePtyBindingFastLane', () => {
         }
       }
     })
+
     expect(
       evaluatePtyBindingFastLane(
         { ...request, leafId: LEAF_B, ptyId: 'pty-2' },

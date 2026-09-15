@@ -7,9 +7,13 @@ import { spawnSync } from 'node:child_process'
 import { CopilotHookService } from './hook-service'
 
 let tmpDir: string
+
 let copilotHome: string
+
 let originalCopilotHome: string | undefined
+
 let originalHome: string | undefined
+
 let originalUserProfile: string | undefined
 
 beforeEach(() => {
@@ -29,16 +33,19 @@ afterEach(() => {
   } else {
     process.env.COPILOT_HOME = originalCopilotHome
   }
+
   if (originalHome === undefined) {
     delete process.env.HOME
   } else {
     process.env.HOME = originalHome
   }
+
   if (originalUserProfile === undefined) {
     delete process.env.USERPROFILE
   } else {
     process.env.USERPROFILE = originalUserProfile
   }
+
   rmSync(tmpDir, { recursive: true, force: true })
 })
 
@@ -53,6 +60,7 @@ function makeStaleManagedHookDefinition(): Record<string, unknown> {
       powershell: 'powershell.exe -File C:/old/agent-hooks/copilot-hook.ps1'
     }
   }
+
   return { type: 'command', bash: '/bin/sh "/old/agent-hooks/copilot-hook.sh"' }
 }
 
@@ -87,6 +95,7 @@ describe('CopilotHookService', () => {
     const firstPromptHook = hooks.UserPromptSubmit[0] as Record<string, unknown>
     expect(firstPromptHook.type).toBe('command')
     expect(firstPromptHook.timeoutSec).toBe(5)
+
     if (process.platform === 'win32') {
       const powershell = firstPromptHook.powershell as string
       expect(powershell).toContain('-EncodedCommand')
@@ -101,6 +110,7 @@ describe('CopilotHookService', () => {
       expect(firstPromptHook.bash).toContain('.orca/agent-hooks/copilot-hook.sh')
       expect(firstPromptHook.bash).toContain("ORCA_COPILOT_HOOK_EVENT='UserPromptSubmit'")
     }
+
     expect(existsSync(join(tmpDir, '.orca', 'agent-hooks', 'copilot-hook.sh'))).toBe(
       process.platform !== 'win32'
     )
@@ -271,6 +281,7 @@ describe('CopilotHookService', () => {
   it('remove leaves nested user hooks untouched when no managed hook is present', () => {
     const configPath = join(copilotHome, 'hooks', 'orca.json')
     mkdirSync(join(copilotHome, 'hooks'), { recursive: true })
+
     const original = JSON.stringify(
       {
         version: 1,
@@ -288,6 +299,7 @@ describe('CopilotHookService', () => {
       null,
       2
     )
+
     writeFileSync(configPath, original)
 
     const status = new CopilotHookService().remove()

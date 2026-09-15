@@ -118,6 +118,7 @@ function answeredRequestFromSnapshot(
   server: AgentHookServer
 ): Parameters<AgentHookServer['inferQuestionAnswered']>[0] {
   const [entry] = server.getStatusSnapshot()
+
   return {
     paneKey: entry.paneKey,
     baselineUpdatedAt: entry.receivedAt,
@@ -237,6 +238,7 @@ describe('inferQuestionAnswered', () => {
       toolName: 'AskUserQuestion',
       toolUseId: 'tool-question'
     })
+
     const staleRequest = {
       ...answeredRequestFromSnapshot(server),
       baselineUpdatedAt: 1

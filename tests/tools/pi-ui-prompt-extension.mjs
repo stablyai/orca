@@ -6,6 +6,7 @@ export default function (pi) {
       const kind = args.trim() || 'select'
       const title = `Orca verification: ${kind}`
       let answer
+
       switch (kind) {
         case 'select':
           answer = await ctx.ui.select(title, ['Continue verification', 'Second option'])
@@ -27,6 +28,7 @@ export default function (pi) {
               if (keys.matches(data, 'tui.select.confirm')) {
                 done('answered')
               }
+
               if (keys.matches(data, 'tui.select.cancel')) {
                 done(undefined)
               }
@@ -35,8 +37,10 @@ export default function (pi) {
           break
         default:
           ctx.ui.notify('Use select, confirm, input, editor, or custom', 'error')
+
           return
       }
+
       ctx.ui.notify(`Orca verification: ${kind} ${answer === undefined ? 'cancelled' : 'answered'}`)
     }
   })

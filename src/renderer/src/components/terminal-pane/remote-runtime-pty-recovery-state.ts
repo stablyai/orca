@@ -29,12 +29,14 @@ export function getScheduledRemoteRuntimePtyRecoveryCountForTests(): number {
 
 export function retryAllRemoteRuntimePtyRecoveriesNow(): number {
   let advanced = 0
+
   // Why: a synchronous retry failure can schedule the same state again.
   for (const recovery of Array.from(scheduledRecoveries)) {
     if (recovery.retryNow()) {
       advanced += 1
     }
   }
+
   return advanced
 }
 
@@ -76,14 +78,17 @@ export class RemoteRuntimePtyRecoveryState {
     if (this.phase === 'disposed') {
       return this.epoch
     }
+
     if (!this.isActive) {
       this.epoch += 1
       this.attempt = 0
       this.armDeadline(this.epoch)
     }
+
     this.clearRetryTimer()
     this.phase = 'recovering'
     this.onChange?.()
+
     return this.epoch
   }
 
@@ -99,19 +104,24 @@ export class RemoteRuntimePtyRecoveryState {
     if (!this.isCurrent(epoch)) {
       return false
     }
+
     this.clearRetryTimer()
     this.phase = 'backoff'
+
     const delayMs =
       REMOTE_RUNTIME_RECOVERY_DELAYS_MS[
         Math.min(this.attempt, REMOTE_RUNTIME_RECOVERY_DELAYS_MS.length - 1)
       ]
+
     this.attempt += 1
     this.pendingRetry = retry
     this.pendingEpoch = epoch
+
     const timer = setTimeout(() => {
       if (this.retryTimer !== timer || !this.isCurrent(epoch)) {
         return
       }
+
       this.retryTimer = null
       this.pendingRetry = null
       this.pendingEpoch = null
@@ -120,10 +130,12 @@ export class RemoteRuntimePtyRecoveryState {
       this.onChange?.()
       retry(epoch)
     }, delayMs)
+
     timer.unref?.()
     this.retryTimer = timer
     scheduledRecoveries.add(this)
     this.onChange?.()
+
     return true
   }
 
@@ -143,9 +155,11 @@ export class RemoteRuntimePtyRecoveryState {
     if (this.pendingRetry !== null) {
       return false
     }
+
     this.pendingRetry = retry
     this.pendingEpoch = this.epoch
     scheduledRecoveries.add(this)
+
     return true
   }
 
@@ -154,6 +168,7 @@ export class RemoteRuntimePtyRecoveryState {
     if (this.pendingRetry !== retry) {
       return
     }
+
     this.clearRetryTimer()
   }
 
@@ -162,22 +177,27 @@ export class RemoteRuntimePtyRecoveryState {
     if (this.pendingRetry === null || this.pendingEpoch === null) {
       return false
     }
+
     if (this.phase !== 'backoff' && this.phase !== 'disconnected') {
       return false
     }
+
     const retry = this.pendingRetry
     const latched = this.phase === 'disconnected'
     this.clearRetryTimer()
+
     if (latched) {
       // Why: the deadline only stops auto-retry; an explicit trigger opens a fresh recovery window.
       this.epoch += 1
       this.attempt = 0
       this.armDeadline(this.epoch)
     }
+
     const epoch = this.epoch
     this.phase = 'recovering'
     this.onChange?.()
     retry(epoch)
+
     return true
   }
 
@@ -185,6 +205,7 @@ export class RemoteRuntimePtyRecoveryState {
     if (this.phase === 'disposed') {
       return
     }
+
     this.deadlineExpired = false
     this.clearTimers()
     this.phase = 'idle'
@@ -196,6 +217,7 @@ export class RemoteRuntimePtyRecoveryState {
     if (this.phase === 'disposed') {
       return
     }
+
     // Why: same latch the deadline arrives at, so it must be equally revivable — stop auto-retry but keep
     // the parked retry registered for online/resume/reconnect. clearTimers() here would be strictly more
     // destructive than exhausting the whole recovery budget.
@@ -209,6 +231,7 @@ export class RemoteRuntimePtyRecoveryState {
     if (this.phase === 'disposed') {
       return
     }
+
     this.deadlineExpired = false
     this.epoch += 1
     this.clearTimers()
@@ -227,10 +250,12 @@ export class RemoteRuntimePtyRecoveryState {
   private armDeadline(epoch: number): void {
     this.clearDeadlineTimer()
     this.deadlineExpired = false
+
     const timer = setTimeout(() => {
       if (this.deadlineTimer !== timer || !this.isCurrent(epoch)) {
         return
       }
+
       this.deadlineTimer = null
       this.deadlineExpired = true
       // Why: the cutoff stops self-initiated retries but must keep the pane revivable by online/resume/reconnect.
@@ -238,6 +263,7 @@ export class RemoteRuntimePtyRecoveryState {
       this.phase = 'disconnected'
       this.onChange?.()
     }, REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
+
     timer.unref?.()
     this.deadlineTimer = timer
   }

@@ -23,6 +23,7 @@ function status(configPath: string, detail: string | null = null): AgentHookInst
 function remoteGrokHome(remoteHome: string, remoteGrokHome?: string): string {
   const home = remoteHome.replace(/\/+$/, '') || remoteHome
   const candidate = remoteGrokHome?.trim()
+
   if (
     candidate &&
     candidate === remoteGrokHome &&
@@ -31,11 +32,13 @@ function remoteGrokHome(remoteHome: string, remoteGrokHome?: string): string {
     candidate.length <= GROK_HOME_ENVELOPE_MAX_LENGTH &&
     !Array.from(candidate).some((character) => {
       const code = character.charCodeAt(0)
+
       return code <= 0x1f || code === 0x7f
     })
   ) {
     return candidate.replace(/\/+$/, '') || '/'
   }
+
   return `${home}/.grok`
 }
 
@@ -48,11 +51,14 @@ export async function installRemoteGrokHook(
   const home = remoteHome.replace(/\/$/, '')
   const configPath = `${remoteGrokHome(home, remoteGrokHomeDir)}/hooks/orca-status.json`
   const scriptPath = `${home}/.orca/agent-hooks/grok-hook.sh`
+
   try {
     const config = await readHooksJsonRemote(sftp, configPath)
+
     if (!config) {
       return status(configPath, 'Could not parse remote Grok hook config')
     }
+
     buildInstalledGrokConfig(
       config,
       wrapPosixHookCommand(scriptPath, {}, { requiredEnvVar: 'ORCA_PANE_KEY' }),
@@ -60,6 +66,7 @@ export async function installRemoteGrokHook(
     )
     await writeManagedScriptRemote(sftp, scriptPath, script)
     await writeHooksJsonRemote(sftp, configPath, config)
+
     return {
       agent: 'grok',
       state: 'installed',

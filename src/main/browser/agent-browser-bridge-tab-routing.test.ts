@@ -10,6 +10,7 @@ const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, s
   }))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
+
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock,
@@ -17,15 +18,19 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
+
 vi.mock('os', () => ({ platform: () => 'darwin', arch: () => 'arm64' }))
+
 vi.mock('electron', () => {
   return {
     app: { getPath: vi.fn(() => '/app'), getAppPath: vi.fn(() => '/project'), isPackaged: false },
     webContents: { fromId: webContentsFromIdMock }
   }
 })
+
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
     this._wc = _wc
@@ -34,12 +39,14 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
     this.getPort = vi.fn(() => 9222)
     instances.push(this)
   })
+
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
 
 vi.mock('./cdp-ws-proxy', () => ({
   CdpWsProxy: CdpWsProxyMock
 }))
+
 vi.mock('./cdp-bridge', () => ({
   BrowserError: class BrowserError extends Error {
     code: string
@@ -84,6 +91,7 @@ describe('AgentBrowserBridge', () => {
       ['tab-a', 1],
       ['tab-b', 2]
     ])
+
     const wc1 = mockWebContents(1, 'https://a.com', 'A')
     const wc2 = mockWebContents(2, 'https://b.com', 'B')
     webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
@@ -97,6 +105,7 @@ describe('AgentBrowserBridge', () => {
     const snapshotCall = execFileMock.mock.calls.find((c: unknown[]) =>
       (c[1] as string[]).includes('snapshot')
     )
+
     expect(snapshotCall).toBeTruthy()
     expect(snapshotCall![1]).toContain('--session')
     expect(
@@ -114,6 +123,7 @@ describe('AgentBrowserBridge', () => {
         ['tab-a', 1],
         ['tab-b', 2]
       ])
+
       const b = new AgentBrowserBridge(mockBrowserManager(tabs))
       const result = b.tabList()
       expect(result.tabs).toHaveLength(2)
@@ -124,10 +134,12 @@ describe('AgentBrowserBridge', () => {
         ['tab-a', 1],
         ['tab-b', 2]
       ])
+
       const worktrees = new Map([
         ['tab-a', 'wt-1'],
         ['tab-b', 'wt-2']
       ])
+
       const wc1 = mockWebContents(1, 'https://a.com', 'A')
       const wc2 = mockWebContents(2, 'https://b.com', 'B')
       webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
@@ -143,11 +155,13 @@ describe('AgentBrowserBridge', () => {
       const tabs = new Map([['tab-a', 1]])
       const wc1 = mockWebContents(1, 'chrome-error://chromewebdata/', '')
       webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : null))
+
       const loadError = {
         code: -202,
         description: 'ERR_CERT_AUTHORITY_INVALID',
         validatedUrl: 'https://localhost:3443/'
       }
+
       const certificateFailure = {
         challengeId: 'challenge-1',
         browserPageId: 'tab-a',
@@ -158,6 +172,7 @@ describe('AgentBrowserBridge', () => {
         canProceed: true,
         observedAt: 123
       }
+
       const b = new AgentBrowserBridge(
         mockBrowserManager(tabs, new Map(), {
           getBrowserPageLoadError: vi.fn((tabId: string) => (tabId === 'tab-a' ? loadError : null)),
@@ -181,6 +196,7 @@ describe('AgentBrowserBridge', () => {
         ['tab-a', 1],
         ['tab-b', 2]
       ])
+
       const wc1 = mockWebContents(1, 'https://a.com', 'A')
       const wc2 = mockWebContents(2, 'https://b.com', 'B')
       webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
@@ -200,6 +216,7 @@ describe('AgentBrowserBridge', () => {
         ['tab-a', 1],
         ['tab-b', 2]
       ])
+
       const wc2 = mockWebContents(2, 'https://b.com', 'B')
       webContentsFromIdMock.mockImplementation((id: number) => (id === 2 ? wc2 : null))
       const unregisterGuest = vi.fn()
@@ -238,6 +255,7 @@ describe('AgentBrowserBridge', () => {
     const tabCount = 1_000
     const tabs = new Map<string, number>()
     const tabIdByWebContentsId = new Map<number, string>()
+
     for (let index = 0; index < tabCount; index += 1) {
       const tabId = `tab-${index}`
       const webContentsId = 20_000 + index
@@ -248,18 +266,22 @@ describe('AgentBrowserBridge', () => {
     const getRegisteredTabs = vi.fn(() => {
       throw new Error('unexpected registered-tab enumeration')
     })
+
     const getTabIdForWebContentsId = vi.fn(
       (webContentsId: number) => tabIdByWebContentsId.get(webContentsId) ?? null
     )
+
     const b = new AgentBrowserBridge(
       mockBrowserManager(tabs, new Map(), {
         getWebContentsIdByTabId: getRegisteredTabs,
         getTabIdForWebContentsId
       })
     )
+
     const resolveTabIdSafe = (
       b as unknown as { resolveTabIdSafe: (webContentsId: number) => string | null }
     ).resolveTabIdSafe.bind(b)
+
     const targetWebContentsId = 20_000 + tabCount - 1
 
     // The old forward scan inspected 1,000,000 entries for this repeated last-tab lookup.
@@ -283,6 +305,7 @@ describe('AgentBrowserBridge', () => {
     const closeCall = execFileMock.mock.calls.find((call: unknown[]) =>
       (call[1] as string[]).includes('close')
     )
+
     expect(closeCall).toBeTruthy()
     expect(closeCall![1]).toEqual(['--session', 'orca-tab-tab-1', 'close'])
   })
@@ -292,10 +315,12 @@ describe('AgentBrowserBridge', () => {
       ['tab-a', 1],
       ['tab-b', 2]
     ])
+
     const worktrees = new Map([
       ['tab-a', 'wt-1'],
       ['tab-b', 'wt-1']
     ])
+
     const wc2 = mockWebContents(2, 'https://b.com', 'B')
     webContentsFromIdMock.mockImplementation((id: number) => (id === 2 ? wc2 : null))
 
@@ -330,6 +355,7 @@ describe('AgentBrowserBridge', () => {
       ['tab-a', 1],
       ['tab-b', 2]
     ])
+
     const wc1 = mockWebContents(1)
     const wc2 = mockWebContents(2)
     webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
@@ -347,6 +373,7 @@ describe('AgentBrowserBridge', () => {
       ['tab-a', 1],
       ['tab-b', 2]
     ])
+
     const wc1 = mockWebContents(1)
     const wc2 = mockWebContents(2)
     webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
@@ -364,10 +391,12 @@ describe('AgentBrowserBridge', () => {
       ['tab-a', 1],
       ['tab-b', 2]
     ])
+
     const worktrees = new Map([
       ['tab-a', 'wt-1'],
       ['tab-b', 'wt-1']
     ])
+
     const wc1 = mockWebContents(1, 'https://a.com', 'A')
     const wc2 = mockWebContents(2, 'https://b.com', 'B')
     webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
@@ -390,10 +419,12 @@ describe('AgentBrowserBridge', () => {
       ['tab-a', 1],
       ['tab-b', 2]
     ])
+
     const worktrees = new Map([
       ['tab-a', 'wt-1'],
       ['tab-b', 'wt-1']
     ])
+
     const wc1 = mockWebContents(1)
     const wc2 = mockWebContents(2)
     webContentsFromIdMock.mockImplementation((id: number) =>
@@ -408,14 +439,18 @@ describe('AgentBrowserBridge', () => {
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('close')) {
           cb(null, JSON.stringify({ success: true, data: null }), '')
+
           return
         }
+
         if (args.includes('snapshot')) {
           releaseSnapshot = () => {
             cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
           }
+
           return
         }
+
         cb(null, JSON.stringify({ success: true, data: { ok: true } }), '')
       }
     )

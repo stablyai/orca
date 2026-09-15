@@ -19,6 +19,7 @@ import {
 } from './mobile-hosted-review-create-intent-runner'
 
 type RunGitWorkflow = (actionId: string, runner: () => Promise<void>) => Promise<boolean>
+
 type LoadStatus = (options?: LoadStatusOptions) => Promise<boolean>
 
 type Params = {
@@ -60,15 +61,20 @@ export function useMobileCreatePrRunner({
     async (pushFirst: boolean) => {
       setShowActionSheet(false)
       const branch = status?.branch
+
       if (!client || !branch) {
         triggerError()
         setActionError('Check out a branch before creating a pull request.')
+
         return
       }
+
       const created: { current: MobileHostedReviewCreateIntentRunOutcome | null } = {
         current: null
       }
+
       let progress: MobileHostedReviewCreateIntentProgress | null = null
+
       const ran = await runGitWorkflow(pushFirst ? 'push-create-pr' : 'create-pr', async () => {
         created.current = await runMobileHostedReviewCreateIntent(client, worktreeId, {
           branch,
@@ -80,14 +86,18 @@ export function useMobileCreatePrRunner({
             setActionError(mobileHostedReviewCreateIntentProgressMessage(nextProgress))
           }
         })
+
         if (!created.current.ok) {
           throw new Error(created.current.error)
         }
       })
+
       const outcome = created.current
+
       if (outcome?.committed && mountedRef.current) {
         setCommitMessage('')
       }
+
       if (!ran && outcome?.status !== undefined && mountedRef.current) {
         await loadStatus({
           preserveReadyOnFailure: true,
@@ -95,6 +105,7 @@ export function useMobileCreatePrRunner({
           force: true
         })
       }
+
       if (!ran || !mountedRef.current || !outcome || !outcome.ok) {
         if (!ran && outcome && isMobileHostedReviewCommitFailure(outcome, progress)) {
           const outcomeStagedEntries = getMobileCommitFailureStagedEntries(outcome.status?.entries)
@@ -104,8 +115,10 @@ export function useMobileCreatePrRunner({
             stagedEntries: outcomeStagedEntries.length > 0 ? outcomeStagedEntries : stagedEntries
           })
         }
+
         return
       }
+
       setActionError(null)
       setCreatedPrUrl(outcome.url)
       setCreatedPrWarning(outcome.warning ?? null)

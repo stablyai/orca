@@ -11,8 +11,10 @@ function getConflictSortRank(entry: GitStatusEntry): number {
   if (entry.conflictStatus === 'unresolved') {
     return 0
   }
+
   if (entry.conflictStatus === 'resolved_locally') {
     return 1
   }
+
   return 2
 }

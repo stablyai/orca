@@ -52,7 +52,9 @@ function fulfilledResult(reply: unknown): { found: boolean; result: unknown } {
   if (reply === null || typeof reply !== 'object' || !('result' in reply)) {
     return { found: false, result: undefined }
   }
+
   const envelope: { ok?: unknown; result?: unknown } = reply
+
   // Neither an absent/undefined result nor `null` counts: both are partitions of their own, so
   // replaying one as `normal` would leave the site with eight shapes and no success control.
   return envelope.ok === true && envelope.result !== undefined && envelope.result !== null
@@ -67,6 +69,7 @@ export function replyMatrixNormalResult(
   request: string
 ): unknown {
   let recorded: { found: boolean; result: unknown } = { found: false, result: undefined }
+
   for (const scenario of scenarios) {
     for (const step of scenario.steps) {
       if ('complete' in step && step.complete === request && !recorded.found) {
@@ -74,21 +77,26 @@ export function replyMatrixNormalResult(
       }
     }
   }
+
   const inventoried = REPLY_MATRIX_NORMAL_RESULT_INVENTORY.find(
     (entry) => entry.family === family && entry.request === request
   )
+
   if (inventoried) {
     if (recorded.found) {
       throw new Error(
         `${family} ${request} now records a fulfilled reply; drop its REPLY_MATRIX_NORMAL_RESULT_INVENTORY entry`
       )
     }
+
     return inventoried.result
   }
+
   if (!recorded.found) {
     throw new Error(
       `No fulfilled reply recorded for matrix site ${family} ${request}. Add a scenario that fulfils it, or list it in REPLY_MATRIX_NORMAL_RESULT_INVENTORY with the reason it cannot be.`
     )
   }
+
   return recorded.result
 }

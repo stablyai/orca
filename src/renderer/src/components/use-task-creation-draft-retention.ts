@@ -20,6 +20,7 @@ export function useTaskCreationDraftRetention<Draft>({
     if (!open) {
       return
     }
+
     draftRef.current = draft
     writeDraftRef.current = writeDraft
   })
@@ -29,7 +30,9 @@ export function useTaskCreationDraftRetention<Draft>({
     if (!open) {
       return
     }
+
     discardRef.current = false
+
     return () => {
       if (!discardRef.current) {
         writeDraftRef.current(draftRef.current)

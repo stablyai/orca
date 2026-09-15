@@ -37,21 +37,27 @@ export class PluginDevWatcher {
 
   start(devPaths: readonly string[], refresh: () => void, onWatcherError?: () => void): void {
     const generation = ++this.generation
+
     for (const devPath of devPaths) {
       let subscription: WatcherProcessSubscription | null = null
       let failedBeforeReady = false
+
       const fail = (): void => {
         if (generation !== this.generation) {
           return
         }
+
         failedBeforeReady = true
+
         if (subscription) {
           this.removeSubscription(subscription)
           releaseSubscription(subscription)
         }
+
         onWatcherError?.()
         this.scheduleRefresh(refresh)
       }
+
       void this.subscribePath(
         devPath,
         (error) => {
@@ -71,10 +77,13 @@ export class PluginDevWatcher {
       )
         .then((created) => {
           subscription = created
+
           if (generation !== this.generation || failedBeforeReady) {
             releaseSubscription(created)
+
             return
           }
+
           this.subscriptions.push(created)
         })
         .catch(() => {
@@ -87,10 +96,12 @@ export class PluginDevWatcher {
 
   dispose(): void {
     this.generation += 1
+
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer)
       this.refreshTimer = null
     }
+
     for (const subscription of this.subscriptions.splice(0)) {
       releaseSubscription(subscription)
     }
@@ -98,6 +109,7 @@ export class PluginDevWatcher {
 
   private removeSubscription(subscription: WatcherProcessSubscription): void {
     const index = this.subscriptions.indexOf(subscription)
+
     if (index !== -1) {
       this.subscriptions.splice(index, 1)
     }
@@ -107,6 +119,7 @@ export class PluginDevWatcher {
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer)
     }
+
     this.refreshTimer = setTimeout(() => {
       this.refreshTimer = null
       refresh()

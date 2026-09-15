@@ -4,6 +4,7 @@ function pathFlavor(rootPath: string): typeof posix | typeof win32 {
   if (/^[a-zA-Z]:[\\/]/.test(rootPath) || rootPath.startsWith('\\\\')) {
     return win32
   }
+
   return posix
 }
 

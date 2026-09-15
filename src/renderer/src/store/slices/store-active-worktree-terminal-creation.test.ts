@@ -8,6 +8,7 @@ import { getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
+
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
 // Mock sonner (imported by repos.ts)
@@ -23,6 +24,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -130,11 +132,13 @@ describe('setActiveWorktree', () => {
     const wt = 'repo1::/path/wt1'
     const sourceTabId = 'tab-source'
     const targetTabId = 'tab-target'
+
     const authority = {
       targetId: 'target-a',
       providerEpoch: 'epoch-a' as SshProviderEpoch,
       connectionGeneration: 1
     }
+
     const detachedPtyId = 'ssh:target-a@@pty-detached'
     seedStore(store, {
       tabsByWorktree: {
@@ -199,11 +203,13 @@ describe('setActiveWorktree', () => {
     const wt = 'repo1::/path/wt1'
     const sourceTabId = 'tab-source'
     const targetTabId = 'tab-target'
+
     const authority = {
       targetId: 'target-a',
       providerEpoch: 'epoch-a' as SshProviderEpoch,
       connectionGeneration: 1
     }
+
     const detachedPtyId = 'ssh:target-a@@pty-detached'
     seedStore(store, {
       tabsByWorktree: {
@@ -321,9 +327,11 @@ describe('setActiveWorktree', () => {
     const labeled = store
       .getState()
       .createTab(wt, undefined, undefined, { quickCommandLabel: '  Run tests  ' })
+
     const unlabeled = store
       .getState()
       .createTab(wt, undefined, undefined, { quickCommandLabel: '   ' })
+
     const state = store.getState()
 
     expect(state.tabsByWorktree[wt].find((tab) => tab.id === labeled.id)?.quickCommandLabel).toBe(
@@ -350,6 +358,7 @@ describe('setActiveWorktree', () => {
     const nested = store
       .getState()
       .createTab(wt, undefined, undefined, { startupCwd: '/path/wt1/packages/app ' })
+
     const empty = store.getState().createTab(wt, undefined, undefined, { startupCwd: '' })
     const state = store.getState()
 
@@ -367,6 +376,7 @@ describe('setActiveWorktree', () => {
       value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
       configurable: true
     })
+
     try {
       const store = createTestStore()
       const wt = 'repo1::/path/wt1'
@@ -399,6 +409,7 @@ describe('setActiveWorktree', () => {
       value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
       configurable: true
     })
+
     try {
       const store = createTestStore()
       const wt = 'repo1::C:\\repo'
@@ -448,6 +459,7 @@ describe('setActiveWorktree', () => {
       value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
       configurable: true
     })
+
     try {
       const store = createTestStore()
       const wt = 'repo1::C:\\repo'
@@ -483,6 +495,7 @@ describe('setActiveWorktree', () => {
       const hostTerminal = store
         .getState()
         .createTab(wt, undefined, 'powershell.exe', { forceHostRuntime: true })
+
       expect(hostTerminal).toMatchObject({
         shellOverride: 'powershell.exe',
         forceHostRuntime: true
@@ -501,6 +514,7 @@ describe('setActiveWorktree', () => {
       value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
       configurable: true
     })
+
     try {
       const store = createTestStore()
       const wt = 'repo1::/wsl/path'
@@ -534,6 +548,7 @@ describe('setActiveWorktree', () => {
       value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
       configurable: true
     })
+
     try {
       const store = createTestStore()
       const wt = 'remote-repo::/path/wt1'
@@ -571,6 +586,7 @@ describe('setActiveWorktree', () => {
       value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
       configurable: true
     })
+
     try {
       const store = createTestStore()
       const wt = 'remote-repo::/path/wt1'
@@ -620,6 +636,7 @@ describe('setActiveWorktree', () => {
       value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
       configurable: true
     })
+
     try {
       const store = createTestStore()
       const wt = 'remote-repo::/path/wt1'
@@ -669,6 +686,7 @@ describe('setActiveWorktree', () => {
       value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
       configurable: true
     })
+
     try {
       const store = createTestStore()
       const wt = 'remote-repo::/path/wt1'

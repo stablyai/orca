@@ -7,8 +7,11 @@
 
 export const ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX =
   'You are working inside Orca, a multi-agent IDE.'
+
 export const ORCA_DISPATCH_STATUS_TASK_MARKER = '=== TASK ==='
+
 const ORCA_DISPATCH_STATUS_TASK_ID_MARKER = 'Your task ID is:'
+
 // Why: real preambles put === TASK === near the end (~4KB+). Scan past the
 // normal single-line budget so the task body is still reachable for compacting.
 const ORCA_DISPATCH_STATUS_SOURCE_SCAN_LIMIT = 24_576
@@ -18,9 +21,11 @@ export function isOrcaDispatchStatusPrompt(value: string): boolean {
   // bounded too, or leading whitespace can bypass the normalizer's scan cap.
   const scanEnd = Math.min(value.length, ORCA_DISPATCH_STATUS_SOURCE_SCAN_LIMIT)
   let start = 0
+
   while (start < scanEnd && isEcmaTrimWhitespace(value.charCodeAt(start))) {
     start++
   }
+
   return (
     start + ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX.length <= scanEnd &&
     value.startsWith(ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX, start)
@@ -41,19 +46,24 @@ export function compactDispatchPromptForStatus(
   // Bound leading trim to the scan window so a multi-MB paste of pure
   // whitespace cannot walk the entire string before we give up.
   let start = 0
+
   while (start < scanEnd && isEcmaTrimWhitespace(value.charCodeAt(start))) {
     start++
   }
+
   const scan = value.slice(start, scanEnd)
 
   let taskId = ''
   const idMarkerIndex = scan.indexOf(ORCA_DISPATCH_STATUS_TASK_ID_MARKER)
+
   if (idMarkerIndex !== -1) {
     const afterId = scan.slice(idMarkerIndex + ORCA_DISPATCH_STATUS_TASK_ID_MARKER.length)
     let idStart = 0
+
     while (idStart < afterId.length && isEcmaTrimWhitespace(afterId.charCodeAt(idStart))) {
       idStart++
     }
+
     const idRest = afterId.slice(idStart)
     const idEnd = idRest.search(/\s/)
     taskId = (idEnd === -1 ? idRest : idRest.slice(0, idEnd)).trim()
@@ -61,10 +71,13 @@ export function compactDispatchPromptForStatus(
 
   let taskBody = ''
   const taskMarkerIndex = findOrcaDispatchTaskMarkerIndex(scan)
+
   if (taskMarkerIndex !== -1) {
     const body = scan.slice(taskMarkerIndex + ORCA_DISPATCH_STATUS_TASK_MARKER.length)
+
     for (const line of body.split(/\r?\n/)) {
       const preview = line.trim().replace(/\s+/g, ' ')
+
       if (preview) {
         taskBody = preview
         break
@@ -75,12 +88,15 @@ export function compactDispatchPromptForStatus(
   // Why: keep the dispatch prefix (isOrcaDispatchPrompt) + task id (label match)
   // + task body (fallback preview) so UI helpers still work on the 200-char field.
   let compact = ORCA_DISPATCH_STATUS_PREAMBLE_PREFIX
+
   if (taskId) {
     compact += ` ${ORCA_DISPATCH_STATUS_TASK_ID_MARKER} ${taskId}`
   }
+
   if (taskBody) {
     compact += ` ${ORCA_DISPATCH_STATUS_TASK_MARKER} ${taskBody}`
   }
+
   return normalizeSingleLine(compact, maxLength)
 }
 
@@ -93,17 +109,22 @@ export function compactDispatchPromptForStatus(
  */
 export function findOrcaDispatchTaskMarkerIndex(value: string): number {
   let searchFrom = 0
+
   while (searchFrom < value.length) {
     const markerIndex = value.indexOf(ORCA_DISPATCH_STATUS_TASK_MARKER, searchFrom)
+
     if (markerIndex === -1) {
       break
     }
+
     const markerEnd = markerIndex + ORCA_DISPATCH_STATUS_TASK_MARKER.length
     const startsLine = markerIndex === 0 || isLineBreak(value.charCodeAt(markerIndex - 1))
     const endsLine = markerEnd === value.length || isLineBreak(value.charCodeAt(markerEnd))
+
     if (startsLine && endsLine) {
       return markerIndex
     }
+
     searchFrom = markerEnd
   }
 

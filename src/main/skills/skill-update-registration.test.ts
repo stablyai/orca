@@ -9,6 +9,7 @@ const temporaryDirectories: string[] = []
 async function temporaryRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-skill-registration-'))
   temporaryDirectories.push(root)
+
   return root
 }
 

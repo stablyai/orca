@@ -23,6 +23,7 @@ function makePane(args: {
   const handleDevicePixelRatioChange = vi.fn()
   const handleResize = vi.fn()
   const refresh = vi.fn()
+
   const canvas = {
     width: args.backingWidth,
     height: args.backingHeight ?? 1200,
@@ -32,6 +33,7 @@ function makePane(args: {
       throw new Error('repair detection must not force layout')
     }
   }
+
   const renderer =
     (args.hasRenderer ?? true)
       ? {
@@ -46,6 +48,7 @@ function makePane(args: {
           handleResize
         }
       : undefined
+
   const pane = {
     id: 1,
     terminal: {
@@ -55,6 +58,7 @@ function makePane(args: {
       _core: { _renderService: { _renderer: { value: renderer } } }
     }
   } as unknown as ManagedPane
+
   return { pane, handleDevicePixelRatioChange, handleResize, refresh }
 }
 
@@ -103,6 +107,7 @@ describe('repairPaneWebglCanvasDprMismatch', () => {
       expectedWidth: 2160,
       dpr: 2
     })
+
     expect(repairPaneWebglCanvasDprMismatch(pane)).toBe(false)
     expect(handleResize).not.toHaveBeenCalled()
     expect(refresh).not.toHaveBeenCalled()
@@ -129,6 +134,7 @@ describe('repairPaneWebglCanvasDprMismatch', () => {
       backingHeight: 600,
       expectedHeight: 1200
     })
+
     expect(repairPaneWebglCanvasDprMismatch(pane)).toBe(true)
     expect(handleResize).toHaveBeenCalledTimes(1)
   })
@@ -140,6 +146,7 @@ describe('repairPaneWebglCanvasDprMismatch', () => {
       dpr: 1,
       connected: false
     })
+
     expect(repairPaneWebglCanvasDprMismatch(detached.pane)).toBe(false)
 
     const zeroDimension = makePane({ backingWidth: 2160, expectedWidth: 0, dpr: 1 })
@@ -151,6 +158,7 @@ describe('repairPaneWebglCanvasDprMismatch', () => {
       dpr: 1,
       hasRenderer: false
     })
+
     expect(repairPaneWebglCanvasDprMismatch(noRenderer.pane)).toBe(false)
   })
 
@@ -161,6 +169,7 @@ describe('repairPaneWebglCanvasDprMismatch', () => {
       dpr: 1,
       connected: false
     })
+
     const noRenderer = makePane({
       backingWidth: 2160,
       expectedWidth: 1080,
@@ -178,6 +187,7 @@ describe('repairPaneWebglCanvasDprMismatch', () => {
       expectedWidth: 1080,
       dpr: 1
     })
+
     handleResize.mockImplementation(() => {
       throw new Error('disposed')
     })

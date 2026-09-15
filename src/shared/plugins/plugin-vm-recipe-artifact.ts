@@ -40,6 +40,7 @@ export type PluginVmRecipeCommand = {
 export function parsePluginVmRecipeArtifact(raw: string): OrcaVmRecipe {
   const parsed = pluginVmRecipeArtifactSchema.parse(JSON.parse(raw))
   const destroyDisabled = parsed.destroy === 'none'
+
   return {
     id: parsed.id,
     name: parsed.name,

@@ -18,12 +18,15 @@ export class PhysicalExitTracker {
     if (this.exited) {
       return
     }
+
     this.exited = true
     this.resolveExit()
+
     for (const waiter of this.waiters) {
       clearTimeout(waiter.timer)
       waiter.resolve()
     }
+
     this.waiters.clear()
   }
 
@@ -31,8 +34,10 @@ export class PhysicalExitTracker {
     if (this.exited) {
       return Promise.resolve()
     }
+
     return new Promise<void>((resolve, reject) => {
       let waiter!: ExitWaiter
+
       const timer = setTimeout(
         () => {
           this.waiters.delete(waiter)
@@ -40,6 +45,7 @@ export class PhysicalExitTracker {
         },
         Math.max(1, timeoutMs)
       )
+
       timer.unref?.()
       waiter = { resolve, reject, timer }
       this.waiters.add(waiter)

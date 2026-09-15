@@ -18,6 +18,7 @@ describe('batched foreground process correlation', () => {
         '102 100 101 101 S  node /opt/codex'
       ].join('\n')
     )
+
     expect(
       resolveAgentForegroundProcessesFromIndex(buildProcessTableIndex(rows), [
         { rootPid: 100, fallbackProcess: 'zsh' }
@@ -35,6 +36,7 @@ describe('batched foreground process correlation', () => {
         '301 300 301 301 S+ vim notes.md'
       ].join('\n')
     )
+
     expect(
       resolveAgentForegroundProcessesFromIndex(buildProcessTableIndex(rows), [
         { rootPid: 200, fallbackProcess: 'zsh' },
@@ -62,6 +64,7 @@ describe('batched foreground process correlation', () => {
   it.each([1, 50, 200])('captures and indexes one host table for %s panes', async (paneCount) => {
     const rows = Array.from({ length: paneCount }, (_, index) => {
       const rootPid = 10_000 + index * 2
+
       return [
         {
           pid: rootPid,
@@ -81,12 +84,14 @@ describe('batched foreground process correlation', () => {
         }
       ]
     }).flat()
+
     const stats: ProcessTableIndexStats = {
       captures: 0,
       indexBuilds: 0,
       rowVisits: 0,
       indexLookups: 0
     }
+
     const results = await resolveAgentForegroundProcessesBatch(
       rows
         .map((row) => (row.pid % 2 === 0 ? { rootPid: row.pid, fallbackProcess: 'zsh' } : null))
@@ -95,6 +100,7 @@ describe('batched foreground process correlation', () => {
         ),
       { readRows: async () => rows, stats }
     )
+
     expect(results).toHaveLength(paneCount)
     expect(results.every((result) => result.processName === 'codex')).toBe(true)
     expect(stats).toMatchObject({ captures: 1, indexBuilds: 1, rowVisits: paneCount * 2 })

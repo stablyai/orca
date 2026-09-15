@@ -35,11 +35,13 @@ class FakeWorker {
     const set = this.listeners.get(event) ?? new Set()
     set.add(listener)
     this.listeners.set(event, set)
+
     return this
   }
 
   off(event: string, listener: (arg?: unknown) => void): this {
     this.listeners.get(event)?.delete(listener)
+
     return this
   }
 
@@ -51,6 +53,7 @@ class FakeWorker {
 
   async terminate(): Promise<number> {
     this.terminated = true
+
     return 1
   }
 
@@ -67,9 +70,11 @@ class FakeWorker {
 
   respond(body: PortScanCommandResponseBody): void {
     const last = this.postedRequests.at(-1)
+
     if (!last) {
       throw new Error('no request posted to fake worker')
     }
+
     this.emit('message', { id: last.id, ...body })
   }
 }
@@ -78,6 +83,7 @@ function makeFactory(workers: FakeWorker[]): () => Worker {
   return () => {
     const worker = new FakeWorker()
     workers.push(worker)
+
     return worker as unknown as Worker
   }
 }
@@ -184,6 +190,7 @@ describe('PortScanCommandClient', () => {
     for (let i = 0; i < accepted.length; i++) {
       workers[0].respond({ ok: true, stdout: 'drained', spawnMs: 1 })
     }
+
     await expect(Promise.all(accepted)).resolves.toHaveLength(MAX_QUEUED_CALLS + 1)
   })
 
@@ -282,11 +289,13 @@ describe('PortScanCommandClient on a real worker thread', () => {
 
     let last = Date.now()
     let maxStallMs = 0
+
     const probe = setInterval(() => {
       const now = Date.now()
       maxStallMs = Math.max(maxStallMs, now - last - 10)
       last = now
     }, 10)
+
     try {
       const results = await Promise.all([client.run('lsof', []), client.run('ps', [])])
 

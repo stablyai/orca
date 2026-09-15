@@ -35,9 +35,13 @@ vi.mock('../../../../../git/worktree', () => ({
 }))
 
 const COORDINATOR_PANE_KEY = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+
 const WORKER_PANE_KEY = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+
 const REQUEST_ID = 'worker_start_prompt_contract'
+
 const openDatabases: OrchestrationDb[] = []
+
 const temporaryRoots: string[] = []
 
 type PromptContractHarness = {
@@ -62,6 +66,7 @@ async function createPromptContractHarness(
   let submittedTurns = 0
   let startedTurns = 0
   let prematureSubmits = 0
+
   const fixture = await createAgentPromptSubmissionRuntime((runtime, data) => {
     if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
       setTimeout(() => runtime.onPtyData('pty-prompt', 'partial composer frame', Date.now()), 650)
@@ -70,20 +75,26 @@ async function createPromptContractHarness(
         composerReady = true
         runtime.onPtyData('pty-prompt', 'final composer frame', Date.now())
       }, 1_000)
+
       return
     }
+
     if (data !== '\r') {
       return
     }
+
     submittedTurns += 1
+
     if (!composerReady) {
       prematureSubmits += 1
     }
+
     if (outcome === 'accepted') {
       startedTurns += 1
       runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
     }
   }, 'codex')
+
   const { runtime, handle } = fixture
   runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07', Date.now())
 
@@ -93,11 +104,13 @@ async function createPromptContractHarness(
   const db = new OrchestrationDb(dbPath)
   openDatabases.push(db)
   runtime.setOrchestrationDb(db)
+
   const run = db.createRun({
     objective: 'Worker prompt contract',
     coordinatorHandle: 'term_coord',
     coordinatorPaneKey: COORDINATOR_PANE_KEY
   })
+
   const task = db.createTask({ spec: 'start exactly one worker turn', runId: run.id })
   vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((candidate) =>
     candidate === 'term_coord'
@@ -163,12 +176,15 @@ async function createPromptContractHarness(
 
 function reopenPromptContractDb(harness: PromptContractHarness): OrchestrationDb {
   const index = openDatabases.indexOf(harness.db)
+
   if (index !== -1) {
     openDatabases.splice(index, 1)
   }
+
   harness.db.close()
   harness.db = new OrchestrationDb(harness.dbPath)
   openDatabases.push(harness.db)
+
   return harness.db
 }
 
@@ -177,9 +193,11 @@ describe('orchestration worker-start prompt contract', () => {
     for (const db of openDatabases.splice(0)) {
       db.close()
     }
+
     for (const root of temporaryRoots.splice(0)) {
       rmSync(root, { recursive: true, force: true })
     }
+
     vi.useRealTimers()
   })
 
@@ -201,9 +219,11 @@ describe('orchestration worker-start prompt contract', () => {
         ])
       }
     })
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     const dispatchId = (response.result as { dispatchId: string }).dispatchId
     expect(harness.submittedTurns()).toBe(1)
     expect(harness.startedTurns()).toBe(1)
@@ -251,6 +271,7 @@ describe('orchestration worker-start prompt contract', () => {
             result: 'Finished before the hook arrived'
           })
         ).toMatchObject({ action: 'settled', outcome })
+
         return observed ? { ...prompt, stages: ['input_accepted', 'turn_started'] } : prompt
       }
     )
@@ -296,6 +317,7 @@ describe('orchestration worker-start prompt contract', () => {
           askerHandle: harness.handle,
           question: 'Which target should I use?'
         }).question.message_id
+
         return prompt
       }
     )
@@ -328,9 +350,11 @@ describe('orchestration worker-start prompt contract', () => {
         mutation: { requestId: harness.requestId, replayed: false }
       }
     })
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     const dispatchId = (response.result as { dispatchId: string }).dispatchId
     await vi.advanceTimersByTimeAsync(20_000)
     // Unverifiable is not failure: exactly one submit, no blind retry, nothing torn down.
@@ -353,9 +377,11 @@ describe('orchestration worker-start prompt contract', () => {
       stage: 'turn_start_unobserved',
       last_error: expect.stringContaining('turn start could not be verified')
     })
+
     const persistedEffects = JSON.parse(
       persisted.getWorkerDispatch(dispatchId)?.effects ?? '[]'
     ) as { kind?: string; state?: string }[]
+
     expect(persistedEffects).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' }),
@@ -380,6 +406,7 @@ describe('orchestration worker-start prompt contract', () => {
     vi.useFakeTimers()
     const { runtime, handle } = await createAgentPromptSubmissionRuntime(() => undefined, 'codex')
     runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+
     const pending = runtime.sendTerminalAgentPrompt(handle, 'queued prompt', {
       acceptQueued: true,
       requestId: 'busy-swallowed',

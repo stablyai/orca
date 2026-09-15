@@ -76,6 +76,7 @@ function buildFloatingWorkspaceSearchEntries(includeBrowser: boolean) {
 const getFloatingWorkspaceSearchEntriesWithBrowser = createLocalizedCatalog(() =>
   buildFloatingWorkspaceSearchEntries(true)
 )
+
 const getFloatingWorkspaceSearchEntriesWithoutBrowser = createLocalizedCatalog(() =>
   buildFloatingWorkspaceSearchEntries(false)
 )

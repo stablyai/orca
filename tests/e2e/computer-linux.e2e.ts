@@ -10,6 +10,7 @@ import {
 } from './helpers/computer-driver'
 
 const isLinux = process.platform === 'linux'
+
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
 
 describe.skipIf(!isLinux || !e2eOptIn)('computer-use Linux e2e (gedit)', () => {
@@ -47,10 +48,12 @@ describe.skipIf(!isLinux || !e2eOptIn)('computer-use Linux e2e (gedit)', () => {
         ])
       ).stdout
     )
+
     const textIndex = findRoleIndex(
       before.result.snapshot.treeText,
       /^\s*(\d+)\s+(text|text entry|entry|document|edit area)(?:\s|$)/im
     )
+
     expect(textIndex).toBeGreaterThanOrEqual(0)
 
     await runOrcaCli([
@@ -66,6 +69,7 @@ describe.skipIf(!isLinux || !e2eOptIn)('computer-use Linux e2e (gedit)', () => {
     ])
 
     const marker = ` orca-linux-type-${Date.now()}`
+
     const typed = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
@@ -81,12 +85,14 @@ describe.skipIf(!isLinux || !e2eOptIn)('computer-use Linux e2e (gedit)', () => {
         ])
       ).stdout
     )
+
     expect(typed.result.action?.path).toBe('synthetic')
     expect(typed.result.snapshot.treeText).toContain(marker.trim())
   })
 
   test('paste-text mutates the test-owned document', async () => {
     const marker = `orca-linux-paste-${Date.now()}`
+
     const action = parseJsonOutput<{ result: ComputerActionResult }>(
       (
         await runOrcaCli([
@@ -102,6 +108,7 @@ describe.skipIf(!isLinux || !e2eOptIn)('computer-use Linux e2e (gedit)', () => {
         ])
       ).stdout
     )
+
     expect(action.result.action?.path).toBe('clipboard')
     expect(action.result.action?.verification).toMatchObject({
       state: 'unverified',
@@ -120,6 +127,7 @@ describe.skipIf(!isLinux || !e2eOptIn)('computer-use Linux e2e (gedit)', () => {
         ])
       ).stdout
     )
+
     expect(after.result.snapshot.treeText).toContain(marker)
   })
 })

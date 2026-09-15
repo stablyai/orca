@@ -19,18 +19,21 @@ describe('buildRows workspace lineage nesting', () => {
     instanceId: 'parent-instance',
     displayName: 'coordinator'
   }
+
   const child: Worktree = {
     ...worktree,
     id: 'wt-child',
     instanceId: 'child-instance',
     displayName: 'worker'
   }
+
   const grandchild: Worktree = {
     ...worktree,
     id: 'wt-grandchild',
     instanceId: 'grandchild-instance',
     displayName: 'nested-worker'
   }
+
   const lineage: WorktreeLineage = {
     worktreeId: child.id,
     worktreeInstanceId: 'child-instance',
@@ -40,6 +43,7 @@ describe('buildRows workspace lineage nesting', () => {
     capture: { source: 'terminal-context', confidence: 'inferred' },
     createdAt: 1
   }
+
   const grandchildLineage: WorktreeLineage = {
     worktreeId: grandchild.id,
     worktreeInstanceId: 'grandchild-instance',
@@ -106,22 +110,26 @@ describe('buildRows workspace lineage nesting', () => {
   it('keeps same-id parent and child lineages partitioned by host', () => {
     const parentA = { ...parent, hostId: 'local' as const }
     const childA = { ...child, hostId: 'local' as const, lineage }
+
     const parentB = {
       ...parent,
       hostId: 'ssh:host-b' as const,
       instanceId: 'parent-instance-b'
     }
+
     const lineageB = {
       ...lineage,
       worktreeInstanceId: 'child-instance-b',
       parentWorktreeInstanceId: 'parent-instance-b'
     }
+
     const childB = {
       ...child,
       hostId: 'ssh:host-b' as const,
       instanceId: 'child-instance-b',
       lineage: lineageB
     }
+
     const rows = buildRows(
       'none',
       [childA, parentA, childB, parentB],
@@ -153,10 +161,13 @@ describe('buildRows workspace lineage nesting', () => {
   it('nests stable-update resolved legacy lineage when generalized lineage is absent', () => {
     const parentId =
       '32a0226d-9f33-42e8-8b7b-24867dea06d4::/Users/jinwoo/orca/workspaces/orca/assigned-issues'
+
     const childId =
       '32a0226d-9f33-42e8-8b7b-24867dea06d4::/Users/jinwoo/orca/workspaces/orca/issue-9276-nested-ssh-runtime-routing'
+
     const secondChildId =
       '32a0226d-9f33-42e8-8b7b-24867dea06d4::/Users/jinwoo/orca/workspaces/orca/issue-9744-terminal-close-lifecycle'
+
     const resolvedParent: ResolvedLineageWorktree = {
       ...parent,
       id: parentId,
@@ -164,6 +175,7 @@ describe('buildRows workspace lineage nesting', () => {
       lineage: null,
       workspaceLineage: null
     }
+
     const resolvedLineage: WorktreeLineage = {
       ...lineage,
       worktreeId: childId,
@@ -172,6 +184,7 @@ describe('buildRows workspace lineage nesting', () => {
       parentWorktreeInstanceId: 'b0ffd635-91cd-424f-b804-80d4bb277a4c',
       capture: { source: 'explicit-cli-flag', confidence: 'explicit' }
     }
+
     const resolvedChild: ResolvedLineageWorktree = {
       ...child,
       id: childId,
@@ -179,11 +192,13 @@ describe('buildRows workspace lineage nesting', () => {
       lineage: resolvedLineage,
       workspaceLineage: null
     }
+
     const secondResolvedLineage: WorktreeLineage = {
       ...resolvedLineage,
       worktreeId: secondChildId,
       worktreeInstanceId: '87e2ef9a-99d3-48e3-9a53-3d1a979b5417'
     }
+
     const secondResolvedChild: ResolvedLineageWorktree = {
       ...child,
       id: secondChildId,
@@ -224,6 +239,7 @@ describe('buildRows workspace lineage nesting', () => {
       ...child,
       lineage: { ...lineage, parentWorktreeInstanceId: 'replaced-parent-instance' }
     }
+
     const rows = buildRows(
       'none',
       [resolvedChild, parent],
@@ -252,6 +268,7 @@ describe('buildRows workspace lineage nesting', () => {
       parentWorktreeId: child.id,
       parentWorktreeInstanceId: child.instanceId!
     }
+
     const rows = buildRows(
       'none',
       [grandchild, child, parent],
@@ -281,10 +298,12 @@ describe('buildRows workspace lineage nesting', () => {
 
   it('resolves inline-only ancestor chains for reveal and temporary picker expansion', () => {
     const resolvedChild: ResolvedLineageWorktree = { ...child, lineage }
+
     const resolvedGrandchild: ResolvedLineageWorktree = {
       ...grandchild,
       lineage: grandchildLineage
     }
+
     const worktreeMap = new Map<string, Worktree>([
       [parent.id, parent],
       [resolvedChild.id, resolvedChild],
@@ -300,6 +319,7 @@ describe('buildRows workspace lineage nesting', () => {
 
   it('keeps a resolved child at the root when its parent is missing', () => {
     const resolvedChild: ResolvedLineageWorktree = { ...child, lineage }
+
     const rows = buildRows(
       'none',
       [resolvedChild],
@@ -329,6 +349,7 @@ describe('buildRows workspace lineage nesting', () => {
       projectId: 'github:stablyai/orca',
       ...boundary
     }
+
     const boundedChild: ResolvedLineageWorktree = {
       ...child,
       repoId: 'repo-1',
@@ -336,6 +357,7 @@ describe('buildRows workspace lineage nesting', () => {
       projectId: 'github:stablyai/orca',
       lineage
     }
+
     const rows = buildRows(
       'none',
       [boundedChild, boundedParent],
@@ -362,16 +384,19 @@ describe('buildRows workspace lineage nesting', () => {
       id: 'wt-other-parent',
       instanceId: 'other-parent-instance'
     }
+
     const hydratedLineage = {
       ...lineage,
       parentWorktreeId: otherParent.id,
       parentWorktreeInstanceId: otherParent.instanceId!
     }
+
     const resolvedChild: ResolvedLineageWorktree = {
       ...child,
       parentWorktreeId: parent.id,
       lineage
     }
+
     const rows = buildRows(
       'none',
       [resolvedChild, parent, otherParent],
@@ -471,6 +496,7 @@ describe('buildRows workspace lineage nesting', () => {
 
   it('does not create a parent group for stale instance links', () => {
     const staleLineage = { ...lineage, parentWorktreeInstanceId: 'old-parent-instance' }
+
     const rows = buildRows(
       'none',
       [child],
@@ -498,6 +524,7 @@ describe('buildRows workspace lineage nesting', () => {
 
   it('marks stale instance links as missing for shared context-menu validation', () => {
     const staleLineage = { ...lineage, parentWorktreeInstanceId: 'old-parent-instance' }
+
     const info = getLineageRenderInfo(
       child,
       { [child.id]: staleLineage },
@@ -513,6 +540,7 @@ describe('buildRows workspace lineage nesting', () => {
 
   it('nests unpinned children under a pinned parent in Pinned', () => {
     const pinnedParent = { ...parent, isPinned: true }
+
     const rows = buildRows(
       'none',
       [child, pinnedParent],
@@ -541,6 +569,7 @@ describe('buildRows workspace lineage nesting', () => {
 
   it('nests grandchildren under a pinned ancestor in Pinned', () => {
     const pinnedParent = { ...parent, isPinned: true }
+
     const rows = buildRows(
       'none',
       [grandchild, child, pinnedParent],
@@ -570,6 +599,7 @@ describe('buildRows workspace lineage nesting', () => {
 
   it('duplicates a pinned parent tree into All when the policy allows it', () => {
     const pinnedParent = { ...parent, isPinned: true }
+
     const rows = buildRows(
       'none',
       [child, pinnedParent],
@@ -603,6 +633,7 @@ describe('buildRows workspace lineage nesting', () => {
   it('nests a pinned child under its pinned parent in Pinned', () => {
     const pinnedParent = { ...parent, isPinned: true }
     const pinnedChild = { ...child, isPinned: true }
+
     const rows = buildRows(
       'none',
       [pinnedChild, pinnedParent],
@@ -630,6 +661,7 @@ describe('buildRows workspace lineage nesting', () => {
 
   it('keeps pinned children in Pinned without a parent badge', () => {
     const pinnedChild = { ...child, isPinned: true }
+
     const rows = buildRows(
       'none',
       [parent, pinnedChild],

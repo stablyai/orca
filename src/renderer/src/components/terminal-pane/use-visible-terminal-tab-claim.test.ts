@@ -13,6 +13,7 @@ const reactEffects = vi.hoisted(() => ({
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useEffect: (effect: () => void | (() => void)) => {

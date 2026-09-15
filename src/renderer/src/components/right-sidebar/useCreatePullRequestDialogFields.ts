@@ -45,10 +45,12 @@ export function useCreatePullRequestDialogFields({
         operation: 'pullRequest'
       })
     : null
+
   const resolvedPrDefaults = {
     ...DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
     ...prCreationDefaults
   }
+
   const initializedFromEligibilityRef = useRef<string | null>(null)
   const [initializedEligibilityKey, setInitializedEligibilityKey] = useState<string | null>(null)
   const syncedDefaultBaseRef = useRef<string | null>(null)
@@ -73,8 +75,10 @@ export function useCreatePullRequestDialogFields({
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
   const hasExternalGeneration = Boolean(generation)
+
   const currentEligibilityKey =
     open && eligibility ? `${repoId}:${worktreeId ?? worktreePath}:${branch}` : null
+
   const resolvedDefaultBaseRef = resolveCreateReviewDefaultBaseRef({
     currentBaseRef,
     eligibilityDefaultBaseRef: eligibility?.defaultBaseRef
@@ -95,6 +99,7 @@ export function useCreatePullRequestDialogFields({
     },
     [markFieldDirty]
   )
+
   const setUserTitle = useCallback(
     (value: string): void => {
       markFieldDirty('title')
@@ -102,6 +107,7 @@ export function useCreatePullRequestDialogFields({
     },
     [markFieldDirty]
   )
+
   const setUserBody = useCallback(
     (value: string): void => {
       markFieldDirty('body')
@@ -109,6 +115,7 @@ export function useCreatePullRequestDialogFields({
     },
     [markFieldDirty]
   )
+
   const setUserDraft = useCallback(
     (value: boolean): void => {
       markFieldDirty('draft')
@@ -124,6 +131,7 @@ export function useCreatePullRequestDialogFields({
     ): PullRequestDraftFields => {
       const currentRevisions = fieldRevisionsRef.current
       const nextFields = { base, title, body, draft }
+
       // Why: AI generation runs asynchronously; only fields untouched since
       // the request started are safe to replace with generated output.
       if (currentRevisions.base === seedRevisions.base) {
@@ -132,18 +140,22 @@ export function useCreatePullRequestDialogFields({
         setBaseQuery('')
         setBaseResults([])
       }
+
       if (currentRevisions.title === seedRevisions.title) {
         nextFields.title = fields.title
         setTitle(fields.title)
       }
+
       if (currentRevisions.body === seedRevisions.body) {
         nextFields.body = fields.body
         setBody(fields.body)
       }
+
       if (currentRevisions.draft === seedRevisions.draft) {
         nextFields.draft = fields.draft
         setDraft(fields.draft)
       }
+
       return nextFields
     },
     [base, body, draft, title]

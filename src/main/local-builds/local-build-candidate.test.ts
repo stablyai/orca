@@ -11,6 +11,7 @@ import { loadLocalBuildCandidate } from './local-build-candidate'
 import { startLocalBuildFeed } from './local-build-feed-server'
 
 const tempDirectories: string[] = []
+
 const execFileAsync = promisify(execFile)
 
 function compatibility(): LocalBuildCompatibility {
@@ -55,6 +56,7 @@ async function fixture(options: { sha512?: string; url?: string } = {}) {
       ]
     })
   )
+
   return { artifactPath, directory, manifestPath }
 }
 
@@ -67,6 +69,7 @@ afterEach(async () => {
 describe('loadLocalBuildCandidate', () => {
   it('returns a sanitized, architecture-specific feed after hash validation', async () => {
     const { manifestPath } = await fixture()
+
     const candidate = await loadLocalBuildCandidate(manifestPath, 'arm64', {
       readCompatibility: async () => compatibility()
     })
@@ -110,14 +113,18 @@ describe('loadLocalBuildCandidate', () => {
   it('serves the same artifact descriptor that passed validation', async () => {
     const { artifactPath, directory, manifestPath } = await fixture()
     const movedArtifactPath = join(directory, 'validated.zip')
+
     const candidate = await loadLocalBuildCandidate(manifestPath, 'arm64', {
       readCompatibility: async () => {
         await rename(artifactPath, movedArtifactPath)
         await writeFile(artifactPath, 'replacement')
+
         return compatibility()
       }
     })
+
     const feed = await startLocalBuildFeed(candidate)
+
     try {
       await expect(
         fetch(`${feed.url}orca-macos-arm64.zip`).then((response) => response.text())

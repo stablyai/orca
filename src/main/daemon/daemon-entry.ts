@@ -121,6 +121,7 @@ async function main(): Promise<void> {
     loginSessionWatch,
     logFilePath
   } = parseArgs(process.argv.slice(2))
+
   const startedAtMs = Date.now() - process.uptime() * 1000
   const readyIdentity = await readCurrentDaemonReadyIdentity(startedAtMs)
   // Fail-open: a broken log path must never block daemon startup.
@@ -132,10 +133,12 @@ async function main(): Promise<void> {
   // surface a degraded TCC attribution here where it's diagnosable (F2).
   const runMacosLoginPreflight = async (): Promise<void> => {
     const outcome = await prepareMacosTccLoginShell()
+
     if (outcome && !outcome.ok) {
       daemonLog.log('macos-login-preflight', { ok: outcome.ok, reason: outcome.reason })
     }
   }
+
   // Why: warm the PAM probe at idle startup so the first terminal spawn doesn't
   // pay it under load — shrinking the window where a slow probe degrades (F1/F7).
   void runMacosLoginPreflight()
@@ -150,11 +153,14 @@ async function main(): Promise<void> {
   // crash the daemon — masking those would hide real issues.
   process.on('uncaughtException', (err) => {
     const msg = err?.message ?? ''
+
     if (isNativePtyException(err)) {
       daemonLog.log('uncaught-exception-suppressed', { name: err?.name, message: msg })
       console.error('[daemon] Native PTY exception (suppressed):', err)
+
       return
     }
+
     daemonLog.log('uncaught-exception-fatal', { name: err?.name, message: msg })
     console.error('[daemon] Uncaught exception (fatal):', err)
     throw err
@@ -172,9 +178,11 @@ async function main(): Promise<void> {
     if (shuttingDown) {
       return
     }
+
     shuttingDown = true
     deathWatch?.stop()
     daemonLog.log('shutdown', { reason })
+
     try {
       if (daemon) {
         await Promise.race([
@@ -202,6 +210,7 @@ async function main(): Promise<void> {
   // 'alive' → accepted/healthy, 'dead' → rejected/unhealthy, 'hang' →
   // timeout-inconclusive/unhealthy (the fail-safe path), else inconclusive.
   const e2eProbeFile = process.env.ORCA_E2E_LOGIN_SESSION_PROBE_FILE
+
   const readE2eVerdict = (): string => {
     try {
       return readFileSync(e2eProbeFile as string, 'utf8').trim()
@@ -209,24 +218,29 @@ async function main(): Promise<void> {
       return ''
     }
   }
+
   deathWatch =
     loginSessionWatch && process.platform === 'darwin'
       ? new MacosLoginSessionDeathWatch({
           probeLoginSession: e2eProbeFile
             ? async () => {
                 const verdict = readE2eVerdict()
+
                 if (verdict === 'alive') {
                   return { ok: true, conclusive: true, reason: 'accepted' }
                 }
+
                 if (verdict === 'dead') {
                   return { ok: false, conclusive: true, reason: 'rejected' }
                 }
+
                 return { ok: false, conclusive: false, reason: 'timeout' }
               }
             : probeMacosLoginSessionAlive,
           readResolverHealth: e2eProbeFile
             ? async () => {
                 const verdict = readE2eVerdict()
+
                 return verdict === 'dead' || verdict === 'hang' ? 'unhealthy' : 'healthy'
               }
             : readCurrentProcessMacSystemResolverHealth,
@@ -315,6 +329,7 @@ async function main(): Promise<void> {
   if (process.send) {
     process.send({ type: 'ready', ...readyIdentity })
   }
+
   daemonLog.log('ready')
 
   warmWindowsConptyOnce()
@@ -323,9 +338,11 @@ async function main(): Promise<void> {
 // Only auto-run when executed directly (not imported for testing, or for the build guard's
 // load check — see config/scripts/build-orcad.mjs).
 const isDirectExecution = !process.env.VITEST && !process.env.ORCA_DAEMON_ENTRY_LOAD_CHECK
+
 if (isDirectExecution) {
   main().catch((err) => {
     console.error('[daemon] Fatal:', err)
+
     if (err instanceof DaemonEndpointUnavailableError && err.reason === 'occupied') {
       // Why an exit code and not the IPC message: process.send only proves the write left this
       // process, not that the parent dispatched 'message' before it observed the exit — and the
@@ -334,6 +351,7 @@ if (isDirectExecution) {
       process.send?.({ type: 'endpoint-unavailable', reason: err.reason })
       process.exit(DAEMON_EXIT_ENDPOINT_OCCUPIED)
     }
+
     process.exit(1)
   })
 }

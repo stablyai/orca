@@ -62,6 +62,7 @@ export class CdpTextInputCommands extends CdpBridgeCommandModule {
       await this.ensureDebuggerAttached(guest)
 
       await insertTextThroughCdp(sender, input)
+
       return { typed: true }
     })
   }
@@ -92,6 +93,7 @@ export class CdpTextInputCommands extends CdpBridgeCommandModule {
       const { nodeId } = (await refSender('DOM.requestNode', {
         backendNodeId: node.backendDOMNodeId
       })) as { nodeId: number }
+
       const { object } = (await refSender('DOM.resolveNode', { nodeId })) as {
         object: { objectId: string }
       }
@@ -184,12 +186,15 @@ function resolveKeyDefinition(key: string): KeyDefinition {
   if (KEY_DEFINITIONS[key]) {
     return KEY_DEFINITIONS[key]
   }
+
   // Why: sites that check event.code drop events with invalid code values.
   if (key.length === 1) {
     const charCode = key.charCodeAt(0)
+
     if (charCode >= 48 && charCode <= 57) {
       return { key, code: `Digit${key}`, windowsVirtualKeyCode: charCode, text: key }
     }
+
     if ((charCode >= 65 && charCode <= 90) || (charCode >= 97 && charCode <= 122)) {
       return {
         key,
@@ -198,7 +203,9 @@ function resolveKeyDefinition(key: string): KeyDefinition {
         text: key
       }
     }
+
     return { key, code: '', windowsVirtualKeyCode: charCode, text: key }
   }
+
   return { key, code: key }
 }

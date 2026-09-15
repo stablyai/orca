@@ -2,6 +2,7 @@ import type { GitHistoryItem, GitHistoryItemRef } from './git-history-types'
 import { iterateNulDelimitedFields } from './nul-delimited-fields'
 
 const GIT_HISTORY_DECORATION_SEPARATOR = '\x1f'
+
 const GIT_HISTORY_LEGACY_DECORATION_SEPARATOR = ','
 
 // Why %D too: %(decorate:…) is Git 2.43+, and older Git echoes it verbatim and exits zero.
@@ -18,6 +19,7 @@ export function shortGitHash(hash: string): string {
 
 function commitSubject(message: string): string {
   const firstLine = message.split(/\r?\n/, 1)[0]?.trim()
+
   return firstLine || '(no commit message)'
 }
 
@@ -36,6 +38,7 @@ function parseGitDecorationRefs(
 
   for (const part of parts) {
     const ref = part.trim()
+
     if (!ref || ref === 'HEAD' || /^refs\/remotes\/[^/]+\/HEAD(?:\s|$)/.test(ref)) {
       continue
     }
@@ -91,40 +94,51 @@ export function compareGitHistoryItemRefsByCategory(
     if (ref.id.startsWith('refs/heads/')) {
       return 1
     }
+
     if (ref.id.startsWith('refs/remotes/')) {
       return 2
     }
+
     if (ref.id.startsWith('refs/tags/')) {
       return 3
     }
+
     return 99
   }
 
   const categoryOrder = order(ref1) - order(ref2)
+
   return categoryOrder || ref1.name.localeCompare(ref2.name)
 }
 
 export function parseGitHistoryLog(stdout: string): GitHistoryItem[] {
   const items: GitHistoryItem[] = []
+
   for (const rawRecord of iterateNulDelimitedFields(stdout)) {
     const record = rawRecord.replace(/^\n+/, '')
+
     if (!record.trim()) {
       continue
     }
 
     const lines: string[] = []
     let messageStart = 0
+
     for (let field = 0; field < 8; field += 1) {
       const newline = record.indexOf('\n', messageStart)
+
       if (newline === -1) {
         lines.push(record.slice(messageStart))
         messageStart = record.length
         break
       }
+
       lines.push(record.slice(messageStart, newline))
       messageStart = newline + 1
     }
+
     const hash = lines[0]?.trim() ?? ''
+
     if (!/^[0-9a-fA-F]{40,64}$/.test(hash)) {
       continue
     }
@@ -154,6 +168,7 @@ export function parseGitHistoryLog(stdout: string): GitHistoryItem[] {
       )
     })
   }
+
   return items
 }
 
@@ -163,14 +178,18 @@ export function gitHistoryRefFromFullName(
   revision: string
 ): GitHistoryItemRef {
   const id = fullName || fallbackName
+
   if (id.startsWith('refs/heads/')) {
     return { id, name: id.slice('refs/heads/'.length), revision, category: 'branches' }
   }
+
   if (id.startsWith('refs/remotes/')) {
     return { id, name: id.slice('refs/remotes/'.length), revision, category: 'remote branches' }
   }
+
   if (id.startsWith('refs/tags/')) {
     return { id, name: id.slice('refs/tags/'.length), revision, category: 'tags' }
   }
+
   return { id, name: fallbackName || shortGitHash(revision), revision, category: 'commits' }
 }

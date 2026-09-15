@@ -12,11 +12,13 @@ const RELAY_HOST_ID = 'AAAAAAAAAAAAAAAA'
 function handshake() {
   const desktopKeys = nacl.box.keyPair()
   const phone = new PhoneE2EE(Buffer.from(desktopKeys.publicKey).toString('base64'), RELAY_HOST_ID)
+
   const desktop = DesktopMobileE2EEV2Session.create({
     hello: phone.hello,
     serverSecretKey: desktopKeys.secretKey,
     expectedContext: { transport: 'relay', relayHostId: RELAY_HOST_ID }
   })
+
   return { phone, desktop }
 }
 
@@ -31,12 +33,14 @@ describe('bench PhoneE2EE against the desktop E2EE v2 responder', () => {
   it('round-trips the e2ee_auth frame the bench sends', () => {
     const { phone, desktop } = handshake()
     phone.acceptReady(desktop.ready)
+
     const auth = JSON.stringify({
       type: 'e2ee_auth',
       v: 2,
       transcriptHashB64: phone.transcriptHashB64,
       deviceToken: 'device-token'
     })
+
     expect(desktop.openText(phone.sealText(auth))).toBe(auth)
   })
 

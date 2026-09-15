@@ -15,16 +15,22 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     if (this.headlessHydrationState.has(ptyId)) {
       return
     }
+
     const providerSnapshotPreferred = this.providerSnapshotPreferredPtys.has(ptyId)
+
     if (this.headlessTerminals.has(ptyId) && !providerSnapshotPreferred) {
       // Daemon-snapshot seed already populated the emulator — skip hydration.
       this.headlessHydrationState.set(ptyId, 'done')
+
       return
     }
+
     const controller = this.ptyController
+
     if (!controller?.serializeBuffer || !controller.hasRendererSerializer) {
       return
     }
+
     if (!controller.hasRendererSerializer(ptyId)) {
       // Renderer hasn't registered yet (or never will). Live writes lazy-
       // create the state via trackHeadlessTerminalData on this same tick.
@@ -58,22 +64,28 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
         const rendered = await controller.serializeBuffer!(ptyId, {
           scrollbackRows: MOBILE_SUBSCRIBE_SCROLLBACK_ROWS
         })
+
         if (!rendered || rendered.data.length === 0) {
           return
         }
+
         this.recordOsc7MetadataForPty(ptyId, rendered.data)
         this.recordRecentPtyOutputForPathProvenance(ptyId, rendered.data)
+
         // Resize to renderer's dims so the seed reflows correctly into the
         // emulator's grid, then resize back to PTY dims (if known) so live
         // writes use the correct cell layout.
         if (rendered.cols !== dims.cols || rendered.rows !== dims.rows) {
           state.emulator.resize(rendered.cols, rendered.rows)
         }
+
         await state.emulator.write(rendered.data)
         const ptyDims = this.getTerminalSize(ptyId)
+
         if (ptyDims && (ptyDims.cols !== rendered.cols || ptyDims.rows !== rendered.rows)) {
           state.emulator.resize(ptyDims.cols, ptyDims.rows)
         }
+
         // Why: the renderer xterm no longer sees synthetic hook title frames
         // (they feed main's tracker only), so its serializer lastTitle can be
         // stale here. Prefer main's tracked title; the renderer's is only the
@@ -82,10 +94,12 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
           alternateScreen: state.emulator.isAlternateScreen
         })
         const seedTitle = this.getTrackedRawTitleForPty(ptyId) ?? rendered.lastTitle
+
         if (seedTitle) {
           state.emulator.setLastTitle(seedTitle)
           this.applySeededAgentStatus(ptyId, seedTitle)
         }
+
         this.providerSnapshotPreferredPtys.delete(ptyId)
       } catch {
         // Hydration is best-effort. Live writes continue via the same
@@ -107,6 +121,7 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     if (!title) {
       return
     }
+
     // Why: a relaunched main starts its per-PTY title tracker cold — without
     // this seed it misses the parked working→idle completion and never arms
     // the stale-title timer for a persisted 'working' title. Seeding no-ops
@@ -118,18 +133,21 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     // touches session tabs once for no visible change.
     const seededTitle = normalizeTerminalTitle(title)
     const pty = this.ptysById.get(ptyId)
+
     if (pty) {
       const observedAt = this.nextTitleObservationSequence()
       pty.lastOscTitle = seededTitle
       pty.lastOscTitleAt = observedAt
       this.setPtyManagementTitleFromObservedTitle(pty, seededTitle, observedAt)
     }
+
     for (const leaf of this.getLeavesForPty(ptyId)) {
       // Why: seed lastOscTitle even when the seeded title doesn't classify
       // as an agent state, so worktree.ps recomputes status from the live
       // title rather than treating the leaf as agentless.
       leaf.lastOscTitle = seededTitle
       leaf.lastOscTitleAt = this.nextTitleObservationSequence()
+
       if (status !== null) {
         leaf.lastAgentStatus = status
       }
@@ -153,6 +171,7 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     forwardQueryReplies = false
   ): Promise<void> {
     const state = this.getOrCreateHeadlessTerminal(ptyId)
+
     const completion = state.writeChain.then(async () => {
       // Why: the ingestion-time ownership decision is closed over this
       // chain link; async scheduling cannot retroactively change it.
@@ -162,8 +181,10 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
       await state.emulator.write(data, { forwardQueryReplies })
       state.outputSequence = outputSequence
     })
+
     // Legacy callers remain best-effort; bounded SSH admission observes the raw receipt.
     state.writeChain = completion.catch(() => {})
+
     return completion
   }
 }

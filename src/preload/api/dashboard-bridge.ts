@@ -19,34 +19,43 @@ export const dashboardApi = {
   onPopoutOpenChanged: (callback: (open: boolean) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, open: boolean): void => callback(open)
     ipcRenderer.on('dashboard:popoutOpenChanged', listener)
+
     return () => ipcRenderer.removeListener('dashboard:popoutOpenChanged', listener)
   },
   onSnapshotRequested: (callback: () => void): (() => void) => {
     const listener = (): void => callback()
     ipcRenderer.on('dashboard:snapshotRequested', listener)
+
     return () => ipcRenderer.removeListener('dashboard:snapshotRequested', listener)
   },
   onRevealAgent: (callback: (args: DashboardRevealAgentArgs) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, args: DashboardRevealAgentArgs): void =>
       callback(args)
+
     ipcRenderer.on('ui:revealDashboardAgent', listener)
+
     return () => ipcRenderer.removeListener('ui:revealDashboardAgent', listener)
   },
   onAckAgent: (callback: (paneKey: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, paneKey: string): void => callback(paneKey)
     ipcRenderer.on('ui:ackDashboardAgent', listener)
+
     return () => ipcRenderer.removeListener('ui:ackDashboardAgent', listener)
   },
   onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, args: DashboardSpawnAgentArgs): void =>
       callback(args)
+
     ipcRenderer.on('ui:spawnDashboardAgent', listener)
+
     return () => ipcRenderer.removeListener('ui:spawnDashboardAgent', listener)
   },
   onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, args: DashboardSleepWorkspaceArgs): void =>
       callback(args)
+
     ipcRenderer.on('ui:sleepDashboardWorkspace', listener)
+
     return () => ipcRenderer.removeListener('ui:sleepDashboardWorkspace', listener)
   },
 
@@ -55,13 +64,17 @@ export const dashboardApi = {
   onSnapshot: (callback: (snapshot: DashboardSnapshot) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, snapshot: DashboardSnapshot): void =>
       callback(snapshot)
+
     ipcRenderer.on('dashboard:snapshot', listener)
+
     return () => ipcRenderer.removeListener('dashboard:snapshot', listener)
   },
   onViewRequested: (callback: (view: 'board' | 'map') => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, view: 'board' | 'map'): void =>
       callback(view)
+
     ipcRenderer.on('dashboard:viewRequested', listener)
+
     return () => ipcRenderer.removeListener('dashboard:viewRequested', listener)
   },
   revealAgent: (args: DashboardRevealAgentArgs): Promise<void> =>

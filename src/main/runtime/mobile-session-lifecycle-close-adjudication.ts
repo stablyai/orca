@@ -44,6 +44,7 @@ export function resolveMobileSessionLifecycleCloseContext(args: {
   observedPtyIds: ReadonlySet<string> | null
 }): MobileSessionLifecycleCloseContext {
   const { host, worktreeId, tabId, tab, authorityTab, snapshot, observedPtyIds } = args
+
   const closeParentTabId =
     tab?.type === 'terminal'
       ? tab.parentTabId
@@ -61,17 +62,20 @@ export function resolveMobileSessionLifecycleCloseContext(args: {
               ) as RuntimeMobileSessionTerminalTab | undefined
             )?.parentTabId ??
             null)
+
   const parentLeaves = closeParentTabId
     ? (snapshot?.tabs.filter(
         (candidate): candidate is RuntimeMobileSessionTerminalTab =>
           candidate.type === 'terminal' && candidate.parentTabId === closeParentTabId
       ) ?? [])
     : []
+
   const rendererLeaves = closeParentTabId
     ? [...host.leaves.values()].filter(
         (leaf) => leaf.tabId === closeParentTabId && worktreeIdsEqual(leaf.worktreeId, worktreeId)
       )
     : []
+
   return {
     closeParentTabId,
     closeLeafId:
@@ -88,6 +92,7 @@ export function resolveMobileSessionLifecycleCloseContext(args: {
       const snapshotPtyIds = [leaf.ptyId, leaf.parentLayout?.ptyIdsByLeafId?.[leaf.leafId]].filter(
         (ptyId): ptyId is string => Boolean(ptyId)
       )
+
       return (
         host.findPtyForMobileTerminalTab(worktreeId, leaf)?.connected === true ||
         snapshotPtyIds.some((ptyId) => observedPtyIds?.has(ptyId) === true)
@@ -95,6 +100,7 @@ export function resolveMobileSessionLifecycleCloseContext(args: {
     },
     rendererLeafHasConnectedPty: (leaf) => {
       const ptyId = leaf.ptyId
+
       return Boolean(
         ptyId &&
         (host.ptysById.get(ptyId)?.connected === true || observedPtyIds?.has(ptyId) === true)
@@ -118,32 +124,40 @@ export function adjudicateAbsentMobileSessionTabClose(args: {
   addressedByPtyCloseAuthority: boolean
 }): MobileSessionTabCloseOutcome {
   const { host, context, worktreeId, snapshot, reason } = args
+
   if (reason === undefined || reason === 'user') {
     throw new Error(args.addressedByPtyCloseAuthority ? 'terminal_handle_stale' : 'tab_not_found')
   }
+
   // A missing leaf can still be part of a live split parent. Closing that
   // parent would take the surviving sibling down, so retain the refusal
   // even though the addressed leaf has already been retired.
   const hasLiveRendererParentLeaf = context.rendererLeaves.some(context.rendererLeafHasConnectedPty)
+
   if (context.parentLeaves.some(context.leafHasConnectedPty) || hasLiveRendererParentLeaf) {
     const addressedDeadRendererLeaf =
       context.closeLeafId !== null &&
       !context.rendererLeaves.some(
         (leaf) => leaf.leafId === context.closeLeafId && context.rendererLeafHasConnectedPty(leaf)
       )
+
     if (addressedDeadRendererLeaf) {
       return refusedMobileSessionTabClose('live-host-pty')
     }
+
     if (snapshot) {
       host.republishSnapshot(worktreeId)
     }
+
     return refusedMobileSessionTabClose('live-host-pty')
   }
+
   // The renderer owns a graph-visible parent, including a dead leaf whose
   // lifecycle echo arrived after main retired its mirror. Leave retirement
   // to that renderer instead of acknowledging a host-side close.
   if (context.closeParentTabId && host.tabs.has(context.closeParentTabId)) {
     return refusedMobileSessionTabClose('retirement-owner')
   }
+
   return delegatedMobileSessionTabClose()
 }

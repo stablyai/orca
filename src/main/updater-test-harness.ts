@@ -4,6 +4,7 @@ import { clearTrackedRealTimers, trackRealTimers } from './updater-test-timer-tr
 
 /** Loose spy signature for the electron/electron-updater calls the suites only assert on. */
 type UpdaterSpy = Mock<(...args: unknown[]) => unknown>
+
 type LinuxPackageType = 'deb' | 'rpm' | 'non-root' | 'unusable'
 
 type AutoUpdaterMock = {
@@ -109,6 +110,7 @@ export function createUpdaterMocks(): UpdaterMocks {
     const handlers = appEventHandlers.get(event) ?? []
     handlers.push(handler)
     appEventHandlers.set(event, handlers)
+
     return appMock
   })
 
@@ -122,6 +124,7 @@ export function createUpdaterMocks(): UpdaterMocks {
     const handlers = eventHandlers.get(event) ?? []
     handlers.push(handler)
     eventHandlers.set(event, handlers)
+
     return autoUpdaterMock
   })
 
@@ -144,12 +147,15 @@ export function createUpdaterMocks(): UpdaterMocks {
    */
   const loadGenerationScopedAutoUpdater = (): AutoUpdaterMock => {
     const loadedGeneration = currentGeneration
+
     return new Proxy(autoUpdaterMock, {
       get(target, property) {
         const value = Reflect.get(target, property)
+
         if (loadedGeneration === currentGeneration || typeof value !== 'function') {
           return value
         }
+
         return () => undefined
       },
       set(target, property, value) {
@@ -203,19 +209,24 @@ export function createUpdaterMocks(): UpdaterMocks {
     emit: appEmit,
     quit: vi.fn()
   }
+
   const browserWindowMock = {
     getAllWindows: vi.fn(() => [])
   }
+
   const nativeUpdaterMock = {
     on: vi.fn()
   }
+
   const isMock = { dev: false }
   const killAllPtyMock = vi.fn()
   const powerMonitorOnMock = vi.fn()
   const getLinuxRootPackageTypeMock = vi.fn<() => 'deb' | 'rpm' | null>(() => null)
+
   const getLinuxPackageTypeMock = vi.fn<() => LinuxPackageType>(() => {
     return getLinuxRootPackageTypeMock() ?? 'non-root'
   })
+
   const isExternallyManagedLinuxInstallMock = vi.fn<() => boolean>(() => false)
   const recordUpdaterLifecycleMock = vi.fn()
   const fetchChangelogMock = vi.fn()
@@ -258,6 +269,7 @@ export function createUpdaterMocks(): UpdaterMocks {
     updaterPrereleaseFeed: () => ({
       fetchNewerReleaseTagsWithReadiness: async (...args: unknown[]) => {
         const result = await fetchNewerReleaseTagsMock(...args)
+
         return Array.isArray(result)
           ? { tags: result, state: result.length > 0 ? 'ready' : 'no-newer' }
           : result

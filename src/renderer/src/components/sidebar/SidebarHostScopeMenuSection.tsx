@@ -24,9 +24,11 @@ type SidebarHostScopeMenuSectionProps = {
 
 function getHostMetadata(host: SidebarHostOption): string {
   const healthLabel = getSidebarHostHealthLabel(host.health)
+
   if (host.kind === 'local') {
     return host.detail
   }
+
   if (host.kind === 'ssh') {
     const presenceLabel =
       host.presence === 'configured'
@@ -38,8 +40,10 @@ function getHostMetadata(host: SidebarHostOption): string {
             'auto.components.sidebar.SidebarWorkspaceOptionsMenu.projectSshHost',
             'Project SSH'
           )
+
     return `${presenceLabel} · ${healthLabel}`
   }
+
   const presenceLabel =
     host.presence === 'active'
       ? translate(
@@ -50,6 +54,7 @@ function getHostMetadata(host: SidebarHostOption): string {
           'auto.components.sidebar.SidebarWorkspaceOptionsMenu.projectRuntimeHost',
           'Project server'
         )
+
   return `${presenceLabel} · ${healthLabel}`
 }
 
@@ -67,9 +72,12 @@ export function SidebarHostScopeMenuSection({
   const toggleAllHosts = (): void => {
     if (!allVisible) {
       setWorkspaceHostScope(ALL_EXECUTION_HOSTS_SCOPE)
+
       return
     }
+
     const firstHost = hostOptions[0]
+
     if (firstHost) {
       setVisibleWorkspaceHostIds([firstHost.id])
     }
@@ -78,17 +86,22 @@ export function SidebarHostScopeMenuSection({
   const toggleHost = (hostId: ExecutionHostId): void => {
     if (allVisible) {
       setVisibleWorkspaceHostIds([hostId])
+
       return
     }
+
     const next = new Set(visibleHostIdSet)
+
     if (next.has(hostId)) {
       if (next.size <= 1) {
         return
       }
+
       next.delete(hostId)
     } else {
       next.add(hostId)
     }
+
     setVisibleWorkspaceHostIds(next.size === hostOptions.length ? null : [...next])
   }
 

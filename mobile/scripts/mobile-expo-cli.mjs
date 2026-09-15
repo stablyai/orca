@@ -22,6 +22,7 @@ function runPnpmInstall(mobileDir) {
       shell: process.platform === 'win32',
       stdio: 'inherit'
     })
+
     install.on('error', reject)
     install.on('exit', (code, signal) => {
       if (signal) {
@@ -41,6 +42,7 @@ export async function ensureMobileExpoCli(mobileDir, logger = {}) {
   }
 
   const message = 'Mobile dependencies are missing; running pnpm install --frozen-lockfile...'
+
   if (logger.logStep) {
     logger.logStep('deps', message)
   } else {

@@ -15,9 +15,11 @@ const { muxRequestMock, openConsumerSessionMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: openConsumerSessionMock
 }))
+
 vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   acceptSshPtyOutputData: vi.fn().mockResolvedValue(undefined),
   acceptSshPtyOutputExit: vi.fn().mockResolvedValue(undefined),
@@ -100,6 +102,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
+
 const { clearPtyOwnershipForConnection, unregisterSshPtyProvider } = await import('../ipc/pty')
 
 describe('SshRelaySession consumer recovery durability', () => {
@@ -127,11 +130,14 @@ describe('SshRelaySession consumer recovery durability', () => {
     const deps = createMockDeps()
     let settleWrite!: () => void
     let signalWriteStarted!: () => void
+
     const writeStarted = new Promise<void>((resolve) => {
       signalWriteStarted = resolve
     })
+
     vi.mocked(deps.mockStore.upsertSshPtyConsumerRecovery).mockImplementation(() => {
       signalWriteStarted()
+
       return new Promise<void>((resolve) => {
         settleWrite = resolve
       })
@@ -143,7 +149,9 @@ describe('SshRelaySession consumer recovery durability', () => {
       deps.mockStore,
       deps.mockPortForward
     )
+
     let established = false
+
     const establishing = session.establish(deps.mockConn).then(() => {
       established = true
     })
@@ -162,6 +170,7 @@ describe('SshRelaySession consumer recovery durability', () => {
 
   it('retries a pending incumbent publication before recovering its persisted lease', async () => {
     vi.useFakeTimers()
+
     try {
       const targetId = 'target-owner-publication-pending'
       const deps = createMockDeps()
@@ -178,6 +187,7 @@ describe('SshRelaySession consumer recovery durability', () => {
           code: PTY_CONSUMER_OWNER_RECOVERY_PENDING_ERROR
         })
       )
+
       const session = new SshRelaySession(
         targetId,
         deps.getMainWindow,
@@ -202,6 +212,7 @@ describe('SshRelaySession consumer recovery durability', () => {
 
   it('preserves persisted recovery while a superseding transport is still live', async () => {
     vi.useFakeTimers()
+
     try {
       const targetId = 'target-owner-generation-superseded'
       const deps = createMockDeps()
@@ -213,10 +224,13 @@ describe('SshRelaySession consumer recovery durability', () => {
         ownerGeneration: 1,
         ownerLease: 'persisted-owner'
       })
+
       const superseded = Object.assign(new Error('Owner recovery generation was superseded'), {
         code: PTY_CONSUMER_OWNER_RECOVERY_SUPERSEDED_ERROR
       })
+
       openConsumerSessionMock.mockRejectedValue(superseded)
+
       const session = new SshRelaySession(
         targetId,
         deps.getMainWindow,
@@ -253,17 +267,20 @@ describe('SshRelaySession consumer recovery durability', () => {
           settleRemoval = resolve
         })
     )
+
     const session = new SshRelaySession(
       'target-disposal-durability',
       getMainWindow,
       mockStore,
       mockPortForward
     )
+
     let completed = false
 
     const disposal = session.disposeAndPersist().then(() => {
       completed = true
     })
+
     await Promise.resolve()
 
     expect(session.getState()).toBe('disposed')
@@ -430,6 +447,7 @@ describe('SshRelaySession consumer recovery durability', () => {
       ownerGeneration: 1,
       ownerLease: 'stale-owner'
     })
+
     const winner = {
       mode: 'negotiated' as const,
       clientInstanceId: 'persisted-client',
@@ -437,12 +455,14 @@ describe('SshRelaySession consumer recovery durability', () => {
       ownerGeneration: 5,
       ownerLease: 'winner-owner'
     }
+
     openConsumerSessionMock.mockImplementationOnce(async () => {
       // Why inside the open: the record is target-scoped, so the winner can land while this attempt is
       // still waiting on its own resume, leaving this attempt's `previousOwner` snapshot stale.
       const record = getSshPtyConsumerRecovery(targetId)!
       record.owner = winner
       record.checkpointsByAppPtyId.set('pty-1', { id: 'pty-1' } as unknown as never)
+
       return {
         state: {
           mode: 'negotiated',
@@ -475,12 +495,15 @@ describe('SshRelaySession consumer recovery durability', () => {
       ownerLease: 'persisted-owner'
     })
     let signalOpenStarted!: () => void
+
     const openStarted = new Promise<void>((resolve) => {
       signalOpenStarted = resolve
     })
+
     let finishOpen!: (value: unknown) => void
     openConsumerSessionMock.mockImplementationOnce(() => {
       signalOpenStarted()
+
       return new Promise((resolve) => {
         finishOpen = resolve
       })
@@ -518,16 +541,20 @@ describe('SshRelaySession consumer recovery durability', () => {
   it('does not remember a consumer opened after establish was disposed', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     let signalOpenStarted!: () => void
+
     const openStarted = new Promise<void>((resolve) => {
       signalOpenStarted = resolve
     })
+
     let finishOpen!: (value: unknown) => void
     openConsumerSessionMock.mockImplementationOnce(() => {
       signalOpenStarted()
+
       return new Promise((resolve) => {
         finishOpen = resolve
       })
     })
+
     const session = new SshRelaySession(
       'target-open-disposal',
       getMainWindow,
@@ -615,9 +642,11 @@ describe('SshRelaySession consumer recovery durability', () => {
     await session.establish(mockConn)
 
     let detachCompleted = false
+
     const detach = session.detachAndPersist().then(() => {
       detachCompleted = true
     })
+
     const disposal = session.disposeAndPersist()
 
     // Why: dispose supersedes the in-flight detach, so the destructive half must still run.

@@ -23,6 +23,7 @@ export function WorkspaceSpaceStatusBadge({
       </Badge>
     )
   }
+
   if (deleteState?.error) {
     return (
       <Badge variant="outline" className="border-destructive/30 text-destructive">
@@ -30,6 +31,7 @@ export function WorkspaceSpaceStatusBadge({
       </Badge>
     )
   }
+
   if (worktree.status !== 'ok') {
     return (
       <Badge variant="outline" className="border-destructive/30 text-destructive">
@@ -37,6 +39,7 @@ export function WorkspaceSpaceStatusBadge({
       </Badge>
     )
   }
+
   if (worktree.isMainWorktree) {
     return (
       <Badge variant="outline">
@@ -47,6 +50,7 @@ export function WorkspaceSpaceStatusBadge({
       </Badge>
     )
   }
+
   if (decisionDetails?.isActive) {
     return (
       <Badge variant="outline">
@@ -57,6 +61,7 @@ export function WorkspaceSpaceStatusBadge({
       </Badge>
     )
   }
+
   if ((decisionDetails?.changedFileCount ?? 0) > 0) {
     return (
       <Badge variant="outline">
@@ -67,6 +72,7 @@ export function WorkspaceSpaceStatusBadge({
       </Badge>
     )
   }
+
   if (decisionDetails?.changedFileCount === null) {
     return (
       <Badge variant="outline">
@@ -77,6 +83,7 @@ export function WorkspaceSpaceStatusBadge({
       </Badge>
     )
   }
+
   if ((decisionDetails?.dirtyEditorBufferCount ?? 0) > 0) {
     return (
       <Badge variant="outline">
@@ -87,6 +94,7 @@ export function WorkspaceSpaceStatusBadge({
       </Badge>
     )
   }
+
   if (
     (decisionDetails?.activeAgentCount ?? 0) > 0 ||
     (decisionDetails?.liveTerminalCount ?? 0) > 0 ||
@@ -101,6 +109,7 @@ export function WorkspaceSpaceStatusBadge({
       </Badge>
     )
   }
+
   if (
     decisionDetails?.reviewLabel ||
     decisionDetails?.issueLabel ||
@@ -115,6 +124,7 @@ export function WorkspaceSpaceStatusBadge({
       </Badge>
     )
   }
+
   return (
     <Badge
       variant="outline"

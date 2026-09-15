@@ -18,6 +18,7 @@ describe('Codex failed-acquisition exit proof', () => {
       .fn<() => Promise<boolean>>()
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true)
+
     const connection: CodexAppServerConnection = {
       pid: 4321,
       closed: true,
@@ -27,10 +28,12 @@ describe('Codex failed-acquisition exit proof', () => {
       respondWithError: () => undefined,
       close
     }
+
     const handshakeError = Object.assign(new Error('initialize failed'), {
       name: 'CodexAppServerHandshakeExitUnprovenError',
       connection
     })
+
     const adapter = new CodexStructuredSessionAdapter({
       resolveLaunch: async () => ({
         command: 'codex',
@@ -57,6 +60,7 @@ describe('Codex failed-acquisition exit proof', () => {
       .fn<() => Promise<boolean>>()
       .mockResolvedValueOnce(false)
       .mockResolvedValue(true)
+
     const connection: CodexAppServerConnection = {
       pid: 4321,
       closed: false,
@@ -69,6 +73,7 @@ describe('Codex failed-acquisition exit proof', () => {
       respondWithError: () => undefined,
       close
     }
+
     const adapter = new CodexStructuredSessionAdapter({
       resolveLaunch: async () => ({
         command: 'codex',
@@ -92,6 +97,7 @@ describe('Codex failed-acquisition exit proof', () => {
     const processStart = Promise.withResolvers<number | null>()
     const readStarted = Promise.withResolvers<void>()
     const close = vi.fn<() => Promise<boolean>>().mockResolvedValue(false)
+
     const connection: CodexAppServerConnection = {
       pid: 4321,
       closed: false,
@@ -101,6 +107,7 @@ describe('Codex failed-acquisition exit proof', () => {
       respondWithError: () => undefined,
       close
     }
+
     const adapter = new CodexStructuredSessionAdapter({
       resolveLaunch: async () => ({
         command: 'codex',
@@ -112,9 +119,11 @@ describe('Codex failed-acquisition exit proof', () => {
       openConnection: async () => connection,
       readProcessStartTime: () => {
         readStarted.resolve()
+
         return processStart.promise
       }
     })
+
     const acquiring = adapter.acquire({ identity: IDENTITY, fence: 7, spawnToken: 'spawn-9' })
     await readStarted.promise
 
@@ -130,6 +139,7 @@ describe('Codex failed-acquisition exit proof', () => {
     const openStarted = Promise.withResolvers<void>()
     const releaseOpen = Promise.withResolvers<void>()
     const close = vi.fn<() => Promise<boolean>>().mockResolvedValue(false)
+
     const connection: CodexAppServerConnection = {
       pid: 4321,
       closed: false,
@@ -139,6 +149,7 @@ describe('Codex failed-acquisition exit proof', () => {
       respondWithError: () => undefined,
       close
     }
+
     const adapter = new CodexStructuredSessionAdapter({
       resolveLaunch: async () => ({
         command: 'codex',
@@ -150,10 +161,12 @@ describe('Codex failed-acquisition exit proof', () => {
       openConnection: async () => {
         openStarted.resolve()
         await releaseOpen.promise
+
         return connection
       },
       readProcessStartTime: async () => 1_700_000_000_000
     })
+
     const acquiring = adapter.acquire({ identity: IDENTITY, fence: 7, spawnToken: 'spawn-9' })
     await openStarted.promise
 

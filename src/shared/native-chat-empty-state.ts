@@ -32,6 +32,7 @@ export function formatNativeChatEmptyStateCopy(
   agentLabel: string
 ): NativeChatEmptyStateCopy {
   const copy = NATIVE_CHAT_EMPTY_STATE_COPY[kind]
+
   return {
     title: copy.title.replaceAll('{{value0}}', agentLabel),
     subtitle: copy.subtitle.replaceAll('{{value0}}', agentLabel)

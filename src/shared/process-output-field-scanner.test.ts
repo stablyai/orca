@@ -31,6 +31,7 @@ describe('getProcessOutputFields', () => {
     const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
       ([separator]) => separator instanceof RegExp && separator.source.includes('\\s+')
     )
+
     splitSpy.mockRestore()
     expect(usedWhitespaceFieldSplit).toBe(false)
   })

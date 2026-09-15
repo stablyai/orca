@@ -47,6 +47,7 @@ export function ArtifactListSearchField({
           if (event.key !== 'Escape' || event.nativeEvent.isComposing || !hasText) {
             return
           }
+
           event.preventDefault()
           onClear()
         }}

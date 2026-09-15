@@ -20,6 +20,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -34,9 +35,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -139,6 +142,7 @@ describe('Store', () => {
     writeDataFile(settled)
 
     vi.useFakeTimers()
+
     try {
       const store = await createStore()
       // Why over-advance: the debounce is exactly 1000ms, so an exact-fit advance turns a
@@ -226,9 +230,11 @@ describe('Store', () => {
 
     const armed = await createStore()
     armed.flush()
+
     const armedOnDisk = readDataFile() as {
       ui?: { osc52ClipboardDefaultOnNoticePending?: boolean }
     }
+
     expect(armedOnDisk.ui?.osc52ClipboardDefaultOnNoticePending).toBe(true)
 
     const reloaded = await createStore()

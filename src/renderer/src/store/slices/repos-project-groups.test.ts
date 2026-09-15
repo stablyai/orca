@@ -34,22 +34,39 @@ const projectGroup: ProjectGroup = {
 }
 
 const reposList = vi.fn()
+
 const reposRemove = vi.fn()
+
 const ptyKill = vi.fn()
+
 const projectGroupsList = vi.fn()
+
 const projectGroupsCreate = vi.fn()
+
 const projectGroupsDelete = vi.fn()
+
 const projectGroupsMoveProject = vi.fn()
+
 const projectGroupsImportNested = vi.fn()
+
 const projectGroupsScanNested = vi.fn()
+
 const projectGroupsCancelNestedScan = vi.fn()
+
 const projectGroupsOnNestedScanProgress = vi.fn()
+
 const folderWorkspacesList = vi.fn()
+
 const folderWorkspacesGetPathStatus = vi.fn()
+
 const folderWorkspacesCreate = vi.fn()
+
 const folderWorkspacesUpdate = vi.fn()
+
 const folderWorkspacesDelete = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 function makeSshConnectionState(status: SshConnectionState['status']): SshConnectionState {
@@ -151,6 +168,7 @@ describe('project group store routing', () => {
       parentPath: '/workspace/platform',
       connectionId: 'ssh-1'
     }
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-list-groups',
       ok: true,
@@ -251,6 +269,7 @@ describe('project group store routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-create-folder',
       ok: true,
@@ -280,11 +299,13 @@ describe('project group store routing', () => {
 
   it('blocks Jira folder creation on runtimes without durable linked context support', async () => {
     const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+
     if (oldRuntimeStatus.ok) {
       oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
         (capability) => capability !== 'worktree.linked-work-item-context.v1'
       )
     }
+
     runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
       args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
     )
@@ -321,6 +342,7 @@ describe('project group store routing', () => {
       url: 'https://linear.app/acme/issue/ENG-123',
       linearIdentifier: 'ENG-123'
     }
+
     const folderWorkspace: FolderWorkspace = {
       id: 'folder-workspace-1',
       projectGroupId: projectGroup.id,
@@ -336,6 +358,7 @@ describe('project group store routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     folderWorkspacesCreate.mockResolvedValue(folderWorkspace)
     folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, comment: 'Ready' })
     folderWorkspacesDelete.mockResolvedValue(true)
@@ -394,6 +417,7 @@ describe('project group store routing', () => {
       scope: 'project-group',
       projectGroupId: folderGroup.id
     })
+
     expect(store.getState().folderWorkspacePathStatuses[cacheKey]?.status).toEqual({
       path: '/workspace/platform',
       exists: false,
@@ -404,6 +428,7 @@ describe('project group store routing', () => {
 
   it('ignores stale folder path status responses after a group path changes', async () => {
     let resolveStatus: (status: { path: string; exists: boolean }) => void = () => {}
+
     folderWorkspacesGetPathStatus.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -429,6 +454,7 @@ describe('project group store routing', () => {
 
   it('ignores stale folder path status responses after repo ownership changes', async () => {
     let resolveStatus: (status: { path: string; exists: boolean }) => void = () => {}
+
     folderWorkspacesGetPathStatus.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -462,6 +488,7 @@ describe('project group store routing', () => {
 
   it('treats expired folder path status cache entries as unknown', async () => {
     vi.useFakeTimers()
+
     try {
       const store = createTestStore()
       store.setState({
@@ -527,6 +554,7 @@ describe('project group store routing', () => {
     store.setState({
       sshConnectionStates: new Map([['ssh-1', makeSshConnectionState('disconnected')]])
     })
+
     const disconnectedStatusPromise = store
       .getState()
       .fetchFolderWorkspacePathStatus(request, { force: true })
@@ -564,6 +592,7 @@ describe('project group store routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
     folderWorkspacesDelete.mockResolvedValue(true)
     const store = createTestStore()
@@ -672,6 +701,7 @@ describe('project group store routing', () => {
       projectGroupId: projectGroup.id,
       projectGroupOrder: 0
     }
+
     const result = {
       group: projectGroup,
       repos: [{ path: importedRepo.path, projectId: importedRepo.id, status: 'imported' as const }],
@@ -679,6 +709,7 @@ describe('project group store routing', () => {
       alreadyKnownCount: 0,
       failedCount: 0
     }
+
     projectGroupsImportNested.mockResolvedValue(result)
     projectGroupsList.mockResolvedValue([projectGroup])
     folderWorkspacesList.mockResolvedValue([])
@@ -712,6 +743,7 @@ describe('project group store routing', () => {
   it('routes local nested scan progress by scanId and unsubscribes after completion', async () => {
     const unsubscribe = vi.fn()
     const progressCallback = vi.fn()
+
     const matchingScan = {
       selectedPath: '/platform',
       selectedPathKind: 'non_git_folder' as const,
@@ -724,10 +756,12 @@ describe('project group store routing', () => {
       maxRepos: 100,
       timeoutMs: null
     }
+
     projectGroupsOnNestedScanProgress.mockImplementation(
       (listener: (data: { scanId: string; scan: NestedRepoScanResult }) => void) => {
         listener({ scanId: 'other-scan', scan: { ...matchingScan, repos: [] } })
         listener({ scanId: 'scan-1', scan: matchingScan })
+
         return unsubscribe
       }
     )

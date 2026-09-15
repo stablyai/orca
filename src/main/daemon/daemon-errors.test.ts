@@ -32,6 +32,7 @@ describe('isDaemonEndpointGoneError', () => {
       new Error('connect ENOENT \\\\?\\pipe\\orca-terminal-host-v30-14cb7f94b511'),
       { code: 'ENOENT', syscall: 'connect' }
     )
+
     expect(isDaemonEndpointGoneError(err)).toBe(true)
   })
 

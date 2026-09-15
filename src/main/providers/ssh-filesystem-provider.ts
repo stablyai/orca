@@ -41,7 +41,9 @@ import {
   writeSshTerminalArtifact
 } from './ssh-filesystem-terminal-artifact'
 import { readSshDocPreviewFile } from './ssh-filesystem-doc-preview'
+
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
+
 export class SshFilesystemProvider implements IFilesystemProvider {
   private connectionId: string
   private mux: SshChannelMultiplexer
@@ -83,14 +85,18 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     if (this.disposed) {
       return
     }
+
     this.disposed = true
+
     if (this.unsubscribeNotifications) {
       this.unsubscribeNotifications()
       this.unsubscribeNotifications = null
     }
+
     for (const registration of this.watchListeners.values()) {
       stopSshFilesystemWatchRegistration(this.mux, registration)
     }
+
     this.watchListeners.clear()
   }
 
@@ -118,8 +124,10 @@ export class SshFilesystemProvider implements IFilesystemProvider {
             '[ssh-fs] Relay does not implement fs.readFileStream; falling back to fs.readFile (10 MB cap)'
           )
         }
+
         return (await this.mux.request('fs.readFile', { filePath })) as FileReadResult
       }
+
       throw err
     }
   }
@@ -162,8 +170,10 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     // Why: system SSH targets cannot open an ssh2-owned SFTP channel.
     if (this.rawTransfer?.downloadFile) {
       await this.rawTransfer.downloadFile(sourcePath, destinationPath)
+
       return
     }
+
     await downloadFileViaSftp(this.createSftp, sourcePath, destinationPath)
   }
 
@@ -176,12 +186,15 @@ export class SshFilesystemProvider implements IFilesystemProvider {
       (result) => result as string,
       (err) => {
         this.tempDirPromise = null
+
         if (isMethodNotFoundError(err)) {
           return '/tmp'
         }
+
         throw err
       }
     )
+
     return this.tempDirPromise
   }
 
@@ -199,14 +212,19 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     append: boolean
   ): Promise<void> {
     const contents = Buffer.from(contentBase64, 'base64')
+
     if (this.rawTransfer?.writeBuffer) {
       await this.rawTransfer.writeBuffer(filePath, contents, { append, exclusive: !append })
+
       return
     }
+
     if (!this.createSftp) {
       throw new Error('remote_binary_upload_unavailable')
     }
+
     const sftp = await this.createSftp()
+
     try {
       // Why: relay fs.writeFile is text-only. SFTP writes the decoded bytes
       // directly so runtime uploads do not corrupt images, PDFs, or archives.
@@ -234,10 +252,13 @@ export class SshFilesystemProvider implements IFilesystemProvider {
       if (!isMethodNotFoundError(err)) {
         throw err
       }
+
       if (!this.createSftp) {
         throw new Error('remote_lstat_unavailable')
       }
+
       const sftp = await this.createSftp()
+
       try {
         // Why: older relays predate fs.lstat, but SFTP can still preserve
         // symlink identity for orphaned-worktree safety checks.
@@ -288,6 +309,7 @@ export class SshFilesystemProvider implements IFilesystemProvider {
         // older relays. Fail closed and let reconnect deploy the safe relay.
         throw new Error('Remote safe rename is unavailable. Reconnect the SSH target and retry.')
       }
+
       throw err
     }
   }
@@ -309,15 +331,19 @@ export class SshFilesystemProvider implements IFilesystemProvider {
     options?: Parameters<IFilesystemProvider['listFiles']>[1]
   ): Promise<string[]> {
     const params: Record<string, unknown> = { rootPath }
+
     if (options?.excludePaths && options.excludePaths.length > 0) {
       params.excludePaths = options.excludePaths
     }
+
     if (options?.maxResults !== undefined) {
       params.maxResults = options.maxResults
     }
+
     if (options?.searchQuery !== undefined) {
       params.searchQuery = options.searchQuery
     }
+
     // Why #7721: the signal lets a workspace switch send rpc.cancel so the
     // relay aborts the full-tree scan instead of stacking abandoned scans
     // that starve interactive fs.readDir/fs.stat on the shared SSH channel.

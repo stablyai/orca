@@ -20,6 +20,7 @@ export function PluginCatalogEmptyState({
   tone = 'default'
 }: PluginCatalogEmptyStateProps): React.JSX.Element {
   const destructive = tone === 'destructive'
+
   return (
     <div
       className={cn(

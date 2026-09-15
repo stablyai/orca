@@ -34,6 +34,7 @@ export function openFilePathLinkAtBufferPosition(
   deps: FileLinkHitTestDeps
 ): boolean {
   const logicalLines = buildCandidateLogicalLinesForBufferPosition(buffer, position.y)
+
   if (logicalLines.length === 0) {
     return false
   }
@@ -47,37 +48,47 @@ export function openFilePathLinkAtBufferPosition(
       cachedExists: boolean | undefined
       isKnownWorktreeRoot: boolean
     }[] = []
+
     for (const parsed of extractTerminalFileLinkCandidates(logicalLine.text)) {
       const resolved = deps.startupCwd
         ? resolveTerminalFileLink(parsed, deps.startupCwd, deps.terminalHomePath)
         : null
+
       if (!resolved) {
         continue
       }
+
       const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
+
       if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
         continue
       }
+
       const fileContext = getTerminalFileContext(
         deps.worktreeId,
         deps.worktreePath,
         deps.runtimeEnvironmentId
       )
+
       const mappedPath = mapTerminalFilePath(
         resolved.absolutePath,
         deps.worktreePath,
         terminalLinkWslDistro(deps.wslDistro, deps.runtimeEnvironmentId)
       )
+
       const cacheKey = getTerminalPathExistsCacheKey({
         absolutePath: mappedPath,
         connectionId: fileContext.connectionId,
         isRemoteRuntimePath: isRemoteRuntimeFileOperation(fileContext, mappedPath),
         runtimeEnvironmentId: deps.runtimeEnvironmentId
       })
+
       const isKnownWorktreeRoot = Boolean(resolveKnownWorktreeRootPathLink(mappedPath))
+
       if (/[\\/]$/.test(parsed.pathText) && !isKnownWorktreeRoot) {
         continue
       }
+
       matches.push({
         absolutePath: mappedPath,
         line: resolved.line,
@@ -91,16 +102,20 @@ export function openFilePathLinkAtBufferPosition(
     const cachedMatch = matches
       .filter((match) => match.cachedExists)
       .sort((a, b) => b.pathText.length - a.pathText.length)[0]
+
     const knownWorktreeRootMatch = matches
       .filter((match) => match.isKnownWorktreeRoot)
       .sort((a, b) => b.pathText.length - a.pathText.length)[0]
+
     const uncachedMatch = matches.find((match) => match.cachedExists !== false)
     const match = cachedMatch ?? knownWorktreeRootMatch ?? uncachedMatch
+
     if (match) {
       openDetectedFilePath(match.absolutePath, match.line, match.column, {
         ...deps,
         openWithSystemDefault: deps.openWithSystemDefault === true
       })
+
       return true
     }
   }
@@ -114,19 +129,24 @@ export function buildCandidateLogicalLinesForBufferPosition(
 ): WrappedLogicalLine[] {
   const hardWrappedCandidates = buildHardWrappedPathLogicalLineCandidates(buffer, bufferLineNumber)
   const softWrappedLogicalLine = buildWrappedLogicalLine(buffer, bufferLineNumber)
+
   const candidates = softWrappedLogicalLine
     ? [...hardWrappedCandidates, softWrappedLogicalLine]
     : hardWrappedCandidates
+
   return dedupeLogicalLines(candidates)
 }
 
 export function dedupeLogicalLines(logicalLines: WrappedLogicalLine[]): WrappedLogicalLine[] {
   const seen = new Set<string>()
+
   return logicalLines.filter((logicalLine) => {
     if (seen.has(logicalLine.fingerprint)) {
       return false
     }
+
     seen.add(logicalLine.fingerprint)
+
     return true
   })
 }
@@ -139,5 +159,6 @@ function rangeContainsBufferPosition(
   const lower = range.start.y * terminalColumns + range.start.x
   const upper = range.end.y * terminalColumns + range.end.x
   const current = position.y * terminalColumns + position.x
+
   return lower <= current && current <= upper
 }

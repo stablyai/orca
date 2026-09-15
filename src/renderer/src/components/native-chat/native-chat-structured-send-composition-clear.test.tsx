@@ -9,13 +9,16 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-compos
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
+
 vi.mock('./NativeChatComposerActions', () => ({
   NativeChatComposerActions: () => <div data-testid="composer-actions" />
 }))
+
 vi.mock('./NativeChatAutocompleteMenus', () => ({
   NativeChatMentionHint: () => null,
   NativeChatPickerMenu: () => null
 }))
+
 vi.mock('../../store', () => {
   const state = {
     dictationState: 'idle',
@@ -24,17 +27,22 @@ vi.mock('../../store', () => {
     clearNativeChatLaunchDraft: vi.fn(),
     markNativeChatLaunchDraftAdopted: vi.fn()
   }
+
   const useAppStore = (selector: (value: typeof state) => unknown): unknown => selector(state)
   useAppStore.getState = () => state
+
   return { useAppStore }
 })
+
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   isRemoteRuntimePtyId: () => false,
   sendRuntimePtyInput: vi.fn()
 }))
+
 vi.mock('@/lib/agent-paste-draft', () => ({
   getSettingsForAgentTabRuntimeOwner: () => ({})
 }))
+
 vi.mock('./native-chat-runtime-send', () => ({
   sendNativeChatMessage: vi.fn(),
   sendNativeChatTypedCommand: vi.fn(),
@@ -42,25 +50,31 @@ vi.mock('./native-chat-runtime-send', () => ({
   typeNativeChatCommand: vi.fn(),
   submitNativeChatPrompt: vi.fn()
 }))
+
 vi.mock('./native-chat-runtime-image-send', () => ({
   sendNativeChatMessageWithImageAttachments: vi.fn()
 }))
+
 vi.mock('./claude-model-switch-confirmation', () => ({
   createClaudeModelSwitchConfirmationObserver: vi.fn()
 }))
+
 vi.mock('../../../../shared/native-chat-agent-profiles', async (importOriginal) => ({
   ...(await importOriginal<typeof nativeChatAgentProfiles>()),
   getVerifiedNativeChatCommands: () => []
 }))
+
 vi.mock('@/lib/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
   emitNativeChatPickerItemAccepted: vi.fn(),
   emitNativeChatPickerOpened: vi.fn(),
   emitNativeChatSendClassified: vi.fn()
 }))
+
 vi.mock('./use-native-chat-skills', () => ({
   useNativeChatSkills: () => ({ status: 'ready', skills: [], error: null, retry: () => {} })
 }))
+
 vi.mock('../dictation/dictation-control-events', () => ({
   dispatchDictationControl: vi.fn()
 }))
@@ -71,9 +85,11 @@ type Dispatched = { handled: boolean; accepted: boolean; error: string | null }
 
 function deferred(): { promise: Promise<Dispatched>; resolve: (value: Dispatched) => void } {
   let resolve!: (value: Dispatched) => void
+
   const promise = new Promise<Dispatched>((settle) => {
     resolve = settle
   })
+
   return { promise, resolve }
 }
 
@@ -201,10 +217,12 @@ describe('structured send racing the next IME composition', () => {
 
   it('keeps the draft when a rejected send races the next composition', async () => {
     const dispatch = deferred()
+
     const structured = transport({
       dispatchCommand: vi.fn(() => dispatch.promise),
       send: vi.fn(() => false)
     })
+
     renderComposer(structured)
     const input = textarea()
 
@@ -228,6 +246,7 @@ describe('structured send racing the next IME composition', () => {
     const structured = transport({
       dispatchCommand: vi.fn(async () => ({ handled: true, accepted: false, error: 'nope' }))
     })
+
     renderComposer(structured)
     const input = textarea()
 

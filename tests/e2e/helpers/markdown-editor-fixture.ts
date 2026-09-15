@@ -18,12 +18,14 @@ export type ActiveEditorFile = {
 export async function getActiveWorktreeContext(page: Page): Promise<ActiveWorktreeContext> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
 
     const state = store.getState()
     const worktreeId = state.activeWorktreeId
+
     if (!worktreeId) {
       throw new Error('No active worktree is selected')
     }
@@ -31,6 +33,7 @@ export async function getActiveWorktreeContext(page: Page): Promise<ActiveWorktr
     const worktree = Object.values(state.worktreesByRepo)
       .flat()
       .find((entry) => entry.id === worktreeId)
+
     if (!worktree) {
       throw new Error(`Active worktree was not found in store: ${worktreeId}`)
     }
@@ -77,6 +80,7 @@ export async function openMarkdownFixture(
   await page.evaluate(
     ({ filePath, relativePath, worktreeId }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
@@ -98,14 +102,17 @@ export async function openMarkdownFixture(
       async () => {
         activeFile = await page.evaluate(() => {
           const store = window.__store
+
           if (!store) {
             return null
           }
 
           const state = store.getState()
           const file = state.openFiles.find((entry) => entry.id === state.activeFileId)
+
           return file ? { filePath: file.filePath } : null
         })
+
         return activeFile?.filePath ?? null
       },
       {
@@ -125,6 +132,7 @@ export async function openMarkdownFixture(
 export async function waitForRichMarkdownEditor(page: Page): Promise<Locator> {
   const editor = page.locator('.rich-markdown-editor')
   await expect(editor).toBeVisible({ timeout: MARKDOWN_HYDRATION_TIMEOUT_MS })
+
   return editor
 }
 

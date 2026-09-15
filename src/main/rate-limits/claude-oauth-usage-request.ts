@@ -6,6 +6,7 @@ import { mapClaudeUsageWindow, type ClaudeUsageWindowInput } from './claude-usag
 import { abortedClaudeRateLimitResult } from './claude-usage-result'
 
 const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
+
 const API_TIMEOUT_MS = 10_000
 
 type OAuthUsageLimit = {
@@ -41,6 +42,7 @@ function mapFableWeeklyWindow(data: OAuthUsageResponse): RateLimitWindow | null 
           limit.scope?.model?.display_name?.trim().toLowerCase() === 'fable'
       )
     : undefined
+
   return (
     mapClaudeUsageWindow(
       scoped ? { used_percentage: scoped.percent, resets_at: scoped.resets_at } : undefined,
@@ -59,7 +61,9 @@ export async function fetchClaudeOAuthUsage(
   if (signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+
   await ensureProxyFromEnvironment()
+
   if (signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
@@ -77,14 +81,17 @@ export async function fetchClaudeOAuthUsage(
       },
       signal: requestSignal
     })
+
     if (!response.ok) {
       throw await createOAuthUsageError(response)
     }
 
     const data = (await response.json()) as OAuthUsageResponse
+
     if (signal?.aborted) {
       return abortedClaudeRateLimitResult()
     }
+
     return {
       provider: 'claude',
       session: mapClaudeUsageWindow(data.five_hour, 300),
@@ -98,6 +105,7 @@ export async function fetchClaudeOAuthUsage(
     if (signal?.aborted) {
       return abortedClaudeRateLimitResult()
     }
+
     throw error
   }
 }

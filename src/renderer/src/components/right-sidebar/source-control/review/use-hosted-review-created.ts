@@ -59,21 +59,27 @@ export function useSourceControlHostedReviewCreated({
       const branch = context?.branch ?? branchName
       const worktreeId = context?.worktreeId ?? activeWorktreeId ?? null
       const openChecks = context?.openChecks ?? true
+
       if (!repoPath || !repoId || !branch) {
         return
       }
+
       const copy = localizedHostedReviewCopy(
         resolveSupportedHostedReviewCopyProvider(result.provider)
       )
+
       if (openChecks) {
         setRightSidebarOpen(true)
         setRightSidebarTab('checks')
       }
+
       try {
         const createdLink = resolveCreatedHostedReviewLink(result.provider, result.number)
+
         if (worktreeId && result.provider !== 'unsupported') {
           await updateWorktreeMeta(worktreeId, createdLink.worktree)
         }
+
         const linkedReviewNumbers = {
           linkedGitHubPR,
           fallbackGitHubPR: fallbackGitHubPRNumber,
@@ -83,22 +89,27 @@ export function useSourceControlHostedReviewCreated({
           linkedGiteaPR,
           ...createdLink.lookup
         }
+
         if (result.provider === 'gitlab') {
           await fetchHostedReviewForBranch(repoPath, branch, {
             force: true,
             repoId,
             ...linkedReviewNumbers
           })
+
           return
         }
+
         if (result.provider !== 'github') {
           await fetchHostedReviewForBranch(repoPath, branch, {
             force: true,
             repoId,
             ...linkedReviewNumbers
           })
+
           return
         }
+
         await Promise.all([
           fetchHostedReviewForBranch(repoPath, branch, {
             force: true,

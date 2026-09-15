@@ -33,6 +33,7 @@ describe('pending PTY projection admissions', () => {
 
   it('compacts terminal prefixes and transfers later admissions until the remainder drains', () => {
     const transfer = vi.fn()
+
     const compacted = propagatePendingProjectionRemainder(
       {
         projectionAdmissionIds: ['projection-published', 'projection-partial', 'projection-tail']
@@ -50,6 +51,7 @@ describe('pending PTY projection admissions', () => {
       'projection-after-transfer',
       { isPending: () => true, transfer }
     )
+
     expect(transferred).toEqual({ projectionAdmissionsTransferred: true })
     expect(transfer).toHaveBeenCalledWith(['projection-after-transfer'], 'pending-projection-cap')
 

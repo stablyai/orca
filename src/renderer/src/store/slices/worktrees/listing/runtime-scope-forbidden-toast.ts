@@ -7,6 +7,7 @@ export function notifyRuntimeScopeForbiddenIfNeeded(error: unknown): boolean {
   if (!isRuntimeScopeForbiddenError(error)) {
     return false
   }
+
   toast.error(
     translate(
       'auto.store.slices.worktrees.runtimeScopeForbiddenTitle',
@@ -20,5 +21,6 @@ export function notifyRuntimeScopeForbiddenIfNeeded(error: unknown): boolean {
       )
     }
   )
+
   return true
 }

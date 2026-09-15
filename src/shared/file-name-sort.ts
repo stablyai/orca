@@ -9,9 +9,11 @@ export const fileNameCollator = new Intl.Collator('en', { numeric: true })
 
 export function compareFileNames(a: string, b: string): number {
   const primary = fileNameCollator.compare(a, b)
+
   if (primary !== 0) {
     return primary
   }
+
   // Why: numeric collation ties distinct names ("2" vs "02"); fall back to code
   // units so sibling order stays a total order instead of readdir order.
   return a < b ? -1 : a > b ? 1 : 0
@@ -25,6 +27,7 @@ export function sortDirEntries<T extends { name: string; isDirectory: boolean }>
     if (a.isDirectory !== b.isDirectory) {
       return a.isDirectory ? -1 : 1
     }
+
     return compareFileNames(a.name, b.name)
   })
 }

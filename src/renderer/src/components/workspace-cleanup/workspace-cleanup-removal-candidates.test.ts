@@ -17,6 +17,7 @@ describe('workspace cleanup removal candidates', () => {
 
   it('keeps a same-id sibling on another host removable', () => {
     const local = makeCandidate({ worktreeId: 'repo-1::/repo/shared', executionHostId: 'local' })
+
     const remote = makeCandidate({
       worktreeId: local.worktreeId,
       executionHostId: 'ssh:box',

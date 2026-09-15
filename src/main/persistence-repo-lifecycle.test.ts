@@ -29,6 +29,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -43,9 +44,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -124,11 +127,13 @@ describe('Store', () => {
   it('deleteProjectGroup ungroups repos from the deleted group subtree', async () => {
     const store = await createStore()
     const root = store.createProjectGroup({ name: 'Platform', createdFrom: 'folder-scan' })
+
     const child = store.createProjectGroup({
       name: 'Services',
       parentGroupId: root.id,
       createdFrom: 'folder-scan'
     })
+
     const sibling = store.createProjectGroup({ name: 'Tools', createdFrom: 'manual' })
     store.addRepo(makeRepo({ id: 'direct', path: '/direct', projectGroupId: root.id }))
     store.addRepo(makeRepo({ id: 'nested', path: '/nested', projectGroupId: child.id }))
@@ -206,6 +211,7 @@ describe('Store', () => {
       createdAt: index,
       updatedAt: index
     }))
+
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -817,12 +823,14 @@ describe('Store', () => {
 
   it('reassignSshTargetId keeps the live partition when both host keys exist', async () => {
     const store = await createStore()
+
     const baseSession = {
       activeRepoId: null,
       activeWorktreeId: null,
       activeTabId: null,
       terminalLayoutsByTabId: {}
     }
+
     store.setWorkspaceSession(
       { ...baseSession, tabsByWorktree: { 'r1::/dead': [] } },
       'ssh:ssh-old'

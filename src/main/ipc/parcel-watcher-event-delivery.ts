@@ -9,6 +9,7 @@ import type {
 } from './parcel-watcher-process-protocol'
 
 const DIRECTORY_STAT_CONCURRENCY = 8
+
 const directoryStatSlots = new PrioritySemaphore(DIRECTORY_STAT_CONCURRENCY)
 
 export type WatcherProcessEventDeliveryQueue = {
@@ -18,8 +19,10 @@ export type WatcherProcessEventDeliveryQueue = {
 
 async function statWatcherEventPath(eventPath: string, signal?: AbortSignal): Promise<boolean> {
   const release = await directoryStatSlots.acquire(0, signal)
+
   try {
     signal?.throwIfAborted()
+
     return (await stat(eventPath)).isDirectory()
   } finally {
     release()
@@ -32,10 +35,13 @@ async function mapWatcherEvent(
   signal?: AbortSignal
 ): Promise<WatcherProcessEvent> {
   signal?.throwIfAborted()
+
   if (!includeDirectoryMetadata || event.type === 'delete') {
     return { type: event.type, path: event.path }
   }
+
   let isDirectory = false
+
   try {
     isDirectory = await statWatcherEventPath(event.path, signal)
   } catch {
@@ -43,6 +49,7 @@ async function mapWatcherEvent(
     // Why: a path can vanish between the native event and metadata lookup.
     // Treat unknown metadata as a file-like event so parent invalidation still runs.
   }
+
   return { type: event.type, path: event.path, isDirectory }
 }
 
@@ -52,12 +59,15 @@ export async function prepareWatcherProcessEvents(
   signal?: AbortSignal
 ): Promise<WatcherProcessEvent[] | null> {
   signal?.throwIfAborted()
+
   if (delivery?.maxEventsPerBatch !== undefined && events.length > delivery.maxEventsPerBatch) {
     return null
   }
+
   if (delivery?.includeDirectoryMetadata !== true) {
     return events.map((event) => ({ type: event.type, path: event.path }))
   }
+
   return mapWithConcurrency(events, DIRECTORY_STAT_CONCURRENCY, (event) =>
     mapWatcherEvent(event, true, signal)
   )
@@ -80,18 +90,23 @@ export function createWatcherProcessEventDeliveryQueue(
     if (!active || draining) {
       return
     }
+
     draining = true
+
     try {
       while (active && (pendingOverflow || pendingEvents.length > 0)) {
         const overflowed = pendingOverflow
         const events = pendingEvents
         pendingOverflow = false
         pendingEvents = []
+
         if (overflowed) {
           await deliver(null)
           continue
         }
+
         const prepared = await prepareWatcherProcessEvents(events, delivery, controller.signal)
+
         if (active) {
           await deliver(prepared)
         }
@@ -102,6 +117,7 @@ export function createWatcherProcessEventDeliveryQueue(
       }
     } finally {
       draining = false
+
       if (active && (pendingOverflow || pendingEvents.length > 0)) {
         void drain()
       }
@@ -113,6 +129,7 @@ export function createWatcherProcessEventDeliveryQueue(
       if (!active || events.length === 0 || pendingOverflow) {
         return
       }
+
       if (events.length > eventLimit || pendingEvents.length + events.length > eventLimit) {
         pendingEvents = []
         pendingOverflow = true
@@ -121,6 +138,7 @@ export function createWatcherProcessEventDeliveryQueue(
           pendingEvents.push(event)
         }
       }
+
       void drain()
     },
     close(): void {

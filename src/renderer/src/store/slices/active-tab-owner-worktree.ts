@@ -2,6 +2,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { recordRendererCrashBreadcrumb } from '../../lib/crash-breadcrumb-recorder'
 
 const reportedDuplicateTabVerdicts = new Set<string>()
+
 // Why capped: this set is never pruned and each tab id adds up to two verdict
 // keys. 256 keys cover 128–256 duplicated ids, enough evidence for a bundle.
 const MAX_REPORTED_DUPLICATE_TAB_VERDICTS = 256
@@ -32,17 +33,22 @@ export function resolveActiveTabOwnerWorktreeId(
   // truthiness guard below and silently fall back to the first match — the very
   // misattribution this function exists to remove.
   let activeOwnerId: string | null = null
+
   // Why keys and not entries: entries allocates a pair array per worktree on a path
   // that runs per tab activation. Own keys stay safe to index by.
   for (const worktreeId of Object.keys(tabsByWorktree)) {
     const tabs = tabsByWorktree[worktreeId]
+
     if (!tabs.some((tab) => tab.id === tabId)) {
       continue
     }
+
     ownerCount += 1
+
     if (firstOwnerId === null) {
       firstOwnerId = worktreeId
     }
+
     if (worktreeId === activeWorktreeId) {
       activeOwnerId = worktreeId
     }
@@ -63,6 +69,7 @@ export function resolveActiveTabOwnerWorktreeId(
   // Still at most two crumbs per tab id.
   const resolvedToActiveWorktree = activeOwnerId !== null
   const verdictKey = `${tabId}:${resolvedToActiveWorktree}`
+
   if (
     ownerCount > 1 &&
     !reportedDuplicateTabVerdicts.has(verdictKey) &&
@@ -78,5 +85,6 @@ export function resolveActiveTabOwnerWorktreeId(
   if (ownerCount > 1 && activeOwnerId !== null) {
     return activeOwnerId
   }
+
   return firstOwnerId
 }

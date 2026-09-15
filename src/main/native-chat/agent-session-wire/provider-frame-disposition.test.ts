@@ -28,6 +28,7 @@ describe('provider frame classification catalog', () => {
     ].filter(isDeltaShapedProviderFrameKind)
 
     expect(deltaKinds.length).toBeGreaterThan(0)
+
     for (const kind of deltaKinds) {
       const provider = kind.startsWith('message:') ? 'claude' : 'codex'
       expect(classifyProviderFrame(provider, kind, {}), kind).toBe('stream-into-item')

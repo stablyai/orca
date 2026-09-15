@@ -10,6 +10,7 @@ export function sanitizeNativeChatRpcImageBlock(
   const boundedUrl = boundedImageMetadata(block.url)
   const url = boundedUrl && !isInlineDataUrl(boundedUrl) ? boundedUrl : undefined
   const alt = boundedImageMetadata(block.alt)
+
   return {
     type: 'image-ref',
     ...(path ? { path } : {}),
@@ -24,8 +25,10 @@ function boundedImageMetadata(value: string | undefined): string | undefined {
 
 function isInlineDataUrl(value: string): boolean {
   let schemeStart = 0
+
   while (schemeStart < value.length && value.charCodeAt(schemeStart) <= 0x20) {
     schemeStart += 1
   }
+
   return /^data:/i.test(value.slice(schemeStart))
 }

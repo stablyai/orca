@@ -19,11 +19,13 @@ export type AgentReadyResult = {
 }
 
 const DEFAULT_TIMEOUT_MS = 5000
+
 const POLL_INTERVAL_MS = 120
 
 function resolvePrimaryPtyId(tabId: string): string | null {
   const state = useAppStore.getState()
   const ptyIds = state.ptyIdsByTabId[tabId]
+
   return ptyIds?.[0] ?? null
 }
 
@@ -31,6 +33,7 @@ function titleSuggestsReady(tabId: string): boolean {
   const state = useAppStore.getState()
   const paneTitles = state.runtimePaneTitlesByTabId[tabId]
   const titles: string[] = []
+
   if (paneTitles) {
     for (const title of Object.values(paneTitles)) {
       if (title) {
@@ -38,6 +41,7 @@ function titleSuggestsReady(tabId: string): boolean {
       }
     }
   }
+
   // Why: fall back to the persisted tab.title when runtime pane titles haven't
   // been populated yet (e.g. the TerminalPane has not mounted a title handler
   // for this tab). Finding the tab by id walks every worktree, which is fine
@@ -45,12 +49,14 @@ function titleSuggestsReady(tabId: string): boolean {
   if (titles.length === 0) {
     for (const tabs of Object.values(state.tabsByWorktree)) {
       const tab = tabs.find((t) => t.id === tabId)
+
       if (tab?.title) {
         titles.push(tab.title)
         break
       }
     }
   }
+
   return titles.some((title) => classifyTitleActivity(title) === 'idle')
 }
 
@@ -79,6 +85,7 @@ export async function waitForAgentReady(
     if (attempt > 0) {
       await new Promise((resolve) => window.setTimeout(resolve, POLL_INTERVAL_MS))
     }
+
     attempt += 1
 
     if (titleSuggestsReady(tabId)) {
@@ -86,6 +93,7 @@ export async function waitForAgentReady(
     }
 
     const ptyId = resolvePrimaryPtyId(tabId)
+
     if (!ptyId) {
       continue
     }
@@ -93,6 +101,7 @@ export async function waitForAgentReady(
     try {
       const process = await inspectRuntimeTerminalProcess(useAppStore.getState().settings, ptyId)
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
+
       if (isExpectedAgentProcess(foreground, expectedProcess)) {
         return { ready: true, reason: 'foreground-match' }
       }

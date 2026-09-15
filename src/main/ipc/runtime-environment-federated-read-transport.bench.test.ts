@@ -20,11 +20,14 @@ it.each([
 
 it('closes the retained connection after a measured request rejects', async () => {
   let requestCount = 0
+
   const fixture = createSharedControlFixture(async () => {
     requestCount += 1
+
     if (requestCount === 4) {
       throw new Error('injected measured request failure')
     }
+
     return { ok: true }
   })
 
@@ -55,41 +58,52 @@ describe.runIf(runLiveBenchmark)('federated read RPC transport benchmark', () =>
   it('compares one-shot and shared-control latency on one saved runtime', async () => {
     const userDataPath = process.env.ORCA_RUNTIME_USER_DATA_PATH
     const environmentName = process.env.ORCA_RUNTIME_ENVIRONMENT
+
     if (!userDataPath || !environmentName) {
       throw new Error('Set ORCA_RUNTIME_USER_DATA_PATH and ORCA_RUNTIME_ENVIRONMENT.')
     }
+
     const store = RuntimeEnvironmentStoreSchema.parse(
       JSON.parse(readFileSync(join(userDataPath, 'orca-environments.json'), 'utf8'))
     )
+
     const environment = store.environments.find((entry) => entry.name === environmentName)
+
     if (!environment) {
       throw new Error(`Unknown runtime environment: ${environmentName}`)
     }
+
     const endpoint =
       environment.endpoints.find((entry) => entry.id === environment.preferredEndpointId) ??
       environment.endpoints[0]
+
     if (!endpoint) {
       throw new Error(`Runtime environment ${environmentName} has no endpoint.`)
     }
+
     const pairing = {
       v: 2 as const,
       endpoint: endpoint.endpoint,
       deviceToken: endpoint.deviceToken,
       publicKeyB64: endpoint.publicKeyB64
     }
+
     const params = {
       dispatchId: 'sta3880_benchmark_missing',
       afterSequence: 0,
       limit: 50
     }
+
     const oneShot = await measureRequests(() =>
       sendRemoteRuntimeRequest(pairing, 'orchestration.federationPull', params, 15_000, {
         orchestrationContractVersion: 1
       })
     )
+
     const shared = new RemoteRuntimeSharedControlConnection(pairing, {
       environmentId: environment.id
     })
+
     const { sharedControl, diagnostics } = await measureSharedControlRequests(shared, params)
 
     expect(diagnostics).toMatchObject({ state: 'ready', pendingRequestCount: 0 })
@@ -113,7 +127,9 @@ async function measureSharedControlRequests(
         }),
       count
     )
+
     const diagnostics = shared.getDiagnostics()
+
     return { sharedControl, diagnostics }
   } finally {
     shared.close()
@@ -135,17 +151,22 @@ async function measureRequests(
   for (let index = 0; index < 3; index++) {
     await request()
   }
+
   const durations: number[] = []
   const responseCodes = new Set<string>()
+
   for (let index = 0; index < count; index++) {
     const startedAt = performance.now()
     const response = await request()
     durations.push(performance.now() - startedAt)
+
     if (!response.ok && response.error) {
       responseCodes.add(response.error.code)
     }
   }
+
   durations.sort((left, right) => left - right)
+
   return {
     count,
     meanMs: round(durations.reduce((sum, value) => sum + value, 0) / count),
@@ -161,11 +182,13 @@ function percentile(sorted: number[], fraction: number): number {
   if (sorted.length === 0) {
     return 0
   }
+
   const rank = (sorted.length - 1) * fraction
   const lowerIndex = Math.floor(rank)
   const upperIndex = Math.ceil(rank)
   const lower = sorted[lowerIndex] ?? 0
   const upper = sorted[upperIndex] ?? lower
+
   return lower + (upper - lower) * (rank - lowerIndex)
 }
 
@@ -191,17 +214,21 @@ function createSharedControlFixture(
     deviceToken: 'token',
     publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
   })
+
   const socketClose = vi.fn()
+
   const unsafe = connection as unknown as {
     state: string
     ws: { readyState: number; close: () => void } | null
     sharedKey: Uint8Array | null
     request: typeof request
   }
+
   unsafe.state = 'ready'
   unsafe.ws = { readyState: 1, close: socketClose }
   unsafe.sharedKey = new Uint8Array(32).fill(2)
   unsafe.request = vi.fn(request)
   const close = vi.spyOn(connection, 'close')
+
   return { connection, close, socketClose, retainedHandleCount: () => (unsafe.ws ? 1 : 0) }
 }

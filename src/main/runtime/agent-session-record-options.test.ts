@@ -6,7 +6,9 @@ import { readNativeSessionOptions } from '../native-chat/agent-session-wire/stru
 import { AgentSessionRecordStore } from './agent-session-record-store'
 
 const NOW = 1_800_000_000_000
+
 const SESSION = 'session-options'
+
 let directory: string
 
 beforeEach(async () => {
@@ -47,6 +49,7 @@ it('drops provider-rejected persisted options before the next owner proof', asyn
 
 it('persists resumed provider options atomically with owner proof', async () => {
   const store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
+
   const reserved = await store.reserveOwner({
     sessionId: SESSION,
     location: {
@@ -70,6 +73,7 @@ it('persists resumed provider options atomically with owner proof', async () => 
     },
     now: NOW
   })
+
   const fence = reserved.record.lease.runtimeFence
   await store.commitProcessIdentity({
     sessionId: SESSION,
@@ -82,6 +86,7 @@ it('persists resumed provider options atomically with owner proof', async () => 
     },
     now: NOW
   })
+
   const options = await readNativeSessionOptions({
     adapter: {
       readOptions: async () => ({
@@ -92,6 +97,7 @@ it('persists resumed provider options atomically with owner proof', async () => 
     sessionId: SESSION,
     fence
   })
+
   await store.proveOwner({
     sessionId: SESSION,
     fence,

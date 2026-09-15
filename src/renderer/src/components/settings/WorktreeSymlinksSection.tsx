@@ -38,6 +38,7 @@ export function WorktreeSymlinksSection({
   // filesystem when the switcher-selected repo is actually local.
   const useLocalDirectorySuggestions = getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
   const directorySuggestionKey = `${repo.path}\n${repo.connectionId ?? ''}`
+
   const [directorySuggestions, setDirectorySuggestions] = useState<DirectorySuggestionState>(
     () => ({
       requestKey: directorySuggestionKey,
@@ -49,6 +50,7 @@ export function WorktreeSymlinksSection({
     if (!useLocalDirectorySuggestions) {
       return
     }
+
     let cancelled = false
     void window.api.fs
       .readDir({ dirPath: repo.path, connectionId: repo.connectionId ?? undefined })
@@ -56,6 +58,7 @@ export function WorktreeSymlinksSection({
         if (cancelled) {
           return
         }
+
         setDirectorySuggestions({
           requestKey: directorySuggestionKey,
           entries: list.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory }))
@@ -65,6 +68,7 @@ export function WorktreeSymlinksSection({
         // Non-fatal: without entries the combobox still works as a free-text
         // input — the user can type any path and commit it.
       })
+
     return () => {
       cancelled = true
     }
@@ -75,6 +79,7 @@ export function WorktreeSymlinksSection({
       useLocalDirectorySuggestions && directorySuggestions.requestKey === directorySuggestionKey
         ? directorySuggestions.entries
         : []
+
     return getWorktreeSymlinkPathFilterState({
       query,
       suggestions: suggestionEntries,
@@ -84,10 +89,13 @@ export function WorktreeSymlinksSection({
 
   const commit = (rawName: string): void => {
     const trimmed = rawName.trim().replace(/^\/+/, '')
+
     if (!trimmed || paths.includes(trimmed)) {
       setQuery('')
+
       return
     }
+
     updateRepo(repo.id, { symlinkPaths: [...paths, trimmed] })
     setQuery('')
     setOpen(false)
@@ -182,6 +190,7 @@ export function WorktreeSymlinksSection({
                 {filtered.map((entry) => {
                   const alreadyAdded = paths.includes(entry.name)
                   const FileIcon = getFileTypeIcon(entry.name)
+
                   return (
                     <CommandItem
                       key={entry.name}

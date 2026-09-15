@@ -6,6 +6,7 @@ const hiddenClaimCounts = new Map<string, number>()
 type VisibilityClaim = { ptyId: string; visible: boolean }
 
 const visibilityClaimsByOwner = new Map<object, VisibilityClaim>()
+
 const visibleClaimCounts = new Map<string, number>()
 
 function sendHiddenState(ptyId: string, hidden: boolean): void {
@@ -26,22 +27,28 @@ function sendVisibility(ptyId: string, visible: boolean): void {
 export function acquireHiddenRendererPtyDeliveryClaim(ptyId: string): () => void {
   const nextCount = (hiddenClaimCounts.get(ptyId) ?? 0) + 1
   hiddenClaimCounts.set(ptyId, nextCount)
+
   if (nextCount === 1) {
     sendHiddenState(ptyId, true)
   }
 
   let released = false
+
   return () => {
     if (released) {
       return
     }
+
     released = true
     const currentCount = hiddenClaimCounts.get(ptyId) ?? 0
+
     if (currentCount <= 1) {
       hiddenClaimCounts.delete(ptyId)
       sendHiddenState(ptyId, false)
+
       return
     }
+
     hiddenClaimCounts.set(ptyId, currentCount - 1)
   }
 }
@@ -58,12 +65,17 @@ function removeVisibleClaim(claim: VisibilityClaim): boolean {
   if (!claim.visible) {
     return false
   }
+
   const currentCount = visibleClaimCounts.get(claim.ptyId) ?? 0
+
   if (currentCount <= 1) {
     visibleClaimCounts.delete(claim.ptyId)
+
     return true
   }
+
   visibleClaimCounts.set(claim.ptyId, currentCount - 1)
+
   return false
 }
 
@@ -77,24 +89,29 @@ export function setRendererPtyVisibilityClaim(
   visible: boolean
 ): void {
   const previous = visibilityClaimsByOwner.get(owner)
+
   if (previous?.ptyId === ptyId && previous.visible === visible) {
     return
   }
 
   if (previous) {
     const becameHidden = removeVisibleClaim(previous)
+
     if (becameHidden && previous.ptyId !== ptyId) {
       sendVisibility(previous.ptyId, false)
     }
   }
 
   visibilityClaimsByOwner.set(owner, { ptyId, visible })
+
   if (visible) {
     const nextCount = (visibleClaimCounts.get(ptyId) ?? 0) + 1
     visibleClaimCounts.set(ptyId, nextCount)
+
     if (nextCount === 1) {
       sendVisibility(ptyId, true)
     }
+
     return
   }
 
@@ -105,10 +122,13 @@ export function setRendererPtyVisibilityClaim(
 
 export function releaseRendererPtyVisibilityClaim(owner: object): void {
   const previous = visibilityClaimsByOwner.get(owner)
+
   if (!previous) {
     return
   }
+
   visibilityClaimsByOwner.delete(owner)
+
   if (removeVisibleClaim(previous)) {
     sendVisibility(previous.ptyId, false)
   }

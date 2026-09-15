@@ -107,9 +107,11 @@ export function isTransientRefreshFailure(refresh: ChecksPanelRefreshInput | und
   if (!refresh) {
     return false
   }
+
   if (isRateLimitRefresh(refresh)) {
     return true
   }
+
   if (refresh.status === 'error') {
     // Untyped and typed-transient errors only pause background refresh; they do
     // not prove a fresh user-initiated lookup would fail.
@@ -120,6 +122,7 @@ export function isTransientRefreshFailure(refresh: ChecksPanelRefreshInput | und
       refresh.errorType === 'unknown'
     )
   }
+
   return false
 }
 
@@ -138,6 +141,7 @@ export function confirmedComposerMode(
   if (!input.confirmedReadiness) {
     return 'hidden'
   }
+
   return input.confirmedNeedsPush ? 'needs_push_open' : 'confirmed_open'
 }
 
@@ -147,9 +151,11 @@ export function workflowActionForComposer(
   if (mode === 'confirmed_open') {
     return 'create'
   }
+
   if (mode === 'needs_push_open') {
     return 'push_and_create'
   }
+
   return null
 }
 

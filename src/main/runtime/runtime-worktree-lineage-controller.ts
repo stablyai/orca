@@ -41,6 +41,7 @@ export class RuntimeWorktreeLineageController {
         const db = this.deps.getDb()
         const dispatch = db?.getActiveDispatchForTerminal(handle)
         const run = db?.getActiveCoordinatorRun()
+
         return {
           parent,
           ...(dispatch ? { activeDispatch: { taskId: dispatch.task_id } } : {}),
@@ -53,14 +54,17 @@ export class RuntimeWorktreeLineageController {
   async resolveParent(selector: string): Promise<ResolvedWorkspaceParent> {
     const rawSelector = selector.startsWith('id:') ? selector.slice(3) : selector
     const parsed = parseWorkspaceKey(rawSelector)
+
     if (parsed?.type === 'folder') {
       const folderWorkspace = this.deps
         .getStore()
         ?.getFolderWorkspaces?.()
         .find((workspace) => workspace.id === parsed.folderWorkspaceId)
+
       if (!folderWorkspace) {
         throw new Error('selector_not_found')
       }
+
       return {
         type: 'folder',
         workspaceKey: folderWorkspaceKey(folderWorkspace.id),
@@ -68,6 +72,7 @@ export class RuntimeWorktreeLineageController {
         instanceId: null
       }
     }
+
     return this.resolveWorktreeParent(
       parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector
     )
@@ -75,6 +80,7 @@ export class RuntimeWorktreeLineageController {
 
   async resolveWorktreeParent(selector: string): Promise<ResolvedWorkspaceParent> {
     const worktree = await this.deps.resolveWorktree(selector)
+
     return {
       type: 'worktree',
       workspaceKey: worktreeWorkspaceKey(worktree.id),
@@ -87,20 +93,24 @@ export class RuntimeWorktreeLineageController {
     if (child.id === parent.id) {
       throw new RuntimeLineageError('LINEAGE_PARENT_CYCLE', 'A worktree cannot parent itself.')
     }
+
     if (!sharesResolvedWorktreeLineageBoundary(child, parent)) {
       throw new RuntimeLineageError(
         'LINEAGE_PARENT_CONTEXT_CONFLICT',
         'Parent worktree must belong to the same repository, execution host, and project.'
       )
     }
+
     const instanceById = new Map(
       this.deps.getCachedWorktrees()?.map((worktree) => [worktree.id, worktree.instanceId]) ?? [
         [child.id, child.instanceId],
         [parent.id, parent.instanceId]
       ]
     )
+
     let cursor: string | undefined = parent.id
     const visited = new Set<string>([child.id])
+
     while (cursor) {
       if (visited.has(cursor)) {
         throw new RuntimeLineageError(
@@ -108,17 +118,21 @@ export class RuntimeWorktreeLineageController {
           'Parent selector would create a lineage cycle.'
         )
       }
+
       visited.add(cursor)
       const lineage = this.deps.getStore()?.getWorktreeLineage?.(cursor)
+
       if (!lineage) {
         break
       }
+
       if (
         instanceById.get(cursor) !== lineage.worktreeInstanceId ||
         instanceById.get(lineage.parentWorktreeId) !== lineage.parentWorktreeInstanceId
       ) {
         break
       }
+
       cursor = lineage.parentWorktreeId
     }
   }
@@ -127,11 +141,14 @@ export class RuntimeWorktreeLineageController {
     const db = this.deps.getDb()
     const dispatch = db?.getDispatchContext(taskId)
     const handle = dispatch?.assignee_handle ?? db?.getTask(taskId)?.created_by_terminal_handle
+
     if (!handle) {
       return null
     }
+
     try {
       const terminal = await this.deps.showTerminal(handle)
+
       return {
         source: 'orchestration-context',
         parent: await this.resolveWorktreeParent(`id:${terminal.worktreeId}`),
@@ -144,18 +161,24 @@ export class RuntimeWorktreeLineageController {
 
   async hydrate(): Promise<void> {
     const store = this.deps.getStore()
+
     if (!store?.getWorktreeLineage || !store.setWorktreeLineage) {
       return
     }
+
     for (const worktree of await this.deps.listResolvedWorktrees()) {
       if (store.getWorktreeLineage(worktree.id) || !worktree.instanceId) {
         continue
       }
+
       const taskId = worktree.comment?.match(/\btask_[A-Za-z0-9]+\b/)?.[0]
+
       if (!taskId) {
         continue
       }
+
       const candidate = await this.resolveTaskCandidate(taskId)
+
       if (
         !candidate?.parent.instanceId ||
         candidate.parent.type !== 'worktree' ||
@@ -163,11 +186,13 @@ export class RuntimeWorktreeLineageController {
       ) {
         continue
       }
+
       try {
         this.validateParent(worktree, candidate.parent.worktree)
       } catch {
         continue
       }
+
       store.setWorktreeLineage(worktree.id, {
         worktreeId: worktree.id,
         worktreeInstanceId: worktree.instanceId,
@@ -183,11 +208,13 @@ export class RuntimeWorktreeLineageController {
 
   async listWorktreeLineage(): Promise<Record<string, WorktreeLineage>> {
     await this.hydrate()
+
     return this.deps.getStore()?.getAllWorktreeLineage?.() ?? {}
   }
 
   async listWorkspaceLineage(): Promise<Record<WorkspaceKey, WorkspaceLineage>> {
     await this.hydrate()
+
     return this.deps.getStore()?.getAllWorkspaceLineage?.() ?? {}
   }
 }

@@ -33,6 +33,7 @@ registerWorktreeSuiteHooks()
 
 describe('addWorktree', () => {
   afterEach(() => vi.restoreAllMocks())
+
   const resolveCreationBaseConfigWrite = () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // config --local --replace-all branch.<branch>.base
   }
@@ -48,6 +49,7 @@ describe('addWorktree', () => {
   it('fast-forwards with reset --hard when localBranch is checked out in primary worktree', async () => {
     const worktreeListOutput =
       'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-other\nHEAD def456\nbranch refs/heads/feature\n'
+
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
       .mockResolvedValueOnce({ stdout: '0\t3\n' }) // rev-list --left-right --count
@@ -110,6 +112,7 @@ describe('addWorktree', () => {
   it('fast-forwards with reset --hard in sibling worktree when localBranch is checked out there', async () => {
     const worktreeListOutput =
       'worktree /repo\nHEAD abc123\nbranch refs/heads/develop\n\nworktree /repo-main-wt\nHEAD def456\nbranch refs/heads/main\n'
+
     gitExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: 'abc123\n' }) // rev-parse refs/remotes/origin/main^{commit}
       .mockResolvedValueOnce({ stdout: '0\t3\n' }) // rev-list --left-right --count

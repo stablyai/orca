@@ -12,14 +12,20 @@ import type * as GitRunner from '../git/runner'
 type WatchCallback = (...args: unknown[]) => void
 
 export const lstatMock: Mock<(path: string) => Promise<unknown>> = vi.fn()
+
 export const openMock: Mock<(...args: Parameters<typeof FsPromises.open>) => Promise<unknown>> =
   vi.fn()
+
 export const readdirMock: Mock<(path: string, options?: unknown) => Promise<unknown>> = vi.fn()
+
 export const renameMock: Mock<(from: string, to: string) => Promise<unknown>> = vi.fn()
+
 export const resolveAuthorizedPathMock: Mock<
   (targetPath: string, store?: unknown, options?: unknown) => Promise<unknown>
 > = vi.fn()
+
 export const statMock: Mock<(path: string) => Promise<unknown>> = vi.fn()
+
 export const watchInWatcherProcessMock: Mock<
   (
     rootPath: string,
@@ -28,21 +34,28 @@ export const watchInWatcherProcessMock: Mock<
     signal?: AbortSignal
   ) => Promise<unknown>
 > = vi.fn()
+
 export const closeWatcherInWatcherProcessMock: Mock<(rootPath: string) => Promise<unknown>> =
   vi.fn()
+
 export const checkRgAvailableMock: Mock<
   (searchPath?: string, wslDistro?: string) => Promise<unknown>
 > = vi.fn()
+
 export const getLocalGitOptionsForRegisteredWorktreeMock: Mock<
   (store: unknown, worktreePath: string, repoPath?: string) => unknown
 > = vi.fn()
+
 export const searchWithGitGrepMock: Mock<(...args: unknown[]) => Promise<unknown>> = vi.fn()
+
 export const wslAwareSpawnMock: Mock<
   (command: string, args: string[], options: unknown) => unknown
 > = vi.fn()
+
 export const watchMock: Mock<
   (rootPath: string, options: unknown, callback: WatchCallback) => unknown
 > = vi.fn()
+
 export const getSshFilesystemProviderMock: Mock<(...args: unknown[]) => unknown> = vi.fn()
 
 export function enoent(): Error {
@@ -51,6 +64,7 @@ export function enoent(): Error {
 
 export async function fsModuleMock() {
   const actual = await vi.importActual<typeof Fs>('fs')
+
   return {
     ...actual,
     watch: watchMock
@@ -59,11 +73,13 @@ export async function fsModuleMock() {
 
 export async function fsPromisesModuleMock() {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
+
   return {
     ...actual,
     lstat: lstatMock,
     open: (...args: Parameters<typeof actual.open>) => {
       const impl = openMock.getMockImplementation()
+
       return impl ? openMock(...args) : actual.open(...args)
     },
     readdir: readdirMock,
@@ -79,6 +95,7 @@ export const fileWatcherHostMock = {
 
 export async function filesystemAuthModuleMock() {
   const actual = await vi.importActual<typeof FilesystemAuth>('../ipc/filesystem-auth')
+
   return {
     ...actual,
     resolveAuthorizedPath: resolveAuthorizedPathMock
@@ -87,6 +104,7 @@ export async function filesystemAuthModuleMock() {
 
 export async function gitRunnerModuleMock() {
   const actual = await vi.importActual<typeof GitRunner>('../git/runner')
+
   return {
     ...actual,
     wslAwareSpawn: wslAwareSpawnMock
@@ -112,9 +130,11 @@ export const sshFilesystemDispatchMock = {
   getSshFilesystemProvider: getSshFilesystemProviderMock,
   requireSshFilesystemProvider: (connectionId: string) => {
     const provider = getSshFilesystemProviderMock(connectionId)
+
     if (!provider) {
       throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
     }
+
     return provider
   },
   onSshFilesystemProviderRegistered: () => () => undefined,

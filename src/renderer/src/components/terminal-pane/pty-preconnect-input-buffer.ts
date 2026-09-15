@@ -1,6 +1,7 @@
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
 
 export const PTY_PRECONNECT_INPUT_MAX_ENTRIES = 1024
+
 // Why: a retention budget, not the 16MB single-write ceiling. The deferral lasts
 // under a second and this is held twice (transport buffer + handoff record) across
 // up to 64 deferred splits, so size it at a few clipboard-sized pastes.
@@ -49,6 +50,7 @@ export function createPtyPreconnectInputBuffer(
   let activeAcceptedInput: BufferedInput | null = null
   let activeFlush: Promise<void> | null = null
   let stopFlush!: () => void
+
   const flushStopped = new Promise<void>((resolve) => {
     stopFlush = resolve
   })
@@ -56,6 +58,7 @@ export function createPtyPreconnectInputBuffer(
   const retain = (input: BufferedInput): boolean => {
     const activeEntries = activeAcceptedInput ? 1 : 0
     const activeCodeUnits = activeAcceptedInput?.data.length ?? 0
+
     if (
       !buffering ||
       pending.length + activeEntries >= PTY_PRECONNECT_INPUT_MAX_ENTRIES ||
@@ -63,15 +66,19 @@ export function createPtyPreconnectInputBuffer(
     ) {
       return false
     }
+
     pending.push(input)
     pendingCodeUnits += input.data.length
+
     return true
   }
+
   const createInput = (
     data: string,
     kind: PtyPreconnectInputKind,
     resolve?: BufferedInput['resolve']
   ): BufferedInput => ({ data, kind, ...(resolve ? { resolve } : {}) })
+
   const notifyRetained = (
     onRetained: ((entry: PtyPreconnectInputEntry) => void) | undefined,
     input: BufferedInput
@@ -88,6 +95,7 @@ export function createPtyPreconnectInputBuffer(
   for (const entry of initialEntries) {
     retain(createInput(entry.data, entry.kind))
   }
+
   const clear = (): void => {
     const dropped = pending
     pending = []
@@ -96,9 +104,11 @@ export function createPtyPreconnectInputBuffer(
     const inFlight = activeAcceptedInput
     activeAcceptedInput = null
     inFlight?.resolve?.(false)
+
     for (const input of dropped) {
       input.resolve?.(false)
     }
+
     stopFlush()
   }
 
@@ -106,20 +116,27 @@ export function createPtyPreconnectInputBuffer(
     try {
       while (buffering && pending.length > 0) {
         const input = pending.shift()
+
         if (!input) {
           continue
         }
+
         pendingCodeUnits -= input.data.length
+
         if (input.kind === 'accepted') {
           activeAcceptedInput = input
         }
+
         if (!buffering || !writer.isCurrent()) {
           input.resolve?.(false)
           clear()
+
           return
         }
+
         if (input.kind === 'accepted') {
           let accepted: boolean | null = null
+
           try {
             accepted = await Promise.race([
               Promise.resolve(
@@ -132,32 +149,43 @@ export function createPtyPreconnectInputBuffer(
           } catch {
             input.resolve?.(false)
             clear()
+
             return
           } finally {
             if (activeAcceptedInput === input) {
               activeAcceptedInput = null
             }
           }
+
           if (!buffering || accepted === null) {
             input.resolve?.(false)
+
             return
           }
+
           input.resolve?.(accepted)
+
           if (!accepted) {
             clear()
+
             return
           }
+
           continue
         }
+
         const accepted =
           input.kind === 'immediate'
             ? writer.sendInputImmediate(input.data)
             : writer.sendInput(input.data)
+
         if (!accepted) {
           clear()
+
           return
         }
       }
+
       buffering = false
       stopFlush()
     } catch (error) {
@@ -170,17 +198,22 @@ export function createPtyPreconnectInputBuffer(
     if (activeFlush) {
       return activeFlush
     }
+
     if (!buffering) {
       return Promise.resolve()
     }
+
     const flushPromise = Promise.resolve().then(() => runFlush(writer))
     activeFlush = flushPromise
+
     const releaseFlight = (): void => {
       if (activeFlush === flushPromise) {
         activeFlush = null
       }
     }
+
     void flushPromise.then(releaseFlight, releaseFlight)
+
     return flushPromise
   }
 
@@ -189,18 +222,23 @@ export function createPtyPreconnectInputBuffer(
     enqueue(data, kind, onRetained) {
       const input = createInput(data, kind)
       const retained = retain(input)
+
       if (retained) {
         notifyRetained(onRetained, input)
       }
+
       return retained
     },
     enqueueAccepted(data, onRetained) {
       return new Promise<boolean>((resolve) => {
         const input = createInput(data, 'accepted', resolve)
+
         if (!retain(input)) {
           resolve(false)
+
           return
         }
+
         notifyRetained(onRetained, input)
       })
     },

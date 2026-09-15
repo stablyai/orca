@@ -40,10 +40,12 @@ export async function changePullRequestState(args: {
   if (!args.canMutateState || args.statePending) {
     return
   }
+
   const label =
     args.nextState === 'closed'
       ? translate('auto.components.PullRequestPage.77482513f8', 'Close')
       : translate('auto.components.PullRequestPage.2f5195c6a0', 'Reopen')
+
   const confirmed = await args.confirm({
     title: translate('auto.components.PullRequestPage.eec3706a6a', '{{value0}} PR #{{value1}}?', {
       value0: label,
@@ -62,12 +64,15 @@ export async function changePullRequestState(args: {
     confirmLabel: label,
     confirmVariant: args.nextState === 'closed' ? 'destructive' : 'default'
   })
+
   if (!confirmed) {
     return
   }
+
   const previousState = args.localState
   args.setStatePending(true)
   args.applyStatePatch(args.nextState)
+
   try {
     await runPullRequestStateUpdate({
       repoPath: args.repoPath,
@@ -126,7 +131,9 @@ export async function mergePullRequest(args: {
   if (args.mergeDisabled) {
     return
   }
+
   const label = GITHUB_PR_MERGE_METHOD_LABELS[args.method]
+
   const confirmed = await args.confirm({
     title: translate('auto.components.PullRequestPage.eec3706a6a', '{{value0}} PR #{{value1}}?', {
       value0: label,
@@ -138,10 +145,13 @@ export async function mergePullRequest(args: {
     ),
     confirmLabel: label
   })
+
   if (!confirmed) {
     return
   }
+
   args.setMergePending(true)
+
   try {
     const result =
       args.mergeTarget.kind === 'environment'
@@ -164,11 +174,15 @@ export async function mergePullRequest(args: {
             method: args.method,
             prRepo: args.prRepo
           })
+
     if (!result.ok) {
       toast.error(result.error)
+
       return
     }
+
     args.applyStatePatch('merged')
+
     if (args.mergeTarget.kind === 'environment') {
       notifyWorkItemDetailsMutation(
         {
@@ -181,6 +195,7 @@ export async function mergePullRequest(args: {
         { local: false }
       )
     }
+
     toast.success(translate('auto.components.PullRequestPage.c57873d721', 'Pull request merged'))
     args.onMutated()
   } catch (err) {
@@ -210,8 +225,10 @@ export async function setPullRequestAutoMerge(args: {
   if (!args.canMergeWithRepoContext || !args.mergePresentation.autoMergeAction) {
     return
   }
+
   const enabled = args.mergePresentation.autoMergeAction.kind === 'enable'
   args.setMergePending(true)
+
   try {
     const result =
       args.mergeTarget.kind === 'environment'
@@ -236,10 +253,13 @@ export async function setPullRequestAutoMerge(args: {
             method: enabled ? args.mergeMethods.defaultMethod : undefined,
             prRepo: args.prRepo
           })
+
     if (!result.ok) {
       toast.error(result.error)
+
       return
     }
+
     if (args.mergeTarget.kind === 'environment') {
       notifyWorkItemDetailsMutation(
         {
@@ -252,6 +272,7 @@ export async function setPullRequestAutoMerge(args: {
         { local: false }
       )
     }
+
     toast.success(
       enabled
         ? translate('auto.components.PullRequestPage.5edbe7eefa', 'Auto-merge enabled')

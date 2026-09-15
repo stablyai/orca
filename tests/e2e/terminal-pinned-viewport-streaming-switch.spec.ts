@@ -52,6 +52,7 @@ async function closeFeatureTips(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
     store?.getState().markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+
     if (store?.getState().activeModal === 'feature-tips') {
       store.getState().closeModal()
     }
@@ -67,17 +68,21 @@ async function pinActiveTerminalNearBottom(page: Page): Promise<{
     const store = window.__store
     const state = store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!tabId || !pane) {
       throw new Error('Active terminal pane unavailable')
     }
+
     const target = pane.container.querySelector<HTMLElement>('.xterm') ?? pane.container
     target.dispatchEvent(
       new WheelEvent('wheel', {
@@ -93,6 +98,7 @@ async function pinActiveTerminalNearBottom(page: Page): Promise<{
     pane.container
       .querySelector<HTMLElement>('.xterm-viewport')
       ?.dispatchEvent(new Event('scroll', { bubbles: true }))
+
     return { tabId, targetViewportY, baseY: buffer.baseY }
   })
 }
@@ -112,19 +118,25 @@ async function readSettledViewport(
           const manager = window.__paneManagers?.get(tabId)
           const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
           const buffer = pane?.terminal?.buffer?.active
+
           return buffer ? { viewportY: buffer.viewportY, baseY: buffer.baseY } : null
         }, tabId)
+
         if (!current || current.baseY < 100) {
           stableCount = 0
           last = current
+
           return false
         }
+
         if (last && current.viewportY === last.viewportY) {
           stableCount += 1
         } else {
           stableCount = 0
         }
+
         last = current
+
         return stableCount >= 3
       },
       {
@@ -134,9 +146,11 @@ async function readSettledViewport(
       }
     )
     .toBe(true)
+
   if (!last) {
     throw new Error('viewport settle poll finished without a sample')
   }
+
   return last
 }
 
@@ -148,10 +162,13 @@ test.describe('Terminal pinned viewport with streaming agent across worktree swi
     await waitForSessionReady(orcaPage)
     await closeFeatureTips(orcaPage)
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'streaming pinned repro needs the seeded secondary worktree')
+
     if (!secondWorktreeId) {
       return
     }

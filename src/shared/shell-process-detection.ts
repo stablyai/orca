@@ -4,6 +4,7 @@
 const SHELL_NAMES = new Set(
   '|bash|zsh|sh|fish|cmd|cmd.exe|powershell|powershell.exe|pwsh|pwsh.exe|nu'.split('|')
 )
+
 const WINDOWS_PROCESS_EXTENSION_RE = /\.(?:exe|cmd|bat|ps1)$/i
 
 export function isShellProcess(processName: string): boolean {
@@ -11,10 +12,12 @@ export function isShellProcess(processName: string): boolean {
     .trim()
     .replace(/^["']|["']$/g, '')
     .toLowerCase()
+
   const basename = normalized.split(/[\\/]/).pop() ?? normalized
   // Why: Windows node-pty reports Git Bash and similar shells as `bash.exe`;
   // those still need the same shell-safe handling as their POSIX basenames.
   const basenameWithoutWindowsExtension = basename.replace(WINDOWS_PROCESS_EXTENSION_RE, '')
+
   return (
     SHELL_NAMES.has(normalized) ||
     SHELL_NAMES.has(basename) ||
@@ -32,10 +35,13 @@ export function isPowerShellProcess(processName: string | null | undefined): boo
   if (!processName) {
     return false
   }
+
   const normalized = processName
     .trim()
     .replace(/^["']|["']$/g, '')
     .toLowerCase()
+
   const basename = normalized.split(/[\\/]/).pop() ?? normalized
+
   return POWERSHELL_NAMES.has(basename.replace(WINDOWS_PROCESS_EXTENSION_RE, ''))
 }

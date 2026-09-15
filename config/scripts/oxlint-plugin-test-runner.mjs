@@ -8,6 +8,7 @@ import process from 'node:process'
 const oxlintPackageDirectory = path.dirname(
   createRequire(import.meta.url).resolve('oxlint/package.json')
 )
+
 const oxlintPath = path.join(oxlintPackageDirectory, 'bin', 'oxlint')
 
 export function runOxlintPluginOnSource({
@@ -40,17 +41,21 @@ export function runOxlintPluginOnSource({
         rules
       })
     )
+
     const result = spawnSync(
       process.execPath,
       [oxlintPath, '--config', configPath, '--format', 'json', sourcePath],
       { encoding: 'utf8' }
     )
+
     if (result.error) {
       throw result.error
     }
+
     if (!result.stdout.trim()) {
       throw new Error(result.stderr || `${pluginName} did not produce Oxlint output`)
     }
+
     return JSON.parse(result.stdout).diagnostics
   } finally {
     rmSync(directory, { recursive: true, force: true })

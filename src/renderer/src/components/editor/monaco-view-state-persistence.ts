@@ -19,9 +19,11 @@ export function installMonacoViewStateTracking(params: MonacoViewStateTrackingPa
 
   // Track cursor line for "copy path to line" feature
   const pos = editorInstance.getPosition()
+
   if (pos) {
     setEditorCursorLine(filePath, pos.lineNumber)
   }
+
   const cursorPositionSub = editorInstance.onDidChangeCursorPosition((e) => {
     setEditorCursorLine(filePath, e.position.lineNumber)
   })
@@ -31,6 +33,7 @@ export function installMonacoViewStateTracking(params: MonacoViewStateTrackingPa
     if (scrollThrottleTimerRef.current !== null) {
       clearTimeout(scrollThrottleTimerRef.current)
     }
+
     scrollThrottleTimerRef.current = setTimeout(() => {
       setWithLRU(scrollTopCache, viewStateKey, e.scrollTop)
       scrollThrottleTimerRef.current = null
@@ -46,15 +49,18 @@ export function restoreMonacoViewState(
 ): void {
   const savedSelections = editorSelectionCache.get(viewStateKey)
   const savedScrollTop = scrollTopCache.get(viewStateKey)
+
   if (savedScrollTop !== undefined || savedSelections) {
     // Why: Monaco renders synchronously so one RAF suffices; focus inside it to avoid a scroll-0 flash before restore.
     requestAnimationFrame(() => {
       if (savedSelections) {
         editorInstance.setSelections(savedSelections)
       }
+
       if (savedScrollTop !== undefined) {
         editorInstance.setScrollTop(savedScrollTop)
       }
+
       editorInstance.focus()
     })
   } else {
@@ -68,9 +74,11 @@ export function snapshotMonacoViewState(
   viewStateKey: string
 ): void {
   const ed = editorRef.current
+
   if (ed) {
     setWithLRU(scrollTopCache, viewStateKey, ed.getScrollTop())
     const selections = ed.getSelections()
+
     if (selections) {
       setWithLRU(editorSelectionCache, viewStateKey, selections)
     }

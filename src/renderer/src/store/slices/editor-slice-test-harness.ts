@@ -58,5 +58,6 @@ export function ownedEditorFileId(
   runtimeEnvironmentId: string | null | undefined
 ): string {
   const runtimeKey = runtimeEnvironmentId?.trim() || 'local'
+
   return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
 }

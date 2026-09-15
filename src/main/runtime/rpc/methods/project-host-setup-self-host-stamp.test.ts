@@ -6,9 +6,11 @@ import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 // check, so the request's host id has to be re-spelled as this machine's own `local`.
 function parseParams(methodName: string, params: unknown): { hostId: string } {
   const method = PROJECT_RUNTIME_METHODS.find((candidate) => candidate.name === methodName)
+
   if (!method?.params) {
     throw new Error(`Missing params schema for ${methodName}`)
   }
+
   return method.params.parse(params) as { hostId: string }
 }
 
@@ -56,6 +58,7 @@ describe('project host setup self-host stamp', () => {
       projectId: 'github:stablyai/orca',
       hostId: 'runtime:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     })
+
     const fromClientB = parseParams('projectHostSetup.create', {
       projectId: 'github:stablyai/orca',
       hostId: 'runtime:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'

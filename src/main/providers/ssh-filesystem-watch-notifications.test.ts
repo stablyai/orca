@@ -30,12 +30,15 @@ function route(registrations: Map<string, WatchRegistration>, events: FsChangeEv
 // matches every root the per-pair normalization did.
 function referenceRoute(roots: string[], events: FsChangeEvent[]): Record<string, string[]> {
   const result: Record<string, string[]> = {}
+
   for (const rootPath of roots) {
     const matching = events.filter((event) => isPathInsideOrEqual(rootPath, event.absolutePath))
+
     if (matching.length > 0) {
       result[rootPath] = matching.map((event) => event.absolutePath)
     }
   }
+
   return result
 }
 
@@ -43,6 +46,7 @@ describe('routeSshFilesystemWatchNotification fs.changed fan-out', () => {
   it('delivers only the events inside each root', () => {
     const alpha = vi.fn()
     const beta = vi.fn()
+
     const registrations = new Map([
       ['/repo/alpha', registration('/repo/alpha', alpha)],
       ['/repo/beta', registration('/repo/beta', beta)]
@@ -72,6 +76,7 @@ describe('routeSshFilesystemWatchNotification fs.changed fan-out', () => {
   // shared pre-normalized candidate stops matching a root it used to match.
   it('routes identically to per-pair normalization', () => {
     const roots = ['/repo/alpha', '/repo/alpha-extra', '/repo/beta/', '/repo']
+
     const events = changed(
       '/repo/alpha/src/a.ts',
       '/repo/alpha-extra/src/b.ts',
@@ -81,7 +86,9 @@ describe('routeSshFilesystemWatchNotification fs.changed fan-out', () => {
       '/repo/gamma/e.ts',
       '/elsewhere/f.ts'
     )
+
     const seen: Record<string, string[]> = {}
+
     const registrations = new Map(
       roots.map((rootPath) => [
         rootPath,
@@ -100,6 +107,7 @@ describe('routeSshFilesystemWatchNotification fs.changed fan-out', () => {
   // a candidate normalized once up front must still match a root normalized once.
   it('matches WSL UNC roots whose case survives only a single fold', () => {
     const received = vi.fn()
+
     const registrations = new Map([
       ['wsl', registration('\\\\wsl.localhost\\Ubuntu\\home\\User\\Repo', received)]
     ])

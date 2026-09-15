@@ -47,7 +47,9 @@ export function AutomationOwnerConflictNotice({
   if (!notice) {
     return null
   }
+
   const recovery = notice.recovery
+
   return (
     <div
       role="alert"

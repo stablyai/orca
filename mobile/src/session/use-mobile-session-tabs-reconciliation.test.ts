@@ -20,6 +20,7 @@ vi.mock('react-native', () => ({
     },
     addEventListener(_event: string, listener: (state: string) => void) {
       lifecycle.listeners.add(listener)
+
       return { remove: () => lifecycle.listeners.delete(listener) }
     }
   }
@@ -27,6 +28,7 @@ vi.mock('react-native', () => ({
 
 vi.mock('expo-router', async () => {
   const React = await import('react')
+
   return {
     useFocusEffect(effect: () => void | (() => void)): void {
       React.useEffect(() => (lifecycle.focused ? effect() : undefined), [effect, lifecycle.focused])
@@ -42,23 +44,37 @@ type TestResult = {
 
 const fetchTerminals = vi.fn(async (options?: MobileTerminalInventoryRefreshOptions) => {
   options?.onPhysicalRequestStarted?.(Date.now())
+
   return true
 })
+
 const applySessionTabs = vi.fn((value: TestResult): SessionTabsApplyOutcome<string> => ({
   accepted: true,
   effectiveTabs: value.tabs
 }))
+
 const consumeAcceptedSessionTabs = vi.fn()
+
 let recoveryNeeded = false
+
 let clearRecoveryAt = Number.POSITIVE_INFINITY
+
 const hasRecoveryNeed = () => recoveryNeeded
+
 const subscribe = vi.fn()
+
 const unsubscribe = vi.fn()
+
 let streamListener: ((payload: unknown) => void) | null = null
+
 let requestTerminalInventoryRecovery: (() => void) | null = null
+
 let connectionState: ConnectionState = 'connected'
+
 let clientConnectionState: ConnectionState = 'connected'
+
 let listSequence = 0
+
 const sendRequest = vi.fn(async () => ({
   id: `list-${++listSequence}`,
   ok: true as const,
@@ -68,25 +84,32 @@ const sendRequest = vi.fn(async () => ({
   },
   _meta: { runtimeId: 'runtime-1' }
 }))
+
 const client = {
   sendRequest,
   subscribe,
   getState: () => clientConnectionState
 } as unknown as RpcClient
+
 const replacementClient = {
   sendRequest,
   subscribe,
   getState: () => clientConnectionState
 } as unknown as RpcClient
+
 let currentClient: RpcClient = client
+
 let currentWorktreeId = 'repo::worktree'
+
 let currentTerminalInventoryRecoveryScopeKey = 'host::repo::worktree'
 
 function applyWithRecovery(value: TestResult): SessionTabsApplyOutcome<string> {
   const outcome = applySessionTabs(value)
+
   if (outcome.accepted && Date.now() >= clearRecoveryAt) {
     recoveryNeeded = false
   }
+
   return outcome
 }
 
@@ -101,14 +124,17 @@ function Harness(): null {
     terminalInventoryRecoveryScopeKey: currentTerminalInventoryRecoveryScopeKey,
     hasRecoveryNeed
   })
+
   useEffect(() => {
     requestTerminalInventoryRecovery = actions.requestTerminalInventoryRecovery
+
     return () => {
       if (requestTerminalInventoryRecovery === actions.requestTerminalInventoryRecovery) {
         requestTerminalInventoryRecovery = null
       }
     }
   }, [actions.requestTerminalInventoryRecovery])
+
   return null
 }
 
@@ -130,6 +156,7 @@ async function setAppState(state: string): Promise<void> {
     for (const listener of lifecycle.listeners) {
       listener(state)
     }
+
     await flush()
   })
 }
@@ -143,6 +170,7 @@ function expectedRecoveryInventoryOptions() {
 
 describe('useMobileSessionTabsReconciliation', () => {
   let renderer: ReactTestRenderer | null = null
+
   async function mount(): Promise<void> {
     await act(async () => {
       renderer = create(createElement(Harness))
@@ -167,6 +195,7 @@ describe('useMobileSessionTabsReconciliation', () => {
     fetchTerminals.mockReset()
     fetchTerminals.mockImplementation(async (options?: MobileTerminalInventoryRefreshOptions) => {
       options?.onPhysicalRequestStarted?.(Date.now())
+
       return true
     })
     applySessionTabs.mockClear()
@@ -178,6 +207,7 @@ describe('useMobileSessionTabsReconciliation', () => {
       .mockImplementation(
         (_method: string, _params: unknown, listener: (payload: unknown) => void) => {
           streamListener = listener
+
           return unsubscribe
         }
       )
@@ -274,6 +304,7 @@ describe('useMobileSessionTabsReconciliation', () => {
       await mount()
       await emitStream({ type: 'updated', snapshotVersion: 1, tabs: ['tab-1'] })
       fetchTerminals.mockClear()
+
       if (outcome === 'failure') {
         fetchTerminals.mockResolvedValueOnce(false)
       } else {
@@ -446,10 +477,12 @@ describe('useMobileSessionTabsReconciliation', () => {
     let terminalPruned = false
     fetchTerminals.mockImplementation(async () => {
       successfulEmptyInventories += 1
+
       if (successfulEmptyInventories === 2) {
         terminalPruned = true
         recoveryNeeded = true
       }
+
       return true
     })
 

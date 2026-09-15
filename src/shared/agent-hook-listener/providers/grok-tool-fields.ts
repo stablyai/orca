@@ -22,6 +22,7 @@ export function extractGrokToolFields(
 ): ToolSnapshot {
   if (isGrokEvent(eventName, 'pre_tool_use', 'post_tool_use', 'post_tool_use_failure')) {
     const update: ToolSnapshot = {}
+
     if (isGrokEvent(eventName, 'post_tool_use_failure')) {
       Object.assign(update, clearActiveToolFieldsUpdate())
     } else {
@@ -29,13 +30,16 @@ export function extractGrokToolFields(
         readString(hookPayload, 'toolName') ??
         readString(hookPayload, 'tool_name') ??
         readString(hookPayload, 'name')
+
       const rawInput =
         hookPayload.toolInput ??
         hookPayload.tool_input ??
         hookPayload.input ??
         hookPayload.arguments
+
       const toolInput =
         deriveToolInputPreview(toolName, rawInput) ?? deriveFallbackToolInputPreview(rawInput)
+
       // Why: Grok's ask_user_question is auto-allowed via PreToolUse, not PermissionRequest; capture full payload for the live card.
       const interactivePrompt = deriveInteractivePrompt(toolName, rawInput, eventName)
       Object.assign(
@@ -53,6 +57,7 @@ export function extractGrokToolFields(
         )
       )
     }
+
     if (isGrokEvent(eventName, 'post_tool_use', 'post_tool_use_failure')) {
       const responseText =
         extractToolResponseText(hookPayload.toolResponse) ??
@@ -61,38 +66,50 @@ export function extractGrokToolFields(
         extractToolResponseText(hookPayload.tool_output) ??
         readString(hookPayload, 'error') ??
         readString(hookPayload, 'message')
+
       if (responseText) {
         update.lastAssistantMessage = responseText
         update.lastAssistantMessageIsToolOutput = true
       }
     }
+
     return update
   }
+
   if (isGrokEvent(eventName, 'stop', 'session_end', 'stop_failure', 'stop_cancelled')) {
     const direct =
       readString(hookPayload, 'lastAssistantMessage') ??
       readString(hookPayload, 'last_assistant_message')
+
     if (direct) {
       return { lastAssistantMessage: direct }
     }
+
     const fromTranscript = readLastAssistantFromTranscript(
       hookPayload.transcriptPath ?? hookPayload.transcript_path
     )
+
     if (fromTranscript) {
       return { lastAssistantMessage: fromTranscript }
     }
+
     const fromChatHistory = readLastAssistantFromGrokChatHistory(hookPayload, grokHome)
+
     if (fromChatHistory) {
       return { lastAssistantMessage: fromChatHistory }
     }
   }
+
   return {}
 }
+
 export function isGrokPermissionNotification(message: string | undefined): boolean {
   if (!message) {
     return false
   }
+
   const lower = message.toLowerCase()
+
   return (
     lower.includes('permission') ||
     lower.includes('approval') ||

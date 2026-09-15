@@ -44,6 +44,7 @@ vi.mock('electron', () => ({
 describe('orchestration notification mailbox consistency', () => {
   afterEach(() => {
     vi.useRealTimers()
+
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -137,6 +138,7 @@ describe('orchestration notification mailbox consistency', () => {
     })
     restarted.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex working\x07', 1)
     restarted.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex done\x07', 2)
+
     const checked = await checkBoundMailbox(restarted.runtime, {
       terminal: SECOND_TERMINAL_HANDLE,
       paneKey: SECOND_PANE_KEY,
@@ -153,15 +155,18 @@ describe('orchestration notification mailbox consistency', () => {
     const db = createDatabase('orca-mailbox-paged-reconciliation-')
     const harness = createRuntime(db)
     const runA = createBoundRun(db, 'Backlog Run A')
+
     const messages = Array.from({ length: 151 }, (_, index) =>
       insertDirectRunMessage(db, runA.id, `Backlog message ${index}`)
     )
+
     createBoundRun(db, 'Backlog Run B')
     const placeholders = messages.map(() => '?').join(',')
     sqliteFor(db)
       .prepare(`UPDATE messages SET to_handle = ? WHERE id IN (${placeholders})`)
       .run(TERMINAL_HANDLE, ...messages.map((message) => message.id))
     const notify = vi.spyOn(harness.runtime, 'notifyMessageArrived')
+
     const directRemaining = (): number =>
       (
         sqliteFor(db)
@@ -189,6 +194,7 @@ describe('orchestration notification mailbox consistency', () => {
   it('uses composite indexes for direct ownership reconciliation', () => {
     const db = createDatabase('orca-mailbox-routing-indexes-')
     const sqlite = sqliteFor(db)
+
     const plan = (sql: string, ...params: string[]): string =>
       (sqlite.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...params) as { detail: string }[])
         .map((row) => row.detail)
@@ -240,13 +246,16 @@ describe('orchestration notification mailbox consistency', () => {
   it('finds owned mail without scanning an older unowned direct backlog', () => {
     const db = createDatabase('orca-mailbox-owned-routing-plan-')
     const detachedHandle = 'term_backlogged_detached'
+
     const ownedRun = db.createRun({
       objective: 'Owned after backlog',
       coordinatorHandle: detachedHandle,
       coordinatorPaneKey:
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
+
     const unownedRun = createBoundRun(db, 'Unowned backlog')
+
     for (let index = 0; index < 500; index += 1) {
       db.insertMessage({
         from: TERMINAL_HANDLE,
@@ -257,6 +266,7 @@ describe('orchestration notification mailbox consistency', () => {
         deliveryContract: 'current_delivery'
       })
     }
+
     const owned = db.insertMessage({
       from: 'term_worker',
       to: detachedHandle,
@@ -265,6 +275,7 @@ describe('orchestration notification mailbox consistency', () => {
       runId: ownedRun.id,
       deliveryContract: 'current_delivery'
     })
+
     sqliteFor(db)
       .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
       .run(detachedHandle, owned.id)
@@ -278,6 +289,7 @@ describe('orchestration notification mailbox consistency', () => {
     const routingSql = prepare.mock.calls
       .map(([sql]) => sql)
       .find((sql) => sql.includes('FROM run_coordinator_handles AS coordinator'))
+
     expect(routingSql).toContain('INDEXED BY idx_messages_undelivered_direct_run')
     expect(routingSql).not.toContain('NOT EXISTS')
     expect(db.getMessageById(owned.id)?.to_handle).toBe(`run:${ownedRun.id}`)
@@ -406,6 +418,7 @@ describe('orchestration notification mailbox consistency', () => {
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
     const runB = createBoundRun(db, 'Run B')
+
     const response = await new RpcDispatcher({
       runtime: harness.runtime,
       methods: ORCHESTRATION_METHODS
@@ -461,11 +474,13 @@ describe('orchestration notification mailbox consistency', () => {
     ).toHaveLength(0)
 
     await vi.advanceTimersByTimeAsync(500)
+
     const checked = await checkBoundMailbox(harness.runtime, {
       terminal: SECOND_TERMINAL_HANDLE,
       paneKey: SECOND_PANE_KEY,
       launchToken: SECOND_LAUNCH_TOKEN
     })
+
     expect(checked).toMatchObject({ runId: runA.id, count: 1 })
     expect(checked.messages).toEqual([expect.objectContaining({ id: message.id })])
     db.close()
@@ -481,12 +496,14 @@ describe('orchestration notification mailbox consistency', () => {
     expect(pointerCount(harness.write)).toBe(1)
 
     registerSecondPane(harness.runtime, LEAF_ID)
+
     const second = db.insertMessage({
       from: 'term_worker',
       to: `run:${run.id}`,
       subject: 'Second status',
       runId: run.id
     })
+
     harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex working\x07', 1)
     harness.runtime.onPtyData(SECOND_PTY_ID, '\x1b]0;Codex done\x07', 2)
     await Promise.resolve()
@@ -674,6 +691,7 @@ describe('orchestration notification mailbox consistency', () => {
       await vi.advanceTimersByTimeAsync(500)
 
       expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
+
       if (state === 'working') {
         harness.runtime.onPtyData(PTY_ID, idleTitle, 4)
         await Promise.resolve()
@@ -685,6 +703,7 @@ describe('orchestration notification mailbox consistency', () => {
       } else {
         expect(db.getMessageById(message.id)?.delivered_at).toBeNull()
       }
+
       db.close()
     }
   )
@@ -714,6 +733,7 @@ describe('orchestration notification mailbox consistency', () => {
     const db = createDatabase('orca-mailbox-current-run-')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Current Run')
+
     const messages = Array.from({ length: 51 }, (_, index) =>
       db.insertMessage({
         from: 'term_worker',
@@ -722,6 +742,7 @@ describe('orchestration notification mailbox consistency', () => {
         runId: run.id
       })
     )
+
     const notificationQuery = vi.spyOn(db, 'getUndeliveredUnreadMessages')
     const submitRevalidation = vi.spyOn(db, 'areUnreadMessages')
     const prepare = vi.spyOn(sqliteFor(db), 'prepare')
@@ -740,15 +761,19 @@ describe('orchestration notification mailbox consistency', () => {
       `run:${run.id}`,
       messages.slice(0, 50).map((message) => message.id)
     )
+
     const revalidationSql = prepare.mock.calls
       .map(([sql]) => sql)
       .find((sql) => sql.includes('SELECT COUNT(*)') && sql.includes('id IN'))
+
     expect(revalidationSql).toContain('INDEXED BY idx_messages_id')
+
     const revalidationPlan = sqliteFor(db)
       .prepare(`EXPLAIN QUERY PLAN ${revalidationSql}`)
       .all(`run:${run.id}`, ...messages.slice(0, 50).map((message) => message.id)) as {
       detail: string
     }[]
+
     expect(revalidationPlan.map((row) => row.detail).join(' ')).toContain('idx_messages_id')
     expect(checked).toMatchObject({ runId: run.id, count: 50 })
     expect(checked.deliveryId).toBeTruthy()
@@ -806,10 +831,13 @@ describe('orchestration notification mailbox consistency', () => {
     const db = createDatabase('orca-mailbox-provider-refusal-')
     const first = createRuntime(db)
     const recordWrite = first.write as unknown as (id: string, payload: string) => unknown
+
     const write = vi.fn((ptyId: string, data: string) => {
       recordWrite(ptyId, data)
+
       return data !== '\r'
     })
+
     first.runtime.setPtyController({
       write,
       writeWithSettlement: settledWriteStub(write),
@@ -837,13 +865,16 @@ describe('orchestration notification mailbox consistency', () => {
     const db = createDatabase('orca-mailbox-outstanding-')
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Outstanding Delivery Run')
+
     const firstMessage = db.insertMessage({
       from: 'term_worker',
       to: `run:${run.id}`,
       subject: 'First status',
       runId: run.id
     })
+
     const firstDelivery = await checkBoundMailbox(harness.runtime)
+
     const newerMessage = db.insertMessage({
       from: 'term_worker',
       to: `run:${run.id}`,

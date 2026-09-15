@@ -44,6 +44,7 @@ describe('resolveTerminalWorktreeRoute', () => {
       settings: { activeRuntimeEnvironmentId: 'hub-a' },
       runtimeEnvironments: [{ id: 'hub-a' }]
     } as unknown as Partial<AppState>)
+
     expect(resolveTerminalWorktreeRoute(state, EPHEMERAL_ID)).toEqual({
       runtimeEnvironmentId: 'hub-a'
     })
@@ -54,6 +55,7 @@ describe('resolveTerminalWorktreeRoute', () => {
       settings: { activeRuntimeEnvironmentId: 'hub-a' },
       runtimeEnvironments: [{ id: 'hub-a' }, { id: 'hub-b' }]
     } as unknown as Partial<AppState>)
+
     expect(resolveTerminalWorktreeRoute(state, EPHEMERAL_ID)).toEqual({
       runtimeEnvironmentId: null
     })
@@ -67,6 +69,7 @@ describe('resolveTerminalWorktreeRoute', () => {
 
   it('routes and tears down an unstamped local worktree despite an unrelated saved runtime', () => {
     const ownerlessWorktree = { id: 'repo-1::/w', repoId: 'repo-1' }
+
     const state = localState({
       repos: [{ id: 'repo-1' }],
       worktreesByRepo: { 'repo-1': [ownerlessWorktree] },
@@ -120,6 +123,7 @@ describe('resolveTerminalHostOwnership teardown', () => {
       folderWorkspaces: [{ id: 'fw-1', projectGroupId: 'pg-1', connectionId: null }],
       projectGroups: [{ id: 'pg-1', connectionId: null, executionHostId: null }]
     } as unknown as Partial<AppState>)
+
     expect(resolveTerminalHostOwnership(state, folderWorkspaceKey('fw-1'), 'teardown')).toEqual({
       kind: 'local-or-ssh',
       runtimeEnvironmentId: null
@@ -131,6 +135,7 @@ describe('resolveTerminalHostOwnership teardown', () => {
       folderWorkspaces: [{ id: 'fw-1', projectGroupId: 'pg-1', connectionId: null }],
       projectGroups: [{ id: 'pg-1', connectionId: null, executionHostId: 'runtime:hub-a' }]
     } as unknown as Partial<AppState>)
+
     expect(resolveTerminalHostOwnership(state, folderWorkspaceKey('fw-1'), 'teardown')).toEqual({
       kind: 'runtime',
       runtimeEnvironmentId: 'hub-a'
@@ -144,6 +149,7 @@ describe('resolveTerminalHostOwnership teardown', () => {
       repos: [{ id: 'repo-1', connectionId: null, executionHostId: null }],
       worktreesByRepo: { 'repo-1': [{ id: 'repo-1::/w', repoId: 'repo-1' }] }
     } as unknown as Partial<AppState>)
+
     for (const purpose of ['spawn', 'teardown'] as const) {
       expect(resolveTerminalHostOwnership(state, 'repo-1::/w', purpose)).toEqual({
         kind: 'runtime',
@@ -158,6 +164,7 @@ describe('resolveTerminalHostOwnership teardown', () => {
         'repo-1': [{ id: 'repo-1::/w', repoId: 'repo-1', runtimeOwnerEnvironmentId: 'hub-a' }]
       }
     } as unknown as Partial<AppState>)
+
     expect(resolveTerminalHostOwnership(state, 'repo-1::/w', 'teardown')).toEqual({
       kind: 'runtime',
       runtimeEnvironmentId: 'hub-a'
@@ -169,6 +176,7 @@ describe('resolveTerminalHostOwnership teardown', () => {
       repos: [{ id: 'repo-1', connectionId: 'conn-1', executionHostId: 'ssh:conn-1' }],
       worktreesByRepo: { 'repo-1': [{ id: 'repo-1::/w', repoId: 'repo-1', hostId: 'ssh:conn-1' }] }
     } as unknown as Partial<AppState>)
+
     expect(resolveTerminalHostOwnership(state, 'repo-1::/w', 'teardown')).toEqual({
       kind: 'local-or-ssh',
       runtimeEnvironmentId: null
@@ -181,6 +189,7 @@ describe('resolveTerminalHostOwnership teardown', () => {
       repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'nonsense:' }],
       worktreesByRepo: { 'repo-1': [{ id: 'repo-1::/w', repoId: 'repo-1', hostId: 'nonsense:' }] }
     } as unknown as Partial<AppState>)
+
     for (const purpose of ['spawn', 'teardown'] as const) {
       expect(resolveTerminalHostOwnership(state, 'repo-1::/w', purpose)).toEqual({
         kind: 'unresolved',

@@ -10,18 +10,21 @@ describe('OrchestrationDb worker Dispatch state', () => {
 
   function createDb(): OrchestrationDb {
     db = new OrchestrationDb(':memory:')
+
     return db
   }
 
   it('creates and activates a composed worker Dispatch transactionally', () => {
     const d = createDb()
     const task = d.createTask({ runId: 'run_legacy_local', spec: 'worker' })
+
     const started = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: { topology: 'current', agent: 'codex' }
     })
+
     expect(started).toMatchObject({
       dispatch: { status: 'pending' },
       worker: { state: 'starting', stage: 'accepted' }
@@ -37,6 +40,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
       setupState: 'not_applicable',
       effects: [{ kind: 'terminal', action: 'created', id: 'term_worker' }]
     })
+
     expect(capability).toMatch(/^dcap_/)
     expect(d.markWorkerDispatchReady(started.dispatch.id)).toMatchObject({
       state: 'ready',
@@ -58,6 +62,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
 
   it('creates a Task and starting Dispatch together for a spec', () => {
     const d = createDb()
+
     const started = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -71,6 +76,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
         payloadHash: 'hash'
       }
     })
+
     expect(started.task.spec).toBe('atomic spec task')
     expect(started.task.status).toBe('dispatched')
     expect(d.getDispatchContextById(started.dispatch.id)?.task_id).toBe(started.task.id)
@@ -83,12 +89,14 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('retains an active supervised worker terminal', () => {
     const d = createDb()
     const task = d.createTask({ runId: 'run_legacy_local', spec: 'retain active worker' })
+
     const started = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
+
     d.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',
@@ -115,12 +123,14 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('requeues an active Task before settling a worker whose terminal is missing', () => {
     const d = createDb()
     const task = d.createTask({ runId: 'run_legacy_local', spec: 'recover missing worker' })
+
     const started = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: { topology: 'current', agent: 'codex' }
     })
+
     d.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_missing',
@@ -154,6 +164,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('commits worker-start mutation acceptance with the starting Dispatch', () => {
     const d = createDb()
     const task = d.createTask({ runId: 'run_legacy_local', spec: 'atomic acceptance' })
+
     const mutationReceipt = {
       callerFingerprint: 'caller_fingerprint',
       requestId: 'worker_start_request',
@@ -208,12 +219,14 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('fails a composed start without losing residual resource receipts', () => {
     const d = createDb()
     const task = d.createTask({ runId: 'run_legacy_local', spec: 'worker' })
+
     const started = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
+
     d.recordWorkerStage({
       dispatchId: started.dispatch.id,
       stage: 'terminal_created',
@@ -233,13 +246,16 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('allows retry only from the Task current terminal Dispatch', () => {
     const d = createDb()
     const task = d.createTask({ runId: 'run_legacy_local', spec: 'retry current' })
+
     const first = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
+
     d.failWorkerStart(first.dispatch.id, 'agent_readiness', 'first failed')
+
     const second = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -247,6 +263,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
       retryOf: first.dispatch.id,
       startOptions: {}
     })
+
     expect(second.dispatch.retry_of_dispatch_id).toBe(first.dispatch.id)
     d.failWorkerStart(second.dispatch.id, 'agent_readiness', 'second failed')
 
@@ -273,13 +290,16 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('treats abandon of a superseded Dispatch as a no-op', () => {
     const d = createDb()
     const task = d.createTask({ runId: 'run_legacy_local', spec: 'stale abandon' })
+
     const first = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
+
     d.failWorkerStart(first.dispatch.id, 'agent_readiness', 'first failed')
+
     const second = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
@@ -287,6 +307,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
       retryOf: first.dispatch.id,
       startOptions: {}
     })
+
     d.prepareStartingWorkerAuthority({
       dispatchId: second.dispatch.id,
       handle: 'term_replacement',
@@ -318,12 +339,14 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('lets the stop fence win before a late worker completion', () => {
     const d = createDb()
     const task = d.createTask({ runId: 'run_legacy_local', spec: 'race' })
+
     const started = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
+
     d.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',
@@ -351,12 +374,14 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('allows explicit stop recovery from uncertain local and remote starts', () => {
     const d = createDb()
     const task = d.createTask({ runId: 'run_legacy_local', spec: 'uncertain local start' })
+
     const started = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
+
     d.markWorkerStartUnknown(started.dispatch.id, 'agent_readiness', 'connection lost')
 
     expect(d.beginWorkerStop(started.dispatch.id, 'runtime_test')).toMatchObject({
@@ -397,6 +422,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
     (state) => {
       const d = createDb()
       const paneKey = 'tab_remote:11111111-1111-4111-8111-111111111111'
+
       const attach = (dispatchId: string): void => {
         d.createRemoteDispatchAttachment({
           runId: 'run-home',
@@ -452,6 +478,7 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('bounds remote attachment lookup across pane remints and malformed suffix collisions', () => {
     const d = createDb()
     const leafId = '11111111-1111-4111-8111-111111111111'
+
     const attach = (dispatchId: string, paneKey: string): void => {
       d.createRemoteDispatchAttachment({
         runId: 'run-home',
@@ -479,9 +506,11 @@ describe('OrchestrationDb worker Dispatch state', () => {
     }
 
     attach('ctx_valid_old', `tab_old:${leafId}`)
+
     for (let index = 0; index < 64; index += 1) {
       const dispatchId = `ctx_malformed_${index}`
       attach(dispatchId, `:${leafId}`)
+
       if (index < 63) {
         d.failRemoteAttachment(dispatchId, 'fixture_retired', 'Superseded fixture row.', false)
       }
@@ -503,12 +532,14 @@ describe('OrchestrationDb worker Dispatch state', () => {
   it('returns already-settled when completion wins before stop', () => {
     const d = createDb()
     const task = d.createTask({ runId: 'run_legacy_local', spec: 'race' })
+
     const started = d.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
+
     d.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',

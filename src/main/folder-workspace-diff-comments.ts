@@ -9,15 +9,19 @@ export function normalizeFolderWorkspaceDiffComments(
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return undefined
   }
+
   const normalized: Record<string, DiffComment[]> = {}
   let kept = false
+
   for (const [id, comments] of Object.entries(value)) {
     if (!Array.isArray(comments)) {
       continue
     }
+
     normalized[id] = comments as DiffComment[]
     kept = true
   }
+
   return kept ? normalized : undefined
 }
 
@@ -27,12 +31,15 @@ export function collectFolderWorkspaceDiffComments(
 ): Record<string, DiffComment[]> | undefined {
   const collected: Record<string, DiffComment[]> = {}
   let kept = false
+
   for (const workspace of workspaces ?? []) {
     const comments = workspace.diffComments
+
     if (Array.isArray(comments) && comments.length > 0) {
       collected[workspace.id] = comments
       kept = true
     }
   }
+
   return kept ? collected : undefined
 }

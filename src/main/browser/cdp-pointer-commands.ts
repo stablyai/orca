@@ -85,6 +85,7 @@ export class CdpPointerCommands extends CdpBridgeCommandModule {
       })
 
       const steps = 10
+
       for (let i = 1; i <= steps; i++) {
         const x = from.cx + ((to.cx - from.cx) * i) / steps
         const y = from.cy + ((to.cy - from.cy) * i) / steps

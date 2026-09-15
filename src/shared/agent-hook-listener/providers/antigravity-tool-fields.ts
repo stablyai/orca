@@ -14,10 +14,13 @@ export function readAntigravityToolCall(hookPayload: Record<string, unknown>): {
   toolInputSource?: unknown
 } {
   const toolCall = hookPayload.toolCall
+
   if (typeof toolCall !== 'object' || toolCall === null) {
     return {}
   }
+
   const record = toolCall as Record<string, unknown>
+
   return {
     toolName: readFirstString(record, ['name', 'toolName', 'tool_name']),
     toolInputSource: record.args
@@ -31,24 +34,30 @@ export function extractAntigravityToolFields(
   if (eventName === 'PreToolUse' || eventName === 'PostToolUse') {
     const toolCall = readAntigravityToolCall(hookPayload)
     const toolName = toolCall.toolName
+
     const toolInput =
       deriveToolInputPreview(toolName, toolCall.toolInputSource) ??
       deriveFallbackToolInputPreview(toolCall.toolInputSource)
+
     return toolUpdate(
       { toolName, toolInput },
       { hasToolInputField: toolCall.toolInputSource !== undefined }
     )
   }
+
   if (eventName === 'Stop') {
     if (isAntigravityStopStillBusy(hookPayload)) {
       return {}
     }
+
     const message =
       readString(hookPayload, 'last_assistant_message') ??
       readLastAssistantFromTranscript(hookPayload.transcriptPath ?? hookPayload.transcript_path)
+
     if (message) {
       return { lastAssistantMessage: message }
     }
   }
+
   return {}
 }

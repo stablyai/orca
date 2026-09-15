@@ -25,6 +25,7 @@ function isMissingFileError(error: unknown): boolean {
 export function probeSocketConnect(socketPath: string): Promise<SocketProbeOutcome> {
   return new Promise((resolve) => {
     let occupiedUnixEntry = false
+
     if (process.platform !== 'win32') {
       try {
         // Why lstat: existsSync follows symlinks, so a dangling one reads as absent while it
@@ -33,28 +34,35 @@ export function probeSocketConnect(socketPath: string): Promise<SocketProbeOutco
         occupiedUnixEntry = true
       } catch (error) {
         resolve(isMissingFileError(error) ? 'missing' : 'unknown')
+
         return
       }
     }
+
     const sock = connect({ path: socketPath })
     let settled = false
+
     const cleanup = (): void => {
       clearTimeout(timer)
       sock.off('connect', onConnect)
       sock.off('error', onError)
     }
+
     const settle = (result: SocketProbeOutcome): void => {
       if (settled) {
         return
       }
+
       settled = true
       cleanup()
       resolve(result)
     }
+
     const onConnect = (): void => {
       settle('connected')
       sock.destroy()
     }
+
     const onError = (error: NodeJS.ErrnoException): void => {
       settle(
         // Why both: a non-socket occupying the name reports ENOTSOCK on macOS but
@@ -70,10 +78,12 @@ export function probeSocketConnect(socketPath: string): Promise<SocketProbeOutco
             : 'unknown'
       )
     }
+
     const timer = setTimeout(() => {
       settle('unknown')
       sock.destroy()
     }, ENDPOINT_PROBE_TIMEOUT_MS)
+
     sock.on('connect', onConnect)
     sock.on('error', onError)
   })

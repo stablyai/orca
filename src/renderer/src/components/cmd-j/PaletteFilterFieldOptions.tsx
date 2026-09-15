@@ -81,6 +81,7 @@ export function PaletteFilterFieldOptions({
   const selected = useMemo(() => new Set(group.selected), [group.selected])
   const normalizedQuery = optionQuery.trim().toLowerCase()
   const rankMode: FilterOptionRankMode = group.field === 'host' ? 'registry' : 'popularity'
+
   const ranked = useMemo(
     () =>
       rankPaletteFilterOptions({
@@ -96,6 +97,7 @@ export function PaletteFilterFieldOptions({
   // listener has to re-attach to the node that replaces it.
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
   // Why the field/query are stored alongside the cursor instead of reset in an
   // effect: a stale row would stay active for one paint. Why not key off the
   // ranked list identity: a toggle re-ranks, so that would yank the cursor back
@@ -109,8 +111,10 @@ export function PaletteFilterFieldOptions({
     query: normalizedQuery,
     id: null
   }))
+
   const storedId =
     highlight.field === group.field && highlight.query === normalizedQuery ? highlight.id : null
+
   // Why track the option id rather than its position: toggling re-ranks the list and pins
   // the toggled option to the front, so a stored index would land on a different option and
   // the next Enter would check one the user never aimed at. findIndex also covers the option
@@ -138,17 +142,22 @@ export function PaletteFilterFieldOptions({
   // Same wheel workaround as CommandList: Radix remove-scroll cancels wheel on portaled content.
   useEffect(() => {
     const el = scrollEl
+
     if (!el) {
       return
     }
+
     const onWheel = (event: WheelEvent): void => {
       if (el.scrollHeight <= el.clientHeight) {
         return
       }
+
       event.preventDefault()
       el.scrollTop += event.deltaY
     }
+
     el.addEventListener('wheel', onWheel, { passive: false })
+
     return () => el.removeEventListener('wheel', onWheel)
   }, [scrollEl])
 
@@ -157,6 +166,7 @@ export function PaletteFilterFieldOptions({
       if (ranked.ordered.length === 0) {
         return
       }
+
       const next = Math.max(0, Math.min(ranked.ordered.length - 1, activeIndex + delta))
       virtualizer.scrollToIndex(next, { align: 'auto' })
       setHighlight({
@@ -175,18 +185,24 @@ export function PaletteFilterFieldOptions({
       if (event.key === 'ArrowDown') {
         event.preventDefault()
         moveActive(1)
+
         return
       }
+
       if (event.key === 'ArrowUp') {
         event.preventDefault()
         moveActive(-1)
+
         return
       }
+
       if (event.key === 'Enter' || (allowSpaceToToggle && event.key === ' ')) {
         const option = ranked.ordered[activeIndex]
+
         if (!option) {
           return
         }
+
         event.preventDefault()
         onToggle(option.id)
       }
@@ -198,10 +214,12 @@ export function PaletteFilterFieldOptions({
     group.field === 'host'
       ? translate('worktreeJumpPalette.filter.searchHosts', 'Filter hosts...')
       : translate('worktreeJumpPalette.filter.searchProjects', 'Filter projects...')
+
   const emptyLabel =
     group.field === 'host'
       ? translate('worktreeJumpPalette.filter.noHosts', 'No matching hosts')
       : translate('worktreeJumpPalette.filter.noProjects', 'No matching projects')
+
   // Why a dedicated string per field: lowercasing a translated heading breaks in
   // languages that capitalize nouns mid-sentence (German "Projekte").
   const clearLabel =
@@ -281,9 +299,11 @@ export function PaletteFilterFieldOptions({
           <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const option = ranked.ordered[virtualItem.index]
+
               if (!option) {
                 return null
               }
+
               return (
                 <div
                   key={virtualItem.key}

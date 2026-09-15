@@ -16,6 +16,8 @@ export function buildFakeAgentCommandOverride(
     platform,
     resolveLocalWindowsAgentStartupShell({ platform, isRemote: false, terminalWindowsShell })
   )
+
   const quotedPath = quoteStartupArg(executablePath, shell)
+
   return shell === 'powershell' ? `& ${quotedPath}` : quotedPath
 }

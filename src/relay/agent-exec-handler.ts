@@ -7,8 +7,11 @@ import { mergeGitConfigEnvProtocol } from '../shared/git-credential-prompt-env'
 import { terminateRelaySubprocessTree } from './subprocess-tree-termination'
 
 const DEFAULT_TIMEOUT_MS = 60_000
+
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
+
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024
+
 const WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR = 'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
 
 function getCmdExePath(): string {
@@ -27,6 +30,7 @@ function quoteWindowsBatchToken(value: string): string {
   if (hasUnsafeWindowsBatchSyntax(value)) {
     throw new Error(WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR)
   }
+
   return `"${value}"`
 }
 
@@ -34,23 +38,29 @@ function resolveWindowsCommand(binary: string, env: NodeJS.ProcessEnv): string {
   if (process.platform !== 'win32') {
     return binary
   }
+
   if (/[\\/]/.test(binary) || /\.[a-z0-9]+$/i.test(binary)) {
     return binary
   }
 
   const pathEnv = env.PATH ?? env.Path
+
   if (!pathEnv) {
     return binary
   }
+
   const names = [`${binary}.cmd`, `${binary}.exe`, `${binary}.bat`, binary]
+
   for (const directory of pathEnv.split(delimiter).filter(Boolean)) {
     for (const name of names) {
       const candidate = join(directory, name)
+
       if (existsSync(candidate)) {
         return candidate
       }
     }
   }
+
   return binary
 }
 
@@ -60,10 +70,13 @@ function getWindowsSafeSpawn(
   env: NodeJS.ProcessEnv
 ): { spawnCmd: string; spawnArgs: string[] } {
   const resolvedBinary = resolveWindowsCommand(binary, env)
+
   if (!isWindowsBatchScript(resolvedBinary)) {
     return { spawnCmd: resolvedBinary, spawnArgs: args }
   }
+
   const commandLine = [resolvedBinary, ...args].map(quoteWindowsBatchToken).join(' ')
+
   return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/s', '/c', commandLine] }
 }
 
@@ -84,6 +97,7 @@ type CancelParams = {
 
 function laneKeyFor(cwd: string, operation: unknown): string {
   const op = typeof operation === 'string' && operation ? operation : 'default'
+
   return JSON.stringify([op, cwd])
 }
 
@@ -126,32 +140,42 @@ export class AgentExecHandler {
   private async cancel(params: CancelParams): Promise<{ canceled: boolean }> {
     const cwd = typeof params.cwd === 'string' ? params.cwd : ''
     const entry = this.inFlightByLane.get(this.laneKey(cwd, params.operation))
+
     if (!entry) {
       return { canceled: false }
     }
+
     entry.cancel()
+
     return { canceled: true }
   }
 
   private async exec(params: ExecParams, context?: RequestContext): Promise<ExecResult> {
     const binary = typeof params.binary === 'string' ? params.binary : ''
+
     if (!binary) {
       throw new Error('agent.execNonInteractive: binary is required')
     }
+
     const args = Array.isArray(params.args) ? params.args.map((a) => String(a)) : []
     const cwd = typeof params.cwd === 'string' && params.cwd.length > 0 ? params.cwd : undefined
     const stdinPayload = typeof params.stdin === 'string' ? params.stdin : null
+
     const requestedTimeout =
       typeof params.timeoutMs === 'number' ? params.timeoutMs : DEFAULT_TIMEOUT_MS
+
     const timeoutMs = Math.max(1_000, Math.min(MAX_TIMEOUT_MS, requestedTimeout))
+
     const extraEnv =
       params.env && typeof params.env === 'object' && !Array.isArray(params.env)
         ? (params.env as Record<string, string>)
         : null
+
     const spawnEnv = mergeGitConfigEnvProtocol(process.env, extraEnv ?? undefined) as Record<
       string,
       string
     >
+
     // Why: this RPC has no interactive terminal, regardless of which wrapper
     // launches the agent or hook command.
     applyTerminalGitCredentialPromptGuard(spawnEnv, {
@@ -161,6 +185,7 @@ export class AgentExecHandler {
 
     return new Promise<ExecResult>((resolve) => {
       let child
+
       try {
         const { spawnCmd, spawnArgs } = getWindowsSafeSpawn(binary, args, spawnEnv)
         child = spawn(spawnCmd, spawnArgs, {
@@ -177,6 +202,7 @@ export class AgentExecHandler {
           timedOut: false,
           spawnError: error instanceof Error ? error.message : String(error)
         })
+
         return
       }
 
@@ -191,27 +217,36 @@ export class AgentExecHandler {
       let entry: InFlightExec | null = null
       let timer: ReturnType<typeof setTimeout> | null = null
       let detachChildListeners = (): void => {}
+
       let detachRequestAbortListener = (): void => {}
+
       const finish = (result: ExecResult): void => {
         if (settled) {
           return
         }
+
         settled = true
+
         if (timer) {
           clearTimeout(timer)
           timer = null
         }
+
         detachRequestAbortListener()
         detachChildListeners()
+
         if (laneKey && entry && this.inFlightByLane.get(laneKey) === entry) {
           this.inFlightByLane.delete(laneKey)
         }
+
         resolve(result)
       }
+
       const cancelCurrent = (): void => {
         canceled = true
         terminateRelaySubprocessTree(child)
       }
+
       if (laneKey) {
         // Why: the relay owns one visible non-interactive job per cwd+operation.
         // Replacing the lane without canceling the prior child would orphan
@@ -236,20 +271,28 @@ export class AgentExecHandler {
 
       const onStdoutData = (chunk: Buffer): void => {
         stdoutBytes += chunk.byteLength
+
         if (stdoutBytes > MAX_OUTPUT_BYTES) {
           terminateRelaySubprocessTree(child)
+
           return
         }
+
         stdout += chunk.toString('utf-8')
       }
+
       const onStderrData = (chunk: Buffer): void => {
         stderrBytes += chunk.byteLength
+
         if (stderrBytes > MAX_OUTPUT_BYTES) {
           terminateRelaySubprocessTree(child)
+
           return
         }
+
         stderr += chunk.toString('utf-8')
       }
+
       const onError = (error: Error): void => {
         finish({
           stdout,
@@ -259,9 +302,11 @@ export class AgentExecHandler {
           spawnError: error.message
         })
       }
+
       const onClose = (code: number | null): void => {
         finish({ stdout, stderr, exitCode: code, timedOut, canceled })
       }
+
       child.stdout?.on('data', onStdoutData)
       child.stderr?.on('data', onStderrData)
       child.on('error', onError)

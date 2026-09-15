@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('react-native', async () => {
   const React = await import('react')
+
   return {
     Keyboard: { dismiss: mocks.dismissKeyboard },
     Linking: { openURL: vi.fn() },
@@ -27,8 +28,10 @@ vi.mock('react-native', async () => {
 vi.mock('react-native-webview', () => {
   const WebView = forwardRef((props: Record<string, unknown>, ref) => {
     useImperativeHandle(ref, () => ({ injectJavaScript: mocks.injectJavaScript }))
+
     return createElement('WebView', props)
   })
+
   return { WebView, default: WebView }
 })
 

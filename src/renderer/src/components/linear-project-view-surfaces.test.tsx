@@ -31,6 +31,7 @@ function render(element: React.ReactNode): HTMLElement {
   const root = createRoot(container)
   roots.push(root)
   act(() => root.render(<TooltipProvider>{element}</TooltipProvider>))
+
   return container
 }
 
@@ -53,6 +54,7 @@ const project: LinearProjectSummary = {
 describe('Linear project view surfaces', () => {
   it('renders collection errors and controlled pagination without changing ownership', () => {
     const onLoadMore = vi.fn()
+
     const container = render(
       <LinearCollectionNotice
         errors={[
@@ -69,6 +71,7 @@ describe('Linear project view surfaces', () => {
         onLoadMore={onLoadMore}
       />
     )
+
     expect(container.textContent).toContain('Acme: Reconnect Linear')
     const button = container.querySelector('button')
     act(() => button?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
@@ -79,6 +82,7 @@ describe('Linear project view surfaces', () => {
     const onSelectProject = vi.fn()
     const onOpenProject = vi.fn()
     const onUseProjectIssues = vi.fn()
+
     const container = render(
       <LinearProjectTable
         projects={[project]}
@@ -90,6 +94,7 @@ describe('Linear project view surfaces', () => {
         onUseProjectIssues={onUseProjectIssues}
       />
     )
+
     const row = container.querySelector('[role="button"]') as HTMLElement
     expect(row.getAttribute('aria-current')).toBe('true')
     expect(row.dataset.current).toBe('true')
@@ -119,8 +124,10 @@ describe('Linear project view surfaces', () => {
       shared: true,
       owner: { id: 'user-1', displayName: 'Ada' }
     }
+
     const onSelectView = vi.fn()
     const onOpenView = vi.fn()
+
     const views = render(
       <LinearCustomViewTable
         views={[view]}
@@ -129,6 +136,7 @@ describe('Linear project view surfaces', () => {
         onOpenView={onOpenView}
       />
     )
+
     expect(views.textContent).toContain('Shared')
     expect(views.textContent).toContain('Ada')
     const row = views.querySelector('[role="button"]') as HTMLElement
@@ -139,6 +147,7 @@ describe('Linear project view surfaces', () => {
     const onRefresh = vi.fn()
     const onOpenIssues = vi.fn()
     const onOpenProject = vi.fn()
+
     const overview = render(
       <LinearProjectOverview
         project={project}
@@ -149,6 +158,7 @@ describe('Linear project view surfaces', () => {
         onOpenProject={onOpenProject}
       />
     )
+
     expect(overview.textContent).toContain('Compiler')
     act(() =>
       overview
@@ -156,9 +166,11 @@ describe('Linear project view surfaces', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     )
     expect(onBack).toHaveBeenCalledOnce()
+
     const refresh = [...overview.querySelectorAll('button')].find((button) =>
       button.textContent?.includes('Refresh')
     )
+
     act(() => refresh?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(onRefresh).toHaveBeenCalledOnce()
   })

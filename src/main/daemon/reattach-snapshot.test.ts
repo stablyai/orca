@@ -9,6 +9,7 @@ function createMockSubprocess(): SubprocessHandle & {
 } {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
+
   return {
     pid: 42,
     getForegroundProcess: vi.fn(() => null),
@@ -39,6 +40,7 @@ function createMockSubprocess(): SubprocessHandle & {
 function buildReattachPayload(snapshot: ReturnType<HeadlessEmulator['getSnapshot']>) {
   const isAltScreen = snapshot.modes.alternateScreen
   const fullPayload = snapshot.scrollbackAnsi + snapshot.rehydrateSequences + snapshot.snapshotAnsi
+
   return {
     rehydrateSequences: snapshot.rehydrateSequences,
     snapshotAnsi: snapshot.snapshotAnsi,
@@ -59,12 +61,14 @@ async function simulateReattachToFreshTerminal(
   rows: number
 ): Promise<{ content: string; cols: number; rows: number }> {
   const fresh = new HeadlessEmulator({ cols, rows })
+
   try {
     // Step 1: write reattach payload (what pty-connection writes to xterm.js)
     await fresh.write(reattachPayload)
     // Step 2: write SIGWINCH repaint data (what the TUI sends after receiving SIGWINCH)
     await fresh.write(sigwinchRepaintData)
     const result = fresh.getSnapshot()
+
     return { content: result.snapshotAnsi, cols: result.cols, rows: result.rows }
   } finally {
     fresh.dispose()
@@ -83,9 +87,11 @@ describe('reattach snapshot flow', () => {
     host = new TerminalHost({
       spawnSubprocess: () => {
         lastSub = createMockSubprocess()
+
         return lastSub
       }
     })
+
     return host
   }
 
@@ -204,6 +210,7 @@ describe('reattach snapshot flow', () => {
       const payload = buildReattachPayload(result.snapshot!)
       // Simulate SIGWINCH repaint: clear screen + redraw
       const repaintData = '\x1b[2J\x1b[3J\x1b[Hrepainted content\r\n'
+
       const { content } = await simulateReattachToFreshTerminal(
         payload.fullPayload,
         repaintData,
@@ -283,6 +290,7 @@ describe('reattach snapshot flow', () => {
       emulator.dispose()
 
       const replay = new HeadlessEmulator({ cols: 80, rows: 10 })
+
       try {
         await replay.write(payload.fullPayload)
         expect(replay.getVisibleLines().join('\n')).toContain('Codex TUI content')
@@ -316,6 +324,7 @@ describe('reattach snapshot flow', () => {
       const payload = buildReattachPayload(result.snapshot!)
       // Simulate single SIGWINCH repaint (what Codex sends)
       const repaintData = '\x1b[H\x1b[2Jnew TUI content\r\n> new prompt'
+
       const { content } = await simulateReattachToFreshTerminal(
         payload.fullPayload,
         repaintData,

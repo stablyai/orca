@@ -39,15 +39,19 @@ export function useAutomationSourceHostAvailability(
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
+
   const mountedRef = useRef(true)
   const requestedHostIdsRef = useRef<Set<TaskSourceContext['hostId']>>(new Set())
   const [requestPool] = useState(createAutomationHostRequestPool)
+
   const [statusByHostId, setStatusByHostId] = useState<
     ReadonlyMap<TaskSourceContext['hostId'], RuntimeProviderPreflightStatus>
   >(() => new Map())
+
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
 
   const sourceContexts = useMemo(
@@ -57,18 +61,24 @@ export function useAutomationSourceHostAvailability(
         .filter((context): context is RepoBackedAutomationSourceContext => context !== null),
     [rows]
   )
+
   const runtimeSourceHostIds = useMemo(() => {
     const hostIds = new Set<TaskSourceContext['hostId']>()
+
     for (const context of sourceContexts) {
       const parsed = parseExecutionHostId(context.hostId)
+
       if (parsed?.kind !== 'runtime') {
         continue
       }
+
       if (getRuntimeSourceHostAvailability(context, runtimeStatusByEnvironmentId)) {
         continue
       }
+
       hostIds.add(parsed.id)
     }
+
     return [...hostIds].sort()
   }, [runtimeStatusByEnvironmentId, sourceContexts])
 
@@ -89,28 +99,37 @@ export function useAutomationSourceHostAvailability(
     const unrequested = runtimeSourceHostIds.filter(
       (hostId) => !requestedHostIdsRef.current.has(hostId)
     )
+
     if (unrequested.length === 0) {
       return
     }
+
     const record = (hostId: TaskSourceContext['hostId'], status: PreflightStatus | null): void => {
       if (!mountedRef.current) {
         return
       }
+
       setStatusByHostId((current) => new Map(current).set(hostId, { checked: true, status }))
     }
+
     setStatusByHostId((current) => {
       const next = new Map(current)
+
       for (const hostId of unrequested) {
         next.set(hostId, { checked: false, status: null })
       }
+
       return next
     })
+
     for (const hostId of unrequested) {
       requestedHostIdsRef.current.add(hostId)
       const parsed = parseExecutionHostId(hostId)
+
       if (parsed?.kind !== 'runtime') {
         continue
       }
+
       void requestPool.submit({
         run: async () => {
           try {
@@ -120,6 +139,7 @@ export function useAutomationSourceHostAvailability(
               undefined,
               { timeoutMs: 15_000 }
             )
+
             record(hostId, status)
           } catch {
             record(hostId, null)
@@ -131,15 +151,19 @@ export function useAutomationSourceHostAvailability(
 
   return useMemo(() => {
     const availabilityByRowKey = new Map<string, TaskSourceHostAvailability[]>()
+
     for (const row of rows) {
       const context = getRepoBackedAutomationSourceContext(row.automation)
+
       if (!context) {
         continue
       }
+
       const hostAvailability = getRuntimeSourceHostAvailability(
         context,
         runtimeStatusByEnvironmentId
       )
+
       const availability = [
         ...(hostAvailability ? [hostAvailability] : []),
         ...getRepoBackedProviderAvailability({
@@ -150,10 +174,12 @@ export function useAutomationSourceHostAvailability(
           runtimePreflightStatusByHostId: statusByHostId
         })
       ]
+
       if (availability.length > 0) {
         availabilityByRowKey.set(row.key, availability)
       }
     }
+
     return availabilityByRowKey
   }, [
     rows,

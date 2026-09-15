@@ -42,6 +42,7 @@ vi.mock('@/store', () => ({
       subscriber: (state: { ptyIdsByTabId: Record<string, string[]> }) => void
     ): (() => void) => {
       testState.storeSubscribers.add(subscriber)
+
       return () => testState.storeSubscribers.delete(subscriber)
     }
   }
@@ -66,11 +67,17 @@ vi.mock('@/runtime/runtime-terminal-stream', () => ({
 }))
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
+
 const SHOW_CURSOR = '\x1b[?25h'
+
 const CODEX_COMPOSER_PROMPT_RENDER = '\x1b[1m›\x1b[0m Ask Codex to do anything'
+
 const CODEX_DYNAMIC_COMPOSER_PROMPT_RENDER = '\x1b[?1049h\x1b[1m›\x1b[0m Implement {feature}'
+
 const ISSUE_URL = 'https://github.com/stablyai/orca/issues/123'
+
 const PASTED_ISSUE_URL = `\x1b[200~${ISSUE_URL}\x1b[201~`
+
 const CODEX_SUBMIT_RETRY_DELAY_MS = TUI_AGENT_CONFIG.codex.submitRetryDelayMs ?? 0
 
 describe('pasteDraftWhenAgentReady', () => {
@@ -93,6 +100,7 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.subscribeToPtyData.mockImplementation(
       (_ptyId: string, observer: (data: string) => void) => {
         testState.ptyObserver = observer
+
         return testState.unsubscribe
       }
     )
@@ -120,6 +128,7 @@ describe('pasteDraftWhenAgentReady', () => {
       content: ISSUE_URL,
       agent: 'codex'
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(CODEX_COMPOSER_PROMPT_RENDER)
@@ -149,6 +158,7 @@ describe('pasteDraftWhenAgentReady', () => {
         observer(DECSET_BRACKETED_PASTE)
       }
     )
+
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
@@ -158,9 +168,11 @@ describe('pasteDraftWhenAgentReady', () => {
 
     expect(testState.storeSubscribers.size).toBe(1)
     testState.appState.ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+
     for (const subscriber of testState.storeSubscribers) {
       subscriber(testState.appState)
     }
+
     expect(testState.storeSubscribers.size).toBe(0)
     expect(testState.ptyObserver).not.toBeNull()
     expect(testState.replayPreHandlerPtyData).toHaveBeenCalledWith('pty-1', testState.ptyObserver)
@@ -184,6 +196,7 @@ describe('pasteDraftWhenAgentReady', () => {
       content: ISSUE_URL,
       agent: 'codex'
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(
@@ -204,6 +217,7 @@ describe('pasteDraftWhenAgentReady', () => {
       content: ISSUE_URL,
       agent: 'gemini'
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
@@ -229,6 +243,7 @@ describe('pasteDraftWhenAgentReady', () => {
       content: ISSUE_URL,
       agent: 'opencode'
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
@@ -252,6 +267,7 @@ describe('pasteDraftWhenAgentReady', () => {
       content: ISSUE_URL,
       agent: 'opencode'
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${SHOW_CURSOR}${'x'.repeat(900)}`)
@@ -270,6 +286,7 @@ describe('pasteDraftWhenAgentReady', () => {
       content: ISSUE_URL,
       agent: 'opencode'
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
@@ -294,10 +311,12 @@ describe('pasteDraftWhenAgentReady', () => {
       content: ISSUE_URL,
       agent: 'opencode'
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
     await flushMicrotasks()
+
     for (let index = 0; index < 5; index += 1) {
       await vi.advanceTimersByTimeAsync(1499)
       testState.ptyObserver?.(`setup output ${index}`)
@@ -323,12 +342,14 @@ describe('pasteDraftWhenAgentReady', () => {
     // not arm one. With process inspection failing, delivery times out instead.
     testState.inspectRuntimeTerminalProcess.mockResolvedValue(null)
     const onTimeout = vi.fn()
+
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
       agent: 'opencode',
       onTimeout
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
@@ -355,11 +376,13 @@ describe('pasteDraftWhenAgentReady', () => {
       foregroundProcess: 'opencode',
       hasChildProcesses: false
     })
+
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
       agent: 'opencode'
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
@@ -378,12 +401,14 @@ describe('pasteDraftWhenAgentReady', () => {
       foregroundProcess: 'claude',
       hasChildProcesses: false
     })
+
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
       agent: 'claude',
       forcePaste: true
     })
+
     await flushMicrotasks()
 
     await vi.advanceTimersByTimeAsync(7999)
@@ -420,6 +445,7 @@ describe('pasteDraftWhenAgentReady', () => {
       submit: true,
       forcePaste: true
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
@@ -449,6 +475,7 @@ describe('pasteDraftWhenAgentReady', () => {
       submit: true,
       forcePaste: true
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
@@ -460,11 +487,13 @@ describe('pasteDraftWhenAgentReady', () => {
 
   it('reports false when verified input delivery fails', async () => {
     testState.sendRuntimePtyInputVerified.mockResolvedValue(false)
+
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
       agent: 'codex'
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${CODEX_COMPOSER_PROMPT_RENDER}`)
@@ -474,11 +503,13 @@ describe('pasteDraftWhenAgentReady', () => {
 
   it('reports false when verified input delivery rejects', async () => {
     testState.sendRuntimePtyInputVerified.mockRejectedValue(new Error('runtime timeout'))
+
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
       agent: 'codex'
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${CODEX_COMPOSER_PROMPT_RENDER}`)
@@ -497,6 +528,7 @@ describe('pasteDraftWhenAgentReady', () => {
       content: ISSUE_URL,
       agent: 'codex'
     })
+
     await flushMicrotasks()
 
     await vi.advanceTimersByTimeAsync(20000)
@@ -519,6 +551,7 @@ describe('pasteDraftWhenAgentReady', () => {
       content: ISSUE_URL,
       agent: 'codex'
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(DECSET_BRACKETED_PASTE)
@@ -544,6 +577,7 @@ describe('pasteDraftWhenAgentReady', () => {
     // composer window before the caller is told.
     testState.appState.ptyIdsByTabId = {}
     const onTimeout = vi.fn()
+
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
@@ -565,6 +599,7 @@ describe('pasteDraftWhenAgentReady', () => {
     // spawn that eats most of a shared budget would leave a cold codex too little
     // room and re-drop the prompt — the exact STA-3367 failure.
     testState.appState.ptyIdsByTabId = {}
+
     const promise = pasteDraftWhenAgentReady({
       tabId: 'tab-1',
       content: ISSUE_URL,
@@ -574,6 +609,7 @@ describe('pasteDraftWhenAgentReady', () => {
     // PTY takes 4s to appear — most of the old shared 8s budget.
     await vi.advanceTimersByTimeAsync(4000)
     testState.appState.ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+
     for (const subscriber of testState.storeSubscribers) {
       subscriber(testState.appState)
     }
@@ -608,6 +644,7 @@ describe('pasteDraftWhenAgentReady', () => {
       timeoutMs: 1,
       onTimeout
     })
+
     await flushMicrotasks()
 
     await vi.advanceTimersByTimeAsync(1)
@@ -632,6 +669,7 @@ describe('pasteDraftWhenAgentReady', () => {
       content: ISSUE_URL,
       agent: 'codex'
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${CODEX_COMPOSER_PROMPT_RENDER}`)
@@ -661,6 +699,7 @@ describe('pasteDraftWhenAgentReady', () => {
         observer: (data: string) => void
       ) => {
         testState.ptyObserver = observer
+
         return testState.unsubscribe
       }
     )
@@ -670,6 +709,7 @@ describe('pasteDraftWhenAgentReady', () => {
       content: ISSUE_URL,
       agent: 'codex'
     })
+
     await flushMicrotasks()
 
     testState.ptyObserver?.(`${DECSET_BRACKETED_PASTE}${CODEX_COMPOSER_PROMPT_RENDER}`)
@@ -712,18 +752,21 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.sendRuntimePtyInputVerified.mockImplementation(
       async (_settings: unknown, _ptyId: string, data: string) => {
         writes.push(data)
+
         return true
       }
     )
 
     const submit = sendBracketedPasteToRunningAgent({ ptyId: 'pty-1', content: ISSUE_URL })
     await flushMicrotasks()
+
     // Competing chunked paste on the same PTY: it must not open a frame the Enter can land in.
     const competing = sendAgentDraftPasteContent(
       {},
       'pty-1',
       'y'.repeat(AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES + 1)
     )
+
     await flushMicrotasks(10)
     expect(writes).toEqual([PASTED_ISSUE_URL])
 
@@ -775,6 +818,7 @@ describe('pasteDraftWhenAgentReady', () => {
     const content = 'x'.repeat(
       AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES + AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES + 7
     )
+
     const promise = sendBracketedPasteToRunningAgent({
       ptyId: 'pty-1',
       content
@@ -791,6 +835,7 @@ describe('pasteDraftWhenAgentReady', () => {
         .map((call) => call[2])
         .join('')
     ).toBe(content)
+
     for (const call of calls.slice(1, -1)) {
       expect((call[2] as string).length).toBeLessThanOrEqual(AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES)
     }
@@ -821,6 +866,7 @@ describe('pasteDraftWhenAgentReady', () => {
       .mockResolvedValueOnce(true)
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true)
+
     const content = 'x'.repeat(
       AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES + AGENT_DRAFT_PASTE_CHUNK_MAX_BYTES + 7
     )
@@ -860,6 +906,7 @@ describe('pasteDraftWhenAgentReady', () => {
     const content = Array.from({ length: 64 }, (_value, index) => `draft-${index}\x1b[201~`).join(
       ''
     )
+
     const includesSpy = vi.spyOn(String.prototype, 'includes')
     const replaceAllSpy = vi.spyOn(String.prototype, 'replaceAll')
 

@@ -21,6 +21,7 @@ function mutationOwner(
   ) {
     return expectedOwner
   }
+
   // Legacy clients cannot echo owner metadata, so snapshot it at the RPC boundary.
   return context.runtime.automationOwnerPrecondition(id) ?? undefined
 }
@@ -41,6 +42,7 @@ export const AUTOMATION_METHODS = [
     handler: (params, { runtime }) => {
       const automation = runtime.showAutomation(params.id, params.expectedOwner)
       const owner = runtime.automationOwnerPrecondition(params.id)
+
       return owner ? { automation, owner } : { automation }
     }
   }),
@@ -92,6 +94,7 @@ export const AUTOMATION_METHODS = [
           params.cursor
         )
       }
+
       return { runs: runtime.listAutomationRuns(params.automationId, params.expectedOwner) }
     }
   })

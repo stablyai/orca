@@ -30,6 +30,7 @@ test('@golden stages and commits a file through Source Control', async ({
   const unstagedRow = orcaPage
     .locator('[data-testid="source-control-entry"][data-source-control-area="unstaged"]')
     .filter({ hasText: path.basename(GOLDEN_CHANGED_PATH) })
+
   await expect(unstagedRow).toBeVisible()
   const stageButton = unstagedRow.getByRole('button', { name: 'Stage' })
   await stageButton.focus()
@@ -39,6 +40,7 @@ test('@golden stages and commits a file through Source Control', async ({
   const stagedRow = orcaPage
     .locator('[data-testid="source-control-entry"][data-source-control-area="staged"]')
     .filter({ hasText: path.basename(GOLDEN_CHANGED_PATH) })
+
   await expect(stagedRow).toBeVisible({ timeout: 10_000 })
   await orcaPage.getByRole('textbox', { name: 'Commit message' }).fill('test: golden daily loop')
   await orcaPage.getByRole('button', { name: 'Commit', exact: true }).click()

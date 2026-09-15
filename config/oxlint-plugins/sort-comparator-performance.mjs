@@ -8,9 +8,11 @@ function propertyName(node) {
   if (node?.type !== 'MemberExpression') {
     return null
   }
+
   if (!node.computed && node.property.type === 'Identifier') {
     return node.property.name
   }
+
   return node.property.type === 'Literal' ? node.property.value : null
 }
 
@@ -19,13 +21,16 @@ function isInlineSortComparator(node) {
     if (!FUNCTION_TYPES.has(parent.type)) {
       continue
     }
+
     const call = parent.parent
+
     return (
       call?.type === 'CallExpression' &&
       call.arguments[0] === parent &&
       ['sort', 'toSorted'].includes(propertyName(call.callee))
     )
   }
+
   return false
 }
 
@@ -43,6 +48,7 @@ function createRule(context) {
       node.type === 'CallExpression' &&
       propertyName(node.callee) === 'localeCompare' &&
       node.arguments.length >= 3
+
     if ((optionedComparison || isCollatorConstruction(node)) && isInlineSortComparator(node)) {
       context.report({
         node,
@@ -51,6 +57,7 @@ function createRule(context) {
       })
     }
   }
+
   return { CallExpression: inspect, NewExpression: inspect }
 }
 

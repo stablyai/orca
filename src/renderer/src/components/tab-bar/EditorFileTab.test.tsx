@@ -23,6 +23,7 @@ const renameFileOnDiskMock = vi.hoisted(() => vi.fn())
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useEffect: () => {},
@@ -34,16 +35,19 @@ vi.mock('react', async () => {
     },
     useState<T>(initial: T | (() => T)) {
       const stateIndex = reactHookRuntime.index++
+
       if (!(stateIndex in reactHookRuntime.states)) {
         reactHookRuntime.states[stateIndex] =
           typeof initial === 'function' ? (initial as () => T)() : initial
       }
+
       const setState = (next: T | ((previous: T) => T)): void => {
         reactHookRuntime.states[stateIndex] =
           typeof next === 'function'
             ? (next as (previous: T) => T)(reactHookRuntime.states[stateIndex] as T)
             : next
       }
+
       return [reactHookRuntime.states[stateIndex] as T, setState] as const
     }
   }
@@ -191,7 +195,9 @@ vi.mock('@/store/selectors', () => ({
 vi.mock('@/store', () => {
   const useAppStore = (selector: (state: { openMarkdownPreview: typeof vi.fn }) => unknown) =>
     selector({ openMarkdownPreview: appStoreMocks.openMarkdownPreview })
+
   useAppStore.getState = appStoreMocks.getState
+
   return { useAppStore }
 })
 
@@ -249,6 +255,7 @@ async function renderEditorFileTab(
 }> {
   reactHookRuntime.index = 0
   const module = await import('./EditorFileTab')
+
   const element = module.default({
     file,
     isActive: true,
@@ -276,6 +283,7 @@ async function renderEditorFileTab(
       iconPath: file.filePath
     }
   })
+
   return { element, onActivate, onMakePermanent }
 }
 
@@ -283,13 +291,17 @@ function expandNode(node: unknown): unknown {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return node
   }
+
   if (Array.isArray(node)) {
     return node.map(expandNode)
   }
+
   const el = node as ReactElementLike
+
   if (typeof el.type === 'function') {
     return expandNode(el.type(el.props))
   }
+
   return {
     ...el,
     props: {
@@ -303,35 +315,47 @@ function getText(node: unknown): string {
   if (node == null) {
     return ''
   }
+
   if (typeof node === 'string' || typeof node === 'number') {
     return String(node)
   }
+
   if (Array.isArray(node)) {
     return node.map(getText).join('')
   }
+
   const el = node as ReactElementLike
+
   return getText(el.props?.children)
 }
 
 function findElementsByType(node: unknown, typeName: string): ReactElementLike[] {
   const results: ReactElementLike[] = []
+
   const visit = (current: unknown): void => {
     if (current == null || typeof current === 'string' || typeof current === 'number') {
       return
     }
+
     if (Array.isArray(current)) {
       for (const child of current) {
         visit(child)
       }
+
       return
     }
+
     const el = current as ReactElementLike
+
     if (el.type === typeName) {
       results.push(el)
     }
+
     visit(el.props?.children)
   }
+
   visit(node)
+
   return results
 }
 
@@ -339,16 +363,20 @@ function findMenuItemByText(node: unknown, label: string): ReactElementLike {
   const item = findElementsByType(node, 'DropdownMenuItem').find((candidate) =>
     getText(candidate).includes(label)
   )
+
   if (!item) {
     throw new Error(`Missing menu item: ${label}`)
   }
+
   return item
 }
 
 /** Picks Rename, then fires the close-autofocus that actually opens the input. */
 function selectRenameFromMenu(node: unknown): void {
   ;(findMenuItemByText(node, 'Rename').props.onSelect as () => void)()
+
   const content = findElementsByType(node, 'DropdownMenuContent')[0]!
+
   ;(content.props.onCloseAutoFocus as (event: { preventDefault: () => void }) => void)({
     preventDefault: vi.fn()
   })
@@ -359,9 +387,11 @@ function findSpanByText(node: unknown, label: string): ReactElementLike {
     (candidate) =>
       getText(candidate) === label && typeof candidate.props.onDoubleClick === 'function'
   )
+
   if (!span) {
     throw new Error(`Missing span: ${label}`)
   }
+
   return span
 }
 
@@ -382,7 +412,9 @@ function pressInputKey(
     preventDefault: vi.fn(),
     stopPropagation: vi.fn()
   }
+
   ;(input.props.onKeyDown as (nextEvent: typeof event) => void)(event)
+
   return event
 }
 
@@ -395,6 +427,7 @@ describe('EditorFileTab rename menu', () => {
     vi.stubGlobal('navigator', { userAgent: 'Mac' })
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0)
+
       return 1
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -490,6 +523,7 @@ describe('EditorFileTab rename menu', () => {
       mode: 'diff',
       diffSource: 'unstaged'
     })
+
     const element = expandNode((await renderEditorFileTab(file)).element)
     const renameItem = findMenuItemByText(element, 'Rename')
 
@@ -500,10 +534,13 @@ describe('EditorFileTab rename menu', () => {
     const onActivate = vi.fn()
     const onMakePermanent = vi.fn()
     const file = baseFile({ isPreview: true })
+
     const element = expandNode(
       (await renderEditorFileTab(file, onActivate, onMakePermanent)).element
     )
+
     const label = findSpanByText(element, 'untitled-5.md')
+
     const stopPropagation = vi.fn()
 
     ;(label.props.onDoubleClick as (event: { stopPropagation: () => void }) => void)({
@@ -516,6 +553,7 @@ describe('EditorFileTab rename menu', () => {
     const secondRender = expandNode(
       (await renderEditorFileTab(file, onActivate, onMakePermanent)).element
     )
+
     expect(findElementsByType(secondRender, 'input')).toHaveLength(0)
   })
 })

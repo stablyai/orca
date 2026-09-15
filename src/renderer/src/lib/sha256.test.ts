@@ -23,9 +23,11 @@ describe('sha256', () => {
   it('matches crypto.subtle SHA-256 across crossing block boundaries', async () => {
     for (const length of [0, 1, 55, 56, 63, 64, 65, 119, 120, 200]) {
       const bytes = new Uint8Array(length)
+
       for (let i = 0; i < length; i += 1) {
         bytes[i] = (i * 37 + 11) & 0xff
       }
+
       const expected = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
       expect(hex(sha256(bytes))).toBe(hex(expected))
     }

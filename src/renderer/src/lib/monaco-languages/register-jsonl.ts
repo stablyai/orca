@@ -64,6 +64,7 @@ export function registerJsonlLanguage(monaco: MonacoModule): void {
   const languageAlreadyRegistered = monaco.languages
     .getLanguages()
     .some((language) => language.id === JSONL_LANGUAGE_ID)
+
   if (languageAlreadyRegistered) {
     return
   }

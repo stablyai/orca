@@ -85,9 +85,11 @@ describe('web repos preload API', () => {
 
   it('does not reassign an in-flight catalog when the browser pairs to another server', async () => {
     let resolveCatalog!: (response: RuntimeRpcResponse<unknown>) => void
+
     const pendingCatalog = new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
       resolveCatalog = resolve
     })
+
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(): Promise<RuntimeRpcResponse<unknown>> {
@@ -103,11 +105,13 @@ describe('web repos preload API', () => {
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
     const catalogPromise = globals.window.api.repos.list()
+
     const pairingCode = encodePairingCode({
       endpoint: 'wss://server-b.example:443',
       deviceToken: 'server-b-token',
       publicKeyB64: 'server-b-key'
     })
+
     const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
       name: 'Server B',
       pairingCode
@@ -151,6 +155,7 @@ describe('web repos preload API', () => {
         WebRuntimeClient: class {
           call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
             runtimeCalls.push({ method, params })
+
             return Promise.resolve({
               id: method,
               ok: true,
@@ -192,6 +197,7 @@ describe('web worktree preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -305,6 +311,7 @@ describe('web worktree preload API', () => {
               resolveServerA = resolve
             })
           }
+
           return Promise.resolve({
             id: 'server-b-list',
             ok: true,
@@ -324,10 +331,12 @@ describe('web worktree preload API', () => {
 
     const serverAList = globals.window.api.worktrees.listAll()
     await vi.waitFor(() => expect(resolveServerA).toBeTypeOf('function'))
+
     const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
       name: 'Server B',
       pairingCode: encodePairingCode({ publicKeyB64: 'server-b-key' })
     })
+
     resolveServerA?.({
       id: 'server-a-list',
       ok: true,
@@ -349,6 +358,7 @@ describe('web worktree preload API', () => {
       WebRuntimeClient: class {
         call(method: string): Promise<RuntimeRpcResponse<unknown>> {
           calls.push(method)
+
           return Promise.resolve({
             id: method,
             ok: true,
@@ -430,6 +440,7 @@ describe('web worktree preload API', () => {
 
   it('falls back to legacy worktree.list when detectedList is unavailable', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
+
     const worktree = {
       id: 'repo-1::/workspace/repo',
       repoId: 'repo-1',
@@ -452,10 +463,12 @@ describe('web worktree preload API', () => {
       lastActivityAt: 0,
       workspaceStatus: 'todo'
     }
+
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           if (method === 'worktree.detectedList') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -467,6 +480,7 @@ describe('web worktree preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -512,6 +526,7 @@ describe('web worktree preload API', () => {
       WebRuntimeClient: class {
         call(method: string): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push(method)
+
           return new Promise((resolve) => {
             resolveDetected = resolve
           })
@@ -551,6 +566,7 @@ describe('web worktree preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           if (method === 'worktree.resolvePrBase') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -559,6 +575,7 @@ describe('web worktree preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           if (method === 'worktree.resolveMrBase') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -570,6 +587,7 @@ describe('web worktree preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -688,6 +706,7 @@ describe('web worktree preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -730,6 +749,7 @@ describe('web worktree preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,

@@ -33,6 +33,7 @@ export async function invokeDispatcherUnaryMethod({
     request.method,
     params
   )
+
   if (clientHostedBrowser.handled) {
     recordRuntimeFeatureInteraction(
       runtime,
@@ -41,26 +42,33 @@ export async function invokeDispatcherUnaryMethod({
       undefined,
       request.params
     )
+
     return clientHostedBrowser.result
   }
 
   const compatibility = await legacyOrchestration.tryHandle(request, params, context.signal)
+
   if (compatibility.handled) {
     return compatibility.result
   }
+
   const effectiveParams = compatibility.params ?? params
+
   const legacyCoordinator = legacyOrchestration.createCoordinatorInvocation(
     request,
     compatibility.legacyCoordinatorAuthority
   )
+
   const authenticatedCallerFingerprint =
     context.authenticatedCallerFingerprint ??
     legacyCoordinator?.mutationCallerFingerprint ??
     (needsLocalCallerFingerprint(request, effectiveParams)
       ? orchestrationMutations.getLocalAuthenticatedCallerFingerprint()
       : undefined)
+
   const invoke = (mutation?: DurableMutationInvocation) => {
     const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
+
     return method.handler(effectiveParams, {
       ...context,
       authenticatedCallerFingerprint:
@@ -78,12 +86,15 @@ export async function invokeDispatcherUnaryMethod({
       orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
     })
   }
+
   const result = await orchestrationMutations.run(
     request,
     effectiveParams,
     invoke,
     legacyCoordinator?.mutationCallerFingerprint ?? authenticatedCallerFingerprint
   )
+
   recordRuntimeFeatureInteraction(runtime, request.method, result, undefined, request.params)
+
   return result
 }

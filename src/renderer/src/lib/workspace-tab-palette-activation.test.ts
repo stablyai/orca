@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
     setActiveTabType: ReturnType<typeof vi.fn>
     setActiveFile: ReturnType<typeof vi.fn>
   }
+
   const store: MockStore = {
     worktreesByRepo: {
       'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/tmp/wt-1' }]
@@ -58,6 +59,7 @@ const mocks = vi.hoisted(() => {
     setActiveTabType: vi.fn(),
     setActiveFile: vi.fn()
   }
+
   return {
     store,
     activateAndRevealWorktree: vi.fn(),

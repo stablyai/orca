@@ -6,9 +6,11 @@ vi.mock('@/components/terminal-pane/pty-transport', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn(() => [])
 }))
+
 vi.mock('@/components/terminal-pane/terminal-parked-watcher-registry', () => ({
   disposeParkedTerminalWatchersForPtyIds: vi.fn()
 }))
+
 vi.mock('@/components/terminal-pane/pty-shutdown-exit-deferral', () => ({
   clearCommittedPtyShutdownSettlements: vi.fn(),
   hasCommittedPtyShutdownSettlement: vi.fn(() => false),
@@ -19,11 +21,14 @@ vi.mock('@/components/terminal-pane/pty-shutdown-exit-deferral', () => ({
 
 function harness(initial: Partial<AppState>, exitGuardPtyIds: readonly string[]) {
   let current = initial as AppState
+
   const set = vi.fn((update: unknown) => {
     const patch =
       typeof update === 'function' ? (update as (s: AppState) => object)(current) : update
+
     current = { ...current, ...(patch as object) }
   })
+
   const guards = createTerminalShutdownGuardController({
     exitGuardPtyIds,
     get: (() => current) as never,
@@ -33,6 +38,7 @@ function harness(initial: Partial<AppState>, exitGuardPtyIds: readonly string[])
     set: set as never,
     tabs: []
   })
+
   return { guards, set, state: () => current }
 }
 
@@ -47,6 +53,7 @@ describe('markShutdownPending identity', () => {
 
   it('still counts a pending owner when every id is already suppressed', () => {
     const suppressedPtyExitIds: Record<string, true> = { 'pty-1': true }
+
     const { guards, state } = harness(
       { suppressedPtyExitIds, pendingPtyShutdownIds: { 'pty-1': 1 } },
       ['pty-1']

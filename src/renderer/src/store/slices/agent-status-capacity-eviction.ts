@@ -12,13 +12,17 @@ export function capRetainedAgents(
   maxEntries = MAX_RETAINED_AGENTS
 ): Record<string, RetainedAgentEntry> {
   const keys = Object.keys(retained)
+
   if (keys.length <= maxEntries) {
     return retained
   }
+
   const capped: Record<string, RetainedAgentEntry> = {}
+
   for (const key of keys.slice(keys.length - maxEntries)) {
     capped[key] = retained[key]
   }
+
   return capped
 }
 
@@ -31,14 +35,18 @@ type PaneLiveness = 'live' | 'dead' | 'unprovable'
 export function classifyPaneKeyLiveness(state: AppState): (paneKey: string) => PaneLiveness {
   const rootedLeafKeys = new Set<string>()
   const rootedTabIds = new Set<string>()
+
   for (const [tabId, layout] of Object.entries(state.terminalLayoutsByTabId)) {
     if (!layout?.root) {
       continue
     }
+
     rootedTabIds.add(tabId)
     const stack: TerminalPaneLayoutNode[] = [layout.root]
+
     while (stack.length > 0) {
       const node = stack.pop()!
+
       if (node.type === 'leaf') {
         rootedLeafKeys.add(`${tabId}:${node.leafId}`)
       } else {
@@ -46,11 +54,14 @@ export function classifyPaneKeyLiveness(state: AppState): (paneKey: string) => P
       }
     }
   }
+
   return (paneKey) => {
     if (rootedLeafKeys.has(paneKey)) {
       return 'live'
     }
+
     const tabId = getTabIdFromPaneKey(paneKey)
+
     return tabId !== null && rootedTabIds.has(tabId) ? 'dead' : 'unprovable'
   }
 }
@@ -61,11 +72,14 @@ const liveAgentStatusCounts = new WeakMap<Record<string, AgentStatusEntry>, numb
 
 export function countLiveAgentStatuses(entries: Record<string, AgentStatusEntry>): number {
   const cached = liveAgentStatusCounts.get(entries)
+
   if (cached !== undefined) {
     return cached
   }
+
   const size = Object.keys(entries).length
   liveAgentStatusCounts.set(entries, size)
+
   return size
 }
 
@@ -86,36 +100,46 @@ export function capLiveAgentStatusesInPlace(
   entryCount = countLiveAgentStatuses(freshLive)
 ): string[] {
   let overflow = entryCount - maxEntries
+
   if (overflow <= 0) {
     return []
   }
+
   const keys = Object.keys(freshLive)
   const classify = buildClassifier()
   const evictedPaneKeys: string[] = []
+
   const sweep = (canEvict: (liveness: PaneLiveness, entry: AgentStatusEntry) => boolean): void => {
     for (const key of keys) {
       if (overflow <= 0) {
         break
       }
+
       if (key === protectedPaneKey || !(key in freshLive)) {
         continue
       }
+
       const liveness = classify(key)
+
       if (liveness === 'live' || !canEvict(liveness, freshLive[key])) {
         continue
       }
+
       delete freshLive[key]
       overflow -= 1
       evictedPaneKeys.push(key)
     }
   }
+
   // Prefer rows that are provably dead or too stale to represent a live agent.
   sweep(
     (liveness, entry) => liveness === 'dead' || now - entry.updatedAt > AGENT_STATUS_STALE_AFTER_MS
   )
+
   // Shed fresh unprovable rows only when needed; rooted live panes make this a soft cap.
   if (overflow > 0) {
     sweep(() => true)
   }
+
   return evictedPaneKeys
 }

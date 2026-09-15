@@ -24,6 +24,7 @@ export function BottomDrawerModalHost({ visible, onRequestClose, children }: Pro
   if (!visible) {
     return null
   }
+
   return (
     <Modal
       visible

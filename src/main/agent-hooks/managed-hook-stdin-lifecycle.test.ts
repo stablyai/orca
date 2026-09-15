@@ -11,6 +11,7 @@ import type { SFTPWrapper } from 'ssh2'
 import type * as osModule from 'node:os'
 
 let isolatedUserDataDir = ''
+
 let previousUserDataPath: string | undefined
 
 beforeEach(() => {
@@ -27,6 +28,7 @@ afterEach(() => {
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   rmSync(isolatedUserDataDir, { recursive: true, force: true })
 })
 
@@ -42,6 +44,7 @@ vi.mock('electron', () => ({
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof osModule>()
+
   return {
     ...actual,
     homedir: homedirMock.mockImplementation(actual.homedir)
@@ -77,14 +80,17 @@ import { findGitBash } from './windows-git-bash-path.test-fixture'
 function decodeEncodedPowerShellCommand(command: string): string {
   const encoded = command.match(/-EncodedCommand\s+(\S+)/)
   expect(encoded, 'launcher carries an encoded command').not.toBeNull()
+
   return Buffer.from(encoded![1], 'base64').toString('utf16le')
 }
 
 const REMOTE_HOME = '/home/dev'
+
 // Why all three: Windows reports a write to a pipe whose reader is gone as any of these,
 // depending on whether the read handle, the pipe, or the process went first. Enumerating
 // them keeps the guard-exit legs from failing on which race the host happened to run.
 const WRITER_BROKEN_BY_EARLY_EXIT = ['EPIPE', 'ECONNRESET', 'EOF']
+
 const LARGE_PAYLOAD = Buffer.alloc(1_000_000, 'x')
 
 // Why: a developer box may set HKCU\...\Command Processor\AutoRun, which cmd.exe runs before any
@@ -96,6 +102,7 @@ function seedCmdAutoRunTarget(profileDir: string): void {
   mkdirSync(profileDir, { recursive: true })
   writeFileSync(join(profileDir, '.cmd_aliases.cmd'), '@echo off\r\n', 'utf8')
 }
+
 const REMOTE_INSTALLERS = [
   {
     agent: 'antigravity',
@@ -182,11 +189,13 @@ function runHookProcess(
     const stdinErrors: NodeJS.ErrnoException[] = []
     let stderr = ''
     let stdout = ''
+
     const timeout = setTimeout(() => {
       child.stdin.destroy()
       child.kill('SIGKILL')
       reject(new Error(`hook did not finish with stdin ${stdin}d`))
     }, 10_000)
+
     child.on('error', (error) => {
       clearTimeout(timeout)
       reject(error)
@@ -202,6 +211,7 @@ function runHookProcess(
       clearTimeout(timeout)
       resolve({ exitCode, stdinErrors, stderr, stdout })
     })
+
     if (stdin === 'close') {
       child.stdin.end(LARGE_PAYLOAD)
     }
@@ -212,6 +222,7 @@ function hookEnvironment(extraEnv: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith('ORCA_'))
   )
+
   return {
     ...env,
     HOME: REMOTE_HOME,
@@ -226,19 +237,24 @@ function runPosixHook(command: string, extraEnv: NodeJS.ProcessEnv = {}): Promis
 
 async function generatePosixScripts(): Promise<Map<string, string>> {
   const scripts = new Map<string, string>()
+
   for (const entry of REMOTE_INSTALLERS) {
     const memory = createAgentHookMemorySftp()
     const status = await entry.install(memory.sftp)
     expect(status.state, `${entry.agent} install status`).toBe('installed')
+
     const generated = [...memory.fs.files.entries()].filter(
       ([path]) => path.includes('/.orca/agent-hooks/') && path.endsWith('.sh')
     )
+
     // Why: Claude ships a second managed script (the statusline usage feed); the stdin lifecycle contract applies to every generated script.
     expect(generated.length, `${entry.agent} generated scripts`).toBeGreaterThan(0)
+
     for (const [path, script] of generated) {
       scripts.set(`${entry.agent} ${path.split('/').pop()}`, script)
     }
   }
+
   return scripts
 }
 
@@ -248,6 +264,7 @@ async function generatePosixScripts(): Promise<Map<string, string>> {
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return await run()
   } finally {
@@ -266,6 +283,7 @@ describe('Windows managed hook stdin structure', () => {
     const previousKimiHome = process.env.KIMI_CODE_HOME
     delete process.env.GROK_HOME
     delete process.env.KIMI_CODE_HOME
+
     try {
       await withPlatform('win32', async () => {
         for (const entry of LOCAL_INSTALLERS) {
@@ -274,11 +292,14 @@ describe('Windows managed hook stdin structure', () => {
       })
       const hooksDir = join(home, '.orca', 'agent-hooks')
       const fileNames = readdirSync(hooksDir)
+
       const mainBatchScripts = fileNames.filter(
         (name) => name.endsWith('-hook.cmd') && !name.startsWith('antigravity-')
       )
+
       mainBatchScripts.push('antigravity-hook.cmd')
       expect(mainBatchScripts).toHaveLength(10)
+
       for (const fileName of mainBatchScripts) {
         const script = readFileSync(join(hooksDir, fileName), 'utf8')
         // Why: missing-env path must not touch more.com — hang class from #11549.
@@ -325,6 +346,7 @@ describe('Windows managed hook stdin structure', () => {
       expect(copilot.indexOf('if (-not $env:ORCA_AGENT_HOOK_PORT')).toBeLessThan(
         copilot.indexOf('[Console]::In.ReadToEnd()')
       )
+
       // Why: the two encoded-PowerShell launchers own stdin themselves when the managed
       // script is missing, so the same guard has to precede their ReadToEnd — and the
       // fallback answer has to precede the guard, or a gate event outside a pane is
@@ -357,16 +379,19 @@ describe('Windows managed hook stdin structure', () => {
       )
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+
       if (previousGrokHome === undefined) {
         delete process.env.GROK_HOME
       } else {
         process.env.GROK_HOME = previousGrokHome
       }
+
       if (previousKimiHome === undefined) {
         delete process.env.KIMI_CODE_HOME
       } else {
         process.env.KIMI_CODE_HOME = previousKimiHome
       }
+
       rmSync(home, { recursive: true, force: true })
     }
   })
@@ -377,12 +402,16 @@ describe('Windows managed hook stdin structure', () => {
       const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-live-'))
       homedirMock.mockReturnValue(home)
       seedCmdAutoRunTarget(home)
+
       try {
         const gitBash = findGitBash()
+
         for (const entry of LOCAL_INSTALLERS) {
           expect((await entry.install()).state, `${entry.agent} install status`).toBe('installed')
         }
+
         const hooksDir = join(home, '.orca', 'agent-hooks')
+
         const mainScripts = readdirSync(hooksDir).filter(
           (name) =>
             name === 'antigravity-hook.cmd' ||
@@ -390,9 +419,12 @@ describe('Windows managed hook stdin structure', () => {
             name.endsWith('-hook.sh') ||
             (name.endsWith('-hook.cmd') && !name.startsWith('antigravity-'))
         )
+
         expect(mainScripts).toHaveLength(12)
+
         for (const fileName of mainScripts) {
           const scriptPath = join(hooksDir, fileName)
+
           const executable = fileName.endsWith('.cmd')
             ? 'cmd.exe'
             : fileName.endsWith('.ps1')
@@ -404,13 +436,16 @@ describe('Windows managed hook stdin structure', () => {
                   'powershell.exe'
                 )
               : gitBash
+
           const args = fileName.endsWith('.cmd')
             ? ['/d', '/c', scriptPath]
             : fileName.endsWith('.ps1')
               ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath]
               : [scriptPath]
+
           const result = await runHookProcess(executable, args, hookEnvironment())
           expect(result.exitCode, `${fileName} exit code`).toBe(0)
+
           // Why (#11549 class): every Windows-local hook exits before owning stdin when the
           // Orca env is missing, so the writer may break. hookEnvironment() strips every
           // ORCA_* var, so this relaxation only ever covers the missing-env path — a
@@ -421,6 +456,7 @@ describe('Windows managed hook stdin structure', () => {
         }
 
         const missingScript = 'C:\\missing\\orca-hook.cmd'
+
         // Why: the cmd fast path is intentionally a bare, directly-spawnable .cmd
         // path (Codex/Antigravity/Devin launch it as argv[0], not via cmd.exe), so
         // it cannot own stdin for a missing script — a cmd-builtin drain would make
@@ -440,6 +476,7 @@ describe('Windows managed hook stdin structure', () => {
             args: ['-lc', wrapRuntimeHomeHookCommand('missing-orca-hook')]
           }
         ]
+
         for (const launcher of launcherCases) {
           // Why (#11549 class): a launcher that reaches an interpreter owns stdin for a
           // missing script exactly like a managed script does, so it obeys the same rule —
@@ -450,12 +487,15 @@ describe('Windows managed hook stdin structure', () => {
             launcher.args,
             hookEnvironment()
           )
+
           expect(outside.exitCode, `${launcher.name} exit code`).toBe(0)
+
           for (const error of outside.stdinErrors) {
             expect(WRITER_BROKEN_BY_EARLY_EXIT, `${launcher.name} stdin error`).toContain(
               error.code
             )
           }
+
           const insideAPane = await runHookProcess(
             launcher.executable,
             launcher.args,
@@ -465,8 +505,10 @@ describe('Windows managed hook stdin structure', () => {
               ORCA_PANE_KEY: 'tab:leaf'
             })
           )
+
           expect(insideAPane.exitCode, `${launcher.name} in-pane exit code`).toBe(0)
           expect(insideAPane.stdinErrors, `${launcher.name} in-pane stdin errors`).toHaveLength(0)
+
           // Why this leg and not a shape assertion: an unguarded ReadToEnd exits fine when
           // the writer closes the pipe. Only a caller that abandons it strands the launcher,
           // which is what left a console per hook event on the reporting hosts.
@@ -476,6 +518,7 @@ describe('Windows managed hook stdin structure', () => {
             hookEnvironment(),
             'abandon'
           )
+
           expect(abandoned.exitCode, `${launcher.name} abandoned-stdin exit code`).toBe(0)
         }
       } finally {
@@ -494,20 +537,25 @@ describe('Windows managed hook stdin structure', () => {
       const absentProfile = join(home, 'absent')
       seedCmdAutoRunTarget(home)
       seedCmdAutoRunTarget(absentProfile)
+
       try {
         expect(new ClaudeHookService().install().state).toBe('installed')
+
         const settings = JSON.parse(
           readFileSync(join(home, '.claude', 'settings.json'), 'utf8')
         ) as { hooks: Record<string, { hooks: { command: string; args?: string[] }[] }[]> }
+
         const entry = settings.hooks.PreToolUse[0].hooks[0]
         expect(entry.args).toBeUndefined()
 
         // Why: MSYS rewrites switches and paths, so the command must survive both shells (#14815).
         const gitBash = findGitBash()
+
         const shells = [
           { name: 'cmd.exe', executable: 'cmd.exe', args: ['/d', '/c', entry.command] },
           { name: 'Git Bash', executable: gitBash, args: ['-c', entry.command] }
         ]
+
         // Why: cover guard exit, reached curl, and the launcher's missing-script fallback.
         const environments = [
           { name: 'no Orca env', env: hookEnvironment({ USERPROFILE: home }) },
@@ -529,6 +577,7 @@ describe('Windows managed hook stdin structure', () => {
             env: hookEnvironment({ USERPROFILE: absentProfile })
           }
         ]
+
         for (const shell of shells) {
           for (const environment of environments) {
             const label = `${shell.name} / ${environment.name}`
@@ -562,14 +611,17 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
 
   it('captures stdin before every possible whole-script success exit', async () => {
     const scripts = await generatePosixScripts()
+
     for (const [agent, script] of scripts) {
       const captureIndex = Math.max(
         script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`),
         script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
       )
+
       const firstExitIndex = script.indexOf('exit 0')
       expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
       expect(firstExitIndex, `${agent} first success exit`).toBeGreaterThan(captureIndex)
+
       // Why: the JSON reader dereferences a variable the prelude sets, so a script
       // that carries the reader must carry its prelude above the capture line.
       if (script.includes(POSIX_HOOK_JSON_STDIN_READER)) {
@@ -584,6 +636,7 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
 
   it('accepts a large payload without Orca environment or a broken writer', async () => {
     const scripts = await generatePosixScripts()
+
     for (const [agent, script] of scripts) {
       const extraEnv = agent.startsWith('command-code')
         ? {
@@ -592,6 +645,7 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
             ORCA_PANE_KEY: 'test-pane'
           }
         : {}
+
       const result = await runPosixHook(script, extraEnv)
       expect(result.exitCode, `${agent} exit code`).toBe(0)
       expect(result.stdinErrors, `${agent} stdin errors`).toHaveLength(0)
@@ -600,6 +654,7 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
 
   it('does not need PATH to capture or drain POSIX hook stdin', async () => {
     const scripts = await generatePosixScripts()
+
     for (const [agent, script] of scripts) {
       const result = await runPosixHook(script, { PATH: '' })
       expect(result.exitCode, `${agent} exit code`).toBe(0)
@@ -622,18 +677,22 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
     ['PATH whose first cat is a decoy', '']
   ])('captures the whole payload with %s', async (label, pathValue) => {
     const decoyDir = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-decoy-'))
+
     try {
       let effectivePath = pathValue
+
       if (label === 'PATH whose first cat is a decoy') {
         const decoy = join(decoyDir, 'cat')
         writeFileSync(decoy, '#!/bin/sh\nexit 0\n', { mode: 0o755 })
         effectivePath = decoyDir
       }
+
       const result = await runHookProcess(
         '/bin/sh',
         ['-c', `payload=$(${POSIX_HOOK_STDIN_READER}); printf '%s' "${'${#payload}'}"`],
         { ...hookEnvironment(), PATH: effectivePath }
       )
+
       expect(result.exitCode, `${label} exit code`).toBe(0)
       expect(result.stdinErrors, `${label} stdin errors`).toHaveLength(0)
       expect(result.stdout, `${label} captured bytes`).toBe(String(LARGE_PAYLOAD.length))

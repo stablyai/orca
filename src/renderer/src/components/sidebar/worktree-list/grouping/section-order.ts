@@ -32,20 +32,25 @@ export function getRenderedNaturalAnchorRepoIds({
   projectGrouping?: ProjectGroupingModel
 }): Set<string> {
   const renderedRepoIds = new Set<string>()
+
   if (groupBy === 'none') {
     if (!collapsedGroups.has(ALL_GROUP_KEY)) {
       for (const worktree of worktrees) {
         renderedRepoIds.add(worktree.repoId)
       }
     }
+
     return renderedRepoIds
   }
+
   if (groupBy === 'repo') {
     for (const worktree of worktrees) {
       renderedRepoIds.add(worktree.repoId)
     }
+
     return renderedRepoIds
   }
+
   for (const worktree of worktrees) {
     const groupKey = getGroupKeyForWorktree(
       groupBy,
@@ -56,18 +61,22 @@ export function getRenderedNaturalAnchorRepoIds({
       settings,
       projectGrouping
     )
+
     if (groupKey && !collapsedGroups.has(groupKey)) {
       renderedRepoIds.add(worktree.repoId)
     }
   }
+
   return renderedRepoIds
 }
 
 export function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
   const mainWorktrees = worktrees.filter((worktree) => worktree.isMainWorktree)
+
   if (mainWorktrees.length === 0) {
     return worktrees
   }
+
   // Why: project groups are scanned by repo; keep the repo's canonical
   // workspace anchored even when dynamic sorts rank a child workspace first.
   return [...mainWorktrees, ...worktrees.filter((worktree) => !worktree.isMainWorktree)]
@@ -84,10 +93,13 @@ export function withRepoSectionDisplayLabels(
   const labelItems = entries.flatMap(([, group]) =>
     group.repo ? [{ ...group.repo, displayName: group.label }] : []
   )
+
   if (labelItems.length === 0) {
     return [...entries]
   }
+
   const labelsByPath = getRepoDisplayLabelsByPath(labelItems)
+
   return entries.map(([key, group]) => [
     key,
     group.repo
@@ -106,17 +118,21 @@ type RecentRank = { hasActivity: boolean; ts: number }
 
 export function recentRankForEntry(entry: OrderedGroupEntry): RecentRank {
   let max = Number.NEGATIVE_INFINITY
+
   for (const worktree of entry[1].items) {
     if (worktree.lastActivityAt > max) {
       max = worktree.lastActivityAt
     }
   }
+
   if (max !== Number.NEGATIVE_INFINITY) {
     // Why: Recent must be timestamp-based, not encounter order — the incoming
     // array is no longer pre-sorted by recency once decoupled from sortBy.
     return { hasActivity: true, ts: max }
   }
+
   const addedAt = entry[1].repo?.addedAt
+
   return {
     hasActivity: false,
     ts: typeof addedAt === 'number' ? addedAt : Number.NEGATIVE_INFINITY
@@ -127,6 +143,7 @@ export function compareRecentRank(a: RecentRank, b: RecentRank): number {
   if (a.hasActivity !== b.hasActivity) {
     return a.hasActivity ? -1 : 1
   }
+
   return b.ts - a.ts
 }
 
@@ -135,17 +152,22 @@ function manualRankForEntry(
   repoOrder: Map<string, number> | undefined
 ): number {
   const key = entry[0]
+
   const repoIds =
     entry[1].repoIds.size > 0
       ? [...entry[1].repoIds]
       : [key.startsWith('repo:') ? key.slice('repo:'.length) : key]
+
   let rank = Number.POSITIVE_INFINITY
+
   for (const repoId of repoIds) {
     const repoRank = repoOrder?.get(repoId)
+
     if (repoRank !== undefined && repoRank < rank) {
       rank = repoRank
     }
   }
+
   return rank
 }
 
@@ -156,17 +178,22 @@ export function getManualOrderAnchorRepo(
 ): Repo | undefined {
   let anchor = group.repo
   let anchorRank = anchor ? (repoOrder?.get(anchor.id) ?? Number.POSITIVE_INFINITY) : undefined
+
   for (const repoId of group.repoIds) {
     const repo = repoMap.get(repoId)
+
     if (!repo) {
       continue
     }
+
     const rank = repoOrder?.get(repoId) ?? Number.POSITIVE_INFINITY
+
     if (!anchor || rank < (anchorRank ?? Number.POSITIVE_INFINITY)) {
       anchor = repo
       anchorRank = rank
     }
   }
+
   return anchor
 }
 
@@ -184,26 +211,34 @@ export function sortProjectEntries(
   if (projectOrderBy === 'recent') {
     return [...entries].sort((a, b) => {
       const byRecent = compareRecentRank(recentRankForEntry(a), recentRankForEntry(b))
+
       if (byRecent !== 0) {
         return byRecent
       }
+
       const ma = manualRankForEntry(a, repoOrder)
       const mb = manualRankForEntry(b, repoOrder)
+
       if (ma !== mb) {
         return ma - mb
       }
+
       return a[1].label.localeCompare(b[1].label)
     })
   }
+
   if (!repoOrder) {
     return entries
   }
+
   return [...entries].sort((a, b) => {
     const ra = manualRankForEntry(a, repoOrder)
     const rb = manualRankForEntry(b, repoOrder)
+
     if (ra !== rb) {
       return ra - rb
     }
+
     return a[1].label.localeCompare(b[1].label)
   })
 }

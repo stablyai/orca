@@ -8,8 +8,11 @@ import { getExplicitRuntimeEnvironmentIdForWorktree } from './worktree-runtime-o
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 const REPO_COUNT = 20
+
 const WORKTREES_PER_REPO = 100
+
 const LOOKUPS_PER_SWEEP = 200
+
 const SWEEPS = 40
 
 type OwnerRecord = {
@@ -18,6 +21,7 @@ type OwnerRecord = {
   hostId?: ExecutionHostId
   runtimeOwnerEnvironmentId?: string
 }
+
 type DetectedByRepo = Record<string, { worktrees: readonly OwnerRecord[] }>
 
 // The pre-index expression, kept as the "before" leg of the benchmark.
@@ -29,25 +33,32 @@ function walkHasDetected(detectedWorktreesByRepo: DetectedByRepo | undefined, id
 
 function buildDetectedCatalog(generation: number, counter?: { reads: number }): DetectedByRepo {
   const catalog: DetectedByRepo = {}
+
   for (let repoIndex = 0; repoIndex < REPO_COUNT; repoIndex += 1) {
     const repoId = `repo-${repoIndex}`
     const worktrees: OwnerRecord[] = []
+
     for (let index = 0; index < WORKTREES_PER_REPO; index += 1) {
       const id = `${repoId}::detected-${index}-gen-${generation}`
       const record: OwnerRecord = { id, repoId, hostId: 'ssh:target-a' }
+
       if (counter) {
         Object.defineProperty(record, 'id', {
           get: () => {
             counter.reads += 1
+
             return id
           },
           enumerable: true
         })
       }
+
       worktrees.push(record)
     }
+
     catalog[repoId] = { worktrees }
   }
+
   return catalog
 }
 
@@ -55,6 +66,7 @@ const publishedRepos = Array.from({ length: REPO_COUNT }, (_unused, index) => ({
   id: `repo-${index}`,
   connectionId: `target-${index}`
 }))
+
 const publishedWorktreesByRepo: Record<string, OwnerRecord[]> = Object.fromEntries(
   publishedRepos.map((repo) => [
     repo.id,
@@ -85,11 +97,13 @@ const PROBE_IDS = Array.from(
 )
 
 const WARMUP_SWEEPS = 5
+
 const warmCatalog = buildDetectedCatalog(-1)
 
 // Each fresh leg needs its own never-indexed catalogs; a shared pool would leave the index warm
 // for whichever leg runs second and silently erase the rebuild it is supposed to measure.
 let catalogGeneration = 0
+
 function freshCatalogPool(): DetectedByRepo[] {
   return Array.from({ length: SWEEPS + WARMUP_SWEEPS }, () =>
     buildDetectedCatalog((catalogGeneration += 1))
@@ -100,10 +114,13 @@ function measureSweeps(run: (sweep: number) => void): number {
   for (let warmup = 0; warmup < WARMUP_SWEEPS; warmup += 1) {
     run(warmup)
   }
+
   const started = performance.now()
+
   for (let sweep = 0; sweep < SWEEPS; sweep += 1) {
     run(WARMUP_SWEEPS + sweep)
   }
+
   return (performance.now() - started) / SWEEPS
 }
 
@@ -115,15 +132,19 @@ describe('detected worktree index performance', () => {
 
     getExplicitRuntimeEnvironmentIdForWorktree(state, 'repo-0::warm-the-index')
     counter.reads = 0
+
     for (const probeId of PROBE_IDS) {
       getExplicitRuntimeEnvironmentIdForWorktree(state, probeId)
     }
+
     const indexedReads = counter.reads
 
     counter.reads = 0
+
     for (const probeId of PROBE_IDS) {
       walkHasDetected(catalog, probeId)
     }
+
     const walkedReads = counter.reads
 
     expect(indexedReads).toBe(0)
@@ -132,27 +153,34 @@ describe('detected worktree index performance', () => {
 
   it('records lookup-path timing without making wall clock a CI gate', () => {
     const walkPool = freshCatalogPool()
+
     const walkMs = measureSweeps((sweep) => {
       const catalog = walkPool[sweep]!
+
       for (const probeId of PROBE_IDS) {
         walkHasDetected(catalog, probeId)
       }
     })
+
     const walkWarmMs = measureSweeps(() => {
       for (const probeId of PROBE_IDS) {
         walkHasDetected(warmCatalog, probeId)
       }
     })
+
     // Unrelated store writes leave the detected catalog identical, so the index stays warm.
     const warmMs = measureSweeps(() => {
       for (const probeId of PROBE_IDS) {
         hasIndexedDetectedWorktree(warmCatalog, probeId)
       }
     })
+
     // A landed worktree scan republishes the catalog: one rebuild amortized over the sweep.
     const freshPool = freshCatalogPool()
+
     const freshMs = measureSweeps((sweep) => {
       const catalog = freshPool[sweep]!
+
       for (const probeId of PROBE_IDS) {
         hasIndexedDetectedWorktree(catalog, probeId)
       }
@@ -160,12 +188,15 @@ describe('detected worktree index performance', () => {
 
     const statePool = freshCatalogPool().map(buildOwnerState)
     const warmState = buildOwnerState(warmCatalog)
+
     const explicitOwnerFreshMs = measureSweeps((sweep) => {
       const state = statePool[sweep]!
+
       for (const probeId of PROBE_IDS) {
         getExplicitRuntimeEnvironmentIdForWorktree(state, probeId)
       }
     })
+
     const explicitOwnerWarmMs = measureSweeps(() => {
       for (const probeId of PROBE_IDS) {
         getExplicitRuntimeEnvironmentIdForWorktree(warmState, probeId)
@@ -173,6 +204,7 @@ describe('detected worktree index performance', () => {
     })
 
     const round = (value: number): number => Number(value.toFixed(4))
+
     const report = {
       entries: REPO_COUNT * WORKTREES_PER_REPO,
       lookupsPerSweep: LOOKUPS_PER_SWEEP,
@@ -190,6 +222,7 @@ describe('detected worktree index performance', () => {
         freshMsPerSweep: round(explicitOwnerFreshMs)
       }
     }
+
     writeFileSync(
       join(tmpdir(), 'orca-detected-worktree-index-bench.json'),
       `${JSON.stringify(report, null, 2)}\n`

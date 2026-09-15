@@ -35,6 +35,7 @@ describe('journal row schema versions', () => {
       now: () => 1_000,
       journalDir: join(root, 'session-1')
     })
+
     const identity = { provider: 'orca' as const, clientMessageId: 'm1' }
     await journal.appendItem(
       identity,
@@ -48,12 +49,14 @@ describe('journal row schema versions', () => {
     )
     await journal.close()
     const opened = openJournalDatabase(journalDatabaseFile(join(root, 'session-1')))
+
     try {
       const stored = opened.db
         .prepare('SELECT row_json FROM journal_rows ORDER BY seq')
         .all()
         .map((row) => JSON.parse(String((row as { row_json: string }).row_json)))
         .map((row: { kind: string; v: number }) => [row.kind, row.v])
+
       expect(stored).toEqual([
         ['epoch', 2],
         ['item', 2],

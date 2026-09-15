@@ -48,8 +48,10 @@ const MIN_READLINE_NEEDLE_LENGTH = 4
  */
 function caretEncodeControls(reply: string): string {
   let out = ''
+
   for (const ch of reply) {
     const code = ch.charCodeAt(0)
+
     if (code === 0x09 || code === 0x0a || code === 0x0d) {
       out += ch
     } else if (code < 0x20) {
@@ -58,6 +60,7 @@ function caretEncodeControls(reply: string): string {
       out += code === 0x7f ? '^?' : ch
     }
   }
+
   return out
 }
 
@@ -70,13 +73,16 @@ function readlineEchoProjection(reply: string): string | null {
   if (reply.includes('\x1b]')) {
     return reply.replaceAll('\x1b]', '\x07').replaceAll('\x1b\\', '')
   }
+
   // Keyed on the private-DSR grammar, not a bare `ESC [ ?` prefix: DA1 (`ESC [ ? 1 ; 2 c`)
   // shares that prefix and is kept off this path today only by a predicate one module away.
   // Matching the final `n` here means widening that predicate cannot silently arm a needle.
   if (!PRIVATE_DSR_RE.test(reply)) {
     return null
   }
+
   const needle = `\x07${reply.slice(3)}`
+
   return needle.length >= MIN_READLINE_NEEDLE_LENGTH ? needle : null
 }
 
@@ -92,11 +98,14 @@ export function replyEchoProjections(
     // ESC-strip without evidence, and the harness that would produce it does not exist.
     return [{ needle: reply.replaceAll('\x1b', ''), holdPartial: true }]
   }
+
   if (ownerBackend !== 'posix-pty') {
     // wsl.exe is ConPTY-hosted but its echo shape is unverified; suppress nothing.
     return []
   }
+
   const readline = readlineEchoProjection(reply)
+
   return [
     // The kernel's ECHOCTL caret form — the POSIX default.
     { needle: caretEncodeControls(reply), holdPartial: true },
@@ -121,6 +130,7 @@ function suffixPrefixOffset(needle: string, data: string): number {
       return offset
     }
   }
+
   return -1
 }
 
@@ -132,25 +142,33 @@ export function locateEcho(
 ): PtyStartupReplyEchoMatch {
   let complete: { offset: number; length: number } | null = null
   let partialOffset = -1
+
   for (const projection of projections) {
     const at = data.indexOf(projection.needle)
+
     if (at !== -1) {
       if (!complete || at < complete.offset) {
         complete = { offset: at, length: projection.needle.length }
       }
+
       continue
     }
+
     if (!projection.holdPartial) {
       continue
     }
+
     const suffix = suffixPrefixOffset(projection.needle, data)
+
     if (suffix !== -1 && (partialOffset === -1 || suffix < partialOffset)) {
       partialOffset = suffix
     }
   }
+
   if (complete) {
     return { kind: 'complete', ...complete }
   }
+
   return partialOffset === -1 ? { kind: 'none' } : { kind: 'partial', offset: partialOffset }
 }
 
@@ -161,11 +179,14 @@ export function isBetterEchoMatch(
   if (candidate.kind === 'none') {
     return false
   }
+
   if (best.kind === 'none') {
     return true
   }
+
   if (candidate.kind !== best.kind) {
     return candidate.kind === 'complete'
   }
+
   return candidate.offset < best.offset
 }

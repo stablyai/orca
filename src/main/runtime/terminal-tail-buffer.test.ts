@@ -27,18 +27,22 @@ function feed(sim: TailSim, chunk: string, cold: boolean): Step {
     chunk,
     sim.redrawCursor
   )
+
   sim.lines = next.lines
   sim.partialLine = next.partialLine
   sim.redrawCursor = next.redrawCursor
+
   return next
 }
 
 function mulberry32(seed: number): () => number {
   let state = seed >>> 0
+
   return () => {
     state = (state + 0x6d2b79f5) >>> 0
     let t = Math.imul(state ^ (state >>> 15), 1 | state)
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
@@ -52,47 +56,63 @@ const ESC = String.fromCharCode(27)
  */
 function randomChunk(random: () => number, profile: 'short' | 'long'): string {
   const roll = random()
+
   if (profile === 'long') {
     if (roll < 0.7) {
       return `${'w'.repeat(1000 + Math.floor(random() * 3000))}\n`
     }
+
     if (roll < 0.8) {
       return `\rspinner ${Math.floor(random() * 100)}%`
     }
+
     if (roll < 0.9) {
       return 'trailing spaces here   \n'
     }
+
     return roll < 0.95 ? '' : `no newline ${Math.floor(random() * 1000)}`
   }
+
   if (roll < 0.22) {
     const lines: string[] = []
+
     for (let index = 0; index < 30; index += 1) {
       lines.push(`burst ${Math.floor(random() * 1e6)}${random() < 0.3 ? '   ' : ''}`)
     }
+
     return `${lines.join('\n')}\n`
   }
+
   if (roll < 0.42) {
     return `plain output ${Math.floor(random() * 1e6)}\n`
   }
+
   if (roll < 0.56) {
     return `${'   '.repeat(Math.floor(random() * 3))}\n`
   }
+
   if (roll < 0.68) {
     const rows = 1 + Math.floor(random() * 12)
+
     return `${ESC}[${rows}A${ESC}[2Kredrawn ${Math.floor(random() * 1000)}\n`
   }
+
   if (roll < 0.8) {
     return `\rspinner ${Math.floor(random() * 100)}%`
   }
+
   if (roll < 0.86) {
     return 'trailing spaces here   \n'
   }
+
   if (roll < 0.92) {
     return `multi\nline\nchunk ${Math.floor(random() * 1000)}\n`
   }
+
   if (roll < 0.96) {
     return ''
   }
+
   return `no newline ${Math.floor(random() * 1000)}`
 }
 
@@ -104,6 +124,7 @@ describe('retained tail buffer prefix reuse', () => {
         const warm = newSim()
         const cold = newSim()
         let sawCap = false
+
         for (let step = 0; step < 1400; step += 1) {
           const chunk = randomChunk(random, profile)
           const lineCountBefore = warm.lines.length
@@ -128,6 +149,7 @@ describe('retained tail buffer prefix reuse', () => {
                 warm.lines.length < MAX_TAIL_LINES &&
                 lineCountBefore + warmStep.newlyCompletedLines.length > warm.lines.length)
         }
+
         // Guard against a vacuous pass: the profile's eviction path must have run.
         expect(sawCap).toBe(true)
       })
@@ -136,20 +158,24 @@ describe('retained tail buffer prefix reuse', () => {
 
   it('does not walk the untouched redraw prefix on every chunk', () => {
     const sim = newSim()
+
     for (let index = 0; index < MAX_TAIL_LINES + 200; index += 1) {
       feed(sim, `streaming build output line ${index}\n`, false)
     }
+
     expect(sim.lines.length).toBe(MAX_TAIL_LINES)
 
     const redrawChunk = `${ESC}[3A${ESC}[2Krewritten row${ESC}[2B\n`
     const spy = vi.spyOn(String.prototype, 'charCodeAt')
     let prefixTouches = 0
+
     try {
       feed(sim, redrawChunk, false)
       prefixTouches = spy.mock.calls.length
     } finally {
       spy.mockRestore()
     }
+
     // Before this change the prefix trailing-space scan alone cost one charCodeAt per retained
     // row (~1990); the chunk itself accounts for well under a hundred.
     expect(prefixTouches).toBeLessThan(300)

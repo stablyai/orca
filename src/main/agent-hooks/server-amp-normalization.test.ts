@@ -321,6 +321,7 @@ describe('Amp hook normalization', () => {
       buildBody({ hook_event_name: 'session.start', threadId: 'thread-1' }),
       'production'
     )
+
     expect(sessionStart).toBeNull()
 
     const nextTool = _internals.normalizeHookPayload(

@@ -16,6 +16,7 @@ export function formatTimeInput(hour: number, minute: number): string {
 
 export function parseDraftTime(time: string): { hour: number; minute: number } {
   const [rawHour, rawMinute] = time.split(':').map((part) => Number(part))
+
   return {
     hour: Number.isInteger(rawHour) && rawHour >= 0 && rawHour <= 23 ? rawHour : 9,
     minute: Number.isInteger(rawMinute) && rawMinute >= 0 && rawMinute <= 59 ? rawMinute : 0
@@ -24,10 +25,13 @@ export function parseDraftTime(time: string): { hour: number; minute: number } {
 
 export function buildDraftPrecheck(draft: AutomationDraft): AutomationPrecheck | null {
   const command = draft.precheckCommand.trim()
+
   if (!command) {
     return null
   }
+
   const rawTimeout = Number(draft.precheckTimeoutSeconds)
+
   return {
     command,
     timeoutSeconds: Number.isFinite(rawTimeout) ? rawTimeout : 60
@@ -38,7 +42,9 @@ export function buildHermesCronSchedule(draft: AutomationDraft): string {
   if (draft.preset === 'custom') {
     return draft.customSchedule.trim()
   }
+
   const { hour, minute } = parseDraftTime(draft.time)
+
   return buildAutomationCronSchedule({
     preset: draft.preset,
     hour,

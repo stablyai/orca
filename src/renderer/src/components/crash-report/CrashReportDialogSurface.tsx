@@ -33,8 +33,10 @@ import { useCrashReportCopy } from './use-crash-report-copy'
 function formatSummary(report: CrashReportRecord): string {
   if (isReactErrorBoundaryReport(report)) {
     const surface = typeof report.details.surface === 'string' ? report.details.surface : null
+
     return surface ? `React render error in ${surface}` : 'React render error'
   }
+
   return `${report.processType} ${report.reason}${
     report.exitCode === null ? '' : ` (exit ${report.exitCode})`
   }`
@@ -44,6 +46,7 @@ function getDialogTitle(report: CrashReportRecord | null): string {
   if (!report) {
     return 'Report a crash'
   }
+
   return report && isReactErrorBoundaryReport(report)
     ? 'Orca hit a recoverable UI error'
     : 'Orca closed unexpectedly'
@@ -53,6 +56,7 @@ function getDialogDescription(report: CrashReportRecord | null): string {
   if (!report) {
     return 'Send a privacy-safe crash report. Recent redacted diagnostic logs are included when available.'
   }
+
   return report && isReactErrorBoundaryReport(report)
     ? 'Send a privacy-safe diagnostic report to help us understand the failed UI surface.'
     : 'Send a privacy-safe diagnostic report to help us understand what happened.'
@@ -62,6 +66,7 @@ function getNotesPlaceholder(report: CrashReportRecord | null): string {
   if (!report) {
     return 'Optional: what happened?'
   }
+
   return report && isReactErrorBoundaryReport(report)
     ? 'Optional: what were you doing before this UI error?'
     : 'Optional: what were you doing before Orca closed?'
@@ -91,12 +96,14 @@ export function CrashReportDialogSurface({
   // Sequence the request so a stale viewer is never used for submission.
   const viewerRequestIdRef = useRef(0)
   const deferredNotes = useDeferredValue(notes)
+
   const diagnosticText = useMemo(
     // Why: formatting applies redaction and truncation over the full crash
     // payload. Keep that preview update out of the textarea keystroke path.
     () => (report ? formatCrashReportText(report, deferredNotes) : ''),
     [deferredNotes, report]
   )
+
   const copyCrashReportDetails = useCrashReportCopy(report, notes)
 
   const clearViewer = useCallback((): void => {
@@ -125,8 +132,10 @@ export function CrashReportDialogSurface({
   useEffect(() => {
     if (!open) {
       clearViewer()
+
       return
     }
+
     setIncludeDiagnosticLogs(true)
     loadViewerForOpenDialog()
   }, [clearViewer, loadViewerForOpenDialog, open])
@@ -155,6 +164,7 @@ export function CrashReportDialogSurface({
   const dismissReportIfNeeded = async (): Promise<void> => {
     if (report?.status === 'pending') {
       await window.api.crashReports.dismiss({ reportId: report.id })
+
       if (mountedRef.current) {
         onReportChange({ ...report, status: 'dismissed' })
       }
@@ -163,6 +173,7 @@ export function CrashReportDialogSurface({
 
   const handleDismiss = async (): Promise<void> => {
     await dismissReportIfNeeded()
+
     if (mountedRef.current) {
       onOpenChange(false)
     }
@@ -170,6 +181,7 @@ export function CrashReportDialogSurface({
 
   const handleSubmit = async (): Promise<void> => {
     setSubmitting(true)
+
     try {
       const result = await window.api.crashReports.submit({
         ...(report ? { reportId: report.id } : {}),
@@ -181,18 +193,23 @@ export function CrashReportDialogSurface({
         githubLogin: viewer?.login ?? null,
         githubEmail: null
       })
+
       if (!result.ok) {
         showSubmitFailure(result.error, result.diagnosticBundle)
         console.error('Failed to submit crash report:', result.error)
+
         return
       }
+
       if (!mountedRef.current) {
         return
       }
+
       onReportChange(result.report)
       setNotes('')
       toast.dismiss(CRASH_REPORT_SUBMIT_FAILURE_TOAST_ID)
       const warningNotice = getCrashReportSubmitWarningNotice(result, includeDiagnosticLogs)
+
       if (warningNotice) {
         toast.warning(warningNotice.title, { description: warningNotice.description })
       } else {
@@ -203,6 +220,7 @@ export function CrashReportDialogSurface({
           )
         )
       }
+
       onOpenChange(false)
     } catch (error) {
       showSubmitFailure(error)
@@ -221,6 +239,7 @@ export function CrashReportDialogSurface({
         if (submitting && !nextOpen) {
           return
         }
+
         if (!nextOpen) {
           clearViewer()
           void dismissReportIfNeeded().finally(() => {
@@ -228,8 +247,10 @@ export function CrashReportDialogSurface({
               onOpenChange(false)
             }
           })
+
           return
         }
+
         onOpenChange(true)
       }}
     >

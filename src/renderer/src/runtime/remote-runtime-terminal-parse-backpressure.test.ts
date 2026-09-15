@@ -11,6 +11,7 @@ import {
 describe('remote terminal renderer backpressure', () => {
   const sendBinary = vi.fn()
   const unsubscribe = vi.fn()
+
   let callbacks: {
     onResponse: (response: unknown) => void
     onBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
@@ -29,6 +30,7 @@ describe('remote terminal renderer backpressure', () => {
             queueMicrotask(() => {
               callbacks?.onResponse({ ok: true, result: { type: 'ready' } })
             })
+
             return { unsubscribe, sendBinary }
           })
         }
@@ -43,11 +45,15 @@ describe('remote terminal renderer backpressure', () => {
   it('withholds server credit until xterm consumes the output frame', async () => {
     const { getRemoteRuntimeTerminalMultiplexer } =
       await import('./remote-runtime-terminal-multiplexer')
+
     const { takeCurrentTerminalDeliveryCredit } =
       await import('../lib/pane-manager/terminal-delivery-credit')
+
     const { writeTerminalOutput } =
       await import('../lib/pane-manager/pane-terminal-output-scheduler')
+
     const parsedCallbacks: (() => void)[] = []
+
     const terminal = {
       write: vi.fn((_data: string, parsed?: () => void) => {
         if (parsed) {
@@ -55,6 +61,7 @@ describe('remote terminal renderer backpressure', () => {
         }
       })
     }
+
     const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
       terminal: 'term-codex',
       client: { id: 'mac-viewer', type: 'desktop' },
@@ -110,11 +117,15 @@ describe('remote terminal renderer backpressure', () => {
   it('batches parsed bulk output credit up to the byte threshold', async () => {
     const { getRemoteRuntimeTerminalMultiplexer } =
       await import('./remote-runtime-terminal-multiplexer')
+
     const { takeCurrentTerminalDeliveryCredit } =
       await import('../lib/pane-manager/terminal-delivery-credit')
+
     const { writeTerminalOutput } =
       await import('../lib/pane-manager/pane-terminal-output-scheduler')
+
     const parsedCallbacks: (() => void)[] = []
+
     const terminal = {
       write: vi.fn((_data: string, parsed?: () => void) => {
         if (parsed) {
@@ -122,6 +133,7 @@ describe('remote terminal renderer backpressure', () => {
         }
       })
     }
+
     const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
       terminal: 'term-bulk',
       client: { id: 'mac-viewer', type: 'desktop' },
@@ -135,6 +147,7 @@ describe('remote terminal renderer backpressure', () => {
         onSnapshot: vi.fn()
       }
     })
+
     sendBinary.mockClear()
     const output = encodeTerminalStreamText('x'.repeat(64 * 1024))
 
@@ -150,9 +163,11 @@ describe('remote terminal renderer backpressure', () => {
     }
 
     expect(sentAckBytes()).toEqual([])
+
     for (const parsed of parsedCallbacks) {
       parsed()
     }
+
     expect(sentAckBytes()).toEqual([output.byteLength * 3])
     stream.close()
   })
@@ -160,11 +175,13 @@ describe('remote terminal renderer backpressure', () => {
   it('pauses output only after the host confirms the stream capability', async () => {
     const { getRemoteRuntimeTerminalMultiplexer } =
       await import('./remote-runtime-terminal-multiplexer')
+
     const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
       terminal: 'term-hidden',
       client: { id: 'mac-viewer', type: 'desktop' },
       callbacks: { onData: vi.fn(), onSnapshot: vi.fn() }
     })
+
     sendBinary.mockClear()
 
     expect(stream.setOutputPaused(true)).toBe(false)
@@ -193,14 +210,17 @@ describe('remote terminal renderer backpressure', () => {
 
   it('keeps paused input immediate without arming a hidden-output probe', async () => {
     vi.useFakeTimers()
+
     try {
       const { getRemoteRuntimeTerminalMultiplexer } =
         await import('./remote-runtime-terminal-multiplexer')
+
       const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
         terminal: 'term-hidden-input',
         client: { id: 'mac-viewer', type: 'desktop' },
         callbacks: { onData: vi.fn(), onSnapshot: vi.fn() }
       })
+
       callbacks?.onResponse({
         ok: true,
         result: {
@@ -225,12 +245,15 @@ describe('remote terminal renderer backpressure', () => {
   it('releases unknown streams and closes malformed connections instead of leaking credit', async () => {
     const { getRemoteRuntimeTerminalMultiplexer } =
       await import('./remote-runtime-terminal-multiplexer')
+
     const multiplexer = getRemoteRuntimeTerminalMultiplexer('windows-test')
+
     const stream = await multiplexer.subscribeTerminal({
       terminal: 'term-codex',
       client: { id: 'mac-viewer', type: 'desktop' },
       callbacks: { onData: vi.fn(), onSnapshot: vi.fn() }
     })
+
     sendBinary.mockClear()
 
     callbacks?.onBinary(
@@ -244,6 +267,7 @@ describe('remote terminal renderer backpressure', () => {
     expect(
       sendBinary.mock.calls.some(([bytes]) => {
         const frame = decodeTerminalStreamFrame(bytes)
+
         return (
           frame?.opcode === TerminalStreamOpcode.Unsubscribe &&
           frame.streamId === stream.streamId + 100
@@ -258,12 +282,15 @@ describe('remote terminal renderer backpressure', () => {
   it('credits malformed transformed output only after intentionally discarding it', async () => {
     const { getRemoteRuntimeTerminalMultiplexer } =
       await import('./remote-runtime-terminal-multiplexer')
+
     const onData = vi.fn()
+
     const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
       terminal: 'term-codex',
       client: { id: 'mac-viewer', type: 'desktop' },
       callbacks: { onData, onSnapshot: vi.fn() }
     })
+
     sendBinary.mockClear()
     const malformed = encodeTerminalStreamJson({ data: 42, rawLength: 'wrong' })
 
@@ -281,6 +308,7 @@ describe('remote terminal renderer backpressure', () => {
     expect(
       sendBinary.mock.calls.some(([bytes]) => {
         const frame = decodeTerminalStreamFrame(bytes)
+
         return frame?.opcode === TerminalStreamOpcode.SnapshotRequest
       })
     ).toBe(true)
@@ -290,18 +318,23 @@ describe('remote terminal renderer backpressure', () => {
   it('passes transformed sequence metadata and cancels pending credit on disposal', async () => {
     const { getRemoteRuntimeTerminalMultiplexer } =
       await import('./remote-runtime-terminal-multiplexer')
+
     const onData = vi.fn()
+
     const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
       terminal: 'term-codex',
       client: { id: 'mac-viewer', type: 'desktop' },
       callbacks: { onData, onSnapshot: vi.fn() }
     })
+
     sendBinary.mockClear()
+
     const transformed = encodeTerminalStreamJson({
       data: 'visible',
       rawLength: 11,
       transformed: true
     })
+
     callbacks?.onBinary(
       encodeTerminalStreamFrame({
         opcode: TerminalStreamOpcode.OutputSpan,
@@ -324,15 +357,19 @@ describe('remote terminal renderer backpressure', () => {
   it('settles a late parser callback locally after the server ends the stream', async () => {
     const { getRemoteRuntimeTerminalMultiplexer } =
       await import('./remote-runtime-terminal-multiplexer')
+
     const { takeCurrentTerminalDeliveryCredit } =
       await import('../lib/pane-manager/terminal-delivery-credit')
+
     const parsedCredits: (() => void)[] = []
+
     const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
       terminal: 'term-codex',
       client: { id: 'mac-viewer', type: 'desktop' },
       callbacks: {
         onData: () => {
           const credit = takeCurrentTerminalDeliveryCredit()
+
           if (credit) {
             parsedCredits.push(credit)
           }
@@ -340,6 +377,7 @@ describe('remote terminal renderer backpressure', () => {
         onSnapshot: vi.fn()
       }
     })
+
     sendBinary.mockClear()
     callbacks?.onBinary(
       encodeTerminalStreamFrame({
@@ -359,6 +397,7 @@ describe('remote terminal renderer backpressure', () => {
   it('closes without ACKing when the renderer delivery callback throws', async () => {
     const { getRemoteRuntimeTerminalMultiplexer } =
       await import('./remote-runtime-terminal-multiplexer')
+
     const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
       terminal: 'term-codex',
       client: { id: 'mac-viewer', type: 'desktop' },
@@ -369,6 +408,7 @@ describe('remote terminal renderer backpressure', () => {
         onSnapshot: vi.fn()
       }
     })
+
     sendBinary.mockClear()
 
     callbacks?.onBinary(
@@ -388,15 +428,19 @@ describe('remote terminal renderer backpressure', () => {
   it('closes and releases server debt when an ACK transport write throws', async () => {
     const { getRemoteRuntimeTerminalMultiplexer } =
       await import('./remote-runtime-terminal-multiplexer')
+
     const { takeCurrentTerminalDeliveryCredit } =
       await import('../lib/pane-manager/terminal-delivery-credit')
+
     const parseCredits: (() => void)[] = []
+
     const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
       terminal: 'term-codex',
       client: { id: 'mac-viewer', type: 'desktop' },
       callbacks: {
         onData: () => {
           const credit = takeCurrentTerminalDeliveryCredit()
+
           if (credit) {
             parseCredits.push(credit)
           }
@@ -404,9 +448,11 @@ describe('remote terminal renderer backpressure', () => {
         onSnapshot: vi.fn()
       }
     })
+
     sendBinary.mockClear()
     sendBinary.mockImplementation((bytes) => {
       const frame = decodeTerminalStreamFrame(bytes)
+
       if (frame?.opcode === TerminalStreamOpcode.Ack) {
         throw new Error('socket closed')
       }
@@ -429,18 +475,23 @@ describe('remote terminal renderer backpressure', () => {
 
   it('stops rearming the ack flush after a failed ACK tears the stream down', async () => {
     vi.useFakeTimers()
+
     try {
       const { getRemoteRuntimeTerminalMultiplexer } =
         await import('./remote-runtime-terminal-multiplexer')
+
       const { takeCurrentTerminalDeliveryCredit } =
         await import('../lib/pane-manager/terminal-delivery-credit')
+
       const parseCredits: (() => void)[] = []
+
       const stream = await getRemoteRuntimeTerminalMultiplexer('windows-test').subscribeTerminal({
         terminal: 'term-wedge',
         client: { id: 'mac-viewer', type: 'desktop' },
         callbacks: {
           onData: () => {
             const credit = takeCurrentTerminalDeliveryCredit()
+
             if (credit) {
               parseCredits.push(credit)
             }
@@ -448,6 +499,7 @@ describe('remote terminal renderer backpressure', () => {
           onSnapshot: vi.fn()
         }
       })
+
       sendBinary.mockClear()
       sendBinary.mockImplementation((bytes) => {
         if (decodeTerminalStreamFrame(bytes)?.opcode === TerminalStreamOpcode.Ack) {
@@ -480,10 +532,13 @@ describe('remote terminal renderer backpressure', () => {
   function sentAckBytes(): number[] {
     return sendBinary.mock.calls.flatMap(([bytes]) => {
       const frame = decodeTerminalStreamFrame(bytes)
+
       if (frame?.opcode !== TerminalStreamOpcode.Ack) {
         return []
       }
+
       const payload = decodeTerminalStreamJson<{ bytes?: number }>(frame.payload)
+
       return typeof payload?.bytes === 'number' ? [payload.bytes] : []
     })
   }
@@ -491,6 +546,7 @@ describe('remote terminal renderer backpressure', () => {
   function sentOpcodes(): TerminalStreamOpcode[] {
     return sendBinary.mock.calls.flatMap(([bytes]) => {
       const opcode = decodeTerminalStreamFrame(bytes)?.opcode
+
       return opcode === undefined ? [] : [opcode]
     })
   }

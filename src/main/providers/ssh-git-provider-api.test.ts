@@ -9,6 +9,7 @@ describe('SshGitProvider public API parity', () => {
       'conn-1',
       createMockMux() as never
     )
+
     const methods = [
       'getConnectionId',
       'getHostPlatform',
@@ -65,6 +66,7 @@ describe('SshGitProvider public API parity', () => {
     ] as const
 
     expect(methods).toHaveLength(52)
+
     for (const method of methods) {
       expect(provider[method], method).toBeTypeOf('function')
     }

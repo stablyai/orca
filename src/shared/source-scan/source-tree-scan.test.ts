@@ -14,6 +14,7 @@ describe('stripComments', () => {
     const source = ['const s = `', '  case "$root"/*/home) echo hit;; esac', '`', 'spawn(x)'].join(
       '\n'
     )
+
     expect(stripComments(source)).toContain('case "$root"/*/home)')
     expect(stripComments(source)).toContain('spawn(x)')
   })
@@ -61,17 +62,20 @@ describe('blankStringContents', () => {
     const blanked = blankStringContents(source)
     let depth = 0
     let end = 0
+
     for (let i = blanked.indexOf('('); i < blanked.length; i += 1) {
       if (blanked[i] === '(') {
         depth += 1
       } else if (blanked[i] === ')') {
         depth -= 1
+
         if (depth === 0) {
           end = i
           break
         }
       }
     }
+
     expect(blanked.slice(0, end)).toContain('windowsHide')
   })
 
@@ -92,6 +96,7 @@ describe('regex literals', () => {
     // found nothing and its guard reported clean.
     const source =
       "const q = (v: string): string => `'${v.replace(/'/g, \"x\")}'`\nspawn('wsl.exe')\n"
+
     expect(blankStringContents(source, true)).not.toBe('desynced')
     expect(blankStringContents(source)).toContain('spawn(')
   })

@@ -104,6 +104,7 @@ async function loadWorkingTreeBuild(): Promise<TerminalWireBuild> {
     import('../../../src/main/runtime/rpc/methods/terminal'),
     import('../../../src/renderer/src/runtime/remote-runtime-terminal-multiplexer')
   ])
+
   return {
     label: WORKING_TREE,
     revision: WORKING_TREE,
@@ -126,6 +127,7 @@ async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<TerminalWire
       '/src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
     )
   ])
+
   return {
     label: checkout.ref,
     revision: checkout.commit,
@@ -147,6 +149,7 @@ export async function loadTerminalWireBuild(ref: string): Promise<TerminalWireBu
   if (ref === WORKING_TREE) {
     return loadWorkingTreeBuild()
   }
+
   return loadReleaseBuild(await materializeReleaseCheckout(ref))
 }
 
@@ -161,9 +164,11 @@ export function withoutOpcodeSupport(
   opcodeName: string
 ): TerminalWireBuild {
   const opcode = build.codec.TerminalStreamOpcode[opcodeName]
+
   if (typeof opcode !== 'number') {
     throw new Error(`Build ${build.label} publishes no terminal stream opcode named ${opcodeName}`)
   }
+
   return {
     ...build,
     label: `${build.label}-without-${opcodeName}`,
@@ -178,6 +183,7 @@ export function withoutOpcodeSupport(
       ),
       decodeTerminalStreamFrame: (bytes) => {
         const frame = build.codec.decodeTerminalStreamFrame(bytes)
+
         return frame && frame.opcode === opcode ? null : frame
       }
     }

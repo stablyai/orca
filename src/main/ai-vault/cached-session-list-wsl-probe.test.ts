@@ -11,6 +11,7 @@ vi.mock('child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof childProcess>()),
   execFile: execFileMock
 }))
+
 vi.mock('./session-scanner-worker-spawn', () => ({
   scanAiVaultSessionsInWorker,
   resetAiVaultScannerWorkerForTests: vi.fn()
@@ -26,6 +27,7 @@ import {
 } from './cached-session-list'
 
 const NATIVE_CODEX_HOME = 'C:\\Users\\ada\\.codex'
+
 const WSL_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
 
 function wslSpawns(): string[][] {

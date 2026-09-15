@@ -15,6 +15,7 @@ export function wslTranscriptFsProcessForkEnv(
 ): NodeJS.ProcessEnv {
   const env = pickAllowedEnv(RUNTIME_ENV_ALLOWLIST, baseEnv, platform)
   env.ELECTRON_RUN_AS_NODE = '1'
+
   return env
 }
 
@@ -28,26 +29,33 @@ export function resolveWslTranscriptFsProcessEntryPath(
   // have no process.resourcesPath, so the __dirname legs must succeed there.
   const toUnpackedDir = (dir: string): string =>
     dir.replace(/([\\/])app\.asar(?=([\\/]|$))/, '$1app.asar.unpacked')
+
   for (const baseDir of [moduleDir, join(moduleDir, '..')].map(toUnpackedDir)) {
     const candidate = join(baseDir, PROCESS_ENTRY_FILENAME)
+
     if (pathExists(candidate)) {
       return candidate
     }
   }
+
   if (resourcesPath) {
     const packaged = join(resourcesPath, 'app.asar.unpacked', 'out', 'main', PROCESS_ENTRY_FILENAME)
+
     if (pathExists(packaged)) {
       return packaged
     }
   }
+
   return join(process.cwd(), 'out', 'main', PROCESS_ENTRY_FILENAME)
 }
 
 export function forkWslTranscriptFsProcess(): ChildProcess {
   const entryPath = resolveWslTranscriptFsProcessEntryPath(__dirname)
+
   if (!existsSync(entryPath)) {
     throw new Error(`WSL transcript filesystem process entry not found: ${entryPath}`)
   }
+
   return fork(entryPath, [], {
     env: wslTranscriptFsProcessForkEnv(),
     execArgv: [],

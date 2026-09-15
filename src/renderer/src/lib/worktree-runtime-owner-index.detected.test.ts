@@ -12,6 +12,7 @@ type OwnerRecord = {
   hostId?: ExecutionHostId
   runtimeOwnerEnvironmentId?: string
 }
+
 type DetectedByRepo = Record<string, { worktrees: readonly OwnerRecord[] }>
 
 // The pre-index expressions this module replaced, kept verbatim as parity oracles.
@@ -26,6 +27,7 @@ function walkDetectedMatches(
   id: string
 ): OwnerRecord[] {
   const matches: OwnerRecord[] = []
+
   for (const result of Object.values(detectedWorktreesByRepo ?? {})) {
     for (const worktree of result.worktrees) {
       if (worktree.id === id) {
@@ -33,6 +35,7 @@ function walkDetectedMatches(
       }
     }
   }
+
   return matches
 }
 
@@ -48,8 +51,10 @@ function walkHasKnown(
 // Deterministic LCG so a parity failure reproduces from the printed case index.
 function makeRandom(seed: number): () => number {
   let state = seed >>> 0
+
   return () => {
     state = (state * 1664525 + 1013904223) >>> 0
+
     return state / 0x100000000
   }
 }
@@ -68,42 +73,53 @@ function buildCase(random: () => number): {
   probeIds: string[]
 } {
   const shape = random()
+
   if (shape < 0.05) {
     return { detectedWorktreesByRepo: undefined, worktreesByRepo: {}, probeIds: ['repo-0::absent'] }
   }
+
   if (shape < 0.1) {
     return { detectedWorktreesByRepo: {}, worktreesByRepo: {}, probeIds: ['repo-0::absent'] }
   }
+
   const repoCount = 1 + Math.floor(random() * 6)
   const detectedWorktreesByRepo: DetectedByRepo = {}
   const worktreesByRepo: Record<string, readonly OwnerRecord[]> = {}
   const knownIds: string[] = []
+
   for (let repoIndex = 0; repoIndex < repoCount; repoIndex += 1) {
     const repoId = `repo-${repoIndex}`
     // Empty arrays are a real store shape: a scan that found nothing still publishes its bucket.
     const worktreeCount = random() < 0.25 ? 0 : 1 + Math.floor(random() * 5)
     const detected: OwnerRecord[] = []
     const published: OwnerRecord[] = []
+
     for (let index = 0; index < worktreeCount; index += 1) {
       // Duplicate ids across repos are how rival publications collide, so allow a shared pool.
       const id = random() < 0.3 ? `shared::worktree-${index}` : `${repoId}::worktree-${index}`
+
       const record: OwnerRecord = {
         id,
         repoId,
         hostId: HOST_IDS[Math.floor(random() * HOST_IDS.length)],
         ...(random() < 0.3 ? { runtimeOwnerEnvironmentId: `hub-${Math.floor(random() * 3)}` } : {})
       }
+
       knownIds.push(id)
+
       if (random() < 0.8) {
         detected.push(record)
       }
+
       if (random() < 0.5) {
         published.push(record)
       }
     }
+
     detectedWorktreesByRepo[repoId] = { worktrees: detected }
     worktreesByRepo[repoId] = published
   }
+
   const probeIds = [
     knownIds[0] ?? 'repo-0::absent',
     knownIds.at(-1) ?? 'repo-0::absent',
@@ -111,14 +127,17 @@ function buildCase(random: () => number): {
     'shared::worktree-0',
     'never-published::worktree'
   ]
+
   return { detectedWorktreesByRepo, worktreesByRepo, probeIds }
 }
 
 describe('detected worktree index', () => {
   it('matches the pre-index catalog walk across randomized store shapes', () => {
     const random = makeRandom(0x5eed)
+
     for (let caseIndex = 0; caseIndex < 240; caseIndex += 1) {
       const { detectedWorktreesByRepo, worktreesByRepo, probeIds } = buildCase(random)
+
       for (const probeId of probeIds) {
         expect(
           {
@@ -147,6 +166,7 @@ describe('detected worktree index', () => {
   it('returns rival publications in catalog order with identity preserved', () => {
     const first = { id: 'shared', repoId: 'repo-a', hostId: 'ssh:target-a' as const }
     const second = { id: 'shared', repoId: 'repo-b', hostId: 'runtime:hub-a' as const }
+
     const detectedWorktreesByRepo = {
       'repo-a': { worktrees: [first] },
       'repo-b': { worktrees: [second] }

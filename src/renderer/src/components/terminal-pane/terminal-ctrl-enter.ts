@@ -17,15 +17,20 @@ export function hasCtrlEnterCsiUAuthorityForPane(
   terminalTitle?: string
 ): boolean {
   const foreground = state.paneForegroundAgentByPaneKey[paneKey]
+
   if (foreground?.shellForeground === true || foreground?.routingRevoked === true) {
     return false
   }
+
   if (foreground?.routingTrusted === true) {
     return agentAcceptsCtrlEnterCsiU(foreground.agent)
   }
+
   const titleAgent = terminalTitle ? resolveCommittedTitleAgentType(terminalTitle) : null
+
   if (foreground?.agent != null && foreground.agent !== titleAgent) {
     return false
   }
+
   return agentAcceptsCtrlEnterCsiU(titleAgent)
 }

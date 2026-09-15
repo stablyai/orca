@@ -23,18 +23,24 @@ type HostHealth = 'blocked' | 'disconnected'
 async function setOnlyRuntimeHostHealth(page: Page, health: HostHealth): Promise<string> {
   return page.evaluate((nextHealth) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Paired web client store unavailable')
     }
+
     const state = store.getState()
     const environment = state.runtimeEnvironments[0]
+
     if (!environment) {
       throw new Error('Paired web client has no configured runtime')
     }
+
     const current = state.runtimeStatusByEnvironmentId.get(environment.id)
+
     if (nextHealth === 'blocked' && !current?.status) {
       throw new Error('Paired web runtime status unavailable for compatibility fault')
     }
+
     store.setState({
       runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId).set(
         environment.id,
@@ -51,6 +57,7 @@ async function setOnlyRuntimeHostHealth(page: Page, health: HostHealth): Promise
           : { ...current, checkedAt: Date.now(), status: null }
       )
     })
+
     return environment.name
   }, health)
 }
@@ -75,9 +82,11 @@ async function assertCreationActionsDisabled(args: {
   await expect(dialog.getByRole('button', { name: /Create new project/i })).toBeDisabled()
 
   await hostPicker.click()
+
   const hostOption = args.page
     .locator('[cmdk-item][aria-disabled="true"]')
     .filter({ hasText: args.hostName })
+
   await expect(hostOption).toHaveAttribute('aria-disabled', 'true')
   await expect(hostOption).toContainText(args.health === 'blocked' ? 'Update Orca' : 'Disconnected')
   await args.page.keyboard.press('Escape')
@@ -96,6 +105,7 @@ async function runUnavailableHostJourney(args: {
   topology: 'headed' | 'headless'
 }): Promise<void> {
   let client: PairedWebClient | null = null
+
   try {
     client = await launchPairedWebClient(args.app, args.offer)
     await args.app.evaluate(({ BrowserWindow }) => {
@@ -142,6 +152,7 @@ test('keeps paired-web Add Project disabled for a headless unavailable host', as
 }, testInfo) => {
   test.setTimeout(240_000)
   const host: HeadlessPairedRuntimeHost = await launchHeadlessPairedRuntimeHost()
+
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
     await runUnavailableHostJourney({

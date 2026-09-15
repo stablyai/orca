@@ -9,6 +9,7 @@ import {
 } from './remote-runtime-pty-recovery-state'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const { runtimeCall, resetRemoteRuntimeTransport } = createRemoteRuntimeTransportMocks({
@@ -33,6 +34,7 @@ describe('recoverable connect failures on a remote runtime pane', () => {
       if (args.method === 'terminal.resolvePane') {
         resolvePaneCalls += 1
       }
+
       throw Object.assign(new Error('Remote Orca runtime closed the connection.'), {
         code: 'remote_runtime_unavailable'
       })
@@ -48,6 +50,7 @@ describe('recoverable connect failures on a remote runtime pane', () => {
       if (args.method === 'terminal.resolvePane') {
         resolvePaneCalls += 1
       }
+
       await new Promise((resolve) => {
         setTimeout(resolve, REMOTE_RUNTIME_RECOVERY_ATTEMPT_BUDGET_MS)
       })
@@ -63,10 +66,12 @@ describe('recoverable connect failures on a remote runtime pane', () => {
 
   it('keeps retrying a recoverable connect failure instead of latching immediately', async () => {
     vi.useFakeTimers()
+
     try {
       installUnreachableRuntime()
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onError = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -95,13 +100,16 @@ describe('recoverable connect failures on a remote runtime pane', () => {
 
   it('leaves both revival paths armed once the recovery window is spent', async () => {
     vi.useFakeTimers()
+
     try {
       installUnreachableRuntime()
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       // Why dynamic: resetRemoteRuntimeTransport() re-registers the module graph, and the retry
       // registry only sees panes from the same instance the transport was loaded from.
       const { retryAllRemoteRuntimePtyRecoveriesNow } =
         await import('./remote-runtime-pty-recovery-state')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -131,9 +139,11 @@ describe('recoverable connect failures on a remote runtime pane', () => {
   })
   it('keeps the window bounded when a silent drop fails after the deadline latched', async () => {
     vi.useFakeTimers()
+
     try {
       installSilentlyDroppedRuntime()
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',

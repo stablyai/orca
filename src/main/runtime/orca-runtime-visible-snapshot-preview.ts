@@ -14,19 +14,26 @@ import { withTimeout } from './runtime-async-boundaries'
 export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptureProviderTerminalBuffer {
   protected async visibleSnapshotPreview(ptyId: string, preview: string): Promise<string> {
     const knownAlternateScreen = this.isTerminalAlternateScreen(ptyId)
+
     const providerModeUnknown =
       this.providerSnapshotPreferredPtys.has(ptyId) && !this.providerModeTrackersByPtyId.has(ptyId)
+
     if (!providerModeUnknown && !knownAlternateScreen && !this.headlessTerminals.has(ptyId)) {
       return preview
     }
+
     const visibleState = await this.readVisibleTerminalState(ptyId)
+
     if (!knownAlternateScreen && !visibleState?.isAlternateScreen) {
       return preview
     }
+
     let projection: RuntimeTerminalProjection = visibleState ?? { lines: [] }
+
     if (projection.lines.length === 0) {
       projection = await this.readRendererVisibleSnapshotLines(ptyId)
     }
+
     return projection.lines.length > 0 ? buildPreview(projection.lines, '') : preview
   }
 
@@ -35,17 +42,22 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
   ): Promise<RuntimeVisibleTerminalState | null> {
     const generation = this.getPtyLifecycleGeneration(ptyId)
     const pending = this.providerVisibleStateReadsByPtyId.get(ptyId)
+
     if (pending?.generation === generation) {
       return pending.promise
     }
+
     let entry: { generation: number; promise: Promise<RuntimeVisibleTerminalState | null> }
+
     const promise = this.loadVisibleTerminalState(ptyId).finally(() => {
       if (this.providerVisibleStateReadsByPtyId.get(ptyId) === entry) {
         this.providerVisibleStateReadsByPtyId.delete(ptyId)
       }
     })
+
     entry = { generation, promise }
     this.providerVisibleStateReadsByPtyId.set(ptyId, entry)
+
     return promise
   }
 
@@ -60,6 +72,7 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     const outputSequence = this.getPtyOutputSequence(ptyId)
     const cached = this.providerVisibleStateByPtyId.get(ptyId)
     const trackedMode = this.providerModeTrackersByPtyId.get(ptyId)
+
     if (
       cached?.generation === generation &&
       outputSequence <= cached.sequence &&
@@ -67,8 +80,10 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     ) {
       return cached
     }
+
     if (trackedMode && !trackedMode.isAlternateScreen) {
       const headlessState = await this.readHeadlessVisibleTerminalState(ptyId)
+
       return headlessState
         ? { ...headlessState, isAlternateScreen: false }
         : {
@@ -78,6 +93,7 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
             generation
           }
     }
+
     if ((this.providerVisibleRetryAtByPtyId.get(ptyId) ?? 0) > Date.now()) {
       return null
     }
@@ -87,33 +103,43 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
       { scrollbackRows: 0 },
       { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
     )
+
     if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
+
       return null
     }
+
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
+
     if (this.providerSnapshotsWithLiveModeTransition.has(snapshot)) {
       // Why: the provider frame can predate a mode switch observed while its
       // RPC was pending; the ordered live emulator owns the post-switch grid.
       const liveState = await this.readHeadlessVisibleTerminalState(ptyId)
+
       if (liveState && liveState.isAlternateScreen === (snapshot.alternateScreen ?? false)) {
         return liveState
       }
     }
+
     const projection = await this.parseVisibleSnapshot(snapshot)
+
     if (
       this.getPtyLifecycleGeneration(ptyId) !== generation ||
       this.getPtyOutputSequence(ptyId) > snapshot.seq
     ) {
       return null
     }
+
     const visibleState: RuntimeVisibleTerminalState = {
       ...projection,
       isAlternateScreen: snapshot.alternateScreen ?? false,
       sequence: snapshot.seq,
       generation
     }
+
     this.providerVisibleStateByPtyId.set(ptyId, visibleState)
+
     return visibleState
   }
 
@@ -121,17 +147,21 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     ptyId: string
   ): Promise<RuntimeVisibleTerminalState | null> {
     const state = this.headlessTerminals.get(ptyId)
+
     if (!state) {
       return null
     }
+
     const generation = this.getPtyLifecycleGeneration(ptyId)
     await state.writeChain
+
     if (
       this.headlessTerminals.get(ptyId) !== state ||
       this.getPtyLifecycleGeneration(ptyId) !== generation
     ) {
       return null
     }
+
     return {
       ...projectTerminalVisibleLines(state.emulator),
       isAlternateScreen: state.emulator.isAlternateScreen,
@@ -148,13 +178,16 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     if (snapshot.data.length === 0) {
       return { lines: [] }
     }
+
     const emulator = new HeadlessEmulator({
       cols: snapshot.cols,
       rows: snapshot.rows,
       scrollback: 0
     })
+
     try {
       await emulator.write(`\x1b[2J\x1b[3J\x1b[H${snapshot.data}`)
+
       return projectTerminalVisibleLines(emulator)
     } finally {
       emulator.dispose()
@@ -165,12 +198,15 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     ptyId: string
   ): Promise<RuntimeTerminalProjection> {
     const controller = this.ptyController
+
     if (!controller?.serializeBuffer) {
       return { lines: [] }
     }
+
     if (controller.hasRendererSerializer && !controller.hasRendererSerializer(ptyId)) {
       return { lines: [] }
     }
+
     try {
       // Why: raw PTY tails can be whitespace-only while a full-screen TUI is
       // visibly nonblank in renderer xterm. Ask the renderer for the active
@@ -180,9 +216,11 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
         VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
         null
       )
+
       if (!snapshot || snapshot.data.length === 0) {
         return { lines: [] }
       }
+
       return this.parseVisibleSnapshot(snapshot)
     } catch {
       return { lines: [] }

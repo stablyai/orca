@@ -16,7 +16,9 @@ export function useGitHubDuplicateIssueCandidates(
       if (!pickerOpen) {
         return NO_DUPLICATE_CANDIDATES
       }
+
       const deduped = new Map<number, GitHubWorkItem>()
+
       for (const entry of Object.values(s.workItemsCache)) {
         for (const candidate of entry.data ?? []) {
           if (
@@ -29,6 +31,7 @@ export function useGitHubDuplicateIssueCandidates(
           }
         }
       }
+
       return Array.from(deduped.values()).sort((a, b) => b.number - a.number)
     })
   )

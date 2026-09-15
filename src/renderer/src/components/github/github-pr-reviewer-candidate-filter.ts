@@ -17,9 +17,11 @@ export function isGitHubPRReviewerQueryTooLarge(
 
 export function getGitHubPRReviewerQueryState(input: string): GitHubPRReviewerQueryState {
   const query = input.trim().replace(/^@/, '')
+
   if (query && isGitHubPRReviewerQueryTooLarge(query)) {
     return { query: '', isTooLarge: true }
   }
+
   return { query: query.toLowerCase(), isTooLarge: false }
 }
 
@@ -35,9 +37,11 @@ export function filterGitHubPRReviewerCandidates({
   }
 
   const query = queryState.query
+
   return [...candidates]
     .filter((user) => {
       const login = user.login.toLowerCase()
+
       return (
         query.length === 0 ||
         login.includes(query) ||
@@ -49,9 +53,11 @@ export function filterGitHubPRReviewerCandidates({
       const bLogin = b.login.toLowerCase()
       const aStarts = aLogin.startsWith(query)
       const bStarts = bLogin.startsWith(query)
+
       if (aStarts !== bStarts) {
         return aStarts ? -1 : 1
       }
+
       return a.login.localeCompare(b.login)
     })
 }

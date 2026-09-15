@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { stripLegacyManagedProfileBlock } from './codex-hook-legacy-cleanup'
 
 const START = '# BEGIN ORCA AGENT STATUS HOOKS'
+
 const END = '# END ORCA AGENT STATUS HOOKS'
 
 describe('legacy Codex managed profile block', () => {

@@ -14,9 +14,11 @@ export function filterWorktreeParentCandidates(
   search: string
 ): Worktree[] {
   const query = search.trim()
+
   if (!query) {
     return [...candidates]
   }
+
   return candidates
     .map((candidate) => ({
       candidate,
@@ -31,5 +33,6 @@ export function clampWorktreeParentPickerIndex(index: number, count: number): nu
   if (count <= 0) {
     return 0
   }
+
   return Math.min(Math.max(index, 0), count - 1)
 }

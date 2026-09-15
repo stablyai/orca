@@ -30,14 +30,18 @@ export function structuredClaudeMatchesActiveManagedAccount(
   if (!settings) {
     return false
   }
+
   // Absent is the same answer as empty — this user has no managed Claude accounts, so nothing
   // claims an identity and ambient auth is the truth. Only settings that cannot be READ are
   // unknown, and those refuse above. The auth policy reads the list the same way.
   const accounts = settings.claudeManagedAccounts ?? []
+
   if (accounts.length === 0) {
     return true
   }
+
   const activeHostId = getSelectedClaudeAccountIdForTarget(settings, { runtime: 'host' })
+
   if (!activeHostId) {
     // Nothing selected for the host runtime is two different states that the settings cannot tell
     // apart after the fact: honest deselection, where ambient auth is the truth and the UI names no
@@ -45,7 +49,9 @@ export function structuredClaudeMatchesActiveManagedAccount(
     // while the UI still names the WSL account. The presence of any WSL-bound account decides.
     return !accounts.some((candidate) => candidate.managedAuthRuntime === 'wsl')
   }
+
   const active = accounts.find((candidate) => candidate.id === activeHostId)
+
   return active ? active.managedAuthRuntime !== 'wsl' : false
 }
 

@@ -10,6 +10,7 @@ export function readDevinHooksConfig(configPath: string): HooksConfig | null {
 
   try {
     const text = readFileSync(configPath, 'utf-8')
+
     return parseDevinHooksConfigText(text, 'Devin config.json')
   } catch {
     return null
@@ -25,12 +26,15 @@ export function readDevinHooksSource(
   }
 
   let text: string
+
   try {
     text = readFileSync(configPath, 'utf-8')
   } catch {
     return null
   }
+
   const config = parseDevinHooksConfigText(text, 'Devin config.json')
+
   return config === null ? null : { text, config }
 }
 
@@ -52,13 +56,16 @@ export function serializeDevinHooksConfig(
   const nextHooks = nextConfig.hooks ?? {}
 
   let text = originalText
+
   // Why: touch only the events that actually changed, so comments attached to a user's
   // own untouched hook entries stay put.
   for (const eventName of new Set([...Object.keys(previousHooks), ...Object.keys(nextHooks)])) {
     const nextValue = nextHooks[eventName]
+
     if (JSON.stringify(previousHooks[eventName]) === JSON.stringify(nextValue)) {
       continue
     }
+
     text = applyEdits(
       text,
       // Why: `undefined` removes the key, which is how remove() drops an emptied event.
@@ -67,6 +74,7 @@ export function serializeDevinHooksConfig(
       })
     )
   }
+
   return text
 }
 
@@ -76,15 +84,19 @@ export function parseDevinHooksConfigText(
 ): HooksConfig | null {
   const errors: ParseError[] = []
   const parsed = parseJsonc(text, errors)
+
   if (errors.length > 0) {
     console.warn(
       `Could not parse ${diagnosticName}: ${errors.map((e) => `offset ${e.offset} length ${e.length}`).join(', ')}`
     )
+
     return null
   }
+
   if (parsed === undefined) {
     return null
   }
+
   return isPlainObject(parsed) ? (parsed as HooksConfig) : null
 }
 
@@ -103,15 +115,19 @@ function isClaudeConfigImportEnabled(raw: unknown): boolean {
   if (raw === undefined || raw === null || raw === true) {
     return true
   }
+
   if (raw === false) {
     return false
   }
+
   if (Array.isArray(raw)) {
     return raw.includes('claude')
   }
+
   if (!isPlainObject(raw)) {
     return false
   }
+
   return raw.claude !== false
 }
 
@@ -119,8 +135,10 @@ export function mergeHookInstallDetail(base: string | null, extra: string | null
   if (!extra) {
     return base
   }
+
   if (!base) {
     return extra
   }
+
   return `${base} ${extra}`
 }

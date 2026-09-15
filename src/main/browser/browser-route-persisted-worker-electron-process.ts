@@ -22,45 +22,58 @@ export async function runPersistedWorkerElectron(
   rmSync(resultPath, { force: true })
   const electronArgs = [mainPath, configPath, mode, `--user-data-dir=${join(root, 'profile')}`]
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
+
   const { executable, args } = resolveElectronProbeLaunch({
     electronBinary,
     electronArgs,
     platform: process.platform,
     display: env.DISPLAY
   })
+
   const child = spawn(executable, args, {
     detached: true,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true
   })
+
   const exit = waitForExit(child)
   let timedOut = false
   let termination: Promise<void> | null = null
+
   const terminate = (): Promise<void> => {
     termination ??= terminateProcessTree(child)
+
     return termination
   }
+
   const timeout = setTimeout(() => {
     timedOut = true
     void terminate()
   }, 30_000)
+
   try {
     const [, output] = await Promise.all([onBarrier?.() ?? Promise.resolve(), exit])
     const rawResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
+
     if (timedOut || output.code !== 0 || rawResult === 'no result') {
       throw new Error(`${timedOut ? 'timeout' : output.code}\n${rawResult}\n${output.output}`)
     }
+
     const result = JSON.parse(rawResult) as Record<string, unknown>
+
     if (typeof result.error === 'string') {
       throw new Error(result.error)
     }
+
     if (mode === 'setup') {
       if (result.registered !== true) {
         throw new Error('worker_probe_setup_result_invalid')
       }
+
       return { workerRunningBeforeForcedWake: false, resolvedProxy: '' }
     }
+
     if (
       !Object.hasOwn(result, 'workerRunningBeforeForcedWake') ||
       typeof result.workerRunningBeforeForcedWake !== 'boolean' ||
@@ -69,12 +82,14 @@ export async function runPersistedWorkerElectron(
     ) {
       throw new Error('worker_probe_result_invalid')
     }
+
     return {
       workerRunningBeforeForcedWake: result.workerRunningBeforeForcedWake,
       resolvedProxy: result.resolvedProxy
     }
   } finally {
     clearTimeout(timeout)
+
     if (termination || (child.exitCode === null && child.signalCode === null)) {
       await terminate()
     }
@@ -95,26 +110,32 @@ async function terminateProcessTree(child: ChildProcess): Promise<void> {
   if (!child.pid) {
     return
   }
+
   if (process.platform === 'win32') {
     spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
       stdio: 'ignore',
       windowsHide: true
     })
     await waitForTermination(child, 5_000)
+
     return
   }
+
   try {
     process.kill(-child.pid, 'SIGTERM')
   } catch {
     return
   }
+
   await waitForTermination(child, 2_000)
+
   try {
     process.kill(-child.pid, 0)
     process.kill(-child.pid, 'SIGKILL')
   } catch {
     return
   }
+
   await waitForTermination(child, 5_000)
 }
 
@@ -122,9 +143,11 @@ function waitForTermination(child: ChildProcess, timeoutMs: number): Promise<voi
   if (child.exitCode !== null || child.signalCode !== null) {
     return Promise.resolve()
   }
+
   return new Promise((resolve) => {
     const timeout = setTimeout(done, timeoutMs)
     child.once('exit', done)
+
     function done(): void {
       clearTimeout(timeout)
       child.off('exit', done)

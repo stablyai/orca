@@ -18,10 +18,12 @@ export function getRepositoryPaneSearchEntries(
   options: RepositoryPaneSearchOptions = {}
 ): SettingsSearchEntry[] {
   const isFolder = isFolderRepo(repo)
+
   const isLocalWindowsProject =
     options.isLocalWindowsProject ??
     (Boolean(options.windowsRuntimeSupported) &&
       getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
+
   return [
     {
       title: translate('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),

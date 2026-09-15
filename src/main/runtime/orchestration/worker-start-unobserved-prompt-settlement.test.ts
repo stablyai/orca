@@ -2,22 +2,27 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
 
 const WORKER_PANE_KEY = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+
 const INCARNATION = 'runtime_test:term_worker:1'
+
 let db: OrchestrationDb
 
 function startWorker(spec: string): { taskId: string; dispatchId: string; capability: string } {
   const task = db.createTask({ runId: 'run_legacy_local', spec })
+
   const started = db.createStartingWorkerDispatch({
     creator: { kind: 'system' },
     maxDepth: Number.MAX_SAFE_INTEGER,
     taskId: task.id,
     startOptions: {}
   })
+
   const capability = db.mintDispatchCapability({
     dispatchId: started.dispatch.id,
     paneKey: WORKER_PANE_KEY,
     processIncarnation: INCARNATION
   })
+
   return { taskId: task.id, dispatchId: started.dispatch.id, capability }
 }
 

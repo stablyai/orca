@@ -64,6 +64,7 @@ export async function htmlToPdf(html: string): Promise<Buffer> {
 
     const renderAndPrint = (async (): Promise<Buffer> => {
       await win.webContents.executeJavaScript(WAIT_FOR_IMAGES_SCRIPT, true)
+
       return win.webContents.printToPDF({
         printBackground: true,
         pageSize: 'A4',
@@ -85,9 +86,11 @@ export async function htmlToPdf(html: string): Promise<Buffer> {
     if (timer) {
       clearTimeout(timer)
     }
+
     if (!win.isDestroyed()) {
       win.destroy()
     }
+
     try {
       await unlink(tempPath)
     } catch {

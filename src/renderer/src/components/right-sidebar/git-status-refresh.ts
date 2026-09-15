@@ -60,6 +60,7 @@ async function fetchAndApplyAutomaticUpstreamStatus({
   if (!shouldApplyAutomaticUpstreamRefresh(worktreeId, order, shouldApply)) {
     return null
   }
+
   const upstreamStatus = await deps.fetchUpstreamStatus(
     worktreeId,
     worktreePath,
@@ -70,6 +71,7 @@ async function fetchAndApplyAutomaticUpstreamStatus({
       applyUpstreamStatus: false
     }
   )
+
   if (!upstreamStatus) {
     if (pushTarget) {
       // Why: failed publish-target refreshes must not let an older automatic
@@ -82,12 +84,16 @@ async function fetchAndApplyAutomaticUpstreamStatus({
         pushTarget
       })
     }
+
     return null
   }
+
   if (!claimAutomaticUpstreamRefreshApply(worktreeId, order, shouldApply)) {
     return null
   }
+
   deps.setUpstreamStatus(worktreeId, upstreamStatus)
+
   return upstreamStatus
 }
 
@@ -123,6 +129,7 @@ export async function refreshGitStatusForWorktree({
   // Why: every status path must carry the merge base, or the chip blanks out on
   // whichever poll happened to omit it.
   const branchLineTotalMergeBase = getBranchLineTotalMergeBase(worktreeId)
+
   try {
     const status = (await getRuntimeGitStatus(
       {
@@ -153,6 +160,7 @@ export async function refreshGitStatusForWorktree({
       branch: status.branch ?? (status.head ? null : undefined)
     })
     request?.onStatusAccepted?.(status)
+
     if (pushTarget) {
       // Why: porcelain status reports Git's configured upstream. Source Control
       // actions for PR-created worktrees must instead reconcile with Orca's
@@ -165,11 +173,13 @@ export async function refreshGitStatusForWorktree({
         pushTarget,
         status
       })
+
       if (cachedUpstreamStatus) {
         // Why: post-push/fetch actions may have already written fresher
         // upstream status; a poll cache hit should only skip subprocess churn.
         return
       }
+
       const upstreamStatus = await fetchAndApplyAutomaticUpstreamStatus({
         settings,
         worktreeId,
@@ -180,6 +190,7 @@ export async function refreshGitStatusForWorktree({
         order: refreshOrder,
         shouldApply: request?.shouldApply
       })
+
       if (upstreamStatus) {
         // Why: explicit publish-target comparison can spawn several git
         // subprocesses; unchanged automatic polls should reuse it briefly.
@@ -188,8 +199,10 @@ export async function refreshGitStatusForWorktree({
           upstreamStatus
         )
       }
+
       return
     }
+
     if (status.upstreamStatus) {
       if (
         status.upstreamStatus.ahead > 0 &&
@@ -208,13 +221,17 @@ export async function refreshGitStatusForWorktree({
           order: refreshOrder,
           shouldApply: request?.shouldApply
         })
+
         return
       }
+
       if (claimAutomaticUpstreamRefreshApply(worktreeId, refreshOrder, request?.shouldApply)) {
         deps.setUpstreamStatus(worktreeId, status.upstreamStatus)
       }
+
       return
     }
+
     await fetchAndApplyAutomaticUpstreamStatus({
       settings,
       worktreeId,
@@ -250,6 +267,7 @@ export async function refreshGitStatusForWorktreeStrict({
   beginStrictUpstreamRefresh(worktreeId)
   clearAutomaticPushTargetUpstreamStatusCache()
   const strictBranchLineTotalMergeBase = getBranchLineTotalMergeBase(worktreeId)
+
   const status = (await getRuntimeGitStatus(
     {
       settings,
@@ -279,6 +297,7 @@ export async function refreshGitStatusForWorktreeStrict({
     // explicit clear signal so stale branch names don't linger in the UI.
     branch: status.branch ?? (status.head ? null : undefined)
   })
+
   if (pushTarget) {
     // Why: porcelain status reports Git's configured upstream. Source Control
     // actions for PR-created worktrees must instead reconcile with Orca's
@@ -287,9 +306,12 @@ export async function refreshGitStatusForWorktreeStrict({
       { settings, worktreeId, worktreePath, connectionId },
       pushTarget
     )
+
     deps.setUpstreamStatus(worktreeId, upstreamStatus)
+
     return { status, upstreamStatus }
   }
+
   if (status.upstreamStatus) {
     if (
       status.upstreamStatus.ahead > 0 &&
@@ -303,16 +325,23 @@ export async function refreshGitStatusForWorktreeStrict({
         { settings, worktreeId, worktreePath, connectionId },
         undefined
       )
+
       deps.setUpstreamStatus(worktreeId, upstreamStatus)
+
       return { status, upstreamStatus }
     }
+
     deps.setUpstreamStatus(worktreeId, status.upstreamStatus)
+
     return { status, upstreamStatus: status.upstreamStatus }
   }
+
   const upstreamStatus = await getRuntimeGitUpstreamStatus(
     { settings, worktreeId, worktreePath, connectionId },
     undefined
   )
+
   deps.setUpstreamStatus(worktreeId, upstreamStatus)
+
   return { status, upstreamStatus }
 }

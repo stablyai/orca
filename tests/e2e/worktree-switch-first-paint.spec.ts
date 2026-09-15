@@ -38,9 +38,12 @@ import {
 // Why 3: the field profile that motivated this budget has 449 worktrees whose
 // median tab count is 2-3, so a 3-tab worktree is the switch users actually pay for.
 const TABS_PER_WORKTREE = Number(process.env.ORCA_SWITCH_TABS ?? '3')
+
 const SCROLLBACK_LINES = 1_500
+
 // Budget: a switch has to look instant. Anything over this reads as a stall.
 const FIRST_PAINT_BUDGET_MS = Number(process.env.ORCA_SWITCH_BUDGET_MS ?? '250')
+
 // Why repeat: a single cold reveal on a loaded dev machine swings by tens of ms,
 // which is the same order as the effect under test.
 const SWITCH_SAMPLE_COUNT = Number(process.env.ORCA_SWITCH_ROUNDS ?? '5')
@@ -77,6 +80,7 @@ async function ensureTabs(page: Page, worktreeId: string, marker: string): Promi
   await switchToWorktree(page, worktreeId)
   await ensureTerminalVisible(page)
   const tabIds: string[] = []
+
   for (let index = 0; index < TABS_PER_WORKTREE; index += 1) {
     const tabId = await page.evaluate(
       ({ id, wanted }) => {
@@ -86,10 +90,12 @@ async function ensureTabs(page: Page, worktreeId: string, marker: string): Promi
         const tab = reuse ?? state.createTab(id, undefined, undefined, { activate: true })
         state.setActiveTab(tab.id)
         state.setActiveTabType('terminal')
+
         return tab.id
       },
       { id: worktreeId, wanted: index }
     )
+
     await waitForActiveTerminalManager(page, 30_000)
     const ptyId = await waitForActivePanePtyId(page, 30_000)
     const label = `${marker}_T${index}`
@@ -101,6 +107,7 @@ async function ensureTabs(page: Page, worktreeId: string, marker: string): Promi
     await waitForTerminalOutput(page, `${label}_READY`, 60_000)
     tabIds.push(tabId)
   }
+
   return tabIds
 }
 
@@ -125,6 +132,7 @@ async function waitForMountedTabs(page: Page, tabIds: readonly string[]): Promis
       (ids) => ids.filter((id) => window.__paneManagers?.has(id) === true).sort(),
       [...tabIds]
     )
+
   await expect
     .poll(async () => (await read()).length, {
       timeout: 20_000,
@@ -132,6 +140,7 @@ async function waitForMountedTabs(page: Page, tabIds: readonly string[]): Promis
     })
     .toBe(tabIds.length)
     .catch(() => undefined)
+
   return read()
 }
 
@@ -152,8 +161,10 @@ async function measureSwitch(
         mountedAtActivation: 0,
         stop: () => {}
       }
+
       globalThis.__switchPaintProbe = probe
       let observer: PerformanceObserver | null = null
+
       try {
         observer = new PerformanceObserver((list) => {
           for (const entry of list.getEntries()) {
@@ -164,20 +175,26 @@ async function measureSwitch(
       } catch {
         /* longtask unsupported */
       }
+
       let running = true
+
       const visibleTabId = () => {
         const state = window.__store!.getState()
+
         return state.activeWorktreeId === worktreeId && state.activeTabType === 'terminal'
           ? state.activeTabId
           : (state.activeTabIdByWorktree?.[worktreeId] ?? null)
       }
+
       const tick = () => {
         if (!running) {
           return
         }
+
         const now = performance.now() - probe.t0
         probe.frames.push(now)
         const state = window.__store!.getState()
+
         if (probe.activationMs === null && state.activeWorktreeId === worktreeId) {
           probe.activationMs = now
           // Why here and not at paint: this is the switch's own frame, before any
@@ -186,12 +203,15 @@ async function measureSwitch(
             (id) => window.__paneManagers?.has(id) === true
           ).length
         }
+
         const tabId = visibleTabId()
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
         if (probe.paneMountedMs === null && pane?.container?.isConnected) {
           probe.paneMountedMs = now
         }
+
         if (probe.contentRestoredMs === null && pane) {
           // Restored = the revealed viewport carries real text rather than an
           // empty grid. Read on a frame callback, so this is the frame the
@@ -199,27 +219,34 @@ async function measureSwitch(
           // a pixel assertion. Both arms are measured identically.
           const buffer = pane.terminal.buffer.active
           let filledRows = 0
+
           for (let row = 0; row < pane.terminal.rows; row += 1) {
             const line = buffer.getLine(buffer.viewportY + row)
+
             if (line && line.translateToString(true).trim().length > 0) {
               filledRows += 1
             }
           }
+
           if (filledRows >= Math.min(5, pane.terminal.rows)) {
             probe.contentRestoredMs = now
           }
         }
+
         requestAnimationFrame(tick)
       }
+
       requestAnimationFrame(tick)
       probe.stop = () => {
         running = false
+
         try {
           observer?.disconnect()
         } catch {
           /* ignore */
         }
       }
+
       window.__store!.getState().setActiveWorktree(worktreeId)
     },
     { worktreeId: targetWorktreeId, tabIds: [...targetTabIds] }
@@ -242,23 +269,29 @@ async function measureSwitch(
     probe.stop()
     let maxGap = 0
     let previous = 0
+
     for (const frame of probe.frames) {
       maxGap = Math.max(maxGap, frame - previous)
       previous = frame
     }
+
     let settledPanes = 0
     let settledWebglContexts = 0
     const managers = window.__paneManagers
+
     for (const manager of managers?.values() ?? []) {
       settledPanes += (manager.getPanes?.() ?? []).length
+
       // Why diagnostics and not `pane.webglAddon`: getPanes() hands back a public
       // projection that has no webglAddon field, so reading it is always falsy.
       const diagnostics =
         (
           manager as { getRenderingDiagnostics?: () => { hasWebgl?: boolean }[] }
         ).getRenderingDiagnostics?.() ?? []
+
       settledWebglContexts += diagnostics.filter((entry) => entry.hasWebgl === true).length
     }
+
     return {
       settledPaneManagers: managers?.size ?? 0,
       settledPanes,
@@ -304,9 +337,11 @@ async function addFillerWorktrees(
   testRepoPath: string
 ): Promise<{ ids: string[]; cleanup: () => void }> {
   const parent = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-switch-paint-')))
+
   const paths = Array.from({ length: FILLER_WORKTREE_COUNT }, (_, index) =>
     path.join(parent, `filler-${index}`)
   )
+
   const removeAll = (): void => {
     for (const worktreePath of paths) {
       try {
@@ -318,8 +353,10 @@ async function addFillerWorktrees(
         /* best effort */
       }
     }
+
     rmSync(parent, { recursive: true, force: true })
   }
+
   // Why clean up before rethrowing: testRepoPath is worker-scoped and reused by
   // later specs, so a half-built fixture would leak worktrees into them.
   try {
@@ -333,6 +370,7 @@ async function addFillerWorktrees(
     removeAll()
     throw error
   }
+
   try {
     return await registerFillerWorktrees(page, testRepoPath, paths, removeAll)
   } catch (error) {
@@ -352,10 +390,13 @@ async function registerFillerWorktrees(
       window.__store!.getState().repos.find((repo) => repo.path === repoPath)?.id ?? null,
     testRepoPath
   )
+
   if (!repoId) {
     throw new Error(`seeded repo not registered: ${testRepoPath}`)
   }
+
   await loadWorktreesUntilPathsPresent(page, repoId, [...paths])
+
   const ids = await page.evaluate(
     ({ id, wanted }) =>
       (window.__store!.getState().worktreesByRepo[id] ?? [])
@@ -363,12 +404,14 @@ async function registerFillerWorktrees(
         .map((worktree) => worktree.id),
     { id: repoId, wanted: paths }
   )
+
   return { ids, cleanup }
 }
 
 function median(values: readonly number[]): number {
   const sorted = [...values].sort((a, b) => a - b)
   const middle = Math.floor(sorted.length / 2)
+
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
 }
 
@@ -394,6 +437,7 @@ test.describe('Worktree switch first paint @headful', () => {
 
     const samples: SwitchSample[] = []
     const lines: string[] = []
+
     try {
       const targetTabIds = await ensureTabs(orcaPage, targetId, 'WTB')
 
@@ -403,8 +447,10 @@ test.describe('Worktree switch first paint @headful', () => {
       await orcaPage.evaluate(
         ({ ids, perWorktree }) => {
           const state = window.__store!.getState()
+
           for (const id of ids) {
             const existing = state.tabsByWorktree[id] ?? []
+
             for (let index = existing.length; index < perWorktree; index += 1) {
               state.createTab(id)
             }
@@ -449,7 +495,9 @@ test.describe('Worktree switch first paint @headful', () => {
     const restored = samples
       .map((sample) => sample.contentRestoredMs)
       .filter((value): value is number => value !== null)
+
     expect(restored.length, 'revealed terminal never restored its content').toBe(samples.length)
+
     const summary = [
       `first activation -> ${TABS_PER_WORKTREE}-tab worktree, ${samples.length} rounds`,
       `  content restored: median=${median(restored).toFixed(1)}ms samples=${restored
@@ -464,6 +512,7 @@ test.describe('Worktree switch first paint @headful', () => {
       '',
       ...lines
     ].join('\n')
+
     await publish(testInfo, 'first-activation-switch.txt', summary)
 
     for (const sample of samples) {
@@ -472,6 +521,7 @@ test.describe('Worktree switch first paint @headful', () => {
         'the switch mounted more than the pane the user is looking at'
       ).toBe(1)
     }
+
     // Why CI is exempt from the budget and not from the invariants: shared
     // runners cannot hold a latency threshold, but "the switch mounted one pane"
     // and "the warm set came back" are exact and are the real regression guards.
@@ -479,8 +529,10 @@ test.describe('Worktree switch first paint @headful', () => {
       console.log(
         `[switch-budget] CI run, latency budget not enforced (median ${median(restored).toFixed(1)}ms)`
       )
+
       return
     }
+
     expect(median(restored)).toBeLessThanOrEqual(FIRST_PAINT_BUDGET_MS)
   })
 })

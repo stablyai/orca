@@ -25,30 +25,38 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'fetch') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'remote') {
         return { stdout: 'origin\nupstream\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         return {
           stdout: 'abc refs/remotes/origin/main\n' + 'def refs/remotes/upstream/main\n',
           stderr: ''
         }
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature/pr-details\n', stderr: '' }
       }
+
       if (args[0] === 'merge-base') {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       if (args[0] === 'log') {
         return { stdout: '- feat: summarize branch\n', stderr: '' }
       }
+
       if (args[0] === 'diff' && args[1] === '--name-status') {
         return { stdout: 'M\tsrc/file.ts\n', stderr: '' }
       }
+
       if (args[0] === 'diff') {
         return { stdout: 'diff --git a/src/file.ts b/src/file.ts\n+change\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -92,24 +100,31 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'fetch') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         throw Object.assign(new Error('missing exact ref'), { code: 1 })
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature/pr-details\n', stderr: '' }
       }
+
       if (args[0] === 'merge-base') {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       if (args[0] === 'log') {
         return { stdout: '- feat: summarize branch\n', stderr: '' }
       }
+
       if (args[0] === 'diff') {
         return { stdout: 'M\tREADME.md\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -128,26 +143,34 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'fetch') {
         expect(args).not.toContain('--all')
         expect(args[2]).toBe('origin')
+
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'remote') {
         return { stdout: 'origin\nstale-fork\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature/pr-details\n', stderr: '' }
       }
+
       if (args[0] === 'merge-base') {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       if (args[0] === 'log') {
         return { stdout: '- feat: change\n', stderr: '' }
       }
+
       if (args[0] === 'diff') {
         return { stdout: 'M\tREADME.md\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -167,25 +190,33 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'fetch') {
         throw new Error(`Unexpected fetch: ${args.join(' ')}`)
       }
+
       if (args[0] === 'remote') {
         return { stdout: 'contributor-a\ncontributor-b\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         throw Object.assign(new Error('missing exact ref'), { code: 1 })
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       if (args[0] === 'merge-base') {
         expect(args[1]).toBe('main')
+
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       if (args[0] === 'log') {
         return { stdout: '- feat: change\n', stderr: '' }
       }
+
       if (args[0] === 'diff') {
         return { stdout: 'M\tREADME.md\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -193,9 +224,11 @@ describe('getPullRequestDraftContext', () => {
 
     expect(execGit.mock.calls.filter(([args]) => args[0] === 'for-each-ref')).toHaveLength(0)
     const showRefCalls = execGit.mock.calls.filter(([args]) => args[0] === 'show-ref')
+
     const exactRefs = showRefCalls
       .filter(([args]) => args.includes('--verify'))
       .map(([args]) => args.at(-1))
+
     expect(exactRefs).toEqual(
       expect.arrayContaining([
         'refs/remotes/origin/main',
@@ -222,22 +255,29 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'remote') {
         return { stdout: 'first\nsecond\n' }
       }
+
       if (args[0] === 'show-ref') {
         throw Object.assign(new Error('remote probe failed'), { code: 128 })
       }
+
       if (args[0] === 'fetch') {
         throw new Error(`Unexpected fetch: ${args.join(' ')}`)
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature\n' }
       }
+
       if (args[0] === 'merge-base') {
         expect(args[1]).toBe('main')
+
         return { stdout: 'abc123\n' }
       }
+
       if (args[0] === 'log' || args[0] === 'diff') {
         return { stdout: 'change\n' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -252,10 +292,12 @@ describe('getPullRequestDraftContext', () => {
     let exactProbeCount = 0
     let activeProbes = 0
     let maxActiveProbes = 0
+
     const execGit = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'remote') {
         return { stdout: `${remoteNames.join('\n')}\n`, stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         if (args.some((arg) => arg.startsWith('refs/remotes/'))) {
           exactProbeCount += 1
@@ -264,17 +306,22 @@ describe('getPullRequestDraftContext', () => {
           await new Promise((resolve) => setTimeout(resolve, 0))
           activeProbes -= 1
         }
+
         throw Object.assign(new Error('missing exact ref'), { code: 1 })
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       if (args[0] === 'merge-base') {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       if (args[0] === 'log' || args[0] === 'diff') {
         return { stdout: 'change\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -293,24 +340,31 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'remote') {
         return { stdout: 'foo/bar\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         return args.at(-1) === 'refs/remotes/foo/bar/feature/fix'
           ? { stdout: '' }
           : Promise.reject(Object.assign(new Error('missing exact ref'), { code: 1 }))
       }
+
       if (args[0] === 'fetch') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature\n' }
       }
+
       if (args[0] === 'merge-base') {
         expect(args[1]).toBe('foo/bar/feature/fix')
+
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       if (args[0] === 'log' || args[0] === 'diff') {
         return { stdout: 'change\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -330,21 +384,27 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'remote') {
         return { stdout: 'team@corp\n' }
       }
+
       if (args[0] === 'show-ref') {
         return args.at(-1) === 'refs/remotes/team@corp/main'
           ? { stdout: '' }
           : Promise.reject(Object.assign(new Error('missing exact ref'), { code: 1 }))
       }
+
       if (args[0] === 'fetch' || args[0] === 'branch') {
         return { stdout: '' }
       }
+
       if (args[0] === 'merge-base') {
         expect(args[1]).toBe('team@corp/main')
+
         return { stdout: 'abc123\n' }
       }
+
       if (args[0] === 'log' || args[0] === 'diff') {
         return { stdout: 'change\n' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -361,25 +421,33 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'remote') {
         return { stdout: 'fork\n' }
       }
+
       if (args[0] === 'show-ref' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
         throw Object.assign(new Error('missing exact ref'), { code: 1 })
       }
+
       if (args[0] === 'show-ref') {
         return { stdout: 'abc123 refs/remotes/orphan/main\n' }
       }
+
       if (args[0] === 'fetch') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature\n' }
       }
+
       if (args[0] === 'merge-base') {
         expect(args[1]).toBe('orphan/main')
+
         return { stdout: 'abc123\n' }
       }
+
       if (args[0] === 'log' || args[0] === 'diff') {
         return { stdout: 'change\n' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -403,27 +471,35 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'remote') {
         return { stdout: 'fork\n' }
       }
+
       if (args[0] === 'show-ref' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
         throw Object.assign(new Error('missing exact ref'), { code: 1 })
       }
+
       if (args[0] === 'show-ref') {
         return {
           stdout: 'abc123 refs/remotes/orphan-a/main\nabc123 refs/remotes/orphan-b/main\n'
         }
       }
+
       if (args[0] === 'fetch') {
         throw new Error(`Unexpected fetch: ${args.join(' ')}`)
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature\n' }
       }
+
       if (args[0] === 'merge-base') {
         expect(args[1]).toBe('main')
+
         return { stdout: 'abc123\n' }
       }
+
       if (args[0] === 'log' || args[0] === 'diff') {
         return { stdout: 'change\n' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -438,25 +514,33 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'remote') {
         return { stdout: 'fork\n' }
       }
+
       if (args[0] === 'show-ref') {
         if (args.some((arg) => arg.startsWith('refs/remotes/'))) {
           throw Object.assign(new Error('missing exact ref'), { code: 1 })
         }
+
         throw new Error('git stdout exceeded maxBuffer')
       }
+
       if (args[0] === 'fetch') {
         throw new Error(`Unexpected fetch: ${args.join(' ')}`)
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature\n' }
       }
+
       if (args[0] === 'merge-base') {
         expect(args[1]).toBe('main')
+
         return { stdout: 'abc123\n' }
       }
+
       if (args[0] === 'log' || args[0] === 'diff') {
         return { stdout: 'change\n' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -472,24 +556,31 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'fetch') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       if (args[0] === 'merge-base') {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       if (args[0] === 'log') {
         return { stdout: '- feat: change\n', stderr: '' }
       }
+
       if (args[0] === 'diff') {
         return { stdout: 'M\tREADME.md\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -508,24 +599,31 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'fetch') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'remote') {
         return { stdout: 'origin\nupstream\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       if (args[0] === 'merge-base') {
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       if (args[0] === 'log') {
         return { stdout: '- feat: change\n', stderr: '' }
       }
+
       if (args[0] === 'diff') {
         return { stdout: 'M\tREADME.md\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -547,24 +645,31 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         return args.at(-1) === 'refs/remotes/origin/feature/HEAD'
           ? { stdout: '', stderr: '' }
           : Promise.reject(Object.assign(new Error('missing exact ref'), { code: 1 }))
       }
+
       if (args[0] === 'fetch') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'branch') {
         return { stdout: 'feature/current\n', stderr: '' }
       }
+
       if (args[0] === 'merge-base') {
         expect(args[1]).toBe('origin/feature/HEAD')
+
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       if (args[0] === 'log' || args[0] === 'diff') {
         return { stdout: 'change\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -581,21 +686,27 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\nfirst\nsecond\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         return args.at(-1) === 'refs/remotes/orphan/main'
           ? { stdout: '', stderr: '' }
           : Promise.reject(Object.assign(new Error('missing exact ref'), { code: 1 }))
       }
+
       if (args[0] === 'fetch' || args[0] === 'branch') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'merge-base') {
         expect(args[1]).toBe('orphan/main')
+
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       if (args[0] === 'log' || args[0] === 'diff') {
         return { stdout: 'change\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 
@@ -612,21 +723,27 @@ describe('getPullRequestDraftContext', () => {
       if (args[0] === 'remote') {
         return { stdout: 'fork\n', stderr: '' }
       }
+
       if (args[0] === 'show-ref') {
         return args.at(-1) === 'refs/remotes/origin/main'
           ? { stdout: '', stderr: '' }
           : Promise.reject(Object.assign(new Error('missing exact ref'), { code: 1 }))
       }
+
       if (args[0] === 'fetch' || args[0] === 'branch') {
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'merge-base') {
         expect(args[1]).toBe('origin/main')
+
         return { stdout: 'abc123\n', stderr: '' }
       }
+
       if (args[0] === 'log' || args[0] === 'diff') {
         return { stdout: 'change\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git args: ${args.join(' ')}`)
     })
 

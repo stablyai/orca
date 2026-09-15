@@ -21,21 +21,27 @@ export function useConfirmedWorktreeDeleteTargets({
     () => readWorktreeDeleteIdentities(worktreeIdentityData),
     [worktreeIdentityData]
   )
+
   const lineageDeleteIdentities = useMemo(
     () => readWorktreeDeleteIdentities(lineageIdentityData),
     [lineageIdentityData]
   )
+
   const resolveConfirmedTargets = useCallback(
     (identities: readonly WorktreeDeleteIdentity[], expectedCount: number) => {
       const state = useAppStore.getState()
+
       const targets = resolveWorktreeBatchDeleteTargets(identities, (worktreeId, hostId) =>
         getWorktreeOnHostFromState(state, worktreeId, hostId)
       )
+
       if (!targets || targets.length !== expectedCount) {
         showWorkspaceListChangedToast()
         closeModal()
+
         return null
       }
+
       return targets
     },
     [closeModal]

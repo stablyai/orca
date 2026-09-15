@@ -66,9 +66,11 @@ function renderUncommittedSections(): void {
     area: 'unstaged',
     items: [UNSTAGED_ENTRY]
   }
+
   const unfilteredById = new Map<SourceControlDisplaySectionId, SourceControlDisplaySection>([
     ['unstaged', section]
   ])
+
   render(
     <TooltipProvider>
       <SourceControlUncommittedSections
@@ -129,6 +131,7 @@ describe('source control section header actions', () => {
 
     const actionsSlot = screen.getByRole('button', { name: 'View all' }).parentElement
       ?.parentElement
+
     expect(actionsSlot).toHaveClass('shrink-0')
     expect(actionsSlot?.className).not.toContain('flex-wrap')
   })

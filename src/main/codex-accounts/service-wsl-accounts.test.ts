@@ -23,6 +23,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -31,6 +32,7 @@ vi.mock('node:os', async () => {
 
 function decodeEncodedWslBashCommand(command: string): string {
   const encoded = command.match(/^set -o pipefail; printf %s '([^']+)' \| base64 -d \| bash$/)?.[1]
+
   return encoded ? Buffer.from(encoded, 'base64').toString('utf8') : command
 }
 
@@ -69,9 +71,11 @@ describe('CodexAccountService config sync', () => {
         if (path === wslManagedHomePath) {
           return { distro: 'Ubuntu', linuxPath: wslLinuxHomePath }
         }
+
         if (path === wslCanonicalHomePath) {
           return { distro: 'Ubuntu', linuxPath: wslLinuxCanonicalHomePath }
         }
+
         return null
       }
     }))
@@ -210,30 +214,39 @@ describe('CodexAccountService config sync', () => {
       const script = decodeEncodedWslBashCommand(String(args.at(-1)))
       expect(args.slice(0, 2)).toEqual(['-d', 'Debian'])
       expect(script).toContain('readlink -f')
+
       return `${wslLinuxHomePath}\n`
     })
+
     const runWslProcessMock = vi.fn(async (spec: WslSpec) => {
       const script = String(spec.script)
       expect(spec.distro).toBe('Debian')
+
       if (script.includes('WSL_DISTRO_NAME')) {
         // 'none': reads $HOME and $WSL_DISTRO_NAME, which wsl.exe supplies from
         // /etc/passwd without a login shell.
         expect(spec.loginPath).toBe('none')
+
         return wslOk('Debian\n/home/alice\n')
       }
+
       if (script.includes('_orca_lookup_command=')) {
         // 'preferred': a PATH lookup. Under 'none' an nvm-installed codex is
         // invisible and a working install is reported absent (#9725).
         expect(spec.loginPath).toBe('preferred')
         expect(script).toBe(buildWslCodexAvailabilityScript())
+
         return wslOk()
       }
+
       expect(spec.loginPath).toBe('none')
       expect(script).toContain('mkdir -p ')
       mkdirSync(wslManagedHomePath, { recursive: true })
       writeFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'account-id-for-test\n')
+
       return wslOk()
     })
+
     const spawnMock = vi.fn((command: string, args: string[]) => {
       expect(command).toBe('wsl.exe')
       expect(args).toEqual(buildWslCodexLoginArgs('Debian', wslLinuxHomePath))
@@ -243,11 +256,13 @@ describe('CodexAccountService config sync', () => {
         'sandbox_mode = "danger-full-access"\n' +
           "model_instructions_file = '/home/alice/.codex/instructions.md'\n"
       )
+
       const child = new EventEmitter() as EventEmitter & {
         stdout: PassThrough
         stderr: PassThrough
         kill: () => void
       }
+
       child.stdout = new PassThrough()
       child.stderr = new PassThrough()
       child.kill = vi.fn()
@@ -255,12 +270,14 @@ describe('CodexAccountService config sync', () => {
       const payload = Buffer.from(JSON.stringify({ email: 'wsl@example.com' })).toString(
         'base64url'
       )
+
       writeFileSync(
         join(wslManagedHomePath, 'auth.json'),
         JSON.stringify({ tokens: { id_token: `header.${payload}.signature` } }),
         'utf-8'
       )
       queueMicrotask(() => child.emit('close', 0))
+
       return child
     })
 
@@ -296,6 +313,7 @@ describe('CodexAccountService config sync', () => {
 
     try {
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,
@@ -343,22 +361,30 @@ describe('CodexAccountService config sync', () => {
       const script = decodeEncodedWslBashCommand(String(args.at(-1)))
       expect(args.slice(0, 2)).toEqual(['-d', 'Debian'])
       expect(script).toContain('readlink -f')
+
       return `${wslLinuxHomePath}\n`
     })
+
     const runWslProcessMock = vi.fn(async (spec: WslSpec) => {
       const script = String(spec.script)
       expect(spec.distro).toBe('Debian')
+
       if (script.includes('WSL_DISTRO_NAME')) {
         return wslOk('Debian\n/home/alice\n')
       }
+
       if (script.includes('_orca_lookup_command=')) {
         expect(script).toBe(buildWslCodexAvailabilityScript())
+
         return wslFailed(1, 'codex missing')
       }
+
       mkdirSync(wslManagedHomePath, { recursive: true })
       writeFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'account-id-for-test\n')
+
       return wslOk()
     })
+
     const spawnMock = vi.fn()
 
     vi.doMock('node:crypto', () => ({
@@ -384,6 +410,7 @@ describe('CodexAccountService config sync', () => {
 
     try {
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,
@@ -421,22 +448,30 @@ describe('CodexAccountService config sync', () => {
       const script = decodeEncodedWslBashCommand(String(args.at(-1)))
       expect(args.slice(0, 2)).toEqual(['-d', 'Debian'])
       expect(script).toContain('readlink -f')
+
       return `${wslLinuxHomePath}\n`
     })
+
     const runWslProcessMock = vi.fn(async (spec: WslSpec) => {
       const script = String(spec.script)
       expect(spec.distro).toBe('Debian')
+
       if (script.includes('WSL_DISTRO_NAME')) {
         return wslOk('Debian\n/home/alice\n')
       }
+
       if (script.includes('_orca_lookup_command=')) {
         expect(script).toBe(buildWslCodexAvailabilityScript())
+
         return { ...wslFailed(1, 'codex missing'), environmentResolved: false }
       }
+
       mkdirSync(wslManagedHomePath, { recursive: true })
       writeFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'account-id-for-test\n')
+
       return wslOk()
     })
+
     const spawnMock = vi.fn()
 
     vi.doMock('node:crypto', () => ({
@@ -462,6 +497,7 @@ describe('CodexAccountService config sync', () => {
 
     try {
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,
@@ -507,21 +543,27 @@ describe('CodexAccountService config sync', () => {
 
     const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
       const script = decodeEncodedWslBashCommand(String(args.at(-1)))
+
       if (script.includes('readlink -f')) {
         return `${wslLinuxHomePath}\n`
       }
+
       return ''
     })
+
     const runWslProcessMock = vi.fn(async () => wslOk())
     let clearSelectionDuringLogin = (): void => {}
+
     const spawnMock = vi.fn((command: string, args: string[]) => {
       expect(command).toBe('wsl.exe')
       expect(args).toEqual(buildWslCodexLoginArgs('Ubuntu', wslLinuxHomePath))
+
       const child = new EventEmitter() as EventEmitter & {
         stdout: PassThrough
         stderr: PassThrough
         kill: () => void
       }
+
       child.stdout = new PassThrough()
       child.stderr = new PassThrough()
       child.kill = vi.fn()
@@ -538,6 +580,7 @@ describe('CodexAccountService config sync', () => {
         'utf-8'
       )
       queueMicrotask(() => child.emit('close', 0))
+
       return child
     })
 
@@ -577,6 +620,7 @@ describe('CodexAccountService config sync', () => {
         wsl: { Ubuntu: 'account-1' }
       }
     })
+
     const store = createStore(settings)
     clearSelectionDuringLogin = () => {
       const current = store.getSettings()
@@ -587,11 +631,13 @@ describe('CodexAccountService config sync', () => {
         }
       })
     }
+
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
 
     try {
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,
@@ -640,31 +686,39 @@ describe('CodexAccountService config sync', () => {
 
     const execFileSyncMock = vi.fn((_command: string, args: string[]) => {
       const script = decodeEncodedWslBashCommand(String(args.at(-1)))
+
       if (script.includes('readlink -f')) {
         return `${wslLinuxHomePath}\n`
       }
+
       return ''
     })
+
     const runWslProcessMock = vi.fn(async (spec: WslSpec) => {
       const script = String(spec.script)
+
       if (script.includes('mkdir -p -- "$candidate"')) {
         expect(spec.shell).toBe('bash')
         mkdirSync(wslManagedHomePath, { recursive: true })
         writeFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'account-1\n', 'utf-8')
       }
+
       return wslOk()
     })
+
     const spawnMock = vi.fn((command: string, args: string[]) => {
       expect(command).toBe('wsl.exe')
       expect(args).toEqual(buildWslCodexLoginArgs('Ubuntu', wslLinuxHomePath))
       expect(readFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'utf-8')).toBe(
         'account-1\n'
       )
+
       const child = new EventEmitter() as EventEmitter & {
         stdout: PassThrough
         stderr: PassThrough
         kill: () => void
       }
+
       child.stdout = new PassThrough()
       child.stderr = new PassThrough()
       child.kill = vi.fn()
@@ -674,6 +728,7 @@ describe('CodexAccountService config sync', () => {
         'utf-8'
       )
       queueMicrotask(() => child.emit('close', 0))
+
       return child
     })
 
@@ -709,6 +764,7 @@ describe('CodexAccountService config sync', () => {
       ],
       activeCodexManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
@@ -716,6 +772,7 @@ describe('CodexAccountService config sync', () => {
 
     try {
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,
@@ -757,6 +814,7 @@ describe('CodexAccountService config sync', () => {
     vi.doMock('node:child_process', () => ({
       execFileSync: vi.fn((_command: string, args: string[]) => {
         const script = decodeEncodedWslBashCommand(String(args.at(-1)))
+
         if (script.includes('readlink -f')) {
           expect(script).toContain("expected_marker='account-1'")
           expect(script).toContain(
@@ -765,8 +823,10 @@ describe('CodexAccountService config sync', () => {
           expect(script).toContain(
             'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"'
           )
+
           return `${wslLinuxHomePath}\n`
         }
+
         return ''
       }),
       spawn: vi.fn()
@@ -799,12 +859,14 @@ describe('CodexAccountService config sync', () => {
       ],
       activeCodexManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
 
     try {
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,

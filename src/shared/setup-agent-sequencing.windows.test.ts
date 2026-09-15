@@ -11,6 +11,7 @@ import {
 } from './setup-agent-sequencing'
 
 const TEMP_DIRS: string[] = []
+
 const WINDOWS_PROCESS_TEST_TIMEOUT_MS = 30_000
 
 afterEach(() => {
@@ -32,9 +33,11 @@ describe.skipIf(process.platform !== 'win32')('Windows setup-agent sequencing', 
     async (directoryName, useForwardSlashes) => {
       const tempDir = makeTempDir(directoryName)
       const nativeRunnerScriptPath = join(tempDir, 'setup runner.cmd')
+
       const runnerScriptPath = useForwardSlashes
         ? nativeRunnerScriptPath.replaceAll('\\', '/')
         : nativeRunnerScriptPath
+
       const startupScriptPath = join(tempDir, 'agent startup.ps1')
       const logPath = join(dirname(tempDir), 'sequence.log')
       const prompt = 'spaces & pipe | caret ^ percent % bang ! "quotes" Unicode 한글 trailing\\'
@@ -65,6 +68,7 @@ describe.skipIf(process.platform !== 'win32')('Windows setup-agent sequencing', 
       const setupExit = await waitForExit(
         spawnWindowsCommand(dirname(tempDir), 'run setup.cmd', commands.setupCommand)
       )
+
       expect(setupExit.code).toBe(0)
       expect(readFileSync(`${runnerScriptPath}.windows-sequence.done`, 'utf8')).toBe(
         'windows-sequence:0\r\n'
@@ -78,6 +82,7 @@ describe.skipIf(process.platform !== 'win32')('Windows setup-agent sequencing', 
           commands.startupEnv
         )
       )
+
       expect(startupExit.code).toBe(0)
       expect(startupExit.stderr).toContain('Waiting for setup to finish before starting agent...')
       expect(readFileSync(logPath, 'utf8')).toBe(`setup-done\r\n${prompt}\r\n`)
@@ -87,6 +92,7 @@ describe.skipIf(process.platform !== 'win32')('Windows setup-agent sequencing', 
 
   it('keeps the startup command out of generated cmd.exe source', () => {
     const startupCommand = 'agent --prompt "& | ^ % ! 한글 trailing\\"'
+
     const commands = createSequencedSetupAgentCommands({
       runnerScriptPath: 'C:\\repo\\setup-runner.cmd',
       startupCommand,
@@ -113,6 +119,7 @@ describe.skipIf(process.platform !== 'win32')('Windows setup-agent sequencing', 
         `@echo off\r\necho started>"${startupLogPath}"\r\nexit /b 0\r\n`,
         'utf8'
       )
+
       const commands = createSequencedSetupAgentCommands({
         runnerScriptPath,
         startupCommand: `cmd.exe /d /c "${startupScriptPath}"`,
@@ -124,6 +131,7 @@ describe.skipIf(process.platform !== 'win32')('Windows setup-agent sequencing', 
       const setupExit = await waitForExit(
         spawnWindowsCommand(dirname(tempDir), 'run failed setup.cmd', commands.setupCommand)
       )
+
       expect(setupExit.code).toBe(37)
       expect(readFileSync(`${runnerScriptPath}.failed-windows-sequence.done`, 'utf8')).toBe(
         'failed-windows-sequence:37\r\n'
@@ -137,6 +145,7 @@ describe.skipIf(process.platform !== 'win32')('Windows setup-agent sequencing', 
           commands.startupEnv
         )
       )
+
       expect(startupExit.code).toBe(37)
       expect(startupExit.stderr).toContain('Setup failed; skipping agent startup.')
       expect(existsSync(startupLogPath)).toBe(false)
@@ -150,6 +159,7 @@ function makeTempDir(directoryName: string): string {
   TEMP_DIRS.push(root)
   const dir = join(root, directoryName)
   mkdirSync(dir)
+
   return dir
 }
 
@@ -161,6 +171,7 @@ function spawnWindowsCommand(
 ): ReturnType<typeof spawn> {
   const scriptPath = join(dir, filename)
   writeFileSync(scriptPath, `@echo off\r\n${command}\r\nexit /b %ERRORLEVEL%\r\n`, 'utf8')
+
   return spawn('cmd.exe', ['/d', '/c', scriptPath], {
     stdio: 'pipe',
     env: { ...process.env, ...env }

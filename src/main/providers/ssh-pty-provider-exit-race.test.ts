@@ -21,6 +21,7 @@ it('rejects a fresh SSH PTY whose exit shares the spawn response batch', async (
     dispose: vi.fn(),
     isDisposed: vi.fn().mockReturnValue(false)
   }
+
   const provider = new SshPtyProvider('conn-1', mux as never)
   const dataListener = vi.fn()
   provider.onData(dataListener)
@@ -33,6 +34,7 @@ it('rejects a fresh SSH PTY whose exit shares the spawn response batch', async (
         incarnationId: 'incarnation-raced',
         sourceActivation: sourceActivation('incarnation-raced')
       }
+
       options?.beforeResolve?.(result)
       const notify = mux.onNotification.mock.calls[0]?.[0]
       notify?.('pty.data', {
@@ -50,11 +52,14 @@ it('rejects a fresh SSH PTY whose exit shares the spawn response batch', async (
         code: 0,
         incarnationId: 'incarnation-raced'
       })
+
       return result
     }
+
     if (method === 'pty.cancelDelivery') {
       return { canceled: true, sentEndSu: 4, creditedEndSu: 0 }
     }
+
     return undefined
   })
 
@@ -91,6 +96,7 @@ it('rejects an SSH reattach whose matching exit shares the attach reply batch', 
     dispose: vi.fn(),
     isDisposed: vi.fn().mockReturnValue(false)
   }
+
   const provider = new SshPtyProvider('conn-1', mux as never)
   mux.request.mockImplementation(async (method: string, _params, options) => {
     if (method === 'pty.attach') {
@@ -98,6 +104,7 @@ it('rejects an SSH reattach whose matching exit shares the attach reply batch', 
         incarnationId: 'incarnation-existing',
         sourceActivation: sourceActivation('incarnation-existing')
       }
+
       options?.beforeResolve?.(result)
       const notify = mux.onNotification.mock.calls[0]?.[0]
       notify?.('pty.exit', {
@@ -105,8 +112,10 @@ it('rejects an SSH reattach whose matching exit shares the attach reply batch', 
         code: 0,
         incarnationId: 'incarnation-existing'
       })
+
       return result
     }
+
     return undefined
   })
 
@@ -138,7 +147,9 @@ it('returns a provisional source activation lease to reconnect authority', async
     dispose: vi.fn(),
     isDisposed: vi.fn().mockReturnValue(false)
   }
+
   const provider = new SshPtyProvider('conn-1', mux as never)
+
   const response = {
     incarnationId: 'incarnation-reconnect',
     sourceActivation: {
@@ -148,14 +159,18 @@ it('returns a provisional source activation lease to reconnect authority', async
       recoveryEndSu: 8
     }
   }
+
   mux.request.mockImplementation(async (method: string, _params, options) => {
     if (method === 'pty.cancelDelivery') {
       return { canceled: true, sentEndSu: 8, creditedEndSu: 4 }
     }
+
     if (method !== 'pty.attach') {
       return undefined
     }
+
     options?.beforeResolve?.(response)
+
     return response
   })
 

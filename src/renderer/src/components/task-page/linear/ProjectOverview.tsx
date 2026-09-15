@@ -1,5 +1,6 @@
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import { LinearProjectOverview } from '@/components/linear-project-view-surfaces'
+
 export function TaskPageLinearProjectOverview({
   model
 }: {
@@ -20,6 +21,7 @@ export function TaskPageLinearProjectOverview({
     linearProjectParentView,
     setLinearProjectParentView
   } = model
+
   return (
     <div className="flex min-h-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
       <LinearProjectOverview
@@ -50,8 +52,10 @@ export function TaskPageLinearProjectOverview({
                   }
             )
             setLinearProjectParentView(null)
+
             return
           }
+
           setSelectedLinearProject(null)
           setSelectedLinearProjectDetail(null)
           setLinearProjectParentView(null)

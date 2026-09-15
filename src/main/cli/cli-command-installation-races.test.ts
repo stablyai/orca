@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const legacyReadlinkRace = vi.hoisted(() => ({ commandPath: '', replacementTarget: '' }))
+
 const reusedIdentity = vi.hoisted(() => ({
   path: '',
   dev: null as bigint | null,
@@ -24,10 +25,12 @@ const reusedIdentity = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
+
   return {
     ...actual,
     lstat: async (...args: Parameters<typeof actual.lstat>) => {
       const stats = await actual.lstat(...args)
+
       if (
         args[0] !== reusedIdentity.path ||
         reusedIdentity.dev === null ||
@@ -35,6 +38,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       ) {
         return stats
       }
+
       return Object.create(stats, {
         dev: { value: reusedIdentity.dev },
         ino: { value: reusedIdentity.ino }
@@ -42,6 +46,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     },
     readlink: async (...args: Parameters<typeof actual.readlink>) => {
       const [path] = args
+
       if (path === legacyReadlinkRace.commandPath && legacyReadlinkRace.replacementTarget) {
         const replacementTarget = legacyReadlinkRace.replacementTarget
         legacyReadlinkRace.commandPath = ''
@@ -50,6 +55,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         await actual.symlink(replacementTarget, path)
         throw Object.assign(new Error('link vanished during inspection'), { code: 'ENOENT' })
       }
+
       return actual.readlink(...args)
     }
   }
@@ -90,6 +96,7 @@ async function createMacCommandFixture() {
   await mkdir(commandDirectory, { recursive: true })
   await mkdir(dirname(launcherPath), { recursive: true })
   await writeFile(launcherPath, '#!/usr/bin/env bash\n', { mode: 0o755 })
+
   return { root, commandDirectory, commandPath, resourcesPath, launcherPath, staleLauncherPath }
 }
 
@@ -106,6 +113,7 @@ function createMacInstaller(
       await hooks.quarantine?.(commandPath)
       const quarantine = await super.quarantineCommandPath(commandPath)
       hooks.afterQuarantine?.(quarantine)
+
       return quarantine
     }
 
@@ -114,6 +122,7 @@ function createMacInstaller(
       commandPath: string
     ): Promise<void> {
       await hooks.link?.(heldPath, commandPath)
+
       return super.linkQuarantinedCommand(heldPath, commandPath)
     }
   }
@@ -135,9 +144,11 @@ async function recoveryPath(commandDirectory: string): Promise<string> {
   const transactionName = (await readdir(commandDirectory)).find((name) =>
     name.startsWith('.orca-cli-')
   )
+
   if (!transactionName) {
     throw new Error('Expected a preserved CLI command transaction.')
   }
+
   return join(commandDirectory, transactionName, 'orca')
 }
 
@@ -148,8 +159,10 @@ async function rejectionFrom(operation: Promise<unknown>): Promise<Error> {
     if (error instanceof Error) {
       return error
     }
+
     throw error
   }
+
   throw new Error('Expected the operation to reject.')
 }
 
@@ -171,11 +184,13 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
     await symlink(fixture.staleLauncherPath, fixture.commandPath)
     const original = await lstat(fixture.commandPath, { bigint: true })
     let raced = false
+
     const installer = createMacInstaller(fixture, {
       quarantine: async (commandPath) => {
         if (raced) {
           return
         }
+
         raced = true
         await unlink(commandPath)
         await symlink(foreignTarget, commandPath)
@@ -215,11 +230,13 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
       ].join('\n')
     )
     let raced = false
+
     const installer = createMacInstaller(fixture, {
       quarantine: async (commandPath) => {
         if (raced) {
           return
         }
+
         raced = true
         await writeFile(commandPath, 'foreign command written into the inspected inode')
       }
@@ -236,11 +253,13 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
     const foreignTarget = join(fixture.root, 'foreign-command')
     await symlink(fixture.launcherPath, fixture.commandPath)
     let raced = false
+
     const installer = createMacInstaller(fixture, {
       quarantine: async (commandPath) => {
         if (raced) {
           return
         }
+
         raced = true
         await unlink(commandPath)
         await symlink(foreignTarget, commandPath)
@@ -255,11 +274,13 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
     const fixture = await createMacCommandFixture()
     await symlink(fixture.staleLauncherPath, fixture.commandPath)
     let raced = false
+
     const installer = createMacInstaller(fixture, {
       quarantine: async (commandPath) => {
         if (raced) {
           return
         }
+
         raced = true
         await unlink(commandPath)
         await mkdir(commandPath)
@@ -279,11 +300,13 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
     const contenderTarget = join(fixture.root, 'contender-command')
     await symlink(fixture.staleLauncherPath, fixture.commandPath)
     let raced = false
+
     const installer = createMacInstaller(fixture, {
       quarantine: async (commandPath) => {
         if (raced) {
           return
         }
+
         raced = true
         await unlink(commandPath)
         await writeFile(commandPath, 'foreign command')
@@ -317,6 +340,7 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
 
     legacyReadlinkRace.commandPath = legacyPath
     legacyReadlinkRace.replacementTarget = foreignTarget
+
     const installer = new CliInstaller({
       platform: 'linux',
       isPackaged: true,
@@ -354,7 +378,9 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
           await unlink(commandPath)
           await symlink(foreignTarget, commandPath)
         }
+
         const quarantine = await super.quarantineCommandPath(commandPath)
+
         if (commandPath === legacyPath && quarantine.snapshot) {
           reusedIdentity.path = quarantine.heldPath
           reusedIdentity.dev = original.dev
@@ -365,6 +391,7 @@ describe.skipIf(process.platform === 'win32')('CLI command filesystem races', ()
             ino: original.ino
           }
         }
+
         return quarantine
       }
     }

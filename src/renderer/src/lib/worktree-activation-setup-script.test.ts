@@ -65,6 +65,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
   it('queues returned setup on an existing terminal tab when startup was already adopted', () => {
     let createdIndex = 1
     const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+
     const store = createMockStore({
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
       createTab,
@@ -93,6 +94,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
   it('queues wrapped setup on an existing terminal tab when setup gates startup', () => {
     let createdIndex = 1
     const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+
     const store = createMockStore({
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
       createTab,

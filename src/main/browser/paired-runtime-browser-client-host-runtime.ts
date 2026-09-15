@@ -60,6 +60,7 @@ type ProductionBrowserClientHostStart = PairedRuntimeBrowserClientHostStart & {
 }
 
 let activeOrcaProfileId: string | null = null
+
 /** Route identity of each live client host, for storage operations without a page. */
 const clientHostRouteIdentities = new Map<string, ClientHostRouteIdentity>()
 
@@ -72,17 +73,20 @@ const browserClientHosts =
       const stagingRoot = browserClientFileStagingRoot(input.environmentId)
       const uploadStaging = new BrowserClientUploadStaging(path.join(stagingRoot, 'uploads'))
       let executor: BrowserClientPageCommandExecutor | null = null
+
       const downloadRelay = new BrowserClientDownloadRelay({
         stagingRoot: path.join(stagingRoot, 'downloads'),
         hostLabel: input.environmentLabel,
         transport: fileChannel,
         resolvePage: (webContentsId) => executor?.findPageByWebContentsId(webContentsId)
       })
+
       const routes = registerBrowserClientHostEnvironmentRoutes(
         input.environmentId,
         downloadRelay,
         (params) => executor?.recordPublishedPageUrl(params)
       )
+
       return new PairedRuntimeBrowserClientHostComposition({
         onClosing: routes.release,
         initialInput: input,
@@ -105,6 +109,7 @@ const browserClientHosts =
             uploadStaging,
             onPageUnavailable
           })
+
           return executor
         },
         createHost: (
@@ -129,8 +134,10 @@ const browserClientHosts =
             onReconnected,
             onError
           })
+
           fileChannel.bind(host)
           routes.pageMetadata.bind(host)
+
           return host
         },
         onError: (error) => retireFailedEnvironmentHost(input.environmentId, error)
@@ -144,6 +151,7 @@ export function configurePairedRuntimeBrowserClientHostsForOrcaProfile(options: 
   if (activeOrcaProfileId && activeOrcaProfileId !== options.orcaProfileId) {
     throw new Error('paired_runtime_browser_client_host_profile_conflict')
   }
+
   activeOrcaProfileId = options.orcaProfileId
 }
 
@@ -152,15 +160,19 @@ export async function startPairedRuntimeBrowserClientHost(options: {
   authorityRuntimeId: string
 }): Promise<BrowserClientHostLeaseAuthority> {
   const orcaProfileId = activeOrcaProfileId
+
   if (!orcaProfileId) {
     throw new Error('paired_runtime_browser_client_host_profile_unavailable')
   }
+
   const pairingRevision = options.environment.pairingRevision ?? options.environment.createdAt
   const pairing = getPreferredPairingOffer(options.environment)
+
   const storageScope = deriveBrowserRoutePartitionStorageScope({
     orcaProfileId,
     environmentId: options.environment.id
   })
+
   const routeIdentity: ClientHostRouteIdentity = {
     orcaProfileId,
     storageScope,
@@ -183,6 +195,7 @@ export async function startPairedRuntimeBrowserClientHost(options: {
       options.authorityRuntimeId
     )
   }
+
   const authority = await browserClientHosts.start({
     environmentId: options.environment.id,
     pairingRevision,
@@ -194,7 +207,9 @@ export async function startPairedRuntimeBrowserClientHost(options: {
     authorityConnectionIdentity: routeIdentity.authorityConnectionIdentity,
     legacyAuthorityConnectionIdentity: routeIdentity.legacyAuthorityConnectionIdentity
   })
+
   clientHostRouteIdentities.set(options.environment.id, routeIdentity)
+
   return authority
 }
 
@@ -214,6 +229,7 @@ export function closePairedRuntimeBrowserClientHostEnvironment(
   error?: Error
 ): Promise<boolean> {
   clientHostRouteIdentities.delete(environmentId)
+
   return browserClientHosts.closeEnvironment(environmentId, error)
 }
 
@@ -226,11 +242,13 @@ export function retirePairedRuntimeBrowserClientHostEnvironment(
   error?: Error
 ): Promise<boolean> {
   clientHostRouteIdentities.delete(environmentId)
+
   return browserClientHosts.retireEnvironment(environmentId, error)
 }
 
 export function shutdownPairedRuntimeBrowserClientHosts(): Promise<void> {
   clientHostRouteIdentities.clear()
+
   return browserClientHosts.close()
 }
 
@@ -307,6 +325,7 @@ function connectionIdentityDigest(components: readonly unknown[]): string {
 // Why: staged remote bytes are main-owned scratch, never the user's visible Downloads folder.
 function browserClientFileStagingRoot(environmentId: string): string {
   const scope = createHash('sha256').update(environmentId).digest('hex').slice(0, 16)
+
   return path.join(app.getPath('temp'), 'orca-browser-file-channel', scope)
 }
 

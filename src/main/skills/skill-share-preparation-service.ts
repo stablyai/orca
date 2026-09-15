@@ -13,6 +13,7 @@ import type { SkillCloudService } from './skill-cloud-service'
 import { readSkillInstallReceipt } from './skill-install-provenance'
 
 const PREPARATION_TTL_MS = 30 * 60 * 1000
+
 const MAX_PREPARATIONS = 8
 
 type Preparation = {
@@ -29,6 +30,7 @@ function shareIdempotencyKey(preparationId: string): string {
 function preview(id: string, value: Preparation): SkillSharePreview {
   const manifest = value.created.manifest
   const files = manifest.skills.flatMap((skill) => skill.files)
+
   return {
     preparationId: id,
     packageId: manifest.packageId,
@@ -83,16 +85,21 @@ export class SkillSharePreparationService {
   }): Promise<SkillSharePreview> {
     await this.initialize()
     await this.prune()
+
     if (this.preparations.size + this.preparingCount >= MAX_PREPARATIONS) {
       throw new Error('skill-share-preparation-limit')
     }
+
     this.preparingCount += 1
     const preparationId = randomUUID()
     const directory = join(this.root, preparationId)
+
     try {
       await mkdir(directory, { recursive: true, mode: 0o700 })
+
       const requestedSources =
         input.sources ?? (input.sourceDirectory ? [{ sourceDirectory: input.sourceDirectory }] : [])
+
       const sources = await Promise.all(
         requestedSources.map(async (source) => {
           if (
@@ -101,12 +108,15 @@ export class SkillSharePreparationService {
           ) {
             return source
           }
+
           let receipt = await readSkillInstallReceipt(
             this.options.installStateDirectory,
             source.sourceDirectory
           )
+
           if (!receipt) {
             const physicalSource = await realpath(source.sourceDirectory).catch(() => null)
+
             if (physicalSource) {
               receipt = await readSkillInstallReceipt(
                 this.options.installStateDirectory,
@@ -114,6 +124,7 @@ export class SkillSharePreparationService {
               )
             }
           }
+
           return receipt?.fileModes
             ? {
                 ...source,
@@ -124,6 +135,7 @@ export class SkillSharePreparationService {
             : source
         })
       )
+
       const created = await createSkillBundleArchive({
         sources,
         bundleName: input.bundleName ?? 'shared-skill',
@@ -132,13 +144,16 @@ export class SkillSharePreparationService {
         packageId: input.packageId ?? randomUUID(),
         versionId: randomUUID()
       })
+
       const value: Preparation = {
         created,
         expiresAt: Date.now() + PREPARATION_TTL_MS,
         controller: null,
         publishedVersion: null
       }
+
       this.preparations.set(preparationId, value)
+
       return preview(preparationId, value)
     } catch (error) {
       await rm(directory, { recursive: true, force: true })
@@ -154,16 +169,21 @@ export class SkillSharePreparationService {
   ): Promise<SkillSharePublishOperation> {
     await this.prune()
     const preparation = this.preparations.get(input.preparationId)
+
     if (!preparation || preparation.expiresAt <= Date.now()) {
       throw new Error('skill-share-preparation-expired')
     }
+
     if (preparation.controller) {
       throw new Error('skill-share-publish-in-progress')
     }
+
     const controller = new AbortController()
     preparation.controller = controller
+
     try {
       let version = preparation.publishedVersion
+
       if (!version) {
         const published = await this.cloud.publishVersion({
           archivePath: preparation.created.archivePath,
@@ -176,32 +196,40 @@ export class SkillSharePreparationService {
           onProgress: (progress) =>
             onProgress?.({ preparationId: input.preparationId, ...progress })
         })
+
         if (published.status !== 'ok') {
           return published
         }
+
         version = published.value
         preparation.publishedVersion = version
       }
+
       onProgress?.({
         preparationId: input.preparationId,
         phase: 'publishing',
         bytesSent: preparation.created.compressedBytes,
         totalBytes: preparation.created.compressedBytes
       })
+
       const shared = await this.cloud.createShare(version.packageId, {
         idempotencyKey: shareIdempotencyKey(input.preparationId),
         signal: controller.signal
       })
+
       if (shared.status !== 'ok') {
         return shared
       }
+
       await this.release(input.preparationId)
+
       return {
         status: 'ok',
         value: { version, share: shared.value }
       } satisfies SkillSharePublishOperation
     } finally {
       const current = this.preparations.get(input.preparationId)
+
       if (current) {
         current.controller = null
       }
@@ -223,6 +251,7 @@ export class SkillSharePreparationService {
     for (const preparation of this.preparations.values()) {
       preparation.controller?.abort()
     }
+
     this.preparations.clear()
     await rm(this.root, { recursive: true, force: true })
   }
@@ -231,6 +260,7 @@ export class SkillSharePreparationService {
     const expired = [...this.preparations.entries()]
       .filter(([, value]) => value.expiresAt <= Date.now() && !value.controller)
       .map(([id]) => id)
+
     await Promise.all(expired.map((id) => this.release(id)))
   }
 
@@ -244,6 +274,7 @@ export class SkillSharePreparationService {
           await mkdir(this.root, { recursive: true, mode: 0o700 })
         }
       })()
+
       this.initialized = initialization
       void initialization.catch(() => {
         if (this.initialized === initialization) {
@@ -251,6 +282,7 @@ export class SkillSharePreparationService {
         }
       })
     }
+
     await this.initialized
   }
 }

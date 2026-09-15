@@ -34,6 +34,7 @@ SplashScreen.preventAutoHideAsync()
 // 'orca-desktop' channel, and a background push can land before any socket has
 // connected. Android drops a notification whose channel does not exist yet.
 void ensureDesktopNotificationChannel().catch(() => {})
+
 void registerPushDismissalTask().catch(() => {})
 
 // Register before scheduling so foreground delivery uses the same suppression policy.
@@ -51,6 +52,7 @@ export default function RootLayout() {
         ? { hostId, worktreeId }
         : null
     )
+
     return () => setNotificationViewingWorkspace(null)
   }, [pathname, hostId, worktreeId])
   const openNotificationRoute = useOpenNotificationRoute()
@@ -75,6 +77,7 @@ export default function RootLayout() {
   useEffect(() => {
     function handleUrl(url: string) {
       const code = extractPairingCodeFromUrl(url)
+
       if (code) {
         // Why: Android camera launches can leave Expo Router's unmatched
         // `orca://pair` route underneath this screen; replacing keeps cancel
@@ -90,6 +93,7 @@ export default function RootLayout() {
     })
 
     const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url))
+
     return () => sub.remove()
   }, [router])
 
@@ -120,6 +124,7 @@ export default function RootLayout() {
     async function getNavigationTarget(notification: Notifications.Notification) {
       const hosts = await loadHostCatalog().catch(() => null)
       const data = readNativeNotificationData(notification.request)
+
       // A gateway push names its host by key fingerprint, not by this device's hostId.
       // With no catalog to resolve against, such a push stays unrouted instead of
       // falling back to whatever hostId its raw data carries.
@@ -128,6 +133,7 @@ export default function RootLayout() {
         hosts ?? [],
         isRemotePushTrigger(notification.request.trigger)
       )
+
       return getNotificationNavigationTarget(routeData, {
         knownHostIds: hosts ? new Set(hosts.map((host) => host.id)) : undefined,
         credentialStatusByHostId: hosts
@@ -139,18 +145,23 @@ export default function RootLayout() {
     async function handleNotificationResponse(response: Notifications.NotificationResponse) {
       if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) {
         clearLastNotificationResponse()
+
         return
       }
 
       const notificationId = response.notification.request.identifier
+
       if (handledNotificationIdsRef.current.has(notificationId)) {
         return
       }
+
       handledNotificationIdsRef.current.add(notificationId)
+
       // Why: RootLayout never unmounts, so cap this tap-dedup set (FIFO) rather
       // than letting it grow one id per notification tapped for the app's life.
       if (handledNotificationIdsRef.current.size > 256) {
         const oldest = handledNotificationIdsRef.current.values().next().value
+
         if (oldest !== undefined) {
           handledNotificationIdsRef.current.delete(oldest)
         }
@@ -158,15 +169,18 @@ export default function RootLayout() {
 
       const target = await getNavigationTarget(response.notification)
       clearLastNotificationResponse()
+
       if (disposed) {
         return
       }
+
       if (target) {
         openNotificationRoute(target)
       }
     }
 
     const initialResponse = getInitialNotificationResponse()
+
     if (initialResponse) {
       void handleNotificationResponse(initialResponse)
     }
@@ -174,6 +188,7 @@ export default function RootLayout() {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       void handleNotificationResponse(response)
     })
+
     return () => {
       disposed = true
       sub.remove()

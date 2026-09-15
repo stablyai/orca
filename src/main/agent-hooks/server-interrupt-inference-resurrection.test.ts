@@ -30,6 +30,7 @@ describe('AgentHookServer listener replay', () => {
   it('does not let late same-turn working hooks resurrect an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -90,6 +91,7 @@ describe('AgentHookServer listener replay', () => {
   it('does not let late Claude tool hooks with explicit prompt resurrect an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -158,6 +160,7 @@ describe('AgentHookServer listener replay', () => {
   it('does not let late Codex tool hooks with explicit prompt resurrect an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -226,6 +229,7 @@ describe('AgentHookServer listener replay', () => {
   it('allows a new prompt after an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -279,6 +283,7 @@ describe('AgentHookServer listener replay', () => {
   it('allows a Claude follow-up prompt after an inferred interrupt to keep working', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -337,6 +342,7 @@ describe('AgentHookServer listener replay', () => {
   it('allows an immediate same-prompt retry after an inferred interrupt', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -392,6 +398,7 @@ describe('AgentHookServer listener replay', () => {
   it('suppresses same-turn Claude tool progress after the stale suppression window', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -456,6 +463,7 @@ describe('AgentHookServer listener replay', () => {
   it('allows generic non-explicit same-prompt working after the stale suppression window', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -510,6 +518,7 @@ describe('AgentHookServer listener replay', () => {
   it('allows non-Claude tool-context working after the stale suppression window', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(

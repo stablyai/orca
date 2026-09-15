@@ -13,11 +13,14 @@ type ControlledWait = {
 
 function createControlledWait(): ControlledWait {
   let resolve = (_result: RuntimeTerminalWait): void => {}
+
   let reject = (_error: Error): void => {}
+
   const promise = new Promise<RuntimeTerminalWait>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, reject, resolve }
 }
 
@@ -25,6 +28,7 @@ async function startSubscribedTerminal(wait: ControlledWait) {
   const harness = startDesktopMultiplexSubscribe({
     waitForTerminal: vi.fn(() => wait.promise)
   })
+
   await vi.waitFor(() =>
     expect(harness.messages.some((message) => JSON.parse(message).result?.type === 'ready')).toBe(
       true
@@ -32,6 +36,7 @@ async function startSubscribedTerminal(wait: ControlledWait) {
   )
   sendDesktopMultiplexSubscribe(harness.handlers)
   await vi.waitFor(() => expect(harness.runtime.waitForTerminal).toHaveBeenCalled())
+
   return harness
 }
 

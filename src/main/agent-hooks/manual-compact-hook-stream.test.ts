@@ -10,11 +10,15 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
 
 const PANE_KEY = makePaneKey('manual-compact', '11111111-1111-4111-8111-111111111111')
+
 const COMPACT_PROMPT_ID = '22222222-2222-4222-8222-222222222222'
+
 const TURN_PROMPT_ID = '33333333-3333-4333-8333-333333333333'
+
 const SESSION = { key: 'session_id' as const, id: 'session-a' }
 
 function claudeHook(hookEventName: string, promptId: string, extra: Record<string, unknown> = {}) {
@@ -94,6 +98,7 @@ describe('manual Claude compact hook stream', () => {
     for (const server of servers.splice(0)) {
       server.stop()
     }
+
     for (const path of temporaryPaths.splice(0)) {
       rmSync(path, { recursive: true, force: true })
     }
@@ -107,6 +112,7 @@ describe('manual Claude compact hook stream', () => {
     const port = Number(env.ORCA_AGENT_HOOK_PORT)
     const token = env.ORCA_AGENT_HOOK_TOKEN
     const events: string[] = []
+
     const unsubscribe = server.subscribeEnrichedStatus((event) => {
       events.push(`${event.hookEventName}:${event.payload.state}`)
     })
@@ -189,9 +195,11 @@ describe('manual Claude compact hook stream', () => {
     expect(before).toMatchObject({ state: 'working' })
 
     const emitted: string[] = []
+
     const unsubscribe = server.subscribeEnrichedStatus((event) => {
       emitted.push(`${event.hookEventName}:${event.payload.state}`)
     })
+
     await postHook(port, token, claudeHook('PostCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
 
     // Why: restating the row here is the regression, not the fix — it would refresh receivedAt and
@@ -207,6 +215,7 @@ describe('manual Claude compact hook stream', () => {
     const emitted: string[] = []
     const endpointDir = mkdtempSync(join(tmpdir(), 'orca-compact-relay-'))
     temporaryPaths.push(endpointDir)
+
     const relay = new RelayAgentHookServer({
       endpointDir,
       token: 'manual-compact-token',
@@ -215,10 +224,13 @@ describe('manual Claude compact hook stream', () => {
         main.ingestRemote(envelope, 'conn-a')
       }
     })
+
     servers.push(main, relay)
+
     const unsubscribe = main.subscribeEnrichedStatus((event) => {
       emitted.push(`${event.hookEventName}:${event.payload.state}`)
     })
+
     await relay.start({ publishEndpoint: false })
     const { port, token } = relay.getCoordinates()
 
@@ -252,6 +264,7 @@ describe('manual Claude compact hook stream', () => {
     const forwarded: AgentHookRelayEnvelope[] = []
     const endpointDir = mkdtempSync(join(tmpdir(), 'orca-compact-cold-'))
     temporaryPaths.push(endpointDir)
+
     // A relay that restarted while the agent session kept running: hooks resolve the endpoint file
     // per invocation, so they reconnect — but the relay's per-process cache is empty, and the
     // compact completion may be the first event it ever sees for this pane.
@@ -263,6 +276,7 @@ describe('manual Claude compact hook stream', () => {
         main.ingestRemote(envelope, 'conn-a')
       }
     })
+
     servers.push(main, relay)
     await relay.start({ publishEndpoint: false })
     const { port, token } = relay.getCoordinates()
@@ -284,11 +298,13 @@ describe('manual Claude compact hook stream', () => {
     const main = new AgentHookServer()
     const endpointDir = mkdtempSync(join(tmpdir(), 'orca-compact-cold-replay-'))
     temporaryPaths.push(endpointDir)
+
     const relay = new RelayAgentHookServer({
       endpointDir,
       token: 'cold-replay-token',
       forward: (envelope) => main.ingestRemote(envelope, 'conn-a')
     })
+
     servers.push(main, relay)
     await relay.start({ publishEndpoint: false })
     const { port, token } = relay.getCoordinates()
@@ -337,9 +353,11 @@ describe('manual Claude compact hook stream', () => {
     const server = new AgentHookServer()
     servers.push(server)
     const emitted: string[] = []
+
     const unsubscribe = server.subscribeEnrichedStatus((event) => {
       emitted.push(`${event.hookEventName}:${event.payload.state}`)
     })
+
     server.ingestRemote(turnEnvelope(), 'conn-a')
     server.ingestRemote(legacyRelayCompactEnvelope('done'), 'conn-a')
     const applied = server._getStateForTests().lastStatusByPaneKey.get(PANE_KEY)

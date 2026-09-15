@@ -32,6 +32,7 @@ export function localWorkerTranscriptSourceIdentity(
   ) {
     return null
   }
+
   return createIdentity(
     stats.dev.toString(),
     stats.ino.toString(),
@@ -44,6 +45,7 @@ export function remoteWorkerTranscriptSourceIdentity(
   stats: FileStat
 ): WorkerTranscriptSourceIdentity | null {
   const mtimeMs = stats.mtimeMs ?? stats.mtime
+
   if (
     stats.type !== 'file' ||
     !Number.isSafeInteger(stats.size) ||
@@ -55,6 +57,7 @@ export function remoteWorkerTranscriptSourceIdentity(
   ) {
     return null
   }
+
   return createIdentity(String(stats.dev), String(stats.ino), stats.size, mtimeMs)
 }
 
@@ -66,9 +69,11 @@ export function workerTranscriptSourceChanged(
   if (!after || before.fingerprint !== after.fingerprint) {
     return true
   }
+
   if (after.size < before.size || after.size < minimumSize) {
     return true
   }
+
   // Same-size metadata movement cannot be append-only and may be an in-place replacement.
   return after.size === before.size && after.mtimeMs !== before.mtimeMs
 }

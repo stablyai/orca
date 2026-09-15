@@ -5,6 +5,7 @@ export function createWebContentsTimedFlag(defaultDurationMs = 10_000): {
   matches: (webContentsId: number, options?: { consume?: boolean }) => boolean
 } {
   let state: { webContentsId: number; until: number } | null = null
+
   return {
     mark(webContentsId, durationMs = defaultDurationMs) {
       state = { webContentsId, until: Date.now() + durationMs }
@@ -17,14 +18,18 @@ export function createWebContentsTimedFlag(defaultDurationMs = 10_000): {
     matches(webContentsId, options) {
       if (!state || Date.now() > state.until) {
         state = null
+
         return false
       }
+
       if (state.webContentsId !== webContentsId) {
         return false
       }
+
       if (options?.consume) {
         state = null
       }
+
       return true
     }
   }

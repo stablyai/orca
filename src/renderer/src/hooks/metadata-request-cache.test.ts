@@ -10,6 +10,7 @@ describe('metadata-request-cache', () => {
   it('dedupes concurrent requests for the same cache key', async () => {
     const store = createMetadataRequestStore<string[]>()
     let resolveRequest: (value: string[]) => void = () => {}
+
     const fetcher = vi.fn(
       () =>
         new Promise<string[]>((resolve) => {
@@ -31,6 +32,7 @@ describe('metadata-request-cache', () => {
       () => Promise.resolve(['should-not-fetch']),
       () => 1_100
     )
+
     expect(cached).toEqual(['bug'])
     expect(fetcher).toHaveBeenCalledTimes(1)
   })
@@ -51,6 +53,7 @@ describe('metadata-request-cache', () => {
 
   it('paces failed requests with a short negative TTL instead of refetching immediately', async () => {
     const store = createMetadataRequestStore<string[]>()
+
     const fetcher = vi
       .fn<() => Promise<string[]>>()
       .mockRejectedValueOnce(new Error('network'))
@@ -74,6 +77,7 @@ describe('metadata-request-cache', () => {
 
   it('a success clears the remembered failure for its key', async () => {
     const store = createMetadataRequestStore<string[]>()
+
     const fetcher = vi
       .fn<() => Promise<string[]>>()
       .mockRejectedValueOnce(new Error('network'))
@@ -109,6 +113,7 @@ describe('metadata-request-cache', () => {
   it('does not record failures from a cleared generation', async () => {
     const store = createMetadataRequestStore<string[]>()
     let rejectRequest: (error: Error) => void = () => {}
+
     const pending = loadMetadata(
       store,
       'repo:labels',
@@ -199,15 +204,18 @@ describe('metadata-request-cache', () => {
     // repo-0 was evicted for capacity, so the gate must point at repo-1's expiry.
     expect(store.nextCacheExpiryAt).toBe(1 + 300_000)
     let reads = 0
+
     for (const entry of store.cache.values()) {
       const { fetchedAt } = entry
       Object.defineProperty(entry, 'fetchedAt', {
         get: () => {
           reads++
+
           return fetchedAt
         }
       })
     }
+
     expect(getFreshMetadata(store, 'repo-500:labels', 300_000)?.data).toEqual(['label-500'])
     expect(reads).toBe(1)
     expect(store.cache.size).toBe(500)
@@ -215,6 +223,7 @@ describe('metadata-request-cache', () => {
 
   it('avoids full-cache sweeps on fresh reads but releases all expired payloads when due', async () => {
     const store = createMetadataRequestStore<number>()
+
     for (let i = 0; i < 500; i++) {
       await loadMetadata(
         store,
@@ -223,19 +232,24 @@ describe('metadata-request-cache', () => {
         () => i
       )
     }
+
     let reads = 0
+
     for (const entry of store.cache.values()) {
       const fetchedAt = entry.fetchedAt
       Object.defineProperty(entry, 'fetchedAt', {
         get: () => {
           reads++
+
           return fetchedAt
         }
       })
     }
+
     for (let i = 0; i < 10_000; i++) {
       expect(getFreshMetadata(store, '499', 1000)?.data).toBe(499)
     }
+
     expect(reads).toBeLessThanOrEqual(10_000)
     expect(getFreshMetadata(store, '499', 300_498)?.data).toBe(499)
     expect([...store.cache.keys()]).toEqual(['499'])

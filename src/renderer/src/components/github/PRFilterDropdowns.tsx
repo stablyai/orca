@@ -83,12 +83,14 @@ export default function PRFilterDropdowns({
   const owner = primarySlug?.owner ?? null
   const repo = primarySlug?.repo ?? null
   const hasPrimarySlug = popoverOpen && owner !== null && repo !== null
+
   const labelsState = useRepoLabelsBySlug(
     popoverOpen ? owner : null,
     popoverOpen ? repo : null,
     settings,
     primarySlug?.host
   )
+
   const assigneesState = useRepoAssigneesBySlug(
     popoverOpen ? owner : null,
     popoverOpen ? repo : null,
@@ -102,22 +104,28 @@ export default function PRFilterDropdowns({
   // user, matching the behavior of the built-in "Mine" / "Needs review" presets.
   const userOpts = useMemo<PickerOption[]>(() => {
     const meOption: PickerOption = { key: '@me', primary: '@me', secondary: 'Current user' }
+
     return [meOption, ...userOptions(hasPrimarySlug ? assigneesState.data : [])]
   }, [assigneesState.data, hasPrimarySlug])
+
   const authorOpts = useMemo<PickerOption[]>(() => {
     const options = new Map<string, PickerOption>()
     options.set('@me', { key: '@me', primary: '@me', secondary: 'Current user' })
+
     // Why: the Author filter should reflect actual visible item authors.
     // Assignable-user metadata is repo-collaborator scoped and can omit outside
     // contributors.
     for (const login of authorLogins) {
       options.set(login.toLowerCase(), { key: login, primary: login })
     }
+
     if (parsed.author && !options.has(parsed.author.toLowerCase())) {
       options.set(parsed.author.toLowerCase(), { key: parsed.author, primary: parsed.author })
     }
+
     return [...options.values()]
   }, [authorLogins, parsed.author])
+
   const labelOpts = useMemo<PickerOption[]>(
     () => (hasPrimarySlug ? labelsState.data.map((name) => ({ key: name, primary: name })) : []),
     [hasPrimarySlug, labelsState.data]
@@ -125,16 +133,20 @@ export default function PRFilterDropdowns({
 
   const reviewerActive = parsed.reviewRequested ?? parsed.reviewedBy ?? null
   const reviewerKind: 'requested' | 'reviewed-by' = parsed.reviewedBy ? 'reviewed-by' : 'requested'
+
   const [reviewerModeOverride, setReviewerModeOverride] = useState<
     'requested' | 'reviewed-by' | null
   >(null)
+
   const reviewerMode = reviewerModeOverride ?? reviewerKind
 
   // Why: treat anything other than the implicit "open" default as an active
   // status filter so the user can see (and clear) it via the inline pill.
   const statusActive = (parsed.state !== null && parsed.state !== 'open') || parsed.draft
+
   const statusPillValue = ((): string | null => {
     const parts: string[] = []
+
     if (parsed.state === 'closed') {
       parts.push('Closed')
     } else if (parsed.state === 'merged') {
@@ -142,9 +154,11 @@ export default function PRFilterDropdowns({
     } else if (parsed.state === 'all') {
       parts.push('Any')
     }
+
     if (parsed.draft) {
       parts.push('Draft')
     }
+
     return parts.length > 0 ? parts.join(' · ') : null
   })()
 
@@ -166,6 +180,7 @@ export default function PRFilterDropdowns({
         open={popoverOpen}
         onOpenChange={(next) => {
           setPopoverOpen(next)
+
           if (!next) {
             setOpenSection(null)
           }
@@ -205,6 +220,7 @@ export default function PRFilterDropdowns({
                 if (s === 'reviewer') {
                   setReviewerModeOverride(null)
                 }
+
                 setOpenSection(s)
               }}
               onClearAll={

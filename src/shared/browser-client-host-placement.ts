@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 export const BrowserClientHostPlacementPreference = z.enum(['auto', 'server'])
+
 export type BrowserClientHostPlacementPreference = z.infer<
   typeof BrowserClientHostPlacementPreference
 >

@@ -42,6 +42,7 @@ describe('stripClientHints', () => {
       'User-Agent': 'ua',
       Accept: 'text/html'
     }
+
     stripClientHints(headers)
     expect(Object.keys(headers).some((k) => k.toLowerCase().startsWith('sec-ch-ua'))).toBe(false)
     expect(headers['User-Agent']).toBe('ua')

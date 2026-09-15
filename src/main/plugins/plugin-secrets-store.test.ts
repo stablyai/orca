@@ -8,9 +8,11 @@ const storageMocks = vi.hoisted(() => ({
   encryptString: vi.fn((value: string) => Buffer.from(`encrypted:${value}`, 'utf8')),
   decryptString: vi.fn((value: Buffer) => {
     const text = value.toString('utf8')
+
     if (!text.startsWith('encrypted:')) {
       throw new Error('wrong key or corrupt ciphertext')
     }
+
     return text.slice('encrypted:'.length)
   })
 }))
@@ -30,6 +32,7 @@ const roots: string[] = []
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-plugin-secrets-'))
   roots.push(root)
+
   return root
 }
 
@@ -40,9 +43,11 @@ beforeEach(() => {
   )
   storageMocks.decryptString.mockImplementation((value) => {
     const text = value.toString('utf8')
+
     if (!text.startsWith('encrypted:')) {
       throw new Error('wrong key or corrupt ciphertext')
     }
+
     return text.slice('encrypted:'.length)
   })
 })
@@ -62,6 +67,7 @@ describe('PluginSecretsStore', () => {
     expect(second.get('token')).toEqual({ ok: true, value: null })
     const persisted = await readFile(join(root, 'acme.first', 'secrets.json.enc'), 'utf8')
     expect(persisted).not.toContain('top-secret')
+
     if (process.platform !== 'win32') {
       expect((await stat(join(root, 'acme.first', 'secrets.json.enc'))).mode & 0o077).toBe(0)
     }

@@ -8,11 +8,15 @@ export function filterGitHubWorkItemAssignees(
   if (isGitHubWorkItemOptionFilterQueryTooLarge(query)) {
     return []
   }
+
   const trimmedQuery = query.trim()
+
   if (!trimmedQuery) {
     return [...assignees]
   }
+
   const normalizedQuery = trimmedQuery.toLowerCase()
+
   return assignees.filter(
     (user) =>
       user.login.toLowerCase().includes(normalizedQuery) ||

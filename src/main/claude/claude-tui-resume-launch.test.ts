@@ -35,6 +35,7 @@ function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord
 function makeExecutable(path: string): void {
   mkdirSync(join(path, '..'), { recursive: true })
   writeFileSync(path, '')
+
   if (process.platform !== 'win32') {
     chmodSync(path, 0o755)
   }
@@ -137,6 +138,7 @@ describe('Claude TUI resume launch', () => {
         }
       ]
     })
+
     const build = createClaudeTuiResumeLaunchBuilder({
       resolveWorkspacePath: async () => '/workspace',
       resolveCommand: () => 'claude',

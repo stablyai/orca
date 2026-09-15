@@ -27,12 +27,15 @@ export function spawnNativeDaemonPty(args: {
   onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
 }): SpawnedDaemonPty {
   let reportsChildExitStatus = true
+
   const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
     const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
+
     // Why: children inherit job membership, so the host job must exist before the first Windows PTY.
     if (process.platform === 'win32') {
       assignHostProcessToKillOnCloseJob()
     }
+
     const proc = pty.spawn(wrapped.file, wrapped.args, {
       name: args.env.TERM ?? 'xterm-256color',
       cols: args.cols,
@@ -42,13 +45,16 @@ export function spawnNativeDaemonPty(args: {
       // Why: bundled ConPTY has the wrap-marker behavior xterm expects.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
+
     reportsChildExitStatus = hostReportsChildExitStatus(wrapped.file)
     args.onMacosTccSpawnStrategy?.(wrapped.file === shellPath ? 'direct' : 'wrapped')
+
     return proc
   }
 
   try {
     const process_ = spawnAt(args.shellPath, args.shellArgs, args.spawnCwd)
+
     return {
       process: process_,
       shellPath: args.shellPath,
@@ -59,6 +65,7 @@ export function spawnNativeDaemonPty(args: {
     if (process.platform !== 'win32') {
       throw primaryErr
     }
+
     for (const attempt of args.windowsFallbackAttempts.slice(1)) {
       try {
         const process = spawnAt(attempt.shellPath, attempt.shellArgs, attempt.effectiveCwd)
@@ -66,6 +73,7 @@ export function spawnNativeDaemonPty(args: {
         console.warn(
           `[daemon/pty] Primary shell "${args.shellPath}" failed (${message}), fell back to "${attempt.shellPath}"`
         )
+
         return {
           process,
           shellPath: attempt.shellPath,
@@ -77,6 +85,7 @@ export function spawnNativeDaemonPty(args: {
         // This fallback shell also failed -- try the next link in the chain.
       }
     }
+
     throw primaryErr
   }
 }

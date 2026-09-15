@@ -5,11 +5,13 @@ import { basename } from './path'
  *  and Linear rows can't drift into labelling the same worktree differently. */
 export function getWorktreeAttachmentLabel(worktree: Worktree): string {
   const displayName = worktree.displayName.trim()
+
   if (displayName) {
     return displayName
   }
 
   const branch = getBranchLabel(worktree.branch)
+
   if (branch) {
     return branch
   }
@@ -19,6 +21,7 @@ export function getWorktreeAttachmentLabel(worktree: Worktree): string {
 
 function getBranchLabel(branch: string | null | undefined): string | null {
   const trimmed = branch?.trim()
+
   if (!trimmed) {
     return null
   }

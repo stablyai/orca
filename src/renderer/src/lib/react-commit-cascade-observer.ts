@@ -28,7 +28,9 @@ export const REACT_COMMIT_CASCADE_INSTALL_CHECK_MS = 10_000
 type FiberRootLike = { pendingLanes?: unknown }
 
 let installed = false
+
 let commitsSeen = 0
+
 let installCheckTimer: ReturnType<typeof setTimeout> | undefined
 
 /**
@@ -39,6 +41,7 @@ function scheduleInstallSelfCheck(): void {
   if (installCheckTimer !== undefined || typeof setTimeout !== 'function') {
     return
   }
+
   installCheckTimer = setTimeout(() => {
     if (commitsSeen === 0) {
       recordRendererCrashBreadcrumb(REACT_COMMIT_CASCADE_UNINSTALLED_BREADCRUMB)
@@ -52,8 +55,10 @@ export function installReactCommitCascadeObserver(): void {
   if (installed) {
     return
   }
+
   try {
     const hook = ensureReactDevtoolsCommitHook()
+
     if (hook) {
       installObserverOnHook(hook)
       // Why only after the assignment: a hook that refuses it stays uninstalled,
@@ -63,6 +68,7 @@ export function installReactCommitCascadeObserver(): void {
   } catch {
     // A renderer without a patchable global still has to boot.
   }
+
   // Why outside the try: a failed install is exactly when the crumb matters.
   scheduleInstallSelfCheck()
 }
@@ -85,6 +91,7 @@ function installObserverOnHook(hook: ReactDevtoolsCommitHook): void {
     } catch {
       // Best-effort crash evidence only.
     }
+
     previous?.call(hook, rendererId, root, priorityLevel, didError)
   }
 }
@@ -92,6 +99,7 @@ function installObserverOnHook(hook: ReactDevtoolsCommitHook): void {
 export function resetReactCommitCascadeObserverForTests(): void {
   installed = false
   commitsSeen = 0
+
   if (installCheckTimer !== undefined) {
     clearTimeout(installCheckTimer)
     installCheckTimer = undefined

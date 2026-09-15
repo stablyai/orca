@@ -25,10 +25,12 @@ export function startAgentMapViewportTransition({
   let frameId: number | null = null
   let startedAt: number | null = null
   let cancelled = false
+
   const tick = (now: number): void => {
     if (cancelled) {
       return
     }
+
     startedAt ??= now
     const progress = Math.min(1, (now - startedAt) / durationMs)
     const eased = 1 - (1 - progress) ** 3
@@ -39,6 +41,7 @@ export function startAgentMapViewportTransition({
       },
       zoom: interpolate(from.zoom, to.zoom, eased)
     })
+
     if (progress < 1) {
       frameId = requestAnimationFrame(tick)
     } else {
@@ -46,9 +49,12 @@ export function startAgentMapViewportTransition({
       onComplete?.()
     }
   }
+
   frameId = requestAnimationFrame(tick)
+
   return () => {
     cancelled = true
+
     if (frameId !== null) {
       cancelAnimationFrame(frameId)
     }

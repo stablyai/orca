@@ -27,6 +27,7 @@ const store = {
   updatePendingWorktreeCreation: vi.fn(
     (creationId: string, patch: Partial<PendingWorktreeCreation>) => {
       const entry = store.pendingWorktreeCreations[creationId]
+
       if (entry) {
         store.pendingWorktreeCreations[creationId] = { ...entry, ...patch }
       }
@@ -318,9 +319,11 @@ describe('runBackgroundWorktreeCreation', () => {
     let provisionEventCallback:
       | ((event: { provisionId: string; stream: 'stdout' | 'stderr'; chunk: string }) => void)
       | null = null
+
     const unsubscribe = vi.fn()
     window.api.ephemeralVm.onProvisionEvent = vi.fn((callback) => {
       provisionEventCallback = callback
+
       return unsubscribe
     })
     prepareEphemeralVmWorkspaceTargetMock.mockImplementation(async () => {
@@ -339,6 +342,7 @@ describe('runBackgroundWorktreeCreation', () => {
         stream: 'stdout',
         chunk: '{"pairingCode":"secret"}'
       })
+
       return {
         ok: true,
         runtimeId: 'runtime-1',
@@ -457,6 +461,7 @@ describe('staged background worktree creation', () => {
       url: 'https://company.atlassian.net/browse/ORCA-123',
       jiraIdentifier: 'ORCA-123'
     }
+
     const linkedTaskSourceContext = {
       kind: 'task-source' as const,
       provider: 'jira' as const,
@@ -471,6 +476,7 @@ describe('staged background worktree creation', () => {
       },
       accountLabel: 'dev@company.test'
     }
+
     const request = makeRequest({ linkedWorkItem, linkedTaskSourceContext })
     const expectedOptions = { linkedWorkItem, linkedTaskSourceContext }
 
@@ -494,6 +500,7 @@ describe('staged background worktree creation', () => {
     store.setSidebarOpen.mockClear()
 
     const request = makeRequest({ setupDecision: 'run' })
+
     const started = continueBackgroundWorktreeCreation('creation-1', request, {
       revealCreationSurface: false
     })
@@ -550,6 +557,7 @@ describe('staged background worktree creation', () => {
       worktree: { id: string; repoId: string }
       startupTerminal: { tabId: string; spawned: true }
     }) => void
+
     store.createWorktree.mockReturnValueOnce(
       new Promise((resolve) => {
         resolveCreate = resolve
@@ -583,12 +591,14 @@ describe('staged background worktree creation', () => {
 
   it('does not reveal a workspace cancelled during post-create trust preflight', async () => {
     let resolveTrust!: () => void
+
     const markTrusted = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveTrust = resolve
         })
     )
+
     globalThis.window = { api: { agentTrust: { markTrusted } } } as never
     store.repos = [{ id: 'repo-1', connectionId: null }]
     store.createWorktree.mockResolvedValueOnce({

@@ -36,8 +36,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -58,6 +61,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -67,6 +71,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -87,6 +92,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -97,9 +103,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -109,9 +117,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -120,6 +130,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -243,6 +254,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(2)
     const manager = createManager(2)
+
     const deps = createDeps({
       startup: {
         command: "codex '--profile' 'recipe'",
@@ -346,6 +358,7 @@ describe('connectPanePty', () => {
     const paneTransports = new Map([[1, existingTransport]])
     const pane = createPane(2)
     const manager = createManager(2)
+
     const deps = createDeps({
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: {
@@ -370,14 +383,18 @@ describe('connectPanePty', () => {
     let spawnedPtyId: string | null = null
     restartedTransport.connect.mockImplementation(async () => {
       spawnedPtyId = 'pty-restarted'
+
       const opts = createdTransportOptions[0]
+
       ;(opts.onPtySpawn as (ptyId: string) => void)('pty-restarted')
+
       return 'pty-restarted'
     })
     transportFactoryQueue.push(restartedTransport)
 
     const restartPane = createPane(1)
     const restartManager = createManager(1)
+
     const restartDeps = createDeps({
       paneTransportsRef: { current: new Map([[99, createMockTransport('another-pane-pty')]]) }
     })
@@ -402,6 +419,7 @@ describe('connectPanePty', () => {
     transportFactoryQueue.push(remountTransport)
     const remountPane = createPane(1)
     const remountManager = createManager(1)
+
     const remountDeps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'pty-restarted' }
@@ -431,6 +449,7 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+
     if (!bellHandler) {
       throw new Error('Expected onBell to be registered')
     }
@@ -469,6 +488,7 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+
     if (!bellHandler) {
       throw new Error('Expected onBell to be registered')
     }

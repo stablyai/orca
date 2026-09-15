@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
@@ -15,6 +16,7 @@ type RunWslProcessSpec = { distro?: string; loginPath: string; script: string }
 function lastSpec(): RunWslProcessSpec {
   const call = runWslProcessMock.mock.calls.at(-1)
   expect(call).toBeDefined()
+
   return (call as [RunWslProcessSpec])[0]
 }
 
@@ -56,11 +58,13 @@ describe('detectWslCommandsOnPath', () => {
     await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
 
     const { script } = lastSpec()
+
     const lookupScript = buildPosixCommandPathLookupScript(
       { kind: 'shell-variable', name: 'cmd' },
       // The WSL probe opts into skipping Windows mounts mid-walk.
       { skipWindowsMountDirs: true }
     )
+
     expect(script).toContain(lookupScript)
     expect(script).not.toContain('type -P')
   })
@@ -193,10 +197,12 @@ describe('the detection script itself, run by a real POSIX shell', () => {
     })
     await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['orca-fake-cli', 'nosuchtool'])
     const script = String(runWslProcessMock.mock.calls.at(-1)?.[0].script)
+
     const options: ExecFileSyncOptions = {
       encoding: 'utf8',
       env: { HOME: home, PATH: '/usr/bin:/bin' }
     }
+
     return String(execFileSync('/bin/sh', ['-c', script], options))
   }
 
@@ -225,6 +231,7 @@ describe('the detection script itself, run by a real POSIX shell', () => {
     const spaced = mkdtempSync(join(tmpdir(), 'orca has space-'))
     const previous = home
     home = spaced
+
     try {
       plant('.nvm/versions/node/v20.1.0/bin', 'orca-fake-cli')
       expect(await runScript()).toContain(`${spaced}/.nvm/versions/node/v20.1.0/bin/orca-fake-cli`)
@@ -262,9 +269,11 @@ describe('the PATH walk, run by a real POSIX shell', () => {
     // false positive into the #9725 false negative. Skipping the component
     // mid-walk is what actually finds the guest binary.
     const root = mkdtempSync(join(tmpdir(), 'orca-walk-'))
+
     try {
       const win = join(root, 'winmnt/c/npm')
       const nvm = join(root, 'home/.nvm/bin')
+
       for (const [dir, body] of [
         [win, 'win'],
         [nvm, 'guest']
@@ -273,18 +282,22 @@ describe('the PATH walk, run by a real POSIX shell', () => {
         writeFileSync(join(dir, 'claude'), `#!/bin/sh\necho ${body}\n`)
         chmodSync(join(dir, 'claude'), 0o755)
       }
+
       const script = buildPosixCommandPathLookupScript(
         { kind: 'literal', value: 'claude' },
         { skipWindowsMountDirs: true }
         // Stand in for /proc/mounts, which a test host does not have.
       ).replace(/_orca_win_mounts=\$\([^)]*\)/, `_orca_win_mounts=${join(root, 'winmnt')}`)
+
       const options: ExecFileSyncOptions = {
         encoding: 'utf8',
         env: { PATH: `${win}:${nvm}:/usr/bin:/bin` }
       }
+
       const out = String(
         execFileSync('/bin/sh', ['-c', `${script}\nprintf %s "$resolved"`], options)
       )
+
       expect(out).toBe(join(nvm, 'claude'))
     } finally {
       rmSync(root, { recursive: true, force: true })
@@ -297,6 +310,7 @@ describe('the mount table read, counted against a real shell', () => {
 
   const runWithCountingAwk = async (commands: string[]): Promise<number> => {
     const root = mkdtempSync(join(tmpdir(), 'orca-awk-'))
+
     try {
       const counter = join(root, 'count')
       const bin = join(root, 'bin')
@@ -316,11 +330,14 @@ describe('the mount table read, counted against a real shell', () => {
       })
       await detectWslCommandsOnPath({ distro: 'Ubuntu' }, commands)
       const script = String(runWslProcessMock.mock.calls.at(-1)?.[0].script)
+
       const options: ExecFileSyncOptions = {
         encoding: 'utf8',
         env: { PATH: `${bin}:/usr/bin:/bin`, HOME: root }
       }
+
       execFileSync('/bin/sh', ['-c', script], options)
+
       return readFileSync(counter, 'utf8').trim().split('\n').filter(Boolean).length
     } finally {
       rmSync(root, { recursive: true, force: true })
@@ -345,19 +362,23 @@ describe('the mount table read, counted against a real shell', () => {
     // single-command test green, while every agent after the first stops
     // skipping /mnt. A surviving mutant proved that gap.
     const root = mkdtempSync(join(tmpdir(), 'orca-memo-'))
+
     try {
       const win = join(root, 'winmnt/c/npm')
       const guest = join(root, 'home/bin')
+
       for (const [dir, body] of [
         [win, 'win'],
         [guest, 'guest']
       ] as const) {
         mkdirSync(dir, { recursive: true })
+
         for (const name of ['claude', 'codex']) {
           writeFileSync(join(dir, name), `#!/bin/sh\necho ${body}\n`)
           chmodSync(join(dir, name), 0o755)
         }
       }
+
       runWslProcessMock.mockResolvedValue({
         environmentResolved: true,
         code: 0,
@@ -366,14 +387,17 @@ describe('the mount table read, counted against a real shell', () => {
         timedOut: false
       })
       await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
+
       const script = String(runWslProcessMock.mock.calls.at(-1)?.[0].script).replace(
         /_orca_win_mounts=\$\([^)]*\)/,
         `_orca_win_mounts=${join(root, 'winmnt')}`
       )
+
       const options: ExecFileSyncOptions = {
         encoding: 'utf8',
         env: { PATH: `${win}:${guest}:/usr/bin:/bin`, HOME: root }
       }
+
       const out = String(execFileSync('/bin/sh', ['-c', script], options))
       // BOTH must resolve behind the mount, not just the first.
       expect(out).toContain(`__ORCA_AGENT_PATH__claude\t${join(guest, 'claude')}`)

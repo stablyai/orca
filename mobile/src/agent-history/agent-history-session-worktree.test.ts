@@ -33,6 +33,7 @@ describe('resolveMobileAgentHistorySessionWorktree', () => {
       worktrees: [worktree({ worktreeId: 'wt-1', path: '/Users/ada/repo/app' })],
       activeWorktreeId: 'wt-1'
     })
+
     expect(resolved).toMatchObject({ status: 'current', worktreeId: 'wt-1' })
   })
 
@@ -45,6 +46,7 @@ describe('resolveMobileAgentHistorySessionWorktree', () => {
       ],
       activeWorktreeId: 'root'
     })
+
     expect(resolved).toMatchObject({ status: 'active', worktreeId: 'app' })
   })
 
@@ -56,6 +58,7 @@ describe('resolveMobileAgentHistorySessionWorktree', () => {
       ],
       activeWorktreeId: 'other'
     })
+
     expect(resolved).toMatchObject({ status: 'archived', worktreeId: 'archived' })
     expect(canResumeInMobileSessionWorktree(resolved)).toBe(false)
   })
@@ -81,6 +84,7 @@ describe('resolveMobileAgentHistorySessionWorktree', () => {
       ],
       activeWorktreeId: 'wsl'
     })
+
     expect(resolved).toMatchObject({ status: 'current', worktreeId: 'wsl' })
   })
 })

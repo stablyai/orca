@@ -82,10 +82,12 @@ export function useScopedExternalAutomations({
   useExternalAutomationScopeRetention(scopeEntries)
 
   const scopes = useMemo(() => externalAutomationScopes(scopeEntries), [scopeEntries])
+
   const signature = useMemo(
     () => scopes.map((scope) => externalAutomationScopeKey(scope)).join(' '),
     [scopes]
   )
+
   const scopesRef = useRef(scopes)
   scopesRef.current = scopes
   const signatureRef = useRef(signature)
@@ -100,9 +102,11 @@ export function useScopedExternalAutomations({
     const token = ++loadTokenRef.current
     loadedSignatureRef.current = signatureRef.current
     const next = await listScopedExternalAutomationManagers(scopesRef.current)
+
     if (token !== loadTokenRef.current) {
       return
     }
+
     setResult({ managers: next.managers, failures: next.failures })
   }, [])
 
@@ -111,6 +115,7 @@ export function useScopedExternalAutomations({
     if (loadedSignatureRef.current === signature) {
       return
     }
+
     // The old host's managers are not evidence about the new one, so they go now
     // rather than when its probe answers.
     setResult(EMPTY_VIEW)
@@ -119,6 +124,7 @@ export function useScopedExternalAutomations({
 
   const createScope = useCallback((connectionId: string | null): ExternalAutomationScope | null => {
     const owner = desktopExternalAutomationOwner(catalogEntriesRef.current, connectionId)
+
     // Hermes is the only provider a create dialog offers today; the picker
     // that would choose between providers does not exist yet.
     return owner ? { owner, provider: 'hermes' } : null

@@ -20,6 +20,7 @@ describe('HermesRunRefRetainer', () => {
 
   it('retains the exact newest window and reports saturation', () => {
     const retainer = new HermesRunRefRetainer<{ id: string; run_at: string }>(3)
+
     for (const day of [1, 5, 2, 6, 3, 4]) {
       retainer.add({ id: `day-${day}`, run_at: `2026-05-0${day}T09:00:00Z` })
     }

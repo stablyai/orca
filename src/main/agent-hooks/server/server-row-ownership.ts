@@ -20,6 +20,7 @@ function toMutationIdentity(
   if (!row) {
     return null
   }
+
   return {
     paneKey: row.paneKey,
     ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
@@ -31,6 +32,7 @@ function semanticRowJson(row: EnrichedAgentHookEventPayload | null | undefined):
   if (!row) {
     return null
   }
+
   const {
     receivedAt: _receivedAt,
     evidenceObservedAt: _evidenceObservedAt,
@@ -39,6 +41,7 @@ function semanticRowJson(row: EnrichedAgentHookEventPayload | null | undefined):
     promptInteractionKey: _promptInteractionKey,
     ...semantic
   } = toAgentStatusIpcPayload(row)
+
   return JSON.stringify(semantic)
 }
 
@@ -46,6 +49,7 @@ function wslDistroForWorktree(worktreeId: string | undefined): string | null {
   const worktreePath = worktreeId
     ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
     : undefined
+
   return worktreePath ? (parseWslUncPath(worktreePath)?.distro ?? null) : null
 }
 
@@ -56,6 +60,7 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
 
   subscribeStatusRowMutations(listener: StatusRowMutationListener): () => void {
     this.statusRowMutationListeners.add(listener)
+
     return () => {
       this.statusRowMutationListeners.delete(listener)
     }
@@ -76,20 +81,26 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     ) {
       return false
     }
+
     if (previous.connectionId === incoming.connectionId) {
       return true
     }
+
     const relayConnection = isWslHookRelayConnectionId(previous.connectionId)
       ? previous.connectionId
       : isWslHookRelayConnectionId(incoming.connectionId)
         ? incoming.connectionId
         : null
+
     const localConnection = previous.connectionId === null || incoming.connectionId === null
+
     if (!relayConnection || !localConnection || !previous.worktreeId || !incoming.worktreeId) {
       return false
     }
+
     const previousDistro = wslDistroForWorktree(previous.worktreeId)
     const incomingDistro = wslDistroForWorktree(incoming.worktreeId)
+
     return (
       previousDistro !== null &&
       incomingDistro !== null &&
@@ -110,16 +121,20 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
     ) {
       this.paneKeyByTerminalHandle.delete(before.terminalHandle)
     }
+
     if (after?.terminalHandle) {
       this.paneKeyByTerminalHandle.set(after.terminalHandle, after.paneKey)
     }
+
     if (!emit || semanticRowJson(before) === semanticRowJson(after)) {
       return false
     }
+
     const mutation: AgentHookStatusRowMutation = {
       before: toMutationIdentity(before),
       after: toMutationIdentity(after)
     }
+
     for (const listener of this.statusRowMutationListeners) {
       try {
         listener(mutation)
@@ -127,6 +142,7 @@ export abstract class AgentHookServerRowOwnership extends AgentHookServerListene
         console.error('[agent-hooks] status-row mutation listener threw', error)
       }
     }
+
     return true
   }
 }

@@ -36,9 +36,11 @@ export function queueStructuredHandoffAfterTurn(input: {
       if (params.direction === 'to-tui') {
         return !activeStructuredAgentSessionTurnId(deps.session(sessionId).journal.snapshot().items)
       }
+
       tuiReadiness = tuiOwner
         ? ((await deps.transport?.waitForTuiIdleOrExit(tuiOwner, signal)) ?? null)
         : null
+
       return tuiReadiness !== null
     },
     () => begin(callerKey, { ...params, mode: 'now' }, tuiReadiness === 'exited')

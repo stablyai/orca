@@ -9,6 +9,7 @@ describe('startStatusWatchdog', () => {
     const result = await watch.stop()
     expect(result.samples.length).toBeGreaterThanOrEqual(1)
     expect(result.durationMs).toBeGreaterThan(0)
+
     for (const s of result.samples) {
       expect(typeof s.ms).toBe('number')
       expect(typeof s.ok).toBe('boolean')
@@ -22,6 +23,7 @@ describe('startStatusWatchdog', () => {
       timeoutMs: 1000,
       cliCommand: 'orca-freeze-watchdog-missing-command'
     })
+
     const result = await watch.stop()
 
     expect(result.samples.length).toBeGreaterThanOrEqual(1)
@@ -36,6 +38,7 @@ describe('startStatusWatchdog', () => {
       cliCommand: 'orca-freeze-watchdog-missing-command',
       sampleHistoryLimit: 1
     })
+
     const result = await watch.stop()
 
     expect(result.samples).toHaveLength(1)

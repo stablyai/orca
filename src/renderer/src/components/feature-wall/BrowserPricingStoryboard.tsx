@@ -51,6 +51,7 @@ function PricingCard(props: {
   ctaRef?: RefObject<HTMLSpanElement | null>
 }): JSX.Element {
   const ctaIsBranded = props.ctaHighlighted && !props.highlighted
+
   return (
     <div
       ref={props.cardRef}

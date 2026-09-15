@@ -17,15 +17,20 @@ export function getPRGroupKey(w: Worktree): PRGroupKey {
   if (!w.linkedPR) {
     return 'in-progress'
   }
+
   const s = w.linkedPR.state.toLowerCase()
+
   if (s === 'merged') {
     return 'done'
   }
+
   if (s === 'closed') {
     return 'closed'
   }
+
   if (s === 'draft') {
     return 'in-progress'
   }
+
   return 'in-review'
 }

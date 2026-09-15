@@ -29,9 +29,11 @@ import {
   directSshProviderAuthorityKey,
   directSshWorktreeRefreshKey
 } from './direct-ssh-worktree-refresh-scheduler-types'
+
 export type * from './direct-ssh-worktree-refresh-scheduler-types'
 
 export const DIRECT_SSH_WORKTREE_SCAN_CONCURRENCY = 5
+
 export const DIRECT_SSH_PROVIDER_START_BUDGET = 7
 
 export function createDirectSshWorktreeRefreshScheduler(
@@ -55,6 +57,7 @@ export function createDirectSshWorktreeRefreshScheduler(
   ): DirectSshWorktreeRefreshOutcome['metrics'] => {
     const metrics = copyDirectSshWorktreeRefreshMetrics(task.metrics)
     metrics.locallySettledWaiterCount = locallySettledWaiterCount
+
     return metrics
   }
 
@@ -62,14 +65,17 @@ export function createDirectSshWorktreeRefreshScheduler(
     if (task.state === 'terminal') {
       return
     }
+
     task.state = 'terminal'
     task.attempt = null
     tasksByKey.delete(task.keyId)
     task.metrics.locallySettledWaiterCount += task.waiters.size
     const settledOutcome = { ...outcome, metrics: metricsFor(task) }
+
     for (const waiter of task.waiters.values()) {
       waiter.resolve(settledOutcome)
     }
+
     task.waiters.clear()
   }
 
@@ -91,7 +97,9 @@ export function createDirectSshWorktreeRefreshScheduler(
     if (!task.attempt || task.attemptCanceled) {
       return
     }
+
     task.attemptCanceled = true
+
     if (cancelDirectSshWorktreeRefreshAttempt(task.attempt, reason)) {
       addCancelDebt(task)
     }
@@ -100,6 +108,7 @@ export function createDirectSshWorktreeRefreshScheduler(
   const canStart = (task: LogicalTask): boolean => {
     const unsettled = unsettledByAuthority.get(task.authorityId) ?? 0
     const debt = cancelDebtByAuthority.get(task.authorityId) ?? 0
+
     return unsettled + debt + 1 <= DIRECT_SSH_PROVIDER_START_BUDGET
   }
 
@@ -111,24 +120,31 @@ export function createDirectSshWorktreeRefreshScheduler(
     if (task.state === 'terminal' || task.attempt?.providerRequestId !== requestId) {
       return
     }
+
     if (result.providerRequestId !== requestId) {
       finishTask(task, { status: 'rejected', providerRequestId: requestId })
+
       return
     }
+
     if (result.status === 'timed-out') {
       addCancelDebt(task)
+
       if (task.attemptCount === 1) {
         task.metrics.timeoutRetryCount++
         task.attempt = null
         task.attemptCanceled = true
         targetQueue.enqueue(task, true, now())
+
         return
       }
     }
+
     const status =
       result.status === 'authority-unknown' || result.status === 'ambiguous-owner'
         ? 'non-authoritative'
         : result.status
+
     finishTask(task, {
       status,
       providerRequestId: result.providerRequestId,
@@ -139,14 +155,17 @@ export function createDirectSshWorktreeRefreshScheduler(
   function drain(): void {
     while (!stopped && locallyUnsettled < DIRECT_SSH_WORKTREE_SCAN_CONCURRENCY) {
       const task = targetQueue.takeNext()
+
       if (!task) {
         return
       }
+
       if (!canStart(task)) {
         task.metrics.replacementAdmissionDelayedCount++
         finishTask(task, { status: 'cancel-budget-exhausted' })
         continue
       }
+
       task.state = 'running'
       task.attemptCount++
       locallyUnsettled++
@@ -157,6 +176,7 @@ export function createDirectSshWorktreeRefreshScheduler(
       )
       adjustDirectSshAuthorityUnsettled(unsettledByAuthority, task.authorityId, 1)
       let attempt: DirectSshWorktreeRefreshAttempt
+
       try {
         attempt = deps.startAttempt(task.key)
         task.attempt = attempt
@@ -169,6 +189,7 @@ export function createDirectSshWorktreeRefreshScheduler(
         finishTask(task, { status: 'rejected' })
         continue
       }
+
       void attempt.result
         .then((result) => {
           if (task.attemptStartedAt !== null) {
@@ -178,6 +199,7 @@ export function createDirectSshWorktreeRefreshScheduler(
             )
             task.attemptStartedAt = null
           }
+
           handleAttemptResult(task, attempt.providerRequestId, result)
         })
         .catch((error) => {
@@ -188,6 +210,7 @@ export function createDirectSshWorktreeRefreshScheduler(
             )
             task.attemptStartedAt = null
           }
+
           if (task.state !== 'terminal' && !task.attemptCanceled) {
             deps.onUnexpectedError?.(error)
             finishTask(task, {
@@ -210,15 +233,19 @@ export function createDirectSshWorktreeRefreshScheduler(
     reason: DirectSshWorktreeRefreshReleaseReason
   ): void => {
     const waiter = task.waiters.get(waiterLeaseId)
+
     if (!waiter) {
       return
     }
+
     task.waiters.delete(waiterLeaseId)
     task.metrics.locallySettledWaiterCount++
     waiter.resolve({ status: 'canceled', metrics: metricsFor(task) })
+
     if (task.waiters.size > 0) {
       return
     }
+
     cancelAttempt(task, reason)
     finishTask(task, { status: 'canceled' })
   }
@@ -226,6 +253,7 @@ export function createDirectSshWorktreeRefreshScheduler(
   const request = (key: DirectSshWorktreeRefreshKey): DirectSshWorktreeRefreshLease => {
     const keyId = directSshWorktreeRefreshKey(key)
     let task = tasksByKey.get(keyId)
+
     if (!task) {
       const requestedAt = now()
       task = {
@@ -246,18 +274,23 @@ export function createDirectSshWorktreeRefreshScheduler(
     } else {
       task.metrics.overlappingJoinCount++
     }
+
     const waiterLeaseId = createLeaseId()
     let resolve!: (outcome: DirectSshWorktreeRefreshOutcome) => void
+
     const result = new Promise<DirectSshWorktreeRefreshOutcome>((settle) => {
       resolve = settle
     })
+
     task.waiters.set(waiterLeaseId, { resolve })
+
     if (stopped) {
       releaseWaiter(task, waiterLeaseId, 'stopped')
       targetQueue.clear()
     } else {
       drain()
     }
+
     return {
       waiterLeaseId,
       result,
@@ -270,9 +303,11 @@ export function createDirectSshWorktreeRefreshScheduler(
       if (!predicate(task)) {
         continue
       }
+
       cancelAttempt(task, 'invalidated')
       finishTask(task, { status: 'stale', providerRequestId: task.attempt?.providerRequestId })
     }
+
     drain()
   }
 
@@ -297,11 +332,14 @@ export function createDirectSshWorktreeRefreshScheduler(
     if (stopped) {
       return
     }
+
     stopped = true
+
     for (const task of tasksByKey.values()) {
       cancelAttempt(task, 'stopped')
       finishTask(task, { status: 'canceled', providerRequestId: task.attempt?.providerRequestId })
     }
+
     targetQueue.clear()
   }
 

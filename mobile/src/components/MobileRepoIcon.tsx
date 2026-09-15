@@ -70,10 +70,13 @@ export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSeconda
       />
     )
   }
+
   if (repoIcon?.type === 'emoji') {
     return <Text style={[styles.emoji, { fontSize: size }]}>{repoIcon.emoji}</Text>
   }
+
   const Icon = (repoIcon?.type === 'lucide' && REPO_LUCIDE_ICONS[repoIcon.name]) || Folder
+
   return (
     <View style={styles.glyph}>
       <Icon size={size} color={color} strokeWidth={2} />

@@ -74,6 +74,7 @@ export function nativeChatModelPillLabel(descriptor: SessionOptionDescriptor): s
   ) {
     return translate('components.native-chat.composer.model', 'Model')
   }
+
   return nativeChatSessionChoiceLabel(
     descriptor.kind.choices.find((choice) => choice.value === descriptor.kind.currentValue) ?? {
       value: descriptor.kind.currentValue,
@@ -86,6 +87,7 @@ export function nativeChatOptionsPillTitle(
   descriptors: readonly SessionOptionDescriptor[]
 ): string {
   const effort = descriptors.find((descriptor) => descriptor.id === 'effort')
+
   // Why: an effort-backed group is primarily the effort picker, even when it also reports modes.
   return effort
     ? nativeChatSessionOptionLabel(effort)
@@ -97,14 +99,17 @@ export function nativeChatOptionsPillLabel(
 ): string {
   const effort = descriptors.find((descriptor) => descriptor.id === 'effort')
   const labels: string[] = []
+
   for (const descriptor of descriptors) {
     if (descriptor.valueSource === 'unknown') {
       continue
     }
+
     if (descriptor.kind.type === 'select' && descriptor.kind.currentValue) {
       const choice = descriptor.kind.choices.find(
         (candidate) => candidate.value === descriptor.kind.currentValue
       )
+
       labels.push(
         nativeChatSessionChoiceLabel(
           choice ?? {
@@ -121,12 +126,15 @@ export function nativeChatOptionsPillLabel(
       )
     }
   }
+
   // Why: value-only pill (no "Effort:" prefix) — category lives on the tooltip.
   if (labels.length > 0) {
     return labels.join(' · ')
   }
+
   if (effort) {
     return nativeChatSessionOptionLabel(effort)
   }
+
   return translate('components.native-chat.composer.options', 'Options')
 }

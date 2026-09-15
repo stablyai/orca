@@ -22,7 +22,9 @@ export function consumeFloatingTerminalOpenMaximizedIntent(): boolean {
   if (openMaximizedIntentAt === null) {
     return false
   }
+
   const requestedAt = openMaximizedIntentAt
   openMaximizedIntentAt = null
+
   return Date.now() - requestedAt <= OPEN_MAXIMIZED_INTENT_TTL_MS
 }

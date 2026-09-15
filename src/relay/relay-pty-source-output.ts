@@ -19,6 +19,7 @@ export function ptySourceDeliveryClosed(
   identity: PtySourceDeliveryIdentity
 ): boolean {
   const state = session.sourceDeliverySnapshotIfKnown(identity)?.state
+
   return !state || state === 'closed' || state === 'closing'
 }
 
@@ -29,6 +30,7 @@ export function appendPtySourceOutput(
 ): boolean {
   const rawLength = output.rawLength ?? output.data.length
   output.sourceSpanId ??= randomUUID()
+
   try {
     session.appendSource(record.identity, {
       spanId: output.sourceSpanId,
@@ -45,8 +47,10 @@ export function appendPtySourceOutput(
   } catch {
     return false
   }
+
   output.sourceAccepted = true
   record.displayEnd += output.data.length
+
   return true
 }
 
@@ -60,6 +64,7 @@ export function projectPtySourceOutputToLegacy(
   return dispatcher.projectPtyDataToMatchingClients(
     (clientId) => {
       const mode = session.deliveryMode(clientId)
+
       return mode === 'legacy-owner' || mode === 'subscriber'
     },
     {

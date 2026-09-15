@@ -21,22 +21,29 @@ export async function selectDialableRelayCredentials(args: {
   credentials: MobileRelayCredentialBundle['current'][]
 }> {
   const memory = args.bundle
+
   const memoryCredentials = memory
     ? args.controller.eligibleCredentials(memory.current, memory.grace)
     : []
+
   if (memoryCredentials.length > 0) {
     // Why: in-memory can be newer than disk (a resume confirmation whose
     // durable write failed); never let a stale disk copy shadow it.
     return { bundle: memory, credentials: memoryCredentials }
   }
+
   const disk = await args.readBundle().catch(() => null)
+
   if (disk) {
     const diskCredentials = args.controller.eligibleCredentials(disk.current, disk.grace)
+
     if (diskCredentials.length > 0) {
       args.controller.acceptFreshCredential(disk.current.version)
       args.onAdoptedFresherBundle()
+
       return { bundle: disk, credentials: diskCredentials }
     }
   }
+
   return { bundle: memory ?? disk, credentials: [] }
 }

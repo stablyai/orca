@@ -17,11 +17,13 @@ export function getWorkItemStateTone(item: GitHubWorkItem, closedIssue: ClosedIs
   if (item.type === 'pr') {
     return getReviewStateTone(item.state)
   }
+
   if (item.state === 'closed') {
     return closedIssue === 'neutral'
       ? 'border-ring/50 bg-primary/10 text-foreground'
       : 'border-rose-500/30 bg-rose-500/10 text-rose-600 dark:text-rose-300'
   }
+
   return OPEN_REVIEW_STATE_TONE
 }
 

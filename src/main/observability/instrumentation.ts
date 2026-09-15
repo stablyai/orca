@@ -25,8 +25,11 @@ import type { PreparedCheckoutOutcome } from '../../shared/worktree/create-types
 import { startSpan, withSpan, type ActiveSpan } from './tracer'
 
 const GIT_FAST_SUCCESS_THRESHOLD_MS = 250
+
 const GIT_FAST_SUCCESS_WINDOW_MS = 60_000
+
 const GIT_FAST_SUCCESS_BUDGET_PER_WINDOW = 60
+
 const GIT_SAMPLING_MAX_BUCKETS = 512
 
 // Why: trace captures showed `git status --short` bursts dominating payloads.
@@ -42,6 +45,7 @@ const GIT_GLOBAL_OPTIONS_WITH_OPERAND = new Set([
   '--super-prefix',
   '--pathspec-from-file'
 ])
+
 const GIT_GLOBAL_FLAGS = new Set([
   '--bare',
   '--no-pager',
@@ -64,16 +68,20 @@ const gitSamplingBuckets = new Map<string, GitSamplingBucket>()
 function gitSubcommandFromArgs(args: readonly string[]): string {
   for (let index = 0; index < args.length; index++) {
     const arg = args[index]
+
     if (!arg) {
       continue
     }
+
     if (arg === '--') {
       return '<none>'
     }
+
     if (GIT_GLOBAL_OPTIONS_WITH_OPERAND.has(arg)) {
       index += 1
       continue
     }
+
     if (
       arg.startsWith('--git-dir=') ||
       arg.startsWith('--work-tree=') ||
@@ -87,14 +95,18 @@ function gitSubcommandFromArgs(args: readonly string[]): string {
     ) {
       continue
     }
+
     if (GIT_GLOBAL_FLAGS.has(arg)) {
       continue
     }
+
     if (arg.startsWith('-')) {
       continue
     }
+
     return arg
   }
+
   return '<none>'
 }
 
@@ -104,18 +116,22 @@ function pruneGitSamplingBuckets(nowMs: number): void {
       gitSamplingBuckets.delete(key)
     }
   }
+
   while (gitSamplingBuckets.size > GIT_SAMPLING_MAX_BUCKETS) {
     let oldestKey: string | undefined
     let oldestWindowStartMs = Number.POSITIVE_INFINITY
+
     for (const [key, bucket] of gitSamplingBuckets) {
       if (bucket.windowStartMs < oldestWindowStartMs) {
         oldestKey = key
         oldestWindowStartMs = bucket.windowStartMs
       }
     }
+
     if (oldestKey === undefined) {
       return
     }
+
     gitSamplingBuckets.delete(oldestKey)
   }
 }
@@ -136,15 +152,20 @@ function shouldRecordGitSpan(
   pruneGitSamplingBuckets(nowMs)
   const key = gitSamplingKey(meta)
   const bucket = gitSamplingBuckets.get(key)
+
   if (!bucket) {
     gitSamplingBuckets.set(key, { windowStartMs: nowMs, emitted: 1 })
     pruneGitSamplingBuckets(nowMs)
+
     return true
   }
+
   if (bucket.emitted < GIT_FAST_SUCCESS_BUDGET_PER_WINDOW) {
     bucket.emitted += 1
+
     return true
   }
+
   return false
 }
 
@@ -153,6 +174,7 @@ function addGitAttributes(span: ActiveSpan, meta: GitSpanArgs): void {
   // Why: git args can contain commit messages, branch names, remotes, or
   // paths. Keep cardinality without copying user-authored content.
   span.setAttribute('git.arg_count', meta.args.length)
+
   if (meta.cwd) {
     span.setAttribute('cwd', meta.cwd)
   }
@@ -182,6 +204,7 @@ export async function withGitSpan<T>(
     'git.exec',
     async (span) => {
       addGitAttributes(span, meta)
+
       return await fn(span)
     },
     { attributes: { kind: 'git' }, shouldRecord: (record) => shouldRecordGitSpan(meta, record) }
@@ -194,7 +217,9 @@ export function startGitSpan(meta: GitSpanArgs): ActiveSpan {
     attributes: { kind: 'git' },
     shouldRecord: (record) => shouldRecordGitSpan(meta, record)
   })
+
   addGitAttributes(span, meta)
+
   return span
 }
 
@@ -213,9 +238,11 @@ export async function withWorktreeSpan<T>(
     `worktree.${meta.stage}`,
     async (span) => {
       span.setAttribute('worktree.stage', meta.stage)
+
       if (meta.path) {
         span.setAttribute('worktree.path', meta.path)
       }
+
       return await fn(span)
     },
     { attributes: { kind: 'worktree' } }
@@ -234,23 +261,28 @@ function measuredWallClockMs(phases: readonly WorktreePhaseInterval[]): number {
   const intervals = [...phases]
     .map((phase) => [phase.startedAtMs, phase.startedAtMs + phase.durationMs] as const)
     .sort((left, right) => left[0] - right[0])
+
   let covered = 0
   let openedAt: number | null = null
   let closesAt = 0
+
   for (const [start, end] of intervals) {
     if (openedAt === null) {
       openedAt = start
       closesAt = end
       continue
     }
+
     if (start <= closesAt) {
       closesAt = Math.max(closesAt, end)
       continue
     }
+
     covered += closesAt - openedAt
     openedAt = start
     closesAt = end
   }
+
   return openedAt === null ? 0 : covered + (closesAt - openedAt)
 }
 
@@ -267,8 +299,10 @@ export function addWorktreeCreatePhaseAttributes(
   }
 ): void {
   span.setAttribute('worktree.create.total_ms', Math.round(timing.totalDurationMs))
+
   if (timing.preparedCheckout) {
     span.setAttribute('worktree.create.prepared_checkout', timing.preparedCheckout.status)
+
     if (timing.preparedCheckout.status === 'hit') {
       // A retargeted hit still pays a reset, so it must not be read as a free hit.
       span.setAttribute(
@@ -279,9 +313,11 @@ export function addWorktreeCreatePhaseAttributes(
       span.setAttribute('worktree.create.prepared_checkout_miss', timing.preparedCheckout.reason)
     }
   }
+
   for (const phase of timing.phases) {
     span.setAttribute(`worktree.create.phase.${phase.phase}_ms`, Math.round(phase.durationMs))
   }
+
   // What the phases do not cover is the number that matters when create feels slow for no visible
   // reason, so name it rather than leaving it to subtraction.
   span.setAttribute(
@@ -324,6 +360,7 @@ export async function withUpdaterSpan<T>(
     `updater.${meta.stage}`,
     async (span) => {
       span.setAttribute('updater.stage', meta.stage)
+
       return await fn(span)
     },
     { attributes: { kind: 'updater' } }

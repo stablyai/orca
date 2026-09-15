@@ -20,15 +20,18 @@ export function getFanoutClientEntries(): {
   failures: WorkspaceReadFailure[]
 } {
   const workspaces = getStatus().workspaces ?? []
+
   if (workspaces.length === 0) {
     return { entries: getClients('all'), failures: [] }
   }
 
   const entries: LinearClientForWorkspace[] = []
   const failures: WorkspaceReadFailure[] = []
+
   for (const workspace of workspaces) {
     try {
       const entry = getClients(workspace.id)[0]
+
       if (entry) {
         entries.push(entry)
       }
@@ -38,6 +41,7 @@ export function getFanoutClientEntries(): {
       console.warn('[linear] agent workspace credential read failed:', error)
     }
   }
+
   return { entries, failures }
 }
 
@@ -60,5 +64,6 @@ function toLinearAccessError(error: unknown): LinearAgentAccessError {
   if (error instanceof LinearAgentAccessError) {
     return error
   }
+
   return linearError(classifyLinearError(error), linearMessage(error))
 }

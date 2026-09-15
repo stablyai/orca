@@ -44,10 +44,13 @@ function admit(
   overrides: Parameters<typeof evaluate>[1] = {}
 ): AgentSessionOperationRow {
   const decision = evaluate(rows, overrides)
+
   if (decision.decision !== 'admit') {
     throw new Error(`expected admit, got ${decision.decision}`)
   }
+
   rows.set(agentSessionOperationKey(decision.row.callerKey, decision.row.operationId), decision.row)
+
   return decision.row
 }
 

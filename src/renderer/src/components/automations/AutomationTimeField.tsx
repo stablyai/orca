@@ -14,6 +14,7 @@ export type AutomationClockParts = {
 
 export function parseAutomationTime(value: string): { hour: number; minute: number } {
   const [hour, minute] = value.split(':').map((part) => Number(part))
+
   return {
     hour: Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : 9,
     minute: Number.isInteger(minute) && minute >= 0 && minute <= 59 ? minute : 0
@@ -26,6 +27,7 @@ export function formatAutomationTimeInput(hour: number, minute: number): string 
 
 export function getAutomationClockParts(time: string): AutomationClockParts {
   const { hour, minute } = parseAutomationTime(time)
+
   return {
     hour12: hour % 12 === 0 ? 12 : hour % 12,
     minute,
@@ -42,6 +44,7 @@ export function formatAutomationTimeFromClockParts(parts: AutomationClockParts):
       : parts.hour12 === 12
         ? 12
         : parts.hour12 + 12
+
   return formatAutomationTimeInput(hour24, parts.minute)
 }
 
@@ -49,19 +52,24 @@ export function clampInt(value: number, min: number, max: number): number {
   if (!Number.isFinite(value)) {
     return min
   }
+
   return Math.min(max, Math.max(min, Math.trunc(value)))
 }
 
 /** Resolve typed digits on commit. Empty → min (0 minutes / 1 hour). */
 export function resolveDigitCommit(raw: string, value: number, min: number, max: number): number {
   const trimmed = raw.trim()
+
   if (trimmed === '') {
     return min
   }
+
   const parsed = Number(trimmed)
+
   if (!Number.isFinite(parsed)) {
     return value
   }
+
   return clampInt(parsed, min, max)
 }
 
@@ -76,9 +84,11 @@ export function resolveDigitStep(
   const trimmed = raw.trim()
   const parsed = trimmed === '' ? Number.NaN : Number(trimmed)
   const base = Number.isFinite(parsed) ? clampInt(parsed, min, max) : value
+
   if (delta === 1) {
     return base >= max ? min : base + 1
   }
+
   return base <= min ? max : base - 1
 }
 
@@ -109,6 +119,7 @@ function TimeDigitInput({
   // Keep the visible digits in sync while the field is not being edited.
   React.useEffect(() => {
     lastCommittedRef.current = value
+
     if (!focused) {
       setText(pad ? pad2(value) : String(value))
     }
@@ -117,9 +128,11 @@ function TimeDigitInput({
   const commit = (raw: string): void => {
     const next = resolveDigitCommit(raw, value, min, max)
     setText(pad ? pad2(next) : String(next))
+
     if (next === lastCommittedRef.current) {
       return
     }
+
     lastCommittedRef.current = next
     onCommit(next)
   }
@@ -143,6 +156,7 @@ function TimeDigitInput({
       onChange={(event) => {
         const next = event.target.value.replace(/\D/g, '').slice(0, 2)
         setText(next)
+
         if (next.length === 2) {
           commit(next)
         }
@@ -152,12 +166,15 @@ function TimeDigitInput({
           event.preventDefault()
           const next = resolveDigitStep(text, value, min, max, event.key === 'ArrowUp' ? 1 : -1)
           setText(pad ? pad2(next) : String(next))
+
           if (next !== lastCommittedRef.current) {
             lastCommittedRef.current = next
             onCommit(next)
           }
+
           return
         }
+
         if (event.key === 'Enter') {
           event.currentTarget.blur()
         }

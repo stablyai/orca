@@ -5,14 +5,17 @@ import { parse } from 'yaml'
 const workflow = parse(
   readFileSync(new URL('../../.github/workflows/packaged-browser-e2e.yml', import.meta.url), 'utf8')
 )
+
 const steps = workflow.jobs.compatibility.steps
 
 describe('packaged browser compatibility lane', () => {
   it('runs weekly and supports immutable manual or reusable revisions', () => {
     expect(workflow.on.schedule).toHaveLength(1)
+
     for (const trigger of ['workflow_dispatch', 'workflow_call']) {
       expect(workflow.on[trigger].inputs.ref).toMatchObject({ type: 'string', required: false })
     }
+
     expect(steps[0].with.ref).toBe('${{ inputs.ref || github.sha }}')
     expect(workflow.permissions).toEqual({ contents: 'read' })
   })

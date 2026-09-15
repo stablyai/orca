@@ -116,15 +116,18 @@ describe('sendTerminalInputAfterComposition', () => {
     const el = document.createElement('div')
     const send = vi.fn()
     const terminal = { input: vi.fn() }
+
     const transport = {
       getPtyId: () => 'pty-1'
     } as unknown as PtyTransport
+
     const route = installTerminalImeCompositionRoute({
       terminalElement: el,
       terminal,
       capturedTransport: transport,
       getCurrentTransport: () => transport
     })
+
     const sessionEvent = (type: string, id: number) =>
       new CustomEvent(type, { detail: { id, data: `commit-${id}` } })
 
@@ -149,12 +152,14 @@ describe('sendTerminalInputAfterComposition', () => {
     const send = vi.fn()
     const terminal = { input: vi.fn() }
     const transport = { getPtyId: () => 'pty-1' } as unknown as PtyTransport
+
     const route = installTerminalImeCompositionRoute({
       terminalElement: el,
       terminal,
       capturedTransport: transport,
       getCurrentTransport: () => transport
     })
+
     const sessionEvent = (type: string, id: number, data: string) =>
       new CustomEvent(type, { cancelable: true, detail: { id, data } })
 

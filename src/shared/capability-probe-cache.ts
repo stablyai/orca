@@ -18,13 +18,17 @@ export class CapabilityProbeCache<TCapability> {
 
   shouldTry(capability: TCapability, nowMs = Date.now()): boolean {
     const retryAfterMs = this.retryAfterByCapability.get(capability)
+
     if (retryAfterMs === undefined) {
       return true
     }
+
     if (nowMs < retryAfterMs) {
       return false
     }
+
     this.retryAfterByCapability.delete(capability)
+
     return true
   }
 
@@ -55,24 +59,31 @@ export class CapabilityProbeCache<TCapability> {
       // sibling repo/SSH calls retain their intended concurrency.
       return this.runPreferredOrFallback(capability, runPreferred, runFallback, isUnsupportedError)
     }
+
     if (!this.shouldTry(capability)) {
       return runFallback()
     }
 
     const inFlightProbe = this.probesByCapability.get(capability)
+
     if (inFlightProbe) {
       const outcome = await inFlightProbe
+
       if (outcome === 'unsupported' || !this.shouldTry(capability)) {
         return runFallback()
       }
+
       return this.runPreferredOrFallback(capability, runPreferred, runFallback, isUnsupportedError)
     }
 
     let settleProbe!: (outcome: CapabilityProbeOutcome) => void
+
     const probe = new Promise<CapabilityProbeOutcome>((resolve) => {
       settleProbe = resolve
     })
+
     this.probesByCapability.set(capability, probe)
+
     try {
       return await this.runPreferredOrFallback(
         capability,
@@ -85,6 +96,7 @@ export class CapabilityProbeCache<TCapability> {
       if (this.probesByCapability.get(capability) === probe) {
         this.probesByCapability.delete(capability)
       }
+
       // Backstop: `isUnsupportedError` or `rememberUnsupported` can throw
       // before the settle below them runs; waiters must not hang behind it.
       settleProbe('unknown')
@@ -110,18 +122,23 @@ export class CapabilityProbeCache<TCapability> {
       // exit-zero option echo) and remember it as unsupported, so do not
       // overwrite that stronger signal.
       const outcome = this.retryAfterByCapability.has(capability) ? 'unsupported' : 'supported'
+
       if (outcome === 'supported') {
         this.supportedCapabilities.add(capability)
       }
+
       settleProbe?.(outcome)
+
       return result
     } catch (error) {
       if (!isUnsupportedError(error)) {
         settleProbe?.('unknown')
         throw error
       }
+
       this.rememberUnsupported(capability)
       settleProbe?.('unsupported')
+
       return runFallback()
     }
   }

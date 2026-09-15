@@ -24,6 +24,7 @@ export function queueSetupAndIssueCommands(
   // Why: setup launch location is user-configurable — 'new-tab' keeps setup output off the primary pane; splits keep it adjacent.
   if (setup) {
     const mode = useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab'
+
     const setupCommand = {
       command:
         wrappedSetupCommandStr ??
@@ -31,15 +32,18 @@ export function queueSetupAndIssueCommands(
         buildSetupRunnerCommand(setup.runnerScriptPath, setup.shell),
       env: setup.envVars
     }
+
     if (mode === 'new-tab') {
       const setupTab = store.createTab(worktreeId, undefined, undefined, {
         recordInteraction: false,
         ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
       })
+
       // Why: createTab auto-activates the new tab; revert so focus stays on the primary terminal while Setup runs in the background.
       if (opts?.activateCreatedTabs !== false && terminalTabId) {
         store.setActiveTab(terminalTabId)
       }
+
       // Why: customTitle overrides the auto "Terminal N" label everywhere the tab renders, so it's the authoritative label source.
       store.setTabCustomTitle(setupTab.id, 'Setup', { recordInteraction: false })
       store.queueTabStartupCommand(setupTab.id, setupCommand)
@@ -61,6 +65,7 @@ export function queueSetupAndIssueCommands(
             env: issueCommand.envVars
           }
         : { command: issueCommand.command, env: issueCommand.env }
+
     store.queueTabIssueCommandSplit(terminalTabId, queuedIssueCommand)
   }
 }

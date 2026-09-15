@@ -32,9 +32,11 @@ export function useMissingWorktreeBounce(args: {
     if (!hostId || bouncedRef.current === worktreeId) {
       return
     }
+
     if (!shouldBounceMissingWorktree(worktreeId, resolution)) {
       return
     }
+
     bouncedRef.current = worktreeId
     bounceRef.current(hostId)
   }, [hostId, worktreeId, resolution])

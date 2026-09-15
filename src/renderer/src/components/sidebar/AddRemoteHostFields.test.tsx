@@ -17,6 +17,7 @@ function loopbackAccessLink(): string {
 describe('RemoteServerFields', () => {
   it('associates blocked loopback guidance with the access-link input', () => {
     const pairingCode = loopbackAccessLink()
+
     const markup = renderToStaticMarkup(
       <RemoteServerFields
         name="Remote workstation"

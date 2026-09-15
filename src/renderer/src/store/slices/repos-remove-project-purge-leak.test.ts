@@ -18,9 +18,11 @@ import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { Repo } from '../../../../shared/repo-types'
 
 const repo1: Repo = { id: 'repo-1', path: '/r1', displayName: 'R1', badgeColor: '#000', addedAt: 1 }
+
 const repo2: Repo = { id: 'repo-2', path: '/r2', displayName: 'R2', badgeColor: '#111', addedAt: 2 }
 
 const reposRemove = vi.fn().mockResolvedValue(undefined)
+
 const ptyKill = vi.fn()
 
 beforeEach(() => {
@@ -36,6 +38,7 @@ beforeEach(() => {
 })
 
 const W1 = 'repo-1::/r1/wt1'
+
 const W2 = 'repo-2::/r2/wt1'
 
 function seedTwoProjects(store: ReturnType<typeof createTestStore>): void {

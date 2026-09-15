@@ -42,6 +42,7 @@ describe('Claude child root identity', () => {
   it('keeps the descendant verdict when a POSIX root probe is unavailable', async () => {
     const child = { pid: 100, kill: vi.fn(() => true) }
     const terminateDescendants = vi.fn(async () => 'exited' as const)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants: vi.fn(async () => posixSnapshot(1)),
@@ -59,6 +60,7 @@ describe('Claude child root identity', () => {
   it('rejects mixed old and recycled root rows instead of making the tree killable', async () => {
     const child = { pid: 100, kill: vi.fn(() => true) }
     const terminateDescendants = vi.fn(async () => 'exited' as const)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants: vi.fn(async () =>
@@ -87,6 +89,7 @@ describe('Claude child root identity', () => {
     const child = { pid: 100, kill: vi.fn(() => true) }
     const terminateWindowsTree = vi.fn(async () => {})
     const terminateWindowsDescendants = vi.fn(async () => 'exited' as const)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'win32',
       captureWindowsDescendants: vi.fn(async () => windowsSnapshot()),

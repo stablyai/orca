@@ -42,19 +42,24 @@ export type AgentCapabilitySetupStatus = {
 
 export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+
   const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
   const computerUseSkill = useInstalledAgentSkill(COMPUTER_USE_SKILL_NAME, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
   const orchestrationSkill = useInstalledAgentSkill(ORCHESTRATION_SKILL_NAME, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
   const computerUsePermissionStatus = useComputerUsePermissionStatus(computerUseSkill.installed)
+
   const readiness: AgentCapabilityReadiness = useMemo(
     () => ({
       browserUseSkillInstalled: browserUseSkill.installed,
@@ -145,6 +150,7 @@ function getSkillInstallStatus(skill: {
       tone: 'checking'
     }
   }
+
   if (skill.error) {
     return {
       label: translate(
@@ -154,6 +160,7 @@ function getSkillInstallStatus(skill: {
       tone: 'error'
     }
   }
+
   if (skill.installed) {
     return {
       label: translate(
@@ -164,6 +171,7 @@ function getSkillInstallStatus(skill: {
       installed: true
     }
   }
+
   return {
     label: translate(
       'auto.components.feature.wall.agent.capability.setup.status.aae94eeb52',
@@ -193,9 +201,11 @@ function getComputerUseInstallStatus(
   }
 ): AgentCapabilityInstallStatus {
   const skillStatus = getSkillInstallStatus(skill)
+
   if (skillStatus.tone !== 'ready') {
     return skillStatus
   }
+
   if (permissions.checking) {
     return {
       label: translate(
@@ -206,6 +216,7 @@ function getComputerUseInstallStatus(
       installed: true
     }
   }
+
   if (permissions.unavailableReason) {
     return {
       label:
@@ -222,6 +233,7 @@ function getComputerUseInstallStatus(
       installed: true
     }
   }
+
   if (!permissions.ready) {
     return {
       label: translate(
@@ -232,6 +244,7 @@ function getComputerUseInstallStatus(
       installed: true
     }
   }
+
   return {
     label: translate(
       'auto.components.feature.wall.agent.capability.setup.status.8eccfcb314',
@@ -260,10 +273,12 @@ function useComputerUsePermissionStatus(enabled: boolean): {
   useEffect(() => {
     if (!enabled) {
       setStatus({ ready: false, checking: false, unavailableReason: null })
+
       return
     }
 
     let stale = false
+
     const refresh = (): void => {
       setStatus((current) => ({ ...current, checking: true }))
       window.api.computerUsePermissions
@@ -272,6 +287,7 @@ function useComputerUsePermissionStatus(enabled: boolean): {
           if (stale) {
             return
           }
+
           setStatus({
             ready:
               next.helperUnavailableReason === null &&
@@ -284,12 +300,14 @@ function useComputerUsePermissionStatus(enabled: boolean): {
           if (stale) {
             return
           }
+
           setStatus({ ready: false, checking: false, unavailableReason: null })
         })
     }
 
     refresh()
     window.addEventListener('focus', refresh)
+
     return () => {
       stale = true
       window.removeEventListener('focus', refresh)

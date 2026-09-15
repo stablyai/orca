@@ -27,10 +27,12 @@ function menuSurfaceTags(source: string): { name: string; tag: string }[] {
   const tags: { name: string; tag: string }[] = []
   const opening = /<(DropdownMenuContent|DropdownMenuSubContent)\b/g
   let match: RegExpExecArray | null
+
   while ((match = opening.exec(source)) !== null) {
     const end = source.indexOf('>', match.index)
     tags.push({ name: match[1], tag: source.slice(match.index, end === -1 ? undefined : end + 1) })
   }
+
   return tags
 }
 
@@ -39,14 +41,18 @@ function actionItemBodies(source: string): string[] {
   const bodies: string[] = []
   const opening = /<DropdownMenu(?:Item|SubTrigger)\b/g
   let match: RegExpExecArray | null
+
   while ((match = opening.exec(source)) !== null) {
     const closing = source.indexOf('</DropdownMenu', match.index + 1)
     const body = source.slice(match.index, closing === -1 ? source.length : closing)
+
     if (body.includes('rounded-full')) {
       continue
     }
+
     bodies.push(body)
   }
+
   return bodies
 }
 
@@ -65,6 +71,7 @@ describe('tab context menu consistency', () => {
   it.each(TAB_MENU_SOURCES)('sizes every menu surface from the shared rule in %s', (fileName) => {
     const source = readSource(fileName)
     const surfaces = menuSurfaceTags(source)
+
     if (surfaces.length === 0) {
       return
     }
@@ -74,6 +81,7 @@ describe('tab context menu consistency', () => {
         name === 'DropdownMenuSubContent'
           ? 'TAB_CONTEXT_SUBMENU_CONTENT_CLASS'
           : 'TAB_CONTEXT_MENU_CONTENT_CLASS'
+
       expect(tag, `<${name}> in ${fileName} does not apply ${expected}:\n${tag}`).toContain(
         expected
       )

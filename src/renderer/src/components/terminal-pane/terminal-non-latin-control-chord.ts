@@ -23,6 +23,7 @@ function hasNonAsciiLogicalKey(key: string): boolean {
   if (Array.from(key).length !== 1) {
     return false
   }
+
   return (key.codePointAt(0) ?? 0) > 0x7f
 }
 
@@ -39,10 +40,13 @@ function physicalLetterFromCode(code: string | undefined): string | null {
   if (!code || code.length !== 4 || !code.startsWith('Key')) {
     return null
   }
+
   const letter = code.charAt(3)
+
   if (letter === 'C') {
     return null
   }
+
   return letter >= 'A' && letter <= 'Z' ? letter : null
 }
 
@@ -66,16 +70,21 @@ export function resolveNonLatinControlChordInput(event: NonLatinControlChordEven
   if (event.type !== 'keydown') {
     return null
   }
+
   if (!event.ctrlKey || event.altKey || event.metaKey || event.shiftKey) {
     return null
   }
+
   if (!hasNonAsciiLogicalKey(event.key)) {
     return null
   }
+
   const letter = physicalLetterFromCode(event.code)
+
   if (!letter) {
     return null
   }
+
   // 'A' -> 0x01 ... 'Z' -> 0x1a, the same arithmetic the OS control table applies.
   return String.fromCharCode(letter.charCodeAt(0) - 0x40)
 }
@@ -88,5 +97,6 @@ export function isNonLatinControlChordKeyup(
   if (event.type !== 'keyup' || !claimedCode) {
     return false
   }
+
   return event.code === claimedCode
 }

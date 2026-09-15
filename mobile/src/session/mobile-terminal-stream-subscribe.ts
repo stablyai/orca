@@ -12,6 +12,7 @@ export function subscribeMobileTerminalSafely(
     // Why: a transport mock or closing socket can reject before returning an
     // unsubscribe handle; callers must still release their subscribing marker.
     onSynchronousError()
+
     return () => {}
   }
 }

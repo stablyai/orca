@@ -15,6 +15,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 describe('CandidateRow', () => {
@@ -28,6 +29,7 @@ describe('CandidateRow', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null
@@ -132,6 +134,7 @@ describe('CandidateRow', () => {
     const openButton = container?.querySelector(
       `[aria-label="Open ${getWorkspaceCleanupCandidateAccessibleName(candidate)}"]`
     )
+
     expect(openButton?.querySelector('.lucide-external-link')).not.toBeNull()
   })
 

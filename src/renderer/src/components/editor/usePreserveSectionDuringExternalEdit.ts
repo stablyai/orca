@@ -18,26 +18,35 @@ export function usePreserveSectionDuringExternalEdit(
     if (content === renderedContent) {
       return
     }
+
     const body = bodyRef.current
+
     const hasSelectionInsideBody = (): boolean => {
       if (!body) {
         return false
       }
+
       const selection = window.getSelection()
+
       if (!selection || selection.isCollapsed) {
         return false
       }
+
       const anchor = selection.anchorNode
       const focus = selection.focusNode
+
       return (
         (anchor instanceof Node && body.contains(anchor)) ||
         (focus instanceof Node && body.contains(focus))
       )
     }
+
     if (!hasSelectionInsideBody()) {
       setRenderedContent(content)
+
       return
     }
+
     // Why: cap the deferral so a forgotten selection (user walked away with
     // text highlighted) can't freeze the preview indefinitely while the file
     // keeps changing on disk. After the cap elapses we apply the pending
@@ -46,15 +55,21 @@ export function usePreserveSectionDuringExternalEdit(
     const MAX_DEFER_MS = 3000
     const deadline = performance.now() + MAX_DEFER_MS
     let frameId = 0
+
     const waitForSelectionRelease = (): void => {
       if (performance.now() >= deadline || !hasSelectionInsideBody()) {
         setRenderedContent(pendingContentRef.current)
+
         return
       }
+
       frameId = window.requestAnimationFrame(waitForSelectionRelease)
     }
+
     frameId = window.requestAnimationFrame(waitForSelectionRelease)
+
     return () => window.cancelAnimationFrame(frameId)
   }, [bodyRef, content, renderedContent])
+
   return renderedContent
 }

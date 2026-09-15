@@ -9,6 +9,7 @@ import { findAppDirResidentModules } from './loaded-module-probe.mjs'
 function makeSyntheticInventory() {
   const unpackedRoot = 'C:\\App\\resources\\app.asar.unpacked'
   const f = (path) => ({ path, exists: true, size: 1 })
+
   return {
     appDir: 'C:\\App',
     unpackedRoot,
@@ -49,6 +50,7 @@ function makeSyntheticInventory() {
 
 function run() {
   const failures = []
+
   const check = (name, cond) => {
     if (!cond) {
       failures.push(name)
@@ -93,6 +95,7 @@ function run() {
 
   // ── Copy-plan resolution ────────────────────────────────────────────
   const inv = makeSyntheticInventory()
+
   for (const tier of TIERS) {
     const plan = resolveTierFileSet(inv, tier)
     check(`${tier}: no warnings`, plan.warnings.length === 0)
@@ -111,6 +114,7 @@ function run() {
       plan.ops.find((o) => o.destRel === 'resources/node_modules/node-pty')?.kind === 'dir'
     )
   }
+
   const fullDests = resolveTierFileSet(inv, 'full').ops.map((o) => o.destRel)
   check('full plan includes gpu dll', fullDests.includes('vulkan-1.dll'))
   const minimalDests = resolveTierFileSet(inv, 'minimal').ops.map((o) => o.destRel)
@@ -123,11 +127,13 @@ function run() {
 
   // ── Module-path filter ──────────────────────────────────────────────
   const appDir = 'C:\\Users\\me\\AppData\\Local\\Programs\\orca'
+
   const modules = [
     'C:\\Users\\me\\AppData\\Local\\Programs\\orca\\Orca.exe',
     'C:\\Windows\\System32\\kernel32.dll',
     'C:\\Users\\me\\AppData\\Local\\orca-daemon-host\\Orca.exe'
   ]
+
   const resident = findAppDirResidentModules(modules, appDir)
   check('detects app-dir module', resident.length === 1)
   check('detects the right module', resident[0].toLowerCase().includes('programs\\orca\\orca.exe'))
@@ -154,13 +160,18 @@ function run() {
 
 export function runSelftest() {
   const failures = run()
+
   if (failures.length === 0) {
     console.log('selftest: PASS (all checks green)')
+
     return true
   }
+
   console.error(`selftest: FAIL (${failures.length} check(s))`)
+
   for (const name of failures) {
     console.error(`  - ${name}`)
   }
+
   return false
 }

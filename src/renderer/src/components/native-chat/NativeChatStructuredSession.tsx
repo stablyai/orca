@@ -42,6 +42,7 @@ export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
 ): React.JSX.Element {
   const controller = useStructuredAgentSession(props)
+
   const launchDraftSignal = useNativeChatLaunchDraftSignal({
     terminalTabId: props.tabId,
     agent: props.agent,
@@ -50,23 +51,30 @@ export function NativeChatStructuredSession(
     // phases, that empty list must not become the draft's turn baseline.
     transcriptLoading: controller.status === 'idle' || controller.status === 'loading'
   })
+
   const [composerError, setComposerError] = useState<string | null>(null)
+
   const [stoppingBackgroundTasks, setStoppingBackgroundTasks] =
     useState<StoppingBackgroundTasks | null>(null)
+
   // Held here, not in the strip: the strip unmounts whenever live work briefly
   // drops to nothing, and its own state would collapse the list each time.
   const [expandedBackgroundTasks, setExpandedBackgroundTasks] =
     useState<ExpandedBackgroundTasks | null>(null)
+
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
     id: string
     sequence: number
   } | null>(null)
+
   const paneKey = useMemo(
     () => structuredAgentSessionPaneKey(props.tabId, props.sessionId),
     [props.sessionId, props.tabId]
   )
+
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
+
   const paneCommands = useStructuredNativeChatPaneCommands({
     tabId: props.tabId,
     groupId: props.groupId,
@@ -75,6 +83,7 @@ export function NativeChatStructuredSession(
     composerRef,
     terminalPaneActions: props.contextMenuActions
   })
+
   const session = useMemo<NativeChatLiveSession>(
     () => ({
       messages: controller.messages,
@@ -103,18 +112,23 @@ export function NativeChatStructuredSession(
     }),
     [controller, props.agent, props.sessionId]
   )
+
   const viewState = selectNativeChatViewState(session)
   const fontScale = useNativeChatFontScale(viewState.kind === 'ready')
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const imageRuntimeContext = useNativeChatImageRuntimeContext(props.tabId)
+
   const { onLinkClick, linkActionRequest, closeLinkActions } = useNativeChatLinkActions(
     fileLinkContext,
     rootRef,
     { sessionId: props.sessionId, isVisible: props.isVisible }
   )
+
   const activeStoppingBackgroundTasks =
     stoppingBackgroundTasks?.sessionId === props.sessionId ? stoppingBackgroundTasks : null
+
   const prompt = controller.prompts[0] ?? null
+
   const cancelPrompt = () => {
     if (controller.turnId && prompt) {
       void controller.cancel(controller.turnId, {
@@ -123,6 +137,7 @@ export function NativeChatStructuredSession(
       })
     }
   }
+
   useNativeChatComposerRevealFocus({
     rootRef,
     composerRef,
@@ -131,6 +146,7 @@ export function NativeChatStructuredSession(
     composerReady: prompt === null
   })
   const questionBody = prompt?.body.kind === 'question' ? prompt.body : null
+
   const questions =
     questionBody?.questions ??
     (questionBody
@@ -146,17 +162,20 @@ export function NativeChatStructuredSession(
           }
         ]
       : [])
+
   // Only the head of the outbox is ever dispatched, so it is the only entry a
   // Retry can act on and the only one whose state can be holding the queue.
   // Scanning past it named a message the user was not looking at and re-sent
   // one from earlier in the session while their newest sat behind it.
   const outboxHead = controller.outbox[0] ?? null
+
   const retryableOutboxEntry =
     outboxHead &&
     (outboxHead.state === 'unconfirmed' ||
       outboxHead.clientMessageId === controller.blockedClientMessageId)
       ? outboxHead
       : null
+
   const structuredTransport = useMemo(
     () => ({
       send: (text: string, attachments: readonly { id: string; path: string }[]): boolean =>
@@ -173,6 +192,7 @@ export function NativeChatStructuredSession(
           snapshot: controller.optionSnapshot,
           invokeAction: async (id) => {
             setOptionPickerRequest((current) => ({ id, sequence: (current?.sequence ?? 0) + 1 }))
+
             return true
           },
           setOption: controller.setStructuredOption,
@@ -277,29 +297,37 @@ export function NativeChatStructuredSession(
               const grouped = questions.map((question, questionIndex) => {
                 const answer = answers[questionIndex]
                 const other = answer?.other?.trim()
+
                 const optionIds = (answer?.indices ?? []).flatMap((optionIndex) => {
                   const optionId = question.options[optionIndex]?.id
+
                   return optionId ? [optionId] : []
                 })
+
                 return {
                   questionId: question.id,
                   optionIds: question.multiSelect || !other ? optionIds : [],
                   ...(other ? { other } : {})
                 }
               })
+
               if (grouped.every((answer) => answer.optionIds.length > 0 || answer.other)) {
                 void controller.respond(prompt, encodeAgentSessionQuestionAnswers(grouped))
               }
+
               return
             }
+
             const index = answers[0]?.indices[0]
             const other = answers[0]?.other?.trim()
+
             const optionId =
               typeof index === 'number'
                 ? questionBody.options[index]?.id
                 : questionBody.freeTextQuestionId && other
                   ? encodeQuestionAnswer(questionBody.freeTextQuestionId, other)
                   : undefined
+
             if (optionId) {
               void controller.respond(prompt, optionId)
             }
@@ -362,9 +390,11 @@ export function NativeChatStructuredSession(
               const taskIds = new Set(
                 current?.sessionId === targetSessionId ? current.taskIds : NO_STOPPING_TASKS
               )
+
               if (taskId) {
                 taskIds.add(taskId)
               }
+
               return {
                 sessionId: targetSessionId,
                 taskIds,
@@ -376,11 +406,15 @@ export function NativeChatStructuredSession(
                 if (current?.sessionId !== targetSessionId) {
                   return current
                 }
+
                 const taskIds = new Set(current.taskIds)
+
                 if (taskId) {
                   taskIds.delete(taskId)
                 }
+
                 const all = taskId ? current.all : false
+
                 return taskIds.size === 0 && !all
                   ? null
                   : { sessionId: targetSessionId, taskIds, all }

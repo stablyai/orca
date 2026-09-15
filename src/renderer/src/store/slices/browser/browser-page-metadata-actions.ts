@@ -35,16 +35,22 @@ export function createBrowserPageMetadataActions(
       let removedHandle: RemoteBrowserPageHandle | null = null
       set((s) => {
         const current = s.remoteBrowserPageHandlesByPageId[pageId]
+
         if (!current || (remotePageId && current.remotePageId !== remotePageId)) {
           return s
         }
+
         removedHandle = current
+
         const nextRemoteBrowserPageHandlesByPageId = {
           ...s.remoteBrowserPageHandlesByPageId
         }
+
         delete nextRemoteBrowserPageHandlesByPageId[pageId]
+
         return { remoteBrowserPageHandlesByPageId: nextRemoteBrowserPageHandlesByPageId }
       })
+
       return removedHandle
     },
 
@@ -52,16 +58,21 @@ export function createBrowserPageMetadataActions(
     setBrowserPageViewportPreset: (pageId, viewportPresetId) =>
       set((s) => {
         const page = findPage(s.browserPagesByWorkspace, pageId)
+
         if (!page) {
           return s
         }
+
         const workspace = findWorkspace(s.browserTabsByWorktree, page.workspaceId)
+
         if (!workspace) {
           return s
         }
+
         const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
           entry.id === pageId ? { ...entry, viewportPresetId } : entry
         )
+
         return {
           browserPagesByWorkspace: {
             ...s.browserPagesByWorkspace,
@@ -73,9 +84,11 @@ export function createBrowserPageMetadataActions(
     addBrowserPageAnnotation: (annotation) =>
       set((s) => {
         const existing = s.browserAnnotationsByPageId[annotation.browserPageId] ?? []
+
         const next = [...existing, sanitizeBrowserPageAnnotation(annotation)].slice(
           -GRAB_BUDGET.annotationsMaxPerPage
         )
+
         return {
           browserAnnotationsByPageId: {
             ...s.browserAnnotationsByPageId,
@@ -88,10 +101,13 @@ export function createBrowserPageMetadataActions(
       set((s) => {
         const existing = s.browserAnnotationsByPageId[pageId] ?? []
         const target = existing.find((annotation) => annotation.id === annotationId)
+
         if (!target) {
           return s
         }
+
         const updated = sanitizeBrowserPageAnnotation({ ...target, ...patch })
+
         return {
           browserAnnotationsByPageId: {
             ...s.browserAnnotationsByPageId,
@@ -106,15 +122,19 @@ export function createBrowserPageMetadataActions(
       set((s) => {
         const existing = s.browserAnnotationsByPageId[pageId] ?? []
         const next = existing.filter((annotation) => annotation.id !== annotationId)
+
         if (next.length === existing.length) {
           return s
         }
+
         const nextByPageId = { ...s.browserAnnotationsByPageId }
+
         if (next.length > 0) {
           nextByPageId[pageId] = next
         } else {
           delete nextByPageId[pageId]
         }
+
         return { browserAnnotationsByPageId: nextByPageId }
       }),
 
@@ -123,8 +143,10 @@ export function createBrowserPageMetadataActions(
         if (!s.browserAnnotationsByPageId[pageId]?.length) {
           return s
         }
+
         const nextByPageId = { ...s.browserAnnotationsByPageId }
         delete nextByPageId[pageId]
+
         return { browserAnnotationsByPageId: nextByPageId }
       })
   }

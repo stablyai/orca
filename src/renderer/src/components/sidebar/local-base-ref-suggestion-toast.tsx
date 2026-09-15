@@ -34,10 +34,12 @@ function SuggestionToastBody({
   deps: SuggestionToastDeps
 }): React.JSX.Element {
   const { updateSettings, getSettings, openSettingsPage, openSettingsTarget } = deps
+
   const commitNoun =
     suggestion.behind === 1
       ? translate('auto.components.sidebar.local.base.ref.suggestion.toast.commit', 'commit')
       : translate('auto.components.sidebar.local.base.ref.suggestion.toast.commits', 'commits')
+
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle()
 
   const turnOn = (): void => {
@@ -46,6 +48,7 @@ function SuggestionToastBody({
         if (getSettings()?.refreshLocalBaseRefOnWorktreeCreate !== true) {
           throw new Error('settings_not_persisted')
         }
+
         toast.dismiss(toastId(suggestion))
         toast.success(
           translate(
@@ -152,9 +155,11 @@ export function showLocalBaseRefUpdateSuggestionToast(
         if (inspectSettingsDismissals.delete(toastId(suggestion))) {
           return
         }
+
         if (deps.getSettings()?.refreshLocalBaseRefOnWorktreeCreate === true) {
           return
         }
+
         void Promise.resolve(deps.updateSettings({ localBaseRefSuggestionDismissed: true })).catch(
           () => {}
         )

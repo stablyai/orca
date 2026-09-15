@@ -13,12 +13,15 @@ import { NATIVE_FILE_DROP_MAX_PATHS } from '../../../../shared/native-file-drop'
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
+
 const runtimeTarget = vi.hoisted(() => ({ remote: false }))
+
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({
   isRemoteRuntimePtyId: () => runtimeTarget.remote
 }))
 
 type AttachmentApi = ReturnType<typeof useNativeChatComposerAttachments>
+
 type ProbeApi = AttachmentApi & { adoptDraft: (draft: string) => void }
 
 const target: NativeChatResolvedTarget = {
@@ -43,6 +46,7 @@ function Probe({
   const [draftValue, setDraftValue] = useState('')
   const [notice, setNotice] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
   const api = useNativeChatComposerAttachments({
     attachmentScopeKey: scopeKey,
     allowWithoutTarget: structured,
@@ -55,9 +59,11 @@ function Probe({
     setDraft: (updater) => setDraftValue((previous) => updater(previous)),
     setNotice
   })
+
   useEffect(() => {
     onReady({ ...api, adoptDraft: setDraftValue })
   }, [api, onReady])
+
   return (
     <div>
       <textarea ref={textareaRef} />
@@ -85,10 +91,13 @@ async function renderProbe(
   // single captured `api` would go stale after attach/remove triggers a render.
   let api: ProbeApi | null = null
   const root = createRoot(container)
+
   const onReady = (next: ProbeApi): void => {
     api = next
   }
+
   const isComposing = options.isComposing ?? (() => false)
+
   const render = async (nextScopeKey: string, disabled: boolean): Promise<void> => {
     await act(async () => {
       root.render(
@@ -102,10 +111,13 @@ async function renderProbe(
       )
     })
   }
+
   await render(scopeKey, options.disabled ?? false)
+
   if (!api) {
     throw new Error('Probe did not render')
   }
+
   return {
     draft: () => container.querySelector('[data-draft]')?.textContent ?? '',
     root,
@@ -113,6 +125,7 @@ async function renderProbe(
       if (!api) {
         throw new Error('Probe is not mounted')
       }
+
       return api
     },
     notice: () => container.querySelector('[data-notice]')?.textContent ?? '',
@@ -120,9 +133,11 @@ async function renderProbe(
       render(nextScopeKey, disabled),
     textarea: () => {
       const textarea = container.querySelector('textarea')
+
       if (!textarea) {
         throw new Error('Probe textarea is not mounted')
       }
+
       return textarea
     }
   }
@@ -293,6 +308,7 @@ describe('useNativeChatComposerAttachments', () => {
       { length: NATIVE_FILE_DROP_MAX_PATHS },
       (_unused, index) => `/local/refused-${index}.txt`
     )
+
     act(() => probe.latest().attachResolvedPaths(refused))
     expect(probe.notice()).toBe('Local attachments are not available for remote sessions.')
 
@@ -371,6 +387,7 @@ describe('useNativeChatComposerAttachments', () => {
   it('caps paths queued during composition and keeps overflow visible after flush', async () => {
     let composing = true
     const probe = await renderProbe('pty-1', false, { isComposing: () => composing })
+
     const acceptedPaths = Array.from(
       { length: NATIVE_FILE_DROP_MAX_PATHS },
       (_, index) => `/remote/accepted-${index}.txt`

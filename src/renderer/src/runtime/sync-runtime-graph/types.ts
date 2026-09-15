@@ -42,53 +42,64 @@ export type RegisteredTerminalTab = {
 }
 
 export type OpenFileByWorktreeAndId = Map<string, Map<string, AppState['openFiles'][number]>>
+
 export type OpenFileIndexes = {
   byWorktreeAndId: OpenFileByWorktreeAndId
   idsByWorktree: Map<string, string[]>
 }
+
 export type FallbackEditorTabTarget = {
   tabId: string
   groupId: string | null
 }
+
 export type TabsProjectionCacheEntry = {
   tabs: NonNullable<AppState['tabsByWorktree'][string]>
   worktreeIdJson: string
   projection: string
 }
+
 export type TabsProjectionCache = {
   source: AppState['tabsByWorktree']
   entries: Map<string, TabsProjectionCacheEntry>
   projection: string
 }
+
 export type OpenFilesProjectionCacheEntry = {
   file: AppState['openFiles'][number]
   projection: string
 }
+
 export type OpenFilesProjectionCache = {
   source: AppState['openFiles']
   entries: Map<string, OpenFilesProjectionCacheEntry>
   projection: string
 }
+
 export type BrowserWorkspacesProjectionCacheEntry = {
   workspaces: NonNullable<AppState['browserTabsByWorktree'][string]>
   keyJson: string
   projection: string
 }
+
 export type BrowserWorkspacesProjectionCache = {
   source: AppState['browserTabsByWorktree']
   entries: Map<string, BrowserWorkspacesProjectionCacheEntry>
   projection: string
 }
+
 export type BrowserPagesProjectionCacheEntry = {
   pages: NonNullable<AppState['browserPagesByWorkspace'][string]>
   keyJson: string
   projection: string
 }
+
 export type BrowserPagesProjectionCache = {
   source: AppState['browserPagesByWorkspace']
   entries: Map<string, BrowserPagesProjectionCacheEntry>
   projection: string
 }
+
 /** One dirty file's FNV draft stamp plus its pre-serialized projection fragment. */
 export type EditorDraftHashCacheEntry = {
   content: string
@@ -96,25 +107,30 @@ export type EditorDraftHashCacheEntry = {
   fileIdJson: string
   projection: string
 }
+
 export type EditorDraftHashCache = {
   source: AppState['editorDrafts']
   entries: Map<string, EditorDraftHashCacheEntry>
   hashByFileId: Map<string, string>
   projection: string
 }
+
 export type AgentStatusProjectionCacheEntry = {
   entry: AppState['agentStatusByPaneKey'][string]
   projection: string
 }
+
 export type AgentStatusProjectionCache = {
   source: AppState['agentStatusByPaneKey']
   entries: Map<string, AgentStatusProjectionCacheEntry>
   projection: string
 }
+
 export type MobileSessionAgentStatusByWorktree = ReadonlyMap<
   string,
   ReadonlyMap<string, AppState['agentStatusByPaneKey'][string]>
 >
+
 /** Slices shared by every worktree in one publication; derived from `AppState` exactly once. */
 export type MobileSessionPublicationInputs = {
   browserTabsByWorktree: AppState['browserTabsByWorktree']
@@ -124,6 +140,7 @@ export type MobileSessionPublicationInputs = {
   generatedTitlesEnabled: boolean
   terminalTheme: RuntimeMobileTerminalTheme | undefined
 }
+
 /**
  * Live PaneManager/DOM reads for one mounted terminal tab, captured once per
  * publication.
@@ -141,6 +158,7 @@ export type MountedTerminalSurfaceCapture = {
   ptyIdByNumericPaneId: ReadonlyMap<number, string | null>
   tabWideAgentHintLeafId: string | null
 }
+
 /**
  * One worktree's complete mobile-snapshot input set.
  *

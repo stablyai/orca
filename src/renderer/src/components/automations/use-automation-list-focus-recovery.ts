@@ -24,12 +24,14 @@ function focusRow(container: HTMLElement, rowKey: string): boolean {
   const selector = `[${AUTOMATION_ROW_ID_ATTRIBUTE}="${CSS.escape(rowKey)}"]`
   const row = container.querySelector<HTMLElement>(selector)
   row?.focus()
+
   return row !== null
 }
 
 /** The fallback is a wrapper, so focus the control inside it rather than the box. */
 function focusFallback(fallback: HTMLElement | null): void {
   const focusable = fallback?.querySelector<HTMLElement>('button, [tabindex]:not([tabindex="-1"])')
+
   ;(focusable ?? fallback)?.focus()
 }
 
@@ -47,16 +49,21 @@ export function useAutomationListFocusRecovery({
     const onFocusIn = (event: FocusEvent): void => {
       const container = containerRef.current
       const target = event.target
+
       if (!container || !(target instanceof HTMLElement) || !container.contains(target)) {
         focusedRowKeyRef.current = null
+
         return
       }
+
       focusedRowKeyRef.current =
         target
           .closest(`[${AUTOMATION_ROW_ID_ATTRIBUTE}]`)
           ?.getAttribute(AUTOMATION_ROW_ID_ATTRIBUTE) ?? null
     }
+
     document.addEventListener('focusin', onFocusIn)
+
     return () => document.removeEventListener('focusin', onFocusIn)
   }, [containerRef])
 
@@ -64,25 +71,32 @@ export function useAutomationListFocusRecovery({
     const previousRowKeys = previousRowKeysRef.current
     previousRowKeysRef.current = rowKeys
     const container = containerRef.current
+
     if (!container) {
       return
     }
+
     // Focus still somewhere in the list means nothing was lost to repair.
     if (container.contains(document.activeElement)) {
       return
     }
+
     const target = resolveAutomationListFocusRecovery({
       previousRowKeys,
       nextRowKeys: rowKeys,
       focusedRowKey: focusedRowKeyRef.current
     })
+
     if (!target) {
       return
     }
+
     focusedRowKeyRef.current = null
+
     if (target.kind === 'row' && focusRow(container, target.rowKey)) {
       return
     }
+
     focusFallback(fallbackRef.current)
   }, [rowKeys, containerRef, fallbackRef])
 }

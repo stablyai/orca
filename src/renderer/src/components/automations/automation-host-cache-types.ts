@@ -73,4 +73,5 @@ export type AutomationHostRequestFence = {
 export const DESKTOP_AUTHORITY_CONNECTION_GENERATION = 0
 
 export const AUTOMATION_HOST_CACHE_TTL_MS = 30_000
+
 export const AUTOMATION_HOST_RETIRED_CACHE_LIMIT = 256

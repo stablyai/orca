@@ -16,7 +16,9 @@ import { readFileSync } from 'node:fs'
 import { performance } from 'node:perf_hooks'
 
 const ROUNDS = 6
+
 const SECONDS = Number(process.env.ORCA_REPLAY_BENCH_SECONDS ?? '1')
+
 if (!Number.isFinite(SECONDS) || SECONDS <= 0) {
   throw new Error(`ORCA_REPLAY_BENCH_SECONDS must be positive, received ${SECONDS}`)
 }
@@ -27,18 +29,23 @@ const HANDLER_SOURCE = readFileSync(
   new URL('../../src/relay/pty-handler.ts', import.meta.url),
   'utf8'
 )
+
 if (!/managed\.buffered\.append\(/.test(HANDLER_SOURCE)) {
   throw new Error('relay no longer appends into a chunk deque; this benchmark is stale')
 }
+
 const capMatch = HANDLER_SOURCE.match(/REPLAY_BUFFER_MAX = ([\d *]+)/)
+
 if (!capMatch) {
   throw new Error('REPLAY_BUFFER_MAX not found; this benchmark is stale')
 }
+
 // The regex admits only digits, spaces, and `*`, so the literal is a plain product.
 const REPLAY_BUFFER_MAX = capMatch[1]
   .split('*')
   .map((factor) => Number(factor.trim()))
   .reduce((product, factor) => product * factor, 1)
+
 if (!Number.isSafeInteger(REPLAY_BUFFER_MAX) || REPLAY_BUFFER_MAX <= 0) {
   throw new Error(`could not read REPLAY_BUFFER_MAX from source, got ${capMatch[1]}`)
 }
@@ -48,7 +55,9 @@ function appendString(state, data) {
   if (data.length === 0) {
     return state
   }
+
   const next = state + data
+
   return next.length > REPLAY_BUFFER_MAX ? next.slice(-REPLAY_BUFFER_MAX) : next
 }
 
@@ -66,18 +75,23 @@ class ChunkDeque {
     if (data.length === 0) {
       return
     }
+
     if (data.length >= this.limit) {
       this.chunks = [data.slice(-this.limit)]
       this.headIndex = 0
       this.headOffset = 0
       this.totalLen = this.limit
+
       return
     }
+
     this.chunks.push(data)
     this.totalLen += data.length
+
     while (this.totalLen > this.limit) {
       const headRemaining = this.chunks[this.headIndex].length - this.headOffset
       const excess = this.totalLen - this.limit
+
       if (headRemaining <= excess) {
         this.chunks[this.headIndex] = ''
         this.headIndex += 1
@@ -88,6 +102,7 @@ class ChunkDeque {
         this.totalLen -= excess
       }
     }
+
     if (this.headIndex >= 1024) {
       this.chunks = this.chunks.slice(this.headIndex)
       this.headIndex = 0
@@ -97,16 +112,19 @@ class ChunkDeque {
   read() {
     if (this.chunks.length - this.headIndex > 1) {
       const retained = this.chunks.slice(this.headIndex)
+
       if (this.headOffset > 0) {
         retained[0] = retained[0].slice(this.headOffset)
         this.headOffset = 0
       }
+
       this.chunks = [retained.join('')]
       this.headIndex = 0
     } else if (this.headOffset > 0) {
       this.chunks[this.headIndex] = this.chunks[this.headIndex].slice(this.headOffset)
       this.headOffset = 0
     }
+
     return this.chunks[this.headIndex] ?? ''
   }
 }
@@ -127,25 +145,31 @@ function saturate(chunks) {
   const preload = 'p'.repeat(REPLAY_BUFFER_MAX)
   stringState = appendString(stringState, preload)
   deque.append(preload)
+
   return { stringState, deque, chunks }
 }
 
 function median(samples) {
   const sorted = [...samples].sort((a, b) => a - b)
   const mid = sorted.length / 2
+
   return (sorted[mid - 1] + sorted[mid]) / 2
 }
 
 function timeString(chunks) {
   let state = 'p'.repeat(REPLAY_BUFFER_MAX)
   const start = performance.now()
+
   for (const chunk of chunks) {
     state = appendString(state, chunk)
   }
+
   const elapsed = performance.now() - start
+
   if (state.length !== REPLAY_BUFFER_MAX) {
     throw new Error('string arm lost its window')
   }
+
   return elapsed
 }
 
@@ -153,10 +177,13 @@ function timeDeque(chunks) {
   const deque = new ChunkDeque(REPLAY_BUFFER_MAX)
   deque.append('p'.repeat(REPLAY_BUFFER_MAX))
   const start = performance.now()
+
   for (const chunk of chunks) {
     deque.append(chunk)
   }
+
   const elapsed = performance.now() - start
+
   return elapsed
 }
 
@@ -166,6 +193,7 @@ function measure(chunks) {
   timeDeque(chunks)
   const stringSamples = []
   const dequeSamples = []
+
   for (let round = 0; round < ROUNDS; round += 1) {
     if (round % 2 === 0) {
       stringSamples.push(timeString(chunks))
@@ -175,14 +203,18 @@ function measure(chunks) {
       stringSamples.push(timeString(chunks))
     }
   }
+
   return { stringMs: median(stringSamples), dequeMs: median(dequeSamples) }
 }
 
 const pad = (value, width) => String(value).padStart(width)
+
 console.log('Relay PTY replay-buffer append, per second of output. Lower is better.')
+
 console.log(
   `cap=${(REPLAY_BUFFER_MAX / 1024).toFixed(0)} KiB rounds=${ROUNDS} (per-arm medians, pre-saturated)`
 )
+
 console.log(
   `${pad('workload', 30)} ${pad('rolling str', 12)} ${pad('chunk deque', 12)} ${pad('speedup', 9)}`
 )
@@ -197,16 +229,20 @@ for (const [label, chunkBytes, chunksPerSecond] of [
   const chunks = makeChunks(chunkBytes, Math.round(chunksPerSecond * SECONDS))
   const { stringState, deque } = saturate(chunks)
   let stringTail = stringState
+
   for (const chunk of chunks) {
     stringTail = appendString(stringTail, chunk)
     deque.append(chunk)
   }
+
   if (deque.read() !== stringTail) {
     throw new Error(`retained tail differs for ${label}`)
   }
+
   if (stringTail.length !== REPLAY_BUFFER_MAX) {
     throw new Error(`fixture never saturated the window for ${label}`)
   }
+
   const { stringMs, dequeMs } = measure(chunks)
   console.log(
     `${pad(label, 30)} ${pad(`${stringMs.toFixed(3)} ms`, 12)} ${pad(`${dequeMs.toFixed(3)} ms`, 12)} ${pad(`${(stringMs / dequeMs).toFixed(0)}x`, 9)}`

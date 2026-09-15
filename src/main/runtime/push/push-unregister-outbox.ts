@@ -22,7 +22,9 @@ function isItem(value: unknown): value is PushUnregisterOutboxItem {
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const item = value as Partial<PushUnregisterOutboxItem>
+
   return (
     typeof item.reqId === 'string' &&
     typeof item.registrationId === 'string' &&
@@ -43,13 +45,16 @@ export class PushUnregisterOutbox {
 
   enqueue(entry: { registrationId: string; deviceId: string }): PushUnregisterOutboxItem {
     const existing = this.items.find((item) => item.registrationId === entry.registrationId)
+
     if (existing) {
       return existing
     }
+
     const item = { ...entry, reqId: randomUUID() }
     const next = [...this.items, item]
     this.save(next)
     this.items = next
+
     return item
   }
 
@@ -63,9 +68,11 @@ export class PushUnregisterOutbox {
 
   remove(reqId: string): void {
     const next = this.items.filter((item) => item.reqId !== reqId)
+
     if (next.length === this.items.length) {
       return
     }
+
     this.save(next)
     this.items = next
   }
@@ -74,12 +81,15 @@ export class PushUnregisterOutbox {
     if (!existsSync(this.path)) {
       return []
     }
+
     try {
       hardenExistingSecureFile(this.path)
       const parsed: unknown = JSON.parse(readFileSync(this.path, 'utf-8'))
+
       return Array.isArray(parsed) ? parsed.filter(isItem) : []
     } catch (error) {
       this.outboxUnreadable = isUnreadableError(error)
+
       return []
     }
   }
@@ -88,6 +98,7 @@ export class PushUnregisterOutbox {
     if (this.outboxUnreadable) {
       throw new Error('Cannot overwrite unreadable push unregister outbox')
     }
+
     writeSecureJsonFile(this.path, items)
   }
 }

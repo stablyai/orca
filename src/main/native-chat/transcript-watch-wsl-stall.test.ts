@@ -11,9 +11,11 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./session-file-resolver', () => ({ resolveSessionFilePath: mocks.resolve }))
+
 vi.mock('../wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: vi.fn(async (paths: readonly string[]) => [...paths])
 }))
+
 vi.mock('./transcript-native-watcher', () => ({
   createTranscriptNativeWatcher: () => ({
     bind: () => true,
@@ -22,6 +24,7 @@ vi.mock('./transcript-native-watcher', () => ({
     dispose: () => {}
   })
 }))
+
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFsPromisesModule>()),
   stat: mocks.stat,
@@ -40,6 +43,7 @@ const SLOW_MESSAGE =
 type Snapshot = [NativeChatMessage[], boolean, number, string | undefined]
 
 let releaseStall: (() => void) | undefined
+
 let unhandled: unknown[] = []
 
 function stalls<T>(): Promise<T> {
@@ -115,9 +119,11 @@ describe('native chat transcript subscription with a stalled install stat', () =
 
     // The distro wakes: the same subscription still delivers a real snapshot.
     mocks.stat.mockResolvedValue(EMPTY_STATS)
+
     for (const release of pendingStats.splice(0)) {
       release(EMPTY_STATS)
     }
+
     await vi.advanceTimersByTimeAsync(500)
 
     expect(snapshots.length).toBeGreaterThan(1)
@@ -154,6 +160,7 @@ describe('native chat transcript subscription with a stalled install stat', () =
         releaseOpen = resolve
       })
     )
+
     const handle = {
       read: vi.fn(async () => ({ bytesRead: 0, buffer: Buffer.alloc(0) })),
       close: vi.fn(async () => {})

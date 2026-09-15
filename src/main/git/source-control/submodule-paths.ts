@@ -5,9 +5,13 @@ import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import { gitRuntimeOptionsKey } from './git-runtime-options-cache-key'
 
 const SUBMODULE_PATHS_CACHE_TTL_MS = 5_000
+
 export const MAX_SUBMODULE_PATHS_CACHE_ENTRIES = 512
+
 type SubmodulePathsCacheEntry = { paths: string[]; expiresAt: number }
+
 const submodulePathsCache = new Map<string, SubmodulePathsCacheEntry>()
+
 let submodulePathsCacheGeneration = 0
 
 export function clearSubmodulePathsCacheForTests(): void {
@@ -40,24 +44,31 @@ function pruneExpiredSubmodulePathsCache(now: number): void {
 function trimSubmodulePathsCache(): void {
   while (submodulePathsCache.size > MAX_SUBMODULE_PATHS_CACHE_ENTRIES) {
     const oldestKey = submodulePathsCache.keys().next().value
+
     if (oldestKey === undefined) {
       break
     }
+
     submodulePathsCache.delete(oldestKey)
   }
 }
 
 function getCachedSubmodulePaths(cacheKey: string, now: number): string[] | null {
   const cached = submodulePathsCache.get(cacheKey)
+
   if (!cached) {
     return null
   }
+
   if (cached.expiresAt <= now) {
     submodulePathsCache.delete(cacheKey)
+
     return null
   }
+
   submodulePathsCache.delete(cacheKey)
   submodulePathsCache.set(cacheKey, cached)
+
   return cached.paths
 }
 
@@ -75,11 +86,14 @@ export function resolveSubmoduleWorktreePath(worktreePath: string, submodulePath
   if (!submodulePath || submodulePath.includes('\0') || path.isAbsolute(submodulePath)) {
     throw new Error('Access denied: invalid submodule path')
   }
+
   const resolved = path.resolve(worktreePath, submodulePath)
   const rel = path.relative(worktreePath, resolved)
+
   if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
     throw new Error('Access denied: submodule path escapes the selected worktree')
   }
+
   return resolved
 }
 
@@ -94,22 +108,27 @@ export async function listSubmodulePaths(
   const now = Date.now()
   const cacheKey = getSubmodulePathsCacheKey(worktreePath, options)
   const cached = getCachedSubmodulePaths(cacheKey, now)
+
   if (cached) {
     return cached
   }
+
   // Why: prune on misses so removed worktrees don't accumulate; hot hits stay O(1).
   pruneExpiredSubmodulePathsCache(now)
   const cacheGeneration = submodulePathsCacheGeneration
   let paths: string[] = []
+
   try {
     const { stdout } = await gitExecFileAsync(
       ['config', '--file', '.gitmodules', '--get-regexp', '^submodule\\..*\\.path$'],
       { ...gitOptionsForWorktree(worktreePath, options), env: gitOptionalLocksDisabledEnv() }
     )
+
     paths = stdout
       .split(/\r?\n/)
       .map((line) => {
         const spaceIndex = line.indexOf(' ')
+
         return spaceIndex === -1
           ? ''
           : line
@@ -122,9 +141,11 @@ export async function listSubmodulePaths(
     // No .gitmodules (or git config failure) — treat as a repo without submodules.
     paths = []
   }
+
   if (cacheGeneration === submodulePathsCacheGeneration) {
     rememberSubmodulePaths(cacheKey, paths, Date.now())
   }
+
   return paths
 }
 
@@ -135,6 +156,7 @@ export async function listSubmodulePaths(
 export function findContainingSubmodule(submodulePaths: string[], filePath: string): string | null {
   const normalized = filePath.replace(/\\/g, '/').replace(/\/+$/, '')
   let best: string | null = null
+
   for (const sub of submodulePaths) {
     if (normalized === sub || normalized.startsWith(`${sub}/`)) {
       // Prefer the longest match to support nested submodule roots.
@@ -143,5 +165,6 @@ export function findContainingSubmodule(submodulePaths: string[], filePath: stri
       }
     }
   }
+
   return best
 }

@@ -6,6 +6,7 @@ import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktr
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
+
 export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-groups'
 
 export function getPinnedWorktreeDisplayPolicy(

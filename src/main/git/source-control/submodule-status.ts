@@ -25,6 +25,7 @@ export async function getSubmoduleStatus(
 ): Promise<GitStatusResult> {
   const submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
   const limit = resolveGitStatusLimit(options.limit)
+
   // Why: staged expansion only represents HEAD→index; scanning the submodule worktree is wasted work.
   // These three reads are independent, so they run concurrently — on SSH/WSL each one is a real round trip.
   const [workingResult, fromOid, toOid] = await Promise.all([
@@ -42,6 +43,7 @@ export async function getSubmoduleStatus(
       ? readGitlinkOidFromIndex(worktreePath, submodulePath, options)
       : readWorkingSubmoduleHead(submoduleWorktreePath, options)
   ])
+
   if (fromOid && toOid && fromOid !== toOid) {
     const rangeEntries = await computeSubmoduleRangeEntries(
       submoduleWorktreePath,
@@ -49,23 +51,29 @@ export async function getSubmoduleStatus(
       toOid,
       options
     )
+
     if (options.staged) {
       return { ...workingResult, ...capGitStatusEntries(rangeEntries, limit) }
     }
+
     const rangePaths = new Set(rangeEntries.map((entry) => entry.path))
+
     // Range rows win on overlap so the diff matches getDiff's commit-range route.
     const entries = [
       ...rangeEntries,
       ...workingResult.entries.filter((entry) => !rangePaths.has(entry.path))
     ]
+
     return {
       ...workingResult,
       ...capGitStatusEntries(entries, limit, workingResult)
     }
   }
+
   if (options.staged) {
     return { ...workingResult, entries: [] }
   }
+
   return workingResult
 }
 
@@ -83,8 +91,10 @@ async function computeSubmoduleRangeEntries(
     ...gitOptionsForWorktree(submoduleWorktreePath, options),
     env: gitOptionalLocksDisabledEnv()
   }
+
   let nameStatus = ''
   let numstat = ''
+
   try {
     const [statusResult, numstatResult] = await Promise.all([
       gitExecFileAsync(
@@ -96,21 +106,27 @@ async function computeSubmoduleRangeEntries(
         gitOptions
       )
     ])
+
     nameStatus = statusResult.stdout
     numstat = numstatResult.stdout
   } catch {
     return []
   }
+
   const statsByPath = parseNumstat(numstat)
   const entries: GitStatusEntry[] = []
+
   for (const line of nameStatus.split(/\r?\n/)) {
     if (!line) {
       continue
     }
+
     const change = parseBranchChangeLine(line)
+
     if (!change) {
       continue
     }
+
     entries.push({
       path: change.path,
       status: change.status,
@@ -119,5 +135,6 @@ async function computeSubmoduleRangeEntries(
       ...statsByPath.get(change.path)
     })
   }
+
   return entries
 }

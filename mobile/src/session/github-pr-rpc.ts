@@ -76,12 +76,15 @@ export function buildGithubPrParams(
     repo: mobileRepoSelectorFromWorktreeId(worktreeId),
     ...params
   }
+
   if (options?.prRepo && METHODS_ACCEPTING_PR_REPO.has(method) && !('prRepo' in built)) {
     built.prRepo = githubPrRepoSlugParam(options.prRepo)
   }
+
   if (options?.headSha && METHODS_ACCEPTING_HEAD_SHA.has(method) && !('headSha' in built)) {
     built.headSha = options.headSha
   }
+
   return built
 }
 
@@ -93,9 +96,11 @@ async function sendGithubPrRead<T>(
 ): Promise<GitHubPrReadOutcome<T>> {
   try {
     const response = await client.sendRequest(method, params)
+
     if (!response.ok) {
       return { ok: false, error: response.error?.message || `Request failed: ${method}` }
     }
+
     return { ok: true, result: parse((response as RpcSuccess).result) }
   } catch (err) {
     // Why: a transport drop or a parser throw must not escape as an unhandled
@@ -119,10 +124,12 @@ export async function fetchGithubRepoSlug(
       if (!value || typeof value !== 'object') {
         return null
       }
+
       const record = value as Record<string, unknown>
       const owner = record.owner
       const repo = record.repo
       const host = record.host
+
       return typeof owner === 'string' && typeof repo === 'string'
         ? { owner, repo, ...(typeof host === 'string' && host ? { host } : {}) }
         : null
@@ -164,16 +171,21 @@ export async function fetchPRForBranch(
     }),
     (value) => {
       const outcome = normalizeGitHubPRForBranchOutcome(value as GitHubPRForBranchResponse)
+
       if (outcome.kind === 'upstream-error') {
         throw new Error(outcome.message)
       }
+
       if (outcome.kind === 'no-pr') {
         return null
       }
+
       const pr = readPRForBranch(outcome.pr)
+
       if (!pr) {
         throw new Error('GitHub returned an invalid pull request response.')
       }
+
       return pr
     }
   )
@@ -225,18 +237,23 @@ export async function fetchPRCheckDetails(
   }
 ): Promise<GitHubPrReadOutcome<PRCheckRunDetails | null>> {
   const params: Record<string, unknown> = {}
+
   if (args.checkRunId !== undefined) {
     params.checkRunId = args.checkRunId
   }
+
   if (args.workflowRunId !== undefined) {
     params.workflowRunId = args.workflowRunId
   }
+
   if (args.checkName !== undefined) {
     params.checkName = args.checkName
   }
+
   if (args.url !== undefined) {
     params.url = args.url
   }
+
   return sendGithubPrRead(
     client,
     'github.prCheckDetails',

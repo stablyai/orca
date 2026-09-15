@@ -20,6 +20,7 @@ import { createRuntimeLocalGitWorktree } from './runtime-local-git-worktree-crea
 import { materializeRuntimeLocalWorktree } from './runtime-local-worktree-materialization'
 
 type LocalGitOptions = { wslDistro?: string }
+
 type LocalGitArgs = [] | [LocalGitOptions]
 
 export async function createRuntimeLocalManagedWorktree<T>(args: {
@@ -53,12 +54,14 @@ export async function createRuntimeLocalManagedWorktree<T>(args: {
   const worktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   const hasWorktreeGitOptions = hasLocalGitOptions(worktreeGitOptions)
   const worktreeGitArgs: LocalGitArgs = hasWorktreeGitOptions ? [worktreeGitOptions] : []
+
   // Username and base resolution are independent read-only probes. Starting
   // both before awaiting removes one serial git/config round trip from create.
   const usernamePromise =
     !request.branchNameOverride && settings.branchPrefix === 'git-username'
       ? resolveLocalGitUsername(repo.path)
       : Promise.resolve('')
+
   const baseBranchPromise = resolveWorktreeCreateBase({
     requestedBaseBranch: request.baseBranch,
     repoWorktreeBaseRef: repo.worktreeBaseRef,
@@ -72,12 +75,14 @@ export async function createRuntimeLocalManagedWorktree<T>(args: {
         candidate,
         ...worktreeGitArgs
       )
+
       if (
         remoteBase &&
         (await args.hasRemoteTrackingRef(repo.path, remoteBase, ...worktreeGitArgs))
       ) {
         return true
       }
+
       return hasLocalWorktreeBaseRef(
         repo.path,
         candidate,
@@ -85,12 +90,15 @@ export async function createRuntimeLocalManagedWorktree<T>(args: {
       )
     }
   })
+
   const [username, baseBranch] = await Promise.all([usernamePromise, baseBranchPromise])
+
   if (!baseBranch) {
     throw new Error(
       'Could not resolve a default base ref for this repo. Pass an explicit --base and try again.'
     )
   }
+
   const candidate = await resolveRuntimeLocalWorktreeCreateCandidate({
     request,
     repo,
@@ -104,6 +112,7 @@ export async function createRuntimeLocalManagedWorktree<T>(args: {
     localWorktreeGitOptionArgs: worktreeGitArgs,
     hostedReviewExecutionContext: args.hostedReviewExecutionContext
   })
+
   const git = await createRuntimeLocalGitWorktree({
     request,
     repo,
@@ -123,6 +132,7 @@ export async function createRuntimeLocalManagedWorktree<T>(args: {
     refreshRemoteTrackingBase: args.refreshRemoteTrackingBase,
     fetchRemote: args.fetchRemote
   })
+
   const materialized = await materializeRuntimeLocalWorktree({
     request,
     repo,
@@ -143,6 +153,7 @@ export async function createRuntimeLocalManagedWorktree<T>(args: {
     localWorktreeGitOptions: worktreeGitOptions,
     onMetadataPersisted: args.onWorktreeMetadataPersisted
   })
+
   return {
     ...materialized,
     worktreePath: candidate.worktreePath,

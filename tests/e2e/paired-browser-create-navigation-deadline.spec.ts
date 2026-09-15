@@ -29,22 +29,28 @@ type CreateOutcome = {
 
 async function startHeldNavigationServer(): Promise<HeldNavigationServer> {
   const pending = new Set<ServerResponse>()
+
   const server: Server = createServer((request, response) => {
     if (request.url?.startsWith('/source')) {
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
       response.end(
         `<!doctype html><html><body style="margin:0"><a href="/hold?operation=${OPERATION_ID}" style="position:fixed;inset:0;display:block">open held page</a></body></html>`
       )
+
       return
     }
+
     if (!request.url?.startsWith('/hold')) {
       response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
       response.end('not found')
+
       return
     }
+
     pending.add(response)
     response.once('close', () => pending.delete(response))
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
@@ -53,6 +59,7 @@ async function startHeldNavigationServer(): Promise<HeldNavigationServer> {
     })
   })
   const { port } = server.address() as AddressInfo
+
   const release = (): void => {
     for (const response of pending) {
       if (!response.destroyed && !response.writableEnded) {
@@ -60,8 +67,10 @@ async function startHeldNavigationServer(): Promise<HeldNavigationServer> {
         response.end('<!doctype html><html><body>released</body></html>')
       }
     }
+
     pending.clear()
   }
+
   return {
     close: () =>
       new Promise<void>((resolve, reject) => {
@@ -83,6 +92,7 @@ async function readHostBrowserPageIds(
   const response = await hostClient.call<RuntimeMobileSessionTabsResult>('session.tabs.list', {
     worktree: `id:${worktreeId}`
   })
+
   return response.result.tabs.flatMap((tab) =>
     tab.type === 'browser' && tab.browserPageId ? [tab.browserPageId] : []
   )
@@ -108,6 +118,7 @@ async function createOwnerPinnedBrowser(
           },
           timeoutMs: 15_000
         })
+
         if (!response.ok) {
           return {
             error: `${response.error.code}: ${response.error.message}`,
@@ -115,7 +126,9 @@ async function createOwnerPinnedBrowser(
             pageId: null
           }
         }
+
         const result = response.result as { browserPageId: string }
+
         return { error: null, ok: true, pageId: result.browserPageId }
       } catch (error) {
         return {
@@ -157,15 +170,18 @@ async function findPairedWorktreeId(
         repoPath
       )
     )
+
   if (!worktreeId) {
     throw new Error('Paired worktree disappeared after discovery')
   }
+
   return worktreeId
 }
 
 async function readClientBrowserPageIds(page: Page, worktreeId: string): Promise<string[]> {
   return page.evaluate((worktreeId) => {
     const state = window.__store?.getState()
+
     return (state?.browserTabsByWorktree[worktreeId] ?? []).flatMap((workspace) =>
       (state?.browserPagesByWorkspace[workspace.id] ?? []).map(
         (browserPage) =>
@@ -183,14 +199,17 @@ async function findMirroredPageId(
   return page.evaluate(
     ({ url, worktreeId }) => {
       const state = window.__store?.getState()
+
       for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
         const browserPage = (state?.browserPagesByWorkspace[workspace.id] ?? []).find((candidate) =>
           candidate.url.startsWith(url)
         )
+
         if (browserPage) {
           return browserPage.id
         }
       }
+
       return null
     },
     { url, worktreeId }
@@ -218,6 +237,7 @@ test('returns a headed host page identity before owner-pinned navigation can tim
   test.setTimeout(300_000)
   const fixture = await startHeldNavigationServer()
   let client: PairedElectronClient | null = null
+
   try {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
@@ -227,10 +247,12 @@ test('returns a headed host page identity before owner-pinned navigation can tim
     const hostClient = new RuntimeClient(userDataDir, 5_000)
     client = await launchPairedElectronClient(offer, testInfo, 'STA-4231 navigation deadline')
     const cdp = await client.page.context().newCDPSession(client.page)
+
     const visibility = await cdp.send('Runtime.evaluate', {
       expression: 'document.visibilityState',
       returnByValue: true
     })
+
     expect(visibility.result.value).toBe('visible')
     const worktreeId = await findPairedWorktreeId(client, testRepoPath)
     const baselineHostPageIds = await readHostBrowserPageIds(hostClient, worktreeId)
@@ -247,11 +269,14 @@ test('returns a headed host page identity before owner-pinned navigation can tim
       worktreeId,
       fixture.url
     )
+
     await expect.poll(fixture.pendingCount, { timeout: 30_000 }).toBe(1)
+
     const firstHostPageId = await expect
       .poll(
         async () => {
           const ids = await readHostBrowserPageIds(hostClient, worktreeId)
+
           return ids.find((id) => !baselineHostPageIds.includes(id)) ?? null
         },
         { timeout: 30_000, message: 'host never registered the owner-pinned page' }
@@ -259,11 +284,14 @@ test('returns a headed host page identity before owner-pinned navigation can tim
       .not.toBeNull()
       .then(async () => {
         const ids = await readHostBrowserPageIds(hostClient, worktreeId)
+
         return ids.find((id) => !baselineHostPageIds.includes(id)) ?? null
       })
+
     const first = await firstPromise
 
     let retry: CreateOutcome | null = null
+
     if (!first.ok) {
       const retryPromise = createOwnerPinnedBrowser(
         client.page,
@@ -271,12 +299,15 @@ test('returns a headed host page identity before owner-pinned navigation can tim
         worktreeId,
         fixture.url
       )
+
       await expect.poll(fixture.pendingCount, { timeout: 30_000 }).toBe(2)
       retry = await retryPromise
     }
+
     const hostPageIds = (await readHostBrowserPageIds(hostClient, worktreeId)).filter(
       (id) => !baselineHostPageIds.includes(id)
     )
+
     await expect
       .poll(() => readClientBrowserPageIds(client!.page, worktreeId), {
         timeout: 30_000,
@@ -309,6 +340,7 @@ test('opens the held URL through the owner-pinned remote-pane link route @headfu
   test.setTimeout(300_000)
   const fixture = await startHeldNavigationServer()
   let client: PairedElectronClient | null = null
+
   try {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
@@ -329,6 +361,7 @@ test('opens the held URL through the owner-pinned remote-pane link route @headfu
       url: fixture.sourceUrl,
       worktree: `id:${worktreeId}`
     })
+
     const sourcePageId = await expect
       .poll(() => findMirroredPageId(client!.page, worktreeId, fixture.sourceUrl), {
         timeout: 60_000,
@@ -336,9 +369,11 @@ test('opens the held URL through the owner-pinned remote-pane link route @headfu
       })
       .not.toBeNull()
       .then(() => findMirroredPageId(client!.page, worktreeId, fixture.sourceUrl))
+
     if (!sourcePageId) {
       throw new Error('Source browser page disappeared')
     }
+
     await client.page.evaluate(
       ({ pageId, worktreeId }) =>
         window.__store?.getState().focusBrowserTabInWorktree(worktreeId, pageId, {
@@ -350,10 +385,12 @@ test('opens the held URL through the owner-pinned remote-pane link route @headfu
 
     await openLinkFromRemotePane(client.page, testInfo)
     await expect.poll(fixture.pendingCount, { timeout: 30_000 }).toBe(1)
+
     const createdPageId = await expect
       .poll(
         async () => {
           const ids = await readHostBrowserPageIds(hostClient, worktreeId)
+
           return ids.find((id) => !baselineHostPageIds.includes(id)) ?? null
         },
         { timeout: 30_000, message: 'link route never registered a host page' }
@@ -361,8 +398,10 @@ test('opens the held URL through the owner-pinned remote-pane link route @headfu
       .not.toBeNull()
       .then(async () => {
         const ids = await readHostBrowserPageIds(hostClient, worktreeId)
+
         return ids.find((id) => !baselineHostPageIds.includes(id)) ?? null
       })
+
     expect(createdPageId).not.toBeNull()
     await expect
       .poll(() => readClientBrowserPageIds(client!.page, worktreeId), {

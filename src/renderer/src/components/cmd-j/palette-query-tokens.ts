@@ -17,17 +17,21 @@ export function normalizeCmdJPaletteQuery(value: string): string {
   const folded = normalizePaletteText(value).normalized
   let normalized = ''
   let pendingWhitespace = false
+
   for (let index = 0; index < folded.length; index += 1) {
     if (isCmdJPaletteWhitespace(folded.charCodeAt(index))) {
       pendingWhitespace = normalized.length > 0
       continue
     }
+
     if (pendingWhitespace) {
       normalized += ' '
       pendingWhitespace = false
     }
+
     normalized += folded[index]
   }
+
   return normalized
 }
 
@@ -36,15 +40,19 @@ export function normalizeCmdJPaletteQuery(value: string): string {
 // tokenizer, which would reject `08-13 1.4.182` far earlier than the entity sections do.
 export function isCmdJPaletteQueryOverTokenLimit(normalizedQuery: string): boolean {
   const seen = new Set<string>()
+
   for (const token of normalizedQuery.split(' ')) {
     if (!token) {
       continue
     }
+
     seen.add(token)
+
     if (seen.size > PALETTE_QUERY_MAX_TOKENS) {
       return true
     }
   }
+
   // Why also bound the scoring split: whitespace-split counting lets 2KB of punctuation
   // through as a single token, and the scorer's tokenizer then expands it into hundreds —
   // paid once per candidate, per keystroke, on the render thread.
@@ -117,6 +125,7 @@ export function cmdJPaletteTokenScore(
   values: readonly string[]
 ): number {
   const candidateTokens = values.flatMap(tokenizeCmdJPaletteQuery)
+
   if (candidateTokens.length === 0) {
     return 0
   }
@@ -124,8 +133,10 @@ export function cmdJPaletteTokenScore(
   let score = 0
   let meaningful = 0
   let covered = 0
+
   for (const queryToken of queryTokens) {
     let best = 0
+
     for (const candidateToken of candidateTokens) {
       if (candidateToken === queryToken) {
         best = Math.max(best, 3)
@@ -145,11 +156,15 @@ export function cmdJPaletteTokenScore(
         best = Math.max(best, 1)
       }
     }
+
     score += best
+
     if (CMD_J_QUERY_FILLER_TOKENS.has(queryToken)) {
       continue
     }
+
     meaningful += 1
+
     if (best > 0) {
       covered += 1
     }
@@ -160,5 +175,6 @@ export function cmdJPaletteTokenScore(
   if (meaningful > 0 && covered * 2 <= meaningful) {
     return 0
   }
+
   return score
 }

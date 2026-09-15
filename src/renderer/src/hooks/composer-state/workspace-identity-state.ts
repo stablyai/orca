@@ -46,15 +46,18 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     if (linkedWorkItemSeedIdentity?.type === 'issue') {
       return String(linkedWorkItemSeedIdentity.number)
     }
+
     if (persistDraft && newWorkspaceDraft?.linkedIssue) {
       return newWorkspaceDraft.linkedIssue
     }
+
     if (
       initialLinkedWorkItem?.type === 'issue' &&
       getLinkedWorkItemProvider(initialLinkedWorkItem) === 'github'
     ) {
       return String(initialLinkedWorkItem.number)
     }
+
     return ''
   })
 
@@ -62,12 +65,15 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     if (linkedWorkItemSeedIdentity?.type === 'pr') {
       return linkedWorkItemSeedIdentity.number
     }
+
     if (linkedWorkItemSeedIdentity?.type === 'issue') {
       return null
     }
+
     if (persistDraft && newWorkspaceDraft?.linkedPR !== undefined) {
       return newWorkspaceDraft.linkedPR
     }
+
     return initialLinkedWorkItem?.type === 'pr' ? initialLinkedWorkItem.number : null
   })
 
@@ -76,6 +82,7 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     if (persistDraft && newWorkspaceDraft?.linkedGitLabIssue !== undefined) {
       return newWorkspaceDraft.linkedGitLabIssue
     }
+
     return initialLinkedWorkItem?.type === 'issue' && isGitLabIssueUrl(initialLinkedWorkItem.url)
       ? initialLinkedWorkItem.number
       : null
@@ -85,6 +92,7 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     if (persistDraft && newWorkspaceDraft?.linkedGitLabMR !== undefined) {
       return newWorkspaceDraft.linkedGitLabMR
     }
+
     return initialLinkedWorkItem?.type === 'mr' ? initialLinkedWorkItem.number : null
   })
 
@@ -165,9 +173,11 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     if (isRemote) {
       return s.remoteDetectedAgentIds[connectionId] ?? null
     }
+
     if (runtimeEnvironmentId) {
       return s.runtimeDetectedAgentIds[runtimeEnvironmentId] ?? null
     }
+
     return s.detectedAgentIds
   })
 

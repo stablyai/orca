@@ -36,6 +36,7 @@ export class BrowserCertificateTrustController {
     this.requestGuard = new BrowserCertificateRequestGuard({
       onBlockedMainFrame: (blocked) => {
         const context = this.dependencies.resolveManagedGuestContext(blocked.webContentsId)
+
         if (context) {
           this.recordPendingChallenge({
             ...blocked,
@@ -63,23 +64,29 @@ export class BrowserCertificateTrustController {
     isMainFrame: boolean
   }): void {
     let answered = false
+
     const answer = (trusted: boolean): void => {
       if (!answered) {
         answered = true
         args.callback(trusted)
       }
     }
+
     try {
       const context = this.dependencies.resolveManagedGuestContext(args.webContents.id)
       const parsed = new URL(args.url)
       const endpoint = toSecureCertificateEndpoint(args.url)
       const digest = getLeafCertificateSha256(args.certificate)
       const error = normalizeCertificateError(args.error)
+
       if (!context || !endpoint || !digest) {
         answer(false)
+
         return
       }
+
       const identity = { secureEndpoint: endpoint, leafCertificateSha256: digest, error }
+
       if (
         this.requestGuard.shouldTrustCertificate(
           args.webContents.session,
@@ -89,8 +96,10 @@ export class BrowserCertificateTrustController {
       ) {
         args.event.preventDefault()
         answer(true)
+
         return
       }
+
       if (
         args.isMainFrame &&
         parsed.protocol === 'https:' &&
@@ -109,6 +118,7 @@ export class BrowserCertificateTrustController {
           error
         })
       }
+
       answer(false)
     } catch (error) {
       // Why: fail closed, but log first — a throw in challenge recording would
@@ -121,9 +131,11 @@ export class BrowserCertificateTrustController {
 
   onGuestRegistered(webContentsId: number, browserPageId: string): void {
     const pending = this.pendingByGuestId.get(webContentsId)
+
     if (!pending) {
       return
     }
+
     pending.browserPageId = browserPageId
     this.emitFailure(pending)
   }
@@ -148,53 +160,69 @@ export class BrowserCertificateTrustController {
 
   getFailure(browserPageId: string): BrowserCertificateFailure | null {
     this.pruneExpired()
+
     for (const pending of this.pendingByGuestId.values()) {
       if (pending.browserPageId === browserPageId) {
         return toBrowserCertificateFailure(pending)
       }
     }
+
     return null
   }
 
   proceed(browserPageId: string, challengeId: string): BrowserCertificateProceedResult {
     const webContentsId = this.dependencies.resolveWebContentsIdForPage(browserPageId)
+
     if (webContentsId === null) {
       return { ok: false, reason: 'missing' }
     }
+
     const pending = this.pendingByGuestId.get(webContentsId)
+
     if (!pending) {
       return { ok: false, reason: 'missing' }
     }
+
     if (pending.challengeId !== challengeId || pending.browserPageId !== browserPageId) {
       return { ok: false, reason: 'changed' }
     }
+
     if (pending.expiresAt <= this.now()) {
       this.clearPending(webContentsId, true)
+
       return { ok: false, reason: 'expired' }
     }
+
     if (pending.errorCode !== SUPPORTED_CERTIFICATE_ERROR_CODE) {
       return { ok: false, reason: 'ineligible' }
     }
+
     if (pending.navigationSequence !== (this.navigationSequenceByGuestId.get(webContentsId) ?? 0)) {
       return { ok: false, reason: 'navigated' }
     }
+
     const context = this.dependencies.resolveManagedGuestContext(webContentsId)
     const guest = this.dependencies.resolveWebContents(webContentsId)
+
     if (!context || context.browserPageId !== browserPageId || !guest || guest.isDestroyed()) {
       return { ok: false, reason: 'missing' }
     }
+
     const granted = this.requestGuard.grant(guest.session, {
       guestWebContentsId: webContentsId,
       secureEndpoint: pending.secureEndpoint,
       leafCertificateSha256: pending.leafCertificateSha256,
       error: pending.error
     })
+
     if (!granted) {
       return { ok: false, reason: 'ineligible' }
     }
+
     const navigationUrl = pending.navigationUrl
     this.clearPending(webContentsId, true)
     void guest.loadURL(navigationUrl).catch(() => {})
+
     return { ok: true }
   }
 
@@ -210,6 +238,7 @@ export class BrowserCertificateTrustController {
   }): void {
     const navigationSequence = this.navigationSequenceByGuestId.get(args.webContentsId) ?? 0
     const existing = this.pendingByGuestId.get(args.webContentsId)
+
     if (
       existing &&
       certificateChallengeIdentityMatches(existing, {
@@ -221,8 +250,10 @@ export class BrowserCertificateTrustController {
     ) {
       return
     }
+
     this.clearPending(args.webContentsId, true)
     const observedAt = this.now()
+
     const pending: PendingCertificateChallenge = {
       challengeId: this.dependencies.createChallengeId?.() ?? randomUUID(),
       guestWebContentsId: args.webContentsId,
@@ -238,6 +269,7 @@ export class BrowserCertificateTrustController {
       observedAt,
       expiresAt: observedAt + CERTIFICATE_CHALLENGE_TTL_MS
     }
+
     this.pendingByGuestId.set(args.webContentsId, pending)
     this.scheduleExpiry(pending)
     this.enforcePendingBound()
@@ -258,10 +290,12 @@ export class BrowserCertificateTrustController {
     const pending = this.pendingByGuestId.get(webContentsId)
     this.pendingByGuestId.delete(webContentsId)
     const timer = this.expiryTimerByGuestId.get(webContentsId)
+
     if (timer) {
       clearTimeout(timer)
       this.expiryTimerByGuestId.delete(webContentsId)
     }
+
     if (notify && pending?.browserPageId) {
       this.dependencies.onFailureChanged(webContentsId, null)
     }
@@ -278,12 +312,14 @@ export class BrowserCertificateTrustController {
       },
       Math.max(0, pending.expiresAt - this.now())
     )
+
     timer.unref?.()
     this.expiryTimerByGuestId.set(pending.guestWebContentsId, timer)
   }
 
   private pruneExpired(): void {
     const now = this.now()
+
     for (const pending of this.pendingByGuestId.values()) {
       if (pending.expiresAt <= now) {
         this.clearPending(pending.guestWebContentsId, true)
@@ -294,9 +330,11 @@ export class BrowserCertificateTrustController {
   private enforcePendingBound(): void {
     while (this.pendingByGuestId.size > MAX_PENDING_CERTIFICATE_CHALLENGES) {
       const oldest = this.pendingByGuestId.keys().next().value as number | undefined
+
       if (oldest === undefined) {
         return
       }
+
       this.clearPending(oldest, true)
     }
   }

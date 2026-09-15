@@ -23,10 +23,12 @@ import type {
   SkillCloudPublishRequest,
   SkillCloudService
 } from './runtime-skill-types'
+
 export type {
   RuntimeSkillCommandSurface,
   RuntimeSkillCommandHost
 } from './runtime-skill-command-contract'
+
 export { installRuntimeSkillCommandSurface } from './runtime-skill-command-contract'
 
 export class RuntimeSkillCommands
@@ -50,6 +52,7 @@ export class RuntimeSkillCommands
     if (!this.skillCloudService) {
       throw new Error('Skill Cloud service is unavailable.')
     }
+
     return this.skillCloudService
   }
   async publishDiscoveredSkillsFromAgent(
@@ -58,16 +61,20 @@ export class RuntimeSkillCommands
     signal?: AbortSignal
   ): Promise<AgentSkillShareOperation> {
     this.assertAgentSkillSharingAllowed()
+
     if (this.skillShareInProgress) {
       throw new AgentSkillSharingError(
         AGENT_SKILL_SHARING_BUSY_CODE,
         'Another agent skill bundle is being published. Wait for it to finish and try again.'
       )
     }
+
     this.skillShareInProgress = true
+
     try {
       const selected = selectDiscoveredSkills(discoveredSkills, request.skillSelectors)
       const cloud = this.requireCloud()
+
       const preparations = new SkillSharePreparationService(
         join(this.userDataPath(), 'agent-skill-share-operations'),
         {
@@ -76,17 +83,22 @@ export class RuntimeSkillCommands
         },
         { installStateDirectory: join(this.userDataPath(), 'skill-installs') }
       )
+
       let preparationId: string | null = null
+
       const cancel = () => {
         if (preparationId) {
           preparations.cancel(preparationId)
         }
       }
+
       signal?.addEventListener('abort', cancel, { once: true })
+
       try {
         if (signal?.aborted) {
           throw signal.reason ?? new Error('skill-share-cancelled')
         }
+
         const preview = await preparations
           .prepare({
             sources: selected.map((skill) => ({
@@ -111,17 +123,23 @@ export class RuntimeSkillCommands
                 'A selected skill cannot be shared. Its SKILL.md must declare a lowercase name containing only letters, numbers, and hyphens.'
               )
             }
+
             throw error
           })
+
         preparationId = preview.preparationId
+
         if (signal?.aborted) {
           throw signal.reason ?? new Error('skill-share-cancelled')
         }
+
         this.assertAgentSkillSharingAllowed()
+
         const published = await preparations.publish({
           preparationId,
           releaseNotes: request.releaseNotes
         })
+
         return published.status === 'ok'
           ? {
               status: 'ok',

@@ -26,6 +26,7 @@ function ActionRow({
   onRun: () => void
 }): React.JSX.Element {
   const isMac = navigator.userAgent.includes('Mac')
+
   const keys = alternate
     ? [isMac ? '⇧' : 'Shift', isMac ? '⌘' : 'Ctrl', 'Click']
     : [isMac ? '⌘' : 'Ctrl', 'Click']
@@ -56,6 +57,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
   const copyableDestination = request?.kind === 'url' ? request.destination : ''
   const { copyText, status: copyStatus } = useClipboardTextCopyFeedback(copyableDestination)
   const copyInFlightRef = useRef(false)
+
   const virtualRef = useMemo(
     () => ({
       current: {
@@ -75,6 +77,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
     'auto.components.terminal.pane.TerminalLinkActionPopover.terminalLinkSettings',
     'Terminal link settings'
   )
+
   const copyLabel =
     copyStatus === 'copied'
       ? translate('auto.components.terminal.pane.TerminalLinkActionPopover.copied', 'Copied')
@@ -84,7 +87,9 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
     if (copyInFlightRef.current) {
       return
     }
+
     copyInFlightRef.current = true
+
     try {
       if (await copyText()) {
         toast.success(
@@ -93,8 +98,10 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
             'Copied link'
           )
         )
+
         return
       }
+
       toast.error(
         translate(
           'auto.components.terminal.pane.TerminalLinkActionPopover.copyLinkFailed',

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { shouldUseAiVaultServiceProcess } from './session-scanner-background'
 
 const originalBackend = process.env.ORCA_AI_VAULT_SERVICE_PROCESS
+
 const originalNodeEnv = process.env.NODE_ENV
 
 afterEach(() => {
@@ -10,6 +11,7 @@ afterEach(() => {
   } else {
     process.env.ORCA_AI_VAULT_SERVICE_PROCESS = originalBackend
   }
+
   process.env.NODE_ENV = originalNodeEnv
 })
 

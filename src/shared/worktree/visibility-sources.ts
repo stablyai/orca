@@ -13,7 +13,9 @@ import type {
 import type { WorktreeVisibilityDefaults } from '../global-settings-types'
 
 export const MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES = 32
+
 const MAX_SOURCE_ID_LENGTH = 128
+
 const MAX_SOURCE_PATH_LENGTH = 4096
 
 export const BUILT_IN_WORKTREE_VISIBILITY_SOURCES: readonly {
@@ -38,6 +40,7 @@ function isValidSourceId(value: string): boolean {
 
 function normalizeSourceRootPath(value: string): string | null {
   const trimmed = value.trim()
+
   if (
     !trimmed ||
     trimmed.length > MAX_SOURCE_PATH_LENGTH ||
@@ -47,6 +50,7 @@ function normalizeSourceRootPath(value: string): string | null {
   ) {
     return null
   }
+
   return trimmed
 }
 
@@ -56,31 +60,41 @@ export function normalizeCustomWorktreeVisibilitySources(
   if (!Array.isArray(value)) {
     return undefined
   }
+
   const ids = new Set<string>()
   const roots = new Set<string>()
   const normalized: CustomWorktreeVisibilitySource[] = []
+
   for (const candidate of value) {
     if (normalized.length >= MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES) {
       break
     }
+
     if (!candidate || typeof candidate !== 'object') {
       continue
     }
+
     const { id, rootPath } = candidate as { id?: unknown; rootPath?: unknown }
+
     if (typeof id !== 'string' || !isValidSourceId(id) || typeof rootPath !== 'string') {
       continue
     }
+
     const normalizedRootPath = normalizeSourceRootPath(rootPath)
+
     const rootKey = normalizedRootPath
       ? normalizeRuntimePathForComparison(normalizedRootPath)
       : null
+
     if (!normalizedRootPath || !rootKey || ids.has(id) || roots.has(rootKey)) {
       continue
     }
+
     ids.add(id)
     roots.add(rootKey)
     normalized.push({ id, rootPath: normalizedRootPath })
   }
+
   return normalized
 }
 
@@ -94,27 +108,34 @@ export function normalizeWorktreeVisibilitySourcePreferences(
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined
   }
+
   const raw = value as { builtIn?: unknown; custom?: unknown }
+
   const builtInValue =
     raw.builtIn && typeof raw.builtIn === 'object' && !Array.isArray(raw.builtIn)
       ? (raw.builtIn as Record<string, unknown>)
       : {}
+
   const builtIn = Object.fromEntries(
     BUILT_IN_WORKTREE_VISIBILITY_SOURCES.flatMap(({ id }) => {
       const visibility = normalizeVisibility(builtInValue[id])
+
       return visibility ? [[id, visibility]] : []
     })
   ) as WorktreeVisibilitySourcePreferences['builtIn']
+
   const customValue =
     raw.custom && typeof raw.custom === 'object' && !Array.isArray(raw.custom)
       ? (raw.custom as Record<string, unknown>)
       : {}
+
   const custom = Object.fromEntries(
     Object.entries(customValue)
       .filter(([id, visibility]) => isValidSourceId(id) && normalizeVisibility(visibility))
       .slice(0, MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES)
       .map(([id, visibility]) => [id, normalizeVisibility(visibility)!])
   )
+
   return {
     ...(Object.keys(builtIn ?? {}).length > 0 ? { builtIn } : {}),
     ...(Object.keys(custom).length > 0 ? { custom } : {})
@@ -124,6 +145,7 @@ export function normalizeWorktreeVisibilitySourcePreferences(
 function createDescendantMatcher(rootPath: string): (normalizedCandidate: string) => boolean {
   const matchesInsideOrEqual = createNormalizedPathInsideOrEqualMatcher(rootPath)
   const normalizedRoot = normalizeRuntimePathForComparison(rootPath)
+
   return (normalizedCandidate) =>
     normalizedCandidate !== normalizedRoot && matchesInsideOrEqual(normalizedCandidate)
 }
@@ -139,14 +161,17 @@ export function createWorktreeVisibilitySourceMatcher(
   configuredWorktreeBasePaths: readonly string[]
 ): WorktreeVisibilitySourceMatcher {
   const checkoutPathKeys = new Set(checkoutPaths.map(normalizeRuntimePathForComparison))
+
   const customMatchers = customSources.map(({ id, rootPath }) => ({
     id,
     matches: createDescendantMatcher(rootPath)
   }))
+
   const configuredBases = configuredWorktreeBasePaths.map((basePath) => ({
     key: normalizeRuntimePathForComparison(basePath),
     contains: createNormalizedPathInsideOrEqualMatcher(basePath)
   }))
+
   // Why: only a base pointing at or inside the matched root counts. A base of
   // `.` or `..` merely contains the root and must not exempt it (#9388).
   const isSupersededByConfiguredBase = (sourceRootKey: string, candidateKey: string): boolean =>
@@ -155,19 +180,25 @@ export function createWorktreeVisibilitySourceMatcher(
         base.contains(candidateKey) &&
         (base.key === sourceRootKey || base.key.startsWith(`${sourceRootKey}/`))
     )
+
   return (worktreePath) => {
     const normalizedCandidate = normalizeRuntimePathForComparison(worktreePath)
     const segments = normalizedCandidate.split('/')
+
     for (const source of BUILT_IN_WORKTREE_VISIBILITY_SOURCES) {
       const prefix = source.relativeRootSegments
+
       for (let index = 0; index + prefix.length < segments.length; index += 1) {
         if (!prefix.every((segment, offset) => segments[index + offset] === segment)) {
           continue
         }
+
         const checkoutPath = segments.slice(0, index).join('/')
+
         const checkoutPathKey = /^[a-z]:$/i.test(checkoutPath)
           ? `${checkoutPath}/`
           : checkoutPath || '/'
+
         if (
           checkoutPathKeys.has(checkoutPathKey) &&
           !isSupersededByConfiguredBase(
@@ -179,11 +210,13 @@ export function createWorktreeVisibilitySourceMatcher(
         }
       }
     }
+
     for (const source of customMatchers) {
       if (source.matches(normalizedCandidate)) {
         return { kind: 'custom', id: source.id }
       }
     }
+
     return null
   }
 }
@@ -196,12 +229,15 @@ export function effectiveBuiltInWorktreeSourceVisibility(
   const explicit = normalizeWorktreeVisibilitySourcePreferences(
     repo.worktreeVisibilitySourcePreferences
   )?.builtIn?.[sourceId]
+
   if (explicit) {
     return explicit
   }
+
   if (repo.agentWorktreeVisibility) {
     return repo.agentWorktreeVisibility
   }
+
   return effectiveDefaultBuiltInWorktreeSourceVisibility(defaults, sourceId)
 }
 
@@ -213,12 +249,15 @@ export function effectiveCustomWorktreeSourceVisibility(
   const explicit = normalizeWorktreeVisibilitySourcePreferences(
     repo.worktreeVisibilitySourcePreferences
   )?.custom?.[sourceId]
+
   if (explicit) {
     return explicit
   }
+
   const isRepoSource = normalizeCustomWorktreeVisibilitySources(
     repo.customWorktreeVisibilitySources
   )?.some((source) => source.id === sourceId)
+
   return isRepoSource ? 'hide' : effectiveDefaultCustomWorktreeSourceVisibility(defaults, sourceId)
 }
 

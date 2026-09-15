@@ -16,6 +16,7 @@ export function createDirectSshReconnectTargetState(
 ): DirectSshReconnectTargetState {
   const rotatedRapidly =
     previous !== undefined && installedAt - previous.installedAt < stabilizationMs
+
   return {
     authority,
     installedAt,

@@ -29,37 +29,53 @@ export function admitBrowserNetworkTunnelOpen(
   context: BrowserNetworkTunnelOpenAdmissionContext
 ): BrowserNetworkTunnelStream | null {
   const identityError = reserveBrowserNetworkTunnelStreamId(context.openedStreamIds, frame.streamId)
+
   if (identityError) {
     context.sendError(frame.streamId, identityError)
     context.closeSession()
+
     return null
   }
+
   if (!context.resourceBudget.admitOpenAttempt()) {
     context.sendError(frame.streamId, 'open_rate_exceeded')
+
     return null
   }
+
   if (context.streamCount >= BROWSER_NETWORK_TUNNEL_MAX_STREAMS) {
     context.sendError(frame.streamId, 'stream_limit_exceeded')
+
     return null
   }
+
   const target = decodeBrowserNetworkTunnelOpen(frame.payload)
+
   if (!target) {
     context.sendError(frame.streamId, 'invalid_open_target')
+
     return null
   }
+
   const releasePendingOpen = context.resourceBudget.claimPendingOpen()
+
   if (!releasePendingOpen) {
     context.sendError(frame.streamId, 'pending_open_limit_exceeded')
+
     return null
   }
+
   let socket: BrowserNetworkTunnelSocket
+
   try {
     socket = context.connect(target)
   } catch {
     releasePendingOpen()
     context.sendError(frame.streamId, 'destination_connect_failed')
+
     return null
   }
+
   return createBrowserNetworkTunnelStream({
     id: frame.streamId,
     socket,

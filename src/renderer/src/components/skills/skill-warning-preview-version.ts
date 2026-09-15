@@ -22,6 +22,7 @@ export function skillWarningPreviewVersion(): SkillCloudVersion {
     'auto.components.skills.skillWarningPreview.bundleDescription',
     'A preview bundle covering every warning level.'
   )
+
   const skill = (
     id: string,
     name: string,

@@ -35,6 +35,7 @@ export function claudeTurnOpenedBySendEcho(
   input: ClaudeSendEchoTurnInput
 ): ClaudeCurrentTurn | null {
   const { envelope } = input
+
   return envelope.role === 'user' &&
     input.startsTurn &&
     claudeHasReplayContent(envelope) &&
@@ -62,6 +63,7 @@ export type ClaudeTurnSource = { sessionId: string; uuid: string; assistant: boo
 export function claudeStreamTurnSource(frame: Record<string, unknown>): ClaudeTurnSource | null {
   const sessionId = claudeText(frame.session_id)
   const uuid = claudeText(frame.uuid)
+
   // A streamed delta only ever carries model output.
   return sessionId && uuid ? { sessionId, uuid, assistant: true } : null
 }
@@ -71,6 +73,7 @@ export function claudeStreamTurnStartSource(
   frame: Record<string, unknown>
 ): ClaudeTurnSource | null {
   const event = claudeRecord(frame.event)
+
   return frame.type === 'stream_event' && event?.type === 'message_start'
     ? claudeStreamTurnSource(frame)
     : null
@@ -88,9 +91,11 @@ export function createClaudeTurnOpener(deps: {
     if (!source?.assistant || !isRootClaudeFrame(frame)) {
       return
     }
+
     if (deps.isSuppressed() || deps.isTurnOpen()) {
       return
     }
+
     deps.open(
       {
         sessionId: source.sessionId,

@@ -29,13 +29,16 @@ export async function syncRuntimeGraph(): Promise<void> {
   if (!graphState.syncEnabled || !graphState.getStoreState) {
     return
   }
+
   // The store getter is injected to break the terminal-slice construction cycle.
   const state = graphState.getStoreState()
   const systemPrefersDark = getSystemPrefersDark()
   const ambiguousTerminalTabIds = collectAmbiguousTerminalTabIds(state.tabsByWorktree)
   const terminalTabsByWorktree = new Map<string, Map<string, TerminalTab>>()
+
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     const tabsById = new Map<string, TerminalTab>()
+
     for (const tab of tabs) {
       // Duplicate ids in one worktree are malformed persisted state; don't
       // guess which PTY a mounted surface owns.
@@ -43,17 +46,23 @@ export async function syncRuntimeGraph(): Promise<void> {
         tabsById.delete(tab.id)
         continue
       }
+
       tabsById.set(tab.id, tab)
     }
+
     terminalTabsByWorktree.set(worktreeId, tabsById)
   }
+
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
+
   const mobileSessionTabs = buildMobileSessionTabSnapshots(
     state,
     systemPrefersDark,
     ambiguousTerminalTabIds
   )
+
   const publication = partitionMobileSessionPublication(mobileSessionTabs)
+
   const graph: RuntimeRendererSyncWindowGraph = {
     tabs: [],
     leaves: [],
@@ -66,18 +75,24 @@ export async function syncRuntimeGraph(): Promise<void> {
     if (ambiguousTerminalTabIds.has(registeredTab.tabId)) {
       continue
     }
+
     const tab = terminalTabsByWorktree.get(registeredTab.worktreeId)?.get(registeredTab.tabId)
+
     if (!tab) {
       continue
     }
+
     if (isWebOnlyMirroredTerminalTab(tab, state.terminalLayoutsByTabId[registeredTab.tabId])) {
       continue
     }
+
     const manager = registeredTab.getManager()
     const container = registeredTab.getContainer()
     const activePaneId = manager?.getActivePane()?.id ?? null
+
     const root =
       container?.firstElementChild instanceof HTMLElement ? container.firstElementChild : null
+
     graph.tabs.push({
       tabId: registeredTab.tabId,
       worktreeId: registeredTab.worktreeId,
@@ -85,13 +100,16 @@ export async function syncRuntimeGraph(): Promise<void> {
       activeLeafId: activePaneId === null ? null : (manager?.getLeafId(activePaneId) ?? null),
       layout: serializePaneTree(root)
     })
+
     const savedPtyIdsByLeafId =
       state.terminalLayoutsByTabId[registeredTab.tabId]?.ptyIdsByLeafId ?? {}
+
     for (const pane of manager?.getPanes() ?? []) {
       const leafId = pane.leafId
       const ptyId = registeredTab.getPtyIdForPane(pane.id)
       const savedPtyId = savedPtyIdsByLeafId[leafId] ?? null
       const registeredTime = graphState.tabRegisteredAt.get(registrationKey) ?? 0
+
       if (!ptyId && savedPtyId && Date.now() - registeredTime > NO_TRANSPORT_GRACE_MS) {
         warnTerminalLifecycleAnomaly('mounted terminal leaf has saved PTY but no live transport', {
           tabId: registeredTab.tabId,
@@ -101,6 +119,7 @@ export async function syncRuntimeGraph(): Promise<void> {
           ptyId: savedPtyId
         })
       }
+
       const paneTitles = state.runtimePaneTitlesByTabId[registeredTab.tabId] ?? {}
       graph.leaves.push({
         tabId: registeredTab.tabId,
@@ -121,22 +140,28 @@ export async function syncRuntimeGraph(): Promise<void> {
   // Inactive automation/cold-parked tabs do not mount a TerminalPane; publish persisted leaves
   // only when a live eager buffer or parked watcher proves the PTY is still owned.
   const parkedWatcherPtyIds = collectParkedTerminalWatcherPtyIds()
+
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     for (const tab of tabs) {
       if (ambiguousTerminalTabIds.has(tab.id)) {
         continue
       }
+
       const layout = state.terminalLayoutsByTabId[tab.id]
+
       if (
         findRegisteredTerminalTab(tab.id, worktreeId) !== null ||
         isWebOnlyMirroredTerminalTab(tab, layout)
       ) {
         continue
       }
+
       const savedPtyIdsByLeafId = layout?.ptyIdsByLeafId
+
       if (!savedPtyIdsByLeafId) {
         continue
       }
+
       const liveLeaves = Object.entries(savedPtyIdsByLeafId).filter(
         ([leafId, ptyId]) =>
           typeof ptyId === 'string' &&
@@ -144,9 +169,11 @@ export async function syncRuntimeGraph(): Promise<void> {
           isTerminalLeafId(leafId) &&
           (Boolean(getEagerPtyBufferHandle(ptyId)) || parkedWatcherPtyIds.has(ptyId))
       )
+
       if (liveLeaves.length === 0) {
         continue
       }
+
       const title = resolveRuntimeTerminalTitle(tab, generatedTitlesEnabled)
       const publishedLeafIds = new Set(liveLeaves.map(([leafId]) => leafId))
       const savedActiveLeafId = layout?.activeLeafId
@@ -190,6 +217,7 @@ export async function syncRuntimeGraph(): Promise<void> {
     commitMobileSessionPublication(mobileSessionTabs, result?.mobileSessionResyncWorktrees)
     const currentState = graphState.getStoreState()
     currentState?.setRuntimeAgentOrchestrationByPaneKey?.(result?.agentOrchestrationByPaneKey ?? {})
+
     for (const resolution of result?.nativeChatLaunchDraftResolutions ?? []) {
       if (currentState) {
         applyNativeChatLaunchDraftResolved(currentState, {
@@ -198,6 +226,7 @@ export async function syncRuntimeGraph(): Promise<void> {
         })
       }
     }
+
     if (result?.mobileSessionResyncWorktrees?.length) {
       scheduleTrailingGraphSync()
     }
@@ -207,6 +236,7 @@ export async function syncRuntimeGraph(): Promise<void> {
 }
 
 let scheduleTrailingGraphSync: () => void = () => undefined
+
 export function setTrailingGraphSyncScheduler(scheduler: () => void): void {
   scheduleTrailingGraphSync = scheduler
 }
@@ -217,6 +247,7 @@ function partitionMobileSessionPublication(snapshots: RuntimeMobileSessionTabsSn
 } {
   const changed: RuntimeMobileSessionTabsSnapshot[] = []
   const unchangedWorktrees: string[] = []
+
   for (const snapshot of snapshots) {
     if (graphState.publishedMobileSessionSnapshotByWorktree.get(snapshot.worktree) === snapshot) {
       unchangedWorktrees.push(snapshot.worktree)
@@ -224,6 +255,7 @@ function partitionMobileSessionPublication(snapshots: RuntimeMobileSessionTabsSn
       changed.push(snapshot)
     }
   }
+
   return { changed, unchangedWorktrees }
 }
 
@@ -232,15 +264,18 @@ function commitMobileSessionPublication(
   resyncWorktrees: string[] | undefined
 ): void {
   const published = new Set<string>()
+
   for (const snapshot of snapshots) {
     published.add(snapshot.worktree)
     graphState.publishedMobileSessionSnapshotByWorktree.set(snapshot.worktree, snapshot)
   }
+
   for (const worktreeId of graphState.publishedMobileSessionSnapshotByWorktree.keys()) {
     if (!published.has(worktreeId)) {
       graphState.publishedMobileSessionSnapshotByWorktree.delete(worktreeId)
     }
   }
+
   for (const worktreeId of resyncWorktrees ?? []) {
     graphState.publishedMobileSessionSnapshotByWorktree.delete(worktreeId)
   }

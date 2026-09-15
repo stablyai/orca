@@ -37,14 +37,17 @@ export function SearchResultsPane({
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => {
       const row = rows[index]
+
       if (!row) {
         return 20
       }
+
       // Why: file rows include pt-1.5 (6 px) for inter-group spacing, so
       // their estimate is taller than match rows.
       if (row.type === 'file') {
         return 28
       }
+
       return 20
     },
     // Why: paddingEnd adds visible breathing room after the last result row.
@@ -54,12 +57,15 @@ export function SearchResultsPane({
     overscan: SEARCH_VIRTUAL_OVERSCAN,
     getItemKey: (index) => {
       const row = rows[index]
+
       if (!row) {
         return `missing:${index}`
       }
+
       if (row.type === 'file') {
         return `file:${row.fileResult.filePath}`
       }
+
       return `match:${row.fileResult.filePath}:${row.match.line}:${row.match.column}:${row.matchIndex}`
     }
   })
@@ -87,6 +93,7 @@ export function SearchResultsPane({
           <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
             {virtualizer.getVirtualItems().map((virtualRow) => {
               const row = rows[virtualRow.index]
+
               if (!row) {
                 return null
               }

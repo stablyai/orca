@@ -6,6 +6,7 @@ export type PaneSpawnReservation = {
   resolve: (result: PaneSpawnReservationResult) => void
   reject: (error: unknown) => void
 }
+
 export type PaneSpawnReservationResult = {
   id: string
   launchConfig?: SleepingAgentLaunchConfig
@@ -18,23 +19,28 @@ export type PaneSpawnReservationResult = {
 
 // Why: identical pane coordinates on different worktrees or hosts are independent owners.
 export const paneSpawnReservationsByOwnerKey = new Map<string, PaneSpawnReservation>()
+
 export type PendingRuntimePaneCreate = {
   count: number
   promise: Promise<void>
   resolve: () => void
 }
+
 export const pendingRuntimePaneCreatesByOwnerKey = new Map<string, PendingRuntimePaneCreate>()
 
 export function reservePaneSpawn(paneKey: string): PaneSpawnReservation {
   let resolve!: (result: PaneSpawnReservationResult) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<PaneSpawnReservationResult>((promiseResolve, promiseReject) => {
     resolve = promiseResolve
     reject = promiseReject
   })
+
   promise.catch(() => {})
   const reservation = { promise, resolve, reject }
   paneSpawnReservationsByOwnerKey.set(paneKey, reservation)
+
   return reservation
 }
 
@@ -57,11 +63,15 @@ export function makePaneSpawnReservationKey(
 
 export function claimRuntimePaneCreate(ownerKey: string): () => void {
   const existing = pendingRuntimePaneCreatesByOwnerKey.get(ownerKey)
+
   if (existing) {
     existing.count += 1
+
     return () => releaseRuntimePaneCreate(ownerKey, existing)
   }
+
   let resolve!: () => void
+
   const claim = {
     count: 1,
     promise: new Promise<void>((done) => {
@@ -69,7 +79,9 @@ export function claimRuntimePaneCreate(ownerKey: string): () => void {
     }),
     resolve: () => resolve()
   }
+
   pendingRuntimePaneCreatesByOwnerKey.set(ownerKey, claim)
+
   return () => releaseRuntimePaneCreate(ownerKey, claim)
 }
 
@@ -77,10 +89,13 @@ export function releaseRuntimePaneCreate(ownerKey: string, claim: PendingRuntime
   if (pendingRuntimePaneCreatesByOwnerKey.get(ownerKey) !== claim) {
     return
   }
+
   claim.count -= 1
+
   if (claim.count > 0) {
     return
   }
+
   pendingRuntimePaneCreatesByOwnerKey.delete(ownerKey)
   claim.resolve()
 }
@@ -93,7 +108,9 @@ export function rejectPaneSpawnReservation(
   if (!reservation) {
     return
   }
+
   reservation.reject(error)
+
   if (paneKey) {
     clearPaneSpawnReservation(paneKey, reservation)
   }
@@ -107,9 +124,12 @@ export function resolvePaneSpawnReservation<T extends PaneSpawnReservationResult
   if (!reservation) {
     return response
   }
+
   reservation.resolve(response)
+
   if (paneKey) {
     clearPaneSpawnReservation(paneKey, reservation)
   }
+
   return response
 }

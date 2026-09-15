@@ -12,6 +12,7 @@ const retired = {
   terminal: 'term',
   incarnationId: 'inc'
 }
+
 function snapshot(
   overrides: Partial<RuntimeMobileSessionTabsSnapshot> = {}
 ): RuntimeMobileSessionTabsSnapshot {
@@ -46,10 +47,12 @@ describe('mobile session terminal retirement proofs', () => {
       worktreeInstanceId: 'instance-a',
       retiredTerminalSurfaces: [retired]
     })
+
     const hostWrite = preserveTerminalRetirementProofs(
       snapshot({ worktreeInstanceId: undefined, snapshotVersion: 2 }),
       occupantA
     )
+
     expect(hostWrite.worktreeInstanceId).toBe('instance-a')
     expect(hostWrite.retiredTerminalSurfaces).toEqual([retired])
 
@@ -59,16 +62,19 @@ describe('mobile session terminal retirement proofs', () => {
 
   it('keeps proofs for a host write that never learned any identity', () => {
     const existing = snapshot({ worktreeInstanceId: undefined, retiredTerminalSurfaces: [retired] })
+
     const next = preserveTerminalRetirementProofs(
       snapshot({ worktreeInstanceId: undefined, snapshotVersion: 2 }),
       existing
     )
+
     expect(next.worktreeInstanceId).toBeUndefined()
     expect(next.retiredTerminalSurfaces).toEqual([retired])
   })
 
   it('drops an old proof when its surface is published again', () => {
     const existing = snapshot({ retiredTerminalSurfaces: [retired] })
+
     const revived = preserveTerminalRetirementProofs(
       snapshot({
         tabs: [
@@ -85,6 +91,7 @@ describe('mobile session terminal retirement proofs', () => {
       }),
       existing
     )
+
     expect(revived.retiredTerminalSurfaces).toEqual([])
     expect(
       preserveTerminalRetirementProofs(snapshot(), revived).retiredTerminalSurfaces

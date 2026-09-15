@@ -9,8 +9,10 @@ import { registerWorkspaceKanbanVirtualLaneLayout } from './workspace-kanban-vir
 // Why: board cards are uniform one-line rows; a close estimate keeps the first
 // virtual window right so the lane does not reflow once cards measure.
 const WORKSPACE_BOARD_CARD_ESTIMATED_HEIGHT = 36
+
 // Matches the `space-y-2` rhythm the lane used before virtualization.
 const WORKSPACE_BOARD_CARD_GAP = 8
+
 const WORKSPACE_BOARD_CARD_OVERSCAN = 6
 
 function estimateWorkspaceBoardCardSize(): number {
@@ -49,6 +51,7 @@ function WorkspaceKanbanLaneCardList({
 }: WorkspaceKanbanLaneCardListProps): React.JSX.Element {
   const spacerRef = useRef<HTMLDivElement | null>(null)
   const itemIds = useMemo(() => items.map(getWorktreeHostIdentity), [items])
+
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
@@ -67,9 +70,11 @@ function WorkspaceKanbanLaneCardList({
   useLayoutEffect(() => {
     const scrollElement = scrollRef.current
     const spacerElement = spacerRef.current
+
     if (!scrollElement || !spacerElement) {
       return
     }
+
     return registerWorkspaceKanbanVirtualLaneLayout({
       scrollElement,
       spacerElement,
@@ -88,11 +93,14 @@ function WorkspaceKanbanLaneCardList({
     >
       {virtualizer.getVirtualItems().map((virtualItem) => {
         const worktree = items[virtualItem.index]
+
         if (!worktree) {
           return null
         }
+
         const worktreeIdentity = getWorktreeHostIdentity(worktree)
         const isSelected = selectedWorktreeIds.has(worktreeIdentity)
+
         return (
           <div
             key={virtualItem.key}

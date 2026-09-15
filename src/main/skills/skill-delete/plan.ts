@@ -33,12 +33,16 @@ function dedupePlacements(
   semantics: SkillPathSemantics
 ): ClassifiedPlacement[] {
   const seen = new Set<string>()
+
   return placements.filter((placement) => {
     const key = normalizedSkillPath(placement.path, semantics)
+
     if (seen.has(key)) {
       return false
     }
+
     seen.add(key)
+
     return true
   })
 }
@@ -85,6 +89,7 @@ export async function buildSkillDeletePlan(
     ...(input.providerRootOverrides ? { providerRootOverrides: input.providerRootOverrides } : {}),
     ...(input.homeDir ? { homeDir: input.homeDir } : {})
   })
+
   const rootPaths = roots.map((root) => root.path)
   // Widen the guest allow-list before anything touches it: the WSL filesystem's
   // constructor list covers installable providers only, a strict subset of the
@@ -99,22 +104,27 @@ export async function buildSkillDeletePlan(
   // component (a symlinked home, macOS `/tmp` -> `/private/tmp`) read `unowned`,
   // so canonical classification gets roots resolved the same way it is.
   const context: SkillDeleteGuardContext = { semantics, roots }
+
   const canonicalContext: SkillDeleteGuardContext = {
     semantics,
     roots: await resolvedRoots(roots, input.filesystem, toFilesystemPath)
   }
+
   const requested = input.request.skills
+
   // Inspect only paths a root already owns. A path outside every root is
   // `unowned` by definition, and asking the guest filesystem about it would
   // throw its own containment error before any of this reported a reason.
   const inspectable = requested.filter(
     (skill) => owningSkillRoot(api.dirname(skill.skillFilePath), context) !== null
   )
+
   const inspections = await inspectRequestedSkillFiles(
     inspectable,
     input.filesystem,
     toFilesystemPath
   )
+
   const candidates = await enumerateSkillPlacementCandidates({
     roots,
     filesystem: input.filesystem,
@@ -123,32 +133,43 @@ export async function buildSkillDeletePlan(
   })
 
   const placementRoots = new Map<string, ClassifiedPlacement[]>()
+
   const skills = requested.map((skill): SkillDeletePlanEntry => {
     const inspection = inspections.get(skill.skillFilePath)
+
     if (!inspection) {
       return blockedEntry(skill, skill.skillFilePath, 'unowned')
     }
+
     const canonicalPath = inspection.realpath
+
     if (!canonicalPath || inspection.kind === 'missing') {
       return blockedEntry(skill, skill.skillFilePath, 'missing')
     }
+
     if (!isSkillDeleteFresh(skill.updatedAt, inspection.mtimeMs)) {
       return blockedEntry(skill, canonicalPath, 'stale')
     }
+
     const blocked = blockedCanonicalReason(api.dirname(canonicalPath), canonicalContext)
+
     if (blocked) {
       return blockedEntry(skill, canonicalPath, blocked)
     }
+
     const placements = dedupePlacements(
       candidates
         .map((candidate) => classifySkillPlacement(candidate, canonicalPath, context))
         .filter((placement): placement is ClassifiedPlacement => placement !== null),
       semantics
     )
+
     if (placements.length === 0) {
       return blockedEntry(skill, canonicalPath, 'unowned')
     }
+
     placementRoots.set(skill.id, placements)
+
     return {
       id: skill.id,
       name: skill.name,
@@ -174,8 +195,10 @@ async function resolvedRoots(
   const inspections = await filesystem
     .inspectPaths?.(roots.map((root) => toFilesystemPath(root.path)))
     .catch(() => null)
+
   return roots.map((root) => {
     const realpath = inspections?.get(toFilesystemPath(root.path))?.realpath
+
     return realpath
       ? { ...root, path: fromFilesystemPath(realpath, root.path, toFilesystemPath) }
       : root
@@ -202,9 +225,11 @@ async function inspectRequestedSkillFiles(
   const { inspectPaths } = requireEnumerableFilesystem(filesystem)
   const paths = [...new Set(skills.map((skill) => skill.skillFilePath))]
   const raw = await inspectPaths(paths.map(toFilesystemPath))
+
   return new Map(
     paths.flatMap((path) => {
       const inspection = raw.get(toFilesystemPath(path))
+
       return inspection ? [[path, inspection] as const] : []
     })
   )

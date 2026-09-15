@@ -121,8 +121,10 @@ export function ConversationDescription({
               if (event.key === 'Escape' && !bodySaving) {
                 event.preventDefault()
                 onCancelEdit()
+
                 return
               }
+
               if (isScreenSubmitShortcut(event) && !bodySaving && bodyChanged) {
                 event.preventDefault()
                 onSave()

@@ -41,6 +41,7 @@ export function createGitStatusActions(
           ...s.trackedConflictPathsByWorktree[worktreeId],
           [path]: conflictKind
         }
+
         return {
           trackedConflictPathsByWorktree: {
             ...s.trackedConflictPathsByWorktree,
@@ -55,17 +56,21 @@ export function createGitStatusActions(
         const prevEntries = s.gitStatusByWorktree[worktreeId] ?? []
         const prevOperation = s.gitConflictOperationByWorktree[worktreeId] ?? 'unknown'
         const currentTracked = { ...s.trackedConflictPathsByWorktree[worktreeId] }
+
         // Why: main process doesn't set conflictStatusSource; stamp 'git' here for live u-records ('session' is stamped below for Resolved-locally).
         const normalizedEntries = status.entries.map((entry) =>
           entry.conflictStatus === 'unresolved'
             ? { ...entry, conflictStatusSource: 'git' as const }
             : entry
         )
+
         const unresolvedEntries = normalizedEntries.filter(
           (entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind
         )
+
         const unresolvedByPath = new Map(unresolvedEntries.map((entry) => [entry.path, entry]))
         const statusIsComplete = status.didHitLimit !== true
+
         // Why: a capped snapshot cannot prove that an omitted conflict operation ended.
         const nextOperation =
           !statusIsComplete && status.conflictOperation === 'unknown'
@@ -88,10 +93,13 @@ export function createGitStatusActions(
           if (entry.conflictStatus === 'unresolved') {
             return entry
           }
+
           const trackedConflictKind = currentTracked[entry.path]
+
           if (!trackedConflictKind) {
             return entry
           }
+
           return {
             ...entry,
             conflictKind: trackedConflictKind,
@@ -102,6 +110,7 @@ export function createGitStatusActions(
 
         if (statusIsComplete) {
           const visiblePaths = new Set(nextEntries.map((entry) => entry.path))
+
           for (const path of Object.keys(currentTracked)) {
             if (!visiblePaths.has(path) && !unresolvedByPath.has(path)) {
               delete currentTracked[path]
@@ -115,16 +124,20 @@ export function createGitStatusActions(
           nextEntries,
           statusIsComplete
         )
+
         const statusUnchanged = hadStatusEntry && areGitStatusEntriesEqual(prevEntries, nextEntries)
+
         const trackedUnchanged = areTrackedConflictMapsEqual(
           s.trackedConflictPathsByWorktree[worktreeId] ?? {},
           currentTracked
         )
+
         const openFilesUnchanged = nextOpenFiles === s.openFiles
         const operationUnchanged = prevOperation === nextOperation
 
         const prevIgnored = s.gitIgnoredPathsByWorktree[worktreeId]
         const nextIgnored = status.ignoredPaths ?? []
+
         const ignoredUnchanged =
           prevIgnored !== undefined &&
           prevIgnored.length === nextIgnored.length &&
@@ -135,6 +148,7 @@ export function createGitStatusActions(
         const hugeUnchanged = (prevHuge?.limit ?? null) === (nextHuge?.limit ?? null)
 
         const prevBranchLineTotal = s.gitBranchLineTotalByWorktree[worktreeId] ?? null
+
         // Why: an omitted field means "not computed on this pass" — soft-deadline
         // miss, cooldown, old host — not "zero", so dropping it blanks a published
         // chip between polls. Staleness is handled where it can be: the host
@@ -144,6 +158,7 @@ export function createGitStatusActions(
         const nextBranchLineTotal = status.didHitLimit
           ? null
           : (status.branchLineTotal ?? prevBranchLineTotal)
+
         const branchLineTotalUnchanged =
           prevBranchLineTotal === nextBranchLineTotal ||
           (prevBranchLineTotal !== null &&
@@ -165,6 +180,7 @@ export function createGitStatusActions(
         const statusHeadUnchanged = prevStatusHead === nextStatusHead
 
         const prevBranchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
+
         // Why: a compare request can finish after git status observed a new HEAD; reject the stale snapshot before it renders a false clean state.
         const shouldInvalidateBranchCompare =
           !statusHeadUnchanged &&
@@ -193,6 +209,7 @@ export function createGitStatusActions(
             : (() => {
                 const copy = { ...s.gitBranchLineTotalByWorktree }
                 delete copy[worktreeId]
+
                 return copy
               })()
 
@@ -203,6 +220,7 @@ export function createGitStatusActions(
             : (() => {
                 const copy = { ...s.gitStatusHugeByWorktree }
                 delete copy[worktreeId]
+
                 return copy
               })()
 
@@ -213,14 +231,17 @@ export function createGitStatusActions(
             : (() => {
                 const copy = { ...s.gitStatusHeadByWorktree }
                 delete copy[worktreeId]
+
                 return copy
               })()
+
         const nextBranchCompareSummaries = shouldInvalidateBranchCompare
           ? {
               ...s.gitBranchCompareSummaryByWorktree,
               [worktreeId]: createLoadingBranchCompareSummary(prevBranchSummary.baseRef)
             }
           : s.gitBranchCompareSummaryByWorktree
+
         const nextBranchChanges = shouldInvalidateBranchCompare
           ? { ...s.gitBranchChangesByWorktree, [worktreeId]: [] }
           : s.gitBranchChangesByWorktree
@@ -249,15 +270,19 @@ export function createGitStatusActions(
     setConflictOperation: (worktreeId, operation) =>
       set((s) => {
         const prev = s.gitConflictOperationByWorktree[worktreeId] ?? 'unknown'
+
         if (prev === operation) {
           return s
         }
+
         // Why: when the operation clears on a non-active worktree, also clear tracked conflict paths — same as setGitStatus does for the active one.
         const nextTracked =
           operation === 'unknown' && prev !== 'unknown'
             ? {}
             : s.trackedConflictPathsByWorktree[worktreeId]
+
         const trackedUnchanged = nextTracked === s.trackedConflictPathsByWorktree[worktreeId]
+
         return {
           gitConflictOperationByWorktree: {
             ...s.gitConflictOperationByWorktree,

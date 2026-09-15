@@ -23,21 +23,28 @@ export function memoizeTitleClassification<T>(
 ): (title: string) => T {
   // Boxed values so `undefined`/`null` verdicts are still cache hits.
   const cache = new Map<string, { value: T }>()
+
   return (title: string): T => {
     const cached = cache.get(title)
+
     if (cached) {
       return cached.value
     }
+
     const value = classify(title)
+
     // Insertion-ordered FIFO eviction: a pane's superseded title frames are the
     // oldest keys and the least likely to be asked for again.
     if (cache.size >= MAX_MEMOIZED_TITLES) {
       const oldest = cache.keys().next()
+
       if (!oldest.done) {
         cache.delete(oldest.value)
       }
     }
+
     cache.set(title, { value })
+
     return value
   }
 }

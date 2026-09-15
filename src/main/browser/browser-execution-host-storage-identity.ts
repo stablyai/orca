@@ -1,6 +1,7 @@
 import type { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
 
 const STORAGE_IDENTITY_VERSION = 1
+
 const STORAGE_IDENTITY_TAG = 'orca-browser-execution-host-storage'
 
 /**
@@ -30,9 +31,11 @@ export function browserNetworkExecutionHostStorageIdentity(
   if (host.kind === 'native') {
     return browserAuthorityExecutionHostStorageIdentity(authorityStorageKey)
   }
+
   if (host.kind === 'wsl') {
     return storageIdentity(['authority-wsl', authorityStorageKey, host.distro])
   }
+
   // Why: providerEpoch is a per-connection fencing nonce reissued on every
   // reconnect, not a persistent record id -- targetId already carries non-reuse.
   return storageIdentity(['ssh', host.targetId])
@@ -61,9 +64,11 @@ export function legacyBrowserNetworkExecutionHostStorageIdentity(
   if (host.kind === 'native') {
     return legacyBrowserNativeExecutionHostStorageIdentity(host.runtimeId)
   }
+
   if (host.kind === 'wsl') {
     return storageIdentity(['wsl', host.runtimeId, host.distro])
   }
+
   return storageIdentity(['ssh', host.targetId])
 }
 

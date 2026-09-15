@@ -54,6 +54,7 @@ function blockedTitle(reason: 'client-too-old' | 'server-too-old'): string {
 // their management pages separate so each connection type can explain itself.
 function openManageHost(row: HostHeaderRow): void {
   const state = useAppStore.getState()
+
   if (row.kind === 'runtime') {
     const parsed = parseExecutionHostId(row.hostId)
     state.openSettingsTarget({
@@ -66,6 +67,7 @@ function openManageHost(row: HostHeaderRow): void {
   } else {
     state.openSettingsTarget({ pane: 'general', repoId: null })
   }
+
   state.openSettingsPage()
 }
 
@@ -75,11 +77,14 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
   const [renameOpen, setRenameOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const mountedRef = useMountedRef()
+
   const sshStatus = useAppStore((s) => {
     const parsed = parseExecutionHostId(row.hostId)
+
     if (parsed?.kind !== 'ssh') {
       return null
     }
+
     return s.sshConnectionStates.get(parsed.targetId)?.status ?? null
   })
 
@@ -89,6 +94,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
     sshConnected: sshStatus === 'connected',
     compatibility: row.compatibility
   })
+
   const removalTarget = resolveHostRemoval(row.hostId)
 
   const handleManage = useCallback(() => {
@@ -98,10 +104,13 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
   const runSshAction = useCallback(
     async (action: 'connect' | 'disconnect') => {
       const parsed = parseExecutionHostId(row.hostId)
+
       if (parsed?.kind !== 'ssh') {
         return
       }
+
       setBusy(true)
+
       try {
         await window.api.ssh[action]({ targetId: parsed.targetId })
       } catch (err) {
@@ -129,18 +138,22 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
 
   const handleCheckConnection = useCallback(async () => {
     const parsed = parseExecutionHostId(row.hostId)
+
     if (parsed?.kind !== 'runtime') {
       return
     }
+
     setBusy(true)
     // Why: drop any cached "compatible" verdict so the re-probe re-evaluates
     // version skew instead of trusting the prior pass.
     clearRuntimeCompatibilityCache(parsed.environmentId)
+
     try {
       const response = await window.api.runtimeEnvironments.getStatus({
         selector: parsed.environmentId,
         timeoutMs: 10_000
       })
+
       unwrapRuntimeRpcResult<RuntimeStatus>(response)
       // Why: feed the probe result into the shared store so the host header and
       // other host pickers reflect this check without a separate fetch.

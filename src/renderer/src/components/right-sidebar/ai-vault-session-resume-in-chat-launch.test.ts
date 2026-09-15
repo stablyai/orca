@@ -12,14 +12,18 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/structured-agent-launch-settlement', () => ({
   settleStructuredAgentLaunch: mocks.settleStructuredAgentLaunch
 }))
+
 vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForResume: mocks.prepareAiVaultSessionForResume
 }))
+
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree,
   activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace
 }))
+
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ activeWorktreeId: mocks.activeWorktreeId }) }
 }))

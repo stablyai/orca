@@ -41,10 +41,13 @@ function readErrorCode(error: unknown): string | null {
   if (error instanceof RuntimeRpcCallError) {
     return error.code
   }
+
   if (!error || typeof error !== 'object' || !('code' in error)) {
     return null
   }
+
   const code = (error as { code: unknown }).code
+
   return typeof code === 'string' ? code : null
 }
 
@@ -60,9 +63,11 @@ export function isRemoteBrowserPageMissingError(error: unknown): boolean {
 // else is unproven and must keep retrying rather than strand the pane with a dead subscription.
 export function isPermanentRemoteBrowserStreamFailure(error: unknown): boolean {
   const code = readErrorCode(error)
+
   if (code === null) {
     return false
   }
+
   return (
     code === REMOTE_BROWSER_STREAM_UNSUPPORTED || REMOTE_BROWSER_STREAM_TARGET_GONE_CODES.has(code)
   )
@@ -99,5 +104,6 @@ export function resolveRemoteBrowserStreamRestartFailure(
       logRawError: false
     }
   }
+
   return { message: remoteBrowserStreamLostNotice(), shouldRetry: true, logRawError: true }
 }

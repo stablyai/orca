@@ -17,6 +17,7 @@ describe('projectTerminalTailLines', () => {
       cursorHidden: false,
       cursorViewportRow: 1
     }
+
     const emulator = {
       getBufferTailLines: () => ['old output', 'tail output'],
       getVisibleLines: () => ['────────', '❯ proceed'],
@@ -44,6 +45,7 @@ describe('projectTerminalTailLines', () => {
       cursorHidden: false,
       cursorViewportRow: 2
     }
+
     const emulator = {
       getBufferTailLines: () => [' with', ' release'],
       getVisibleLines: () => ['Build passed', '────────', '❯ proceed', ' with', ' release'],

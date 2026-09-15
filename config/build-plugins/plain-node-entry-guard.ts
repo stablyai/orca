@@ -3,8 +3,11 @@ import { join } from 'node:path'
 import type { Plugin, Rollup } from 'vite'
 
 type NormalizedInputOptions = Rollup.NormalizedInputOptions
+
 type NormalizedOutputOptions = Rollup.NormalizedOutputOptions
+
 type OutputBundle = Rollup.OutputBundle
+
 type OutputChunk = Rollup.OutputChunk
 
 // Why: v1.4.129-rc.1 shipped a dead terminal daemon because a shared main
@@ -60,8 +63,10 @@ function assertEntryNamesAreRollupInputs(input: NormalizedInputOptions['input'])
   if (typeof input === 'string' || Array.isArray(input)) {
     return
   }
+
   const inputNames = new Set(Object.keys(input))
   const missing = GUARDED_ENTRY_NAMES.filter((name) => !inputNames.has(name))
+
   if (missing.length > 0) {
     throw new Error(
       `[plain-node-entry-guard] guarded ${missing.map((name) => `"${name}"`).join(', ')} ` +
@@ -79,21 +84,28 @@ function collectReachableChunks(
   const seen = new Set<string>()
   const reachable: OutputChunk[] = []
   const stack = [entry.fileName]
+
   while (stack.length > 0) {
     const fileName = stack.pop() as string
+
     if (seen.has(fileName)) {
       continue
     }
+
     seen.add(fileName)
     const chunk = byFileName.get(fileName)
+
     if (!chunk) {
       continue
     }
+
     reachable.push(chunk)
+
     for (const imported of [...chunk.imports, ...chunk.dynamicImports]) {
       stack.push(imported)
     }
   }
+
   return reachable
 }
 
@@ -166,6 +178,7 @@ function runDaemonEntry(entryPath: string, timings: SmokeTimings): Promise<Smoke
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(deadlineTimer)
       clearTimeout(forceKillTimer)
@@ -190,12 +203,14 @@ function runDaemonEntry(entryPath: string, timings: SmokeTimings): Promise<Smoke
 async function smokeLoadDaemonEntry(outputDir: string, timings: SmokeTimings): Promise<void> {
   const entryPath = join(outputDir, 'daemon-entry.js')
   const result = await runDaemonEntry(entryPath, timings)
+
   if (result.error) {
     throw new Error(
       `[plain-node-entry-guard] could not smoke-load daemon-entry.js under plain Node: ` +
         `${result.error.message}`
     )
   }
+
   // Almost always means the daemon stopped rejecting an empty argv and started
   // listening instead.
   if (result.timedOut) {
@@ -204,17 +219,21 @@ async function smokeLoadDaemonEntry(outputDir: string, timings: SmokeTimings): P
         `empty argv under plain Node, so the smoke killed it.`
     )
   }
+
   if (result.signal) {
     throw new Error(
       `[plain-node-entry-guard] daemon-entry.js was killed by ${result.signal} under plain Node.`
     )
   }
+
   const stderr = result.stderr
+
   if (/Cannot find module|MODULE_NOT_FOUND/.test(stderr)) {
     throw new Error(
       `[plain-node-entry-guard] daemon-entry.js failed to load under plain Node:\n${stderr}`
     )
   }
+
   if (result.status === 0 || !stderr.includes(DAEMON_USAGE_PREFIX)) {
     throw new Error(
       `[plain-node-entry-guard] daemon-entry.js did not reject an empty argv under plain Node ` +
@@ -240,11 +259,14 @@ export function createPlainNodeEntryGuardPlugin(
       if (this.meta.watchMode) {
         return
       }
+
       const chunks = Object.values(bundle).filter(
         (item): item is OutputChunk => item.type === 'chunk'
       )
+
       const byFileName = new Map(chunks.map((chunk) => [chunk.fileName, chunk]))
       const entryByName = new Map<string, OutputChunk>()
+
       for (const chunk of chunks) {
         if (chunk.isEntry && chunk.name) {
           entryByName.set(chunk.name, chunk)
@@ -253,6 +275,7 @@ export function createPlainNodeEntryGuardPlugin(
 
       for (const entryName of PLAIN_NODE_ENTRY_NAMES) {
         const entry = entryByName.get(entryName)
+
         if (entry) {
           assertNoElectronRequire(entryName, entry, byFileName, 'plain-Node process')
         }
@@ -260,6 +283,7 @@ export function createPlainNodeEntryGuardPlugin(
 
       for (const entryName of WORKER_THREAD_ENTRY_NAMES) {
         const entry = entryByName.get(entryName)
+
         if (entry) {
           assertNoElectronRequire(entryName, entry, byFileName, 'worker thread')
         }

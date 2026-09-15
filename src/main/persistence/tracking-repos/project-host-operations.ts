@@ -84,13 +84,16 @@ export class ProjectHostPersistenceOperations {
 
   updateProject(id: string, updates: ProjectUpdateArgs['updates']): Project | null {
     const project = this.state.projects.find((entry) => entry.id === id)
+
     if (!project) {
       return null
     }
+
     if ('localWindowsRuntimePreference' in updates) {
       for (const repoId of project.sourceRepoIds) {
         this.operations.bumpLocalWorktreeScanGeneration(repoId)
       }
+
       if (updates.localWindowsRuntimePreference === undefined) {
         delete project.localWindowsRuntimePreference
       } else {
@@ -99,8 +102,10 @@ export class ProjectHostPersistenceOperations {
         )
       }
     }
+
     project.updatedAt = Date.now()
     this.scheduleSave()
+
     return { ...project }
   }
 
@@ -110,21 +115,28 @@ export class ProjectHostPersistenceOperations {
 
   createProjectHostSetup(args: ProjectHostSetupCreateArgs): ProjectHostSetupCreateResult | null {
     const project = this.state.projects.find((entry) => entry.id === args.projectId)
+
     if (!project) {
       return null
     }
+
     const hostId = normalizeExecutionHostId(args.hostId)
+
     if (!hostId) {
       throw new Error(`Invalid host ID: ${args.hostId}`)
     }
+
     const duplicateSetup = this.state.projectHostSetups.find(
       (entry) => entry.projectId === project.id && entry.hostId === hostId
     )
+
     if (duplicateSetup) {
       throw new Error(`Project host setup already exists: ${duplicateSetup.id}`)
     }
+
     const now = Date.now()
     const existingIds = new Set(this.state.projectHostSetups.map((entry) => entry.id))
+
     const setup: ProjectHostSetup = {
       id: makeProjectHostSetupId(project.id, hostId, existingIds, args.setupId),
       projectId: project.id,
@@ -140,46 +152,61 @@ export class ProjectHostPersistenceOperations {
       createdAt: now,
       updatedAt: now
     }
+
     // Why: persist independently so future repo projection sync doesn't erase this non-repo-backed setup.
     this.state.projectHostSetups.push(setup)
     this.scheduleSave()
+
     return { project, setup }
   }
 
   updateProjectHostSetup(args: ProjectHostSetupUpdateArgs): ProjectHostSetupUpdateResult | null {
     const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+
     if (!setup) {
       return null
     }
+
     const project = this.state.projects.find((entry) => entry.id === setup.projectId)
+
     if (!project) {
       return null
     }
+
     const repo = setup.repoId
       ? this.state.repos.find((entry) => entry.id === setup.repoId)
       : undefined
+
     if (repo) {
       const updated = this.updateRepoBackedProjectHostSetup(setup, repo, args.updates)
+
       const updatedProject = updated
         ? this.state.projects.find((entry) => entry.id === updated.setup.projectId)
         : undefined
+
       return updated && updatedProject
         ? { project: updatedProject, setup: updated.setup, repo: updated.repo }
         : null
     }
+
     const updatedSetup = this.updateIndependentProjectHostSetup(setup, args.updates)
+
     return { project, setup: updatedSetup }
   }
 
   deleteProjectHostSetup(args: ProjectHostSetupDeleteArgs): ProjectHostSetupDeleteResult | null {
     const setup = this.state.projectHostSetups.find((entry) => entry.id === args.setupId)
+
     if (!setup) {
       return null
     }
+
     const project = this.state.projects.find((entry) => entry.id === setup.projectId)
+
     if (!project) {
       return null
     }
+
     // Why: the same repo id can exist on multiple execution hosts, so match this setup's own host
     // row and never fall back to a sibling host's row — a stale repoId/hostId would delete that host's
     // registration. With no exact match the setup is stale, and the path below drops just the setup.
@@ -188,14 +215,18 @@ export class ProjectHostPersistenceOperations {
           (entry) => entry.id === setup.repoId && getRepoExecutionHostId(entry) === setup.hostId
         )
       : undefined
+
     if (repo) {
       this.removeProjectForHost(repo.id, setup.hostId)
+
       return { project, setup, repo: this.hydrateRepo(repo) }
     }
+
     this.state.projectHostSetups = this.state.projectHostSetups.filter(
       (entry) => entry.id !== setup.id
     )
     this.scheduleSave()
+
     return { project, setup }
   }
 
@@ -206,6 +237,7 @@ export class ProjectHostPersistenceOperations {
 
   getRepo(id: string): Repo | undefined {
     const repo = this.state.repos.find((r) => r.id === id)
+
     return repo ? this.hydrateRepo(repo) : undefined
   }
 
@@ -220,25 +252,32 @@ export class ProjectHostPersistenceOperations {
     username: string
   ): boolean {
     const targetHostId = getRepoExecutionHostId(target)
+
     const repo = this.state.repos.find(
       (r) => r.id === target.id && getRepoExecutionHostId(r) === targetHostId
     )
+
     if (!repo) {
       return false
     }
+
     const cacheKey = repoGitUsernameCacheKey(repo)
     const previous = this.gitUsernameCache.get(cacheKey) ?? repo.gitUsername ?? ''
     this.gitUsernameCache.set(cacheKey, username)
+
     if (previous === username) {
       return false
     }
+
     if (username) {
       // Why: persist so the next launch hydrates repos with the right branch prefix before enrichment re-runs.
       repo.gitUsername = username
     } else {
       delete repo.gitUsername
     }
+
     this.scheduleSave()
+
     return true
   }
 }

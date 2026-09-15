@@ -9,6 +9,7 @@ vi.mock('electron', () => ({
   app: { getPath: () => '/unused-in-tests' },
   crashReporter: { start: vi.fn() }
 }))
+
 vi.mock('./minidump-crash-signature', () => ({
   parseMinidumpCrashSignature: parseMinidumpCrashSignatureMock
 }))
@@ -29,6 +30,7 @@ function emptyDump(): Buffer {
   buf.writeUInt32LE(0xa793, 4)
   buf.writeUInt32LE(0, 8)
   buf.writeUInt32LE(32, 12)
+
   return buf
 }
 
@@ -38,6 +40,7 @@ async function writeDump(relativePath: string, mtimeMs: number, contents = empty
   await writeFile(filePath, contents)
   const seconds = mtimeMs / 1000
   await utimes(filePath, seconds, seconds)
+
   return filePath
 }
 
@@ -96,8 +99,10 @@ describe('waitForCrashMinidump', () => {
   it('polls until the handler finishes writing, then returns the dump', async () => {
     let clock = CRASHED_AT
     let written = false
+
     const sleep = async (ms: number) => {
       clock += ms
+
       if (!written) {
         await writeDump(path.join('reports', 'late.dmp'), CRASHED_AT + 300)
         written = true
@@ -115,6 +120,7 @@ describe('waitForCrashMinidump', () => {
 
   it('gives up at the deadline instead of polling forever', async () => {
     let clock = CRASHED_AT
+
     const sleep = async (ms: number) => {
       clock += ms
     }
@@ -184,6 +190,7 @@ describe('captureMinidumpSignature', () => {
       timeoutMs: 0,
       now: () => CRASHED_AT
     })
+
     const second = await captureMinidumpSignature(CRASHED_AT, {
       timeoutMs: 0,
       now: () => CRASHED_AT
@@ -199,6 +206,7 @@ describe('captureMinidumpSignature', () => {
       CRASHED_AT + 100,
       Buffer.from('renderer')
     )
+
     await writeDump(path.join('reports', 'gpu.dmp'), CRASHED_AT + 200, Buffer.from('gpu-process'))
     parseMinidumpCrashSignatureMock.mockImplementation((dump: Buffer) => ({
       processType: dump.toString('utf8'),
@@ -221,6 +229,7 @@ describe('captureMinidumpSignature', () => {
       CRASHED_AT + 100,
       Buffer.from('gpu-process')
     )
+
     parseMinidumpCrashSignatureMock.mockReturnValue({
       processType: 'gpu-process',
       annotations: {}
@@ -231,6 +240,7 @@ describe('captureMinidumpSignature', () => {
       timeoutMs: 0,
       now: () => CRASHED_AT
     })
+
     const gpu = await captureMinidumpSignature(CRASHED_AT, {
       expectedProcessType: 'gpu-process',
       timeoutMs: 0,
@@ -274,10 +284,12 @@ describe('Crashpad dump pruning', () => {
 
   it('keeps a dump already claimed by a persisted crash report', async () => {
     await writeDump(path.join('reports', 'claimed.dmp'), CRASHED_AT + 200, Buffer.alloc(8))
+
     const captured = await captureMinidumpSignature(CRASHED_AT, {
       timeoutMs: 0,
       now: () => CRASHED_AT
     })
+
     expect(captured?.filePath).toBe(path.join(dumpDir, 'reports', 'claimed.dmp'))
     // Newer than the claimed dump, so the claim is what protects it, not index 0.
     await writeDump(path.join('reports', 'newest.dmp'), CRASHED_AT + 400, Buffer.alloc(8))

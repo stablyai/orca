@@ -33,6 +33,7 @@ export class BrowserHostLeaseReconnectController {
 
   createHandle(state: BrowserHostLeaseState): BrowserHostLeaseHandle {
     const connectionToken = state.connectionToken
+
     return {
       lease: state.lease,
       whenFenced: state.fence.promise,
@@ -57,12 +58,15 @@ export class BrowserHostLeaseReconnectController {
     ) {
       return undefined
     }
+
     if (state.status === 'active') {
       for (const route of state.routes) {
         this.options.fenceRoute(route, 'lease_released')
       }
+
       state.commandLedger?.detachDelivery()
     }
+
     this.clear(state)
     state.connectionFence.resolve('replaced')
     state.connectionFence = createBrowserHostFence()
@@ -79,6 +83,7 @@ export class BrowserHostLeaseReconnectController {
       ...(input.fileChannelProtocolVersion ? { fileChannelProtocolVersion: 1 as const } : {})
     })
     state.status = 'active'
+
     return this.createHandle(state)
   }
 
@@ -86,6 +91,7 @@ export class BrowserHostLeaseReconnectController {
     if (!state.reconnectTimer) {
       return
     }
+
     clearTimeout(state.reconnectTimer)
     state.reconnectTimer = undefined
   }
@@ -98,15 +104,20 @@ export class BrowserHostLeaseReconnectController {
     ) {
       return
     }
+
     if (state.lease.leaseReconnectProtocolVersion !== 1) {
       this.options.fenceLease(state, 'released')
+
       return
     }
+
     state.status = 'reconnecting'
     this.options.fenceReconciliation(state)
+
     for (const route of state.routes) {
       this.options.fenceRoute(route, 'lease_released')
     }
+
     state.reconnectTimer = setTimeout(
       () => this.options.fenceLease(state, 'released'),
       this.options.graceMs

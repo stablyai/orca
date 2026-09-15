@@ -10,11 +10,13 @@ const context: RelayAuthContext = {
 
 function coordinatorOver(readContext: () => Promise<RelayAuthContext | null>) {
   const broker = { closeNow: vi.fn() }
+
   const coordinator = new RelayAuthCoordinator({
     readContext,
     openBroker: async () => broker,
     onStatus: vi.fn()
   })
+
   return { broker, coordinator }
 }
 
@@ -80,6 +82,7 @@ describe('relay control close reason', () => {
   it('stays silent when demand drops and the broker lingers out', async () => {
     let demanded = true
     const broker = { closeNow: vi.fn() }
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => context,
       hasDemand: () => demanded,
@@ -87,6 +90,7 @@ describe('relay control close reason', () => {
       onStatus: vi.fn(),
       lingerMs: 5
     })
+
     coordinator.reconcile()
     await expect(coordinator.waitForLiveBroker()).resolves.toBe(broker)
 
@@ -101,15 +105,18 @@ describe('relay control close reason', () => {
   it('stays silent when an identity switch replaces the broker', async () => {
     let current = context
     const brokers: { closeNow: ReturnType<typeof vi.fn> }[] = []
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => current,
       openBroker: async () => {
         const broker = { closeNow: vi.fn() }
         brokers.push(broker)
+
         return broker
       },
       onStatus: vi.fn()
     })
+
     coordinator.reconcile()
     await coordinator.waitForLiveBroker()
 

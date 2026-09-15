@@ -25,6 +25,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
       worktreesByRepo: { 'repo-1': [makePRRefreshWorktree()] }
     } as unknown as Partial<AppState>)
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })
@@ -44,6 +45,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
       rightSidebarOpen: false
     } as unknown as Partial<AppState>)
     let publications = 0
+
     const unsubscribe = store.subscribe(() => {
       publications += 1
     })
@@ -61,17 +63,20 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     let repoIdentityReads = 0
     let worktreeRepoIdentityReads = 0
     const repo = { id: repoId, path: '/idle', name: 'idle', kind: 'git' as const }
+
     const worktree = makePRRefreshWorktree({
       id: 'wt-idle',
       repoId,
       path: '/idle/worktrees/idle',
       branch: 'feature/idle'
     })
+
     Object.defineProperty(repo, 'id', {
       configurable: true,
       enumerable: true,
       get: () => {
         repoIdentityReads += 1
+
         return repoId
       }
     })
@@ -80,6 +85,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
       enumerable: true,
       get: () => {
         worktreeRepoIdentityReads += 1
+
         return repoId
       }
     })
@@ -108,17 +114,21 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     const repoCount = 128
     let repoIdentityReads = 0
     const repoIds = Array.from({ length: repoCount }, (_, index) => `repo-${index}`)
+
     const repos = repoIds.map((repoId) => {
       const repo = { id: repoId, path: `/${repoId}`, name: repoId, kind: 'git' as const }
+
       return Object.defineProperty(repo, 'id', {
         configurable: true,
         enumerable: true,
         get: () => {
           repoIdentityReads += 1
+
           return repoId
         }
       })
     })
+
     const worktreesByRepo = Object.fromEntries(
       repoIds.map((repoId, index) => [
         repoId,
@@ -133,6 +143,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
         ]
       ])
     )
+
     store.setState({
       repos,
       groupBy: 'repo',
@@ -152,18 +163,22 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     const store = createTestStore()
     const repoCount = 128
     let repoIdentityReads = 0
+
     const repos = Array.from({ length: repoCount }, (_, index) => {
       const repoId = `repo-${index}`
       const repo = { id: repoId, path: `/${repoId}`, name: repoId, kind: 'git' as const }
+
       return Object.defineProperty(repo, 'id', {
         configurable: true,
         enumerable: true,
         get: () => {
           repoIdentityReads += 1
+
           return repoId
         }
       })
     })
+
     store.setState({
       repos,
       groupBy: 'repo',
@@ -192,18 +207,22 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     const store = createTestStore()
     const repoCount = 128
     let repoIdentityReads = 0
+
     const repos = Array.from({ length: repoCount }, (_, index) => {
       const repoId = `repo-${index}`
       const repo = { id: repoId, path: `/${repoId}`, name: repoId, kind: 'git' as const }
+
       return Object.defineProperty(repo, 'id', {
         configurable: true,
         enumerable: true,
         get: () => {
           repoIdentityReads += 1
+
           return repoId
         }
       })
     })
+
     const missingWorktrees = Array.from({ length: repoCount }, (_, index) =>
       makePRRefreshWorktree({
         id: `wt-missing-${index}`,
@@ -211,6 +230,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
         branch: `feature/missing-${index}`
       })
     )
+
     store.setState({
       repos,
       groupBy: 'repo',
@@ -237,9 +257,11 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     const repoCount = 128
     let repoIdentityReads = 0
     let worktreeIdentityReads = 0
+
     const repos = Array.from({ length: repoCount }, (_, index) => {
       const repoId = `runtime-repo-${index}`
       const repoPath = `/runtime/repo-${index}`
+
       const repo = {
         id: repoId,
         path: repoPath,
@@ -247,26 +269,32 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
         kind: 'git' as const,
         executionHostId: 'runtime:env-1'
       }
+
       Object.defineProperty(repo, 'id', {
         configurable: true,
         enumerable: true,
         get: () => {
           repoIdentityReads += 1
+
           return repoId
         }
       })
+
       return Object.defineProperty(repo, 'path', {
         configurable: true,
         enumerable: true,
         get: () => {
           repoIdentityReads += 1
+
           return repoPath
         }
       })
     })
+
     const worktreesByRepo = Object.fromEntries(
       repos.map((repo, index) => {
         const worktreeId = `runtime-wt-${index}`
+
         const worktree = makePRRefreshWorktree({
           id: worktreeId,
           repoId: repo.id,
@@ -275,17 +303,21 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
           linkedPR: 12,
           lastActivityAt: index
         })
+
         Object.defineProperty(worktree, 'id', {
           configurable: true,
           enumerable: true,
           get: () => {
             worktreeIdentityReads += 1
+
             return worktreeId
           }
         })
+
         return [repo.id, [worktree]]
       })
     )
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos,
@@ -314,9 +346,11 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     const store = createTestStore()
     const repoCount = 128
     let repoIdentityReads = 0
+
     const repos = Array.from({ length: repoCount }, (_, index) => {
       const repoId = `issue-repo-${index}`
       const repoPath = `/runtime/issues-${index}`
+
       const repo = {
         id: repoId,
         path: repoPath,
@@ -324,23 +358,28 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
         kind: 'git' as const,
         executionHostId: 'runtime:env-1'
       }
+
       Object.defineProperty(repo, 'id', {
         configurable: true,
         enumerable: true,
         get: () => {
           repoIdentityReads += 1
+
           return repoId
         }
       })
+
       return Object.defineProperty(repo, 'path', {
         configurable: true,
         enumerable: true,
         get: () => {
           repoIdentityReads += 1
+
           return repoPath
         }
       })
     })
+
     const worktreesByRepo = Object.fromEntries(
       repos.map((repo, index) => [
         repo.id,
@@ -354,6 +393,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
         ]
       ])
     )
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repos,
@@ -373,6 +413,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
   it('keeps the first repo owner when duplicate IDs span hosts', () => {
     const store = createTestStore()
     const repoId = 'duplicate-repo'
+
     const firstRepo = {
       id: repoId,
       path: '/first',
@@ -381,6 +422,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
       connectionId: 'first',
       executionHostId: 'ssh:first'
     }
+
     const secondRepo = {
       id: repoId,
       path: '/second',
@@ -389,12 +431,14 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
       connectionId: 'second',
       executionHostId: 'ssh:second'
     }
+
     const laterRepo = {
       id: 'later-repo',
       path: '/later',
       name: 'later',
       kind: 'git' as const
     }
+
     store.setState({
       repos: [firstRepo, secondRepo, laterRepo],
       groupBy: 'repo',
@@ -437,6 +481,7 @@ describe('createGitHubSlice.refreshAllGitHub', () => {
     const duplicateCandidates = mockApi.gh.enqueuePRRefresh.mock.calls
       .map(([call]) => call.candidate)
       .filter((candidate) => candidate.repoId === repoId)
+
     expect(duplicateCandidates).toHaveLength(2)
     expect(duplicateCandidates).toEqual(
       expect.arrayContaining([

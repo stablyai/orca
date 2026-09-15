@@ -19,26 +19,37 @@ export function formatCommitTime(timestampMs: number | undefined, nowMs: number)
   if (timestampMs == null) {
     return ''
   }
+
   const delta = nowMs - timestampMs
+
   if (delta < 60_000) {
     return 'just now'
   }
+
   const minutes = Math.floor(delta / 60_000)
+
   if (minutes < 60) {
     return `${minutes}m`
   }
+
   const hours = Math.floor(minutes / 60)
+
   if (hours < 24) {
     return `${hours}h`
   }
+
   const days = Math.floor(hours / 24)
+
   if (days < 30) {
     return `${days}d`
   }
+
   const months = Math.floor(days / 30)
+
   if (months < 12) {
     return `${months}mo`
   }
+
   return `${Math.floor(months / 12)}y`
 }
 
@@ -64,6 +75,7 @@ export async function fetchMobileGitHistory(
 ): Promise<GitHistoryResult> {
   // Not inside the try: a transport rejection must reach the caller as the original error object.
   const reply = await gitHistoryRead.request(client, { worktree: `id:${worktreeId}`, limit })
+
   try {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
     return gitHistoryRead.interpret(reply) as GitHistoryResult

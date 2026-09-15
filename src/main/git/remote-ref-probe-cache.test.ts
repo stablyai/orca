@@ -22,14 +22,17 @@ import { createRemoteRefProbeCache, NEGATIVE_ENTRY_TTL_MS } from './remote-ref-p
 /** Stands in for a forge's parser: claims one host, rejects everything else. */
 function parseExampleRef(remoteUrl: string): { repo: string } | null {
   const match = remoteUrl.trim().match(/^git@example\.com:(.+?)(?:\.git)?$/)
+
   return match ? { repo: match[1] } : null
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve: (value: T) => void = () => {}
+
   const promise = new Promise<T>((settle) => {
     resolve = settle
   })
+
   return { promise, resolve }
 }
 
@@ -92,12 +95,14 @@ describe('remote ref probe cache (P1-D)', () => {
   it('does not let a lookup on a reconnected provider join the old connection probe', async () => {
     const cache = createRemoteRefProbeCache(parseExampleRef)
     let releaseStalled = (): void => {}
+
     const execMock = vi
       .fn()
       .mockImplementationOnce(
         async () => await new Promise((resolve) => (releaseStalled = () => resolve({ stdout: '' })))
       )
       .mockResolvedValue({ stdout: 'git@example.com:team/repo.git\n' })
+
     getSshGitProviderMock.mockReturnValue({ exec: execMock })
 
     const stalled = cache.get('/repo', 'origin', 'conn-1')
@@ -158,9 +163,11 @@ describe('remote ref probe cache (P1-D)', () => {
 
   it('holds an SSH repo that has no such remote instead of re-asking every poll', async () => {
     const cache = createRemoteRefProbeCache(parseExampleRef)
+
     const exec = vi.fn(async () => {
       throw new Error("fatal: No such remote 'origin'")
     })
+
     getSshGitProviderMock.mockReturnValue({ exec })
 
     await expect(cache.get('/repo', 'origin', 'conn-1')).resolves.toBeNull()
@@ -174,10 +181,12 @@ describe('remote ref probe cache (P1-D)', () => {
 
   it('keeps re-asking an SSH repo whose probe died with its transport', async () => {
     const cache = createRemoteRefProbeCache(parseExampleRef)
+
     const exec = vi
       .fn()
       .mockRejectedValueOnce(new Error('relay request failed: connection closed'))
       .mockResolvedValue({ stdout: 'git@example.com:team/repo.git\n' })
+
     getSshGitProviderMock.mockReturnValue({ exec })
 
     await expect(cache.get('/repo', 'origin', 'conn-1')).resolves.toBeNull()

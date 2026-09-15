@@ -15,6 +15,7 @@ function build(args: {
 }): ReturnType<typeof buildActivityEvents> {
   const repo = makeRepo()
   const worktree = makeWorktree()
+
   return buildActivityEvents({
     agentStatusByPaneKey: { [PANE_KEY]: args.entry },
     retainedAgentsByPaneKey: {},
@@ -73,18 +74,22 @@ describe('activity event agent contexts', () => {
 
   it('preserves a unified structured session remote-runtime owner', () => {
     const localRepo = makeRepo()
+
     const runtimeRepo = {
       ...makeRepo(),
       executionHostId: 'runtime:env-1' as const,
       displayName: 'Runtime repo'
     }
+
     const localWorktree = makeWorktree()
+
     const runtimeWorktree = {
       ...makeWorktree(),
       hostId: 'runtime:env-1' as const,
       runtimeOwnerEnvironmentId: 'env-1',
       displayName: 'Runtime worktree'
     }
+
     const structuredTab = {
       id: 'tab-1',
       entityId: 'session-1',
@@ -99,6 +104,7 @@ describe('activity event agent contexts', () => {
       createdAt: 1,
       agentSessionAgent: 'codex'
     } satisfies Tab
+
     const resolveWorktree = vi.fn((_worktreeId, executionHostId) =>
       executionHostId === 'runtime:env-1' ? runtimeWorktree : localWorktree
     )
@@ -125,17 +131,21 @@ describe('activity event agent contexts', () => {
 
   it('preserves an early worktree-attributed SSH owner before its tab arrives', () => {
     const localRepo = makeRepo()
+
     const remoteRepo = {
       ...makeRepo(),
       connectionId: 'builder',
       displayName: 'SSH repo'
     }
+
     const localWorktree = makeWorktree()
+
     const remoteWorktree = {
       ...makeWorktree(),
       hostId: 'ssh:builder' as const,
       displayName: 'SSH worktree'
     }
+
     const resolveWorktree = vi.fn((_worktreeId, executionHostId) =>
       executionHostId === 'ssh:builder' ? remoteWorktree : localWorktree
     )

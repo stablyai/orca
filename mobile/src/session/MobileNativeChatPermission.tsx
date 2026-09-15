@@ -18,18 +18,22 @@ function MobileNativeChatPermissionImpl({
 }): React.JSX.Element {
   const [submitting, setSubmitting] = useState(false)
   const submittingRef = useRef(false)
+
   const respond = async (send: string): Promise<void> => {
     if (submittingRef.current) {
       return
     }
+
     submittingRef.current = true
     setSubmitting(true)
     const accepted = await onRespond(send)
+
     if (!accepted) {
       submittingRef.current = false
       setSubmitting(false)
     }
   }
+
   return (
     <View style={styles.card}>
       <View style={styles.header}>
@@ -51,6 +55,7 @@ function MobileNativeChatPermissionImpl({
       <View style={styles.options}>
         {permission.options.map((option, index) => {
           const isPrimary = index === 0
+
           return (
             <Pressable
               key={`${option.send}:${option.label}`}

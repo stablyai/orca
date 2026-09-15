@@ -26,6 +26,7 @@ export function renderAccountsRemovalDialogs(
     setRemoveCodexTarget,
     settings
   } = model
+
   return (
     <>
       <Dialog
@@ -55,9 +56,11 @@ export function renderAccountsRemovalDialogs(
               variant="destructive"
               onClick={() => {
                 const target = removeCodexTarget
+
                 if (!target) {
                   return
                 }
+
                 setRemoveCodexTarget(null)
                 void runCodexAccountAction(
                   `remove:${target.id}`,
@@ -98,9 +101,11 @@ export function renderAccountsRemovalDialogs(
               variant="destructive"
               onClick={() => {
                 const target = removeClaudeTarget
+
                 if (!target) {
                   return
                 }
+
                 setRemoveClaudeTarget(null)
                 void runClaudeAccountAction(
                   `remove:${target.id}`,

@@ -44,6 +44,7 @@ const CodexResetCreditAttemptLedgerSchema = z
     const keys = new Set<string>()
     const offers = new Set<string>()
     const pendingAccountScopes = new Set<string>()
+
     for (const [index, attempt] of ledger.attempts.entries()) {
       const offerScope = JSON.stringify([
         attempt.expectedScope.target.runtime,
@@ -52,12 +53,14 @@ const CodexResetCreditAttemptLedgerSchema = z
         attempt.expectedScope.accountRevision,
         attempt.expectedScope.offerRevision
       ])
+
       const accountScope = JSON.stringify([
         attempt.expectedScope.target.runtime,
         attempt.expectedScope.target.wslDistro,
         attempt.expectedScope.accountId,
         attempt.expectedScope.accountRevision
       ])
+
       if (keys.has(attempt.idempotencyKey)) {
         context.addIssue({
           code: 'custom',
@@ -65,6 +68,7 @@ const CodexResetCreditAttemptLedgerSchema = z
           path: ['attempts', index, 'idempotencyKey']
         })
       }
+
       if (offers.has(offerScope)) {
         context.addIssue({
           code: 'custom',
@@ -72,6 +76,7 @@ const CodexResetCreditAttemptLedgerSchema = z
           path: ['attempts', index, 'expectedScope']
         })
       }
+
       if (attempt.state === 'providerPending' && pendingAccountScopes.has(accountScope)) {
         context.addIssue({
           code: 'custom',
@@ -79,8 +84,10 @@ const CodexResetCreditAttemptLedgerSchema = z
           path: ['attempts', index, 'expectedScope']
         })
       }
+
       keys.add(attempt.idempotencyKey)
       offers.add(offerScope)
+
       if (attempt.state === 'providerPending') {
         pendingAccountScopes.add(accountScope)
       }
@@ -114,9 +121,12 @@ export function parseCodexResetCreditAttemptLedger(value: unknown): CodexResetCr
   if (value === undefined) {
     return { version: 1, attempts: [] }
   }
+
   const parsed = CodexResetCreditAttemptLedgerSchema.safeParse(value)
+
   if (!parsed.success) {
     throw new Error('Codex reset-credit attempt ledger is corrupt')
   }
+
   return structuredClone(parsed.data) as CodexResetCreditAttemptLedger
 }

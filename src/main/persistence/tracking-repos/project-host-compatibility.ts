@@ -21,17 +21,21 @@ function arraysEqualByJson<T>(a: readonly T[], b: readonly T[]): boolean {
   if (a === b) {
     return true
   }
+
   if (a.length !== b.length) {
     return false
   }
+
   for (let i = 0; i < a.length; i++) {
     if (a[i] === b[i]) {
       continue
     }
+
     if (JSON.stringify(a[i]) !== JSON.stringify(b[i])) {
       return false
     }
   }
+
   return true
 }
 
@@ -40,6 +44,7 @@ export function isRepoBackedProjectHostSetup(
   currentRepoIds: ReadonlySet<string>
 ): boolean {
   const repoId = typeof setup.repoId === 'string' ? setup.repoId : ''
+
   return repoId.length > 0 && (currentRepoIds.has(repoId) || setup.id === repoId)
 }
 
@@ -52,32 +57,39 @@ export function mergeProjectHostSetupCompatibilityState(
   repos: readonly Repo[]
 ): Pick<PersistedState, 'projects' | 'projectHostSetups'> {
   const projection = projectHostSetupProjectionFromRepos(repos)
+
   const succession = carryProjectStateThroughIdentityChange(
     projection.projects,
     state.projects ?? []
   )
+
   const currentRepoIds = new Set(repos.map((repo) => repo.id))
   const projectedProjectIds = new Set(projection.projects.map((project) => project.id))
   const projectedSetupIds = new Set(projection.setups.map((setup) => setup.id))
   const projectedHosts = new Set(projection.setups.map(projectHostKey))
+
   // Why: legacy/repo-backed setup rows reuse the repo id; keep only independent rows so repo deletion leaves no ghosts.
   const independentSetups = (state.projectHostSetups ?? [])
     .filter((setup) => {
       if (projectedSetupIds.has(setup.id)) {
         return false
       }
+
       return !isRepoBackedProjectHostSetup(setup, currentRepoIds)
     })
     // Why: follow the repo's project through a derived-id change so no ghost project row survives.
     .map((setup) => {
       const remappedProjectId = succession.remappedProjectIds.get(setup.projectId)
+
       return remappedProjectId ? { ...setup, projectId: remappedProjectId } : setup
     })
     // Why: a project resolves to one setup per host. Once a repo projection covers that
     // pair, a leftover placeholder is a ghost that shadows the ready row — it sorts first
     // and reads back as "not set up". Runs after the remap so renamed rows are caught too.
     .filter((setup) => !projectedHosts.has(projectHostKey(setup)))
+
   const independentProjectIds = new Set(independentSetups.map((setup) => setup.projectId))
+
   const independentProjects = (state.projects ?? [])
     .filter(
       (project) => independentProjectIds.has(project.id) && !projectedProjectIds.has(project.id)
@@ -86,6 +98,7 @@ export function mergeProjectHostSetupCompatibilityState(
       ...project,
       sourceRepoIds: project.sourceRepoIds.filter((repoId) => currentRepoIds.has(repoId))
     }))
+
   return {
     projects: [...succession.projects, ...independentProjects],
     projectHostSetups: [...projection.setups, ...independentSetups]
@@ -99,14 +112,18 @@ export function makeProjectHostSetupId(
   requestedId?: string
 ): string {
   const baseId = requestedId?.trim() || `${projectId}::${hostId}`
+
   if (!existingIds.has(baseId)) {
     return baseId
   }
+
   let suffix = 2
   let candidate = `${baseId}::${suffix}`
+
   while (existingIds.has(candidate)) {
     suffix++
     candidate = `${baseId}::${suffix}`
   }
+
   return candidate
 }

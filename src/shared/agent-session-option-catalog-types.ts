@@ -6,6 +6,7 @@ import type {
 } from './native-chat-session-options'
 
 export type CatalogAgentInteractionDetection = 'claude-model-switch-confirmation'
+
 export type CatalogCommandDelivery = 'type'
 
 export type CatalogMidSessionApply =

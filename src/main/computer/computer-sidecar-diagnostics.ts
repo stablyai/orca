@@ -20,15 +20,19 @@ export function isComputerSidecarDiagnostic(
   if (!message || typeof message !== 'object') {
     return false
   }
+
   const record = message as Record<string, unknown>
+
   return record.kind === DIAGNOSTIC_KIND && typeof record.message === 'string'
 }
 
 export function reportComputerDiagnostic(message: string): void {
   if (process.send) {
     process.send({ kind: DIAGNOSTIC_KIND, message } satisfies ComputerSidecarDiagnostic)
+
     return
   }
+
   logComputerDiagnostic(message)
 }
 

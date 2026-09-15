@@ -4,21 +4,28 @@ import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repo
 
 const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./client-test-mocks')
+
   return { clientMocks: moduleMocks.createGitHubClientMocks(), moduleMocks }
 })
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
+
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
+
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
+
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
+
 vi.mock('./github-enterprise-repository', async (importOriginal) =>
   moduleMocks.githubEnterpriseRepositoryModuleMock(
     await importOriginal<typeof GitHubEnterpriseRepositoryModule>()
   )
 )
+
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(clientMocks))
+
 vi.mock('./github-api-repository', async (importOriginal) =>
   moduleMocks.githubApiRepositoryModuleMock(
     clientMocks,
@@ -364,6 +371,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
       baseRefOid: 'base-oid',
       headRefOid: 'head-oid'
     }
+
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify({ stack: null }) })
       .mockResolvedValueOnce({ stdout: JSON.stringify(prView) })
@@ -399,6 +407,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
 
   it('caches unknown merge queue probes after GraphQL failures', async () => {
     getOwnerRepoMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+
     const prView = {
       number: 7,
       title: 'PR',
@@ -415,6 +424,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
       baseRefOid: 'base-oid',
       headRefOid: 'head-oid'
     }
+
     ghExecFileAsyncMock
       .mockResolvedValueOnce({ stdout: JSON.stringify(prView) })
       .mockRejectedValueOnce(new Error('network is down'))
@@ -441,7 +451,9 @@ describe('GitHub GraphQL rate-limit guard', () => {
       if (args.includes('graphql')) {
         return { stdout: JSON.stringify({ data: { repository: { mergeQueue: null } } }) }
       }
+
       prViewCount += 1
+
       return {
         stdout: JSON.stringify({
           number: prViewCount,
@@ -477,6 +489,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
       ],
       headRepo: { owner: 'acme', repo: 'widgets', host: 'github.com' }
     })
+
     const prView = {
       number: 7,
       title: 'PR',
@@ -489,9 +502,11 @@ describe('GitHub GraphQL rate-limit guard', () => {
       baseRefName: 'main',
       headRefOid: 'head-oid'
     }
+
     ghExecFileAsyncMock.mockImplementation(async (args, options) => {
       if (args.includes('graphql')) {
         const enterprise = options?.host === 'github.acme-corp.com'
+
         return {
           stdout: JSON.stringify({
             data: {
@@ -503,6 +518,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
           })
         }
       }
+
       return { stdout: JSON.stringify(prView) }
     })
 
@@ -512,6 +528,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
       7,
       'pr'
     )
+
     const enterprise = await getWorkItemByOwnerRepo(
       '/repo-root',
       { owner: 'acme', repo: 'widgets', host: 'github.acme-corp.com' },

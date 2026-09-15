@@ -50,24 +50,32 @@ export function resolveElectronBuilderCacheDir({
   temp = tmpdir()
 } = {}) {
   const override = env.ELECTRON_BUILDER_CACHE?.trim()
+
   if (override && parse(override).root) {
     return override
   }
+
   if (platform === 'darwin') {
     return join(home, 'Library', 'Caches', 'electron-builder')
   }
+
   if (platform === 'win32') {
     const localAppData = env.LOCALAPPDATA?.trim()
+
     // https://github.com/electron-userland/electron-builder/issues/1164
     const isSystemUser =
       localAppData?.toLowerCase().includes('\\windows\\system32\\') === true ||
       env.USERNAME?.trim().toLowerCase() === 'system'
+
     if (!localAppData || isSystemUser) {
       return join(temp, 'electron-builder-cache')
     }
+
     return join(localAppData, 'electron-builder', 'Cache')
   }
+
   const xdgCache = env.XDG_CACHE_HOME
+
   return xdgCache && parse(xdgCache).root
     ? join(xdgCache, 'electron-builder')
     : join(home, '.cache', 'electron-builder')
@@ -75,13 +83,16 @@ export function resolveElectronBuilderCacheDir({
 
 function collectElevateFiles(dir, depth, found) {
   let entries
+
   try {
     entries = readdirSync(dir, { withFileTypes: true })
   } catch {
     return found
   }
+
   for (const entry of entries) {
     const path = join(dir, entry.name)
+
     if (entry.isFile()) {
       if (entry.name.toLowerCase() === ELEVATE_EXE) {
         found.push(path)
@@ -90,6 +101,7 @@ function collectElevateFiles(dir, depth, found) {
       collectElevateFiles(path, depth - 1, found)
     }
   }
+
   return found
 }
 
@@ -100,20 +112,25 @@ function collectElevateFiles(dir, depth, found) {
 export function findCachedElevatePaths(cacheDir, { env = process.env } = {}) {
   const found = []
   const overrideDir = env.ELECTRON_BUILDER_NSIS_DIR?.trim()
+
   if (overrideDir && isFile(join(overrideDir, ELEVATE_EXE))) {
     found.push(join(overrideDir, ELEVATE_EXE))
   }
+
   let entries
+
   try {
     entries = readdirSync(cacheDir, { withFileTypes: true })
   } catch {
     return found
   }
+
   for (const entry of entries) {
     if (entry.isDirectory() && NSIS_RELEASE_DIR.test(entry.name)) {
       collectElevateFiles(join(cacheDir, entry.name), MAX_DEPTH, found)
     }
   }
+
   return found
 }
 
@@ -128,6 +145,7 @@ export async function resolveToolsetElevatePath(projectDir = process.cwd()) {
     const config = require(configPath)
     const { getNsisElevatePath } = require('app-builder-lib/out/toolsets/windows.js')
     const path = await getNsisElevatePath(config.toolsets?.nsis, config.nsis?.customNsisBinary)
+
     return { path, error: null }
   } catch (error) {
     return { path: null, error: error.message }
@@ -154,17 +172,21 @@ export async function replaceCachedElevateHelpers({
   if (!isFile(signedPath)) {
     throw new Error(`Signed elevate.exe not found: ${signedPath}`)
   }
+
   const targets = new Set(findCachedElevatePaths(cacheDir, { env }))
   const { path: toolsetPath, error: toolsetError } = await probe(projectDir)
+
   if (toolsetPath != null && isFile(toolsetPath)) {
     targets.add(toolsetPath)
   }
 
   const replaced = []
+
   for (const target of targets) {
     copyFileSync(signedPath, target)
     replaced.push(target)
   }
+
   return {
     replaced,
     cacheDir,
@@ -194,6 +216,7 @@ export function summarizeSwap({ replaced, cacheDir, toolsetPath, toolsetError, t
       exitCode: 1
     }
   }
+
   if (replaced.length === 0) {
     return {
       annotations: [
@@ -208,6 +231,7 @@ export function summarizeSwap({ replaced, cacheDir, toolsetPath, toolsetError, t
       exitCode: 1
     }
   }
+
   if (toolsetPath == null) {
     // A green step must never quietly mean "the authoritative check did not run". The scan
     // alone is satisfiable by a stale release directory that the `electron-builder-win-`
@@ -226,6 +250,7 @@ export function summarizeSwap({ replaced, cacheDir, toolsetPath, toolsetError, t
       exitCode: 0
     }
   }
+
   return { annotations: [], exitCode: 0 }
 }
 
@@ -236,22 +261,27 @@ export function summarizeSwap({ replaced, cacheDir, toolsetPath, toolsetError, t
 // loudly without making a release unbuildable.
 if (import.meta.filename === process.argv[1]) {
   const signedPath = process.argv[2]
+
   if (!signedPath) {
     process.stderr.write('Usage: replace-cached-nsis-elevate.mjs <signed-elevate.exe>\n')
     process.exit(2)
   }
+
   try {
     const result = await replaceCachedElevateHelpers({ signedPath })
     const { annotations, exitCode } = summarizeSwap(result)
+
     for (const { level, message } of annotations) {
       process.stdout.write(`::${level}::${message}\n`)
     }
+
     if (exitCode === 0) {
       for (const path of result.replaced) {
         const role = path === result.toolsetPath ? ' (the copy app-builder-lib will pack)' : ''
         process.stdout.write(`Replaced ${path} with the SignPath-signed copy.${role}\n`)
       }
     }
+
     process.exit(exitCode)
   } catch (error) {
     process.stdout.write(`::error::Could not replace the cached elevate.exe: ${error.message}\n`)

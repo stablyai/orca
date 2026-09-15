@@ -24,8 +24,10 @@ export class RuntimeTerminalStreamConsumers {
     const listeners = this.dataListeners.get(ptyId) ?? new Set<TerminalDataListener>()
     listeners.add(listener)
     this.dataListeners.set(ptyId, listeners)
+
     return () => {
       listeners.delete(listener)
+
       if (listeners.size === 0) {
         this.dataListeners.delete(ptyId)
       }
@@ -34,10 +36,13 @@ export class RuntimeTerminalStreamConsumers {
 
   publish(ptyId: string, data: string, getMeta: () => RuntimeTerminalDataMeta): void {
     const listeners = this.dataListeners.get(ptyId)
+
     if (!listeners) {
       return
     }
+
     const meta = getMeta()
+
     for (const listener of listeners) {
       try {
         listener(data, meta)

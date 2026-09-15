@@ -20,29 +20,37 @@ export function openExecutionRouteSocketAsDuplex(
     // record can arrive before any consumer listener exists. Buffer from the
     // very start and replay through the duplex.
     const earlyData: Buffer[] = []
+
     let deliver = (bytes: Buffer): void => {
       earlyData.push(bytes)
     }
+
     socket.on('data', (bytes) => {
       deliver(Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes))
     })
+
     const swapDelivery = (next: (bytes: Buffer) => void): Buffer[] => {
       deliver = next
+
       return earlyData
     }
+
     const fail = (error: Error): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timeout)
       socket.destroy()
       reject(error)
     }
+
     const timeout = setTimeout(
       () => fail(new Error('browser_local_route_connect_timeout')),
       options.connectTimeoutMs ?? BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS
     )
+
     socket.on('error', (error) => {
       if (!settled) {
         fail(error)
@@ -57,6 +65,7 @@ export function openExecutionRouteSocketAsDuplex(
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timeout)
       resolve(wrapConnectedSocket(socket, swapDelivery))
@@ -84,16 +93,19 @@ function wrapConnectedSocket(
       callback(error)
     }
   })
+
   const buffered = swapDelivery((bytes) => {
     if (!duplex.push(bytes)) {
       socket.pause()
     }
   })
+
   for (const bytes of buffered.splice(0)) {
     if (!duplex.push(bytes)) {
       socket.pause()
     }
   }
+
   socket.on('end', () => {
     duplex.push(null)
   })
@@ -103,5 +115,6 @@ function wrapConnectedSocket(
   socket.on('close', () => {
     duplex.destroy()
   })
+
   return duplex
 }

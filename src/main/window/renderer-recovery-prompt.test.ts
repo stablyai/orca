@@ -26,12 +26,14 @@ function harness(overrides: Partial<RendererRecoveryPromptDeps> & { responses?: 
   const copied: string[] = []
   const reload = vi.fn()
   const quit = vi.fn()
+
   const deps: RendererRecoveryPromptDeps = {
     recentRecoveryCount: 4,
     isQuitting: () => false,
     diagnose: () => null,
     showMessageBox: async (options: MessageBoxOptions): Promise<MessageBoxReturnValue> => {
       shown.push(options)
+
       return {
         response: responses[Math.min(shown.length - 1, responses.length - 1)],
         checkboxChecked: false
@@ -42,6 +44,7 @@ function harness(overrides: Partial<RendererRecoveryPromptDeps> & { responses?: 
     quit,
     ...rest
   }
+
   return { run: () => presentRendererRecoveryPrompt(deps), shown, copied, reload, quit }
 }
 
@@ -122,6 +125,7 @@ describe('presentRendererRecoveryPrompt', () => {
       diagnose: () => POISON,
       responses: [1, 1, 0]
     })
+
     await run()
     expect(copied).toEqual([POISON.commands.join('\r\n'), POISON.commands.join('\r\n')])
     expect(shown).toHaveLength(3)
@@ -147,10 +151,12 @@ describe('presentRendererRecoveryPrompt', () => {
   it('re-reads the diagnosis on every pass', async () => {
     const details = ['repairing now', 'repaired']
     let pass = 0
+
     const { run, shown } = harness({
       diagnose: () => ({ detail: details[Math.min(pass++, 1)], commands: POISON.commands }),
       responses: [1, 0]
     })
+
     await run()
     expect(shown[0].detail).toContain('repairing now')
     expect(shown[1].detail).toContain('repaired')

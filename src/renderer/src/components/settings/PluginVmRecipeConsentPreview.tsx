@@ -24,6 +24,7 @@ export function PluginVmRecipeConsentPreview({
   if (recipes.length === 0) {
     return null
   }
+
   return (
     <section className="space-y-3" aria-labelledby="plugin-vm-recipe-consent-heading">
       <h3
@@ -46,6 +47,7 @@ export function PluginVmRecipeConsentPreview({
           <dl className="space-y-2">
             {recipe.commands.map(({ phase, command }) => {
               const phaseLabel = lifecycleLabel(phase)
+
               return (
                 <div key={phase}>
                   <dt className="mb-1 text-xs text-muted-foreground">{phaseLabel}</dt>

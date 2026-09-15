@@ -10,11 +10,14 @@ export class PackedRefsLockGate {
 
   setHeld(held: boolean): void {
     this.held = held
+
     if (held) {
       return
     }
+
     const waiting = this.waiters
     this.waiters = []
+
     for (const resolve of waiting) {
       resolve()
     }
@@ -25,16 +28,20 @@ export class PackedRefsLockGate {
     if (!this.held) {
       return Promise.resolve()
     }
+
     return new Promise<void>((resolve) => {
       let settled = false
+
       const finish = (): void => {
         if (settled) {
           return
         }
+
         settled = true
         clearTimeout(timer)
         resolve()
       }
+
       const timer = setTimeout(finish, timeoutMs)
       timer.unref?.()
       this.waiters.push(finish)

@@ -8,13 +8,17 @@ import { getLocalizedConflictKindLabel } from './conflict-label'
 
 export function ConflictBadge({ entry }: { entry: GitStatusEntry }): React.JSX.Element {
   const isUnresolvedConflict = entry.conflictStatus === 'unresolved'
+
   const label = isUnresolvedConflict
     ? translate('auto.components.right.sidebar.SourceControl.31f6d46278', 'Unresolved')
     : translate('auto.components.right.sidebar.SourceControl.2c417432b7', 'Resolved locally')
+
   const conflictKindLabel = entry.conflictKind
     ? getLocalizedConflictKindLabel(entry.conflictKind)
     : null
+
   const Icon = isUnresolvedConflict ? TriangleAlert : CircleCheck
+
   const badge = (
     <span
       role="status"

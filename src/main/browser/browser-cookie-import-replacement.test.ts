@@ -26,12 +26,15 @@ vi.mock('./browser-session-registry', () => ({
     clearPendingCookieImport: clearPendingCookieImportMock
   }
 }))
+
 vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
+
 vi.mock('electron', () => ({
   app: { getPath: appGetPathMock },
   dialog: { showOpenDialog: vi.fn() },
   session: { fromPartition: sessionFromPartitionMock }
 }))
+
 // Why: snapshot/restore are spies, not no-ops, so a rollback that never ran cannot pass as one.
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
@@ -92,6 +95,7 @@ describe('validated cookie replacement', () => {
   function writeCookies(cookies: unknown[]): string {
     const filePath = join(tmpDir, 'cookies.json')
     writeFileSync(filePath, JSON.stringify(cookies))
+
     return filePath
   }
 
@@ -103,6 +107,7 @@ describe('validated cookie replacement', () => {
       cookie('.unrelated.com', 'keep'),
       cookie('.google.com.evil.example', 'keep-suffix-confusion')
     ])
+
     const filePath = writeCookies([
       { domain: '.google.com', name: 'SIDCC', value: 'source-bound', secure: true },
       { domain: '.google.com', name: 'SAPISID', value: 'google-session', secure: true },
@@ -175,6 +180,7 @@ describe('validated cookie replacement', () => {
       .mockResolvedValue(undefined)
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error('cookie rejected'))
+
     const filePath = writeCookies([
       { domain: '.example.com', name: 'first', value: 'new', secure: true },
       { domain: '.example.com', name: 'second', value: 'new', secure: true }
@@ -206,6 +212,7 @@ describe('validated cookie replacement', () => {
       .mockResolvedValue(undefined)
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error('cookie rejected'))
+
     const filePath = writeCookies([
       { domain: '.example.com', name: 'first', value: 'new', secure: true },
       { domain: '.example.com', name: 'second', value: 'new', secure: true }
@@ -225,6 +232,7 @@ describe('validated cookie replacement', () => {
 
   it('fails closed when existing cookies cannot be replaced', async () => {
     cookiesGetMock.mockRejectedValue(new Error('cookie store unavailable'))
+
     const filePath = writeCookies([
       { domain: '.example.com', name: 'session', value: 'new', secure: true }
     ])
@@ -283,6 +291,7 @@ describe('native Chromium integrity-cookie accounting', () => {
         chromeBrowser(sourceCookiesPath),
         'persist:test'
       )
+
       expect(result.ok && result.summary).toMatchObject({
         totalCookies: 3,
         importedCookies: 1,

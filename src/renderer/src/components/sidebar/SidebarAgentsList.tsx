@@ -52,10 +52,13 @@ export default function SidebarAgentsList({
   const handleShowSearchChange = useCallback(
     (visible: boolean) => {
       setShowSearch(visible)
+
       if (!visible) {
         setQuery('')
+
         return
       }
+
       // Wait for the newly visible input to mount before focusing it.
       requestAnimationFrame(() => activityFilterInputRef.current?.focus())
     },

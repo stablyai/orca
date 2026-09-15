@@ -26,16 +26,19 @@ function replaySwapCascade(args: {
 }): string[] {
   let displayedPaneKey = args.initialDisplayedPaneKey
   const kinds: string[] = []
+
   for (let step = 0; step < args.steps; step += 1) {
     const displayedThread = displayedPaneKey
       ? (ALL_THREADS.find((entry) => entry.paneKey === displayedPaneKey) ?? null)
       : null
+
     const { visibleThread, stagedThread } = reconcileActivityPortalThreads({
       selectedThread: args.selectedThread,
       displayedThread,
       selectedHasLiveTab: true,
       displayedHasLiveTab: true
     })
+
     // Most permissive readiness the page can hand in, so no swap is withheld.
     const swap = resolveActivityPortalSwap({
       selectedThread: args.selectedThread,
@@ -46,13 +49,16 @@ function replaySwapCascade(args: {
       stagedPortalReady: true,
       stagedPortalUnavailable: true
     })
+
     kinds.push(swap?.kind ?? 'none')
+
     if (swap?.kind === 'clear') {
       displayedPaneKey = null
     } else if (swap) {
       displayedPaneKey = swap.paneKey
     }
   }
+
   return kinds
 }
 
@@ -68,6 +74,7 @@ describe('resolveActivityPortalSwap cascade', () => {
           initialDisplayedPaneKey: displayed?.paneKey ?? null,
           steps: 6
         })
+
         const label = `selected=${selectedThread.paneKey} displayed=${displayed?.paneKey ?? 'null'}`
         expect(
           kinds.filter((kind) => kind === 'swap-staged').length,
@@ -86,6 +93,7 @@ describe('resolveActivityPortalSwap cascade', () => {
       selectedHasLiveTab: true,
       displayedHasLiveTab: true
     })
+
     expect(sameTabDisplayed.stagedThread).toBeNull()
 
     const crossTabDisplayed = reconcileActivityPortalThreads({
@@ -94,6 +102,7 @@ describe('resolveActivityPortalSwap cascade', () => {
       selectedHasLiveTab: true,
       displayedHasLiveTab: true
     })
+
     expect(crossTabDisplayed.stagedThread).toBe(ALL_THREADS[1])
   })
 })

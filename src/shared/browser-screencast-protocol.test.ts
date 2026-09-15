@@ -54,6 +54,7 @@ describe('browser screencast binary protocol', () => {
       metadata: {},
       image: new Uint8Array([1])
     })
+
     encoded[offset] = value
 
     expect(decodeBrowserScreencastFrame(encoded)).toBeNull()
@@ -67,6 +68,7 @@ describe('browser screencast binary protocol', () => {
       metadata: {},
       image: new Uint8Array([1])
     })
+
     new DataView(encoded.buffer, encoded.byteOffset, encoded.byteLength).setUint32(
       8,
       encoded.byteLength,
@@ -90,6 +92,7 @@ describe('browser screencast binary protocol', () => {
 
   it('rejects excessive metadata nesting before JSON.parse', () => {
     const parseSpy = vi.spyOn(JSON, 'parse')
+
     try {
       const depth = BROWSER_SCREENCAST_METADATA_JSON_STRUCTURE_LIMITS.nestingDepth + 1
       const metadata = new TextEncoder().encode(`${'['.repeat(depth)}0${']'.repeat(depth)}`)
@@ -117,6 +120,7 @@ describe('browser screencast binary protocol', () => {
       metadata: {},
       image: new Uint8Array([1])
     })
+
     encoded[12] = 1
 
     expect(decodeBrowserScreencastFrame(encoded)).toBeNull()

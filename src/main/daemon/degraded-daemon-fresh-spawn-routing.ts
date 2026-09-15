@@ -22,6 +22,7 @@ export class DegradedDaemonFreshSpawnRouter {
 
   supportsGitGuardHost(sessionId?: string): boolean {
     const provider = (sessionId ? this.sessionProviders.get(sessionId) : undefined) ?? this.target
+
     return provider.supportsGitCredentialGuardHost?.(sessionId) === true
   }
 
@@ -36,15 +37,19 @@ export class DegradedDaemonFreshSpawnRouter {
     if (this.target === this.current) {
       return true
     }
+
     if (!this.probeCurrent) {
       return false
     }
+
     if (Date.now() < this.retryAfterMs) {
       return false
     }
+
     if (this.recovery) {
       return this.recovery
     }
+
     const recovery = this.probeCurrent()
       .catch(() => false)
       .then((healthy) => {
@@ -54,6 +59,7 @@ export class DegradedDaemonFreshSpawnRouter {
         } else {
           this.retryAfterMs = Date.now() + DEGRADED_DAEMON_RECOVERY_RETRY_MS
         }
+
         return healthy
       })
       .finally(() => {
@@ -61,7 +67,9 @@ export class DegradedDaemonFreshSpawnRouter {
           this.recovery = null
         }
       })
+
     this.recovery = recovery
+
     return recovery
   }
 
@@ -69,9 +77,11 @@ export class DegradedDaemonFreshSpawnRouter {
     const mapped = opts.sessionId ? this.sessionProviders.get(opts.sessionId) : undefined
     const target = mapped ?? this.target
     const result = await target.spawn(opts)
+
     if (!result.exitedBeforeSpawnReply) {
       this.sessionProviders.set(result.id, target)
     }
+
     return result
   }
 }

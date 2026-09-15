@@ -28,6 +28,7 @@ export class ClaudeAccountSelection {
 
   list(): ClaudeRateLimitAccountsState {
     this.normalizeActiveSelection()
+
     return this.snapshot()
   }
 
@@ -35,14 +36,18 @@ export class ClaudeAccountSelection {
     const account = this.requireAccount(accountId)
     const settings = this.store.getSettings()
     const nextAccounts = settings.claudeManagedAccounts.filter((entry) => entry.id !== accountId)
+
     const nextSelection = removeClaudeAccountIdFromSelection(
       normalizeClaudeRuntimeSelection(settings),
       accountId
     )
+
     const nextActiveId =
       settings.activeClaudeManagedAccountId === accountId ? null : nextSelection.host
+
     const target = getClaudeSelectionTargetForAccount(account)
     const wasSelected = getSelectedClaudeAccountIdForTarget(settings, target) === accountId
+
     try {
       if (wasSelected) {
         this.store.updateSettings({
@@ -59,12 +64,14 @@ export class ClaudeAccountSelection {
         })
         await this.syncRuntimeAuth(target)
       }
+
       await this.removeManagedAuth(accountId, account.managedAuthPath)
       this.rateLimits.evictInactiveClaudeCache(accountId)
       await this.rateLimits.refreshForClaudeAccountChange(
         wasSelected ? accountId : undefined,
         target
       )
+
       return this.snapshot()
     } catch (error) {
       this.restoreSettings(settings)
@@ -78,11 +85,13 @@ export class ClaudeAccountSelection {
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRateLimitAccountsState> {
     let effectiveTarget = target
+
     if (accountId !== null) {
       const account = this.requireAccount(accountId)
       const accountTarget = getClaudeSelectionTargetForAccount(account)
       const requestedTarget = normalizeClaudeAccountSelectionTarget(target ?? accountTarget)
       const normalizedAccountTarget = normalizeClaudeAccountSelectionTarget(accountTarget)
+
       if (
         requestedTarget.runtime !== normalizedAccountTarget.runtime ||
         (requestedTarget.wslDistro !== null &&
@@ -90,23 +99,29 @@ export class ClaudeAccountSelection {
       ) {
         throw new Error('That Claude account belongs to a different runtime.')
       }
+
       effectiveTarget = accountTarget
     }
+
     const previousSettings = this.store.getSettings()
     const outgoingAccountId = getSelectedClaudeAccountIdForTarget(previousSettings, effectiveTarget)
+
     const nextSelection = setSelectedClaudeAccountIdForTarget(
       normalizeClaudeRuntimeSelection(previousSettings),
       accountId,
       effectiveTarget
     )
+
     this.store.updateSettings({
       activeClaudeManagedAccountId:
         effectiveTarget?.runtime === 'wsl' ? nextSelection.host : accountId,
       activeClaudeManagedAccountIdsByRuntime: nextSelection
     })
+
     try {
       await this.syncRuntimeAuth(effectiveTarget)
       await this.rateLimits.refreshForClaudeAccountChange(outgoingAccountId, effectiveTarget)
+
       return this.snapshot()
     } catch (error) {
       this.restoreSettings(previousSettings)
@@ -117,6 +132,7 @@ export class ClaudeAccountSelection {
 
   snapshot(): ClaudeRateLimitAccountsState {
     const settings = this.store.getSettings()
+
     return {
       accounts: settings.claudeManagedAccounts
         .map(toClaudeAccountSummary)
@@ -130,9 +146,11 @@ export class ClaudeAccountSelection {
     const account = this.store
       .getSettings()
       .claudeManagedAccounts.find((entry) => entry.id === accountId)
+
     if (!account) {
       throw new Error('That Claude account no longer exists.')
     }
+
     return account
   }
 
@@ -149,6 +167,7 @@ export class ClaudeAccountSelection {
     operation?: () => Promise<void>
   ): Promise<void> {
     beginClaudeAuthSwitch()
+
     try {
       await (operation ? operation() : this.runtimeAuth.syncForCurrentSelection(target))
     } finally {
@@ -159,10 +178,12 @@ export class ClaudeAccountSelection {
   private normalizeActiveSelection(): void {
     const settings = this.store.getSettings()
     const currentSelection = normalizeClaudeRuntimeSelection(settings)
+
     const nextSelection = pruneInvalidClaudeRuntimeSelection(
       currentSelection,
       settings.claudeManagedAccounts
     )
+
     if (
       nextSelection.host !== settings.activeClaudeManagedAccountId ||
       JSON.stringify(nextSelection) !== JSON.stringify(currentSelection)

@@ -24,9 +24,13 @@ import type {
 } from './automation-host-catalog-types'
 
 const DESKTOP: StableAutomationAuthorityRef = { kind: 'desktop' }
+
 const RUNTIME: StableAutomationAuthorityRef = { kind: 'runtime', environmentId: 'env-1' }
+
 const DESKTOP_SELF: StableAutomationCatalogRef = { authority: DESKTOP, selector: { kind: 'self' } }
+
 const RUNTIME_SELF: StableAutomationCatalogRef = { authority: RUNTIME, selector: { kind: 'self' } }
+
 const RUNTIME_SSH: StableAutomationCatalogRef = {
   authority: RUNTIME,
   selector: { kind: 'ssh', targetId: 'target-1' }

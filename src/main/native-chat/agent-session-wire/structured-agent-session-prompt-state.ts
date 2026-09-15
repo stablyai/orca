@@ -24,15 +24,19 @@ export function validatePendingPrompt(
   }
 ): PendingPromptValidation {
   const item = ctx.journal.snapshot().items.find((entry) => entry.itemId === input.itemId)
+
   if (!item) {
     return invalid(`No item ${input.itemId} in session ${ctx.sessionId}.`)
   }
+
   const prompt = item.body.kind === 'approval' || item.body.kind === 'question' ? item.body : null
+
   if (!prompt || (input.kind !== undefined && prompt.kind !== input.kind)) {
     return invalid(
       `Item ${input.itemId} is not a pending${input.kind ? ` ${input.kind}` : ' prompt'}.`
     )
   }
+
   if (item.revision !== input.expectedRevision) {
     return {
       ok: false,
@@ -44,6 +48,7 @@ export function validatePendingPrompt(
       }
     }
   }
+
   if (prompt.resolution.state !== 'pending') {
     return {
       ok: false,
@@ -55,5 +60,6 @@ export function validatePendingPrompt(
       }
     }
   }
+
   return { ok: true, item, prompt }
 }

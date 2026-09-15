@@ -42,20 +42,25 @@ async function createWslStartupTab(
   marker: string
 ): Promise<string> {
   await selectWslRuntimeForActiveProject(page, distro)
+
   return page.evaluate(
     ({ worktreeId, marker }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Store unavailable')
       }
+
       const tab = store.getState().createTab(worktreeId, undefined, undefined, {
         pendingStartup: {
           command: `printf '${marker}:%s\\n' "$PWD"`,
           delivery: 'terminal-paste'
         }
       })
+
       store.getState().setActiveTab(tab.id)
       store.getState().setActiveTabType('terminal')
+
       return tab.id
     },
     { worktreeId, marker }
@@ -70,21 +75,28 @@ async function readSnapshot(
   return page.evaluate(
     async ({ worktreeId, tabId }) => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('Store unavailable')
       }
+
       const tab = (state.tabsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === tabId
       )
+
       const ptyIds = state.ptyIdsByTabId[tabId] ?? []
+
       if (!tab || ptyIds.length !== 1) {
         throw new Error(`Expected one PTY for restored WSL tab ${tabId}`)
       }
+
       const sessions = await window.api.pty.listSessions()
       const ownedSession = sessions.find((session) => session.id === ptyIds[0])
+
       if (!ownedSession) {
         throw new Error(`WSL PTY ${ptyIds[0]} was absent from provider inventory`)
       }
+
       return {
         hostCwd: ownedSession.cwd,
         ptyId: ptyIds[0]!,
@@ -118,16 +130,20 @@ test('WSL terminal preserves guest cwd, liveness, and PTY ownership across relau
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
     : ''
+
   if (!repoPath || !existsSync(repoPath)) {
     if (REQUIRE_WSL_RESTORE) {
       throw new Error('Required WSL restore E2E seeded repo is unavailable')
     }
+
     test.skip(true, 'Global setup did not produce a seeded test repo')
+
     return
   }
 
   const restart = createRestartSession(testInfo)
   let app: ElectronApplication | null = null
+
   try {
     const first = await restart.launch()
     app = first.app
@@ -140,13 +156,17 @@ test('WSL terminal preserves guest cwd, liveness, and PTY ownership across relau
       if (!(await window.api.wsl.isAvailable())) {
         return null
       }
+
       return (await window.api.wsl.listDistros())[0] ?? null
     })
+
     if (!distro) {
       if (REQUIRE_WSL_RESTORE) {
         throw new Error('Required Windows WSL distro is unavailable')
       }
+
       test.skip(true, 'No WSL distro is available on this Windows host')
+
       return
     }
 
@@ -172,12 +192,15 @@ test('WSL terminal preserves guest cwd, liveness, and PTY ownership across relau
           first.page.evaluate(
             async ({ worktreeId, tabId, ptyId }) => {
               const persisted = await window.api.session.get()
+
               const tab = (persisted.tabsByWorktree[worktreeId] ?? []).find(
                 (candidate) => candidate.id === tabId
               )
+
               const layoutPtyId = persisted.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId
                 ? Object.values(persisted.terminalLayoutsByTabId[tabId]!.ptyIdsByLeafId!)[0]
                 : undefined
+
               return tab?.id === tabId && layoutPtyId === ptyId
             },
             { worktreeId, tabId, ptyId: firstPtyId }
@@ -207,6 +230,7 @@ test('WSL terminal preserves guest cwd, liveness, and PTY ownership across relau
     if (app) {
       await restart.close(app)
     }
+
     await restart.dispose()
   }
 })

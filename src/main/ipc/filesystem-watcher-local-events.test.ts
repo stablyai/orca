@@ -12,6 +12,7 @@ const { statMock, subscribeMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('fs/promises', () => ({ stat: statMock }))
+
 vi.mock('./parcel-watcher-process', () => ({ subscribeViaWatcherProcess: subscribeMock }))
 
 import { createLocalWatcher } from './filesystem-watcher-local-events'
@@ -24,9 +25,11 @@ import { watcherLifecycleState } from './filesystem-watcher-lifecycle-state'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((nextResolve) => {
     resolve = nextResolve
   })
+
   return { promise, resolve }
 }
 
@@ -50,6 +53,7 @@ describe('local filesystem watcher flush serialization', () => {
     sender = { isDestroyed: () => false, send: vi.fn() }
     subscribeMock.mockImplementation(async (_root: string, callback: typeof watcherCallback) => {
       watcherCallback = callback
+
       return { unsubscribe: vi.fn() }
     })
   })
@@ -73,11 +77,13 @@ describe('local filesystem watcher flush serialization', () => {
     const root = await createLocalWatcher('/repo', '/repo')
     root.listeners.set(1, sender as never)
     watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
+
     for (let elapsed = 100; elapsed <= WATCH_BATCH_MAX_WAIT_MS; elapsed += 100) {
       vi.advanceTimersByTime(100)
       expect(sender.send).not.toHaveBeenCalled()
       watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
     }
+
     await flushMicrotasks()
     expect(sender.send).toHaveBeenCalledTimes(1)
     expect(root.batch.timer).toBeNull()
@@ -98,6 +104,7 @@ describe('local filesystem watcher flush serialization', () => {
 
   it('discards queued and late events after a terminal watcher error', async () => {
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       const root = await createLocalWatcher('/repo', '/repo')
       root.listeners.set(1, sender as never)
@@ -120,6 +127,7 @@ describe('local filesystem watcher flush serialization', () => {
     const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
     const pendingStat = deferred<{ isDirectory: () => boolean }>()
     statMock.mockReturnValueOnce(pendingStat.promise)
+
     try {
       const root = await createLocalWatcher('/repo', '/repo')
       root.listeners.set(1, sender as never)
@@ -238,6 +246,7 @@ describe('local filesystem watcher flush serialization', () => {
       peakInFlight = Math.max(peakInFlight, inFlight)
       await Promise.resolve()
       inFlight--
+
       return { isDirectory: () => statPath.endsWith('-0.ts') }
     })
     const root = await createLocalWatcher('/repo', '/repo')
@@ -248,6 +257,7 @@ describe('local filesystem watcher flush serialization', () => {
       paths.map((path) => ({ type: 'update' as const, path }))
     )
     vi.advanceTimersByTime(WATCH_BATCH_TRAILING_MS)
+
     // Why a loop, not a fixed microtask count: 5,000 stats through 8 lanes take many turns.
     for (let i = 0; i < eventCount * 4 && sender.send.mock.calls.length === 0; i++) {
       await Promise.resolve()
@@ -286,6 +296,7 @@ describe('local filesystem watcher flush serialization', () => {
 
     cancelLocalBatchFlush(root)
     pendingStats.resolve({ isDirectory: () => false })
+
     for (let i = 0; i < eventCount * 4 && root.batch.flushInFlight; i++) {
       await Promise.resolve()
     }
@@ -337,6 +348,7 @@ describe('local filesystem watcher flush serialization', () => {
     vi.useRealTimers()
     statMock.mockResolvedValue({ isDirectory: () => true })
     const listener = { ...sender, id: 7, once: vi.fn() }
+
     try {
       await subscribeLocalWatcher('/repo', listener as never)
       watcherCallback?.(null, [{ type: 'delete', path: '/repo/file.ts' }])
@@ -349,6 +361,7 @@ describe('local filesystem watcher flush serialization', () => {
       for (const teardown of watcherLifecycleState.pendingTeardowns.values()) {
         clearTimeout(teardown)
       }
+
       watcherLifecycleState.pendingTeardowns.clear()
       watcherLifecycleState.watchedRoots.clear()
     }

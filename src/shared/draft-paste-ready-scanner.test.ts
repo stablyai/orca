@@ -2,14 +2,23 @@ import { describe, expect, it } from 'vitest'
 import { createDraftPasteReadyScanner } from './draft-paste-ready-scanner'
 
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
+
 const SHOW_CURSOR = '\x1b[?25h'
+
 const HIDE_CURSOR = '\x1b[?25l'
+
 const CODEX_PROMPT = '\x1b[1m›\x1b[0m Ask Codex to do anything'
+
 const CODEX_DYNAMIC_PROMPT = '\x1b[1m›\x1b[0m Implement {feature}'
+
 const ALT_SCREEN_ENTER = '\x1b[?1049h'
+
 const ALT_SCREEN_LEAVE = '\x1b[?1049l'
+
 const GROK_ALT_SCREEN_ENTER = '\x1b[?1049h\x1b[?2004h\x1b[?25l'
+
 const GROK_ALT_SCREEN_LEAVE = '\x1b[?1049l\x1b[?25h'
+
 const GROK_COMPOSER_FRAME = '\x1b[38;2;80;80;88m│\x1b[38;2;200;200;200m❯ \x1b[0m'
 
 describe('createDraftPasteReadyScanner', () => {
@@ -70,6 +79,7 @@ describe('createDraftPasteReadyScanner', () => {
     it('never arms the quiet window during the silent pre-composer gap', () => {
       const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste')
       scanner.observe(DECSET_BRACKETED_PASTE)
+
       // Why: opencode is silent here; arming the quiet window would fire before
       // the composer mounts and pre-empt the cursor signal (the original bug).
       // Delivery waits for show-cursor, bounded by the caller's hard timeout.

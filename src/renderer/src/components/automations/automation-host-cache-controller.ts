@@ -80,7 +80,9 @@ function authorityRefFor(entry: AutomationHostCatalogEntry): AutomationAuthority
   if (entry.owner) {
     return entry.owner.authority
   }
+
   const authority = entry.stableRef.authority
+
   return authority.kind === 'desktop'
     ? { kind: 'desktop' }
     : {
@@ -95,6 +97,7 @@ function isFetchable(entry: AutomationHostCatalogEntry, selectedStableKey: strin
   if (entry.catalogState === 'removed') {
     return false
   }
+
   // A disconnected authority proves nothing about its rows, so it keeps the stale ones
   // and a Reconnect action instead of being dialled by a background refresh.
   return entry.authorityHealth !== 'unavailable' || entry.stableKey === selectedStableKey
@@ -119,6 +122,7 @@ export function createAutomationHostQueryController(
   options: AutomationHostQueryControllerOptions
 ): AutomationHostQueryController {
   const cache = options.cache ?? createAutomationHostCache({ now: options.now })
+
   const scheduler =
     options.scheduler ??
     createAutomationHostScheduler({
@@ -130,6 +134,7 @@ export function createAutomationHostQueryController(
       isVisible: options.isVisible,
       scheduleRetry: options.scheduleRetry
     })
+
   let latest: AutomationHostCatalog | null = null
   let selected: string | null = null
   let disposed = false
@@ -144,11 +149,14 @@ export function createAutomationHostQueryController(
 
   const refreshKeys = async (stableKeys: readonly string[]): Promise<void> => {
     const catalog = latest
+
     if (!catalog) {
       return
     }
+
     const wanted = new Set(stableKeys)
     const targets = targetsFor(catalog, (entry) => wanted.has(entry.stableKey))
+
     if (targets.length > 0) {
       // Forced: the event already proved these entries stale, so TTL must not swallow them.
       await scheduler.refresh(targets, { force: true })
@@ -170,6 +178,7 @@ export function createAutomationHostQueryController(
   // StrictMode-safe lifecycle owns the subscription) takes that duty on itself.
   const eventTarget =
     options.eventTarget === undefined ? (globalThis.window ?? null) : options.eventTarget
+
   const unsubscribe = eventTarget
     ? subscribeAutomationHostInvalidation(invalidation.handle, eventTarget)
     : null
@@ -182,16 +191,19 @@ export function createAutomationHostQueryController(
       selected = applyOptions.selectedStableKey ?? null
       // Membership first: a request captured under the old membership must not commit.
       const generations = syncAutomationHostCatalogGenerations(catalog)
+
       // A re-adopted host keeps its stable key, so eviction below never sees it:
       // only this drops rows the host's previous incarnation answered with.
       for (const stableKey of generations.reincarnatedStableKeys) {
         cache.discardIncarnation(stableKey)
       }
+
       for (const key of cache.keys()) {
         if (!catalog.byStableKey.has(key)) {
           cache.evict(key)
         }
       }
+
       scheduler.cancelQueued()
       const manual = applyOptions.force === true
       // A manual refresh bypasses TTL, but a host already known to fail stays failed
@@ -205,15 +217,19 @@ export function createAutomationHostQueryController(
     handleAuthorityEvent: invalidation.handle,
     authorityOrphanCount: (authority) => {
       let newest: { fetchedAt: number; orphanCount: number } | null = null
+
       for (const key of cache.keysForAuthority(authority)) {
         const entry = cache.getByKey(key)
+
         if (!entry || entry.orphanCount === null || entry.fetchedAt === null) {
           continue
         }
+
         if (!newest || entry.fetchedAt >= newest.fetchedAt) {
           newest = { fetchedAt: entry.fetchedAt, orphanCount: entry.orphanCount }
         }
       }
+
       return newest?.orphanCount ?? null
     },
     isDisposed: () => disposed,

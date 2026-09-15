@@ -8,6 +8,7 @@ type RankedAgent = {
 }
 
 const NO_MATCH = Number.POSITIVE_INFINITY
+
 export const AGENT_PICKER_QUERY_MAX_BYTES = 2 * 1024
 
 export function isAgentPickerQueryTooLarge(
@@ -31,15 +32,19 @@ export function getAgentPickerCommandValue({
   rawQuery: string
 }): string {
   const query = getAgentPickerSearchQuery(rawQuery)
+
   if (query === null) {
     return ''
   }
+
   if (!query) {
     return currentValue ?? blankValue
   }
+
   if (blankMatchesQuery) {
     return blankValue
   }
+
   return filteredAgents[0]?.id ?? ''
 }
 
@@ -48,9 +53,11 @@ export function searchAgentPickerEntries(
   rawQuery: string
 ): AgentCatalogEntry[] {
   const query = getAgentPickerSearchQuery(rawQuery)
+
   if (query === null) {
     return []
   }
+
   if (!query) {
     return [...agents]
   }
@@ -58,20 +65,24 @@ export function searchAgentPickerEntries(
   const matches: RankedAgent[] = []
   agents.forEach((agent, index) => {
     const score = scoreAgent(agent, query)
+
     if (score !== NO_MATCH) {
       matches.push({ agent, score, index })
     }
   })
 
   matches.sort((a, b) => a.score - b.score || a.index - b.index)
+
   return matches.map((m) => m.agent)
 }
 
 export function agentPickerBlankTerminalMatches(rawQuery: string): boolean {
   const query = getAgentPickerSearchQuery(rawQuery)
+
   if (query === null) {
     return false
   }
+
   if (!query) {
     return true
   }
@@ -94,6 +105,7 @@ function scoreAgent(agent: AgentCatalogEntry, query: string): number {
 
 function scoreCandidate(query: string, rawCandidate: string, baseScore: number): number {
   const candidate = normalizeSearchText(rawCandidate)
+
   if (!candidate) {
     return NO_MATCH
   }
@@ -101,21 +113,25 @@ function scoreCandidate(query: string, rawCandidate: string, baseScore: number):
   if (candidate === query) {
     return baseScore
   }
+
   if (candidate.startsWith(query)) {
     return baseScore + 10
   }
 
   const substringIndex = candidate.indexOf(query)
+
   if (substringIndex !== -1) {
     return baseScore + 100 + substringIndex
   }
 
   const acronymScore = scoreAcronymQuery(query, rawCandidate)
+
   if (acronymScore !== NO_MATCH) {
     return baseScore + 220 + acronymScore
   }
 
   const fuzzyScore = scoreFuzzyQuery(query, candidate)
+
   if (fuzzyScore !== NO_MATCH) {
     return baseScore + 400 + fuzzyScore
   }
@@ -125,15 +141,19 @@ function scoreCandidate(query: string, rawCandidate: string, baseScore: number):
 
 function scoreAcronymQuery(query: string, rawCandidate: string): number {
   const acronym = buildAcronym(rawCandidate)
+
   if (!acronym) {
     return NO_MATCH
   }
+
   if (acronym === query) {
     return 0
   }
+
   if (acronym.startsWith(query)) {
     return 10
   }
+
   return scoreFuzzyQuery(query, acronym)
 }
 
@@ -154,6 +174,7 @@ function buildAcronym(value: string): string {
     ) {
       chars.push(char.toLowerCase())
     }
+
     previous = char
   }
 
@@ -176,9 +197,11 @@ function scoreFuzzyQuery(query: string, candidate: string): number {
 
     const gap = lastMatchIndex === -1 ? candidateIndex : candidateIndex - lastMatchIndex - 1
     score += gap
+
     if (isBoundary(candidate, candidateIndex)) {
       score -= 4
     }
+
     lastMatchIndex = candidateIndex
     queryIndex++
   }
@@ -194,24 +217,30 @@ function isBoundary(value: string, index: number): boolean {
   if (index === 0) {
     return true
   }
+
   return value[index - 1] === ' ' || value[index - 1] === '-' || value[index - 1] === '_'
 }
 
 function normalizeSearchText(value: string): string {
   let normalized = ''
   let pendingWhitespace = false
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (isAgentPickerWhitespace(code)) {
       pendingWhitespace = normalized.length > 0
       continue
     }
+
     if (pendingWhitespace) {
       normalized += ' '
       pendingWhitespace = false
     }
+
     normalized += value.charAt(index).toLowerCase()
   }
+
   return normalized
 }
 
@@ -219,6 +248,7 @@ function getAgentPickerSearchQuery(rawQuery: string): string | null {
   if (isAgentPickerQueryTooLarge(rawQuery)) {
     return null
   }
+
   return normalizeSearchText(rawQuery)
 }
 

@@ -13,6 +13,7 @@ export function handleRichMarkdownCitationKey({
   onOpen?: () => boolean
 }): boolean {
   const selection = editor?.state?.selection
+
   if (
     !(selection instanceof NodeSelection) ||
     selection.node.type.name !== 'richMarkdownHtmlSuperscriptLink' ||
@@ -21,20 +22,27 @@ export function handleRichMarkdownCitationKey({
   ) {
     return false
   }
+
   if (event.key === 'Enter') {
     event.preventDefault()
+
     return onOpen?.() ?? true
   }
+
   if (event.key !== 'Tab' || event.shiftKey) {
     return false
   }
+
   const firstAction = document.querySelector<HTMLButtonElement>(
     `[data-rich-markdown-link-bubble-owner="${linkBubbleOwnerId}"] button:not([disabled])`
   )
+
   if (!firstAction) {
     return false
   }
+
   event.preventDefault()
   firstAction.focus()
+
   return true
 }

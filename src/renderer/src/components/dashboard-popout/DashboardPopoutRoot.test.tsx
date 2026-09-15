@@ -6,6 +6,7 @@ import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
 import { APP_MENU_SELECTION_ACTION_EVENT } from '@/lib/app-menu-selection-actions'
 
 vi.mock('./AgentKanbanBoard', () => ({ AgentKanbanBoard: () => null }))
+
 vi.mock('./useDashboardSnapshot', () => ({ useDashboardSnapshot: () => null }))
 
 import { DashboardPopoutRoot } from './DashboardPopoutRoot'
@@ -28,11 +29,13 @@ describe('DashboardPopoutRoot', () => {
           performNativeSelectionAction,
           onAppMenuPaste: (listener: () => void) => {
             emitAppMenuPaste = listener
+
             return vi.fn()
           },
           onEditableContextPaste: () => vi.fn(),
           onAppMenuSelectionAction: (listener: (action: 'copy' | 'select-all') => void) => {
             emitAppMenuSelectionAction = listener
+
             return vi.fn()
           }
         }

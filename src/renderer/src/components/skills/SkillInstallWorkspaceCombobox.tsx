@@ -30,13 +30,17 @@ function searchChoices(
   query: string
 ): readonly SkillInstallWorkspaceChoice[] {
   const trimmed = query.trim().toLowerCase()
+
   if (!trimmed) {
     return choices
   }
+
   const terms = trimmed.split(/\s+/)
+
   return choices.filter((choice) => {
     const kindLabel = choice.kind === 'worktree' ? 'git worktree' : 'folder'
     const searchTarget = `${choice.label} ${kindLabel}`.toLowerCase()
+
     return terms.every((term) => searchTarget.includes(term))
   })
 }
@@ -75,6 +79,7 @@ export function SkillInstallWorkspaceCombobox({
       if (node === null) {
         cancelFocusFrame()
       }
+
       inputRef.current = node
     },
     [cancelFocusFrame]
@@ -85,9 +90,11 @@ export function SkillInstallWorkspaceCombobox({
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null
       const input = inputRef.current
+
       if (!input) {
         return
       }
+
       input.focus()
       const end = input.value.length
       input.setSelectionRange(end, end)
@@ -97,10 +104,13 @@ export function SkillInstallWorkspaceCombobox({
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
+
       if (nextOpen) {
         setCommandValue(value)
+
         return
       }
+
       cancelFocusFrame()
       setQuery('')
     },
@@ -121,15 +131,19 @@ export function SkillInstallWorkspaceCombobox({
       if (open) {
         return
       }
+
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
         setCommandValue(value)
         setOpen(true)
+
         return
       }
+
       if (event.metaKey || event.ctrlKey || event.altKey) {
         return
       }
+
       if (event.key.length === 1 && /\S/.test(event.key)) {
         event.preventDefault()
         setCommandValue(value)
@@ -149,6 +163,7 @@ export function SkillInstallWorkspaceCombobox({
     selectedChoice?.kind === 'worktree'
       ? translate('auto.components.skills.SkillInstallTargetFields.d628c416a2', 'Git worktree')
       : translate('auto.components.skills.SkillInstallTargetFields.7a366323e7', 'Folder')
+
   const selectedFullLabel = selectedChoice
     ? `${selectedChoice.label} · ${selectedKindLabel}`
     : undefined
@@ -211,6 +226,7 @@ export function SkillInstallWorkspaceCombobox({
               </CommandEmpty>
               {filteredChoices.map((choice) => {
                 const isSelected = choice.id === value
+
                 const kindLabel =
                   choice.kind === 'worktree'
                     ? translate(
@@ -221,6 +237,7 @@ export function SkillInstallWorkspaceCombobox({
                         'auto.components.skills.SkillInstallTargetFields.7a366323e7',
                         'Folder'
                       )
+
                 const fullLabel = `${choice.label} · ${kindLabel}`
 
                 return (

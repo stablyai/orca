@@ -104,6 +104,7 @@ export async function provisionEphemeralVmRuntime(
   args: ProvisionEphemeralVmRuntimeArgs
 ): Promise<ProvisionEphemeralVmRuntimeResult> {
   const compatibility = prepareEphemeralVmCompatibilityPersistence(args)
+
   const start = await runEphemeralVmRecipeStart({
     repoPath: args.repoPath,
     recipe: args.recipe,
@@ -122,6 +123,7 @@ export async function provisionEphemeralVmRuntime(
     onStdout: args.onStdout,
     onStderr: args.onStderr
   })
+
   if (!start.ok) {
     if (start.recipeResult) {
       await cleanupFailedEphemeralVmStart(args, {
@@ -129,6 +131,7 @@ export async function provisionEphemeralVmRuntime(
         recipeResult: start.recipeResult
       })
     }
+
     return { ok: false, start }
   }
 
@@ -154,9 +157,11 @@ async function cleanupEphemeralVmRuntimeOnce(
   const existing = listEphemeralVmRuntimes(args.userDataPath).find(
     (entry) => entry.id === args.runtimeId
   )
+
   if (!existing) {
     throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
   }
+
   if (existing.status === 'cleaned') {
     return {
       ok: true,
@@ -166,6 +171,7 @@ async function cleanupEphemeralVmRuntimeOnce(
   }
 
   const now = args.now ?? Date.now()
+
   const running = updateEphemeralVmRuntimeStatus(args.userDataPath, existing.id, {
     status: 'cleanup_pending',
     cleanupStatus: args.recipe.destroyDisabled ? 'disabled' : 'running',
@@ -173,6 +179,7 @@ async function cleanupEphemeralVmRuntimeOnce(
     cleanupLastError: null,
     updatedAt: now
   })
+
   const cleanup = await runEphemeralVmRecipeCleanup({
     repoPath: args.repoPath,
     recipe: args.recipe,
@@ -190,6 +197,7 @@ async function cleanupEphemeralVmRuntimeOnce(
       cleanupLastError: cleanup.error ?? 'Destroy failed.',
       updatedAt: Date.now()
     })
+
     return { ok: false, runtime: failed, error: cleanup.error ?? 'Destroy failed.' }
   }
 
@@ -199,6 +207,7 @@ async function cleanupEphemeralVmRuntimeOnce(
     cleanupLastError: null,
     updatedAt: Date.now()
   })
+
   return { ok: true, runtime: cleaned, skipped: cleanup.skipped }
 }
 
@@ -208,9 +217,11 @@ export async function suspendEphemeralVmRuntime(
   const existing = listEphemeralVmRuntimes(args.userDataPath).find(
     (entry) => entry.id === args.runtimeId
   )
+
   if (!existing) {
     throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
   }
+
   const suspend = await runEphemeralVmRecipeSuspend({
     repoPath: args.repoPath,
     recipe: args.recipe,
@@ -226,6 +237,7 @@ export async function suspendEphemeralVmRuntime(
       status: 'suspend_failed',
       updatedAt: Date.now()
     })
+
     return { ok: false, runtime: failed, error: suspend.error ?? 'Suspend failed.' }
   }
 
@@ -233,6 +245,7 @@ export async function suspendEphemeralVmRuntime(
     status: suspend.skipped ? existing.status : 'suspended',
     updatedAt: Date.now()
   })
+
   return { ok: true, runtime: suspended, skipped: suspend.skipped }
 }
 
@@ -242,9 +255,11 @@ export async function resumeEphemeralVmRuntime(
   const existing = listEphemeralVmRuntimes(args.userDataPath).find(
     (entry) => entry.id === args.runtimeId
   )
+
   if (!existing) {
     throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
   }
+
   const resume = await runEphemeralVmRecipeResume({
     repoPath: args.repoPath,
     recipe: args.recipe,
@@ -260,17 +275,20 @@ export async function resumeEphemeralVmRuntime(
       status: 'resume_failed',
       updatedAt: Date.now()
     })
+
     return { ok: false, runtime: failed, error: resume.error }
   }
 
   const resumeIntegrityError = resume.skipped
     ? null
     : getProvisionedRootResumeIntegrityError(existing.recipeResult, resume.result)
+
   if (resumeIntegrityError) {
     const failed = updateEphemeralVmRuntimeStatus(args.userDataPath, existing.id, {
       status: 'resume_failed',
       updatedAt: Date.now()
     })
+
     return { ok: false, runtime: failed, error: resumeIntegrityError }
   }
 
@@ -279,6 +297,7 @@ export async function resumeEphemeralVmRuntime(
     ...(!resume.skipped ? { recipeResult: resume.result } : {}),
     updatedAt: Date.now()
   })
+
   return { ok: true, runtime, skipped: resume.skipped }
 }
 

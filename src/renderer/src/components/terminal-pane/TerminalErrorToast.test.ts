@@ -35,9 +35,11 @@ afterEach(() => {
 
 const SSH_FAILURE =
   "SSH connection failed: Error invoking remote method 'ssh:connect': Error: Relay package for linux-x64 not found locally."
+
 // Relay loss reaches reportError already IPC-wrapped, so the marker is mid-string.
 const RELAY_LOST =
   "Error invoking remote method 'pty:attach': Error: SSH connection lost, reconnecting..."
+
 const LEGACY_HOST_GONE =
   "Error invoking remote method 'pty:spawn': Error: connect ENOENT \\\\?\\pipe\\orca-terminal-host-v30-14cb7f94b511"
 
@@ -84,6 +86,7 @@ describe('humanizeTerminalError', () => {
   it('humanizes an IPC-wrapped pane-owner-unverified error', () => {
     const wrapped =
       "Error invoking remote method 'pty:spawn': Error: terminal_pane_owner_unverified"
+
     expect(humanizeTerminalError(wrapped)).not.toContain('terminal_pane_owner_unverified')
   })
 
@@ -137,6 +140,7 @@ describe('humanizeTerminalError', () => {
   it('replaces an expired SSH session token and its internal relay id', () => {
     const wrapped =
       "Error invoking remote method 'pty:spawn': Error: SSH_SESSION_EXPIRED: orca:2f1c@@pty-7"
+
     const humanized = humanizeTerminalError(wrapped)
     expect(humanized).not.toContain('SSH_SESSION_EXPIRED')
     expect(humanized).not.toContain('orca:2f1c@@pty-7')
@@ -147,6 +151,7 @@ describe('humanizeTerminalError', () => {
     const humanized = humanizeTerminalError(
       'SSH_SESSION_EXPIRED: orca:2f1c@@pty-7 SSH_PTY_IDENTITY_MISMATCH'
     )
+
     expect(humanized).not.toContain('SSH_SESSION_EXPIRED')
     expect(humanized).not.toContain('SSH_PTY_IDENTITY_MISMATCH')
   })
@@ -155,6 +160,7 @@ describe('humanizeTerminalError', () => {
     const humanized = humanizeTerminalError(
       'Error invoking remote method \'pty:spawn\': Error: PTY "orca:2f1c@@pty-7" not found'
     )
+
     expect(humanized).not.toContain('not found')
     expect(humanized).not.toContain('orca:2f1c@@pty-7')
     expect(humanized).toContain('Open a new terminal to continue')
@@ -166,6 +172,7 @@ describe('humanizeTerminalError', () => {
     const humanized = humanizeTerminalError(
       "Error invoking remote method 'pty:spawn': SessionNotFoundError: Session not found: wt-1@@pane-a"
     )
+
     expect(humanized).not.toContain('SessionNotFoundError')
     expect(humanized).not.toContain('wt-1@@pane-a')
     expect(humanized).toContain('Open a new terminal to continue')
@@ -191,6 +198,7 @@ describe('humanizeTerminalError', () => {
     const humanized = humanizeTerminalError(
       'SSH_PTY_SOURCE_RESTORE_REQUIRED: remote:2f1c:pty-7 checkpointUnavailable'
     )
+
     expect(humanized).not.toContain('SSH_PTY_SOURCE_RESTORE_REQUIRED')
     expect(humanized).not.toContain('remote:2f1c:pty-7')
     expect(humanized).not.toContain('checkpointUnavailable')
@@ -209,6 +217,7 @@ describe('humanizeTerminalError', () => {
     (code) => {
       const aggregated =
         `connect ${code} \\\\?\\pipe\\unrelated\n` + 'orca-terminal-host-v30-14cb7f94b511'
+
       expect(isExplainedTerminalError(aggregated)).toBe(false)
       expect(humanizeTerminalError(aggregated)).toBe(aggregated)
     }
@@ -337,6 +346,7 @@ describe('TerminalErrorToast environment footer', () => {
         onDismiss: vi.fn()
       })
     )
+
     await waitFor(() => expect(view.container.textContent).toContain('Orca: 1.4.178-rc.2'))
 
     view.rerender(
@@ -363,6 +373,7 @@ describe('TerminalErrorToast environment footer', () => {
 
   it('renders owner-unverified as a warning without an issue link', () => {
     const onRetry = vi.fn().mockResolvedValue(true)
+
     const view = render(
       React.createElement(TerminalErrorToast, {
         error: 'terminal_pane_owner_unverified',
@@ -382,6 +393,7 @@ describe('TerminalErrorToast environment footer', () => {
 
   it('keeps Retry available when the recovery attempt rejects', async () => {
     const onRetry = vi.fn().mockRejectedValue(new Error('recovery unavailable'))
+
     const view = render(
       React.createElement(TerminalErrorToast, {
         error: 'terminal_pane_owner_unverified',
@@ -402,6 +414,7 @@ describe('TerminalErrorToast environment footer', () => {
 
   it('explains when Retry is temporarily unavailable', async () => {
     const onRetry = vi.fn().mockResolvedValue(false)
+
     const view = render(
       React.createElement(TerminalErrorToast, {
         error: 'terminal_pane_owner_unverified',

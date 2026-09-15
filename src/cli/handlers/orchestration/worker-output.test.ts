@@ -306,6 +306,7 @@ function transcriptRead(
     timestamp: 1,
     source: 'transcript'
   }
+
   return {
     dispatchId: 'd1',
     source: 'transcript',
@@ -360,6 +361,7 @@ describe('formatWorkerRead', () => {
   // the renderer drops the twin for the same reason, from the other side.
   it('prints the roster sentence once for the two-block row the producer writes', () => {
     const sentence = subagentGroupFallbackText(ROSTER)
+
     const output = formatWorkerRead(
       transcriptRead(
         [
@@ -381,6 +383,7 @@ describe('formatWorkerRead', () => {
     const other: readonly NativeChatSubagentEntry[] = [
       { id: 'child-3', label: 'plan', state: 'completed' }
     ]
+
     const output = formatWorkerRead(
       transcriptRead(
         [
@@ -404,7 +407,9 @@ describe('formatWorkerRead', () => {
     const other: readonly NativeChatSubagentEntry[] = [
       { id: 'child-3', label: 'plan', state: 'completed' }
     ]
+
     const second = subagentGroupFallbackText(other)
+
     const output = formatWorkerRead(
       transcriptRead(
         [
@@ -426,7 +431,9 @@ describe('formatWorkerRead', () => {
     const other: readonly NativeChatSubagentEntry[] = [
       { id: 'child-3', label: 'plan', state: 'completed' }
     ]
+
     const second = subagentGroupFallbackText(other)
+
     const output = formatWorkerRead(
       transcriptRead(
         [
@@ -460,6 +467,7 @@ describe('formatWorkerRead', () => {
   // `[subagents]` line contradicting it.
   it('prints the roster once when the twin names a state this build cannot reproduce', () => {
     const frozenTwin = 'Ran 2 subagents (1 cancelled)'
+
     const output = formatWorkerRead(
       transcriptRead(
         [

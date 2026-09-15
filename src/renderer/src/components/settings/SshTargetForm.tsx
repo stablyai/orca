@@ -19,6 +19,7 @@ import {
   type EditingTarget
 } from './ssh-target-draft'
 import { translate } from '@/i18n/i18n'
+
 export { EMPTY_FORM, type EditingTarget } from './ssh-target-draft'
 
 type SshTargetFormProps = {
@@ -33,12 +34,15 @@ type SshTargetFormProps = {
 
 function editingEndpointSummary(form: EditingTarget): string {
   const host = form.host.trim()
+
   if (!host) {
     return form.label.trim()
   }
+
   const username = form.username.trim()
   const port = form.port.trim()
   const userHost = username ? `${username}@${host}` : host
+
   return port ? `${userHost}:${port}` : userHost
 }
 
@@ -64,6 +68,7 @@ export function SshTargetForm({
   useEffect(() => {
     formRef.current = form
   })
+
   const sessionRef = useRef<{ open: boolean; editingId: string | null }>({
     open: false,
     editingId: null
@@ -72,12 +77,16 @@ export function SshTargetForm({
   useEffect(() => {
     if (!open) {
       sessionRef.current = { open: false, editingId: null }
+
       return
     }
+
     const sessionChanged = !sessionRef.current.open || sessionRef.current.editingId !== editingId
+
     if (!sessionChanged) {
       return
     }
+
     sessionRef.current = { open: true, editingId }
     baselineRef.current = formRef.current
     setAdvancedOpen(hasAdvancedConnectionValues(formRef.current))
@@ -86,6 +95,7 @@ export function SshTargetForm({
   const isEditing = editingId != null
   const editingLabel = form.label.trim()
   const endpointSummary = editingEndpointSummary(form)
+
   const showEditingChip =
     isEditing &&
     (editingLabel !== '' || (endpointSummary !== '' && endpointSummary !== editingLabel))
@@ -110,10 +120,12 @@ export function SshTargetForm({
           className="flex min-h-0 flex-1 flex-col"
           onSubmit={(e) => {
             e.preventDefault()
+
             // Why: Enter still submits while the button is disabled, so gate here too.
             if (saving) {
               return
             }
+
             onSave()
           }}
         >

@@ -25,9 +25,11 @@ export function orchestrationMapsEqual(
 ): boolean {
   const aKeys = Object.keys(a)
   const bKeys = Object.keys(b)
+
   if (aKeys.length !== bKeys.length) {
     return false
   }
+
   return aKeys.every((key) => b[key] !== undefined && orchestrationContextsEqual(a[key]!, b[key]!))
 }
 
@@ -38,14 +40,19 @@ export function mergeCurrentOrchestrationContext(
   if (!existing) {
     return current
   }
+
   const sameDispatch =
     existing.taskId === current.taskId && existing.dispatchId === current.dispatchId
+
   if (!sameDispatch) {
     return current
   }
+
   if (current.dispatchStatus !== undefined) {
     return orchestrationContextsEqual(existing, current) ? existing : current
   }
+
   const merged = { ...existing, ...current }
+
   return orchestrationContextsEqual(existing, merged) ? existing : merged
 }

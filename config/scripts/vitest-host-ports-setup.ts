@@ -57,9 +57,11 @@ beforeEach(() => {
     encryptString: (plainText) => Buffer.from(`${SEAL_PREFIX}${plainText}`),
     decryptString: (cipher) => {
       const text = cipher.toString()
+
       if (!text.startsWith(SEAL_PREFIX)) {
         throw new Error('vitest secret store: ciphertext was not produced by this store')
       }
+
       return text.slice(SEAL_PREFIX.length)
     },
     describeProtectionGap: () => null

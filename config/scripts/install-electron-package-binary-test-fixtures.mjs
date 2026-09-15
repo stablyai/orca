@@ -8,13 +8,16 @@ import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
 const sourceScriptPath = fileURLToPath(
   new URL('./install-electron-package-binary.mjs', import.meta.url)
 )
+
 /** Matches the fake package version and the platform/arch runInstallScript installs for. */
 export const sharedEntryName = '41.5.0-linux-x64'
+
 export const sharedEntryNameFor = (version) => `${version}-linux-x64`
 
 export function mkTempProject() {
   const projectDir = mkdtempSync(join(tmpdir(), 'orca-install-electron-'))
   copyScriptWithLocalModules(sourceScriptPath, join(projectDir, 'config', 'scripts'))
+
   return projectDir
 }
 
@@ -65,6 +68,7 @@ export function writeFakeElectronDist(
   mkdirSync(join(electronDir, 'dist'), { recursive: true })
   writeFileSync(join(electronDir, 'dist/version'), version)
   writeFileSync(join(electronDir, 'dist/electron'), executableContents)
+
   if (pathContents !== undefined) {
     writeFileSync(join(electronDir, 'path.txt'), pathContents)
   }
@@ -158,6 +162,7 @@ fs.renameSync = (source, target) => {
 syncBuiltinESMExports()
 `
   )
+
   return preloadPath
 }
 
@@ -171,6 +176,7 @@ export function initGitRepo(projectDir) {
 export function addSiblingWorktree(projectDir, siblingDir) {
   runGit(projectDir, ['worktree', 'add', '--quiet', '-b', 'sibling', siblingDir])
   copyScriptWithLocalModules(sourceScriptPath, join(siblingDir, 'config', 'scripts'))
+
   return siblingDir
 }
 
@@ -206,5 +212,6 @@ export function writeNonDarwinPlatformPreload(projectDir) {
 Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
 `
   )
+
   return preloadPath
 }

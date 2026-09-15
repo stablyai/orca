@@ -70,7 +70,9 @@ describe('native chat transcript tail with stalled post-resolution UNC I/O', () 
       filePath: UNC_PATH,
       limit: 10
     })
+
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS + 1)
+
     return pending
   }
 

@@ -12,6 +12,7 @@ const generationRace = vi.hoisted(() => ({
 
 vi.mock('./fs-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof FsUtils>()
+
   return {
     ...actual,
     writeFileAtomicallyIfUnchanged: (
@@ -23,13 +24,16 @@ vi.mock('./fs-utils', async (importOriginal) => {
       if (path === generationRace.path) {
         generationRace.beforeGuardedReplace?.()
       }
+
       return actual.writeFileAtomicallyIfUnchanged(path, expectedContents, contents, options)
     }
   }
 })
 
 let root: string
+
 let sharedRuntimeHome: string
+
 let systemCodexHome: string
 
 beforeEach(() => {
@@ -50,6 +54,7 @@ afterEach(() => {
 describe('legacy shared Codex config compatibility', () => {
   it('refreshes retained panes with the authenticated production provider config', () => {
     const staleSharedAuth = '{"tokens":{"access_token":"stale"}}\n'
+
     const systemConfig = [
       'model_provider = "codex-lb"',
       '',
@@ -58,6 +63,7 @@ describe('legacy shared Codex config compatibility', () => {
       'requires_openai_auth = true',
       ''
     ].join('\n')
+
     writeFileSync(join(systemCodexHome, 'config.toml'), systemConfig, 'utf-8')
     writeFileSync(join(sharedRuntimeHome, 'auth.json'), staleSharedAuth)
     writeFileSync(
@@ -108,6 +114,7 @@ describe('legacy shared Codex config compatibility', () => {
   it('does not overwrite trust appended by a retained Codex during the mirror', () => {
     const runtimeConfigPath = join(sharedRuntimeHome, 'config.toml')
     const runtimeConfig = 'model = "runtime-before"\n'
+
     const concurrentConfig = [
       runtimeConfig.trimEnd(),
       '',
@@ -115,6 +122,7 @@ describe('legacy shared Codex config compatibility', () => {
       'trust_level = "trusted"',
       ''
     ].join('\n')
+
     writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "canonical"\n', 'utf-8')
     writeFileSync(runtimeConfigPath, runtimeConfig, 'utf-8')
     generationRace.path = runtimeConfigPath

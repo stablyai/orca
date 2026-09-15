@@ -14,6 +14,7 @@ import type { TerminalSnapshot } from './types'
 
 // Worktree sleep threads an absolute deadline into stopAndWait; this stands in for it.
 const CALLER_DEADLINE_MS = 300
+
 // Why well above the deadline it proves: a stop that only settles because the whole suite is slow
 // would prove nothing, and a stop that never settles must fail this test rather than hang the run.
 const STOP_BUDGET_MS = 8_000
@@ -21,6 +22,7 @@ const STOP_BUDGET_MS = 8_000
 function createMockSubprocess(): SubprocessHandle & { emitData: (data: string) => void } {
   let onData: ((data: string) => void) | undefined
   let onExit: ((code: number) => void) | undefined
+
   return {
     pid: 4243,
     getForegroundProcess: vi.fn(() => null),
@@ -46,9 +48,11 @@ function createMockSubprocess(): SubprocessHandle & { emitData: (data: string) =
 /** Resolves 'timed-out' instead of hanging, so a stranded stop fails the test rather than the run. */
 async function withinBudget<T>(work: Promise<T>, budgetMs: number): Promise<T | 'timed-out'> {
   let timer: ReturnType<typeof setTimeout> | undefined
+
   const budget = new Promise<'timed-out'>((resolve) => {
     timer = setTimeout(() => resolve('timed-out'), budgetMs)
   })
+
   try {
     return await Promise.race([work, budget])
   } finally {
@@ -62,6 +66,7 @@ async function rejectionOf(work: Promise<unknown>): Promise<unknown> {
   } catch (error) {
     return error
   }
+
   throw new Error('Expected work to reject')
 }
 
@@ -84,6 +89,7 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
       spawnSubprocess: () => {
         const subprocess = createMockSubprocess()
         subprocesses.push(subprocess)
+
         return subprocess
       }
     })
@@ -100,17 +106,20 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
     // that write's tmp/rename will recreate files under the temp tree if we delete it first.
     releaseStall?.()
     releaseStall = undefined
+
     if (adapter) {
       const internals = adapter as unknown as {
         checkpointInFlight: Promise<void> | null
         stopCheckpointTimer: () => void
       }
+
       await internals.checkpointInFlight
       internals.stopCheckpointTimer()
       await internals.checkpointInFlight
       await adapter.getHistoryManager()?.dispose()
       adapter.dispose()
     }
+
     await server?.shutdown()
     rmSync(dir, { recursive: true, force: true })
   })
@@ -121,9 +130,11 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
     expect(manager).not.toBeNull()
     const original = manager!.checkpoint.bind(manager!)
     let release = (): void => {}
+
     const stalled = new Promise<void>((resolve) => {
       release = resolve
     })
+
     releaseStall = release
     vi.spyOn(manager!, 'checkpoint').mockImplementation(
       async (
@@ -134,16 +145,20 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
         if (sessionId !== stalledSessionId) {
           return await original(sessionId, snapshot, opts)
         }
+
         await stalled
+
         return await original(sessionId, snapshot, opts)
       }
     )
+
     return { release }
   }
 
   async function spawnWithOutput(sessionId: string, output: string): Promise<string> {
     const { id } = await adapter.spawn({ cols: 80, rows: 24, sessionId, cwd: '/tmp' })
     subprocesses.at(-1)!.emitData(output)
+
     return id
   }
 
@@ -159,6 +174,7 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
     const restore = await new HistoryReader(join(dir, 'history')).detectColdRestore(sessionId, {
       ignoreCleanEnd: true
     })
+
     return `${restore?.scrollbackAnsi ?? ''}${restore?.snapshotAnsi ?? ''}`
   }
 
@@ -216,9 +232,11 @@ describe('STA-4228 keep-history stop bounds only the caller wait on the final ch
 
   it('resumes periodic durable writes after a rejected exclusive checkpoint', async () => {
     const adapterClass = DaemonPtyAdapter as unknown as { CHECKPOINT_INTERVAL_MS: number }
+
     const internals = adapter as unknown as {
       runExclusiveCheckpoint(operation: () => Promise<void>): Promise<boolean>
     }
+
     const previousInterval = adapterClass.CHECKPOINT_INTERVAL_MS
     const rejection = new Error('injected checkpoint rejection')
 

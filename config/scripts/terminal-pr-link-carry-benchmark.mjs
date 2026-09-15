@@ -28,11 +28,13 @@ const DETECTOR_SOURCE = readFileSync(
 function readMirroredConstants(source) {
   const cap = source.match(/const MAX_CARRY_LENGTH = (\d+)/)
   const prefixes = source.match(/const HTTP_SCHEME_PREFIXES = \[([^\]]+)\]/)
+
   if (!cap || !prefixes) {
     throw new Error(
       'terminal-github-pr-link-detector.ts no longer exposes MAX_CARRY_LENGTH / HTTP_SCHEME_PREFIXES in the expected shape; re-sync this benchmark with the implementation.'
     )
   }
+
   return {
     maxCarryLength: Number(cap[1]),
     httpSchemePrefixes: prefixes[1]
@@ -44,7 +46,9 @@ function readMirroredConstants(source) {
 
 const { maxCarryLength: MAX_CARRY_LENGTH, httpSchemePrefixes: HTTP_SCHEME_PREFIXES } =
   readMirroredConstants(DETECTOR_SOURCE)
+
 const ITERATIONS = Number.parseInt(process.env.ORCA_PR_CARRY_BENCH_ITERATIONS ?? '2000', 10)
+
 const WARMUP = Number.parseInt(process.env.ORCA_PR_CARRY_BENCH_WARMUP ?? '200', 10)
 
 for (const [name, value] of [
@@ -62,6 +66,7 @@ function hasTerminalUrlWhitespace(value, start, end) {
       return true
     }
   }
+
   return false
 }
 
@@ -73,34 +78,42 @@ function endsWithHttpSchemePrefixFragment(value) {
       }
     }
   }
+
   return ''
 }
 
 // Pre-fix implementation, kept verbatim for comparison.
 function carryBefore(value) {
   const schemeIndex = Math.max(...HTTP_SCHEME_PREFIXES.map((prefix) => value.lastIndexOf(prefix)))
+
   if (schemeIndex !== -1) {
     const tailLength = value.length - schemeIndex
+
     if (tailLength > MAX_CARRY_LENGTH) {
       return ''
     }
+
     return hasTerminalUrlWhitespace(value, schemeIndex, value.length)
       ? ''
       : value.slice(schemeIndex)
   }
+
   return endsWithHttpSchemePrefixFragment(value)
 }
 
 // Post-fix implementation, mirroring src/shared/terminal-github-pr-link-detector.ts.
 function lastIndexOfHttpScheme(value, fromIndex) {
   let lastIndex = -1
+
   for (const prefix of HTTP_SCHEME_PREFIXES) {
     const candidate =
       fromIndex === undefined ? value.lastIndexOf(prefix) : value.lastIndexOf(prefix, fromIndex)
+
     if (candidate > lastIndex) {
       lastIndex = candidate
     }
   }
+
   return lastIndex
 }
 
@@ -108,16 +121,21 @@ function carryAfter(value) {
   const windowStart = value.length > MAX_CARRY_LENGTH ? value.length - MAX_CARRY_LENGTH : 0
   const window = windowStart === 0 ? value : value.slice(windowStart)
   const schemeIndexInWindow = lastIndexOfHttpScheme(window)
+
   if (schemeIndexInWindow !== -1) {
     const schemeIndex = windowStart + schemeIndexInWindow
+
     return hasTerminalUrlWhitespace(value, schemeIndex, value.length)
       ? ''
       : value.slice(schemeIndex)
   }
+
   const fragment = endsWithHttpSchemePrefixFragment(window)
+
   if (fragment === '' || windowStart === 0) {
     return fragment
   }
+
   return lastIndexOfHttpScheme(value, windowStart - 1) === -1 ? fragment : ''
 }
 
@@ -129,6 +147,7 @@ const GITHUB_PR_PATH_MARKER = '/pull/'
 function makeChunk(bytes, tail = '') {
   const line = 'build output line with some text and punctuation, id=12345\n'
   const filled = line.repeat(Math.ceil(bytes / line.length)).slice(0, bytes)
+
   return tail ? filled.slice(0, bytes - tail.length) + tail : filled
 }
 
@@ -140,6 +159,7 @@ function detectorEarlyOut(carry, value) {
   if (value.includes(GITHUB_PR_PATH_MARKER)) {
     throw new Error('benchmark fixture unexpectedly contains the PR marker')
   }
+
   return carry(value)
 }
 
@@ -147,15 +167,21 @@ function measure(fn, chunk) {
   for (let index = 0; index < WARMUP; index += 1) {
     fn(chunk)
   }
+
   const samples = []
+
   for (let round = 0; round < 5; round += 1) {
     const start = performance.now()
+
     for (let index = 0; index < ITERATIONS; index += 1) {
       fn(chunk)
     }
+
     samples.push((performance.now() - start) / ITERATIONS)
   }
+
   samples.sort((a, b) => a - b)
+
   return samples[2]
 }
 
@@ -172,6 +198,7 @@ const EQUIVALENCE_FIXTURES = [
   '',
   'https://github.com/acme/orca/pull/7'
 ]
+
 for (const fixture of EQUIVALENCE_FIXTURES) {
   if (carryBefore(fixture) !== carryAfter(fixture)) {
     throw new Error(
@@ -181,17 +208,21 @@ for (const fixture of EQUIVALENCE_FIXTURES) {
 }
 
 const SIZES = [4 * 1024, 16 * 1024, 64 * 1024, 256 * 1024, 1024 * 1024]
+
 const rows = []
+
 for (const bytes of SIZES) {
   const chunk = makeChunk(bytes)
   // 'with' ends in 'h', so the chunk terminates on a partial scheme fragment and
   // the new code pays the extra bounded probe behind the window.
   const fragmentChunk = makeChunk(bytes, 'with')
+
   for (const sample of [chunk, fragmentChunk]) {
     if (carryBefore(sample) !== carryAfter(sample)) {
       throw new Error(`carry mismatch at ${bytes} bytes`)
     }
   }
+
   rows.push({
     chunk: `${(bytes / 1024).toFixed(0)} KiB`,
     carry: measure(carryBefore, chunk) / measure(carryAfter, chunk),
@@ -203,16 +234,21 @@ for (const bytes of SIZES) {
 }
 
 const pad = (value, width) => String(value).padStart(width)
+
 console.log('PR-link carry scan, per PTY chunk. Speedup = before / after (>1 is faster).')
+
 console.log(`iterations=${ITERATIONS} warmup=${WARMUP} (median of 5 rounds)`)
+
 console.log(
   `${pad('chunk', 9)} ${pad('carry only', 12)} ${pad('detector path', 15)} ${pad('fragment tail', 15)}`
 )
+
 for (const row of rows) {
   console.log(
     `${pad(row.chunk, 9)} ${pad(`${row.carry.toFixed(1)}x`, 12)} ${pad(`${row.path.toFixed(1)}x`, 15)} ${pad(`${row.fragment.toFixed(2)}x`, 15)}`
   )
 }
+
 console.log(
   '\ncarry only    = the scan this change bounds, in isolation.\n' +
     'detector path = includes() + carry, i.e. what the PTY hot path actually saves.\n' +

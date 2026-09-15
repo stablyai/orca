@@ -18,6 +18,7 @@ function wslDistroForCommand(cwd: string | undefined, override?: string): string
   if (process.platform !== 'win32') {
     return null
   }
+
   return (cwd ? parseWslPath(cwd)?.distro : undefined) ?? override ?? null
 }
 
@@ -31,9 +32,12 @@ export function resolveGitCommand(
     // Why: WSL Git resolves a Windows-authored linked-worktree pointer relative to cwd.
     return { binary: 'git', args, cwd: options.cwd, wsl: null, wslMode: null }
   }
+
   const distro = directWslGitReadDistro(args, options, forceLoginShell)
+
   if (distro) {
     const environment = peekWslGitReadEnvironment(distro)
+
     if (environment) {
       return resolveCommand('git', args, options.cwd, distro, {
         wslGitReadEnvironment: environment,
@@ -41,8 +45,10 @@ export function resolveGitCommand(
         terminationBarrier: options.terminationBarrier
       })
     }
+
     void getWslGitReadEnvironment(distro)
   }
+
   return resolveGitCommandWithoutProbe(args, options, captureLoginShellOutput)
 }
 
@@ -61,6 +67,7 @@ function directWslGitReadDistro(
   if (forceLoginShell || !shouldAttemptWslDirectGit(args, options)) {
     return null
   }
+
   return wslDistroForCommand(options.cwd, options.wslDistro)
 }
 
@@ -97,9 +104,11 @@ export function pendingWslDirectGitReadEnvironment(
   // A settled probe — including a distro whose direct route was permanently disabled — has
   // nothing left to wait for, and neither does a read that is already aborted.
   const distro = directWslGitReadDistro(args, options, false)
+
   if (!distro || isWslGitReadEnvironmentSettled(distro) || options.signal?.aborted) {
     return null
   }
+
   // withTimeout also absorbs rejection, so a probe failure can never become a read failure.
   return withTimeout(
     waitForPromiseWithSignal(getWslGitReadEnvironment(distro), options.signal),
@@ -124,8 +133,10 @@ function isDirectWslGitNotFound(error: unknown, resolved: ResolvedCommand): bool
   if (resolved.wslMode !== 'direct-git' || !error || typeof error !== 'object') {
     return false
   }
+
   const { code, stderr } = error as { code?: unknown; stderr?: unknown }
   const message = typeof stderr === 'string' ? stderr : String(stderr ?? '')
+
   return code === 127 && (message.includes('not found') || message.includes('No such file'))
 }
 
@@ -133,7 +144,9 @@ export function directWslGitExitCode(error: unknown, resolved: ResolvedCommand):
   if (resolved.wslMode !== 'direct-git' || !error || typeof error !== 'object') {
     return null
   }
+
   const code = (error as { code?: unknown }).code
+
   return typeof code === 'number' ? code : null
 }
 
@@ -149,19 +162,25 @@ export function isQuietGitControlFlowExit(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
     return false
   }
+
   const record = error as Record<string, unknown>
+
   if (record.code !== 1) {
     return false
   }
+
   const stderr = record.stderr
+
   return stderr !== undefined && stderr !== null && String(stderr).trim().length === 0
 }
 
 export function invalidateMissingDirectWslGit(error: unknown, resolved: ResolvedCommand): boolean {
   const isMissing = isDirectWslGitNotFound(error, resolved)
+
   if (isMissing && resolved.wsl) {
     invalidateWslGitReadEnvironment(resolved.wsl.distro)
   }
+
   return isMissing
 }
 

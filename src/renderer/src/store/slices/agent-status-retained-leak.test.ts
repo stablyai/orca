@@ -33,10 +33,12 @@ const MAX_RETAINED_AGENTS = 500
 // Approximate the worst-case per-entry payload the production type permits, so
 // the leak's byte weight (not just entry count) is visible in the assertions.
 const BIG_ASSISTANT_MESSAGE = 'a'.repeat(8 * 1024)
+
 const BIG_INTERACTIVE_PROMPT = 'q'.repeat(16 * 1024)
 
 function makeRetained(index: number, worktreeId = 'wt-x'): RetainedAgentEntry {
   const paneKey = `tab-${index}:leaf-${index}`
+
   const entry: AgentStatusEntry = {
     state: 'done',
     prompt: `prompt ${index}`,
@@ -47,6 +49,7 @@ function makeRetained(index: number, worktreeId = 'wt-x'): RetainedAgentEntry {
     lastAssistantMessage: BIG_ASSISTANT_MESSAGE,
     interactivePrompt: BIG_INTERACTIVE_PROMPT
   }
+
   return {
     entry,
     worktreeId,
@@ -67,6 +70,7 @@ describe('retainedAgentsByPaneKey stays bounded (leak regression)', () => {
     // Drive the production retention path with more distinct ephemeral paneKeys
     // than the cap allows — one call per completion, as production does.
     const total = MAX_RETAINED_AGENTS + 200
+
     for (let i = 0; i < total; i++) {
       store.getState().retainAgents([makeRetained(i)])
     }
@@ -102,9 +106,11 @@ describe('retainedAgentsByPaneKey stays bounded (leak regression)', () => {
 
   it('does not evict anything while under the cap', () => {
     const store = createTestStore()
+
     for (let i = 0; i < MAX_RETAINED_AGENTS; i++) {
       store.getState().retainAgents([makeRetained(i)])
     }
+
     const retained = store.getState().retainedAgentsByPaneKey
     expect(Object.keys(retained)).toHaveLength(MAX_RETAINED_AGENTS)
     expect(retained['tab-0:leaf-0']).toBeDefined()

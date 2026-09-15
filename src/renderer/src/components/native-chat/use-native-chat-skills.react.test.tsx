@@ -15,12 +15,15 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) => selector(mocks.state)
 }))
+
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: (...args: unknown[]) => mocks.callRuntimeRpc(...args)
 }))
+
 vi.mock('@/lib/local-preflight-context', () => ({
   getLocalProjectExecutionRuntimeContext: () => undefined
 }))
+
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatSkillDiscovery: vi.fn() }))
 
 import {
@@ -55,6 +58,7 @@ function stateForHost(hostId: string) {
 
 function Probe({ enabled }: { enabled: boolean }): null {
   mocks.snapshots.push(useNativeChatSkills('codex', 'tab-1', enabled))
+
   return null
 }
 
@@ -144,10 +148,12 @@ describe('useNativeChatSkills', () => {
 
     view.rerender(<DraftProbe draft="Explain /" />)
     await waitFor(() => expect(mocks.snapshots.at(-1)?.status).toBe('ready'))
+
     for (const draft of ['Explain /b', 'Explain /br', 'Explain /bro']) {
       view.rerender(<DraftProbe draft={draft} />)
       expect(mocks.snapshots.at(-1)?.skills.map((skill) => skill.name)).toEqual(['browser'])
     }
+
     view.rerender(<DraftProbe draft="Explain $browser " />)
     expect(mocks.snapshots.at(-1)?.status).toBe('idle')
     view.rerender(<DraftProbe draft="/" />)

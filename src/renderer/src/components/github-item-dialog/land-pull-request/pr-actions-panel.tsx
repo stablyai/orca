@@ -55,18 +55,23 @@ export function PRActionsPanel({
   const actionItem = { ...item, state: localState }
   const mergePresentation = presentGitHubPRMergeState(actionItem)
   const mergeMethods = resolveGitHubPRMergeMethods(actionItem.mergeMethodSettings)
+
   const sourceSettings = useAppStore(
     useShallow((s) =>
       getGitHubMutationRoutingSettings(s, item.repoId ?? repoId ?? null, sourceContext)
     )
   )
+
   const mergeTarget = getActiveRuntimeTarget(sourceSettings)
   const prRepo = resolvePullRequestRepo(item, projectOrigin)
+
   const canMutateWithRepoContext =
     !!repoPath || !!projectOrigin || mergeTarget.kind === 'environment'
+
   const canMutateState = localState !== 'merged' && canMutateWithRepoContext
   const nextState: 'open' | 'closed' = localState === 'closed' ? 'open' : 'closed'
   const canMergeWithRepoContext = !!repoPath || mergeTarget.kind === 'environment'
+
   const mergeDisabled =
     !canMergeWithRepoContext || mergePending || !mergePresentation.directMergeAvailable
 
@@ -75,6 +80,7 @@ export function PRActionsPanel({
       if (!projectOrigin) {
         return
       }
+
       patchProjectRowContent(projectOrigin.cacheKey, projectOrigin.projectItemId, { state })
     },
     [patchProjectRowContent, projectOrigin]
@@ -93,10 +99,12 @@ export function PRActionsPanel({
     if (!canMutateState || statePending) {
       return
     }
+
     const label =
       nextState === 'closed'
         ? translate('auto.components.GitHubItemDialog.4aecf121e7', 'Close')
         : translate('auto.components.GitHubItemDialog.8812225174', 'Reopen')
+
     const confirmed = await confirm({
       title: translate(
         'auto.components.GitHubItemDialog.03d7216d62',
@@ -116,11 +124,14 @@ export function PRActionsPanel({
       confirmLabel: label,
       confirmVariant: nextState === 'closed' ? 'destructive' : 'default'
     })
+
     if (!confirmed) {
       return
     }
+
     const previousState = localState
     setStatePending(true)
+
     // Why: without registry authority a search-lagged Tasks refetch silently
     // reverts this row to its pre-mutation state (STA-3343).
     const authority = assertTaskPageGitHubDialogStateAuthority({
@@ -129,7 +140,9 @@ export function PRActionsPanel({
       state: nextState,
       sourceContext
     })
+
     applyStatePatch(nextState)
+
     try {
       await runPullRequestStateUpdate({
         repoPath,
@@ -151,6 +164,7 @@ export function PRActionsPanel({
       if (authority.revert()) {
         applyStatePatch(previousState)
       }
+
       // Why: full sentences per branch — interpolating a lowercased label breaks locales with different casing rules.
       toast.error(
         err instanceof Error
@@ -174,7 +188,9 @@ export function PRActionsPanel({
     if (mergeDisabled) {
       return
     }
+
     const label = GITHUB_PR_MERGE_METHOD_LABELS[method]
+
     const confirmed = await confirm({
       title: translate(
         'auto.components.GitHubItemDialog.03d7216d62',
@@ -187,10 +203,13 @@ export function PRActionsPanel({
       ),
       confirmLabel: label
     })
+
     if (!confirmed) {
       return
     }
+
     setMergePending(true)
+
     try {
       const result =
         mergeTarget.kind === 'environment'
@@ -213,13 +232,16 @@ export function PRActionsPanel({
               method,
               prRepo
             })
+
       if (!result.ok) {
         toast.error(
           result.error ||
             translate('auto.components.GitHubItemDialog.aba792c8b3', 'Failed to merge pull request')
         )
+
         return
       }
+
       // Why: merge is confirmed here; hold 'merged' against search-lagged refetches.
       assertTaskPageGitHubDialogStateAuthority({
         repoId: item.repoId,
@@ -228,6 +250,7 @@ export function PRActionsPanel({
         sourceContext
       })
       applyStatePatch('merged')
+
       if (mergeTarget.kind === 'environment') {
         notifyWorkItemDetailsMutation(
           {
@@ -240,6 +263,7 @@ export function PRActionsPanel({
           { local: false }
         )
       }
+
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(translate('auto.components.GitHubItemDialog.dbe5e2448e', 'Pull request merged'))
       onMutated()
@@ -256,8 +280,10 @@ export function PRActionsPanel({
     if (!canMergeWithRepoContext || !mergePresentation.autoMergeAction) {
       return
     }
+
     const enabled = mergePresentation.autoMergeAction.kind === 'enable'
     setMergePending(true)
+
     try {
       const result =
         mergeTarget.kind === 'environment'
@@ -282,6 +308,7 @@ export function PRActionsPanel({
               method: enabled ? mergeMethods.defaultMethod : undefined,
               prRepo
             })
+
       if (!result.ok) {
         toast.error(
           result.error ||
@@ -295,8 +322,10 @@ export function PRActionsPanel({
                   'Failed to disable auto-merge'
                 ))
         )
+
         return
       }
+
       if (mergeTarget.kind === 'environment') {
         notifyWorkItemDetailsMutation(
           {
@@ -309,6 +338,7 @@ export function PRActionsPanel({
           { local: false }
         )
       }
+
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       toast.success(
         enabled

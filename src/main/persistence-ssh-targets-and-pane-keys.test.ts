@@ -25,6 +25,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -39,9 +40,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -155,6 +158,7 @@ describe('Store', () => {
     expect(targets[2].relayGracePeriodSeconds).toBe(0)
     expect(targets[3].relayGracePeriodSeconds).toBe(0)
     expect(targets[4]).not.toHaveProperty('relayGracePeriodSeconds')
+
     for (const target of targets) {
       expect(target).not.toHaveProperty('remoteWorkspaceSyncEnabled')
       expect(target).not.toHaveProperty('remoteWorkspaceSyncGracePeriodSeconds')
@@ -167,6 +171,7 @@ describe('Store', () => {
     expect(persisted.sshTargets?.[2]?.relayGracePeriodSeconds).toBe(0)
     expect(persisted.sshTargets?.[3]?.relayGracePeriodSeconds).toBe(0)
     expect(persisted.sshTargets?.[4]).not.toHaveProperty('relayGracePeriodSeconds')
+
     for (const target of persisted.sshTargets ?? []) {
       expect(target).not.toHaveProperty('remoteWorkspaceSyncEnabled')
       expect(target).not.toHaveProperty('remoteWorkspaceSyncGracePeriodSeconds')
@@ -249,9 +254,11 @@ describe('Store', () => {
 
     store.flush()
     const persistedBeforeUpdate = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+
     const defaultTarget = persistedBeforeUpdate.sshTargets?.find(
       (t) => t.id === 'ssh-reuse-default'
     )
+
     const disabledTarget = persistedBeforeUpdate.sshTargets?.find((t) => t.id === 'ssh-reuse-off')
     expect(defaultTarget).not.toHaveProperty('systemSshConnectionReuse')
     expect(disabledTarget?.systemSshConnectionReuse).toBe(false)
@@ -286,6 +293,7 @@ describe('Store', () => {
 
   it('upserts ~/.ssh/config through the real store: rotated port updates in place and persists', async () => {
     loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
+
     const candidate = (port: number, id: string) => [
       { id, label: 'cluster', configHost: 'cluster', host: '10.0.0.5', port, username: 'dev' }
     ]

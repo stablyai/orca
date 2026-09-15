@@ -52,20 +52,25 @@ export function handleCodexHomePtySpawned(args: {
   // Why: only shared or ambiguous retained shells can create rollout logs that still need publication.
   if (args.reattached && args.startedSequence !== undefined) {
     const paneAccount = getCodexPaneAccount(args.id)
+
     const homeRoute =
       args.reattachedHomeRoute !== undefined
         ? (args.reattachedHomeRoute ?? undefined)
         : paneAccount?.homeRoute
+
     if (state.codexSessionMigration && isCodexPaneHomeRouteProvenAwayFromSharedHome(homeRoute)) {
       state.codexSessionMigration.ignoreLaunch(args.id, args.startedSequence)
+
       return
     }
   }
+
   const fullScanRequired =
     state.codexRuntimeHome?.beginHostSystemDefaultSessionMigrationLaunch(args.codexHomePath, {
       reattached: args.reattached,
       launchEnv: args.launchEnv
     }) ?? null
+
   if (fullScanRequired !== null) {
     state.codexSessionMigration?.beginLaunch(
       args.id,
@@ -87,16 +92,21 @@ export function handlePtyExit(id: string, exitSequence: number): void {
  *  retire only rows whose local owner is proven gone. */
 export async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
   const store = state.store
+
   if (!store) {
     return
   }
+
   const provider = getDaemonProvider()
+
   if (!provider) {
     return
   }
+
   const persistedPtyIdByPaneKey = indexPersistedPaneKeyPtyIds(
     store.getWorkspaceSession().terminalLayoutsByTabId ?? {}
   )
+
   await sweepRestoredSubagentsWithoutLiveAgent({
     probeLiveLocalPty: (ptyId) => provider.probePtyLiveness(ptyId),
     isLocalExecutionHost: (worktreeId) =>
@@ -121,6 +131,7 @@ export async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
 
 export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
   logStartupMilestone('first-window-startup-services-start')
+
   const startupServices = startFirstWindowStartupServices({
     // Why: both desktop and headless serve must adopt the same persistent provider before creating terminals or a renderer.
     startDaemonPtyProvider: async (signal) => {
@@ -132,14 +143,17 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
       })
       // Why: a retained shell keeps its launch-time Codex home even when the current routing lane changes.
       const hasRetainedManagedHostPane = hasRecordedManagedHostCodexPane()
+
       if (
         state.codexRuntimeHome &&
         (hasRetainedManagedHostPane || hasAnyRecordedLegacyWslCodexPane())
       ) {
         const livePtyIds = await listLiveDaemonPtyIds()
+
         if (livePtyIds) {
           reconcileCodexPaneAccountsWithLivePtys(livePtyIds)
           const settings = state.store?.getSettings()
+
           // Why (#16441): each retained home can run a codex app-server grant
           // session. Awaiting them here delayed the first window by N sessions;
           // a retained shell cannot invoke Codex before this provider serves.
@@ -156,6 +170,7 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
           }
         }
       }
+
       // Why: retained shells can invoke Codex immediately after the startup gate.
       state.codexRuntimeHome?.reconcileLegacySharedHomeForRetainedPanes()
       logStartupMilestone('startup-service-done', { service: 'daemon-pty-provider' })
@@ -163,9 +178,11 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
     // Why: PTY spawn env reads ORCA_AGENT_HOOK_* from live server state, so the renderer awaits this before restored terminals reconnect.
     startAgentHookServer: async () => {
       const settings = state.store?.getSettings()
+
       if (!isAgentStatusHooksEnabled(settings)) {
         return
       }
+
       logStartupMilestone('startup-service-start', { service: 'agent-hook-server' })
       // Why (#11217): the hook listener fails open on every request error, so an IDS resetting
       // loopback POSTs mid-body stops agent status for every runtime with no symptom but staleness.
@@ -194,6 +211,7 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
       console.error('[agent-hooks] Failed to start local hook server:', error)
     }
   })
+
   void startupServices.firstWindowReady.then(() =>
     logStartupMilestone('first-window-startup-services-ready')
   )
@@ -203,6 +221,7 @@ export function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServ
       console.warn('[agent-hooks] restored-subagent liveness probe failed:', error)
     )
   })
+
   return startupServices
 }
 

@@ -5,6 +5,7 @@ describe('IssueSourceIndicator suppression', () => {
   it('hides when sources deep-equal, shows when they differ, hides when either is null', async () => {
     const { default: IssueSourceIndicator, sameGitHubOwnerRepo } =
       await import('../../components/github/IssueSourceIndicator')
+
     const React = await import('react')
     const { renderToStaticMarkup } = await import('react-dom/server')
 
@@ -28,18 +29,21 @@ describe('IssueSourceIndicator suppression', () => {
       issues: { owner: 'o', repo: 'r' },
       prs: { owner: 'o', repo: 'r' }
     })
+
     expect(renderToStaticMarkup(sameEl)).toBe('')
 
     const nullIssueEl = React.createElement(IssueSourceIndicator, {
       issues: null,
       prs: { owner: 'o', repo: 'r' }
     })
+
     expect(renderToStaticMarkup(nullIssueEl)).toBe('')
 
     const diffEl = React.createElement(IssueSourceIndicator, {
       issues: { owner: 'up', repo: 'r' },
       prs: { owner: 'fork', repo: 'r' }
     })
+
     const defaultMarkup = renderToStaticMarkup(diffEl)
     expect(defaultMarkup).toContain('up/r')
     // Default variant is 'list' → plural prefix on list surfaces.
@@ -52,6 +56,7 @@ describe('IssueSourceIndicator suppression', () => {
       prs: { owner: 'fork', repo: 'r' },
       variant: 'item'
     })
+
     const itemMarkup = renderToStaticMarkup(itemEl)
     expect(itemMarkup).toContain('up/r')
     expect(itemMarkup).toContain('Issue from')
@@ -61,6 +66,7 @@ describe('IssueSourceIndicator suppression', () => {
       issues: { owner: 'up', repo: 'r', host: 'ghe.example.test' },
       prs: { owner: 'fork', repo: 'r', host: 'ghe.example.test' }
     })
+
     expect(renderToStaticMarkup(enterpriseEl)).toContain('ghe.example.test/up/r')
   })
 })

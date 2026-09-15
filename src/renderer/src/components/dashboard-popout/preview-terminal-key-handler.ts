@@ -37,9 +37,11 @@ export function installPreviewTerminalKeyHandler(args: {
   const platform = getShortcutPlatform()
   const consumedClipboardKeys = new Set<string>()
   const nativeOnlyShortcutTracker = createTerminalNativeOnlyShortcutTracker()
+
   const consumeEvent = (event: KeyboardEvent): false => {
     event.preventDefault()
     event.stopPropagation()
+
     return false
   }
 
@@ -47,26 +49,33 @@ export function installPreviewTerminalKeyHandler(args: {
   // left-vs-right Option must be recorded from the modifier's own keydown.
   const optionKeyLocations = createOptionKeyLocationTracker()
   const optionKittyReleases = createTerminalOptionKittyReleaseTracker()
+
   const onModifierDown = (event: KeyboardEvent): void => {
     optionKeyLocations.keyDown(event)
   }
+
   const onModifierUp = (event: KeyboardEvent): void => {
     optionKeyLocations.keyUp(event)
   }
+
   const onWindowBlur = (): void => {
     optionKeyLocations.clear()
     optionKittyReleases.clear()
     nativeOnlyShortcutTracker.clear()
   }
+
   const onNativeOnlyShortcutCompanion = (event: KeyboardEvent): void => {
     if (!nativeOnlyShortcutTracker.consumeCompanion(event)) {
       return
     }
+
     if (event.type === 'keypress') {
       event.preventDefault()
     }
+
     event.stopImmediatePropagation()
   }
+
   const onNativeOnlyBeforeInput = (event: Event): void => {
     if (
       !(event instanceof InputEvent) ||
@@ -74,14 +83,17 @@ export function installPreviewTerminalKeyHandler(args: {
     ) {
       return
     }
+
     event.preventDefault()
     event.stopImmediatePropagation()
   }
+
   if (platform === 'darwin') {
     // Why: kitty Option-chord encoding resolves base keys through the async
     // KeyboardLayoutMap; prefetch so the map is cached before the first chord.
     prefetchLayoutCharacters()
   }
+
   window.addEventListener('keydown', onModifierDown, true)
   window.addEventListener('keyup', onModifierUp, true)
   window.addEventListener('keypress', onNativeOnlyShortcutCompanion, true)
@@ -94,23 +106,31 @@ export function installPreviewTerminalKeyHandler(args: {
       // Why: bypass xterm's kitty encoder for native-text keydowns so the committed glyph survives via the input event.
       return false
     }
+
     if (event.type !== 'keydown') {
       if (event.type === 'keyup' && optionKittyReleases.settle(event)) {
         return consumeEvent(event)
       }
+
       const keyIdentity = event.code || event.key
+
       if (consumedClipboardKeys.has(keyIdentity)) {
         if (event.type === 'keyup') {
           consumedClipboardKeys.delete(keyIdentity)
         }
+
         return consumeEvent(event)
       }
+
       return true
     }
+
     nativeOnlyShortcutTracker.prepareKeyDown(event)
     const keybindings = useAppStore.getState().keybindings
+
     if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
       const selection = readTerminalClipboardSelection(terminal)
+
       if (
         !selection &&
         platform !== 'darwin' &&
@@ -121,14 +141,18 @@ export function installPreviewTerminalKeyHandler(args: {
       ) {
         return true
       }
+
       const keyIdentity = event.code || event.key
       const firstKeydown = !consumedClipboardKeys.has(keyIdentity)
       consumedClipboardKeys.add(keyIdentity)
+
       if (firstKeydown && selection) {
         void window.api.ui.writeTerminalClipboardText(selection).catch(() => undefined)
       }
+
       return consumeEvent(event)
     }
+
     // Why darwin-only: only macOS has a real Edit-menu Cmd+V accelerator to
     // defer to. Windows/Linux draw their own titlebar with the menu hidden, so
     // a deferred Ctrl+V would never come back — handle it here, like the pane.
@@ -139,15 +163,18 @@ export function installPreviewTerminalKeyHandler(args: {
       !event.altKey &&
       !event.shiftKey &&
       event.key.toLowerCase() === 'v'
+
     if (
       !isMenuPasteChord &&
       keybindingMatchesAction('terminal.paste', event, platform, keybindings)
     ) {
       const keyIdentity = event.code || event.key
+
       if (!consumedClipboardKeys.has(keyIdentity)) {
         consumedClipboardKeys.add(keyIdentity)
         args.pasteClipboardText(document.activeElement, 'keyboard')
       }
+
       return consumeEvent(event)
     }
 
@@ -155,9 +182,11 @@ export function installPreviewTerminalKeyHandler(args: {
       ...args.getShortcutContext(),
       optionKeyLocations: optionKeyLocations.get()
     })
+
     if (!action) {
       return true
     }
+
     switch (action.type) {
       case 'sendInput':
         if (action.consumeOptionKeyUp) {
@@ -171,10 +200,13 @@ export function installPreviewTerminalKeyHandler(args: {
             getLayoutCharacterForCode
           )
         }
+
         args.sendInput(action.data)
+
         return consumeEvent(event)
       case 'trackNativeOptionDeadKey':
         optionKittyReleases.armNativeDeadKey(event)
+
         return true
       case 'scrollViewport':
         if (action.position === 'top') {
@@ -182,17 +214,20 @@ export function installPreviewTerminalKeyHandler(args: {
         } else {
           terminal.scrollToBottom()
         }
+
         return consumeEvent(event)
       case 'selectAll':
         if (!event.repeat) {
           nativeOnlyShortcutTracker.armKeyDown(event)
           terminal.selectAll()
         }
+
         return consumeEvent(event)
       case 'switchInputSource':
         // Why: the OS owns this chord — block xterm without preventing the default.
         nativeOnlyShortcutTracker.armKeyDown(event)
         event.stopImmediatePropagation()
+
         return false
       // Why: pane-scoped chords have no target in a preview dialog. Swallow them
       // — a pane never sends these bytes to the shell, and xterm would encode

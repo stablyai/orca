@@ -20,11 +20,13 @@ export function formatDuration(minutes: number): string {
   if (minutes < 1) {
     return translate('dashboardPopout.card.time.justNow', 'just now')
   }
+
   if (minutes < 60) {
     return translate('dashboardPopout.card.time.minutes', '{{count}}m', {
       count: Math.floor(minutes)
     })
   }
+
   return translate('dashboardPopout.card.time.hours', '{{count}}h', {
     count: Math.floor(minutes / 60)
   })
@@ -40,5 +42,6 @@ export function agentName(card: DashboardCard): string {
 
 export function agentMapAttentionMarkerScale(mapScale: number): number {
   const inverseScale = 1 / Math.max(mapScale, 0.001)
+
   return Math.max(1, inverseScale ** 0.72, inverseScale * 0.5)
 }

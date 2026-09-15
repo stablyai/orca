@@ -13,7 +13,9 @@ import { describe, expect, it } from 'vitest'
  * them: a new spec that hand-rolls the removal fails here rather than intermittently on Windows.
  */
 const REPO_ROOT = join(__dirname, '..', '..')
+
 const WORKFLOW_PATH = join(REPO_ROOT, '.github', 'workflows', 'pr.yml')
+
 const WINDOWS_STEP_NAME = 'Test Windows-specific boundaries'
 
 /** The spec paths the `package (windows)` job passes to vitest, read from the workflow itself. */
@@ -25,6 +27,7 @@ function readWindowsLaneSpecs(): string[] {
   )
   const nextStepIndex = workflow.indexOf('\n      - name:', stepIndex + 1)
   const step = workflow.slice(stepIndex, nextStepIndex === -1 ? undefined : nextStepIndex)
+
   return step
     .split('\n')
     .map((line) => line.trim())
@@ -33,11 +36,13 @@ function readWindowsLaneSpecs(): string[] {
 
 /** `node:fs` and `node:fs/promises`, spelled with or without the `node:` prefix. */
 const FS_SPECIFIER = String.raw`['"](?:node:)?fs(?:/promises)?['"]`
+
 /** The `{ … }` clause of an fs import or require, which is where a rename would be declared. */
 const FS_BINDING_CLAUSE = new RegExp(
   String.raw`\{([^}]*)\}\s*(?:from\s*${FS_SPECIFIER}|=\s*(?:await\s+import|require)\(\s*${FS_SPECIFIER})`,
   'g'
 )
+
 /** `rm as removeDir` or `rmSync: dropTree` — the two ways a binding gets a local name. */
 const RENAMED_REMOVAL = /\brm(?:Sync)?\s*(?:as|:)\s*([A-Za-z0-9_$]+)/g
 
@@ -51,45 +56,57 @@ const RENAMED_REMOVAL = /\brm(?:Sync)?\s*(?:as|:)\s*([A-Za-z0-9_$]+)/g
  */
 function collectRemovalNames(source: string): string[] {
   const names = new Set(['rmSync', 'rm'])
+
   for (const clause of source.matchAll(FS_BINDING_CLAUSE)) {
     for (const rename of clause[1].matchAll(RENAMED_REMOVAL)) {
       names.add(rename[1])
     }
   }
+
   return [...names]
 }
 
 /** Every recursive removal that does not go through the retrying helper. */
 function findRawRecursiveRemovals(source: string): number[] {
   const offenders: number[] = []
+
   const call = new RegExp(
     String.raw`(?<![\w$.])(?:[\w$]+\.)?(?:${collectRemovalNames(source).join('|')})\s*\(`,
     'g'
   )
+
   let match: RegExpExecArray | null
+
   while ((match = call.exec(source)) !== null) {
     // Read to the call's closing paren so multi-line option objects are covered.
     let depth = 0
     let end = match.index + match[0].length - 1
+
     for (; end < source.length; end += 1) {
       if (source[end] === '(') {
         depth += 1
       } else if (source[end] === ')') {
         depth -= 1
+
         if (depth === 0) {
           break
         }
       }
     }
+
     const args = source.slice(match.index, end + 1)
+
     if (!args.includes('recursive')) {
       continue
     }
+
     if (args.includes('maxRetries')) {
       continue
     }
+
     offenders.push(source.slice(0, match.index).split('\n').length)
   }
+
   return offenders
 }
 
@@ -160,6 +177,7 @@ describe('windows lane tree removal', () => {
   it('removes trees through the retrying helper, never a raw recursive rm', () => {
     const offenders = specs.flatMap((spec) => {
       const source = readFileSync(join(REPO_ROOT, spec), 'utf8')
+
       return findRawRecursiveRemovals(source).map((line) => `${spec}:${line}`)
     })
 

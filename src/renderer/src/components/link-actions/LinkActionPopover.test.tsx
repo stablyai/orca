@@ -72,6 +72,7 @@ describe('LinkActionPopover', () => {
     const onClose = vi.fn()
     const restoreFocus = vi.fn()
     const run = vi.fn()
+
     const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
@@ -108,6 +109,7 @@ describe('LinkActionPopover', () => {
   it('identifies the dismissed request so a newer request can survive', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const onClose = vi.fn()
+
     const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
@@ -125,6 +127,7 @@ describe('LinkActionPopover', () => {
 
   it('uses distinct icons for system and Orca browser actions', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+
     const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
@@ -151,6 +154,7 @@ describe('LinkActionPopover', () => {
     mocks.writeClipboardText.mockResolvedValue(undefined)
     const onClose = vi.fn()
     const restoreFocus = vi.fn()
+
     const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
@@ -179,6 +183,7 @@ describe('LinkActionPopover', () => {
         resolveWrite = resolve
       })
     )
+
     const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
@@ -204,6 +209,7 @@ describe('LinkActionPopover', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     Object.assign(window, { api: { ui: { writeClipboardText: mocks.writeClipboardText } } })
     mocks.writeClipboardText.mockRejectedValue(new Error('denied'))
+
     const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
@@ -223,6 +229,7 @@ describe('LinkActionPopover', () => {
 
   it('does not offer copy link for non-URL destinations', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+
     const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,
@@ -241,6 +248,7 @@ describe('LinkActionPopover', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const onClose = vi.fn()
     const restoreFocus = vi.fn()
+
     const request: LinkActionRequest = {
       anchorX: 100,
       anchorY: 200,

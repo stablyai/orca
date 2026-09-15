@@ -19,9 +19,11 @@ function createDeferredBoolean(): DeferredBoolean {
   let resolvePromise: (value: boolean) => void = () => {
     throw new Error('deferred promise was resolved before initialization')
   }
+
   const promise = new Promise<boolean>((resolve) => {
     resolvePromise = resolve
   })
+
   return { promise, resolve: resolvePromise }
 }
 
@@ -63,15 +65,19 @@ function createAccessoryInputCommitHarness({
   const liveInputRef: RefObject<TextInput | null> = { current: null }
   const liveInputTerminalHandles = new Set([activeHandle])
   const sent: string[] = []
+
   const sendLiveTerminalInputRef: RefObject<TerminalLiveInputSender> = {
     current: async (_handle, bytes) => {
       sent.push(bytes)
+
       return sendResult
     }
   }
+
   const applyLiveInputMirror = vi.fn(
     async (_handle: string, _fieldText: string, _composing?: boolean) => true
   )
+
   const clearPendingLiveInputCommit = vi.fn(() => {})
   const flushPendingLiveInputText = vi.fn(async (_expectedHandle: string | null) => flushResult)
   const waitForPendingLiveInputFlush = vi.fn(async () => waitResult)
@@ -97,12 +103,14 @@ function createAccessoryInputCommitHarness({
       setLiveInputCapture,
       waitForPendingLiveInputFlush
     })
+
     return null
   }
 
   act(() => {
     renderer = create(createElement(Harness))
   })
+
   if (!commit || !renderer) {
     throw new Error('terminal live accessory input hook did not render')
   }
@@ -129,6 +137,7 @@ describe('terminal live accessory inactive input commit result', () => {
     const resultPromise = getTerminalLiveAccessoryInactiveInputCommitResult(
       () => deferredFlush.promise
     )
+
     void resultPromise.then(() => {
       settled = true
     })

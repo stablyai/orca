@@ -58,16 +58,20 @@ export function isActiveMoveSourcePath(
   if (operations.size === 0) {
     return false
   }
+
   const normalizedPath = normalize(absolutePath)
   const scopedOwner = owner(runtimeEnvironmentId)
+
   for (const operation of operations.values()) {
     if (operation.worktreeId !== worktreeId || operation.runtimeEnvironmentId !== scopedOwner) {
       continue
     }
+
     if (operation.sourceRoots.some((root) => isInsideOrEqual(root, normalizedPath))) {
       return true
     }
   }
+
   return false
 }
 

@@ -13,6 +13,7 @@ import {
 export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnapshots {
   protected readRuntimeCredentialsFile(): string | null {
     const credentialsPath = this.pathResolver.getRuntimePaths().credentialsPath
+
     return existsSync(credentialsPath) ? readFileSync(credentialsPath, 'utf-8') : null
   }
 
@@ -24,20 +25,26 @@ export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnap
     if (!credentialsJson) {
       return false
     }
+
     const identity = this.readIdentityFromCredentials(credentialsJson)
+
     if (
       !identity?.email ||
       (account.email && this.normalizeField(account.email) !== identity.email)
     ) {
       return false
     }
+
     const oauthIdentity = this.readIdentityFromOauthAccount(managedOauthAccount)
+
     const selectedOrganizationUuid = this.normalizeField(
       account.organizationUuid ?? oauthIdentity.organizationUuid
     )
+
     if (selectedOrganizationUuid) {
       return identity.organizationUuid === selectedOrganizationUuid
     }
+
     return !identity.organizationUuid
   }
 
@@ -54,19 +61,24 @@ export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnap
     if (previouslyWrittenCredentialsJson === null) {
       return false
     }
+
     const paths = this.pathResolver.getRuntimePaths()
+
     const currentCredentialsJson = existsSync(paths.credentialsPath)
       ? readFileSync(paths.credentialsPath, 'utf-8')
       : null
+
     return currentCredentialsJson === previouslyWrittenCredentialsJson
   }
 
   protected runtimeCredentialsChangedSinceLastWrite(baselineCredentialsJson: string): boolean {
     const paths = this.pathResolver.getRuntimePaths()
+
     try {
       const currentCredentialsJson = existsSync(paths.credentialsPath)
         ? readFileSync(paths.credentialsPath, 'utf-8')
         : null
+
       return (
         currentCredentialsJson !== null &&
         currentCredentialsJson !== (this.lastWrittenCredentialsJson ?? baselineCredentialsJson)
@@ -78,6 +90,7 @@ export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnap
 
   protected restoreRuntimeCredentials(credentialsJson: string | null): void {
     const paths = this.pathResolver.getRuntimePaths()
+
     if (credentialsJson !== null) {
       this.writeRuntimeCredentials(credentialsJson)
     } else {
@@ -91,22 +104,28 @@ export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnap
     options: { allowCredentialSurfaceOwnership: boolean }
   ): void {
     const currentOauthAccount = this.readRuntimeOauthAccount()
+
     if (currentOauthAccount === RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR) {
       return
     }
+
     if (options.allowCredentialSurfaceOwnership) {
       this.writeRuntimeOauthAccount(oauthAccount)
+
       return
     }
+
     if (
       (ownedOauthAccount === null || ownedOauthAccount === undefined) &&
       !options.allowCredentialSurfaceOwnership
     ) {
       return
     }
+
     if (!this.jsonValuesEqual(currentOauthAccount, ownedOauthAccount)) {
       return
     }
+
     this.writeRuntimeOauthAccount(oauthAccount)
   }
 
@@ -118,8 +137,10 @@ export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnap
     if (snapshotValue.status === 'unknown') {
       return false
     }
+
     const currentCredentialsJson =
       await this.readActiveClaudeKeychainCredentialsBestEffort(configDir)
+
     return (
       previouslyWrittenCredentialsJson !== null &&
       currentCredentialsJson === previouslyWrittenCredentialsJson
@@ -142,6 +163,7 @@ export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnap
   ): Promise<boolean> {
     const currentCredentialsJson =
       await this.readActiveClaudeKeychainCredentialsBestEffort(configDir)
+
     return this.runtimeCredentialsBelongToAccount(
       currentCredentialsJson,
       account,
@@ -151,15 +173,19 @@ export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnap
 
   protected readRuntimeOauthAccount(): unknown {
     const configPath = this.pathResolver.getRuntimePaths().configPath
+
     if (!existsSync(configPath)) {
       return null
     }
+
     try {
       const parsed = JSON.parse(readFileSync(configPath, 'utf-8')) as unknown
       const record = this.asRecord(parsed)
+
       if (!record) {
         return RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR
       }
+
       return record.oauthAccount ?? null
     } catch {
       return RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR
@@ -170,25 +196,32 @@ export class ClaudeRuntimeAuthRuntimeState extends ClaudeRuntimeAuthKeychainSnap
     if (managedOauthAccount === null || managedOauthAccount === undefined) {
       return false
     }
+
     const currentOauthAccount = this.readRuntimeOauthAccount()
+
     if (currentOauthAccount === RUNTIME_OAUTH_ACCOUNT_PARSE_ERROR) {
       return false
     }
+
     return this.jsonValuesEqual(currentOauthAccount, managedOauthAccount)
   }
 
   protected writeRuntimeOauthAccount(oauthAccount: unknown): boolean {
     const configPath = this.pathResolver.getRuntimePaths().configPath
     const existing = this.readJsonObject(configPath)
+
     if (existing === null) {
       return false
     }
+
     if (oauthAccount === null || oauthAccount === undefined) {
       delete existing.oauthAccount
     } else {
       existing.oauthAccount = oauthAccount
     }
+
     this.writeJson(configPath, existing)
+
     return true
   }
 }

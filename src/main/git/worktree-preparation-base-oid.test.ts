@@ -1,12 +1,16 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 
 const gitExec = vi.hoisted(() => vi.fn())
+
 vi.mock('./runner', () => ({ gitExecFileAsync: gitExec }))
+
 vi.mock('./worktree-base-refresh', () => ({
   refreshLocalBaseRefForWorktreeCreate: vi.fn(),
   getLocalBaseRefUpdateSuggestionForWorktreeCreate: vi.fn()
 }))
+
 vi.mock('./status', () => ({ runWithGitReadCacheInvalidation: (run: () => unknown) => run() }))
+
 vi.mock('./wsl-linked-worktree-git-routing', () => ({
   invalidateWslLinkedWorktreeGitRouting: vi.fn()
 }))
@@ -14,6 +18,7 @@ vi.mock('./wsl-linked-worktree-git-routing', () => ({
 import { finalizePreparedWorktree } from './worktree-create-preparation'
 
 const originalOid = '1'.repeat(40)
+
 const refreshedOid = '2'.repeat(40)
 
 beforeEach(() => {
@@ -39,6 +44,7 @@ it('reuses the current base-resolution oid and preserves WSL routing', async () 
   ])
   expect(gitExec.mock.calls.find(([args]) => args.includes('checkout'))?.[0]).toContain(originalOid)
   expect(gitExec.mock.calls.some(([args]) => args.includes('reset'))).toBe(false)
+
   for (const [, options] of gitExec.mock.calls) {
     expect(options).toMatchObject({ wslDistro: 'Ubuntu', timeout: 8000 })
   }
@@ -75,9 +81,11 @@ it('starts both independent probes before either resolves and settles them befor
     if (args.includes('--quiet')) {
       return new Promise((resolve) => (resolveBase = resolve))
     }
+
     if (args.at(-1) === 'HEAD') {
       return new Promise((_, reject) => (rejectPrepared = reject))
     }
+
     return Promise.resolve({ stdout: '' })
   })
   let settled = false

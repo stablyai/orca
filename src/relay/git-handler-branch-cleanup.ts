@@ -15,7 +15,9 @@ export async function deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
 ): Promise<boolean> {
   const runGit = (args: string[], options?: { stdin?: string }) =>
     options ? git(args, repoPath, options) : git(args, repoPath)
+
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
+
   // Why: SSH worktrees hit the same squash-merge shape as local worktrees.
   // Git's no-op merge proof lets us clean up only branches whose changes
   // already exist on the saved base ref.
@@ -29,7 +31,9 @@ export async function deleteAlreadyMergedRelayBranchAfterSafeDeleteFailure(
   ) {
     return false
   }
+
   await deleteRelayBranchAtExpectedHead(git, repoPath, branchName, branchHead)
+
   return true
 }
 
@@ -42,9 +46,11 @@ export async function forceDeletePreservedRelayBranch(
   if (!branchName || branchName.includes('\0') || branchName.startsWith('-')) {
     throw new Error('Invalid branch name for preserved branch delete.')
   }
+
   if (!expectedHead) {
     throw new Error('Expected branch head is required for preserved branch delete.')
   }
+
   await deleteRelayBranchAtExpectedHead(git, repoPath, branchName, expectedHead, () => {
     return new Error(
       `Local branch "${branchName}" changed after the workspace was deleted. Review it before deleting it.`
@@ -62,6 +68,7 @@ async function deleteRelayBranchAtExpectedHead(
   if (await isRelayBranchCheckedOut(git, repoPath, branchName)) {
     throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
   }
+
   try {
     await git(['update-ref', '-d', `refs/heads/${branchName}`, expectedHead], repoPath)
   } catch (error) {
@@ -69,6 +76,7 @@ async function deleteRelayBranchAtExpectedHead(
     // and removeWorktree cleanup still rely on their distinct/raw failures.
     throw mapUpdateRefError?.(error) ?? error
   }
+
   if (await isRelayBranchCheckedOut(git, repoPath, branchName)) {
     try {
       await git(['update-ref', `refs/heads/${branchName}`, expectedHead, ''], repoPath)
@@ -78,8 +86,10 @@ async function deleteRelayBranchAtExpectedHead(
         restoreError
       )
     }
+
     throw new Error(`Local branch "${branchName}" is checked out in another worktree.`)
   }
+
   try {
     await git(['config', '--remove-section', `branch.${branchName}`], repoPath)
   } catch {
@@ -94,6 +104,7 @@ async function isRelayBranchCheckedOut(
   branchName: string
 ): Promise<boolean> {
   const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
+
   return parseWorktreeList(stdout).some(
     (worktree) =>
       typeof worktree.branch === 'string' &&

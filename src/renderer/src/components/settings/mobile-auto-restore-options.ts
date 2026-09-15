@@ -38,6 +38,8 @@ export function autoRestoreValueFromMs(ms: number | null | undefined): string {
   if (ms == null) {
     return 'indefinite'
   }
+
   const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
+
   return exact ? exact.value : 'indefinite'
 }

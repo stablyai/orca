@@ -104,6 +104,7 @@ describe('pluginMarketplaceSchema', () => {
     })
 
     expect(parsed.success).toBe(false)
+
     if (!parsed.success) {
       expect(parsed.error.issues).toEqual(
         expect.arrayContaining([
@@ -117,6 +118,7 @@ describe('pluginMarketplaceSchema', () => {
     const plugins = Array.from({ length: PLUGIN_MARKETPLACE_ENTRY_LIMIT + 1 }, (_, index) =>
       listing(`publisher.plugin-${index}`)
     )
+
     expect(
       pluginMarketplaceSchema.safeParse({ name: 'Plugins', owner: 'team', plugins }).success
     ).toBe(false)
@@ -181,6 +183,7 @@ describe('marketplace provenance contracts', () => {
     expect(isMarketplaceListingSupported(['vm-recipes', 'official'])).toBe(true)
     expect(isMarketplaceListingSupported(['keybindings'])).toBe(true)
     expect(isMarketplaceListingSupported([])).toBe(true)
+
     for (const deferred of ['themes', 'icons', 'icon-themes', 'terminal-themes', 'skills']) {
       expect(isMarketplaceListingSupported([deferred, 'official'])).toBe(false)
     }

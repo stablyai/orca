@@ -7,5 +7,6 @@ export function readCodexJournalString(
   key: string
 ): string | null {
   const value = source[key]
+
   return typeof value === 'string' && value.length > 0 ? value : null
 }

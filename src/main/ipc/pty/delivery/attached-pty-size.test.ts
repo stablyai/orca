@@ -7,7 +7,9 @@ import {
 import { ptySizes } from './visibility-state'
 
 const REQUESTED = { cols: 80, rows: 24 }
+
 const CACHED = { cols: 180, rows: 50 }
+
 const LIVE = { cols: 211, rows: 57 }
 
 describe('shouldSeedPreAttachPtySize', () => {
@@ -136,6 +138,7 @@ describe('commitAttachedPtySize', () => {
 
   it('records the resolved grid and reflows the model onto it for a reattach', () => {
     const reflow = vi.fn()
+
     const committed = commitAttachedPtySize({
       result: {
         id: 'pty-commit',
@@ -147,6 +150,7 @@ describe('commitAttachedPtySize', () => {
       cachedBeforeAttach: undefined,
       reflowHeadlessTerminalToPtyGrid: reflow
     })
+
     expect(committed).toEqual(LIVE)
     expect(ptySizes.get('pty-commit')).toEqual(LIVE)
     expect(reflow).toHaveBeenCalledWith('pty-commit', LIVE.cols, LIVE.rows)

@@ -21,6 +21,7 @@ import { electronViteConfig } from '../../electron.vite.config'
 import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../../src/main/startup/bootstrap-fatal-exit-guard'
 
 const targetConfig = readFileSync('config/electron-vite-target.config.cts', 'utf8')
+
 const devRunner = readFileSync('config/scripts/run-electron-vite-dev.mjs', 'utf8')
 
 type BootstrapProcessMock = EventEmitter & {
@@ -40,16 +41,20 @@ function failBootstrapWithBanner(options: {
   processMock.env = options.env
   processMock.pid = 4242
   processMock.exit = () => {}
+
   const fsShim = {
     ...nodeFs,
     writeSync: (descriptor: number, data: string) => {
       if (descriptor === 2) {
         options.stderrWrites?.push(data)
+
         return data.length
       }
+
       return nodeFs.writeSync(descriptor, data)
     }
   }
+
   const context = {
     process: processMock,
     setImmediate: () => {},
@@ -57,12 +62,15 @@ function failBootstrapWithBanner(options: {
       if (specifier === 'node:fs') {
         return fsShim
       }
+
       if (specifier === 'node:path') {
         return nodePath
       }
+
       if (specifier === 'node:os' && options.tmpdir !== undefined) {
         return { tmpdir: () => options.tmpdir }
       }
+
       // Electron's own module is unreachable from a bootstrap fault this early.
       throw new Error(`unexpected require: ${specifier}`)
     }
@@ -70,6 +78,7 @@ function failBootstrapWithBanner(options: {
 
   runInNewContext(createBootstrapFatalExitBanner(), context)
   processMock.emit('uncaughtException', new Error("Cannot find module 'ws'"))
+
   return processMock
 }
 
@@ -95,6 +104,7 @@ describe('Electron Vite output contract', () => {
 
   it('keeps main-process and plain-Node entries at stable CommonJS paths', () => {
     const output = electronViteConfig.main?.build?.rollupOptions?.output
+
     if (!output || Array.isArray(output)) {
       throw new Error('Expected one main-process output')
     }
@@ -106,6 +116,7 @@ describe('Electron Vite output contract', () => {
 
   it('externalizes packaged dependencies but bundles self-contained main dependencies', () => {
     const external = electronViteConfig.main?.build?.rollupOptions?.external
+
     if (typeof external !== 'function') {
       throw new Error('Expected main-process external predicate')
     }
@@ -132,18 +143,22 @@ describe('Electron Vite output contract', () => {
       exitCode?: number
       stderr: { write: (chunk: string) => boolean }
     }
+
     let scheduledExit: (() => void) | null = null
     let exitedWith: number | null = null
     const stderrWrites: string[] = []
     processMock.exit = (code) => {
       exitedWith = code
     }
+
     processMock.stderr = {
       write: (chunk) => {
         stderrWrites.push(chunk)
+
         return true
       }
     }
+
     const context = {
       process: processMock,
       setImmediate: (callback: () => void) => {

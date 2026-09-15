@@ -28,6 +28,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -42,9 +43,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -74,6 +77,7 @@ describe('Store host-partitioned workspace sessions', () => {
 
   const makeLegacyPaneHostSession = (repoId: string, ptyId: string): WorkspaceSessionState => {
     const worktreeId = `${repoId}::/worktree`
+
     return {
       ...getDefaultWorkspaceSession(),
       activeRepoId: repoId,
@@ -128,6 +132,7 @@ describe('Store host-partitioned workspace sessions', () => {
         workspaceSession?: unknown
         workspaceSessionsByHostId?: unknown
       }
+
       return {
         workspaceSession: data.workspaceSession,
         workspaceSessionsByHostId: data.workspaceSessionsByHostId
@@ -243,12 +248,14 @@ describe('Store host-partitioned workspace sessions', () => {
   it('repairs a stable SSH lease leaf copied from another host partition', async () => {
     const leafA = '11111111-1111-4111-8111-111111111111'
     const leafB = '22222222-2222-4222-8222-222222222222'
+
     const makeStableHostSession = (
       repoId: string,
       ptyId: string,
       leafId: string
     ): WorkspaceSessionState => {
       const worktreeId = `${repoId}::/worktree`
+
       return {
         ...getDefaultWorkspaceSession(),
         activeRepoId: repoId,
@@ -267,6 +274,7 @@ describe('Store host-partitioned workspace sessions', () => {
         }
       }
     }
+
     writeDataFile({
       schemaVersion: 1,
       workspaceSession: makeHostSession('local-repo'),
@@ -328,9 +336,11 @@ describe('Store host-partitioned workspace sessions', () => {
   it('preserves and enforces equal repo-id topology authority independently per host', async () => {
     const store = await createStore()
     const worktreeId = 'duplicate::/worktree'
+
     const staleTabs = {
       [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId, ptyId: 'stale-pty' })]
     }
+
     store.setWorkspaceSession(
       {
         ...getDefaultWorkspaceSession(),
@@ -390,6 +400,7 @@ describe('Store host-partitioned workspace sessions', () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'repo-gone', path: '/repo-gone' }))
     const worktreeId = 'repo-gone::/workspace/stale'
+
     const session = {
       ...makeHostSession('repo-gone'),
       activeWorktreeId: worktreeId,
@@ -400,6 +411,7 @@ describe('Store host-partitioned workspace sessions', () => {
       },
       terminalTopologyRevisionByRepoId: { 'repo-gone': 3 }
     }
+
     store.setWorkspaceSession(session, 'local')
     store.setWorkspaceSession(session, 'runtime:env-a')
     store.setWorkspaceSession(session, 'runtime:env-b')
@@ -433,12 +445,14 @@ describe('Store host-partitioned workspace sessions', () => {
   it('uses persisted worktree ownership when removing metadata', async () => {
     const store = await createStore()
     const worktreeId = 'repo-gone::/workspace/stale'
+
     const session = {
       ...makeHostSession('repo-gone'),
       tabsByWorktree: {
         [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
       }
     }
+
     store.setWorkspaceSession(session, 'local')
     store.setWorkspaceSession(session, 'runtime:env-a')
     store.setWorkspaceSession(session, 'runtime:env-b')
@@ -456,6 +470,7 @@ describe('Store host-partitioned workspace sessions', () => {
   it('cleans both surfaces that hold an ssh-owned worktree', async () => {
     const store = await createStore()
     const worktreeId = 'repo-ssh::/srv/stale'
+
     const makeSession = (): ReturnType<typeof makeHostSession> => ({
       ...makeHostSession('repo-ssh'),
       activeWorktreeId: worktreeId,
@@ -464,6 +479,7 @@ describe('Store host-partitioned workspace sessions', () => {
         [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
       }
     })
+
     // The renderer persists SSH workspaces in the local blob; the main process writes their
     // terminal state to the host's own `ssh:*` partition. Removal must clear both.
     store.setWorkspaceSession(makeSession(), 'local')
@@ -523,19 +539,23 @@ describe('Store host-partitioned workspace sessions', () => {
   it('preserves a same-id persisted owner when another qualified host is removed', async () => {
     const store = await createStore()
     const worktreeId = 'repo-split::/workspace/stale'
+
     const session = {
       ...makeHostSession('repo-split'),
       tabsByWorktree: {
         [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
       }
     }
+
     store.setWorkspaceSession(session, 'local')
     store.setWorkspaceSession(session, 'runtime:env-b')
     store.setWorktreeMeta(worktreeId, { hostId: 'local' })
     const worktreeLineage = makeWorktreeLineage({ worktreeId })
+
     const workspaceLineage = makeWorkspaceLineage({
       childWorkspaceKey: worktreeWorkspaceKey(worktreeId)
     })
+
     store.setWorktreeLineage(worktreeId, worktreeLineage)
     store.setWorkspaceLineage(workspaceLineage)
 
@@ -562,18 +582,21 @@ describe('Store host-partitioned workspace sessions', () => {
         executionHostId: 'ssh:ssh-b'
       })
     )
+
     const localSession = {
       ...makeHostSession('repo-split'),
       tabsByWorktree: {
         [worktreeId]: [makeTerminalTab({ id: 'same-id-local-tab', worktreeId })]
       }
     }
+
     const remoteSession = {
       ...makeHostSession('repo-split'),
       tabsByWorktree: {
         [worktreeId]: [makeTerminalTab({ id: 'removed-remote-tab', worktreeId })]
       }
     }
+
     store.setWorkspaceSession(localSession, 'local')
     store.setWorkspaceSession(remoteSession, 'ssh:ssh-b')
     store.setWorktreeMeta(worktreeId, { hostId: 'ssh:ssh-b' })
@@ -590,12 +613,14 @@ describe('Store host-partitioned workspace sessions', () => {
   it('falls back to the caller hostId only when no ownership was recorded', async () => {
     const store = await createStore()
     const worktreeId = 'repo-gone::/workspace/stale'
+
     const session = {
       ...makeHostSession('repo-gone'),
       tabsByWorktree: {
         [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
       }
     }
+
     store.setWorkspaceSession(session, 'runtime:env-a')
     store.setWorkspaceSession(session, 'local')
 
@@ -610,6 +635,7 @@ describe('Store host-partitioned workspace sessions', () => {
   it('does not fence a delayed session write when its host partition was never persisted', async () => {
     const store = await createStore()
     const worktreeId = 'repo-gone::/workspace/stale'
+
     const delayedSession = {
       ...makeHostSession('repo-gone'),
       tabsByWorktree: {
@@ -691,6 +717,7 @@ describe('Store host-partitioned workspace sessions', () => {
   // schedules nothing), so a later rewrite proves the salvage scheduled it.
   async function loadAndAwaitScheduledSave(): Promise<void> {
     vi.useFakeTimers()
+
     try {
       const store = await createStore()
       vi.advanceTimersByTime(10_000)
@@ -709,11 +736,13 @@ describe('Store host-partitioned workspace sessions', () => {
     // dirtied every load would otherwise leave those tests silently vacuous.
     await loadAndAwaitScheduledSave()
     expect(readFileSync(dataFile(), 'utf-8')).toBe(canonical)
+
     return JSON.parse(canonical) as PersistedSessionsFile
   }
 
   it('schedules a save for a salvaged local session instead of re-salvaging every launch', async () => {
     const worktreeId = 'repo-1::/worktree'
+
     const profile = await canonicalize({
       schemaVersion: 1,
       repos: makeRepos('repo-1'),
@@ -722,12 +751,14 @@ describe('Store host-partitioned workspace sessions', () => {
         tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'tab-keep', worktreeId })] }
       }
     })
+
     const tabs = profile.workspaceSession?.tabsByWorktree?.[worktreeId]
     expect(tabs).toBeDefined()
     tabs!.push({ id: 'tab-corrupt' })
     writeDataFile(profile)
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       await loadAndAwaitScheduledSave()
       expect(warn).toHaveBeenCalledWith(
@@ -747,6 +778,7 @@ describe('Store host-partitioned workspace sessions', () => {
 
   it('schedules a save for salvaged host partitions', async () => {
     const worktreeId = 'repo-1::/worktree'
+
     const profile = await canonicalize({
       schemaVersion: 1,
       repos: makeRepos('repo-1'),
@@ -761,6 +793,7 @@ describe('Store host-partitioned workspace sessions', () => {
         }
       }
     })
+
     const partitions = profile.workspaceSessionsByHostId
     const runtimeTabs = partitions?.['runtime:env-a']?.tabsByWorktree?.[worktreeId]
     const sshTabs = partitions?.['ssh:target-b']?.tabsByWorktree?.[worktreeId]
@@ -791,6 +824,7 @@ describe('Store host-partitioned workspace sessions', () => {
         sleepingAgentSessionsByPaneKey: {}
       }
     })
+
     profile.workspaceSession!.sleepingAgentSessionsByPaneKey = {
       'tab-bad:leaf': { paneKey: 'different:leaf' }
     }

@@ -150,13 +150,17 @@ function expandNode(node: unknown): unknown {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return node
   }
+
   if (Array.isArray(node)) {
     return node.map(expandNode)
   }
+
   const el = node as ReactElementLike
+
   if (typeof el.type === 'function') {
     return expandNode((el.type as (props: unknown) => unknown)(el.props))
   }
+
   return {
     ...el,
     props: {
@@ -168,23 +172,31 @@ function expandNode(node: unknown): unknown {
 
 function findElementsByType(node: unknown, typeName: string): ReactElementLike[] {
   const results: ReactElementLike[] = []
+
   const visit = (current: unknown): void => {
     if (current == null || typeof current === 'string' || typeof current === 'number') {
       return
     }
+
     if (Array.isArray(current)) {
       for (const child of current) {
         visit(child)
       }
+
       return
     }
+
     const el = current as ReactElementLike
+
     if (el.type === typeName) {
       results.push(el)
     }
+
     visit(el.props?.children)
   }
+
   visit(node)
+
   return results
 }
 
@@ -192,13 +204,17 @@ function extractText(node: unknown): string {
   if (node == null) {
     return ''
   }
+
   if (typeof node === 'string' || typeof node === 'number') {
     return String(node)
   }
+
   if (Array.isArray(node)) {
     return node.map(extractText).join('')
   }
+
   const el = node as ReactElementLike
+
   return el.props && 'children' in el.props ? extractText(el.props.children) : ''
 }
 
@@ -206,6 +222,7 @@ async function renderMenu(
   overrides: { onActivate?: () => void; onOpenRenameInput?: () => void } = {}
 ): Promise<unknown> {
   const module = await import('./EditorFileTabContextMenu')
+
   return module.EditorFileTabContextMenu({
     open: true,
     menuPoint: { x: 0, y: 0 },
@@ -273,10 +290,13 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     const onActivate = vi.fn()
     const onOpenRenameInput = vi.fn()
     const tree = expandNode(await renderMenu({ onActivate, onOpenRenameInput }))
+
     const rename = findElementsByType(tree, 'DropdownMenuItem').find((item) =>
       extractText(item.props.children).includes('Rename')
     )!
+
     const content = findElementsByType(tree, 'DropdownMenuContent')[0]!
+
     ;(rename.props.onSelect as () => void)()
     expect(onActivate).not.toHaveBeenCalled()
     expect(onOpenRenameInput).not.toHaveBeenCalled()
@@ -296,6 +316,7 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
 
     const renameItem = menuItems.find((item) => extractText(item.props.children).includes('Rename'))
     const closeItem = menuItems.find((item) => extractText(item.props.children) === 'Close⌘W')
+
     const closeAllItem = menuItems.find((item) =>
       extractText(item.props.children).includes('Close All Editor Tabs')
     )
@@ -321,6 +342,7 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
 
   it('renders Close Others and both directional close items', async () => {
     const tree = expandNode(await renderMenu())
+
     const labels = findElementsByType(tree, 'DropdownMenuItem').map((item) =>
       extractText(item.props.children)
     )

@@ -16,6 +16,7 @@ type DaemonServerPrivate = {
 
 function createMockSubprocess(): SubprocessHandle {
   let onExitCb: ((code: number) => void) | null = null
+
   return {
     pid: 55555,
     getForegroundProcess: vi.fn(() => null),
@@ -53,6 +54,7 @@ describe('daemon preflight client replacement', () => {
     clientId: string
   ): Promise<{ control: Socket; stream: Socket }> {
     const token = readFileSync(tokenPath, 'utf-8').trim()
+
     const connectRole = async (role: 'control' | 'stream'): Promise<Socket> => {
       const socket = connect(socketPath)
       await new Promise<void>((resolve) => socket.once('connect', resolve))
@@ -60,16 +62,20 @@ describe('daemon preflight client replacement', () => {
         encodeNdjson({ type: 'hello', version: PROTOCOL_VERSION, token, clientId, role })
       )
       await new Promise<void>((resolve) => socket.once('data', () => resolve()))
+
       return socket
     }
+
     return { control: await connectRole('control'), stream: await connectRole('stream') }
   }
 
   it('cancels preparation when a reconnect replaces the owning control socket', async () => {
     let finishPreparation!: () => void
+
     const preparation = new Promise<void>((resolve) => {
       finishPreparation = resolve
     })
+
     const preparePtySpawn = vi.fn(() => preparation)
     const spawnSubprocess = vi.fn(() => createMockSubprocess())
     const socketPath = join(dir, 'daemon.sock')
@@ -78,7 +84,9 @@ describe('daemon preflight client replacement', () => {
     await server.start()
 
     const original = new DaemonClient({ socketPath, tokenPath })
+
     const replacement = new DaemonClient({ socketPath, tokenPath })
+
     ;(original as unknown as { clientId: string }).clientId = 'reused-client-id'
     ;(replacement as unknown as { clientId: string }).clientId = 'reused-client-id'
     await original.ensureConnected()
@@ -106,9 +114,11 @@ describe('daemon preflight client replacement', () => {
 
   it('cancels only the preparation whose client loses its stream socket', async () => {
     let finishPreparation!: () => void
+
     const preparation = new Promise<void>((resolve) => {
       finishPreparation = resolve
     })
+
     const preparePtySpawn = vi.fn(() => preparation)
     const spawnSubprocess = vi.fn(() => createMockSubprocess())
     const socketPath = join(dir, 'daemon.sock')

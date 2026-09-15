@@ -4,6 +4,7 @@ export function getCodexAccountErrorDescription(error: unknown): string {
     .replace(/^Error invoking remote method 'codexAccounts:[^']+':\s*/i, '')
     .replace(/^Error:\s*/i, '')
     .trim()
+
   const normalizedMessage = message.toLowerCase()
 
   // Why: Codex account actions cross the Electron IPC boundary, and invoke()
@@ -14,9 +15,11 @@ export function getCodexAccountErrorDescription(error: unknown): string {
   if (normalizedMessage.includes('timed out waiting for codex login to finish')) {
     return 'Codex sign-in took too long to finish. Please try again.'
   }
+
   if (normalizedMessage.includes('codex sign-in took too long to finish')) {
     return 'Codex sign-in took too long to finish. Please try again.'
   }
+
   if (
     normalizedMessage.includes('auth error 502') ||
     normalizedMessage.includes('gateway') ||
@@ -24,8 +27,10 @@ export function getCodexAccountErrorDescription(error: unknown): string {
   ) {
     return 'Codex sign-in is temporarily unavailable. Please try again in a minute.'
   }
+
   if (normalizedMessage.startsWith('codex login failed:')) {
     const loginMessage = message.slice('Codex login failed:'.length).trim()
+
     return loginMessage || 'Codex sign-in failed. Please try again.'
   }
 

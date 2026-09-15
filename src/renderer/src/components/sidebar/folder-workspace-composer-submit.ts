@@ -85,19 +85,23 @@ export async function submitFolderWorkspaceCreate({
 }: SubmitFolderWorkspaceCreateParams): Promise<boolean> {
   const linkedName = linkedWorkItem ? getLinkedItemDisplayName(linkedWorkItem) : null
   const nameIsAutoManaged = !name.trim() || name === lastAutoName || isWorkItemLookupText(name)
+
   const workspaceName =
     nameIsAutoManaged && linkedName
       ? linkedName
       : name.trim() || linkedName || `${projectGroup.name} workspace`
+
   const launchPlatform = getFolderWorkspaceAgentLaunchPlatform(projectGroup)
   // Why: an SSH folder group runs the plain `orca` relay shim, so the Linux-only
   // `orca-ide` rename must not be applied for remote launches.
   const launchIsRemote = Boolean(projectGroup.connectionId)
+
   const launchShell = resolveLocalWindowsAgentStartupShell({
     platform: launchPlatform,
     isRemote: launchIsRemote,
     terminalWindowsShell
   })
+
   const startupPlan =
     quickAgent && linkedWorkItem
       ? buildFolderWorkspaceLinkedStartupPlan({
@@ -126,10 +130,12 @@ export async function submitFolderWorkspaceCreate({
             allowEmptyPromptLaunch: true
           })
         : null
+
   // Why: the argv-prefill plan carries the draft inside `launchCommand`, so
   // `startupPlan.draftPrompt` alone can't tell whether this launch has one.
   const launchDraftPrompt =
     quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
+
   const plan = quickAgent
     ? planAgentSessionLaunch(useAppStore.getState(), {
         agent: quickAgent,
@@ -144,7 +150,9 @@ export async function submitFolderWorkspaceCreate({
         initialSessionOptions: startupPlan?.sessionOptions
       })
     : null
+
   const structuredLaunch = plan?.route === 'structured-native-chat'
+
   // Why: the pending badge should only appear when the submitted prompt can
   // actually produce the first agent message that names the workspace.
   const pendingFirstAgentMessageRename =
@@ -165,9 +173,11 @@ export async function submitFolderWorkspaceCreate({
     ...(quickAgent ? { createdWithAgent: quickAgent } : {}),
     ...(pendingFirstAgentMessageRename ? { pendingFirstAgentMessageRename: true } : {})
   })
+
   if (!workspace) {
     return false
   }
+
   if (!structuredLaunch) {
     await preflightAgentTrust({
       agent: quickAgent,
@@ -175,6 +185,7 @@ export async function submitFolderWorkspaceCreate({
       connectionId: workspace.connectionId ?? projectGroup.connectionId
     })
   }
+
   if (startupPlan && !startupPlan.launchToken) {
     // Why: delayed delivery must target the exact pane spawned from this queued
     // startup, so both halves share one renderer-session token.
@@ -204,7 +215,9 @@ export async function submitFolderWorkspaceCreate({
           }
         }
       : undefined
+
   onOpenChange(false)
+
   try {
     let activation = activateAndRevealFolderWorkspace(workspace.id, {
       agent: quickAgent,
@@ -212,7 +225,9 @@ export async function submitFolderWorkspaceCreate({
       ...(structuredLaunch ? { providesInitialSurface: true } : {}),
       runtimeEnvironmentId
     })
+
     let structuredLaunchAccepted = structuredLaunch
+
     const settlement =
       plan?.route === 'structured-native-chat'
         ? await plan.launch(
@@ -224,16 +239,19 @@ export async function submitFolderWorkspaceCreate({
                     .updateFolderWorkspace(workspace.id, { pendingFirstAgentMessageRename: true })
                     .catch(() => undefined)
                 }
+
                 await preflightAgentTrust({
                   agent: quickAgent,
                   workspacePath: workspace.folderPath,
                   connectionId: workspace.connectionId ?? projectGroup.connectionId
                 })
+
                 const fallbackActivation = activateAndRevealFolderWorkspace(workspace.id, {
                   agent: quickAgent,
                   ...(startup ? { startup } : {}),
                   runtimeEnvironmentId
                 })
+
                 return {
                   activation: fallbackActivation,
                   primaryTabId:
@@ -244,21 +262,25 @@ export async function submitFolderWorkspaceCreate({
             { worktreeId: folderWorkspaceKey(workspace.id) }
           )
         : null
+
     if (settlement) {
       // Why: the workspace exists either way. Unknown keeps reporting false and failed true, as
       // the boolean did before the loop was shared; the launch layer owns the failure toast.
       if (settlement.kind === 'visibility-unknown') {
         return false
       }
+
       if (settlement.kind === 'failed' || settlement.kind === 'cancelled') {
         return true
       }
+
       if (settlement.kind === 'refused-then-legacy') {
         structuredLaunchAccepted = false
         // Why: this flow's own fallback always activates; `??` only satisfies the shared type.
         activation = settlement.activation ?? false
       }
     }
+
     if (
       !structuredLaunchAccepted &&
       quickAgent &&
@@ -275,6 +297,7 @@ export async function submitFolderWorkspaceCreate({
         text: launchDraftPrompt
       })
     }
+
     if (
       !structuredLaunchAccepted &&
       startupPlan &&
@@ -292,5 +315,6 @@ export async function submitFolderWorkspaceCreate({
     // open if the follow-up reveal/startup path hits a transient issue.
     console.error('Failed to activate folder workspace after create:', error)
   }
+
   return true
 }

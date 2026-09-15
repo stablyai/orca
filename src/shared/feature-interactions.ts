@@ -10,12 +10,14 @@ export {
   type FeatureInteractionDefinition,
   type FeatureInteractionId
 } from './feature-interaction-catalog'
+
 export {
   FEATURE_INTERACTION_CATEGORIES,
   FEATURE_INTERACTION_CATEGORY_BY_ID,
   getFeatureInteractionCategory,
   type FeatureInteractionCategory
 } from './feature-interaction-categories'
+
 export {
   compareFeatureInteractionUsageBuckets,
   FEATURE_INTERACTION_USAGE_BUCKETS,
@@ -62,12 +64,15 @@ export function normalizeFeatureInteractionTelemetryBuckets(
 
   const input = value as Record<string, unknown>
   const out: FeatureInteractionTelemetryBucketState = {}
+
   for (const id of FEATURE_INTERACTION_IDS) {
     const bucket = input[id]
+
     if (isFeatureInteractionUsageBucket(bucket)) {
       out[id] = bucket
     }
   }
+
   return out
 }
 
@@ -78,12 +83,15 @@ export function normalizeFeatureInteractions(value: unknown): FeatureInteraction
 
   const input = value as Record<string, unknown>
   const out: FeatureInteractionState = {}
+
   for (const id of FEATURE_INTERACTION_IDS) {
     const record = normalizeFeatureInteractionRecord(input[id])
+
     if (record) {
       out[id] = record
     }
   }
+
   return out
 }
 
@@ -91,8 +99,10 @@ function normalizeFeatureInteractionRecord(value: unknown): FeatureInteractionRe
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return null
   }
+
   const input = value as Record<string, unknown>
   const firstInteractedAt = input.firstInteractedAt
+
   if (
     typeof firstInteractedAt !== 'number' ||
     !Number.isFinite(firstInteractedAt) ||
@@ -100,12 +110,15 @@ function normalizeFeatureInteractionRecord(value: unknown): FeatureInteractionRe
   ) {
     return null
   }
+
   const rawInteractionCount = input.interactionCount
+
   const interactionCount =
     typeof rawInteractionCount === 'number' &&
     Number.isInteger(rawInteractionCount) &&
     rawInteractionCount > 0
       ? rawInteractionCount
       : 1
+
   return { firstInteractedAt, interactionCount }
 }

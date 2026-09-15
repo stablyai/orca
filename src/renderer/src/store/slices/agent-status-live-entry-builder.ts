@@ -74,17 +74,21 @@ export function buildAgentStatusLiveEntry(
 ): AgentStatusLiveEntryBuild | AgentStatusLiveEntryRejection {
   const { state, paneKey, payload, terminalTitle, timing, routing, metadata, updatedAt } = args
   const existing = state.agentStatusByPaneKey[paneKey]
+
   if (existing && updatedAt < existing.updatedAt && !timing?.allowOlderTimestamp) {
     return { entry: null, reason: 'stale' }
   }
+
   const effectiveTitle = terminalTitle ?? existing?.terminalTitle
   let history: AgentStateHistoryEntry[] = existing?.stateHistory ?? []
   let lastCompletedAssistantMessage = existing?.lastCompletedAssistantMessage
+
   const boundaryLandsOnRealDone =
     existing?.state === 'done' &&
     existing.sessionBoundary !== true &&
     payload.state === 'done' &&
     payload.sessionBoundary === true
+
   if (
     existing &&
     (existing.state !== payload.state || boundaryLandsOnRealDone) &&
@@ -99,13 +103,16 @@ export function buildAgentStatusLiveEntry(
         interrupted: existing.interrupted
       }
     ]
+
     if (history.length > AGENT_STATE_HISTORY_MAX) {
       history = history.slice(history.length - AGENT_STATE_HISTORY_MAX)
     }
+
     if (existing.state === 'done') {
       lastCompletedAssistantMessage = existing.lastAssistantMessage
     }
   }
+
   const identity = resolveAgentStatusIdentity({
     existing: existing
       ? {
@@ -118,6 +125,7 @@ export function buildAgentStatusLiveEntry(
     incoming: payload.agentType,
     now: updatedAt
   })
+
   const commandCodeNewTurn =
     existing !== undefined &&
     isCommandCodeNewTurnWhileWorking({
@@ -129,9 +137,11 @@ export function buildAgentStatusLiveEntry(
       previousPromptInteractionKey: existing.promptInteractionKey,
       incomingPromptInteractionKey: payload.promptInteractionKey
     })
+
   const promptInteractionKey =
     payload.promptInteractionKey ??
     (payload.prompt === existing?.prompt ? existing?.promptInteractionKey : undefined)
+
   const stateStartedAt =
     timing?.stateStartedAt ??
     (commandCodeNewTurn
@@ -139,6 +149,7 @@ export function buildAgentStatusLiveEntry(
       : existing && existing.state === payload.state
         ? existing.stateStartedAt
         : updatedAt)
+
   if (
     existing &&
     shouldSuppressInheritedTerminalStatus({
@@ -148,29 +159,37 @@ export function buildAgentStatusLiveEntry(
   ) {
     return { entry: null, reason: 'suppressed-inherited-terminal' }
   }
+
   const runtimeOrchestration = state.runtimeAgentOrchestrationByPaneKey[paneKey]
+
   const runtimeMergedOrchestration = runtimeOrchestration
     ? mergeCurrentOrchestrationContext(existing?.orchestration, runtimeOrchestration)
     : undefined
+
   const payloadMergedOrchestration = payload.orchestration
     ? mergeCurrentOrchestrationContext(
         runtimeMergedOrchestration ?? existing?.orchestration,
         payload.orchestration
       )
     : undefined
+
   const orchestration =
     payloadMergedOrchestration ??
     runtimeMergedOrchestration ??
     (payload.state === 'done' ? existing?.orchestration : undefined)
+
   const canReuseExistingProviderSession =
     existing?.agentType === identity.agentType &&
     (existing.state !== 'done' || payload.state === 'done')
+
   const providerSession =
     metadata?.providerSession ??
     (canReuseExistingProviderSession ? existing.providerSession : undefined)
+
   const existingProviderSession = canReuseExistingProviderSession
     ? existing.providerSession
     : undefined
+
   const providerSessionChanged =
     Boolean(metadata?.providerSession && existingProviderSession) &&
     !agentProviderSessionsEqual(
@@ -178,9 +197,11 @@ export function buildAgentStatusLiveEntry(
       metadata?.providerSession,
       existingProviderSession
     )
+
   const statusTabId = routing?.tabId ?? existing?.tabId ?? getTabIdFromPaneKey(paneKey) ?? undefined
   const statusTerminalHandle = routing?.terminalHandle ?? existing?.terminalHandle
   const registryEntry = state.agentLaunchConfigByPaneKey[paneKey]
+
   const registryMatched = registryEntryMatchesStatus({
     entry: registryEntry,
     paneKey,
@@ -192,13 +213,16 @@ export function buildAgentStatusLiveEntry(
     existingProviderSession,
     providerSessionChanged
   })
+
   const matchedRegistryLaunchConfig = registryMatched ? registryEntry?.launchConfig : undefined
   const existingSleepingRecord = state.sleepingAgentSessionsByPaneKey[paneKey]
+
   const retainsResumableRecoveryIdentity =
     payload.state === 'done' &&
     isResumableTuiAgent(identity.agentType) &&
     providerSession !== undefined &&
     getAgentResumeArgv(identity.agentType, providerSession) !== null
+
   const matchedSleepingLaunchConfig =
     (payload.state !== 'done' || retainsResumableRecoveryIdentity) &&
     existingSleepingRecord?.launchConfig &&
@@ -211,12 +235,14 @@ export function buildAgentStatusLiveEntry(
     )
       ? existingSleepingRecord.launchConfig
       : undefined
+
   const launchConfigSource =
     (payload.state !== 'done' && !providerSessionChanged && metadata?.launchToken
       ? metadata?.launchConfig
       : undefined) ??
     matchedRegistryLaunchConfig ??
     matchedSleepingLaunchConfig
+
   const entry: AgentStatusEntry = {
     state: payload.state,
     workingMode: payload.workingMode,
@@ -278,6 +304,7 @@ export function buildAgentStatusLiveEntry(
         ? existing.sessionBoundary
         : undefined)
   }
+
   const facts = deriveAgentStatusLiveFacts({
     state,
     paneKey,
@@ -288,6 +315,7 @@ export function buildAgentStatusLiveEntry(
     commandCodeNewTurn,
     updatedAt
   })
+
   return {
     entry,
     existing,

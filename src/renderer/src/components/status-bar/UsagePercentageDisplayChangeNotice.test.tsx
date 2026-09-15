@@ -8,6 +8,7 @@ import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from '../settings/appearance-usag
 
 // Controllable ResizeObserver so tests can drive reflow deliveries by hand.
 type ResizeObserverStub = { cb: ResizeObserverCallback; targets: Element[] }
+
 const resizeObservers: ResizeObserverStub[] = []
 
 function fireResizeObservers(): void {
@@ -15,6 +16,7 @@ function fireResizeObservers(): void {
     if (observer.targets.length === 0) {
       continue
     }
+
     observer.cb([] as unknown as ResizeObserverEntry[], observer as unknown as ResizeObserver)
   }
 }
@@ -189,6 +191,7 @@ describe('UsagePercentageDisplayChangeNotice', () => {
     const openSettingsButton = Array.from(
       document.querySelectorAll('.status-bar-change-notice-card button')
     ).find((button) => button.textContent === 'Open Settings')
+
     expect(openSettingsButton).toBeTruthy()
     act(() => {
       openSettingsButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -209,6 +212,7 @@ describe('UsagePercentageDisplayChangeNotice', () => {
     const dismissButton = document.querySelector(
       '.status-bar-change-notice-card button[aria-label="Dismiss"]'
     )
+
     expect(dismissButton).toBeTruthy()
     act(() => {
       dismissButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -222,6 +226,7 @@ describe('UsagePercentageDisplayChangeNotice', () => {
     const gotItButton = Array.from(
       document.querySelectorAll('.status-bar-change-notice-card button')
     ).find((button) => button.textContent === 'Got it')
+
     expect(gotItButton).toBeTruthy()
     act(() => {
       gotItButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -265,6 +270,7 @@ describe('UsagePercentageDisplayChangeNotice', () => {
         fireResizeObservers()
       })
     }
+
     // Why: without the equality guard every identical-geometry delivery churns a
     // fresh AnchorPosition object → one re-render each (measured 20). The guard
     // returns the same reference so React bails on all but the first settling

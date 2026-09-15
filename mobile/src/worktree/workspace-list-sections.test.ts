@@ -13,6 +13,7 @@ import { getMobileWorkspaceLineageGroupKey } from './mobile-workspace-lineage'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   const worktreePath = join('/tmp', 'orca', 'worktrees', 'feature')
+
   return {
     workspaceKind: 'git',
     worktreeId: `repo-1::${worktreePath}`,
@@ -70,6 +71,7 @@ describe('filterWorktrees', () => {
       liveTerminalCount: 0,
       hasHostSidebarActivity: true
     })
+
     const retainedPtyOnly = worktree({
       worktreeId: 'retained-pty-only',
       status: 'active',
@@ -92,6 +94,7 @@ describe('filterWorktrees', () => {
       branch: 'main',
       isMainWorktree: true
     })
+
     const featureNamedMain = worktree({
       worktreeId: 'feature-main',
       branch: 'main',
@@ -243,6 +246,7 @@ describe('getWorktreeStatus', () => {
 describe('buildSections', () => {
   it('keys same-id rows by host inside a section', () => {
     const worktreeId = 'repo-1::/work/orca'
+
     const sections = buildSections(
       [worktree({ worktreeId, hostId: 'local' }), worktree({ worktreeId, hostId: 'ssh:builder' })],
       'name',
@@ -251,6 +255,7 @@ describe('buildSections', () => {
       'none',
       new Set()
     )
+
     const keys = sections[0]?.data.map((item) => item.sectionListKey) ?? []
 
     expect(new Set(keys).size).toBe(2)
@@ -311,6 +316,7 @@ describe('buildSections', () => {
       unread: false,
       lastOutputAt: 1
     })
+
     const mobileFallbackFirst = worktree({
       worktreeId: 'mobile-fallback-first',
       displayName: 'mobile-fallback-first',
@@ -339,6 +345,7 @@ describe('buildSections', () => {
 
   it('uses desktop display-name tie-breaks for equal persisted smart ranks', () => {
     const zed = worktree({ worktreeId: 'zed', displayName: 'Zed', sortOrder: 20, unread: true })
+
     const alpha = worktree({
       worktreeId: 'alpha',
       displayName: 'Alpha',
@@ -361,6 +368,7 @@ describe('buildSections', () => {
       lastActivityAt: 100,
       lastOutputAt: 1_000
     })
+
     const touchedOnDesktop = worktree({
       worktreeId: 'touched',
       displayName: 'touched',
@@ -380,6 +388,7 @@ describe('buildSections', () => {
       lastActivityAt: 2_000,
       lastOutputAt: 1
     })
+
     const quietOlder = worktree({
       worktreeId: 'quiet-older',
       displayName: 'quiet',
@@ -395,11 +404,13 @@ describe('buildSections', () => {
   it('falls back to agent attention order in Smart when no desktop ranks exist', () => {
     // Display names are deliberately reverse-alphabetical to prove status ranks.
     const idle = worktree({ worktreeId: 'idle', displayName: 'Aardvark' })
+
     const needsPermission = worktree({
       worktreeId: 'needs-permission',
       displayName: 'Zebra',
       status: 'permission'
     })
+
     const working = worktree({ worktreeId: 'working', displayName: 'Yak', status: 'working' })
 
     expect(
@@ -409,6 +420,7 @@ describe('buildSections', () => {
 
   it('keeps desktop-ranked rows above unranked attention-fallback rows in Smart', () => {
     const ranked = worktree({ worktreeId: 'ranked', displayName: 'Ranked', sortOrder: 5 })
+
     const unrankedWorking = worktree({
       worktreeId: 'unranked-working',
       displayName: 'Working',
@@ -422,12 +434,14 @@ describe('buildSections', () => {
 
   it('matches desktop Recent create grace for newly-created workspaces', () => {
     const now = 10_000
+
     const created = worktree({
       worktreeId: 'created',
       displayName: 'created',
       lastActivityAt: 100,
       createdAt: now - 1_000
     })
+
     const active = worktree({
       worktreeId: 'active',
       displayName: 'active',
@@ -446,11 +460,13 @@ describe('buildSections', () => {
       repo: 'Beta Repo',
       displayName: 'Alpha'
     })
+
     const alphaZed = worktree({
       worktreeId: 'alpha-zed',
       repo: 'Alpha Repo',
       displayName: 'Zed'
     })
+
     const betaBravo = worktree({
       worktreeId: 'beta-bravo',
       repo: 'Beta Repo',
@@ -468,6 +484,7 @@ describe('buildSections', () => {
       repo: 'áb repo',
       displayName: 'Alpha'
     })
+
     const plainRepo = worktree({
       worktreeId: 'plain-repo',
       repo: 'ab repo',
@@ -488,6 +505,7 @@ describe('buildSections', () => {
       sortOrder: 30,
       status: 'inactive'
     })
+
     const child = worktree({
       worktreeId: 'child',
       displayName: 'Agent Session History resume (PR2)',
@@ -496,6 +514,7 @@ describe('buildSections', () => {
       sortOrder: 20,
       status: 'inactive'
     })
+
     const unrelatedActive = worktree({
       worktreeId: 'active',
       displayName: 'Overlapping tui output',
@@ -529,6 +548,7 @@ describe('buildSections', () => {
       sortOrder: 30,
       isMainWorktree: false
     })
+
     const main = worktree({
       worktreeId: 'main',
       displayName: 'Main',
@@ -618,6 +638,7 @@ describe('buildSections', () => {
       repo: 'sleeping-repo',
       hasHostSidebarActivity: false
     })
+
     const sections = buildSections(
       [sleeping],
       'manual',
@@ -642,6 +663,7 @@ describe('buildSections', () => {
       workspaceStatus: 'in-review',
       status: 'active'
     })
+
     const progress = worktree({
       worktreeId: 'progress',
       workspaceStatus: 'in-progress',
@@ -720,6 +742,7 @@ describe('buildSections', () => {
       manualOrder: 30,
       status: 'inactive'
     })
+
     const activeSecond = worktree({
       worktreeId: 'active-second',
       displayName: 'active-second',
@@ -751,6 +774,7 @@ describe('buildSections', () => {
       displayName: 'parent',
       workspaceStatus: 'in-progress'
     })
+
     const child = worktree({
       worktreeId: 'child',
       displayName: 'child',
@@ -779,6 +803,7 @@ describe('buildSections', () => {
       displayName: 'parent',
       workspaceStatus: 'in-progress'
     })
+
     const child = worktree({
       worktreeId: 'child',
       displayName: 'child',

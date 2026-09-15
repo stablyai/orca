@@ -59,6 +59,7 @@ export type TerminalUnavailableCause = z.infer<typeof TerminalUnavailableCauseSc
 /** Null for anything that does not validate; a malformed cause must never be acted on. */
 export function parseTerminalUnavailableCause(value: unknown): TerminalUnavailableCause | null {
   const parsed = TerminalUnavailableCauseSchema.safeParse(value)
+
   return parsed.success ? parsed.data : null
 }
 
@@ -73,6 +74,7 @@ export function terminalUnavailableCauseFromError(error: unknown): TerminalUnava
   if (typeof error !== 'object' || error === null || !('data' in error)) {
     return null
   }
+
   return parseTerminalUnavailableCause((error as { data: unknown }).data)
 }
 

@@ -46,6 +46,7 @@ describe('refreshRuntimeProjectWorktrees', () => {
   it('limits a large catalog to the bounded worktree refresh lane', async () => {
     let active = 0
     let peak = 0
+
     const fetchWorktrees = vi.fn(
       async (_repoId: string, _options: { executionHostId: string }): Promise<void> => {
         active += 1
@@ -70,6 +71,7 @@ describe('refreshRuntimeProjectWorktrees', () => {
     // the background event lane, which can repeat and coalesce many repos.
     let active = 0
     let peak = 0
+
     const fetchWorktrees = vi.fn(async (): Promise<void> => {
       active += 1
       peak = Math.max(peak, active)
@@ -124,6 +126,7 @@ describe('createRuntimeProjectRefreshScheduler', () => {
 
   it('coalesces a burst of remote repo events into one refresh', async () => {
     const refresh = vi.fn().mockResolvedValue(undefined)
+
     const scheduler = createRuntimeProjectRefreshScheduler({
       refresh,
       debounceMs: 100,
@@ -146,6 +149,7 @@ describe('createRuntimeProjectRefreshScheduler', () => {
 
   it('throttles repeated bursts after the first refresh', async () => {
     const refresh = vi.fn().mockResolvedValue(undefined)
+
     const scheduler = createRuntimeProjectRefreshScheduler({
       refresh,
       debounceMs: 100,
@@ -171,12 +175,14 @@ describe('createRuntimeProjectRefreshScheduler', () => {
     let finishRefresh = (): void => {
       throw new Error('Expected refresh promise resolver to be set')
     }
+
     const refresh = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           finishRefresh = resolve
         })
     )
+
     const scheduler = createRuntimeProjectRefreshScheduler({
       refresh,
       debounceMs: 100,
@@ -201,6 +207,7 @@ describe('createRuntimeProjectRefreshScheduler', () => {
 
   it('clears pending timers on stop', async () => {
     const refresh = vi.fn().mockResolvedValue(undefined)
+
     const scheduler = createRuntimeProjectRefreshScheduler({
       refresh,
       debounceMs: 100,

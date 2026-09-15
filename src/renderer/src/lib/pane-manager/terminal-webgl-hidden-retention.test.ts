@@ -32,6 +32,7 @@ function retentionFor(owner: object, panes: ManagedPaneInternal[]) {
 function managerWithPane(pane: ManagedPaneInternal, options: Partial<PaneManagerOptions>) {
   const manager = new PaneManager({} as HTMLElement, options as PaneManagerOptions)
   Object.assign(manager, { panes: new Map([[1, pane]]) })
+
   return manager
 }
 
@@ -100,9 +101,11 @@ describe('terminal-webgl-hidden-retention', () => {
     suspendPaneRendering(panesC, retentionFor(ownerC, panesC))
 
     expect(panesA.every((pane) => pane.webglAddon === null)).toBe(true)
+
     for (const addon of addonsA) {
       expect(addon?.dispose).toHaveBeenCalled()
     }
+
     expect(panesB.every((pane) => pane.webglAddon != null)).toBe(true)
     expect(panesC.every((pane) => pane.webglAddon != null)).toBe(true)
     expect(retainedHiddenWebglOwnerCountForTest()).toBe(2)
@@ -139,6 +142,7 @@ describe('terminal-webgl-hidden-retention', () => {
     const addons = panes.map((pane) => pane.webglAddon)
     suspendPaneRendering(panes, retentionFor(owner, panes))
     expect(retainedHiddenWebglOwnerCountForTest()).toBe(0)
+
     for (const addon of addons) {
       expect(addon?.dispose).toHaveBeenCalled()
     }
@@ -154,6 +158,7 @@ describe('terminal-webgl-hidden-retention', () => {
     expect(panes[0].webglAttachmentDeferred).toBe(false)
     // Released owner no longer counts toward the cap: three more 3-pane owners fit.
     const others = [{}, {}]
+
     for (const other of others) {
       const otherPanes = [createPane(), createPane(), createPane()]
       suspendPaneRendering(otherPanes, retentionFor(other, otherPanes))
@@ -174,10 +179,12 @@ describe('terminal-webgl-hidden-retention', () => {
     const ownerA = {}
     const panesA = [createPane(), createPane(), createPane(), createPane()]
     suspendPaneRendering(panesA, retentionFor(ownerA, panesA))
+
     // GPU-off path disposes retained addons directly.
     for (const pane of panesA) {
       pane.webglAddon = null
     }
+
     const ownerB = {}
     const panesB = Array.from({ length: 6 }, () => createPane())
     suspendPaneRendering(panesB, retentionFor(ownerB, panesB))

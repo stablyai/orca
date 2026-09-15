@@ -73,6 +73,7 @@ export function RuntimeServerWorkflowPicker({
               if (value !== 'connect') {
                 onCloseAddServerForm()
               }
+
               onWorkflowChange(value)
             }}
             className={cn(

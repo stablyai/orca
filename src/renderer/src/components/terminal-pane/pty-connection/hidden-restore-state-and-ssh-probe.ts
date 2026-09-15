@@ -36,25 +36,31 @@ export function bindHiddenRestoreStateAndSshProbe(session: ConnectPanePtySession
     ) {
       return
     }
+
     if (
       session.hiddenOutputRestoreDeferredRetryAttempts >= HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MAX
     ) {
       const ptyId = session.hiddenOutputRestorePtyId
+
       if (ptyId !== null) {
         session.abandonHiddenOutputRestoreAndDrainPendingForeground(ptyId)
       } else {
         session.clearHiddenOutputRestoreState()
         session.writeRestoreUnavailableWarning()
       }
+
       return
     }
+
     session.hiddenOutputRestoreDeferredRetryAttempts += 1
     // Why: a null snapshot usually means remote output was still mutating; retry after one quiet tick instead of spinning.
     session.hiddenOutputRestoreDeferredRetryTimer = setTimeout(() => {
       session.hiddenOutputRestoreDeferredRetryTimer = null
+
       if (session.disposed || !session.hiddenOutputRestoreNeeded) {
         return
       }
+
       session.hiddenOutputRestoreRetryDeferred = false
       session.requestHiddenOutputRestoreIfNeeded()
     }, HIDDEN_OUTPUT_RESTORE_DEFERRED_RETRY_MS)
@@ -79,16 +85,20 @@ export function bindHiddenRestoreStateAndSshProbe(session: ConnectPanePtySession
     session.pendingHiddenSnapshotFit?.cancel()
     session.pendingHiddenSnapshotFit = null
     const scrollRestore = session.hiddenOutputSnapshotScrollRestore
+
     if (!scrollRestore) {
       return
     }
+
     scrollRestore.valid = false
     session.hiddenOutputSnapshotScrollRestore = null
+
     if (scrollRestore.started) {
       cancelTerminalScrollIntentBufferRebuildCompletions(session.pane.terminal)
     }
     // Why: invalidation suppresses restoration, but queued bytes still own the bracket until their FIFO sentinels prove parsing finished.
   }
+
   session.cancelHiddenOutputSnapshotScrollRestore = session.cancelSnapshotScrollRestore
 
   session.clearPaneMode2031State = function (): void {
@@ -107,11 +117,14 @@ export function bindHiddenRestoreStateAndSshProbe(session: ConnectPanePtySession
     ) {
       return
     }
+
     const cols = session.pane.terminal.cols
     const rows = session.pane.terminal.rows
+
     if (cols <= 2 || rows <= 0) {
       return
     }
+
     // Why: a hidden alt-screen TUI can miss the same-size restore SIGWINCH; a one-column pulse makes the repaint observable to the child.
     session.transport.resize(cols - 1, rows)
     session.transport.resize(cols, rows)
@@ -122,9 +135,11 @@ export function bindHiddenRestoreStateAndSshProbe(session: ConnectPanePtySession
     session.hiddenRendererStateDirty = true
     recordHiddenRendererSkip(data.length)
     const ptyId = session.transport.getPtyId()
+
     if (!ptyId || session.alternateScreenBackgroundRepaintTimer !== null) {
       return
     }
+
     session.pulseVisibleLocalPtySizeForTuiRepaint(ptyId)
     session.alternateScreenBackgroundRepaintTimer = setTimeout(() => {
       session.alternateScreenBackgroundRepaintTimer = null
@@ -135,6 +150,7 @@ export function bindHiddenRestoreStateAndSshProbe(session: ConnectPanePtySession
     if (session.hiddenOutputRestorePtyId === null) {
       return
     }
+
     if (session.transport.getPtyId() !== session.hiddenOutputRestorePtyId) {
       // Why: renderer backlog is tied to the old PTY stream; after reattach it must not delay or replay before the new PTY.
       session.clearHiddenOutputRestoreState()
@@ -153,10 +169,12 @@ export function bindHiddenRestoreStateAndSshProbe(session: ConnectPanePtySession
     ownerGeneration = session.transportStreamGeneration
   ): void => {
     session.reattachLiveDataDeferralDepth += 1
+
     if (session.reattachLiveDataDeferralDepth === 1) {
       session.deferredReattachLiveData = new DeferredReattachLiveDataQueue()
       session.deferredReattachLiveDataOwners = new Map()
     }
+
     if (!session.deferredReattachLiveDataOwners.has(ownerGeneration)) {
       session.deferredReattachLiveDataOwners.set(ownerGeneration, { failed: false })
     }
@@ -180,7 +198,9 @@ export function bindHiddenRestoreStateAndSshProbe(session: ConnectPanePtySession
     ) {
       return false
     }
+
     session.transport.detach?.({ preserveExitObserver: false })
+
     return true
   }
 
@@ -194,9 +214,11 @@ export function bindHiddenRestoreStateAndSshProbe(session: ConnectPanePtySession
   ): (() => Promise<PtyBufferSnapshot | null>) =>
     memoizeSshReattachModelSnapshotProbe(async (): Promise<PtyBufferSnapshot | null> => {
       const sshParkingEnabled = useAppStore.getState().settings?.terminalSshViewParking !== false
+
       if (!shouldFetchSshReattachModelSnapshot({ ptyId, sshParkingEnabled })) {
         return null
       }
+
       const snapshot = await resolveSshReattachModelSnapshotWithTimeout(
         window.api.pty.getMainBufferSnapshot(ptyId, {
           scrollbackRows: resolveHiddenRestoreScrollbackRows(
@@ -204,6 +226,7 @@ export function bindHiddenRestoreStateAndSshProbe(session: ConnectPanePtySession
           )
         })
       )
+
       return snapshot &&
         decideSshReattachPaintSource({ ptyId, sshParkingEnabled, snapshot }) ===
           'main-model-snapshot'
@@ -217,6 +240,7 @@ export function bindHiddenRestoreStateAndSshProbe(session: ConnectPanePtySession
     if (parkedSshSnapshotPrefetch?.ptyId !== ptyId) {
       parkedSshSnapshotPrefetch = { ptyId, fetch: createSshMainModelSnapshotProbe(ptyId) }
     }
+
     return parkedSshSnapshotPrefetch.fetch
   }
 }

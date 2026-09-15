@@ -30,13 +30,16 @@ export async function searchWithGitGrep(
   if (isWslLinkedWorktreeGitRoutingCandidate(rootPath, localGitOptions.wslDistro)) {
     await prepareWslLinkedWorktreeGitRouting(rootPath, localGitOptions.wslDistro)
   }
+
   const gitArgs = buildGitGrepArgs(args.query, args)
+
   const child = await gitSpawnAfterWindowsEnvironmentReady(gitArgs, {
     cwd: rootPath,
     admissionTier: 'interactive',
     ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
     stdio: ['ignore', 'pipe', 'pipe']
   })
+
   return new Promise((resolve) => {
     const matchRegex = buildSubmatchRegex(args.query, args)
     const acc = createAccumulator()
@@ -49,6 +52,7 @@ export async function searchWithGitGrep(
       if (done) {
         return
       }
+
       done = true
       lines.clear()
       clearTimeout(killTimeout)
@@ -63,6 +67,7 @@ export async function searchWithGitGrep(
 
     function processLine(line: string): void {
       const verdict = ingestGitGrepLine(line, rootPath, matchRegex, acc, maxResults)
+
       if (verdict === 'stop') {
         child.kill()
       }
@@ -82,9 +87,11 @@ export async function searchWithGitGrep(
 
     function handleClose(): void {
       const tail = lines.finish()
+
       if (tail !== null) {
         processLine(tail)
       }
+
       resolveOnce()
     }
 

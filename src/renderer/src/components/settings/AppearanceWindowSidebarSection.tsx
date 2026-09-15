@@ -78,20 +78,25 @@ export function AppearanceWindowSidebarSection({
   const sidebarEntries = getSidebarEntries()
   const workspaceCardLayoutEntry = getWorkspaceCardLayoutEntry()
   const layoutEntries = getLayoutEntries()
+
   const statusBarTitle = translate(
     'auto.components.settings.AppearancePane.3e4175e5c6',
     'Status Bar'
   )
+
   const statusBarDescription = translate(
     'auto.components.settings.AppearancePane.statusBarDescription',
     'Choose which indicators appear in the status bar.'
   )
+
   const statusBarKeywords = ['status bar', 'indicators']
+
   const statusBarSectionMatches = matchesSettingsSearch(searchQuery, {
     title: statusBarTitle,
     description: statusBarDescription,
     keywords: statusBarKeywords
   })
+
   const statusBarControlMatches =
     matchesSettingsSearch(searchQuery, usagePercentageDisplayEntry) ||
     visibleStatusBarToggles.some((toggle) =>
@@ -101,10 +106,12 @@ export function AppearanceWindowSidebarSection({
         keywords: toggle.keywords
       })
     )
+
   const sidebarAdvancedMatches = matchesSettingsSearch(searchQuery, [
     workspaceCardLayoutEntry,
     ...sidebarEntries
   ])
+
   const fileExplorerAdvancedMatches = matchesSettingsSearch(searchQuery, layoutEntries)
   const showStatusBarControls = !isSearching || statusBarSectionMatches || statusBarControlMatches
   const showSidebarAdvanced = !isSearching || sidebarAdvancedMatches
@@ -169,6 +176,7 @@ export function AppearanceWindowSidebarSection({
 
               {visibleStatusBarToggles.map((toggle) => {
                 const enabled = statusBarItems.includes(toggle.id)
+
                 return (
                   <SearchableSetting
                     key={toggle.id}

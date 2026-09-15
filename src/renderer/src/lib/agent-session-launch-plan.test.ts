@@ -11,10 +11,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/agent-launch-route-input', () => ({
   buildAgentLaunchRouteInput: mocks.buildAgentLaunchRouteInput
 }))
+
 vi.mock('@/lib/agent-launch-routing', () => ({
   resolveAgentLaunchRoute: mocks.resolveAgentLaunchRoute,
   structuredAgentLaunchSupported: mocks.structuredAgentLaunchSupported
 }))
+
 vi.mock('@/lib/structured-agent-launch-settlement', () => ({
   settleStructuredAgentLaunch: mocks.settleStructuredAgentLaunch
 }))
@@ -26,8 +28,11 @@ import {
 } from './agent-session-launch-plan'
 
 const store = { settings: {} } as unknown as AgentLaunchRouteStore
+
 const ROUTE_INPUT = { agent: 'codex', executionHostId: 'local' }
+
 const STRUCTURED = { kind: 'structured', sessionId: 'session-1' }
+
 const hooks = { onStructuredReady: vi.fn() }
 
 describe('planAgentSessionLaunch', () => {
@@ -64,6 +69,7 @@ describe('planAgentSessionLaunch', () => {
   it('hands the settle loop exactly the prompt, mode, resume source, and delivery hook it planned on', async () => {
     const onPromptDelivered = vi.fn()
     const resumeFrom = { providerSessionId: 'provider-1' }
+
     const plan = planAgentSessionLaunch(store, {
       agent: 'claude',
       workspace: { kind: 'folder', worktreeId: 'folder:ws-1' },
@@ -106,6 +112,7 @@ describe('planAgentSessionLaunch', () => {
     'returns null from launch on the %s route without touching the loop',
     async (route) => {
       mocks.resolveAgentLaunchRoute.mockReturnValue(route)
+
       const plan = planAgentSessionLaunch(store, {
         agent: 'codex',
         workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }

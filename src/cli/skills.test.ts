@@ -38,6 +38,7 @@ vi.mock('node:child_process', () => ({
 
 vi.mock('./bundled-skill-guides.js', () => {
   guideModuleLoadMock()
+
   return {
     BUNDLED_SKILL_GUIDES: [
       {
@@ -661,10 +662,12 @@ describe('orca skills CLI', () => {
     // Why a real directory with a real sibling node: pairing only fires when the
     // node it would add actually exists, so a fictional path proves nothing.
     const npxBin = mkdtempSync(join(tmpdir(), 'orca-npx-'))
+
     for (const name of ['node', 'npx']) {
       writeFileSync(join(npxBin, name), '')
       chmodSync(join(npxBin, name), 0o755)
     }
+
     const child = createFakeChild()
     spawnMock.mockReturnValue(child)
     resolveCliCommandMock.mockReturnValue(join(npxBin, 'npx'))
@@ -781,6 +784,7 @@ describe('orca skills CLI', () => {
       ['skills', 'install', '--skill', 'alpha', '--agent', 'codex, claude-code ,codex'],
       '/tmp/repo'
     )
+
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
     child.emit('exit', 0, null)
     await resultPromise
@@ -885,6 +889,7 @@ describe('orca skills CLI', () => {
       ['skills', 'install', '--skill', 'zeta', '--skill', 'alpha'],
       '/tmp/repo'
     )
+
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
     child.emit('exit', 0, null)
     await resultPromise

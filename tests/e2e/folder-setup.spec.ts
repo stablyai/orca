@@ -62,15 +62,19 @@ async function createLargeNestedRepoFixture(): Promise<{
   const parentPath = realpathSync(
     await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-large-folder-setup-'))
   )
+
   tempRoots.push(parentPath)
+
   const nestedParent = path.join(
     parentPath,
     'products-with-long-folder-name',
     'platform-domain-with-long-folder-name',
     'region-alpha-with-long-folder-name'
   )
+
   const projectPaths = Array.from({ length: 87 }, (_, index) => {
     const repoName = `service-${String(index + 1).padStart(2, '0')}-with-long-repository-name`
+
     return path.join(nestedParent, repoName)
   })
 
@@ -131,6 +135,7 @@ test.describe('Folder setup', () => {
     const importDialog = orcaPage.getByRole('dialog', {
       name: /Import repositories from folder/i
     })
+
     await expect(
       importDialog.getByRole('heading', { name: /Import repositories from folder/i })
     ).toBeVisible()
@@ -144,13 +149,17 @@ test.describe('Folder setup', () => {
         () =>
           orcaPage.evaluate(async (args) => {
             const state = window.__store?.getState()
+
             if (!state) {
               return null
             }
+
             const importedRepos = state.repos
               .filter((repo) => args.projectPaths.includes(repo.path))
               .sort((left, right) => left.displayName.localeCompare(right.displayName))
+
             const group = state.projectGroups.find((entry) => entry.parentPath === args.parentPath)
+
             return {
               groupName: group?.name ?? null,
               repoNames: importedRepos.map((repo) => repo.displayName),
@@ -196,15 +205,19 @@ test.describe('Folder setup', () => {
     const importDialog = orcaPage.getByRole('dialog', {
       name: /Import repositories from folder/i
     })
+
     await expect(importDialog.getByText(/Found 87 repositories in/)).toBeVisible()
     await expect
       .poll(async () =>
         importDialog.locator('ul').evaluate((list) => {
           const dialog = list.closest('[role="dialog"]')
+
           if (!dialog) {
             return 0
           }
+
           const dialogRight = dialog.getBoundingClientRect().right
+
           return [...list.querySelectorAll('li, label, span')].filter(
             (node) => node.getBoundingClientRect().right > dialogRight + 1
           ).length
@@ -213,6 +226,7 @@ test.describe('Folder setup', () => {
       .toBe(0)
 
     await importDialog.getByLabel('Deselect all').click()
+
     for (const projectPath of fixture.selectedProjectPaths) {
       const repoName = path.basename(projectPath)
       await importDialog
@@ -221,6 +235,7 @@ test.describe('Folder setup', () => {
         .locator('input[type="checkbox"]')
         .check()
     }
+
     await getImportAsGroupButton(importDialog).click()
 
     await expect
@@ -228,31 +243,41 @@ test.describe('Folder setup', () => {
         () =>
           orcaPage.evaluate(async (args) => {
             const state = window.__store?.getState()
+
             if (!state) {
               return null
             }
+
             const importedRepos = state.repos.filter((repo) =>
               args.selectedProjectPaths.includes(repo.path)
             )
+
             const fixtureRepos = state.repos.filter((repo) => args.projectPaths.includes(repo.path))
             const group = state.projectGroups.find((entry) => entry.parentPath === args.parentPath)
             const groupsById = new Map(state.projectGroups.map((entry) => [entry.id, entry]))
+
             const isInGroupSubtree = (groupId: string | null | undefined): boolean => {
               let currentId = groupId ?? null
+
               while (currentId) {
                 if (currentId === group?.id) {
                   return true
                 }
+
                 currentId = groupsById.get(currentId)?.parentGroupId ?? null
               }
+
               return false
             }
+
             const worktreeCounts = await Promise.all(
               importedRepos.map(async (repo) => {
                 const result = await window.api.worktrees.listDetected({ repoId: repo.id })
+
                 return result.worktrees.length
               })
             )
+
             return {
               importedCount: importedRepos.length,
               fixtureImportCount: fixtureRepos.length,

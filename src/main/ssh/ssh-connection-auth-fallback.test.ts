@@ -14,15 +14,19 @@ import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from './ssh-config-parser'
 
 vi.mock('ssh2', async () => (await import('./ssh-connection-test-harness')).createSsh2Module())
+
 vi.mock('./system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
+
 vi.mock('./ssh-system-fallback', async () =>
   (await import('./ssh-connection-test-harness')).createSystemFallbackModule()
 )
+
 vi.mock('./ssh-control-socket', async () =>
   (await import('./ssh-connection-test-harness')).createControlSocketModule()
 )
+
 vi.mock('./ssh-config-parser', async () =>
   (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
 )
@@ -34,6 +38,7 @@ describe('SshConnection', () => {
 
   it('resolves OpenSSH config using configHost when present', async () => {
     const callbacks = createCallbacks()
+
     const conn = new SshConnection(
       createTarget({
         label: 'Friendly Name',
@@ -49,9 +54,11 @@ describe('SshConnection', () => {
 
   it('tries ssh-agent before reading an explicit private key', async () => {
     vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+
     const callbacks = createCallbacks({
       onCredentialRequest: vi.fn()
     })
+
     const conn = new SshConnection(
       createTarget({
         identityFile: '/tmp/encrypted-key'
@@ -65,6 +72,7 @@ describe('SshConnection', () => {
       agent?: unknown
       privateKey?: unknown
     }
+
     expect(initialConfig.agent).toBe('/tmp/agent.sock')
     expect(initialConfig.privateKey).toBeUndefined()
     expect(callbacks.onCredentialRequest).not.toHaveBeenCalled()
@@ -83,14 +91,17 @@ describe('SshConnection', () => {
       await conn.connect()
 
       expect(clientInstances).toHaveLength(2)
+
       const initialConfig = clientInstances[0].lastConnectConfig as {
         agent?: unknown
         privateKey?: unknown
       }
+
       const fallbackConfig = clientInstances[1].lastConnectConfig as {
         agent?: unknown
         privateKey?: Buffer
       }
+
       expect(initialConfig.agent).toBe('/tmp/agent.sock')
       expect(initialConfig.privateKey).toBeUndefined()
       expect(fallbackConfig.agent).toBeUndefined()
@@ -115,10 +126,12 @@ describe('SshConnection', () => {
       await conn.connect()
 
       expect(clientInstances).toHaveLength(2)
+
       const fallbackConfig = clientInstances[1].lastConnectConfig as {
         agent?: unknown
         privateKey?: Buffer
       }
+
       expect(fallbackConfig.agent).toBeUndefined()
       expect(fallbackConfig.privateKey).toEqual(Buffer.from('test-key'))
     } finally {
@@ -142,10 +155,12 @@ describe('SshConnection', () => {
       await conn.connect()
 
       expect(clientInstances).toHaveLength(2)
+
       const fallbackConfig = clientInstances[1].lastConnectConfig as {
         agent?: unknown
         privateKey?: Buffer
       }
+
       expect(fallbackConfig.agent).toBeUndefined()
       expect(fallbackConfig.privateKey).toEqual(Buffer.from('test-key'))
     } finally {
@@ -159,6 +174,7 @@ describe('SshConnection', () => {
     agentError.level = 'agent'
     ssh2Mock.connectSequence = [agentError, 'ready']
     const onCredentialRequest = vi.fn(async () => 'password-123')
+
     const conn = new SshConnection(
       createTarget({ identityFile: join(tmpdir(), 'missing-key') }),
       createCallbacks({ onCredentialRequest })
@@ -167,11 +183,13 @@ describe('SshConnection', () => {
     await conn.connect()
 
     expect(clientInstances).toHaveLength(2)
+
     const retryConfig = clientInstances[1].lastConnectConfig as {
       agent?: unknown
       password?: string
       privateKey?: unknown
     }
+
     expect(retryConfig.agent).toBeUndefined()
     expect(retryConfig.password).toBe('password-123')
     expect(retryConfig.privateKey).toBeUndefined()
@@ -204,15 +222,18 @@ describe('SshConnection', () => {
       await conn.connect()
 
       expect(clientInstances).toHaveLength(3)
+
       const keyRetryConfig = clientInstances[1].lastConnectConfig as {
         agent?: unknown
         privateKey?: Buffer
       }
+
       const passwordRetryConfig = clientInstances[2].lastConnectConfig as {
         agent?: unknown
         password?: string
         privateKey?: Buffer
       }
+
       expect(keyRetryConfig.agent).toBeUndefined()
       expect(keyRetryConfig.privateKey).toEqual(Buffer.from('test-key'))
       expect(passwordRetryConfig.agent).toBeUndefined()
@@ -226,6 +247,7 @@ describe('SshConnection', () => {
   it('answers bounded keyboard-interactive challenges such as Duo 2FA', async () => {
     vi.useFakeTimers()
     const onCredentialRequest = vi.fn().mockResolvedValueOnce('1').mockResolvedValueOnce('123456')
+
     try {
       const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
       const clientCreated = nextSshClientCreation()
@@ -244,6 +266,7 @@ describe('SshConnection', () => {
         ],
         finish
       )
+
       for (let turn = 0; turn < 8 && finish.mock.calls.length === 0; turn += 1) {
         await Promise.resolve()
       }
@@ -277,10 +300,12 @@ describe('SshConnection', () => {
     ssh2Mock.connectBehavior = 'pending'
     const firstResponse = Promise.withResolvers<string | null>()
     const secondResponse = Promise.withResolvers<string | null>()
+
     const onCredentialRequest = vi
       .fn()
       .mockImplementationOnce(() => firstResponse.promise)
       .mockImplementationOnce(() => secondResponse.promise)
+
     try {
       const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
       const clientCreated = nextSshClientCreation()
@@ -311,9 +336,11 @@ describe('SshConnection', () => {
 
       await vi.advanceTimersByTimeAsync(100_000)
       firstResponse.resolve('1')
+
       for (let turn = 0; turn < 4 && onCredentialRequest.mock.calls.length < 2; turn += 1) {
         await Promise.resolve()
       }
+
       expect(onCredentialRequest).toHaveBeenCalledTimes(2)
 
       await vi.advanceTimersByTimeAsync(30_000)
@@ -321,9 +348,11 @@ describe('SshConnection', () => {
       expect(finish).not.toHaveBeenCalled()
 
       secondResponse.resolve('123456')
+
       for (let turn = 0; turn < 4 && finish.mock.calls.length === 0; turn += 1) {
         await Promise.resolve()
       }
+
       expect(finish).toHaveBeenCalledWith(['1', '123456'])
       emitSshEvent('ready')
       await connected
@@ -336,26 +365,32 @@ describe('SshConnection', () => {
     vi.useFakeTimers()
     ssh2Mock.connectBehavior = 'pending'
     let credentialSignal: AbortSignal | undefined
+
     const onCredentialRequest = vi.fn(
       (_targetId: string, _kind: string, _detail: string, signal?: AbortSignal) => {
         credentialSignal = signal
         const response = Promise.withResolvers<string | null>()
+
         if (signal?.aborted) {
           response.resolve(null)
         } else {
           signal?.addEventListener('abort', () => response.resolve(null), { once: true })
         }
+
         return response.promise
       }
     )
+
     try {
       const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
       const clientCreated = nextSshClientCreation()
       const connected = conn.connect()
+
       const connectionResult = connected.then(
         () => null,
         (error: unknown) => error
       )
+
       await clientCreated
       await vi.advanceTimersByTimeAsync(1)
       const finish = vi.fn()
@@ -373,9 +408,11 @@ describe('SshConnection', () => {
       await conn.disconnect()
       expect(credentialSignal?.aborted).toBe(true)
       await expect(connectionResult).resolves.toBeInstanceOf(Error)
+
       for (let turn = 0; turn < 4 && finish.mock.calls.length === 0; turn += 1) {
         await Promise.resolve()
       }
+
       expect(finish).toHaveBeenCalledWith([])
     } finally {
       vi.useRealTimers()

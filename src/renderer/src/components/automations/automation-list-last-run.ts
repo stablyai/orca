@@ -26,6 +26,7 @@ export type AutomationLastRunSnapshot = {
 }
 
 const EXTERNAL_FAILED_STATUSES = new Set(['failed', 'fail', 'error', 'dispatch_failed'])
+
 const EXTERNAL_SUCCEEDED_STATUSES = new Set([
   'ok',
   'completed',
@@ -39,12 +40,15 @@ export function indexLatestAutomationRuns(
   runs: readonly AutomationRun[]
 ): ReadonlyMap<string, AutomationRun> {
   const latest = new Map<string, AutomationRun>()
+
   for (const run of runs) {
     const existing = latest.get(run.automationId)
+
     if (!existing || run.createdAt > existing.createdAt) {
       latest.set(run.automationId, run)
     }
   }
+
   return latest
 }
 
@@ -56,15 +60,19 @@ export function getToneForAutomationRunStatus(status: AutomationRunStatus): Auto
   if (status === 'dispatch_failed') {
     return 'failed'
   }
+
   if (status === 'completed') {
     return 'succeeded'
   }
+
   if (status === 'pending' || status === 'dispatching' || status === 'dispatched') {
     return 'running'
   }
+
   if (status.startsWith('skipped')) {
     return 'skipped'
   }
+
   return 'unknown'
 }
 
@@ -78,6 +86,7 @@ export function getAutomationRowLastRunSnapshot(row: {
   usageSummary: { lastRunStatus?: AutomationRunStatus | null; lastRunAt?: number | null } | null
 }): AutomationLastRunSnapshot {
   const status = row.usageSummary?.lastRunStatus
+
   if (status) {
     return {
       at: row.usageSummary?.lastRunAt ?? row.automation.lastRunAt ?? null,
@@ -85,6 +94,7 @@ export function getAutomationRowLastRunSnapshot(row: {
       statusLabel: getAutomationRunStatusLabel(status)
     }
   }
+
   return getLocalAutomationLastRunSnapshot(row.automation, undefined)
 }
 
@@ -99,6 +109,7 @@ export function getLocalAutomationLastRunSnapshot(
       statusLabel: getAutomationRunStatusLabel(lastRun.status)
     }
   }
+
   if (automation.lastRunAt) {
     return {
       at: automation.lastRunAt,
@@ -106,6 +117,7 @@ export function getLocalAutomationLastRunSnapshot(
       statusLabel: ''
     }
   }
+
   return { at: null, tone: 'never', statusLabel: '' }
 }
 
@@ -113,7 +125,9 @@ function parseExternalLastRunAt(value: string | null): number | null {
   if (!value) {
     return null
   }
+
   const parsed = Date.parse(value)
+
   return Number.isFinite(parsed) ? parsed : null
 }
 
@@ -123,9 +137,11 @@ export function getExternalAutomationLastRunSnapshot(
   const at = parseExternalLastRunAt(job.lastRunAt)
   const raw = job.lastStatus?.trim() ?? ''
   const normalized = raw.toLowerCase()
+
   if (!at && !raw && !job.lastError) {
     return { at: null, tone: 'never', statusLabel: '' }
   }
+
   if (EXTERNAL_SUCCEEDED_STATUSES.has(normalized)) {
     return {
       at,
@@ -133,6 +149,7 @@ export function getExternalAutomationLastRunSnapshot(
       statusLabel: translate('auto.components.automations.automation.list.last.run.done', 'Done')
     }
   }
+
   if (EXTERNAL_FAILED_STATUSES.has(normalized) || Boolean(job.lastError)) {
     return {
       at,
@@ -143,9 +160,11 @@ export function getExternalAutomationLastRunSnapshot(
       )
     }
   }
+
   if (raw) {
     return { at, tone: 'unknown', statusLabel: raw }
   }
+
   return { at, tone: 'unknown', statusLabel: '' }
 }
 
@@ -154,16 +173,21 @@ export function formatAutomationLastRunCell(
   now: number
 ): { text: string; title: string; tone: AutomationLastRunTone } {
   const status = snapshot.statusLabel.trim()
+
   if (snapshot.tone === 'never') {
     const never = formatAutomationDateTime(null)
+
     return { text: never, title: never, tone: 'never' }
   }
+
   if (snapshot.at == null) {
     return { text: status || formatAutomationDateTime(null), title: status, tone: snapshot.tone }
   }
+
   const relative = formatAutomationRelativeTime(snapshot.at, now)
   const absolute = formatAutomationDateTime(snapshot.at)
   const text = status && relative ? `${status} ${relative}` : status || relative || absolute
+
   return {
     text,
     title: status ? `${status} · ${absolute}` : absolute,

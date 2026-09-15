@@ -5,6 +5,7 @@ import { splitPathSegments } from './path-tree'
 import { compareGitStatusEntries } from './source-control-status-sort'
 
 export type SourceControlTreeArea = Extract<GitStagingArea, 'unstaged' | 'staged' | 'untracked'>
+
 // Why: committed branch rows share the same path tree but do not carry
 // uncommitted status metadata, so the tree builder stays entry-shape generic.
 export type SourceControlTreeEntry = {
@@ -95,6 +96,7 @@ function finalizeDirectoryNode<Entry extends SourceControlTreeEntry, Area extend
   // for the file rows one line below.
   directories.sort((a, b) => compareFileNames(a.name, b.name))
   files.sort((a, b) => compareEntries(a.entry, b.entry))
+
   const fileCount =
     files.length + directories.reduce((count, directory) => count + directory.fileCount, 0)
 
@@ -123,6 +125,7 @@ export function buildSourceControlTree<
   for (const entry of entries) {
     const normalizedPath = normalizeRelativePath(entry.path)
     const segments = splitPathSegments(normalizedPath)
+
     if (segments.length === 0) {
       continue
     }
@@ -132,15 +135,18 @@ export function buildSourceControlTree<
     // tree building O(files x depth^2) in characters copied, and the Source Control filter
     // rebuilds this whole tree on every keystroke.
     let ancestorPath = ''
+
     for (let index = 0; index < segments.length - 1; index += 1) {
       const name = segments[index]
       ancestorPath = ancestorPath ? `${ancestorPath}/${name}` : name
       let dir = parent.directoryChildren.get(name)
+
       if (!dir) {
         dir = makeDirectoryNode<Entry, Area>(area, ancestorPath, name, index)
         parent.directoryChildren.set(name, dir)
         parent.children.push(dir)
       }
+
       parent = dir
     }
 
@@ -176,6 +182,7 @@ export function flattenSourceControlTree<Entry extends SourceControlTreeEntry, A
 
   const visit = (node: SourceControlTreeNode<Entry, Area>): void => {
     result.push(node)
+
     if (node.type === 'directory' && !collapsedDirectoryKeys.has(node.key)) {
       for (const child of node.children) {
         visit(child)
@@ -203,6 +210,7 @@ export function compactSourceControlTree<Entry extends SourceControlTreeEntry, A
 
     const names = [node.name]
     let compacted = node
+
     while (compacted.children.length === 1 && compacted.children[0]?.type === 'directory') {
       compacted = compacted.children[0]
       names.push(compacted.name)
@@ -280,11 +288,14 @@ export function collectSourceControlTreeFileEntries<
   }
 
   const entries: Entry[] = []
+
   const collect = (child: SourceControlTreeNode<Entry, Area>): void => {
     if (child.type === 'file') {
       entries.push(child.entry)
+
       return
     }
+
     for (const grandchild of child.children) {
       collect(grandchild)
     }
@@ -293,5 +304,6 @@ export function collectSourceControlTreeFileEntries<
   for (const child of node.children) {
     collect(child)
   }
+
   return entries
 }

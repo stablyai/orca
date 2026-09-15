@@ -29,6 +29,7 @@ import {
 } from './ssh-terminal-stale-grid-probe'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const BASE_VIEWPORT = { width: 1160, height: 760 }
 
 async function startRemoteMonitor(page: Page, ptyId: string): Promise<void> {
@@ -54,6 +55,7 @@ test.describe('SSH terminal window-wake stale PTY grid repro', () => {
   }, testInfo) => {
     test.setTimeout(240_000)
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       const pageErrors: string[] = []
@@ -96,9 +98,11 @@ test.describe('SSH terminal window-wake stale PTY grid repro', () => {
         .toBe(true)
 
       const baseline = await readRendererGrid(orcaPage, ptyId)
+
       if (!baseline.xterm) {
         throw new Error('Active xterm grid unavailable')
       }
+
       const staleGrid = chooseStaleGrid(baseline.xterm)
       await orcaPage.evaluate(({ id, grid }) => window.api.pty.resize(id, grid.cols, grid.rows), {
         id: ptyId,
@@ -112,6 +116,7 @@ test.describe('SSH terminal window-wake stale PTY grid repro', () => {
       expect(drifted.applied).toEqual(staleGrid)
 
       await orcaPage.evaluate(() => window.dispatchEvent(new Event('focus')))
+
       const wakeResult = await sampleRemoteConvergence({
         cycle: 0,
         page: orcaPage,
@@ -133,6 +138,7 @@ test.describe('SSH terminal window-wake stale PTY grid repro', () => {
           width: BASE_VIEWPORT.width + 24,
           height: BASE_VIEWPORT.height + 24
         })
+
         const manualResize = await sampleRemoteConvergence({
           cycle: 1,
           page: orcaPage,
@@ -140,6 +146,7 @@ test.describe('SSH terminal window-wake stale PTY grid repro', () => {
           target,
           timeoutMs: 6_000
         })
+
         expect(actualGridMatchesXterm(manualResize.last.remote, manualResize.last.renderer)).toBe(
           true
         )
@@ -155,10 +162,12 @@ test.describe('SSH terminal window-wake stale PTY grid repro', () => {
         target,
         `git -C ${DOCKER_SSH_RELAY_REMOTE_REPO_PATH} status --short --branch`
       )
+
       const remoteWorktrees = execDockerSshRelayTargetCommand(
         target,
         `git -C ${DOCKER_SSH_RELAY_REMOTE_REPO_PATH} worktree list --porcelain`
       )
+
       expect(remoteGitStatus).toContain('## master')
       expect(remoteWorktrees).toContain(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)
       expect(
@@ -177,6 +186,7 @@ test.describe('SSH terminal window-wake stale PTY grid repro', () => {
         remoteGitStatus,
         remoteWorktrees
       }
+
       console.log(`[ssh-window-wake-stale-grid] ${JSON.stringify(evidence)}`)
       testInfo.annotations.push({
         type: 'ssh-window-wake-stale-grid',

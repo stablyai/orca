@@ -23,6 +23,7 @@ import {
 } from './config-toml-trust-test-fixtures'
 
 let tmpDir: string
+
 let configPath: string
 
 beforeEach(() => {
@@ -44,6 +45,7 @@ describe('removeHookTrustEntries', () => {
       handlerIndex: 0,
       command: 'echo trusted'
     }
+
     upsertHookTrustEntries(configPath, [entry])
     chmodSync(configPath, 0o600)
 
@@ -56,6 +58,7 @@ describe('removeHookTrustEntries', () => {
     'updates a symlink target without replacing config.toml',
     () => {
       const targetPath = join(tmpDir, 'dotfiles-config.toml')
+
       const entry: CodexTrustEntry = {
         sourcePath: '/x/hooks.json',
         eventLabel: 'stop',
@@ -63,6 +66,7 @@ describe('removeHookTrustEntries', () => {
         handlerIndex: 0,
         command: 'echo trusted'
       }
+
       upsertHookTrustEntries(targetPath, [entry])
       symlinkSync(targetPath, configPath)
 
@@ -108,6 +112,7 @@ describe('removeHookTrustEntries', () => {
 
   it('removes a single block while leaving unrelated tables intact', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       '[features]',
       'hooks = true',
@@ -120,6 +125,7 @@ describe('removeHookTrustEntries', () => {
       'value = 42',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     removeHookTrustEntries(configPath, [key])
@@ -134,6 +140,7 @@ describe('removeHookTrustEntries', () => {
   it('removes duplicate blocks for the requested key', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const otherKey = '/x/hooks.json:post_tool_use:0:0'
+
     const original = [
       `[hooks.state."${key}"]`,
       'enabled = false',
@@ -148,6 +155,7 @@ describe('removeHookTrustEntries', () => {
       'trusted_hash = "sha256:B"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     removeHookTrustEntries(configPath, [key])
@@ -162,12 +170,14 @@ describe('removeHookTrustEntries', () => {
 
   it('removes a literal-string hook table for the requested key', () => {
     const key = 'C:\\x\\hooks.json:session_start:0:0'
+
     const original = [
       `[hooks.state.'${key}']`,
       'enabled = true',
       'trusted_hash = "sha256:LITERAL"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     removeHookTrustEntries(configPath, [key])
@@ -179,6 +189,7 @@ describe('removeHookTrustEntries', () => {
 
   it('removes mixed quoting duplicates for the requested key', () => {
     const key = 'C:\\x\\hooks.json:session_start:0:0'
+
     const original = [
       `[hooks.state.'${key}']`,
       'enabled = true',
@@ -189,6 +200,7 @@ describe('removeHookTrustEntries', () => {
       'trusted_hash = "sha256:BASIC"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     removeHookTrustEntries(configPath, [key])
@@ -200,6 +212,7 @@ describe('removeHookTrustEntries', () => {
 
   it('does not remove the target hook header text inside a multi-line string', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       `[hooks.state."${key}"]`,
       'enabled = true',
@@ -212,6 +225,7 @@ describe('removeHookTrustEntries', () => {
       '"""',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     removeHookTrustEntries(configPath, [key])
@@ -226,6 +240,7 @@ describe('removeHookTrustEntries', () => {
 
   it('does not let triple quotes in comments hide a block being removed', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       '# user note mentions triple quote: """',
       `[hooks.state."${key}"]`,
@@ -233,6 +248,7 @@ describe('removeHookTrustEntries', () => {
       'trusted_hash = "sha256:K"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     removeHookTrustEntries(configPath, [key])
@@ -246,6 +262,7 @@ describe('removeHookTrustEntries', () => {
   it('preserves the line separator when no blank line precedes the removed block', () => {
     // Why: regression — removeTrustBlock cut the leading newline, fusing prior content into the next header.
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       'a = 1',
       `[hooks.state."${key}"]`,
@@ -255,6 +272,7 @@ describe('removeHookTrustEntries', () => {
       'b = 2',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     removeHookTrustEntries(configPath, [key])
@@ -267,6 +285,7 @@ describe('removeHookTrustEntries', () => {
   it('removes multiple blocks in a single call', () => {
     const keyA = '/x/hooks.json:pre_tool_use:0:0'
     const keyB = '/x/hooks.json:post_tool_use:0:0'
+
     const original = [
       `[hooks.state."${keyA}"]`,
       'enabled = true',
@@ -277,6 +296,7 @@ describe('removeHookTrustEntries', () => {
       'trusted_hash = "sha256:B"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     removeHookTrustEntries(configPath, [keyA, keyB])

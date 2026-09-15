@@ -52,6 +52,7 @@ export class PluginVmRecipeRegistry {
       (plugin): plugin is ValidDiscoveredPlugin =>
         !isInvalidDiscoveredPlugin(plugin) && plugin.manifest.contributes.vmRecipes.length > 0
     )
+
     const results = await mapWithConcurrency(
       candidates,
       VM_RECIPE_LOAD_CONCURRENCY,
@@ -60,6 +61,7 @@ export class PluginVmRecipeRegistry {
           const approved = isApproved(plugin)
           const registrations: PluginVmRecipeRegistration[] = []
           const seen = new Set<string>()
+
           for (const contribution of plugin.manifest.contributes.vmRecipes) {
             const recipe = parsePluginVmRecipeArtifact(
               await readContainedPluginArtifactText(
@@ -68,15 +70,19 @@ export class PluginVmRecipeRegistry {
                 PLUGIN_VM_RECIPE_MAX_BYTES
               )
             )
+
             if (seen.has(recipe.id)) {
               throw new Error(`duplicate VM recipe id "${recipe.id}"`)
             }
+
             seen.add(recipe.id)
             registrations.push({ pluginKey: plugin.pluginKey, recipe })
           }
+
           // Verify after reading so the in-memory commands shown/activated are
           // bound to the exact tree identity the user reviewed.
           await verifyInstructionalPluginContent(plugin)
+
           return { pluginKey: plugin.pluginKey, approved, registrations }
         } catch (error) {
           return {
@@ -89,6 +95,7 @@ export class PluginVmRecipeRegistry {
 
     this.previews.clear()
     this.errors.clear()
+
     for (const result of results) {
       if ('error' in result) {
         this.errors.set(result.pluginKey, result.error)
@@ -96,11 +103,14 @@ export class PluginVmRecipeRegistry {
         this.previews.set(result.pluginKey, result.registrations)
       }
     }
+
     const approved = results.filter(
       (result): result is Extract<VmRecipeLoadResult, { approved: boolean }> =>
         'approved' in result && result.approved
     )
+
     const owners = new Map<string, Set<string>>()
+
     for (const result of approved) {
       for (const registration of result.registrations) {
         const recipeOwners = owners.get(registration.recipe.id) ?? new Set<string>()
@@ -108,7 +118,9 @@ export class PluginVmRecipeRegistry {
         owners.set(registration.recipe.id, recipeOwners)
       }
     }
+
     const conflicted = new Set<string>()
+
     for (const [recipeId, recipeOwners] of owners) {
       if (recipeOwners.size > 1) {
         for (const pluginKey of recipeOwners) {
@@ -120,6 +132,7 @@ export class PluginVmRecipeRegistry {
         }
       }
     }
+
     this.active = approved
       .filter((result) => !conflicted.has(result.pluginKey))
       .flatMap((result) => result.registrations)

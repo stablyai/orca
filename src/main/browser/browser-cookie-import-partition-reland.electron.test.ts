@@ -8,6 +8,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { build as buildVite } from 'vite'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
+
 const fixtureRoots: string[] = []
 
 afterAll(() => {
@@ -25,10 +26,15 @@ const EXPECTED_PARTITION_KEY = {
   topLevelSite: 'https://example.com',
   hasCrossSiteAncestor: true
 }
+
 const SOURCE_HOST = '.thirdparty.example'
+
 const COOKIE_NAME_NATIVE = 'sta4300-native-partitioned'
+
 const COOKIE_NAME_FILE = 'sta4300-file-partitioned'
+
 const COOKIE_VALUE_NATIVE = 'partitioned-native-value'
+
 const COOKIE_VALUE_FILE = 'partitioned-file-value'
 
 type SetCall = {
@@ -103,6 +109,7 @@ function createPartitionedChromiumSourceDatabase(
       value,
       chromiumExpiry(Math.floor(Date.now() / 1000) + 30 * 86400)
     )
+
   return database
 }
 
@@ -111,6 +118,7 @@ function assertSourceRowPartitioned(database: DatabaseSync, name: string): void 
   const row = database
     .prepare('SELECT top_frame_site_key, has_cross_site_ancestor FROM cookies WHERE name = ?')
     .get(name) as { top_frame_site_key: string; has_cross_site_ancestor: number } | undefined
+
   if (
     !row ||
     row.top_frame_site_key !== EXPECTED_PARTITION_KEY.topLevelSite ||
@@ -124,7 +132,9 @@ function assertNativeSourceFileReady(databasePath: string, name: string): void {
   if (!existsSync(databasePath)) {
     throw new Error(`native source cookies DB was not created: ${databasePath}`)
   }
+
   const database = new DatabaseSync(databasePath, { readOnly: true })
+
   try {
     assertSourceRowPartitioned(database, name)
   } finally {
@@ -139,6 +149,7 @@ function buildFixtureMain(
   sourcePath: string
 ): string {
   const importedCookieName = mode === 'native' ? COOKIE_NAME_NATIVE : COOKIE_NAME_FILE
+
   const sourcePartitionBlock =
     mode === 'native'
       ? `
@@ -162,6 +173,7 @@ function buildFixtureMain(
     throw new Error('SOURCE ENTRY IS NOT PARTITIONED: ' + JSON.stringify(sourceEntry))
   }
 `
+
   const importBlock =
     mode === 'native'
       ? `
@@ -176,6 +188,7 @@ function buildFixtureMain(
       : `
   importResult = await importCookiesFromFile(${JSON.stringify(sourcePath)}, partition)
 `
+
   return `
 const { app, BrowserWindow, session } = require('electron')
 const { readFileSync, writeFileSync } = require('node:fs')
@@ -307,18 +320,22 @@ async function runFixture(mode: 'native' | 'file'): Promise<FixtureResult> {
   const resultPath = join(root, 'result.json')
   const fixturePath = join(root, 'main.cjs')
   let sourcePath: string
+
   if (mode === 'native') {
     sourcePath = join(root, 'source', 'Network', 'Cookies')
+
     const database = createPartitionedChromiumSourceDatabase(
       sourcePath,
       COOKIE_NAME_NATIVE,
       COOKIE_VALUE_NATIVE
     )
+
     assertSourceRowPartitioned(database, COOKIE_NAME_NATIVE)
     database.close()
     assertNativeSourceFileReady(sourcePath, COOKIE_NAME_NATIVE)
   } else {
     sourcePath = join(root, 'cookies.json')
+
     const jsonSource = [
       {
         domain: SOURCE_HOST,
@@ -340,8 +357,10 @@ async function runFixture(mode: 'native' | 'file'): Promise<FixtureResult> {
         }
       }
     ]
+
     writeFileSync(sourcePath, JSON.stringify(jsonSource, null, 2))
     const entry = JSON.parse(readFileSync(sourcePath, 'utf8'))[0]
+
     if (
       !entry?.partitionKey ||
       entry.partitionKey.topLevelSite !== EXPECTED_PARTITION_KEY.topLevelSite ||
@@ -350,6 +369,7 @@ async function runFixture(mode: 'native' | 'file'): Promise<FixtureResult> {
       throw new Error(`fixture source JSON entry is not partitioned: ${JSON.stringify(entry)}`)
     }
   }
+
   writeFileSync(
     registryStubPath,
     'exports.browserSessionRegistry = { clearPendingCookieImport() {}, setPendingCookieImport() {} }\n'
@@ -384,18 +404,22 @@ async function runFixture(mode: 'native' | 'file'): Promise<FixtureResult> {
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
   const electronArgs = [fixturePath, `--user-data-dir=${join(root, 'profile')}`]
   const executable = process.platform === 'linux' ? 'xvfb-run' : electronBinary
+
   const args =
     process.platform === 'linux'
       ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
       : electronArgs
+
   const run = spawnSync(executable, args, {
     encoding: 'utf8',
     env,
     timeout: 180_000
   })
+
   const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
   expect(run.error).toBeUndefined()
   expect(run.status, `${fixtureResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
+
   return JSON.parse(fixtureResult) as FixtureResult
 }
 

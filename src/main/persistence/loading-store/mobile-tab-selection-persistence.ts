@@ -6,6 +6,7 @@ import { scheduleSave } from './write-scheduling'
 type MobileTabSelectionRuntime = Pick<StoreRuntimeState, 'state'>
 
 const mobileTabSelectionPersistenceContext = Symbol('MobileTabSelectionPersistence')
+
 type MobileTabSelectionPersistenceContext = {
   runtime: MobileTabSelectionRuntime
   scheduling: WriteSchedulingOperations

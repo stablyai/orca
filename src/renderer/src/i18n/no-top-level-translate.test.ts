@@ -20,6 +20,7 @@ function collectSourceFiles(dir: string, files: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
     const filePath = resolve(dir, name)
     const stat = statSync(filePath)
+
     if (stat.isDirectory()) {
       collectSourceFiles(filePath, files)
     } else if (
@@ -30,17 +31,21 @@ function collectSourceFiles(dir: string, files: string[] = []): string[] {
       files.push(filePath)
     }
   }
+
   return files
 }
 
 function isInsideFunction(node: ts.Node): boolean {
   let parent = node.parent
+
   while (parent && parent.kind !== ts.SyntaxKind.SourceFile) {
     if (FUNCTION_KINDS.has(parent.kind)) {
       return true
     }
+
     parent = parent.parent
   }
+
   return false
 }
 
@@ -50,9 +55,11 @@ describe('i18n import-time safety', () => {
 
     for (const filePath of collectSourceFiles(RENDERER_ROOT)) {
       const source = readFileSync(filePath, 'utf8')
+
       if (!source.includes('translate(')) {
         continue
       }
+
       const sourceFile = ts.createSourceFile(
         filePath,
         source,
@@ -70,8 +77,10 @@ describe('i18n import-time safety', () => {
           const { line, character } = sourceFile.getLineAndCharacterOfPosition(
             node.getStart(sourceFile)
           )
+
           violations.push(`${relative(process.cwd(), filePath)}:${line + 1}:${character + 1}`)
         }
+
         ts.forEachChild(node, visit)
       }
 

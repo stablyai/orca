@@ -10,18 +10,24 @@ import type { Page } from '@stablyai/playwright-test'
 export async function openTerminalTabInActiveGroup(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const state = store.getState()
     const worktreeId = state.activeWorktreeId
+
     if (!worktreeId) {
       throw new Error('No active worktree to open a terminal tab in')
     }
+
     const groupId = state.activeGroupIdByWorktree[worktreeId]
+
     if (!groupId) {
       throw new Error(`No active tab group for worktree ${worktreeId}`)
     }
+
     await state.openNewTerminalTabInActiveWorkspace(groupId)
   })
 }

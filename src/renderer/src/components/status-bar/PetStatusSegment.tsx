@@ -44,6 +44,7 @@ function PetStatusSegmentInner(): React.JSX.Element {
 
   const handleImport = async (): Promise<void> => {
     console.log('[pet-overlay] upload: click')
+
     if (!window.api?.pet?.import) {
       console.warn('[pet-overlay] upload: window.api.pet.import missing — restart Orca')
       toast.error(
@@ -52,18 +53,24 @@ function PetStatusSegmentInner(): React.JSX.Element {
           'Custom pet upload needs a full app restart (not just reload).'
         )
       )
+
       return
     }
+
     try {
       const model = await window.api.pet.import()
       console.log('[pet-overlay] upload: result', model)
+
       if (!model) {
         return
       }
+
       addCustomPet(model)
+
       if (!petVisible) {
         setPetVisible(true)
       }
+
       setPetId(model.id)
     } catch (error) {
       console.error('[pet-overlay] upload: error', error)
@@ -86,17 +93,23 @@ function PetStatusSegmentInner(): React.JSX.Element {
           'Pet bundle import needs a full app restart (not just reload).'
         )
       )
+
       return
     }
+
     try {
       const model = await window.api.pet.importPetBundle()
+
       if (!model) {
         return
       }
+
       addCustomPet(model)
+
       if (!petVisible) {
         setPetVisible(true)
       }
+
       setPetId(model.id)
     } catch (error) {
       console.error('[pet-overlay] pet bundle: error', error)
@@ -188,6 +201,7 @@ function PetStatusSegmentInner(): React.JSX.Element {
             <DropdownMenuSubContent className="min-w-[220px]">
               {BUNDLED_PETS.map((pet) => {
                 const selected = pet.id === petId
+
                 return (
                   <DropdownMenuItem
                     key={pet.id}
@@ -195,6 +209,7 @@ function PetStatusSegmentInner(): React.JSX.Element {
                       if (!petVisible) {
                         setPetVisible(true)
                       }
+
                       setPetId(pet.id)
                     }}
                   >
@@ -208,6 +223,7 @@ function PetStatusSegmentInner(): React.JSX.Element {
               {customPets.length > 0 ? <DropdownMenuSeparator /> : null}
               {customPets.map((model) => {
                 const selected = model.id === petId
+
                 return (
                   <DropdownMenuItem
                     key={model.id}
@@ -216,6 +232,7 @@ function PetStatusSegmentInner(): React.JSX.Element {
                       if (!petVisible) {
                         setPetVisible(true)
                       }
+
                       setPetId(model.id)
                     }}
                   >

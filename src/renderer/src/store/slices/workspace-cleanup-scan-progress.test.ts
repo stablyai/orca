@@ -70,10 +70,13 @@ describe('workspace cleanup scan progress', () => {
     let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined
     const partialCandidate = makeCandidate({ worktreeId: 'repo1::/tmp/partial' })
     const finalCandidate = makeCandidate({ worktreeId: 'repo1::/tmp/final' })
+
     const scan = vi.fn((_args, progressCallback) => {
       onProgress = progressCallback
+
       return pending.promise
     })
+
     installWorkspaceCleanupApi(scan)
     const store = createCleanupTestStore()
 
@@ -119,10 +122,13 @@ describe('workspace cleanup scan progress', () => {
     let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined
     const localCandidate = makeCandidate({ executionHostId: 'local' })
     const remoteCandidate = makeCandidate({ executionHostId: 'ssh:ssh-1', connectionId: 'ssh-1' })
+
     const scan = vi.fn((_args, progressCallback) => {
       onProgress = progressCallback
+
       return pending.promise
     })
+
     installWorkspaceCleanupApi(scan)
     const store = createCleanupTestStore()
 
@@ -167,13 +173,18 @@ describe('workspace cleanup scan progress', () => {
     let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined
     const terminalCandidate = makeCandidate({ worktreeId: 'repo1::/tmp/terminal' })
     const laterCandidate = makeCandidate({ worktreeId: 'repo1::/tmp/later' })
+
     const scan = vi.fn((_args, progressCallback) => {
       onProgress = progressCallback
+
       return pending.promise
     })
+
     installWorkspaceCleanupApi(scan)
     const hasChildProcesses = vi.fn().mockResolvedValue(false)
+
     const getForegroundProcess = vi.fn().mockResolvedValue('zsh')
+
     ;(
       globalThis.window as unknown as {
         api: {
@@ -243,10 +254,13 @@ describe('workspace cleanup scan progress', () => {
     const pending = deferred<WorkspaceCleanupScanResult>()
     let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined
     const candidate = makeCandidate({ worktreeId: 'repo1::/tmp/alpha' })
+
     const scan = vi.fn((_args, progressCallback) => {
       onProgress = progressCallback
+
       return pending.promise
     })
+
     installWorkspaceCleanupApi(scan)
     const store = createCleanupTestStore()
 
@@ -295,13 +309,18 @@ describe('workspace cleanup scan progress', () => {
     let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined
     const terminalCandidate = makeCandidate({ worktreeId: 'repo1::/tmp/terminal' })
     const laterCandidate = makeCandidate({ worktreeId: 'repo1::/tmp/later' })
+
     const scan = vi.fn((_args, progressCallback) => {
       onProgress = progressCallback
+
       return pending.promise
     })
+
     installWorkspaceCleanupApi(scan)
     const hasChildProcesses = vi.fn().mockReturnValue(terminalProbe.promise)
+
     const getForegroundProcess = vi.fn().mockResolvedValue('zsh')
+
     ;(
       globalThis.window as unknown as {
         api: {
@@ -371,13 +390,18 @@ describe('workspace cleanup scan progress', () => {
     let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined
     const terminalCandidate = makeCandidate({ worktreeId: 'repo1::/tmp/terminal' })
     const finalCandidate = makeCandidate({ worktreeId: 'repo1::/tmp/final' })
+
     const scan = vi.fn((_args, progressCallback) => {
       onProgress = progressCallback
+
       return pending.promise
     })
+
     installWorkspaceCleanupApi(scan)
     const hasChildProcesses = vi.fn().mockReturnValue(terminalProbe.promise)
+
     const getForegroundProcess = vi.fn().mockResolvedValue('zsh')
+
     ;(
       globalThis.window as unknown as {
         api: {
@@ -404,6 +428,7 @@ describe('workspace cleanup scan progress', () => {
       .finally(() => {
         scanSettled = true
       })
+
     onProgress?.({
       scanId: 'scan-1',
       scannedAt: NOW,
@@ -448,15 +473,20 @@ describe('workspace cleanup scan progress', () => {
     const firstCandidate = makeCandidate({ worktreeId: 'repo1::/tmp/first' })
     const terminalCandidate = makeCandidate({ worktreeId: 'repo1::/tmp/terminal' })
     const finalCandidate = makeCandidate({ worktreeId: 'repo1::/tmp/final' })
+
     const scan = vi.fn((args, progressCallback) => {
       progressCallbacks.push(progressCallback)
+
       return args?.skipGitWorktreeIds?.includes('second')
         ? secondPending.promise
         : firstPending.promise
     })
+
     installWorkspaceCleanupApi(scan)
     const hasChildProcesses = vi.fn().mockReturnValue(terminalProbe.promise)
+
     const getForegroundProcess = vi.fn().mockResolvedValue('zsh')
+
     ;(
       globalThis.window as unknown as {
         api: {
@@ -478,6 +508,7 @@ describe('workspace cleanup scan progress', () => {
     } as Partial<AppState>)
 
     const firstScan = store.getState().scanWorkspaceCleanup({ skipGitWorktreeIds: ['first'] })
+
     const secondScan = store
       .getState()
       .scanWorkspaceCleanup({ skipGitWorktreeIds: ['second'] })
@@ -532,21 +563,29 @@ describe('workspace cleanup scan progress', () => {
     const candidate = makeCandidate()
     const refreshedCandidate = makeCandidate({ worktreeId: 'repo1::/tmp/refreshed' })
     const broadScans = [firstBroadScan, secondBroadScan]
+
     const scan = vi.fn((args?: WorkspaceCleanupScanArgs) => {
       if (args?.worktreeId || args?.worktreeIds) {
         return Promise.resolve({ scannedAt: NOW, candidates: [candidate], errors: [] })
       }
+
       const nextBroadScan = broadScans.shift()
+
       if (!nextBroadScan) {
         throw new Error('unexpected broad scan')
       }
+
       return nextBroadScan.promise
     })
+
     installWorkspaceCleanupApi(scan)
+
     const cancelScan = vi.fn(async () => {
       firstBroadScan.reject(new Error('Workspace cleanup scan cancelled'))
+
       return true
     })
+
     ;(
       globalThis.window as unknown as {
         api: { workspaceCleanup: { cancelScan: typeof cancelScan } }
@@ -580,27 +619,32 @@ describe('workspace cleanup scan progress', () => {
   it('does not join broad cleanup scans with different explicit args', async () => {
     const firstPending = deferred<WorkspaceCleanupScanResult>()
     const secondPending = deferred<WorkspaceCleanupScanResult>()
+
     const firstResult = {
       scannedAt: NOW,
       candidates: [makeCandidate({ worktreeId: 'repo1::/tmp/first' })],
       errors: []
     }
+
     const secondResult = {
       scannedAt: NOW + 1,
       candidates: [makeCandidate({ worktreeId: 'repo1::/tmp/second' })],
       errors: []
     }
+
     const scan = vi.fn((args?: { skipGitWorktreeIds?: string[] }) =>
       args?.skipGitWorktreeIds?.includes('repo1::/tmp/first')
         ? firstPending.promise
         : secondPending.promise
     )
+
     installWorkspaceCleanupApi(scan)
     const store = createCleanupTestStore()
 
     const first = store
       .getState()
       .scanWorkspaceCleanup({ skipGitWorktreeIds: ['repo1::/tmp/first'] })
+
     const second = store
       .getState()
       .scanWorkspaceCleanup({ skipGitWorktreeIds: ['repo1::/tmp/second'] })
@@ -620,9 +664,11 @@ describe('workspace cleanup scan progress', () => {
   it('does not join suggestion-only and full-workspace broad scans', async () => {
     const legacyPending = deferred<WorkspaceCleanupScanResult>()
     const fullPending = deferred<WorkspaceCleanupScanResult>()
+
     const scan = vi.fn((args?: { includeAllWorkspaces?: boolean }) =>
       args?.includeAllWorkspaces ? fullPending.promise : legacyPending.promise
     )
+
     installWorkspaceCleanupApi(scan)
     const store = createCleanupTestStore()
 
@@ -638,9 +684,11 @@ describe('workspace cleanup scan progress', () => {
   it('restarts a superseded key instead of joining the cancelled scan', async () => {
     const firstPending = deferred<WorkspaceCleanupScanResult>()
     const secondPending = deferred<WorkspaceCleanupScanResult>()
+
     const scan = vi.fn((args?: { skipGitWorktreeIds?: string[] }) =>
       args?.skipGitWorktreeIds?.includes('second') ? secondPending.promise : firstPending.promise
     )
+
     installWorkspaceCleanupApi(scan)
     const store = createCleanupTestStore()
 
@@ -661,10 +709,12 @@ describe('workspace cleanup scan progress', () => {
 
   it('keeps stale cleanup results visible after a broad refresh failure', async () => {
     const previous = { scannedAt: NOW, candidates: [makeCandidate()], errors: [] }
+
     const scan = vi
       .fn()
       .mockResolvedValueOnce(previous)
       .mockRejectedValueOnce(new Error('scan failed'))
+
     installWorkspaceCleanupApi(scan)
     const store = createCleanupTestStore()
 
@@ -678,6 +728,7 @@ describe('workspace cleanup scan progress', () => {
 
   it('keeps focused cleanup preflight scans separate from broad scans', async () => {
     const broad = deferred<WorkspaceCleanupScanResult>()
+
     const scan = vi.fn((args?: { worktreeId?: string }) => {
       if (args?.worktreeId) {
         return Promise.resolve({
@@ -686,8 +737,10 @@ describe('workspace cleanup scan progress', () => {
           errors: []
         } satisfies WorkspaceCleanupScanResult)
       }
+
       return broad.promise
     })
+
     installWorkspaceCleanupApi(scan)
     const store = createCleanupTestStore()
 

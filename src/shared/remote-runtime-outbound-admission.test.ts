@@ -44,6 +44,7 @@ afterEach(async () => {
           for (const client of server.clients) {
             client.close()
           }
+
           server.close(() => resolve())
         })
     )
@@ -86,11 +87,13 @@ describe('remote runtime outbound admission', () => {
   it('rejects shared-control subscription count and byte overload before connecting', async () => {
     const { pairing, server } = await createServer()
     const connection = new RemoteRuntimeSharedControlConnection(pairing)
+
     const subscriptions = (
       connection as unknown as {
         subscriptions: Map<string, { retainedParamsBytes: number }>
       }
     ).subscriptions
+
     for (let index = 0; index < REMOTE_RUNTIME_MAX_SUBSCRIPTIONS; index += 1) {
       subscriptions.set(`subscription-${index}`, { retainedParamsBytes: 0 })
     }
@@ -121,6 +124,7 @@ describe('remote runtime outbound admission', () => {
   it('bounds aggregate prepared bytes across stalled one-shot sockets', async () => {
     const { pairing, server } = await createServer()
     const params = { value: 'x'.repeat(3 * 1024 * 1024) }
+
     const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
       serializeRemoteRuntimeRpcRequest({
         requestId: '00000000-0000-4000-8000-000000000000',
@@ -129,7 +133,9 @@ describe('remote runtime outbound admission', () => {
         params
       })
     )
+
     const admittedCount = Math.floor(REMOTE_RUNTIME_MAX_PROCESS_PENDING_RPC_BYTES / retainedBytes)
+
     const requests = Array.from({ length: admittedCount }, () =>
       sendRemoteRuntimeRequest(pairing, 'status.large', params, 60_000).catch(() => undefined)
     )
@@ -140,9 +146,11 @@ describe('remote runtime outbound admission', () => {
     expect(getRemoteRuntimeRequestAdmissionEvidence().pendingRequestCount).toBe(admittedCount)
 
     await vi.waitFor(() => expect(server.clients.size).toBe(admittedCount))
+
     for (const client of server.clients) {
       client.close()
     }
+
     await Promise.all(requests)
     expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
       pendingRequestCount: 0,
@@ -152,6 +160,7 @@ describe('remote runtime outbound admission', () => {
 
   it('bounds pending requests and ready waiters while both handshakes stall', async () => {
     const { pairing } = await createServer()
+
     const connections: InspectableRequestConnection[] = [
       new RemoteRuntimeRequestConnection(pairing),
       new RemoteRuntimeSharedControlConnection(pairing)
@@ -161,6 +170,7 @@ describe('remote runtime outbound admission', () => {
       const requests = Array.from({ length: REMOTE_RUNTIME_MAX_PENDING_REQUESTS }, (_, index) =>
         connection.request(`status.${index}`, undefined, 60_000).catch(() => undefined)
       )
+
       await expect(connection.request('status.overflow', undefined, 60_000)).rejects.toMatchObject({
         code: 'remote_runtime_busy'
       })
@@ -178,6 +188,7 @@ describe('remote runtime outbound admission', () => {
   it('bounds aggregate prepared request text while both handshakes stall', async () => {
     const { pairing } = await createServer()
     const params = { value: 'x'.repeat(3 * 1024 * 1024) }
+
     const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
       serializeRemoteRuntimeRpcRequest({
         requestId: '00000000-0000-4000-8000-000000000000',
@@ -186,6 +197,7 @@ describe('remote runtime outbound admission', () => {
         params
       })
     )
+
     const admittedCount = Math.floor(REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES / retainedBytes)
     expect(admittedCount).toBeGreaterThan(0)
 
@@ -196,14 +208,17 @@ describe('remote runtime outbound admission', () => {
       const requests = Array.from({ length: admittedCount }, () =>
         connection.request('status.large', params, 60_000).catch(() => undefined)
       )
+
       await expect(connection.request('status.overflow', params, 60_000)).rejects.toMatchObject({
         code: 'remote_runtime_busy'
       })
       const state = connection as unknown as RequestAdmissionState
+
       const retainedTotal = Array.from(state.pendingRequests.values()).reduce(
         (total, pending) => total + (pending.preparedRequest?.retainedBytes ?? 0),
         0
       )
+
       expect(retainedTotal).toBeLessThanOrEqual(REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES)
 
       connection.close()
@@ -215,10 +230,12 @@ describe('remote runtime outbound admission', () => {
 
   it('bounds pending request count across stalled environment connections', async () => {
     const { pairing } = await createServer()
+
     const connections: InspectableRequestConnection[] = [
       new RemoteRuntimeRequestConnection(pairing),
       new RemoteRuntimeSharedControlConnection(pairing)
     ]
+
     const requests = Array.from(
       { length: REMOTE_RUNTIME_MAX_PROCESS_PENDING_REQUESTS },
       (_, index) =>
@@ -228,6 +245,7 @@ describe('remote runtime outbound admission', () => {
           60_000
         ).catch(() => undefined)
     )
+
     const overflow = new RemoteRuntimeRequestConnection(pairing)
 
     await expect(overflow.request('status.overflow', undefined, 60_000)).rejects.toMatchObject({
@@ -264,6 +282,7 @@ describe('remote runtime outbound admission', () => {
   it('bounds retained request bytes across stalled environment connections', async () => {
     const { pairing } = await createServer()
     const params = { value: 'x'.repeat(1024 * 1024) }
+
     const retainedBytes = retainedRemoteRuntimeJsonStringBytes(
       serializeRemoteRuntimeRpcRequest({
         requestId: '00000000-0000-4000-8000-000000000000',
@@ -272,15 +291,19 @@ describe('remote runtime outbound admission', () => {
         params
       })
     )
+
     const admittedCount = Math.floor(REMOTE_RUNTIME_MAX_PROCESS_PENDING_RPC_BYTES / retainedBytes)
+
     const connections: InspectableRequestConnection[] = [
       new RemoteRuntimeRequestConnection(pairing),
       new RemoteRuntimeSharedControlConnection(pairing),
       new RemoteRuntimeRequestConnection(pairing)
     ]
+
     expect(Math.ceil(admittedCount / connections.length) * retainedBytes).toBeLessThan(
       REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES
     )
+
     const requests = Array.from({ length: admittedCount }, (_, index) =>
       connections[index % connections.length]!.request('status.large', params, 60_000).catch(
         () => undefined
@@ -327,6 +350,7 @@ describe('remote runtime outbound admission', () => {
   it('rejects ready waiters beyond the combined request and subscription bound', async () => {
     const readyWaiters: Parameters<typeof waitForSharedControlReadyWithTimeout>[0]['readyWaiters'] =
       []
+
     const admitted = Array.from({ length: REMOTE_RUNTIME_MAX_READY_WAITERS }, () =>
       waitForSharedControlReadyWithTimeout({
         readyWaiters,
@@ -334,6 +358,7 @@ describe('remote runtime outbound admission', () => {
         open: () => undefined
       }).catch(() => undefined)
     )
+
     const open = vi.fn()
 
     await expect(
@@ -345,6 +370,7 @@ describe('remote runtime outbound admission', () => {
     for (const waiter of readyWaiters.splice(0)) {
       waiter.reject(new Error('test cleanup'))
     }
+
     await Promise.all(admitted)
     expect(readyWaiters).toHaveLength(0)
   })
@@ -357,6 +383,7 @@ async function createServer(): Promise<{ pairing: PairingOffer; server: WebSocke
   servers.push(server)
   await new Promise<void>((resolve) => server.once('listening', resolve))
   const address = server.address() as AddressInfo
+
   const pairing = parsePairingCode(
     encodePairingOffer({
       v: 2,
@@ -365,8 +392,10 @@ async function createServer(): Promise<{ pairing: PairingOffer; server: WebSocke
       publicKeyB64: publicKeyToBase64(keyPair.publicKey)
     })
   )
+
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
+
   return { pairing, server }
 }

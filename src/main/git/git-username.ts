@@ -6,6 +6,7 @@ import { resolveDefaultBaseRefViaExec } from './repo'
 const EXPLICIT_USERNAME_CONFIG_KEYS = ['github.user', 'user.username'] as const
 
 const GH_LOGIN_PROBE_TIMEOUT_MS = 2500
+
 // Why: a timeout-killed gh can leave a grandchild holding the stdio pipes, so
 // the exec promise may settle long after the kill. The wall keeps the resolver
 // on schedule either way (issue #7225: a hung gh froze startup for 127s). It
@@ -15,18 +16,22 @@ const GH_LOGIN_PROBE_TIMEOUT_MS = 2500
 // stuck and start the retry cooldown. Retry-After sleeps can exceed any wall;
 // bounding those is exactly what the wall is for.
 const GH_LOGIN_PROBE_WALL_MS = 10_000
+
 // Why: a timed-out probe says nothing about the account, so don't pin '' for
 // the whole session — retry after a cooldown instead of hammering a stuck gh.
 const GH_LOGIN_TIMEOUT_RETRY_MS = 5 * 60 * 1000
+
 const LOCAL_GIT_READ_TIMEOUT_MS = 5000
 
 export function normalizeGitUsername(value: string): string {
   const trimmed = value.trim()
+
   if (!trimmed) {
     return ''
   }
 
   const localPart = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed
+
   return localPart.replace(/^\d+\+/, '')
 }
 
@@ -57,21 +62,25 @@ export function isBranchSafeHostedLogin(value: string): boolean {
   if (value.length > MAX_BRANCH_SAFE_LOGIN_LENGTH) {
     return false
   }
+
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)) {
     return false
   }
+
   // Dot placements git check-ref-format rejects; `.lock` is case-sensitive there too.
   return !value.includes('..') && !value.endsWith('.') && !value.endsWith('.lock')
 }
 
 function normalizeHostedLogin(value: string): string {
   const normalized = normalizeGitUsername(value)
+
   return normalized && isPlausibleHostedLogin(normalized) ? normalized : ''
 }
 
 /** Explicit `github.user`/`user.username` config is provider-agnostic; only reject non-tokens. */
 function normalizeConfiguredLogin(value: string): string {
   const normalized = normalizeGitUsername(value)
+
   return normalized && isBranchSafeHostedLogin(normalized) ? normalized : ''
 }
 
@@ -92,6 +101,7 @@ export async function getSshGitUsername(
     try {
       const { stdout } = await provider.exec(['config', '--get', key], repoPath)
       const username = normalizeConfiguredLogin(stdout)
+
       if (username) {
         return username
       }
@@ -99,24 +109,30 @@ export async function getSshGitUsername(
       // Missing config keys are expected; try the next explicit username key.
     }
   }
+
   return ''
 }
 
 type GhLoginProbeResult = { stdout: string; stderr: string; timedOut: boolean }
+
 type GhLoginOutcome = { login: string; timedOut: boolean }
 
 // gh reports one account for the whole machine, so the login is cached
 // per-process rather than per-repo (mirrors the old sync cache). Timed-out
 // probes use the soft retry timestamp instead of the permanent cache.
 let cachedGhLogin: string | null = null
+
 let ghLoginTimedOutAt: number | null = null
+
 let ghLoginProbeInFlight: Promise<GhLoginOutcome> | null = null
 
 function isExecTimeoutError(err: unknown): boolean {
   if (!err || typeof err !== 'object') {
     return false
   }
+
   const { code, killed, signal } = err as { code?: unknown; killed?: unknown; signal?: unknown }
+
   // Why: on Windows a timeout kill surfaces as killed/SIGTERM with a null
   // code, not ETIMEDOUT — the old ETIMEDOUT-only check let a stuck first
   // probe fall through to a second equally stuck probe (issue #7225).
@@ -125,6 +141,7 @@ function isExecTimeoutError(err: unknown): boolean {
 
 async function runGhLoginProbe(args: string[]): Promise<GhLoginProbeResult> {
   let wallTimer: ReturnType<typeof setTimeout> | undefined
+
   const wall = new Promise<GhLoginProbeResult>((resolve) => {
     wallTimer = setTimeout(
       () => resolve({ stdout: '', stderr: '', timedOut: true }),
@@ -132,15 +149,18 @@ async function runGhLoginProbe(args: string[]): Promise<GhLoginProbeResult> {
     )
     wallTimer.unref?.()
   })
+
   const exec = ghExecFileAsync(args, { timeout: GH_LOGIN_PROBE_TIMEOUT_MS }).then(
     ({ stdout, stderr }) => ({ stdout, stderr, timedOut: false }),
     (err: unknown) => {
       // Why: `gh auth status` reports the login on stderr with a non-zero
       // exit when partially authenticated, so failures still carry output.
       const { stdout, stderr } = extractExecError(err)
+
       return { stdout, stderr, timedOut: isExecTimeoutError(err) }
     }
   )
+
   try {
     return await Promise.race([exec, wall])
   } finally {
@@ -157,38 +177,50 @@ async function runGhLoginProbe(args: string[]): Promise<GhLoginProbeResult> {
 function parseGhAuthStatusLogin(output: string): string {
   let currentLogin = ''
   let firstLogin = ''
+
   for (const line of output.split('\n')) {
     const login = line.match(/Logged in to github\.com account\s+([A-Za-z0-9-]+)/)?.[1]
+
     if (login) {
       currentLogin = login
+
       if (!firstLogin) {
         firstLogin = login
       }
+
       continue
     }
+
     if (/Active account:\s+true/.test(line) && currentLogin) {
       return currentLogin
     }
   }
+
   return firstLogin
 }
 
 async function probeGhLoginOnce(): Promise<GhLoginOutcome> {
   const api = await runGhLoginProbe(['api', 'user', '-q', '.login'])
   const apiLogin = normalizeHostedLogin(api.stdout)
+
   if (apiLogin) {
     return { login: apiLogin, timedOut: false }
   }
+
   if (api.timedOut) {
     // Why: if `gh api user` timed out, `gh auth status` is likely to hit the
     // same stuck keychain/network path. Keep resolution bounded to one probe.
     return { login: '', timedOut: true }
   }
+
   const status = await runGhLoginProbe(['auth', 'status'])
+
   if (status.timedOut) {
     return { login: '', timedOut: true }
   }
+
   const output = `${status.stdout}\n${status.stderr}`
+
   return { login: normalizeHostedLogin(parseGhAuthStatusLogin(output)), timedOut: false }
 }
 
@@ -196,12 +228,15 @@ async function getGhLoginOutcome(): Promise<GhLoginOutcome> {
   if (cachedGhLogin !== null) {
     return { login: cachedGhLogin, timedOut: false }
   }
+
   if (ghLoginTimedOutAt !== null && Date.now() - ghLoginTimedOutAt < GH_LOGIN_TIMEOUT_RETRY_MS) {
     return { login: '', timedOut: true }
   }
+
   if (ghLoginProbeInFlight) {
     return ghLoginProbeInFlight
   }
+
   const probe = probeGhLoginOnce()
     .then((outcome) => {
       if (outcome.timedOut) {
@@ -210,12 +245,15 @@ async function getGhLoginOutcome(): Promise<GhLoginOutcome> {
         cachedGhLogin = outcome.login
         ghLoginTimedOutAt = null
       }
+
       return outcome
     })
     .finally(() => {
       ghLoginProbeInFlight = null
     })
+
   ghLoginProbeInFlight = probe
+
   return probe
 }
 
@@ -225,6 +263,7 @@ async function readGitStdout(repoPath: string, args: string[]): Promise<string> 
       cwd: repoPath,
       timeout: LOCAL_GIT_READ_TIMEOUT_MS
     })
+
     return stdout.trim()
   } catch {
     return ''
@@ -233,6 +272,7 @@ async function readGitStdout(repoPath: string, args: string[]): Promise<string> 
 
 function getRemoteNameFromRef(shortRef: string, remotes: readonly string[]): string {
   const sortedRemotes = [...remotes].sort((a, b) => b.length - a.length)
+
   return sortedRemotes.find((remote) => shortRef.startsWith(`${remote}/`)) ?? ''
 }
 
@@ -240,6 +280,7 @@ function getDefaultBranchName(shortRef: string, remoteName: string): string {
   if (!shortRef.includes('/')) {
     return shortRef
   }
+
   return remoteName ? shortRef.slice(remoteName.length + 1) : shortRef.split('/').slice(1).join('/')
 }
 
@@ -247,7 +288,9 @@ async function getConfiguredBranchRemote(repoPath: string, branch: string | null
   if (!branch) {
     return ''
   }
+
   const remote = await readGitStdout(repoPath, ['config', '--get', `branch.${branch}.remote`])
+
   return remote === '.' ? '' : remote
 }
 
@@ -263,20 +306,26 @@ async function localRepoHasEffectiveGitHubRemote(repoPath: string): Promise<bool
     cwd: repoPath,
     timeout: LOCAL_GIT_READ_TIMEOUT_MS
   }).catch(() => null)
+
   const remotes = (remoteList?.stdout.trim() ?? '').split('\n').filter(Boolean)
+
   // Only a successful empty list proves there is no hosted remote to inspect.
   if (remoteList && remotes.length === 0) {
     return false
   }
+
   const defaultBaseRef = await resolveDefaultBaseRefViaExec((argv) =>
     gitExecFileAsync(argv, { cwd: repoPath, timeout: LOCAL_GIT_READ_TIMEOUT_MS })
   )
+
   const defaultBaseRemote = defaultBaseRef ? getRemoteNameFromRef(defaultBaseRef, remotes) : ''
+
   const defaultBranch = defaultBaseRef
     ? getDefaultBranchName(defaultBaseRef, defaultBaseRemote)
     : null
 
   const currentBranch = await readGitStdout(repoPath, ['branch', '--show-current'])
+
   const candidateRemotes = [
     await getConfiguredBranchRemote(repoPath, currentBranch || null),
     await getConfiguredBranchRemote(repoPath, defaultBranch),
@@ -286,16 +335,20 @@ async function localRepoHasEffectiveGitHubRemote(repoPath: string): Promise<bool
   ]
 
   const seen = new Set<string>()
+
   for (const remote of candidateRemotes) {
     if (!remote || seen.has(remote)) {
       continue
     }
+
     seen.add(remote)
     const remoteUrl = await readGitStdout(repoPath, ['remote', 'get-url', remote])
+
     if (remoteUrl && parseHostedRemote(remoteUrl)?.provider === 'github') {
       return true
     }
   }
+
   return false
 }
 
@@ -315,8 +368,10 @@ export async function resolveLocalGitUsernameDetailed(
         cwd: repoPath,
         timeout: LOCAL_GIT_READ_TIMEOUT_MS
       })
+
       // Why: config can hold free-form strings; only branch-safe logins become prefixes.
       const username = normalizeConfiguredLogin(stdout)
+
       if (username) {
         return { username, authoritative: true }
       }
@@ -324,10 +379,13 @@ export async function resolveLocalGitUsernameDetailed(
       // Missing config keys are expected; try the next explicit username key.
     }
   }
+
   if (await localRepoHasEffectiveGitHubRemote(repoPath)) {
     const outcome = await getGhLoginOutcome()
+
     return { username: outcome.login, authoritative: !outcome.timedOut }
   }
+
   return { username: '', authoritative: true }
 }
 

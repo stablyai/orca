@@ -44,6 +44,7 @@ export function closeBrowserWorkspaceTabOnHosts({
     focusedEnvironmentId,
     isEnvironmentActive: isWebRuntimeSessionActive
   })
+
   // Why here: chrome the user was mid-way through — a half-typed URL, a URL submitted against a
   // page the host had not minted yet — is parked outside React under the page id, waiting for the
   // pane that owns it, and this funnel is where every user-driven close of that pane lands. The two
@@ -53,6 +54,7 @@ export function closeBrowserWorkspaceTabOnHosts({
     clearBrowserAddressBarEditSession(page.id)
     clearBrowserPageDeferredNavigation(page.id)
   }
+
   // Collected before anything tears down: the handles this reads are exactly what the teardown
   // drops, so a later read would see a workspace with no owners and record nothing.
   const pending = collectPendingClientHostedBrowserCloses(state, {
@@ -63,13 +65,16 @@ export function closeBrowserWorkspaceTabOnHosts({
         ? plan.hostEnvironmentIds.filter((id): id is string => id !== null)
         : getBrowserWorkspaceRemoteOwnerEnvironmentIds(state, workspaceId)
   })
+
   if (plan.closesLocally) {
     // Why: this renderer only promotes itself to owner when every owning host is unreachable, so
     // the close is one none of them heard. The runtime persists client-hosted pages, so without a
     // durable intent its next start faithfully restores the tab the user just dismissed.
     state.recordClientHostedBrowserCloseIntents(pending)
+
     return plan
   }
+
   void settleBrowserWorkspaceTabCloseOnHosts({
     plan,
     worktreeId,
@@ -80,6 +85,7 @@ export function closeBrowserWorkspaceTabOnHosts({
     // this snapshot stops describing the tab.
     recordCloseIntents: state.recordClientHostedBrowserCloseIntents
   })
+
   return plan
 }
 
@@ -102,10 +108,13 @@ async function settleBrowserWorkspaceTabCloseOnHosts(args: {
       })
     }))
   )
+
   const unheard = new Set(
     outcomes.filter((entry) => entry.outcome === 'failed').map((entry) => entry.environmentId)
   )
+
   args.recordCloseIntents(args.pending.filter((close) => unheard.has(close.environmentId)))
+
   // Why every owner and not any: a host that still knows the page removes this mirror through tab
   // sync, and tearing down here too would race that retraction. Only when all of them answer that
   // the tab does not exist is there nobody left to do it — the case the connected-owner branch
@@ -121,18 +130,22 @@ async function settleBrowserWorkspaceTabCloseOnHosts(args: {
 
 function tearDownBrowserWorkspaceTabLocally(worktreeId: string, workspaceId: string): void {
   const state = useAppStore.getState()
+
   if (!(state.browserTabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === workspaceId)) {
     return
   }
+
   // Why before the teardown: closeBrowserTab announces the MRU page selection, and a guest torn
   // down first leaves the fallback picking registration order instead (#16306).
   state.closeBrowserTab(workspaceId)
   destroyWorkspaceWebviews(state.browserPagesByWorkspace, workspaceId)
+
   // Read after: closeBrowserTab normally removes the mirror itself, and looking it up again is what
   // keeps this from closing whatever tab later took its place.
   const mirroredTab = (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).find(
     (candidate) => candidate.contentType === 'browser' && candidate.entityId === workspaceId
   )
+
   if (mirroredTab) {
     useAppStore.getState().closeUnifiedTab(mirroredTab.id)
   }

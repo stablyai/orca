@@ -11,8 +11,11 @@ const AUTOMATION_TARGET_FLAGS = [
   'workspace-mode',
   'base-branch'
 ]
+
 const AUTOMATION_SCHEDULE_FLAGS = ['trigger', 'schedule', 'time', 'day', 'timezone']
+
 const AUTOMATION_PRECHECK_FLAGS = ['precheck', 'precheck-timeout']
+
 const AUTOMATION_STATE_FLAGS = [
   'enabled',
   'disabled',

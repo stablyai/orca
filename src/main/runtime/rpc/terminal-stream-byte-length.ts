@@ -19,6 +19,7 @@ export function terminalStreamByteLength(data: string): number {
   if (data.length < MIN_NATIVE_BYTE_LENGTH_CODE_UNITS) {
     return measureClipboardTextByteLength(data).byteLength
   }
+
   return Buffer.byteLength(data, 'utf8')
 }
 
@@ -26,13 +27,16 @@ export function terminalStreamByteLengthExceeds(data: string, maxBytes: number):
   if (data.length === 0 || !Number.isFinite(maxBytes)) {
     return false
   }
+
   // Sound: UTF-8 is never shorter than UTF-16 code-unit count, so this needs no scan at all.
   if (data.length > maxBytes) {
     return true
   }
+
   if (data.length < MIN_NATIVE_BYTE_LENGTH_CODE_UNITS) {
     return measureClipboardTextByteLength(data, { stopAfterBytes: maxBytes }).exceededLimit
   }
+
   return Buffer.byteLength(data, 'utf8') > maxBytes
 }
 
@@ -41,9 +45,11 @@ export function measureTerminalStreamByteLength(
   options: { stopAfterBytes?: number } = {}
 ): TerminalStreamByteLengthMeasurement {
   const stopAfterBytes = options.stopAfterBytes
+
   if (!Number.isFinite(stopAfterBytes)) {
     return { byteLength: terminalStreamByteLength(data), exceededLimit: false }
   }
+
   // Why: over the limit the callers keep the scan's TRUNCATED running total, so only take the
   // native count when the upper bound proves it can't trip the limit — otherwise both would run.
   if (
@@ -52,5 +58,6 @@ export function measureTerminalStreamByteLength(
   ) {
     return { byteLength: Buffer.byteLength(data, 'utf8'), exceededLimit: false }
   }
+
   return measureClipboardTextByteLength(data, options)
 }

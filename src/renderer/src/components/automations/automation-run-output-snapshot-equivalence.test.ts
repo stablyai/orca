@@ -21,11 +21,14 @@ function createShiftReferenceBuffer(): AutomationRunOutputSnapshotBuffer {
       if (!chunk) {
         return
       }
+
       chunks.push(chunk)
       totalChars += chunk.length
       let overflowChars = totalChars - MAX_OUTPUT_SNAPSHOT_CHARS
+
       while (overflowChars > 0 && chunks.length > 0) {
         const firstChunk = chunks[0]
+
         if (firstChunk.length <= overflowChars) {
           chunks.shift()
           totalChars -= firstChunk.length
@@ -33,6 +36,7 @@ function createShiftReferenceBuffer(): AutomationRunOutputSnapshotBuffer {
           truncated = true
           continue
         }
+
         chunks[0] = firstChunk.slice(overflowChars)
         totalChars -= overflowChars
         truncated = true
@@ -45,6 +49,7 @@ function createShiftReferenceBuffer(): AutomationRunOutputSnapshotBuffer {
         .replace(/\r/g, '\n')
         .replace(TERMINAL_CONTROL_CHARACTER_PATTERN, '')
         .trim()
+
       return createAutomationRunOutputSnapshotFromText(content, truncated)
     }
   }
@@ -52,8 +57,10 @@ function createShiftReferenceBuffer(): AutomationRunOutputSnapshotBuffer {
 
 function createSeededRandom(seed: number): () => number {
   let state = seed
+
   return () => {
     state = (state * 1_664_525 + 1_013_904_223) % 4_294_967_296
+
     return state
   }
 }
@@ -70,6 +77,7 @@ describe('automation run output snapshot queue equivalence', () => {
 
   it('matches the shift reference across seeded chunk and control-sequence boundaries', () => {
     const random = createSeededRandom(0xc0ffee)
+
     const tokens = [
       'plain-output-',
       '\u001b[31mred\u001b[0m',
@@ -81,7 +89,9 @@ describe('automation run output snapshot queue equivalence', () => {
       '\u0007',
       '   '
     ]
+
     let source = ''
+
     for (let index = 0; index < 80_000; index += 1) {
       source += tokens[random() % tokens.length]
     }
@@ -89,6 +99,7 @@ describe('automation run output snapshot queue equivalence', () => {
     const reference = createShiftReferenceBuffer()
     const candidate = createAutomationRunOutputSnapshotBuffer()
     let chunkCount = 0
+
     for (let offset = 0; offset < source.length;) {
       const chunkLength = 1 + (random() % 73)
       const chunk = source.slice(offset, offset + chunkLength)
@@ -96,6 +107,7 @@ describe('automation run output snapshot queue equivalence', () => {
       candidate.append(chunk)
       offset += chunkLength
       chunkCount += 1
+
       if (chunkCount % 2_048 === 0) {
         expect(candidate.snapshot()).toEqual(reference.snapshot())
       }
@@ -106,6 +118,7 @@ describe('automation run output snapshot queue equivalence', () => {
 
   it('matches the shift reference across oversized and subsequent appends', () => {
     const retained = `\ude00${'A'.repeat(MAX_OUTPUT_SNAPSHOT_CHARS - 2)}\ud83d`
+
     const chunks = [
       'older output',
       `discarded\u001b[31m prefix${retained}`,
@@ -113,6 +126,7 @@ describe('automation run output snapshot queue equivalence', () => {
       `${'B'.repeat(MAX_OUTPUT_SNAPSHOT_CHARS)}extra`,
       '\u001b[0mDone\r\n'
     ]
+
     const reference = createShiftReferenceBuffer()
     const candidate = createAutomationRunOutputSnapshotBuffer()
 

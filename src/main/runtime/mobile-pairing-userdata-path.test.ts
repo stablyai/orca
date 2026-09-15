@@ -92,14 +92,17 @@ describe('mobile pairing userData path stability', () => {
 
   it('migrates existing mobile pairing files from the late path as an all-or-nothing pair', async () => {
     appState.userData = canonicalDir
+
     const {
       initDataPath,
       getCanonicalUserDataPath,
       migrateMobilePairingDataToCanonicalUserDataPath
     } = await import('../persistence')
+
     initDataPath()
 
     appState.userData = lateDir
+
     const lateDevices = JSON.stringify([
       {
         deviceId: 'late-phone',
@@ -110,11 +113,13 @@ describe('mobile pairing userData path stability', () => {
         lastSeenAt: 2
       }
     ])
+
     const lateKeypair = JSON.stringify({
       v: 1,
       publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64'),
       secretKeyB64: Buffer.from(new Uint8Array(32).fill(2)).toString('base64')
     })
+
     writeFileSync(join(lateDir, DEVICE_REGISTRY_FILENAME), lateDevices)
     writeFileSync(join(lateDir, E2EE_KEYPAIR_FILENAME), lateKeypair)
 
@@ -134,11 +139,14 @@ describe('mobile pairing userData path stability', () => {
 
   it('skips legacy migration when only part of the canonical credential pair exists', async () => {
     appState.userData = canonicalDir
+
     const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
       await import('../persistence')
+
     initDataPath()
 
     appState.userData = lateDir
+
     const lateDevices = JSON.stringify([
       {
         deviceId: 'late-phone',
@@ -149,16 +157,19 @@ describe('mobile pairing userData path stability', () => {
         lastSeenAt: 2
       }
     ])
+
     const lateKeypair = JSON.stringify({
       v: 1,
       publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64'),
       secretKeyB64: Buffer.from(new Uint8Array(32).fill(2)).toString('base64')
     })
+
     const canonicalKeypair = JSON.stringify({
       v: 1,
       publicKeyB64: Buffer.from(new Uint8Array(32).fill(3)).toString('base64'),
       secretKeyB64: Buffer.from(new Uint8Array(32).fill(4)).toString('base64')
     })
+
     writeFileSync(join(lateDir, DEVICE_REGISTRY_FILENAME), lateDevices)
     writeFileSync(join(lateDir, E2EE_KEYPAIR_FILENAME), lateKeypair)
     writeFileSync(join(canonicalDir, E2EE_KEYPAIR_FILENAME), canonicalKeypair)
@@ -175,23 +186,29 @@ describe('mobile pairing userData path stability', () => {
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof NodeFs>('node:fs')
       let copies = 0
+
       return {
         ...actual,
         default: actual,
         copyFileSync: (source: string, target: string) => {
           copies += 1
+
           if (copies === 2) {
             throw new Error('simulated copy failure')
           }
+
           actual.copyFileSync(source, target)
         }
       }
     })
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       appState.userData = canonicalDir
+
       const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
         await import('../persistence')
+
       initDataPath()
 
       appState.userData = lateDir
@@ -213,13 +230,16 @@ describe('mobile pairing userData path stability', () => {
     // Case-insensitive filesystems (macOS/Windows) resolve both paths to the same
     // dir, so migration must be a clean no-op rather than copy a file onto itself.
     appState.userData = canonicalDir
+
     const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
       await import('../persistence')
+
     initDataPath()
 
     const devices = JSON.stringify([
       { deviceId: 'phone', name: 'iPhone', token: 't', scope: 'mobile', pairedAt: 1, lastSeenAt: 2 }
     ])
+
     writeFileSync(join(canonicalDir, DEVICE_REGISTRY_FILENAME), devices)
 
     expect(() => migrateMobilePairingDataToCanonicalUserDataPath(canonicalDir)).not.toThrow()
@@ -228,8 +248,10 @@ describe('mobile pairing userData path stability', () => {
 
   it('no-ops on a fresh install with no legacy pairing files to migrate', async () => {
     appState.userData = canonicalDir
+
     const { initDataPath, migrateMobilePairingDataToCanonicalUserDataPath } =
       await import('../persistence')
+
     initDataPath()
 
     appState.userData = lateDir

@@ -30,10 +30,13 @@ function createHarness(
   const order: string[] = []
   const bindings = new Map<string, string>()
   let preparingPartition = 'persist:route-a'
+
   const retirements: Parameters<
     BrowserRouteSessionRegistryDependencies['retirePageAuthority']
   >[0][] = []
+
   let registry: BrowserRouteSessionRegistry
+
   const session: BrowserRouteElectronSession = {
     setProxy: vi.fn(async () => {
       order.push('set-proxy')
@@ -49,9 +52,11 @@ function createHarness(
       expect(registry.isAllowedPartition(preparingPartition)).toBe(false)
       options.proxyProbeStarted?.()
       await options.resolveProxyGate
+
       return options.resolvedProxy ?? 'SOCKS5 127.0.0.1:43123'
     })
   }
+
   const dependencies: BrowserRouteSessionRegistryDependencies = {
     derivePartition: (input) => ({
       partition:
@@ -61,6 +66,7 @@ function createHarness(
     }),
     validateProfile: vi.fn(() => {
       order.push('validate-profile')
+
       if (options.profileError) {
         throw options.profileError
       }
@@ -68,25 +74,30 @@ function createHarness(
     getSession: vi.fn((partition) => {
       order.push('get-session')
       preparingPartition = partition
+
       return session
     }),
     setupPolicies: vi.fn(() => {
       order.push('setup-policies')
+
       if (options.setupError) {
         throw options.setupError
       }
     }),
     clearPolicies: vi.fn(() => {
       order.push('clear-policies')
+
       if (options.cleanupError) {
         throw options.cleanupError
       }
     }),
     retirePageAuthority: vi.fn((retirement) => {
       retirements.push(retirement)
+
       if (options.retirementError) {
         throw options.retirementError
       }
+
       return options.retirementSettled ?? true
     }),
     bindingStore: {
@@ -94,6 +105,7 @@ function createHarness(
       set: vi.fn((partition: string, fingerprint: string) => {
         order.push('persist-binding')
         bindings.set(partition, fingerprint)
+
         return []
       }),
       touch: vi.fn(),
@@ -103,7 +115,9 @@ function createHarness(
     maxLivePartitions: options.maxLivePartitions,
     maxPagesPerPartition: options.maxPagesPerPartition
   }
+
   registry = new BrowserRouteSessionRegistry(dependencies)
+
   return { bindings, dependencies, order, registry, retirements, session }
 }
 
@@ -126,10 +140,12 @@ function deferred(): {
 } {
   let rejectPromise: ((error: Error) => void) | undefined
   let resolvePromise: (() => void) | undefined
+
   const promise = new Promise<void>((resolve, reject) => {
     rejectPromise = reject
     resolvePromise = resolve
   })
+
   return {
     promise,
     reject: (error) => rejectPromise?.(error),
@@ -141,12 +157,14 @@ describe('BrowserRouteSessionRegistry', () => {
   it('rekeys one prepared authority and makes the old release handle inert', async () => {
     const { dependencies, registry } = createHarness()
     const previousHandle = await prepare(registry)
+
     const previousOwner = {
       partition: previousHandle.partition,
       browserPageId: 'page-a',
       pageHostGeneration: 1,
       rendererWebContentsId: 11
     }
+
     const pageAuthority = registry.getPreparedPageAuthority(previousOwner)
     expect(pageAuthority).not.toBeNull()
     const nextOwner = { ...previousOwner, pageHostGeneration: 2 }
@@ -232,6 +250,7 @@ describe('BrowserRouteSessionRegistry', () => {
   it('binds prepared page authority to the exact owning renderer', async () => {
     const { registry } = createHarness()
     const handle = await prepare(registry)
+
     const page = {
       partition: handle.partition,
       browserPageId: 'page-a',
@@ -290,6 +309,7 @@ describe('BrowserRouteSessionRegistry', () => {
   it('continues owner retirement across partitions when policy cleanup throws', async () => {
     const { registry } = createHarness({ cleanupError: new Error('cleanup unavailable') })
     const first = await prepare(registry)
+
     const second = await prepare(registry, {
       browserPageId: 'page-b',
       pageHostGeneration: 2,
@@ -297,6 +317,7 @@ describe('BrowserRouteSessionRegistry', () => {
     })
 
     expect(registry.retirePreparedPagesOwnedByRenderer(11)).toBe(2)
+
     for (const page of [
       { partition: first.partition, browserPageId: 'page-a', pageHostGeneration: 1 },
       { partition: second.partition, browserPageId: 'page-b', pageHostGeneration: 2 }
@@ -308,10 +329,12 @@ describe('BrowserRouteSessionRegistry', () => {
   it('rejects an in-flight prepare after its renderer owner exits', async () => {
     const probeStarted = deferred()
     const resolveProxyGate = deferred()
+
     const { dependencies, registry } = createHarness({
       proxyProbeStarted: probeStarted.resolve,
       resolveProxyGate: resolveProxyGate.promise
     })
+
     const preparing = prepare(registry)
     await probeStarted.promise
 
@@ -325,12 +348,15 @@ describe('BrowserRouteSessionRegistry', () => {
   it('admits a live sibling waiter after fencing a stale pending owner', async () => {
     const probeStarted = deferred()
     const resolveProxyGate = deferred()
+
     const { dependencies, registry } = createHarness({
       proxyProbeStarted: probeStarted.resolve,
       resolveProxyGate: resolveProxyGate.promise
     })
+
     const stale = prepare(registry)
     await probeStarted.promise
+
     const live = prepare(registry, {
       browserPageId: 'page-b',
       pageHostGeneration: 2,
@@ -355,11 +381,13 @@ describe('BrowserRouteSessionRegistry', () => {
   it('bounds callers waiting on one pending partition setup', async () => {
     const probeStarted = deferred()
     const resolveProxyGate = deferred()
+
     const { registry } = createHarness({
       maxPagesPerPartition: 1,
       proxyProbeStarted: probeStarted.resolve,
       resolveProxyGate: resolveProxyGate.promise
     })
+
     const first = prepare(registry)
     await probeStarted.promise
 
@@ -379,6 +407,7 @@ describe('BrowserRouteSessionRegistry', () => {
       browserPageId: 'page-b',
       pageHostGeneration: 2
     })
+
     expect(registry.retirePreparedPagesOwnedByRenderer(11)).toBe(2)
 
     await expect(preparing).rejects.toThrow('browser_route_partition_renderer_retired')
@@ -388,15 +417,18 @@ describe('BrowserRouteSessionRegistry', () => {
   it('changes opaque page authority when the same logical tuple is prepared again', async () => {
     const { registry } = createHarness()
     const first = await prepare(registry)
+
     const firstAuthority = registry.getPreparedPageAuthority({
       partition: first.partition,
       browserPageId: 'page-a',
       pageHostGeneration: 1,
       rendererWebContentsId: 11
     })
+
     first.release()
 
     const replacement = await prepare(registry)
+
     const replacementAuthority = registry.getPreparedPageAuthority({
       partition: replacement.partition,
       browserPageId: 'page-a',
@@ -415,6 +447,7 @@ describe('BrowserRouteSessionRegistry', () => {
       maxPagesPerPartition: 1,
       retirementSettled: false
     })
+
     const handle = await prepare(registry)
 
     handle.release()
@@ -439,6 +472,7 @@ describe('BrowserRouteSessionRegistry', () => {
     const { dependencies, registry, retirements } = createHarness({
       retirementSettled: false
     })
+
     const first = await prepare(registry)
     const second = await prepare(registry, { browserPageId: 'page-b' })
 
@@ -460,6 +494,7 @@ describe('BrowserRouteSessionRegistry', () => {
     const { dependencies, registry } = createHarness({
       retirementError: new Error('retirement unavailable')
     })
+
     const handle = await prepare(registry)
 
     expect(() => handle.release()).not.toThrow()
@@ -471,6 +506,7 @@ describe('BrowserRouteSessionRegistry', () => {
   it('lets an exact lifecycle event begin the same fenced page retirement', async () => {
     const { registry, retirements } = createHarness({ retirementSettled: false })
     const handle = await prepare(registry)
+
     const pageAuthority = registry.getPreparedPageAuthority({
       partition: handle.partition,
       browserPageId: 'page-a',
@@ -526,6 +562,7 @@ describe('BrowserRouteSessionRegistry', () => {
     'keeps retries joined until failed policy setup settles proxy cleanup (reject: %s)',
     async (rejectProxy) => {
       const proxyGate = deferred()
+
       const { registry, session } = createHarness({
         setProxyGate: proxyGate.promise,
         setupError: new Error('policy setup failed')
@@ -535,6 +572,7 @@ describe('BrowserRouteSessionRegistry', () => {
       const retry = prepare(registry, { browserPageId: 'page-b' })
       await vi.waitFor(() => expect(session.setProxy).toHaveBeenCalledTimes(1))
       let settlementCount = 0
+
       for (const attempt of [first, retry]) {
         void attempt.then(
           () => {
@@ -545,6 +583,7 @@ describe('BrowserRouteSessionRegistry', () => {
           }
         )
       }
+
       await Promise.resolve()
       expect(settlementCount).toBe(0)
 
@@ -553,6 +592,7 @@ describe('BrowserRouteSessionRegistry', () => {
       } else {
         proxyGate.resolve()
       }
+
       await expect(first).rejects.toThrow('policy setup failed')
       await expect(retry).rejects.toThrow('policy setup failed')
       expect(session.setProxy).toHaveBeenCalledTimes(1)
@@ -612,6 +652,7 @@ describe('BrowserRouteSessionRegistry', () => {
 
   it('coalesces concurrent setup and refuses live proxy retargeting', async () => {
     const { registry, session } = createHarness()
+
     const [first, second] = await Promise.all([
       prepare(registry),
       prepare(registry, { browserPageId: 'page-b' })

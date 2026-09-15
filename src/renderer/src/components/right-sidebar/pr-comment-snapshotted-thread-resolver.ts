@@ -43,15 +43,19 @@ export function buildSnapshottedThreadResolver(
 ): (threadId: string) => Promise<boolean> {
   return async (threadId: string): Promise<boolean> => {
     const outcome = await resolveOnHost(deps, threadId)
+
     if (!outcome.ok) {
       deps.onResolveFailed({ threadId, error: outcome.error })
+
       return false
     }
+
     // Why: the optimistic row must never land in another review's list; the caller's guarded
     // refresh reconciles whichever panel is actually showing.
     if (deps.isPanelStillOnLaunchReview()) {
       deps.onResolvedOptimistically(threadId)
     }
+
     return true
   }
 }
@@ -65,6 +69,7 @@ async function resolveOnHost(
       if (!deps.gitlabTarget) {
         return { ok: false }
       }
+
       return await deps.resolveGitLabDiscussion({
         repoPath: deps.gitlabTarget.repoPath,
         repoId: deps.gitlabTarget.repoId,
@@ -73,14 +78,18 @@ async function resolveOnHost(
         resolved: true
       })
     }
+
     if (deps.provider !== 'github' || !deps.githubResolveTarget) {
       return { ok: false }
     }
+
     const target = deps.githubResolveTarget
+
     const ok = await deps.resolveReviewThread(target.repoPath, target.prNumber, threadId, true, {
       repoId: target.repoId,
       prRepo: target.prRepo
     })
+
     return { ok }
   } catch (err) {
     // Why: one rejected host call would otherwise abort the whole bulk ack pool.

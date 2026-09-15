@@ -6,6 +6,7 @@ import {
 } from '../sidebar/worktree-list/viewport/virtual-rows'
 
 export const VAULT_GROUP_HEADER_ROW_HEIGHT = 32
+
 export const VAULT_SESSION_ROW_HEIGHT = 98
 
 export type VaultVirtualRow = { type: 'group' | 'session' }
@@ -17,6 +18,7 @@ export function getVaultStickyHeaderIndexes(rows: readonly VaultVirtualRow[]): n
       indexes.push(index)
     }
   })
+
   return indexes
 }
 
@@ -28,6 +30,7 @@ export function extractVaultVirtualRowIndexes(args: {
     args.stickyHeaderIndexes,
     args.range.startIndex
   )
+
   if (activeStickyHeaderIndex === null) {
     return defaultRangeExtractor(args.range)
   }
@@ -36,6 +39,7 @@ export function extractVaultVirtualRowIndexes(args: {
     args.stickyHeaderIndexes,
     activeStickyHeaderIndex
   )
+
   return Array.from(
     new Set([
       activeStickyHeaderIndex,

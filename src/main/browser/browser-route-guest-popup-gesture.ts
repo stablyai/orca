@@ -28,22 +28,27 @@ export function trackBrowserRouteGuestPopupGesture(
   now: () => number = () => Date.now()
 ): BrowserRouteGuestPopupGesture {
   let lastGestureAt: number | null = null
+
   const onInputEvent = (_event: unknown, input: { type?: string }): void => {
     if (typeof input?.type === 'string' && ACTIVATING_INPUT_TYPES.has(input.type)) {
       lastGestureAt = now()
     }
   }
+
   let attached = false
+
   try {
     guest.on('input-event', onInputEvent as never)
     attached = true
   } catch {
     // Fail closed: an unobservable input stream never counts as a gesture.
   }
+
   return {
     consume: () => {
       const observedAt = lastGestureAt
       lastGestureAt = null
+
       return (
         attached &&
         observedAt !== null &&
@@ -52,10 +57,13 @@ export function trackBrowserRouteGuestPopupGesture(
     },
     dispose: () => {
       lastGestureAt = null
+
       if (!attached) {
         return
       }
+
       attached = false
+
       try {
         guest.off('input-event', onInputEvent as never)
       } catch {}

@@ -48,11 +48,14 @@ export function PrSidebarCreateEmptyState({
   const [mode, setMode] = useState<Mode>('choose')
   const [loading, setLoading] = useState(false)
   const [createWarning, setCreateWarning] = useState<string | null>(null)
+
   const [commitFailureRecovery, setCommitFailureRecovery] =
     useState<MobileCommitFailureRecovery | null>(null)
+
   // A persisted linkedPR while the branch shows no PR means the linked PR could
   // not be resolved. Mention it while still allowing the user to relink.
   const [orphanLinkedPR, setOrphanLinkedPR] = useState<number | null>(null)
+
   const commitFailureRecoveryAction = useMobileCommitFailureRecovery({
     client,
     connState,
@@ -68,10 +71,13 @@ export function PrSidebarCreateEmptyState({
 
   useEffect(() => {
     let cancelled = false
+
     if (!client) {
       setOrphanLinkedPR(null)
+
       return
     }
+
     void fetchWorktreeLinkedPR(client, worktreeId)
       .then((n) => {
         if (!cancelled) {
@@ -83,6 +89,7 @@ export function PrSidebarCreateEmptyState({
           setOrphanLinkedPR(null)
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -92,17 +99,22 @@ export function PrSidebarCreateEmptyState({
     if (!client || loading) {
       return
     }
+
     setCreateWarning(null)
     setCommitFailureRecovery(null)
     setLoading(true)
+
     try {
       if (!gitBranch) {
         setCreateWarning('Check out a branch before creating a pull request.')
+
         return
       }
+
       // Why: mobile skips the local compose step here and runs the hosted create
       // flow directly so PR creation matches the automated hosted-review path.
       let progress: MobileHostedReviewCreateIntentProgress | null = null
+
       const outcome = await runMobileHostedReviewCreateIntent(client, worktreeId, {
         branch: gitBranch,
         title: gitBranch,
@@ -112,6 +124,7 @@ export function PrSidebarCreateEmptyState({
           setCreateWarning(mobileHostedReviewCreateIntentProgressMessage(nextProgress))
         }
       })
+
       if (!outcome.ok) {
         if (isMobileHostedReviewCommitFailure(outcome, progress)) {
           const outcomeStagedEntries = getMobileCommitFailureStagedEntries(outcome.status?.entries)
@@ -124,9 +137,12 @@ export function PrSidebarCreateEmptyState({
                 : getMobileCommitFailureStagedEntries(gitStatus?.entries)
           })
         }
+
         setCreateWarning(outcome.error)
+
         return
       }
+
       setCreateWarning(outcome.warning ?? null)
       openMobilePrUrl(outcome.url)
       onCreated()

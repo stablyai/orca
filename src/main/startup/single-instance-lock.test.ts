@@ -22,14 +22,17 @@ function makeFakeApp(lockResult: boolean): {
 } {
   const listeners: Record<string, Listener[]> = {}
   const requestSingleInstanceLock = vi.fn(() => lockResult)
+
   const on = vi.fn((event: string, cb: Listener) => {
     listeners[event] = listeners[event] ?? []
     listeners[event].push(cb)
   })
+
   const app = {
     requestSingleInstanceLock,
     on
   } as unknown as App
+
   return { app, requestSingleInstanceLock, on, listeners }
 }
 

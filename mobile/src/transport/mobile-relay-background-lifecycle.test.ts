@@ -9,7 +9,9 @@ import {
 import { MobileEndpointSupervisor } from './mobile-endpoint-supervisor'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
+
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
 describe('mobile Relay background lifecycle', () => {
@@ -116,10 +118,12 @@ describe('mobile Relay background lifecycle', () => {
   it('resumes a lease rotation that came due during the background grace', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const openRelay = vi.fn(() => new FakeRelaySession('connected', null, Date.now() + 90_000))
+
     const deps = dependencies({
       openDirect: vi.fn(() => new FakeSession('disconnected')),
       openRelay
     })
+
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
     await supervisor.start()
 
@@ -137,16 +141,20 @@ describe('mobile Relay background lifecycle', () => {
 
   it('arms lease rotation when confirmation persistence finishes during the grace', async () => {
     let finishWrite: (() => void) | null = null
+
     const writeStarted = new Promise<void>((resolve) => {
       finishWrite = resolve
     })
+
     const logical = new FakeLogicalClient('disconnected', 'lan')
     const openRelay = vi.fn(() => new FakeRelaySession('connected', null, Date.now() + 90_000))
+
     const deps = dependencies({
       openDirect: vi.fn(() => new FakeSession('disconnected')),
       openRelay,
       writeBundle: vi.fn(() => writeStarted)
     })
+
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
     const starting = supervisor.start()
     await vi.waitFor(() => expect(deps.writeBundle).toHaveBeenCalledOnce())

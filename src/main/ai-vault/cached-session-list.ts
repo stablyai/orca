@@ -38,8 +38,11 @@ type CachedAiVaultList = {
 }
 
 let cachedList: CachedAiVaultList | null = null
+
 let scanCoordinator = new AiVaultScanCoordinator()
+
 let sources: AiVaultSessionSources = {}
+
 // Bumped on every invalidation. A scan that started before an invalidation
 // carries the old generation and must not write its (now stale) result back
 // into the cache — otherwise a delete's invalidation is silently undone by an
@@ -63,6 +66,7 @@ export async function localAiVaultScanRoots(): Promise<
     filterPathsToRunningWslDistrosAsync(configuredAdditionalCodexHomePaths()),
     getAiVaultWslHomeDirs()
   ])
+
   return {
     additionalCodexSessionsDirs: additionalCodexHomes.map((homePath) => join(homePath, 'sessions')),
     wslHomeDirs,
@@ -87,9 +91,11 @@ export async function listAiVaultSessions(
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = JSON.stringify({ key, depth })
   const now = Date.now()
+
   if (args?.force === true) {
     clearAiVaultBackgroundRestartCircuit()
   }
+
   // Why: opening this panel repeatedly should not re-parse hundreds of JSONL
   // transcripts; explicit refreshes bypass the cache and preempt stale scans.
   if (
@@ -100,10 +106,12 @@ export async function listAiVaultSessions(
   ) {
     return truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths)
   }
+
   // Captured here, not inside start(): the coordinator defers start() by a
   // microtask, so an invalidation landing in that gap would otherwise be read
   // as having happened before this scan and leave the stale result cacheable.
   const startGeneration = cacheGeneration
+
   return scanCoordinator.run({
     key: scanKey,
     force: args?.force,
@@ -118,11 +126,13 @@ export async function listAiVaultSessions(
         },
         scanSignal
       )
+
       // A delete (or other invalidation) landed while this scan was running:
       // its result predates the delete, so caching it would resurrect the
       // deleted session for the TTL. Return it to this caller but don't cache.
       if (!scanSignal.aborted && startGeneration === cacheGeneration) {
         const current = cachedList
+
         if (
           args?.force === true ||
           current?.key !== key ||
@@ -137,6 +147,7 @@ export async function listAiVaultSessions(
           }
         }
       }
+
       return result
     }
   })
@@ -148,6 +159,7 @@ export async function getAiVaultWslHomeDirs(): Promise<string[]> {
   if (process.platform !== 'win32') {
     return []
   }
+
   // No installed distro can be running: spares WSL-less hosts the running-distro probe.
   // Cache read only: a rejected wsl.exe probe yields [] without caching, so it must not
   // narrow the WSL roots delete/subagent validation trusts; and probing here would let this
@@ -155,6 +167,7 @@ export async function getAiVaultWslHomeDirs(): Promise<string[]> {
   if (hasCachedWslDistros() && getCachedWslDistros()?.length === 0) {
     return []
   }
+
   return listRunningWslHomeDirsAsync()
 }
 

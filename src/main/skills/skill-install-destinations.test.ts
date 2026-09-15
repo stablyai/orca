@@ -18,6 +18,7 @@ async function fixture() {
   const worktree = join(root, 'worktree')
   const folder = join(root, 'folder')
   await Promise.all([mkdir(home), mkdir(worktree), mkdir(folder)])
+
   return {
     home,
     worktree,
@@ -53,10 +54,12 @@ describe('resolveSkillInstallDestination', () => {
     [{ scope: 'workspace', folderWorkspaceId: 'folder_1' }, 'folder']
   ] as const)('resolves %s identity without accepting a caller path', async (destination, key) => {
     const fixtureValue = await fixture()
+
     const result = await resolveSkillInstallDestination(
       destination as SkillInstallRequest['destination'],
       fixtureValue.authority
     )
+
     expect(result.workspaceDirectory).toBe(await realpath(fixtureValue[key]))
   })
 

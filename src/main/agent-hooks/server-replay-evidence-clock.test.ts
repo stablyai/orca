@@ -6,9 +6,11 @@ import type { EnrichedAgentHookEventPayload } from './server/server-types'
 import { buildBody, PANE } from './server.test-fixtures'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
 
 const CONNECTION = 'conn-1'
+
 const T0 = 1_800_000_000_000
 
 function ingest(
@@ -22,9 +24,11 @@ function ingest(
     buildBody(payload),
     'production'
   )
+
   if (!event) {
     throw new Error('normalizeHookPayload rejected a known-good Claude fixture')
   }
+
   server.ingestRemote({ ...event, ...(options.isReplay ? { isReplay: true } : {}) }, CONNECTION)
 }
 

@@ -26,6 +26,7 @@ vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   session: { fromPartition: sessionFromPartitionMock }
 }))
+
 // Why (STA-4300): both import paths now write through writeCookieIdentity, not cookies.set. A stub
 // without that method throws a TypeError that writeImportedCookies CATCHES as a write rejection, so
 // the import would silently take the failure path and the ordering assertions would go vacuous.
@@ -45,12 +46,14 @@ vi.mock('./browser-cookie-clear-store', () => ({
     dispose: () => undefined
   })
 }))
+
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
     clearPendingCookieImport: clearPendingCookieImportMock
   }
 }))
+
 vi.mock('../codex-accounts/fs-utils', () => ({
   copyFileWithWindowsRetry: copyFileWithWindowsRetryMock
 }))
@@ -80,6 +83,7 @@ describe('cookie mutation lock', () => {
       await Promise.resolve()
       order.push('A:write')
     })
+
     // Why: started before A resolves, so an unserialised implementation interleaves here.
     const second = withCookieMutationLock(owner, async () => {
       order.push('B:clear')
@@ -95,11 +99,13 @@ describe('cookie mutation lock', () => {
   it('does not serialise across different owners', async () => {
     // Why: the lock is per partition. Two different profiles must still import concurrently.
     const order: string[] = []
+
     const a = withCookieMutationLock({}, async () => {
       order.push('a:start')
       await Promise.resolve()
       order.push('a:end')
     })
+
     const b = withCookieMutationLock({}, async () => {
       order.push('b:start')
       await Promise.resolve()
@@ -136,6 +142,7 @@ describe('cookie mutation lock', () => {
     const order: string[] = []
 
     const release = await acquireCookieMutationLock(owner)
+
     const queued = withCookieMutationLock(owner, async () => {
       order.push('B:clear')
     })
@@ -198,11 +205,14 @@ describe('two concurrent imports into one partition', () => {
     cookiesRemoveMock = vi.fn(async (_url: string, name: string) => {
       events.push(`remove:${name}`)
     })
+
     const firstWrite = new Promise<void>((resolve) => {
       releaseFirstWrite = resolve
     })
+
     writeCookieIdentityMock.mockReset().mockImplementation(async (identity: { name: string }) => {
       events.push(`set:${identity.name}`)
+
       // Why: hold the FIRST import inside its write so a second import has a real opportunity to
       // interleave. Without the lock it takes that opportunity; with it, it waits.
       if (identity.name === 'new-a') {
@@ -219,6 +229,7 @@ describe('two concurrent imports into one partition', () => {
     const stableSession = {
       cookies: { get: cookiesGetMock, remove: cookiesRemoveMock, set: cookiesSetMock }
     }
+
     sessionFromPartitionMock.mockReset().mockReturnValue(stableSession)
   })
 
@@ -232,6 +243,7 @@ describe('two concurrent imports into one partition', () => {
       filePath,
       JSON.stringify([{ domain, name, value: 'imported', path: '/', secure: true }])
     )
+
     return filePath
   }
 
@@ -308,6 +320,7 @@ describe('two concurrent NATIVE imports into one partition', () => {
           stagingCopyCount += 1
           events.push(`copy:${stagingCopyCount === 1 ? 'first' : 'second'}`)
         }
+
         copyFileSync(source, destination)
       })
     // Why: an EMPTY jar makes removeTransplantableCookies return before it clears, so the clear
@@ -326,8 +339,10 @@ describe('two concurrent NATIVE imports into one partition', () => {
     const firstWrite = new Promise<void>((resolve) => {
       releaseFirstWrite = resolve
     })
+
     writeCookieIdentityMock.mockReset().mockImplementation(async (identity: { name: string }) => {
       events.push(`set:${identity.name}`)
+
       if (identity.name === 'first') {
         await firstWrite
       }
@@ -340,6 +355,7 @@ describe('two concurrent NATIVE imports into one partition', () => {
     clearDataMock = vi.fn(async () => {
       events.push('clearData')
     })
+
     const stableSession = {
       cookies: {
         get: vi.fn().mockResolvedValue([
@@ -358,6 +374,7 @@ describe('two concurrent NATIVE imports into one partition', () => {
       getStoragePath: () => join(tmpDir, 'userData', 'Partitions', 'native-conc'),
       setUserAgent: vi.fn()
     }
+
     sessionFromPartitionMock.mockReset().mockReturnValue(stableSession)
   })
 
@@ -385,10 +402,12 @@ describe('two concurrent NATIVE imports into one partition', () => {
     // lock boundary: B's staging copy must be blocked too, not merely B's live clear/write.
     const first = importCookiesFromBrowser(chromeBrowser(sourceA), 'persist:native-conc')
     const second = importCookiesFromBrowser(chromeBrowser(sourceB), 'persist:native-conc')
+
     // Wait until A is parked in its write so the assertions below have a deterministic hold point.
     for (let i = 0; i < 100 && !events.includes('set:first'); i++) {
       await new Promise((resolve) => setTimeout(resolve, 1))
     }
+
     expect(events).toContain('set:first')
     await new Promise((resolve) => setTimeout(resolve, 10))
 
@@ -502,6 +521,7 @@ describe('cold-init probe on a partition that has never stored a cookie', () => 
       },
       'persist:probe-conc'
     )
+
     await new Promise((resolve) => setTimeout(resolve, 20))
 
     // This is the assertion that fails if the probe stops taking the lock.

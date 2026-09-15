@@ -16,6 +16,7 @@ export function selectDashboardOrchestration(
 } {
   let singletonOrchestration: ReturnType<typeof selectRuntimeAgentOrchestrationForWorktree> | null =
     null
+
   let orchestrationByWorktree: ReturnType<typeof selectRuntimeAgentOrchestrationBatch> | null = null
 
   if (activeWorkspaces.length >= 2) {
@@ -25,6 +26,7 @@ export function selectDashboardOrchestration(
     )
   } else {
     releaseRuntimeAgentOrchestrationBatchCache()
+
     if (activeWorkspaces.length === 1) {
       singletonOrchestration = selectRuntimeAgentOrchestrationForWorktree(
         state,

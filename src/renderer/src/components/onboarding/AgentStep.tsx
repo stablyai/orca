@@ -30,6 +30,7 @@ function useAgentGridScrollMaxHeight(
 
   useLayoutEffect(() => {
     const scroll = scrollRef.current
+
     if (!scroll) {
       return
     }
@@ -37,10 +38,13 @@ function useAgentGridScrollMaxHeight(
     const measure = (): void => {
       const card = scroll.querySelector<HTMLElement>('[data-agent-card]')
       const grid = card?.closest<HTMLElement>('[data-agent-grid]')
+
       if (!card || !grid) {
         setMaxHeight(undefined)
+
         return
       }
+
       const gap = Number.parseFloat(getComputedStyle(grid).rowGap || '10')
       const cardHeight = card.getBoundingClientRect().height
       setMaxHeight(Math.ceil(AGENT_GRID_MAX_ROWS * cardHeight + (AGENT_GRID_MAX_ROWS - 1) * gap))
@@ -50,9 +54,11 @@ function useAgentGridScrollMaxHeight(
     const observer = new ResizeObserver(measure)
     observer.observe(scroll)
     const card = scroll.querySelector<HTMLElement>('[data-agent-card]')
+
     if (card) {
       observer.observe(card)
     }
+
     return () => observer.disconnect()
   }, [remeasureKey, scrollRef])
 
@@ -73,27 +79,34 @@ export function AgentStep({
   const hasDetected = detected.length > 0
   const primary = hasDetected ? detected : agentCatalog.slice(0, 6)
   const fallbackRest = hasDetected ? rest : agentCatalog.slice(6)
+
   const selectedEntry =
     selectedAgent && !detectedSet.has(selectedAgent)
       ? agentCatalog.find((a) => a.id === selectedAgent)
       : undefined
+
   // Why: keep the collapsed bucket open when the selected agent lives there, so
   // the active card is visible without forcing the user to expand the disclosure.
   const selectedEntryIsCollapsed =
     selectedAgent != null && fallbackRest.some((a) => a.id === selectedAgent)
+
   // Why: one-way latch: auto-open when selection lands in the fallback bucket,
   // but never force-close. The user can freely toggle via the native <details>
   // disclosure once it's open; controlling `open` directly off the prop would
   // slam it shut as soon as `selectedEntryIsCollapsed` flips back to false.
   const [openState, setOpenState] = useState(selectedEntryIsCollapsed)
+
   const [previousSelectedEntryIsCollapsed, setPreviousSelectedEntryIsCollapsed] =
     useState(selectedEntryIsCollapsed)
+
   if (selectedEntryIsCollapsed !== previousSelectedEntryIsCollapsed) {
     setPreviousSelectedEntryIsCollapsed(selectedEntryIsCollapsed)
+
     if (selectedEntryIsCollapsed && !openState) {
       setOpenState(true)
     }
   }
+
   const fallbackRestLabel = openState
     ? translate('auto.components.onboarding.AgentStep.hideAgents', 'Hide agents')
     : translate(
@@ -103,7 +116,9 @@ export function AgentStep({
           value0: fallbackRest.length
         }
       )
+
   const agentGridScrollRef = useRef<HTMLDivElement>(null)
+
   const agentGridScrollMaxHeight = useAgentGridScrollMaxHeight(
     agentGridScrollRef,
     `${primary.length}:${fallbackRest.length}:${openState}:${hasDetected}`

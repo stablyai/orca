@@ -15,6 +15,7 @@ export const WORKSPACE_ROWS_SCHEMA = z.object({
 const LEGACY_WORKSPACE_ROWS_SCHEMA = z.array(z.object({ id: z.string() }))
 
 export type WorkspaceRows = z.output<typeof WORKSPACE_ROWS_SCHEMA>
+
 export type LegacyWorkspaceRows = z.output<typeof LEGACY_WORKSPACE_ROWS_SCHEMA>
 
 export const workspaceRowsReader = rpcResultVariant('rows', WORKSPACE_ROWS_SCHEMA)

@@ -4,6 +4,7 @@ import { selectedOrDetectedSkillProviders } from '../../shared/skill-install-pro
 import { resolveSkillProviderDestinations } from './skill-provider-destinations'
 
 const HOME = join('/home', 'dev')
+
 const WORKSPACE = join('/repos', 'orca')
 
 describe('resolveSkillProviderDestinations', () => {
@@ -14,6 +15,7 @@ describe('resolveSkillProviderDestinations', () => {
       workspaceDirectory: WORKSPACE,
       detectedProviders: ['codex']
     })
+
     expect(destinations).toEqual([
       {
         provider: 'codex',
@@ -32,11 +34,13 @@ describe('resolveSkillProviderDestinations', () => {
       workspaceDirectory: WORKSPACE,
       detectedProviders: ['cursor']
     })
+
     const global = resolveSkillProviderDestinations({
       scope: 'global',
       homeDirectory: HOME,
       detectedProviders: ['cursor']
     })
+
     expect(workspace[0]).toMatchObject({ readsCanonicalRoot: true })
     expect(global[0]).toMatchObject({
       readsCanonicalRoot: false,
@@ -50,6 +54,7 @@ describe('resolveSkillProviderDestinations', () => {
       homeDirectory: HOME,
       detectedProviders: ['codex', 'claude', 'droid', 'grok', 'aug', 'continue', 'trae']
     })
+
     expect(destinations.map((destination) => destination.rootPath)).toEqual([
       join(HOME, '.agents', 'skills'),
       join(HOME, '.claude', 'skills'),

@@ -29,11 +29,13 @@ export class FakeSession implements RpcClient {
   getLastConnectedAt = () => null
   onStateChange = (listener: (state: ConnectionState) => void) => {
     this.listeners.add(listener)
+
     return () => this.listeners.delete(listener)
   }
 
   publishState(state: ConnectionState): void {
     this.state = state
+
     for (const listener of this.listeners) {
       listener(state)
     }
@@ -91,11 +93,13 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
         session.close()
         throw new Error(`replacement session ${session.getState()}`)
       }
+
       // Mirrors the real client: a racing caller withdraws after auth, before the swap.
       if (shouldAbort?.()) {
         session.close()
         throw new Error('migration superseded')
       }
+
       this.path = path
       this.recoveryPath = null
       this.recoveryAttempt = 0
@@ -112,11 +116,13 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
     const previous = this.getPendingPath()
     const previousAttempt = this.getReconnectAttempt()
     this.recoveryPath = path
+
     if (path === null) {
       this.recoveryAttempt = 0
     } else if (attempt !== undefined) {
       this.recoveryAttempt = attempt
     }
+
     if (previous !== this.getPendingPath() || previousAttempt !== this.getReconnectAttempt()) {
       for (const listener of this.pathListeners) {
         listener()
@@ -128,7 +134,9 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
     if (this.pairingRejected === rejected) {
       return
     }
+
     this.pairingRejected = rejected
+
     for (const listener of this.pathListeners) {
       listener()
     }
@@ -139,7 +147,9 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
     if (this.hostSignedOut === signedOut) {
       return
     }
+
     this.hostSignedOut = signedOut
+
     for (const listener of this.pathListeners) {
       listener()
     }
@@ -151,11 +161,13 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
       this.pairingRejected = false
       this.hostSignedOut = false
     }
+
     super.publishState(state)
   }
   setRecoveryAttempt = vi.fn((attempt: number) => {
     const previous = this.getReconnectAttempt()
     this.recoveryAttempt = attempt
+
     if (previous !== this.getReconnectAttempt()) {
       for (const listener of this.pathListeners) {
         listener()
@@ -164,6 +176,7 @@ export class FakeLogicalClient extends FakeSession implements StableLogicalRpcCl
   })
   onConnectionPathChange = vi.fn((listener: () => void) => {
     this.pathListeners.add(listener)
+
     return () => this.pathListeners.delete(listener)
   })
   getGeneration = () => this.generation
@@ -177,6 +190,7 @@ export const relay = {
   relayHostId: 'AbCdEf0123_-xyZ9',
   e2eeFraming: 2 as const
 }
+
 export const host: HostProfile = {
   id: 'host-1',
   name: 'Blue Whale',
@@ -191,6 +205,7 @@ export const host: HostProfile = {
   relayHostId: relay.relayHostId,
   relay
 }
+
 export const bundle: MobileRelayCredentialBundle = {
   v: 1,
   hostId: host.id,
@@ -225,6 +240,7 @@ export function mockCredentialRotation(logical: FakeLogicalClient): void {
   let installResult: Record<string, unknown> | null = null
   logical.sendRequest.mockImplementation(async (method, params) => {
     const request = params as { installReqId?: string; reqId?: string }
+
     if (method === 'pairing.provisionRelay') {
       installResult = {
         v: 1,
@@ -234,8 +250,10 @@ export function mockCredentialRotation(logical: FakeLogicalClient): void {
         resumeExpiresAt: Date.now() + 300_000,
         graceExpiresAt: Date.now() + 60_000
       }
+
       return { id: 'rpc-2', ok: true, result: installResult, _meta: { runtimeId: 'runtime-1' } }
     }
+
     return {
       id: 'rpc-1',
       ok: true,

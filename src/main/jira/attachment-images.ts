@@ -46,19 +46,26 @@ async function downloadImageAttachment(
               `${apiBasePath(client.site)}/attachment/content/${encodeURIComponent(meta.id)}`,
               client.site.siteUrl
             )
+
         if (/\/rest\/api\/(?:2|3)\/attachment\/content\/[^/]+$/i.test(contentUrl.pathname)) {
           contentUrl.searchParams.set('redirect', 'false')
         }
+
         const binary = await jiraRequestBinary(client, contentUrl.toString())
+
         if (binary.data.byteLength === 0 || binary.data.byteLength > MAX_IMAGE_BYTES) {
           return null
         }
+
         const contentType = binary.contentType.split(';')[0]?.trim() || meta.mimeType
+
         if (!isImageMimeType(contentType) && !isImageMimeType(meta.mimeType)) {
           return null
         }
+
         const mime = isImageMimeType(contentType) ? contentType : meta.mimeType
         const base64 = Buffer.from(binary.data).toString('base64')
+
         return {
           dataUrl: `data:${mime};base64,${base64}`,
           byteSize: binary.data.byteLength
@@ -68,7 +75,9 @@ async function downloadImageAttachment(
         if (error instanceof JiraApiError && error.status === 404) {
           return null
         }
+
         console.warn('[jira] attachment image download failed:', meta.id, error)
+
         return null
       }
     }
@@ -99,6 +108,7 @@ export async function loadIssueImageAttachments(
   preferredIds: string[] = []
 ): Promise<JiraImageAttachment[]> {
   const metas = parseImageAttachmentMetas(attachmentField)
+
   if (metas.length === 0 || preferredIds.length === 0) {
     return []
   }
@@ -109,6 +119,7 @@ export async function loadIssueImageAttachments(
 
   for (const id of preferredIds) {
     const meta = byId.get(id)
+
     if (meta && !used.has(meta.id)) {
       ordered.push(meta)
       used.add(meta.id)
@@ -119,11 +130,14 @@ export async function loadIssueImageAttachments(
   // that will be dropped by the total budget after completion.
   const toDownload: AttachmentMeta[] = []
   let plannedBytes = 0
+
   for (const meta of ordered.slice(0, MAX_IMAGES)) {
     if (meta.size > 0 && plannedBytes + meta.size > MAX_TOTAL_IMAGE_BYTES) {
       continue
     }
+
     toDownload.push(meta)
+
     if (meta.size > 0) {
       plannedBytes += meta.size
     }
@@ -135,16 +149,20 @@ export async function loadIssueImageAttachments(
 
   const images: JiraImageAttachment[] = []
   let totalBytes = 0
+
   for (const image of downloaded) {
     if (!image) {
       continue
     }
+
     if (totalBytes + image.byteSize > MAX_TOTAL_IMAGE_BYTES) {
       continue
     }
+
     totalBytes += image.byteSize
     images.push(image)
   }
+
   return images
 }
 
@@ -161,6 +179,7 @@ export function createMediaMarkdownResolver(
   const byId = new Map(images.map((image) => [image.id, image]))
   const byFilename = new Map<string, JiraImageAttachment[]>()
   const resolvedByMediaId = new Map<string, string>()
+
   for (const image of images) {
     const key = image.filename.toLowerCase()
     const list = byFilename.get(key) ?? []
@@ -171,13 +190,16 @@ export function createMediaMarkdownResolver(
   // Prefer document-order attachment IDs from rendered HTML, then remaining images.
   const queue: JiraImageAttachment[] = []
   const queued = new Set<string>()
+
   for (const id of preferredAttachmentIds) {
     const image = byId.get(id)
+
     if (image && !queued.has(image.id)) {
       queue.push(image)
       queued.add(image.id)
     }
   }
+
   for (const image of images) {
     if (!queued.has(image.id)) {
       queue.push(image)
@@ -189,47 +211,61 @@ export function createMediaMarkdownResolver(
     if (!image) {
       return null
     }
+
     const index = queue.findIndex((entry) => entry.id === image.id)
+
     // Why: already-consumed images must not re-emit; fall through to positional pairing.
     if (index === -1) {
       return null
     }
+
     queue.splice(index, 1)
+
     return `![${escapeMarkdownAlt(image.filename)}](${image.dataUrl})`
   }
 
   return (attrs: JiraAdfMediaAttrs): string | null => {
     if (attrs.id) {
       const cached = resolvedByMediaId.get(attrs.id)
+
       if (cached) {
         if (stats && !cached.startsWith('*[') && cached.includes('data:')) {
           stats.attachmentResolvedCount += 1
         }
+
         return cached
       }
     }
+
     const alt = attrs.alt?.trim() || 'Image'
+
     if (attrs.url) {
       // Why: return placeholder (not null) so non-http / hostile externals do not
       // fall through to positional attachment pairing.
       if (!/^https?:\/\//i.test(attrs.url)) {
         return unresolvedMediaPlaceholder({ ...attrs, alt })
       }
+
       const safeUrl = escapeMarkdownLinkDestination(attrs.url)
+
       if (!safeUrl) {
         return unresolvedMediaPlaceholder({ ...attrs, alt })
       }
+
       // External success does not count toward attachment needCount.
       return `![${escapeMarkdownAlt(alt)}](${safeUrl})`
     }
 
     let resolved: string | null = null
+
     // Why: ADF media IDs are Media Service UUIDs, not attachment IDs — skip byId
     // lookup on attrs.id against attachment map (they never match).
     if (attrs.alt?.trim()) {
       const matches = byFilename.get(attrs.alt.trim().toLowerCase())
+
       if (matches && matches.length > 0) {
         const stillQueued = matches.find((image) => queue.some((entry) => entry.id === image.id))
+
         // Why: only take still-queued matches; never re-emit matches[0] after consume.
         if (stillQueued) {
           resolved = take(stillQueued)
@@ -241,12 +277,15 @@ export function createMediaMarkdownResolver(
     if (!resolved && queue.length > 0) {
       resolved = take(queue[0])
     }
+
     if (resolved && attrs.id) {
       resolvedByMediaId.set(attrs.id, resolved)
     }
+
     if (resolved && stats) {
       stats.attachmentResolvedCount += 1
     }
+
     return resolved
   }
 }

@@ -37,7 +37,9 @@ export class SessionSearchWorkLoop {
         () => this.run(work)
       )
       .then(() => this.arm(tick))
+
     this.chain = chained
+
     return chained
   }
 
@@ -48,10 +50,12 @@ export class SessionSearchWorkLoop {
    */
   close(): void {
     this.closed = true
+
     if (this.timer !== null) {
       this.options.clock.clearTimeout(this.timer)
       this.timer = null
     }
+
     this.controller?.abort()
   }
 
@@ -59,6 +63,7 @@ export class SessionSearchWorkLoop {
     if (this.closed || this.timer !== null) {
       return
     }
+
     this.timer = this.options.clock.setTimeout(() => {
       this.timer = null
       tick()
@@ -69,8 +74,10 @@ export class SessionSearchWorkLoop {
     if (this.closed) {
       return
     }
+
     const controller = new AbortController()
     this.controller = controller
+
     try {
       await work(controller.signal)
     } catch (error) {

@@ -10,6 +10,7 @@ export function rewindRefusal(reason: AgentSessionRewindReason): {
 } {
   const knownReason =
     AGENT_SESSION_REWIND_REASONS.find((value) => value === reason) ?? 'outcome-unknown'
+
   return {
     ok: false,
     refusal: {

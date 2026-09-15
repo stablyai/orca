@@ -46,6 +46,7 @@ describe('resolveWindowsShiftEnterEncoding', () => {
   // encoding sends Esc+CR — which submits instead of inserting a newline (#9703).
   it('recovers CSI-u from an OMP title, which wraps the same Pi reader', () => {
     const state = { paneForegroundAgentByPaneKey: {}, agentLaunchConfigByPaneKey: {} }
+
     for (const title of ['⠸ OMP', 'OMP ready', 'OMP', 'OMP - action required']) {
       expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:pane', title)).toBe('csi-u')
     }
@@ -138,6 +139,7 @@ describe('resolveWindowsShiftEnterEncoding', () => {
         })
       ).toBe('alt-enter')
     }
+
     expect(resolveWindowsShiftEnterEncoding({})).toBe('alt-enter')
   })
 

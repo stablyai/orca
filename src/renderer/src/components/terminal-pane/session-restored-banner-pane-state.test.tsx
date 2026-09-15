@@ -26,6 +26,7 @@ function createPane(id: number): SessionRestoredBannerPane {
   container.className = 'pane'
   container.dataset.leafId = `leaf-${id}`
   document.body.appendChild(container)
+
   return { id, container }
 }
 
@@ -44,6 +45,7 @@ async function renderPortals(
 
 function eventFrom(target: HTMLElement, event: KeyboardEvent | PointerEvent): typeof event {
   target.dispatchEvent(event)
+
   return event
 }
 
@@ -127,6 +129,7 @@ describe('session restored banner pane state', () => {
       renamingPaneId: null,
       sessionRestoredBannerPaneIds: paneIds
     })
+
     await renderPortals([activePane, inactiveRestoredPane], paneIds)
 
     expect(needsFit).toBe(true)
@@ -176,6 +179,7 @@ describe('session restored banner pane state', () => {
       eventFrom(secondChild, new PointerEvent('pointerdown', { bubbles: true })),
       [firstPane, secondPane]
     )
+
     const afterKey = dismissSessionRestoredBannerPaneIds(
       bannerReasons([firstPane.id, secondPane.id]),
       eventFrom(firstChild, new KeyboardEvent('keydown', { bubbles: true })),

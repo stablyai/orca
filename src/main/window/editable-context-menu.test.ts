@@ -45,6 +45,7 @@ describe('buildEditableContextMenuTemplate', () => {
     const replaceMisspelling = vi.fn()
     const addWordToSpellCheckerDictionary = vi.fn()
     const send = vi.fn()
+
     const template = buildEditableContextMenuTemplate(contextParams(), {
       replaceMisspelling,
       send,
@@ -78,6 +79,7 @@ describe('buildEditableContextMenuTemplate', () => {
 
   it('adds useful markdown and native edit actions for rich markdown text', () => {
     const send = vi.fn()
+
     const template = buildEditableContextMenuTemplate(
       contextParams({ x: 12, y: 34, misspelledWord: '', dictionarySuggestions: [] }),
       {
@@ -195,6 +197,7 @@ describe('buildEditableContextMenuTemplate', () => {
       },
       { tableTarget: { cellType: 'header', targetId: 'header-target', x: 12, y: 34 } }
     )
+
     const tableMenu = template[5].submenu as Electron.MenuItemConstructorOptions[]
 
     expect(tableMenu[0]).toMatchObject({ label: 'Insert row above', enabled: false })
@@ -216,6 +219,7 @@ describe('buildEditableContextMenuTemplate', () => {
 
   it('keeps coordinated paste available for regular editable text without spelling actions', () => {
     const send = vi.fn()
+
     const template = buildEditableContextMenuTemplate(
       contextParams({
         formControlType: 'input-text',
@@ -245,6 +249,7 @@ describe('buildEditableContextMenuTemplate', () => {
 
   it('keeps regular text inputs to spelling and native edit actions', () => {
     const send = vi.fn()
+
     const template = buildEditableContextMenuTemplate(
       contextParams({ formControlType: 'input-text' }),
       {

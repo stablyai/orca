@@ -16,9 +16,11 @@ function TaskUrlProviderIcon({
   if (provider === 'github') {
     return <Github className="size-3" aria-hidden="true" />
   }
+
   if (provider === 'gitlab') {
     return <Gitlab className="size-3" aria-hidden="true" />
   }
+
   return <JiraIcon className="size-3" />
 }
 
@@ -42,6 +44,7 @@ export function PaletteCreateWorktreeRow({
   onSelect: () => void
 }): React.JSX.Element {
   const showLinearPreview = linearPending || linearIssue !== null
+
   const linearPreviewLabel = linearIssue
     ? translate(
         'worktreeJumpPalette.linearIssue.createLabel',
@@ -61,17 +64,22 @@ export function PaletteCreateWorktreeRow({
             { value0: linearIdentifier ?? '' }
           )
         : undefined
+
   const previewLabel = showLinearPreview
     ? linearPreviewLabel
     : (taskUrlPreview?.createLabel ?? undefined)
+
   const [showTaskUrlLoadingFeedback, setShowTaskUrlLoadingFeedback] = useState(false)
   useEffect(() => {
     if (!taskUrlPreview?.loading) {
       setShowTaskUrlLoadingFeedback(false)
+
       return
     }
+
     setShowTaskUrlLoadingFeedback(false)
     const timer = window.setTimeout(() => setShowTaskUrlLoadingFeedback(true), 200)
+
     return () => window.clearTimeout(timer)
   }, [taskUrlPreview?.identifier, taskUrlPreview?.loading])
 

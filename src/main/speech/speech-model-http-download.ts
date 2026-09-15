@@ -28,48 +28,58 @@ export abstract class SpeechModelHttpDownload {
     return new Promise((resolve, reject) => {
       if (signal?.aborted) {
         reject(new Error('Aborted'))
+
         return
       }
 
       let parsedUrl: URL
+
       try {
         parsedUrl = new URL(url)
       } catch {
         reject(new Error('Invalid download URL'))
+
         return
       }
 
       if (parsedUrl.protocol !== 'https:') {
         reject(new Error('Model downloads must use HTTPS'))
+
         return
       }
 
       let settled = false
       let request: Electron.ClientRequest | null = null
       let idleTimeout: ReturnType<typeof setTimeout> | null = null
+
       const onSignalAbort = (): void => {
         const activeRequest = request
         rejectOnce(new Error('Aborted'))
         activeRequest?.abort()
       }
+
       const clearIdleTimeout = (): void => {
         if (idleTimeout) {
           clearTimeout(idleTimeout)
           idleTimeout = null
         }
       }
+
       const cleanupRequestListeners = (): void => {
         const activeRequest = request
         clearIdleTimeout()
+
         if (!activeRequest) {
           return
         }
+
         activeRequest.off('error', onRequestError)
         activeRequest.off('response', onResponse)
         activeRequest.off('redirect', onRedirect)
         signal?.removeEventListener('abort', onSignalAbort)
         request = null
       }
+
       const resetIdleTimeout = (): void => {
         if (idleTimeout) {
           idleTimeout.refresh()
@@ -77,23 +87,29 @@ export abstract class SpeechModelHttpDownload {
           idleTimeout = setTimeout(onRequestTimeout, DOWNLOAD_IDLE_TIMEOUT_MS)
         }
       }
+
       const resolveOnce = (): void => {
         if (settled) {
           return
         }
+
         settled = true
         cleanupRequestListeners()
         resolve()
       }
+
       const rejectOnce = (error: Error): void => {
         if (settled) {
           return
         }
+
         settled = true
         cleanupRequestListeners()
         reject(error)
       }
+
       const onRequestError = (error: Error): void => rejectOnce(error)
+
       const onRequestTimeout = (): void => {
         const activeRequest = request
         rejectOnce(
@@ -103,28 +119,36 @@ export abstract class SpeechModelHttpDownload {
         )
         activeRequest?.abort()
       }
+
       const onRedirect = (_statusCode: number, _method: string, redirectUrl: string): void => {
         if (redirectCount >= 5) {
           const activeRequest = request
           rejectOnce(new Error('Too many redirects'))
           activeRequest?.abort()
+
           return
         }
+
         let resolvedRedirect: URL
+
         try {
           resolvedRedirect = new URL(redirectUrl, parsedUrl)
         } catch {
           const activeRequest = request
           rejectOnce(new Error('Invalid redirect URL'))
           activeRequest?.abort()
+
           return
         }
+
         if (resolvedRedirect.protocol !== 'https:') {
           const activeRequest = request
           rejectOnce(new Error('Model download redirect must use HTTPS'))
           activeRequest?.abort()
+
           return
         }
+
         const activeRequest = request
         cleanupRequestListeners()
         activeRequest?.abort()
@@ -142,13 +166,17 @@ export abstract class SpeechModelHttpDownload {
           .then(resolveOnce)
           .catch(rejectOnce)
       }
+
       const onResponse = (incoming: Electron.IncomingMessage): void => {
         const response = incoming as DownloadIncomingMessage
         const contentLength = response.headers['content-length']
         const headerLength = Number.parseInt(getHeaderValue(contentLength) || '0', 10)
+
         const parsedLength =
           Number.isSafeInteger(headerLength) && headerLength > 0 ? headerLength : 0
+
         const contentRange = parseContentRange(response.headers['content-range'])
+
         const resumed =
           resumeOffset > 0 &&
           response.statusCode === 206 &&
@@ -162,13 +190,17 @@ export abstract class SpeechModelHttpDownload {
           } catch {
             // best-effort
           }
+
           const activeRequest = request
+
           const rangeError: HttpStatusError = new Error(
             `Invalid Content-Range for resume at byte ${resumeOffset}`
           )
+
           rangeError.retryable = true
           rejectOnce(rangeError)
           activeRequest?.abort()
+
           return
         }
 
@@ -181,6 +213,7 @@ export abstract class SpeechModelHttpDownload {
               // best-effort
             }
           }
+
           const activeRequest = request
           const statusError: HttpStatusError = new Error(`HTTP ${response.statusCode}`)
           statusError.httpStatusCode = response.statusCode
@@ -188,20 +221,24 @@ export abstract class SpeechModelHttpDownload {
           rejectOnce(statusError)
           // Why: abort so a retry doesn't leave the error-response body draining unowned.
           activeRequest?.abort()
+
           return
         }
 
         // Why: a 200 to our Range request means the server restarted from byte zero, so overwrite the partial.
         const progressBase = resumed ? resumeOffset : 0
+
         // Why: Content-Length on a 206 is only this segment; on Content-Range '*' keep the known full size.
         const totalSize = resumed
           ? (contentRange?.totalBytes ?? totals?.totalBytes ?? expectedSize)
           : parsedLength > 0
             ? parsedLength
             : expectedSize
+
         if (totals) {
           totals.totalBytes = totalSize
         }
+
         let downloaded = 0
 
         const fileStream = createWriteStream(dest, { flags: resumed ? 'a' : 'w' })
@@ -209,20 +246,26 @@ export abstract class SpeechModelHttpDownload {
         const cleanupResponseProgressListener = (): void => {
           response.off('data', onResponseData)
         }
+
         const onResponseData = (chunk: Buffer): void => {
           resetIdleTimeout()
+
           if (isAborted()) {
             request?.abort()
             response.destroy?.()
             fileStream.destroy()
+
             return
           }
+
           downloaded += chunk.length
+
           const progress = Math.min(
             0.9,
             ((totals?.completedBytes ?? 0) + progressBase + downloaded) /
               (totals?.modelTotalBytes ?? totalSize)
           )
+
           this.reportDownloadProgress(modelId, progress)
         }
 
@@ -230,6 +273,7 @@ export abstract class SpeechModelHttpDownload {
         pipeline(response, fileStream)
           .then(() => {
             cleanupResponseProgressListener()
+
             if (isAborted()) {
               rejectOnce(new Error('Aborted'))
             } else {
@@ -243,6 +287,7 @@ export abstract class SpeechModelHttpDownload {
       }
 
       request = net.request({ method: 'GET', url: parsedUrl.toString() })
+
       if (resumeOffset > 0) {
         request.setHeader('Range', `bytes=${resumeOffset}-`)
       }
@@ -252,9 +297,11 @@ export abstract class SpeechModelHttpDownload {
       request.on('error', onRequestError)
       request.on('response', onResponse)
       request.on('redirect', onRedirect)
+
       if (signal) {
         signal.addEventListener('abort', onSignalAbort, { once: true })
       }
+
       request.end()
     })
   }

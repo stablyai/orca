@@ -16,6 +16,7 @@ describe('OrchestrationDb version-skew migration', () => {
   afterEach(() => {
     db?.close()
     db = undefined
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
       tempDir = undefined
@@ -134,6 +135,7 @@ describe('OrchestrationDb version-skew migration', () => {
     `)
     raw.pragma(`user_version = ${claimedVersion}`)
     raw.close()
+
     return dbPath
   }
 
@@ -160,18 +162,22 @@ describe('OrchestrationDb version-skew migration', () => {
       coordinatorHandle: 'term_coord_v2',
       coordinatorPaneKey: 'tab_v2:leaf_coord'
     })
+
     const task = db.createTask({ spec: 'reply with ack', runId: run.id })
     const dispatch = createRootDispatch(db, task.id, 'term_worker_v2', 'tab_v2:leaf_worker')
+
     const question = db.createQuestion({
       runId: run.id,
       dispatchId: dispatch.id,
       askerHandle: 'term_worker_v2',
       question: 'ack?'
     })
+
     const delivery = db.getOrCreateRunDelivery({
       runId: run.id,
       consumerGeneration: run.consumer_generation
     })
+
     expect(question.message.type).toBe('question')
     expect(delivery?.messages.map((message) => message.id)).toContain(question.message.id)
 
@@ -290,16 +296,20 @@ describe('OrchestrationDb version-skew migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-version-skew-v33-delivery-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
+
     const run = db.createRun({
       objective: 'v33 Delivery',
       coordinatorHandle: 'term_v33',
       coordinatorPaneKey: 'tab_v33:leaf_v33'
     })
+
     db.insertMessage({ from: 'term_worker', to: `run:${run.id}`, subject: 'queued', runId: run.id })
+
     const deliveryId = db.getOrCreateRunDelivery({
       runId: run.id,
       consumerGeneration: run.consumer_generation
     })!.delivery.id
+
     const originalMessageIds = db.getDeliveryRaw(deliveryId)!.message_ids
     db.close()
     db = undefined
@@ -329,6 +339,7 @@ describe('OrchestrationDb version-skew migration', () => {
         expect.objectContaining({ name: 'mailbox_handle', type: 'TEXT', notnull: 1 })
       ])
     )
+
     const migratedDeliveries = db.db
       .prepare(
         `SELECT id, run_id, mailbox_handle, consumer_generation, message_ids,
@@ -336,6 +347,7 @@ describe('OrchestrationDb version-skew migration', () => {
          FROM deliveries`
       )
       .all()
+
     expect(migratedDeliveries).toHaveLength(3)
     expect(migratedDeliveries).toEqual(
       expect.arrayContaining([
@@ -371,9 +383,11 @@ describe('OrchestrationDb version-skew migration', () => {
         }
       ])
     )
+
     const deliveryIndexes = db.db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'deliveries'")
       .all() as { name: string }[]
+
     expect(deliveryIndexes.map(({ name }) => name)).toEqual(
       expect.arrayContaining(['idx_deliveries_one_outstanding', 'idx_deliveries_run_created'])
     )
@@ -384,16 +398,19 @@ describe('OrchestrationDb version-skew migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-version-skew-v30-reset-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
+
     const task = db.createTask({
       runId: 'run_legacy_local',
       spec: 'reset by an older writer'
     })
+
     const started = db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
+
     db.recordAttemptObservation({
       id: 'observation_before_v30_reset',
       dispatchId: started.dispatch.id,
@@ -445,6 +462,7 @@ describe('OrchestrationDb version-skew migration', () => {
 
   it('indexes pending pointer Enters on the predicate their query uses', () => {
     db = new OrchestrationDb(':memory:')
+
     const index = db.db
       .prepare("SELECT sql FROM sqlite_master WHERE name = 'idx_messages_pending_pointer_enter'")
       .get() as { sql: string } | undefined
@@ -455,11 +473,13 @@ describe('OrchestrationDb version-skew migration', () => {
   it('keeps a downgraded binary able to write Deliveries against a v34 database', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-downgrade-delivery-'))
     db = new OrchestrationDb(join(tempDir, 'orchestration.db'))
+
     const run = db.createRun({
       objective: 'downgrade',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_c:aaaaaaaa-aaaa-4aaa-8aaa-000000000009'
     })
+
     // Verbatim statement shape from a pre-v34 binary, which does not know mailbox_handle.
     const insertLegacyDelivery = (id: string): void => {
       db!.db
@@ -520,6 +540,7 @@ describe('OrchestrationDb version-skew migration', () => {
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_c:aaaaaaaa-aaaa-4aaa-8aaa-000000000010'
     })
+
     expect(() =>
       db!.db
         .prepare(
@@ -547,11 +568,13 @@ describe('OrchestrationDb version-skew migration', () => {
     raw.close()
 
     db = new OrchestrationDb(dbPath)
+
     const sql = (
       db.db
         .prepare("SELECT sql FROM sqlite_master WHERE name = 'idx_messages_pending_pointer_enter'")
         .get() as { sql: string }
     ).sql
+
     expect(sql).toContain('pointer_enter_pending > 0')
   })
 

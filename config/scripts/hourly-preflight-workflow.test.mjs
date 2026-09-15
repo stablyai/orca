@@ -8,13 +8,17 @@ import { runProcess } from '../../src/shared/child-process/run-process'
 const workflow = parse(
   readFileSync(new URL('../../.github/workflows/hourly-mac-build.yml', import.meta.url), 'utf8')
 )
+
 const preflight = workflow.jobs.preflight
+
 const freshness = preflight.steps.find((step) => step.id === 'freshness')
+
 const head = 'abcdef0123'.repeat(4)
 
 async function checkFreshness(overrides = {}) {
   const directory = mkdtempSync(join(tmpdir(), 'hourly-preflight-'))
   const output = join(directory, 'output')
+
   try {
     const result = await runProcess({
       program: 'bash',
@@ -43,6 +47,7 @@ async function checkFreshness(overrides = {}) {
         ...overrides
       }
     })
+
     return {
       exitCode: result.code,
       stderr: result.stderr,

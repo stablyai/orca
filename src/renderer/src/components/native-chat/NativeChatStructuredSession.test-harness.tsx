@@ -19,6 +19,7 @@ type StructuredSessionMessageListProps = {
 }
 
 const initialMessageListProps: StructuredSessionMessageListProps | null = null
+
 const initialApprovalCardProps: NativeChatApprovalCardProps | null = null
 
 /**
@@ -65,6 +66,7 @@ export function createStructuredSessionMocks() {
     useStructuredAgentSession: async () => {
       const { useStructuredAgentSessionOutbox } =
         await import('./use-structured-agent-session-outbox')
+
       return {
         useStructuredAgentSession: (props: {
           sessionId: string
@@ -76,6 +78,7 @@ export function createStructuredSessionMocks() {
             fence: 1,
             submissions: mocks.submissions as never
           })
+
           return {
             messages:
               mocks.messages ??
@@ -160,6 +163,7 @@ export function createStructuredSessionMocks() {
     nativeChatMessageList: () => ({
       NativeChatMessageList: (props: typeof mocks.messageListProps) => {
         mocks.messageListProps = props
+
         return <div data-testid="message-list" />
       }
     }),
@@ -171,12 +175,14 @@ export function createStructuredSessionMocks() {
           // Real DOM focus: the reveal-focus loop retries until focus lands in the pane.
           focus: () => {
             fieldRef.current?.focus()
+
             return true
           },
           insertTypedText: () => true,
           handlePasteEvent: mocks.handlePasteEvent,
           pasteFromClipboard: mocks.pasteFromClipboard
         }))
+
         return <textarea ref={fieldRef} data-testid="structured-composer" />
       })
     }),
@@ -184,12 +190,14 @@ export function createStructuredSessionMocks() {
     nativeChatApprovalCard: () => ({
       NativeChatApprovalCard: (props: NativeChatApprovalCardProps) => {
         mocks.approvalCardProps = props
+
         return null
       }
     }),
     nativeChatQuestionCard: () => ({
       NativeChatQuestionCard: (props: NativeChatQuestionCardProps) => {
         mocks.questionCardProps = props
+
         return null
       }
     })

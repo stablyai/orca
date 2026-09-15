@@ -2,19 +2,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
 
 type AppStateListener = (next: string) => void
+
 type NetworkSnapshot = { isConnected?: boolean; type?: string }
+
 type NetworkListener = (state: NetworkSnapshot) => void
 
 let appStateListener: AppStateListener | null = null
+
 let networkListener: NetworkListener | null = null
+
 let seededNetworkState: NetworkSnapshot = { isConnected: true, type: 'WIFI' }
+
 const appStateRemove = vi.fn()
+
 const networkRemove = vi.fn()
 
 vi.mock('react-native', () => ({
   AppState: {
     addEventListener: (_event: string, listener: AppStateListener) => {
       appStateListener = listener
+
       return { remove: appStateRemove }
     }
   }
@@ -24,6 +31,7 @@ vi.mock('expo-network', () => ({
   getNetworkStateAsync: () => Promise.resolve(seededNetworkState),
   addNetworkStateListener: (listener: NetworkListener) => {
     networkListener = listener
+
     return { remove: networkRemove }
   }
 }))
@@ -33,6 +41,7 @@ vi.mock('expo-network', () => ({
 async function subscribeAndSeed(nudge: () => void): Promise<() => void> {
   const unsubscribe = subscribeConnectionRevivalTriggers(nudge)
   await Promise.resolve()
+
   return unsubscribe
 }
 

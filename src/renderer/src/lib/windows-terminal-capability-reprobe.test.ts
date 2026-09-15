@@ -27,10 +27,13 @@ function createWatcher(answers: WindowsTerminalCapabilities[] = []): {
   readCached: () => WindowsTerminalCapabilities
 } {
   let current = ABSENT_WSL
+
   const probe = vi.fn(async () => {
     current = answers.shift() ?? current
+
     return current
   })
+
   return { probe, readCached: () => current }
 }
 
@@ -43,10 +46,13 @@ describe('windows terminal capability re-probe', () => {
   it('reprobes usable WSL until Windows process identity is proved', async () => {
     vi.useFakeTimers()
     let current: WindowsTerminalCapabilities = USABLE_WSL
+
     const probe = vi.fn(async () => {
       current = { ...current, windowsProcessStartTimeAvailable: true }
+
       return current
     })
+
     const readCached = () => current
     startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
 
@@ -85,9 +91,11 @@ describe('windows terminal capability re-probe', () => {
 
   it('still re-checks a transient absent answer, then stops once WSL answers', async () => {
     vi.useFakeTimers()
+
     const { probe, readCached } = createWatcher([
       { ...USABLE_WSL, windowsProcessStartTimeAvailable: true }
     ])
+
     startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
 
     await vi.advanceTimersByTimeAsync(30_000)
@@ -100,10 +108,12 @@ describe('windows terminal capability re-probe', () => {
 
   it('keeps watching closely while the answer is still moving', async () => {
     vi.useFakeTimers()
+
     const { probe, readCached } = createWatcher([
       { ...ABSENT_WSL, pwshAvailable: true },
       { ...ABSENT_WSL, pwshAvailable: true, gitBashAvailable: false }
     ])
+
     startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
 
     // Each changed answer resets the backoff to the base delay.
@@ -118,11 +128,13 @@ describe('windows terminal capability re-probe', () => {
   it('stops entirely once the last consumer unregisters', async () => {
     vi.useFakeTimers()
     const { probe, readCached } = createWatcher()
+
     const stopFirst = startWindowsTerminalCapabilityReprobe({
       ownerKey: 'local',
       probe,
       readCached
     })
+
     const stopSecond = startWindowsTerminalCapabilityReprobe({
       ownerKey: 'local',
       probe,
@@ -183,6 +195,7 @@ describe('windows terminal capability re-probe', () => {
       await vi.advanceTimersByTimeAsync(10_000)
       globalThis.dispatchEvent(new Event('focus'))
     }
+
     expect(probe).toHaveBeenCalledTimes(1)
   })
 
@@ -192,6 +205,7 @@ describe('windows terminal capability re-probe', () => {
     startWindowsTerminalCapabilityReprobe({ ownerKey: 'local', probe, readCached })
 
     await vi.advanceTimersByTimeAsync(30_000)
+
     for (let elapsed = 0; elapsed < 10 * 60_000; elapsed += 25_000) {
       await vi.advanceTimersByTimeAsync(25_000)
       globalThis.dispatchEvent(new Event('focus'))

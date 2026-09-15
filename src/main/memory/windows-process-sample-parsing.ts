@@ -22,10 +22,12 @@ export const TYPEPERF_COUNTERS = [
 ] as const
 
 const TYPEPERF_MAX_INSTANCES = 4_096
+
 // Why derived: PDH emits one field per counter per instance plus a timestamp, so
 // a fixed cap silently shrinks the parsable process count each time a counter is
 // added. The 1 MB line cap bounds memory independently.
 const TYPEPERF_MAX_FIELDS = 1 + TYPEPERF_COUNTERS.length * TYPEPERF_MAX_INSTANCES
+
 const TYPEPERF_MAX_LINE_CHARS = 1024 * 1024
 
 export type WindowsProcessResourceRow = {
@@ -59,17 +61,22 @@ type TypeperfProcessFields = {
 export function parseWindowsProcessSample(stdout: string): ParsedWindowsProcessSample {
   const rows: WindowsProcessResourceRow[] = []
   const cpuByPid = new Map<number, WindowsCpuTimes>()
+
   for (const line of iterateProcessOutputLines(stdout)) {
     const fields = parseCimTabFields(line)
+
     if (fields.length < 3) {
       continue
     }
+
     const pid = Number.parseInt(fields[0], 10)
     const ppid = Number.parseInt(fields[1], 10)
     const memory = Number.parseInt(fields[2], 10)
+
     if (!Number.isSafeInteger(pid) || pid <= 0 || !Number.isSafeInteger(ppid) || ppid < 0) {
       continue
     }
+
     const privateMemory = parseCimPageFileBytes(fields[6])
     rows.push({
       pid,
@@ -82,6 +89,7 @@ export function parseWindowsProcessSample(stdout: string): ParsedWindowsProcessS
     const kernelTicks = parseUnsignedBigInt(fields[3])
     const userTicks = parseUnsignedBigInt(fields[4])
     const startTimeId = fields[5] ?? ''
+
     if (
       kernelTicks !== null &&
       userTicks !== null &&
@@ -91,6 +99,7 @@ export function parseWindowsProcessSample(stdout: string): ParsedWindowsProcessS
       cpuByPid.set(pid, { cpuTicks: kernelTicks + userTicks, startTimeId })
     }
   }
+
   return { rows, cpuByPid }
 }
 
@@ -100,6 +109,7 @@ function parseCimTabFields(line: string): string[] {
   if (line.length > PROCESS_OUTPUT_FIELD_SCAN_MAX_CHARS) {
     return []
   }
+
   return line.split('\t', 7).map((field) => field.trim())
 }
 
@@ -112,7 +122,9 @@ function parseCimPageFileBytes(field: string | undefined): number | null {
   if (!field) {
     return null
   }
+
   const kb = Number.parseInt(field, 10)
+
   return Number.isSafeInteger(kb) && kb >= 0 ? kb * 1024 : null
 }
 
@@ -130,11 +142,14 @@ export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResour
     if (!line || line.length > TYPEPERF_MAX_LINE_CHARS) {
       continue
     }
+
     const fields = parseTypeperfCsvLine(line)
+
     if (!headers && fields[0]?.startsWith('(PDH-CSV')) {
       headers = fields
       continue
     }
+
     if (headers && fields.length === headers.length) {
       values = fields
       break
@@ -146,16 +161,22 @@ export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResour
   }
 
   const byInstance = new Map<string, TypeperfProcessFields>()
+
   for (let index = 1; index < headers.length; index += 1) {
     const path = parseTypeperfCounterPath(headers[index])
+
     if (!path || path.instance === '_Total') {
       continue
     }
+
     const value = Number.parseFloat(values[index])
+
     if (!Number.isFinite(value)) {
       continue
     }
+
     const row = byInstance.get(path.instance) ?? {}
+
     if (path.counter === 'ID Process') {
       row.pid = Math.trunc(value)
     } else if (path.counter === 'Creating Process ID') {
@@ -165,14 +186,17 @@ export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResour
     } else if (path.counter === 'Private Bytes') {
       row.privateMemory = value
     }
+
     byInstance.set(path.instance, row)
   }
 
   const rows: WindowsProcessResourceRow[] = []
+
   for (const row of byInstance.values()) {
     if (row.pid === undefined || row.pid <= 0 || row.ppid === undefined || row.ppid < 0) {
       continue
     }
+
     rows.push({
       pid: row.pid,
       ppid: row.ppid,
@@ -183,15 +207,18 @@ export function parseTypeperfProcessOutput(stdout: string): WindowsProcessResour
         : {})
     })
   }
+
   return rows
 }
 
 function parseTypeperfCounterPath(path: string): { instance: string; counter: string } | null {
   const processStart = path.lastIndexOf('\\Process(')
   const counterStart = path.lastIndexOf(')\\')
+
   if (processStart === -1 || counterStart <= processStart + 9) {
     return null
   }
+
   return {
     instance: path.slice(processStart + 9, counterStart),
     counter: path.slice(counterStart + 2)
@@ -205,6 +232,7 @@ function parseTypeperfCsvLine(line: string): string[] {
 
   for (let index = 0; index < line.length; index += 1) {
     const char = line[index]
+
     if (char === '"') {
       if (quoted && line[index + 1] === '"') {
         value += '"'
@@ -212,19 +240,26 @@ function parseTypeperfCsvLine(line: string): string[] {
       } else {
         quoted = !quoted
       }
+
       continue
     }
+
     if (char === ',' && !quoted) {
       fields.push(value)
       value = ''
+
       if (fields.length >= TYPEPERF_MAX_FIELDS) {
         return []
       }
+
       continue
     }
+
     value += char
   }
+
   fields.push(value)
+
   return fields
 }
 
@@ -232,6 +267,7 @@ function parseUnsignedBigInt(value: string | undefined): bigint | null {
   if (!value || !/^\d+$/.test(value)) {
     return null
   }
+
   try {
     return BigInt(value)
   } catch {

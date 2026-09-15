@@ -9,10 +9,12 @@ function referenceDecorationRanges(content: string): IRange[] {
   const getInlineCodeSpans = (line: string): { start: number; end: number }[] => {
     const spans: { start: number; end: number }[] = []
     let start = -1
+
     for (let index = 0; index < line.length; index += 1) {
       if (line[index] !== '`' || (index > 0 && line[index - 1] === '\\')) {
         continue
       }
+
       if (start === -1) {
         start = index
       } else {
@@ -20,8 +22,10 @@ function referenceDecorationRanges(content: string): IRange[] {
         start = -1
       }
     }
+
     return spans
   }
+
   const isInsideSpan = (index: number, spans: { start: number; end: number }[]): boolean =>
     spans.some((span) => index >= span.start && index < span.end)
 
@@ -29,10 +33,12 @@ function referenceDecorationRanges(content: string): IRange[] {
   let insideFence = false
   let lineStart = 0
   let lineNumber = 1
+
   for (let index = 0; index <= content.length; index += 1) {
     if (index < content.length && content.charCodeAt(index) !== 10) {
       continue
     }
+
     const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
     const line = content.slice(lineStart, lineEnd)
     lineStart = index + 1
@@ -43,22 +49,30 @@ function referenceDecorationRanges(content: string): IRange[] {
       insideFence = !insideFence
       continue
     }
+
     if (insideFence) {
       continue
     }
+
     const inlineCodeSpans = getInlineCodeSpans(line)
     let searchFrom = 0
+
     while (searchFrom < line.length) {
       const start = line.indexOf('[[', searchFrom)
+
       if (start === -1) {
         break
       }
+
       const end = line.indexOf(']]', start + 2)
+
       if (end === -1) {
         break
       }
+
       if (!isInsideSpan(start, inlineCodeSpans)) {
         const target = getMarkdownDocLinkTarget(line.slice(start + 2, end))
+
         if (target) {
           ranges.push({
             startLineNumber: currentLineNumber,
@@ -68,9 +82,11 @@ function referenceDecorationRanges(content: string): IRange[] {
           })
         }
       }
+
       searchFrom = end + 2
     }
   }
+
   return ranges
 }
 
@@ -151,8 +167,10 @@ describe('getMarkdownDocLinkDecorationRanges offset scan', () => {
     let indexOfCalls = 0
     String.prototype.indexOf = function (this: string, ...args: unknown[]) {
       indexOfCalls += 1
+
       return (realIndexOf as (...a: unknown[]) => number).apply(this, args)
     } as typeof String.prototype.indexOf
+
     try {
       getMarkdownDocLinkDecorationRanges(linkFree)
     } finally {

@@ -71,6 +71,7 @@ export async function createRuntimeLocalGitWorktree(args: {
     args.baseBranch,
     ...args.localWorktreeGitOptionArgs
   )
+
   if (remoteTrackingBase) {
     const [hadRemoteRef, hasNamedLocalBaseRef] = await Promise.all([
       args.hasRemoteTrackingRef(
@@ -84,7 +85,9 @@ export async function createRuntimeLocalGitWorktree(args: {
         args.hasLocalWorktreeGitOptions ? args.localWorktreeGitOptions : {}
       )
     ])
+
     const hasLocalBase = hadRemoteRef || hasNamedLocalBaseRef
+
     if (!hadRemoteRef && hasLocalBase) {
       remoteTrackingBase = null
     } else {
@@ -93,11 +96,13 @@ export async function createRuntimeLocalGitWorktree(args: {
         remoteTrackingBase,
         ...args.localWorktreeGitOptionArgs
       )
+
       if (!refresh.ok && !hadRemoteRef) {
         throw new Error(
           `Could not refresh base ref "${args.baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
         )
       }
+
       if (
         !hadRemoteRef &&
         !(await args.hasRemoteTrackingRef(
@@ -120,22 +125,28 @@ export async function createRuntimeLocalGitWorktree(args: {
       await args.fetchRemote(args.repo.path, 'origin', ...args.localWorktreeGitOptionArgs)
     } catch {}
   }
+
   const sparseDirectories = args.request.sparseCheckout
     ? normalizeSparseDirectories(args.request.sparseCheckout.directories)
     : []
+
   if (args.request.sparseCheckout && sparseDirectories.length === 0) {
     throw new Error('Sparse checkout requires at least one repo-relative directory.')
   }
+
   // Why: defer the remote add + fetch (fork case) or the redundant re-fetch
   // (same-repo case, already fetched while resolving the PR start point) to
   // first use -- push/pull/fetch/fast-forward materialize it on demand
   // (#17828). Metadata is persisted untouched; only the git mutation defers.
   const preparedPushTarget = args.request.pushTarget
+
   const suggestLocalBaseRefUpdate =
     !args.settings.refreshLocalBaseRefOnWorktreeCreate &&
     !args.settings.localBaseRefSuggestionDismissed &&
     Boolean(remoteTrackingBase)
+
   const remoteOption = remoteTrackingBase ? { remoteTrackingBase } : undefined
+
   const baseOptions: AddWorktreeOptions | undefined = args.checkoutExistingBranch
     ? {
         checkoutExistingBranch: true,
@@ -145,19 +156,24 @@ export async function createRuntimeLocalGitWorktree(args: {
     : suggestLocalBaseRefUpdate
       ? { ...remoteOption, suggestLocalBaseRefUpdate }
       : remoteOption
+
   const addProjectGitOptions = (options?: AddWorktreeOptions): AddWorktreeOptions | undefined =>
     args.hasLocalWorktreeGitOptions ? { ...options, ...args.localWorktreeGitOptions } : options
+
   const addOptions = addProjectGitOptions(baseOptions)
   const defaultAddWorktreeOption = addProjectGitOptions()
+
   const preparedWorktreeOptions = suggestLocalBaseRefUpdate
     ? addProjectGitOptions({ ...remoteOption, suggestLocalBaseRefUpdate })
     : remoteOption
       ? addProjectGitOptions(remoteOption)
       : defaultAddWorktreeOption
+
   const shouldRetireGeneratedName =
     args.request.nameWasGenerated === true &&
     Boolean(args.effectiveSanitizedName) &&
     isGeneratedWorktreeCreateName(args.effectiveSanitizedName!)
+
   const addStandardWorktree = async (): Promise<AddWorktreeResult> =>
     addOptions
       ? ((await addWorktree(
@@ -176,7 +192,9 @@ export async function createRuntimeLocalGitWorktree(args: {
           args.baseBranch,
           args.settings.refreshLocalBaseRefOnWorktreeCreate
         )) ?? {})
+
   let addResult: AddWorktreeResult
+
   try {
     const preparedAttempt =
       sparseDirectories.length === 0 && !args.checkoutExistingBranch
@@ -190,6 +208,7 @@ export async function createRuntimeLocalGitWorktree(args: {
             ...(preparedWorktreeOptions ? { options: preparedWorktreeOptions } : {})
           })
         : null
+
     // This path has no create-span recorder, so the miss reason is only observable on the IPC path.
     if (preparedAttempt?.status === 'hit') {
       addResult = preparedAttempt.result
@@ -225,8 +244,10 @@ export async function createRuntimeLocalGitWorktree(args: {
         args.effectiveSanitizedName!
       )
     }
+
     throw error
   }
+
   if (shouldRetireGeneratedName) {
     await retireGeneratedWorktreeName(
       args.store as Parameters<typeof retireGeneratedWorktreeName>[0],
@@ -235,6 +256,7 @@ export async function createRuntimeLocalGitWorktree(args: {
       args.effectiveSanitizedName!
     )
   }
+
   // Why: `--set-upstream-to` requires the remote to already exist -- safe for a
   // same-repo target (its remote, e.g. `origin`, always exists) but not for a
   // deferred fork remote, which is materialized lazily at first push/pull/fetch.
@@ -247,12 +269,14 @@ export async function createRuntimeLocalGitWorktree(args: {
           args.localWorktreeGitOptions
         )
       : preparedPushTarget
+
   const { created } = await resolveCreatedWorktree(
     args.repo.path,
     args.worktreePath,
     args.branchName,
     args.hasLocalWorktreeGitOptions ? args.localWorktreeGitOptions : undefined
   )
+
   return {
     remoteTrackingBase,
     sparseDirectories,

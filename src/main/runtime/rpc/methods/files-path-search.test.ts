@@ -17,7 +17,9 @@ describe('file path search RPC method', () => {
         truncated: false
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
+
     const request: RpcRequest = {
       id: 'req-1',
       authToken: 'tok',
@@ -42,10 +44,12 @@ describe('file path search RPC method', () => {
       totalCount: 1,
       truncated: false
     })
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       searchQuickOpenFilePaths
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
     const controller = new AbortController()
 
@@ -87,10 +91,12 @@ describe('file path search RPC method', () => {
       totalCount: 32,
       truncated: false
     })
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       searchQuickOpenFilePaths
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
     const id = 'req-bounded-quick-open'
     const replies: string[] = []
@@ -110,6 +116,7 @@ describe('file path search RPC method', () => {
       ok: boolean
       result: { files: unknown[]; truncated: boolean }
     }
+
     expect(response.ok).toBe(true)
     expect(response.result.files.length).toBeLessThan(32)
     expect(response.result.truncated).toBe(true)

@@ -15,6 +15,7 @@ export function createPairingRelayLogger(onLog?: ConnectionLogSink): PairingRela
   if (!onLog) {
     return () => {}
   }
+
   return (level, message, detail) => {
     onLog({ id: `relay-pair-log-${++sequence}`, ts: Date.now(), level, message, detail })
   }
@@ -24,6 +25,8 @@ export function pairingRelayErrorDetail(error: unknown): string {
   if (error instanceof RelayOuterError) {
     return `relay close code ${error.code}`
   }
+
   const failure = error instanceof Error ? error : new Error(String(error))
+
   return `${failure.name}: ${String(failure.message).slice(0, 80)}`
 }

@@ -10,7 +10,9 @@ export const workspacePortsApi = {
       _event: Electron.IpcRendererEvent,
       event: WorkspacePortAdvertisedUrlChangedEvent
     ): void => callback(event)
+
     ipcRenderer.on('workspacePorts:advertised-url-changed', listener)
+
     return () => ipcRenderer.removeListener('workspacePorts:advertised-url-changed', listener)
   }
 } satisfies PreloadApi['workspacePorts']

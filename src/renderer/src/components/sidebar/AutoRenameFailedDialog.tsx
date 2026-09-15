@@ -51,6 +51,7 @@ export function AutoRenameFailedDialog({
     if (!open) {
       return
     }
+
     let stale = false
     setFullOutput(null)
     window.api.worktrees
@@ -65,6 +66,7 @@ export function AutoRenameFailedDialog({
           setFullOutput(null)
         }
       })
+
     return () => {
       stale = true
     }
@@ -79,9 +81,11 @@ export function AutoRenameFailedDialog({
       // matching the app's other inline copy buttons.
       await window.api.ui.writeClipboardText(detailText)
       setCopied(true)
+
       if (copiedResetTimerRef.current !== null) {
         window.clearTimeout(copiedResetTimerRef.current)
       }
+
       copiedResetTimerRef.current = window.setTimeout(() => {
         copiedResetTimerRef.current = null
         setCopied(false)

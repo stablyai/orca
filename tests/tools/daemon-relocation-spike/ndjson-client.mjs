@@ -18,15 +18,19 @@ function encodeNdjson(msg) {
 // Split incoming bytes on newlines and dispatch each complete JSON line.
 function makeLineReader(onMessage) {
   let buffer = ''
+
   return (chunk) => {
     buffer += chunk.toString('utf8')
     let idx = buffer.indexOf('\n')
+
     while (idx !== -1) {
       const line = buffer.slice(0, idx)
       buffer = buffer.slice(idx + 1)
+
       if (line.length > 0) {
         onMessage(JSON.parse(line))
       }
+
       idx = buffer.indexOf('\n')
     }
   }
@@ -35,10 +39,12 @@ function makeLineReader(onMessage) {
 function connectSocket(socketPath, timeoutMs) {
   return new Promise((resolve, reject) => {
     const socket = connect(socketPath)
+
     const timer = setTimeout(() => {
       socket.destroy()
       reject(new Error(`connect timeout after ${timeoutMs}ms: ${socketPath}`))
     }, timeoutMs)
+
     socket.once('connect', () => {
       clearTimeout(timer)
       resolve(socket)
@@ -62,6 +68,7 @@ function handshake(socket, hello) {
         }
       }
     })
+
     socket.on('data', read)
     socket.write(encodeNdjson(hello))
   })
@@ -84,9 +91,11 @@ function stripAnsi(text) {
 // path (an unanswered RPC would otherwise hang until the CI job limit).
 function withTimeout(promise, ms, label) {
   let timer
+
   const timeout = new Promise((_resolve, reject) => {
     timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
   })
+
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
 }
 
@@ -131,6 +140,7 @@ export async function runPtyEcho(options) {
 
   const control = await connectSocket(socketPath, connectTimeoutMs)
   const stream = await connectSocket(socketPath, connectTimeoutMs)
+
   const teardown = () => {
     control.destroy()
     stream.destroy()
@@ -144,6 +154,7 @@ export async function runPtyEcho(options) {
       clientId,
       role: 'control'
     })
+
     await handshake(stream, {
       type: 'hello',
       version: protocolVersion,
@@ -161,6 +172,7 @@ export async function runPtyEcho(options) {
         if (msg.id && pending.has(msg.id)) {
           const { resolve, reject } = pending.get(msg.id)
           pending.delete(msg.id)
+
           if (msg.ok) {
             resolve(msg.payload)
           } else {
@@ -174,6 +186,7 @@ export async function runPtyEcho(options) {
 
     const rpc = (type, payload) => {
       const id = randomUUID()
+
       return new Promise((resolve, reject) => {
         pending.set(id, { resolve, reject })
         control.write(encodeNdjson({ id, type, payload }))
@@ -188,6 +201,7 @@ export async function runPtyEcho(options) {
         if (settled) {
           return
         }
+
         settled = true
         clearTimeout(timer)
         err.diagnostics = diagnostics
@@ -217,12 +231,15 @@ export async function runPtyEcho(options) {
         makeLineReader((msg) => {
           if (msg.type === 'event' && msg.event === 'data') {
             const data = msg.payload?.data ?? ''
+
             if (diagnostics.rawSample.length < 500) {
               diagnostics.rawSample = (diagnostics.rawSample + data).slice(0, 500)
             }
+
             if (msg.sessionId === sessionId) {
               diagnostics.ourDataFrames++
               output += data
+
               // Test against the ANSI-stripped stream: ConPTY interleaves the
               // executed marker with cursor-move / SGR codes.
               if (expectRe.test(stripAnsi(output)) && !settled) {
@@ -240,12 +257,15 @@ export async function runPtyEcho(options) {
       )
 
       const createPayload = { sessionId, cols: 120, rows: 30 }
+
       if (shellOverride) {
         createPayload.shellOverride = shellOverride
       }
+
       rpc('createOrAttach', createPayload)
         .then((payload) => {
           diagnostics.createResponse = payload
+
           return delay(writeDelayMs)
         })
         // Submit with a lone CR: PSReadLine treats CRLF as a soft newline

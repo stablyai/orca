@@ -24,16 +24,20 @@ describe('ExternalChromiumBrowserProcess integration', () => {
         fixturePath,
         '<!doctype html><title>External Chromium</title><main>external-ready</main>'
       )
+
       const provider = await resolveOrcadBrowserProvider({
         userDataPath: root,
         environment: { ORCA_BROWSER_EXECUTABLE: executablePath },
         resolveInstalledElectronExecutable: async () => null
       })
+
       try {
         expect(provider?.kind).toBe('chromium')
+
         if (!provider) {
           throw new Error('External Chromium provider did not resolve.')
         }
+
         const commands = provider.factory({
           getAgentBrowserBridge: () => null,
           resolveWorktreeSelector: async (selector) => ({ id: selector }),
@@ -55,6 +59,7 @@ describe('ExternalChromiumBrowserProcess integration', () => {
           getAvailableAuthoritativeWindow: () => null,
           getOffscreenBrowserBackend: () => null
         })
+
         await expect(
           commands.browserTabCreate({ page: 'external-page', url: 'about:blank' })
         ).resolves.toEqual({ browserPageId: 'external-page' })

@@ -11,8 +11,11 @@ import {
   RETIRED_RECENT_SESSION_BRIDGE_COMMAND,
   ROLLBACK_SESSION_LINKS_FUNCTION
 } from './legacy-wsl-runtime-auth-drain-shell-commands'
+
 export * from './legacy-wsl-runtime-auth-drain-exit-codes'
+
 export { FINALIZE_ABSENT_AUTH_SCRIPT } from './legacy-wsl-runtime-auth-finalize-script'
+
 export const INSPECT_LEGACY_AUTH_SCRIPT = `
 set -eu
 source_recovery_auth="$3.orca-drain-source"

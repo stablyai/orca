@@ -50,13 +50,16 @@ export function useNativeChatPickerCommandDispatch(args: {
     clearImageAttachments,
     setNotice
   } = args
+
   return useCallback(
     (command) => {
       const text = `/${command.name}`
       const target = resolveTarget()
+
       if (!target || disabled || isDispatchingSessionOption) {
         return
       }
+
       trackPendingSend(
         agent === 'codex'
           ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)

@@ -64,17 +64,21 @@ function classifyRefusal(lease: AgentSessionLease): AgentSessionPtyWriteRefusalC
   if (lease.unreconciled) {
     return 'execution_owner_reconciling'
   }
+
   if (lease.claimStatus === 'conflicted') {
     return 'agent_session_conflict'
   }
+
   if (lease.handoffStage === 'recovering' || lease.handoffStage === 'manual-recovery') {
     return 'execution_owner_reconciling'
   }
+
   if (lease.handoffStage !== null || lease.runtimeKind !== 'tui') {
     // Why: a live native owner and a mid-flight handoff are both "someone else holds it", which is
     // actionable in a way "we cannot tell" is not.
     return 'agent_session_conflict'
   }
+
   return 'agent_session_ownership_unknown'
 }
 
@@ -102,18 +106,24 @@ export function evaluateAgentSessionPtyWriteAdmission(
   if (!binding) {
     return UNBOUND_ADMISSION
   }
+
   const record = binding.record
+
   if (!record) {
     // Why: a bound PTY whose record cannot be read is a lost lease, not an unmanaged shell.
     return refuse('execution_owner_reconciling', binding.sessionId, null)
   }
+
   if (record.sessionId !== binding.sessionId) {
     return refuse('agent_session_ownership_unknown', binding.sessionId, record.lease)
   }
+
   const lease = record.lease
+
   if (lease.runtimeKind === 'tui' && agentSessionLeaseAdmitsWriter(lease)) {
     return { admitted: true, sessionId: record.sessionId, runtimeFence: lease.runtimeFence }
   }
+
   return refuse(classifyRefusal(lease), binding.sessionId, lease)
 }
 
@@ -128,14 +138,18 @@ export function reevaluateAgentSessionPtyWriteAdmission(args: {
 }): AgentSessionPtyWriteAdmission {
   const { admitted, binding } = args
   const next = evaluateAgentSessionPtyWriteAdmission(binding)
+
   if (admitted.sessionId === null || admitted.runtimeFence === null) {
     // Why: an unbound write that acquires a binding mid-flight is judged on the new binding alone.
     return next
   }
+
   if (!next.admitted) {
     return next
   }
+
   const lease = binding?.record?.lease ?? null
+
   if (
     next.sessionId !== admitted.sessionId ||
     !lease ||
@@ -143,6 +157,7 @@ export function reevaluateAgentSessionPtyWriteAdmission(args: {
   ) {
     return refuse('agent_session_checkpoint_stale', admitted.sessionId, lease)
   }
+
   return next
 }
 
@@ -171,7 +186,9 @@ export function describeAgentSessionPtyWriteRefusal(refusal: AgentSessionPtyWrit
       : `${refusal.ownerRuntimeKind === 'native' ? 'native chat' : 'the agent TUI'}${
           refusal.ownerPid === null ? '' : ` (pid ${refusal.ownerPid})`
         }`
+
   const stage =
     refusal.handoffStage === null ? 'no handoff in progress' : `handoff ${refusal.handoffStage}`
+
   return `Agent session ${refusal.sessionId} is held by ${owner}; ${stage} (${refusal.code}).`
 }

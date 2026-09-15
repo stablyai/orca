@@ -28,11 +28,15 @@ vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
+
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 
 const NOW = 1_700_000_000_000
+
 const PROD_GENERATION = 4
+
 const STAGING_GENERATION = 9
 
 function target(id: string, generation: number): SshTarget {
@@ -140,6 +144,7 @@ async function loadStore(state: Record<string, unknown>) {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
+
   return new Store()
 }
 
@@ -148,9 +153,11 @@ function repinWorkspace(connectionId: string, sshTargets?: SshTarget[]): void {
   const file = join(testState.dir, 'orca-data.json')
   const state = JSON.parse(readFileSync(file, 'utf-8'))
   state.folderWorkspaces = [folderWorkspace(connectionId)]
+
   if (sshTargets) {
     state.sshTargets = sshTargets
   }
+
   writeFileSync(file, JSON.stringify(state), 'utf-8')
 }
 

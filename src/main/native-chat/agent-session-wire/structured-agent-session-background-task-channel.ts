@@ -33,8 +33,10 @@ export class StructuredAgentSessionBackgroundTaskChannel {
       record: this.deps.store.getRecord(request.sessionId),
       request
     })
+
     const backgroundTasks = this.state(request.sessionId)
     const hostNow = this.deps.now?.() ?? Date.now()
+
     return {
       ...result,
       page: {
@@ -48,6 +50,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
   subscribe(input: AgentSessionSubscribeInput): () => void {
     const session = this.requireSession(input.sessionId)
     const backgroundTasks = this.state(input.sessionId)
+
     return this.subscribers.open({
       ...input,
       journal: session.journal,
@@ -60,6 +63,7 @@ export class StructuredAgentSessionBackgroundTaskChannel {
   publish(sessionId: string, publishedState?: AgentSessionBackgroundTaskState | null): void {
     const session = this.sessions.get(sessionId)
     const state = publishedState !== undefined ? publishedState : this.state(sessionId)
+
     if (session && state !== undefined) {
       this.subscribers.backgroundTasks(sessionId, state, session.fence)
       this.onPublished(sessionId)

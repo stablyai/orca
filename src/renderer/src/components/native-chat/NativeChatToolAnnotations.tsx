@@ -17,6 +17,7 @@ export function NativeChatToolName({
   mcpIdentity?: NativeChatMcpIdentity
 }): React.JSX.Element {
   const identity = mcpToolIdentity(name, mcpIdentity)
+
   return identity ? (
     <span title={name} className="inline-flex min-w-0 items-center gap-1.5">
       <span className="truncate">{identity.server}</span>
@@ -36,10 +37,13 @@ export function NativeChatCommandMetadata({
   const duration = formatToolDuration(block.durationMs, (value0) =>
     translate('components.native-chat.tool.milliseconds', '{{value0}}ms', { value0 })
   )
+
   const exitCode = Number.isSafeInteger(block.exitCode) ? block.exitCode : undefined
+
   if (exitCode === undefined && duration === null) {
     return null
   }
+
   return (
     <span className="flex shrink-0 gap-1.5 font-mono text-[11px] text-muted-foreground">
       {exitCode !== undefined ? (
@@ -62,9 +66,11 @@ export function NativeChatSearchResults({
   onLinkClick?: CommentMarkdownLinkClickHandler
 }): React.JSX.Element | null {
   const hits = toolWebSearchResults(results)
+
   if (hits.length === 0) {
     return null
   }
+
   return (
     <ul className="ml-5 space-y-0.5 text-xs">
       {hits.map((hit) => (

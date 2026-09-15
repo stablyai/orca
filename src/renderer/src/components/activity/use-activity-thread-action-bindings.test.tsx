@@ -28,11 +28,14 @@ function makeThread(paneKey: string, overrides: Partial<AgentPaneThread> = {}): 
 type HookResult = ReturnType<typeof useActivityThreadActionBindings>
 
 let container: HTMLDivElement
+
 let root: Root
+
 let latest: HookResult | null
 
 function Probe(props: Parameters<typeof useActivityThreadActionBindings>[0]): null {
   latest = useActivityThreadActionBindings(props)
+
   return null
 }
 
@@ -40,9 +43,11 @@ function renderProbe(props: Parameters<typeof useActivityThreadActionBindings>[0
   act(() => {
     root.render(<Probe {...props} />)
   })
+
   if (!latest) {
     throw new Error('hook did not render')
   }
+
   return latest
 }
 
@@ -61,6 +66,7 @@ afterEach(() => {
 
 describe('useActivityThreadActionBindings', () => {
   const acknowledgeAgents = vi.fn()
+
   const baseProps = {
     acknowledgeAgents,
     unacknowledgeAgents: vi.fn(),
@@ -73,6 +79,7 @@ describe('useActivityThreadActionBindings', () => {
 
   it('enables and applies Mark all read from the badge set, not the narrowed visible set', () => {
     const hiddenUnread = makeThread('tab-1:hidden', { unread: true })
+
     const bindings = renderProbe({
       ...baseProps,
       // Search/scope narrowing hid the only unread thread from the list…
@@ -89,6 +96,7 @@ describe('useActivityThreadActionBindings', () => {
   it('clears completed strictly from the visible set', () => {
     const visibleDone = makeThread('tab-1:done', { currentAgentState: null })
     const hiddenDone = makeThread('tab-2:hidden-done', { currentAgentState: null })
+
     const bindings = renderProbe({
       ...baseProps,
       visibleThreads: [visibleDone],
@@ -102,6 +110,7 @@ describe('useActivityThreadActionBindings', () => {
 
   it('disables clear-completed when completions are only outside the visible set', () => {
     const hiddenDone = makeThread('tab-2:hidden-done', { currentAgentState: null })
+
     const bindings = renderProbe({
       ...baseProps,
       visibleThreads: [makeThread('tab-1:working')],

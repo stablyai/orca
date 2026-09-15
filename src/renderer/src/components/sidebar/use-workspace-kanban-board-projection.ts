@@ -28,6 +28,7 @@ export function useWorkspaceKanbanBoardProjection(args: {
     allWorktrees: args.allWorktrees,
     repoMap: args.repoMap
   })
+
   const worktreesByStatus = useMemo(
     () =>
       groupWorkspaceKanbanWorktrees({
@@ -38,14 +39,17 @@ export function useWorkspaceKanbanBoardProjection(args: {
       }),
     [args.allWorktrees, args.sortBy, args.workspaceStatuses, visibleWorktreeIds]
   )
+
   const worktreeById = useMemo(
     () => buildUnambiguousWorktreeIdIndex(args.allWorktrees),
     [args.allWorktrees]
   )
+
   const boardWorktrees = useMemo(
     () => args.workspaceStatuses.flatMap((status) => worktreesByStatus.get(status.id) ?? []),
     [args.workspaceStatuses, worktreesByStatus]
   )
+
   const boardDragGroups = useMemo<WorktreeDragGroup[]>(
     () =>
       args.workspaceStatuses.map((status) => ({
@@ -54,21 +58,26 @@ export function useWorkspaceKanbanBoardProjection(args: {
       })),
     [args.workspaceStatuses, worktreesByStatus]
   )
+
   useLayoutEffect(() => {
     if (!args.open) {
       return
     }
+
     return registerWorkspaceKanbanSidebarDropGroups(boardDragGroups)
   }, [args.open, boardDragGroups])
+
   const laneFullWorktreeIds = useMemo(
     () => new Map(boardDragGroups.map((group) => [group.key, group.worktreeIds])),
     [boardDragGroups]
   )
+
   const search = useWorkspaceKanbanSearch({
     open: args.open,
     worktrees: boardWorktrees,
     repoMap: args.repoMap
   })
+
   const laneViews = useMemo(
     () =>
       buildWorkspaceKanbanLaneViews({
@@ -77,6 +86,7 @@ export function useWorkspaceKanbanBoardProjection(args: {
       }),
     [search.matchingWorktreeIds, worktreesByStatus]
   )
+
   const renderedBoardWorktrees = useMemo(
     () =>
       search.matchingWorktreeIds
@@ -86,12 +96,14 @@ export function useWorkspaceKanbanBoardProjection(args: {
         : boardWorktrees,
     [boardWorktrees, search.matchingWorktreeIds]
   )
+
   const activeWorktreeIdentity = args.activeWorktreeId
     ? composeWorktreeHostIdentity(
         args.activeWorkspaceExecutionHostId ?? undefined,
         args.activeWorktreeId
       )
     : null
+
   return {
     activeWorktreeIdentity,
     boardDragGroups,

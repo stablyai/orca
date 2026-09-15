@@ -31,35 +31,45 @@ export type TerminalCursorContextSource = {
 
 function undimmedText(line: TerminalCursorLine, fromX = 0, trimRight = true): string {
   let text = ''
+
   for (let x = fromX; x < line.length; x += 1) {
     const cell = line.getCell(x)
+
     if (!cell || cell.isDim() || cell.getWidth() === 0) {
       continue
     }
+
     text += cell.getChars() || ' '
   }
+
   return trimRight ? text.trimEnd() : text
 }
 
 function firstVisibleCellIsBold(line: TerminalCursorLine): boolean {
   for (let x = 0; x < line.length; x += 1) {
     const cell = line.getCell(x)
+
     if (!cell || cell.getWidth() === 0 || !cell.getChars().trim()) {
       continue
     }
+
     return Boolean(cell.isBold())
   }
+
   return false
 }
 
 function firstVisibleCellHasCustomForeground(line: TerminalCursorLine): boolean {
   for (let x = 0; x < line.length; x += 1) {
     const cell = line.getCell(x)
+
     if (!cell || cell.getWidth() === 0 || !cell.getChars().trim()) {
       continue
     }
+
     return !cell.isFgDefault()
   }
+
   return false
 }
 
@@ -70,15 +80,18 @@ export function readTerminalCursorLineContext(
   const buffer = terminal.buffer.active
   const cursorRow = buffer.baseY + buffer.cursorY
   const cursorLine = buffer.getLine(cursorRow)
+
   if (!cursorLine) {
     return null
   }
+
   const rows: string[] = []
   const typedRows: string[] = []
   const promptGlyphBoldRows: boolean[] = []
   const rowsWrapped: boolean[] = []
   const rowRadius = Math.max(0, Math.floor(rowsAroundCursor))
   const start = Math.max(buffer.viewportY, cursorRow - rowRadius)
+
   for (let row = start; row <= cursorRow; row += 1) {
     const line = buffer.getLine(row)
     const nextLineIsWrapped = buffer.getLine(row + 1)?.isWrapped ?? false
@@ -87,11 +100,13 @@ export function readTerminalCursorLineContext(
     promptGlyphBoldRows.push(line ? firstVisibleCellIsBold(line) : false)
     rowsWrapped.push(line?.isWrapped ?? false)
   }
+
   const rowsBelow: string[] = []
   const typedRowsBelow: string[] = []
   const rowsBelowWrapped: boolean[] = []
   const rowsBelowCustomForeground: boolean[] = []
   const end = Math.min(buffer.viewportY + terminal.rows - 1, cursorRow + rowRadius)
+
   for (let row = cursorRow + 1; row <= end; row += 1) {
     const line = buffer.getLine(row)
     const nextLineIsWrapped = buffer.getLine(row + 1)?.isWrapped ?? false
@@ -100,6 +115,7 @@ export function readTerminalCursorLineContext(
     rowsBelowWrapped.push(line?.isWrapped ?? false)
     rowsBelowCustomForeground.push(line ? firstVisibleCellHasCustomForeground(line) : false)
   }
+
   return {
     rows,
     typedRows,

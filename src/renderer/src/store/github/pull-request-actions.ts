@@ -24,11 +24,14 @@ export const createPullRequestActions = (
 ): Pick<GitHubSlice, 'fetchPRForBranch'> => ({
   fetchPRForBranch: async (repoPath, branch, options): Promise<PRInfo | null> => {
     const repoLookup = getGitHubRepoLookupIndex(get().repos)
+
     const repo = options?.repoId
       ? repoLookup.findById(options.repoId)
       : repoLookup.findByPath(repoPath)
+
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = settingsForGitHubRepoOwner(get().settings, repo)
+
     const cacheKey = prCacheKey(
       repoPath,
       repoId,
@@ -38,7 +41,9 @@ export const createPullRequestActions = (
       repo?.executionHostId,
       repo !== undefined
     )
+
     const cached = get().prCache[cacheKey]
+
     const hostedReviewCacheKey = getHostedReviewCacheKey(
       repoPath,
       branch,
@@ -48,9 +53,11 @@ export const createPullRequestActions = (
       repo?.executionHostId,
       repo !== undefined
     )
+
     // Why: a prior linkedPR-less caller may have cached null for this branch; refetch so the cached miss can now resolve via the linkedPR path.
     const linkedPRNumber = options?.linkedPRNumber ?? null
     const explicitFallbackPRNumber = options?.fallbackPRNumber ?? null
+
     const hostedReviewFallbackPRNumber = githubHostedReviewFallbackPRNumber(
       get(),
       repoPath,
@@ -60,16 +67,21 @@ export const createPullRequestActions = (
       repo?.executionHostId,
       repo !== undefined
     )
+
     const fallbackPRNumber =
       linkedPRNumber == null ? (explicitFallbackPRNumber ?? hostedReviewFallbackPRNumber) : null
+
     const fallbackPRSource: GitHubPRFallbackSource | null =
       linkedPRNumber != null || fallbackPRNumber == null
         ? null
         : (options?.fallbackPRSource ??
           (explicitFallbackPRNumber != null ? 'explicit' : 'hosted-review'))
+
     const lookupHintKey = prLookupHintKey(linkedPRNumber, fallbackPRNumber)
+
     const linkedRefetch =
       cached?.data === null && (linkedPRNumber !== null || fallbackPRNumber !== null)
+
     if (!options?.force && !linkedRefetch && isFresh(cached)) {
       // Why: even a fresh cache hit carries the head-scoped divergence signal; if a prior clear was declined for a mid-request head move and we're back on that head, clear the durable link.
       if (
@@ -78,6 +90,7 @@ export const createPullRequestActions = (
         cached?.data?.headDivergedFromMergedPRAtOid != null
       ) {
         const currentHeadOid = findWorktreeById(get(), options.worktreeId)?.head ?? null
+
         if (
           shouldClearDivergedLinkedMergedPR({
             pr: cached.data,
@@ -100,10 +113,12 @@ export const createPullRequestActions = (
           )
         }
       }
+
       return cached.data
     }
 
     const inflightRequest = inflightPRRequests.get(cacheKey)
+
     if (
       inflightRequest &&
       (!options?.force || inflightRequest.force) &&
@@ -117,11 +132,13 @@ export const createPullRequestActions = (
     const requestStartedAt = Date.now()
     const requestStartedHostedReviewEntry = get().hostedReviewCache[hostedReviewCacheKey]
     const requestStartedPRRefreshState = get().prRefreshStates[cacheKey]
+
     const requestStartedPRRefreshToken = buildGitHubPRRefreshStateClearToken(
       requestStartedPRRefreshState,
       get().prRefreshSequences,
       cacheKey
     )
+
     prRequestGenerations.set(cacheKey, generation)
 
     const request = startPullRequestLookup({
@@ -150,6 +167,7 @@ export const createPullRequestActions = (
       generation,
       lookupHintKey
     })
+
     return request
   }
 })

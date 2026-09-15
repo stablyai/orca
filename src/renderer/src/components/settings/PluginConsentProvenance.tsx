@@ -52,6 +52,7 @@ function provenanceBadge(props: PluginConsentProvenanceProps): React.JSX.Element
       </Badge>
     )
   }
+
   if (props.source?.kind === 'bundled') {
     return (
       <Badge variant="outline">
@@ -59,6 +60,7 @@ function provenanceBadge(props: PluginConsentProvenanceProps): React.JSX.Element
       </Badge>
     )
   }
+
   if (props.source?.kind === 'local-path') {
     return (
       <Badge variant="outline">
@@ -66,6 +68,7 @@ function provenanceBadge(props: PluginConsentProvenanceProps): React.JSX.Element
       </Badge>
     )
   }
+
   return (
     <Badge variant="outline">
       {translate('auto.components.settings.PluginConsentProvenance.community', 'Community')}
@@ -77,6 +80,7 @@ function provenanceBadge(props: PluginConsentProvenanceProps): React.JSX.Element
 export function PluginConsentProvenance(props: PluginConsentProvenanceProps): React.JSX.Element {
   const { source } = props
   const pinned = shortCommit(source?.resolvedCommit)
+
   return (
     <div className="flex items-center gap-1.5">
       {provenanceBadge(props)}

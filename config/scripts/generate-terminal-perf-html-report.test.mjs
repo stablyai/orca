@@ -12,6 +12,7 @@ const tempDirs = []
 function makeTempDir() {
   const dir = mkdtempSync(join(tmpdir(), 'orca-terminal-perf-html-'))
   tempDirs.push(dir)
+
   return dir
 }
 
@@ -49,6 +50,7 @@ function writeReport(
       ]
     })
   )
+
   return reportPath
 }
 
@@ -104,6 +106,7 @@ describe('generate-terminal-perf-html-report', () => {
         'rendererDroppedBacklogs=0'
       ].join(' ')
     )
+
     const outputPath = join(makeTempDir(), 'report.html')
 
     const result = generateTerminalPerfHtmlReport({
@@ -131,6 +134,7 @@ describe('generate-terminal-perf-html-report', () => {
       'panes=8 parkedTabs=8 heapUsedMB=142.5 liveTerminals=1 livePaneManagers=1',
       'opencode-parked-memory'
     )
+
     const outputPath = join(makeTempDir(), 'report.html')
 
     const result = generateTerminalPerfHtmlReport({ inputPaths: [reportPath], outputPath })
@@ -157,6 +161,7 @@ describe('generate-terminal-perf-html-report', () => {
       ].join(' '),
       'opencode-scale-cross-workspace-100'
     )
+
     const outputPath = join(makeTempDir(), 'report.html')
 
     const result = generateTerminalPerfHtmlReport({ inputPaths: [reportPath], outputPath })
@@ -174,16 +179,19 @@ describe('generate-terminal-perf-html-report', () => {
       'opencode-scale-same-workspace-25',
       'main.json'
     )
+
     const middleReport = writeReport(
       'panes=25 median=30.0ms worst=140.0ms rendererDroppedBacklogs=0',
       'opencode-scale-same-workspace-25',
       'backpressure.json'
     )
+
     const finalReport = writeReport(
       'panes=25 median=20.0ms worst=100.0ms rendererDroppedBacklogs=0',
       'opencode-scale-same-workspace-25',
       'final.json'
     )
+
     const outputPath = join(makeTempDir(), 'report.html')
 
     const result = generateTerminalPerfHtmlReport({
@@ -215,6 +223,7 @@ describe('generate-terminal-perf-html-report', () => {
       'opencode-scale-same-workspace-25',
       'main.json'
     )
+
     const finalReport = makeTempDir()
     const finalPath = join(finalReport, 'final.json')
     writeFileSync(

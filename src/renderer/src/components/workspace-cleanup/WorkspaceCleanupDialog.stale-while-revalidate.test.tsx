@@ -32,6 +32,7 @@ vi.mock('@/store', () => {
   useAppStore.setState = (partial: unknown) => holders.store.setState(partial)
   useAppStore.subscribe = (listener: (state: unknown, previous: unknown) => void) =>
     holders.store.subscribe(listener)
+
   return { useAppStore }
 })
 
@@ -107,9 +108,11 @@ function installApi(cachedScan: WorkspaceCleanupScanResult | null): ScanRig {
           errors: []
         })
       }
+
       if (onProgress) {
         rig.progressCallbacks.push(onProgress)
       }
+
       return new Promise<WorkspaceCleanupScanResult>((resolve) => {
         rig.resolvers.push(resolve)
       })
@@ -131,10 +134,12 @@ function installApi(cachedScan: WorkspaceCleanupScanResult | null): ScanRig {
     ui: { set: vi.fn().mockResolvedValue(undefined) }
   }
   holders.rig = rig
+
   return rig
 }
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 async function flush(): Promise<void> {
@@ -213,11 +218,13 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     // Why: broad-scan dedupe lives in slice module state; an unresolved scan
     // left by one case would silently join into the next case's scan call.
     for (const resolve of holders.rig?.resolvers ?? []) {
       resolve({ scannedAt: NOW, candidates: [], errors: [] })
     }
+
     holders.rig = null
     await new Promise((resolve) => setTimeout(resolve, 0))
     container?.remove()
@@ -331,6 +338,7 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     if (rowCheckbox('alpha')?.getAttribute('aria-checked') !== 'true') {
       await act(async () => rowCheckbox('alpha')?.click())
     }
+
     expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
     const search = container?.querySelector<HTMLInputElement>('[aria-label="Search workspaces"]')
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
@@ -496,9 +504,11 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     await openDialog()
 
     await act(async () => rowCheckbox('active')?.click())
+
     const selectAll = container?.querySelector<HTMLElement>(
       '[aria-label="Select 1 safety-checked workspace"]'
     )
+
     expect(selectAll?.getAttribute('aria-checked')).toBe('false')
 
     await act(async () => selectAll?.click())

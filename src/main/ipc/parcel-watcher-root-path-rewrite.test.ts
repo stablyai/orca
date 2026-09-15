@@ -33,10 +33,12 @@ const { forkMock, existsSyncMock, mkdtempSyncMock, parcelSubscribeMock, rmSyncMo
 )
 
 vi.mock('node:child_process', () => ({ fork: forkMock }))
+
 vi.mock('node:fs', async (importOriginal) => {
   // Why: the supervisor resolves the watched root with realpathSync.native, so
   // keep the real implementation while stubbing the child-launch surface.
   const actual = await importOriginal<typeof NodeFs>()
+
   return {
     existsSync: existsSyncMock,
     mkdtempSync: mkdtempSyncMock,
@@ -44,6 +46,7 @@ vi.mock('node:fs', async (importOriginal) => {
     realpathSync: actual.realpathSync
   }
 })
+
 vi.mock('@parcel/watcher', () => ({ subscribe: parcelSubscribeMock }))
 
 import {
@@ -88,11 +91,13 @@ describe('watcher-process root path rewrite', () => {
     const id = acknowledgeWatcherSubscribe(child)
     await pending
     child.emit('message', { op: 'events', id, events })
+
     return delivered
   }
 
   it('rewrites resolved-alias paths for desktop watches', async () => {
     root = await createAliasedWatcherRoot('watcher-rewrite-')
+
     const delivered = await subscribeAndEmit(subscribeViaWatcherProcess, root.aliasRoot, [
       { type: 'update', path: join(root.realRoot, 'src', 'agent-edit.ts'), isDirectory: false }
     ])
@@ -111,6 +116,7 @@ describe('watcher-process root path rewrite', () => {
   // The runtime pool is also what a relay host uses for every SSH worktree watch.
   it('rewrites resolved-alias paths for runtime and relay watches', async () => {
     root = await createAliasedWatcherRoot('watcher-rewrite-')
+
     const delivered = await subscribeAndEmit(subscribeViaRuntimeWatcherProcess, root.aliasRoot, [
       { type: 'create', path: join(root.realRoot, 'docs', 'notes.md') }
     ])
@@ -123,6 +129,7 @@ describe('watcher-process root path rewrite', () => {
   it('leaves an unaliased root untouched', async () => {
     root = await createAliasedWatcherRoot('watcher-rewrite-')
     const eventPath = join(root.realRoot, 'src', 'agent-edit.ts')
+
     const delivered = await subscribeAndEmit(subscribeViaWatcherProcess, root.realRoot, [
       { type: 'update', path: eventPath, isDirectory: false }
     ])

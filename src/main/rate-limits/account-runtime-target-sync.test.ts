@@ -8,6 +8,7 @@ function createServiceTargets(
   codexTarget: RateLimitState['codexTarget']
 ) {
   const state = { claudeTarget, codexTarget } as RateLimitState
+
   return {
     getState: vi.fn(() => state),
     refreshClaudeForTarget: vi.fn(async () => state),
@@ -21,11 +22,13 @@ describe('createAccountRuntimeTargetSettingsSync', () => {
       { runtime: 'host', wslDistro: null },
       { runtime: 'host', wslDistro: null }
     )
+
     const settings = {
       ...getDefaultSettings('/tmp'),
       localAccountRuntime: 'auto' as const,
       localWindowsRuntimeDefault: { kind: 'wsl' as const, distro: 'Ubuntu' }
     }
+
     const syncSettings = createAccountRuntimeTargetSettingsSync(
       service,
       getDefaultSettings('/tmp'),
@@ -49,6 +52,7 @@ describe('createAccountRuntimeTargetSettingsSync', () => {
       { runtime: 'host', wslDistro: null },
       { runtime: 'host', wslDistro: null }
     )
+
     const settings = getDefaultSettings('/tmp')
     const syncSettings = createAccountRuntimeTargetSettingsSync(service, settings, 'win32')
 
@@ -64,14 +68,17 @@ describe('createAccountRuntimeTargetSettingsSync', () => {
       { runtime: 'wsl', wslDistro: 'Ubuntu' },
       { runtime: 'wsl', wslDistro: 'Ubuntu' }
     )
+
     const initialSettings = {
       ...getDefaultSettings('/tmp'),
       localAccountRuntime: 'host' as const
     }
+
     const settings = {
       ...initialSettings,
       localWindowsRuntimeDefault: { kind: 'wsl' as const, distro: 'Ubuntu' }
     }
+
     const syncSettings = createAccountRuntimeTargetSettingsSync(service, initialSettings, 'win32')
 
     await syncSettings(
@@ -89,10 +96,12 @@ describe('createAccountRuntimeTargetSettingsSync', () => {
       { runtime: 'host', wslDistro: null },
       { runtime: 'wsl', wslDistro: 'Ubuntu' }
     )
+
     const initialSettings = {
       ...getDefaultSettings('/tmp'),
       localWindowsRuntimeDefault: { kind: 'wsl' as const, distro: 'Ubuntu' }
     }
+
     const settings = getDefaultSettings('/tmp')
     const syncSettings = createAccountRuntimeTargetSettingsSync(service, initialSettings, 'win32')
 

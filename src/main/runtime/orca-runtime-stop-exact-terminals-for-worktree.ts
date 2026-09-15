@@ -21,23 +21,30 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     this.assertStableReadyGraph(graphEpoch)
     const expected = new Set(expectedPtyIds.filter((ptyId) => ptyId.length > 0))
+
     if (expected.size !== 1) {
       throw new Error('terminal_exact_stop_requires_single_pty')
     }
+
     const resolvedWorktrees = [...(await this.getResolvedWorktreeMap()).values()]
+
     const refreshedPtyLiveness =
       await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+
     if (!refreshedPtyLiveness) {
       throw new Error('terminal_liveness_unavailable')
     }
+
     const livePtyIds = this.getLivePtyIdsForWorktree(worktree.id, refreshedPtyLiveness)
     const targetOnly = opts.targetOnly === true
     const expectedIsLive = [...expected].every((ptyId) => livePtyIds.has(ptyId))
+
     if (targetOnly ? !expectedIsLive : !setsEqual(livePtyIds, expected)) {
       const error = Object.assign(new Error('terminal_stop_pty_set_mismatch'), {
         livePtyIds: [...livePtyIds].sort(),
         expectedPtyIds: [...expected].sort()
       })
+
       throw error
     }
 
@@ -46,6 +53,7 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
     }
 
     const stoppedPtyIds: string[] = []
+
     for (const ptyId of [...expected].sort()) {
       if (opts.keepHistory) {
         this.intentionalHandlelessPtyStops.set(
@@ -53,6 +61,7 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
           this.ptysById.get(ptyId)?.incarnationId ?? null
         )
       }
+
       try {
         if (!(await this.ptyController.stopAndWait(ptyId, { keepHistory: opts.keepHistory }))) {
           throw Object.assign(new Error('terminal_exact_stop_failed'), { ptyId })
@@ -60,9 +69,12 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
       } finally {
         this.intentionalHandlelessPtyStops.delete(ptyId)
       }
+
       stoppedPtyIds.push(ptyId)
     }
+
     const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+
     if (!postStopLiveness) {
       return {
         stopped: stoppedPtyIds.length,
@@ -72,8 +84,10 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
         postStopFailure: 'terminal_liveness_unavailable'
       }
     }
+
     const remainingLivePtyIds = this.getLivePtyIdsForWorktree(worktree.id, postStopLiveness)
     const stoppedTargetsStillLive = [...expected].filter((ptyId) => remainingLivePtyIds.has(ptyId))
+
     if (targetOnly ? stoppedTargetsStillLive.length > 0 : remainingLivePtyIds.size > 0) {
       return {
         stopped: stoppedPtyIds.length,
@@ -84,6 +98,7 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
         remainingLivePtyIds: [...remainingLivePtyIds].sort()
       }
     }
+
     return {
       stopped: stoppedPtyIds.length,
       stoppedPtyIds,
@@ -100,6 +115,7 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
     freshPtyIds?: ReadonlySet<string>
   ): Set<string> {
     const ptyIds = new Set<string>()
+
     for (const leaf of this.leaves.values()) {
       if (
         runtimeWorktreeIdsEqual(leaf.worktreeId, worktreeId) &&
@@ -110,6 +126,7 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
         ptyIds.add(leaf.ptyId)
       }
     }
+
     for (const pty of this.ptysById.values()) {
       if (
         runtimeWorktreeIdsEqual(pty.worktreeId, worktreeId) &&
@@ -119,23 +136,29 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
         ptyIds.add(pty.ptyId)
       }
     }
+
     return ptyIds
   }
 
   protected getTerminalHandlesForPtyId(ptyId: string): string[] {
     const handles = new Set(this.getExistingTerminalHandlesForPtyId(ptyId))
+
     for (const handle of this.getLeavesForPty(ptyId)
       .filter((candidate) => candidate.connected)
       .map((leaf) => this.issueHandle(leaf))) {
       handles.add(handle)
     }
+
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
+
     if (!pty) {
       throw Object.assign(new Error('terminal_worktree_sleep_handle_unavailable'), { ptyId })
     }
+
     if (handles.size === 0) {
       handles.add(this.issuePtyHandle(pty))
     }
+
     return [...handles].sort()
   }
 
@@ -145,14 +168,19 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
         .map((leaf) => this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId)))
         .filter((handle): handle is string => handle !== undefined)
     )
+
     const runtimeHandle = this.handleByPtyId.get(ptyId)
+
     if (runtimeHandle) {
       handles.add(runtimeHandle)
     }
+
     const incarnationHandle = this.handleByPtyIncarnation.get(ptyId)?.handle
+
     if (incarnationHandle) {
       handles.add(incarnationHandle)
     }
+
     return [...handles].sort()
   }
 
@@ -174,13 +202,16 @@ export class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWit
     const newlyCommittedPtyIds = [...new Set(args.ptyIds)]
       .filter((ptyId) => !args.committedPtyIds.has(ptyId))
       .sort()
+
     for (const ptyId of newlyCommittedPtyIds) {
       args.pendingPtyIds.delete(ptyId)
       args.committedPtyIds.add(ptyId)
     }
+
     if (newlyCommittedPtyIds.length === 0) {
       return
     }
+
     this.emitClientEvent({
       type: 'worktreeTerminalSleepState',
       worktreeId: args.worktreeId,

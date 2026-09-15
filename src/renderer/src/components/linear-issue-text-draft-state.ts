@@ -18,6 +18,7 @@ export function createLinearIssueTextDraftState(
   issue: LinearIssueTextDraftSource
 ): LinearIssueTextDraftState {
   const description = getLinearIssueDescription(issue)
+
   return {
     issueId: issue.id,
     sourceTitle: issue.title,
@@ -32,12 +33,15 @@ export function resolveLinearIssueTextDraftState(
   issue: LinearIssueTextDraftSource
 ): LinearIssueTextDraftState {
   const sourceDescription = getLinearIssueDescription(issue)
+
   if (state.issueId !== issue.id) {
     return createLinearIssueTextDraftState(issue)
   }
+
   if (state.sourceTitle === issue.title && state.sourceDescription === sourceDescription) {
     return state
   }
+
   return {
     issueId: state.issueId,
     sourceTitle: issue.title,

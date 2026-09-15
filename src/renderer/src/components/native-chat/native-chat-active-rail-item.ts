@@ -51,26 +51,32 @@ export function findActiveNativeChatRailItem({
   // Pinned to the bottom the newest turn is what is being read, whatever happens
   // to sit at the top edge — a short last turn would otherwise light its predecessor.
   const atBottom = scrollHeight - clientHeight - scrollTop <= NATIVE_CHAT_BOTTOM_THRESHOLD_PX
+
   if (atBottom) {
     const last = virtualItems.at(-1)
+
     return last === undefined ? previousActiveId : (slots[last.index]?.turnKey ?? null)
   }
 
   let fold: NativeChatRailVirtualItem | undefined
+
   for (const item of virtualItems) {
     if (item.start <= scrollTop && (fold === undefined || item.start > fold.start)) {
       fold = item
     }
   }
+
   // Scrolled above everything the window holds: the first windowed row is the
   // nearest thing to the fold.
   if (fold === undefined) {
     return slots[virtualItems[0]?.index ?? -1]?.turnKey ?? null
   }
+
   // The window lags the scroll by a commit, so a fold past every row it holds is
   // a stale read, not an answer. Holding the previous tick beats blanking one.
   if (fold.end <= scrollTop) {
     return previousActiveId
   }
+
   return slots[fold.index]?.turnKey ?? null
 }

@@ -25,6 +25,7 @@ function escapeHtml(value: string): string {
  */
 export function buildMarkdownExportHtml(args: BuildMarkdownExportHtmlArgs): string {
   const title = escapeHtml(args.title || 'Untitled')
+
   // Why (CSP): the generated HTML is loaded in an Electron BrowserWindow with
   // `javascript: true` (required for printToPDF layout). Without a CSP, any
   // <script> tag that leaked into the cloned rendered subtree — e.g. from a

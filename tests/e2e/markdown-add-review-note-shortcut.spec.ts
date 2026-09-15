@@ -62,13 +62,17 @@ test.describe('Markdown add-review-note shortcut', () => {
         // an icon menu that is brittle to locate; the store action is what it
         // dispatches anyway, and the shortcut under test is mode-independent.
         const store = window.__store
+
         if (!store) {
           throw new Error('window.__store is not available')
         }
+
         const state = store.getState()
+
         if (!state.activeFileId) {
           throw new Error('No active editor file')
         }
+
         state.setMarkdownViewMode(state.activeFileId, 'source')
       })
       const monaco = orcaPage.locator('.monaco-editor').first()
@@ -106,14 +110,18 @@ test.describe('Markdown add-review-note shortcut', () => {
         // is a separate file mode, not a view mode of the edit tab, and the
         // toolbar entry point is an icon menu that is brittle to locate.
         const store = window.__store
+
         if (!store) {
           throw new Error('window.__store is not available')
         }
+
         const state = store.getState()
         const file = state.openFiles.find((f) => f.id === state.activeFileId)
+
         if (!file) {
           throw new Error('No active editor file')
         }
+
         state.openMarkdownPreview(
           {
             filePath: file.filePath,
@@ -133,13 +141,17 @@ test.describe('Markdown add-review-note shortcut', () => {
         // Why: mirror a reader selecting rendered text — focus lands on the
         // preview's tabIndex=0 root and the DOM selection covers the block.
         const block = document.querySelector<HTMLElement>('[data-annotation-block-key]')
+
         if (!block) {
           throw new Error('No annotation block found in preview')
         }
+
         const focusable = block.closest<HTMLElement>('[tabindex]')
+
         if (!focusable) {
           throw new Error('No focusable preview root above the annotation block')
         }
+
         focusable.focus()
         const paragraph = block.querySelector('p') ?? block
         const selection = window.getSelection()

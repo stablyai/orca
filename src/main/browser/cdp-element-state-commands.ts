@@ -31,6 +31,7 @@ export class CdpElementStateCommands extends CdpBridgeCommandModule {
 
       const node = await this.resolveRef(guest, sender, element)
       const refSender = this.senderForRef(guest, node)
+
       const { nodeId } = (await refSender('DOM.requestNode', {
         backendNodeId: node.backendDOMNodeId
       })) as { nodeId: number }
@@ -86,6 +87,7 @@ export class CdpElementStateCommands extends CdpBridgeCommandModule {
       const { nodeId } = (await refSender('DOM.requestNode', {
         backendNodeId: node.backendDOMNodeId
       })) as { nodeId: number }
+
       const { object } = (await refSender('DOM.resolveNode', { nodeId })) as {
         object: { objectId: string }
       }
@@ -99,12 +101,14 @@ export class CdpElementStateCommands extends CdpBridgeCommandModule {
       if (currentState.value !== checked) {
         await this.scrollIntoView(refSender, node.backendDOMNodeId)
         const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
+
         const { cx, cy } = await this.getPageCoordinates(
           guest,
           node,
           localCenter.cx,
           localCenter.cy
         )
+
         await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy })
         await sender('Input.dispatchMouseEvent', {
           type: 'mousePressed',

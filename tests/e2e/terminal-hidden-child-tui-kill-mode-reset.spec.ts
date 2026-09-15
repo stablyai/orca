@@ -45,6 +45,7 @@ for (const exitMode of ['normal', 'sigkill'] as const) {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const shellTabId = (await getActiveTabId(orcaPage))!
+
     const child = [
       "process.stdin.setRawMode?.(true); process.stdin.resume(); process.stdout.write('\\x1b[?1049h\\x1b[?1003h\\x1b[?1006h\\x1b[?25lCHILD_TUI_STARTED\\r\\n')",
       ...(exitMode === 'normal'
@@ -54,23 +55,29 @@ for (const exitMode of ['normal', 'sigkill'] as const) {
         : []),
       "setInterval(() => process.stdout.write('\\x1b[2J\\x1b[HCHILD_TUI_FRAME\\r\\n'), 80)"
     ].join(';')
+
     const parent = [
       `const {spawn}=require('node:child_process'); const child=spawn(process.execPath,['-e',${JSON.stringify(child)}],{stdio:'inherit'});`,
       "process.stdout.write('CHILD_TUI_PID_' + child.pid + '\\r\\n');",
       "child.on('exit', () => process.stdout.write('\\r\\nCHILD_TUI_KILLED\\r\\n'))"
     ].join(' ')
+
     const command = stageNodeScriptForTerminal(parent, { prefix: 'orca-child-tui-kill' }).command
+
     const tuiTabId = await orcaPage.evaluate(
       ({ command }) => {
         const state = window.__store?.getState()
         const worktreeId = state?.activeWorktreeId
+
         if (!state || !worktreeId) {
           throw new Error('store/worktree unavailable')
         }
+
         const tab = state.createTab(worktreeId)
         state.queueTabStartupCommand(tab.id, { command })
         state.setActiveTab(tab.id)
         state.setActiveTabType('terminal')
+
         return tab.id
       },
       { command }
@@ -86,6 +93,7 @@ for (const exitMode of ['normal', 'sigkill'] as const) {
     await expect
       .poll(async () => {
         const match = (await getTerminalContent(orcaPage, 6_000)).match(/CHILD_TUI_PID_(\d+)/)
+
         return match?.[1] ?? null
       })
       .not.toBeNull()
@@ -94,15 +102,18 @@ for (const exitMode of ['normal', 'sigkill'] as const) {
     await activateTerminalTab(orcaPage, shellTabId)
     const shellPtyId = await waitForActivePanePtyId(orcaPage, 30_000)
     const exitSignal = exitMode === 'normal' ? 'SIGTERM' : 'SIGKILL'
+
     const killCommand = stageNodeScriptForTerminal(`process.kill(${childPid!}, '${exitSignal}')`, {
       prefix: 'orca-child-tui-external-kill'
     }).command
+
     await execInTerminal(orcaPage, shellPtyId, killCommand)
     await expect
       .poll(
         () =>
           orcaPage.evaluate(async (ptyId) => {
             const processName = await window.api.pty.getForegroundProcess(ptyId)
+
             return processName?.toLowerCase() ?? null
           }, tuiPtyId),
         { timeout: 8_000 }
@@ -112,9 +123,11 @@ for (const exitMode of ['normal', 'sigkill'] as const) {
       ({ paneKey, tabId }) => {
         const state = window.__store?.getState()
         const worktreeId = state?.activeWorktreeId
+
         if (!state || !worktreeId) {
           throw new Error('store/worktree unavailable')
         }
+
         state.setAgentStatus(
           paneKey,
           { state: 'working', prompt: 'stale hidden TUI status', agentType: 'codex' },
@@ -130,8 +143,10 @@ for (const exitMode of ['normal', 'sigkill'] as const) {
 
     const revealedPtyId = await orcaPage.evaluate((tabId) => {
       const manager = window.__paneManagers?.get(tabId)
+
       return manager?.getActivePane?.()?.container?.dataset?.ptyId ?? null
     }, tuiTabId)
+
     expect(revealedPtyId).not.toBeNull()
     await expect
       .poll(async () => {
@@ -139,6 +154,7 @@ for (const exitMode of ['normal', 'sigkill'] as const) {
           (ptyId) => window.api.pty.getMainBufferSnapshot(ptyId, { scrollbackRows: 5000 }),
           revealedPtyId!
         )
+
         return snapshot?.terminalOwner === 'shell' && snapshot.alternateScreen === false
       })
       .toBe(true)
@@ -147,6 +163,7 @@ for (const exitMode of ['normal', 'sigkill'] as const) {
         orcaPage.evaluate((tabId) => {
           const manager = window.__paneManagers?.get(tabId)
           const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+
           return {
             buffer: pane?.terminal.buffer.active.type,
             mouse: pane?.terminal.modes.mouseTrackingMode
@@ -172,6 +189,7 @@ for (const exitMode of ['normal', 'sigkill'] as const) {
     await expect
       .poll(async () => {
         const writes = await readTerminalPtyWriteEntries(electronApp)
+
         return writes.some(
           (entry) => entry.id === revealedPtyId && entry.data.includes(shellInputMarker)
         )
@@ -194,6 +212,7 @@ for (const exitMode of ['normal', 'sigkill'] as const) {
     const ptyWrites = (await readTerminalPtyWriteEntries(electronApp))
       .filter((entry) => entry.id === revealedPtyId)
       .map((entry) => entry.data)
+
     const escape = String.fromCharCode(27)
     expect(ptyWrites.some((data) => data.includes(`${escape}[<`))).toBe(false)
     expect(ptyWrites.some((data) => data.includes(`${escape}[M`))).toBe(false)
@@ -201,11 +220,13 @@ for (const exitMode of ['normal', 'sigkill'] as const) {
     const terminalState = await orcaPage.evaluate((tabId) => {
       const manager = window.__paneManagers?.get(tabId)
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+
       return {
         buffer: pane?.terminal.buffer.active.type,
         mouse: pane?.terminal.modes.mouseTrackingMode
       }
     }, tuiTabId)
+
     expect(terminalState).toEqual({ buffer: 'normal', mouse: 'none' })
     expect(await getTerminalContent(orcaPage, 6_000)).not.toMatch(/\[<\d+;\d+;\d+[Mm]/)
 

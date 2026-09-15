@@ -62,15 +62,20 @@ function replyToCreates(...replies: CreateReply[]): void {
     if (method === 'agentSession.createSupport') {
       return { supported: true }
     }
+
     if (method !== 'agentSession.create') {
       return { ok: true, page: { fence: 1 } }
     }
+
     const reply = replies[Math.min(index, replies.length - 1)]
     index += 1
+
     if (!reply.ok) {
       return reply
     }
+
     const sessionId = (params as { envelope: { sessionId: string } }).envelope.sessionId
+
     return { ok: true, replayed: index > 1, fence: 1, value: { sessionId, fence: 1 } }
   })
 }
@@ -144,9 +149,11 @@ describe('legacy terminal fallback after a refused structured create', () => {
     replyToCreates(refused('agent_session_operation_unknown'), { ok: true })
 
     const launch = startStructuredAgentLaunch(worktreeId, 'codex')
+
     const fallbackRan = launch.claimDefinitiveRefusalFallback(() => {
       legacyTerminals.push('legacy-terminal')
     })
+
     mocks.refresh
       .mockResolvedValueOnce([])
       .mockResolvedValue([publishedSnapshot(worktreeId, launch.sessionId)])
@@ -168,6 +175,7 @@ describe('legacy terminal fallback after a refused structured create', () => {
     replyToCreates(refused('structured_agent_session_unsupported'))
 
     const launch = startStructuredAgentLaunch(worktreeId, 'codex')
+
     const fallbackRan = launch.claimDefinitiveRefusalFallback(() => {
       legacyTerminals.push('legacy-terminal')
     })
@@ -197,6 +205,7 @@ describe('legacy terminal fallback after a refused structured create', () => {
     )
 
     const launch = startStructuredAgentLaunch('wt-old-runtime', 'codex')
+
     const fallbackRan = launch.claimDefinitiveRefusalFallback(() => {
       legacyTerminals.push('legacy-terminal')
     })

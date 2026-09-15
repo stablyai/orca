@@ -30,6 +30,7 @@ describe('verifyImeEngagementReceipts', () => {
   it('rejects an empty receipt, which is what a fully skipped run leaves behind', () => {
     const problems = verifyImeEngagementReceipts('')
     expect(problems).toHaveLength(EXPECTED_NATIVE_IME_TESTS.length)
+
     for (const test of EXPECTED_NATIVE_IME_TESTS) {
       expect(problems.some((problem) => problem.includes(test))).toBe(true)
     }
@@ -52,6 +53,7 @@ describe('verifyImeEngagementReceipts', () => {
     const problems = verifyImeEngagementReceipts(
       `${receipt(firstTest, { compositionStart: 0 })}\n${receipt(secondTest)}\n${receipt(thirdTest)}\n`
     )
+
     expect(problems).toEqual([
       `"${firstTest}" recorded no compositionstart — the IME never engaged`
     ])
@@ -61,6 +63,7 @@ describe('verifyImeEngagementReceipts', () => {
     const problems = verifyImeEngagementReceipts(
       `${receipt(firstTest, { hangulComposition: 0 })}\n${receipt(secondTest)}\n${receipt(thirdTest)}\n`
     )
+
     expect(problems).toEqual([
       `"${firstTest}" recorded no Hangul composition data — the engine produced no syllables`
     ])
@@ -70,6 +73,7 @@ describe('verifyImeEngagementReceipts', () => {
     const problems = verifyImeEngagementReceipts(
       `${receipt(firstTest)}\n${receipt(secondTest)}\n${receipt(thirdTest)}\n${receipt('some new scenario')}\n`
     )
+
     expect(problems).toEqual([
       'unexpected engagement receipt for "some new scenario" — update EXPECTED_NATIVE_IME_TESTS'
     ])
@@ -79,6 +83,7 @@ describe('verifyImeEngagementReceipts', () => {
     const problems = verifyImeEngagementReceipts(
       `${receipt(firstTest)}\n{"test":"trunc\n${receipt(secondTest)}\n${receipt(thirdTest)}\n`
     )
+
     expect(problems).toEqual(['malformed receipt line: {"test":"trunc'])
   })
 })

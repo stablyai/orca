@@ -41,6 +41,7 @@ export function collectManagedTrustEntries(
       if (!isManagedCommand(hook.command)) {
         return
       }
+
       const entry = createCodexHookTrustEntry(
         sourcePath,
         eventName,
@@ -49,11 +50,13 @@ export function collectManagedTrustEntries(
         definition,
         hook
       )
+
       if (entry) {
         entries.push(entry)
       }
     })
   })
+
   return entries
 }
 
@@ -66,12 +69,15 @@ export function removeSelfComputedMatchingTrustEntries(
   }
 
   const existingEntries = readHookTrustEntries(configPath)
+
   const ownedKeys = entries
     .map((entry) => {
       const key = computeTrustKey(entry)
+
       return existingEntries.get(key)?.trustedHash === computeTrustedHash(entry) ? key : null
     })
     .filter((key): key is string => key !== null)
+
   if (ownedKeys.length > 0) {
     removeHookTrustEntries(configPath, ownedKeys)
   }
@@ -88,18 +94,24 @@ export function removeStaleRuntimeHookTrustEntries(
       entry.trustedHash ?? computeTrustedHash(entry)
     ])
   )
+
   const canonicalRuntimeHooksPath = getCodexExplicitHomeHookSourcePath(runtimeHooksPath)
   const staleKeys: string[] = []
+
   for (const [key, state] of readHookTrustEntries(tomlPath)) {
     const parsed = parseTrustKey(key)
+
     if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, canonicalRuntimeHooksPath)) {
       continue
     }
+
     if (expectedHashes.get(normalizeHookTrustKeyForLookup(key)) === state.trustedHash) {
       continue
     }
+
     staleKeys.push(key)
   }
+
   if (staleKeys.length > 0) {
     removeHookTrustEntries(tomlPath, staleKeys)
   }

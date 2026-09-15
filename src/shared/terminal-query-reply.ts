@@ -30,29 +30,38 @@ const ESC = String.fromCharCode(0x1b)
 // following keypress inside a live colour-query deferral, and we keep the reply grammar
 // complete rather than special-casing an unresolvable ambiguity.
 const CPR_OR_DSR_PREFIX_RE = new RegExp('^\\u001b\\[\\??[0-9;]*[Rn]')
+
 const DEVICE_ATTRIBUTES_PREFIX_RE = new RegExp('^\\u001b\\[[?>=]?[0-9;]*c')
+
 // 4/6 = pixel-size reports, 8 = text-area size in characters (answer to CSI 18t).
 const WINDOW_SIZE_REPORT_PREFIX_RE = new RegExp('^\\u001b\\[[468];[0-9]+;[0-9]+t')
+
 // `?` optional: private-mode reports carry it (DECRPM), ANSI-mode reports don't.
 const DECRPM_PREFIX_RE = new RegExp('^\\u001b\\[\\??[0-9;]*\\$y')
+
 // Kitty keyboard protocol flags report: CSI ? flags u. The `?` distinguishes it
 // from kitty-protocol *keystrokes* (CSI code;mods u), which must stay batched.
 const KITTY_FLAGS_PREFIX_RE = new RegExp('^\\u001b\\[\\?[0-9]+u')
+
 // OSC color/title responses: ESC ] Ps ; body ST (ST = BEL or ESC backslash).
 const OSC_RESPONSE_PREFIX_RE = new RegExp(
   '^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)'
 )
+
 // DCS-framed reports xterm emits: DECRQSS "ESC P 1 $ r Pt ST" / "ESC P 0 $ r ST"
 // (vim queries cursor style this way) and XTVERSION "ESC P > | text ST".
 const DCS_RESPONSE_PREFIX_RE = new RegExp(
   '^\\u001bP(?:[01]\\$r[^\\u001b]*|>\\|[^\\u001b]*)\\u001b\\\\'
 )
+
 // Private-mode DSR (CSI ? … n) — e.g. color-scheme `?997;1n` — often lands cooked.
 // Prefix form peels consecutive replies out of one coalesced payload.
 const COOKED_ECHO_RISK_PRIVATE_DSR_PREFIX_RE = new RegExp('^\\u001b\\[\\?[0-9;]*n')
+
 const COOKED_ECHO_RISK_OSC_PREFIX_RE = new RegExp(
   '^\\u001b\\][0-9]+;[^\\u0007\\u001b]*(?:\\u0007|\\u001b\\\\)'
 )
+
 const QUERY_REPLY_PREFIX_RES = [
   CPR_OR_DSR_PREFIX_RE,
   DEVICE_ATTRIBUTES_PREFIX_RE,
@@ -68,13 +77,17 @@ function terminalQueryReplyEnd(data: string, start: number): number {
   if (start >= data.length || data[start] !== ESC) {
     return -1
   }
+
   const slice = data.slice(start)
+
   for (const re of QUERY_REPLY_PREFIX_RES) {
     const match = re.exec(slice)
+
     if (match?.[0]) {
       return start + match[0].length
     }
   }
+
   return -1
 }
 
@@ -97,15 +110,20 @@ function cookedEchoSafeReplyEnd(data: string, start: number): number {
   if (start >= data.length || data[start] !== ESC) {
     return -1
   }
+
   const slice = data.slice(start)
   const dsr = COOKED_ECHO_RISK_PRIVATE_DSR_PREFIX_RE.exec(slice)
+
   if (dsr?.[0]) {
     return start + dsr[0].length
   }
+
   const osc = COOKED_ECHO_RISK_OSC_PREFIX_RE.exec(slice)
+
   if (osc?.[0]) {
     return start + osc[0].length
   }
+
   return -1
 }
 
@@ -119,16 +137,21 @@ export function extractOnlyCookedEchoSafeQueryReplies(data: string): string[] | 
   if (data.length < 4 || data[0] !== ESC) {
     return null
   }
+
   const replies: string[] = []
   let offset = 0
+
   while (offset < data.length) {
     const end = cookedEchoSafeReplyEnd(data, offset)
+
     if (end === -1) {
       return null
     }
+
     replies.push(data.slice(offset, end))
     offset = end
   }
+
   return replies.length > 0 ? replies : null
 }
 
@@ -137,16 +160,21 @@ export function extractOnlyTerminalQueryReplies(data: string): string[] | null {
   if (data.length < 3 || data[0] !== ESC) {
     return null
   }
+
   const replies: string[] = []
   let offset = 0
+
   while (offset < data.length) {
     const end = terminalQueryReplyEnd(data, offset)
+
     if (end === -1) {
       return null
     }
+
     replies.push(data.slice(offset, end))
     offset = end
   }
+
   return replies.length > 0 ? replies : null
 }
 
@@ -160,5 +188,6 @@ export function extractOnlyTerminalQueryReplies(data: string): string[] | null {
  */
 export function needsCookedEchoSafeQueryReply(data: string): boolean {
   const replies = extractOnlyCookedEchoSafeQueryReplies(data)
+
   return replies !== null && replies.length === 1
 }

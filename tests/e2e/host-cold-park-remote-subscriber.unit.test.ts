@@ -42,13 +42,19 @@ import { createTerminalTabActivationOrder } from '../../src/renderer/src/compone
 import type { TerminalTab } from '../../src/shared/terminal-tab-types'
 
 const WORKTREE_ID = 'repo-1::/tmp/wt'
+
 /** Host-owned, snapshot-backed local daemon PTY: the exact shape the report's
  *  host had (a local pane a paired client was watching). */
 const ptyIdFor = (n: number): string => `${WORKTREE_ID}@@aaaaaaa${n}`
+
 const SUBSCRIBED_TAB_ID = 'tab-remote-viewed'
+
 const MARKER_BEFORE_PARK = 'STA2854-BEFORE-PARK'
+
 const MARKER_AFTER_PARK = 'STA2854-AFTER-PARK'
+
 const MARKER_AFTER_RECONNECT = 'STA2854-AFTER-RECONNECT'
+
 const CLIENT_INPUT = 'echo STA2854-INPUT\r'
 
 // ---------------------------------------------------------------------------
@@ -63,9 +69,11 @@ function tabModel(id: string, ptyId: string): TerminalTab {
  *  hot-retain limit + 1 hidden host tabs, one of them remotely subscribed. */
 function hiddenHostTabs(): TerminalTab[] {
   const tabs: TerminalTab[] = [tabModel(SUBSCRIBED_TAB_ID, ptyIdFor(0))]
+
   for (let i = 1; i <= TERMINAL_TAB_HOT_RETAIN_LIMIT + 1; i += 1) {
     tabs.push(tabModel(`tab-${i}`, ptyIdFor(i)))
   }
+
   return tabs
 }
 
@@ -93,6 +101,7 @@ describe('STA-2854 A: host cold-park policy vs an active remote subscriber', () 
     // Pass 2: exactly the cold-park hysteresis later. The remote client has
     // been driving this tab the whole time; the policy has no input for that.
     const nowMs = t0 + TERMINAL_TAB_COLD_PARK_DELAY_MS
+
     const candidates = buildTerminalTabColdParkCandidates({
       terminalTabs: tabs,
       assignments: new Map(),
@@ -104,6 +113,7 @@ describe('STA-2854 A: host cold-park policy vs an active remote subscriber', () 
       activationOrder,
       nowMs
     })
+
     const subscribedCandidate = candidates.find((c) => c.id === SUBSCRIBED_TAB_ID)!
 
     expect(
@@ -123,6 +133,7 @@ describe('STA-2854 A: host cold-park policy vs an active remote subscriber', () 
       parkingEnabled: true,
       nowMs
     })
+
     // Eligible AND actually evicted: it is outside the hot-retain set.
     expect(parked.has(SUBSCRIBED_TAB_ID)).toBe(true)
 
@@ -162,6 +173,7 @@ describe('STA-2854 A: host cold-park policy vs an active remote subscriber', () 
     // the tab locally visible, so it re-enters the candidate list with its
     // original hidden stamp — already past the hysteresis on the first pass.
     const remountNowMs = t0 + 4 * 60 * 60_000
+
     const candidates = buildTerminalTabColdParkCandidates({
       terminalTabs: tabs,
       assignments: new Map(),
@@ -173,6 +185,7 @@ describe('STA-2854 A: host cold-park policy vs an active remote subscriber', () 
       activationOrder,
       nowMs: remountNowMs
     })
+
     const subscribedCandidate = candidates.find((c) => c.id === SUBSCRIBED_TAB_ID)!
     expect(subscribedCandidate.hiddenSinceMs).toBe(t0)
     expect(remountNowMs - subscribedCandidate.hiddenSinceMs!).toBeGreaterThan(
@@ -217,9 +230,11 @@ function createHostProvider() {
   const attachCalls: string[] = []
   const writes: [string, string][] = []
   let runtime: OrcaRuntimeService | null = null
+
   const controller = {
     write: (id: string, text: string) => {
       writes.push([id, text])
+
       return true
     },
     kill: () => true,
@@ -235,6 +250,7 @@ function createHostProvider() {
     attach: async (id: string) => {
       attachCalls.push(id)
       session.attached = true
+
       return true
     },
     serializeProviderBuffer: async () => ({
@@ -245,6 +261,7 @@ function createHostProvider() {
       source: 'headless' as const
     })
   }
+
   return {
     ptyId,
     controller,
@@ -258,8 +275,10 @@ function createHostProvider() {
       if (!session.attached) {
         return false
       }
+
       session.screen += data
       runtime?.onPtyData(ptyId, data, Date.now())
+
       return true
     }
   }
@@ -268,17 +287,21 @@ function createHostProvider() {
 function startMultiplex(runtime: OrcaRuntimeService, connectionId: string) {
   const messages: { result?: { type?: string; streamId?: number | null } }[] = []
   const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
   const handlers = new Map<
     number,
     (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
   >()
+
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
   const request: RpcRequest = {
     id: `req-${connectionId}`,
     authToken: 'tok',
     method: 'terminal.multiplex',
     params: {}
   }
+
   const dispatchPromise = dispatcher.dispatchStreaming(
     request,
     (msg) => {
@@ -288,6 +311,7 @@ function startMultiplex(runtime: OrcaRuntimeService, connectionId: string) {
       connectionId,
       sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => {
         binaryFrames.push(bytes)
+
         return true
       },
       registerBinaryStreamHandler: (
@@ -295,6 +319,7 @@ function startMultiplex(runtime: OrcaRuntimeService, connectionId: string) {
         handler: (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
       ) => {
         handlers.set(streamId, handler)
+
         return () => {
           if (handlers.get(streamId) === handler) {
             handlers.delete(streamId)
@@ -303,6 +328,7 @@ function startMultiplex(runtime: OrcaRuntimeService, connectionId: string) {
       }
     }
   )
+
   return { messages, binaryFrames, handlers, dispatchPromise }
 }
 
@@ -368,9 +394,11 @@ describe('STA-2854 B: remote subscriber survives a fully unmounted host renderer
     const provider = createHostProvider()
     provider.bind(runtime)
     runtime.setPtyController(provider.controller as never)
+
     const record = internals(runtime).recordPtyWorktree(provider.ptyId, WORKTREE_ID, {
       connected: true
     })
+
     const handle = internals(runtime).issuePtyHandle(record)
     // The park, at its strictest: no authoritative window exists, so a renderer
     // mount request is impossible — more unmounted than a cold-parked pane.
@@ -427,9 +455,11 @@ describe('STA-2854 B: remote subscriber survives a fully unmounted host renderer
     const provider = createHostProvider()
     provider.bind(runtime)
     runtime.setPtyController(provider.controller as never)
+
     const record = internals(runtime).recordPtyWorktree(provider.ptyId, WORKTREE_ID, {
       connected: true
     })
+
     const handle = internals(runtime).issuePtyHandle(record)
     vi.spyOn(runtime, 'requestRendererTerminalTabMount').mockReturnValue(false)
 
@@ -470,9 +500,11 @@ describe('STA-2854 C: an unattached host PTY with no mountable renderer pane', (
     provider.session.attached = false
     provider.bind(runtime)
     runtime.setPtyController(provider.controller as never)
+
     const record = internals(runtime).recordPtyWorktree(provider.ptyId, WORKTREE_ID, {
       connected: true
     })
+
     const handle = internals(runtime).issuePtyHandle(record)
     const mountSpy = vi.spyOn(runtime, 'requestRendererTerminalTabMount').mockReturnValue(false)
 

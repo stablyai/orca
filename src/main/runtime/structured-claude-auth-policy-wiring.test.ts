@@ -37,6 +37,7 @@ describe('structured Claude auth policy wiring', () => {
 
     afterEach(async () => {
       await stopStructuredAgentSessionRuntime()
+
       if (stateDirectory) {
         await rm(stateDirectory, { recursive: true, force: true })
         stateDirectory = null

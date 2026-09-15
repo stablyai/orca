@@ -12,6 +12,7 @@ import {
 } from './worktree-base-fallback-notice'
 
 const initialState = useAppStore.getInitialState()
+
 let root: Root | null = null
 
 async function renderDialog(activeModal: AppState['activeModal'] = 'none'): Promise<void> {
@@ -31,9 +32,11 @@ function getButton(label: string): HTMLButtonElement {
   const button = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
     (candidate) => candidate.textContent === label
   )
+
   if (!button) {
     throw new Error(`Button not found: ${label}`)
   }
+
   return button
 }
 

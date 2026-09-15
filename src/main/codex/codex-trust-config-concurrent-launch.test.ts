@@ -18,14 +18,20 @@ const testState = {
 vi.mock('node:os', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const actual = await vi.importActual<typeof import('node:os')>('node:os')
+
   return { ...actual, homedir: () => testState.fakeHomeDir }
 })
 
 const { CodexAppServerUnsupportedError } = await import('./codex-app-server-client')
+
 const { codexAppServerCapabilityCache } = await import('./codex-app-server-capability-cache')
+
 const { _internals, grantManagedCodexHookTrust } = await import('./codex-hook-trust-grant')
+
 const { markCodexProjectTrusted } = await import('../agent-trust-presets')
+
 const { setCodexTrustGrantTelemetry } = await import('./codex-trust-grant-telemetry')
+
 const {
   computeTrustKey,
   computeTrustedHash,
@@ -53,11 +59,13 @@ afterEach(() => {
   _internals.setGrantSessionRunner(null)
   setCodexTrustGrantTelemetry(() => {})
   codexAppServerCapabilityCache.clear()
+
   if (testState.previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = testState.previousUserDataPath
   }
+
   delete process.env.ORCA_DISABLE_CODEX_TRUST_RPC
   rmSync(testState.fakeHomeDir, { recursive: true, force: true })
   rmSync(testState.userDataDir, { recursive: true, force: true })
@@ -107,20 +115,24 @@ function writingSessionRunner(args: {
   ): Promise<CodexHookTrustGrantSessionResult> => {
     const granted = args.entries.map((entry) => {
       const key = computeTrustKey(entry)
+
       return {
         key,
         normalizedKey: normalizeHookTrustKeyForLookup(key),
         trustedHash: `${args.hashPrefix}${entry.eventLabel}`
       }
     })
+
     await tick()
     upsertHookTrustEntries(
       args.tomlPath,
       args.entries.map((entry, index) => ({ ...entry, trustedHash: granted[index].trustedHash }))
     )
+
     if (args.gate) {
       await args.gate
     }
+
     if (args.outcome === 'verify-failed') {
       return {
         outcome: 'verify-failed',
@@ -128,6 +140,7 @@ function writingSessionRunner(args: {
         reasonClass: 'post-grant-mismatch'
       }
     }
+
     return { outcome: 'granted', wroteTrust: true, entries: granted }
   }
 }
@@ -144,6 +157,7 @@ describe('two Codex pane launches against one config.toml', () => {
     let maxSessionsInFlight = 0
     let call = 0
     let releaseFirst!: () => void
+
     const firstGate = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
@@ -153,6 +167,7 @@ describe('two Codex pane launches against one config.toml', () => {
       maxSessionsInFlight = Math.max(maxSessionsInFlight, sessionsInFlight)
       call += 1
       const isFirst = call === 1
+
       try {
         return await writingSessionRunner({
           tomlPath,
@@ -188,6 +203,7 @@ describe('two Codex pane launches against one config.toml', () => {
     const entries = [managedEntry('session_start')]
     const workspace = mkdtempSync(join(tmpdir(), 'orca-concurrent-ws-'))
     let releaseSession!: () => void
+
     const sessionGate = new Promise<void>((resolve) => {
       releaseSession = resolve
     })
@@ -231,9 +247,11 @@ describe('concurrent capability probes against a cold host', () => {
     const entries = [managedEntry('session_start')]
     let sessions = 0
     let releaseProbe!: () => void
+
     const probeGate = new Promise<void>((resolve) => {
       releaseProbe = resolve
     })
+
     _internals.setGrantSessionRunner(async () => {
       sessions += 1
       await probeGate
@@ -241,12 +259,14 @@ describe('concurrent capability probes against a cold host', () => {
     })
 
     const first = grantManagedCodexHookTrust(buildPlan(entries))
+
     const second = grantManagedCodexHookTrust(
       buildPlan([{ ...entries[0], sourcePath: join(secondHome, 'hooks.json') }], {
         runtimeHomePath: secondHome,
         tomlPath: join(secondHome, 'config.toml')
       })
     )
+
     await tick()
     await tick()
     expect(sessions).toBe(1)
@@ -262,10 +282,12 @@ describe('concurrent capability probes against a cold host', () => {
     mkdirSync(secondHome, { recursive: true })
     writeFileSync(join(secondHome, 'hooks.json'), '{"hooks":{}}\n', 'utf-8')
     const waiterToml = join(secondHome, 'config.toml')
+
     const waiterEntry = {
       ...managedEntry('session_start'),
       sourcePath: join(secondHome, 'hooks.json')
     }
+
     // Self-computed trust the fallback lane already wrote for this pane.
     upsertHookTrustEntries(waiterToml, [
       { ...waiterEntry, trustedHash: computeTrustedHash(waiterEntry) }
@@ -273,18 +295,22 @@ describe('concurrent capability probes against a cold host', () => {
     const before = readFileSync(waiterToml, 'utf-8')
 
     let releaseProbe!: () => void
+
     const probeGate = new Promise<void>((resolve) => {
       releaseProbe = resolve
     })
+
     _internals.setGrantSessionRunner(async () => {
       await probeGate
       throw new CodexAppServerUnsupportedError('hooks/grantTrust: method not found')
     })
 
     const first = grantManagedCodexHookTrust(buildPlan([managedEntry('session_start')]))
+
     const waiter = grantManagedCodexHookTrust(
       buildPlan([waiterEntry], { runtimeHomePath: secondHome, tomlPath: waiterToml })
     )
+
     await tick()
     releaseProbe()
     await first
@@ -347,16 +373,20 @@ describe('host-scoped transient cooldown', () => {
     const okPlan = buildPlan([okEntry], { runtimeHomePath: secondHome, tomlPath: okToml })
 
     let releaseFailure!: () => void
+
     const failureGate = new Promise<void>((resolve) => {
       releaseFailure = resolve
     })
+
     let sessions = 0
     _internals.setGrantSessionRunner(async (request) => {
       sessions += 1
+
       if (request.hooksListCwd === runtimeHomeDir) {
         await failureGate
         throw new Error('spawn ETIMEDOUT')
       }
+
       return writingSessionRunner({
         tomlPath: okToml,
         entries: [okEntry],
@@ -385,6 +415,7 @@ describe('reentrancy under concurrency', () => {
   it('completes a grant nested inside an installer that already holds both lanes', async () => {
     const { runExclusivelyForCodexTrustConfig } =
       await import('./codex-trust-config-mutation-queue')
+
     const entries = [managedEntry('session_start')]
     const tomlPath = join(runtimeHomeDir, 'config.toml')
     const systemToml = join(testState.fakeHomeDir, '.codex', 'config.toml')
@@ -392,15 +423,18 @@ describe('reentrancy under concurrency', () => {
       writingSessionRunner({ tomlPath, entries, hashPrefix: 'sha256:nested-' })
     )
     const workspace = mkdtempSync(join(tmpdir(), 'orca-nested-ws-'))
+
     try {
       // Installer lock order: runtime then system, with a grant and a preset
       // write nested inside both.
       const outcome = await runExclusivelyForCodexTrustConfig(tomlPath, () =>
         runExclusivelyForCodexTrustConfig(systemToml, async () => {
           await markCodexProjectTrusted(workspace)
+
           return grantManagedCodexHookTrust(buildPlan(entries))
         })
       )
+
       expect(outcome).toMatchObject({ lane: 'rpc' })
       expect(readFileSync(tomlPath, 'utf-8')).toContain('trust_level = "trusted"')
     } finally {

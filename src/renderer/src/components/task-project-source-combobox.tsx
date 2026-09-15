@@ -44,7 +44,9 @@ function renderTriggerLabel(
       </span>
     )
   }
+
   const selectedProjectGroups = selectedTaskProjectGroups(groups, selected)
+
   if (selectedProjectGroups.length === groups.length) {
     return (
       <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -52,7 +54,9 @@ function renderTriggerLabel(
       </span>
     )
   }
+
   const [first, second, ...rest] = selectedProjectGroups
+
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
       {first ? (
@@ -76,6 +80,7 @@ function getProjectDetail(
 ): string {
   const selectedSource = getSelectedTaskProjectSource(group, selected)
   const hostLabel = showHostLabels ? getRepoHostLabel?.(selectedSource)?.trim() : ''
+
   if (hasMultipleTaskProjectHostsInGroup(group)) {
     const hostCount = translate(
       'auto.components.task.project.source.combobox.hostCount',
@@ -84,8 +89,10 @@ function getProjectDetail(
         value0: String(group.sources.length)
       }
     )
+
     return hostLabel ? `${hostLabel} · ${hostCount}` : hostCount
   }
+
   return hostLabel ? `${hostLabel} · ${selectedSource.path}` : selectedSource.path
 }
 
@@ -107,6 +114,7 @@ export default function TaskProjectSourceCombobox({
   const [query, setQuery] = useState('')
   const [commandValue, setCommandValue] = useState('')
   const sourceMenuCloseTimerRef = useRef<number | null>(null)
+
   const sourceMenuHoverRef = useRef<{
     projectKey: string | null
     row: boolean
@@ -117,18 +125,24 @@ export default function TaskProjectSourceCombobox({
     if (isRepoSearchQueryTooLarge(query)) {
       return []
     }
+
     const trimmed = query.trim()
+
     if (!trimmed) {
       return groups
     }
+
     return groups.filter((group) => searchRepos(group.sources, trimmed).length > 0)
   }, [groups, query])
+
   const showHostLabels = useMemo(() => hasMultipleTaskProjectHosts(groups), [groups])
+
   const allSelected =
     groups.length > 0 && selectedTaskProjectGroups(groups, selected).length === groups.length
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen)
+
     if (!nextOpen) {
       setQuery('')
       setSourceMenuProjectKey(null)
@@ -146,20 +160,27 @@ export default function TaskProjectSourceCombobox({
   const setSourceMenuHover = useCallback(
     (projectKey: string, region: 'row' | 'content', hovered: boolean) => {
       clearSourceMenuCloseTimer()
+
       if (sourceMenuHoverRef.current.projectKey !== projectKey) {
         sourceMenuHoverRef.current = { projectKey, row: false, content: false }
       }
+
       sourceMenuHoverRef.current[region] = hovered
+
       if (hovered) {
         setSourceMenuProjectKey(projectKey)
+
         return
       }
+
       sourceMenuCloseTimerRef.current = window.setTimeout(() => {
         const hover = sourceMenuHoverRef.current
+
         if (hover.projectKey === projectKey && !hover.row && !hover.content) {
           setSourceMenuProjectKey((current) => (current === projectKey ? null : current))
           sourceMenuHoverRef.current = { projectKey: null, row: false, content: false }
         }
+
         sourceMenuCloseTimerRef.current = null
       }, 100)
     },
@@ -172,16 +193,19 @@ export default function TaskProjectSourceCombobox({
     (group: TaskProjectPickerGroup) => {
       const next = new Set(selected)
       const selectedSource = group.sources.find((source) => next.has(source.id))
+
       if (selectedSource) {
         if (selectedTaskProjectGroups(groups, selected).length <= 1) {
           return
         }
+
         for (const source of group.sources) {
           next.delete(source.id)
         }
       } else {
         next.add(group.repo.id)
       }
+
       onChange(next)
     },
     [groups, onChange, selected]
@@ -190,13 +214,17 @@ export default function TaskProjectSourceCombobox({
   const selectProjectSource = useCallback(
     (group: TaskProjectPickerGroup, source: Repo) => {
       const status = getRepoSourceStatus?.(source)
+
       if (status?.disabled) {
         return
       }
+
       const next = new Set(selected)
+
       for (const candidate of group.sources) {
         next.delete(candidate.id)
       }
+
       next.add(source.id)
       onChange(next)
       setSourceMenuProjectKey(null)
@@ -208,12 +236,16 @@ export default function TaskProjectSourceCombobox({
   const handleSelectAll = useCallback(() => {
     if (allSelected) {
       const first = groups[0]
+
       if (!first) {
         return
       }
+
       onChange(new Set([first.repo.id]))
+
       return
     }
+
     onSelectAll()
   }, [allSelected, groups, onChange, onSelectAll])
 
@@ -285,11 +317,13 @@ export default function TaskProjectSourceCombobox({
               const selectedSource = getSelectedTaskProjectSource(group, selected)
               const detail = getProjectDetail(group, selected, showHostLabels, getRepoHostLabel)
               const hasSourceMenu = hasMultipleTaskProjectHostsInGroup(group)
+
               return (
                 <div
                   key={group.projectKey}
                   onMouseEnter={() => {
                     setCommandValue(group.repo.id)
+
                     if (hasSourceMenu) {
                       setSourceMenuHover(group.projectKey, 'row', true)
                     }
@@ -364,6 +398,7 @@ export default function TaskProjectSourceCombobox({
                             const status = getRepoSourceStatus?.(source)
                             const sourceSelected = source.id === selectedSource.id
                             const sourceDetail = getSourceDetail(source, status)
+
                             return (
                               <button
                                 key={source.id}

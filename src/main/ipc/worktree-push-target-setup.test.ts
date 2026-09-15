@@ -13,7 +13,9 @@ import {
 type ExecMock = Mock<GitRemoteExec>
 
 const REPO = '/repo-root'
+
 const FORK_SSH = 'git@github.com:contributor/orca.git'
+
 const FORK_HTTPS = 'https://github.com/contributor/orca.git'
 
 /** Real `git remote -v` shape: a fetch row and a push row per remote, tab-separated. */
@@ -35,28 +37,38 @@ function makeRepoExec(
     if (args[0] === 'symbolic-ref' && args[1] === '--short' && args[2] === 'HEAD') {
       return { stdout: `${checkedOutBranch}\n`, stderr: '' }
     }
+
     if (args[0] === 'remote' && args.length === 1) {
       return { stdout: Object.keys(remotes).join('\n'), stderr: '' }
     }
+
     if (args[0] === 'remote' && args[1] === '-v' && args.length === 2) {
       return { stdout: renderRemoteVerbose(remotes), stderr: '' }
     }
+
     if (args[0] === 'remote' && args[1] === 'get-url') {
       const url = remotes[args[2]!]
+
       if (!url) {
         throw new Error(`No such remote ${args[2]}`)
       }
+
       return { stdout: `${url}\n`, stderr: '' }
     }
+
     if (args[0] === 'remote' && args[1] === 'add') {
       // Why: name/url are always the last two args, regardless of `-t`/`--no-tags` flags.
       remotes[args.at(-2)!] = args.at(-1)!
+
       return { stdout: '', stderr: '' }
     }
+
     if (args[0] === 'remote' && args[1] === 'remove') {
       delete remotes[args[2]!]
+
       return { stdout: '', stderr: '' }
     }
+
     return { stdout: '', stderr: '' }
   })
 }
@@ -192,6 +204,7 @@ describe('findRemoteForUrl', () => {
       origin: 'git@github.com:stablyai/orca.git',
       fork: FORK_SSH
     })
+
     await expect(findRemoteForUrl(exec, REPO, FORK_HTTPS)).resolves.toBe('fork')
   })
 
@@ -220,6 +233,7 @@ describe('remoteAlreadyMatchesUrl', () => {
     const exec = makeRepoExec({
       'pr-contributor-orca': 'git@github.com:someone-else/orca.git'
     })
+
     await expect(
       remoteAlreadyMatchesUrl(exec, REPO, 'pr-contributor-orca', FORK_SSH)
     ).resolves.toBe(false)
@@ -294,8 +308,10 @@ describe('restoreUpstreamAfterMaterialize', () => {
       if (args[0] === 'symbolic-ref') {
         throw new Error('fatal: ref HEAD is not a symbolic ref')
       }
+
       return { stdout: '', stderr: '' }
     })
+
     const target = forkTarget()
 
     const result = await restoreUpstreamAfterMaterialize(exec, '/wt/path', target)
@@ -308,10 +324,12 @@ describe('restoreUpstreamAfterMaterialize', () => {
 describe('prepareWorktreePushTargetWithExec rollback', () => {
   it('removes the remote it just added when the fetch fails', async () => {
     const remotes: Record<string, string> = { origin: 'git@github.com:stablyai/orca.git' }
+
     const exec = vi.fn<GitRemoteExec>(async (args: string[]) => {
       if (args[0] === 'fetch') {
         throw new Error('network unreachable')
       }
+
       return makeRepoExec(remotes)(args, REPO)
     })
 
@@ -335,10 +353,12 @@ describe('prepareWorktreePushTargetWithExec rollback', () => {
       origin: 'git@github.com:stablyai/orca.git',
       existing: FORK_SSH
     }
+
     const exec = vi.fn<GitRemoteExec>(async (args: string[]) => {
       if (args[0] === 'fetch') {
         throw new Error('network unreachable')
       }
+
       return makeRepoExec(remotes)(args, REPO)
     })
 
@@ -362,10 +382,12 @@ describe('prepareWorktreePushTargetWithExec rollback', () => {
       origin: 'git@github.com:stablyai/orca.git',
       'pr-contributor-orca': FORK_HTTPS
     }
+
     const exec = vi.fn<GitRemoteExec>(async (args: string[]) => {
       if (args[0] === 'fetch') {
         throw new Error('network unreachable')
       }
+
       return makeRepoExec(remotes)(args, REPO)
     })
 

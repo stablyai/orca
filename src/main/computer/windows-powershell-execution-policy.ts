@@ -11,6 +11,7 @@
 export type WindowsExecutionPolicy = 'RemoteSigned' | 'Bypass'
 
 export const PREFERRED_WINDOWS_EXECUTION_POLICY: WindowsExecutionPolicy = 'RemoteSigned'
+
 export const FALLBACK_WINDOWS_EXECUTION_POLICY: WindowsExecutionPolicy = 'Bypass'
 
 /**

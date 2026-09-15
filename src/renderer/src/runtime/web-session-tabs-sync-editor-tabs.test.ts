@@ -113,6 +113,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       loadError: null,
       createdAt: NOW - 10
     }
+
     const page: BrowserPage = {
       id: 'local-browser-page',
       workspaceId: workspace.id,
@@ -126,7 +127,9 @@ describe('applyWebSessionTabsSnapshot', () => {
       loadError: null,
       createdAt: NOW - 10
     }
+
     const readmePath = pathPosix.join('/repo', 'README.md')
+
     const file: OpenFile = {
       id: readmePath,
       filePath: readmePath,
@@ -137,6 +140,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       runtimeEnvironmentId: ENV,
       mode: 'edit'
     }
+
     const existingTabs: Tab[] = [
       {
         id: 'local-browser-unified',
@@ -320,6 +324,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       ENV,
       NOW
     ) as Partial<WebSessionTabsSyncState>
+
     const hydratedState = { ...makeState(), ...hydratedPatch } as WebSessionTabsSyncState
 
     expect(hydratedState.openFiles[0]).toMatchObject({
@@ -360,6 +365,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       runtimeEnvironmentId: ENV,
       mode: 'edit'
     }
+
     const unifiedTab: Tab = {
       id: 'local-notes-unified',
       entityId: openFile.id,

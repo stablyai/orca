@@ -11,11 +11,13 @@ function areWorktreeIdSetsEqual(a: ReadonlySet<string>, b: ReadonlySet<string>):
   if (a.size !== b.size) {
     return false
   }
+
   for (const id of a) {
     if (!b.has(id)) {
       return false
     }
   }
+
   return true
 }
 
@@ -78,6 +80,7 @@ export function useWorkspaceKanbanSearch(args: {
     stableMatched && matched && areWorktreeIdSetsEqual(stableMatched, matched)
       ? stableMatched
       : matched
+
   if (matchingWorktreeIds !== stableMatched) {
     setStableMatched(matchingWorktreeIds)
   }

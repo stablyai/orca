@@ -1,6 +1,7 @@
 vi.mock('../notifications/push-registration', () => ({
   attachPushRegistration: () => () => {}
 }))
+
 import { createElement, type ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,18 +9,23 @@ import type { RpcClient } from './rpc-client'
 import type { ConnectionState } from './types'
 
 const openHostLogicalClientMock = vi.fn()
+
 const loadHostsMock = vi.fn()
+
 const revival = vi.hoisted(() => ({ callback: null as null | ((reason: 'focus') => void) }))
 
 vi.mock('./host-logical-client', () => ({
   openHostLogicalClient: (...args: unknown[]) => openHostLogicalClientMock(...args)
 }))
+
 vi.mock('./host-store', () => ({
   loadHosts: () => loadHostsMock()
 }))
+
 vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: (callback: (reason: 'focus') => void) => {
     revival.callback = callback
+
     return () => {
       revival.callback = null
     }
@@ -80,8 +86,10 @@ describe('wanted host open recovery', () => {
 
     let observed: { client: RpcClient | null; state: ConnectionState } | null = null
     let renderer: MountedRenderer | null = null
+
     function Probe(): null {
       observed = useHostClient(HOST.id)
+
       return null
     }
 
@@ -112,8 +120,10 @@ describe('wanted host open recovery', () => {
 
     let observed: { client: RpcClient | null; state: ConnectionState } | null = null
     let renderer: MountedRenderer | null = null
+
     function Probe(): null {
       observed = useHostClient(HOST.id)
+
       return null
     }
 
@@ -142,8 +152,10 @@ describe('wanted host open recovery', () => {
 
     let observed: { client: RpcClient | null; state: ConnectionState } | null = null
     let renderer: MountedRenderer | null = null
+
     function Probe(): null {
       observed = useHostClient(HOST.id)
+
       return null
     }
 
@@ -171,8 +183,10 @@ describe('wanted host open recovery', () => {
     openHostLogicalClientMock.mockReturnValue(client)
 
     let renderer: MountedRenderer | null = null
+
     function Probe(): null {
       useHostClient(HOST.id)
+
       return null
     }
 
@@ -201,9 +215,11 @@ describe('wanted host open recovery', () => {
 
     let forgetHostClient: ((hostId: string) => void) | null = null
     let renderer: MountedRenderer | null = null
+
     function Probe(): null {
       useHostClient(HOST.id)
       forgetHostClient = useForgetHostClient()
+
       return null
     }
 
@@ -222,9 +238,11 @@ describe('wanted host open recovery', () => {
 
   it('does not let a retired owner cancel a newer acquisition', async () => {
     let resolveReplacement: ((hosts: (typeof HOST)[]) => void) | null = null
+
     const replacementLookup = new Promise<(typeof HOST)[]>((resolve) => {
       resolveReplacement = resolve
     })
+
     loadHostsMock.mockResolvedValueOnce([HOST]).mockReturnValueOnce(replacementLookup)
     const firstClient = fakeClient()
     const replacementClient = fakeClient()
@@ -233,15 +251,20 @@ describe('wanted host open recovery', () => {
       .mockReturnValueOnce(replacementClient)
 
     let disconnectHostClient: ((hostId: string) => void) | null = null
+
     function RetiredOwner(): null {
       useHostClient(HOST.id)
       disconnectHostClient = useDisconnectHostClient()
+
       return null
     }
+
     function NewOwner(): null {
       useHostClient(HOST.id)
+
       return null
     }
+
     function App({ oldVisible, newVisible }: { oldVisible: boolean; newVisible: boolean }) {
       return createElement(
         RpcClientProvider,
@@ -252,6 +275,7 @@ describe('wanted host open recovery', () => {
     }
 
     let renderer: MountedRenderer | null = null
+
     try {
       await act(async () => {
         renderer = create(createElement(App, { oldVisible: true, newVisible: false }))
@@ -279,12 +303,15 @@ describe('wanted host open recovery', () => {
     openHostLogicalClientMock.mockReturnValue(fakeClient())
 
     let forceReconnect: ((hostId: string) => Promise<void>) | null = null
+
     function Probe(): null {
       forceReconnect = useForceReconnect()
+
       return null
     }
 
     let renderer: MountedRenderer | null = null
+
     try {
       act(() => {
         renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
@@ -304,21 +331,26 @@ describe('wanted host open recovery', () => {
 
   it('cancels an in-flight open after the final owner releases', async () => {
     let resolveHosts: ((hosts: (typeof HOST)[]) => void) | null = null
+
     const lookup = new Promise<(typeof HOST)[]>((resolve) => {
       resolveHosts = resolve
     })
+
     loadHostsMock.mockReturnValue(lookup)
     openHostLogicalClientMock.mockReturnValue(fakeClient())
 
     function Probe(): null {
       useHostClient(HOST.id)
+
       return null
     }
+
     function App({ visible }: { visible: boolean }) {
       return createElement(RpcClientProvider, null, visible ? createElement(Probe) : null)
     }
 
     let renderer: MountedRenderer | null = null
+
     try {
       act(() => {
         renderer = create(createElement(App, { visible: true }))
@@ -339,24 +371,31 @@ describe('wanted host open recovery', () => {
 
   it('ignores a canceled failure after a replacement client succeeds', async () => {
     let rejectStale: ((error: Error) => void) | null = null
+
     const staleLookup = new Promise<(typeof HOST)[]>((_, reject) => {
       rejectStale = reject
     })
+
     loadHostsMock.mockReturnValueOnce(staleLookup).mockResolvedValueOnce([HOST])
     const client = fakeClient()
     openHostLogicalClientMock.mockReturnValue(client)
 
     let refreshHostClient: ((hostId: string) => void) | null = null
     let replacement: { client: RpcClient | null; state: ConnectionState } | null = null
+
     function Primary(): null {
       useHostClient(HOST.id)
       refreshHostClient = useRefreshHostClient()
+
       return null
     }
+
     function Replacement(): null {
       replacement = useHostClient(HOST.id)
+
       return null
     }
+
     function App({ showReplacement }: { showReplacement: boolean }) {
       return createElement(
         RpcClientProvider,
@@ -367,6 +406,7 @@ describe('wanted host open recovery', () => {
     }
 
     let renderer: MountedRenderer | null = null
+
     try {
       act(() => {
         renderer = create(createElement(App, { showReplacement: false }))

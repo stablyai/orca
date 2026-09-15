@@ -33,6 +33,7 @@ describe('OpenCode hook normalization', () => {
       buildBody({ hook_event_name: 'SessionBusy' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.agentType).toBe('opencode')
   })
@@ -44,11 +45,13 @@ describe('OpenCode hook normalization', () => {
       buildBody({ hook_event_name: 'MessagePart', role: 'user', text: 'new prompt' }),
       'production'
     )
+
     const result = _internals.normalizeHookPayload(
       'opencode',
       buildBody({ hook_event_name: 'SessionBusy' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.prompt).toBe('new prompt')
   })
@@ -59,6 +62,7 @@ describe('OpenCode hook normalization', () => {
       buildBody({ hook_event_name: 'SessionIdle' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('done')
     expect(result?.payload.agentType).toBe('opencode')
   })
@@ -69,6 +73,7 @@ describe('OpenCode hook normalization', () => {
       buildBody({ hook_event_name: 'PermissionRequest' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('waiting')
   })
 
@@ -79,6 +84,7 @@ describe('OpenCode hook normalization', () => {
       buildBody({ hook_event_name: 'AskUserQuestion' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('waiting')
     expect(result?.payload.agentType).toBe('opencode')
   })
@@ -89,6 +95,7 @@ describe('OpenCode hook normalization', () => {
       buildBody({ hook_event_name: 'SomeOtherEvent' }),
       'production'
     )
+
     expect(result).toBeNull()
   })
 
@@ -103,6 +110,7 @@ describe('OpenCode hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.prompt).toBe('hi there')
     expect(result?.hasExplicitPrompt).toBe(true)
@@ -119,6 +127,7 @@ describe('OpenCode hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.lastAssistantMessage).toBe('Hello! How can I help?')
   })
@@ -134,6 +143,7 @@ describe('OpenCode hook normalization', () => {
       }),
       'production'
     )
+
     expect(assistant?.payload.lastAssistantMessage?.length).toBe(8_000)
 
     // Why: prompt is capped at 200 by normalizeAgentStatusObject; assert oversized input still stays within that bound.
@@ -147,6 +157,7 @@ describe('OpenCode hook normalization', () => {
       }),
       'production'
     )
+
     expect(user?.payload.prompt?.length).toBe(200)
   })
 
@@ -161,11 +172,13 @@ describe('OpenCode hook normalization', () => {
       buildBody({ hook_event_name: 'MessagePart', role: 'assistant', text: 'hello back' }),
       'production'
     )
+
     const done = _internals.normalizeHookPayload(
       'opencode',
       buildBody({ hook_event_name: 'SessionIdle' }),
       'production'
     )
+
     expect(done?.payload.state).toBe('done')
     expect(done?.payload.prompt).toBe('hi')
     expect(done?.payload.lastAssistantMessage).toBe('hello back')

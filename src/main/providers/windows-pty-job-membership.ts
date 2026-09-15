@@ -24,10 +24,13 @@ export function readWindowsPtyJobProcessIds(
   listJobProcessIds: (proc: IPty) => readonly number[] | null = listPtyJobProcessIds
 ): ReadonlySet<number> | null {
   const pids = listJobProcessIds(proc)
+
   if (!pids) {
     return null
   }
+
   const membership = new Set(pids.filter((pid) => Number.isSafeInteger(pid) && pid > 0))
+
   // Without the shell, a size-1 set would read as "shell alone, retire" when it
   // means the opposite. The forked probe this replaced refused the same way.
   return membership.has(proc.pid) ? membership : null

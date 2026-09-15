@@ -4,45 +4,61 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers, setLocalPtyProvider } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -138,6 +154,7 @@ describe('registerPtyHandlers', () => {
         snapshot?: { data?: unknown; cols?: unknown; rows?: unknown; lastTitle?: unknown } | null
       }
     ) => void
+
     type SerializeController = {
       serializeBuffer: (
         ptyId: string,
@@ -153,16 +170,21 @@ describe('registerPtyHandlers', () => {
         onPtyExit: vi.fn(),
         preAllocateHandleForPty: vi.fn()
       }
+
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
+
       const onCall = onMock.mock.calls.find(
         (call: unknown[]) => call[0] === 'pty:serializeBuffer:response'
       )
+
       if (!onCall) {
         throw new Error('expected pty:serializeBuffer:response listener registration')
       }
+
       const listener = onCall[1] as SerializeListener
       const controller = runtime.setPtyController.mock.calls[0]?.[0] as SerializeController
+
       return { listener, controller }
     }
 
@@ -174,6 +196,7 @@ describe('registerPtyHandlers', () => {
 
     it('registers exactly one persistent listener regardless of concurrent in-flight requests', async () => {
       const { listener, controller } = setup()
+
       const inflight = [
         controller.serializeBuffer('pty-1'),
         controller.serializeBuffer('pty-2'),
@@ -188,15 +211,19 @@ describe('registerPtyHandlers', () => {
         controller.serializeBuffer('pty-11'),
         controller.serializeBuffer('pty-12')
       ]
+
       // Why: the bug registered one listener per request, so 12 concurrent calls would trip Node's MaxListeners.
       const responseChannelRegistrations = onMock.mock.calls.filter(
         (call: unknown[]) => call[0] === 'pty:serializeBuffer:response'
       )
+
       expect(responseChannelRegistrations.length).toBe(1)
+
       // Drain the in-flight requests so the test doesn't leak timers.
       for (const requestId of getSentRequestIds()) {
         listener(mainWindowIpcEvent, { requestId, snapshot: null })
       }
+
       await Promise.all(inflight)
     })
     it('routes each response to the originating request via requestId', async () => {
@@ -250,6 +277,7 @@ describe('registerPtyHandlers', () => {
     })
     it('resolves to null and removes the entry when the 750ms timeout fires', async () => {
       vi.useFakeTimers()
+
       try {
         const { controller } = setup()
         const pending = controller.serializeBuffer('pty-stuck')
@@ -282,6 +310,7 @@ describe('registerPtyHandlers', () => {
       const runtime = { setPtyController: vi.fn() }
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
+
       const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
         serializeProviderBuffer(ptyId: string, opts?: { scrollbackRows?: number }): Promise<unknown>
       }
@@ -316,6 +345,7 @@ describe('registerPtyHandlers', () => {
           source: 'headless'
         })
       }
+
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
 
@@ -347,6 +377,7 @@ describe('registerPtyHandlers', () => {
         seq: 900,
         source: 'headless'
       })
+
       const runtime = {
         setPtyController: vi.fn(),
         getPtyOutputSequence: vi.fn(() => 640),
@@ -360,6 +391,7 @@ describe('registerPtyHandlers', () => {
           source: 'headless'
         })
       }
+
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
       provider.emitDataGap('daemon-pty', 512)
@@ -388,6 +420,7 @@ describe('registerPtyHandlers', () => {
     it("never paints main's incomplete tail when a required provider snapshot is unavailable", async () => {
       const provider = installObservableDaemonTestProvider()
       provider.getBufferSnapshot.mockResolvedValue(null)
+
       const runtime = {
         setPtyController: vi.fn(),
         getPtyOutputSequence: vi.fn(() => 640),
@@ -401,6 +434,7 @@ describe('registerPtyHandlers', () => {
           source: 'headless'
         })
       }
+
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
       provider.emitDataGap('daemon-pty', 512)
@@ -421,6 +455,7 @@ describe('registerPtyHandlers', () => {
       vi.useFakeTimers()
       const mockProc = createMockProc()
       spawnMock.mockReturnValue(mockProc.proc)
+
       const runtime = {
         setPtyController: vi.fn(),
         registerPty: vi.fn(),
@@ -439,9 +474,11 @@ describe('registerPtyHandlers', () => {
           source: 'headless'
         })
       }
+
       try {
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never)
+
         const spawnResult = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,

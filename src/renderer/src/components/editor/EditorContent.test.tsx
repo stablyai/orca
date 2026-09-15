@@ -46,6 +46,7 @@ describe('EditorContent', () => {
 
   it('surfaces file load errors before notebook content is parsed', () => {
     const activeFile = createOpenFile()
+
     const html = renderToStaticMarkup(
       <EditorContent
         activeFile={activeFile}
@@ -94,6 +95,7 @@ describe('EditorContent', () => {
       isDirty: true,
       externalMutation: 'changed'
     })
+
     const html = renderToStaticMarkup(
       <EditorContent
         activeFile={activeFile}
@@ -138,6 +140,7 @@ describe('EditorContent', () => {
       isDirty: true,
       externalMutation: 'changed'
     })
+
     const html = renderToStaticMarkup(
       <EditorContent
         activeFile={activeFile}
@@ -186,6 +189,7 @@ describe('EditorContent', () => {
       isDirty: true,
       externalMutation: 'changed'
     })
+
     const html = renderToStaticMarkup(
       <EditorContent
         activeFile={activeFile}

@@ -12,6 +12,7 @@ import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 // session then kept or regained orchestration authority (the #14943 revert reason).
 
 const WORKTREE_PATH = '/tmp/worktree-a'
+
 const WORKTREE = {
   path: WORKTREE_PATH,
   head: 'abc',
@@ -57,6 +58,7 @@ async function launchOpenCodePane(options: {
   attestAgentHookCompatibilityAuthority?: OrcaRuntimeServiceDeps['attestAgentHookCompatibilityAuthority']
 }): Promise<LaunchedOpenCodePane> {
   const spawn = vi.fn().mockResolvedValue({ id: options.ptyId, incarnationId: 'incarnation-1' })
+
   const runtime = new OrcaRuntimeService(makeStore() as never, undefined, {
     attestAgentHookCompatibilityAuthority:
       options.attestAgentHookCompatibilityAuthority ??
@@ -65,22 +67,26 @@ async function launchOpenCodePane(options: {
       ? { retireAgentHookCompatibilityAuthority: options.retireAgentHookCompatibilityAuthority }
       : {})
   })
+
   runtime.setPtyController({
     spawn,
     write: () => true,
     kill: () => true,
     getForegroundProcess: options.getForegroundProcess
   })
+
   const terminal = await runtime.createTerminal(`path:${WORKTREE.path}`, {
     command: 'opencode',
     launchConfig: { agentCommand: 'opencode', agentArgs: '', agentEnv: {} },
     launchAgent: 'opencode'
   })
+
   const env = (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
   const paneKey = env.ORCA_PANE_KEY as string
   const launchToken = env.ORCA_AGENT_LAUNCH_TOKEN as string
   expect(paneKey).toBeTruthy()
   expect(launchToken).toBeTruthy()
+
   return {
     runtime,
     ptyId: options.ptyId,
@@ -108,20 +114,26 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     for (const server of servers) {
       server.stop()
     }
+
     servers.length = 0
+
     for (const dir of tempDirs) {
       rmSync(dir, { recursive: true, force: true })
     }
+
     tempDirs.length = 0
     vi.restoreAllMocks()
   })
 
   it('retires authority when command-finished proves OpenCode left the foreground, even if a title raced the read', async () => {
     let resolveForeground: ((process: string | null) => void) | undefined
+
     const foreground = new Promise<string | null>((resolve) => {
       resolveForeground = resolve
     })
+
     const getForegroundProcess = vi.fn(() => foreground)
+
     const pane = await launchOpenCodePane({
       ptyId: 'pty-opencode-exit',
       getForegroundProcess
@@ -141,6 +153,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
 
   it('retires authority when every foreground re-poll keeps racing a fresh title', async () => {
     let titleSequence = 0
+
     const getForegroundProcess = vi.fn(
       () =>
         new Promise<string | null>((resolve) => {
@@ -155,6 +168,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
           }, 0)
         })
     )
+
     const pane = await launchOpenCodePane({
       ptyId: 'pty-opencode-title-storm',
       getForegroundProcess
@@ -170,6 +184,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     const server = new AgentHookServer()
     servers.push(server)
     await server.start({ env: 'production' })
+
     const pane = await launchOpenCodePane({
       ptyId: 'pty-opencode-reuse',
       // OpenCode is a TUI: it is still the foreground process when its command completes.
@@ -178,7 +193,9 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
       attestAgentHookCompatibilityAuthority: (candidate) =>
         server.attestCompatibilityAuthority(candidate)
     })
+
     const hookEnv = server.buildPtyEnv()
+
     const post = (payload: Record<string, unknown>): Promise<Response> =>
       fetch(`http://127.0.0.1:${hookEnv.ORCA_AGENT_HOOK_PORT}/hook/opencode`, {
         method: 'POST',
@@ -227,9 +244,11 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     servers.push(server)
     await server.start({ env: 'production' })
     let resolveForeground: ((process: string | null) => void) | undefined
+
     const foreground = new Promise<string | null>((resolve) => {
       resolveForeground = resolve
     })
+
     const pane = await launchOpenCodePane({
       ptyId: 'pty-opencode-session-boundary',
       getForegroundProcess: () => foreground,
@@ -237,7 +256,9 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
       attestAgentHookCompatibilityAuthority: (candidate) =>
         server.attestCompatibilityAuthority(candidate)
     })
+
     const hookEnv = server.buildPtyEnv()
+
     // Both sessions post the same launchToken: it lives in the PTY env, so every
     // process started in this shell inherits it. Only sessionID separates them.
     const post = (sessionId: string): Promise<Response> =>
@@ -256,6 +277,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
           payload: { hook_event_name: 'SessionBusy', sessionID: sessionId }
         })
       })
+
     const attestCurrent = (): unknown =>
       server.attestCompatibilityAuthority({
         paneKey: pane.paneKey,
@@ -284,11 +306,13 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     const first = new AgentHookServer()
     servers.push(first)
     await first.start({ env: 'production', userDataPath })
+
     const pane = await launchOpenCodePane({
       ptyId: 'pty-opencode-restart',
       getForegroundProcess: async () => 'opencode',
       retireAgentHookCompatibilityAuthority: (paneKey) => first.retirePaneAuthority(paneKey)
     })
+
     const hookEnv = first.buildPtyEnv()
     await fetch(`http://127.0.0.1:${hookEnv.ORCA_AGENT_HOOK_PORT}/hook/opencode`, {
       method: 'POST',

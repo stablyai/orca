@@ -19,8 +19,10 @@ export function performReveal(
   revealHighlightTimerRef: React.RefObject<ReturnType<typeof setTimeout> | null>
 ): void {
   const model = ed.getModel()
+
   if (!model) {
     ed.focus()
+
     return
   }
 
@@ -31,9 +33,11 @@ export function performReveal(
     maxLine: model.getLineCount(),
     lineMaxColumn: model.getLineMaxColumn(Math.min(Math.max(1, line), model.getLineCount()))
   })
+
   const shouldHighlight = matchLength > 0
 
   ed.setPosition({ lineNumber: range.startLineNumber, column: range.startColumn })
+
   if (shouldHighlight) {
     ed.setSelection(range)
     ed.revealRangeInCenter(range)
@@ -48,6 +52,7 @@ export function performReveal(
   }
 
   clearTransientRevealHighlight()
+
   if (shouldHighlight) {
     revealDecorationRef.current = ed.createDecorationsCollection([
       {

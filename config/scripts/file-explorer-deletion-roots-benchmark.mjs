@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
+
 const bundled = await build({
   stdin: {
     contents: `export { selectDeletionRoots } from './file-explorer-batch-deletion';
@@ -19,6 +20,7 @@ const bundled = await build({
   write: false,
   logLevel: 'silent'
 })
+
 const { selectDeletionRoots, isPathEqualOrDescendant } = await import(
   `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`
 )
@@ -37,16 +39,20 @@ function measure(run, nodes) {
   for (let index = 0; index < 3; index++) {
     run(nodes)
   }
+
   const samples = []
+
   for (let index = 0; index < 11; index++) {
     const start = performance.now()
     run(nodes)
     samples.push(performance.now() - start)
   }
+
   return samples.sort((a, b) => a - b)[5]
 }
 
 const results = []
+
 for (const [fileCount, directoryCount] of [
   [100, 0],
   [1000, 0],
@@ -61,6 +67,7 @@ for (const [fileCount, directoryCount] of [
     isDirectory: index >= fileCount,
     depth: 0
   }))
+
   const expected = original(nodes)
   const actual = selectDeletionRoots(nodes)
   assert.equal(actual.length, expected.length)
@@ -72,4 +79,5 @@ for (const [fileCount, directoryCount] of [
     afterMs: measure(selectDeletionRoots, nodes)
   })
 }
+
 console.log(JSON.stringify({ node: process.version, platform: process.platform, results }, null, 2))

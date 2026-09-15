@@ -12,21 +12,28 @@ export class StructuredAgentSessionHolders {
   /** True when the session gained its FIRST holder — the edge that ends a pending release. */
   add(sessionId: string, holderId: string, resumeCapable = true): boolean {
     const holders = this.bySession.get(sessionId)
+
     if (!holders) {
       this.bySession.set(sessionId, new Map([[holderId, resumeCapable]]))
+
       return true
     }
+
     holders.set(holderId, (holders.get(holderId) ?? false) || resumeCapable)
+
     return false
   }
 
   /** True when the session lost its LAST holder — the edge that starts one. */
   remove(sessionId: string, holderId: string): boolean {
     const holders = this.bySession.get(sessionId)
+
     if (!holders?.delete(holderId) || holders.size > 0) {
       return false
     }
+
     this.bySession.delete(sessionId)
+
     return true
   }
 

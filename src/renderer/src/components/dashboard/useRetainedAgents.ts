@@ -39,6 +39,7 @@ type RetainedAgentsSyncInputs = {
 type RetainedAgentsSyncSnapshotInputs = RetainedAgentsSyncInputs & {
   now: number
 }
+
 export function createRetainedAgentsTabTopologyProjection(
   onInspectBucket?: (worktreeId: string) => void
 ) {
@@ -68,12 +69,15 @@ function buildLiveTabIndex(args: {
 
   for (const repo of args.repos) {
     const worktrees = args.worktreesByRepo[repo.id] ?? []
+
     for (const worktree of worktrees) {
       if (worktree.isArchived) {
         continue
       }
+
       existingWorktreeIds.add(worktree.id)
       const tabs = args.tabsByWorktree[worktree.id] ?? []
+
       for (const tab of tabs) {
         tabIndex.set(tab.id, { tab, worktreeId: worktree.id })
       }
@@ -84,8 +88,10 @@ function buildLiveTabIndex(args: {
     if (folderWorkspace.isArchived) {
       continue
     }
+
     const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
     existingWorktreeIds.add(workspaceKey)
+
     for (const tab of args.tabsByWorktree[workspaceKey] ?? []) {
       tabIndex.set(tab.id, { tab, worktreeId: workspaceKey })
     }
@@ -108,17 +114,23 @@ export function buildRetainedAgentsSyncSnapshot(args: RetainedAgentsSyncSnapshot
 
   for (const [paneKey, entry] of Object.entries(args.agentStatusByPaneKey)) {
     const tabId = paneKeyTabId(paneKey)
+
     if (!tabId) {
       continue
     }
+
     const owner = tabIndex.get(tabId)
+
     if (!owner) {
       continue
     }
+
     const isFresh = isExplicitAgentStatusFresh(entry, args.now, AGENT_STATUS_STALE_AFTER_MS)
+
     const shouldDecay =
       !isFresh &&
       (entry.state === 'working' || entry.state === 'blocked' || entry.state === 'waiting')
+
     currentAgents.set(paneKey, {
       row: {
         paneKey,
@@ -140,10 +152,12 @@ export function useRetainedAgentsSync(): void {
     TerminalTab,
     TerminalTab
   > | null>(null)
+
   tabTopologyProjectionRef.current ??= createRetainedAgentsTabTopologyProjection()
   const retainAgents = useAppStore((s) => s.retainAgents)
   const pruneRetainedAgents = useAppStore((s) => s.pruneRetainedAgents)
   const clearRetentionSuppressedPaneKeys = useAppStore((s) => s.clearRetentionSuppressedPaneKeys)
+
   const [repos, worktreesByRepo, folderWorkspaces, tabTopology, agentStatusEpoch] = useAppStore(
     useShallow(
       (s) =>
@@ -156,10 +170,12 @@ export function useRetainedAgentsSync(): void {
         ] as const
     )
   )
+
   const prevAgentsRef = useRef<RetainedAgentSnapshot>(new Map())
 
   useEffect(() => {
     const state = useAppStore.getState()
+
     const { currentAgents, existingWorktreeIds, tabIndex } = buildRetainedAgentsSyncSnapshot({
       repos: state.repos,
       worktreesByRepo: state.worktreesByRepo,
@@ -175,6 +191,7 @@ export function useRetainedAgentsSync(): void {
     // store read still supplies current tab objects whenever a real topology
     // or agent transition does run.
     const { retainedAgentsByPaneKey: retainedNow, retentionSuppressedPaneKeys } = state
+
     const { toRetain, consumedSuppressedPaneKeys } = collectRetainedAgentsOnDisappear({
       previousAgents: prevAgentsRef.current,
       currentAgents,
@@ -184,6 +201,7 @@ export function useRetainedAgentsSync(): void {
       recentlyRetiredAgentStatusPaneKeys: state.recentlyRetiredAgentStatusPaneKeys,
       tabIndex
     })
+
     // Why: batch retention into a single store mutation. Looping retainAgent
     // would trigger N set(...) calls and N subscriber notifications when
     // several agents vanish in the same frame (e.g. tab close, worktree
@@ -193,6 +211,7 @@ export function useRetainedAgentsSync(): void {
 
     prevAgentsRef.current = currentAgents
     pruneRetainedAgents(existingWorktreeIds)
+
     if (consumedSuppressedPaneKeys.length > 0) {
       clearRetentionSuppressedPaneKeys(consumedSuppressedPaneKeys)
     }
@@ -216,17 +235,21 @@ function sameAgentRun(
   // while the other is not. Only a session present on BOTH sides is decisive.
   const previousSession = previous.row.entry.providerSession
   const currentSession = current.row.entry.providerSession
+
   if (previousSession && currentSession) {
     return previousSession.key === currentSession.key && previousSession.id === currentSession.id
   }
+
   // Why: terminalHandle identifies the TERMINAL, not the run — a later agent started
   // in the same pty inherits it, so it only corroborates a matching run identity.
   // It is absent for ordinary local PTY agents, so it cannot be required.
   const previousHandle = previous.row.entry.terminalHandle
   const currentHandle = current.row.entry.terminalHandle
+
   if (previousHandle && currentHandle && previousHandle !== currentHandle) {
     return false
   }
+
   return (
     previous.row.startedAt === current.row.startedAt &&
     previous.row.agentType === current.row.agentType
@@ -253,61 +276,76 @@ export function collectRetainedAgentsOnDisappear(args: {
     if (args.currentAgents.has(paneKey)) {
       continue
     }
+
     const transferredPaneKey = resolveAgentPaneAuthorityKey(paneKey)
+
     const migrated =
       transferredPaneKey === paneKey ? undefined : args.currentAgents.get(transferredPaneKey)
+
     if (migrated && sameAgentRun(prev, migrated)) {
       continue
     }
+
     // Why: a different run already occupies the transferred key, so this row keeps
     // its own key rather than colliding with the live one.
     const ownerPaneKey = migrated ? paneKey : transferredPaneKey
+
     if (
       args.recentlyRetiredAgentStatusPaneKeys[paneKey] ||
       args.recentlyRetiredAgentStatusPaneKeys[ownerPaneKey]
     ) {
       continue
     }
+
     // Why: skip only when the retained snapshot is for the SAME (or newer) run.
     // A reused paneKey (same tab+pane, fresh agent start after a prior run was
     // retained) produces a newer startedAt — we must overwrite so stale
     // completion data doesn't linger forever for the reused pane.
     const alreadyRetained = args.retainedAgentsByPaneKey[ownerPaneKey]
+
     if (alreadyRetained && alreadyRetained.startedAt >= prev.row.startedAt) {
       continue
     }
+
     const suppressedPaneKey = args.retentionSuppressedPaneKeys[paneKey]
       ? paneKey
       : args.retentionSuppressedPaneKeys[ownerPaneKey]
         ? ownerPaneKey
         : null
+
     if (suppressedPaneKey) {
       consumedSuppressedPaneKeys.push(suppressedPaneKey)
       continue
     }
+
     // Why: the row must land on the surface that owns the pane now — a detach
     // followed by a PTY exit before the next sync would otherwise retain it
     // under the abandoned source tab.
     const ownerTabId = paneKeyTabId(ownerPaneKey) ?? prev.row.tab.id
+
     // Why: prefer the real destination tab — reusing the source tab's title and
     // launchAgent under a different id would mislabel the retained row.
     const ownerTab =
       args.tabIndex?.get(ownerTabId)?.tab ??
       (ownerTabId === prev.row.tab.id ? prev.row.tab : { ...prev.row.tab, id: ownerTabId })
+
     // Why: PTY exit can remove the live row before closeTab plants a suppressor;
     // the closed-tab marker prevents re-retention.
     if (args.recentlyClosedAgentStatusTabIds[ownerTabId]) {
       continue
     }
+
     // Why: only keep a sticky snapshot when the agent finished cleanly
     // (state === 'done' and not interrupted). Explicit teardown paths mark
     // pane keys as suppression candidates, so a close/quit/crash cannot
     // resurrect a stale `done` row on the next sync.
     const lastState = prev.row.state
     const wasInterrupted = prev.row.entry.interrupted === true
+
     if (lastState !== 'done' || wasInterrupted) {
       continue
     }
+
     toRetain.push({
       entry:
         ownerPaneKey === paneKey

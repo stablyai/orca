@@ -31,6 +31,7 @@ export function resolveWorktreeFilesystemPath(
   if (process.platform !== 'win32' || !isRespellableGuestPath(worktreePath)) {
     return worktreePath
   }
+
   // Unreachable: the resolver returns null only for an empty pointer, which the guard rejects.
   // Kept so the never-null contract stays the resolver's to state, not ours to assert.
   return resolveGitMetadataPath('', worktreePath, options) ?? worktreePath

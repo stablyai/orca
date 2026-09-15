@@ -18,11 +18,13 @@ describe('remote terminal stream watchdog delivery deadline', () => {
     const watchdog = createRemoteTerminalStreamWatchdog(onStall)
 
     watchdog.beginOutputDelivery(100)
+
     for (let tick = 0; tick < 3; tick += 1) {
       vi.advanceTimersByTime(9_000)
       const settle = watchdog.beginOutputDelivery(10)
       settle()
     }
+
     expect(onStall).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS - 27_000)

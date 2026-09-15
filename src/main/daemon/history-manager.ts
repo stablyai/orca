@@ -33,7 +33,9 @@ import type {
 } from './terminal-history-manager-options'
 
 export type { SessionMeta } from './terminal-history-metadata'
+
 export type { HistoryRecoveryFreeze } from './terminal-history-recovery-quarantine'
+
 export type * from './terminal-history-manager-options'
 
 export class HistoryManager {
@@ -57,6 +59,7 @@ export class HistoryManager {
 
   async openSession(sessionId: string, opts: OpenSessionOptions): Promise<void> {
     let recoveryFreeze = opts.recoveryFreeze
+
     try {
       this.disabledSessions.delete(sessionId)
       const dir = this.sessionDir(sessionId)
@@ -72,6 +75,7 @@ export class HistoryManager {
       ) {
         throw new Error('terminal_history_recovery_generation_changed')
       }
+
       this.recoveryFreezes.release(sessionId)
       ensurePrivateDir(dir)
 
@@ -83,6 +87,7 @@ export class HistoryManager {
         endedAt: null,
         exitCode: null
       }
+
       writeTerminalHistoryMeta(dir, meta)
 
       if (!opts.quarantineUnreadableRecovery) {
@@ -97,6 +102,7 @@ export class HistoryManager {
       if (recoveryFreeze) {
         this.abandonRecoveryFreeze(recoveryFreeze)
       }
+
       this.handleWriteError(sessionId, err)
     }
   }
@@ -107,26 +113,32 @@ export class HistoryManager {
     }
 
     this.writers.delete(sessionId)
+
     const handle: HistoryRecoveryFreeze = {
       sessionId,
       token: randomUUID()
     }
+
     const activeFreeze: ActiveHistoryRecoveryFreeze = { handle }
     this.recoveryFreezes.hold(sessionId, activeFreeze)
+
     try {
       await this.mutations.wait(sessionId)
       activeFreeze.fingerprint = fingerprintTerminalHistorySession(this.basePath, sessionId)
+
       return handle
     } catch (err) {
       if (this.recoveryFreezes.get(sessionId) === activeFreeze) {
         this.recoveryFreezes.release(sessionId)
       }
+
       throw err
     }
   }
 
   abandonRecoveryFreeze(freeze?: HistoryRecoveryFreeze): void {
     const activeFreeze = freeze ? this.recoveryFreezes.get(freeze.sessionId) : undefined
+
     if (activeFreeze && activeFreeze.handle === freeze) {
       this.recoveryFreezes.release(activeFreeze.handle.sessionId)
     }
@@ -137,27 +149,34 @@ export class HistoryManager {
     if (this.writers.has(sessionId)) {
       return
     }
+
     if (hasTerminalHistoryRecoveryProtection(this.basePath, sessionId)) {
       this.abandonRecoveryFreeze(recoveryFreeze)
+
       return void this.disabledSessions.add(sessionId)
     }
+
     if (recoveryFreeze) {
       try {
         const activeFreeze = this.requireRecoveryFreeze(sessionId, recoveryFreeze)
+
         if (
           fingerprintTerminalHistorySession(this.basePath, sessionId) !== activeFreeze.fingerprint
         ) {
           throw new Error('terminal_history_recovery_generation_changed')
         }
+
         this.recoveryFreezes.release(sessionId)
       } catch (err) {
         this.abandonRecoveryFreeze(recoveryFreeze)
         this.handleWriteError(sessionId, err)
+
         return
       }
     } else if (this.recoveryFreezes.has(sessionId)) {
       return
     }
+
     const dir = this.sessionDir(sessionId)
     this.writers.set(
       sessionId,
@@ -170,9 +189,11 @@ export class HistoryManager {
     this.disabledSessions.delete(sessionId)
     this.registerWriter(sessionId, recoveryFreeze)
     const writer = this.writers.get(sessionId)
+
     if (!writer) {
       return
     }
+
     try {
       updateTerminalHistoryMeta(writer.dir, { endedAt: null, exitCode: null })
     } catch (err) {
@@ -183,9 +204,11 @@ export class HistoryManager {
   suspendSession(sessionId: string, recoveryFreeze?: HistoryRecoveryFreeze): void {
     // Why: leaving the writer active would let the next checkpoint overwrite the only good recovered-scrollback copy.
     this.writers.delete(sessionId)
+
     if (recoveryFreeze) {
       this.abandonRecoveryFreeze(recoveryFreeze)
     }
+
     this.disabledSessions.delete(sessionId)
   }
 
@@ -206,14 +229,18 @@ export class HistoryManager {
     if (this.disabledSessions.has(sessionId) || records.length === 0) {
       return 'ok'
     }
+
     const writer = this.writers.get(sessionId)
+
     if (!writer) {
       return 'ok'
     }
+
     try {
       return await writer.appendIncrements(seq, records)
     } catch (err) {
       this.handleWriteError(sessionId, err)
+
       return 'ok'
     }
   }
@@ -235,7 +262,9 @@ export class HistoryManager {
     if (this.disabledSessions.has(sessionId)) {
       return 'unavailable'
     }
+
     const writer = this.writers.get(sessionId)
+
     if (!writer) {
       return 'unavailable'
     }
@@ -244,18 +273,22 @@ export class HistoryManager {
       // Why: tmp+rename is atomic (corrupt checkpoint > stale); async so a sync ~MB write can't stall IPC (worse under Windows AV).
       // The adapter's per-session checkpoint queue prevents concurrent writes from colliding on the fixed .tmp path.
       const checkpoint = await writer.checkpoint(snapshot, opts)
+
       if (checkpoint.result === 'retryable') {
         this.onWriteError?.(sessionId, checkpoint.error)
       }
+
       return checkpoint.result
     } catch (err) {
       this.handleWriteError(sessionId, err)
+
       return 'unavailable'
     }
   }
 
   async closeSession(sessionId: string, exitCode: number): Promise<void> {
     const writer = this.writers.get(sessionId)
+
     if (!writer) {
       return
     }
@@ -263,6 +296,7 @@ export class HistoryManager {
     this.writers.delete(sessionId)
     // Why: session is dead; without this a transient-error-poisoned id leaks forever (sessionIds never reused).
     this.disabledSessions.delete(sessionId)
+
     try {
       updateTerminalHistoryMeta(writer.dir, { endedAt: new Date().toISOString(), exitCode })
     } catch (err) {
@@ -313,6 +347,7 @@ export class HistoryManager {
         this.disabledSessions.add(sessionId)
       }
     }
+
     this.writers.clear()
     this.recoveryFreezes.releaseAll()
   }
@@ -332,6 +367,7 @@ export class HistoryManager {
     recoveryFreeze: HistoryRecoveryFreeze
   ): ActiveHistoryRecoveryFreeze {
     const activeFreeze = this.recoveryFreezes.get(sessionId)
+
     if (
       recoveryFreeze.sessionId !== sessionId ||
       activeFreeze?.handle !== recoveryFreeze ||
@@ -339,6 +375,7 @@ export class HistoryManager {
     ) {
       throw new Error('terminal_history_recovery_freeze_invalid')
     }
+
     return activeFreeze
   }
 }

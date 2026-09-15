@@ -84,6 +84,7 @@ describe('editor file operation owner', () => {
       undefined,
       false
     )
+
     const context = getEditorFileOperationContext(
       useAppStore.getState(),
       { worktreeId, operationProvenance: provenance },
@@ -108,6 +109,7 @@ describe('editor file operation owner', () => {
         ]
       }
     })
+
     const provenance = captureEditorFileOperationProvenance(
       useAppStore.getState(),
       worktreeId,
@@ -159,12 +161,14 @@ describe('editor file operation owner', () => {
         ]
       ])
     })
+
     const provenance = captureEditorFileOperationProvenance(
       useAppStore.getState(),
       worktreeId,
       undefined,
       false
     )
+
     expect(provenance.expectedSshConnectionGeneration).toBe(7)
 
     useAppStore.setState((state) => ({
@@ -245,6 +249,7 @@ describe('editor file operation owner', () => {
         undefined,
         false
       )
+
       expect(provenance.generation.route).toEqual({
         executionHostId: 'local',
         runtimeEnvironmentId: null
@@ -265,6 +270,7 @@ describe('editor file operation owner', () => {
           } as never
         ]
       })
+
       const context = getEditorFileOperationContext(
         useAppStore.getState(),
         { worktreeId: folderKey },
@@ -281,6 +287,7 @@ describe('editor file operation owner', () => {
         undefined,
         false
       )
+
       useAppStore.setState({
         projectGroups: [
           { id: 'group-1', connectionId: null, executionHostId: 'runtime:hub-a' } as never

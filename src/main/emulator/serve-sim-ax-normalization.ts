@@ -38,6 +38,7 @@ function asString(value: unknown): string {
 
 function readFrame(value: unknown): NormalizedAxFrame {
   const frame = asRecord(value)
+
   return {
     x: numeric(frame.x),
     y: numeric(frame.y),
@@ -49,6 +50,7 @@ function readFrame(value: unknown): NormalizedAxFrame {
 // Fall back to a unit screen so a malformed/empty root never divides by zero.
 function screenFrame(roots: unknown[]): NormalizedAxFrame {
   const first = readFrame(asRecord(roots[0]).frame)
+
   return first.width > 0 && first.height > 0 ? first : { x: 0, y: 0, width: 1, height: 1 }
 }
 
@@ -74,12 +76,15 @@ function normalizeNode(
   const node = asRecord(raw)
   const rawChildren = Array.isArray(node.children) ? node.children : []
   const children: NormalizedAxNode[] = []
+
   for (const child of rawChildren) {
     if (budget.remaining <= 0) {
       break
     }
+
     children.push(normalizeNode(child, screen, budget))
   }
+
   const normalized: NormalizedAxNode = {
     role: asString(node.role_description),
     type: asString(node.type),
@@ -89,14 +94,18 @@ function normalizeNode(
     frame: normalizeFrame(readFrame(node.frame), screen),
     children
   }
+
   // AXUniqueId is often null; only surface it when the helper provides one.
   const uniqueId = asString(node.AXUniqueId)
+
   if (uniqueId) {
     normalized.id = uniqueId
   }
+
   if (children.length < rawChildren.length) {
     normalized.truncated = true
   }
+
   return normalized
 }
 
@@ -104,11 +113,14 @@ export function normalizeServeSimAxTree(roots: unknown[]): NormalizedAxNode[] {
   const screen = screenFrame(roots)
   const budget = { remaining: MAX_AX_NODES }
   const normalized: NormalizedAxNode[] = []
+
   for (const root of roots) {
     if (budget.remaining <= 0) {
       break
     }
+
     normalized.push(normalizeNode(root, screen, budget))
   }
+
   return normalized
 }

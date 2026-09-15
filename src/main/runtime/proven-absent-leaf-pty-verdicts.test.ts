@@ -8,6 +8,7 @@ describe('pruneExpiredProvenAbsentLeafPtyVerdicts', () => {
       ['still-fresh', 1_400],
       ['exact-expiry', 1_000]
     ])
+
     pruneExpiredProvenAbsentLeafPtyVerdicts(map, 1_000 + 15_000, 15_000)
     expect([...map.keys()]).toEqual(['still-fresh'])
   })

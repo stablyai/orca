@@ -3,6 +3,7 @@ import type * as SshConfigParser from './ssh-config-parser'
 import type { SshConfigHost } from './ssh-config-parser'
 
 const loadUserSshConfigMock = vi.hoisted(() => vi.fn<() => SshConfigHost[]>(() => []))
+
 vi.mock('./ssh-config-parser', async (importOriginal) => ({
   ...(await importOriginal<typeof SshConfigParser>()),
   loadUserSshConfig: loadUserSshConfigMock
@@ -43,6 +44,7 @@ describe('SSH config host picker search', () => {
     const hosts = Array.from({ length: 150_000 }, (_, index) => ({
       host: `generated-${index}`
     }))
+
     const initial = searchSshConfigHosts(hosts, [])
     const last = searchSshConfigHosts(hosts, [], 'generated-149999')
 

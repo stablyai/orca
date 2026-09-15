@@ -19,13 +19,19 @@ function worktree(id: string): Worktree {
 }
 
 const alpha = worktree('alpha')
+
 const beta = worktree('beta')
+
 const gamma = worktree('gamma')
+
 const delta = worktree('delta')
+
 const fullBoard = [alpha, beta, gamma, delta]
 
 let container: HTMLDivElement
+
 let root: Root
+
 let selection: Selection
 
 function Probe({
@@ -36,6 +42,7 @@ function Probe({
   rendered: readonly Worktree[]
 }): null {
   selection = useWorkspaceKanbanSelection(true, board, rendered)
+
   return null
 }
 

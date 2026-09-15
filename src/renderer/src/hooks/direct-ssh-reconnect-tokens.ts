@@ -13,6 +13,7 @@ export function directSshAuthoritiesEqual(
   if (!left || !right) {
     return false
   }
+
   return (
     left.targetId === right.targetId &&
     left.providerEpoch === right.providerEpoch &&
@@ -41,6 +42,7 @@ export function isDirectSshPreparationInputHostConsistent(
   input: DirectSshPreparationInput
 ): boolean {
   const expectedHost = toSshExecutionHostId(input.targetId)
+
   return input.repoRefs.every((repo) => repo.executionHostId === expectedHost)
 }
 
@@ -68,6 +70,7 @@ export function buildDirectSshSnapshotApplyToken(
   if (token.snapshotRevision !== null && token.snapshotRevision !== snapshotRevision) {
     return null
   }
+
   return { ...token, snapshotRevision }
 }
 

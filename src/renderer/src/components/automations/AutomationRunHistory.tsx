@@ -44,6 +44,7 @@ export function AutomationRunHistory({
   onOpenRun
 }: AutomationRunHistoryProps): React.JSX.Element {
   const containerRef = React.useRef<HTMLDivElement>(null)
+
   const [selectedRunState, setSelectedRunState] = useState<{
     automationId: string
     runId: string | null
@@ -51,13 +52,16 @@ export function AutomationRunHistory({
     automationId,
     runId: null
   }))
+
   const runCountLabel = useMemo(() => {
     const completed = runs.filter((run) => run.status === 'completed').length
+
     return `${runs.length} ${runs.length === 1 ? 'run' : 'runs'} · ${completed} completed`
   }, [runs])
 
   const selectedRunId =
     selectedRunState.automationId === automationId ? selectedRunState.runId : null
+
   const selectedRun = runs.find((run) => run.id === selectedRunId) ?? runs[0] ?? null
 
   const findRunRow = React.useCallback(
@@ -82,6 +86,7 @@ export function AutomationRunHistory({
           event.preventDefault()
           onOpenRun(selectedRun)
         }
+
         return
       }
 
@@ -91,6 +96,7 @@ export function AutomationRunHistory({
           selectedRunId: selectedRun?.id ?? null,
           key: event.key
         })
+
         if (targetRun) {
           event.preventDefault()
           setSelectedRunState({ automationId, runId: targetRun.id })
@@ -101,6 +107,7 @@ export function AutomationRunHistory({
     }
 
     window.addEventListener('keydown', handleKeyDown)
+
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [automationId, findRunRow, notice, onOpenRun, runs, selectedRun])
 
@@ -108,7 +115,9 @@ export function AutomationRunHistory({
     if (!selectedRunId) {
       return
     }
+
     const element = findRunRow(selectedRunId)
+
     if (element && typeof element.scrollIntoView === 'function') {
       element.scrollIntoView({ block: 'nearest' })
     }
@@ -144,12 +153,15 @@ export function AutomationRunHistory({
         <div className="divide-y divide-border/50">
           {runs.map((run) => {
             const runWorktree = run.workspaceId ? (worktreeMap.get(run.workspaceId) ?? null) : null
+
             const workspaceLabel = getAutomationRunWorkspaceDisplay({
               run,
               worktree: runWorktree
             })
+
             const usageLabel = getAutomationUsageStatusLabel(run.usage)
             const occurrenceLabel = automationRunOccurrenceLabel(run)
+
             return (
               <button
                 key={run.id}

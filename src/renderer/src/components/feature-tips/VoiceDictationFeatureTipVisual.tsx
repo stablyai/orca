@@ -6,16 +6,20 @@ import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 
 const TYPE_START_DELAY_MS = 650
+
 const TYPE_INTERVAL_MS = 36
+
 const WAVEFORM_BAR_HEIGHTS = [38, 70, 100, 58, 82]
 
 export function VoiceDictationFeatureTipVisual(): JSX.Element {
   const reducedMotion = usePrefersReducedMotion()
   const shortcut = useShortcutKeyDetails('voice.dictation')
+
   const dictatedPrompt = translate(
     'featureTips.voice.demoPrompt',
     'Review this diff for edge cases and add tests for anything you find.'
   )
+
   const [typedLength, setTypedLength] = useState(0)
   const effectiveTypedLength = reducedMotion ? dictatedPrompt.length : typedLength
   const typing = !reducedMotion && effectiveTypedLength < dictatedPrompt.length
@@ -28,20 +32,25 @@ export function VoiceDictationFeatureTipVisual(): JSX.Element {
     let cancelled = false
     let timeoutId: number | undefined
     let nextLength = 0
+
     const typeNext = (): void => {
       if (cancelled) {
         return
       }
+
       nextLength += 1
       setTypedLength(nextLength)
+
       if (nextLength < dictatedPrompt.length) {
         timeoutId = window.setTimeout(typeNext, TYPE_INTERVAL_MS)
       }
     }
 
     timeoutId = window.setTimeout(typeNext, TYPE_START_DELAY_MS)
+
     return () => {
       cancelled = true
+
       if (timeoutId !== undefined) {
         window.clearTimeout(timeoutId)
       }

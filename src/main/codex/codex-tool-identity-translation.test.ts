@@ -37,6 +37,7 @@ describe('command row metadata', () => {
       duration_ms: 400,
       aggregatedOutput: 'x'.repeat(70000)
     }
+
     expect(boundStreamItem(source)).toMatchObject({ exitCode: 0, durationMs: 400 })
     expect(codexStreamingJournalItem(source, 'output').body).toMatchObject({
       exitCode: 0,
@@ -58,6 +59,7 @@ describe('command row metadata', () => {
 describe('web result annotations', () => {
   it('adds safe result annotations and retains old-reader JSON output', () => {
     const results = [{ title: 'Docs', url: 'https://example.com/' }, { url: 'javascript:alert(1)' }]
+
     const body = codexItemBody({
       type: 'webSearch',
       id: 'web',
@@ -65,6 +67,7 @@ describe('web result annotations', () => {
       action: { type: 'search' },
       results
     })
+
     expect(body).toMatchObject({
       kind: 'tool-call',
       name: 'web_search',

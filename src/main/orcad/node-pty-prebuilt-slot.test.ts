@@ -26,15 +26,19 @@ const DARWIN_ARM64: NativeHostAbi = {
 }
 
 const dirs: string[] = []
+
 const temp = (): string => {
   const dir = mkdtempSync(join(tmpdir(), 'orcad-slot-'))
   dirs.push(dir)
+
   return dir
 }
+
 afterEach(() => {
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
+
   delete process.env.ORCA_ORCAD_PREBUILDS_DIR
 })
 

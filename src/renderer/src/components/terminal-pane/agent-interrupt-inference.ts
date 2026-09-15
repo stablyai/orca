@@ -140,11 +140,13 @@ export function createAgentInterruptInference({
       clearTimer(pendingTimer)
       pendingTimer = null
     }
+
     pendingBaseline = null
   }
 
   const clearDoubleEscapeBaseline = (): void => {
     doubleEscapeBaseline = null
+
     if (doubleEscapeTimer !== null) {
       clearTimer(doubleEscapeTimer)
       doubleEscapeTimer = null
@@ -161,12 +163,14 @@ export function createAgentInterruptInference({
     intent: AgentInterruptInputIntent
   ): CapturedInterruptBaseline | null => {
     const agentType = entry.agentType
+
     if (
       !canInferInterrupt(entry, intent) ||
       !isExplicitAgentStatusFresh(entry, now(), AGENT_STATUS_STALE_AFTER_MS)
     ) {
       return null
     }
+
     return {
       updatedAt: entry.updatedAt,
       stateStartedAt: entry.stateStartedAt,
@@ -180,14 +184,17 @@ export function createAgentInterruptInference({
     if (disposed) {
       return false
     }
+
     const baseline = pendingBaseline
     pendingTimer = null
     pendingBaseline = null
+
     if (!baseline) {
       return false
     }
 
     const entry = getStatusEntry()
+
     if (
       entry &&
       (!canInferInterrupt(entry, baseline.intent) ||
@@ -199,6 +206,7 @@ export function createAgentInterruptInference({
     ) {
       return false
     }
+
     if (!entry && now() - baseline.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
       return false
     }
@@ -212,6 +220,7 @@ export function createAgentInterruptInference({
       intent: baseline.intent,
       ...(baseline.inputCount !== undefined ? { inputCount: baseline.inputCount } : {})
     })
+
     return result ?? true
   }
 
@@ -224,50 +233,69 @@ export function createAgentInterruptInference({
       if (disposed) {
         return
       }
+
       if (baselineSequence !== undefined) {
         if (baselineSequence < latestBaselineSequence) {
           return
         }
+
         latestBaselineSequence = baselineSequence
       }
+
       const currentEntry = getStatusEntry()
+
       // Why: an older acknowledged write must not replace a newer turn's pending inference.
       if (capturedEntry !== undefined && currentEntry && currentEntry !== capturedEntry) {
         return
       }
+
       const entry = capturedEntry === undefined ? currentEntry : capturedEntry
+
       if (!entry) {
         clearPending()
+
         return
       }
+
       let baseline = captureBaseline(entry, intent)
+
       if (!baseline) {
         clearPending()
+
         return
       }
+
       if (shouldIgnoreInterruptIntent(baseline.agentType, intent)) {
         clearPending()
+
         return
       }
+
       // Why: this keypress proves nothing, but it must not revoke a Ctrl+C already waiting to
       // settle — the user really did ask to interrupt, and Escape does not take that back.
       if (isIgnorableNavigationEscape(baseline.agentType, intent, entry.state)) {
         return
       }
+
       if (requiresDoubleEscapeForAgent(baseline.agentType, intent)) {
         const isSecondEscape =
           doubleEscapeBaseline !== null && isSameTurnBaseline(doubleEscapeBaseline, baseline)
+
         doubleEscapeBaseline = baseline
         clearPendingTimer()
+
         if (!isSecondEscape) {
           if (doubleEscapeTimer !== null) {
             clearTimer(doubleEscapeTimer)
           }
+
           // Why: some TUIs use the first Escape as an editor/menu cancel. Do
           // not let that arm a later single Escape indefinitely.
           doubleEscapeTimer = setTimer(clearDoubleEscapeBaseline, AGENT_INTERRUPT_SETTLE_MS)
+
           return
         }
+
         clearDoubleEscapeBaseline()
         // Why: these agents use the first Escape as a TUI/editor cancel. The
         // second Escape on the same turn is the actual running-turn interrupt.
@@ -276,13 +304,17 @@ export function createAgentInterruptInference({
         clearDoubleEscapeBaseline()
         clearPendingTimer()
       }
+
       pendingBaseline = baseline
+
       if (shouldFlushInterruptImmediately(baseline)) {
         // Why: these interrupts can emit an idle/done hook before the settle timer,
         // overwriting the working baseline and losing the interrupted outcome.
         return flushPending()
       }
+
       pendingTimer = setTimer(flushPendingFromTimer, AGENT_INTERRUPT_SETTLE_MS)
+
       return undefined
     },
     flushPending,

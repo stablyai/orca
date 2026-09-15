@@ -89,6 +89,7 @@ describe('gitLabJobCanHaveTrace', () => {
         webUrl: '',
         duration: null
       } as unknown as GitLabPipelineJob
+
       const [check] = gitLabPipelineJobsToPRChecks([job])
 
       expect(gitLabJobCanHaveTrace(check)).toBe(expected)

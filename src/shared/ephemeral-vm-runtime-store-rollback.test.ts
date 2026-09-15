@@ -107,6 +107,7 @@ describe('ephemeral VM runtime store rollback projection', () => {
   function makeUserDataPath(): string {
     const path = mkdtempSync(join(tmpdir(), 'orca-vm-rollback-store-'))
     tempDirs.push(path)
+
     return path
   }
 
@@ -125,6 +126,7 @@ describe('ephemeral VM runtime store rollback projection', () => {
   it('keeps ordinary v1 bytes and sidecar behavior unchanged', () => {
     const userDataPath = makeUserDataPath()
     const runtime = runtimeRecord()
+
     const expected = JSON.stringify(
       EphemeralVmRuntimeStoreSchema.parse({ version: 1, runtimes: [runtime] })
     )
@@ -137,6 +139,7 @@ describe('ephemeral VM runtime store rollback projection', () => {
 
   it('projects an explicit ordinary checkout mode without changing its current meaning', () => {
     const userDataPath = makeUserDataPath()
+
     const runtime = runtimeRecord({
       recipe: { ...runtimeRecord().recipe!, checkoutMode: 'orca-worktree' }
     })
@@ -150,18 +153,21 @@ describe('ephemeral VM runtime store rollback projection', () => {
 
   it('does not rewrite unchanged features when runtime order differs from feature order', () => {
     const userDataPath = makeUserDataPath()
+
     const older = {
       ...provisionedRootRecord(),
       id: 'a-runtime',
       recipeId: 'a-recipe',
       createdAt: 1_000
     }
+
     const newer = {
       ...provisionedRootRecord(),
       id: 'z-runtime',
       recipeId: 'z-recipe',
       createdAt: 2_000
     }
+
     upsertEphemeralVmRuntime(userDataPath, older)
     upsertEphemeralVmRuntime(userDataPath, newer)
     const featurePath = getEphemeralVmRuntimeFeatureStorePath(userDataPath)
@@ -178,10 +184,12 @@ describe('ephemeral VM runtime store rollback projection', () => {
 
   it('migrates current-main poisoned bytes when they are first read', () => {
     const userDataPath = makeUserDataPath()
+
     const poisoned = {
       version: 1 as const,
       runtimes: [provisionedRootRecord(), runtimeRecord()]
     }
+
     writeFileSync(
       getEphemeralVmRuntimeStorePath(userDataPath),
       JSON.stringify(EphemeralVmRuntimeStoreSchema.parse(poisoned))
@@ -200,9 +208,11 @@ describe('ephemeral VM runtime store rollback projection', () => {
     upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
     upsertEphemeralVmRuntime(userDataPath, provisionedRootRecord())
     const path = getEphemeralVmRuntimeStorePath(userDataPath)
+
     const rollback = RollbackEphemeralVmRuntimeStoreSchema.parse(
       JSON.parse(readFileSync(path, 'utf8'))
     )
+
     writeFileSync(
       path,
       JSON.stringify({
@@ -293,20 +303,24 @@ describe('runtime feature restoration scaling', () => {
   it('indexes feature identities once and preserves unmatched runtime references', () => {
     let reads = 0
     const runtimes = Array.from({ length: 1000 }, (_, i) => runtimeRecord({ id: `runtime-${i}` }))
+
     const features = runtimes.map((runtime) => ({
       get id() {
         reads++
+
         return runtime.id
       },
       recipeId: runtime.recipeId,
       createdAt: runtime.createdAt,
       recipeCheckoutMode: 'provisioned-root' as const
     }))
+
     for (const runtime of runtimes) {
       expect(
         features.find((entry) => featureIdentity(entry) === featureIdentity(runtime))
       ).toBeDefined()
     }
+
     expect(reads).toBe(500_500)
     reads = 0
     const restored = restoreRuntimeFeatureList(runtimes, features)

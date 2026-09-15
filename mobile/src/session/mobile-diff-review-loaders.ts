@@ -42,20 +42,26 @@ export async function loadMobileDiffReviewBranchCompare(
 ): Promise<BranchCompareLoadResult> {
   try {
     const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
+
     if (!baseRef) {
       return { result: null }
     }
+
     const response = await client.sendRequest('git.branchCompare', {
       worktree: `id:${worktreeId}`,
       baseRef
     })
+
     if (!response.ok) {
       if (isMobileGitUnavailable(response.error?.code, response.error?.message)) {
         return { result: null }
       }
+
       return { result: null, error: response.error?.message || 'Committed changes unavailable' }
     }
+
     const parsed = readMobileBranchCompareResult(response.result)
+
     return parsed
       ? { result: parsed }
       : { result: null, error: 'Committed changes response was invalid' }
@@ -69,13 +75,17 @@ export async function loadMobileDiffReviewSnapshot(
   worktreeId: string
 ): Promise<ReviewScreenState> {
   const statusResponse = await client.sendRequest('git.status', { worktree: `id:${worktreeId}` })
+
   if (!statusResponse.ok) {
     if (isMobileGitUnavailable(statusResponse.error?.code, statusResponse.error?.message)) {
       return { kind: 'unavailable', message: 'Update Orca desktop to review changes on mobile.' }
     }
+
     throw new Error(statusResponse.error?.message || 'Unable to load changes')
   }
+
   const status = readMobileGitStatusResult(statusResponse.result)
+
   if (!status) {
     throw new Error('Source control response was invalid')
   }
@@ -84,6 +94,7 @@ export async function loadMobileDiffReviewSnapshot(
     loadMobileDiffReviewBranchCompare(client, worktreeId),
     client.sendRequest('worktree.show', { worktree: `id:${worktreeId}` })
   ])
+
   if (!worktreeResponse.ok) {
     throw new Error(worktreeResponse.error?.message || 'Unable to load review notes')
   }
@@ -91,10 +102,12 @@ export async function loadMobileDiffReviewSnapshot(
   const metadata = readMobileReviewWorktreeMetadata(worktreeResponse.result)
   const comments = normalizeMobileDiffComments(metadata.diffComments, worktreeId)
   const normalizedReviewState = normalizeMobileDiffReviewState(metadata.mobileDiffReview)
+
   const branchEntries =
     branch.result && canOpenMobileBranchCompareDiff(branch.result.summary)
       ? branch.result.entries
       : []
+
   const queue = buildMobileDiffReviewQueue({
     worktreeId,
     statusEntries: status.entries,
@@ -121,6 +134,7 @@ export async function loadMobileDiffReviewSnapshot(
 
 export async function loadMobileDiffReviewDiff(input: DiffLoadInput): Promise<ReviewDiffState> {
   const { client, worktreeId, item, branchCompare } = input
+
   const response =
     item.scope === 'branch'
       ? await loadBranchFileDiff(client, worktreeId, item, branchCompare)
@@ -129,27 +143,36 @@ export async function loadMobileDiffReviewDiff(input: DiffLoadInput): Promise<Re
           filePath: item.filePath,
           staged: item.scope === 'staged'
         })
+
   if (!response.ok) {
     if (response.error?.code === 'diff_too_large') {
       return { kind: 'too-large', itemKey: item.key }
     }
+
     if (item.status === 'deleted') {
       return { kind: 'deleted', itemKey: item.key }
     }
+
     throw new Error(response.error?.message || 'Unable to load diff')
   }
+
   const result = readMobileReviewGitDiffResult(response.result)
+
   if (!result) {
     throw new Error('Diff response was invalid')
   }
+
   if (result.kind === 'binary') {
     return { kind: 'binary', itemKey: item.key }
   }
+
   if (result.kind === 'too-large') {
     return { kind: 'too-large', itemKey: item.key, byteLength: result.byteLength }
   }
+
   const diff = buildMobileDiffLines(result.originalContent, result.modifiedContent)
   const language = resolveMobileSyntaxLanguage(item.filePath)
+
   return {
     kind: 'ready',
     itemKey: item.key,
@@ -166,9 +189,11 @@ async function loadBranchFileDiff(
   branchCompare: MobileGitBranchCompareResult | null
 ) {
   const summary = branchCompare?.summary
+
   if (!summary || !summary.headOid || !summary.mergeBase) {
     throw new Error('Committed diff is unavailable')
   }
+
   return client.sendRequest('git.branchDiff', {
     worktree: `id:${worktreeId}`,
     filePath: item.filePath,

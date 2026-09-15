@@ -28,12 +28,15 @@ export function resyncStaleRemoteWorkspace(
   onError: (error: unknown) => void = () => {}
 ): Promise<void> {
   const existing = pendingByTargetId.get(target.id)
+
   if (existing) {
     // Why: a burst of markers must collapse to one extra read, but never to zero — a marker that
     // arrived while a read was already in flight may describe a revision that read did not see.
     existing.requeued = true
+
     return existing.promise
   }
+
   const pending: PendingResync = { requeued: false, promise: Promise.resolve() }
   pending.promise = (async () => {
     try {
@@ -41,14 +44,17 @@ export function resyncStaleRemoteWorkspace(
         pending.requeued = false
         const previous = getCachedRemoteWorkspaceSnapshot(target.id)
         const snapshot = await getRemoteSnapshot(target)
+
         if (!snapshot) {
           return
         }
+
         // Suppress the echo: our own patch response already cached this session, and re-publishing it
         // makes the renderer rehydrate a state it authored.
         if (remoteWorkspaceSessionMatchesSnapshot(previous, snapshot.session)) {
           continue
         }
+
         deliver(snapshot)
       } while (pending.requeued)
     } catch (error) {
@@ -58,5 +64,6 @@ export function resyncStaleRemoteWorkspace(
     }
   })()
   pendingByTargetId.set(target.id, pending)
+
   return pending.promise
 }

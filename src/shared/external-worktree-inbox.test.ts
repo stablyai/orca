@@ -144,6 +144,7 @@ describe('external worktree inbox', () => {
   it('returns only hidden external worktrees outside the inbox baseline', () => {
     const hidden = detectedWorktree({ id: 'hidden', path: '/scratch/new-one' })
     const baselined = detectedWorktree({ id: 'baselined', path: '/scratch/old-one' })
+
     const detected = detectedResult([
       hidden,
       baselined,
@@ -162,6 +163,7 @@ describe('external worktree inbox', () => {
 
   it('excludes explicitly visible agent scratch from visibility-control counts', () => {
     const visible = detectedWorktree({ id: 'visible', visible: true })
+
     const scratch = detectedWorktree({
       id: 'agent-scratch',
       ownership: 'agent-scratch',
@@ -183,7 +185,9 @@ describe('external worktree inbox', () => {
       path: '/repo/.claude/worktrees/scratch-1',
       ownership: 'agent-scratch'
     })
+
     const hiddenExternal = detectedWorktree({ id: 'hidden-external' })
+
     const detected = detectedResult([
       hiddenScratch,
       hiddenExternal,
@@ -208,6 +212,7 @@ describe('external worktree inbox', () => {
 
   it('offers metadata-free nested Orca workspace worktrees through the inbox', () => {
     const settings = makeSettings()
+
     const manual = toDetectedWorktree({
       repo,
       settings,

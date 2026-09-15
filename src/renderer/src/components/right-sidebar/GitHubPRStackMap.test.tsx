@@ -44,6 +44,7 @@ const stack: GitHubPRStack = {
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 describe('GitHubPRStackMap', () => {
@@ -72,6 +73,7 @@ describe('GitHubPRStackMap', () => {
     const trigger = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Expand stack #51"]'
     )
+
     act(() => trigger?.click())
 
     const rows = [...container.querySelectorAll<HTMLButtonElement>('button[data-stack-pr-number]')]

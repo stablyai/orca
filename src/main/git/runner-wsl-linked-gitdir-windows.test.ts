@@ -15,7 +15,9 @@ import { listWorktrees } from './worktree'
 import { resetWslLinkedWorktreeGitRoutingForTests } from './wsl-linked-worktree-git-routing'
 
 const distro = process.env.ORCA_TEST_WSL_DISTRO?.trim()
+
 const fixtureRoots: string[] = []
+
 const wslFixtureRoots: string[] = []
 
 function hostGit(args: string[], cwd: string): string {
@@ -30,10 +32,12 @@ afterEach(async () => {
   await Promise.all(
     fixtureRoots.splice(0).map((path) => rm(path, { recursive: true, force: true }))
   )
+
   for (const path of wslFixtureRoots.splice(0)) {
     if (!/^\/tmp\/orca-wsl-native-[A-Za-z0-9]+$/.test(path)) {
       throw new Error(`Refusing to remove unexpected WSL fixture path: ${path}`)
     }
+
     wslExec(['rm', '-rf', '--', path])
   }
 })
@@ -118,10 +122,12 @@ describe.runIf(process.platform === 'win32' && Boolean(distro))(
         cwd: linkedPath,
         wslDistro: distro!
       })
+
       const mainExecPath = await gitExecFileAsync(['--exec-path'], {
         cwd: mainPath,
         wslDistro: distro!
       })
+
       expect(linkedExecPath.stdout).toMatch(/^[A-Za-z]:\//)
       expect(mainExecPath.stdout).toMatch(/(?:^|\n)\/[^\n]+\n$/)
       await expect(listWorktrees(linkedPath, { wslDistro: distro! })).resolves.toEqual(

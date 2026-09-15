@@ -4,18 +4,26 @@ import type { ParkedTerminalByteWatcherOptions } from './parked-terminal-byte-wa
 import type * as ParkedTerminalCommandStatus from './parked-terminal-command-status'
 
 const PTY_ID = 'pty-parked-1'
+
 const TAB_ID = 'tab-1'
+
 const WORKTREE_ID = 'repo-1::/tmp/wt-1'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = `${TAB_ID}:${LEAF_ID}`
+
 const PANE_ID = 1
+
 // Mirrors PARKED_NOTIFICATION_GRACE_MS / AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS.
 const NOTIFICATION_GRACE_MS = 250
 
 // Real agent-detection titles: braille spinner classifies as working,
 // the "✳ " Claude prefix as idle, and both as Claude agents.
 const WORKING_TITLE_OSC = '\x1b]0;⠋ Build feature\x07'
+
 const IDLE_TITLE = '✳ Build feature'
+
 const IDLE_TITLE_OSC = `\x1b]0;${IDLE_TITLE}\x07`
 
 type MockStoreState = {
@@ -39,6 +47,7 @@ type MockStoreState = {
 }
 
 const dispatchTerminalNotification = vi.fn()
+
 let mockStoreState: MockStoreState
 
 vi.mock('./use-notification-dispatch', () => ({
@@ -53,6 +62,7 @@ const commandStatusPolicy = {
   onCommandCodeDone: vi.fn(),
   dispose: vi.fn()
 }
+
 // Partial mock: readInFlightCommandCodeTurn stays real so detector seeding reads the store.
 vi.mock('./parked-terminal-command-status', async (importOriginal) => ({
   ...(await importOriginal<typeof ParkedTerminalCommandStatus>()),
@@ -110,8 +120,11 @@ describe('startParkedTerminalByteWatcher', () => {
     overrides: Partial<ParkedTerminalByteWatcherOptions> = {}
   ): Promise<{ dispose: () => void; ptyWrite: ReturnType<typeof vi.fn> }> {
     const { startParkedTerminalByteWatcher } = await import('./parked-terminal-byte-watcher')
+
     const ptyWrite = vi.fn()
+
     ;(window as unknown as { api: { pty: Record<string, unknown> } }).api.pty.write = ptyWrite
+
     const dispose = startParkedTerminalByteWatcher({
       ptyId: PTY_ID,
       tabId: TAB_ID,
@@ -120,6 +133,7 @@ describe('startParkedTerminalByteWatcher', () => {
       paneId: PANE_ID,
       ...overrides
     })
+
     return { dispose, ptyWrite }
   }
 
@@ -139,6 +153,7 @@ describe('startParkedTerminalByteWatcher', () => {
         pty: {
           onData: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
             onData = callback
+
             return () => {}
           }),
           onReplay: vi.fn(() => () => {}),
@@ -151,6 +166,7 @@ describe('startParkedTerminalByteWatcher', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+
     if (originalWindow) {
       ;(globalThis as { window: typeof window }).window = originalWindow
     } else {
@@ -626,11 +642,14 @@ describe('startParkedTerminalByteWatcher', () => {
      *  migration-safety parity check. */
     async function emitViaMainTrackerFacts(chunks: string[]): Promise<void> {
       const { createAgentStatusOscProcessor } = await import('../../../../shared/agent-status-osc')
+
       const { createTerminalTitleTracker } =
         await import('../../../../shared/terminal-output-side-effects')
+
       const handler = await import('./terminal-side-effect-facts-handler')
       const processStatusChunk = createAgentStatusOscProcessor()
       let pending: TerminalSideEffectFact[] = []
+
       const tracker = createTerminalTitleTracker({
         onTitle: (normalizedTitle, rawTitle) =>
           pending.push({ kind: 'title', normalizedTitle, rawTitle }),
@@ -639,15 +658,19 @@ describe('startParkedTerminalByteWatcher', () => {
         onAgentExited: () => pending.push({ kind: 'agent-exited' }),
         onBell: () => pending.push({ kind: 'bell' })
       })
+
       let seq = 0
+
       for (const chunk of chunks) {
         seq += chunk.length
         tracker.handleChunk(processStatusChunk(chunk).cleanData)
+
         if (pending.length > 0) {
           handler._dispatchTerminalSideEffectBatchForTest({ ptyId: PTY_ID, seq, facts: pending })
           pending = []
         }
       }
+
       tracker.dispose()
     }
 
@@ -678,6 +701,7 @@ describe('startParkedTerminalByteWatcher', () => {
       dispatchTerminalNotification.mockImplementation((...args: unknown[]) => {
         calls.push(['dispatchTerminalNotification', ...args])
       })
+
       return calls
     }
 
@@ -723,7 +747,9 @@ describe('startParkedTerminalByteWatcher', () => {
 
     it('does not request a title snapshot for an ordinary parked watcher', async () => {
       enableMainAuthority()
+
       const getSideEffectSnapshot = vi.fn()
+
       ;(
         window as unknown as {
           api: { pty: { getSideEffectSnapshot: typeof getSideEffectSnapshot } }
@@ -738,6 +764,7 @@ describe('startParkedTerminalByteWatcher', () => {
 
     it('restores a cold-started watcher title without replaying attention facts', async () => {
       enableMainAuthority()
+
       const getSideEffectSnapshot = vi.fn().mockResolvedValue({
         ptyId: PTY_ID,
         seq: 42,
@@ -748,6 +775,7 @@ describe('startParkedTerminalByteWatcher', () => {
           { kind: 'agent-idle', title: IDLE_TITLE }
         ] satisfies TerminalSideEffectFact[]
       })
+
       ;(
         window as unknown as {
           api: { pty: { getSideEffectSnapshot: typeof getSideEffectSnapshot } }
@@ -884,7 +912,9 @@ describe('startParkedTerminalByteWatcher', () => {
 
     it('marks the PTY hidden for delivery on start and clears it on dispose', async () => {
       enableMainAuthority()
+
       const setHiddenRendererPty = vi.fn()
+
       ;(
         window as unknown as { api: { pty: Record<string, unknown> } }
       ).api.pty.setHiddenRendererPty = setHiddenRendererPty
@@ -904,7 +934,9 @@ describe('startParkedTerminalByteWatcher', () => {
         ...mockStoreState.settings,
         terminalHiddenDeliveryGate: false
       } as MockStoreState['settings']
+
       const setHiddenRendererPty = vi.fn()
+
       ;(
         window as unknown as { api: { pty: Record<string, unknown> } }
       ).api.pty.setHiddenRendererPty = setHiddenRendererPty
@@ -929,6 +961,7 @@ describe('startParkedTerminalByteWatcher', () => {
         slug: { owner: 'orca-dev', repo: 'orca' },
         number: 421
       }
+
       await dispatchFacts([{ kind: 'pr-link', link }])
 
       expect(mockStoreState.observeTerminalGitHubPullRequestLink).toHaveBeenCalledTimes(1)
@@ -965,10 +998,12 @@ describe('startParkedTerminalByteWatcher', () => {
       const byteModeCalls = recordPolicyOutcomes()
       {
         const { dispose } = await startWatcher()
+
         for (const chunk of fixtureChunks) {
           emit(chunk)
           flushSideEffects()
         }
+
         vi.advanceTimersByTime(NOTIFICATION_GRACE_MS)
         dispose()
       }

@@ -36,15 +36,19 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
     if (session.isHiddenDeliveryGateManagedPty(session.transport.getPtyId())) {
       return
     }
+
     const result = scanMode2031ReplyDecision(session.mode2031ReplyScanState, data)
     session.mode2031ReplyScanState = result.state
+
     if (result.decision === 'unsubscribed') {
       session.deps.paneMode2031Ref.current.delete(session.pane.id)
       session.deps.paneLastThemeModeRef.current.delete(session.pane.id)
     }
+
     if (result.decision !== 'subscribed') {
       return
     }
+
     const settings = useAppStore.getState().settings
     // Why seed the mode: maybePushMode2031Flip only pushes on a change, so an unseeded
     // subscription would read as a flip on the next unrelated appearance re-apply.
@@ -78,14 +82,18 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
   bindWritePtyOutputToXterm(session)
   session.markHiddenOutputRestoreNeeded = function (): void {
     const ptyId = session.transport.getPtyId()
+
     if (!session.canUseHiddenOutputSnapshot(ptyId)) {
       return
     }
+
     if (session.hiddenOutputRestorePtyId !== null && session.hiddenOutputRestorePtyId !== ptyId) {
       session.clearHiddenOutputRestoreState()
     }
+
     session.hiddenOutputRestorePtyId = ptyId
     session.hiddenOutputRestoreNeeded = true
+
     if (shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)) {
       session.requestHiddenOutputRestoreIfNeeded()
     }
@@ -93,6 +101,7 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
 
   session.shouldSkipHiddenRendererOutput = function (foreground: boolean, data: string): boolean {
     const ptyId = session.transport.getPtyId()
+
     if (
       foreground ||
       (!session.shouldSnapshotHiddenCodexOutput && session.remoteOutputGatedPtyId !== ptyId) ||
@@ -100,6 +109,7 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
     ) {
       return false
     }
+
     // Why: CPR/DECRQM replies depend on ordered state; keep a clean stateful-query chunk live, but after skipped bytes avoid stale replies.
     return session.hiddenRendererStateDirty || !containsStatefulRendererQuery(data)
   }
@@ -109,7 +119,9 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
       data,
       session.hiddenStartupRendererQueryPending
     )
+
     session.hiddenStartupRendererQueryPending = extracted.pending
+
     if (extracted.oscColorQueryData) {
       // Why: Codex's startup palette probe has a 100ms budget; answer hidden color queries immediately so scheduling/remote-input debounce (#7329) can't miss it.
       sendTerminalOscColorQueryReplies(
@@ -118,6 +130,7 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
         session.sendDesktopQueryReplyImmediate
       )
     }
+
     if (extracted.statelessQueryData) {
       session.writePtyOutputToXterm(extracted.statelessQueryData, false, {
         hiddenStartupRendererQuery: true
@@ -145,6 +158,7 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
       snapshot.snapshotSeq === undefined
         ? undefined
         : parseTerminalKittyKeyboardFlags(snapshot.kittyKeyboardFlags)
+
     if (proven === undefined) {
       // Why the demotion: a mirror grounded in this PTY's stream keeps its
       // state, but a constructor-fresh tracker (window reload) holds a
@@ -154,9 +168,12 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
       if (!session.kittyKeyboardModes.hasProvenBaseline) {
         session.kittyKeyboardModes.resetForSnapshot()
       }
+
       session.kittyKeyboardModes.scanReplay(snapshotData)
+
       return
     }
+
     session.kittyKeyboardModes.resetForSnapshot()
     session.kittyKeyboardModes.scanReplay(snapshotData)
     session.kittyKeyboardModes.restoreSnapshotFlags(proven)
@@ -169,15 +186,20 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
     if (typeof meta?.seq !== 'number') {
       return
     }
+
     const ptyId = session.transport.getPtyId()
+
     if (!ptyId) {
       return
     }
+
     if (session.rendererOrderedPtyId !== ptyId) {
       session.rendererOrderedPtyId = ptyId
       session.rendererOrderedSeq = meta.seq
+
       return
     }
+
     session.rendererOrderedSeq = Math.max(session.rendererOrderedSeq ?? 0, meta.seq)
   }
 
@@ -186,10 +208,12 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
     if (session.restoredSnapshotBaselinePtyId === exitedPtyId) {
       session.clearRestoredSnapshotBaseline()
     }
+
     if (session.rendererOrderedPtyId === exitedPtyId) {
       session.rendererOrderedPtyId = null
       session.rendererOrderedSeq = null
     }
+
     if (session.rendererChannelSeqPtyId === exitedPtyId) {
       session.rendererChannelSeqPtyId = null
       session.rendererChannelSeq = null
@@ -200,15 +224,20 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
     if (typeof meta?.seq !== 'number') {
       return
     }
+
     const ptyId = session.transport.getPtyId()
+
     if (!ptyId) {
       return
     }
+
     if (session.rendererChannelSeqPtyId !== ptyId) {
       session.rendererChannelSeqPtyId = ptyId
       session.rendererChannelSeq = meta.seq
+
       return
     }
+
     if (session.rendererChannelSeq !== null && meta.seq < session.rendererChannelSeq) {
       // Why: pty:data is FIFO, so seq regresses only when a session revived without an observed exit and restarted its counter; drop the stale baseline.
       if (session.rendererOrderedPtyId === ptyId) {
@@ -216,6 +245,7 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
         session.rendererOrderedSeq = null
       }
     }
+
     session.rendererChannelSeq = meta.seq
   }
 
@@ -230,6 +260,7 @@ export function bindHiddenOutputSeqAndSkip(session: ConnectPanePtySession): void
     ) {
       return data
     }
+
     return session.getChunkDataAfterSnapshot(
       { data, seq: meta?.seq, rawLength: meta?.rawLength },
       session.rendererOrderedSeq

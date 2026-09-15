@@ -45,6 +45,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   afterEach(() => {
     restorePlatform()
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
     }
@@ -56,6 +57,7 @@ describe('ClaudeAccountService credential capture', () => {
     rmSync(tempDir, { recursive: true, force: true })
     const hostAuthPath = join(tempDir, 'claude-accounts', 'host-account', 'auth')
     mkdirSync(hostAuthPath, { recursive: true })
+
     let settings = {
       claudeManagedAccounts: [
         {
@@ -76,29 +78,36 @@ describe('ClaudeAccountService credential capture', () => {
       activeClaudeManagedAccountId: 'host-account',
       activeClaudeManagedAccountIdsByRuntime: { host: 'host-account', wsl: { Ubuntu: null } }
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
+
     const rateLimits = {
       evictInactiveClaudeCache: vi.fn(),
       refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
     }
+
     const { ClaudeAccountService } = await import('./service')
     const { markClaudePtyExited, markClaudePtySpawned } = await import('./live-pty-gate')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,
       runtimeAuth as never
     )
+
     ;(
       service as unknown as {
         runClaudeLoginAndCapture(): Promise<{
@@ -114,6 +123,7 @@ describe('ClaudeAccountService credential capture', () => {
     }))
 
     markClaudePtySpawned('live-claude-pty')
+
     try {
       await service.addAccount({ runtime: 'host' })
     } finally {
@@ -144,6 +154,7 @@ describe('ClaudeAccountService credential capture', () => {
     const hostAuthPath = join(tempDir, 'claude-accounts', 'host-account', 'auth')
     mkdirSync(hostAuthPath, { recursive: true })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     let settings = {
       claudeManagedAccounts: [
         {
@@ -164,13 +175,16 @@ describe('ClaudeAccountService credential capture', () => {
       activeClaudeManagedAccountId: 'host-account',
       activeClaudeManagedAccountIdsByRuntime: { host: 'host-account', wsl: { Ubuntu: null } }
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
@@ -178,16 +192,20 @@ describe('ClaudeAccountService credential capture', () => {
         throw new Error('rematerialize failed')
       })
     }
+
     const rateLimits = {
       evictInactiveClaudeCache: vi.fn(),
       refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
     }
+
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,
       runtimeAuth as never
     )
+
     ;(
       service as unknown as {
         runClaudeLoginAndCapture(): Promise<{
@@ -226,6 +244,7 @@ describe('ClaudeAccountService credential capture', () => {
     mkdirSync(existingAuthPath, { recursive: true })
     const existingMarkerPath = join(existingAuthPath, '.orca-managed-claude-auth')
     writeFileSync(existingMarkerPath, 'existing-account\n', 'utf-8')
+
     let settings = {
       claudeManagedAccounts: [
         {
@@ -246,28 +265,35 @@ describe('ClaudeAccountService credential capture', () => {
       activeClaudeManagedAccountId: 'existing-account',
       activeClaudeManagedAccountIdsByRuntime: { host: 'existing-account', wsl: {} }
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
+
     const rateLimits = {
       evictInactiveClaudeCache: vi.fn(),
       refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
     }
+
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,
       runtimeAuth as never
     )
+
     ;(
       service as unknown as {
         runClaudeLoginAndCapture(): Promise<{
@@ -308,6 +334,7 @@ describe('ClaudeAccountService credential capture', () => {
       'existing-account\n',
       'utf-8'
     )
+
     let settings = {
       claudeManagedAccounts: [
         {
@@ -328,28 +355,35 @@ describe('ClaudeAccountService credential capture', () => {
       activeClaudeManagedAccountId: 'existing-account',
       activeClaudeManagedAccountIdsByRuntime: { host: 'existing-account', wsl: {} }
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
+
     const rateLimits = {
       evictInactiveClaudeCache: vi.fn(),
       refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
     }
+
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,
       runtimeAuth as never
     )
+
     ;(
       service as unknown as {
         runClaudeLoginAndCapture(): Promise<{

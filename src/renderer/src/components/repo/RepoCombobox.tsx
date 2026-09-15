@@ -61,6 +61,7 @@ export default function RepoCombobox({
     () => repos.find((repo) => repo.id === value) ?? null,
     [repos, value]
   )
+
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
 
   const cancelFocusFrame = useCallback((): void => {
@@ -75,6 +76,7 @@ export default function RepoCombobox({
       if (node === null) {
         cancelFocusFrame()
       }
+
       inputRef.current = node
     },
     [cancelFocusFrame]
@@ -85,9 +87,11 @@ export default function RepoCombobox({
     focusFrameRef.current = requestAnimationFrame(() => {
       focusFrameRef.current = null
       const repoSearchInput = inputRef.current
+
       if (!repoSearchInput) {
         return
       }
+
       repoSearchInput.focus()
       // Why: when a printable keydown on the trigger seeded the query, the
       // user expects the next keystroke to append to what they typed — not
@@ -100,10 +104,13 @@ export default function RepoCombobox({
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
       setOpen(nextOpen)
+
       if (nextOpen) {
         setCommandValue(value)
+
         return
       }
+
       cancelFocusFrame()
       // Why: the create-worktree dialog delays its own field reset until after
       // close animation, so the repo picker must clear its local filter here or a
@@ -133,15 +140,19 @@ export default function RepoCombobox({
       if (open) {
         return
       }
+
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
         setCommandValue(value)
         setOpen(true)
+
         return
       }
+
       if (event.metaKey || event.ctrlKey || event.altKey) {
         return
       }
+
       // Why: restrict to visible characters so whitespace/Enter keep their
       // native button semantics (Space/Enter = click = open-without-filter via
       // the PopoverTrigger) instead of leaking into the query as a stray char.
@@ -159,16 +170,21 @@ export default function RepoCombobox({
     if (isAdding) {
       return
     }
+
     setIsAdding(true)
+
     try {
       const repo = await addRepo()
+
       if (repo) {
         if (isGitRepoKind(repo)) {
           await fetchWorktrees(repo.id)
         }
+
         if (!mountedRef.current) {
           return
         }
+
         onValueChange(repo.id)
         setOpen(false)
         setQuery('')

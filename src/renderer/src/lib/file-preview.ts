@@ -19,6 +19,7 @@ import type { BrowserPageConversionLeg } from '@/store/slices/browser-page-conve
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 
 export type PreviewableLanguage = 'html'
+
 /** Still the answer for flows that need a real `file://` URL (e.g. dropping a file on a browser pane). */
 export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE =
   'Open in Orca Browser is only available for local files.'
@@ -51,6 +52,7 @@ export function getWorkspaceFilePreviewPlan(
   filePath: string
 ): WorkspaceFilePreviewPlan {
   const connectionId = getConnectionIdForFileFromState(state, worktreeId, filePath)
+
   if (connectionId === undefined) {
     // Why: an unresolved owner can't pick a channel — reading it locally would hand a
     // remote path to this machine's filesystem.
@@ -60,13 +62,16 @@ export function getWorkspaceFilePreviewPlan(
       reason: 'no-channel'
     }
   }
+
   if (connectionId !== null) {
     return { status: 'doc-preview' }
   }
+
   // Why: the doc preview needs no browser at all, so a paired runtime without the
   // screencast capability still previews documents.
   if (getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
     const worktreeRoot = state.getKnownWorktreeById(worktreeId)?.path ?? null
+
     if (worktreeRoot && !getRelativePathInsideRoot(filePath, worktreeRoot)) {
       // Why: the host's files.read is worktree-scoped, so this would 404 at request time with
       // nothing telling the user which boundary they hit.
@@ -76,12 +81,16 @@ export function getWorkspaceFilePreviewPlan(
         reason: 'outside-worktree'
       }
     }
+
     return { status: 'doc-preview' }
   }
+
   const availability = getClientCreationActionPolicy(state, worktreeId)['managed-browser']
+
   if (availability.state !== 'enabled') {
     return { status: 'unsupported', message: availability.reason, reason: 'no-channel' }
   }
+
   return {
     status: 'browser-tab',
     url: absolutePathToFileUri(filePath),
@@ -95,6 +104,7 @@ export function canShowWorkspaceFileBrowserAction(
   filePath: string
 ): boolean {
   const plan = getWorkspaceFilePreviewPlan(state, worktreeId, filePath)
+
   // Why: an out-of-worktree paired doc keeps its action so activating it can say why it cannot
   // render; hiding the control would leave the limitation unexplained.
   return plan.status !== 'unsupported' || plan.reason === 'outside-worktree'
@@ -121,6 +131,7 @@ export function useWorkspaceFileBrowserActionPredicate(
       worktreesByRepo: state.worktreesByRepo
     }))
   )
+
   return useCallback(
     (filePath: string) =>
       worktreeId
@@ -173,11 +184,13 @@ function openDocPreviewTab(
     worktreeId: params.worktreeId,
     filePath: params.filePath
   }
+
   // Why reuse and not a second tab: previewing a document already on screen is a request to look at
   // it, and two tabs of one document would each hold their own grant on the same file.
   const existing = (state.browserTabsByWorktree[params.worktreeId] ?? []).find((tab) =>
     browserPageDocLocationsEqual(tab.docLocation ?? null, docLocation)
   )
+
   if (existing) {
     if (
       !params.activate ||
@@ -185,8 +198,10 @@ function openDocPreviewTab(
     ) {
       state.setActiveBrowserTab(existing.id)
     }
+
     return
   }
+
   state.createBrowserTab(params.worktreeId, ORCA_BROWSER_BLANK_URL, {
     docLocation,
     title: basename(params.filePath) || params.filePath,
@@ -206,11 +221,14 @@ export function openFileInBrowserTab(params: {
 }): WorkspaceFilePreviewPlan {
   const state = useAppStore.getState()
   const plan = getWorkspaceFilePreviewPlan(state, params.worktreeId, params.filePath)
+
   if (plan.status === 'unsupported') {
     return plan
   }
+
   if (plan.status === 'doc-preview') {
     openDocPreviewTab(state, { ...params, activate: true })
+
     return plan
   }
 
@@ -218,6 +236,7 @@ export function openFileInBrowserTab(params: {
     title: plan.title,
     activate: true
   })
+
   return plan
 }
 
@@ -231,10 +250,12 @@ function findWorkspaceShowingDoc(
     const page = (state.browserPagesByWorkspace[tab.id] ?? []).find((candidate) =>
       browserPageDocLocationsEqual(candidate.docLocation ?? null, docLocation)
     )
+
     if (page) {
       return { workspaceId: tab.id, pageId: page.id }
     }
   }
+
   return null
 }
 
@@ -256,12 +277,14 @@ export function convertBrowserPageToWorkspaceDoc(
   // in place is right.
   const isHistoryLeg = options?.leg !== undefined
   const existing = isHistoryLeg ? null : findWorkspaceShowingDoc(state, docLocation)
+
   if (existing) {
     // Why the worktree switches first: activation is deliberately scoped to the active worktree,
     // so without the switch a cross-worktree reuse would happen entirely out of sight.
     if (state.activeWorktreeId !== docLocation.worktreeId) {
       state.setActiveWorktree(docLocation.worktreeId)
     }
+
     if (
       !activateBrowserWorkspaceTab({
         worktreeId: docLocation.worktreeId,
@@ -270,30 +293,39 @@ export function convertBrowserPageToWorkspaceDoc(
     ) {
       state.setActiveBrowserTab(existing.workspaceId)
     }
+
     state.setActiveBrowserPage(existing.workspaceId, existing.pageId)
+
     return 'activated-existing'
   }
+
   // Why another worktree's document opens a tab there instead of converting this one: a converted
   // page keeps its workspace row, and a row whose worktree differs from its document's can never
   // be the reader's surface under the per-worktree activity slots — its guest would never take
   // focus, and every link in the document would be a dead end.
   const owningPage = findPage(state.browserPagesByWorkspace, pageId)
+
   if (!isHistoryLeg && owningPage && owningPage.worktreeId !== docLocation.worktreeId) {
     // The reader follows the document to its worktree; opening it out of sight is indistinguishable
     // from nothing having happened.
     if (state.activeWorktreeId !== docLocation.worktreeId) {
       state.setActiveWorktree(docLocation.worktreeId)
     }
+
     const plan = openFileInBrowserTab({
       filePath: docLocation.filePath,
       worktreeId: docLocation.worktreeId
     })
+
     if (plan.status === 'unsupported') {
       toast.error(plan.message)
+
       return 'failed'
     }
+
     return 'opened-in-owning-worktree'
   }
+
   return state.convertBrowserPage(pageId, { kind: 'workspace-doc', docLocation }, options)
     ? 'converted'
     : 'failed'
@@ -320,8 +352,10 @@ export function openFilePreviewToSide(params: {
   const state = useAppStore.getState()
   const worktreeId = params.worktreeId
   const plan = getWorkspaceFilePreviewPlan(state, worktreeId, params.filePath)
+
   if (plan.status === 'unsupported') {
     toast.error(plan.message)
+
     return
   }
 
@@ -333,6 +367,7 @@ export function openFilePreviewToSide(params: {
     state.activeGroupIdByWorktree[worktreeId] ??
     state.groupsByWorktree[worktreeId]?.[0]?.id ??
     null
+
   if (!sourceGroupId) {
     return
   }
@@ -347,6 +382,7 @@ export function openFilePreviewToSide(params: {
     (getRuntimeEnvironmentIdForWorktree(state, worktreeId)
       ? state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right', { activate: false })
       : state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right'))
+
   if (!targetGroupId) {
     return
   }
@@ -358,6 +394,7 @@ export function openFilePreviewToSide(params: {
       targetGroupId,
       activate: false
     })
+
     return
   }
 

@@ -37,13 +37,16 @@ export async function readBlobAtOid(
 ): Promise<{ content: string; isBinary: boolean }> {
   // Why: Git's `<oid>:<path>` syntax expects forward slashes even on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
+
   try {
     const buf = await gitBuffer(['show', '--end-of-options', `${oid}:${gitPath}`], cwd)
+
     return bufferToBlob(buf, filePath)
   } catch (error) {
     if (isGitBufferOverflowError(error)) {
       return { content: '', isBinary: true }
     }
+
     return { content: '', isBinary: false }
   }
 }
@@ -55,13 +58,16 @@ export async function readBlobAtIndex(
 ): Promise<{ content: string; isBinary: boolean; missing: boolean }> {
   // Why: Git's `:<path>` syntax expects forward slashes even on Windows.
   const gitPath = filePath.replace(/\\/g, '/')
+
   try {
     const buf = await gitBuffer(['show', '--end-of-options', `:${gitPath}`], cwd)
+
     return { ...bufferToBlob(buf, filePath), missing: false }
   } catch (error) {
     if (isGitBufferOverflowError(error)) {
       return { content: '', isBinary: true, missing: false }
     }
+
     // Why: a non-overflow failure means the path is absent from the index (a
     // staged deletion), distinct from the size-capped case handled above.
     return { content: '', isBinary: false, missing: true }
@@ -74,9 +80,11 @@ export async function readUnstagedLeft(
   filePath: string
 ): Promise<{ content: string; isBinary: boolean }> {
   const index = await readBlobAtIndex(gitBuffer, cwd, filePath)
+
   if (index.content || index.isBinary) {
     return index
   }
+
   return readBlobAtOid(gitBuffer, cwd, 'HEAD', filePath)
 }
 
@@ -109,6 +117,7 @@ export async function computeDiff(
       const left = compareAgainstHead
         ? await readBlobAtOid(git, worktreePath, 'HEAD', filePath)
         : await readUnstagedLeft(git, worktreePath, filePath)
+
       originalContent = left.content
       originalIsBinary = left.isBinary
 
@@ -128,11 +137,13 @@ export async function computeDiff(
     modifiedIsBinary,
     filePath
   )
+
   // Why: mark a proven deletion so previewers can fall back to the original bytes
   // without mistaking a read failure's empty modified side for a deletion.
   if (result.kind === 'binary' && modifiedDeleted) {
     return { ...result, modifiedDeleted: true }
   }
+
   return result
 }
 
@@ -157,21 +168,25 @@ export async function branchCompare(
   const readCompareRef = async (): Promise<string> => {
     try {
       const { stdout } = await git(['branch', '--show-current'], worktreePath)
+
       return stdout.trim() || 'HEAD'
     } catch {
       return 'HEAD'
     }
   }
+
   const readOid = (ref: string) =>
     git(['rev-parse', '--verify', ref], worktreePath).then(
       ({ stdout }) => ({ ok: true as const, oid: stdout.trim() }),
       (error) => ({ ok: false as const, error })
     )
+
   const [compareRef, headOidResult, baseOidResult] = await Promise.all([
     readCompareRef(),
     readOid('HEAD'),
     readOid(baseRef)
   ])
+
   summary.compareRef = compareRef
 
   if (!headOidResult.ok) {
@@ -184,25 +199,32 @@ export async function branchCompare(
       summary.commitsAhead = 0
       summary.commitsBehind = 0
       summary.status = 'ready'
+
       return { summary, entries: [] }
     }
+
     summary.status = 'unborn-head'
     summary.errorMessage =
       'This branch does not have a committed HEAD yet, so compare-to-base is unavailable.'
+
     return { summary, entries: [] }
   }
 
   const headOid = headOidResult.oid
   summary.headOid = headOid
+
   if (!baseOidResult.ok) {
     summary.status = 'invalid-base'
     summary.errorMessage = `Base ref ${baseRef} could not be resolved in this repository.`
+
     return { summary, entries: [] }
   }
+
   const baseOid = baseOidResult.oid
   summary.baseOid = baseOid
 
   let mergeBase: string
+
   try {
     const { stdout } = await git(['merge-base', baseOid, headOid], worktreePath)
     mergeBase = stdout.trim()
@@ -210,6 +232,7 @@ export async function branchCompare(
   } catch {
     summary.status = 'no-merge-base'
     summary.errorMessage = `This branch and ${baseRef} do not share a merge base, so compare-to-base is unavailable.`
+
     return { summary, entries: [] }
   }
 
@@ -218,15 +241,18 @@ export async function branchCompare(
       loadBranchChanges(mergeBase, headOid),
       git(['rev-list', '--left-right', '--count', `${baseOid}...${headOid}`], worktreePath)
     ])
+
     summary.changedFiles = entries.length
     const [behindOut = '', aheadOut = ''] = countOut.trim().split(/\s+/)
     summary.commitsAhead = Number.parseInt(aheadOut, 10) || 0
     summary.commitsBehind = Number.parseInt(behindOut, 10) || 0
     summary.status = 'ready'
+
     return { summary, entries }
   } catch (error) {
     summary.status = 'error'
     summary.errorMessage = error instanceof Error ? error.message : 'Failed to load branch compare'
+
     return { summary, entries: [] }
   }
 }
@@ -242,6 +268,7 @@ export async function branchDiffEntries(
 ) {
   let headOid: string
   let mergeBase: string
+
   try {
     const { stdout: headOut } = await git(['rev-parse', '--verify', 'HEAD'], worktreePath)
     headOid = headOut.trim()
@@ -260,11 +287,13 @@ export async function branchDiffEntries(
     ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
     worktreePath
   )
+
   const allChanges = parseBranchDiff(stdout)
 
   // Why: the IPC handler for single-file branch diff sends filePath/oldPath
   // to avoid reading blobs for every changed file — only the matched file.
   let changes = allChanges
+
   if (opts.filePath) {
     changes = allChanges.filter(
       (c) =>
@@ -285,9 +314,11 @@ export async function branchDiffEntries(
   }
 
   const results: Record<string, unknown>[] = []
+
   for (const change of changes) {
     const fp = change.path as string
     const oldP = (change.oldPath as string) ?? fp
+
     try {
       const left = await readBlobAtOid(gitBuffer, worktreePath, mergeBase, oldP)
       const right = await readBlobAtOid(gitBuffer, worktreePath, headOid, fp)
@@ -302,6 +333,7 @@ export async function branchDiffEntries(
       })
     }
   }
+
   return results
 }
 

@@ -5,12 +5,14 @@ import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 
 type TerminalHarness = { terminal: Terminal; addon: SerializeAddon }
+
 type OscLinkData = { id?: string; uri: string }
 
 function createTerminal(): TerminalHarness {
   const terminal = new Terminal({ cols: 80, rows: 5, scrollback: 100, allowProposedApi: true })
   const addon = new SerializeAddon()
   terminal.loadAddon(addon)
+
   return { terminal, addon }
 }
 
@@ -21,6 +23,7 @@ function write(terminal: Terminal, data: string): Promise<void> {
 async function replay(data: string): Promise<Terminal> {
   const { terminal } = createTerminal()
   await write(terminal, data)
+
   return terminal
 }
 
@@ -28,13 +31,17 @@ function oscLinkAt(terminal: Terminal, row: number, col: number): OscLinkData | 
   const cell = terminal.buffer.active.getLine(row)?.getCell(col) as
     | { extended?: { urlId?: number } }
     | undefined
+
   const linkId = cell?.extended?.urlId ?? 0
+
   if (!linkId) {
     return null
   }
+
   const internals = terminal as unknown as {
     _core?: { _oscLinkService?: { getLinkData: (id: number) => OscLinkData | undefined } }
   }
+
   return internals._core?._oscLinkService?.getLinkData(linkId) ?? null
 }
 

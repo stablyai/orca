@@ -40,17 +40,21 @@ export class CodexJournalPrompts {
     promptKey: string
   }): CodexJournalTranslationAdmission {
     const turnId = readCodexTurnId(event.params) ?? this.activeTurn(event.threadId)
+
     if (event.method === CODEX_USER_INPUT_METHOD) {
       const questions = codexQuestionItems({
         threadId: event.threadId,
         promptKey: event.promptKey,
         params: event.params
       })
+
       const promptItems = questions.map(({ identity, body }) => ({ identity, body }))
       const admission = this.admit(event, promptItems)
+
       if (!admission.accepted) {
         return admission
       }
+
       for (const question of promptItems) {
         const itemId = agentJournalItemKey(question.identity)
         this.pending.set(itemId, {
@@ -61,26 +65,34 @@ export class CodexJournalPrompts {
           body: question.body
         })
         const trimAdmission = this.trim()
+
         if (!trimAdmission.accepted) {
           return trimAdmission
         }
+
         this.deps.bindPromptItemId?.(itemId, event.threadId, event.promptKey, turnId)
       }
+
       return CODEX_JOURNAL_ADMITTED
     }
+
     const identity = codexPromptIdentity({
       threadId: event.threadId,
       promptKey: event.promptKey
     })
+
     const body = codexApprovalItem({
       method: event.method,
       params: event.params,
       detail: this.detailFor(event.threadId, event.codexItemId)
     })
+
     const admission = this.admit(event, [{ identity, body }])
+
     if (!admission.accepted) {
       return admission
     }
+
     const itemId = agentJournalItemKey(identity)
     this.pending.set(itemId, {
       threadId: event.threadId,
@@ -90,10 +102,13 @@ export class CodexJournalPrompts {
       body
     })
     const trimAdmission = this.trim()
+
     if (!trimAdmission.accepted) {
       return trimAdmission
     }
+
     this.deps.bindPromptItemId?.(itemId, event.threadId, event.promptKey, turnId)
+
     return CODEX_JOURNAL_ADMITTED
   }
 
@@ -103,19 +118,24 @@ export class CodexJournalPrompts {
 
   cancel(journalItemId: string): CodexJournalTranslationAdmission {
     const selected = this.pending.get(journalItemId)
+
     if (!selected) {
       return CODEX_JOURNAL_ADMITTED
     }
+
     const group = [...this.pending].filter(
       ([, prompt]) =>
         prompt.threadId === selected.threadId &&
         prompt.turnId === selected.turnId &&
         prompt.promptKey === selected.promptKey
     )
+
     const mutations = group.flatMap(([, prompt]) => {
       const body = cancelledJournalPromptBody(prompt.body)
+
       return body ? [{ kind: 'item' as const, identity: prompt.identity, body }] : []
     })
+
     const admission = appendCodexLifecycleMutations(
       this.deps.sink,
       `prompt-cancelled:${encodeURIComponent(selected.threadId)}:${encodeURIComponent(
@@ -123,11 +143,13 @@ export class CodexJournalPrompts {
       )}:${encodeURIComponent(selected.turnId ?? 'unbound')}`,
       mutations
     )
+
     if (admission.accepted) {
       for (const [itemId] of group) {
         this.pending.delete(itemId)
       }
     }
+
     return admission
   }
 
@@ -151,25 +173,34 @@ export class CodexJournalPrompts {
   private trim(): CodexJournalTranslationAdmission {
     while (this.pending.size > MAX_CODEX_PENDING_PROMPTS) {
       const oldest = this.pending.keys().next().value
+
       if (typeof oldest !== 'string') {
         break
       }
+
       const evicted = this.pending.get(oldest)
+
       if (evicted) {
         const cancelled = cancelledJournalPromptBody(evicted.body)
+
         if (cancelled) {
           const admission = appendCodexLifecycleItem(this.deps.sink, evicted.identity, cancelled)
+
           if (!admission.accepted) {
             return admission
           }
+
           const published = publishCodexLifecycle(this.deps.sink)
+
           if (!published.accepted) {
             return published
           }
         }
       }
+
       this.pending.delete(oldest)
     }
+
     return CODEX_JOURNAL_ADMITTED
   }
 }

@@ -103,7 +103,9 @@ function isPosixFence(value: unknown): value is PosixFence {
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const input = value as Record<string, unknown>
+
   if (
     input.platform !== 'posix' ||
     !Number.isSafeInteger(input.shellPid) ||
@@ -115,13 +117,17 @@ function isPosixFence(value: unknown): value is PosixFence {
   ) {
     return false
   }
+
   if (input.process === undefined) {
     return true
   }
+
   if (typeof input.process !== 'object' || input.process === null) {
     return false
   }
+
   const process = input.process as Record<string, unknown>
+
   return (
     Number.isSafeInteger(process.pid) &&
     Number(process.pid) > 0 &&
@@ -133,7 +139,9 @@ function isWindowsFence(value: unknown): value is WindowsFence {
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const input = value as Record<string, unknown>
+
   if (
     input.platform !== 'windows' ||
     !Number.isSafeInteger(input.rootProcessId) ||
@@ -143,13 +151,17 @@ function isWindowsFence(value: unknown): value is WindowsFence {
   ) {
     return false
   }
+
   if (input.process === undefined) {
     return true
   }
+
   if (typeof input.process !== 'object' || input.process === null) {
     return false
   }
+
   const process = input.process as Record<string, unknown>
+
   return (
     Number.isSafeInteger(process.pid) &&
     Number(process.pid) > 0 &&
@@ -162,16 +174,20 @@ export function isRemoteForegroundEvidence(value: unknown): value is RemoteForeg
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const input = value as Record<string, unknown>
+
   if (!isHostObservation(input)) {
     return false
   }
+
   if (input.verdict === 'live') {
     return (
       (input.processName === null || typeof input.processName === 'string') &&
       (isPosixFence(input.fence) || isWindowsFence(input.fence))
     )
   }
+
   return (
     (input.verdict === 'unverifiable' || input.verdict === 'exited') &&
     typeof input.reason === 'string' &&
@@ -187,7 +203,9 @@ export function isForegroundProcessEvidence(value: unknown): value is Foreground
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const input = value as Record<string, unknown>
+
   if (
     typeof input.authorityGeneration !== 'string' ||
     input.authorityGeneration.length === 0 ||
@@ -202,6 +220,7 @@ export function isForegroundProcessEvidence(value: unknown): value is Foreground
   ) {
     return false
   }
+
   if (input.verdict === 'live') {
     if (
       input.shellOwnsEveryTtyProcessGroup !== undefined &&
@@ -209,8 +228,10 @@ export function isForegroundProcessEvidence(value: unknown): value is Foreground
     ) {
       return false
     }
+
     return input.processName === null || typeof input.processName === 'string'
   }
+
   return (
     input.verdict === 'unverifiable' && typeof input.reason === 'string' && input.reason.length > 0
   )

@@ -16,6 +16,7 @@ export function readRemoteHomeCommand(host: RemoteHostPlatform): string {
   if (!isWindowsRemoteHost(host)) {
     return 'echo $HOME'
   }
+
   return powerShellCommand("Write-Output ([Environment]::GetFolderPath('UserProfile'))")
 }
 
@@ -23,6 +24,7 @@ export function makeRemoteDirectoryCommand(host: RemoteHostPlatform, remotePath:
   if (!isWindowsRemoteHost(host)) {
     return `mkdir -p ${shellEscape(remotePath)}`
   }
+
   // New-Item has no -LiteralPath parameter; using it breaks stock Windows PowerShell.
   return powerShellCommand(
     `$null = New-Item -ItemType Directory -Force -Path ${powerShellLiteral(remotePath)}`
@@ -33,6 +35,7 @@ export function makeRemoteExecutableCommand(host: RemoteHostPlatform, remotePath
   if (isWindowsRemoteHost(host)) {
     return powerShellCommand(`if (Test-Path -LiteralPath ${powerShellLiteral(remotePath)}) { }`)
   }
+
   return `chmod +x ${shellEscape(remotePath)} 2>/dev/null; true`
 }
 
@@ -40,6 +43,7 @@ export function removeRemoteFileCommand(host: RemoteHostPlatform, remotePath: st
   if (!isWindowsRemoteHost(host)) {
     return `rm -f ${shellEscape(remotePath)} 2>/dev/null; true`
   }
+
   return powerShellCommand(
     `Remove-Item -LiteralPath ${powerShellLiteral(remotePath)} -Force -ErrorAction SilentlyContinue`
   )
@@ -49,6 +53,7 @@ export function removeRemoteTreeCommand(host: RemoteHostPlatform, remotePath: st
   if (!isWindowsRemoteHost(host)) {
     return `rm -rf ${shellEscape(remotePath)}`
   }
+
   return powerShellCommand(
     `Remove-Item -LiteralPath ${powerShellLiteral(remotePath)} -Recurse -Force -ErrorAction SilentlyContinue`
   )
@@ -62,6 +67,7 @@ export function moveRemoteTreeCommand(
   if (!isWindowsRemoteHost(host)) {
     return `mv ${shellEscape(sourcePath)} ${shellEscape(destinationPath)} 2>&1 && echo MOVED || echo BUSY`
   }
+
   return powerShellCommand(
     [
       'try {',
@@ -80,6 +86,7 @@ export function promoteRemoteTreeContentsCommand(
   if (!isWindowsRemoteHost(host)) {
     return `cp -a ${shellEscape(sourcePath)}/. ${shellEscape(destinationPath)}/ && rm -rf ${shellEscape(sourcePath)}`
   }
+
   return powerShellCommand(
     `$ErrorActionPreference = 'Stop'; Get-ChildItem -LiteralPath ${powerShellLiteral(sourcePath)} -Force -ErrorAction Stop | Copy-Item -Destination ${powerShellLiteral(destinationPath)} -Recurse -Force -ErrorAction Stop; Remove-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Recurse -Force -ErrorAction Stop`
   )
@@ -89,6 +96,7 @@ export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath
   if (!isWindowsRemoteHost(host)) {
     return `touch ${shellEscape(remotePath)}`
   }
+
   return powerShellCommand(
     `Set-Content -LiteralPath ${powerShellLiteral(remotePath)} -Value '' -NoNewline`
   )
@@ -123,13 +131,17 @@ export function probeRemoteInstallCompleteCommand(
   requiredFilenames: readonly string[]
 ): string {
   const remoteRelayDir = remoteInstallDir
+
   const required = requiredFilenames.map((filename) =>
     joinRemotePath(host, remoteRelayDir, filename)
   )
+
   if (!isWindowsRemoteHost(host)) {
     const fileTests = required.map((path) => `&& test -f ${shellEscape(path)} `).join('')
+
     return `test -d ${shellEscape(remoteRelayDir)} ${fileTests}&& echo OK || echo MISSING`
   }
+
   return powerShellCommand(
     [
       `$dir = ${powerShellLiteral(remoteRelayDir)}`,
@@ -160,14 +172,17 @@ export function listRemoteInstallBaseDirsCommand(
   model: RemoteInstallModel
 ): string {
   const namePattern = remoteInstallListingRegexSource(model)
+
   if (!isWindowsRemoteHost(host)) {
     const statusPrefix = '__ORCA_RELAY_GC_FIND_STATUS__'
+
     return [
       `base=${shellEscape(baseDir)}; [ -d "$base" ] || exit 0;`,
       `{ find "$base" -mindepth 1 -maxdepth 1 -type d -name '${model.dirPrefix}-*' -print; status=$?; printf '\n${statusPrefix}%s\n' "$status"; } |`,
       String.raw`awk 'BEGIN { count=0; status=-1 } /^${statusPrefix}[0-9]+$/ { status=substr($0, ${statusPrefix.length + 1}); next } { name=$0; sub(/^.*\//, "", name); if (name ~ /${namePattern}/ && count < ${MAX_RELAY_GC_LISTING_ENTRIES}) { entries[count++]=name } } END { if (status != 0) exit 1; for (i=0; i<count; i++) print entries[i] }'`
     ].join(' ')
   }
+
   return powerShellCommand(
     [
       "$ErrorActionPreference = 'Stop'",
@@ -186,6 +201,7 @@ export function probeDirectoryExistsCommand(host: RemoteHostPlatform, remotePath
   if (!isWindowsRemoteHost(host)) {
     return `test -d ${shellEscape(remotePath)} && echo LOCKED || echo OPEN`
   }
+
   return powerShellCommand(
     `if (Test-Path -LiteralPath ${powerShellLiteral(remotePath)} -PathType Container) { 'LOCKED' } else { 'OPEN' }`
   )
@@ -195,6 +211,7 @@ export function probeFileExistsCommand(host: RemoteHostPlatform, remotePath: str
   if (!isWindowsRemoteHost(host)) {
     return `test -f ${shellEscape(remotePath)} && echo COMPLETE || echo PARTIAL`
   }
+
   return powerShellCommand(
     `if (Test-Path -LiteralPath ${powerShellLiteral(remotePath)} -PathType Leaf) { 'COMPLETE' } else { 'PARTIAL' }`
   )
@@ -217,9 +234,11 @@ export function relayLivenessProbeCommand(
       'done; echo "$state"'
     )
   }
+
   if (!windowsOptions) {
     return powerShellCommand("'ALIVE'")
   }
+
   const js = [
     'const fs=require("fs"),path=require("path"),net=require("net");',
     'const [dir,...seed]=process.argv.slice(1);',
@@ -249,6 +268,7 @@ export function relayLivenessProbeCommand(
     '}',
     'next();'
   ].join('')
+
   return commandWithNodePath(
     host,
     windowsOptions.nodePath,
@@ -271,6 +291,7 @@ export function commandInRemoteDirectory(
   if (!isWindowsRemoteHost(host)) {
     return `cd ${shellEscape(remoteDir)} && ${command}`
   }
+
   return powerShellCommand(
     `Set-Location -ErrorAction Stop -LiteralPath ${powerShellLiteral(remoteDir)}; ${command}`
   )
@@ -283,10 +304,13 @@ export function commandWithNodePath(
   command: string
 ): string {
   const nodeBinDir = remoteDirname(nodePath, host)
+
   if (!isWindowsRemoteHost(host)) {
     return `export PATH=${shellEscape(nodeBinDir)}:$PATH && cd ${shellEscape(remoteDir)} && ${command}`
   }
+
   const windowsNodeBinDir = nodeBinDir.replace(/\//g, '\\')
+
   return powerShellCommand(
     [
       `$env:PATH = ${powerShellLiteral(windowsNodeBinDir)} + ';' + $env:PATH`,

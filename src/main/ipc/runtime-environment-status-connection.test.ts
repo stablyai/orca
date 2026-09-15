@@ -16,7 +16,9 @@ import {
 } from './runtime-environment-request-connections'
 
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
+
 const profiles: string[] = []
+
 afterEach(async () => {
   resetRuntimeEnvironmentStatusOwners()
   await closeSharedControlTestServers()
@@ -25,18 +27,22 @@ afterEach(async () => {
 
 it('publishes real same-socket verification after every authenticated reconnect', async () => {
   let runtimeId = 'host-before'
+
   const server = await createSharedControlTestServer({
     resultForRequest: () => ({
       runtimeId,
       capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY]
     })
   })
+
   const profile = mkdtempSync(join(tmpdir(), 'orca-status-socket-'))
   profiles.push(profile)
+
   const environment = addEnvironmentFromPairingCode(profile, {
     name: 'host',
     pairingCode: encodePairingOffer(server.pairing)
   })
+
   await getRuntimeEnvironmentStatus(profile, environment.id)
   const owner = getRuntimeEnvironmentStatusOwner(profile, environment.id)
   await vi.waitFor(

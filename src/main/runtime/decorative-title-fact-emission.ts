@@ -30,9 +30,11 @@ export function shouldEmitTitleFactForFrame({
   if (!decorativeOnly || staleWorkingTitleClear) {
     return true
   }
+
   if (lastEmittedAtMs === null) {
     return true
   }
+
   // A backwards clock step must not park the heartbeat until it catches up.
   return nowMs < lastEmittedAtMs || nowMs - lastEmittedAtMs >= DECORATIVE_TITLE_FACT_HEARTBEAT_MS
 }

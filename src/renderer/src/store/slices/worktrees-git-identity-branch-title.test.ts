@@ -36,6 +36,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('updates branch identity from git status without fetching worktrees', () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -62,6 +63,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('does not notify subscribers when git status reports unchanged identity', () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -69,8 +71,10 @@ describe('updateWorktreeGitIdentity', () => {
       head: 'old-head',
       branch: 'refs/heads/main'
     })
+
     store.setState({ worktreesByRepo: { repo1: [existing] }, sortEpoch: 3 } as Partial<AppState>)
     let notifications = 0
+
     const unsubscribe = store.subscribe(() => {
       notifications += 1
     })
@@ -91,6 +95,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('clears branch-scoped linked reviews when git status observes a branch switch', () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -123,6 +128,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('preserves linked reviews when branch identity only changes ref formatting', () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -148,6 +154,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('preserves linked reviews when only the head commit changes', () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -175,6 +182,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('follows the new branch in the title when displayName was auto-derived from the branch', () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -194,6 +202,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('preserves a custom title when displayName differs from the branch', () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -213,6 +222,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('preserves a pinned user title even when it equals the old branch', () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -232,6 +242,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('preserves a legacy CLI title even without projected display-name mode', () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -251,6 +262,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('clears stale branch identity for detached HEAD updates', () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -277,6 +289,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('keeps an auto-derived title when detached HEAD clears the branch', () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -301,6 +314,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('resumes following branch names after an auto-derived title crosses detached HEAD', () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -329,6 +343,7 @@ describe('updateWorktreeGitIdentity', () => {
 
   it('preserves custom detached titles when a branch returns', () => {
     const store = createTestStore()
+
     const existing = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',

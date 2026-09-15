@@ -54,7 +54,9 @@ import {
 } from './browser-manager-viewport-test-fixtures'
 
 const { guestOnMock, webContentsFromIdMock } = browserMocks
+
 const makeGuest = createViewportGuestFactory(browserMocks)
+
 const MOBILE_VIEWPORT_OVERRIDE = {
   width: 375,
   height: 667,
@@ -103,9 +105,11 @@ describe('browserManager', () => {
         enabled: true,
         maxTouchPoints: 5
       })
+
       const uaCall = debuggerSendCommand.mock.calls.find(
         (call) => call[0] === 'Emulation.setUserAgentOverride'
       )
+
       expect(uaCall).toBeDefined()
       expect(uaCall?.[1]).toMatchObject({
         userAgent: expect.stringContaining('iPhone')
@@ -157,6 +161,7 @@ describe('browserManager', () => {
           mobile ? 4246 : 4245,
           'https://accounts.google.com/v3/signin/identifier'
         )
+
         webContentsFromIdMock.mockReturnValue(guest)
         browserManager.attachGuestPolicies(guest as never)
         browserManager.registerGuest({
@@ -187,9 +192,11 @@ describe('browserManager', () => {
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
+
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
       const willRedirect = guestOnMock.mock.calls.find(
         ([event]) => event === 'will-redirect'
       )?.[1] as (
@@ -237,6 +244,7 @@ describe('browserManager', () => {
       const calls = debuggerSendCommand.mock.calls.filter(
         (call) => call[0] === 'Emulation.setUserAgentOverride'
       )
+
       return calls.at(-1)?.[1] as Record<string, unknown> | undefined
     }
 
@@ -248,9 +256,11 @@ describe('browserManager', () => {
       const { guest, debuggerSendCommand } = makeGuest(4251, 'https://example.com/')
       // Hold the preset's first CDP command open so the navigation lands inside its await window.
       let releaseMetrics = (): void => {}
+
       const metricsGate = new Promise<void>((resolve) => {
         releaseMetrics = () => resolve()
       })
+
       debuggerSendCommand.mockImplementation((method: string) =>
         method === 'Emulation.setDeviceMetricsOverride' ? metricsGate : Promise.resolve(undefined)
       )
@@ -261,6 +271,7 @@ describe('browserManager', () => {
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
+
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
@@ -269,6 +280,7 @@ describe('browserManager', () => {
         'tab-race-onto-auth',
         MOBILE_VIEWPORT_OVERRIDE
       )
+
       await flushViewportOps()
 
       // The tab navigates to the auth host while the preset is still awaiting its first command.
@@ -293,6 +305,7 @@ describe('browserManager', () => {
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
+
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
@@ -311,18 +324,22 @@ describe('browserManager', () => {
 
       // A second preset change is now in flight when the tab leaves the auth host.
       let releaseMetrics = (): void => {}
+
       const metricsGate = new Promise<void>((resolve) => {
         releaseMetrics = () => resolve()
       })
+
       debuggerSendCommand.mockImplementation((method: string) =>
         method === 'Emulation.setDeviceMetricsOverride' ? metricsGate : Promise.resolve(undefined)
       )
+
       const presetDone = browserManager.setViewportOverride('tab-race-off-auth', {
         width: 1440,
         height: 900,
         deviceScaleFactor: 2,
         mobile: false
       })
+
       await flushViewportOps()
 
       didStartNavigation(null, 'https://example.com/', false, true)
@@ -340,6 +357,7 @@ describe('browserManager', () => {
         4253,
         'https://example.com/'
       )
+
       webContentsFromIdMock.mockReturnValue(guest)
       browserManager.attachGuestPolicies(guest as never)
       browserManager.registerGuest({
@@ -347,9 +365,11 @@ describe('browserManager', () => {
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
+
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
       const didFailLoad = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-fail-load'
       )?.[1] as (
@@ -359,6 +379,7 @@ describe('browserManager', () => {
         validatedURL: string,
         isMainFrame: boolean
       ) => void
+
       const didNavigate = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-navigate'
       )?.[1] as (event: unknown, url: string) => void
@@ -414,9 +435,11 @@ describe('browserManager', () => {
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
+
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
       const willRedirect = guestOnMock.mock.calls.find(
         ([event]) => event === 'will-redirect'
       )?.[1] as (
@@ -425,6 +448,7 @@ describe('browserManager', () => {
         isInPlace: boolean,
         isMainFrame: boolean
       ) => void
+
       const didFailLoad = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-fail-load'
       )?.[1] as (
@@ -470,9 +494,11 @@ describe('browserManager', () => {
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
+
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
       const willRedirect = guestOnMock.mock.calls.find(
         ([event]) => event === 'will-redirect'
       )?.[1] as (
@@ -481,6 +507,7 @@ describe('browserManager', () => {
         isInPlace: boolean,
         isMainFrame: boolean
       ) => void
+
       const didFailLoad = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-fail-load'
       )?.[1] as (
@@ -529,9 +556,11 @@ describe('browserManager', () => {
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
+
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
       const willRedirect = guestOnMock.mock.calls.find(
         ([event]) => event === 'will-redirect'
       )?.[1] as (
@@ -576,12 +605,14 @@ describe('browserManager', () => {
         browserTabId: 'tab-mobile-popup-owner',
         rootGuestWebContentsId: ownerGuest.id as number
       })
+
       const willRedirect = popupOn.mock.calls.find(([event]) => event === 'will-redirect')?.[1] as (
         event: { preventDefault: () => void },
         url: string,
         isInPlace: boolean,
         isMainFrame: boolean
       ) => void
+
       const didStartNavigation = popupOn.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
@@ -598,14 +629,17 @@ describe('browserManager', () => {
     it('reapplies a preset when navigation starts during its final UA write', async () => {
       const { guest, debuggerSendCommand } = makeGuest(4257, 'https://example.com/')
       let releaseFirstUa = (): void => {}
+
       const firstUaGate = new Promise<void>((resolve) => {
         releaseFirstUa = resolve
       })
+
       let uaWrites = 0
       debuggerSendCommand.mockImplementation((method: string) => {
         if (method === 'Emulation.setUserAgentOverride' && uaWrites++ === 0) {
           return firstUaGate
         }
+
         return Promise.resolve(undefined)
       })
       webContentsFromIdMock.mockReturnValue(guest)
@@ -615,6 +649,7 @@ describe('browserManager', () => {
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
+
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
@@ -625,6 +660,7 @@ describe('browserManager', () => {
         deviceScaleFactor: 1,
         mobile: false
       })
+
       await flushViewportOps()
       didStartNavigation(null, 'https://accounts.google.com/', false, true)
       await flushViewportOps()
@@ -645,6 +681,7 @@ describe('browserManager', () => {
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
+
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
@@ -656,9 +693,11 @@ describe('browserManager', () => {
         mobile: false
       })
       let releaseClearUa = (): void => {}
+
       const clearUaGate = new Promise<void>((resolve) => {
         releaseClearUa = resolve
       })
+
       debuggerSendCommand.mockImplementation(
         (method: string, params: { userAgent?: string } | undefined) =>
           method === 'Emulation.setUserAgentOverride' && params?.userAgent === ''
@@ -691,6 +730,7 @@ describe('browserManager', () => {
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
+
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
@@ -734,6 +774,7 @@ describe('browserManager', () => {
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
+
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
@@ -755,6 +796,7 @@ describe('browserManager', () => {
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
+
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
@@ -787,6 +829,7 @@ describe('browserManager', () => {
         webContentsId: guest.id as number,
         rendererWebContentsId
       })
+
       const didStartNavigation = guestOnMock.mock.calls.find(
         ([event]) => event === 'did-start-navigation'
       )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
@@ -831,6 +874,7 @@ describe('browserManager', () => {
 
     it('attaches the debugger if not already attached and does not detach after', async () => {
       const { guest, debuggerSendCommand, debuggerAttach } = makeGuest(4444)
+
       ;(guest.debugger as { isAttached: ReturnType<typeof vi.fn> }).isAttached = vi.fn(() => false)
       webContentsFromIdMock.mockReturnValue(guest)
       browserManager.attachGuestPolicies(guest as never)
@@ -855,6 +899,7 @@ describe('browserManager', () => {
 
     it('returns false when debugger.attach throws (e.g. DevTools already open)', async () => {
       const { guest, debuggerSendCommand, debuggerAttach } = makeGuest(4545)
+
       ;(guest.debugger as { isAttached: ReturnType<typeof vi.fn> }).isAttached = vi.fn(() => false)
       // Why: Electron throws from debugger.attach if another client (e.g. the
       // user's open DevTools window) is already attached. setViewportOverride

@@ -47,6 +47,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
 
   it('accepts an extended-length Windows rollout and preserves its original path', async () => {
     const homePath = 'C:\\Users\\Example\\.codex'
+
     const transcriptPath =
       '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-session.jsonl'
 
@@ -64,6 +65,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
   it('rejects unsafe or unrelated Windows namespace paths before probing files', () => {
     const fileIsRegular = vi.fn((): boolean => true)
     const trustedCodexHomes = ['C:\\Users\\Example\\.codex']
+
     const rejectedPaths = [
       '\\\\?\\D:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-a.jsonl',
       '\\\\?\\GLOBALROOT\\Device\\HarddiskVolumeShadowCopy1\\sessions\\2026\\07\\20\\rollout-a.jsonl',
@@ -82,6 +84,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
         })
       ).toBeNull()
     }
+
     expect(fileIsRegular).not.toHaveBeenCalled()
   })
 
@@ -112,8 +115,10 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
   // comparison copy must never leak into the probed or returned path.
   it('follows a compressed extended-length rollout without losing the extended spelling', async () => {
     const homePath = 'C:\\Users\\Example\\.codex'
+
     const plainPath =
       '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-session.jsonl'
+
     const compressedPath = `${plainPath}.zst`
 
     await expect(
@@ -223,6 +228,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
   it('follows Codex when a persisted plain rollout was compressed in place', async () => {
     const homePath = mkdtempSync(join(tmpdir(), 'orca-codex-resume-home-'))
     tempRoots.push(homePath)
+
     const plainPath = join(
       homePath,
       'sessions',
@@ -231,6 +237,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
       '20',
       'rollout-2026-07-20T12-00-00-session.jsonl'
     )
+
     const compressedPath = `${plainPath}.zst`
     mkdirSync(join(plainPath, '..'), { recursive: true })
     writeFileSync(compressedPath, 'compressed-rollout')
@@ -259,6 +266,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
     const homePath = mkdtempSync(join(tmpdir(), 'orca-codex-resume-home-'))
     tempRoots.push(homePath)
     const sessionId = '019f81b9-19a9-7651-a8d1-352d9420bd11'
+
     const compressedPath = join(
       homePath,
       'sessions',
@@ -267,6 +275,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
       '20',
       `rollout-2026-07-20T12-00-00-${sessionId}.jsonl.zst`
     )
+
     mkdirSync(join(compressedPath, '..'), { recursive: true })
     writeFileSync(compressedPath, 'compressed-rollout')
 
@@ -283,6 +292,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
   it('finds older saved sessions by id when transcript provenance is absent', async () => {
     const sessionId = '019f81b9-19a9-7651-a8d1-352d9420bd11'
     const rolloutPath = `/managed/account/home/sessions/2026/07/20/rollout-2026-07-20T15-50-19-${sessionId}.jsonl`
+
     const listSessionFiles = async function* (sessionsRoot: string): AsyncIterable<string> {
       if (sessionsRoot === '/managed/account/home/sessions') {
         yield `/managed/account/home/sessions/misplaced-${sessionId}.jsonl`
@@ -304,6 +314,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
   it('does not scan session trees when exact transcript provenance is valid', async () => {
     const transcriptPath =
       '/managed/account/home/sessions/2026/07/20/rollout-2026-07-20-session.jsonl'
+
     const listSessionFiles = vi.fn((): AsyncIterable<string> => {
       throw new Error('must not scan')
     })
@@ -323,6 +334,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
 
   it('does not replace rejected transcript provenance with a same-id rollout from another home', async () => {
     const sessionId = '019f81b9-19a9-7651-a8d1-352d9420bd11'
+
     const listSessionFiles = vi.fn((): AsyncIterable<string> => {
       throw new Error('must not scan')
     })
@@ -363,6 +375,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
     const listSessionFiles = (): AsyncIterable<string> => {
       throw new Error('must not scan')
     }
+
     await expect(
       findTrustedCodexSessionResume({
         sessionId: '../session',
@@ -496,8 +509,10 @@ describe('findTrustedCodexSessionResume legacy-rescan home ranking', () => {
     const windowsSystemHome = `${windowsRoot}\\.codex`
     const windowsAccountAHome = `${windowsRoot}\\AppData\\Roaming\\Orca\\codex-accounts\\a\\home`
     const windowsAccountBHome = `${windowsRoot}\\AppData\\Roaming\\Orca\\codex-accounts\\b\\home`
+
     const windowsRolloutIn = (homePath: string): string =>
       `${join(homePath, 'sessions')}\\2026\\07\\20\\rollout-2026-07-20T15-50-19-${sessionId}.jsonl`
+
     const listSessionFiles = async function* (sessionsRoot: string): AsyncIterable<string> {
       yield `${sessionsRoot}\\2026\\07\\20\\rollout-2026-07-20T15-50-19-${sessionId}.jsonl`
     }
@@ -610,6 +625,7 @@ describe('resolveCodexSessionResumeProvenance', () => {
   function writeRollout(sessionId: string): { homePath: string; rolloutPath: string } {
     const homePath = mkdtempSync(join(tmpdir(), 'orca-codex-resume-provenance-'))
     tempRoots.push(homePath)
+
     const rolloutPath = join(
       homePath,
       'sessions',
@@ -618,8 +634,10 @@ describe('resolveCodexSessionResumeProvenance', () => {
       '20',
       `rollout-2026-07-20T12-00-00-${sessionId}.jsonl`
     )
+
     mkdirSync(join(rolloutPath, '..'), { recursive: true })
     writeFileSync(rolloutPath, 'rollout')
+
     return { homePath, rolloutPath }
   }
 

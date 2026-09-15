@@ -17,23 +17,29 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
     if (!this.supportsAuthoritativeBufferSnapshots) {
       return null
     }
+
     try {
       const scrollbackRows = normalizeDesktopTerminalSnapshotRows(opts.scrollbackRows)
+
       const result = await this.client.request<GetSnapshotResult>('getSnapshot', {
         sessionId: id,
         ...(scrollbackRows !== undefined ? { scrollbackRows } : {})
       })
+
       const snapshot = result.snapshot
+
       // Why: older v19 daemons lack an absolute output sequence, so their snapshot can't reconcile bytes queued on the other socket.
       if (!snapshot || typeof snapshot.outputSequence !== 'number') {
         return null
       }
+
       const restored =
         this.historyManager &&
         this.historyReader &&
         (scrollbackRows === undefined || scrollbackRows > DAEMON_SESSION_SCROLLBACK_ROWS)
           ? await this.overlayDurableRestoreSnapshot(id, snapshot, scrollbackRows)
           : snapshot
+
       return this.toProviderBufferSnapshot(restored)
     } catch {
       return null
@@ -46,7 +52,9 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
     if (typeof snapshot.outputSequence !== 'number') {
       return null
     }
+
     const kittyKeyboardFlags = parseTerminalKittyKeyboardFlags(snapshot.modes.kittyKeyboardFlags)
+
     return {
       data: snapshot.rehydrateSequences + snapshot.snapshotAnsi,
       frameRestoreAnsi: snapshot.frameRestoreAnsi,
@@ -77,17 +85,20 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
     if (!this.historyManager || !this.historyReader) {
       return liveSnapshot
     }
+
     // Why turn the caller away instead of queueing: this session already has a
     // compact in flight whose result a third one would only duplicate, and an
     // unbounded queue is how a stalled history filesystem grows without limit.
     if (this.checkpointQueue.isSaturated(sessionId)) {
       return liveSnapshot
     }
+
     // Why reserve before enqueueing: pane mounts can arrive in one turn, before any compact starts.
     // Count abandoned waits until their writes settle so a relaunch cannot fan out unbounded work.
     if (!this.tryAdmitNonFinalCheckpoint(sessionId)) {
       return liveSnapshot
     }
+
     // Why per session with a deadline: a reattach is a user click, so it must wait
     // on this session's own compact and nothing else. A blown deadline does not
     // cancel that compact — it keeps running and still commits — so the fallback
@@ -121,17 +132,22 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
         this.nonFinalAdmissionDeniedSessionIds.add(sessionId)
         console.warn('[history] non-final checkpoint already in flight:', sessionId)
       }
+
       return false
     }
+
     if (
       this.nonFinalCheckpointAdmissionSessionIds.size >=
       (this.constructor as typeof DaemonPtyBufferSnapshots).MAX_CONCURRENT_CHECKPOINTS
     ) {
       this.reportNonFinalGlobalAdmissionDenial(sessionId)
+
       return false
     }
+
     this.nonFinalAdmissionDeniedSessionIds.delete(sessionId)
     this.nonFinalCheckpointAdmissionSessionIds.add(sessionId)
+
     return true
   }
 
@@ -157,6 +173,7 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
     if (!this.historyReader) {
       return liveSnapshot
     }
+
     try {
       // Why compact before reading: an independent take/append races the 5s tick, can
       // seq-gap the log, and would remount a stale checkpoint over the live window.
@@ -165,22 +182,28 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
         forceLiveSnapshot: this.sessionsNeedingLiveCheckpoint.has(sessionId),
         requireContinuityProof: this.sessionsNeedingContinuityCheckpoint.has(sessionId)
       })
+
       if (checkpoint.checkpoint === 'committed') {
         this.sessionsNeedingFullCheckpoint.delete(sessionId)
       }
+
       if (checkpoint.checkpoint !== 'committed' || !checkpoint.snapshot) {
         return checkpoint.snapshot ?? liveSnapshot
       }
+
       if (scrollbackRows === undefined || scrollbackRows >= DAEMON_RESTORE_SCROLLBACK_ROWS) {
         return checkpoint.snapshot
       }
+
       const restoreInfo = await this.historyReader.detectColdRestore(sessionId, {
         ignoreCleanEnd: true,
         wslDistro: this.wslDistrosBySessionId.get(sessionId)
       })
+
       if (!restoreInfo) {
         return liveSnapshot
       }
+
       return await buildDurableCheckpointSnapshot({
         liveSnapshot: checkpoint.snapshot,
         restoreInfo,
@@ -188,6 +211,7 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
       })
     } catch (error) {
       console.warn('[history] durable snapshot overlay failed:', sessionId, error)
+
       return liveSnapshot
     }
   }

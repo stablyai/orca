@@ -69,6 +69,7 @@ function makeSession(overrides: Partial<OpenCodeUsageSession> = {}): OpenCodeUsa
   const repoId = overrides.primaryRepoId ?? 'repo-1'
   const projectLabel = overrides.primaryProjectLabel ?? 'Repo'
   const model = overrides.primaryModel ?? 'anthropic/claude-sonnet-4-5'
+
   return {
     sessionId: 'session-1',
     firstTimestamp: '2026-04-09T10:00:00.000Z',
@@ -138,6 +139,7 @@ function makeDaily(
   overrides: Partial<OpenCodeUsageDailyAggregate> = {}
 ): OpenCodeUsageDailyAggregate {
   const worktreeId = overrides.worktreeId ?? 'repo-1::/workspace/repo'
+
   return {
     day: '2026-04-09',
     model: 'anthropic/claude-sonnet-4-5',

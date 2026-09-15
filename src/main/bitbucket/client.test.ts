@@ -23,12 +23,15 @@ function primeGitExecWithDefaultBranch(defaultRef = 'refs/remotes/origin/main'):
     if (args[0] === 'remote') {
       return { stdout: 'git@bitbucket.org:team/repo.git\n', stderr: '' }
     }
+
     if (args[0] === 'symbolic-ref' && args.includes('refs/remotes/origin/HEAD')) {
       return { stdout: `${defaultRef}\n`, stderr: '' }
     }
+
     if (args[0] === 'rev-parse' && args[1] === '--verify' && args.includes(defaultRef)) {
       return { stdout: 'default-oid\n', stderr: '' }
     }
+
     throw new Error(`unexpected git call: ${args.join(' ')}`)
   })
 }
@@ -73,14 +76,17 @@ describe('Bitbucket client', () => {
 
   it('hides a stale DECLINED PR whose source branch is the repo default branch (#9171)', async () => {
     primeGitExecWithDefaultBranch()
+
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes('/statuses/build')) {
         return Response.json({ values: [] })
       }
+
       return Response.json({
         values: [{ ...bitbucketPr(7), state: 'DECLINED', source: { branch: { name: 'main' } } }]
       })
     })
+
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(getBitbucketPullRequestForBranch('/repo', 'refs/heads/main')).resolves.toBeNull()
@@ -91,12 +97,14 @@ describe('Bitbucket client', () => {
       if (url.includes('/statuses/build')) {
         return Response.json({ values: [{ state: 'SUCCESSFUL' }] })
       }
+
       return Response.json({
         values: [
           { ...bitbucketPr(8), source: { branch: { name: 'main' }, commit: { hash: 'abc123' } } }
         ]
       })
     })
+
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(
@@ -106,17 +114,21 @@ describe('Bitbucket client', () => {
 
   it('discards a MERGED default-branch shadow and refetches the linked PR via the fallback (#9171)', async () => {
     primeGitExecWithDefaultBranch()
+
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes('/statuses/build')) {
         return Response.json({ values: [] })
       }
+
       if (url.endsWith('/pullrequests/42')) {
         return Response.json(bitbucketPr(42))
       }
+
       return Response.json({
         values: [{ ...bitbucketPr(7), state: 'MERGED', source: { branch: { name: 'main' } } }]
       })
     })
+
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(
@@ -129,12 +141,14 @@ describe('Bitbucket client', () => {
       if (url.includes('/statuses/build')) {
         return Response.json({ values: [] })
       }
+
       return Response.json({
         values: [
           { ...bitbucketPr(7), state: 'MERGED', source: { branch: { name: 'feature/login' } } }
         ]
       })
     })
+
     vi.stubGlobal('fetch', fetchMock)
 
     // Why: a merged branch match is history. Returning it made eligibility
@@ -149,12 +163,14 @@ describe('Bitbucket client', () => {
       if (url.includes('/statuses/build')) {
         return Response.json({ values: [] })
       }
+
       return Response.json({
         values: [
           { ...bitbucketPr(9), state: 'DECLINED', source: { branch: { name: 'feature/login' } } }
         ]
       })
     })
+
     vi.stubGlobal('fetch', fetchMock)
 
     // Why: only merged matches are hidden. Hiding declined too made a declined
@@ -183,11 +199,14 @@ describe('Bitbucket client', () => {
       if (url.endsWith('/pullrequests/7')) {
         return Response.json({ ...bitbucketPr(7), state: 'DECLINED' })
       }
+
       if (url.includes('/statuses/build')) {
         return Response.json({ values: [] })
       }
+
       return new Response('branch index unavailable', { status: 503 })
     })
+
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(
@@ -200,17 +219,21 @@ describe('Bitbucket client', () => {
 
   it('falls back to the branch index when a linked PR number is stale', async () => {
     const branchPR = bitbucketPr(7)
+
     const fetchMock = vi.fn(async (url: string) => {
       if (url.endsWith('/pullrequests/99')) {
         return new Response('not found', { status: 404 })
       }
+
       if (url.includes('/statuses/build')) {
         return Response.json({ values: [] })
       }
+
       return Response.json({
         values: [{ ...branchPR, source: { ...branchPR.source, branch: { name: 'feature/login' } } }]
       })
     })
+
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(
@@ -250,8 +273,10 @@ describe('Bitbucket client', () => {
       if (url.includes('/statuses/build')) {
         return Response.json({ values: [{ state: 'SUCCESSFUL' }] })
       }
+
       return Response.json({ values: [bitbucketPr()] })
     })
+
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(
@@ -270,9 +295,11 @@ describe('Bitbucket client', () => {
     const firstCall = fetchMock.mock.calls[0]
     const listUrl = String(firstCall?.[0])
     const listInit = firstCall?.[1]
+
     if (!listInit) {
       throw new Error('expected request init')
     }
+
     const parsed = new URL(listUrl)
     expect(parsed.pathname).toBe('/2.0/repositories/team/repo/pullrequests')
     expect(parsed.searchParams.get('q')).toBe(
@@ -307,11 +334,14 @@ describe('Bitbucket client', () => {
       if (url.includes('/statuses/build')) {
         return Response.json({ values: [] })
       }
+
       if (url.endsWith('/pullrequests/42')) {
         return Response.json(bitbucketPr(42))
       }
+
       return Response.json({ values: [] })
     })
+
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(getBitbucketPullRequestForBranch('/repo', 'different', 42)).resolves.toMatchObject(
@@ -335,11 +365,13 @@ describe('Bitbucket client', () => {
 
   it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {
     let cancelledBodies = 0
+
     const fetchMock = vi.fn(async () =>
       cancelTrackingResponse(502, () => {
         cancelledBodies += 1
       })
     )
+
     vi.stubGlobal('fetch', fetchMock)
 
     await getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/bitbucket')

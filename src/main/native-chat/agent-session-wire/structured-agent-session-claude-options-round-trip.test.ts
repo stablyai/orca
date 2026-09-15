@@ -24,15 +24,23 @@ import type {
 } from './structured-agent-session-handoff-types'
 
 const CALLER = { callerKey: 'client-claude' }
+
 const CLAUDE_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f61'
+
 const DEFAULT_MODEL = 'sonnet'
+
 const PICKED_MODEL = 'opus'
 
 let root: string
+
 let store: AgentSessionRecordStore
+
 let host: StructuredAgentSessionHost
+
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
+
 let activeModel: string
+
 let transcriptPath: string
 
 function envelope(method: string, fields: Record<string, unknown>): AgentSessionMutationEnvelope {
@@ -50,6 +58,7 @@ function envelope(method: string, fields: Record<string, unknown>): AgentSession
 
 function handoff(direction: AgentSessionHandoffDirection): AgentSessionHandoffRequest {
   const fields = { direction, mode: 'now' as const, action: 'start' as const }
+
   return { envelope: envelope('agentSession.requestHandoff', fields), ...fields }
 }
 
@@ -93,6 +102,7 @@ function transport(): StructuredAgentSessionHandoffTransport {
 function adapter(): StructuredAgentSessionAdapter {
   acquire = vi.fn(async ({ fence, spawnToken, options }) => {
     activeModel = options?.model ?? DEFAULT_MODEL
+
     return {
       process: { hostId: 'local', pid: 4200, processStartTimeMs: NOW, spawnToken },
       link: {
@@ -104,6 +114,7 @@ function adapter(): StructuredAgentSessionAdapter {
       }
     }
   })
+
   return {
     acquire,
     dispatch: vi.fn(),
@@ -111,11 +122,13 @@ function adapter(): StructuredAgentSessionAdapter {
     answerPrompt: vi.fn(async () => undefined),
     setOption: vi.fn(async ({ value }) => {
       activeModel = value
+
       return { model: value }
     }),
     readOptions: vi.fn(async () => ({ current: { model: activeModel }, models: [] })),
     closeSession: vi.fn(async () => {
       activeModel = DEFAULT_MODEL
+
       return true
     })
   }

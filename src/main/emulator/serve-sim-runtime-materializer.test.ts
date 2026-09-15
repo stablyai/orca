@@ -19,6 +19,7 @@ async function createBundledServeSimPackage(root: string): Promise<string> {
     mode: 0o644
   })
   await writeFile(join(packageDir, 'bin', 'serve-sim-bin'), 'bin', { mode: 0o644 })
+
   return packageDir
 }
 
@@ -34,6 +35,7 @@ describe('materializeServeSimRuntime', () => {
   async function createRoot(): Promise<string> {
     const root = await mkdtemp(join(tmpdir(), 'orca-simcam-materializer-'))
     cleanupPaths.push(root)
+
     return root
   }
 
@@ -55,6 +57,7 @@ describe('materializeServeSimRuntime', () => {
     expect(await readFile(dylibPath)).toEqual(DYLIB_CONTENT)
     expect(clearQuarantine).toHaveBeenCalledTimes(1)
     expect(clearQuarantine).toHaveBeenCalledWith(expect.stringContaining('.staging-1.2.3-'))
+
     if (process.platform !== 'win32') {
       for (const executable of [
         join(materialized!, 'bin', 'serve-sim-bin'),
@@ -69,6 +72,7 @@ describe('materializeServeSimRuntime', () => {
     const root = await createRoot()
     const bundledPackageDir = await createBundledServeSimPackage(root)
     const clearQuarantine = vi.fn()
+
     const options = {
       bundledPackageDir,
       targetRootDir: join(root, 'runtime'),

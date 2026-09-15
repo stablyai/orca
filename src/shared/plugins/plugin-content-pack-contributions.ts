@@ -3,8 +3,11 @@ import { pluginCommandIdSchema, pluginRelativePathSchema } from './plugin-manife
 import { normalizeKeybinding } from '../keybindings'
 
 export const PLUGIN_LANGUAGE_PACK_LIMIT = 16
+
 export const PLUGIN_KEYBINDING_LIMIT = 256
+
 export const PLUGIN_VM_RECIPE_LIMIT = 64
+
 export const PLUGIN_AGENT_PROFILE_LIMIT = 64
 
 // Why: locale ids become i18next bundle keys and filenames. This bounded BCP
@@ -31,10 +34,13 @@ export const pluginKeybindingContributionSchema = z
       .max(128)
       .transform((value, ctx) => {
         const normalized = normalizeKeybinding(value)
+
         if (!normalized.ok) {
           ctx.addIssue({ code: 'custom', message: normalized.error })
+
           return z.NEVER
         }
+
         return normalized.value
       }),
     when: z.enum(['global', 'worktree']).optional()
@@ -50,6 +56,9 @@ export const pluginAgentProfileContributionSchema = z
   .strict()
 
 export type PluginLanguagePackContribution = z.infer<typeof pluginLanguagePackContributionSchema>
+
 export type PluginKeybindingContribution = z.infer<typeof pluginKeybindingContributionSchema>
+
 export type PluginVmRecipeContribution = z.infer<typeof pluginVmRecipeContributionSchema>
+
 export type PluginAgentProfileContribution = z.infer<typeof pluginAgentProfileContributionSchema>

@@ -98,6 +98,7 @@ describe('OrcaRuntimeService', () => {
     const sharedHandle = before.terminals[0].handle
     const abort = new AbortController()
     let settled: 'resolved' | 'rejected' | null = null
+
     const waiting = runtime
       .waitForTerminal(sharedHandle, {
         condition: 'exit',
@@ -164,6 +165,7 @@ describe('OrcaRuntimeService', () => {
     })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
     runtime.onPtyExit(appPtyId, -1, undefined, { hostExitConfirmed: true })
+
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term-replacement',
       tabId: currentTabId,
@@ -210,9 +212,11 @@ describe('OrcaRuntimeService', () => {
     await expect(
       runtime.recoverTerminalPane(stalePaneKey, TEST_WORKTREE_ID, staleHandle)
     ).rejects.toThrow(/terminal_not_recoverable|terminal_not_found/)
+
     const leases = runtime as unknown as {
       getRecentExpiredSshLease: (worktreeId: string, tabId: string, leafId?: string) => unknown
     }
+
     expect(
       leases.getRecentExpiredSshLease(TEST_WORKTREE_ID, leaseTabId, HEADLESS_LEAF_ID)
     ).toBeNull()

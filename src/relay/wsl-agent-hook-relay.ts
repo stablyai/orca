@@ -33,18 +33,22 @@ import {
 async function main(): Promise<void> {
   const windowsPort = Number(process.env.ORCA_AGENT_HOOK_PORT ?? '')
   const token = process.env.ORCA_AGENT_HOOK_TOKEN ?? ''
+
   if (!Number.isInteger(windowsPort) || windowsPort <= 0 || token.length === 0) {
     process.stderr.write('[wsl-hook-relay] missing ORCA_AGENT_HOOK_PORT/TOKEN in env\n')
     process.exit(1)
   }
 
   let stdoutAlive = true
+
   const dispatcher = new RelayDispatcher(
     (data, onSettled) => {
       if (!stdoutAlive) {
         onSettled({ ok: false, error: new Error('WSL relay stdout is closed') })
+
         return false
       }
+
       return process.stdout.write(data, (error) => {
         onSettled(error ? { ok: false, error } : { ok: true })
       })
@@ -55,6 +59,7 @@ async function main(): Promise<void> {
       writableHighWaterMark: () => process.stdout.writableHighWaterMark,
       waitWriteDrain: (callback) => {
         process.stdout.once('drain', callback)
+
         return () => process.stdout.off('drain', callback)
       }
     }
@@ -64,12 +69,14 @@ async function main(): Promise<void> {
   // across app restarts so surviving agents re-coordinate off its rewrite.
   const instanceKey =
     sanitizeWslHookInstanceKey(process.env[WSL_HOOK_RELAY_INSTANCE_ENV]) ?? `port${windowsPort}`
+
   const hookServer = new RelayAgentHookServer({
     endpointDir: wslHookRelayEndpointDir(homedir(), instanceKey),
     token,
     preferredPort: windowsPort,
     forward: (envelope) => publishAgentHookEnvelope(dispatcher, envelope)
   })
+
   new PreflightHandler(dispatcher)
 
   dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => ({
@@ -97,6 +104,7 @@ async function main(): Promise<void> {
     )
     process.exit(1)
   }
+
   if (hookServer.usedPortFallback) {
     // Why: diagnosable breadcrumb — hook clients are fail-open silent, the
     // relay must not be. Fallback is expected under mirrored networking.

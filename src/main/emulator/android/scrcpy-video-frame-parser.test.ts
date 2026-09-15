@@ -7,12 +7,14 @@ import {
 } from './scrcpy-video-frame-parser'
 
 const CONFIG = 1n << 63n
+
 const KEY = 1n << 62n
 
 function frame(meta: bigint, data: number[]): Buffer {
   const header = Buffer.alloc(12)
   header.writeBigUInt64BE(meta, 0)
   header.writeUInt32BE(data.length, 8)
+
   return Buffer.concat([header, Buffer.from(data)])
 }
 
@@ -112,11 +114,13 @@ describe('parseScrcpyVideoFrames', () => {
     const pending = new RelayFrameBuffer()
     let maxChunks = 0
     let frames: ReturnType<typeof parseScrcpyVideoFrames> = []
+
     for (const byte of full) {
       pending.append(Buffer.from([byte]))
       frames = parseScrcpyVideoFrames(pending)
       maxChunks = Math.max(maxChunks, pending.chunkCount)
     }
+
     expect(maxChunks).toBeLessThanOrEqual(MAX_PENDING_CHUNKS)
     expect(frames).toHaveLength(1)
     expect(frames[0]).toMatchObject({ config: false, keyFrame: true, pts: 789n })

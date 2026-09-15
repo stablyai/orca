@@ -8,6 +8,7 @@ import type { RpcContext } from '../core'
 // Stub the bounded tail reader so the handler returns a deterministic transcript with
 // one oversized tool-result block; the test then asserts clip behavior per client.
 const OVERSIZED = 'x'.repeat(5000)
+
 const cachedResult = vi.hoisted(() => ({
   value: {
     messages: [] as NativeChatMessage[],
@@ -24,7 +25,9 @@ const cachedResult = vi.hoisted(() => ({
     }
   }
 }))
+
 const tailRead = vi.hoisted(() => ({ signal: undefined as AbortSignal | undefined }))
+
 const watcher = vi.hoisted(() => ({
   args: null as null | {
     onInitialSnapshot?: (
@@ -66,10 +69,12 @@ const watcher = vi.hoisted(() => ({
     | null,
   unsubscribe: vi.fn()
 }))
+
 vi.mock('../../../native-chat/transcript-watch', () => ({
   readNativeChatTranscriptTail: ({ limit }: { limit: number }, signal?: AbortSignal) => {
     tailRead.signal = signal
     const messages = cachedResult.value.messages
+
     return Promise.resolve({
       messages: messages.slice(-limit),
       hasMore: messages.length > limit,
@@ -83,6 +88,7 @@ vi.mock('../../../native-chat/transcript-watch', () => ({
   ) => {
     watcher.args = args
     watcher.setupSignal = setupSignal
+
     return (
       watcher.setupFactory?.(setupSignal) ??
       watcher.setupPromise ??
@@ -110,9 +116,11 @@ function makeTextMessage(text: string): NativeChatMessage {
 
 function readSessionHandler(): (params: unknown, ctx: RpcContext) => Promise<unknown> {
   const method = NATIVE_CHAT_METHODS.find((m) => m.name === 'nativeChat.readSession')
+
   if (!method) {
     throw new Error('readSession method not registered')
   }
+
   return method.handler as (params: unknown, ctx: RpcContext) => Promise<unknown>
 }
 
@@ -122,9 +130,11 @@ function subscribeHandler(): (
   emit: (value: unknown) => void
 ) => Promise<void> {
   const method = NATIVE_CHAT_METHODS.find((candidate) => candidate.name === 'nativeChat.subscribe')
+
   if (!method) {
     throw new Error('subscribe method not registered')
   }
+
   return method.handler as (
     params: unknown,
     ctx: RpcContext,
@@ -151,6 +161,7 @@ function ctxWith(clientKind: RpcContext['clientKind']): RpcContext {
 function firstOutput(result: unknown): string {
   const messages = (result as { messages: NativeChatMessage[] }).messages
   const block = messages[0].blocks[0] as { output: string }
+
   return block.output
 }
 
@@ -158,6 +169,7 @@ function activeWatcherArgs(): NonNullable<typeof watcher.args> {
   if (!watcher.args) {
     throw new Error('native-chat transcript watcher was not subscribed')
   }
+
   return watcher.args
 }
 
@@ -172,10 +184,12 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
 
   it('clips oversized tool output for mobile clients', async () => {
     cachedResult.value = { messages: [makeMessage(OVERSIZED)] }
+
     const result = await readSessionHandler()(
       { agent: 'claude', sessionId: 's' },
       ctxWith('mobile')
     )
+
     const output = firstOutput(result)
     expect(output).toBe(`${OVERSIZED.slice(0, 4000)}\n… (truncated)`)
   })
@@ -185,13 +199,16 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
   it('passes a long assistant text block through unclipped for mobile clients', async () => {
     const text = 'prose '.repeat(1000)
     cachedResult.value = { messages: [makeTextMessage(text)] }
+
     const result = await readSessionHandler()(
       { agent: 'claude', sessionId: 's' },
       ctxWith('mobile')
     )
+
     const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0] as {
       text: string
     }
+
     expect(block.text).toBe(text)
   })
 
@@ -201,6 +218,7 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
       label: 'l'.repeat(600),
       state: 'working'
     }))
+
     cachedResult.value = {
       messages: [
         {
@@ -209,13 +227,16 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
         }
       ]
     }
+
     const result = await readSessionHandler()(
       { agent: 'claude', sessionId: 's' },
       ctxWith('mobile')
     )
+
     const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0] as {
       agents: { id: string; label: string }[]
     }
+
     expect(block.agents).toHaveLength(64)
     expect(block.agents[0].label).toBe(`${'l'.repeat(512)}\n… (truncated)`)
     // The id is as untrusted as the label on an imported roster, but it is the
@@ -227,13 +248,16 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
   it('clips a pathological text block at the safety ceiling for mobile clients', async () => {
     const text = 'y'.repeat(70_000)
     cachedResult.value = { messages: [makeTextMessage(text)] }
+
     const result = await readSessionHandler()(
       { agent: 'claude', sessionId: 's' },
       ctxWith('mobile')
     )
+
     const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0] as {
       text: string
     }
+
     expect(block.text).toBe(`${text.slice(0, 64_000)}\n… (truncated)`)
   })
 
@@ -262,6 +286,7 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
         { agent: 'codex', sessionId: 's' },
         ctxWith(clientKind)
       )
+
       const messages = (result as { messages: NativeChatMessage[] }).messages
 
       expect(messages[0].blocks).toEqual([
@@ -289,10 +314,12 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
         }
       ]
     }
+
     const result = await readSessionHandler()(
       { agent: 'claude', sessionId: 's' },
       ctxWith('mobile')
     )
+
     const input = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0]
 
     expect(JSON.stringify(input).length).toBeLessThan(OVERSIZED.length)
@@ -323,6 +350,7 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
 
     const result = await readSessionHandler()({ agent: 'codex', sessionId: 's' }, ctxWith('mobile'))
     const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0]
+
     if (block.type !== 'subagent-group') {
       throw new Error('expected a subagent-group block')
     }
@@ -363,6 +391,7 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
       { agent: 'claude', sessionId: 's' },
       ctxWith('mobile')
     )
+
     const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0]
 
     expect(block).toMatchObject({
@@ -384,6 +413,7 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     const wide = Object.fromEntries(
       Array.from({ length: 200 }, (_unused, index) => [`${'k'.repeat(200)}-${index}`, index])
     )
+
     cachedResult.value = {
       messages: [
         {
@@ -392,10 +422,12 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
         }
       ]
     }
+
     const result = await readSessionHandler()(
       { agent: 'claude', sessionId: 's' },
       ctxWith('mobile')
     )
+
     const encoded = JSON.stringify((result as { messages: NativeChatMessage[] }).messages[0])
 
     expect(encoded.length).toBeLessThan(10_000)
@@ -418,13 +450,16 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
         }
       ]
     }
+
     const result = await readSessionHandler()(
       { agent: 'claude', sessionId: 's' },
       ctxWith('mobile')
     )
+
     const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0] as {
       input: Record<string, unknown>
     }
+
     const keys = Object.keys(block.input)
 
     expect(keys).toHaveLength(2)
@@ -434,19 +469,23 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
 
   it('passes oversized tool output through intact for runtime (web/desktop) clients', async () => {
     cachedResult.value = { messages: [makeMessage(OVERSIZED)] }
+
     const result = await readSessionHandler()(
       { agent: 'claude', sessionId: 's' },
       ctxWith('runtime')
     )
+
     expect(firstOutput(result)).toBe(OVERSIZED)
   })
 
   it('defaults to no clip when clientKind is undefined (in-process callers)', async () => {
     cachedResult.value = { messages: [makeMessage(OVERSIZED)] }
+
     const result = await readSessionHandler()(
       { agent: 'claude', sessionId: 's' },
       ctxWith(undefined)
     )
+
     expect(firstOutput(result)).toBe(OVERSIZED)
   })
 
@@ -466,13 +505,17 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
   it('windows by count for all client kinds', async () => {
     const many = Array.from({ length: 60 }, (_unused, n) => {
       const message = makeMessage('small')
+
       return { ...message, id: `m-${n}` }
     })
+
     cachedResult.value = { messages: many }
+
     const result = await readSessionHandler()(
       { agent: 'claude', sessionId: 's', limit: 40 },
       ctxWith('runtime')
     )
+
     const messages = (result as { messages: NativeChatMessage[] }).messages
     expect(messages).toHaveLength(40)
     // Tail-only: the last id survives, the first is dropped.
@@ -505,6 +548,7 @@ describe('nativeChat.subscribe initial snapshot', () => {
       'replacement',
       'appended'
     ])
+
     for (const frame of emitted as { messages: NativeChatMessage[] }[]) {
       expect(frame.messages[0].blocks[0]).toEqual({ type: 'text', text })
     }
@@ -557,6 +601,7 @@ describe('nativeChat.subscribe initial snapshot', () => {
       streamingContext('mobile'),
       (value) => emitted.push(value)
     )
+
     const messages = Array.from({ length: 60 }, (_unused, index) => ({
       ...makeMessage('small'),
       id: `m-${index}`
@@ -564,10 +609,12 @@ describe('nativeChat.subscribe initial snapshot', () => {
 
     const callbacks = activeWatcherArgs()
     callbacks.onInitialSnapshot?.(messages, true, 123)
+
     const live = Array.from({ length: 60 }, (_unused, index) => ({
       ...makeMessage('live'),
       id: `m-live-${index}`
     }))
+
     callbacks.onAppend(live)
 
     expect(emitted[0]).toMatchObject({
@@ -662,6 +709,7 @@ describe('nativeChat.subscribe initial snapshot', () => {
       turnId: 'turn-rpc-1',
       timestamp: 1_720_000_000_000
     }
+
     const callbacks = activeWatcherArgs()
     callbacks.onInitialSnapshot?.([makeMessage('snap')], false, 3, undefined, completed)
     callbacks.onAppend([], completed)
@@ -696,9 +744,11 @@ describe('nativeChat.subscribe initial snapshot', () => {
     vi.mocked(context.runtime.registerSubscriptionCleanup).mockImplementation((id, cleanup) => {
       cleanups.set(id, cleanup)
     })
+
     const setupControl: {
       finish?: (subscription: { unsubscribe: () => void; watching: boolean }) => void
     } = {}
+
     const lateUnsubscribe = vi.fn()
     watcher.setupSignal = undefined
     watcher.setupPromise = new Promise((resolve) => {
@@ -712,6 +762,7 @@ describe('nativeChat.subscribe initial snapshot', () => {
         context,
         (value) => emitted.push(value)
       )
+
       await vi.waitFor(() => expect(watcher.setupSignal).toBeDefined())
       const setupSignal = watcher.setupSignal as unknown as AbortSignal
       const cleanup = [...cleanups.values()][0]
@@ -752,6 +803,7 @@ describe('nativeChat.subscribe initial snapshot', () => {
         context,
         (value) => emitted.push(value)
       )
+
       await vi.waitFor(() => expect(watcher.setupSignal).toBeDefined())
       controller.abort(new Error('request closed'))
       await handling
@@ -787,11 +839,14 @@ describe('nativeChat.readSession lifecycle payload', () => {
       turnId: 'turn-read-1',
       timestamp: 1_720_000_000_100
     }
+
     cachedResult.value = { messages: [makeMessage('done')], lifecycle }
+
     const result = await readSessionHandler()(
       { agent: 'claude', sessionId: 's' },
       ctxWith('runtime')
     )
+
     expect(result).toMatchObject({
       hasMore: false,
       beforeOffset: 123,

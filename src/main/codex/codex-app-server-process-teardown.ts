@@ -6,7 +6,9 @@ import { findAgentSessionSpawnTokenProcesses } from '../runtime/agent-session-sp
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
 
 const TOKEN_PROCESS_EXIT_TIMEOUT_MS = 3_500
+
 const TOKEN_PROCESS_POLL_MS = 25
+
 const activeTeardowns = new WeakMap<object, Promise<boolean>>()
 
 type TeardownChild = Pick<ChildProcessHandle, 'pid' | 'kill'>
@@ -33,17 +35,20 @@ function terminateDedicatedPosixGroup(
   const signalGroup =
     deps.signalProcessGroup ??
     ((pgid: number, signal: NodeJS.Signals) => process.kill(-pgid, signal))
+
   try {
     signalGroup(rootPid, 'SIGKILL')
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === 'ESRCH'
   }
+
   // Outside the try: that catch is the ESRCH contract, not a breadcrumb handler.
   recordSelfInitiatedTreeKill({
     pid: rootPid,
     site: 'codex-app-server-teardown',
     scope: 'posix-process-group'
   })
+
   return true
 }
 
@@ -58,6 +63,7 @@ function sendSignal(pid: number, signal: NodeJS.Signals): void {
 function isPidPresent(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch (error) {
     return (error as NodeJS.ErrnoException).code !== 'ESRCH'
@@ -72,25 +78,33 @@ async function diagnosticTokenFallback(
   const find = deps.findSpawnTokenProcesses ?? findAgentSessionSpawnTokenProcesses
   const signal = deps.signalPid ?? sendSignal
   const pidPresent = deps.isPidPresent ?? isPidPresent
+
   const delay =
     deps.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+
   const now = deps.now ?? Date.now
   const deadline = now() + TOKEN_PROCESS_EXIT_TIMEOUT_MS
   const signalled = new Set<number>()
+
   while (now() < deadline) {
     const pids = await find(spawnToken).catch(() => null)
+
     if (pids === null) {
       return false
     }
+
     for (const pid of pids.filter((candidate) => candidate !== rootPid)) {
       signalled.add(pid)
       signal(pid, 'SIGKILL')
     }
+
     if ([...signalled].every((pid) => !pidPresent(pid))) {
       return true
     }
+
     await delay(TOKEN_PROCESS_POLL_MS)
   }
+
   return false
 }
 
@@ -105,21 +119,29 @@ async function terminatePosixTree(
   // never the owner of orphan-reaping decisions.
   if (_spawnToken && deps.findSpawnTokenProcesses) {
     const reaped = await diagnosticTokenFallback(rootPid, _spawnToken, deps)
+
     if (reaped) {
       child.kill('SIGKILL')
+
       return true
     }
+
     return false
   }
+
   child.kill('SIGSTOP')
   const capture = deps.captureDescendants ?? captureDescendantSnapshot
   const snapshot = await capture(rootPid).catch(() => null)
+
   if (!snapshot) {
     child.kill('SIGKILL')
+
     return true
   }
+
   const terminate = deps.terminateDescendants ?? terminateDescendantSnapshotAndWait
   const descendantsExited = await terminate(snapshot)
+
   // A detached POSIX launch is the leader of its own process group. Group
   // signalling reaches grandchildren even after they daemonise/reparent,
   // while the stopped root and captured pgid make the ownership proof exact.
@@ -129,7 +151,9 @@ async function terminatePosixTree(
     const signalGroup =
       deps.signalProcessGroup ??
       ((pgid: number, signal: NodeJS.Signals) => process.kill(-pgid, signal))
+
     let groupSignalled = false
+
     try {
       signalGroup(snapshot.rootPgid, 'SIGKILL')
       groupSignalled = true
@@ -137,6 +161,7 @@ async function terminatePosixTree(
       // Already-gone is still the desired outcome, but nothing here killed it,
       // and a crumb for a kill we never landed is a false render-process-gone suspect.
     }
+
     if (groupSignalled) {
       // Outside the try, as in terminateDedicatedPosixGroup: that catch is the
       // already-gone contract, not a breadcrumb handler.
@@ -147,11 +172,15 @@ async function terminatePosixTree(
       })
     }
   }
+
   if (!descendantsExited) {
     child.kill('SIGCONT')
+
     return false
   }
+
   child.kill('SIGKILL')
+
   return true
 }
 
@@ -162,20 +191,26 @@ async function terminateOnce(
   deps: CodexAppServerProcessTeardownDeps
 ): Promise<boolean> {
   const rootPid = child.pid
+
   if (!rootPid) {
     child.kill('SIGKILL')
+
     return false
   }
+
   if ((deps.platform ?? process.platform) === 'win32') {
     const terminate = deps.terminateWindowsTree ?? terminateWindowsProcessTree
     await terminate(rootPid, { site: 'codex-app-server-teardown' })
     // taskkill owns the tree; this preserves the prior direct-child fallback when it fails.
     child.kill('SIGKILL')
+
     return true
   }
+
   if (deps.dedicatedProcessGroup) {
     return terminateDedicatedPosixGroup(rootPid, deps)
   }
+
   return terminatePosixTree(child, rootPid, spawnToken, deps)
 }
 
@@ -186,9 +221,11 @@ export function terminateCodexAppServerProcessTree(
 ): Promise<boolean> {
   const key = child as object
   const active = activeTeardowns.get(key)
+
   if (active) {
     return active
   }
+
   const attempt = terminateOnce(child, spawnToken, deps).catch(() => false)
   activeTeardowns.set(key, attempt)
   void attempt.then(() => {
@@ -196,5 +233,6 @@ export function terminateCodexAppServerProcessTree(
       activeTeardowns.delete(key)
     }
   })
+
   return attempt
 }

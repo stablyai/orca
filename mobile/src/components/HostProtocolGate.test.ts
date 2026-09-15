@@ -31,6 +31,7 @@ vi.mock('expo-router', () => ({
 const hostClient = vi.hoisted(() => ({
   current: { client: null as RpcClient | null, state: 'disconnected' as string }
 }))
+
 vi.mock('../transport/client-context', () => ({
   useHostClient: () => hostClient.current
 }))
@@ -41,15 +42,18 @@ function clientWithStatus(result: Record<string, unknown>): RpcClient {
 
 function GateConsumer() {
   const { hostCapabilities } = useHostProtocolGates()
+
   return createElement('GateStatus', null, hostCapabilities.join(','))
 }
 
 // Counts mounts so a test can prove the routes were never torn down, which presence alone can't.
 const probeMounts = { count: 0 }
+
 function MountProbe() {
   useEffect(() => {
     probeMounts.count += 1
   }, [])
+
   return createElement('MountProbe')
 }
 
@@ -67,6 +71,7 @@ async function renderGate(): Promise<ReactTestRenderer> {
     renderer = create(gateElement())
     await Promise.resolve()
   })
+
   return renderer as unknown as ReactTestRenderer
 }
 
@@ -142,6 +147,7 @@ describe('HostProtocolGate', () => {
       minCompatibleMobileVersion: 0,
       capabilities: ['browser.screencast.v1']
     })
+
     hostClient.current = {
       client,
       state: 'connected'
@@ -164,6 +170,7 @@ describe('HostProtocolGate', () => {
     const client = {
       sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
     } as unknown as RpcClient
+
     hostClient.current = { client, state: 'connected' }
     renderer = await renderGate()
     const output = renderedText(renderer)
@@ -182,6 +189,7 @@ describe('HostProtocolGate', () => {
     const client = {
       sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
     } as unknown as RpcClient
+
     await act(async () => {
       hostClient.current = { client, state: 'connected' }
       renderer?.update(gateElement())
@@ -193,9 +201,11 @@ describe('HostProtocolGate', () => {
     expect(output).toContain('Checking host compatibility')
     // Why: the cold-start remount this replaces is exactly what destroys in-flight deep navigation.
     expect(probeMounts.count).toBe(1)
+
     const overlay = renderer.root
       .findAllByType('View')
       .find((node) => node.props.accessibilityViewIsModal === true)
+
     expect(overlay?.props.pointerEvents).toBe('auto')
   })
 
@@ -229,6 +239,7 @@ describe('HostProtocolGate', () => {
         })
         .mockReturnValueOnce(new Promise(() => {}))
     } as unknown as RpcClient
+
     hostClient.current = { client, state: 'connected' }
     renderer = await renderGate()
 

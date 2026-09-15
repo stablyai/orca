@@ -29,8 +29,10 @@ export function useCombinedDiffViewPersist({
     if (sections.length === 0 && entryCount > 0) {
       return
     }
+
     const preservedScrollTop =
       combinedDiffScrollTopCache.get(viewStateKey) ?? scrollContainerRef.current?.scrollTop ?? 0
+
     setWithLRU(combinedDiffViewStateCache, viewStateKey, {
       entrySignature,
       gitStatusSignature: combinedGitStatusSignature,

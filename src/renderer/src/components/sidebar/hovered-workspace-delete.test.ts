@@ -25,6 +25,7 @@ function hoveredDocument(...rows: { workspaceId: string; hostIdentity: string }[
       length: rows.length,
       item: (index: number) => {
         const row = rows[index]
+
         return row
           ? ({
               dataset: {
@@ -136,12 +137,15 @@ describe('hovered workspace delete', () => {
       isContentEditable = false
       closest = () => this
     }
+
     vi.stubGlobal('HTMLElement', EditableElement)
     const target = worktree({ hostId: 'local' })
+
     const doc = hoveredDocument({
       workspaceId: target.id,
       hostIdentity: 'local|repo::/feature'
     }) as Pick<Document, 'activeElement' | 'querySelectorAll'>
+
     Object.defineProperty(doc, 'activeElement', { value: new EditableElement() })
 
     try {
@@ -202,12 +206,14 @@ describe('hovered workspace delete', () => {
     current.deleteFolderWorkspace = vi.fn(
       () => new Promise<boolean>((resolve) => (finishDelete = resolve))
     )
+
     const target = {
       kind: 'folder' as const,
       executionHostId: 'runtime:remote-2' as const,
       folderWorkspaceId: 'folder-2',
       workspaceKey: 'folder:folder-2'
     }
+
     const dependencies = { deleteWorktree: vi.fn(), getCurrentState: () => current }
 
     expect(deleteHoveredWorkspaceImmediately(current, target, dependencies)).toBe(true)

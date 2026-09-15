@@ -15,6 +15,7 @@ export async function recoverDeadTuiHandoffStatus(input: {
   probe: AgentSessionOwnerProbe
 }): Promise<AgentSessionHandoffStatus | null> {
   const { expectedFence, now, probe, record, store } = input
+
   if (
     record.lease.runtimeFence !== expectedFence ||
     record.lease.runtimeKind !== 'tui' ||
@@ -24,6 +25,7 @@ export async function recoverDeadTuiHandoffStatus(input: {
   ) {
     return null
   }
+
   const recovered = await recoverStoredDeadTuiOwnerForHandoff(store, {
     sessionId: record.sessionId,
     expectedFence,
@@ -31,5 +33,6 @@ export async function recoverDeadTuiHandoffStatus(input: {
     probe,
     now: now()
   })
+
   return idleStructuredHandoffStatus(recovered)
 }

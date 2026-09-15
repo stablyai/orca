@@ -51,13 +51,17 @@ async function runWorkspaceAction(
   run: (groupId: string) => Promise<void>
 ): Promise<CmdJQuickActionRunResult> {
   const availability = workspaceActionAvailability(ctx)
+
   if (!availability.available) {
     return { status: 'unavailable', reason: availability.reason }
   }
+
   if (!ctx.activeGroupId) {
     return { status: 'unavailable', reason: 'no-active-group' }
   }
+
   await run(ctx.activeGroupId)
+
   return { status: 'ok' }
 }
 
@@ -83,9 +87,11 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
     isAvailable: browserWorkspaceActionAvailability,
     run: async (ctx) => {
       const availability = browserWorkspaceActionAvailability(ctx)
+
       if (!availability.available) {
         return { status: 'unavailable', reason: availability.reason }
       }
+
       return runWorkspaceAction(ctx, ctx.openNewBrowserTab)
     }
   },
@@ -144,6 +150,7 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
     isAvailable: () => ({ available: true }),
     run: async (ctx) => {
       ctx.openCreateWorkspace()
+
       return { status: 'ok' }
     }
   },
@@ -168,10 +175,13 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
     isAvailable: currentWorkspaceActionAvailability,
     run: async (ctx) => {
       const availability = currentWorkspaceActionAvailability(ctx)
+
       if (!availability.available) {
         return { status: 'unavailable', reason: availability.reason }
       }
+
       ctx.deleteActiveWorkspace()
+
       return { status: 'ok' }
     }
   },
@@ -191,6 +201,7 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
     isAvailable: () => ({ available: true }),
     run: async (ctx) => {
       ctx.openAddQuickCommand()
+
       return { status: 'ok' }
     }
   }

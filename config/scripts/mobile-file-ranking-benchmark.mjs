@@ -7,19 +7,26 @@ import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedu
 import { summarizeBenchmarkSamples } from './benchmark-sample-summary.mjs'
 
 const baseline = process.argv[2]
+
 if (!baseline) {
   throw new Error(
     'Usage: node config/scripts/mobile-file-ranking-benchmark.mjs <baseline-ref|--autocomplete-stdin>'
   )
 }
+
 // git show <ref>:mobile/src/session/mobile-native-chat-autocomplete.ts | node config/scripts/mobile-file-ranking-benchmark.mjs --autocomplete-stdin
 const autocompleteSource = baseline === '--autocomplete-stdin' ? readFileSync(0, 'utf8') : null
+
 async function load(source) {
   const { code } = await transform(source, { loader: 'ts', format: 'esm' })
+
   return await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`)
 }
+
 const results = []
+
 let differentialCases = 0
+
 for (const [file, name] of [
   ['src/main/runtime/runtime-mobile-file-path-search.ts', 'rankRuntimeMobileFilePaths'],
   ['mobile/src/session/mobile-native-chat-autocomplete.ts', 'rankSuggestions'],
@@ -28,23 +35,31 @@ for (const [file, name] of [
   if (autocompleteSource !== null && name === 'rankRuntimeMobileFilePaths') {
     continue
   }
+
   const before = (
     await load(
       autocompleteSource ??
         execFileSync('git', ['show', `${baseline}:${file}`], { encoding: 'utf8' })
     )
   )[name]
+
   const after = (await load(readFileSync(file, 'utf8')))[name]
   const slash = name === 'rankSlashCommandSuggestions'
+
   const toCandidates = (names) =>
     slash ? names.map((name, index) => ({ name, description: `Command ${index}` })) : names
+
   if (name !== 'rankRuntimeMobileFilePaths') {
     let seed = 42
+
     const random = (max) => {
       seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+
       return seed % max
     }
+
     const tokens = ['', 'app', 'src/', 'APP', 'zapp', '🙂', '한', '\ud800', '\u0130', ' ']
+
     const limits = [
       undefined,
       0,
@@ -60,6 +75,7 @@ for (const [file, name] of [
       16,
       Infinity
     ]
+
     for (let index = 0; index < 3000; index += 1) {
       const candidates = toCandidates(
         Array.from(
@@ -67,20 +83,24 @@ for (const [file, name] of [
           () => tokens[random(tokens.length)] + tokens[random(tokens.length)]
         )
       )
+
       const query = tokens[random(tokens.length)]
       const limit = limits[random(limits.length)]
       assert.deepEqual(after(candidates, query, limit), before(candidates, query, limit))
       differentialCases += 1
     }
   }
+
   for (const count of slash ? [16, 100, 1000] : [16, 100, 10_000, 50_000, 100_000]) {
     const names = Array.from({ length: count }, (_, index) =>
       slash
         ? `team-review-${index}`
         : `src/components/workspace/group-${index % 100}/file-${index}.tsx`
     )
+
     const limit = slash ? 12 : 16
     const substringQuery = slash ? 'review' : 'workspace'
+
     const workloads = [
       { name: 'empty-query', names, query: '' },
       { name: 'substring', names, query: substringQuery },
@@ -92,29 +112,36 @@ for (const [file, name] of [
         query: substringQuery
       }
     ]
+
     for (const workload of workloads) {
       const candidates = toCandidates(workload.names)
       const expected = before(candidates, workload.query, limit)
       assert.deepEqual(after(candidates, workload.query, limit), expected)
       const implementations = { before, after }
       const iterations = Math.max(10, Math.floor(100_000 / count))
+
       for (let warmup = 0; warmup < 100; warmup += 1) {
         before(candidates, workload.query, limit)
         after(candidates, workload.query, limit)
       }
+
       /** @type {{ before: number[], after: number[] }} */
       const samples = { before: [], after: [] }
+
       for (const pair of buildCounterbalancedSchedule(8, 'before', 'after')) {
         for (const arm of pair) {
           let actual
           const start = performance.now()
+
           for (let repeat = 0; repeat < iterations; repeat += 1) {
             actual = implementations[arm](candidates, workload.query, limit)
           }
+
           samples[arm].push(performance.now() - start)
           assert.deepEqual(actual, expected)
         }
       }
+
       results.push({
         function: name,
         candidates: candidates.length,
@@ -132,6 +159,7 @@ for (const [file, name] of [
     }
   }
 }
+
 console.log(
   JSON.stringify(
     { node: process.version, platform: process.platform, differentialCases, results },

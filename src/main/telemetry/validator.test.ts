@@ -28,6 +28,7 @@ describe('validate', () => {
       launch_source: 'command_palette',
       request_kind: 'new'
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -38,6 +39,7 @@ describe('validate', () => {
       request_kind: 'followup',
       nth_repo_added: 1
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -51,6 +53,7 @@ describe('validate', () => {
       agents_since_baseline_bucket: '35-69',
       nth_repo_added: 4
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -81,6 +84,7 @@ describe('validate', () => {
   it('drops unknown event names', () => {
     const result = validate('not_a_real_event' as never, {})
     expect(result.ok).toBe(false)
+
     if (!result.ok) {
       expect(result.reason).toMatch(/unknown event/)
     }
@@ -100,6 +104,7 @@ describe('validate', () => {
       agent_kind: 'claude-code',
       error_message: 'at /Users/alice/secret/path/index.ts:42'
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -109,6 +114,7 @@ describe('validate', () => {
       agent_kind: 'claude-code',
       error_stack: 'Error: boom\n    at /Users/alice/...'
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -118,6 +124,7 @@ describe('validate', () => {
       launch_source: 'sidebar'
       // missing request_kind
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -127,6 +134,7 @@ describe('validate', () => {
       launch_source: 'command_palette',
       request_kind: 'restart' // not in ['new', 'resume', 'followup']
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -135,6 +143,7 @@ describe('validate', () => {
       error_class: 'binary_not_found',
       agent_kind: 'claude-code'
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -146,6 +155,7 @@ describe('validate', () => {
       error_class: 'auth_expired',
       agent_kind: 'claude-code'
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -189,6 +199,7 @@ describe('validate', () => {
       method: 'folder_picker',
       is_git_repo: 'yes'
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -201,6 +212,7 @@ describe('validate', () => {
       is_git_repo: false,
       total_duration_ms: 100
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -209,6 +221,7 @@ describe('validate', () => {
       path: 'add_project_modal',
       total_duration_ms: 100
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -218,6 +231,7 @@ describe('validate', () => {
       launch_source: 'command_palette',
       request_kind: 'new'
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -241,6 +255,7 @@ describe('validate', () => {
       value_kind: 'bool',
       nth_repo_added: 1
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -254,6 +269,7 @@ describe('validate', () => {
       detection_state: 'complete',
       from_collapsed_section: false
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -269,6 +285,7 @@ describe('validate', () => {
       from_collapsed_section: true,
       cohort: 'fresh_install'
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -280,6 +297,7 @@ describe('validate', () => {
       detection_state: 'detecting',
       from_collapsed_section: false
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -295,6 +313,7 @@ describe('validate', () => {
       path_source: 'sync_seed_only',
       path_failure_reason: 'timeout'
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -307,6 +326,7 @@ describe('validate', () => {
       detection_state: 'complete',
       from_collapsed_section: false
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -319,6 +339,7 @@ describe('validate', () => {
       from_collapsed_section: false,
       path_source: 'env_path'
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -331,6 +352,7 @@ describe('validate', () => {
       from_collapsed_section: false,
       path_failure_reason: 'parse_failed'
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -339,6 +361,7 @@ describe('validate', () => {
       state: 'found',
       field_group_count_bucket: '4-7'
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -349,6 +372,7 @@ describe('validate', () => {
       state: 'found',
       field_group_count_bucket: 5
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -371,6 +395,7 @@ describe('validate', () => {
       duration_ms: 1234,
       advanced_via: 'keyboard'
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -381,6 +406,7 @@ describe('validate', () => {
       step: 2,
       value_kind: 'theme'
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -389,6 +415,7 @@ describe('validate', () => {
       step: 4,
       value_kind: 'windows_terminal'
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -398,6 +425,7 @@ describe('validate', () => {
       value_kind: 'agent',
       duration_ms: -5
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -407,6 +435,7 @@ describe('validate', () => {
       value_kind: 'agent',
       advanced_via: 'voice'
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -418,6 +447,7 @@ describe('validate', () => {
       duration_ms: 1200,
       advanced_via: 'button'
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -427,6 +457,7 @@ describe('validate', () => {
       linear_status: 'not_connected',
       exit_action: 'continue'
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -438,6 +469,7 @@ describe('validate', () => {
       duration_ms: 1200,
       advanced_via: 'keyboard'
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -447,6 +479,7 @@ describe('validate', () => {
       right_click_behavior: 'menu',
       exit_action: 'continue'
     } as never)
+
     expect(result.ok).toBe(false)
   })
 
@@ -461,6 +494,7 @@ describe('validate', () => {
     const result = validate('app_opened', {
       cohort: 'fresh_install'
     } as never)
+
     expect(result.ok).toBe(false)
   })
 

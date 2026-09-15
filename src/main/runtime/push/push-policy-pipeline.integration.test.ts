@@ -11,10 +11,13 @@ import { PushUnregisterOutbox } from './push-unregister-outbox'
 import { createPushHostKeypair } from './push-host-challenge-fixtures'
 
 const paths: string[] = []
+
 const services: DesktopPushService[] = []
+
 const filter = {
   onlyWhenDesktopAway: true
 }
+
 const flush = () => new Promise((resolve) => setImmediate(resolve))
 
 afterEach(() => {
@@ -30,11 +33,13 @@ async function pipeline() {
   const registry = new DeviceRegistry(path)
   const device = registry.addDevice('policy-phone', 'mobile')
   const controller = new RuntimeMobileNotificationController()
+
   const client = {
     registerDevice: vi.fn(async () => ({ ok: true, registrationId: 'policy-registration' })),
     deleteDevice: vi.fn(async () => true),
     send: vi.fn(async () => ({ ok: true, results: [] }))
   }
+
   const service = DesktopPushService.create({
     runtime: {
       setMobilePushRegistrar: controller.setPushRegistrar.bind(controller),
@@ -49,8 +54,10 @@ async function pipeline() {
     gatewayUrl: 'https://push.onorca.dev',
     client: client as never
   })!
+
   services.push(service)
   service.start()
+
   const register = () =>
     controller.registerPushDevice({
       deviceId: device.deviceId,
@@ -58,7 +65,9 @@ async function pipeline() {
       token: 'test-token',
       filter
     })
+
   expect(await register()).toMatchObject({ registered: true })
+
   const dispatch = () =>
     controller.dispatch({
       type: 'notification',
@@ -68,6 +77,7 @@ async function pipeline() {
       title: 'Policy test',
       body: 'Policy test'
     })
+
   return { path, registry, device, controller, client, register, dispatch }
 }
 

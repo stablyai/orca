@@ -48,6 +48,7 @@ export class BrowserHostCommandLedger {
     if (options.authority.pageCommandProtocolVersion !== 1) {
       throw new Error('browser_host_command_protocol_required')
     }
+
     this.authority = Object.freeze({ ...options.authority })
     this.createCommandId = options.createCommandId ?? (() => randomUUID())
     this.maxOutstandingCommands = positiveBrowserHostCommandLimit(
@@ -73,16 +74,20 @@ export class BrowserHostCommandLedger {
     if (this.closed) {
       throw new Error('browser_host_command_ledger_closed')
     }
+
     if (this.delivery) {
       throw new Error('browser_host_command_delivery_attached')
     }
+
     this.delivery = delivery
+
     try {
       replayOutstandingBrowserHostCommands(this.pages.values(), delivery)
     } catch {
       this.detachDelivery()
       throw new Error('browser_host_command_delivery_failed')
     }
+
     return () => {
       if (this.delivery === delivery) {
         this.delivery = undefined
@@ -101,22 +106,28 @@ export class BrowserHostCommandLedger {
     if (this.closed) {
       throw new Error('browser_host_command_ledger_closed')
     }
+
     if (!this.delivery) {
       throw new Error('browser_host_command_delivery_required')
     }
+
     if (this.outstandingCommands >= this.maxOutstandingCommands) {
       throw new Error('browser_host_command_capacity')
     }
+
     const command = BrowserClientHostPageCommand.parse(input.command)
     const admission = this.selectPage(input)
     const { page } = admission
+
     if (page.outstanding >= this.maxOutstandingCommandsPerPage) {
       throw new Error('browser_host_page_command_capacity')
     }
+
     assertBrowserHostCommandOrder(page, command, input.resultAdmission ?? 'placed-page')
     admission.commit()
     recordBrowserHostCommandOrder(page, command)
     const commandSequence = page.nextIssueSequence
+
     const event = Object.freeze({
       type: 'command' as const,
       ...this.authority,
@@ -127,17 +138,20 @@ export class BrowserHostCommandLedger {
       commandId: this.createCommandId(commandSequence),
       command: snapshotBrowserHostPageCommand(command)
     })
+
     const record = createBrowserHostCommandRecord(event, input.resultAdmission ?? 'placed-page')
     page.records.set(commandSequence, record)
     page.nextIssueSequence += 1
     page.outstanding += 1
     this.outstandingCommands += 1
+
     try {
       this.delivery(event)
     } catch {
       this.close()
       throw new Error('browser_host_command_delivery_failed')
     }
+
     return { event, result: record.result }
   }
 
@@ -157,21 +171,28 @@ export class BrowserHostCommandLedger {
     if (this.closed) {
       throw new Error('browser_host_command_ledger_closed')
     }
+
     assertBrowserHostCommandResultAuthority(this.authority, params)
     const page = this.pages.get(params.browserPageId)
+
     if (!page || page.generation !== params.pageHostGeneration) {
       throw new Error('browser_host_command_result_page_stale')
     }
+
     if (params.commandSequence < page.nextSettlementSequence) {
       return replaySettledBrowserHostCommand(page, params)
     }
+
     if (params.commandSequence > page.nextSettlementSequence) {
       throw new Error('browser_host_command_result_sequence_gap')
     }
+
     const record = page.records.get(params.commandSequence)
+
     if (!record || record.event.commandId !== params.commandId || record.settled) {
       throw new Error('browser_host_command_result_conflict')
     }
+
     const result = Object.freeze({ ...params.result })
     record.settled = result
     record.resolve(result)
@@ -180,12 +201,14 @@ export class BrowserHostCommandLedger {
     this.outstandingCommands -= 1
     page.settledSequences.push(params.commandSequence)
     this.resultCache.remember(page, record)
+
     if (record.event.command.type === 'closePage' && result.status === 'failed') {
       page.terminalCommandIssued = false
     } else if (record.event.command.type === 'closePage' && !page.activeCapacityReleased) {
       page.activeCapacityReleased = true
       this.activePages -= 1
     }
+
     return true
   }
 
@@ -193,8 +216,10 @@ export class BrowserHostCommandLedger {
     if (this.closed) {
       return
     }
+
     this.closed = true
     this.delivery = undefined
+
     for (const page of this.pages.values()) {
       for (const record of page.records.values()) {
         if (!record.settled) {
@@ -202,6 +227,7 @@ export class BrowserHostCommandLedger {
         }
       }
     }
+
     this.pages.clear()
     this.resultCache.clear()
     this.outstandingCommands = 0
@@ -210,23 +236,30 @@ export class BrowserHostCommandLedger {
 
   retirePage(browserPageId: string, pageHostGeneration: number): boolean {
     const page = this.pages.get(browserPageId)
+
     if (!page) {
       return false
     }
+
     if (page.generation !== pageHostGeneration) {
       throw new Error('browser_host_command_page_stale')
     }
+
     for (const record of page.records.values()) {
       if (!record.settled) {
         record.reject(new Error('browser_host_command_outcome_unknown'))
       }
     }
+
     this.outstandingCommands -= page.outstanding
     page.outstanding = 0
+
     if (!page.activeCapacityReleased) {
       this.activePages -= 1
     }
+
     this.resultCache.releasePage(page)
+
     return this.pages.delete(browserPageId)
   }
 
@@ -235,19 +268,25 @@ export class BrowserHostCommandLedger {
     commit: () => void
   } {
     const existing = this.pages.get(input.browserPageId)
+
     if (existing?.generation === input.pageHostGeneration) {
       return { page: existing, commit: () => {} }
     }
+
     if (existing && (input.pageHostGeneration < existing.generation || existing.outstanding > 0)) {
       throw new Error('browser_host_command_page_stale')
     }
+
     if (input.pageHostGeneration < 1) {
       throw new Error('browser_host_command_page_stale')
     }
+
     const claimsActivePage = !existing || existing.activeCapacityReleased
+
     if (claimsActivePage && this.activePages >= this.maxPages) {
       throw new Error('browser_host_command_page_capacity')
     }
+
     const page: BrowserHostCommandPageState = {
       generation: input.pageHostGeneration,
       nextIssueSequence: 1,
@@ -258,13 +297,16 @@ export class BrowserHostCommandLedger {
       terminalCommandIssued: false,
       activeCapacityReleased: false
     }
+
     return {
       page,
       commit: () => {
         if (existing) {
           this.resultCache.releasePage(existing)
         }
+
         this.pages.set(input.browserPageId, page)
+
         if (claimsActivePage) {
           this.activePages += 1
         }

@@ -21,6 +21,7 @@ async function resolveIssueUrlWithinTimeout(
   lookup: Promise<{ url?: string } | null>
 ): Promise<string | null> {
   let timer: ReturnType<typeof setTimeout> | undefined
+
   try {
     const issue = await Promise.race([
       lookup,
@@ -28,6 +29,7 @@ async function resolveIssueUrlWithinTimeout(
         timer = setTimeout(() => resolve(null), OPEN_ISSUE_TIMEOUT_MS)
       })
     ])
+
     return issue?.url ?? null
   } catch {
     // Why: the store's fetchers already log and normalize failures to null; a
@@ -69,6 +71,7 @@ export function useWorktreeIssueLink(args: {
     linkedLinearIssue,
     linearSourceContext
   } = args
+
   const isLinear = issueProvider === 'linear'
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
@@ -95,18 +98,22 @@ export function useWorktreeIssueLink(args: {
     () => (isLinear ? null : parseGitHubIssueOrPRNumber(boundedInput)),
     [isLinear, boundedInput]
   )
+
   const issueUrlFromInput = useMemo(
     () => (isLinear ? null : parseExplicitGitHubIssueUrl(boundedInput)),
     [isLinear, boundedInput]
   )
+
   const issueInputLooksLikeUrl = useMemo(
     () => /^https?:\/\//i.test(boundedInput.trim()),
     [boundedInput]
   )
+
   const parsedLinearIssue = useMemo(
     () => (isLinear ? parseLinearIssueInput(boundedInput) : null),
     [isLinear, boundedInput]
   )
+
   // Why: only an org key that is authoritative *for this identifier* may build a
   // URL directly — the input's own, or the workspace's stored one while the typed
   // identifier still is that issue. The connected viewer's key is not: a bare key
@@ -117,9 +124,11 @@ export function useWorktreeIssueLink(args: {
     if (!parsedLinearIssue) {
       return null
     }
+
     const storedKeyApplies =
       typeof linkedLinearIssue === 'string' &&
       linkedLinearIssue.toUpperCase() === parsedLinearIssue.identifier.toUpperCase()
+
     return buildLinearIssueUrl({
       identifier: parsedLinearIssue.identifier,
       organizationUrlKey:
@@ -129,12 +138,15 @@ export function useWorktreeIssueLink(args: {
 
   const issueRepo = useAppStore((s) => {
     const repoId = ownerRepoId ?? findIndexedWorktreeOwner(s.worktreesByRepo, worktreeId)?.repoId
+
     return repoId ? s.repos.find((repo) => repo.id === repoId) : undefined
   })
+
   const cachedIssueUrl = useAppStore((s) => {
     if (!issueRepo || issueNumber === null) {
       return null
     }
+
     return (
       s.issueCache[
         getIssueCacheKey(
@@ -149,6 +161,7 @@ export function useWorktreeIssueLink(args: {
       ]?.data?.url ?? null
     )
   })
+
   const canOpenIssue = isLinear
     ? Boolean(parsedLinearIssue)
     : issueInputLooksLikeUrl
@@ -159,9 +172,11 @@ export function useWorktreeIssueLink(args: {
     if (openingIssue) {
       return
     }
+
     setFailedIssueInput(null)
     const generation = ++openRequestRef.current
     const requestKey = latestRequestKeyRef.current
+
     // Why: the losing side of the timeout race keeps running, so every result
     // has to prove it still belongs to the field the user is looking at.
     const isCurrentRequest = (): boolean =>
@@ -173,12 +188,15 @@ export function useWorktreeIssueLink(args: {
       if (!parsedLinearIssue) {
         return
       }
+
       if (linearIssueUrl) {
         void window.api.shell.openUrl(linearIssueUrl)
+
         return
       }
 
       setOpeningIssue(true)
+
       try {
         // Why: 'all' — the issue may belong to a different Linear workspace than
         // the selected one, which is the usual case for a bare or pasted identifier.
@@ -187,9 +205,11 @@ export function useWorktreeIssueLink(args: {
             sourceContext: linearSourceContext ?? null
           })
         )
+
         if (!isCurrentRequest()) {
           return
         }
+
         if (url) {
           void window.api.shell.openUrl(url)
         } else {
@@ -203,11 +223,13 @@ export function useWorktreeIssueLink(args: {
           setOpeningIssue(false)
         }
       }
+
       return
     }
 
     if (issueUrlFromInput) {
       void window.api.shell.openUrl(issueUrlFromInput)
+
       return
     }
 
@@ -217,6 +239,7 @@ export function useWorktreeIssueLink(args: {
 
     if (cachedIssueUrl) {
       void window.api.shell.openUrl(cachedIssueUrl)
+
       return
     }
 
@@ -225,13 +248,16 @@ export function useWorktreeIssueLink(args: {
     }
 
     setOpeningIssue(true)
+
     try {
       const url = await resolveIssueUrlWithinTimeout(
         fetchIssue(issueRepo.path, issueNumber, { repoId: issueRepo.id })
       )
+
       if (!isCurrentRequest()) {
         return
       }
+
       if (url) {
         void window.api.shell.openUrl(url)
       } else {

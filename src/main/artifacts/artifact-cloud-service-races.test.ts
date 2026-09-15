@@ -11,7 +11,9 @@ vi.mock('electron', () => ({
 import { ArtifactCloudService } from './artifact-cloud-service'
 
 const createdPaths: string[] = []
+
 const apiUrl = 'http://localhost:3000'
+
 const writeRequest = {
   sourceKey: '/repo/report.html',
   content: '<h1>Hi</h1>',
@@ -47,6 +49,7 @@ function createResponse(slug: string): Response {
 async function setup(): Promise<ArtifactCloudService> {
   const path = await mkdtemp(join(tmpdir(), 'orca-artifact-races-'))
   createdPaths.push(path)
+
   return new ArtifactCloudService(path, () => true)
 }
 
@@ -67,6 +70,7 @@ afterEach(async () => {
 describe('ArtifactCloudService same-source races', () => {
   it('runs the next same-source operation after an earlier failure', async () => {
     const service = await setup()
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -76,6 +80,7 @@ describe('ArtifactCloudService same-source races', () => {
         })
       )
       .mockResolvedValueOnce(createResponse('artifact-b'))
+
     vi.stubGlobal('fetch', fetchMock)
 
     const failedShare = service.share(writeRequest)
@@ -92,6 +97,7 @@ describe('ArtifactCloudService same-source races', () => {
   it('does not let an old update overwrite a newer share mapping', async () => {
     const service = await setup()
     let resolveUpdate: ((response: Response) => void) | undefined
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(createResponse('artifact-a'))
@@ -103,6 +109,7 @@ describe('ArtifactCloudService same-source races', () => {
       )
       .mockResolvedValueOnce(createResponse('artifact-b'))
       .mockResolvedValueOnce(createResponse('artifact-b'))
+
     vi.stubGlobal('fetch', fetchMock)
 
     await service.share(writeRequest)
@@ -121,6 +128,7 @@ describe('ArtifactCloudService same-source races', () => {
   it('does not let an old unshare delete a newer share mapping', async () => {
     const service = await setup()
     let resolveDelete: ((response: Response) => void) | undefined
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(createResponse('artifact-a'))
@@ -132,14 +140,17 @@ describe('ArtifactCloudService same-source races', () => {
       )
       .mockResolvedValueOnce(createResponse('artifact-b'))
       .mockResolvedValueOnce(createResponse('artifact-b'))
+
     vi.stubGlobal('fetch', fetchMock)
 
     await service.share(writeRequest)
+
     const oldUnshare = service.unshare({
       sourceKey: writeRequest.sourceKey,
       apiUrl,
       authToken: 'token-a'
     })
+
     await vi.waitFor(() => expect(resolveDelete).toBeTypeOf('function'))
     const newerShare = service.share(writeRequest)
     expect(fetchMock).toHaveBeenCalledTimes(2)

@@ -65,6 +65,7 @@ type AgentsPaneSearchOptions = {
 }
 
 const AGENT_AWAKE_SEARCH_ENTRY_ID = 'agent-awake'
+
 const AGENT_RUNTIME_SEARCH_ENTRY_ID = 'agent-runtime'
 
 const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
@@ -148,6 +149,7 @@ export function getAgentsPaneSearchEntries({
   includeAgentRuntime = true
 }: AgentsPaneSearchOptions = {}) {
   const entries = getAllAgentsPaneSearchEntries()
+
   return entries.filter(
     (entry) =>
       (!('id' in entry) || entry.id !== AGENT_RUNTIME_SEARCH_ENTRY_ID || includeAgentRuntime) &&

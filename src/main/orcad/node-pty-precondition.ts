@@ -34,8 +34,11 @@ import { installPrebuiltSlot, type PrebuiltSlotOutcome } from './node-pty-prebui
 // before the stack trace, so any substring test against stderr also matches this file's
 // own token strings. stdout carries only what the child chose to print.
 const PROBE_OK_TOKEN = 'ORCA_NODE_PTY_LOAD_OK'
+
 const NO_BINARY_TOKEN = 'ORCA_NODE_PTY_NO_BINARY'
+
 const LOAD_ERROR_TOKEN = 'ORCA_NODE_PTY_LOAD_ERROR'
+
 const PROBE_TIMEOUT_MS = 20_000
 
 /**
@@ -88,31 +91,38 @@ export function readNodePtyProbeOutcome(
   result: Pick<ProcessResult, 'code' | 'signal' | 'stdout' | 'stderr' | 'timedOut'>
 ): NodePtyProbeOutcome {
   const stdout = result.stdout
+
   if (result.code === 0 && stdout.includes(PROBE_OK_TOKEN)) {
     return {
       kind: 'loaded',
       loadedDir: stdout.split(PROBE_OK_TOKEN)[1]?.trim().split('\n')[0]?.trim() || null
     }
   }
+
   if (result.timedOut) {
     return {
       kind: 'unanswered',
       detail: 'the node-pty load probe did not finish in time, so nothing was established'
     }
   }
+
   // Why signal before anything the child said: a binary that aborts or segfaults inside
   // the loader never reaches the catch, and often prints nothing at all. That silence is
   // exactly the uncatchable case this probe is a separate process for.
   if (result.signal) {
     return { kind: 'signalled', signal: result.signal }
   }
+
   if (stdout.includes(NO_BINARY_TOKEN)) {
     return { kind: 'noBinary' }
   }
+
   const reported = readReportedLoadError(stdout)
+
   if (reported !== null) {
     return { kind: 'loaderError', message: reported }
   }
+
   return {
     kind: 'unexplained',
     detail: firstErrorLine(result.stderr) || `the load probe exited with code ${result.code}`
@@ -128,6 +138,7 @@ export function classifyNodePtyProbeResult(
   result: Pick<ProcessResult, 'code' | 'signal' | 'stdout' | 'stderr' | 'timedOut'>
 ): NodePtyProbeFailure | null {
   const outcome = readNodePtyProbeOutcome(result)
+
   switch (outcome.kind) {
     case 'loaded':
       return null
@@ -155,9 +166,11 @@ export function classifyNodePtyProbeResult(
 /** The message the child caught, or null when it never got that far. */
 function readReportedLoadError(stdout: string): string | null {
   const line = stdout.split('\n').find((candidate) => candidate.startsWith(LOAD_ERROR_TOKEN))
+
   if (!line) {
     return null
   }
+
   try {
     return JSON.parse(line.slice(LOAD_ERROR_TOKEN.length).trim()) as string
   } catch {
@@ -190,6 +203,7 @@ export function buildNodePtyLoadProbeScript(nodePtyDir: string): string {
   const entry = JSON.stringify(join(nodePtyDir, 'lib', 'index.js'))
   const utils = JSON.stringify(join(nodePtyDir, 'lib', 'utils.js'))
   const root = JSON.stringify(nodePtyDir)
+
   // Same directory order node-pty's own loader walks, so the file opened here is the file
   // it would load. Windows defers conpty.node to the first spawn, which is why the name is
   // chosen the way node-pty chooses it rather than always being 'pty'.
@@ -227,18 +241,21 @@ export function probeLocalBuildToolchainHints(platform: NodeJS.Platform): string
   if (platform === 'win32') {
     return []
   }
+
   // Why macOS is not routed through the relay's hints: that function answers with a
   // cross-distro apt/dnf/pacman/apk menu when it finds no package manager, and none of
   // those lines is the macOS answer. Printing them here would be confidently wrong.
   if (platform === 'darwin') {
     return ['  xcode-select --install']
   }
+
   try {
     const result = runProcessSync({
       program: '/bin/sh',
       args: ['-c', buildToolchainProbeCommand()],
       timeoutMs: 10_000
     })
+
     return toolchainInstallHintLines(parseBuildToolchainProbe(result.stdout))
   } catch {
     return []
@@ -253,6 +270,7 @@ export function checkNodePtyPrecondition(
   // Why `in` and not `??`: an explicit `null` means "this host cannot resolve node-pty",
   // which is a case tests must be able to state. `??` would silently re-detect instead.
   const nodePtyDir = 'nodePtyDir' in options ? options.nodePtyDir : resolveNodePtyDir()
+
   if (!nodePtyDir) {
     return {
       status: 'blocked',
@@ -266,6 +284,7 @@ export function checkNodePtyPrecondition(
   // Why install before probing: on a toolchain-free deployment the compiled binary does
   // not exist yet, and the shipped slot is the only thing that can make the probe pass.
   let prebuilt: PrebuiltSlotOutcome | undefined
+
   if (!existsSync(join(nodePtyDir, 'build', 'Release', 'pty.node'))) {
     prebuilt = installPrebuiltSlot({
       abi,
@@ -275,6 +294,7 @@ export function checkNodePtyPrecondition(
   }
 
   let result: ProcessResult
+
   try {
     result = runProcessSync({
       program: process.execPath,
@@ -291,7 +311,9 @@ export function checkNodePtyPrecondition(
       ...(prebuilt ? { prebuilt } : {})
     }
   }
+
   const failure = classifyNodePtyProbeResult(result)
+
   if (failure) {
     return {
       status: failure.status,
@@ -308,8 +330,10 @@ export function checkNodePtyPrecondition(
   // on a host that otherwise looks healthy. That is a degradation, not a boot blocker.
   const outcome = readNodePtyProbeOutcome(result)
   const loadedDir = outcome.kind === 'loaded' ? outcome.loadedDir : null
+
   if (usesNodePtySpawnHelper(abi.platform)) {
     const helper = join(loadedDir || join(nodePtyDir, 'build', 'Release'), 'spawn-helper')
+
     if (!isExecutableFile(helper)) {
       return {
         status: 'degraded',
@@ -321,12 +345,14 @@ export function checkNodePtyPrecondition(
       }
     }
   }
+
   return { status: 'ok', slot, abi, ...(prebuilt ? { prebuilt } : {}) }
 }
 
 function isExecutableFile(path: string): boolean {
   try {
     accessSync(path, constants.X_OK)
+
     return true
   } catch {
     return false
@@ -340,6 +366,7 @@ export function formatNodePtyPreconditionReport(
   toolchainHints: string[] = []
 ): string {
   const { abi } = verdict
+
   const host = [
     `platform ${abi.platform}/${abi.arch}`,
     abi.libc === 'none'
@@ -350,7 +377,9 @@ export function formatNodePtyPreconditionReport(
   ]
     .filter((part): part is string => part !== null)
     .join(', ')
+
   const lines = [message, '', `Host: ${host}`]
+
   if (verdict.prebuilt && !verdict.prebuilt.installed) {
     lines.push(
       verdict.prebuilt.why === 'no-slot'
@@ -360,8 +389,10 @@ export function formatNodePtyPreconditionReport(
           : `Shipped prebuilds are unusable here: ${verdict.prebuilt.detail ?? 'ABI mismatch'}.`
     )
   }
+
   if (toolchainHints.length > 0) {
     lines.push('', 'To build node-pty on this host, install a C/C++ toolchain:', ...toolchainHints)
   }
+
   return lines.join('\n')
 }

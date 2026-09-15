@@ -26,12 +26,14 @@ function createReactHookHarness() {
         const index = refIndex
         refIndex += 1
         refs[index] ??= { current: initialValue }
+
         return refs[index] as { current: T }
       },
       useState: <T>(initialValue: T): [T, (value: T) => void] => {
         const index = stateIndex
         stateIndex += 1
         states[index] ??= initialValue
+
         return [
           states[index] as T,
           (value: T) => {
@@ -71,8 +73,10 @@ describe('useGrabMode', () => {
       }
     })
     const { useGrabMode } = await import('./useGrabMode')
+
     const render = (browserPageId: string) => {
       harness.beginRender()
+
       // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
       return useGrabMode(browserPageId)
     }
@@ -107,8 +111,10 @@ describe('useGrabMode', () => {
       }
     })
     const { useGrabMode } = await import('./useGrabMode')
+
     const render = () => {
       harness.beginRender()
+
       // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
       return useGrabMode('page-1')
     }
@@ -124,12 +130,15 @@ describe('useGrabMode', () => {
   it('arms immediately and treats a second toggle as cancellation while enable is pending', async () => {
     const harness = createReactHookHarness()
     let resolveEnable!: (result: { ok: true }) => void
+
     const pendingEnable = new Promise<{ ok: true }>((resolve) => {
       resolveEnable = resolve
     })
+
     const setGrabMode = vi.fn(async ({ enabled }: { enabled: boolean }) =>
       enabled ? pendingEnable : ({ ok: true } as const)
     )
+
     const awaitGrabSelection = vi.fn(() => new Promise(() => {}))
     const cancelGrab = vi.fn()
     vi.doMock('react', () => harness.react)
@@ -144,8 +153,10 @@ describe('useGrabMode', () => {
       }
     })
     const { useGrabMode } = await import('./useGrabMode')
+
     const render = () => {
       harness.beginRender()
+
       // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
       return useGrabMode('page-1')
     }
@@ -185,8 +196,10 @@ describe('useGrabMode', () => {
       }
     })
     const { useGrabMode } = await import('./useGrabMode')
+
     const render = (browserPageId: string) => {
       harness.beginRender()
+
       // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
       return useGrabMode(browserPageId)
     }
@@ -207,16 +220,19 @@ describe('useGrabMode', () => {
 
   it('ignores a stale screenshot after restarting on the same page', async () => {
     const harness = createReactHookHarness()
+
     let resolveScreenshot!: (result: {
       ok: true
       screenshot: { dataUrl: string; width: number; height: number }
     }) => void
+
     const pendingScreenshot = new Promise<{
       ok: true
       screenshot: { dataUrl: string; width: number; height: number }
     }>((resolve) => {
       resolveScreenshot = resolve
     })
+
     const awaitGrabSelection = vi
       .fn()
       .mockResolvedValueOnce({
@@ -228,6 +244,7 @@ describe('useGrabMode', () => {
         }
       })
       .mockImplementation(() => new Promise(() => {}))
+
     const captureSelectionScreenshot = vi.fn(() => pendingScreenshot)
     vi.doMock('react', () => harness.react)
     vi.doMock('@/hooks/useMountedRef', () => ({
@@ -246,8 +263,10 @@ describe('useGrabMode', () => {
       }
     })
     const { useGrabMode } = await import('./useGrabMode')
+
     const render = () => {
       harness.beginRender()
+
       // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
       return useGrabMode('page-1')
     }
@@ -296,8 +315,10 @@ describe('useGrabMode', () => {
       }
     })
     const { useGrabMode } = await import('./useGrabMode')
+
     const render = () => {
       harness.beginRender()
+
       // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
       return useGrabMode('page-1')
     }
@@ -349,8 +370,10 @@ describe('useGrabMode', () => {
       }
     })
     const { useGrabMode } = await import('./useGrabMode')
+
     const render = () => {
       harness.beginRender()
+
       // oxlint-disable-next-line react-hooks/rules-of-hooks -- test harness mocks React's hook dispatcher directly.
       return useGrabMode('page-1')
     }

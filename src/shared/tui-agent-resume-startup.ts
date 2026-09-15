@@ -27,11 +27,14 @@ export function buildAgentResumeStartupPlan(args: {
   isRemote?: boolean
 }): AgentStartupPlan | null {
   const argv = getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
+
   if (!argv) {
     return null
   }
+
   const shell = resolveStartupShell(args.platform, args.shell)
   const resolvedAgentCommand = args.agentCommand?.trim()
+
   const baseCommand = resolvedAgentCommand
     ? ({
         ok: true,
@@ -49,15 +52,19 @@ export function buildAgentResumeStartupPlan(args: {
         sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
         isRemote: args.isRemote
       })
+
   if (!baseCommand.ok) {
     return null
   }
+
   const launchConfig = buildSleepingAgentLaunchConfig({
     ...args,
     agentCommand: baseCommand.commandWithoutSessionOptions
   })
+
   const launchCommand = buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell)
   const applied = baseCommand.appliedSessionOptions
+
   return {
     agent: args.agent,
     launchCommand,

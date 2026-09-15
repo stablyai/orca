@@ -31,7 +31,9 @@ export function buildSourceControlAgentDeliveryPlan({
   if (connectionUnavailable) {
     return buildSourceControlAgentConnectionErrorPlan()
   }
+
   const settings = useAppStore.getState().settings
+
   const result = planSourceControlAgentActionLaunch({
     agent: selectedAgent,
     commandInput,
@@ -52,9 +54,11 @@ export function buildSourceControlAgentDeliveryPlan({
     platform: launchPlatform,
     isRemote
   })
+
   if (!result.ok) {
     return { status: 'error', error: result.error }
   }
+
   return {
     status: 'success',
     summary: result.summary,

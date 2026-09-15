@@ -11,13 +11,17 @@ import {
 async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<string> {
   const repoId = await orcaPage.evaluate(async (pathToRepo: string) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const addedRepo = await store.getState().addRepoPath(pathToRepo)
+
     if (!addedRepo) {
       throw new Error(`isolated repo not found: ${pathToRepo}`)
     }
+
     return addedRepo.id
   }, repoPath)
 
@@ -26,10 +30,13 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
       () =>
         orcaPage.evaluate(async (targetRepoId: string) => {
           const store = window.__store
+
           if (!store) {
             return 0
           }
+
           await store.getState().fetchWorktrees(targetRepoId)
+
           return store.getState().worktreesByRepo[targetRepoId]?.length ?? 0
         }, repoId),
       { timeout: 30_000, message: 'isolated staged-diff worktree did not load' }
@@ -39,17 +46,22 @@ async function addAndActivateRepo(orcaPage: Page, repoPath: string): Promise<str
   return orcaPage.evaluate(
     ({ targetRepoId, pathToRepo }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       const state = store.getState()
       const worktrees = state.worktreesByRepo[targetRepoId] ?? []
       const worktree = worktrees.find((entry) => entry.path === pathToRepo) ?? worktrees[0]
+
       if (!worktree) {
         throw new Error(`isolated worktree not found: ${pathToRepo}`)
       }
+
       state.setActiveRepo(targetRepoId)
       state.setActiveWorktree(worktree.id)
+
       return worktree.id
     },
     { targetRepoId: repoId, pathToRepo: repoPath }
@@ -72,33 +84,41 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
       const opened = await orcaPage.evaluate(
         async ({ wId, repoPath }) => {
           const store = window.__store
+
           if (!store) {
             throw new Error('window.__store is not available')
           }
+
           const status = await window.api.git.status({ worktreePath: repoPath })
           store.getState().setGitStatus(wId, status)
           const staged = status.entries.filter((entry) => entry.area === 'staged')
+
           if (staged.length === 0) {
             throw new Error('fixture produced no staged entries')
           }
+
           // Why: mirrors the Source Control "Staged Changes" tab, which snapshots entries at open.
           store.getState().openAllDiffs(wId, repoPath, undefined, 'staged', staged)
 
           const startedAt = performance.now()
           let editorCount = 0
+
           while (performance.now() - startedAt < 30_000) {
             await new Promise((resolve) => window.setTimeout(resolve, 50))
             editorCount = document.querySelectorAll('.monaco-diff-editor').length
+
             if (editorCount > 0) {
               await new Promise((resolve) => window.setTimeout(resolve, 1_500))
               editorCount = document.querySelectorAll('.monaco-diff-editor').length
               break
             }
           }
+
           return { stagedCount: staged.length, editorCount }
         },
         { wId: worktreeId, repoPath: fixture.repoPath }
       )
+
       console.log(`staged diff opened ${JSON.stringify(opened)}`)
       expect(opened.editorCount).toBeGreaterThan(0)
 
@@ -112,6 +132,7 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
       const measurement = await orcaPage.evaluate(
         async ({ wId, repoPath }) => {
           const store = window.__store
+
           if (!store) {
             throw new Error('window.__store is not available')
           }
@@ -120,6 +141,7 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
           const samples: number[] = []
           let last = performance.now()
           let maxLagMs = 0
+
           const timer = window.setInterval(() => {
             const now = performance.now()
             const lag = Math.max(0, now - last - intervalMs)
@@ -129,6 +151,7 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
           }, intervalMs)
 
           const startedAt = performance.now()
+
           try {
             // Why: the file watcher pushes several status refreshes while git
             // rewrites the index; replay that churn instead of a single update.
@@ -137,12 +160,14 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
               store.getState().setGitStatus(wId, status)
               await new Promise((resolve) => window.setTimeout(resolve, 700))
             }
+
             await new Promise((resolve) => window.setTimeout(resolve, 3_000))
           } finally {
             window.clearInterval(timer)
           }
 
           const sorted = [...samples].sort((a, b) => a - b)
+
           return {
             elapsedMs: performance.now() - startedAt,
             maxLagMs,
@@ -184,9 +209,11 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
       const opened = await orcaPage.evaluate(
         async ({ wId, repoPath }) => {
           const store = window.__store
+
           if (!store) {
             throw new Error('window.__store is not available')
           }
+
           const status = await window.api.git.status({ worktreePath: repoPath })
           store.getState().setGitStatus(wId, status)
           const staged = status.entries.filter((entry) => entry.area === 'staged')
@@ -194,39 +221,48 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
 
           const startedAt = performance.now()
           let editorCount = 0
+
           while (performance.now() - startedAt < 30_000) {
             await new Promise((resolve) => window.setTimeout(resolve, 50))
             editorCount = document.querySelectorAll('.monaco-diff-editor').length
+
             if (editorCount > 0) {
               await new Promise((resolve) => window.setTimeout(resolve, 1_500))
               editorCount = document.querySelectorAll('.monaco-diff-editor').length
               break
             }
           }
+
           return { stagedCount: staged.length, editorCount }
         },
         { wId: worktreeId, repoPath: fixture.repoPath }
       )
+
       console.log(`staged diff opened for burst ${JSON.stringify(opened)}`)
       expect(opened.editorCount).toBeGreaterThan(0)
 
       const measurement = await orcaPage.evaluate(
         async ({ wId, repoPath, relativePaths, burstDurationMs }) => {
           const intervalMs = 50
+
           type LagWindow = { maxLagMs: number; p95LagMs: number; sampleCount: number }
+
           const startLagMeter = (): (() => LagWindow) => {
             const samples: number[] = []
             let last = performance.now()
             let maxLagMs = 0
+
             const timer = window.setInterval(() => {
               const now = performance.now()
               maxLagMs = Math.max(maxLagMs, Math.max(0, now - last - intervalMs))
               samples.push(Math.max(0, now - last - intervalMs))
               last = now
             }, intervalMs)
+
             return () => {
               window.clearInterval(timer)
               const sorted = [...samples].sort((a, b) => a - b)
+
               return {
                 maxLagMs,
                 p95LagMs: sorted.length ? sorted[Math.floor(sorted.length * 0.95)] : 0,
@@ -241,12 +277,14 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
           const settleStartedAt = performance.now()
           let settleWindows = 0
           let quietWindows = 0
+
           while (performance.now() - settleStartedAt < 60_000 && quietWindows < 2) {
             const stopWindow = startLagMeter()
             await new Promise((resolve) => window.setTimeout(resolve, 1_000))
             settleWindows += 1
             quietWindows = stopWindow().maxLagMs < 100 ? quietWindows + 1 : 0
           }
+
           const settle = { ...stopSettle(), settleWindows }
 
           // Why: settling still leaves occasional multi-hundred-ms stalls from the 8 mounted
@@ -258,6 +296,7 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
 
           const stopBurst = startLagMeter()
           const startedAt = performance.now()
+
           // Why: a rebase rewrites the worktree in bursts. The watcher debounces per
           // path, so each notification lands in its OWN task — never batched together.
           for (let round = 0; round < 3; round += 1) {
@@ -270,14 +309,17 @@ test.describe('Combined diff invalidation freeze repro (STA-3420)', () => {
                 )
               }, 0)
             }
+
             await new Promise((resolve) => window.setTimeout(resolve, 1_000))
           }
+
           await new Promise((resolve) => window.setTimeout(resolve, burstDurationMs - 3_000))
           const burst = stopBurst()
 
           const rows = Array.from(
             document.querySelectorAll('[data-combined-diff-section-row]')
           ) as HTMLElement[]
+
           return {
             elapsedMs: performance.now() - startedAt,
             settle,

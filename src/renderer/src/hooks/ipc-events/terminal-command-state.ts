@@ -16,12 +16,15 @@ export function resolveTerminalPresentation(data: {
   if (data.presentation) {
     return data.presentation
   }
+
   if (data.focus !== undefined) {
     return data.focus ? 'focused' : 'background'
   }
+
   if (data.activate === true) {
     return 'focused'
   }
+
   return undefined
 }
 
@@ -39,6 +42,7 @@ export function activateTerminalInitiatedWorktree(store: AppState, worktreeId: s
   store.setActiveView('terminal')
   store.setActiveWorktree(worktreeId)
   store.markWorktreeVisited(worktreeId)
+
   if (!store.isNavigatingHistory) {
     store.recordWorktreeVisit(worktreeId)
   }
@@ -56,6 +60,7 @@ function insertLeafAfterSource(
     if (node.leafId !== sourceLeafId) {
       return { node, inserted: false }
     }
+
     return {
       node: {
         type: 'split',
@@ -67,11 +72,15 @@ function insertLeafAfterSource(
       inserted: true
     }
   }
+
   const first = insertLeafAfterSource(node.first, sourceLeafId, newLeafId, direction)
+
   if (first.inserted) {
     return { node: { ...node, first: first.node }, inserted: true }
   }
+
   const second = insertLeafAfterSource(node.second, sourceLeafId, newLeafId, direction)
+
   return second.inserted
     ? { node: { ...node, second: second.node }, inserted: true }
     : { node, inserted: false }
@@ -88,17 +97,21 @@ export function addSplitLeafToLayout(
 ): TerminalLayoutSnapshot {
   const root = layout?.root ?? { type: 'leaf', leafId: sourceLeafId }
   const existingLeafIds = collectLeafIdsInOrder(root)
+
   const nextActiveLeafId =
     activateNewLeaf || !layout?.activeLeafId || !existingLeafIds.includes(layout.activeLeafId)
       ? newLeafId
       : layout.activeLeafId
+
   const nextRoot = existingLeafIds.includes(newLeafId)
     ? root
     : (() => {
         const inserted = insertLeafAfterSource(root, sourceLeafId, newLeafId, direction)
+
         if (inserted.inserted) {
           return inserted.node
         }
+
         return {
           type: 'split' as const,
           direction,
@@ -107,6 +120,7 @@ export function addSplitLeafToLayout(
           ratio: 0.5
         }
       })()
+
   return {
     ...(layout ?? { root: null, activeLeafId: null, expandedLeafId: null }),
     root: nextRoot,
@@ -126,6 +140,7 @@ export function activateExistingLeafInLayout(
   if (!layout?.root || !collectLeafIdsInOrder(layout.root).includes(leafId)) {
     return null
   }
+
   return {
     ...layout,
     activeLeafId: leafId,

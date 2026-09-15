@@ -11,10 +11,12 @@ function failure(message: string): RpcResponse {
 }
 
 const createdTerminal = success({ tab: { type: 'terminal', id: 't1', terminal: 'term-1' } })
+
 const sendAccepted = success({ send: { accepted: true } })
 
 function clientReturning(...responses: RpcResponse[]) {
   const sendRequest = vi.fn(async () => responses[sendRequest.mock.calls.length - 1])
+
   return { sendRequest }
 }
 

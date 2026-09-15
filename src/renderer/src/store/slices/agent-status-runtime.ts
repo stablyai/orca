@@ -42,21 +42,28 @@ export function createAgentStatusRuntime(
   // this slice can compile into a REPLACE the batch commit is unable to express.
   const set = (update: AgentStatusStateUpdate): void => {
     const staged = batchedAgentStatusState
+
     if (staged === null) {
       storeSet(update, false)
+
       return
     }
+
     const nextState = typeof update === 'function' ? update(staged) : update
+
     if (Object.is(nextState, staged)) {
       return
     }
+
     batchedAgentStatusRevision += 1
     const touched = batchedAgentStatusTouchedKeys
+
     if (touched) {
       for (const key of Object.keys(nextState)) {
         touched.add(key as keyof AppState)
       }
     }
+
     // The staged object is private until commit, so fold into it instead of cloning AppState per update.
     Object.assign(staged, nextState)
   }
@@ -64,16 +71,20 @@ export function createAgentStatusRuntime(
   const runAfterCommit = (effect: () => void): void => {
     if (batchedAgentStatusEffects) {
       batchedAgentStatusEffects.push(effect)
+
       return
     }
+
     effect()
   }
 
   const applyGeneratedTabTitleUpdate = (update: GeneratedTabTitleUpdate): void => {
     if (batchedGeneratedTabTitleUpdates) {
       batchedGeneratedTabTitleUpdates.push(update)
+
       return
     }
+
     if (update.options) {
       get().setGeneratedTabTitleFromAgentPrompt(update.paneKey, update.prompt, update.options)
     } else {
@@ -84,8 +95,10 @@ export function createAgentStatusRuntime(
   const requestFreshness = (acceptedInBatch: boolean): void => {
     if (batchedAgentStatusState !== null) {
       batchedAgentStatusFreshnessRequested ||= acceptedInBatch
+
       return
     }
+
     freshness.scheduleDeferred()
   }
 
@@ -93,8 +106,10 @@ export function createAgentStatusRuntime(
     if (!batchedAgentStatusState) {
       return false
     }
+
     const revisionBeforeUpdate = batchedAgentStatusRevision
     const actions = getActions()
+
     if (update.kind === 'providerSession') {
       actions.recordAgentProviderSession(
         update.paneKey,
@@ -114,6 +129,7 @@ export function createAgentStatusRuntime(
         update.metadata
       )
     }
+
     return batchedAgentStatusRevision !== revisionBeforeUpdate
   }
 
@@ -129,6 +145,7 @@ export function createAgentStatusRuntime(
     if (batchedAgentStatusState) {
       return operation(batchTransaction)
     }
+
     const initialState = storeGet()
     const touchedKeys = new Set<keyof AppState>()
     const revisionAtStart = batchedAgentStatusRevision
@@ -136,6 +153,7 @@ export function createAgentStatusRuntime(
     batchedAgentStatusTouchedKeys = touchedKeys
     batchedAgentStatusEffects = []
     batchedGeneratedTabTitleUpdates = []
+
     try {
       const result = operation(batchTransaction)
       const nextState = batchedAgentStatusState
@@ -148,18 +166,23 @@ export function createAgentStatusRuntime(
       batchedAgentStatusEffects = null
       batchedGeneratedTabTitleUpdates = null
       batchedAgentStatusFreshnessRequested = false
+
       if (hasStagedWrites) {
         storeSet(buildAgentStatusBatchPatch(initialState, nextState, touchedKeys), false)
       }
+
       if (generatedTabTitleUpdates.length > 0) {
         storeGet().setGeneratedTabTitlesFromAgentPrompts(generatedTabTitleUpdates)
       }
+
       if (freshnessRequested) {
         freshness.scheduleDeferred()
       }
+
       for (const effect of effects) {
         effect()
       }
+
       return result
     } finally {
       batchedAgentStatusState = null
@@ -186,30 +209,37 @@ export function createAgentStatusRuntime(
     if (paneKeys.length === 0) {
       return
     }
+
     const uniquePaneKeys = new Set(paneKeys)
     set((s) => {
       let nextSleeping = s.sleepingAgentSessionsByPaneKey
       let nextLaunchConfigs = s.agentLaunchConfigByPaneKey
+
       for (const paneKey of uniquePaneKeys) {
         if (paneKey in nextSleeping) {
           if (nextSleeping === s.sleepingAgentSessionsByPaneKey) {
             nextSleeping = { ...nextSleeping }
           }
+
           delete nextSleeping[paneKey]
         }
+
         if (paneKey in nextLaunchConfigs) {
           if (nextLaunchConfigs === s.agentLaunchConfigByPaneKey) {
             nextLaunchConfigs = { ...nextLaunchConfigs }
           }
+
           delete nextLaunchConfigs[paneKey]
         }
       }
+
       if (
         nextSleeping === s.sleepingAgentSessionsByPaneKey &&
         nextLaunchConfigs === s.agentLaunchConfigByPaneKey
       ) {
         return s
       }
+
       return {
         sleepingAgentSessionsByPaneKey: nextSleeping,
         agentLaunchConfigByPaneKey: nextLaunchConfigs
@@ -235,11 +265,13 @@ function buildAgentStatusBatchPatch(
   touchedKeys: ReadonlySet<keyof AppState>
 ): Partial<AppState> {
   const patch: Record<string, unknown> = {}
+
   // Untouched slices cannot differ, so the patch stays proportional to what the fold actually wrote.
   for (const key of touchedKeys) {
     if (!Object.is(nextState[key], initialState[key])) {
       patch[key as string] = nextState[key]
     }
   }
+
   return patch as Partial<AppState>
 }

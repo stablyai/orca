@@ -89,6 +89,7 @@ const US_SHIFTED_CHARS: Record<string, string> = {
 }
 
 const US_SHIFT_OF: Record<string, string> = {}
+
 for (const shifted of Object.keys(US_SHIFTED_CHARS)) {
   US_SHIFT_OF[US_SHIFTED_CHARS[shifted]] = shifted
 }
@@ -119,19 +120,25 @@ function usKeyboardKeyForChar(ch: string): UsKeyboardKey | null {
   if (ch >= 'a' && ch <= 'z') {
     return { keyCode: ch.charCodeAt(0) - 32, code: `Key${ch.toUpperCase()}`, shift: false }
   }
+
   if (ch >= 'A' && ch <= 'Z') {
     return { keyCode: ch.charCodeAt(0), code: `Key${ch}`, shift: true }
   }
+
   if (ch >= '0' && ch <= '9') {
     return { keyCode: ch.charCodeAt(0), code: `Digit${ch}`, shift: false }
   }
+
   if (Object.hasOwn(US_SHIFTED_CHARS, ch)) {
     const base = usKeyboardKeyForChar(US_SHIFTED_CHARS[ch])
+
     return base === null ? null : { keyCode: base.keyCode, code: base.code, shift: true }
   }
+
   if (Object.hasOwn(US_PUNCTUATION_KEYS, ch)) {
     return { keyCode: US_PUNCTUATION_KEYS[ch][0], code: US_PUNCTUATION_KEYS[ch][1], shift: false }
   }
+
   return null
 }
 
@@ -156,10 +163,13 @@ export function imeFallbackKeyEvent(raw: string): CdpKeyEvent | null {
   if (raw.length !== 1) {
     return null
   }
+
   const codePoint = raw.charCodeAt(0)
+
   if (codePoint < 0xa0 || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
     return null
   }
+
   return { keyCode: 229, key: raw, code: '', modifiers: 0, location: 0, selfModifier: 0, text: raw }
 }
 
@@ -167,20 +177,27 @@ export function parseCdpKeyEvent(raw: string): CdpKeyEvent | null {
   if (raw.length === 0) {
     return null
   }
+
   let rest = raw
   let modifiers = 0
+
   while (rest.length > 1) {
     const plus = rest.indexOf('+')
+
     if (plus <= 0) {
       break
     }
+
     const name = rest.slice(0, plus).toLowerCase()
+
     if (!Object.hasOwn(CDP_MODIFIER_BITS, name)) {
       break
     }
+
     modifiers |= CDP_MODIFIER_BITS[name]
     rest = rest.slice(plus + 1)
   }
+
   if (rest.length === 0) {
     return null
   }
@@ -191,11 +208,14 @@ export function parseCdpKeyEvent(raw: string): CdpKeyEvent | null {
   let text: string | null
   let location = 0
   let selfModifier = 0
+
   if (rest.length === 1) {
     const mapped = usKeyboardKeyForChar(rest)
+
     if (mapped === null) {
       return null
     }
+
     keyCode = mapped.keyCode
     key = rest
     code = mapped.code
@@ -204,6 +224,7 @@ export function parseCdpKeyEvent(raw: string): CdpKeyEvent | null {
     // shift — Ctrl+A means select-all (key 'a'), never Ctrl+Shift+A. Shifted punctuation
     // is different: on a US keyboard shift is the only way to produce the character.
     const capitalShortcut = rest >= 'A' && rest <= 'Z' && (modifiers & ~8) !== 0
+
     if (capitalShortcut) {
       key = rest.toLowerCase()
       text = key
@@ -220,15 +241,18 @@ export function parseCdpKeyEvent(raw: string): CdpKeyEvent | null {
     // Why: Blink reports a modifier's own bit during its keydown (shiftKey is true while
     // Shift goes down), and the table's modifier entries are the left-side keys.
     selfModifier = CDP_MODIFIER_BITS[name] ?? 0
+
     if (selfModifier !== 0) {
       modifiers |= selfModifier
       location = 1
     }
   } else {
     const functionKey = /^f([1-9]|1[0-9]|2[0-4])$/i.exec(rest)
+
     if (functionKey === null) {
       return null
     }
+
     keyCode = 111 + Number(functionKey[1])
     key = `F${functionKey[1]}`
     code = key
@@ -237,11 +261,13 @@ export function parseCdpKeyEvent(raw: string): CdpKeyEvent | null {
 
   if (text !== null && (modifiers & 8) !== 0) {
     text = Object.hasOwn(US_SHIFT_OF, text) ? US_SHIFT_OF[text] : text.toUpperCase()
+
     // Why: Shift+a is the "A" key as far as the page is concerned.
     if (rest.length === 1) {
       key = text
     }
   }
+
   // Why: with ctrl, alt or meta held the press is a shortcut and produces no character.
   if ((modifiers & ~8) !== 0) {
     text = null

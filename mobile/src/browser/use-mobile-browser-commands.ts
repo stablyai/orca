@@ -13,7 +13,9 @@ import {
 import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
 
 const TOUCH_CLICK_RADIUS_DIP = 14
+
 type BrowserPageParams = { worktree: string; page: string }
+
 type PendingWheelCommand = {
   base: BrowserPageParams
   point: BrowserPoint
@@ -21,6 +23,7 @@ type PendingWheelCommand = {
   dx: number
   dy: number
 }
+
 type SendBrowserRequest = (
   method: string,
   params?: Record<string, unknown>,
@@ -68,10 +71,13 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
     if (wheelCommandInFlightRef.current) {
       return
     }
+
     const pending = pendingWheelCommandRef.current
+
     if (!pending || !client) {
       return
     }
+
     pendingWheelCommandRef.current = null
     wheelCommandInFlightRef.current = true
     void (async () => {
@@ -106,9 +112,11 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
   const sendPointerClick = useCallback(
     async (point: BrowserPoint, button: 'left' | 'right') => {
       const base = pageParams()
+
       if (!client || !base) {
         return
       }
+
       const clickResult = await sendBrowserRequest(
         'browser.mouseClick',
         {
@@ -129,9 +137,11 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
         },
         { suppressError: true, timeoutMs: 5_000 }
       )
+
       if (clickResult !== null || pointerModifiers.length > 0) {
         return
       }
+
       try {
         assertRpcOk(
           await client.sendRequest('browser.mouseMove', { ...base, x: point.x, y: point.y }),
@@ -165,9 +175,11 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
   const sendWheel = useCallback(
     (point: BrowserPoint, screenDx: number, screenDy: number, gestureId: number) => {
       const base = pageParams()
+
       if (!client || !base) {
         return
       }
+
       const currentLayout = layoutRef.current
       const geometry = computeBrowserFrameGeometry(currentLayout, frameMetadataRef.current)
       const localZoom = zoomRef.current.scale
@@ -175,9 +187,11 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
       const cssDx = screenDx / scale
       const cssDy = screenDy / scale
       const delta = { dx: Math.round(-cssDx), dy: Math.round(-cssDy) }
+
       if (Math.abs(delta.dx) < 1 && Math.abs(delta.dy) < 1) {
         return
       }
+
       const pending = pendingWheelCommandRef.current
       pendingWheelCommandRef.current =
         pending && pending.base.page === base.page && pending.gestureId === gestureId
@@ -206,15 +220,19 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
 
   const sendKeyboardText = useCallback(async () => {
     const text = keyboardValue
+
     if (!text) {
       return
     }
+
     setKeyboardValue('')
+
     const result = await sendBrowserRequest(
       'browser.keyboardInsertText',
       { text },
       { suppressError: true }
     )
+
     if (result !== null) {
       onToast('Sent')
     } else {
@@ -236,6 +254,7 @@ export function useMobileBrowserCommands(args: MobileBrowserCommandArgs) {
     },
     [sendBrowserRequest]
   )
+
   return {
     mapTouchPoint,
     sendDialogCommand,

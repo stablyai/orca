@@ -28,24 +28,29 @@ function fakeChild(): FakeChild {
     }
     kill: ReturnType<typeof vi.fn>
   }
+
   child.stdout = Object.assign(new EventEmitter(), {
     pause: vi.fn(),
     resume: vi.fn()
   })
   child.stderr = new EventEmitter()
+
   const stdin = new EventEmitter() as EventEmitter & {
     write: ReturnType<typeof vi.fn>
     destroyed: boolean
     writable: boolean
   }
+
   stdin.write = vi.fn((_data, onWritten?: (error?: Error | null) => void) => {
     onWritten?.(null)
+
     return true
   })
   stdin.destroyed = false
   stdin.writable = true
   child.stdin = stdin
   child.kill = vi.fn()
+
   return child as unknown as FakeChild
 }
 
@@ -182,6 +187,7 @@ describe('waitForWslRelaySentinel', () => {
     const writeMock = child.stdin.write as ReturnType<typeof vi.fn>
     writeMock.mockImplementation((_data, onWritten) => {
       onWritten?.(null)
+
       return false
     })
     const promise = waitForWslRelaySentinel(child)

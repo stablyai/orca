@@ -79,12 +79,14 @@ async function runSingleCycle(
   const phases: WorkbenchAnimationPhase[] = []
   const cursorTargets: WorkbenchCursorTarget[] = []
   const waits: number[] = []
+
   const controls: WorkbenchTerminalSequenceControls = {
     isCancelled: () => cancelled,
     wait: (ms) => {
       waits.push(ms)
       elapsedMs += ms
       cancelled = elapsedMs >= durationMs
+
       return Promise.resolve()
     },
     setPhase: (phase) => phases.push(phase),
@@ -102,5 +104,6 @@ async function runSingleCycle(
   }
 
   await runWorkbenchTerminalStoryboardSequence(variant, controls)
+
   return { phases, cursorTargets, waits, lines, ripples }
 }

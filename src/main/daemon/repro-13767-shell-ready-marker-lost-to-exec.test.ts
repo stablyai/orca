@@ -7,9 +7,13 @@ import { createPtySubprocess } from './pty-subprocess'
 import { Session } from './session'
 
 const describePosix = process.platform === 'win32' ? describe.skip : describe
+
 const hasZsh = process.platform !== 'win32' && spawnSync('/bin/zsh', ['--version']).status === 0
+
 const hasBash = process.platform !== 'win32' && spawnSync('/bin/bash', ['--version']).status === 0
+
 const COMMAND_OUTPUT = 'ORCA_STARTUP_COMMAND_RAN'
+
 // A second Bash install with its own canonical path -- the shape a login profile
 // switches to (`exec /opt/homebrew/bin/bash`) and the one #18768 stalled on. A
 // symlink cannot stand in: both sides are realpath'd before they are compared.
@@ -17,6 +21,7 @@ const alternateBashPath = ['/opt/homebrew/bin/bash', '/usr/local/bin/bash', '/us
   (candidate) =>
     hasBash && existsSync(candidate) && realpathSync(candidate) !== realpathSync('/bin/bash')
 )
+
 if (process.platform !== 'win32' && !alternateBashPath) {
   // Why announced: usrmerge hosts resolve /usr/bin/bash back to /bin/bash, so these
   // two skip on most Linux CI. A silent skip reads as coverage that does not exist.
@@ -24,6 +29,7 @@ if (process.platform !== 'win32' && !alternateBashPath) {
     '[repro-13767] no second Bash install with a distinct realpath; skipping the alternate-install recovery tests'
   )
 }
+
 const READ_STARTED_FILE = '.orca-read-started'
 
 type ShellFixture = {
@@ -82,18 +88,22 @@ function waitForOutput(
   if (isDone()) {
     return Promise.resolve()
   }
+
   return new Promise<void>((resolve, reject) => {
     const deadline = setTimeout(
       () => reject(new Error('Timed out waiting for PTY output')),
       timeoutMs
     )
+
     const settle = (): void => {
       if (!isDone()) {
         return
       }
+
       clearTimeout(deadline)
       resolve()
     }
+
     subscribe(settle)
     settle()
   })
@@ -105,10 +115,12 @@ function waitForCondition(isDone: () => boolean, timeoutMs = 5_000): Promise<voi
       if (!isDone()) {
         return
       }
+
       clearInterval(interval)
       clearTimeout(deadline)
       resolve()
     }, 10)
+
     const deadline = setTimeout(() => {
       clearInterval(interval)
       reject(new Error('Timed out waiting for fixture state'))
@@ -146,11 +158,14 @@ async function startFixture(
   let subprocess: Awaited<ReturnType<typeof createPtySubprocess>> | undefined
   let session: Session | undefined
   let consoleWarnSpy: { mockRestore: () => void } | undefined
+
   try {
     writeFileSync(join(tempHome, fixture.startupFile), startupContent)
+
     for (const [fileName, content] of Object.entries(extraFiles)) {
       writeFileSync(join(tempHome, fileName), content)
     }
+
     process.env.HOME = tempHome
     delete process.env.ZDOTDIR
     delete process.env.ORCA_ORIG_ZDOTDIR
@@ -180,6 +195,7 @@ async function startFixture(
     })
     let output = ''
     let onOutput = (): void => {}
+
     session.attachClient({
       onData: (data) => {
         output += data
@@ -208,6 +224,7 @@ async function startFixture(
             runCleanupActions(() => runningSubprocess.forceKill())
           }
         }
+
         runCleanupActions(
           () => runningSession.dispose(),
           () => activeConsoleWarnSpy.mockRestore(),
@@ -256,6 +273,7 @@ async function runExecOracle(fixture: ShellFixture): Promise<void> {
 fi
 `
   )
+
   try {
     await waitForOutput(running.subscribe, () => running.output().includes(COMMAND_OUTPUT))
     expect(running.session.shellState).toBe('ready')
@@ -269,6 +287,7 @@ fi
 
 async function runReadOracle(fixture: ShellFixture, child: boolean): Promise<void> {
   const running = await startFixture(fixture, child ? fixture.childRead : fixture.secretRead)
+
   try {
     await waitForCondition(running.readStarted)
     await new Promise((resolve) => setTimeout(resolve, 300))
@@ -341,6 +360,7 @@ zle -N zle-line-init
 `
         }
       )
+
       try {
         try {
           await waitForOutput(running.subscribe, () => running.output().includes('HOOK_SECRET> '))
@@ -349,16 +369,19 @@ zle -N zle-line-init
             cause: error
           })
         }
+
         await new Promise((resolve) => setTimeout(resolve, 300))
         expect(running.session.shellState).toBe('pending')
         expect(running.output()).not.toContain(COMMAND_OUTPUT)
 
         running.subprocess.write('x')
+
         try {
           await waitForOutput(running.subscribe, () => running.output().includes(COMMAND_OUTPUT))
         } catch (error) {
           throw new Error(`ZLE hook output: ${JSON.stringify(running.output())}`, { cause: error })
         }
+
         expect(running.output()).toContain('HOOK_DONE')
         expect(count(running.output(), COMMAND_OUTPUT)).toBe(1)
       } finally {
@@ -373,6 +396,7 @@ zle -N zle-line-init
     'does not treat an exec-replaced readline program as the shell prompt',
     async () => {
       const running = await startFixture(zshFixture, 'exec /usr/bin/sqlite3\n')
+
       try {
         await waitForOutput(running.subscribe, () => running.output().includes('sqlite> '))
         await new Promise((resolve) => setTimeout(resolve, 300))
@@ -392,6 +416,7 @@ zle -N zle-line-init
         zshFixture,
         'ln -s /usr/bin/sqlite3 "$HOME/zsh" && exec "$HOME/zsh"\n'
       )
+
       try {
         await waitForOutput(running.subscribe, () => running.output().includes('sqlite> '))
         await new Promise((resolve) => setTimeout(resolve, 300))
@@ -418,6 +443,7 @@ fi
           '.zshrc': "zmodload zsh/zle\nunset zle_bracketed_paste\nPS1='NO_BRACKET_PROMPT> '\n"
         }
       )
+
       try {
         await waitForOutput(running.subscribe, () =>
           running.output().includes('NO_BRACKET_PROMPT> ')
@@ -434,6 +460,7 @@ fi
 
   const bashFixture = FIXTURES[2] as ShellFixture
   const alternateBashTest = alternateBashPath ? it : it.skip
+
   const alternateBashProfile = `if [[ -z "\${ORCA_EXEC_REPRO_DONE:-}" ]]; then
   export ORCA_EXEC_REPRO_DONE=1
   exec ${alternateBashPath ?? '/bin/bash'} --noprofile --norc -l -i
@@ -449,6 +476,7 @@ fi
         {},
         `${dirname(alternateBashPath ?? '/bin/bash')}:/usr/bin:/bin`
       )
+
       try {
         await waitForOutput(running.subscribe, () => running.output().includes(COMMAND_OUTPUT))
         expect(running.session.shellState).toBe('ready')
@@ -465,6 +493,7 @@ fi
     'does not trust a Bash install that the pane PATH cannot reach',
     async () => {
       const running = await startFixture(bashFixture, alternateBashProfile, {}, '/usr/bin:/bin')
+
       try {
         await waitForOutput(running.subscribe, () => running.output().includes('$'))
         await new Promise((resolve) => setTimeout(resolve, 500))

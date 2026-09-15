@@ -13,6 +13,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
+
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
 
 function flattenText(node: ReactTestInstance): string {
@@ -51,6 +52,7 @@ describe('MobileMarkdown file links', () => {
     act(() => {
       renderer = create(createElement(MobileMarkdown, { content, onOpenFile }))
     })
+
     return renderer!
   }
 

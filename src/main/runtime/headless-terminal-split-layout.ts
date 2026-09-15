@@ -10,6 +10,7 @@ export function terminalLayoutContainsLeaf(
   if (!node) {
     return false
   }
+
   return node.type === 'leaf'
     ? node.leafId === leafId
     : terminalLayoutContainsLeaf(node.first, leafId) ||
@@ -37,27 +38,35 @@ export function buildHeadlessTerminalSplitLayout(
     if (node.type === 'leaf') {
       return node.leafId === args.leafId ? null : node
     }
+
     const first = removeProvisionalLeaf(node.first)
     const second = removeProvisionalLeaf(node.second)
+
     if (!first) {
       return second
     }
+
     if (!second) {
       return first
     }
+
     return { ...node, first, second }
   }
+
   // Why: PTY admission durably appends a fallback vertical leaf before this exact-direction commit.
   const currentRoot = existing?.root ? removeProvisionalLeaf(existing.root) : null
+
   const existingRoot: TerminalPaneLayoutNode = currentRoot ?? {
     type: 'leaf',
     leafId: args.splitFromLeafId
   }
+
   const insertSplit = (node: TerminalPaneLayoutNode): TerminalPaneLayoutNode => {
     if (node.type === 'leaf') {
       if (node.leafId !== args.splitFromLeafId) {
         return node
       }
+
       return {
         type: 'split',
         direction: args.direction,
@@ -65,10 +74,13 @@ export function buildHeadlessTerminalSplitLayout(
         second: { type: 'leaf', leafId: args.leafId }
       }
     }
+
     return { ...node, first: insertSplit(node.first), second: insertSplit(node.second) }
   }
+
   const ptyIdsByLeafId = { ...existing?.ptyIdsByLeafId }
   delete ptyIdsByLeafId[args.leafId]
+
   return {
     ...existing,
     root: insertSplit(existingRoot),
@@ -86,8 +98,10 @@ export function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | 
   if (!node) {
     return 0
   }
+
   if (node.type === 'leaf') {
     return 1
   }
+
   return countTerminalLayoutLeaves(node.first) + countTerminalLayoutLeaves(node.second)
 }

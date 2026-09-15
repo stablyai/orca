@@ -47,16 +47,20 @@ function loadSvgAnchorDocument(href: string): void {
  */
 function dispatch(selector: string, event: MouseEvent): MouseEvent {
   const onClick = (candidate: Event): void => handleDocPreviewLinkClick(candidate, report)
+
   const onAuxClick = (candidate: Event): void =>
     handleDocPreviewLinkAuxClick(candidate as MouseEvent)
+
   document.addEventListener('click', onClick, true)
   document.addEventListener('auxclick', onAuxClick, true)
+
   try {
     document.querySelector(selector)!.dispatchEvent(event)
   } finally {
     document.removeEventListener('click', onClick, true)
     document.removeEventListener('auxclick', onAuxClick, true)
   }
+
   return event
 }
 
@@ -64,6 +68,7 @@ function dispatch(selector: string, event: MouseEvent): MouseEvent {
 function pressTrusted(selector: string, init: MouseEventInit = {}): MouseEvent {
   const event = new MouseEvent('click', { bubbles: true, cancelable: true, ...init })
   Object.defineProperty(event, 'isTrusted', { configurable: true, value: true })
+
   return dispatch(selector, event)
 }
 

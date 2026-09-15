@@ -31,6 +31,7 @@ function branchEntry(overrides: Partial<MobileGitBranchChangeEntry>): MobileGitB
 
 function comment(overrides: Partial<DiffComment> & Pick<DiffComment, 'id'>): DiffComment {
   const { id, ...rest } = overrides
+
   return {
     id,
     worktreeId: 'wt-1',
@@ -100,6 +101,7 @@ describe('mobile diff review queue', () => {
         }
       }
     }
+
     const queue = buildMobileDiffReviewQueue({
       worktreeId: 'wt-1',
       statusEntries: [
@@ -126,25 +128,31 @@ describe('mobile diff review queue', () => {
     let expectedReviewedCount = 0
     let expectedReviewedUnstagedItems = 0
     let expectedReviewedUnstagedCount = 0
+
     const queue = Array.from({ length: entryCount }, (_, index) => {
       const isReviewed = index % 2 === 0
       const scope = index % 3 === 0 ? 'unstaged' : 'staged'
       const canStage = index % 5 === 0
+
       if (isReviewed) {
         expectedReviewedCount += 1
+
         if (scope === 'unstaged') {
           expectedReviewedUnstagedItems += 1
+
           if (canStage) {
             expectedReviewedUnstagedCount += 1
           }
         }
       }
+
       const item = {} as MobileDiffReviewQueueItem
       Object.defineProperties(item, {
         isReviewed: {
           enumerable: true,
           get: () => {
             reads.isReviewed += 1
+
             return isReviewed
           }
         },
@@ -152,6 +160,7 @@ describe('mobile diff review queue', () => {
           enumerable: true,
           get: () => {
             reads.scope += 1
+
             return scope
           }
         },
@@ -159,10 +168,12 @@ describe('mobile diff review queue', () => {
           enumerable: true,
           get: () => {
             reads.canStage += 1
+
             return canStage
           }
         }
       })
+
       return item
     })
 

@@ -34,20 +34,25 @@ export async function readRemoteUrl(
 ): Promise<string | null> {
   if (context.connectionId) {
     const provider = getSshGitProvider(context.connectionId)
+
     if (!provider) {
       return null
     }
+
     const { stdout } = await provider.exec(['remote', 'get-url', remoteName], context.repoPath, {
       signal: AbortSignal.timeout(REMOTE_URL_PROBE_TIMEOUT_MS)
     })
+
     return stdout
   }
+
   const { stdout } = await gitExecFileAsync(['remote', 'get-url', remoteName], {
     cwd: context.repoPath,
     timeout: REMOTE_URL_PROBE_TIMEOUT_MS,
     ...(context.wslDistro ? { wslDistro: context.wslDistro } : {}),
     ...(context.admissionTier ? { admissionTier: context.admissionTier } : {})
   })
+
   return stdout
 }
 
@@ -74,23 +79,31 @@ export function isTransientGitProbeError(error: unknown): boolean {
   ) {
     return true
   }
+
   const parts: string[] = []
+
   if (error instanceof Error) {
     parts.push(error.message)
   }
+
   if (typeof error === 'object' && error !== null) {
     const execLike = error as { stderr?: unknown; code?: unknown }
+
     if (typeof execLike.stderr === 'string') {
       parts.push(execLike.stderr)
     }
+
     if (typeof execLike.code === 'string') {
       parts.push(execLike.code)
     }
   }
+
   if (parts.length === 0) {
     parts.push(String(error))
   }
+
   const text = parts.join('\n')
+
   return TRANSIENT_PROBE_PATTERNS.some((pattern) => pattern.test(text))
 }
 
@@ -106,12 +119,14 @@ export async function assertRemoteUrlReadable(
   if (context.connectionId && !getSshGitProvider(context.connectionId)) {
     throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
   }
+
   try {
     await readRemoteUrl(context, remoteName)
   } catch (error) {
     if (isStableMissingGitRemoteError(error)) {
       return
     }
+
     throw error
   }
 }

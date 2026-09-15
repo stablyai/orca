@@ -22,10 +22,12 @@ const LOCAL_TARGET = { kind: 'local' } as const
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason: unknown) => void
+
   const promise = new Promise<T>((next, fail) => {
     resolve = next
     reject = fail
   })
+
   return { promise, reject, resolve }
 }
 
@@ -130,6 +132,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     randomUuidSequence = 0
     vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(() => {
       randomUuidSequence += 1
+
       return `11111111-1111-4111-8111-${randomUuidSequence.toString(16).padStart(12, '0')}`
     })
   })
@@ -138,6 +141,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     const first = deferred<ReturnType<typeof acceptedResult>>()
     const second = deferred<ReturnType<typeof acceptedResult>>()
     mocks.call.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+
     const { result, rerender } = renderHook(
       ({ fence }) =>
         useStructuredAgentSessionOutbox({
@@ -172,6 +176,7 @@ describe('useStructuredAgentSessionOutbox', () => {
         .mockReturnValueOnce('11111111-1111-4111-8111-111111111111')
         .mockReturnValueOnce('22222222-2222-4222-8222-222222222222')
       mocks.call.mockResolvedValueOnce(refusedResult(code)).mockResolvedValueOnce(acceptedResult(1))
+
       const { result } = renderHook(() =>
         useStructuredAgentSessionOutbox({
           sessionId: 'session-1',
@@ -183,8 +188,10 @@ describe('useStructuredAgentSessionOutbox', () => {
 
       act(() => expect(result.current.send('hello')).toBe(true))
       await waitFor(() => expect(result.current.outbox[0]?.state).toBe('queued'))
+
       const firstId = (mocks.call.mock.calls[0]![2] as { envelope: { clientOperationId: string } })
         .envelope.clientOperationId
+
       const retryId = result.current.outbox[0]!.clientMessageId
       expect(retryId).not.toBe(firstId)
 
@@ -201,8 +208,10 @@ describe('useStructuredAgentSessionOutbox', () => {
     mocks.call.mockImplementationOnce(async (_target, _method, params) => {
       const clientMessageId = (params as { envelope: { clientOperationId: string } }).envelope
         .clientOperationId
+
       return pendingResultFor(clientMessageId, 10)
     })
+
     const { result, rerender } = renderHook(
       ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
         useStructuredAgentSessionOutbox({
@@ -242,6 +251,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     // The RPC fails while the host has already accepted: the journal is the
     // authority, so the entry leaves the outbox and no Retry is offered for it.
     mocks.call.mockRejectedValue(new Error('socket closed'))
+
     const { result, rerender } = renderHook(
       ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
         useStructuredAgentSessionOutbox({
@@ -271,6 +281,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   it('ignores a transport failure after the journal already settled the send', async () => {
     const inFlight = deferred<ReturnType<typeof acceptedResult>>()
     mocks.call.mockReturnValueOnce(inFlight.promise)
+
     const { result, rerender } = renderHook(
       ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
         useStructuredAgentSessionOutbox({
@@ -300,6 +311,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   it('ignores a transport failure after the host admitted the send', async () => {
     const inFlight = deferred<ReturnType<typeof acceptedResult>>()
     mocks.call.mockReturnValueOnce(inFlight.promise)
+
     const { result, rerender } = renderHook(
       ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
         useStructuredAgentSessionOutbox({
@@ -325,6 +337,7 @@ describe('useStructuredAgentSessionOutbox', () => {
   it('keeps a failed tail-save error when the admitted head is republished', async () => {
     const inFlight = deferred<ReturnType<typeof acceptedResult>>()
     mocks.call.mockReturnValueOnce(inFlight.promise)
+
     const { result, rerender } = renderHook(
       ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
         useStructuredAgentSessionOutbox({
@@ -340,9 +353,11 @@ describe('useStructuredAgentSessionOutbox', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     const id = result.current.outbox[0]!.clientMessageId
     rerender({ submissions: [pendingResultFor(id, 10).value.submission] })
+
     const setItem = vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
       throw new Error('storage full')
     })
+
     act(() => expect(result.current.send('tail that cannot be saved')).toBe(false))
     expect(result.current.error).toBe('Message could not be saved to the outbox')
 
@@ -355,8 +370,10 @@ describe('useStructuredAgentSessionOutbox', () => {
     mocks.call.mockImplementationOnce(async (_target, _method, params) => {
       const clientMessageId = (params as { envelope: { clientOperationId: string } }).envelope
         .clientOperationId
+
       return pendingResultFor(clientMessageId, 10)
     })
+
     const first = renderHook(() =>
       useStructuredAgentSessionOutbox({
         sessionId: 'session-1',
@@ -379,6 +396,7 @@ describe('useStructuredAgentSessionOutbox', () => {
         submissions: [pendingResultFor(id, 10).value.submission]
       })
     )
+
     await waitFor(() => expect(restored.result.current.outbox[0]?.state).toBe('dispatching'))
     expect(restored.result.current.error).toBeNull()
     expect(mocks.call).toHaveBeenCalledOnce()
@@ -396,11 +414,14 @@ describe('useStructuredAgentSessionOutbox', () => {
         envelope: { clientOperationId: string }
         body: { blocks: { text?: string }[] }
       }
+
       if (request.body.blocks[0]?.text === 'second') {
         return new Promise(() => {})
       }
+
       return unknownResultFor(request.envelope.clientOperationId, 10)
     })
+
     const { result, rerender } = renderHook(
       ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
         useStructuredAgentSessionOutbox({
@@ -431,6 +452,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     const sent = mocks.call.mock.calls.map(
       (call) => (call[2] as { body?: { blocks?: { text?: string }[] } })?.body?.blocks?.[0]?.text
     )
+
     expect(sent).toContain('second')
     expect(result.current.error).toBe(
       'Message delivery is unconfirmed and Orca will not send it again'
@@ -441,6 +463,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     mocks.call
       .mockResolvedValueOnce(refusedResult('agent_session_checkpoint_stale'))
       .mockResolvedValueOnce(acceptedResult(1))
+
     const { result } = renderHook(() =>
       useStructuredAgentSessionOutbox({
         sessionId: 'session-1',
@@ -452,8 +475,10 @@ describe('useStructuredAgentSessionOutbox', () => {
 
     act(() => expect(result.current.send('hello')).toBe(true))
     await waitFor(() => expect(result.current.outbox[0]?.state).toBe('queued'))
+
     const firstId = (mocks.call.mock.calls[0]![2] as { envelope: { clientOperationId: string } })
       .envelope.clientOperationId
+
     expect(result.current.outbox[0]?.clientMessageId).toBe(firstId)
 
     act(() => result.current.retry(firstId))
@@ -466,6 +491,7 @@ describe('useStructuredAgentSessionOutbox', () => {
 
   it('persists and dispatches an attachment-only structured send', async () => {
     mocks.call.mockResolvedValue(acceptedResult(1))
+
     const { result } = renderHook(() =>
       useStructuredAgentSessionOutbox({
         sessionId: 'session-1',
@@ -499,18 +525,22 @@ describe('useStructuredAgentSessionOutbox', () => {
       .mockImplementationOnce(async (_target, _method, params) => {
         const clientMessageId = (params as { envelope: { clientOperationId: string } }).envelope
           .clientOperationId
+
         return unknownResultFor(clientMessageId, 10)
       })
       .mockImplementationOnce(async (_target, _method, params) => {
         const clientMessageId = (params as { envelope: { clientOperationId: string } }).envelope
           .clientOperationId
+
         return acceptedResultFor(clientMessageId, 11)
       })
       .mockImplementationOnce(async (_target, _method, params) => {
         const clientMessageId = (params as { envelope: { clientOperationId: string } }).envelope
           .clientOperationId
+
         return acceptedResultFor(clientMessageId, 12)
       })
+
     const { result, rerender } = renderHook(
       ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
         useStructuredAgentSessionOutbox({
@@ -562,18 +592,22 @@ describe('useStructuredAgentSessionOutbox', () => {
       .mockImplementationOnce(async (_target, _method, params) => {
         const clientMessageId = (params as { envelope: { clientOperationId: string } }).envelope
           .clientOperationId
+
         return unknownResultFor(clientMessageId, 10)
       })
       .mockImplementationOnce(async (_target, _method, params) => {
         const clientMessageId = (params as { envelope: { clientOperationId: string } }).envelope
           .clientOperationId
+
         return acceptedResultFor(clientMessageId, 11)
       })
       .mockImplementationOnce(async (_target, _method, params) => {
         const clientMessageId = (params as { envelope: { clientOperationId: string } }).envelope
           .clientOperationId
+
         return acceptedResultFor(clientMessageId, 12)
       })
+
     const { result, rerender } = renderHook(
       ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
         useStructuredAgentSessionOutbox({
@@ -607,9 +641,11 @@ describe('useStructuredAgentSessionOutbox', () => {
     act(() => result.current.retry(firstId))
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(3))
     await waitFor(() => expect(result.current.outbox).toHaveLength(0))
+
     const retryParams = mocks.call.mock.calls[1]?.[2] as
       | { envelope: { clientOperationId: string } }
       | undefined
+
     expect(retryParams?.envelope.clientOperationId).not.toBe(firstId)
   })
 
@@ -617,6 +653,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     vi.mocked(globalThis.crypto.randomUUID)
       .mockReturnValueOnce('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
       .mockReturnValueOnce('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')
+
     const writeFailed = (clientMessageId: string) => ({
       clientMessageId,
       fence: 1,
@@ -627,6 +664,7 @@ describe('useStructuredAgentSessionOutbox', () => {
       submittedAt: 10,
       resolvedAt: 10
     })
+
     mocks.call
       .mockImplementationOnce(async (_target, _method, params) => ({
         ok: true,
@@ -647,6 +685,7 @@ describe('useStructuredAgentSessionOutbox', () => {
           11
         )
       )
+
     const { result } = renderHook(
       ({ submissions }: { submissions: readonly AgentJournalSubmission[] }) =>
         useStructuredAgentSessionOutbox({
@@ -680,10 +719,12 @@ describe('useStructuredAgentSessionOutbox', () => {
     // Exactly one further delivery, under a new id, and with no `retryUnknown`:
     // this is a first delivery of a new message, so it cannot duplicate.
     expect(mocks.call).toHaveBeenCalledTimes(2)
+
     const retryParams = mocks.call.mock.calls[1]?.[2] as {
       envelope: { clientOperationId: string }
       retryUnknown?: true
     }
+
     expect(retryParams.envelope.clientOperationId).not.toBe(firstId)
     expect(retryParams.retryUnknown).toBeUndefined()
   })
@@ -692,6 +733,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     mocks.call.mockImplementationOnce(async (_target, _method, params) => {
       const clientMessageId = (params as { envelope: { clientOperationId: string } }).envelope
         .clientOperationId
+
       return unknownResultFor(clientMessageId, 10)
     })
 
@@ -727,6 +769,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     mocks.call
       .mockResolvedValueOnce(refusedResult('agent_session_checkpoint_stale'))
       .mockReturnValueOnce(redispatch.promise)
+
     const { result, rerender } = renderHook(
       ({ sessionId }: { sessionId: string }) =>
         useStructuredAgentSessionOutbox({
@@ -752,9 +795,11 @@ describe('useStructuredAgentSessionOutbox', () => {
     const oldDispatch = deferred<ReturnType<typeof refusedResult>>()
     const sessionTwoCommitted = deferred<void>()
     mocks.call.mockReturnValueOnce(oldDispatch.promise)
+
     const controllerRef: {
       current: ReturnType<typeof useStructuredAgentSessionOutbox> | null
     } = { current: null }
+
     function Probe({ sessionId }: { sessionId: string }): null {
       controllerRef.current = useStructuredAgentSessionOutbox({
         sessionId,
@@ -768,12 +813,14 @@ describe('useStructuredAgentSessionOutbox', () => {
           sessionTwoCommitted.resolve()
         }
       }, [sessionId])
+
       return null
     }
 
     const container = document.createElement('div')
     const root = createRoot(container)
     const actEnvironment = globalThis.IS_REACT_ACT_ENVIRONMENT
+
     try {
       await act(async () => root.render(<Probe sessionId="session-1" />))
       act(() => expect(controllerRef.current?.send('hello')).toBe(true))

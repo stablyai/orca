@@ -22,10 +22,12 @@ vi.mock('@/store', () => ({
 }))
 
 let latestState: WorkspaceBoardPanelState | null = null
+
 const roots: Root[] = []
 
 function HookProbe(): null {
   latestState = useWorkspaceBoardPanel()
+
   return null
 }
 
@@ -43,6 +45,7 @@ function panelState(): WorkspaceBoardPanelState {
   if (!latestState) {
     throw new Error('Hook state has not been rendered')
   }
+
   return latestState
 }
 
@@ -60,12 +63,15 @@ async function pressEscape(from: EventTarget = document): Promise<void> {
 
 function appendInput(inside: 'board' | 'app'): HTMLInputElement {
   const host = document.createElement('div')
+
   if (inside === 'board') {
     host.setAttribute('data-workspace-board-sheet', '')
   }
+
   const field = document.createElement('input')
   host.appendChild(field)
   document.body.appendChild(host)
+
   return field
 }
 

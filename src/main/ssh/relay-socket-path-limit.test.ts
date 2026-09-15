@@ -76,7 +76,9 @@ import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshConnection } from './ssh-connection'
 
 const LINUX = getRemoteHostPlatform('linux-x64')
+
 const DARWIN = getRemoteHostPlatform('darwin-arm64')
+
 const WINDOWS = getRemoteHostPlatform('win32-x64')
 
 // The reporter's host: a managed-hosting container whose $HOME is 45 bytes (#10726).
@@ -116,6 +118,7 @@ function launchedSockPath(conn: SshConnection): string {
     .mocked(conn.exec)
     .mock.calls.map(([command]) => command as string)
     .find((command) => command.includes('--detached'))
+
   return /--sock-path\s+'([^']+)'/.exec(launch ?? '')?.[1] ?? ''
 }
 
@@ -203,6 +206,7 @@ describe('relay launch with a long remote $HOME', () => {
 
   it('sweeps superseded relays under the short base too, but never the live one', () => {
     const currentShortSocketDir = `${SHORT_RELAY_SOCKET_DIR_PREFIX}1000/${shortRelayVersionSegment(RELAY_VERSION_DIR_NAME)}`
+
     const script = supersededRelayEndpointListCommand({
       remoteHome: LONG_HOME,
       currentRelayDir: `${LONG_HOME}/.orca-remote/${RELAY_VERSION_DIR_NAME}`,

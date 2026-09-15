@@ -29,9 +29,11 @@ describe('browser route partition identity', () => {
     expect(first.partition).toMatch(/^persist:orca-browser-v1-[a-f0-9]{64}$/)
     expect(first.bindingFingerprint).toMatch(/^[a-f0-9]{64}$/)
     expect(first.partition.slice('persist:'.length)).toMatch(/^[a-z0-9-]+$/)
+
     for (const rawIdentity of Object.values(identity)) {
       expect(first.partition).not.toContain(rawIdentity)
     }
+
     expect(first.partition).not.toContain('private.example')
   })
 
@@ -41,6 +43,7 @@ describe('browser route partition identity', () => {
       orcaProfileId: 'a',
       browserProfileId: 'b:c'
     })
+
     const right = deriveBrowserRoutePartition({
       ...identity,
       orcaProfileId: 'a:b',
@@ -52,6 +55,7 @@ describe('browser route partition identity', () => {
 
   it('does not expose equality of individual identity components', () => {
     const baseline = deriveBrowserRoutePartition(identity).partition
+
     const sameProfile = deriveBrowserRoutePartition({
       ...identity,
       executionHostIdentity: 'ssh/target:other.example'
@@ -120,6 +124,7 @@ describe('browser route partition identity', () => {
     const valid = deriveBrowserRoutePartition(pinnedIdentity).partition
 
     expect(isBrowserRoutePartition(valid)).toBe(true)
+
     for (const value of [
       `../../${valid}`,
       `${valid}/../../escape`,

@@ -10,6 +10,7 @@ import {
 export const OPENCODE_BASE_URL = 'https://opencode.ai'
 
 const OPENCODE_SESSION_PARTITION = 'orca-opencode-go-rate-limit-fetch'
+
 const appliedProxyKeys = new WeakMap<Session, string>()
 
 export async function clearOpenCodeSessionCookies(openCodeSession: Session): Promise<void> {
@@ -23,9 +24,11 @@ async function setOpenCodeSessionProxy(
   source: 'settings' | 'env'
 ): Promise<void> {
   const key = `${source}\0${proxyRules}\0${proxyBypassRules}`
+
   if (appliedProxyKeys.get(openCodeSession) === key) {
     return
   }
+
   await openCodeSession.setProxy({
     mode: 'fixed_servers',
     proxyRules,
@@ -38,24 +41,30 @@ async function setOpenCodeSessionProxy(
 async function ensureEnvironmentProxyForOpenCodeSession(openCodeSession: Session): Promise<void> {
   const envProxy = getProxyUrlFromEnvironment(process.env)
   const proxyBypassRules = getProxyBypassRulesFromEnvironment(process.env)
+
   const envKey =
     envProxy.ok && envProxy.value ? `env\0${envProxy.value}\0${proxyBypassRules}` : null
+
   if (envKey && appliedProxyKeys.get(openCodeSession) === envKey) {
     return
   }
+
   if (appliedProxyKeys.has(openCodeSession)) {
     await openCodeSession.setProxy({ mode: 'system' })
     await openCodeSession.closeAllConnections()
     appliedProxyKeys.delete(openCodeSession)
   }
+
   // Environment proxy bridging is best-effort, matching the app-wide startup path.
   try {
     if ((await openCodeSession.resolveProxy(OPENCODE_BASE_URL)) !== 'DIRECT') {
       return
     }
+
     if (!envProxy.ok || !envProxy.value) {
       return
     }
+
     await setOpenCodeSessionProxy(openCodeSession, envProxy.value, proxyBypassRules, 'env')
   } catch {
     // Direct networking remains available when optional environment bridging fails.
@@ -67,6 +76,7 @@ async function ensureProxyForOpenCodeSession(
   networkProxySettings?: NetworkProxySettings
 ): Promise<void> {
   const configuredProxy = normalizeProxyUrl(networkProxySettings?.httpProxyUrl)
+
   if (configuredProxy.ok && configuredProxy.value) {
     await setOpenCodeSessionProxy(
       openCodeSession,
@@ -74,6 +84,7 @@ async function ensureProxyForOpenCodeSession(
       normalizeProxyBypassRules(networkProxySettings?.httpProxyBypassRules),
       'settings'
     )
+
     return
   }
 
@@ -88,6 +99,7 @@ export async function createOpenCodeRequestSession(
   await clearOpenCodeSessionCookies(openCodeSession)
   // The isolated cookie jar must still honor Orca, environment, and system proxies.
   await ensureProxyForOpenCodeSession(openCodeSession, networkProxySettings)
+
   try {
     // Sequential writes ensure cleanup cannot race an in-flight cookie write after a rejection.
     for (const { name, value } of authCookies) {
@@ -99,6 +111,7 @@ export async function createOpenCodeRequestSession(
         path: '/'
       })
     }
+
     return openCodeSession
   } catch (error) {
     await clearOpenCodeSessionCookies(openCodeSession).catch(() => undefined)

@@ -21,6 +21,7 @@ vi.mock('electron', () => ({
 
 async function loadSessionStore() {
   vi.resetModules()
+
   return import('./profile-cloud-session-store')
 }
 
@@ -148,6 +149,7 @@ describe('Orca cloud session store', () => {
     const saved = JSON.parse(
       readFileSync(store.getOrcaCloudSessionPath('profile-1', userDataPath), 'utf-8')
     ) as { format: string }
+
     expect(saved.format).toBe('dev-plaintext-v1')
 
     const reloaded = await loadSessionStore()

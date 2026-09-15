@@ -25,12 +25,14 @@ import {
   shellReadyWrappersExist,
   SHELL_READY_MARKER_ESCAPED
 } from './local-pty-shell-ready-wrapper-root'
+
 export {
   createShellReadyScanState,
   drainShellReadyHeldBytes,
   scanForShellReady,
   SHELL_READY_MARKER_PREFIX
 } from '../shell-ready-marker-scanner'
+
 export type { ShellReadyScanResult, ShellReadyScanState } from '../shell-ready-marker-scanner'
 
 export type ShellReadyLaunchConfig = {
@@ -48,6 +50,7 @@ const UNWRAPPED: ShellReadyLaunchConfig = {
 /** True when the wrapper tree is complete on disk right now. */
 function wrapperTreeUsable(): boolean {
   const ensured = ensureShellReadyWrappers()
+
   return ensured && shellReadyWrappersExist()
 }
 
@@ -68,6 +71,7 @@ export function getShellLaunchConfig(
   startupCommand?: string
 ): ShellReadyLaunchConfig {
   const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
+
   const wrapperFeatures =
     startupCommand !== undefined && !features.includes('startup')
       ? [...features, 'startup' as const]
@@ -77,11 +81,13 @@ export function getShellLaunchConfig(
     if (wrapperFeatures.length === 0) {
       return UNWRAPPED
     }
+
     if (!wrapperTreeUsable()) {
       // Why plain login zsh: ZDOTDIR pointed at an incomplete wrapper dir makes
       // zsh skip the user's whole config. Losing Orca's features is recoverable.
       return { args: ['-l'], env: {}, supportsReadyMarker: false }
     }
+
     return {
       args: ['-l'],
       env: {
@@ -100,11 +106,14 @@ export function getShellLaunchConfig(
     if (features.length === 0) {
       return UNWRAPPED
     }
+
     ensureShellReadyWrappers()
     const args = getBashWrapperLaunchArgs()
+
     if (!args) {
       return UNWRAPPED
     }
+
     return {
       args,
       env: {

@@ -23,6 +23,7 @@ vi.mock('./oauth-refresh', () => createOauthRefreshMock())
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -44,15 +45,18 @@ describe('ClaudeRuntimeAuthService', () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const originalCredentials = createClaudeCredentialsJson('user@example.com', 'original')
     const reauthedCredentials = createClaudeCredentialsJson('user@example.com', 'reauthed')
+
     const managedAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'account-1',
       originalCredentials
     )
+
     const settings = createSettings({
       claudeManagedAccounts: [createClaudeAccount('account-1', managedAuthPath)],
       activeClaudeManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
@@ -74,9 +78,11 @@ describe('ClaudeRuntimeAuthService', () => {
     writeFileSync(runtimeCredentialsPath, expired, 'utf-8')
     testState.scopedKeychainCredentials = expired
     testState.legacyKeychainCredentials = expired
+
     const settings = createSettings({
       activeClaudeManagedAccountId: null
     })
+
     const store = createStore(settings)
 
     vi.mocked(isOauthTokenExpiring).mockReturnValue(true)
@@ -102,17 +108,20 @@ describe('ClaudeRuntimeAuthService', () => {
   it('proactively refreshes and persists an expiring account on switch-in', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const account1Stale = createClaudeCredentialsJson('one@example.com', 'one-stale', null, 1_000)
+
     const account1Refreshed = createClaudeCredentialsJson(
       'one@example.com',
       'one-refreshed',
       null,
       9_999_999_999_999
     )
+
     const managedAuthPath1 = createManagedClaudeAuth(
       testState.userDataDir,
       'account-1',
       account1Stale
     )
+
     // Start on the system default (no active managed account), then switch in.
     const settings = createSettings({
       claudeManagedAccounts: [
@@ -120,6 +129,7 @@ describe('ClaudeRuntimeAuthService', () => {
       ],
       activeClaudeManagedAccountId: null
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
@@ -141,13 +151,16 @@ describe('ClaudeRuntimeAuthService', () => {
   it('refreshes the active account with an expired token when no Claude PTY is live', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
     const expired = createClaudeCredentialsJson('one@example.com', 'one-expired', null, 1_000)
+
     const refreshedCreds = createClaudeCredentialsJson(
       'one@example.com',
       'one-refreshed',
       null,
       9_999_999_999_999
     )
+
     const managedAuthPath1 = createManagedClaudeAuth(testState.userDataDir, 'account-1', expired)
+
     // account-1 is ALREADY the active account (seeded), so this is a re-sync of
     // the active account, not a switch-in — the path that was previously missed.
     const settings = createSettings({
@@ -156,6 +169,7 @@ describe('ClaudeRuntimeAuthService', () => {
       ],
       activeClaudeManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
 
     vi.mocked(isOauthTokenExpiring).mockReturnValue(true)
@@ -176,12 +190,14 @@ describe('ClaudeRuntimeAuthService', () => {
   it('does not refresh the active account while a Claude PTY is live', async () => {
     const expired = createClaudeCredentialsJson('one@example.com', 'one-expired', null, 1_000)
     const managedAuthPath1 = createManagedClaudeAuth(testState.userDataDir, 'account-1', expired)
+
     const settings = createSettings({
       claudeManagedAccounts: [
         createClaudeAccount('account-1', managedAuthPath1, { email: 'one@example.com' })
       ],
       activeClaudeManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
 
     vi.mocked(isOauthTokenExpiring).mockReturnValue(true)
@@ -194,6 +210,7 @@ describe('ClaudeRuntimeAuthService', () => {
     const service = new ClaudeRuntimeAuthService(store as never)
 
     markClaudePtySpawned('pty-live-1')
+
     try {
       const preparation = await service.prepareForRateLimitFetch()
       // A live Claude owns the credentials; refreshing here would race its
@@ -209,6 +226,7 @@ describe('ClaudeRuntimeAuthService', () => {
 
   it('adopts a rotated-refresh-token runtime credential on cold-start read-back', async () => {
     const runtimeCredentialsPath = join(testState.fakeHomeDir, '.claude', '.credentials.json')
+
     // Same expiry on both sides (cold start), but the runtime refresh token has
     // rotated — proof the CLI refreshed. Must be read back into managed storage.
     const managedCredentials = createClaudeCredentialsJson(
@@ -217,6 +235,7 @@ describe('ClaudeRuntimeAuthService', () => {
       null,
       3_000
     )
+
     const runtimeRotated = `${JSON.stringify({
       claudeAiOauth: {
         email: 'one@example.com',
@@ -225,18 +244,22 @@ describe('ClaudeRuntimeAuthService', () => {
         expiresAt: 3_000
       }
     })}\n`
+
     writeFileSync(runtimeCredentialsPath, runtimeRotated, 'utf-8')
+
     const managedAuthPath1 = createManagedClaudeAuth(
       testState.userDataDir,
       'account-1',
       managedCredentials
     )
+
     const settings = createSettings({
       claudeManagedAccounts: [
         createClaudeAccount('account-1', managedAuthPath1, { email: 'one@example.com' })
       ],
       activeClaudeManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')

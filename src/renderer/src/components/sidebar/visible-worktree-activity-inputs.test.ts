@@ -52,18 +52,23 @@ describe('visible worktree activity inputs', () => {
   })
   it('inspects only the changed bucket in a 300-worktree title publication', () => {
     const inspected: string[] = []
+
     const projector = createVisibleWorktreeTerminalActivityProjection((worktreeId) =>
       inspected.push(worktreeId)
     )
+
     const tabs = Object.fromEntries(
       Array.from({ length: 300 }, (_, index) => {
         const worktreeId = `wt-${index}`
+
         return [worktreeId, [terminalTab(`tab-${index}`, `Title ${index}`)]]
       })
     )
+
     const first = projector.project(tabs)
     inspected.length = 0
     const changedWorktreeId = 'wt-173'
+
     const second = projector.project({
       ...tabs,
       [changedWorktreeId]: [{ ...tabs[changedWorktreeId][0], title: 'Changed display title' }]

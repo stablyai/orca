@@ -12,17 +12,21 @@ export function resolveFile(
   ext = '.onnx'
 ): string {
   const match = files.find((f) => f.includes(role) && f.endsWith(ext))
+
   if (!match) {
     throw new Error(`No *${role}*${ext} found in model files: ${files.join(', ')}`)
   }
+
   return join(modelDir, match)
 }
 
 export function resolveTokens(files: string[], modelDir: string): string {
   const match = files.find((f) => f.endsWith('tokens.txt'))
+
   if (!match) {
     throw new Error(`No *tokens.txt found in model files: ${files.join(', ')}`)
   }
+
   return join(modelDir, match)
 }
 
@@ -31,6 +35,7 @@ function discoverBpeVocab(modelDir: string): string | undefined {
   try {
     const entries = readdirSync(modelDir)
     const vocabFile = entries.find((f) => f.endsWith('.vocab'))
+
     return vocabFile ? join(modelDir, vocabFile) : undefined
   } catch {
     return undefined
@@ -56,11 +61,14 @@ export function buildHotwordsConfig(opts: {
   }
 
   const unit = opts.modelingUnit
+
   if (unit?.includes('bpe')) {
     const bpeVocab = discoverBpeVocab(opts.modelDir)
+
     if (!bpeVocab) {
       return { decodingMethod: 'greedy_search' }
     }
+
     return {
       decodingMethod: 'modified_beam_search',
       hotwordsFile: opts.hotwordsFilePath,

@@ -17,6 +17,7 @@ export function registerLinearTeamHandlers(): void {
       if (typeof args?.teamId !== 'string' || !args.teamId.trim()) {
         return []
       }
+
       return getTeamStates(args.teamId.trim(), normalizeWorkspaceId(args.workspaceId))
     }
   )
@@ -27,6 +28,7 @@ export function registerLinearTeamHandlers(): void {
       if (typeof args?.teamId !== 'string' || !args.teamId.trim()) {
         return []
       }
+
       return getTeamLabels(args.teamId.trim(), normalizeWorkspaceId(args.workspaceId))
     }
   )
@@ -37,6 +39,7 @@ export function registerLinearTeamHandlers(): void {
       if (typeof args?.teamId !== 'string' || !args.teamId.trim()) {
         return []
       }
+
       return getTeamMembers(args.teamId.trim(), normalizeWorkspaceId(args.workspaceId))
     }
   )

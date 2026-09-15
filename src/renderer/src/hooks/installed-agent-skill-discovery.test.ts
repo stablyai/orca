@@ -22,6 +22,7 @@ const {
 } = await import('./installed-agent-skill-discovery')
 
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
+
 const remote = (environmentId: string): RuntimeClientTarget => ({
   kind: 'environment',
   environmentId
@@ -29,9 +30,11 @@ const remote = (environmentId: string): RuntimeClientTarget => ({
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -146,6 +149,7 @@ describe('installed agent skill discovery lifecycle', () => {
       discoverInstalledAgentSkills(true, undefined),
       discoverInstalledAgentSkills(true, undefined)
     ]
+
     scan.resolve(result(1))
 
     await expect(Promise.all(requests)).resolves.toEqual([result(1), result(1), result(1)])
@@ -238,6 +242,7 @@ describe('installed agent skill discovery lifecycle', () => {
       names: [' Computer-Use ', 'orchestration', 'computer-use'],
       sourceKinds: ['home' as const]
     }
+
     const normalizedFilters = [['computer-use', 'orchestration'], ['home']]
 
     expect(getSkillDiscoveryTargetKey(target)).toBe(

@@ -8,10 +8,13 @@ import type { ContextualTourId } from '../../../../shared/contextual-tours'
 describe('shouldRequestContextualTourAfterInteraction', () => {
   it('waits for persisted seen ids before allowing a tour request', async () => {
     let resolvePersisted!: () => void
+
     const persisted = new Promise<void>((resolve) => {
       resolvePersisted = resolve
     })
+
     const seenIds: ContextualTourId[] = []
+
     const requestReady = shouldRequestContextualTourAfterInteraction({
       id: 'tasks',
       persisted,

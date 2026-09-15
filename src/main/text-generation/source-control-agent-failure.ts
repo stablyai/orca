@@ -20,6 +20,7 @@ export function formatAgentCliFailureMessage(
   const detail = sanitizeAgentFailureDetail(
     excerptAgentFailureOutput(options?.includeStdoutDetail === false ? '' : stdout, stderr)
   )
+
   const message =
     exitCode === null
       ? detail
@@ -28,6 +29,7 @@ export function formatAgentCliFailureMessage(
       : detail
         ? `${label} CLI command failed with code ${exitCode}: ${detail}`
         : `${label} CLI command failed with code ${exitCode}.`
+
   return options?.includeLocalMacDnsHint === false
     ? message
     : withMacTailscaleDnsHint(message, detail)
@@ -47,19 +49,25 @@ export function finalizeFromAgentOutput(args: {
   includeStdoutDetail?: boolean
 }): InternalTextGenerationResult {
   const { code, stdout, stderr, label, emptyResultName } = args
+
   if (code !== 0) {
     console.error('[commit-message] Generator failed:', { label, exitCode: code, stdout, stderr })
+
     return {
       success: false,
       error: formatAgentCliFailureMessage(label, stdout, stderr, code, args),
       failureOutput: captureFailureOutput(label, code, stdout, stderr)
     }
   }
+
   const cleaned = cleanGeneratedCommitMessage(stdout)
+
   if (cleaned) {
     return { success: true, rawOutput: cleaned, agentLabel: label }
   }
+
   const detail = sanitizeAgentFailureDetail(excerptAgentFailureOutput('', stderr))
+
   if (detail) {
     console.error('[commit-message] Generator returned no stdout but wrote to stderr:', {
       label,
@@ -68,6 +76,7 @@ export function finalizeFromAgentOutput(args: {
       stderr
     })
   }
+
   return {
     success: false,
     error: detail

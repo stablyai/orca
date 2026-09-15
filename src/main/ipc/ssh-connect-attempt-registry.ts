@@ -16,6 +16,7 @@ export type ConnectAttempt = {
 }
 
 export const connectInFlight = new Map<string, ConnectAttempt>()
+
 export const pendingTransportReconnects = new Set<string>()
 
 // Why the quit gate rather than a local latch: "the committed quit has begun" already has an owner,
@@ -43,4 +44,5 @@ export const resetRelayInFlight = new Map<string, Promise<void>>()
 
 // Why: ssh:testConnection connects then disconnects; suppressing broadcasts during the test avoids worktree cards flashing connected → disconnected.
 export const testingTargets = new Set<string>()
+
 export const testConnectionProbes = new Set<Promise<unknown>>()

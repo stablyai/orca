@@ -16,9 +16,12 @@ export const useMicrophonePermissions = createPermissionHook({
 // the native recording listener stable across component re-renders.
 const subscribeToRecordingChanges = (cb: () => void) => {
   const sub = addExpoTwoWayAudioEventListener('onRecordingChange', cb)
+
   return () => sub.remove()
 }
+
 const getRecordingSnapshot = () => isRecording()
+
 const getServerRecordingSnapshot = () => false
 
 export function useIsRecording() {
@@ -35,6 +38,7 @@ export function useExpoTwoWayAudioEventListener<K extends keyof ExpoTwoWayAudioE
 ) {
   useEffect(() => {
     const sub = addExpoTwoWayAudioEventListener(eventName, listener)
+
     return () => sub.remove()
   }, [eventName, listener])
 }

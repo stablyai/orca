@@ -25,6 +25,7 @@ import {
 
 /** What remountTerminalTabForRecovery answers now that it reports admission. */
 const REMOUNTED = { remounted: true as const, generation: 1 }
+
 const AUTOMATIC_REQUEST = expect.objectContaining({ trigger: 'automatic' })
 
 const {
@@ -44,8 +45,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -66,6 +70,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -75,6 +80,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -95,6 +101,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -105,9 +112,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -117,9 +126,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -128,6 +139,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -178,6 +190,7 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const manager = createManager(1)
@@ -186,9 +199,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     expect(onDataHandler).toBeDefined()
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     ;(onDataHandler as (data: string) => void)('a')
 
     expect(transport.sendInput).toHaveBeenCalledWith('a')
@@ -221,6 +236,7 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const manager = createManager(1)
@@ -229,9 +245,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     expect(onDataHandler).toBeDefined()
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     ;(onDataHandler as (data: string) => void)('a')
 
     expect(transport.sendInput).toHaveBeenCalledWith('a')
@@ -264,6 +282,7 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const manager = createManager(1)
@@ -272,9 +291,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     expect(onDataHandler).toBeDefined()
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     ;(onDataHandler as (data: string) => void)('a')
 
     expect(transport.sendInput).not.toHaveBeenCalled()
@@ -300,6 +321,7 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const manager = createManager(1)
@@ -308,9 +330,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     expect(onDataHandler).toBeDefined()
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     ;(onDataHandler as (data: string) => void)('a')
 
     expect(transport.sendInput).toHaveBeenCalledWith('a')
@@ -334,6 +358,7 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const manager = createManager(1)
@@ -342,9 +367,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     expect(onDataHandler).toBeDefined()
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     ;(onDataHandler as (data: string) => void)('a')
 
     expect(transport.sendInput).toHaveBeenCalledWith('a')
@@ -371,9 +398,11 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const manager = createManager(1)
+
     const deps = createDeps({
       // Why: the sibling already holds `tab.ptyId`, which is what makes this a
       // split rather than this pane adopting the tab's binding.
@@ -383,9 +412,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     expect(onDataHandler).toBeDefined()
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     ;(onDataHandler as (data: string) => void)('a')
 
     expect((transport.getPtyId as unknown as () => string | null)()).toBe('pty-dismissed')
@@ -411,9 +442,11 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const manager = createManager(1)
+
     const deps = createDeps({
       paneTransportsRef: { current: new Map([[2, createMockTransport('pty-sibling')]]) }
     })
@@ -421,9 +454,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     expect(onDataHandler).toBeDefined()
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     ;(onDataHandler as (data: string) => void)('a')
 
     expect((transport.getPtyId as unknown as () => string | null)()).toBe('pty-stale')
@@ -450,9 +485,11 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const manager = createManager(1)
+
     const deps = createDeps({
       paneTransportsRef: { current: new Map([[2, createMockTransport('pty-sibling')]]) }
     })
@@ -460,9 +497,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     expect(onDataHandler).toBeDefined()
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     ;(onDataHandler as (data: string) => void)('a')
 
     expect((transport.getPtyId as unknown as () => string | null)()).toBe('pty-plain-shell')
@@ -489,6 +528,7 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const manager = createManager(1)
@@ -497,9 +537,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     expect(onDataHandler).toBeDefined()
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     ;(onDataHandler as (data: string) => void)('a')
 
     expect(transport.sendInput).not.toHaveBeenCalled()
@@ -537,11 +579,14 @@ describe('connectPanePty', () => {
     }
 
     const pane = createPane(1)
+
     const terminalTarget = createKeyboardEventTarget()
+
     ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const manager = createManager(1)
@@ -550,9 +595,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     expect(onDataHandler).toBeDefined()
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     const sendTerminalInput = onDataHandler as (data: string) => void
     terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
     sendTerminalInput('\x03')
@@ -570,6 +617,7 @@ describe('connectPanePty', () => {
     vi.setSystemTime(1_100)
     const ptyId = 'pty-mobile-locked'
     setDriverForPty(ptyId, { kind: 'mobile', clientId: 'phone-1' })
+
     try {
       const transport = createMockTransport(ptyId)
       transportFactoryQueue.push(transport)
@@ -592,11 +640,14 @@ describe('connectPanePty', () => {
       }
 
       const pane = createPane(1)
+
       const terminalTarget = createKeyboardEventTarget()
+
       ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
       let onDataHandler: ((data: string) => void) | null = null
       pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
         onDataHandler = handler
+
         return { dispose: vi.fn() }
       }) as typeof pane.terminal.onData)
 
@@ -605,6 +656,7 @@ describe('connectPanePty', () => {
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
+
       terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
       ;(onDataHandler as unknown as (data: string) => void)('\x03')
       ;(onDataHandler as unknown as (data: string) => void)('x')
@@ -624,6 +676,7 @@ describe('connectPanePty', () => {
 
     const ptyId = 'pty-mobile-tui-query'
     setDriverForPty(ptyId, { kind: 'mobile', clientId: 'phone-1' })
+
     try {
       const transport = createMockTransport(ptyId)
       transportFactoryQueue.push(transport)
@@ -637,6 +690,7 @@ describe('connectPanePty', () => {
       let onDataHandler: ((data: string) => void) | null = null
       pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
         onDataHandler = handler
+
         return { dispose: vi.fn() }
       }) as typeof pane.terminal.onData)
 
@@ -645,14 +699,17 @@ describe('connectPanePty', () => {
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
+
       // Simulate xterm answering a TUI's DA1 query while the phone owns the PTY.
       ;(onDataHandler as unknown as (data: string) => void)('\x1b[?1;2c')
+
       // Capability handlers are registered outside onData and must honor the same mobile query-authority lock.
       const csiCalls = (
         pane.terminal.parser.registerCsiHandler as unknown as {
           mock: { calls: [{ final: string }, (params: (number | number[])[]) => boolean][] }
         }
       ).mock.calls
+
       const da1Handler = csiCalls.find(([id]) => id.final === 'c')?.[1]
       expect(da1Handler).toBeTypeOf('function')
       da1Handler?.([])
@@ -672,6 +729,7 @@ describe('connectPanePty', () => {
 
     const ptyId = 'remote:env-1@@terminal-1'
     setDriverForPty(ptyId, { kind: 'mobile', clientId: 'phone-1' })
+
     try {
       const transport = createMockTransport(ptyId)
       transportFactoryQueue.push(transport)
@@ -685,6 +743,7 @@ describe('connectPanePty', () => {
       let onDataHandler: ((data: string) => void) | null = null
       pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
         onDataHandler = handler
+
         return { dispose: vi.fn() }
       }) as typeof pane.terminal.onData)
 
@@ -693,6 +752,7 @@ describe('connectPanePty', () => {
       if (!onDataHandler) {
         throw new Error('expected onData handler to be registered')
       }
+
       ;(onDataHandler as unknown as (data: string) => void)('x')
       await flushAsyncTicks()
 
@@ -723,11 +783,14 @@ describe('connectPanePty', () => {
     }
 
     const pane = createPane(1)
+
     const terminalTarget = createKeyboardEventTarget()
+
     ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
 
@@ -736,6 +799,7 @@ describe('connectPanePty', () => {
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
     ;(onDataHandler as unknown as (data: string) => void)('\x03')
     vi.advanceTimersByTime(500)
@@ -764,11 +828,14 @@ describe('connectPanePty', () => {
     }
 
     const pane = createPane(1)
+
     const terminalTarget = createKeyboardEventTarget()
+
     ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
 
@@ -777,6 +844,7 @@ describe('connectPanePty', () => {
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
     ;(onDataHandler as unknown as (data: string) => void)('\x03')
     await flushAsyncTicks()
@@ -797,6 +865,7 @@ describe('connectPanePty', () => {
     let writeUnavailable: (() => void) | undefined
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       writeUnavailable = callbacks.onWriteUnavailable
+
       return { id: 'daemon-pty' }
     })
     transportFactoryQueue.push(transport)
@@ -821,6 +890,7 @@ describe('connectPanePty', () => {
     let writeUnavailable: (() => void) | undefined
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       writeUnavailable = callbacks.onWriteUnavailable
+
       return { id: 'daemon-pty' }
     })
     transportFactoryQueue.push(transport)
@@ -850,8 +920,10 @@ describe('connectPanePty', () => {
   it('recovers a wedged write pipeline after accepted input without renderer output', async () => {
     vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
+
     const { settleTerminalWriteStallWatch, WRITE_PIPELINE_STALL_CHECK_MS } =
       await import('@/lib/pane-manager/terminal-write-pipeline-health')
+
     const remountTerminalTabForRecovery = vi.fn(() => REMOUNTED)
     mockStoreState = { ...mockStoreState, remountTerminalTabForRecovery } as StoreState
     const transport = createMockTransport('pty-wedged')
@@ -876,8 +948,10 @@ describe('connectPanePty', () => {
   it('does not arm the wedge probe when acknowledged input is rejected', async () => {
     vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
+
     const { WRITE_PIPELINE_STALL_CHECK_MS } =
       await import('@/lib/pane-manager/terminal-write-pipeline-health')
+
     const transport = createMockTransport('pty-rejected')
     transport.sendInputAccepted = vi.fn().mockResolvedValue(false)
     transportFactoryQueue.push(transport)
@@ -916,6 +990,7 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const manager = createManager(1)
@@ -924,9 +999,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     expect(onDataHandler).toBeDefined()
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     ;(onDataHandler as (data: string) => void)('hello')
 
     expect(transport.sendInput).not.toHaveBeenCalled()

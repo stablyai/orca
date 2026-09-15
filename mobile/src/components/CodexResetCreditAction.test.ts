@@ -32,9 +32,11 @@ function renderAction(busy: boolean, disabled: boolean): ReactTestRenderer {
       })
     )
   })
+
   if (!renderer) {
     throw new Error('Reset action did not render')
   }
+
   return renderer
 }
 
@@ -54,6 +56,7 @@ describe('CodexResetCreditAction', () => {
   it('announces progress and visually dims a busy disabled action', () => {
     const renderer = renderAction(true, true)
     const button = renderer.root.findByType('Pressable')
+
     const text = renderer.root
       .findAllByType('Text')
       .map((node) => node.children.filter((child) => typeof child === 'string').join(''))

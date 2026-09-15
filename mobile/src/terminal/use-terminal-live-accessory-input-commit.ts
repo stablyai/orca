@@ -63,17 +63,22 @@ export function useTerminalLiveAccessoryInputCommit({
       if (!activeHandle) {
         return { kind: 'allow-raw' }
       }
+
       if (!liveInputTerminalHandles.has(activeHandle)) {
         return getTerminalLiveAccessoryInactiveInputCommitResult(waitForPendingLiveInputFlush)
       }
+
       onInteraction()
       const ownsPendingState = pendingLiveInputHandleRef.current === activeHandle
+
       if (pendingLiveInputHandleRef.current && !ownsPendingState) {
         clearPendingLiveInputCommit()
       }
+
       const heldText = ownsPendingState ? heldLiveInputTextRef.current : ''
       const sentText = ownsPendingState ? sentLiveInputTextRef.current : ''
       const decision = getTerminalLiveAccessoryBytesDecision({ ...input, heldText, sentText })
+
       switch (decision.kind) {
         case 'send-now':
           // Why: raw accessory bytes must wait behind any in-flight mirror send
@@ -86,27 +91,34 @@ export function useTerminalLiveAccessoryInputCommit({
             localEdit: decision.localEdit,
             fieldText: sentText + heldText
           })
+
           // Why: accessory buttons do not emit native TextInput edits, so the
           // field is edited here and the mirror diff syncs the PTY echo.
           setLiveInputCapture(editedText)
           liveInputRef.current?.setNativeProps({ text: editedText })
+
           // Preserve undefined so Android's heuristic hold still settles on its timer.
           const sent = await applyLiveInputMirror(
             activeHandle,
             editedText,
             liveInputComposingRef.current
           )
+
           return sent ? { kind: 'handled' } : { kind: 'suppress-raw' }
         }
+
         case 'commit-held-then-send': {
           const sent = await sendTerminalLiveControlAfterPendingFlush(
             () => flushPendingLiveInputText(activeHandle),
             () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
           )
+
           return sent ? { kind: 'handled' } : { kind: 'suppress-raw' }
         }
+
         default:
           decision satisfies never
+
           return { kind: 'handled' }
       }
     },

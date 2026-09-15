@@ -59,6 +59,7 @@ function buildSavedLaunchRecipe(input: {
   if (!input.savedAgentId) {
     return null
   }
+
   return {
     agentId: input.savedAgentId,
     commandInputTemplate: input.savedCommandInputTemplate ?? '{basePrompt}',
@@ -76,6 +77,7 @@ function getMatchedSavedReceiptTargetValue(input: {
   if (!input.recipe) {
     return null
   }
+
   if (
     input.repoId &&
     input.repo &&
@@ -89,6 +91,7 @@ function getMatchedSavedReceiptTargetValue(input: {
   ) {
     return 'repo'
   }
+
   if (
     sourceControlActionRecipeMatchesTarget({
       actionId: input.actionId,
@@ -100,6 +103,7 @@ function getMatchedSavedReceiptTargetValue(input: {
   ) {
     return 'global'
   }
+
   return null
 }
 
@@ -162,6 +166,7 @@ export function useSavedSourceControlAgentActionAutoStart({
       }),
     [savedAgentArgs, savedAgentId, savedCommandInputTemplate]
   )
+
   const matchedSavedReceiptTargetValue = useMemo(
     () =>
       getMatchedSavedReceiptTargetValue({
@@ -173,10 +178,12 @@ export function useSavedSourceControlAgentActionAutoStart({
       }),
     [actionId, repo, repoId, savedLaunchRecipe, settings]
   )
+
   const receiptKey = useMemo(() => {
     if (!savedAgentId || !matchedSavedReceiptTargetValue) {
       return null
     }
+
     return buildReceiptKey({
       actionId,
       targetValue: matchedSavedReceiptTargetValue,
@@ -201,9 +208,11 @@ export function useSavedSourceControlAgentActionAutoStart({
   ])
 
   const currentReceiptState = receiptState?.openCycle === openCycle ? receiptState : null
+
   const consideredDifferentReceipt = Boolean(
     currentReceiptState && receiptKey && currentReceiptState.receiptKey !== receiptKey
   )
+
   const autoLaunchPending = Boolean(
     open &&
     matchedSavedReceiptTargetValue &&
@@ -216,8 +225,10 @@ export function useSavedSourceControlAgentActionAutoStart({
     if (!open) {
       autoStartedOpenCycleRef.current = 0
       setReceiptState(null)
+
       return
     }
+
     if (receiptState?.openCycle !== openCycle) {
       setReceiptState({
         openCycle,
@@ -225,21 +236,27 @@ export function useSavedSourceControlAgentActionAutoStart({
         revealed: !receiptKey
       })
     }
+
     if (!matchedSavedReceiptTargetValue || !receiptKey || !savedAgentId) {
       return
     }
+
     if (receiptState?.openCycle === openCycle && receiptState.receiptKey !== receiptKey) {
       return
     }
+
     if (receiptState?.openCycle === openCycle && receiptState.revealed) {
       return
     }
+
     const revealDialog = (): void => {
       setReceiptState({ openCycle, receiptKey, revealed: true })
     }
+
     if (!detectionReady || detecting || isStarting) {
       return
     }
+
     if (
       selectedAgent !== savedAgentId ||
       !trimmedCommandInput ||
@@ -247,11 +264,14 @@ export function useSavedSourceControlAgentActionAutoStart({
       !isSourceControlAgentDetectedAndEnabled(savedAgentId, detectedAgents, disabledAgents)
     ) {
       revealDialog()
+
       return
     }
+
     if (autoStartedOpenCycleRef.current === openCycle) {
       return
     }
+
     autoStartedOpenCycleRef.current = openCycle
     void onAutoStart({
       detectedAgents,

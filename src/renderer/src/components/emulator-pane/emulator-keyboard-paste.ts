@@ -5,7 +5,9 @@ import {
 import { measureClipboardTextByteLength } from '../../../../shared/clipboard-text'
 
 export const EMULATOR_KEYBOARD_PASTE_MAX_BYTES = 4 * 1024
+
 export const EMULATOR_KEYBOARD_PASTE_MAX_FRAMES_PER_CHUNK = 48
+
 export const EMULATOR_KEYBOARD_PASTE_FRAME_DELAY_MS = 4
 
 export type EmulatorKeyboardPasteResult =
@@ -65,10 +67,13 @@ export function buildEmulatorKeyboardPastePlan(
   } = {}
 ): EmulatorKeyboardPastePlan {
   const validation = validateEmulatorKeyboardPasteText(text, options.maxBytes)
+
   if (validation.status === 'rejected') {
     return validation
   }
+
   const chunks = [...iterateEmulatorKeyboardPasteChunks(text, options.maxFramesPerChunk)]
+
   return { byteLength: validation.byteLength, chunks, status: 'accepted' }
 }
 
@@ -78,9 +83,11 @@ function validateEmulatorKeyboardPasteText(
 ): EmulatorKeyboardPasteValidation {
   const byteLimit = getPositiveIntegerLimit(maxBytes, EMULATOR_KEYBOARD_PASTE_MAX_BYTES)
   const byteLengthMeasurement = measureClipboardTextByteLength(text, { stopAfterBytes: byteLimit })
+
   if (byteLengthMeasurement.exceededLimit) {
     return { byteLength: byteLengthMeasurement.byteLength, reason: 'too-large', status: 'rejected' }
   }
+
   const { byteLength } = byteLengthMeasurement
   let hasFrames = false
 
@@ -90,9 +97,11 @@ function validateEmulatorKeyboardPasteText(
     }
 
     const charFrames = buildServeSimKeyboardFramesForKey(char)
+
     if (!charFrames) {
       return { byteLength, reason: 'unsupported-text', status: 'rejected' }
     }
+
     if (charFrames.length > 0) {
       hasFrames = true
     }
@@ -111,6 +120,7 @@ export function* iterateEmulatorKeyboardPasteChunks(
     maxFramesPerChunk,
     EMULATOR_KEYBOARD_PASTE_MAX_FRAMES_PER_CHUNK
   )
+
   let currentChunk: ServeSimKeyboardFrame[] = []
 
   for (const char of text) {
@@ -119,6 +129,7 @@ export function* iterateEmulatorKeyboardPasteChunks(
     }
 
     const charFrames = buildServeSimKeyboardFramesForKey(char)
+
     if (!charFrames) {
       return
     }
@@ -130,6 +141,7 @@ export function* iterateEmulatorKeyboardPasteChunks(
       yield currentChunk
       currentChunk = []
     }
+
     currentChunk.push(...charFrames)
   }
 
@@ -147,6 +159,7 @@ export async function pasteTextIntoEmulatorKeyboard({
   text
 }: PasteTextIntoEmulatorKeyboardOptions): Promise<EmulatorKeyboardPasteResult> {
   const validation = validateEmulatorKeyboardPasteText(text, maxBytes)
+
   if (validation.status === 'rejected') {
     return validation
   }
@@ -154,6 +167,7 @@ export async function pasteTextIntoEmulatorKeyboard({
   const chunks = iterateEmulatorKeyboardPasteChunks(text, maxFramesPerChunk)
   let chunk = chunks.next()
   let chunkCount = 0
+
   while (!chunk.done) {
     if (isCancelled?.()) {
       return { byteLength: validation.byteLength, reason: 'cancelled', status: 'cancelled' }
@@ -166,10 +180,12 @@ export async function pasteTextIntoEmulatorKeyboard({
         status: 'rejected'
       }
     }
+
     chunkCount += 1
 
     const sentFrameCount = chunk.value.length
     chunk = chunks.next()
+
     if (!chunk.done) {
       await waitForEmulatorKeyboardChunk(sentFrameCount, frameDelayMs)
     }
@@ -186,5 +202,6 @@ function waitForEmulatorKeyboardChunk(frameCount: number, frameDelayMs: number):
   // Why: serve-sim's sender spaces frames with timers, so later chunks must wait
   // for the previous chunk's scheduled HID events instead of overlapping them.
   const delayMs = Math.max(frameDelayMs, frameCount * frameDelayMs)
+
   return new Promise((resolve) => window.setTimeout(resolve, delayMs))
 }

@@ -65,11 +65,15 @@ export type WsOutboundEnqueueResult = {
 }
 
 const DEFAULT_SOFT_CAP_BYTES = 8 * 1024 * 1024
+
 // Why: tolerate a large transient burst (e.g. a build log spike) before
 // declaring the link dead; 64 MiB is ~8x the soft cap yet still bounds RSS.
 const DEFAULT_MAX_QUEUED_BYTES = 64 * 1024 * 1024
+
 const DEFAULT_MAX_QUEUED_FRAMES = 4_096
+
 const DEFAULT_DRAIN_POLL_MS = 25
+
 const QUEUE_COMPACTION_HEAD_THRESHOLD = 64
 
 export function createWsOutboundBackpressureQueue<TFrame>(
@@ -81,12 +85,14 @@ export function createWsOutboundBackpressureQueue<TFrame>(
   const maxQueuedFrames = options.maxQueuedFrames ?? DEFAULT_MAX_QUEUED_FRAMES
   const drainPollMs = options.drainPollMs ?? DEFAULT_DRAIN_POLL_MS
   const configuredDrainFramesPerTurn = options.maxDrainFramesPerTurn
+
   const maxDrainFramesPerTurn =
     typeof configuredDrainFramesPerTurn === 'number' &&
     Number.isSafeInteger(configuredDrainFramesPerTurn) &&
     configuredDrainFramesPerTurn > 0
       ? configuredDrainFramesPerTurn
       : Number.POSITIVE_INFINITY
+
   const setTimer = options.setTimer ?? ((cb, ms) => setTimeout(cb, ms))
   const clearTimer = options.clearTimer ?? ((timer) => clearTimeout(timer))
 
@@ -94,6 +100,7 @@ export function createWsOutboundBackpressureQueue<TFrame>(
   // strand frames in the queue forever; treat unknown backpressure as "clear".
   const bufferedAmount = (): number => {
     const value = options.getBufferedAmount()
+
     return Number.isFinite(value) ? value : 0
   }
 
@@ -122,12 +129,14 @@ export function createWsOutboundBackpressureQueue<TFrame>(
   const dropBacklog = (): void => {
     while (queueHead < queue.length) {
       const entry = queue[queueHead++]
+
       if (entry?.retained) {
         entry.retained = false
         entry.frame = null
         entry.releaseQueuedBytes()
       }
     }
+
     queue.length = 0
     queueHead = 0
     queued = 0
@@ -139,6 +148,7 @@ export function createWsOutboundBackpressureQueue<TFrame>(
     if (disposed || overflowed) {
       return
     }
+
     overflowed = true
     dropBacklog()
     options.onOverflow()
@@ -147,9 +157,11 @@ export function createWsOutboundBackpressureQueue<TFrame>(
   const sendFrame = (frame: TFrame): boolean => {
     try {
       options.send(frame)
+
       return true
     } catch {
       failOverflow()
+
       return false
     }
   }
@@ -170,11 +182,13 @@ export function createWsOutboundBackpressureQueue<TFrame>(
     if (!entry.retained) {
       return false
     }
+
     entry.retained = false
     entry.frame = null
     queued -= entry.bytes
     queuedFrames -= 1
     entry.releaseQueuedBytes()
+
     return true
   }
 
@@ -182,14 +196,19 @@ export function createWsOutboundBackpressureQueue<TFrame>(
     if (!releaseEntry(entry)) {
       return false
     }
+
     const index = queue.indexOf(entry, queueHead)
+
     if (index !== -1) {
       queue[index] = undefined
     }
+
     advanceQueueHead()
+
     if (queuedFrames === 0) {
       resetDrainedQueue()
     }
+
     return true
   }
 
@@ -197,16 +216,21 @@ export function createWsOutboundBackpressureQueue<TFrame>(
   // soft cap; re-arm the poll timer if frames remain.
   const drain = (): void => {
     timer = null
+
     if (disposed || overflowed) {
       return
     }
+
     if (!options.isWritable()) {
       // Socket went away mid-park; let the transport's own close path clean up.
       dropBacklog()
+
       return
     }
+
     advanceQueueHead()
     let drainedFrames = 0
+
     while (
       queuedFrames > 0 &&
       drainedFrames < maxDrainFramesPerTurn &&
@@ -218,15 +242,19 @@ export function createWsOutboundBackpressureQueue<TFrame>(
       const frame = entry.frame!
       releaseEntry(entry)
       advanceQueueHead()
+
       if (queueHead >= QUEUE_COMPACTION_HEAD_THRESHOLD) {
         queue.splice(0, queueHead)
         queueHead = 0
       }
+
       if (!sendFrame(frame)) {
         return
       }
+
       drainedFrames += 1
     }
+
     if (queuedFrames > 0) {
       const nextDrainDelay = drainedFrames >= maxDrainFramesPerTurn ? 0 : drainPollMs
       timer = setTimer(drain, nextDrainDelay)
@@ -241,11 +269,15 @@ export function createWsOutboundBackpressureQueue<TFrame>(
     if (disposed || overflowed) {
       return { accepted: false, queued: false, cancel: () => false }
     }
+
     const bytes = options.byteLengthOf(frame)
+
     if (!Number.isFinite(bytes) || bytes < 0 || bytes > maxFrameBytes) {
       failOverflow()
+
       return { accepted: false, queued: false, cancel: () => false }
     }
+
     // Fast path: nothing parked and the wire is under the cap — send directly.
     if (
       queuedFrames === 0 &&
@@ -259,27 +291,36 @@ export function createWsOutboundBackpressureQueue<TFrame>(
         cancel: () => false
       }
     }
+
     const queuedBytesClaim = options.claimQueuedBytes?.(bytes)
+
     if (options.claimQueuedBytes && !queuedBytesClaim) {
       failOverflow()
+
       return { accepted: false, queued: false, cancel: () => false }
     }
+
     const entry: QueueEntry = {
       frame,
       bytes,
       releaseQueuedBytes: queuedBytesClaim ?? (() => undefined),
       retained: true
     }
+
     queue.push(entry)
     queued += bytes
     queuedFrames += 1
+
     if (queued > maxQueuedBytes || queuedFrames > maxQueuedFrames) {
       failOverflow()
+
       return { accepted: false, queued: false, cancel: () => false }
     }
+
     if (timer === null) {
       timer = setTimer(drain, drainPollMs)
     }
+
     return {
       accepted: true,
       queued: true,

@@ -37,5 +37,6 @@ export function assertAuthoritativeWorktreeCatalog<T>(worktrees: unknown, repoPa
         'Treating this as an empty catalog would authorize removing workspaces that still exist.'
     )
   }
+
   return worktrees as T[]
 }

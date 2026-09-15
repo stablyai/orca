@@ -18,6 +18,7 @@ export const PublicRuntimeAccessEndpointSchema = RuntimeAccessEndpointSchema.omi
 export type PublicRuntimeAccessEndpoint = z.infer<typeof PublicRuntimeAccessEndpointSchema>
 
 export const RuntimeEnvironmentSourceSchema = z.enum(['manual', 'ephemeral-vm'])
+
 export type RuntimeEnvironmentSource = z.infer<typeof RuntimeEnvironmentSourceSchema>
 
 export const KnownRuntimeEnvironmentSchema = z.object({
@@ -69,6 +70,7 @@ export function createEnvironmentFromPairingOffer(args: {
   connectionDependency?: 'ssh-tunnel'
 }): KnownRuntimeEnvironment {
   const endpointId = `ws-${args.id}`
+
   return KnownRuntimeEnvironmentSchema.parse({
     id: args.id,
     name: args.name,
@@ -110,9 +112,11 @@ export function getPreferredPairingOffer(environment: KnownRuntimeEnvironment): 
   const endpoint =
     environment.endpoints.find((entry) => entry.id === environment.preferredEndpointId) ??
     environment.endpoints[0]
+
   if (!endpoint) {
     throw new Error(`Environment ${environment.name} has no access endpoints`)
   }
+
   return {
     v: PAIRING_OFFER_VERSION,
     endpoint: endpoint.endpoint,

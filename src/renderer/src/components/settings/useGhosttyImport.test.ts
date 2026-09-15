@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/global-settings-types'
 
 const mockStateValues: unknown[] = []
+
 let mockStateIndex = 0
 
 const baseSettings: GlobalSettings = {
@@ -29,6 +30,7 @@ function resetMockState() {
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useEffect: (effect: () => void | (() => void)) => {
@@ -37,12 +39,15 @@ vi.mock('react', async () => {
     useRef: (initial: unknown) => ({ current: initial }),
     useState: (initial: unknown) => {
       const i = mockStateIndex++
+
       if (mockStateValues[i] === undefined) {
         mockStateValues[i] = initial
       }
+
       const setter = (v: unknown) => {
         mockStateValues[i] = v
       }
+
       return [mockStateValues[i], setter]
     }
   }
@@ -77,6 +82,7 @@ describe('useGhosttyImport', () => {
       diff: { terminalFontSize: 14, terminalFontFamily: 'JetBrains Mono' },
       unsupportedKeys: ['background']
     }
+
     const previewMock = vi.fn().mockResolvedValue(previewResponse)
     vi.stubGlobal('window', {
       api: { settings: { previewGhosttyImport: previewMock } }
@@ -134,6 +140,7 @@ describe('useGhosttyImport', () => {
       diff: {},
       unsupportedKeys: []
     }
+
     const previewMock = vi.fn().mockResolvedValue(previewResponse)
     vi.stubGlobal('window', {
       api: { settings: { previewGhosttyImport: previewMock } }
@@ -183,6 +190,7 @@ describe('useGhosttyImport', () => {
       diff: {},
       unsupportedKeys: []
     })
+
     vi.stubGlobal('window', {
       api: { settings: { previewGhosttyImport: previewMock } }
     })
@@ -205,12 +213,14 @@ describe('useGhosttyImport', () => {
       ...baseSettings,
       terminalColorOverrides: { foreground: '#e0e0e0', red: '#ff0000' }
     } as GlobalSettings
+
     const previewResponse: GhosttyImportPreview = {
       found: true,
       configPath: '/path',
       diff: { terminalColorOverrides: { background: '#1a1a1a' } },
       unsupportedKeys: []
     }
+
     const previewMock = vi.fn().mockResolvedValue(previewResponse)
     vi.stubGlobal('window', {
       api: { settings: { previewGhosttyImport: previewMock } }

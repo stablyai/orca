@@ -46,9 +46,11 @@ export function admitAgentSessionOperationRow(
 ): { rows: OperationRows; decision: AgentSessionOperationDecision } {
   const pruned = pruneAgentSessionOperationRows(rows, args.now)
   const decision = evaluateAgentSessionOperation({ rows: pruned, ...args })
+
   if (decision.decision === 'admit') {
     pruned.set(agentSessionOperationKey(args.callerKey, args.operationId), decision.row)
   }
+
   return { rows: pruned, decision }
 }
 
@@ -58,19 +60,24 @@ export function admitAgentSessionGlobalOperationRow(
   args: AgentSessionOperationAdmission
 ): { rows: OperationRows; decision: AgentSessionOperationDecision } {
   let existing: AgentSessionOperationRow | undefined
+
   for (const row of rows.values()) {
     if (row.expiresAt > args.now && row.operationId === args.operationId) {
       existing = row
       break
     }
   }
+
   if (!existing) {
     return admitAgentSessionOperationRow(rows, args)
   }
+
   const pruned = pruneAgentSessionOperationRows(rows, args.now)
+
   const syntheticRows = new Map([
     [agentSessionOperationKey(args.callerKey, args.operationId), existing]
   ])
+
   return {
     rows: pruned,
     decision: evaluateAgentSessionOperation({ rows: syntheticRows, ...args })
@@ -83,27 +90,34 @@ export function admitAgentSessionMutationOperation(
   args: AgentSessionMutationOperationAdmission
 ): AgentSessionMutationOperationDecision {
   const record = state.records.get(args.envelope.sessionId)
+
   if (!record) {
     return null
   }
+
   const operation = {
     callerKey: args.callerKey,
     operationId: args.envelope.clientOperationId,
     fingerprint: args.hostFingerprint,
     now: args.now
   }
+
   const ledger = args.operationIdScope
     ? admitAgentSessionGlobalOperationRow(state.operations, operation)
     : admitAgentSessionOperationRow(state.operations, operation)
+
   const admission = admitAgentSessionMutation({
     envelope: args.envelope,
     hostFingerprint: args.hostFingerprint,
     ledger: ledger.decision,
     lease: record.lease
   })
+
   if (ledger.decision.decision === 'admit' && admission.decision === 'refused') {
     ledger.rows.delete(agentSessionOperationKey(operation.callerKey, operation.operationId))
   }
+
   state.operations = ledger.rows
+
   return { admission, record }
 }

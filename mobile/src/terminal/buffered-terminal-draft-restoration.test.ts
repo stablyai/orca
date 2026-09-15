@@ -60,6 +60,7 @@ describe('buffered terminal draft restoration', () => {
     if (settleBufferedTerminalDraftRestoration(pendingRestorations, terminal, token)) {
       drafts = restoreRejectedBufferedTerminalDraft(drafts, terminal, rejectedDraft)
     }
+
     expect(drafts).toEqual({ [terminal]: '' })
   })
 

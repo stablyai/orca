@@ -29,10 +29,12 @@ function claudeIdentity(uuid: string): AgentJournalItemIdentity {
 }
 
 let root: string
+
 let clock = 1_000
 
 function tick(): number {
   clock += 1
+
   return clock
 }
 
@@ -81,6 +83,7 @@ async function reopenAfterCrash(
   })
   const restarted = await open()
   await restarted.markPendingSubmissionsUnknown(2)
+
   return restarted
 }
 
@@ -259,6 +262,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
 
   it('leaves two identical unsettled sends unknown rather than guessing between them', async () => {
     const journal = await open()
+
     for (const id of ['cm_1', 'cm_2']) {
       await journal.appendSubmission({
         clientMessageId: id,
@@ -267,6 +271,7 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
         fence: 1
       })
     }
+
     const restarted = await open()
     await restarted.markPendingSubmissionsUnknown(2)
 

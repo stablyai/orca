@@ -27,6 +27,7 @@ export async function deliverWorkerDispatchPreamble(args: {
   requestId: string
 }): Promise<RuntimeTerminalSend['prompt']> {
   const { runtime, structuredSession, terminalHandle } = args
+
   const preamble = buildDispatchPreamble({
     // Depth only. A worker is taught the same verbs whichever mode it runs in, so this must not
     // become a second gate: resolving the caller's worktree is what lets a structured worker
@@ -41,6 +42,7 @@ export async function deliverWorkerDispatchPreamble(args: {
     devMode: args.devMode,
     cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
   })
+
   if (structuredSession) {
     await sendStructuredWorkerPreamble({
       host: structuredSession.host,
@@ -48,8 +50,10 @@ export async function deliverWorkerDispatchPreamble(args: {
       dispatchId: args.dispatchId,
       preamble
     })
+
     return undefined
   }
+
   return (
     await runtime.sendTerminalAgentPrompt(terminalHandle, preamble, {
       acceptQueued: true,

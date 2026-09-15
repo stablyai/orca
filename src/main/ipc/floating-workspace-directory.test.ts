@@ -42,9 +42,11 @@ function createStore(settings: Partial<GlobalSettings> = {}): TestStore {
     getSettings: () => store.settings,
     updateSettings: (updates) => {
       store.settings = { ...store.settings, ...updates }
+
       return store.settings
     }
   }
+
   return store
 }
 
@@ -62,9 +64,11 @@ describe('floating workspace directory authorization', () => {
       if (name === 'home') {
         return homeDir
       }
+
       if (name === 'userData') {
         return userDataDir
       }
+
       throw new Error(`unexpected app path: ${name}`)
     })
     authorizeExternalPathMock.mockClear()
@@ -154,6 +158,7 @@ describe('floating workspace directory authorization', () => {
     const selectedDir = path.join(tempRoot, 'new-notes')
     await mkdir(selectedDir)
     const canonicalSelectedDir = await realpath(selectedDir)
+
     const store = createStore({
       floatingTerminalTrustedCwds: [missingTrustedDir]
     })

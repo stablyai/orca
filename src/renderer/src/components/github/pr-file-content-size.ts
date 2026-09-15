@@ -19,6 +19,7 @@ export function getPRFileContentsCacheByteCount(contents: GitHubPRFileContents):
   if (isPRFileContentsTooLargeSentinel(contents)) {
     return 0
   }
+
   return getUtf8ByteLength(contents.original) + getUtf8ByteLength(contents.modified)
 }
 
@@ -26,6 +27,8 @@ export function getRetainedPRFileContentsByteCount(contents: GitHubPRFileContent
   if (isPRFileContentsTooLargeSentinel(contents)) {
     return 0
   }
+
   const byteCount = getPRFileContentsCacheByteCount(contents)
+
   return byteCount <= PR_FILE_CONTENT_CACHE_MAX_BYTES ? byteCount : null
 }

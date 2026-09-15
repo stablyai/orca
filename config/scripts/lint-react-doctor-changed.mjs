@@ -9,12 +9,15 @@ function run(command, args) {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'inherit']
   })
+
   if (result.error) {
     throw result.error
   }
+
   if (result.status !== 0) {
     return []
   }
+
   return result.stdout.split(/\r?\n/).filter(Boolean)
 }
 
@@ -33,6 +36,7 @@ if (lintTargets.length === 0) {
 }
 
 const { command, prefixArgs } = resolveOxlintInvocation()
+
 const result = spawnSync(
   command,
   [...prefixArgs, '--config', 'config/oxlint-react-doctor.json', ...lintTargets],
@@ -42,4 +46,5 @@ const result = spawnSync(
 if (result.error) {
   throw result.error
 }
+
 process.exit(result.status ?? 1)

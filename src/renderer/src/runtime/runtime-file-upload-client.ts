@@ -33,8 +33,10 @@ export async function uploadRuntimeFileWithoutClobber(
   expectedExecutionHostId?: 'local' | `ssh:${string}`
 ): Promise<void> {
   const tempRelativePath = makeRuntimeUploadTempPath(relativePath)
+
   try {
     session.assertCurrent()
+
     // Why: main owns the file handle and the runtime socket, so it streams the
     // body in slices; the renderer never holds the whole file.
     try {
@@ -56,6 +58,7 @@ export async function uploadRuntimeFileWithoutClobber(
       // main-process throw in "Error invoking remote method '…'".
       throw new Error(extractIpcErrorMessage(error, 'Upload failed'))
     }
+
     await callRuntimeFileImportMutation(
       session,
       'files.commitUpload',
@@ -93,6 +96,7 @@ function makeRuntimeUploadTempPath(relativePath: string): string {
   const dir = slashIndex === -1 ? '' : normalized.slice(0, slashIndex + 1)
   const leaf = slashIndex === -1 ? normalized : normalized.slice(slashIndex + 1)
   const nonce = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+
   return `${dir}.${leaf}.orca-upload-${nonce}`
 }
 
@@ -102,22 +106,28 @@ export async function ensureRuntimeDirectory(
   session: RuntimeFileImportSession
 ): Promise<void> {
   const destinationArgs = getRemoteFileArgs(context, destinationDir)
+
   if (!destinationArgs) {
     return
   }
+
   const parts = normalizeRelativePath(destinationArgs.relativePath)
     .split('/')
     .filter((part) => part.length > 0)
+
   let current = ''
+
   for (const part of parts) {
     current = joinRuntimeRelativePath(current, part)
     const absolutePath = joinPath(context.worktreePath ?? '', current)
     session.assertCurrent()
+
     if (
       await runtimePathExists(context, absolutePath, session.expectedEnvironmentPairingRevision)
     ) {
       continue
     }
+
     await callRuntimeFileImportMutation(
       session,
       'files.createDir',

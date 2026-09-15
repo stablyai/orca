@@ -31,7 +31,9 @@ export type KnownHostsEntry = {
 }
 
 const HASH_MAGIC = '|1|'
+
 const SHA1_DIGEST_BYTES = 20
+
 /** Guards a malformed length prefix from allocating or reading past the blob. */
 const MAX_KEY_TYPE_BYTES = 64
 
@@ -45,10 +47,13 @@ export function readHostKeyType(key: Buffer): string | undefined {
   if (key.length < 4) {
     return undefined
   }
+
   const length = key.readUInt32BE(0)
+
   if (length === 0 || length > MAX_KEY_TYPE_BYTES || 4 + length > key.length) {
     return undefined
   }
+
   return key.subarray(4, 4 + length).toString('utf8')
 }
 
@@ -67,17 +72,22 @@ export function readHostKeyType(key: Buffer): string | undefined {
  */
 function isWellFormedHostKeyBlob(key: Buffer): boolean {
   let offset = 0
+
   while (offset < key.length) {
     if (offset + 4 > key.length) {
       return false
     }
+
     const fieldLength = key.readUInt32BE(offset)
     offset += 4
+
     if (fieldLength > key.length - offset) {
       return false
     }
+
     offset += fieldLength
   }
+
   return offset === key.length
 }
 
@@ -104,21 +114,26 @@ export function formatHostKeyFingerprint(sha256Base64: string): string {
  */
 function decodeCanonicalBase64(raw: string): Buffer | undefined {
   const decoded = Buffer.from(raw, 'base64')
+
   // Empty would re-encode to '' and pass the comparison; `|1||hash` must not survive as an entry.
   if (decoded.length === 0) {
     return undefined
   }
+
   return decoded.toString('base64') === raw ? decoded : undefined
 }
 
 function parseHashedPatterns(field: string): KnownHostsEntry['hashed'] | undefined {
   const parts = field.split('|')
+
   // '' , '1', salt, hash — exactly four, or the line is malformed.
   if (parts.length !== 4 || parts[0] !== '' || parts[1] !== '1') {
     return undefined
   }
+
   const salt = decodeCanonicalBase64(parts[2] ?? '')
   const hash = decodeCanonicalBase64(parts[3] ?? '')
+
   // Length is orthogonal to canonicality, so both checks are needed: ssh requires BOTH fields to be
   // exactly one SHA1 digest — extract_salt rejects anything else with "expected salt len 20, got N".
   // Accepting a shorter salt would let us match a line ssh treats as a parse error, so the entry
@@ -126,12 +141,14 @@ function parseHashedPatterns(field: string): KnownHostsEntry['hashed'] | undefin
   if (!salt || !hash || salt.length !== SHA1_DIGEST_BYTES || hash.length !== SHA1_DIGEST_BYTES) {
     return undefined
   }
+
   return { salt, hash }
 }
 
 /** Returns undefined for blank lines, comments, and anything malformed — never throws. */
 export function parseKnownHostsLine(line: string): KnownHostsEntry | undefined {
   const trimmed = line.trim()
+
   if (trimmed.length === 0 || trimmed.startsWith('#')) {
     return undefined
   }
@@ -139,8 +156,10 @@ export function parseKnownHostsLine(line: string): KnownHostsEntry | undefined {
   const fields = trimmed.split(/\s+/)
   let index = 0
   let marker: KnownHostsEntry['marker']
+
   if (fields[index]?.startsWith('@')) {
     const raw = fields[index]
+
     if (raw === '@revoked') {
       marker = 'revoked'
     } else if (raw === '@cert-authority') {
@@ -150,23 +169,27 @@ export function parseKnownHostsLine(line: string): KnownHostsEntry | undefined {
       // way we do not model, so honouring the line as if it were unmarked would over-trust it.
       return undefined
     }
+
     index += 1
   }
 
   const hostField = fields[index]
   const keyType = fields[index + 1]
   const keyBase64 = fields[index + 2]
+
   if (!hostField || !keyType || !keyBase64) {
     return undefined
   }
 
   const key = decodeCanonicalBase64(keyBase64)
+
   if (!key || readHostKeyType(key) !== keyType || !isWellFormedHostKeyBlob(key)) {
     return undefined
   }
 
   if (hostField.startsWith(HASH_MAGIC)) {
     const hashed = parseHashedPatterns(hostField)
+
     return hashed
       ? { ...(marker ? { marker } : {}), patterns: [], negations: [], hashed, keyType, key }
       : undefined
@@ -174,36 +197,45 @@ export function parseKnownHostsLine(line: string): KnownHostsEntry | undefined {
 
   const patterns: string[] = []
   const negations: string[] = []
+
   for (const raw of hostField.split(',')) {
     const pattern = raw.trim().toLowerCase()
+
     if (pattern.length === 0) {
       continue
     }
+
     if (pattern.startsWith('!')) {
       negations.push(pattern.slice(1))
     } else {
       patterns.push(pattern)
     }
   }
+
   if (patterns.length === 0 && negations.length === 0) {
     return undefined
   }
+
   return { ...(marker ? { marker } : {}), patterns, negations, keyType, key }
 }
 
 export function parseKnownHosts(contents: string): KnownHostsEntry[] {
   const entries: KnownHostsEntry[] = []
+
   for (const line of contents.split(/\r?\n/)) {
     const entry = parseKnownHostsLine(line)
+
     if (entry) {
       entries.push(entry)
     }
   }
+
   return entries
 }
 
 function globToRegExp(pattern: string): RegExp {
   const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+
   return new RegExp(`^${escaped.replace(/\*/g, '.*').replace(/\?/g, '.')}$`)
 }
 
@@ -218,12 +250,15 @@ function entryMatchesCandidate(entry: KnownHostsEntry, candidate: string): boole
     // The hash covers the candidate form verbatim, so a bracketed candidate hashes as
     // "[host]:port" — each form must be hashed separately rather than hashing the bare host once.
     const digest = createHmac('sha1', entry.hashed.salt).update(candidate).digest()
+
     return digest.length === entry.hashed.hash.length && timingSafeEqual(digest, entry.hashed.hash)
   }
+
   // A single negation vetoes the entire line even when another pattern on it matches.
   if (entry.negations.some((pattern) => patternMatches(pattern, candidate))) {
     return false
   }
+
   return entry.patterns.some((pattern) => patternMatches(pattern, candidate))
 }
 
@@ -247,6 +282,7 @@ export function hostCandidatePasses(
   isHostKeyAlias = false
 ): string[][] {
   const lower = host.toLowerCase()
+
   return port === 22 || isHostKeyAlias ? [[lower]] : [[`[${lower}]:${port}`], [lower]]
 }
 
@@ -270,6 +306,7 @@ export function matchKnownHosts(
   query: KnownHostsQuery
 ): KnownHostsOutcome {
   const passes = hostCandidatePasses(query.host, query.port, query.isHostKeyAlias)
+
   const matchesHost = (entry: KnownHostsEntry, candidates: string[]): boolean =>
     candidates.some((candidate) => entryMatchesCandidate(entry, candidate))
 
@@ -301,15 +338,18 @@ export function matchKnownHosts(
       if (entry.marker === 'revoked' || !matchesHost(entry, candidates)) {
         continue
       }
+
       if (entry.marker === 'cert-authority') {
         sawCertAuthority = true
         continue
       }
+
       // Byte equality implies the types agree: the blob carries its own algorithm name, and parsing
       // already rejected any line whose declared type disagreed with it.
       if (entry.key.equals(query.key)) {
         return 'match'
       }
+
       sawPlainEntryForHost = true
       sawSameTypeForHost ||= entry.keyType === query.keyType
     }

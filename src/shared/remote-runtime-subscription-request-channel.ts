@@ -48,7 +48,9 @@ export class RemoteRuntimeSubscriptionRequestChannel {
         )
       )
     }
+
     const socket = this.options.resolveWritableSocket()
+
     if (!socket) {
       return Promise.reject(
         new RemoteRuntimeClientError(
@@ -57,6 +59,7 @@ export class RemoteRuntimeSubscriptionRequestChannel {
         )
       )
     }
+
     if (this.pending.size >= MAX_PENDING_SUBSCRIPTION_REQUESTS) {
       return Promise.reject(
         new RemoteRuntimeClientError(
@@ -65,8 +68,10 @@ export class RemoteRuntimeSubscriptionRequestChannel {
         )
       )
     }
+
     const requestId = randomUUID()
     let serialized: string
+
     try {
       serialized = serializeRemoteRuntimeRpcRequest({
         requestId,
@@ -81,7 +86,9 @@ export class RemoteRuntimeSubscriptionRequestChannel {
           : new RemoteRuntimeClientError('invalid_argument', String(error))
       )
     }
+
     const encrypted = encrypt(serialized, this.options.sharedKey)
+
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.options.fail(
@@ -91,7 +98,9 @@ export class RemoteRuntimeSubscriptionRequestChannel {
           )
         )
       }, timeoutMs)
+
       this.pending.set(requestId, { resolve, reject, timeout })
+
       if (!this.options.enqueue(socket, encrypted)) {
         this.options.fail(
           new RemoteRuntimeClientError(
@@ -105,12 +114,15 @@ export class RemoteRuntimeSubscriptionRequestChannel {
 
   resolveResponse(response: RuntimeRpcResponse<unknown>): boolean {
     const pending = this.pending.get(response.id)
+
     if (!pending) {
       return false
     }
+
     this.pending.delete(response.id)
     clearTimeout(pending.timeout)
     pending.resolve(response)
+
     return true
   }
 
@@ -119,6 +131,7 @@ export class RemoteRuntimeSubscriptionRequestChannel {
       clearTimeout(pending.timeout)
       pending.reject(error)
     }
+
     this.pending.clear()
   }
 }

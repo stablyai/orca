@@ -40,6 +40,7 @@ describe('getRecoveredHistorySeedSegments', () => {
     const segments = getRecoveredHistorySeedSegments(
       restoreInfo({ pendingEscapeTailAnsi: '\x1b[3' })
     )
+
     expect(segments).toEqual([
       `${RESET_GRAPHIC_RENDITION}\x1b[?1003h\x1b[?1006h`,
       'user@host ~ $ \x1b[?1003h',
@@ -98,10 +99,12 @@ describe('getRecoveredHistorySeedSegments', () => {
 
   it('leaves the revived emulator unarmed while preserving scrollback (#12101)', () => {
     const emulator = new HeadlessEmulator({ cols: 80, rows: 24 })
+
     try {
       for (const segment of getRecoveredHistorySeedSegments(restoreInfo())) {
         expect(emulator.writeSync(segment)).toBe(true)
       }
+
       const snapshot = emulator.getSnapshot()
       expect(snapshot.modes.mouseTracking).toBe(false)
       expect(snapshot.modes.mouseTrackingMode).toBe('none')

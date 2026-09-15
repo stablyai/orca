@@ -10,9 +10,13 @@ import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 // said the listing was scoped or which host each row ran on.
 
 const LOCAL_WORKTREE_ID = 'repo-local::/tmp/local-worktree'
+
 const SSH_WORKTREE_ID = 'repo-ssh::/remote/ssh-worktree'
+
 const LOCAL_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const SSH_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const REMOTE_LEAF_ID = '33333333-3333-4333-8333-333333333333'
 
 const REPOS = [
@@ -35,6 +39,7 @@ const REPOS = [
 
 function makeStore() {
   const session: WorkspaceSessionState = getDefaultWorkspaceSession()
+
   return {
     getWorkspaceSession: vi.fn(() => session),
     getWorkspaceSessionHostIds: vi.fn(() => ['local', 'ssh:box-1']),
@@ -110,6 +115,7 @@ function makeRuntime(leaves: GraphLeaf[], store = makeStore()): OrcaRuntimeServi
       title: ''
     }))
   })
+
   return runtime
 }
 
@@ -198,6 +204,7 @@ describe('listTerminals scope declaration', () => {
 
   it('keeps a repo-known paired runtime omitted without a mirrored row', async () => {
     const baseStore = makeStore()
+
     const repos = [
       REPOS[0]!,
       {
@@ -209,6 +216,7 @@ describe('listTerminals scope declaration', () => {
         executionHostId: 'runtime:env-9' as const
       }
     ]
+
     const runtime = makeRuntime([], {
       ...baseStore,
       getRepos: vi.fn(() => repos),
@@ -224,6 +232,7 @@ describe('listTerminals scope declaration', () => {
 
   it('keeps a repo-known paired runtime omitted in a worktree-scoped listing', async () => {
     const baseStore = makeStore()
+
     const repos = [
       REPOS[0]!,
       {
@@ -235,6 +244,7 @@ describe('listTerminals scope declaration', () => {
         executionHostId: 'runtime:env-9' as const
       }
     ]
+
     const runtime = makeRuntime([], {
       ...baseStore,
       getRepos: vi.fn(() => repos),
@@ -251,6 +261,7 @@ describe('listTerminals scope declaration', () => {
   it('covers a queried SSH host used only by a folder workspace', async () => {
     const baseStore = makeStore()
     const folderWorkspace = makeSshFolderWorkspace()
+
     const runtime = makeRuntime([], {
       ...baseStore,
       getRepos: vi.fn(() => [REPOS[0]!]),
@@ -258,6 +269,7 @@ describe('listTerminals scope declaration', () => {
       getWorkspaceSessionHostIds: vi.fn(() => ['local']),
       getFolderWorkspaces: vi.fn(() => [folderWorkspace])
     })
+
     runtime.setPtyController({
       spawn: vi.fn(async () => ({ id: 'never' })),
       write: () => true,
@@ -278,6 +290,7 @@ describe('listTerminals scope declaration', () => {
   it('keeps a disconnected folder-workspace SSH host omitted', async () => {
     const baseStore = makeStore()
     const folderWorkspace = makeSshFolderWorkspace()
+
     const runtime = makeRuntime([], {
       ...baseStore,
       getRepos: vi.fn(() => [REPOS[0]!]),
@@ -285,6 +298,7 @@ describe('listTerminals scope declaration', () => {
       getWorkspaceSessionHostIds: vi.fn(() => ['local']),
       getFolderWorkspaces: vi.fn(() => [folderWorkspace])
     })
+
     runtime.setPtyController({
       spawn: vi.fn(async () => ({ id: 'never' })),
       write: () => true,
@@ -303,6 +317,7 @@ describe('listTerminals scope declaration', () => {
   it('does not claim local coverage for a paired-runtime folder workspace', async () => {
     const baseStore = makeStore()
     const folderWorkspace = makeRuntimeFolderWorkspace()
+
     const runtime = makeRuntime([], {
       ...baseStore,
       getRepos: vi.fn(() => [REPOS[0]!]),
@@ -320,6 +335,7 @@ describe('listTerminals scope declaration', () => {
   it('keeps a paired-runtime folder owner omitted in an unscoped listing', async () => {
     const baseStore = makeStore()
     const folderWorkspace = makeRuntimeFolderWorkspace()
+
     const runtime = makeRuntime([], {
       ...baseStore,
       getRepos: vi.fn(() => [REPOS[0]!]),

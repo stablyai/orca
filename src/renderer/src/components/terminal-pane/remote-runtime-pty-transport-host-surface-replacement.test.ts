@@ -10,6 +10,7 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const {
@@ -44,6 +45,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onExit = vi.fn()
     const onDisconnect = vi.fn()
     const renderedScreen: string[] = []
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-tab-1',
@@ -77,17 +79,21 @@ describe('createRemoteRuntimePtyTransport', () => {
         // Why: this host publishes the replacement only through its own inventory, so activation answers with nothing.
         return { ok: true, result: { tabs: [] } }
       }
+
       if (args.method === 'session.tabs.list') {
         hostListCalls += 1
+
         if (hostListCalls === 1) {
           throw new Error('runtime reconnect in progress')
         }
+
         const terminal =
           hostListCalls === 2
             ? 'terminal-stale'
             : hostListCalls === 3
               ? null
               : 'terminal-reconnected'
+
         return {
           ok: true,
           result: {
@@ -112,6 +118,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         }
       }
+
       return { ok: true, result: {} }
     })
 
@@ -144,26 +151,32 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(transport.isConnected()).toBe(true)
     expect(renderedScreen.at(-1)).toBe(draft)
     expect(hostListCalls).toBe(4)
+
     const subscribedTerminals = subscriptionSendBinary.mock.calls
       .map((call) => decodeTerminalStreamFrame(call[0]))
       .flatMap((frame) => {
         if (frame?.opcode !== TerminalStreamOpcode.Subscribe) {
           return []
         }
+
         const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
+
         return payload ? [payload.terminal] : []
       })
+
     expect(subscribedTerminals).toEqual(['terminal-stale', 'terminal-reconnected'])
     transport.destroy?.()
   })
 
   it('reattaches from a later host snapshot after bounded replacement polling stops', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onError = vi.fn()
       const onPtyExit = vi.fn()
       const onPtyRebind = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-tab-1',
@@ -189,10 +202,13 @@ describe('createRemoteRuntimePtyTransport', () => {
             error: { code: 'terminal_handle_stale', message: 'terminal_handle_stale' }
           }
         }
+
         if (args.method !== 'session.tabs.list') {
           return { ok: true, result: {} }
         }
+
         hostListCalls += 1
+
         return {
           ok: true,
           result: {
@@ -230,12 +246,14 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       expect(hostListCalls).toBeGreaterThan(1)
       expect(hostListCalls).toBeLessThan(25)
+
       // The reconnect opens with a materialize (session.tabs.activate) and then
       // polls the inventory, so the first list runs one backoff into the budget.
       const listTimeouts = runtimeCall.mock.calls
         .map(([args]) => args)
         .filter((args) => args.method === 'session.tabs.list')
         .map((args) => args.timeoutMs as number)
+
       expect(listTimeouts[0]).toBeGreaterThan(14_000)
       expect(listTimeouts[0]).toBeLessThanOrEqual(15_000)
       expect(listTimeouts.every((timeoutMs) => timeoutMs > 0 && timeoutMs <= 15_000)).toBe(true)
@@ -295,15 +313,19 @@ describe('createRemoteRuntimePtyTransport', () => {
       emitSnapshot(latestSubscribePayload().streamId, 'reattached')
       expect(transport.isConnected()).toBe(true)
       expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(0)
+
       const subscribedTerminals = subscriptionSendBinary.mock.calls
         .map((call) => decodeTerminalStreamFrame(call[0]))
         .flatMap((frame) => {
           if (frame?.opcode !== TerminalStreamOpcode.Subscribe) {
             return []
           }
+
           const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
+
           return payload ? [payload.terminal] : []
         })
+
       expect(subscribedTerminals).toEqual(['terminal-stale', 'terminal-after-timeout'])
     } finally {
       vi.useRealTimers()
@@ -312,11 +334,13 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('materializes a host surface whose PTY died instead of polling a dead inventory', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onError = vi.fn()
       const onPtyExit = vi.fn()
       const onPtyRebind = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-tab-1',
@@ -333,6 +357,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         callbacks: { onError }
       })
       await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+
       const activateCalls = (): {
         method: string
         params?: { tabId?: string; leafId?: string }
@@ -340,10 +365,12 @@ describe('createRemoteRuntimePtyTransport', () => {
         runtimeCall.mock.calls
           .map(([args]) => args)
           .filter((args) => args.method === 'session.tabs.activate')
+
       const activateCallsBeforeStale = activateCalls().length
 
       // The host still publishes the surface, but only activation can mint its replacement handle.
       let materialized = false
+
       const hostSnapshot = (): unknown => ({
         worktree: 'wt-1',
         publicationEpoch: 'epoch-2',
@@ -365,14 +392,18 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         ]
       })
+
       runtimeCall.mockImplementation(async (args: { method: string }) => {
         if (args.method === 'session.tabs.activate') {
           materialized = true
+
           return { ok: true, result: hostSnapshot() }
         }
+
         if (args.method === 'session.tabs.list') {
           return { ok: true, result: hostSnapshot() }
         }
+
         return { ok: true, result: {} }
       })
 
@@ -409,11 +440,13 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('re-activates when a stale ready activation response precedes the pending surface', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onError = vi.fn()
       const onPtyExit = vi.fn()
       const onPtyRebind = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-tab-1',
@@ -431,6 +464,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       runtimeCall.mockClear()
 
       let activateCalls = 0
+
       const snapshot = (terminal: string | null): unknown => ({
         worktree: 'wt-1',
         publicationEpoch: 'epoch-2',
@@ -452,9 +486,11 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         ]
       })
+
       runtimeCall.mockImplementation(async (args: { method: string }) => {
         if (args.method === 'session.tabs.activate') {
           activateCalls += 1
+
           // Why: the first activation races host publication and answers with the pre-restart handle.
           return {
             ok: true,
@@ -463,9 +499,11 @@ describe('createRemoteRuntimePtyTransport', () => {
             )
           }
         }
+
         if (args.method === 'session.tabs.list') {
           return { ok: true, result: snapshot(null) }
         }
+
         return { ok: true, result: {} }
       })
 

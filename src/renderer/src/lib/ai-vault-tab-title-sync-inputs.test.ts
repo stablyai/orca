@@ -11,6 +11,7 @@ const COLLECTIONS = [
   'retainedAgentsByPaneKey',
   'sleepingAgentSessionsByPaneKey'
 ] as const
+
 type Collection = (typeof COLLECTIONS)[number]
 
 function makeState(count = 1): AppState {
@@ -18,6 +19,7 @@ function makeState(count = 1): AppState {
   const retained: AppState['retainedAgentsByPaneKey'] = {}
   const sleeping: AppState['sleepingAgentSessionsByPaneKey'] = {}
   const tabs: TerminalTab[] = []
+
   for (let index = 0; index < count * 3; index++) {
     const tab: TerminalTab = {
       id: `tab-${index}`,
@@ -29,6 +31,7 @@ function makeState(count = 1): AppState {
       sortOrder: index,
       createdAt: 1
     }
+
     const entry = {
       paneKey: `${tab.id}:00000000-0000-4000-8000-000000000001`,
       tabId: tab.id,
@@ -41,7 +44,9 @@ function makeState(count = 1): AppState {
       stateStartedAt: 1,
       stateHistory: []
     }
+
     tabs.push(tab)
+
     if (index < count) {
       live[entry.paneKey] = entry
     } else if (index < count * 2) {
@@ -61,6 +66,7 @@ function makeState(count = 1): AppState {
       }
     }
   }
+
   return {
     agentStatusByPaneKey: live,
     retainedAgentsByPaneKey: retained,
@@ -84,10 +90,12 @@ function replaceProvider(
 ): AppState {
   const paneKey = Object.keys(state[collection])[0]
   const existing = state[collection][paneKey]
+
   const next =
     collection === 'retainedAgentsByPaneKey'
       ? { ...existing, entry: { ...state.retainedAgentsByPaneKey[paneKey].entry, providerSession } }
       : { ...existing, providerSession }
+
   return { ...state, [collection]: { ...state[collection], [paneKey]: next } }
 }
 
@@ -95,25 +103,31 @@ describe('AI Vault title subscription inputs', () => {
   it('does not enumerate unchanged retained and sleeping maps during live status writes', () => {
     const state = makeState(500)
     let unchangedEnumerations = 0
+
     const observeEnumerations = <T extends object>(records: T): T =>
       new Proxy(records, {
         ownKeys(target) {
           unchangedEnumerations++
+
           return Reflect.ownKeys(target)
         }
       })
+
     state.retainedAgentsByPaneKey = observeEnumerations(state.retainedAgentsByPaneKey)
     state.sleepingAgentSessionsByPaneKey = observeEnumerations(state.sleepingAgentSessionsByPaneKey)
     const store = createStore<AppState>(() => state)
     const scheduleReconcile = vi.fn(() => () => {})
+
     const stop = startAiVaultTabTitleSync({
       getState: store.getState,
       subscribe: store.subscribe,
       scheduleReconcile,
       resolveSessionTitles: vi.fn()
     })
+
     try {
       const paneKey = Object.keys(state.agentStatusByPaneKey)[0]
+
       for (let index = 0; index < 50; index++) {
         store.setState((current) => ({
           agentStatusByPaneKey: {
@@ -122,6 +136,7 @@ describe('AI Vault title subscription inputs', () => {
           }
         }))
       }
+
       expect(unchangedEnumerations).toBe(0)
       expect(scheduleReconcile).toHaveBeenCalledTimes(1)
     } finally {
@@ -134,11 +149,13 @@ describe('AI Vault title subscription inputs', () => {
     (collection) => {
       const state = makeState()
       const paneKey = Object.keys(state[collection])[0]
+
       const provider =
         collection === 'retainedAgentsByPaneKey'
           ? state.retainedAgentsByPaneKey[paneKey].entry.providerSession!
           : (state[collection][paneKey] as { providerSession: AgentProviderSessionMetadata })
               .providerSession
+
       for (const patch of [
         { id: 'changed' },
         { key: 'conversation_id' as const },
@@ -151,6 +168,7 @@ describe('AI Vault title subscription inputs', () => {
           )
         ).toBe(true)
       }
+
       expect(
         aiVaultTitleSyncInputsChanged(replaceProvider(state, collection, { ...provider }), state)
       ).toBe(false)
@@ -173,11 +191,14 @@ describe('AI Vault title subscription inputs', () => {
     const records = state[collection]
     const paneKey = Object.keys(records)[0]
     const record = records[paneKey]
+
     const entry =
       collection === 'retainedAgentsByPaneKey'
         ? state.retainedAgentsByPaneKey[paneKey].entry
         : record
+
     const agentField = collection === 'sleepingAgentSessionsByPaneKey' ? 'agent' : 'agentType'
+
     const changedRecords = [
       { ...record, [agentField]: 'claude' },
       { ...record, [agentField]: 'gemini' },
@@ -188,6 +209,7 @@ describe('AI Vault title subscription inputs', () => {
           : { ...record, [field]: 'other' }
       )
     ]
+
     for (const changed of changedRecords) {
       expect(
         aiVaultTitleSyncInputsChanged(
@@ -200,6 +222,7 @@ describe('AI Vault title subscription inputs', () => {
 
   it('still checks workspace ownership after unchanged record collections', () => {
     const state = makeState()
+
     for (const host of ['ssh:host-1', 'runtime:server-1'] as const) {
       expect(
         aiVaultTitleSyncInputsChanged(

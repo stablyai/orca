@@ -97,6 +97,7 @@ describe('createIpcPtyTransport', () => {
     })
     vi.mocked(window.api.pty.writeAccepted).mockImplementation(async (_id, data) => {
       delivered.push(data)
+
       return true
     })
     const { createIpcPtyTransport } = await import('./pty-transport')
@@ -126,10 +127,12 @@ describe('createIpcPtyTransport', () => {
     })
     vi.mocked(window.api.pty.writeAccepted).mockImplementation(async (_id, data) => {
       delivered.push(data)
+
       return true
     })
     const onPreconnectInput = vi.fn()
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const transport = createIpcPtyTransport({
       bufferInputUntilConnect: true,
       preconnectInput: [
@@ -171,10 +174,12 @@ describe('createIpcPtyTransport', () => {
     const delivered: string[] = []
     vi.mocked(window.api.pty.writeAccepted).mockImplementation(async (_id, data) => {
       delivered.push(data)
+
       return true
     })
     const captured: PtyPreconnectInputEntry[] = []
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const predecessor = createIpcPtyTransport({
       bufferInputUntilConnect: true,
       onPreconnectInput: (input) => captured.push(input)
@@ -199,7 +204,9 @@ describe('createIpcPtyTransport', () => {
     const onPreconnectInput = vi.fn(() => {
       throw new Error('capture failed')
     })
+
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const transport = createIpcPtyTransport({
       bufferInputUntilConnect: true,
       onPreconnectInput
@@ -227,6 +234,7 @@ describe('createIpcPtyTransport', () => {
     })
     vi.mocked(window.api.pty.writeAccepted).mockImplementation(async (_id, data) => {
       delivered.push(`accepted:${data}`)
+
       return acceptedWrite.promise
     })
 
@@ -266,6 +274,7 @@ describe('createIpcPtyTransport', () => {
     })
     vi.mocked(window.api.pty.writeAccepted).mockImplementation(async (_id, data) => {
       delivered.push({ data, kind: 'accepted' })
+
       return true
     })
 
@@ -413,6 +422,7 @@ describe('createIpcPtyTransport', () => {
 
       const connecting = transport.connect({ url: '', callbacks: { onConnect } })
       const accepted = transport.sendInputAccepted?.('pending')
+
       if (teardown === 'disconnect') {
         transport.disconnect()
       } else {
@@ -457,11 +467,13 @@ describe('createIpcPtyTransport', () => {
       const currentOnError = vi.fn()
 
       const connecting = transport.connect({ url: '', callbacks: { onError: staleOnError } })
+
       if (teardown === 'disconnect') {
         transport.disconnect()
       } else {
         transport.detach?.()
       }
+
       transport.attach({ existingPtyId: 'pty-current', callbacks: { onError: currentOnError } })
 
       spawn.reject(new Error('late spawn failed'))
@@ -483,6 +495,7 @@ describe('createIpcPtyTransport', () => {
       const onError = vi.fn()
 
       const connecting = transport.connect({ url: '', callbacks: { onError } })
+
       if (teardown === 'disconnect') {
         transport.disconnect()
       } else {
@@ -512,6 +525,7 @@ describe('createIpcPtyTransport', () => {
       url: '',
       callbacks: { onExit: onExitCallback }
     })
+
     await expect(connecting).resolves.toBeUndefined()
 
     onExit?.({ id: 'pty-1', code: 0 })
@@ -524,6 +538,7 @@ describe('createIpcPtyTransport', () => {
   it('does not return a stale exitedBeforeAttach result after its exit callback tears down', async () => {
     const { bufferPreHandlerPtyExit, clearPreHandlerPtyState } =
       await import('./pty-pre-handler-buffer')
+
     const { createIpcPtyTransport } = await import('./pty-transport')
     const sessionId = 'pty-buffered-exit-teardown'
     bufferPreHandlerPtyExit(sessionId, 0)
@@ -545,6 +560,7 @@ describe('createIpcPtyTransport', () => {
 
   it('fences stale queued chunks when natural exit reuses the same pty id', async () => {
     vi.useFakeTimers()
+
     try {
       const { createIpcPtyTransport } = await import('./pty-transport')
       const transport = createIpcPtyTransport({})
@@ -614,8 +630,10 @@ describe('createIpcPtyTransport', () => {
 
   it('clears preconnect input when attach observes a buffered exit', async () => {
     const ptyId = 'pty-exited-before-attach-with-input'
+
     const { bufferPreHandlerPtyExit, clearPreHandlerPtyState } =
       await import('./pty-pre-handler-buffer')
+
     bufferPreHandlerPtyExit(ptyId, 0)
     const { createIpcPtyTransport } = await import('./pty-transport')
     const transport = createIpcPtyTransport({ bufferInputUntilConnect: true })
@@ -714,6 +732,7 @@ describe('createIpcPtyTransport', () => {
     for (let index = 0; index < PTY_PRECONNECT_INPUT_MAX_ENTRIES; index += 1) {
       expect(transport.sendInput('x')).toBe(true)
     }
+
     expect(transport.sendInput('overflow')).toBe(false)
 
     const oversized = createIpcPtyTransport({ bufferInputUntilConnect: true })
@@ -724,6 +743,7 @@ describe('createIpcPtyTransport', () => {
 
   it('chunks large local IPC terminal input before renderer-to-main writes', async () => {
     vi.useFakeTimers()
+
     try {
       const { createIpcPtyTransport } = await import('./pty-transport')
       const transport = createIpcPtyTransport({})
@@ -746,6 +766,7 @@ describe('createIpcPtyTransport', () => {
 
   it('bounds immediate cooked replies without shedding ordinary-path lookalikes', async () => {
     vi.useFakeTimers()
+
     try {
       const { createIpcPtyTransport } = await import('./pty-transport')
       const transport = createIpcPtyTransport({})
@@ -756,6 +777,7 @@ describe('createIpcPtyTransport', () => {
       await transport.connect({ url: '', callbacks: {} })
       expect(transport.sendInputImmediate(first)).toBe(true)
       expect(transport.sendInput(ordinary)).toBe(true)
+
       for (const reply of replies) {
         expect(transport.sendInputImmediate(reply)).toBe(true)
       }
@@ -776,6 +798,7 @@ describe('createIpcPtyTransport', () => {
 
   it('yields while validating accepted large local IPC terminal input before renderer-to-main writes', async () => {
     vi.useFakeTimers()
+
     try {
       const { createIpcPtyTransport } = await import('./pty-transport')
       const transport = createIpcPtyTransport({})
@@ -811,6 +834,7 @@ describe('createIpcPtyTransport', () => {
 
   it('chunks large acknowledged local IPC terminal input before writeAccepted IPC', async () => {
     vi.useFakeTimers()
+
     try {
       const { createIpcPtyTransport } = await import('./pty-transport')
       const transport = createIpcPtyTransport({})
@@ -835,6 +859,7 @@ describe('createIpcPtyTransport', () => {
 
   it('yields while validating accepted large acknowledged local IPC terminal input before writeAccepted IPC', async () => {
     vi.useFakeTimers()
+
     try {
       const { createIpcPtyTransport } = await import('./pty-transport')
       const transport = createIpcPtyTransport({})

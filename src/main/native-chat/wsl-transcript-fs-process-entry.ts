@@ -10,6 +10,7 @@ const operations = new WslTranscriptFsProcessOperations()
 
 function serializeError(error: unknown): WslTranscriptFsProcessError {
   const value = error as NodeJS.ErrnoException | null
+
   return {
     name: value?.name ?? 'Error',
     message: value?.message ?? String(error),

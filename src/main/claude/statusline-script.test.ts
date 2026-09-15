@@ -88,9 +88,11 @@ describe('getManagedStatusLineScript (win32 local)', () => {
   it('drains stdin before exiting when the pane key is missing', () => {
     stubPlatform('win32')
     const script = getManagedStatusLineScript('local')
+
     const paneGuardIndex = script.indexOf(
       'if "%ORCA_PANE_KEY%"=="" goto :orca_agent_hook_drain_stdin'
     )
+
     const captureIndex = script.indexOf('more.com')
     expect(paneGuardIndex).toBeGreaterThan(-1)
     expect(paneGuardIndex).toBeLessThan(captureIndex)
@@ -101,16 +103,21 @@ describe('getManagedStatusLineScript (win32 local)', () => {
     stubPlatform('win32')
     const script = getManagedStatusLineScript('local')
     const captureIndex = script.indexOf('more.com')
+
     const stampIndex = script.indexOf(
       'set "ORCA_STATUSLINE_STAMP_FILE=%TEMP%\\orca-claude-statusline-last-%ORCA_STATUSLINE_PANE_ID%.tmp"'
     )
+
     const throttleIndex = script.indexOf(
       `if %ORCA_STATUSLINE_ELAPSED% GEQ 0 if %ORCA_STATUSLINE_ELAPSED% LSS ${CLAUDE_STATUSLINE_MIN_POST_INTERVAL_SECONDS} goto :orca_statusline_cleanup`
     )
+
     const findstrIndex = script.indexOf('findstr.exe')
+
     const stampWriteIndex = script.indexOf(
       'if defined ORCA_STATUSLINE_NOW (>"%ORCA_STATUSLINE_STAMP_FILE%" echo %ORCA_STATUSLINE_NOW%)'
     )
+
     const tokenGuardIndex = script.indexOf('if "%ORCA_AGENT_HOOK_TOKEN%"=="" goto')
     const curlIndex = script.indexOf('curl.exe')
     // Why: the check precedes findstr so throttled ticks skip that spawn too, but the stamp
@@ -208,6 +215,7 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
     writeFileSync(join(binDir, 'cat'), `#!/bin/sh\nprintf 'x\\n' >> "${catLog}"\n/bin/cat "$@"\n`, {
       mode: 0o755
     })
+
     return { scriptPath, dir, curlLog, payloadLog, dateLog, catLog }
   }
 
@@ -228,6 +236,7 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
         },
         stdio: ['pipe', 'ignore', 'pipe']
       })
+
       let stderr = ''
       child.stderr.on('data', (chunk: Buffer) => {
         stderr += chunk.toString()
@@ -259,9 +268,11 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
 
   it('spawns one curl and no capture or clock subprocesses across 30 rapid ticks', async () => {
     const { scriptPath, dir, curlLog, dateLog, catLog } = makeHarness()
+
     for (let index = 0; index < 30; index += 1) {
       await runScript(scriptPath, dir, rateLimitPayload(1_000 + index * 100))
     }
+
     expect(lineCount(curlLog)).toBe(1)
     expect(lineCount(dateLog)).toBe(0)
     expect(lineCount(catLog)).toBe(0)
@@ -287,9 +298,11 @@ describe.skipIf(process.platform === 'win32')('statusline curl throttle (posix b
     const burstPosts = lineCount(curlLog)
     expect(burstPosts).toBeGreaterThanOrEqual(1)
     expect(readFileSync(stampPathFor(dir), 'utf8')).toBe('1')
+
     for (let index = 0; index < 5; index += 1) {
       await runScript(scriptPath, dir, rateLimitPayload(2_000 + index * 100))
     }
+
     expect(lineCount(curlLog)).toBe(burstPosts)
   })
 

@@ -30,15 +30,20 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
   } | null {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     const sessionWorktreeId = session ? resolveTerminalSessionWorktreeId(session, worktreeId) : null
+
     const persistedTab = sessionWorktreeId
       ? session?.tabsByWorktree[sessionWorktreeId]?.find(
           (tab) => tab.id === tabId && runtimeWorktreeIdsEqual(tab.worktreeId, worktreeId)
         )
       : undefined
+
     const persistedLayout = session?.terminalLayoutsByTabId?.[tabId]
+
     const persistedIncarnationId =
       session?.terminalPtyIncarnationsByPaneKey?.[makePaneKey(tabId, leafId)] ?? null
+
     const liveIncarnationId = this.ptysById.get(ptyId)?.incarnationId ?? null
+
     if (
       persistedIncarnationId &&
       liveIncarnationId &&
@@ -46,13 +51,16 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
     ) {
       return null
     }
+
     const persisted = Boolean(
       persistedTab &&
       persistedLayout?.ptyIdsByLeafId?.[leafId] === ptyId &&
       terminalLayoutContainsLeaf(persistedLayout.root, leafId)
     )
+
     const rendererTab = this.tabs.get(tabId)
     const rendererLeaf = this.leaves.get(this.getLeafKey(tabId, leafId))
+
     const rendererMounted = Boolean(
       rendererTab &&
       rendererLeaf &&
@@ -60,6 +68,7 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
       runtimeWorktreeIdsEqual(rendererLeaf.worktreeId, worktreeId) &&
       rendererLeaf.ptyId === ptyId
     )
+
     if (persisted && persistedLayout) {
       return {
         persisted: true,
@@ -69,6 +78,7 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
         liveIncarnationId
       }
     }
+
     // Why: renderer adoption can precede graph sync; this path still requires reveal success before commit.
     const projected = [...this.mobileSessionTabsByWorktree.entries()].some(
       ([candidateWorktreeId, snapshot]) =>
@@ -81,9 +91,11 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
             (tab.ptyId === ptyId || tab.parentLayout?.ptyIdsByLeafId?.[leafId] === ptyId)
         )
     )
+
     if (!rendererMounted && !projected) {
       return null
     }
+
     return {
       persisted: false,
       rendererMounted,
@@ -111,9 +123,11 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
     baseEnv?: Record<string, string>
   }): Promise<{ env: Record<string, string> }> {
     const handle = this.getTerminalHandleForPaneKey(args.paneKey)
+
     if (!handle) {
       throw new Error('claude_agent_teams_requires_orca_terminal')
     }
+
     return await this.prepareClaudeAgentTeamsLeaderForHandle({
       handle,
       baseEnv: args.baseEnv
@@ -128,8 +142,10 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
       ...process.env,
       ...args.baseEnv
     }
+
     const shimDir = await ensureClaudeAgentTeamsShimDir()
     const shimBin = resolveClaudeAgentTeamsShimBin(baseEnv)
+
     return this.claudeAgentTeams.createLaunchEnv({
       leaderHandle: args.handle,
       baseEnv,
@@ -147,10 +163,12 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
   protected waitForLeafInTab(tabId: string, leafId: string, timeoutMs = 10_000): Promise<string> {
     const tryResolve = (): string | null => {
       const leaf = this.leaves.get(this.getLeafKey(tabId, leafId))
+
       return leaf?.ptyId !== null && leaf?.ptyId !== undefined ? this.issueHandle(leaf) : null
     }
 
     const existing = tryResolve()
+
     if (existing) {
       return Promise.resolve(existing)
     }
@@ -158,23 +176,29 @@ export class OrcaRuntimeWithResolveTerminalSplitSourceAuthority extends OrcaRunt
     return new Promise<string>((resolve, reject) => {
       const timer = setTimeout(() => {
         const idx = this.graphSyncCallbacks.indexOf(check)
+
         if (idx !== -1) {
           this.graphSyncCallbacks.splice(idx, 1)
         }
+
         reject(new Error('Timed out waiting for split pane handle'))
       }, timeoutMs)
 
       const check = (): void => {
         const handle = tryResolve()
+
         if (handle) {
           clearTimeout(timer)
           const idx = this.graphSyncCallbacks.indexOf(check)
+
           if (idx !== -1) {
             this.graphSyncCallbacks.splice(idx, 1)
           }
+
           resolve(handle)
         }
       }
+
       this.graphSyncCallbacks.push(check)
       check()
     })

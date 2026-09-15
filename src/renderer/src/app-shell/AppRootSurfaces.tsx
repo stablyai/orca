@@ -26,64 +26,86 @@ import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel
 import type { OnboardingGate } from './use-onboarding-and-feature-tips'
 
 const QuickOpen = lazy(() => import('../components/QuickOpen'))
+
 const WorktreeJumpPalette = lazy(() => import('../components/WorktreeJumpPalette'))
+
 const WorkspaceCleanupDialog = lazy(
   () => import('../components/workspace-cleanup/WorkspaceCleanupDialog')
 )
+
 const StatusBar = lazy(() =>
   import('../components/status-bar/StatusBar').then((module) => ({ default: module.StatusBar }))
 )
+
 const SetupGuideModal = lazy(() => import('../components/setup-guide/SetupGuideModal'))
+
 const FeatureWallModal = lazy(() => import('../components/feature-wall/FeatureWallModal'))
+
 const FeatureTipsModal = lazy(() => import('../components/feature-tips/FeatureTipsModal'))
+
 const AddRepoDialog = lazy(() => import('../components/sidebar/AddRepoDialog'))
+
 const NonGitFolderDialog = lazy(() => import('../components/sidebar/NonGitFolderDialog'))
+
 const AddProjectFromFolderDialog = lazy(
   () => import('../components/sidebar/AddProjectFromFolderDialog')
 )
+
 const ProjectAddedDialog = lazy(() => import('../components/sidebar/ProjectAddedDialog'))
+
 const DeleteWorktreeDialog = lazy(() => import('../components/sidebar/DeleteWorktreeDialog'))
+
 const PreservedBranchBatchReviewModal = lazy(
   () => import('../components/sidebar/PreservedBranchBatchReviewModal')
 )
+
 const DictationController = lazy(() =>
   import('../components/dictation/DictationController').then((module) => ({
     default: module.DictationController
   }))
 )
+
 const SshPassphraseDialog = lazy(() =>
   import('../components/settings/SshPassphraseDialog').then((module) => ({
     default: module.SshPassphraseDialog
   }))
 )
+
 const UpdateCard = lazy(() =>
   import('../components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
 )
+
 const UnexpectedSignoutCard = lazy(() =>
   import('../components/UnexpectedSignoutCard').then((module) => ({
     default: module.UnexpectedSignoutCard
   }))
 )
+
 const RemoteServerUpdateDialog = lazy(
   () => import('../components/settings/RemoteServerUpdateDialog')
 )
+
 const ContextualTourOverlay = lazy(() =>
   import('../components/contextual-tours/ContextualTourOverlay').then((module) => ({
     default: module.ContextualTourOverlay
   }))
 )
+
 const SetupGuideTelemetryObserver = lazy(() =>
   import('../components/setup-guide/SetupGuideTelemetryObserver').then((module) => ({
     default: module.SetupGuideTelemetryObserver
   }))
 )
+
 const FloatingTerminalPanel = lazy(() =>
   import('../components/floating-terminal/FloatingTerminalPanel').then((module) => ({
     default: module.FloatingTerminalPanel
   }))
 )
+
 // Why: lazy so the WebP asset + overlay module aren't fetched unless the experimental flag is on.
 const PetOverlay = lazy(() => import('../components/pet/PetOverlay'))
+
 // Why: lazy so onboarding's step modules + assets aren't fetched for users past first-launch.
 const OnboardingFlow = lazy(() => import('../components/onboarding/OnboardingFlow'))
 
@@ -115,9 +137,11 @@ function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
   if (status.state === 'idle') {
     return false
   }
+
   if (status.state === 'checking' || status.state === 'not-available') {
     return status.userInitiated === true
   }
+
   return true
 }
 

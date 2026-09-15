@@ -16,10 +16,13 @@ vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionTerminal: vi.fn(),
   isWebRuntimeSessionActive
 }))
+
 vi.mock('@/store/slices/browser-webview-cleanup', () => ({ destroyWorkspaceWebviews }))
 
 const closeBrowserTab = vi.fn()
+
 const closeUnifiedTab = vi.fn()
+
 const recordClientHostedBrowserCloseIntents = vi.fn()
 
 /** One active browser workspace, optionally held under a handle the host has not published yet. */
@@ -69,6 +72,7 @@ function requireListener(ref: { current: CloseActiveTabListener | null }): Close
   if (!ref.current) {
     throw new Error('onCloseActiveTab was never registered')
   }
+
   return ref.current
 }
 

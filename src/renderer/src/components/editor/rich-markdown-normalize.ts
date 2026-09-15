@@ -20,6 +20,7 @@ function normalizeRichMarkdownDocument(editor: Editor, options: NormalizeOptions
   // editor.view.state always reflects the latest document.
   const { doc, schema } = editor.view.state
   const paragraphType = schema.nodes.paragraph
+
   if (!paragraphType) {
     return
   }
@@ -43,16 +44,19 @@ function normalizeRichMarkdownDocument(editor: Editor, options: NormalizeOptions
         kind: 'empty-list-item',
         node: node.type.create(node.attrs, paragraphType.create(), node.marks)
       })
+
       return false
     }
 
     if (node.type !== paragraphType) {
       return true // continue descending into container nodes
     }
+
     if (!options.splitSoftBreakParagraphs) {
       // Document-editor prose reflows soft breaks through CSS, preserving clean diffs.
       return false
     }
+
     if (!node.textContent.includes('\n')) {
       return false // no need to descend into inline content
     }
@@ -66,18 +70,22 @@ function normalizeRichMarkdownDocument(editor: Editor, options: NormalizeOptions
     node.content.forEach((child) => {
       if (!child.isText || !child.text?.includes('\n')) {
         currentNodes.push(child)
+
         return
       }
 
       const text = child.text!
       let segmentStart = 0
+
       for (let index = 0; index <= text.length; index += 1) {
         if (index < text.length && text.charCodeAt(index) !== 10) {
           continue
         }
+
         if (index > segmentStart) {
           currentNodes.push(schema.text(text.slice(segmentStart, index), child.marks))
         }
+
         if (index < text.length) {
           // Why: pasted markdown paragraphs can contain thousands of soft line
           // breaks; scan boundaries directly instead of allocating a split array.
@@ -115,6 +123,7 @@ function normalizeRichMarkdownDocument(editor: Editor, options: NormalizeOptions
 
   // Apply replacements in reverse document order to preserve positions.
   replacements.sort((a, b) => b.from - a.from)
+
   for (const replacement of replacements) {
     if (replacement.kind === 'empty-list-item') {
       tr.replaceWith(replacement.from, replacement.to, replacement.node)

@@ -45,19 +45,25 @@ export async function replayClientHostedBrowserCloseIntents(
   store: ClientHostedBrowserCloseIntentReplayStore
 ): Promise<void> {
   const trimmed = environmentId.trim()
+
   if (!trimmed || replayingEnvironmentIds.has(trimmed)) {
     return
   }
+
   const intents = listClientHostedBrowserCloseIntents(
     store.clientHostedBrowserCloseIntentsByEnvironment,
     trimmed
   )
+
   if (intents.length === 0) {
     return
   }
+
   replayingEnvironmentIds.add(trimmed)
+
   try {
     const settled: string[] = []
+
     for (const intent of intents) {
       try {
         await callRuntimeRpc(
@@ -75,6 +81,7 @@ export async function replayClientHostedBrowserCloseIntents(
           settled.push(intent.browserPageId)
           continue
         }
+
         console.warn(
           '[client-hosted-browser] deferred replaying a close for',
           intent.browserPageId,
@@ -82,6 +89,7 @@ export async function replayClientHostedBrowserCloseIntents(
         )
       }
     }
+
     store.clearClientHostedBrowserCloseIntents(trimmed, settled)
   } finally {
     replayingEnvironmentIds.delete(trimmed)

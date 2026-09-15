@@ -1,5 +1,6 @@
 import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
 import GitLabItemDialog from '@/components/GitLabItemDialog'
+
 export function TaskPageGitLabDialog({
   model
 }: {
@@ -12,6 +13,7 @@ export function TaskPageGitLabDialog({
     gitlabDialogSourceContext,
     handleUseGitLabItem
   } = model
+
   return (
     <GitLabItemDialog
       item={gitlabDialogItem}

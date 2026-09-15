@@ -7,5 +7,6 @@ export function buildSshLoginShellCommand(shell: string, command: string): strin
   const shellName = shell.split('/').at(-1)
   // Why: csh/tcsh reject combined -lc, while sh/dash do not need login mode here.
   const mode = shellName && COMMAND_ONLY_SHELLS.has(shellName) ? '-c' : '-lc'
+
   return `${shellEscape(shell)} ${mode} ${shellEscape(command)}`
 }

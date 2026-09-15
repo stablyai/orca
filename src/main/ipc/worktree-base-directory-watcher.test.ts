@@ -61,11 +61,17 @@ import { matchingWorktreeBaseRepoIds } from './worktree-base-directory-event-fil
 type PollerCallback = (events: WorktreeBasePollEvent[]) => void
 
 const watcherCallbacks = new Map<string, PollerCallback>()
+
 const unsubscribeMocks = new Map<string, ReturnType<typeof vi.fn>>()
+
 const pollerOptions = new Map<string, WorktreeBasePollerOptions>()
+
 const absolutePath = (...parts: string[]): string => join(sep, ...parts)
+
 const WORKTREE_ROOT = absolutePath('workspace', 'worktrees')
+
 const PROJECT_ROOT = absolutePath('workspace', 'projects', 'project')
+
 const PROJECT_GIT_COMMON_DIR = join(PROJECT_ROOT, '.git')
 
 const settings = {
@@ -104,9 +110,11 @@ function mockHeadIdentities(identities: WorktreeHeadIdentity[]): void {
 
 function emit(root: string, events: WorktreeBasePollEvent[]): void {
   const callback = watcherCallbacks.get(root)
+
   if (!callback) {
     throw new Error(`No poller callback for ${root}`)
   }
+
   callback(events)
 }
 
@@ -124,6 +132,7 @@ describe('worktree base directory watcher', () => {
         watcherCallbacks.set(target.path, onEvents)
         unsubscribeMocks.set(target.path, unsubscribe)
         pollerOptions.set(target.path, options ?? {})
+
         return { unsubscribe }
       }
     )
@@ -275,10 +284,13 @@ describe('worktree base directory watcher', () => {
 
   it('filters SSH common-dir events to the active worktree upstream ref', async () => {
     const remoteCallbacks = new Map<string, (events: never[]) => void>()
+
     const remoteWatch = vi.fn(async (root: string, callback: (events: never[]) => void) => {
       remoteCallbacks.set(root, callback)
+
       return vi.fn()
     })
+
     vi.mocked(getSshFilesystemProvider).mockReturnValue({
       stat: vi.fn(async () => ({ type: 'directory', size: 0, mtime: 0 })),
       realpath: vi.fn(async (path: string) => path),
@@ -322,6 +334,7 @@ describe('worktree base directory watcher', () => {
 
   it('invalidates exact resolution only when common config changes', async () => {
     const worktreeId = `repo-1::${PROJECT_ROOT}`
+
     const request = {
       worktreeId,
       worktreePath: PROJECT_ROOT,
@@ -329,6 +342,7 @@ describe('worktree base directory watcher', () => {
       branch: 'refs/heads/feature',
       upstreamName: 'origin/feature'
     }
+
     const resolve = vi.fn(async () => 'refs/remotes/origin/feature')
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
 
@@ -352,6 +366,7 @@ describe('worktree base directory watcher', () => {
       branch: 'refs/heads/feature',
       upstreamName: 'origin/feature'
     }
+
     const resolve = vi.fn(async () => 'refs/remotes/origin/feature')
     await syncWorktreeBaseDirectoryWatchers(makeStore([makeRepo()]) as never, makeWindow() as never)
     await setWorktreeGitStatusRefWatch(request, resolve)
@@ -415,6 +430,7 @@ describe('worktree base directory watcher', () => {
       branch: 'refs/heads/feature',
       upstreamName: 'origin/feature'
     }
+
     const resolve = vi.fn(async () => 'refs/remotes/origin/feature')
     await setWorktreeGitStatusRefWatch(request, resolve)
 
@@ -620,6 +636,7 @@ describe('worktree base directory watcher', () => {
       type: 'update' as const,
       path: join(PROJECT_GIT_COMMON_DIR, 'worktrees', 'external-5104', 'logs', 'HEAD')
     }
+
     emit(PROJECT_GIT_COMMON_DIR, [reflog])
     // Second burst arrives before the debounce window elapses and resets it.
     await vi.advanceTimersByTimeAsync(100)
@@ -740,10 +757,13 @@ describe('worktree base directory watcher', () => {
 
   it('never reads head identities for SSH watches', async () => {
     const remoteCallbacks = new Map<string, (events: never[]) => void>()
+
     const remoteWatch = vi.fn(async (root: string, callback: (events: never[]) => void) => {
       remoteCallbacks.set(root, callback)
+
       return vi.fn()
     })
+
     vi.mocked(getSshFilesystemProvider).mockReturnValue({
       stat: vi.fn(async () => ({ type: 'directory', size: 0, mtime: 0 })),
       realpath: vi.fn(async (path: string) => path),
@@ -783,10 +803,13 @@ describe('worktree base directory watcher', () => {
   it('uses the remote sibling root for default SSH worktree roots', async () => {
     const remoteCallbacks = new Map<string, (events: never[]) => void>()
     const remoteUnwatch = vi.fn()
+
     const remoteWatch = vi.fn(async (root: string, callback: (events: never[]) => void) => {
       remoteCallbacks.set(root, callback)
+
       return remoteUnwatch
     })
+
     vi.mocked(getSshFilesystemProvider).mockReturnValue({
       stat: vi.fn(async () => ({ type: 'directory', size: 0, mtime: 0 })),
       realpath: vi.fn(async (path: string) => path),
@@ -816,10 +839,13 @@ describe('worktree base directory watcher', () => {
 
   it('treats remote index renames as status-only and overflow as structural', async () => {
     const remoteCallbacks = new Map<string, (events: never[]) => void>()
+
     const remoteWatch = vi.fn(async (root: string, callback: (events: never[]) => void) => {
       remoteCallbacks.set(root, callback)
+
       return vi.fn()
     })
+
     vi.mocked(getSshFilesystemProvider).mockReturnValue({
       stat: vi.fn(async () => ({ type: 'directory', size: 0, mtime: 0 })),
       realpath: vi.fn(async (path: string) => path),
@@ -831,6 +857,7 @@ describe('worktree base directory watcher', () => {
       makeStore([makeRepo({ connectionId: 'ssh-1', path: '/home/alice/project' })]) as never,
       makeWindow() as never
     )
+
     const request = {
       worktreeId: 'repo-1::/home/alice/project',
       worktreePath: '/home/alice/project',
@@ -839,6 +866,7 @@ describe('worktree base directory watcher', () => {
       branch: 'refs/heads/feature',
       upstreamName: 'origin/feature'
     }
+
     const resolve = vi.fn(async () => 'refs/remotes/origin/feature')
     await setWorktreeGitStatusRefWatch(request, resolve)
 
@@ -879,6 +907,7 @@ describe('worktree base directory watcher', () => {
 
   it('unsubscribes a watcher that finishes installing after disposal starts', async () => {
     let resolveInstall: (subscription: { unsubscribe: () => Promise<void> }) => void = () => {}
+
     const unsubscribe = vi.fn(async () => {})
     vi.mocked(startWorktreeBaseDirectoryPoller).mockImplementationOnce(
       async () =>
@@ -891,6 +920,7 @@ describe('worktree base directory watcher', () => {
       makeStore([makeRepo()]) as never,
       makeWindow() as never
     )
+
     await vi.waitFor(() => expect(startWorktreeBaseDirectoryPoller).toHaveBeenCalled())
     const disposePromise = disposeWorktreeBaseDirectoryWatchers()
     resolveInstall({ unsubscribe })

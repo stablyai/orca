@@ -34,13 +34,17 @@ export function useMobileCommitMessageGeneration(params: Params) {
     if (!client || generatingMessage || busyActionRef.current) {
       return
     }
+
     setGeneratingMessage(true)
     setActionError(null)
+
     try {
       const result = await requestMobileCommitMessage(client, worktreeId)
+
       if (!mountedRef.current) {
         return
       }
+
       if (result.success) {
         setCommitMessage(result.message)
         triggerSuccess()

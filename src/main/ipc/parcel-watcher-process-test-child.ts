@@ -15,24 +15,30 @@ export class FakeWatcherChild extends EventEmitter {
   })
   send = vi.fn((message: SentMessage) => {
     this.sent.push(message)
+
     return true
   })
 }
 
 export function currentWatcherChild(forkMock: ReturnType<typeof vi.fn>): FakeWatcherChild {
   const result = forkMock.mock.results.at(-1)
+
   if (!result) {
     throw new Error('fork was not called')
   }
+
   return result.value as FakeWatcherChild
 }
 
 export function acknowledgeWatcherSubscribe(child: FakeWatcherChild, index = -1): number {
   const message = child.sent.filter((candidate) => candidate.op === 'subscribe').at(index)
+
   if (!message) {
     throw new Error('no subscribe message sent')
   }
+
   child.emit('message', { op: 'subscribed', id: message.id })
+
   return message.id
 }
 
@@ -42,5 +48,6 @@ export function trackPromiseSettlement(promise: Promise<unknown>): () => boolean
     () => (settled = true),
     () => (settled = true)
   )
+
   return () => settled
 }

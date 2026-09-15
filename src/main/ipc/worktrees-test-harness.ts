@@ -96,6 +96,7 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   resetSshProviderAuthorities()
   invalidateAuthorizedRootsCache()
   __resetCreatedWorktreeRootsForTests()
+
   for (const m of [
     handleMock,
     removeHandlerMock,
@@ -176,6 +177,7 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   ]) {
     m.mockReset()
   }
+
   killAllProcessesForWorktreeMock.mockResolvedValue({
     runtimeStopped: 0,
     providerStopped: 0,
@@ -198,12 +200,14 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   store.getRepo.mockReturnValue({ ...harnessRepo, worktreeBaseRef: null })
   store.getProjects.mockReturnValue([])
   store.getSparsePresets.mockReturnValue([])
+
   const settings = {
     branchPrefix: 'none',
     nestWorkspaces: false,
     refreshLocalBaseRefOnWorktreeCreate: false,
     workspaceDir: '/workspace'
   }
+
   store.getSettings.mockReturnValue(settings)
   store.getWorktreeMeta.mockReturnValue(undefined)
   // Host-qualified accessors delegate by default so payload assertions stay on one spy;
@@ -294,8 +298,10 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
             .split(/[\\/]/)
             .at(-1)
             ?.replace(/\.git$/, '') ?? 'repo'
+
         return `${settings.workspaceDir}/${repoName}/${sanitizedName}`
       }
+
       return `${settings.workspaceDir}/${sanitizedName}`
     }
   )
@@ -306,5 +312,6 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   forceDeleteLocalBranchMock.mockResolvedValue(undefined)
   const runtimeStub = createWorktreeRuntimeStub()
   registerWorktreeHandlers(mainWindow as never, store as never, runtimeStub as never)
+
   return runtimeStub
 }

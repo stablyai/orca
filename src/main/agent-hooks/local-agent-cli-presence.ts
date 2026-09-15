@@ -13,6 +13,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
 
 export type LocalCliPresenceState = 'found' | 'missing' | 'unknown'
+
 export type LocalCliPresenceByAgent = Partial<
   Record<
     AgentHookTarget,
@@ -50,13 +51,17 @@ function pathApiForPlatform(platform: NodeJS.Platform) {
 async function isExecutableFile(filePath: string, platform: NodeJS.Platform): Promise<boolean> {
   try {
     const fileStat = await stat(filePath)
+
     if (!fileStat.isFile()) {
       return false
     }
+
     if (platform === 'win32') {
       return true
     }
+
     await access(filePath, constants.X_OK)
+
     return true
   } catch {
     return false
@@ -69,6 +74,7 @@ function pathEntries(pathEnv: string, delimiter: string): string[] {
 
 function windowsPathExts(value: string | undefined): string[] {
   const source = value?.length ? value : DEFAULT_WINDOWS_EXTENSIONS.join(';')
+
   return [
     ...new Set(
       source
@@ -89,6 +95,7 @@ function candidateFileNames(
   if (platform !== 'win32' || pathApiForPlatform(platform).extname(candidate)) {
     return [candidate]
   }
+
   return windowsPathExts(pathExt).map((suffix) => `${candidate}${suffix}`)
 }
 
@@ -104,9 +111,11 @@ function expandHomePathToken(token: string, platform: NodeJS.Platform, homeDir: 
   if (token === '~') {
     return homeDir
   }
+
   if (token.startsWith('~/') || (platform === 'win32' && token.startsWith('~\\'))) {
     return pathApiForPlatform(platform).join(homeDir, token.slice(2))
   }
+
   return token
 }
 
@@ -120,6 +129,7 @@ async function probePathCandidate(
   if (!isSafeExecutableBasename(candidate)) {
     return null
   }
+
   for (const dir of dirs) {
     for (const fileName of candidateFileNames(candidate, platform, pathExt)) {
       if (await fileProbe.isExecutableFile(pathApiForPlatform(platform).join(dir, fileName))) {
@@ -127,6 +137,7 @@ async function probePathCandidate(
       }
     }
   }
+
   return null
 }
 
@@ -138,8 +149,10 @@ async function maybeHydrateShellPath(options: DetectOptions): Promise<void> {
   if (!options.shouldHydrateShellPath) {
     return
   }
+
   try {
     const result = await (options.hydratePath ?? hydrateShellPath)()
+
     if (result.ok) {
       mergePathSegments(result.segments)
     }
@@ -159,22 +172,29 @@ export async function detectLocalManagedAgentCliPresence(
   const delimiter = options.pathDelimiter ?? pathApiForPlatform(platform).delimiter
   const dirs = pathEntries(options.pathEnv ?? process.env.PATH ?? '', delimiter)
   const homeDir = options.homeDir ?? homedir()
+
   const fileProbe = options.fileProbe ?? {
     isExecutableFile: (filePath: string) => isExecutableFile(filePath, platform)
   }
+
   const candidates = new Set<string>()
+
   for (const target of targets) {
     for (const candidate of target.executableCandidates) {
       if (!hasPathSeparatorToken(candidate)) {
         candidates.add(candidate)
       }
     }
+
     const override = overrideTokenForAgent(settings, target, platform)
+
     if (override && !hasPathSeparatorToken(override)) {
       candidates.add(override)
     }
   }
+
   const found = new Map<string, string>()
+
   for (const candidate of candidates) {
     const executablePath = await probePathCandidate(
       candidate,
@@ -183,31 +203,41 @@ export async function detectLocalManagedAgentCliPresence(
       fileProbe,
       options.pathExt
     )
+
     if (executablePath) {
       found.set(candidate, executablePath)
     }
   }
+
   const result: LocalCliPresenceByAgent = {}
+
   for (const target of targets) {
     const override = overrideTokenForAgent(settings, target, platform)
+
     if (override && hasPathSeparatorToken(override)) {
       const expanded = expandHomePathToken(override, platform, homeDir)
+
       if (!isPlatformAbsolutePath(expanded, platform)) {
         result[target.agent] = { state: 'unknown' }
         continue
       }
+
       result[target.agent] = (await fileProbe.isExecutableFile(expanded))
         ? { state: 'found', executablePath: expanded }
         : { state: 'missing' }
       continue
     }
+
     const targetCandidates = [...target.executableCandidates, ...(override ? [override] : [])]
+
     const executablePath = targetCandidates
       .map((candidate) => found.get(candidate))
       .find((candidate): candidate is string => candidate !== undefined)
+
     result[target.agent] = executablePath
       ? { state: 'found', executablePath }
       : { state: 'missing' }
   }
+
   return result
 }

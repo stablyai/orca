@@ -12,12 +12,14 @@ function startSensor(options: PointerSensorOptions = {}) {
     onMove: vi.fn(),
     onEnd: vi.fn()
   }
+
   new TabDragPointerSensor({
     active: 'tab-1',
     event: new PointerEvent('pointerdown', { clientX: 10, clientY: 10 }),
     options,
     ...callbacks
   } as unknown as SensorProps<PointerSensorOptions>)
+
   return callbacks
 }
 

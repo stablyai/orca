@@ -22,9 +22,11 @@ export function parseAgentHookEndpointFile(contents: string): AgentHookEndpoint 
       .map((line) => {
         const normalizedLine = line.replace(/^set\s+/i, '')
         const [key, ...rest] = normalizedLine.split('=')
+
         return [key, rest.join('=')]
       })
   )
+
   if (
     !values.ORCA_AGENT_HOOK_PORT ||
     !values.ORCA_AGENT_HOOK_TOKEN ||
@@ -33,6 +35,7 @@ export function parseAgentHookEndpointFile(contents: string): AgentHookEndpoint 
   ) {
     throw new Error('Agent hook endpoint file is missing required fields')
   }
+
   return {
     port: values.ORCA_AGENT_HOOK_PORT,
     token: values.ORCA_AGENT_HOOK_TOKEN,

@@ -25,15 +25,18 @@ import type {
 } from './pty-registry'
 
 const LARGE_SESSION_COUNT = 150_000
+
 // Why: the hydrator pulls the daemon provider through this module-level
 // getter. Stubbing it lets us drive the offline / throwing / live paths
 // without spinning up real sockets.
 const getDaemonProviderMock = vi.fn()
+
 vi.mock('../daemon/daemon-init', () => ({
   getDaemonProvider: () => getDaemonProviderMock()
 }))
 
 const getLocalProjectWorktreeGitOptionsMock = vi.fn()
+
 vi.mock('../project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: (store: unknown, repo: unknown) =>
     getLocalProjectWorktreeGitOptionsMock(store, repo)
@@ -44,6 +47,7 @@ vi.mock('../project-runtime-git-options', () => ({
 // unit; the mock also lets count tests prove repos without live sessions
 // launch no Git work.
 const listLocalRepoWorktreesStrictMock = vi.fn()
+
 vi.mock('../repo-worktrees', () => ({
   listLocalRepoWorktreesStrict: (
     repo: unknown,
@@ -72,6 +76,7 @@ function makeStore(
     executionHostId: r.executionHostId ?? null,
     kind: r.kind
   }))
+
   return {
     getRepos: () => built,
     getFolderWorkspaces: (): FolderWorkspace[] => [],
@@ -97,6 +102,7 @@ function makeProviderGroup(adapters: Pick<DaemonPtyAdapter, 'listSessions'>[]): 
 
 function makeLocalSessions(repoId: string, worktreePath: string, count: number): SessionInfo[] {
   const sessions: SessionInfo[] = []
+
   for (let index = 0; index < count; index += 1) {
     const suffix = index.toString(16).padStart(8, '0')
     sessions.push({
@@ -105,6 +111,7 @@ function makeLocalSessions(repoId: string, worktreePath: string, count: number):
       cwd: worktreePath
     } as unknown as SessionInfo)
   }
+
   return sessions
 }
 
@@ -113,9 +120,11 @@ function createDeferred<T>(): {
   resolve: (value: T) => void
 } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolver) => {
     resolve = resolver
   })
+
   return { promise, resolve }
 }
 
@@ -136,6 +145,7 @@ async function loadFresh(): Promise<{
   vi.resetModules()
   const hydrateMod = await import('./hydrate-local-pty-registry')
   const registryMod = await import('./pty-registry')
+
   return {
     hydrate: hydrateMod.hydrateLocalPtyRegistryAtBoot,
     deadlineMs: hydrateMod.LOCAL_PTY_REGISTRY_BOOT_HYDRATION_DEADLINE_MS,
@@ -177,9 +187,11 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
 
   it('catches provider.listSessions rejection and does not throw', async () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
+
     const provider = {
       listSessions: vi.fn().mockRejectedValue(new Error('socket EPIPE'))
     }
+
     getDaemonProviderMock.mockReturnValue(provider)
     listLocalRepoWorktreesStrictMock.mockResolvedValue([
       { path: '/local/Triton', isMainWorktree: true }
@@ -215,9 +227,11 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
   it('retries after worktree enumeration throws', async () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
     const ptyId = 'repo-a::/local/repo-a@@00000001'
+
     const provider = makeProvider([
       { sessionId: ptyId, pid: 4001, cwd: '/local/repo-a' } as unknown as SessionInfo
     ])
+
     getDaemonProviderMock.mockReturnValue(provider)
     listLocalRepoWorktreesStrictMock
       .mockRejectedValueOnce(new Error('git unavailable'))
@@ -257,6 +271,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
       Repo,
       { signal: AbortSignal; wslDistro?: string }
     ]
+
     expect(getLocalProjectWorktreeGitOptionsMock).toHaveBeenCalledWith(store, repo)
     expect(options.wslDistro).toBe('Ubuntu')
     expect(options.signal).toBeInstanceOf(AbortSignal)
@@ -266,12 +281,15 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
   it('resolves by the boot deadline and lets a later call retry stalled enumeration', async () => {
     vi.useFakeTimers()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const { hydrate, deadlineMs, listRegisteredPtys } = await loadFresh()
       const ptyId = 'repo-a::/local/repo-a@@00000001'
+
       const provider = makeProvider([
         { sessionId: ptyId, pid: 4001, cwd: '/local/repo-a' } as unknown as SessionInfo
       ])
+
       const signals: AbortSignal[] = []
       getDaemonProviderMock.mockReturnValue(provider)
       listLocalRepoWorktreesStrictMock
@@ -279,12 +297,14 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
           if (options?.signal) {
             signals.push(options.signal)
           }
+
           return new Promise(() => {})
         })
         .mockImplementation(async (_repo: Repo, options?: { signal?: AbortSignal }) => {
           if (options?.signal) {
             signals.push(options.signal)
           }
+
           return [
             {
               path: '/local/repo-a',
@@ -297,9 +317,11 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
         })
 
       let settled = false
+
       const first = hydrate(makeStore([{ id: 'repo-a' }])).then(() => {
         settled = true
       })
+
       await vi.advanceTimersByTimeAsync(deadlineMs - 1)
       expect(settled).toBe(false)
 
@@ -326,20 +348,24 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     const gate = createDeferred<void>()
     let active = 0
     let maxActive = 0
+
     const sessions = Array.from({ length: repoCount }, (_, index) => {
       const repoId = `repo-${index}`
+
       return {
         sessionId: `${repoId}::/local/${repoId}@@0000000${index}`,
         pid: 4000 + index,
         cwd: `/local/${repoId}`
       } as unknown as SessionInfo
     })
+
     getDaemonProviderMock.mockReturnValue(makeProvider(sessions))
     listLocalRepoWorktreesStrictMock.mockImplementation(async (repo: Repo) => {
       active += 1
       maxActive = Math.max(maxActive, active)
       await gate.promise
       active -= 1
+
       return [
         { path: `/local/${repo.id}`, head: '', branch: '', isBare: false, isMainWorktree: true }
       ]
@@ -348,7 +374,9 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     const hydration = hydrate(
       makeStore(Array.from({ length: repoCount }, (_, index) => ({ id: `repo-${index}` })))
     )
+
     let startedBeforeRelease = 0
+
     try {
       await vi.waitFor(() =>
         expect(listLocalRepoWorktreesStrictMock).toHaveBeenCalledTimes(gitEnumerationConcurrency)
@@ -365,17 +393,21 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
 
   it('registers successful adapter rows but retries a failed adapter', async () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
+
     const sessionA = {
       sessionId: 'repo-a::/local/repo-a@@00000001',
       pid: 4001,
       cwd: '/local/repo-a'
     } as unknown as SessionInfo
+
     const sessionB = {
       sessionId: 'repo-b::/local/repo-b@@00000002',
       pid: 4002,
       cwd: '/local/repo-b'
     } as unknown as SessionInfo
+
     const adapterA = makeProvider([sessionA])
+
     const adapterB = {
       listSessions: vi
         .fn()
@@ -383,6 +415,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
         .mockRejectedValueOnce(new Error('legacy unavailable'))
         .mockResolvedValue([sessionB])
     }
+
     getDaemonProviderMock.mockReturnValue(makeProviderGroup([adapterA, adapterB]))
     listLocalRepoWorktreesStrictMock.mockImplementation(async (repo: Repo) => [
       { path: `/local/${repo.id}`, head: '', branch: '', isBare: false, isMainWorktree: true }
@@ -405,12 +438,15 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
 
   it('retries an all-adapter inventory failure and latches only the complete retry', async () => {
     const { hydrate } = await loadFresh()
+
     const firstAdapter = {
       listSessions: vi.fn().mockRejectedValueOnce(new Error('current down')).mockResolvedValue([])
     }
+
     const secondAdapter = {
       listSessions: vi.fn().mockRejectedValueOnce(new Error('legacy down')).mockResolvedValue([])
     }
+
     getDaemonProviderMock.mockReturnValue(makeProviderGroup([firstAdapter, secondAdapter]))
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -445,6 +481,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
       // stop sampling it on the next tick.
       { sessionId: ptyId, pid: null, cwd: '/local/Triton' } as unknown as SessionInfo
     ])
+
     getDaemonProviderMock.mockReturnValue(provider)
     listLocalRepoWorktreesStrictMock.mockResolvedValue([
       { path: '/local/Triton', head: '', branch: '', isBare: false, isMainWorktree: true }
@@ -462,14 +499,18 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
   it('does not clobber a pty:spawn registration that arrives during worktree enumeration', async () => {
     const { hydrate, listRegisteredPtys, registerPty } = await loadFresh()
     const ptyId = 'repo-a::/local/Triton@@deadbeef'
+
     const provider = makeProvider([
       { sessionId: ptyId, pid: null, cwd: '/local/Triton' } as unknown as SessionInfo
     ])
+
     getDaemonProviderMock.mockReturnValue(provider)
+
     const worktrees =
       createDeferred<
         { path: string; head: string; branch: string; isBare: boolean; isMainWorktree: boolean }[]
       >()
+
     listLocalRepoWorktreesStrictMock.mockReturnValue(worktrees.promise)
 
     const hydration = hydrate(makeStore([{ id: 'repo-a', connectionId: null }]))
@@ -494,6 +535,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
   it('does not resurrect a daemon session that exits during worktree enumeration', async () => {
     const { hydrate, listRegisteredPtys, unregisterPty } = await loadFresh()
     const ptyId = 'repo-a::/local/Triton@@deadbeef'
+
     const provider = {
       listSessions: vi
         .fn()
@@ -502,11 +544,14 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
         ])
         .mockResolvedValueOnce([])
     }
+
     getDaemonProviderMock.mockReturnValue(provider)
+
     const worktrees =
       createDeferred<
         { path: string; head: string; branch: string; isBare: boolean; isMainWorktree: boolean }[]
       >()
+
     listLocalRepoWorktreesStrictMock.mockReturnValue(worktrees.promise)
 
     const hydration = hydrate(makeStore([{ id: 'repo-a', connectionId: null }]))
@@ -525,9 +570,11 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
 
     const ptyId = 'repo-ssh::/remote/Stingray@@feedface'
+
     const provider = makeProvider([
       { sessionId: ptyId, pid: 999, cwd: '/remote/Stingray' } as unknown as SessionInfo
     ])
+
     getDaemonProviderMock.mockReturnValue(provider)
     listLocalRepoWorktreesStrictMock.mockResolvedValue([
       { path: '/remote/Stingray', head: '', branch: '', isBare: false, isMainWorktree: true }
@@ -544,6 +591,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
 
   it('skips paired-runtime repos even when connectionId is absent', async () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
+
     const provider = makeProvider([
       {
         sessionId: 'repo-runtime::/runtime/Stingray@@feedface',
@@ -551,6 +599,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
         cwd: '/runtime/Stingray'
       } as unknown as SessionInfo
     ])
+
     getDaemonProviderMock.mockReturnValue(provider)
 
     await hydrate(makeStore([{ id: 'repo-runtime', executionHostId: 'runtime:environment-1' }]))
@@ -563,9 +612,11 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
 
     const ptyId = 'repo-a::/local/Triton@@cafebabe'
+
     const provider = makeProvider([
       { sessionId: ptyId, pid: 4242, cwd: '/local/Triton' } as unknown as SessionInfo
     ])
+
     getDaemonProviderMock.mockReturnValue(provider)
     listLocalRepoWorktreesStrictMock.mockResolvedValue([
       { path: '/local/Triton', head: '', branch: '', isBare: false, isMainWorktree: true }
@@ -663,8 +714,10 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
 
   it('preserves an exact repo-backed folder instance id from local-host metadata', async () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
+
     const instanceId =
       'folder-repo::/workspace/folder::workspace:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+
     const ptyId = `${instanceId}@@cafebabe`
     getDaemonProviderMock.mockReturnValue(
       makeProvider([
@@ -686,8 +739,10 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
 
   it('accepts legacy unhosted folder-instance metadata for a uniquely local repo', async () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
+
     const instanceId =
       'folder-repo::/workspace/folder::workspace:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+
     const ptyId = `${instanceId}@@cafebabe`
     getDaemonProviderMock.mockReturnValue(
       makeProvider([
@@ -706,8 +761,10 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
 
   it('rejects legacy folder-instance metadata when the repo id also has a remote owner', async () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
+
     const instanceId =
       'folder-repo::/workspace/folder::workspace:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+
     getDaemonProviderMock.mockReturnValue(
       makeProvider([
         {
@@ -738,8 +795,10 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
 
   it('accepts explicit local folder-instance metadata beside a same-id runtime owner', async () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
+
     const instanceId =
       'folder-repo::/workspace/folder::workspace:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+
     const ptyId = `${instanceId}@@cafebabe`
     getDaemonProviderMock.mockReturnValue(
       makeProvider([
@@ -776,10 +835,12 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     'hydrates only an unambiguous local folder workspace (%s)',
     async (host, ownership, expected) => {
       const { hydrate, listRegisteredPtys } = await loadFresh()
+
       const workspace = {
         id: 'folder-workspace-1',
         ...ownership
       } as FolderWorkspace
+
       getDaemonProviderMock.mockReturnValue(
         makeProvider([
           {
@@ -798,18 +859,21 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
       await hydrate(store)
 
       expect(listRegisteredPtys()).toHaveLength(expected ? 1 : 0)
+
       if (expected) {
         expect(listRegisteredPtys()[0]).toMatchObject({
           worktreeId: 'folder:folder-workspace-1',
           pid: 4242
         })
       }
+
       expect(listLocalRepoWorktreesStrictMock).not.toHaveBeenCalled()
     }
   )
 
   it('does not register a daemon session whose worktree was removed', async () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
+
     const provider = makeProvider([
       {
         sessionId: 'repo-a::/local/removed@@deadbeef',
@@ -817,6 +881,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
         cwd: '/local/removed'
       } as unknown as SessionInfo
     ])
+
     getDaemonProviderMock.mockReturnValue(provider)
     listLocalRepoWorktreesStrictMock.mockResolvedValue([
       { path: '/local/current', head: '', branch: '', isBare: false, isMainWorktree: true }
@@ -832,6 +897,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     const { hydrate, listRegisteredPtys } = await loadFresh()
     const repos = Array.from({ length: 100 }, (_, index) => ({ id: `repo-${index}` }))
     const activeRepoIds = ['repo-17', 'repo-83']
+
     const provider = makeProvider(
       activeRepoIds.map(
         (repoId, index) =>
@@ -842,6 +908,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
           }) as unknown as SessionInfo
       )
     )
+
     getDaemonProviderMock.mockReturnValue(provider)
     listLocalRepoWorktreesStrictMock.mockImplementation(async (repo: Repo) => [
       {
@@ -870,11 +937,13 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
       pid: 4001,
       cwd: '/local/repo-a'
     } as unknown as SessionInfo
+
     const sessionB = {
       sessionId: 'repo-b::/local/repo-b@@00000002',
       pid: 4002,
       cwd: '/local/repo-b'
     } as unknown as SessionInfo
+
     // Why: a briefly unreachable adapter can omit a session from the first
     // listing; once it reappears on the re-read its repo must still be
     // scanned and the session registered instead of silently dropped.
@@ -882,6 +951,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
       .fn()
       .mockResolvedValueOnce([sessionA])
       .mockResolvedValue([sessionA, sessionB])
+
     getDaemonProviderMock.mockReturnValue({ listSessions })
     listLocalRepoWorktreesStrictMock.mockImplementation(async (repo: Repo) => [
       { path: `/local/${repo.id}`, head: '', branch: '', isBare: false, isMainWorktree: true }

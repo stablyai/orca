@@ -60,8 +60,11 @@ import {
 } from './wsl-linked-worktree-git-routing'
 
 const REPO = String.raw`C:\repo`
+
 const LINKED = String.raw`C:\ws\linked`
+
 const MOVED = String.raw`C:\ws\moved`
+
 const PREPARED = String.raw`C:\ws\.orca-preparing\wt`
 
 function hasCachedHostRoute(path: string): boolean {

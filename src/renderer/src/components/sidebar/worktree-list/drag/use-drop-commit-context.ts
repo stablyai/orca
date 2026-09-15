@@ -18,12 +18,14 @@ export function useWorktreeDropCommitContext(args: {
   onPinWorktrees: WorktreeDropCommitContext['onPinWorktrees']
 }): WorktreeDropCommitContext {
   const { scrollRef, workspaceStatuses, session, lineageDrop, runtime } = args
+
   const {
     onMoveWorktreesToStatus,
     onMoveWorktreesToStatusAtIndex,
     onReorderWorktrees,
     onPinWorktrees
   } = args
+
   return useMemo<WorktreeDropCommitContext>(
     () => ({
       scrollRef,

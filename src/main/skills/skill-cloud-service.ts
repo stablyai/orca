@@ -30,6 +30,7 @@ function id(value: string): string {
   if (!ID_PATTERN.test(value)) {
     throw new Error('skill-cloud-id-invalid')
   }
+
   return encodeURIComponent(value)
 }
 
@@ -40,10 +41,13 @@ export class SkillCloudService {
     request: SkillCloudPublishRequest
   ): Promise<SkillCloudOperation<SkillCloudPublishResult>> {
     const version = await this.publishVersion(request)
+
     if (version.status !== 'ok') {
       return version
     }
+
     const share = await this.createShare(version.value.packageId, request)
+
     return share.status === 'ok'
       ? { status: 'ok', value: { version: version.value, share: share.value } }
       : share
@@ -59,6 +63,7 @@ export class SkillCloudService {
           policy: { url: string; fields: Record<string, string>; expiresAt: string }
         }
       }
+
       try {
         upload = await skillCloudRequest<typeof upload>({
           apiUrl,
@@ -79,20 +84,25 @@ export class SkillCloudService {
           path: `/v1/skill-packages/${id(request.packageId)}`,
           signal: request.signal
         }).catch(() => null)
+
         const published = existing?.package.versions.find(
           (version) =>
             version.archiveSha256 === request.archiveSha256 &&
             version.compressedBytes === request.compressedBytes
         )
+
         if (published) {
           return published
         }
+
         throw error
       }
+
       const uploadOperation = startSkillPhaseOperation({
         phase: 'upload',
         compressedBytes: request.compressedBytes
       })
+
       try {
         await uploadSkillPackageToSignedPolicy({
           policy: upload.upload.policy,
@@ -114,16 +124,20 @@ export class SkillCloudService {
         uploadOperation.fail(error)
         throw error
       }
+
       request.onProgress?.({
         phase: 'finalizing',
         bytesSent: request.compressedBytes,
         totalBytes: request.compressedBytes
       })
+
       const finalizationOperation = startSkillPhaseOperation({
         phase: 'finalization',
         compressedBytes: request.compressedBytes
       })
+
       let finalized: { version: SkillCloudVersion }
+
       try {
         finalized = await skillCloudRequest<{ version: SkillCloudVersion }>({
           apiUrl,
@@ -134,14 +148,17 @@ export class SkillCloudService {
           idempotencyKey: upload.upload.id,
           signal: request.signal
         })
+
         if (finalized.version.packageId !== request.packageId) {
           throw new Error('skill-cloud-published-package-mismatch')
         }
+
         finalizationOperation.complete({ status: 'complete' })
       } catch (error) {
         finalizationOperation.fail(error)
         throw error
       }
+
       return finalized.version
     })
   }
@@ -166,6 +183,7 @@ export class SkillCloudService {
         idempotencyKey: request.idempotencyKey ?? randomUUID(),
         signal: request.signal
       })
+
       return shared.share
     })
   }
@@ -178,6 +196,7 @@ export class SkillCloudService {
       const result = await skillCloudRequest<{
         share: { id: string; version: SkillCloudVersion }
       }>({ apiUrl, path: `/v1/skill-shares/${id(shareId)}` })
+
       return result.share
     })
   }
@@ -225,6 +244,7 @@ export class SkillCloudService {
         authToken: token,
         path: `/v1/skill-packages/${id(packageId)}`
       })
+
       return result.package
     })
   }
@@ -238,6 +258,7 @@ export class SkillCloudService {
         authToken: token,
         path: '/v1/skill-shares'
       })
+
       return result.shares
     })
   }
@@ -295,6 +316,7 @@ export class SkillCloudService {
     operation: (apiUrl: string) => Promise<T>
   ): Promise<SkillCloudOperation<T>> {
     const value = await operation(resolveArtifactCloudApiUrl(options.apiUrl))
+
     return { status: 'ok', value }
   }
 }

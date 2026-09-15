@@ -44,6 +44,7 @@ describe('daemon-entry parseArgs', () => {
       '--log-file',
       '/tmp/daemon.log'
     ])
+
     expect(result).toEqual({
       socketPath: '/tmp/t.sock',
       tokenPath: '/tmp/t.token',

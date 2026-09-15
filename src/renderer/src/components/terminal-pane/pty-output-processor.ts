@@ -47,16 +47,20 @@ function removeSuppressedCursorNativeTitles(
 ): boolean {
   let writeIndex = 0
   let previousTitle = precedingTitle
+
   for (const title of titles) {
     if (isCursorNativeAgentTitle(title) && shouldSuppressCursorNativeTitle(previousTitle)) {
       continue
     }
+
     previousTitle = normalizeTerminalTitle(title)
     titles[writeIndex] = title
     writeIndex += 1
   }
+
   const removed = writeIndex < titles.length
   titles.length = writeIndex
+
   return removed
 }
 
@@ -71,6 +75,7 @@ export function createPtyOutputProcessor({
 }: PtyOutputProcessorOptions) {
   const bellDetector = createBellDetector()
   let processAgentStatusChunk = createAgentStatusOscProcessor()
+
   const titleObserver = createPtyOutputTitleObserver({
     onTitleChange,
     onAgentBecameIdle,
@@ -78,6 +83,7 @@ export function createPtyOutputProcessor({
     onAgentExited,
     initialAgentTitle
   })
+
   const sideEffects = createPtyOutputSideEffectQueue({
     countWorkingTitles: titleObserver.countWorkingTitles,
     apply: (effect) => {
@@ -86,11 +92,13 @@ export function createPtyOutputProcessor({
           onAgentStatus(payload)
         }
       }
+
       titleObserver.processObservedTitles(
         effect.titles,
         effect.titleScanEffect,
         effect.suppressAttentionEvents
       )
+
       if (onBell && effect.containsBell) {
         onBell()
       }
@@ -104,15 +112,19 @@ export function createPtyOutputProcessor({
   ): void {
     const scannedForTitles = Boolean(onTitleChange && data.includes('\x1b]'))
     const titles = scannedForTitles ? extractAllOscTitles(data) : []
+
     const ignoredCursorNativeTitle = removeSuppressedCursorNativeTitles(
       titles,
       sideEffects.isDrained() ? titleObserver.getLastEmittedTitle() : null
     )
+
     const deliveredPayloads =
       onAgentStatus && !suppressAttentionEvents && payloads.length > 0 ? payloads : []
+
     const containsBell = Boolean(
       onBell && !suppressAttentionEvents && bellDetector.chunkContainsBell(data)
     )
+
     const needsStaleTitleProbe = Boolean(
       onTitleChange &&
       data.length > 0 &&
@@ -121,12 +133,15 @@ export function createPtyOutputProcessor({
       (titleObserver.countWorkingTitles([titleObserver.getLastEmittedTitle() ?? '']) > 0 ||
         sideEffects.pendingWorkingTitleCount() > 0)
     )
+
     const shouldEmitEmptyTitleScan = scannedForTitles || needsStaleTitleProbe
+
     const titleScanEffect: PendingPtySideEffect['titleScanEffect'] = ignoredCursorNativeTitle
       ? 'ignored-cursor-native'
       : shouldEmitEmptyTitleScan
         ? 'stale-probe'
         : 'none'
+
     if (!shouldEmitEmptyTitleScan && deliveredPayloads.length === 0 && !containsBell) {
       return
     }
@@ -148,6 +163,7 @@ export function createPtyOutputProcessor({
         suppressAttentionEvents
       )
     }
+
     sideEffects.scheduleDrain()
   }
 
@@ -167,6 +183,7 @@ export function createPtyOutputProcessor({
         suppressAttentionEvents
       })
     }
+
     if (titles.length === 0 && emptyTitleScanEffect !== 'none') {
       sideEffects.enqueue({
         payloads: [],
@@ -176,6 +193,7 @@ export function createPtyOutputProcessor({
         suppressAttentionEvents
       })
     }
+
     for (const title of titles) {
       sideEffects.enqueue({
         payloads: [],
@@ -185,6 +203,7 @@ export function createPtyOutputProcessor({
         suppressAttentionEvents
       })
     }
+
     if (containsBell) {
       sideEffects.enqueue({
         payloads: [],
@@ -206,6 +225,7 @@ export function createPtyOutputProcessor({
     const suppressAttentionEvents = options.suppressAttentionEvents === true
     const processed = processAgentStatusChunk(data)
     data = processed.cleanData
+
     if (options.replayingBufferedData && callbacks.onReplayData) {
       const replayMeta = {
         ...(options.clearBeforeReplay === false ? { clearBeforeReplay: false } : {}),
@@ -224,6 +244,7 @@ export function createPtyOutputProcessor({
           ? { snapshotCols: options.snapshotCols, snapshotRows: options.snapshotRows }
           : {})
       }
+
       if (Object.keys(replayMeta).length > 0) {
         callbacks.onReplayData(data, replayMeta)
       } else {
@@ -234,6 +255,7 @@ export function createPtyOutputProcessor({
     } else {
       callbacks.onData?.(data)
     }
+
     enqueueSideEffects(data, processed.payloads, suppressAttentionEvents)
   }
 

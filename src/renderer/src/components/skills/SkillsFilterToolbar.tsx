@@ -47,8 +47,10 @@ export function SkillsFilterToolbar({
   onRefresh: () => void
 }): React.JSX.Element {
   const sharedView = view === 'shared'
+
   const filtered =
     filters.query.trim() !== '' || filters.sourceKind !== 'all' || filters.agent !== 'all'
+
   return (
     <section className="shrink-0 border-b border-border">
       <div className={cn(SKILLS_PAGE_COLUMN, 'flex flex-col gap-2 py-3')}>

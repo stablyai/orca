@@ -21,7 +21,9 @@ const { fakeListFiles } = vi.hoisted(() => {
     signal: AbortSignal | undefined
     resolve: (files: string[]) => void
   }
+
   const scans: ScanRecord[] = []
+
   const fakeListFiles = Object.assign(
     vi.fn(
       (
@@ -47,11 +49,13 @@ const { fakeListFiles } = vi.hoisted(() => {
     ),
     { scans }
   )
+
   return { fakeListFiles }
 })
 
 vi.mock('./fs-handler-utils', async (importOriginal) => {
   const original = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...original,
     listFilesWithRg: fakeListFiles
@@ -88,6 +92,7 @@ describe('Integration: cancellable fs.listFiles (#7721)', () => {
 
     let relayFeedFn: (data: Buffer) => void
     const clientDataCallbacks: ((data: Buffer) => void)[] = []
+
     const clientTransport: MultiplexerTransport = {
       write: (data: Buffer) => {
         setImmediate(() => relayFeedFn?.(data))
@@ -97,6 +102,7 @@ describe('Integration: cancellable fs.listFiles (#7721)', () => {
       },
       onClose: () => {}
     }
+
     dispatcher = new RelayDispatcher((data: Buffer) => {
       setImmediate(() => {
         for (const cb of clientDataCallbacks) {
@@ -133,11 +139,13 @@ describe('Integration: cancellable fs.listFiles (#7721)', () => {
 
   it('client abort sends rpc.cancel and stops the relay-side scan', async () => {
     const controller = new AbortController()
+
     const scanPromise = mux.request(
       'fs.listFiles',
       { rootPath: '/big/workspace' },
       { signal: controller.signal }
     )
+
     await flushPipe()
     expect(fakeListFiles.scans).toHaveLength(1)
     expect(fakeListFiles.scans[0].signal?.aborted).toBe(false)
@@ -152,12 +160,14 @@ describe('Integration: cancellable fs.listFiles (#7721)', () => {
 
   it('a scan for a different workspace supersedes the previous scan', async () => {
     const first = mux.request('fs.listFiles', { rootPath: '/workspace/a' })
+
     // Attach the rejection handler up front: the error response arrives on a
     // macrotask inside flushPipe, before any later `await expect` could.
     const firstOutcome = first.then(
       () => null,
       (err: Error) => err
     )
+
     await flushPipe()
     expect(fakeListFiles.scans).toHaveLength(1)
 
@@ -188,11 +198,13 @@ describe('Integration: cancellable fs.listFiles (#7721)', () => {
 
   it('cancelling one coalesced requester keeps the scan alive for the other', async () => {
     const controller = new AbortController()
+
     const first = mux.request(
       'fs.listFiles',
       { rootPath: '/workspace/a' },
       { signal: controller.signal }
     )
+
     const second = mux.request('fs.listFiles', { rootPath: '/workspace/a' })
     await flushPipe()
     expect(fakeListFiles.scans).toHaveLength(1)

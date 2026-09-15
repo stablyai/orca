@@ -61,9 +61,11 @@ export function readSentinelWeightProbe(
       }
     }
   }
+
   const atlas = term._core?._renderService?._renderer?.value?._charAtlas
   const config = atlas?._config
   const census = countBoldTextCells(buffer, rows, cols)
+
   return {
     optionsFontWeight: stringOrNull(term.options?.fontWeight),
     optionsFontWeightBold: stringOrNull(term.options?.fontWeightBold),
@@ -104,23 +106,28 @@ export function auditPaneWeightParity(
   if (!settings) {
     return
   }
+
   const expected = resolveTerminalFontWeights(
     settings.terminalFontWeight,
     settings.terminalFontWeightBold
   )
+
   for (const pane of panes) {
     if (hasDeferredPaneMetricOptions(pane)) {
       continue
     }
+
     const live = pane.terminal.options
     const liveWeight = stringOrNull(live.fontWeight)
     const liveBold = stringOrNull(live.fontWeightBold)
+
     if (
       liveWeight === String(expected.fontWeight) &&
       liveBold === String(expected.fontWeightBold)
     ) {
       continue
     }
+
     recordTerminalWebglDiagnostic('terminal-weight-parity-mismatch', {
       paneId: pane.id,
       liveFontWeight: liveWeight,
@@ -144,28 +151,38 @@ function countBoldTextCells(
 ): { bold: number; total: number } {
   let bold = 0
   let total = 0
+
   if (!buffer) {
     return { bold, total }
   }
+
   for (let row = 0; row < rows; row++) {
     const line = buffer.getLine(buffer.viewportY + row)
+
     if (!line) {
       continue
     }
+
     for (let column = 0; column < cols; column++) {
       const cell = line.getCell(column) as BoldReadableCell | undefined
+
       if (!cell) {
         break
       }
+
       const chars = cell.getChars()
+
       if (chars === '' || chars === ' ' || cell.getWidth() === 0) {
         continue
       }
+
       total++
+
       if (cell.isBold?.()) {
         bold++
       }
     }
   }
+
   return { bold, total }
 }

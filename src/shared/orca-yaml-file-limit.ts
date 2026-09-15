@@ -1,10 +1,15 @@
 import { measureUtf8ByteLength } from './utf8-byte-limits'
 
 export const MAX_ORCA_YAML_BYTES = 256 * 1024
+
 export const MAX_ORCA_YAML_CODE_UNITS = 256 * 1024
+
 export const MAX_ORCA_YAML_FIELD_BYTES = 64 * 1024
+
 export const MAX_ORCA_YAML_FIELD_CODE_UNITS = 64 * 1024
+
 export const MAX_ORCA_YAML_COLLECTION_ENTRIES = 256
+
 // The yaml parser rejects on `useCount * subtreeAliasCount`, so exponential expansion is caught by
 // the multiplication regardless of this value; lowering it only rejects flat, linear reuse. Keep the
 // library default so an orca.yaml that merges one anchor into many tabs still parses.

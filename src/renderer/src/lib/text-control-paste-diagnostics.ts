@@ -98,6 +98,7 @@ export function createTextControlRejectedResult(
   durationMs: number
 ): TextControlPasteResult {
   const diagnosticMetadata = typeof metadata === 'number' ? { byteLength: metadata } : metadata
+
   return {
     status: 'rejected',
     reason,

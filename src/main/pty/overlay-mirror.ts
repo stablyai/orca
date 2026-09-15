@@ -32,14 +32,17 @@ export function mirrorEntry(sourcePath: string, targetPath: string): void {
   if (process.platform === 'win32') {
     if (isDirectoryLike) {
       symlinkSync(sourcePath, targetPath, 'junction')
+
       return
     }
 
     try {
       linkSync(sourcePath, targetPath)
+
       return
     } catch {
       cpSync(sourcePath, targetPath)
+
       return
     }
   }
@@ -51,6 +54,7 @@ export function mirrorWritableFileEntry(sourcePath: string, targetPath: string):
   if (process.platform === 'win32') {
     try {
       linkSync(sourcePath, targetPath)
+
       return
     } catch {
       // Cross-device homes cannot hardlink; try a file symlink so writable
@@ -59,6 +63,7 @@ export function mirrorWritableFileEntry(sourcePath: string, targetPath: string):
 
     try {
       symlinkSync(sourcePath, targetPath, 'file')
+
       return
     } catch {
       throw new Error(`Unable to create source-backed writable file mirror: ${targetPath}`)
@@ -80,6 +85,7 @@ export function isSafeDescendCandidate(stats: {
   if (stats.isSymbolicLink()) {
     return false
   }
+
   return stats.isDirectory()
 }
 
@@ -91,6 +97,7 @@ export function isSafeDescendCandidate(stats: {
 // itself; only entries that are truly directories on disk are recursed into.
 export function safeRemoveTree(path: string): void {
   let stat
+
   try {
     stat = lstatSync(path)
   } catch {
@@ -108,10 +115,12 @@ export function safeRemoveTree(path: string): void {
       // Best-effort: antivirus/indexers can hold handles briefly on Windows.
       // A leftover link is harmless; the next spawn rebuilds the overlay.
     }
+
     return
   }
 
   let entries
+
   try {
     entries = readdirSync(path, { withFileTypes: true })
   } catch {
@@ -120,10 +129,12 @@ export function safeRemoveTree(path: string): void {
 
   for (const entry of entries) {
     const child = join(path, entry.name)
+
     if (isSafeDescendCandidate(entry)) {
       safeRemoveTree(child)
       continue
     }
+
     try {
       unlinkSync(child)
     } catch {
@@ -147,11 +158,14 @@ export function safeRemoveOverlay(overlayDir: string, overlayRoot: string): void
   const resolvedRoot = resolve(overlayRoot)
   const resolvedTarget = resolve(overlayDir)
   const rel = relative(resolvedRoot, resolvedTarget)
+
   if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     console.warn(
       `[overlay-mirror] refusing to remove overlay outside root: target=${resolvedTarget} root=${resolvedRoot}`
     )
+
     return
   }
+
   safeRemoveTree(resolvedTarget)
 }

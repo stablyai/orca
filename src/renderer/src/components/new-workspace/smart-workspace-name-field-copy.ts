@@ -47,7 +47,9 @@ export function getSmartWorkspaceNameFieldCopy({
             'auto.components.new.workspace.SmartWorkspaceNameField.placeholderSmartGitLab',
             'Type a name, #1234, GitHub, GitLab, or Jira URL'
           )
+
   const crossRepoSwitchIsTaskSource = crossRepoSwitchTarget === 'task-source'
+
   const crossRepoSwitchTitle = crossRepoSwitchIsTaskSource
     ? translate(
         'auto.components.new.workspace.SmartWorkspaceNameField.switchTaskSourceTitle',
@@ -57,6 +59,7 @@ export function getSmartWorkspaceNameFieldCopy({
         'auto.components.new.workspace.SmartWorkspaceNameField.4bd98f1091',
         'Switch project?'
       )
+
   const crossRepoSwitchDescriptionSuffix = crossRepoSwitchIsTaskSource
     ? translate(
         'auto.components.new.workspace.SmartWorkspaceNameField.differentTaskSource',
@@ -66,6 +69,7 @@ export function getSmartWorkspaceNameFieldCopy({
         'auto.components.new.workspace.SmartWorkspaceNameField.9ef1a7c4b0',
         ', which is different from the selected project.'
       )
+
   const crossRepoSwitchFallbackLabel = crossRepoSwitchIsTaskSource
     ? translate(
         'auto.components.new.workspace.SmartWorkspaceNameField.currentTaskSource',
@@ -75,6 +79,7 @@ export function getSmartWorkspaceNameFieldCopy({
         'auto.components.new.workspace.SmartWorkspaceNameField.fda67f0b61',
         'current project'
       )
+
   const placeholder = disabled
     ? (disabledPlaceholder ??
       translate('auto.components.new.workspace.SmartWorkspaceNameField.unavailable', 'Unavailable'))

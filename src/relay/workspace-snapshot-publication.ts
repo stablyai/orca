@@ -12,14 +12,18 @@ const stalePublishers = new WeakMap<RelayDispatcher, RelayClientResyncMarkerPubl
 
 function stalePublisher(dispatcher: RelayDispatcher): RelayClientResyncMarkerPublisher {
   const existing = stalePublishers.get(dispatcher)
+
   if (existing) {
     return existing
   }
+
   const publisher = createRelayClientResyncMarkerPublisher(
     dispatcher,
     REMOTE_WORKSPACE_STALE_NOTIFICATION
   )
+
   stalePublishers.set(dispatcher, publisher)
+
   return publisher
 }
 
@@ -44,6 +48,7 @@ export function publishWorkspaceSnapshotChange(
     ) {
       continue
     }
+
     stalePublisher(dispatcher).emit(clientId, namespace, { namespace })
   }
 }

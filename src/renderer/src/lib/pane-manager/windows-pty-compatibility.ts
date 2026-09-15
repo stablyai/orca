@@ -24,10 +24,13 @@ function isWslShellOverride(shellOverride: string | null | undefined): boolean {
 
 function parseWindowsBuildNumber(osRelease: string | null | undefined): number | undefined {
   const build = osRelease?.split('.')[2]
+
   if (!build) {
     return undefined
   }
+
   const parsed = Number.parseInt(build, 10)
+
   return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
@@ -39,6 +42,7 @@ function buildXtermWindowsPtyOptions(
   if (buildNumber === undefined || buildNumber < 21376) {
     return { backend: 'conpty' }
   }
+
   return { backend: 'conpty', buildNumber }
 }
 
@@ -56,6 +60,7 @@ export function buildWindowsPtyCompatibilityOptions(
   if (!isLocalNativeWindowsConpty(context)) {
     return {}
   }
+
   return buildLocalConptyTerminalOptions(context.osRelease)
 }
 

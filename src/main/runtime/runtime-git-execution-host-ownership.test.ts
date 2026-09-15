@@ -37,6 +37,7 @@ function remoteCommands(): RuntimeGitCommands {
     path: '/remote/repo',
     git: { path: '/remote/repo', branch: 'main', isBare: false, isMainWorktree: false }
   } as unknown as ResolvedRuntimeGitWorktree
+
   return new RuntimeGitCommands({
     resolveRuntimeGitTarget: async () => ({ worktree, executionHostId: 'ssh:ssh-1' }),
     getRuntimeSettings: () => ({}) as GlobalSettings

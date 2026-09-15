@@ -158,6 +158,7 @@ describe('WorktreeList keyboard cycling', () => {
       fileURLToPath(new URL('./worktree-list/navigation/use-keyboard.ts', import.meta.url)),
       'utf8'
     )
+
     const navigateWorktree = source.slice(
       source.indexOf('const navigateWorktree = useCallback('),
       source.indexOf('const handleContainerKeyDown = useCallback(')

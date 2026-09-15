@@ -54,13 +54,16 @@ export async function prepareEphemeralVmWorkspaceTarget(
     ...(args.ref ? { ref: args.ref } : {}),
     ...(args.provisionId ? { provisionId: args.provisionId } : {})
   })
+
   if (!provisioned.ok) {
     return { ok: false, error: provisioned.error, stderr: provisioned.stderr }
   }
 
   const checkoutMode = getEphemeralVmRecipeResultCheckoutMode(provisioned.runtime.recipeResult)
+
   if (checkoutMode === 'provisioned-root' && provisioned.connectionType !== 'ssh') {
     await cleanupProvisionedRuntime(provisioned.runtime.id)
+
     return {
       ok: false,
       error: translate(
@@ -85,6 +88,7 @@ export async function prepareEphemeralVmWorkspaceTarget(
       )
     } catch (error) {
       await cleanupProvisionedRuntime(provisioned.runtime.id)
+
       return {
         ok: false,
         error: error instanceof Error ? error.message : String(error),
@@ -94,6 +98,7 @@ export async function prepareEphemeralVmWorkspaceTarget(
   }
 
   let setup: ProjectHostSetupResult | null
+
   try {
     setup = await args.setupExistingFolder({
       projectId: args.projectId,
@@ -103,14 +108,17 @@ export async function prepareEphemeralVmWorkspaceTarget(
     })
   } catch (error) {
     await cleanupProvisionedRuntime(provisioned.runtime.id)
+
     return {
       ok: false,
       error: error instanceof Error ? error.message : String(error),
       stderr: provisioned.stderr
     }
   }
+
   if (!setup) {
     await cleanupProvisionedRuntime(provisioned.runtime.id)
+
     return {
       ok: false,
       error: translate(
@@ -120,6 +128,7 @@ export async function prepareEphemeralVmWorkspaceTarget(
       stderr: provisioned.stderr
     }
   }
+
   setup = {
     ...setup,
     setup: {

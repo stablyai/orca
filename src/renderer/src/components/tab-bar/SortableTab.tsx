@@ -98,6 +98,7 @@ export default function SortableTab({
       unreadAgentCompletionPanes: s.unreadAgentCompletionPanes
     })
   )
+
   // Why: resolver returns a primitive so unrelated agent updates can't repaint this tab (pane bucketing memoized per snapshot).
   const activityStatus = useAppStore((s) =>
     resolveTerminalTabActivityStatus({
@@ -129,6 +130,7 @@ export default function SortableTab({
   // Why: no transform/transition/opacity so tabs stay anchored during drag, only the insertion bar moves (see TabBar.tsx).
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
+
   const {
     isEditing,
     renameValue,
@@ -143,6 +145,7 @@ export default function SortableTab({
     customTitle: tab.customTitle,
     onSetCustomTitle
   })
+
   // Why: a live working/needs-input state is newer than a prior-turn unread, so it owns the icon until the turn ends.
   const showUnreadActivity =
     hasUnreadActivity && !isEditing && !isTerminalTabActivityLive(activityStatus)
@@ -150,6 +153,7 @@ export default function SortableTab({
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
 
@@ -158,24 +162,30 @@ export default function SortableTab({
     if (!menuOpen) {
       return
     }
+
     const dismiss = (): void => setMenuOpen(false)
     window.addEventListener('blur', dismiss)
+
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
 
   // Why: while editing, drop drag listeners so typing can't start a drag; attributes stay spread to keep dnd-kit a11y.
   const dragListeners = isEditing ? undefined : listeners
+
   const handleActivate = useCallback(() => {
     onActivate(tab.id)
   }, [onActivate, tab.id])
+
   // Why: defer activation to pointer-up so a drag doesn't switch tabs or steal focus mid-gesture (tab-strip-pointer-activation).
   const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
     onActivate: handleActivate,
     disabled: isEditing
   })
+
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const closeLabel = translate('auto.components.tab.bar.SortableTab.95db5f2f7d', 'Close tab')
   const tabTitle = tab.customTitle ?? tab.title
+
   const tabRoot = (
     <div
       ref={setNodeRef}
@@ -194,6 +204,7 @@ export default function SortableTab({
         if (isEditing) {
           return
         }
+
         e.stopPropagation()
         handleRenameOpen()
       }}
@@ -214,12 +225,15 @@ export default function SortableTab({
         if (isEditing) {
           return
         }
+
         if (e.button === 1) {
           e.preventDefault()
           e.stopPropagation()
+
           if (isPinned) {
             return
           }
+
           onClose(tab.id)
         }
       }}
@@ -256,6 +270,7 @@ export default function SortableTab({
             if (isImeCompositionKeyDown(event)) {
               return
             }
+
             if (event.key === 'Enter') {
               event.preventDefault()
               commitRename()
@@ -269,6 +284,7 @@ export default function SortableTab({
           onMouseDown={(event) => {
             // Why: stopPropagation avoids outer tab activation/drag; preventDefault on middle-click blocks Linux X11 paste.
             event.stopPropagation()
+
             if (event.button === 1) {
               event.preventDefault()
             }

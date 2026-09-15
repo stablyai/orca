@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
 
 const PROCESS_TABLE_TIMEOUT_MS = 1_000
+
 const PROCESS_TABLE_MAX_BYTES = 1024 * 1024
 
 type ProcessRow = {
@@ -28,9 +29,11 @@ function runPs(args: string[]): string {
 function readPtyProcessTable(rootPid: number): string {
   const root = runPs(['-p', String(rootPid), '-o', 'pid=,pgid=,tty='])
   const rootRow = parseProcessRows(root).find((row) => row.pid === rootPid)
+
   if (!rootRow || rootRow.tty === '?' || rootRow.tty === '??') {
     return root
   }
+
   // Why: a whole-host `ps -ax` takes nearly a second on large machines. TTY
   // selection keeps forced terminal teardown proportional to one terminal.
   return `${root}\n${runPs(['-t', rootRow.tty, '-o', 'pid=,pgid=,tty='])}`
@@ -38,17 +41,22 @@ function readPtyProcessTable(rootPid: number): string {
 
 function parseProcessRows(output: string): ProcessRow[] {
   const rows: ProcessRow[] = []
+
   for (const line of output.split(/\r?\n/)) {
     const match = /^\s*(\d+)\s+(\d+)\s+(\S+)/.exec(line)
+
     if (!match) {
       continue
     }
+
     const pid = Number(match[1])
     const pgid = Number(match[2])
+
     if (pid > 0 && pgid > 1) {
       rows.push({ pid, pgid, tty: match[3] })
     }
   }
+
   return rows
 }
 
@@ -59,25 +67,32 @@ export function getPosixPtyProcessGroups(
 ): number[] | null {
   const rows = parseProcessRows(output)
   const root = rows.find((row) => row.pid === rootPid)
+
   if (!root || root.tty === '?' || root.tty === '??') {
     return null
   }
+
   // Why: a development daemon can inherit its launch TTY. Never group-signal
   // when Orca itself shares the PTY; fall back to the already-scoped root kill.
   if (rows.some((row) => row.pid === currentPid && row.tty === root.tty)) {
     return null
   }
+
   const groups = new Set(rows.filter((row) => row.tty === root.tty).map((row) => row.pgid))
+
   if (!groups.has(root.pgid)) {
     return null
   }
+
   return [...groups].sort((left, right) => {
     if (left === root.pgid) {
       return 1
     }
+
     if (right === root.pgid) {
       return -1
     }
+
     return left - right
   })
 }
@@ -94,9 +109,12 @@ export function forceKillPosixPtyProcessGroups(
 ): void {
   if ((deps.platform ?? process.platform) === 'win32') {
     fallback()
+
     return
   }
+
   let groups: number[] | null
+
   try {
     groups = getPosixPtyProcessGroups(
       (deps.readProcessTable ?? (() => readPtyProcessTable(rootPid)))(),
@@ -106,14 +124,18 @@ export function forceKillPosixPtyProcessGroups(
   } catch {
     groups = null
   }
+
   if (!groups || groups.length === 0) {
     fallback()
+
     return
   }
 
   const signalProcessGroup =
     deps.signalProcessGroup ?? ((pgid: number) => process.kill(-pgid, 'SIGKILL'))
+
   let firstError: unknown
+
   for (const pgid of groups) {
     try {
       signalProcessGroup(pgid)
@@ -123,8 +145,10 @@ export function forceKillPosixPtyProcessGroups(
       if (!isProcessAlreadyGone(error) && firstError === undefined) {
         firstError = error
       }
+
       continue
     }
+
     // Outside the try: this catch is the ESRCH contract, and a throw from the
     // breadcrumb path would be rethrown as a failed kill.
     recordSelfInitiatedTreeKill({
@@ -133,6 +157,7 @@ export function forceKillPosixPtyProcessGroups(
       scope: 'posix-process-group'
     })
   }
+
   if (firstError !== undefined) {
     throw firstError
   }

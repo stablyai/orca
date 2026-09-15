@@ -6,16 +6,21 @@ import type * as TranscriptTailReader from './transcript-tail-reader'
 
 const { tailRead, tailReadStarted, rejectTailRead } = vi.hoisted(() => {
   let markStarted = (): void => {}
+
   let reject = (_error: Error): void => {}
+
   const started = new Promise<void>((resolve) => {
     markStarted = resolve
   })
+
   const read = new Promise<never>((_resolve, rejectPromise) => {
     reject = rejectPromise
   })
+
   return {
     tailRead: vi.fn(() => {
       markStarted()
+
       return read
     }),
     tailReadStarted: started,
@@ -25,6 +30,7 @@ const { tailRead, tailReadStarted, rejectTailRead } = vi.hoisted(() => {
 
 vi.mock('./transcript-tail-reader', async () => {
   const actual = await vi.importActual<typeof TranscriptTailReader>('./transcript-tail-reader')
+
   return { ...actual, readNativeChatTranscriptTailFile: tailRead }
 })
 
@@ -46,6 +52,7 @@ describe('native chat transcript watcher unsubscribe race', () => {
     await writeFile(filePath, '{}\n')
     const snapshots = vi.fn()
     const activeBefore = getActiveNativeChatWatcherCount()
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'session',
@@ -56,6 +63,7 @@ describe('native chat transcript watcher unsubscribe race', () => {
       debounceMs: 0,
       reconciliationIntervalMs: 10_000
     })
+
     await tailReadStarted
 
     subscription.unsubscribe()

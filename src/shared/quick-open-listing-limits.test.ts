@@ -29,6 +29,7 @@ describe('Quick Open listing limits', () => {
 
   it('accepts the exact retained path boundaries without charging duplicates', () => {
     const paths = new Set<string>()
+
     const budget = createQuickOpenListingBudget({
       maxRetainedPaths: 2,
       maxRetainedPathBytes: 3,
@@ -44,11 +45,13 @@ describe('Quick Open listing limits', () => {
 
   it('rejects path-byte overflow without mutating the retained budget', () => {
     const paths = new Set<string>()
+
     const budget = createQuickOpenListingBudget({
       maxRetainedPaths: 3,
       maxRetainedPathBytes: 2,
       maxPathBytes: 2
     })
+
     retainQuickOpenPath(paths, 'ab', budget)
 
     expect(() => retainQuickOpenPath(paths, 'c', budget)).toThrow('2 retained path bytes')
@@ -74,6 +77,7 @@ describe('Quick Open listing limits', () => {
     expect(
       fields.push(Buffer.from('one\0two\0three\0'), (path) => {
         visited.push(path)
+
         return path !== 'two'
       })
     ).toBe('stopped')

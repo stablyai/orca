@@ -51,6 +51,7 @@ describe('partitionLegacyAutomationList', () => {
       [automation({ executionTargetType: 'ssh', executionTargetId: 'ssh-1' })],
       context
     ).rows
+
     expect(row?.selector).toEqual({ kind: 'ssh', targetId: 'ssh-1' })
   })
 
@@ -63,6 +64,7 @@ describe('partitionLegacyAutomationList', () => {
       ],
       context
     )
+
     expect(partition.rows.map((row) => row.selector.kind)).toEqual(['orphan', 'orphan', 'orphan'])
     expect(partition.rows[2]?.selector).toEqual({
       kind: 'orphan',
@@ -76,6 +78,7 @@ describe('partitionLegacyAutomationList', () => {
       [automation({ schedulerOwner: 'remote_host_service' })],
       context
     )
+
     expect(partition.rows[0]?.selector).toEqual({
       kind: 'orphan',
       issue: AUTOMATION_ORPHAN_ISSUES.scheduledElsewhere
@@ -87,6 +90,7 @@ describe('partitionLegacyAutomationList', () => {
       [automation({ projectId: 'repo-gone' })],
       mirroredContext
     )
+
     expect(partition.rows[0]?.selector).toEqual({
       kind: 'orphan',
       issue: AUTOMATION_ORPHAN_ISSUES.projectUnverified
@@ -103,6 +107,7 @@ describe('partitionLegacyAutomationList', () => {
       [automation({ projectId: 'repo-ssh' })],
       context
     )
+
     expect(partition.rows[0]?.selector).toEqual({
       kind: 'orphan',
       issue: AUTOMATION_ORPHAN_ISSUES.malformed

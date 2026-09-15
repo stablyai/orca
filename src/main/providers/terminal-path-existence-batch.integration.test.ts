@@ -6,7 +6,9 @@ import { pathsExistOnRelay } from '../../relay/fs-path-existence'
 import { statRelayPath } from '../../relay/fs-path-metadata-requests'
 import { readSshPathExistenceBatch } from './ssh-filesystem-path-existence'
 import { JsonRpcErrorCode } from '../ssh/relay-protocol'
+
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => Promise<unknown>>())
+
 vi.mock('electron', () => ({
   ipcMain: {
     handle: (name: string, fn: (...args: unknown[]) => Promise<unknown>) => handlers.set(name, fn)
@@ -14,21 +16,28 @@ vi.mock('electron', () => ({
   shell: {},
   dialog: {}
 }))
+
 import { registerShellHandlers } from '../ipc/shell'
+
 let root: string | undefined
+
 afterEach(async () => {
   if (root) {
     await rm(root, { recursive: true, force: true })
   }
+
   root = undefined
   handlers.clear()
 })
+
 async function fixture() {
   root = await mkdtemp(join(tmpdir(), 'orca-link-batch-'))
   const paths = Array.from({ length: 8 }, (_, i) => join(root!, `file-${i}.ts`))
   await Promise.all(paths.map((path) => writeFile(path, 'fixture')))
+
   return paths
 }
+
 it('one actual shell IPC handler probes eight distinct temporary files and retains scalar answers', async () => {
   const paths = await fixture()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This registration fixture never invokes unrelated store operations.
@@ -46,11 +55,14 @@ it('one actual shell IPC handler probes eight distinct temporary files and retai
     'Invalid'
   )
 })
+
 it('one real relay batch serves eight distinct SSH paths after one shared capability probe', async () => {
   const paths = await fixture()
+
   const request = vi.fn(async (method: string, params: Record<string, unknown>) =>
     method === 'fs.getCapabilities' ? { pathExistenceBatchVersion: 1 } : pathsExistOnRelay(params)
   )
+
   const scalar = vi.fn((path: string) => statRelayPath({ filePath: path }))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture implements request, the only multiplexer operation exercised here.
   const mux = { request } as never
@@ -65,13 +77,16 @@ it('one real relay batch serves eight distinct SSH paths after one shared capabi
   expect(await readSshPathExistenceBatch(mux, [paths[0]], scalar)).toEqual([{ exists: true }])
   expect(request.mock.calls.filter((c) => c[0] === 'fs.getCapabilities')).toHaveLength(1)
 })
+
 it('old relay falls back on the same host without retrying a missing capability document', async () => {
   const paths = await fixture()
+
   const request = vi
     .fn()
     .mockRejectedValue(
       Object.assign(new Error('method not found'), { code: JsonRpcErrorCode.MethodNotFound })
     )
+
   const scalar = vi.fn((path: string) => statRelayPath({ filePath: path }))
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture implements request, the only multiplexer operation exercised here.
   const mux = { request } as never
@@ -82,6 +97,7 @@ it('old relay falls back on the same host without retrying a missing capability 
   await readSshPathExistenceBatch(mux, [paths[0]], scalar)
   expect(request).toHaveBeenCalledTimes(1)
 })
+
 it('connection failure is neither a missing path nor permission to use local/scalar fallback', async () => {
   const scalar = vi.fn()
   const request = vi.fn().mockRejectedValue(new Error('connection closed'))
@@ -99,12 +115,15 @@ it('connection failure is neither a missing path nor permission to use local/sca
   ])
   expect(request).toHaveBeenCalledTimes(3)
 })
+
 it('malformed batch replies fail rather than manufacturing negative cache entries', async () => {
   const scalar = vi.fn()
+
   const request = vi
     .fn()
     .mockResolvedValueOnce({ pathExistenceBatchVersion: 1 })
     .mockResolvedValueOnce([])
+
   await expect(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture implements request, the only multiplexer operation exercised here.
     readSshPathExistenceBatch({ request } as never, ['/remote/path'], scalar)

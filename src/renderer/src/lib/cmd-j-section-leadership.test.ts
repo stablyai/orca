@@ -123,12 +123,14 @@ describe('ranked item comparison', () => {
       identity: 'z',
       activity: { ageBucket: 0, timestamp: 2000 }
     }
+
     const older = {
       rank: rank(),
       order: 0,
       identity: 'a',
       activity: { ageBucket: 0, timestamp: 1000 }
     }
+
     expect(comparePaletteRankedItems(recent, older)).toBeLessThan(0)
   })
 

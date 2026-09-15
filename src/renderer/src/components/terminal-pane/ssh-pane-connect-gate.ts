@@ -24,6 +24,7 @@ export function resolveSshPaneConnectGate(input: {
   hasLeafSessionMap: boolean
 }): SshPaneConnectGate {
   const sshConnected = input.sshStatus === 'connected'
+
   // Why: the deferred maps can miss a tab (e.g. activeConnectionIdsAtShutdown
   // wasn't persisted, so restore registered no deferred target). The tab's own
   // restored app SSH pty id still names the session — reattach it rather than
@@ -37,11 +38,14 @@ export function resolveSshPaneConnectGate(input: {
     parseAppSshPtyId(input.tabPtyId)?.connectionId === input.connectionId
       ? input.tabPtyId
       : null
+
   const pendingSessionId =
     input.restoredLeafSessionId ?? input.deferredTabSessionId ?? fallbackTabSessionId ?? null
+
   // Why: runtime-owned targets are excluded — their relay health is owned by
   // the runtime layer and users cannot connect to them directly.
   const needsConnectBeforeSpawn = !sshConnected && !isRuntimeOwnedSshTargetId(input.connectionId)
+
   return {
     pendingSessionId,
     enterDeferredFlow:

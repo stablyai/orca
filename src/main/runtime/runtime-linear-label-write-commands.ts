@@ -16,16 +16,21 @@ export class RuntimeLinearLabelWriteCommands extends RuntimeLinearProjectWriteCo
     workspaceId: string
   ): Promise<{ id: string; name: string }[]> {
     const labels = await this.getLinearTeamLabelsForWrite(issue.team.id, workspaceId)
+
     const resolved = inputs.map((input) => {
       const normalized = input.toLocaleLowerCase()
       const idMatch = labels.find((label) => label.id.toLocaleLowerCase() === normalized)
+
       if (idMatch) {
         return { id: idMatch.id, name: idMatch.name }
       }
+
       const nameMatches = labels.filter((label) => label.name.toLocaleLowerCase() === normalized)
+
       if (nameMatches.length === 1) {
         return { id: nameMatches[0].id, name: nameMatches[0].name }
       }
+
       throw linearError(
         'linear_invalid_label',
         nameMatches.length === 0
@@ -37,6 +42,7 @@ export class RuntimeLinearLabelWriteCommands extends RuntimeLinearProjectWriteCo
         }
       )
     })
+
     return Array.from(new Map(resolved.map((label) => [label.id, label])).values())
   }
 
@@ -46,16 +52,21 @@ export class RuntimeLinearLabelWriteCommands extends RuntimeLinearProjectWriteCo
     workspaceId: string
   ): Promise<{ id: string; name: string }[]> {
     const labels = await this.getLinearTeamLabelsForWrite(teamId, workspaceId)
+
     const resolved = inputs.map((input) => {
       const normalized = input.toLocaleLowerCase()
       const idMatch = labels.find((label) => label.id.toLocaleLowerCase() === normalized)
+
       if (idMatch) {
         return { id: idMatch.id, name: idMatch.name }
       }
+
       const nameMatches = labels.filter((label) => label.name.toLocaleLowerCase() === normalized)
+
       if (nameMatches.length === 1) {
         return { id: nameMatches[0].id, name: nameMatches[0].name }
       }
+
       throw linearError(
         'linear_invalid_label',
         nameMatches.length === 0
@@ -64,6 +75,7 @@ export class RuntimeLinearLabelWriteCommands extends RuntimeLinearProjectWriteCo
         { labels: labels.map((label) => ({ id: label.id, name: label.name })) }
       )
     })
+
     return Array.from(new Map(resolved.map((label) => [label.id, label])).values())
   }
 
@@ -83,19 +95,25 @@ export class RuntimeLinearLabelWriteCommands extends RuntimeLinearProjectWriteCo
     if (operation === 'assignee') {
       return (record.assignee?.id ?? null) === update.fields.assigneeId
     }
+
     if (operation === 'priority') {
       return record.priority === update.fields.priority
     }
+
     if (operation === 'estimate') {
       return (record.estimate ?? null) === update.fields.estimate
     }
+
     if (operation === 'dueDate') {
       return (record.dueDate ?? null) === update.fields.dueDate
     }
+
     if (operation === 'labels') {
       const recordLabelIds = record.labelIds ?? record.labels?.map((label) => label.id) ?? []
+
       return sameStringSet(recordLabelIds, update.fields.labelIds ?? [])
     }
+
     return false
   }
 

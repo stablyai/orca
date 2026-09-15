@@ -33,10 +33,13 @@ describe('WindowsFirewallNotice', () => {
       networkCategory: 'private',
       inspectionAvailable: true
     })
+
     setMobileApi({ getWindowsFirewallStatus })
+
     const { rerender } = render(
       <WindowsFirewallNotice pairingReady={false} address="192.168.0.108" />
     )
+
     expect(screen.queryByText(/allow phone connections through/i)).not.toBeInTheDocument()
 
     rerender(<WindowsFirewallNotice pairingReady address="192.168.0.108" />)
@@ -54,10 +57,13 @@ describe('WindowsFirewallNotice', () => {
       networkCategory: 'private',
       inspectionAvailable: true
     })
+
     setMobileApi({ getWindowsFirewallStatus })
+
     const { rerender } = render(
       <WindowsFirewallNotice pairingReady address="192.168.0.108" usingRelay />
     )
+
     expect(await screen.findByText(/allow phone connections through/i)).toBeInTheDocument()
     expect(screen.getByText(/still works over Orca Relay/i)).toBeInTheDocument()
 
@@ -67,6 +73,7 @@ describe('WindowsFirewallNotice', () => {
 
   it('repairs only after explicit user action and hides after success', async () => {
     const repairWindowsFirewall = vi.fn().mockResolvedValue({ ok: true })
+
     const getWindowsFirewallStatus = vi
       .fn()
       .mockResolvedValueOnce({
@@ -87,6 +94,7 @@ describe('WindowsFirewallNotice', () => {
         networkCategory: 'private',
         inspectionAvailable: true
       })
+
     setMobileApi({
       getWindowsFirewallStatus,
       repairWindowsFirewall
@@ -112,6 +120,7 @@ describe('WindowsFirewallNotice', () => {
       networkCategory: 'private',
       inspectionAvailable: true
     }
+
     const getWindowsFirewallStatus = vi.fn().mockResolvedValue(blockedStatus)
     const repairWindowsFirewall = vi.fn().mockResolvedValue({ ok: true })
     setMobileApi({ getWindowsFirewallStatus, repairWindowsFirewall })
@@ -136,8 +145,10 @@ describe('WindowsFirewallNotice', () => {
       networkCategory: 'private',
       inspectionAvailable: true
     }
+
     const clearedStatus = { ...blockedStatus, ruleAllowed: true, blockingRuleDetected: false }
     let resolveStale: (status: typeof blockedStatus) => void = () => {}
+
     const getWindowsFirewallStatus = vi
       .fn()
       .mockResolvedValueOnce(blockedStatus)
@@ -148,6 +159,7 @@ describe('WindowsFirewallNotice', () => {
           })
       )
       .mockResolvedValueOnce(clearedStatus)
+
     setMobileApi({ getWindowsFirewallStatus })
     render(<WindowsFirewallNotice pairingReady address="192.168.0.108" />)
     expect(await screen.findByText(/Windows may be blocking Orca Mobile/i)).toBeInTheDocument()
@@ -202,6 +214,7 @@ describe('WindowsFirewallNotice', () => {
       networkCategory: 'domain',
       inspectionAvailable: true
     })
+
     setMobileApi({
       getWindowsFirewallStatus
     })

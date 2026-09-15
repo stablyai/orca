@@ -39,11 +39,13 @@ import { createWorktreeRemovalRuntime } from '../orca-runtime-test-scenario-buil
 describe('OrcaRuntimeService', () => {
   it('force-deletes a preserved branch on the qualified host when repo ids collide', async () => {
     const localRepo = store.getRepo(TEST_REPO_ID)!
+
     const remoteRepo = {
       ...localRepo,
       path: '/remote/repo',
       connectionId: 'ssh-1'
     }
+
     const remoteWorktree = {
       path: TEST_WORKTREE_PATH,
       head: 'def456',
@@ -51,12 +53,14 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({
         hostId: 'local',
         preserveBranchOnDelete: true
       })
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [localRepo, remoteRepo],
@@ -65,6 +69,7 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       },
       removeWorktreeMeta: (worktreeId: string, hostId?: string) => {
@@ -73,6 +78,7 @@ describe('OrcaRuntimeService', () => {
         }
       }
     }
+
     const provider = {
       exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
       forceDeletePreservedBranch: vi.fn().mockResolvedValue(undefined),
@@ -90,6 +96,7 @@ describe('OrcaRuntimeService', () => {
         preservedBranch: { branchName: 'feature/test', head: 'def456' }
       })
     }
+
     registerSshGitProvider('ssh-1', provider as never)
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
@@ -97,6 +104,7 @@ describe('OrcaRuntimeService', () => {
       await runtime.removeManagedWorktree(TEST_WORKTREE_ID, false, false, false, 'ssh:ssh-1')
       expect(provider.removeWorktree).toHaveBeenCalledWith(TEST_WORKTREE_PATH, false)
       expect(metaById[TEST_WORKTREE_ID]?.hostId).toBe('local')
+
       const result = await runtime.forceDeletePreservedBranch(
         TEST_WORKTREE_ID,
         'feature/test',
@@ -118,6 +126,7 @@ describe('OrcaRuntimeService', () => {
 
   it('routes runtime preserved-branch force-delete through the selected WSL project runtime', async () => {
     setPlatform('win32')
+
     const runtimeStore = {
       ...store,
       getProjects: () => [
@@ -136,10 +145,12 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
+
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
     vi.mocked(removeWorktree).mockResolvedValue({
       preservedBranch: { branchName: 'feature/test', head: 'def456' }
     })
+
     const gitExec = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
       stdout: '',
       stderr: ''
@@ -178,6 +189,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(removeWorktree).mockImplementation(async () => {
       removeStarted.resolve()
       await finishRemoval.promise
+
       return {}
     })
 
@@ -197,24 +209,32 @@ describe('OrcaRuntimeService', () => {
     // The second owner names its host only in the migrated spelling, so its removal must reach the
     // SSH host rather than joining the local one and running `git worktree remove` here.
     const remoteRepo = { ...baseRepo, path: '/remote/repo', executionHostId: 'ssh:host-b' }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [{ ...baseRepo, executionHostId: 'local' }, remoteRepo]
     }
+
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
     vi.spyOn(runtime, 'acquireFileWatcherRemoval').mockResolvedValue({ finish: vi.fn() })
     const bothStarted = deferred<void>()
     const finishRemovals = deferred<void>()
     let startedCount = 0
+
     const startRemoval = async (): Promise<Record<string, never>> => {
       startedCount += 1
+
       if (startedCount === 2) {
         bothStarted.resolve()
       }
+
       await finishRemovals.promise
+
       return {}
     }
+
     vi.mocked(removeWorktree).mockImplementation(startRemoval)
+
     const provider = {
       exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
       listWorktrees: vi.fn().mockResolvedValue([
@@ -235,10 +255,12 @@ describe('OrcaRuntimeService', () => {
       ]),
       removeWorktree: vi.fn().mockImplementation(startRemoval)
     }
+
     registerSshGitProvider('host-b', provider as never)
 
     try {
       const local = runtime.removeManagedWorktree(TEST_WORKTREE_ID, true, false, false, 'local')
+
       const remote = runtime.removeManagedWorktree(
         TEST_WORKTREE_ID,
         true,
@@ -265,6 +287,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(removeWorktree).mockImplementation(async () => {
       removeStarted.resolve()
       await finishRemoval.promise
+
       return {}
     })
 
@@ -341,13 +364,17 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     }
+
     const worktreeId = `${repo.id}::/remote/already-deleted`
+
     const metaById: Record<string, WorktreeMeta> = {
       [worktreeId]: makeWorktreeMeta({ hostId: 'ssh:ssh-1', orcaCreationSource: 'ssh' })
     }
+
     const removeWorktreeMeta = vi.fn((id: string) => {
       delete metaById[id]
     })
+
     const runtimeStore = {
       ...store,
       getRepos: () => [repo],
@@ -356,6 +383,7 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (id: string) => metaById[id],
       removeWorktreeMeta
     }
+
     const gitProvider = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -367,13 +395,16 @@ describe('OrcaRuntimeService', () => {
         }
       ])
     }
+
     const fsProvider = {
       stat: vi.fn().mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
     }
+
     const deleteWorktreeHistory = vi.fn().mockResolvedValue(undefined)
     const ptyProvider = { deleteWorktreeHistory } as never
     registerSshGitProvider(repo.connectionId, gitProvider as never)
     registerSshFilesystemProvider(repo.connectionId, fsProvider as never)
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getSshProvider: () => ptyProvider
     })
@@ -401,8 +432,10 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     }
+
     const worktreePath = '/remote/orphan'
     const worktreeId = `${repo.id}::${worktreePath}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [worktreeId]: makeWorktreeMeta({
         hostId: 'ssh:ssh-1',
@@ -410,9 +443,11 @@ describe('OrcaRuntimeService', () => {
         orcaCreationSource: 'ssh'
       })
     }
+
     const removeWorktreeMeta = vi.fn((id: string) => {
       delete metaById[id]
     })
+
     const runtimeStore = {
       ...store,
       getRepos: () => [repo],
@@ -421,6 +456,7 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (id: string) => metaById[id],
       removeWorktreeMeta
     }
+
     const gitProvider = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -432,6 +468,7 @@ describe('OrcaRuntimeService', () => {
         }
       ])
     }
+
     const fsProvider = {
       lstat: vi.fn(async (path: string) => ({
         type: path === `${worktreePath}/.git` ? 'file' : 'directory'
@@ -445,14 +482,18 @@ describe('OrcaRuntimeService', () => {
       })),
       deletePath: vi.fn().mockResolvedValue(undefined)
     }
+
     const deleteWorktreeHistory = vi.fn().mockResolvedValue(undefined)
+
     const ptyProvider = {
       listProcesses: vi.fn().mockResolvedValue([]),
       shutdown: vi.fn().mockResolvedValue(undefined),
       deleteWorktreeHistory
     }
+
     registerSshGitProvider(repo.connectionId, gitProvider as never)
     registerSshFilesystemProvider(repo.connectionId, fsProvider as never)
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       getSshProvider: () => ptyProvider as never
     })
@@ -481,9 +522,11 @@ describe('OrcaRuntimeService', () => {
     await mkdir(adminWorktreePath, { recursive: true })
     await writeFile(join(orphanPath, '.git'), `gitdir: ${adminWorktreePath}\n`)
     await writeFile(join(adminWorktreePath, 'gitdir'), `${join(orphanPath, '.git')}\n`)
+
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId, {
       createdAt: Date.now()
     })
+
     const runtimeStoreWithRepoPath = {
       ...runtimeStore,
       getRepos: () => [
@@ -506,6 +549,7 @@ describe('OrcaRuntimeService', () => {
             }
           : undefined
     }
+
     const runtime = createWorktreeRemovalRuntime(runtimeStoreWithRepoPath)
     const notifier = { worktreesChanged: vi.fn() }
     runtime.setNotifier(notifier as never)
@@ -540,10 +584,12 @@ describe('OrcaRuntimeService', () => {
     const worktreeId = `${TEST_REPO_ID}::${leftoverPath}`
     await mkdir(leftoverPath, { recursive: true })
     await writeFile(join(leftoverPath, 'leftover.txt'), 'kept until force\n')
+
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId, {
       orcaCreatedAt: Date.now(),
       orcaCreationSource: 'runtime'
     })
+
     const runtimeStoreWithRepoPath = {
       ...runtimeStore,
       getRepos: () => [
@@ -566,13 +612,16 @@ describe('OrcaRuntimeService', () => {
             }
           : undefined
     }
+
     const runtime = createWorktreeRemovalRuntime(runtimeStoreWithRepoPath)
     const notifier = { worktreesChanged: vi.fn() }
     runtime.setNotifier(notifier as never)
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'status') {
         throw new Error('fatal: not a git repository')
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -611,10 +660,12 @@ describe('OrcaRuntimeService', () => {
     const standalonePath = join(parentDir, 'standalone')
     const worktreeId = `${TEST_REPO_ID}::${standalonePath}`
     await mkdir(join(standalonePath, '.git'), { recursive: true })
+
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId, {
       orcaCreatedAt: Date.now(),
       orcaCreationSource: 'runtime'
     })
+
     const runtimeStoreWithRepoPath = {
       ...runtimeStore,
       getRepos: () => [
@@ -637,6 +688,7 @@ describe('OrcaRuntimeService', () => {
             }
           : undefined
     }
+
     const runtime = createWorktreeRemovalRuntime(runtimeStoreWithRepoPath)
 
     try {

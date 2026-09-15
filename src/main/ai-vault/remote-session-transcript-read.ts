@@ -10,9 +10,11 @@ export async function parseRemoteSessionTranscript(
   context: RemoteScannerContext
 ): Promise<AiVaultSession | null> {
   const sidecar = candidate.file.sidecar
+
   const exceedsWholeReadLimit =
     (candidate.file.sizeBytes ?? 0) > LEGACY_SESSION_TEXT_LIMIT_BYTES ||
     (typeof sidecar === 'object' && sidecar.sizeBytes > LEGACY_SESSION_TEXT_LIMIT_BYTES)
+
   if (
     exceedsWholeReadLimit &&
     candidate.source.parseDocument &&
@@ -25,6 +27,7 @@ export async function parseRemoteSessionTranscript(
       context
     )
   }
+
   if (
     exceedsWholeReadLimit &&
     candidate.file.path.endsWith('.jsonl') &&
@@ -40,10 +43,13 @@ export async function parseRemoteSessionTranscript(
       context
     )
   }
+
   const read = await context.provider.readFile(candidate.file.path)
   throwIfAiVaultScanCancelled(context.signal)
+
   if (read.isBinary) {
     return null
   }
+
   return await candidate.source.parse(candidate.file, read.content, context)
 }

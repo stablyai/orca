@@ -20,20 +20,24 @@ export async function markPRReadyForReview(
     connectionId,
     localGitOptions
   )
+
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
 
   await acquire()
+
   try {
     await ghExecFileAsync(
       ['pr', 'ready', String(prNumber), '--repo', `${ownerRepo.owner}/${ownerRepo.repo}`],
       ghOptions
     )
+
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
+
     return { ok: false, error: classifyPullRequestUpdateError(message).message }
   } finally {
     release()

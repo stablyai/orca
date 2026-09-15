@@ -19,5 +19,6 @@ export function resolveCommentReplyTarget(
   if (replyingTo === null) {
     return null
   }
+
   return visibleComments.some((comment) => comment.id === replyingTo) ? replyingTo : null
 }

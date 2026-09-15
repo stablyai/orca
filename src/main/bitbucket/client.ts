@@ -25,6 +25,7 @@ import {
 import { resolveBitbucketAuthConfig, storedAuthConfig } from './resolve-auth'
 
 const REQUEST_TIMEOUT_MS = 5000
+
 const ALL_PULL_REQUEST_STATES = ['OPEN', 'MERGED', 'DECLINED', 'SUPERSEDED'] as const
 
 export type BitbucketAuthStatus = {
@@ -49,6 +50,7 @@ function apiUrl(
 ): string {
   const base = baseUrl.replace(/\/+$/, '')
   const url = new URL(`${base}${path}`)
+
   if (searchParams) {
     for (const [key, value] of Object.entries(searchParams)) {
       if (isStringArray(value)) {
@@ -60,6 +62,7 @@ function apiUrl(
       }
     }
   }
+
   return url.toString()
 }
 
@@ -76,6 +79,7 @@ async function requestJson<T>(
   notFoundIsNull = false
 ): Promise<T | null> {
   const config = resolveBitbucketAuthConfig()
+
   // Why: a denied keychain prompt leaves no usable credential. Issuing the
   // request anyway gets a 404 on private repos, which reads as "no pull
   // request" and offers Create for a branch that already has one.
@@ -83,8 +87,10 @@ async function requestJson<T>(
     if (throwOnFailure) {
       throw new Error('Bitbucket request failed: no usable credential')
     }
+
     return null
   }
+
   try {
     const response = await fetch(apiUrl(config.baseUrl, path, options.searchParams), {
       headers: {
@@ -93,21 +99,27 @@ async function requestJson<T>(
       },
       signal: AbortSignal.timeout(options.timeoutMs ?? REQUEST_TIMEOUT_MS)
     })
+
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
+
       if (response.status === 404 && notFoundIsNull) {
         return null
       }
+
       if (throwOnFailure) {
         throw new Error(`Bitbucket request failed: HTTP ${response.status}`)
       }
+
       return null
     }
+
     return (await response.json()) as T
   } catch (error) {
     if (throwOnFailure) {
       throw error
     }
+
     return null
   }
 }
@@ -131,10 +143,12 @@ async function getBuildStatus(
   if (!headSha) {
     return 'neutral'
   }
+
   const data = await requestJson<{ values?: RawBitbucketBuildStatus[] }>(
     `/repositories/${encodedRepoPath(repo)}/commit/${encodeURIComponent(headSha)}/statuses/build`,
     { searchParams: { pagelen: '100' } }
   )
+
   return deriveBitbucketBuildStatus(data?.values ?? [])
 }
 
@@ -144,6 +158,7 @@ async function normalizePullRequest(
 ): Promise<BitbucketPullRequestInfo | null> {
   const headSha = raw.source?.commit?.hash?.trim()
   const status = await getBuildStatus(repo, headSha)
+
   return mapBitbucketPullRequest(raw, status)
 }
 
@@ -153,8 +168,10 @@ async function normalizePullRequest(
 // prompt for keychain access every time Settings opens.
 export async function getBitbucketAuthStatus(): Promise<BitbucketAuthStatus> {
   const env = getEnvAuthConfig()
+
   if (hasAuth(env)) {
     const result = await fetchBitbucketUserResult(env)
+
     return {
       configured: true,
       // Why (STA-3944): only a rejection means the credential is bad. An
@@ -164,22 +181,29 @@ export async function getBitbucketAuthStatus(): Promise<BitbucketAuthStatus> {
       account: result.ok ? accountNameFromUser(result.user) : null
     }
   }
+
   const metadata = getStoredBitbucketMetadata()
+
   if (metadata && hasStoredBitbucketCredential()) {
     if (getStoredBitbucketCredentialError()) {
       return { configured: true, authenticated: false, account: metadata.account }
     }
+
     const cached = loadStoredBitbucketSecret()
+
     if (!cached) {
       return { configured: true, authenticated: true, account: metadata.account }
     }
+
     const result = await fetchBitbucketUserResult(storedAuthConfig(metadata, cached))
+
     return {
       configured: true,
       authenticated: result.ok || result.reason === 'unreachable',
       account: (result.ok ? accountNameFromUser(result.user) : null) ?? metadata.account
     }
   }
+
   return { configured: false, authenticated: false, account: null }
 }
 
@@ -194,12 +218,15 @@ export async function getBitbucketPullRequest(
     connectionId,
     getHostedReviewLocalGitOptions(options)
   )
+
   if (!repo) {
     return null
   }
+
   const raw = await requestJson<RawBitbucketPullRequest>(
     `/repositories/${encodedRepoPath(repo)}/pullrequests/${encodeURIComponent(String(prNumber))}`
   )
+
   return raw ? normalizePullRequest(repo, raw) : null
 }
 
@@ -212,6 +239,7 @@ export async function getBitbucketPullRequestForBranch(
   throwOnFailure = false
 ): Promise<BitbucketPullRequestInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
+
   if (!branchName && linkedPRNumber == null) {
     return null
   }
@@ -221,6 +249,7 @@ export async function getBitbucketPullRequestForBranch(
     connectionId,
     getHostedReviewLocalGitOptions(options)
   )
+
   if (!repo) {
     return null
   }
@@ -232,6 +261,7 @@ export async function getBitbucketPullRequestForBranch(
       throwOnFailure,
       true
     )
+
     if (raw) {
       return normalizePullRequest(repo, raw)
     }
@@ -242,6 +272,7 @@ export async function getBitbucketPullRequestForBranch(
       `source.branch.name = "${escapeBitbucketQueryString(branchName)}"`,
       allStateFilter()
     ].join(' AND ')
+
     const list = await requestJson<{ values?: RawBitbucketPullRequest[] }>(
       `/repositories/${encodedRepoPath(repo)}/pullrequests`,
       {
@@ -254,7 +285,9 @@ export async function getBitbucketPullRequestForBranch(
       },
       throwOnFailure
     )
+
     const raw = list?.values?.[0]
+
     if (raw) {
       const state = mapBitbucketPullRequestState(raw.state)
       // Why: a merged PR we only matched by branch name is history, not review
@@ -264,6 +297,7 @@ export async function getBitbucketPullRequestForBranch(
       // every other provider; the linked lookup above already returned early
       // for an explicitly linked review.
       const isMergedImplicitMatch = state === 'merged'
+
       const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
         state,
         reviewNumber: raw.id ?? null,
@@ -273,6 +307,7 @@ export async function getBitbucketPullRequestForBranch(
         connectionId,
         localGitOptions: getHostedReviewLocalGitOptions(options)
       })
+
       if (!isMergedImplicitMatch && !hideOnDefaultBranch) {
         return normalizePullRequest(repo, raw)
       }

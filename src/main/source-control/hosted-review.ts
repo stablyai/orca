@@ -50,6 +50,7 @@ export async function getHostedReviewForBranch(
   } & HostedReviewExecutionOptions
 ): Promise<HostedReviewInfo | null> {
   const branchName = input.branch.replace(/^refs\/heads\//, '')
+
   // Why: detached HEAD cannot use branch lookup, but provider-specific exact
   // ids can still resolve the review without probing an empty branch name.
   if (
@@ -65,6 +66,7 @@ export async function getHostedReviewForBranch(
   }
 
   const headOid = input.currentHeadOid?.trim() || null
+
   // Why (#11532): every client polls this one entry point, and they share the
   // host's per-user API quota, so the cache has to sit above the provider call.
   return withHostedReviewBranchCache(
@@ -76,6 +78,7 @@ export async function getHostedReviewForBranch(
         executionHostId: input.executionHostId,
         ...(input.localGitExecOptions ? { localGitExecOptions: input.localGitExecOptions } : {})
       })
+
       if (!provider) {
         // Why: forge detection swallows probe failures, so a remote read that
         // was killed on its deadline (or lost its relay) would otherwise be
@@ -87,8 +90,10 @@ export async function getHostedReviewForBranch(
           connectionId: hostedReviewSshConnectionId(input.executionHostId),
           ...getHostedReviewLocalGitOptions(input)
         })
+
         return null
       }
+
       return provider.getReviewForBranch({
         repoPath: input.repoPath,
         executionHostId: input.executionHostId,

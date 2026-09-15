@@ -270,9 +270,11 @@ describe('exact orchestration worker output', () => {
 
   it('rejects an old cursor after the exact provider session changes', async () => {
     const initial = await read()
+
     if (initial.source !== 'transcript') {
       throw new Error('Expected transcript output')
     }
+
     providerSession = {
       ...providerSession!,
       providerSession: {
@@ -289,9 +291,11 @@ describe('exact orchestration worker output', () => {
 
   it('rejects an old cursor after a same-inode truncate/regrow', async () => {
     const initial = await read()
+
     if (initial.source !== 'transcript') {
       throw new Error('Expected transcript output')
     }
+
     const before = await stat(transcriptA, { bigint: true })
     await writeFile(
       transcriptA,
@@ -301,9 +305,11 @@ describe('exact orchestration worker output', () => {
     expect(after.ino).toBe(before.ino)
     expect(after.dev).toBe(before.dev)
     const fresh = await read()
+
     if (fresh.source !== 'transcript') {
       throw new Error('Expected replacement transcript output')
     }
+
     expect(fresh.sourceIdentity).toBe(initial.sourceIdentity)
 
     await expect(read({ cursor: initial.cursor })).rejects.toMatchObject({

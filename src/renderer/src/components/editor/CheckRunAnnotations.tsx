@@ -26,11 +26,13 @@ export function CheckRunAnnotations({
     },
     []
   )
+
   const openAnnotation = React.useCallback(
     (path: string, line: number) => {
       if (!worktreeId) {
         return
       }
+
       openAnnotationLocation({ worktreeId, path, line, revealRafRef, revealInnerRafRef })
     },
     [worktreeId]
@@ -40,6 +42,7 @@ export function CheckRunAnnotations({
     'auto.components.editor.CheckRunDetailsPanel.cdbfda4dec',
     'Annotation'
   )
+
   const clipboardText = formatAnnotationsForClipboard(annotations, annotationFallback)
 
   return (
@@ -56,9 +59,11 @@ export function CheckRunAnnotations({
       <div className="divide-y divide-border/50">
         {annotations.map((annotation, index) => {
           const openable = worktreeId ? getOpenableAnnotationLine(annotation) : null
+
           const locationLabel = `${annotation.path ?? annotationFallback}${
             annotation.startLine ? `:${annotation.startLine}` : ''
           }`
+
           return (
             <div key={`${annotation.path ?? 'annotation'}-${index}`} className="px-3 py-3">
               <div className="flex min-w-0 flex-wrap items-center gap-2">

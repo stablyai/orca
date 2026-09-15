@@ -25,9 +25,11 @@ describe('paired mobile devices', () => {
 
   it('coalesces concurrent refreshes onto one mobile device IPC call', async () => {
     let resolveLookup: (value: { devices: [] }) => void = () => {}
+
     const lookup = new Promise<{ devices: [] }>((resolve) => {
       resolveLookup = resolve
     })
+
     listDevices.mockReturnValueOnce(lookup)
 
     const first = refreshPairedMobileDevices()
@@ -43,9 +45,11 @@ describe('paired mobile devices', () => {
     const staleDevice = { deviceId: 'old-phone', name: 'Old phone', pairedAt: 1, lastSeenAt: 2 }
     const currentDevice = { deviceId: 'new-phone', name: 'New phone', pairedAt: 3, lastSeenAt: 4 }
     let resolveLookup: (value: { devices: [typeof staleDevice] }) => void = () => {}
+
     const lookup = new Promise<{ devices: [typeof staleDevice] }>((resolve) => {
       resolveLookup = resolve
     })
+
     listDevices.mockReturnValueOnce(lookup)
 
     const refresh = refreshPairedMobileDevices()
@@ -59,13 +63,17 @@ describe('paired mobile devices', () => {
   it('returns the newer refresh when a superseded refresh fails', async () => {
     const currentDevice = { deviceId: 'new-phone', name: 'New phone', pairedAt: 3, lastSeenAt: 4 }
     let rejectStaleLookup: (reason?: unknown) => void = () => {}
+
     let resolveCurrentLookup: (value: { devices: [typeof currentDevice] }) => void = () => {}
+
     const staleLookup = new Promise<{ devices: [] }>((_, reject) => {
       rejectStaleLookup = reject
     })
+
     const currentLookup = new Promise<{ devices: [typeof currentDevice] }>((resolve) => {
       resolveCurrentLookup = resolve
     })
+
     listDevices.mockReturnValueOnce(staleLookup).mockReturnValueOnce(currentLookup)
 
     const staleRefresh = refreshPairedMobileDevices()

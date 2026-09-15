@@ -130,9 +130,11 @@ export function requireLiveCodexSession(
   sessionId: string
 ): CodexSession {
   const session = sessions.get(sessionId)
+
   if (!session || session.ended) {
     throw new Error(`no live codex app-server for session ${sessionId}`)
   }
+
   return session
 }
 
@@ -146,9 +148,11 @@ export type CodexAcquisitionAttempt = {
 
 export function createCodexAcquisitionAttempt(): CodexAcquisitionAttempt {
   let finish = (): void => {}
+
   const finished = new Promise<void>((resolve) => {
     finish = resolve
   })
+
   return {
     window: new CodexAcquisitionWindow(),
     cancelled: false,
@@ -173,9 +177,11 @@ export class CodexAcquisitionRegistry {
     if (this.closing) {
       throw new Error('codex structured session adapter is closing')
     }
+
     const previousAttempt = this.attempts.get(sessionId)
     const attempt = createCodexAcquisitionAttempt()
     this.attempts.set(sessionId, attempt)
+
     return { previousAttempt, attempt }
   }
 
@@ -207,10 +213,12 @@ export class CodexAcquisitionRegistry {
 
   async closeFailedAttempt(sessionId: string, attempt: CodexAcquisitionAttempt): Promise<boolean> {
     const stopped = (await attempt.window.connection?.close()) ?? true
+
     if (stopped) {
       attempt.exitProven = true
       this.deleteIfCurrent(sessionId, attempt)
     }
+
     return stopped
   }
 
@@ -229,6 +237,7 @@ export async function cancelCodexAcquisitionAttempt(
   if (!attempt) {
     return true
   }
+
   return cancelProcessAcquisition({
     cancel: () => {
       attempt.cancelled = true

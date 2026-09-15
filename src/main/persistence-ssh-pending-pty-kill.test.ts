@@ -18,6 +18,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
 
 const NOW = 1_800_000_000_000
@@ -157,6 +158,7 @@ describe('Store SSH pending PTY kills', () => {
   it('caps pending kills per target so an unreachable host cannot grow the store', async () => {
     const store = await createStore()
     const total = MAX_SSH_PENDING_PTY_KILLS_PER_TARGET + 50
+
     for (let index = 0; index < total; index++) {
       store.recordSshRemotePtyKillIntent('ssh-1', `pty-${index}`, {
         requestedAt: NOW + index,
@@ -164,12 +166,15 @@ describe('Store SSH pending PTY kills', () => {
         attempts: 0
       })
     }
+
     store.flush()
 
     const reloaded = await createStore()
+
     const persisted = reloaded
       .getSshRemotePtyLeases('ssh-1')
       .filter((lease) => lease.pendingKill !== undefined)
+
     expect(persisted).toHaveLength(MAX_SSH_PENDING_PTY_KILLS_PER_TARGET)
     expect(reloaded.getSshRemotePtyLeases('ssh-1')).toHaveLength(
       MAX_SSH_PENDING_PTY_KILLS_PER_TARGET

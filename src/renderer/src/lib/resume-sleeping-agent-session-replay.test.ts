@@ -40,6 +40,7 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
       tabsByWorktree: { 'wt-1': [] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
+
     let firstVisible:
       | {
           command: string | undefined
@@ -47,8 +48,10 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
           layout: ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId'][string]
         }
       | undefined
+
     const unsubscribe = useAppStore.subscribe((state) => {
       const tab = state.tabsByWorktree['wt-1']?.[0]
+
       if (tab && !firstVisible) {
         firstVisible = {
           command: state.pendingStartupByTabId[tab.id]?.command,
@@ -224,6 +227,7 @@ describe('resumeSleepingAgentSessionsForWorktree replay protection', () => {
       command: "codex resume 'sess-1'",
       launchConfig: { agentArgs: '', agentEnv: {} }
     })
+
     const second = launchAiVaultSessionInNewTab({
       agent: 'codex',
       worktreeId: 'wt-1',

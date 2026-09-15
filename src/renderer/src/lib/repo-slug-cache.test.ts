@@ -30,6 +30,7 @@ describe('repo slug cache host identity', () => {
   it('does not route a GHES project row to a same-named github.com repo', () => {
     const dotCom = repo('dotcom')
     const enterprise = repo('enterprise')
+
     for (const [candidate, host] of [
       [dotCom, 'github.com'],
       [enterprise, 'ghe.example:8443']

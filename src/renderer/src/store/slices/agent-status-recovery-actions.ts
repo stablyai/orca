@@ -26,6 +26,7 @@ export function createAgentStatusRecoveryActions(
   | 'pruneSleepingAgentSessions'
 > {
   const { set, clearSleepingAgentSessionsByPaneKey } = runtime
+
   return {
     captureSleepingAgentSessionsByWorktree: (worktreeId, paneKeys) => {
       set((s) => {
@@ -33,20 +34,24 @@ export function createAgentStatusRecoveryActions(
           paneKeys,
           captureMode: 'manual-worktree-sleep'
         })
+
         const replaced = removeSleepingRecordsReplacedByManualWorktreeSleep(
           s.sleepingAgentSessionsByPaneKey,
           worktreeId,
           paneKeys,
           records
         )
+
         let next = { ...replaced.records }
         let changed = replaced.changed
+
         for (const record of Object.values(records)) {
           if (next[record.paneKey] !== record) {
             next[record.paneKey] = record
             changed = true
           }
         }
+
         return changed ? { sleepingAgentSessionsByPaneKey: next } : s
       })
     },
@@ -55,30 +60,40 @@ export function createAgentStatusRecoveryActions(
       set((s) => {
         const capturedAt = Date.now()
         const origin = mode === 'quit' ? ('quit' as const) : ('live' as const)
+
         const next: Record<string, SleepingAgentSessionRecord> = {
           ...s.sleepingAgentSessionsByPaneKey
         }
+
         let changed = false
+
         for (const entry of Object.values(s.agentStatusByPaneKey)) {
           if (entry.state === 'done') {
             const existing = next[entry.paneKey]
+
             if (
               !isCompletedPiCompatibleAgentWithLiveRecoveryRecord(entry, existing) ||
               mode === 'periodic'
             ) {
               continue
             }
+
             const record = { ...existing, capturedAt, origin }
+
             if (!sleepingRecordsEquivalentIgnoringCaptureTime(existing, record)) {
               next[entry.paneKey] = record
               changed = true
             }
+
             continue
           }
+
           const worktreeId = entry.worktreeId ?? findAgentPaneWorktreeId(s, entry.paneKey)
+
           if (!worktreeId) {
             continue
           }
+
           const record = sleepingRecordFromEntry({
             state: s,
             entry,
@@ -87,7 +102,9 @@ export function createAgentStatusRecoveryActions(
             launchConfig: getLaunchConfigForEntry(s, entry),
             origin
           })
+
           const existing = next[entry.paneKey]
+
           if (
             mode === 'periodic' &&
             existing?.origin === 'quit' &&
@@ -96,11 +113,13 @@ export function createAgentStatusRecoveryActions(
           ) {
             continue
           }
+
           if (record && !sleepingRecordsEquivalentIgnoringCaptureTime(existing, record)) {
             next[record.paneKey] = record
             changed = true
           }
         }
+
         return changed ? { sleepingAgentSessionsByPaneKey: next } : s
       })
     },
@@ -113,6 +132,7 @@ export function createAgentStatusRecoveryActions(
         let changed = false
         const next: Record<string, SleepingAgentSessionRecord> = {}
         const removed: string[] = []
+
         for (const [paneKey, record] of Object.entries(s.sleepingAgentSessionsByPaneKey)) {
           if (record.worktreeId === worktreeId) {
             changed = true
@@ -121,14 +141,18 @@ export function createAgentStatusRecoveryActions(
             next[paneKey] = record
           }
         }
+
         if (!changed) {
           return s
         }
+
         const nextLaunch =
           removed.length > 0 ? { ...s.agentLaunchConfigByPaneKey } : s.agentLaunchConfigByPaneKey
+
         for (const paneKey of removed) {
           delete nextLaunch[paneKey]
         }
+
         return {
           sleepingAgentSessionsByPaneKey: next,
           ...(nextLaunch !== s.agentLaunchConfigByPaneKey
@@ -143,6 +167,7 @@ export function createAgentStatusRecoveryActions(
         let changed = false
         const next: Record<string, SleepingAgentSessionRecord> = {}
         const removed: string[] = []
+
         for (const [paneKey, record] of Object.entries(s.sleepingAgentSessionsByPaneKey)) {
           if (!validWorktreeIds.has(record.worktreeId)) {
             changed = true
@@ -151,14 +176,18 @@ export function createAgentStatusRecoveryActions(
             next[paneKey] = record
           }
         }
+
         if (!changed) {
           return s
         }
+
         const nextLaunch =
           removed.length > 0 ? { ...s.agentLaunchConfigByPaneKey } : s.agentLaunchConfigByPaneKey
+
         for (const paneKey of removed) {
           delete nextLaunch[paneKey]
         }
+
         return {
           sleepingAgentSessionsByPaneKey: next,
           ...(nextLaunch !== s.agentLaunchConfigByPaneKey

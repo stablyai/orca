@@ -39,6 +39,7 @@ export function authHeader(email: string, apiToken: string, authType?: JiraAuthT
   if (authType === 'server' && !email) {
     return `Bearer ${apiToken}`
   }
+
   return `Basic ${Buffer.from(`${email}:${apiToken}`).toString('base64')}`
 }
 
@@ -46,10 +47,13 @@ function describeErrorCause(error: unknown): string | undefined {
   if (!error || typeof error !== 'object' || !('cause' in error)) {
     return undefined
   }
+
   const cause = (error as { cause?: unknown }).cause
+
   if (cause instanceof Error) {
     return `${cause.name}: ${cause.message}`
   }
+
   return cause === undefined ? undefined : String(cause)
 }
 
@@ -69,6 +73,7 @@ async function jiraFetch(url: string, init: RequestInit): Promise<Response> {
           errorMessage: error instanceof Error ? error.message : String(error)
         })
       })
+
       try {
         // Why the port: on the desktop this is Electron's net.fetch, which follows
         // Chromium proxy/session state and avoids undici's stale keep-alive sockets
@@ -84,9 +89,11 @@ async function jiraFetch(url: string, init: RequestInit): Promise<Response> {
           error instanceof Error ? error.message : String(error)
         )
         const cause = describeErrorCause(error)
+
         if (cause) {
           span.setAttribute('jira.transportErrorCause', cause)
         }
+
         throw error
       }
     },
@@ -107,16 +114,20 @@ export async function requestWithCredentials(
   headers.set('Content-Type', 'application/json')
   headers.set('User-Agent', JIRA_API_USER_AGENT)
   headers.set('Authorization', authHeader(email, apiToken, authType))
+
   const response = await jiraFetch(`${siteUrl}${path}`, {
     ...init,
     headers
   })
+
   if (!response.ok) {
     throw new JiraApiError(await readJiraError(response), response.status)
   }
+
   if (response.status === 204) {
     return null
   }
+
   return response.json()
 }
 
@@ -127,17 +138,20 @@ async function readJiraError(response: Response): Promise<string> {
       errors?: Record<string, string>
       message?: string
     }
+
     const messages = [
       ...(Array.isArray(data.errorMessages) ? data.errorMessages : []),
       ...Object.values(data.errors ?? {}),
       ...(data.message ? [data.message] : [])
     ].filter(Boolean)
+
     if (messages.length > 0) {
       return messages.join('; ')
     }
   } catch {
     // Fall through to status text.
   }
+
   return response.statusText || `Jira request failed (${response.status})`
 }
 
@@ -151,16 +165,20 @@ export async function jiraRequest<T>(
   headers.set('Content-Type', 'application/json')
   headers.set('User-Agent', JIRA_API_USER_AGENT)
   headers.set('Authorization', client.authorization)
+
   const response = await jiraFetch(`${client.site.siteUrl}${path}`, {
     ...init,
     headers
   })
+
   if (!response.ok) {
     throw new JiraApiError(await readJiraError(response), response.status)
   }
+
   if (response.status === 204) {
     return null as T
   }
+
   return (await response.json()) as T
 }
 
@@ -169,14 +187,17 @@ export async function jiraRequestBinary(
   pathOrUrl: string
 ): Promise<{ data: ArrayBuffer; contentType: string }> {
   const siteUrl = new URL(client.site.siteUrl)
+
   const requestUrl = /^https?:\/\//i.test(pathOrUrl)
     ? new URL(pathOrUrl)
     : new URL(`${client.site.siteUrl}${pathOrUrl}`)
+
   if (requestUrl.origin !== siteUrl.origin) {
     // Why: attachment metadata is provider-controlled; never forward Jira
     // credentials if a malformed response points at another origin.
     throw new JiraApiError('Jira attachment URL must use the configured site origin.', null)
   }
+
   const headers = new Headers()
   // Why: attachment content is binary; forcing JSON Accept/Content-Type can
   // break downloads and confuses some Atlassian edge responses.
@@ -184,10 +205,13 @@ export async function jiraRequestBinary(
   headers.set('User-Agent', JIRA_API_USER_AGENT)
   headers.set('Authorization', client.authorization)
   const response = await jiraFetch(requestUrl.toString(), { headers })
+
   if (!response.ok) {
     throw new JiraApiError(await readJiraError(response), response.status)
   }
+
   const contentType = response.headers.get('content-type') || 'application/octet-stream'
+
   return {
     data: await response.arrayBuffer(),
     contentType

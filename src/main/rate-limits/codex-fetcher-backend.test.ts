@@ -9,8 +9,11 @@ const { childSpawnMock, readFileMock, ptySpawnMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node:child_process', () => ({ spawn: childSpawnMock }))
+
 vi.mock('node:fs/promises', () => ({ readFile: readFileMock }))
+
 vi.mock('node-pty', () => ({ spawn: ptySpawnMock }))
+
 vi.mock('./codex-auth-presence', () => ({
   probeCodexAuthPresence: vi.fn(async () => 'present')
 }))
@@ -191,6 +194,7 @@ describe('Codex backend rate-limit requests', () => {
       codexHomePath: '/managed/deadline-home',
       idempotencyKey: 'redeem-timeout'
     })
+
     await vi.advanceTimersByTimeAsync(0)
     // Why: redeem is user-triggered, so it gets the longer redeem deadline.
     expect(timeout).toHaveBeenCalledWith(30_000)

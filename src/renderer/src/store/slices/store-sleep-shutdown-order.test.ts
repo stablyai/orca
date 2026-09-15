@@ -11,6 +11,7 @@ import {
 
 const orderHarness = vi.hoisted(() => {
   const events: string[] = []
+
   return {
     events,
     unregister: vi.fn(() => [
@@ -43,6 +44,7 @@ vi.mock('@/components/terminal-pane/pty-shutdown-exit-deferral', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
@@ -72,16 +74,20 @@ describe('shutdownWorktreeTerminals ordering', () => {
       clearPaneForegroundAgentByWorktree: vi.fn()
     })
     shutdownBufferCaptures.set('tab-1', () => orderHarness.events.push('buffer-capture'))
+
     const unsubscribe = store.subscribe((state, previous) => {
       if (!previous.pendingPtyShutdownIds['pty-1'] && state.pendingPtyShutdownIds['pty-1']) {
         orderHarness.events.push('shutdown-guard-publication')
       }
+
       if (previous.ptyIdsByTabId['tab-1']?.length && state.ptyIdsByTabId['tab-1']?.length === 0) {
         orderHarness.events.push('terminal-state-cleanup')
       }
     })
+
     orderHarness.unregister.mockImplementationOnce(() => {
       orderHarness.events.push('handler-unregister')
+
       return [
         {
           ptyId: 'pty-1',
@@ -92,12 +98,15 @@ describe('shutdownWorktreeTerminals ordering', () => {
     })
     mockApi.runtimeEnvironments.call.mockImplementation(async (args: { method: string }) => {
       const compatibilityResponse = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
       if (compatibilityResponse) {
         return compatibilityResponse
       }
+
       if (args.method === 'terminal.sleep') {
         orderHarness.events.push('owner-runtime-rpc')
       }
+
       return {
         id: 'rpc-order',
         ok: true,

@@ -28,32 +28,41 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
     const existingBrowserTabs = existing.tabs.filter(
       (tab): tab is RuntimeMobileSessionBrowserTab => tab.type === 'browser'
     )
+
     const publishedBrowserTabs = this.buildHeadlessMobileSessionBrowserTabs(worktreeId)
+
     // An attached renderer owns its browser rows; the client-page registry cannot retire them.
     const rendererBrowserTabs =
       this.getAvailableAuthoritativeWindow() && !this.offscreenBrowserBackend
         ? existingBrowserTabs.filter((tab) => tab.placement?.kind !== 'client')
         : []
+
     // Keyed by id so no row can publish twice whatever the two sources overlap on; a freshly
     // built row wins over the retained one it replaces.
     const liveById = new Map(
       [...rendererBrowserTabs, ...publishedBrowserTabs].map((tab) => [tab.id, tab])
     )
+
     // Emit in the order the snapshot already had, because the equality check below compares by
     // index: rebuilding renderer-first would read a pure reordering as a change and republish.
     const retainedInOrder = existingBrowserTabs.flatMap((tab) => {
       const live = liveById.get(tab.id)
+
       return live && liveById.delete(tab.id) ? [live] : []
     })
+
     const liveBrowserTabs = [...retainedInOrder, ...liveById.values()]
     const liveIds = liveBrowserTabs.map((tab) => tab.id)
     const existingBrowserIds = existingBrowserTabs.map((tab) => tab.id)
+
     if (headlessBrowserTabsUnchanged(liveBrowserTabs, existingBrowserTabs)) {
       return
     }
+
     const nonBrowserTabs = existing.tabs.filter((tab) => tab.type !== 'browser')
     const nextTabs: RuntimeMobileSessionSnapshotTab[] = [...nonBrowserTabs, ...liveBrowserTabs]
     const liveIdSet = new Set(liveIds)
+
     const tabGroups = appendBrowserTabOrder(
       (existing.tabGroups ?? []).map((group) => ({
         ...group,
@@ -64,10 +73,13 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
       })),
       liveIds
     )
+
     const activeStillPresent = nextTabs.some((tab) => tab.id === existing.activeTabId)
+
     const active = activeStillPresent
       ? null
       : (nextTabs.find((tab) => tab.isActive) ?? nextTabs[0] ?? null)
+
     this.storeMobileSessionSnapshot(worktreeId, {
       ...existing,
       snapshotVersion: existing.snapshotVersion + 1,
@@ -102,19 +114,24 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
     // different tabId, so asking it once per worktree answers every tab. Kept lazy so a
     // worktree whose first tab already owns a serve/SSH pty never sweeps at all.
     let recoverableTabIds: ReadonlySet<string> | undefined
+
     return tabs.some((tab) => {
       if (this.isServeOrSshOwnedPtyId(tab.ptyId)) {
         return true
       }
+
       const leafPtyIds = session.terminalLayoutsByTabId?.[tab.id]?.ptyIdsByLeafId
+
       if (
         leafPtyIds &&
         Object.values(leafPtyIds).some((ptyId) => this.isServeOrSshOwnedPtyId(ptyId))
       ) {
         return true
       }
+
       // Why: expiry keeps pane coordinates so paired viewers can request a fresh shell.
       recoverableTabIds ??= this.collectRecentExpiredSshLeaseTabIds(worktreeId)
+
       return recoverableTabIds.has(tab.id)
     })
   }
@@ -136,12 +153,15 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
         return leaf.tabId
       }
     }
+
     for (const pty of this.ptysById.values()) {
       const parsed = parsePaneKey(pty.paneKey ?? '')
+
       if (parsed?.leafId === leafId) {
         return parsed.tabId
       }
     }
+
     return (
       findTerminalTabIdForLeaf(this.store?.getWorkspaceSession?.(), leafId) ??
       findTerminalTabIdForLeaf(
@@ -184,6 +204,7 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
     const currentTabId = lease.leafId
       ? this.findCurrentTerminalTabIdForLeaf(lease.targetId, lease.leafId)
       : undefined
+
     return currentTabId ?? lease.tabId
   }
 
@@ -191,11 +212,13 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
   protected collectRecentExpiredSshLeaseTabIds(worktreeId: string): ReadonlySet<string> {
     const now = Date.now()
     const tabIds = new Set<string>()
+
     for (const lease of this.store?.getSshRemotePtyLeases?.() ?? []) {
       if (this.isRecentExpiredSshLeaseForWorktree(lease, worktreeId, now)) {
         tabIds.add(this.resolveExpiredSshLeaseTabId(lease))
       }
     }
+
     return tabIds
   }
 
@@ -206,11 +229,13 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
     ptyId?: string
   ): ReturnType<NonNullable<RuntimeStore['getSshRemotePtyLeases']>>[number] | null {
     const now = Date.now()
+
     return (
       this.store?.getSshRemotePtyLeases?.().find((lease) => {
         if (!this.isRecentExpiredSshLeaseForWorktree(lease, worktreeId, now)) {
           return false
         }
+
         return (
           this.resolveExpiredSshLeaseTabId(lease) === tabId &&
           // Leases store RELAY form (`toStoredPtyId` -> `toRelaySshPtyId`); the runtime hands us
@@ -245,6 +270,7 @@ export class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs extends Or
     if (this.isServeOrSshOwnedPtyId(tab.ptyId)) {
       return true
     }
+
     return Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {}).some((ptyId) =>
       this.isServeOrSshOwnedPtyId(ptyId)
     )

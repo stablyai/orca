@@ -33,6 +33,7 @@ async function createStore(): Promise<Store> {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store: StoreClass, initDataPath } = await import('../persistence')
   initDataPath()
+
   return new StoreClass()
 }
 
@@ -56,6 +57,7 @@ const NO_WINDOW = 'No Orca window was available to launch the automation.'
 async function seedUnresolvableAutomation(): Promise<{ store: Store; automation: Automation }> {
   const seed = await createStore()
   seed.addRepo(makeRepo())
+
   const automation = seed.createAutomation({
     name: 'Nightly check',
     prompt: 'Check the repo',
@@ -66,6 +68,7 @@ async function seedUnresolvableAutomation(): Promise<{ store: Store; automation:
     rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
     dtstart: new Date('2026-05-12T00:00:00').getTime()
   })
+
   const file = join(testState.dir, 'orca-data.json')
   const state = JSON.parse(readFileSync(file, 'utf-8'))
   state.automations[0].runContext = {
@@ -77,12 +80,14 @@ async function seedUnresolvableAutomation(): Promise<{ store: Store; automation:
     path: '/repo'
   }
   writeFileSync(file, JSON.stringify(state, null, 2), 'utf-8')
+
   return { store: await createStore(), automation }
 }
 
 /** Daily at 09:00 against a repo that resolves, so only the window can refuse it. */
 function seedRunnableAutomation(store: Store): Automation {
   store.addRepo(makeRepo())
+
   return store.createAutomation({
     name: 'Nightly check',
     prompt: 'Check the repo',
@@ -98,6 +103,7 @@ function seedRunnableAutomation(store: Store): Automation {
 function attachedService(store: Store): AutomationService {
   const service = new AutomationService(store, { tickMs: 60_000 })
   service.setWebContents({ isDestroyed: () => false, send: vi.fn() } as never)
+
   return service
 }
 
@@ -110,6 +116,7 @@ async function evaluateAt(
 ): Promise<void> {
   const nextRunAt = (): number | undefined =>
     store.listAutomations().find((entry) => entry.id === automationId)?.nextRunAt
+
   const before = nextRunAt()
   vi.setSystemTime(new Date(when))
   service.setRendererReady()
@@ -187,10 +194,12 @@ describe('repeated skipped_unavailable coalescing', () => {
   it('starts a new record when a real run intervened, so history is not rewritten', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const { store, automation } = await seedUnresolvableAutomation()
+
     const completed = store.createAutomationRun(
       automation,
       new Date('2026-05-12T09:00:00').getTime()
     )
+
     store.updateAutomationRun({ runId: completed.id, status: 'completed', workspaceId: null })
     const service = attachedService(store)
 
@@ -251,11 +260,13 @@ describe('repeated skipped_unavailable coalescing', () => {
     expect(
       store.recordRepeatedAutomationSkip(automation.id, SETUP_GONE, scheduledFor)?.occurrenceCount
     ).toBeUndefined()
+
     const folded = store.recordRepeatedAutomationSkip(
       automation.id,
       SETUP_GONE,
       scheduledFor + 1000
     )
+
     expect(folded?.occurrenceCount).toBe(2)
     expect(
       store.recordRepeatedAutomationSkip(automation.id, SETUP_GONE, scheduledFor + 1000)
@@ -267,10 +278,12 @@ describe('repeated skipped_unavailable coalescing', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00'))
     const { store, automation } = await seedUnresolvableAutomation()
     const published: unknown[] = []
+
     const service = new AutomationService(store, {
       tickMs: 60_000,
       onAutomationsChanged: (payload) => published.push(payload)
     })
+
     service.setWebContents({ isDestroyed: () => false, send: vi.fn() } as never)
 
     await evaluateAt(store, service, automation.id, '2026-05-13T09:01:00')

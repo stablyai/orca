@@ -142,6 +142,7 @@ export function SourceControlNotesShelf({
                   if (!activeWorktreeId || diffCommentCount === 0) {
                     return
                   }
+
                   setPendingDiffCommentsClear({ kind: 'all', worktreeId: activeWorktreeId })
                 }}
               >

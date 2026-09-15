@@ -26,9 +26,11 @@ export async function requestAndSettle(
   outcome: 'success' | 'failed' | 'timed-out' = 'success'
 ): Promise<boolean> {
   const recovered = await requestTerminalPaneRecovery(request)
+
   if (recovered) {
     settleCurrentRecovery(request.tabId, outcome)
   }
+
   return recovered
 }
 

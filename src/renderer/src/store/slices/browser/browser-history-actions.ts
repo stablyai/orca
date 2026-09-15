@@ -27,17 +27,21 @@ export function createBrowserHistoryActions(
       const bump = options?.bump ?? true
       set((s) => {
         const now = Date.now()
+
         const existing = s.workspaceDocHistory.find((entry) =>
           browserPageDocLocationsEqual(entry.docLocation, docLocation)
         )
+
         if (!existing && !bump) {
           // A title refresh for a document never visited records nothing.
           return s
         }
+
         const normalizedTitle = normalizeWorkspaceDocHistoryTitle(
           title ?? existing?.title,
           docLocation
         )
+
         const updated: WorkspaceDocHistoryEntry | null = existing
           ? {
               ...existing,
@@ -45,6 +49,7 @@ export function createBrowserHistoryActions(
               ...(bump ? { lastVisitedAt: now, visitCount: existing.visitCount + 1 } : {})
             }
           : null
+
         // A repeated title-updated event from a live preview changes nothing; hand back the same
         // state so no subscriber re-renders. Over the cap the old path still had trimming to do.
         if (
@@ -55,12 +60,14 @@ export function createBrowserHistoryActions(
         ) {
           return s
         }
+
         const next: WorkspaceDocHistoryEntry[] = updated
           ? s.workspaceDocHistory.map((entry) => (entry === existing ? updated : entry))
           : [
               { docLocation, title: normalizedTitle, lastVisitedAt: now, visitCount: 1 },
               ...s.workspaceDocHistory
             ]
+
         return {
           workspaceDocHistory:
             next.length > MAX_WORKSPACE_DOC_HISTORY_ENTRIES
@@ -72,12 +79,15 @@ export function createBrowserHistoryActions(
 
     addBrowserHistoryEntry: (url, title, faviconUrl) => {
       const safeUrl = redactKagiSessionToken(url)
+
       if (safeUrl === ORCA_BROWSER_BLANK_URL || safeUrl === 'about:blank' || !safeUrl) {
         return
       }
+
       const normalized = normalizeBrowserHistoryUrl(safeUrl)
       set((s) => {
         const existing = s.browserUrlHistory.find((entry) => entry.normalizedUrl === normalized)
+
         let next: BrowserHistoryEntry[] = existing
           ? s.browserUrlHistory.map((entry) =>
               entry === existing
@@ -101,11 +111,13 @@ export function createBrowserHistoryActions(
               },
               ...s.browserUrlHistory
             ]
+
         if (next.length > MAX_BROWSER_HISTORY_ENTRIES) {
           next = next
             .sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
             .slice(0, MAX_BROWSER_HISTORY_ENTRIES)
         }
+
         return { browserUrlHistory: next }
       })
     },

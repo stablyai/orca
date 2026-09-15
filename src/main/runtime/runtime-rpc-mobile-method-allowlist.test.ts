@@ -15,6 +15,7 @@ describe('OrcaRuntimeRpcServer', () => {
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const mobile = server['deviceRegistry']!.addDevice('phone', 'mobile')
     const replies: Record<string, unknown>[] = []
+
     const dispatch = async (request: Record<string, unknown>): Promise<void> => {
       await server['handleWebSocketMessage'](
         JSON.stringify(request),

@@ -17,11 +17,13 @@ describe('createMobileSessionTabsNotifyCoalescer', () => {
     const coalescer = createMobileSessionTabsNotifyCoalescer(emit)
 
     const FLIPS = 20
+
     for (let i = 0; i < FLIPS; i++) {
       coalescer.schedule('worktree-1')
       // Each flip lands well inside the trailing window, resetting the timer.
       vi.advanceTimersByTime(10)
     }
+
     expect(emit).not.toHaveBeenCalled()
 
     // Let the trailing window elapse after the last flip.

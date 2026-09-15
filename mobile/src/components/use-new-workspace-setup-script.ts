@@ -26,10 +26,12 @@ export function useNewWorkspaceSetupScript(args: {
 } {
   const { client, selectedRepo } = args
   const [details, setDetails] = useState<SetupHookDetails | null>(null)
+
   const [setupDecisionChoice, setSetupDecisionChoice] = useState<Exclude<
     WorkspaceCreateSetupDecision,
     'inherit'
   > | null>(null)
+
   const [runSetup, setRunSetup] = useState(true)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const activeDetails = selectedRepo && details?.repoId === selectedRepo.id ? details : null
@@ -38,6 +40,7 @@ export function useNewWorkspaceSetupScript(args: {
     if (!client || !selectedRepo) {
       return
     }
+
     let stale = false
     void client
       .sendRequest('repo.hooks', { repo: `id:${selectedRepo.id}` })
@@ -45,6 +48,7 @@ export function useNewWorkspaceSetupScript(args: {
         if (stale || !response.ok) {
           return
         }
+
         const result = (response as RpcSuccess).result as RepoHooksResponse
         const command = result.hooks?.scripts?.setup?.trim() || null
         const runPolicy = result.setupRunPolicy ?? 'run-by-default'
@@ -57,6 +61,7 @@ export function useNewWorkspaceSetupScript(args: {
         })
         setSetupDecisionChoice(null)
         setRunSetup(runPolicy !== 'skip-by-default')
+
         if (command && runPolicy === 'ask') {
           setShowAdvanced(true)
         }
@@ -73,6 +78,7 @@ export function useNewWorkspaceSetupScript(args: {
           setSetupDecisionChoice(null)
         }
       })
+
     return () => {
       stale = true
     }

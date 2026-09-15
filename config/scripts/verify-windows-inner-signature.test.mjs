@@ -162,8 +162,10 @@ describe('verify-windows-inner-signature', () => {
 
   it('runs PowerShell with an argument array and fails on stderr or nonzero exit', () => {
     const calls = []
+
     const spawnSyncImpl = (command, args, options) => {
       calls.push({ command, args, options })
+
       return { status: 0, stdout: JSON.stringify(validSignature), stderr: '' }
     }
 

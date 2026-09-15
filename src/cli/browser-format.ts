@@ -12,6 +12,7 @@ import type {
 
 export function formatSnapshot(result: BrowserSnapshotResult): string {
   const header = `page: ${result.browserPageId}\n${result.title} — ${result.url}\n`
+
   return header + result.snapshot
 }
 
@@ -30,10 +31,12 @@ export function formatTabListWithProfiles(
   if (result.tabs.length === 0) {
     return 'No browser tabs open.'
   }
+
   return result.tabs
     .map((t) => {
       const marker = t.active ? '* ' : '  '
       const profile = showProfile ? `  [${t.profileLabel ?? t.profileId ?? 'Unknown'}]` : ''
+
       return `${marker}[${t.index}] ${t.browserPageId}  ${t.title} — ${t.url}${profile}`
     })
     .join('\n')
@@ -43,11 +46,13 @@ export function formatBrowserProfileList(result: BrowserProfileListResult): stri
   if (result.profiles.length === 0) {
     return 'No browser profiles found.'
   }
+
   return result.profiles
     .map((profile) => {
       const marker = profile.scope === 'default' ? '* ' : '  '
       const source = profile.source?.browserFamily ?? 'none'
       const userAgent = profile.userAgentMode === 'native' ? '  ua:native' : ''
+
       return `${marker}${profile.id}  ${profile.label}  ${profile.scope}  source:${source}${userAgent}`
     })
     .join('\n')
@@ -55,6 +60,7 @@ export function formatBrowserProfileList(result: BrowserProfileListResult): stri
 
 export function formatTabShow(result: BrowserTabShowResult | BrowserTabCurrentResult): string {
   const tab = result.tab
+
   return [
     `page: ${tab.browserPageId}`,
     `title: ${tab.title}`,

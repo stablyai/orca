@@ -27,7 +27,9 @@ export async function releaseStoredStructuredAgentSessionOwner(input: {
   if (!input.hasProviderChild) {
     return
   }
+
   const record = input.store.getRecord(input.sessionId)
+
   if (
     !record ||
     record.lease.runtimeFence !== input.expectedFence ||
@@ -35,6 +37,7 @@ export async function releaseStoredStructuredAgentSessionOwner(input: {
   ) {
     return
   }
+
   await releaseStoredAgentSessionOwnerAfterSurfaceClose(input.store, {
     sessionId: input.sessionId,
     expectedFence: input.expectedFence,
@@ -56,7 +59,9 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExi
   if (input.acquisitionGeneration !== input.expectedAcquisitionGeneration) {
     throw new Error('agent_session_checkpoint_stale')
   }
+
   const record = input.store.getRecord(input.sessionId)
+
   if (
     !record ||
     record.lease.runtimeFence !== input.expectedFence ||
@@ -64,6 +69,7 @@ export async function releaseStoredStructuredAgentSessionOwnerAfterUnexpectedExi
   ) {
     throw new Error('agent_session_checkpoint_stale')
   }
+
   return releaseStoredAgentSessionOwnerAfterSurfaceClose(input.store, {
     sessionId: input.sessionId,
     expectedFence: input.expectedFence,

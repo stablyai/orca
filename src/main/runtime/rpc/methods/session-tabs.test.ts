@@ -24,6 +24,7 @@ describe('session tab RPC methods', () => {
         tabs: []
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -49,6 +50,7 @@ describe('session tab RPC methods', () => {
       listMobileSessionTabs: vi.fn().mockResolvedValue(visibleSnapshot()),
       activateMobileSessionTab: vi.fn().mockResolvedValue({ tabs: [] })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const replies: string[] = []
 
@@ -77,6 +79,7 @@ describe('session tab RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       activateMobileSessionTab: vi.fn().mockResolvedValue({ tabs: [] })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -104,6 +107,7 @@ describe('session tab RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       activateMobileSessionTab: vi.fn().mockResolvedValue({ tabs: [] })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -132,6 +136,7 @@ describe('session tab RPC methods', () => {
       }),
       closeMobileSessionTab: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -152,6 +157,7 @@ describe('session tab RPC methods', () => {
       refuseUnattributedMobileSessionTabClose: vi.fn(),
       closeMobileSessionTab: vi.fn().mockResolvedValue({ closed: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -176,6 +182,7 @@ describe('session tab RPC methods', () => {
       refuseUnattributedMobileSessionTabClose: vi.fn(),
       closeMobileSessionTab: vi.fn().mockResolvedValue({ closed: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const replies: string[] = []
 
@@ -204,6 +211,7 @@ describe('session tab RPC methods', () => {
       refuseUnattributedMobileSessionTabClose: vi.fn(),
       closeMobileSessionTab: vi.fn().mockResolvedValue({ closed: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const replies: string[] = []
 
@@ -227,6 +235,7 @@ describe('session tab RPC methods', () => {
       refuseUnattributedMobileSessionTabClose: vi.fn(),
       closeMobileSessionTab: vi.fn().mockResolvedValue({ closed: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const replies: string[] = []
 
@@ -256,6 +265,7 @@ describe('session tab RPC methods', () => {
       }),
       closeMobileSessionTab: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const replies: string[] = []
 
@@ -281,6 +291,7 @@ describe('session tab RPC methods', () => {
         getRuntimeId: () => 'test-runtime',
         closeMobileSessionTab: vi.fn()
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
       const response = await dispatcher.dispatch(
@@ -303,6 +314,7 @@ describe('session tab RPC methods', () => {
         getRuntimeId: () => 'test-runtime',
         closeMobileSessionTab: vi.fn().mockResolvedValue({ closed: true })
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
       const response = await dispatcher.dispatch(
@@ -331,6 +343,7 @@ describe('session tab RPC methods', () => {
         moved: true
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -357,6 +370,7 @@ describe('session tab RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       moveMobileSessionTab: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -379,6 +393,7 @@ describe('session tab RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       moveMobileSessionTab: vi.fn().mockResolvedValue({ moved: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -418,6 +433,7 @@ describe('session tab RPC methods', () => {
         snapshotVersion: 1
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -474,6 +490,7 @@ describe('session tab RPC methods', () => {
         snapshotVersion: 1
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -515,6 +532,7 @@ describe('session tab RPC methods', () => {
         snapshotVersion: 1
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -548,6 +566,7 @@ describe('session tab RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       createMobileSessionTerminal: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -582,6 +601,7 @@ describe('session tab RPC methods', () => {
         snapshotVersion: 1
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -611,6 +631,7 @@ describe('session tab RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       createMobileSessionTerminal: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -630,6 +651,7 @@ describe('session tab RPC methods', () => {
   it('streams all known session tab snapshots and later updates', async () => {
     const unsubscribe = vi.fn()
     const listeners: ((snapshot: unknown, changeSequence: number) => void)[] = []
+
     const snapshots = [
       {
         worktree: 'wt-1',
@@ -650,6 +672,7 @@ describe('session tab RPC methods', () => {
         tabs: []
       }
     ]
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       listAllMobileSessionTabs: vi.fn(() => snapshots),
@@ -661,11 +684,13 @@ describe('session tab RPC methods', () => {
       onMobileSessionTabsChanged: vi.fn(
         (listener: (snapshot: unknown, changeSequence: number) => void) => {
           listeners.push(listener)
+
           return unsubscribe
         }
       ),
       registerSubscriptionCleanup: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const messages: string[] = []
 
@@ -717,6 +742,7 @@ describe('session tab RPC methods', () => {
       onMobileSessionTabsChanged: vi.fn(() => vi.fn()),
       registerSubscriptionCleanup: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -757,6 +783,7 @@ describe('session tab RPC methods', () => {
       onMobileSessionTabsChanged: vi.fn(() => vi.fn()),
       registerSubscriptionCleanup: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -792,6 +819,7 @@ describe('session tab RPC methods', () => {
       onMobileSessionTabsChanged: vi.fn(() => vi.fn()),
       registerSubscriptionCleanup: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
     await dispatcher.dispatchStreaming(

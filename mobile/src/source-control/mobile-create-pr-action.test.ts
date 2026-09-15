@@ -32,6 +32,7 @@ function action(
   } = {}
 ) {
   const onCreatePr = vi.fn()
+
   const descriptor = buildMobileCreatePrAction({
     branch: Object.hasOwn(overrides, 'branch') ? overrides.branch : 'feature',
     eligibilityState:
@@ -41,6 +42,7 @@ function action(
     busyAction: overrides.busyAction ?? null,
     onCreatePr
   })
+
   return { descriptor, onCreatePr }
 }
 
@@ -157,6 +159,7 @@ describe('buildMobileCreatePrAction', () => {
 
   it('keeps a creatable button visible but disabled while a newer eligibility loads', () => {
     const onCreatePr = vi.fn()
+
     const descriptor = buildMobileCreatePrAction({
       branch: 'feature',
       // stale ready snapshot retained during the next request: chrome stays, action does not fire
@@ -222,6 +225,7 @@ describe('cold-mount layout stability (issue #8411)', () => {
         busyAction: null,
         onCreatePr: vi.fn()
       })
+
       return descriptor.visible
     })
 

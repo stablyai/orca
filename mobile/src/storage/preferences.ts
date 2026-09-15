@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const PINS_PREFIX = 'orca:pins:'
+
 // Consent to the push service is separate from the old socket notification choice.
 const NOTIF_KEY = 'orca:pushServiceNotificationsEnabled'
 
@@ -14,6 +15,7 @@ export type PushNotificationsPreference = {
 export async function readPushNotificationsPreference(): Promise<PushNotificationsPreference> {
   try {
     const raw = await AsyncStorage.getItem(NOTIF_KEY)
+
     return { value: raw === null ? null : raw === 'true', loaded: true }
   } catch {
     return { value: null, loaded: false }
@@ -24,6 +26,7 @@ export async function readPushNotificationsPreference(): Promise<PushNotificatio
 // system prompt; only the onboarding CTA or Settings switch requests permission.
 export async function loadPushNotificationsEnabled(): Promise<boolean> {
   const preference = await readPushNotificationsPreference()
+
   return preference.value ?? false
 }
 
@@ -49,10 +52,13 @@ const EMPTY_REMOTE_PUSH_HOST_REGISTRATIONS: RemotePushHostRegistrations = {
 export async function loadRemotePushHostRegistrations(): Promise<RemotePushHostRegistrations> {
   try {
     const raw = await AsyncStorage.getItem(REMOTE_PUSH_HOST_REGISTRATIONS_KEY)
+
     if (!raw) {
       return EMPTY_REMOTE_PUSH_HOST_REGISTRATIONS
     }
+
     const parsed = JSON.parse(raw) as Record<string, unknown>
+
     return {
       registeredHostIds: stringArray(parsed.registeredHostIds),
       pendingUnregisterHostIds: stringArray(parsed.pendingUnregisterHostIds)
@@ -78,15 +84,19 @@ const TEXT_SCALE_KEY = 'orca:terminalTextScale'
 // pinch-to-zoom in the terminal snaps to these same presets. Sub-1 steps shrink
 // below fit-to-width (more columns visible with side margins).
 export const TERMINAL_TEXT_SCALES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const
+
 const DEFAULT_TEXT_SCALE = 1
 
 export async function loadTerminalTextScale(): Promise<number> {
   try {
     const raw = await AsyncStorage.getItem(TEXT_SCALE_KEY)
+
     if (raw === null) {
       return DEFAULT_TEXT_SCALE
     }
+
     const parsed = Number(raw)
+
     return (TERMINAL_TEXT_SCALES as readonly number[]).includes(parsed)
       ? parsed
       : DEFAULT_TEXT_SCALE
@@ -107,6 +117,7 @@ const AUTOCOMPLETE_KEY = 'orca:terminalAutocompleteEnabled'
 export async function loadTerminalAutocompleteEnabled(): Promise<boolean> {
   try {
     const raw = await AsyncStorage.getItem(AUTOCOMPLETE_KEY)
+
     return raw === 'true'
   } catch {
     return false
@@ -136,9 +147,11 @@ export async function readDisabledTerminalLiveInputHandlesPreference(
 ): Promise<DisabledTerminalLiveInputHandlesPreference> {
   try {
     const raw = await AsyncStorage.getItem(terminalLiveInputDisabledKey(hostId, worktreeId))
+
     if (!raw) {
       return { handles: new Set(), loaded: true }
     }
+
     return { handles: new Set(stringArray(JSON.parse(raw))), loaded: true }
   } catch {
     return { handles: new Set(), loaded: false }
@@ -150,6 +163,7 @@ export async function loadDisabledTerminalLiveInputHandles(
   worktreeId: string
 ): Promise<Set<string>> {
   const preference = await readDisabledTerminalLiveInputHandlesPreference(hostId, worktreeId)
+
   return preference.handles
 }
 
@@ -170,22 +184,27 @@ const SIDEBAR_WIDTH_KEY = 'orca:hostSidebarWidth'
 // layouts (mirrors the desktop's resizable sidebar). The caller additionally
 // caps the max against the window so the detail pane keeps usable space.
 export const HOST_SIDEBAR_MIN_WIDTH = 280
+
 export const HOST_SIDEBAR_MAX_WIDTH = 560
+
 export const HOST_SIDEBAR_DEFAULT_WIDTH = 340
 
 export function clampHostSidebarWidth(width: number): number {
   if (!Number.isFinite(width)) {
     return HOST_SIDEBAR_DEFAULT_WIDTH
   }
+
   return Math.min(HOST_SIDEBAR_MAX_WIDTH, Math.max(HOST_SIDEBAR_MIN_WIDTH, Math.round(width)))
 }
 
 export async function loadHostSidebarWidth(): Promise<number> {
   try {
     const raw = await AsyncStorage.getItem(SIDEBAR_WIDTH_KEY)
+
     if (raw === null) {
       return HOST_SIDEBAR_DEFAULT_WIDTH
     }
+
     return clampHostSidebarWidth(Number(raw))
   } catch {
     return HOST_SIDEBAR_DEFAULT_WIDTH
@@ -204,22 +223,27 @@ const DOCK_WIDTH_KEY = 'orca:hostDockWidth'
 // The caller additionally caps the max against the window so the terminal keeps
 // usable space.
 export const HOST_DOCK_MIN_WIDTH = 280
+
 export const HOST_DOCK_MAX_WIDTH = 560
+
 export const HOST_DOCK_DEFAULT_WIDTH = 340
 
 export function clampHostDockWidth(width: number): number {
   if (!Number.isFinite(width)) {
     return HOST_DOCK_DEFAULT_WIDTH
   }
+
   return Math.min(HOST_DOCK_MAX_WIDTH, Math.max(HOST_DOCK_MIN_WIDTH, Math.round(width)))
 }
 
 export async function loadHostDockWidth(): Promise<number> {
   try {
     const raw = await AsyncStorage.getItem(DOCK_WIDTH_KEY)
+
     if (raw === null) {
       return HOST_DOCK_DEFAULT_WIDTH
     }
+
     return clampHostDockWidth(Number(raw))
   } catch {
     return HOST_DOCK_DEFAULT_WIDTH
@@ -233,11 +257,13 @@ export async function saveHostDockWidth(width: number): Promise<void> {
 export type MobileTerminalLinkOpenMode = 'orca-browser' | 'phone-browser'
 
 const TERMINAL_LINK_OPEN_MODE_KEY = 'orca:terminalLinkOpenMode'
+
 export const DEFAULT_TERMINAL_LINK_OPEN_MODE: MobileTerminalLinkOpenMode = 'orca-browser'
 
 export async function loadTerminalLinkOpenMode(): Promise<MobileTerminalLinkOpenMode> {
   try {
     const raw = await AsyncStorage.getItem(TERMINAL_LINK_OPEN_MODE_KEY)
+
     return raw === 'phone-browser' || raw === 'orca-browser' ? raw : DEFAULT_TERMINAL_LINK_OPEN_MODE
   } catch {
     return DEFAULT_TERMINAL_LINK_OPEN_MODE
@@ -257,9 +283,11 @@ function stringArray(value: unknown): string[] {
 export async function loadPinnedIds(hostId: string): Promise<Set<string>> {
   try {
     const raw = await AsyncStorage.getItem(PINS_PREFIX + hostId)
+
     if (!raw) {
       return new Set()
     }
+
     return new Set(stringArray(JSON.parse(raw)))
   } catch {
     return new Set()

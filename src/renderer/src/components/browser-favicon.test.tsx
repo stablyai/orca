@@ -7,6 +7,7 @@ import { BrowserFavicon } from './browser-favicon'
 afterEach(cleanup)
 
 const faviconUrl = 'https://example.test/favicon.ico'
+
 const icon = (loading = false, url: string | null = faviconUrl) =>
   createElement(BrowserFavicon, { faviconUrl: url, loading })
 

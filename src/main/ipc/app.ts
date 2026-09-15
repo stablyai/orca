@@ -28,7 +28,9 @@ import { readMacKeyboardLayoutSnapshot } from './macos-keyboard-layout-snapshot'
 import { registerMacKeyboardLayoutChangeNotifications } from './macos-keyboard-layout-change-notifications'
 
 const KEYBOARD_INPUT_SOURCE_TIMEOUT_MS = 500
+
 const MAC_HITOOLBOX_DOMAIN = 'com.apple.HIToolbox'
+
 // Why: defaults export reads live prefs (on-disk plist lags cfprefsd); xml1 dodges plutil's json abort on macOS 15 input-source arrays; absolute paths so a minimal PATH can't shadow the tools.
 const MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND = [
   `/usr/bin/defaults export ${MAC_HITOOLBOX_DOMAIN} -`,
@@ -44,23 +46,31 @@ async function pickFloatingMarkdownDocument(
   event: IpcMainInvokeEvent
 ): Promise<MarkdownDocument | null> {
   const cwd = await ensureDefaultFloatingWorkspacePath()
+
   const options = {
     defaultPath: cwd,
     properties: ['openFile'],
     filters: [{ name: 'Markdown', extensions: ['md', 'mdx', 'markdown'] }]
   } satisfies Electron.OpenDialogOptions
+
   const parentWindow = BrowserWindow.fromWebContents(event.sender)
+
   const result = parentWindow
     ? await dialog.showOpenDialog(parentWindow, options)
     : await dialog.showOpenDialog(options)
+
   if (result.canceled || result.filePaths.length === 0) {
     return null
   }
+
   const filePath = result.filePaths[0]
+
   if (!isMarkdownDocumentName(filePath)) {
     throw new Error('Selected file is not a markdown document.')
   }
+
   authorizeExternalPath(filePath)
+
   return markdownDocumentFromFilePath(cwd, filePath, { outsideRootRelativePath: 'basename' })
 }
 
@@ -69,19 +79,24 @@ async function pickFloatingWorkspaceDirectory(
   store: Store
 ): Promise<string | null> {
   const parentWindow = BrowserWindow.fromWebContents(event.sender)
+
   const options = {
     // Why: this picker only grants access to an existing directory; creation belongs to explicit file actions.
     properties: ['openDirectory']
   } satisfies Electron.OpenDialogOptions
+
   const result = parentWindow
     ? await dialog.showOpenDialog(parentWindow, options)
     : await dialog.showOpenDialog(options)
+
   if (result.canceled || result.filePaths.length === 0) {
     return null
   }
+
   const selectedDir = result.filePaths[0]
   // Why: a user-approved picker selection is a trust grant for later markdown creation, unlike typed settings text.
   await grantFloatingWorkspaceDirectory(store, selectedDir)
+
   return selectedDir
 }
 
@@ -93,6 +108,7 @@ function getFeatureWallAssetBaseUrl(): string {
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     const vitePath = assetDir.split(path.sep).join('/')
     const absoluteVitePath = vitePath.startsWith('/') ? vitePath : `/${vitePath}`
+
     // Why: Chromium blocks file:// image loads from the http dev origin; Vite's /@fs route serves the same local media.
     return new URL(`/@fs${absoluteVitePath}/`, process.env.ELECTRON_RENDERER_URL).toString()
   }
@@ -102,6 +118,7 @@ function getFeatureWallAssetBaseUrl(): string {
 
 function resolveDevFeatureWallAssetDir(): string {
   const relativeDir = path.join('resources', 'onboarding', 'feature-wall')
+
   const candidates = [
     path.join(app.getAppPath(), relativeDir),
     path.resolve(app.getAppPath(), '..', '..', relativeDir),
@@ -126,6 +143,7 @@ function readCommandStdout(
       if (!child?.pid) {
         return
       }
+
       try {
         process.kill(-child.pid, 'SIGKILL')
       } catch {
@@ -138,6 +156,7 @@ function readCommandStdout(
       if (settled) {
         return
       }
+
       settled = true
       killTree()
       reject(new Error(timeoutMessage))
@@ -147,6 +166,7 @@ function readCommandStdout(
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
       callback()
@@ -159,10 +179,12 @@ function readCommandStdout(
       child.stdout?.on('data', (chunk: string) => {
         stdout += chunk
       })
+
       const failWith = (error: Error): void => {
         killTree()
         settle(() => reject(error))
       }
+
       // Why: an unhandled Readable 'error' would crash the main process; treat stdout errors like spawn errors.
       child.stdout?.on('error', failWith)
       child.on('error', failWith)
@@ -185,11 +207,13 @@ function readCommandStdout(
 
 function readSelectedInputSourceIdFromJson(stdout: string): string | null {
   let records: unknown
+
   try {
     records = JSON.parse(stdout)
   } catch {
     return null
   }
+
   if (!Array.isArray(records)) {
     return null
   }
@@ -198,20 +222,27 @@ function readSelectedInputSourceIdFromJson(stdout: string): string | null {
     if (!record || typeof record !== 'object') {
       continue
     }
+
     const fields = record as Record<string, unknown>
     const kind = typeof fields.InputSourceKind === 'string' ? fields.InputSourceKind : ''
+
     if (kind.toLowerCase().includes('non keyboard')) {
       continue
     }
+
     const inputMode = fields['Input Mode']
+
     if (typeof inputMode === 'string' && inputMode.trim()) {
       return inputMode.trim()
     }
+
     const bundleId = fields['Bundle ID']
+
     if (typeof bundleId === 'string' && bundleId.trim()) {
       return bundleId.trim()
     }
   }
+
   return null
 }
 
@@ -222,6 +253,7 @@ async function readSelectedKeyboardInputSourceId(): Promise<string | null> {
       ['-c', MAC_SELECTED_INPUT_SOURCES_JSON_COMMAND],
       'Selected keyboard input source probe timed out'
     )
+
     return readSelectedInputSourceIdFromJson(stdout)
   } catch {
     return null
@@ -238,9 +270,11 @@ function readKeyboardLayoutInputSourceId(): Promise<string> {
 
 async function readKeyboardInputSourceId(): Promise<string | null> {
   const selectedInputSourceId = await readSelectedKeyboardInputSourceId()
+
   if (selectedInputSourceId) {
     return selectedInputSourceId
   }
+
   return readKeyboardLayoutInputSourceId()
 }
 
@@ -252,6 +286,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
 
   ipcMain.handle('app:getIdentity', (): AppIdentity => {
     const identity = getDevInstanceIdentity(is.dev)
+
     return {
       name: identity.name,
       isDev: identity.isDev,
@@ -275,10 +310,12 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     if (process.platform !== 'darwin') {
       return null
     }
+
     try {
       // Why: async so the focus-in probe (see option-as-alt-probe.ts) never blocks the main event loop.
       const stdout = await readKeyboardInputSourceId()
       const trimmed = stdout?.trim() ?? ''
+
       return trimmed.length > 0 ? trimmed : null
     } catch {
       // Why: probe can fail (missing keys on first boot, sandbox) — treat as "no signal" and fall back to the fingerprint.

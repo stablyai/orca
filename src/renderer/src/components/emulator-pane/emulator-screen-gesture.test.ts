@@ -123,6 +123,7 @@ describe('emulator screen gestures', () => {
       width: 400,
       height: 200
     }
+
     const stalePortraitStream = { width: 390, height: 844 }
 
     expect(

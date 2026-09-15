@@ -28,11 +28,14 @@ async function fetchContentAtRef(args: {
     ...githubHostExecOptions(args.ownerRepo),
     maxBuffer: GITHUB_RAW_CONTENT_MAX_BUFFER_BYTES
   }
+
   if (repositoryRateLimitGuard(args.ownerRepo, 'core', ghOptions).blocked) {
     return { content: '', isBinary: false }
   }
+
   try {
     noteRepositoryRateLimitSpend(args.ownerRepo, 'core', 1, ghOptions)
+
     const { stdout } = await ghExecFileAsync(
       [
         'api',
@@ -44,15 +47,19 @@ async function fetchContentAtRef(args: {
       ],
       ghOptions
     )
+
     const sample = stdout.slice(0, 2048)
+
     if (sample.includes('\u0000')) {
       return { content: '', isBinary: true }
     }
+
     return { content: stdout, isBinary: false }
   } catch (error) {
     if (isMaxBufferOverflowError(error)) {
       return { content: '', isBinary: false, tooLarge: true }
     }
+
     return { content: '', isBinary: false }
   }
 }
@@ -75,6 +82,7 @@ export async function getPRFileContents(args: {
     args.connectionId,
     args.localGitOptions
   )
+
   if (!ownerRepo) {
     return {
       original: '',
@@ -85,11 +93,13 @@ export async function getPRFileContents(args: {
   }
 
   await acquire()
+
   try {
     // Added and removed files have no content on one side of the comparison.
     const needsOriginal = args.status !== 'added'
     const needsModified = args.status !== 'removed'
     const originalPath = args.oldPath ?? args.path
+
     const [original, modified] = await Promise.all([
       needsOriginal
         ? fetchContentAtRef({
@@ -118,6 +128,7 @@ export async function getPRFileContents(args: {
             isBinary: false
           })
     ])
+
     return {
       original: original.content,
       modified: modified.content,

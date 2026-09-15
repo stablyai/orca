@@ -16,7 +16,9 @@ import {
 } from './stable-logical-rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
+
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
 // Why: 12+ gated reprobe ticks (45s escalating to the 675s floored ceiling) — long
@@ -47,17 +49,23 @@ describe('continuous Relay pairing-rejection escalation', () => {
     activeRelay.getLastConnectedAt = () => Date.now() - 120_000
     const logical = createStableLogicalRpcClient(new FakeSession('disconnected'), 'tailscale')
     let replacements = 0
+
     const openRelay = vi.fn(() => {
       replacements += 1
+
       if (replacements > replacementsAfter) {
         return new FakeRelaySession('connected')
       }
+
       const session = new FakeRelaySession('connecting', replacementFailure)
       setTimeout(() => session.publishState('auth-failed'), 0)
+
       return session
     })
+
     openRelay.mockImplementationOnce(() => activeRelay)
     const readBundle = vi.fn(async () => bundle)
+
     const deps = dependencies({
       openDirect: vi.fn(() => new FakeSession('disconnected')),
       openRelay,
@@ -65,7 +73,9 @@ describe('continuous Relay pairing-rejection escalation', () => {
       randomBytes: () => new Uint8Array([0, 0]),
       onLog: () => {}
     })
+
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
     return { activeRelay, logical, openRelay, supervisor }
   }
 
@@ -97,6 +107,7 @@ describe('continuous Relay pairing-rejection escalation', () => {
     openRelay.mockImplementation(() => {
       const session = new FakeRelaySession('connecting', new MobileE2EEAuthenticationError())
       setTimeout(() => session.publishState('auth-failed'), 0)
+
       return session
     })
 

@@ -69,9 +69,12 @@ export function useFileExplorerRowScrolling({
         if (index === inlineInputIndex) {
           return '__inline_input__'
         }
+
         const rowIndex = index > inlineInputIndex ? index - 1 : index
+
         return rowProjection.getRowAtIndex(rowIndex)?.path ?? `__fallback_${index}`
       }
+
       return rowProjection.getRowAtIndex(index)?.path ?? `__fallback_${index}`
     }
   })
@@ -92,12 +95,15 @@ export function useFileExplorerRowScrolling({
     flashTimeoutRef,
     virtualizer
   })
+
   const setExplorerShellRef = useCallback(
     (node: HTMLDivElement | null): void => {
       explorerShellRef.current = node
+
       if (node !== null) {
         return
       }
+
       // Why: reveal flash/scroll timers target the explorer shell; clear them
       // when that owner detaches instead of keeping a passive unmount Effect.
       cancelRevealTimers()

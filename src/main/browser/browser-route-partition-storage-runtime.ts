@@ -32,29 +32,38 @@ export async function collectOrphanedBrowserRoutePartitionStorage(
   listLocalSshTargetIds?: () => string[]
 ): Promise<string[]> {
   const orcaProfileId = activeBrowserRoutePartitionOrcaProfileId()
+
   if (!orcaProfileId) {
     return []
   }
+
   const dependencies = storageDependencies()
+
   const liveStorageScopes = new Set(
     listEnvironments(app.getPath('userData')).map((environment) =>
       deriveBrowserRoutePartitionStorageScope({ orcaProfileId, environmentId: environment.id })
     )
   )
+
   if (!listLocalSshTargetIds) {
     return []
   }
+
   for (const targetId of listLocalSshTargetIds()) {
     liveStorageScopes.add(
       deriveLocalSshBrowserRoutePartitionStorageScope({ orcaProfileId, targetId })
     )
   }
+
   const orphans = findOrphanedBrowserRoutePartitions(dependencies, liveStorageScopes)
+
   if (orphans.length === 0) {
     return []
   }
+
   const released = await releaseBrowserRoutePartitionStorage(dependencies, orphans)
   reportStorageFailures('orphan collection', released.failures)
+
   return released.clearedPartitions
 }
 
@@ -68,19 +77,25 @@ export async function clearBrowserRoutePartitionStorageForEnvironment(
   environmentId: string
 ): Promise<BrowserRoutePartitionStorageClear> {
   const orcaProfileId = activeBrowserRoutePartitionOrcaProfileId()
+
   if (!orcaProfileId) {
     return { clearedPartitions: [], livePartitions: [] }
   }
+
   const dependencies = storageDependencies()
+
   const partitions = findBrowserRoutePartitionsForStorageScope(
     dependencies,
     deriveBrowserRoutePartitionStorageScope({ orcaProfileId, environmentId })
   )
+
   if (partitions.length === 0) {
     return { clearedPartitions: [], livePartitions: [] }
   }
+
   const released = await releaseBrowserRoutePartitionStorage(dependencies, partitions)
   reportStorageFailures('environment removal', released.failures)
+
   return { clearedPartitions: released.clearedPartitions, livePartitions: released.livePartitions }
 }
 
@@ -89,19 +104,25 @@ export async function clearBrowserRoutePartitionStorageForLocalSshTarget(
   targetId: string
 ): Promise<BrowserRoutePartitionStorageClear> {
   const orcaProfileId = activeBrowserRoutePartitionOrcaProfileId()
+
   if (!orcaProfileId) {
     return { clearedPartitions: [], livePartitions: [] }
   }
+
   const dependencies = storageDependencies()
+
   const partitions = findBrowserRoutePartitionsForStorageScope(
     dependencies,
     deriveLocalSshBrowserRoutePartitionStorageScope({ orcaProfileId, targetId })
   )
+
   if (partitions.length === 0) {
     return { clearedPartitions: [], livePartitions: [] }
   }
+
   const released = await releaseBrowserRoutePartitionStorage(dependencies, partitions)
   reportStorageFailures('ssh target removal', released.failures)
+
   return { clearedPartitions: released.clearedPartitions, livePartitions: released.livePartitions }
 }
 

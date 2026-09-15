@@ -67,8 +67,11 @@ vi.mock('../pty-descendant-termination', () => ({
 // Store App Execution Alias stub — is covered in
 // windows-powershell-executable.test.ts.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('./windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -92,9 +95,11 @@ vi.mock('./windows-pty-job-membership', () => ({
 vi.mock('../wsl', () => ({
   parseWslPath: (path: string) => {
     const match = path.match(/^\\\\wsl\.localhost\\([^\\]+)(.*)$/)
+
     if (!match) {
       return null
     }
+
     return {
       distro: match[1],
       linuxPath: (match[2] || '').replace(/\\/g, '/') || '/'
@@ -180,12 +185,14 @@ describe('LocalPtyProvider', () => {
 
     it('reports native and WSL ownership explicitly on Windows', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
       const native = await provider.spawn({
         cols: 80,
         rows: 24,
         cwd: 'C:\\repo',
         shellOverride: 'powershell.exe'
       })
+
       const wsl = await provider.spawn({
         cols: 80,
         rows: 24,
@@ -202,6 +209,7 @@ describe('LocalPtyProvider', () => {
   describe('getDefaultShell', () => {
     it('returns SHELL env var on Unix', async () => {
       const originalShell = process.env.SHELL
+
       try {
         process.env.SHELL = '/bin/bash'
         expect(await provider.getDefaultShell()).toBe('/bin/bash')

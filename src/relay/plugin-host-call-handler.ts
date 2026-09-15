@@ -11,6 +11,7 @@ import {
 } from '../main/plugins/plugin-host-call-adapter'
 
 export const RELAY_PLUGIN_PANEL_HOST_CALL_METHOD = 'plugins.hostCall.panel'
+
 export const RELAY_PLUGIN_WORKER_HOST_CALL_METHOD = 'plugins.hostCall.worker'
 
 export type RelayPluginHostCallDispatcher = {
@@ -30,14 +31,17 @@ export function registerRelayPluginHostCallHandlers(
   options: { panelAdmission?: PluginPanelCallAdmission } = {}
 ): void {
   const panelAdmission = options.panelAdmission ?? createPluginPanelCallAdmission()
+
   const register = (registeredMethod: string, viaPanel: boolean): void => {
     dispatcher.onRequest(registeredMethod, async (params, context) => {
       let pluginKey: string | null
+
       try {
         pluginKey = await resolveIdentity(context)
       } catch {
         pluginKey = null
       }
+
       if (!pluginKey) {
         return {
           ok: false,
@@ -45,15 +49,19 @@ export function registerRelayPluginHostCallHandlers(
           error: 'plugin host authority is not available'
         }
       }
+
       if (viaPanel) {
         const admissionRefusal = admitPluginPanelCall(panelAdmission, pluginKey, params)
+
         if (admissionRefusal) {
           return admissionRefusal
         }
       }
+
       if (!isPluginHostCallRequest(params)) {
         return { ok: false, code: 'invalid_request', error: 'malformed plugin host call request' }
       }
+
       return executePluginHostCallRequest({
         pluginKey,
         request: params,
@@ -62,6 +70,7 @@ export function registerRelayPluginHostCallHandlers(
       })
     })
   }
+
   // Why: transport authority is fixed by the registered RPC method; callers
   // cannot promote a panel call to the wider worker method set in params.
   register(RELAY_PLUGIN_PANEL_HOST_CALL_METHOD, true)

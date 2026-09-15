@@ -43,18 +43,22 @@ describe('serve supervisor disconnect quit', () => {
 
   afterEach(() => {
     const slot = globalThis as Record<symbol, unknown>
+
     if (installedEnvironment === undefined) {
       delete slot[APP_ENVIRONMENT_SLOT]
     } else {
       slot[APP_ENVIRONMENT_SLOT] = installedEnvironment
     }
+
     Object.defineProperty(process, 'platform', originalPlatform)
+
     // Why restore rather than delete: this suite can run inside a serve process that set it.
     if (installedHandoffPath === undefined) {
       delete process.env[SERVE_UPDATE_HANDOFF_PATH_ENV]
     } else {
       process.env[SERVE_UPDATE_HANDOFF_PATH_ENV] = installedHandoffPath
     }
+
     rmSync(userDataDir, { recursive: true, force: true })
     vi.resetModules()
   })
@@ -71,6 +75,7 @@ describe('serve supervisor disconnect quit', () => {
     installFakeAppEnvironment({ getPath: () => userDataDir })
     const { installServeSupervisorDisconnectQuit } = await import('./serve-update-handoff')
     const listeners: (() => void)[] = []
+
     const parent = {
       once: (_event: 'disconnect', listener: () => void) => listeners.push(listener),
       off: (_event: 'disconnect', listener: () => void) =>

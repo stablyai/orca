@@ -14,7 +14,9 @@ import { getManagedScript as getClaudeManagedScript } from '../claude/hook-servi
 import { getManagedScript as getCursorManagedScript } from '../cursor/hook-script'
 
 const POSIX_GROK_GUARD = 'if [ -n "$GROK_HOOK_EVENT" ]; then'
+
 const WINDOWS_GROK_GUARD = 'if not "%GROK_HOOK_EVENT%"=="" goto :orca_agent_hook_drain_stdin'
+
 const CLAUDE_SCRIPT_OPTIONS = {
   skipWhenDevinImportsClaude: true,
   skipWhenGrokImportsClaude: true
@@ -23,6 +25,7 @@ const CLAUDE_SCRIPT_OPTIONS = {
 function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')!
   Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+
   try {
     return run()
   } finally {
@@ -39,6 +42,7 @@ function expectGuardBeforeTransport(
   const guardIndex = script.indexOf(guard)
   expect(guardIndex).toBeGreaterThan(script.indexOf(response))
   expect(guardIndex).toBeLessThan(script.indexOf('curl'))
+
   if (spool) {
     expect(guardIndex).toBeLessThan(script.indexOf(spool))
   }
@@ -55,6 +59,7 @@ function runPosixHook(
   const scriptPath = join(dir, 'hook.sh')
   const curlPath = join(dir, 'curl')
   const curlLog = join(dir, 'curl.log')
+
   try {
     writeFileSync(scriptPath, script)
     writeFileSync(
@@ -81,6 +86,7 @@ function runPosixHook(
 
     expect(result.error).toBeUndefined()
     expect(result.status).toBe(0)
+
     return { curlCalled: existsSync(curlLog), stdout: result.stdout }
   } finally {
     rmSync(dir, { recursive: true, force: true })

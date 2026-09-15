@@ -36,16 +36,20 @@ export function useEditorContentChangeHandler({
       if (!file) {
         return
       }
+
       setEditorDraft(file.id, content)
       const ignoreTrailingWhitespace = file.language === 'markdown'
+
       if (file.mode === 'edit') {
         const original = fileContentsRef.current[file.id]?.content ?? ''
         markFileDirty(
           file.id,
           !isEditorContentUnchanged(content, original, ignoreTrailingWhitespace)
         )
+
         return
       }
+
       const diffContent = diffContentsRef.current[file.id]
       const original = diffContent?.kind === 'text' ? diffContent.modifiedContent : ''
       markFileDirty(file.id, !isEditorContentUnchanged(content, original, ignoreTrailingWhitespace))

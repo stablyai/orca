@@ -8,6 +8,7 @@ export function credentialDecryptionMessage(service: IntegrationCredentialServic
 // survives serialization, so detection matches on the canonical message.
 export function isIntegrationCredentialDecryptionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
+
   return (
     message.includes(credentialDecryptionMessage('Linear')) ||
     message.includes(credentialDecryptionMessage('Jira')) ||

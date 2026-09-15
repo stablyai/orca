@@ -27,10 +27,13 @@ export async function listLabels(
     connectionId,
     localGitOptions
   )
+
   if (!ownerRepo) {
     return []
   }
+
   await acquire()
+
   try {
     const { stdout } = await ghExecFileAsync(
       [
@@ -42,6 +45,7 @@ export async function listLabels(
       ],
       ghOptions
     )
+
     return stdout
       .trim()
       .split('\n')
@@ -73,10 +77,13 @@ export async function listAssignableUsers(
     connectionId,
     localGitOptions
   )
+
   if (!ownerRepo) {
     return []
   }
+
   await acquire()
+
   try {
     // Why: paginate through all assignable users — GraphQL's assignableUsers
     // maxes out at 100 per page and large orgs/repos silently lose assignees
@@ -93,15 +100,21 @@ export async function listAssignableUsers(
       ],
       ghOptions
     )
+
     type RESTAssignee = { login?: string; avatar_url?: string | null }
+
     const users: GitHubAssignableUser[] = []
+
     for (const line of stdout.split('\n')) {
       const trimmed = line.trim()
+
       if (!trimmed) {
         continue
       }
+
       try {
         const user = JSON.parse(trimmed) as RESTAssignee
+
         if (user.login) {
           users.push({
             login: user.login,
@@ -113,6 +126,7 @@ export async function listAssignableUsers(
         // Skip malformed NDJSON lines defensively.
       }
     }
+
     return users
   } catch {
     return []

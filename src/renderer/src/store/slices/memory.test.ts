@@ -46,12 +46,14 @@ afterEach(() => {
 describe('createMemorySlice', () => {
   it('dedupes concurrent memory snapshot IPC calls', async () => {
     let resolveSnapshot: (snapshot: MemorySnapshot) => void = () => {}
+
     const getSnapshot = vi.fn(
       () =>
         new Promise<MemorySnapshot>((resolve) => {
           resolveSnapshot = resolve
         })
     )
+
     vi.stubGlobal('window', { api: { memory: { getSnapshot } } })
 
     const store = makeStore()

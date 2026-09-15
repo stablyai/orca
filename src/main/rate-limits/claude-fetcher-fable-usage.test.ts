@@ -64,12 +64,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('accepts Claude Code statusline-style rate limit window fields', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({
         claudeAiOauth: {
@@ -100,12 +102,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('maps active Fable usage from the scoped OAuth limits array without a PTY read', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'managed:account-1'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({ claudeAiOauth: { accessToken: 'oauth-token' } })
     )
@@ -146,12 +150,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('surfaces inactive scoped Fable usage over the legacy OAuth fallback', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({ claudeAiOauth: { accessToken: 'oauth-token' } })
     )
@@ -181,12 +187,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('surfaces an inactive scoped Fable entry when no legacy Fable field exists (#8979)', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({ claudeAiOauth: { accessToken: 'oauth-token' } })
     )
@@ -221,12 +229,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('supplements managed-account OAuth usage with Fable from the CLI usage panel', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'managed:account-1'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({
         claudeAiOauth: {
@@ -275,12 +285,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('supplements system OAuth usage when the service explicitly allows usage-panel reads', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({
         claudeAiOauth: {
@@ -326,12 +338,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('ignores bare Fable OAuth usage because the window length is ambiguous', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({
         claudeAiOauth: {

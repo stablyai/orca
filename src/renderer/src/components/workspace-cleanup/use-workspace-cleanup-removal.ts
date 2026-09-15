@@ -54,15 +54,19 @@ export function useWorkspaceCleanupRemoval({
 
   const [confirming, setConfirming] = useState(false)
   const [confirmCandidates, setConfirmCandidates] = useState<WorkspaceCleanupCandidate[]>([])
+
   const [removalProgress, setRemovalProgress] = useState<WorkspaceCleanupRemovalProgress | null>(
     null
   )
+
   // Why: `removalProgress` only arrives once the batch reports, so rendering
   // needs its own in-flight flag; removalInFlightRef stays the synchronous guard.
   const [removalInFlight, setRemovalInFlight] = useState(false)
+
   const [deletionPhaseByIdentity, setDeletionPhaseByIdentity] = useState<
     Record<string, 'queued' | 'deleting'>
   >({})
+
   const [rowFailures, setRowFailures] = useState<Record<string, WorkspaceCleanupFailure>>({})
   const removalInFlightRef = useRef(false)
   // Why: the dialog stays mounted across cleanup runs, so late settlements from
@@ -75,6 +79,7 @@ export function useWorkspaceCleanupRemoval({
     if (removalInFlightRef.current) {
       return
     }
+
     setConfirming(false)
     setRowFailures({})
   }, [])
@@ -82,10 +87,13 @@ export function useWorkspaceCleanupRemoval({
   const clearQueuedDeleteState = useCallback(
     (worktreeId: string, executionHostId?: WorkspaceCleanupFailure['executionHostId']) => {
       const deleteStateByWorktreeId = useAppStore.getState().deleteStateByWorktreeId
+
       const key = executionHostId
         ? composeWorktreeHostIdentity(executionHostId, worktreeId)
         : worktreeId
+
       const deleteState = deleteStateByWorktreeId[key]
+
       // Why: candidates that fail before removal starts would otherwise stay
       // marked "Queued for deletion" in the sidebar; rows already in the
       // 'deleting' phase or failed with an error keep their own state.
@@ -108,9 +116,11 @@ export function useWorkspaceCleanupRemoval({
       candidates,
       useAppStore.getState().deleteStateByWorktreeId
     )
+
     if (nextCandidates.length === 0) {
       return
     }
+
     setConfirmCandidates(nextCandidates)
     setConfirming(true)
   }, [])
@@ -118,8 +128,10 @@ export function useWorkspaceCleanupRemoval({
   const cancelConfirmRemove = useCallback(() => {
     if (removalProgress) {
       closeModal()
+
       return
     }
+
     setConfirming(false)
     setConfirmCandidates([])
   }, [closeModal, removalProgress])
@@ -145,31 +157,39 @@ export function useWorkspaceCleanupRemoval({
     if (confirmCandidates.length === 0 || removalInFlightRef.current) {
       return
     }
+
     const removableCandidates = filterWorkspaceCleanupRemovalCandidates(
       confirmCandidates,
       useAppStore.getState().deleteStateByWorktreeId
     )
+
     if (removableCandidates.length === 0) {
       setConfirming(false)
       setConfirmCandidates([])
+
       return
     }
+
     removalInFlightRef.current = true
     setRemovalInFlight(true)
     removalBatchIdRef.current += 1
     const removalBatchId = removalBatchIdRef.current
+
     // Why: a hung late settlement retains these callbacks for the renderer's
     // lifetime; capture only ids so it cannot pin the candidate objects.
     const removableDeleteStateTargets = removableCandidates.map((candidate) => {
       const hostId = resolveWorkspaceCleanupRemovalHostId(candidate)
+
       return hostId ? { id: candidate.worktreeId, hostId } : candidate.worktreeId
     })
+
     const removableIdentities = removableCandidates.map(getWorkspaceCleanupCandidateIdentity)
     setRowFailures({})
     setDeletionPhaseByIdentity(
       Object.fromEntries(removableIdentities.map((identity) => [identity, 'queued' as const]))
     )
     markWorktreesQueuedForDeletion(removableDeleteStateTargets)
+
     const handleRemovalError = (): void => {
       for (const target of removableDeleteStateTargets) {
         if (typeof target === 'string') {
@@ -178,11 +198,14 @@ export function useWorkspaceCleanupRemoval({
           clearWorktreeDeleteState(target.id, target.hostId)
         }
       }
+
       if (mountedRef.current) {
         settle()
       }
+
       removalInFlightRef.current = false
     }
+
     try {
       const snapshotPruneBatch = createWorkspaceCleanupSnapshotPruneBatch()
       startWorkspaceCleanupBackgroundRemoval({
@@ -199,28 +222,34 @@ export function useWorkspaceCleanupRemoval({
         },
         onRowFailed: (failure) => {
           clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
+
           if (!mountedRef.current) {
             return
           }
+
           const identity = getWorkspaceCleanupFailureIdentity(failure)
           setDeletionPhaseByIdentity((current) => {
             const next = { ...current }
             delete next[identity]
+
             return next
           })
         },
         onResult: (result) => {
           const nextFailures: Record<string, WorkspaceCleanupFailure> = {}
+
           for (const failure of result.failures) {
             nextFailures[getWorkspaceCleanupFailureIdentity(failure)] = failure
             // Why: defensively covers failures that never reached onRowFailed.
             clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
           }
+
           if (mountedRef.current) {
             setRowFailures(nextFailures)
             onDeselect(result.removedIdentities)
             settle()
           }
+
           removalInFlightRef.current = false
         },
         onLateResult: (result) => {
@@ -229,17 +258,22 @@ export function useWorkspaceCleanupRemoval({
             // reached 'deleting'; clear its queued overlay like every other path.
             clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
           }
+
           if (!mountedRef.current || removalBatchIdRef.current !== removalBatchId) {
             return
           }
+
           setRowFailures((current) => {
             const next = { ...current }
+
             for (const identity of result.removedIdentities) {
               delete next[identity]
             }
+
             for (const failure of result.failures) {
               next[getWorkspaceCleanupFailureIdentity(failure)] = failure
             }
+
             return next
           })
           onDeselect(result.removedIdentities)

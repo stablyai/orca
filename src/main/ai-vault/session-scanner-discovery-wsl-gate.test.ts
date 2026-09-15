@@ -58,6 +58,7 @@ afterEach(async () => {
   if (!vi.isFakeTimers()) {
     return
   }
+
   releaseStall?.()
   await vi.advanceTimersByTimeAsync(0)
   vi.useRealTimers()
@@ -98,6 +99,7 @@ describe('discoverFiles containment for a stalled WSL root', () => {
         dir === UNC_ROOT ? stalls<Dirent[]>() : Promise.resolve([])
       )
       const issues: AiVaultScanIssue[] = []
+
       const discovery = discoverFiles({
         rootDir: UNC_ROOT,
         limit: 10,
@@ -105,6 +107,7 @@ describe('discoverFiles containment for a stalled WSL root', () => {
         issues,
         extensions: ['.jsonl']
       })
+
       const healthy = discoverFiles({
         rootDir: '/home/ada/.codex/sessions',
         limit: 10,
@@ -130,6 +133,7 @@ describe('discoverFiles containment for a stalled WSL root', () => {
       fsMocks.readdir.mockResolvedValue(names)
       fsMocks.stat.mockImplementation(stalls)
       const issues: AiVaultScanIssue[] = []
+
       const discovery = discoverFiles({
         rootDir: UNC_ROOT,
         limit: 10,

@@ -22,6 +22,7 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
 
   protected markSharedRuntimeAuthManaged(accountId: string): void {
     const status = this.resolveSharedRuntimeAuthProvenanceStatus()
+
     if (
       status.kind === 'committed' &&
       status.provenance.owner === 'managed' &&
@@ -29,18 +30,22 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
     ) {
       return
     }
+
     const runtimeAuthJson = this.readRuntimeAuthForProvenance()
     const systemDefaultBaseline = this.getUntouchedSystemDefaultBaseline(status, runtimeAuthJson)
+
     const provenance: CodexSharedRuntimeAuthProvenance = {
       owner: 'managed',
       accountId,
       ...(systemDefaultBaseline ? { systemDefaultBaseline } : {})
     }
+
     this.persistSharedRuntimeAuthProvenance({
       owner: 'pending',
       next: provenance,
       runtimeAuthJson
     })
+
     if (this.readRuntimeAuthForProvenance() === runtimeAuthJson) {
       this.persistSharedRuntimeAuthProvenance(provenance)
     }
@@ -53,10 +58,12 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
     if (status.kind !== 'committed') {
       return null
     }
+
     const baseline =
       status.provenance.owner === 'system-default'
         ? { authJson: status.provenance.authJson }
         : status.provenance.systemDefaultBaseline
+
     return baseline && runtimeAuthJson === baseline.authJson ? baseline : null
   }
 
@@ -64,19 +71,24 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
     provenance: Extract<CodexSharedRuntimeAuthProvenance, { owner: 'managed' }>
   ): Extract<CodexSharedRuntimeAuthProvenance, { owner: 'system-default' }> | null {
     const baseline = provenance.systemDefaultBaseline
+
     if (!baseline || this.readRuntimeAuthForProvenance() !== baseline.authJson) {
       return null
     }
+
     const restored = { owner: 'system-default' as const, authJson: baseline.authJson }
     this.persistSharedRuntimeAuthProvenance({
       owner: 'pending',
       next: restored,
       runtimeAuthJson: baseline.authJson
     })
+
     if (this.readRuntimeAuthForProvenance() !== baseline.authJson) {
       return null
     }
+
     this.persistSharedRuntimeAuthProvenance(restored)
+
     return restored
   }
 
@@ -87,6 +99,7 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
     if (status.kind !== 'committed' || status.provenance.owner !== expected.owner) {
       return false
     }
+
     return expected.owner === 'system-default'
       ? status.provenance.owner === 'system-default' &&
           status.provenance.authJson === expected.authJson
@@ -95,25 +108,34 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
 
   protected resolveSharedRuntimeAuthProvenanceStatus(): CodexSharedRuntimeAuthProvenanceStatus {
     const provenancePath = this.getSharedRuntimeAuthProvenancePath()
+
     if (!existsSync(provenancePath)) {
       return { kind: 'missing' }
     }
+
     let parsed: unknown
+
     try {
       parsed = JSON.parse(readFileSync(provenancePath, 'utf-8')) as unknown
     } catch {
       return { kind: 'fenced' }
     }
+
     const committed = this.parseSharedRuntimeAuthProvenance(parsed)
+
     if (committed) {
       return { kind: 'committed', provenance: committed }
     }
+
     const pending = this.parsePendingSharedRuntimeAuthProvenance(parsed)
+
     if (!pending || this.readRuntimeAuthForProvenance() !== pending.runtimeAuthJson) {
       return { kind: 'fenced' }
     }
+
     try {
       this.persistSharedRuntimeAuthProvenance(pending.next)
+
       return { kind: 'committed', provenance: pending.next }
     } catch {
       return { kind: 'fenced' }
@@ -126,13 +148,16 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return null
     }
+
     const provenance = value as Record<string, unknown>
+
     if (
       provenance.owner === 'system-default' &&
       (typeof provenance.authJson === 'string' || provenance.authJson === null)
     ) {
       return { owner: 'system-default', authJson: provenance.authJson }
     }
+
     if (
       provenance.owner !== 'managed' ||
       typeof provenance.accountId !== 'string' ||
@@ -140,10 +165,13 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
     ) {
       return null
     }
+
     const baseline = this.parseSystemDefaultBaseline(provenance.systemDefaultBaseline)
+
     if ('systemDefaultBaseline' in provenance && !baseline) {
       return null
     }
+
     return {
       owner: 'managed',
       accountId: provenance.accountId,
@@ -155,7 +183,9 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return null
     }
+
     const baseline = value as Record<string, unknown>
+
     return typeof baseline.authJson === 'string' || baseline.authJson === null
       ? { authJson: baseline.authJson }
       : null
@@ -167,8 +197,10 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       return null
     }
+
     const pending = value as Record<string, unknown>
     const next = this.parseSharedRuntimeAuthProvenance(pending.next)
+
     return pending.owner === 'pending' &&
       next &&
       (typeof pending.runtimeAuthJson === 'string' || pending.runtimeAuthJson === null)
@@ -186,13 +218,16 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
 
   protected readSystemDefaultSnapshot(snapshotPath: string): CodexSystemDefaultSnapshot | null {
     let rawContents: string
+
     try {
       rawContents = readFileSync(snapshotPath, 'utf-8')
     } catch {
       return null
     }
+
     try {
       const parsed = JSON.parse(rawContents) as unknown
+
       if (
         parsed &&
         typeof parsed === 'object' &&
@@ -203,6 +238,7 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
       ) {
         return parsed as CodexSystemDefaultSnapshot
       }
+
       // Why: pre-PR snapshots stored raw auth.json; treat objects lacking an authJson wrapper as legacy so upgraders don't lose their auth.
       if (
         parsed &&
@@ -215,6 +251,7 @@ export abstract class CodexRuntimeHomeAuthProvenance extends CodexRuntimeHomeAut
     } catch {
       return null
     }
+
     return null
   }
 

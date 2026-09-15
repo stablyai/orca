@@ -16,13 +16,16 @@ afterEach(() => {
 function makeRepo(scripts: Record<string, { body?: string; mode?: number }>): string {
   const root = mkdtempSync(join(tmpdir(), 'orca-vm-doctor-'))
   roots.push(root)
+
   for (const [relPath, opts] of Object.entries(scripts)) {
     const full = join(root, relPath)
     writeFileSync(full, opts.body ?? '#!/usr/bin/env bash\necho hi\n')
+
     if (opts.mode !== undefined) {
       chmodSync(full, opts.mode)
     }
   }
+
   return root
 }
 
@@ -48,12 +51,14 @@ describe('doctorEphemeralVmRecipe', () => {
       'create.sh': { mode: 0o755 },
       'destroy.sh': { mode: 0o755 }
     })
+
     const result = run(repo, {
       id: 'cloud',
       name: 'Cloud',
       create: './create.sh',
       destroy: './destroy.sh'
     })
+
     expect(result.ok).toBe(true)
     expect(checkById(result, 'recipe.create')?.status).toBe('pass')
     expect(checkById(result, 'recipe.destroy')?.status).toBe('pass')
@@ -65,6 +70,7 @@ describe('doctorEphemeralVmRecipe', () => {
       'suspend.sh': { mode: 0o755 },
       'resume.sh': { mode: 0o755 }
     })
+
     const result = run(repo, {
       id: 'cloud',
       name: 'Cloud',
@@ -73,6 +79,7 @@ describe('doctorEphemeralVmRecipe', () => {
       resume: './resume.sh',
       destroyDisabled: true
     })
+
     expect(checkById(result, 'recipe.suspend')?.status).toBe('pass')
     expect(checkById(result, 'recipe.resume')?.status).toBe('pass')
     expect(checkById(result, 'recipe.suspend_resume_pairing')).toBeUndefined()
@@ -81,6 +88,7 @@ describe('doctorEphemeralVmRecipe', () => {
 
   it('warns when only one of suspend/resume is defined (asymmetry strands the workspace)', () => {
     const repo = makeRepo({ 'create.sh': { mode: 0o755 }, 'suspend.sh': { mode: 0o755 } })
+
     const result = run(repo, {
       id: 'cloud',
       name: 'Cloud',
@@ -88,6 +96,7 @@ describe('doctorEphemeralVmRecipe', () => {
       suspend: './suspend.sh',
       destroyDisabled: true
     })
+
     expect(checkById(result, 'recipe.suspend_resume_pairing')?.status).toBe('warn')
     // warn never flips ok
     expect(result.ok).toBe(true)
@@ -97,28 +106,33 @@ describe('doctorEphemeralVmRecipe', () => {
     if (process.platform === 'win32') {
       return
     }
+
     const repo = makeRepo({
       'create.sh': { mode: 0o644 },
       'destroy.sh': { mode: 0o755 }
     })
+
     const result = run(repo, {
       id: 'cloud',
       name: 'Cloud',
       create: './create.sh',
       destroy: './destroy.sh'
     })
+
     expect(checkById(result, 'recipe.create')?.status).toBe('warn')
     expect(result.ok).toBe(true)
   })
 
   it('fails when a referenced script does not exist', () => {
     const repo = makeRepo({ 'create.sh': { mode: 0o755 } })
+
     const result = run(repo, {
       id: 'cloud',
       name: 'Cloud',
       create: './create.sh',
       destroy: './missing.sh'
     })
+
     expect(checkById(result, 'recipe.destroy')?.status).toBe('fail')
     expect(result.ok).toBe(false)
   })

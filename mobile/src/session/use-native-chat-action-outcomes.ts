@@ -14,9 +14,11 @@ export function useNativeChatAcceptedAction<Params extends unknown[]>(
   return useCallback(
     async (...params: Params): Promise<boolean> => {
       const accepted = await action(...params)
+
       if (accepted) {
         onAccepted()
       }
+
       return accepted
     },
     [action, onAccepted]

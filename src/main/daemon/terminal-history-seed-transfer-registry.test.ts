@@ -33,11 +33,13 @@ describe('TerminalHistorySeedTransferRegistry', () => {
 
   it('rejects a digest mismatch and releases the transfer', () => {
     const registry = new TerminalHistorySeedTransferRegistry()
+
     const transferId = registry.start('owner', {
       chunkCount: 1,
       codeUnits: 4,
       sha256: '0'.repeat(64)
     })
+
     registry.append('owner', transferId, 0, 'test')
 
     expect(() => registry.finish('owner', transferId)).toThrow('digest mismatch')

@@ -19,6 +19,7 @@ import WorktreeJumpPalette from './WorktreeJumpPalette'
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
+
   return {
     ...actual,
     useTranslation: () => ({
@@ -55,6 +56,7 @@ vi.mock('@/components/cmd-j/palette-host-badge', () => ({
 
 vi.mock('@/components/ui/command', async () => {
   const React = await import('react')
+
   return {
     Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     CommandGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -83,6 +85,7 @@ vi.mock('@/components/ui/command', async () => {
       ref: React.ForwardedRef<HTMLInputElement>
     ) {
       setCommandQuery = onValueChange ?? null
+
       return <input ref={ref} data-command-input="true" value={value} onChange={() => {}} />
     }),
     CommandList: React.forwardRef(function CommandList(
@@ -121,11 +124,15 @@ vi.mock('@/components/ui/command', async () => {
 })
 
 const initialAppState = useAppStore.getInitialState()
+
 let testRoot: Root
+
 let testContainer: HTMLDivElement
+
 let setCommandQuery: ((next: string) => void) | null = null
 
 const WORKSPACE_TAB_ITEM_PREFIX = encodePaletteIdentity(['workspace-tab'])
+
 const WORKTREE_ITEM_PREFIX = encodePaletteIdentity(['worktree'])
 
 function workspaceTabItemId(worktreeId: string, tabId: string): string {
@@ -218,6 +225,7 @@ function makeGroup(worktreeId: string, tabIds: string[]): TabGroup {
 /** Both primaries overflow their first-screen slice, so the layout interleaves. */
 function makeInterleavedQueryState(): Partial<AppState> {
   const tabIds = Array.from({ length: 8 }, (_, index) => `${index}`)
+
   return {
     worktreesByRepo: {
       'repo-1': [
@@ -281,6 +289,7 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
 /** Palette state with `count` "Perf chat" tabs on one worktree plus 5 "improve-perf" worktrees. */
 function perfTabsPaletteProps(count: number): Partial<AppState> {
   const tabIds = Array.from({ length: count }, (_, index) => `${index}`)
+
   return {
     worktreesByRepo: {
       'repo-1': [
@@ -317,21 +326,27 @@ function getPrimaryRowsBySectionHeader(): { header: string; rowId: string }[] {
   const headerLabels = new Set(['Open Tabs', 'Worktrees'])
   const pairs: { header: string; rowId: string }[] = []
   let header = ''
+
   for (const node of testContainer.querySelectorAll<HTMLElement>(
     '[data-command-item], .uppercase'
   )) {
     const rowId = node.dataset.commandItem
+
     if (rowId) {
       if (isWorkspaceTabItemId(rowId) || isWorktreeItemId(rowId)) {
         pairs.push({ header, rowId })
       }
+
       continue
     }
+
     const label = node.textContent?.trim() ?? ''
+
     if (!node.closest('[data-command-item]') && headerLabels.has(label)) {
       header = label
     }
   }
+
   return pairs
 }
 
@@ -365,6 +380,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     // Why the counts: both remainders must still render, just under a re-emitted header.
     expect(rows.filter((row) => isWorkspaceTabItemId(row.rowId))).toHaveLength(8)
     expect(rows.filter((row) => isWorktreeItemId(row.rowId))).toHaveLength(5)
+
     for (const { header, rowId } of rows) {
       expect(header).toBe(isWorkspaceTabItemId(rowId) ? 'Open Tabs' : 'Worktrees')
     }
@@ -391,6 +407,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
       leadingItems: tabIds,
       trailingItems: worktreeIds
     })
+
     const expectedOrder = orderMultiPrimaryPaletteItems(layout)
     expect(renderedIds).toEqual(expectedOrder)
   })
@@ -444,6 +461,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     const row = testContainer.querySelector(
       `[data-command-item="${workspaceTabItemId('wt-tabs', 'tab-0')}"]`
     )
+
     expect(row).not.toBeNull()
     const title = row?.querySelector('[data-slot="palette-open-tab-title"]')
     const worktree = row?.querySelector('[data-slot="palette-open-tab-worktree"]')
@@ -480,6 +498,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     const row = testContainer.querySelector(
       `[data-command-item="${workspaceTabItemId('wt-tabs', 'tab-0')}"]`
     )
+
     expect(row).not.toBeNull()
     const worktree = row?.querySelector('[data-slot="palette-open-tab-worktree"]')
     expect(worktree?.textContent).toBe('main')
@@ -495,9 +514,11 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
 
     // Preview is 6; 74 follow, 30 of them past the hard cap of 50.
     expect(testContainer.textContent).toContain('74 more')
+
     const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
     )
+
     expect(seeMoreBtn).toBeDefined()
 
     // Click See more button
@@ -521,9 +542,11 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
 
     // 6 preview tabs, 24 more follow below the worktrees section
     expect(testContainer.textContent).toContain('24 more')
+
     const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
     )
+
     expect(seeMoreBtn).toBeDefined()
 
     // Click See more: preview expands to 6 + 20 = 26 tabs, leaving 4 more
@@ -537,6 +560,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     const seeMoreBtn2 = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
     )
+
     expect(seeMoreBtn2).toBeDefined()
 
     // Click See more again: preview expands to 26 + 20 = 46 tabs (fits all 30), hint disappears
@@ -559,6 +583,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
     )
+
     await act(async () => {
       seeMoreBtn?.click()
     })
@@ -577,6 +602,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     const worktrees = Array.from({ length: 35 }, (_, index) =>
       makeWorktree(`wt-${index}`, `project-wt-${index}`)
     )
+
     await renderPalette({
       worktreesByRepo: { 'repo-1': worktrees },
       showSleepingWorkspaces: true
@@ -584,13 +610,17 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
 
     // Empty query with 35 worktrees: initial cap is 10, 25 more
     expect(testContainer.textContent).toContain('25 more')
+
     const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
     )
+
     expect(seeMoreBtn).toBeDefined()
+
     const initialItemIds = Array.from(testContainer.querySelectorAll('[cmdk-item]')).map((item) =>
       item.getAttribute('data-value')
     )
+
     const seeMoreIndex = initialItemIds.indexOf('__hint_worktree_overflow__')
     expect(seeMoreIndex).toBeGreaterThan(0)
     const input = testContainer.querySelector<HTMLInputElement>('[data-command-input="true"]')
@@ -605,11 +635,14 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     const renderedItems = testContainer.querySelectorAll(
       `[data-command-item^="${WORKTREE_ITEM_PREFIX}"]`
     )
+
     expect(renderedItems).toHaveLength(30)
     expect(testContainer.textContent).toContain('5 more')
+
     const firstRevealedItemId = Array.from(testContainer.querySelectorAll('[cmdk-item]'))[
       seeMoreIndex
     ]?.getAttribute('data-value')
+
     expect(firstRevealedItemId).toMatch(new RegExp(`^${WORKTREE_ITEM_PREFIX}`))
     expect(firstRevealedItemId).not.toBe(initialItemIds[0])
     expect(
@@ -623,6 +656,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     const seeMoreBtn2 = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
     )
+
     await act(async () => {
       seeMoreBtn2?.click()
     })
@@ -631,6 +665,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     const renderedItemsAll = testContainer.querySelectorAll(
       `[data-command-item^="${WORKTREE_ITEM_PREFIX}"]`
     )
+
     expect(renderedItemsAll).toHaveLength(35)
     expect(testContainer.textContent).not.toContain('more')
   })

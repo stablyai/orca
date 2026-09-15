@@ -45,6 +45,7 @@ describe('getLayoutBaseCharacterForCode', () => {
       ['Semicolon', 'm'],
       ['KeyE', 'Dead']
     ])
+
     _setLayoutMapForTests({
       get: (code) => azertyEntries.get(code),
       size: azertyEntries.size
@@ -85,6 +86,7 @@ describe('getLayoutBaseCharacterForCode', () => {
       }
     })
     let resolveMap!: (map: { get: (code: string) => string | undefined; size: number }) => void
+
     let resolveSnapshot!: (snapshot: {
       inputSourceId: string
       keyCharacters: Record<
@@ -95,15 +97,18 @@ describe('getLayoutBaseCharacterForCode', () => {
         }
       >
     }) => void
+
     const mapPromise = new Promise<{
       get: (code: string) => string | undefined
       size: number
     }>((resolve) => {
       resolveMap = resolve
     })
+
     const snapshotPromise = new Promise<Parameters<typeof resolveSnapshot>[0]>((resolve) => {
       resolveSnapshot = resolve
     })
+
     vi.stubGlobal('window', {
       navigator: { keyboard: { getLayoutMap: () => mapPromise } },
       api: { app: { getKeyboardLayoutSnapshot: () => snapshotPromise } }
@@ -147,16 +152,20 @@ describe('getLayoutBaseCharacterForCode', () => {
     let focusListener: (() => void) | undefined
     let resolveOldSnapshot!: (snapshot: KeyboardLayoutSnapshot) => void
     let resolveNewSnapshot!: (snapshot: KeyboardLayoutSnapshot) => void
+
     const oldSnapshot = new Promise<KeyboardLayoutSnapshot>((resolve) => {
       resolveOldSnapshot = resolve
     })
+
     const newSnapshot = new Promise<KeyboardLayoutSnapshot>((resolve) => {
       resolveNewSnapshot = resolve
     })
+
     const getKeyboardLayoutSnapshot = vi
       .fn<() => Promise<KeyboardLayoutSnapshot>>()
       .mockReturnValueOnce(oldSnapshot)
       .mockReturnValueOnce(newSnapshot)
+
     vi.stubGlobal('window', {
       navigator: { keyboard: { getLayoutMap: async () => null } },
       api: {
@@ -164,6 +173,7 @@ describe('getLayoutBaseCharacterForCode', () => {
           getKeyboardLayoutSnapshot,
           onKeyboardLayoutChanged: (callback: (event: KeyboardLayoutChangeEvent) => void) => {
             notifyLayoutChanged = callback
+
             return vi.fn()
           }
         }

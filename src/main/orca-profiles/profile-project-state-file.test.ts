@@ -51,6 +51,7 @@ function makeState(overrides: Partial<PersistedState>): PersistedState {
 describe('rebuildRepoBackedProjectState', () => {
   it('carries project state and independent setups across a repo remote identity change', () => {
     const originProjectId = 'git:git.example.com/acme/app'
+
     const rebuilt = rebuildRepoBackedProjectState(
       makeState({
         repos: [makeRepo({ gitRemoteIdentity: upstreamIdentity })],
@@ -90,6 +91,7 @@ describe('rebuildRepoBackedProjectState', () => {
       remoteName: 'origin',
       remoteUrl: 'git@git.example.com:acme/shared.git'
     }
+
     const rebuilt = rebuildRepoBackedProjectState(
       makeState({
         repos: [

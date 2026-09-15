@@ -16,6 +16,7 @@ function getProjectWslRuntimeDistro(
   settings: BoundaryAdvisorySettings
 ): string | null {
   const project = projects.find((candidate) => candidate.sourceRepoIds.includes(repo.id))
+
   const resolution = resolveProjectExecutionRuntime({
     // Why win32 unconditionally: a non-Windows host cannot produce a drive or WSL UNC repo path, so
     // the boundary check below rejects it regardless of what platform we claim here.
@@ -24,6 +25,7 @@ function getProjectWslRuntimeDistro(
     projectRuntimePreference: project?.localWindowsRuntimePreference,
     globalWindowsRuntimeDefault: settings.localWindowsRuntimeDefault
   })
+
   // Why not warn on repair-required: the runtime is unusable, and a perf advisory on top of the
   // repair prompt is noise.
   return resolution.status === 'resolved' && resolution.runtime.kind === 'wsl'
@@ -47,13 +49,16 @@ export function warnIfProjectCrossesWslFilesystemBoundary(
     if (!settings || getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
       return
     }
+
     const distro = getWslFilesystemBoundaryDistro({
       projectPath: repo.path,
       wslRuntimeDistro: getProjectWslRuntimeDistro(repo, projects, settings)
     })
+
     if (!distro) {
       return
     }
+
     toast.warning(
       translate(
         'auto.store.slices.repos.wslFilesystemBoundaryTitle',

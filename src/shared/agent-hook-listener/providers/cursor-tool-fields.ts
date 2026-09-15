@@ -18,6 +18,7 @@ export function extractCursorToolFields(
     eventName === 'postToolUseFailure'
   ) {
     const update: ToolSnapshot = {}
+
     if (eventName === 'postToolUseFailure') {
       Object.assign(update, clearActiveToolFieldsUpdate())
     } else {
@@ -31,48 +32,61 @@ export function extractCursorToolFields(
         )
       )
     }
+
     if (eventName === 'postToolUse') {
       const responseText = extractToolResponseText(hookPayload.tool_output)
+
       if (responseText) {
         update.lastAssistantMessage = responseText
         update.lastAssistantMessageIsToolOutput = true
       }
     }
+
     if (eventName === 'postToolUseFailure') {
       const errorText =
         extractToolResponseText(hookPayload.tool_output) ??
         readString(hookPayload, 'error_message') ??
         readString(hookPayload, 'error')
+
       if (errorText) {
         update.lastAssistantMessage = errorText
         update.lastAssistantMessageIsToolOutput = true
       }
     }
+
     return update
   }
+
   if (eventName === 'beforeShellExecution') {
     const command = readString(hookPayload, 'command')
+
     return toolUpdate(
       { toolName: 'Shell', toolInput: command },
       { hasToolInputField: hasOwnField(hookPayload, 'command') }
     )
   }
+
   if (eventName === 'beforeMCPExecution') {
     const toolName = readString(hookPayload, 'tool_name') ?? 'MCP'
+
     const toolInput =
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       readString(hookPayload, 'command') ??
       readString(hookPayload, 'url')
+
     return toolUpdate(
       { toolName, toolInput },
       { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'command', 'url']) }
     )
   }
+
   if (eventName === 'afterAgentResponse') {
     const text = readString(hookPayload, 'text')
+
     if (text) {
       return { lastAssistantMessage: text }
     }
   }
+
   return {}
 }

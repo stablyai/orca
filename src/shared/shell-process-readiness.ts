@@ -6,7 +6,9 @@ import { promisify } from 'node:util'
 import { PS_MAX_BUFFER_BYTES } from './process-table-snapshot'
 
 const execFile = promisify(execFileCallback)
+
 const PROCESS_READINESS_TIMEOUT_MS = 3000
+
 const DEFAULT_POSIX_EXEC_PATH = '/usr/bin:/bin'
 
 export type ShellProcessReadiness = {
@@ -18,6 +20,7 @@ export function parseDarwinExecutablePath(stdout: string): string | null {
   const lines = stdout.split(/\r?\n/)
   const textIndex = lines.indexOf('ftxt')
   const pathLine = textIndex === -1 ? undefined : lines[textIndex + 1]
+
   return pathLine?.startsWith('n') ? pathLine.slice(1) : null
 }
 
@@ -25,9 +28,11 @@ async function readExecutablePath(pid: number): Promise<string | null> {
   if (process.platform === 'linux') {
     return readlink(`/proc/${pid}/exe`)
   }
+
   if (process.platform !== 'darwin') {
     return null
   }
+
   const { stdout } = await execFile(
     '/usr/sbin/lsof',
     ['-a', '-p', String(pid), '-d', 'txt', '-Fn'],
@@ -36,6 +41,7 @@ async function readExecutablePath(pid: number): Promise<string | null> {
       timeout: PROCESS_READINESS_TIMEOUT_MS
     }
   )
+
   return parseDarwinExecutablePath(stdout)
 }
 
@@ -50,7 +56,9 @@ export async function readShellProcessReadiness(
       maxBuffer: PS_MAX_BUFFER_BYTES
     })
   ])
+
   const status = stdout.trim()
+
   return status && executablePath
     ? { executablePath: await realpath(executablePath), foreground: status.includes('+') }
     : null
@@ -75,6 +83,7 @@ async function canonicalizeExecutable(candidate: string): Promise<string | null>
   try {
     await access(candidate, constants.X_OK)
     const canonicalPath = await realpath(candidate)
+
     return (await stat(canonicalPath)).isFile() ? canonicalPath : null
   } catch {
     return null
@@ -88,10 +97,12 @@ export async function resolveShellExecutablePath(
 ): Promise<string | null> {
   for (const candidate of shellExecutableCandidates(shellPath, cwd, pathEnv)) {
     const canonicalPath = await canonicalizeExecutable(candidate)
+
     if (canonicalPath) {
       return canonicalPath
     }
   }
+
   return null
 }
 
@@ -106,5 +117,6 @@ export async function resolveInstalledShellExecutablePaths(
   const canonicalPaths = await Promise.all(
     shellExecutableCandidates(shellName, cwd, pathEnv).map(canonicalizeExecutable)
   )
+
   return [...new Set(canonicalPaths.filter((path): path is string => path !== null))]
 }

@@ -35,6 +35,7 @@ export async function lookupGitLabWorkItemByPathForSource(
   args: GitLabWorkItemByPathLookupArgs
 ): Promise<GitLabWorkItem | null> {
   const target = getActiveRuntimeTarget(getTaskSourceRuntimeSettings(args.sourceContext))
+
   const item =
     target.kind === 'environment'
       ? await callRuntimeRpc<Omit<GitLabWorkItem, 'repoId'> | null>(
@@ -58,6 +59,7 @@ export async function lookupGitLabWorkItemByPathForSource(
           iid: args.iid,
           type: args.type
         })) as Omit<GitLabWorkItem, 'repoId'> | GitLabWorkItem | null)
+
   return item ? withRendererRepoId(item, args.repoId) : null
 }
 
@@ -65,6 +67,7 @@ export async function listGitLabMRsForSource(
   args: GitLabMRListLookupArgs
 ): Promise<ListMergeRequestsResult> {
   const target = getActiveRuntimeTarget(getTaskSourceRuntimeSettings(args.sourceContext))
+
   const result =
     target.kind === 'environment'
       ? await callRuntimeRpc<ListMergeRequestsResult>(
@@ -88,6 +91,7 @@ export async function listGitLabMRsForSource(
           perPage: args.perPage,
           query: args.query
         })) as ListMergeRequestsResult)
+
   return {
     ...result,
     items: result.items.map((item) => withRendererRepoId(item, args.repoId))

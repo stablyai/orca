@@ -108,6 +108,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     togglePointerModifier,
     zoom
   } = props
+
   return (
     <View ref={setRootViewRef} style={styles.root}>
       <View style={styles.toolbar}>
@@ -155,10 +156,13 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             width: event.nativeEvent.layout.width,
             height: event.nativeEvent.layout.height
           }
+
           const current = layoutRef.current
+
           if (current && current.width === next.width && current.height === next.height) {
             return
           }
+
           layoutRef.current = next
           setLayout(next)
         }}

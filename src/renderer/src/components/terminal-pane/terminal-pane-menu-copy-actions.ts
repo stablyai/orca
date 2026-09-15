@@ -10,6 +10,7 @@ export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): P
   if (!pane) {
     return
   }
+
   await runTerminalCopy({
     selection: readTerminalClipboardSelection(pane.terminal),
     writeClipboardText: window.api.ui.writeTerminalClipboardText,
@@ -28,6 +29,7 @@ export const copyTerminalPaneMenuPaneId = async (
   if (!pane) {
     return
   }
+
   await runTerminalIdentityCopy({
     // Why: orchestration targets use ORCA_PANE_KEY, which survives renderer
     // remounts; the numeric PaneManager id is only a local runtime handle.
@@ -60,6 +62,7 @@ export const copyTerminalPaneMenuTerminalId = async (
   if (!pane) {
     return
   }
+
   try {
     await copyTerminalHandleForPane({
       tabId,
@@ -92,10 +95,13 @@ export const copyTerminalPaneMenuAgentSessionId = async (
   if (!pane) {
     return
   }
+
   if (!sessionId) {
     pane.terminal.focus()
+
     return
   }
+
   await runTerminalIdentityCopy({
     text: sessionId,
     writeClipboardText: window.api.ui.writeTerminalClipboardText,

@@ -4,7 +4,9 @@ import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 const initialAppStoreState = useAppStore.getState()
+
 const LEAF_ID = '11111111-1111-1111-8111-111111111111'
+
 const PANE_KEY = `pi-tab:${LEAF_ID}`
 
 afterEach(() => {
@@ -18,6 +20,7 @@ describe('Pi live session does not spawn a duplicate resume tab', () => {
       id: 'pi-1',
       transcriptPath: '/tmp/pi-session-1.jsonl'
     }
+
     const record: SleepingAgentSessionRecord = {
       paneKey: PANE_KEY,
       tabId: 'pi-tab',
@@ -30,6 +33,7 @@ describe('Pi live session does not spawn a duplicate resume tab', () => {
       updatedAt: 1,
       origin: 'live'
     }
+
     useAppStore.setState({
       activeWorktreeId: 'wt-1',
       activeTabType: 'editor',

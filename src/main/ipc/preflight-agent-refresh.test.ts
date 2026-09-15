@@ -31,6 +31,7 @@ const {
 }))
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
+
 // Why the runner and not child_process: WSL agent detection goes through
 // runWslProcess now, so a child_process mock never sees it.
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
@@ -45,6 +46,7 @@ vi.mock('child_process', () => {
   const execFileWithPromisify = Object.assign(execFileMock, {
     [Symbol.for('nodejs.util.promisify.custom')]: execFileAsyncMock
   })
+
   return {
     execFile: execFileWithPromisify,
     spawn: vi.fn()
@@ -138,6 +140,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
 
@@ -188,6 +191,7 @@ describe('preflight', () => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
+
       if (String(args[0]) === 'opencode') {
         return {
           environmentResolved: true,
@@ -197,6 +201,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
 
@@ -230,6 +235,7 @@ describe('preflight', () => {
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
+
       if (String(args[0]) === 'claude') {
         return {
           environmentResolved: true,
@@ -239,6 +245,7 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+
       throw new Error('not found')
     })
 

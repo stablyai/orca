@@ -45,6 +45,7 @@ export function useComposerSubmitOrchestration(
     taskSourceContext: target.sourceContextState.taskSourceContext,
     telemetrySource: target.composerTargetStore.telemetrySource
   })
+
   const fullSubmitSourcePreparation = useFullSubmitSourcePreparation({
     agentPrompt: target.sourceContextState.agentPrompt,
     attachmentPaths: target.sourceContextState.attachmentPaths,
@@ -65,6 +66,7 @@ export function useComposerSubmitOrchestration(
     pushTarget: target.workspaceIdentityState.pushTarget,
     workspaceSeedName: target.derivedComposerState.workspaceSeedName
   })
+
   const fullSubmitPreparation = useFullSubmitPreparation({
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
     branchNameOverridePreservesNameEdits:
@@ -87,6 +89,7 @@ export function useComposerSubmitOrchestration(
     telemetrySource: target.composerTargetStore.telemetrySource,
     tuiAgent: target.workspaceIdentityState.tuiAgent
   })
+
   const fullCreationExecution = useFullCreationExecution({
     applyWorktreeMeta: source.composerNavigationActions.applyWorktreeMeta,
     clearNewWorkspaceDraft: target.composerTargetStore.clearNewWorkspaceDraft,
@@ -111,6 +114,7 @@ export function useComposerSubmitOrchestration(
     telemetrySource: target.composerTargetStore.telemetrySource,
     tuiAgent: target.workspaceIdentityState.tuiAgent
   })
+
   const fullSubmitOrchestration = useFullSubmitOrchestration({
     disabledTuiAgents: target.workspaceIdentityState.disabledTuiAgents,
     executeFullCreation: fullCreationExecution.executeFullCreation,
@@ -137,6 +141,7 @@ export function useComposerSubmitOrchestration(
     tuiAgent: target.workspaceIdentityState.tuiAgent,
     workspaceSeedName: target.derivedComposerState.workspaceSeedName
   })
+
   const multipleCreateReset = useMultipleCreateReset({
     handleClearSmartNameSelection: source.issueSourceActions.handleClearSmartNameSelection,
     lastAutoNameRef: target.asyncComposerState.lastAutoNameRef,
@@ -147,6 +152,7 @@ export function useComposerSubmitOrchestration(
     setName: target.sourceContextState.setName,
     setNote: target.sourceContextState.setNote
   })
+
   const quickSubmitSourcePreparation = useQuickSubmitSourcePreparation({
     baseBranch: target.workspaceIdentityState.baseBranch,
     branchNameOverride: target.workspaceIdentityState.branchNameOverride,
@@ -162,6 +168,7 @@ export function useComposerSubmitOrchestration(
     parsedLinkedIssueNumber: target.derivedComposerState.parsedLinkedIssueNumber,
     pushTarget: target.workspaceIdentityState.pushTarget
   })
+
   const quickSubmitPreparation = useQuickSubmitPreparation({
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
     branchNameOverridePreservesNameEdits:
@@ -188,6 +195,7 @@ export function useComposerSubmitOrchestration(
     setupPolicy: target.derivedComposerState.setupPolicy,
     smartNameMode: target.workspaceIdentityState.smartNameMode
   })
+
   const quickCreationExecution = useQuickCreationExecution({
     clearNewWorkspaceDraft: target.composerTargetStore.clearNewWorkspaceDraft,
     createMultiple: target.asyncComposerState.createMultiple,
@@ -218,6 +226,7 @@ export function useComposerSubmitOrchestration(
     taskSourceContext: target.sourceContextState.taskSourceContext,
     telemetrySource: target.composerTargetStore.telemetrySource
   })
+
   const quickSubmitAction = useQuickSubmitAction({
     effectiveLinkedPR: target.derivedComposerState.effectiveLinkedPR,
     executeQuickCreation: quickCreationExecution.executeQuickCreation,
@@ -243,6 +252,7 @@ export function useComposerSubmitOrchestration(
     sparseError: target.derivedComposerState.sparseError,
     submitFolderTarget: folderSubmitOrchestration.submitFolderTarget
   })
+
   return {
     folderSubmitOrchestration,
     fullSubmitSourcePreparation,

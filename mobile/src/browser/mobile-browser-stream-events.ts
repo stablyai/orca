@@ -39,12 +39,15 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
 
   if (event.type === 'ready') {
     clearStartupTimer()
+
     if (busyRef.current) {
       busyRef.current = false
       setBusy(false)
     }
+
     if (typeof event.tab?.url === 'string') {
       setAddressValue(displayBrowserUrl(event.tab.url))
+
       if (event.tab.url !== lastZoomResetUrlRef.current) {
         lastZoomResetUrlRef.current = event.tab.url
         resetBrowserZoomState()
@@ -52,6 +55,7 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
     }
   } else if (event.type === 'end') {
     clearStartupTimer()
+
     if (busyRef.current) {
       busyRef.current = false
       setBusy(false)
@@ -65,11 +69,14 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
     setDialog(null)
   } else if (event.type === 'error') {
     clearStartupTimer()
+
     if (busyRef.current) {
       busyRef.current = false
       setBusy(false)
     }
+
     const message = event.message ?? event.error?.message ?? 'Browser stream failed.'
+
     if (shouldSurfaceBrowserError(message)) {
       setError(message)
     }

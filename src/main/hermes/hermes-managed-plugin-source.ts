@@ -1,4 +1,5 @@
 export const HERMES_PLUGIN_NAME = 'orca-status'
+
 export const HERMES_PLUGIN_MARKER = 'Managed by Orca. Do not edit; changes may be overwritten.'
 
 export const HERMES_EVENTS = [

@@ -1,8 +1,11 @@
 export const CLIPBOARD_IMAGE_MAX_BASE64_CHARS = 24 * 1024 * 1024
+
 export const CLIPBOARD_IMAGE_MAX_SOURCE_BYTES = Math.floor(
   (CLIPBOARD_IMAGE_MAX_BASE64_CHARS / 4) * 3
 )
+
 export const CLIPBOARD_IMAGE_MAX_PIXELS = 32 * 1024 * 1024
+
 export const CLIPBOARD_IMAGE_TOO_LARGE_ERROR = 'Clipboard image is too large'
 
 export type ClipboardImageDimensions = {
@@ -27,6 +30,7 @@ export function assertClipboardImageDimensionsWithinLimit({
   width
 }: ClipboardImageDimensions): void {
   const pixelCount = width * height
+
   if (
     !Number.isFinite(pixelCount) ||
     width <= 0 ||
@@ -53,10 +57,13 @@ export function clipboardImageThumbnailSize({
   width
 }: ClipboardImageDimensions): ClipboardImageDimensions {
   const longestEdge = Math.max(width, height)
+
   if (longestEdge <= CLIPBOARD_IMAGE_THUMBNAIL_MAX_EDGE) {
     return { height, width }
   }
+
   const scale = CLIPBOARD_IMAGE_THUMBNAIL_MAX_EDGE / longestEdge
+
   return {
     height: Math.max(1, Math.round(height * scale)),
     width: Math.max(1, Math.round(width * scale))

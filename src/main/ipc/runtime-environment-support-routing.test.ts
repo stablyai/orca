@@ -18,6 +18,7 @@ vi.mock('./runtime-environment-shared-control-support', () => ({
   supportsSharedControl: supportsMock,
   clearSharedControlSupport: clearSupportMock
 }))
+
 vi.mock('../../shared/runtime-environment-store', async (importOriginal) => ({
   ...(await importOriginal()),
   resolveEnvironment: resolveEnvironmentMock
@@ -89,6 +90,7 @@ describe('runtime environment support routing', () => {
     const pending = deferred<ReturnType<typeof success>>()
     const unsupported = vi.fn().mockReturnValue(pending.promise)
     const markUsed = vi.fn()
+
     const routed = routeRuntimeEnvironmentCallBySupport({
       userDataPath: '/profile',
       initialEnvironment: environment(),
@@ -98,6 +100,7 @@ describe('runtime environment support routing', () => {
       unsupported,
       markUsed
     })
+
     await vi.waitFor(() => expect(unsupported).toHaveBeenCalledOnce())
     advanceRuntimeEnvironmentCapabilityIncarnation('env')
     pending.resolve(success())
@@ -110,6 +113,7 @@ describe('runtime environment support routing', () => {
     const outcome = acceptedOutcome('capable')
     supportsMock.mockImplementation(async () => {
       advanceRuntimeEnvironmentCapabilityIncarnation('env')
+
       return outcome
     })
     const supported = vi.fn()
@@ -132,14 +136,17 @@ describe('runtime environment support routing', () => {
 
 function acceptedOutcome(verdict: 'capable' | 'absent') {
   const environmentId = 'env'
+
   const pairing = {
     v: 2 as const,
     endpoint: 'ws://host',
     deviceToken: 'token',
     publicKeyB64: 'key'
   }
+
   const evidence = captureRuntimeEnvironmentCapabilityEvidence(environmentId, pairing)
   applyRuntimeEnvironmentCapabilityVerdict({ evidence, verdict, runtimeId: 'runtime' })
+
   return runtimeEnvironmentCapabilityOutcome(evidence, verdict, 'runtime')
 }
 
@@ -173,8 +180,10 @@ function success() {
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {}
+
   const promise = new Promise<T>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }

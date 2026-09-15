@@ -9,6 +9,7 @@ export function admitCloseActiveTabPayload(value: unknown): AdmittedCloseActiveT
   if (value === undefined) {
     return { kind: 'legacy' }
   }
+
   if (
     typeof value === 'object' &&
     value !== null &&
@@ -21,5 +22,6 @@ export function admitCloseActiveTabPayload(value: unknown): AdmittedCloseActiveT
       payload: { sourceId: (value as Record<string, unknown>).sourceId as string }
     }
   }
+
   return { kind: 'invalid' }
 }

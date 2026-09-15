@@ -25,8 +25,10 @@ export function listedExternalEntries(): readonly ExternalAutomationListEntry[] 
 
 export function listedRow(automationId: string): AutomationListRow {
   const row = listedRows().find((entry) => entry.automation.id === automationId)
+
   if (!row) {
     throw new Error(`no listed row for ${automationId}`)
   }
+
   return row
 }

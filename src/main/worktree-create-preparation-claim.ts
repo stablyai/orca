@@ -40,6 +40,7 @@ export function preparationPathKey(path: string): string {
   if (isWindowsAbsolutePathLike(path)) {
     return win32.normalize(path).toLowerCase()
   }
+
   return posix.normalize(path)
 }
 
@@ -86,26 +87,34 @@ export function selectPreparationForCreate<T extends PreparationCandidate>(
   if (candidates.length === 0) {
     return { kind: 'miss', reason: 'none_armed' }
   }
+
   const sameRepo = candidates.filter((candidate) => candidate.repoPathKey === request.repoPathKey)
+
   if (sameRepo.length === 0) {
     // Separate from `none_armed`: this is what a size-cap eviction looks like from the create side.
     return { kind: 'miss', reason: 'repo_mismatch' }
   }
+
   // Distro before root: the distro decides which filesystem the root is even on.
   const sameHost = sameRepo.filter((candidate) => candidate.wslDistro === request.wslDistro)
+
   if (sameHost.length === 0) {
     return { kind: 'miss', reason: 'wsl_distro_mismatch' }
   }
+
   const sameRoot = sameHost.filter(
     (candidate) => candidate.workspaceRootKey === request.workspaceRootKey
   )
+
   if (sameRoot.length === 0) {
     return { kind: 'miss', reason: 'workspace_root_mismatch' }
   }
 
   const { canonicalBase } = request
+
   if (canonicalBase === null) {
     const rawMatch = sameRoot.find((candidate) => candidate.baseBranch === request.baseBranch)
+
     // Same spelling, so the armed entry already holds this request's canonical form.
     return rawMatch
       ? { kind: 'exact', candidate: rawMatch, canonicalBase: rawMatch.canonicalBase }
@@ -113,18 +122,22 @@ export function selectPreparationForCreate<T extends PreparationCandidate>(
   }
 
   const canonicalMatch = sameRoot.find((candidate) => candidate.canonicalBase === canonicalBase)
+
   if (canonicalMatch) {
     return { kind: 'exact', candidate: canonicalMatch, canonicalBase }
   }
 
   const family = worktreeBaseRefFamily(canonicalBase)
+
   if (family) {
     const retarget = sameRoot
       .filter((candidate) => worktreeBaseRefFamily(candidate.canonicalBase) === family)
       .sort((left, right) => right.createdAt - left.createdAt)[0]
+
     if (retarget) {
       return { kind: 'retarget', candidate: retarget, canonicalBase }
     }
   }
+
   return { kind: 'miss', reason: 'base_mismatch' }
 }

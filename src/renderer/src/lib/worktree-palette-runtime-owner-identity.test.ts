@@ -42,21 +42,25 @@ it('keeps same-target SSH worktrees from separate paired runtimes distinct', () 
     makeWorktree('hub-a', 'AlphaOwner workspace'),
     makeWorktree('hub-b', 'BetaOwner workspace')
   ]
+
   const repoMap = new Map<string, Repo>()
   const documents = buildWorktreePaletteDocuments(worktrees, { repoMap })
   const results = searchWorktreeDocuments({ worktrees, query: 'workspace', documents, repoMap })
+
   const alphaResults = searchWorktreeDocuments({
     worktrees,
     query: 'alphaowner',
     documents,
     repoMap
   })
+
   const betaResults = searchWorktreeDocuments({
     worktrees,
     query: 'betaowner',
     documents,
     repoMap
   })
+
   const index = buildPaletteWorktreeIndex(worktrees)
 
   expect(dedupePaletteWorktrees(worktrees)).toHaveLength(2)
@@ -89,6 +93,7 @@ it('keeps a physical-host alias only when one runtime owns it', () => {
 it('keeps both runtime owners in the tab ownership ambiguity inventory', () => {
   const hubA = makeWorktree('hub-a', 'AlphaOwner workspace')
   const hubB = makeWorktree('hub-b', 'BetaOwner workspace')
+
   const ownershipWorktrees = getPaletteOwnershipWorktreeIds({
     worktreesByRepo: { repo: [hubA, hubB] },
     folderWorkspaces: []

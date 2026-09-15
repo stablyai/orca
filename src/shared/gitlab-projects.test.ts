@@ -16,6 +16,7 @@ describe('computeNextGitLabRecents', () => {
       { host: 'gitlab.com', path: 'g/p', lastOpenedAt: '2026-05-06' },
       { host: 'gitlab.com', path: 'c/d', lastOpenedAt: '2026-05-05' }
     ]
+
     const result = computeNextGitLabRecents(existing, 'gitlab.com', 'g/p', fixedNow)
     expect(result.map((r) => r.path)).toEqual(['g/p', 'a/b', 'c/d'])
     expect(result[0].lastOpenedAt).toBe(fixedNow.toISOString())
@@ -35,6 +36,7 @@ describe('computeNextGitLabRecents', () => {
       path: `g/p${i}`,
       lastOpenedAt: `2026-05-0${i}`
     }))
+
     const result = computeNextGitLabRecents(existing, 'gitlab.com', 'g/new', fixedNow)
     expect(result).toHaveLength(GITLAB_RECENTS_MAX)
     expect(result[0].path).toBe('g/new')

@@ -10,29 +10,37 @@ const pathOperationCounts = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
+
 vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosaveModule>()
+
   return { ...actual, notifyEditorExternalFileChange: vi.fn() }
 })
+
 vi.mock('../../../shared/cross-platform-path', async (importOriginal) => {
   type PathModuleWithIdentity = typeof CrossPlatformPathModule & {
     getLocalWindowsWslPathIdentity?: (value: string) => unknown
   }
+
   const actual = await importOriginal<PathModuleWithIdentity>()
+
   return {
     ...actual,
     normalizeRuntimePathForComparison: (value: string) => {
       pathOperationCounts.normalizations++
+
       return actual.normalizeRuntimePathForComparison(value)
     },
     areLocalWindowsWslPathAliases: (left: string, right: string) => {
       pathOperationCounts.aliasComparisons++
+
       return actual.areLocalWindowsWslPathAliases(left, right)
     },
     ...(actual.getLocalWindowsWslPathIdentity
       ? {
           getLocalWindowsWslPathIdentity: (value: string) => {
             pathOperationCounts.identities++
+
             return actual.getLocalWindowsWslPathIdentity!(value)
           }
         }
@@ -48,7 +56,9 @@ import {
 import { createExternalWatchEventHandler } from './useEditorExternalWatch'
 
 const EVENT_COUNT = 5_000
+
 const OPEN_FILE_COUNT = 100
+
 const payloadWorktreePath = '\\\\wsl.localhost\\Ubuntu\\workspace\\repo'
 
 describe('external watcher path matching complexity', () => {
@@ -76,6 +86,7 @@ describe('external watcher path matching complexity', () => {
       mode: 'edit' as const,
       isDirty: false
     }))
+
     const initialOpenFiles = [
       ...openFiles,
       {
@@ -88,10 +99,12 @@ describe('external watcher path matching complexity', () => {
         isDirty: false
       }
     ]
+
     vi.mocked(useAppStore.getState).mockReturnValue({
       openFiles: initialOpenFiles,
       setExternalMutation: vi.fn()
     } as never)
+
     const payload: FsChangedPayload = {
       worktreePath: payloadWorktreePath,
       events: Array.from({ length: EVENT_COUNT }, (_, index) => ({
@@ -99,6 +112,7 @@ describe('external watcher path matching complexity', () => {
         absolutePath: `\\\\wsl.localhost\\Ubuntu\\workspace\\repo\\file-${index}.ts`
       }))
     }
+
     const { handleFsChanged, dispose } = createExternalWatchEventHandler(() => ({
       worktreeId: 'wt-wsl',
       worktreePath: payload.worktreePath,
@@ -114,9 +128,11 @@ describe('external watcher path matching complexity', () => {
     expect(notifyEditorExternalFileChange).toHaveBeenCalledTimes(EVENT_COUNT)
     // Why: a tab/store update during debounce must rebuild the index once, not rescan per event.
     const currentOpenFiles = initialOpenFiles.map((file) => ({ ...file }))
+
     for (const [notification] of vi.mocked(notifyEditorExternalFileChange).mock.calls) {
       getOpenFilesForExternalFileChange(currentOpenFiles as never, notification)
     }
+
     const pathOperations =
       pathOperationCounts.aliasComparisons +
       pathOperationCounts.normalizations +

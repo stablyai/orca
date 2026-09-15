@@ -19,11 +19,13 @@ const FAILURE = {
 describe('browser certificate failures while a runtime environment is active', () => {
   it('stores a client-hosted page failure', async () => {
     const setBrowserPageCertificateFailure = vi.fn()
+
     const harness = await loadIpcEventsHarness(
       storeStateWithRuntime(setBrowserPageCertificateFailure, {
         'page-1': { environmentId: 'env-a', remotePageId: 'r-1', placement: { kind: 'client' } }
       })
     )
+
     harness.useIpcEvents()
 
     harness.certificateFailureChanged({ browserPageId: 'page-1', failure: FAILURE })
@@ -33,11 +35,13 @@ describe('browser certificate failures while a runtime environment is active', (
 
   it('still drops a streamed page failure, whose state the host owns', async () => {
     const setBrowserPageCertificateFailure = vi.fn()
+
     const harness = await loadIpcEventsHarness(
       storeStateWithRuntime(setBrowserPageCertificateFailure, {
         'page-1': { environmentId: 'env-a', remotePageId: 'r-1', placement: { kind: 'server' } }
       })
     )
+
     harness.useIpcEvents()
 
     harness.certificateFailureChanged({ browserPageId: 'page-1', failure: FAILURE })
@@ -47,9 +51,11 @@ describe('browser certificate failures while a runtime environment is active', (
 
   it('still drops a failure for a page with no remote handle at all', async () => {
     const setBrowserPageCertificateFailure = vi.fn()
+
     const harness = await loadIpcEventsHarness(
       storeStateWithRuntime(setBrowserPageCertificateFailure, {})
     )
+
     harness.useIpcEvents()
 
     harness.certificateFailureChanged({ browserPageId: 'page-1', failure: FAILURE })
@@ -59,6 +65,7 @@ describe('browser certificate failures while a runtime environment is active', (
 
   it('stores a local page failure when no runtime environment is active', async () => {
     const setBrowserPageCertificateFailure = vi.fn()
+
     const harness = await loadIpcEventsHarness(
       createHarnessStoreState({
         tabsByWorktree: {},
@@ -66,6 +73,7 @@ describe('browser certificate failures while a runtime environment is active', (
         remoteBrowserPageHandlesByPageId: {}
       })
     )
+
     harness.useIpcEvents()
 
     harness.certificateFailureChanged({ browserPageId: 'page-1', failure: FAILURE })

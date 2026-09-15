@@ -115,6 +115,7 @@ describe('buildHydratedTabState referential repair', () => {
     const layout = node as
       | { type: 'leaf'; groupId: string }
       | { type: 'split'; first: unknown; second: unknown }
+
     return layout.type === 'leaf'
       ? [layout.groupId]
       : [...leafGroupIds(layout.first), ...leafGroupIds(layout.second)]

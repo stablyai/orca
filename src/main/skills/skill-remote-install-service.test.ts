@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
+
 vi.mock('./skill-client-mediated-transfer', () => ({
   transferSkillPackageToRuntime: mocks.transferSkillPackageToRuntime
 }))
@@ -134,9 +135,11 @@ describe('installSkillOnRemoteRuntime', () => {
   it('settles a hung paired install when cancellation reaches the transport', async () => {
     const controller = new AbortController()
     let started: () => void = () => {}
+
     const requestStarted = new Promise<void>((resolve) => {
       started = resolve
     })
+
     mocks.callRuntimeEnvironment.mockImplementation(
       (...args: unknown[]) =>
         new Promise((_resolve, reject) => {
@@ -147,6 +150,7 @@ describe('installSkillOnRemoteRuntime', () => {
           started()
         })
     )
+
     const pending = installSkillOnRemoteRuntime({
       userDataPath: '/state',
       environmentId: 'environment-1',
@@ -155,6 +159,7 @@ describe('installSkillOnRemoteRuntime', () => {
       requireHttps: true,
       signal: controller.signal
     })
+
     await requestStarted
 
     controller.abort()
@@ -341,6 +346,7 @@ describe('installSkillBundleOnRemoteRuntime', () => {
 
   it('polls current-skill progress only when the destination advertises it', async () => {
     const onProgress = vi.fn()
+
     const progress = {
       operationId: bundleRequest.operationId,
       skillId: 'skill-1',
@@ -348,6 +354,7 @@ describe('installSkillBundleOnRemoteRuntime', () => {
       skillIndex: 1,
       skillCount: 30
     }
+
     mocks.callRuntimeEnvironment.mockImplementation(async (_state, _environment, method: string) =>
       method === 'skills.getInstallProgress' ? success(progress) : success(bundleResult)
     )

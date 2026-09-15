@@ -104,9 +104,11 @@ type PlannedTarget = PlannedAutomationHostTarget
 
 function scopeSelectorFor(target: AutomationHostFetchTarget): AutomationListScopeSelector | null {
   const selector = target.ref.selector
+
   if (selector.kind === 'self' || selector.kind === 'orphan') {
     return { kind: selector.kind }
   }
+
   // Why: an SSH scope without a registration generation cannot be fenced, and a
   // ghost target's records are returned by the authority's orphan scope anyway.
   return target.owner?.selector.kind === 'ssh'
@@ -126,17 +128,22 @@ export function createAutomationHostScheduler(
   const isVisible = options.isVisible ?? (() => document.visibilityState !== 'hidden')
   const listScoped = options.transport?.listScoped ?? listScopedAutomations
   const listLegacy = options.transport?.listLegacy ?? listLegacyAutomations
+
   const scheduleRetry =
     options.scheduleRetry ??
     ((run, delayMs) => {
       const handle = setTimeout(run, delayMs)
+
       return () => clearTimeout(handle)
     })
+
   const pool: AutomationHostRequestPool = createAutomationHostRequestPool(options.concurrency)
+
   const instrument = createAutomationHostRequestInstrumentation(
     options.diagnostics,
     options.elapsed
   )
+
   let disposed = false
 
   const retries = createAutomationHostRetrySchedule({
@@ -166,6 +173,7 @@ export function createAutomationHostScheduler(
     apply: (target: PlannedTarget) => boolean
   ): void => {
     let landed = 0
+
     for (const target of live) {
       if (apply(target)) {
         landed += 1
@@ -173,6 +181,7 @@ export function createAutomationHostScheduler(
         instrument.entryDiscarded(target.fence)
       }
     }
+
     if (landed === 0) {
       instrument.requestDiscarded(live[0].fence, stableKey, outcome)
     }
@@ -182,16 +191,21 @@ export function createAutomationHostScheduler(
     if (!stillCurrent(target)) {
       return
     }
+
     const selector = scopeSelectorFor(target)
+
     if (!selector) {
       // Nothing will ever answer for this entry, so its marker has to go too.
       cache.abandonRequest(target.fence)
+
       return
     }
+
     // Counted here rather than at submission: a queued job the catalog dropped
     // is never sent, and a request that was never sent must not be in the count.
     instrument.request(target.fence, 'scoped')
     const startedAt = instrument.startedAt()
+
     try {
       const result = await listScoped(target.authority, selector)
       const rows = toScopedAutomationHostRows(target.authority, result)
@@ -207,29 +221,36 @@ export function createAutomationHostScheduler(
 
   const runLegacyAuthority = async (targets: readonly PlannedTarget[]): Promise<void> => {
     const live = targets.filter(stillCurrent)
+
     if (live.length === 0) {
       return
     }
+
     const authority = live[0].authority
     instrument.request(live[0].fence, 'legacy')
     const startedAt = instrument.startedAt()
+
     try {
       const automations = await listLegacy(authority)
       // Attributed to the authority alone: one answer serves every entry in the group.
       instrument.response(live[0].fence, null, startedAt, automations.length, automations)
+
       const partition = partitionLegacyAutomationHostRows(
         automations,
         live.map((target) => target.ref),
         options.legacyPartitionContext(live[0].ref.authority),
         hostStableKey
       )
+
       const rowsFor = (target: PlannedTarget): readonly AutomationHostRow[] =>
         partition.rowsByStableKey.get(target.stableKey) ?? []
+
       // The call belongs to the authority, but the rows belong to the hosts —
       // without this, per-host row counts are missing exactly where payload is worst.
       for (const target of live) {
         instrument.entryRows(target.stableKey, rowsFor(target).length)
       }
+
       // The count is the whole authority's, so every entry reports it — as the scoped
       // path does. Recording it only under an orphan request would need the orphan
       // entry that only a reported count creates.
@@ -256,24 +277,31 @@ export function createAutomationHostScheduler(
     if (disposed) {
       return
     }
+
     const force = refreshOptions.force === true
     const joined: Promise<void>[] = []
     const counted = new Set<string>()
+
     for (const target of force ? [] : targets) {
       // plan() collapses a repeated ref into one entry, so counting the raw array
       // would score two hits on the single promise they share.
       const stableKey = hostStableKey(target.ref)
+
       if (counted.has(stableKey)) {
         continue
       }
+
       counted.add(stableKey)
       const pending = cache.pendingRequest(target.ref)
+
       if (!pending) {
         continue
       }
+
       instrument.dedupeHit(target.ref, target.querySupport)
       joined.push(pending)
     }
+
     const planned = planAutomationHostRequests({
       cache,
       targets,
@@ -281,7 +309,9 @@ export function createAutomationHostScheduler(
       skipKnownFailures: refreshOptions.skipKnownFailures === true,
       now
     })
+
     const incompatible = planned.filter((target) => target.querySupport === 'incompatible')
+
     for (const target of incompatible) {
       retries.record(
         target,
@@ -290,23 +320,28 @@ export function createAutomationHostScheduler(
         )
       )
     }
+
     const fetchable = planned.filter((target) => target.querySupport !== 'incompatible')
     const legacyByAuthority = new Map<string, PlannedTarget[]>()
     const submitted: Promise<void>[] = [...joined]
+
     for (const target of fetchable) {
       if (target.querySupport === 'legacy-unscoped') {
         const key = automationAuthorityCatalogKey(target.ref.authority)
         legacyByAuthority.set(key, [...(legacyByAuthority.get(key) ?? []), target])
         continue
       }
+
       const request = pool.submit({
         priority: target.priority,
         run: () => runScoped(target),
         cancel: () => abandon([target])
       })
+
       cache.trackRequest(target.fence, request)
       submitted.push(request)
     }
+
     for (const group of legacyByAuthority.values()) {
       // One request for the whole authority; every entry in the group shares it.
       const request = pool.submit({
@@ -314,11 +349,14 @@ export function createAutomationHostScheduler(
         run: () => runLegacyAuthority(group),
         cancel: () => abandon(group)
       })
+
       for (const target of group) {
         cache.trackRequest(target.fence, request)
       }
+
       submitted.push(request)
     }
+
     await Promise.all(submitted)
   }
 

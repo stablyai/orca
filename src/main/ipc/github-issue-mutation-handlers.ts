@@ -17,12 +17,15 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
     'gh:updateIssue',
     async (event, args: GitHubRepoScopedArgs & { number: number; updates: GitHubIssueUpdate }) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
         return { ok: false, error: 'Invalid issue number' }
       }
+
       if (!args.updates || typeof args.updates !== 'object') {
         return { ok: false, error: 'Updates object is required' }
       }
+
       const result = await updateIssue(
         repo.path,
         args.number,
@@ -30,12 +33,14 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
         getGitHubRepoConnectionId(repo),
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
+
       if (result.ok) {
         broadcastGitHubWorkItemMutation(
           { repoPath: repo.path, repoId: repo.id, type: 'issue', number: args.number },
           event.sender.id
         )
       }
+
       return result
     }
   )
@@ -55,12 +60,15 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       if (typeof args.number !== 'number' || !Number.isInteger(args.number) || args.number < 1) {
         return { ok: false, error: 'Invalid issue number' }
       }
+
       if (!args.body?.trim()) {
         return { ok: false, error: 'Comment body required' }
       }
+
       const result = await addIssueComment(
         repo.path,
         args.number,
@@ -69,6 +77,7 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
+
       if (result.ok) {
         broadcastGitHubWorkItemMutation(
           {
@@ -80,12 +89,14 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
           event.sender.id
         )
       }
+
       return result
     }
   )
 
   ipcMain.handle('gh:listLabels', (_event, args: GitHubRepoScopedArgs) => {
     const repo = assertRegisteredGitHubRepo(args, store)
+
     return listLabels(
       repo.path,
       repo.issueSourcePreference,
@@ -96,6 +107,7 @@ export function registerGitHubIssueMutationHandlers(store: Store): void {
 
   ipcMain.handle('gh:listAssignableUsers', (_event, args: GitHubRepoScopedArgs) => {
     const repo = assertRegisteredGitHubRepo(args, store)
+
     return listAssignableUsers(
       repo.path,
       repo.issueSourcePreference,

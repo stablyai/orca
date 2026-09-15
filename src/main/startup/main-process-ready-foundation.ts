@@ -68,6 +68,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   const canonicalUserDataPath = getCanonicalUserDataPath()
   installMainThreadHangWatchdog({ userDataPath: canonicalUserDataPath })
   state.hangDetection = consumeHangDetectionMarker(hangDetectionMarkerPath(canonicalUserDataPath))
+
   if (state.hangDetection) {
     recordDurableCrashBreadcrumb('main_thread_hang_detected', {
       unresponsiveMs: state.hangDetection.unresponsiveMs,
@@ -75,6 +76,7 @@ export async function initializeReadyFoundation(): Promise<void> {
       selfRecovered: state.hangDetection.selfRecovered
     })
   }
+
   // Why: install certificate decisions before any webview or headless window issues its first TLS request.
   app.on(
     'certificate-error',
@@ -91,9 +93,11 @@ export async function initializeReadyFoundation(): Promise<void> {
     }
   )
   const identity = state.devInstanceIdentity
+
   if (!identity) {
     throw new Error('Development identity is unavailable')
   }
+
   electronApp.setAppUserModelId(identity.appUserModelId)
   // Why: names the app menu/About panel. Dev already applied this pre-ready (see the
   // safeStorage note above); this call stays unconditional so packaged builds keep their
@@ -117,6 +121,7 @@ export async function initializeReadyFoundation(): Promise<void> {
           console.log(`[wsl-cli] Repaired managed registration in ${result.distro}.`)
         }
       }
+
       state.managedWslCliReconciliationStatus = 'settled'
     })
     .catch((error) => {
@@ -134,10 +139,12 @@ export async function initializeReadyFoundation(): Promise<void> {
   // Why this early: the first window stamps the hosting id into its renderer's argv, so the durable
   // read has to have happened by then or the renderer and the browser-host lease disagree.
   initializeBrowserClientHostId(profile.profileDirectory)
+
   const store = new Store({
     dataFile: profile.dataFile,
     storageAuthority: state.isServeMode ? 'runtime' : 'desktop'
   })
+
   state.store = store
   // Why: create pending readiness before the guard can observe the default session.
   // Why parked on state instead of awaited here: Dock/Launchpad launches don't inherit shell
@@ -178,8 +185,10 @@ export async function initializeReadyFoundation(): Promise<void> {
   configureWindowsHostGitEnvironmentReadiness(
     process.platform === 'win32' ? windowsShellPathHydration.whenReady : null
   )
+
   if (process.platform === 'win32') {
     const settings = store.getSettings()
+
     if (app.isPackaged) {
       void windowsShellPathHydration.hydrate(
         settings.terminalWindowsShell,
@@ -192,6 +201,7 @@ export async function initializeReadyFoundation(): Promise<void> {
       )
     }
   }
+
   wslHookRelayManager.setManagedHookSettingsResolver(() => state.store?.getSettings() ?? null)
   logStartupMilestone('store-loaded')
   // Why: pre-`ready` startup reads this flag from a marker so it never has to parse orca-data.json.
@@ -208,10 +218,12 @@ export async function initializeReadyFoundation(): Promise<void> {
         settings.electronHttp1CompatibilityMode === true
       )
     }
+
     if ('terminalWindowsWslDistro' in updates) {
       // Why: synchronize fallback WSL distro updates to runner.
       setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)
     }
+
     if (
       ('terminalWindowsShell' in updates || 'terminalWindowsPowerShellImplementation' in updates) &&
       process.platform === 'win32'
@@ -228,10 +240,12 @@ export async function initializeReadyFoundation(): Promise<void> {
         )
       }
     }
+
     if ('showMenuBarIcon' in updates) {
       // Why: Store is the mutation authority for all settings writes, so every macOS toggle updates the native item live.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }
+
     if ('agentStatusHooksEnabled' in updates) {
       // Why both directions: the ensure gate only blocks NEW relays, so off must stop the running
       // guest process and timers, and on must restart them — otherwise open WSL panes report no
@@ -253,15 +267,19 @@ export async function initializeReadyFoundation(): Promise<void> {
   })
   const persistedClaudePtyIds = store.getClaudeLivePtySessionIds()
   seedLiveClaudePtysFromPersistence(persistedClaudePtyIds)
+
   if (persistedClaudePtyIds.length > 0) {
     console.log(
       `[claude-live-pty] Seeded ${persistedClaudePtyIds.length} persisted Claude session id(s) into the refresh gate`
     )
   }
+
   applyAppIcon(store.getSettings().appIcon)
+
   if (shouldSuppressDevEducation({ isDev: is.dev })) {
     suppressDevEducationForStore(store)
   }
+
   // Why: the partition installer reads the proxy through this resolver, so register it before sessions materialize.
   setBrowserNetworkProxySettingsResolver(() => state.store!.getSettings())
   // Why: the preview session is protocol-scoped, so the handler must exist before any preview webview attaches.
@@ -275,13 +293,16 @@ export async function initializeReadyFoundation(): Promise<void> {
     // sweep must see the live target list or it would clear their cookie jars.
     listLocalSshTargetIds: () => {
       const currentStore = state.store
+
       if (!currentStore) {
         // Why: an empty list would read as "every SSH jar is an orphan"; throwing skips the sweep.
         throw new Error('ssh target store unavailable at partition sweep')
       }
+
       return currentStore.getSshTargets().map((target) => target.id)
     }
   })
+
   try {
     // Why: awaited here so the first guest navigation cannot race the installer's fire-and-forget write.
     await applyBrowserSessionProxies(browserSessionRegistry.listProfiles(), store.getSettings())

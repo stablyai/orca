@@ -8,6 +8,7 @@ import {
 import { collectAgentTitleEvidence } from './agent-title-evidence'
 
 const agentFor = (title: string) => collectAgentTitleEvidence(title).agent
+
 const reasonFor = (title: string) => collectAgentTitleEvidence(title).reason
 
 describe('collectAgentTitleEvidence', () => {

@@ -98,6 +98,7 @@ const CANVAS_BOUNDS = {
   height: 300,
   toJSON: () => ({})
 }
+
 const ZERO_BOUNDS = { ...CANVAS_BOUNDS, right: 0, bottom: 0, width: 0, height: 0 }
 
 /** Gives the map a measurable canvas and a non-Mac platform, the way every map

@@ -22,6 +22,7 @@ export type ClearCompletedActivityPlan = {
  *  with no fresh live working/monitoring/blocked/waiting state. */
 export function isClearableActivityThread(thread: AgentPaneThread): boolean {
   const id = activityThreadStatusId(thread)
+
   return id === 'done' || id === 'interrupted'
 }
 
@@ -38,10 +39,12 @@ export function planClearCompletedActivity(
   const retainedSnapshots: RetainedAgentEntry[] = []
   const cacheIdentities: AgentStatusCacheIdentity[] = []
   let clearedThreadCount = 0
+
   for (const thread of threads) {
     if (!isClearableActivityThread(thread)) {
       continue
     }
+
     clearedThreadCount += 1
     const previousCutoff = state.activityClearedAtByPaneKey[thread.paneKey] ?? null
     const latestCutoff = Math.max(previousCutoff ?? 0, thread.latestTimestamp)
@@ -50,6 +53,7 @@ export function planClearCompletedActivity(
     cutoffPatch[thread.paneKey] = latestCutoff > 0 ? latestCutoff : now
     restorePatch[thread.paneKey] = previousCutoff
     const retained = state.retainedAgentsByPaneKey[thread.paneKey]
+
     if (retained) {
       retainedSnapshots.push(retained)
       const entry = retained.entry
@@ -62,18 +66,21 @@ export function planClearCompletedActivity(
       })
     }
   }
+
   return { cutoffPatch, restorePatch, retainedSnapshots, cacheIdentities, clearedThreadCount }
 }
 
 // Deferred evictions whose undo toast is still open; flushed on pagehide because the toast's
 // close callbacks never fire on quit/reload, which would let cleared rows replay next launch.
 const pendingDiskEvictions = new Set<() => void>()
+
 export function flushPendingClearCompletedEvictions(): void {
   // Set iteration tolerates the self-delete each evict() performs.
   for (const evict of pendingDiskEvictions) {
     evict()
   }
 }
+
 if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', flushPendingClearCompletedEvictions)
 }
@@ -84,13 +91,17 @@ export const CLEAR_COMPLETED_EVICTION_FALLBACK_MS = 60_000
 
 function evictPersistedStatuses(identities: readonly AgentStatusCacheIdentity[]): void {
   const api = window.api?.agentStatus
+
   if (!api || identities.length === 0) {
     return
   }
+
   if (api.dropPersistedBatch) {
     api.dropPersistedBatch(identities)
+
     return
   }
+
   for (const identity of identities) {
     api.dropPersisted?.(identity)
   }
@@ -100,12 +111,15 @@ function evictPersistedStatuses(identities: readonly AgentStatusCacheIdentity[])
 export function clearActivityThread(thread: AgentPaneThread): boolean {
   const state = useAppStore.getState()
   const plan = planClearCompletedActivity([thread], state)
+
   if (plan.clearedThreadCount === 0) {
     return false
   }
+
   state.applyActivityClearedAt(plan.cutoffPatch)
   state.dismissRetainedAgents(plan.retainedSnapshots.map((retained) => retained.entry.paneKey))
   evictPersistedStatuses(plan.cacheIdentities)
+
   return true
 }
 
@@ -120,10 +134,13 @@ export function clearActivityThread(thread: AgentPaneThread): boolean {
 export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boolean {
   const state = useAppStore.getState()
   const plan = planClearCompletedActivity(threads, state)
+
   if (plan.clearedThreadCount === 0) {
     return false
   }
+
   state.applyActivityClearedAt(plan.cutoffPatch)
+
   // Why turn timestamps, not entry identity: a runtime orchestration merge replaces the live
   // entry object without a state change (setRuntimeAgentOrchestrationByPaneKey), and an
   // identity check would then strand the clear-planted suppressor past Undo, losing the run.
@@ -131,28 +148,35 @@ export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boo
     plan.retainedSnapshots.flatMap((retained) => {
       const paneKey = retained.entry.paneKey
       const liveEntry = state.agentStatusByPaneKey[paneKey]
+
       return liveEntry && !state.retentionSuppressedPaneKeys[paneKey]
         ? ([[paneKey, liveEntry.stateStartedAt]] as const)
         : []
     })
   )
+
   state.dismissRetainedAgents(plan.retainedSnapshots.map((retained) => retained.entry.paneKey))
 
   let undone = false
   let dropped = false
   let fallbackTimer: ReturnType<typeof setTimeout> | null = null
+
   const dropRetainedFromDiskCache = (): void => {
     pendingDiskEvictions.delete(dropRetainedFromDiskCache)
+
     if (fallbackTimer !== null) {
       clearTimeout(fallbackTimer)
       fallbackTimer = null
     }
+
     if (undone || dropped) {
       return
     }
+
     dropped = true
     evictPersistedStatuses(plan.cacheIdentities)
   }
+
   pendingDiskEvictions.add(dropRetainedFromDiskCache)
   fallbackTimer = setTimeout(dropRetainedFromDiskCache, CLEAR_COMPLETED_EVICTION_FALLBACK_MS)
   toast(
@@ -169,26 +193,34 @@ export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boo
         onClick: () => {
           undone = true
           pendingDiskEvictions.delete(dropRetainedFromDiskCache)
+
           if (fallbackTimer !== null) {
             clearTimeout(fallbackTimer)
             fallbackTimer = null
           }
+
           const current = useAppStore.getState()
+
           const retainedByPaneKey = new Map(
             plan.retainedSnapshots.map((retained) => [retained.entry.paneKey, retained])
           )
+
           const restorePatch: Record<string, number | null> = {}
           const snapshotsToRestore: RetainedAgentEntry[] = []
           const suppressorPaneKeysToClear: string[] = []
+
           for (const paneKey of Object.keys(plan.restorePatch)) {
             const currentLive = current.agentStatusByPaneKey?.[paneKey]
             const currentRetained = current.retainedAgentsByPaneKey[paneKey]
             const clearedSnapshot = retainedByPaneKey.get(paneKey)
+
             const cutoffStillOwned =
               current.activityClearedAtByPaneKey[paneKey] === plan.cutoffPatch[paneKey]
+
             if (cutoffStillOwned) {
               restorePatch[paneKey] = plan.restorePatch[paneKey] ?? null
             }
+
             if (
               cutoffStillOwned &&
               introducedSuppressorLiveTurns.has(paneKey) &&
@@ -197,15 +229,19 @@ export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boo
             ) {
               suppressorPaneKeysToClear.push(paneKey)
             }
+
             if (currentLive || (currentRetained && currentRetained !== clearedSnapshot)) {
               continue
             }
+
             if (clearedSnapshot && !currentRetained) {
               snapshotsToRestore.push(clearedSnapshot)
             }
           }
+
           current.applyActivityClearedAt(restorePatch)
           current.clearRetentionSuppressedPaneKeys(suppressorPaneKeysToClear)
+
           if (snapshotsToRestore.length > 0) {
             current.retainAgents(snapshotsToRestore)
           }
@@ -215,5 +251,6 @@ export function clearCompletedActivity(threads: readonly AgentPaneThread[]): boo
       onAutoClose: dropRetainedFromDiskCache
     }
   )
+
   return true
 }

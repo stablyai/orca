@@ -17,5 +17,6 @@ export function getFolderWorkspaceHostId(
   defaultHostId: ExecutionHostId
 ): ExecutionHostId {
   const connectionId = folderWorkspace.connectionId ?? projectGroup.connectionId
+
   return connectionId ? toSshExecutionHostId(connectionId) : defaultHostId
 }

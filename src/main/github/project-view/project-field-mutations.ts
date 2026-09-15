@@ -25,6 +25,7 @@ function graphqlValueForFieldMutation(value: GitHubProjectFieldMutationValue): s
     case 'date':
       return 'date: $value'
   }
+
   throw new UnknownFieldMutationKindError((value as { kind: string }).kind)
 }
 
@@ -44,6 +45,7 @@ function mutationValueVar(value: GitHubProjectFieldMutationValue): {
     case 'date':
       return { type: 'Date!', val: value.date }
   }
+
   throw new UnknownFieldMutationKindError((value as { kind: string }).kind)
 }
 
@@ -53,8 +55,10 @@ export async function updateProjectItemFieldValue(
   if (!args.projectId || !args.itemId || !args.fieldId) {
     return { ok: false, error: { type: 'validation_error', message: 'Missing ids.' } }
   }
+
   let valueFragment: string
   let valueVariable: { type: string; val: string | number }
+
   try {
     valueFragment = graphqlValueForFieldMutation(args.value)
     valueVariable = mutationValueVar(args.value)
@@ -62,8 +66,10 @@ export async function updateProjectItemFieldValue(
     if (error instanceof UnknownFieldMutationKindError) {
       return { ok: false, error: { type: 'validation_error', message: error.message } }
     }
+
     throw error
   }
+
   const query = `
     mutation($projectId:ID!, $itemId:ID!, $fieldId:ID!, $value:${valueVariable.type}) {
       updateProjectV2ItemFieldValue(input: {
@@ -74,13 +80,16 @@ export async function updateProjectItemFieldValue(
       }) { projectV2Item { id } }
     }
   `
+
   const vars: GraphqlVars = {
     projectId: args.projectId,
     itemId: args.itemId,
     fieldId: args.fieldId,
     value: valueVariable.val
   }
+
   const result = await runGraphql<unknown>(query, vars, projectGhExecOptions(args.host))
+
   return result.ok ? { ok: true } : { ok: false, error: result.error }
 }
 
@@ -90,6 +99,7 @@ export async function clearProjectItemFieldValue(
   if (!args.projectId || !args.itemId || !args.fieldId) {
     return { ok: false, error: { type: 'validation_error', message: 'Missing ids.' } }
   }
+
   const result = await runGraphql<unknown>(
     `mutation($projectId:ID!, $itemId:ID!, $fieldId:ID!) {
        clearProjectV2ItemFieldValue(input: {
@@ -99,5 +109,6 @@ export async function clearProjectItemFieldValue(
     { projectId: args.projectId, itemId: args.itemId, fieldId: args.fieldId },
     projectGhExecOptions(args.host)
   )
+
   return result.ok ? { ok: true } : { ok: false, error: result.error }
 }

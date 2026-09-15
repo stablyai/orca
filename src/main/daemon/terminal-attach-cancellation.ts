@@ -5,11 +5,14 @@ export function rejectOnAbort(signal: AbortSignal | undefined, sessionId: string
   if (!signal) {
     return new Promise<never>(() => {})
   }
+
   return new Promise<never>((_resolve, reject) => {
     if (signal.aborted) {
       reject(new TerminalAttachCanceledError(sessionId))
+
       return
     }
+
     signal.addEventListener('abort', () => reject(new TerminalAttachCanceledError(sessionId)), {
       once: true
     })

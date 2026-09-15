@@ -4,21 +4,28 @@ import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repo
 
 const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./client-test-mocks')
+
   return { clientMocks: moduleMocks.createGitHubClientMocks(), moduleMocks }
 })
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
+
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
+
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
+
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
+
 vi.mock('./github-enterprise-repository', async (importOriginal) =>
   moduleMocks.githubEnterpriseRepositoryModuleMock(
     await importOriginal<typeof GitHubEnterpriseRepositoryModule>()
   )
 )
+
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(clientMocks))
+
 vi.mock('./github-api-repository', async (importOriginal) =>
   moduleMocks.githubApiRepositoryModuleMock(
     clientMocks,
@@ -139,9 +146,11 @@ describe('GitHub GraphQL rate-limit guard', () => {
       ]
     })
     expect(pr?.mergeQueueRequired).toBe(true)
+
     const mergeQueueMetadataCall = ghExecFileAsyncMock.mock.calls.find(
       ([args]) => args.includes('graphql') && args.includes('branch=main')
     )
+
     expect(mergeQueueMetadataCall?.[0]).toEqual(expect.arrayContaining(['-f', 'branch=main']))
   })
 
@@ -198,6 +207,7 @@ describe('GitHub GraphQL rate-limit guard', () => {
     const mergeCall = ghExecFileAsyncMock.mock.calls.find(([args]) =>
       args.includes('repos/stablyai/orca/pulls/202/merge-async')
     )
+
     expect(mergeCall?.[0]).toEqual(
       expect.arrayContaining([
         'PUT',
@@ -533,11 +543,13 @@ describe('GitHub GraphQL rate-limit guard', () => {
     }
   ])('fails closed on $failure', async (scenario) => {
     const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
     if (scenario.probeResponse instanceof Error) {
       ghExecFileAsyncMock.mockRejectedValueOnce(scenario.probeResponse)
     } else {
       ghExecFileAsyncMock.mockResolvedValueOnce(scenario.probeResponse)
     }
+
     // Why: disabling the guard must expose the legacy merge fallthrough, not fail on an unstubbed call.
     ghExecFileAsyncMock
       .mockResolvedValueOnce({

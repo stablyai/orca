@@ -6,6 +6,7 @@ import type { LinearIssue } from '../../src/shared/linear/issue-types'
 
 const LINEAR_URL =
   'https://linear.app/stably/issue/STA-4084/restore-osc-133-shell-integration-when-an-exec-in-user-rc-files-strips'
+
 const EXPECTED_WORKSPACE_NAME = 'sta-4084-restore-osc-133-shell-integration-when'
 
 const LINEAR_ISSUE: LinearIssue = {
@@ -38,9 +39,11 @@ async function installLinearFixture(
     ({ resolvedIssue, lookupDelayMs }) => {
       Reflect.deleteProperty(window, '__orcaTestReleaseLinearLookup')
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       store.setState({
         linearStatus: {
           connected: true,
@@ -76,6 +79,7 @@ async function installLinearFixture(
                 Reflect.set(window, '__orcaTestReleaseLinearLookup', resolve)
               })
             : new Promise<void>((resolve) => window.setTimeout(resolve, lookupDelayMs)))
+
           return resolvedIssue && workspaceId === resolvedIssue.workspaceId ? resolvedIssue : null
         }
       })
@@ -87,9 +91,11 @@ async function installLinearFixture(
 async function releaseHeldLinearLookup(page: Page): Promise<void> {
   await page.evaluate(() => {
     const release = Reflect.get(window, '__orcaTestReleaseLinearLookup')
+
     if (typeof release !== 'function') {
       throw new Error('Linear lookup is not held')
     }
+
     Reflect.deleteProperty(window, '__orcaTestReleaseLinearLookup')
     release()
   })
@@ -145,10 +151,12 @@ test.describe('Linear URL workspace entry', () => {
       name: `${LINEAR_ISSUE.identifier} ${LINEAR_ISSUE.title}`,
       exact: true
     })
+
     const useNameRow = orcaPage.getByRole('option', {
       name: `Use "${LINEAR_URL}" as workspace name`,
       exact: true
     })
+
     await expect(useNameRow).toBeVisible()
     await expect(useNameRow).not.toHaveAttribute('data-selected', 'true')
     await expect(issueRow).toContainText(LINEAR_ISSUE.title)
@@ -178,10 +186,12 @@ test.describe('Linear URL workspace entry', () => {
     const input = dialog.locator('[data-workspace-name-input="true"]')
 
     await pasteLinearUrl(orcaPage, input)
+
     const useNameRow = orcaPage.getByRole('option', {
       name: `Use "${LINEAR_URL}" as workspace name`,
       exact: true
     })
+
     await expect(useNameRow).toHaveAttribute('data-selected', 'true')
     await expect(input).not.toHaveAttribute('aria-busy', 'true')
 
@@ -189,9 +199,11 @@ test.describe('Linear URL workspace entry', () => {
     await expect(input).toHaveValue(LINEAR_URL)
     await expect(dialog.locator('[data-workspace-source-pill="true"]')).toHaveCount(0)
     const suggestions = dialog.locator('[data-workspace-source-suggestions="true"]')
+
     if (await suggestions.isVisible()) {
       await input.press('Escape')
     }
+
     await expect(input).not.toHaveAttribute('aria-busy', 'true')
     await input.press('Enter')
     await expect(dialog.locator('[data-agent-combobox-root="true"][role="combobox"]')).toBeFocused()
@@ -203,9 +215,11 @@ test.describe('Linear URL workspace entry', () => {
   }, testInfo) => {
     await openJumpPalette(electronApp)
     const palette = orcaPage.getByRole('dialog', { name: 'Jump to...' })
+
     const input = palette.getByPlaceholder(
       'Search chats, terminals, worktrees, settings, and actions...'
     )
+
     await expect(input).toBeVisible()
 
     await pasteLinearUrl(orcaPage, input)
@@ -213,6 +227,7 @@ test.describe('Linear URL workspace entry', () => {
     const preview = palette.locator(
       '[data-cmd-j-linear-issue-preview="true"][data-cmd-j-linear-issue-state="resolved"]'
     )
+
     await expect(preview).toContainText(LINEAR_ISSUE.identifier)
     await expect(preview).toContainText(LINEAR_ISSUE.title)
     await expect(preview).toHaveAttribute('data-selected', 'true')

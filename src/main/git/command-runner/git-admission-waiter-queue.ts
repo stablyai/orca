@@ -8,6 +8,7 @@ type SelectedWaiter = {
 }
 
 const TIERS = ['interactive', 'status', 'background'] as const
+
 const createLane = (): WaiterLane => ({
   items: [],
   head: 0,
@@ -16,12 +17,15 @@ const createLane = (): WaiterLane => ({
   headroomEligible: false,
   version: 0
 })
+
 type TierLanes = Record<GitAdmissionTier, Map<string | null, WaiterLane>>
+
 const createTierLanes = (): TierLanes => ({
   interactive: new Map(),
   status: new Map(),
   background: new Map()
 })
+
 export class GitAdmissionWaiterQueue {
   private readonly lanes: Record<AdmissionClass, TierLanes> = {
     general: createTierLanes(),
@@ -54,27 +58,33 @@ export class GitAdmissionWaiterQueue {
   /** @internal - exposed for bounded-storage regression tests only. */
   get candidateCountForTests(): number {
     let count = this.headroomCandidates.general.size + this.headroomCandidates.network.size
+
     for (const admissionClass of ['general', 'network'] as const) {
       for (const tier of TIERS) {
         count += this.baseCandidates[admissionClass][tier].size
       }
     }
+
     return count
   }
 
   enqueue(waiter: AdmissionWaiter): void {
     const lanes = this.lanes[waiter.admissionClass][waiter.tier]
     let lane = lanes.get(waiter.route)
+
     if (!lane) {
       lane = createLane()
       lanes.set(waiter.route, lane)
     }
+
     lane.items.push(waiter)
     lane.count += 1
     this.totalCount += 1
+
     for (const key of waiter.budgetKeys) {
       this.countsByBudget.set(key, (this.countsByBudget.get(key) ?? 0) + 1)
     }
+
     if (lane.count === 1) {
       this.publishLaneHead(waiter.admissionClass, waiter.tier, lane)
     }
@@ -83,21 +93,27 @@ export class GitAdmissionWaiterQueue {
   dequeue(waiter: AdmissionWaiter): void {
     const lanes = this.lanes[waiter.admissionClass][waiter.tier]
     const lane = lanes.get(waiter.route)
+
     if (!lane) {
       return
     }
+
     lane.count -= 1
     this.totalCount -= 1
+
     for (const key of waiter.budgetKeys) {
       const current = this.countsByBudget.get(key)
+
       if (current === 1) {
         this.countsByBudget.delete(key)
       } else if (current !== undefined) {
         this.countsByBudget.set(key, current - 1)
       }
     }
+
     const previousHead = lane.items[lane.head]
     this.compact(lane)
+
     if (lane.count === 0) {
       lane.version += 1
       lanes.delete(waiter.route)
@@ -117,12 +133,14 @@ export class GitAdmissionWaiterQueue {
   ): void {
     for (const tier of TIERS) {
       const lane = this.lanes[admissionClass][tier].get(route)
+
       if (
         !lane ||
         (lane.baseEligible === baseEligible && lane.headroomEligible === headroomEligible)
       ) {
         continue
       }
+
       lane.baseEligible = baseEligible
       lane.headroomEligible = headroomEligible
       lane.version += 1
@@ -156,30 +174,37 @@ export class GitAdmissionWaiterQueue {
   ): SelectedWaiter | null {
     while (true) {
       const candidates: SelectedWaiter[] = []
+
       if (allowBase) {
         // Aging preserves order within a raw tier, so only its oldest eligible head can win.
         for (const tier of TIERS) {
           const candidate = this.peekValid(this.baseCandidates[admissionClass][tier], 'base')
+
           if (candidate) {
             candidates.push({ waiter: candidate.waiter, slotKind: 'base' })
           }
         }
       }
+
       if (allowHeadroom) {
         const candidate = this.peekValid(this.headroomCandidates[admissionClass], 'headroom')
+
         if (candidate) {
           candidates.push({ waiter: candidate.waiter, slotKind: 'headroom' })
         }
       }
+
       const selected = candidates.sort(
         (left, right) =>
           effectiveTier(left.waiter) - effectiveTier(right.waiter) ||
           left.waiter.id - right.waiter.id ||
           (left.slotKind === 'base' ? -1 : 1)
       )[0]
+
       if (!selected || !selected.waiter.signal?.aborted) {
         return selected ?? null
       }
+
       abort(selected.waiter)
     }
   }
@@ -190,13 +215,17 @@ export class GitAdmissionWaiterQueue {
     lane: WaiterLane
   ): void {
     const waiter = lane.items[lane.head]
+
     if (!waiter || waiter.state !== 'queued') {
       return
     }
+
     const candidate = { lane, waiter, version: lane.version }
+
     if (lane.baseEligible) {
       this.baseCandidates[admissionClass][tier].push(candidate)
     }
+
     if (tier === 'interactive' && lane.headroomEligible) {
       this.headroomCandidates[admissionClass].push(candidate)
     }
@@ -208,6 +237,7 @@ export class GitAdmissionWaiterQueue {
 
   private candidateIsValid(candidate: Candidate, slotKind: AdmissionSlotKind): boolean {
     const { lane, waiter, version } = candidate
+
     return (
       version === lane.version &&
       waiter === lane.items[lane.head] &&
@@ -221,6 +251,7 @@ export class GitAdmissionWaiterQueue {
     this.baseCandidates[admissionClass][tier].compactIfOversized(liveLaneCount, (candidate) =>
       this.candidateIsValid(candidate, 'base')
     )
+
     if (tier === 'interactive') {
       this.headroomCandidates[admissionClass].compactIfOversized(liveLaneCount, (candidate) =>
         this.candidateIsValid(candidate, 'headroom')
@@ -230,19 +261,26 @@ export class GitAdmissionWaiterQueue {
 
   private compact(lane: WaiterLane): void {
     let head = lane.head
+
     while (head < lane.items.length && lane.items[head].state !== 'queued') {
       head += 1
     }
+
     lane.head = head
+
     if (lane.count === 0) {
       lane.items.length = 0
       lane.head = 0
+
       return
     }
+
     const tombstones = lane.items.length - head - lane.count
+
     if (head < 256 && (lane.items.length < 256 || tombstones <= lane.count)) {
       return
     }
+
     lane.items = lane.items.slice(head).filter((candidate) => candidate.state === 'queued')
     lane.head = 0
   }

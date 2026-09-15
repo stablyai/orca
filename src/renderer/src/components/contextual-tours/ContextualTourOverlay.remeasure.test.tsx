@@ -7,7 +7,9 @@ import { ContextualTourOverlay } from './ContextualTourOverlay'
 import { useAppStore } from '@/store'
 
 let container: HTMLDivElement
+
 let root: Root
+
 let commits = 0
 
 type MovableTarget = { element: HTMLElement; moveTo: (top: number) => void }
@@ -30,6 +32,7 @@ function tourTarget(name: string, top: number): MovableTarget {
     })
   })
   document.body.appendChild(element)
+
   return {
     element,
     moveTo: (next) => {
@@ -100,9 +103,11 @@ describe('ContextualTourOverlay re-measure triggers', () => {
     const unrelatedPane = document.createElement('div')
     document.body.appendChild(unrelatedPane)
     const commitsBeforeScroll = commits
+
     for (let index = 0; index < 60; index += 1) {
       await dispatchScroll(unrelatedPane)
     }
+
     unrelatedPane.remove()
 
     expect(commits - commitsBeforeScroll).toBeLessThanOrEqual(2)
@@ -122,6 +127,7 @@ describe('ContextualTourOverlay re-measure triggers', () => {
 
     const rings = (): HTMLElement | null =>
       container.querySelector<HTMLElement>('[data-contextual-tour-target-rings]')
+
     expect(rings()?.style.top).toBe('300px')
 
     target.moveTo(640)

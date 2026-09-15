@@ -43,6 +43,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     subscribeToTerminal,
     fetchSessionTabs
   } = scope
+
   async function handleCreateTerminal(
     agent?: MobileNewTabAgentOption['agent'],
     options?: MobileQuickCommandLaunch['options'] & {
@@ -53,6 +54,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     if (!client || creatingTerminalRef.current) {
       return
     }
+
     creatingTerminalRef.current = true
 
     setCreating(true)
@@ -68,6 +70,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     function reportCreateFailure(hostReason: string): void {
       const reason = hostReason.trim()
       setCreateError(reason || options?.errorToast || 'Failed to create terminal')
+
       if (options?.errorToast) {
         triggerError()
         showToast(options.errorToast, 1800)
@@ -78,12 +81,15 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       // Bare structured-provider launches follow host createSupport; prompted launches keep their startup semantics.
       if (isAgentSessionHandleProvider(agent) && options === undefined) {
         const structured = await createMobileStructuredAgentSession(client, worktreeId, agent)
+
         if (structured.kind === 'created') {
           const previous = activeHandleRef.current
+
           if (previous) {
             unsubscribeTerminal(previous)
             initializedHandlesRef.current.delete(previous)
           }
+
           const tabId = `agent-session:${structured.sessionId}`
           pendingActiveSessionTabIdRef.current = tabId
           pendingActiveTerminalHandleRef.current = null
@@ -94,16 +100,20 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           setActiveHandle(null)
           // Refresh if the create response beats its published tab frame.
           scheduleDelayedAction(() => void fetchSessionTabs(), 500)
+
           return
         }
+
         if (structured.kind === 'unknown') {
           // Never create a legacy sibling when the host may already have committed.
           setCreateError(structured.message)
           triggerError()
           showToast(structured.message, 1800)
+
           return
         }
       }
+
       const response = await client.sendRequest('session.tabs.createTerminal', {
         worktree: `id:${worktreeId}`,
         afterTabId: activeSessionTabId ?? undefined,
@@ -118,15 +128,18 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
         select: true,
         navigation: 'caller'
       })
+
       if (response.ok) {
         const result = (response as RpcSuccess).result as TerminalCreateResult
         const created = result.tab
         // Why: unsubscribe the old terminal so the server restores its desktop dims; otherwise its restore timer is never set.
         const prev = activeHandleRef.current
+
         if (prev) {
           unsubscribeTerminal(prev)
           initializedHandlesRef.current.delete(prev)
         }
+
         pendingActiveSessionTabIdRef.current = created.id
         activeSessionTabTypeRef.current = 'terminal'
         setActiveSessionTabId(created.id)
@@ -134,8 +147,10 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           if (prev.some((tab) => tab.id === created.id)) {
             return prev
           }
+
           return [...prev, { ...created, isActive: true }]
         })
+
         if (typeof created.terminal === 'string') {
           const createdHandle = created.terminal
           defaultTerminalHandlesToLiveInput([createdHandle])
@@ -145,24 +160,31 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           setActiveHandle(createdHandle)
           setTerminals((prev) => {
             const existing = prev.find((terminal) => terminal.handle === createdHandle)
+
             const createdTerminal: Terminal = {
               handle: createdHandle,
               title: created.title || existing?.title || 'Terminal',
               terminalTheme: created.terminalTheme ?? existing?.terminalTheme,
               isActive: true
             }
+
             if (existing) {
               const next = prev.map((terminal) =>
                 terminal.handle === createdHandle ? { ...terminal, ...createdTerminal } : terminal
               )
+
               terminalsRef.current = next
+
               return terminalRecordsEqual(prev, next) ? prev : next
             }
+
             const next = [...prev, createdTerminal]
             terminalsRef.current = next
+
             return next
           })
           subscribeToTerminal(createdHandle)
+
           if (options?.initialPrompt?.trim()) {
             void client
               .sendRequest(
@@ -180,12 +202,15 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
                     (sendResponse as RpcFailure).error.message || 'Failed to send notes'
                   )
                 }
+
                 const result = (sendResponse as RpcSuccess).result as {
                   send?: { accepted?: boolean }
                 }
+
                 if (result.send?.accepted === false) {
                   throw new Error('Terminal input is locked by another client.')
                 }
+
                 triggerSuccess()
                 showToast(options.successToast ?? 'Notes sent')
                 options.onPromptSent?.()
@@ -208,6 +233,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           activeHandleRef.current = null
           setActiveHandle(null)
         }
+
         scheduleDelayedAction(() => void fetchSessionTabs(), 500)
       } else {
         reportCreateFailure((response as RpcFailure).error.message)
@@ -233,19 +259,25 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
     ) {
       return false
     }
+
     const launch = buildMobileQuickCommandLaunch(command)
+
     if (!launch) {
       triggerError()
       showToast('Edit this quick command before running it', 1800)
+
       return false
     }
+
     const label = command.label.trim() || 'Quick command'
     void handleCreateTerminal(launch.agent, {
       ...launch.options,
       errorToast: `Couldn't run ${label}`
     })
+
     return true
   }
+
   return {
     handleCreateTerminal,
     launchQuickCommand

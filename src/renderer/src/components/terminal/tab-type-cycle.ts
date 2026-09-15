@@ -35,17 +35,21 @@ export function getActiveEntityIdForTabType(
   if (activeTabType === 'editor') {
     return activeFileId
   }
+
   if (activeTabType === 'browser') {
     return activeBrowserTabId
   }
+
   // Why: `activeTabId` is terminal-only state that keeps naming a live background terminal while a
   // structured tab is active, so falling through here cycles from a tab the user is not on.
   if (activeTabType === 'agent-session') {
     return activeAgentSessionEntityId
   }
+
   if (activeTabType === 'simulator') {
     return activeTabId
   }
+
   return activeTabId
 }
 
@@ -80,12 +84,14 @@ export function getNextTabAcrossAllTypes({
     activeGroupTabId && tabs.some((entry) => entry.tabId === activeGroupTabId)
       ? activeGroupTabId
       : null
+
   const currentId = getActiveEntityIdForTabType(
     activeTabType,
     activeTabId,
     activeFileId,
     activeBrowserTabId
   )
+
   const currentIndex = groupTabIdInNav
     ? tabs.findIndex((tab) => tab.tabId === groupTabIdInNav)
     : tabs.findIndex((tab) => tab.type === activeTabType && tab.id === currentId)
@@ -107,6 +113,7 @@ export function getNextTabWithinActiveType({
   direction
 }: GetNextTabWithinActiveTypeParams): TypeCyclableTab | null {
   const tabsOfActiveType = tabs.filter((tab) => tab.type === activeTabType)
+
   if (tabsOfActiveType.length <= 1) {
     return null
   }
@@ -115,12 +122,14 @@ export function getNextTabWithinActiveType({
     activeGroupTabId && tabsOfActiveType.some((entry) => entry.tabId === activeGroupTabId)
       ? activeGroupTabId
       : null
+
   const currentId = getActiveEntityIdForTabType(
     activeTabType,
     activeTabId,
     activeFileId,
     activeBrowserTabId
   )
+
   const currentIndex = groupTabIdInNav
     ? tabsOfActiveType.findIndex((tab) => tab.tabId === groupTabIdInNav)
     : tabsOfActiveType.findIndex((tab) => tab.id === currentId)

@@ -15,13 +15,16 @@ describe('Coordinator drift probe coalescing', () => {
     db = new OrchestrationDb(':memory:')
     const sentMessages: { handle: string; text: string }[] = []
     const probeDriftCalls: string[] = []
+
     const terminals = [
       { handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true },
       { handle: 'term_b', worktreeId: 'wt1', connected: true, writable: true }
     ]
+
     const runtime: CoordinatorRuntime = {
       async sendTerminalAgentPrompt(handle, prompt) {
         sentMessages.push({ handle, text: prompt })
+
         return { accepted: true }
       },
       async listTerminals() {
@@ -35,6 +38,7 @@ describe('Coordinator drift probe coalescing', () => {
       },
       async probeWorktreeDrift(worktreeSelector) {
         probeDriftCalls.push(worktreeSelector)
+
         return probeDriftCalls.length === 1
           ? {
               base: 'origin/main',
@@ -44,8 +48,10 @@ describe('Coordinator drift probe coalescing', () => {
           : { base: 'origin/main', behind: 0, recentSubjects: [] }
       }
     }
+
     const first = db.createTask({ runId: 'run_legacy_local', spec: 'first task' })
     const second = db.createTask({ runId: 'run_legacy_local', spec: 'second task' })
+
     const coordinator = new Coordinator(db, runtime, {
       spec: 'go',
       coordinatorHandle: 'coord',
@@ -61,9 +67,11 @@ describe('Coordinator drift probe coalescing', () => {
 
     for (const task of [first, second]) {
       const dispatch = db.getDispatchContext(task.id)
+
       if (!dispatch?.assignee_handle) {
         throw new Error(`missing dispatch for ${task.id}`)
       }
+
       db.insertMessage({
         runId: 'run_legacy_local',
         from: dispatch.assignee_handle,
@@ -81,9 +89,11 @@ describe('Coordinator drift probe coalescing', () => {
     db = new OrchestrationDb(':memory:')
     const sentMessages: { handle: string; text: string }[] = []
     const probeDriftCalls: string[] = []
+
     const runtime: CoordinatorRuntime = {
       async sendTerminalAgentPrompt(handle, prompt) {
         sentMessages.push({ handle, text: prompt })
+
         return { accepted: true }
       },
       async listTerminals() {
@@ -99,6 +109,7 @@ describe('Coordinator drift probe coalescing', () => {
       },
       async probeWorktreeDrift(worktreeSelector) {
         probeDriftCalls.push(worktreeSelector)
+
         return {
           base: 'origin/main',
           behind: DISPATCH_STALE_THRESHOLD + 1,
@@ -106,14 +117,17 @@ describe('Coordinator drift probe coalescing', () => {
         }
       }
     }
+
     const refused = db.createTask({
       runId: 'run_legacy_local',
       spec: 'requires a current base'
     })
+
     const allowed = db.createTask({
       runId: 'run_legacy_local',
       spec: 'can use stale base\nallow-stale-base: true'
     })
+
     const coordinator = new Coordinator(db, runtime, {
       spec: 'go',
       coordinatorHandle: 'coord',

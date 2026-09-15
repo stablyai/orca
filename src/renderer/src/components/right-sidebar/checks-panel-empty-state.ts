@@ -77,10 +77,13 @@ export function getChecksPanelReviewState(
   // 1.5 Keep active positive-review lookups self-updating without hiding stronger safety guidance.
   const reviewFetchInFlight =
     input.refresh?.status === 'queued' || input.refresh?.status === 'in-flight'
+
   const hasPendingReviewEvidence =
     input.reviewLookup === 'positive_unresolved' || blockedReason === 'existing_review'
+
   const pendingReviewLookupOwnsState =
     blockedReason === undefined || blockedReason === 'existing_review'
+
   if (reviewFetchInFlight && hasPendingReviewEvidence && pendingReviewLookupOwnsState) {
     return {
       renderReview: false,
@@ -134,6 +137,7 @@ export function getChecksPanelReviewState(
       blockedReason as NonNullable<HostedReviewCreationBlockedReason>
     )
   }
+
   // A ready Git status reporting no upstream is a publish state even before
   // eligibility resolves. `hasUpstream === undefined` is unknown, never false.
   if (input.gitStatusPhase === 'ready' && input.hasUpstream === false && input.hasCurrentBranch) {
@@ -150,7 +154,9 @@ export function getChecksPanelReviewState(
     const detail = isTransientRefreshFailure(input.refresh)
       ? concurrentLookupDetail(input)
       : undefined
+
     const mode = confirmedComposerMode(input)
+
     return {
       renderReview: false,
       title: translate(
@@ -174,12 +180,14 @@ export function getChecksPanelReviewState(
   // 7. Transient classified error / rate-limit pause with no accepted result.
   if (isTransientRefreshFailure(input.refresh)) {
     const mode = confirmedComposerMode(input)
+
     return transientRefreshState(input, mode, workflowActionForComposer(mode))
   }
 
   // 8. Active refresh (queued / in-flight) with no accepted result.
   if (input.refresh?.status === 'queued' || input.refresh?.status === 'in-flight') {
     const mode = confirmedComposerMode(input)
+
     return {
       renderReview: false,
       title: translate(
@@ -215,6 +223,7 @@ export function getChecksPanelReviewState(
       recovery: []
     }
   }
+
   if (input.gitStatusPhase === 'error' && input.hasUpstream === undefined) {
     return {
       renderReview: false,
@@ -237,13 +246,17 @@ export function getChecksPanelReviewState(
   if (input.refresh?.status === 'skipped' && input.refresh.skippedReason) {
     if (input.refresh.skippedReason === 'rate-limit') {
       const mode = confirmedComposerMode(input)
+
       return transientRefreshState(input, mode, workflowActionForComposer(mode))
     }
+
     const skipped = skippedRefreshState(input, input.refresh.skippedReason)
+
     if (skipped) {
       return skipped
     }
   }
+
   return {
     renderReview: false,
     title: translate(
@@ -273,6 +286,8 @@ export function shouldShowChecksPanelPublishBranchAction(input: {
   if (input.hasCurrentBranch === false) {
     return false
   }
+
   const blockedReason = input.hostedReviewBlockedReason
+
   return input.hasUpstream === false || blockedReason === 'no_upstream'
 }

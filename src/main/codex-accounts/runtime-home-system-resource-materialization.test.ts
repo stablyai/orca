@@ -21,6 +21,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -56,6 +57,7 @@ describe('CodexRuntimeHomeService', () => {
   it('launches the system-default custom provider without requiring OAuth auth', async () => {
     const systemCodexHome = getSystemCodexHomePath()
     const canonicalConfigPath = join(systemCodexHome, 'config.toml')
+
     const canonicalConfig = [
       'model_provider = "codex-lb"',
       '',
@@ -64,6 +66,7 @@ describe('CodexRuntimeHomeService', () => {
       'env_key = "EXAMPLE_GATEWAY_TOKEN"',
       ''
     ].join('\n')
+
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
     const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -111,6 +114,7 @@ describe('CodexRuntimeHomeService', () => {
       '26',
       'rollout-old.jsonl'
     )
+
     const systemConflictSessionPath = join(
       getSystemCodexHomePath(),
       'sessions',
@@ -119,6 +123,7 @@ describe('CodexRuntimeHomeService', () => {
       '26',
       'rollout-conflict.jsonl'
     )
+
     const runtimeConflictSessionPath = join(
       getRuntimeCodexHomePath(),
       'sessions',
@@ -127,6 +132,7 @@ describe('CodexRuntimeHomeService', () => {
       '26',
       'rollout-conflict.jsonl'
     )
+
     mkdirSync(join(getSystemCodexHomePath(), 'sessions', '2026', '05', '26'), { recursive: true })
     mkdirSync(join(getRuntimeCodexHomePath(), 'sessions', '2026', '05', '26'), {
       recursive: true
@@ -137,8 +143,10 @@ describe('CodexRuntimeHomeService', () => {
     writeFileSync(join(getSystemCodexHomePath(), 'state_5.sqlite'), 'sqlite\n', 'utf-8')
     const store = createStore(createSettings())
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+
     const { startSystemCodexSessionBridgeInBackground } =
       await import('../codex/codex-session-bridge')
+
     const service = new CodexRuntimeHomeService(store as never)
 
     service.prepareForCodexLaunch()
@@ -152,6 +160,7 @@ describe('CodexRuntimeHomeService', () => {
       '26',
       'rollout-old.jsonl'
     )
+
     expect(readFileSync(runtimeMissingSessionPath, 'utf-8')).toBe('{"id":"old"}\n')
     expectResourceLinkedOrCopied(runtimeMissingSessionPath, systemMissingRuntimeSessionPath)
     expect(readFileSync(runtimeConflictSessionPath, 'utf-8')).toBe('{"id":"runtime-conflict"}\n')

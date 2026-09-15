@@ -32,9 +32,11 @@ describe('contextual tour overlay measurement', () => {
     })
 
     expect(result.kind).toBe('render')
+
     if (result.kind !== 'render') {
       throw new Error(`Expected render result, received ${result.kind}`)
     }
+
     expect(result.renderState.title).toBe('자동화란 무엇인가요?')
     expect(result.renderState.body).toBe(
       '자동화는 일정에 따라 agent 작업을 실행합니다. 이 버튼을 눌러 자동화를 추가하세요.'
@@ -57,9 +59,11 @@ describe('contextual tour overlay measurement', () => {
     })
 
     expect(result.kind).toBe('render')
+
     if (result.kind !== 'render') {
       throw new Error(`Expected render result, received ${result.kind}`)
     }
+
     expect(result.renderState.title).toBe('결과 확인')
     expect(result.renderState.body).toBe(
       '실행 내역에서 자동화가 언제 실행되었는지, 어떤 일이 발생했는지, 출력을 어디서 확인할 수 있는지 볼 수 있습니다.'
@@ -74,6 +78,7 @@ describe('contextual tour overlay measurement', () => {
     document.body.appendChild(target)
 
     const automations = getContextualTour('automations')
+
     const result = measureContextualTourOverlayRenderState({
       tour: {
         ...automations,
@@ -93,9 +98,11 @@ describe('contextual tour overlay measurement', () => {
     })
 
     expect(result.kind).toBe('render')
+
     if (result.kind !== 'render') {
       throw new Error(`Expected render result, received ${result.kind}`)
     }
+
     expect(result.renderState.title).toBe('자동화란 무엇인가요?')
   })
 

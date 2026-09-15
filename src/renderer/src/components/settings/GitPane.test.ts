@@ -26,56 +26,70 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return
   }
+
   if (Array.isArray(node)) {
     node.forEach((entry) => visit(entry, cb))
+
     return
   }
+
   const element = node as ReactElementLike
   cb(element)
+
   for (const [key, value] of Object.entries(element.props ?? {})) {
     if (key.startsWith('on')) {
       continue
     }
+
     visit(value, cb)
   }
 }
 
 function findSegmentedControl(node: unknown): ReactElementLike {
   let found: ReactElementLike | null = null
+
   const label = translate(
     'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
     'Source Control Group Order'
   )
+
   visit(node, (entry) => {
     if (entry.type === SettingsSegmentedControl && entry.props.ariaLabel === label) {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('segmented control not found')
   }
+
   return found
 }
 
 function findCompareBaseSegmentedControl(node: unknown): ReactElementLike {
   let found: ReactElementLike | null = null
+
   const label = translate(
     'auto.components.settings.GitPane.compareAgainstUpstreamTitle',
     'Default Compare Base'
   )
+
   visit(node, (entry) => {
     if (entry.type === SettingsSegmentedControl && entry.props.ariaLabel === label) {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('compare-base segmented control not found')
   }
+
   return found
 }
 
 function renderGitPane(searchQuery: string): string {
   useAppStore.setState({ settingsSearchQuery: searchQuery })
+
   return renderToStaticMarkup(
     React.createElement(
       TooltipProvider,
@@ -158,6 +172,7 @@ describe('GitPane', () => {
 
   it('updates Source Control group order only when the selected option changes', () => {
     const updateSettings = vi.fn()
+
     const element = SourceControlGroupOrderSetting({
       settings: {
         ...getDefaultSettings(os.homedir()),
@@ -224,6 +239,7 @@ describe('GitPane', () => {
         updateSettings: () => {}
       })
     )
+
     expect(repositoryDefaultControl.props.value).toBe('repository-default')
 
     const branchUpstreamControl = findCompareBaseSegmentedControl(
@@ -235,11 +251,13 @@ describe('GitPane', () => {
         updateSettings: () => {}
       })
     )
+
     expect(branchUpstreamControl.props.value).toBe('branch-upstream')
   })
 
   it('updates the default compare base policy from its segmented control', () => {
     const updateSettings = vi.fn()
+
     const repositoryDefaultControl = findCompareBaseSegmentedControl(
       CompareAgainstUpstreamSetting({
         settings: {
@@ -249,10 +267,12 @@ describe('GitPane', () => {
         updateSettings
       })
     )
+
     ;(repositoryDefaultControl.props.onChange as (value: string) => void)('branch-upstream')
     expect(updateSettings).toHaveBeenCalledWith({ sourceControlCompareAgainstUpstream: true })
 
     updateSettings.mockClear()
+
     const branchUpstreamControl = findCompareBaseSegmentedControl(
       CompareAgainstUpstreamSetting({
         settings: {
@@ -262,6 +282,7 @@ describe('GitPane', () => {
         updateSettings
       })
     )
+
     ;(branchUpstreamControl.props.onChange as (value: string) => void)('repository-default')
     expect(updateSettings).toHaveBeenCalledWith({ sourceControlCompareAgainstUpstream: false })
   })

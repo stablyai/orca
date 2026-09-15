@@ -25,15 +25,20 @@ export function createOpenUnstagedDiff(
           worktreeId,
           options?.runtimeEnvironmentId
         )
+
         const diffSource: DiffSource = staged ? 'staged' : 'unstaged'
         const id = buildDiffEditorFileId(worktreeId, diffSource, relativePath, runtimeEnvironmentId)
         editorItemFileId = id
+
         const targetGroupId =
           resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
+
         editorItemTargetGroupId = targetGroupId
         const existing = s.openFiles.find((f) => f.id === id)
+
         if (existing) {
           const updatedPreview = isPreview ? existing.isPreview : false
+
           const reopenedDiff = withDiffContentReloadRequest({
             ...existing,
             mode: 'diff' as const,
@@ -44,6 +49,7 @@ export function createOpenUnstagedDiff(
             isPreview: updatedPreview,
             runtimeEnvironmentId
           })
+
           return {
             openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
             activeFileId: id,
@@ -52,6 +58,7 @@ export function createOpenUnstagedDiff(
             activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
           }
         }
+
         const newFile: OpenFile = {
           id,
           filePath,
@@ -67,11 +74,14 @@ export function createOpenUnstagedDiff(
           isPreview: isPreview || undefined,
           runtimeEnvironmentId
         }
+
         if (isPreview) {
           const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
+
           const replaceablePreviewIndex = s.openFiles.findIndex(
             (file) => file.id === replaceablePreviewId
           )
+
           if (replaceablePreviewIndex !== -1) {
             return {
               openFiles: s.openFiles.map((file, index) =>
@@ -85,6 +95,7 @@ export function createOpenUnstagedDiff(
             }
           }
         }
+
         return {
           openFiles: [...s.openFiles, newFile],
           activeFileId: id,

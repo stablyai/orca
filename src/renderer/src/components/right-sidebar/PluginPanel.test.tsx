@@ -30,6 +30,7 @@ vi.mock('@/store/plugin-panels', () => ({
 vi.mock('./plugin-panel-watchdog', () => ({
   createPanelWatchdog: (options: { onUnresponsive: () => void }) => {
     watchdogCallbacks.onUnresponsive = options.onUnresponsive
+
     return {
       start: watchdogStartMock,
       stop: watchdogStopMock,
@@ -54,11 +55,17 @@ const dashboardPanel: ActivePluginPanel = {
 }
 
 let container: HTMLDivElement
+
 let root: Root
+
 const readPanelEntryMock = vi.fn()
+
 const panelActionMock = vi.fn()
+
 const SESSION_TOKEN = 's'.repeat(43)
+
 const REFRESHED_SESSION_TOKEN = 'r'.repeat(43)
+
 let pluginChangedListener: (() => void) | null
 
 function waitForHappyDomTasks(): Promise<void> {
@@ -87,6 +94,7 @@ beforeEach(() => {
       panelAction: panelActionMock,
       onChanged: (listener: () => void) => {
         pluginChangedListener = listener
+
         return vi.fn()
       }
     }
@@ -211,6 +219,7 @@ describe('PluginPanel', () => {
         params: { title: 'Hello' }
       }
     })
+
     Object.defineProperty(event, 'source', { value: iframe?.contentWindow })
     await act(async () => {
       window.dispatchEvent(event)

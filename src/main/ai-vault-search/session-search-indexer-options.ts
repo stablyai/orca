@@ -5,8 +5,10 @@ import type { SessionSearchScanRoots } from './session-search-scan-roots'
  * not re-statting continuously, short enough that a live conversation shows up
  * while the user is still in it. */
 export const DEFAULT_SESSION_SEARCH_RECONCILE_INTERVAL_MS = 20_000
+
 /** Newest-N per agent root: the same recency rule the session sidebar applies. */
 export const DEFAULT_SESSION_SEARCH_RECENT_PER_AGENT = 12
+
 /**
  * A quarter of the interval: the only bound on how long one pass reads for.
  *
@@ -17,6 +19,7 @@ export const DEFAULT_SESSION_SEARCH_RECENT_PER_AGENT = 12
  * than being read slowly, which is what a load-average back-off did instead.
  */
 export const DEFAULT_SESSION_SEARCH_PASS_DEADLINE_FRACTION = 4
+
 /**
  * Cycles between whole-machine sweeps: five minutes at the default interval.
  *

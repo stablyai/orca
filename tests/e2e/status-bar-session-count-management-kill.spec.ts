@@ -39,12 +39,14 @@ function resourceChip(page: Page) {
 async function readChipAriaCount(page: Page): Promise<number | null> {
   const label = await resourceChip(page).getAttribute('aria-label')
   const match = /(\d+) terminal session/.exec(label ?? '')
+
   return match ? Number(match[1]) : null
 }
 
 /** The count as a human reads it off the chip: the digits next to the terminal glyph. */
 async function readChipVisibleCount(page: Page): Promise<string | null> {
   const text = await resourceChip(page).locator('span.tabular-nums').last().textContent()
+
   return text?.trim() ?? null
 }
 
@@ -60,6 +62,7 @@ async function waitForStableSessionIds(page: Page, expected: number): Promise<vo
         const first = await listDaemonSessionIds(page)
         await page.waitForTimeout(750)
         const second = await listDaemonSessionIds(page)
+
         return (
           first.length === expected &&
           second.length === expected &&
@@ -88,6 +91,7 @@ test.describe('Status bar CLI session count', () => {
     const hasPaneManager = await waitForActiveTerminalManager(page, 30_000)
       .then(() => true)
       .catch(() => false)
+
     test.skip(
       !hasPaneManager,
       'Electron automation in this environment never mounts the TerminalPane manager.'
@@ -98,18 +102,22 @@ test.describe('Status bar CLI session count', () => {
     // would be. Its session is live and listed, but this app never attaches to it.
     const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
     const runtimeDir = path.join(userDataDir, 'daemon')
+
     const foreignClient = new DaemonClient({
       socketPath: path.join(runtimeDir, `daemon-v${PROTOCOL_VERSION}.sock`),
       tokenPath: path.join(runtimeDir, `daemon-v${PROTOCOL_VERSION}.token`)
     })
+
     const foreignSessionId = `${randomUUID()}::${userDataDir}`
 
     try {
       await foreignClient.ensureConnected()
+
       const created = await foreignClient.request<{ isNew: boolean; pid: number }>(
         'createOrAttach',
         { sessionId: foreignSessionId, cols: 80, rows: 24, cwd: userDataDir, env: {} }
       )
+
       expect(created.isNew, 'the foreign daemon session was not created').toBe(true)
 
       // Split after the foreign session exists: the new pane's spawn event is the app's one
@@ -144,9 +152,11 @@ test.describe('Status bar CLI session count', () => {
       // Real UI kill path: Settings > Terminal > Manage Sessions, row kill + confirm.
       await page.evaluate(() => {
         const state = window.__store?.getState()
+
         if (!state) {
           throw new Error('store unavailable')
         }
+
         state.openSettingsTarget({ pane: 'terminal', repoId: null })
         state.openSettingsPage()
       })

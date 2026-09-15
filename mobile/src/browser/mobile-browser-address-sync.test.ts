@@ -41,6 +41,7 @@ describe('resolveMobileBrowserAddressSync', () => {
 
   it('preserves externally updated address text when focus and tab URL are unchanged', () => {
     const previous = { focused: false, url: 'https://new.example/' }
+
     const result = resolveMobileBrowserAddressSync(previous, {
       focused: false,
       url: 'https://new.example/'

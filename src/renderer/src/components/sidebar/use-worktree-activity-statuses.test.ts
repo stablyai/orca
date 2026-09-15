@@ -22,6 +22,7 @@ function makeStatusState(): StatusState {
 describe('selectWorktreeActivityStatuses', () => {
   it('stays shallow-equal when an unrelated worktree receives activity updates', () => {
     const state = makeStatusState()
+
     const unrelatedUpdate: StatusState = {
       ...state,
       agentStatusEpoch: 1,

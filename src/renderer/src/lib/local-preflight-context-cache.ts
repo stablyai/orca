@@ -12,11 +12,13 @@ export type LocalPreflightContext =
 // Why: selector snapshots must be reference-stable, but project/runtime ids can
 // churn as repos are added and removed during a long-lived renderer session.
 const WSL_PREFLIGHT_CONTEXT_CACHE_MAX = 128
+
 const PROJECT_RUNTIME_PREFLIGHT_CONTEXT_CACHE_MAX = 2048
 
 // Why: these reads run inside broad store selectors. Insertion-order eviction
 // keeps cache hits read-only instead of adding Map mutations to every store update.
 const wslPreflightContextsByDistro = new Map<string, NonNullable<LocalPreflightContext>>()
+
 const projectRuntimePreflightContextsByKey = new Map<string, NonNullable<LocalPreflightContext>>()
 
 export function resetLocalPreflightContextCachesForTests(): void {
@@ -42,6 +44,7 @@ export function _hasProjectRuntimePreflightContextCacheEntryForTest(cacheKey: st
 
 export function getWslPreflightContext(wslDistro: string): NonNullable<LocalPreflightContext> {
   const cached = wslPreflightContextsByDistro.get(wslDistro)
+
   if (cached) {
     return cached
   }
@@ -50,6 +53,7 @@ export function getWslPreflightContext(wslDistro: string): NonNullable<LocalPref
   // here triggers a useSyncExternalStore loop when Settings observes WSL repos.
   const context = Object.freeze({ wslDistro })
   storeCacheEntry(wslPreflightContextsByDistro, wslDistro, context, WSL_PREFLIGHT_CONTEXT_CACHE_MAX)
+
   return context
 }
 
@@ -58,6 +62,7 @@ export function getProjectRuntimePreflightContext(
 ): NonNullable<LocalPreflightContext> {
   const cacheKey = getProjectRuntimeContextObjectCacheKey(resolution)
   const cached = projectRuntimePreflightContextsByKey.get(cacheKey)
+
   if (cached) {
     return cached
   }
@@ -66,18 +71,21 @@ export function getProjectRuntimePreflightContext(
     resolution.status === 'resolved' && resolution.runtime.kind === 'wsl'
       ? resolution.runtime.distro
       : undefined
+
   // Why: selectors compare by reference; cache each resolved runtime context so
   // adding projectRuntime does not reintroduce useSyncExternalStore churn.
   const context = Object.freeze({
     ...(wslDistro ? { wslDistro } : {}),
     projectRuntime: resolution
   })
+
   storeCacheEntry(
     projectRuntimePreflightContextsByKey,
     cacheKey,
     context,
     PROJECT_RUNTIME_PREFLIGHT_CONTEXT_CACHE_MAX
   )
+
   return context
 }
 
@@ -87,6 +95,7 @@ function getProjectRuntimeContextObjectCacheKey(
   if (resolution.status === 'resolved') {
     return `${resolution.runtime.cacheKey}:${resolution.runtime.reason}`
   }
+
   return `${resolution.repair.cacheKey}:${resolution.repair.source}`
 }
 
@@ -97,8 +106,10 @@ function storeCacheEntry<T>(
   maxEntries: number
 ): void {
   cache.set(key, value)
+
   if (cache.size > maxEntries) {
     const oldest = cache.keys().next()
+
     if (!oldest.done) {
       cache.delete(oldest.value)
     }

@@ -17,6 +17,7 @@ function PaletteList({ rows, uniqueKeys }: { rows: Row[]; uniqueKeys: boolean })
   const renderKeys = uniqueKeys
     ? buildPaletteListEntryRenderKeys(rows.map((row) => row.id))
     : rows.map((row) => row.id)
+
   return (
     <div>
       {rows.map((row, index) => (
@@ -38,6 +39,7 @@ function rowsForQuery(query: string): Row[] {
           { id: DUPLICATE_TAB_ID, label: `[lungfish ${query}-hit]` }
         ]
       : []
+
   return [...remoteRows, { id: '__header_open_tabs__', label: '(OPEN TABS)' }]
 }
 
@@ -45,14 +47,17 @@ async function typeQuery(uniqueKeys: boolean): Promise<string> {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const root = createRoot(host)
+
   for (const query of ['l', 'li', 'lin', 'line', 'linea', 'linear']) {
     await act(async () => {
       root.render(<PaletteList rows={rowsForQuery(query)} uniqueKeys={uniqueKeys} />)
     })
   }
+
   const rendered = host.textContent ?? ''
   root.unmount()
   host.remove()
+
   return rendered
 }
 

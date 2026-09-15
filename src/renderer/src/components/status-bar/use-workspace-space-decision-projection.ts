@@ -40,18 +40,23 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
   } = bindings
 
   const sourceRows = useMemo(() => analysis?.worktrees ?? [], [analysis?.worktrees])
+
   const worktreeIdCounts = useMemo(() => {
     const counts = new Map<string, number>()
+
     for (const row of sourceRows) {
       counts.set(row.worktreeId, (counts.get(row.worktreeId) ?? 0) + 1)
     }
+
     return counts
   }, [sourceRows])
+
   const decisionDetailsByWorktreeId = useMemo(() => {
     // Why: the epoch bumps when fresh hook entries cross the stale boundary so
     // delete readiness recomputes with the same wall-clock sample as the store.
     const agentStatusNow = getAgentStatusEpochNow(agentStatusEpoch)
     const details = new Map<string, WorkspaceDecisionDetails>()
+
     for (const worktree of sourceRows) {
       details.set(
         getWorkspaceSpaceWorktreeIdentity(worktree),
@@ -81,6 +86,7 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
         })
       )
     }
+
     return details
   }, [
     activeWorktreeId,
@@ -107,6 +113,7 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
     tabsByWorktree,
     worktreeMap
   ])
+
   const getDeleteStateForWorktree = useCallback(
     (worktree: WorkspaceSpaceWorktree) =>
       getWorkspaceSpaceDeleteState(
@@ -116,6 +123,7 @@ export function useWorkspaceSpaceDecisionProjection(bindings: WorkspaceSpaceMana
       ),
     [deleteStateByWorktreeId, worktreeIdCounts]
   )
+
   const isWorktreeDeleting = useCallback(
     (worktree: WorkspaceSpaceWorktree): boolean =>
       getDeleteStateForWorktree(worktree)?.isDeleting ?? false,

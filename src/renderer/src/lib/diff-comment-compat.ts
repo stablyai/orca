@@ -21,5 +21,6 @@ export function getDiffCommentLineLabel(
       ? `L${comment.startLine}-L${comment.lineNumber}`
       : `Lines ${comment.startLine}-${comment.lineNumber}`
   }
+
   return compact ? `L${comment.lineNumber}` : `Line ${comment.lineNumber}`
 }

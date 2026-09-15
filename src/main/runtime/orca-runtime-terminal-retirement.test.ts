@@ -10,7 +10,9 @@ import { sanitizeWorkspaceSessionTerminalRetirements } from './mobile-session-te
 import { OrcaRuntimeService } from './orca-runtime'
 
 const WORKTREE_ID = 'repo::/worktree'
+
 const REPO_ID = 'repo'
+
 // Why: main's hydrateHeadlessMobileSessionTabsFromWorkspaceSession skips
 // `${repoId}::…` keys whose repo is missing from getRepos (PR #9343). Tests
 // that persist worktree sessions must advertise that repo as live.
@@ -47,6 +49,7 @@ function makeSplitSnapshot(): RuntimeMobileSessionTabsSnapshot {
     expandedLeafId: 'left',
     ptyIdsByLeafId: { left: 'pty-left', right: 'pty-right' }
   }
+
   return {
     worktree: WORKTREE_ID,
     publicationEpoch: 'renderer',
@@ -150,6 +153,7 @@ function makePersistedSplitSession(): WorkspaceSessionState {
 describe('OrcaRuntimeService terminal surface retirement', () => {
   it('releases each early-exit fence after its matching registration is rejected', () => {
     const runtime = new OrcaRuntimeService()
+
     const internals = runtime as unknown as {
       earlyExitedPtyIncarnations: Map<string, string | null>
     }
@@ -170,6 +174,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
 
   it('does not retain fences for completed surface-less lifecycles', () => {
     const runtime = new OrcaRuntimeService()
+
     const internals = runtime as unknown as {
       earlyExitedPtyIncarnations: Map<string, string | null>
       pendingPtyRegistrationIncarnations: Map<string, string | null>
@@ -203,10 +208,12 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       runtime.assertPtyRegistrationAllowed('pty-left', 'incarnation-replacement')
     ).toThrow('agent_session_exited_during_start')
     runtime.releaseRejectedPtyRegistrationFence('pty-left', 'incarnation-replacement')
+
     const internals = runtime as unknown as {
       earlyExitedPtyIncarnations: Map<string, string | null>
       pendingPtyRegistrationIncarnations: Map<string, string | null>
     }
+
     expect(internals.earlyExitedPtyIncarnations.size).toBe(0)
     expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
   })
@@ -216,9 +223,11 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
     runtime.attachWindow(1)
     const staleSnapshot = makeSplitSnapshot()
     syncSplit(runtime, staleSnapshot)
+
     const leftBeforeExit = (await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)).tabs.find(
       (tab) => tab.type === 'terminal' && tab.id === 'tab::left'
     )
+
     const leftHandle =
       leftBeforeExit?.type === 'terminal' && leftBeforeExit.status === 'ready'
         ? leftBeforeExit.terminal
@@ -277,6 +286,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       incarnationId: 'incarnation-current'
     })
     const snapshot = makeSplitSnapshot()
+
     const incoming = {
       ...snapshot,
       tabs: snapshot.tabs.map((tab) =>
@@ -294,10 +304,13 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
           : tab
       )
     }
+
     type IncomingTerminalTab = Extract<(typeof incoming.tabs)[number], { type: 'terminal' }>
+
     const rightTab = incoming.tabs.find(
       (tab): tab is IncomingTerminalTab => tab.type === 'terminal' && tab.leafId === 'right'
     )!
+
     const hostSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...incoming,
       activeTabId: rightTab.id,
@@ -375,6 +388,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
         mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
       }
     ).mobileSessionTabsByWorktree.get(WORKTREE_ID)
+
     expect(internalSnapshot?.tabs).toEqual([
       expect.objectContaining({ id: 'tab::right', ptyId: 'pty-shared' })
     ])
@@ -428,6 +442,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
     Object.assign(session, {
       terminalTopologyRevisionByRepoId: { [REPO_ID]: 1 }
     })
+
     const runtime = new OrcaRuntimeService(
       runtimeStore({
         getWorkspaceSession: () => session,
@@ -466,6 +481,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       ...getDefaultWorkspaceSession(),
       sleepingAgentSessionsByPaneKey: { 'tab:left': {} as never }
     }
+
     const runtime = new OrcaRuntimeService(
       runtimeStore({
         getWorkspaceSession: () => session,
@@ -473,6 +489,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
         flushOrThrow: vi.fn()
       })
     )
+
     runtime.attachWindow(1)
     syncSplit(runtime)
 
@@ -487,12 +504,14 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
 
   it('ignores a delayed exit from an older incarnation of a reused PTY id', async () => {
     const setWorkspaceSession = vi.fn()
+
     const runtime = new OrcaRuntimeService(
       runtimeStore({
         getWorkspaceSession: () => makePersistedSplitSession(),
         setWorkspaceSession
       })
     )
+
     runtime.attachWindow(1)
     syncSplit(runtime)
     runtime.registerPty('pty-left', WORKTREE_ID, null, {
@@ -518,6 +537,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
   it('retires a durable surface after reconnect proves a newer incarnation', async () => {
     const session = makePersistedSplitSession()
     const setWorkspaceSession = vi.fn()
+
     const runtime = new OrcaRuntimeService(
       runtimeStore({
         getWorkspaceSession: () => session,
@@ -525,6 +545,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
         flushOrThrow: vi.fn()
       })
     )
+
     runtime.attachWindow(1)
     syncSplit(runtime)
     runtime.registerPty('pty-left', WORKTREE_ID, null, {
@@ -563,9 +584,11 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
       'tab:left': 'incarnation-exiting',
       'tab:right': 'incarnation-newer'
     }
+
     const setWorkspaceSession = vi.fn((next: WorkspaceSessionState) => {
       session = next
     })
+
     const runtime = new OrcaRuntimeService(
       runtimeStore({
         getWorkspaceSession: () => session,
@@ -573,8 +596,10 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
         flushOrThrow: vi.fn()
       })
     )
+
     runtime.attachWindow(1)
     const snapshot = makeSplitSnapshot()
+
     const sharedSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       tabs: snapshot.tabs.map((tab) =>
@@ -592,6 +617,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
           : tab
       )
     }
+
     syncSplit(runtime, sharedSnapshot)
     runtime.registerPty('pty-shared', WORKTREE_ID, null, {
       tabId: 'tab',
@@ -630,6 +656,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
     const session = makePersistedSplitSession()
     const setWorkspaceSession = vi.fn()
     const flushOrThrow = vi.fn()
+
     const runtime = new OrcaRuntimeService(
       runtimeStore({
         getWorkspaceSession: () => session,
@@ -637,6 +664,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
         flushOrThrow
       })
     )
+
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -685,6 +713,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
   it('does not publish absence when the durable retirement flush fails', async () => {
     const session = makePersistedSplitSession()
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
     const runtime = new OrcaRuntimeService(
       runtimeStore({
         getWorkspaceSession: () => session,
@@ -694,6 +723,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
         })
       })
     )
+
     runtime.attachWindow(1)
     syncSplit(runtime)
     runtime.registerPty('pty-left', WORKTREE_ID, null, {
@@ -722,9 +752,11 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
   it('rolls back an in-memory retirement when the durable flush fails', async () => {
     let session = makePersistedSplitSession()
     const original = structuredClone(session)
+
     const setWorkspaceSession = vi.fn((next: WorkspaceSessionState) => {
       session = next
     })
+
     const runtime = new OrcaRuntimeService(
       runtimeStore({
         getWorkspaceSession: () => session,
@@ -734,6 +766,7 @@ describe('OrcaRuntimeService terminal surface retirement', () => {
         })
       })
     )
+
     runtime.attachWindow(1)
     syncSplit(runtime)
     runtime.registerPty('pty-left', WORKTREE_ID, null, {

@@ -10,6 +10,7 @@ export function migrateV38(this: OrchestrationDb, current: number): void {
   if (current >= 38) {
     return
   }
+
   this.db.exec(
     `UPDATE question_threads
         SET status = 'closed', closed_at = datetime('now')

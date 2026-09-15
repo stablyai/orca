@@ -15,11 +15,13 @@ export function resolveComposerBranchSelection(args: {
   lastAutoName: string
 }): ComposerBranchSelection {
   const trimmedCurrentName = args.currentName.trim()
+
   const shouldAutoName =
     !trimmedCurrentName ||
     args.currentName === args.lastAutoName ||
     args.localBranchName.startsWith(trimmedCurrentName) ||
     args.refName.startsWith(trimmedCurrentName)
+
   if (!shouldAutoName) {
     return {
       baseBranch: args.refName,
@@ -29,6 +31,7 @@ export function resolveComposerBranchSelection(args: {
       lastAutoName: undefined
     }
   }
+
   return {
     baseBranch: args.refName,
     branchNameOverride: args.localBranchName,
@@ -82,6 +85,7 @@ export function resolveComposerBranchReuse(args: {
     args.refName === args.localBranchName && !args.branchCheckedOutElsewhere
       ? args.localBranchName
       : null
+
   return {
     reuseEligibleBranch,
     defaultReuse: reuseEligibleBranch !== null && args.selectionProducedOverride
@@ -105,6 +109,7 @@ export function resolveComposerReuseOverride(args: {
   if (args.branchCheckedOutElsewhere && args.refName === args.localBranchName) {
     return undefined
   }
+
   return args.branchNameOverride
 }
 
@@ -121,16 +126,19 @@ export function resolveComposerBranchPick(args: {
   worktreeBranches: readonly string[]
 }): ComposerBranchPick {
   const selection = resolveComposerBranchSelection(args)
+
   const branchCheckedOutElsewhere = isBranchCheckedOutInWorktrees(
     args.localBranchName,
     args.worktreeBranches
   )
+
   const reuse = resolveComposerBranchReuse({
     refName: args.refName,
     localBranchName: args.localBranchName,
     selectionProducedOverride: selection.branchNameOverride !== undefined,
     branchCheckedOutElsewhere
   })
+
   return {
     ...selection,
     branchNameOverride: resolveComposerReuseOverride({
@@ -165,9 +173,11 @@ export function resolveComposerBranchNameOverrideForCreate(args: {
       ? args.workspaceName
       : undefined
   }
+
   if (args.preserveWorkspaceNameEdits) {
     return args.branchNameOverride
   }
+
   return args.workspaceName === args.branchAutoName ? args.branchNameOverride : undefined
 }
 
@@ -181,6 +191,7 @@ export function resolveComposerManualBranchNameChange(args: {
   forkPushWarning: string | null
 } {
   const branchNameOverride = args.value?.trim() || undefined
+
   if (args.pushTarget && args.pushTarget.branchName !== branchNameOverride) {
     return {
       branchNameOverride,
@@ -188,6 +199,7 @@ export function resolveComposerManualBranchNameChange(args: {
       forkPushWarning: null
     }
   }
+
   return {
     branchNameOverride,
     pushTarget: args.pushTarget,

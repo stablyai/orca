@@ -30,18 +30,22 @@ export class RuntimeGitStatusCommands {
   ): Promise<GitStatusResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return options
         ? provider.getStatus(target.worktree.path, options)
         : provider.getStatus(target.worktree.path)
     }
+
     const gitOptions = {
       ...localGitOptionsForTarget(target),
       admissionTier: options?.admissionTier ?? ('status' as const)
     }
+
     // Why: shared symlinks do not match Git's directory-only ignore rules.
     const sharedLinkPaths = target.repo ? getWorktreeSharedLinkPaths(target.repo) : []
     const sharedOptions = sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {}
+
     return options
       ? getGitStatus(target.worktree.path, { ...options, ...gitOptions, ...sharedOptions })
       : getGitStatus(target.worktree.path, { ...gitOptions, ...sharedOptions })
@@ -54,9 +58,11 @@ export class RuntimeGitStatusCommands {
   ): Promise<GitStatusResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return provider.getSubmoduleStatus(target.worktree.path, submodulePath, area)
     }
+
     return getGitSubmoduleStatus(target.worktree.path, submodulePath, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive',
@@ -70,9 +76,11 @@ export class RuntimeGitStatusCommands {
   ): Promise<string[]> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return provider.checkIgnoredPaths(target.worktree.path, relativePaths)
     }
+
     return checkIgnoredPaths(target.worktree.path, relativePaths, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
@@ -85,9 +93,11 @@ export class RuntimeGitStatusCommands {
   ): Promise<GitHistoryResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return provider.getHistory(target.worktree.path, options)
     }
+
     return getGitHistory(target.worktree.path, {
       ...options,
       ...localGitOptionsForTarget(target),
@@ -98,9 +108,11 @@ export class RuntimeGitStatusCommands {
   async getRuntimeGitConflictOperation(worktreeSelector: string): Promise<GitConflictOperation> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return provider.detectConflictOperation(target.worktree.path)
     }
+
     return detectConflictOperation(target.worktree.path, localGitOptionsForTarget(target))
   }
 
@@ -110,23 +122,29 @@ export class RuntimeGitStatusCommands {
   ): Promise<RuntimeGitCheckoutResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       await provider.checkoutBranch(target.worktree.path, branch)
+
       return { ok: true, branch }
     }
+
     await checkoutBranch(target.worktree.path, branch, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+
     return { ok: true, branch }
   }
 
   async listRuntimeGitLocalBranches(worktreeSelector: string): Promise<RuntimeGitLocalBranches> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return provider.listLocalBranches(target.worktree.path)
     }
+
     return listLocalBranches(target.worktree.path, localGitOptionsForTarget(target))
   }
 }

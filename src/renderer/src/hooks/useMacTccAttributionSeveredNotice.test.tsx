@@ -8,9 +8,13 @@ import { MacosTccPromptNoticeHost } from './MacosTccPromptNoticeHost'
 const macTccAttribution = vi.hoisted(() =>
   vi.fn(async (): Promise<{ health: 'intact' | 'severed' | 'unknown' }> => ({ health: 'intact' }))
 )
+
 const openSettingsPage = vi.hoisted(() => vi.fn())
+
 const openSettingsTarget = vi.hoisted(() => vi.fn())
+
 const setSettingsSearchQuery = vi.hoisted(() => vi.fn())
+
 const platform = vi.hoisted(() => ({ value: 'darwin' as NodeJS.Platform }))
 
 vi.mock('sonner', () => ({
@@ -108,9 +112,11 @@ describe('useMacTccAttributionSeveredNotice', () => {
     })
     const call = vi.mocked(toast.warning).mock.calls[0]
     const title = String(call?.[0] ?? '')
+
     const options = call?.[1] as
       | { description?: string; action?: { onClick?: () => void } }
       | undefined
+
     expect(title).toMatch(/macOS permissions may not reach Orca terminals/i)
     expect(String(options?.description ?? '')).toMatch(/Manage Sessions/i)
     options?.action?.onClick?.()
@@ -159,9 +165,11 @@ describe('useMacTccAttributionSeveredNotice', () => {
 
   it('coalesces overlapping mount/focus checks into one IPC call and one toast', async () => {
     let resolveHealth!: (value: { health: 'severed' }) => void
+
     const pending = new Promise<{ health: 'severed' }>((resolve) => {
       resolveHealth = resolve
     })
+
     macTccAttribution.mockImplementation(() => pending)
 
     render(<MacosTccPromptNoticeHost />)

@@ -16,6 +16,7 @@ export function getDragEdgeScrollTarget({
   edgeZonePx?: number
 }): number | null {
   let delta = 0
+
   if (localY < edgeZonePx) {
     const strength = (edgeZonePx - localY) / edgeZonePx
     delta = -(1.25 + strength * 9)
@@ -30,5 +31,6 @@ export function getDragEdgeScrollTarget({
 
   const maxScroll = Math.max(0, scrollHeight - clientHeight)
   const nextScrollTop = Math.max(0, Math.min(maxScroll, scrollTop + delta))
+
   return nextScrollTop === scrollTop ? null : nextScrollTop
 }

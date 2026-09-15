@@ -72,6 +72,7 @@ export function useTerminalPaneLifecycleStage(controller: TerminalPaneCloseContr
     getTabWideAgentHintLeafIdRef,
     handlePaneProcessDied
   } = controller
+
   const { consumeSuppressedPtyExit, isPtyShutdownPending } = useTerminalPaneStoreActions()
 
   useTerminalPaneLifecycle({

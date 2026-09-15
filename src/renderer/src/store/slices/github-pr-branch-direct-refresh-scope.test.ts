@@ -34,10 +34,13 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoPath = '/repo'
     const branch = 'feature/test'
     const prCacheKey = `${repoPath}::${branch}`
+
     const refreshPRNow = mockApi.gh.refreshPRNow
+
     ;(mockApi.gh as unknown as { refreshPRNow?: typeof refreshPRNow }).refreshPRNow = undefined
 
     let resolveInitial: ((value: null) => void) | undefined
+
     const initialRequest = new Promise<null>((resolve) => {
       resolveInitial = resolve
     })
@@ -68,7 +71,9 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoPath = '/repo'
     const branch = 'feature/no-generation-leak'
     const beforeCount = _getGitHubPRRequestGenerationCountForTest()
+
     const refreshPRNow = mockApi.gh.refreshPRNow
+
     ;(mockApi.gh as unknown as { refreshPRNow?: typeof refreshPRNow }).refreshPRNow = undefined
     mockApi.gh.prForBranch.mockResolvedValueOnce(makePR({ number: 31 }))
 
@@ -175,18 +180,22 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/scope-switch'
     const localHostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
     const runtimeHostedReviewCacheKey = getHostedReviewCacheKey(
       repoPath,
       branch,
       { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
       repoId
     )
+
     let resolveRefresh: (
       value: Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>
     ) => void = () => {}
+
     const refresh = new Promise<Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>>((resolve) => {
       resolveRefresh = resolve
     })
+
     mockApi.gh.refreshPRNow.mockReturnValueOnce(refresh)
 
     store.setState({
@@ -198,6 +207,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       force: true,
       repoId
     })
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
     } as Partial<AppState>)
@@ -251,6 +261,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/newer-hosted-review'
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
     const newerReview: HostedReviewInfo = {
       provider: 'github',
       number: 12,
@@ -261,12 +272,15 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       updatedAt: '2026-03-28T00:00:00Z',
       mergeable: 'MERGEABLE'
     }
+
     let resolveRefresh: (
       value: Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>
     ) => void = () => {}
+
     const refresh = new Promise<Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>>((resolve) => {
       resolveRefresh = resolve
     })
+
     mockApi.gh.refreshPRNow.mockReturnValueOnce(refresh)
 
     store.setState({
@@ -277,6 +291,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       force: true,
       repoId
     })
+
     store.setState({
       hostedReviewCache: {
         [hostedReviewCacheKey]: {
@@ -307,6 +322,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/newer-matching-hosted-review'
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
     const matchingReview: HostedReviewInfo = {
       provider: 'github',
       number: 12,
@@ -317,13 +333,17 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       updatedAt: '2026-03-28T00:00:00Z',
       mergeable: 'UNKNOWN'
     }
+
     const pr = makePR({ number: 12, title: 'Exact fallback PR' })
+
     let resolveRefresh: (
       value: Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>
     ) => void = () => {}
+
     const refresh = new Promise<Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>>((resolve) => {
       resolveRefresh = resolve
     })
+
     mockApi.gh.refreshPRNow.mockReturnValueOnce(refresh)
 
     store.setState({
@@ -335,6 +355,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       repoId,
       fallbackPRNumber: 12
     })
+
     store.setState({
       hostedReviewCache: {
         [hostedReviewCacheKey]: {
@@ -368,6 +389,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/create-pr'
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
     const createdReview: HostedReviewInfo = {
       provider: 'github',
       number: 88,
@@ -378,13 +400,17 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       updatedAt: '2026-03-28T00:00:00Z',
       mergeable: 'UNKNOWN'
     }
+
     const pr = makePR({ number: 88, title: 'Created PR' })
+
     let resolveRefresh: (
       value: Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>
     ) => void = () => {}
+
     const refresh = new Promise<Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>>((resolve) => {
       resolveRefresh = resolve
     })
+
     mockApi.gh.refreshPRNow.mockReturnValueOnce(refresh)
 
     store.setState({
@@ -396,6 +422,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       repoId,
       linkedPRNumber: 88
     })
+
     store.setState({
       hostedReviewCache: {
         [hostedReviewCacheKey]: {
@@ -426,6 +453,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
     const repoId = 'repo-1'
     const branch = 'feature/same-ms-hosted-review'
     const hostedReviewCacheKey = getHostedReviewCacheKey(repoPath, branch, null, repoId)
+
     const externalReview: HostedReviewInfo = {
       provider: 'github',
       number: 12,
@@ -436,12 +464,15 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
       updatedAt: '2026-03-28T00:00:00Z',
       mergeable: 'MERGEABLE'
     }
+
     let resolveRefresh: (
       value: Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>
     ) => void = () => {}
+
     const refresh = new Promise<Awaited<ReturnType<typeof mockApi.gh.refreshPRNow>>>((resolve) => {
       resolveRefresh = resolve
     })
+
     mockApi.gh.refreshPRNow.mockReturnValueOnce(refresh)
 
     try {
@@ -453,6 +484,7 @@ describe('createGitHubSlice.fetchPRForBranch', () => {
         force: true,
         repoId
       })
+
       store.setState({
         hostedReviewCache: {
           [hostedReviewCacheKey]: {

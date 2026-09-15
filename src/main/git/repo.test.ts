@@ -66,9 +66,11 @@ describe('buildSearchBaseRefsArgv', () => {
 
   it('keeps remote HEAD excludes compact when many remotes are configured', () => {
     const ordinaryRemotes = Array.from({ length: 200 }, (_, index) => `remote-${index}`)
+
     const argv = buildSearchBaseRefsArgv('feature', 10, {
       remoteNames: [...ordinaryRemotes, 'origin', 'upstream', 'origin', 'foo/bar', 'foo/bar']
     })
+
     const excludes = argv.filter((arg) => arg.startsWith('--exclude='))
 
     // One wildcard handles ordinary remotes; slash-containing names need an
@@ -92,6 +94,7 @@ describe('buildSearchBaseRefsArgv', () => {
       remoteNames: ['origin', 'upstream'],
       patternGroup: 'segmented'
     })
+
     const argv = buildSearchBaseRefsArgv('upstream/feat', 10, {
       remoteNames: ['origin', 'upstream'],
       patternGroup: 'branchRoot'
@@ -493,9 +496,11 @@ describe('searchBaseRefs (widened glob)', () => {
     const sha = getHeadSha(tmpDir)
     git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
     git(tmpDir, ['remote', 'add', 'upstream', 'https://example.invalid/upstream.git'])
+
     for (let i = 0; i < 12; i += 1) {
       createRemoteRef(tmpDir, `origin/upstream/feature-${i}`, sha)
     }
+
     createRemoteRef(tmpDir, 'upstream/feature-target', sha)
 
     const results = await searchBaseRefs(tmpDir, 'upstream/feature', 2)
@@ -518,9 +523,11 @@ describe('searchBaseRefs (widened glob)', () => {
     const sha = getHeadSha(tmpDir)
     git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
     git(tmpDir, ['remote', 'add', 'plan', 'https://example.invalid/plan.git'])
+
     for (let i = 0; i < 12; i += 1) {
       createRemoteRef(tmpDir, `plan/docs-${i}`, sha)
     }
+
     createRemoteRef(tmpDir, 'origin/plan/docs', sha)
 
     const results = await searchBaseRefs(tmpDir, 'plan/docs', 2)
@@ -605,14 +612,18 @@ describe('getDefaultBaseRef (regression — unchanged behavior)', () => {
 describe('resolveDefaultBaseRefViaExec', () => {
   it('falls through from a stale origin/HEAD target to the probe list', async () => {
     const calls: string[][] = []
+
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
+
       if (argv[0] === 'symbolic-ref') {
         return { stdout: 'refs/remotes/origin/master\n' }
       }
+
       if (argv[0] === 'rev-parse' && argv.at(-1) === 'refs/remotes/origin/main') {
         return { stdout: 'main-sha\n' }
       }
+
       throw new Error('missing ref')
     }
 
@@ -627,14 +638,18 @@ describe('resolveDefaultBaseRefViaExec', () => {
 
   it('verifies origin/HEAD even when it points at origin/main', async () => {
     const calls: string[][] = []
+
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
+
       if (argv[0] === 'symbolic-ref') {
         return { stdout: 'refs/remotes/origin/main\n' }
       }
+
       if (argv[0] === 'rev-parse' && argv.at(-1) === 'refs/remotes/origin/master') {
         return { stdout: 'master-sha\n' }
       }
+
       throw new Error('missing ref')
     }
 

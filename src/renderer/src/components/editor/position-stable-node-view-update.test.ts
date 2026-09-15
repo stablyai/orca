@@ -7,6 +7,7 @@ function updateArgs(overrides: Partial<UpdateArgs> = {}): UpdateArgs {
   const node = { type: 'codeBlock' }
   const decorations = [] as unknown as UpdateArgs['newDecorations']
   const innerDecorations = { inner: true } as unknown as UpdateArgs['innerDecorations']
+
   return {
     oldNode: node,
     newNode: node,

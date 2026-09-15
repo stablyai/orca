@@ -17,14 +17,18 @@ function hasEntries<T>(queue: LaneQueue<T>): boolean {
 
 function shift<T>(queue: LaneQueue<T>): T | undefined {
   const entry = queue.entries[queue.head]
+
   if (entry === undefined) {
     return undefined
   }
+
   queue.head += 1
+
   if (queue.head === queue.entries.length) {
     queue.entries.length = 0
     queue.head = 0
   }
+
   return entry
 }
 
@@ -32,6 +36,7 @@ function clear<T>(queue: LaneQueue<T>): T[] {
   const entries = queue.entries.slice(queue.head)
   queue.entries.length = 0
   queue.head = 0
+
   return entries
 }
 
@@ -47,27 +52,35 @@ export class SshMultiplexerWriterLaneScheduler<T extends object> {
 
   select(): T | undefined {
     const liveness = shift(this.liveness)
+
     if (liveness) {
       return liveness
     }
+
     if (
       hasEntries(this.control) &&
       (!hasEntries(this.ordinary) ||
         this.controlWritesSinceOrdinary < CONTROL_WRITES_BEFORE_ORDINARY)
     ) {
       this.controlWritesSinceOrdinary += 1
+
       return shift(this.control)
     }
+
     const ordinary = shift(this.ordinary)
+
     if (ordinary) {
       this.controlWritesSinceOrdinary = 0
+
       return ordinary
     }
+
     return shift(this.control)
   }
 
   clear(): T[] {
     this.controlWritesSinceOrdinary = 0
+
     return [...clear(this.liveness), ...clear(this.control), ...clear(this.ordinary)]
   }
 }

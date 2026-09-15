@@ -62,6 +62,7 @@ function App(): React.JSX.Element {
   }, [])
 
   const { cancelReturnFocusFrame } = floatingWorkspace
+
   const setAppRootNode = useCallback(
     (node: HTMLDivElement | null): void => {
       // Why: these best-effort App chrome cleanups share the App root lifetime.

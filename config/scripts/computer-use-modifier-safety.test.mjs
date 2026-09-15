@@ -11,9 +11,11 @@ function source(path) {
 function sourceBetween(contents, startMarker, endMarker) {
   const start = contents.indexOf(startMarker)
   const end = contents.indexOf(endMarker, start + startMarker.length)
+
   if (start === -1 || end === -1) {
     throw new Error(`Missing source boundary: ${startMarker} → ${endMarker}`)
   }
+
   return contents.slice(start, end)
 }
 
@@ -21,6 +23,7 @@ describe('computer-use modifier safety', () => {
   it('uses mouse-event flags instead of held modifier keys on macOS', () => {
     const macOS = source('native/computer-use-macos/Sources/OrcaComputerUseMacOS/main.swift')
     const clickInput = sourceBetween(macOS, 'static func click(', 'static func scroll(')
+
     const mouseInput = sourceBetween(
       macOS,
       'private static func mouse(',
@@ -38,11 +41,13 @@ describe('computer-use modifier safety', () => {
 
   it('submits each modified Windows click in a closed, timed SendInput batch', () => {
     const windows = source('native/computer-use-windows/runtime.ps1')
+
     const modifiedClick = sourceBetween(
       windows,
       'public static void SendModifiedClick',
       'private static INPUT KeyboardInput'
     )
+
     const mouseClick = sourceBetween(
       windows,
       'function Send-OrcaMouseClick',

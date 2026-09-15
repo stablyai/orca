@@ -20,13 +20,17 @@ export function reuseAiVaultListResult(
   if (current === incoming) {
     return current
   }
+
   if (!current) {
     return incoming
   }
+
   const sessions = reuseEqualCatalogRows(current.sessions, incoming.sessions)
+
   const issues = structuralValuesEqual(current.issues, incoming.issues)
     ? current.issues
     : incoming.issues
+
   if (
     sessions === current.sessions &&
     issues === current.issues &&
@@ -34,9 +38,11 @@ export function reuseAiVaultListResult(
   ) {
     return current
   }
+
   if (sessions === incoming.sessions && issues === incoming.issues) {
     return incoming
   }
+
   return { ...incoming, sessions, issues }
 }
 

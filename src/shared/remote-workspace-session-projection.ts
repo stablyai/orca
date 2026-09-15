@@ -43,15 +43,18 @@ function tabToRemote(tab: TerminalTab, worktreePath: string): RemoteWorkspaceTer
     recovery: _recovery,
     ...rest
   } = tab
+
   void _worktreeId
   void _pendingActivationSpawn
   void _recovery
+
   return { ...rest, worktreePath }
 }
 
 function tabToLocal(tab: RemoteWorkspaceTerminalTab, worktreeId: string): TerminalTab {
   const { worktreePath: _worktreePath, ...rest } = tab
   void _worktreePath
+
   return { ...rest, worktreeId }
 }
 
@@ -66,10 +69,13 @@ export function exportRemoteWorkspaceSession(
     if (!options.isTargetWorktree(worktreeId)) {
       continue
     }
+
     const worktreePath = worktreePathFromId(worktreeId)
+
     if (!worktreePath) {
       continue
     }
+
     // Why union rather than assignment: `worktreePathFromId` drops the repoId, so two local keys
     // for one host path — duplicate repo rows for the same remote checkout, which is the normal
     // state while a host catalog reconciles — collapse onto one entry here. Assignment let
@@ -80,14 +86,17 @@ export function exportRemoteWorkspaceSession(
     // collision the `Math.max` below folds for `lastVisitedAtByWorktreePath`.
     const merged = tabsByWorktreePath[worktreePath] ?? []
     const alreadyProjected = new Set(merged.map((tab) => tab.id))
+
     for (const tab of tabs) {
       if (alreadyProjected.has(tab.id)) {
         continue
       }
+
       alreadyProjected.add(tab.id)
       terminalTabIds.add(tab.id)
       merged.push(tabToRemote(tab, worktreePath))
     }
+
     tabsByWorktreePath[worktreePath] = merged
   }
 
@@ -100,11 +109,14 @@ export function exportRemoteWorkspaceSession(
     session.activeTabId && terminalTabIds.has(session.activeTabId) ? session.activeTabId : null
 
   const activeTabIdByWorktreePath: Record<string, string | null> = {}
+
   for (const [worktreeId, tabId] of Object.entries(session.activeTabIdByWorktree ?? {})) {
     if (!options.isTargetWorktree(worktreeId)) {
       continue
     }
+
     const worktreePath = worktreePathFromId(worktreeId)
+
     if (worktreePath) {
       // Same path collision as the tab lists above: a colliding key's null must not erase the
       // active tab the other key named.
@@ -115,17 +127,22 @@ export function exportRemoteWorkspaceSession(
   }
 
   const lastVisitedAtByWorktreePath: Record<string, number> = {}
+
   for (const [visitKey, timestamp] of Object.entries(session.lastVisitedAtByWorktreeId ?? {})) {
     const worktreeId = isWorktreeHostIdentity(visitKey)
       ? getWorktreeIdFromHostIdentity(visitKey)
       : visitKey
+
     const executionHostId = isWorktreeHostIdentity(visitKey)
       ? (visitKey.slice(0, visitKey.indexOf('|')) as ExecutionHostId)
       : undefined
+
     if (!options.isTargetWorktree(worktreeId, executionHostId)) {
       continue
     }
+
     const worktreePath = worktreePathFromId(worktreeId)
+
     if (worktreePath) {
       // Why max: a bare legacy key and its host-qualified twin collapse onto one path.
       lastVisitedAtByWorktreePath[worktreePath] = Math.max(
@@ -136,11 +153,14 @@ export function exportRemoteWorkspaceSession(
   }
 
   const defaultTerminalTabsAppliedByWorktreePath: Record<string, true> = {}
+
   for (const worktreeId of Object.keys(session.defaultTerminalTabsAppliedByWorktreeId ?? {})) {
     if (!options.isTargetWorktree(worktreeId)) {
       continue
     }
+
     const worktreePath = worktreePathFromId(worktreeId)
+
     if (worktreePath) {
       defaultTerminalTabsAppliedByWorktreePath[worktreePath] = true
     }
@@ -180,27 +200,35 @@ export function importRemoteWorkspaceSession(
   const tabsByWorktree: Record<string, TerminalTab[]> = {}
   const terminalTabIds = new Set<string>()
   const worktreeIdByPath = new Map<string, string>()
+
   const resolvePath = (worktreePath: string): string | null => {
     if (worktreeIdByPath.has(worktreePath)) {
       return worktreeIdByPath.get(worktreePath) ?? null
     }
+
     const worktreeId = options.resolveWorktreeId(worktreePath)
+
     if (worktreeId) {
       worktreeIdByPath.set(worktreePath, worktreeId)
     }
+
     return worktreeId
   }
 
   for (const [worktreePath, tabs] of Object.entries(remote.tabsByWorktreePath ?? {})) {
     const worktreeId = resolvePath(worktreePath)
+
     if (!worktreeId) {
       if (tabs.length > 0) {
         options.onUnplacedTerminalTabs?.(worktreePath, tabs.length)
       }
+
       continue
     }
+
     tabsByWorktree[worktreeId] = tabs.map((tab) => {
       terminalTabIds.add(tab.id)
+
       return tabToLocal(tab, worktreeId)
     })
   }
@@ -211,29 +239,36 @@ export function importRemoteWorkspaceSession(
     remote.activeTabId && terminalTabIds.has(remote.activeTabId) ? remote.activeTabId : null
 
   const activeTabIdByWorktree: Record<string, string | null> = {}
+
   for (const [worktreePath, tabId] of Object.entries(remote.activeTabIdByWorktreePath ?? {})) {
     const worktreeId = resolvePath(worktreePath)
+
     if (worktreeId) {
       activeTabIdByWorktree[worktreeId] = tabId && terminalTabIds.has(tabId) ? tabId : null
     }
   }
 
   const lastVisitedAtByWorktreeId: Record<string, number> = {}
+
   for (const [worktreePath, timestamp] of Object.entries(
     remote.lastVisitedAtByWorktreePath ?? {}
   )) {
     const worktreeId = resolvePath(worktreePath)
+
     if (worktreeId) {
       const key = options.executionHostId
         ? composeWorktreeHostIdentity(options.executionHostId, worktreeId)
         : worktreeId
+
       lastVisitedAtByWorktreeId[key] = timestamp
     }
   }
 
   const defaultTerminalTabsAppliedByWorktreeId: Record<string, true> = {}
+
   for (const worktreePath of Object.keys(remote.defaultTerminalTabsAppliedByWorktreePath ?? {})) {
     const worktreeId = resolvePath(worktreePath)
+
     if (worktreeId) {
       defaultTerminalTabsAppliedByWorktreeId[worktreeId] = true
     }

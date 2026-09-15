@@ -18,21 +18,26 @@ function makeSessionState(overrides: Partial<AppState> = {}): AppState {
     agentStatusByPaneKey: {},
     runtimePaneTitlesByTabId: {}
   }
+
   const arrayFields = new Set<string>([
     'repos',
     'openFiles',
     'browserUrlHistory',
     'workspaceDocHistory'
   ])
+
   const mapFields = new Set<string>(['sshConnectionStates'])
+
   for (const key of SESSION_RELEVANT_FIELDS) {
     base[key] = arrayFields.has(key) ? [] : mapFields.has(key) ? new Map() : {}
   }
+
   base.activeRepoId = null
   base.activeWorkspaceKey = null
   base.activeWorktreeId = null
   base.activeTabId = null
   base.activeWorkspaceExecutionHostId = null
+
   return { ...base, ...overrides } as AppState
 }
 
@@ -40,10 +45,12 @@ function createHarness() {
   let state = makeSessionState()
   const listeners: ((next: AppState) => void)[] = []
   const persisted: unknown[] = []
+
   const dispose = createSessionWriteSubscriber({
     store: {
       subscribe: (listener) => {
         listeners.push(listener)
+
         return () => {
           listeners.splice(listeners.indexOf(listener), 1)
         }
@@ -52,11 +59,13 @@ function createHarness() {
     },
     persist: (payload) => persisted.push(payload)
   })
+
   return {
     dispose,
     persisted,
     write(mutate?: (previous: AppState) => Partial<AppState>) {
       state = { ...state, ...mutate?.(state) } as AppState
+
       for (const listener of listeners.slice()) {
         listener(state)
       }
@@ -67,15 +76,19 @@ function createHarness() {
 function countFilterCalls<T>(run: () => T): number {
   const original = Array.prototype.filter
   let calls = 0
+
   const spy = vi.spyOn(Array.prototype, 'filter').mockImplementation(function filterCounting(
     this: unknown[],
     ...args: never[]
   ) {
     calls += 1
+
     return (original as (...a: never[]) => unknown[]).apply(this, args)
   } as typeof Array.prototype.filter)
+
   try {
     run()
+
     return calls
   } finally {
     spy.mockRestore()
@@ -85,6 +98,7 @@ function countFilterCalls<T>(run: () => T): number {
 beforeEach(() => {
   vi.useFakeTimers()
 })
+
 afterEach(() => {
   vi.useRealTimers()
 })
@@ -94,17 +108,20 @@ describe('session write subscriber allocation', () => {
     'remembers an equivalent %s source before unrelated writes',
     (field) => {
       const harness = createHarness()
+
       try {
         harness.write(() => ({ [field]: { 'wt-1': [] } }))
         vi.advanceTimersByTime(500)
         harness.persisted.length = 0
 
         harness.write(() => ({ [field]: { 'wt-1': [] } }))
+
         const calls = countFilterCalls(() => {
           for (let write = 0; write < 200; write += 1) {
             harness.write(() => ({ runtimePaneTitlesByTabId: {} }))
           }
         })
+
         expect(calls).toBe(0)
         vi.advanceTimersByTime(500)
         expect(harness.persisted).toHaveLength(0)
@@ -120,12 +137,14 @@ describe('session write subscriber allocation', () => {
 
   it('allocates nothing for store writes that touch no session field', () => {
     const harness = createHarness()
+
     try {
       // Prime `prev` on the first fire.
       harness.write()
       vi.advanceTimersByTime(500)
 
       const writes = 200
+
       const calls = countFilterCalls(() => {
         for (let write = 0; write < writes; write += 1) {
           harness.write((previous) => ({
@@ -133,6 +152,7 @@ describe('session write subscriber allocation', () => {
           }))
         }
       })
+
       // Before: one changed-field array (and one 35-field snapshot) per write.
       expect(calls).toBe(0)
     } finally {
@@ -142,17 +162,20 @@ describe('session write subscriber allocation', () => {
 
   it('still allocates and persists when a session field really changes', () => {
     const harness = createHarness()
+
     try {
       harness.write()
       vi.advanceTimersByTime(500)
       harness.persisted.length = 0
 
       const writes = 20
+
       const calls = countFilterCalls(() => {
         for (let write = 0; write < writes; write += 1) {
           harness.write(() => ({ activeTabId: `tab-${write}` }))
         }
       })
+
       expect(calls).toBe(writes)
       vi.advanceTimersByTime(500)
       expect(harness.persisted).toHaveLength(1)
@@ -166,10 +189,12 @@ describe('session write subscriber allocation', () => {
     const listeners: ((next: AppState) => void)[] = []
     const persisted: unknown[] = []
     let gateOpen = false
+
     const dispose = createSessionWriteSubscriber({
       store: {
         subscribe: (listener) => {
           listeners.push(listener)
+
           return () => {}
         },
         getState: () => state
@@ -178,12 +203,15 @@ describe('session write subscriber allocation', () => {
       shouldSchedulePersist: () => gateOpen,
       subscribeToPersistGateOpen: () => () => {}
     })
+
     const write = (patch: Partial<AppState>): void => {
       state = { ...state, ...patch } as AppState
+
       for (const listener of listeners.slice()) {
         listener(state)
       }
     }
+
     try {
       // A real session change lands while the gate is closed, so the write is owed but deferred.
       write({ activeTabId: 'tab-1' })
@@ -205,14 +233,17 @@ describe('session write subscriber allocation', () => {
     // A gate that misses a projection input persists stale state, so this is a correctness lock,
     // not a perf one. Record what the builder actually touches rather than trusting the types.
     const read = new Set<string>()
+
     const snapshot = new Proxy(makeSessionState() as unknown as Record<string, unknown>, {
       get(target, property, receiver) {
         if (typeof property === 'string') {
           read.add(property)
         }
+
         return Reflect.get(target, property, receiver)
       }
     })
+
     buildWorkspaceSessionPatch(
       snapshot as never,
       SESSION_RELEVANT_FIELDS as unknown as Iterable<never>

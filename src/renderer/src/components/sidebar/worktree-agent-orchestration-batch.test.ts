@@ -19,11 +19,17 @@ import { selectRuntimeAgentOrchestrationForWorktree } from './worktree-agent-row
 type BatchState = Parameters<typeof selectRuntimeAgentOrchestrationBatch>[0]
 
 const CHILD_KEY = makePaneKey('tab-child', '11111111-1111-4111-8111-111111111111')
+
 const SECOND_CHILD_KEY = makePaneKey('tab-child', '22222222-2222-4222-8222-222222222222')
+
 const ORPHAN_KEY = makePaneKey('tab-orphan', '33333333-3333-4333-8333-333333333333')
+
 const PARENT_KEY = makePaneKey('tab-parent', '44444444-4444-4444-8444-444444444444')
+
 const MALFORMED_KEY = makePaneKey('tab-none', '55555555-5555-4555-8555-555555555555')
+
 const DIFFERENT_STORE_KEY = makePaneKey('tab-other', '66666666-6666-4666-8666-666666666666')
+
 const LEGACY_KEY = 'tab-legacy:1'
 
 function makeTab(id: string, worktreeId = 'stored-worktree-id'): TerminalTab {
@@ -45,9 +51,11 @@ function makeCountedTab(id: string, onIdRead: () => void): TerminalTab {
     enumerable: true,
     get: () => {
       onIdRead()
+
       return id
     }
   })
+
   return tab
 }
 
@@ -94,10 +102,12 @@ function getBatchRecord(
 
 function expectReferenceParity(state: BatchState, worktreeIds: string[]): void {
   const batch = selectRuntimeAgentOrchestrationBatch(state, worktreeIds)
+
   for (const worktreeId of new Set(worktreeIds)) {
     const expected = selectRuntimeAgentOrchestrationForWorktree(state, worktreeId)
     const actual = getBatchRecord(batch, worktreeId)
     expect(Object.keys(actual)).toEqual(Object.keys(expected))
+
     for (const paneKey of Object.keys(expected)) {
       expect(actual[paneKey]).toBe(expected[paneKey])
     }
@@ -107,6 +117,7 @@ function expectReferenceParity(state: BatchState, worktreeIds: string[]): void {
 describe('selectRuntimeAgentOrchestrationBatch', () => {
   it('short-circuits empty requests and empty runtime before reading unrelated slices', () => {
     let forbiddenAccesses = 0
+
     const noRequestsState = {
       get runtimeAgentOrchestrationByPaneKey() {
         forbiddenAccesses += 1
@@ -117,6 +128,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
         throw new Error('tabs must stay cold')
       }
     } as unknown as BatchState
+
     const noRequests = selectRuntimeAgentOrchestrationBatch(noRequestsState, [])
 
     const emptyRuntimeState = {
@@ -134,6 +146,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
         throw new Error('retained status must stay cold')
       }
     } as unknown as BatchState
+
     const emptyRuntime = selectRuntimeAgentOrchestrationBatch(emptyRuntimeState, ['target'])
 
     expect(noRequests).toBe(emptyRuntime)
@@ -147,6 +160,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     const parentContext = makeContext('parent', { parentPaneKey: PARENT_KEY })
     const legacyContext = makeContext('legacy', { parentPaneKey: 'tab-parent:7' })
     const malformedContext = makeContext('malformed', { parentPaneKey: 'bad:parent:key' })
+
     const state = {
       tabsByWorktree: {
         'wt-child': [makeTab('tab-child'), makeTab('tab-child')],
@@ -177,6 +191,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
         [CHILD_KEY]: makeRetained(CHILD_KEY, 'wt-retained')
       }
     } as BatchState
+
     const requested = [
       'wt-child',
       'wt-child',
@@ -212,6 +227,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     const secondContext = makeContext('second')
     const otherContext = makeContext('other')
     const otherKey = makePaneKey('tab-other', '77777777-7777-4777-8777-777777777777')
+
     const baseState = {
       tabsByWorktree: {
         'wt-1': [makeTab('tab-child'), makeTab('unrelated-tab')],
@@ -225,6 +241,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
       agentStatusByPaneKey: {},
       retainedAgentsByPaneKey: {}
     } as BatchState
+
     const requested = ['wt-1', 'wt-2']
     const firstBatch = selectRuntimeAgentOrchestrationBatch(baseState, requested)
     const firstWt1 = getBatchRecord(firstBatch, 'wt-1')
@@ -238,6 +255,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
         'wt-1': [makeTab('unrelated-tab'), makeTab('tab-child')]
       }
     }
+
     expectReferenceParity(reorderedTabs, requested)
     const reorderedTabBatch = selectRuntimeAgentOrchestrationBatch(reorderedTabs, requested)
     expect(getBatchRecord(reorderedTabBatch, 'wt-1')).toBe(firstWt1)
@@ -247,6 +265,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
       ...reorderedTabs,
       agentStatusByPaneKey: { unrelated: makeEntry('unrelated', 'wt-3') }
     }
+
     const liveBatch = selectRuntimeAgentOrchestrationBatch(liveChurn, requested)
     expect(getBatchRecord(liveBatch, 'wt-1')).toBe(firstWt1)
     expect(getBatchRecord(liveBatch, 'wt-2')).toBe(firstWt2)
@@ -255,6 +274,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
       ...liveChurn,
       retainedAgentsByPaneKey: { unrelated: makeRetained('unrelated', 'wt-3') }
     }
+
     const retainedBatch = selectRuntimeAgentOrchestrationBatch(retainedChurn, requested)
     expect(getBatchRecord(retainedBatch, 'wt-1')).toBe(firstWt1)
     expect(getBatchRecord(retainedBatch, 'wt-2')).toBe(firstWt2)
@@ -267,6 +287,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
         [otherKey]: otherContext
       }
     }
+
     expectReferenceParity(reorderedRuntime, requested)
     const reorderedRuntimeBatch = selectRuntimeAgentOrchestrationBatch(reorderedRuntime, requested)
     const reorderedWt1 = getBatchRecord(reorderedRuntimeBatch, 'wt-1')
@@ -275,6 +296,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     expect(getBatchRecord(reorderedRuntimeBatch, 'wt-2')).toBe(firstWt2)
 
     const replacementContext = makeContext('replacement')
+
     const replacedRuntime = {
       ...reorderedRuntime,
       runtimeAgentOrchestrationByPaneKey: {
@@ -283,6 +305,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
         [otherKey]: otherContext
       }
     }
+
     const replacedBatch = selectRuntimeAgentOrchestrationBatch(replacedRuntime, requested)
     expect(getBatchRecord(replacedBatch, 'wt-1')).not.toBe(reorderedWt1)
     expect(getBatchRecord(replacedBatch, 'wt-1')[SECOND_CHILD_KEY]).toBe(replacementContext)
@@ -293,6 +316,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
   // not drop a cache that every mounted sidebar card is still reading through.
   it('leaves the shared index intact for an empty request and rebuilds after an empty runtime', () => {
     let tabIdReads = 0
+
     const state = {
       tabsByWorktree: {
         target: [
@@ -312,10 +336,12 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     expect(tabIdReads).toBe(1)
 
     expect(selectRuntimeAgentOrchestrationBatch(state, []).size).toBe(0)
+
     const afterEmptyRequest = getBatchRecord(
       selectRuntimeAgentOrchestrationBatch(state, ['target']),
       'target'
     )
+
     expect(tabIdReads).toBe(1)
     expect(afterEmptyRequest).toBe(first)
 
@@ -323,10 +349,12 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     selectRuntimeAgentOrchestrationBatch({ ...state, runtimeAgentOrchestrationByPaneKey: {} }, [
       'target'
     ])
+
     const afterEmptyRuntime = getBatchRecord(
       selectRuntimeAgentOrchestrationBatch(state, ['target']),
       'target'
     )
+
     expect(tabIdReads).toBe(2)
     expect(afterEmptyRuntime).not.toBe(first)
   })
@@ -334,6 +362,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
   it('matches the per-worktree selector for a single requested worktree', () => {
     const tabCount = 10
     const contextCount = 8
+
     const makeCountedState = () => {
       let runtimeEnumerations = 0
       let runtimeValueReads = 0
@@ -341,35 +370,43 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
       let targetTabIdReads = 0
       let unrelatedTabIdReads = 0
       const rawRuntime: Record<string, AgentStatusOrchestrationContext> = {}
+
       for (let index = 0; index < contextCount; index += 1) {
         const paneKey = makePaneKey(
           'tab-target',
           `88888888-8888-4888-8888-${index.toString(16).padStart(12, '0')}`
         )
+
         rawRuntime[paneKey] = {
           taskId: `task-${index}`,
           dispatchId: `dispatch-${index}`,
           get parentPaneKey() {
             contextVisits += 1
+
             return undefined
           }
         }
       }
+
       const runtime = new Proxy(rawRuntime, {
         ownKeys(target) {
           runtimeEnumerations += 1
+
           return Reflect.ownKeys(target)
         },
         get(target, key, receiver) {
           if (typeof key === 'string' && Object.hasOwn(target, key)) {
             runtimeValueReads += 1
           }
+
           return Reflect.get(target, key, receiver)
         }
       })
+
       const tabsByWorktree = Object.fromEntries(
         Array.from({ length: tabCount }, (_, index) => {
           const isTarget = index === 0
+
           return [
             isTarget ? 'target' : `unrelated-${index}`,
             [
@@ -384,6 +421,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
           ]
         })
       )
+
       return {
         state: {
           tabsByWorktree,
@@ -400,16 +438,19 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
         })
       }
     }
+
     const reference = makeCountedState()
     const batched = makeCountedState()
 
     const expected = selectRuntimeAgentOrchestrationForWorktree(reference.state, 'target')
+
     const actual = getBatchRecord(
       selectRuntimeAgentOrchestrationBatch(batched.state, ['target']),
       'target'
     )
 
     expect(Object.keys(actual)).toEqual(Object.keys(expected))
+
     // Why identical: the batch is the shared index, which walks every worktree's tabs once per
     // tabs-slice identity — not once per request — so a one-worktree request costs the same.
     const singleWorktreeCounts = {
@@ -419,6 +460,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
       targetTabIdReads: 1,
       unrelatedTabIdReads: tabCount - 1
     }
+
     expect(batched.counts()).toEqual(singleWorktreeCounts)
     expect(reference.counts()).toEqual(singleWorktreeCounts)
   })
@@ -427,38 +469,46 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     const worktreeCount = 12
     const contextCount = 24
     const publicationCount = 40
+
     const makeCountedState = () => {
       let runtimeEnumerations = 0
       let runtimeValueReads = 0
       let contextVisits = 0
       let tabIdReads = 0
       const rawRuntime: Record<string, AgentStatusOrchestrationContext> = {}
+
       for (let index = 0; index < contextCount; index += 1) {
         const paneKey = makePaneKey(
           `tab-${index % worktreeCount}`,
           `99999999-9999-4999-8999-${index.toString(16).padStart(12, '0')}`
         )
+
         rawRuntime[paneKey] = {
           taskId: `task-${index}`,
           dispatchId: `dispatch-${index}`,
           get parentPaneKey() {
             contextVisits += 1
+
             return undefined
           }
         }
       }
+
       const runtime = new Proxy(rawRuntime, {
         ownKeys(target) {
           runtimeEnumerations += 1
+
           return Reflect.ownKeys(target)
         },
         get(target, key, receiver) {
           if (typeof key === 'string' && Object.hasOwn(target, key)) {
             runtimeValueReads += 1
           }
+
           return Reflect.get(target, key, receiver)
         }
       })
+
       return {
         state: {
           tabsByWorktree: Object.fromEntries(
@@ -478,6 +528,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
         counts: () => ({ runtimeEnumerations, runtimeValueReads, contextVisits, tabIdReads })
       }
     }
+
     const requested = Array.from({ length: worktreeCount }, (_, index) => `wt-${index}`)
     const reference = makeCountedState()
     const batched = makeCountedState()
@@ -485,6 +536,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     for (const worktreeId of requested) {
       selectRuntimeAgentOrchestrationForWorktree(reference.state, worktreeId)
     }
+
     selectRuntimeAgentOrchestrationBatch(batched.state, requested)
 
     // One enumeration for worktreeCount calls: the first builds the shared
@@ -505,6 +557,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     for (let publication = 0; publication < publicationCount; publication += 1) {
       selectRuntimeAgentOrchestrationBatch({ ...batched.state }, [...requested])
     }
+
     expect(batched.counts()).toEqual({
       runtimeEnumerations: 1,
       runtimeValueReads: contextCount,
@@ -523,6 +576,7 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
         requested
       )
     }
+
     // The batch reads nothing but each orchestrated pane's worktreeId out of the live
     // map, so publications that leave those alone never revisit a context at all.
     expect(batched.counts()).toEqual({
@@ -537,20 +591,24 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
     // one cache slot on a different fixture store; production has a single store.
     selectRuntimeAgentOrchestrationForWorktree(reference.state, requested[0])
     const referenceBefore = reference.counts()
+
     for (let publication = 0; publication < publicationCount; publication += 1) {
       for (const worktreeId of requested) {
         selectRuntimeAgentOrchestrationForWorktree(reference.state, worktreeId)
       }
     }
+
     expect(reference.counts()).toEqual(referenceBefore)
 
     // A real live-status ping replaces agentStatusByPaneKey wholesale. The index is keyed on
     // what it reads out of that map, not on its identity, so an unrelated pane's ping costs
     // nothing: no rebuild, no context revisit, however many cards call in.
     const churn = makeCountedState()
+
     for (const worktreeId of requested) {
       selectRuntimeAgentOrchestrationForWorktree(churn.state, worktreeId)
     }
+
     for (let publication = 0; publication < publicationCount; publication += 1) {
       const published = {
         ...churn.state,
@@ -558,10 +616,12 @@ describe('selectRuntimeAgentOrchestrationBatch', () => {
           [`unrelated-${publication}`]: makeEntry(`unrelated-${publication}`, 'elsewhere')
         }
       }
+
       for (const worktreeId of requested) {
         selectRuntimeAgentOrchestrationForWorktree(published, worktreeId)
       }
     }
+
     expect(churn.counts()).toEqual({
       runtimeEnumerations: 1,
       runtimeValueReads: contextCount,
@@ -602,10 +662,12 @@ describe('selectRuntimeAgentOrchestrationBatch live-map churn', () => {
 
   it('rebuilds once across repeated agentStatus:set identity churn on unrelated panes', () => {
     releaseWorktreeAgentOrchestrationIndexCache()
+
     const first = selectRuntimeAgentOrchestrationBatch(
       makeChurnState({ [CHILD_KEY]: makeEntry(CHILD_KEY, 'wt-1') }),
       requested
     )
+
     const buildsAfterFirst = builds()
 
     for (let index = 0; index < 25; index += 1) {
@@ -617,8 +679,10 @@ describe('selectRuntimeAgentOrchestrationBatch live-map churn', () => {
         }),
         requested
       )
+
       expect(churned).toBe(first)
     }
+
     expect(builds()).toBe(buildsAfterFirst)
     expect(getBatchRecord(first, 'wt-1')[CHILD_KEY]).toBe(ORCHESTRATED_CONTEXT)
   })
@@ -630,15 +694,18 @@ describe('selectRuntimeAgentOrchestrationBatch live-map churn', () => {
     releaseWorktreeAgentOrchestrationIndexCache()
     const liveReads: string[] = []
     const retainedReads: string[] = []
+
     const countReads = <Value extends object>(target: Value, reads: string[]): Value =>
       new Proxy(target, {
         get(source, key, receiver) {
           if (typeof key === 'string') {
             reads.push(key)
           }
+
           return Reflect.get(source, key, receiver)
         }
       })
+
     const state = {
       tabsByWorktree: TABS_BY_WORKTREE,
       runtimeAgentOrchestrationByPaneKey: RUNTIME_TWO,
@@ -667,24 +734,29 @@ describe('selectRuntimeAgentOrchestrationBatch live-map churn', () => {
 
   it('rebuilds when an orchestrated pane changes worktree or the entry set changes', () => {
     releaseWorktreeAgentOrchestrationIndexCache()
+
     const first = selectRuntimeAgentOrchestrationBatch(
       makeChurnState({ [CHILD_KEY]: makeEntry(CHILD_KEY, 'wt-1') }),
       requested
     )
+
     expect(getBatchRecord(first, 'wt-1')[CHILD_KEY]).toBe(ORCHESTRATED_CONTEXT)
     expect(first.has('wt-2')).toBe(false)
 
     const movedBuilds = builds()
+
     const moved = selectRuntimeAgentOrchestrationBatch(
       makeChurnState({ [CHILD_KEY]: makeEntry(CHILD_KEY, 'wt-2') }),
       requested
     )
+
     expect(builds()).toBe(movedBuilds + 1)
     expect(moved).not.toBe(first)
     expect(moved.has('wt-1')).toBe(false)
     expect(getBatchRecord(moved, 'wt-2')[CHILD_KEY]).toBe(ORCHESTRATED_CONTEXT)
 
     const addedBuilds = builds()
+
     const added = selectRuntimeAgentOrchestrationBatch(
       makeChurnState(
         {
@@ -695,10 +767,12 @@ describe('selectRuntimeAgentOrchestrationBatch live-map churn', () => {
       ),
       requested
     )
+
     expect(builds()).toBe(addedBuilds + 1)
     expect(Object.keys(getBatchRecord(added, 'wt-1'))).toEqual([SECOND_CHILD_KEY])
 
     const removedBuilds = builds()
+
     const removed = selectRuntimeAgentOrchestrationBatch(
       makeChurnState({
         [CHILD_KEY]: makeEntry(CHILD_KEY, 'wt-2'),
@@ -706,6 +780,7 @@ describe('selectRuntimeAgentOrchestrationBatch live-map churn', () => {
       }),
       requested
     )
+
     expect(builds()).toBe(removedBuilds + 1)
     expect(removed.has('wt-1')).toBe(false)
   })

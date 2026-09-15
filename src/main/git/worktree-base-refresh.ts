@@ -24,31 +24,39 @@ export async function refreshLocalBaseRefForWorktreeCreate(
     remoteTrackingBase,
     options
   )
+
   if (!evaluation) {
     return undefined
   }
+
   if (!evaluation.refreshable) {
     return evaluation.result
   }
 
   const resultBase = { baseRef: evaluation.baseRef, localBranch: evaluation.localBranch }
+
   try {
     if (evaluation.ownerWorktreePath) {
       const { stdout: worktreeListOutput } = await gitExecFileAsync(
         ['worktree', 'list', '--porcelain'],
         gitExecOptions(repoPath, options)
       )
+
       const worktrees = parseWorktreeList(
         translateWslOutputPaths(worktreeListOutput, repoPath, options)
       )
+
       const currentOwner = worktrees.find((wt) => wt.branch === evaluation.fullRef)
+
       if (!currentOwner || currentOwner.path !== evaluation.ownerWorktreePath) {
         return { ...resultBase, status: 'skipped_error' }
       }
+
       const { stdout: status } = await gitExecFileAsync(
         ['status', '--porcelain', '--untracked-files=no'],
         gitExecOptions(currentOwner.path, options)
       )
+
       if (status.trim()) {
         return {
           ...resultBase,
@@ -56,10 +64,12 @@ export async function refreshLocalBaseRefForWorktreeCreate(
           ownerWorktreePath: currentOwner.path
         }
       }
+
       await gitExecFileAsync(
         ['reset', '--hard', evaluation.remoteOid],
         gitExecOptions(currentOwner.path, options)
       )
+
       return { ...resultBase, status: 'updated', ownerWorktreePath: currentOwner.path }
     }
 
@@ -68,6 +78,7 @@ export async function refreshLocalBaseRefForWorktreeCreate(
       ['update-ref', evaluation.fullRef, evaluation.remoteOid, evaluation.localOid],
       gitExecOptions(repoPath, options)
     )
+
     return { ...resultBase, status: 'updated' }
   } catch {
     // update-ref/reset can fail on locked refs or odd worktree states; worktree creation should still proceed.

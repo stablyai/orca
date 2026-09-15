@@ -18,6 +18,7 @@ import { gcOldRelayVersions } from './ssh-relay-versioned-install'
 import type { SshTarget } from '../../shared/ssh-types'
 
 const RUN_REVIEW_ORACLE = process.env.ORCA_REVIEW_SSH_UPLOAD_CANCEL === '1'
+
 const REMOTE_REPO = '/tmp/orca-pr-10207-real-repo'
 
 type TargetFixture = {
@@ -51,9 +52,11 @@ function dockerExec(fixture: TargetFixture, command: string): string {
 
 function startTarget(): TargetFixture {
   const image = process.env.ORCA_REVIEW_SSH_IMAGE
+
   if (!image) {
     throw new Error('ORCA_REVIEW_SSH_IMAGE is required')
   }
+
   const tempDir = mkdtempSync(join(tmpdir(), 'orca-pr10207-ssh-'))
   const identityFile = join(tempDir, 'id_ed25519')
   run('ssh-keygen', ['-t', 'ed25519', '-N', '', '-f', identityFile, '-q'])
@@ -92,6 +95,7 @@ function startTarget(): TargetFixture {
       'git commit -m initial'
     ].join(' && ')
   )
+
   return fixture
 }
 
@@ -99,6 +103,7 @@ function stopTarget(fixture: TargetFixture | null): void {
   if (!fixture) {
     return
   }
+
   spawnSync('docker', ['stop', fixture.containerName], { stdio: 'ignore', timeout: 20_000 })
   spawnSync('docker', ['rm', fixture.containerName], { stdio: 'ignore', timeout: 20_000 })
   rmSync(fixture.tempDir, { recursive: true, force: true })
@@ -106,9 +111,11 @@ function stopTarget(fixture: TargetFixture | null): void {
 
 function createConnection(fixture: TargetFixture): SshConnection {
   const host = process.env.ORCA_REVIEW_SSH_TARGET_HOST ?? ''
+
   if (!host || host === 'localhost' || host === '::1' || host.startsWith('127.')) {
     throw new Error(`Review SSH target must be non-loopback, received ${JSON.stringify(host)}`)
   }
+
   const target: SshTarget = {
     id: `pr-10207-${randomUUID()}`,
     label: 'PR 10207 Docker SSH target',
@@ -119,11 +126,13 @@ function createConnection(fixture: TargetFixture): SshConnection {
     identityFile: fixture.identityFile,
     identitiesOnly: true
   }
+
   return new SshConnection(target, { onStateChange: vi.fn() })
 }
 
 function readInventory(fixture: TargetFixture, remoteRelayDir: string): RemoteInventory {
   const stagePool = '/root/.orca-remote/.upload-stages'
+
   const raw = dockerExec(
     fixture,
     [
@@ -133,7 +142,9 @@ function readInventory(fixture: TargetFixture, remoteRelayDir: string): RemoteIn
       `find ${shellQuote(stagePool)} -mindepth 1 -maxdepth 1 \\( -name 'slot-*' -o -name 'claim-*' -o -name 'delete-*' \\) -print 2>/dev/null | sort || true`
     ].join('; ')
   )
+
   const lines = raw.split(/\r?\n/)
+
   return {
     installLock: lines[0] === 'LOCK=1',
     payloadFiles: Number(lines[1]?.slice('FILES='.length) ?? 0),
@@ -167,10 +178,12 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     )
     const connection = createConnection(activeFixture)
     await connection.connect()
+
     try {
       const startedAt = Date.now()
       await acquireInstallLock(connection, remoteRelayDir, getRemoteHostPlatform('linux-arm64'))
       const elapsedMs = Date.now() - startedAt
+
       const state = dockerExec(
         activeFixture,
         [
@@ -201,9 +214,11 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     await connection.connect()
     const sentinelPid = dockerExec(activeFixture, 'sleep 300 </dev/null >/dev/null 2>&1 & echo $!')
     let releaseFirstWrite: () => void = () => {}
+
     const firstWrite = new Promise<void>((resolve) => {
       releaseFirstWrite = resolve
     })
+
     let acknowledgedBytes = 0
     const openSftp = connection.sftp.bind(connection)
     connection.sftp = vi.fn(async (signal) => {
@@ -212,9 +227,11 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
       sftp.createWriteStream = ((...args: Parameters<typeof createWriteStream>) => {
         const [remotePath] = args
         const stream = createWriteStream(...args)
+
         if (!remotePath.endsWith('/payload/relay.js')) {
           return stream
         }
+
         const writable = stream as typeof stream & {
           _write: (
             chunk: Buffer,
@@ -222,24 +239,30 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
             callback: (error?: Error | null) => void
           ) => void
         }
+
         const write = writable._write.bind(writable)
         writable._write = (chunk, encoding, callback): void => {
           write(chunk, encoding, (error) => {
             if (error) {
               callback(error)
+
               return
             }
+
             acknowledgedBytes += chunk.length
             releaseFirstWrite()
           })
         }
+
         return stream
       }) as typeof sftp.createWriteStream
+
       return sftp
     })
 
     const deployment = deployAndLaunchRelay(connection, undefined, 60)
     let barrierTimeout: ReturnType<typeof setTimeout>
+
     try {
       await Promise.race([
         firstWrite,
@@ -253,23 +276,28 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     } finally {
       clearTimeout(barrierTimeout!)
     }
+
     const partialRemoteBytes = Number(
       dockerExec(
         activeFixture,
         "find /root/.orca-remote/.upload-stages -type f -path '*/slot-*/payload/relay.js' -printf '%s\\n'"
       )
     )
+
     const operationController = (
       connection as unknown as { systemOperationAbortController: AbortController }
     ).systemOperationAbortController
+
     operationController.abort()
 
     await expect(deployment).rejects.toMatchObject({ name: 'AbortError' })
     const inventory = readInventory(activeFixture, remoteRelayDir)
+
     const sentinelCommand = dockerExec(
       activeFixture,
       `tr '\\0' ' ' < /proc/${shellQuote(sentinelPid)}/cmdline`
     )
+
     await connection.disconnect()
 
     console.log(
@@ -284,17 +312,21 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
 
   it('recovers cancellation with bounded safe reclamation and bounded real version GC', async () => {
     const activeFixture = fixture as TargetFixture
+
     const relayVersion = readFileSync(
       join(process.cwd(), 'out', 'relay', 'linux-arm64', '.version'),
       'utf8'
     ).trim()
+
     const remoteRelayDir = `/root/.orca-remote/relay-${relayVersion}`
     const firstConnection = createConnection(activeFixture)
     const progress: string[] = []
     await firstConnection.connect()
+
     const unconfirmedCancellation = Object.assign(new Error('injected upload cancellation'), {
       sshChannelCloseConfirmed: false
     })
+
     firstConnection.uploadDirectory = vi.fn().mockRejectedValue(unconfirmedCancellation)
 
     await expect(
@@ -303,6 +335,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     await firstConnection.disconnect()
     const firstInventory = readInventory(activeFixture, remoteRelayDir)
     const expected = process.env.ORCA_REVIEW_EXPECT_RECOVERY === '1' ? 'recovered' : 'blocked'
+
     if (expected === 'recovered') {
       const secondAbandonedConnection = createConnection(activeFixture)
       await secondAbandonedConnection.connect()
@@ -317,9 +350,11 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
     await retryConnection.connect()
     let retryResult: 'blocked' | 'recovered'
     let finalInventory: RemoteInventory | undefined
+
     let scaleEvidence:
       | { gcDurationMs: number; listingBytes: number; scaleEntries: number }
       | undefined
+
     if (firstInventory.installLock) {
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), 1_500)
@@ -339,10 +374,12 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
       mux.dispose()
       retryResult = 'recovered'
     }
+
     const repoHead = await execCommand(
       retryConnection,
       `cd ${shellQuote(REMOTE_REPO)} && git rev-parse --verify HEAD`
     )
+
     await retryConnection.disconnect()
 
     if (expected === 'recovered') {
@@ -383,6 +420,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
         resolvedPath: '/root'
       })
       const reclaimDeadline = Date.now() + 10_000
+
       while (
         dockerExec(
           activeFixture,
@@ -392,6 +430,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
       ) {
         await new Promise((resolve) => setTimeout(resolve, 50))
       }
+
       expect(
         dockerExec(activeFixture, `test ! -e ${shellQuote(reclaimableStage)} && echo RECLAIMED`)
       ).toBe('RECLAIMED')
@@ -400,6 +439,7 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
         cleanupConnection,
         listRelayBaseDirsCommand(getRemoteHostPlatform('linux-arm64'), '/root/.orca-remote')
       )
+
       const gcStartedAt = Date.now()
       await gcOldRelayVersions(
         cleanupConnection,
@@ -427,23 +467,27 @@ describe.skipIf(!RUN_REVIEW_ORACLE)('SSH relay upload cancellation recovery', ()
       const listingBytes = Buffer.byteLength(listing)
       expect(listingBytes).toBeLessThan(1_024)
       expect(gcDurationMs).toBeLessThan(10_000)
+
       const scaleEntries = Number(
         dockerExec(
           activeFixture,
           `find /root/.orca-remote -mindepth 1 -maxdepth 1 -type d -name ${shellQuote(`relay-${relayVersion}.upload-scale-*`)} | wc -l`
         )
       )
+
       expect(scaleEntries).toBe(15_197)
       scaleEvidence = { gcDurationMs, listingBytes, scaleEntries }
       cleanupMux.dispose()
       await cleanupConnection.disconnect()
     }
+
     console.log(
       `[pr-10207-oracle] ${JSON.stringify({ progress, firstInventory, retryResult, finalInventory, scaleEvidence, repoHead: repoHead.trim() })}`
     )
     expect(progress).toContain('Uploading relay...')
     expect(repoHead.trim()).toMatch(/^[0-9a-f]{40}$/)
     expect(retryResult).toBe(expected)
+
     if (expected === 'recovered') {
       expect(firstInventory.installLock).toBe(false)
       expect(firstInventory.uploadStages.length).toBeGreaterThan(0)

@@ -22,6 +22,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -33,6 +34,7 @@ describe('CodexAccountService config sync', () => {
 
   it('isolates a WSL reset to the selected distro account and immutable managed home', async () => {
     const managedHomePath = createManagedHome(testState.userDataDir, 'account-wsl')
+
     const account = {
       id: 'account-wsl',
       email: 'wsl@example.com',
@@ -43,6 +45,7 @@ describe('CodexAccountService config sync', () => {
       updatedAt: 1,
       lastAuthenticatedAt: 1
     }
+
     const settings = createSettings({
       codexManagedAccounts: [account],
       activeCodexManagedAccountIdsByRuntime: {
@@ -50,17 +53,21 @@ describe('CodexAccountService config sync', () => {
         wsl: { Ubuntu: account.id }
       }
     })
+
     const limits = createResetCreditLimits()
     const target = { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
     const state = createResetRateLimitState(limits, target)
     const consume = vi.fn().mockResolvedValue({ outcome: 'reset', state })
+
     const rateLimits = {
       ...createRateLimits(),
       getState: vi.fn(() => state),
       consumeCodexRateLimitResetCredit: consume
     }
+
     const expectedScope = buildCodexResetCreditExpectedScope({ target, account, limits })!
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       createStore(settings) as never,
       rateLimits as never,
@@ -80,6 +87,7 @@ describe('CodexAccountService config sync', () => {
   it('keeps a restarted pending WSL attempt isolated from another distro', async () => {
     const ubuntuHome = createManagedHome(testState.userDataDir, 'account-ubuntu')
     const debianHome = createManagedHome(testState.userDataDir, 'account-debian')
+
     const ubuntu = {
       id: 'account-ubuntu',
       email: 'ubuntu@example.com',
@@ -90,6 +98,7 @@ describe('CodexAccountService config sync', () => {
       updatedAt: 1,
       lastAuthenticatedAt: 1
     }
+
     const debian = {
       ...ubuntu,
       id: 'account-debian',
@@ -98,6 +107,7 @@ describe('CodexAccountService config sync', () => {
       wslDistro: 'Debian',
       updatedAt: 2
     }
+
     const settings = createSettings({
       codexManagedAccounts: [ubuntu, debian],
       activeCodexManagedAccountIdsByRuntime: {
@@ -105,22 +115,27 @@ describe('CodexAccountService config sync', () => {
         wsl: { Ubuntu: ubuntu.id, Debian: debian.id }
       }
     })
+
     const limits = createResetCreditLimits()
     const ubuntuTarget = { runtime: 'wsl' as const, wslDistro: 'Ubuntu' }
     const debianTarget = { runtime: 'wsl' as const, wslDistro: 'Debian' }
     const state = createResetRateLimitState(limits, ubuntuTarget)
+
     const ubuntuScope = buildCodexResetCreditExpectedScope({
       target: ubuntuTarget,
       account: ubuntu,
       limits
     })!
+
     const debianScope = buildCodexResetCreditExpectedScope({
       target: debianTarget,
       account: debian,
       limits
     })!
+
     const store = createStore(settings)
     const { CodexAccountService } = await import('./service')
+
     const firstService = new CodexAccountService(
       store as never,
       {
@@ -132,12 +147,14 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+
     await expect(
       firstService.consumeRateLimitResetCredit('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', ubuntuScope)
     ).rejects.toThrow('Ubuntu response lost')
 
     state.codexTarget = debianTarget
     const debianConsume = vi.fn().mockResolvedValue({ outcome: 'reset', state })
+
     const restarted = new CodexAccountService(
       store as never,
       {
@@ -162,14 +179,17 @@ describe('CodexAccountService config sync', () => {
     const settings = createSettings()
     const state = createResetRateLimitState(createResetCreditLimits())
     const consume = vi.fn().mockResolvedValue({ outcome: 'noCredit', state })
+
     const rateLimits = {
       ...createRateLimits(),
       getState: vi.fn(() => state),
       consumeCodexRateLimitResetCredit: consume
     }
+
     const runtimeHome = createRuntimeHome()
     runtimeHome.prepareForRateLimitFetch.mockReturnValue({ kind: 'ready', codexHomePath: null })
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       createStore(settings) as never,
       rateLimits as never,
@@ -192,6 +212,7 @@ describe('CodexAccountService config sync', () => {
 
   it('routes a managed desktop reset through the durable coordinator', async () => {
     const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+
     const account = {
       id: 'account-1',
       email: 'user@example.com',
@@ -202,15 +223,18 @@ describe('CodexAccountService config sync', () => {
       updatedAt: 1,
       lastAuthenticatedAt: 1
     }
+
     const settings = createSettings({
       codexManagedAccounts: [account],
       activeCodexManagedAccountId: account.id
     })
+
     const limits = createResetCreditLimits()
     const state = createResetRateLimitState(limits)
     const store = createStore(settings)
     const consume = vi.fn().mockResolvedValue({ outcome: 'reset', state })
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       {
@@ -237,6 +261,7 @@ describe('CodexAccountService config sync', () => {
 
   it('reuses the durable pending key when desktop retries a managed reset after restart', async () => {
     const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+
     const account = {
       id: 'account-1',
       email: 'user@example.com',
@@ -247,15 +272,18 @@ describe('CodexAccountService config sync', () => {
       updatedAt: 1,
       lastAuthenticatedAt: 1
     }
+
     const settings = createSettings({
       codexManagedAccounts: [account],
       activeCodexManagedAccountId: account.id
     })
+
     const limits = createResetCreditLimits()
     const state = createResetRateLimitState(limits)
     const store = createStore(settings)
     const firstConsume = vi.fn().mockRejectedValue(new Error('provider response lost'))
     const { CodexAccountService } = await import('./service')
+
     const firstService = new CodexAccountService(
       store as never,
       {
@@ -281,6 +309,7 @@ describe('CodexAccountService config sync', () => {
       rateLimitResetCredits: { ...limits.rateLimitResetCredits!, availableCount: 0 }
     }
     const replayConsume = vi.fn().mockResolvedValue({ outcome: 'alreadyRedeemed', state })
+
     const restarted = new CodexAccountService(
       store as never,
       {
@@ -307,6 +336,7 @@ describe('CodexAccountService config sync', () => {
 
   it('blocks the system-default fallback while the exact target has a pending attempt', async () => {
     const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+
     const account = {
       id: 'account-1',
       email: 'user@example.com',
@@ -317,17 +347,21 @@ describe('CodexAccountService config sync', () => {
       updatedAt: 1,
       lastAuthenticatedAt: 1
     }
+
     const settings = createSettings({
       codexManagedAccounts: [account],
       activeCodexManagedAccountId: null
     })
+
     const limits = createResetCreditLimits()
     const state = createResetRateLimitState(limits)
+
     const expectedScope = buildCodexResetCreditExpectedScope({
       target: state.codexTarget,
       account,
       limits
     })!
+
     const store = createStore(settings)
     store.replaceCodexResetCreditAttemptLedgerAndFlush({
       version: 1,
@@ -341,6 +375,7 @@ describe('CodexAccountService config sync', () => {
     })
     const consume = vi.fn()
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       {
@@ -357,6 +392,7 @@ describe('CodexAccountService config sync', () => {
 
   it('unwedges the system-default reset after removing the account owning a pending attempt', async () => {
     const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+
     const account = {
       id: 'account-1',
       email: 'user@example.com',
@@ -367,17 +403,21 @@ describe('CodexAccountService config sync', () => {
       updatedAt: 1,
       lastAuthenticatedAt: 1
     }
+
     const settings = createSettings({
       codexManagedAccounts: [account],
       activeCodexManagedAccountId: null
     })
+
     const limits = createResetCreditLimits()
     const state = createResetRateLimitState(limits)
+
     const expectedScope = buildCodexResetCreditExpectedScope({
       target: state.codexTarget,
       account,
       limits
     })!
+
     const store = createStore(settings)
     store.replaceCodexResetCreditAttemptLedgerAndFlush({
       version: 1,
@@ -391,6 +431,7 @@ describe('CodexAccountService config sync', () => {
     })
     const consume = vi.fn().mockResolvedValue({ outcome: 'reset', state })
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       {
@@ -416,6 +457,7 @@ describe('CodexAccountService config sync', () => {
 
   it('keeps reset attempts fail-closed when removal cannot persist their purge', async () => {
     const managedHomePath = createManagedHome(testState.userDataDir, 'account-1')
+
     const account = {
       id: 'account-1',
       email: 'user@example.com',
@@ -426,17 +468,21 @@ describe('CodexAccountService config sync', () => {
       updatedAt: 1,
       lastAuthenticatedAt: 1
     }
+
     const settings = createSettings({
       codexManagedAccounts: [account],
       activeCodexManagedAccountId: null
     })
+
     const limits = createResetCreditLimits()
     const state = createResetRateLimitState(limits)
+
     const expectedScope = buildCodexResetCreditExpectedScope({
       target: state.codexTarget,
       account,
       limits
     })!
+
     const store = createStore(settings)
     store.replaceCodexResetCreditAttemptLedgerAndFlush({
       version: 1,
@@ -450,6 +496,7 @@ describe('CodexAccountService config sync', () => {
     })
     const consume = vi.fn().mockResolvedValue({ outcome: 'reset', state })
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       {
@@ -459,6 +506,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+
     vi.spyOn(store, 'replaceCodexResetCreditAttemptLedgerAndFlush').mockImplementationOnce(() => {
       throw new Error('disk full')
     })
@@ -473,6 +521,7 @@ describe('CodexAccountService config sync', () => {
     const state = createResetRateLimitState(createResetCreditLimits())
     let finishRefresh: (() => void) | undefined
     const consume = vi.fn()
+
     const rateLimits = {
       ...createRateLimits(),
       getState: vi.fn(() => state),
@@ -484,8 +533,10 @@ describe('CodexAccountService config sync', () => {
           })
       )
     }
+
     const runtimeHome = createRuntimeHome()
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       createStore(settings) as never,
       rateLimits as never,

@@ -21,6 +21,7 @@ export type MiniMaxCredentialsStatus = {
 function getMiniMaxCredentialsStatus(): MiniMaxCredentialsStatus {
   const cookieConfigured = hasMiniMaxSessionCookie()
   const apiKeyConfigured = hasMiniMaxApiKey()
+
   return {
     configured: cookieConfigured || apiKeyConfigured,
     cookieConfigured,
@@ -48,31 +49,39 @@ export function registerMiniMaxCredentialsHandlers(rateLimits: RateLimitService 
     if (typeof cookie !== 'string') {
       throw new Error('MiniMax session cookie must be a string')
     }
+
     saveMiniMaxSessionCookie(cookie)
     refreshAfterMiniMaxCredentialChange(rateLimits, 'save')
+
     return getMiniMaxCredentialsStatus()
   })
   ipcMain.handle('minimaxCredentials:clearCookie', async () => {
     clearMiniMaxSessionCookie()
+
     try {
       await clearMiniMaxSessionCookieJar()
     } catch (error) {
       console.error('[minimax] failed to clear session cookie jar after credential clear:', error)
     }
+
     refreshAfterMiniMaxCredentialChange(rateLimits, 'clear')
+
     return getMiniMaxCredentialsStatus()
   })
   ipcMain.handle('minimaxCredentials:saveApiKey', (_event, key: string) => {
     if (typeof key !== 'string') {
       throw new Error('MiniMax API key must be a string')
     }
+
     saveMiniMaxApiKey(key)
     refreshAfterMiniMaxCredentialChange(rateLimits, 'save')
+
     return getMiniMaxCredentialsStatus()
   })
   ipcMain.handle('minimaxCredentials:clearApiKey', () => {
     clearMiniMaxApiKey()
     refreshAfterMiniMaxCredentialChange(rateLimits, 'clear')
+
     return getMiniMaxCredentialsStatus()
   })
 }

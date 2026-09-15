@@ -14,6 +14,7 @@ export class StructuredAgentSessionTaskQueue {
       () => this.attaching.delete(operation),
       () => this.attaching.delete(operation)
     )
+
     return operation
   }
 

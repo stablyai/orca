@@ -108,6 +108,7 @@ describe('imported worktree virtual rows', () => {
       makeHeaderRow('all'),
       makeWorktreeRow('main')
     ]
+
     const { groupKeyByRowKey } = getWorktreeDragIndexes(rows)
 
     expect(getWorktreeDragGroups(rows)).toEqual([{ key: 'all', worktreeIds: ['main'] }])

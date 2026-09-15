@@ -15,11 +15,13 @@ const mocks = vi.hoisted(() => ({
 // invariant test below exercises the shipped gate instead of a copy of it.
 vi.mock('@/lib/worktree-activation', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return { ...actual, activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace }
 })
 
 vi.mock('@/lib/new-workspace', async (importOriginal) => {
   const actual = await importOriginal<typeof NewWorkspaceModule>()
+
   return {
     ...actual,
     ensureAgentStartupInTerminal: mocks.ensureAgentStartupInTerminal
@@ -200,6 +202,7 @@ describe('submitFolderWorkspaceCreate', () => {
 
   it('does not mark first-input rename when a linked work item owns the folder workspace name', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+
     const linkedWorkItem = {
       provider: 'github' as const,
       type: 'issue' as const,
@@ -233,6 +236,7 @@ describe('submitFolderWorkspaceCreate', () => {
 
   it('creates a Jira folder workspace with its bound source context', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+
     const linkedWorkItem = {
       provider: 'jira' as const,
       type: 'issue' as const,
@@ -241,6 +245,7 @@ describe('submitFolderWorkspaceCreate', () => {
       url: 'https://company.atlassian.net/browse/ORCA-123',
       jiraIdentifier: 'ORCA-123'
     }
+
     const linkedTaskSourceContext = {
       kind: 'task-source' as const,
       provider: 'jira' as const,
@@ -279,6 +284,7 @@ describe('submitFolderWorkspaceCreate', () => {
 
   it('keeps linked Codex context out of submitted startup and pastes it as a draft', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+
     const linkedWorkItem = {
       provider: 'github' as const,
       type: 'pr' as const,
@@ -336,6 +342,7 @@ describe('submitFolderWorkspaceCreate', () => {
         folderPath: '/home/alice/platform/Trust remote folder draft'
       })
     )
+
     const linkedWorkItem = {
       provider: 'github' as const,
       type: 'pr' as const,
@@ -344,6 +351,7 @@ describe('submitFolderWorkspaceCreate', () => {
       url: 'https://github.com/stablyai/orca/pull/92',
       repoId: 'repo-1'
     }
+
     const projectGroup = {
       ...makeProjectGroup(),
       connectionId: 'ssh-1',
@@ -411,6 +419,7 @@ describe('submitFolderWorkspaceCreate', () => {
 
   it('uses native draft launch for linked agents with prefill support', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+
     const linkedWorkItem = {
       provider: 'gitlab' as const,
       type: 'mr' as const,
@@ -442,6 +451,7 @@ describe('submitFolderWorkspaceCreate', () => {
 
   it('uses native prefill for link-only Linear folder workspace drafts', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+
     const linkedWorkItem = {
       provider: 'linear' as const,
       type: 'issue' as const,
@@ -504,6 +514,7 @@ describe('submitFolderWorkspaceCreate', () => {
 
   it('keeps explicit blank linked folder creates free of agent startup and draft paste', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+
     const linkedWorkItem = {
       provider: 'github' as const,
       type: 'issue' as const,
@@ -566,6 +577,7 @@ describe('submitFolderWorkspaceCreate', () => {
 
   it('quotes quick-agent startup for POSIX when the folder group is a local WSL UNC path', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+
     const projectGroup = {
       ...makeProjectGroup(),
       parentPath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\platform'
@@ -598,6 +610,7 @@ describe('submitFolderWorkspaceCreate', () => {
 
   it('quotes quick-agent startup for Windows when the remote folder group uses a Windows path', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+
     const projectGroup = {
       ...makeProjectGroup(),
       connectionId: 'ssh-windows',
@@ -635,6 +648,7 @@ describe('submitFolderWorkspaceCreate', () => {
       connectionId: 'ssh-1',
       executionHostId: 'ssh:ssh-1'
     }
+
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace({ connectionId: 'ssh-1' }))
     const onOpenChange = vi.fn()
 
@@ -692,6 +706,7 @@ describe('submitFolderWorkspaceCreate', () => {
 
 describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
   const ISSUE_URL = 'https://github.com/stablyai/orca/issues/42'
+
   const linkedIssue = {
     provider: 'github' as const,
     type: 'issue' as const,
@@ -804,6 +819,7 @@ describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
 
 describe('folder-workspace draft: seeded set == chat-opening set', () => {
   const ISSUE_URL = 'https://github.com/stablyai/orca/issues/42'
+
   const linkedIssue = {
     provider: 'github' as const,
     type: 'issue' as const,
@@ -854,6 +870,7 @@ describe('folder-workspace draft: seeded set == chat-opening set', () => {
     const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
     const seeded = useAppStore.getState().nativeChatLaunchDraftByTabId['tab-1'] != null
     const draftText = resolveStartupLaunchDraftText(startup)
+
     const opensInChat =
       decideInitialAgentTabViewMode({
         experimentalNativeChat: true,

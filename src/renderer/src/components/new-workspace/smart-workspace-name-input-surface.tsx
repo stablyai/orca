@@ -68,6 +68,7 @@ export function renderSmartWorkspaceNameInput(
           if (event.currentTarget !== event.target) {
             return
           }
+
           if (
             (event.key === 'Backspace' || event.key === 'Delete') &&
             !event.metaKey &&
@@ -82,8 +83,10 @@ export function renderSmartWorkspaceNameInput(
               localInputFocusFrameRef.current = null
               localInputRef.current?.focus({ preventScroll: true })
             })
+
             return
           }
+
           if (
             event.key === 'Enter' &&
             event.altKey &&
@@ -94,8 +97,10 @@ export function renderSmartWorkspaceNameInput(
           ) {
             event.preventDefault()
             openSelectedSource()
+
             return
           }
+
           if (
             event.key !== 'Enter' ||
             event.metaKey ||
@@ -105,6 +110,7 @@ export function renderSmartWorkspaceNameInput(
           ) {
             return
           }
+
           event.preventDefault()
           onPlainEnter?.()
         }}
@@ -188,14 +194,18 @@ export function renderSmartWorkspaceNameInput(
           const nextValue = event.target.value
           const nextCursor = event.target.selectionStart
           const completedEmoji = replaceCompletedWorkspaceEmojiShortcode(nextValue, nextCursor)
+
           if (completedEmoji) {
             applyEmojiReplacement(completedEmoji)
+
             return
           }
+
           // A pending emoji caret frame would otherwise yank the caret back mid-typing.
           cancelLocalInputFocusFrame()
           onValueChange(nextValue)
           setEmojiCursor(nextCursor)
+
           if (!disabled && mode !== 'text') {
             markSourcePopoverUserEngaged()
             setOpen(true)
@@ -204,14 +214,17 @@ export function renderSmartWorkspaceNameInput(
         onPaste={(event) => {
           // Why: a pasted issue URL is the whole intent, not a name fragment.
           const pasted = event.clipboardData.getData('text')
+
           if (
             !pasted ||
             (!isBlockingJiraUrlIntent(mode, pasted) && !isBlockingLinearUrlIntent(mode, pasted))
           ) {
             return
           }
+
           event.preventDefault()
           onValueChange(pasted)
+
           if (!disabled && mode !== 'text') {
             markSourcePopoverUserEngaged()
             setOpen(true)
@@ -221,8 +234,10 @@ export function renderSmartWorkspaceNameInput(
           // Why: dialog autofocus stays suppressed; only field-to-field focus opens results.
           if (!isComposerFieldToFieldFocus(event)) {
             setEmojiCursor(event.currentTarget.selectionStart)
+
             return
           }
+
           setEmojiCursor(event.currentTarget.selectionStart)
           markSourcePopoverUserEngaged()
           tryOpenSourcePopover()
@@ -232,64 +247,88 @@ export function renderSmartWorkspaceNameInput(
             const activeTrigger = tabsListRef.current?.querySelector<HTMLElement>(
               `[data-smart-name-mode="${mode}"]`
             )
+
             if (activeTrigger) {
               event.preventDefault()
               activeTrigger.focus()
+
               return
             }
           }
+
           if (emojiMenuOpen && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
             event.preventDefault()
             event.stopPropagation()
+
             const selectedIndex = emojiSuggestions.findIndex(
               (suggestion) => `emoji:${suggestion.shortcode}` === resolvedEmojiCommandValue
             )
+
             const direction = event.key === 'ArrowDown' ? 1 : -1
+
             const nextIndex =
               (selectedIndex + direction + emojiSuggestions.length) % emojiSuggestions.length
+
             setEmojiCommandValue(`emoji:${emojiSuggestions[nextIndex].shortcode}`)
+
             return
           }
+
           if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
             // Why: committing an IME candidate must not select a row or move focus.
             if (isImeCompositionKeyDown(event)) {
               return
             }
+
             if (emojiMenuOpen && selectedEmojiSuggestion) {
               event.preventDefault()
               event.stopPropagation()
               handleEmojiSelect(selectedEmojiSuggestion)
+
               return
             }
+
             if (unresolvedLinearUrlIntent || blockingTaskUrlResolution) {
               event.preventDefault()
+
               return
             }
+
             if (open && rows.length > 0) {
               const row = rows.find((entry) => entry.value === resolvedCommandValue)
+
               if (row) {
                 event.preventDefault()
                 handleSelect(row)
+
                 return
               }
             }
+
             if (mode === 'jira' || jiraSource.intent) {
               event.preventDefault()
+
               return
             }
+
             onPlainEnter?.()
           }
+
           if (event.key === 'Tab' && !event.shiftKey && emojiMenuOpen && selectedEmojiSuggestion) {
             event.preventDefault()
             event.stopPropagation()
             handleEmojiSelect(selectedEmojiSuggestion)
+
             return
           }
+
           if (event.key === 'Escape' && emojiMenuOpen) {
             event.stopPropagation()
             setEmojiCursor(null)
+
             return
           }
+
           if (event.key === 'Escape' && open) {
             event.stopPropagation()
             setOpen(false)

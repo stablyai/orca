@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ editorDrafts: mocks.drafts }) }
 }))
+
 vi.mock('./editor-pending-flush', () => ({
   flushPendingEditorChange: mocks.flush
 }))
@@ -65,6 +66,7 @@ describe('Markdown artifact upload', () => {
         }
       }
     })
+
     expect(JSON.parse(markdownArtifactSourceKey(file))).toEqual([
       'ssh',
       'build-box',

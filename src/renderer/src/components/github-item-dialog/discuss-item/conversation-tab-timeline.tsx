@@ -22,6 +22,7 @@ export function renderTimelineTarget(
   if (!target) {
     return null
   }
+
   return (
     <button
       key={target.url}
@@ -38,6 +39,7 @@ export function renderTimelineTarget(
 export function renderTimelineActivityMessage(activity: GitHubIssueTimelineItem): React.ReactNode {
   const assignee =
     activity.assignee ?? translate('auto.components.GitHubItemDialog.timeline.someone', 'someone')
+
   if (activity.event === 'assigned') {
     return (
       <>
@@ -46,6 +48,7 @@ export function renderTimelineActivityMessage(activity: GitHubIssueTimelineItem)
       </>
     )
   }
+
   if (activity.event === 'unassigned') {
     return (
       <>
@@ -54,6 +57,7 @@ export function renderTimelineActivityMessage(activity: GitHubIssueTimelineItem)
       </>
     )
   }
+
   if (activity.event === 'mentioned' || activity.event === 'cross-referenced') {
     return (
       <>
@@ -68,8 +72,10 @@ export function renderTimelineActivityMessage(activity: GitHubIssueTimelineItem)
       </>
     )
   }
+
   if (activity.event === 'closed') {
     const stateReason = getTimelineStateReasonLabel(activity.stateReason)
+
     return (
       <>
         {translate('auto.components.GitHubItemDialog.timeline.closed', 'closed this')}
@@ -84,11 +90,14 @@ export function renderTimelineActivityMessage(activity: GitHubIssueTimelineItem)
       </>
     )
   }
+
   if (activity.event === 'reopened') {
     return translate('auto.components.GitHubItemDialog.timeline.reopened', 'reopened this')
   }
+
   const hasFrom = Boolean(activity.previousColumnName)
   const hasTo = Boolean(activity.columnName)
+
   return (
     <>
       {translate('auto.components.GitHubItemDialog.timeline.moved', 'moved this')}
@@ -130,6 +139,7 @@ export function renderTimelineActivity(activity: GitHubIssueTimelineItem): React
             : activity.event === 'moved_columns_in_project'
               ? MoveRight
               : Link2
+
   return (
     <div
       key={`activity-${activity.id}`}

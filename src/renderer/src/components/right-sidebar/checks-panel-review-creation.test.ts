@@ -182,12 +182,14 @@ describe('isChecksPanelHardRefreshErrorType', () => {
     for (const t of ['rate_limited', 'network', 'unknown']) {
       expect(isChecksPanelHardRefreshErrorType(t)).toBe(false)
     }
+
     expect(isChecksPanelHardRefreshErrorType(undefined)).toBe(false)
   })
 })
 
 describe('computeChecksPanelConfirmedReadiness', () => {
   const NOW = 1_000_000
+
   function readiness(
     overrides: Partial<ChecksPanelConfirmedReadinessInput> = {}
   ): ChecksPanelConfirmedReadinessInput {
@@ -314,6 +316,7 @@ describe('computeChecksPanelConfirmedReadiness', () => {
 
 describe('isChecksPanelHardErrorCleared', () => {
   const NOW = 1_000_000
+
   function cleared(
     overrides: Partial<ChecksPanelConfirmedReadinessInput> = {}
   ): ChecksPanelConfirmedReadinessInput {
@@ -386,6 +389,9 @@ describe('isChecksPanelHardErrorCleared', () => {
 
 // Type-only usage to keep the imports meaningful across refactors.
 const _blocked: HostedReviewCreationBlockedReason = null
+
 const _outcome: HostedReviewLookupOutcome = 'not_found'
+
 void _blocked
+
 void _outcome

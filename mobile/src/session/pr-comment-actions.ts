@@ -36,15 +36,19 @@ export function buildReplyParams(prNumber: number, comment: PRComment, body: str
     commentId: comment.id,
     body
   }
+
   if (comment.threadId) {
     params.threadId = comment.threadId
   }
+
   if (comment.path) {
     params.path = comment.path
   }
+
   if (typeof comment.line === 'number') {
     params.line = comment.line
   }
+
   return params
 }
 
@@ -57,6 +61,7 @@ export function buildResolveParams(comment: PRComment): ResolveParams | null {
   if (!comment.threadId) {
     return null
   }
+
   return { threadId: comment.threadId, resolve: comment.isResolved !== true }
 }
 
@@ -77,9 +82,11 @@ export function isMutablePRConversationComment(
   if (comment.threadId || comment.path) {
     return false
   }
+
   if (comment.url && comment.url.includes('pullrequestreview')) {
     return false
   }
+
   return Number.isSafeInteger(comment.id) && comment.id > 0
 }
 

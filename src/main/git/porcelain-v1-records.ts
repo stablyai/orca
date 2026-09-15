@@ -19,13 +19,16 @@ export function parsePorcelainV1Records(stdout: string): PorcelainV1Record[] {
 
   for (let index = 0; index < fields.length; index++) {
     const field = fields[index]
+
     // Why: the trailing NUL yields a final empty field; a record is always
     // `XY<space><path>`, so anything shorter cannot be one.
     if (field.length < 4) {
       continue
     }
+
     const xy = field.slice(0, 2)
     records.push({ xy, path: field.slice(3) })
+
     if (xy.includes('R') || xy.includes('C')) {
       // Skip the origin path that follows a rename or copy.
       index++

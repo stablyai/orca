@@ -25,7 +25,9 @@ import { readStructuredWorkerOutput } from './orchestration-structured-worker-li
 import { inspectWorkerTerminal } from './orchestration/worker/worker-observation'
 
 const WORKTREE = 'repo::wt'
+
 const STRUCTURED_HANDLE = 'structworker_worker'
+
 const TERMINAL_HANDLE = 'term_worker'
 
 const structuredPreambles: string[] = []
@@ -34,10 +36,12 @@ vi.mock('./orchestration/worker/worker-topology', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   createStructuredWorkerSessionForWorktree: async (args: { effects: unknown[] }) => {
     args.effects.push({ kind: 'terminal', role: 'agent', action: 'created' })
+
     return { identity: { handle: STRUCTURED_HANDLE, sessionId: 'sess_worker' }, host: {} }
   },
   createExistingWorktreeWorkerTerminal: async () => ({ handle: TERMINAL_HANDLE })
 }))
+
 vi.mock('./orchestration-structured-worker-session', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   sendStructuredWorkerPreamble: async (args: { preamble: string }) => {
@@ -55,6 +59,7 @@ const STRUCTURED_DEFAULT = {
   agentDefaultArgs: {},
   agentDefaultEnv: {}
 }
+
 const TERMINAL_DEFAULT = { ...STRUCTURED_DEFAULT, experimentalStructuredNativeChat: false }
 
 /** A coordinator that IS a structured session: registry identity plus a live durable record. */
@@ -86,6 +91,7 @@ function installStructuredCoordinator(handle: string, sessionId: string): string
       }
     }
   } as never)
+
   return paneKey
 }
 
@@ -160,15 +166,19 @@ describe('a worker cannot tell which mode it is running in', () => {
     coordinatorPaneKey: string
   }) {
     vi.spyOn(runtime, 'getClientSettings').mockReturnValue(args.settings as never)
+
     const runId = db.createRun({
       objective: 'mode opacity',
       coordinatorHandle: args.from,
       coordinatorPaneKey: args.coordinatorPaneKey
     }).id
+
     const task = db.createTask({ spec: 'do the thing', runId })
+
     const method = ORCHESTRATION_METHODS.find(
       (candidate) => candidate.name === 'orchestration.workerStart'
     )!
+
     const result = (await method.handler(
       method.params!.parse({
         task: task.id,
@@ -178,6 +188,7 @@ describe('a worker cannot tell which mode it is running in', () => {
       }),
       { runtime }
     )) as { state: string; dispatchId: string; mode: { mode: string } }
+
     return result
   }
 
@@ -193,6 +204,7 @@ describe('a worker cannot tell which mode it is running in', () => {
       from: 'term_coord',
       coordinatorPaneKey
     })
+
     const terminal = await startWorker({
       settings: TERMINAL_DEFAULT,
       from: 'term_coord',
@@ -213,6 +225,7 @@ describe('a worker cannot tell which mode it is running in', () => {
 
   it('lets a structured worker dispatch a sub-worker like any other coordinator', async () => {
     const paneKey = installStructuredCoordinator('structworker_coord', 'sess_coord')
+
     // Proves the resolution is not falling through to a PTY: showTerminal cannot answer here.
     const showTerminal = vi
       .spyOn(runtime, 'showTerminal')
@@ -238,6 +251,7 @@ describe('a worker cannot tell which mode it is running in', () => {
       worktreeId: WORKTREE,
       status: 'running'
     } as never)
+
     const started = await startWorker({
       settings: STRUCTURED_DEFAULT,
       from: 'term_coord',
@@ -266,6 +280,7 @@ describe('a worker cannot tell which mode it is running in', () => {
       worktreeId: WORKTREE,
       status: 'running'
     } as never)
+
     const started = await startWorker({
       settings: STRUCTURED_DEFAULT,
       from: 'term_coord',

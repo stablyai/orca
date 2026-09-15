@@ -30,18 +30,23 @@ export abstract class CodexRuntimeHomePaths extends CodexRuntimeHomeState {
    */
   getMirroredHostHomePathForStatus(): CodexMirroredHomeStatus {
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
+
     if (selfContainedAccount) {
       const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
+
       if (resolved.kind === 'indeterminate') {
         // Why: `null` here is a positive claim that no mirror exists, which the
         // status channel reports as healthy. An unreadable home is not that.
         return { kind: 'unavailable' }
       }
+
       return { kind: 'ready', homePath: resolved.kind === 'owned' ? resolved.homePath : null }
     }
+
     if (this.isHostSystemDefaultRealHome()) {
       return { kind: 'ready', homePath: null }
     }
+
     return {
       kind: 'ready',
       homePath: join(getOrcaUserDataPath(), 'codex-runtime-home', 'home')
@@ -67,6 +72,7 @@ export abstract class CodexRuntimeHomePaths extends CodexRuntimeHomeState {
   protected getRuntimeMetadataDir(): string {
     const metadataDir = join(app.getPath('userData'), 'codex-runtime-home')
     mkdirSync(metadataDir, { recursive: true })
+
     return metadataDir
   }
 
@@ -90,6 +96,7 @@ export abstract class CodexRuntimeHomePaths extends CodexRuntimeHomeState {
     if (this.activeHomeAlreadyPointsToRuntimeHome(activeHomePath, runtimeHomePath)) {
       return
     }
+
     if (!this.legacyActiveHomeLinkIsReplaceable(activeHomePath)) {
       return
     }
@@ -98,6 +105,7 @@ export abstract class CodexRuntimeHomePaths extends CodexRuntimeHomeState {
     mkdirSync(dirname(activeHomePath), { recursive: true })
     const nextLinkPath = `${activeHomePath}.next-${process.pid}-${Date.now()}`
     this.removeLegacyActiveHomeLinkIfOwned(nextLinkPath)
+
     try {
       symlinkSync(
         runtimeHomePath,
@@ -106,12 +114,14 @@ export abstract class CodexRuntimeHomePaths extends CodexRuntimeHomeState {
           ? 'junction'
           : undefined
       )
+
       try {
         renameSync(nextLinkPath, activeHomePath)
       } catch (error) {
         if (!this.legacyActiveHomeLinkIsReplaceable(activeHomePath)) {
           throw error
         }
+
         this.removeLegacyActiveHomeLinkIfOwned(activeHomePath)
         renameSync(nextLinkPath, activeHomePath)
       }
@@ -139,12 +149,14 @@ export abstract class CodexRuntimeHomePaths extends CodexRuntimeHomeState {
     const resolvedLinkTarget = isAbsolute(linkTarget)
       ? resolve(linkTarget)
       : resolve(dirname(linkPath), linkTarget)
+
     return resolvedLinkTarget === resolve(expectedTargetPath)
   }
 
   protected legacyActiveHomeLinkIsReplaceable(activeHomePath: string): boolean {
     try {
       const stat = lstatSync(activeHomePath)
+
       return stat.isSymbolicLink() || this.isWindowsReadableLink(activeHomePath)
     } catch {
       return true
@@ -154,6 +166,7 @@ export abstract class CodexRuntimeHomePaths extends CodexRuntimeHomeState {
   protected legacyActiveHomePathExists(activeHomePath: string): boolean {
     try {
       lstatSync(activeHomePath)
+
       return true
     } catch {
       return false
@@ -163,6 +176,7 @@ export abstract class CodexRuntimeHomePaths extends CodexRuntimeHomeState {
   protected removeLegacyActiveHomeLinkIfOwned(activeHomePath: string): void {
     try {
       const stat = lstatSync(activeHomePath)
+
       if (stat.isSymbolicLink()) {
         unlinkSync(activeHomePath)
       } else if (this.isWindowsReadableLink(activeHomePath)) {
@@ -177,8 +191,10 @@ export abstract class CodexRuntimeHomePaths extends CodexRuntimeHomeState {
     if (process.platform !== 'win32') {
       return false
     }
+
     try {
       readlinkSync(targetPath)
+
       return true
     } catch {
       return false

@@ -15,13 +15,18 @@ export function useMobileNativeChatCancelAsk(args: {
   onSendError: (message: string) => void
 }): () => Promise<boolean> {
   const { client, enabled, handleRef, deviceTokenRef, cancelPending, onSendError } = args
+
   return useCallback(async (): Promise<boolean> => {
     const handle = handleRef.current
+
     if (!client || !handle || !enabled) {
       onSendError('Cancel not sent (disconnected)')
+
       return false
     }
+
     cancelPending()
+
     // Escape never submits the composer, so no stale-input heal: it would consume
     // the marker still protecting the next real message.
     const outcome = await sendMobileNativeChatMessageWithOutcome({
@@ -33,6 +38,7 @@ export function useMobileNativeChatCancelAsk(args: {
         ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
         : {})
     })
+
     if (outcome === 'unknown') {
       // Why: the Escape may have landed (ack lost / path cutover) — a definite
       // "not sent" would invite a second Escape into a changed prompt state.
@@ -40,6 +46,7 @@ export function useMobileNativeChatCancelAsk(args: {
     } else if (outcome === 'rejected') {
       onSendError('Cancel not sent')
     }
+
     return outcome === 'accepted'
   }, [cancelPending, client, deviceTokenRef, enabled, handleRef, onSendError])
 }

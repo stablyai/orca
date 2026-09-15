@@ -40,6 +40,7 @@ function createPublisher(): {
   const events: ClientHostedBrowserRowsEvent[] = []
   const livePlacements = new Set<string>()
   let attached = true
+
   const publisher = new ClientHostedBrowserRowPublisher({
     listClientPages,
     hasLivePlacement: (browserPageId) => livePlacements.has(browserPageId),
@@ -51,6 +52,7 @@ function createPublisher(): {
           }
         : null
   })
+
   return {
     publisher,
     registry,
@@ -166,6 +168,7 @@ describe('ClientHostedBrowserRowPublisher', () => {
   it('scans the registry once when publishing all workspaces', () => {
     const { publisher, registry, events, livePlacements, listClientPages } = createPublisher()
     const worktreeIds = Array.from({ length: 64 }, (_, index) => `wt-${index}`)
+
     for (const [index, worktreeId] of worktreeIds.entries()) {
       const browserPageId = `page-${index}`
       publishPage(registry, browserPageId, worktreeId)
@@ -178,6 +181,7 @@ describe('ClientHostedBrowserRowPublisher', () => {
     expect(listClientPages).toHaveBeenCalledWith()
     expect(events.map((event) => event.worktreeId)).toEqual(worktreeIds)
     expect(events).toHaveLength(worktreeIds.length)
+
     for (const [index, event] of events.entries()) {
       expect(event.rows).toHaveLength(1)
       expect(event.rows[0]).toMatchObject({

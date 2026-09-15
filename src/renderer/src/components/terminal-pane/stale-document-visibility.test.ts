@@ -16,6 +16,7 @@ type EventTargetStub = {
 
 function createEventTargetStub(): EventTargetStub {
   const listeners = new Map<string, Set<Handler>>()
+
   return {
     addEventListener(type, handler) {
       const set = listeners.get(type) ?? new Set()
@@ -127,6 +128,7 @@ describe('stale document visibility', () => {
     const throwing = vi.fn(() => {
       throw new Error('pane exploded')
     })
+
     const healthy = vi.fn()
     mod.registerStaleDocumentVisibilityRecovery(throwing)
     mod.registerStaleDocumentVisibilityRecovery(healthy)

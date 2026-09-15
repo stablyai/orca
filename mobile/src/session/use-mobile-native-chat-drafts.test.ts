@@ -64,6 +64,7 @@ describe('useMobileNativeChatDrafts', () => {
       transcriptLoading,
       transcriptSettled
     })
+
     return null
   }
 
@@ -205,6 +206,7 @@ describe('useMobileNativeChatDrafts', () => {
 
   it('keeps the composer clear when the echo lands after the unconfirmed deadline', async () => {
     vi.useFakeTimers()
+
     try {
       await mount('a')
       act(() => state?.setComposerText('ping'))
@@ -494,6 +496,7 @@ describe('useMobileNativeChatDrafts', () => {
 
   it('stays quiet when an unconfirmed send lands in the transcript', async () => {
     vi.useFakeTimers()
+
     try {
       await mount('a')
       const origin = state?.captureSendOrigin('ping')
@@ -519,6 +522,7 @@ describe('useMobileNativeChatDrafts', () => {
 
   it('reconciles an image-only unconfirmed send against the next user turn (no false warning)', async () => {
     vi.useFakeTimers()
+
     try {
       await mount('a')
       await act(async () =>
@@ -597,6 +601,7 @@ describe('useMobileNativeChatDrafts', () => {
 
   it('registers no deadline when the transcript echo beat the ambiguous RPC rejection', async () => {
     vi.useFakeTimers()
+
     try {
       await mount('a')
       const origin = state?.captureSendOrigin('ping')
@@ -623,6 +628,7 @@ describe('useMobileNativeChatDrafts', () => {
 
   it('surfaces uncertainty when no echo lands before the deadline', async () => {
     vi.useFakeTimers()
+
     try {
       await mount('a')
       const origin = state?.captureSendOrigin('ping')
@@ -644,6 +650,7 @@ describe('useMobileNativeChatDrafts', () => {
 
   it('does not confirm an unconfirmed send against an older identical turn', async () => {
     vi.useFakeTimers()
+
     try {
       await mount('a')
       await act(async () =>
@@ -679,6 +686,7 @@ describe('useMobileNativeChatDrafts', () => {
 
   it('does not confirm an unconfirmed send when pagination prepends an older identical turn', async () => {
     vi.useFakeTimers()
+
     try {
       await mount('a')
       const anchor = assistantTextMessage('anchor', 'working')
@@ -713,6 +721,7 @@ describe('useMobileNativeChatDrafts', () => {
 
   it('requires one new transcript echo per repeated unconfirmed send', async () => {
     vi.useFakeTimers()
+
     try {
       await mount('a')
       act(() => state?.setComposerText('ping'))
@@ -742,6 +751,7 @@ describe('useMobileNativeChatDrafts', () => {
 
   it('does not retain a deadline when an ambiguous send settles after unmount', async () => {
     vi.useFakeTimers()
+
     try {
       await mount('a')
       const origin = state?.captureSendOrigin('ping')
@@ -785,6 +795,7 @@ describe('useMobileNativeChatDrafts', () => {
 
   it('does not confirm an old session send from an identical turn in its replacement', async () => {
     vi.useFakeTimers()
+
     try {
       await mount('a')
       act(() => state?.setComposerText('ping'))

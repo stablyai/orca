@@ -38,6 +38,7 @@ export function claudePromptIdentity(input: {
   questionId?: string
 }): AgentJournalItemIdentity {
   const suffix = input.questionId ? `:${input.questionId}` : ''
+
   return {
     provider: 'orca',
     clientMessageId: `claude-prompt:${input.sessionId}:${input.promptKey}${suffix}`
@@ -46,6 +47,7 @@ export function claudePromptIdentity(input: {
 
 export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApprovalItem {
   const serialized = JSON.stringify(prompt.input)
+
   return {
     kind: 'approval',
     title: `Allow ${prompt.toolName}?`,
@@ -70,10 +72,12 @@ function questionOptions(
   if (!Array.isArray(question.options)) {
     return []
   }
+
   return question.options.flatMap((value, index) => {
     const option = claudeRecord(value)
     const label = claudeText(option?.label)
     const description = claudeText(option?.description)
+
     return label
       ? [
           {
@@ -91,11 +95,13 @@ export function claudeQuestionItems(input: {
   prompt: ClaudePendingPrompt
 }): ClaudeQuestionItem[] {
   const values = Array.isArray(input.prompt.input.questions) ? input.prompt.input.questions : []
+
   const questions = values.flatMap((value, index): AgentJournalQuestion[] => {
     const question = claudeRecord(value)
     const questionAddress = `q${index + 1}`
     const text = claudeText(question?.question) ?? claudeText(question?.header)
     const header = claudeText(question?.header)
+
     return question && input.prompt.questionIds[index] && text
       ? [
           {
@@ -109,11 +115,14 @@ export function claudeQuestionItems(input: {
         ]
       : []
   })
+
   if (questions.length === 0) {
     return []
   }
+
   const legacyCompatible = questions.length === 1 && questions[0]?.multiSelect === false
   const first = questions[0]!
+
   return [
     {
       identity: claudePromptIdentity({

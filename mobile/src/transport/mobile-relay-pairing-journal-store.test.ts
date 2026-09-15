@@ -5,19 +5,24 @@ const asyncStorage = vi.hoisted(() => ({
   setItem: vi.fn(),
   removeItem: vi.fn()
 }))
+
 const secureStore = vi.hoisted(() => ({
   getItemAsync: vi.fn(),
   setItemAsync: vi.fn(),
   deleteItemAsync: vi.fn()
 }))
+
 const platform = vi.hoisted(() => ({ OS: 'ios' }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
+
 vi.mock('expo-secure-store', () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
   ...secureStore
 }))
+
 vi.mock('expo-crypto', () => ({ getRandomBytes: vi.fn() }))
+
 vi.mock('react-native', () => ({ Platform: platform }))
 
 import { createMobileRelayPairingJournal } from './mobile-relay-pairing-journal'
@@ -31,8 +36,11 @@ import {
 import type { PairingOffer } from './types'
 
 const now = Date.UTC(2026, 6, 13)
+
 const GENERATION_KEY = 'orca:pairing-keychain-generation'
+
 const JOURNAL_PRESENCE_KEY = 'orca:pairing-keychain-presence:orca.mobile-relay.pairing-journal.v1'
+
 const offer = {
   v: 2,
   endpoint: 'ws://192.168.1.10:6768',
@@ -68,9 +76,11 @@ describe('mobile relay pairing journal store', () => {
       if (key === GENERATION_KEY) {
         return generationRaw
       }
+
       if (key === JOURNAL_PRESENCE_KEY) {
         return presenceRaw
       }
+
       return metadataRaw
     })
     asyncStorage.setItem.mockImplementation(async (key: string, value: string) => {
@@ -126,6 +136,7 @@ describe('mobile relay pairing journal store', () => {
       now,
       randomBytes: (length) => new Uint8Array(length).fill(length)
     })
+
     secureStore.setItemAsync.mockImplementation(
       async (_key: string, value: string, options?: { keychainService?: string }) => {
         if (options?.keychainService === undefined) {
@@ -133,6 +144,7 @@ describe('mobile relay pairing journal store', () => {
             "Could not encrypt the value for key 'orca.mobile-relay.pairing-journal.v1' under keychain 'key_v1'. Caused by: unknown"
           )
         }
+
         secretRaw = value
       }
     )
@@ -155,6 +167,7 @@ describe('mobile relay pairing journal store', () => {
       hostName: 'Blue Whale',
       randomBytes: (length) => new Uint8Array(length).fill(7)
     })
+
     await saveMobileRelayPairingJournal(journal)
 
     await updateMobileRelayPairingJournal(journal.metadata.journalId, (metadata) => ({
@@ -178,6 +191,7 @@ describe('mobile relay pairing journal store', () => {
       hostName: 'Blue Whale',
       randomBytes: (length) => new Uint8Array(length).fill(9)
     })
+
     metadataRaw = JSON.stringify(journal.metadata)
 
     await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()
@@ -191,6 +205,7 @@ describe('mobile relay pairing journal store', () => {
       hostName: 'Blue Whale',
       randomBytes: (length) => new Uint8Array(length).fill(10)
     })
+
     metadataRaw = JSON.stringify(journal.metadata)
     secretRaw = JSON.stringify({ ...journal.secrets, journalId: 'different-journal' })
     await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()
@@ -205,7 +220,9 @@ describe('mobile relay pairing journal store', () => {
       hostName: 'Blue Whale',
       randomBytes: (length) => new Uint8Array(length).fill(10)
     })
+
     await saveMobileRelayPairingJournal(journal)
+
     const replacement = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
       hostId: 'host-2',
@@ -214,6 +231,7 @@ describe('mobile relay pairing journal store', () => {
     })
 
     const replacementSave = saveMobileRelayPairingJournal(replacement)
+
     const staleUpdate = updateMobileRelayPairingJournal(
       journal.metadata.journalId,
       (metadata) => metadata
@@ -231,13 +249,17 @@ describe('mobile relay pairing journal store', () => {
       hostName: 'Blue Whale',
       randomBytes: (length) => new Uint8Array(length).fill(10)
     })
+
     await saveMobileRelayPairingJournal(journal)
     let releaseSecretRead!: () => void
+
     const secretReadGate = new Promise<void>((resolve) => {
       releaseSecretRead = resolve
     })
+
     secureStore.getItemAsync.mockImplementationOnce(async () => {
       await secretReadGate
+
       return secretRaw
     })
     const loading = loadMobileRelayPairingJournal()
@@ -249,10 +271,13 @@ describe('mobile relay pairing journal store', () => {
       hostName: 'Red Panda',
       randomBytes: (length) => new Uint8Array(length).fill(12)
     })
+
     let replacementSaved = false
+
     const saving = saveMobileRelayPairingJournal(replacement).then(() => {
       replacementSaved = true
     })
+
     await Promise.resolve()
     expect(replacementSaved).toBe(false)
 
@@ -270,13 +295,16 @@ describe('mobile relay pairing journal store', () => {
       hostName: 'Blue Whale',
       randomBytes: (length) => new Uint8Array(length).fill(10)
     })
+
     await saveMobileRelayPairingJournal(journal)
+
     const replacement = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
       hostId: 'host-2',
       hostName: 'Red Panda',
       randomBytes: (length) => new Uint8Array(length).fill(12)
     })
+
     secureStore.setItemAsync.mockRejectedValue(new Error('keychain unavailable'))
 
     await expect(saveMobileRelayPairingJournal(replacement)).rejects.toThrow(/keychain/)
@@ -292,13 +320,16 @@ describe('mobile relay pairing journal store', () => {
       hostName: 'Blue Whale',
       randomBytes: (length) => new Uint8Array(length).fill(10)
     })
+
     await saveMobileRelayPairingJournal(journal)
+
     const replacement = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
       hostId: 'host-2',
       hostName: 'Red Panda',
       randomBytes: (length) => new Uint8Array(length).fill(12)
     })
+
     const authorizationUpdate = updateMobileRelayPairingJournal(
       journal.metadata.journalId,
       (metadata) => ({
@@ -307,6 +338,7 @@ describe('mobile relay pairing journal store', () => {
         authorizationMode: 'authenticated-direct'
       })
     )
+
     const replacementSave = saveMobileRelayPairingJournal(replacement)
 
     await expect(authorizationUpdate).resolves.toBeUndefined()
@@ -323,30 +355,35 @@ describe('mobile relay pairing journal store', () => {
       hostName: 'Blue Whale',
       randomBytes: (length) => new Uint8Array(length).fill(10)
     })
+
     const journal = {
       ...created,
       metadata: { ...created.metadata, ...authorization }
     }
 
     await saveMobileRelayPairingJournal(journal)
+
     const replacement = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
       hostId: 'host-2',
       hostName: 'Red Panda',
       randomBytes: (length) => new Uint8Array(length).fill(12)
     })
+
     await expect(saveMobileRelayPairingJournal(replacement)).rejects.toThrow(/recovery pending/)
     await expect(loadMobileRelayPairingJournal()).resolves.toEqual(journal)
   })
 
   it('self-heals an undecryptable Android secret so the next QR scan can pair', async () => {
     platform.OS = 'android'
+
     const created = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
       hostId: 'host-1',
       hostName: 'Blue Whale',
       randomBytes: (length) => new Uint8Array(length).fill(13)
     })
+
     // Why: the candidate race stamps winner/authorizationMode long before pairing completes.
     const journal = {
       ...created,
@@ -356,6 +393,7 @@ describe('mobile relay pairing journal store', () => {
         authorizationMode: 'relay-basis' as const
       }
     }
+
     await saveMobileRelayPairingJournal(journal)
     expect(presenceRaw).toBe('0')
 
@@ -377,6 +415,7 @@ describe('mobile relay pairing journal store', () => {
       hostName: 'Red Panda',
       randomBytes: (length) => new Uint8Array(length).fill(14)
     })
+
     await expect(saveMobileRelayPairingJournal(rescan)).resolves.toBeUndefined()
     await expect(loadMobileRelayPairingJournal()).resolves.toEqual(rescan)
   })
@@ -388,6 +427,7 @@ describe('mobile relay pairing journal store', () => {
       hostName: 'Blue Whale',
       randomBytes: (length) => new Uint8Array(length).fill(11)
     })
+
     await saveMobileRelayPairingJournal(journal)
     await clearMobileRelayPairingJournal(journal.metadata.journalId)
     expect(asyncStorage.removeItem.mock.invocationCallOrder[0]).toBeLessThan(

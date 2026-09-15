@@ -19,6 +19,7 @@ import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
 
 const RANGE_OPTIONS: ClaudeUsageRange[] = ['7d', '30d', '90d', 'all']
+
 const SCOPE_OPTIONS: { value: ClaudeUsageScope; label: string }[] = [
   {
     value: 'orca',
@@ -33,6 +34,7 @@ const SCOPE_OPTIONS: { value: ClaudeUsageScope; label: string }[] = [
     }
   }
 ]
+
 const RANGE_LABELS: Record<ClaudeUsageRange, string> = {
   get '7d'() {
     return translate('auto.components.stats.ClaudeUsagePane.rangeLast7Days', 'Last 7 days')
@@ -77,6 +79,7 @@ export function ClaudeUsagePane(): React.JSX.Element {
     'auto.components.stats.ClaudeUsagePane.6afacbee37',
     'Claude Usage Tracking'
   )
+
   const enableLabel = translate(
     'auto.components.stats.ClaudeUsagePane.424cd50412',
     'Enable Claude usage analytics'

@@ -42,12 +42,14 @@ describe('removeWorktree state cleanup', () => {
 
   it('invalidates huge-repo warning probes after successful explicit removal', async () => {
     const store = createTestStore()
+
     const removed = makeWorktree({
       id: 'repo1::/path/reused',
       instanceId: 'persisted-instance',
       repoId: 'repo1',
       path: '/path/reused'
     })
+
     store.setState({ worktreesByRepo: { repo1: [removed] } } as Partial<AppState>)
     const staleProbe = beginHugeRepoWarningProbe(removed)
     expect(markHugeRepoWarningDismissed(staleProbe)).toBe(true)
@@ -63,12 +65,14 @@ describe('removeWorktree state cleanup', () => {
 
   it('retains huge-repo warning state when explicit removal fails', async () => {
     const store = createTestStore()
+
     const retained = makeWorktree({
       id: 'repo1::/path/retained',
       instanceId: 'retained-instance',
       repoId: 'repo1',
       path: '/path/retained'
     })
+
     store.setState({ worktreesByRepo: { repo1: [retained] } } as Partial<AppState>)
     const retainedProbe = beginHugeRepoWarningProbe(retained)
     expect(markHugeRepoWarningDismissed(retainedProbe)).toBe(true)
@@ -82,16 +86,19 @@ describe('removeWorktree state cleanup', () => {
 
   it('cleans up hosted review link mutation bookkeeping for the removed worktree', async () => {
     const store = createTestStore()
+
     const removed = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1'
     })
+
     const surviving = makeWorktree({
       id: 'repo1::/path/wt2',
       repoId: 'repo1',
       path: '/path/wt2'
     })
+
     store.setState({ worktreesByRepo: { repo1: [removed, surviving] } } as Partial<AppState>)
     await store.getState().updateWorktreeMeta(removed.id, { linkedBitbucketPR: 101 })
     await store.getState().updateWorktreeMeta(surviving.id, { linkedAzureDevOpsPR: 202 })
@@ -129,11 +136,13 @@ describe('removeWorktree state cleanup', () => {
 
   it('cleans up automatic agent resume claims for removed worktree tabs', async () => {
     const store = createTestStore()
+
     const removed = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1'
     })
+
     const surviving = makeWorktree({
       id: 'repo1::/path/wt2',
       repoId: 'repo1',
@@ -174,14 +183,17 @@ describe('removeWorktree state cleanup', () => {
   it('purges the orphaned project that pointed at a destroyed runtime-owned SSH target', async () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+
     const orphanedSetup = {
       id: 'setup-runtime-ssh',
       hostId: 'ssh:runtime-ssh-orca-1'
     } as unknown as AppState['projectHostSetups'][number]
+
     const userSshSetup = {
       id: 'setup-user-ssh',
       hostId: 'ssh:my-server'
     } as unknown as AppState['projectHostSetups'][number]
+
     const deleteProjectHostSetup = vi.fn().mockResolvedValue(null)
     store.setState({
       worktreesByRepo: { repo1: [wt] },
@@ -243,6 +255,7 @@ describe('removeWorktree state cleanup', () => {
     const store = createTestStore()
     const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
     const childLineage = makeLineage({ worktreeId: wt.id })
+
     const siblingLineage = makeLineage({
       worktreeId: 'repo1::/path/wt2',
       worktreeInstanceId: 'sibling-instance'

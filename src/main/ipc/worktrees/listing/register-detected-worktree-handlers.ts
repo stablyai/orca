@@ -35,10 +35,13 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
       if ('executionHostId' in args) {
         const parsedHost = parseExecutionHostId(args.executionHostId)
         const directSshRequest = parsedHost?.kind === 'ssh'
+
         const controller = directSshRequest
           ? detectedWorktreeCancellations.begin(event, args.providerRequestId)
           : null
+
         const directArgs = args as DirectSshDetectedWorktreeRequest
+
         const removeAuthorityAbort =
           controller &&
           parsedHost?.kind === 'ssh' &&
@@ -46,8 +49,10 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
           directArgs.expectedAuthority.targetId === parsedHost.targetId
             ? registerSshProviderRequestAbort(directArgs.expectedAuthority, controller)
             : undefined
+
         let timedOut = false
         let removeAbortListener: (() => void) | undefined
+
         const abortedResult = controller
           ? new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
               const onAbort = (): void => {
@@ -57,16 +62,19 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
                   status: timedOut ? 'timed-out' : 'canceled'
                 })
               }
+
               controller.signal.addEventListener('abort', onAbort, { once: true })
               removeAbortListener = () => controller.signal.removeEventListener('abort', onAbort)
             })
           : undefined
+
         const timeout = controller
           ? setTimeout(() => {
               timedOut = true
               controller.abort()
             }, DETECTED_WORKTREE_PROVIDER_TIMEOUT_MS)
           : undefined
+
         try {
           const providerResult = listHostQualifiedDetectedWorktrees(
             store,
@@ -78,6 +86,7 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
                 }
               : undefined
           )
+
           return abortedResult
             ? await Promise.race([providerResult, abortedResult])
             : await providerResult
@@ -85,12 +94,15 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
           if (timeout) {
             clearTimeout(timeout)
           }
+
           removeAbortListener?.()
           removeAuthorityAbort?.()
           detectedWorktreeCancellations.finish(event, args.providerRequestId, controller)
         }
       }
+
       const repo = findExactRepoOwner(store, args.repoId)
+
       if (!repo) {
         return {
           repoId: args.repoId,
@@ -99,10 +111,13 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
           worktrees: []
         }
       }
+
       const provider = repo.connectionId ? getSshGitProvider(repo.connectionId) : undefined
+
       const authority = repo.connectionId
         ? { ...getSshProviderAuthority(repo.connectionId) }
         : undefined
+
       const result = await listDetectedWorktreesForCapturedRepo(
         store,
         repo,
@@ -114,6 +129,7 @@ export function registerDetectedWorktreeHandlers(context: WorktreeIpcContext): v
               isCurrentSshProviderAuthority(authority))),
         provider
       )
+
       return result && !('providerAbortStatus' in result)
         ? result
         : {

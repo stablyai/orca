@@ -9,9 +9,11 @@ export async function callColdActivationRuntime<TResult>(
   return page.evaluate(
     async ({ method, params }) => {
       const response = await window.api.runtime.call({ method, params })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { method, params }
@@ -24,6 +26,7 @@ export async function readColdActivationMountState(
 ): Promise<{ mounted: number; parked: number }> {
   return page.evaluate((targets) => {
     const parked = new Set(window.__terminalParkingDebug?.parkedTabIds() ?? [])
+
     return {
       mounted: targets.filter((id) => window.__paneManagers?.has(id)).length,
       parked: targets.filter((id) => parked.has(id)).length
@@ -39,8 +42,10 @@ export async function expectStableColdActivationMountState(
   await expect
     .poll(() => readColdActivationMountState(page, tabIds), { timeout: 30_000 })
     .toEqual(expected)
+
   const samples = await page.evaluate(async (targets) => {
     const result: { mounted: number; parked: number }[] = []
+
     for (let index = 0; index < 8; index += 1) {
       const parked = new Set(window.__terminalParkingDebug?.parkedTabIds() ?? [])
       result.push({
@@ -49,7 +54,9 @@ export async function expectStableColdActivationMountState(
       })
       await new Promise((resolve) => window.setTimeout(resolve, 25))
     }
+
     return result
   }, tabIds)
+
   expect(samples).toEqual(Array.from({ length: 8 }, () => expected))
 }

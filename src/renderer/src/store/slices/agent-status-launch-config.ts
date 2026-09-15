@@ -59,25 +59,32 @@ export function registryEntryMatchesStatus(args: {
   providerSessionChanged: boolean
 }): boolean {
   const entry = args.entry
+
   if (!entry || args.providerSessionChanged) {
     return false
   }
+
   const identity = entry.identity
+
   if (identity.agentType !== undefined && identity.agentType !== args.agentType) {
     return false
   }
+
   if (identity.tabId !== undefined && identity.tabId !== args.tabId) {
     return false
   }
+
   if (identity.leafId !== undefined && identity.leafId !== getLeafIdFromPaneKey(args.paneKey)) {
     return false
   }
+
   if (
     identity.terminalHandle !== undefined &&
     (args.terminalHandle === undefined || identity.terminalHandle !== args.terminalHandle)
   ) {
     return false
   }
+
   if (
     identity.launchToken !== undefined &&
     (args.launchToken === undefined || identity.launchToken !== args.launchToken)
@@ -85,6 +92,7 @@ export function registryEntryMatchesStatus(args: {
     // Why: a missing/mismatched launch token is stale proof even if a later manual/mixed Codex run reused the provider session id.
     return false
   }
+
   if (identity.providerSession !== undefined) {
     return agentProviderSessionsEqual(
       args.agentType,
@@ -92,12 +100,15 @@ export function registryEntryMatchesStatus(args: {
       args.providerSession
     )
   }
+
   if (identity.launchToken !== undefined) {
     return true
   }
+
   if (identity.terminalHandle !== undefined) {
     return true
   }
+
   if (args.existingProviderSession && args.providerSession) {
     return agentProviderSessionsEqual(
       args.agentType,
@@ -105,6 +116,7 @@ export function registryEntryMatchesStatus(args: {
       args.providerSession
     )
   }
+
   return false
 }
 
@@ -113,6 +125,7 @@ export function getLaunchConfigForEntry(
   entry: AgentStatusEntry
 ): SleepingAgentLaunchConfig | undefined {
   const registryEntry = state.agentLaunchConfigByPaneKey[entry.paneKey]
+
   const registryLaunchConfig = registryEntryMatchesStatus({
     entry: registryEntry,
     paneKey: entry.paneKey,
@@ -126,10 +139,13 @@ export function getLaunchConfigForEntry(
   })
     ? registryEntry?.launchConfig
     : undefined
+
   if (registryLaunchConfig) {
     return registryLaunchConfig
   }
+
   const sleepingRecord = state.sleepingAgentSessionsByPaneKey[entry.paneKey]
+
   return sleepingRecord?.launchConfig &&
     sleepingRecord.agent === entry.agentType &&
     entry.providerSession &&
@@ -147,6 +163,7 @@ export function getLaunchConfigForStatusMetadata(
   metadata: AgentLaunchConfigStatusMetadata
 ): SleepingAgentLaunchConfig | undefined {
   const registryEntry = state.agentLaunchConfigByPaneKey[metadata.paneKey]
+
   return registryEntryMatchesStatus({
     entry: registryEntry,
     paneKey: metadata.paneKey,

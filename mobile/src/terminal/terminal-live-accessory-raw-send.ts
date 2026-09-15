@@ -24,9 +24,11 @@ export async function sendTerminalLiveAccessoryRawBytes(
     activeHandle: args.activeHandle,
     activeSessionTabType: args.activeSessionTabType
   })
+
   if (!args.client || !rawSendTarget || args.connState !== 'connected') {
     return false
   }
+
   return args.client
     .sendRequest(
       'terminal.send',
@@ -41,9 +43,11 @@ export async function sendTerminalLiveAccessoryRawBytes(
     .then(
       (response) => {
         const accepted = isTerminalSendRpcAccepted(response)
+
         if (accepted) {
           reportWorkerTerminalUserInput(args.client!, rawSendTarget)
         }
+
         return accepted
       },
       () => false

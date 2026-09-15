@@ -91,12 +91,15 @@ describe('folder workspace host resolution', () => {
       configurable: true,
       get: () => {
         hostReads += 1
+
         return 'runtime:env-1'
       }
     })
+
     const previous = Array.from({ length: 8 }, (_, index) =>
       makeFolderWorkspace({ id: `folder-${index}` })
     )
+
     const fetched = previous.map((workspace) => ({ ...workspace, name: 'Updated' }))
 
     const merged = mergeFetchedFolderWorkspaceCatalog(
@@ -116,9 +119,11 @@ describe('folder workspace host resolution', () => {
       configurable: true,
       get: () => {
         hostReads += 1
+
         return 'runtime:env-1'
       }
     })
+
     const rows = Array.from({ length: 8 }, (_, index) =>
       makeFolderWorkspace({ id: `folder-${index}` })
     )

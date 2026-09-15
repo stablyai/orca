@@ -14,7 +14,9 @@ import { matchesSettingsSearch } from './settings-search'
 
 const INSTALL_COMMAND =
   'npx skills add https://github.com/stablyai/orca --skill orchestration --global'
+
 const UPDATE_COMMAND = INSTALL_COMMAND
+
 const WINDOWS_INSTALL_COMMAND =
   'cmd.exe /d /s /c "where.exe npx >nul 2>nul & if errorlevel 1 (echo ERROR: npx was not found. Install Node.js LTS from https://nodejs.org/ to get npx. & echo Then close this terminal and start skill setup again - a new terminal picks up the updated PATH. & exit /b 1) else (npx skills add https://github.com/stablyai/orca --skill orchestration --global)"'
 
@@ -30,6 +32,7 @@ vi.mock('./AgentSkillSetupPanel', () => ({
     props: Record<string, unknown> & { actionHint?: ReactNode; footer?: ReactNode }
   ) => {
     mocks.panelProps.push(props)
+
     return (
       <section>
         <h3>{String(props.title)}</h3>
@@ -48,6 +51,7 @@ vi.mock('./AgentSkillSetupPanel', () => ({
 vi.mock('./OrchestrationSkillPromptDialog', () => ({
   OrchestrationSkillPromptDialog: (props: Record<string, unknown>) => {
     mocks.dialogProps.push(props)
+
     return props.open ? (
       <div data-testid="orchestration-skill-prompt-dialog">
         <code>{String(props.command)}</code>
@@ -102,6 +106,7 @@ vi.mock('@/hooks/useDetectedAgents', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -124,6 +129,7 @@ async function renderPane(
   await act(async () => {
     root?.render(<OrchestrationPane {...getPaneProps(settings)} />)
   })
+
   return container
 }
 
@@ -160,6 +166,7 @@ describe('OrchestrationPane', () => {
         root?.unmount()
       })
     }
+
     root = null
     container?.remove()
     container = null
@@ -185,9 +192,11 @@ describe('OrchestrationPane', () => {
     expect(markup).not.toContain('See examples')
     const examples = getOrchestrationUsageExamples()
     expect(examples).toHaveLength(5)
+
     for (const example of examples) {
       expect(markup).toContain(example.title)
     }
+
     expect(markup).toMatch(/<button\b[^>]*>[\s\S]*?Update[\s\S]*?<\/button>/)
     expect(markup).toContain('Re-check')
   })
@@ -218,9 +227,11 @@ describe('OrchestrationPane', () => {
 
   it('commits a whole-number depth and rejects fractional values', async () => {
     const rendered = await renderPane()
+
     const input = rendered.querySelector<HTMLInputElement>(
       'input[aria-label="Nested worker depth"]'
     )
+
     if (!input) {
       throw new Error('Nested worker depth input was not rendered')
     }
@@ -288,6 +299,7 @@ describe('OrchestrationPane', () => {
     const copyButton = Array.from(rendered.querySelectorAll('button')).find(
       (button) => button.textContent === 'Copy install command'
     )
+
     expect(copyButton).toBeDefined()
 
     await act(async () => {

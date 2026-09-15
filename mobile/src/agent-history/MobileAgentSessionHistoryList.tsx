@@ -145,6 +145,7 @@ function AgentHistoryCardRow({
             ]}
             onPress={(event) => {
               event.stopPropagation()
+
               if (!resumeActionState?.disabled) {
                 void onResume(session)
               }

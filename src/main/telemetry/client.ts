@@ -26,10 +26,12 @@ const BUILD_IDENTITY: 'stable' | 'rc' | null =
   typeof ORCA_BUILD_IDENTITY !== 'undefined'
     ? ORCA_BUILD_IDENTITY
     : ((globalThis as { ORCA_BUILD_IDENTITY?: 'stable' | 'rc' | null }).ORCA_BUILD_IDENTITY ?? null)
+
 const WRITE_KEY: string | null =
   typeof ORCA_POSTHOG_WRITE_KEY !== 'undefined'
     ? ORCA_POSTHOG_WRITE_KEY
     : ((globalThis as { ORCA_POSTHOG_WRITE_KEY?: string | null }).ORCA_POSTHOG_WRITE_KEY ?? null)
+
 const IS_OFFICIAL_BUILD: boolean =
   (BUILD_IDENTITY === 'stable' || BUILD_IDENTITY === 'rc') &&
   typeof WRITE_KEY === 'string' &&
@@ -37,9 +39,13 @@ const IS_OFFICIAL_BUILD: boolean =
 
 // Module-level singletons — one Store / process / telemetry session; threading `store` everywhere buys nothing.
 let posthog: PostHog | null = null
+
 let sessionId: string | null = null
+
 let commonProps: CommonProps | null = null
+
 let shuttingDown = false
+
 let storeRef: Store | null = null
 
 const OPT_OUT_CAPTURE_ENQUEUE_TIMEOUT_MS = 1_000
@@ -77,9 +83,11 @@ export function initTelemetry(store: Store): void {
 
   const settings = store.getSettings()
   const installId = settings.telemetry?.installId
+
   if (!installId) {
     // Migration guarantees installId; if missing, don't transmit with an absent distinct_id.
     console.warn('[telemetry] installId missing after migration; skipping transport init')
+
     return
   }
 
@@ -94,9 +102,11 @@ export function initTelemetry(store: Store): void {
   // Fail-closed: a bad `install_id` (e.g. empty from a migration bug) would collapse all events into one distinct_id.
   // Validated once here (not per `track()`): `commonProps` is a session-lifetime singleton that can't drift.
   const parsedCommon = commonPropsSchema.safeParse(commonProps)
+
   if (!parsedCommon.success) {
     console.warn('[telemetry] common props failed schema validation; skipping transport init')
     commonProps = null
+
     return
   }
 
@@ -137,10 +147,13 @@ function waitForCaptureEnqueue(client: PostHog, event: EventName, uuid: string):
       if (settled) {
         return
       }
+
       settled = true
+
       if (timeout) {
         clearTimeout(timeout)
       }
+
       stopListening?.()
       resolve(enqueued)
     }
@@ -150,7 +163,9 @@ function waitForCaptureEnqueue(client: PostHog, event: EventName, uuid: string):
       if (!payload || typeof payload !== 'object') {
         return
       }
+
       const message = payload as { event?: unknown; uuid?: unknown }
+
       if (message.event === event && message.uuid === uuid) {
         settle(true)
       }
@@ -170,6 +185,7 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): void 
   if (shuttingDown) {
     return
   }
+
   if (!posthog || !commonProps || !storeRef) {
     return
   }
@@ -181,12 +197,14 @@ export function track<N extends EventName>(name: N, props: EventProps<N>): void 
 
   // (3) Consent resolve — reads live settings every call so it can't drift from persisted state / env-var precedence.
   const consent = resolveConsent(storeRef.getSettings())
+
   if (consent.effective !== 'enabled') {
     return
   }
 
   // (4) Validator — single enforcement point for schema, enum, key set, and length caps.
   const result = validate(name, props)
+
   if (!result.ok) {
     return
   }
@@ -207,11 +225,14 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
   if (!storeRef) {
     return
   }
+
   const settings = storeRef.getSettings()
   const telemetryBeforeUpdate = settings.telemetry
+
   const wasPendingBanner =
     telemetryBeforeUpdate?.existedBeforeTelemetryRelease === true &&
     telemetryBeforeUpdate.optedIn === null
+
   // Deep-merge (persistence.ts:552) so flipping `optedIn` won't clobber `installId` / `existedBeforeTelemetryRelease`.
   storeRef.updateSettings({
     telemetry: {
@@ -221,23 +242,28 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
   })
 
   const client = posthog
+
   if (optedIn) {
     if (client) {
       await client.optIn()
     }
+
     if (wasPendingBanner) {
       trackAppOpenedOnce()
     }
+
     track('telemetry_opted_in', { via })
   } else {
     if (!client) {
       return
     }
+
     // Fire before disabling the SDK — the one event that must transmit against the new preference. Capture directly (not
     // `track()`, which would drop it on `user_opt_out`); await enqueue since posthog-node captures async and must confirm before optOut().
     try {
       if (!shuttingDown && commonProps && consumeBurstToken('telemetry_opted_out')) {
         const validated = validate('telemetry_opted_out', { via })
+
         if (validated.ok) {
           const uuid = randomUUID()
           const enqueued = waitForCaptureEnqueue(client, 'telemetry_opted_out', uuid)
@@ -251,6 +277,7 @@ export async function setOptIn(via: OptInVia, optedIn: boolean): Promise<void> {
               $process_person_profile: false
             }
           })
+
           if (!(await enqueued)) {
             console.warn('[telemetry] telemetry_opted_out did not enqueue before SDK opt-out')
           }
@@ -271,6 +298,7 @@ export async function persistBannerAcknowledgeWithoutEmitting(): Promise<void> {
   if (!storeRef) {
     return
   }
+
   const settings = storeRef.getSettings()
   // Fallback only used if the `telemetry` block is absent (migration invariant broken); updateSettings deep-merges it (persistence.ts:560).
   storeRef.updateSettings({
@@ -279,9 +307,11 @@ export async function persistBannerAcknowledgeWithoutEmitting(): Promise<void> {
       optedIn: true
     }
   })
+
   if (posthog) {
     await posthog.optIn()
   }
+
   // Why: banner resolution is the first eligible moment for app_opened; SDK re-enabled above so capture sees the new consent.
   trackAppOpenedOnce()
 }
@@ -290,6 +320,7 @@ export function trackAppOpenedOnce(): void {
   if (appOpenedTrackedThisSession) {
     return
   }
+
   appOpenedTrackedThisSession = true
   // Why: `nth_repo_added: 0` marks the session-zero / pre-repo cohort. See docs/onboarding-funnel-cohort-addendum.md.
   track('app_opened', { ...getCohortAtEmit() })
@@ -299,9 +330,11 @@ export async function shutdownTelemetry(): Promise<void> {
   // Set the gate before flush so late IPC-arrived tracks drop instead of enqueuing mid-flush.
   shuttingDown = true
   const instance = posthog
+
   if (!instance) {
     return
   }
+
   try {
     // Bounded flush caps at 2s, so quit delay rises by at most that.
     await instance.shutdown(2_000)

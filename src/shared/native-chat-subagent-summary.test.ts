@@ -36,6 +36,7 @@ describe('summarizeSubagentGroup', () => {
       const summary = summarizeSubagentGroup(
         states.map((state, index) => agent({ id: `a${index}`, state }))
       )
+
       expect(summary.settledState).toBe(expected)
     }
   })
@@ -66,6 +67,7 @@ describe('summarizeSubagentGroup', () => {
       agent({ id: 'a', state: 'completed', startedAt: 50, settledAt: 80 }),
       agent({ id: 'b', state: 'working', startedAt: 20 })
     ])
+
     const settled = summarizeSubagentGroup([
       agent({ id: 'a', state: 'completed', startedAt: 50, settledAt: 80 }),
       agent({ id: 'b', state: 'stopped', startedAt: 20, settledAt: 95 })
@@ -119,6 +121,7 @@ describe('summarizeSubagentGroup', () => {
 
   it('keeps working the only non-terminal state', () => {
     expect(isTerminalSubagentState('working')).toBe(false)
+
     for (const state of ['idle', 'completed', 'failed', 'stopped', 'unverifiable']) {
       expect(isTerminalSubagentState(state)).toBe(true)
     }

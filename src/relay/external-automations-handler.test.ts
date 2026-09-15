@@ -6,6 +6,7 @@ import type { RelayDispatcher } from './dispatcher'
 const execFileMock = vi.hoisted(() =>
   vi.fn((...args: unknown[]) => {
     const callback = args.at(-1)
+
     if (typeof callback === 'function') {
       const execCallback = callback as (error: Error | null, stdout: string, stderr: string) => void
       execCallback(null, '', '')
@@ -19,12 +20,15 @@ type CapturedHandler = (params?: Record<string, unknown>) => Promise<unknown>
 
 function createHandlerHarness(): Map<string, CapturedHandler> {
   const requestHandlers = new Map<string, CapturedHandler>()
+
   const dispatcher = {
     onRequest(method: string, handler: CapturedHandler): void {
       requestHandlers.set(method, handler)
     }
   }
+
   new ExternalAutomationsHandler(dispatcher as unknown as RelayDispatcher)
+
   return requestHandlers
 }
 
@@ -103,6 +107,7 @@ describe('ExternalAutomationCommandExecutor', () => {
   it('does not clear count state when a command fails', async () => {
     const commandError = new Error('command failed')
     const clearRunCount = vi.fn()
+
     const executor = new ExternalAutomationCommandExecutor(
       vi.fn().mockRejectedValue(commandError),
       clearRunCount

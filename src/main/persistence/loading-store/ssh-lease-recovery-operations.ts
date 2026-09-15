@@ -49,6 +49,7 @@ import { scheduleSave } from './write-scheduling'
 type SshLeaseRecoveryOperationsRuntime = Pick<StoreRuntimeState, 'protectedSecrets' | 'state'>
 
 const sshLeaseRecoveryOperationsContext = Symbol('SshLeaseRecoveryOperations')
+
 type SshLeaseRecoveryOperationsContext = {
   runtime: SshLeaseRecoveryOperationsRuntime
   flushBarriers: WriteFlushBarrierOperations

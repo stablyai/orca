@@ -17,6 +17,7 @@ function createGroupRecorder(): {
   }) => ProjectGroup
 } {
   const groups: ProjectGroup[] = []
+
   return {
     groups,
     createGroup: (input) => {
@@ -33,7 +34,9 @@ function createGroupRecorder(): {
         createdAt: 1,
         updatedAt: 1
       }
+
       groups.push(group)
+
       return group
     }
   }
@@ -42,6 +45,7 @@ function createGroupRecorder(): {
 describe('createNestedProjectGroupResolver', () => {
   it('creates sparse folder scopes for nested repos in grouped imports', () => {
     const groups: ProjectGroup[] = []
+
     const resolver = createNestedProjectGroupResolver({
       parentPath: '/workspace',
       groupName: 'workspace',
@@ -65,7 +69,9 @@ describe('createNestedProjectGroupResolver', () => {
           createdAt: 1,
           updatedAt: 1
         }
+
         groups.push(group)
+
         return group
       }
     })
@@ -86,6 +92,7 @@ describe('createNestedProjectGroupResolver', () => {
 
   it('skips intermediate folders that only lead to one meaningful child scope', () => {
     const { groups, createGroup } = createGroupRecorder()
+
     const resolver = createNestedProjectGroupResolver({
       parentPath: '/workspace/platform',
       groupName: 'Platform',
@@ -114,6 +121,7 @@ describe('createNestedProjectGroupResolver', () => {
 
   it('creates a parent folder scope when it has direct repos and nested descendants', () => {
     const { groups, createGroup } = createGroupRecorder()
+
     const resolver = createNestedProjectGroupResolver({
       parentPath: '/workspace/platform',
       groupName: 'Platform',
@@ -152,11 +160,13 @@ describe('createNestedProjectGroupResolver', () => {
 
   it('leaves every separate-import repo ungrouped even when repo paths are supplied', () => {
     const { groups, createGroup } = createGroupRecorder()
+
     const repoPaths = [
       '/workspace/services/api',
       '/workspace/services/worker',
       '/workspace/platform/packages/shared'
     ]
+
     const resolver = createNestedProjectGroupResolver({
       parentPath: '/workspace',
       groupName: 'workspace',
@@ -176,6 +186,7 @@ describe('createNestedProjectGroupResolver', () => {
 
   it('preserves filesystem root parent paths when creating the root group', () => {
     const groups: ProjectGroup[] = []
+
     const resolver = createNestedProjectGroupResolver({
       parentPath: '/',
       groupName: 'root',
@@ -194,7 +205,9 @@ describe('createNestedProjectGroupResolver', () => {
           createdAt: 1,
           updatedAt: 1
         }
+
         groups.push(group)
+
         return group
       }
     })
@@ -207,6 +220,7 @@ describe('createNestedProjectGroupResolver', () => {
 
   it('preserves Windows drive roots when creating the root group', () => {
     const groups: ProjectGroup[] = []
+
     const resolver = createNestedProjectGroupResolver({
       parentPath: 'C:\\',
       groupName: 'C',
@@ -225,7 +239,9 @@ describe('createNestedProjectGroupResolver', () => {
           createdAt: 1,
           updatedAt: 1
         }
+
         groups.push(group)
+
         return group
       }
     })
@@ -238,6 +254,7 @@ describe('createNestedProjectGroupResolver', () => {
 
   it('creates sparse folder scopes for Windows repo paths', () => {
     const { groups, createGroup } = createGroupRecorder()
+
     const resolver = createNestedProjectGroupResolver({
       parentPath: 'C:\\workspace\\platform',
       groupName: 'Platform',
@@ -263,6 +280,7 @@ describe('createNestedProjectGroupResolver', () => {
 
   it('preserves SSH provenance on grouped folder scopes', () => {
     const { groups, createGroup } = createGroupRecorder()
+
     const resolver = createNestedProjectGroupResolver({
       parentPath: '/workspace/platform',
       groupName: 'Platform',
@@ -285,6 +303,7 @@ describe('createNestedProjectGroupResolver', () => {
 
   it('falls back to the selected parent folder basename for blank group names', () => {
     const groups: ProjectGroup[] = []
+
     const resolver = createNestedProjectGroupResolver({
       parentPath: '/workspace/platform',
       groupName: '   ',
@@ -302,7 +321,9 @@ describe('createNestedProjectGroupResolver', () => {
           createdAt: 1,
           updatedAt: 1
         }
+
         groups.push(group)
+
         return group
       }
     })

@@ -57,6 +57,7 @@ export function TerminalPane({
   const showWindowsHostSettings = isWindowsTerminalHost ?? isWindows
   const isMac = isMacUserAgent()
   const windowsShell = settings.terminalWindowsShell ?? 'powershell.exe'
+
   const showWindowsPowerShellImplementation =
     showWindowsHostSettings && windowsShell === 'powershell.exe'
 

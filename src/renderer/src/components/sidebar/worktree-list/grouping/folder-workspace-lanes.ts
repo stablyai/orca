@@ -29,14 +29,18 @@ export function getRenderableFolderWorkspaces(
 ): RenderableFolderWorkspace[] {
   const projectGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
   const renderable: RenderableFolderWorkspace[] = []
+
   for (const folderWorkspace of folderWorkspaces) {
     const projectGroup = projectGroupsById.get(folderWorkspace.projectGroupId)
+
     // A group filtered out for host visibility legitimately hides its workspaces.
     if (!projectGroup?.parentPath) {
       continue
     }
+
     renderable.push({ folderWorkspace, projectGroup })
   }
+
   return renderable
 }
 
@@ -73,5 +77,6 @@ export function compareFolderWorkspacesForDisplay(
 ): number {
   const leftOrder = left.manualOrder ?? left.sortOrder
   const rightOrder = right.manualOrder ?? right.sortOrder
+
   return rightOrder - leftOrder || left.name.localeCompare(right.name)
 }

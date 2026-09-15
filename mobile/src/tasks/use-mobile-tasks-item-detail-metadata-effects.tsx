@@ -16,11 +16,14 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
     setItemLabelsLoading,
     tasksSupported
   } = model
+
   useEffect(() => {
     if (!detailPayload) {
       setItemBodyDraft('')
+
       return
     }
+
     setItemBodyDraft(
       detailPayload.provider === 'linear' ? detailPayload.description : detailPayload.body
     )
@@ -34,10 +37,12 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
       setItemAssignableUsers([])
       setItemAssignableUsersLoading(false)
       setItemAssignableUsersError('')
+
       return
     }
 
     let stale = false
+
     if (actionItem.source.type === 'issue' || actionItem.source.type === 'pr') {
       setItemAvailableLabels([])
       setItemLabelsError('')
@@ -52,9 +57,11 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
           if (stale) {
             return
           }
+
           if (!isSuccess(response)) {
             throw new Error(response.error.message)
           }
+
           setItemAvailableLabels(response.result as string[])
         })
         .catch((err) => {
@@ -86,9 +93,11 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
         if (stale) {
           return
         }
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         setItemAssignableUsers(response.result as GitHubAssignableUser[])
       })
       .catch((err) => {
@@ -108,6 +117,7 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
       stale = true
     }
   }, [actionItem, client, tasksSupported])
+
   return model
 }
 

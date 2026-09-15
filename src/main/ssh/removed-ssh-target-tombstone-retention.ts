@@ -22,14 +22,17 @@ export function capRemovedSshTargetTombstones(
   if (tombstones.length <= cap) {
     return [...tombstones]
   }
+
   const unreferencedToDrop = new Set<number>()
   let dropCount = tombstones.length - cap
+
   for (let index = 0; index < tombstones.length && dropCount > 0; index += 1) {
     if (!referencedTargetIds.has(tombstones[index].oldTargetId)) {
       unreferencedToDrop.add(index)
       dropCount -= 1
     }
   }
+
   return tombstones.filter((_, index) => !unreferencedToDrop.has(index))
 }
 
@@ -38,11 +41,13 @@ export function collectAutomationReferencedSshTargetIds(
   automations: readonly { executionTargetType: string; executionTargetId: string }[]
 ): Set<string> {
   const ids = new Set<string>()
+
   for (const automation of automations) {
     if (automation.executionTargetType === 'ssh' && automation.executionTargetId) {
       ids.add(automation.executionTargetId)
     }
   }
+
   return ids
 }
 
@@ -53,7 +58,9 @@ export function persistedAutomationHostFilterSshTargetId(
   if (filter?.kind !== 'host') {
     return null
   }
+
   const host = parseHostStableKey(filter.hostKey)
+
   return host?.authority.kind === 'desktop' && host.selector.kind === 'ssh'
     ? host.selector.targetId
     : null
@@ -75,20 +82,25 @@ export function collectSshTargetRemovalEvidenceDependencies(
   input: SshTargetRemovalEvidenceDependents
 ): Set<string> {
   const ids = collectAutomationReferencedSshTargetIds(input.automations)
+
   if (input.workspaceState) {
     for (const automation of input.automations) {
       const targetId = resolveAutomationWorkspaceSshTargetId(
         input.workspaceState,
         automation.workspaceId ?? null
       )
+
       if (targetId) {
         ids.add(targetId)
       }
     }
   }
+
   const filterTargetId = persistedAutomationHostFilterSshTargetId(input.automationHostFilter)
+
   if (filterTargetId) {
     ids.add(filterTargetId)
   }
+
   return ids
 }

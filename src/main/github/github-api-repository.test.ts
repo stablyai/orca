@@ -240,6 +240,7 @@ describe('origin repository cache', () => {
       repo: 'widgets',
       host: 'github.acme-corp.com'
     }
+
     getEnterpriseGitHubRepoSlugMock.mockResolvedValueOnce(null).mockResolvedValueOnce(enterprise)
 
     await expect(getOriginGitHubApiRepository('/remote/repo', 'ssh-1')).resolves.toBeNull()
@@ -263,6 +264,7 @@ describe('origin repository cache', () => {
       repo: 'widgets',
       host: 'github.acme-corp.com'
     }
+
     getEnterpriseGitHubRepoSlugMock
       .mockResolvedValueOnce(undefined)
       .mockResolvedValueOnce(enterprise)
@@ -284,11 +286,13 @@ describe('origin repository cache', () => {
       repo: 'widgets',
       host: 'github.acme-corp.com'
     }
+
     const newRepository = {
       owner: 'new-owner',
       repo: 'widgets',
       host: 'github.acme-corp.com'
     }
+
     getSshGitProviderGenerationMock.mockReturnValue(1)
     getEnterpriseGitHubRepoSlugMock
       .mockResolvedValueOnce(oldRepository)
@@ -309,6 +313,7 @@ describe('origin repository cache', () => {
       repo: 'widgets',
       host: 'github.acme-corp.com'
     }
+
     getSshGitProviderGenerationMock.mockReturnValue(1)
     getEnterpriseGitHubRepoSlugMock.mockResolvedValueOnce(null).mockResolvedValueOnce(repository)
 
@@ -327,15 +332,19 @@ describe('origin repository cache', () => {
       repo: 'widgets',
       host: 'github.acme-corp.com'
     }
+
     const newRepository = {
       owner: 'new-owner',
       repo: 'widgets',
       host: 'github.acme-corp.com'
     }
+
     let resolveOldProbe: (repository: typeof oldRepository) => void = () => {}
+
     const oldProbeResult = new Promise<typeof oldRepository>((resolve) => {
       resolveOldProbe = resolve
     })
+
     getEnterpriseGitHubRepoSlugMock
       .mockImplementationOnce(() => oldProbeResult)
       .mockResolvedValueOnce(newRepository)
@@ -368,8 +377,10 @@ describe('skip missing upstream remote probes', () => {
     getOwnerRepoForRemoteMock.mockImplementation(async (_path, remote) => {
       if (remote === 'origin') {
         originStarted = true
+
         return { owner: 'fork', repo: 'orca' }
       }
+
       return { owner: 'stablyai', repo: 'orca' }
     })
 
@@ -417,6 +428,7 @@ describe('skip missing upstream remote probes', () => {
       if (remote === 'origin') {
         throw originError
       }
+
       return { owner: 'stablyai', repo: 'orca' }
     })
 
@@ -433,6 +445,7 @@ describe('skip missing upstream remote probes', () => {
       if (remote === 'origin') {
         throw originError
       }
+
       return null
     })
 
@@ -462,6 +475,7 @@ describe('skip missing upstream remote probes', () => {
       if (remote === 'origin') {
         throw originError
       }
+
       return { owner: 'stablyai', repo: 'orca' }
     })
 

@@ -10,9 +10,11 @@ import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 // duplicates disk; `orca.yaml` names the ones every worktree should share instead.
 
 const CONFIGURED_SHARED_DIRECTORIES_CACHE_TTL_MS = 30_000
+
 // Why: resolving a worktree may list many generated directories; overlap
 // independent local probes without flooding the filesystem threadpool.
 const SHARED_DIRECTORY_STAT_CONCURRENCY = 8
+
 const configuredSharedDirectoriesByRepoPath = new Map<
   string,
   { directories: string[]; expiresAt: number }
@@ -32,14 +34,17 @@ const configuredSharedDirectoriesByRepoPath = new Map<
 export function getConfiguredWorktreeSharedDirectories(repoPath: string): readonly string[] {
   const cached = configuredSharedDirectoriesByRepoPath.get(repoPath)
   const now = Date.now()
+
   if (cached && cached.expiresAt > now) {
     return cached.directories
   }
+
   const configured = loadHooks(repoPath)?.worktree?.sharedDirectories ?? []
   configuredSharedDirectoriesByRepoPath.set(repoPath, {
     directories: configured,
     expiresAt: now + CONFIGURED_SHARED_DIRECTORIES_CACHE_TTL_MS
   })
+
   return configured
 }
 
@@ -75,6 +80,7 @@ export async function resolveWorktreeSharedDirectories(
 ): Promise<string[]> {
   try {
     const configured = loadHooks(repoPath)?.worktree?.sharedDirectories ?? []
+
     if (configured.length === 0) {
       return []
     }
@@ -97,11 +103,14 @@ export async function resolveWorktreeSharedDirectories(
         }
       }
     )
+
     const existing: string[] = []
+
     for (const probe of probes) {
       if (!probe.exists) {
         continue
       }
+
       if (probe.isDirectory) {
         existing.push(probe.relativePath)
       } else {
@@ -110,11 +119,13 @@ export async function resolveWorktreeSharedDirectories(
         )
       }
     }
+
     if (existing.length === 0) {
       return []
     }
 
     const ignored = new Set(await checkIgnoredPaths(repoPath, existing, options))
+
     for (const relativePath of existing) {
       if (!ignored.has(relativePath)) {
         console.warn(
@@ -122,9 +133,11 @@ export async function resolveWorktreeSharedDirectories(
         )
       }
     }
+
     return existing.filter((relativePath) => ignored.has(relativePath)).sort()
   } catch (error) {
     console.warn('[worktree-shared-directories] Failed to resolve shared directories:', error)
+
     return []
   }
 }

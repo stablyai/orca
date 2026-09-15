@@ -30,13 +30,17 @@ export function useGitLabReviewActions(
     setReviewerOptionsLoading,
     setReviewerUpdating
   } = state
+
   const loadGitLabReviewerOptions = useCallback(async (): Promise<void> => {
     if (!repoSelector || reviewerOptions !== null || reviewerOptionsLoading) {
       return
     }
+
     setReviewerOptionsLoading(true)
+
     try {
       const users = await window.api.gl.listAssignableUsers(repoSelector)
+
       if (mountedRef.current) {
         setReviewerOptions(dedupeGitLabUsers(users))
       }
@@ -63,9 +67,11 @@ export function useGitLabReviewActions(
       if (!repoSelector || !item || !details || item.type !== 'mr') {
         return
       }
+
       const reviewerIds = nextReviewers
         .map((reviewer) => reviewer.id)
         .filter((id): id is number => typeof id === 'number')
+
       if (reviewerIds.length !== nextReviewers.length) {
         toast.error(
           translate(
@@ -73,9 +79,12 @@ export function useGitLabReviewActions(
             'Reviewer id is unavailable for this GitLab user.'
           )
         )
+
         return
       }
+
       setReviewerUpdating(true)
+
       try {
         const result = await window.api.gl.updateMRReviewers({
           ...repoSelector,
@@ -83,9 +92,11 @@ export function useGitLabReviewActions(
           reviewerIds,
           projectRef: details.item.projectRef ?? item.projectRef ?? null
         })
+
         if (!mountedRef.current) {
           return
         }
+
         if (result.ok) {
           setDetails((current) =>
             current ? { ...current, reviewers: dedupeGitLabUsers(result.reviewers) } : current
@@ -124,9 +135,11 @@ export function useGitLabReviewActions(
     if (!repoSelector || !item || !details || item.type !== 'mr') {
       return
     }
+
     const file = (details.files ?? []).find((row) => row.path === inlineCommentFilePath)
     const line = Number.parseInt(inlineCommentLine, 10)
     const bodyState = getCommentBodySubmitState(inlineCommentBody)
+
     if (!file || !Number.isFinite(line) || line <= 0 || bodyState.status === 'empty') {
       toast.error(
         translate(
@@ -134,8 +147,10 @@ export function useGitLabReviewActions(
           'File, line, and comment are required.'
         )
       )
+
       return
     }
+
     if (bodyState.status === 'too-large-leading-whitespace') {
       toast.error(
         translate(
@@ -143,8 +158,10 @@ export function useGitLabReviewActions(
           'Comment is too large to submit safely.'
         )
       )
+
       return
     }
+
     if (!details.baseSha || !details.startSha || !details.headSha) {
       toast.error(
         translate(
@@ -152,9 +169,12 @@ export function useGitLabReviewActions(
           'MR diff refs are unavailable for inline comments.'
         )
       )
+
       return
     }
+
     setInlineCommentSubmitting(true)
+
     try {
       const result = await window.api.gl.addMRInlineComment({
         ...repoSelector,
@@ -170,9 +190,11 @@ export function useGitLabReviewActions(
           headSha: details.headSha
         }
       })
+
       if (!mountedRef.current) {
         return
       }
+
       if (result.ok) {
         setDetails((current) =>
           current ? { ...current, comments: [...current.comments, result.comment] } : current
@@ -212,7 +234,9 @@ export function useGitLabReviewActions(
       if (!item || !repoSelector || item.type !== 'mr') {
         return
       }
+
       setResolvingThreadId(threadId)
+
       try {
         const res = await window.api.gl.resolveMRDiscussion({
           ...repoSelector,
@@ -220,6 +244,7 @@ export function useGitLabReviewActions(
           discussionId: threadId,
           resolved
         })
+
         if (res.ok) {
           if (mountedRef.current) {
             setDetails((current) =>

@@ -59,10 +59,12 @@ describe('ClaudeAgentTeams eviction on natural PTY exit (leak regression)', () =
 
   it('does not accumulate teams across many natural leader exits', () => {
     const runtime = new OrcaRuntimeService()
+
     for (let i = 0; i < 100; i++) {
       registerTeam(runtime, `pty-${i}`, `handle-${i}`)
       runtime.onPtyExit(`pty-${i}`, 0)
     }
+
     expect(internals(runtime).claudeAgentTeams.getActiveTeamCount()).toBe(0)
   })
 

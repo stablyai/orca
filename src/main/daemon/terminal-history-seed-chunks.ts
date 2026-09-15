@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 
 export const TERMINAL_HISTORY_SEED_CHUNK_CODE_UNITS = 512 * 1024
+
 export const TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS = 1024 * 1024
 
 export type TerminalHistorySeedMetrics = {
@@ -22,6 +23,7 @@ export function* iterateTerminalHistorySeedChunks(segments: readonly string[]): 
 
   for (const segment of segments) {
     let offset = 0
+
     if (trailingHighSurrogate) {
       if (segment.length > 0 && isLowSurrogate(segment.charCodeAt(0))) {
         yield trailingHighSurrogate + segment[0]
@@ -29,11 +31,13 @@ export function* iterateTerminalHistorySeedChunks(segments: readonly string[]): 
       } else {
         yield trailingHighSurrogate
       }
+
       trailingHighSurrogate = ''
     }
 
     while (offset < segment.length) {
       let end = Math.min(segment.length, offset + TERMINAL_HISTORY_SEED_CHUNK_CODE_UNITS)
+
       if (
         end < segment.length &&
         isHighSurrogate(segment.charCodeAt(end - 1)) &&
@@ -41,13 +45,16 @@ export function* iterateTerminalHistorySeedChunks(segments: readonly string[]): 
       ) {
         end -= 1
       }
+
       if (end === segment.length && isHighSurrogate(segment.charCodeAt(end - 1))) {
         trailingHighSurrogate = segment[end - 1]
         end -= 1
       }
+
       if (end > offset) {
         yield segment.slice(offset, end)
       }
+
       offset = Math.max(end, offset + (end === offset ? 1 : 0))
     }
   }

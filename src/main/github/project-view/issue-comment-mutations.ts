@@ -34,16 +34,21 @@ export async function addIssueCommentBySlug(
   args: AddIssueCommentBySlugArgs
 ): Promise<GitHubProjectCommentMutationResult> {
   const slug = validateSlugArgs(args.owner, args.repo)
+
   if (!slug.ok) {
     return slug
   }
+
   const number = assertPositiveInt(args.number, 'number')
+
   if (!number.ok) {
     return { ok: false, error: number.error }
   }
+
   if (typeof args.body !== 'string' || !args.body.trim()) {
     return { ok: false, error: { type: 'validation_error', message: 'Comment body required.' } }
   }
+
   const result = await runRest<RawIssueCommentResponse>(
     [
       '-X',
@@ -56,6 +61,7 @@ export async function addIssueCommentBySlug(
     'core',
     projectGhExecOptions(args.host)
   )
+
   return result.ok
     ? { ok: true, comment: mapIssueComment(result.data, args.body) }
     : { ok: false, error: result.error }
@@ -65,16 +71,21 @@ export async function updateIssueCommentBySlug(
   args: UpdateIssueCommentBySlugArgs
 ): Promise<GitHubProjectMutationResult> {
   const slug = validateSlugArgs(args.owner, args.repo)
+
   if (!slug.ok) {
     return slug
   }
+
   const number = assertPositiveInt(args.commentId, 'commentId')
+
   if (!number.ok) {
     return { ok: false, error: number.error }
   }
+
   if (typeof args.body !== 'string' || !args.body.trim()) {
     return { ok: false, error: { type: 'validation_error', message: 'Comment body required.' } }
   }
+
   const result = await runRest<unknown>(
     [
       '-X',
@@ -87,6 +98,7 @@ export async function updateIssueCommentBySlug(
     'core',
     projectGhExecOptions(args.host)
   )
+
   return result.ok ? { ok: true } : { ok: false, error: result.error }
 }
 
@@ -94,18 +106,23 @@ export async function deleteIssueCommentBySlug(
   args: DeleteIssueCommentBySlugArgs
 ): Promise<GitHubProjectMutationResult> {
   const slug = validateSlugArgs(args.owner, args.repo)
+
   if (!slug.ok) {
     return slug
   }
+
   const number = assertPositiveInt(args.commentId, 'commentId')
+
   if (!number.ok) {
     return { ok: false, error: number.error }
   }
+
   const result = await runRest<unknown>(
     ['-X', 'DELETE', `repos/${args.owner}/${args.repo}/issues/comments/${args.commentId}`],
     undefined,
     'core',
     { expectEmpty: true, ...projectGhExecOptions(args.host) }
   )
+
   return result.ok ? { ok: true } : { ok: false, error: result.error }
 }

@@ -81,21 +81,26 @@ export function containedDeleteCommand(
   recursive: boolean
 ): string[] | null {
   const targetPath = posix.resolve(target.linuxPath)
+
   const matchedRoot = approvedRoots
     .map(parsePath)
     .filter((root): root is WslPathInfo => root?.distro === target.distro)
     .map((root) => posix.resolve(root.linuxPath))
     .filter((root) => isInside(root, targetPath) && root !== '/')
     .sort((left, right) => right.length - left.length)[0]
+
   if (!matchedRoot) {
     return null
   }
 
   const relativeParts = posix.relative(matchedRoot, targetPath).split('/').filter(Boolean)
+
   if (relativeParts.length === 0) {
     return null
   }
+
   const rootParts = matchedRoot.split('/').filter(Boolean)
+
   return [
     'sh',
     '-c',
@@ -113,14 +118,17 @@ export function rejectionFromWslDeleteStderr(stderr: string): WslDeleteRejection
     .split(/\r?\n/u)
     .find((line) => line.startsWith(REJECTION_PREFIX))
     ?.slice(REJECTION_PREFIX.length)
+
   if (!marker) {
     return null
   }
+
   return marker === 'kind' ? 'unexpected-target-kind' : 'path-outside-known-roots'
 }
 
 function isInside(root: string, target: string): boolean {
   const relative = posix.relative(root, target)
+
   return (
     relative !== '' &&
     relative !== '..' &&

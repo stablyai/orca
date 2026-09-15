@@ -63,6 +63,7 @@ async function renderSection(): Promise<HTMLDivElement> {
   await act(async () => {
     root.render(<EphemeralVmRuntimesSection />)
   })
+
   return container
 }
 
@@ -161,6 +162,7 @@ describe('EphemeralVmRuntimesSection', () => {
     const cleanupButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Cleanup'
     )
+
     expect(cleanupButton).toBeDefined()
     await act(async () => {
       cleanupButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -195,9 +197,11 @@ describe('EphemeralVmRuntimesSection', () => {
     const container = await renderSection()
 
     await vi.waitFor(() => expect(container.textContent).toContain('Fix Login Race'))
+
     const cleanupButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Cleanup'
     )
+
     await act(async () => {
       cleanupButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -208,11 +212,13 @@ describe('EphemeralVmRuntimesSection', () => {
 
   it('stops running cleanup from a persistent runtime row', async () => {
     const running = makeRuntime({ status: 'cleanup_pending', cleanupStatus: 'running' })
+
     const stopped = makeRuntime({
       status: 'cleanup_failed',
       cleanupStatus: 'failed',
       cleanupLastError: 'Cleanup stopped by user.'
     })
+
     window.api.ephemeralVm.listRuntimes = vi
       .fn()
       .mockResolvedValueOnce([running])
@@ -221,17 +227,21 @@ describe('EphemeralVmRuntimesSection', () => {
     const container = await renderSection()
 
     await vi.waitFor(() => expect(container.textContent).toContain('Stop cleanup'))
+
     const stopButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Stop cleanup'
     )
+
     await act(async () => {
       stopButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await vi.waitFor(() => expect(document.body.textContent).toContain('The VM may remain running'))
     const dialog = document.body.querySelector('[data-slot="dialog-content"]')
+
     const confirmButton = [...(dialog?.querySelectorAll('button') ?? [])].find(
       (button) => button.textContent === 'Stop cleanup'
     )
+
     await act(async () => {
       confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -276,9 +286,11 @@ describe('EphemeralVmRuntimesSection', () => {
     const container = await renderSection()
 
     await vi.waitFor(() => expect(container.textContent).toContain('Copy command'))
+
     const copyButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'Copy command'
     )
+
     await act(async () => {
       copyButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })

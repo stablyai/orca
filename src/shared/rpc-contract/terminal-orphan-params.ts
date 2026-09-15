@@ -8,8 +8,10 @@ import type { PtyIncarnationId } from '../pty-incarnation'
 export function parseOrphanGroupLayout(value: unknown): TabGroupLayoutNode | null {
   const stack: { value: unknown; depth: number }[] = [{ value, depth: 0 }]
   let count = 0
+
   while (stack.length > 0) {
     const current = stack.pop()!
+
     if (
       current.depth > 64 ||
       ++count > 1_024 ||
@@ -18,7 +20,9 @@ export function parseOrphanGroupLayout(value: unknown): TabGroupLayoutNode | nul
     ) {
       return null
     }
+
     const node = current.value as Record<string, unknown>
+
     if (node.type === 'leaf') {
       if (
         typeof node.groupId !== 'string' ||
@@ -27,8 +31,10 @@ export function parseOrphanGroupLayout(value: unknown): TabGroupLayoutNode | nul
       ) {
         return null
       }
+
       continue
     }
+
     if (
       node.type !== 'split' ||
       (node.direction !== 'horizontal' && node.direction !== 'vertical') ||
@@ -40,11 +46,13 @@ export function parseOrphanGroupLayout(value: unknown): TabGroupLayoutNode | nul
     ) {
       return null
     }
+
     stack.push(
       { value: node.first, depth: current.depth + 1 },
       { value: node.second, depth: current.depth + 1 }
     )
   }
+
   return value as TabGroupLayoutNode
 }
 

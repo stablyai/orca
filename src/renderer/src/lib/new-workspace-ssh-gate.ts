@@ -23,7 +23,9 @@ export function getSelectedRepoSshGate(input: {
   const selectedRepoConnectionId = isRuntimeOwnedSshTargetId(input.connectionId)
     ? null
     : (input.connectionId ?? null)
+
   const selectedRepoSshStatus = selectedRepoConnectionId ? (input.status ?? null) : null
+
   return {
     selectedRepoConnectionId,
     selectedRepoSshStatus,

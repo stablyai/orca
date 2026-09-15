@@ -18,6 +18,7 @@ afterEach(async () => {
 async function fixture(): Promise<{ home: string }> {
   const home = await mkdtemp(join(tmpdir(), 'orca-skill-delete-plan-'))
   roots.push(home)
+
   return { home }
 }
 
@@ -25,6 +26,7 @@ async function writeSkill(directory: string, name: string): Promise<string> {
   await mkdir(directory, { recursive: true })
   const file = join(directory, 'SKILL.md')
   await writeFile(file, `---\nname: ${name}\ndescription: ${name}\n---\n\n# ${name}\n`)
+
   return file
 }
 
@@ -33,6 +35,7 @@ async function request(
   overrides: Partial<SkillDeleteRequest['skills'][number]> = {}
 ): Promise<SkillDeleteRequest> {
   const mtime = (await stat(skillFilePath).catch(() => null))?.mtimeMs ?? null
+
   return {
     operationId: 'op',
     skills: [
@@ -94,9 +97,11 @@ describe('buildSkillDeletePlan placement enumeration', () => {
       await symlink(file, join(aliasDirectory, 'SKILL.md'))
 
       const resolved = await plan(home, await request(file))
+
       const alias = resolved.plan.skills[0].placements.find(
         (placement) => placement.path === aliasDirectory
       )
+
       expect(alias?.kind).toBe('alias-file')
     }
   )
@@ -114,6 +119,7 @@ describe('buildSkillDeletePlan placement enumeration', () => {
         home,
         await request(join(home, '.claude', 'skills', 'demo', 'SKILL.md'))
       )
+
       expect(resolved.plan.skills[0].blocked).toBeUndefined()
       expect(resolved.plan.skills[0].placements).toEqual([
         expect.objectContaining({
@@ -138,6 +144,7 @@ describe('buildSkillDeletePlan placement enumeration', () => {
       await symlink(managedElsewhere, join(repo, '.agents', 'skills', 'demo'), 'dir')
 
       const linked = join(repo, '.agents', 'skills', 'demo', 'SKILL.md')
+
       const resolved = await buildSkillDeletePlan({
         request: await request(linked),
         target: { kind: 'native-host', cwd: undefined },
@@ -145,6 +152,7 @@ describe('buildSkillDeletePlan placement enumeration', () => {
         filesystem: nativeSkillInstallFilesystem,
         homeDir: home
       })
+
       const entry = resolved.plan.skills[0]
       expect(entry.blocked).toBeUndefined()
       expect(entry.placements).toEqual([
@@ -200,6 +208,7 @@ describe('buildSkillDeletePlan placement enumeration', () => {
     // second rename and roll the whole skill back.
     const canonicalDirectory = join(home, '.claude', 'skills', 'demo')
     const file = await writeSkill(canonicalDirectory, 'demo')
+
     const resolved = await buildSkillDeletePlan({
       request: await request(file),
       target: { kind: 'native-host', cwd: home },
@@ -207,6 +216,7 @@ describe('buildSkillDeletePlan placement enumeration', () => {
       filesystem: nativeSkillInstallFilesystem,
       homeDir: home
     })
+
     expect(
       resolved.plan.skills[0].placements.filter(
         (placement) => placement.path === canonicalDirectory

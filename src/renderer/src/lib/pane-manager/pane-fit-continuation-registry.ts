@@ -42,15 +42,20 @@ export function settlePendingSafeFitContinuation(
   completed: boolean
 ): boolean {
   const operations = pendingSafeFitContinuations.get(pane)
+
   if (operations?.get(operationKey) !== pending) {
     return false
   }
+
   operations.delete(operationKey)
+
   if (operations.size === 0) {
     pendingSafeFitContinuations.delete(pane)
     clearPaneFitContinuationRetry(pane)
   }
+
   pending.resolve(completed)
+
   return true
 }
 
@@ -61,9 +66,11 @@ export function registerPendingSafeFitContinuation(
 ): void {
   const operations = pendingSafeFitContinuations.get(pane) ?? new Map()
   const replaced = operations.get(operationKey)
+
   if (replaced) {
     settlePendingSafeFitContinuation(pane, operationKey, replaced, false)
   }
+
   // Why: this registration owns the key now, so an earlier deferred twin must not survive to
   // fire alongside it on the next fit.
   clearDeferredFitContinuation(pane, operationKey)
@@ -78,14 +85,17 @@ export function flushPendingSafeFitContinuations(pane: ManagedPane): void {
   // what keeps a continuation that fits re-entrantly from re-running a settled entry.
   flushDeferredFitContinuations(pane)
   const operations = pendingSafeFitContinuations.get(pane)
+
   if (!operations) {
     return
   }
+
   for (const [operationKey, pending] of operations) {
     if (!pending.shouldContinue()) {
       settlePendingSafeFitContinuation(pane, operationKey, pending, false)
       continue
     }
+
     try {
       pending.continuation()
       settlePendingSafeFitContinuation(pane, operationKey, pending, true)
@@ -114,9 +124,11 @@ export function releaseSafeFitContinuationUntilMeasurable(
 
 export function pruneStaleSafeFitContinuations(pane: ManagedPane): void {
   const operations = pendingSafeFitContinuations.get(pane)
+
   if (!operations) {
     return
   }
+
   for (const [operationKey, pending] of operations) {
     if (!pending.shouldContinue()) {
       settlePendingSafeFitContinuation(pane, operationKey, pending, false)
@@ -128,9 +140,11 @@ export function pruneStaleSafeFitContinuations(pane: ManagedPane): void {
 
 export function failPendingSafeFitContinuations(pane: ManagedPane): void {
   const operations = pendingSafeFitContinuations.get(pane)
+
   if (!operations) {
     return
   }
+
   for (const [operationKey, pending] of Array.from(operations.entries())) {
     settlePendingSafeFitContinuation(pane, operationKey, pending, false)
   }
@@ -141,10 +155,13 @@ export function cancelPendingSafeFitContinuations(pane: ManagedPane): void {
   // Why: this is pane teardown/rebuild — a grid push owed to the old pane is now meaningless.
   clearDeferredFitContinuations(pane)
   const operations = pendingSafeFitContinuations.get(pane)
+
   if (!operations) {
     return
   }
+
   pendingSafeFitContinuations.delete(pane)
+
   for (const pending of operations.values()) {
     pending.resolve(false)
   }

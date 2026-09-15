@@ -20,15 +20,19 @@ import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from './ssh-config-parser'
 
 vi.mock('ssh2', async () => (await import('./ssh-connection-test-harness')).createSsh2Module())
+
 vi.mock('./system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
+
 vi.mock('./ssh-system-fallback', async () =>
   (await import('./ssh-connection-test-harness')).createSystemFallbackModule()
 )
+
 vi.mock('./ssh-control-socket', async () =>
   (await import('./ssh-connection-test-harness')).createControlSocketModule()
 )
+
 vi.mock('./ssh-config-parser', async () =>
   (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
 )
@@ -68,6 +72,7 @@ describe('SshConnection', () => {
     vi.mocked(resolveWithSshG).mockResolvedValue(
       createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: true })
     )
+
     const conn = new SshConnection(
       createTarget({
         source: 'manual',
@@ -115,6 +120,7 @@ describe('SshConnection', () => {
     vi.mocked(resolveWithSshG).mockResolvedValue(
       createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: false })
     )
+
     const conn = new SshConnection(
       createTarget({
         source: 'ssh-config',
@@ -138,6 +144,7 @@ describe('SshConnection', () => {
       createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: true })
     )
     const onCredentialRequest = vi.fn(async () => 'password-123')
+
     const conn = new SshConnection(
       createTarget({ configHost: 'krb-host' }),
       createCallbacks({ onCredentialRequest })
@@ -184,6 +191,7 @@ describe('SshConnection', () => {
       })
     )
     const onCredentialRequest = vi.fn(async () => 'password-123')
+
     const conn = new SshConnection(
       createTarget({ configHost: 'krb-host' }),
       createCallbacks({ onCredentialRequest })
@@ -227,10 +235,13 @@ describe('SshConnection', () => {
     const order: string[] = []
     spawnSystemSshCommandMock.mockImplementation(() => {
       order.push('probe')
+
       return createSystemCommandChannel()
     })
+
     const onCredentialRequest = vi.fn(async () => {
       order.push('prompt')
+
       return 'secret'
     })
 
@@ -310,9 +321,11 @@ describe('SshConnection', () => {
       channel.stderr = new EventEmitter()
       channel.close = vi.fn(() => channel.emit('close', null))
       pendingChannel = channel
+
       return channel
     })
     const onStateChange = vi.fn()
+
     const conn = new SshConnection(
       createTarget({ configHost: 'krb-host' }),
       createCallbacks({ onStateChange })

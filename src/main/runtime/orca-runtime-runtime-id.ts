@@ -108,14 +108,19 @@ export class OrcaRuntimeWithRuntimeId {
     for (const replacement of getStructuredAgentSessionHost()?.conversationReplacements?.() ?? []) {
       snapshot = replaceConversationInSnapshot(snapshot, replacement)
     }
+
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
     snapshot = preserveTerminalRetirementProofs(snapshot, existing)
+
     const snapshotVersion = existing
       ? Math.max(snapshot.snapshotVersion, existing.snapshotVersion + 1)
       : snapshot.snapshotVersion
+
     const stamped =
       snapshotVersion === snapshot.snapshotVersion ? snapshot : { ...snapshot, snapshotVersion }
+
     this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
+
     return stamped
   }
 
@@ -270,7 +275,9 @@ export class OrcaRuntimeWithRuntimeId {
     if (!ptyId) {
       return null
     }
+
     const pty = this.ptysById.get(ptyId)
+
     return pty?.launchAgent ?? pty?.foregroundAgent ?? null
   }
 

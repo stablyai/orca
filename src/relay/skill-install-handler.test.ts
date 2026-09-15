@@ -51,36 +51,43 @@ async function fixture(
     join(source, 'SKILL.md'),
     '---\nname: relay-skill\ndescription: Relay test\n---\n\n# Relay\n'
   )
+
   const archive = await createSkillPackageArchive({
     sourceDirectory: source,
     archivePath: join(root, 'package.tar.gz'),
     packageId: 'package_1',
     versionId: 'version_1'
   })
+
   await beforeStart?.({ archive, home, source, state })
   const bytes = await readFile(archive.archivePath)
   const handlers = new Map<string, MethodHandler>()
+
   const dispatcher = {
     onRequest: vi.fn((method: string, handler: MethodHandler) => handlers.set(method, handler))
   } as unknown as RelayDispatcher
+
   new SkillInstallHandler(dispatcher, {
     homeDirectory: home,
     stateDirectory: state,
     detectProviders: options.detectProviders ?? (async () => []),
     recovery: options.recovery
   })
+
   const call = (method: string, params: Record<string, unknown>) =>
     handlers.get(method)!(params, {
       clientId: 1,
       isStale: () => false,
       signal: new AbortController().signal
     })
+
   return { archive, bytes, call, home, root, state }
 }
 
 describe('SkillInstallHandler', () => {
   it('installs a client-mediated package entirely on the SSH host', async () => {
     const { archive, bytes, call, home } = await fixture()
+
     const packageIdentity = {
       packageId: archive.manifest.packageId,
       versionId: archive.manifest.versionId,
@@ -88,9 +95,11 @@ describe('SkillInstallHandler', () => {
       archiveSha256: archive.archiveSha256,
       compressedBytes: bytes.length
     }
+
     const begun = (await call(SKILL_SSH_RELAY_BEGIN_UPLOAD_METHOD, {
       package: packageIdentity
     })) as { uploadId: string }
+
     await call(SKILL_SSH_RELAY_UPLOAD_CHUNK_METHOD, {
       uploadId: begun.uploadId,
       offset: 0,
@@ -128,6 +137,7 @@ describe('SkillInstallHandler', () => {
   it('previews a bundle with one provider detection pass', async () => {
     const detectProviders = vi.fn(async () => [])
     const { call } = await fixture(undefined, { detectProviders })
+
     const selectedSkills = Array.from({ length: 30 }, (_, index) => ({
       id: `skill-${index}`,
       name: `skill-${index}`,
@@ -156,6 +166,7 @@ describe('SkillInstallHandler', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const recovery = Promise.reject(new Error('transient-recovery-failure'))
     void recovery.catch(() => undefined)
+
     const { call } = await fixture(undefined, {
       recovery
     })
@@ -165,6 +176,7 @@ describe('SkillInstallHandler', () => {
 
   it('recovers a committed install before the first managed-install listing', async () => {
     let canonicalPath = ''
+
     const { archive, call, state } = await fixture(async (input) => {
       canonicalPath = join(input.home, '.agents', 'skills', input.archive.manifest.name)
       await mkdir(canonicalPath, { recursive: true })
@@ -172,6 +184,7 @@ describe('SkillInstallHandler', () => {
         join(canonicalPath, 'SKILL.md'),
         await readFile(join(input.source, 'SKILL.md'))
       )
+
       const receipt: SkillInstallReceiptV1 = {
         schemaVersion: 1,
         packageId: input.archive.manifest.packageId,
@@ -193,7 +206,9 @@ describe('SkillInstallHandler', () => {
         hostIdentity: 'ssh-host',
         fileModes: input.archive.manifest.files
       }
+
       const extractionPath = join(input.home, '.agents', 'skills', '.orca-skill-extract-crashed')
+
       const journal: SkillInstallJournalV1 = {
         schemaVersion: 1,
         operation: 'install',
@@ -217,6 +232,7 @@ describe('SkillInstallHandler', () => {
         backupFileModes: input.archive.manifest.files,
         receipt
       }
+
       await writeSkillStateFile(
         skillInstallJournalPath(join(input.state, 'skill-installs'), canonicalPath),
         journal
@@ -251,6 +267,7 @@ describe('SkillInstallHandler', () => {
     await Promise.all([mkdir(alpha), mkdir(beta)])
     await writeFile(join(alpha, 'SKILL.md'), '---\nname: alpha-skill\ndescription: Alpha\n---\n')
     await writeFile(join(beta, 'SKILL.md'), '---\nname: beta-skill\ndescription: Beta\n---\n')
+
     const bundle = await createSkillBundleArchive({
       sources: [{ sourceDirectory: alpha }, { sourceDirectory: beta }],
       archivePath: join(root, 'bundle.tar.gz'),
@@ -258,7 +275,9 @@ describe('SkillInstallHandler', () => {
       versionId: 'bundle_version',
       bundleName: 'relay-bundle'
     })
+
     const bundleBytes = await readFile(bundle.archivePath)
+
     const packageIdentity = {
       packageId: bundle.manifest.packageId,
       versionId: bundle.manifest.versionId,
@@ -266,9 +285,11 @@ describe('SkillInstallHandler', () => {
       archiveSha256: bundle.archiveSha256,
       compressedBytes: bundleBytes.length
     }
+
     const begun = (await call(SKILL_SSH_RELAY_BEGIN_UPLOAD_METHOD, {
       package: packageIdentity
     })) as { uploadId: string }
+
     await call(SKILL_SSH_RELAY_UPLOAD_CHUNK_METHOD, {
       uploadId: begun.uploadId,
       offset: 0,
@@ -300,6 +321,7 @@ describe('SkillInstallHandler', () => {
   it('exposes invalid staged archives through the stable SSH failure contract', async () => {
     const { call } = await fixture()
     const bytes = Buffer.from('not a skill archive')
+
     const packageIdentity = {
       packageId: 'package_1',
       versionId: 'version_1',
@@ -307,9 +329,11 @@ describe('SkillInstallHandler', () => {
       archiveSha256: createHash('sha256').update(bytes).digest('hex'),
       compressedBytes: bytes.length
     }
+
     const begun = (await call(SKILL_SSH_RELAY_BEGIN_UPLOAD_METHOD, {
       package: packageIdentity
     })) as { uploadId: string }
+
     await call(SKILL_SSH_RELAY_UPLOAD_CHUNK_METHOD, {
       uploadId: begun.uploadId,
       offset: 0,

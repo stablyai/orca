@@ -35,16 +35,19 @@ export function useNewWorkspaceRuntimeContext(
     if (!visible || !client) {
       return
     }
+
     let stale = false
     void (async () => {
       const probes = Promise.allSettled([
         client.sendRequest('preflight.check'),
         client.sendRequest('linear.status')
       ])
+
       const [settingsRes, uiRes] = await Promise.allSettled([
         optionalSettingsRead.request(client),
         client.sendRequest('ui.get')
       ])
+
       if (stale) {
         return
       }
@@ -53,14 +56,18 @@ export function useNewWorkspaceRuntimeContext(
         settingsRes.status === 'fulfilled'
           ? optionalSettingsRead.interpret(settingsRes.value)
           : null
+
       const settingsValue = settingsResult?.accepted
         ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
           (settingsResult.value as NewWorktreeRuntimeSettings & { visibleTaskProviders?: unknown })
         : null
+
       if (settingsValue) {
         setRuntimeSettings(settingsValue)
       }
+
       const uiResult = settledSuccess(uiRes)
+
       if (uiResult) {
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary; a missing result reads as untrusted.
         const ui = (uiResult.result as UiGetResult)?.ui
@@ -68,15 +75,19 @@ export function useNewWorkspaceRuntimeContext(
       }
 
       const [preflightRes, linearRes] = await probes
+
       if (stale) {
         return
       }
+
       const glabInstalled =
         (settledSuccess(preflightRes)?.result as { glab?: { installed?: boolean } } | undefined)
           ?.glab?.installed === true
+
       const linearConnected =
         (settledSuccess(linearRes)?.result as { connected?: boolean } | undefined)?.connected ===
         true
+
       const visibleProviders = normalizeVisibleTaskProviders(settingsValue?.visibleTaskProviders)
       setAvailableProviders(
         filterAvailableTaskProviders(visibleProviders, {
@@ -85,6 +96,7 @@ export function useNewWorkspaceRuntimeContext(
         }).filter((provider) => visibleProviders.includes(provider))
       )
     })()
+
     return () => {
       stale = true
     }

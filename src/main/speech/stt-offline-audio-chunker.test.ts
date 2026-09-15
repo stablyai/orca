@@ -4,13 +4,16 @@ import { OFFLINE_DECODE_CHUNK_SECONDS, OfflineAudioChunker } from './stt-offline
 // Why: a small rate keeps test arrays tiny while exercising the same
 // seconds-based limits used with real 16 kHz audio.
 const SAMPLE_RATE = 1000
+
 const CHUNK_LIMIT = OFFLINE_DECODE_CHUNK_SECONDS * SAMPLE_RATE
 
 function loudSignal(length: number): Float32Array {
   const samples = new Float32Array(length)
+
   for (let i = 0; i < length; i += 1) {
     samples[i] = Math.sin(i * 0.3) * 0.8
   }
+
   return samples
 }
 
@@ -39,15 +42,19 @@ describe('OfflineAudioChunker', () => {
     const emitted: Float32Array[] = []
     const pushSize = 160
     const pushes = Math.ceil((CHUNK_LIMIT * 3.5) / pushSize)
+
     for (let i = 0; i < pushes; i += 1) {
       emitted.push(...chunker.push(loudSignal(pushSize)))
     }
+
     const remainder = chunker.flush()
 
     expect(emitted.length).toBeGreaterThanOrEqual(3)
+
     for (const chunk of emitted) {
       expect(chunk.length).toBeLessThanOrEqual(CHUNK_LIMIT)
     }
+
     const totalOut = emitted.reduce((sum, c) => sum + c.length, 0) + (remainder?.length ?? 0)
     expect(totalOut).toBe(pushes * pushSize)
   })
@@ -58,6 +65,7 @@ describe('OfflineAudioChunker', () => {
     const ready = chunker.push(loudSignal(CHUNK_LIMIT * 2 + 100))
 
     expect(ready.length).toBeGreaterThanOrEqual(2)
+
     for (const chunk of ready) {
       expect(chunk.length).toBeLessThanOrEqual(CHUNK_LIMIT)
     }

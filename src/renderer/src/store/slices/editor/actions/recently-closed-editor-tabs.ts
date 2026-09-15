@@ -20,9 +20,11 @@ export function createRecentlyClosedEditorTabs(
     reopenClosedEditorTab: (worktreeId) => {
       const stack = get().recentlyClosedEditorTabsByWorktree[worktreeId] ?? []
       const next = stack[0]
+
       if (!next) {
         return false
       }
+
       set((s) => ({
         recentlyClosedEditorTabsByWorktree: {
           ...s.recentlyClosedEditorTabsByWorktree,
@@ -30,11 +32,14 @@ export function createRecentlyClosedEditorTabs(
         }
       }))
       const { position, reopenId, ...file } = next
+
       const restoredFileId = get().openFile(file, {
         targetGroupId: position?.groupId,
         reopenId
       })
+
       restoreRecentlyClosedTabPosition(get, worktreeId, restoredFileId, position)
+
       return true
     },
 
@@ -48,9 +53,11 @@ export function createRecentlyClosedEditorTabs(
           shouldDeleteUntouchedUntitledFile(f, !!state.editorDrafts[f.id]) &&
           (!activeWorktreeId || f.worktreeId === activeWorktreeId)
       )
+
       const closingFiles = state.openFiles.filter(
         (file) => !activeWorktreeId || file.worktreeId === activeWorktreeId
       )
+
       // Why: close-all bypasses closeFile, so notify mirrored host-owned editors here or the next host snapshot reopens them.
       for (const file of closingFiles) {
         notifyHostOfMirroredEditorClose(state, file.worktreeId, file.id)
@@ -67,8 +74,10 @@ export function createRecentlyClosedEditorTabs(
             (!activeWorktreeId || item.worktreeId === activeWorktreeId)
         )
         .map((item) => item.id)
+
       set((s) => {
         const activeWorktreeId = s.activeWorktreeId
+
         if (!activeWorktreeId) {
           return {
             openFiles: [],
@@ -85,36 +94,45 @@ export function createRecentlyClosedEditorTabs(
             pendingEditorFocusRequest: null
           }
         }
+
         // Only close files for the current worktree
         const newFiles = s.openFiles.filter((f) => f.worktreeId !== activeWorktreeId)
         const remainingFileIds = new Set(newFiles.map((f) => f.id))
+
         const newEditorDrafts = Object.fromEntries(
           Object.entries(s.editorDrafts).filter(([fileId]) => remainingFileIds.has(fileId))
         )
+
         const newMarkdownViewMode = Object.fromEntries(
           Object.entries(s.markdownViewMode).filter(([fileId]) => remainingFileIds.has(fileId))
         )
+
         const newMarkdownRichModeSizeOverride = Object.fromEntries(
           Object.entries(s.markdownRichModeSizeOverride).filter(([fileId]) =>
             remainingFileIds.has(fileId)
           )
         )
+
         const newEditorViewMode = Object.fromEntries(
           Object.entries(s.editorViewMode).filter(([fileId]) => remainingFileIds.has(fileId))
         )
+
         const newMarkdownFrontmatterVisible = Object.fromEntries(
           Object.entries(s.markdownFrontmatterVisible).filter(([fileId]) =>
             remainingFileIds.has(fileId)
           )
         )
+
         const newMarkdownTableOfContentsVisible = Object.fromEntries(
           Object.entries(s.markdownTableOfContentsVisible).filter(([fileId]) =>
             remainingFileIds.has(fileId)
           )
         )
+
         const newEditorCursorLine = Object.fromEntries(
           Object.entries(s.editorCursorLine).filter(([fileId]) => remainingFileIds.has(fileId))
         )
+
         const newActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
         delete newActiveFileIdByWorktree[activeWorktreeId]
         const newActiveTabTypeByWorktree = { ...s.activeTabTypeByWorktree }
@@ -122,6 +140,7 @@ export function createRecentlyClosedEditorTabs(
         const terminalTabsForWorktree = s.tabsByWorktree[activeWorktreeId] ?? []
         newActiveTabTypeByWorktree[activeWorktreeId] =
           browserTabsForWorktree.length > 0 ? 'browser' : 'terminal'
+
         const shouldDeactivateWorktree =
           browserTabsForWorktree.length === 0 && terminalTabsForWorktree.length === 0
 
@@ -129,7 +148,9 @@ export function createRecentlyClosedEditorTabs(
         const closedFileIds = new Set(
           s.openFiles.filter((f) => f.worktreeId === activeWorktreeId).map((f) => f.id)
         )
+
         const closedTabOrderIds = new Set([...closedFileIds, ...closingItemIds])
+
         const nextTabBarOrderByWorktree = s.tabBarOrderByWorktree
           ? {
               ...s.tabBarOrderByWorktree,
@@ -144,6 +165,7 @@ export function createRecentlyClosedEditorTabs(
         let capturedCloseCount = 0
         // Why: one shared index — a per-file position lookup rescans tab order and group membership, making close-all cubic.
         const positionIndex = createRecentlyClosedTabPositionIndex(s, activeWorktreeId)
+
         for (const f of [...closingFiles].toReversed()) {
           // Why: skip untitled non-dirty files (deleted from disk after close) and ephemeral preview tabs so the reopen stack has no vanished/junk paths.
           if (
@@ -152,6 +174,7 @@ export function createRecentlyClosedEditorTabs(
           ) {
             continue
           }
+
           const { id: _id, isDirty: _dirty, mirroredFromRuntimeSession: _mirrored, ...snap } = f
           const position = positionIndex.positionFor(f.id)
           nextRecentClosed = [
@@ -206,12 +229,15 @@ export function createRecentlyClosedEditorTabs(
           )
         }
       })
+
       if (typeof window !== 'undefined') {
         const postCloseState = get()
+
         for (const f of untitledToDelete) {
           deleteUntouchedUntitledFile(postCloseState, f)
         }
       }
+
       for (const itemId of closingItemIds) {
         get().closeUnifiedTab?.(itemId)
       }

@@ -120,6 +120,7 @@ describe('matchWorkspaceBoardWorktrees', () => {
   // `repoId::path` across hosts each keep their own searchable document.
   it('separates two same-id host rows', () => {
     const local = worktree({ id: 'shared', branch: 'refs/heads/local-only' })
+
     const remote = worktree({
       id: local.id,
       hostId: 'ssh:box',
@@ -136,6 +137,7 @@ describe('matchWorkspaceBoardWorktrees', () => {
 describe('buildWorkspaceKanbanLaneViews', () => {
   const todo = [worktree({ id: 'todo-a', displayName: 'Alpha' }), worktree({ id: 'todo-b' })]
   const doing = [worktree({ id: 'doing-a', displayName: 'Alpha' })]
+
   const worktreesByStatus = new Map([
     ['todo', todo],
     ['doing', doing]

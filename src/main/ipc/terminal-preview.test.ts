@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const { handlers, ipcMainMock, isDashboardPopoutRendererMock, isTrustedUIRendererMock } =
   vi.hoisted(() => {
     const map = new Map<string, (...args: unknown[]) => unknown>()
+
     return {
       handlers: map,
       ipcMainMock: {
@@ -15,9 +16,11 @@ const { handlers, ipcMainMock, isDashboardPopoutRendererMock, isTrustedUIRendere
   })
 
 vi.mock('electron', () => ({ ipcMain: ipcMainMock }))
+
 vi.mock('../window/dashboard-popout-window', () => ({
   isDashboardPopoutRenderer: isDashboardPopoutRendererMock
 }))
+
 vi.mock('./ui', () => ({
   isTrustedUIRenderer: isTrustedUIRendererMock
 }))
@@ -25,7 +28,9 @@ vi.mock('./ui', () => ({
 import { registerTerminalPreviewHandlers } from './terminal-preview'
 
 type OutputMeta = { seq?: number; rawLength?: number; transformed?: boolean }
+
 type Listener = (data: string, meta?: OutputMeta) => void
+
 type ResizeListener = (event: { cols: number; rows: number }) => void
 
 function makeRuntime() {
@@ -34,6 +39,7 @@ function makeRuntime() {
   const unsubscribe = vi.fn()
   const unsubscribeResize = vi.fn()
   const releaseRawView = vi.fn()
+
   return {
     listeners,
     resizeListeners,
@@ -50,10 +56,12 @@ function makeRuntime() {
     ),
     subscribeToTerminalData: vi.fn((_ptyId: string, listener: Listener) => {
       listeners.push(listener)
+
       return unsubscribe
     }),
     subscribeToTerminalResize: vi.fn((_ptyId: string, listener: ResizeListener) => {
       resizeListeners.push(listener)
+
       return unsubscribeResize
     }),
     registerRawTerminalViewSubscriber: vi.fn(() => releaseRawView),
@@ -66,6 +74,7 @@ function makeRuntime() {
 
 function makeSender(id = 1) {
   const destroyedListeners: (() => void)[] = []
+
   return {
     id,
     isDestroyed: () => false,
@@ -96,12 +105,14 @@ describe('registerTerminalPreviewHandlers', () => {
 
   it('subscribes before snapshot acquisition and replays only bytes after its sequence', async () => {
     const runtime = makeRuntime()
+
     let resolveSnapshot!: (snapshot: {
       data: string
       cols: number
       rows: number
       seq: number
     }) => void
+
     runtime.serializeTerminalBuffer.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -159,9 +170,11 @@ describe('registerTerminalPreviewHandlers', () => {
     await handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId: 'p1' })
 
     const chunk = 'x'.repeat(64 * 1024)
+
     for (let index = 0; index < 13; index++) {
       runtime.listeners[0]!(chunk)
     }
+
     const dataSends = sender.send.mock.calls.filter(([, payload]) => payload.type === 'data')
     expect(dataSends).toHaveLength(8)
 
@@ -171,6 +184,7 @@ describe('registerTerminalPreviewHandlers', () => {
         bytes: 64 * 1024
       })
     }
+
     expect(sender.send).toHaveBeenLastCalledWith('terminalPreview:data', {
       type: 'resync',
       ptyId: 'p1'
@@ -185,9 +199,11 @@ describe('registerTerminalPreviewHandlers', () => {
     await handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId: 'p1' })
 
     const fullChunk = 'x'.repeat(64 * 1024)
+
     for (let index = 0; index < 7; index++) {
       runtime.listeners[0]!(fullChunk)
     }
+
     runtime.listeners[0]!('a'.repeat(40 * 1024))
     await vi.advanceTimersByTimeAsync(5)
     runtime.listeners[0]!('b'.repeat(40 * 1024))
@@ -203,12 +219,14 @@ describe('registerTerminalPreviewHandlers', () => {
 
   it('fails safe to another resync when output overflows both snapshot captures', async () => {
     const runtime = makeRuntime()
+
     const snapshotResolvers: ((snapshot: {
       data: string
       cols: number
       rows: number
       seq: number
     }) => void)[] = []
+
     runtime.serializeTerminalBuffer.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -221,15 +239,20 @@ describe('registerTerminalPreviewHandlers', () => {
     const resultPromise = handlers.get('terminalPreview:connect')!(eventFor(sender), {
       ptyId: 'p1'
     }) as Promise<unknown>
+
     const chunk = 'x'.repeat(64 * 1024)
+
     for (let index = 0; index < 5; index++) {
       runtime.listeners[0]!(chunk)
     }
+
     snapshotResolvers[0]!({ data: 'first', cols: 80, rows: 20, seq: 1 })
     await vi.waitFor(() => expect(snapshotResolvers).toHaveLength(2))
+
     for (let index = 0; index < 5; index++) {
       runtime.listeners[0]!(chunk)
     }
+
     snapshotResolvers[1]!({ data: 'second', cols: 80, rows: 20, seq: 2 })
 
     await expect(resultPromise).resolves.toEqual({
@@ -246,6 +269,7 @@ describe('registerTerminalPreviewHandlers', () => {
   // so replaying the intervening bytes could duplicate or reorder transitions.
   it('returns the kitty flags of the capture that produced the returned image', async () => {
     const runtime = makeRuntime()
+
     const snapshotResolvers: ((snapshot: {
       data: string
       cols: number
@@ -253,6 +277,7 @@ describe('registerTerminalPreviewHandlers', () => {
       seq: number
       kittyKeyboardFlags?: number
     }) => void)[] = []
+
     runtime.serializeTerminalBuffer.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -265,10 +290,13 @@ describe('registerTerminalPreviewHandlers', () => {
     const resultPromise = handlers.get('terminalPreview:connect')!(eventFor(sender), {
       ptyId: 'p1'
     }) as Promise<unknown>
+
     const chunk = 'x'.repeat(64 * 1024)
+
     for (let index = 0; index < 5; index++) {
       runtime.listeners[0]!(chunk)
     }
+
     // The first capture overflowed; its flags must not survive onto the second image.
     snapshotResolvers[0]!({
       data: 'first',
@@ -472,11 +500,13 @@ describe('registerTerminalPreviewHandlers', () => {
       cols: 100,
       rows: 30
     }) as Promise<unknown>
+
     const secondFit = handlers.get('terminalPreview:fit')!(eventFor(sender), {
       ptyId: 'p1',
       cols: 132,
       rows: 40
     }) as Promise<unknown>
+
     await expect(secondFit).resolves.toEqual({ cols: 80, rows: 20 })
 
     resolveFirst(false)
@@ -504,6 +534,7 @@ describe('registerTerminalPreviewHandlers', () => {
       cols: 132,
       rows: 40
     }) as Promise<unknown>
+
     handlers.get('terminalPreview:unsubscribe')!(eventFor(sender), { ptyId: 'p1' })
     expect(runtime.unregisterRemoteDesktopViewer).toHaveBeenCalledTimes(1)
 

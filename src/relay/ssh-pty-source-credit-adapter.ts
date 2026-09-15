@@ -44,7 +44,9 @@ export class SshPtySourceCreditAdapter {
     if (this.disposed) {
       throw new Error('SSH PTY source credit adapter is disposed')
     }
+
     const flow = grant?.capabilities?.outputFlowControl
+
     if (
       !grant ||
       grant.role !== 'session-owner' ||
@@ -55,6 +57,7 @@ export class SshPtySourceCreditAdapter {
     ) {
       return null
     }
+
     const identity = Object.freeze({
       id,
       providerGeneration: this.relayProviderGeneration,
@@ -63,8 +66,10 @@ export class SshPtySourceCreditAdapter {
       ptyIncarnation,
       deliveryToken: randomUUID()
     })
+
     this.sourceCredit.open(identity, flow.windowSu, checkpointSourceEndSu)
     this.identityByToken.set(identity.deliveryToken, identity)
+
     return identity
   }
 
@@ -74,26 +79,31 @@ export class SshPtySourceCreditAdapter {
     acceptedSourceEndSu: number
   ) {
     const flow = grant?.capabilities?.outputFlowControl
+
     if (!grant || !flow || !grant.ownerGeneration || grant.role !== 'session-owner') {
       throw new Error('PTY source delivery recovery requires the active negotiated owner')
     }
+
     const replacement = Object.freeze({
       ...oldIdentity,
       clientGeneration: grant.clientGeneration,
       ownerGeneration: grant.ownerGeneration,
       deliveryToken: randomUUID()
     })
+
     const rotation = this.sourceCredit.rotate(
       oldIdentity,
       replacement,
       acceptedSourceEndSu,
       flow.windowSu
     )
+
     this.identityByToken.delete(oldIdentity.deliveryToken)
     this.recentCancellations.remember(rotation.cancellation)
     this.publishCancellation?.(rotation.cancellation)
     this.identityByToken.set(replacement.deliveryToken, replacement)
     this.clearGraceWhenSettled(oldIdentity.ownerGeneration)
+
     return Object.freeze({ identity: replacement, ...rotation })
   }
 
@@ -151,6 +161,7 @@ export class SshPtySourceCreditAdapter {
     grant: Readonly<PtyConsumerSessionGrant> | null
   ): void {
     const acknowledgements = params.acknowledgements
+
     if (
       !grant?.capabilities?.outputFlowControl ||
       !Array.isArray(acknowledgements) ||
@@ -158,16 +169,20 @@ export class SshPtySourceCreditAdapter {
     ) {
       return
     }
+
     for (const raw of acknowledgements) {
       if (typeof raw !== 'object' || raw === null) {
         continue
       }
+
       const candidate = raw as Record<string, unknown>
       const token = typeof candidate.deliveryToken === 'string' ? candidate.deliveryToken : ''
       const identity = token.length > 0 ? this.identityByToken.get(token) : undefined
+
       if (!identity || identity.clientGeneration !== grant.clientGeneration) {
         continue
       }
+
       try {
         const result = this.sourceCredit.acknowledge(identity, {
           id: String(candidate.id ?? ''),
@@ -176,9 +191,11 @@ export class SshPtySourceCreditAdapter {
           deliveryToken: String(candidate.deliveryToken),
           creditedEndSu: Number(candidate.creditedEndSu)
         })
+
         if (result === 'advanced') {
           this.onCreditAvailable?.(identity.id)
         }
+
         this.pruneClosed(token, identity)
       } catch {
         /* Invalid and stale cumulative ACKs never mutate credit. */
@@ -193,9 +210,11 @@ export class SshPtySourceCreditAdapter {
     const token = typeof params.deliveryToken === 'string' ? params.deliveryToken : ''
     const identity = this.identityByToken.get(token)
     const recent = this.recentCancellations.owned(token, params, grant)
+
     if (!identity && recent) {
       return ptySourceCancellationResult(recent)
     }
+
     if (
       !grant?.capabilities?.outputFlowControl ||
       !identity ||
@@ -206,6 +225,7 @@ export class SshPtySourceCreditAdapter {
     ) {
       throw new Error('Unknown or stale PTY source delivery cancellation')
     }
+
     const proof = this.sourceCredit.cancel(identity, 'client-request')
     this.identityByToken.delete(token)
     this.recentCancellations.remember(proof)
@@ -213,6 +233,7 @@ export class SshPtySourceCreditAdapter {
     // Why: the publication must retire its record the moment the delivery closes, or the next
     // exit seals a dead ledger entry.
     notifyPtySourceCreditAvailable(this.onCreditAvailable, identity.id)
+
     return ptySourceCancellationResult(proof)
   }
 
@@ -221,8 +242,10 @@ export class SshPtySourceCreditAdapter {
       if (this.hasOwnerDeliveries(grant.ownerGeneration!)) {
         this.scheduleGraceExpiry(grant.ownerGeneration!)
       }
+
       return
     }
+
     this.closeClientDeliveries(grant.clientGeneration)
   }
 
@@ -244,9 +267,11 @@ export class SshPtySourceCreditAdapter {
 
   cancelIdentity(identity: PtySourceDeliveryIdentity, reason: string): void {
     const token = identity.deliveryToken
+
     if (this.identityByToken.get(token) !== identity) {
       return
     }
+
     this.cancelExact(token, identity, reason)
   }
 
@@ -254,6 +279,7 @@ export class SshPtySourceCreditAdapter {
     if (this.disposed) {
       return
     }
+
     this.disposed = true
     this.graceTimers.forEach((timer) => clearTimeout(timer))
     this.graceTimers.clear()
@@ -267,6 +293,7 @@ export class SshPtySourceCreditAdapter {
       if (identity.clientGeneration !== clientGeneration) {
         continue
       }
+
       this.cancelExact(token, identity, 'client-detached')
       notifyPtySourceCreditAvailable(this.onCreditAvailable, identity.id)
     }
@@ -274,16 +301,20 @@ export class SshPtySourceCreditAdapter {
 
   private scheduleGraceExpiry(ownerGeneration: number): void {
     this.clearGraceTimer(ownerGeneration)
+
     const timer = setTimeout(() => {
       this.graceTimers.delete(ownerGeneration)
+
       for (const [token, identity] of this.identityByToken) {
         if (identity.ownerGeneration !== ownerGeneration) {
           continue
         }
+
         this.cancelExact(token, identity, 'reconnect-grace-expired')
         notifyPtySourceCreditAvailable(this.onCreditAvailable, identity.id)
       }
     }, PTY_CONSUMER_OWNER_GRACE_MS)
+
     timer.unref?.()
     this.graceTimers.set(ownerGeneration, timer)
   }
@@ -292,14 +323,17 @@ export class SshPtySourceCreditAdapter {
     // Why: this runs from the bare grace setTimeout, where an evicted tombstone probing unknown
     // would throw straight into uncaughtException.
     const snapshot = this.sourceCredit.snapshotIfKnown(identity)
+
     if (snapshot && snapshot.state !== 'closed') {
       const proof = this.sourceCredit.cancel(identity, reason)
       this.recentCancellations.remember(proof)
       this.publishCancellation?.(proof)
     }
+
     if (this.identityByToken.get(token) === identity) {
       this.identityByToken.delete(token)
     }
+
     this.clearGraceWhenSettled(identity.ownerGeneration)
   }
 

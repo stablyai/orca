@@ -17,6 +17,7 @@ export class CodexManagedHomePath {
   getRoot(): string {
     const root = join(app.getPath('userData'), 'codex-accounts')
     mkdirSync(root, { recursive: true })
+
     return root
   }
 
@@ -31,8 +32,10 @@ export class CodexManagedHomePath {
 
   async ensureForReauthentication(account: CodexManagedAccount): Promise<string> {
     const wslInfo = parseWslUncPath(account.managedHomePath)
+
     if (wslInfo && process.platform === 'win32') {
       await this.ensureExpectedWslHome(account, wslInfo)
+
       return this.assert(account.managedHomePath, account.id)
     }
 
@@ -42,12 +45,14 @@ export class CodexManagedHomePath {
       if (!this.isMissingHomeError(error)) {
         throw error
       }
+
       return this.recreateExpectedHostHome(account, error)
     }
   }
 
   assert(candidatePath: string, expectedAccountId?: string): string {
     const wslInfo = parseWslUncPath(candidatePath)
+
     if (!wslInfo) {
       return assertOwnedHostCodexManagedHomePath({
         candidatePath,
@@ -56,32 +61,39 @@ export class CodexManagedHomePath {
         expectedAccountId
       })
     }
+
     if (
       !wslInfo.linuxPath.includes('/.local/share/orca/codex-accounts/') ||
       !wslInfo.linuxPath.endsWith('/home')
     ) {
       throw new Error('Managed WSL Codex home is outside Orca account storage.')
     }
+
     if (
       expectedAccountId !== undefined &&
       !wslInfo.linuxPath.endsWith(`/.local/share/orca/codex-accounts/${expectedAccountId}/home`)
     ) {
       throw new Error('Managed WSL Codex home does not match its persisted account ID.')
     }
+
     if (process.platform === 'win32') {
       return this.assertWindowsWslPath(wslInfo, expectedAccountId)
     }
+
     return this.assertMountedWslPath(candidatePath, wslInfo.linuxPath, expectedAccountId)
   }
 
   private recreateExpectedHostHome(account: CodexManagedAccount, originalError: unknown): string {
     const expectedPath = join(this.getRoot(), account.id, 'home')
+
     if (!this.pathsEqual(account.managedHomePath, expectedPath)) {
       throw originalError
     }
+
     // Why: re-auth may recreate a lost empty home, but only at the exact Orca-owned path persisted for this account.
     mkdirSync(expectedPath, { recursive: true })
     writeFileSync(join(expectedPath, '.orca-managed-home'), `${account.id}\n`, 'utf-8')
+
     return this.assert(expectedPath, account.id)
   }
 
@@ -97,6 +109,7 @@ export class CodexManagedHomePath {
     ) {
       return
     }
+
     const result = await runWslProcess({
       distro: wslInfo.distro,
       loginPath: 'none',
@@ -113,6 +126,7 @@ export class CodexManagedHomePath {
       shell: 'bash',
       timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
     })
+
     // Why: 41/42 mean the path is not this account's home; re-auth must refuse
     // rather than write credentials into someone else's directory.
     if (result.code !== 0 || result.timedOut) {
@@ -148,9 +162,11 @@ export class CodexManagedHomePath {
               ])
         ].join('\n')
       ).trim()
+
       if (!canonicalLinuxPath) {
         throw new Error('Managed Codex home directory does not exist on disk.')
       }
+
       return toWindowsWslPath(canonicalLinuxPath, wslInfo.distro)
     } catch (error) {
       throw new Error('Managed WSL Codex home is outside Orca account storage.', {
@@ -167,19 +183,24 @@ export class CodexManagedHomePath {
     if (linuxPath.split('/').includes('..')) {
       throw new Error('Managed WSL Codex home is outside Orca account storage.')
     }
+
     if (!existsSync(candidatePath)) {
       throw new Error('Managed Codex home directory does not exist on disk.')
     }
+
     const markerPath = join(candidatePath, '.orca-managed-home')
+
     if (!existsSync(markerPath)) {
       throw new Error('Managed Codex home is missing Orca ownership marker.')
     }
+
     if (
       expectedAccountId !== undefined &&
       readFileSync(markerPath, 'utf-8').trim() !== expectedAccountId
     ) {
       throw new Error('Managed WSL Codex home ownership marker does not match its account ID.')
     }
+
     return candidatePath
   }
 
@@ -193,6 +214,7 @@ export class CodexManagedHomePath {
   private pathsEqual(left: string, right: string): boolean {
     const resolvedLeft = resolve(left)
     const resolvedRight = resolve(right)
+
     return process.platform === 'win32'
       ? resolvedLeft.toLowerCase() === resolvedRight.toLowerCase()
       : resolvedLeft === resolvedRight

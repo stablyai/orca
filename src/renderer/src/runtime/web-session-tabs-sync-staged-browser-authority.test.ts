@@ -25,14 +25,20 @@ vi.mock('../store', () => ({
 
 /** The group the create targeted — where staging first put the tab. */
 const CREATE_GROUP = 'client-group-create'
+
 /** The group the user split the staged tab into while the create was still in flight. */
 const SPLIT_GROUP = 'client-group-split'
 
 const REMOTE_PAGE_ID = 'staged-page'
+
 const PAGE_ID = 'staged-page'
+
 const WORKSPACE_ID = 'staged-workspace'
+
 const UNIFIED_TAB_ID = 'staged-unified-tab'
+
 const SIBLING_TAB_ID = 'sibling-unified-tab'
+
 const OTHER_SIBLING_TAB_ID = 'other-sibling-unified-tab'
 
 function stagedWorkspace(title: string, url: string): BrowserWorkspace {
@@ -125,6 +131,7 @@ function makeStagedState(args: {
   url: string
 }): WebSessionTabsSyncState {
   const split = args.groupId === SPLIT_GROUP
+
   return makeState({
     activeGroupIdByWorktree: { [WT]: args.groupId },
     activeTabType: 'browser',
@@ -218,6 +225,7 @@ describe('staged browser rows stay authoritative through adoption', () => {
 
   it('keeps a split the user made during the staging window', () => {
     recordCreatePlacement()
+
     const state = makeStagedState({
       groupId: SPLIT_GROUP,
       title: 'New Tab',
@@ -236,6 +244,7 @@ describe('staged browser rows stay authoritative through adoption', () => {
   // The host publishes on its own cadence and the next snapshot lands inside that window.
   it('keeps the split through the snapshot that follows adoption', () => {
     recordCreatePlacement()
+
     const state = makeStagedState({
       groupId: SPLIT_GROUP,
       title: 'New Tab',
@@ -258,6 +267,7 @@ describe('staged browser rows stay authoritative through adoption', () => {
   // the record's group active proves nothing — both answers agree.
   it('still honours the create record for a row the client never placed', () => {
     recordCreatePlacement()
+
     // No local row at all: staging can refuse (the create records its intent before it stages), and
     // then the host mirrors the page under its own ids with nothing local to inherit a group from.
     const state = makeState({
@@ -294,6 +304,7 @@ describe('staged browser rows stay authoritative through adoption', () => {
     const adopted = (next.unifiedTabsByWorktree[WT] ?? []).find(
       (tab) => tab.contentType === 'browser'
     )
+
     expect(adopted).toBeDefined()
     expect(groupOf(next, adopted?.id ?? '')).toBe(CREATE_GROUP)
   })

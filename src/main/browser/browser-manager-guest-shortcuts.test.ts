@@ -67,6 +67,7 @@ describe('browserManager', () => {
 
   it('does not forward ctrl/cmd+r or readline chords from browser guests', () => {
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 405,
       isDestroyed: vi.fn(() => false),
@@ -82,9 +83,11 @@ describe('browserManager', () => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -148,6 +151,7 @@ describe('browserManager', () => {
         shift: false
       }
     ]
+
     for (const input of readlineChords) {
       const preventDefault = vi.fn()
       beforeInputHandler?.({ preventDefault }, input)
@@ -160,6 +164,7 @@ describe('browserManager', () => {
   it('forwards browser guest tab shortcuts alongside shared window shortcuts', () => {
     const isDarwin = process.platform === 'darwin'
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 406,
       isDestroyed: vi.fn(() => false),
@@ -175,9 +180,11 @@ describe('browserManager', () => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -313,6 +320,7 @@ describe('browserManager', () => {
     const isDarwin = process.platform === 'darwin'
     const primary = { meta: isDarwin, control: !isDarwin }
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 407,
       isDestroyed: vi.fn(() => false),
@@ -328,9 +336,11 @@ describe('browserManager', () => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
     browserManager.setSettingsResolver(() => ({
@@ -417,6 +427,7 @@ describe('browserManager', () => {
 
   it('forwards browser guest Ctrl+Tab keydown and Ctrl release', () => {
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 407,
       isDestroyed: vi.fn(() => false),
@@ -432,9 +443,11 @@ describe('browserManager', () => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -487,6 +500,7 @@ describe('browserManager', () => {
 
   it('respects disabled browser guest tab-switch bindings', () => {
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 408,
       isDestroyed: vi.fn(() => false),
@@ -502,9 +516,11 @@ describe('browserManager', () => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
     browserManager.setSettingsResolver(() => ({

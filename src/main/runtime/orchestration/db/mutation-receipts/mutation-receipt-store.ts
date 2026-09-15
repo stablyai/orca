@@ -10,27 +10,36 @@ export function getOrCreateLocalMutationCallerFingerprint(this: OrchestrationDb)
   if (this.localMutationCallerFingerprint) {
     return this.localMutationCallerFingerprint
   }
+
   const transport = 'local_authenticated_transport'
+
   const existing = this.db
     .prepare('SELECT caller_fingerprint FROM mutation_caller_identities WHERE transport = ?')
     .get(transport) as { caller_fingerprint: string } | undefined
+
   if (existing) {
     this.localMutationCallerFingerprint = existing.caller_fingerprint
+
     return this.localMutationCallerFingerprint
   }
+
   this.db
     .prepare(
       `INSERT OR IGNORE INTO mutation_caller_identities (transport, caller_fingerprint)
        VALUES (?, ?)`
     )
     .run(transport, randomBytes(32).toString('hex'))
+
   const created = this.db
     .prepare('SELECT caller_fingerprint FROM mutation_caller_identities WHERE transport = ?')
     .get(transport) as { caller_fingerprint: string } | undefined
+
   if (!created) {
     throw new Error('Failed to create the local orchestration mutation caller identity.')
   }
+
   this.localMutationCallerFingerprint = created.caller_fingerprint
+
   return this.localMutationCallerFingerprint
 }
 
@@ -47,8 +56,10 @@ export function beginMutationReceipt(
   | { disposition: 'pending'; row: MutationReceiptRow }
   | { disposition: 'completed'; row: MutationReceiptRow } {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const existing = this.getMutationReceipt(params.callerFingerprint, params.requestId)
+
     if (existing) {
       if (existing.method !== params.method || existing.payload_hash !== params.payloadHash) {
         throw new OrchestrationError(
@@ -56,9 +67,12 @@ export function beginMutationReceipt(
           `Mutation request ${params.requestId} was already used with different input.`
         )
       }
+
       this.db.exec('COMMIT')
+
       return { disposition: existing.state, row: existing }
     }
+
     ensureMutationReceiptCapacity(this.db)
     this.db
       .prepare(
@@ -69,6 +83,7 @@ export function beginMutationReceipt(
       .run(params.callerFingerprint, params.requestId, params.method, params.payloadHash)
     const row = this.getMutationReceipt(params.callerFingerprint, params.requestId)
     this.db.exec('COMMIT')
+
     return { disposition: 'started', row: row as MutationReceiptRow }
   } catch (error) {
     this.db.exec('ROLLBACK')
@@ -100,13 +115,16 @@ export function completeMutationReceipt(
       params.method,
       params.payloadHash
     )
+
   const row = this.getMutationReceipt(params.callerFingerprint, params.requestId)
+
   if (result.changes !== 1 || !row) {
     throw new OrchestrationError(
       'request_mismatch',
       `Mutation request ${params.requestId} no longer matches its pending operation.`
     )
   }
+
   return row
 }
 
@@ -134,13 +152,16 @@ export function checkpointPendingMutationReceipt(
       params.method,
       params.payloadHash
     )
+
   const row = this.getMutationReceipt(params.callerFingerprint, params.requestId)
+
   if (result.changes !== 1 || !row) {
     throw new OrchestrationError(
       'request_mismatch',
       `Mutation request ${params.requestId} no longer matches its pending operation.`
     )
   }
+
   return row
 }
 

@@ -47,11 +47,14 @@ export function captureEditorFileOperationProvenance(
 ): EditorFileOperationProvenance {
   const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
   const worktreeIsPublished = isWorktreePublished(state, worktreeId)
+
   const ownershipProjection =
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID || explicitResolution.kind === 'resolved'
       ? 'explicit'
       : 'legacy'
+
   const hintedRuntimeEnvironmentId = ownerHint?.trim() || null
+
   const route =
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID
       ? { executionHostId: 'local' as const, runtimeEnvironmentId: null }
@@ -67,10 +70,13 @@ export function captureEditorFileOperationProvenance(
                 runtimeEnvironmentId: hintedRuntimeEnvironmentId
               }
             : resolveWorktreeOperationRoute(state, worktreeId)
+
   if (!route || (ownerHintProvided && (ownerHint?.trim() || null) !== route.runtimeEnvironmentId)) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
+
   const expectedSshConnectionGeneration = getExpectedSshConnectionGeneration(state, route)
+
   return {
     generation: captureWorktreeOperationGenerationSnapshot(route),
     ownershipProjection,
@@ -90,10 +96,13 @@ export function assertEditorFileOperationCurrent(
     () => new Error(OWNER_CHANGED_MESSAGE),
     () => resolveCurrentEditorRoute(state, worktreeId, provenance)
   )
+
   const currentGeneration = getExpectedSshConnectionGeneration(state, route)
+
   if (currentGeneration !== provenance.expectedSshConnectionGeneration) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
+
   return route
 }
 
@@ -105,18 +114,23 @@ function resolveCurrentEditorRoute(
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return { executionHostId: 'local', runtimeEnvironmentId: null }
   }
+
   const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
+
   if (explicitResolution.kind === 'resolved') {
     return explicitResolution.route
   }
+
   if (explicitResolution.kind === 'ambiguous' || provenance.ownershipProjection === 'explicit') {
     return null
   }
+
   // Why: ordinary folder workspaces have no published worktree row, so re-resolve their live
   // folder owner after preserving the explicit-owner fail-closed contract above (#10251).
   if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
     return resolveWorktreeOperationRoute(state, worktreeId)
   }
+
   return isWorktreePublished(state, worktreeId) ? provenance.generation.route : null
 }
 
@@ -157,11 +171,14 @@ export function getEditorFileOperationContext(
       file.runtimeEnvironmentId,
       file.runtimeEnvironmentId !== undefined
     )
+
   const route = file.operationProvenance
     ? assertEditorFileOperationCurrent(state, file.worktreeId, provenance)
     : provenance.generation.route
+
   const host = parseExecutionHostId(route.executionHostId)
   const workspaceScope = parseWorkspaceKey(file.worktreeId)
+
   const resolvedWorktreePath =
     (worktreePath?.trim() ? worktreePath : null) ??
     (workspaceScope?.type === 'folder'
@@ -169,10 +186,13 @@ export function getEditorFileOperationContext(
           (workspace) => workspace.id === workspaceScope.folderWorkspaceId
         )?.folderPath ?? null)
       : null)
+
   if (!host) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
+
   const externalSshTargetId = file.externalSshTargetId?.trim()
+
   if (
     externalSshTargetId &&
     (host.kind !== 'ssh' ||
@@ -181,10 +201,12 @@ export function getEditorFileOperationContext(
   ) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
+
   if (host?.kind === 'ssh' && provenance.expectedSshConnectionGeneration === undefined) {
     // Why: an old/partial SSH publication may be readable but cannot safely authorize mutations.
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
+
   return {
     settings: settingsForWorktreeOperationRoute(state.settings, route),
     worktreeId: file.worktreeId,
@@ -205,9 +227,11 @@ function getExpectedSshConnectionGeneration(
   route: WorktreeOperationRoute
 ): number | undefined {
   const host = parseExecutionHostId(route.executionHostId)
+
   if (host?.kind !== 'ssh') {
     return undefined
   }
+
   return route.runtimeEnvironmentId
     ? state.sshStateByEnvironment
         .get(route.runtimeEnvironmentId)

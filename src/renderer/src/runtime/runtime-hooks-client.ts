@@ -9,9 +9,11 @@ function getHookInspectionTarget(
   hostId?: ExecutionHostId
 ): ReturnType<typeof getActiveRuntimeTarget> {
   const parsedHost = parseExecutionHostId(hostId)
+
   if (parsedHost?.kind === 'runtime') {
     return { kind: 'environment', environmentId: parsedHost.environmentId }
   }
+
   return parsedHost ? { kind: 'local' } : getActiveRuntimeTarget(settings)
 }
 
@@ -37,9 +39,11 @@ export async function checkRuntimeHooks(
   hostId?: ExecutionHostId
 ): Promise<HookCheckResult> {
   const target = getHookInspectionTarget(settings, hostId)
+
   if (target.kind !== 'environment') {
     return window.api.hooks.check({ repoId, ...(hostId ? { hostId } : {}) })
   }
+
   return callRuntimeRpc<HookCheckResult>(
     target,
     'repo.hooksCheck',
@@ -54,9 +58,11 @@ export async function inspectRuntimeSetupScriptImports(
   hostId?: ExecutionHostId
 ): Promise<SetupScriptImportCandidate[]> {
   const target = getHookInspectionTarget(settings, hostId)
+
   if (target.kind !== 'environment') {
     return window.api.hooks.inspectSetupScriptImports({ repoId, ...(hostId ? { hostId } : {}) })
   }
+
   return callRuntimeRpc<SetupScriptImportCandidate[]>(
     target,
     'repo.setupScriptImports',
@@ -71,9 +77,11 @@ export async function readRuntimeIssueCommand(
   hostId?: ExecutionHostId
 ): Promise<IssueCommandReadResult> {
   const target = getActiveRuntimeTarget(settings)
+
   if (target.kind !== 'environment') {
     return window.api.hooks.readIssueCommand({ repoId, ...(hostId ? { hostId } : {}) })
   }
+
   return callRuntimeRpc<IssueCommandReadResult>(
     target,
     'repo.issueCommandRead',
@@ -89,10 +97,13 @@ export async function writeRuntimeIssueCommand(
   hostId?: ExecutionHostId
 ): Promise<void> {
   const target = getActiveRuntimeTarget(settings)
+
   if (target.kind !== 'environment') {
     await window.api.hooks.writeIssueCommand({ repoId, content, ...(hostId ? { hostId } : {}) })
+
     return
   }
+
   await callRuntimeRpc(
     target,
     'repo.issueCommandWrite',

@@ -11,9 +11,11 @@ export function shouldShowUnexpectedSignoutCard(gate: UnexpectedSignoutGate): bo
   if (!gate.persistedUIReady || gate.appVersion === null) {
     return false
   }
+
   if (gate.dismissedVersion !== null) {
     return false
   }
+
   return (
     gate.authStatus?.configured === true &&
     gate.authStatus.state === 'reconnect-required' &&

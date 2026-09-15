@@ -39,7 +39,9 @@ export function createMonarchTokenizer(
     isRegisteredLanguageId: () => false,
     requestBasicLanguageFeatures: () => {}
   }
+
   const themeService = { getColorTheme: () => ({ tokenTheme: {} }) }
+
   const configurationService = {
     getValue: () => maxTokenizationLineLength,
     onDidChangeConfiguration: () => ({ dispose: () => {} })
@@ -67,9 +69,11 @@ export function tokenizeLines(
   lines: string[]
 ): TokenizedLine[] {
   let state: unknown = tokenizer.getInitialState()
+
   return lines.map((text) => {
     const { tokens, endState } = tokenizer.tokenize(text, true, state)
     state = endState
+
     return {
       text,
       tokens,
@@ -110,6 +114,7 @@ export function tokenLanguagesPerLine(lines: TokenizedLine[]): string[][] {
 /** Token type covering `index`, without the grammar's `tokenPostfix`. */
 export function tokenTypeAt(line: TokenizedLine, index: number): string {
   const covering = line.tokens.findLast((token) => token.offset <= index)
+
   return covering?.type.split('.').slice(0, -1).join('.') ?? ''
 }
 
@@ -119,6 +124,7 @@ export function formatTokenizedLines(lines: TokenizedLine[]): string[] {
     const tokens = line.tokens
       .map((token) => `${token.offset}:${token.type || '-'}@${token.language}`)
       .join(' ')
+
     return `${line.text} | ${tokens} | embed=${line.endEmbeddedLanguageId ?? 'none'}`
   })
 }
@@ -142,6 +148,7 @@ export function measureNestedDepth(
   tokenizer._nestedTokenize = (...args: unknown[]) => {
     depth += 1
     maxNestedDepth = Math.max(maxNestedDepth, depth)
+
     try {
       return nestedTokenize(...args)
     } finally {
@@ -150,10 +157,12 @@ export function measureNestedDepth(
   }
 
   let error: Error | undefined
+
   try {
     tokenizeLines(tokenizer, lines)
   } catch (thrown) {
     error = thrown as Error
   }
+
   return { maxNestedDepth, error }
 }

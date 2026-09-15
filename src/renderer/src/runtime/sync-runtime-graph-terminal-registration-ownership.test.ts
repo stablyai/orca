@@ -9,13 +9,18 @@ import { makeState } from './sync-runtime-graph-test-harness'
 import type { AppState } from '../store/types'
 
 const TAB_ID = 'duplicate-tab'
+
 const WORKTREE_A = 'registry-worktree-a'
+
 const WORKTREE_B = 'registry-worktree-b'
+
 const LEAF_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+
 const LEAF_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
 function registerSurface(worktreeId: string, leafId: string, ptyId: string): () => void {
   const pane = { id: 1, leafId, container: { querySelector: () => null } }
+
   const manager = {
     getPanes: () => [pane],
     getActivePane: () => pane,
@@ -23,6 +28,7 @@ function registerSurface(worktreeId: string, leafId: string, ptyId: string): () 
     getNumericIdForLeaf: (candidateLeafId: string) =>
       candidateLeafId === pane.leafId ? pane.id : null
   }
+
   return registerRuntimeTerminalTab({
     tabId: TAB_ID,
     worktreeId,
@@ -55,12 +61,14 @@ describe('runtime terminal registration ownership', () => {
   it('keeps duplicate tab ids scoped to their registered worktree', () => {
     const unregisterA = registerSurface(WORKTREE_A, LEAF_A, 'pty-a')
     const unregisterB = registerSurface(WORKTREE_B, LEAF_B, 'pty-b')
+
     try {
       expect(hasRegisteredRuntimeTerminalTab(TAB_ID)).toBe(false)
       expect(hasRegisteredRuntimeTerminalTab(TAB_ID, WORKTREE_A)).toBe(true)
       expect(hasRegisteredRuntimeTerminalTab(TAB_ID, WORKTREE_B)).toBe(true)
 
       const snapshots = buildMobileSessionTabSnapshots(duplicateTabState())
+
       const terminalFor = (worktreeId: string) =>
         snapshots
           .find((snapshot) => snapshot.worktree === worktreeId)
@@ -82,18 +90,21 @@ describe('runtime terminal registration ownership', () => {
     const container = { querySelector: () => null }
     const paneA = { id: 1, leafId: LEAF_A, container, terminal: { focus: focusA } }
     const paneB = { id: 1, leafId: LEAF_B, container, terminal: { focus: focusB } }
+
     const managerA = {
       getPanes: () => [paneA],
       getActivePane: () => paneA,
       getLeafId: () => LEAF_A,
       getNumericIdForLeaf: () => 1
     }
+
     const managerB = {
       getPanes: () => [paneB],
       getActivePane: () => paneB,
       getLeafId: () => LEAF_B,
       getNumericIdForLeaf: () => 1
     }
+
     const unregisterA = registerRuntimeTerminalTab({
       tabId: TAB_ID,
       worktreeId: WORKTREE_A,
@@ -102,6 +113,7 @@ describe('runtime terminal registration ownership', () => {
       getPtyIdForPane: () => null,
       getTabWideAgentHintLeafId: () => null
     })
+
     const unregisterB = registerRuntimeTerminalTab({
       tabId: TAB_ID,
       worktreeId: WORKTREE_B,
@@ -110,6 +122,7 @@ describe('runtime terminal registration ownership', () => {
       getPtyIdForPane: () => null,
       getTabWideAgentHintLeafId: () => null
     })
+
     try {
       expect(focusRuntimeTerminalSurface(TAB_ID, null, WORKTREE_B)).toBe(true)
       expect(focusB).toHaveBeenCalledOnce()

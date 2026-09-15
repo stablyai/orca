@@ -43,10 +43,12 @@ export default function MobilePage(): React.JSX.Element {
   const [connectionMode, setConnectionMode] = useMobilePairingConnectionMode()
   const [networkInterfaces, setNetworkInterfaces] = useState<MobileNetworkInterface[]>([])
   const pairingAddressChangeRef = useRef<(change: MobilePairingAddressChange) => void>(() => {})
+
   const notifyPairingAddressChange = useCallback(
     (change: MobilePairingAddressChange): void => pairingAddressChangeRef.current(change),
     []
   )
+
   const {
     selectedAddress,
     selectedAddressIsCustom,
@@ -59,6 +61,7 @@ export default function MobilePage(): React.JSX.Element {
     networkInterfaces,
     onSelectionInvalidated: notifyPairingAddressChange
   })
+
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
   const hasGeneratedRef = useRef(false)
   const pairingRequestIdRef = useRef(0)
@@ -66,6 +69,7 @@ export default function MobilePage(): React.JSX.Element {
   const closeMobilePage = useAppStore((s) => s.closeMobilePage)
   const showMobileButton = useAppStore((s) => s.settings?.showMobileButton !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
+
   const {
     devices,
     enterFlow: showFirstPairingFlow,
@@ -76,7 +80,9 @@ export default function MobilePage(): React.JSX.Element {
     showPairedDevices,
     stage
   } = useMobilePagePairedDevices({ stepIdx, setStepIdx })
+
   const installQrUrl = useMobileInstallQr(stage, platform, iosChannel)
+
   const { copyInstallUrl, openAndroidInstallGuide, openInstallUrl } = useMobileInstallActions(
     platform,
     iosChannel
@@ -97,21 +103,27 @@ export default function MobilePage(): React.JSX.Element {
     setRelayMintFailure,
     refreshAuthStatus
   })
+
   useLayoutEffect(() => {
     pairingAddressChangeRef.current = ({ address, source }) => {
       const pairingContext = { connectionMode, signedIn }
+
       if (source === 'user') {
         if (canMintMobilePairingOffer(pairingContext)) {
           void generatePairing(true, address ?? '')
         }
+
         return
       }
+
       if (source === 'refresh') {
         if (hasGeneratedRef.current && canMintMobilePairingOffer(pairingContext)) {
           void generatePairing(true, address)
         }
+
         return
       }
+
       const shouldRegenerate = hasGeneratedRef.current || pairLoading
       pairingRequestIdRef.current += 1
       hasGeneratedRef.current = false
@@ -121,6 +133,7 @@ export default function MobilePage(): React.JSX.Element {
       setPairingQrError(false)
       setRelayMintFailure(null)
       setPairLoading(false)
+
       if (shouldRegenerate && canMintMobilePairingOffer(pairingContext)) {
         void generatePairing(true, address ?? '')
       }
@@ -132,6 +145,7 @@ export default function MobilePage(): React.JSX.Element {
       if (nextMode === connectionMode) {
         return
       }
+
       // Why: persist the pick and update local state. The QR invalidation +
       // rotate-regenerate is handled centrally by useMobilePairingQrInvalidation
       // (below), which also covers cross-window preference syncs.
@@ -146,6 +160,7 @@ export default function MobilePage(): React.JSX.Element {
     if (relayMintFailure == null) {
       return
     }
+
     // Why: users share this payload — the selected address would leak a LAN/Tailscale IP or hostname.
     const payload = {
       kind: 'mobile_pairing_relay_failure',
@@ -153,8 +168,10 @@ export default function MobilePage(): React.JSX.Element {
       failure: relayMintFailure,
       at: new Date().toISOString()
     }
+
     try {
       await window.api.ui.writeClipboardText(JSON.stringify(payload, null, 2))
+
       if (mountedRef.current) {
         toast.success(
           translate('auto.components.mobile.MobilePage.diagnosticsCopied', 'Diagnostics copied')
@@ -191,8 +208,10 @@ export default function MobilePage(): React.JSX.Element {
     if (mountedRef.current) {
       setRefreshingNetworkInterfaces(true)
     }
+
     try {
       const result = await window.api.mobile.listNetworkInterfaces()
+
       if (mountedRef.current) {
         setNetworkInterfaces(result.interfaces)
         selectAddressAfterRefresh(result.interfaces)
@@ -210,6 +229,7 @@ export default function MobilePage(): React.JSX.Element {
     if (stage !== 'flow') {
       return
     }
+
     void loadNetworkInterfaces()
   }, [stage, loadNetworkInterfaces])
 
@@ -218,8 +238,10 @@ export default function MobilePage(): React.JSX.Element {
       if (!canMintMobilePairingOffer({ connectionMode, signedIn })) {
         return true
       }
+
       try {
         const result = await window.api.mobile.getPairingQR({ address, connectionMode })
+
         return result.available && result.qrDataUrl !== null
       } catch {
         return false
@@ -232,8 +254,10 @@ export default function MobilePage(): React.JSX.Element {
     if (!pairingUrl) {
       return
     }
+
     try {
       await window.api.ui.writeClipboardText(pairingUrl)
+
       if (mountedRef.current) {
         toast.success(
           translate('auto.components.mobile.MobilePage.3c1f7168bb', 'Pairing code copied')
@@ -241,6 +265,7 @@ export default function MobilePage(): React.JSX.Element {
       }
     } catch (err) {
       console.error('writeClipboardText failed', err)
+
       if (mountedRef.current) {
         toast.error(
           translate('auto.components.mobile.MobilePage.6a66e38943', 'Failed to copy pairing code')
@@ -257,12 +282,14 @@ export default function MobilePage(): React.JSX.Element {
     if (stage !== 'flow' || stepIdx !== 1 || hasGeneratedRef.current) {
       return
     }
+
     // Why: signed-out Anywhere cannot serve Relay; auto-minting here would show a
     // scannable local-only QR under the Relay label. Wait for sign-in or a switch
     // to LAN (both flip canGenerate and re-run this effect) instead.
     if (!canGenerate) {
       return
     }
+
     void generatePairing(false)
   }, [stage, stepIdx, canGenerate, generatePairing])
 
@@ -299,6 +326,7 @@ export default function MobilePage(): React.JSX.Element {
   const toggleMobileSidebarButton = useCallback(() => {
     const nextShowMobileButton = !showMobileButton
     void updateSettings({ showMobileButton: nextShowMobileButton })
+
     if (!nextShowMobileButton) {
       toast.message(
         translate(

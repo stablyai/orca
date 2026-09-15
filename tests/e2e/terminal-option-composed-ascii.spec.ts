@@ -44,20 +44,24 @@ async function getPaneKittyKeyboardFlags(page: Page): Promise<number> {
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     const terminal = pane?.terminal as
       | {
           core?: { coreService?: { kittyKeyboard?: { flags?: number } } }
           _core?: { coreService?: { kittyKeyboard?: { flags?: number } } }
         }
       | undefined
+
     return (
       terminal?.core?.coreService?.kittyKeyboard?.flags ??
       terminal?._core?.coreService?.kittyKeyboard?.flags ??
@@ -77,20 +81,25 @@ async function pressOptionComposedKey(
   return page.evaluate((press) => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     const textarea = pane?.container.querySelector(
       '.xterm-helper-textarea'
     ) as HTMLTextAreaElement | null
+
     if (!pane || !textarea) {
       throw new Error('No active terminal textarea for the Option chord dispatch')
     }
+
     pane.terminal.focus()
     textarea.focus()
 
@@ -109,6 +118,7 @@ async function pressOptionComposedKey(
       bubbles: true,
       cancelable: true
     })
+
     textarea.dispatchEvent(keydown)
 
     textarea.dispatchEvent(
@@ -152,6 +162,7 @@ async function setUpPane(
   const ptyId = await waitForActivePanePtyId(page)
   await installMainProcessPtyWriteSpy(app)
   await armKittyKeyboardFromPty(page, ptyId)
+
   return { ptyId, joinedWrites: async () => (await getPtyWrites(app)).join('') }
 }
 
@@ -192,6 +203,7 @@ test.describe('Option-composed ASCII in a kitty-keyboard pane', () => {
       code: 'Digit7',
       shiftKey: true
     })
+
     expect(dispatch.keydownDefaultPrevented).toBe(true)
 
     await expect

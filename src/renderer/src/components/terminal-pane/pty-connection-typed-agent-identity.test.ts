@@ -39,8 +39,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -61,6 +64,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -70,6 +74,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -90,6 +95,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -100,9 +106,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -112,9 +120,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -123,6 +133,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -166,15 +177,19 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
     sendTerminalInputThroughPane(pane, 'omp\r')
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
       | undefined
+
     if (!onTitleChange || !onAgentStatus) {
       throw new Error('missing remote PTY callbacks')
     }
+
     onTitleChange('Pi ready', 'Pi ready')
     onAgentStatus({
       state: 'done',
@@ -202,12 +217,15 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!onTitleChange) {
       throw new Error('missing title callback')
     }
+
     onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
 
     // Display/runtime/tab title and the GPU gate all come from the same decision.
@@ -242,12 +260,15 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!onTitleChange) {
       throw new Error('missing title callback')
     }
+
     onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
 
     // Pane-scoped owner evidence outranks the raw title, so the fallback cannot fire.
@@ -267,12 +288,15 @@ describe('connectPanePty', () => {
     connectPanePty(pane1 as never, manager as never, createDeps() as never)
     connectPanePty(pane2 as never, manager as never, createDeps() as never)
     await flushAsyncTicks()
+
     const onTitleChange1 = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!onTitleChange1) {
       throw new Error('missing title callback for split pane 1')
     }
+
     onTitleChange1('✦ Gemini CLI', '✦ Gemini CLI')
 
     const gpuCalls = manager.setPaneGpuRendering.mock.calls as [number, boolean][]
@@ -299,12 +323,15 @@ describe('connectPanePty', () => {
     connectPanePty(pane1 as never, manager as never, createDeps() as never)
     connectPanePty(pane2 as never, manager as never, createDeps() as never)
     await flushAsyncTicks()
+
     const onTitleChange2 = createdTransportOptions[1]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!onTitleChange2) {
       throw new Error('missing title callback for split pane 2')
     }
+
     onTitleChange2('✦ Gemini CLI', '✦ Gemini CLI')
 
     expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(2, false)
@@ -321,12 +348,15 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!onTitleChange) {
       throw new Error('missing title callback')
     }
+
     onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
 
     expect(manager.setPaneGpuRendering).toHaveBeenCalledWith(1, false)
@@ -357,12 +387,15 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!onTitleChange) {
       throw new Error('missing title callback')
     }
+
     onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
 
     // A `done` row is a leftover from a prior agent, so it must not veto.
@@ -395,12 +428,15 @@ describe('connectPanePty', () => {
 
     connectPanePty(pane as never, manager as never, deps as never)
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!onTitleChange) {
       throw new Error('missing title callback')
     }
+
     onTitleChange('✦ Gemini CLI', '✦ Gemini CLI')
 
     // A stale working row (older than AGENT_STATUS_STALE_AFTER_MS) must not veto.
@@ -420,15 +456,19 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
     sendTerminalInputThroughPane(pane, 'pi \x17omp\r')
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
       | undefined
+
     if (!onTitleChange || !onAgentStatus) {
       throw new Error('missing remote PTY callbacks')
     }
+
     onTitleChange('Pi ready', 'Pi ready')
     onAgentStatus({
       state: 'done',
@@ -458,15 +498,19 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
     sendTerminalInputThroughPane(pane, 'pi\r')
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
       | undefined
+
     if (!onTitleChange || !onAgentStatus) {
       throw new Error('missing remote PTY callbacks')
     }
+
     onTitleChange('Pi ready', 'Pi ready')
     onAgentStatus({
       state: 'done',
@@ -509,15 +553,19 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
     sendTerminalInputThroughPane(pane, 'omp\r')
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
       | undefined
+
     if (!onTitleChange || !onAgentStatus) {
       throw new Error('missing remote PTY callbacks')
     }
+
     onTitleChange('Pi ready', 'Pi ready')
     onAgentStatus({
       state: 'done',
@@ -548,15 +596,19 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
     sendTerminalInputThroughPane(pane, 'omp\r')
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
       | undefined
+
     if (!onTitleChange || !onAgentStatus) {
       throw new Error('missing remote PTY callbacks')
     }
+
     onTitleChange('Pi ready', 'Pi ready')
     onAgentStatus({
       state: 'done',
@@ -597,15 +649,19 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
     sendTerminalInputThroughPane(pane, 'omp\r')
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
       | undefined
+
     if (!onTitleChange || !onAgentStatus) {
       throw new Error('missing remote PTY callbacks')
     }
+
     onTitleChange('Pi ready', 'Pi ready')
     onAgentStatus({
       state: 'done',
@@ -634,15 +690,19 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
     sendTerminalInputThroughPane(pane, 'op\x1b[Dm\r')
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
       | undefined
+
     if (!onTitleChange || !onAgentStatus) {
       throw new Error('missing remote PTY callbacks')
     }
+
     onTitleChange('Pi ready', 'Pi ready')
     onAgentStatus({
       state: 'done',
@@ -671,15 +731,19 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
     sendTerminalInputThroughPane(pane, 'ommp\x1b[D\x1b[D\x1b[3~\r')
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
       | undefined
+
     if (!onTitleChange || !onAgentStatus) {
       throw new Error('missing remote PTY callbacks')
     }
+
     onTitleChange('Pi ready', 'Pi ready')
     onAgentStatus({
       state: 'done',
@@ -707,15 +771,19 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
     sendTerminalInputThroughPane(pane, `${'x'.repeat(4097)}omp\r`)
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
       | undefined
+
     if (!onTitleChange || !onAgentStatus) {
       throw new Error('missing remote PTY callbacks')
     }
+
     onTitleChange('Pi ready', 'Pi ready')
     onAgentStatus({
       state: 'done',
@@ -745,15 +813,19 @@ describe('connectPanePty', () => {
     sendTerminalInputThroughPane(pane, '\x03')
     sendTerminalInputThroughPane(pane, 'omp\r')
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
       | undefined
+
     if (!onTitleChange || !onAgentStatus) {
       throw new Error('missing remote PTY callbacks')
     }
+
     onTitleChange('Pi ready', 'Pi ready')
     onAgentStatus({
       state: 'done',
@@ -778,6 +850,7 @@ describe('connectPanePty', () => {
     transport.connect.mockImplementation(
       async ({ callbacks }: { callbacks?: ConnectCallbacks }) => {
         dataCallbackRef.current = callbacks?.onData ?? null
+
         return 'remote:env-1@@pty-command-finished'
       }
     )
@@ -788,16 +861,21 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
     sendTerminalInputThroughPane(pane, 'omp\r')
     await flushAsyncTicks()
+
     const onTitleChange = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     const onAgentStatus = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'done'; prompt: string; agentType: 'pi' }) => void)
       | undefined
+
     const dataCallback = dataCallbackRef.current
+
     if (!dataCallback || !onTitleChange || !onAgentStatus) {
       throw new Error('missing remote PTY callbacks')
     }
+
     dataCallback('\x1b]133;D;0\x07')
     onTitleChange('Pi ready', 'Pi ready')
     onAgentStatus({

@@ -22,15 +22,19 @@ export type ParsedDaemonPid = {
  */
 export function salvagePidFromCorruptDaemonRecord(contents: string): number | null {
   const match = /"pid"\s*:\s*(\d+)(?=\D)/.exec(contents)
+
   if (!match) {
     return null
   }
+
   const pid = Number(match[1])
+
   return Number.isSafeInteger(pid) && pid > 0 ? pid : null
 }
 
 export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
   const trimmed = contents.trim()
+
   try {
     const parsed = JSON.parse(trimmed) as {
       pid?: unknown
@@ -42,6 +46,7 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
       bootId?: unknown
       spawnerExecPath?: unknown
     }
+
     if (typeof parsed.pid === 'number' && Number.isFinite(parsed.pid)) {
       return {
         pid: parsed.pid,
@@ -62,6 +67,7 @@ export function parseDaemonPidFile(contents: string): ParsedDaemonPid | null {
   }
 
   const pid = Number(trimmed)
+
   return Number.isFinite(pid)
     ? {
         pid,

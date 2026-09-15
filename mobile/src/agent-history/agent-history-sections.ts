@@ -39,6 +39,7 @@ export function buildMobileAgentHistorySections(
   // filtering everything out (which would flash an empty list); the memo re-runs
   // with real paths once worktree.ps resolves.
   const narrowByPath = options.scope !== 'all' && options.scopeFilterPaths.length > 0
+
   const filtered = filterAiVaultSessions(sessions, {
     query: options.query,
     agents: AI_VAULT_AGENTS,
@@ -49,6 +50,7 @@ export function buildMobileAgentHistorySections(
   })
 
   const groups = groupAiVaultSessions(filtered, 'folder')
+
   return groups.map((group) => ({
     key: group.key,
     label: group.label,

@@ -18,6 +18,7 @@ export function gitLabJobCanHaveTrace(check: PRCheckDetail): boolean {
   if (check.status === 'queued') {
     return false
   }
+
   return check.conclusion !== 'neutral' && check.conclusion !== 'skipped'
 }
 
@@ -35,6 +36,7 @@ export function gitLabJobTraceToCheckRunDetails(
   // Re-slice defensively: an older remote runtime returns the raw trace because it
   // does not understand the `logExcerpt` request flag.
   const logTail = gitLabJobTraceToLogExcerpt(trace)
+
   return {
     name: check.name,
     // Why: copying the row's own state keeps the panel's status/conclusion cache

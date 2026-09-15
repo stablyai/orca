@@ -76,9 +76,11 @@ export function structuredSessionTeardownHostId(
   if (fence.resolvedRuntimeEnvironmentId !== undefined) {
     return toRuntimeExecutionHostId(fence.resolvedRuntimeEnvironmentId)
   }
+
   // Both no-connection readings collapse here on purpose — see the fence type. A caller that
   // resolved no host, and one that resolved this machine, each close nothing on anyone else's.
   const connectionId = fence.resolvedConnectionId ?? null
+
   return connectionId === null ? LOCAL_EXECUTION_HOST_ID : toSshExecutionHostId(connectionId)
 }
 
@@ -116,22 +118,28 @@ export function listStructuredSessionsForWorktree(
   fence: StructuredSessionHostFence
 ): StructuredSessionsForWorktree {
   const host = getStructuredAgentSessionHost()
+
   if (!host) {
     return { members: [], live: [] }
   }
+
   let records: ReturnType<typeof host.deps.store.listRecords>
+
   try {
     records = host.deps.store.listRecords()
   } catch {
     return { members: [], live: [] }
   }
+
   const hostId = structuredSessionTeardownHostId(fence)
+
   const members = records
     .filter(
       (record) =>
         record.location.workspaceId === worktreeId && record.location.executionHostId === hostId
     )
     .map((record) => ({ sessionId: record.sessionId, agent: record.provider }))
+
   return {
     members,
     live: members.filter(
@@ -150,6 +158,7 @@ export function listStructuredSessionsForWorktree(
 function countStructuredSessions(sessions: readonly UnclosedStructuredSession[]): string {
   const noun = sessions.length === 1 ? 'agent session' : 'agent sessions'
   const providers = [...new Set(sessions.map((session) => session.agent))].sort().join(', ')
+
   return `${sessions.length} ${noun} (${providers})`
 }
 
@@ -171,10 +180,13 @@ export function describeUnclosedStructuredSessions(
 ): string {
   const stillLive = sessions.filter((session) => session.status === 'live')
   const unconfirmed = sessions.filter((session) => session.status !== 'live')
+
   if (stillLive.length === 0) {
     return `could not confirm these closed: ${countStructuredSessions(unconfirmed)}`
   }
+
   const live = `${STILL_LIVE_DETAIL_PREFIX} ${countStructuredSessions(stillLive)}`
+
   return unconfirmed.length === 0
     ? live
     : `${live}; could not confirm these closed: ${countStructuredSessions(unconfirmed)}`
@@ -256,6 +268,7 @@ export async function closeStructuredSessionsForWorktree(
   } = {}
 ): Promise<void> {
   const { runtime, mayRefuse } = options
+
   // No `afterClose` for a dispatched worker: `host.close` drops the holds, so nothing keeps a
   // provider child un-evictable, but the dispatch's redrive subscription and registry entry do
   // survive until it settles by another verb. That is a bounded leak, not a hazard — and passing
@@ -269,16 +282,19 @@ export async function closeStructuredSessionsForWorktree(
     if (Date.now() >= deadline) {
       return
     }
+
     const outcome = await closeStructuredAgentSessionChild(session.sessionId, {
       ...(runtime ? { runtime } : {}),
       restoreTabOnUnprovenClose: mayRefuse === true
     })
+
     if (outcome.stopped) {
       progress.closed += 1
     } else {
       // Re-observed rather than reusing the close's own reason string: what the user is asked to
       // waive is the state AFTER the attempt, and a close that threw never reached an observation.
       const status = observeStructuredWorker({ sessionId: session.sessionId }).status
+
       if (status === 'exited') {
         // The re-read can PROVE the exit a failed close could not — it threw past its own
         // observation, or the record's death evidence landed after it read. Refusing on a child
@@ -295,6 +311,7 @@ export async function closeStructuredSessionsForWorktree(
         progress.unstopped.push({ ...session, status })
       }
     }
+
     // Advanced only once an outcome is recorded, so a close still in flight when the deadline
     // lands stays reported as unclosed instead of falling out of both counts.
     progress.settled += 1

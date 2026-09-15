@@ -35,7 +35,9 @@ export function isLegacySharedCodexHome(codexHome: string | null): boolean {
   if (!codexHome) {
     return false
   }
+
   const segments = codexHome.split(/[\\/]/).filter(Boolean)
+
   return segments.at(-2) === 'codex-runtime-home' && segments.at(-1) === 'home'
 }
 
@@ -44,6 +46,8 @@ export function isPerAccountManagedCodexHome(codexHome: string | null): boolean 
   if (!codexHome) {
     return false
   }
+
   const segments = codexHome.split(/[\\/]/).filter(Boolean)
+
   return segments.at(-3) === 'codex-accounts' && segments.at(-1) === 'home'
 }

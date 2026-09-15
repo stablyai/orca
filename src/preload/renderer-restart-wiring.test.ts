@@ -17,12 +17,15 @@ describe('renderer restart wiring', () => {
     const handleStatus = vi.fn()
     const abort = vi.fn()
     const listeners = new Map<string, (...args: unknown[]) => void>()
+
     const ipcRenderer = {
       on: vi.fn((channel: string, listener: (...args: unknown[]) => void) => {
         listeners.set(channel, listener)
+
         return ipcRenderer
       })
     } as unknown as Parameters<typeof registerRendererRestartIpcRelays>[0]
+
     eventTarget.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, unloadPrevented)
     eventTarget.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, restartAborted)
 
@@ -45,10 +48,12 @@ describe('renderer restart wiring', () => {
     eventTarget.addEventListener(ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT, () => {
       calls.push('prepared')
     })
+
     const relay = {
       markPrepared: () => calls.push('marked'),
       abort: () => calls.push('aborted')
     }
+
     const invoke = vi.fn(async () => {
       calls.push('invoked')
       throw new Error('IPC failed')

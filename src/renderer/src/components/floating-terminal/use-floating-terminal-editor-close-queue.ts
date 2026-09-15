@@ -35,17 +35,21 @@ export function useFloatingTerminalEditorCloseQueue({
     while (pendingEditorCloseQueueRef.current.length > 0) {
       const fileId = pendingEditorCloseQueueRef.current[0]
       const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === fileId)
+
       if (!file) {
         pendingEditorCloseQueueRef.current.shift()
         continue
       }
+
       if (!file.isDirty) {
         closeFile(fileId)
         pendingEditorCloseQueueRef.current.shift()
         continue
       }
+
       return fileId
     }
+
     return null
   }, [closeFile, pendingEditorCloseQueueRef])
 
@@ -53,10 +57,13 @@ export function useFloatingTerminalEditorCloseQueue({
     if (saveDialogFileIdRef.current !== null) {
       return
     }
+
     const nextFileId = getNextQueuedEditorClose()
+
     if (!nextFileId) {
       return
     }
+
     saveDialogFileIdRef.current = nextFileId
     requestCloseFile(nextFileId)
   }, [getNextQueuedEditorClose, requestCloseFile, saveDialogFileIdRef])
@@ -75,6 +82,7 @@ export function useFloatingTerminalEditorCloseQueue({
 
   useEffect(() => {
     saveDialogFileIdRef.current = saveDialogFileId
+
     if (saveDialogFileId === null) {
       advanceEditorCloseQueue()
     }
@@ -82,21 +90,25 @@ export function useFloatingTerminalEditorCloseQueue({
 
   const handleFloatingSaveDialogSave = useCallback(() => {
     const fileId = saveDialogFileIdRef.current
+
     if (fileId) {
       pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
         (queuedId) => queuedId !== fileId
       )
     }
+
     handleSaveDialogSave()
   }, [handleSaveDialogSave, pendingEditorCloseQueueRef, saveDialogFileIdRef])
 
   const handleFloatingSaveDialogDiscard = useCallback(() => {
     const fileId = saveDialogFileIdRef.current
+
     if (fileId) {
       pendingEditorCloseQueueRef.current = pendingEditorCloseQueueRef.current.filter(
         (queuedId) => queuedId !== fileId
       )
     }
+
     void Promise.resolve(handleSaveDialogDiscard())
   }, [handleSaveDialogDiscard, pendingEditorCloseQueueRef, saveDialogFileIdRef])
 

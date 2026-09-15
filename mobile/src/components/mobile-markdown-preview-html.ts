@@ -46,6 +46,7 @@ function decodeHtmlEntities(value: string, preserveEscapedEntities = false): str
 
 function stripTags(value: string): string {
   const { protectedText, codeSpans, placeholderPrefix } = protectMarkdownCode(value)
+
   const stripped = decodeHtmlEntities(
     stripMobileMarkdownMarkupTags(protectedText.replace(/<!--[\s\S]*?-->/g, '')),
     true
@@ -59,65 +60,85 @@ function stripTags(value: string): string {
 
 function attrValue(tag: string, name: string): string {
   let cursor = 1
+
   while (cursor < tag.length && !/[\s/>]/.test(tag[cursor] ?? '')) {
     cursor += 1
   }
+
   while (cursor < tag.length) {
     while (/\s/.test(tag[cursor] ?? '')) {
       cursor += 1
     }
+
     if (tag[cursor] === '>' || (tag[cursor] === '/' && tag[cursor + 1] === '>')) {
       return ''
     }
 
     const attributeStart = cursor
+
     while (!/[\s=/>]/.test(tag[cursor] ?? '>')) {
       cursor += 1
     }
+
     if (attributeStart === cursor) {
       cursor += 1
       continue
     }
+
     const attributeName = tag.slice(attributeStart, cursor)
+
     while (/\s/.test(tag[cursor] ?? '')) {
       cursor += 1
     }
+
     if (tag[cursor] !== '=') {
       continue
     }
 
     cursor += 1
+
     while (/\s/.test(tag[cursor] ?? '')) {
       cursor += 1
     }
+
     const quote = tag[cursor] === '"' || tag[cursor] === "'" ? tag[cursor] : ''
+
     if (quote) {
       cursor += 1
     }
+
     const valueStart = cursor
+
     if (quote) {
       const valueEnd = tag.indexOf(quote, cursor)
+
       if (valueEnd === -1) {
         return ''
       }
+
       cursor = valueEnd + 1
+
       if (attributeName.toLowerCase() === name) {
         return decodeHtmlEntities(tag.slice(valueStart, valueEnd))
       }
+
       continue
     }
 
     while (!/[\s>]/.test(tag[cursor] ?? '>')) {
       cursor += 1
     }
+
     if (attributeName.toLowerCase() === name) {
       return decodeHtmlEntities(tag.slice(valueStart, cursor))
     }
   }
+
   return ''
 }
 
 const tagAttributesSource = `(?:[^<>"']|"[^"]*"|'[^']*')*`
+
 const imageTagPattern = new RegExp(`<img\\b${tagAttributesSource}>`, 'gi')
 
 function normalizeAnchorTags(value: string): string {
@@ -129,17 +150,22 @@ function normalizeAnchorTags(value: string): string {
 
   while (searchCursor < value.length) {
     const start = findNextPairedMarkupOpener(value, lowerValue, 'a', searchCursor)
+
     if (start < 0) {
       break
     }
+
     const end = findMobileMarkdownMarkupTagEnd(value, start + 2)
+
     if (end < 0) {
       if (end === -2) {
         break
       }
+
       searchCursor = start + 2
       continue
     }
+
     if (!isPairedMarkupOpener(value, start + 2, end)) {
       searchCursor = end + 1
       continue
@@ -147,6 +173,7 @@ function normalizeAnchorTags(value: string): string {
 
     const tag = value.slice(start, end + 1)
     const href = attrValue(tag, 'href')
+
     if (!href) {
       searchCursor = end + 1
       continue
@@ -155,10 +182,13 @@ function normalizeAnchorTags(value: string): string {
     if (closingStart < end + 1) {
       closingStart = lowerValue.indexOf('</a>', end + 1)
     }
+
     if (closingStart < 0) {
       break
     }
+
     const nestedStart = findNextPairedMarkupOpener(value, lowerValue, 'a', end + 1)
+
     if (nestedStart >= 0 && nestedStart < closingStart) {
       searchCursor = nestedStart
       continue
@@ -182,21 +212,26 @@ function normalizeInlineHtml(value: string): string {
   let next = normalizeAnchorTags(imagesNormalized)
   next = replaceMobileMarkdownPairedMarkupTags(next, ['strong', 'b'], (_name, inner) => {
     const text = stripTags(inner)
+
     return text ? `**${text}**` : ''
   })
   next = replaceMobileMarkdownPairedMarkupTags(next, ['em', 'i'], (_name, inner) => {
     const text = stripTags(inner)
+
     return text ? `*${text}*` : ''
   })
   next = replaceMobileMarkdownPairedMarkupTags(next, ['code', 'kbd'], (_name, inner) => {
     const text = stripTags(inner)
+
     return text ? `\`${text}\`` : ''
   })
+
   return next
 }
 
 // Why: Markdown code is literal source, so it must bypass the HTML strip pass.
 const CODE_PLACEHOLDER_PREFIX_BASE = '\uE000ORCA_MD_CODE_'
+
 const CODE_PLACEHOLDER_SUFFIX = '\uE000'
 
 function escapeRegExp(value: string): string {
@@ -206,15 +241,19 @@ function escapeRegExp(value: string): string {
 function codePlaceholderPrefix(content: string): string {
   let suffixLength = 0
   let cursor = 0
+
   while ((cursor = content.indexOf(CODE_PLACEHOLDER_PREFIX_BASE, cursor)) !== -1) {
     cursor += CODE_PLACEHOLDER_PREFIX_BASE.length
     const suffixStart = cursor
+
     while (content[cursor] === '_') {
       cursor += 1
     }
+
     // One extra underscore keeps the prefix longer than every authored run.
     suffixLength = Math.max(suffixLength, cursor - suffixStart + 1)
   }
+
   return CODE_PLACEHOLDER_PREFIX_BASE + '_'.repeat(suffixLength)
 }
 
@@ -225,26 +264,33 @@ function protectMarkdownCode(content: string): {
 } {
   const placeholderPrefix = codePlaceholderPrefix(content)
   const codeSpans: string[] = []
+
   const store = (match: string): string => {
     const token = `${placeholderPrefix}${codeSpans.length}${CODE_PLACEHOLDER_SUFFIX}`
     codeSpans.push(match)
+
     return token
   }
 
   const lines = content.split('\n')
   const protectedLines: string[] = []
   let index = 0
+
   while (index < lines.length) {
     const line = lines[index] ?? ''
+
     if (/^```[A-Za-z0-9_-]*\s*$/.test(line)) {
       const start = index
       index += 1
+
       while (index < lines.length && !/^```\s*$/.test(lines[index] ?? '')) {
         index += 1
       }
+
       if (index < lines.length) {
         index += 1
       }
+
       protectedLines.push(store(lines.slice(start, index).join('\n')))
       continue
     }
@@ -265,6 +311,7 @@ function restoreMarkdownCode(
     `${escapeRegExp(placeholderPrefix)}(\\d+)${escapeRegExp(CODE_PLACEHOLDER_SUFFIX)}`,
     'g'
   )
+
   return value.replace(placeholderPattern, (_token, index) => codeSpans[Number(index)] ?? _token)
 }
 
@@ -272,6 +319,7 @@ export function normalizeMobileMarkdownPreviewHtml(content: string): string {
   const { protectedText, codeSpans, placeholderPrefix } = protectMarkdownCode(
     content.replace(/\r\n?/g, '\n')
   )
+
   let next = protectedText
 
   // Why: repository Markdown often uses small HTML islands for centered README
@@ -282,11 +330,13 @@ export function normalizeMobileMarkdownPreviewHtml(content: string): string {
     ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
     (name, inner) => {
       const text = stripTags(normalizeInlineHtml(inner))
+
       return text ? `\n${'#'.repeat(Number(name.slice(1)))} ${text}\n` : '\n'
     }
   )
   next = replaceMobileMarkdownPairedMarkupTags(next, ['p'], (_name, inner) => {
     const text = stripTags(normalizeInlineHtml(inner))
+
     return text ? `\n${text}\n` : '\n'
   })
   next = replaceMobileMarkdownPairedMarkupTags(next, ['sub'], (_name, inner) =>

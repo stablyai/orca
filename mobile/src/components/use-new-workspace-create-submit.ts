@@ -75,21 +75,28 @@ export function useNewWorkspaceCreateSubmit(args: {
 
   async function create(options: CreateOptions = {}): Promise<void> {
     const { client, selectedRepo } = args
+
     if (!client || !selectedRepo || createInFlightRef.current) {
       return
     }
+
     createInFlightRef.current = true
     setCreating(true)
     args.setError('')
+
     try {
       if (args.sshGate.requiresConnection) {
         args.setError(`Connect ${selectedRepo.displayName} before creating a workspace.`)
+
         return
       }
+
       let latestRuntimeSettings = args.runtimeSettings
+
       try {
         const settingsReply = await settingsRead.request(client)
         const settings = settingsRead.interpret(settingsReply)
+
         if (settings.accepted) {
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
           latestRuntimeSettings = settings.value as NewWorktreeRuntimeSettings
@@ -98,6 +105,7 @@ export function useNewWorkspaceCreateSubmit(args: {
       } catch {
         // The runtime validates the same setting before spawning.
       }
+
       if (
         args.selectedAgent.id !== '__blank__' &&
         !isMobileTuiAgentEnabled(args.selectedAgent.id, latestRuntimeSettings?.disabledTuiAgents)
@@ -107,10 +115,12 @@ export function useNewWorkspaceCreateSubmit(args: {
         )
         args.setAgentOverridden(false)
         args.setError('Selected agent is disabled. Choose an enabled agent before creating.')
+
         return
       }
 
       const trimmedName = args.composer.name.trim()
+
       const baseName =
         trimmedName ||
         getSuggestedCreatureName(
@@ -118,20 +128,25 @@ export function useNewWorkspaceCreateSubmit(args: {
           undefined,
           args.retiredWorktreeNames
         )
+
       let setupDecision: WorkspaceCreateSetupDecision = 'inherit'
+
       if (args.setupCommand) {
         if (options.setupOverride) {
           setupDecision = options.setupOverride
         } else if (args.setupRunPolicy === 'ask') {
           if (!args.setupDecisionChoice) {
             args.setError('Choose whether to run the setup script.')
+
             return
           }
+
           setupDecision = args.setupDecisionChoice
         } else {
           setupDecision = args.runSetup ? 'run' : 'skip'
         }
       }
+
       if (
         setupDecision === 'run' &&
         args.setupTrust &&
@@ -146,13 +161,16 @@ export function useNewWorkspaceCreateSubmit(args: {
           previouslyApproved: wasSetupHookPreviouslyApproved(args.trustedOrcaHooks, selectedRepo.id)
         })
         args.transitionDrawer('trust')
+
         return
       }
 
       const createdWithAgentId =
         args.selectedAgent.id !== '__blank__' ? args.selectedAgent.id : undefined
+
       const trimmedNote = args.note.trim() || undefined
       const selection = args.composer.createSelection
+
       const result = selection
         ? await createWorkspaceFromComposerSource({
             client,
@@ -175,10 +193,13 @@ export function useNewWorkspaceCreateSubmit(args: {
             setupDecision,
             worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport()
           })
+
       if ('error' in result) {
         args.setError(result.error)
+
         return
       }
+
       args.onClose()
       args.onCreated(result.worktreeId, result.name, result.warning)
     } catch (error) {
@@ -198,8 +219,10 @@ export function useNewWorkspaceCreateSubmit(args: {
     ) {
       return
     }
+
     setupTrustActionInFlightRef.current = true
     setCreating(true)
+
     try {
       const nextTrust = await persistSetupHookTrustApproval({
         client: args.client,
@@ -208,6 +231,7 @@ export function useNewWorkspaceCreateSubmit(args: {
         contentHash: setupTrustPrompt.contentHash,
         alwaysTrust
       })
+
       args.setTrustedOrcaHooks(nextTrust)
       const approvedHash = setupTrustPrompt.contentHash
       setSetupTrustPrompt(null)
@@ -217,6 +241,7 @@ export function useNewWorkspaceCreateSubmit(args: {
       args.setError(error instanceof Error ? error.message : 'Failed to trust setup script.')
     } finally {
       setupTrustActionInFlightRef.current = false
+
       if (!createInFlightRef.current) {
         setCreating(false)
       }
@@ -227,6 +252,7 @@ export function useNewWorkspaceCreateSubmit(args: {
     if (setupTrustActionInFlightRef.current || createInFlightRef.current) {
       return
     }
+
     setSetupTrustPrompt(null)
     args.transitionDrawer('form')
   }
@@ -235,6 +261,7 @@ export function useNewWorkspaceCreateSubmit(args: {
     if (setupTrustActionInFlightRef.current || createInFlightRef.current) {
       return
     }
+
     closeSetupTrust()
     void create({ setupOverride: 'skip' })
   }

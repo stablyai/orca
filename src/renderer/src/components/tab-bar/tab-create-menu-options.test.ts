@@ -113,6 +113,7 @@ describe('tab create menu options', () => {
 
   it('rejects oversized pasted queries before scoring menu options', () => {
     const oversizedQuery = 'secret-tab-create-menu'.repeat(TAB_CREATE_MENU_QUERY_MAX_BYTES)
+
     const option = {
       id: 'new-terminal',
       kind: 'new-terminal',

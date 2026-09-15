@@ -23,6 +23,7 @@ export async function attachDaemonOwnedSession(
   if (owner === fallback) {
     throw new SessionNotFoundError(sessionId)
   }
+
   return await owner.attach(sessionId)
 }
 
@@ -36,9 +37,11 @@ export function adoptOwningProvider(
   for (const provider of providers) {
     if (provider.hasPty?.(sessionId) === true) {
       sessionProviders.set(sessionId, provider)
+
       return provider
     }
   }
+
   return null
 }
 
@@ -48,6 +51,7 @@ export function findDaemonAdapter(
   sessionId: string
 ): DaemonPtyAdapter | null {
   const provider = sessionProviders.get(sessionId)
+
   return provider && daemonAdapters.includes(provider as DaemonPtyAdapter)
     ? (provider as DaemonPtyAdapter)
     : null

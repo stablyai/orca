@@ -35,6 +35,7 @@ describe('native chat launch-default adoption', () => {
     }) => void
   } => {
     let persisted: PersistedNativeChatSessionOptions = {}
+
     return {
       read: () => persisted,
       persistSelection: (args) => {
@@ -50,6 +51,7 @@ describe('native chat launch-default adoption', () => {
     // for this agent launched `-m claude-opus-5` — an id neither list has ever carried.
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'claude-opus-5' })
     const defaults = claudeLaunchDefaults()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -70,6 +72,7 @@ describe('native chat launch-default adoption', () => {
     // enough, but tracking says the flag was emitted, not that the id names anything.
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'claude-opus-5' })
     const defaults = claudeLaunchDefaults()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -86,6 +89,7 @@ describe('native chat launch-default adoption', () => {
   it('still adopts a model only the host catalog lists', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'sonnet' })
     const defaults = claudeLaunchDefaults()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -105,6 +109,7 @@ describe('native chat launch-default adoption', () => {
     // so a CLI that lists only `opus[1m]` is no evidence against it.
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'opus', effort: 'xhigh' })
     const defaults = claudeLaunchDefaults()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
@@ -125,6 +130,7 @@ describe('native chat launch-default adoption', () => {
   it('still adopts a tracked seed model before any discovery', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'opus', effort: 'xhigh' })
     const defaults = claudeLaunchDefaults()
+
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',

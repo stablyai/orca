@@ -58,12 +58,15 @@ function fieldCoverage(field: PaletteIndexedField): number {
   if (field.evidenceId) {
     return 3
   }
+
   if (field.role === 'primary') {
     return 0
   }
+
   if (field.role === 'secondary' || field.role === 'alias') {
     return 1
   }
+
   return 2
 }
 
@@ -73,21 +76,27 @@ function toCandidate(hits: readonly FieldHit[]): TokenCandidate {
   let recovery = strength >= STRENGTH.compact ? 1 : 0
   let wordMatch = strength >= STRENGTH['literal-substring'] ? 1 : 0
   let coverage = fieldCoverage(hits[0].field)
+
   for (let index = 1; index < hits.length; index += 1) {
     const hit = hits[index]
     const value = STRENGTH[hit.match.quality]
+
     if (value > strength) {
       strength = value
       quality = hit.match.quality
     }
+
     if (value >= STRENGTH.compact) {
       recovery = 1
     }
+
     if (value >= STRENGTH['literal-substring']) {
       wordMatch = 1
     }
+
     coverage = Math.max(coverage, fieldCoverage(hit.field))
   }
+
   return {
     hits,
     quality,
@@ -107,12 +116,15 @@ function matchCompositePairs(
   if (!token.repoBranch || !document.compositePairs.length) {
     return []
   }
+
   const left = createPaletteQueryToken(token.repoBranch.repo, token.index)
   const right = createPaletteQueryToken(token.repoBranch.branch, token.index)
   const candidates: TokenCandidate[] = []
+
   for (const pair of document.compositePairs) {
     const leftField = document.fieldById.get(pair.leftFieldId)
     const rightField = document.fieldById.get(pair.rightFieldId)
+
     if (
       !leftField ||
       !rightField ||
@@ -120,8 +132,10 @@ function matchCompositePairs(
     ) {
       continue
     }
+
     const leftMatch = matchPaletteField(leftField, left)
     const rightMatch = matchPaletteField(rightField, right)
+
     if (leftMatch && rightMatch) {
       candidates.push(
         toCandidate([
@@ -131,6 +145,7 @@ function matchCompositePairs(
       )
     }
   }
+
   return candidates
 }
 
@@ -143,21 +158,28 @@ function collectTokenCandidates(
     visible: matchCompositePairs(document, token, isFieldAllowed),
     byEvidenceId: new Map()
   }
+
   let found = candidates.visible.length > 0
+
   for (const field of document.fields) {
     if (isFieldAllowed && !isFieldAllowed(field)) {
       continue
     }
+
     const match = matchPaletteField(field, token)
+
     if (!match) {
       continue
     }
+
     found = true
     const candidate = toCandidate([{ field, match }])
+
     if (!field.evidenceId) {
       candidates.visible.push(candidate)
     } else {
       const bucket = candidates.byEvidenceId.get(field.evidenceId)
+
       if (bucket) {
         bucket.push(candidate)
       } else {
@@ -165,6 +187,7 @@ function collectTokenCandidates(
       }
     }
   }
+
   return found ? candidates : null
 }
 
@@ -183,6 +206,7 @@ function toTokenAssignments(
       })
     }
   })
+
   return assignments
 }
 
@@ -196,17 +220,21 @@ export function matchPaletteDocument(args: {
   diagnostics?: PaletteMatchDiagnostics
 }): PaletteDocumentMatch | null {
   const candidates: TokenCandidates[] = []
+
   for (const token of args.tokens) {
     const collected = collectTokenCandidates(args.document, token, args.isFieldAllowed)
+
     if (!collected) {
       return null
     }
+
     candidates.push(collected)
   }
 
   const visibleSummaries = candidates.map((candidate) =>
     summarizeCandidates(candidate.visible, args.diagnostics)
   )
+
   const evidenceSummaries = candidates.map(
     (candidate) =>
       new Map(
@@ -216,6 +244,7 @@ export function matchPaletteDocument(args: {
         ])
       )
   )
+
   const ranked: RankedAssignment[] = [
     ...collectCompleteVisibleAssignments({
       document: args.document,
@@ -224,6 +253,7 @@ export function matchPaletteDocument(args: {
       diagnostics: args.diagnostics
     })
   ]
+
   addRankedAssignment(
     ranked,
     args.document,
@@ -232,11 +262,13 @@ export function matchPaletteDocument(args: {
     null
   )
   const matchedEvidenceIds = new Set<string>()
+
   for (const candidate of candidates) {
     for (const evidenceId of candidate.byEvidenceId.keys()) {
       matchedEvidenceIds.add(evidenceId)
     }
   }
+
   for (const evidenceId of matchedEvidenceIds) {
     ranked.push(
       ...collectScopeAssignments({
@@ -249,6 +281,7 @@ export function matchPaletteDocument(args: {
       })
     )
   }
+
   if ((args.tokenCountBeforeDeduplication ?? args.tokens.length) === 1) {
     ranked.push(
       ...collectRecognizedIdentifierAssignments({
@@ -259,27 +292,34 @@ export function matchPaletteDocument(args: {
       })
     )
   }
+
   if (!ranked.length) {
     return null
   }
+
   ranked.sort((a, b) => {
     const rank = comparePaletteDocumentRank(a.rank, b.rank)
+
     if (rank !== 0) {
       return rank
     }
+
     return compareSelectedSourceOrder(a.selected, b.selected)
   })
   const winner = ranked[0]
   const winnerRank = args.exactIntent ? { ...winner.rank, destination: 0 } : winner.rank
   const assignments = toTokenAssignments(args.tokens, winner.selected)
+
   const worstQuality = winner.selected.reduce<PaletteMatchQuality>(
     (worst, candidate) =>
       STRENGTH[candidate.quality] > STRENGTH[worst] ? candidate.quality : worst,
     'field-exact'
   )
+
   const usesSupportingEvidence = assignments.some(
     (assignment) => args.document.fieldById.get(assignment.fieldId)?.evidenceId
   )
+
   return {
     qualityClass:
       winnerRank.destination === 0

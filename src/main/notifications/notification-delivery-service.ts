@@ -63,6 +63,7 @@ export function createNotificationDeliveryService(
       }
 
       const settings = deps.readNotificationSettings()
+
       const desktopAllowed =
         settings.enabled &&
         (request.source !== 'agent-task-complete' || settings.agentTaskComplete) &&
@@ -105,6 +106,7 @@ export function createNotificationDeliveryService(
       }
 
       const browserWindow = deps.findActiveWindow()
+
       if (
         settings.suppressWhenFocused &&
         request.isActiveWorktree &&
@@ -135,12 +137,15 @@ export function createNotificationDeliveryService(
       if (deps.platform !== 'darwin') {
         return deps.deliverNative(request, notificationOptions, settings)
       }
+
       // Why: macOS silently swallows notifications while permission is denied/undecided (verified macOS 26); skip so the renderer can show a fallback.
       return deps.readAuthorizationStatus().then((authorization) => {
         if (authorization === 'denied' || authorization === 'not-determined') {
           deps.recordDeliveryOutcome('failed')
+
           return { delivered: false, reason: 'blocked-by-system' }
         }
+
         return deps.deliverNative(request, notificationOptions, settings)
       })
     }

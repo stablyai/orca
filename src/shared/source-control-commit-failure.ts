@@ -1,23 +1,31 @@
 import type { GitStatusEntry } from './git-status-types'
 
 const FALLBACK_COMMIT_FAILURE_SUMMARY = 'Commit failed.'
+
 const LINT_COMMIT_FAILURE_SUMMARY = 'Lint failed during commit.'
+
 const PRE_COMMIT_FAILURE_SUMMARY = 'Pre-commit hook failed.'
+
 export const COMMIT_FAILURE_SUMMARY_SCAN_CODE_UNITS = 64 * 1024
 
 const COMMIT_FAILURE_PROMPT_OUTPUT_LIMIT = 12_000
+
 const COMMIT_FAILURE_REPLY_INSTRUCTION =
   'Reply with the root cause, files changed, validation run, final git status, and anything left for the user.'
 
 const ANSI_PATTERN =
   // eslint-disable-next-line no-control-regex
   /[\u001b\u009b][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[a-zA-Z\d]*)*)?\u0007)|(?:(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g
+
 const CONTROL_PATTERN =
   // eslint-disable-next-line no-control-regex
   /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g
+
 const LOW_SIGNAL_LINE_PATTERN =
   /^(?:npm\s+(?:warn|warning)\b.*(?:env|config)|npm\s+notice\b|husky\s+-\s+deprecated\b)/i
+
 const HOOK_PATTERN = /\b(?:pre-commit|precommit|husky|lint-staged)\b/i
+
 const LINT_PATTERN = /\b(?:eslint|oxlint|lint-staged|lint)\b/i
 
 function normalizeCommitFailure(raw: string): string {
@@ -38,22 +46,28 @@ function getMeaningfulLines(raw: string): string[] {
   }
 
   const filtered = lines.filter((line) => !LOW_SIGNAL_LINE_PATTERN.test(line))
+
   return filtered.length > 0 ? filtered : lines
 }
 
 function getCommitFailureNormalizedLines(normalized: string): string[] {
   const lines: string[] = []
   let lineStart = 0
+
   for (let index = 0; index <= normalized.length; index += 1) {
     if (index < normalized.length && normalized.charCodeAt(index) !== 10) {
       continue
     }
+
     const line = normalized.slice(lineStart, index).trim()
+
     if (line.length > 0) {
       lines.push(line)
     }
+
     lineStart = index + 1
   }
+
   return lines
 }
 
@@ -96,18 +110,23 @@ export function hasExpandedCommitFailureDetails(raw: string, summary: string): b
 function foldCommitFailureComparisonWhitespace(value: string): string {
   let result = ''
   let pendingSpace = false
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (isCommitFailureComparisonWhitespace(code)) {
       pendingSpace = result.length > 0
       continue
     }
+
     if (pendingSpace) {
       result += ' '
       pendingSpace = false
     }
+
     result += value[index]
   }
+
   return result
 }
 
@@ -135,6 +154,7 @@ function truncatePromptText(value: string, limit: number): string {
   const omitted = value.length - limit
   const headLength = Math.floor(limit * 0.35)
   const tailLength = limit - headLength
+
   return [
     value.slice(0, headLength),
     `\n[...${omitted} characters omitted...]\n`,
@@ -203,6 +223,7 @@ export function appendCommitFailureCustomInstruction(
   customInstruction: string
 ): string {
   const trimmedInstruction = customInstruction.trim()
+
   if (!trimmedInstruction) {
     return prompt
   }
@@ -213,6 +234,7 @@ export function appendCommitFailureCustomInstruction(
     trimmedInstruction,
     ''
   ].join('\n')
+
   if (!prompt.endsWith(COMMIT_FAILURE_REPLY_INSTRUCTION)) {
     return `${prompt}${customInstructionBlock}`
   }

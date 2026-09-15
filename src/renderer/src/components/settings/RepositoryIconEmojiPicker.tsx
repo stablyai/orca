@@ -30,6 +30,7 @@ export function RepositoryIconEmojiPicker({
   const handleEmojiClick = (emojiData: EmojiClickData): void => {
     // ZWJ/skin-tone sequences can exceed the 16-char cap even without skinTonesDisabled.
     const repoIcon = sanitizeRepoIcon({ type: 'emoji', emoji: emojiData.emoji })
+
     if (!repoIcon) {
       toast.error(
         translate(
@@ -37,8 +38,10 @@ export function RepositoryIconEmojiPicker({
           "This emoji can't be used as a repo icon."
         )
       )
+
       return
     }
+
     onSetIcon(repoIcon)
   }
 

@@ -43,6 +43,7 @@ function makeState(worktreeHostId?: string): ResumeShellState {
 
 function withLoginShell<T>(shell: string, run: () => T): T {
   clientLoginShell.value = shell
+
   try {
     return run()
   } finally {

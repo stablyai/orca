@@ -13,11 +13,13 @@ export async function expectSidebarProjectVisible(page: Page, projectName: strin
         if (await label.isVisible()) {
           return true
         }
+
         // Virtualized project headers mount only as their scroll range enters the viewport.
         await sidebar.evaluate((element) => {
           element.scrollTop += Math.max(1, Math.floor(element.clientHeight * 0.8))
           element.dispatchEvent(new Event('scroll', { bubbles: true }))
         })
+
         return false
       },
       { message: `sidebar never rendered project ${projectName}`, intervals: [100] }

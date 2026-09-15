@@ -81,6 +81,7 @@ describe('Claude live PTY gate', () => {
   it('notifies drain listeners only when the last live Claude PTY exits', () => {
     const onDrained = vi.fn()
     const unsubscribe = onLiveClaudePtysDrained(onDrained)
+
     try {
       markClaudePtySpawned('live-claude-pty')
       markClaudePtySpawned('seeded-pty-1')
@@ -103,6 +104,7 @@ describe('Claude live PTY gate', () => {
   it('notifies drain listeners when seed reconciliation releases the last live id', () => {
     const onDrained = vi.fn()
     const unsubscribe = onLiveClaudePtysDrained(onDrained)
+
     try {
       seedLiveClaudePtysFromPersistence(['seeded-pty-1'])
 

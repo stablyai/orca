@@ -11,6 +11,7 @@ export function readRendererHeapStatistics(
   source: HeapStatisticsSource = process
 ): RendererHeapStatistics | null {
   let heap: Electron.HeapStatistics
+
   try {
     heap = source.getHeapStatistics()
   } catch {
@@ -19,6 +20,7 @@ export function readRendererHeapStatistics(
   }
 
   let blinkAllocatedKB: number | undefined
+
   try {
     // Why a separate try: Blink's number is supplementary. Losing it must not
     // discard the exact V8 read and send callers back to the quantized metric.

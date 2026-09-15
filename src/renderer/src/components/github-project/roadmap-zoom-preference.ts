@@ -3,6 +3,7 @@
 import type { RoadmapZoom } from '../../../../shared/github/project-roadmap-timeline'
 
 const STORAGE_KEY = 'orca.githubProject.roadmapZoom'
+
 const DEFAULT_ZOOM: RoadmapZoom = 'month'
 
 function isRoadmapZoom(value: string | null): value is RoadmapZoom {
@@ -12,6 +13,7 @@ function isRoadmapZoom(value: string | null): value is RoadmapZoom {
 export function loadRoadmapZoom(): RoadmapZoom {
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY)
+
     return isRoadmapZoom(stored) ? stored : DEFAULT_ZOOM
   } catch {
     return DEFAULT_ZOOM

@@ -73,6 +73,7 @@ export function useMobileNativeChatAnswerSend(args: {
     streamIdentity,
     onSendError
   } = args
+
   const generationRef = useRef(0)
   const activeRouteRef = useRef({ client, enabled, sessionId, streamIdentity })
   activeRouteRef.current = { client, enabled, sessionId, streamIdentity }
@@ -82,16 +83,19 @@ export function useMobileNativeChatAnswerSend(args: {
   const writeHoldsRef = useRef(new Map<string, number>())
   // Successors wait for the prior RPC and inherit any delivery ambiguity.
   const writeTurnsRef = useRef(new Map<string, Promise<boolean>>())
+
   const delaysRef = useRef<
     Set<{ timer: ReturnType<typeof setTimeout>; resolve: (completed: boolean) => void }>
   >(new Set())
 
   const cancelPending = useCallback(() => {
     generationRef.current += 1
+
     for (const delay of delaysRef.current) {
       clearTimeout(delay.timer)
       delay.resolve(false)
     }
+
     delaysRef.current.clear()
   }, [])
 
@@ -100,35 +104,45 @@ export function useMobileNativeChatAnswerSend(args: {
     if (!enabled) {
       cancelPending()
     }
+
     return cancelPending
   }, [client, enabled, sessionId, streamIdentity, cancelPending])
 
   const answerAsk = useCallback(
     async (prompt: AskPrompt, selections: AskAnswerSelection[]): Promise<boolean> => {
       const handle = handleRef.current
+
       if (!client || !handle || !enabled) {
         onSendError('Answer not sent (disconnected)')
+
         return false
       }
+
       if (!hasAskAnswer(prompt, selections)) {
         return false
       }
+
       // One composed write sequence per terminal: an answer landing mid-flight
       // in an image paste (or vice versa) would interleave bytes into the PTY.
       // A superseding answer shares the cancelled chain's hold on this terminal
       // (that chain has not unwound to its release yet).
       const holds = writeHoldsRef.current
       const heldCount = holds.get(handle) ?? 0
+
       if (heldCount === 0 && !acquireMobileNativeChatTerminalWrite(handle)) {
         onSendError('Answer not sent')
+
         return false
       }
+
       holds.set(handle, heldCount + 1)
       const previousTurn = writeTurnsRef.current.get(handle) ?? Promise.resolve(true)
       let finishTurn: (safeToContinue: boolean) => void = () => undefined
+
       const turn = new Promise<boolean>((resolve) => {
         finishTurn = resolve
       })
+
       writeTurnsRef.current.set(handle, turn)
       // A new answer supersedes any still-pending keystroke writes.
       cancelPending()
@@ -136,8 +150,10 @@ export function useMobileNativeChatAnswerSend(args: {
       let sawUnknownOutcome = false
       let sawAcceptedGroup = false
       let predecessorSafe = true
+
       try {
         predecessorSafe = await previousTurn
+
         if (!predecessorSafe) {
           // Fenced. Report it: the card re-enables on a false result, so silence
           // here is indistinguishable from a dead button. "Check chat" rather than
@@ -148,19 +164,24 @@ export function useMobileNativeChatAnswerSend(args: {
           if (writeTurnsRef.current.get(handle) === turn) {
             onSendError('Answer not sent — check chat before retrying')
           }
+
           return false
         }
+
         // Superseded by a newer answer, which owns the error surface from here.
         if (generationRef.current !== generation) {
           return false
         }
+
         // One budget for the whole answer instead of a fresh timeout per keystroke
         // group, which let an N-group selector hold the card for N × the send timeout.
         // It bounds transport time only: each deliberate pacing wait is credited back
         // below, so a long multi-question answer still gets a full budget to write in.
         let deadline = openMobileNativeChatSendBudget()
+
         const sendTerminal = async (body: string, enter: boolean): Promise<boolean> => {
           const activeRoute = activeRouteRef.current
+
           if (
             !activeRoute.enabled ||
             activeRoute.client !== client ||
@@ -170,6 +191,7 @@ export function useMobileNativeChatAnswerSend(args: {
           ) {
             return false
           }
+
           const outcome = await sendMobileNativeChatMessageWithOutcome({
             client,
             terminal: handle,
@@ -180,20 +202,25 @@ export function useMobileNativeChatAnswerSend(args: {
               ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
               : {})
           })
+
           if (outcome === 'unknown') {
             sawUnknownOutcome = true
           }
+
           if (outcome === 'accepted') {
             sawAcceptedGroup = true
           }
+
           return outcome === 'accepted'
         }
+
         const wait = (ms: number): Promise<boolean> => {
           // Already superseded: don't hold the successor for a full pacing step
           // waiting on a timer whose only job is to report the cancellation.
           if (generationRef.current !== generation) {
             return Promise.resolve(false)
           }
+
           return new Promise((resolve) => {
             const delay = {
               timer: setTimeout(() => {
@@ -202,9 +229,11 @@ export function useMobileNativeChatAnswerSend(args: {
               }, ms),
               resolve
             }
+
             delaysRef.current.add(delay)
           })
         }
+
         const fail = (): false => {
           if (generationRef.current === generation) {
             // Why: keystrokes that may have landed (ack lost / path cutover) must
@@ -221,8 +250,10 @@ export function useMobileNativeChatAnswerSend(args: {
                   : 'Answer not sent'
             )
           }
+
           return false
         }
+
         // Grok commits pasted labels; Claude and Codex need their selector-specific
         // keystrokes paced so each step renders before the next lands.
         if (!shouldStepNativeChatAskAnswer(agentRef.current)) {
@@ -245,52 +276,66 @@ export function useMobileNativeChatAnswerSend(args: {
             if (generationRef.current === generation) {
               onSendError('Answer not sent')
             }
+
             return false
           }
+
           if (generationRef.current !== generation) {
             return false
           }
+
           // A chain a successor took over from must not report success either: an
           // accepted answer retires the shared send-error banner, wiping the
           // successor's fence. Test the turn slot, not the generation counter —
           // Stop, ask-cancel and a dropped lease all bump the generation with no
           // successor, and there a landed answer IS a success.
           const sent = (await sendTerminal(formatAskAnswer(prompt, selections), true)) || fail()
+
           return sent && writeTurnsRef.current.get(handle) === turn
         }
+
         const groups =
           resolveNativeChatTranscriptAgent(agentRef.current) === 'codex'
             ? buildCodexAskAnswerKeys(prompt, selections)
             : buildAskAnswerKeys(prompt, selections)
+
         for (let index = 0; index < groups.length; index += 1) {
           if (generationRef.current !== generation) {
             return false
           }
+
           const group = groups[index]!
           const body = 'raw' in group ? group.raw : sanitizeAskFreeText(group.text)
+
           if (!(await sendTerminal(body, false))) {
             return fail()
           }
+
           if (index < groups.length - 1) {
             if (!(await wait(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS))) {
               return false
             }
+
             // Pacing is deliberate, not transport latency — don't charge it to the budget.
             deadline += MOBILE_NATIVE_CHAT_QUESTION_STEP_MS
           }
         }
+
         // Taken over on the last key: same as above, the successor owns the surface.
         return groups.length > 0 && writeTurnsRef.current.get(handle) === turn
       } finally {
         // Any accepted key changed the live selector, so a queued replacement
         // cannot safely apply its from-scratch key plan to that new position.
         finishTurn(predecessorSafe && !sawUnknownOutcome && !sawAcceptedGroup)
+
         if (writeTurnsRef.current.get(handle) === turn) {
           writeTurnsRef.current.delete(handle)
         }
+
         // Last chain out releases; a superseded chain unwinding late must not
         // free the lock out from under the successor sharing its hold.
         const remaining = (holds.get(handle) ?? 1) - 1
+
         if (remaining <= 0) {
           holds.delete(handle)
           releaseMobileNativeChatTerminalWrite(handle)

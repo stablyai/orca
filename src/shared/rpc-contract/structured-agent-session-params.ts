@@ -179,6 +179,7 @@ export const CancelParams = z
     if (value.taskId !== undefined && value.scope !== 'background-tasks') {
       ctx.addIssue({ code: 'custom', message: 'A task id requires background-task scope' })
     }
+
     if (value.prompt !== undefined && value.scope === 'background-tasks') {
       ctx.addIssue({ code: 'custom', message: 'A prompt cannot use background-task scope' })
     }

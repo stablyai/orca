@@ -27,7 +27,9 @@ import {
 } from './config-toml-trust'
 
 let userDataDir: string
+
 let runtimeHomeDir: string
+
 let previousUserDataPath: string | undefined
 
 beforeEach(() => {
@@ -48,11 +50,13 @@ afterEach(() => {
   _internals.setGrantSessionRunner(null)
   setCodexTrustGrantTelemetry(() => {})
   codexAppServerCapabilityCache.clear()
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   delete process.env.ORCA_DISABLE_CODEX_TRUST_RPC
   rmSync(userDataDir, { recursive: true, force: true })
 })
@@ -87,6 +91,7 @@ function grantedSessionResult(entries: CodexTrustEntry[], hashPrefix = 'sha256:c
     wroteTrust: true,
     entries: entries.map((entry) => {
       const key = computeTrustKey(entry)
+
       return {
         key,
         normalizedKey: normalizeHookTrustKeyForLookup(key),
@@ -100,9 +105,11 @@ describe('grantManagedCodexHookTrust', () => {
   it('does not let a short trust RPC claim an incomplete session index', async () => {
     const sessions = join(runtimeHomeDir, 'sessions')
     mkdirSync(sessions, { recursive: true })
+
     for (let index = 0; index < 100; index += 1) {
       writeFileSync(join(sessions, `${index}.jsonl`), '{}\n')
     }
+
     const runner = vi.fn()
     _internals.setGrantSessionRunner(runner)
 
@@ -115,16 +122,20 @@ describe('grantManagedCodexHookTrust', () => {
 
   it('returns granted entries with codex-verbatim hashes and records the ledger', async () => {
     const entries = [managedEntry('session_start'), managedEntry('stop')]
+
     const runner = vi.fn(async (_request: CodexHookTrustGrantRequest) =>
       grantedSessionResult(entries)
     )
+
     _internals.setGrantSessionRunner(runner)
 
     const outcome = await grantManagedCodexHookTrust(buildPlan(entries))
     expect(outcome.lane).toBe('rpc')
+
     if (outcome.lane !== 'rpc') {
       return
     }
+
     expect(outcome.entries.map((entry) => entry.trustedHash)).toEqual([
       'sha256:codex-session_start',
       'sha256:codex-stop'
@@ -143,9 +154,11 @@ describe('grantManagedCodexHookTrust', () => {
 
   it('builds a default-home grant invocation without an inherited CODEX_HOME', async () => {
     const entries = [managedEntry('stop')]
+
     const runner = vi.fn(async (_request: CodexHookTrustGrantRequest) =>
       grantedSessionResult(entries)
     )
+
     _internals.setGrantSessionRunner(runner)
 
     expect(
@@ -161,15 +174,19 @@ describe('grantManagedCodexHookTrust', () => {
       ...managedEntry('stop'),
       sourcePath: String.raw`C:\Users\Alice\.codex\hooks.json`
     }
+
     const plan = buildPlan([entry])
     upsertHookTrustEntries(plan.tomlPath, [entry])
     expect(readHookTrustEntries(plan.tomlPath).get(computeTrustKey(entry))?.trustedHash).toBe(
       computeTrustedHash(entry)
     )
+
     const runner = vi.fn(async () => {
       expect(readHookTrustEntries(plan.tomlPath).has(computeTrustKey(entry))).toBe(false)
+
       return grantedSessionResult([entry])
     })
+
     _internals.setGrantSessionRunner(runner)
 
     expect(await grantManagedCodexHookTrust(plan)).toMatchObject({ lane: 'rpc' })
@@ -223,9 +240,11 @@ describe('grantManagedCodexHookTrust', () => {
 
   it('marks the host unsupported only for the unsupported error class', async () => {
     const entries = [managedEntry('session_start')]
+
     const runner = vi.fn((): Promise<CodexHookTrustGrantSessionResult> => {
       throw new CodexAppServerUnsupportedError('no such method')
     })
+
     _internals.setGrantSessionRunner(runner)
     const plan = buildPlan(entries)
 
@@ -247,9 +266,11 @@ describe('grantManagedCodexHookTrust', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     const entries = [managedEntry('session_start')]
+
     const runner = vi.fn((): Promise<CodexHookTrustGrantSessionResult> => {
       throw new Error('spawn ETIMEDOUT')
     })
+
     _internals.setGrantSessionRunner(runner)
     const plan = buildPlan(entries)
 
@@ -272,11 +293,13 @@ describe('grantManagedCodexHookTrust', () => {
 
   it('falls back on verify-failed without marking unsupported', async () => {
     const entries = [managedEntry('session_start')]
+
     const runner = vi.fn(async () => ({
       outcome: 'verify-failed' as const,
       reason: 'missing entries',
       reasonClass: 'list-mismatch' as const
     }))
+
     _internals.setGrantSessionRunner(runner)
 
     expect(await grantManagedCodexHookTrust(buildPlan(entries))).toMatchObject({
@@ -338,6 +361,7 @@ describe('grantManagedCodexHookTrust', () => {
     mkdirSync(runtimeHomeDir, { recursive: true })
     _internals.setGrantSessionRunner(async () => {
       writeFileSync(plan.tomlPath, '[hooks.state."rpc-partial"]\ntrusted_hash = "changed"\n')
+
       return {
         outcome: 'verify-failed',
         reason: 'post-write listing failed',
@@ -379,6 +403,7 @@ describe('grantManagedCodexHookTrust', () => {
       maxInFlight = Math.max(maxInFlight, inFlight)
       await new Promise<void>((resolve) => releases.push(resolve))
       inFlight -= 1
+
       return grantedSessionResult(entries)
     })
 
@@ -409,15 +434,18 @@ describe('grantManagedCodexHookTrust', () => {
       maxInFlight = Math.max(maxInFlight, inFlight)
       await new Promise<void>((resolve) => releases.push(resolve))
       inFlight -= 1
+
       return grantedSessionResult(entries)
     })
 
     const first = grantManagedCodexHookTrust(buildPlan(entries))
+
     const second = grantManagedCodexHookTrust({
       ...buildPlan(entries),
       runtimeHomePath: otherHome,
       tomlPath: join(otherHome, 'config.toml')
     })
+
     await vi.waitFor(() => expect(releases).toHaveLength(2))
     releases.forEach((release) => release())
     await Promise.all([first, second])
@@ -434,11 +462,13 @@ describe('grantManagedCodexHookTrust', () => {
     _internals.setGrantSessionRunner(runner)
 
     const first = grantManagedCodexHookTrust(buildPlan(entries))
+
     const second = grantManagedCodexHookTrust({
       ...buildPlan(entries),
       runtimeHomePath: otherHome,
       tomlPath: join(otherHome, 'config.toml')
     })
+
     await vi.waitFor(() => expect(releases).toHaveLength(1))
     releases[0]!(new CodexAppServerUnsupportedError('no such method'))
 
@@ -449,15 +479,18 @@ describe('grantManagedCodexHookTrust', () => {
 
   it('builds a WSL invocation that runs codex inside the distro', async () => {
     const entries = [managedEntry('session_start')]
+
     const runner = vi.fn(async (_request: CodexHookTrustGrantRequest) =>
       grantedSessionResult(entries)
     )
+
     _internals.setGrantSessionRunner(runner)
 
     const outcome = await grantManagedCodexHookTrust({
       ...buildPlan(entries),
       host: { kind: 'wsl', distro: 'Ubuntu', linuxRuntimeHome: '/home/alice/.codex-runtime' }
     })
+
     expect(outcome.lane).toBe('rpc')
     const request = runner.mock.calls[0]![0]!
     expect(request.invocation.command).toBe('wsl.exe')
@@ -475,6 +508,7 @@ describe('trust-grant telemetry detail', () => {
     setCodexTrustGrantTelemetry((event) => {
       events.push(event)
     })
+
     return events
   }
 

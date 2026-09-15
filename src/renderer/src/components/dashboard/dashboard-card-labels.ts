@@ -11,6 +11,7 @@ export function rowTask(row: DashboardAgentRow): string {
 
 export function nonEmpty(value: string | undefined): string | undefined {
   const trimmed = (value ?? '').trim()
+
   return trimmed.length > 0 ? trimmed : undefined
 }
 
@@ -35,6 +36,7 @@ export function rowConversationName(
   paneTitles: Record<number, string> | undefined
 ): string | undefined {
   const parentPaneKey = row.entry.orchestration?.parentPaneKey
+
   // Why: a child row rendered on its parent's tab does not own that tab's name.
   if (
     row.lineage?.depth === 1 &&
@@ -43,11 +45,13 @@ export function rowConversationName(
   ) {
     return undefined
   }
+
   const paneLiveTitle = resolveAgentRowPaneLiveTitle(
     layout,
     paneTitles,
     parsePaneKey(row.paneKey)?.leafId
   )
+
   return (
     getAgentRowConversationName(
       row.tab,

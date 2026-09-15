@@ -178,6 +178,7 @@ describe('ensureBrowserClientHostForRestartedRuntime', () => {
   it('re-prepares after an in-flight preparation aimed at the dead runtime settles', async () => {
     const state = stateWith({ 'page-1': { environmentId: 'env-a', placement: CLIENT_PLACEMENT } })
     let releaseFirst = (): void => {}
+
     prepareBrowserClientHostPlacement.mockImplementationOnce(
       async () =>
         new Promise((resolve) => {
@@ -188,6 +189,7 @@ describe('ensureBrowserClientHostForRestartedRuntime', () => {
     const restored = ensureBrowserClientHostsForRestoredPages(
       stateWith({ 'page-1': { environmentId: 'env-a', restoredClientHosted: true } })
     )
+
     const restarted = ensureBrowserClientHostForRestartedRuntime(state, 'env-a')
     releaseFirst()
     await Promise.all([restored, restarted])
@@ -198,6 +200,7 @@ describe('ensureBrowserClientHostForRestartedRuntime', () => {
 
 function statusFor(runtimeId: string, checkedAt = 1): RuntimeEnvironmentStatus {
   const response = createCompatibleRuntimeStatusResponse(runtimeId)
+
   return { status: response.ok ? response.result : null, checkedAt }
 }
 

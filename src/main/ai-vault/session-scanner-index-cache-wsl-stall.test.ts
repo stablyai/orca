@@ -2,8 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
 
 const CODEX_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex'
+
 const CODEX_SESSION_FILE = `${CODEX_HOME}\\sessions\\2026\\01\\01\\rollout-1.jsonl`
+
 const SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+
 const KIMI_INDEX = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.kimi\\session_index.jsonl'
 
 const mocks = vi.hoisted(() => ({ stat: vi.fn(), open: vi.fn(), readFile: vi.fn() }))
@@ -47,10 +50,12 @@ function stalls(): Promise<never> {
 
 function servingHandle(body: string) {
   const bytes = Buffer.from(body)
+
   return {
     read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
       const slice = bytes.subarray(position, Math.min(position + length, bytes.length))
       slice.copy(buffer, offset)
+
       return { bytesRead: slice.length, buffer }
     }),
     close: vi.fn(async () => {})
@@ -125,9 +130,11 @@ describe('memoized WSL session indexes under a stalled mount', () => {
 
   it('surfaces a refused optional JSON enrichment instead of caching it as absent', async () => {
     mocks.readFile.mockImplementation(stalls)
+
     const pending = readJsonObjectIfExists(`${CODEX_HOME}\\history.json`).catch(
       (error: unknown) => error
     )
+
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
 
     // A throw, not `null`: `parseSessionCandidate` turns it into a scan issue,

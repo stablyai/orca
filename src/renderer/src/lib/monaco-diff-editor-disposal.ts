@@ -31,6 +31,7 @@ export function guardMonacoDiffEditorDispose(
   reportError: DisposeErrorReporter = reportMonacoDiffDisposeError
 ): editor.IStandaloneDiffEditor {
   const guardedDiffEditor = diffEditor as GuardedDiffEditor
+
   if (guardedDiffEditor.__orcaDiffEditorDisposeGuardInstalled) {
     return diffEditor
   }
@@ -42,6 +43,7 @@ export function guardMonacoDiffEditorDispose(
     if (didDispose) {
       return
     }
+
     didDispose = true
 
     try {
@@ -52,6 +54,7 @@ export function guardMonacoDiffEditorDispose(
       reportError(error)
     }
   }
+
   guardedDiffEditor.__orcaDiffEditorDisposeGuardInstalled = true
 
   return diffEditor
@@ -62,6 +65,7 @@ export function installMonacoDiffEditorDisposalGuard(
   reportError?: DisposeErrorReporter
 ): void {
   const editorNamespace = monaco.editor as GuardedEditorNamespace
+
   if (editorNamespace.__orcaDiffEditorFactoryGuardInstalled) {
     return
   }

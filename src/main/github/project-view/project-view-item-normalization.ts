@@ -57,15 +57,19 @@ function mapItemType(raw: string | undefined, hasContent: boolean): GitHubProjec
   if (raw === 'ISSUE') {
     return 'ISSUE'
   }
+
   if (raw === 'PULL_REQUEST') {
     return 'PULL_REQUEST'
   }
+
   if (raw === 'DRAFT_ISSUE') {
     return 'DRAFT_ISSUE'
   }
+
   if (raw === 'REDACTED' || !hasContent) {
     return 'REDACTED'
   }
+
   // Unknown item type with content — treat as redacted rather than dropping.
   return 'REDACTED'
 }
@@ -77,6 +81,7 @@ export function normalizeItem(raw: RawItem, position: number): NormalizedItemOut
       drift: driftError('item missing id', { path: ['items', 'nodes', position, 'id'] })
     }
   }
+
   if (raw.fieldValues?.pageInfo?.hasNextPage === true) {
     return {
       ok: false,
@@ -85,14 +90,18 @@ export function normalizeItem(raw: RawItem, position: number): NormalizedItemOut
       })
     }
   }
+
   const itemType = mapItemType(raw.type, raw.content !== null && raw.content !== undefined)
   const content = raw.content ?? null
+
   const assignees = (content?.assignees?.nodes ?? [])
     .map(normalizeUser)
     .filter((u): u is GitHubProjectUser => u !== null)
+
   const labels = (content?.labels?.nodes ?? [])
     .map(normalizeLabel)
     .filter((l): l is GitHubProjectLabel => l !== null)
+
   const parentIssue =
     content?.parent &&
     typeof content.parent.number === 'number' &&
@@ -100,6 +109,7 @@ export function normalizeItem(raw: RawItem, position: number): NormalizedItemOut
     typeof content.parent.url === 'string'
       ? { number: content.parent.number, title: content.parent.title, url: content.parent.url }
       : null
+
   const issueType =
     content?.issueType &&
     typeof content.issueType.id === 'string' &&
@@ -112,19 +122,24 @@ export function normalizeItem(raw: RawItem, position: number): NormalizedItemOut
             typeof content.issueType.description === 'string' ? content.issueType.description : null
         }
       : null
+
   const fieldValuesByFieldId: Record<string, GitHubProjectFieldValue> = {}
+
   for (const fv of raw.fieldValues?.nodes ?? []) {
     const normalized = normalizeFieldValue(fv)
+
     if (normalized) {
       fieldValuesByFieldId[normalized.fieldId] = normalized
     }
   }
+
   const title =
     itemType === 'REDACTED'
       ? 'Restricted item'
       : typeof content?.title === 'string'
         ? content.title
         : ''
+
   const row: GitHubProjectRow = {
     id: raw.id,
     itemType,
@@ -149,5 +164,6 @@ export function normalizeItem(raw: RawItem, position: number): NormalizedItemOut
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : '',
     position
   }
+
   return { ok: true, row }
 }

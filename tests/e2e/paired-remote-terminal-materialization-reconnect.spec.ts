@@ -19,7 +19,9 @@ import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
 import { readFreshTerminalInventory } from './helpers/terminal-inventory-observation'
 
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-materialize-'))
+
 const fixturePath = path.join(scratch, 'materialize-terminal.mjs')
+
 const processedInputPath = path.join(scratch, 'processed-input.txt')
 
 writeFileSync(
@@ -55,6 +57,7 @@ function shellQuote(value: string): string {
 
 function fixtureCommand(): string {
   const command = [process.execPath, fixturePath, processedInputPath]
+
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
     : command.map(shellQuote).join(' ')
@@ -69,9 +72,11 @@ async function callRuntime<TResult>(
   return page.evaluate(
     async ({ method, params, selector }) => {
       const response = await window.api.runtimeEnvironments.call({ selector, method, params })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { method, params, selector }
@@ -102,6 +107,7 @@ async function waitForClientWorktree(page: Page, expectedId?: string): Promise<s
       { timeout: 30_000 }
     )
     .not.toBeNull()
+
   const worktreeId = await page.evaluate(
     (id) =>
       window.__store
@@ -110,9 +116,11 @@ async function waitForClientWorktree(page: Page, expectedId?: string): Promise<s
         .find((worktree) => !id || worktree.id === id)?.id ?? null,
     expectedId
   )
+
   if (!worktreeId) {
     throw new Error('Paired client did not receive the host workspace')
   }
+
   return worktreeId
 }
 
@@ -128,9 +136,11 @@ async function hostSurfaceStatus(
     'session.tabs.list',
     { worktree: `id:${worktreeId}` }
   )
+
   const surface = snapshot.tabs.find(
     (candidate) => candidate.type === 'terminal' && candidate.parentTabId === parentTabId
   )
+
   return surface?.type === 'terminal' ? surface.status : null
 }
 
@@ -146,6 +156,7 @@ async function parkHostTerminal(
   options: { expectedPtyId: string }
 ): Promise<void> {
   let lastError = 'terminal.stopExact was never attempted'
+
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const stop = await callRuntime<{
       stopped: number
@@ -158,14 +169,18 @@ async function parkHostTerminal(
       targetOnly: true
     }).catch((error: unknown) => {
       lastError = error instanceof Error ? error.message : String(error)
+
       return null
     })
+
     if (stop) {
       expect(stop.postStopVerified).toBe(true)
       expect(stop.stopped).toBe(1)
       expect(stop.stoppedPtyIds).toEqual([options.expectedPtyId])
+
       return
     }
+
     // Why: the host reports a set mismatch once the target PTY is no longer live, which is the
     // parked state this journey needs even when the stop call itself missed the exit.
     if (
@@ -174,8 +189,10 @@ async function parkHostTerminal(
     ) {
       return
     }
+
     await page.waitForTimeout(1_000)
   }
+
   throw new Error(`Host never parked the fixture terminal: ${lastError}`)
 }
 
@@ -185,6 +202,7 @@ async function runMaterializationJourney(
   worktreeId: string
 ): Promise<void> {
   writeFileSync(processedInputPath, '')
+
   const created = await callRuntime<{
     tab: { parentTabId: string; terminal: string | null }
   }>(page, environmentId, 'session.tabs.createTerminal', {
@@ -194,7 +212,9 @@ async function runMaterializationJourney(
     select: false,
     navigation: 'caller'
   })
+
   const originalHandle = created.tab.terminal
+
   if (!originalHandle) {
     throw new Error('Host did not publish the fixture terminal')
   }
@@ -216,18 +236,22 @@ async function runMaterializationJourney(
     'terminal.show',
     { terminal: originalHandle }
   )
+
   if (!originalTerminal.terminal.ptyId) {
     throw new Error('Host fixture terminal has no authoritative PTY')
   }
+
   await page.evaluate((terminal) => {
     const gate = (
       window as typeof window & {
         __remoteTerminalMultiplexAckGate?: { holdEnd: (terminals: string[]) => void }
       }
     ).__remoteTerminalMultiplexAckGate
+
     if (!gate) {
       throw new Error('Remote terminal fault gate is unavailable')
     }
+
     gate.holdEnd([terminal])
   }, originalHandle)
   await parkHostTerminal(page, environmentId, worktreeId, created.tab.parentTabId, {
@@ -241,6 +265,7 @@ async function runMaterializationJourney(
       message: 'Host never published the stopped pane as pending-handle'
     })
     .toBe('pending-handle')
+
   const dispatched = await page.evaluate((terminal) => {
     const gate = (
       window as typeof window & {
@@ -250,13 +275,17 @@ async function runMaterializationJourney(
         }
       }
     ).__remoteTerminalMultiplexAckGate
+
     if (!gate) {
       throw new Error('Remote terminal fault gate is unavailable')
     }
+
     const dispatched = gate.forceError([terminal], 'terminal_handle_stale')
     gate.release()
+
     return dispatched
   }, originalHandle)
+
   expect(dispatched).toBe(1)
 
   let replacementHandle: string | null = null
@@ -269,11 +298,14 @@ async function runMaterializationJourney(
           'session.tabs.list',
           { worktree: `id:${worktreeId}` }
         )
+
         const surface = snapshot.tabs.find(
           (candidate) =>
             candidate.type === 'terminal' && candidate.parentTabId === created.tab.parentTabId
         )
+
         replacementHandle = surface?.type === 'terminal' ? surface.terminal : null
+
         return replacementHandle !== null && replacementHandle !== originalHandle
       },
       { timeout: 20_000, message: 'Reconnect never materialized the sleeping host surface' }
@@ -305,6 +337,7 @@ async function runMaterializationJourney(
           'terminal.read',
           { terminal: replacementHandle }
         )
+
         return read.terminal.tail.join('\n')
       },
       { timeout: 10_000 }
@@ -325,6 +358,7 @@ async function runMaterializationJourney(
           requireFreshPtyLiveness: true
         })
       )
+
       return listed?.terminals.filter((terminal) => terminal.tabId === created.tab.parentTabId)
     })
     .toHaveLength(1)
@@ -336,11 +370,14 @@ test('materializes a stopped terminal on reconnect from a headed paired host', a
 }, testInfo) => {
   test.setTimeout(120_000)
   const worktreeId = await orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId)
+
   if (!worktreeId) {
     throw new Error('Headed host has no active seeded workspace')
   }
+
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedElectronClient(offer, testInfo, 'headed-materialization-client')
+
   try {
     await showClient(client.app, client.page)
     await runMaterializationJourney(
@@ -360,6 +397,7 @@ test('materializes a stopped terminal on reconnect from a headless folder host',
   test.setTimeout(150_000)
   const host = await launchHeadlessPairedRuntimeHost()
   await host.client.call('repo.add', { path: testRepoPath, kind: 'folder' })
+
   const client = await launchPairedElectronClient(
     host.offer,
     testInfo,
@@ -368,6 +406,7 @@ test('materializes a stopped terminal on reconnect from a headless folder host',
     await host.dispose()
     throw error
   })
+
   try {
     await showClient(client.app, client.page)
     await runMaterializationJourney(

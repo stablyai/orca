@@ -66,50 +66,65 @@ export class OrchestrationPeerCapabilityCache {
   ): Promise<PeerCapabilityDecision> {
     const generation = this.touchPeer(args.peerFingerprint)
     const knownEpoch = this.latestEpochs.get(args.peerFingerprint) ?? args.expectedRuntimeEpoch
+
     const cached = knownEpoch
       ? this.cached(args.peerFingerprint, knownEpoch, args.capability)
       : null
+
     if (cached) {
       return cached
     }
+
     const probeKey = this.key(args.peerFingerprint, knownEpoch ?? 'unknown')
     let probe = this.probes.get(probeKey)
+
     if (!probe) {
       const sequence = this.nextSequence(args.peerFingerprint)
+
       const status = args.probe().finally(() => {
         const current = this.probes.get(probeKey)
+
         if (current?.generation === generation && current.sequence === sequence) {
           this.probes.delete(probeKey)
         }
       })
+
       probe = { generation, sequence, status }
       this.probes.set(probeKey, probe)
     }
+
     const status = await probe.status
     const supported = status.capabilities?.includes(args.capability) === true
+
     if (
       !this.observeEpochAt(args.peerFingerprint, status.runtimeId, probe.sequence, probe.generation)
     ) {
       const latestEpoch = this.latestEpochs.get(args.peerFingerprint)
+
       const latest = latestEpoch
         ? this.cached(args.peerFingerprint, latestEpoch, args.capability)
         : null
+
       if (latest) {
         return latest
       }
+
       if (staleRetriesRemaining > 0) {
         return this.resolveAttempt(
           { ...args, expectedRuntimeEpoch: latestEpoch ?? args.expectedRuntimeEpoch },
           staleRetriesRemaining - 1
         )
       }
+
       throw new Error('Peer runtime changed repeatedly during capability negotiation')
     }
+
     this.statusCapabilities.set(this.key(args.peerFingerprint, status.runtimeId), {
       capabilities: new Set(status.capabilities ?? []),
       negativeExpiresAt: this.now() + this.negativeTtlMs
     })
     this.store(args.peerFingerprint, status.runtimeId, args.capability, supported)
+
     return { runtimeEpoch: status.runtimeId, supported, cached: false }
   }
 
@@ -125,9 +140,11 @@ export class OrchestrationPeerCapabilityCache {
   ): PeerCapabilityDecision | null {
     const epoch = this.latestEpochs.get(peerFingerprint) ?? expectedRuntimeEpoch
     const state = epoch ? this.states.get(this.key(peerFingerprint, epoch))?.get(capability) : null
+
     if (!state || (!state.supported && (state.negativeExpiresAt ?? 0) <= this.now())) {
       return null
     }
+
     return { runtimeEpoch: state.runtimeEpoch, supported: state.supported, cached: true }
   }
 
@@ -139,6 +156,7 @@ export class OrchestrationPeerCapabilityCache {
     expectedRuntimeEpoch?: string | null
   ): void {
     const latestEpoch = this.latestEpochs.get(peerFingerprint)
+
     // Advance only from the epoch this call targeted; late answers cannot replace a newer epoch.
     if (
       latestEpoch !== undefined &&
@@ -147,6 +165,7 @@ export class OrchestrationPeerCapabilityCache {
     ) {
       return
     }
+
     const generation = this.touchPeer(peerFingerprint)
     this.observeEpochAt(
       peerFingerprint,
@@ -165,10 +184,12 @@ export class OrchestrationPeerCapabilityCache {
   ): void {
     const key = this.key(peerFingerprint, runtimeEpoch)
     let states = this.states.get(key)
+
     if (!states) {
       states = new Map()
       this.states.set(key, states)
     }
+
     states.set(capability, {
       runtimeEpoch,
       supported,
@@ -195,20 +216,27 @@ export class OrchestrationPeerCapabilityCache {
     if (this.peers.peek(peerFingerprint) !== generation) {
       return false
     }
+
     const observedSequence = this.observedSequences.get(peerFingerprint) ?? 0
+
     if (sequence < observedSequence) {
       return false
     }
+
     this.observedSequences.set(peerFingerprint, sequence)
     const previous = this.latestEpochs.get(peerFingerprint)
+
     if (previous === runtimeEpoch) {
       return true
     }
+
     this.latestEpochs.set(peerFingerprint, runtimeEpoch)
+
     if (previous) {
       this.states.delete(this.key(peerFingerprint, previous))
       this.statusCapabilities.delete(this.key(peerFingerprint, previous))
     }
+
     return true
   }
 
@@ -218,19 +246,25 @@ export class OrchestrationPeerCapabilityCache {
     capability: RuntimeCapability
   ): PeerCapabilityDecision | null {
     const state = this.states.get(this.key(peerFingerprint, runtimeEpoch))?.get(capability)
+
     if (state) {
       if (state.supported || (state.negativeExpiresAt ?? 0) > this.now()) {
         return { runtimeEpoch: state.runtimeEpoch, supported: state.supported, cached: true }
       }
+
       this.states.get(this.key(peerFingerprint, runtimeEpoch))?.delete(capability)
     }
+
     const status = this.statusCapabilities.get(this.key(peerFingerprint, runtimeEpoch))
+
     if (!status) {
       return null
     }
+
     if (status.capabilities.has(capability)) {
       return { runtimeEpoch, supported: true, cached: true }
     }
+
     return status.negativeExpiresAt > this.now()
       ? { runtimeEpoch, supported: false, cached: true }
       : null
@@ -239,6 +273,7 @@ export class OrchestrationPeerCapabilityCache {
   private nextSequence(peerFingerprint: string): number {
     const sequence = (this.sequenceCounters.get(peerFingerprint) ?? 0) + 1
     this.sequenceCounters.set(peerFingerprint, sequence)
+
     return sequence
   }
 
@@ -248,11 +283,14 @@ export class OrchestrationPeerCapabilityCache {
 
   private touchPeer(peerFingerprint: string): symbol {
     const retainedGeneration = this.peers.get(peerFingerprint)
+
     if (retainedGeneration !== undefined) {
       return retainedGeneration
     }
+
     const generation = Symbol(peerFingerprint)
     this.peers.set(peerFingerprint, generation)
+
     return generation
   }
 
@@ -261,6 +299,7 @@ export class OrchestrationPeerCapabilityCache {
     this.sequenceCounters.delete(peerFingerprint)
     this.observedSequences.delete(peerFingerprint)
     const prefix = `${peerFingerprint}\u0000`
+
     for (const collection of [this.states, this.statusCapabilities, this.probes]) {
       for (const key of collection.keys()) {
         if (key.startsWith(prefix)) {
@@ -277,9 +316,11 @@ export function getOrchestrationPeerCapabilityCache(
   runtime: OrcaRuntimeService
 ): OrchestrationPeerCapabilityCache {
   let cache = cachesByRuntime.get(runtime)
+
   if (!cache) {
     cache = new OrchestrationPeerCapabilityCache()
     cachesByRuntime.set(runtime, cache)
   }
+
   return cache
 }

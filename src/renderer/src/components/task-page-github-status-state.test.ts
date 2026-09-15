@@ -8,6 +8,7 @@ import {
 describe('TaskPage GitHub status state draft', () => {
   it('keeps optimistic local state while the backing item state is unchanged', () => {
     const item = { id: 'issue-1', state: 'open' as const }
+
     const current = updateTaskPageGitHubStatusLocalState(
       createTaskPageGitHubStatusStateDraft(item),
       item,

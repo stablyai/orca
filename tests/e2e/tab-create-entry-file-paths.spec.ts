@@ -31,10 +31,13 @@ test('new-tab file results prioritize the filename and reveal the full path on h
     if ((await newTab.getAttribute('aria-expanded')) !== 'true') {
       await newTab.press('Space')
     }
+
     await expect(input).toBeVisible({ timeout: 1_000 })
+
     if ((await input.inputValue()) !== 'secondaryNav') {
       await input.fill('secondaryNav')
     }
+
     await expect(row).toBeVisible({ timeout: 2_000 })
   }).toPass({ timeout: 20_000 })
   await expect(row).toContainText('SecondaryNav.tsx')
@@ -48,11 +51,13 @@ test('new-tab file results prioritize the filename and reveal the full path on h
   // row itself must never spill past the dropdown.
   const overflow = await row.evaluate((element) => {
     const filename = element.querySelector(':scope > span:last-of-type > span:first-child')
+
     return {
       filenameClipped: filename ? filename.scrollWidth > filename.clientWidth : true,
       rowClipped: element.scrollWidth > element.clientWidth
     }
   })
+
   expect(overflow).toEqual({ filenameClipped: false, rowClipped: false })
 
   // Two hovers on purpose: results stream in and remount the row, and Radix only
@@ -70,6 +75,7 @@ test('new-tab file results prioritize the filename and reveal the full path on h
   ).toBeVisible()
 
   const proofPath = process.env.ORCA_STA3424_PROOF_PATH
+
   if (proofPath) {
     await orcaPage.screenshot({ path: proofPath })
   }

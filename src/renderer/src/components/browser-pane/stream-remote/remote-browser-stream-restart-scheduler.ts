@@ -49,22 +49,29 @@ export class RemoteBrowserStreamRestartScheduler {
     if (this.timer !== null) {
       return
     }
+
     if (this.inFlightGeneration === this.generation) {
       this.queuedRun = run
+
       return
     }
+
     if (this.isBudgetExhausted) {
       this.onBudgetExhausted()
+
       return
     }
+
     const delayMs = this.delaysMs[this.attempt]!
     this.attempt += 1
     const generation = this.generation
     this.timer = setTimeout(() => {
       this.timer = null
+
       if (generation !== this.generation) {
         return
       }
+
       this.inFlightGeneration = generation
       void Promise.resolve()
         .then(run)
@@ -86,6 +93,7 @@ export class RemoteBrowserStreamRestartScheduler {
       clearTimeout(this.timer)
       this.timer = null
     }
+
     this.queuedRun = null
     this.generation += 1
     this.attempt = 0
@@ -99,9 +107,11 @@ export class RemoteBrowserStreamRestartScheduler {
     if (generation !== this.generation) {
       return
     }
+
     this.inFlightGeneration = null
     const nextRun = this.queuedRun ?? (shouldRetry ? run : null)
     this.queuedRun = null
+
     if (nextRun) {
       this.schedule(nextRun)
     }

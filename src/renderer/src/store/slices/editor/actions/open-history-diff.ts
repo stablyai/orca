@@ -25,15 +25,20 @@ export function createOpenHistoryDiff(
       set((s) => {
         const targetGroupId =
           resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
+
         editorItemTargetGroupId = targetGroupId
+
         const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
           s,
           worktreeId,
           options?.runtimeEnvironmentId
         )
+
         const existing = s.openFiles.find((f) => f.id === id)
+
         if (existing) {
           const updatedPreview = isPreview ? existing.isPreview : false
+
           const reopenedDiff = withDiffContentReloadRequest({
             ...existing,
             mode: 'diff' as const,
@@ -46,6 +51,7 @@ export function createOpenHistoryDiff(
             isPreview: updatedPreview,
             runtimeEnvironmentId
           })
+
           return {
             openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
             activeFileId: id,
@@ -54,6 +60,7 @@ export function createOpenHistoryDiff(
             activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
           }
         }
+
         const newFile: OpenFile = {
           id,
           filePath: joinPath(worktreePath, entry.path),
@@ -71,11 +78,14 @@ export function createOpenHistoryDiff(
           isPreview: isPreview || undefined,
           runtimeEnvironmentId
         }
+
         if (isPreview) {
           const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
+
           const replaceablePreviewIndex = s.openFiles.findIndex(
             (file) => file.id === replaceablePreviewId
           )
+
           if (replaceablePreviewIndex !== -1) {
             return {
               openFiles: s.openFiles.map((file, index) =>
@@ -89,6 +99,7 @@ export function createOpenHistoryDiff(
             }
           }
         }
+
         return {
           openFiles: [...s.openFiles, newFile],
           activeFileId: id,
@@ -116,15 +127,20 @@ export function createOpenHistoryDiff(
       set((s) => {
         const targetGroupId =
           resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
+
         editorItemTargetGroupId = targetGroupId
+
         const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
           s,
           worktreeId,
           options?.runtimeEnvironmentId
         )
+
         const existing = s.openFiles.find((f) => f.id === id)
+
         if (existing) {
           const updatedPreview = isPreview ? existing.isPreview : false
+
           const reopenedDiff = withDiffContentReloadRequest({
             ...existing,
             mode: 'diff' as const,
@@ -137,6 +153,7 @@ export function createOpenHistoryDiff(
             isPreview: updatedPreview,
             runtimeEnvironmentId
           })
+
           return {
             openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
             activeFileId: id,
@@ -145,6 +162,7 @@ export function createOpenHistoryDiff(
             activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
           }
         }
+
         const newFile: OpenFile = {
           id,
           filePath: joinPath(worktreePath, entry.path),
@@ -162,11 +180,14 @@ export function createOpenHistoryDiff(
           isPreview: isPreview || undefined,
           runtimeEnvironmentId
         }
+
         if (isPreview) {
           const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
+
           const replaceablePreviewIndex = s.openFiles.findIndex(
             (file) => file.id === replaceablePreviewId
           )
+
           if (replaceablePreviewIndex !== -1) {
             return {
               openFiles: s.openFiles.map((file, index) =>
@@ -180,6 +201,7 @@ export function createOpenHistoryDiff(
             }
           }
         }
+
         return {
           openFiles: [...s.openFiles, newFile],
           activeFileId: id,

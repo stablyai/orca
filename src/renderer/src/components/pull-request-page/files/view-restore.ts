@@ -20,10 +20,12 @@ export function usePRFilesDiffViewPersistence(args: {
     if (args.sections.length === 0 && args.entriesLength > 0) {
       return
     }
+
     const preservedScrollTop =
       prFilesDiffScrollTopCache.get(args.viewStateKey) ??
       args.scrollContainerRef.current?.scrollTop ??
       0
+
     setWithLRU(prFilesDiffViewStateCache, args.viewStateKey, {
       entrySignature: args.entrySignature,
       sections: args.sections,
@@ -51,6 +53,7 @@ export function usePRFilesDiffViewPersistence(args: {
 
   useLayoutEffect(() => {
     const container = args.scrollContainerRef.current
+
     if (!container) {
       return
     }
@@ -58,9 +61,11 @@ export function usePRFilesDiffViewPersistence(args: {
     const writeCachedScrollPosition = (scrollTop: number): void => {
       const existing = prFilesDiffViewStateCache.get(args.viewStateKey)
       setWithLRU(prFilesDiffScrollTopCache, args.viewStateKey, scrollTop)
+
       if (!existing || existing.entrySignature !== args.entrySignature) {
         return
       }
+
       setWithLRU(prFilesDiffViewStateCache, args.viewStateKey, { ...existing, scrollTop })
     }
 
@@ -69,6 +74,7 @@ export function usePRFilesDiffViewPersistence(args: {
       if (args.pendingRestoreScrollTopRef.current !== null) {
         return
       }
+
       writeCachedScrollPosition(container.scrollTop)
     }
 
@@ -78,6 +84,7 @@ export function usePRFilesDiffViewPersistence(args: {
     }
 
     container.addEventListener('scroll', cacheScrollPositionOnScroll, { passive: true })
+
     return () => {
       cacheScrollPositionOnTeardown()
       container.removeEventListener('scroll', cacheScrollPositionOnScroll)
@@ -92,15 +99,18 @@ export function usePRFilesDiffViewPersistence(args: {
   useLayoutEffect(() => {
     const container = args.scrollContainerRef.current
     const targetScrollTop = args.pendingRestoreScrollTopRef.current
+
     if (!container || targetScrollTop === null) {
       return
     }
 
     let frameId = 0
     let attempts = 0
+
     const restoreScrollPosition = (): void => {
       const liveContainer = args.scrollContainerRef.current
       const liveTarget = args.pendingRestoreScrollTopRef.current
+
       if (!liveContainer || liveTarget === null) {
         return
       }
@@ -113,20 +123,25 @@ export function usePRFilesDiffViewPersistence(args: {
       if (Math.abs(liveContainer.scrollTop - liveTarget) <= 1 || maxScrollTop >= liveTarget) {
         setWithLRU(prFilesDiffScrollTopCache, args.viewStateKey, nextScrollTop)
         args.pendingRestoreScrollTopRef.current = null
+
         return
       }
 
       attempts += 1
+
       if (attempts < 30) {
         frameId = window.requestAnimationFrame(restoreScrollPosition)
+
         return
       }
+
       // Why: cache what we actually reached; an unreachable target would replay this fight every visit.
       setWithLRU(prFilesDiffScrollTopCache, args.viewStateKey, liveContainer.scrollTop)
       args.pendingRestoreScrollTopRef.current = null
     }
 
     restoreScrollPosition()
+
     return () => window.cancelAnimationFrame(frameId)
   }, [
     args.pendingRestoreScrollTopRef,

@@ -32,6 +32,7 @@ export function committedMobileSessionTabClose(
   closedTabIds: readonly string[]
 ): MobileSessionTabCloseOutcome {
   selections.forgetTabs(worktreeId, closedTabIds)
+
   return { closed: true } as MobileSessionTabCloseOutcome
 }
 

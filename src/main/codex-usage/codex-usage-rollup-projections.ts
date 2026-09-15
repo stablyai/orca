@@ -46,12 +46,14 @@ export function buildSummary(
       (byModel.get(row.model ?? 'Unknown model') ?? 0) + row.totalTokens
     )
     byProject.set(row.projectLabel, (byProject.get(row.projectLabel) ?? 0) + row.totalTokens)
+
     const cost = estimateCostUsd(
       row.model,
       row.inputTokens,
       row.cachedInputTokens,
       row.outputTokens
     )
+
     if (cost !== null) {
       hasAnyBillableCost = true
       estimatedCostUsd += cost
@@ -84,6 +86,7 @@ export function buildDaily(
   range: CodexUsageRange
 ): CodexUsageDailyPoint[] {
   const byDay = new Map<string, CodexUsageDailyPoint>()
+
   for (const row of getFilteredDaily(state, scope, range)) {
     const existing = byDay.get(row.day) ?? {
       day: row.day,
@@ -93,6 +96,7 @@ export function buildDaily(
       reasoningOutputTokens: 0,
       totalTokens: 0
     }
+
     existing.inputTokens += row.inputTokens
     existing.cachedInputTokens += row.cachedInputTokens
     existing.outputTokens += row.outputTokens
@@ -100,6 +104,7 @@ export function buildDaily(
     existing.totalTokens += row.totalTokens
     byDay.set(row.day, existing)
   }
+
   return [...byDay.values()].sort((left, right) => left.day.localeCompare(right.day))
 }
 
@@ -111,14 +116,17 @@ export function buildBreakdown(
 ): CodexUsageBreakdownRow[] {
   const rows = new Map<string, CodexUsageBreakdownRow>()
   const filteredDaily = getFilteredDaily(state, scope, range)
+
   if (filteredDaily.length === 0) {
     return []
   }
+
   const filteredSessions = getFilteredSessions(state, scope, range)
 
   for (const daily of filteredDaily) {
     const key = kind === 'model' ? (daily.model ?? 'unknown') : daily.projectKey
     const label = kind === 'model' ? (daily.model ?? 'Unknown model') : daily.projectLabel
+
     const existing = rows.get(key) ?? {
       key,
       label,
@@ -132,6 +140,7 @@ export function buildBreakdown(
       estimatedCostUsd: null,
       hasInferredPricing: false
     }
+
     existing.events += daily.eventCount
     existing.inputTokens += daily.inputTokens
     existing.cachedInputTokens += daily.cachedInputTokens
@@ -145,28 +154,37 @@ export function buildBreakdown(
   for (const session of filteredSessions) {
     if (kind === 'model') {
       const seen = new Set<string>()
+
       for (const model of getScopedSessionModels(session, scope)) {
         if (seen.has(model.modelKey)) {
           continue
         }
+
         seen.add(model.modelKey)
         const row = rows.get(model.modelKey)
+
         if (row) {
           row.sessions++
         }
       }
+
       continue
     }
+
     const matchingLocations = session.locationBreakdown.filter((entry) =>
       scope === 'all' ? true : entry.worktreeId !== null
     )
+
     const seen = new Set<string>()
+
     for (const location of matchingLocations) {
       if (seen.has(location.locationKey)) {
         continue
       }
+
       seen.add(location.locationKey)
       const row = rows.get(location.locationKey)
+
       if (row) {
         row.sessions++
       }

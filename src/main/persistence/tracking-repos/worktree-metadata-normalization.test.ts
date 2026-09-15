@@ -86,6 +86,7 @@ describe('normalizeWorktreeLinkedItemMetadata', () => {
     const localKey = 'wt2:local:local-instance'
     const remoteKey = 'wt2:ssh%3Abuilder:remote-instance'
     const worktreeId = 'r1::/tmp/wt'
+
     const state = makeState({
       worktreeMeta: { [worktreeId]: null } as unknown as PersistedState['worktreeMeta'],
       worktreeMetaByIdentity: { [localKey]: makeMeta(), [remoteKey]: makeMeta() },
@@ -110,6 +111,7 @@ describe('normalizeWorktreeLinkedItemMetadata', () => {
   it('preserves valid canonical state when the whole legacy projection is malformed', () => {
     const identityKey = 'wt2:ssh%3Abuilder:remote-instance'
     const alias = 'ssh:builder|r1::/tmp/wt'
+
     const state = makeState({
       worktreeMeta: null as unknown as PersistedState['worktreeMeta'],
       worktreeMetaByIdentity: { [identityKey]: makeMeta() },
@@ -125,6 +127,7 @@ describe('normalizeWorktreeLinkedItemMetadata', () => {
   it('prunes canonical metadata left unreachable by dangling-alias cleanup', () => {
     const liveKey = 'wt2:local:live'
     const orphanKey = 'wt2:local:orphan'
+
     const state = makeState({
       worktreeMetaByIdentity: { [liveKey]: makeMeta(), [orphanKey]: makeMeta() },
       worktreeIdentityAliases: {
@@ -152,6 +155,7 @@ describe('gcStaleWorktreeMeta', () => {
     const worktreeId = 'r1::/definitely/missing/orca/path'
     const identityKey = 'wt2:local:dead'
     const remoteIdentityKey = 'wt2:ssh:live'
+
     const state = makeState({
       repos: [],
       projects: [],

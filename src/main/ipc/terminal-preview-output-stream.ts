@@ -6,9 +6,13 @@ import type {
 } from '../../shared/terminal-preview'
 
 const OUTPUT_BATCH_MS = 5
+
 export const TERMINAL_PREVIEW_OUTPUT_BATCH_MAX_BYTES = 64 * 1024
+
 const OUTPUT_IN_FLIGHT_MAX_BYTES = 512 * 1024
+
 const OUTPUT_PENDING_MAX_BYTES = 256 * 1024
+
 const INITIAL_PENDING_MAX_BYTES = 256 * 1024
 
 export type TerminalPreviewOutputMeta = {
@@ -37,18 +41,23 @@ function outputAfterSnapshotSeq(
   ) {
     return { data: output.data, mode: 'replay' }
   }
+
   if (output.meta.seq <= snapshotSeq) {
     return null
   }
+
   const startSeq = output.meta.seq - output.meta.rawLength
+
   if (startSeq >= snapshotSeq) {
     return { data: output.data, mode: 'live' }
   }
+
   if (output.meta.transformed === true) {
     // Transformed payloads make raw offsets unmappable, so the covered head
     // cannot be sliced off and the whole chunk stays uncertain redelivery.
     return { data: output.data, mode: 'replay' }
   }
+
   return { data: output.data.slice(snapshotSeq - startSeq), mode: 'live' }
 }
 
@@ -88,11 +97,14 @@ export class TerminalPreviewOutputStream {
     if (this.isDisposed) {
       return
     }
+
     this.isDisposed = true
+
     if (this.batchTimer) {
       clearTimeout(this.batchTimer)
       this.batchTimer = null
     }
+
     this.unsubscribeData()
     this.releaseRawView()
     this.onDispose(this)
@@ -102,6 +114,7 @@ export class TerminalPreviewOutputStream {
     if (this.isDisposed || this.awaitingReconnect || this.resyncPending) {
       return
     }
+
     if (this.bufferingSnapshot) {
       this.appendInitial(data, meta)
     } else {
@@ -113,9 +126,11 @@ export class TerminalPreviewOutputStream {
     if (!this.initialPendingOverflowed) {
       return false
     }
+
     this.initialPending = []
     this.initialPendingBytes = 0
     this.initialPendingOverflowed = false
+
     return true
   }
 
@@ -123,6 +138,7 @@ export class TerminalPreviewOutputStream {
     const replay: TerminalPreviewReplayChunk[] = []
     this.initialPending.forEach((output) => {
       const uncovered = outputAfterSnapshotSeq(output, snapshotSeq)
+
       if (uncovered && uncovered.data.length > 0) {
         replay.push(uncovered)
       }
@@ -130,6 +146,7 @@ export class TerminalPreviewOutputStream {
     this.initialPending = []
     this.initialPendingBytes = 0
     this.bufferingSnapshot = false
+
     return replay
   }
 
@@ -140,10 +157,12 @@ export class TerminalPreviewOutputStream {
     if (this.isDisposed || this.awaitingReconnect || this.resyncPending) {
       return
     }
+
     if (this.batchTimer) {
       clearTimeout(this.batchTimer)
       this.batchTimer = null
     }
+
     this.batchChunks = []
     this.batchBytes = 0
     this.pendingBatches = []
@@ -157,6 +176,7 @@ export class TerminalPreviewOutputStream {
       clearTimeout(this.batchTimer)
       this.batchTimer = null
     }
+
     this.batchChunks = []
     this.batchBytes = 0
     this.pendingBatches = []
@@ -175,13 +195,17 @@ export class TerminalPreviewOutputStream {
   private send(payload: TerminalPreviewDataPayload): boolean {
     if (this.isDisposed || this.contents.isDestroyed()) {
       this.dispose()
+
       return false
     }
+
     try {
       this.contents.send('terminalPreview:data', payload)
+
       return true
     } catch {
       this.dispose()
+
       return false
     }
   }
@@ -190,21 +214,27 @@ export class TerminalPreviewOutputStream {
     if (this.isDisposed || this.awaitingReconnect) {
       return
     }
+
     if (this.resyncPending) {
       if (this.inFlightBytes === 0) {
         this.resyncPending = false
         this.awaitingReconnect = true
         this.send({ type: 'resync', ptyId: this.ptyId })
       }
+
       return
     }
+
     while (this.pendingBatches.length > 0) {
       const next = this.pendingBatches[0]!
+
       if (this.inFlightBytes > 0 && this.inFlightBytes + next.bytes > OUTPUT_IN_FLIGHT_MAX_BYTES) {
         break
       }
+
       this.pendingBatches.shift()
       this.pendingBatchBytes -= next.bytes
+
       if (this.send({ type: 'data', ptyId: this.ptyId, data: next.data, bytes: next.bytes })) {
         this.inFlightBytes += next.bytes
       }
@@ -215,6 +245,7 @@ export class TerminalPreviewOutputStream {
     if (this.isDisposed || this.awaitingReconnect || this.resyncPending) {
       return
     }
+
     if (
       this.pendingBatches.length === 0 &&
       (this.inFlightBytes === 0 || this.inFlightBytes + bytes <= OUTPUT_IN_FLIGHT_MAX_BYTES)
@@ -222,10 +253,13 @@ export class TerminalPreviewOutputStream {
       if (this.send({ type: 'data', ptyId: this.ptyId, data, bytes })) {
         this.inFlightBytes += bytes
       }
+
       return
     }
+
     this.pendingBatches.push({ data, bytes })
     this.pendingBatchBytes += bytes
+
     if (this.pendingBatchBytes > OUTPUT_PENDING_MAX_BYTES) {
       // Why: a stuck renderer heals from a fresh authoritative snapshot instead of retaining output without bound.
       this.pendingBatches = []
@@ -239,9 +273,11 @@ export class TerminalPreviewOutputStream {
       clearTimeout(this.batchTimer)
       this.batchTimer = null
     }
+
     if (this.batchChunks.length === 0) {
       return
     }
+
     const data = this.batchChunks.length === 1 ? this.batchChunks[0]! : this.batchChunks.join('')
     const bytes = this.batchBytes
     this.batchChunks = []
@@ -252,14 +288,17 @@ export class TerminalPreviewOutputStream {
   private appendLive(data: string): void {
     for (const chunk of iterateTerminalInputChunks(data, TERMINAL_PREVIEW_OUTPUT_BATCH_MAX_BYTES)) {
       const bytes = Buffer.byteLength(chunk, 'utf8')
+
       if (
         this.batchBytes > 0 &&
         this.batchBytes + bytes > TERMINAL_PREVIEW_OUTPUT_BATCH_MAX_BYTES
       ) {
         this.flushBatch()
       }
+
       this.batchChunks.push(chunk)
       this.batchBytes += bytes
+
       if (this.batchBytes >= TERMINAL_PREVIEW_OUTPUT_BATCH_MAX_BYTES) {
         this.flushBatch()
       } else if (!this.batchTimer) {
@@ -273,6 +312,7 @@ export class TerminalPreviewOutputStream {
     const bytes = Buffer.byteLength(data, 'utf8')
     this.initialPending.push({ data, bytes, meta })
     this.initialPendingBytes += bytes
+
     while (this.initialPendingBytes > INITIAL_PENDING_MAX_BYTES && this.initialPending.length > 0) {
       this.initialPendingBytes -= this.initialPending.shift()!.bytes
       this.initialPendingOverflowed = true

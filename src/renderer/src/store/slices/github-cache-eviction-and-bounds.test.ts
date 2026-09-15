@@ -131,14 +131,18 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
 
   it('clears matching in-flight work-item dedupe keys before the next fetch', async () => {
     const store = createTestStore()
+
     type WorkItemsEnvelope = {
       items: []
       sources: { issues: null; prs: null; originCandidate: null; upstreamCandidate: null }
     }
+
     let resolveFirst: (value: WorkItemsEnvelope) => void = () => {}
+
     const firstRequest = new Promise<WorkItemsEnvelope>((resolve) => {
       resolveFirst = resolve
     })
+
     mockApi.gh.listWorkItems.mockReturnValueOnce(firstRequest).mockResolvedValueOnce({
       items: [],
       sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
@@ -160,6 +164,7 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
 
   it('does not let a stale pre-invalidation work-item response rewrite the cache', async () => {
     const store = createTestStore()
+
     const item = {
       type: 'pr',
       number: 42,
@@ -167,6 +172,7 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
       url: 'https://example.test/42',
       updatedAt: '2026-05-22T00:00:00Z'
     } as GitHubWorkItem
+
     let resolveFirst: (value: {
       items: GitHubWorkItem[]
       sources: {
@@ -176,6 +182,7 @@ describe('createGitHubSlice.evictGitHubRepoCaches', () => {
         upstreamCandidate: { owner: 'up'; repo: 'r' }
       }
     }) => void = () => {}
+
     mockApi.gh.listWorkItems.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -216,18 +223,21 @@ describe('createGitHubSlice cache bounds', () => {
 
   it('bounds restored PR and issue caches', async () => {
     const store = createTestStore()
+
     const pr = Object.fromEntries(
       Array.from({ length: 505 }, (_, index) => [
         `repo-id::branch-${index}`,
         { data: makePR({ number: index }), fetchedAt: index }
       ])
     )
+
     const issue = Object.fromEntries(
       Array.from({ length: 505 }, (_, index) => [
         `repo-id::${index}`,
         { data: { number: index } as never, fetchedAt: index }
       ])
     )
+
     mockApi.cache.getGitHub.mockResolvedValueOnce({ pr, issue })
 
     await store.getState().initGitHubCache()

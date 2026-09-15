@@ -16,6 +16,7 @@ import {
 } from './web-session-terminal-orphan-recovery'
 
 vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
+
 vi.mock('@/hooks/agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn()
 }))
@@ -61,6 +62,7 @@ const newerAgentTab = {
   agent: 'gemini',
   isActive: false
 }
+
 const newerAgentStatus = {
   state: 'future-state',
   prompt: '',
@@ -69,6 +71,7 @@ const newerAgentStatus = {
   paneKey: 'host-tab:leaf-1',
   stateHistory: []
 }
+
 const newerTabKind = { type: 'notebook', id: 'nb-1', title: 'Notebook', isActive: false }
 
 describe('mixed-version web terminal orphan recovery', () => {
@@ -83,6 +86,7 @@ describe('mixed-version web terminal orphan recovery', () => {
   ])('mirrors a new CLI tab after old-host recovery when $name', async ({ streamFirst }) => {
     const environmentId = 'windows-2'
     const runtimeId = 'host-runtime'
+
     const originalTab = {
       type: 'terminal' as const,
       id: 'host-tab::leaf-1',
@@ -93,6 +97,7 @@ describe('mixed-version web terminal orphan recovery', () => {
       status: 'ready' as const,
       terminal: 'term_live'
     }
+
     const adopted: RuntimeMobileSessionTabsResult = {
       ...missingSnapshot,
       publicationEpoch: 'renderer:host',
@@ -101,16 +106,20 @@ describe('mixed-version web terminal orphan recovery', () => {
       activeTabType: 'terminal',
       tabs: [originalTab]
     }
+
     const projected = {
       ...adopted,
       publicationEpoch: 'renderer:host:client-navigation',
       snapshotVersion: 3
     }
+
     const missing = { ...projected, snapshotVersion: 2, tabs: [] }
     let mirror = makeMirrorState({ activeWorktreeId: worktree, ...legacyRecoveryState() })
+
     const applyReceived = (snapshot: RuntimeMobileSessionTabsResult, frame?: number): void => {
       const received =
         frame ?? recordReceivedWebSessionTabsSnapshot(environmentId, snapshot, undefined, runtimeId)
+
       if (
         shouldApplyRecoveredWebSessionTabsSnapshot(environmentId, snapshot, received, runtimeId) &&
         decideWebSessionTabsSnapshot(snapshot, environmentId, runtimeId).apply
@@ -118,12 +127,14 @@ describe('mixed-version web terminal orphan recovery', () => {
         mirror = { ...mirror, ...applyWebSessionTabsSnapshot(mirror, snapshot, environmentId) }
       }
     }
+
     const received = recordReceivedWebSessionTabsSnapshot(
       environmentId,
       missing,
       undefined,
       runtimeId
     )
+
     const call = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'terminal.list') {
         return {
@@ -144,25 +155,32 @@ describe('mixed-version web terminal orphan recovery', () => {
           }
         }
       }
+
       if (method === 'terminal.adoptOrphans') {
         if (streamFirst) {
           applyReceived(projected)
         }
+
         return { ok: true, result: { adopted: true, topologyRevision: 2, snapshot: adopted } }
       }
+
       if (method === 'session.tabs.list') {
         return { ok: true, result: projected }
       }
+
       throw new Error(`Unexpected method: ${method}`)
     })
+
     const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
       legacyRecoveryState(),
       missing,
       environmentId,
       { call: call as never, expectedEnvironmentPairingRevision: 123 }
     )
+
     expect(recovered).not.toBeNull()
     applyReceived(recovered!, received)
+
     const newTab = {
       ...originalTab,
       id: 'cli-tab::leaf-2',
@@ -172,6 +190,7 @@ describe('mixed-version web terminal orphan recovery', () => {
       terminal: 'term_cli',
       isActive: false
     }
+
     applyReceived({ ...projected, snapshotVersion: 4, tabs: [originalTab, newTab] })
 
     expect(mirror.tabsByWorktree[worktree]?.map((tab) => tab.id)).toEqual([
@@ -179,6 +198,7 @@ describe('mixed-version web terminal orphan recovery', () => {
       'web-terminal-cli-tab'
     ])
     expect(mirror.activeTabIdByWorktree[worktree]).toBe('web-terminal-host-tab')
+
     if (!streamFirst) {
       expect(call).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -212,6 +232,7 @@ describe('mixed-version web terminal orphan recovery', () => {
       status: 'ready' as const,
       terminal: 'term_live'
     }
+
     const projected: RuntimeMobileSessionTabsResult = {
       ...missingSnapshot,
       publicationEpoch: 'renderer:host:client-navigation',
@@ -220,6 +241,7 @@ describe('mixed-version web terminal orphan recovery', () => {
       activeTabType: 'terminal',
       tabs: extend([liveTab]) as never
     }
+
     const call = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'terminal.list') {
         return {
@@ -240,10 +262,13 @@ describe('mixed-version web terminal orphan recovery', () => {
           }
         }
       }
+
       if (method === 'terminal.adoptOrphans') {
         const snapshot = { ...projected, publicationEpoch: 'renderer:host', snapshotVersion: 2 }
+
         return { ok: true, result: { adopted: true, topologyRevision: 2, snapshot } }
       }
+
       return { ok: true, result: projected }
     })
 

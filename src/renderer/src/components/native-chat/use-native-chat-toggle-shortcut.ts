@@ -22,12 +22,15 @@ export function resolveNativeChatToggleShortcutDetectedAgent({
   agentStatusByPaneKey: Record<string, { agentType?: AgentType }>
 }): AgentType | null {
   const activeLeafId = resolveNativeChatActiveLayoutLeafId(terminalLayout)
+
   if (activeLeafId) {
     return agentStatusByPaneKey[`${terminalTabId}:${activeLeafId}`]?.agentType ?? null
   }
+
   if (!isNativeChatTabWideFallbackSafe(terminalLayout)) {
     return null
   }
+
   return (
     Object.entries(agentStatusByPaneKey).find(([paneKey]) =>
       paneKey.startsWith(`${terminalTabId}:`)
@@ -44,44 +47,55 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
     if (!isWorktreeActive) {
       return
     }
+
     const isMac = isMacPlatform()
+
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.repeat || !matchesNativeChatToggleShortcut(e, isMac)) {
         return
       }
+
       const state = useAppStore.getState()
       const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
       const group = (state.groupsByWorktree[worktreeId] ?? []).find((g) => g.id === activeGroupId)
+
       if (!group?.activeTabId) {
         return
       }
+
       const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === group.activeTabId
       )
+
       // contentType gates out standalone structured (agent-session) tabs;
       // structuredSessionId gates out a terminal tab that adopted one, which
       // renders the structured surface with no TUI to switch back to.
       if (!tab || tab.contentType !== 'terminal' || tab.structuredSessionId) {
         return
       }
+
       const terminalTab = (state.tabsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === tab.entityId
       )
+
       // Carry the agent identity (not just "an agent exists") so the chord stays
       // inert on unsupported agents (e.g. Gemini), matching the menu/header gate.
       // Pane keys are `${entityId}:${leafId}` — the backing terminal tab id, not
       // the unified tab id.
       const terminalLayout = state.terminalLayoutsByTabId[tab.entityId]
       const tabWideFallbackSafe = isNativeChatTabWideFallbackSafe(terminalLayout)
+
       const detectedAgent = resolveNativeChatToggleShortcutDetectedAgent({
         terminalTabId: tab.entityId,
         terminalLayout,
         agentStatusByPaneKey: state.agentStatusByPaneKey
       })
+
       const titleFallbackAgent =
         tabWideFallbackSafe && terminalTab
           ? resolveNativeChatTabAgentEvidence(terminalTab, tab)
           : null
+
       if (
         !canToggleNativeChat({
           experimentalNativeChatEnabled: state.settings?.experimentalNativeChat === true,
@@ -97,11 +111,14 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
       ) {
         return
       }
+
       e.preventDefault()
       e.stopPropagation()
       state.toggleTabViewMode(tab.id)
     }
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
+
     return () => {
       window.removeEventListener('keydown', onKeyDown, { capture: true })
     }

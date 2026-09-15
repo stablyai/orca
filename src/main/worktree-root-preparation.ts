@@ -12,6 +12,7 @@ import type { ProjectRuntimeResolutionStore } from './local-project-runtime-reso
 // root than the create path uses.
 type WorktreeRootPreparationSettings = Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces'> &
   Partial<Pick<GlobalSettings, 'localWindowsRuntimeDefault'>>
+
 type WorktreeRootPreparationStore = {
   getSettings: () => WorktreeRootPreparationSettings
   getRepos: () => Repo[]
@@ -31,6 +32,7 @@ export async function prepareLocalWorktreeRootForRepo(
       repo.path,
       getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
     )
+
     // Why: mkdir touches the current root to preflight macOS TCC, while
     // access remains scoped by recomputed settings instead of a permanent grant.
     await mkdir(root, { recursive: true })

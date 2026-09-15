@@ -46,11 +46,13 @@ export function useSourceControlStatusRefresh({
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
+
   const refreshActiveGitStatus = useCallback(
     async (signal?: AbortSignal): Promise<void> => {
       if (!activeWorktreeId || !worktreePath || isFolder) {
         return
       }
+
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       await refreshGitStatusForWorktree({
         // Why: route git status by the repo OWNER host, not the focused runtime.
@@ -80,6 +82,7 @@ export function useSourceControlStatusRefresh({
       worktreePath
     ]
   )
+
   const refreshActiveGitStatusAfterMutation = useCallback(async (): Promise<void> => {
     try {
       await refreshActiveGitStatus()
@@ -93,13 +96,16 @@ export function useSourceControlStatusRefresh({
     if (!repositoryHuge || !activeWorktreeId || !worktreePath || activeConnectionId) {
       return
     }
+
     const warningProbe = beginHugeRepoWarningProbe({
       id: activeWorktreeId,
       instanceId: activeWorktreeInstanceId
     })
+
     if (hasDismissedHugeRepoWarning(warningProbe)) {
       return
     }
+
     let cancelled = false
     void window.api.git
       .findHugeFoldersToIgnore({ worktreePath })
@@ -107,9 +113,11 @@ export function useSourceControlStatusRefresh({
         if (cancelled || folders.length === 0 || hasDismissedHugeRepoWarning(warningProbe)) {
           return
         }
+
         if (!markHugeRepoWarningDismissed(warningProbe)) {
           return
         }
+
         const folderName = folders[0]
         toast.warning(
           translate(
@@ -128,6 +136,7 @@ export function useSourceControlStatusRefresh({
                 if (!hasDismissedHugeRepoWarning(warningProbe)) {
                   return
                 }
+
                 void window.api.git
                   .appendGitignore({ worktreePath, folderName })
                   .then(() => refreshActiveGitStatus())
@@ -138,6 +147,7 @@ export function useSourceControlStatusRefresh({
         )
       })
       .catch((error) => console.warn('[SourceControl] findHugeFoldersToIgnore failed', error))
+
     return () => {
       cancelled = true
     }
@@ -155,6 +165,7 @@ export function useSourceControlStatusRefresh({
       if (!context.worktreeId || isFolder) {
         return
       }
+
       try {
         await refreshGitStatusForWorktree({
           // Why: generation can finish after a host switch; refresh the host that owned the generation request.

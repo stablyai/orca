@@ -12,6 +12,7 @@ vi.mock('../store', () => ({
     if (!mocks.state) {
       throw new Error('mock app state not initialized')
     }
+
     return selector(mocks.state)
   }
 }))
@@ -19,8 +20,10 @@ vi.mock('../store', () => ({
 // Why: the driver and automation-lease modules are the real ones — mocking them would leave
 // the wiring under test unproven, which is the whole point of this file.
 const { setDriverForBrowserPage } = await import('../lib/pane-manager/browser-mobile-driver-state')
+
 const { acquireBrowserAutomationVisibility, releaseBrowserAutomationVisibility } =
   await import('./browser-pane/host-guest/browser-automation-visibility')
+
 const { TerminalWorkbenchContainer } = await import('./TerminalWorkbenchContainer')
 
 const PAGE_ID = 'page-1'
@@ -31,15 +34,19 @@ function mountWorkbench(isVisible: boolean): HTMLElement {
       'wt-1': [{ id: 'tab-1', activePageId: PAGE_ID }] as unknown as readonly BrowserTabState[]
     }
   }
+
   const { container } = render(
     <TerminalWorkbenchContainer isVisible={isVisible}>
       <span>workbench</span>
     </TerminalWorkbenchContainer>
   )
+
   const node = container.querySelector('[data-terminal-workbench-container]')
+
   if (!(node instanceof HTMLElement)) {
     throw new Error('workbench container not rendered')
   }
+
   return node
 }
 
@@ -75,6 +82,7 @@ describe('TerminalWorkbenchContainer', () => {
   // means the guest never mounts, so the driver never flips.
   it('never applies display:none while an automation lease holds one of its pages', () => {
     const token = acquireBrowserAutomationVisibility(PAGE_ID)
+
     try {
       const node = mountWorkbench(false)
       expect(node.className).not.toContain('hidden')

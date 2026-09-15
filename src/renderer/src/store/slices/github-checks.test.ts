@@ -13,6 +13,7 @@ describe('deriveCheckStatusFromChecks', () => {
       { name: 'build', status: 'completed', conclusion: 'success', url: null },
       { name: 'approval', status: 'completed', conclusion: 'action_required', url: null }
     ]
+
     expect(deriveCheckStatusFromChecks(checks)).toBe('failure')
   })
 
@@ -20,6 +21,7 @@ describe('deriveCheckStatusFromChecks', () => {
     const checks = [
       { name: 'future-check', status: 'completed', conclusion: 'future_state', url: null }
     ] as unknown as PRCheckDetail[]
+
     expect(deriveCheckStatusFromChecks(checks)).toBe('neutral')
   })
 })
@@ -64,6 +66,7 @@ describe('syncPRChecksStatus', () => {
     const result = syncPRChecksStatus(baseState, '/repo', 'repo-id', 'main', [
       { name: 'build', status: 'completed', conclusion: 'success', url: null }
     ])
+
     expect(result?.prCache?.['repo-id::main']?.data?.checksStatus).toBe('success')
   })
 

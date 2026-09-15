@@ -32,6 +32,7 @@ import {
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 
 const NO_FILE_PATHS: string[] = []
+
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 
 type Props = {
@@ -94,12 +95,14 @@ export function MobileNativeChatComposer({
   onNeedFiles
 }: Props): React.JSX.Element {
   const [cursor, setCursor] = useState(0)
+
   // Transiently drives the native caret after a mid-text autocomplete insert,
   // then released on the next selection change so manual caret placement still
   // works (a permanently controlled `selection` breaks it in React Native).
   const [pendingSelection, setPendingSelection] = useState<{ start: number; end: number } | null>(
     null
   )
+
   const sendingRef = useRef(false)
   const mountedRef = useRef(true)
   const sendSurfaceIdRef = useRef(sendSurfaceId)
@@ -113,6 +116,7 @@ export function MobileNativeChatComposer({
   const [sending, setSending] = useState(false)
   const trimmed = value.trim()
   const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
+
   // An attached image alone is a valid send (desktop parity), so the image rides
   // along even when the user sends no accompanying text.
   const canSend =
@@ -123,10 +127,12 @@ export function MobileNativeChatComposer({
     !sessionOptionDispatching
 
   const trigger = useMemo(() => detectAutocompleteTrigger(value, cursor), [value, cursor])
+
   const suggestions = useMemo<ComposerSuggestion[]>(() => {
     if (!trigger) {
       return []
     }
+
     if (trigger.kind === 'slash') {
       const commands =
         structuredCommands !== undefined
@@ -134,6 +140,7 @@ export function MobileNativeChatComposer({
           : agent
             ? getVerifiedNativeChatCommands(agent)
             : []
+
       // Why: Codex's catalog is 45 commands and this list is a plain ScrollView
       // (~5 rows visible), so an uncapped `/` would mount every row and
       // re-reconcile them on each streaming tick right above the transcript.
@@ -142,6 +149,7 @@ export function MobileNativeChatComposer({
         command
       }))
     }
+
     return rankSuggestions(filePaths, trigger.query).map((path) => ({
       kind: 'file' as const,
       path
@@ -156,6 +164,7 @@ export function MobileNativeChatComposer({
 
   useEffect(() => {
     mountedRef.current = true
+
     return () => {
       mountedRef.current = false
       sendSurfaceGenerationRef.current += 1
@@ -170,11 +179,13 @@ export function MobileNativeChatComposer({
     if (!trigger) {
       return
     }
+
     const { text: nextText, cursor: nextCursor } = applyAutocomplete(
       value,
       trigger,
       composerSuggestionInsertText(suggestion)
     )
+
     onChangeText(nextText)
     setCursor(nextCursor)
     setPendingSelection({ start: nextCursor, end: nextCursor })
@@ -184,15 +195,18 @@ export function MobileNativeChatComposer({
     if (!canSend || sendingRef.current) {
       return
     }
+
     sendingRef.current = true
     setSending(true)
     const sendSurfaceGeneration = sendSurfaceGenerationRef.current
     const sendCompletionGeneration = getSendCompletionGeneration()
     const composerEditGeneration = getComposerEditGeneration()
+
     try {
       // Raw, not trimmed: the send seam owns the wire trim, and a rejection has
       // to hand the user back exactly what they typed (#14819).
       const accepted = await onSend(value)
+
       if (
         accepted &&
         mountedRef.current &&

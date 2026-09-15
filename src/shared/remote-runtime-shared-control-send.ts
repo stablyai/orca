@@ -13,10 +13,13 @@ export function sendSharedControlRequest(args: {
   reject: (requestId: string, error: Error) => void
 }): void {
   const pending = args.pendingRequests.get(args.requestId)
+
   if (!pending) {
     return
   }
+
   const serializedRequest = takeRemoteRuntimePreparedRequest(pending)
+
   if (serializedRequest === null || !args.send(serializedRequest)) {
     args.reject(args.requestId, remoteRuntimeUnavailableError())
   }
@@ -31,6 +34,7 @@ export function sendSharedControlSubscription(args: {
   if (args.subscription.closed || args.subscription.sent) {
     return
   }
+
   if (
     args.send({
       id: args.subscription.requestId,
@@ -40,8 +44,10 @@ export function sendSharedControlSubscription(args: {
     })
   ) {
     args.subscription.sent = true
+
     return
   }
+
   finishSharedControlSubscription(
     args.subscriptions,
     args.subscription,

@@ -75,6 +75,7 @@ export function NativeChatToolRun({
     disclosureId === undefined
       ? undefined
       : `run:${disclosureId}:${expandOverride ?? '-'}:${expandSignal}:${revealedDiff?.requestId ?? '-'}`
+
   const { open, setOpen } = useNativeChatDisclosure(
     runKey,
     revealedDiff ? true : (expandOverride ?? expandSignal)
@@ -88,30 +89,37 @@ export function NativeChatToolRun({
   const subagentRows = subagentGroups
     .filter(isRenderableSubagentGroup)
     .map((group) => <NativeChatSubagentRun key={group.groupId} block={group} />)
+
   const callCount = countToolCalls(blocks) || blocks.length
   // Members stay separate all the way to the markup: joining them into one
   // string is what made a run read as a single call, because the separator also
   // occurs inside tool names like `browser.open` and `tools/read`.
   const summaryMembers = toolRunSummaryMembers(blocks)
   const hiddenCallCount = Math.max(0, callCount - summaryMembers.length)
+
   // Same content-signature keying the member rows below use: two identical calls
   // in one run are distinguished by occurrence, never by list position.
   const keyedSummaryMembers = ((): (ToolRunMember & { key: string })[] => {
     const seen = new Map<string, number>()
+
     return summaryMembers.map((member) => {
       const signature = `${member.name}:${member.arg}`
       const occurrence = seen.get(signature) ?? 0
       seen.set(signature, occurrence + 1)
+
       return { ...member, key: `${signature}:${occurrence}` }
     })
   })()
+
   const latestActiveCall = structuredActivityUi
     ? selectActiveToolCall(blocks, { activeTurnIsWorking })
     : null
+
   const isSettled = latestActiveCall == null
   const hasRunningCall = blocks.some((block) => isToolCallBlock(block) && block.state === 'running')
   // The turn caret opens the activity group while each child tool stays collapsed.
   const expandToolLines = expandOverride === undefined ? open : false
+
   // Diffing every edit is the run's most expensive work, so a collapsed run —
   // which renders none of it — never pays for it.
   const taskLists = useMemo(
@@ -124,11 +132,13 @@ export function NativeChatToolRun({
         : null,
     [open, blocks, previousTodoWrite, previousUpdatePlan]
   )
+
   // Rollups cache counts only; detailed diff rows are built when the run opens.
   const { editCards, consumedResults } = useMemo(
     () => (open ? buildEditCards(blocks) : NO_EDIT_CARDS),
     [open, blocks]
   )
+
   // Only the settled header reads this. It stands over `summaryMembers`, which speaks
   // for the run's first calls rather than its last, so a glyph taken from one
   // call would assert a category the text beside it doesn't describe. A run that
@@ -136,6 +146,7 @@ export function NativeChatToolRun({
   // fixed once settled, so state rides on the trailing mark — a leading glyph
   // that flipped to a check would read as a change of identity.
   const settledHeaderIcon = nativeChatToolRunIconName(blocks.filter(isToolCallBlock))
+
   const fallbackLabel =
     callCount === 1
       ? translate('components.native-chat.tool.countOne', NATIVE_CHAT_TOOL_ACTIVITY_COPY.countOne)
@@ -274,15 +285,20 @@ export function NativeChatToolRun({
         <div className="mt-1 pl-4">
           {(() => {
             const seen = new Map<string, number>()
+
             return blocks.map((block, blockIndex) => {
               const taskList = taskLists?.rows.get(block)
+
               if (taskList) {
                 return <NativeChatTaskList key={`tasks:${blockIndex}`} {...taskList} />
               }
+
               if (taskLists?.consumedResults.has(block)) {
                 return null
               }
+
               const edit = editCards.get(block)
+
               if (edit) {
                 return (
                   <div key={`edit:${edit.key}`}>
@@ -307,27 +323,33 @@ export function NativeChatToolRun({
                   </div>
                 )
               }
+
               if (consumedResults.has(block)) {
                 return null
               }
+
               const signature =
                 block.type === 'tool-call'
                   ? `${block.type}:${block.name}:${JSON.stringify(block.input)}`
                   : block.type === 'tool-result'
                     ? `${block.type}:${block.output}`
                     : `${block.type}`
+
               const occurrence = seen.get(signature) ?? 0
               seen.set(signature, occurrence + 1)
+
               const providerCallId =
                 block.type === 'tool-call' &&
                 block.callId !== undefined &&
                 block.callId.trim().length > 0
                   ? block.callId
                   : undefined
+
               const lineIdentity =
                 providerCallId !== undefined
                   ? `call:${providerCallId}`
                   : `${signature}:${occurrence}`
+
               return (
                 <NativeChatToolLine
                   key={lineIdentity}

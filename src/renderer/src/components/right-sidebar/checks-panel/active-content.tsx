@@ -20,6 +20,7 @@ import { translate } from '@/i18n/i18n'
 import type { ChecksPanelReview } from '../checks-panel-review'
 import type { ChecksPanelHostedReviewModifierDestination } from '../checks-panel-hosted-review-click-routing'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
+
 type ReviewHeaderComponentProps = {
   review: ChecksPanelReview
   isRefreshing: boolean
@@ -104,16 +105,21 @@ export function ChecksPanelActiveContent({
     titleSaving,
     setTitleDraft
   } = model
+
   if (!activeReview) {
     return null
   }
+
   const reviewShortLabel = activeReview.provider === 'gitlab' ? 'MR' : 'PR'
+
   const shouldShowReviewTriageStrip =
     activeConflictReview !== null || getBrokenChecks(checks).length > 0
+
   const hostedReviewModifierHintDestination = resolveChecksPanelHostedReviewModifierDestination(
     settings,
     Boolean(activeWorktreeId)
   )
+
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
       {/* Why: surface a background-refresh failure over stale cached PR data so a GitHub outage doesn't look like a normal panel. GitHub-only. */}
@@ -273,6 +279,7 @@ export function ChecksPanelActiveContent({
         onOpenChange={(open) => {
           if (!open) {
             setAgentComposerState(null)
+
             // Why: a launch in flight owns the payload (claimed ref). Any other close —
             // cancel, or closing after a failed launch — must drop it so the next action
             // (e.g. fix checks) does not post stale fixing replies.
@@ -333,6 +340,7 @@ export function ChecksPanelActiveContent({
         onLaunched={() => {
           // Why: prompt delivery succeeded — the only point at which host replies/resolves may run.
           consumeClaimedCommentResolutionAfterDeliveryRef.current()
+
           if (agentComposerState?.actionId === 'resolveConflicts') {
             toast.success(
               translate(
@@ -340,12 +348,15 @@ export function ChecksPanelActiveContent({
                 'Started an AI agent for the conflicts.'
               )
             )
+
             return
           }
+
           if (agentComposerState?.actionId === 'resolveComments') {
             // Why: resolve/reply toast is emitted by resolveSelectedThreadsAfterLaunch.
             return
           }
+
           toast.success(
             translate(
               'auto.components.right.sidebar.ChecksPanel.2ef90c9819',

@@ -15,6 +15,7 @@ export function snapshotBrowserClientPageRendererMemoryProfile(
   let attachingPageCount = 0
   let attachedPageCount = 0
   let retiringPageCount = 0
+
   for (const page of pages.values()) {
     if (page.status === 'attaching') {
       attachingPageCount += 1
@@ -24,6 +25,7 @@ export function snapshotBrowserClientPageRendererMemoryProfile(
       retiringPageCount += 1
     }
   }
+
   return {
     retainedPageCount: pages.size,
     attachingPageCount,

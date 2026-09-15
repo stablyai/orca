@@ -32,9 +32,11 @@ import {
 export function configureRelaySessionCallbacks(session: SshRelaySession): void {
   session.setOnTerminalRelayError((tid, err) => {
     clearRelayLostBackoff(tid)
+
     if (activeSessions.get(tid)?.getState() !== 'deploying') {
       rotateSshProviderAuthority(tid)
     }
+
     console.warn(
       `[ssh] Terminal relay error for ${tid}: ${err.message}; skipping reconnect backoff.`
     )
@@ -43,13 +45,17 @@ export function configureRelaySessionCallbacks(session: SshRelaySession): void {
 
   session.setOnRelayLost((tid) => {
     const s = activeSessions.get(tid)
+
     if (!s) {
       return
     }
+
     const c = connectionManager?.getConnection(tid)
+
     if (!c) {
       return
     }
+
     const t = getSshTargetRegistryStore()?.getTarget(tid)
 
     // Why: bounded exponential backoff — without it, a remote bug that closes every fresh --connect channel becomes an infinite relay-deploy loop.
@@ -58,13 +64,16 @@ export function configureRelaySessionCallbacks(session: SshRelaySession): void {
       reconnectTimer: null,
       stabilizedTimer: null
     }
+
     if (state.stabilizedTimer) {
       clearTimeout(state.stabilizedTimer)
       state.stabilizedTimer = null
     }
+
     if (state.reconnectTimer) {
       return
     }
+
     rotateSshProviderAuthority(tid)
 
     // Why: re-deploying the relay rides the SSH transport, so while the transport is itself down no attempt
@@ -72,6 +81,7 @@ export function configureRelaySessionCallbacks(session: SshRelaySession): void {
     // manual-reconnect banner, which would tell the user to act on a link that is still auto-recovering.
     const transportStatus = connectionManager?.getState(tid)?.status
     const transportConnected = transportStatus === 'connected'
+
     if (transportConnected && state.attempts >= RELAY_LOST_MAX_ATTEMPTS) {
       console.warn(
         `[ssh] Relay channel for ${tid} kept dying across ${state.attempts} attempts; giving up. User must reconnect manually.`
@@ -85,6 +95,7 @@ export function configureRelaySessionCallbacks(session: SshRelaySession): void {
         'Relay channel kept dropping. Click Reconnect on the SSH target before retrying.',
         0
       )
+
       return
     }
 
@@ -93,25 +104,34 @@ export function configureRelaySessionCallbacks(session: SshRelaySession): void {
         state.reconnectTimer = null
         relayLostBackoff.set(tid, state)
         const liveConn = connectionManager?.getConnection(tid)
+
         if (!liveConn || !activeSessions.has(tid)) {
           clearRelayLostBackoff(tid)
+
           return
         }
+
         const status = connectionManager?.getState(tid)?.status
+
         if (status === 'connected') {
           if (!attemptCharged) {
             // Why: waiting is free, but the deploy it defers is real — charge it here so a transport that
             // flaps back to 'connected' can't redeploy forever on an uncharged budget.
             state.attempts += 1
           }
+
           void s.reconnect(liveConn, relayGracePeriodForTarget(t))
+
           return
         }
+
         if (status === undefined || TRANSPORT_TERMINAL_STATUSES.has(status)) {
           // Why: the transport gave up for good; its own state is what the user acts on, so stop waiting for a redeploy that can never run.
           clearRelayLostBackoff(tid)
+
           return
         }
+
         // Why: still mid-transition — re-arm at the max delay without consuming an attempt. It ends once
         // the transport settles: 'connected' redeploys, a terminal status or a dropped session clears above.
         scheduleRelayRedeploy(RELAY_LOST_MAX_DELAY_MS, false)
@@ -131,6 +151,7 @@ export function configureRelaySessionCallbacks(session: SshRelaySession): void {
       console.warn(
         `[ssh] Relay channel for ${tid} lost while the SSH transport is ${transportStatus ?? 'unknown'}; waiting ${RELAY_LOST_MAX_DELAY_MS}ms without consuming an attempt`
       )
+
       return
     }
 
@@ -152,20 +173,25 @@ export function configureRelaySessionCallbacks(session: SshRelaySession): void {
   // Why: fires after both establish() and reconnect() reach 'ready'; re-create persisted port forwards so they survive restarts and blips.
   session.setOnReady((tid) => {
     const state = relayLostBackoff.get(tid)
+
     if (state) {
       if (state.stabilizedTimer) {
         clearTimeout(state.stabilizedTimer)
       }
+
       // Why: stabilization counts post-ready uptime; slow deploy time before `ready` doesn't prove the new relay survived real work.
       state.stabilizedTimer = setTimeout(() => {
         const current = relayLostBackoff.get(tid)
+
         if (current === state && !current.reconnectTimer) {
           relayLostBackoff.delete(tid)
         }
       }, RELAY_LOST_STABILIZED_MS)
       relayLostBackoff.set(tid, state)
     }
+
     clearRelayStateOverride(tid)
+
     if (!testingTargets.has(tid)) {
       broadcastSshState(getCurrentMainWindow, tid, {
         targetId: tid,
@@ -175,6 +201,7 @@ export function configureRelaySessionCallbacks(session: SshRelaySession): void {
         supportsFolderDownload: connectionSupportsFolderDownload(tid)
       })
     }
+
     currentRuntime?.notifySshRelayReady?.(tid)
     void restorePortForwards(tid, getCurrentMainWindow)
   })
@@ -184,6 +211,7 @@ export function refreshActiveRelaySessions(): void {
   if (!persistedStore || !portForwardManager) {
     return
   }
+
   for (const session of activeSessions.values()) {
     session.refreshEnvironment(
       getCurrentMainWindow,

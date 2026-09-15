@@ -17,6 +17,7 @@ export function assertSshAgentSessionCreateResult(
   result: unknown
 ): asserts result is PtySpawnResult {
   const candidate = result as Partial<PtySpawnResult> | null
+
   if (
     typeof candidate?.id === 'string' &&
     candidate.id.length > 0 &&
@@ -25,6 +26,7 @@ export function assertSshAgentSessionCreateResult(
   ) {
     return
   }
+
   // Why: a malformed success arrived after dispatch, so retain the replay fence instead of
   // falling back or issuing a fresh operation that could duplicate a live PTY.
   throw Object.assign(new Error('execution_owner_unavailable'), {
@@ -43,6 +45,7 @@ export async function sshSupportsAgentSessionCreateOperations(
     })) as {
       agentSessionCreateOperationVersion?: unknown
     }
+
     return (
       result.agentSessionCreateOperationVersion === AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION
     )
@@ -64,11 +67,13 @@ export async function requestSshAgentSessionCreate(args: {
       args.signal || args.beforeResolve
         ? { signal: args.signal, beforeResolve: args.beforeResolve }
         : undefined
+
     return await args.mux.request('pty.spawn', args.params, options)
   } catch (error) {
     if (!args.operationId) {
       throw error
     }
+
     const spawnError = error instanceof Error ? error : new Error(String(error))
     // Why: after request dispatch, either an old relay or a capable replay ledger may own a PTY.
     throw Object.assign(spawnError, { agentSessionOperationOutcome: 'unknown' as const })
@@ -90,6 +95,7 @@ export async function spawnFreshSshPty(args: {
 }): Promise<PtySpawnResult> {
   const operation = args.exitRaceTracker.begin()
   let sourceActivationLease: SshPtyReceivingActivationLease | undefined
+
   try {
     const result = await requestSshAgentSessionCreate({
       mux: args.mux,
@@ -100,18 +106,24 @@ export async function spawnFreshSshPty(args: {
         sourceActivationLease = installSpawnSourceActivation(value, args.installSourceActivation)
       }
     })
+
     if (args.options.agentSessionCreateOperationId) {
       assertSshAgentSessionCreateResult(result)
     }
+
     const spawnResult = parseSshPtySpawnResult(result)
+
     if (args.exitRaceTracker.didMatchingExitArrive(operation, spawnResult)) {
       throw Object.assign(new Error('agent_session_exited_during_start'), {
         agentSessionOperationOutcome: 'unknown' as const
       })
     }
+
     const claimed = spawnResult.agentSessionEnsure
+
     if (args.options.agentSessionEnsure) {
       const validation = validateClaimedSshSpawn(spawnResult, args.options.agentSessionEnsure)
+
       if (!validation.valid) {
         if (validation.cleanup === 'created' && typeof spawnResult.id === 'string') {
           try {
@@ -120,12 +132,15 @@ export async function spawnFreshSshPty(args: {
             throw new Error('execution_owner_unavailable')
           }
         }
+
         throw new Error(validation.error)
       }
     }
+
     const id = args.toAppPtyId(spawnResult.id)
     args.rememberPtyIncarnation(spawnResult.id, spawnResult.incarnationId)
     args.acceptLivePty(id)
+
     const mappedResult = {
       ...spawnResult,
       id,
@@ -138,12 +153,15 @@ export async function spawnFreshSshPty(args: {
           }
         : {})
     }
+
     sourceActivationLease?.commit()
+
     return mappedResult
   } catch (error) {
     if (sourceActivationLease && !(await sourceActivationLease.rollback())) {
       throw new Error('execution_owner_unavailable')
     }
+
     throw error
   } finally {
     args.exitRaceTracker.finish(operation)
@@ -159,9 +177,11 @@ function installSpawnSourceActivation(
 ): SshPtyReceivingActivationLease | undefined {
   const result = parseSshPtySpawnResult(value)
   const activation = result.sourceActivation
+
   if (!activation) {
     return undefined
   }
+
   return install(result.id, activation)
 }
 
@@ -170,7 +190,9 @@ function parseSshPtySpawnResult(value: unknown): PtySpawnResult {
     typeof value === 'object' && value !== null && !Array.isArray(value)
       ? (value as PtySpawnResult)
       : ({} as PtySpawnResult)
+
   const activation = parsePtySourceReceivingActivation(result.sourceActivation)
+
   if (
     activation &&
     (typeof result.id !== 'string' ||
@@ -180,5 +202,6 @@ function parseSshPtySpawnResult(value: unknown): PtySpawnResult {
   ) {
     throw new Error('Invalid SSH PTY source activation identity')
   }
+
   return activation ? { ...result, sourceActivation: activation } : result
 }

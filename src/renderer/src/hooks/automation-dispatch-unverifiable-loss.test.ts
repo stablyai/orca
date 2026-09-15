@@ -9,11 +9,14 @@ vi.mock('@/store', () => ({
 }))
 
 const markDispatchResult = vi.fn<(result: AutomationDispatchResult) => Promise<void>>()
+
 const releaseTerminalOwnership = vi.fn()
+
 const finalizeTerminalOwnership = vi.fn(() => false)
 
 async function createCompletion() {
   const { createAutomationDispatchCompletion } = await import('./automation-dispatch-completion')
+
   const completion = createAutomationDispatchCompletion({
     run: { id: 'run-1' } as never,
     worktree: { id: 'wt-1', displayName: 'Automation worktree' } as never,
@@ -22,9 +25,11 @@ async function createCompletion() {
     releaseTerminalOwnership,
     finalizeTerminalOwnership
   })
+
   // The dispatch itself is already recorded before any exit can settle it.
   await completion.settlePendingAfterDispatch()
   markDispatchResult.mockClear()
+
   return completion
 }
 

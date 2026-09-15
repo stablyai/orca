@@ -25,17 +25,21 @@ export async function getIssue(
   siteId?: JiraSiteSelection | null
 ): Promise<JiraIssue | null> {
   const entries = getClients(siteId)
+
   for (const entry of entries) {
     let mediaRequest: MediaRequest | undefined
     let issue: JiraRecord | undefined
     let held = false
+
     try {
       await acquire()
       held = true
+
       const params = new URLSearchParams({
         fields: ISSUE_DETAIL_FIELDS.join(','),
         expand: 'renderedFields'
       })
+
       issue = await jiraRequest<JiraRecord>(
         entry,
         `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}?${params.toString()}`
@@ -45,12 +49,14 @@ export async function getIssue(
     } catch (error) {
       if (isAuthError(error)) {
         clearToken(entry.site.id)
+
         if (shouldSurfaceSiteFailure(siteId, entries.length)) {
           throw error
         }
       } else {
         console.warn('[jira] getIssue failed:', error)
       }
+
       continue
     } finally {
       if (held) {
@@ -63,17 +69,22 @@ export async function getIssue(
       if (!issue) {
         continue
       }
+
       const prepared = mediaRequest ? await prepareMediaResolver(entry, mediaRequest) : undefined
       const mapped = mapJiraIssue(entry.site, issue, prepared?.options)
+
       if (prepared) {
         flushMediaResolutionWarn(entry, prepared)
       }
+
       return mapped
     } catch (error) {
       console.warn('[jira] getIssue media load failed:', error)
+
       return mapJiraIssue(entry.site, issue)
     }
   }
+
   return null
 }
 
@@ -83,20 +94,25 @@ export async function getIssueSummary(
   signal?: AbortSignal
 ): Promise<JiraIssue | null> {
   let entries: JiraClientForSite[]
+
   try {
     entries = getClients(siteId)
   } catch (error) {
     throw new JiraSummaryLookupError('auth', error)
   }
+
   const entry = entries.find((candidate) => candidate.site.id === siteId)
+
   if (!entry) {
     throw new JiraSummaryLookupError('disconnected')
   }
 
   return withJiraDeadline(signal, ISSUE_SUMMARY_TIMEOUT_MS, async (requestSignal) => {
     await acquire(requestSignal)
+
     try {
       const params = new URLSearchParams({ fields: ISSUE_SUMMARY_FIELDS.join(',') })
+
       const issue = await settleJiraSummaryRead(
         jiraRequest<JiraRecord>(
           entry,
@@ -105,14 +121,17 @@ export async function getIssueSummary(
         ),
         requestSignal
       )
+
       return mapJiraIssue(entry.site, issue)
     } catch (error) {
       if (isAuthError(error)) {
         throw new JiraSummaryLookupError('auth', error)
       }
+
       if (getErrorStatus(error) === 404) {
         throw new JiraSummaryLookupError('not-found', error)
       }
+
       throw new JiraSummaryLookupError('read-failed', error)
     } finally {
       release()

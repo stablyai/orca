@@ -30,6 +30,7 @@ type DaemonLifecyclePrivate = {
 function createMockSubprocess(): MockSubprocess {
   let onData: ((data: string) => void) | undefined
   let onExit: ((code: number) => void) | undefined
+
   return {
     pid: 55_555,
     getForegroundProcess: () => null,
@@ -58,15 +59,18 @@ function createMockSubprocess(): MockSubprocess {
 function createServerHarness() {
   const subprocesses: MockSubprocess[] = []
   const unique = randomUUID()
+
   const server = new DaemonServer({
     socketPath: join(tmpdir(), `orca-droppability-${unique}.sock`),
     tokenPath: join(tmpdir(), `orca-droppability-${unique}.token`),
     spawnSubprocess: () => {
       const subprocess = createMockSubprocess()
       subprocesses.push(subprocess)
+
       return subprocess
     }
   })
+
   return {
     server,
     daemon: server as unknown as DaemonLifecyclePrivate,
@@ -79,6 +83,7 @@ function addClient(
   writableLength = 0
 ): Socket & { write: ReturnType<typeof vi.fn>; writableLength: number } {
   const controlSocket = { destroy: vi.fn() } as unknown as Socket
+
   const streamSocket = {
     destroyed: false,
     writableLength,
@@ -88,12 +93,14 @@ function addClient(
     write: ReturnType<typeof vi.fn>
     writableLength: number
   }
+
   daemon.connections.clients.set('client-1', {
     clientId: 'client-1',
     controlSocket,
     streamSocket,
     authenticatedPairEstablished: true
   })
+
   return streamSocket
 }
 
@@ -103,9 +110,11 @@ function pendingBatch(batcher: DaemonStreamDataBatcher): PendingStreamDataBatch 
       pendingByClient: Map<string, PendingStreamDataBatch>
     }
   ).pendingByClient.get('client-1')
+
   if (!pending) {
     throw new Error('Missing client-1 stream batch')
   }
+
   return pending
 }
 

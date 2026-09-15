@@ -25,10 +25,13 @@ test.describe('Tab Rename (Inline)', () => {
     // title, not a stale rename like "My Custom Title".
     await orcaPage.evaluate(() => {
       const store = window.__store
+
       if (!store) {
         return
       }
+
       const state = store.getState()
+
       for (const tabs of Object.values(state.tabsByWorktree)) {
         for (const tab of tabs) {
           if (tab.customTitle != null) {
@@ -48,6 +51,7 @@ test.describe('Tab Rename (Inline)', () => {
     const tabs = await getWorktreeTabs(page, worktreeId)
     const tab = tabs.find((entry) => entry.id === activeId)
     expect(tab).toBeDefined()
+
     // Why: mirror what the UI renders (customTitle ?? title) so locators that
     // key off the tab's visible text match what's actually on screen.
     return tab!.customTitle ?? tab!.title ?? ''
@@ -61,6 +65,7 @@ test.describe('Tab Rename (Inline)', () => {
     // double-quote aren't themselves re-escaped; both chars are CSS-selector
     // metacharacters inside a double-quoted attribute value.
     const escaped = title.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+
     return page.locator(`[data-testid="sortable-tab"][data-tab-title="${escaped}"]`).first()
   }
 
@@ -81,6 +86,7 @@ test.describe('Tab Rename (Inline)', () => {
   ): Promise<string | null> {
     return page.evaluate((targetWorktreeId) => {
       const store = window.__store
+
       if (!store) {
         return null
       }
@@ -88,6 +94,7 @@ test.describe('Tab Rename (Inline)', () => {
       const state = store.getState()
       const activeId = state.activeTabIdByWorktree[targetWorktreeId] ?? state.activeTabId
       const tab = (state.tabsByWorktree[targetWorktreeId] ?? []).find((t) => t.id === activeId)
+
       return tab?.customTitle ?? null
     }, worktreeId)
   }
@@ -106,6 +113,7 @@ test.describe('Tab Rename (Inline)', () => {
       name: `Rename tab ${originalTitle}`,
       exact: true
     })
+
     await expect(renameInput).toBeVisible()
 
     await renameInput.fill('My Custom Title')
@@ -132,6 +140,7 @@ test.describe('Tab Rename (Inline)', () => {
       name: `Rename tab ${originalTitle}`,
       exact: true
     })
+
     await expect(renameInput).toBeVisible()
     await expect(renameInput).toBeFocused()
 
@@ -157,6 +166,7 @@ test.describe('Tab Rename (Inline)', () => {
       name: `Rename tab ${originalTitle}`,
       exact: true
     })
+
     await expect(renameInput).toBeVisible()
 
     await renameInput.fill('Should Be Discarded')
@@ -188,12 +198,14 @@ test.describe('Tab Rename (Inline)', () => {
     // "empty string → reset" behavior independently from the double-click flow.
     await orcaPage.evaluate((targetWorktreeId) => {
       const store = window.__store
+
       if (!store) {
         return
       }
 
       const state = store.getState()
       const activeId = state.activeTabIdByWorktree[targetWorktreeId] ?? state.activeTabId
+
       if (activeId) {
         state.setTabCustomTitle(activeId, 'Seeded Custom')
       }
@@ -210,6 +222,7 @@ test.describe('Tab Rename (Inline)', () => {
       name: 'Rename tab Seeded Custom',
       exact: true
     })
+
     await expect(renameInput).toBeVisible()
 
     await renameInput.fill('')
@@ -230,11 +243,14 @@ test.describe('Tab Rename (Inline)', () => {
     // rename input itself. Seed both with known titles so we can locate them.
     await orcaPage.evaluate((targetWorktreeId) => {
       const store = window.__store
+
       if (!store) {
         return
       }
+
       const state = store.getState()
       const existing = state.tabsByWorktree[targetWorktreeId] ?? []
+
       if (existing.length < 2) {
         state.createTab(targetWorktreeId)
       }
@@ -256,6 +272,7 @@ test.describe('Tab Rename (Inline)', () => {
       name: `Rename tab ${activeTab.title}`,
       exact: true
     })
+
     await expect(renameInput).toBeVisible()
 
     await renameInput.fill('Committed By Blur')
@@ -270,9 +287,11 @@ test.describe('Tab Rename (Inline)', () => {
         ({ targetWorktreeId, targetTabId }) => {
           const store = window.__store
           const state = store!.getState()
+
           const tab = (state.tabsByWorktree[targetWorktreeId] ?? []).find(
             (t) => t.id === targetTabId
           )
+
           return tab?.customTitle ?? null
         },
         { targetWorktreeId: worktreeId, targetTabId: activeTab.id }
@@ -293,6 +312,7 @@ test.describe('Tab Rename (Inline)', () => {
       name: `Rename tab ${originalTitle}`,
       exact: true
     })
+
     await expect(renameInput).toBeVisible()
 
     await renameInput.fill('Committed By Right Click')
@@ -310,26 +330,34 @@ test.describe('Tab Rename (Inline)', () => {
 
   test('terminal title updates do not resize neighboring tabs', async ({ orcaPage }) => {
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
+
     const tabIds = await orcaPage.evaluate((targetWorktreeId) => {
       const state = window.__store!.getState()
       const existing = state.tabsByWorktree[targetWorktreeId] ?? []
+
       for (let index = existing.length; index < 3; index += 1) {
         state.createTab(targetWorktreeId, undefined, undefined, { activate: false })
       }
+
       const ids = (window.__store!.getState().tabsByWorktree[targetWorktreeId] ?? [])
         .slice(0, 3)
         .map((tab) => tab.id)
+
       ids.forEach((id, index) => state.setTabCustomTitle(id, `Tab ${index + 1}`))
+
       return ids
     }, worktreeId)
 
     const tabs = tabIds.map((id) =>
       orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${id}"]`)
     )
+
     await expect(tabs[2]!).toBeVisible()
+
     const before = await Promise.all(
       tabs.map((tab) => tab.evaluate((element) => element.getBoundingClientRect().width))
     )
+
     // Why: at the 88px shrink floor widths are stable for the wrong reason, and being above it is
     // also what proves the definite tab width applied — so this fails first on a regression.
     expect(
@@ -349,6 +377,7 @@ test.describe('Tab Rename (Inline)', () => {
       { tabId: tabIds[0] }
     )
     await expect(tabs[0]!).toContainText('Continuously changing generated terminal title')
+
     const after = await Promise.all(
       tabs.map((tab) => tab.evaluate((element) => element.getBoundingClientRect().width))
     )
@@ -374,11 +403,14 @@ test.describe('Tab Rename (Inline)', () => {
     await orcaPage.evaluate(
       ({ targetWorktreeId, targetTabId, targetTitle }) => {
         const store = window.__store
+
         if (!store) {
           return
         }
+
         const state = store.getState()
         const existing = state.tabsByWorktree[targetWorktreeId] ?? []
+
         for (const [index, tab] of existing.entries()) {
           // Why: shell-driven terminal title updates can race this crowded-tab
           // assertion; custom titles keep the rename target stable.
@@ -387,6 +419,7 @@ test.describe('Tab Rename (Inline)', () => {
             tab.id === targetTabId ? targetTitle : `Width Filler ${index + 1}`
           )
         }
+
         for (let i = existing.length; i < 15; i++) {
           const tab = state.createTab(targetWorktreeId, undefined, undefined, { activate: false })
           state.setTabCustomTitle(tab.id, `Width Filler ${i + 1}`)
@@ -427,6 +460,7 @@ test.describe('Tab Rename (Inline)', () => {
       name: `Rename tab ${targetTitle}`,
       exact: true
     })
+
     await expect(renameInput).toBeVisible()
 
     const width = await renameInput.evaluate((element) => element.getBoundingClientRect().width)
@@ -445,6 +479,7 @@ test.describe('Tab Rename (Inline)', () => {
       name: `Rename tab ${originalTitle}`,
       exact: true
     })
+
     await expect(renameInput).toBeVisible()
 
     // Why: the outer tab's middle-click handler closes the tab. The rename

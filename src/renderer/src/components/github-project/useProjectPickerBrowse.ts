@@ -29,39 +29,49 @@ export function useProjectPickerBrowse(
     activeCacheKeyRef.current = cacheKey
   }, [cacheKey])
   const cached = peekProjectPickerBrowseCacheEntry(cacheKey)
+
   const [browseProjects, setBrowseProjects] = useState<GitHubProjectSummary[]>(
     () => cached?.projects ?? []
   )
+
   const [partialFailures, setPartialFailures] = useState<{ owner: string; message: string }[]>(
     () => cached?.partialFailures ?? []
   )
+
   const [browseLoading, setBrowseLoading] = useState(false)
   const [browseError, setBrowseError] = useState<GitHubProjectViewError | null>(null)
 
   const loadBrowse = useCallback(async () => {
     const cachedEntry = getProjectPickerBrowseCacheEntry(cacheKey)
+
     if (cachedEntry) {
       setBrowseLoading(false)
       setBrowseError(null)
       setBrowseProjects(cachedEntry.projects)
       setPartialFailures(cachedEntry.partialFailures ?? [])
+
       return
     }
+
     setBrowseLoading(true)
     setBrowseError(null)
     setBrowseProjects([])
     setPartialFailures([])
+
     try {
       const result = await listAccessibleProjectsForRuntime(settings, browseHost)
+
       if (result.ok) {
         rememberProjectPickerBrowseCacheEntry(cacheKey, {
           projects: result.projects,
           partialFailures: result.partialFailures
         })
       }
+
       if (!mountedRef.current || activeCacheKeyRef.current !== cacheKey) {
         return
       }
+
       if (result.ok) {
         setBrowseProjects(result.projects)
         setPartialFailures(result.partialFailures ?? [])

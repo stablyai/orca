@@ -39,9 +39,12 @@ export function AgentSpinner({
           useNativeDriver: true
         })
       )
+
       animation.start()
+
       return () => animation.stop()
     }
+
     spinValue.setValue(0)
   }, [monitoring, status, spinValue])
 
@@ -60,6 +63,7 @@ export function AgentSpinner({
       inputRange: [0, 1],
       outputRange: ['0deg', '360deg']
     })
+
     return (
       <View style={styles.wrapper}>
         <Animated.View style={[styles.spinner, { borderColor: color, transform: [{ rotate }] }]} />

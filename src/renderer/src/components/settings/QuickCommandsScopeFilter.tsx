@@ -30,16 +30,20 @@ function ScopeTriggerLabel({
       </span>
     )
   }
+
   const includesGlobal = effectiveSelection.has(GLOBAL_SCOPE_KEY)
   const selectedRepos = repos.filter((repo) => effectiveSelection.has(repo.id))
   const parts: string[] = []
+
   if (includesGlobal) {
     parts.push('Global')
   }
+
   if (selectedRepos.length > 0) {
     const [first, ...rest] = selectedRepos
     parts.push(rest.length > 0 ? `${first.displayName} +${rest.length}` : first.displayName)
   }
+
   return (
     <span className="truncate">
       {parts.join(', ') ||
@@ -131,6 +135,7 @@ export function QuickCommandsScopeFilter({
               </CommandItem>
               {repos.map((repo) => {
                 const isSelected = effectiveSelection.has(repo.id)
+
                 return (
                   <CommandItem
                     key={repo.id}

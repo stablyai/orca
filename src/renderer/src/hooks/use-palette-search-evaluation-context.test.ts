@@ -11,14 +11,17 @@ describe('usePaletteSearchEvaluationContext', () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000)
     const evaluations: number[] = []
     const snapshot = { query: 'atlas' }
+
     const { result, rerender } = renderHook(
       ({ snapshot }) => {
         const context = usePaletteSearchEvaluationContext(snapshot)
         evaluations.push(context.nowMs)
+
         return context
       },
       { initialProps: { snapshot } }
     )
+
     expect(evaluations).toEqual([1_000])
     const initial = result.current
 

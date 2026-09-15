@@ -77,16 +77,19 @@ export function AutomationListFilterPills({
   onClearHost?: () => void
 }): React.JSX.Element | null {
   const statusLabel = translate('auto.components.automations.AutomationsPage.tableStatus', 'Status')
+
   const lastRunLabel = translate(
     'auto.components.automations.AutomationListFilterMenu.lastRun',
     'Last run'
   )
+
   const statusValueLabel =
     filter.status === 'enabled'
       ? translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')
       : filter.status === 'paused'
         ? translate('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')
         : null
+
   const lastRunValueLabel =
     filter.lastRun === 'failed'
       ? translate('auto.components.automations.AutomationListFilterMenu.failed', 'Failed')
@@ -95,15 +98,19 @@ export function AutomationListFilterPills({
         : filter.lastRun === 'never'
           ? translate('auto.components.automations.AutomationListFilterMenu.neverRan', 'Never ran')
           : null
+
   const agentValueLabel = filter.agentIds.length
     ? filter.agentIds
         .map((agentId) => getAgentCatalog().find((agent) => agent.id === agentId)?.label ?? agentId)
         .join(', ')
     : null
+
   const hostPillLabel = onClearHost ? (hostLabel ?? null) : null
+
   if (!statusValueLabel && !lastRunValueLabel && !agentValueLabel && !hostPillLabel) {
     return null
   }
+
   return (
     <>
       {hostPillLabel && onClearHost ? (
@@ -155,17 +162,22 @@ export function AutomationListFilterMenu({
     const nextHostKeys = selectedHostKeys.includes(stableKey)
       ? selectedHostKeys.filter((selectedKey) => selectedKey !== stableKey)
       : [...selectedHostKeys, stableKey]
+
     onChange({ ...filter, hostStableKeys: nextHostKeys })
   }
+
   const statusLabel = translate('auto.components.automations.AutomationsPage.tableStatus', 'Status')
+
   const lastRunLabel = translate(
     'auto.components.automations.AutomationListFilterMenu.lastRun',
     'Last run'
   )
+
   const agentLabel = translate(
     'auto.components.automations.AutomationListFilterMenu.agent',
     'Agent'
   )
+
   const agents = getAgentCatalog()
   const selectedAgentIds = filter.agentIds
   const [agentQuery, setAgentQuery] = React.useState('')
@@ -175,6 +187,7 @@ export function AutomationListFilterMenu({
     const nextAgentIds = selectedAgentIds.includes(agentId)
       ? selectedAgentIds.filter((selectedId) => selectedId !== agentId)
       : [...selectedAgentIds, agentId]
+
     onChange({ ...filter, agentIds: nextAgentIds })
   }
 

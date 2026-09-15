@@ -16,6 +16,7 @@ import {
 } from './terminal-output-side-effects'
 
 const ESC = '\x1b'
+
 const BEL = '\x07'
 
 // A fish prompt cycle: subscribe, paint the prompt, hand the tty to the child.
@@ -26,12 +27,14 @@ function trackerRecording(overrides: TerminalTitleTrackerCallbacks = {}): {
   tracker: ReturnType<typeof createTerminalTitleTracker>
 } {
   const state = { subscribes: 0 }
+
   const tracker = createTerminalTitleTracker({
     onMode2031Subscribe: () => {
       state.subscribes += 1
     },
     ...overrides
   })
+
   return {
     get subscribes() {
       return state.subscribes
@@ -162,6 +165,7 @@ function trackerRecordingBothFacts(): {
   tracker: ReturnType<typeof createTerminalTitleTracker>
 } {
   const facts: string[] = []
+
   return {
     facts,
     tracker: createTerminalTitleTracker({
@@ -174,9 +178,11 @@ function trackerRecordingBothFacts(): {
 describe('a fish prompt-accept burst is tracked, never answered (#9993)', () => {
   it('yields registry transitions only — subscribe then unsubscribe, two chunks apart', () => {
     let state = INITIAL_MODE_2031_REPLY_SCAN_STATE
+
     const decisions: Mode2031ReplyDecision[] = FISH_PROMPT_ACCEPT_CHUNKS.map((chunk) => {
       const result = scanMode2031ReplyDecision(state, chunk)
       state = result.state
+
       return result.decision
     })
 

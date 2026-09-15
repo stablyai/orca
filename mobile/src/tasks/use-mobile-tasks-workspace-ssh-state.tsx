@@ -41,10 +41,12 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
     workspaceDetectedAgentIds,
     workspaceSshState
   } = model
+
   const connectWorkspaceSshRepo = useCallback(async (): Promise<void> => {
     if (!client || !tasksSupported || !workspaceCreateTargetConnectionId) {
       return
     }
+
     setWorkspaceSshConnecting(true)
     setWorkspaceSshState({
       targetId: workspaceCreateTargetConnectionId,
@@ -52,12 +54,14 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       error: null,
       reconnectAttempt: 0
     })
+
     try {
       const reply = await sshRepoConnectRun.request(
         client,
         { targetId: workspaceCreateTargetConnectionId },
         { timeoutMs: 120_000 }
       )
+
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
       const state = sshRepoConnectRun.interpret(reply) as SshConnectionState | null | undefined
       setWorkspaceSshState(
@@ -85,19 +89,24 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       if (!repo.connectionId || !client || !tasksSupported) {
         return
       }
+
       if (
         workspaceSshState?.targetId === repo.connectionId &&
         workspaceSshState.status === 'connected'
       ) {
         return
       }
+
       const reply = await sshRepoStateRead.request(client, { targetId: repo.connectionId })
+
       const state =
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
         (sshRepoStateRead.interpret(reply) as SshConnectionState | null | undefined) ?? null
+
       if (state) {
         setWorkspaceSshState(state)
       }
+
       if (state?.status !== 'connected') {
         throw new Error(`Connect ${repo.displayName} before creating a workspace.`)
       }
@@ -108,16 +117,21 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
   useEffect(() => {
     if (!tasksSupported || !workspaceCreateDraft || !client || !workspaceCreateTargetRepo) {
       setWorkspaceDetectedAgentIds(null)
+
       return
     }
+
     if (workspaceCreateTargetRepo.connectionId && workspaceCreateSshStatus !== 'connected') {
       // Why: remote agent detection runs on the SSH host through the relay; a
       // disconnected repo would fail and cache an empty agent list.
       setWorkspaceDetectedAgentIds(null)
+
       return
     }
+
     let stale = false
     setWorkspaceDetectedAgentIds(null)
+
     const detection = workspaceCreateTargetRepo.connectionId
       ? {
           operation: remoteAgentDetectionRead,
@@ -126,11 +140,13 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
           })
         }
       : { operation: localAgentDetectionRead, reply: localAgentDetectionRead.request(client) }
+
     void detection.reply
       .then((reply) => {
         if (stale) {
           return
         }
+
         const detected = detection.operation.interpret(reply)
         setWorkspaceDetectedAgentIds(
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
@@ -142,6 +158,7 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
           setWorkspaceDetectedAgentIds(new Set())
         }
       })
+
     return () => {
       stale = true
     }
@@ -160,6 +177,7 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
     agent: workspaceAgent,
     overridden: workspaceAgentOverridden
   })
+
   if (
     workspaceAgentSelection.agent !== workspaceAgent ||
     workspaceAgentSelection.overridden !== workspaceAgentOverridden
@@ -176,6 +194,7 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
     () => workspaceAgent ?? pickWorkspaceAgent(runtimeTaskSettings, workspaceDetectedAgentIds),
     [runtimeTaskSettings, workspaceAgent, workspaceDetectedAgentIds]
   )
+
   const workspaceAgentDetectionPending =
     workspaceCreateDraft != null &&
     workspaceCreateTargetRepo != null &&
@@ -198,21 +217,27 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       if (!client || !tasksSupported) {
         return { kind: 'decision', decision: override ?? 'inherit' }
       }
+
       const reply = await repoSetupHooksRead.request(client, { repo: `id:${repo.id}` })
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
       const result = repoSetupHooksRead.interpret(reply) as RepoHooksResponse
       const setupCommand = result.hooks?.scripts?.setup?.trim()
       const setupTrust = normalizeSetupHookTrust(result.setupTrust) ?? undefined
+
       if (!setupCommand) {
         return { kind: 'decision', decision: 'inherit' }
       }
+
       if (override) {
         return { kind: 'decision', decision: override, setupTrust }
       }
+
       const setupRunPolicy = result.setupRunPolicy ?? 'run-by-default'
+
       if (setupRunPolicy === 'ask') {
         return { kind: 'prompt', command: setupCommand, source: result.source, setupTrust }
       }
+
       return {
         kind: 'decision',
         decision: setupRunPolicy === 'run-by-default' ? 'run' : 'skip',
@@ -221,6 +246,7 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
     },
     [client, tasksSupported]
   )
+
   return Object.assign(model, {
     connectWorkspaceSshRepo,
     ensureWorkspaceSshReady,

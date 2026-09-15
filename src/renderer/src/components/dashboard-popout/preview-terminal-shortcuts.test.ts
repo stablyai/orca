@@ -104,6 +104,7 @@ describe('resolvePreviewShortcutAction', () => {
         kittyKeyboardAdvertised: false
       }
     })
+
     expect(
       resolvePreviewShortcutAction(keydown({ key: 'ArrowLeft', ctrlKey: true }), conpty)
     ).toBeNull()
@@ -126,6 +127,7 @@ describe('resolvePreviewShortcutAction', () => {
         kittyKeyboardAdvertised: true
       }
     })
+
     expect(
       resolvePreviewShortcutAction(keydown({ key: 'Enter', shiftKey: true }), windowsHost)
     ).toEqual({ type: 'sendInput', data: '\x1b[13;2u' })
@@ -145,6 +147,7 @@ describe('resolvePreviewShortcutAction', () => {
         kittyKeyboardAdvertised: false
       }
     })
+
     expect(
       resolvePreviewShortcutAction(keydown({ key: 'Enter', ctrlKey: true }), {
         ...conpty,
@@ -186,6 +189,7 @@ describe('resolvePreviewShortcutAction', () => {
       'terminal.closePane': ['Mod+Shift+W'],
       'tab.close': ['Ctrl+W']
     } as unknown as PreviewShortcutContext['keybindings']
+
     const chord = (): KeyboardEvent => keydown({ key: 'w', code: 'KeyW', ctrlKey: true })
     expect(
       resolvePreviewShortcutAction(

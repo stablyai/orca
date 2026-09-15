@@ -66,6 +66,7 @@ function getPreferredThemeTarget(
   if (darkThemeSearchScore === lightThemeSearchScore) {
     return undefined
   }
+
   return darkThemeSearchScore > lightThemeSearchScore ? 'dark' : 'light'
 }
 
@@ -88,6 +89,7 @@ export function TerminalAppearanceSection({
   const lightThemeSearchEntries = getTerminalLightThemeSearchEntries()
   const terminalTypographyEntries = getTerminalTypographySearchEntries()
   const ghosttyImportEntries = getTerminalGhosttyImportSearchEntries()
+
   const themeCatalogSearchEntries = [
     ...getTerminalThemeTargetSearchEntries(),
     ...darkThemeSearchEntries,
@@ -96,6 +98,7 @@ export function TerminalAppearanceSection({
       ? [...getTerminalWarpImportSearchEntries(), ...getTerminalYamlImportSearchEntries()]
       : [])
   ]
+
   const darkThemeTargetScore = scoreThemeTargetIntent(searchQuery, darkThemeSearchEntries)
   const lightThemeTargetScore = scoreThemeTargetIntent(searchQuery, lightThemeSearchEntries)
   const preferredThemeTarget = getPreferredThemeTarget(darkThemeTargetScore, lightThemeTargetScore)
@@ -106,26 +109,32 @@ export function TerminalAppearanceSection({
     searchQuery,
     getTerminalAdvancedTypographySearchEntries()
   )
+
   const cursorMatches = matchesSettingsSearch(searchQuery, getTerminalCursorSearchEntries())
   const paneMatches = matchesSettingsSearch(searchQuery, getTerminalPaneAppearanceSearchEntries())
   const windowMatches = matchesSettingsSearch(searchQuery, getTerminalWindowSearchEntries())
   const themeCatalogMatches = matchesSettingsSearch(searchQuery, themeCatalogSearchEntries)
   const previewAdvancedMatches = cursorMatches || paneMatches || windowMatches
   const showThemeCatalog = !isSearching || themeCatalogMatches || previewAdvancedMatches
+
   const primaryTypographyMatches = matchesSettingsSearch(
     searchQuery,
     terminalTypographyEntries.slice(0, 2)
   )
+
   const ghosttyImportMatches =
     showDesktopThemeImports && matchesSettingsSearch(searchQuery, ghosttyImportEntries)
+
   const showPrimaryTypography =
     !isSearching ||
     forceVisiblePrimary ||
     primaryTypographyMatches ||
     typographyMatches ||
     ghosttyImportMatches
+
   const showGhosttyImport =
     showDesktopThemeImports && (!isSearching || forceVisiblePrimary || ghosttyImportMatches)
+
   const showTypographyAdvancedDisclosure = !isSearching || typographyMatches
 
   const advancedGroups = [
@@ -152,7 +161,9 @@ export function TerminalAppearanceSection({
         }
       : null
   ].filter((group): group is { key: string; node: React.JSX.Element } => group !== null)
+
   const showAdvancedDisclosure = !isSearching || advancedGroups.length > 0
+
   const previewAdvancedContent = showAdvancedDisclosure ? (
     <AppearanceAdvancedDisclosure
       showTopBorder={false}

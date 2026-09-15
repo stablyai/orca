@@ -34,15 +34,20 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
       }
     ) => {
       const replayNudge = readMutationReplayNudge(replayedMutationReceipt)
+
       if (replayNudge) {
         replayMutationNudge(runtime, replayNudge)
+
         return stripMutationReplayNudge(replayedMutationReceipt)
       }
+
       const db = runtime.getOrchestrationDb()
       const original = db.getMessageById(params.id)
+
       if (!original) {
         throw new Error(`Message not found: ${params.id}`)
       }
+
       if (
         legacyCoordinatorRunId &&
         (original.run_id !== legacyCoordinatorRunId ||
@@ -54,6 +59,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
           { effectsApplied: false }
         )
       }
+
       if (
         original.run_id === ORCHESTRATION_LEGACY_RUN_ID ||
         original.delivery_contract === 'legacy_direct' ||
@@ -67,6 +73,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
       }
 
       const question = db.getQuestion(params.id)
+
       if (question) {
         const run = resolveRunScope(runtime, {
           runId: params.run ?? question.run_id,
@@ -75,18 +82,22 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
           legacyCoordinatorRunId,
           callerEvidence: orchestrationCompatibilityEvidence
         })
+
         const answered = db.answerQuestion({
           messageId: question.message_id,
           runId: run.id,
           consumerGeneration: run.consumer_generation,
           body: params.body
         })
+
         const federated = db.getFederatedDispatch(question.dispatch_id)
+
         const receipt = {
           message: exposeMessage(answered.message),
           question: answered.question,
           duplicate: answered.duplicate
         }
+
         if (federated) {
           db.enqueueFederationRelay({
             dispatchId: question.dispatch_id,
@@ -98,6 +109,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
               body: params.body
             })
           })
+
           return recordReceiptBeforeNudge(
             recordMutationReceipt,
             receipt,
@@ -105,6 +117,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
             { kind: 'federation', runId: run.id }
           )
         }
+
         return recordReceiptBeforeNudge(recordMutationReceipt, receipt, () =>
           runtime.notifyMessageArrived(`dispatch:${question.dispatch_id}`, 'status')
         )
@@ -122,6 +135,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
       })
 
       const receipt = { message: exposeMessage(reply) }
+
       return recordReceiptBeforeNudge(recordMutationReceipt, receipt, () =>
         runtime.notifyMessageArrived(reply.to_handle, reply.type)
       )
@@ -133,10 +147,12 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     params: InboxParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+
       // Why: stale/unknown handles return empty rather than error — historical rows survive handle deletion (design doc §3.3).
       const messages = params.terminal
         ? db.getAllMessagesForHandle(params.terminal, params.limit)
         : db.getInbox(params.limit)
+
       return { messages, count: messages.length }
     }
   }),
@@ -147,6 +163,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
       const deps = params.deps ? parseOrchestrationTaskDepsFlag(params.deps) : undefined
+
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.callerTerminalHandle,
@@ -154,9 +171,11 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
         legacyCoordinatorRunId,
         callerEvidence: orchestrationCompatibilityEvidence
       })
+
       const creatorAuthority = params.callerTerminalHandle
         ? runtime.getOrchestrationDispatchAuthority(params.callerTerminalHandle)
         : null
+
       const task = db.createTask({
         spec: params.spec,
         taskTitle: params.taskTitle,
@@ -173,6 +192,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
           : {}),
         runId: run.id
       })
+
       return { task }
     }
   }),
@@ -183,6 +203,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
       const explicitRun = params.run ? db.getRun(params.run) : undefined
+
       const run =
         explicitRun?.legacy === 1
           ? explicitRun
@@ -193,19 +214,24 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
               legacyCoordinatorRunId,
               callerEvidence: orchestrationCompatibilityEvidence
             })
+
       // Why: listTasksWithDispatch adds assignee_handle + dispatch_id (NULL for non-dispatched), so legacy-shape consumers are unaffected.
       const joined = db.listTasksWithDispatch({
         status: params.status as TaskStatus,
         ready: params.ready,
         runId: run.id
       })
+
       const tasks = joined.map((row) => {
         const { assignee_handle, dispatch_id, ...base } = row
+
         if (base.status === 'dispatched') {
           return { ...base, assignee_handle, dispatch_id }
         }
+
         return base
       })
+
       return {
         runId: run.id,
         legacyReadOnly: run.legacy === 1,
@@ -220,6 +246,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
     params: TaskUpdateParams,
     handler: (params, { orchestrationCompatibilityEvidence, runtime, legacyCoordinatorRunId }) => {
       const db = runtime.getOrchestrationDb()
+
       const run = resolveRunScope(runtime, {
         runId: params.run,
         callerTerminalHandle: params.callerTerminalHandle,
@@ -227,17 +254,22 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
         legacyCoordinatorRunId,
         callerEvidence: orchestrationCompatibilityEvidence
       })
+
       const existing = db.getTask(params.id)
+
       if (!existing || existing.run_id !== run.id) {
         throw new OrchestrationError(
           'task_not_found',
           `Task ${params.id} was not found in Run ${run.id}.`
         )
       }
+
       const task = db.updateTaskStatus(params.id, params.status, params.result)
+
       if (!task) {
         throw new Error(`Task not found: ${params.id}`)
       }
+
       return { task }
     }
   })

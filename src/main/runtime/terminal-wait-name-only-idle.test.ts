@@ -20,9 +20,13 @@ import type { FirstPartyAgentStatus } from './tui-idle-evidence'
 // which only corroborates, and which vetoes.
 
 const POLL_INTERVAL_MS = 2000
+
 const QUIESCENCE_MS = 3000
+
 const NAME_ONLY_TITLE = 'Codex'
+
 const EXPLICIT_IDLE_TITLE = 'Codex ready'
+
 const HANDLE = 'terminal-1'
 
 function createWait(options: {
@@ -37,6 +41,7 @@ function createWait(options: {
 }) {
   const waiters = new RuntimeTerminalWaiterRegistry()
   const startVisibleReadProbe = vi.fn()
+
   const shared = {
     getTabTitle: () => options.tabTitle ?? null,
     getAdoptedPtyIdleStatus: () => options.adoptedIdleStatus ?? null,
@@ -44,6 +49,7 @@ function createWait(options: {
     getFirstPartyAgentStatus: () => options.firstPartyStatus ?? null,
     quiescenceMs: QUIESCENCE_MS
   }
+
   const polls = new RuntimeTerminalIdlePolls({
     ...shared,
     intervalMs: POLL_INTERVAL_MS,
@@ -51,6 +57,7 @@ function createWait(options: {
     getLiveLeaf: (leaf) => options.liveLeaf?.() ?? leaf,
     resolve: (waiter, result) => waiters.resolve(waiter, result)
   })
+
   const wait = new RuntimeTerminalWait(
     {
       ...shared,
@@ -62,6 +69,7 @@ function createWait(options: {
     waiters,
     polls
   )
+
   return { wait, waiters, polls, startVisibleReadProbe }
 }
 
@@ -71,6 +79,7 @@ function watch(promise: Promise<unknown>) {
     (value) => settled({ ok: value }),
     (error) => settled({ error: errorMessage(error) })
   )
+
   return settled
 }
 
@@ -130,6 +139,7 @@ describe('tui-idle evidence ranking', () => {
       lastOscTitle: EXPLICIT_IDLE_TITLE,
       paneTitle: null
     })
+
     const { wait } = createWait({ leaf, agent: 'codex', tabTitle: null })
     await expect(
       wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 })
@@ -142,11 +152,13 @@ describe('tui-idle evidence ranking', () => {
       lastOscTitle: NAME_ONLY_TITLE,
       lastOutputAt: Date.now() - QUIESCENCE_MS * 4
     })
+
     const { wait } = createWait({
       pty,
       agent: 'codex',
       firstPartyStatus: { state: 'working', updatedAt: Date.now() }
     })
+
     const settled = watch(wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 }))
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 3)
     expect(settled).not.toHaveBeenCalled()
@@ -193,6 +205,7 @@ describe('tui-idle evidence ranking', () => {
       lastAgentStatus: 'permission',
       lastOscTitle: 'Codex - action required'
     })
+
     const { wait } = createWait({ pty, agent: 'codex' })
     const settled = watch(wait.wait(HANDLE, { condition: 'tui-idle', timeoutMs: 60_000 }))
     await vi.advanceTimersByTimeAsync(POLL_INTERVAL_MS * 4 + QUIESCENCE_MS)
@@ -201,10 +214,15 @@ describe('tui-idle evidence ranking', () => {
 })
 
 const E2E_WORKTREE_ID = 'repo-1::/tmp/name-only-idle'
+
 const E2E_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+
 const E2E_PTY_ID = 'pty-name-only-idle'
+
 const WORKING_TITLE = '⠋ Codex'
+
 const ESC = String.fromCharCode(27)
+
 const BEL = String.fromCharCode(7)
 
 const E2E_GRAPH = {
@@ -236,8 +254,10 @@ async function makeRuntime(launchAgent?: TuiAgent) {
     repoPath: '/tmp/name-only-idle',
     getForegroundProcess: async () => 'codex'
   })
+
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, E2E_GRAPH)
+
   if (launchAgent) {
     runtime.registerPty(E2E_PTY_ID, E2E_WORKTREE_ID, null, {
       tabId: 'tab-1',
@@ -246,7 +266,9 @@ async function makeRuntime(launchAgent?: TuiAgent) {
       agentLaunchAuthority: { launchToken: 'name-only-launch', launchAgent }
     })
   }
+
   const { terminals } = await runtime.listTerminals(`id:${E2E_WORKTREE_ID}`)
+
   return { runtime, handle: terminals[0].handle }
 }
 

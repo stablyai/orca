@@ -4,7 +4,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockCreateTab = vi.fn()
+
 const mockQueueTabStartupCommand = vi.fn()
+
 const mockPasteDraftWhenAgentReady = vi.fn()
 
 const store = {

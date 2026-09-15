@@ -15,10 +15,12 @@ type NaturalWorktreeIdRow = { type: string } & Partial<{
  */
 export function getNaturalWorktreeIds(rows: readonly NaturalWorktreeIdRow[]): Set<string> {
   const ids = new Set<string>()
+
   for (const row of rows) {
     if (row.type === 'item' && row.sectionKey !== PINNED_GROUP_KEY && row.worktree) {
       ids.add(row.worktree.id)
     }
   }
+
   return ids
 }

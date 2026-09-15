@@ -6,31 +6,46 @@ import {
 import { BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION } from './browser-client-file-channel-protocol'
 
 const Generation = z.number().int().min(1).max(0xffff_ffff)
+
 const Identity = z.string().min(1).max(256)
+
 export const BROWSER_CLIENT_HOST_PAGE_INVENTORY_IDENTITY_MAX_JSON_BYTES = 384
+
 const PageInventoryIdentity = Identity.refine(
   (value) =>
     browserClientHostJsonByteLength(value) <=
     BROWSER_CLIENT_HOST_PAGE_INVENTORY_IDENTITY_MAX_JSON_BYTES,
   'Browser page inventory identity exceeds its JSON byte budget'
 )
+
 const CommandSequence = z.number().int().min(1).max(Number.MAX_SAFE_INTEGER)
+
 export const BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES = 256
+
 export const BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_BYTES = 768 * 1024
+
 export const BROWSER_CLIENT_HOST_PAGE_INVENTORY_URL_MAX_LENGTH = 8192
 
 export const BROWSER_CLIENT_HOST_PAGE_COMMAND_PROTOCOL_VERSION = 1 as const
+
 const PageCommandProtocolVersion = z.literal(BROWSER_CLIENT_HOST_PAGE_COMMAND_PROTOCOL_VERSION)
+
 export const BROWSER_CLIENT_HOST_PAGE_INVENTORY_PROTOCOL_VERSION = 1 as const
+
 const PageInventoryProtocolVersion = z.literal(BROWSER_CLIENT_HOST_PAGE_INVENTORY_PROTOCOL_VERSION)
+
 export const BROWSER_CLIENT_HOST_LEASE_RECONNECT_PROTOCOL_VERSION = 1 as const
+
 const LeaseReconnectProtocolVersion = z.literal(
   BROWSER_CLIENT_HOST_LEASE_RECONNECT_PROTOCOL_VERSION
 )
+
 export const BROWSER_CLIENT_HOST_PAGE_RECONCILIATION_PROTOCOL_VERSION = 1 as const
+
 const PageReconciliationProtocolVersion = z.literal(
   BROWSER_CLIENT_HOST_PAGE_RECONCILIATION_PROTOCOL_VERSION
 )
+
 const FileChannelProtocolVersion = z.literal(BROWSER_CLIENT_FILE_CHANNEL_PROTOCOL_VERSION)
 
 /**
@@ -76,6 +91,7 @@ export const BrowserClientHostedPageInventoryList = z
   .max(BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_PAGES)
   .superRefine((pages, context) => {
     const pageIds = new Set<string>()
+
     for (const [index, page] of pages.entries()) {
       if (pageIds.has(page.browserPageId)) {
         context.addIssue({
@@ -84,8 +100,10 @@ export const BrowserClientHostedPageInventoryList = z
           path: [index, 'browserPageId']
         })
       }
+
       pageIds.add(page.browserPageId)
     }
+
     if (
       browserClientHostedPageInventoryByteLength(pages) >
       BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_BYTES
@@ -129,6 +147,7 @@ export const BrowserClientHostAttachParams = z
         message: 'Browser file channel requires command negotiation'
       })
     }
+
     if (
       (params.pageInventoryProtocolVersion === undefined) !==
       (params.pageInventory === undefined)
@@ -138,6 +157,7 @@ export const BrowserClientHostAttachParams = z
         message: 'Browser page inventory negotiation is incomplete'
       })
     }
+
     if (
       params.leaseReconnectProtocolVersion !== undefined &&
       params.pageInventoryProtocolVersion === undefined
@@ -147,6 +167,7 @@ export const BrowserClientHostAttachParams = z
         message: 'Browser host reconnect requires page inventory negotiation'
       })
     }
+
     if (
       params.pageReconciliationProtocolVersion !== undefined &&
       (params.pageCommandProtocolVersion !== 1 || params.pageInventoryProtocolVersion !== 1)
@@ -156,6 +177,7 @@ export const BrowserClientHostAttachParams = z
         message: 'Browser page reconciliation requires command and inventory negotiation'
       })
     }
+
     for (const [index, page] of (params.pageInventory ?? []).entries()) {
       if (page.browserHostClientId !== params.browserHostClientId) {
         context.addIssue({
@@ -286,24 +308,28 @@ export const BrowserClientHostCommandEvent = BrowserClientPageCommandAuthority.e
   ) {
     return
   }
+
   if (event.pageReconciliationProtocolVersion !== 1) {
     context.addIssue({
       code: 'custom',
       message: 'Browser page reconciliation command was not negotiated'
     })
   }
+
   const previousAuthority =
     event.command.type === 'reclaimPage'
       ? event.command.previousAuthority
       : event.command.type === 'closePage'
         ? event.command.targetAuthority
         : null
+
   if (previousAuthority && previousAuthority.browserHostClientId !== event.browserHostClientId) {
     context.addIssue({
       code: 'custom',
       message: 'Browser page reconciliation client authority does not match'
     })
   }
+
   if (
     event.command.type === 'reclaimPage' &&
     event.command.previousAuthority.authorityEpoch === event.authorityEpoch

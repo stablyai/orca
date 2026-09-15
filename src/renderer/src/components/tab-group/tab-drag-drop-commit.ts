@@ -37,10 +37,12 @@ export function commitTabDragDrop({
 
   if (!isTabDragData(activeData) || activeData.worktreeId !== worktreeId) {
     finishDrag(true)
+
     return
   }
 
   const state = useAppStore.getState()
+
   const paneColumnSplit = resolveActivePaneColumnSplitTarget({
     event,
     groupsByWorktree: state.groupsByWorktree,
@@ -49,11 +51,13 @@ export function commitTabDragDrop({
     getDragPointer,
     geometry: dragGeometryRef.current
   })
+
   if (paneColumnSplit) {
     const moved = dropUnifiedTab(activeData.unifiedTabId, {
       groupId: paneColumnSplit.groupId,
       splitDirection: paneColumnSplit.zone
     })
+
     if (moved) {
       shouldRestorePreDragActivation = false
       mirrorWebRuntimeTabMove({
@@ -64,6 +68,7 @@ export function commitTabDragDrop({
         splitDirection: paneColumnSplit.zone
       })
     }
+
     finishDrag(
       shouldRestorePreDragActivation,
       resolveSourceGroupRestoreOnDrop(
@@ -72,24 +77,29 @@ export function commitTabDragDrop({
         shouldRestorePreDragActivation
       )
     )
+
     return
   }
 
   if (!event.over) {
     finishDrag(true)
+
     return
   }
 
   if (isTabDragData(overData)) {
     if (activeData.unifiedTabId === overData.unifiedTabId) {
       finishDrag(true)
+
       return
     }
 
     const groups = state.groupsByWorktree[worktreeId] ?? []
     const targetGroup = groups.find((group) => group.id === overData.groupId)
+
     if (!targetGroup) {
       finishDrag(true)
+
       return
     }
 
@@ -98,8 +108,10 @@ export function commitTabDragDrop({
     // Using the bar's computed side (re-derived here to avoid stale
     // closures) means the drop always lands where the blue bar was drawn.
     const insertion = resolveTabInsertion(event, isTabDragData, getDragPointer)
+
     if (!insertion) {
       finishDrag(true)
+
       return
     }
 
@@ -112,6 +124,7 @@ export function commitTabDragDrop({
       // intended target slot left by one when moving forward. Adjust the
       // insertion index to match the post-removal order.
       const nextIndex = oldIndex < rawInsertIndex ? rawInsertIndex - 1 : rawInsertIndex
+
       if (oldIndex !== -1 && oldIndex !== nextIndex) {
         const nextOrder = targetGroup.tabOrder.filter((id) => id !== activeData.unifiedTabId)
         nextOrder.splice(nextIndex, 0, activeData.unifiedTabId)
@@ -126,10 +139,12 @@ export function commitTabDragDrop({
       }
     } else {
       const index = overIndex === -1 ? targetGroup.tabOrder.length : rawInsertIndex
+
       const moved = dropUnifiedTab(activeData.unifiedTabId, {
         groupId: overData.groupId,
         index
       })
+
       if (moved) {
         shouldRestorePreDragActivation = false
         mirrorWebRuntimeTabMove({
@@ -146,6 +161,7 @@ export function commitTabDragDrop({
       shouldRestorePreDragActivation,
       resolveSourceGroupRestoreOnDrop(activeData, overData.groupId, shouldRestorePreDragActivation)
     )
+
     return
   }
 
@@ -154,6 +170,7 @@ export function commitTabDragDrop({
       const moved = dropUnifiedTab(activeData.unifiedTabId, {
         groupId: overData.groupId
       })
+
       if (moved) {
         shouldRestorePreDragActivation = false
         mirrorWebRuntimeTabMove({

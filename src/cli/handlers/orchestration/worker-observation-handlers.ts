@@ -22,10 +22,12 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
     }>('orchestration.workerShow', {
       dispatch: getRequiredStringFlag(flags, 'dispatch')
     })
+
     printResult(result, json, (value) => {
       const lines = [
         `${value.dispatch?.id ?? 'unknown'} task=${value.dispatch?.taskId ?? 'unknown'} [${value.worker.state}] stage=${value.worker.stage}`
       ]
+
       // Why: PTY status alone read `live` for an agent that died at a trust prompt, so the
       // fleet verdict and its next action print beside it rather than in another command.
       if (value.projection) {
@@ -34,6 +36,7 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
           `Next action: ${value.projection.nextAction.argv.join(' ') || 'none'}`
         )
       }
+
       // Why: absent means unknown on older runtimes, distinct from an evaluated null wait.
       if (value.observation === undefined || !('agentWait' in value.observation)) {
         lines.push('Interactive wait: unknown (not evaluated)')
@@ -45,23 +48,28 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
       } else {
         lines.push('Interactive wait: none')
       }
+
       return lines.join('\n')
     })
   },
 
   'orchestration worker-read': async ({ flags, client, json }) => {
     const cursorFlag = getOptionalStringFlag(flags, 'cursor')
+
     const cursor =
       cursorFlag !== undefined && /^\d+$/.test(cursorFlag)
         ? Number.parseInt(cursorFlag, 10)
         : cursorFlag
+
     const source = getOptionalStringFlag(flags, 'source')
+
     if (source && !['auto', 'transcript', 'terminal'].includes(source)) {
       throw new RuntimeClientError(
         'invalid_argument',
         '--source must be auto, transcript, or terminal'
       )
     }
+
     const result = await client.call<OrchestrationWorkerReadResult | LegacyWorkerReadResult>(
       'orchestration.workerRead',
       {
@@ -71,6 +79,7 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
         source: source as OrchestrationWorkerReadSource | undefined
       }
     )
+
     printResult(result, json, formatWorkerRead)
   }
 }

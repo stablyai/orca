@@ -20,8 +20,10 @@ export function getFolderWorkspaceConnectionId(
   folderWorkspaceId: string
 ): string | null | undefined {
   const host = resolveFolderWorkspaceHost(state, folderWorkspaceId)
+
   if (host.kind === 'ssh') {
     return host.targetId
   }
+
   return host.kind === 'local' ? null : undefined
 }

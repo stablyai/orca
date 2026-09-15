@@ -35,9 +35,11 @@ test.describe('Dead Terminal Stress @headful', () => {
 
     await orcaPage.evaluate(async () => {
       const state = window.__store?.getState()
+
       if (!state) {
         return
       }
+
       state.updateSettings({ setupScriptLaunchMode: 'split-vertical' })
     })
   })
@@ -46,6 +48,7 @@ test.describe('Dead Terminal Stress @headful', () => {
     for (const id of createdWorktreeIds) {
       await removeWorktreeViaStore(orcaPage, id)
     }
+
     createdWorktreeIds.length = 0
   })
 
@@ -72,20 +75,25 @@ test.describe('Dead Terminal Stress @headful', () => {
       const lostCount = await orcaPage.evaluate(() => {
         const canvases = document.querySelectorAll('.pane canvas:not(.xterm-link-layer)')
         let lost = 0
+
         for (const canvas of canvases) {
           const gl =
             (canvas as HTMLCanvasElement).getContext('webgl2') ??
             (canvas as HTMLCanvasElement).getContext('webgl')
+
           if (gl) {
             const ext = gl.getExtension('WEBGL_lose_context')
+
             if (ext) {
               ext.loseContext()
               lost++
             }
           }
         }
+
         return lost
       })
+
       if (lostCount > 0) {
         console.log(`[ctxloss-${i}] Forced context loss on ${lostCount} canvases`)
       }

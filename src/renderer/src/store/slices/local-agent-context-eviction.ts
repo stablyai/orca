@@ -25,15 +25,19 @@ export function removeLocalAgentContextEntries<T>(
   contextKeys: ReadonlySet<string>
 ): Record<string, T> {
   let filtered = entries
+
   for (const contextKey of contextKeys) {
     if (!(contextKey in filtered)) {
       continue
     }
+
     if (filtered === entries) {
       filtered = { ...entries }
     }
+
     delete filtered[contextKey]
   }
+
   return filtered
 }
 
@@ -53,30 +57,37 @@ export function getLocalAgentContextEviction(args: {
     .map((projectId) => projectId.trim())
     .filter(Boolean)
     .map((projectId) => `${projectId}:`)
+
   if (prefixes.length === 0) {
     return null
   }
+
   const contextKeys = new Set([
     ...Object.keys(args.state.localDetectedAgentIdsByContext),
     ...Object.keys(args.state.isDetectingLocalAgentsByContext),
     ...Object.keys(args.state.isRefreshingLocalAgentsByContext),
     ...args.internalContextKeys
   ])
+
   const removedContextKeys = new Set(
     [...contextKeys].filter((contextKey) =>
       prefixes.some((prefix) => contextKey.startsWith(prefix))
     )
   )
+
   if (removedContextKeys.size === 0) {
     return null
   }
+
   const clearDetected = Boolean(
     (args.detectedContextKey && removedContextKeys.has(args.detectedContextKey)) ||
     (args.legacyDetectContextKey && removedContextKeys.has(args.legacyDetectContextKey))
   )
+
   const clearRefreshing = Boolean(
     args.legacyRefreshContextKey && removedContextKeys.has(args.legacyRefreshContextKey)
   )
+
   return {
     removedContextKeys,
     detectedContextKey:

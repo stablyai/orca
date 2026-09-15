@@ -3,6 +3,7 @@ export class RuntimeWorktreeLifecycleEvents<T> {
 
   on(listener: (event: T) => void): () => void {
     this.listeners.add(listener)
+
     return () => this.listeners.delete(listener)
   }
 

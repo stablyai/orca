@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../github/issues', () => ({ getIssue: mocks.getGitHubIssue }))
+
 vi.mock('../gitlab/issues', () => ({ getIssue: mocks.getGitLabIssue }))
 
 describe('loadPullRequestLinkedIssue', () => {

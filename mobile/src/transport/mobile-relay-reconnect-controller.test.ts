@@ -7,6 +7,7 @@ import { RelayDirectorHttpError } from './mobile-relay-resume-director'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-crypto', () => ({
   getRandomBytes: (length: number) => new Uint8Array(length)
 }))
@@ -79,6 +80,7 @@ describe('relay reconnect controller', () => {
     const logical = { getState: () => 'disconnected' } as never
     const rejected: boolean[] = []
     const reconnect = createController(vi.fn(), undefined, (value) => rejected.push(value))
+
     for (let attempt = 0; attempt < 3; attempt++) {
       reconnect.registerFailure(new MobileE2EEAuthenticationError(), false)
     }
@@ -109,6 +111,7 @@ describe('relay reconnect controller', () => {
   it('clears the pairing-rejected latch once the desktop authenticates the device', () => {
     const rejected: boolean[] = []
     const reconnect = createController(vi.fn(), undefined, (value) => rejected.push(value))
+
     for (let attempt = 0; attempt < 3; attempt++) {
       reconnect.registerFailure(new MobileE2EEAuthenticationError(), false)
     }
@@ -121,6 +124,7 @@ describe('relay reconnect controller', () => {
   it('clears the pairing-rejected latch when direct connectivity proves the pairing', () => {
     const rejected: boolean[] = []
     const reconnect = createController(vi.fn(), undefined, (value) => rejected.push(value))
+
     for (let attempt = 0; attempt < 3; attempt++) {
       reconnect.registerFailure(new MobileE2EEAuthenticationError(), false)
     }
@@ -318,9 +322,11 @@ describe('relay reconnect controller', () => {
   it('resets backoff after an authenticated relay remains stable', () => {
     const onRetry = vi.fn()
     const reconnect = createController(onRetry)
+
     const session = {
       getFailure: () => new RelayOuterError(4408)
     } as MobileRelayRpcSession
+
     const logical = {
       getActivePath: () => 'relay'
     } as StableLogicalRpcClient
@@ -367,6 +373,7 @@ describe('relay reconnect controller', () => {
     for (let failure = 0; failure < 6; failure++) {
       reconnect.registerFailure(new RelayOuterError(4429), false)
     }
+
     reconnect.registerFailure(new RelayDirectorHttpError(503, 100), false)
 
     expect(reconnect.retryDelayMs(0)).toBe(15_000)
@@ -398,9 +405,11 @@ function createController(
     },
     onRetry
   )
+
   controller.reportRecoveryTo({
     setRecoveryAttempt: reportFailureCount,
     setPairingRejected: reportPairingRejected
   } as unknown as StableLogicalRpcClient)
+
   return controller
 }

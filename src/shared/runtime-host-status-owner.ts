@@ -7,7 +7,9 @@ import {
 } from './runtime-host-status'
 
 const RETRY_DELAYS_MS = [3_000, 6_000, 12_000, 30_000, 60_000]
+
 const REQUEST_TIMEOUT_MS = 15_000
+
 let publicationSequence = 0
 
 type Waiter = {
@@ -60,6 +62,7 @@ export class RuntimeHostStatusOwner {
     if (this.active || this.disposed) {
       return
     }
+
     this.active = true
     this.startRequest()
   }
@@ -68,6 +71,7 @@ export class RuntimeHostStatusOwner {
     if (this.disposed) {
       return
     }
+
     this.active = true
     this.retireRequest()
     this.clearRetry()
@@ -80,31 +84,39 @@ export class RuntimeHostStatusOwner {
     if (options.signal?.aborted) {
       return Promise.reject(options.signal.reason)
     }
+
     if (this.disposed) {
       return Promise.resolve(this.response)
     }
+
     if (!options.observeOnly) {
       this.active = true
     }
+
     if (options.reconnect) {
       this.attempt = 0
       this.update({ verification: 'checking' })
     }
+
     if (this.snapshot.verification === 'blocked') {
       return Promise.resolve(this.response)
     }
+
     const result = new Promise<RuntimeHostStatusResponse>((resolve, reject) => {
       const release = (): void => {
         waiter.cleanup()
         this.waiters.delete(waiter)
+
         if (!this.active && this.waiters.size === 0) {
           this.retireRequest()
         }
       }
+
       const abort = (): void => {
         release()
         reject(options.signal?.reason)
       }
+
       const timer = setTimeout(() => {
         release()
         resolve(
@@ -116,6 +128,7 @@ export class RuntimeHostStatusOwner {
           )
         )
       }, options.timeoutMs ?? REQUEST_TIMEOUT_MS)
+
       const waiter: Waiter = {
         resolve,
         cleanup: () => {
@@ -123,10 +136,13 @@ export class RuntimeHostStatusOwner {
           options.signal?.removeEventListener('abort', abort)
         }
       }
+
       this.waiters.add(waiter)
       options.signal?.addEventListener('abort', abort, { once: true })
     })
+
     this.startRequest()
+
     return result
   }
 
@@ -137,21 +153,27 @@ export class RuntimeHostStatusOwner {
     if (this.disposed) {
       return
     }
+
     const previous = this.snapshot.transport
     this.update({ transport, ...(remoteControl !== undefined ? { remoteControl } : {}) })
+
     if (transport === previous) {
       return
     }
+
     if (previous === 'ready') {
       this.retireRequest()
       this.clearRetry()
+
       if (this.snapshot.verification !== 'blocked') {
         this.update({ verification: 'unavailable' })
       }
     }
+
     if (transport === 'ready' && this.snapshot.verification !== 'blocked') {
       // A pre-reconnect answer cannot verify the new socket's runtime.
       this.retireRequest()
+
       if (this.active || this.waiters.size > 0) {
         this.startRequest()
       }
@@ -162,6 +184,7 @@ export class RuntimeHostStatusOwner {
     if (this.disposed) {
       return
     }
+
     this.retireRequest()
     this.clearRetry()
     this.complete(runtimeHostStatusFailure('unauthorized', 'Pair this client again.'))
@@ -171,6 +194,7 @@ export class RuntimeHostStatusOwner {
     if (this.disposed) {
       return
     }
+
     this.disposed = true
     this.active = false
     this.retireRequest()
@@ -187,35 +211,43 @@ export class RuntimeHostStatusOwner {
     if (this.disposed || this.request || this.snapshot.verification === 'blocked') {
       return
     }
+
     this.clearRetry()
     const controller = new AbortController()
     this.request = controller
+
     if (this.snapshot.verification !== 'verified') {
       this.update({ verification: 'checking' })
     }
+
     void this.verify(controller)
   }
 
   private async verify(controller: AbortController): Promise<void> {
     let response: RuntimeHostStatusResponse
+
     try {
       response = await this.options.request(controller.signal)
     } catch (error) {
       response = runtimeHostStatusError(error)
+
       if (error instanceof TypeError || error instanceof SyntaxError) {
         console.error('Runtime status verification failed:', error)
         response = runtimeHostStatusFailure('invalid_runtime_response', error.message)
       }
     }
+
     if (this.request !== controller || this.disposed) {
       return
     }
+
     this.request = null
     this.complete(response)
   }
 
   private complete(response: RuntimeHostStatusResponse): void {
     this.response = response
+
     if (response.ok) {
       this.attempt = 0
       this.update({ status: response.result, checkedAt: Date.now(), verification: 'verified' })
@@ -227,6 +259,7 @@ export class RuntimeHostStatusOwner {
       })
       this.scheduleRetry()
     }
+
     this.settleWaiters()
   }
 
@@ -239,6 +272,7 @@ export class RuntimeHostStatusOwner {
     ) {
       return
     }
+
     const delay = RETRY_DELAYS_MS[Math.min(this.attempt++, RETRY_DELAYS_MS.length - 1)]
     this.retry = setTimeout(() => {
       this.retry = null
@@ -251,6 +285,7 @@ export class RuntimeHostStatusOwner {
       waiter.cleanup()
       waiter.resolve(this.response)
     }
+
     this.waiters.clear()
   }
 
@@ -264,6 +299,7 @@ export class RuntimeHostStatusOwner {
     if (this.retry) {
       clearTimeout(this.retry)
     }
+
     this.retry = null
   }
 

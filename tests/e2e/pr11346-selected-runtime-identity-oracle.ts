@@ -58,9 +58,11 @@ export async function createProjectFixtures(): Promise<{
   const reconnectCatalogPath = path.join(rootPath, 'reconnect-catalog')
   const localCloneCollisionPath = path.join(rootPath, 'local-clone-collision')
   const localCreateCollisionPath = path.join(rootPath, 'local-create-collision')
+
   const nestedRepoPaths = ['nested-api', 'nested-web'].map((name) =>
     path.join(nestedParentPath, name)
   )
+
   mkdirSync(folderPath)
   mkdirSync(cloneParentPath)
   mkdirSync(createParentPath)
@@ -71,6 +73,7 @@ export async function createProjectFixtures(): Promise<{
   nestedRepoPaths.forEach((repoPath) => initializeGitRepo(repoPath, 'NESTED_REMOTE_MARKER.md'))
   mkdirSync(catalogFolderPath)
   mkdirSync(reconnectCatalogPath)
+
   return {
     catalogFolderPath,
     cloneParentPath,
@@ -96,14 +99,18 @@ type ActivationCollision = {
 export async function installFinalActivationGate(page: Page, targetPath: string): Promise<void> {
   await page.evaluate((pathToGate) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Renderer store unavailable')
     }
+
     const originalFetchWorktrees = store.getState().fetchWorktrees
     let release!: () => void
+
     const released = new Promise<void>((resolve) => {
       release = resolve
     })
+
     const gateWindow = window as typeof window & {
       __pr11346ActivationGate?: {
         originalFetchWorktrees: typeof originalFetchWorktrees
@@ -111,6 +118,7 @@ export async function installFinalActivationGate(page: Page, targetPath: string)
         waiting: boolean
       }
     }
+
     gateWindow.__pr11346ActivationGate = {
       originalFetchWorktrees,
       release,
@@ -119,16 +127,19 @@ export async function installFinalActivationGate(page: Page, targetPath: string)
     store.setState({
       fetchWorktrees: async (...args: Parameters<typeof originalFetchWorktrees>) => {
         const result = await originalFetchWorktrees(...args)
+
         const targetRepo = store
           .getState()
           .repos.find(
             (repo) =>
               repo.path === pathToGate && repo.executionHostId?.startsWith('runtime:') === true
           )
+
         if (targetRepo?.id === args[0]) {
           gateWindow.__pr11346ActivationGate!.waiting = true
           await released
         }
+
         return result
       }
     })
@@ -158,32 +169,42 @@ export async function injectSameIdLocalActivationCollision(
   return page.evaluate(
     ({ localCollisionPath, runtimePath }) => {
       const store = window.__store
+
       const gateWindow = window as typeof window & {
         __pr11346ActivationGate?: {
           originalFetchWorktrees: AppState['fetchWorktrees']
           release: () => void
         }
       }
+
       const gate = gateWindow.__pr11346ActivationGate
+
       if (!store || !gate) {
         throw new Error('Activation gate unavailable')
       }
+
       const state = store.getState()
+
       const runtimeRepo = state.repos.find(
         (repo) => repo.path === runtimePath && repo.executionHostId?.startsWith('runtime:') === true
       )
+
       if (!runtimeRepo) {
         throw new Error(`Runtime repo unavailable for ${runtimePath}`)
       }
+
       const runtimeWorktree = state.worktreesByRepo[runtimeRepo.id]?.find(
         (worktree) =>
           worktree.hostId === runtimeRepo.executionHostId &&
           (worktree.isMainWorktree || worktree.path === runtimePath)
       )
+
       if (!runtimeWorktree) {
         throw new Error(`Runtime default checkout unavailable for ${runtimePath}`)
       }
+
       const localRepoId = `${runtimeRepo.id}-local-collision`
+
       const localWorktree = {
         ...runtimeWorktree,
         repoId: localRepoId,
@@ -191,6 +212,7 @@ export async function injectSameIdLocalActivationCollision(
         hostId: 'local' as const,
         runtimeOwnerEnvironmentId: null
       }
+
       store.setState({
         repos: [
           {
@@ -211,6 +233,7 @@ export async function injectSameIdLocalActivationCollision(
       })
       gate.release()
       delete gateWindow.__pr11346ActivationGate
+
       return {
         localWorktreeId: localWorktree.id,
         runtimeWorktreeId: runtimeWorktree.id
@@ -229,6 +252,7 @@ export async function expectRuntimeActivation(
       () =>
         page.evaluate(() => {
           const state = window.__store?.getState()
+
           return {
             activeWorktreeId: state?.activeWorktreeId ?? null,
             activeWorktreeHost: state?.activeWorkspaceExecutionHostId ?? null,

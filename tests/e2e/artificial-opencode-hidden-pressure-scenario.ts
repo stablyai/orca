@@ -88,10 +88,12 @@ type HiddenPressureAckGate = {
 // spends ~2.75s of that (750ms deadline + 2s suppression), so the poll below reads the
 // viewport on a fixed interval rather than serializing scrollback on a backoff.
 const MAX_HIDDEN_RESTORE_LATENCY_MS = 4_000
+
 // Why: Phase-4 hidden-delivery gate contract — hidden PTY bytes are dropped in
 // main after model ingestion, so renderer-delivery pressure must stay FAR
 // below the old 2 MB ACK-backpressure target instead of reaching it.
 const MAIN_RENDERER_PRESSURE_TARGET_CHARS = 2 * 1024 * 1024
+
 // Why: in this hidden real-PTY pressure case, maxTimerDriftMs and worst-key
 // latency catch the same isolated CI starvation spike; median remains strict.
 const MAX_HIDDEN_PRESSURE_TIMER_DRIFT_MS = 3_000
@@ -130,6 +132,7 @@ export async function runHiddenRealPtyPressureScenario<
   expect(Boolean(secondWorktreeId), 'OpenCode hidden PTY pressure needs a second worktree').toBe(
     true
   )
+
   if (!secondWorktreeId) {
     return
   }
@@ -138,14 +141,17 @@ export async function runHiddenRealPtyPressureScenario<
   const hiddenPanes = await deps.ensureActiveWorktreePaneLoad(orcaPage, hiddenPaneCount)
 
   const runId = randomUUID()
+
   const typingScriptPath = path.join(
     testRepoPath,
     `.orca-opencode-hidden-pressure-typing-${runId}.mjs`
   )
+
   const pressureScriptPath = path.join(
     testRepoPath,
     `.orca-opencode-hidden-pressure-load-${runId}.mjs`
   )
+
   deps.writeInteractivePromptScript(typingScriptPath, runId)
   writePressureOutputScript(pressureScriptPath, runId, pressureOutputMode)
 
@@ -154,6 +160,7 @@ export async function runHiddenRealPtyPressureScenario<
     orcaPage,
     hiddenPanes.map((pane) => pane.ptyId)
   )
+
   try {
     await startHiddenPressureCommands({
       hiddenPanes,
@@ -170,12 +177,14 @@ export async function runHiddenRealPtyPressureScenario<
     // never builds. Wait for the gate to drop at least one pane's worth of
     // output instead of the old 2 MB ACK-backpressure target.
     await waitForMainHiddenDeliveryDrops(orcaPage, deps, pressureOutputChars)
+
     const measurement = await deps.measureTypingDuringLoad(
       orcaPage,
       typingScriptPath,
       typingPtyId,
       runId
     )
+
     const debug = await deps.readTerminalPtyOutputDebug(orcaPage)
     const scheduler = await deps.readTerminalOutputSchedulerDebug(orcaPage)
     const mainPressure = await deps.readMainPtyPressureDebug(orcaPage)
@@ -216,11 +225,13 @@ export async function runHiddenRealPtyPressureScenario<
     expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_HIDDEN_PRESSURE_TIMER_DRIFT_MS)
 
     await deps.releaseTerminalAckGate(orcaPage)
+
     const restoreLatencyMs = await measureHiddenOutputRestoreLatency(
       orcaPage,
       secondWorktreeId,
       runId
     )
+
     testInfo.annotations.push({
       type: `opencode-hidden-real-pty-restore${annotationSuffix ?? ''}`,
       description: `panes=${hiddenPanes.length + 1} restore=${restoreLatencyMs.toFixed(
@@ -279,6 +290,7 @@ async function measureHiddenOutputRestoreLatency(
       message: 'No restored output from main buffer on return (or no active terminal pane)'
     })
     .toContain(`OPENCODE_PRESSURE_DONE_${runId}_`)
+
   return performance.now() - restoreStart
 }
 

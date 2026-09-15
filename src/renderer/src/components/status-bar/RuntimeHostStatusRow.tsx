@@ -67,6 +67,7 @@ function runtimeStatusTone(state: RuntimeHostConnectionState): string {
   ) {
     return 'text-yellow-500'
   }
+
   return 'text-muted-foreground'
 }
 
@@ -123,12 +124,14 @@ function runtimeFailureExplanation(state: RuntimeHostConnectionState): string | 
   if (state === 'connected' || state === 'workspace-window-closed') {
     return null
   }
+
   if (state === 'runtime-unavailable') {
     return translate(
       'auto.components.status.bar.RuntimeHostStatusRow.runtime_unavailable_explanation',
       'The remote host may still be running; only the Orca runtime connection is unavailable.'
     )
   }
+
   return translate(
     'auto.components.status.bar.RuntimeHostStatusRow.contact_note',
     'The host may still be running; only the Orca connection is unavailable.'
@@ -158,10 +161,13 @@ export function RuntimeHostStatusRow({
 
   const handleAction = useCallback(async () => {
     const action = isConnectedRuntimeHostState(state) ? onDisconnect : onConnect
+
     if (!action) {
       return
     }
+
     setBusy(true)
+
     try {
       await action()
     } finally {
@@ -172,6 +178,7 @@ export function RuntimeHostStatusRow({
   }, [mountedRef, onConnect, onDisconnect, state])
 
   const action = isConnectedRuntimeHostState(state) ? onDisconnect : onConnect
+
   const lastConnectedLabel = diagnostics?.lastConnectedAt
     ? translate(
         'auto.components.status.bar.RuntimeHostStatusRow.last_connected',
@@ -181,6 +188,7 @@ export function RuntimeHostStatusRow({
         }
       )
     : null
+
   const reconnectAttemptLabel =
     diagnostics && state === 'reconnecting'
       ? translate(
@@ -189,6 +197,7 @@ export function RuntimeHostStatusRow({
           { value0: String(diagnostics.reconnectAttempt + 1) }
         )
       : null
+
   const diagnosticLabel = [lastConnectedLabel, reconnectAttemptLabel].filter(Boolean).join(' · ')
   const rawDetail = diagnostics?.lastError ?? diagnostics?.lastClose?.reason ?? detail
   const failureExplanation = runtimeFailureExplanation(state)

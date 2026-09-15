@@ -6,6 +6,8 @@ export function sortDirectoryEntriesByName<T extends { name: string }>(entries: 
   if (entries.length < 2) {
     return entries
   }
+
   const compare = new Intl.Collator(undefined, { sensitivity: 'base' }).compare
+
   return entries.sort((left, right) => compare(left.name, right.name))
 }

@@ -23,7 +23,9 @@ import {
 } from './web-runtime-split-focus'
 
 const pendingWebRuntimeSplitMirrorTelemetry = new Map<string, Set<string>>()
+
 const WEB_RUNTIME_SPLIT_MIRROR_SUPPRESSION_TTL_MS = 30_000
+
 let pendingWebRuntimeSplitMirrorTelemetryId = 0
 
 export function splitWebRuntimeTerminal(
@@ -35,25 +37,31 @@ export function splitWebRuntimeTerminal(
   if (!ptyId) {
     return false
   }
+
   const remote = parseRemoteRuntimePtyId(ptyId)
   const environmentId = remote?.environmentId?.trim()
+
   if (!remote || !environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
 
   // Why: split must run on the host pane; a local split mints a web-only pane the host mirrors back as a tab, not a split.
   const pendingMirrorSuppressionId = reservePendingWebRuntimeSplitMirrorTelemetry(ptyId, direction)
+
   const releasePendingMirrorSuppression = schedulePendingWebRuntimeSplitMirrorTelemetryRelease(
     ptyId,
     direction,
     pendingMirrorSuppressionId
   )
+
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const focusTarget = source ? captureWebRuntimeSplitFocusTarget(ptyId, source) : null
+
   // Advance the fence for every source-bearing gesture, even when its pane metadata is stale.
   const focusRequest = source
     ? beginWebRuntimeSplitFocusRequest(intentOwner, source.worktreeId)
     : null
+
   void captureRuntimeEnvironmentCall(
     environmentId,
     intentOwner.pairingRevision
@@ -70,6 +78,7 @@ export function splitWebRuntimeTerminal(
       const result = unwrapRuntimeRpcResult(
         response as RuntimeRpcResponse<{ split: RuntimeTerminalSplit }>
       )
+
       await focusSplitWebRuntimeTerminalPane(intentOwner, focusTarget, focusRequest, result?.split)
     })
     .catch((error) => {
@@ -81,6 +90,7 @@ export function splitWebRuntimeTerminal(
       console.warn('[web-runtime-session] failed to split terminal:', message)
     })
     .finally(() => finishWebRuntimeSplitFocusRequest(focusRequest))
+
   return true
 }
 
@@ -91,16 +101,21 @@ export function consumePendingWebRuntimeSplitMirrorTelemetry(
   if (!sourcePtyId) {
     return false
   }
+
   const key = getPendingWebRuntimeSplitMirrorTelemetryKey(sourcePtyId, direction)
   const ids = pendingWebRuntimeSplitMirrorTelemetry.get(key)
   const id = ids?.values().next().value
+
   if (!ids || !id) {
     return false
   }
+
   ids.delete(id)
+
   if (ids.size === 0) {
     pendingWebRuntimeSplitMirrorTelemetry.delete(key)
   }
+
   return true
 }
 
@@ -113,6 +128,7 @@ function reservePendingWebRuntimeSplitMirrorTelemetry(
   const ids = pendingWebRuntimeSplitMirrorTelemetry.get(key) ?? new Set<string>()
   ids.add(id)
   pendingWebRuntimeSplitMirrorTelemetry.set(key, ids)
+
   return id
 }
 
@@ -122,14 +138,18 @@ function schedulePendingWebRuntimeSplitMirrorTelemetryRelease(
   id: string
 ): () => void {
   let released = false
+
   const release = (): void => {
     if (released) {
       return
     }
+
     released = true
     releasePendingWebRuntimeSplitMirrorTelemetry(sourcePtyId, direction, id)
   }
+
   const timeout = globalThis.setTimeout(release, WEB_RUNTIME_SPLIT_MIRROR_SUPPRESSION_TTL_MS)
+
   return () => {
     globalThis.clearTimeout(timeout)
     release()
@@ -143,10 +163,13 @@ function releasePendingWebRuntimeSplitMirrorTelemetry(
 ): void {
   const key = getPendingWebRuntimeSplitMirrorTelemetryKey(sourcePtyId, direction)
   const ids = pendingWebRuntimeSplitMirrorTelemetry.get(key)
+
   if (!ids) {
     return
   }
+
   ids.delete(id)
+
   if (ids.size === 0) {
     pendingWebRuntimeSplitMirrorTelemetry.delete(key)
   }
@@ -163,8 +186,10 @@ export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boole
   if (!ptyId) {
     return false
   }
+
   const remote = parseRemoteRuntimePtyId(ptyId)
   const environmentId = remote?.environmentId?.trim()
+
   if (!remote || !environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
@@ -188,6 +213,7 @@ export function closeWebRuntimeTerminal(ptyId: string | null | undefined): boole
         error instanceof Error ? error.message : String(error)
       )
     })
+
   return true
 }
 
@@ -201,13 +227,17 @@ export async function updateWebRuntimePaneLayout(args: {
 }): Promise<boolean> {
   const environmentId =
     getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
+
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
+
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId)
+
   const hostTabId = isWebTerminalSurfaceTabId(args.tabId)
     ? toHostSessionTabId(args.tabId)
     : args.tabId
+
   try {
     const response = await callEnvironment({
       method: 'session.tabs.updatePaneLayout',
@@ -220,13 +250,16 @@ export async function updateWebRuntimePaneLayout(args: {
       },
       timeoutMs: 15_000
     })
+
     unwrapRuntimeRpcResult(response as RuntimeRpcResponse<{ updated: true }>)
+
     return true
   } catch (error) {
     console.warn(
       '[web-runtime-session] failed to update pane layout:',
       error instanceof Error ? error.message : String(error)
     )
+
     return false
   }
 }
@@ -241,9 +274,11 @@ export function setWebRuntimeTabProps(args: {
 }): boolean {
   const environmentId =
     getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), args.worktreeId) ?? null
+
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
+
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId)
   const state = useAppStore.getState()
   void import('./web-session-tabs-sync')
@@ -254,6 +289,7 @@ export function setWebRuntimeTabProps(args: {
           worktreeId: args.worktreeId,
           tabId: args.tabId
         }) ?? (isWebTerminalSurfaceTabId(args.tabId) ? toHostSessionTabId(args.tabId) : args.tabId)
+
       return callEnvironment({
         method: 'session.tabs.setTabProps',
         params: {
@@ -275,6 +311,7 @@ export function setWebRuntimeTabProps(args: {
         error instanceof Error ? error.message : String(error)
       )
     })
+
   return true
 }
 
@@ -283,11 +320,14 @@ export function clearWebRuntimeTerminalBuffer(ptyId: string | null | undefined):
   if (!ptyId) {
     return false
   }
+
   const remote = parseRemoteRuntimePtyId(ptyId)
   const environmentId = remote?.environmentId?.trim()
+
   if (!remote || !environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
+
   void window.api.runtimeEnvironments
     .call({
       selector: environmentId,
@@ -304,5 +344,6 @@ export function clearWebRuntimeTerminalBuffer(ptyId: string | null | undefined):
         error instanceof Error ? error.message : String(error)
       )
     })
+
   return true
 }

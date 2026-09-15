@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const scriptPath = 'config/scripts/summarize-terminal-perf-report.mjs'
+
 const tempDirs = []
 
 function writeReport() {
@@ -38,6 +39,7 @@ function writeReport() {
       ]
     })
   )
+
   return reportPath
 }
 

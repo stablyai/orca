@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => {
     ensureDetectedAgents: vi.fn(),
     ensureRemoteDetectedAgents: vi.fn()
   }
+
   return {
     store,
     activateAndRevealWorktree: vi.fn(),

@@ -24,9 +24,11 @@ export type WslSkillDiscoveryObservation = {
 
 function readProtocolField(fields: string[], index: number): string {
   const value = fields[index]
+
   if (value === undefined) {
     throw new Error('WSL skill discovery returned an incomplete response.')
   }
+
   return value
 }
 
@@ -39,17 +41,21 @@ export function readWslSkillDiscoveryObservation(
   const rootExists = new Map<number, boolean>()
   const rows: WslSkillDiscoveryObservation['rows'] = []
   let index = 0
+
   while (index < fields.length && fields[index]) {
     const recordKind = fields[index++]
     const rootIndex = Number.parseInt(readProtocolField(fields, index++), 10)
     const root = roots[rootIndex]
+
     if (!root) {
       throw new Error('WSL skill discovery returned an unknown source.')
     }
+
     if (recordKind === 'R') {
       rootExists.set(rootIndex, readProtocolField(fields, index++) === '1')
       continue
     }
+
     if (recordKind !== 'S') {
       throw new Error('WSL skill discovery returned an invalid response.')
     }
@@ -85,6 +91,7 @@ export function readWslSkillDiscoveryObservation(
 
   const sources: SkillDiscoverySource[] = roots.map((root, rootIndex) => {
     const exists = rootExists.get(rootIndex) ?? false
+
     return {
       ...root,
       providers: [...root.providers],
@@ -92,6 +99,7 @@ export function readWslSkillDiscoveryObservation(
       skippedReason: exists ? undefined : 'missing'
     }
   })
+
   return {
     rows,
     sources: sortSkillDiscoverySources(sources),
@@ -107,11 +115,14 @@ export function projectWslSkillDiscovery(
   const normalizedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
   const expectedNames = normalizedNames?.length ? new Set(normalizedNames) : undefined
   const skillsByCanonicalPath = new Map<string, DiscoveredSkill>()
+
   for (const { canonicalSkillFilePath, skill } of observation.rows) {
     if (sourceKinds?.length && !sourceKinds.includes(skill.sourceKind)) {
       continue
     }
+
     const directoryName = pathPosix.basename(skill.directoryPath)
+
     if (
       expectedNames &&
       !expectedNames.has(skill.name.trim().toLowerCase()) &&
@@ -119,28 +130,35 @@ export function projectWslSkillDiscovery(
     ) {
       continue
     }
+
     // Filter aliases before deduplication; each name/source may select a different row.
     const existing = skillsByCanonicalPath.get(canonicalSkillFilePath)
+
     if (existing) {
       const existingRoots = (existing.rootPaths ??= [existing.rootPath])
+
       for (const rootPath of skill.rootPaths ?? [skill.rootPath]) {
         if (!existingRoots.includes(rootPath)) {
           existingRoots.push(rootPath)
         }
       }
+
       for (const provider of skill.providers) {
         if (!existing.providers.includes(provider)) {
           existing.providers.push(provider)
         }
       }
+
       continue
     }
+
     skillsByCanonicalPath.set(canonicalSkillFilePath, {
       ...skill,
       providers: [...skill.providers],
       rootPaths: [...(skill.rootPaths ?? [skill.rootPath])]
     })
   }
+
   return {
     skills: sortDiscoveredSkills([...skillsByCanonicalPath.values()]),
     sources: observation.sources

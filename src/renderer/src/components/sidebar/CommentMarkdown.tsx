@@ -19,6 +19,7 @@ import { remarkNativeChatFileLinks } from './comment-markdown-native-chat-file-l
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
 
 type MarkdownPlugins = NonNullable<React.ComponentProps<typeof Markdown>['rehypePlugins']>
+
 type UrlTransform = NonNullable<React.ComponentProps<typeof Markdown>['urlTransform']>
 
 type GitHubRepoReference = {
@@ -48,6 +49,7 @@ const commentMarkdownUrlTransform: UrlTransform = (value, key, node) => {
   if (key === 'src' && node?.tagName === 'img' && isTrustedCompactImageSrc(value)) {
     return value
   }
+
   return defaultUrlTransform(value)
 }
 
@@ -55,6 +57,7 @@ const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
   if (key === 'href' && node?.tagName === 'a' && value.trim().toLowerCase().startsWith('file:')) {
     return value
   }
+
   return commentMarkdownUrlTransform(value, key, node)
 }
 
@@ -74,6 +77,7 @@ function isEmbeddedGitHubReference(value: string, index: number): boolean {
   if (index === 0) {
     return false
   }
+
   return /[A-Za-z0-9_./-]/.test(value[index - 1] ?? '')
 }
 
@@ -98,6 +102,7 @@ function splitGitHubReferenceText(value: string, defaultRepo: GitHubRepoReferenc
   for (const match of value.matchAll(GITHUB_REFERENCE_PATTERN)) {
     const label = match[0]
     const index = match.index ?? 0
+
     if (isEmbeddedGitHubReference(value, index)) {
       continue
     }
@@ -105,6 +110,7 @@ function splitGitHubReferenceText(value: string, defaultRepo: GitHubRepoReferenc
     const owner = match[1] ?? defaultRepo.owner
     const repo = match[2] ?? defaultRepo.repo
     const number = match[3]
+
     if (!number) {
       continue
     }
@@ -112,6 +118,7 @@ function splitGitHubReferenceText(value: string, defaultRepo: GitHubRepoReferenc
     if (index > cursor) {
       parts.push({ type: 'text', value: value.slice(cursor, index) })
     }
+
     parts.push(createGitHubReferenceLinkNode(label, owner, repo, number))
     cursor = index + label.length
   }
@@ -119,9 +126,11 @@ function splitGitHubReferenceText(value: string, defaultRepo: GitHubRepoReferenc
   if (cursor === 0) {
     return [{ type: 'text', value }]
   }
+
   if (cursor < value.length) {
     parts.push({ type: 'text', value: value.slice(cursor) })
   }
+
   return parts
 }
 
@@ -134,6 +143,7 @@ function transformGitHubReferenceChildren(
   }
 
   const nextChildren: MarkdownNode[] = []
+
   for (const child of node.children) {
     if (child.type === 'text' && child.value !== undefined) {
       // Why: generated agent comments can contain thousands of issue refs;
@@ -221,14 +231,17 @@ const CommentMarkdown = React.memo(
             ? createCompactCommentMarkdownComponents(undefined, true)
             : compactCommentMarkdownComponents
       }
+
       return variant === 'document'
         ? createDocumentCommentMarkdownComponents(onLinkClick, renderCodeBlock)
         : createCompactCommentMarkdownComponents(onLinkClick, expandImages)
     }, [expandImages, renderCodeBlock, variant, onLinkClick])
+
     const activeRemarkPlugins = React.useMemo(() => {
       const plugins = linkifyFilePaths
         ? [...remarkPlugins, remarkNativeChatFileLinks]
         : remarkPlugins
+
       return githubRepo ? [...plugins, remarkGitHubReferences(githubRepo)] : plugins
     }, [githubRepo, linkifyFilePaths])
 

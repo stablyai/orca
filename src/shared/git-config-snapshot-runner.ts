@@ -17,16 +17,20 @@ function isConfigGetCommand(args: string[]): boolean {
 
 function canonicalizeGitConfigLookupKey(key: string): string {
   const parts = key.split('.')
+
   if (parts.length === 1) {
     return key.toLowerCase()
   }
+
   const firstPart = parts[0]?.toLowerCase() ?? ''
   const lastPart = parts.at(-1)?.toLowerCase() ?? ''
+
   return [firstPart, ...parts.slice(1, -1), lastPart].join('.')
 }
 
 function parseGitConfigListSnapshot(stdout: string): GitConfigSnapshot {
   const snapshot: GitConfigSnapshot = new Map()
+
   for (const record of iterateNulDelimitedFields(stdout)) {
     if (!record.trim()) {
       continue
@@ -41,6 +45,7 @@ function parseGitConfigListSnapshot(stdout: string): GitConfigSnapshot {
     values.push(value)
     snapshot.set(key, values)
   }
+
   return snapshot
 }
 
@@ -53,6 +58,7 @@ export function createGitConfigSnapshotRunner(runGit: GitCommandRunner): GitComm
     if (snapshot) {
       return Promise.resolve(snapshot)
     }
+
     if (!snapshotPromise) {
       // Why: upstream resolvers read config keys with Promise.all; the first
       // caller must publish the in-flight snapshot before any await.
@@ -60,6 +66,7 @@ export function createGitConfigSnapshotRunner(runGit: GitCommandRunner): GitComm
         snapshotPromise = runGit(['config', '--list', '-z'])
           .then(({ stdout }) => {
             snapshot = parseGitConfigListSnapshot(stdout)
+
             return snapshot
           })
           .catch(() => {
@@ -67,14 +74,17 @@ export function createGitConfigSnapshotRunner(runGit: GitCommandRunner): GitComm
             // behavior for this round instead of failing the config lookup.
             interceptionDisabled = true
             snapshotPromise = null
+
             return null
           })
       } catch {
         interceptionDisabled = true
         snapshotPromise = null
+
         return Promise.resolve(null)
       }
     }
+
     return snapshotPromise
   }
 
@@ -84,12 +94,14 @@ export function createGitConfigSnapshotRunner(runGit: GitCommandRunner): GitComm
     }
 
     const configSnapshot = await readSnapshot()
+
     if (!configSnapshot) {
       return runGit(args)
     }
 
     const key = args[2] ?? ''
     const values = configSnapshot.get(canonicalizeGitConfigLookupKey(key))
+
     if (!values?.length) {
       // Why: real `git config --get` exits non-zero for an absent key (it does
       // not return empty success), so reject here to stay a faithful drop-in —
@@ -101,4 +113,5 @@ export function createGitConfigSnapshotRunner(runGit: GitCommandRunner): GitComm
     return { stdout: values.at(-1) ?? '' }
   }
 }
+
 import { iterateNulDelimitedFields } from './nul-delimited-fields'

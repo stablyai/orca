@@ -39,6 +39,7 @@ describe('openMobileFileTap', () => {
         }
       })
     ])
+
     const pushPreviewRoute = vi.fn()
     const triggerOpenFeedback = vi.fn()
 
@@ -107,6 +108,7 @@ describe('openMobileFileTap', () => {
       }),
       ok({ opened: true })
     ])
+
     const scheduleDelayedAction = vi.fn((callback: () => void) => callback())
     const openedTab = { id: 'tab-2', relativePath: 'src/index.ts' }
     const switchSessionTab = vi.fn()
@@ -156,6 +158,7 @@ describe('openMobileFileTap', () => {
         }
       })
     ])
+
     const pushPreviewRoute = vi.fn()
 
     openMobileFileTap({
@@ -206,6 +209,7 @@ describe('openMobileFileTap', () => {
         }
       })
     ])
+
     const pushPreviewRoute = vi.fn()
     const triggerOpenFeedback = vi.fn()
 
@@ -261,6 +265,7 @@ describe('openMobileFileTap', () => {
         }
       })
     ])
+
     const openBrowser = vi.fn()
 
     openMobileFileTap({
@@ -355,6 +360,7 @@ describe('openMobileFileTap', () => {
       }),
       ok({ opened: true })
     ])
+
     const openBrowser = vi.fn()
 
     openMobileFileTap({
@@ -387,6 +393,7 @@ describe('openMobileFileTap', () => {
 
   it('does not navigate an absolute artifact after the user leaves the source terminal', async () => {
     let resolveRequest: (value: unknown) => void = () => {}
+
     const client = {
       sendRequest: vi.fn(
         () =>
@@ -395,6 +402,7 @@ describe('openMobileFileTap', () => {
           })
       )
     }
+
     let activeTerminalHandle: string | null = 'terminal-1'
     const pushPreviewRoute = vi.fn()
 
@@ -459,6 +467,7 @@ describe('openMobileFileTap', () => {
       }),
       { ok: false, error: { message: 'nope' } }
     ])
+
     const onOpenFailed = vi.fn()
 
     openMobileFileTap({
@@ -503,6 +512,7 @@ describe('openMobileFileTap', () => {
       }),
       ok({ worktree: 'wt-1', relativePath: 'dist/app.zip', kind: 'binary', opened: false })
     ])
+
     const onOpenFailed = vi.fn()
     const scheduleDelayedAction = vi.fn()
 
@@ -542,6 +552,7 @@ describe('openMobileFileTap', () => {
         isDirectory: false
       })
     ])
+
     const onOpenFailed = vi.fn()
 
     openMobileFileTap({
@@ -587,6 +598,7 @@ describe('openMobileFileTap', () => {
         }
       })
     ])
+
     const onOpenFailed = vi.fn()
 
     openMobileFileTap({
@@ -633,6 +645,7 @@ describe('openMobileFileTap', () => {
       }),
       ok({ opened: true })
     ])
+
     const callbacks: (() => void)[] = []
     const openedTab = { id: 'tab-2', relativePath: 'src/index.ts' }
     const switchSessionTab = vi.fn()

@@ -18,14 +18,18 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
       try {
         const store = useAppStore.getState()
         const worktreeId = data.worktreeId ?? store.activeWorktreeId
+
         if (!worktreeId) {
           window.api.ui.replyTerminalCreate({
             requestId: data.requestId,
             error: translate('auto.hooks.useIpcEvents.f000b2ff76', 'No active worktree')
           })
+
           return
         }
+
         const worktreeRoute = resolveTerminalWorktreeRoute(store, worktreeId)
+
         if (!worktreeRoute) {
           window.api.ui.replyTerminalCreate({
             requestId: data.requestId,
@@ -34,8 +38,10 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
               'Terminal creation is unavailable because the worktree owner could not be resolved'
             )
           })
+
           return
         }
+
         // Why: runtime-session requests are host-owned tabs materialized by this renderer, not ordinary local creates.
         if (worktreeRoute.runtimeEnvironmentId && data.source !== 'runtime-session') {
           window.api.ui.replyTerminalCreate({
@@ -45,15 +51,20 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
               'Local terminal creation is unavailable while a remote runtime is active'
             )
           })
+
           return
         }
+
         const terminalPresentation = resolveTerminalPresentation(data)
         const shouldActivate = terminalPresentation === 'focused'
+
         const shouldSurfaceOwner =
           terminalPresentation !== 'background' && data.surfaceOwner !== false
+
         if (shouldActivate) {
           activateTerminalInitiatedWorktree(store, worktreeId)
         }
+
         // Why: the paired launch client already resolved the mode, so its choice wins over the host renderer's local default.
         const tabOptions = data.launchAgent
           ? {
@@ -78,30 +89,38 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
                 recordInteraction: false,
                 ...(data.cwd ? { startupCwd: data.cwd } : {})
               }
+
         const tab = store.createTab(worktreeId, data.targetGroupId, undefined, tabOptions)
+
         if (!shouldActivate) {
           // Why: renderer-backed Codex startup must mount its new TerminalPane without switching UI or connecting every saved tab.
           requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
         }
+
         if (data.afterTabId) {
           const createdUnifiedTabId = useAppStore
             .getState()
             .unifiedTabsByWorktree[worktreeId]?.find((item) => item.entityId === tab.id)?.id
+
           if (createdUnifiedTabId) {
             insertUnifiedTabAfterAnchor(worktreeId, createdUnifiedTabId, data.afterTabId)
           }
         }
+
         if (shouldActivate) {
           store.setActiveTabType('terminal')
           store.setActiveTab(tab.id)
         }
+
         if (shouldSurfaceOwner) {
           store.revealWorktreeInSidebar(worktreeId)
           focusTerminalInitiatedTab(tab.id, undefined, worktreeId)
         }
+
         if (data.title) {
           store.setTabCustomTitle(tab.id, data.title, { recordInteraction: false })
         }
+
         if (data.command) {
           store.queueTabStartupCommand(tab.id, {
             command: data.command,
@@ -118,6 +137,7 @@ export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {
               : {})
           })
         }
+
         window.api.ui.replyTerminalCreate({
           requestId: data.requestId,
           tabId: tab.id,

@@ -31,9 +31,11 @@ export function decodeWorkerListCursor(value: string): WorkerListCursor | null {
     const parsed = JSON.parse(
       Buffer.from(value, 'base64url').toString('utf8')
     ) as Partial<WorkerListCursor>
+
     if (!parsed.snapshot) {
       return null
     }
+
     if (
       parsed.version === 3 &&
       typeof (parsed.snapshot as Partial<WorkerListCursorV3['snapshot']>).id === 'string' &&
@@ -43,15 +45,18 @@ export function decodeWorkerListCursor(value: string): WorkerListCursor | null {
     ) {
       return parsed as WorkerListCursorV3
     }
+
     if (!('after' in parsed) || !parsed.after) {
       return null
     }
+
     if (
       'databaseId' in parsed.after &&
       !(Number.isSafeInteger(parsed.after.databaseId) && Number(parsed.after.databaseId) > 0)
     ) {
       delete parsed.after.databaseId
     }
+
     if (
       parsed.version === 1 &&
       typeof (parsed.snapshot as Partial<WorkerListCursorV1['snapshot']>).createdAt === 'string' &&
@@ -61,7 +66,9 @@ export function decodeWorkerListCursor(value: string): WorkerListCursor | null {
     ) {
       return parsed as WorkerListCursorV1
     }
+
     const databaseId = (parsed.snapshot as Partial<WorkerListCursorV2['snapshot']>).databaseId
+
     if (
       parsed.version === 2 &&
       Number.isSafeInteger(databaseId) &&
@@ -71,6 +78,7 @@ export function decodeWorkerListCursor(value: string): WorkerListCursor | null {
     ) {
       return parsed as WorkerListCursorV2
     }
+
     return null
   } catch {
     return null

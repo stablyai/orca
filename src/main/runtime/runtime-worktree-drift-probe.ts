@@ -22,37 +22,48 @@ export async function probeRuntimeWorktreeDrift(args: {
   fetchRemote: (repoPath: string, remote: string, options: { wslDistro?: string }) => Promise<void>
 }): Promise<{ base: string; behind: number; recentSubjects: string[] } | null> {
   const worktree = await args.resolveWorktree(args.selector)
+
   if (!args.store) {
     return null
   }
+
   const repo = args.store.getRepos().find((candidate: Repo) => candidate.id === worktree.repoId)
+
   if (!repo || repo.connectionId) {
     return null
   }
+
   const gitExecOptions = getLocalProjectGitExecOptions(args.store, repo)
   const worktreeGitOptions = getLocalProjectWorktreeGitOptions(args.store, repo)
   const meta = args.store.getWorktreeMeta(worktree.id)
+
   const base =
     meta?.baseRef ||
     meta?.sparseBaseRef ||
     repo.worktreeBaseRef ||
     (await getBaseRefDefault(repo.path, worktreeGitOptions))
+
   if (!base) {
     return null
   }
+
   const remoteTrackingBase = await args.resolveRemoteTrackingBase(
     repo.path,
     base,
     worktreeGitOptions
   )
+
   if (!remoteTrackingBase) {
     return null
   }
+
   await args.fetchRemote(repo.path, remoteTrackingBase.remote, worktreeGitOptions)
   const drift = await getRemoteDrift(worktree.path, 'HEAD', base, gitExecOptions)
+
   if (!drift) {
     return null
   }
+
   const recentSubjects =
     drift.behind > 0
       ? await getRecentDriftSubjects(
@@ -63,5 +74,6 @@ export async function probeRuntimeWorktreeDrift(args: {
           gitExecOptions
         )
       : []
+
   return { base, behind: drift.behind, recentSubjects }
 }

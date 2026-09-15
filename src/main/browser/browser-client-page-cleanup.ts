@@ -49,9 +49,11 @@ export async function cleanupBrowserClientPage(
   const failures: unknown[] = []
   const guestDestruction = target.lifecycleClaim?.whenDestroyed ?? null
   let guestDestroyed = !target.guestMayExist
+
   if (target.guestMayExist && !target.lifecycleClaim) {
     failures.push(new Error('Browser client page guest destruction was not observable'))
   }
+
   if (target.lifecycleClaim) {
     try {
       if (!routeWebContents.beginGuestRetirement(target.lifecycleClaim)) {
@@ -61,23 +63,31 @@ export async function cleanupBrowserClientPage(
       failures.push(error)
     }
   }
+
   const renderer = target.renderer
+
   if (renderer) {
     for (const rendererPage of target.rendererPages) {
       await collectCleanupFailure(() => renderer.retirePage(rendererPage), failures)
     }
   }
+
   if (guestDestruction) {
     guestDestroyed = await collectCleanupFailure(() => guestDestruction, failures)
   }
+
   const routeSession = target.routeSession
+
   if (routeSession && guestDestroyed) {
     await collectCleanupFailure(() => routeSession.release(), failures)
   }
+
   const route = target.route
+
   if (route && guestDestroyed) {
     await collectCleanupFailure(() => route.release(), failures)
   }
+
   if (failures.length > 0) {
     throw new AggregateError(failures, 'Browser client page cleanup failed')
   }
@@ -97,6 +107,7 @@ export async function cleanupRetainedBrowserClientPage(
   previousRendererPage?: BrowserClientPageRendererIdentity
 ): Promise<void> {
   const failures: unknown[] = []
+
   try {
     await dependencies.retireAutomation({
       browserPageId: page.inventory.browserPageId,
@@ -106,10 +117,12 @@ export async function cleanupRetainedBrowserClientPage(
   } catch (error) {
     failures.push(error)
   }
+
   const currentRendererPage = browserClientPageIdentity(
     page.registration,
     page.registration.partition
   )
+
   try {
     await cleanupBrowserClientPage(dependencies.routeWebContents, {
       guestMayExist: true,
@@ -124,10 +137,12 @@ export async function cleanupRetainedBrowserClientPage(
   } catch (error) {
     failures.push(error)
   }
+
   // Why: staged upload copies of remote files must not outlive the page, but a temp file the guest
   // still holds open must not strand the guest, its route, or its partition either. Runs last so
   // the removal sees a destroyed guest.
   await collectCleanupFailure(() => dependencies.releaseUploadStaging?.(), failures)
+
   if (failures.length > 0) {
     throw new AggregateError(failures, 'Browser client page cleanup failed')
   }
@@ -147,9 +162,11 @@ async function collectCleanupFailure(
 ): Promise<boolean> {
   try {
     await cleanup()
+
     return true
   } catch (error) {
     failures.push(error)
+
     return false
   }
 }

@@ -50,6 +50,7 @@ function createSupersetSetupRepo(repoPath: string): string {
       2
     )}\n`
   )
+
   return repoPath
 }
 
@@ -80,26 +81,31 @@ function createCmuxSetupRepo(repoPath: string): string {
       2
     )}\n`
   )
+
   return repoPath
 }
 
 async function addAndActivateRepo(page: Page, repoPath: string): Promise<string> {
   return page.evaluate(async (targetRepoPath) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
 
     const addedRepo = await store.getState().addRepoPath(targetRepoPath)
+
     if (!addedRepo) {
       throw new Error(`Failed to add repo at ${targetRepoPath}`)
     }
 
     await store.getState().fetchWorktrees(addedRepo.id)
     const state = store.getState()
+
     const worktree = state.worktreesByRepo[addedRepo.id]?.find(
       (entry) => entry.path === targetRepoPath
     )
+
     if (!worktree) {
       throw new Error(`Failed to find primary worktree for ${targetRepoPath}`)
     }
@@ -107,6 +113,7 @@ async function addAndActivateRepo(page: Page, repoPath: string): Promise<string>
     state.setActiveRepo(addedRepo.id)
     state.setActiveWorktree(worktree.id)
     state.setSidebarOpen(true)
+
     return addedRepo.id
   }, realpathSync.native(repoPath))
 }
@@ -122,6 +129,7 @@ async function openRepoSettings(page: Page, repoId: string): Promise<Locator> {
   const repoSettings = page.locator(`[data-settings-section="repo-${repoId}"]`)
   await expect(repoSettings).toBeVisible({ timeout: 10_000 })
   await expect(repoSettings.getByText('Setup Script').first()).toBeVisible()
+
   return repoSettings
 }
 
@@ -135,6 +143,7 @@ async function openImportedSetupSettingsFromToast(page: Page, repoId: string): P
   await expect(setupCommand).toBeVisible({ timeout: 10_000 })
   const repoSettings = page.locator(`[data-settings-section="repo-${repoId}"]`)
   await expect(repoSettings.getByText('Setup Script').first()).toBeVisible()
+
   return repoSettings
 }
 

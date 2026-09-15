@@ -38,6 +38,7 @@ export function shouldShowTrigger(args: {
   canDock?: boolean
 }): boolean {
   const isDocked = args.isWideLayout && (args.canDock ?? args.isWideLayout)
+
   return args.isGithubRepo && !isDocked
 }
 

@@ -194,6 +194,7 @@ describe('DesktopScriptProviderClient snapshot cache', () => {
     const cacheKeys = [
       ...(client as unknown as { snapshots: Map<string, unknown> }).snapshots.keys()
     ]
+
     expect(cacheKeys).not.toContain('pid:0')
     expect(cacheKeys).not.toContain('default:pid:0')
     expect(cacheKeys).not.toContain('0')
@@ -229,6 +230,7 @@ describe('DesktopScriptProviderClient snapshot cache', () => {
     const client = await createDesktopScriptProviderClient('linux', '/tmp/runtime.py')
 
     const result = await client.snapshot({ app: 'Text Editor' })
+
     const cached = [
       ...(
         client as unknown as { snapshots: Map<string, { screenshotPngBase64?: string | null }> }

@@ -8,10 +8,12 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((nextResolve, nextReject) => {
     resolve = nextResolve
     reject = nextReject
   })
+
   return { promise, resolve, reject }
 }
 
@@ -46,10 +48,13 @@ describe('GitStatusReadLeaseOwner', () => {
     const firstPending = deferred<string>()
     const secondPending = deferred<string>()
     const signals: AbortSignal[] = []
+
     const load = vi.fn((signal: AbortSignal) => {
       signals.push(signal)
+
       return signals.length === 1 ? firstPending.promise : secondPending.promise
     })
+
     const firstController = new AbortController()
     const secondController = new AbortController()
 
@@ -127,6 +132,7 @@ describe('GitStatusReadLeaseOwner', () => {
     const owner = new GitStatusReadLeaseOwner<string>()
     const firstPending = deferred<string>()
     const secondPending = deferred<string>()
+
     const load = vi
       .fn<(_signal: AbortSignal) => Promise<string>>()
       .mockReturnValueOnce(firstPending.promise)

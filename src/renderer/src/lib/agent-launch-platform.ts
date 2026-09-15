@@ -11,10 +11,13 @@ export function getAgentLaunchPlatformForRepo(
     if (projectRuntime?.status === 'repair-required') {
       return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
     }
+
     if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
       return 'linux'
     }
+
     return CLIENT_PLATFORM
   }
+
   return isWindowsAbsolutePathLike(repo.path) ? 'win32' : 'linux'
 }

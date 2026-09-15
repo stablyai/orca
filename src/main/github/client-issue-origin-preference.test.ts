@@ -28,6 +28,7 @@ const {
 
 vi.mock('./gh-utils', async () => {
   const actual = await vi.importActual<typeof GhUtils>('./gh-utils')
+
   return {
     ...actual,
     execFileAsync: vi.fn(),
@@ -53,6 +54,7 @@ vi.mock('./rate-limit', () => ({
 
 vi.mock('./github-api-repository', async (importOriginal) => {
   const actual = await importOriginal<typeof GithubApiRepositoryModule>()
+
   return {
     ...actual,
     resolveIssueGitHubApiRepositorySource: (
@@ -108,6 +110,7 @@ describe('GitHub issue open-by-number origin preference', () => {
     resolvePRRepositoryCandidatesMock.mockImplementation(async (repoPath, connectionId) => {
       const origin = await getOwnerRepoMock(repoPath, connectionId)
       const repository = origin ? { host: 'github.com', ...origin } : null
+
       return { candidates: repository ? [repository] : [], headRepo: repository }
     })
     _resetOwnerRepoCache()

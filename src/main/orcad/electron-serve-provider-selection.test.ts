@@ -18,20 +18,27 @@ vi.mock('../../shared/child-process/run-process', async (importOriginal) => ({
 import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-browser-provider'
 
 const FAKE_SIDECAR = join(import.meta.dirname, '__fixtures__', 'fake-orcad-electron-sidecar.cjs')
+
 const INSTALLED_EXECUTABLE = join('/Applications', 'Orca.app', 'Contents', 'MacOS', 'Orca')
 
 let harnessRoot: string
+
 let controlPath: string
+
 let chromiumExecutable: string
+
 let sidecarMode: string | undefined
+
 let provider: OrcadBrowserProvider | null
 
 /** Strips the session/profile/args prefix the agent-browser invocation carries. */
 function commandFromArgs(args: readonly string[]): string[] {
   let index = 0
+
   while (['--session', '--profile', '--args'].includes(args[index] ?? '')) {
     index += 2
   }
+
   return args.slice(index, -1)
 }
 
@@ -53,6 +60,7 @@ beforeEach(async () => {
   provider = null
   await writeFile(controlPath, '{}')
   await writeFile(chromiumExecutable, '')
+
   if (process.platform !== 'win32') {
     await chmod(chromiumExecutable, 0o755)
   }
@@ -60,6 +68,7 @@ beforeEach(async () => {
   const actual = await vi.importActual<typeof RunProcessModule>(
     '../../shared/child-process/run-process'
   )
+
   spawnProcessMock.mockReset()
   spawnProcessMock.mockImplementation((spec: RunProcessModule.ProcessSpec) =>
     actual.spawnProcess({
@@ -76,17 +85,21 @@ beforeEach(async () => {
   runProcessMock.mockReset()
   runProcessMock.mockImplementation(async (spec: RunProcessModule.ProcessSpec) => {
     const command = commandFromArgs(spec.args ?? [])
+
     if (command[0] === 'open') {
       return agentBrowserSuccess({ url: 'about:blank', title: '' })
     }
+
     if (command[0] === 'tab') {
       return agentBrowserSuccess({
         tabs: [{ active: true, tabId: 't1', title: '', url: 'about:blank' }]
       })
     }
+
     if (command[0] === 'close') {
       return agentBrowserSuccess({ closed: true })
     }
+
     throw new Error(`Unexpected agent-browser command: ${command.join(' ')}`)
   })
 })

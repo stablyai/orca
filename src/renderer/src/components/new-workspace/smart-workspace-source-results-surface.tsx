@@ -45,12 +45,14 @@ export function renderSmartWorkspaceSourceResults(
       onPointerDownOutside={(event) => {
         // Why: Radix sees input and mode tabs as outside because the input is an anchor.
         const target = event.target as Node
+
         if (localInputRef.current?.contains(target) || tabsListRef.current?.contains(target)) {
           event.preventDefault()
         }
       }}
       onFocusOutside={(event) => {
         const target = event.target as Node
+
         if (localInputRef.current?.contains(target) || tabsListRef.current?.contains(target)) {
           event.preventDefault()
         }

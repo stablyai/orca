@@ -1,6 +1,7 @@
 type RefLike<T> = { current: T }
 
 const STOPPED_SESSION_WAIT_MS = 1000
+
 const MAX_EARLY_STOPPED_SESSION_IDS = 16
 
 export function recordStoppedSession(
@@ -9,9 +10,11 @@ export function recordStoppedSession(
   stoppedResolversRef: RefLike<Map<string, () => void>>
 ): void {
   const resolver = stoppedResolversRef.current.get(sessionId)
+
   if (resolver) {
     stoppedResolversRef.current.delete(sessionId)
     resolver()
+
     return
   }
 
@@ -19,11 +22,14 @@ export function recordStoppedSession(
   // never wait on the id. Keep the early-event cache bounded across sessions.
   stoppedSessionIdsRef.current.delete(sessionId)
   stoppedSessionIdsRef.current.add(sessionId)
+
   while (stoppedSessionIdsRef.current.size > MAX_EARLY_STOPPED_SESSION_IDS) {
     const oldest = stoppedSessionIdsRef.current.values().next().value
+
     if (!oldest) {
       break
     }
+
     stoppedSessionIdsRef.current.delete(oldest)
   }
 }
@@ -42,6 +48,7 @@ export function waitForStoppedSession(
       stoppedResolversRef.current.delete(sessionId)
       resolve()
     }, STOPPED_SESSION_WAIT_MS)
+
     stoppedResolversRef.current.set(sessionId, () => {
       window.clearTimeout(timeoutId)
       resolve()

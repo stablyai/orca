@@ -43,6 +43,7 @@ export class CdpBridgeCommandSet {
           const sender = debuggerLifecycle.makeCdpSender(guest)
           await debuggerLifecycle.ensureDebuggerAttached(guest)
           const state = bridgeState.getOrCreateTabState(bridgeState.resolveTabId(guest.id))
+
           return operation({ guest, sender, state })
         }),
       runOnState: <T>(
@@ -51,10 +52,12 @@ export class CdpBridgeCommandSet {
         bridgeState.enqueueCommand(async () => {
           const guest = bridgeState.getActiveGuest()
           const state = bridgeState.getOrCreateTabState(bridgeState.resolveTabId(guest.id))
+
           return operation({ guest, state })
         }),
       current: () => {
         const guest = bridgeState.getActiveGuest()
+
         return {
           guest,
           state: bridgeState.getOrCreateTabState(bridgeState.resolveTabId(guest.id))

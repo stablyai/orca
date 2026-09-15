@@ -11,6 +11,7 @@ import {
   isNewIssueDraftContentful
 } from '@/components/task-page-new-issue-draft'
 import { getTaskPageRepoSourceContext } from './task-page-source-context'
+
 export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconciliationModel) {
   const { settings, repos, selectedRepos } = model
   const [newIssueOpen, setNewIssueOpen] = useState(false)
@@ -29,14 +30,17 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
     () => selectedRepos.find((r) => r.id === newIssueRepoId) ?? selectedRepos[0] ?? null,
     [selectedRepos, newIssueRepoId]
   )
+
   const newIssueSourceContext = useMemo(
     () => getTaskPageRepoSourceContext(newIssueTargetRepo, 'github'),
     [newIssueTargetRepo]
   )
+
   const newIssueRuntimeTarget = useMemo(() => {
     if (!newIssueTargetRepo?.id) {
       return null
     }
+
     const repoOwnerSettings = getSettingsForRepoRuntimeOwner(
       {
         repos: [newIssueTargetRepo],
@@ -44,6 +48,7 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
       },
       newIssueTargetRepo.id
     )
+
     const targetSettings =
       newIssueSourceContext?.provider === 'github'
         ? {
@@ -51,12 +56,16 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
             ...getTaskSourceRuntimeSettings(newIssueSourceContext)
           }
         : repoOwnerSettings
+
     const target = getActiveRuntimeTarget(targetSettings)
+
     if (target.kind !== 'environment') {
       return null
     }
+
     return repos.some((repo) => repo.id === newIssueTargetRepo.id) ? target : null
   }, [newIssueSourceContext, newIssueTargetRepo, repos, settings])
+
   const newIssueRepoLabels = useRepoLabels(
     newIssueOpen ? (newIssueTargetRepo?.path ?? null) : null,
     newIssueOpen ? (newIssueTargetRepo?.id ?? null) : null,
@@ -64,6 +73,7 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
       runtimeEnvironmentId: newIssueOpen ? (newIssueRuntimeTarget?.environmentId ?? null) : null
     }
   )
+
   const newIssueRepoAssignees = useRepoAssignees(
     newIssueOpen ? (newIssueTargetRepo?.path ?? null) : null,
     newIssueOpen ? (newIssueTargetRepo?.id ?? null) : null,
@@ -78,9 +88,11 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
       newIssueRepoId,
       selectedRepos.map((r) => r.id)
     )
+
     if (!reset) {
       return
     }
+
     setNewIssueLabels([])
     setNewIssueAssignees([])
     setNewIssueRepoId(reset.repoId)
@@ -91,6 +103,7 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
     if (!newIssueOpen) {
       return
     }
+
     if (
       isNewIssueDraftContentful({
         title: newIssueTitle,
@@ -119,6 +132,7 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
     setNewIssueDraft,
     clearNewIssueDraft
   ])
+
   const nextModel = model as typeof model & {
     newIssueOpen: typeof newIssueOpen
     setNewIssueOpen: typeof setNewIssueOpen
@@ -142,6 +156,7 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
     newIssueRepoLabels: typeof newIssueRepoLabels
     newIssueRepoAssignees: typeof newIssueRepoAssignees
   }
+
   nextModel.newIssueOpen = newIssueOpen
   nextModel.setNewIssueOpen = setNewIssueOpen
   nextModel.newIssueTitle = newIssueTitle
@@ -163,6 +178,8 @@ export function useTaskPageGitHubIssueDraft(model: TaskPageGitHubCacheReconcilia
   nextModel.newIssueRuntimeTarget = newIssueRuntimeTarget
   nextModel.newIssueRepoLabels = newIssueRepoLabels
   nextModel.newIssueRepoAssignees = newIssueRepoAssignees
+
   return nextModel
 }
+
 export type TaskPageGitHubIssueDraftModel = ReturnType<typeof useTaskPageGitHubIssueDraft>

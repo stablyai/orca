@@ -48,6 +48,7 @@ describe('pty delivery breadcrumb ring', () => {
       vi.advanceTimersByTime(2_000)
       ring.record(`kind-${i}`)
     }
+
     const entries = ring.snapshot()
     expect(entries).toHaveLength(5)
     expect(entries[4].kind).toBe('kind-19')

@@ -80,16 +80,21 @@ export function judgeCachedAgentJobEvidence(args: {
   if (args.jobProcessIds === null) {
     return args.jobSupported === false ? 'unsupported' : 'unavailable'
   }
+
   const withinAgeBound = args.identityAgeMs <= WINDOWS_DETACHED_DESCENDANT_IDENTITY_MAX_AGE_MS
+
   // A shell-pid "anchor" proves nothing about a child; treat it as unanchored.
   if (args.anchorProcessId !== null && args.anchorProcessId !== args.shellPid) {
     if (!args.jobProcessIds.has(args.anchorProcessId)) {
       return args.jobProcessIds.size <= 1 ? 'exited' : 'anchor-exited'
     }
+
     return withinAgeBound ? 'confirmed' : 'recheck'
   }
+
   if (args.jobProcessIds.size <= 1) {
     return 'exited'
   }
+
   return withinAgeBound ? 'unproven' : 'expired'
 }

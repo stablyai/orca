@@ -70,6 +70,7 @@ function PickerModalContent<T extends string = string>({
     <View style={styles.group}>
       {options.map((opt, i) => {
         const isSelected = opt.value === selected
+
         return (
           <View key={opt.value}>
             {i > 0 && <View style={styles.separator} />}
@@ -87,6 +88,7 @@ function PickerModalContent<T extends string = string>({
                 if (opt.disabled) {
                   return
                 }
+
                 onSelect(opt.value)
                 onClose()
               }}
@@ -96,6 +98,7 @@ function PickerModalContent<T extends string = string>({
                       if (opt.disabled) {
                         return
                       }
+
                       onLongSelect(opt.value)
                       onClose()
                     }

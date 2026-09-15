@@ -58,6 +58,7 @@ function pullRequestComposerElement({
     isRemoteOperationActive: false,
     upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
   }
+
   const primaryAction = resolvePrimaryAction(sourceControlInputs)
 
   return (
@@ -179,6 +180,7 @@ describe('CreateHostedReviewComposer generate tooltip', () => {
       generateDisabled: true,
       generateDisabledReason: 'Stage changes before generating.'
     })
+
     const wrapper = elementByLabel(markup, 'span', 'Generate pull request details with AI')
     const button = elementByLabel(markup, 'button', 'Generate pull request details with AI')
 
@@ -205,6 +207,7 @@ describe('CreateHostedReviewComposer generate tooltip', () => {
 
   it('shows the parent-child preview and stack create action for an open parent review', () => {
     const onPrimaryAction = vi.fn()
+
     const { container } = renderDom(
       pullRequestComposerElement({
         stackParentReview: { number: 13741, url: 'https://github.com/stablyai/orca/pull/13741' },
@@ -238,6 +241,7 @@ describe('CreateHostedReviewComposer generate tooltip', () => {
     )
 
     expect(container.querySelectorAll('[data-slot="checkbox"]')).toHaveLength(2)
+
     // Radix keeps a hidden native input for form participation; nothing browser-native renders.
     for (const native of container.querySelectorAll('input[type="checkbox"]')) {
       expect(native.getAttribute('aria-hidden')).toBe('true')

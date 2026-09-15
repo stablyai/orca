@@ -19,7 +19,9 @@ import { handleStarNagOnboardingCompleted } from './onboarding-completed'
 import { ensureStarNagBaseline, shouldShowStarNagThresholdPrompt } from './threshold-trigger'
 
 const STAR_NAG_COOLDOWN_DAYS = 3
+
 const STAR_NAG_COOLDOWN_MS = STAR_NAG_COOLDOWN_DAYS * 24 * 60 * 60 * 1000
+
 type StarNagSurface = 'card' | 'toast'
 
 export class StarNagService {
@@ -102,6 +104,7 @@ export class StarNagService {
     ) {
       return
     }
+
     void this.maybeShow('threshold')
   }
 
@@ -112,30 +115,39 @@ export class StarNagService {
     if (this.promptVisible || this.evaluating) {
       return false
     }
+
     this.setEvaluating(true)
+
     try {
       // Why: checkOrcaStarred lets us skip users who already starred outside
       // the app. When gh cannot tell us, keep the prompt available but route
       // the renderer to the browser fallback instead of a dead direct-star
       // button.
       const starred = await checkOrcaStarred()
+
       if (this.store.getUI().starNagCompleted) {
         this.pendingForceShow = false
+
         return false
       }
+
       if (starred === null) {
         return this.broadcastShow(source, 'web', surface)
       }
+
       if (starred) {
         this.trackAlreadyStarredSuppressed(source)
         // Already starred somewhere — lock in the permanent suppression so we
         // stop recomputing thresholds on every spawn.
         this.markCompleted()
+
         return false
       }
+
       if (this.promptVisible) {
         return false
       }
+
       return this.broadcastShow(source, 'gh', surface)
     } finally {
       this.setEvaluating(false)
@@ -145,6 +157,7 @@ export class StarNagService {
 
   private setEvaluating(value: boolean): void {
     this.evaluating = value
+
     if (!value) {
       this.flushPendingOnboardingCompleted()
     }
@@ -154,10 +167,13 @@ export class StarNagService {
     if (!this.pendingForceShow || this.evaluating) {
       return
     }
+
     this.pendingForceShow = false
+
     if (this.promptVisible) {
       return
     }
+
     this.broadcastShow('force_show', 'gh')
   }
 
@@ -165,6 +181,7 @@ export class StarNagService {
     if (!this.pendingOnboardingCompleted || this.evaluating) {
       return
     }
+
     this.pendingOnboardingCompleted = false
     void this.onboardingCompleted()
   }
@@ -175,17 +192,21 @@ export class StarNagService {
     surface: StarNagSurface = 'card'
   ): boolean {
     const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+
     if (!win) {
       this.promptVisible = false
       this.promptSession = null
+
       return false
     }
+
     const context = createStarNagPromptContext(this.store, this.stats, source, mode)
     win.webContents.send('star-nag:show', { mode, surface })
     this.promptVisible = true
     this.promptSession = context
     this.trackOutcome('shown')
     logStarNagConsoleEvent(this.store, this.stats, 'star_nag_shown', source)
+
     return true
   }
 
@@ -202,9 +223,11 @@ export class StarNagService {
     options: { mode?: StarNagPromptMode; nextThreshold?: number; cooldownDays?: number } = {}
   ): void {
     const session = this.promptSession
+
     if (!session) {
       return
     }
+
     trackStarNagSessionOutcome(session, outcome, options)
   }
 
@@ -261,10 +284,13 @@ export class StarNagService {
 
   private defer(outcome: Extract<StarNagOutcome, 'dismissed' | 'later'>): void {
     const session = this.promptSession
+
     if (!session) {
       this.promptVisible = false
+
       return
     }
+
     const ui = this.store.getUI()
     const threshold = ui.starNagNextThreshold ?? STAR_NAG_INITIAL_THRESHOLD
     const nextThreshold = threshold * 2
@@ -292,9 +318,11 @@ export class StarNagService {
 
   private openWeb(): void {
     const session = this.promptSession
+
     if (!session || session.openedRepoTracked) {
       return
     }
+
     session.openedRepoTracked = true
     trackStarNagSessionOutcome(session, 'opened_repo', { mode: 'web' })
     // Why: opening GitHub is only a handoff, not verified star success. Keep the
@@ -306,14 +334,18 @@ export class StarNagService {
 
   private async starOrcaFromNag(): Promise<boolean> {
     const session = this.promptSession
+
     if (!session) {
       return false
     }
+
     if (session.starAttemptPromise) {
       return session.starAttemptPromise
     }
+
     const attempt = this.runStarOrcaAttempt(session)
     session.starAttemptPromise = attempt
+
     try {
       return await attempt
     } finally {
@@ -325,9 +357,11 @@ export class StarNagService {
 
   private async runStarOrcaAttempt(session: StarNagPromptSession): Promise<boolean> {
     const starred = await runStarNagDirectStarAttempt(session)
+
     if (starred) {
       this.markCompleted()
     }
+
     return starred
   }
 
@@ -350,10 +384,13 @@ export class StarNagService {
     if (this.promptVisible) {
       return
     }
+
     if (this.evaluating) {
       this.pendingForceShow = true
+
       return
     }
+
     this.broadcastShow('force_show', 'gh')
   }
 }

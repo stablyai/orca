@@ -37,44 +37,56 @@ export function createPtySizeReassertion(options: PtySizeReassertionOptions): Pt
     if (disposed || options.isDisposed() || !ptyId) {
       return false
     }
+
     return !options.isRemotePtyId(ptyId) && !options.shouldSuppressDesktopResize()
   }
 
   const run = (shouldFit: boolean): void => {
     const ptyId = options.getPtyId()
+
     if (!canQuery(ptyId)) {
       return
     }
+
     if (shouldFit) {
       options.fitAndRun(() => run(false))
+
       return
     }
+
     const target = options.getTerminalDimensions()
+
     if (!dimensionsAreUsable(target)) {
       return
     }
+
     inFlight = true
 
     const forwardIfDrifted = (actual: PtySizeReassertionDimensions | null): void => {
       if (options.getPtyId() !== ptyId || !canQuery(ptyId)) {
         return
       }
+
       // Why: a queued request means a newer layout observation should re-measure
       // before we send this older target back to the PTY.
       if (pending) {
         return
       }
+
       // Why: a reveal fit or snapshot-restore resize can change xterm while the
       // applied-size read is in flight without queuing a request; forwarding the
       // captured target would resize the PTY back to the pre-reveal grid, so
       // re-run against the fresh grid instead.
       if (!dimensionsMatch(options.getTerminalDimensions(), target)) {
         pending = true
+
         return
       }
+
       if (dimensionsMatch(actual, target)) {
         return
       }
+
       options.forwardResize(target.cols, target.rows)
     }
 
@@ -85,6 +97,7 @@ export function createPtySizeReassertion(options: PtySizeReassertionOptions): Pt
       .then(forwardIfDrifted, () => forwardIfDrifted(null))
       .finally(() => {
         inFlight = false
+
         if (pending && !disposed) {
           const shouldFitPending = pendingFit
           pending = false
@@ -99,12 +112,16 @@ export function createPtySizeReassertion(options: PtySizeReassertionOptions): Pt
       if (disposed || options.isDisposed()) {
         return
       }
+
       const shouldFit = requestOptions?.fit !== false
+
       if (inFlight) {
         pending = true
         pendingFit ||= shouldFit
+
         return
       }
+
       run(shouldFit)
     },
     dispose: () => {

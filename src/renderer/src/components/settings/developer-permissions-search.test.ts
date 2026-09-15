@@ -18,14 +18,17 @@ function getLanEntry() {
   const entry = getDeveloperPermissionsPaneSearchEntries().find((candidate) =>
     candidate.keywords?.includes('usb')
   )
+
   if (!entry) {
     throw new Error('LAN, USB, and Bluetooth search entry is missing')
   }
+
   return entry
 }
 
 async function searchInLocale(locale: string, query: string): Promise<boolean> {
   await i18n.changeLanguage(locale)
+
   return matchesSettingsSearch(query, getLanEntry())
 }
 

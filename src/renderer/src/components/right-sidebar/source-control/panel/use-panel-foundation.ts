@@ -12,6 +12,7 @@ import { useSourceControlPanelState } from './use-panel-state'
 export function useSourceControlPanelFoundation() {
   const panelState = useSourceControlPanelState()
   const reviewContext = useSourceControlReviewContext(panelState)
+
   const {
     activeConnectionId,
     activeGroupId,
@@ -73,6 +74,7 @@ export function useSourceControlPanelFoundation() {
     worktreeMap,
     worktreePath
   })
+
   const ai = useSourceControlAi({
     settings: activeRepoSettings,
     activeRepo: activeRepo ?? null,
@@ -92,6 +94,7 @@ export function useSourceControlPanelFoundation() {
     openSettingsTarget,
     openSettingsPage
   })
+
   const {
     setCommitGenerationDialogOpen,
     setPullRequestGenerationDialogOpen,
@@ -103,6 +106,7 @@ export function useSourceControlPanelFoundation() {
     if (sourceControlAiActionsVisible) {
       return
     }
+
     setResolveConflictsComposerOpen(false)
     setCommitGenerationDialogOpen(false)
     setPullRequestGenerationDialogOpen(false)

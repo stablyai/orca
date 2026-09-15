@@ -24,7 +24,9 @@ export function readCurrentRendererFrame(
     if (endpoint.isDestroyed()) {
       return null
     }
+
     const frame = endpoint.mainFrame
+
     return frame && typeof frame === 'object' ? frame : null
   } catch {
     return null
@@ -35,7 +37,9 @@ export function readRendererReplyRequestId(candidate: unknown): string | null {
   if (!candidate || typeof candidate !== 'object' || !('requestId' in candidate)) {
     return null
   }
+
   const requestId = candidate.requestId
+
   return typeof requestId === 'string' && requestId.length > 0 && requestId.length <= 256
     ? requestId
     : null
@@ -47,6 +51,7 @@ export function rendererReplyMatchesRequest(
 ): boolean {
   const expectedType =
     request.type === 'mountPage' ? 'mounted' : request.type === 'retirePage' ? 'retired' : 'rekeyed'
+
   return Boolean(
     (reply.type === expectedType ||
       (reply.type === 'failed' && reply.operation === request.type)) &&

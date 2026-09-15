@@ -52,6 +52,7 @@ describe('serve-mode-argv', () => {
       expect(argvRequestsServeMode(argv), argv.join(' ')).toBe(false)
       expect(normalizeServeModeArgv(argv)).toEqual(argv)
     }
+
     // A directory named `help` is a value, not a help request.
     expect(argvRequestsServeMode(['/AppRun', 'serve', '--project-root', 'help'])).toBe(true)
     // Past an operator's terminator nothing is reinterpreted, help flags included.
@@ -155,6 +156,7 @@ describe('serve-mode-argv', () => {
       '--serve-project-root',
       '/srv/repo'
     ]
+
     expect(normalizeServeModeArgv(argv)).toEqual(argv)
   })
 
@@ -227,19 +229,25 @@ describe('serve-mode-argv', () => {
       '--port=1',
       '--no-pairing=false'
     ]
+
     const disagreements: string[][] = []
+
     const walk = (tail: string[]): void => {
       const argv = ['/AppRun', ...tail]
+
       if (argvRequestsServeMode(argv) !== normalizeServeModeArgv(argv).includes('--serve')) {
         disagreements.push(argv)
       }
+
       if (tail.length === 4) {
         return
       }
+
       for (const token of alphabet) {
         walk([...tail, token])
       }
     }
+
     walk([])
 
     expect(disagreements).toEqual([])

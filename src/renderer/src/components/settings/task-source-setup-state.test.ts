@@ -28,9 +28,11 @@ function buildReadiness(
     },
     jira: { connected: true, checking: false, visible: true }
   }
+
   for (const provider of ORDER) {
     Object.assign(base[provider], overrides[provider])
   }
+
   return base
 }
 

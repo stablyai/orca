@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest'
 import { commandBackslashMode } from './commit-message-text-generation'
 
 const LOCAL = { kind: 'local' as const, cwd: 'C:\\repo' }
+
 const REMOTE = {
   kind: 'remote' as const,
   cwd: '/repo',

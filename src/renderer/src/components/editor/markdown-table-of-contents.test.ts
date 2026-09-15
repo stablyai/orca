@@ -124,9 +124,11 @@ describe('markdown table of contents', () => {
     const toc = buildMarkdownTableOfContents(`# ${'Large   heading\ttext '.repeat(120)}`)
 
     expect(toc[0].title).toContain('Large heading text Large heading text')
+
     const usedWhitespaceReplace = replaceSpy.mock.calls.some(
       ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
     )
+
     expect(usedWhitespaceReplace).toBe(false)
   })
 })

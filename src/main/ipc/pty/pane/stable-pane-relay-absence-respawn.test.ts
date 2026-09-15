@@ -10,8 +10,11 @@ import type { IPtyProvider } from '../../../providers/types'
 import { spawnForStablePane, type StablePaneOwner } from './stable-owner'
 
 const LEAF = '1b3f2c4d-5e6a-4b7c-8d9e-0f1a2b3c4d5e'
+
 const SIBLING_LEAF = '2c4d3e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f'
+
 const WORKTREE = 'worktree-1'
+
 const OWNER: StablePaneOwner = {
   tabId: 'tab-1',
   leafId: LEAF,
@@ -30,6 +33,7 @@ function spawnAfterAttachRejection(
     .fn()
     .mockRejectedValueOnce(error)
     .mockResolvedValueOnce({ id: 'ssh:conn-1@@pty-2', isReattach: false })
+
   return {
     spawn,
     run: () =>
@@ -68,6 +72,7 @@ function sessionStore(leaves: string[]): { store: Store; read: () => WorkspaceSe
     },
     terminalPtyIncarnationsByPaneKey: {}
   } as unknown as WorkspaceSessionState
+
   return {
     read: () => session,
     store: {
@@ -86,6 +91,7 @@ describe('stable pane adoption after the relay reports the PTY absent', () => {
     async (settledWorker) => {
       const { store, read } = sessionStore([LEAF])
       const paneKey = `${OWNER.tabId}:${LEAF}`
+
       const record = {
         paneKey,
         tabId: OWNER.tabId,
@@ -98,12 +104,14 @@ describe('stable pane adoption after the relay reports the PTY absent', () => {
         updatedAt: 1,
         ...(settledWorker ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' } : {})
       }
+
       store.setWorkspaceSession({
         ...read(),
         sleepingAgentSessionsByPaneKey: { [paneKey]: record }
       })
       const spawn = vi.fn().mockResolvedValue({ id: OWNER.ptyId, isReattach: true })
       const onFreshSpawn = vi.fn()
+
       const result = await spawnForStablePane({
         runtime: undefined,
         store,
@@ -115,6 +123,7 @@ describe('stable pane adoption after the relay reports the PTY absent', () => {
         resolveOwner: () => OWNER,
         onFreshSpawn
       })
+
       expect(result.owner).toBe(OWNER)
       expect(spawn).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ sessionId: OWNER.ptyId, attachOnly: true, command: undefined })
@@ -156,6 +165,7 @@ describe('stable pane adoption after the relay reports the PTY absent', () => {
   describe('with persistence actually reached', () => {
     it('retires only the absent leaf and leaves the tab and its sibling bound', async () => {
       const { store, read } = sessionStore([LEAF, SIBLING_LEAF])
+
       const { run, spawn } = spawnAfterAttachRejection(
         new SshPtyAbsentFromRelayError(`${SSH_SESSION_EXPIRED_ERROR}: pty-1`),
         { store, worktreeId: WORKTREE }
@@ -178,6 +188,7 @@ describe('stable pane adoption after the relay reports the PTY absent', () => {
     // survival then rests entirely on the renderer. If that ever regresses, this is the tripwire.
     it('drops the tab when the absent leaf was the only one, leaving re-persistence to the renderer', async () => {
       const { store, read } = sessionStore([LEAF])
+
       const { run, spawn } = spawnAfterAttachRejection(
         new SshPtyAbsentFromRelayError(`${SSH_SESSION_EXPIRED_ERROR}: pty-1`),
         { store, worktreeId: WORKTREE }
@@ -195,6 +206,7 @@ describe('stable pane adoption after the relay reports the PTY absent', () => {
     it('leaves persistence untouched when the failure is not positive absence', async () => {
       const { store, read } = sessionStore([LEAF, SIBLING_LEAF])
       const before = JSON.stringify(read())
+
       const { run, spawn } = spawnAfterAttachRejection(
         new Error('SSH connection lost, reconnecting...'),
         { store, worktreeId: WORKTREE }
@@ -209,6 +221,7 @@ describe('stable pane adoption after the relay reports the PTY absent', () => {
     it('does not retire the binding when daemon attach-only cleanup is unverifiable', async () => {
       const { store, read } = sessionStore([LEAF, SIBLING_LEAF])
       const before = JSON.stringify(read())
+
       const { run, spawn } = spawnAfterAttachRejection(
         new TerminalSessionOwnerUnverifiedError(OWNER.ptyId),
         { store, worktreeId: WORKTREE }

@@ -7,6 +7,7 @@ import { deriveValidatedClonePath, getClonePathComparisonKey } from './repo-clon
 describe('repo clone path helpers', () => {
   it('allows safe repository names that start with two dots', async () => {
     const destination = await mkdtemp(join(tmpdir(), 'orca-clone-path-'))
+
     try {
       expect(
         deriveValidatedClonePath({
@@ -23,6 +24,7 @@ describe('repo clone path helpers', () => {
     if (process.platform === 'win32') {
       return
     }
+
     expect(() =>
       deriveValidatedClonePath({
         url: 'https://example.com/orca.git',

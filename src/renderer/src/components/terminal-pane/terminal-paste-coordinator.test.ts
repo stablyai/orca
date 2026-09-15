@@ -53,9 +53,11 @@ function bracketedChunkedPlan() {
 
 function getPastePayloadCorpusText(name: string): string {
   const entry = PASTE_PAYLOAD_CORPUS.find((item) => item.name === name)
+
   if (!entry) {
     throw new Error(`Missing paste payload corpus case: ${name}`)
   }
+
   return entry.text
 }
 
@@ -115,6 +117,7 @@ describe('terminal paste coordinator', () => {
   it('builds payload metadata without logging clipboard content', () => {
     const secret = 'token=sk-live-secret\r\nemoji=👩‍💻\nansi=\x1b[31m'
     const payload = createTerminalPastePayload({ text: secret, source: 'keyboard' })
+
     const plan = planTerminalPaste({
       text: secret,
       source: 'keyboard',
@@ -133,6 +136,7 @@ describe('terminal paste coordinator', () => {
   it('keeps small text on the xterm paste path', async () => {
     const pasteText = vi.fn()
     const writePty = vi.fn()
+
     const plan = planTerminalPaste({
       text: 'printf "hello"',
       source: 'keyboard',
@@ -153,6 +157,7 @@ describe('terminal paste coordinator', () => {
 
   it('forces small Windows multiline paste through bracketed terminal input', async () => {
     const pasteText = vi.fn()
+
     const plan = planTerminalPaste({
       text: 'one\r\ntwo',
       source: 'keyboard',
@@ -174,6 +179,7 @@ describe('terminal paste coordinator', () => {
     const writePty = vi.fn<(data: string) => boolean>(() => true)
     const yieldToEventLoop = vi.fn(async () => {})
     const text = 'path with spaces && unicode 👩‍💻\n'.repeat(6)
+
     const plan = planTerminalPaste({
       text,
       source: 'context-menu',
@@ -205,6 +211,7 @@ describe('terminal paste coordinator', () => {
 
   it('bracket-wraps large terminal-mode paste once with xterm newline semantics', async () => {
     const text = 'alpha\r\nbeta\nbefore\x1b[201~after'
+
     const plan = planTerminalPaste({
       text,
       source: 'keyboard',
@@ -213,6 +220,7 @@ describe('terminal paste coordinator', () => {
       maxDirectBytes: 8,
       maxChunkBytes: 5
     })
+
     const chunks = chunkTerminalPastePlan(plan)
 
     expect(chunks[0]).toBe(BRACKETED_PASTE_START)
@@ -232,6 +240,7 @@ describe('terminal paste coordinator', () => {
       maxDirectBytes: 4,
       maxChunkBytes: 4
     })
+
     const chunks = chunkTerminalPastePlan(plan)
 
     expect(plan.mode).toBe('chunked')
@@ -252,6 +261,7 @@ describe('terminal paste coordinator', () => {
       maxDirectBytes: 4,
       maxChunkBytes: 4
     })
+
     const chunks = chunkTerminalPastePlan(plan)
 
     expect(plan.mode).toBe('chunked')
@@ -285,6 +295,7 @@ describe('terminal paste coordinator', () => {
       maxDirectBytes: 3,
       maxBytes: 3
     })
+
     const csiU = planTerminalPaste({
       text: 'a\r\n',
       source: 'keyboard',
@@ -302,6 +313,7 @@ describe('terminal paste coordinator', () => {
 
   it('chunks escape-heavy bracketed paste without per-character string sanitizer scans', () => {
     const text = Array.from({ length: 64 }, (_value, index) => `part-${index}\x1b[201~`).join('')
+
     const plan = planTerminalPaste({
       text,
       source: 'keyboard',
@@ -310,6 +322,7 @@ describe('terminal paste coordinator', () => {
       maxDirectBytes: 8,
       maxChunkBytes: 12
     })
+
     const includesSpy = vi.spyOn(String.prototype, 'includes')
     const replaceAllSpy = vi.spyOn(String.prototype, 'replaceAll')
 
@@ -349,6 +362,7 @@ describe('terminal paste coordinator', () => {
         maxDirectBytes: 0,
         maxChunkBytes: 7
       })
+
       const chunks = chunkTerminalPastePlan(plan)
 
       expect(plan.mode, name).toBe('chunked')
@@ -369,6 +383,7 @@ describe('terminal paste coordinator', () => {
       if (expected.hasControlSequences) {
         continue
       }
+
       const plan = planTerminalPaste({
         hasRichText,
         text,
@@ -378,6 +393,7 @@ describe('terminal paste coordinator', () => {
         maxDirectBytes: 0,
         maxChunkBytes: 7
       })
+
       const chunks = chunkTerminalPastePlan(plan)
 
       expect(plan.mode, name).toBe('chunked')
@@ -402,6 +418,7 @@ describe('terminal paste coordinator', () => {
 
     for (const { name, runtime } of RUNTIME_MATRIX) {
       const writePty = vi.fn<(data: string) => boolean>(() => true)
+
       const plan = planTerminalPaste({
         text,
         source: 'keyboard',
@@ -446,6 +463,7 @@ describe('terminal paste coordinator', () => {
 
   it('does not split astral Unicode when it starts a new terminal chunk', () => {
     const text = `ab${getPastePayloadCorpusText('Unicode')}cd`
+
     const plan = planTerminalPaste({
       text,
       source: 'keyboard',
@@ -459,6 +477,7 @@ describe('terminal paste coordinator', () => {
 
   it('yields during accepted large terminal paste planning before chunk execution', async () => {
     const yieldToEventLoop = vi.fn(async () => {})
+
     const plan = await planTerminalPasteWithYield({
       text: `${'x'.repeat(32)}\nwith unicode 😀`,
       source: 'app-menu',
@@ -478,6 +497,7 @@ describe('terminal paste coordinator', () => {
 
   it('does not scan remaining large chunks after the first PTY write fails', async () => {
     const text = 'x'.repeat(128)
+
     const plan = planTerminalPaste({
       text,
       source: 'keyboard',
@@ -485,6 +505,7 @@ describe('terminal paste coordinator', () => {
       maxDirectBytes: 4,
       maxChunkBytes: 8
     })
+
     const codePointAt = vi.spyOn(String.prototype, 'codePointAt')
     const writePty = vi.fn<(data: string) => boolean>(() => false)
 
@@ -503,6 +524,7 @@ describe('terminal paste coordinator', () => {
   it('cancels before writing when the target changed during async clipboard read', async () => {
     const pasteText = vi.fn()
     const writePty = vi.fn()
+
     const plan = planTerminalPaste({
       text: 'stale target',
       source: 'paste-event',
@@ -522,10 +544,13 @@ describe('terminal paste coordinator', () => {
 
   it('stops chunking when the PTY disconnects', async () => {
     let writable = true
+
     const writePty = vi.fn<(data: string) => boolean>(() => {
       writable = false
+
       return true
     })
+
     const plan = planTerminalPaste({
       text: '0123456789abcdef',
       source: 'middle-click',
@@ -548,6 +573,7 @@ describe('terminal paste coordinator', () => {
 
   it('adds redacted execution outcome, reason, chunks, and duration to diagnostics', async () => {
     const secret = 'secret-token-123456'
+
     const plan = planTerminalPaste({
       text: secret,
       source: 'keyboard',
@@ -555,6 +581,7 @@ describe('terminal paste coordinator', () => {
       maxDirectBytes: 4,
       maxChunkBytes: 4
     })
+
     const now = vi.fn()
     now.mockReturnValueOnce(10).mockReturnValueOnce(42)
 
@@ -582,6 +609,7 @@ describe('terminal paste coordinator', () => {
 
   it('redacts unsafe diagnostic reasons instead of echoing arbitrary text', () => {
     const secret = 'secret-token-from-exception'
+
     const plan = planTerminalPaste({
       text: 'safe payload',
       source: 'keyboard',
@@ -605,12 +633,14 @@ describe('terminal paste coordinator', () => {
 
   it('cancels direct paste when the paste operation exceeds the safety timeout', async () => {
     vi.useFakeTimers()
+
     try {
       const plan = planTerminalPaste({
         text: 'small direct paste',
         source: 'keyboard',
         target: terminalTarget()
       })
+
       const pasteText = vi.fn(() => new Promise<void>(() => {}))
 
       const execution = executeTerminalPastePlan(plan, {
@@ -618,6 +648,7 @@ describe('terminal paste coordinator', () => {
         isTargetCurrent: () => true,
         operationTimeoutMs: 25
       })
+
       await vi.advanceTimersByTimeAsync(25)
 
       await expect(execution).resolves.toMatchObject({
@@ -633,6 +664,7 @@ describe('terminal paste coordinator', () => {
 
   it('cancels chunked PTY paste when a write exceeds the safety timeout', async () => {
     vi.useFakeTimers()
+
     try {
       const plan = planTerminalPaste({
         text: '0123456789abcdef',
@@ -641,6 +673,7 @@ describe('terminal paste coordinator', () => {
         maxDirectBytes: 4,
         maxChunkBytes: 4
       })
+
       const writePty = vi.fn(() => new Promise<boolean>(() => {}))
       const yieldToEventLoop = vi.fn(async () => {})
 
@@ -652,6 +685,7 @@ describe('terminal paste coordinator', () => {
         yieldToEventLoop,
         operationTimeoutMs: 25
       })
+
       await vi.advanceTimersByTimeAsync(25)
 
       await expect(execution).resolves.toMatchObject({
@@ -669,6 +703,7 @@ describe('terminal paste coordinator', () => {
   it('stops chunking when the target becomes stale between writes', async () => {
     let current = true
     const writePty = vi.fn<(data: string) => boolean>(() => true)
+
     const plan = planTerminalPaste({
       text: '0123456789abcdef',
       source: 'keyboard',
@@ -694,6 +729,7 @@ describe('terminal paste coordinator', () => {
   it('closes an opened bracketed paste when stale focus cancels before payload chunks', async () => {
     let current = true
     const writePty = vi.fn<(data: string) => boolean>(() => true)
+
     const plan = planTerminalPaste({
       text: '0123456789abcdef',
       source: 'keyboard',
@@ -722,8 +758,10 @@ describe('terminal paste coordinator', () => {
 
   it('closes an opened bracketed paste when a payload write is rejected', async () => {
     const writes: string[] = []
+
     const writePty = vi.fn<(data: string) => boolean>((data) => {
       writes.push(data)
+
       return data === BRACKETED_PASTE_START
     })
 
@@ -741,10 +779,13 @@ describe('terminal paste coordinator', () => {
 
   it('closes an opened bracketed paste when a payload write exceeds the safety timeout', async () => {
     vi.useFakeTimers()
+
     try {
       const writes: string[] = []
+
       const writePty = vi.fn((data: string) => {
         writes.push(data)
+
         return data === BRACKETED_PASTE_START ? true : new Promise<boolean>(() => {})
       })
 
@@ -756,6 +797,7 @@ describe('terminal paste coordinator', () => {
         yieldToEventLoop: async () => {},
         operationTimeoutMs: 25
       })
+
       // Why: the payload write and the best-effort close each burn their own budget.
       await vi.advanceTimersByTimeAsync(25)
       await vi.advanceTimersByTimeAsync(25)
@@ -772,11 +814,14 @@ describe('terminal paste coordinator', () => {
 
   it('reports a timed-out bracketed close on a stale target as an operation timeout', async () => {
     vi.useFakeTimers()
+
     try {
       let current = true
       const writes: string[] = []
+
       const writePty = vi.fn((data: string) => {
         writes.push(data)
+
         return data === BRACKETED_PASTE_END ? new Promise<boolean>(() => {}) : true
       })
 
@@ -790,6 +835,7 @@ describe('terminal paste coordinator', () => {
         },
         operationTimeoutMs: 25
       })
+
       await vi.advanceTimersByTimeAsync(25)
       await vi.advanceTimersByTimeAsync(25)
 
@@ -814,6 +860,7 @@ describe('terminal paste coordinator', () => {
       writePty: (data) => {
         writes.push(data)
         writable = false
+
         return true
       },
       isTargetCurrent: () => true,
@@ -827,11 +874,14 @@ describe('terminal paste coordinator', () => {
 
   it('closes an opened bracketed paste when the PTY writer throws', async () => {
     const writes: string[] = []
+
     const writePty = vi.fn<(data: string) => boolean>((data) => {
       writes.push(data)
+
       if (data !== BRACKETED_PASTE_START && data !== BRACKETED_PASTE_END) {
         throw new Error('writer gone')
       }
+
       return true
     })
 
@@ -854,6 +904,7 @@ describe('terminal paste coordinator', () => {
       target: terminalTarget(),
       maxBytes: 8
     })
+
     const pasteText = vi.fn()
     const writePty = vi.fn()
 

@@ -37,14 +37,18 @@ function detectTitleHintPaneEvidence(
 ): AgentTitleEvidence | null {
   if (paneTitleResolution.title !== null) {
     const status = detectAgentSendTitleStatus(paneTitleResolution.title)
+
     return status ? { status, title: paneTitleResolution.title } : null
   }
+
   // Why: mirror isTerminalRunningAgent — the OSC-enriched tab title only counts
   // when the leaf has no runtime pane title of its own yet.
   if (paneTitleResolution.hasAnyPaneTitle) {
     return null
   }
+
   const status = detectAgentSendTitleStatus(tabTitle)
+
   return status ? { status, title: tabTitle } : null
 }
 
@@ -81,6 +85,7 @@ export function deriveNotesSendAgentTargets(
 
   for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
     const titleHintTarget = deriveTitleHintAgentTarget(state, tab)
+
     if (!titleHintTarget) {
       continue
     }
@@ -105,6 +110,7 @@ function resolveNotesTargetAgentType(
   if (entryAgentType && entryAgentType !== 'unknown') {
     return entryAgentType
   }
+
   return launchAgent ?? entryAgentType
 }
 
@@ -114,11 +120,13 @@ function deriveTitleHintAgentTarget(
 ): NotesSendAgentTarget | null {
   const layout = state.terminalLayoutsByTabId[tab.id]
   const leafId = layout?.activeLeafId
+
   if (!leafId || !isTerminalLeafId(leafId)) {
     return null
   }
 
   const ptyId = layout.ptyIdsByLeafId?.[leafId] ?? null
+
   if (!ptyId || !state.ptyIdsByTabId[tab.id]?.includes(ptyId)) {
     return null
   }
@@ -126,11 +134,13 @@ function deriveTitleHintAgentTarget(
   const paneTitles = state.runtimePaneTitlesByTabId[tab.id]
   const paneTitleResolution = resolveRuntimePaneTitleLeafResolution(layout, paneTitles, leafId)
   const titleEvidence = detectTitleHintPaneEvidence(paneTitleResolution, tab.title)
+
   if (!titleEvidence) {
     // Why: launch metadata predates TUI identity; require a matching current title
     // before listing either launched or manually started panes.
     return null
   }
+
   const disabledReason =
     titleEvidence.status === 'permission' ? 'Agent needs permission' : undefined
 
@@ -154,6 +164,7 @@ function mergeManualAgentTitleTarget(
   if (targets.some((existing) => existing.tabId === target.tabId)) {
     return
   }
+
   targets.push(target)
 }
 
@@ -162,8 +173,10 @@ function mergeLaunchAgentTitleTarget(
   target: NotesSendAgentTarget
 ): void {
   const samePaneIndex = targets.findIndex((existing) => existing.paneKey === target.paneKey)
+
   if (samePaneIndex !== -1) {
     const existing = targets[samePaneIndex]
+
     if (existing.status === 'eligible' || existing.disabledReason === 'Agent needs permission') {
       return
     }
@@ -179,6 +192,7 @@ function mergeLaunchAgentTitleTarget(
           : target.agentType,
       tabTitle: existing.tabTitle || target.tabTitle
     }
+
     return
   }
 

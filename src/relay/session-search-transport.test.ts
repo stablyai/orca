@@ -7,6 +7,7 @@ import { fakeSearchService } from '../shared/ai-vault-search-test-fixture'
 import { setSessionSearchService } from '../main/ai-vault-search/session-search-service-registry'
 
 const cleanups: (() => void)[] = []
+
 afterEach(() => {
   cleanups.splice(0).forEach((close) => close())
   setSessionSearchService(null)
@@ -15,6 +16,7 @@ afterEach(() => {
 function wire(register: boolean) {
   let receive!: (data: Buffer) => void
   const host = new RelayDispatcher((data) => receive(Buffer.from(data)))
+
   const mux = new SshChannelMultiplexer({
     write: (data) => host.feed(data),
     onData: (callback) => {
@@ -22,14 +24,18 @@ function wire(register: boolean) {
     },
     onClose: () => {}
   })
+
   cleanups.push(() => {
     mux.dispose()
     host.dispose()
   })
+
   if (register) {
     new AiVaultHandler(host, { remoteHome: '/synthetic-host' })
   }
+
   const client = createSessionSearchClient((method, params) => mux.request(method, params), 'relay')
+
   return { host, mux, client }
 }
 
@@ -43,11 +49,13 @@ describe('session search over real relay frames', () => {
       kind: 'results',
       hits: [{ sessionId: 'host-session', source: { presence: 'present' } }]
     })
+
     const raw = await mux.request('aiVault.searchSessions', {
       query: 'needle',
       tier: 'conversation',
       refresh: true
     })
+
     expect(raw).toMatchObject({ hits: [{ source: { presence: 'present' } }] })
     expect(JSON.stringify(raw)).not.toContain('/host/transcript')
     expect(JSON.stringify(raw)).not.toContain('/host/codex')

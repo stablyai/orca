@@ -56,10 +56,12 @@ export function createGitLabApi(): WebGitLabApi {
     updateMR: async (args) => {
       if (args.updates.readyForReview) {
         const status = await getRemoteRuntimeStatus().catch(() => null)
+
         if (!status?.capabilities?.includes(GITLAB_READY_FOR_REVIEW_RUNTIME_CAPABILITY)) {
           return { ok: false, error: GITLAB_READY_FOR_REVIEW_UPDATE_REQUIRED_MESSAGE }
         }
       }
+
       return route<WebGitLabResult<'updateMR'>>(GITLAB_WEB_RPC_METHODS.updateMR, args)
     },
     updateMRReviewers: (args) =>

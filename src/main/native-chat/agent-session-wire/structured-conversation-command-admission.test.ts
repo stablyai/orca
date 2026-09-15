@@ -29,6 +29,7 @@ describe('conversationCommandBlocked background tasks', () => {
       contextWith({ state: 'monitoring', supportsTaskStop: true }),
       RECORD
     )
+
     expect(blocked).toBe('Stop background tasks before using this command.')
   })
 
@@ -43,6 +44,7 @@ describe('conversationCommandBlocked background tasks', () => {
       contextWith({ state: 'monitoring', supportsStopAll: false }),
       RECORD
     )
+
     expect(blocked).toBe('Wait for background tasks to finish before using this command.')
   })
 

@@ -38,6 +38,7 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
   const replaceWorkspacePortScans = useAppStore((s) => s.replaceWorkspacePortScans)
   const setWorkspacePortScanRefreshing = useAppStore((s) => s.setWorkspacePortScanRefreshing)
   const [detailsPort, setDetailsPort] = useState<WorkspacePort | null>(null)
+
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     other: true,
     external: true
@@ -52,7 +53,9 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
     if (!activeRepo || !runtimeTarget || !scanKey) {
       return Promise.resolve()
     }
+
     setWorkspacePortScanRefreshing(true)
+
     const promise = scanWorkspacePortsForTarget(runtimeTarget)
       .then((nextScan) => {
         publishWorkspacePortScanForHost({
@@ -82,6 +85,7 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
       .finally(() => {
         setWorkspacePortScanRefreshing(false)
       })
+
     return promise
   }, [
     activeRepo,
@@ -104,15 +108,19 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
       if (!activeRepo || !port.pid) {
         return
       }
+
       const result = await killWorkspacePortForTarget(runtimeTarget, {
         repoId: activeRepo.id,
         pid: port.pid,
         port: port.port
       })
+
       if (!result.ok) {
         toast.error(result.reason)
+
         return
       }
+
       toast.success(
         translate(
           'auto.components.right.sidebar.PortsPanel.97b562d21d',
@@ -120,12 +128,14 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
           { value0: port.port }
         )
       )
+
       const refreshResult = await refreshWorkspacePortScanAfterStop({
         runtimeTarget,
         replaceWorkspacePortScans,
         getWorkspacePortScansByKey: () => useAppStore.getState().workspacePortScansByKey,
         setWorkspacePortScanRefreshing
       })
+
       if (!refreshResult.ok) {
         toast.error(
           translate(
@@ -156,6 +166,7 @@ export function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }):
         }),
         localhostLabelRoute: resolveLocalhostLabelRouteForPort(useAppStore.getState(), port)
       })
+
       if (!result.ok) {
         toast.error(
           translate(

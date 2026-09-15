@@ -87,6 +87,7 @@ export function resolveSourceControlPrimaryActionDecision(
   }
 
   const createPrIntent = resolveCreatePrIntentDecision(inputs)
+
   if (createPrIntent) {
     return createPrIntent
   }
@@ -142,6 +143,7 @@ export function resolveSourceControlPrimaryActionDecision(
         hasOpenHostedReview,
         canPushLinkedReviewWithoutUpstream
       })
+
       if (linkedReviewAction) {
         return linkedReviewAction
       }
@@ -162,6 +164,7 @@ export function resolveSourceControlPrimaryActionDecision(
         requiresForceWithLease: true
       }
     }
+
     return {
       kind: 'sync',
       labelIntent: 'sync',
@@ -215,6 +218,7 @@ function shouldOfferCreateReviewLoadingAction(
   if (!supportsHostedReviewCreation(hostedReviewCreation?.provider)) {
     return false
   }
+
   return (
     hostedReviewCreation.blockedReason !== 'existing_review' &&
     hostedReviewCreation.blockedReason !== 'unsupported_provider'
@@ -246,9 +250,11 @@ function resolveCreatePrIntentDecision(
     branchCommitsAhead: inputs.branchCommitsAhead,
     hasCurrentBranch: inputs.hasCurrentBranch
   })
+
   if (!createPrIntent.eligible) {
     return null
   }
+
   return {
     kind: 'create_pr_intent',
     labelIntent: 'create_pr',
@@ -264,6 +270,7 @@ function resolveLinkedReviewSourceControlPrimaryAction(args: {
   if (!args.hasOpenHostedReview) {
     return null
   }
+
   if (args.canPushLinkedReviewWithoutUpstream) {
     return {
       kind: 'push',
@@ -272,6 +279,7 @@ function resolveLinkedReviewSourceControlPrimaryAction(args: {
       disabled: false
     }
   }
+
   return {
     kind: 'commit',
     labelIntent: 'commit',

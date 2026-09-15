@@ -29,10 +29,13 @@ function mockExecFile(
     (command: string, args: string[], _opts: unknown, cb: unknown) => {
       const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
       const result = implementation(command, args)
+
       if (result instanceof Error) {
         callback(result, { stdout: '', stderr: '' })
+
         return
       }
+
       callback(null, { stdout: result.stdout, stderr: result.stderr ?? '' })
     }
   )
@@ -67,6 +70,7 @@ async function withProcessPlatform<T>(
 ): Promise<T> {
   const descriptor = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return await run()
   } finally {
@@ -98,6 +102,7 @@ describe('isProcessAlive', () => {
       err.code = 'ESRCH'
       throw err
     })
+
     try {
       expect(isProcessAlive(2147483646)).toBe(false)
     } finally {
@@ -111,6 +116,7 @@ describe('isProcessAlive', () => {
       err.code = 'EPERM'
       throw err
     })
+
     try {
       expect(isProcessAlive(1)).toBe(true)
     } finally {
@@ -314,6 +320,7 @@ describe('getForegroundProcessName', () => {
         if (args[0] === '-axo') {
           return { stdout: ['100 99 Ss   zsh -l', '101 100 S+   vim notes.md'].join('\n') }
         }
+
         return new Error('unexpected command')
       })
 
@@ -331,6 +338,7 @@ describe('getForegroundProcessName', () => {
             stdout: ['100 99 Ss   zsh -l', '101 100 S+   claude --model haiku'].join('\n')
           }
         }
+
         return new Error('unexpected command')
       })
 
@@ -348,6 +356,7 @@ describe('getForegroundProcessName', () => {
             )
           }
         }
+
         return new Error('unexpected command')
       })
 
@@ -382,6 +391,7 @@ describe('getForegroundProcessName', () => {
             ].join('\n')
           }
         }
+
         return new Error('unexpected command')
       })
 
@@ -401,6 +411,7 @@ describe('getForegroundProcessName', () => {
             ].join('\n')
           }
         }
+
         return new Error('unexpected command')
       })
 
@@ -420,6 +431,7 @@ describe('getForegroundProcessName', () => {
             ].join('\n')
           }
         }
+
         return new Error('unexpected command')
       })
 
@@ -436,6 +448,7 @@ describe('getForegroundProcessName', () => {
             stdout: ['100 99 Ss   bash -l', '101 100 S+   omp', '102 101 S+   pi'].join('\n')
           }
         }
+
         return new Error('unexpected command')
       })
 
@@ -451,6 +464,7 @@ describe('getForegroundProcessName', () => {
             stdout: ['100 99 Ss   bash -l', '101 100 S+   omp', '102 101 S+   pi'].join('\n')
           }
         }
+
         return new Error('unexpected command')
       })
 
@@ -483,6 +497,7 @@ describe('getForegroundProcessName', () => {
         if (args[0] === '-axo') {
           return { stdout: ['100 99 Ss   bash -l', '101 100 S+   pi'].join('\n') }
         }
+
         return new Error('unexpected command')
       })
 
@@ -498,6 +513,7 @@ describe('getForegroundProcessName', () => {
         if (args[0] === '-axo') {
           return { stdout: ['100 99 Ss   bash -l', '101 100 S+   vim notes.txt'].join('\n') }
         }
+
         return new Error('unexpected command')
       })
 
@@ -516,6 +532,7 @@ describe('getForegroundProcessName', () => {
             stdout: ['100 1 Ss bash', '100 1 Ss+ bash', '101 100 S node /opt/codex'].join('\n')
           }
         }
+
         return new Error('unexpected command')
       })
 
@@ -528,6 +545,7 @@ describe('getForegroundProcessName', () => {
       if (args[0] === '-axo') {
         return new Error('ps table unavailable')
       }
+
       return { stdout: 'bash\n' }
     })
 
@@ -548,6 +566,7 @@ describe('processHasChildren', () => {
         if (args[0] === '-axo') {
           return { stdout: PS_TABLE }
         }
+
         return new Error('unexpected command')
       })
 
@@ -564,6 +583,7 @@ describe('processHasChildren', () => {
         if (args[0] === '-axo') {
           return { stdout: PS_TABLE }
         }
+
         return new Error('unexpected command')
       })
 
@@ -586,6 +606,7 @@ describe('processHasChildren', () => {
         if (args[0] === '-axo') {
           return { stdout: table }
         }
+
         return new Error('unexpected command')
       })
 
@@ -649,6 +670,7 @@ describe('inspectPtyChildProcesses on Windows', () => {
       resetWindowsProcessRowsSnapshotForTests()
       mockUnreadableWindowsProcessTable()
       const alive = vi.spyOn(process, 'kill').mockReturnValue(true as never)
+
       try {
         await expect(inspectPtyChildProcesses(100)).resolves.toBe('unverifiable')
         // The compatibility boolean keeps spelling unverifiable `false`: it reaches clients that
@@ -665,11 +687,13 @@ describe('inspectPtyChildProcesses on Windows', () => {
       // The root is absent from the snapshot, which on its own cannot distinguish a filtered
       // table from an exited shell. Only ESRCH settles it.
       mockWindowsProcessTable([{ pid: 900, ppid: 1, name: 'explorer.exe' }])
+
       const gone = vi.spyOn(process, 'kill').mockImplementation(() => {
         const error = new Error('no such process') as NodeJS.ErrnoException
         error.code = 'ESRCH'
         throw error
       })
+
       try {
         await expect(inspectPtyChildProcesses(100)).resolves.toBe('no-children')
       } finally {

@@ -29,6 +29,7 @@ function splitBalanced(items: readonly TreemapInput[]): {
   second: TreemapInput[]
 } {
   const total = sumSizes(items)
+
   if (items.length <= 1 || total <= 0) {
     return { first: [...items], second: [] }
   }
@@ -36,16 +37,20 @@ function splitBalanced(items: readonly TreemapInput[]): {
   const target = total / 2
   let running = 0
   let splitIndex = 0
+
   for (let index = 0; index < items.length; index += 1) {
     const next = running + Math.max(0, items[index].sizeBytes)
+
     if (index > 0 && Math.abs(target - running) < Math.abs(target - next)) {
       break
     }
+
     running = next
     splitIndex = index + 1
   }
 
   splitIndex = Math.min(items.length - 1, Math.max(1, splitIndex))
+
   return {
     first: items.slice(0, splitIndex),
     second: items.slice(splitIndex)
@@ -70,10 +75,12 @@ function layoutTreemapRecursive(
       depth,
       index: output.length
     })
+
     return
   }
 
   const total = sumSizes(items)
+
   if (total <= 0) {
     return
   }
@@ -96,6 +103,7 @@ function layoutTreemapRecursive(
       depth + 1,
       output
     )
+
     return
   }
 
@@ -118,7 +126,9 @@ export function buildTreemapLayout(items: readonly TreemapInput[]): TreemapRect[
   const filtered = items
     .filter((item) => item.sizeBytes > 0)
     .sort((a, b) => b.sizeBytes - a.sizeBytes || a.label.localeCompare(b.label))
+
   const output: TreemapRect[] = []
   layoutTreemapRecursive(filtered, { x: 0, y: 0, width: 100, height: 100 }, 0, output)
+
   return output
 }

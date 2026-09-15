@@ -10,6 +10,7 @@ export function isEditableMobileTerminalArtifactPreview(
   if (readOnly) {
     return false
   }
+
   return (
     (preview.status === 'ready' && preview.kind !== 'image' && !preview.truncated) ||
     preview.status === 'empty'

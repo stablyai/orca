@@ -12,8 +12,10 @@ import {
 function abortError(): Error {
   const error = new Error('The operation was aborted.')
   error.name = 'AbortError'
+
   return error
 }
+
 const GLOBAL_OPTIONS_WITH_VALUE = new Set([
   '-c',
   '-C',
@@ -34,45 +36,58 @@ export function resolveGitFetchHeadCommand(
   let cwd = initialCwd
   let gitDir: string | undefined
   let subcommandIndex = -1
+
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
+
     if (arg === '-C' && args[index + 1]) {
       cwd = path.resolve(cwd, args[index + 1])
       index += 1
       continue
     }
+
     if (arg.startsWith('-C') && arg.length > 2) {
       cwd = path.resolve(cwd, arg.slice(2))
       continue
     }
+
     if (arg === '--git-dir' && args[index + 1]) {
       gitDir = path.resolve(cwd, args[index + 1])
       index += 1
       continue
     }
+
     if (arg.startsWith('--git-dir=')) {
       gitDir = path.resolve(cwd, arg.slice('--git-dir='.length))
       continue
     }
+
     if (GLOBAL_OPTIONS_WITH_VALUE.has(arg)) {
       index += 1
       continue
     }
+
     if (arg.startsWith('-')) {
       continue
     }
+
     subcommandIndex = index
     break
   }
+
   const subcommand = args[subcommandIndex]
+
   if (subcommand === 'pull') {
     return { needsLock: true, cwd, gitDir }
   }
+
   if (subcommand !== 'fetch') {
     return { needsLock: false, cwd, gitDir }
   }
+
   let writesFetchHead = true
   let updatesRemoteTrackingRef = false
+
   for (const arg of args.slice(subcommandIndex + 1)) {
     if (arg === '--no-write-fetch-head') {
       writesFetchHead = false
@@ -82,6 +97,7 @@ export function resolveGitFetchHeadCommand(
       updatesRemoteTrackingRef = true
     }
   }
+
   // Why: explicit tracking-ref updates race sibling-worktree fetch transactions even without FETCH_HEAD.
   return { needsLock: writesFetchHead || updatesRemoteTrackingRef, cwd, gitDir }
 }
@@ -110,10 +126,12 @@ function hostPath(): typeof path.posix {
 function resolveMetadataPointer(basePath: string, rawPointer: string): string {
   if (process.platform === 'win32' && !isWslUncPath(basePath)) {
     const drivePath = toWindowsWslDrivePath(rawPointer)
+
     if (drivePath) {
       return drivePath
     }
   }
+
   return hostPath().resolve(basePath, rawPointer)
 }
 
@@ -125,6 +143,7 @@ function canonicalizeFetchHeadLockKey(key: string): string {
   if (process.platform !== 'win32') {
     return key
   }
+
   return foldWslUncPathCaseInsensitiveParts(key) ?? key
 }
 
@@ -137,6 +156,7 @@ async function realpathOrResolve(target: string, signal: AbortSignal | undefined
     if (signal?.aborted) {
       throw abortError()
     }
+
     return hostPath().resolve(target)
   }
 }
@@ -148,16 +168,21 @@ async function fetchLockPath(
 ): Promise<string> {
   let current = await realpathOrResolve(worktreePath, signal)
   let gitDir = explicitGitDir
+
   while (!gitDir) {
     const dotGitPath = hostPath().join(current, '.git')
+
     try {
       const metadata = await waitForPromiseWithSignal(stat(dotGitPath), signal)
+
       if (metadata.isDirectory()) {
         gitDir = dotGitPath
         break
       }
+
       const contents = await readFile(dotGitPath, { encoding: 'utf-8', signal })
       const marker = parseGitdirMarkerPayload(contents)
+
       if (marker) {
         gitDir = resolveMetadataPointer(current, marker)
         break
@@ -167,19 +192,25 @@ async function fetchLockPath(
         throw abortError()
       }
     }
+
     const parent = hostPath().dirname(current)
+
     if (parent === current) {
       gitDir = hostPath().join(current, '.git')
       break
     }
+
     current = parent
   }
+
   let commonGitDir = gitDir
+
   try {
     const contents = await readFile(hostPath().join(gitDir, 'commondir'), {
       encoding: 'utf-8',
       signal
     })
+
     if (contents.trim()) {
       commonGitDir = resolveMetadataPointer(gitDir, contents.trim())
     }
@@ -188,7 +219,9 @@ async function fetchLockPath(
       throw abortError()
     }
   }
+
   const canonicalGitDir = await realpathOrResolve(commonGitDir, signal)
+
   return canonicalizeFetchHeadLockKey(hostPath().join(canonicalGitDir, 'FETCH_HEAD'))
 }
 
@@ -199,5 +232,6 @@ export async function runWithGitFetchHeadLock<T>(
   explicitGitDir?: string
 ): Promise<T> {
   const key = await fetchLockPath(worktreePath, signal, explicitGitDir)
+
   return runWithGitOperationLock(key, signal, run)
 }

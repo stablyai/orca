@@ -22,6 +22,7 @@ export function hasBoundedGitHubMarkdownImageUrlText(value: string): boolean {
 function isHttpImageUrl(value: string): boolean {
   try {
     const parsed = new URL(value)
+
     return parsed.protocol === 'https:' || parsed.protocol === 'http:'
   } catch {
     return false
@@ -34,11 +35,14 @@ export function getGitHubMarkdownImageUrlState(value: string): GitHubMarkdownIma
   }
 
   const trimmed = value.trim()
+
   if (!trimmed) {
     return { status: 'empty' }
   }
+
   if (!isHttpImageUrl(trimmed)) {
     return { status: 'invalid' }
   }
+
   return { status: 'valid', url: trimmed }
 }

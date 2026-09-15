@@ -12,9 +12,11 @@ import { expect, test } from './helpers/orca-app'
 async function openPluginSettings(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
+
     if (!state) {
       throw new Error('store unavailable')
     }
+
     state.openSettingsTarget({ pane: 'plugins', repoId: null })
     state.openSettingsPage()
   })
@@ -24,10 +26,13 @@ async function openPluginSettings(page: Page): Promise<void> {
 async function openDemoPanel(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
+
     if (!state) {
       throw new Error('store unavailable')
     }
+
     state.closeSettingsPage()
+
     if (!state.rightSidebarOpen) {
       state.toggleRightSidebar()
     }
@@ -47,23 +52,31 @@ async function createWorktree(page: Page, name: string): Promise<string> {
   await page.waitForFunction(
     () => {
       const state = window.__store?.getState()
+
       return Boolean(state && Object.values(state.worktreesByRepo).flat().length > 0)
     },
     undefined,
     { timeout: 15_000 }
   )
+
   return page.evaluate(async (worktreeName) => {
     const state = window.__store?.getState()
+
     if (!state) {
       throw new Error('store unavailable')
     }
+
     const worktrees = Object.values(state.worktreesByRepo).flat()
+
     const active =
       worktrees.find((worktree) => worktree.id === state.activeWorktreeId) ?? worktrees[0]
+
     if (!active) {
       throw new Error('active worktree was not found')
     }
+
     const result = await state.createWorktree(active.repoId, worktreeName)
+
     return result.worktree.id
   }, name)
 }
@@ -81,16 +94,21 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
       const settings = await window.api.settings.set({ pluginSystemEnabled: true })
       window.__store?.setState({ settings })
       const result = await window.api.plugins.install({ kind: 'local-path', path: sourcePath })
+
       if (!result.ok) {
         throw new Error(result.error)
       }
+
       const pending = (await window.api.plugins.refresh()).find(
         (entry) => entry.pluginKey === result.pluginKey
       )
+
       if (!pending) {
         throw new Error('installed plugin was not listed')
       }
+
       let blocked = false
+
       try {
         await window.api.plugins.invokeCommand({
           pluginKey: result.pluginKey,
@@ -100,6 +118,7 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
       } catch {
         blocked = true
       }
+
       return { pluginKey: result.pluginKey, status: pending.status, blocked }
     }, pluginRoot)
 
@@ -126,13 +145,16 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
         commandId: 'hello-ping',
         args: { source: 'e2e' }
       })
+
       const second = await window.api.plugins.invokeCommand({
         pluginKey,
         commandId: 'hello-ping',
         args: { source: 'e2e' }
       })
+
       return { first, second }
     }, installed.pluginKey)
+
     expect(commandResults.first).toEqual({ pong: true, count: 1, args: { source: 'e2e' } })
     expect(commandResults.second).toEqual({ pong: true, count: 2, args: { source: 'e2e' } })
 
@@ -176,6 +198,7 @@ test('runs hello-orca panel, command, and event behind visible consent', async (
         }, createdWorktreeId)
         .catch(() => undefined)
     }
+
     await rm(tempRoot, { recursive: true, force: true })
   }
 })

@@ -82,6 +82,7 @@ function ActivityThreadHoverCardContent({
 }): React.JSX.Element {
   const { worktree, repo } = thread
   const foundation = useWorktreeCardFoundation({ worktree, repo: repo ?? undefined })
+
   const review = useWorktreeCardReviewDetails({
     worktree,
     repo: repo ?? undefined,
@@ -90,6 +91,7 @@ function ActivityThreadHoverCardContent({
     cardProps: foundation.cardProps,
     newCardStyle: foundation.newCardStyle
   })
+
   const linked = useWorktreeCardLinkedDetails({
     worktree,
     newCardStyle: foundation.newCardStyle,
@@ -176,6 +178,7 @@ function ActivityThreadHoverCardContent({
     if (!secondary.hoverIssue?.url) {
       return
     }
+
     detailsHoverControl.closeHover()
     void copyLinkedWorkItemLink(
       secondary.hoverIssue.url,
@@ -187,6 +190,7 @@ function ActivityThreadHoverCardContent({
     if (!secondary.hoverReview?.url) {
       return
     }
+
     void copyLinkedWorkItemLink(
       secondary.hoverReview.url,
       translate('auto.components.sidebar.WorktreeCardMeta.reviewLinkLabel', '{{value0}} link', {

@@ -35,9 +35,11 @@ export async function prepareCodexSessionResume(args: {
     ...(args.fileIsRegular ? { fileIsRegular: args.fileIsRegular } : {}),
     ...(args.listSessionFiles ? { listSessionFiles: args.listSessionFiles } : {})
   })
+
   if (provenance.outcome === 'fresh') {
     return provenance
   }
+
   return {
     outcome: 'resume',
     codexHomePath: await args.resolveVerifiedResumeHome({

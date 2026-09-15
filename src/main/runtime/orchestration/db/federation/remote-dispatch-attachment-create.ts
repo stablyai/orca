@@ -26,6 +26,7 @@ export function createRemoteDispatchAttachment(
   }
 ): RemoteDispatchAttachmentRow {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     if (params.homePeerFingerprint !== params.mutationReceipt.callerFingerprint) {
       throw new OrchestrationError(
@@ -33,10 +34,12 @@ export function createRemoteDispatchAttachment(
         'The authenticated Run-home peer does not match the attachment request.'
       )
     }
+
     const existingReceipt = this.getMutationReceipt(
       params.mutationReceipt.callerFingerprint,
       params.mutationReceipt.requestId
     )
+
     if (existingReceipt) {
       throw new OrchestrationError(
         existingReceipt.method === params.mutationReceipt.method &&
@@ -46,10 +49,13 @@ export function createRemoteDispatchAttachment(
         `Remote attachment request ${params.mutationReceipt.requestId} already exists.`
       )
     }
+
     const runId = params.runId ?? federatedStubHomeRunId(params.dispatchId)
+
     if (!runId.trim()) {
       throw new OrchestrationError('invalid_argument', 'Missing Run ID')
     }
+
     this.db
       .prepare(
         `INSERT OR IGNORE INTO runs (id, objective, home_database, consumer_generation, legacy)
@@ -81,6 +87,7 @@ export function createRemoteDispatchAttachment(
       depth: params.depth ?? 1
     })
     this.db.exec('COMMIT')
+
     return this.getRemoteDispatchAttachment(params.dispatchId) as RemoteDispatchAttachmentRow
   } catch (error) {
     this.db.exec('ROLLBACK')
@@ -112,12 +119,14 @@ export function recordRemoteAttachmentStage(
   }
 ): RemoteDispatchAttachmentRow {
   const current = this.getRemoteDispatchAttachment(params.dispatchId)
+
   if (!current) {
     throw new OrchestrationError(
       'dispatch_not_found',
       `Remote Dispatch ${params.dispatchId} was not found.`
     )
   }
+
   this.db
     .prepare(
       `UPDATE remote_dispatch_attachments
@@ -138,6 +147,7 @@ export function recordRemoteAttachmentStage(
       params.lastError ?? current.last_error,
       params.dispatchId
     )
+
   return this.getRemoteDispatchAttachment(params.dispatchId) as RemoteDispatchAttachmentRow
 }
 
@@ -150,16 +160,20 @@ export function updateRemoteAttachmentSetupEvidence(
   }
 ): { attachment: RemoteDispatchAttachmentRow; changed: boolean } {
   const current = this.getRemoteDispatchAttachment(params.dispatchId)
+
   if (!current) {
     throw new OrchestrationError(
       'dispatch_not_found',
       `Remote Dispatch ${params.dispatchId} was not found.`
     )
   }
+
   const effects = JSON.stringify(params.effects)
+
   if (current.setup_state === params.setupState && current.effects === effects) {
     return { attachment: current, changed: false }
   }
+
   this.db
     .prepare(
       `UPDATE remote_dispatch_attachments
@@ -167,6 +181,7 @@ export function updateRemoteAttachmentSetupEvidence(
        WHERE dispatch_id = ?`
     )
     .run(params.setupState, effects, params.dispatchId)
+
   return {
     attachment: this.getRemoteDispatchAttachment(params.dispatchId) as RemoteDispatchAttachmentRow,
     changed: true

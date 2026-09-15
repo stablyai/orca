@@ -16,10 +16,12 @@ export type LeafSpec = {
 export function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason?: unknown) => void
+
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, resolve, reject }
 }
 
@@ -28,9 +30,11 @@ export function makeState(
   leaves: readonly LeafSpec[]
 ): TerminalOrphanRecoveryState {
   const localTabId = 'web-terminal-host-tab'
+
   const ptyIdsByLeafId = Object.fromEntries(
     leaves.map((leaf) => [leaf.leafId, toRemoteRuntimePtyId(leaf.handle, ENVIRONMENT_ID)])
   )
+
   const root =
     leaves.length === 1
       ? { type: 'leaf' as const, leafId: leaves[0]!.leafId }
@@ -41,6 +45,7 @@ export function makeState(
           first: { type: 'leaf' as const, leafId: leaves[0]!.leafId },
           second: { type: 'leaf' as const, leafId: leaves[1]!.leafId }
         }
+
   return {
     tabsByWorktree: {
       [worktree]: [
@@ -122,6 +127,7 @@ export function pendingSurface(
       terminal
     }
   }
+
   return {
     type: 'terminal',
     id: `${tabId}::${leafId}`,

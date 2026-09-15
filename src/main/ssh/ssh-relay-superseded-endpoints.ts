@@ -91,9 +91,11 @@ export function supersededRelayEndpointListCommand(options: {
 /** Remove a socket inode proven to have no holder, so version-dir GC can reclaim the tree. */
 export function removeStaleRelayEndpointCommand(sockPath: string): string {
   const remove = `rm -f ${shellEscape(sockPath)}`
+
   if (!sockPath.startsWith(SHORT_RELAY_SOCKET_DIR_PREFIX)) {
     return remove
   }
+
   // `gcOldRelayVersions` only walks `$HOME/.orca-remote`, so nothing else would ever
   // reclaim a relocated version segment. `rmdir` fails while another target of the same
   // build still has a socket there, which is exactly the condition for keeping it.
@@ -106,9 +108,11 @@ export function classifySupersededRelay(
   if (incumbent.verdict === 'exited') {
     return incumbent.socketPresent ? 'stale-endpoint-removed' : 'unverifiable'
   }
+
   if (incumbent.verdict !== 'live') {
     return 'unverifiable'
   }
+
   return isReapableRelayHusk(incumbent) ? 'reap-candidate' : 'retained-live-work'
 }
 
@@ -120,7 +124,9 @@ export async function sweepSupersededRelayEndpoints(
   if (isWindowsRemoteHost(hostPlatform)) {
     return []
   }
+
   let listing: string
+
   try {
     listing = await execCommand(conn, supersededRelayEndpointListCommand(options), {
       wrapCommand: true,
@@ -129,6 +135,7 @@ export async function sweepSupersededRelayEndpoints(
   } catch {
     return []
   }
+
   const sockPaths = listing
     .split('\n')
     .map((line) => line.trim())
@@ -136,8 +143,10 @@ export async function sweepSupersededRelayEndpoints(
     .slice(0, MAX_SWEPT_ENDPOINTS)
 
   const findings: SupersededRelayFinding[] = []
+
   for (const sockPath of sockPaths) {
     options.signal?.throwIfAborted()
+
     const incumbent = await probeRelayEndpointIncumbent(
       conn,
       hostPlatform,
@@ -145,13 +154,16 @@ export async function sweepSupersededRelayEndpoints(
       sockPath,
       { signal: options.signal }
     )
+
     findings.push({
       sockPath,
       outcome: await applySupersededRelayDecision(conn, incumbent, options),
       incumbent
     })
   }
+
   logSupersededRelayFindings(findings)
+
   return findings
 }
 
@@ -161,36 +173,43 @@ async function applySupersededRelayDecision(
   options: SupersededRelaySweepOptions
 ): Promise<SupersededRelayOutcome> {
   const decision = classifySupersededRelay(incumbent)
+
   if (decision === 'stale-endpoint-removed') {
     try {
       await execCommand(conn, removeStaleRelayEndpointCommand(incumbent.sockPath), {
         wrapCommand: true,
         signal: options.signal
       })
+
       return 'stale-endpoint-removed'
     } catch {
       return 'unverifiable'
     }
   }
+
   if (decision !== 'reap-candidate') {
     return decision
   }
+
   return reapEmptyRelayHusk(conn, incumbent, { signal: options.signal })
 }
 
 function logSupersededRelayFindings(findings: SupersededRelayFinding[]): void {
   for (const finding of findings) {
     const detail = describeRelayEndpointIncumbent(finding.incumbent)
+
     if (finding.outcome === 'retained-live-work') {
       console.warn(
         `[ssh-relay] Superseded relay retained (holds live work; not signalled): ${detail}`
       )
       continue
     }
+
     if (finding.outcome === 'unverifiable' || finding.outcome === 'reap-unconfirmed') {
       console.warn(`[ssh-relay] Superseded relay ${finding.outcome}: ${detail}`)
       continue
     }
+
     console.log(`[ssh-relay] Superseded relay ${finding.outcome}: ${detail}`)
   }
 }

@@ -55,6 +55,7 @@ describe('orchestration federated worker output', () => {
     workerAdvertisesDurableRelease = true
     workerTerminalAvailable = true
     remoteCalls = []
+
     const transport: OrchestrationEnvironmentTransport = {
       resolve: () => ({
         environmentId: 'environment_windows',
@@ -63,8 +64,10 @@ describe('orchestration federated worker output', () => {
       }),
       call: async (_selector, method, params, _timeoutMs, envelope) => {
         remoteCalls.push(method)
+
         if (method === 'status.get') {
           const status = workerRuntime.getStatus()
+
           return {
             id: 'status',
             ok: true,
@@ -87,6 +90,7 @@ describe('orchestration federated worker output', () => {
             _meta: { runtimeId: workerRuntime.getRuntimeId() }
           }
         }
+
         if (method === 'orchestration.federationReadOutput' && !workerSupportsStructuredRead) {
           return {
             id: `remote_${method}`,
@@ -94,6 +98,7 @@ describe('orchestration federated worker output', () => {
             error: { code: 'method_not_found', message: `Unknown method: ${method}` }
           }
         }
+
         if (
           method === 'orchestration.federationFleetSnapshot' &&
           !workerAdvertisesNewCapabilities
@@ -105,6 +110,7 @@ describe('orchestration federated worker output', () => {
             error: { code: 'method_not_found', message: `Unknown method: ${method}` }
           }
         }
+
         if (method === 'orchestration.federationFleetSnapshot' && workerFleetUnavailable) {
           return {
             id: `remote_${method}`,
@@ -112,6 +118,7 @@ describe('orchestration federated worker output', () => {
             error: { code: 'relay_provider_unavailable', message: 'relay unavailable' }
           }
         }
+
         if (method === 'orchestration.federationRelease' && workerReleaseUnavailable) {
           return {
             id: `remote_${method}`,
@@ -119,6 +126,7 @@ describe('orchestration federated worker output', () => {
             error: { code: 'relay_provider_unavailable', message: 'relay unavailable' }
           }
         }
+
         return (await workerDispatcher.dispatch({
           id: `remote_${method}`,
           authToken: 'run-home-device-token',
@@ -130,6 +138,7 @@ describe('orchestration federated worker output', () => {
         })) as RuntimeRpcResponse<unknown>
       }
     }
+
     homeRuntime = new OrcaRuntimeService(null, undefined, {
       orchestrationEnvironmentTransport: transport
     })
@@ -146,9 +155,11 @@ describe('orchestration federated worker output', () => {
 
   afterEach(() => {
     homeRuntime.stopOrchestrationFederationRelay()
+
     for (const db of databases.splice(0)) {
       db.close()
     }
+
     rmSync(workerDbDirectory, { recursive: true, force: true })
   })
 
@@ -160,6 +171,7 @@ describe('orchestration federated worker output', () => {
           coordinatorHandle: 'term_coord',
           coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
         })
+
     return homeDb.createTask({ spec: 'Read Windows worker output', runId: run.id })
   }
 
@@ -224,6 +236,7 @@ describe('orchestration federated worker output', () => {
       if (!workerTerminalAvailable) {
         throw new Error('terminal_handle_stale')
       }
+
       return {
         handle: 'term_windows_worker',
         worktreeId: 'repo::windows-worktree',
@@ -240,6 +253,7 @@ describe('orchestration federated worker output', () => {
       if (!workerTerminalAvailable) {
         throw new Error('terminal_handle_stale')
       }
+
       return {
         handle: 'term_windows_worker',
         status: 'running',
@@ -250,6 +264,7 @@ describe('orchestration federated worker output', () => {
     })
     vi.spyOn(runtime, 'closeTerminal').mockImplementation(async () => {
       workerTerminalAvailable = false
+
       return { ptyKilled: true } as never
     })
   }
@@ -261,6 +276,7 @@ describe('orchestration federated worker output', () => {
       workerDb = new OrchestrationDb(workerDbPath)
       databases.push(workerDb)
     }
+
     workerRuntime = new OrcaRuntimeService()
     workerRuntime.setOrchestrationDb(workerDb)
     configureWorkerRuntime(workerRuntime)
@@ -273,6 +289,7 @@ describe('orchestration federated worker output', () => {
   async function startRemoteWorker(): Promise<string> {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
+
     return homeDb.getDispatchContext(task.id)!.id
   }
 
@@ -300,6 +317,7 @@ describe('orchestration federated worker output', () => {
       state: 'succeeded',
       stage: 'worker_report_settled'
     })
+
     return dispatchId
   }
 
@@ -312,6 +330,7 @@ describe('orchestration federated worker output', () => {
       method: 'orchestration.workerShow',
       params: { dispatch: dispatchId }
     })
+
     const read = await homeDispatcher.dispatch({
       id: 'rpc_remote_read',
       authToken: 'coordinator-token',
@@ -349,13 +368,16 @@ describe('orchestration federated worker output', () => {
       method: 'orchestration.workerRead',
       params: { dispatch: dispatchId }
     })
+
     const cursor = (automatic as { result: { cursor: string } }).result.cursor
+
     const continued = await homeDispatcher.dispatch({
       id: 'rpc_remote_legacy_continue',
       authToken: 'coordinator-token',
       method: 'orchestration.workerRead',
       params: { dispatch: dispatchId, cursor }
     })
+
     const required = await homeDispatcher.dispatch({
       id: 'rpc_remote_legacy_transcript',
       authToken: 'coordinator-token',
@@ -463,21 +485,25 @@ describe('orchestration federated worker output', () => {
       remoteCalls.filter((method) => method === 'orchestration.federationFleetSnapshot')
     ).toHaveLength(1)
     expect(healthy).toMatchObject({ ok: true })
+
     const healthyWorker = (
       healthy as { result: { workers: { dispatchId: string; projection: unknown }[] } }
     ).result.workers.find((worker) => worker.dispatchId === firstDispatchId)
+
     expect(healthyWorker?.projection).toMatchObject({
       host: { kind: 'remote', id: 'environment_windows' },
       liveness: { verdict: 'live', source: 'execution_host' }
     })
 
     workerFleetUnavailable = true
+
     const unavailable = await homeDispatcher.dispatch({
       id: 'rpc_remote_fleet_unavailable',
       authToken: 'coordinator-token',
       method: 'orchestration.workerList',
       params: { includeRemote: true }
     })
+
     expect(unavailable).toMatchObject({
       ok: true,
       result: {
@@ -490,9 +516,11 @@ describe('orchestration federated worker output', () => {
         ]
       }
     })
+
     const unavailableWorker = (
       unavailable as { result: { workers: { dispatchId: string; projection: unknown }[] } }
     ).result.workers.find((worker) => worker.dispatchId === firstDispatchId)
+
     expect(unavailableWorker?.projection).toMatchObject({
       liveness: { verdict: 'unverifiable', reason: 'host_unavailable' }
     })
@@ -501,6 +529,7 @@ describe('orchestration federated worker output', () => {
   it('negotiates release on the execution host and never treats relay loss as exit', async () => {
     const dispatchId = await startSettledRemoteWorker()
     workerReleaseUnavailable = true
+
     const unavailable = await homeDispatcher.dispatch({
       id: 'rpc_remote_release_unavailable',
       authToken: 'coordinator-token',
@@ -509,6 +538,7 @@ describe('orchestration federated worker output', () => {
       method: 'orchestration.workerRelease',
       params: { dispatch: dispatchId }
     })
+
     expect(unavailable).toMatchObject({
       ok: true,
       result: {
@@ -520,6 +550,7 @@ describe('orchestration federated worker output', () => {
     expect(workerRuntime.closeTerminal).not.toHaveBeenCalled()
 
     workerReleaseUnavailable = false
+
     const replayedUnknown = await homeDispatcher.dispatch({
       id: 'rpc_remote_release_unavailable_replay',
       authToken: 'coordinator-token',
@@ -528,6 +559,7 @@ describe('orchestration federated worker output', () => {
       method: 'orchestration.workerRelease',
       params: { dispatch: dispatchId }
     })
+
     expect(replayedUnknown).toMatchObject({
       ok: true,
       result: { state: 'release_unknown', mutation: { replayed: true } }
@@ -542,6 +574,7 @@ describe('orchestration federated worker output', () => {
       method: 'orchestration.workerRelease',
       params: { dispatch: dispatchId }
     })
+
     expect(released).toMatchObject({
       ok: true,
       result: {
@@ -562,15 +595,18 @@ describe('orchestration federated worker output', () => {
       stage: 'released',
       agent_terminal_handle: null
     })
+
     const projected = await homeDispatcher.dispatch({
       id: 'rpc_remote_release_projection',
       authToken: 'coordinator-token',
       method: 'orchestration.workerList',
       params: {}
     })
+
     const projectedWorker = (
       projected as { result: { workers: { dispatchId: string; projection: unknown }[] } }
     ).result.workers.find((worker) => worker.dispatchId === dispatchId)
+
     expect(projectedWorker?.projection).toMatchObject({
       liveness: { verdict: 'exited', source: 'execution_host' },
       nextAction: { kind: 'none', argv: [] }
@@ -592,6 +628,7 @@ describe('orchestration federated worker output', () => {
       expect(archive).toBeDefined()
       expect(archive!.content.length).toBeLessThan(270_000)
       workerTerminalAvailable = false
+
       return { ptyKilled: true } as never
     })
 
@@ -603,6 +640,7 @@ describe('orchestration federated worker output', () => {
       method: 'orchestration.workerRelease',
       params: { dispatch: dispatchId }
     })
+
     expect(released).toMatchObject({
       ok: true,
       result: { state: 'released', archive: { source: 'terminal', status: 'captured' } }
@@ -614,6 +652,7 @@ describe('orchestration federated worker output', () => {
       method: 'orchestration.workerRead',
       params: { dispatch: dispatchId }
     })
+
     expect(afterRemoval).toMatchObject({
       ok: true,
       result: {
@@ -627,12 +666,14 @@ describe('orchestration federated worker output', () => {
     expect(JSON.stringify(afterRemoval)).not.toContain(capability)
 
     restartWorkerRuntime(true)
+
     const afterRestart = await homeDispatcher.dispatch({
       id: 'rpc_remote_read_archive_after_restart',
       authToken: 'coordinator-token',
       method: 'orchestration.workerRead',
       params: { dispatch: dispatchId }
     })
+
     expect(afterRestart).toMatchObject({
       ok: true,
       result: {
@@ -652,6 +693,7 @@ describe('orchestration federated worker output', () => {
       method: 'orchestration.workerRelease',
       params: { dispatch: dispatchId }
     })
+
     expect(replayed).toMatchObject({
       ok: true,
       result: {
@@ -702,18 +744,21 @@ describe('orchestration federated worker output', () => {
     workerSupportsStructuredRead = false
     const dispatchId = await startRemoteWorker()
     remoteCalls = []
+
     const read = await homeDispatcher.dispatch({
       id: 'rpc_old_peer_read',
       authToken: 'coordinator-token',
       method: 'orchestration.workerRead',
       params: { dispatch: dispatchId }
     })
+
     const fleet = await homeDispatcher.dispatch({
       id: 'rpc_old_peer_fleet',
       authToken: 'coordinator-token',
       method: 'orchestration.workerList',
       params: { includeRemote: true }
     })
+
     const release = await homeDispatcher.dispatch({
       id: 'rpc_old_peer_release',
       authToken: 'coordinator-token',
@@ -797,14 +842,17 @@ describe('orchestration federated worker output', () => {
       method: 'orchestration.workerRead',
       params: { dispatch: dispatchId }
     })
+
     const fleet = await homeDispatcher.dispatch({
       id: 'rpc_restarted_peer_fleet',
       authToken: 'coordinator-token',
       method: 'orchestration.workerList',
       params: { includeRemote: true }
     })
+
     // Read and fleet negotiate through the methods themselves, so neither spends a probe.
     expect(remoteCalls.filter((method) => method === 'status.get')).toHaveLength(0)
+
     const release = await homeDispatcher.dispatch({
       id: 'rpc_restarted_peer_release',
       authToken: 'coordinator-token',

@@ -4,21 +4,28 @@ import type * as GitHubEnterpriseRepositoryModule from './github-enterprise-repo
 
 const { clientMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./client-test-mocks')
+
   return { clientMocks: moduleMocks.createGitHubClientMocks(), moduleMocks }
 })
 
 vi.mock('./gh-utils', () => moduleMocks.ghUtilsModuleMock(clientMocks))
+
 vi.mock('../git/runner', () => moduleMocks.gitRunnerModuleMock(clientMocks))
+
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(clientMocks))
+
 vi.mock('./local-git-config-signature', () =>
   moduleMocks.localGitConfigSignatureModuleMock(clientMocks)
 )
+
 vi.mock('./github-enterprise-repository', async (importOriginal) =>
   moduleMocks.githubEnterpriseRepositoryModuleMock(
     await importOriginal<typeof GitHubEnterpriseRepositoryModule>()
   )
 )
+
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(clientMocks))
+
 vi.mock('./github-api-repository', async (importOriginal) =>
   moduleMocks.githubApiRepositoryModuleMock(
     clientMocks,
@@ -38,6 +45,7 @@ const {
 } = clientMocks
 
 const MERGED_BRANCH = 'fix-tab-strip-layout-test'
+
 const MERGED_HEAD_OID = 'current-head-oid'
 
 function mockMergedBranchPRLookup(): void {
@@ -162,6 +170,7 @@ describe('getPRForBranch SSH execution boundary', () => {
           : { stdout: '', stderr: '' }
       )
     }
+
     getSshGitProviderMock.mockReturnValue(sshGitProvider)
     mockMergedBranchPRLookup()
 
@@ -228,6 +237,7 @@ describe('getPRForBranch SSH execution boundary', () => {
 
   it('reads tracked upstreams through the SSH provider when it is registered', async () => {
     const forEachRefArgs = ['for-each-ref', '--format=%(refname)%00%(upstream)', 'refs/heads']
+
     const sshGitProvider = {
       exec: vi.fn(async (args: string[]) =>
         args[0] === 'for-each-ref'
@@ -235,6 +245,7 @@ describe('getPRForBranch SSH execution boundary', () => {
           : { stdout: '', stderr: '' }
       )
     }
+
     getSshGitProviderMock.mockReturnValue(sshGitProvider)
     mockUpstreamOnlyPRLookup()
 

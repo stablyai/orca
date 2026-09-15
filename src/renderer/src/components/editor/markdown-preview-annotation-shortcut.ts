@@ -11,9 +11,11 @@ export function isMarkdownPreviewAddReviewNoteShortcut(
 function closestAnnotationBlockKey(node: Node | null, root: HTMLElement): string | null {
   const element = node instanceof Element ? node : (node?.parentElement ?? null)
   const block = element?.closest('[data-annotation-block-key]') ?? null
+
   if (!block || !root.contains(block)) {
     return null
   }
+
   return block.getAttribute('data-annotation-block-key')
 }
 
@@ -29,6 +31,7 @@ export function getMarkdownAnnotationBlockKeyForSelection(
   if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
     return null
   }
+
   // Why: a selection spanning multiple blocks anchors the composer on the
   // block where the selection started, falling back to where it ended.
   return (
@@ -45,6 +48,7 @@ export function previewHasAnnotationBlockKey(root: HTMLElement, blockKey: string
       return true
     }
   }
+
   return false
 }
 
@@ -96,15 +100,19 @@ export function resolveMarkdownPreviewAddReviewNoteKey(options: {
     if (previewHasAnnotationBlockKey(root, activeAnnotationBlockKey)) {
       return { action: 'consume' }
     }
+
     // Fall through after clearing so a held/stale key does not permanently
     // suppress open. Repeat still must not open (below).
     if (event.repeat) {
       return { action: 'clear-stale-and-ignore' }
     }
+
     const blockKey = getMarkdownAnnotationBlockKeyForSelection(root, selection)
+
     if (blockKey) {
       return { action: 'open', blockKey }
     }
+
     return { action: 'clear-stale-and-ignore' }
   }
 
@@ -114,8 +122,10 @@ export function resolveMarkdownPreviewAddReviewNoteKey(options: {
   }
 
   const blockKey = getMarkdownAnnotationBlockKeyForSelection(root, selection)
+
   if (blockKey) {
     return { action: 'open', blockKey }
   }
+
   return { action: 'ignore' }
 }

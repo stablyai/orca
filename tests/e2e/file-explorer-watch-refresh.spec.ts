@@ -16,15 +16,19 @@ test('refreshes the visible tree after external Windows file changes', async ({ 
   const worktreePath = await orcaPage.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     if (!state || !worktreeId) {
       throw new Error('active worktree unavailable')
     }
+
     const worktree = Object.values(state.worktreesByRepo)
       .flat()
       .find((candidate) => candidate.id === worktreeId)
+
     if (!worktree) {
       throw new Error('active worktree path unavailable')
     }
+
     return worktree.path
   })
 
@@ -32,6 +36,7 @@ test('refreshes the visible tree after external Windows file changes', async ({ 
   const renamedName = 'WATCH-REFRESH-CASE.txt'
   const originalPath = path.join(worktreePath, originalName)
   const renamedPath = path.join(worktreePath, renamedName)
+
   const row = (name: string) =>
     orcaPage
       .locator('[data-file-explorer-row]')
@@ -39,6 +44,7 @@ test('refreshes the visible tree after external Windows file changes', async ({ 
 
   rmSync(originalPath, { force: true })
   rmSync(renamedPath, { force: true })
+
   try {
     await expect(row('README.md')).toBeVisible({ timeout: 10_000 })
     await orcaPage.waitForTimeout(2_000)

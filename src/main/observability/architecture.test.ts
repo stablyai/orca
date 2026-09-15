@@ -35,19 +35,24 @@ import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const REPO_ROOT = join(__dirname, '..', '..', '..')
+
 const TELEMETRY_DIR = join(REPO_ROOT, 'src', 'main', 'telemetry')
+
 const OBSERVABILITY_DIR = join(REPO_ROOT, 'src', 'main', 'observability')
 
 function listTsFiles(dir: string): string[] {
   const out: string[] = []
+
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry)
+
     if (statSync(full).isDirectory()) {
       out.push(...listTsFiles(full))
     } else if (entry.endsWith('.ts') || entry.endsWith('.tsx')) {
       out.push(full)
     }
   }
+
   return out
 }
 
@@ -58,12 +63,15 @@ function findOffendingImports(file: string, forbiddenSegment: string): string[] 
   const importRe = /(?:from\s+|import\(|require\()\s*(['"])([^'"]+)\1/g
   const offenders: string[] = []
   let m: RegExpExecArray | null
+
   while ((m = importRe.exec(text)) !== null) {
     const spec = m[2]
+
     if (spec.includes(forbiddenSegment)) {
       offenders.push(spec)
     }
   }
+
   return offenders
 }
 
@@ -71,16 +79,20 @@ describe('architectural invariant — telemetry / observability lane isolation',
   it('no file in src/main/telemetry/ imports from observability', () => {
     const files = listTsFiles(TELEMETRY_DIR)
     expect(files.length).toBeGreaterThan(0) // sanity: directory exists
+
     const violations = files.flatMap((f) => {
       const bad = findOffendingImports(f, 'observability')
+
       return bad.map((spec) => `${relative(REPO_ROOT, f)}: imports '${spec}'`)
     })
+
     expect(violations, violations.join('\n')).toEqual([])
   })
 
   it('no file in src/main/observability/ imports from telemetry', () => {
     const files = listTsFiles(OBSERVABILITY_DIR)
     expect(files.length).toBeGreaterThan(0)
+
     const violations = files.flatMap((f) => {
       // Allow this very file — the test references the path string for its
       // own message, and the whitelist is one specific filename rather than
@@ -88,9 +100,12 @@ describe('architectural invariant — telemetry / observability lane isolation',
       if (f.endsWith('architecture.test.ts')) {
         return []
       }
+
       const bad = findOffendingImports(f, 'telemetry')
+
       return bad.map((spec) => `${relative(REPO_ROOT, f)}: imports '${spec}'`)
     })
+
     expect(violations, violations.join('\n')).toEqual([])
   })
 })

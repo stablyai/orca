@@ -11,9 +11,11 @@ describe('getNextTerminalReadyRetryAttempt', () => {
 
     while (true) {
       const nextAttempt = getNextTerminalReadyRetryAttempt(attempt)
+
       if (nextAttempt === null) {
         break
       }
+
       scheduledRetries += 1
       attempt = nextAttempt
     }

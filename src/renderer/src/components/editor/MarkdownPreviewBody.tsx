@@ -53,6 +53,7 @@ const markdownPreviewSanitizeSchema = {
 }
 
 type MarkdownPluginList = NonNullable<ReactMarkdownOptions['remarkPlugins']>
+
 const MARKDOWN_REMARK_PLUGINS: MarkdownPluginList = [
   remarkGfm,
   remarkBreaks,
@@ -60,6 +61,7 @@ const MARKDOWN_REMARK_PLUGINS: MarkdownPluginList = [
   remarkMath,
   remarkMarkdownDocLinks
 ]
+
 // Why: sanitize raw HTML before KaTeX/highlight expand it.
 const MARKDOWN_REHYPE_PLUGINS: MarkdownPluginList = [
   rehypeRaw,

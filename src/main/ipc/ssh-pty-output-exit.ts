@@ -27,12 +27,14 @@ export async function settleSshPtyOutputExit(args: {
     waitForSourceTerminal,
     beforeFinalize
   } = args
+
   await admission.whenIdle({
     ptyId: event.id,
     providerGeneration: event.providerGeneration
   })
   validateGeneration()
   afterAdmissionIdle?.()
+
   try {
     if (prepareExit) {
       prepareExit()
@@ -49,6 +51,7 @@ export async function settleSshPtyOutputExit(args: {
     dependencies.closeProvider?.(event.providerGeneration, 'pty-exit-finalize-failed')
     throw error
   }
+
   projections.transferUnpublishedPty(
     event.id,
     event.providerGeneration,
@@ -58,6 +61,7 @@ export async function settleSshPtyOutputExit(args: {
   await projections.whenPtyTerminal(event.id, event.providerGeneration, event.ptyIncarnation)
   await waitForSourceTerminal?.()
   validateGeneration()
+
   try {
     beforeFinalize?.()
     dependencies.finalizeExit(event)

@@ -6,8 +6,11 @@ import {
 } from '../ssh/ssh-channel-multiplexer'
 
 const requestActiveSshAiVaultSessionList = vi.fn()
+
 const getActiveSshAiVaultHostInfo = vi.fn()
+
 const getSshFilesystemProvider = vi.fn()
+
 const scanRemoteAiVaultSessions = vi.fn()
 
 vi.mock('../ipc/ssh', () => ({
@@ -43,6 +46,7 @@ describe('scanSshAiVaultSessions', () => {
     let fallbackSignal: AbortSignal | undefined
     scanRemoteAiVaultSessions.mockImplementation(({ signal }: { signal?: AbortSignal }) => {
       fallbackSignal = signal
+
       return new Promise(() => {})
     })
 
@@ -52,9 +56,11 @@ describe('scanSshAiVaultSessions', () => {
 
     expect(result).not.toBe('still-pending')
     expect(fallbackSignal?.aborted).toBe(true)
+
     if (result === 'still-pending') {
       return
     }
+
     expect(result.sessions).toEqual([])
     expect(result.issues).toEqual([
       expect.objectContaining({
@@ -223,6 +229,7 @@ describe('scanSshAiVaultSessions', () => {
       signal: controller.signal,
       timeoutMs: 5_000
     })
+
     await vi.waitFor(() => expect(scanRemoteAiVaultSessions).toHaveBeenCalledTimes(1))
     controller.abort()
 

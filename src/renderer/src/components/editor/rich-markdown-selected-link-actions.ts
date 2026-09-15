@@ -28,9 +28,11 @@ export function getRichMarkdownSelectionLinkBubble(
   context: RichMarkdownHtmlSuperscriptLinkContext
 ): LinkBubbleState | null {
   const position = getLinkBubblePosition(editor, root)
+
   if (!position) {
     return null
   }
+
   if (editor.isActive('link')) {
     return createBubble(
       'markdown',
@@ -39,13 +41,16 @@ export function getRichMarkdownSelectionLinkBubble(
       context
     )
   }
+
   const selection = editor.state.selection
+
   if (
     !(selection instanceof NodeSelection) ||
     selection.node.type.name !== 'richMarkdownHtmlSuperscriptLink'
   ) {
     return null
   }
+
   return createBubble(
     'html-superscript',
     String(selection.node.attrs.href ?? ''),
@@ -60,6 +65,7 @@ export function getSelectedHtmlSuperscriptLinkStatus(
   context: RichMarkdownHtmlSuperscriptLinkContext
 ): { href: string; label: string; openEnabled: boolean } | null {
   const selection = editor?.state.selection
+
   if (
     !editor ||
     !(selection instanceof NodeSelection) ||
@@ -67,7 +73,9 @@ export function getSelectedHtmlSuperscriptLinkStatus(
   ) {
     return null
   }
+
   const href = String(selection.node.attrs.href ?? '')
+
   return {
     href,
     label: String(selection.node.attrs.label ?? ''),
@@ -81,6 +89,7 @@ export function formatSelectedHtmlSuperscriptLinkStatus(
   const label =
     status.label ||
     translate('auto.components.editor.RichMarkdownEditor.citationFallbackLabel', 'Citation')
+
   if (status.openEnabled) {
     return translate(
       'auto.components.editor.RichMarkdownEditor.citationLinkAvailable',
@@ -88,6 +97,7 @@ export function formatSelectedHtmlSuperscriptLinkStatus(
       { value0: label, value1: status.href }
     )
   }
+
   const actionHint = status.href
     ? translate(
         'auto.components.editor.RichMarkdownEditor.tabForCitationActions',
@@ -97,6 +107,7 @@ export function formatSelectedHtmlSuperscriptLinkStatus(
         'auto.components.editor.RichMarkdownEditor.noCitationActions',
         'No link actions are available.'
       )
+
   return translate(
     'auto.components.editor.RichMarkdownEditor.citationLinkUnavailable',
     '{{value0}}, citation link unavailable. {{value1}}',
@@ -118,6 +129,7 @@ export function openSelectedHtmlSuperscriptLink({
   runtimeEnvironmentId?: string | null
 }): boolean {
   const selection = editor?.state.selection
+
   if (
     !editor ||
     !(selection instanceof NodeSelection) ||
@@ -125,15 +137,20 @@ export function openSelectedHtmlSuperscriptLink({
   ) {
     return false
   }
+
   const href = String(selection.node.attrs.href ?? '')
   const snapshot = context.getSnapshot()
+
   if (!classifyHtmlSuperscriptLinkAction(href, snapshot)) {
     return true
   }
+
   if (href.startsWith('#')) {
     scrollToAnchorInEditor(root, href.slice(1))
+
     return true
   }
+
   void activateMarkdownLink(href, {
     sourceFilePath: snapshot.sourceFilePath,
     worktreeId: snapshot.worktreeId,
@@ -141,6 +158,7 @@ export function openSelectedHtmlSuperscriptLink({
     runtimeEnvironmentId,
     sourceOwner: snapshot.sourceOwner
   })
+
   return true
 }
 

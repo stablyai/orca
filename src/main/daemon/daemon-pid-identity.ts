@@ -61,9 +61,11 @@ export async function inspectDaemonProcessIdentity(
 
   if (process.platform === 'win32') {
     const identity = await queryWindowsProcessIdentity(pid)
+
     if (identity === null) {
       return 'unknown'
     }
+
     // Why: image names are too broad after PID reuse. Match the daemon entry
     // plus the exact socket/token args so we only kill the daemon for this
     // userData protocol endpoint.
@@ -75,14 +77,17 @@ export async function inspectDaemonProcessIdentity(
 
   try {
     const cmdline = readFileSync(`/proc/${pid}/cmdline`, 'utf8')
+
     return verdict(
       commandLineMatchesDaemon(cmdline, socketPath, tokenPath) && startTimeMatches(pid, startedAtMs)
     )
   } catch {
     const identity = await getPsProcessIdentityAsync(pid)
+
     if (!identity) {
       return 'unknown'
     }
+
     return verdict(
       commandLineMatchesDaemon(identity.commandLine, socketPath, tokenPath) &&
         startTimesWithinTolerance(identity.startedAtMs, startedAtMs, START_TIME_TOLERANCE_MS)
@@ -112,6 +117,7 @@ export async function getDaemonLaunchIdentity(
   protocolVersion = PROTOCOL_VERSION
 ): Promise<DaemonLaunchIdentity> {
   const parsedPid = await readVerifiedDaemonPid(runtimeDir, socketPath, tokenPath, protocolVersion)
+
   if (!parsedPid) {
     return 'unknown'
   }
@@ -125,9 +131,11 @@ export async function getDaemonLaunchIdentity(
   // daemon forked from a deleted sibling checkout. If command-line probing is
   // unavailable, fail open so we don't kill live sessions unnecessarily.
   const commandLine = await getDaemonCommandLine(parsedPid.pid)
+
   if (!commandLine) {
     return 'unknown'
   }
+
   return commandLine.includes(expectedEntryPath) ? 'match' : 'mismatch'
 }
 
@@ -138,6 +146,7 @@ export async function readVerifiedDaemonPid(
   protocolVersion = PROTOCOL_VERSION
 ): Promise<ParsedDaemonPid | null> {
   let parsedPid: ParsedDaemonPid | null
+
   try {
     parsedPid = parseDaemonPidFile(
       readFileSync(getDaemonPidPath(runtimeDir, protocolVersion), 'utf8')

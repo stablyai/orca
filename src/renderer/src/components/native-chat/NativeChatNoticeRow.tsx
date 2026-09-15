@@ -19,6 +19,7 @@ export function NativeChatNoticeRow({
 }): React.JSX.Element {
   if (block.presentation === 'compaction') {
     const label = translate('components.native-chat.notices.compaction', 'Context compacted')
+
     return (
       <div
         role="separator"
@@ -31,6 +32,7 @@ export function NativeChatNoticeRow({
       </div>
     )
   }
+
   if (block.presentation === 'plan-document') {
     return (
       <Card className="gap-3 py-3 shadow-xs">
@@ -52,7 +54,9 @@ export function NativeChatNoticeRow({
       </Card>
     )
   }
+
   const tone = block.tone
+
   const Icon =
     tone === 'warning'
       ? AlertTriangle
@@ -61,6 +65,7 @@ export function NativeChatNoticeRow({
         : tone === 'notice'
           ? Info
           : null
+
   return (
     <div
       className={cn(

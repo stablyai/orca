@@ -43,6 +43,7 @@ describe.skipIf(process.platform === 'win32')('WSL skill discovery script round-
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024
     })
+
     const result = parseWslSkillDiscoveryOutput(stdout, roots, 42)
 
     // A desynced field count surfaces here as a wrong name/description, a thrown
@@ -54,10 +55,12 @@ describe.skipIf(process.platform === 'win32')('WSL skill discovery script round-
     ])
     expect(result.sources.find((source) => source.id === 'present')?.exists).toBe(true)
     expect(result.sources.find((source) => source.id === 'missing')?.exists).toBe(false)
+
     for (const skill of result.skills) {
       expect(skill.skillFilePath.endsWith('/SKILL.md')).toBe(true)
       expect(skill.directoryPath).toBe(skill.skillFilePath.slice(0, -'/SKILL.md'.length))
     }
+
     expect(result.scannedAt).toBe(42)
   })
 })

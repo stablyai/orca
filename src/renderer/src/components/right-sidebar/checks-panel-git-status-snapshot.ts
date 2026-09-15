@@ -47,6 +47,7 @@ export type ChecksPanelRefreshGitIdentitySnapshot =
       head?: string
       branch: string | null
     }
+
 // Fingerprint HEAD/dirty/upstream/base/execution-host so a stale snapshot can't keep an enabled Create open when any of them move.
 export function buildChecksPanelEligibilityGitFingerprint(input: {
   headOid: string | null
@@ -156,6 +157,7 @@ export function readChecksPanelPublishActionGitStatus(input: {
   fallbackRemoteStatus: GitUpstreamStatus | undefined
 }): ChecksPanelGitStatusInputs {
   const snapshotInputs = readChecksPanelGitStatusSnapshot(input.snapshot, input.contextKey)
+
   if (snapshotInputs.hasUncommittedChanges !== undefined || !input.fallbackRemoteStatus) {
     return snapshotInputs
   }

@@ -21,12 +21,15 @@ function createHarness(overrides?: {
   let pendingTimerDelay: number | null = null
 
   const softCapBytes = overrides?.softCapBytes ?? 100
+
   const queue = createWsOutboundBackpressureQueue<string>({
     send: (frame) => {
       sent.push(frame)
+
       if (overrides?.throwOnSend) {
         throw new Error('send failed')
       }
+
       if (overrides?.parkAfterSend) {
         bufferedAmount = softCapBytes + 1
       }
@@ -43,6 +46,7 @@ function createHarness(overrides?: {
     setTimer: (cb, delay) => {
       pendingTimer = cb
       pendingTimerDelay = delay
+
       return 1 as unknown as ReturnType<typeof setTimeout>
     },
     clearTimer: () => {
@@ -97,6 +101,7 @@ describe('ws outbound backpressure queue', () => {
     const sent = vi.fn()
     const canSend = vi.fn().mockReturnValueOnce(false).mockReturnValue(true)
     let pendingTimer: (() => void) | null = null
+
     const queue = createWsOutboundBackpressureQueue<string>({
       send: sent,
       byteLengthOf: (frame) => frame.length,
@@ -106,6 +111,7 @@ describe('ws outbound backpressure queue', () => {
       onOverflow: vi.fn(),
       setTimer: (callback) => {
         pendingTimer = callback
+
         return 1 as unknown as ReturnType<typeof setTimeout>
       },
       clearTimer: () => {
@@ -147,6 +153,7 @@ describe('ws outbound backpressure queue', () => {
   it('rejects an oversized frame before the direct-send fast path', () => {
     const send = vi.fn()
     const overflow = vi.fn()
+
     const queue = createWsOutboundBackpressureQueue<string>({
       send,
       byteLengthOf: (frame) => frame.length,
@@ -259,6 +266,7 @@ describe('ws outbound backpressure queue', () => {
     let bufferedAmount = 100
     let pendingTimer: (() => void) | null = null
     const sent: string[] = []
+
     const queue = createWsOutboundBackpressureQueue<string>({
       send: (frame) => sent.push(frame),
       byteLengthOf: (frame) => frame.length,
@@ -268,6 +276,7 @@ describe('ws outbound backpressure queue', () => {
       softCapBytes: 10,
       setTimer: (callback) => {
         pendingTimer = callback
+
         return 1 as unknown as ReturnType<typeof setTimeout>
       },
       clearTimer: () => {
@@ -277,7 +286,9 @@ describe('ws outbound backpressure queue', () => {
         if (denyClaims) {
           return null
         }
+
         claimedBytes += bytes
+
         return () => {
           claimedBytes -= bytes
         }
@@ -287,11 +298,13 @@ describe('ws outbound backpressure queue', () => {
     queue.enqueue('one')
     expect(claimedBytes).toBe(3)
     bufferedAmount = 0
+
     const runTimer = (): void => {
       const callback = pendingTimer
       pendingTimer = null
       callback?.()
     }
+
     runTimer()
     expect(sent).toEqual(['one'])
     expect(claimedBytes).toBe(0)
@@ -336,6 +349,7 @@ describe('ws outbound backpressure queue', () => {
 
   it('fails closed when a caller reports an invalid retained size', () => {
     const overflow = vi.fn()
+
     const queue = createWsOutboundBackpressureQueue<string>({
       send: vi.fn(),
       byteLengthOf: () => Number.NaN,

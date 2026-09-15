@@ -8,12 +8,14 @@ const { callMock, getTerminalHandleMock } = vi.hoisted(() => ({
 vi.mock('../runtime-client', async () => {
   // Why: re-export the REAL error classes so format.ts `instanceof` narrowing still matches.
   const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
+
   class RuntimeClient {
     readonly isRemote = false
     call = callMock
     getCliStatus = vi.fn()
     openOrca = vi.fn()
   }
+
   return {
     RuntimeClient,
     RuntimeClientError,
@@ -33,6 +35,7 @@ import { RuntimeClientError } from '../runtime/types'
 import { okFixture, queueFixtures } from '../test-fixtures'
 
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
+
 const originalPaneKey = process.env.ORCA_PANE_KEY
 
 const restoreEnv = (name: string, value: string | undefined): void => {
@@ -94,9 +97,11 @@ describe('orchestration gate commands carry caller identity', () => {
       if (method === 'terminal.resolveIdentity') {
         return okFixture('req_identity', { identity: { handle: 'term_stale', live: false } })
       }
+
       if (method === 'terminal.resolvePane') {
         return okFixture('req_pane', { terminal: { handle: 'term_live' } })
       }
+
       return okFixture('req_gate', {
         gate: { id: 'gate_1', task_id: 'task_1', status: 'pending' }
       })
@@ -233,9 +238,11 @@ describe('orchestration gate commands carry caller identity', () => {
     )
 
     expect(process.exitCode).toBe(1)
+
     const output = JSON.parse(String(logSpy.mock.calls[0]?.[0])) as {
       error: { message: string; data: Record<string, unknown> }
     }
+
     expect(output.error.message).toContain('--retry-request mutation_1')
     expect(output.error.message).toContain('may already have taken effect')
     expect(output.error.message).toContain('Failed stage: dispatch_input')

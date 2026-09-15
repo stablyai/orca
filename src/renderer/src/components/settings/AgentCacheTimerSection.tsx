@@ -73,6 +73,7 @@ export function AgentCacheTimerSection({
           onChange={() => {
             const enabling = !settings.promptCacheTimerEnabled
             updateSettings({ promptCacheTimerEnabled: enabling })
+
             if (enabling) {
               useAppStore.getState().seedCacheTimersForIdleTabs()
             }

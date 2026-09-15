@@ -24,6 +24,7 @@ describe('readClaudeSubagentTaskFrame', () => {
           description: 'Review the diff'
         })
       )
+
       expect(frame).toMatchObject({
         taskId: 'task-1',
         toolUseId: 'toolu_1',
@@ -43,6 +44,7 @@ describe('readClaudeSubagentTaskFrame', () => {
           is_backgrounded: true
         })
       )
+
       expect(frame).toMatchObject({
         taskId: 'task-bash',
         toolUseId: 'toolu_bash',
@@ -65,6 +67,7 @@ describe('readClaudeSubagentTaskFrame', () => {
       const frame = readClaudeSubagentTaskFrame(
         system('task_started', { task_id: 'task-1', subagent_type: 'a'.repeat(900) })
       )
+
       // The roster stores this label verbatim, so nothing downstream bounds it.
       expect(frame?.label).toHaveLength(512)
     })
@@ -124,6 +127,7 @@ describe('readClaudeSubagentTaskFrame', () => {
         ['killed', 'stopped'],
         ['stopped', 'stopped']
       ]
+
       for (const [status, state] of mapped) {
         expect(
           readClaudeSubagentTaskFrame(

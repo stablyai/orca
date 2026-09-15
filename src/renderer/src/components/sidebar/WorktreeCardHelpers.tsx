@@ -31,6 +31,7 @@ export const CONFLICT_OPERATION_LABELS: Record<Exclude<GitConflictOperation, 'un
 // ── Stable empty arrays for tabs fallback ────────────────────────────
 
 export const EMPTY_TABS: TerminalTab[] = []
+
 export const EMPTY_BROWSER_TABS: { id: string }[] = []
 
 // ── SVG icon components ──────────────────────────────────────────────

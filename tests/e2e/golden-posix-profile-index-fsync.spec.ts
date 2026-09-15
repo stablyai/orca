@@ -3,6 +3,7 @@ import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 
 test.use({ seedTestRepo: false })
+
 test.skip(process.platform === 'win32', 'Restrictive-umask fsync regression is POSIX-only')
 
 test('recreates a fresh profile index on disk with a restrictive umask @posix-profile-index-golden', async ({
@@ -18,13 +19,16 @@ test('recreates a fresh profile index on disk with a restrictive umask @posix-pr
   try {
     rmSync(indexPath, { force: true })
     rmSync(`${indexPath}.bak`, { force: true })
+
     // Why: orcaProfiles:list reads the index from disk on every call and rebuilds
     // it when missing, so this drives the real create + fsync + rename path.
     const listed = await orcaPage.evaluate(async () => {
       const result = await window.api.orcaProfiles.list()
       window.__store!.getState().openSettingsPage()
+
       return result
     })
+
     expect(listed.profiles.length).toBeGreaterThan(0)
 
     // The rebuilt index must be on disk and complete — a cached in-memory list is

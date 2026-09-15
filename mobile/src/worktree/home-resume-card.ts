@@ -31,12 +31,15 @@ function lastVisitedCard({
   if (!lastVisited) {
     return null
   }
+
   const match = cachedWorktrees(lastVisited.hostId)?.find(
     (worktree) => worktree.worktreeId === lastVisited.worktreeId
   )
+
   if (!match) {
     return null
   }
+
   return {
     hostId: lastVisited.hostId,
     worktree: match,
@@ -50,14 +53,18 @@ function hostHistoryCard(
 ): HomeResumeCard | null {
   for (const host of hosts) {
     const worktree = worktreeInfo[host.id]?.lastActiveWorktree
+
     if (!worktree) {
       continue
     }
+
     const actionable = hostStates[host.id] === 'connected'
+
     if (actionable || !connectedOnly) {
       return { hostId: host.id, worktree, actionable }
     }
   }
+
   return null
 }
 
@@ -72,18 +79,23 @@ export function isResumeTargetConfirmedMissing(
   if (!provenWorktrees || isSyntheticWorkspaceRoute(card.worktree.worktreeId)) {
     return false
   }
+
   return !provenWorktrees.some((worktree) => worktree.worktreeId === card.worktree.worktreeId)
 }
 
 export function selectHomeResumeCard(input: HomeResumeCardInput): HomeResumeCard | null {
   const visited = lastVisitedCard(input)
+
   if (visited?.actionable) {
     return visited
   }
+
   const connected = hostHistoryCard(input, true)
+
   if (connected) {
     return connected
   }
+
   // Nothing live to resume yet: hold the slot with whatever the snapshot remembers.
   return visited ?? hostHistoryCard(input, false)
 }

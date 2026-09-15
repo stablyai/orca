@@ -11,11 +11,13 @@ describe('requestContextualTourWhenReady', () => {
   it('retries a forced tour request until the target starts', () => {
     vi.useFakeTimers()
     let activeContextualTourId: string | null = null
+
     const requestContextualTour = vi.fn(() => {
       if (requestContextualTour.mock.calls.length === 3) {
         activeContextualTourId = 'workspace-agent-sessions'
       }
     })
+
     vi.spyOn(useAppStore, 'getState').mockImplementation(
       () =>
         ({
@@ -48,9 +50,11 @@ describe('requestContextualTourWhenReady', () => {
   it('stops when another tour becomes active before the target starts', () => {
     vi.useFakeTimers()
     let activeContextualTourId: string | null = null
+
     const requestContextualTour = vi.fn(() => {
       activeContextualTourId = 'tasks'
     })
+
     vi.spyOn(useAppStore, 'getState').mockImplementation(
       () =>
         ({
@@ -75,9 +79,11 @@ describe('requestContextualTourWhenReady', () => {
   it('can wait for another tour to clear before requesting the target tour', () => {
     vi.useFakeTimers()
     let activeContextualTourId: string | null = 'workspace-agent-sessions'
+
     const requestContextualTour = vi.fn(() => {
       activeContextualTourId = 'workspace-creation'
     })
+
     vi.spyOn(useAppStore, 'getState').mockImplementation(
       () =>
         ({

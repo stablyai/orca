@@ -14,6 +14,7 @@ describe('PairedRuntimeBrowserClientHostRegistry', () => {
   it('shares one composition for the exact environment pairing revision', async () => {
     const composition = createComposition()
     const compositionFactory = vi.fn(() => composition)
+
     const registry = new PairedRuntimeBrowserClientHostRegistry({
       createComposition: compositionFactory
     })
@@ -30,9 +31,11 @@ describe('PairedRuntimeBrowserClientHostRegistry', () => {
     const order: string[] = []
     const first = createComposition(order, 'start-first', 'close-first')
     const second = createComposition(order, 'start-second', 'close-second')
+
     const registry = new PairedRuntimeBrowserClientHostRegistry({
       createComposition: vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
     })
+
     await registry.start(input(11))
 
     await registry.start(input(12))
@@ -43,9 +46,11 @@ describe('PairedRuntimeBrowserClientHostRegistry', () => {
   it('preserves the composition across a runtime authority transition', async () => {
     const composition = createComposition()
     const compositionFactory = vi.fn(() => composition)
+
     const registry = new PairedRuntimeBrowserClientHostRegistry({
       createComposition: compositionFactory
     })
+
     await registry.start(input(11))
 
     await registry.start(input(11, 'runtime-b'))
@@ -61,9 +66,11 @@ describe('PairedRuntimeBrowserClientHostRegistry', () => {
     failed.replaceAuthority.mockRejectedValueOnce(new Error('replacement attach failed'))
     const replacement = createComposition()
     const compositionFactory = vi.fn().mockReturnValueOnce(failed).mockReturnValueOnce(replacement)
+
     const registry = new PairedRuntimeBrowserClientHostRegistry({
       createComposition: compositionFactory
     })
+
     await registry.start(input(11))
 
     await expect(registry.start(input(11, 'runtime-b'))).rejects.toThrow(
@@ -85,9 +92,11 @@ describe('PairedRuntimeBrowserClientHostRegistry', () => {
     const first = createComposition(undefined, undefined, undefined, false, cleanup.promise)
     const second = createComposition()
     const compositionFactory = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
+
     const registry = new PairedRuntimeBrowserClientHostRegistry({
       createComposition: compositionFactory
     })
+
     await registry.start(input(11))
 
     await expect(registry.start(input(12))).rejects.toThrow(
@@ -108,9 +117,11 @@ describe('PairedRuntimeBrowserClientHostRegistry', () => {
     const first = createComposition(undefined, undefined, undefined, false, cleanup.promise)
     const second = createComposition()
     const compositionFactory = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
+
     const registry = new PairedRuntimeBrowserClientHostRegistry({
       createComposition: compositionFactory
     })
+
     await registry.start(input(11))
 
     await expect(registry.start(input(12))).rejects.toThrow(
@@ -130,9 +141,11 @@ describe('PairedRuntimeBrowserClientHostRegistry', () => {
     const first = createComposition()
     const second = createComposition()
     const compositionFactory = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
+
     const registry = new PairedRuntimeBrowserClientHostRegistry({
       createComposition: compositionFactory
     })
+
     await registry.start(input(11))
 
     await expect(registry.closeEnvironment('environment-a')).resolves.toBe(true)
@@ -145,9 +158,11 @@ describe('PairedRuntimeBrowserClientHostRegistry', () => {
   it('permanently fences new starts before closing every environment', async () => {
     const first = createComposition()
     const second = createComposition()
+
     const registry = new PairedRuntimeBrowserClientHostRegistry({
       createComposition: vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second)
     })
+
     await registry.start(input(11))
     await registry.start({ ...input(11), environmentId: 'environment-b' })
 
@@ -173,6 +188,7 @@ function createComposition(
       if (order && startLabel) {
         order.push(startLabel)
       }
+
       return authority
     }),
     replaceAuthority: vi.fn(async () => ({ ...authority, authorityRuntimeId: 'runtime-b' })),
@@ -181,6 +197,7 @@ function createComposition(
       if (order && closeLabel) {
         order.push(closeLabel)
       }
+
       return closeSettled
     }),
     whenClosed: vi.fn(() => closed)
@@ -189,11 +206,14 @@ function createComposition(
 
 function deferred<T>() {
   let resolve = (_value: T): void => {}
+
   let reject = (_error: unknown): void => {}
+
   const promise = new Promise<T>((innerResolve, innerReject) => {
     resolve = innerResolve
     reject = innerReject
   })
+
   return { promise, reject, resolve }
 }
 

@@ -22,6 +22,7 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
   committedSize: PtyGrid
 }> {
   const args = ctx.args
+
   try {
     ctx.stablePaneBindingPersisted = persistAdmittedStablePaneBinding({
       store: ctx.deps.store,
@@ -35,11 +36,13 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
     if (error instanceof Error && error.message === 'terminal_pane_owner_changed') {
       throw error
     }
+
     console.error('[pty] failed to persist PTY binding after attach:', error)
     throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
       agentSessionOperationOutcome: 'unknown' as const
     })
   }
+
   ctx.spawnTiming.log(ctx.result.id, {
     daemon: ctx.isDaemonHostSpawn,
     reattach: ctx.result.isReattach ?? false
@@ -55,25 +58,32 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
     settings: ctx.deps.getSettings?.()
   })
   ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
+
   if (ctx.result.incarnationId) {
     ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
   }
+
   if (ctx.initiallyHidden) {
     // Why marked synchronously here: provider data events dispatch on later tasks, so this still lands ahead of the first byte's delivery decision (idempotent if already marked pre-spawn).
     ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.result.id, true)
+
     if (ctx.preSpawnHiddenMarkId !== null && ctx.preSpawnHiddenMarkId !== ctx.result.id) {
       // Defense: never strand a mark on an id the provider renamed.
       ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
     }
+
     // Why after ptyOwnership.set: provider lookup routes by ownership, and a hidden-spawned agent should be paceable from its first flood.
     ctx.deps.syncPtyBackgroundedDelivery(ctx.result.id, 'spawn')
     closeStartupQueryAuthorityForPty(ctx.result.id)
   }
+
   // Why: record the native-Windows-ConPTY determination before the headless seed so the emulator's DA1 override exists from byte zero.
   if (ctx.nativeWindowsConptySpawn) {
     markNativeWindowsConptyPty(ctx.result.id)
   }
+
   const relayResultId = getRelayPtyId(args.connectionId, ctx.result.id)
+
   if (ctx.deps.store && args.connectionId) {
     // Why: remote PTYs live in the SSH relay grace window after Orca detaches; persist IDs immediately so reconnect reattaches instead of spawning a fresh shell.
     ctx.deps.store.upsertSshRemotePtyLease({
@@ -86,21 +96,26 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
       lastAttachedAt: Date.now()
     })
   }
+
   if (ctx.preAllocatedHandle && !ctx.stablePaneOwner?.handle) {
     if (ctx.deps.runtime?.registerPreAllocatedHandleForPty) {
       ctx.deps.runtime.registerPreAllocatedHandleForPty(ctx.result.id, ctx.preAllocatedHandle)
       ctx.agentTeamsLeaderHandle = null
     }
   }
+
   const committedSize = resolveCommittedPtySize({
     result: ctx.result,
     requested: { cols: args.cols, rows: args.rows },
     cachedBeforeAttach: ctx.sessionSizeBeforeAttach
   })
+
   ptySizes.set(ctx.result.id, committedSize)
+
   if (ctx.effectiveSessionAppId !== undefined && ctx.effectiveSessionAppId !== ctx.result.id) {
     ptySizes.delete(ctx.effectiveSessionAppId)
   }
+
   // Why: patch the load-bearing ptyId binding synchronously so a force-quit in the renderer's ~450 ms debounce window can't orphan daemon history or an SSH relay lease (Issue #217).
   if (
     ctx.deps.store &&
@@ -119,6 +134,7 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
         origin: spawnCommitBindingOrigin(ctx.result)
       }
+
       if (args.connectionId) {
         ctx.deps.store.persistPtyBinding(binding, toSshExecutionHostId(args.connectionId))
       } else {
@@ -126,23 +142,28 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
       }
     } catch (err) {
       console.error('[pty] failed to persist PTY binding after spawn:', err)
+
       if (!ctx.result.isReattach) {
         try {
           await ctx.provider.shutdown(ctx.result.id, { immediate: true })
         } catch (shutdownErr) {
           console.warn('[pty] failed to clean up PTY after persistence failure:', shutdownErr)
         }
+
         clearProviderPtyState(ctx.result.id)
         deletePtyOwnership(ctx.result.id)
       }
+
       if (!ctx.result.isReattach && args.connectionId && ctx.deps.store) {
         ctx.deps.store.removeSshRemotePtyLease(args.connectionId, relayResultId)
       }
+
       throw Object.assign(new Error(createTerminalSessionStateSaveFailureMessage()), {
         agentSessionOperationOutcome: 'unknown' as const
       })
     }
   }
+
   // Why here and not at the upsert: this path leases before it binds, so supersession fenced on the
   // pane's binding still named the predecessor and bailed on every reconnect — one more reattachable
   // lease, and one more `pty.attach`, per reconnect forever. Runs after whichever binding write this
@@ -150,21 +171,27 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
   if (ctx.deps.store && args.connectionId && ctx.validatedLeafId !== null) {
     ctx.deps.store.supersedeSshRemotePtyLeasesForBoundPane(args.connectionId, ctx.validatedLeafId)
   }
+
   // Why: when the renderer has declared it will own the serializer for this paneKey, suppress the daemon-snapshot seed so its hydration path is sole authority (keyed on paneKey since the ptyId isn't known yet). See docs/mobile-prefer-renderer-scrollback.md.
   const rendererPreSignaled = ctx.validatedPaneKey
     ? pendingByPaneKey.has(ctx.validatedPaneKey)
     : false
+
   const rendererAlreadyRegistered =
     ctx.result.isReattach === true &&
     !rendererPreSignaled &&
     rendererSerializerReadiness.has(ctx.result.id)
+
   rendererSerializerReadiness.beginIncarnation(ctx.result.id, rendererAlreadyRegistered)
+
   // Why: capture the pending gen at spawn time so this PTY's teardown only settles its own generation, not a remount that replaced the entry.
   if (ctx.validatedPaneKey && rendererPreSignaled) {
     const pending = pendingByPaneKey.get(ctx.validatedPaneKey)
+
     if (pending) {
       pendingPtyIdBySerializerGeneration.set(pending.gen, ctx.result.id)
     }
   }
+
   return { rendererPreSignaled, rendererAlreadyRegistered, committedSize }
 }

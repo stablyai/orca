@@ -39,11 +39,13 @@ async function listPrRemoteCandidates(
   repoPath: string
 ): Promise<PrRemoteCandidate[]> {
   let stdout: string
+
   try {
     ;({ stdout } = await execGit(['remote', '-v'], repoPath))
   } catch {
     return []
   }
+
   return [...parseGitRemoteFetchUrls(stdout)]
     .filter(([name]) => isOrcaGeneratedPrRemoteName(name))
     .map(([name, url]) => ({ name, url }))
@@ -61,19 +63,25 @@ async function shouldReclaimPrRemote(
     remoteName: remote.name,
     remoteUrl: remote.url
   }
+
   const referencingEntries = findWorktreeMetaReferencingRemote(store, repoId, target)
+
   // Provenance gate: only touch a remote some worktree's persisted pushTarget explicitly
   // recorded Orca creating. Naming and URL shape are necessary but not sufficient proof.
   if (!referencingEntries.some(({ meta }) => meta.pushTarget?.remoteCreated === true)) {
     return false
   }
+
   const stillClaimedByLiveWorktree = referencingEntries.some(({ worktreeId }) => {
     const key = worktreeIdComparisonKey(worktreeId)
+
     return key !== null && liveWorktreeKeys.has(key)
   })
+
   if (stillClaimedByLiveWorktree) {
     return false
   }
+
   // A branch that still exists may push to this fork again later; only a branch that's
   // actually gone (force-deleted, or deleted outside the "preserve on delete" flow) frees it.
   if (
@@ -81,6 +89,7 @@ async function shouldReclaimPrRemote(
   ) {
     return false
   }
+
   return true
 }
 
@@ -98,23 +107,28 @@ export async function reconcileOrphanedPrRemotesWithExec(
       .map((path) => worktreeIdComparisonKey(`${repoId}${WORKTREE_ID_SEPARATOR}${path}`))
       .filter((key): key is string => key !== null)
   )
+
   const reclaimed: string[] = []
+
   for (const remote of await listPrRemoteCandidates(execGit, repoPath)) {
     if (await shouldReclaimPrRemote(execGit, repoPath, repoId, store, remote, liveWorktreeKeys)) {
       await execGit(['remote', 'remove', remote.name], repoPath)
       reclaimed.push(remote.name)
     }
   }
+
   return reclaimed
 }
 
 // Why: the sweep costs a handful of git subprocesses (remote -v, worktree list, per-candidate
 // config/for-each-ref); bound to once per repo per cooldown so bursts of removals don't repeat it.
 const RECONCILE_COOLDOWN_MS = 60 * 60 * 1000
+
 const lastReconciledAtByRepoId = new Map<string, number>()
 
 function shouldReconcileNow(repoId: string): boolean {
   const last = lastReconciledAtByRepoId.get(repoId)
+
   return last === undefined || Date.now() - last >= RECONCILE_COOLDOWN_MS
 }
 
@@ -140,7 +154,9 @@ export async function reconcileOrphanedPrRemotes(
   if (!shouldReconcileNow(repoId)) {
     return
   }
+
   lastReconciledAtByRepoId.set(repoId, Date.now())
+
   try {
     const liveWorktrees = await listWorktrees(repoPath, gitOptions)
     logReclaimed(
@@ -168,7 +184,9 @@ export async function reconcileOrphanedPrRemotesSsh(
   if (!shouldReconcileNow(repoId)) {
     return
   }
+
   lastReconciledAtByRepoId.set(repoId, Date.now())
+
   try {
     const liveWorktrees = await provider.listWorktrees(repoPath)
     logReclaimed(

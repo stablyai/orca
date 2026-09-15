@@ -33,14 +33,17 @@ export function openRemoteRuntimeWebSocket(
   callbacks: RemoteRuntimeWebSocketCallbacks
 ): { ok: true; socket: RemoteRuntimeWebSocket } | { ok: false; error: RemoteRuntimeClientError } {
   const opened = createSocket(pairing)
+
   if (!opened.ok) {
     return opened
   }
+
   const { ws, keyPair } = opened
   const serverPublicKey = publicKeyFromBase64(pairing.publicKeyB64)
   const sharedKey = deriveSharedKey(keyPair.secretKey, serverPublicKey)
 
   let cleanedUp = false
+
   const onOpen = (): void => {
     ws.send(
       JSON.stringify({
@@ -49,13 +52,16 @@ export function openRemoteRuntimeWebSocket(
       })
     )
   }
+
   const onError = (): void => {
     callbacks.onError(
       ws,
       remoteRuntimeUnavailableError('Could not connect to the remote Orca runtime.')
     )
   }
+
   const onClose = (code: number, reason: Buffer): void => callbacks.onClose(ws, code, reason)
+
   const onMessage = (data: WebSocket.RawData, isBinary: boolean): void => {
     if (isBinary) {
       callbacks.onError(
@@ -64,16 +70,21 @@ export function openRemoteRuntimeWebSocket(
           'Remote Orca runtime returned an unexpected binary frame.'
         )
       )
+
       return
     }
+
     callbacks.onTextFrame(ws, data.toString())
   }
+
   const onPong = (): void => callbacks.onPong?.(ws)
   const onPing = (): void => callbacks.onPing?.(ws)
+
   const cleanup = (): void => {
     if (cleanedUp) {
       return
     }
+
     cleanedUp = true
     ws.off('open', onOpen)
     ws.off('error', onError)
@@ -81,6 +92,7 @@ export function openRemoteRuntimeWebSocket(
     ws.off('message', onMessage)
     ws.off('pong', onPong)
     ws.off('ping', onPing)
+
     // Why: a manually closed ws can still emit a late transport error; keep
     // that from becoming an unhandled EventEmitter error after detaching Orca.
     if (ws.readyState !== WebSocket.CLOSED) {
@@ -94,6 +106,7 @@ export function openRemoteRuntimeWebSocket(
   ws.on('message', onMessage)
   ws.on('pong', onPong)
   ws.on('ping', onPing)
+
   return { ok: true, socket: { ws, sharedKey, cleanup } }
 }
 
@@ -105,11 +118,13 @@ function createSocket(
   | { ok: true; ws: WebSocket; keyPair: ReturnType<typeof generateKeyPair> }
   | { ok: false; error: RemoteRuntimeClientError } {
   let keyPair: ReturnType<typeof generateKeyPair>
+
   try {
     keyPair = generateKeyPair()
     publicKeyFromBase64(pairing.publicKeyB64)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+
     return {
       ok: false,
       error: new RemoteRuntimeClientError(
@@ -118,10 +133,12 @@ function createSocket(
       )
     }
   }
+
   try {
     return { ok: true, ws: new WebSocket(pairing.endpoint), keyPair }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+
     return {
       ok: false,
       error: new RemoteRuntimeClientError('invalid_argument', `Invalid remote endpoint: ${message}`)

@@ -34,12 +34,15 @@ export function dashboardRowBucketProjection(
 ): DashboardRowBucketProjection {
   const isTitleDerived = row.startedAt === 0
   const dotState = dashboardCardDotState(row.state)
+
   const workingMode =
     row.state === 'working' && row.entry.workingMode === 'monitoring'
       ? row.entry.workingMode
       : undefined
+
   const unseen =
     !isTitleDerived && (acknowledgedAgentsByPaneKey?.[row.paneKey] ?? 0) < row.entry.stateStartedAt
+
   const bucket = dashboardBucketForDotState(
     dashboardCardDisplayState({ dotState, workingMode, unseen })
   )

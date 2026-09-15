@@ -15,6 +15,7 @@ export type WindowsNativeRegistryModule = {
 }
 
 export const WINDOWS_REG_SZ = 1
+
 export const WINDOWS_REG_EXPAND_SZ = 2
 
 const requireFromMain = createRequire(__filename)

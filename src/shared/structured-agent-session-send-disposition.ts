@@ -93,9 +93,11 @@ export function structuredAgentSessionRejectionNotice(reason: string | null): st
   if (reason === null) {
     return 'Message was not sent.'
   }
+
   if (dispatchRejectionWasTransportWriteFailure(reason)) {
     return "Couldn't reach the agent. Your message was not sent — Retry to send it again."
   }
+
   // Any other reason we minted is an internal cause with no user-facing meaning;
   // only a provider's own explanation is worth reading verbatim.
   return dispatchRejectionReasonIsInternal(reason)
@@ -110,6 +112,7 @@ export function disposeStructuredAgentSessionSendResult(
   }
 ): StructuredAgentSessionSendDisposition {
   const result = input.result
+
   if (!result.ok) {
     const entries = input.entries.map((candidate) =>
       candidate.clientMessageId === input.entry.clientMessageId
@@ -121,6 +124,7 @@ export function disposeStructuredAgentSessionSendResult(
           )
         : candidate
     )
+
     return {
       entries,
       error: result.refusal.message,
@@ -128,7 +132,9 @@ export function disposeStructuredAgentSessionSendResult(
       retryWithFreshClientMessageId: null
     }
   }
+
   const submission = result.value.submission
+
   if (refusedRedelivery(input.entry, submission)) {
     return {
       entries: dropEntry(input),
@@ -137,6 +143,7 @@ export function disposeStructuredAgentSessionSendResult(
       retryWithFreshClientMessageId: null
     }
   }
+
   if (submission.dispatchState === 'accepted') {
     return {
       entries: dropEntry(input),
@@ -145,6 +152,7 @@ export function disposeStructuredAgentSessionSendResult(
       retryWithFreshClientMessageId: null
     }
   }
+
   if (submission.dispatchState === 'rejected') {
     return {
       entries: replaceEntryState(input, 'queued'),
@@ -153,6 +161,7 @@ export function disposeStructuredAgentSessionSendResult(
       retryWithFreshClientMessageId: input.entry.clientMessageId
     }
   }
+
   if (submission.dispatchState === 'unknown' && submission.recovered) {
     return {
       entries: input.entries.map((candidate) =>
@@ -165,6 +174,7 @@ export function disposeStructuredAgentSessionSendResult(
       retryWithFreshClientMessageId: null
     }
   }
+
   // `pending` is the host saying the message was written and is awaiting the
   // provider's acknowledgement, which cannot arrive until the turn ahead of it
   // ends. That is not doubt: the entry stays `dispatching` and the queue behind
@@ -188,6 +198,7 @@ export function disposeStructuredAgentSessionSendFailure(
 ): StructuredAgentSessionSendDisposition {
   const failure = classifyStructuredAgentSessionSendFailure(input.cause, input.isDeliveryUnknown)
   const deliveryUnknown = failure === 'delivery-unknown'
+
   return {
     entries: replaceEntryState(input, deliveryUnknown ? 'unconfirmed' : 'queued'),
     error: deliveryUnknown ? 'Message delivery is unconfirmed' : String(input.cause),

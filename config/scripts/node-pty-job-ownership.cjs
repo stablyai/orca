@@ -6,11 +6,14 @@ function assertNodePtyJobOwnership({ nativeName, native, platform = process.plat
   if (platform !== 'win32' || nativeName !== 'conpty') {
     return
   }
+
   const exported = native?.module ?? native
   const missing = NODE_PTY_JOB_EXPORTS.filter((name) => typeof exported?.[name] !== 'function')
+
   if (missing.length === 0) {
     return
   }
+
   throw new Error(
     [
       `node-pty's conpty native is missing ${missing.join(', ')}.`,

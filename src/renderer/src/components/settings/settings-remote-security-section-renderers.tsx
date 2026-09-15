@@ -8,6 +8,7 @@ import type { SettingsRenderContext } from './settings-render-context'
 
 export function renderServersSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { model, navigation, view } = context
+
   return (
     <SettingsSection
       id="servers"
@@ -41,6 +42,7 @@ export function renderServersSettingsSection(context: SettingsRenderContext): Re
 
 export function renderSshSettingsSection(context: SettingsRenderContext): React.JSX.Element | null {
   const { model, navigation, view } = context
+
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="ssh"
@@ -62,6 +64,7 @@ export function renderDeveloperPermissionsSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
+
   return model.showDesktopOnlySettings && model.isMac ? (
     <SettingsSection
       id="developer-permissions"
@@ -81,6 +84,7 @@ export function renderDeveloperPermissionsSettingsSection(
 
 export function renderPrivacySettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { model, navigation, view } = context
+
   return (
     <SettingsSection
       id="privacy"

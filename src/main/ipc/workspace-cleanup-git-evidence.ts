@@ -46,13 +46,16 @@ export async function readWorkspaceCleanupGitEvidence(
   let status: GitStatusResult
   const checkedAt = Date.now()
   const route = resolveWorkspaceCleanupWorktreeGitRoute(repoRoute, worktree, repo)
+
   if (route.kind === 'host-mismatch') {
     // Refusing beats reading one host's checkout and labelling the row with the other's.
     console.warn(
       `Workspace cleanup skipped git for ${worktree.id}: listed on ${route.listedHostId}, owned by ${route.hostId}`
     )
+
     return { ...createEmptyWorkspaceCleanupGitEvidence(), blockers: ['git-status-error'] }
   }
+
   // Shared links are this machine's symlink layout; no remote checkout inherits it.
   const sharedLinkPaths = route.kind === 'ssh' ? [] : getWorktreeSharedLinkPaths(repo)
 
@@ -77,6 +80,7 @@ export async function readWorkspaceCleanupGitEvidence(
     if (error instanceof WorkspaceCleanupScanCancelledError) {
       throw error
     }
+
     return {
       ...createEmptyWorkspaceCleanupGitEvidence(),
       blockers: ['git-status-error']
@@ -91,17 +95,21 @@ export async function readWorkspaceCleanupGitEvidence(
   }
 
   const clean = status.entries.length === 0
+
   if (!clean) {
     blockers.push('dirty-files')
   }
 
   const upstreamAhead = status.upstreamStatus.hasUpstream ? status.upstreamStatus.ahead : null
   const upstreamBehind = status.upstreamStatus.hasUpstream ? status.upstreamStatus.behind : null
+
   if (upstreamAhead !== null && upstreamAhead > 0) {
     blockers.push('unpushed-commits')
   }
+
   if (clean && upstreamAhead === null) {
     const unpushedCommitCount = await readUnpushedCommitCount(worktree, route, signal)
+
     if (unpushedCommitCount === null) {
       blockers.push('unknown-base')
     } else if (unpushedCommitCount > 0) {
@@ -140,12 +148,15 @@ async function readUnpushedCommitCount(
       'Timed out checking unpushed commits.',
       signal
     )
+
     const count = Number.parseInt(result.stdout.trim(), 10)
+
     return Number.isFinite(count) ? count : null
   } catch (error) {
     if (error instanceof WorkspaceCleanupScanCancelledError) {
       throw error
     }
+
     return null
   }
 }
@@ -157,6 +168,7 @@ function requireWorkspaceCleanupGitProvider(
   if (!route.provider) {
     throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
   }
+
   return route.provider
 }
 

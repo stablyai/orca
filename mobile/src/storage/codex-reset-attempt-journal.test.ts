@@ -16,6 +16,7 @@ import {
 } from './codex-reset-attempt-journal'
 
 const FIRST_UUID = '11111111-1111-4111-8111-111111111111'
+
 const SECOND_UUID = '22222222-2222-4222-8222-222222222222'
 
 function makeScope(
@@ -49,6 +50,7 @@ describe('Codex reset attempt journal', () => {
   it('persists an unresolved UUID and reuses it after a module-level remount', async () => {
     const identity = { hostId: 'host-a', expectedScope: makeScope() }
     const createFirst = vi.fn(() => FIRST_UUID)
+
     const first = await getOrCreateCodexResetAttempt({
       ...identity,
       createIdempotencyKey: createFirst
@@ -56,6 +58,7 @@ describe('Codex reset attempt journal', () => {
 
     resetCodexResetAttemptJournalForTests()
     const createAfterRemount = vi.fn(() => SECOND_UUID)
+
     const restored = await getOrCreateCodexResetAttempt({
       ...identity,
       createIdempotencyKey: createAfterRemount
@@ -94,6 +97,7 @@ describe('Codex reset attempt journal', () => {
 
   it('replays the original exact offer after a refresh changes its offer revision', async () => {
     const originalScope = makeScope()
+
     const original = await getOrCreateCodexResetAttempt({
       hostId: 'host-a',
       expectedScope: originalScope,
@@ -102,6 +106,7 @@ describe('Codex reset attempt journal', () => {
 
     resetCodexResetAttemptJournalForTests()
     const createRefreshedKey = vi.fn(() => SECOND_UUID)
+
     const restored = await getOrCreateCodexResetAttempt({
       hostId: 'host-a',
       expectedScope: makeScope({ offerRevision: 'v1:refreshed-offer' }),
@@ -129,6 +134,7 @@ describe('Codex reset attempt journal', () => {
     })
 
     const createAfterSwitchBack = vi.fn(() => '33333333-3333-4333-8333-333333333333')
+
     const restoredA = await getOrCreateCodexResetAttempt({
       hostId: 'host-a',
       expectedScope: { ...accountA, offerRevision: 'v1:after-switch-back' },
@@ -142,9 +148,11 @@ describe('Codex reset attempt journal', () => {
 
   it('serializes same-scope creation so concurrent callers share one durable UUID', async () => {
     let releaseWrite!: () => void
+
     const writeGate = new Promise<void>((resolve) => {
       releaseWrite = resolve
     })
+
     asyncStorage.setItem.mockImplementationOnce(async (key: string, value: string) => {
       await writeGate
       values.set(key, value)
@@ -157,12 +165,15 @@ describe('Codex reset attempt journal', () => {
       ...identity,
       createIdempotencyKey: createFirst
     })
+
     await vi.waitFor(() => expect(asyncStorage.setItem).toHaveBeenCalledTimes(1))
+
     const second = getOrCreateCodexResetAttempt({
       ...identity,
       expectedScope: makeScope({ offerRevision: 'v1:refreshed-offer' }),
       createIdempotencyKey: createSecond
     })
+
     await Promise.resolve()
     expect(createSecond).not.toHaveBeenCalled()
 
@@ -209,10 +220,12 @@ describe('Codex reset attempt journal', () => {
     await getOrCreateCodexResetAttempt({ ...identity, createIdempotencyKey: createKey })
 
     const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2036-01-01T00:00:00Z'))
+
     const oldAttempt = await getOrCreateCodexResetAttempt({
       ...identity,
       createIdempotencyKey: () => SECOND_UUID
     })
+
     now.mockRestore()
     expect(oldAttempt.idempotencyKey).toBe(FIRST_UUID)
 

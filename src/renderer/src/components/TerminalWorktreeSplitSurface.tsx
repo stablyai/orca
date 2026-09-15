@@ -43,6 +43,7 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
 }): React.JSX.Element {
   const browserPageIds = useWorktreeBrowserPageIds(worktreeId)
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
+
   const shouldKeepPaintable = shouldKeepHiddenWorktreeSurfacePaintable({
     shouldMeasureHiddenWorktree,
     needsBrowserGuestPaint

@@ -10,8 +10,10 @@ describe('createAgentSessionOperationId', () => {
   it('combines the request time with a cryptographically generated nonce', () => {
     const getRandomValues = vi.fn((bytes: Uint8Array) => {
       bytes.fill(0xab)
+
       return bytes
     })
+
     vi.stubGlobal('crypto', { getRandomValues })
 
     expect(createAgentSessionOperationId(1234)).toBe(`1234-${'ab'.repeat(16)}`)
@@ -31,10 +33,12 @@ describe('agent session create operation', () => {
     vi.stubGlobal('crypto', {
       getRandomValues: (bytes: Uint8Array) => {
         bytes.fill(0xcd)
+
         return bytes
       }
     })
     const operation = createAgentSessionCreateOperation()
+
     const invoke = vi
       .fn<(operationId: string) => Promise<string>>()
       .mockRejectedValueOnce(new Error('connection closed before response'))
@@ -52,11 +56,13 @@ describe('agent session create operation', () => {
       getRandomValues: (bytes: Uint8Array) => bytes
     })
     const operation = createAgentSessionCreateOperation()
+
     const failure = new RuntimeRpcCallError({
       id: 'rpc-1',
       ok: false,
       error: { code: 'agent_session_operation_capacity', message: 'capacity' }
     })
+
     const invoke = vi.fn().mockRejectedValue(failure)
 
     await expect(operation.run(invoke)).rejects.toBe(failure)

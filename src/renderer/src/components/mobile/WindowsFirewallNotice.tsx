@@ -30,22 +30,28 @@ export function WindowsFirewallNotice({
     // Why: UAC elevation steals and returns window focus, so a focus-triggered
     // inspection can race the post-repair one; only the latest result may win.
     const inspectId = ++inspectIdRef.current
+
     if (!pairingReady) {
       setStatus(null)
+
       return null
     }
+
     try {
       const next = await window.api.mobile.getWindowsFirewallStatus(
         address ? { address } : undefined
       )
+
       if (mountedRef.current && inspectIdRef.current === inspectId) {
         setStatus(next)
       }
+
       return next
     } catch {
       if (mountedRef.current && inspectIdRef.current === inspectId) {
         setStatus(null)
       }
+
       return null
     }
   }, [address, mountedRef, pairingReady])
@@ -53,19 +59,23 @@ export function WindowsFirewallNotice({
   useEffect(() => {
     void inspect()
     window.addEventListener('focus', inspect)
+
     return () => window.removeEventListener('focus', inspect)
   }, [inspect])
 
   if (!status?.supported) {
     return null
   }
+
   const firewallStatus = status
   const networkIsPublic = firewallStatus.networkCategory === 'public'
   const blockingRuleDetected = firewallStatus.blockingRuleDetected
+
   // Why: a Private-profile allow rule cannot help on managed domain networks.
   if (!pairingReady || firewallStatus.networkCategory === 'domain') {
     return null
   }
+
   if (
     !networkIsPublic &&
     (!firewallStatus.privateFirewallEnabled ||
@@ -76,18 +86,23 @@ export function WindowsFirewallNotice({
 
   async function repair(): Promise<void> {
     setRepairing(true)
+
     try {
       const result = await window.api.mobile.repairWindowsFirewall()
+
       if (!mountedRef.current) {
         return
       }
+
       if (result.ok) {
         // Why: elevation success only confirms the script ran; managed policy
         // can still leave an overriding Block rule in effect.
         const next = await inspect()
+
         if (!mountedRef.current) {
           return
         }
+
         if (
           next?.supported &&
           (!next.privateFirewallEnabled ||
@@ -99,19 +114,24 @@ export function WindowsFirewallNotice({
               'Windows Firewall now allows Orca Mobile on private networks'
             )
           )
+
           return
         }
+
         if (!next) {
           setStatus(firewallStatus)
         }
+
         toast.error(
           translate(
             'auto.components.mobile.WindowsFirewallNotice.repair-unverified',
             'Windows Firewall access could not be verified'
           )
         )
+
         return
       }
+
       if (result.reason !== 'cancelled') {
         toast.error(
           translate(

@@ -8,5 +8,6 @@ export type ResponsiveLayout = ResponsiveLayoutMetrics
 
 export function useResponsiveLayout(): ResponsiveLayout {
   const { width, height } = useWindowDimensions()
+
   return getResponsiveLayoutMetrics(width, height)
 }

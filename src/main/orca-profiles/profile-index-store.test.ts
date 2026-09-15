@@ -21,6 +21,7 @@ installFakeAppEnvironment({ getPath: () => testState.dir })
 
 async function loadProfileIndexStore() {
   vi.resetModules()
+
   return import('./profile-index-store')
 }
 
@@ -42,10 +43,12 @@ describe('profile index store', () => {
   it('creates the default local profile and copies legacy state without deleting it', async () => {
     const legacyState = { schemaVersion: 1, repos: [{ id: 'repo-1' }] }
     const legacyBackup = { schemaVersion: 1, repos: [{ id: 'backup-repo' }] }
+
     const legacyBrowserSessionMeta = {
       defaultSource: { browserFamily: 'chrome', importedAt: 1 },
       profiles: []
     }
+
     writeFileSync(join(testState.dir, 'orca-data.json'), JSON.stringify(legacyState), 'utf-8')
     writeFileSync(
       join(testState.dir, 'orca-data.json.bak.0'),
@@ -93,6 +96,7 @@ describe('profile index store', () => {
       JSON.stringify({ schemaVersion: 1, repos: [{ id: 'legacy-repo' }] }),
       'utf-8'
     )
+
     const index: OrcaProfileIndex = {
       schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
       activeProfileId: profileId,
@@ -108,6 +112,7 @@ describe('profile index store', () => {
         }
       ]
     }
+
     writeFileSync(join(testState.dir, 'orca-profile-index.json'), JSON.stringify(index), 'utf-8')
 
     const { ensureActiveOrcaProfile } = await loadProfileIndexStore()
@@ -127,6 +132,7 @@ describe('profile index store', () => {
 
     const { createLocalOrcaProfile, getOrcaProfileDataFile, getOrcaProfileListState } =
       await loadProfileIndexStore()
+
     const created = createLocalOrcaProfile({ name: ' Work ' })
 
     expect(created.profile.name).toBe('Work')
@@ -163,11 +169,13 @@ describe('profile index store', () => {
     const store = await loadProfileIndexStore()
     const indexPath = store.getOrcaProfileIndexPath()
     const profile = createDefaultLocalOrcaProfile(1)
+
     const index: OrcaProfileIndex = {
       schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
       activeProfileId: profile.id,
       profiles: [profile]
     }
+
     const originalUmask = process.umask(0o200)
 
     try {
@@ -198,6 +206,7 @@ describe('profile index store', () => {
   it('rejects profile ids that are not safe path segments', async () => {
     const store = await loadProfileIndexStore()
     const indexPath = store.getOrcaProfileIndexPath()
+
     const index: OrcaProfileIndex = {
       schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
       activeProfileId: '../../escape',
@@ -213,6 +222,7 @@ describe('profile index store', () => {
         }
       ]
     }
+
     mkdirSync(testState.dir, { recursive: true })
     writeFileSync(indexPath, JSON.stringify(index), 'utf-8')
 

@@ -2,6 +2,7 @@ import { optionalNumberParam, optionalStringParam } from './desktop-script-provi
 import type { BridgeSnapshot } from './desktop-script-provider-types'
 
 export const MAX_CACHED_DESKTOP_SNAPSHOTS = 32
+
 // Why: cached element frames and provider IDs are follow-up hints, not durable
 // state; delayed agents should refresh instead of acting on old UI geometry.
 export const MAX_CACHED_DESKTOP_SNAPSHOT_AGE_MS = 2 * 60 * 1000
@@ -20,11 +21,14 @@ export function snapshotCacheKeys(
   const namespace = snapshotNamespace(params)
   const pidKeys = snapshotPidKeys(snapshot.app.pid)
   const keys = new Set<string>()
+
   if (snapshot.windowId !== null && snapshot.windowId !== undefined) {
     keys.add(canonicalWindowIdKey(snapshot.windowId))
     keys.add(namespacedSnapshotKey(namespace, canonicalWindowIdKey(snapshot.windowId)))
   }
+
   const resolvedWindowIndex = optionalNumberParam(params, 'windowIndex') ?? snapshot.windowIndex
+
   if (resolvedWindowIndex !== null && resolvedWindowIndex !== undefined) {
     keys.add(canonicalWindowIndexKey(resolvedWindowIndex))
     keys.add(namespacedSnapshotKey(namespace, canonicalWindowIndexKey(resolvedWindowIndex)))
@@ -56,11 +60,14 @@ export function snapshotCacheKeys(
     if (!key) {
       continue
     }
+
     if (!isExplicitSnapshotNamespace(namespace)) {
       keys.add(key.toLowerCase())
     }
+
     keys.add(namespacedSnapshotKey(namespace, key))
   }
+
   return [...keys]
 }
 
@@ -88,6 +95,7 @@ function snapshotKeysForWindowIndex(
   params: Record<string, unknown>
 ): string[] {
   const windowIndex = optionalNumberParam(params, 'windowIndex') ?? snapshot.windowIndex
+
   return windowIndex === null || windowIndex === undefined
     ? []
     : [snapshotWindowIndexKey(query, windowIndex)]
@@ -100,6 +108,7 @@ export function snapshotWindowIndexKey(query: string, windowIndex: number): stri
 export function snapshotNamespace(params: Record<string, unknown>): string {
   const session = optionalStringParam(params, 'session')
   const worktree = optionalStringParam(params, 'worktree')
+
   return session ? `session:${session}` : worktree ? `worktree:${worktree}` : 'default'
 }
 
@@ -115,29 +124,36 @@ export function staleWindowTargetKeys(
   const namespace = snapshotNamespace(params)
   const windowId = optionalNumberParam(params, 'windowId')
   const windowIndex = optionalNumberParam(params, 'windowIndex')
+
   if (windowId === undefined && windowIndex === undefined) {
     return []
   }
 
   const keys = new Set<string>()
+
   if (windowId !== undefined) {
     keys.add(canonicalWindowIdKey(windowId))
     keys.add(namespacedSnapshotKey(namespace, canonicalWindowIdKey(windowId)))
   }
+
   if (windowIndex !== undefined) {
     keys.add(canonicalWindowIndexKey(windowIndex))
     keys.add(namespacedSnapshotKey(namespace, canonicalWindowIndexKey(windowIndex)))
   }
+
   for (const appKey of snapshotAppKeys(query, snapshot)) {
     const targetKey =
       windowId !== undefined
         ? snapshotWindowKey(appKey, windowId)
         : snapshotWindowIndexKey(appKey, windowIndex!)
+
     if (!isExplicitSnapshotNamespace(namespace)) {
       keys.add(targetKey.toLowerCase())
     }
+
     keys.add(namespacedSnapshotKey(namespace, targetKey))
   }
+
   return [...keys]
 }
 
@@ -149,28 +165,35 @@ export function lookupCachedSnapshotKey(
 ): string[] {
   const namespace = snapshotNamespace(params)
   const keys: string[] = []
+
   if (windowId !== undefined) {
     keys.push(
       namespacedSnapshotKey(namespace, canonicalWindowIdKey(windowId)),
       namespacedSnapshotKey(namespace, snapshotWindowKey(app, windowId))
     )
+
     if (!isExplicitSnapshotNamespace(namespace)) {
       keys.push(canonicalWindowIdKey(windowId), snapshotWindowKey(app, windowId))
     }
   }
+
   if (windowIndex !== undefined) {
     keys.push(
       namespacedSnapshotKey(namespace, canonicalWindowIndexKey(windowIndex)),
       namespacedSnapshotKey(namespace, snapshotWindowIndexKey(app, windowIndex))
     )
+
     if (!isExplicitSnapshotNamespace(namespace)) {
       keys.push(canonicalWindowIndexKey(windowIndex), snapshotWindowIndexKey(app, windowIndex))
     }
   }
+
   keys.push(namespacedSnapshotKey(namespace, app))
+
   if (!isExplicitSnapshotNamespace(namespace)) {
     keys.push(app.toLowerCase())
   }
+
   return keys
 }
 
@@ -188,6 +211,7 @@ function snapshotPidKeys(pid: number): string[] {
   if (!Number.isInteger(pid) || pid <= 0) {
     return []
   }
+
   return [snapshotPidSelector(pid), String(pid)]
 }
 

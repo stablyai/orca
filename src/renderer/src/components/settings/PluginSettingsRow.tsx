@@ -47,18 +47,21 @@ function statusPresentation(plugin: PluginHostListEntry): { label: string; class
       className: 'border-destructive/25 bg-destructive/8 text-destructive'
     }
   }
+
   if (plugin.needsReconsent || plugin.status === 'pending') {
     return {
       label: translate('auto.components.settings.PluginSettingsRow.needsReview', 'Needs review'),
       className: 'border-foreground/20 bg-foreground/8 text-foreground'
     }
   }
+
   if (plugin.status === 'restarting') {
     return {
       label: translate('auto.components.settings.PluginSettingsRow.restarting', 'Restarting'),
       className: 'border-foreground/20 bg-foreground/8 text-foreground'
     }
   }
+
   if (plugin.status === 'errored' || plugin.status === 'invalid') {
     return {
       label:
@@ -68,12 +71,14 @@ function statusPresentation(plugin: PluginHostListEntry): { label: string; class
       className: 'border-destructive/25 bg-destructive/8 text-destructive'
     }
   }
+
   if (plugin.status === 'disabled') {
     return {
       label: translate('auto.components.settings.PluginSettingsRow.disabled', 'Disabled'),
       className: 'border-border bg-muted/40 text-muted-foreground'
     }
   }
+
   return {
     label:
       plugin.status === 'running'
@@ -140,11 +145,13 @@ export function PluginSettingsRow({
 }: PluginSettingsRowProps): React.JSX.Element {
   const status = statusPresentation(plugin)
   const needsReview = plugin.needsReconsent || plugin.status === 'pending'
+
   const enabled =
     plugin.status === 'running' ||
     plugin.status === 'restarting' ||
     plugin.status === 'idle' ||
     plugin.status === 'errored'
+
   const switchDisabled =
     busy || needsReview || plugin.status === 'invalid' || Boolean(plugin.blockedByKillList)
 
@@ -161,6 +168,7 @@ export function PluginSettingsRow({
       {translate('auto.components.settings.PluginSettingsRow.reviewAndEnable', 'Review & enable')}
     </Button>
   ) : null
+
   const footerAction = reviewAction
 
   return (

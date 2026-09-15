@@ -114,8 +114,10 @@ describe('AutomationsPage save visibility under StrictMode', () => {
         if (method === 'automation.create') {
           // The runtime store now holds the row; later list reads must say so.
           mocks.state.runtimeAnswers = { automations: [CREATED], runs: [] }
+
           return { automation: CREATED }
         }
+
         return await previous?.(target, method, params, options)
       }
     )

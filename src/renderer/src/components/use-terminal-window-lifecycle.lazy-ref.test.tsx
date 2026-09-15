@@ -17,10 +17,12 @@ vi.mock('../store', () => {
     browserPagesByWorkspace: {},
     openFiles: []
   }
+
   const useAppStore = Object.assign(() => undefined, {
     getState: () => state,
     subscribe: () => () => {}
   })
+
   return { useAppStore }
 })
 
@@ -28,6 +30,7 @@ vi.mock('../store/slices/browser-webview-cleanup', () => ({
   collectBrowserWebviewIds: (...args: unknown[]) => {
     collectBrowserWebviewIdsCalls.count += 1
     void args
+
     return new Set<string>()
   },
   destroyRemovedBrowserWebview: vi.fn()
@@ -36,9 +39,11 @@ vi.mock('../store/slices/browser-webview-cleanup', () => ({
 vi.mock('@/lib/updater-beforeunload', () => ({
   isIntentionalAppRestartInProgress: () => false
 }))
+
 vi.mock('@/lib/shutdown-checkpoint-guard', () => ({
   preventUnloadAndScheduleShutdownCheckpointReset: vi.fn()
 }))
+
 vi.mock('./window-close-request-coordinator', () => ({
   setWindowCloseRequestHandler: vi.fn()
 }))
@@ -63,6 +68,7 @@ function Host(): null {
   const [, setTick] = useState(0)
   bumpRender = () => setTick((tick) => tick + 1)
   useTerminalWindowLifecycle(controller)
+
   return null
 }
 

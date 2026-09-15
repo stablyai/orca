@@ -42,9 +42,11 @@ export function useWorkspaceCleanupUnverifiedRemoval({
     (candidate) => {
       const identity = getWorkspaceCleanupCandidateIdentity(candidate)
       const attemptId = beginConsent(identity)
+
       if (!attemptId) {
         return
       }
+
       const hostId = resolveWorkspaceCleanupRemovalHostId(candidate)
       setRowFailures((current) => withoutIdentity(current, identity))
       setDeletionPhaseByIdentity((current) => ({ ...current, [identity]: 'queued' }))
@@ -63,6 +65,7 @@ export function useWorkspaceCleanupUnverifiedRemoval({
         },
         onRowFailed: (failure) => {
           clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
+
           // A preflight/timeout failure can arrive before the background
           // batch settles; drop the optimistic deleting overlay immediately.
           if (mountedRef.current) {
@@ -71,6 +74,7 @@ export function useWorkspaceCleanupUnverifiedRemoval({
         },
         onResult: (result) => {
           clearQueuedDeleteState(candidate.worktreeId, hostId ?? undefined)
+
           if (mountedRef.current) {
             applyResult(result, identity, setRowFailures, setDeletionPhaseByIdentity, onDeselect)
           }
@@ -83,6 +87,7 @@ export function useWorkspaceCleanupUnverifiedRemoval({
         },
         onError: () => {
           clearQueuedDeleteState(candidate.worktreeId, hostId ?? undefined)
+
           if (mountedRef.current) {
             setDeletionPhaseByIdentity((current) => withoutIdentity(current, identity))
           }
@@ -121,9 +126,11 @@ function applyLateResult(
 ): void {
   setFailures((current) => {
     let next = current
+
     for (const identity of result.removedIdentities) {
       next = withoutIdentity(next, identity)
     }
+
     return addFailures(next, result.failures)
   })
   onDeselect(result.removedIdentities)
@@ -134,15 +141,18 @@ function addFailures(
   failures: readonly WorkspaceCleanupFailure[]
 ): Record<string, WorkspaceCleanupFailure> {
   const next = { ...current }
+
   for (const failure of failures) {
     next[getWorkspaceCleanupFailureIdentity(failure)] = failure
   }
+
   return next
 }
 
 function withoutIdentity<T>(current: Record<string, T>, identity: string): Record<string, T> {
   const next = { ...current }
   delete next[identity]
+
   return next
 }
 

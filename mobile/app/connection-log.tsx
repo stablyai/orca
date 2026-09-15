@@ -42,6 +42,7 @@ export default function NativeConnectionLogRoute() {
         setHosts(loaded)
       }
     })
+
     return () => {
       stale = true
     }
@@ -50,11 +51,13 @@ export default function NativeConnectionLogRoute() {
   const selectedId = resolveDiagnosticsHostId(hosts, params.hostId, manualSelection, routeKey)
   const selected = hosts.find((host) => host.id === selectedId) ?? null
   const { client, state } = useHostClient(selected?.id)
+
   const { desktopAppVersion } = useHostStatusGates({
     hostId: selected?.id,
     client,
     connState: state
   })
+
   const reconnectAttempts = useReconnectAttempt(selected?.id)
   const { activePath, pendingPath } = useConnectionPathStatus(selected?.id)
 
@@ -69,11 +72,14 @@ export default function NativeConnectionLogRoute() {
       selectedId ? connectionLogStore.subscribe(selectedId, listener) : () => {},
     [selectedId]
   )
+
   const getSnapshot = useCallback(
     () => (selectedId ? connectionLogStore.get(selectedId) : EMPTY_ENTRIES),
     [selectedId]
   )
+
   const entries = useSyncExternalStore(subscribe, getSnapshot)
+
   const device = useMemo(
     () =>
       selected

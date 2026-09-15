@@ -18,12 +18,15 @@ const noopTiming: PtySpawnTiming = {
 
 export function createPtySpawnTiming(): PtySpawnTiming {
   const flag = process.env.ORCA_PTY_SPAWN_TIMING
+
   if (!flag || flag === '0' || flag.toLowerCase() === 'false') {
     return noopTiming
   }
+
   const startedAt = Date.now()
   let lastAt = startedAt
   const phases: string[] = []
+
   return {
     mark(phase: string): void {
       const now = Date.now()
@@ -36,6 +39,7 @@ export function createPtySpawnTiming(): PtySpawnTiming {
             .map(([key, value]) => `${key}=${value}`)
             .join(' ')}`
         : ''
+
       console.log(
         `[pty-spawn-timing] id=${id} total=${Date.now() - startedAt}ms ${phases.join(' ')}${extras}`
       )

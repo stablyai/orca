@@ -40,6 +40,7 @@ import {
 import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-file-transfer'
 
 const isMac = navigator.userAgent.includes('Mac')
+
 const isLinux = navigator.userAgent.includes('Linux')
 
 /** Platform-appropriate label: macOS → Finder, Windows → File Explorer, Linux → Files */
@@ -61,6 +62,7 @@ function stopRightButtonMenuSelection(event: React.PointerEvent): void {
   if (event.button !== 2) {
     return
   }
+
   // Why: Radix opens context menus under the pointer; on some macOS/Electron
   // paths the right-button release lands on the first item and selects it.
   event.preventDefault()
@@ -122,29 +124,38 @@ export function FileExplorerRowContextMenu({
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
+
   const showRemoteDownloadAction = shouldShowRemoteDownloadAction(
     node,
     connectionId,
     runtimeDownloadContext,
     supportsFolderDownload
   )
+
   const showCopyFileAction = shouldShowCopyFileAction(node, connectionId, selectionSize)
+
   const handleOpenInOrcaBrowser = useCallback(() => {
     if (!activeWorktreeId) {
       return
     }
+
     const result = openFileInBrowserTab({ filePath: node.path, worktreeId: activeWorktreeId })
+
     if (result.status === 'unsupported') {
       toast.error(result.message)
     }
   }, [activeWorktreeId, node.path])
+
   const handleDownload = useCallback(() => {
     const downloadTarget = connectionId || runtimeDownloadContext
+
     if (!downloadTarget) {
       return
     }
+
     void downloadRemoteFile(node, downloadTarget)
   }, [connectionId, node, runtimeDownloadContext])
+
   const handleCopyFile = useCallback(() => {
     void copyFileToOsClipboard(node, connectionId)
   }, [connectionId, node])
@@ -280,20 +291,25 @@ export function FileExplorerRowContextMenu({
       <ContextMenuItem
         onSelect={() => {
           const state = useAppStore.getState()
+
           const activeWorktree = Object.values(state.worktreesByRepo)
             .flat()
             .find((worktree) => worktree.id === activeWorktreeId)
+
           const activeRepo = activeWorktree
             ? state.repos.find((repo) => repo.id === activeWorktree.repoId)
             : null
+
           if (
             isLocalPathOpenBlocked(state.settings, {
               connectionId: activeRepo?.connectionId ?? null
             })
           ) {
             showLocalPathOpenBlockedToast()
+
             return
           }
+
           window.api.shell.openPath(node.path)
         }}
       >

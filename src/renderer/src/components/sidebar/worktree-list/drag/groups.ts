@@ -14,6 +14,7 @@ export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup
       groups.push({ key: current.key, worktreeIds: current.ids })
       continue
     }
+
     if (
       row.type === 'host-header' ||
       row.type === 'imported-worktrees-card' ||
@@ -23,13 +24,16 @@ export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup
     ) {
       continue
     }
+
     if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeIds.has(row.worktree.id)) {
       continue
     }
+
     if (!current) {
       current = { key: ALL_GROUP_KEY, ids: [] }
       groups.push({ key: current.key, worktreeIds: current.ids })
     }
+
     current.ids.push(row.worktree.id)
   }
 
@@ -44,21 +48,26 @@ export function getWorktreeDragIndexes(rows: readonly HostSectionRow[]): {
   const groupIndexByRowKey = new Map<string, number>()
   const groupIndexes = new Map<string, number>()
   const naturalWorktreeIds = getNaturalWorktreeIds(rows)
+
   for (const row of rows) {
     if (row.type === 'header') {
       groupIndexes.set(row.key, 0)
       continue
     }
+
     if (row.type !== 'item') {
       continue
     }
+
     if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeIds.has(row.worktree.id)) {
       continue
     }
+
     const index = groupIndexes.get(row.sectionKey) ?? 0
     groupKeyByRowKey.set(row.rowKey, row.sectionKey)
     groupIndexByRowKey.set(row.rowKey, index)
     groupIndexes.set(row.sectionKey, index + 1)
   }
+
   return { groupKeyByRowKey, groupIndexByRowKey }
 }

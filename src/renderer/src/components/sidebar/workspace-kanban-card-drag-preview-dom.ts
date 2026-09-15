@@ -1,10 +1,15 @@
 import { CARD_SELECTOR } from './workspace-kanban-card-pointer-drag-dom'
 
 const POINTER_CARD_DRAGGING_ATTR = 'data-workspace-board-card-pointer-dragging'
+
 const POINTER_DRAG_CARD_ATTR = 'data-workspace-board-card-drag-card'
+
 const POINTER_DRAG_COUNT_ATTR = 'data-workspace-board-card-drag-count'
+
 const POINTER_DRAGGING_ATTR = 'data-workspace-board-pointer-dragging'
+
 const POINTER_DRAG_PREVIEW_ATTR = 'data-workspace-board-card-drag-preview'
+
 const POINTER_DRAG_STACK_ATTR = 'data-workspace-board-card-drag-stack'
 
 type DragPreviewState = {
@@ -31,18 +36,23 @@ export function setDraggedCardsDragging(args: {
   enabled: boolean
 }): void {
   const { board, worktreeIdentities, enabled } = args
+
   if (!board) {
     return
   }
+
   // Why: virtual lanes remount cards during scroll; query live nodes by id
   // instead of holding HTMLElement references across unmounts.
   if (!enabled) {
     board.querySelectorAll<HTMLElement>(`[${POINTER_CARD_DRAGGING_ATTR}]`).forEach((card) => {
       card.removeAttribute(POINTER_CARD_DRAGGING_ATTR)
     })
+
     return
   }
+
   const ids = new Set(worktreeIdentities)
+
   for (const card of board.querySelectorAll<HTMLElement>(CARD_SELECTOR)) {
     if (ids.has(card.dataset.workspaceBoardCardId ?? '')) {
       card.setAttribute(POINTER_CARD_DRAGGING_ATTR, 'true')
@@ -84,6 +94,7 @@ export function createDragPreview(state: DragPreviewState): HTMLElement {
   previewCard.setAttribute(POINTER_DRAG_CARD_ATTR, 'true')
   removeDuplicatePreviewAttributes(previewCard)
   preview.appendChild(previewCard)
+
   if (state.worktreeIds.length > 1) {
     const countBadge = document.createElement('span')
     preview.setAttribute(POINTER_DRAG_STACK_ATTR, 'true')
@@ -91,6 +102,7 @@ export function createDragPreview(state: DragPreviewState): HTMLElement {
     countBadge.textContent = String(state.worktreeIds.length)
     preview.appendChild(countBadge)
   }
+
   preview.style.setProperty('position', 'fixed')
   preview.style.setProperty('left', '0')
   preview.style.setProperty('top', '0')
@@ -99,5 +111,6 @@ export function createDragPreview(state: DragPreviewState): HTMLElement {
   preview.style.setProperty('pointer-events', 'none')
   updateDragPreviewPosition({ ...state, preview })
   document.body.appendChild(preview)
+
   return preview
 }

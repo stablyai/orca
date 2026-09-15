@@ -21,6 +21,7 @@ function makeBrowserPage(id: string): BrowserPage {
 describe('getBrowserPagesForWorkspace', () => {
   it('returns only the owning workspace page array so unrelated page updates keep the selector stable', () => {
     const pages = [makeBrowserPage('page-1')]
+
     const browserPagesByWorkspace = {
       workspaceA: pages,
       workspaceB: [makeBrowserPage('page-2')]

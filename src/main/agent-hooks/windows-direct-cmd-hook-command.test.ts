@@ -80,9 +80,11 @@ describe.skipIf(process.platform !== 'win32')('direct hook command, run by both 
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'pipe']
       })
+
       return { stdout, status: 0 }
     } catch (error) {
       const failure = error as { stdout?: string; status?: number }
+
       return { stdout: failure.stdout ?? '', status: failure.status ?? 1 }
     }
   }
@@ -94,6 +96,7 @@ describe.skipIf(process.platform !== 'win32')('direct hook command, run by both 
 
   function withTempDir(run: (dir: string, scriptPath: string, command: string) => void): void {
     const dir = mkdtempSync(join(tmpdir(), 'orca-direct-hook-'))
+
     try {
       const scriptPath = join(dir, 'claude-hook.cmd')
       const command = wrapWindowsDirectCmdHookCommand(scriptPath)
@@ -109,6 +112,7 @@ describe.skipIf(process.platform !== 'win32')('direct hook command, run by both 
   it.skipIf(!canRunLive)('answers {} and exit 0 in both hosts when the script exists', () => {
     withTempDir((dir, scriptPath, command) => {
       writeFileSync(scriptPath, '@echo off\r\necho {}\r\nexit /b 0\r\n', 'utf8')
+
       for (const result of [runInCmd(command, dir), runInBash(command, dir)]) {
         expect(result.stdout.trim()).toBe('{}')
         expect(result.status).toBe(0)
@@ -123,6 +127,7 @@ describe.skipIf(process.platform !== 'win32')('direct hook command, run by both 
       // encoded launcher did this with a Test-Path; `|| echo {}` does it with no interpreter.
       withTempDir((dir, scriptPath, command) => {
         expect(existsSync(scriptPath)).toBe(false)
+
         for (const result of [runInCmd(command, dir), runInBash(command, dir)]) {
           expect(result.stdout.trim()).toBe('{}')
           expect(result.status).toBe(0)

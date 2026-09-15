@@ -19,12 +19,15 @@ function expand(node: unknown): unknown {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return node
   }
+
   if (Array.isArray(node)) {
     return node.map((entry) => expand(entry))
   }
+
   if (!React.isValidElement(node)) {
     if (typeof node === 'object' && 'props' in node) {
       const element = node as ReactElementLike
+
       return {
         ...element,
         props: {
@@ -33,13 +36,18 @@ function expand(node: unknown): unknown {
         }
       }
     }
+
     return node
   }
+
   const element = node as React.ReactElement<Record<string, unknown>>
+
   if (typeof element.type === 'function') {
     const Component = element.type as (props: Record<string, unknown>) => unknown
+
     return expand(Component(element.props))
   }
+
   return {
     type: element.type,
     props: {
@@ -52,10 +60,13 @@ function expand(node: unknown): unknown {
 function findByType(node: unknown, type: string): ReactElementLike {
   if (node && typeof node === 'object' && 'type' in node) {
     const element = node as ReactElementLike
+
     if (element.type === type) {
       return element
     }
+
     const children = element.props.children
+
     if (Array.isArray(children)) {
       for (const child of children) {
         try {
@@ -68,12 +79,14 @@ function findByType(node: unknown, type: string): ReactElementLike {
       return findByType(children, type)
     }
   }
+
   throw new Error(`Unable to find ${type}`)
 }
 
 describe('BrowserAnnotationSendMenuContent', () => {
   it('uses the review notes send content so existing agent sessions are selectable', () => {
     const onPromptDelivered = vi.fn()
+
     const tree = expand(
       <BrowserAnnotationSendMenuContent
         worktreeId="wt-1"
@@ -98,10 +111,12 @@ describe('BrowserAnnotationSendMenuContent', () => {
       fileURLToPath(new URL('../assemble-chrome/browser-page-chrome-banners.tsx', import.meta.url)),
       'utf8'
     )
+
     const traySource = readFileSync(
       fileURLToPath(new URL('./browser-page-annotation-tray.tsx', import.meta.url)),
       'utf8'
     )
+
     const sendSurfaces = `${bannerSource}\n${traySource}`
 
     expect(sendSurfaces.match(/<BrowserAnnotationSendMenuContent\b/g)).toHaveLength(2)

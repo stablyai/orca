@@ -4,6 +4,7 @@ import { TerminalHost } from './terminal-host'
 
 function createSubprocess(): SubprocessHandle {
   let onExit: ((code: number) => void) | null = null
+
   return {
     pid: 99_999,
     getForegroundProcess: vi.fn(() => null),
@@ -24,6 +25,7 @@ function createSubprocess(): SubprocessHandle {
 describe('TerminalHost process inspection', () => {
   it('returns unverifiable when the expected incarnation is stale', async () => {
     const host = new TerminalHost({ spawnSubprocess: () => createSubprocess() })
+
     try {
       const created = await host.createOrAttach({
         sessionId: 'session-incarnation',

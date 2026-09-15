@@ -31,6 +31,7 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
 
   if (file.mode === 'check-details') {
     const label = file.checkRunDetails?.check.name ?? 'Check details'
+
     return {
       copyText: null,
       copyToastLabel: 'Check details copied',
@@ -85,6 +86,7 @@ export function getEditorHeaderOpenFileState(
   if (file.diffSource === 'branch') {
     return { canOpen: branchEntry?.status !== 'deleted' || !branchEntry }
   }
+
   if (file.diffSource === 'commit') {
     return { canOpen: false }
   }

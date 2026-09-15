@@ -35,12 +35,15 @@ type PendingRetryHarness = {
 
 async function createPendingRetryHarness(): Promise<PendingRetryHarness> {
   const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
+
   const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
     current: null
   }
+
   const setAgentStatuses = vi.fn((updates: readonly AgentStatusBatchUpdate[]) =>
     updates.map(() => true)
   )
+
   const storeState = buildStoreState({
     setAgentStatuses,
     workspaceSessionReady: true,
@@ -48,6 +51,7 @@ async function createPendingRetryHarness(): Promise<PendingRetryHarness> {
     terminalLayoutsByTabId: {},
     settings: { terminalFontSize: 13, notifications: { enabled: false } }
   })
+
   const transactImplementation = storeState.transactAgentStatuses as (...args: unknown[]) => unknown
   const transactAgentStatuses = vi.fn(transactImplementation)
   storeState.transactAgentStatuses = transactAgentStatuses
@@ -56,6 +60,7 @@ async function createPendingRetryHarness(): Promise<PendingRetryHarness> {
     useAppStore: {
       subscribe: vi.fn((listener: StoreSubscribeListener) => {
         subscribeListenerRef.current = listener
+
         return () => {
           subscribeListenerRef.current = null
         }
@@ -72,6 +77,7 @@ async function createPendingRetryHarness(): Promise<PendingRetryHarness> {
       agentStatus: {
         onSet: (listener: (data: AgentStatusSetData) => void) => {
           onSetListenerRef.current = listener
+
           return () => {
             onSetListenerRef.current = null
           }
@@ -82,6 +88,7 @@ async function createPendingRetryHarness(): Promise<PendingRetryHarness> {
 
   const { registerAgentStatusIpcBridge } = await import('./agent-status-ipc-bridge')
   const bridge = registerAgentStatusIpcBridge([])
+
   if (!subscribeListenerRef.current || !onSetListenerRef.current) {
     throw new Error('Expected agent-status bridge listeners')
   }
@@ -122,6 +129,7 @@ describe('agent status pending retry gate', () => {
 
   it('tracks every store-owned input that can resolve or retire pending attribution', () => {
     const previous = createRetryState()
+
     const changes: RetryState[] = [
       { ...previous, workspaceSessionReady: false },
       { ...previous, tabsByWorktree: {} },
@@ -134,6 +142,7 @@ describe('agent status pending retry gate', () => {
     ]
 
     expect(shouldRetryPendingAgentStatusesAfterStoreUpdate({ ...previous }, previous)).toBe(false)
+
     for (const current of changes) {
       expect(shouldRetryPendingAgentStatusesAfterStoreUpdate(current, previous)).toBe(true)
     }

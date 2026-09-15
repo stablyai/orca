@@ -17,6 +17,7 @@ async function createSource(): Promise<{ root: string; source: string }> {
     join(source, 'SKILL.md'),
     '---\nname: retry-skill\ndescription: Retry publication\n---\n\n# Retry\n'
   )
+
   return { root, source }
 }
 
@@ -72,6 +73,7 @@ describe('SkillSharePreparationService', () => {
         { path: 'run.sh', executable: true }
       ]
     })
+
     const service = new SkillSharePreparationService(
       join(root, 'preparations'),
       { publishVersion: vi.fn(), createShare: vi.fn() },
@@ -111,6 +113,7 @@ describe('SkillSharePreparationService', () => {
         { path: 'run.sh', executable: true }
       ]
     })
+
     const service = new SkillSharePreparationService(
       join(root, 'preparations'),
       { publishVersion: vi.fn(), createShare: vi.fn() },
@@ -125,12 +128,14 @@ describe('SkillSharePreparationService', () => {
   it('retries initialization after a transient failure', async () => {
     const { root, source } = await createSource()
     const preparationRoot = join(root, 'preparations')
+
     const initializeRoot = vi
       .fn<() => Promise<void>>()
       .mockRejectedValueOnce(new Error('transient-init-failure'))
       .mockImplementationOnce(async () => {
         await mkdir(preparationRoot, { recursive: true })
       })
+
     const service = new SkillSharePreparationService(
       preparationRoot,
       { publishVersion: vi.fn(), createShare: vi.fn() },
@@ -151,6 +156,7 @@ describe('SkillSharePreparationService', () => {
     const preparationRoot = join(root, 'preparations')
     await mkdir(join(preparationRoot, 'abandoned'), { recursive: true })
     await writeFile(join(preparationRoot, 'abandoned', 'package.tar.gz'), 'private bytes')
+
     const service = new SkillSharePreparationService(preparationRoot, {
       publishVersion: vi.fn(),
       createShare: vi.fn()
@@ -163,6 +169,7 @@ describe('SkillSharePreparationService', () => {
 
   it('enforces the preparation cap while archives are still being created', async () => {
     const { root, source } = await createSource()
+
     const service = new SkillSharePreparationService(join(root, 'preparations'), {
       publishVersion: vi.fn(),
       createShare: vi.fn()
@@ -181,10 +188,12 @@ describe('SkillSharePreparationService', () => {
 
   it('reuses a finalized version when share response delivery is lost', async () => {
     const { root, source } = await createSource()
+
     const publishVersion = vi.fn(async (request: { packageId: string }) => ({
       status: 'ok' as const,
       value: publishedVersion(request.packageId, 'version_retry')
     }))
+
     const createShare = vi
       .fn()
       .mockRejectedValueOnce(new Error('response lost'))
@@ -192,15 +201,19 @@ describe('SkillSharePreparationService', () => {
         status: 'ok',
         value: { id: 'share_retry', url: 'https://share.test/skills/share/share_retry' }
       })
+
     const service = new SkillSharePreparationService(join(root, 'preparations'), {
       publishVersion,
       createShare
     })
+
     const preview = await service.prepare({ sourceDirectory: source })
+
     const input = {
       preparationId: preview.preparationId,
       releaseNotes: 'retry'
     }
+
     const progress = vi.fn()
 
     await expect(service.publish(input, progress)).rejects.toThrow('response lost')
@@ -222,10 +235,12 @@ describe('SkillSharePreparationService', () => {
 
   it('keeps the finalized version while sign-in is reconnected', async () => {
     const { root, source } = await createSource()
+
     const publishVersion = vi.fn(async (request: { packageId: string }) => ({
       status: 'ok' as const,
       value: publishedVersion(request.packageId, 'version_reconnect')
     }))
+
     const createShare = vi
       .fn()
       .mockResolvedValueOnce({ status: 'reconnect-required' })
@@ -233,10 +248,12 @@ describe('SkillSharePreparationService', () => {
         status: 'ok',
         value: { id: 'share_retry', url: 'https://share.test/skills/share/share_retry' }
       })
+
     const service = new SkillSharePreparationService(join(root, 'preparations'), {
       publishVersion,
       createShare
     })
+
     const preview = await service.prepare({ sourceDirectory: source })
 
     await expect(

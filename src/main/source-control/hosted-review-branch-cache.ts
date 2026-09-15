@@ -49,6 +49,7 @@ import {
 // Why: a found review still refreshes at the callers' poll cadence; the cache
 // exists to collapse concurrent clients, not to make review state go stale.
 const FOUND_REVIEW_TTL_MS = 60_000
+
 const MAX_ENTRIES = MAX_BRANCH_MAP_ENTRIES
 
 type CacheEntry = {
@@ -69,7 +70,9 @@ type InflightRecord = {
 }
 
 const entries = new Map<string, CacheEntry>()
+
 const inflight = new Map<string, InflightRecord>()
+
 // Why: NUL is the one byte a repo path or branch name cannot contain, so a
 // scope prefix cannot straddle a component boundary — invalidating `/a/b` must
 // not also flush the unrelated repo at `/a/b c`.
@@ -129,6 +132,7 @@ function refreshIntervalMs(entry: CacheEntry, active: boolean): number {
   if (entry.review !== null) {
     return FOUND_REVIEW_TTL_MS
   }
+
   return active ? ACTIVE_REFRESH_INTERVAL_MS : NO_REVIEW_REFRESH_INTERVAL_MS
 }
 
@@ -138,17 +142,21 @@ function isFresh(entry: CacheEntry, headOid: string | null, active: boolean): bo
       return false
     }
   }
+
   return Date.now() - entry.fetchedAt < refreshIntervalMs(entry, active)
 }
 
 function storeEntry(key: string, entry: CacheEntry): void {
   entries.delete(key)
   entries.set(key, entry)
+
   while (entries.size > MAX_ENTRIES) {
     const oldest = entries.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     entries.delete(oldest)
   }
 }
@@ -158,7 +166,9 @@ function releaseInflight(key: string, token: object): boolean {
   if (inflight.get(key)?.token !== token) {
     return false
   }
+
   inflight.delete(key)
+
   return true
 }
 
@@ -172,12 +182,14 @@ function releaseInflight(key: string, token: object): boolean {
  */
 function expireOverdueInflight(now: number): void {
   let overdue: InflightRecord[] | undefined
+
   for (const record of inflight.values()) {
     if (now - record.startedAt >= HOSTED_REVIEW_LOOKUP_DEADLINE_MS) {
       overdue ??= []
       overdue.push(record)
     }
   }
+
   // Expire after the walk: each one deletes its own entry from the map.
   for (const record of overdue ?? []) {
     record.expire()
@@ -186,11 +198,14 @@ function expireOverdueInflight(now: number): void {
 
 function trackInflight(key: string, record: InflightRecord): void {
   inflight.set(key, record)
+
   while (inflight.size > MAX_INFLIGHT_LOOKUPS) {
     const oldest = inflight.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     // Why: drop the record without expiring it — its own deadline still
     // releases its callers, and evicting is about memory, not about failing.
     // It does forfeit the sweep's wall-clock release, so the cap must stay far
@@ -211,11 +226,13 @@ export function invalidateHostedReviewBranchCache(
   const scope = repoScope(repoPath, executionHostId)
   bumpScopeGeneration(scope)
   const prefix = `${scope}${KEY_SEPARATOR}`
+
   for (const key of entries.keys()) {
     if (key.startsWith(prefix)) {
       entries.delete(key)
     }
   }
+
   dropFailuresWithPrefix(prefix)
 }
 
@@ -242,18 +259,22 @@ function canAdoptDetachedAnswer(key: string, startedAt: number): boolean {
   if (inflight.has(key)) {
     return false
   }
+
   const current = entries.get(key)
+
   return current === undefined || (current.startedAt < startedAt && current.fetchedAt >= startedAt)
 }
 
 /** Why the branch must not be asked again yet, or null when a lookup may start. */
 function lookupUnavailableReason(key: string): string | null {
   const until = backoffUntil(key)
+
   if (until !== null) {
     return `Hosted review lookup is backing off after repeated failures. Retrying after ${new Date(
       until
     ).toLocaleTimeString()}.`
   }
+
   return lookupCapacityRefusal(key)
 }
 
@@ -276,36 +297,46 @@ function startLookup(
   let timedOut = false
   let completed = false
   let release: (review: HostedReviewInfo | null) => void = () => {}
+
   let fail: (error: unknown) => void = () => {}
+
   const promise = new Promise<HostedReviewInfo | null>((resolve, reject) => {
     release = resolve
     fail = reject
   })
+
   let timer: ReturnType<typeof setTimeout> | undefined
 
   const expire = (): void => {
     if (timedOut || completed) {
       return
     }
+
     timedOut = true
+
     if (timer !== undefined) {
       clearTimeout(timer)
     }
+
     // Why: only the lookup still serving this key shapes the backoff. A record
     // already replaced — or dropped by the size cap — has a live successor, and
     // penalising the branch would slow down the retry that is already running.
     if (releaseInflight(key, token)) {
       noteFailure(key)
     }
+
     // Why: the lookup runs on with nothing able to stop it, so it is counted
     // process-wide until it settles — that count is what stops a wedged host
     // from stranding a lookup on every branch it serves.
     noteDetachedLookup()
     const stale = entries.get(key)
+
     if (stale) {
       release(stale.review)
+
       return
     }
+
     fail(
       new Error(
         `Hosted review lookup timed out after ${Math.round(
@@ -320,9 +351,11 @@ function startLookup(
   // branch with the cap still reading zero, and every one of them can wedge.
   noteLookupStarted(key)
   timer = setTimeout(expire, HOSTED_REVIEW_LOOKUP_DEADLINE_MS)
+
   if (typeof timer === 'object' && 'unref' in timer) {
     timer.unref()
   }
+
   // Why: track before running, so a lookup that throws synchronously clears the
   // record it would otherwise leave behind for a full deadline.
   trackInflight(key, { token, startedAt, promise, expire })
@@ -330,6 +363,7 @@ function startLookup(
   void (async () => {
     try {
       const review = await lookup()
+
       // Why: a review created while this lookup was out makes its answer older
       // than the invalidation; storing it would re-pin the stale "no review".
       // Owning the key is what licenses a store outright — anything else is a
@@ -337,15 +371,18 @@ function startLookup(
       const stored =
         generation === scopeGeneration(scope) &&
         (inflight.get(key)?.token === token || canAdoptDetachedAnswer(key, startedAt))
+
       if (stored) {
         storeEntry(key, { review, fetchedAt: Date.now(), headOid, startedAt })
       }
+
       // Why: only an answer that beat the deadline proves the provider is
       // healthy. Clearing on a straggler leaves a chronically wedged host at the
       // base window forever, re-asking as fast as the deadline expires.
       if (stored && !timedOut) {
         clearFailures(key)
       }
+
       release(review)
     } catch (error) {
       // Why: the deadline already counted this lookup as a failure and released
@@ -353,28 +390,36 @@ function startLookup(
       if (timedOut) {
         return
       }
+
       // Why: a record the size cap dropped has a live successor, and backing the
       // branch off would slow the retry that is already running.
       if (inflight.get(key)?.token === token) {
         noteFailure(key)
       }
+
       // Why: the last good review beats an error card here just as it does on
       // the backed-off path — otherwise it blinks out on the first failure.
       // An invalidation drops the entry, so this cannot revive a retired answer.
       const stale = entries.get(key)
+
       if (stale) {
         release(stale.review)
+
         return
       }
+
       fail(error)
     } finally {
       completed = true
+
       if (timer !== undefined) {
         clearTimeout(timer)
       }
+
       if (timedOut) {
         settleDetachedLookup()
       }
+
       settleLookup(key)
       releaseInflight(key, token)
     }
@@ -398,6 +443,7 @@ export async function withHostedReviewBranchCache(
   // Why: sweep first, so a lookup whose deadline never fired cannot be joined —
   // that is the pin this cache used to hold until the process restarted.
   expireOverdueInflight(Date.now())
+
   if (options.active === true && noteActiveClaim(key) && entries.get(key)?.review === null) {
     // Why: switching to a worktree is the user asking whether a review exists
     // yet, so the long no-review interval must not answer on their behalf. This
@@ -405,25 +451,30 @@ export async function withHostedReviewBranchCache(
     // rather than one per minute.
     entries.delete(key)
   }
+
   const active = isActiveBranch(key)
 
   const cached = entries.get(key)
+
   if (cached && isFresh(cached, headOid, active)) {
     return cached.review
   }
 
   const pending = inflight.get(key)
+
   if (pending) {
     return pending.promise
   }
 
   const unavailable = lookupUnavailableReason(key)
+
   if (unavailable !== null) {
     // Why: a stale answer beats an error card, but with nothing cached the
     // caller must hear the failure rather than read it as "no review".
     if (cached) {
       return cached.review
     }
+
     throw new Error(unavailable)
   }
 

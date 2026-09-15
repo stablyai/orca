@@ -12,6 +12,7 @@ export function sameStringRecord(
   const right = b ?? {}
   const leftKeys = Object.keys(left)
   const rightKeys = Object.keys(right)
+
   return (
     leftKeys.length === rightKeys.length &&
     leftKeys.every((key) => Object.hasOwn(right, key) && left[key] === right[key])
@@ -25,12 +26,15 @@ export function terminalLayoutNodeEqual(
   if (!a || !b) {
     return !a && !b
   }
+
   if (a.type !== b.type) {
     return false
   }
+
   if (a.type === 'leaf') {
     return b.type === 'leaf' && a.leafId === b.leafId
   }
+
   return (
     b.type === 'split' &&
     a.direction === b.direction &&

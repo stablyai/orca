@@ -71,15 +71,19 @@ import { sendStructuredAgentSessionForClient } from './structured-agent-session-
 async function resolveClientSuppliedAttach(params: z.infer<typeof AttachParams>, ctx: RpcContext) {
   await ensureHostInstalled(ctx)
   const host = requireHost(ctx)
+
   if (!host.supportsCreate(params.location, params.agent)) {
     throw new Error('structured_agent_session_unsupported')
   }
+
   const { agent: _attachAgent, provider: _attachProvider, ...attachWithoutAgent } = params
+
   const attachParams = {
     ...attachWithoutAgent,
     provider: params.provider as 'claude' | 'codex',
     agent: params.agent as 'claude' | 'codex'
   } as AgentSessionAttachParams
+
   return { host, attachParams }
 }
 
@@ -88,6 +92,7 @@ async function attachClientSuppliedLocation(
   ctx: RpcContext
 ): Promise<unknown> {
   const { host, attachParams } = await resolveClientSuppliedAttach(params, ctx)
+
   return host.attach(callerFor(ctx), attachParams)
 }
 
@@ -98,6 +103,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
       await ensureHostInstalled(ctx)
+
       return requireHost(ctx).rewind(callerFor(ctx), params)
     }
   }),
@@ -110,15 +116,19 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       const host = requireHost(ctx)
       await host.revealSession(params.envelope.sessionId)
       const result = await host.conversationCommand(callerFor(ctx), params)
+
       if (result.ok && result.value.command === 'clear' && result.value.replacementSessionId) {
         const replacement = host
           .conversationReplacements()
           .find((entry) => entry.sourceSessionId === params.envelope.sessionId)
+
         if (replacement) {
           await ctx.runtime.replaceStructuredAgentSessionTab(replacement)
         }
+
         await host.close(params.envelope.sessionId)
       }
+
       return result
     }
   }),
@@ -129,6 +139,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       if (!supportsStructuredSessions(ctx)) {
         throw new Error('structured_agent_session_unsupported')
       }
+
       return ctx.runtime.getStructuredAgentSessionCreateSupport(params.worktree, params.agent)
     }
   }),
@@ -137,9 +148,11 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
     params: CreateParams,
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
+
       if (params.envelope.expectedRuntimeFence !== null) {
         throw new Error('agent_session_operation_invalid')
       }
+
       // Everything up to `attach` is pre-commit, and answers with a refusal rather than a throw so
       // a client can tell "nothing was created" from "the outcome is unknown".
       const prepared = await resolveUncommittedStructuredCreate(async () => {
@@ -156,14 +169,18 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
               resumeFrom: params.resumeFrom
             }
           })
+
           const conflict = agentSessionFingerprintConflict(params.envelope, intentFingerprint)
+
           if (conflict) {
             return { refusal: conflict }
           }
+
           return prepareStructuredAgentSessionCreateForWorktree({
             runtime: ctx.runtime,
             ensureHost: async () => {
               await ensureHostInstalled(ctx)
+
               return requireHost(ctx)
             },
             envelope: params.envelope,
@@ -173,12 +190,16 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
             ...(params.resumeFrom ? { resumeFrom: params.resumeFrom } : {})
           })
         }
+
         const { host, attachParams } = await resolveClientSuppliedAttach(params, ctx)
+
         return { host, attachParams, tab: null }
       })
+
       if ('refusal' in prepared) {
         return { ok: false, refusal: prepared.refusal }
       }
+
       return commitStructuredAgentSessionCreate({
         runtime: ctx.runtime,
         caller: callerFor(ctx),
@@ -212,11 +233,14 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       // Cleanup gate: turning the host setting off must not strand an open chat whose owner can
       // then never close it. See the rule on `requireStructuredCleanupHost`.
       const host = requireStructuredCleanupHost(ctx)
+
       // Terminal-disposal closes use this RPC without the session-tabs retirement RPC.
       if (typeof host.setSessionTabVisibility === 'function') {
         await host.setSessionTabVisibility(params.sessionId, false)
       }
+
       await host.close(params.sessionId)
+
       return { ok: true as const }
     }
   }),
@@ -279,13 +303,16 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       // explicitly hold every open surface before subscribing.
       const streamHolder = `subscription:${subscriptionId}`
       let dispose = (): void => {}
+
       const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => {
         dispose()
         host.release(params.sessionId, streamHolder)
       })
+
       if (stream.isClosed()) {
         return
       }
+
       // The host emits the opening snapshot (or the missed batch) synchronously
       // inside open(), so nothing between here and there can interleave.
       dispose = host.subscribe({
@@ -294,6 +321,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
         emit: (event) => emit(projectTurnItemEvent(projectBackgroundTaskEvent(event, ctx), ctx)),
         ...(params.cursor ? { cursor: params.cursor } : {})
       })
+
       if (stream.isClosed()) {
         dispose()
       } else {
@@ -315,12 +343,16 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       // retire resources it already owns; the base still comes from main's shared helper.
       requireStructuredCleanupHost(ctx)
       const base = subscriptionBaseFor(ctx, params.sessionId)
+
       if (params.subscriptionId) {
         ctx.runtime.cleanupSubscription(`${base}:${params.subscriptionId}`)
+
         return { unsubscribed: true }
       }
+
       ctx.runtime.cleanupSubscription(base)
       ctx.runtime.cleanupSubscriptionsByPrefix(`${base}:`)
+
       return { unsubscribed: true }
     }
   }),

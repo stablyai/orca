@@ -40,10 +40,12 @@ export function createLivePaneManagerRegistry(): {
   unregisterAllManagers: () => void
 } {
   const registeredManagers: { resetWebglTextureAtlases(): void }[] = []
+
   return {
     registerManagerForReset<T extends { resetWebglTextureAtlases(): void }>(manager: T): T {
       registerLivePaneManager(manager)
       registeredManagers.push(manager)
+
       return manager
     },
     unregisterAllManagers(): void {

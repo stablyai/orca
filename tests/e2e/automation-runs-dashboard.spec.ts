@@ -14,9 +14,11 @@ test('opens the runs dashboard and returns to automations', async ({ orcaPage })
 
   await orcaPage.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     store.getState().openAutomationsPage()
   })
 

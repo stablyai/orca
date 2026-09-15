@@ -35,8 +35,10 @@ export function resolveNestedWorkerMaxDepth(
   settings: Pick<GlobalSettings, 'nestedWorkerMaxDepth'> | null | undefined
 ): number {
   const raw = settings?.nestedWorkerMaxDepth
+
   if (typeof raw !== 'number' || !Number.isSafeInteger(raw) || raw < 1) {
     return NESTED_WORKER_MAX_DEPTH_DEFAULT
   }
+
   return raw
 }

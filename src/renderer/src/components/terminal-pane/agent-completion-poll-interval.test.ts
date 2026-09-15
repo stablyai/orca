@@ -18,6 +18,7 @@ describe('nextCadenceInspectionDelayMs', () => {
     // Why this matters: the inspection queue collapses shared-observation tasks enqueued in the
     // same tick onto one process-table capture, so a shared deadline is one `ps` for all panes.
     const clocks = [0, 137, 999, 1_501].map((offset) => 1_700_000_000_000 + offset)
+
     // Each pane may only be pulled forward by the snapshot TTL per step, so convergence takes
     // at most IDLE_MS / TTL steps.
     for (let step = 0; step < IDLE_MS / PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS; step += 1) {
@@ -45,6 +46,7 @@ describe('nextCadenceInspectionDelayMs', () => {
       now: 1_700_000_000_000,
       random: () => 0
     })
+
     const highJitter = nextCadenceInspectionDelayMs({
       baseMs: IDLE_MS,
       hasConsecutiveErrors: true,

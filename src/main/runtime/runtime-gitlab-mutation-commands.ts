@@ -33,6 +33,7 @@ export class RuntimeGitLabMutationCommands {
 
   async createGitLabRepoIssue(repoSelector: string, title: string, body: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return createIssue(
       repo.path,
       title,
@@ -50,6 +51,7 @@ export class RuntimeGitLabMutationCommands {
     projectRef?: GitLabProjectRef | null
   ) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return updateIssue(
       repo.path,
       number,
@@ -68,6 +70,7 @@ export class RuntimeGitLabMutationCommands {
     projectRef?: GitLabProjectRef | null
   ) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return addIssueComment(
       repo.path,
       number,
@@ -86,6 +89,7 @@ export class RuntimeGitLabMutationCommands {
     projectRef?: GitLabProjectRef | null
   ) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return addMRComment(
       repo.path,
       iid,
@@ -104,6 +108,7 @@ export class RuntimeGitLabMutationCommands {
     projectRef?: GitLabProjectRef | null
   ) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return addMRInlineComment(
       repo.path,
       iid,
@@ -123,6 +128,7 @@ export class RuntimeGitLabMutationCommands {
     projectRef?: GitLabProjectRef | null
   ) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return resolveMRDiscussion(
       repo.path,
       iid,
@@ -141,6 +147,7 @@ export class RuntimeGitLabMutationCommands {
     projectRef?: GitLabProjectRef | null
   ) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return getJobTrace(
       repo.path,
       jobId,
@@ -157,6 +164,7 @@ export class RuntimeGitLabMutationCommands {
     projectRef?: GitLabProjectRef | null
   ) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return retryJob(
       repo.path,
       jobId,
@@ -174,6 +182,7 @@ export class RuntimeGitLabMutationCommands {
     projectRef?: GitLabProjectRef | null
   ) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return mergeMR(
       repo.path,
       iid,
@@ -193,6 +202,7 @@ export class RuntimeGitLabMutationCommands {
   ) {
     const repo = await this.deps.resolveRepo(repoSelector)
     const updateState = state === 'closed' ? closeMR : reopenMR
+
     return updateState(
       repo.path,
       iid,
@@ -210,6 +220,7 @@ export class RuntimeGitLabMutationCommands {
     projectRef?: GitLabProjectRef | null
   ) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return updateMR(
       repo.path,
       iid,
@@ -228,6 +239,7 @@ export class RuntimeGitLabMutationCommands {
     projectRef?: GitLabProjectRef | null
   ) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return updateMRReviewers(
       repo.path,
       iid,

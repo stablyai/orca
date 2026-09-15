@@ -68,19 +68,23 @@ function scheduleRebaseline(
   state: WorktreeHeadIdentityRefreshState
 ): void {
   disposeWorktreeHeadIdentityRefreshState(state)
+
   if (host.disposed || host.mainWindow.isDestroyed()) {
     return
   }
+
   const dueInMs = Math.max(
     0,
     state.lastFullReadAtMs + HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS - Date.now()
   )
+
   const timer = setTimeout(() => {
     state.rebaselineTimer = null
     // `emit: true`: unlike a structural burst, nothing else runs alongside this
     // to correct the drift, so a silent re-baseline would bury it forever.
     void refreshWorktreeHeadIdentities(host, state, true, FULL_HEAD_IDENTITY_SCOPE)
   }, dueInMs)
+
   // Never hold the process open for a freshness backstop.
   timer.unref?.()
   state.rebaselineTimer = timer
@@ -97,6 +101,7 @@ function resolveScope(
   if (scope.all || state.baseline === null) {
     return FULL_HEAD_IDENTITY_SCOPE
   }
+
   return Date.now() - state.lastFullReadAtMs >= HEAD_IDENTITY_FULL_REBASELINE_INTERVAL_MS
     ? FULL_HEAD_IDENTITY_SCOPE
     : scope
@@ -119,14 +124,17 @@ export async function refreshWorktreeHeadIdentities(
   if (host.disposed || host.mainWindow.isDestroyed()) {
     return
   }
+
   if (state.inFlight) {
     state.queuedScope = mergeHeadIdentityScopes(
       state.queuedScope ?? EMPTY_HEAD_IDENTITY_SCOPE,
       scope
     )
     state.queuedEmit ||= emit
+
     return
   }
+
   // Why: the queued re-run below can be handed to a window that was destroyed
   // mid-read (macOS recreates it while the watch lives on), and that call
   // returns at the guard above. Fold anything still queued into this request so
@@ -134,6 +142,7 @@ export async function refreshWorktreeHeadIdentities(
   const requestedScope = state.queuedScope
     ? mergeHeadIdentityScopes(state.queuedScope, scope)
     : scope
+
   const requestedEmit = emit || state.queuedEmit
   state.queuedScope = null
   state.queuedEmit = false
@@ -141,6 +150,7 @@ export async function refreshWorktreeHeadIdentities(
   // periodic re-baseline, and a repo whose only churn is `git worktree
   // lock`/`unlock` or a sparse toggle must not be able to starve it forever.
   const effectiveScope = resolveScope(state, requestedScope)
+
   // Nothing the burst touched can move a head (a `locked` or `config.worktree`
   // write) and no re-baseline is due: read nothing.
   //
@@ -154,29 +164,36 @@ export async function refreshWorktreeHeadIdentities(
   if (state.baseline !== null && isEmptyHeadIdentityScope(effectiveScope)) {
     return
   }
+
   state.inFlight = true
+
   try {
     const { identities, complete } = await readGitCommonHeadIdentities(
       host.path,
       state.cache,
       effectiveScope
     )
+
     if (host.disposed || host.mainWindow.isDestroyed()) {
       return
     }
+
     // After the teardown check, so a read whose result is discarded cannot pass
     // for a checkpoint. A read that could not enumerate `worktrees/`, or that hit
     // an unreadable entry, has not observed the whole repo — not one either.
     if (effectiveScope.all && complete) {
       state.lastFullReadAtMs = Date.now()
     }
+
     const baseline = state.baseline
     // Rows this pass could not observe are carried forward: dropping them would
     // make the next successful listing report every linked worktree as changed.
     const nextBaseline = complete ? new Map<string, string>() : new Map(baseline ?? [])
+
     for (const identity of identities) {
       nextBaseline.set(identity.worktreePath, headIdentitySignature(identity))
     }
+
     // Why `emit: false` is safe to publish nothing: the only classification that
     // reaches here with a head-moving scope and no emit is a structural burst,
     // and structural bursts notify the worktree catalog for every repo on this
@@ -188,9 +205,11 @@ export async function refreshWorktreeHeadIdentities(
             (identity) => baseline.get(identity.worktreePath) !== headIdentitySignature(identity)
           )
         : []
+
     for (const repoId of changed.length > 0 ? host.repos.keys() : []) {
       notifyWorktreeHeadIdentitiesChanged(host.mainWindow, repoId, changed)
     }
+
     // Last, so a send that throws part-way leaves the old baseline and the next
     // refresh re-diffs instead of silently dropping the move.
     state.baseline = nextBaseline
@@ -202,6 +221,7 @@ export async function refreshWorktreeHeadIdentities(
     state.lastFullReadAtMs = 0
   } finally {
     state.inFlight = false
+
     if (state.queuedScope && !host.disposed) {
       // Leave the queue armed: if this call cannot proceed (destroyed window),
       // the next refresh folds it back in at the entry above.

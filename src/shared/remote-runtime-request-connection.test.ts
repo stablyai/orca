@@ -31,6 +31,7 @@ afterEach(async () => {
           for (const client of server.clients) {
             client.close()
           }
+
           server.close(() => resolve())
         })
     )
@@ -111,19 +112,24 @@ async function createServer(): Promise<TestServer> {
       if (isBinary) {
         return
       }
+
       const frame = data.toString()
+
       if (!sharedKey) {
         const hello = JSON.parse(frame) as { type: string; publicKeyB64: string }
         const clientPublicKey = publicKeyFromBase64(hello.publicKeyB64)
         sharedKey = deriveSharedKey(serverKeyPair.secretKey, clientPublicKey)
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))
+
         return
       }
 
       const plaintext = decrypt(frame, sharedKey)
+
       if (plaintext === null) {
         return
       }
+
       if (!authenticated) {
         const auth = JSON.parse(plaintext) as { type: string; deviceToken: string }
         auths.push(auth)
@@ -134,6 +140,7 @@ async function createServer(): Promise<TestServer> {
         })
         authenticated = true
         sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
+
         return
       }
 
@@ -142,10 +149,13 @@ async function createServer(): Promise<TestServer> {
         method: string
         params?: unknown
       }
+
       requests.push(request)
+
       if (request.method === 'test.hang') {
         return
       }
+
       sendEncrypted(ws, sharedKey, {
         id: request.id,
         ok: true,
@@ -157,6 +167,7 @@ async function createServer(): Promise<TestServer> {
 
   await new Promise<void>((resolve) => wss.once('listening', resolve))
   const address = wss.address() as AddressInfo
+
   const pairing = parsePairingCode(
     encodePairingOffer({
       v: 2,
@@ -165,6 +176,7 @@ async function createServer(): Promise<TestServer> {
       publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
     })
   )
+
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }

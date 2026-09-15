@@ -28,10 +28,12 @@ describe('Quick Open transport byte budget', () => {
       totalCount: 2,
       truncated: false
     }
+
     const budget = Buffer.byteLength(
       JSON.stringify({ ...result, files: result.files.slice(0, 1) }),
       'utf8'
     )
+
     expect(limitQuickOpenSearchReplyBySerializedBytes(result, budget).files).toHaveLength(1)
     expect(limitQuickOpenSearchReplyBySerializedBytes(result, budget).truncated).toBe(true)
   })

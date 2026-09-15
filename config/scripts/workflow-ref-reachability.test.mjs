@@ -7,14 +7,21 @@ import { parse } from 'yaml'
 import { runProcess } from '../../src/shared/child-process/run-process'
 
 const readWorkflow = (name) => parse(readFileSync(`.github/workflows/${name}.yml`, 'utf8'))
+
 const windowsVet = readWorkflow('dev-channel-win-build').jobs['build-win'].steps.find(
   (step) => step.id === 'vetted'
 )
+
 const macSteps = readWorkflow('adhoc-mac-build').jobs['build-adhoc-mac'].steps
+
 const macVet = macSteps.find((step) => step.id === 'vetted')
+
 const macCheckout = macSteps.find((step) => step.name === 'Checkout the requested ref')
+
 const directory = mkdtempSync(join(tmpdir(), 'workflow-ref-reachability-'))
+
 const repository = join(directory, 'remote.git')
+
 const identity = {
   ...process.env,
   GIT_AUTHOR_NAME: 'Ref test',
@@ -22,11 +29,13 @@ const identity = {
   GIT_COMMITTER_NAME: 'Ref test',
   GIT_COMMITTER_EMAIL: 'ref-test@example.com'
 }
+
 let ancestor, upper, lower, untrusted
 
 async function git(args, env = identity) {
   const result = await runProcess({ program: 'git', args, env })
   expect(result.code, result.stderr).toBe(0)
+
   return result.stdout.trim()
 }
 
@@ -37,6 +46,7 @@ beforeAll(async () => {
   upper = await git(['-C', repository, 'commit-tree', tree, '-p', ancestor, '-m', 'upper'])
   lower = await git(['-C', repository, 'commit-tree', tree, '-p', ancestor, '-m', 'lower'])
   untrusted = await git(['-C', repository, 'commit-tree', tree, '-m', 'PR only'])
+
   for (const [ref, sha] of [
     ['refs/heads/Fix', upper],
     ['refs/heads/fix', lower],
@@ -44,6 +54,7 @@ beforeAll(async () => {
   ]) {
     await git(['-C', repository, 'update-ref', ref, sha])
   }
+
   await git(['-C', repository, 'tag', '-a', 'Release', upper, '-m', 'upper tag'])
   await git(['-C', repository, 'tag', '-a', 'release', lower, '-m', 'lower tag'])
   await git(['-C', repository, 'config', 'uploadpack.allowFilter', 'true'])
@@ -55,6 +66,7 @@ async function vet(step, ref) {
   const scratch = mkdtempSync(join(directory, 'attempt-'))
   const script = join(scratch, 'vet.sh')
   writeFileSync(script, step.run)
+
   return runProcess({
     program: 'bash',
     args: [script],
@@ -78,6 +90,7 @@ describe('release ref trust with case-twin names', () => {
       const result = await vet(windowsVet, sha)
       expect(result.code, result.stderr).toBe(0)
     }
+
     for (const ref of ['Fix', 'fix', 'Release', 'release', ancestor]) {
       const result = await vet(macVet, ref)
       expect(result.code, result.stderr).toBe(0)
@@ -90,6 +103,7 @@ describe('release ref trust with case-twin names', () => {
       expect(result.code).not.toBe(0)
       expect(result.stdout).toContain('not reachable from any branch or tag')
     }
+
     const result = await vet(macVet, 'refs/pull/1/head')
     expect(result.code).not.toBe(0)
     expect(result.stdout).toContain('Refusing to build PR ref')

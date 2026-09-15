@@ -27,22 +27,37 @@ import type {
 } from './structured-agent-session-handoff-types'
 
 const CALLER = { callerKey: 'client-1' }
+
 const DEFAULT_MODEL = 'gpt-default'
+
 const PICKED_MODEL = 'gpt-picked'
+
 const PICKED_EFFORT = 'medium'
+
 const PICKED_FAST_MODE = true
 
 let root: string
+
 let store: AgentSessionRecordStore
+
 let host: StructuredAgentSessionHost
+
 let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
+
 let activeModel: string
+
 let activeEffort: string | null
+
 let activeFastMode: boolean | null
+
 let transcriptPath: string
+
 let optionFailure: Error | null
+
 const dispatchedModels: string[] = []
+
 const launchedOptions: (Readonly<Record<string, string>> | undefined)[] = []
+
 const closedTuiOwners: StructuredTuiOwner[] = []
 
 function envelope(method: string, fields: Record<string, unknown>): AgentSessionMutationEnvelope {
@@ -60,6 +75,7 @@ function envelope(method: string, fields: Record<string, unknown>): AgentSession
 
 function handoff(direction: AgentSessionHandoffDirection): AgentSessionHandoffRequest {
   const fields = { direction, mode: 'now' as const, action: 'start' as const }
+
   return { envelope: envelope('agentSession.requestHandoff', fields), ...fields }
 }
 
@@ -88,6 +104,7 @@ function handoffTransport(): StructuredAgentSessionHandoffTransport {
     hostLabel: 'Test host',
     launchTui: async ({ record, fence, spawnToken }) => {
       launchedOptions.push(record.options)
+
       return tuiOwner(fence, spawnToken)
     },
     reproveTuiOwner: async ({ owner }) => owner,
@@ -99,6 +116,7 @@ function handoffTransport(): StructuredAgentSessionHandoffTransport {
     stopRecoveredOwner: async () => undefined,
     closeTuiOwner: async (owner) => {
       closedTuiOwners.push(owner)
+
       return { transcriptPath: owner.transcriptPath }
     },
     waitForTuiExit: async (owner) => ({ transcriptPath: owner.transcriptPath }),
@@ -112,6 +130,7 @@ function adapter(): StructuredAgentSessionAdapter {
     activeModel = options?.model ?? DEFAULT_MODEL
     activeEffort = options?.effort ?? null
     activeFastMode = options?.fastMode === undefined ? null : options.fastMode === 'true'
+
     return {
       process: {
         hostId: 'local',
@@ -128,10 +147,12 @@ function adapter(): StructuredAgentSessionAdapter {
       }
     }
   })
+
   return {
     acquire,
     dispatch: vi.fn<StructuredAgentSessionAdapter['dispatch']>(async () => {
       dispatchedModels.push(activeModel)
+
       return {
         state: 'accepted',
         providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
@@ -145,6 +166,7 @@ function adapter(): StructuredAgentSessionAdapter {
         optionFailure = null
         throw error
       }
+
       if (key === 'model') {
         activeModel = value
       } else if (key === 'effort') {
@@ -152,6 +174,7 @@ function adapter(): StructuredAgentSessionAdapter {
       } else if (key === 'fastMode') {
         activeFastMode = value === 'true'
       }
+
       return {
         model: activeModel,
         ...(activeEffort ? { effort: activeEffort } : {}),
@@ -168,6 +191,7 @@ function adapter(): StructuredAgentSessionAdapter {
     })),
     closeSession: vi.fn(async () => {
       activeModel = DEFAULT_MODEL
+
       return true
     })
   }
@@ -206,10 +230,12 @@ beforeEach(async () => {
     handoffTransport: handoffTransport(),
     now: () => NOW
   })
+
   const attached = await host.attach(
     CALLER,
     hostTestAttachParams(null, { accountHome: { variable: 'CODEX_HOME', path: accountHome } })
   )
+
   expect(attached).toMatchObject({ ok: true })
 })
 
@@ -222,6 +248,7 @@ describe('structured session handoff options', () => {
   it('settles a pre-mutation rejection so a fresh retry can succeed', async () => {
     optionFailure = new AgentSessionOptionRejectedError('model list unavailable')
     const fields = { key: 'model', value: PICKED_MODEL }
+
     const rejected = {
       envelope: envelope('agentSession.setOption', fields),
       ...fields

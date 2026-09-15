@@ -10,13 +10,16 @@ export class PaneReparentFrameTracker {
     let frameId: number | undefined
     frameId = requestAnimationFrame((timestamp) => {
       completed = true
+
       if (frameId !== undefined) {
         this.pendingPaneReparentFrameIds.delete(frameId)
       }
+
       if (!this.isDestroyed()) {
         callback(timestamp)
       }
     })
+
     if (!completed) {
       this.pendingPaneReparentFrameIds.add(frameId)
     }
@@ -26,6 +29,7 @@ export class PaneReparentFrameTracker {
     for (const frameId of this.pendingPaneReparentFrameIds) {
       cancelAnimationFrame(frameId)
     }
+
     this.pendingPaneReparentFrameIds.clear()
   }
 }

@@ -55,16 +55,19 @@ function clientClaims(args: SshOrphanRelayPtySweepArgs): {
 } {
   const routed = new Set<string>(args.routedPtyIds)
   const expired = new Set<string>()
+
   for (const lease of args.store.getSshRemotePtyLeases(args.targetId)) {
     if (lease.state === 'expired') {
       expired.add(lease.ptyId)
     } else if (lease.state !== 'terminated') {
       routed.add(lease.ptyId)
     }
+
     if (lease.pendingKill) {
       routed.add(lease.ptyId)
     }
   }
+
   return { routed, expired }
 }
 
@@ -106,17 +109,22 @@ export async function sweepOrphanedRelayPtys(args: SshOrphanRelayPtySweepArgs): 
   if (!args.isSessionOwner || !args.clientInstanceId || !args.shouldContinue()) {
     return
   }
+
   const now = args.now ?? Date.now
   const deadlineMs = now() + (args.passBudgetMs ?? RELAY_PTY_SWEEP_PASS_BUDGET_MS)
+
   try {
     const processes = await args.provider.listProcesses({ deadlineMs })
     // The instant the host's observations reached this client. Every later step — reading the
     // leases, planning, issuing the stops — ages them, and the plan has to see that age.
     const listedAtMs = now()
+
     if (!args.shouldContinue() || now() >= deadlineMs) {
       return
     }
+
     const claims = clientClaims(args)
+
     const plan = planRelayPtySweep(
       processes.map((process) => toEvidence(args.targetId, process)),
       {
@@ -129,14 +137,17 @@ export async function sweepOrphanedRelayPtys(args: SshOrphanRelayPtySweepArgs): 
         maximumEvidenceAgeMs: args.maximumEvidenceAgeMs ?? RELAY_PTY_SWEEP_MAX_EVIDENCE_AGE_MS
       }
     )
+
     if (plan.sweep.length === 0) {
       return
     }
+
     await Promise.all(
       plan.sweep.map(async (target) => {
         if (!args.shouldContinue()) {
           return
         }
+
         try {
           // Two fences, both enforced by the host that owns the process. The incarnation stops a
           // relay that renumbered its ids between the read and this call from hitting a stranger;

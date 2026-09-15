@@ -18,61 +18,82 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
   protected getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null {
     const parsed = parsePaneKey(paneKey)
     let leafPty: RuntimePtyWorktreeRecord | null = null
+
     if (parsed) {
       const leaf = this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId))
       const pty = leaf?.ptyId ? this.ptysById.get(leaf.ptyId) : undefined
+
       if (pty?.connected) {
         return pty
       }
+
       leafPty = pty ?? null
+
       for (const candidate of this.leaves.values()) {
         if (candidate.leafId !== parsed.leafId || !candidate.ptyId) {
           continue
         }
+
         const remintedPty = this.ptysById.get(candidate.ptyId)
+
         if (remintedPty?.connected) {
           return remintedPty
         }
+
         leafPty ??= remintedPty ?? null
       }
     }
+
     let newestMatch: RuntimePtyWorktreeRecord | null = null
+
     for (const pty of this.ptysById.values()) {
       const ptyPane = parsePaneKey(pty.paneKey ?? '')
+
       if (pty.paneKey === paneKey || (parsed && ptyPane && parsed.leafId === ptyPane.leafId)) {
         if (pty.connected) {
           return pty
         }
+
         newestMatch = pty
       }
     }
+
     return leafPty ?? newestMatch
   }
 
   protected getPaneKeyForTerminalHandle(handle: string): string | null {
     const livePty = this.getLivePtyForHandle(handle)
+
     if (livePty?.pty.paneKey) {
       return livePty.pty.paneKey
     }
+
     const record = this.handles.get(handle)
+
     if (!record || record.runtimeId !== this.runtimeId) {
       return null
     }
+
     if (!isTerminalLeafId(record.leafId)) {
       return null
     }
+
     return makePaneKey(record.tabId, record.leafId)
   }
 
   getTerminalWorktreeIdForHandle(handle: string): string | null {
     const livePty = this.getLivePtyForHandle(handle)
+
     if (livePty?.pty.worktreeId) {
       return livePty.pty.worktreeId
     }
+
     const record = this.handles.get(handle)
+
     if (!record || record.runtimeId !== this.runtimeId) {
       return null
     }
+
     return record.worktreeId
   }
 
@@ -82,14 +103,18 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     observedAt: number
   ): void {
     const trimmed = title?.trim()
+
     if (!trimmed) {
       return
     }
+
     if (isClaudeManagementTitle(trimmed)) {
       pty.managementTitle = trimmed
       pty.managementTitleAt = observedAt
+
       return
     }
+
     if (
       detectAgentStatusFromTitle(trimmed) !== null &&
       observedAt >= (pty.managementTitleAt ?? -1)
@@ -101,6 +126,7 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
 
   protected nextTitleObservationSequence(): number {
     this.titleObservationSequence += 1
+
     return this.titleObservationSequence
   }
 
@@ -118,11 +144,14 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
       const leaf = livePty ? null : this.getLiveLeafForHandle(handle).leaf
       const ptyId = livePty?.pty.ptyId ?? leaf?.ptyId ?? null
       const trackedPty = livePty?.pty ?? (ptyId ? this.ptysById.get(ptyId) : null)
+
       if (!ptyId || !trackedPty || !this.ptyController) {
         return false
       }
+
       let foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
       let agent = recognizeAgentProcess(foregroundProcess)?.agent
+
       // Why: the cached foreground name can be an executable basename nothing recognizes
       // (macOS p_comm reports the native Claude installer as `2.1.258`), and treating that
       // as "no agent" silently downgrades the prompt to unframed chunks, which Claude's
@@ -131,9 +160,11 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
         foregroundProcess = await this.ptyController.confirmForegroundProcess(ptyId)
         agent = recognizeAgentProcess(foregroundProcess)?.agent
       }
+
       if (agent !== 'claude' && agent !== 'codex') {
         return false
       }
+
       if (
         !(await this.isTerminalRunningAgent(handle, {
           retryForegroundWrappers: false,
@@ -142,7 +173,9 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
       ) {
         return false
       }
+
       trackedPty.foregroundAgent = agent
+
       return true
     } catch {
       return false
@@ -175,6 +208,7 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
    */
   getStructuredWorkerPaneKeyForSession(sessionId: string): string | null {
     const identity = structuredWorkerIdentities.getBySessionId(sessionId)
+
     return identity && resolveStructuredWorkerAuthority(identity.handle, this._orchestrationDb)
       ? identity.paneKey
       : null
@@ -207,18 +241,24 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     if (mailboxHandle.startsWith('run:')) {
       return this.resolveStructuredCoordinatorMailboxTarget(mailboxHandle.slice('run:'.length))
     }
+
     if (!mailboxHandle.startsWith('dispatch:')) {
       return this.resolveStructuredWorkerDirectMailboxTarget(mailboxHandle)
     }
+
     const dispatchId = mailboxHandle.slice('dispatch:'.length)
     const assignee = this._orchestrationDb?.getDispatchContextById?.(dispatchId)?.assignee_handle
+
     if (!assignee) {
       return null
     }
+
     const identity = resolveStructuredWorkerAuthority(assignee, this._orchestrationDb)?.identity
+
     if (identity) {
       return { sessionId: identity.sessionId, dispatchId }
     }
+
     return this.resolveAdoptedStructuredMailboxTarget(assignee, dispatchId)
   }
 
@@ -234,10 +274,13 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     runId: string
   ): StructuredPointerTarget | null {
     const coordinator = this._orchestrationDb?.getRun?.(runId)?.coordinator_handle
+
     if (!coordinator) {
       return null
     }
+
     const identity = resolveStructuredWorkerAuthority(coordinator, this._orchestrationDb)?.identity
+
     return identity ? { sessionId: identity.sessionId, dispatchId: null } : null
   }
 
@@ -260,10 +303,13 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     // Answers null for anything that is not a live structured worker of THIS runtime, so `run:`
     // and PTY handles fall through to the PTY lane exactly as before.
     const identity = resolveStructuredWorkerAuthority(handle, db)?.identity
+
     if (!identity) {
       return null
     }
+
     const dispatchId = db?.findActiveDispatchForAssignee?.(handle, identity.paneKey)?.id ?? null
+
     return { sessionId: identity.sessionId, dispatchId }
   }
 
@@ -279,23 +325,29 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
     dispatchId: string
   ): StructuredPointerTarget | null {
     let ptyId: string | null | undefined
+
     try {
       ptyId = this.getLiveLeafForHandle(assignee).leaf.ptyId
     } catch {
       return null
     }
+
     if (!ptyId) {
       return null
     }
+
     const admission = agentSessionPtyWriteGate.admit(ptyId)
+
     if (admission.admitted || !isSettledNativeOwner(admission.refusal)) {
       return null
     }
+
     return { sessionId: admission.refusal.sessionId, dispatchId, refusal: admission.refusal }
   }
 
   protected scheduleRestoredMessageRepoints(): void {
     let handles: Set<string>
+
     try {
       const db = this._orchestrationDb
       // Pointer-phase rows are excluded from the undelivered scan, so they need their own.
@@ -305,18 +357,23 @@ export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneM
       ])
     } catch (error) {
       console.warn('[orchestration] failed to scan restored mailboxes', error)
+
       return
     }
+
     for (const handle of handles) {
       try {
         if (handle.startsWith('run:') || handle.startsWith('dispatch:')) {
           this.mailPointerRepointScheduler.schedule(handle)
           continue
         }
+
         const routed = this.orchestrationMailboxOwner.routeDetachedDirectMessages(handle)
+
         for (const mailbox of routed.mailboxes) {
           this.mailPointerRepointScheduler.schedule(mailbox.mailboxHandle)
         }
+
         if (!routed.hasMore) {
           this.mailPointerRepointScheduler.schedule(handle)
         }

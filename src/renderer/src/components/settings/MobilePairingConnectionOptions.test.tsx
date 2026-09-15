@@ -29,6 +29,7 @@ vi.mock('../../store', () => ({
     useSyncExternalStore(
       (onStoreChange) => {
         mocks.listeners.add(onStoreChange)
+
         return () => mocks.listeners.delete(onStoreChange)
       },
       () => selector(mocks.state)
@@ -60,6 +61,7 @@ describe('MobilePairingConnectionOptions', () => {
           getRelayStatus: vi.fn().mockResolvedValue({ status: 'registered' }),
           onRelayStatusChanged: vi.fn((listener: (detail: MobileRelayStatusDetail) => void) => {
             statusListener = listener
+
             return vi.fn()
           })
         },
@@ -308,6 +310,7 @@ describe('MobilePairingConnectionOptions', () => {
         persistence: 'encrypted'
       }
     }
+
     mocks.state = connectedState
     fetchAuthStatus.mockImplementation(async () => {
       const revoked: OrcaProfileAuthStatus = {
@@ -316,7 +319,9 @@ describe('MobilePairingConnectionOptions', () => {
         state: 'reconnect-required',
         persistence: 'encrypted'
       }
+
       publishStoreState({ ...connectedState, orcaProfileAuthStatus: revoked })
+
       return revoked
     })
 

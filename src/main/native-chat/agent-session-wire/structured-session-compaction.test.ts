@@ -5,12 +5,15 @@ describe('structured compaction lifecycle', () => {
   it('waits beyond the Codex acknowledgment and ignores other threads', async () => {
     const tracker = new StructuredSessionCompaction()
     const finished = vi.fn()
+
     const result = tracker
       .run('session', 'thread', async () => ({}))
       .then((value) => {
         finished()
+
         return value
       })
+
     await Promise.resolve()
     tracker.codex('session', 'turn/started', { threadId: 'other', turn: { id: 'foreign' } })
     tracker.codex('session', 'turn/completed', {
@@ -73,14 +76,17 @@ describe('structured compaction lifecycle', () => {
     const pending = tracker.run('s', 'p', async () => {})
     tracker.ended('s')
     await expect(pending).resolves.toEqual({ error: 'The provider exited during compaction.' })
+
     const next = tracker.run('s', 'p', async () => {
       tracker.claude('s', { type: 'system', subtype: 'compact_boundary', session_id: 'p' })
       tracker.claude('s', { type: 'result', subtype: 'success', session_id: 'p' })
     })
+
     await expect(next).resolves.toEqual({})
   })
   it('reconciles a terminal frame after timeout without repeating the provider request', async () => {
     vi.useFakeTimers()
+
     try {
       const tracker = new StructuredSessionCompaction(10)
       const late = vi.fn(async () => {})

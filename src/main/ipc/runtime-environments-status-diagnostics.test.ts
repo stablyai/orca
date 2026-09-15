@@ -62,6 +62,7 @@ vi.mock('../../shared/remote-runtime-client', () => ({
 
 vi.mock('./runtime-environment-request-connections', async () => {
   const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+
   return withRuntimeStatusOwners({
     sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
     sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
@@ -86,6 +87,7 @@ const handler = channelHandlerLookup(handleMock)
 describe('registerRuntimeEnvironmentHandlers', () => {
   let userDataPath: string
   let activeRuntimeEnvironmentId: string | null
+
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
@@ -142,12 +144,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const getStatus = handler<
       { selector: string; timeoutMs?: number },
       { ok: true; result: { runtimeId: string } }
     >('runtimeEnvironments:getStatus')
+
     expect(await getStatus(null, { selector: 'desk', timeoutMs: 50 })).toMatchObject({
       ok: true,
       result: { runtimeId: 'runtime-remote' }
@@ -172,6 +176,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const resolve = handler<{ selector: string }, { id: string; runtimeId: string | null }>(
       'runtimeEnvironments:resolve'
     )
+
     expect(await resolve(null, { selector: added.environment.id })).toMatchObject({
       id: added.environment.id,
       runtimeId: 'runtime-remote'
@@ -199,10 +204,13 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       },
       _meta: { runtimeId: 'runtime-remote' }
     })
+
     const add = handler<{ name: string; pairingCode: string }, { environment: { id: string } }>(
       'runtimeEnvironments:addFromPairingCode'
     )
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
     const getStatus = handler<
       { selector: string; observeOnly?: true },
       { ok: true; result: { remoteControl: { state: string } } }
@@ -213,9 +221,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     })
     expect(ensureRemoteRuntimeSharedControlConnectionMock).not.toHaveBeenCalled()
     expect(reconnectRemoteRuntimeSharedControlConnectionMock).not.toHaveBeenCalled()
+
     const resolve = handler<{ selector: string }, { runtimeId: string | null }>(
       'runtimeEnvironments:resolve'
     )
+
     expect((await resolve(null, { selector: added.environment.id })).runtimeId).toBeNull()
   })
 
@@ -236,10 +246,13 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       result: { runtimeId: 'runtime-legacy', graphStatus: 'ready', capabilities: [] },
       _meta: { runtimeId: 'runtime-legacy' }
     })
+
     const add = handler<{ name: string; pairingCode: string }, unknown>(
       'runtimeEnvironments:addFromPairingCode'
     )
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
+
     const getStatus = handler<{ selector: string }, { result: { remoteControl?: unknown } }>(
       'runtimeEnvironments:getStatus'
     )
@@ -275,6 +288,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const getStatus = handler<
@@ -311,6 +325,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const getStatus = handler<
@@ -348,6 +363,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         { name: string; pairingCode: string },
         { environment: { id: string; name: string } }
       >('runtimeEnvironments:addFromPairingCode')
+
       await add(null, { name: 'desk', pairingCode: pairingCode() })
 
       const getStatus = handler<

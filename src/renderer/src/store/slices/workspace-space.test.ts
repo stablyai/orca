@@ -90,6 +90,7 @@ describe('workspace space slice', () => {
   it('keeps streamed measurements across later progress updates', () => {
     const store = createWorkspaceSpaceTestStore()
     store.setState({ workspaceSpaceScanning: true })
+
     const progress = {
       scanId: 'scan-1',
       state: 'running' as const,

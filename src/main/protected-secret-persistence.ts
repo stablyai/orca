@@ -56,9 +56,11 @@ export class ProtectedSecretPersistence {
 
   encrypt(slot: string, plaintext: string): ProtectedSecretEncryption {
     const retained = this.retainedBlobs.get(slot) ?? ''
+
     if (!plaintext && !retained) {
       return { blob: '', degraded: false }
     }
+
     if (!this.encryptionAvailable()) {
       return {
         blob: retained,
@@ -66,9 +68,11 @@ export class ProtectedSecretPersistence {
         ...(!plaintext && retained ? { hashValue: retained } : {})
       }
     }
+
     if (this.isSealed(slot, plaintext) || (!plaintext && this.sealedSlots.has(slot))) {
       return { blob: retained, degraded: false, hashValue: retained }
     }
+
     if (!plaintext) {
       return {
         blob: '',
@@ -76,8 +80,10 @@ export class ProtectedSecretPersistence {
         retentionUpdate: { slot, blob: null }
       }
     }
+
     try {
       const blob = getSecretStore().encryptString(plaintext).toString('base64')
+
       return {
         blob,
         degraded: false,
@@ -85,6 +91,7 @@ export class ProtectedSecretPersistence {
       }
     } catch (err) {
       console.error('[persistence] Encryption failed; retaining the prior protected value:', err)
+
       return { blob: retained, degraded: true }
     }
   }
@@ -100,30 +107,40 @@ export class ProtectedSecretPersistence {
   ): ProtectedSecretDecryption {
     if (!ciphertext) {
       this.removeRetainedBlob(slot)
+
       return { plaintext: '', status: 'decrypted' }
     }
+
     this.retainedBlobs.set(slot, ciphertext)
+
     if (!this.encryptionAvailable()) {
       this.sealedSlots.add(slot)
+
       return { plaintext: '', status: 'unavailable' }
     }
+
     try {
       const decrypted = {
         plaintext: getSecretStore().decryptString(Buffer.from(ciphertext, 'base64')),
         status: 'decrypted' as const
       }
+
       this.sealedSlots.delete(slot)
+
       return decrypted
     } catch {
       if (isLegacyPlaintext?.(ciphertext)) {
         this.sealedSlots.delete(slot)
         console.warn('[persistence] secret decryption failed; accepting legacy plaintext.')
+
         return { plaintext: ciphertext, status: 'failed' }
       }
+
       this.sealedSlots.add(slot)
       console.warn(
         '[persistence] secret decryption failed; retaining the protected value without exposing it.'
       )
+
       return { plaintext: '', status: 'failed' }
     }
   }
@@ -134,10 +151,12 @@ export class ProtectedSecretPersistence {
     // 'unavailable' — the silent-wrong-state outcome the port throws to prevent. Only
     // the backend probe itself may fail softly.
     const store = getSecretStore()
+
     try {
       return store.isEncryptionAvailable()
     } catch (err) {
       console.warn('[persistence] secret store availability check failed:', err)
+
       return false
     }
   }

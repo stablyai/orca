@@ -36,15 +36,19 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     session.hiddenOutputRestoreFloodSuppressedUntil =
       Date.now() + HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS
     const ptyId = session.transport.getPtyId()
+
     if (ptyId === null) {
       return
     }
+
     session.clearHiddenOutputRestoreFloodRepaintTimer()
     session.hiddenOutputRestoreFloodRepaintTimer = setTimeout(() => {
       session.hiddenOutputRestoreFloodRepaintTimer = null
+
       if (session.disposed || session.transport.getPtyId() !== ptyId) {
         return
       }
+
       // Why one repaint: flood-dropped bytes leave a gap the live stream can't heal; once quiet, one snapshot restore repaints from main's authoritative buffer.
       session.repaintAfterFloodWhenFollowingOutput(ptyId)
     }, HIDDEN_OUTPUT_RESTORE_FLOOD_SUPPRESS_MS)
@@ -55,16 +59,20 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     if (session.disposed) {
       return
     }
+
     recordTerminalFreezeBreadcrumb('restore-marker', {
       id: redactPtyIdForDiagnostics(session.transport.getPtyId() ?? '')
     })
     // Why: dropped bytes invalidate cross-chunk carry — a partial OSC-9999 prefix spanning the gap would corrupt the next live chunk.
     session.transport.resetCrossChunkParserState?.()
+
     // Why gated (rc.7.perf loop): on a visible pane these markers come from our own restore starving ACKs; re-arming per marker kept the fetch loop alive all flood, so defer to one post-flood repaint.
     if (session.isForegroundRestoreBackpressureContext()) {
       session.noteHiddenOutputRestoreFloodBackpressure()
+
       return
     }
+
     // Why the emulator too: it carries state across chunks exactly like the
     // parser does. If the gap swallowed the `ESC[22m` closing a bold run,
     // every cell written afterwards inherits it. This marker is the one point
@@ -79,6 +87,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     // Why: a marker during an in-flight restore means that snapshot may predate the drop, so a fresh one must follow; capture BEFORE the mark, which starts a restore synchronously on a visible pane.
     const restoreWasInFlight = session.hiddenOutputRestoreInFlight !== null
     session.markHiddenOutputRestoreNeeded()
+
     if (restoreWasInFlight) {
       session.hiddenOutputRestoreFreshSnapshotNeeded = true
     }
@@ -88,14 +97,17 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     if (session.modelRestoreSubscribedPtyId === ptyId) {
       return
     }
+
     session.unregisterModelRestoreNeeded?.()
     session.unregisterModelRestoreNeeded = null
     session.modelRestoreSubscribedPtyId = ptyId
+
     // Why: markers exist only for PTYs whose bytes transit local main;
     // remote-runtime transports are structurally unaffected.
     if (!ptyId || isRemoteRuntimePtyId(ptyId)) {
       return
     }
+
     session.unregisterModelRestoreNeeded = registerPtyModelRestoreNeededHandler(
       ptyId,
       handleModelRestoreNeededMarker
@@ -104,62 +116,80 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
 
   session.handleRemoteOutputPauseChanged = (paused, supported): void => {
     const ptyId = session.transport.getPtyId()
+
     if (!ptyId || !isRemoteRuntimePtyId(ptyId)) {
       return
     }
+
     if (!paused) {
       const wasGated = session.remoteOutputGatedPtyId === ptyId
+
       if (wasGated) {
         session.remoteOutputGatedPtyId = null
+
         if (!session.mainSideEffectAuthority) {
           session.dropSideEffectFactConsumer()
         }
       }
+
       if (wasGated && session.hiddenOutputRestorePtyId === ptyId) {
         session.requestHiddenOutputRestoreIfNeeded()
       }
+
       return
     }
+
     if (session.remoteOutputGatedPtyId !== ptyId) {
       session.remoteOutputGatedPtyId = ptyId
     }
+
     if (supported && session.remoteOutputFactConsumerPtyId !== ptyId) {
       session.registerSideEffectFactConsumerForPty(ptyId, true)
       session.remoteOutputFactConsumerPtyId = ptyId
     }
+
     session.markHiddenOutputRestoreNeeded()
   }
 
   session.syncHiddenRendererPtyDelivery = (): void => {
     const ptyId = session.transport.getPtyId()
     syncModelRestoreNeededSubscription(ptyId)
+
     if (session.remoteOutputGatedPtyId !== null && session.remoteOutputGatedPtyId !== ptyId) {
       session.remoteOutputGatedPtyId = null
+
       if (!session.mainSideEffectAuthority) {
         session.dropSideEffectFactConsumer()
       }
     }
+
     if (isRemoteRuntimePtyId(ptyId) && session.canUseHiddenOutputSnapshot(ptyId)) {
       session.transport.setOutputPaused?.(
         !session.disposed && !shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
       )
+
       return
     }
+
     if (session.hiddenDeliverySyncedPtyId !== null && session.hiddenDeliverySyncedPtyId !== ptyId) {
       session.releaseHiddenDeliveryClaim?.()
       session.releaseHiddenDeliveryClaim = null
       session.hiddenDeliverySyncedPtyId = null
     }
+
     if (
       !session.isHiddenDeliveryGateManagedPty(ptyId) ||
       !session.canUseHiddenOutputSnapshot(ptyId)
     ) {
       return
     }
+
     const shouldHide =
       !session.disposed && !shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)
+
     const isFirstSyncForPty = session.hiddenDeliverySyncedPtyId !== ptyId
     session.hiddenDeliverySyncedPtyId = ptyId
+
     if (shouldHide) {
       if (!session.releaseHiddenDeliveryClaim) {
         session.releaseHiddenDeliveryClaim = acquireHiddenRendererPtyDeliveryClaim(ptyId)
@@ -172,14 +202,18 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       declareRendererPtyDeliveryVisible(ptyId)
     }
   }
+
   session.releaseHiddenRendererPtyDelivery = (): void => {
     session.transport.setOutputPaused?.(false)
+
     if (session.remoteOutputGatedPtyId !== null) {
       session.remoteOutputGatedPtyId = null
+
       if (!session.mainSideEffectAuthority) {
         session.dropSideEffectFactConsumer()
       }
     }
+
     session.releaseHiddenDeliveryClaim?.()
     session.releaseHiddenDeliveryClaim = null
     session.hiddenDeliverySyncedPtyId = null
@@ -206,7 +240,9 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     if (!session.deps.isActiveRef.current) {
       return false
     }
+
     const activePane = session.manager.getActivePane?.() ?? null
+
     return activePane ? activePane.id === session.pane.id : true
   }
 
@@ -216,14 +252,18 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       if (data.includes('\x1b[')) {
         return false
       }
+
       return consumeInactiveForegroundImmediateBudget(data.length)
     }
+
     if (data.length <= FOREGROUND_THROUGHPUT_IMMEDIATE_CHARS) {
       return session.consumeForegroundImmediateBudget(data.length)
     }
+
     const recentInput =
       performance.now() - session.lastInteractiveRedrawInputAt <=
       FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
+
     if (
       recentInput &&
       data.length <= FOREGROUND_INTERACTIVE_REDRAW_CHARS &&
@@ -231,6 +271,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     ) {
       return session.consumeForegroundImmediateBudget(data.length)
     }
+
     return false
   }
 
@@ -240,6 +281,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
         return true
       }
     }
+
     return false
   }
 
@@ -252,8 +294,10 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       previousChunkEndsWithCarriageReturn: session.foregroundRewriteChunkEndedWithCarriageReturn,
       previousRewriteCsiScanTail: session.foregroundRewriteCsiScanTail
     })
+
     session.foregroundRewriteChunkEndedWithCarriageReturn = decision.nextChunkEndsWithCarriageReturn
     session.foregroundRewriteCsiScanTail = decision.nextRewriteCsiScanTail
+
     return decision.prefersRenderRefresh
   }
 
@@ -263,19 +307,23 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
   } {
     const rewriteOutputPrefersRenderRefresh =
       session.foregroundRewriteOutputPrefersRenderRefresh(data)
+
     const recentInput =
       performance.now() - session.lastInteractiveRedrawInputAt <=
       FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
+
     if (session.foregroundRendererRiskOutputPrefersRenderRefresh(data)) {
       return {
         refresh: true,
         inPlaceRewrite: rewriteOutputPrefersRenderRefresh
       }
     }
+
     if (rewriteOutputPrefersRenderRefresh) {
       // Why: xterm's buffer is right but in-place redraw cells stay stale in the renderer until a repaint (resize fixes it).
       return { refresh: true, inPlaceRewrite: true }
     }
+
     if (
       windowsEastAsianOutputPrefersRenderRefresh(data, {
         isWindowsClient: session.shouldApplyWindowsRendererUnicodeRefresh,
@@ -287,6 +335,7 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
       // Why: CJK/Korean from Microsoft Pinyin commits and native ConPTY output can leave stale wide-glyph cells in the Windows DOM renderer.
       return { refresh: true, inPlaceRewrite: false }
     }
+
     return {
       refresh:
         session.shouldApplyNativeWindowsRewriteRefresh &&

@@ -16,8 +16,10 @@ export function AgentCommandOverrideInput({
 }): React.JSX.Element {
   const draftSeed = cmdOverride ?? defaultCmd
   const [cmdDraft, setCmdDraft] = useState(draftSeed)
+
   const commitCmd = (): void => {
     const trimmed = cmdDraft.trim()
+
     if (!trimmed || trimmed === defaultCmd) {
       onSaveOverride('')
       setCmdDraft(defaultCmd)
@@ -41,6 +43,7 @@ export function AgentCommandOverrideInput({
               commitCmd()
               event.currentTarget.blur()
             }
+
             if (event.key === 'Escape') {
               setCmdDraft(draftSeed)
               event.currentTarget.blur()
@@ -96,6 +99,7 @@ export function AgentDefaultArgsInput({
               commitArgs()
               event.currentTarget.blur()
             }
+
             if (event.key === 'Escape') {
               setArgsDraft(argsOverride)
               event.currentTarget.blur()
@@ -141,9 +145,11 @@ export function AgentDefaultEnvInput({
   const [envDraft, setEnvDraft] = useState(draftSeed)
   const [envDraftTooLarge, setEnvDraftTooLarge] = useState(false)
   const envDraftErrorId = useId()
+
   const commitEnv = (): void => {
     const parsedDraft = parseAgentDefaultEnvDraft(envDraft)
     setEnvDraftTooLarge(parsedDraft.tooLarge)
+
     if (!parsedDraft.tooLarge) {
       onSaveEnv(parsedDraft.env)
     }
@@ -159,6 +165,7 @@ export function AgentDefaultEnvInput({
           value={envDraft}
           onChange={(event) => {
             setEnvDraft(event.target.value)
+
             if (envDraftTooLarge) {
               setEnvDraftTooLarge(false)
             }
@@ -169,6 +176,7 @@ export function AgentDefaultEnvInput({
               commitEnv()
               event.currentTarget.blur()
             }
+
             if (event.key === 'Escape') {
               setEnvDraft(draftSeed)
               setEnvDraftTooLarge(false)

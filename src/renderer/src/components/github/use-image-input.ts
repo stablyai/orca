@@ -31,9 +31,11 @@ export function useImageInput(
   const insertImageUrl = useCallback(() => {
     const editor = editorRef.current
     const imageUrlState = getGitHubMarkdownImageUrlState(imageUrl)
+
     if (!editor || imageUrlState.status === 'empty') {
       return
     }
+
     if (imageUrlState.status === 'too-large') {
       toast.error(
         translate(
@@ -41,8 +43,10 @@ export function useImageInput(
           'Image URL is too large.'
         )
       )
+
       return
     }
+
     if (imageUrlState.status === 'invalid') {
       toast.error(
         translate(
@@ -50,8 +54,10 @@ export function useImageInput(
           'Use an http:// or https:// image URL.'
         )
       )
+
       return
     }
+
     editor
       .chain()
       .focus()

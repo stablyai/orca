@@ -13,8 +13,10 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 /** Delay before BEL/completion OS notifications so the richer
  *  agent-task-complete notification can win a same-burst BEL race. */
 export const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250
+
 /** Hard cap on waiting for hook detail before dispatching a completion. */
 export const AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS = 1500
+
 export const AGENT_TASK_COMPLETE_NOTIFICATION_DETAIL_MAX_AGE_MS = 10_000
 
 type NotificationSettingsState = {
@@ -25,6 +27,7 @@ export function isAgentTaskCompleteOsNotificationEnabledFromState(
   state: NotificationSettingsState
 ): boolean {
   const notifications = state.settings?.notifications
+
   return notifications?.enabled !== false && notifications?.agentTaskComplete !== false
 }
 

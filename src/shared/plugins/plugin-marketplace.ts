@@ -3,12 +3,17 @@ import { isAllowedPluginGitUrl } from './plugin-install-lockfile'
 import { isQualifiedPluginKey } from './plugin-manifest'
 
 export const PLUGIN_MARKETPLACE_FILENAME = 'orca-marketplace.json'
+
 export const PLUGIN_MARKETPLACE_ENTRY_LIMIT = 2_048
+
 export const PLUGIN_MARKETPLACE_CATEGORY_LIMIT = 16
 
 export const OFFICIAL_PLUGIN_PUBLISHER = 'stablyai'
+
 export const OFFICIAL_PLUGIN_ID_PREFIX = 'orca-'
+
 export const OFFICIAL_MARKETPLACE_OWNER = 'stablyai'
+
 export const OFFICIAL_MARKETPLACE_REPOSITORY = 'orca-plugins'
 
 // Why: theme/icon/skill contributions were deferred, so `contributes` now
@@ -66,6 +71,7 @@ export const pluginMarketplaceEntrySchema = z
   })
   .superRefine((entry, context) => {
     const seen = new Set<string>()
+
     for (const [index, category] of entry.categories.entries()) {
       if (seen.has(category)) {
         context.addIssue({
@@ -74,6 +80,7 @@ export const pluginMarketplaceEntrySchema = z
           message: `duplicate category: ${category}`
         })
       }
+
       seen.add(category)
     }
   })
@@ -86,6 +93,7 @@ export const pluginMarketplaceSchema = z
   })
   .superRefine((marketplace, context) => {
     const seen = new Set<string>()
+
     for (const [index, plugin] of marketplace.plugins.entries()) {
       if (seen.has(plugin.id)) {
         context.addIssue({
@@ -94,6 +102,7 @@ export const pluginMarketplaceSchema = z
           message: `duplicate plugin id: ${plugin.id}`
         })
       }
+
       seen.add(plugin.id)
     }
   })
@@ -110,8 +119,11 @@ export const pluginMarketplaceTrustMetadataSchema = z
   })
 
 export type PluginMarketplace = z.infer<typeof pluginMarketplaceSchema>
+
 export type PluginMarketplaceEntry = z.infer<typeof pluginMarketplaceEntrySchema>
+
 export type PluginMarketplaceGitSource = z.infer<typeof pluginMarketplaceGitSourceSchema>
+
 export type PluginMarketplaceTrustMetadata = z.infer<typeof pluginMarketplaceTrustMetadataSchema>
 
 export const OFFICIAL_MARKETPLACE_GIT_SOURCE: PluginMarketplaceGitSource = {
@@ -127,7 +139,9 @@ export function splitQualifiedPluginKey(pluginKey: string): {
   if (!isQualifiedPluginKey(pluginKey)) {
     return null
   }
+
   const separator = pluginKey.indexOf('.')
+
   return {
     publisher: pluginKey.slice(0, separator),
     id: pluginKey.slice(separator + 1)
@@ -136,6 +150,7 @@ export function splitQualifiedPluginKey(pluginKey: string): {
 
 export function isReservedPluginIdentity(pluginKey: string): boolean {
   const identity = splitQualifiedPluginKey(pluginKey)
+
   return (
     identity !== null &&
     (identity.publisher === OFFICIAL_PLUGIN_PUBLISHER ||
@@ -145,6 +160,7 @@ export function isReservedPluginIdentity(pluginKey: string): boolean {
 
 export function isOfficialPluginIdentity(pluginKey: string): boolean {
   const identity = splitQualifiedPluginKey(pluginKey)
+
   return (
     identity !== null &&
     identity.publisher === OFFICIAL_PLUGIN_PUBLISHER &&
@@ -163,14 +179,18 @@ type GitRepositoryIdentity = {
 export function parseGitRepositoryIdentity(url: string): GitRepositoryIdentity | null {
   const trimmed = url.trim()
   const scp = /^[^\s@/:]+@([^\s:]+):(.+)$/.exec(trimmed)
+
   if (scp) {
     return repositoryIdentity(scp[1]!, scp[2]!)
   }
+
   try {
     const parsed = new URL(trimmed)
+
     if (parsed.protocol !== 'https:' && parsed.protocol !== 'ssh:') {
       return null
     }
+
     return repositoryIdentity(parsed.hostname, parsed.pathname)
   } catch {
     return null
@@ -182,23 +202,29 @@ function repositoryIdentity(host: string, repositoryPath: string): GitRepository
     .replace(/^\/+|\/+$/g, '')
     .split('/')
     .filter(Boolean)
+
   if (segments.length < 2) {
     return null
   }
+
   const repository = segments.at(-1)!.replace(/\.git$/i, '')
+
   if (!repository) {
     return null
   }
+
   return { host: host.toLowerCase(), owner: segments[0]!, repository }
 }
 
 export function isOfficialOrganizationGitSource(url: string): boolean {
   const source = parseGitRepositoryIdentity(url)
+
   return source?.host === 'github.com' && source.owner.toLowerCase() === OFFICIAL_PLUGIN_PUBLISHER
 }
 
 export function isOfficialMarketplaceGitSource(url: string): boolean {
   const source = parseGitRepositoryIdentity(url)
+
   return (
     source?.host === 'github.com' &&
     source.owner.toLowerCase() === OFFICIAL_MARKETPLACE_OWNER &&

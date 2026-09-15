@@ -9,6 +9,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 // hook listener and feeds its real output into the REAL coordinator, rather than hand-writing a
 // payload — the whole question is whether the two layers actually agree about a monitoring turn.
 const PANE = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+
 const RUNNING_SHELL = {
   id: 'shell-1',
   type: 'shell',
@@ -27,9 +28,11 @@ function hookPayload(
     { paneKey: PANE, payload },
     'production'
   )?.payload
+
   if (!parsed) {
     throw new Error('listener produced no payload')
   }
+
   // The hook server stamps stateStartedAt on the way to the renderer.
   return { ...parsed, stateStartedAt: 1_700_000_000_000 }
 }
@@ -37,6 +40,7 @@ function hookPayload(
 function createCoordinator() {
   const dispatchCompletion = vi.fn()
   const dispatchHookLifecycle = vi.fn()
+
   const coordinator = createAgentCompletionCoordinator({
     paneKey: PANE,
     getPtyId: () => 'pty-1',
@@ -46,6 +50,7 @@ function createCoordinator() {
     dispatchHookLifecycle,
     isLive: () => true
   })
+
   return { coordinator, dispatchCompletion, dispatchHookLifecycle }
 }
 
@@ -66,6 +71,7 @@ describe('completion notification when a lead turn ends into monitoring', () => 
     coordinator.observeHookStatus(
       hookPayload(listener, { hook_event_name: 'UserPromptSubmit', prompt: 'start the dev server' })
     )
+
     const monitoring = hookPayload(listener, {
       hook_event_name: 'Stop',
       background_tasks: [RUNNING_SHELL]

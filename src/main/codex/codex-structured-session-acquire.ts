@@ -73,16 +73,20 @@ export async function acquireCodexStructuredSession(input: {
     turnCancellation,
     notificationRetries
   } = input
+
   const sessionId = acquireInput.identity.sessionId
   const { previousAttempt, attempt } = acquisitions.start(sessionId)
   const acquisition = attempt.window
   let unbindReadingControl: (() => void) | undefined
+
   let primaryThreadId =
     acquireInput.identity.providerHandle.kind === 'codex'
       ? acquireInput.identity.providerHandle.threadId
       : null
+
   const subagentExecutions = new CodexSubagentExecutions()
   const dispatchEchoes = createCodexDispatchEchoes()
+
   const translator = acquireInput.events
     ? createCodexJournalTranslator({
         sink: acquireInput.events,
@@ -102,7 +106,9 @@ export async function acquireCodexStructuredSession(input: {
         }
       })
     : null
+
   const open = deps.openConnection ?? openCodexAppServerConnection
+
   try {
     await stopSupersededCodexAcquisition({
       sessionId,
@@ -111,16 +117,21 @@ export async function acquireCodexStructuredSession(input: {
       previous: previousAttempt
     })
     acquisitions.assertCurrent(sessionId, attempt)
+
     if (!(await closeCodexPublishedSession(sessions, sessionId, deps.onEvent))) {
       throw new Error(`codex app-server for session ${sessionId} could not be stopped`)
     }
+
     acquisitions.assertCurrent(sessionId, attempt)
+
     const launch = await deps
       .resolveLaunch({ identity: acquireInput.identity })
       .catch((error: unknown) => {
         throw new AgentSessionPreSpawnError(error)
       })
+
     acquisitions.assertCurrent(sessionId, attempt)
+
     const connection = await open(
       {
         command: launch.command,
@@ -170,7 +181,9 @@ export async function acquireCodexStructuredSession(input: {
         }
       }
     )
+
     acquisition.connection = connection
+
     if (connection.pauseReading && connection.resumeReading) {
       unbindReadingControl = acquireInput.events?.bindReadingControl?.({
         pauseReading: connection.pauseReading,
@@ -180,21 +193,26 @@ export async function acquireCodexStructuredSession(input: {
         }
       })
     }
+
     acquisitions.assertCurrent(sessionId, attempt)
     const opened = await openCodexThread(connection, launch, deps.requestTimeoutMs)
     acquisitions.assertCurrent(sessionId, attempt)
     primaryThreadId = opened.threadId
     const restoreAdmission = translator?.restoreThread(opened.threadId, opened.thread ?? {})
+
     if (restoreAdmission && !restoreAdmission.accepted) {
       throw new AgentSessionAcquisitionRefusal(
         'Codex thread history exceeds the bounded restore queue; history was not partially imported.'
       )
     }
+
     const process = await codexProcessIdentity(
       { ...acquireInput, pid: connection.pid },
       deps.readProcessStartTime
     )
+
     acquisitions.assertCurrent(sessionId, attempt)
+
     const acquired: AgentSessionAcquisition = {
       process,
       link: codexProviderHandleLink({
@@ -206,11 +224,14 @@ export async function acquireCodexStructuredSession(input: {
       }),
       acquisitionGeneration: mintCodexAcquisitionGeneration(deps)
     }
+
     if (connection.closed) {
       throw new Error(`codex app-server for session ${sessionId} exited while being acquired`)
     }
+
     acquisitions.assertCurrent(sessionId, attempt)
     const options = restoredCodexSessionOptions(acquireInput.options)
+
     const fastModeCatalog =
       options.get('fastMode') === 'true' || options.has('serviceTier')
         ? await readCodexStructuredSessionOptionCatalog({
@@ -223,11 +244,15 @@ export async function acquireCodexStructuredSession(input: {
             timeoutMs: deps.requestTimeoutMs
           }).catch(() => null)
         : null
+
     acquisitions.assertCurrent(sessionId, attempt)
+
     if (connection.closed) {
       throw new Error(`codex app-server for session ${sessionId} exited while being acquired`)
     }
+
     acquisitions.deleteIfCurrent(sessionId, attempt)
+
     const session: CodexSession = {
       connection,
       ...codexSessionLifecycle(acquireInput.fence, acquired.acquisitionGeneration as string),
@@ -251,6 +276,7 @@ export async function acquireCodexStructuredSession(input: {
         ),
       ...(unbindReadingControl ? { unbindReadingControl } : {})
     }
+
     if (fastModeCatalog) {
       const model = opened.model ?? fastModeCatalog.result.current.model
       reconcileCodexFastModeOption(session, {
@@ -261,11 +287,14 @@ export async function acquireCodexStructuredSession(input: {
           ?.supportsFastMode
       })
     }
+
     turnCancellation.register(session)
     sessions.set(sessionId, session)
+
     for (const event of acquisition.drain()) {
       event()
     }
+
     return acquired
   } catch (error) {
     if (sessions.get(sessionId)?.connection !== acquisition.connection) {
@@ -280,6 +309,7 @@ export async function acquireCodexStructuredSession(input: {
         }
       })
     }
+
     acquisitions.deleteIfCurrent(sessionId, attempt)
     throw error
   } finally {

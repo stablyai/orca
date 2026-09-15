@@ -18,6 +18,7 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
         `Runtime bind address is pinned to ${this.pinnedBindHost}; refusing to widen to all interfaces`
       )
     }
+
     if (
       !this.enableWebSocket ||
       this.stopping ||
@@ -25,6 +26,7 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
     ) {
       return
     }
+
     // Why: concurrent pairing requests must share one rebind — two simultaneous stop/start races would
     // fight for the port and strand the listener on a random one.
     if (!this.networkExposurePromise) {
@@ -32,6 +34,7 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
         this.networkExposurePromise = null
       })
     }
+
     return this.networkExposurePromise
   }
 
@@ -39,12 +42,15 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
     const current = this.activeTransports.find(
       (transport): transport is WebSocketTransport => transport instanceof WebSocketTransport
     )
+
     if (!current) {
       return
     }
+
     const index = this.activeTransports.indexOf(current)
     const previousPort = current.resolvedPort
     let widened: { transport: WebSocketTransport; endpoint: string }
+
     try {
       // Why: detach the loopback listener from the session wiring before stopping it so terminateDevice-
       // Connections never iterates a dead transport; the new listener re-attaches to the SAME wiring.
@@ -63,19 +69,23 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
       await this.recoverWebSocketBindAfterFailedWiden(index, previousPort)
       throw error
     }
+
     // Why: register the live wide transport BEFORE persisting metadata so a metadata-write failure can
     // never orphan a running 0.0.0.0 listener outside activeTransports (and thus outside stop()).
     this.activeTransports[index] = widened.transport
     const metaIndex = this.transports.findIndex((meta) => meta.kind === 'websocket')
+
     if (metaIndex !== -1) {
       this.transports[metaIndex] = { kind: 'websocket', endpoint: widened.endpoint }
     }
+
     try {
       // Why: a rebind that lands on a different port (same-port bind refused) must be persisted so a
       // later reconnect from a device paired to this port matches on the next launch (STA-1511).
       if (this.wsPort !== 0 && widened.transport.resolvedPort !== this.wsPort) {
         writeWsFallbackPort(this.userDataPath, widened.transport.resolvedPort)
       }
+
       this.writeMetadata()
     } catch (persistError) {
       // Why: the wide listener is live and tracked; a persistence failure must not tear it down. Keep
@@ -94,6 +104,7 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
     previousPort: number
   ): Promise<void> {
     let restored: { transport: WebSocketTransport; endpoint: string }
+
     try {
       restored = await this.startWebSocketTransport({
         host: WS_BIND_HOST_LOOPBACK,
@@ -109,24 +120,31 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
       )
       this.activeTransports.splice(index, 1)
       const metaIndex = this.transports.findIndex((meta) => meta.kind === 'websocket')
+
       if (metaIndex !== -1) {
         this.transports.splice(metaIndex, 1)
       }
+
       this.wsBoundHost = null
+
       try {
         this.writeMetadata()
       } catch {
         // Why: metadata already reflects the torn-down listener; nothing else to recover here.
       }
+
       return
     }
+
     // Why: register the restored loopback listener BEFORE persisting metadata so a write failure can never
     // orphan a live transport outside activeTransports (and thus outside stop()).
     this.activeTransports[index] = restored.transport
     const metaIndex = this.transports.findIndex((meta) => meta.kind === 'websocket')
+
     if (metaIndex !== -1) {
       this.transports[metaIndex] = { kind: 'websocket', endpoint: restored.endpoint }
     }
+
     try {
       this.writeMetadata()
     } catch (persistError) {

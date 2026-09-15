@@ -35,6 +35,7 @@ describe('browser-url helpers', () => {
     ]) {
       expect(classifySchemeLessLocalDevAddress(input), input).not.toBeNull()
     }
+
     expect(classifySchemeLessLocalDevAddress('app.localhost:3000')).toBeNull()
     expect(isEligibleLocalCertificateHost('0.0.0.0')).toBe(false)
     expect(isEligibleLocalCertificateHost('[2001:db8::1]')).toBe(false)
@@ -53,6 +54,7 @@ describe('browser-url helpers', () => {
     ]) {
       expect(isEligibleLocalCertificateHost(hostname), hostname).toBe(true)
     }
+
     for (const hostname of [
       '0.0.0.0',
       '::',
@@ -225,6 +227,7 @@ describe('browser-url helpers', () => {
   it('encodes Unicode, reserved characters, and emoji for every search engine', () => {
     const query = 'snow 雪 &?# 😀'
     const encoded = 'snow%20%E9%9B%AA%20%26%3F%23%20%F0%9F%98%80'
+
     for (const engine of ['google', 'duckduckgo', 'bing', 'kagi'] as const) {
       expect(buildSearchUrl(query, engine)).toContain(encoded)
     }

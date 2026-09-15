@@ -21,15 +21,19 @@ function isHostedOnRuntimeOwnedSshTarget(
     repoById.get(worktree.repoId)?.executionHostId,
     repoById.get(worktree.repoId)?.connectionId
   ]
+
   return hostIds.some((value) => {
     if (!value) {
       return false
     }
+
     // connectionId is a raw target id; executionHostId/hostId are `ssh:<targetId>`.
     if (isRuntimeOwnedSshTargetId(value)) {
       return true
     }
+
     const parsed = parseExecutionHostId(value)
+
     return parsed?.kind === 'ssh' && isRuntimeOwnedSshTargetId(parsed.targetId)
   })
 }
@@ -46,6 +50,7 @@ function pickNextWorktreeIdAfterDelete(
 ): string | null {
   const deleteState = state.deleteStateByWorktreeId
   const repoById = getRepoMapFromState(state)
+
   const siblings = (state.worktreesByRepo[repoId] ?? []).filter(
     (worktree) =>
       worktree.id !== deletedWorktreeId &&
@@ -53,16 +58,21 @@ function pickNextWorktreeIdAfterDelete(
       // Skip siblings hosted on the now-destroyed runtime-owned SSH target (see helper).
       !isHostedOnRuntimeOwnedSshTarget(worktree, repoById)
   )
+
   const others = siblings.filter((worktree) => !worktree.isMainWorktree)
+
   if (others.length > 0) {
     const lastVisited = state.lastVisitedAtByWorktreeId
+
     const [mostRecent] = [...others].sort(
       (a, b) =>
         (getWorktreeVisitTimestamp(lastVisited, b) ?? 0) -
         (getWorktreeVisitTimestamp(lastVisited, a) ?? 0)
     )
+
     return mostRecent.id
   }
+
   return siblings.find((worktree) => worktree.isMainWorktree)?.id ?? null
 }
 
@@ -74,7 +84,9 @@ function focusNextWorktreeAfterActiveDelete(
   if (!wasViewingBeforeDelete || !repoId) {
     return
   }
+
   const state = useAppStore.getState()
+
   // Why: a concurrent activation may have already moved focus during the delete.
   // Only hand off when deletion left the terminal workspace selection empty.
   if (
@@ -84,7 +96,9 @@ function focusNextWorktreeAfterActiveDelete(
   ) {
     return
   }
+
   const nextWorktreeId = pickNextWorktreeIdAfterDelete(state, repoId, deletedWorktreeId)
+
   if (nextWorktreeId) {
     // Keep successor focus from replacing the deleted row's spatial context.
     activateAndRevealWorktree(nextWorktreeId, { revealInSidebar: false })
@@ -102,10 +116,13 @@ function focusNextWorktreeAfterActiveDelete(
  */
 export function prepareActiveWorktreeFocusAfterDelete(worktreeId: string): () => void {
   const state = useAppStore.getState()
+
   const wasViewing =
     state.activeView === 'terminal' &&
     state.activePendingCreationId === null &&
     state.activeWorktreeId === worktreeId
+
   const repoId = getWorktreeMapFromState(state).get(worktreeId)?.repoId ?? null
+
   return () => focusNextWorktreeAfterActiveDelete(worktreeId, repoId, wasViewing)
 }

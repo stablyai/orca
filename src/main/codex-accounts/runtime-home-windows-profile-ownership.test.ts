@@ -3,13 +3,16 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { CodexRuntimeHomeService } from './runtime-home-service'
 
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+
 const originalCodexHome = process.env.CODEX_HOME
+
 const originalOrcaCodexHome = process.env.ORCA_CODEX_HOME
 
 afterEach(() => {
   if (originalPlatform) {
     Object.defineProperty(process, 'platform', originalPlatform)
   }
+
   restoreEnv('CODEX_HOME', originalCodexHome)
   restoreEnv('ORCA_CODEX_HOME', originalOrcaCodexHome)
 })
@@ -39,6 +42,7 @@ function createStore() {
     activeCodexManagedAccountId: null,
     activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} }
   } as unknown as GlobalSettings
+
   return { getSettings: () => settings }
 }
 

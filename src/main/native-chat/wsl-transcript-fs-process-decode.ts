@@ -9,6 +9,7 @@ export function decodeWslTranscriptFsProcessError(value: WslTranscriptFsProcessE
   const error = new Error(value.message) as NodeJS.ErrnoException
   error.name = value.name
   Object.assign(error, value)
+
   return error
 }
 
@@ -36,8 +37,10 @@ export function decodeWslTranscriptFsProcessValue(
     // suite's own fixture here, which may be shared or frozen.
     return Object.assign(Object.create(Stats.prototype) as Stats, value)
   }
+
   if (operation === 'readdir') {
     return (value as WslTranscriptFsDirent[]).map(decodeDirent)
   }
+
   return value
 }

@@ -7,18 +7,31 @@ import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { buildActivityEvents, buildAgentPaneThreads } from './ActivityPrototypePage'
 
 export const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 export const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222'
+
 export const LEAF_ID_3 = '33333333-3333-4333-8333-333333333333'
+
 export const LEAF_ID_UNKNOWN = '44444444-4444-4444-8444-444444444444'
+
 export const LEAF_ID_A1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
+
 export const LEAF_ID_B1 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'
+
 export const LEAF_ID_A2 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'
+
 export const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
+
 export const PANE_KEY_2 = makePaneKey('tab-2', LEAF_ID_2)
+
 export const PANE_KEY_3 = makePaneKey('tab-3', LEAF_ID_3)
+
 export const UNKNOWN_PANE_KEY = makePaneKey('tab-unknown', LEAF_ID_UNKNOWN)
+
 export const PANE_KEY_A1 = makePaneKey('tab-a1', LEAF_ID_A1)
+
 export const PANE_KEY_B1 = makePaneKey('tab-b1', LEAF_ID_B1)
+
 export const PANE_KEY_A2 = makePaneKey('tab-a2', LEAF_ID_A2)
 
 export function makeRepo(): Repo {

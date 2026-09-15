@@ -11,14 +11,18 @@ export function selectAgentMapSpawnParentContainer(
 ): string | undefined {
   const ownContainerId = cards[0] ? containerIdentity(cards[0]) : undefined
   const linkCounts = new Map<string, number>()
+
   for (const card of cards) {
     const parent = card.parentPaneKey ? cardsByPaneKey.get(card.parentPaneKey) : undefined
     const parentContainerId = parent ? containerIdentity(parent) : undefined
+
     if (!parentContainerId || parentContainerId === ownContainerId) {
       continue
     }
+
     linkCounts.set(parentContainerId, (linkCounts.get(parentContainerId) ?? 0) + 1)
   }
+
   return [...linkCounts]
     .sort(([leftId, leftCount], [rightId, rightCount]) =>
       rightCount !== leftCount ? rightCount - leftCount : compareStable(leftId, rightId)

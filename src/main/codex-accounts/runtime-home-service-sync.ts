@@ -15,17 +15,22 @@ export abstract class CodexRuntimeHomeSync extends CodexRuntimeHomeWsl {
   ): void {
     if (target?.runtime === 'wsl') {
       this.startLegacyWslAuthDrain(this.resolveWslDefaultTarget(target))
+
       return
     }
 
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
+
     if (selfContainedAccount) {
       // Why: self-contained managed homes hold their own auth, so the shared
       // runtime home's snapshot/hot-swap/read-back machinery below must not run.
       this.syncSelfContainedManagedSelection(selfContainedAccount)
+
       return
     }
+
     const settings = this.store.getSettings()
+
     if (this.lastHostAccountUsedSelfContainedHome) {
       // Why: the account's auth is already canonical in its own home. Reset the
       // legacy mirror baseline without reading it; a real-home deselect needs no
@@ -33,10 +38,12 @@ export abstract class CodexRuntimeHomeSync extends CodexRuntimeHomeWsl {
       this.lastHostAccountUsedSelfContainedHome = false
       this.lastSyncedAccountId = null
       this.lastWrittenAuthJson = null
+
       if (this.isHostSystemDefaultRealHome(launchEnv)) {
         return
       }
     }
+
     if (this.isHostSystemDefaultRealHome(launchEnv)) {
       // Why: retained daemon panes may own shared auth from a managed launch;
       // compatibility reconciliation runs later with durable provenance.
@@ -45,24 +52,31 @@ export abstract class CodexRuntimeHomeSync extends CodexRuntimeHomeWsl {
         this.lastSyncedAccountId = null
         this.lastWrittenAuthJson = null
       }
+
       return
     }
+
     const runtimeAuthExistedBeforeSync = existsSync(this.getRuntimeAuthPath())
+
     if (this.lastSyncedAccountId === null) {
       this.captureSystemDefaultSnapshot({ force: false })
     }
+
     const activeAccount = this.getActiveAccount(
       settings.codexManagedAccounts,
       normalizeCodexRuntimeSelection(settings).host
     )
+
     if (activeAccount) {
       // Why: only a WSL-managed account can reach here — every host account was
       // routed to its own self-contained home above. Its auth lives in the
       // distro-local runtime home, so the host mirror only drops its baseline.
       this.lastSyncedAccountId = null
       this.lastWrittenAuthJson = null
+
       return
     }
+
     if (normalizeCodexRuntimeSelection(settings).host) {
       this.store.updateSettings({
         activeCodexManagedAccountId: null,
@@ -72,12 +86,14 @@ export abstract class CodexRuntimeHomeSync extends CodexRuntimeHomeWsl {
         }
       })
     }
+
     // Why: only restore the system-default mirror when leaving a managed account; otherwise later syncs mirror current ~/.codex instead of replaying an old snapshot.
     if (this.lastSyncedAccountId !== null) {
       this.restoreSystemDefaultSnapshot({ detectExternalLogin: true })
       this.lastSyncedAccountId = null
     } else if (!runtimeAuthExistedBeforeSync) {
       const logoutMarkerStatus = this.getRuntimeLogoutMarkerStatus()
+
       if (logoutMarkerStatus.kind === 'applies') {
         this.lastWrittenAuthJson = null
       } else if (
@@ -118,13 +134,16 @@ export abstract class CodexRuntimeHomeSync extends CodexRuntimeHomeWsl {
     provenanceStatus: CodexSharedRuntimeAuthProvenanceStatus
   ): { ownershipProven: boolean; mirroredAuthJson: string | null } {
     const provenance = provenanceStatus.kind === 'committed' ? provenanceStatus.provenance : null
+
     const snapshotAuth =
       this.readSystemDefaultSnapshot(this.getSystemDefaultSnapshotPath())?.authJson ?? null
+
     const preProvenanceRuntimeRefreshProven =
       provenanceStatus.kind === 'missing' &&
       snapshotAuth !== null &&
       this.runtimeAuthMatchesSystemDefaultIdentity(runtimeAuth, snapshotAuth) &&
       codexAuthIsMonotonicallyFresher(runtimeAuth, snapshotAuth)
+
     return {
       ownershipProven: provenance?.owner === 'system-default' || preProvenanceRuntimeRefreshProven,
       mirroredAuthJson:

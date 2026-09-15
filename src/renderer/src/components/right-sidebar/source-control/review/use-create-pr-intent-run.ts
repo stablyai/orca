@@ -114,7 +114,9 @@ export function useSourceControlCreatePrIntentRun({
       // Why: intent crosses async commit/push steps, so the base stays tied to what was selected when the run started.
       baseRef: effectiveBaseRef ?? null
     })
+
     const operationTarget = getCreatePrIntentOperationTarget(token)
+
     const snapshot = createCreatePrIntentRunSnapshot({
       initialEntries: entries,
       initialUpstreamStatus: remoteStatus,
@@ -125,6 +127,7 @@ export function useSourceControlCreatePrIntentRun({
       setIsExecutingBulk,
       token
     })
+
     createPrIntentRunTokenRef.current[token.worktreeId] = token
     createPrIntentInFlightRef.current[token.worktreeId] = true
     setCreatePrIntentInFlightByWorktree((prev) => ({ ...prev, [token.worktreeId]: true }))
@@ -149,9 +152,11 @@ export function useSourceControlCreatePrIntentRun({
         token,
         updateCommitDrafts
       })
+
       if (!prepared) {
         return
       }
+
       await runCreatePrIntentReviewStep({
         createHostedReviewForCreatePrIntent,
         operationTarget,
@@ -164,6 +169,7 @@ export function useSourceControlCreatePrIntentRun({
       })
     } catch (error) {
       console.warn('[SourceControl] Create PR intent failed', error)
+
       if (!snapshot.abortIfStale()) {
         setCreatePrIntentNoticeForWorktree(token.worktreeId, {
           tone: 'destructive',
@@ -177,9 +183,11 @@ export function useSourceControlCreatePrIntentRun({
       if (createPrIntentRunTokenRef.current[token.worktreeId] === token) {
         createPrIntentInFlightRef.current[token.worktreeId] = false
         createPrIntentRunTokenRef.current[token.worktreeId] = null
+
         if (snapshot.wasAbortedByStaleTarget()) {
           setCreatePrIntentNoticeForWorktree(token.worktreeId, null)
         }
+
         setCreatePrIntentInFlightByWorktree((prev) => ({
           ...prev,
           [token.worktreeId]: false

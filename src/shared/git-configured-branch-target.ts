@@ -16,6 +16,7 @@ async function getGitConfigValue(runGit: GitCommandRunner, key: string): Promise
   try {
     const { stdout } = await runGit(['config', '--get', key])
     const value = stdout.trim()
+
     return value || null
   } catch {
     return null
@@ -34,6 +35,7 @@ async function findRemoteNameForUrl(
 ): Promise<string | null> {
   try {
     const { stdout } = await runGit(['remote', '-v'])
+
     return findGitRemoteNameByFetchUrl(stdout, (candidateUrl) => candidateUrl === remoteUrl)
   } catch {
     return null
@@ -50,12 +52,15 @@ export async function getConfiguredBranchRemoteUpstream(
     getGitConfigValue(runGit, `branch.${currentBranchName}.merge`),
     getGitConfigValue(runGit, `branch.${currentBranchName}.base`)
   ])
+
   const branchName = mergeRef?.replace(/^refs\/heads\//, '') ?? ''
+
   if (!remote || !branchName || branchName === mergeRef || remote === '.') {
     return null
   }
 
   const remoteName = isUrlValuedRemote(remote) ? await findRemoteNameForUrl(runGit, remote) : remote
+
   if (
     !remoteName ||
     gitRefTargetsBranchOnRemote(baseRef, remoteName, branchName) ||
@@ -63,6 +68,7 @@ export async function getConfiguredBranchRemoteUpstream(
   ) {
     return null
   }
+
   return {
     upstreamName: `${remoteName}/${branchName}`,
     remoteName,
@@ -82,14 +88,18 @@ export async function hasConfiguredBranchPushTarget(
     getGitConfigValue(runGit, `branch.${currentBranchName}.merge`),
     getGitConfigValue(runGit, `branch.${currentBranchName}.base`)
   ])
+
   const remote = pushRemote ?? pushDefault ?? branchRemote
   const branchName = mergeRef?.replace(/^refs\/heads\//, '') ?? ''
+
   if (!remote || remote === '.' || !branchName || branchName === mergeRef) {
     return false
   }
+
   const pushRemoteName = isUrlValuedRemote(remote)
     ? ((await findRemoteNameForUrl(runGit, remote)) ?? remote)
     : remote
+
   // The two usually name the same URL; resolving it twice reads the remote table twice.
   const branchRemoteName = !branchRemote
     ? null
@@ -98,9 +108,11 @@ export async function hasConfiguredBranchPushTarget(
       : isUrlValuedRemote(branchRemote)
         ? ((await findRemoteNameForUrl(runGit, branchRemote)) ?? branchRemote)
         : branchRemote
+
   if (gitRefTargetsBranchOnRemote(baseRef, pushRemoteName, branchName)) {
     return false
   }
+
   // Why: branch.merge belongs to branch.remote. Do not combine a user's
   // pushDefault fork with an origin/main merge target and call it pushable.
   if (
@@ -109,5 +121,6 @@ export async function hasConfiguredBranchPushTarget(
   ) {
     return false
   }
+
   return true
 }

@@ -4,18 +4,24 @@ import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 let hermesHome: string | null = null
+
 let extraTempDirs: string[] = []
+
 const previousHermesHome = process.env.HERMES_HOME
+
 const fakeDbRows = vi.hoisted(() => ({
   sessions: [] as Record<string, unknown>[],
   messages: [] as Record<string, unknown>[]
 }))
+
 const fakePrepareSqls = vi.hoisted(() => [] as string[])
+
 const fakeDatabase = vi.hoisted(() =>
   vi.fn(function FakeDatabase() {
     return {
       prepare: vi.fn((sql: string) => {
         fakePrepareSqls.push(sql)
+
         return {
           get: vi.fn((param: string) =>
             sql.includes('FROM sessions')
@@ -40,12 +46,14 @@ vi.mock('../sqlite/sync-database', () => ({
 
 async function loadReader() {
   vi.resetModules()
+
   return import('./hermes-cron-output')
 }
 
 async function createHermesHome(): Promise<string> {
   hermesHome = await mkdtemp(join(tmpdir(), 'orca-hermes-output-'))
   process.env.HERMES_HOME = hermesHome
+
   return hermesHome
 }
 
@@ -62,10 +70,12 @@ afterEach(async () => {
   } else {
     process.env.HERMES_HOME = previousHermesHome
   }
+
   if (hermesHome) {
     await rm(hermesHome, { recursive: true, force: true })
     hermesHome = null
   }
+
   await Promise.all(extraTempDirs.map((dir) => rm(dir, { recursive: true, force: true })))
   extraTempDirs = []
   vi.resetModules()
@@ -168,9 +178,11 @@ Run summary: monitor automation completed successfully.
     const execSpy = vi.spyOn(RegExp.prototype, 'exec')
     const replaceSpy = vi.spyOn(String.prototype, 'replace')
     const page = await readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 25 })
+
     const usedBroadCapture = execSpy.mock.contexts.some(
       (pattern) => pattern instanceof RegExp && pattern.source.includes('[\\s\\S]')
     )
+
     const usedWhitespaceReplace = replaceSpy.mock.calls.some(
       ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
     )
@@ -286,6 +298,7 @@ Run summary: monitor automation completed successfully.
     ]
     const { readHermesCronOutputRunsPage } = await loadReader()
     const parse = vi.spyOn(Date, 'parse')
+
     try {
       await expect(
         readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 0 })
@@ -297,6 +310,7 @@ Run summary: monitor automation completed successfully.
     } finally {
       parse.mockRestore()
     }
+
     const page = await readHermesCronOutputRunsPage('job-1', { page: 1, pageSize: 1 })
     expect(page.total).toBe(2)
     expect(page.runs).toMatchObject([{ id: 'cron_job-1_newer' }])
@@ -342,6 +356,7 @@ Run summary: monitor automation completed successfully.
     for (let i = 1; i <= 200; i += 1) {
       await readHermesCronOutputRunsPage(`job-${i}`, { page: 1, pageSize: 0 })
     }
+
     await writeFile(join(outputDir, '2026-05-15_09-03-00.md'), 'second run', 'utf-8')
 
     await expect(readHermesCronOutputRunsPage('job-0', { page: 1, pageSize: 0 })).resolves.toEqual({

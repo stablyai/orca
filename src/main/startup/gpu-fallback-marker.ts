@@ -11,6 +11,7 @@ import { join } from 'node:path'
  */
 
 export const GPU_FALLBACK_MARKER_FILE = 'gpu-fallback.json'
+
 export const GPU_FALLBACK_SCHEME_VERSION = 3
 
 export type GpuFallbackEnvironment = {
@@ -40,9 +41,11 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
     const parsed = JSON.parse(readFileSync(markerPath(userDataPath), 'utf-8')) as Partial<
       Record<keyof GpuFallbackMarker, unknown>
     >
+
     if (parsed.schemeVersion !== GPU_FALLBACK_SCHEME_VERSION) {
       return null
     }
+
     if (
       typeof parsed.engagedAt !== 'number' ||
       !Number.isFinite(parsed.engagedAt) ||
@@ -55,6 +58,7 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
     ) {
       return null
     }
+
     return {
       schemeVersion: GPU_FALLBACK_SCHEME_VERSION,
       engagedAt: parsed.engagedAt,
@@ -67,6 +71,7 @@ export function readGpuFallbackMarker(userDataPath: string): GpuFallbackMarker |
   } catch {
     // missing or corrupt means no fallback requested
   }
+
   return null
 }
 
@@ -84,6 +89,7 @@ export function writeGpuFallbackMarker(
     electronVersion: environment.electronVersion,
     platform: 'win32'
   }
+
   writeFileSync(markerPath(userDataPath), JSON.stringify(marker))
 }
 
@@ -100,12 +106,15 @@ export function readActiveGpuFallbackMarker(
   environment: GpuFallbackEnvironment
 ): GpuFallbackMarker | null {
   const marker = readGpuFallbackMarker(userDataPath)
+
   if (!marker) {
     if (existsSync(markerPath(userDataPath))) {
       clearGpuFallbackMarker(userDataPath)
     }
+
     return null
   }
+
   if (
     environment.platform !== 'win32' ||
     marker.platform !== environment.platform ||
@@ -115,7 +124,9 @@ export function readActiveGpuFallbackMarker(
     // Why: the marker is sticky only for the build that observed the driver
     // crash burst; updates get one fresh hardware attempt automatically.
     clearGpuFallbackMarker(userDataPath)
+
     return null
   }
+
   return marker
 }

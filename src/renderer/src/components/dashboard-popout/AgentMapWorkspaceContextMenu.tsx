@@ -42,7 +42,9 @@ function countWorkspaceOwners(
   if (!worktreeId) {
     return 0
   }
+
   const scope = parseWorkspaceKey(worktreeId)
+
   if (scope?.type === 'folder') {
     return new Set(
       state.folderWorkspaces
@@ -54,32 +56,44 @@ function countWorkspaceOwners(
         )
     ).size
   }
+
   const repoOwnerIdsByRepoId = new Map<string, Set<ExecutionHostId>>()
+
   for (const repo of state.repos) {
     const ownerId = getRepoExecutionHostId(repo)
     const owners = repoOwnerIdsByRepoId.get(repo.id)
+
     if (owners) {
       owners.add(ownerId)
     } else {
       repoOwnerIdsByRepoId.set(repo.id, new Set([ownerId]))
     }
   }
+
   const ownerIds = new Set<ExecutionHostId>()
+
   const addOwner = (worktree: { repoId: string; hostId?: ExecutionHostId }): void => {
     const directOwner = normalizeExecutionHostId(worktree.hostId)
+
     if (directOwner) {
       ownerIds.add(directOwner)
+
       return
     }
+
     const repoOwnerIds = repoOwnerIdsByRepoId.get(worktree.repoId)
+
     if (!repoOwnerIds) {
       ownerIds.add('local')
+
       return
     }
+
     for (const ownerId of repoOwnerIds) {
       ownerIds.add(ownerId)
     }
   }
+
   for (const worktrees of Object.values(state.worktreesByRepo)) {
     for (const worktree of worktrees) {
       if (worktree.id === worktreeId) {
@@ -87,6 +101,7 @@ function countWorkspaceOwners(
       }
     }
   }
+
   for (const result of Object.values(state.detectedWorktreesByRepo)) {
     for (const worktree of result.worktrees) {
       if (worktree.id === worktreeId) {
@@ -94,6 +109,7 @@ function countWorkspaceOwners(
       }
     }
   }
+
   return ownerIds.size
 }
 
@@ -115,6 +131,7 @@ function ContextMenuTrigger({
       })
     )
   }, [request])
+
   return <span ref={triggerRef} aria-hidden />
 }
 
@@ -131,7 +148,9 @@ export function AgentMapWorkspaceContextMenu({
       repos: state.repos
     }))
   )
+
   const worktree = useWorktreeById(request?.worktreeId ?? null, request?.executionHostId)
+
   const ownerCount = useMemo(
     () =>
       countWorkspaceOwners(request?.worktreeId ?? null, {
@@ -142,15 +161,18 @@ export function AgentMapWorkspaceContextMenu({
       }),
     [detectedWorktreesByRepo, folderWorkspaces, repos, request?.worktreeId, worktreesByRepo]
   )
+
   const unavailable = request !== null && (!worktree || ownerCount !== 1)
   useEffect(() => {
     if (unavailable) {
       onLifecycleComplete?.()
     }
   }, [onLifecycleComplete, unavailable])
+
   if (!request || unavailable || !worktree) {
     return null
   }
+
   return (
     <div className="pointer-events-none absolute inset-0">
       <Suspense fallback={null}>

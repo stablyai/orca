@@ -6,12 +6,16 @@ import { build } from 'esbuild'
 import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
 
 const modulePath = 'src/main/daemon/terminal-history-legacy-scrollback-restore.ts'
+
 const baselineSource = readFileSync(0, 'utf8')
+
 assert.ok(
   baselineSource.includes('function truncateAltScreen'),
   'Pipe the baseline module on stdin'
 )
+
 const arms = {}
+
 for (const [name, source] of [
   ['baseline', baselineSource],
   ['indexed', readFileSync(modulePath, 'utf8')]
@@ -39,6 +43,7 @@ for (const [name, source] of [
       }
     ]
   })
+
   arms[name] = (
     await import(
       `data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`
@@ -47,33 +52,46 @@ for (const [name, source] of [
 }
 
 const on = '\x1b[?1049h'
+
 const off = '\x1b[?1049l'
+
 let differentialCases = 0
+
 function verify(input) {
   assert.equal(arms.indexed(input), arms.baseline(input))
   differentialCases++
 }
+
 const tokens = [on, off, '\x1b[?1049', 'h', 'l', 'x']
+
 function enumerate(prefix, depth) {
   verify(prefix)
+
   if (depth === 0) {
     return
   }
+
   for (const token of tokens) {
     enumerate(prefix + token, depth - 1)
   }
 }
+
 enumerate('', 6)
 
 let seed = 90211
+
 function random(max) {
   seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+
   return Math.floor((seed / 0x100000000) * max)
 }
+
 const fragments = [...tokens, '\r\n', '\x1b[?1047h', '\x1b[0m', 'é中😀', '\ud800', '\x00']
+
 for (let trial = 0; trial < 5000; trial++) {
   verify(Array.from({ length: random(300) }, () => fragments[random(fragments.length)]).join(''))
 }
+
 console.log(
   JSON.stringify({
     differentialCases,
@@ -97,31 +115,39 @@ const workloads = [
   ],
   ['4096 off near 16MiB limit', ('x'.repeat(4088) + off).repeat(4096)]
 ]
+
 function median(values) {
   const sorted = [...values].sort((a, b) => a - b)
+
   return (sorted[3] + sorted[4]) / 2
 }
+
 for (const [name, input] of workloads) {
   const expected = arms.baseline(input)
   assert.equal(arms.indexed(input), expected)
   const samples = { baseline: [], indexed: [] }
   const repeats = input.length < 8192 ? 10000 : 1
+
   for (const arm of Object.values(arms)) {
     for (let warmup = 0; warmup < Math.min(100, repeats); warmup++) {
       assert.equal(arm(input), expected)
     }
   }
+
   for (const pair of buildCounterbalancedSchedule(8, 'baseline', 'indexed')) {
     for (const name of pair) {
       const start = performance.now()
       let result
+
       for (let repeat = 0; repeat < repeats; repeat++) {
         result = arms[name](input)
       }
+
       samples[name].push((performance.now() - start) / repeats)
       assert.equal(result, expected)
     }
   }
+
   console.log(
     JSON.stringify({
       name,

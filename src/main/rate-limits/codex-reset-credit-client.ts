@@ -45,15 +45,20 @@ function parseCreditTimestamp(value: number | string | null | undefined): number
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value < 10_000_000_000 ? value * 1000 : value
   }
+
   if (typeof value !== 'string' || !value.trim()) {
     return null
   }
+
   const trimmed = value.trim()
   const numeric = Number(trimmed)
+
   if (Number.isFinite(numeric)) {
     return numeric < 10_000_000_000 ? numeric * 1000 : numeric
   }
+
   const timestamp = Date.parse(trimmed)
+
   return Number.isFinite(timestamp) ? timestamp : null
 }
 
@@ -70,6 +75,7 @@ function nextAvailableCreditExpiry(
       .map((credit) => credit.expiresAt)
       .filter((expiresAt): expiresAt is number => typeof expiresAt === 'number')
       .sort((a, b) => a - b) ?? []
+
   return expiries[0] ?? null
 }
 
@@ -79,14 +85,17 @@ export function mapRpcRateLimitResetCredits(
   if (!raw) {
     return raw
   }
+
   if (typeof raw.availableCount !== 'number' || !Number.isFinite(raw.availableCount)) {
     return null
   }
+
   const credits = raw.credits?.map((credit) => ({
     status: normalizeCreditStatus(credit.status),
     expiresAt: parseCreditTimestamp(credit.expiresAt),
     grantedAt: parseCreditTimestamp(credit.grantedAt)
   }))
+
   return {
     availableCount: Math.max(0, Math.floor(raw.availableCount)),
     ...(typeof raw.totalEarnedCount === 'number' && Number.isFinite(raw.totalEarnedCount)
@@ -103,18 +112,22 @@ export function mapBackendRateLimitResetCredits(
   if (!raw) {
     return raw
   }
+
   const credits = raw.credits?.map((credit) => ({
     status: normalizeCreditStatus(credit.status),
     expiresAt: parseCreditTimestamp(credit.expires_at),
     grantedAt: parseCreditTimestamp(credit.granted_at)
   }))
+
   const availableCount =
     typeof raw.available_count === 'number' && Number.isFinite(raw.available_count)
       ? raw.available_count
       : (credits?.filter((credit) => credit.status === 'available').length ?? null)
+
   if (availableCount === null) {
     return null
   }
+
   return {
     availableCount: Math.max(0, Math.floor(availableCount)),
     ...(typeof raw.total_earned_count === 'number' && Number.isFinite(raw.total_earned_count)
@@ -138,20 +151,27 @@ async function fetchBackendRateLimitResetCredits(
   if (options?.signal?.aborted) {
     return null
   }
+
   const signal = createCodexBackendRequestSignal(options?.signal)
   const headers = await getCodexBackendAuthHeaders(options, signal)
+
   if (!headers || signal.aborted) {
     return null
   }
+
   const response = await request('https://chatgpt.com/backend-api/wham/rate-limit-reset-credits', {
     headers,
     signal
   })
+
   if (!response.ok) {
     await cancelUnreadResponseBody(response)
+
     return null
   }
+
   const payload = (await response.json()) as BackendRateLimitResetCreditsResponse
+
   return mapBackendRateLimitResetCredits(payload) ?? null
 }
 
@@ -167,8 +187,10 @@ export async function supplementCodexRateLimitResetCredits(
   ) {
     return limits
   }
+
   try {
     const rateLimitResetCredits = await fetchBackendRateLimitResetCredits(request, options)
+
     return rateLimitResetCredits === null ? limits : { ...limits, rateLimitResetCredits }
   } catch {
     return limits
@@ -179,15 +201,19 @@ function mapBackendConsumeOutcome(code: string | undefined): CodexRateLimitReset
   if (code === 'reset') {
     return 'reset'
   }
+
   if (code === 'nothing_to_reset') {
     return 'nothingToReset'
   }
+
   if (code === 'no_credit') {
     return 'noCredit'
   }
+
   if (code === 'already_redeemed') {
     return 'alreadyRedeemed'
   }
+
   throw new Error(`Unknown Codex reset outcome: ${code ?? 'missing'}`)
 }
 
@@ -201,11 +227,14 @@ export async function consumeCodexRateLimitResetCreditFromBackend(
   if (!options.idempotencyKey.trim()) {
     throw new Error('Codex reset idempotency key is required')
   }
+
   const signal = createCodexBackendRequestSignal(undefined, REDEEM_BACKEND_TIMEOUT_MS)
   const headers = await getCodexBackendAuthHeaders(options, signal)
+
   if (!headers) {
     throw new Error('Codex not signed in')
   }
+
   const response = await request(
     'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume',
     {
@@ -215,10 +244,13 @@ export async function consumeCodexRateLimitResetCreditFromBackend(
       signal
     }
   )
+
   if (!response.ok) {
     await cancelUnreadResponseBody(response)
     throw new Error(`Codex reset failed: HTTP ${response.status}`)
   }
+
   const payload = (await response.json()) as { code?: string }
+
   return mapBackendConsumeOutcome(payload.code)
 }

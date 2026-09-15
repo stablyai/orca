@@ -99,6 +99,7 @@ describe('activating a workspace whose last terminal was closed', () => {
       ...selection,
       notifyHostRuntime: false
     })
+
     await gate.mock.results[0]?.value
 
     // The gate owns seeding for this activation, so the synchronous call never returns a tab.
@@ -116,9 +117,11 @@ describe('activating a workspace whose last terminal was closed', () => {
       } as never
     })
     let resolveGate!: (outcome: activationGate.WorktreeAgentActivationOutcome) => void
+
     const pendingGate = new Promise<activationGate.WorktreeAgentActivationOutcome>((resolve) => {
       resolveGate = resolve
     })
+
     vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockReturnValue(pendingGate)
 
     activateAndRevealWorktree(worktree.id, { agent: 'codex', notifyHostRuntime: false })
@@ -142,12 +145,15 @@ describe('activating a workspace whose last terminal was closed', () => {
       } as never
     })
     let resolveGate!: (outcome: activationGate.WorktreeAgentActivationOutcome) => void
+
     const pendingGate = new Promise<activationGate.WorktreeAgentActivationOutcome>((resolve) => {
       resolveGate = resolve
     })
+
     vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockReturnValue(pendingGate)
 
     activateAndRevealWorktree(worktree.id, { agent: 'codex', notifyHostRuntime: false })
+
     const recoveredTabId = ensureWorktreeHasInitialTerminal(
       useAppStore.getState(),
       worktree.id,
@@ -157,6 +163,7 @@ describe('activating a workspace whose last terminal was closed', () => {
       undefined,
       { reseedEmptiedWorkspace: true }
     )
+
     resolveGate('empty')
     await pendingGate
 
@@ -303,7 +310,9 @@ describe('activating a workspace whose last terminal was closed', () => {
 })
 
 const FOLDER_ID = 'folder-1'
+
 const FOLDER_KEY = folderWorkspaceKey(FOLDER_ID)
+
 const SSH_HOST_ID = toSshExecutionHostId('conn-1')
 
 /** One folder id resolves to a different `FolderWorkspace` per host while both share a single
@@ -320,6 +329,7 @@ function seedEmptiedFolderWorkspaceOnTwoHosts(): void {
     isPinned: false,
     sortOrder: 0
   }
+
   useAppStore.setState({
     folderWorkspaces: [
       { ...base, folderPath: '/local/notes', executionHostId: 'local' },
@@ -485,6 +495,7 @@ describe('activating a folder workspace whose last terminal was closed', () => {
       executionHostId: 'local',
       providesInitialSurface: true
     })
+
     await waitForWorktreeAgentActivationGateForTests(FOLDER_KEY)
 
     expect(result).not.toBe(false)

@@ -22,12 +22,16 @@ export function updateTaskStatus(
   const permitsActiveDispatch = terminalStatus || requiresActiveDispatch
   // Why: reserve the WAL writer before lifecycle reads so a concurrent commit cannot stale the snapshot.
   const transaction = beginLifecycleWriteTransaction(this.db, UPDATE_TASK_STATUS_SAVEPOINT)
+
   try {
     const task = this.getTask(id)
+
     if (!task) {
       commitLifecycleWriteTransaction(this.db, transaction)
+
       return undefined
     }
+
     const active = this.db
       .prepare(
         `SELECT id FROM dispatch_contexts
@@ -35,11 +39,13 @@ export function updateTaskStatus(
          ORDER BY rowid DESC LIMIT 1`
       )
       .get(id) as { id: string } | undefined
+
     // Why: a supervised worker owns its Task for as long as it is alive. Every status this
     // function lets past the active-Dispatch check must clear the same worker check, or the Task
     // re-opens under a worker whose own lifecycle can no longer settle it (#16904 relay wedge).
     // A no-op re-assert of `dispatched` re-opens nothing and stays legal.
     const reopensUnderWorker = requiresActiveDispatch && task.status !== 'dispatched'
+
     const activeWorker =
       terminalStatus || reopensUnderWorker
         ? (this.db
@@ -53,6 +59,7 @@ export function updateTaskStatus(
             )
             .get(id) as { id: string } | undefined)
         : undefined
+
     if (activeWorker) {
       throw new OrchestrationError(
         'task_not_startable',
@@ -60,6 +67,7 @@ export function updateTaskStatus(
         { taskId: id, dispatchId: activeWorker.id }
       )
     }
+
     if (requiresActiveDispatch && !active) {
       throw new OrchestrationError(
         'task_not_startable',
@@ -67,6 +75,7 @@ export function updateTaskStatus(
         { taskId: id }
       )
     }
+
     if (active && !permitsActiveDispatch) {
       throw new OrchestrationError(
         'task_not_startable',
@@ -74,10 +83,13 @@ export function updateTaskStatus(
         { taskId: id, dispatchId: active.id }
       )
     }
+
     if (task.status === status && result === undefined) {
       commitLifecycleWriteTransaction(this.db, transaction)
+
       return task
     }
+
     try {
       transitionLifecycleWithDb(this.db, {
         entity: 'task',
@@ -93,23 +105,31 @@ export function updateTaskStatus(
       if (!(error instanceof OrchestrationError) || error.code !== 'lifecycle_conflict') {
         throw error
       }
+
       const current = this.getTask(id)
+
       // A concurrent writer may have already applied the requested status;
       // preserve idempotency for that race, but never hide an invalid edge.
       if (!current || current.status !== status) {
         throw error
       }
+
       commitLifecycleWriteTransaction(this.db, transaction)
+
       return current
     }
+
     if (terminalStatus) {
       settleActiveDispatchesForTask(this, id, status, result)
     }
+
     if (status === 'completed') {
       this.promoteReadyTasks(id)
     }
+
     const updatedTask = this.getTask(id)
     commitLifecycleWriteTransaction(this.db, transaction)
+
     return updatedTask
   } catch (error) {
     rollbackLifecycleWriteTransaction(this.db, transaction)

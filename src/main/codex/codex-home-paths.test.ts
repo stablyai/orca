@@ -31,22 +31,26 @@ const { fsMockState } = vi.hoisted(() => ({
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
   return {
     ...actual,
     cpSync: (...args: Parameters<typeof actual.cpSync>) => {
       fsMockState.copyCount += 1
+
       return actual.cpSync(...args)
     },
     readFileSync: (...args: Parameters<typeof actual.readFileSync>) => {
       if (args[0] === fsMockState.trackedReadPath) {
         fsMockState.trackedReadCount += 1
       }
+
       return actual.readFileSync(...args)
     },
     symlinkSync: (...args: Parameters<typeof actual.symlinkSync>) => {
       if (fsMockState.failSymlink) {
         throw new Error('symlink disabled for test')
       }
+
       return actual.symlinkSync(...args)
     }
   }
@@ -60,6 +64,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
+
   return {
     ...actual,
     homedir: homedirMock
@@ -72,7 +77,9 @@ import {
 } from './codex-home-paths'
 
 let fakeHomeDir: string
+
 let userDataDir: string
+
 let previousUserDataPath: string | undefined
 
 function getSystemCodexHomePath(): string {
@@ -93,6 +100,7 @@ function expectSymbolicLinkTargetIfLinked(targetPath: string, sourcePath: string
   if (!lstatSync(targetPath).isSymbolicLink()) {
     return
   }
+
   expect(normalizeLinkTarget(readlinkSync(targetPath))).toBe(normalizeLinkTarget(sourcePath))
 }
 
@@ -119,6 +127,7 @@ beforeEach(() => {
     if (name === 'userData') {
       return userDataDir
     }
+
     throw new Error(`unexpected app.getPath(${name})`)
   })
   mkdirSync(getSystemCodexHomePath(), { recursive: true })
@@ -127,11 +136,13 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(fakeHomeDir, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   vi.clearAllMocks()
 })
 
@@ -143,6 +154,7 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
     })
     const previousUserDataPath = process.env.ORCA_USER_DATA_PATH
     process.env.ORCA_USER_DATA_PATH = userDataDir
+
     try {
       const { getOrcaManagedCodexHomePath: getCliSafeManagedPath } =
         await import('./codex-home-paths')
@@ -154,6 +166,7 @@ describe('syncSystemCodexResourcesIntoManagedHome', () => {
       } else {
         process.env.ORCA_USER_DATA_PATH = previousUserDataPath
       }
+
       mockElectronAppPaths()
       vi.resetModules()
     }

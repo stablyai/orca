@@ -18,6 +18,7 @@ export class RuntimeLinearCommentLookupCommands extends RuntimeLinearWriteResult
   ): Promise<string> {
     try {
       const root = await getLinearIssueCommentThreadRoot(issueId, commentId, workspaceId)
+
       if (!root) {
         throw linearError(
           'linear_invalid_parent',
@@ -27,11 +28,13 @@ export class RuntimeLinearCommentLookupCommands extends RuntimeLinearWriteResult
           }
         )
       }
+
       return root.id
     } catch (error) {
       if (error instanceof LinearAgentAccessError) {
         throw error
       }
+
       throw this.mapLinearReadFailure(error)
     }
   }
@@ -44,6 +47,7 @@ export class RuntimeLinearCommentLookupCommands extends RuntimeLinearWriteResult
     const writePromise = write(controller.signal)
     writePromise.catch(() => undefined)
     let timer: ReturnType<typeof setTimeout> | null = null
+
     try {
       return await Promise.race([
         writePromise,
@@ -63,15 +67,19 @@ export class RuntimeLinearCommentLookupCommands extends RuntimeLinearWriteResult
       if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
         throw error
       }
+
       if (error instanceof LinearWriteFailure && error.kind === 'unconfirmed') {
         throw unconfirmed(this.linearWriteFailureCauseMessage(error))
       }
+
       if (error instanceof LinearWriteFailure && error.kind === 'network') {
         throw linearError('linear_network_error', sanitizeLinearErrorMessage(error.message))
       }
+
       if (error instanceof LinearWriteFailure) {
         throw linearError('linear_write_failed', sanitizeLinearErrorMessage(error.message))
       }
+
       throw this.mapLinearReadFailure(error)
     } finally {
       if (timer) {
@@ -84,9 +92,11 @@ export class RuntimeLinearCommentLookupCommands extends RuntimeLinearWriteResult
     if (error.cause instanceof Error) {
       return sanitizeLinearErrorMessage(error.cause.message)
     }
+
     if (error.cause !== undefined) {
       return sanitizeLinearErrorMessage(String(error.cause))
     }
+
     return sanitizeLinearErrorMessage(error.message)
   }
 
@@ -94,11 +104,13 @@ export class RuntimeLinearCommentLookupCommands extends RuntimeLinearWriteResult
     if (error instanceof LinearAgentAccessError) {
       return error
     }
+
     if (isLinearAuthError(error)) {
       return linearError('linear_auth_expired', 'Linear authentication expired.', {
         nextSteps: ['Reconnect Linear from Orca settings.']
       })
     }
+
     return linearError(classifyLinearError(error), linearMessage(error))
   }
 }

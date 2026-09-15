@@ -64,6 +64,7 @@ describe('keybindings', () => {
       alt: false,
       shift: false
     }
+
     const focusListInput = { ...zoomResetInput, shift: true }
 
     expect(keybindingMatchesAction('zoom.reset', zoomResetInput, 'darwin')).toBe(true)

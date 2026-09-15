@@ -8,12 +8,14 @@ import {
 describe('projectHomeHostConnections', () => {
   it('reads each connection once while preserving all lookup values', () => {
     const entryCount = 1_000
+
     const reads = {
       hostId: 0,
       path: 0,
       pendingPath: 0,
       pairingRejected: 0
     }
+
     const entries = Array.from({ length: entryCount }, (_, index) => {
       const hostId = index === entryCount - 1 ? '__proto__' : `host-${index}`
       const path: MobileConnectionPath = index % 2 === 0 ? 'lan' : 'relay'
@@ -25,6 +27,7 @@ describe('projectHomeHostConnections', () => {
           enumerable: true,
           get: () => {
             reads.hostId += 1
+
             return hostId
           }
         },
@@ -32,6 +35,7 @@ describe('projectHomeHostConnections', () => {
           enumerable: true,
           get: () => {
             reads.path += 1
+
             return path
           }
         },
@@ -39,6 +43,7 @@ describe('projectHomeHostConnections', () => {
           enumerable: true,
           get: () => {
             reads.pendingPath += 1
+
             return pendingPath
           }
         },
@@ -46,10 +51,12 @@ describe('projectHomeHostConnections', () => {
           enumerable: true,
           get: () => {
             reads.pairingRejected += 1
+
             return pairingRejected
           }
         }
       })
+
       return entry
     })
 

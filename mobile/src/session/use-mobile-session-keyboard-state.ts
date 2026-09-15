@@ -38,6 +38,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel
     unsubscribeTerminal,
     subscribeToTerminal
   } = scope
+
   // Why: non-subscribe layout refits (tab strip, fold, rotation) live in a dedicated hook — see terminal-viewport-refit.ts.
   const { notifyTerminalFrameHeight, notifyKeyboardVisibility } = useTerminalViewportRefit({
     activeHandleRef,
@@ -62,14 +63,17 @@ export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel
       notifyKeyboardVisibility(true)
       setKeyboardHeight(e.endCoordinates?.height ?? 0)
     }
+
     const onHide = () => {
       notifyKeyboardVisibility(false)
       setKeyboardHeight(0)
     }
+
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
     const showSub = Keyboard.addListener(showEvent, onShow)
     const hideSub = Keyboard.addListener(hideEvent, onHide)
+
     return () => {
       showSub.remove()
       hideSub.remove()
@@ -80,10 +84,13 @@ export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel
     if (!tabId) {
       return
     }
+
     const layout = tabLayoutsRef.current.get(tabId)
+
     if (!layout) {
       return
     }
+
     const nextOffset = resolveTabStripScrollOffset({
       tabX: layout.x,
       tabWidth: layout.width,
@@ -91,6 +98,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel
       contentWidth: tabStripContentWidthRef.current,
       currentOffset: tabStripOffsetRef.current
     })
+
     if (nextOffset !== tabStripOffsetRef.current) {
       tabStripOffsetRef.current = nextOffset
       tabStripRef.current?.scrollTo({ x: nextOffset, animated })
@@ -100,6 +108,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel
   // Reveal the active tab on change; defer one frame so freshly mounted tab layouts are recorded.
   useEffect(() => {
     const id = requestAnimationFrame(() => scrollActiveTabIntoView(activeSessionTabId, true))
+
     return () => cancelAnimationFrame(id)
   }, [activeSessionTabId, scrollActiveTabIntoView])
 
@@ -125,6 +134,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionLifecycleModel
     setShowCustomKeyModal(false)
     router.push('/terminal-settings')
   }, [router])
+
   return {
     notifyTerminalFrameHeight,
     notifyKeyboardVisibility,

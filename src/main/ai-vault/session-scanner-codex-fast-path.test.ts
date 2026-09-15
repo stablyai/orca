@@ -35,6 +35,7 @@ async function writeTranscript(lines: string[], name: string): Promise<FileWithM
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, `${lines.join('\n')}\n`)
   const fileStat = await stat(path)
+
   return {
     path,
     mtimeMs: fileStat.mtimeMs,
@@ -136,6 +137,7 @@ describe('Codex resumable parser fast path', () => {
     // path skipped and which correctly fell back to the full parser.
     const skippedFiller = `skipped-${'x'.repeat(2 * 1024 * 1024)}`
     const fallbackFiller = `fallback-${'x'.repeat(2 * 1024 * 1024)}`
+
     const file = await writeTranscript(
       [
         record(
@@ -194,6 +196,7 @@ describe('Codex resumable parser fast path', () => {
       ],
       'rollout-2026-08-20T10-00-00-fast-path.jsonl'
     )
+
     const expected = await parseCodexSessionFile(file, process.platform, null)
     const candidate: SessionFileCandidate = { agent: 'codex', file, codexHome: null }
 
@@ -206,9 +209,11 @@ describe('Codex resumable parser fast path', () => {
       totalTokens: 150,
       updatedAt: '2026-08-20T10:00:09.000Z'
     })
+
     const parsedInputs = parseSpy.mock.calls
       .map(([input]) => input)
       .filter((input): input is string => typeof input === 'string')
+
     expect(parsedInputs.some((input) => input.includes('skipped-xxx'))).toBe(false)
     // A reordered envelope is not proven irrelevant, so it still parses whole.
     expect(parsedInputs.some((input) => input.includes('fallback-xxx'))).toBe(true)
@@ -226,6 +231,7 @@ describe('Codex resumable parser fast path', () => {
       ],
       'rollout-2026-08-20T10-00-00-worker.jsonl'
     )
+
     const stats = createSessionParseStats()
 
     const session = await parseAgentSessionFileCached(
@@ -250,10 +256,12 @@ describe('Codex resumable parser fast path', () => {
       ],
       'rollout-2026-08-20T10-00-00-worker-grown.jsonl'
     )
+
     const candidate: SessionFileCandidate = { agent: 'codex', file, codexHome: null }
     await parseAgentSessionFileCached(candidate, process.platform)
 
     const grown = createSessionParseStats()
+
     const session = await parseAgentSessionFileCached(
       { ...candidate, file: { ...file, mtimeMs: file.mtimeMs + 1, sizeBytes: 99_000_000 } },
       process.platform,

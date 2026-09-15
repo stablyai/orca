@@ -5,9 +5,11 @@ describe('mobile relay orphan cleanup', () => {
   it('durably schedules credential deletion before removing an orphan overlay pointer', async () => {
     const order: string[] = []
     const deleteCredential = vi.fn(async () => {})
+
     const scheduleCleanup = vi.fn(async (hostId: string) => {
       order.push(`schedule:${hostId}`)
     })
+
     const removeOverlay = vi.fn(async (hostId: string) => {
       order.push(`overlay:${hostId}`)
     })

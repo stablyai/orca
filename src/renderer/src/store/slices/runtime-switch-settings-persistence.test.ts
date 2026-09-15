@@ -21,9 +21,11 @@ function compatibleStatus(runtimeId: string) {
 it('does not persist a stale overlapping runtime switch', async () => {
   let resolveFirst!: (value: unknown) => void
   const firstStatus = new Promise((resolve) => (resolveFirst = resolve))
+
   const persistPreference = vi.fn(({ environmentId }: { environmentId: string }) =>
     Promise.resolve({ activeRuntimeEnvironmentId: environmentId })
   )
+
   vi.stubGlobal('window', {
     api: {
       settings: { setActiveRuntimeEnvironmentPreference: persistPreference },

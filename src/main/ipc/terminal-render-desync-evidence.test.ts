@@ -12,6 +12,7 @@ vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/test/user-data') },
   ipcMain: { handle: ipcHandle }
 }))
+
 vi.mock('./ui', () => ({ isTrustedUIRenderer }))
 
 import {
@@ -42,6 +43,7 @@ describe('writeTerminalRenderDesyncEvidence', () => {
   it('writes private PNG and metadata files under app-owned user data', async () => {
     const userData = await mkdtemp(path.join(os.tmpdir(), 'orca-render-desync-'))
     tempDirectories.push(userData)
+
     const result = await writeTerminalRenderDesyncEvidence(userData, {
       captureId: 'capture-1',
       phase: 'corrupt',
@@ -53,6 +55,7 @@ describe('writeTerminalRenderDesyncEvidence', () => {
     expect(JSON.parse(await readFile(result.metadataPath!, 'utf8'))).toEqual({
       bufferText: 'private terminal text'
     })
+
     if (process.platform !== 'win32') {
       expect((await stat(result.directory)).mode & 0o777).toBe(0o700)
       expect((await stat(result.pngPath)).mode & 0o777).toBe(0o600)
@@ -94,6 +97,7 @@ describe('writeTerminalRenderDesyncEvidence', () => {
   it('retains only the newest four capture directories', async () => {
     const userData = await mkdtemp(path.join(os.tmpdir(), 'orca-render-desync-'))
     tempDirectories.push(userData)
+
     for (let capture = 1; capture <= 6; capture++) {
       await writeTerminalRenderDesyncEvidence(userData, {
         captureId: `capture-${capture}`,

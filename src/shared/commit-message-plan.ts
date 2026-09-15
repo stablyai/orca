@@ -45,18 +45,23 @@ export function planAgentBinary(
   backslash: CommandTemplateBackslash = 'escape'
 ): { ok: true; binary: string; prefixArgs: string[] } | { ok: false; error: string } {
   const command = commandOverride?.trim()
+
   if (!command) {
     return { ok: true, binary: defaultBinary, prefixArgs: [] }
   }
 
   const tokenized = tokenizeCustomCommandTemplate(command, backslash)
+
   if (!tokenized.ok) {
     return { ok: false, error: `Agent command override is invalid: ${tokenized.error}` }
   }
+
   const [binary, ...prefixArgs] = tokenized.tokens
+
   if (!binary) {
     return { ok: false, error: 'Agent command override must start with a binary name.' }
   }
+
   return { ok: true, binary, prefixArgs }
 }
 
@@ -65,13 +70,17 @@ function planAdditionalAgentArgs(
   backslash: CommandTemplateBackslash = 'escape'
 ): { ok: true; args: string[] } | { ok: false; error: string } {
   const trimmed = agentArgs?.trim()
+
   if (!trimmed) {
     return { ok: true, args: [] }
   }
+
   const tokenized = tokenizeCustomCommandTemplate(trimmed, backslash)
+
   if (!tokenized.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${tokenized.error}` }
   }
+
   return { ok: true, args: tokenized.tokens }
 }
 
@@ -96,17 +105,23 @@ function findOptionOccurrence(
 ): { index: number; consumed: number } | null {
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]
+
     if (stopAtTerminator && token === '--') {
       break
     }
+
     if (!matchesOption(token, aliases)) {
       continue
     }
+
     const nextToken = tokens[index + 1]
+
     const consumesNext =
       aliases.includes(token) && nextToken !== undefined && !nextToken.startsWith('-')
+
     return { index, consumed: consumesNext ? 2 : 1 }
   }
+
   return null
 }
 
@@ -117,6 +132,7 @@ function applyRecipeOptionOverride(args: {
 }): { generatedArgs: string[]; recipeArgs: string[] } {
   const recipeOption = findOptionOccurrence(args.recipeArgs, args.aliases, true)
   const generatedOption = findOptionOccurrence(args.generatedArgs, args.aliases, false)
+
   if (!recipeOption || !generatedOption) {
     return { generatedArgs: args.generatedArgs, recipeArgs: args.recipeArgs }
   }
@@ -125,6 +141,7 @@ function applyRecipeOptionOverride(args: {
     recipeOption.index,
     recipeOption.index + recipeOption.consumed
   )
+
   return {
     generatedArgs: [
       ...args.generatedArgs.slice(0, generatedOption.index),
@@ -140,11 +157,14 @@ function applyRecipeOptionOverride(args: {
 
 function removeAllOptionOccurrences(tokens: string[], aliases: readonly string[]): string[] {
   let result = tokens
+
   while (true) {
     const found = findOptionOccurrence(result, aliases, true)
+
     if (!found) {
       return result
     }
+
     result = [...result.slice(0, found.index), ...result.slice(found.index + found.consumed)]
   }
 }
@@ -153,16 +173,21 @@ function removeAllOptionOccurrences(tokens: string[], aliases: readonly string[]
  *  twice in one field still gets a single flag rather than a rejected argv. */
 function keepFirstOptionOccurrence(tokens: string[], aliases: readonly string[]): string[] {
   let result = tokens
+
   while (true) {
     const first = findOptionOccurrence(result, aliases, true)
+
     if (!first) {
       return result
     }
+
     const tail = result.slice(first.index + first.consumed)
     const duplicate = findOptionOccurrence(tail, aliases, true)
+
     if (!duplicate) {
       return result
     }
+
     const offset = first.index + first.consumed
     result = [
       ...result.slice(0, offset + duplicate.index),
@@ -189,18 +214,22 @@ function applySingletonOptionOverrides(args: {
     const recipeOption = findOptionOccurrence(recipeArgs, aliases, true)
     const prefixOption = findOptionOccurrence(prefixArgs, aliases, true)
     const prefixHasTerminator = prefixArgs.includes('--')
+
     if (recipeOption && !prefixHasTerminator) {
       prefixArgs = removeAllOptionOccurrences(prefixArgs, aliases)
     } else if (prefixOption && !prefixHasTerminator) {
       const generatedOption = findOptionOccurrence(generatedArgs, aliases, false)
+
       if (generatedOption) {
         generatedArgs = [
           ...generatedArgs.slice(0, generatedOption.index),
           ...generatedArgs.slice(generatedOption.index + generatedOption.consumed)
         ]
       }
+
       continue
     }
+
     const withRecipe = applyRecipeOptionOverride({ generatedArgs, recipeArgs, aliases })
     generatedArgs = withRecipe.generatedArgs
     recipeArgs = withRecipe.recipeArgs
@@ -218,12 +247,16 @@ function insertAdditionalAgentArgs(args: {
   if (!args.agentArgs.length) {
     return args.baseArgs
   }
+
   const promptPlaceholderIndex = args.baseArgs.lastIndexOf('{prompt}')
+
   if (promptPlaceholderIndex !== -1) {
     const merged = [...args.baseArgs]
     merged.splice(promptPlaceholderIndex, 0, ...args.agentArgs)
+
     return merged
   }
+
   if (
     args.promptDelivery === 'argv' &&
     args.prompt.length > 0 &&
@@ -231,6 +264,7 @@ function insertAdditionalAgentArgs(args: {
   ) {
     return [...args.baseArgs.slice(0, -1), ...args.agentArgs, args.prompt]
   }
+
   return [...args.baseArgs, ...args.agentArgs]
 }
 
@@ -240,20 +274,26 @@ export function planCommitMessageGeneration(
 ): CommitMessagePlanResult {
   if (isCustomAgentId(input.agentId)) {
     const command = input.customAgentCommand?.trim() ?? ''
+
     if (!command) {
       return {
         ok: false,
         error: 'Custom command is empty. Add one in Settings → Git → AI Commit Messages.'
       }
     }
+
     const planned = planCustomCommand(command, prompt, input.backslash)
+
     if (!planned.ok) {
       return { ok: false, error: planned.error }
     }
+
     const agentArgs = planAdditionalAgentArgs(input.agentArgs, input.backslash)
+
     if (!agentArgs.ok) {
       return agentArgs
     }
+
     return {
       ok: true,
       plan: {
@@ -273,13 +313,17 @@ export function planCommitMessageGeneration(
   }
 
   const spec = getCommitMessageAgentSpec(input.agentId)
+
   if (!spec) {
     return { ok: false, error: `Agent "${input.agentId}" does not support AI commit messages.` }
   }
+
   const model = getCommitMessageModel(input.agentId, input.model)
+
   if (!model) {
     return { ok: false, error: `Model "${input.model}" is not available for ${spec.label}.` }
   }
+
   if (input.thinkingLevel) {
     if (!model.thinkingLevels && spec.modelSource !== 'dynamic') {
       return {
@@ -287,6 +331,7 @@ export function planCommitMessageGeneration(
         error: `Model "${model.label}" does not support a thinking effort level.`
       }
     }
+
     if (model.thinkingLevels && !model.thinkingLevels.some((l) => l.id === input.thinkingLevel)) {
       return {
         ok: false,
@@ -296,19 +341,25 @@ export function planCommitMessageGeneration(
   }
 
   const argvPrompt = spec.promptDelivery === 'argv' ? prompt : ''
+
   const baseArgs = spec.buildArgs({
     prompt: argvPrompt,
     model: input.model,
     thinkingLevel: input.thinkingLevel
   })
+
   const agentArgs = planAdditionalAgentArgs(input.agentArgs, input.backslash)
+
   if (!agentArgs.ok) {
     return agentArgs
   }
+
   const command = planAgentBinary(spec.binary, input.agentCommandOverride, input.backslash)
+
   if (!command.ok) {
     return { ok: false, error: command.error }
   }
+
   // Why: repeating a singleton flag makes yargs-based CLIs parse it as an array and
   // crash (OpenCode's `model.split('/')`). User values replace Orca's, never stack.
   const merged = applySingletonOptionOverrides({
@@ -317,12 +368,14 @@ export function planCommitMessageGeneration(
     recipeArgs: agentArgs.args,
     singletonOptions: spec.singletonOptions ?? DEFAULT_SINGLETON_OPTIONS
   })
+
   const args = insertAdditionalAgentArgs({
     baseArgs: merged.generatedArgs,
     agentArgs: merged.recipeArgs,
     promptDelivery: spec.promptDelivery,
     prompt: argvPrompt
   })
+
   return {
     ok: true,
     plan: {

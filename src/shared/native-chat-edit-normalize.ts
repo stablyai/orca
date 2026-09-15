@@ -14,12 +14,15 @@ import type { NativeChatEditPatch } from './native-chat-types'
 // source, so a card would render an unchanged cell as wholly added. It falls
 // through to the generic tool view instead.
 const CLAUDE_EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'str_replace'])
+
 /** Command tools, which run a patch as one of many things they can run, so a
  *  quoted envelope is not evidence that one was applied. */
 const COMMAND_PATCH_TOOLS = new Set(['exec', 'shell', 'local_shell'])
+
 /** Tools whose input may wrap a `*** Begin Patch` envelope. The dedicated patch
  *  tool applies whatever it is given; a command tool must say that it is. */
 const PATCH_ENVELOPE_TOOLS = new Set(['apply_patch', ...COMMAND_PATCH_TOOLS])
+
 /** Tools whose whole payload is patch text. `Diff` reaches its patch only
  *  through the result, because the structured journal projects a diff item as a
  *  call carrying just the path. */
@@ -41,12 +44,14 @@ function text(value: unknown): string | null {
  *  for a provider that reports its edits as a snippet pair. */
 function linesFromEditPatch(patch: NativeChatEditPatch): NativeChatEditLine[] {
   const lines: NativeChatEditLine[] = []
+
   for (const hunk of patch.hunks) {
     // Hunks are separate regions of the file; run together the gutter jumps
     // from one to the next with nothing marking the skipped span.
     pushEditGap(lines)
     let oldNo = hunk.oldStart
     let newNo = hunk.newStart
+
     for (const raw of hunk.lines) {
       if (raw.startsWith('+')) {
         lines.push({ kind: 'add', text: raw.slice(1), oldLineNumber: null, newLineNumber: newNo })
@@ -66,6 +71,7 @@ function linesFromEditPatch(patch: NativeChatEditPatch): NativeChatEditLine[] {
       }
     }
   }
+
   return lines
 }
 
@@ -83,6 +89,7 @@ function wholeContentChangeKind(
   if (text(input.command) === 'create') {
     return 'added'
   }
+
   return output !== undefined && CREATED_FILE_RESULT.test(output) ? 'added' : 'edited'
 }
 
@@ -91,24 +98,30 @@ function multiEditFiles(input: Record<string, unknown>, path: string): NativeCha
   if (!Array.isArray(input.edits)) {
     return null
   }
+
   const lines: NativeChatEditLine[] = []
   let truncated = false
+
   for (const entry of input.edits) {
     const edit = record(entry)
     const oldString = text(edit?.old_string) ?? text(edit?.oldString)
     const newString = text(edit?.new_string) ?? text(edit?.newString)
+
     if (oldString === null && newString === null) {
       continue
     }
+
     // Each entry is its own snippet, so it starts a new region.
     pushEditGap(lines)
     const diffed = editLinesFromContents(oldString ?? '', newString ?? '')
     lines.push(...diffed.lines)
     truncated ||= diffed.truncated
   }
+
   if (lines.length === 0) {
     return null
   }
+
   return [
     finalizeEditFile({
       path,
@@ -128,14 +141,18 @@ function claudeEditFiles(
   output: string | undefined
 ): NativeChatEditFile[] | null {
   const path = text(input.file_path) ?? text(input.path) ?? 'file'
+
   if (name === 'MultiEdit') {
     return multiEditFiles(input, path)
   }
+
   const oldString = text(input.old_string) ?? text(input.oldString)
   const newString = text(input.new_string) ?? text(input.newString)
   const content = text(input.content) ?? text(input.file_text)
+
   if (oldString === null && content !== null) {
     const whole = editLinesFromWholeFile(content, 'add')
+
     return [
       finalizeEditFile({
         path,
@@ -147,10 +164,13 @@ function claudeEditFiles(
       })
     ]
   }
+
   if (oldString === null && newString === null) {
     return null
   }
+
   const diffed = editLinesFromContents(oldString ?? '', newString ?? content ?? '')
+
   return [
     finalizeEditFile({
       path,
@@ -169,15 +189,19 @@ function codexChangeFiles(changes: unknown[]): NativeChatEditFile[] {
     const change = record(entry)
     const path = text(change?.path)
     const diff = text(change?.diff)
+
     if (!change || !path || !diff) {
       return []
     }
+
     const kind = record(change.kind)
     const kindType = text(kind?.type) ?? text(change.kind) ?? 'update'
     const movePath = text(kind?.move_path) ?? text(change.movePath)
+
     if (kindType === 'add' || kindType === 'delete') {
       // Add and delete arrive as raw file content, with no hunk header or signs.
       const whole = editLinesFromWholeFile(diff, kindType === 'add' ? 'add' : 'del')
+
       return [
         finalizeEditFile({
           path,
@@ -189,10 +213,13 @@ function codexChangeFiles(changes: unknown[]): NativeChatEditFile[] {
         })
       ]
     }
+
     const parsed = editLinesFromUnifiedPatch(splitMoveMarker(diff).body)
+
     if (!parsed) {
       return []
     }
+
     return [
       finalizeEditFile({
         path: movePath ?? path,
@@ -222,11 +249,14 @@ export function editFilesFromToolPair(pair: {
   if (pair.state === 'failed' || pair.state === 'running' || pair.result?.isError === true) {
     return null
   }
+
   if (pair.state !== 'completed' && pair.result === undefined) {
     return null
   }
+
   const input = record(pair.input)
   const patch = pair.result?.editPatch
+
   if (patch && patch.hunks.length > 0) {
     return [
       finalizeEditFile({
@@ -246,7 +276,9 @@ export function editFilesFromToolPair(pair: {
     const envelope = unwrapBeginPatch(pair.input, {
       requireApplyCommand: COMMAND_PATCH_TOOLS.has(pair.name)
     })
+
     const files = envelope ? editFilesFromBeginPatch(envelope) : []
+
     if (files.length > 0) {
       return files
     }
@@ -254,6 +286,7 @@ export function editFilesFromToolPair(pair: {
 
   if (input && Array.isArray(input.changes)) {
     const files = codexChangeFiles(input.changes)
+
     if (files.length > 0) {
       return files
     }
@@ -266,13 +299,16 @@ export function editFilesFromToolPair(pair: {
   if (!PATCH_TEXT_TOOLS.has(pair.name)) {
     return null
   }
+
   // The result fallback is scoped to `Diff`, whose call carries only a path.
   // Reading any command tool's output as a patch reclassified `git diff` as a
   // file edit and swallowed the command line with it.
   const patchText =
     text(input?.patch) ?? text(input?.diff) ?? (pair.name === 'Diff' ? pair.result?.output : null)
+
   if (!patchText) {
     return null
   }
+
   return editFilesFromPatchText(patchText, text(input?.path) ?? text(input?.file_path))
 }

@@ -29,27 +29,34 @@ export async function restoreStructuredAgentSessionRead(
   sessionId: string
 ): Promise<RestoredStructuredAgentSessionRead | null> {
   const record = store.getRecord(sessionId)
+
   if (!record) {
     return null
   }
+
   const params = attachParamsForRecord(record, {
     clientOperationId: `read-restore:${record.sessionId}`,
     expectedRuntimeFence: record.lease.runtimeFence
   })
+
   const journalDir = journalDirectoryFor(journalRoot, {
     workspaceId: record.location.workspaceId,
     sessionId
   })
+
   const loaded = loadJournal(journalDir, sessionId)
+
   if (loaded?.corrupt) {
     return null
   }
+
   // A session still in the pre-SQLite format has no `journal.db` to load. Dropping
   // it here leaves it unpublished, which is also what prunes its tab out of the
   // saved workspace — so the chat disappears with nowhere to explain itself.
   if (!loaded && !findJournalFileFormatRemnant(journalDir)) {
     return null
   }
+
   const journal = await openAgentSessionJournal({
     identity: journalIdentityFor(record, params),
     journalDir,
@@ -59,6 +66,7 @@ export async function restoreStructuredAgentSessionRead(
     // database another process creates in between.
     ...(loaded ? { loaded } : {})
   })
+
   // Read restore opens the journal and nothing else: no adapter call, so no
   // provider child. Opening it can still write — a session whose history is in
   // the old format founds its epoch and commits the row explaining that here.
@@ -92,6 +100,7 @@ export function attachParamsForRecord(
     accountHome: record.accountHome,
     runtimeKind: input.runtimeKind ?? record.lease.runtimeKind
   }
+
   return {
     ...params,
     envelope: {

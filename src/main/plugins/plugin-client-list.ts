@@ -13,5 +13,6 @@ export async function listPluginsForClients(
 ): Promise<PluginListEntry[]> {
   await pluginService.whenReady()
   const lock = await readPluginLockfile(getUserPluginsDir(pluginService.options.userDataPath))
+
   return buildPluginList(pluginService, lock)
 }

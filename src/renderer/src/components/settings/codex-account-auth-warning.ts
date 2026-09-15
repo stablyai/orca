@@ -19,9 +19,11 @@ export function codexRateLimitTargetMatchesAccountRuntime(
   if (target.runtime !== runtime.runtime) {
     return false
   }
+
   if (runtime.runtime === 'host') {
     return true
   }
+
   return !runtime.wslDistro || target.wslDistro === runtime.wslDistro
 }
 
@@ -36,19 +38,24 @@ export function getCodexAccountAuthWarning(args: {
   if (args.accountId !== args.activeAccountId) {
     return null
   }
+
   // Why: app-server reports API-key homes as a ChatGPT-auth error because
   // usage is unsupported; that is not a stale sign-in the user can re-auth.
   if (args.accountId === null && args.authKind === 'api-key') {
     return null
   }
+
   if (args.accountId === null && args.authKind === 'none') {
     return 'missing-sign-in'
   }
+
   if (!codexRateLimitTargetMatchesAccountRuntime(args.target, args.runtime)) {
     return null
   }
+
   if (args.limits?.status !== 'error' || !isCodexAuthError(args.limits.error)) {
     return null
   }
+
   return 'stale-sign-in'
 }

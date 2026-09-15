@@ -35,6 +35,7 @@ vi.mock('sonner', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function discoveredSkill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
@@ -70,9 +71,11 @@ async function renderCta(
       </TooltipProvider>
     )
   })
+
   if (!container) {
     throw new Error('Container was not created')
   }
+
   return container
 }
 
@@ -100,6 +103,7 @@ describe('LinearAgentSkillInstallCta', () => {
         root?.unmount()
       })
     }
+
     root = null
     container?.remove()
     container = null

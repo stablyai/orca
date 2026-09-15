@@ -19,6 +19,7 @@ export function isHostAuthoritativeLayout(args: {
   if (args.isWebClient) {
     return true
   }
+
   return Object.values(args.ptyIdsByLeafId ?? {}).some(
     (ptyId) => typeof ptyId === 'string' && isRemoteRuntimePtyId(ptyId)
   )
@@ -44,6 +45,7 @@ function rightmostMountedLeafId(
   if (node.type === 'leaf') {
     return mountedLeafIds.has(node.leafId) ? node.leafId : null
   }
+
   return (
     rightmostMountedLeafId(node.second, mountedLeafIds) ??
     rightmostMountedLeafId(node.first, mountedLeafIds)
@@ -57,6 +59,7 @@ function leftmostMountedLeafId(
   if (node.type === 'leaf') {
     return mountedLeafIds.has(node.leafId) ? node.leafId : null
   }
+
   return (
     leftmostMountedLeafId(node.first, mountedLeafIds) ??
     leftmostMountedLeafId(node.second, mountedLeafIds)
@@ -70,6 +73,7 @@ function hasMountedLeaf(
   if (node.type === 'leaf') {
     return mountedLeafIds.has(node.leafId)
   }
+
   return hasMountedLeaf(node.first, mountedLeafIds) || hasMountedLeaf(node.second, mountedLeafIds)
 }
 
@@ -80,6 +84,7 @@ function mountedLeafIdsIn(
   if (node.type === 'leaf') {
     return mountedLeafIds.has(node.leafId) ? [node.leafId] : []
   }
+
   return [
     ...mountedLeafIdsIn(node.first, mountedLeafIds),
     ...mountedLeafIdsIn(node.second, mountedLeafIds)
@@ -100,7 +105,9 @@ export function planTerminalLiveLayoutRemovals(
   if (!root) {
     return []
   }
+
   const layoutLeafIds = new Set(collectLeafIds(root))
+
   // Why: a mounted leaf the layout stopped naming is a removal only once the
   // host is known to have retired it (trackRetiredLeafIds). A snapshot landing
   // while the client is still starting a pane must not read as a retirement.
@@ -127,6 +134,7 @@ export function planTerminalLiveLayoutInsertions(
 
     const firstHasMounted = hasMountedLeaf(node.first, mountedLeafIds)
     const secondHasMounted = hasMountedLeaf(node.second, mountedLeafIds)
+
     if (!firstHasMounted && !secondHasMounted) {
       return false
     }
@@ -137,6 +145,7 @@ export function planTerminalLiveLayoutInsertions(
     if (firstHasMounted && !secondHasMounted) {
       const sourceLeafId = rightmostMountedLeafId(node.first, mountedLeafIds)
       const newLeafId = leftmostLeafId(node.second)
+
       if (sourceLeafId && !mountedLeafIds.has(newLeafId)) {
         insertions.push({
           sourceLeafId,
@@ -148,14 +157,17 @@ export function planTerminalLiveLayoutInsertions(
         })
         mountedLeafIds.add(newLeafId)
       }
+
       ensureSubtree(node.second)
       ensureSubtree(node.first)
+
       return true
     }
 
     if (!firstHasMounted && secondHasMounted) {
       const sourceLeafId = leftmostMountedLeafId(node.second, mountedLeafIds)
       const newLeafId = leftmostLeafId(node.first)
+
       if (sourceLeafId && !mountedLeafIds.has(newLeafId)) {
         insertions.push({
           sourceLeafId,
@@ -167,17 +179,21 @@ export function planTerminalLiveLayoutInsertions(
         })
         mountedLeafIds.add(newLeafId)
       }
+
       ensureSubtree(node.first)
       ensureSubtree(node.second)
+
       return true
     }
 
     ensureSubtree(node.first)
     ensureSubtree(node.second)
+
     return true
   }
 
   ensureSubtree(root)
+
   return insertions
 }
 
@@ -194,16 +210,21 @@ export function selectRetiredPaneIds(
   }
 ): number[] {
   const paneIds: number[] = []
+
   for (const leafId of retiredLeafIds) {
     if (view.paneCount - paneIds.length <= 1) {
       break
     }
+
     const paneId = view.paneIdForLeaf(leafId)
+
     if (paneId === null || view.ptyIdForPane(paneId) !== null) {
       continue
     }
+
     paneIds.push(paneId)
   }
+
   return paneIds
 }
 
@@ -222,10 +243,12 @@ export function trackRetiredLeafIds(args: {
 }): ReadonlySet<string> {
   const mounted = new Set(args.mountedLeafIds)
   const next = new Set<string>()
+
   for (const leafId of [...args.retiredLeafIds, ...args.previousLayoutLeafIds]) {
     if (mounted.has(leafId) && !args.layoutLeafIds.has(leafId)) {
       next.add(leafId)
     }
   }
+
   return next
 }

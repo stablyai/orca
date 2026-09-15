@@ -25,21 +25,35 @@ const {
 )
 
 vi.mock('fs', () => moduleFactories.fs())
+
 vi.mock('child_process', async (importOriginal) =>
   moduleFactories.childProcess(await importOriginal<Record<string, unknown>>())
 )
+
 vi.mock('net', () => moduleFactories.net())
+
 vi.mock('./daemon-health', () => moduleFactories.daemonHealth())
+
 vi.mock('./daemon-pid-identity', () => moduleFactories.daemonPidIdentity())
+
 vi.mock('./daemon-tcc-attribution', () => moduleFactories.daemonTccAttribution())
+
 vi.mock('./daemon-bundle-staleness', () => moduleFactories.daemonBundleStaleness())
+
 vi.mock('./daemon-stale-kill', () => moduleFactories.daemonStaleKill())
+
 vi.mock('./daemon-process-start-time', () => moduleFactories.daemonProcessStartTime())
+
 vi.mock('./daemon-pid-file-parse', () => moduleFactories.daemonPidFileParse())
+
 vi.mock('./client', () => moduleFactories.client())
+
 vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent())
+
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
+
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
+
 vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
 
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
@@ -59,6 +73,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     getDaemonLaunchIdentityMock.mockClear()
     killStaleDaemonMock.mockClear()
     forkMock.mockClear()
@@ -90,6 +105,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     isPackagedMock.mockReturnValue(true)
     isDaemonStaleForCurrentBundleMock.mockReturnValueOnce(true)
     forkMock.mockImplementationOnce(() => {
@@ -98,17 +114,21 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         error: [],
         exit: []
       }
+
       return {
         pid: 12345,
         on(event: string, cb: (arg?: unknown) => void) {
           handlers[event]?.push(cb)
+
           if (event === 'message') {
             queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
           }
+
           return this
         },
         off(event: string, cb: (arg?: unknown) => void) {
           handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+
           return this
         },
         disconnect: vi.fn(),
@@ -157,8 +177,10 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           sessions: [{ sessionId: 'wt-1@@live', isAlive: true }]
         }
       }
+
       return {}
     })
+
     const disconnectMock = vi.fn()
     mockConnectedAdoptionClientOnce()
     daemonClientMock.mockImplementationOnce(function MockDaemonClient() {
@@ -174,6 +196,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     isPackagedMock.mockReturnValue(true)
     isDaemonStaleForCurrentBundleMock.mockReturnValueOnce(true)
 

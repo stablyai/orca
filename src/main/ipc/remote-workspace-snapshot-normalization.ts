@@ -19,7 +19,9 @@ function normalizeOptionalStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined
   }
+
   const normalized = value.filter((entry): entry is string => typeof entry === 'string')
+
   return normalized.length > 0 ? normalized : undefined
 }
 
@@ -27,6 +29,7 @@ function normalizeOptionalRecord<T extends Record<string, unknown>>(value: unkno
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined
   }
+
   return Object.keys(value).length > 0 ? (value as T) : undefined
 }
 
@@ -34,7 +37,9 @@ function normalizeRemoteSession(raw: unknown): RemoteWorkspaceSession {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return emptyRemoteSession()
   }
+
   const input = raw as Partial<RemoteWorkspaceSession>
+
   return {
     activeWorktreePath:
       typeof input.activeWorktreePath === 'string' ? input.activeWorktreePath : null,
@@ -76,6 +81,7 @@ export function normalizeSnapshot(
   fallbackNamespace: string
 ): RemoteWorkspaceSnapshot {
   const input = raw as Partial<RemoteWorkspaceSnapshot> | null
+
   return {
     namespace: typeof input?.namespace === 'string' ? input.namespace : fallbackNamespace,
     revision:
@@ -99,6 +105,7 @@ export function remoteWorkspaceSessionMatchesSnapshot(
   if (!snapshot) {
     return false
   }
+
   return isDeepStrictEqual(
     normalizeRemoteSession(snapshot.session),
     normalizeRemoteSession(session)

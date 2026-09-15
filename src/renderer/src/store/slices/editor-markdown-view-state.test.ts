@@ -14,6 +14,7 @@ vi.mock('sonner', () => ({
 const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
   notifyHostOfMirroredEditorCloseMock: vi.fn()
 }))
+
 vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
@@ -473,6 +474,7 @@ describe('createEditorSlice openMarkdownPreview', () => {
 
   it('keeps preview-only same-path markdown previews separate by owner', () => {
     const store = createEditorStore()
+
     const floatingSourceId = ownedEditorFileId(
       '/repo/docs/README.md',
       FLOATING_TERMINAL_WORKTREE_ID,
@@ -529,9 +531,11 @@ describe('createEditorSlice openMarkdownPreview', () => {
       },
       { suppressActiveRuntimeFallback: true }
     )
+
     const floatingFile = store
       .getState()
       .openFiles.find((file) => file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID)
+
     expect(floatingFile).toBeDefined()
 
     store.getState().openMarkdownPreview({

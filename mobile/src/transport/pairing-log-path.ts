@@ -18,7 +18,9 @@ export function attributePairingLogPath(
   if (!onLog) {
     return undefined
   }
+
   const prefix = PATH_PREFIX[path]
+
   return (entry) => {
     onLog(
       entry.message.startsWith(prefix) ? entry : { ...entry, message: `${prefix}${entry.message}` }

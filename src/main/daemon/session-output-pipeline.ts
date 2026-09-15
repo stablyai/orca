@@ -15,6 +15,7 @@ export function createSessionOutputPipeline(opts: {
   isAlive: () => boolean
 }): { output: SessionOutputPlane; recoveryBarrier: TerminalShellRecoveryBarrier } {
   let barrier: TerminalShellRecoveryBarrier | null = null
+
   const output = new SessionOutputPlane({
     cols: opts.cols,
     rows: opts.rows,
@@ -23,11 +24,14 @@ export function createSessionOutputPipeline(opts: {
     historySeedChunks: opts.historySeedChunks,
     getTerminalOwner: () => barrier?.getOwner()
   })
+
   const recoveryBarrier = new TerminalShellRecoveryBarrier({
     confirmShellForeground: async () => (await opts.subprocess.confirmShellForeground?.()) ?? false,
     release: (emission) => output.emit(emission),
     isAlive: opts.isAlive
   })
+
   barrier = recoveryBarrier
+
   return { output, recoveryBarrier }
 }

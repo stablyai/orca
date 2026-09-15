@@ -141,12 +141,15 @@ export function TerminalPaneSurface({
           ) {
             return
           }
+
           event.preventDefault()
           event.stopPropagation()
           const manager = managerRef.current
+
           if (!manager) {
             return
           }
+
           void handleInternalTerminalFileDrop({
             manager,
             paneTransports: paneTransportsRef.current,
@@ -173,6 +176,7 @@ export function TerminalPaneSurface({
                       const ptyId = activePane
                         ? (paneTransportsRef.current.get(activePane.id)?.getPtyId() ?? null)
                         : null
+
                       return requestTerminalPaneRecovery({
                         tabId,
                         ptyId,
@@ -184,6 +188,7 @@ export function TerminalPaneSurface({
                         if (recovered) {
                           dismissTerminalError()
                         }
+
                         return recovered
                       })
                     }

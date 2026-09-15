@@ -23,12 +23,14 @@ function resolveConfigRestorePath(tomlPath: string): string {
     if (!lstatSync(tomlPath).isSymbolicLink()) {
       return tomlPath
     }
+
     try {
       return realpathSync.native(tomlPath)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw error
       }
+
       // Why: a dangling dotfiles link is still user-owned state. Target the
       // lexical destination so rollback removes an RPC-created file, not the link.
       return resolve(dirname(tomlPath), readlinkSync(tomlPath))
@@ -37,6 +39,7 @@ function resolveConfigRestorePath(tomlPath: string): string {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return tomlPath
     }
+
     throw error
   }
 }
@@ -44,14 +47,17 @@ function resolveConfigRestorePath(tomlPath: string): string {
 export function captureCodexTrustConfig(tomlPath: string): CodexTrustConfigSnapshot {
   const restorePath = resolveConfigRestorePath(tomlPath)
   let descriptor: number
+
   try {
     descriptor = openSync(restorePath, 'r')
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return restorePath === tomlPath ? { existed: false } : { existed: false, restorePath }
     }
+
     throw error
   }
+
   try {
     // Why: read and stat the same open file so replacement between two path
     // lookups cannot pair one file's contents with another file's mode.
@@ -78,14 +84,18 @@ export function restoreCodexTrustConfig(
         throw error
       }
     }
+
     return
   }
+
   const { restorePath } = snapshot
+
   try {
     if (readFileSync(restorePath).equals(snapshot.contents)) {
       // Why: the RPC may change permissions without changing bytes; rollback
       // restores the complete captured file state, not only its contents.
       chmodSync(restorePath, snapshot.mode)
+
       return
     }
   } catch (error) {
@@ -93,11 +103,13 @@ export function restoreCodexTrustConfig(
       throw error
     }
   }
+
   // Why: rollback protects config integrity too; direct truncating writes can
   // leave Codex unusable if Orca exits midway through recovery.
   // Why: Codex's writer preserves config.toml symlinks. Restore through their
   // real target too, or Orca's atomic rename would disconnect dotfiles users.
   const tempPath = `${restorePath}.${process.pid}.${randomUUID()}.rollback.tmp`
+
   try {
     writeFileSync(tempPath, snapshot.contents, { mode: snapshot.mode })
     renameFileWithWindowsRetry(tempPath, restorePath)
@@ -107,6 +119,7 @@ export function restoreCodexTrustConfig(
     } catch {
       // Best effort; preserve the rollback failure as the actionable error.
     }
+
     throw error
   }
 }

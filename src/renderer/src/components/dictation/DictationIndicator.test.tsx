@@ -22,6 +22,7 @@ const storeState = {
 
 vi.mock('@/store', () => {
   const useAppStore = (selector: (value: typeof storeState) => unknown) => selector(storeState)
+
   return { useAppStore }
 })
 
@@ -70,9 +71,11 @@ afterEach(() => {
 describe('DictationIndicator', () => {
   it('stops dictation when the stop button is clicked', () => {
     const actions: DictationControlAction[] = []
+
     const listener = (event: Event): void => {
       actions.push((event as CustomEvent<DictationControlAction>).detail)
     }
+
     document.addEventListener(DICTATION_CONTROL_EVENT, listener)
 
     render(<DictationIndicator />)

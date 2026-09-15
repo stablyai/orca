@@ -21,8 +21,11 @@ import { resetProcessTableSnapshotForTests } from '../../shared/process-table-sn
 import { resolveAgentForegroundProcess } from './agent-foreground-process'
 
 const ACTIVE_POLL_INTERVAL_MS = 750 // mirrors agent-completion-coordinator.ts
+
 const PANE_COUNT = 6 // reporter saw it with "only three projects" -> several agent panes
+
 const WINDOW_SECONDS = 30
+
 const TICKS = Math.floor((WINDOW_SECONDS * 1000) / ACTIVE_POLL_INTERVAL_MS)
 
 const shellPid = (pane: number): number => 100 + pane * 1000
@@ -32,6 +35,7 @@ const shellPid = (pane: number): number => 100 + pane * 1000
 // agent from the single scan.
 const PS_OUTPUT = Array.from({ length: PANE_COUNT }, (_, pane) => {
   const shell = shellPid(pane)
+
   return [
     `${shell} 99 Ss   bash -i`,
     `${shell + 1} ${shell} S+   node /Users/dev/.nvm/versions/node/bin/codex`
@@ -41,9 +45,11 @@ const PS_OUTPUT = Array.from({ length: PANE_COUNT }, (_, pane) => {
 function installCountingPsMock(): void {
   execFileMock.mockImplementation((cmd: string, args: string[], _opts: unknown, cb: unknown) => {
     const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+
     if (cmd === 'ps' && Array.isArray(args) && args.includes('-axo')) {
       psScanCount.value += 1
     }
+
     callback(null, { stdout: PS_OUTPUT, stderr: '' })
   })
 }
@@ -63,6 +69,7 @@ describe('#6288 agent foreground inspection ps-scan volume', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
@@ -73,12 +80,14 @@ describe('#6288 agent foreground inspection ps-scan volume', () => {
 
     for (let tick = 0; tick < TICKS; tick++) {
       vi.setSystemTime(tick * ACTIVE_POLL_INTERVAL_MS)
+
       // All panes inspect concurrently within the tick (worst case for a busy relay).
       const resolved = await Promise.all(
         Array.from({ length: PANE_COUNT }, (_, pane) =>
           resolveAgentForegroundProcess(shellPid(pane), 'node')
         )
       )
+
       // Caching must not change the answer: every pane still resolves the agent.
       expect(resolved.every((name) => name === 'codex')).toBe(true)
     }

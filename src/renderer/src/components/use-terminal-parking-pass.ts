@@ -46,9 +46,11 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
 
   useEffect(() => {
     const pass = collectTerminalParkingPassCandidates(controller)
+
     const retentionBudgetCandidates: TerminalWorktreeRetentionCandidate[] =
       pass.retentionCandidates.map((candidate) => {
         const tabs = tabsByWorktree[candidate.worktreeId] ?? []
+
         return {
           worktreeId: candidate.worktreeId,
           hiddenSinceMs: candidate.hiddenSinceMs,
@@ -62,6 +64,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
           )
         }
       })
+
     const forceParkedWorktreeIds = selectRetentionForceParkedTerminalWorktrees({
       worktrees: retentionBudgetCandidates,
       parkingEnabled: terminalParkingEnabled,
@@ -69,6 +72,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
       nowMs: pass.nowMs,
       ...pass.overrides
     })
+
     recordTerminalWorktreeParkingDebugVerdicts(
       retentionBudgetCandidates.map((candidate) => ({
         ...candidate,
@@ -77,23 +81,29 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
       }))
     )
     const capturedForceParked = forceParkedCaptureDoneRef.current
+
     for (const id of Array.from(capturedForceParked)) {
       if (!forceParkedWorktreeIds.has(id)) {
         capturedForceParked.delete(id)
       }
     }
+
     const repos = useAppStore.getState().repos
     const nextEvictionExemptTabIds = new Set<string>()
+
     for (const worktreeId of forceParkedWorktreeIds) {
       const forceParkedTabs = tabsByWorktree[worktreeId] ?? []
       const exemptTabIds = selectEvictionExemptTerminalTabIds(worktreeId, forceParkedTabs)
+
       for (const tabId of exemptTabIds) {
         nextEvictionExemptTabIds.add(tabId)
       }
+
       if (!capturedForceParked.has(worktreeId)) {
         const evictableTabIds = selectForceParkEvictableTabIds(forceParkedTabs, (tab) =>
           exemptTabIds.has(tab.id)
         )
+
         // Why routed + breadcrumbed: only per-route counts in a field bundle
         // can say whether fail-open ids or unresolved snapshot capability
         // dominates the degenerate all-exempt force-park (which frees no heap).
@@ -108,6 +118,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
             ...exemptRouteCounts
           })
         }
+
         if (
           captureForceParkedWorktreeBuffers({
             worktreeId,
@@ -118,8 +129,10 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
           capturedForceParked.add(worktreeId)
         }
       }
+
       pass.nextParkedTerminalWorktreeIds.add(worktreeId)
     }
+
     setParkedTerminalWorktreeIds((current) =>
       haveSameIdSet(current, pass.nextParkedTerminalWorktreeIds)
         ? current
@@ -131,6 +144,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     setEvictionExemptTerminalTabIds((current) =>
       haveSameIdSet(current, nextEvictionExemptTabIds) ? current : nextEvictionExemptTabIds
     )
+
     const retentionTtlEligibleIds = new Set(
       retentionBudgetCandidates
         .filter((candidate) => !candidate.ordinaryParkingCovers && !candidate.hasPendingSpawnWork)
@@ -146,6 +160,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
       ) {
         continue
       }
+
       const delayMs = getTerminalWorktreeColdParkRecheckDelayMs({
         parkingEnabled: terminalParkingEnabled,
         hiddenSinceMs: candidate.hiddenSinceMs,
@@ -159,12 +174,15 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
             }
           : {})
       })
+
       if (delayMs !== null && delayMs > 0) {
         const worktreeId = candidate.worktreeId
+
         const timer = window.setTimeout(() => {
           pass.parkingTimers.delete(worktreeId)
           setTerminalParkingRevision((revision) => revision + 1)
         }, delayMs)
+
         pass.parkingTimers.set(worktreeId, timer)
       }
     }

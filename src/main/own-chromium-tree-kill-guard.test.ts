@@ -27,7 +27,9 @@ import {
 import { _resetTracerForTests, setActiveSink } from './observability/tracer'
 
 const ORCA_MAIN_PID = 1000
+
 const RENDERER_PID = 1001
+
 /** The standalone daemon is a sibling of the renderers, spawned by main. */
 const DAEMON_PID = 1500
 
@@ -69,6 +71,7 @@ afterEach(() => {
   if (previousEnvironment) {
     setAppEnvironment(previousEnvironment)
   }
+
   vi.restoreAllMocks()
   _resetTracerForTests()
   clearCrashBreadcrumbsForTest()

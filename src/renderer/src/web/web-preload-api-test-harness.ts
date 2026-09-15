@@ -36,6 +36,7 @@ export function installBrowserGlobals(userAgent = 'Linux'): {
   storage: MemoryStorage
 } {
   const storage = new MemoryStorage()
+
   const windowStub = {
     localStorage: storage,
     location: {
@@ -47,8 +48,10 @@ export function installBrowserGlobals(userAgent = 'Linux'): {
     atob: (value: string) => Buffer.from(value, 'base64').toString('binary'),
     btoa: (value: string) => Buffer.from(value, 'binary').toString('base64')
   } as unknown as Window & typeof globalThis
+
   vi.stubGlobal('window', windowStub)
   vi.stubGlobal('navigator', { userAgent, hardwareConcurrency: 8 })
+
   return { window: windowStub, storage }
 }
 
@@ -60,6 +63,7 @@ export async function installApi(userAgent?: string): Promise<{
   const globals = installBrowserGlobals(userAgent)
   const { installWebPreloadApi } = await import('./web-preload-api')
   installWebPreloadApi()
+
   return {
     api: globals.window.api,
     storage: globals.storage,

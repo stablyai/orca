@@ -128,6 +128,7 @@ describe('journal row validation', () => {
       providerHandle: { kind: 'codex', threadId: 't' },
       body: { kind: 'message', role: 'user', blocks: [] }
     }
+
     expect(parse({ ...submission, payloadFingerprint: undefined as never })).toBe(false)
     expect(parse({ ...submission, providerHandle: 'codex' })).toBe(false)
     expect(parse({ ...submission, body: 'hi' })).toBe(false)

@@ -19,6 +19,7 @@ afterEach(async () => {
 async function makeRoot(prefix: string): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), prefix))
   tempRoots.push(root)
+
   return root
 }
 
@@ -352,12 +353,14 @@ describe('resolveSessionFilePath', () => {
       'utf8'
     )
     const calls: (string | null)[] = []
+
     const readTranscriptLeaf = async ({
       previousLeafUuid
     }: {
       previousLeafUuid: string | null
     }) => {
       calls.push(previousLeafUuid)
+
       return readClaudeTranscriptLeafUuid(transcript, 'session-1', previousLeafUuid)
     }
 
@@ -378,12 +381,15 @@ describe('resolveSessionFilePath', () => {
 
   it('does not accept a divergent sibling after a truncated-tail reproof', async () => {
     const calls: (string | null)[] = []
+
     const readTranscriptLeaf = vi.fn(
       async ({ previousLeafUuid }: { previousLeafUuid: string | null }) => {
         calls.push(previousLeafUuid)
+
         if (calls.length === 1) {
           throw new ClaudeTranscriptTailIncompleteError()
         }
+
         return 'divergent-sibling'
       }
     )
@@ -453,6 +459,7 @@ describe('resolveSessionFilePath', () => {
   it('ignores nested Grok decoys outside the direct group/session layout', async () => {
     const root = await makeRoot('orca-native-chat-resolve-grok-decoy-')
     const grokSessionsDir = join(root, 'grok-sessions')
+
     const decoy = join(
       grokSessionsDir,
       'group',
@@ -461,6 +468,7 @@ describe('resolveSessionFilePath', () => {
       'sess-decoy',
       'chat_history.jsonl'
     )
+
     await mkdir(dirname(decoy), { recursive: true })
     await writeFile(decoy, '{}\n')
 
@@ -488,6 +496,7 @@ describe('resolveSessionFilePath', () => {
     await writeFile(target, '{}\n')
     const previous = process.env.GROK_HOME
     process.env.GROK_HOME = root
+
     try {
       await expect(resolveSessionFilePath('grok', 'sess-env-1')).resolves.toBe(target)
     } finally {
@@ -506,6 +515,7 @@ describe('resolveSessionFilePath', () => {
     const resolved = await resolveSessionFilePath('codex', 'abc-session', {
       codexSessionsDirs: [codexSessionsDir]
     })
+
     expect(resolved).toBe(target)
   })
 
@@ -554,6 +564,7 @@ describe('resolveSessionFilePath', () => {
 
     const previous = process.env.OMP_CODING_AGENT_DIR
     process.env.OMP_CODING_AGENT_DIR = join(root, 'omp-sessions')
+
     try {
       await expect(resolveSessionFilePath('omp', 'sess-omp-env')).resolves.toBe(target)
     } finally {
@@ -573,6 +584,7 @@ describe('resolveSessionFilePath', () => {
 
     const previous = process.env.ORCA_USER_DATA_PATH
     process.env.ORCA_USER_DATA_PATH = root
+
     try {
       const resolved = await resolveSessionFilePath('codex', '019edf9c-managed')
       expect(resolved).toBe(target)
@@ -600,6 +612,7 @@ describe('resolveSessionFilePath', () => {
     process.env.CODEX_HOME = codexHome
     // Point the managed home at an empty dir so the fallback is exercised.
     process.env.ORCA_USER_DATA_PATH = managedRoot
+
     try {
       const resolved = await resolveSessionFilePath('codex', 'xyz-session')
       expect(resolved).toBe(target)
@@ -635,6 +648,7 @@ describe('resolveSessionFilePath', () => {
       claudeProjectsDir,
       transcriptPath: realFile
     })
+
     expect(resolved).toBe(realFile)
   })
 
@@ -650,6 +664,7 @@ describe('resolveSessionFilePath', () => {
       claudeProjectsDir,
       transcriptPath: join(projectDir, 'does-not-exist.jsonl')
     })
+
     expect(resolved).toBe(target)
   })
 
@@ -667,6 +682,7 @@ describe('resolveSessionFilePath', () => {
       claudeProjectsDir,
       transcriptPath: bogus
     })
+
     expect(resolved).toBe(target)
   })
 })

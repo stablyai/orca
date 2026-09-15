@@ -38,6 +38,7 @@ export class LazyWorkerThreadHost<TResponse> {
     if (this.worker) {
       return this.worker
     }
+
     try {
       const worker = this.options.factory()
       const onMessage = (response: TResponse): void => this.options.onMessage(response)
@@ -51,15 +52,18 @@ export class LazyWorkerThreadHost<TResponse> {
         worker.off('error', onError)
         worker.off('exit', onExit)
       }
+
       // Never keep the app alive for background work.
       worker.unref?.()
       this.worker = worker
+
       return worker
     } catch (err) {
       if (!this.reportedUnavailable) {
         this.reportedUnavailable = true
         this.options.onUnavailable(err)
       }
+
       return null
     }
   }
@@ -68,9 +72,11 @@ export class LazyWorkerThreadHost<TResponse> {
     this.clearIdleTimer()
     const worker = this.worker
     this.worker = null
+
     if (!worker) {
       return
     }
+
     this.cleanupListeners?.()
     this.cleanupListeners = null
     worker.removeAllListeners()
@@ -79,11 +85,14 @@ export class LazyWorkerThreadHost<TResponse> {
 
   scheduleIdleTeardown(): void {
     this.clearIdleTimer()
+
     if (!this.worker) {
       return
     }
+
     this.idleTimer = setTimeout(() => {
       this.idleTimer = null
+
       // Re-checked here: a request arriving as the timer fires must never be
       // lost to a self-exiting worker.
       if (this.options.isIdle()) {

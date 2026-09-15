@@ -23,8 +23,11 @@ import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 import { runWslProcess } from '../wsl/wsl-runner'
 
 const BATCH_FILE_COUNT = 8
+
 const GUEST_COMMAND_TIMEOUT_MS = 30_000
+
 const GUEST_COMMAND_MAX_OUTPUT_BYTES = 64 * 1024
+
 // Why far above the default: one batched `listEntries` covers every discovery
 // root of a WSL home at once, which is orders of magnitude more output than any
 // install call. Matched to the discovery scanner's own bound.
@@ -93,6 +96,7 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
   authorizeRoots(paths: readonly string[]): void {
     for (const path of paths) {
       const guestRoot = this.toGuestPath(path)
+
       if (!this.guestAllowedRoots.includes(guestRoot)) {
         this.guestAllowedRoots.push(guestRoot)
       }
@@ -101,17 +105,22 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
 
   async prepareExtractedSkill(path: string, manifest: SkillPackageManifestV1): Promise<void> {
     const guestRoot = this.requireAllowed(path)
+
     if (isWindowsBackedGuestPath(guestRoot)) {
       return
     }
+
     const directories = new Set([guestRoot])
+
     for (const file of manifest.files) {
       let directory = posix.dirname(posix.join(guestRoot, file.path))
+
       while (directory !== guestRoot && directory.startsWith(`${guestRoot}/`)) {
         directories.add(directory)
         directory = posix.dirname(directory)
       }
     }
+
     await this.applyModes([
       ...[...directories].map((directory) => ({ path: directory, mode: '700' })),
       ...manifest.files.map((file) => ({
@@ -129,10 +138,13 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
     if (!files) {
       return observeSkillPackage(path)
     }
+
     const guestRoot = this.requireAllowed(path)
+
     if (!isWindowsBackedGuestPath(guestRoot)) {
       await this.verifyModes(guestRoot, files)
     }
+
     return observeSkillPackage(
       path,
       SKILL_PACKAGE_OBSERVATION_LIMITS,
@@ -168,6 +180,7 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
     if (directories.length === 0) {
       return new Map()
     }
+
     return parseWslListEntriesOutput(
       await this.runOutput(
         WSL_LIST_ENTRIES_SCRIPT,
@@ -182,6 +195,7 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
     if (paths.length === 0) {
       return new Map()
     }
+
     return parseWslInspectPathsOutput(
       await this.runOutput(
         WSL_INSPECT_PATHS_SCRIPT,
@@ -208,6 +222,7 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
       path: posix.join(root, file.path),
       mode: file.executable ? '700' : '600'
     }))
+
     for (let offset = 0; offset < entries.length; offset += BATCH_FILE_COUNT) {
       await this.run(
         VERIFY_MODES_SCRIPT,
@@ -220,6 +235,7 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
 
   private toGuestPath(path: string): string {
     const parsed = parseWslUncPath(path)
+
     if (parsed) {
       if (
         parsed.distro.toLocaleLowerCase('en-US') !== this.distro.toLocaleLowerCase('en-US') ||
@@ -228,24 +244,32 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
       ) {
         throw new Error('skill-install-wsl-path-invalid')
       }
+
       return posix.normalize(parsed.linuxPath)
     }
+
     const drive = path.replace(/\\/g, '/').match(/^([A-Za-z]):\/(.*)$/)
+
     if (!drive || path.includes('\0')) {
       throw new Error('skill-install-wsl-path-invalid')
     }
+
     return posix.join('/mnt', drive[1].toLocaleLowerCase('en-US'), drive[2])
   }
 
   private requireAllowed(path: string): string {
     const guestPath = this.toGuestPath(path)
+
     const allowed = this.guestAllowedRoots.some((root) => {
       const child = posix.relative(root, guestPath)
+
       return child !== '' && child !== '..' && !child.startsWith('../') && !posix.isAbsolute(child)
     })
+
     if (!allowed) {
       throw new Error('skill-install-wsl-path-outside-root')
     }
+
     return guestPath
   }
 
@@ -254,13 +278,17 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
    *  so admitting the root adds no mutation surface. */
   private requireReadable(path: string): string {
     const guestPath = this.toGuestPath(path)
+
     const allowed = this.guestAllowedRoots.some((root) => {
       const child = posix.relative(root, guestPath)
+
       return child !== '..' && !child.startsWith('../') && !posix.isAbsolute(child)
     })
+
     if (!allowed) {
       throw new Error('skill-install-wsl-path-outside-root')
     }
+
     return guestPath
   }
 
@@ -283,11 +311,13 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
       timeoutMs: GUEST_COMMAND_TIMEOUT_MS,
       maxOutputBytes
     })
+
     if (result.code !== 0 || result.timedOut) {
       throw Object.assign(new Error('skill-install-wsl-guest-operation-failed'), {
         cause: new Error(`wsl exited ${result.code}: ${result.stderr}`)
       })
     }
+
     return result.stdout.trim()
   }
 }
@@ -300,12 +330,16 @@ export function createWslSkillInstallFilesystem(input: {
 }): WslSkillInstallFilesystem {
   const scopeRoot = input.workspaceDirectory ?? input.homeDirectory
   const scope = input.workspaceDirectory ? 'workspace' : 'global'
+
   const providerRoots = SKILL_INSTALL_PROVIDERS.flatMap((provider) => {
     const segments = scope === 'global' ? provider.globalSegments : provider.workspaceSegments
+
     const overriddenRoot =
       scope === 'global' ? input.providerRootOverrides?.[provider.id] : undefined
+
     return overriddenRoot ? [overriddenRoot] : segments ? [join(scopeRoot, ...segments)] : []
   })
+
   return new WslSkillInstallFilesystem(input.distro, [
     join(scopeRoot, '.agents', 'skills'),
     ...providerRoots

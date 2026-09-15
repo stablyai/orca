@@ -35,6 +35,7 @@ export function TelemetryFirstLaunchSurface(): React.JSX.Element | null {
   }
 
   const telemetry = settings.telemetry
+
   if (!telemetry) {
     // Defensive: migration guarantees the block exists. If it somehow
     // doesn't, show nothing rather than guessing a cohort wrong.
@@ -43,6 +44,7 @@ export function TelemetryFirstLaunchSurface(): React.JSX.Element | null {
 
   const isExistingUserAwaitingBanner =
     telemetry.existedBeforeTelemetryRelease === true && telemetry.optedIn === null
+
   if (!isExistingUserAwaitingBanner) {
     return null
   }

@@ -8,6 +8,7 @@ import {
 import { rightSidebarShowsPullRequestData } from '@/lib/right-sidebar-visibility'
 
 const REPO_COUNT = 10
+
 const WORKTREE_COUNT = 400
 
 /** Counts every `id` read so a rescan shows up as a multiple of the row count. */
@@ -17,20 +18,25 @@ function buildCountingState(): {
   worktreeId: string
 } {
   let idReads = 0
+
   const repos = Array.from({ length: REPO_COUNT }, (_, index) => ({
     id: `repo-${index}`,
     name: `repo-${index}`,
     path: `/repos/repo-${index}`,
     connectionId: null
   }))
+
   const worktreesByRepo: Record<string, unknown[]> = {}
   const perRepo = WORKTREE_COUNT / REPO_COUNT
+
   for (let repoIndex = 0; repoIndex < REPO_COUNT; repoIndex++) {
     worktreesByRepo[`repo-${repoIndex}`] = Array.from({ length: perRepo }, (_, index) => {
       const id = `repo-${repoIndex}::/repos/repo-${repoIndex}/wt-${index}`
+
       return {
         get id() {
           idReads++
+
           return id
         },
         repoId: `repo-${repoIndex}`,
@@ -40,6 +46,7 @@ function buildCountingState(): {
       }
     })
   }
+
   return {
     state: {
       repos,
@@ -76,6 +83,7 @@ describe('terminal workspace routing scales with tab count, not workspace count'
 
   it('still resolves the owning repo and its connection', () => {
     const { state, worktreeId } = buildCountingState()
+
     const remoteState = {
       ...state,
       repos: state.repos.map((repo) =>

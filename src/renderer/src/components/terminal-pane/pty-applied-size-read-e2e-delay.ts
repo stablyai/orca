@@ -10,6 +10,8 @@ export function getAppliedSizeReadE2eDelayMs(): number {
   if (!e2eConfig.exposeStore || typeof window === 'undefined') {
     return 0
   }
+
   const delayMs = window.__e2ePtyAppliedSizeReadDelayMs
+
   return typeof delayMs === 'number' && Number.isFinite(delayMs) && delayMs > 0 ? delayMs : 0
 }

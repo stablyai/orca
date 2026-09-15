@@ -26,19 +26,24 @@ import {
 describe('browser client page renderer runtime', () => {
   it('lazily binds the app-lifetime IPC listener and exact current Electron renderer', async () => {
     expect(ipcMainOn).not.toHaveBeenCalled()
+
     const rendererEndpoint = {
       id: 41,
       mainFrame: {},
       isDestroyed: vi.fn(() => false),
       send: vi.fn()
     }
+
     attachBrowserClientPageRenderer(rendererEndpoint)
+
     const listener = ipcMainOn.mock.calls.find(
       ([channel]) => channel === BROWSER_CLIENT_PAGE_RENDERER_REPLY_CHANNEL
     )?.[1]
+
     expect(listener).toEqual(expect.any(Function))
 
     const renderer = selectBrowserClientPageRenderer()
+
     const mounted = renderer.mountPage(
       {
         partition: 'persist:orca-browser-route:v1:partition-a',
@@ -47,6 +52,7 @@ describe('browser client page renderer runtime', () => {
       },
       new AbortController().signal
     )
+
     const request = rendererEndpoint.send.mock.calls[0]?.[1] as BrowserClientPageRendererRequest
     expect(rendererEndpoint.send).toHaveBeenCalledWith(
       BROWSER_CLIENT_PAGE_RENDERER_REQUEST_CHANNEL,

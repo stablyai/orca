@@ -18,7 +18,9 @@ import { createFleetStatusIndex, statusForFleetWorker } from './orchestration-fl
  * is the clock, so the binding is supplied and terminal identity is proven elsewhere.
  */
 const PANE_KEY = 'tab-clock:leaf-clock'
+
 const TERMINAL_HANDLE = 'term_clock'
+
 const NOW = 10 * AGENT_STATUS_STALE_AFTER_MS
 
 const binding: FleetEvidenceBinding = {
@@ -94,10 +96,12 @@ describe('fleet evidence clocks', () => {
       payload({ receivedAt: NOW, evidenceObservedAt: NOW - 5_000, state: 'done' }),
       binding
     )
+
     const observedLastDeliveredFirst = mintFleetAgentStatusEvidence(
       payload({ receivedAt: NOW - 10_000, evidenceObservedAt: NOW - 1_000, state: 'working' }),
       binding
     )
+
     const rows = [worker()]
 
     const selected = statusForFleetWorker(

@@ -3,23 +3,30 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { MobileNotificationDismissalStore } from './mobile-notification-dismissal-store'
+
 const paths: string[] = []
+
 afterEach(() => {
   paths.splice(0).forEach((path) => rmSync(path, { recursive: true, force: true }))
   vi.restoreAllMocks()
 })
+
 function fixture() {
   const path = mkdtempSync(join(tmpdir(), 'orca-dismissals-'))
   paths.push(path)
+
   return { path, store: new MobileNotificationDismissalStore(path) }
 }
+
 const shown = { notificationId: 'same', notificationEpoch: 'old', notificationSeq: 12 }
+
 const alert = {
   type: 'notification' as const,
   source: 'terminal-bell' as const,
   title: 'QA',
   body: ''
 }
+
 it('reconciles an old delivered alert after desktop restart and preserves unrelated identities', () => {
   const h = fixture()
   h.store.record({ ...alert, ...shown })
@@ -40,6 +47,7 @@ it('reconciles an old delivered alert after desktop restart and preserves unrela
     ])
   ).toEqual([shown])
 })
+
 it('does not dismiss a newer replacement and does not treat missing or expired history as dismissal', () => {
   const h = fixture()
   const now = Date.now()

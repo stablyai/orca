@@ -49,9 +49,13 @@ type CodexPaneLaneState = Pick<
  * stranded by a local selection change, so they must not share the local keys.
  */
 const RUNTIME_ENVIRONMENT_LANE_PREFIX = 'env:'
+
 const SSH_CONNECTION_LANE_KEY = 'ssh-connection'
+
 const UNATTRIBUTED_REMOTE_LANE_KEY = 'remote-runtime'
+
 const HOST_LANE_KEY = 'host'
+
 const WSL_LANE_PREFIX = 'wsl:'
 
 /** True for the lanes an on-disk pane-account record can name. */
@@ -83,21 +87,27 @@ export function getCodexAccountSwitchLaneMatcher(args: {
   clearsEveryWslDistro?: boolean
 }): (laneKey: string) => boolean {
   const runtimeTarget = getActiveRuntimeTarget(args.settings)
+
   // Why: with an environment active the mutation is RPC'd to that machine's
   // roster and local GlobalSettings are never touched, so the local host/WSL
   // panes are exactly the ones the switch cannot have affected.
   if (runtimeTarget.kind === 'environment') {
     const environmentLaneKey = `${RUNTIME_ENVIRONMENT_LANE_PREFIX}${runtimeTarget.environmentId}`
+
     return (laneKey) => laneKey === environmentLaneKey
   }
+
   const normalized = normalizeCodexAccountSelectionTarget(args.target)
+
   // Why a family rather than the `wsl:__default__` key: clearing a distro-less
   // WSL selection nulls every distro slot, so every WSL pane really is stranded.
   // Keying that to `__default__` alone would leave them all without a notice.
   if (args.clearsEveryWslDistro && normalized.runtime === 'wsl' && normalized.wslDistro === null) {
     return (laneKey) => laneKey.startsWith(WSL_LANE_PREFIX)
   }
+
   const switchLaneKey = getCodexSelectionLaneKey(normalized)
+
   return (laneKey) => laneKey === switchLaneKey
 }
 
@@ -130,6 +140,7 @@ export function resolveCodexPaneSelectionLane(args: {
   recordedLaneKey?: string | null
 }): CodexPaneSelectionLane {
   const recorded = args.recordedLaneKey?.trim()
+
   // Why the local-key check: the registry accepts any string it finds on disk,
   // and a lane key that matches no switch silently drops that pane's notice.
   // Why foreign ids still derive: their lane is settled by the id itself and no
@@ -138,11 +149,15 @@ export function resolveCodexPaneSelectionLane(args: {
     Boolean(recorded) &&
     isLocalCodexSelectionLaneKey(recorded as string) &&
     !isForeignMachineCodexPtyId(args.ptyId)
+
   if (!trustsRecord) {
     const laneKey = resolveCodexPaneSelectionLaneKey(args)
+
     return { laneKey, source: 'derived', derivedLaneKey: laneKey }
   }
+
   const derivedLaneKey = deriveLaneKeyForDiagnostics(args)
+
   if (derivedLaneKey !== null && derivedLaneKey !== recorded) {
     // Why loud: every divergence found in review was this exact disagreement,
     // and the recorded key now hides it instead of producing a visible bug.
@@ -152,6 +167,7 @@ export function resolveCodexPaneSelectionLane(args: {
       derived: derivedLaneKey
     })
   }
+
   return { laneKey: recorded as string, source: 'recorded', derivedLaneKey }
 }
 
@@ -175,20 +191,25 @@ export function resolveCodexPaneSelectionLaneKey(args: {
   ptyId: string
 }): string {
   const remoteParts = parseRemoteRuntimePtyId(args.ptyId)
+
   if (remoteParts !== null) {
     const runtimeTarget = getActiveRuntimeTarget(args.state.settings)
+
     // Why: mirror inspectRuntimeTerminalProcess — an owner-less remote id is
     // routed to whichever environment is active, so that is its lane too.
     const environmentId =
       remoteParts.environmentId?.trim() ||
       (runtimeTarget.kind === 'environment' ? runtimeTarget.environmentId : null)
+
     return environmentId
       ? `${RUNTIME_ENVIRONMENT_LANE_PREFIX}${environmentId}`
       : UNATTRIBUTED_REMOTE_LANE_KEY
   }
+
   if (parseAppSshPtyId(args.ptyId) !== null) {
     return SSH_CONNECTION_LANE_KEY
   }
+
   return getCodexSelectionLaneKey(resolveLocalPaneSelectionTarget(args))
 }
 
@@ -207,13 +228,17 @@ function resolveLocalPaneSelectionTarget(args: {
 }): CodexAccountSelectionTarget {
   const paneCwd = resolvePaneCwd(args)
   const wslPath = paneCwd ? parseWslUncPath(paneCwd) : null
+
   if (wslPath) {
     return { runtime: 'wsl', wslDistro: wslPath.distro }
   }
+
   const terminalRuntime = resolveLocalPaneTerminalRuntime(args)
+
   if (isWslShellName(terminalRuntime.shellOverride)) {
     return { runtime: 'wsl', wslDistro: terminalRuntime.terminalWindowsWslDistro }
   }
+
   return { runtime: 'host' }
 }
 
@@ -231,10 +256,13 @@ function resolvePaneCwd(args: {
   if (args.tab.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return null
   }
+
   const workspacePath = getWorkspacePath(args.state, args.tab.worktreeId)
+
   if (!workspacePath) {
     return null
   }
+
   // Why this exact call: it is the same one main spawns through, so a relative
   // or inherited startup folder resolves to the identical absolute path.
   return resolveTerminalStartupCwd(workspacePath, args.tab.startupCwd) ?? workspacePath
@@ -258,9 +286,11 @@ function resolveLocalPaneTerminalRuntime(args: {
   if (getRendererAppPlatform() !== 'win32') {
     return { shellOverride: args.tab.shellOverride, terminalWindowsWslDistro: null }
   }
+
   const capabilities = hasCachedWindowsTerminalCapabilities()
     ? getCachedWindowsTerminalCapabilities()
     : null
+
   const projectRuntime = getLocalProjectExecutionRuntimeContext(
     args.state,
     args.tab.worktreeId,
@@ -270,6 +300,7 @@ function resolveLocalPaneTerminalRuntime(args: {
       availableWslDistros: capabilities?.wslDistros ?? null
     }
   )
+
   if (projectRuntime?.status === 'repair-required') {
     // Why not delegate: resolveLocalWindowsTerminalRuntimeOptions throws here,
     // and this call sits outside the scan's per-pane failure guard, so a throw
@@ -279,6 +310,7 @@ function resolveLocalPaneTerminalRuntime(args: {
       terminalWindowsWslDistro: projectRuntime.repair.preferredRuntime.distro
     }
   }
+
   return resolveLocalWindowsTerminalRuntimeOptions({
     requestedShellOverride: args.tab.shellOverride,
     settings: args.state.settings ?? undefined,
@@ -291,12 +323,14 @@ function getWorkspacePath(
   worktreeId: string
 ): string | null {
   const parsed = parseWorkspaceKey(worktreeId)
+
   if (parsed?.type === 'folder') {
     return (
       (state.folderWorkspaces ?? []).find((workspace) => workspace.id === parsed.folderWorkspaceId)
         ?.folderPath ?? null
     )
   }
+
   return (
     Object.values(state.worktreesByRepo ?? {})
       .flat()

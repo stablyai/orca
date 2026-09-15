@@ -22,6 +22,7 @@ const NARROW_STRIP_REM = 24
 
 function rootFontSizePx(): number {
   const parsed = Number.parseFloat(getComputedStyle(document.documentElement).fontSize)
+
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 16
 }
 
@@ -31,17 +32,23 @@ function useNarrowStrip(ref: React.RefObject<HTMLDivElement | null>): boolean {
   const [narrow, setNarrow] = useState(() => window.innerWidth < NARROW_STRIP_REM * 16)
   useEffect(() => {
     const element = ref.current
+
     if (!element || typeof ResizeObserver === 'undefined') {
       return
     }
+
     const observer = new ResizeObserver((observerEntries) => {
       const width =
         observerEntries[0]?.borderBoxSize?.[0]?.inlineSize ?? element.getBoundingClientRect().width
+
       setNarrow(width < NARROW_STRIP_REM * rootFontSizePx())
     })
+
     observer.observe(element, { box: 'border-box' })
+
     return () => observer.disconnect()
   }, [ref])
+
   return narrow
 }
 
@@ -59,6 +66,7 @@ const KIND_ICONS = {
  *  kind markers and stay neutral. `dimmed` is the running-turn treatment. */
 function kindIconTone(kind: AgentSessionBackgroundTask['kind'], dimmed: boolean): string {
   const tone = kind === 'monitor' ? 'text-yellow-500' : 'text-muted-foreground'
+
   return dimmed ? `${tone}/40` : tone
 }
 
@@ -83,6 +91,7 @@ function BackgroundTaskRow(props: {
   // Every attention state states its reason on the row, the same ones the collapsed
   // header names; `unverifiable` ("no contact") must never be silently dropped.
   const reason = backgroundTaskStateReason(entry.state)
+
   // Settled rows keep their final usage but no elapsed — a still-growing clock
   // on finished work would lie.
   const meta = [
@@ -93,6 +102,7 @@ function BackgroundTaskRow(props: {
   ]
     .filter((part): part is string => part !== null)
     .join(' · ')
+
   return (
     <li className="flex h-6 min-w-0 items-center gap-2 text-foreground/80">
       <Icon
@@ -157,19 +167,24 @@ export function NativeChatBackgroundTasksStatus(props: {
   const taskListId = useId()
   const stripRef = useRef<HTMLDivElement>(null)
   const narrow = useNarrowStrip(stripRef)
+
   // The 1 Hz elapsed tick must not re-group, re-sort and re-translate the whole roster.
   const groups = useMemo(
     () => buildBackgroundTaskGroups(props.tasks, props.settledTasks),
     [props.tasks, props.settledTasks]
   )
+
   const singleLiveCommand =
     groups.length === 1 && groups[0].kind === 'command' && groups[0].tasks.length === 1
+
   const hasElapsed = groups.some((group) =>
     group.tasks.some((entry) => !entry.settled && (entry.task.startedAt ?? 0) > 0)
   )
+
   const now = useNow(1_000, props.isVisible && hasElapsed && (expanded || singleLiveCommand))
   const header = backgroundTasksHeaderContent(groups, { narrow, now })
   const headerText = `${header.segments.map((segment) => segment.text).join(' · ')}${header.detail ? `${header.segments.length > 0 ? ' — ' : ''}${header.detail}` : ''}`
+
   return (
     <div
       data-native-chat-background-tasks="true"
@@ -193,6 +208,7 @@ export function NativeChatBackgroundTasksStatus(props: {
                 // A collapsed total spans kinds, so no single icon can stand for it.
                 const kind = segment.kind
                 const Icon = kind ? KIND_ICONS[kind] : null
+
                 return (
                   <span key={segment.kind ?? 'total'}>
                     {/* A text token, not `--border`: that one is a divider line

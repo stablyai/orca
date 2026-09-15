@@ -89,6 +89,7 @@ const consumers = new Set<TranscriptConsumer>()
 
 export function registerTranscriptConsumer(consumer: TranscriptConsumer): () => void {
   consumers.add(consumer)
+
   return () => {
     consumers.delete(consumer)
   }

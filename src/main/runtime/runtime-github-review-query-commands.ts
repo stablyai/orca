@@ -18,6 +18,7 @@ export class RuntimeGitHubReviewQueryCommands {
     number: number
   ): Promise<Awaited<ReturnType<typeof getIssue>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return getIssue(
       repo.path,
       number,
@@ -34,6 +35,7 @@ export class RuntimeGitHubReviewQueryCommands {
     options?: { noCache?: boolean }
   ): Promise<Awaited<ReturnType<typeof getPRChecks>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return getPRChecks(
       repo.path,
       prNumber,
@@ -58,6 +60,7 @@ export class RuntimeGitHubReviewQueryCommands {
   ): Promise<Awaited<ReturnType<typeof getPRCheckDetails>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const localGitOptions = this.deps.getLocalGitArgs(repo)[0] ?? {}
+
     return getPRCheckDetails(
       repo.path,
       { ...args, prRepo: args.prRepo ?? null },
@@ -74,6 +77,7 @@ export class RuntimeGitHubReviewQueryCommands {
     options?: { noCache?: boolean }
   ): Promise<Awaited<ReturnType<typeof getPRComments>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return getPRComments(
       repo.path,
       prNumber,
@@ -96,6 +100,7 @@ export class RuntimeGitHubReviewQueryCommands {
     }
   ): Promise<Awaited<ReturnType<typeof getPRFileContents>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return getPRFileContents({
       repoPath: repo.path,
       connectionId: repo.connectionId ?? null,

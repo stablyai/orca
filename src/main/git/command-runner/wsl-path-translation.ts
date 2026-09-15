@@ -13,15 +13,18 @@ export function translateArgsForWsl(args: string[]): string[] {
 export function translateArgForWsl(arg: string): string {
   // WSL UNC path → native linux path
   const wslInfo = parseWslPath(arg)
+
   if (wslInfo) {
     return wslInfo.linuxPath
   }
 
   // Windows drive path (e.g. C:\Users\...) → /mnt/c/Users/...
   const driveMatch = arg.match(/^([A-Za-z]):[/\\](.*)$/)
+
   if (driveMatch) {
     const driveLetter = driveMatch[1].toLowerCase()
     const rest = driveMatch[2].replace(/\\/g, '/')
+
     return `/mnt/${driveLetter}/${rest}`
   }
 
@@ -39,6 +42,7 @@ export function translateWslOutputPaths(
 ): string {
   const wsl = parseWslPath(originalCwd)
   const distro = wsl?.distro ?? options.wslDistro
+
   if (!distro) {
     return output
   }

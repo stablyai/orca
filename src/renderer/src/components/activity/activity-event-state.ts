@@ -26,6 +26,7 @@ export function freshActivityLiveAgentState(
   ) {
     return null
   }
+
   return entry.state === 'working' && entry.workingMode === 'monitoring'
     ? 'monitoring'
     : entry.state

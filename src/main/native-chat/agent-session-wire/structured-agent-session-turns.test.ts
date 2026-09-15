@@ -16,10 +16,12 @@ const IDENTITY: AgentSessionJournalIdentity = {
 }
 
 let root: string | null = null
+
 const journals = createTrackedJournalOpener()
 
 afterEach(async () => {
   await journals.closeAll()
+
   if (root) {
     await rm(root, { recursive: true, force: true })
     root = null
@@ -30,12 +32,14 @@ describe('performCancel', () => {
   it('acknowledges only the request and leaves the running lifecycle row intact', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-turn-cancel-'))
     const journal = await journals.open({ identity: IDENTITY, journalDir: root })
+
     const lifecycleIdentity = {
       provider: 'legacy' as const,
       agent: 'codex' as const,
       sessionId: 'session-1',
       recordId: 'turn-lifecycle:turn-1'
     }
+
     await journal.appendItem(
       lifecycleIdentity,
       {
@@ -46,6 +50,7 @@ describe('performCancel', () => {
       { fence: 1 }
     )
     const cancelTurn = vi.fn(async () => ({ cancelled: true }))
+
     const ctx: AgentSessionTurnContext = {
       sessionId: 'session-1',
       journal,
@@ -92,6 +97,7 @@ describe('performCancel', () => {
       },
       { fence: 1 }
     )
+
     const ctx: AgentSessionTurnContext = {
       sessionId: 'session-1',
       journal,
@@ -127,6 +133,7 @@ describe('performCancel', () => {
     const journal = await journals.open({ identity: IDENTITY, journalDir: root })
     const cancelTurn = vi.fn(async () => ({ cancelled: true }))
     const stopBackgroundTasks = vi.fn(async () => ({ cancelled: true }))
+
     const ctx: AgentSessionTurnContext = {
       sessionId: 'session-1',
       journal,
@@ -159,6 +166,7 @@ describe('performCancel', () => {
     const journal = await journals.open({ identity: IDENTITY, journalDir: root })
     const cancelTurn = vi.fn(async () => ({ cancelled: true }))
     const stopBackgroundTasks = vi.fn(async () => ({ cancelled: true }))
+
     const ctx: AgentSessionTurnContext = {
       sessionId: 'session-1',
       journal,

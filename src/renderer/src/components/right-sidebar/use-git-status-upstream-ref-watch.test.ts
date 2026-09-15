@@ -5,6 +5,7 @@ const { runtimeState, setWatch } = vi.hoisted(() => ({
   runtimeState: { environmentId: null as string | null },
   setWatch: vi.fn(async () => {})
 }))
+
 let cleanup: (() => void) | undefined
 
 vi.mock('@/runtime/runtime-git-client', () => ({
@@ -23,6 +24,7 @@ vi.mock('./file-explorer-runtime-owner', () => ({
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof React>('react')
+
   return {
     ...actual,
     useCallback: (callback: unknown) => callback,

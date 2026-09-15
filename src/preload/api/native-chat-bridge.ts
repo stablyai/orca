@@ -31,8 +31,10 @@ export const nativeChatApi = {
         onFrame(payload.frame)
       }
     }
+
     ipcRenderer.on('nativeChat:appended', listener)
     ipcRenderer.send('nativeChat:subscribe', args)
+
     return () => {
       ipcRenderer.removeListener('nativeChat:appended', listener)
       ipcRenderer.send('nativeChat:unsubscribe', { subscriptionId: args.subscriptionId })

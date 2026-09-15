@@ -20,31 +20,39 @@ export const createWorkItemMutationActions = (
     set((s) => {
       const nextCache = { ...s.workItemsCache }
       let changed = false
+
       const sourceScope =
         options?.sourceContext?.provider === 'github'
           ? getTaskSourceCacheScope(options.sourceContext)
           : null
+
       for (const key of Object.keys(nextCache)) {
         // Why: don't patch another host/account's visually identical issue/PR cache entry.
         if (sourceScope && key !== sourceScope && !key.startsWith(`${sourceScope}::`)) {
           continue
         }
+
         const entry = nextCache[key]
+
         if (!entry?.data) {
           continue
         }
+
         // Why: issue/PR ids are only unique within a repo; cross-repo views can share `pr:42`.
         const idx = entry.data.findIndex(
           (item) => item.id === itemId && (!repoId || item.repoId === repoId)
         )
+
         if (idx === -1) {
           continue
         }
+
         const updatedItems = [...entry.data]
         updatedItems[idx] = { ...updatedItems[idx], ...patch }
         nextCache[key] = { ...entry, data: updatedItems }
         changed = true
       }
+
       return changed ? { workItemsCache: nextCache } : s
     })
   },
@@ -61,6 +69,7 @@ export const createWorkItemMutationActions = (
           : r
       )
     }))
+
     try {
       // Why: use the generic `repos:update` channel so a single write → single `repos:changed` broadcast re-fetches other windows.
       // Why: map 'auto' to undefined so persistence drops the key entirely (see main/persistence.ts#updateRepo).
@@ -82,6 +91,7 @@ export const createWorkItemMutationActions = (
       // Why: the optimistic patch may now disagree with disk; resync rather than leave a lie on screen.
       void get().fetchRepos()
     }
+
     // Why: clear inflight dedupe BEFORE bumping the nonce so the re-triggered fetch can't collapse onto a pre-flip in-flight entry.
     clearInflightWorkItemsForRepo(repoId, repoPath)
     // Why: evict AFTER the await so an overlapping fetch can't repopulate with pre-flip data; also drops legacy path-scoped keys.
@@ -89,11 +99,13 @@ export const createWorkItemMutationActions = (
       const prefix = `${repoId}::`
       const legacyPrefix = `${repoPath}::`
       const next: Record<string, CacheEntry<readonly GitHubWorkItem[]>> = {}
+
       for (const [key, entry] of Object.entries(s.workItemsCache)) {
         if (!key.startsWith(prefix) && !key.startsWith(legacyPrefix)) {
           next[key] = entry
         }
       }
+
       // Why: the Tasks fetch effect keys on the nonce, not the cache, so bump it to re-run and re-populate the evicted entries.
       return { workItemsCache: next, workItemsInvalidationNonce: s.workItemsInvalidationNonce + 1 }
     })
@@ -114,15 +126,19 @@ export const createWorkItemMutationActions = (
         updates.workItemsCache = workItems.cache
         updates.workItemsInvalidationNonce = s.workItemsInvalidationNonce + 1
       }
+
       if (prs.evicted) {
         updates.prCache = prs.cache
       }
+
       if (issues.evicted) {
         updates.issueCache = issues.cache
       }
+
       if (checks.evicted) {
         updates.checksCache = checks.cache
       }
+
       if (comments.evicted) {
         updates.commentsCache = comments.cache
       }

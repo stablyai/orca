@@ -28,9 +28,11 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
     this.providerModeTrackersByPtyId.get(ptyId)?.scan(data)
+
     for (const tracker of this.providerModeSnapshotScansByPtyId.get(ptyId) ?? []) {
       tracker.scan(data)
     }
+
     const osc7Metadata = this.recordOsc7MetadataForPty(ptyId, data)
     const cwd = osc7Metadata.cwd
     const cwdChanged = osc7Metadata.cwdChanged
@@ -54,6 +56,7 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     // that the later seed-resolve would overwrite, dropping the live byte.
     // See docs/mobile-prefer-renderer-scrollback.md.
     this.maybeHydrateHeadlessFromRenderer(ptyId)
+
     // Our structure wins: OSC title/agent-status extraction runs through the
     // shared per-PTY title tracker below (getOrCreatePtyTitleTrackerEntry →
     // applyTrackedPtyTitle) in byte order, superseding main's inline
@@ -65,9 +68,11 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       outputSequence,
       forwardQueryReplies
     )
+
     captureModelReceipt?.(modelCompletion)
 
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
+
     const ptyTailBefore = pty
       ? {
           lines: pty.tailBuffer,
@@ -79,26 +84,32 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
           linesTotal: pty.tailLinesTotal
         }
       : null
+
     let ptyTailAfter: ReturnType<typeof appendNormalizedToTailBuffer> | null = null
+
     if (pty) {
       pty.connected = true
       pty.disconnectedAt = null
       pty.lastOutputAt = at
       const normalized = normalizeTerminalChunk(data, pty.tailPendingAnsi)
       pty.tailPendingAnsi = normalized.pendingAnsi
+
       const nextTail = appendNormalizedToTailBuffer(
         pty.tailBuffer,
         pty.tailPartialLine,
         normalized.text,
         pty.tailRedrawCursor
       )
+
       ptyTailAfter = nextTail
+
       const nextTranscript = appendCompletedTerminalTranscript(
         pty.tailTranscriptBuffer,
         pty.tailTranscriptChars,
         nextTail.newlyCompletedLines,
         nextTail.newCompleteLines
       )
+
       pty.tailBuffer = nextTail.lines
       pty.tailTranscriptBuffer = nextTranscript.lines
       pty.tailTranscriptChars = nextTranscript.characters
@@ -121,6 +132,7 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       leaf.connected = true
       leaf.writable = this.graphStatus === 'ready'
       leaf.lastOutputAt = at
+
       if (
         pty &&
         ptyTailBefore &&
@@ -156,30 +168,36 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       } else {
         const normalized = normalizeTerminalChunk(data, leaf.tailPendingAnsi)
         leaf.tailPendingAnsi = normalized.pendingAnsi
+
         const previousWaitState =
           leaf.tailWaitState?.fromTail === true
             ? leaf.tailWaitState
             : computeTerminalTailWaitState(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+
         const nextTail = appendNormalizedToTailBuffer(
           leaf.tailBuffer,
           leaf.tailPartialLine,
           normalized.text,
           leaf.tailRedrawCursor
         )
+
         const nextTranscript = appendCompletedTerminalTranscript(
           leaf.tailTranscriptBuffer,
           leaf.tailTranscriptChars,
           nextTail.newlyCompletedLines,
           nextTail.newCompleteLines
         )
+
         const nextWaitState = computeTerminalTailWaitState(
           nextTail.lines,
           nextTail.partialLine,
           leaf.preview
         )
+
         if (tailGainedNewerBlockedReason(previousWaitState, nextWaitState, normalized.text)) {
           leaf.waitBlockedAt = at
         }
+
         leaf.tailWaitState = nextWaitState
         leaf.tailBuffer = nextTail.lines
         leaf.tailTranscriptBuffer = nextTranscript.lines
@@ -200,27 +218,35 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     // renderer, so pure status chunks don't perturb the stale-title probe.
     const titleTrackerEntry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
     const previousTitleScanTail = this.oscTitleScanTailByPtyId.get(ptyId)
+
     const titleInput = previousTitleScanTail
       ? `${previousTitleScanTail}${agentStatusChunk.cleanData}`
       : agentStatusChunk.cleanData
+
     const nextTitleScanTail = extractOscTitleScanTail(titleInput)
+
     if (nextTitleScanTail.length > 0) {
       this.oscTitleScanTailByPtyId.set(ptyId, nextTitleScanTail)
     } else {
       this.oscTitleScanTailByPtyId.delete(ptyId)
     }
+
     titleTrackerEntry.applyingChunk = true
     titleTrackerEntry.chunkTouchedSessionTabs = false
+
     try {
       for (const payload of agentStatusChunk.payloads) {
         titleTrackerEntry.pendingFacts.push({ kind: 'agent-status', payload })
       }
+
       // Why on the PTY record: the retained status snapshots are keyed by paneKey, which a
       // background CLI-created PTY may never have. `terminal wait --for tui-idle` still needs
       // the agent's own account of itself, and ptyId is the only identity that path always holds.
       const latestAgentStatus = agentStatusChunk.payloads.at(-1)
+
       if (latestAgentStatus) {
         const ptyRecord = this.ptysById.get(ptyId)
+
         if (ptyRecord) {
           ptyRecord.lastExplicitAgentStatus = {
             state: latestAgentStatus.state,
@@ -228,6 +254,7 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
           }
         }
       }
+
       titleTrackerEntry.tracker.handleChunk(agentStatusChunk.cleanData, {
         titleScanData: titleInput
       })
@@ -238,15 +265,18 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       titleTrackerEntry.commandCodeDetector?.observe(agentStatusChunk.cleanData)
     } finally {
       titleTrackerEntry.applyingChunk = false
+
       try {
         // Why: per-chunk cross-channel contract order is status → titles →
         // bell — the chunk's agentStatus:set events must reach the renderer
         // before its pty:sideEffect batch.
         this.emitTerminalAgentStatusEvents(ptyId, agentStatusChunk)
+
         const lastPayloadTitleOffset =
           agentStatusChunk.lastPayloadCleanOffset === null
             ? null
             : (previousTitleScanTail?.length ?? 0) + agentStatusChunk.lastPayloadCleanOffset
+
         this.restoreAgentPromptLifecycleByteOrder(ptyId, titleInput, lastPayloadTitleOffset)
       } finally {
         // Why: flushed in the finally so a throwing tracker callback cannot
@@ -254,6 +284,7 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
         this.flushPendingTerminalSideEffectFacts(ptyId, titleTrackerEntry)
       }
     }
+
     // Why only the title arm here: an OSC 9999 transition republishes off the store's own
     // change signal (installHookStatusSessionTabsRepublish), which sees hook and OSC rows
     // alike — a second per-chunk republish would only re-emit the same snapshot version.
@@ -268,6 +299,7 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       ...(cwdChanged && cwd !== null ? { cwd } : {}),
       ...(sourceRanges && sourceRanges.length > 0 ? { sourceRanges } : {})
     }))
+
     return outputSequence
   }
 }

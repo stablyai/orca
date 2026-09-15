@@ -153,12 +153,15 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         }),
       handleTextInput: (view, from, to, text) => {
         typedEmptyOrderedListMarkerRef.current = false
+
         if (text !== ' ' || from !== to || !view.state.selection.empty) {
           return false
         }
+
         const { $from } = view.state.selection
         const beforeCursor = $from.parent.textBetween(0, $from.parentOffset, '\0', '\0')
         typedEmptyOrderedListMarkerRef.current = /^\d+\.$/.test(beforeCursor)
+
         return false
       },
       // Why: KeyHandlerContext is a typed subset of EditorConfigParams, so the
@@ -237,24 +240,31 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     onUpdate: ({ editor: nextEditor }) => {
       syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
       syncDocLinkMenu(nextEditor, rootRef.current, setDocLinkMenu)
+
       if (!isSingleEmptyTopLevelOrderedList(nextEditor)) {
         typedEmptyOrderedListMarkerRef.current = false
       }
+
       if (isInitializingRef.current || isApplyingProgrammaticUpdateRef.current) {
         return
       }
+
       onDirtyStateHintRef.current(true)
+
       if (serializeTimerRef.current !== null) {
         window.clearTimeout(serializeTimerRef.current)
       }
+
       serializeTimerRef.current = window.setTimeout(() => {
         serializeTimerRef.current = null
+
         try {
           const { markdown, didSerialize } = commitRichMarkdownSerialization(
             nextEditor,
             { originalSourceRef, baseCanonicalRef, lastCommittedMarkdownRef },
             reconcileRoundTripRef.current
           )
+
           if (didSerialize) {
             onContentChangeRef.current(markdown)
           }

@@ -38,14 +38,17 @@ function makeCountingSection(
     largeDiffRenderLimit: null,
     ...overrides
   }
+
   Object.defineProperty(section, 'key', {
     configurable: true,
     enumerable: true,
     get: () => {
       counter.reads += 1
+
       return key
     }
   })
+
   return section
 }
 
@@ -59,11 +62,17 @@ const FAKE_VIRTUALIZER = {
 
 // Stable across renders so the hooks under test see the same dependency identities the viewer gives them.
 const NO_DIRECT_SCROLL_INPUT = (): boolean => false
+
 const NOOP = vi.fn()
+
 const PROGRAMMATIC_SCROLL_MARKS = createProgrammaticScrollMarks()
+
 const SCROLL_CONTAINER_REF = { current: null } as React.RefObject<HTMLDivElement | null>
+
 const SCROLL_ANCHOR_REF = { current: null } as React.RefObject<VirtualizedScrollAnchor>
+
 const LATEST_DOM_SCROLL_ANCHOR_REF = { current: null } as React.RefObject<VirtualizedScrollAnchor>
+
 const SCROLL_OFFSET_REF = { current: 0 } as React.RefObject<number>
 
 function useCombinedDiffSectionPasses({
@@ -80,6 +89,7 @@ function useCombinedDiffSectionPasses({
 } {
   const sectionRowKeys = useCombinedDiffSectionRowKeys({ generation: 1, sections })
   const sectionIndexByKey = useCombinedDiffSectionIndexMap({ entrySignature: 'sig', sections })
+
   const anchors = useCombinedDiffScrollAnchors({
     clampRestoreCount: 0,
     generation: 1,
@@ -98,6 +108,7 @@ function useCombinedDiffSectionPasses({
     viewStateKey: 'scaling-test',
     virtualizer: FAKE_VIRTUALIZER
   })
+
   const treeNavigation = useCombinedDiffTreeNavigation({
     ensureSectionLoaded: NOOP,
     entrySignature: 'sig',
@@ -109,6 +120,7 @@ function useCombinedDiffSectionPasses({
     toggleSection: NOOP,
     treeMode: 'all'
   })
+
   return {
     allSectionsCollapsed: sectionRowKeys.allSectionsCollapsed,
     rowKeys: sectionRowKeys.rowKeys,
@@ -120,22 +132,28 @@ function useCombinedDiffSectionPasses({
 describe('combined diff section passes at scale', () => {
   it('stays O(N) in section-key reads across a full progressive load of 500 sections', () => {
     const counter: KeyReadCounter = { reads: 0 }
+
     const initial = Array.from({ length: SECTION_COUNT }, (_, index) =>
       makeCountingSection(counter, `combined-branch:file-${index}.ts`)
     )
+
     const sectionsRef = { current: initial } as React.RefObject<DiffSection[]>
+
     const view = renderHook(
       ({ sections }: { sections: DiffSection[] }) => {
         sectionsRef.current = sections
+
         return useCombinedDiffSectionPasses({ sections, sectionsRef })
       },
       { initialProps: { sections: initial } }
     )
+
     const firstRowKeys = view.result.current.rowKeys
     const firstIndexMap = view.result.current.sectionIndexByKey
     const readsAfterMount = counter.reads
 
     let sections = initial
+
     for (let index = 0; index < SECTION_COUNT; index += 1) {
       // Mirrors loadSectionNow's `prev.map((s, i) => i === index ? {...s, ...} : s)`: one new
       // section object, every other row keeps its identity.
@@ -167,17 +185,22 @@ describe('combined diff section passes at scale', () => {
 
   it('reuses the row-key string of every section a load did not touch', () => {
     const counter: KeyReadCounter = { reads: 0 }
+
     const sections = Array.from({ length: 4 }, (_, index) =>
       makeCountingSection(counter, `combined-branch:file-${index}.ts`)
     )
+
     const sectionsRef = { current: sections } as React.RefObject<DiffSection[]>
+
     const view = renderHook(
       ({ rows }: { rows: DiffSection[] }) => {
         sectionsRef.current = rows
+
         return useCombinedDiffSectionPasses({ sections: rows, sectionsRef })
       },
       { initialProps: { rows: sections } }
     )
+
     const firstRowKeys = view.result.current.rowKeys
 
     const next = sections.slice()
@@ -188,22 +211,27 @@ describe('combined diff section passes at scale', () => {
     view.rerender({ rows: next })
 
     const rowKeys = view.result.current.rowKeys
+
     for (const index of [0, 1, 3]) {
       expect(rowKeys[index]).toBe(firstRowKeys[index])
     }
+
     expect(rowKeys[2]).toBe('combined-branch:file-2.ts:expanded:1:1')
   })
 
   it('returns the identical row-key result when a rerender changes nothing', () => {
     const counter: KeyReadCounter = { reads: 0 }
+
     const sections = Array.from({ length: 8 }, (_, index) =>
       makeCountingSection(counter, `combined-branch:file-${index}.ts`)
     )
+
     const view = renderHook(
       ({ rows }: { rows: DiffSection[] }) =>
         useCombinedDiffSectionRowKeys({ generation: 1, sections: rows }),
       { initialProps: { rows: sections } }
     )
+
     const first = view.result.current
 
     // A fresh array whose elements are identical: the shape a no-op setSections produces.

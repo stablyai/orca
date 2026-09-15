@@ -38,8 +38,10 @@ export function remoteSessionParseHostKey(context: RemoteScannerContext): string
 function storeEntry(path: string, entry: RemoteSessionParseCacheEntry): void {
   cache.delete(path)
   cache.set(path, entry)
+
   if (cache.size > MAX_CACHE_ENTRIES) {
     const oldest = cache.keys().next()
+
     if (!oldest.done) {
       cache.delete(oldest.value)
     }
@@ -80,6 +82,7 @@ export async function parseRemoteSessionFileCached(args: {
 }): Promise<AiVaultSession | null> {
   const { file } = args.candidate
   const entry = cache.get(file.path)
+
   const unchanged =
     entry !== undefined &&
     entry.hostKey === args.hostKey &&
@@ -88,22 +91,28 @@ export async function parseRemoteSessionFileCached(args: {
       file.sizeBytes === undefined ||
       entry.sizeBytes === file.sizeBytes) &&
     sidecarUnchanged(entry.sidecar, file.sidecar)
+
   if (unchanged) {
     if (args.stats) {
       args.stats.reused++
     }
+
     if (entry.session && args.refreshReusedSession) {
       entry.session = await args.refreshReusedSession(entry.session)
     }
+
     // Refresh recency without re-parsing so the LRU evicts cold paths first.
     storeEntry(file.path, entry)
+
     return entry.session
   }
 
   const session = await args.parse()
+
   if (args.stats) {
     args.stats.parsed++
   }
+
   storeEntry(file.path, {
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,
@@ -111,5 +120,6 @@ export async function parseRemoteSessionFileCached(args: {
     sidecar: file.sidecar,
     session
   })
+
   return session
 }

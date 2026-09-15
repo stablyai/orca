@@ -17,6 +17,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -112,6 +113,7 @@ describe('hydrateBrowserSession', () => {
   it('drops legacy window close bypass state during hydration', () => {
     const store = createTestStore()
     const validWt = 'repo1::/path/wt1'
+
     const legacyPage: BrowserPage & { allowWindowClose: boolean } = {
       id: 'page-1',
       workspaceId: 'browser-1',
@@ -379,6 +381,7 @@ describe('hydrateBrowserSession remote page handle seeding', () => {
       },
       activeBrowserTabIdByWorktree: { [WT]: 'workspace-1' }
     })
+
     return store
   }
 
@@ -480,6 +483,7 @@ describe('hydrateBrowserSession remote page handle seeding', () => {
     }
   ): RemoteBrowserPageSession {
     let remotePage: string | null = null
+
     return new RemoteBrowserPageSession({
       tokens: {
         isCurrent: () => true,
@@ -508,9 +512,11 @@ describe('hydrateBrowserSession remote page handle seeding', () => {
       environmentId: 'env-1',
       remotePageId: 'remote-page-1'
     })
+
     const callRpc = vi.fn(async (_target: unknown, _method: string) => ({
       tab: { url: 'https://example.com/', title: 'Example' }
     }))
+
     const session = createStreamedSession(store, {
       callRpc: callRpc as never,
       currentUrl: 'https://example.com/'
@@ -536,6 +542,7 @@ describe('hydrateBrowserSession remote page handle seeding', () => {
       remoteBrowserPageId: 'remote-page-1',
       url: 'https://example.com/saved'
     })
+
     const callRpc = vi.fn(async (_target: unknown, method: string, _params?: unknown) => {
       if (method === 'browser.tabShow') {
         throw new RuntimeRpcCallError({
@@ -543,9 +550,12 @@ describe('hydrateBrowserSession remote page handle seeding', () => {
           error: { code: 'browser_tab_not_found', message: 'browser_tab_not_found' }
         } as never)
       }
+
       return { browserPageId: 'remote-page-2' }
     })
+
     const closeMissingRemotePage = vi.fn()
+
     const session = createStreamedSession(store, {
       callRpc: callRpc as never,
       currentUrl: 'https://example.com/saved',

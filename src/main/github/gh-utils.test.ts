@@ -46,13 +46,17 @@ function mockGitRemoteCommands(remotes: Record<string, string>): void {
     if (args[0] === 'remote' && args[1] !== 'get-url') {
       return { stdout: `${Object.keys(remotes).join('\n')}\n` }
     }
+
     if (args[0] === 'remote' && args[1] === 'get-url') {
       const url = remotes[args[2] ?? '']
+
       if (!url) {
         throw new Error(`fatal: No such remote '${args[2]}'`)
       }
+
       return { stdout: url }
     }
+
     throw new Error(`unexpected git ${args.join(' ')}`)
   })
 }
@@ -216,12 +220,15 @@ describe('github owner/repo resolution', () => {
         if (args[0] === 'remote' && args[1] !== 'get-url') {
           return { stdout: 'origin\n', stderr: '' }
         }
+
         if (args[2] === 'upstream') {
           throw new Error("fatal: No such remote 'upstream'")
         }
+
         return { stdout: 'git@github.com:stablyai/orca.git\n', stderr: '' }
       })
     }
+
     getSshGitProviderMock.mockReturnValue(sshProvider)
 
     await expect(getOwnerRepo('/home/user/orca', 'openclaw-2')).resolves.toEqual({
@@ -246,9 +253,11 @@ describe('github owner/repo resolution', () => {
         if (args[0] === 'remote' && args[1] !== 'get-url') {
           return { stdout: 'origin\n', stderr: '' }
         }
+
         return { stdout: 'git@github.com:remote/orca.git\n', stderr: '' }
       })
     }
+
     mockGitRemoteCommands({ origin: 'git@github.com:local/orca.git\n' })
     getSshGitProviderMock.mockReturnValue(sshProvider)
 
@@ -262,9 +271,11 @@ describe('github owner/repo resolution', () => {
         if (args[0] === 'remote' && args[1] !== 'get-url') {
           return { stdout: 'origin\n' }
         }
+
         if (args[2] === 'upstream') {
           throw new Error("fatal: No such remote 'upstream'")
         }
+
         return {
           stdout: options.wslDistro
             ? 'git@github.com:wsl/orca.git\n'
@@ -299,6 +310,7 @@ describe('github owner/repo resolution', () => {
 
   it('prunes expired distinct owner/repo cache entries on later lookups', async () => {
     const nowSpy = vi.spyOn(Date, 'now')
+
     try {
       nowSpy.mockReturnValue(1_000)
       gitExecFileAsyncMock.mockResolvedValueOnce({
@@ -368,6 +380,7 @@ describe('github owner/repo resolution', () => {
 
   it('expires cached remote owner/repo entries after the TTL', async () => {
     vi.useFakeTimers()
+
     try {
       gitExecFileAsyncMock
         .mockResolvedValueOnce({ stdout: 'git@github.com:old/orca.git\n' })
@@ -400,6 +413,7 @@ describe('github owner/repo resolution', () => {
     await mkdir(join(repoPath, '.git'))
     await writeFile(join(repoPath, '.git', 'config'), '[core]\n\trepositoryformatversion = 0\n')
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(1_000)
       gitExecFileAsyncMock.mockRejectedValue(new Error("error: No such remote 'origin'"))
@@ -420,6 +434,7 @@ describe('github owner/repo resolution', () => {
     await mkdir(join(repoPath, '.git'))
     await writeFile(join(repoPath, '.git', 'config'), '[core]\n\trepositoryformatversion = 0\n')
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(1_000)
       gitExecFileAsyncMock.mockRejectedValue(
@@ -442,6 +457,7 @@ describe('github owner/repo resolution', () => {
     const repoPath = await mkdtemp(join(tmpdir(), 'orca-gh-utils-'))
     await mkdir(join(repoPath, '.git'))
     await writeFile(join(repoPath, '.git', 'config'), '[core]\n\trepositoryformatversion = 0\n')
+
     try {
       gitExecFileAsyncMock
         .mockRejectedValueOnce(new Error('fatal: cannot lock ref'))
@@ -464,6 +480,7 @@ describe('github owner/repo resolution', () => {
     const configPath = join(repoPath, '.git', 'config')
     await writeFile(configPath, '[core]\n\trepositoryformatversion = 0\n')
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(1_000)
       gitExecFileAsyncMock
@@ -498,6 +515,7 @@ describe('github owner/repo resolution', () => {
     )
     await writeFile(includedConfigPath, '')
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(1_000)
       gitExecFileAsyncMock
@@ -532,6 +550,7 @@ describe('github owner/repo resolution', () => {
     )
     await writeFile(includedConfigPath, '')
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(1_000)
       gitExecFileAsyncMock
@@ -566,6 +585,7 @@ describe('github owner/repo resolution', () => {
     )
     await writeFile(includedConfigPath, '')
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(1_000)
       gitExecFileAsyncMock
@@ -600,6 +620,7 @@ describe('github owner/repo resolution', () => {
     )
     await writeFile(includedConfigPath, '')
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(1_000)
       gitExecFileAsyncMock
@@ -636,6 +657,7 @@ describe('github owner/repo resolution', () => {
     )
     await writeFile(includedConfigPath, '')
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(1_000)
       gitExecFileAsyncMock
@@ -665,6 +687,7 @@ describe('github owner/repo resolution', () => {
     const gitDir = join(repoPath, '.git')
     await mkdir(gitDir)
     await writeFile(join(gitDir, 'config'), '[core]\n\trepositoryformatversion = 0\n')
+
     try {
       const firstSignature = await readLocalGitConfigSignature({
         repoPath,
@@ -675,6 +698,7 @@ describe('github owner/repo resolution', () => {
         join(gitDir, 'config.worktree'),
         '[remote "origin"]\n\turl = git@github.com:acme/widgets.git\n'
       )
+
       const secondSignature = await readLocalGitConfigSignature({
         repoPath,
         connectionId: null
@@ -696,6 +720,7 @@ describe('github owner/repo resolution', () => {
     await writeFile(join(worktreePath, '.git'), `gitdir: ${worktreeGitDir}\n`)
     await writeFile(join(worktreeGitDir, 'commondir'), '../..\n')
     await writeFile(join(commonGitDir, 'config'), '[core]\n\trepositoryformatversion = 0\n')
+
     try {
       const firstSignature = await readLocalGitConfigSignature({
         repoPath: worktreePath,
@@ -706,6 +731,7 @@ describe('github owner/repo resolution', () => {
         join(worktreeGitDir, 'config.worktree'),
         '[branch "feature"]\n\tremote = origin\n\tmerge = refs/heads/contributor/original\n'
       )
+
       const secondSignature = await readLocalGitConfigSignature({
         repoPath: worktreePath,
         connectionId: null
@@ -732,6 +758,7 @@ describe('github owner/repo resolution', () => {
       join(gitDir, 'config'),
       `[includeIf "gitdir:${includedDir}/"]\n\tpath = "${includedConfigPath}"\n`
     )
+
     try {
       const firstSignature = await readLocalGitConfigSignature({
         repoPath,
@@ -742,6 +769,7 @@ describe('github owner/repo resolution', () => {
         includedConfigPath,
         '[remote "origin"]\n\turl = git@github.com:acme/renamed-widgets.git\n'
       )
+
       const secondSignature = await readLocalGitConfigSignature({
         repoPath,
         connectionId: null
@@ -860,6 +888,7 @@ describe('gh error classification', () => {
   it('classifies "has disabled issues" stderr as issues_disabled', () => {
     const stderr =
       "Command failed: gh issue list --limit 36 --json number,title,state --repo brennanb2025/orca --state open\nthe 'brennanb2025/orca' repository has disabled issues"
+
     expect(classifyGhError(stderr)).toEqual({
       type: 'issues_disabled',
       message: 'Issues are disabled on this repository.'
@@ -878,6 +907,7 @@ describe('gh error classification', () => {
   it('keeps the search-window phrase in validation_error list messages', () => {
     const stderr =
       'Command failed: gh api --hostname github.com search/issues\nValidation Failed: Only the first 1000 search results are available (HTTP 422)'
+
     const classified = classifyListIssuesError(stderr)
     expect(classified.type).toBe('validation_error')
     expect(classified.message).toMatch(GITHUB_SEARCH_RESULT_WINDOW_ERROR_PATTERN)

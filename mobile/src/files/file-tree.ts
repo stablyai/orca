@@ -38,6 +38,7 @@ export type InlineStatusNode = {
 export type FileExplorerRow = TreeNode | InlineStatusNode
 
 const DESKTOP_EXCLUDED_NAMES = new Set(['.git', 'node_modules'])
+
 const BINARY_EXTENSIONS = new Set([
   '.avif',
   '.bmp',
@@ -61,6 +62,7 @@ export function flattenDirectoryCache(
 ): FileExplorerRow[] {
   const rows: FileExplorerRow[] = []
   visitDirectory('', 0, cache, expanded, rows)
+
   return rows
 }
 
@@ -73,6 +75,7 @@ function visitDirectory(
 ): void {
   const state = getDirectoryCacheState(cache, relativePath)
   const entries = state?.entries ?? []
+
   const visibleEntries = entries
     .filter(shouldIncludeMobileFileExplorerEntry)
     .sort(compareDirectoryEntries)
@@ -80,8 +83,10 @@ function visitDirectory(
   for (const entry of visibleEntries) {
     const childPath = joinRelativePath(relativePath, entry.name)
     rows.push(toTreeNode(entry, childPath, depth))
+
     if (entry.isDirectory && expanded.has(childPath)) {
       const childState = getDirectoryCacheState(cache, childPath)
+
       if (childState?.loading) {
         rows.push({
           id: `loading:${childPath}`,
@@ -119,6 +124,7 @@ function compareDirectoryEntries(a: MobileDirEntry, b: MobileDirEntry): number {
   if (a.isDirectory !== b.isDirectory) {
     return a.isDirectory ? -1 : 1
   }
+
   return compareFileNames(a.name, b.name)
 }
 
@@ -142,9 +148,11 @@ export function joinRelativePath(parentPath: string, name: string): string {
 export function getMobileFileKind(relativePath: string): MobileFileKind {
   const basename = relativePath.split('/').pop() ?? relativePath
   const dotIndex = basename.lastIndexOf('.')
+
   if (dotIndex <= 0) {
     return 'text'
   }
+
   return BINARY_EXTENSIONS.has(basename.slice(dotIndex).toLowerCase()) ? 'binary' : 'text'
 }
 

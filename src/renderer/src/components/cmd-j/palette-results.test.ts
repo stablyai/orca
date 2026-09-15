@@ -20,6 +20,7 @@ import type { Project, ProjectHostSetup } from '../../../../shared/project-types
 import type { Repo } from '../../../../shared/repo-types'
 
 const noopRun: CmdJQuickAction['run'] = async () => ({ status: 'ok' })
+
 const available: CmdJQuickAction['isAvailable'] = () => ({ available: true })
 
 const actions: CmdJQuickAction[] = [
@@ -185,6 +186,7 @@ describe('action keyword folding', () => {
         verbKeywords: ['Format Document', 'FORMAT  DOC']
       } as (typeof actions)[number]
     ])
+
     expect(folded.verbKeywords).toEqual(['format document', 'format doc'])
   })
 })
@@ -290,6 +292,7 @@ describe('Cmd+J palette middle-band ranking', () => {
         group: 'setup'
       }
     ]
+
     const rank = (query: string): string[] =>
       rankCmdJMiddleResults({
         query,
@@ -342,6 +345,7 @@ describe('Cmd+J palette middle-band ranking', () => {
     const usedWhitespaceReplace = replaceSpy.mock.calls.some(
       ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'
     )
+
     expect(usedWhitespaceReplace).toBe(false)
   })
 
@@ -491,6 +495,7 @@ describe('Cmd+J project and repo-group search', () => {
       projects: [project('project-1', 'API Service')],
       projectHostSetups: [setup('setup-1', 'project-1', 'local', 'repo-1')]
     })
+
     const fallbackResults = searchCmdJProjectResults({
       query: 'source',
       projectGroups: [],
@@ -593,6 +598,7 @@ describe('Cmd+J project and repo-group search', () => {
 
   it('rejects oversized project queries before reading names', () => {
     const oversizedQuery = 'secret-palette-query'.repeat(CMD_J_PALETTE_QUERY_MAX_BYTES)
+
     const throwingGroup = {
       get id() {
         throw new Error('oversized palette queries must not scan project groups')
@@ -601,6 +607,7 @@ describe('Cmd+J project and repo-group search', () => {
         throw new Error('oversized palette queries must not scan project groups')
       }
     } as unknown as ProjectGroup
+
     const throwingRepo = {
       get id() {
         throw new Error('oversized palette queries must not scan repos')

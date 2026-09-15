@@ -7,45 +7,61 @@ import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/h
 import { registerPtyHandlers } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -122,6 +138,7 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
       if (filePath.endsWith('auth.json')) {
         throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
       }
+
       return ''
     })
   }
@@ -141,9 +158,11 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
     it('refuses the spawn when the first home resolution is indeterminate', async () => {
       readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)
       const daemonSpawn = setupDaemonAdapter()
+
       const resolveHome = vi.fn((): string | null => {
         throw new ManagedCodexHomeTemporarilyUnavailableError()
       })
+
       register(resolveHome)
 
       await expect(
@@ -158,6 +177,7 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
       vi.useFakeTimers()
       makeAuthUnreadable()
       const daemonSpawn = setupDaemonAdapter()
+
       const resolveHome = vi.fn(
         (
           _target?: unknown,
@@ -167,9 +187,11 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
           if (context?.unavailableManagedHomePath) {
             throw new ManagedCodexHomeTemporarilyUnavailableError()
           }
+
           return TEST_CODEX_HOME
         }
       )
+
       register(resolveHome)
 
       const spawnPromise = handlers.get('pty:spawn')!(null, {
@@ -177,6 +199,7 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
         rows: 24,
         launchAgent: 'codex'
       })
+
       const rejection = expect(spawnPromise).rejects.toThrow(UNAVAILABLE_MESSAGE)
       await vi.advanceTimersByTimeAsync(2_000)
       await rejection
@@ -197,18 +220,23 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
         if (!filePath.endsWith('auth.json')) {
           return ''
         }
+
         if (!authReady) {
           throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
         }
+
         return TEST_CODEX_AUTH_JSON
       })
       const daemonSpawn = setupDaemonAdapter()
+
       const resolveHome = vi.fn((): string | null => {
         if (resolveHome.mock.calls.length > 1) {
           throw new ManagedCodexHomeTemporarilyUnavailableError()
         }
+
         return TEST_CODEX_HOME
       })
+
       register(resolveHome)
 
       const spawnPromise = handlers.get('pty:spawn')!(null, {
@@ -216,6 +244,7 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
         rows: 24,
         launchAgent: 'codex'
       })
+
       const rejection = expect(spawnPromise).rejects.toThrow(UNAVAILABLE_MESSAGE)
       await vi.advanceTimersByTimeAsync(0)
       expect(daemonSpawn).not.toHaveBeenCalled()
@@ -287,9 +316,11 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
       readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)
       const daemonSpawn = setupDaemonAdapter()
       const runtime = makeRuntime()
+
       const resolveHome = vi.fn((): string | null => {
         throw new ManagedCodexHomeTemporarilyUnavailableError()
       })
+
       register(resolveHome, runtime)
       const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
 
@@ -306,6 +337,7 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
       makeAuthUnreadable()
       const daemonSpawn = setupDaemonAdapter()
       const runtime = makeRuntime()
+
       const resolveHome = vi.fn(
         (
           _target?: unknown,
@@ -315,9 +347,11 @@ describe('registerPtyHandlers Codex launch refusal on an unreadable managed home
           if (context?.unavailableManagedHomePath) {
             throw new ManagedCodexHomeTemporarilyUnavailableError()
           }
+
           return TEST_CODEX_HOME
         }
       )
+
       register(resolveHome, runtime)
       const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
 

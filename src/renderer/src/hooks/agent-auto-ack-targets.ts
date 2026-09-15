@@ -19,13 +19,16 @@ export function resolveAutoAckTabTargets(
   options: { floatingPanelVisible: boolean }
 ): AutoAckTabTarget[] {
   const targets: AutoAckTabTarget[] = []
+
   if (options.floatingPanelVisible) {
     const floatingTabId = state.activeTabIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? null
+
     // The floating pane is on top when two worktrees claim the same tab ID.
     if (floatingTabId) {
       targets.push({ tabId: floatingTabId, worktreeId: FLOATING_TERMINAL_WORKTREE_ID })
     }
   }
+
   if (
     state.activeView === 'terminal' &&
     state.activeTabId &&
@@ -33,5 +36,6 @@ export function resolveAutoAckTabTargets(
   ) {
     targets.push({ tabId: state.activeTabId, worktreeId: state.activeWorktreeId })
   }
+
   return targets
 }

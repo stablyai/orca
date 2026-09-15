@@ -57,6 +57,7 @@ export type TrackedClaudeSubagent = {
  *  `background_tasks`, so omission from the list proves nothing for them. */
 export function isClaudeTeammateLifecycleId(id: string): boolean {
   const separator = id.lastIndexOf('-')
+
   return separator > 1 && id.startsWith('a') && /^[0-9a-f]+$/i.test(id.slice(separator + 1))
 }
 
@@ -69,7 +70,9 @@ export function upsertWorkingClaudeSubagent(
   if (id.length === 0 || id.length > CLAUDE_SUBAGENT_ID_MAX_LENGTH) {
     return
   }
+
   const existing = roster.get(id)
+
   if (existing) {
     existing.state = 'working'
     existing.agentType = fields.agentType ?? existing.agentType
@@ -81,13 +84,16 @@ export function upsertWorkingClaudeSubagent(
     // Why: the live event proves the agent process behind the restored row is
     // still running it, so the liveness reap must stop treating it as a claim.
     existing.restoredFromSnapshot = undefined
+
     return
   }
+
   // Why: beyond the wire cap extra rows would be invisible anyway; idle
   // teammates are the only safe eviction — never displace a working child.
   if (roster.size >= AGENT_STATUS_MAX_SUBAGENTS && !evictOldestIdleClaudeSubagent(roster)) {
     return
   }
+
   roster.set(id, {
     state: 'working',
     startedAt: now,
@@ -99,16 +105,20 @@ export function upsertWorkingClaudeSubagent(
 function evictOldestIdleClaudeSubagent(roster: ClaudeSubagentRoster): boolean {
   let oldestId: string | null = null
   let oldestStartedAt = Infinity
+
   for (const [id, tracked] of roster) {
     if (tracked.state === 'idle' && tracked.startedAt < oldestStartedAt) {
       oldestId = id
       oldestStartedAt = tracked.startedAt
     }
   }
+
   if (oldestId === null) {
     return false
   }
+
   roster.delete(oldestId)
+
   return true
 }
 
@@ -119,13 +129,17 @@ function evictOldestIdleClaudeSubagent(roster: ClaudeSubagentRoster): boolean {
  *  stop is a true finish. */
 export function stopClaudeSubagent(roster: ClaudeSubagentRoster, id: string): void {
   const tracked = roster.get(id)
+
   if (!tracked) {
     return
   }
+
   if (!isClaudeTeammateLifecycleId(id) || tracked.listedAsSubagentTask === true) {
     roster.delete(id)
+
     return
   }
+
   tracked.backgroundTasksAuthoritative = undefined
   tracked.restoredFromSnapshot = undefined
   tracked.state = 'idle'
@@ -161,23 +175,29 @@ export function foldClaudeBackgroundTasksIntoRoster(
     if (options?.inventoryComplete !== false) {
       roster.clear()
     }
+
     return
   }
+
   const listedIds = new Set<string>()
   const pendingRunningTasks = new Map<string, ClaudeBackgroundAgentTask>()
   const hasTeammateTypedTask = tasks.some((task) => task.teammate)
+
   for (const task of tasks) {
     if (task.teammate) {
       continue
     }
+
     listedIds.add(task.id)
     const existing = roster.get(task.id)
+
     if (existing) {
       if (!task.running) {
         roster.delete(task.id)
         pendingRunningTasks.delete(task.id)
         continue
       }
+
       // Why: a Stop can park the row before the lead inventory confirms the
       // same workflow lane is still running; the authoritative task wins.
       existing.state = 'working'
@@ -189,10 +209,12 @@ export function foldClaudeBackgroundTasksIntoRoster(
       existing.restoredFromSnapshot = undefined
       continue
     }
+
     if (!task.running) {
       pendingRunningTasks.delete(task.id)
       continue
     }
+
     upsertWorkingClaudeSubagent(
       roster,
       task.id,
@@ -200,6 +222,7 @@ export function foldClaudeBackgroundTasksIntoRoster(
       now
     )
     const created = roster.get(task.id)
+
     if (created) {
       created.backgroundTasksAuthoritative = true
       created.listedAsSubagentTask = true
@@ -209,11 +232,13 @@ export function foldClaudeBackgroundTasksIntoRoster(
       pendingRunningTasks.set(task.id, task)
     }
   }
+
   if (options?.inventoryComplete !== false) {
     for (const [id, tracked] of roster) {
       if (listedIds.has(id)) {
         continue
       }
+
       if (
         hasTeammateTypedTask &&
         !tracked.backgroundTasksAuthoritative &&
@@ -226,13 +251,16 @@ export function foldClaudeBackgroundTasksIntoRoster(
       ) {
         continue
       }
+
       roster.delete(id)
     }
   }
+
   for (const task of pendingRunningTasks.values()) {
     if (roster.size >= AGENT_STATUS_MAX_SUBAGENTS) {
       break
     }
+
     upsertWorkingClaudeSubagent(
       roster,
       task.id,
@@ -240,6 +268,7 @@ export function foldClaudeBackgroundTasksIntoRoster(
       now
     )
     const created = roster.get(task.id)
+
     if (created) {
       created.backgroundTasksAuthoritative = true
       created.listedAsSubagentTask = true
@@ -250,12 +279,14 @@ export function foldClaudeBackgroundTasksIntoRoster(
 /** Drop restored rows that no current-runtime child activity has confirmed. */
 export function reapUnconfirmedRestoredClaudeSubagents(roster: ClaudeSubagentRoster): boolean {
   let changed = false
+
   for (const [id, tracked] of roster) {
     if (tracked.restoredFromSnapshot === true) {
       roster.delete(id)
       changed = true
     }
   }
+
   return changed
 }
 
@@ -265,11 +296,13 @@ export function claudeRosterHasRestoredSnapshotSubagent(
   if (!roster) {
     return false
   }
+
   for (const tracked of roster.values()) {
     if (tracked.restoredFromSnapshot === true) {
       return true
     }
   }
+
   return false
 }
 
@@ -279,6 +312,7 @@ export function claudeRosterHasRestoredSnapshotSubagent(
  *  hyphenated name still matches its own ids exactly. */
 export function claudeTeammateIdMatchesName(id: string, name: string): boolean {
   const prefix = `a${name}-`
+
   return id.startsWith(prefix) && !id.slice(prefix.length).includes('-')
 }
 
@@ -291,6 +325,7 @@ export function claudeTeammateIdMatchesName(id: string, name: string): boolean {
  *  could idle unrelated live work when the teammate's start hook was lost. */
 export function idleClaudeTeammateByName(roster: ClaudeSubagentRoster, name: string): boolean {
   let changed = false
+
   for (const [id, tracked] of roster) {
     if (claudeTeammateIdMatchesName(id, name)) {
       changed = changed || tracked.state !== 'idle' || tracked.confirmedTeammate !== true
@@ -300,6 +335,7 @@ export function idleClaudeTeammateByName(roster: ClaudeSubagentRoster, name: str
       tracked.confirmedTeammate = true
     }
   }
+
   return changed
 }
 
@@ -309,11 +345,13 @@ export function claudeRosterHasWorkingSubagent(roster: ClaudeSubagentRoster | un
   if (!roster) {
     return false
   }
+
   for (const tracked of roster.values()) {
     if (tracked.state === 'working') {
       return true
     }
   }
+
   return false
 }
 
@@ -324,11 +362,13 @@ export function claudeRosterHasRuntimeWorkingSubagent(
   if (!roster) {
     return false
   }
+
   for (const tracked of roster.values()) {
     if (tracked.state === 'working' && tracked.restoredFromSnapshot !== true) {
       return true
     }
   }
+
   return false
 }
 
@@ -338,7 +378,9 @@ export function claudeRosterToSnapshots(
   if (!roster || roster.size === 0) {
     return undefined
   }
+
   const snapshots: AgentSubagentSnapshot[] = []
+
   for (const [id, tracked] of roster) {
     snapshots.push({
       id,
@@ -348,8 +390,10 @@ export function claudeRosterToSnapshots(
       description: tracked.description
     })
   }
+
   // Why: hook arrival order is not stable across reconciles; sort so equal
   // rosters serialize identically and downstream equality checks can dedupe.
   snapshots.sort((a, b) => a.startedAt - b.startedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+
   return snapshots
 }

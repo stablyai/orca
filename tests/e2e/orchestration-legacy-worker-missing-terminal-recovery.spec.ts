@@ -26,12 +26,17 @@ import {
 import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './helpers/fake-agent-paste-end-scanner'
 
 const PROVIDER_SESSION_ID = 'e2e-missing-legacy-worker'
+
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-missing-legacy-worker-'))
+
 const spawnLedgerPath = path.join(fakeCliDir, 'spawn.jsonl')
+
 const interruptionLedgerPath = path.join(fakeCliDir, 'interruption.jsonl')
+
 const fakeCodexCommand = buildFakeAgentCommandOverride(
   path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
 )
+
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 function appendLedger(envName, event) {
@@ -97,6 +102,7 @@ function readLedger(ledgerPath: string): LedgerEvent[] {
   if (!existsSync(ledgerPath)) {
     return []
   }
+
   return readFileSync(ledgerPath, 'utf8')
     .split(/\r?\n/)
     .filter(Boolean)
@@ -106,6 +112,7 @@ function readLedger(ledgerPath: string): LedgerEvent[] {
 function isProcessAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
+
     return true
   } catch {
     return false
@@ -114,10 +121,12 @@ function isProcessAlive(pid: number): boolean {
 
 async function removeDetachedDaemonSession(userDataDir: string, ptyId: string): Promise<void> {
   const daemonDir = path.join(userDataDir, 'daemon')
+
   const client = new DaemonClient({
     socketPath: getDaemonSocketPath(daemonDir),
     tokenPath: getDaemonTokenPath(daemonDir)
   })
+
   try {
     await client.ensureConnected()
     await client.request('kill', { sessionId: ptyId, immediate: true })
@@ -128,16 +137,20 @@ async function removeDetachedDaemonSession(userDataDir: string, ptyId: string): 
 
 async function detachedDaemonSessionExists(userDataDir: string, ptyId: string): Promise<boolean> {
   const daemonDir = path.join(userDataDir, 'daemon')
+
   const client = new DaemonClient({
     socketPath: getDaemonSocketPath(daemonDir),
     tokenPath: getDaemonTokenPath(daemonDir)
   })
+
   try {
     await client.ensureConnected()
+
     const result = await client.request<{ sessions: { sessionId: string }[] }>(
       'listSessions',
       undefined
     )
+
     return result.sessions.some((session) => session.sessionId === ptyId)
   } finally {
     client.disconnect()
@@ -154,6 +167,7 @@ function hasPersistedResumeRecord(userDataDir: string, paneKey: string): boolean
       sleepingAgentSessionsByPaneKey?: Record<string, { providerSession?: { id?: unknown } }>
     }
   }
+
   return (
     data.workspaceSession?.sleepingAgentSessionsByPaneKey?.[paneKey]?.providerSession?.id ===
     PROVIDER_SESSION_ID
@@ -162,6 +176,7 @@ function hasPersistedResumeRecord(userDataDir: string, paneKey: string): boolean
 
 function markDispatchLegacy(userDataDir: string, dispatchId: string): void {
   const db = new Database(path.join(userDataDir, 'orchestration.db'))
+
   try {
     db.prepare(
       `UPDATE dispatch_contexts
@@ -176,6 +191,7 @@ function markDispatchLegacy(userDataDir: string, dispatchId: string): void {
 
 function readSettledDispatch(userDataDir: string, dispatchId: string): unknown {
   const db = new Database(path.join(userDataDir, 'orchestration.db'))
+
   try {
     return db
       .prepare(
@@ -201,9 +217,11 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
   test.setTimeout(300_000)
   rmSync(spawnLedgerPath, { force: true })
   rmSync(interruptionLedgerPath, { force: true })
+
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
     : ''
+
   test.skip(!repoPath || !existsSync(repoPath), 'Global setup did not produce a seeded test repo')
 
   const session = createRestartSession(testInfo, {
@@ -211,6 +229,7 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
     ORCA_E2E_SPAWN_LEDGER: spawnLedgerPath,
     ORCA_E2E_INTERRUPTION_LEDGER: interruptionLedgerPath
   })
+
   let firstApp: ElectronApplication | null = null
   let secondApp: ElectronApplication | null = null
 
@@ -233,30 +252,37 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
     await waitForActivePanePtyId(first.page)
     const coordinatorPane = await waitForActivePaneHookDescriptor(first.page)
     const firstClient = new RuntimeClient(session.userDataDir, 30_000, null, null)
+
     const coordinator = await firstClient.call<{ terminal: { handle: string } }>(
       'terminal.resolvePane',
       { paneKey: coordinatorPane.paneKey }
     )
+
     const coordinatorTerminal = await firstClient.call<{
       terminal: { worktreeId: string }
     }>('terminal.show', { terminal: coordinator.result.terminal.handle })
+
     await expect
       .poll(async () => {
         const listed = await firstClient.call<{ worktrees: { id: string }[] }>('worktree.list', {})
+
         return listed.result.worktrees.some(
           (candidate) => candidate.id === coordinatorTerminal.result.terminal.worktreeId
         )
       })
       .toBe(true)
+
     const run = await firstClient.call<{ run: { id: string } }>('orchestration.runCreate', {
       objective: 'Missing legacy worker recovery',
       from: coordinator.result.terminal.handle
     })
+
     const task = await firstClient.call<{ task: { id: string } }>('orchestration.taskCreate', {
       spec: 'Respond ACK and remain idle',
       run: run.result.run.id,
       callerTerminalHandle: coordinator.result.terminal.handle
     })
+
     await firstClient.call('orchestration.workerStart', {
       task: task.result.task.id,
       from: coordinator.result.terminal.handle,
@@ -267,10 +293,12 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
     let worker = (
       await firstClient.call<RuntimeTerminalListResult>('terminal.list')
     ).result.terminals.find((terminal) => terminal.title === 'Codex Ready')
+
     await expect
       .poll(async () => {
         const listed = await firstClient.call<RuntimeTerminalListResult>('terminal.list')
         worker = listed.result.terminals.find((terminal) => terminal.title === 'Codex Ready')
+
         return worker?.ptyId ?? null
       })
       .toBeTruthy()
@@ -281,12 +309,15 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
           terminal: worker!.handle,
           limit: 100
         })
+
         return read.result.terminal.tail.join('\n')
       })
       .toContain('ACK')
+
     const dispatch = await firstClient.call<{
       dispatch: { id: string } | null
     }>('orchestration.dispatchShow', { task: task.result.task.id })
+
     expect(dispatch.result.dispatch?.id).toBeTruthy()
     await expect.poll(() => readLedger(spawnLedgerPath)).toHaveLength(1)
     const [initialSpawn] = readLedger(spawnLedgerPath)
@@ -347,6 +378,7 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
     await expect
       .poll(async () => {
         const listed = await secondClient.call<RuntimeTerminalListResult>('terminal.list')
+
         return listed.result.terminals.filter(
           (terminal) => terminal.ptyId === worker!.ptyId || terminal.title === 'Codex Ready'
         )
@@ -371,9 +403,11 @@ test('a missing legacy worker cannot spawn a replacement during restart recovery
     if (secondApp) {
       await session.close(secondApp).catch(() => undefined)
     }
+
     if (firstApp) {
       await session.close(firstApp).catch(() => undefined)
     }
+
     await session.dispose()
   }
 })

@@ -28,6 +28,7 @@ describe('applyTerminalPaneCloseRequest', () => {
       detachPaneForExternalMove: vi.fn(() => true),
       retirePanePreservingPty: vi.fn(() => true)
     }
+
     const closeTab = vi.fn()
     const closeTabPreservingPty = vi.fn()
 
@@ -83,6 +84,7 @@ describe('applyTerminalPaneCloseRequest', () => {
       detachPaneForExternalMove: vi.fn(() => true),
       retirePanePreservingPty: vi.fn(() => true)
     }
+
     const closeTab = vi.fn()
     const closeTabPreservingPty = vi.fn()
 
@@ -172,7 +174,9 @@ describe('resetTerminalKeyboardProtocolAfterInterrupt', () => {
   it('does not write to an xterm whose pipeline is certified dead', async () => {
     const { _resetWritePipelineHealthForTests, notifyUndeliverableWrite } =
       await import('@/lib/pane-manager/terminal-write-pipeline-health')
+
     const terminal = { write: vi.fn() }
+
     try {
       notifyUndeliverableWrite(terminal, 'replay-wedged')
 
@@ -192,10 +196,13 @@ describe('resetTerminalKeyboardProtocolAfterInterrupt', () => {
 describe('paneOwnsQueuedStartup', () => {
   it('grants ownership only to the pane still holding the queued object', () => {
     const queuedStartup = { command: 'echo queued' }
+
     const deps: { startup?: { command: string; env?: Record<string, string> } | null } = {
       startup: queuedStartup
     }
+
     const ownershipAtConnect: boolean[] = []
+
     const observeConnect = (): void => {
       ownershipAtConnect.push(paneOwnsQueuedStartup(deps.startup, queuedStartup))
     }
@@ -206,10 +213,12 @@ describe('paneOwnsQueuedStartup', () => {
     deps.startup = null
     splitPaneWithOneShotStartup(deps, { command: 'orca setup' }, () => {
       observeConnect()
+
       return { id: 2 }
     })
     splitPaneWithOneShotStartup(deps, { command: 'orca issue' }, () => {
       observeConnect()
+
       return { id: 3 }
     })
 
@@ -266,6 +275,7 @@ describe('createQueuedStartupConsumer', () => {
   it('leaves a command that replaced the captured one queued for its own launch', () => {
     const capturedStartup = { command: 'echo captured' }
     let pending: object | null = capturedStartup
+
     const consume = vi.fn(() => {
       pending = null
     })
@@ -276,6 +286,7 @@ describe('createQueuedStartupConsumer', () => {
       consume,
       () => pending === capturedStartup
     )
+
     const replacement = { command: 'echo replacement' }
     pending = replacement
 
@@ -312,6 +323,7 @@ describe('splitPaneWithOneShotStartup', () => {
     const deps: { startup?: { command: string; env?: Record<string, string> } | null } = {
       startup: null
     }
+
     const seenStartupValues: (typeof deps.startup)[] = []
 
     const createdPane = splitPaneWithOneShotStartup(
@@ -319,6 +331,7 @@ describe('splitPaneWithOneShotStartup', () => {
       { command: 'orca setup', env: { ORCA_ROLE: 'setup' } },
       () => {
         seenStartupValues.push(deps.startup ?? null)
+
         return { id: 2 }
       }
     )
@@ -332,6 +345,7 @@ describe('splitPaneWithOneShotStartup', () => {
     const deps: { startup?: { command: string; env?: Record<string, string> } | null } = {
       startup: null
     }
+
     const seenStartupValues: (typeof deps.startup)[] = []
 
     splitPaneWithOneShotStartup(
@@ -339,6 +353,7 @@ describe('splitPaneWithOneShotStartup', () => {
       { command: 'orca setup', env: { ORCA_ROLE: 'setup' } },
       () => {
         seenStartupValues.push(deps.startup ?? null)
+
         return { id: 2 }
       }
     )
@@ -347,6 +362,7 @@ describe('splitPaneWithOneShotStartup', () => {
 
     splitPaneWithOneShotStartup(deps, { command: 'orca issue' }, () => {
       seenStartupValues.push(deps.startup ?? null)
+
       return { id: 3 }
     })
 
@@ -358,6 +374,7 @@ describe('splitPaneWithOneShotStartup', () => {
 
     const userSplitObservedStartup = ((splitPane: () => { id: number }) => {
       splitPane()
+
       return deps.startup ?? null
     })(() => ({ id: 4 }))
 
@@ -367,6 +384,7 @@ describe('splitPaneWithOneShotStartup', () => {
 
   it('clears startup even when splitPane throws', () => {
     const deps: { startup?: { command: string } | null } = { startup: null }
+
     const splitPane = vi.fn(() => {
       throw new Error('split failed')
     })
@@ -387,6 +405,7 @@ describe('replayLayoutWithOneShotParkIntent', () => {
 
     const restored = replayLayoutWithOneShotParkIntent(deps, () => {
       observedByReplayedPane.push(deps.mountFollowsTerminalPark)
+
       return 'restored-panes'
     })
 
@@ -415,6 +434,7 @@ describe('applyTerminalScrollbackRowsToMountedPanes', () => {
     const secondOptions = { scrollback: 5_000 }
     const firstTerminal = { options: firstOptions }
     let secondWrites = 0
+
     const secondTerminal = {
       options: {
         get scrollback() {
@@ -426,6 +446,7 @@ describe('applyTerminalScrollbackRowsToMountedPanes', () => {
         }
       }
     }
+
     const manager = {
       getPanes: vi.fn(() => [{ terminal: firstTerminal }, { terminal: secondTerminal }])
     }
@@ -627,6 +648,7 @@ describe('resolvePaneSeedCwd', () => {
 describe('suppressIntentionalPaneCloseExit', () => {
   it('suppresses the pane PTY exit before intentional close teardown destroys the transport', () => {
     const suppressPtyExit = vi.fn()
+
     const transport = {
       getPtyId: vi.fn(() => 'pty-pane-2')
     }
@@ -637,6 +659,7 @@ describe('suppressIntentionalPaneCloseExit', () => {
 
   it('does not suppress natural PTY exits that already cleared the transport id', () => {
     const suppressPtyExit = vi.fn()
+
     const transport = {
       getPtyId: vi.fn(() => null)
     }

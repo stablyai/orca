@@ -72,6 +72,7 @@ describe('selectMenuScopedMap (delete-teardown re-render guard)', () => {
 describe('getDeleteStateForWorktreeHost', () => {
   const local = { id: 'repo::path', hostId: 'local' } as unknown as Worktree
   const ssh = { id: 'repo::path', hostId: 'ssh:box' } as unknown as Worktree
+
   const sshDelete = {
     isDeleting: true,
     executionHostId: 'ssh:box' as const,
@@ -127,6 +128,7 @@ describe('shouldUseNativeContextMenu', () => {
 describe('shouldIgnoreNestedWorktreeContextMenuScope', () => {
   it('allows the context menu scope that owns the event target', () => {
     const currentScope = {} as EventTarget
+
     const target = {
       closest: () => currentScope
     } as unknown as EventTarget
@@ -137,6 +139,7 @@ describe('shouldIgnoreNestedWorktreeContextMenuScope', () => {
   it('ignores context menu events owned by a nested scope', () => {
     const currentScope = {} as EventTarget
     const nestedScope = {} as Element
+
     const target = {
       closest: () => nestedScope
     } as unknown as EventTarget
@@ -147,6 +150,7 @@ describe('shouldIgnoreNestedWorktreeContextMenuScope', () => {
   it('ignores context menu events from text nodes inside a nested scope', () => {
     const currentScope = {} as EventTarget
     const nestedScope = {} as Element
+
     const target = {
       parentElement: {
         closest: () => nestedScope
@@ -158,6 +162,7 @@ describe('shouldIgnoreNestedWorktreeContextMenuScope', () => {
 
   it('allows events from unscoped targets', () => {
     const currentScope = {} as EventTarget
+
     const target = {
       closest: () => null
     } as unknown as EventTarget
@@ -199,6 +204,7 @@ describe('shouldContinueDeleteSiblingPositionRestore', () => {
 describe('parent picker context menu affordance', () => {
   it('offers unlink for valid inline-only legacy lineage after stable-update hydration', () => {
     const parent = { id: 'repo::parent', instanceId: 'parent-instance' }
+
     const lineage: WorktreeLineage = {
       worktreeId: 'repo::child',
       worktreeInstanceId: 'child-instance',
@@ -208,6 +214,7 @@ describe('parent picker context menu affordance', () => {
       capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
       createdAt: 1
     }
+
     const child = {
       id: lineage.worktreeId,
       instanceId: lineage.worktreeInstanceId,
@@ -232,6 +239,7 @@ describe('parent picker context menu affordance', () => {
 
   it('snapshots the stable row anchor before the context menu closes', () => {
     const card = { dataset: { worktreeDragId: 'child' } } as unknown as HTMLElement
+
     const scope = {
       closest: (selector: string) => (selector === '[data-worktree-drag-id]' ? card : null)
     } as HTMLElement
@@ -241,6 +249,7 @@ describe('parent picker context menu affordance', () => {
 
   it('uses the child scope instead of climbing to a different workspace drag row', () => {
     const parentCard = { dataset: { worktreeDragId: 'parent' } } as unknown as HTMLElement
+
     const scope = {
       closest: (selector: string) => (selector === '[data-worktree-drag-id]' ? parentCard : null)
     } as HTMLElement
@@ -277,6 +286,7 @@ describe('planWorkspaceStatusAssignment (context-menu "Move to Status" routing)'
     { id: 'todo', label: 'Todo' },
     { id: 'in-review', label: 'In review' }
   ]
+
   const wt = (id: string, workspaceStatus: string): Worktree =>
     ({ id, workspaceStatus }) as Worktree
 

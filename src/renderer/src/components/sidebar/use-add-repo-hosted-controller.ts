@@ -31,12 +31,14 @@ export function useAddRepoHostedController(hosted: AddRepoDialogHostedController
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const hostedOnOpenChange = hosted?.onOpenChange
   const hostedOnProjectAdded = hosted?.onProjectAdded
+
   // Why: hosted mode (nested inside the workspace composer) must close only
   // this dialog, never the composer modal that lives in the activeModal slot.
   const closeModal = useMemo(
     () => (hostedOnOpenChange ? () => hostedOnOpenChange(false) : storeCloseModal),
     [hostedOnOpenChange, storeCloseModal]
   )
+
   const finishProjectAdd = useMemo(
     () =>
       hostedOnOpenChange && hostedOnProjectAdded
@@ -48,6 +50,7 @@ export function useAddRepoHostedController(hosted: AddRepoDialogHostedController
         : undefined,
     [hostedOnOpenChange, hostedOnProjectAdded]
   )
+
   const closeForFolderHandoff = useMemo(
     () =>
       hostedOnOpenChange
@@ -58,15 +61,19 @@ export function useAddRepoHostedController(hosted: AddRepoDialogHostedController
         : storeCloseModal,
     [hostedOnOpenChange, storeCloseModal]
   )
+
   const handleOpenSshSettings = useCallback((): void => {
     closeModal()
+
     // Why: Settings is a full page; in hosted mode the composer modal in the
     // activeModal slot would otherwise stay open on top of it.
     if (hostedOnOpenChange) {
       storeCloseModal()
     }
+
     openSettingsTarget({ pane: 'ssh', repoId: null, sectionId: 'ssh' })
     openSettingsPage()
   }, [closeModal, hostedOnOpenChange, openSettingsPage, openSettingsTarget, storeCloseModal])
+
   return { closeModal, closeForFolderHandoff, finishProjectAdd, handleOpenSshSettings }
 }

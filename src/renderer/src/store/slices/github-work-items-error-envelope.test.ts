@@ -107,9 +107,11 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     // a still-failing non-forcing request.
     const store = createTestStore()
     let resolveFailing: (v: unknown) => void = () => {}
+
     const failingRequest = new Promise((resolve) => {
       resolveFailing = resolve
     })
+
     mockApi.gh.listWorkItems.mockReturnValueOnce(failingRequest).mockResolvedValueOnce({
       items: [],
       sources: {
@@ -188,14 +190,18 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
 
   it('does not dedupe a no-cache forced fetch onto a cacheable forced request', async () => {
     const store = createTestStore()
+
     type WorkItemsEnvelope = {
       items: []
       sources: { issues: null; prs: null; originCandidate: null; upstreamCandidate: null }
     }
+
     let resolveCacheable: (value: WorkItemsEnvelope) => void = () => {}
+
     const cacheableRequest = new Promise<WorkItemsEnvelope>((resolve) => {
       resolveCacheable = resolve
     })
+
     mockApi.gh.listWorkItems.mockReturnValueOnce(cacheableRequest).mockResolvedValueOnce({
       items: [],
       sources: { issues: null, prs: null, originCandidate: null, upstreamCandidate: null }
@@ -204,7 +210,9 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     const landingProbe = store
       .getState()
       .fetchWorkItems('repo-id', '/repo', 24, '', { force: true })
+
     await Promise.resolve()
+
     const noCacheRefresh = store
       .getState()
       .fetchWorkItems('repo-id', '/repo', 24, '', { force: true, noCache: true })
@@ -231,6 +239,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
     const store = createTestStore()
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const item = {
       type: 'pr',
       number: 7,
@@ -363,6 +372,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   it('flags githubUnavailable while serving stale cached rows after a failed refresh', async () => {
     const store = createTestStore()
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const item = {
       type: 'pr',
       number: 8,
@@ -370,6 +380,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       url: 'https://example.test/8',
       updatedAt: '2026-05-21T00:00:00Z'
     } as GitHubWorkItem
+
     mockApi.gh.listWorkItems
       .mockResolvedValueOnce({
         items: [item],
@@ -401,6 +412,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
         requireComplete: true,
         allowStaleFallback: false
       })
+
       expect(completeOnly.items).toEqual([])
       expect(completeOnly.failedCount).toBe(1)
       expect(mockApi.gh.listWorkItems).toHaveBeenCalledTimes(3)
@@ -438,6 +450,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   it('keeps the partial-failure count when another GitHub repo still loads', async () => {
     const store = createTestStore()
     const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const item = {
       type: 'pr',
       number: 8,
@@ -445,6 +458,7 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       url: 'https://example.test/8',
       updatedAt: '2026-05-21T00:00:00Z'
     } as GitHubWorkItem
+
     mockApi.gh.listWorkItems
       .mockRejectedValueOnce(new Error('HTTP 503: Service Unavailable'))
       .mockResolvedValueOnce({

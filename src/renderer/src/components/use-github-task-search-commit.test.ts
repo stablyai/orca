@@ -13,6 +13,7 @@ describe('useGitHubTaskSearchCommit', () => {
 
   it('commits only the final value after a full idle window', () => {
     const onCommit = vi.fn()
+
     const view = renderHook(
       ({ value }) => useGitHubTaskSearchCommit({ enabled: true, onCommit, value }),
       { initialProps: { value: 'r' } }
@@ -34,6 +35,7 @@ describe('useGitHubTaskSearchCommit', () => {
   it('ignores a stale timer when cleanup races with the idle boundary', () => {
     const onCommit = vi.fn()
     const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout').mockImplementation(() => {})
+
     const view = renderHook(
       ({ value }) => useGitHubTaskSearchCommit({ enabled: true, onCommit, value }),
       { initialProps: { value: 'r' } }
@@ -52,6 +54,7 @@ describe('useGitHubTaskSearchCommit', () => {
 
   it('cancels a pending commit when disabled', () => {
     const onCommit = vi.fn()
+
     const view = renderHook(
       ({ enabled }) => useGitHubTaskSearchCommit({ enabled, onCommit, value: 'rate' }),
       { initialProps: { enabled: true } }
@@ -66,6 +69,7 @@ describe('useGitHubTaskSearchCommit', () => {
 
   it('cancels a pending commit on unmount', () => {
     const onCommit = vi.fn()
+
     const view = renderHook(() =>
       useGitHubTaskSearchCommit({ enabled: true, onCommit, value: 'rate' })
     )

@@ -20,6 +20,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
       return true
     }
+
     return this.hasChildProcessesFromForeground(await this.getForegroundProcess(id))
   }
 
@@ -30,6 +31,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
       return clientOnlyUnverifiableInspection('old_host')
     }
+
     if (this.protocolVersion < COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION) {
       // Why: pre-v27 daemons survive an in-place app update; compose the inspection client-side from the
       // one call they do support instead of throwing, or completion detection stays dead until recreate.
@@ -38,11 +40,13 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       const { foregroundProcess } = await this.client.request<{
         foregroundProcess: string | null
       }>('getForegroundProcess', { sessionId: id })
+
       return {
         foregroundProcess,
         hasChildProcesses: this.hasChildProcessesFromForeground(foregroundProcess)
       }
     }
+
     return this.client.request<PtyProcessInspection>('inspectProcess', {
       sessionId: id,
       ...(options?.expectedIncarnationId
@@ -57,11 +61,13 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
     if (this.protocolVersion < GET_FOREGROUND_PROCESS_PROTOCOL_VERSION) {
       return null
     }
+
     try {
       const result = await this.client.request<{ foregroundProcess: string | null }>(
         'getForegroundProcess',
         { sessionId: id }
       )
+
       return result.foregroundProcess
     } catch {
       return null
@@ -74,6 +80,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
         'confirmForegroundProcess',
         { sessionId: id }
       )
+
       return result.foregroundProcess
     } catch {
       return null
@@ -85,6 +92,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       const result = await this.client.request<{ confirmed: boolean }>('confirmShellForeground', {
         sessionId: id
       })
+
       return result.confirmed === true
     } catch {
       return false
@@ -93,9 +101,11 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
 
   async serialize(ids: string[]): Promise<string> {
     const sessions: Record<string, { initialCwd?: string }> = {}
+
     for (const id of ids) {
       sessions[id] = { initialCwd: this.initialCwds.get(id) }
     }
+
     return JSON.stringify(sessions)
   }
 
@@ -124,6 +134,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       if (!session.isAlive) {
         continue
       }
+
       // Why: an unminted session id (worktreeId === null) can't be tied to a live worktree, so it's treated as an orphan.
       const { worktreeId } = parsePtySessionId(session.sessionId)
 
@@ -133,6 +144,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
         } catch {
           /* already dead */
         }
+
         killed.push(session.sessionId)
       } else {
         alive.push(session.sessionId)
@@ -150,17 +162,22 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
   protected async reconcileLiveSessionHistory(session: SessionInfo): Promise<void> {
     const historyManager = this.historyManager
     const historyReader = this.historyReader
+
     if (!historyManager || !historyReader) {
       return
     }
+
     await this.withHistorySpawnLock(session.sessionId, async () => {
       if (historyManager.hasWriter(session.sessionId)) {
         return
       }
+
       const probe = historyReader.probeRestorableHistory(session.sessionId)
+
       if (probe.status === 'unreadable') {
         return
       }
+
       if (probe.status === 'none') {
         await historyManager.openSession(session.sessionId, {
           cwd: session.cwd ?? '',
@@ -169,22 +186,27 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
         })
       } else {
         const recoveryFreeze = await historyManager.freezeForRecovery(session.sessionId)
+
         try {
           const detection = await historyReader.detectColdRestoreState(session.sessionId, {
             wslDistro: session.wslDistro ?? undefined
           })
+
           if (
             detection.status === 'unreadable' ||
             (detection.status === 'restored' && detection.hasUnreadableRecovery)
           ) {
             historyManager.suspendSession(session.sessionId, recoveryFreeze)
+
             return
           }
+
           historyManager.reopenSession(session.sessionId, recoveryFreeze)
         } finally {
           historyManager.abandonRecoveryFreeze(recoveryFreeze)
         }
       }
+
       if (historyManager.hasWriter(session.sessionId)) {
         this.sessionsNeedingFullCheckpoint.add(session.sessionId)
         this.sessionsNeedingContinuityCheckpoint.add(session.sessionId)

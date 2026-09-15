@@ -61,9 +61,11 @@ export const TerminalRead = TerminalHandle.extend({
       if (value === undefined) {
         return undefined
       }
+
       if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
         return Number.NaN
       }
+
       return value
     })
     .pipe(

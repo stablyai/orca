@@ -29,6 +29,7 @@ describe('short relay socket dir guard, against a real shell', () => {
   async function attempt(dir: string): Promise<{ ok: boolean; stdout: string }> {
     try {
       const { stdout } = await run('/bin/sh', ['-c', scriptFor(dir)])
+
       return { ok: true, stdout }
     } catch {
       return { ok: false, stdout: '' }

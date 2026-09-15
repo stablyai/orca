@@ -13,6 +13,7 @@ export function createWslCliReconciliationStartupBarrier(
 ): Promise<void> {
   const timeoutMs = options.timeoutMs ?? WSL_CLI_RECONCILIATION_STARTUP_BUDGET_MS
   let timeout: ReturnType<typeof setTimeout> | null = null
+
   const settled = reconciliation
     .then(() => undefined)
     .catch(() => undefined)

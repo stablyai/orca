@@ -66,15 +66,19 @@ async function delay(ms: number): Promise<void> {
 
 async function reserveRestartRuntimeWsPort(): Promise<number> {
   const server = createServer()
+
   return new Promise<number>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
       const address = server.address()
+
       if (!address || typeof address === 'string') {
         server.close()
         reject(new Error('Restart fixture could not reserve a runtime WebSocket port'))
+
         return
       }
+
       server.close((error) => (error ? reject(error) : resolve(address.port)))
     })
   })
@@ -84,11 +88,13 @@ async function removeProfileDir(userDataDir: string): Promise<void> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       rmSync(userDataDir, { recursive: true, force: true })
+
       return
     } catch (error) {
       if (attempt === 4) {
         throw error
       }
+
       // Why: on Windows, taskkill can return before Electron/PTY handles are
       // fully released, making immediate temp-profile deletion flaky.
       await delay(250)
@@ -107,6 +113,7 @@ function createRestartLaunchIsolation(
 ): ElectronHomeIsolation {
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
+
   return createElectronHomeIsolation({
     inheritedEnv: cleanEnv,
     launchEnv: {
@@ -159,6 +166,7 @@ export function createRestartSession(
       '07',
       '28'
     )
+
     mkdirSync(sessionsDir, { recursive: true })
     const transcriptPath = path.join(sessionsDir, `rollout-2026-07-28T00-00-00-${sessionId}.jsonl`)
     writeFileSync(
@@ -169,11 +177,13 @@ export function createRestartSession(
         payload: { id: sessionId, cwd }
       })}\n`
     )
+
     return transcriptPath
   }
 
   const launch = async (options?: LaunchOptions): Promise<LaunchedOrca> => {
     runtimeWsPort ??= await reserveRestartRuntimeWsPort()
+
     const app = await electron.launch({
       args: getOrcaElectronLaunchArgs(mainPath, headful),
       env: {
@@ -182,24 +192,29 @@ export function createRestartSession(
         ORCA_E2E_RUNTIME_WS_PORT: String(runtimeWsPort)
       }
     })
+
     // Why: attach before firstWindow — the main-process daemon guard and the
     // plugin-system startup metrics can both emit before the renderer is ready.
     if (options?.onStderr) {
       const onStderr = options.onStderr
       app.process().stderr?.on('data', (chunk: Buffer) => onStderr(chunk.toString()))
     }
+
     try {
       const resolvedHome = await retryTransientMainEvaluate(() =>
         app.evaluate(({ app }) => app.getPath('home'))
       )
+
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
     } catch (error) {
       await closeElectronAppForE2E(app)
       throw error
     }
+
     const page = await app.firstWindow({ timeout: 120_000 })
     await page.waitForLoadState('domcontentloaded')
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
+
     return { app, page }
   }
 
@@ -209,10 +224,13 @@ export function createRestartSession(
 
   const dispose = async (): Promise<void> => {
     await cleanupE2EDaemons(userDataDir)
+
     if (process.env.ORCA_E2E_PRESERVE_RESTART_PROFILE === '1') {
       console.log(`[e2e] Preserved restart profile at ${userDataDir}`)
+
       return
     }
+
     if (existsSync(userDataDir)) {
       await removeProfileDir(userDataDir)
     }
@@ -233,9 +251,11 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
 
   const repoId = await page.evaluate(async (repoPath) => {
     const result = await window.api.repos.add({ path: repoPath })
+
     if ('error' in result) {
       throw new Error(result.error)
     }
+
     return result.repo.id
   }, repoPath)
 
@@ -245,19 +265,24 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
         readRestartRendererState(() =>
           page.evaluate(async (repoId) => {
             const store = window.__store
+
             if (!store) {
               return false
             }
+
             // Why: repos.add emits a concurrent refresh whose generation can
             // supersede this fetch; poll until either refresh publishes the repo.
             await store.getState().fetchRepos()
             const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
+
             if (!repo) {
               return false
             }
+
             // Why: this restart fixture uses the global e2e repo, whose seeded Git
             // worktree is external to Orca's workspace root after the visibility rollout.
             await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+
             return true
           }, repoId)
         ),
@@ -284,10 +309,13 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
         readRestartRendererState(() =>
           page.evaluate(async (repoId) => {
             const store = window.__store
+
             if (!store) {
               return false
             }
+
             await store.getState().fetchWorktrees(repoId)
+
             return (store.getState().worktreesByRepo[repoId]?.length ?? 0) > 0
           }, repoId)
         ),
@@ -300,18 +328,23 @@ export async function attachRepoAndOpenTerminal(page: Page, repoPath: string): P
 
   const worktreeId = await page.evaluate((repoId: string) => {
     const store = window.__store
+
     if (!store) {
       return null
     }
+
     const state = store.getState()
     // Why: repo identity remains stable when Windows canonicalizes path casing
     // or separators between the IPC and renderer layers.
     const repoWorktrees = state.worktreesByRepo[repoId] ?? []
     const primary = repoWorktrees.find((worktree) => worktree.isMainWorktree) ?? repoWorktrees[0]
+
     if (!primary) {
       return null
     }
+
     state.setActiveWorktree(primary.id)
+
     return primary.id
   }, repoId)
 
@@ -331,6 +364,7 @@ export async function readRestartRendererState<T>(read: () => Promise<T>): Promi
     if (error instanceof Error && error.message.includes('Execution context was destroyed')) {
       return null
     }
+
     throw error
   }
 }
@@ -339,6 +373,7 @@ function isValidGitRepo(repoPath: string): boolean {
   if (!repoPath || !existsSync(repoPath)) {
     return false
   }
+
   try {
     return (
       execSync('git rev-parse --is-inside-work-tree', {

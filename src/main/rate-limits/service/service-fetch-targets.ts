@@ -19,9 +19,11 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     homePath: string | null
   } {
     const resolution = this.codexHomePathResolver?.(target)
+
     if (!resolution) {
       return { skip: false, homePath: null }
     }
+
     return resolution.kind === 'skip'
       ? { skip: true, homePath: null }
       : { skip: false, homePath: resolution.codexHomePath }
@@ -31,6 +33,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
   // providers' fetches are started; chaining keeps the no-resolver path immediate.
   protected fetchKimiWithResolvedHome(): Promise<ProviderRateLimits> {
     const pendingHome = this.kimiHomeResolver?.()
+
     return pendingHome
       ? pendingHome.then((home) => fetchKimiRateLimits({ home }))
       : fetchKimiRateLimits({ home: undefined })
@@ -55,6 +58,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     codexHomePath: string | null
   ): string {
     const targetKey = target.runtime === 'wsl' ? `wsl:${target.wslDistro ?? '__default__'}` : 'host'
+
     return codexHomePath ? `${targetKey}:managed:${codexHomePath}` : `${targetKey}:system`
   }
 
@@ -64,6 +68,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     if (target.runtime !== 'wsl') {
       return null
     }
+
     return {
       provider: 'codex',
       session: null,
@@ -81,6 +86,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
   ): Promise<RateLimitState> {
     const controller = this.beginFetchCycle()
     let fresh: ProviderRateLimits
+
     try {
       fresh = await fetchCodexRateLimits({
         codexHomePath,
@@ -102,6 +108,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
 
     const scopedCodex = this.applyStalePolicy(fresh, stateBeforeReset.codex)
     const currentCodexHome = this.resolveCodexHome(target)
+
     // Why: a skip has no provenance to compare, so treat it as no longer active
     // rather than publishing this result against the system-default lane.
     const stillActive =
@@ -109,6 +116,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       this.isSameCodexTarget(this.codexFetchTarget, target) &&
       this.getCodexProvenance(target, currentCodexHome.homePath) ===
         this.getCodexProvenance(target, codexHomePath)
+
     if (stillActive) {
       // Why: this post-redemption read is newer than every Codex fetch that
       // started before it, so invalidate those results before publishing it.
@@ -137,6 +145,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     if (process.platform === 'win32') {
       return false
     }
+
     // Why: system-default Claude isn't Orca-managed; refresh may read existing OAuth but must not launch Claude and trigger auth/browser flows.
     return !isSystemDefaultClaudeAuth(authPreparation)
   }

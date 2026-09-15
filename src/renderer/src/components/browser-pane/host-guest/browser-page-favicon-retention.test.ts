@@ -4,11 +4,13 @@ import { createBrowserPageWebviewLoadingHandlers } from './browser-page-webview-
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
 
 const TAB_ID = 'tab-1'
+
 const GITHUB_ICON = 'https://github.githubassets.com/favicons/favicon.png'
 
 function createHarness(startUrl: string) {
   const updates: BrowserTabPageState[] = []
   const committedUrl = { current: startUrl }
+
   const webview = {
     getURL: () => committedUrl.current,
     getTitle: () => 'title',
@@ -16,13 +18,17 @@ function createHarness(startUrl: string) {
     canGoForward: () => false,
     src: startUrl
   } as unknown as Electron.WebviewTag
+
   const faviconUrlRef = { current: null as string | null }
+
   const onUpdatePageStateRef = {
     current: (_tabId: string, next: BrowserTabPageState) => {
       updates.push(next)
     }
   }
+
   const ref = <T>(value: T) => ({ current: value })
+
   const navigation = createBrowserPageWebviewNavigationHandlers({
     webview,
     browserTabId: TAB_ID,
@@ -41,6 +47,7 @@ function createHarness(startUrl: string) {
     annotationViewportBridgeTokenRef: ref('token'),
     setBrowserOverlayViewport: vi.fn()
   })
+
   const loading = createBrowserPageWebviewLoadingHandlers({
     webview,
     browserTabId: TAB_ID,

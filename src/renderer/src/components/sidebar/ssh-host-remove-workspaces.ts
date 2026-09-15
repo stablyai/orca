@@ -41,6 +41,7 @@ export async function clearSshHostWorkspaces(
       false,
       forgetLocalOnly ? { mode: 'forget-local' } : undefined
     )
+
     if (!result.ok) {
       failedIds.push(worktreeId)
     }
@@ -58,12 +59,14 @@ export async function clearSshHostWorkspaces(
     } catch {
       failedIds.push(repoId)
     }
+
     // Why: removeProject swallows its own errors and returns void, so the
     // try/catch above can't observe a failure. Verify the host's repo row is
     // actually gone; if it lingers, the removal did not succeed.
     const stillPresent = useAppStore
       .getState()
       .repos.some((repo) => repo.id === repoId && getRepoExecutionHostId(repo) === hostId)
+
     if (stillPresent && !failedIds.includes(repoId)) {
       failedIds.push(repoId)
     }

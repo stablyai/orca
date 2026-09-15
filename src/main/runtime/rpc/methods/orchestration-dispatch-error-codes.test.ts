@@ -13,19 +13,24 @@ import { RpcDispatcher } from '../dispatcher'
 import { ORCHESTRATION_METHODS } from './orchestration'
 
 const COORDINATOR_HANDLE = 'term_codes_coordinator'
+
 const COORDINATOR_PANE = 'tab_coord:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+
 const WORKER_HANDLE = 'term_codes_worker'
+
 const WORKER_PANE = 'tab_worker:dddddddd-dddd-4ddd-8ddd-dddddddddddd'
 
 type Harness = { db: OrchestrationDb; runtime: OrcaRuntimeService; dispatcher: RpcDispatcher }
 
 const harnesses: Harness[] = []
+
 let requestSequence = 0
 
 afterEach(() => {
   for (const harness of harnesses.splice(0)) {
     harness.db.close()
   }
+
   vi.restoreAllMocks()
 })
 
@@ -147,8 +152,10 @@ describe('orchestration dispatch failure codes through RpcDispatcher', () => {
     vi.mocked(harness.runtime.getTerminalPaneKey).mockImplementation((handle) => {
       if (handle === WORKER_HANDLE) {
         harness.db.updateTaskStatus(task.id, 'failed', 'raced out')
+
         return WORKER_PANE
       }
+
       return handle === COORDINATOR_HANDLE ? COORDINATOR_PANE : null
     })
 
@@ -184,6 +191,7 @@ function expectFailure(response: RpcResponse): RpcFailure {
   if (response.ok) {
     throw new Error(`Expected a failure, got ${JSON.stringify(response.result)}`)
   }
+
   return response
 }
 
@@ -197,19 +205,24 @@ function createHarness(): Harness {
   vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
     handle === WORKER_HANDLE ? 'pty-worker:incarnation-1' : null
   )
+
   const runId = db.createRun({
     objective: 'Typed dispatch failures',
     coordinatorHandle: COORDINATOR_HANDLE,
     coordinatorPaneKey: COORDINATOR_PANE
   }).id
+
   const createTask = db.createTask.bind(db)
   db.createTask = (task) => createTask({ ...task, runId: task.runId ?? runId })
+
   const harness = {
     db,
     runtime,
     dispatcher: new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
   }
+
   harnesses.push(harness)
+
   return harness
 }
 
@@ -231,6 +244,7 @@ function dispatch(harness: Harness, params: Record<string, unknown>): Promise<Rp
 
 function request(method: string, params: Record<string, unknown>): RpcRequest {
   requestSequence += 1
+
   return {
     id: `rpc_dispatch_error_codes_${requestSequence}`,
     authToken: 'test-token',

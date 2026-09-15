@@ -17,6 +17,7 @@ export function addIssueCommentForRepo(args: {
   prRepo?: GitHubOwnerRepo | null
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>> {
   const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+
   if (runtimeHost) {
     return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addIssueComment>>>(
       { kind: 'environment', environmentId: runtimeHost.environmentId },
@@ -41,9 +42,11 @@ export function addIssueCommentForRepo(args: {
           { local: false }
         )
       }
+
       return result
     })
   }
+
   return window.api.gh.addIssueComment({
     repoPath: args.repoPath,
     repoId: args.repoId,
@@ -68,6 +71,7 @@ export function addPRReviewCommentForRepo(args: {
   body: string
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewComment>>> {
   const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+
   if (runtimeHost) {
     return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addPRReviewComment>>>(
       { kind: 'environment', environmentId: runtimeHost.environmentId },
@@ -96,9 +100,11 @@ export function addPRReviewCommentForRepo(args: {
           { local: false }
         )
       }
+
       return result
     })
   }
+
   return window.api.gh.addPRReviewComment({
     repoPath: args.repoPath,
     repoId: args.repoId,
@@ -126,6 +132,7 @@ export function addPRReviewCommentReplyForRepo(args: {
   line?: number
 }): Promise<Awaited<ReturnType<typeof window.api.gh.addPRReviewCommentReply>>> {
   const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+
   if (runtimeHost) {
     return callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.addPRReviewCommentReply>>>(
       { kind: 'environment', environmentId: runtimeHost.environmentId },
@@ -154,9 +161,11 @@ export function addPRReviewCommentReplyForRepo(args: {
           { local: false }
         )
       }
+
       return result
     })
   }
+
   return window.api.gh.addPRReviewCommentReply({
     repoPath: args.repoPath,
     repoId: args.repoId,
@@ -184,6 +193,7 @@ export function notifyWorkItemDetailsMutation(
   if (options.local !== false) {
     emitGitHubWorkItemDetailsCacheMutation(args)
   }
+
   void window.api.gh
     .notifyWorkItemMutated({
       repoPath: args.repoPath,
@@ -205,6 +215,7 @@ export function setPRFileViewedForRepo(args: {
   viewed: boolean
 }): Promise<boolean> {
   const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
+
   if (runtimeHost) {
     return callRuntimeRpc<boolean>(
       { kind: 'environment', environmentId: runtimeHost.environmentId },
@@ -230,9 +241,11 @@ export function setPRFileViewedForRepo(args: {
           { local: false }
         )
       }
+
       return ok
     })
   }
+
   return window.api.gh.setPRFileViewed({
     repoPath: args.repoPath,
     repoId: args.repoId,

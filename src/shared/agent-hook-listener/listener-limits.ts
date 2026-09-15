@@ -19,18 +19,26 @@ export function capOpenCodeHookText(text: string): string {
 
 /** Bound paneKey size (real keys are well under 200); caps per-pane caches against pathological input. Exported so non-HTTP ingest (`ingestRemote`) applies the same cap as defense-in-depth. */
 export const MAX_PANE_KEY_LEN = 200
+
 export const AMP_THREAD_ID_MAX_LENGTH = 256
+
 export const AMP_MAX_SCOPED_THREAD_CACHE_KEYS = 32
+
 export const GROK_SESSION_CWD_MAX_LENGTH = 4096
+
 export const GROK_HOME_ENVELOPE_MAX_LENGTH = 4096
+
 const CLAUDE_PROMPT_ID_RE = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
+
 const GROK_PROMPT_ID_MAX_LENGTH = 512
 
 export function normalizeClaudePromptId(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined
   }
+
   const normalized = value.trim().toLowerCase()
+
   return CLAUDE_PROMPT_ID_RE.test(normalized) ? normalized : undefined
 }
 
@@ -38,24 +46,31 @@ export function normalizeGrokPromptId(value: unknown): string | undefined {
   if (typeof value !== 'string') {
     return undefined
   }
+
   const normalized = value.trim()
+
   if (normalized.length === 0 || normalized.length > GROK_PROMPT_ID_MAX_LENGTH) {
     return undefined
   }
+
   for (let index = 0; index < normalized.length; index += 1) {
     const code = normalized.charCodeAt(index)
+
     if (code <= 0x1f || code === 0x7f) {
       return undefined
     }
   }
+
   return normalized
 }
+
 /** Warn-once on cross-build (`version`) and dev-vs-prod (`env`) mismatches; the relay's "remote" env marker is a location tag, not a build env, so it must not warn as a stale local hook. */
 export function warnOnHookEnvOrVersionMismatch(
   state: HookListenerState,
   fields: { version?: string; env?: string; expectedEnv: string }
 ): void {
   const { version, env, expectedEnv } = fields
+
   if (
     version &&
     version !== ORCA_HOOK_PROTOCOL_VERSION &&
@@ -68,8 +83,10 @@ export function warnOnHookEnvOrVersionMismatch(
         'Reinstall agent hooks from Settings to upgrade the managed script.'
     )
   }
+
   if (env && env !== REMOTE_AGENT_HOOK_ENV && env !== expectedEnv) {
     const key = `${env}->${expectedEnv}`
+
     if (!state.warnedEnvs.has(key) && state.warnedEnvs.size < MAX_WARNED_KEYS) {
       state.warnedEnvs.add(key)
       console.warn(

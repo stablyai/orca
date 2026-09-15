@@ -23,6 +23,7 @@ function formatForkSyncResult(result: GitForkSyncResult): { title: string; descr
   const branch =
     result.branchName ??
     translate('auto.components.settings.RepositoryForkSyncSection.defaultBranch', 'default branch')
+
   if (result.status === 'synced') {
     return {
       title: translate('auto.components.settings.RepositoryForkSyncSection.synced', 'Fork updated'),
@@ -40,6 +41,7 @@ function formatForkSyncResult(result: GitForkSyncResult): { title: string; descr
             )
     }
   }
+
   if (result.status === 'up-to-date') {
     return {
       title: translate(
@@ -53,6 +55,7 @@ function formatForkSyncResult(result: GitForkSyncResult): { title: string; descr
       )
     }
   }
+
   const reasonLabels: Record<NonNullable<GitForkSyncResult['reason']>, string> = {
     'missing-origin': translate(
       'auto.components.settings.RepositoryForkSyncSection.missingOrigin',
@@ -79,7 +82,9 @@ function formatForkSyncResult(result: GitForkSyncResult): { title: string; descr
       'origin has commits that are not in upstream.'
     )
   }
+
   const blockedDescription = result.reason ? reasonLabels[result.reason] : undefined
+
   return {
     title: translate(
       'auto.components.settings.RepositoryForkSyncSection.blocked',
@@ -103,28 +108,35 @@ export function RepositoryForkSyncSection({
   const upstream = repo.upstream
   const [syncing, setSyncing] = useState(false)
   const syncInFlightRef = useRef(false)
+
   if (!upstream) {
     return null
   }
 
   const mode = repo.forkSyncMode ?? 'ask'
+
   const updateMode = (nextMode: ForkSyncMode) => {
     if (syncing || nextMode === mode) {
       return
     }
+
     updateRepo(repo.id, { forkSyncMode: nextMode })
+
     if (nextMode === 'safe-auto') {
       // Why: users enabling automation should immediately learn whether the
       // fork can be fast-forwarded safely instead of waiting for the next reload.
       void syncNow()
     }
   }
+
   const syncNow = async () => {
     if (syncInFlightRef.current) {
       return
     }
+
     syncInFlightRef.current = true
     setSyncing(true)
+
     try {
       const result = await syncRuntimeGitForkDefaultBranch(
         {
@@ -135,7 +147,9 @@ export function RepositoryForkSyncSection({
         },
         upstream
       )
+
       const message = formatForkSyncResult(result)
+
       if (result.status === 'blocked') {
         toast.message(message.title, { description: message.description })
       } else {

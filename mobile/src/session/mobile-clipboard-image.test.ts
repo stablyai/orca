@@ -23,14 +23,17 @@ function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendReq
   calls: Array<{ method: string; params: unknown }>
 } {
   const calls: Array<{ method: string; params: unknown }> = []
+
   return {
     calls,
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
       calls.push({ method, params })
       const response = responses.shift()
+
       if (!response) {
         throw new Error(`unexpected request: ${method}`)
       }
+
       return response
     })
   }
@@ -49,6 +52,7 @@ describe('mobile clipboard image paste helpers', () => {
 
   it('uploads mobile clipboard images in ordered chunks and commits', async () => {
     const base64 = 'a'.repeat(MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS + 4)
+
     const client = clientWithResponses([
       ok('start', { uploadId: 'upload-1' }),
       ok('append-1', { receivedBase64Length: MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS }),
@@ -195,6 +199,7 @@ describe('mobile clipboard image downscaling', () => {
       .fn()
       .mockResolvedValueOnce({ data: 'b'.repeat(150), width: 17, height: 8 })
       .mockResolvedValueOnce({ data: 'c'.repeat(40), width: 7, height: 3 })
+
     const data = `data:image/png;base64,${'a'.repeat(400)}`
     await expect(
       prepareMobileClipboardImageBase64({ data, size: { width: 40, height: 20 } }, resize, 100)

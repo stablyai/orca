@@ -1,4 +1,5 @@
 const CRASH_WINDOW_MS = 2 * 60_000
+
 const MAX_CRASHES_PER_WINDOW = 3
 
 export class WatcherProcessCrashFuse {
@@ -9,6 +10,7 @@ export class WatcherProcessCrashFuse {
     if (this.open) {
       return
     }
+
     this.removeExpired(now)
     this.crashTimes.push(now)
     this.open = this.crashTimes.length >= MAX_CRASHES_PER_WINDOW
@@ -18,7 +20,9 @@ export class WatcherProcessCrashFuse {
     if (this.open) {
       return true
     }
+
     this.removeExpired(now)
+
     return false
   }
 

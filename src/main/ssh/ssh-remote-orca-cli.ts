@@ -60,6 +60,7 @@ export async function runRemoteOrcaCli(
 
   const interactiveMessage =
     HOST_INTERACTIVE_COMMANDS[command] ?? HOST_INTERACTIVE_COMMANDS[parsed.commandPath[0] ?? '']
+
   if (interactiveMessage && !parsed.flags.has('help')) {
     if (json) {
       return {
@@ -68,6 +69,7 @@ export async function runRemoteOrcaCli(
         exitCode: 1
       }
     }
+
     return { stdout: '', stderr: `${interactiveMessage}\n`, exitCode: 1 }
   }
 
@@ -83,17 +85,20 @@ export async function runRemoteOrcaCli(
   }
 
   let passthroughFailure: HostCliUnavailableError | null = null
+
   try {
     return await runHostOrcaCliPassthrough(request, passthroughOptions)
   } catch (err) {
     if (!(err instanceof HostCliUnavailableError)) {
       throw err
     }
+
     // Why: fall back to the legacy in-process command switch below so the
     // historical read-only/orchestration surface keeps working even when the
     // bundled CLI entry cannot be launched on this install.
     passthroughFailure = err
   }
+
   return await runLegacyRemoteOrcaCli(runtime, request, parsed, json, passthroughFailure)
 }
 
@@ -106,6 +111,7 @@ async function runLegacyRemoteOrcaCli(
 ): Promise<RemoteOrcaCliResult> {
   const dispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
   const help = getRemoteLinearHelp(parsed)
+
   if (help) {
     return { stdout: `${help}\n`, stderr: '', exitCode: 0 }
   }
@@ -119,9 +125,11 @@ async function runLegacyRemoteOrcaCli(
       passthroughFailure.message,
       request.runtimeAuthority
     )
+
     return formatInProcessRemoteCliResult(parsed, request.env, response, json)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+
     const code =
       err instanceof RemoteCliArgumentError
         ? err.code
@@ -130,6 +138,7 @@ async function runLegacyRemoteOrcaCli(
             typeof (err as { code: unknown }).code === 'string'
           ? (err as { code: string }).code
           : 'runtime_error'
+
     if (json) {
       return {
         stdout: `${JSON.stringify(buildRemoteCliError(message, code), null, 2)}\n`,
@@ -137,6 +146,7 @@ async function runLegacyRemoteOrcaCli(
         exitCode: 1
       }
     }
+
     return { stdout: '', stderr: `${message}\n`, exitCode: 1 }
   }
 }
@@ -151,9 +161,11 @@ async function dispatchRemoteCli(
 ): Promise<RpcResponse> {
   const command = parsed.commandPath.join(' ')
   const inheritedEvidence = readOrchestrationCompatibilityEvidence(env)
+
   const orchestrationCompatibilityEvidence = runtimeAuthority
     ? { ...inheritedEvidence, host: runtimeAuthority }
     : inheritedEvidence
+
   const compatibilityEnvelope: RuntimeOrchestrationEnvelope = {
     compatibilityInvocationId: randomUUID(),
     orchestrationRequestId:
@@ -163,17 +175,23 @@ async function dispatchRemoteCli(
         : undefined),
     orchestrationCompatibilityEvidence
   }
+
   const linearResponse = await tryDispatchRemoteLinearCli(dispatcher, parsed, env, stdin)
+
   if (linearResponse) {
     return linearResponse
   }
+
   switch (command) {
     case 'status': {
       const response = await call(dispatcher, 'status.get')
+
       if (!response.ok) {
         return response
       }
+
       const status = response.result as RuntimeStatus
+
       const cliStatus: CliStatusResult = {
         target: { kind: 'environment', environment: 'ssh' },
         // Why: this answers for the Orca host the caller reached over SSH, not for the caller's
@@ -189,8 +207,10 @@ async function dispatchRemoteCli(
         },
         graph: { state: status.graphStatus }
       }
+
       return { ...response, result: cliStatus }
     }
+
     case 'terminal list':
       return await call(dispatcher, 'terminal.list', {
         worktree: optionalRemoteCliString(parsed.flags, 'worktree'),
@@ -201,6 +221,7 @@ async function dispatchRemoteCli(
       })
     case 'orchestration send': {
       const type = optionalRemoteCliString(parsed.flags, 'type')
+
       return await call(
         dispatcher,
         'orchestration.send',
@@ -223,6 +244,7 @@ async function dispatchRemoteCli(
         }
       )
     }
+
     case 'orchestration check':
       return await call(
         dispatcher,

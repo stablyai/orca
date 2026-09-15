@@ -13,10 +13,13 @@ import {
 } from './ssh-known-hosts-source'
 
 const ED_A = 'AAAAC3NzaC1lZDI1NTE5AAAAIKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq'
+
 const ED_B = 'AAAAC3NzaC1lZDI1NTE5AAAAILu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7'
+
 const ED_C = 'AAAAC3NzaC1lZDI1NTE5AAAAIMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM'
 
 const blob = (base64: string): Buffer => Buffer.from(base64, 'base64')
+
 const hostLine = (hosts: string, key: string): string => `${hosts} ssh-ed25519 ${key}\n`
 
 function verdict(entries: KnownHostsEntry[], host: string, key: string): string {
@@ -29,11 +32,13 @@ function verdict(entries: KnownHostsEntry[], host: string, key: string): string 
 }
 
 const roots: string[] = []
+
 const savedHome = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE }
 
 async function createRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-known-hosts-'))
   roots.push(root)
+
   return root
 }
 
@@ -65,12 +70,14 @@ function resolvedConfig(overrides: Partial<SshResolvedConfig> = {}): SshResolved
 afterEach(async () => {
   for (const key of ['HOME', 'USERPROFILE'] as const) {
     const value = savedHome[key]
+
     if (value === undefined) {
       delete process.env[key]
     } else {
       process.env[key] = value
     }
   }
+
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
@@ -475,12 +482,15 @@ describe('parsing real ssh -G output from Windows OpenSSH', () => {
     // rotated key that should have produced a mismatch rather than a first-contact accept.
     const previous = process.env.ProgramData
     process.env.ProgramData = 'C:\\ProgramData'
+
     try {
       const resolved = parseSshGOutput(WINDOWS_SSH_G_OUTPUT)
+
       for (const path of resolved.globalKnownHostsFiles) {
         expect(path).not.toContain('__PROGRAMDATA__')
         expect(path).toContain('ProgramData')
       }
+
       expect(resolved.globalKnownHostsFiles).toHaveLength(2)
     } finally {
       if (previous === undefined) {
@@ -497,6 +507,7 @@ describe('parsing real ssh -G output from Windows OpenSSH', () => {
     // separator. Found by probing the expansion rather than by reading it.
     const previous = process.env.ProgramData
     process.env.ProgramData = 'C:\\ProgramData'
+
     try {
       const resolved = parseSshGOutput('userknownhostsfile __PROGRAMDATA__evil/known_hosts')
       expect(resolved.userKnownHostsFiles).toEqual(['__PROGRAMDATA__evil/known_hosts'])
@@ -526,6 +537,7 @@ describe('parsing real ssh -G output from Windows OpenSSH', () => {
     const spaced = parseSshGOutput(
       'userknownhostsfile C:\\Users\\John Doe/.ssh/known_hosts C:\\Users\\John Doe/.ssh/known_hosts2'
     )
+
     expect(spaced.userKnownHostsFiles).toEqual([
       'C:\\Users\\John',
       'Doe/.ssh/known_hosts',

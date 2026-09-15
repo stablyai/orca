@@ -23,7 +23,9 @@ function isOrchestrationSkill(skill: DiscoveredSkill): boolean {
   if (!skill.installed) {
     return false
   }
+
   const expected = normalizeSkillName(ORCHESTRATION_SKILL_NAME)
+
   return (
     normalizeSkillName(skill.name) === expected ||
     normalizeSkillName(basenameFromPath(skill.directoryPath)) === expected
@@ -44,12 +46,15 @@ export function agentHasOrchestrationSkill(
   sources: readonly SkillDiscoverySource[]
 ): boolean {
   const owner = getSkillSourceOwnerForAgent(agent)
+
   return skills.some((skill) => {
     if (!isOrchestrationSkill(skill)) {
       return false
     }
+
     // Why: dedup keeps one row, so the roots it absorbed still have to be classified.
     const rootPaths = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
+
     return rootPaths.some((rootPath) =>
       // Why: one path can carry several sources — a workspace whose cwd is the
       // home dir scans `~/.claude/skills` as both a home and a repo root. Keying
@@ -66,9 +71,11 @@ export function agentHasOrchestrationSkill(
 
 export function sortOrchestrationAgents(agents: readonly TuiAgent[]): TuiAgent[] {
   const order = new Map<TuiAgent, number>()
+
   for (const [index, agent] of TUI_AGENT_AUTO_PICK_ORDER.entries()) {
     order.set(agent, index)
   }
+
   return [...agents].sort(
     (left, right) =>
       (order.get(left) ?? Number.MAX_SAFE_INTEGER) - (order.get(right) ?? Number.MAX_SAFE_INTEGER)

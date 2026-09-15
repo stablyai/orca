@@ -12,6 +12,7 @@ import type {
 
 // Desktop caps the inline lists so a noisy check can't break the layout; match it.
 const MAX_ANNOTATIONS = 20
+
 const MAX_JOBS = 100
 
 function isFailureState(state: string | null | undefined): boolean {
@@ -54,6 +55,7 @@ export type CheckDetailContent = {
 function mapAnnotation(annotation: PRCheckAnnotation): CheckDetailAnnotation {
   const path = annotation.path ?? 'Annotation'
   const locator = annotation.startLine ? `${path}:${annotation.startLine}` : path
+
   return {
     locator,
     level: annotation.annotationLevel,
@@ -66,6 +68,7 @@ function mapJob(job: PRCheckJob): CheckDetailJob {
   const failedSteps = job.steps
     .filter((step: PRCheckStep) => isFailureState(step.conclusion ?? step.status))
     .map((step) => ({ name: step.name, state: step.conclusion ?? step.status ?? 'unknown' }))
+
   return {
     name: job.name,
     state: job.conclusion ?? job.status ?? 'unknown',

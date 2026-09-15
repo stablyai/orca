@@ -20,27 +20,34 @@ export function formatWorkerTranscriptMessage(message: NativeChatMessage): strin
   // every fallback-shaped text block as soon as any group is present and draws
   // each group, so it never has to decide which twin belongs to which group.
   const standIns = claimSubagentGroupTwins(message.blocks)
+
   const blocks = message.blocks.map((block, index) => {
     if (block.type === 'text') {
       return block.text
     }
+
     if (block.type === 'tool-call') {
       return `[tool ${block.name}] ${safeJson(block.input)}`
     }
+
     if (block.type === 'tool-result') {
       return `[tool result${block.isError ? ' error' : ''}] ${block.output}`
     }
+
     if (block.type === 'image-ref') {
       return block.url ? `[image] ${block.url}` : `[image omitted]`
     }
+
     if (block.type === 'subagent-group') {
       return standIns.get(index) ?? null
     }
+
     // The journal deliberately admits block types this build does not know, and
     // a newer remote host can send one over the wire. Degrade to a marker rather
     // than reading fields off a shape that has none.
     return '[unsupported block]'
   })
+
   return `[${message.role}] ${blocks.filter((line) => line !== null).join('\n')}`.trimEnd()
 }
 
@@ -68,22 +75,29 @@ function claimSubagentGroupTwins(blocks: NativeChatMessage['blocks']): Map<numbe
     }
   })
   const standIns = new Map<number, string>()
+
   const unclaimed = groups.filter((group) => {
     const count = twins.get(group.sentence) ?? 0
+
     if (count === 0) {
       return true
     }
+
     twins.set(group.sentence, count - 1)
     remainingTwins -= 1
+
     return false
   })
+
   for (const group of unclaimed) {
     if (remainingTwins > 0) {
       remainingTwins -= 1
       continue
     }
+
     standIns.set(group.index, `[subagents] ${group.sentence}`)
   }
+
   return standIns
 }
 

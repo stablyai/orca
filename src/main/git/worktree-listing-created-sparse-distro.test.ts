@@ -23,6 +23,7 @@ vi.mock('node:fs/promises', () => ({
   realpath: realpathMock,
   stat: statMock
 }))
+
 // Only Git is stubbed; the sparse probe below runs for real so the distro has somewhere to matter.
 vi.mock('./worktree-list-reader', () => ({
   readCheckedOutBranchRef: readCheckedOutBranchRefMock,
@@ -36,6 +37,7 @@ vi.mock('./worktree-list-reader', () => ({
 import { describeCreatedWorktree } from './worktree-listing'
 
 const slashed = (value: unknown): string => String(value).replaceAll('\\', '/')
+
 const missing = () => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 
 // The layout that needs the caller's distro: the repo lives in the distro, its worktrees on the
@@ -43,10 +45,15 @@ const missing = () => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 // no longer names a distro, and the gitfile beside it points at a guest path with no drive to
 // derive — so only the distro the create ran under can resolve it.
 const REPO = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
+
 const GUEST_WORKTREE = '/mnt/c/wt/x'
+
 const HOST_WORKTREE = 'C:/wt/x'
+
 const GUEST_GIT_DIR = '/home/me/repo/.git/worktrees/x'
+
 const HOST_GIT_DIR = '//wsl.localhost/Ubuntu/home/me/repo/.git/worktrees/x'
+
 const HEAD_OID = 'a'.repeat(40)
 
 describe('describeCreatedWorktree on a drvfs-spelled WSL worktree', () => {
@@ -67,14 +74,17 @@ describe('describeCreatedWorktree on a drvfs-spelled WSL worktree', () => {
     readFileMock.mockReset()
     readFileMock.mockImplementation(async (target: string) => {
       const value = slashed(target)
+
       if (value === `${HOST_WORKTREE}/.git`) {
         return `gitdir: ${GUEST_GIT_DIR}\n`
       }
+
       // No `commondir`, so the gitdir is its own common dir and the config read stays in one
       // namespace — the pointer resolve is the only thing under test.
       if (value === `${HOST_GIT_DIR}/config`) {
         return '[core]\n\tsparseCheckout = true\n'
       }
+
       throw missing()
     })
     statMock.mockReset()

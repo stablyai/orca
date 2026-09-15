@@ -1,8 +1,10 @@
 import { expect, it, vi } from 'vitest'
 import { PushOutcomeCounters } from './push-outcome-counters'
+
 it('limits failure logs while retaining category counts', () => {
   let now = 0
   const log = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
   try {
     const counters = new PushOutcomeCounters(() => now)
     counters.record('rejected')

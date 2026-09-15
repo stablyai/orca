@@ -68,19 +68,23 @@ export function resolveAgentAttention(
   const { workspaceId } = request.subject
   const subjectKey = request.subject.surfaceKey ?? null
   const hasLiveSession = surface.hasLiveSession(request.subject)
+
   if (!hasLiveSession && !request.hasFreshActivityEvidence) {
     return { admitted: false, cause: 'no-live-session' }
   }
 
   let groupId: string | null = null
+
   if (request.settlesTurn && subjectKey !== null) {
     const admission = surface.admitSurface(
       { workspaceId, surfaceKey: subjectKey },
       { hasLiveSession, hasFreshActivityEvidence: request.hasFreshActivityEvidence }
     )
+
     if (!admission.admitted) {
       return { admitted: false, cause: admission.cause }
     }
+
     groupId = admission.groupId
   }
 
@@ -89,6 +93,7 @@ export function resolveAgentAttention(
     subjectKey,
     workspaceIsActive: surface.isWorkspaceActive(workspaceId)
   }
+
   if (!request.settlesTurn) {
     return { admitted: true, unread: null, delivery }
   }
@@ -97,6 +102,7 @@ export function resolveAgentAttention(
     subjectKey === null
       ? surface.isWorkspaceViewed(workspaceId)
       : surface.isSurfaceViewed({ workspaceId, surfaceKey: subjectKey })
+
   return {
     admitted: true,
     unread: viewed
@@ -117,11 +123,13 @@ export function applyAgentAttentionUnread(
   sink: AgentAttentionUnreadSink
 ): void {
   sink.markWorkspaceUnread(write.workspaceId)
+
   if (write.subjectKey !== null) {
     // Why: focus-return auto-ack needs an agent-specific marker; the generic surface marker
     // below also covers bells and is gated behind the experimental attention setting.
     sink.markSubjectUnread(write.subjectKey, write.reason)
   }
+
   if (write.groupAttentionEnabled && write.groupId !== null && write.subjectKey !== null) {
     sink.markGroupUnread(write.groupId, write.reason)
     sink.markSurfaceUnread(write.subjectKey, write.reason)
@@ -136,8 +144,10 @@ export function applyAgentAttention(
   if (!decision.admitted) {
     return
   }
+
   if (decision.unread !== null) {
     applyAgentAttentionUnread(decision.unread, sink.unread)
   }
+
   sink.requestDelivery(decision.delivery)
 }

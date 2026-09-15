@@ -41,6 +41,7 @@ function claudeProjectsDirs(): string[] {
     join(process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude'), 'projects'),
     join(homedir(), '.claude', 'projects')
   ]
+
   return candidates.filter((dir, index) => candidates.indexOf(dir) === index)
 }
 
@@ -58,6 +59,7 @@ function codexSessionsDirs(): string[] {
     join(resolveOrcaManagedCodexHomePath(), 'sessions'),
     join(process.env.CODEX_HOME?.trim() || join(homedir(), '.codex'), 'sessions')
   ]
+
   return candidates.filter((dir, index) => candidates.indexOf(dir) === index)
 }
 
@@ -111,21 +113,25 @@ export async function resolveSessionFilePath(
 ): Promise<string | null> {
   signal?.throwIfAborted()
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+
   if (!transcriptAgent) {
     return null
   }
+
   // Why: the hook's transcript_path is the exact file the agent is writing, so it
   // beats reconstructing a path from the session id. Route it through the host
   // readability check so a WSL guest path becomes an openable UNC on Windows;
   // stale/missing paths fall through to the id-based search.
   let unavailable: WslTranscriptFsError | undefined
   const hookPath = options.transcriptPath?.trim()
+
   if (hookPath && extname(hookPath) === '.jsonl') {
     try {
       const hostReadable = await toHostReadableTranscriptPath(hookPath, {
         signal,
         wslDistro: options.wslDistro
       })
+
       if (hostReadable) {
         return hostReadable
       }
@@ -145,6 +151,7 @@ export async function resolveSessionFilePath(
     if (unavailable) {
       throw unavailable
     }
+
     return null
   }
 
@@ -154,13 +161,16 @@ export async function resolveSessionFilePath(
     if (unavailable) {
       throw unavailable
     }
+
     return null
   }
 
   const resolved = await resolveSessionFileById(transcriptAgent, sessionId, options, signal)
+
   if (!resolved && unavailable) {
     throw unavailable
   }
+
   return resolved
 }
 
@@ -186,6 +196,7 @@ async function resolveSessionFileById(
   signal?: AbortSignal
 ): Promise<string | null> {
   const trimmedId = sessionId.trim()
+
   if (!trimmedId) {
     return null
   }
@@ -199,8 +210,10 @@ async function resolveSessionFileById(
       signal
     )
   }
+
   if (transcriptAgent === 'codex') {
     const overrideDirs = options.codexSessionsDirs
+
     return resolveCodexSessionFile(
       trimmedId,
       overrideDirs ?? codexSessionsDirs(),
@@ -210,16 +223,20 @@ async function resolveSessionFileById(
       signal
     )
   }
+
   if (transcriptAgent === 'grok') {
     return resolveGrokSessionFile(trimmedId, options.grokSessionsDir ?? grokSessionsDir(), signal)
   }
+
   if (transcriptAgent === 'omp') {
     return resolveOmpSessionFile(trimmedId, options.ompSessionsDir ?? ompSessionsDir(), signal)
   }
+
   // Why: a new transcript agent must pick its own resolver. Falling through to
   // OMP's scan would search the wrong root with a foreign session id, so fail
   // the build here instead of resolving silently wrong at runtime.
   transcriptAgent satisfies never
+
   return null
 }
 
@@ -229,6 +246,7 @@ async function resolveClaudeSessionFile(
   signal?: AbortSignal
 ): Promise<string | null> {
   const targetName = `${sessionId}.jsonl`
+
   for (const projectsDir of projectsDirs) {
     // No existence pre-check: walkSessionFiles already yields [] for a missing root.
     const files = await walkSessionFiles(projectsDir, 'claude', [], {
@@ -236,10 +254,12 @@ async function resolveClaudeSessionFile(
       filePredicate: (path) => basename(path) === targetName,
       signal
     })
+
     if (files[0]) {
       return files[0]
     }
   }
+
   return null
 }
 
@@ -253,17 +273,21 @@ async function resolveCodexSessionFile(
   // match the id as a suffix of the file's base name rather than an exact name.
   // Search each candidate root (managed home first) and stop at the first match.
   const hit = await findCodexRolloutInDirs(sessionId, sessionsDirs, signal)
+
   if (hit) {
     return hit
   }
+
   if (!loadFallbackDirs) {
     return null
   }
+
   signal?.throwIfAborted()
   // Why: a WSL-hosted session's rollout only exists inside the distro, so fall
   // back to each distro's Codex homes when the host's own roots came up empty (#10326).
   const fallbackDirs = (await loadFallbackDirs()).filter((dir) => !sessionsDirs.includes(dir))
   signal?.throwIfAborted()
+
   return findCodexRolloutInDirs(sessionId, fallbackDirs, signal)
 }
 
@@ -273,6 +297,7 @@ async function findCodexRolloutInDirs(
   signal?: AbortSignal
 ): Promise<string | null> {
   let unavailable: WslTranscriptFsError | undefined
+
   for (const sessionsDir of sessionsDirs) {
     // Why: no existence pre-check — walkSessionFiles already yields [] for a
     // missing/unreadable root, and a sync probe would block the main thread on a
@@ -281,10 +306,13 @@ async function findCodexRolloutInDirs(
       extensions: new Set(['.jsonl']),
       filePredicate: (path: string): boolean => {
         const name = basename(path, extname(path))
+
         return name === sessionId || name.endsWith(`-${sessionId}`)
       }
     }
+
     const isWslRoot = isWslUncPath(sessionsDir)
+
     try {
       const files = isWslRoot
         ? await findWslCodexSessionPath(sessionsDir, sessionId, signal)
@@ -294,6 +322,7 @@ async function findCodexRolloutInDirs(
               signal
             })
           )[0]
+
       if (files) {
         return files
       }
@@ -304,10 +333,12 @@ async function findCodexRolloutInDirs(
       unavailable = wslTranscriptFsRefusal(error)
     }
   }
+
   // No hit and at least one root never scanned: "couldn't look", not "missing".
   if (unavailable) {
     throw unavailable
   }
+
   return null
 }
 
@@ -321,6 +352,7 @@ async function resolveGrokSessionFile(
   signal?.throwIfAborted()
   const history = await findGrokChatHistoryBySessionId(sessionsDir, sessionId)
   signal?.throwIfAborted()
+
   return history
 }
 
@@ -346,9 +378,11 @@ async function resolveOmpSessionFile(
       depth === 0 || !OMP_SESSION_ARTIFACT_DIR_PATTERN.test(name),
     filePredicate: (path) => {
       const name = basename(path, extname(path))
+
       return name === sessionId || name.endsWith(`_${sessionId}`)
     },
     signal
   })
+
   return files[0] ?? null
 }

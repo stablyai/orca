@@ -75,9 +75,11 @@ export function createBrowserPageWebviewLoadingHandlers({
     clearBrowserPageAnnotationsRef.current(browserTabId)
     setPendingAnnotationPayload(null)
     setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
+
     if (!trackNextLoadingEventRef.current) {
       return
     }
+
     // Why the favicon isn't cleared here: it is dropped on the cross-origin did-start-navigation
     // instead, because Chromium won't re-announce an unchanged icon for a same-origin load.
     onUpdatePageStateRef.current(browserTabId, {
@@ -89,8 +91,10 @@ export function createBrowserPageWebviewLoadingHandlers({
     const currentUrl = webview.getURL() || webview.src || 'about:blank'
     const browserModelUrl = redactKagiSessionToken(currentUrl)
     const activeLoadFailure = activeLoadFailureRef.current
+
     if (isChromiumErrorPage(currentUrl)) {
       trackNextLoadingEventRef.current = false
+
       const synthesizedFailure = {
         code: -1,
         description: translate(
@@ -101,13 +105,16 @@ export function createBrowserPageWebviewLoadingHandlers({
           browserTabUrlRef.current || addressBarValueRef.current || 'about:blank'
         )
       }
+
       activeLoadFailureRef.current = synthesizedFailure
       onUpdatePageStateRef.current(browserTabId, {
         loading: false,
         loadError: synthesizedFailure
       })
+
       return
     }
+
     if (activeLoadFailure?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
       trackNextLoadingEventRef.current = false
       onUpdatePageStateRef.current(browserTabId, {
@@ -118,12 +125,15 @@ export function createBrowserPageWebviewLoadingHandlers({
         canGoForward: webview.canGoForward(),
         loadError: activeLoadFailure
       })
+
       return
     } else if (activeLoadFailure) {
       const normalizedAttemptedUrl =
         normalizeBrowserNavigationUrl(activeLoadFailure.validatedUrl) ??
         activeLoadFailure.validatedUrl
+
       const normalizedCurrentUrl = normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
+
       if (normalizedAttemptedUrl === normalizedCurrentUrl) {
         trackNextLoadingEventRef.current = false
         // Why: some failures still emit did-stop-loading on the original URL; keep loadError so the known-failed load isn't cleared to a blank surface.
@@ -135,24 +145,30 @@ export function createBrowserPageWebviewLoadingHandlers({
           canGoForward: webview.canGoForward(),
           loadError: activeLoadFailure
         })
+
         return
       }
     }
+
     trackNextLoadingEventRef.current = false
     activeLoadFailureRef.current = null
     lastKnownWebviewUrlRef.current =
       normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
     rememberLiveBrowserUrl(browserTabId, browserModelUrl)
+
     // Why: don't overwrite in-progress typing (see the browserTab.url sync effect above).
     if (document.activeElement !== addressBarInputRef.current) {
       setAddressBarValue(toDisplayUrl(browserModelUrl))
     }
+
     onSetUrlRef.current(browserTabId, browserModelUrl)
+
     if (keepAddressBarFocusRef.current && currentUrl === ORCA_BROWSER_BLANK_URL) {
       focusAddressBarNow()
     } else {
       keepAddressBarFocusRef.current = false
     }
+
     onUpdatePageStateRef.current(browserTabId, {
       loading: false,
       title: getBrowserDisplayTitle(webview.getTitle(), browserModelUrl),
@@ -165,14 +181,18 @@ export function createBrowserPageWebviewLoadingHandlers({
 
   const handleFailLoad = (event: BrowserPageFailLoadEvent): void => {
     const loadError = resolveBrowserWebviewLoadFailure(event)
+
     if (!loadError) {
       return
     }
+
     trackNextLoadingEventRef.current = false
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
+
     if (pendingRecoveryNavigation?.started) {
       recoveryNavigationValidationRef.current = null
     }
+
     activeLoadFailureRef.current = loadError
     onUpdatePageStateRef.current(browserTabId, {
       loading: false,

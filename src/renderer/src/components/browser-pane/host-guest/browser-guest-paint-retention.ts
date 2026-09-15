@@ -39,10 +39,12 @@ export function collectBrowserPageIds(
   if (!tabs || tabs.length === 0) {
     return NO_BROWSER_PAGE_IDS
   }
+
   return tabs.flatMap((tab) =>
     tab.pageIds && tab.pageIds.length > 0 ? tab.pageIds : [tab.activePageId ?? tab.id]
   )
 }
+
 const NO_BROWSER_TABS_BY_WORKTREE: Record<string, BrowserTabPageIdSource[]> = {}
 
 export function useWorktreeBrowserPageIds(worktreeId: string): readonly string[] {
@@ -55,6 +57,7 @@ export function useBrowserGuestPaintRetention(browserPageIds: readonly string[])
   const hasAutomationVisibleBrowser = useBrowserAutomationVisibilityForAny(browserPageIds)
   const hasMobileDrivenBrowser = useBrowserMobileDriverForAny(browserPageIds)
   const hasRemotelyViewedBrowser = useBrowserRemoteViewerForAny(browserPageIds)
+
   return hasAutomationVisibleBrowser || hasMobileDrivenBrowser || hasRemotelyViewedBrowser
 }
 
@@ -77,6 +80,7 @@ export function onBrowserGuestPaintRetentionChange(listener: () => void): () => 
     onBrowserDriverChange(listener),
     onBrowserRemoteViewerChange(listener)
   ]
+
   return () => {
     for (const removeListener of removeListeners) {
       removeListener()
@@ -95,6 +99,7 @@ export function useAnyBrowserGuestNeedsPaint(enabled: boolean): boolean {
   const browserTabsByWorktree = useAppStore((state) =>
     enabled ? state.browserTabsByWorktree : NO_BROWSER_TABS_BY_WORKTREE
   )
+
   const browserPageIds = useMemo(
     () =>
       enabled
@@ -102,5 +107,6 @@ export function useAnyBrowserGuestNeedsPaint(enabled: boolean): boolean {
         : NO_BROWSER_PAGE_IDS,
     [browserTabsByWorktree, enabled]
   )
+
   return useBrowserGuestPaintRetention(browserPageIds)
 }

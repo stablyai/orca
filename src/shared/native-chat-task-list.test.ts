@@ -11,6 +11,7 @@ const task = (content: string, status: NativeChatTask['status'] = 'pending'): Na
   content,
   status
 })
+
 const list = (...tasks: NativeChatTask[]): NativeChatTaskList => ({ tasks })
 
 describe('normalizeNativeChatTaskList', () => {
@@ -22,6 +23,7 @@ describe('normalizeNativeChatTaskList', () => {
         { content: 'Test', status: 'pending', activeForm: 'Testing' }
       ]
     })!
+
     expect(result.tasks.map(nativeChatTaskLabel)).toEqual(['Read', 'Writing', 'Test'])
     expect(result.tasks.map((entry) => entry.status)).toEqual([
       'completed',

@@ -38,6 +38,7 @@ function makeSession(args: {
   const unifiedTabs = args.canonicalEntityIds.map((entityId, index) =>
     makeCanonicalUnifiedTab(entityId, index)
   )
+
   return {
     ...getDefaultWorkspaceSession(),
     activeRepoId: 'repo1',
@@ -83,6 +84,7 @@ function hydrate(session: WorkspaceSessionState): ReturnType<typeof createTestSt
   })
   store.getState().hydrateWorkspaceSession(session)
   store.getState().hydrateTabsSession(session)
+
   return store
 }
 
@@ -90,6 +92,7 @@ describe('hydrateWorkspaceSession canonical PTY overlap', () => {
   it('keeps the valid local row when an invalid-id canonical mirror shares its PTY', () => {
     const sharedPtyId = 'daemon-session-1'
     const mirrorTabId = 'host-tab::11111111-1111-4111-8111-111111111111'
+
     const session = makeSession({
       tabs: [
         makeTab({ id: mirrorTabId, worktreeId: WORKTREE_ID, ptyId: sharedPtyId }),
@@ -114,6 +117,7 @@ describe('hydrateWorkspaceSession canonical PTY overlap', () => {
   it('keeps a legacy split tab whose second pane owns an independent PTY', () => {
     const sharedPtyId = 'daemon-shared'
     const soloPtyId = 'daemon-solo'
+
     const session = makeSession({
       tabs: [
         makeTab({ id: 'canonical-tab', worktreeId: WORKTREE_ID, ptyId: sharedPtyId }),
@@ -160,6 +164,7 @@ describe('hydrateWorkspaceSession canonical PTY overlap', () => {
   it('ignores a canonical row’s stale leaf binding when scoring another row’s live PTY', () => {
     const canonicalPtyId = 'daemon-canonical'
     const livePtyId = 'daemon-live'
+
     const session = makeSession({
       tabs: [
         makeTab({ id: 'canonical-tab', worktreeId: WORKTREE_ID, ptyId: canonicalPtyId }),
@@ -190,6 +195,7 @@ describe('hydrateWorkspaceSession canonical PTY overlap', () => {
   it('strips a retained row’s stale binding to a PTY the canonical row owns', () => {
     const sharedPtyId = 'daemon-shared'
     const soloPtyId = 'daemon-solo'
+
     const session = makeSession({
       tabs: [
         makeTab({ id: 'canonical-tab', worktreeId: WORKTREE_ID, ptyId: sharedPtyId }),
@@ -222,6 +228,7 @@ describe('hydrateWorkspaceSession canonical PTY overlap', () => {
   it('ignores a rootless canonical row’s extra bindings when scoring another row’s live PTY', () => {
     const canonicalPtyId = 'daemon-canonical'
     const livePtyId = 'daemon-live'
+
     const session = makeSession({
       tabs: [
         makeTab({ id: 'canonical-tab', worktreeId: WORKTREE_ID, ptyId: canonicalPtyId }),
@@ -250,6 +257,7 @@ describe('hydrateWorkspaceSession canonical PTY overlap', () => {
   it('advertises a retained row’s own PTY after its tab-level id went to the canonical row', async () => {
     const sharedPtyId = 'daemon-shared'
     const soloPtyId = 'daemon-solo'
+
     const session = makeSession({
       tabs: [
         makeTab({ id: 'canonical-tab', worktreeId: WORKTREE_ID, ptyId: sharedPtyId }),
@@ -296,6 +304,7 @@ describe('hydrateWorkspaceSession canonical PTY overlap', () => {
     const soloPtyId = 'daemon-solo'
     const sharedLeafId = '11111111-1111-4111-8111-111111111111'
     const soloLeafId = '22222222-2222-4222-8222-222222222222'
+
     const session = {
       ...makeSession({
         tabs: [
@@ -331,6 +340,7 @@ describe('hydrateWorkspaceSession canonical PTY overlap', () => {
 
   it('lets remote-snapshot rows keep every PTY, since unifiedTabs describes the local client', () => {
     const sharedPtyId = 'daemon-shared'
+
     const session = makeSession({
       tabs: [
         makeTab({ id: 'canonical-tab', worktreeId: WORKTREE_ID, ptyId: sharedPtyId }),
@@ -342,6 +352,7 @@ describe('hydrateWorkspaceSession canonical PTY overlap', () => {
       },
       canonicalEntityIds: ['canonical-tab']
     })
+
     const rows = session.tabsByWorktree[WORKTREE_ID]!
 
     expect(
@@ -356,6 +367,7 @@ describe('hydrateWorkspaceSession canonical PTY overlap', () => {
 
   it('retains a non-canonical row that owns no PTY at all', () => {
     const sharedPtyId = 'daemon-shared'
+
     const session = makeSession({
       tabs: [
         makeTab({ id: 'canonical-tab', worktreeId: WORKTREE_ID, ptyId: sharedPtyId }),

@@ -157,6 +157,7 @@ describe('computeProjectHeaderDropPreview', () => {
   it('snaps a drop inside the last expanded project section to its bottom boundary', () => {
     const INDICATOR_GAP = 4
     const sectionBottom = 380
+
     const preview = computeProjectHeaderDropPreview({
       pointerY: 350,
       containerTop: 0,
@@ -181,6 +182,7 @@ describe('computeProjectHeaderDropPreview', () => {
   it('snaps a drop between sibling project headers to the nearer boundary', () => {
     const INDICATOR_GAP = 4
     const nextHeaderTop = 220
+
     const preview = computeProjectHeaderDropPreview({
       pointerY: 150,
       containerTop: 0,
@@ -215,6 +217,7 @@ describe('computeProjectHeaderDropPreview', () => {
     const sectionBottomSlotY = prevSectionBottom + INDICATOR_GAP // 204
     const nextHeaderSlotY = nextHeaderTop - INDICATOR_GAP // 236
     const midpointY = (sectionBottomSlotY + nextHeaderSlotY) / 2 // 220
+
     const gapRects = [
       {
         repoId: 'a',
@@ -274,6 +277,7 @@ describe('computeProjectHeaderDropPreview', () => {
   describe('content bound for the last section', () => {
     const INDICATOR_GAP = 4
     const estimatedSectionBottom = 380
+
     const lastRects = [
       {
         repoId: 'c',
@@ -284,6 +288,7 @@ describe('computeProjectHeaderDropPreview', () => {
         sectionBottom: estimatedSectionBottom
       }
     ] as const
+
     const lastPreview = (pointerY: number, contentBottom: number) =>
       computeProjectHeaderDropPreview({
         pointerY,

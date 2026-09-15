@@ -17,6 +17,7 @@ function trimTrailingSeparators(value: string): string {
 
 function comparableLocalPath(value: string): string {
   const normalized = resolve(value)
+
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
@@ -30,9 +31,11 @@ function matchesRequestPath(
     // resolve()/case-folding it from a Windows host would rewrite it and never match.
     return trimTrailingSeparators(idWorktreePath) === trimTrailingSeparators(args.worktreePath)
   }
+
   const candidates = new Set(
     [args.worktreePath, resolvedWorktreePath ?? args.worktreePath].map(comparableLocalPath)
   )
+
   return candidates.has(comparableLocalPath(idWorktreePath))
 }
 
@@ -63,21 +66,27 @@ export function resolveSourceControlAiLinkedIssueMeta(
   if (typeof args.worktreeId !== 'string' || !args.worktreeId) {
     return null
   }
+
   if (typeof store.getWorktreeMeta !== 'function') {
     return null
   }
+
   const parsed = splitWorktreeIdForFilesystem(args.worktreeId)
+
   if (!parsed) {
     return null
   }
+
   // Why: `typeof` rather than truthiness, so an empty-string repoId fails closed
   // instead of silently disabling the cross-check.
   if (typeof args.repoId === 'string' && parsed.repoId !== args.repoId) {
     return null
   }
+
   if (!matchesRequestPath(parsed.worktreePath, args, resolvedWorktreePath)) {
     return null
   }
+
   return store.getWorktreeMeta(args.worktreeId) ?? null
 }
 
@@ -91,6 +100,7 @@ export function resolveSourceControlAiLinkedIssue(
     args,
     resolvedWorktreePath
   )?.linkedIssue
+
   // Why: GitHub only in v1 — no `linkedGitLabIssue` dual-read.
   return isLinkedIssueNumber(linkedIssue) ? linkedIssue : null
 }

@@ -16,6 +16,7 @@ describe('ProjectHeaderActions', () => {
       act(() => root?.unmount())
       root = null
     }
+
     document.body.replaceChildren()
   })
 

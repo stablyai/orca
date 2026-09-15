@@ -20,6 +20,7 @@ vi.mock('../git/worktree', () => {
       isMainWorktree: false
     }
   ]
+
   return {
     listWorktrees: vi.fn().mockResolvedValue(worktrees),
     listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
@@ -29,11 +30,13 @@ vi.mock('../git/worktree', () => {
 describe('OrcaRuntimeRpcServer', () => {
   it('rejects WebSocket requests whose request token differs from the authenticated channel token', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+
     const runtime = {
       configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'test-runtime',
       getStatus: vi.fn().mockResolvedValue({ graphStatus: 'ok' })
     } as unknown as OrcaRuntimeService
+
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const channelDevice = server['deviceRegistry']!.addDevice('phone', 'mobile')
@@ -89,6 +92,7 @@ describe('OrcaRuntimeRpcServer', () => {
         undefined,
         authenticatedToken
       )
+
       return replies[0]
     }
 
@@ -184,14 +188,17 @@ describe('OrcaRuntimeRpcServer', () => {
   it('rejects unpaired terminal creates before runtime dispatch', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const createMobileSessionTerminal = vi.fn()
+
     const runtime = {
       configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'test-runtime',
       createMobileSessionTerminal
     } as unknown as OrcaRuntimeService
+
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const replies: Record<string, unknown>[] = []
+
     const send = async (id: string, deviceToken?: string): Promise<void> => {
       await server['handleWebSocketMessage'](
         JSON.stringify({
@@ -226,11 +233,13 @@ describe('OrcaRuntimeRpcServer', () => {
   it('allows runtime-scoped WebSocket tokens to use the full RPC surface', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const pushRuntimeGit = vi.fn().mockResolvedValue({ ok: true })
+
     const runtime = {
       configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'test-runtime',
       pushRuntimeGit
     } as unknown as OrcaRuntimeService
+
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const runtimeDevice = server['deviceRegistry']!.addDevice('cli', 'runtime')
@@ -259,6 +268,7 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.start()
 
     const metadata = readRuntimeMetadata(userDataPath)
+
     const response = await sendRequest(metadata!.transports[0]!.endpoint, {
       id: 'req_1',
       authToken: metadata!.authToken,
@@ -292,6 +302,7 @@ describe('OrcaRuntimeRpcServer', () => {
         (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
         () => {}
       )
+
       return replies[0]!
     }
 
@@ -325,6 +336,7 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.start()
 
     const metadata = readRuntimeMetadata(userDataPath)
+
     const response = await sendRequest(metadata!.transports[0]!.endpoint, {
       id: 'req_1',
       authToken: 'wrong',
@@ -350,6 +362,7 @@ describe('OrcaRuntimeRpcServer', () => {
     await server.start()
 
     const metadata = readRuntimeMetadata(userDataPath)
+
     const response = await sendRequest(metadata!.transports[0]!.endpoint, {
       authToken: metadata!.authToken,
       method: 'status.get'

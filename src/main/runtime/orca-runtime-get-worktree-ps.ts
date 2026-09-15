@@ -41,13 +41,16 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
+
     const resolvedWorktreeSnapshot = await this.listResolvedWorktreeSnapshot()
     const visibilitySettings = this.store?.getSettings()
+
     const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
       resolvedWorktreeSnapshot.worktrees,
       sourceDefaultsSupported,
       visibilitySettings
     )
+
     const resolvedWorktrees = resolvedWorktreeSnapshot.worktrees.filter((worktree) =>
       this.isRuntimeWorktreeVisible(
         worktree,
@@ -56,11 +59,13 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         visibilitySettings
       )
     )
+
     // Why: worktree.ps backs the mobile sidebar, so it must use the same
     // host-owned imported-worktree visibility gate as worktree.list/desktop.
     const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
     const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
     const platformByRepoId = resolvedWorktreeSnapshot.platformByRepoId
+
     const summaries = buildRuntimeWorktreePsSummaries({
       store: this.store,
       resolvedWorktrees,
@@ -72,8 +77,10 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       resolvedWorktrees,
       platformByRepoId
     )
+
     const missingRuntimeWorktreeIds = new Set<string>()
     const session = this.store?.getWorkspaceSession?.()
+
     const workingTerminalEvidenceByWorktreeId = applyRuntimeWorktreePsTerminalActivity({
       summaries,
       pathIndex: runtimeWorktreeSummaryPathIndex,
@@ -87,6 +94,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
         this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
     })
+
     const { mirroredWorktreeIdByTabId, connectedPtyEvidence } =
       applyRuntimeWorktreePsSessionActivity({
         store: this.store,
@@ -100,6 +108,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
           this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
       })
+
     attachRuntimeWorktreeAgentRows({
       summaries,
       pathIndex: runtimeWorktreeSummaryPathIndex,
@@ -117,6 +126,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
     })
 
     const sorted = [...summaries.values()].sort(compareWorktreePs)
+
     // Why: the same cap starvation as worktree.list — a host whose rows all sort last gets no
     // page at all, which is indistinguishable from it having no workspaces (#18104).
     return buildWorktreeListingPage(sorted, limit, this.listKnownExecutionHostIds())
@@ -130,6 +140,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
     if (!this.store) {
       return
     }
+
     enrichMissingRepoGitRemoteIdentities(this.store, {
       onChanged: () => {
         this.invalidateResolvedWorktreeCache()
@@ -184,11 +195,13 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
     if (provider === 'claude') {
       return this.resolveConfiguredClaudeStructuredArgs()
     }
+
     return this.resolveConfiguredCodexStructuredArgs()
   }
 
   protected resolveConfiguredClaudeStructuredArgs(): string[] {
     const settings = this.requireStore().getSettings()
+
     const shell = resolveStartupShell(
       process.platform,
       resolveLocalWindowsAgentStartupShell({
@@ -197,20 +210,24 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         terminalWindowsShell: settings.terminalWindowsShell
       })
     )
+
     const tokenized = tokenizeStartupCommand(
       resolveTuiAgentLaunchArgs('claude', settings.agentDefaultArgs),
       shell
     )
+
     return tokenized.ok ? tokenized.tokens : []
   }
 
   protected resolveConfiguredCodexStructuredArgs(): string[] {
     const settings = this.requireStore().getSettings()
+
     const shell = resolveLocalWindowsAgentStartupShell({
       platform: process.platform,
       isRemote: false,
       terminalWindowsShell: settings.terminalWindowsShell
     })
+
     return resolveCodexStructuredAppServerArgs(
       resolveTuiAgentLaunchArgs('codex', settings.agentDefaultArgs),
       shell ?? 'posix'
@@ -223,6 +240,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       launchTui: this.createStructuredAgentSessionLaunchTuiCallback(),
       waitForTuiExit: async (owner) => {
         await this.waitForStructuredTuiOwnerExit(owner)
+
         return owner.transcriptPath ? { transcriptPath: owner.transcriptPath } : {}
       },
       waitForTuiIdleOrExit: async (owner, signal) => {
@@ -232,16 +250,21 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       recoverTuiOwner: this.createStructuredAgentSessionRecoverTuiOwnerCallback(),
       probeRecoveredOwner: async (record) => {
         const identity = record.lease.ownerProcess
+
         if (!identity) {
           return 'dead'
         }
+
         const proof = await probeAgentSessionProcessIdentity({ identity })
+
         if (proof.outcome === 'identity-matched' && proof.matchedOn.length > 0) {
           return 'live'
         }
+
         if (proof.outcome === 'pid-absent' || proof.outcome === 'identity-mismatch') {
           return 'dead'
         }
+
         return 'unknown'
       },
       stopRecoveredOwner: (record) => this.stopStructuredSessionProcess(record),
@@ -251,6 +274,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         if (adoptedTerminal || (agent !== 'codex' && agent !== 'claude')) {
           return
         }
+
         await this.publishStructuredAgentSessionTab({
           workspaceId,
           sessionId,

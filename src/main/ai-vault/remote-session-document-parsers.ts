@@ -18,9 +18,11 @@ export function remoteSessionDocumentParsers(
         : agent === 'gemini'
           ? parseGeminiSessionDocument
           : null
+
   if (!parse) {
     return {}
   }
+
   return {
     parseDocument: (file, bytes, context) =>
       parse(

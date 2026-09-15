@@ -27,6 +27,7 @@ describe('OrcaRuntimeService', () => {
     } {
       const servePtyId = 'serve-live-1'
       const processes = [{ id: servePtyId, cwd: TEST_WORKTREE_PATH, title: 'Live' }]
+
       const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
         makeWorkspaceSessionWithHeadlessTerminal({
           tabsByWorktree: {
@@ -48,6 +49,7 @@ describe('OrcaRuntimeService', () => {
           }
         })
       )
+
       const kill = vi.fn(() => true)
       const closeTerminal = vi.fn()
       const closeTerminalTab = vi.fn(async () => {})
@@ -80,6 +82,7 @@ describe('OrcaRuntimeService', () => {
           }
         ]
       })
+
       return {
         runtime,
         getSession,
@@ -96,6 +99,7 @@ describe('OrcaRuntimeService', () => {
       async (reason) => {
         const { runtime, getSession, kill, closeTerminal, closeTerminalTab } =
           makeAdoptedLiveTabRuntime()
+
         const before = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
         const events: { worktree: string; snapshotVersion: number; tabs: unknown[] }[] = []
         const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
@@ -141,6 +145,7 @@ describe('OrcaRuntimeService', () => {
           reason: 'cleanup'
         })
       ])
+
       await vi.waitFor(() => expect(listProcesses).toHaveBeenCalledTimes(1))
       inventory.resolve(processes)
 
@@ -153,6 +158,7 @@ describe('OrcaRuntimeService', () => {
 
     it('keeps a live persisted PTY whose pane binding has not reconnected yet', async () => {
       const ptyId = 'persisted-pty'
+
       const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
         makeWorkspaceSessionWithHeadlessTerminal({
           tabsByWorktree: {
@@ -174,6 +180,7 @@ describe('OrcaRuntimeService', () => {
           }
         })
       )
+
       const kill = vi.fn(() => true)
       const runtime = new OrcaRuntimeService(runtimeStore as never)
       runtime.setPtyController({
@@ -217,6 +224,7 @@ describe('OrcaRuntimeService', () => {
         `id:${TEST_WORKTREE_ID}`,
         'host-tab'
       )
+
       const after = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
 
       expect(result).toEqual({
@@ -235,6 +243,7 @@ describe('OrcaRuntimeService', () => {
       const { runtime, kill, closeTerminal, closeTerminalTab } = makeAdoptedLiveTabRuntime()
       const current = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
       const terminal = current.tabs.find((tab) => tab.type === 'terminal')
+
       if (!terminal || terminal.status !== 'ready') {
         throw new Error('expected a ready terminal fixture')
       }
@@ -280,11 +289,14 @@ describe('OrcaRuntimeService', () => {
     it('leaves dead renderer-owned retirement to the renderer without relaying a close', async () => {
       const { runtime, processes, kill, closeTerminal, closeTerminalTab } =
         makeAdoptedLiveTabRuntime()
+
       const current = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
       const terminal = current.tabs.find((tab) => tab.type === 'terminal')
+
       if (!terminal || terminal.status !== 'ready') {
         throw new Error('expected a ready terminal fixture')
       }
+
       runtime.onPtyExit('serve-live-1', 0)
       processes.length = 0
 
@@ -314,6 +326,7 @@ describe('OrcaRuntimeService', () => {
         [HEADLESS_LEAF_ID]: 'serve-left',
         [HEADLESS_SECOND_LEAF_ID]: 'serve-right'
       })
+
       const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
         makeWorkspaceSessionWithHeadlessTerminal({
           tabsByWorktree: {
@@ -333,6 +346,7 @@ describe('OrcaRuntimeService', () => {
           terminalLayoutsByTabId: { 'host-tab': layout }
         })
       )
+
       const kill = vi.fn(() => true)
       const closeTerminal = vi.fn()
       const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -372,6 +386,7 @@ describe('OrcaRuntimeService', () => {
           }
         ]
       })
+
       return { runtime, getSession, kill, closeTerminal }
     }
 
@@ -435,6 +450,7 @@ describe('OrcaRuntimeService', () => {
       // Why: the headless close path kills every leaf PTY and de-persists the
       // parent; an echo must not reach it while the host sees the PTY alive.
       const servePtyId = 'serve-headless-live'
+
       const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
         makeWorkspaceSessionWithHeadlessTerminal({
           tabsByWorktree: {
@@ -456,6 +472,7 @@ describe('OrcaRuntimeService', () => {
           }
         })
       )
+
       const kill = vi.fn(() => true)
       const closeTerminal = vi.fn()
       const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -504,6 +521,7 @@ describe('OrcaRuntimeService', () => {
       const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
         makeWorkspaceSessionWithHeadlessTerminal()
       )
+
       const kill = vi.fn(() => true)
       const runtime = new OrcaRuntimeService(runtimeStore as never)
       runtime.setPtyController({
@@ -530,9 +548,11 @@ describe('OrcaRuntimeService', () => {
       const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
         makeWorkspaceSessionWithHeadlessTerminal()
       )
+
       const processes: { id: string; cwd: string; title: string }[] = [
         { id: 'persisted-pty', cwd: TEST_WORKTREE_PATH, title: 'Shell' }
       ]
+
       const kill = vi.fn(() => true)
       const runtime = new OrcaRuntimeService(runtimeStore as never)
       runtime.setPtyController({
@@ -561,6 +581,7 @@ describe('OrcaRuntimeService', () => {
       const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
         makeWorkspaceSessionWithHeadlessTerminal()
       )
+
       const kill = vi.fn(() => true)
       const runtime = new OrcaRuntimeService(runtimeStore as never)
       runtime.setPtyController({
@@ -591,6 +612,7 @@ describe('OrcaRuntimeService', () => {
 
   it('builds mobile session agent launch commands on the runtime host', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent' })
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => ({
@@ -600,6 +622,7 @@ describe('OrcaRuntimeService', () => {
         agentDefaultEnv: { 'command-code': { COMMAND_CODE_PROFILE: 'mobile-env' } }
       })
     } as never)
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -626,6 +649,7 @@ describe('OrcaRuntimeService', () => {
 
   it('injects mobile quick-command prompts into the host-built agent startup command', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-agent-prompt' })
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => ({
@@ -635,6 +659,7 @@ describe('OrcaRuntimeService', () => {
         agentDefaultArgs: {}
       })
     } as never)
+
     runtime.setPtyController({
       spawn,
       write: () => true,

@@ -30,6 +30,7 @@ import { resolvePnpmCliInvocation } from './pnpm-cli-invocation.mjs'
  * with no node_modules and no native builds.
  */
 const PROJECT_DIR = resolve(import.meta.dirname, '../..')
+
 const WINDOWS_PROCESS_TREE_PATCH = '@vscode__windows-process-tree@0.8.0.patch'
 
 /**
@@ -40,12 +41,15 @@ const WINDOWS_PROCESS_TREE_PATCH = '@vscode__windows-process-tree@0.8.0.patch'
  */
 function resolvePnpmInvocation() {
   const { command, prefixArgs } = resolvePnpmCliInvocation()
+
   if (isAbsolute(command)) {
     return existsSync(command) ? { program: command, prefixArgs } : null
   }
+
   // Bare name only when npm_execpath is unset (bare `vitest`, not `pnpm test`).
   // Drop the extension so the shared resolver tries every executable form of it.
   const resolved = resolveCliCommand(parse(command).name)
+
   return isAbsolute(resolved) ? { program: resolved, prefixArgs } : null
 }
 
@@ -57,10 +61,12 @@ describe('patched dependencies', () => {
     // A copy, because a --frozen-lockfile run still rewrites parts of the
     // lockfile this repo does not track, and the real one must not move.
     const scratch = mkdtempSync(join(tmpdir(), 'orca-frozen-install-'))
+
     try {
       for (const file of ['package.json', 'pnpm-lock.yaml', 'pnpm-workspace.yaml']) {
         copyFileSync(join(PROJECT_DIR, file), join(scratch, file))
       }
+
       mkdirSync(join(scratch, 'config'), { recursive: true })
       cpSync(join(PROJECT_DIR, 'config', 'patches'), join(scratch, 'config', 'patches'), {
         recursive: true
@@ -100,6 +106,7 @@ describe('patched dependencies', () => {
     expect(pnpm, 'pnpm must be installed; it is the only thing that can check this').not.toBeNull()
 
     const scratch = mkdtempSync(join(tmpdir(), 'orca-patch-apply-'))
+
     try {
       mkdirSync(join(scratch, 'config', 'patches'), { recursive: true })
       copyFileSync(
@@ -131,6 +138,7 @@ describe('patched dependencies', () => {
         cwd: scratch,
         timeoutMs: 300_000
       })
+
       expect(result.code, `${result.stdout}\n${result.stderr}`).toBe(0)
 
       const materialized = readFileSync(
@@ -144,6 +152,7 @@ describe('patched dependencies', () => {
         ),
         'utf8'
       )
+
       expect(materialized).toContain('kProcessCommandLineInformation')
       // The whole point of the patch: the upstream reader is gone, not merely
       // supplemented.

@@ -61,15 +61,18 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
     effectiveCreatedWithAgent,
     localWorktreeGitOptions
   } = args
+
   const worktreeId = `${repo.id}::${created.path}`
   const now = Date.now()
   const metadataBaseRef = request.compareBaseRef ?? remoteTrackingBase?.ref ?? baseBranch
+
   const displayNameMeta = resolveWorktreeCreateDisplayNameMeta(
     requestedDisplayName,
     branchName,
     displayNameKind,
     { requestedName: effectiveRequestedName, sanitizedName: effectiveSanitizedName }
   )
+
   const meta = store.setWorktreeMeta(worktreeId, {
     instanceId: randomUUID(),
     ...getProjectHostSetupWorktreeMeta(store.getProjectHostSetups?.() ?? [], repo),
@@ -126,35 +129,44 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
     ...(request.manualOrder !== undefined ? { manualOrder: request.manualOrder } : {}),
     ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {})
   })
+
   const worktree = {
     ...mergeWorktree(repo.id, created, meta),
     hostId: meta.hostId ?? getRepoExecutionHostId(repo)
   }
+
   const metadataResult = args.onMetadataPersisted(worktree)
 
   if ((repo.symlinkPaths ?? []).length > 0) {
     await createWorktreeLinkedPaths(repo.path, created.path, repo.symlinkPaths ?? [])
   }
+
   // These discoveries are read-only; overlap them, but keep the shared-path
   // mutation ahead of include copies below.
   const [sharedDirectories, worktreeIncludePaths] = await Promise.all([
     resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions),
     resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
   ])
+
   if (sharedDirectories.length > 0) {
     await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
   }
+
   if (worktreeIncludePaths.length === 0) {
     return { worktree, metadataResult }
   }
+
   const skippedIncludePaths = await createWorktreeCopiedPaths(
     repo.path,
     created.path,
     worktreeIncludePaths
   )
+
   const includeCopyWarning = formatWorktreeIncludeCopyWarning(skippedIncludePaths)
+
   if (includeCopyWarning) {
     console.warn(`[worktree-include] ${includeCopyWarning}`)
   }
+
   return { worktree, metadataResult, ...(includeCopyWarning ? { includeCopyWarning } : {}) }
 }

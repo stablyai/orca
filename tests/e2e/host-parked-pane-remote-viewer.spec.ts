@@ -48,9 +48,13 @@ import { focusActiveTerminalInput } from './helpers/terminal'
 import { waitForTabParked } from './helpers/terminal-hidden-parking'
 
 const PARK_DELAY_MS = 30_000
+
 const PAINT_BUDGET_MS = 20_000
+
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-host-park-viewer-'))
+
 const fixturePath = path.join(scratch, 'host-park-viewer-terminal.mjs')
+
 writeFileSync(
   fixturePath,
   [
@@ -87,6 +91,7 @@ function shellQuote(value: string): string {
 
 function fixtureCommand(sinkPath: string): string {
   const command = [process.execPath, fixturePath, sinkPath]
+
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
     : command.map(shellQuote).join(' ')
@@ -113,9 +118,11 @@ async function callEnvironment<TResult>(
         method,
         params
       })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { environmentId, method, params }
@@ -126,6 +133,7 @@ async function readPaneContent(page: Page, tabId: string): Promise<string> {
   return page.evaluate((id) => {
     const manager = window.__paneManagers?.get(id)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     return pane?.serializeAddon?.serialize?.() ?? ''
   }, tabId)
 }
@@ -137,12 +145,15 @@ async function waitForPaneMarker(
   budgetMs: number
 ): Promise<boolean> {
   const deadline = Date.now() + budgetMs
+
   while (Date.now() < deadline) {
     if ((await readPaneContent(page, tabId)).includes(marker)) {
       return true
     }
+
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
+
   return false
 }
 
@@ -156,14 +167,18 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
   const client = await launchPairedElectronClient(offer, testInfo, 'host-park-viewer')
   const createdTerminals: string[] = []
   const sinkPath = path.join(scratch, `sink-${randomUUID()}.log`)
+
   try {
     const worktreeId = await orcaPage.evaluate(() => {
       const id = window.__store?.getState().activeWorktreeId
+
       if (!id) {
         throw new Error('headed host has no active worktree')
       }
+
       return id
     })
+
     await expect
       .poll(
         () =>
@@ -192,9 +207,11 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
         navigation: 'caller'
       }
     )
+
     if (!created.tab.terminal) {
       throw new Error('host session terminal was not created')
     }
+
     createdTerminals.push(created.tab.terminal)
     const hostTabId = created.tab.id.split(HOST_TERMINAL_SURFACE_SEPARATOR)[0]
     const webTabId = toWebTerminalSurfaceTabId(hostTabId)
@@ -249,16 +266,21 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
     await focusActiveTerminalInput(client.page)
     await client.page.keyboard.type(controlToken)
     await client.page.keyboard.press('Enter')
+
     const controlReached = await (async () => {
       const deadline = Date.now() + PAINT_BUDGET_MS
+
       while (Date.now() < deadline) {
         if (readSink(sinkPath).includes(`LINE:${controlToken}`)) {
           return true
         }
+
         await new Promise((resolve) => setTimeout(resolve, 250))
       }
+
       return false
     })()
+
     console.log(
       `[sta2854] control-reached=${controlReached} sink=${JSON.stringify(readSink(sinkPath))}`
     )
@@ -276,22 +298,26 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
       await orcaPage.evaluate((id) => {
         const state = window.__store?.getState()
         const tab = state?.createTab(id, undefined, undefined, { activate: true })
+
         if (tab) {
           state?.setActiveTab(tab.id)
           state?.setActiveTabType('terminal')
         }
       }, worktreeId)
     }
+
     const readClientState = async (): Promise<unknown> =>
       client.page.evaluate((id) => {
         const manager = window.__paneManagers?.get(id)
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
         return {
           mounted: Boolean(manager),
           ptyId: pane?.container?.dataset?.ptyId ?? null,
           recoveryState: pane?.container?.dataset?.ptyRecoveryState ?? null
         }
       }, webTabId)
+
     console.log(`[sta2854] decoys-created client=${JSON.stringify(await readClientState())}`)
     await waitForTabParked(orcaPage, hostTabId, { parkDelayMs: PARK_DELAY_MS })
     console.log(`[sta2854] post-park client=${JSON.stringify(await readClientState())}`)
@@ -305,12 +331,14 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
           method: 'terminal.read',
           params: { terminal }
         })
+
         return response.ok
           ? { ok: true as const }
           : { ok: false as const, code: response.error.code, message: response.error.message }
       },
       { environmentId: client.environmentId, terminal: created.tab.terminal }
     )
+
     console.log(`[sta2854] handle-probe=${JSON.stringify(handleProbe)}`)
 
     // Type the moment the host parks — a user driving the pane does not wait
@@ -326,16 +354,20 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
     const timelineDeadline = Date.now() + 90_000
     let inputReached = false
     let clientEchoed = false
+
     while (Date.now() < timelineDeadline) {
       const hostMounted = await orcaPage.evaluate(
         (id) => window.__paneManagers?.has(id) ?? false,
         hostTabId
       )
+
       const clientPhase = await client.page.evaluate((id) => {
         const manager = window.__paneManagers?.get(id)
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
         return pane?.container?.dataset?.ptyRecoveryState ?? 'unmounted'
       }, webTabId)
+
       inputReached ||= readSink(sinkPath).includes(`LINE:${token}`)
       // Signal 2, and the reason this is not merely a host-side test: the echo
       // has to come back out to the client's own xterm.
@@ -345,6 +377,7 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
       )
       await new Promise((resolve) => setTimeout(resolve, 2_000))
     }
+
     console.log(`[sta2854] timeline=${JSON.stringify(timeline)}`)
     console.log(
       `[sta2854] input-reached=${inputReached} client-echoed=${clientEchoed} sink=${JSON.stringify(readSink(sinkPath))}`
@@ -364,6 +397,7 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
     const readyLines = readSink(sinkPath)
       .split('\n')
       .filter((line) => line.startsWith('READY:'))
+
     expect(readyLines, 'host PTY was replaced across the park').toHaveLength(1)
     // Intentionally not asserted: whether the host pane stays parked is part of
     // what the timeline above reports (a recovery-driven remount would show as
@@ -374,11 +408,13 @@ test('a cold-parked host pane keeps serving its paired remote viewer', async ({
     } else {
       process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS = previousParkDelay
     }
+
     for (const terminal of createdTerminals) {
       await callEnvironment(client.page, client.environmentId, 'terminal.closeTab', {
         terminal
       }).catch(() => undefined)
     }
+
     await client.dispose()
   }
 })

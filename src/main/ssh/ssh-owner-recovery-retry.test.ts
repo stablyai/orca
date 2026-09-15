@@ -43,6 +43,7 @@ describe('SSH owner recovery retry', () => {
 
   it('recovers once the incumbent grant publication settles', async () => {
     vi.useFakeTimers()
+
     const attempt = vi
       .fn<() => Promise<string>>()
       .mockRejectedValueOnce(publicationPendingError())
@@ -79,6 +80,7 @@ describe('SSH owner recovery retry', () => {
 
   it('retries while a superseded transport is closing', async () => {
     vi.useFakeTimers()
+
     const attempt = vi
       .fn<() => Promise<string>>()
       .mockRejectedValueOnce(supersededError())
@@ -93,6 +95,7 @@ describe('SSH owner recovery retry', () => {
 
   it('retries a disconnected holder until it releases admission', async () => {
     vi.useFakeTimers()
+
     const attempt = vi
       .fn<() => Promise<string>>()
       .mockRejectedValueOnce(heldError(PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR))
@@ -121,10 +124,12 @@ describe('SSH owner recovery retry', () => {
   it('gives a disconnected holder its own budget rather than the publication one', async () => {
     vi.useFakeTimers()
     let failures = 0
+
     const attempt = vi.fn<() => Promise<string>>().mockImplementation(async () => {
       if (failures++ < 6) {
         throw heldError(PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR)
       }
+
       return 'recovered'
     })
 
@@ -147,6 +152,7 @@ describe('SSH owner recovery retry', () => {
       gate,
       60
     )
+
     const pendingRejection = expect(pending).rejects.toThrow('publication')
     await vi.advanceTimersByTimeAsync(60)
     await pendingRejection
@@ -158,6 +164,7 @@ describe('SSH owner recovery retry', () => {
       gate,
       60
     )
+
     const heldRejection = expect(held).rejects.toThrow('held')
     // Why the disconnected budget and not the 60ms one: each reason carries its own deadline so a
     // settling publication cannot spend the budget that waits out a grace floor.
@@ -171,11 +178,13 @@ describe('SSH owner recovery retry', () => {
     vi.useFakeTimers()
     const start = Date.now()
     let disconnectedAttempts = 0
+
     const attempt = vi.fn<() => Promise<string>>().mockImplementation(async () => {
       // A publication that takes longer to settle than the whole disconnected budget.
       if (Date.now() - start < SSH_OWNER_HELD_DISCONNECTED_WAIT_MS + 100) {
         throw publicationPendingError()
       }
+
       return disconnectedAttempts++ < 3
         ? Promise.reject(heldError(PTY_CONSUMER_OWNER_HELD_DISCONNECTED_ERROR))
         : 'recovered'
@@ -193,6 +202,7 @@ describe('SSH owner recovery retry', () => {
   it("treats the client's own attached connection as transient, not blocked", async () => {
     vi.useFakeTimers()
     const selfError = heldError(PTY_CONSUMER_OWNER_HELD_SELF_ERROR)
+
     const attempt = vi
       .fn<() => Promise<string>>()
       .mockRejectedValueOnce(selfError)
@@ -228,15 +238,18 @@ describe('SSH owner recovery retry', () => {
     let close: (() => void) | undefined
     const error = publicationPendingError()
     const attempt = vi.fn<() => Promise<never>>().mockRejectedValue(error)
+
     const recovery = retrySshOwnerRecoveryWhileBlocked(attempt, {
       isCurrent: () => current,
       onClosed: (listener) => {
         close = listener
+
         return () => {
           close = undefined
         }
       }
     })
+
     await vi.advanceTimersByTimeAsync(0)
     expect(close).toBeTypeOf('function')
 

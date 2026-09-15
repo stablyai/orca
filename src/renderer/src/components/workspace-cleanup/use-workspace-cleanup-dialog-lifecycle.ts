@@ -32,18 +32,23 @@ export function useWorkspaceCleanupDialogLifecycle(): WorkspaceCleanupDialogLife
     if (removedIdentities.length === 0) {
       return
     }
+
     setSelectedIds((current) => {
       const next = new Set(current)
+
       for (const identity of removedIdentities) {
         next.delete(identity)
       }
+
       return next
     })
   }, [])
+
   const removal = useWorkspaceCleanupRemoval({
     onDeselect: deselectRemovedIdentities,
     closeModal
   })
+
   const { removalInFlightRef, resetForReopen, resetRowFailures } = removal
 
   const onFreshOpen = useCallback(() => {
@@ -61,16 +66,20 @@ export function useWorkspaceCleanupDialogLifecycle(): WorkspaceCleanupDialogLife
     resetRowFailures,
     onFreshOpen
   })
+
   const [mountedContent, setMountedContent] = useState(open)
   useEffect(() => {
     if (open) {
       setMountedContent(true)
+
       return
     }
+
     const timer = window.setTimeout(
       () => setMountedContent(false),
       WORKSPACE_CLEANUP_CLOSE_LINGER_MS
     )
+
     return () => window.clearTimeout(timer)
   }, [open])
 

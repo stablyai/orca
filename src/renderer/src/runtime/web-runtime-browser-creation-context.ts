@@ -74,12 +74,15 @@ export function createWebRuntimeBrowserCreationContext(
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
   const shouldFocusOnCreate = args.focusOnCreate !== false
   const provisionalPageId = createBrowserUuid()
+
   const advertisedCapabilities =
     useAppStore.getState().runtimeStatusByEnvironmentId?.get(environmentId)?.status?.capabilities ??
     []
+
   const hostSupportsKnownPageId = advertisedCapabilities.includes(
     BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
   )
+
   // Why the same predicate the main process uses: this mounts the staged pane one round-trip
   // before prepareBrowserClientHostPlacement answers, so the two have to reach the same verdict
   // from the same inputs. A cached status disagreeing with the live one is corrected by
@@ -91,6 +94,7 @@ export function createWebRuntimeBrowserCreationContext(
       ?.deviceScope,
     capabilities: advertisedCapabilities
   })
+
   return {
     args,
     environmentId,
@@ -113,6 +117,7 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
   const { args, environmentId, intentOwner, provisionalPageId, shouldFocusOnCreate } = context
   throwIfE2eWebRuntimeBrowserCapabilityUnavailable()
   assertRuntimeManagedBrowserCreationAvailable(useAppStore.getState(), environmentId)
+
   if (args.clientTargetGroupId) {
     recordWebSessionBrowserPlacement({
       environmentId,
@@ -122,9 +127,11 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
       callerCreatedGroup: args.clientTargetGroupCreated
     })
   }
+
   if (context.shouldSelectWorktree) {
     selectWebRuntimeSessionBrowserWorktree(args.worktreeId, environmentId)
   }
+
   // Why: everything below this point is a host round-trip; stage the tab first so the strip
   // reacts to the click instead of to the runtime.
   context.staged = stageWebRuntimeBrowserTab({
@@ -153,6 +160,7 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
   context.expectedCurrentLocalTabId = initialFocusState
     ? resolveWebSessionVisibleTabId(initialFocusState, args.worktreeId)
     : null
+
   if (shouldFocusOnCreate && matchesWebSessionIntentOwner(intentOwner)) {
     recordWebSessionFocusIntent(
       intentOwner,
@@ -178,6 +186,7 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
       ) {
         return
       }
+
       if (
         state.activeWorktreeId === expectedActiveWorktreeId &&
         state.activeWorkspaceExecutionHostId === expectedActiveWorkspaceExecutionHostId &&
@@ -185,6 +194,7 @@ export function stageWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreatio
       ) {
         return
       }
+
       clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, context.guardedPageId)
       context.unsubscribeFocusGuard()
     })
@@ -215,6 +225,7 @@ export function rehomeWebRuntimeBrowserCreation(
     fromRemotePageId: provisionalPageId,
     toRemotePageId: remotePageId
   })
+
   if (context.staged) {
     context.staged = rehomeStagedWebRuntimeBrowserTab(context.staged, {
       environmentId,
@@ -222,9 +233,11 @@ export function rehomeWebRuntimeBrowserCreation(
       remotePageId
     })
   }
+
   const focusIntent = context.shouldFocusOnCreate
     ? peekWebSessionFocusIntent(intentOwner, args.worktreeId)
     : null
+
   if (focusIntent?.hostTabId === provisionalPageId) {
     recordWebSessionFocusIntent(
       intentOwner,
@@ -234,32 +247,39 @@ export function rehomeWebRuntimeBrowserCreation(
       focusIntent.expectedCurrentLocalTabId
     )
   }
+
   context.guardedPageId = remotePageId
 }
 
 export function completeWebRuntimeBrowserCreation(context: WebRuntimeBrowserCreationContext): true {
   const { args, environmentId, intentOwner, guardedPageId } = context
   context.staged = null
+
   const remainingFocusIntent = context.shouldFocusOnCreate
     ? peekWebSessionFocusIntent(intentOwner, args.worktreeId)
     : null
+
   if (
     remainingFocusIntent?.hostTabId === guardedPageId &&
     remainingFocusIntent.expectedCurrentLocalTabId === context.expectedCurrentLocalTabId
   ) {
     clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, guardedPageId)
   }
+
   context.unsubscribeFocusGuard()
+
   if (args.clientTargetGroupId) {
     markWebSessionBrowserPlacementGroupMaterialized({
       worktreeId: args.worktreeId,
       groupId: args.clientTargetGroupId
     })
   }
+
   forgetWebSessionBrowserPlacement({
     environmentId,
     worktreeId: args.worktreeId,
     remotePageId: guardedPageId
   })
+
   return true
 }

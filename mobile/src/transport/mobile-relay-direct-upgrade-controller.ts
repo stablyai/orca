@@ -28,6 +28,7 @@ export class MobileRelayDirectUpgradeController {
         void this.tryUpgrade()
       }
     })
+
     if (this.logical.getState() === 'connected') {
       await this.tryUpgrade()
     }
@@ -35,6 +36,7 @@ export class MobileRelayDirectUpgradeController {
 
   setForeground(foreground: boolean): void {
     this.foreground = foreground
+
     if (foreground && this.logical.getState() === 'connected') {
       void this.tryUpgrade()
     }
@@ -56,12 +58,16 @@ export class MobileRelayDirectUpgradeController {
     if (this.stopped || !this.foreground || this.inFlight) {
       return
     }
+
     this.inFlight = true
+
     try {
       const result = await this.dependencies.upgrade(this.logical, this.host)
+
       if (!result || this.stopped) {
         return
       }
+
       this.unsubscribe?.()
       this.unsubscribe = null
       await this.dependencies.onUpgraded(result)

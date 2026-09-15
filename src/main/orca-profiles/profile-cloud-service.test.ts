@@ -145,6 +145,7 @@ describe('Orca cloud profile service', () => {
     if (result.status !== 'connected') {
       throw new Error(`Expected connected result, got ${result.status}`)
     }
+
     expect(result.activeProfileId).toBe('local-default')
     expect(result.profiles[0]).toMatchObject({
       id: 'local-default',
@@ -251,6 +252,7 @@ describe('Orca cloud profile service', () => {
     if (result.status !== 'created') {
       throw new Error(`Expected created result, got ${result.status}`)
     }
+
     expect(result.profile).toMatchObject({
       id: expect.stringMatching(/^cloud-/),
       name: 'Acme',
@@ -268,11 +270,13 @@ describe('Orca cloud profile service', () => {
     configureCloudEnv()
     mockSuccessfulConnect()
     await connectCurrentOrcaProfile(userDataPath)
+
     const orgCloudSummary = {
       ...cloudSummary,
       activeOrgId: 'org-1',
       activeOrgName: 'Acme'
     }
+
     selectOrcaCloudOrgMock.mockResolvedValue({
       cloud: orgCloudSummary,
       organizations,

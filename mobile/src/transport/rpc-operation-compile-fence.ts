@@ -116,6 +116,7 @@ export const fenceKeepsRequiredField: RpcSendParams<'files.searchPaths'> = { que
 declare const fenceTighterThanParsed: {
   [Method in RpcMethodName]: RpcParams<Method> extends RpcSendParams<Method> ? never : Method
 }[RpcMethodName] & {}
+
 export const fenceNoTighterMethod: never = fenceTighterThanParsed
 
 // z.input collapses every coercing builder to `unknown`. Only plugins.panelAction may be
@@ -123,6 +124,7 @@ export const fenceNoTighterMethod: never = fenceTighterThanParsed
 declare const fenceUnknownParams: {
   [Method in RpcMethodName]: unknown extends RpcSendParams<Method> ? Method : never
 }[RpcMethodName] & {}
+
 export const fenceOnlyDeclaredUnknown: 'plugins.panelAction' = fenceUnknownParams
 
 export async function fenceBarrierAndParams(): Promise<void> {

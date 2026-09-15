@@ -27,12 +27,14 @@ export async function settleFullCreationStructuredLaunch(args: {
             .applyWorktreeMeta(args.worktreeId, { pendingFirstAgentMessageRename: true })
             .catch(() => undefined)
         }
+
         const activation = activateAndRevealWorktree(args.worktreeId, {
           sidebarRevealBehavior: 'auto',
           agent: args.agent,
           createNewTerminalForStartup: true,
           ...(args.startup ? { startup: args.startup } : {})
         })
+
         return { activation, primaryTabId: activation === false ? null : activation.primaryTabId }
       },
       onStructuredReady: (sessionId) =>

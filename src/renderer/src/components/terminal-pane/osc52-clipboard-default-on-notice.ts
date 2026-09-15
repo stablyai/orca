@@ -22,6 +22,7 @@ export function useOsc52ClipboardDefaultOnNotice(persistedUIReady: boolean): voi
     if (!shouldShowOsc52ClipboardDefaultOnNotice({ persistedUIReady, noticePending })) {
       return
     }
+
     toast.info(
       translate(
         'auto.components.terminal.pane.osc52.clipboard.default.on.notice.title',

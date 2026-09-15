@@ -55,11 +55,14 @@ function openTerminal(): { emitted: string[]; terminal: Terminal; textarea: HTML
   const terminal = new Terminal()
   terminal.open(container)
   const textarea = terminal.textarea
+
   if (!textarea) {
     throw new Error('xterm helper textarea was not created')
   }
+
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
+
   return { emitted, terminal, textarea }
 }
 
@@ -72,22 +75,29 @@ function buildEvent(recorded: RecordedEvent): Event {
       bubbles: true,
       cancelable: true
     })
+
     Object.defineProperty(keyboard, 'keyCode', { value: recorded.keyCode })
+
     return keyboard
   }
+
   if (recorded.type === 'input' || recorded.type === 'beforeinput') {
     const input = new InputEvent(recorded.type, {
       isComposing: recorded.isComposing,
       bubbles: true
     })
+
     // happy-dom drops these three from InputEventInit; Chromium supplies all of them.
     Object.defineProperty(input, 'inputType', { value: recorded.inputType ?? '' })
     Object.defineProperty(input, 'data', { value: recorded.data ?? null })
     Object.defineProperty(input, 'composed', { value: true })
+
     return input
   }
+
   const composition = new CompositionEvent(recorded.type, { bubbles: true })
   Object.defineProperty(composition, 'data', { value: recorded.data ?? '' })
+
   return composition
 }
 
@@ -96,9 +106,11 @@ function replayEvent(textarea: HTMLTextAreaElement, recorded: RecordedEvent): vo
   if (recorded.value !== undefined) {
     textarea.value = recorded.value
   }
+
   if (recorded.selectionStart !== undefined && recorded.selectionEnd !== undefined) {
     textarea.setSelectionRange(recorded.selectionStart, recorded.selectionEnd)
   }
+
   textarea.dispatchEvent(buildEvent(recorded))
 }
 
@@ -110,9 +122,11 @@ async function replayTrace(
   const { emitted, terminal, textarea } = openTerminal()
   const preedits: PreeditSample[] = []
   const inputSignals: TypingInputSignal[] = []
+
   const detachInputEvents = installTypingLatencyInputEvents(window, (signal) => {
     inputSignals.push(signal)
   })
+
   try {
     for (const recorded of trace.dom) {
       // Keys were driven 20 ms apart, so every physical key event began its own task; the composition
@@ -121,15 +135,19 @@ async function replayTrace(
       if (recorded.type === 'keydown' || recorded.type === 'keyup') {
         await nextEventLoop()
       }
+
       replayEvent(textarea, recorded)
+
       if (recorded.type === 'compositionupdate' && recorded.data) {
         const view = terminal.element?.querySelector('.composition-view')
         preedits.push({ data: recorded.data, shown: view?.classList.contains('active') === true })
       }
     }
+
     // Two turns: the commit's deferred send, then the late-native-commit window it opens.
     await nextEventLoop()
     await nextEventLoop()
+
     return { stream: emitted.join(''), preedits, inputSignals }
   } finally {
     detachInputEvents()
@@ -167,6 +185,7 @@ describe.each([
   it('reports each reconciled commit to the typing diagnostic', async () => {
     const { inputSignals } = await replayTrace(trace)
     const expectedCommits = trace.expectedLines.flatMap((line) => [line.at(0), line.at(-1)])
+
     const commitSignals = inputSignals
       .filter((signal) => signal.source === 'ime')
       .map((signal) => signal.text)
@@ -175,9 +194,11 @@ describe.each([
       const rawEndData = trace.dom
         .filter((recorded) => recorded.type === 'compositionend')
         .map((recorded) => recorded.data ?? '')
+
       expect(rawEndData.length).toBeGreaterThan(0)
       expect(rawEndData.every((data) => data === '')).toBe(true)
     }
+
     expect(commitSignals).toEqual(expectedCommits)
   })
 

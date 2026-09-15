@@ -10,6 +10,7 @@ import type { TuiAgent } from './tui-agent'
 
 export function commandTemplateFromInstruction(instruction: string | null | undefined): string {
   const trimmed = instruction?.trim()
+
   return trimmed ? ['{basePrompt}', '', trimmed].join('\n') : '{basePrompt}'
 }
 
@@ -18,9 +19,11 @@ export function commandTemplateFromOperationInstruction(
   instruction: string | null | undefined
 ): string {
   const trimmed = instruction?.trim()
+
   if (!trimmed) {
     return '{basePrompt}'
   }
+
   return operation === 'branchName'
     ? [trimmed, '', '{basePrompt}'].join('\n')
     : commandTemplateFromInstruction(trimmed)
@@ -59,9 +62,11 @@ export function legacyPromptFromCommandTemplate(
   fallback: string | undefined
 ): string {
   const trimmed = template?.trim()
+
   if (!trimmed || trimmed === '{basePrompt}') {
     return fallback ?? ''
   }
+
   return trimmed.startsWith('{basePrompt}') ? trimmed.slice('{basePrompt}'.length).trim() : trimmed
 }
 
@@ -76,6 +81,7 @@ export function applyLegacyAgentToActionRecipe(
   agentId: CommitMessageAiSettings['agentId']
 ): SourceControlActionRecipe {
   const next = { ...recipe }
+
   if (agentId === null) {
     next.agentId = null
   } else if (isCustomAgentId(agentId)) {
@@ -85,6 +91,7 @@ export function applyLegacyAgentToActionRecipe(
   } else {
     delete next.agentId
   }
+
   return next
 }
 
@@ -93,10 +100,12 @@ export function shouldImportLegacyBranchPrompt(
   projectedLegacy: CommitMessageAiSettings
 ): boolean {
   const branchRecipe = readSourceControlActionDefault(base.actions, 'branchName')
+
   const projectedTemplate = commandTemplateFromOperationInstruction(
     'branchName',
     projectedLegacy.customPrompt
   )
+
   return (
     branchRecipe.commandInputTemplate === undefined ||
     branchRecipe.commandInputTemplate ===
@@ -110,5 +119,6 @@ export function shouldImportLegacyBranchAgent(
   projectedLegacy: CommitMessageAiSettings
 ): boolean {
   const branchRecipe = readSourceControlActionDefault(base.actions, 'branchName')
+
   return !hasActionAgentRecipe(branchRecipe) || branchRecipe.agentId === projectedLegacy.agentId
 }

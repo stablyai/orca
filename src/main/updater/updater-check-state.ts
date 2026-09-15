@@ -28,15 +28,18 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (options?.includePerfPrerelease) {
       return 'perf'
     }
+
     if (options?.includePrerelease) {
       return 'prerelease'
     }
+
     // Why: a persisted 'rc' override makes every routine check follow the RC series
     // without the user re-holding shift; the dev channels need an explicit tag, so
     // neither is a routine-check variant.
     if (this.getReleaseChannelOverride?.() === 'rc') {
       return 'prerelease'
     }
+
     return 'default'
   }
 
@@ -47,6 +50,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
       if (this.currentStatus.state === 'checking') {
         this.currentStatus = { state: 'idle' }
       }
+
       this.checkForUpdatesFromMenu(this.getOptionsForUpdateCheckVariant(variant))
     }, 0)
   }
@@ -59,6 +63,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (!this.updateCheckStallTimer) {
       return
     }
+
     clearTimeout(this.updateCheckStallTimer)
     this.updateCheckStallTimer = null
   }
@@ -67,6 +72,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (!this.updateCheckSilentSettleTimer) {
       return
     }
+
     clearTimeout(this.updateCheckSilentSettleTimer)
     this.updateCheckSilentSettleTimer = null
   }
@@ -87,9 +93,11 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (this.activeUpdateCheckAttemptId === null) {
       return null
     }
+
     if (this.activeUpdateCheckEventAttemptId !== this.activeUpdateCheckAttemptId) {
       return null
     }
+
     return this.activeUpdateCheckAttemptId
   }
 
@@ -101,10 +109,13 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (this.activeUpdateCheckAttemptId === null) {
       return false
     }
+
     if (this.activeUpdateCheckLaunchAttemptId !== this.activeUpdateCheckAttemptId) {
       return false
     }
+
     this.activeUpdateCheckEventAttemptId = this.activeUpdateCheckAttemptId
+
     return true
   }
 
@@ -112,6 +123,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (!this.isActiveUpdateCheckAttempt(attemptId)) {
       return
     }
+
     this.activeUpdateCheckLaunchAttemptId = attemptId
   }
 
@@ -123,6 +135,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (this.updateAvailableEventPendingAttemptId !== attemptId) {
       return
     }
+
     this.updateAvailableEventPendingAttemptId = null
   }
 
@@ -130,10 +143,13 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     this.clearUpdateCheckStallTimer()
     this.updateCheckStallTimer = setTimeout(() => {
       this.updateCheckStallTimer = null
+
       if (!this.isActiveUpdateCheckAttempt(attemptId)) {
         return
       }
+
       const wasUserInitiated = this.getSettledCheckUserInitiated()
+
       if (this.currentStatus.state === 'checking') {
         this.finishActiveUpdateCheckAttempt()
         this.backgroundCheckLaunchPending = false
@@ -144,8 +160,10 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
           wasUserInitiated,
           'promise'
         )
+
         return
       }
+
       if (this.backgroundCheckLaunchPending) {
         this.finishActiveUpdateCheckAttempt()
         this.backgroundCheckLaunchPending = false
@@ -164,6 +182,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     this.armUpdateCheckStallTimer(this.activeUpdateCheckAttemptId)
     // Why: issue #7576 warnings recurred at retry cadence; timestamp each attempt to confirm or rule out the updater.
     writeMainThreadDiagnosticMarker('updater-check-attempt')
+
     return this.activeUpdateCheckAttemptId
   }
 
@@ -171,6 +190,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (this.activeUpdateCheckAttemptId === null) {
       return
     }
+
     this.armUpdateCheckStallTimer(this.activeUpdateCheckAttemptId)
   }
 
@@ -193,21 +213,27 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (this.publishingWindowLastGoodCheck !== null) {
       return true
     }
+
     return this.consumeMissingManifestPrereleaseFallbackResult() !== null
   }
 
   protected completeSilentUpdateCheck(userInitiated: boolean | undefined): boolean {
     const shouldRetrySoon = this.consumeSilentCheckShortRetryReason()
     this.clearAvailableUpdateContext()
+
     if (shouldRetrySoon) {
       // Why: a silent result against a temporary last-good feed is still a release transition, so it must not suppress the short publish retry.
       this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_RETRY_INTERVAL_MS)
+
       return true
     }
+
     this.recordCompletedUpdateCheck()
+
     if (!userInitiated) {
       this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
     }
+
     return false
   }
 
@@ -215,9 +241,11 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (!this.isActiveUpdateCheckAttempt(attemptId)) {
       return
     }
+
     if (this.updateAvailableEventPendingAttemptId === attemptId) {
       return
     }
+
     if (this.currentStatus.state !== 'checking') {
       if (this.backgroundCheckLaunchPending) {
         this.finishActiveUpdateCheckAttempt()
@@ -225,16 +253,21 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
         this.backgroundCheckPromotedToUserInitiated = false
         this.userInitiatedCheck = false
         const shouldRetrySoon = this.completeSilentUpdateCheck(userInitiated)
+
         if (this.awaitingNudgeCheckOutcome) {
           if (shouldRetrySoon) {
             this.deferPendingUpdateNudgeUntilRetry()
+
             return
           }
+
           this.sendSettledCheckStatus({ state: 'not-available', userInitiated })
         }
       }
+
       return
     }
+
     this.finishActiveUpdateCheckAttempt()
     this.clearBackgroundCheckLaunchPending()
     this.backgroundCheckPromotedToUserInitiated = false
@@ -247,6 +280,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (!this.isActiveUpdateCheckAttempt(attemptId)) {
       return
     }
+
     this.clearUpdateCheckSilentSettleTimer()
     // Why: electron-updater can resolve before the terminal event arrives; grace-period it, then unstick checks that resolved without one.
     this.updateCheckSilentSettleTimer = setTimeout(() => {
@@ -259,6 +293,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     if (this.getActiveUpdateCheckEventAttemptId() !== null) {
       return true
     }
+
     // Why: electron-updater emits check errors globally; once a check settles, only active download/install flows should consume them.
     return (
       this.downloadInFlight ||
@@ -275,6 +310,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
     ) {
       return
     }
+
     // Why: count AV/EDR-blocked Windows signature checks in the field to size the affected cohort before bigger updater changes.
     if (isWindowsSignatureCheckUnavailableFailure(message)) {
       recordUpdaterLifecycle('windows_signature_check_blocked', undefined, {
@@ -282,6 +318,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
         message: 'Windows update signature check could not run'
       })
     }
+
     this.sendStatus({ state: 'error', message, userInitiated })
   }
 
@@ -291,6 +328,7 @@ export abstract class UpdaterCheckState extends UpdaterStatus {
    */
   protected sendSettledCheckStatus(status: UpdateStatus): void {
     const retainedStatus = getRetainedLinuxPackageManualInstallStatus()
+
     if (retainedStatus) {
       this.sendStatus(retainedStatus)
     } else if (status.state === 'error') {

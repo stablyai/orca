@@ -9,14 +9,17 @@ export function collectApprovedWorkerSpecs(
   isApproved: (plugin: ValidDiscoveredPlugin) => boolean
 ): ReadonlyMap<string, PluginWorkerSpawnSpec> {
   const specs = new Map<string, PluginWorkerSpawnSpec>()
+
   for (const plugin of plugins) {
     if (isInvalidDiscoveredPlugin(plugin) || !plugin.manifest.main || !isApproved(plugin)) {
       continue
     }
+
     specs.set(
       plugin.pluginKey,
       buildPluginWorkerSpawnSpec(plugin, capabilityKinds(plugin.manifest.capabilities))
     )
   }
+
   return specs
 }

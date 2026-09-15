@@ -127,7 +127,9 @@ describe('computeWorktreeSidebarDropPreview', () => {
       { worktreeId: 'expanded', groupIndex: 2, top: 244, bottom: 648 },
       { worktreeId: 'd', groupIndex: 3, top: 654, bottom: 770 }
     ]
+
     const groupIds = ['a', 'b', 'expanded', 'd']
+
     const preview = computeWorktreeSidebarDropPreview({
       pointerY: 700,
       containerTop: 0,
@@ -156,10 +158,13 @@ describe('computeWorktreeSidebarDropPreview', () => {
       { worktreeId: 'b', groupIndex: 1, top: 122, bottom: 238 },
       { worktreeId: 'expanded', groupIndex: 2, top: 244, bottom: 648 }
     ]
+
     const groupIds = ['a', 'b', 'expanded']
     const height = 404
+
     const dropIndexes = [0.05, 0.5, 0.95].map((fraction) => {
       const offsetY = height * fraction
+
       return computeWorktreeSidebarDropPreview({
         pointerY: 122 + offsetY,
         containerTop: 0,
@@ -177,11 +182,13 @@ describe('computeWorktreeSidebarDropPreview', () => {
 
   it('keeps a downward end drop stable when leading rows are virtualized', () => {
     const groupIds = ['a', 'b', 'c', 'd', 'e', 'f']
+
     const mountedRects = [
       { worktreeId: 'd', groupIndex: 3, top: 168, bottom: 218 },
       { worktreeId: 'e', groupIndex: 4, top: 224, bottom: 274 },
       { worktreeId: 'f', groupIndex: 5, top: 280, bottom: 330 }
     ]
+
     const input = {
       pointerY: 320,
       containerTop: 0,
@@ -194,6 +201,7 @@ describe('computeWorktreeSidebarDropPreview', () => {
     }
 
     const first = computeWorktreeSidebarDropPreview(input)!
+
     const held = computeWorktreeSidebarDropPreview({
       ...input,
       anchor: { beforeWorktreeId: first.dropAnchorId, pointerY: 320, scrollTop: 0 }

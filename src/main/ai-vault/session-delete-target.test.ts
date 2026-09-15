@@ -5,17 +5,29 @@ import { validateAiVaultSessionDeleteTarget } from './session-delete-target'
 // All roots are supplied via rootOptions so these tests never touch the real
 // home directory or filesystem — validation is pure string-path judgement.
 const HOME = join('/tmp', 'orca-ai-vault-delete-fixture-home')
+
 const GEMINI_ROOT = join(HOME, '.gemini', 'tmp')
+
 const CURSOR_ROOT = join(HOME, '.cursor', 'projects')
+
 const HERMES_ROOT = join(HOME, '.hermes', 'sessions')
+
 const OPENCLAW_ROOT = join(HOME, '.openclaw')
+
 const COPILOT_ROOT = join(HOME, '.copilot', 'session-state')
+
 const DEVIN_ROOT = join(HOME, '.local', 'share', 'devin', 'cli', 'transcripts')
+
 const PI_ROOT = join(HOME, '.pi', 'agent', 'sessions')
+
 const OMP_ROOT = join(HOME, '.omp', 'agent', 'sessions')
+
 const CLAUDE_ROOT = join(HOME, '.claude', 'projects')
+
 const CLAUDE_SESSION_ENV_ROOT = join(HOME, '.claude', 'session-env')
+
 const ROVO_ROOT = join(HOME, '.rovodev', 'sessions')
+
 const GROK_ROOT = join(HOME, '.grok', 'sessions')
 
 describe('validateAiVaultSessionDeleteTarget', () => {
@@ -23,6 +35,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
     const root = join('/tmp', 'cline-sessions')
     const sessionId = '1786466194549_xrzrl'
     const sessionDir = join(root, sessionId)
+
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'cline',
       filePath: join(sessionDir, `${sessionId}.json`),
@@ -40,6 +53,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
   it('rejects a Cline messages companion as an undiscoverable delete target', () => {
     const root = join('/tmp', 'cline-sessions')
     const sessionId = '1786466194549_xrzrl'
+
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'cline',
       filePath: join(root, sessionId, `${sessionId}.messages.json`),
@@ -57,6 +71,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { geminiSessionsDir: GEMINI_ROOT }
     })
+
     expect(result).toEqual({
       allowed: true,
       agent: 'gemini',
@@ -78,6 +93,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { geminiSessionsDir: GEMINI_ROOT }
     })
+
     expect(result.allowed).toBe(true)
   })
 
@@ -88,6 +104,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { geminiSessionsDir: GEMINI_ROOT }
     })
+
     expect(result).toEqual({ allowed: false, agent: 'gemini', reason: 'path-outside-known-roots' })
   })
 
@@ -98,6 +115,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { geminiSessionsDir: GEMINI_ROOT }
     })
+
     expect(result).toEqual({ allowed: false, agent: 'gemini', reason: 'path-outside-known-roots' })
   })
 
@@ -108,6 +126,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { cursorProjectsDir: CURSOR_ROOT }
     })
+
     expect(result).toEqual({ allowed: false, agent: 'cursor', reason: 'undiscoverable-path' })
   })
 
@@ -118,6 +137,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { cursorProjectsDir: CURSOR_ROOT }
     })
+
     expect(result).toEqual({ allowed: false, agent: 'cursor', reason: 'undiscoverable-path' })
   })
 
@@ -128,6 +148,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { cursorProjectsDir: CURSOR_ROOT }
     })
+
     expect(result.allowed).toBe(true)
   })
 
@@ -138,6 +159,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { hermesSessionsDir: HERMES_ROOT }
     })
+
     expect(result).toEqual({ allowed: false, agent: 'hermes', reason: 'undiscoverable-path' })
   })
 
@@ -148,6 +170,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { hermesSessionsDir: HERMES_ROOT }
     })
+
     expect(result.allowed).toBe(true)
   })
 
@@ -158,6 +181,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { openclawStateDir: OPENCLAW_ROOT }
     })
+
     expect(result.allowed).toBe(true)
   })
 
@@ -168,6 +192,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { openclawStateDir: OPENCLAW_ROOT }
     })
+
     expect(result).toEqual({ allowed: false, agent: 'openclaw', reason: 'undiscoverable-path' })
   })
 
@@ -177,6 +202,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       filePath: join(HOME, '.codex', 'sessions', 'rollout-1.jsonl'),
       executionHostId: 'local'
     })
+
     expect(result).toEqual({ allowed: false, agent: 'codex', reason: 'unsupported-agent' })
   })
 
@@ -187,6 +213,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'ssh:some-host',
       rootOptions: { geminiSessionsDir: GEMINI_ROOT }
     })
+
     expect(result).toEqual({ allowed: false, agent: 'gemini', reason: 'non-local-host' })
   })
 
@@ -199,6 +226,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       filePath: join(HOME, '.local', 'share', 'opencode', 'db.sqlite#session-1'),
       executionHostId: 'local'
     })
+
     expect(result).toEqual({ allowed: false, agent: 'opencode', reason: 'unsupported-agent' })
   })
 
@@ -211,6 +239,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { geminiSessionsDir: GEMINI_ROOT }
     })
+
     expect(result).toEqual({ allowed: false, agent: 'gemini', reason: 'synthetic-path' })
   })
 
@@ -221,25 +250,30 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { geminiSessionsDir: GEMINI_ROOT }
     })
+
     expect(result).toEqual({ allowed: false, agent: 'gemini', reason: 'invalid-path' })
   })
 
   it('allows a droid path under either of its .factory roots', () => {
     const sessionsRoot = join(HOME, '.factory', 'sessions')
     const projectsRoot = join(HOME, '.factory', 'projects')
+
     const underSessions = validateAiVaultSessionDeleteTarget({
       agent: 'droid',
       filePath: join(sessionsRoot, 'session-1.jsonl'),
       executionHostId: 'local',
       rootOptions: { droidSessionsDir: sessionsRoot, droidProjectsDir: projectsRoot }
     })
+
     expect(underSessions.allowed).toBe(true)
+
     const underProjects = validateAiVaultSessionDeleteTarget({
       agent: 'droid',
       filePath: join(projectsRoot, 'proj-a', 'session-2.jsonl'),
       executionHostId: 'local',
       rootOptions: { droidSessionsDir: sessionsRoot, droidProjectsDir: projectsRoot }
     })
+
     expect(underProjects.allowed).toBe(true)
   })
 
@@ -250,6 +284,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { copilotSessionsDir: COPILOT_ROOT }
     })
+
     expect(result.allowed).toBe(true)
   })
 
@@ -260,6 +295,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { devinTranscriptsDir: DEVIN_ROOT }
     })
+
     expect(result.allowed).toBe(true)
   })
 
@@ -270,6 +306,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { piSessionsDir: PI_ROOT }
     })
+
     expect(result.allowed).toBe(true)
   })
 
@@ -280,6 +317,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { ompSessionsDir: OMP_ROOT }
     })
+
     expect(result.allowed).toBe(true)
   })
 
@@ -292,11 +330,13 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       executionHostId: 'local',
       rootOptions: { geminiSessionsDir: GEMINI_ROOT }
     })
+
     expect(result.allowed).toBe(true)
   })
 
   it('allows a gemini file under a WSL-expanded root', () => {
     const wslHome = join('/tmp', 'orca-ai-vault-delete-fixture-wsl-home')
+
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'gemini',
       filePath: join(wslHome, '.gemini', 'tmp', 'project-a', 'session-1.json'),
@@ -304,6 +344,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
       wslHomeDirs: [wslHome],
       rootOptions: { geminiSessionsDir: GEMINI_ROOT }
     })
+
     expect(result.allowed).toBe(true)
   })
 
@@ -311,12 +352,14 @@ describe('validateAiVaultSessionDeleteTarget', () => {
   // `agents/agents`; openClawAgentsRootDir uses it as-is.
   it('allows an openclaw path whose stateDir already ends in agents', () => {
     const agentsRoot = join(OPENCLAW_ROOT, 'agents')
+
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'openclaw',
       filePath: join(agentsRoot, 'agent-1', 'sessions', 'session-1.jsonl'),
       executionHostId: 'local',
       rootOptions: { openclawStateDir: agentsRoot }
     })
+
     expect(result.allowed).toBe(true)
   })
 })
@@ -326,6 +369,7 @@ describe('validateAiVaultSessionDeleteTarget', () => {
 describe('directory-shaped agents', () => {
   it('plans claude companions before the transcript, so a failure keeps the row', () => {
     const filePath = join(CLAUDE_ROOT, '-proj', 'sess-1.jsonl')
+
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'claude',
       filePath,
@@ -370,6 +414,7 @@ describe('directory-shaped agents', () => {
   it("pairs a WSL-home claude session with that distro's session-env, not the local one", () => {
     const wslHome = join('/tmp', 'orca-wsl-home')
     const filePath = join(wslHome, '.claude', 'projects', '-proj', 'sess-2.jsonl')
+
     const result = validateAiVaultSessionDeleteTarget({
       agent: 'claude',
       filePath,

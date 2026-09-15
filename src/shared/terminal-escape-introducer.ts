@@ -16,17 +16,22 @@ export function classifyTerminalEscapeIntroducer(code: number): TerminalEscapeIn
   if (code === 0x5b) {
     return 'csi'
   }
+
   if (code === 0x5d) {
     return 'osc'
   }
+
   if (code === 0x50 || code === 0x58 || code === 0x5e || code === 0x5f) {
     return 'string'
   }
+
   if (code >= 0x20 && code <= 0x2f) {
     return 'intermediate'
   }
+
   if (code < 0x20 || code === 0x7f) {
     return 'execute'
   }
+
   return 'final'
 }

@@ -90,6 +90,7 @@ describe('resolveChecksPanelTerminalPtyId', () => {
 describe('resolveChecksPanelWorktreeFromTerminalCwd', () => {
   it('matches the deepest worktree that contains the terminal cwd', () => {
     const parent = worktree({ id: 'repo-1::/repo', path: '/repo', displayName: 'Parent' })
+
     const child = worktree({
       id: 'repo-1::/repo/packages/app',
       path: '/repo/packages/app',
@@ -103,6 +104,7 @@ describe('resolveChecksPanelWorktreeFromTerminalCwd', () => {
 
   it('does not match a sibling whose path is a string prefix of the cwd', () => {
     const app = worktree({ id: 'repo-1::/repo/app', path: '/repo/app', displayName: 'App' })
+
     const application = worktree({
       id: 'repo-1::/repo/application',
       path: '/repo/application',
@@ -150,8 +152,10 @@ it('selects the deepest cwd match without comparator-time path normalization', (
       path: `/repo${'/a'.repeat((i * 173) % 300)}`
     })
   )
+
   const deepest = worktrees.find((candidate) => candidate.path.length === '/repo'.length + 299 * 2)
   const normalize = vi.spyOn(String.prototype, 'normalize')
+
   try {
     expect(resolveChecksPanelWorktreeFromTerminalCwd(`/repo${'/a'.repeat(300)}`, worktrees)).toBe(
       deepest
@@ -166,7 +170,9 @@ it('normalizes only the cwd, each root, and the matching path when roots do not 
   const worktrees = Array.from({ length: 300 }, (_, i) =>
     worktree({ id: String(i), path: `/repo/w${i}` })
   )
+
   const normalize = vi.spyOn(String.prototype, 'normalize')
+
   try {
     expect(resolveChecksPanelWorktreeFromTerminalCwd('/repo/w150/src/a', worktrees)?.id).toBe('150')
     // 1 cwd + 300 candidate roots + 1 matched path; main normalized 600.

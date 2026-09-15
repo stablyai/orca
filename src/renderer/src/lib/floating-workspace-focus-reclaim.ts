@@ -13,6 +13,7 @@ export function armFloatingPanelReclaimIntent(): void {
 export function consumeFloatingPanelReclaimIntent(): boolean {
   const armed = floatingPanelReclaimIntent
   floatingPanelReclaimIntent = false
+
   return armed
 }
 

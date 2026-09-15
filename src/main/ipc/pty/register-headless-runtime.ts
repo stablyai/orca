@@ -36,6 +36,7 @@ export function registerHeadlessPtyRuntime(
       removeListener: () => {}
     }
   } as unknown as BrowserWindow
+
   registerPtyHandlers(
     headlessWindow,
     runtime,
@@ -45,5 +46,6 @@ export function registerHeadlessPtyRuntime(
     store,
     { prepareCodexSessionResume, ...lifecycle }
   )
+
   return store ? hydrateLocalPtyRegistryAtBoot(store) : Promise.resolve()
 }

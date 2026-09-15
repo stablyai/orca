@@ -27,10 +27,12 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
   ): Promise<LegacyWorkerTerminalRecoveryResult> {
     let resolveResult!: (result: LegacyWorkerTerminalRecoveryResult) => void
     let rejectResult!: (error: unknown) => void
+
     const result = new Promise<LegacyWorkerTerminalRecoveryResult>((resolve, reject) => {
       resolveResult = resolve
       rejectResult = reject
     })
+
     const run = this.queue.then(async () => {
       try {
         resolveResult(await runLegacyWorkerTerminalRecovery(this, this.ports, options))
@@ -38,15 +40,19 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
         rejectResult(error)
       }
     })
+
     this.queue = run.catch(() => undefined)
+
     return result
   }
 
   cancelScope(scopeKey: string): void {
     const retry = this.retries.get(scopeKey)
+
     if (retry?.timer) {
       clearTimeout(retry.timer)
     }
+
     this.retries.delete(scopeKey)
   }
 
@@ -56,23 +62,30 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
     options: LegacyWorkerRecoveryOptions
   ): void {
     const scopeKey = options.connectionId ? `ssh:${options.connectionId}` : 'local'
+
     const hasDeferredWorker = plan.candidates.some((candidate) => {
       const sshPty = parseAppSshPtyId(candidate.ptyId)
+
       const inScope = options.connectionId
         ? sshPty?.connectionId === options.connectionId
         : sshPty === null
+
       return inScope && deferredDispatchIds.has(candidate.dispatchId)
     })
+
     if (!hasDeferredWorker) {
       this.cancelScope(scopeKey)
+
       return
     }
+
     const retry = this.retries.get(scopeKey) ?? {
       attempt: 0,
       ...(options.connectionId ? { connectionId: options.connectionId } : {}),
       materializeRenderer: options.materializeRenderer === true,
       timer: null
     }
+
     retry.materializeRenderer ||= options.materializeRenderer === true
     this.retries.set(scopeKey, retry)
     this.armRetry(scopeKey, retry)
@@ -106,6 +119,7 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
     if (retry.timer) {
       return
     }
+
     const delayMs = Math.min(1_000 * 2 ** retry.attempt, 30_000)
     retry.attempt += 1
     retry.timer = setTimeout(() => {
@@ -120,6 +134,7 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
             scope: scopeKey,
             error
           })
+
           if (this.retries.get(scopeKey) === retry) {
             this.armRetry(scopeKey, retry)
           }

@@ -75,14 +75,17 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   let startupTerminalPtyId: string | null = null
   let sequencedStartup = startup
   let wrappedSetupCommand: string | undefined
+
   if (startup && setup?.waitForAgentStartup === true) {
     const platform = setupPlatform(setup, process.platform === 'win32' ? 'windows' : 'posix')
+
     const sequenced = createSequencedSetupAgentCommands({
       runnerScriptPath: setup.runnerScriptPath,
       startupCommand: startup.command,
       platform,
       shell: setup.shell
     })
+
     sequencedStartup = {
       ...startup,
       command: sequenced.startupCommand,
@@ -94,9 +97,11 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   if (sequencedStartup && ports.canSpawn) {
     try {
       const trustAgent = args.draftPaste?.agent ?? args.createdWithAgent
+
       if (trustAgent) {
         await ports.markTrusted(trustAgent, worktree.path)
       }
+
       const terminal = await ports.createTerminal(`id:${worktree.id}`, {
         command: sequencedStartup.command,
         ...(setup && startup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
@@ -108,12 +113,15 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         telemetry: sequencedStartup.telemetry,
         ...ownerSurfacing(shouldActivate)
       })
+
       if (args.draftPaste) {
         ports.pasteDraft(terminal.handle, args.draftPaste)
       }
+
       if (args.startupFollowup) {
         ports.sendFollowup(terminal.handle, args.startupFollowup)
       }
+
       didSpawnStartup = true
       startupTerminalHandle = terminal.handle
       startupTerminalTabId = terminal.tabId ?? null
@@ -126,13 +134,16 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
 
   if (shouldActivate) {
     const runtimeWillProvision = didSpawnStartup && Boolean(setup || defaultTabs)
+
     if (runtimeWillProvision) {
       const provisioned = await ports.provision(
         provisionArgs(args, startupTerminalHandle, didSpawnStartup, wrappedSetupCommand)
       )
+
       didSpawnSetup = provisioned.setupSpawned
       setupTerminalHandle = provisioned.setupTerminalHandle
     }
+
     const activationSetup = didSpawnSetup
       ? undefined
       : setup
@@ -141,6 +152,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
             ...(didSpawnStartup && wrappedSetupCommand ? { command: wrappedSetupCommand } : {})
           }
         : undefined
+
     ports.activate(
       repo.id,
       worktree.id,
@@ -153,12 +165,14 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       ...provisionArgs(args, startupTerminalHandle, didSpawnStartup, wrappedSetupCommand),
       surfaceOwner: false
     })
+
     if (request.awaitTerminalProvisioning) {
       const provisioned = await provisioning
       didSpawnSetup = provisioned.setupSpawned
       setupTerminalHandle = provisioned.setupTerminalHandle
     } else {
       void provisioning
+
       if (setup) {
         didSpawnSetup = true
       }
@@ -170,6 +184,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       warning = appendFailure(warning, worktree.path, 'initial', error)
     }
   }
+
   const returnedSetup = didSpawnSetup
     ? undefined
     : setup
@@ -178,6 +193,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
           ...(didSpawnStartup && wrappedSetupCommand ? { command: wrappedSetupCommand } : {})
         }
       : undefined
+
   return {
     ...(warning ? { warning } : {}),
     ...(returnedSetup ? { returnedSetup } : {}),
@@ -232,9 +248,12 @@ function appendFailure(
 ): string {
   const message = error instanceof Error ? error.message : String(error)
   const failure = `failed to create the ${kind} terminal for ${path}: ${message}`
+
   const combined = warning
     ? `${warning} Also ${failure}`
     : `${failure[0].toUpperCase()}${failure.slice(1)}`
+
   console.warn(`[worktree-create] ${combined}`)
+
   return combined
 }

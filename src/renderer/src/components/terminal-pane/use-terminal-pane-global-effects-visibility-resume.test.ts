@@ -42,6 +42,7 @@ function resetHookRefs(): void {
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: never[]) => unknown>(callback: T) => callback,
@@ -51,9 +52,11 @@ vi.mock('react', async (importOriginal) => {
     useRef: <T>(value: T) => {
       const index = reactRefState.index
       reactRefState.index += 1
+
       if (!reactRefState.slots[index]) {
         reactRefState.slots[index] = { current: value }
       }
+
       return reactRefState.slots[index] as { current: T }
     }
   }
@@ -105,9 +108,12 @@ vi.mock('./terminal-input-activity', () => ({
 vi.mock('@/store', async (importOriginal) => {
   const actual = await importOriginal<typeof StoreModule>()
   const realHook = actual.useAppStore
+
   const testHook = ((selector?: (state: ReturnType<typeof realHook.getState>) => unknown) =>
     selector ? selector(realHook.getState()) : realHook.getState()) as typeof realHook
+
   Object.assign(testHook, realHook)
+
   return { ...actual, useAppStore: testHook }
 })
 
@@ -133,10 +139,12 @@ describe('useTerminalPaneGlobalEffects', () => {
     const order: string[] = []
     const terminalA = { name: 'terminal-a' }
     const terminalB = { name: 'terminal-b' }
+
     const getPanes = vi.fn(() => [
       { id: 1, terminal: terminalA },
       { id: 2, terminal: terminalB }
     ])
+
     const manager = {
       getPanes,
       resumeRendering: vi.fn(() => order.push('resume')),
@@ -153,6 +161,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       getActivePane: vi.fn(() => null),
       setActivePane: vi.fn()
     }
+
     mocks.flushTerminalOutput.mockImplementation((terminal: { name: string }) => {
       order.push(`flush:${terminal.name}`)
     })
@@ -161,6 +170,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     })
     mocks.captureScrollState.mockImplementation((terminal: { name: string }) => {
       order.push(`capture:${terminal.name}`)
+
       return { terminalName: terminal.name }
     })
     mocks.restoreScrollStateAfterLayout.mockImplementation((terminal: { name: string }) => {
@@ -227,10 +237,12 @@ describe('useTerminalPaneGlobalEffects', () => {
       'requestAnimationFrame',
       vi.fn((callback: FrameRequestCallback) => {
         callback(0)
+
         return 1
       })
     )
     const terminal = { name: 'terminal-a' }
+
     const manager = {
       getPanes: vi.fn(() => [{ id: 1, terminal }]),
       resumeRendering: vi.fn(),
@@ -244,7 +256,9 @@ describe('useTerminalPaneGlobalEffects', () => {
       getActivePane: vi.fn(() => null),
       setActivePane: vi.fn()
     }
+
     registerManagerForReset(manager)
+
     const baseArgs = {
       tabId: 'tab-1',
       worktreeId: 'wt-1',
@@ -315,14 +329,17 @@ describe('useTerminalPaneGlobalEffects', () => {
       'requestAnimationFrame',
       vi.fn((callback: FrameRequestCallback) => {
         callback(0)
+
         return 1
       })
     )
+
     const pane = {
       id: 1,
       terminal: { name: 'terminal-a' },
       container: { querySelector: vi.fn(() => (covered ? {} : null)) }
     }
+
     const manager = {
       getPanes: vi.fn(() => [pane]),
       resumeRendering: vi.fn(),
@@ -336,6 +353,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       getActivePane: vi.fn(() => pane),
       setActivePane: vi.fn()
     }
+
     registerManagerForReset(manager)
 
     beginHookRender()
@@ -357,6 +375,7 @@ describe('useTerminalPaneGlobalEffects', () => {
     })
 
     expect(pane.container.querySelector).toHaveBeenCalledWith('.native-chat-pane-shell')
+
     if (covered) {
       expect(mocks.focusActivePane).not.toHaveBeenCalled()
     } else {
@@ -370,10 +389,12 @@ describe('useTerminalPaneGlobalEffects', () => {
       'requestAnimationFrame',
       vi.fn((callback: FrameRequestCallback) => {
         callback(0)
+
         return 1
       })
     )
     const terminal = { name: 'terminal-a' }
+
     const manager = {
       getPanes: vi.fn(() => [{ id: 1, terminal }]),
       resumeRendering: vi.fn(),
@@ -387,7 +408,9 @@ describe('useTerminalPaneGlobalEffects', () => {
       getActivePane: vi.fn(() => null),
       setActivePane: vi.fn()
     }
+
     registerManagerForReset(manager)
+
     const baseArgs = {
       tabId: 'tab-1',
       worktreeId: 'wt-1',
@@ -442,6 +465,7 @@ describe('useTerminalPaneGlobalEffects', () => {
 
   it('suspends rendering when a terminal tab first mounts hidden', () => {
     const terminal = { name: 'terminal-a' }
+
     const manager = {
       getPanes: vi.fn(() => [{ id: 1, terminal }]),
       resumeRendering: vi.fn(),
@@ -455,7 +479,9 @@ describe('useTerminalPaneGlobalEffects', () => {
       getActivePane: vi.fn(() => null),
       setActivePane: vi.fn()
     }
+
     registerManagerForReset(manager)
+
     const baseArgs = {
       tabId: 'tab-1',
       worktreeId: 'wt-1',
@@ -498,6 +524,7 @@ describe('useTerminalPaneGlobalEffects', () => {
 
   it('suspends a tab-hidden terminal when its worktree surface becomes hidden', () => {
     const terminal = { name: 'terminal-a' }
+
     const manager = {
       getPanes: vi.fn(() => [{ id: 1, terminal }]),
       resumeRendering: vi.fn(),
@@ -511,7 +538,9 @@ describe('useTerminalPaneGlobalEffects', () => {
       getActivePane: vi.fn(() => null),
       setActivePane: vi.fn()
     }
+
     registerManagerForReset(manager)
+
     const baseArgs = {
       tabId: 'tab-1',
       worktreeId: 'wt-1',
@@ -587,6 +616,7 @@ describe('useTerminalPaneGlobalEffects', () => {
 
   it('enforces scroll intent after hidden layout changes the viewport', () => {
     const terminalA = { name: 'terminal-a' }
+
     const manager = {
       getPanes: vi.fn(() => [{ id: 1, terminal: terminalA }]),
       resumeRendering: vi.fn(),
@@ -599,6 +629,7 @@ describe('useTerminalPaneGlobalEffects', () => {
       getActivePane: vi.fn(() => null),
       setActivePane: vi.fn()
     }
+
     const initialState = { marker: 'initial' }
     const preHideState = { marker: 'before-hide' }
     const corruptedHiddenState = { marker: 'hidden-corrupted' }

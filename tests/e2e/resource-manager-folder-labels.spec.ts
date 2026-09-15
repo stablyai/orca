@@ -14,34 +14,43 @@ for (const theme of ['dark', 'light'] as const) {
   }, testInfo) => {
     const root = mkdtempSync(join(tmpdir(), 'orca-resource-folders-'))
     registerPostElectronShutdownCleanup(async () => rmSync(root, { recursive: true, force: true }))
+
     const folders = ['Release notes', 'Customer research'].map((name) => {
       const folderPath = join(root, name)
       mkdirSync(folderPath)
+
       return { name, folderPath }
     })
+
     await waitForSessionReady(orcaPage)
     await orcaPage.setViewportSize({ width: 1200, height: 900 })
     await orcaPage.evaluate(
       async ({ theme, folders }) => {
         const state = window.__store!.getState()
         await state.updateSettingsOrThrow({ theme })
+
         for (const [index, folder] of folders.entries()) {
           const group = await window.api.projectGroups.create({
             name: index === 0 ? 'Documentation' : 'Product',
             parentPath: folder.folderPath,
             createdFrom: 'folder-scan'
           })
+
           await state.fetchProjectGroups()
+
           if (!group) {
             throw new Error('Could not create project group')
           }
+
           const workspace = await state.createFolderWorkspace({
             projectGroupId: group.id,
             ...folder
           })
+
           if (!workspace) {
             throw new Error('Could not create folder workspace')
           }
+
           await window.api.pty.spawn({
             cols: 80,
             rows: 24,
@@ -50,6 +59,7 @@ for (const theme of ['dark', 'light'] as const) {
             initiallyHidden: true
           })
         }
+
         await window.__store!.getState().fetchMemorySnapshot()
       },
       { theme, folders }
@@ -68,11 +78,13 @@ for (const theme of ['dark', 'light'] as const) {
 
     await expect(popover.getByText('Documentation', { exact: true })).toBeVisible()
     await expect(popover.getByText('Product', { exact: true })).toBeVisible()
+
     for (const { name } of folders) {
       await expect(
         popover.getByRole('button', { name: `Resume workspace ${name}`, exact: true })
       ).toBeVisible()
     }
+
     await expect(popover).not.toContainText('folder:')
   })
 }
@@ -82,29 +94,36 @@ test('names a folder terminal recovered from the daemon after restart without an
   const root = mkdtempSync(join(tmpdir(), 'orca-recovered-folder-'))
   const session = createRestartSession(testInfo)
   let launched: Awaited<ReturnType<typeof session.launch>> | undefined
+
   try {
     launched = await session.launch()
     await waitForSessionReady(launched.page)
     await launched.page.evaluate(async (folderPath) => {
       const state = window.__store!.getState()
       await state.updateSettingsOrThrow({ theme: 'dark' })
+
       const group = await window.api.projectGroups.create({
         name: 'Documentation',
         parentPath: folderPath,
         createdFrom: 'folder-scan'
       })
+
       await state.fetchProjectGroups()
+
       if (!group) {
         throw new Error('Could not create project group')
       }
+
       const folder = await state.createFolderWorkspace({
         projectGroupId: group.id,
         name: 'Recovered notes',
         folderPath
       })
+
       if (!folder) {
         throw new Error('Could not create folder workspace')
       }
+
       await window.api.pty.spawn({
         cols: 80,
         rows: 24,
@@ -122,6 +141,7 @@ test('names a folder terminal recovered from the daemon after restart without an
     await page.getByRole('button', { name: /^Resource Manager,/ }).click()
     const popover = page.getByRole('dialog')
     await expect(popover.getByText('Resource Manager', { exact: true })).toBeVisible()
+
     try {
       await expect(
         popover.getByRole('button', { name: 'Resume workspace Recovered notes', exact: true })
@@ -141,6 +161,7 @@ test('names a folder terminal recovered from the daemon after restart without an
     if (launched) {
       await session.close(launched.app)
     }
+
     await session.dispose()
     rmSync(root, { recursive: true, force: true })
   }

@@ -34,9 +34,11 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
 
   protected requireTargetWebContents(target: ResolvedBrowserCommandTarget): WebContents {
     const wc = this.getWebContents(target.webContentsId)
+
     if (!wc || wc.isDestroyed()) {
       throw this.createPageUnavailableError(`${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`)
     }
+
     return wc
   }
 
@@ -54,7 +56,9 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     ) {
       return
     }
+
     session.initialized = false
+
     if (session.activeInterceptPatterns.length > 0) {
       this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
     }
@@ -72,6 +76,7 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     execOptions?: AgentBrowserExecOptions
   ): Promise<unknown> {
     const session = this.sessions.get(sessionName)
+
     if (!session) {
       // Why: a queued command can run after a concurrent close deleted the session — surface a tab-lifecycle error, not an opaque failure.
       throw this.createPageUnavailableError(sessionName)
@@ -87,6 +92,7 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     session.lastCommandAt = Date.now()
 
     const args = ['--session', sessionName]
+
     const managesInterceptRoutes =
       commandArgs[0] === 'network' && (commandArgs[1] === 'route' || commandArgs[1] === 'unroute')
 
@@ -98,6 +104,7 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     for (const commandArg of commandArgs) {
       args.push(commandArg)
     }
+
     args.push('--json')
 
     const stdout = await this.runAgentBrowserRaw(sessionName, args, execOptions)
@@ -120,8 +127,10 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
       const pendingPatterns = managesInterceptRoutes
         ? undefined
         : this.pendingInterceptRestore.get(sessionName)
+
       if (pendingPatterns && pendingPatterns.length > 0) {
         this.pendingInterceptRestore.delete(sessionName)
+
         try {
           const urlPattern = pendingPatterns[0] ?? '**/*'
           await this.runAgentBrowserRaw(sessionName, [
@@ -154,6 +163,7 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
       element,
       'contenteditable'
     ])
+
     return isExplicitContentEditableResult(result)
   }
 
@@ -183,6 +193,7 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     ) {
       return Promise.resolve()
     }
+
     return new Promise((resolve, reject) => {
       let child: ReturnType<typeof execFile> | null = null
       let settled = false
@@ -191,8 +202,10 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
         if (settled) {
           return
         }
+
         settled = true
         clearTimeout(timeout)
+
         if (error) {
           reject(error)
         } else {
@@ -259,15 +272,19 @@ export abstract class AgentBrowserBridgeExecution extends AgentBrowserBridgeTabs
     ) {
       return this.createPageUnavailableError(sessionName)
     }
+
     return new BrowserError(fallbackCode, message)
   }
 
   protected isSessionTargetClosed(sessionName: string, webContentsId?: number): boolean {
     const session = this.sessions.get(sessionName)
+
     if (!session) {
       return true
     }
+
     const targetWebContentsId = webContentsId ?? session.webContentsId
+
     return !this.getWebContents(targetWebContentsId)
   }
 }

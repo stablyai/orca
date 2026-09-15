@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
     badgeColor: '#000',
     addedAt: 0
   }
+
   const activeWorktree = {
     id: 'wt-1',
     repoId: 'repo-1',
@@ -41,6 +42,7 @@ const mocks = vi.hoisted(() => {
     sortOrder: 0,
     lastActivityAt: 0
   }
+
   return {
     activeRepo,
     activeWorktree,
@@ -56,6 +58,7 @@ vi.mock('@/store', () => {
       getState: () => mocks.state
     }
   )
+
   return { useAppStore }
 })
 
@@ -75,6 +78,7 @@ vi.mock('./git-status-refresh', () => ({
 }))
 
 const VIEWPORT_HEIGHT_PX = 600
+
 // Rows the viewport can show plus overscan on both edges plus the partial
 // rows clipped at each edge of the window.
 const MAX_MOUNTED_ROWS =
@@ -186,6 +190,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 class NoopResizeObserver {
@@ -219,6 +224,7 @@ beforeEach(() => {
     const isScroller = this.classList.contains('overflow-auto')
     const scroller = isScroller ? null : this.closest('.overflow-auto')
     const top = isScroller ? 0 : -(scroller?.scrollTop ?? 0)
+
     return {
       top,
       bottom: top + SOURCE_CONTROL_FILE_ROW_HEIGHT_PX,
@@ -252,9 +258,11 @@ function renderSourceControl(): void {
 
 function scroller(): HTMLDivElement {
   const element = container.querySelector<HTMLDivElement>('.overflow-auto')
+
   if (!element) {
     throw new Error('source control scroller not found')
   }
+
   return element
 }
 
@@ -350,6 +358,7 @@ describe('SourceControl virtualized changed-files list', () => {
     const changesHeader = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('Changes')
     )
+
     expect(changesHeader).toBeTruthy()
 
     act(() => {
@@ -401,6 +410,7 @@ describe('SourceControl virtualized changed-files list', () => {
     expect(paths.length).toBeLessThan(SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS)
     expect(virtualList()).toBeNull()
     expect(mountedRows().length).toBe(paths.length)
+
     for (const path of paths) {
       expect(row(path)).toBeTruthy()
     }
@@ -422,9 +432,11 @@ describe('SourceControl virtualized changed-files list', () => {
     renderSourceControl()
 
     expect(virtualList()).toBeTruthy()
+
     const mounted = container.querySelectorAll(
       '[data-testid="source-control-virtual-list"] [data-index]'
     ).length
+
     expect(mounted).toBeGreaterThan(0)
     expect(mounted).toBeLessThanOrEqual(MAX_MOUNTED_ROWS)
   })

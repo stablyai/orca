@@ -38,9 +38,11 @@ async function renderPreview(props: PreviewProps): Promise<ReactTestRenderer> {
   await act(async () => {
     renderer = create(createElement(MobileFileMarkdownPreview, props))
   })
+
   if (!renderer) {
     throw new Error('MobileFileMarkdownPreview did not render')
   }
+
   return renderer
 }
 
@@ -54,9 +56,11 @@ function modeToggle(renderer: ReactTestRenderer, label: string) {
   const toggle = renderer.root
     .findAllByType('Pressable')
     .find((node) => node.props.accessibilityLabel === label)
+
   if (!toggle) {
     throw new Error(`Missing ${label} toggle`)
   }
+
   return toggle
 }
 
@@ -86,6 +90,7 @@ describe('MobileFileMarkdownPreview', () => {
       truncated: false,
       byteLength: 7
     }
+
     renderer = await renderPreview(baseProps)
 
     expect(isSelected(renderer, 'View rendered Markdown preview')).toBe(true)

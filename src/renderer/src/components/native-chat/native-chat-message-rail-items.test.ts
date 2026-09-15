@@ -32,12 +32,15 @@ function image(id: string): NativeChatMessage {
 
 function slotsOf(messages: NativeChatMessage[]) {
   let turn: string | undefined
+
   const turnKeys = messages.map((message) => {
     if (message.role === 'user') {
       turn = message.id
     }
+
     return turn
   })
+
   return buildNativeChatTranscriptSlots({
     messages,
     turnKeys,
@@ -65,15 +68,19 @@ describe('rail items', () => {
   it('invalidates cached previews and positions after edits, prepends and removals', () => {
     const prompt = text('u1', 'original prompt', 'user')
     const first = buildNativeChatRailItems(slotsOf([prompt]))
+
     const prepended = buildNativeChatRailItems(
       slotsOf([text('a0', 'earlier reply'), prompt]),
       first
     )
+
     expect(prepended[0]).toEqual({ ...first[0], slotIndex: 1 })
+
     const edited = buildNativeChatRailItems(
       slotsOf([text('u1', 'edited prompt', 'user')]),
       prepended
     )
+
     expect(edited[0]).toEqual({ ...first[0], text: 'edited prompt' })
     expect(buildNativeChatRailItems([], edited)).toEqual([])
   })
@@ -86,6 +93,7 @@ describe('rail items', () => {
         text('u2', 'second ask', 'user')
       ])
     )
+
     expect(items.map((item) => item.id)).toEqual(['u1', 'u2'])
   })
 

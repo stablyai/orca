@@ -1,4 +1,5 @@
 import type { PRComment } from '../../../../shared/github/comment-types'
+
 export function mapReviewCommentResponse(
   data: {
     id?: number

@@ -65,15 +65,18 @@ describe('PluginMarketplaceSourceDialog', () => {
     })
     const url = document.querySelector<HTMLInputElement>('#plugin-marketplace-url')
     const gitRef = document.querySelector<HTMLInputElement>('#plugin-marketplace-ref')
+
     if (!url || !gitRef) {
       throw new Error('missing marketplace source inputs')
     }
+
     await setInput(url, 'git@example.com:private/plugins.git')
     await setInput(gitRef, 'release')
 
     const add = Array.from(document.querySelectorAll('button')).find(
       (candidate) => candidate.textContent?.trim() === 'Add source'
     )
+
     await act(async () => add?.click())
 
     expect(window.api.plugins.addMarketplace).toHaveBeenCalledWith({

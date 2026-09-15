@@ -60,6 +60,7 @@ describe('OpenCode hook plugin source', () => {
 
   it('keeps family routing and session-start policy separate', () => {
     const primarySource = getOpenCodePluginSource()
+
     const familySource = getOpenCodeFamilyPluginSource('/hook/mimo-code', {
       emitSessionStart: false
     })
@@ -191,6 +192,7 @@ describe('OpenCode id safety guard', () => {
     // Why: after #1148 pty.ts mints sessionIds like <worktreeId>@@<uuid> with "::" and a path; the old strict regex rejected every real id.
     const daemonSessionId =
       '50c010a2-bc8e-4eb1-8847-5812133ad6df::/Users/thebr/ghostx/workspaces/noqa/autoheal@@a1b2c3d4'
+
     expect(isUsableId(daemonSessionId)).toBe(true)
   })
 
@@ -230,6 +232,7 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
   // Why: exercise the public surface against a real filesystem so regressions fail loudly (before #1148 daemon-shaped ids silently returned {}).
   const daemonSessionId =
     '50c010a2-bc8e-4eb1-8847-5812133ad6df::/Users/thebr/ghostx/workspaces/noqa/autoheal@@a1b2c3d4'
+
   const plainUuidId = 'c0ffee00-0000-4000-8000-000000000000'
   let userDataDir: string
 
@@ -239,6 +242,7 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
       if (name === 'userData') {
         return userDataDir
       }
+
       throw new Error(`unexpected getPath(${name})`)
     })
   })
@@ -294,6 +298,7 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     // Why: even when the id is rejected, don't blow away the user's own OPENCODE_CONFIG_DIR.
     const service = new OpenCodeHookService()
     const userDir = mkdtempSync(join(tmpdir(), 'orca-opencode-userdir-'))
+
     try {
       expect(service.buildPtyEnv('', userDir)).toEqual({ OPENCODE_CONFIG_DIR: userDir })
     } finally {
@@ -327,6 +332,7 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
       if (name === 'userData') {
         return userDataDir
       }
+
       throw new Error(`unexpected getPath(${name})`)
     })
   })
@@ -424,6 +430,7 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
       join(env.OPENCODE_CONFIG_DIR!, 'plugins', 'orca-opencode-status.js'),
       'utf8'
     )
+
     expect(overlayPlugin).toContain('OrcaOpenCodeStatusPlugin')
     expect(overlayPlugin).not.toBe(userOrcaSentinel)
     expectUserConfigIntact()
@@ -434,6 +441,7 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
     () => {
       // Why: writing Orca's plugin through a symlinked plugins/ would leak into the user's fs (docs/opencode-config-dir-collision.md).
       const realPluginsDir = mkdtempSync(join(tmpdir(), 'orca-real-plugins-'))
+
       try {
         writeFileSync(join(realPluginsDir, 'real-plugin.js'), 'REAL USER PLUGIN')
 
@@ -483,19 +491,23 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
   it("preserves the user's OPENCODE_CONFIG_DIR when the mirror step fails", async () => {
     // Why: if mirroring fails (e.g. Windows EPERM), fall back to the user's OPENCODE_CONFIG_DIR so their config still loads.
     const overlayMirror = await import('../pty/overlay-mirror')
+
     const mirrorSpy = vi.spyOn(overlayMirror, 'mirrorEntry').mockImplementation(() => {
       throw new Error('simulated EPERM on symlink')
     })
+
     try {
       const service = new OpenCodeHookService()
       const env = service.buildPtyEnv(ptyId, userConfigDir)
       expect(env).toEqual({ OPENCODE_CONFIG_DIR: userConfigDir })
+
       // Overlay cleanup is deliberately off the fallback path; it may hold OpenCode runtime files on Windows.
       const overlayDir = join(
         userDataDir,
         'opencode-config-overlays',
         toSafeDirName(`source:${userConfigDir}`)
       )
+
       expect(existsSync(overlayDir)).toBe(true)
       expectUserConfigIntact()
     } finally {
@@ -515,6 +527,7 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
         'opencode-config-overlays',
         toSafeDirName(`source:${userConfigDir}`)
       )
+
       expect(existsSync(overlayDir)).toBe(true)
 
       service.clearPty(ptyId)

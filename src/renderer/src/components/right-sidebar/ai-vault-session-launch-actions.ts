@@ -84,8 +84,10 @@ export function useAiVaultSessionLaunchActions({
     (session: AiVaultSession, targetWorktreeId?: string): void => {
       if (session.structuredSession) {
         void activateAiVaultStructuredSession(session)
+
         return
       }
+
       const targetId = resolveAiVaultSessionLaunchTargetOrNotify({
         sessionFilePath: session.filePath,
         sessionExecutionHostId: session.executionHostId,
@@ -93,6 +95,7 @@ export function useAiVaultSessionLaunchActions({
         targetWorktreeId,
         targetState
       })
+
       if (!targetId) {
         return
       }
@@ -106,6 +109,7 @@ export function useAiVaultSessionLaunchActions({
           )
         )
       }
+
       void prepareAiVaultSessionForResume(session)
         .then((preparedSession) => {
           const launchResult = launchAiVaultSessionInNewTab({
@@ -113,6 +117,7 @@ export function useAiVaultSessionLaunchActions({
             worktreeId: targetId.worktreeId,
             ...buildResumeStartup(preparedSession, targetId.worktreeId)
           })
+
           if (launchResult.tabId === null) {
             void launchResult.runtimeLaunch.then((outcome) => {
               if (outcome.status === 'failed') {
@@ -124,18 +129,24 @@ export function useAiVaultSessionLaunchActions({
                       { value0: agentLabel(session.agent) }
                     )
                 )
+
                 return
               }
+
               if (useAppStore.getState().activeWorktreeId !== targetId.worktreeId) {
                 activateAiVaultResumeWorkspace(targetId.worktreeId)
               }
+
               showQueuedToast()
             })
+
             return
           }
+
           if (useAppStore.getState().activeWorktreeId !== targetId.worktreeId) {
             activateAiVaultResumeWorkspace(targetId.worktreeId)
           }
+
           showQueuedToast()
         })
         .catch(notifyAiVaultSessionPreparationFailure)
@@ -148,7 +159,9 @@ export function useAiVaultSessionLaunchActions({
       if (!isAgentSessionHandleProvider(session.agent)) {
         return
       }
+
       const worktreeId = targetWorktreeId ?? activeWorktreeId ?? activeWorktree?.id ?? null
+
       if (!worktreeId) {
         toast.error(
           translate(
@@ -156,8 +169,10 @@ export function useAiVaultSessionLaunchActions({
             'Open a workspace before resuming a session.'
           )
         )
+
         return
       }
+
       void resumeAiVaultSessionInNewChat(session, session.agent, worktreeId)
     },
     [activeWorktree?.id, activeWorktreeId]
@@ -172,6 +187,7 @@ export function useAiVaultSessionLaunchActions({
         targetWorktreeId,
         targetState
       })
+
       if (!targetId) {
         return
       }
@@ -180,6 +196,7 @@ export function useAiVaultSessionLaunchActions({
         targetState,
         targetId.worktreeId
       )
+
       if (!targetWorkspacePath) {
         toast.error(
           translate(
@@ -187,8 +204,10 @@ export function useAiVaultSessionLaunchActions({
             'Open a workspace before resuming a session.'
           )
         )
+
         return
       }
+
       setContinuationRequest(
         prepareAiVaultSessionContinuation({
           session,
@@ -232,6 +251,7 @@ function resolveAiVaultSessionLaunchTargetOrNotify(
   args: Parameters<typeof resolveAiVaultSessionLaunchTarget>[0]
 ): Extract<ReturnType<typeof resolveAiVaultSessionLaunchTarget>, { status: 'ready' }> | null {
   const target = resolveAiVaultSessionLaunchTarget(args)
+
   if (target.status === 'missing') {
     toast.error(
       translate(
@@ -239,11 +259,15 @@ function resolveAiVaultSessionLaunchTargetOrNotify(
         'Open a workspace before resuming a session.'
       )
     )
+
     return null
   }
+
   if (target.status === 'unsupported') {
     toast.error(aiVaultResumeUnsupportedMessage(target.targetStatus))
+
     return null
   }
+
   return target
 }

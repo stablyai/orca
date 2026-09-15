@@ -2,6 +2,7 @@ import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-
 
 export function getKnownGitHead(head: string | null | undefined): string | undefined {
   const trimmed = head?.trim()
+
   return trimmed ? trimmed : undefined
 }
 
@@ -22,6 +23,7 @@ export function branchCompareMatchesStatusHead(
   statusHead: string
 ): boolean {
   const summaryHead = getKnownGitHead(summary.headOid)
+
   // Why: git status reports '(initial)' for unborn branches; branch compare represents that same state as a null headOid.
   return summaryHead === statusHead || (statusHead === '(initial)' && summary.headOid === null)
 }

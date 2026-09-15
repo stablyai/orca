@@ -37,10 +37,12 @@ type StoreState = {
 
 const mocks = vi.hoisted(() => {
   const holder: { state: StoreState } = { state: {} as StoreState }
+
   const useAppStore = Object.assign(
     (selector: (state: StoreState) => unknown) => selector(holder.state),
     { getState: () => holder.state }
   )
+
   return {
     holder,
     useAppStore,
@@ -56,15 +58,18 @@ const mocks = vi.hoisted(() => {
 })
 
 vi.mock('@/store', () => ({ useAppStore: mocks.useAppStore }))
+
 vi.mock('../../store', () => ({ useAppStore: mocks.useAppStore }))
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+
 vi.mock('sonner', () => ({
   toast: {
     error: mocks.toastError,
     success: mocks.toastSuccess
   }
 }))
+
 vi.mock('./mobile-pairing-device-polling', () => ({ useMobilePairingDevicePolling: vi.fn() }))
 
 // Stub the child sections so the test targets MobilePane's own connection-mode
@@ -123,6 +128,7 @@ vi.mock('./MobilePairingSetupSection', () => ({
     </div>
   )
 }))
+
 vi.mock('./MobilePairingConnectionOptions', () => ({
   MobilePairingConnectionOptions: (props: {
     onChange: (mode: MobilePairingConnectionMode) => void
@@ -137,6 +143,7 @@ vi.mock('./MobilePairingConnectionOptions', () => ({
     </div>
   )
 }))
+
 vi.mock('./MobilePairingQrSection', () => ({
   MobilePairingQrSection: (props: {
     qrDataUrl: string | null
@@ -150,13 +157,17 @@ vi.mock('./MobilePairingQrSection', () => ({
     </div>
   )
 }))
+
 vi.mock('./MobilePairedDevicesSection', () => ({
   MobilePairedDevicesSection: (props: PairedDevicesProps) => {
     mocks.latestPairedDevicesProps = props
+
     return <div data-testid="paired-devices">{props.devices.map((d) => d.deviceId).join(',')}</div>
   }
 }))
+
 vi.mock('./MobileAutoRestoreFitSection', () => ({ MobileAutoRestoreFitSection: () => <div /> }))
+
 vi.mock('../mobile/WindowsFirewallNotice', () => ({
   WindowsFirewallNotice: (props: { usingRelay?: boolean }) => (
     <div data-testid="firewall-notice">{String(props.usingRelay)}</div>
@@ -896,9 +907,11 @@ describe('MobilePane', () => {
 
   it('does not show revoke success after unmounting during the refresh', async () => {
     let resolveRefreshAfterRevoke: (value: { devices: [] }) => void = () => {}
+
     const refreshAfterRevoke = new Promise<{ devices: [] }>((resolve) => {
       resolveRefreshAfterRevoke = resolve
     })
+
     mocks.listDevices
       .mockResolvedValueOnce({ devices: [pairedDevice('phone-1')] })
       .mockReturnValueOnce(refreshAfterRevoke)

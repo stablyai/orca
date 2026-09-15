@@ -14,6 +14,7 @@ vi.mock('node:os', async (importOriginal) => ({
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const dirStat = { isSymbolicLink: () => false, isDirectory: () => true, isFile: () => false }
+
   const fileStat = {
     isSymbolicLink: () => false,
     isDirectory: () => false,
@@ -21,6 +22,7 @@ vi.mock('node:fs', async (importOriginal) => {
     dev: 1n,
     ino: 2n
   }
+
   return {
     ...actual,
     constants: actual.constants,

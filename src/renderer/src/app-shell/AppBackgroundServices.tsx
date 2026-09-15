@@ -16,6 +16,7 @@ const DashboardPopoutBridge = lazy(() => import('../components/dashboard/Dashboa
  */
 export function AppBackgroundServices(): React.JSX.Element {
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
+
   const dashboardPopoutEnabled = useAppStore(
     (s) => s.settings?.experimentalAgentDashboardPopout === true
   )

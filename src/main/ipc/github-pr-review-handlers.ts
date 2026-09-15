@@ -26,6 +26,7 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       if (
         typeof args.prNumber !== 'number' ||
         !Number.isInteger(args.prNumber) ||
@@ -33,9 +34,11 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
       ) {
         return false
       }
+
       if (!args.pullRequestId?.trim() || !args.path?.trim()) {
         return false
       }
+
       const ok = await setPRFileViewed({
         repoPath: repo.path,
         connectionId: getGitHubRepoConnectionId(repo),
@@ -45,12 +48,14 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
         path: args.path,
         viewed: Boolean(args.viewed)
       })
+
       if (ok) {
         broadcastGitHubWorkItemMutation(
           { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },
           event.sender.id
         )
       }
+
       return ok
     }
   )
@@ -73,6 +78,7 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       if (
         typeof args.prNumber !== 'number' ||
         !Number.isInteger(args.prNumber) ||
@@ -80,6 +86,7 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
       ) {
         return { ok: false, error: 'Invalid PR number' }
       }
+
       if (
         typeof args.commentId !== 'number' ||
         !Number.isInteger(args.commentId) ||
@@ -87,9 +94,11 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
       ) {
         return { ok: false, error: 'Invalid comment ID' }
       }
+
       if (!args.body?.trim()) {
         return { ok: false, error: 'Comment body required' }
       }
+
       const result = await addPRReviewCommentReply(
         repo.path,
         args.prNumber,
@@ -102,12 +111,14 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
+
       if (result.ok) {
         broadcastGitHubWorkItemMutation(
           { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },
           event.sender.id
         )
       }
+
       return result
     }
   )
@@ -128,6 +139,7 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       if (
         typeof args.prNumber !== 'number' ||
         !Number.isInteger(args.prNumber) ||
@@ -135,9 +147,11 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
       ) {
         return { ok: false, error: 'Invalid PR number' }
       }
+
       if (typeof args.line !== 'number' || !Number.isInteger(args.line) || args.line < 1) {
         return { ok: false, error: 'Invalid line number' }
       }
+
       if (
         args.startLine !== undefined &&
         (typeof args.startLine !== 'number' ||
@@ -147,15 +161,19 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
       ) {
         return { ok: false, error: 'Invalid start line' }
       }
+
       if (!args.commitId?.trim()) {
         return { ok: false, error: 'Missing PR head SHA' }
       }
+
       if (!args.path?.trim()) {
         return { ok: false, error: 'File path required' }
       }
+
       if (!args.body?.trim()) {
         return { ok: false, error: 'Comment body required' }
       }
+
       const result = await addPRReviewComment({
         repoPath: repo.path,
         prRepo: args.prRepo ?? null,
@@ -168,12 +186,14 @@ export function registerGitHubPRReviewHandlers(store: Store): void {
         connectionId: getGitHubRepoConnectionId(repo),
         localGitOptions: getGitHubLocalGitOptionArgs(store, repo)[0]
       })
+
       if (result.ok) {
         broadcastGitHubWorkItemMutation(
           { repoPath: repo.path, repoId: repo.id, type: 'pr', number: args.prNumber },
           event.sender.id
         )
       }
+
       return result
     }
   )

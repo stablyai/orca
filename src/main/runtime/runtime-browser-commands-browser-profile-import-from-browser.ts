@@ -19,9 +19,11 @@ export class RuntimeBrowserCommandsWithBrowserProfileImportFromBrowser extends R
     supportsPartitionSkippedCookies?: true
   }): Promise<BrowserProfileImportFromBrowserResult> {
     const profile = browserSessionRegistry.getProfile(params.profileId)
+
     if (!profile) {
       return { ok: false, reason: 'Session profile not found.' }
     }
+
     if (
       params.browserProfile &&
       (/[/\\]/.test(params.browserProfile) || params.browserProfile.includes('..'))
@@ -31,24 +33,28 @@ export class RuntimeBrowserCommandsWithBrowserProfileImportFromBrowser extends R
 
     const browsers = detectInstalledBrowsers()
     let browser = browsers.find((candidate) => candidate.family === params.browserFamily)
+
     if (!browser) {
       return { ok: false, reason: 'Browser not found on this system.' }
     }
 
     if (params.browserProfile && params.browserProfile !== browser.selectedProfile) {
       const reselected = selectBrowserProfile(browser, params.browserProfile)
+
       if (!reselected) {
         return {
           ok: false,
           reason: `No cookies database found for profile "${params.browserProfile}".`
         }
       }
+
       browser = reselected
     }
 
     const result = await importCookiesFromBrowser(browser, profile.partition, {
       canReportPartitionSkippedCookies: params.supportsPartitionSkippedCookies === true
     })
+
     if (!result.ok) {
       return result
     }
@@ -56,11 +62,13 @@ export class RuntimeBrowserCommandsWithBrowserProfileImportFromBrowser extends R
     const profileName =
       browser.profiles.find((candidate) => candidate.directory === browser.selectedProfile)?.name ??
       browser.selectedProfile
+
     browserSessionRegistry.updateProfileSource(params.profileId, {
       browserFamily: browser.family,
       profileName,
       importedAt: Date.now()
     })
+
     return { ...result, profileId: params.profileId }
   }
 

@@ -27,6 +27,7 @@ export function admitRendererAgentLaunchAuthority(args: {
   ) {
     return null
   }
+
   return { launchToken: args.launchToken, launchAgent: args.launchAgent }
 }
 
@@ -42,6 +43,7 @@ export function admitProviderReattachLaunchIdentity(args: {
   ) {
     return null
   }
+
   return { incarnationId: args.incarnationId, launchAgent: args.launchAgent }
 }
 
@@ -52,5 +54,6 @@ export function shouldRefreshNativeClaudeAgentTeamsEnv(args: {
   const capturedCommand = args.launchConfig?.agentCommand?.trim() || args.command?.trim() || ''
   const capturedArgs = args.launchConfig?.agentArgs?.trim() ?? ''
   const capturedLaunch = `${capturedCommand} ${capturedArgs}`.trim()
+
   return /(^|\s)--teammate-mode(?:=|\s+)auto(?:\s|$)/.test(capturedLaunch)
 }

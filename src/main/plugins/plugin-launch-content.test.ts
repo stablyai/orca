@@ -11,6 +11,7 @@ import { bootstrapBundledPlugins, resolveBundledPluginRoot } from './plugin-bund
 import { inspectPluginInstallTree } from './plugin-install-staging'
 
 const launchRoot = join(process.cwd(), 'resources', 'plugins', 'launch')
+
 const temporaryRoots: string[] = []
 
 async function readJson(path: string): Promise<unknown> {
@@ -28,6 +29,7 @@ describe('Phase 1 launch plugin content', () => {
     const marketplace = pluginMarketplaceSchema.parse(
       await readJson(join(launchRoot, 'orca-marketplace.json'))
     )
+
     expect(marketplace.plugins.map((plugin) => plugin.id).sort()).toEqual([
       'stablyai.orca-multipass-recipes',
       'stablyai.orca-navigation-shortcuts',
@@ -44,34 +46,43 @@ describe('Phase 1 launch plugin content', () => {
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name)
       .sort()
+
     expect(marketplace.plugins.map((plugin) => plugin.id).sort()).toEqual(localPluginDirectories)
 
     const contributionKinds = new Set<string>()
+
     for (const listing of marketplace.plugins) {
       const inspection = await inspectPluginInstallTree({
         rootDir: join(launchRoot, listing.id),
         hostVersion: '1.4.0',
         expectedPluginKey: listing.id
       })
+
       expect(inspection, `${listing.id} must pass the production install inspection`).toMatchObject(
         {
           ok: true
         }
       )
+
       if (!inspection.ok) {
         continue
       }
+
       const contributes = inspection.manifest.contributes
+
       if (contributes.languagePacks.length > 0) {
         contributionKinds.add('language')
       }
+
       if (contributes.vmRecipes.length > 0) {
         contributionKinds.add('vm-recipe')
       }
+
       if (contributes.commands.length > 0 && contributes.keybindings.length > 0) {
         contributionKinds.add('command-keybinding')
       }
     }
+
     expect(contributionKinds).toEqual(new Set(['language', 'vm-recipe', 'command-keybinding']))
   })
 

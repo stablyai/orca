@@ -31,14 +31,17 @@ export function useWorkspaceKanbanWorktreeActions(args: {
   const recordInteraction = (): void => {
     useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
   }
+
   const getSourceStatusKeys = useCallback(
     (worktreeIds: readonly string[]): WorkspaceStatus[] =>
       worktreeIds.flatMap((worktreeId) => {
         const worktree = args.worktreeById.get(worktreeId)
+
         return worktree ? [getWorkspaceStatus(worktree, args.workspaceStatuses)] : []
       }),
     [args.workspaceStatuses, args.worktreeById]
   )
+
   const shouldWriteDropManualOrder = useCallback(
     (worktreeIds: readonly string[], status: WorkspaceStatus): boolean =>
       shouldWriteManualOrderForGroupDrop({
@@ -48,12 +51,15 @@ export function useWorkspaceKanbanWorktreeActions(args: {
       }),
     [args.sortBy, getSourceStatusKeys]
   )
+
   const moveWorktreeToStatus = useCallback(
     (worktreeId: string, status: WorkspaceStatus) => {
       const current = args.worktreeById.get(worktreeId)
+
       if (!current || getWorkspaceStatus(current, args.workspaceStatuses) === status) {
         return
       }
+
       recordInteraction()
       void args.updateWorktreeMeta(
         worktreeId,
@@ -64,15 +70,19 @@ export function useWorkspaceKanbanWorktreeActions(args: {
     },
     [args]
   )
+
   const moveWorktreesToStatus = useCallback(
     (worktreeIds: readonly string[], status: WorkspaceStatus) => {
       const updates: WorktreeMetaBatchUpdate[] = []
       const changedIds: string[] = []
+
       for (const worktreeId of worktreeIds) {
         const current = args.worktreeById.get(worktreeId)
+
         if (!current || getWorkspaceStatus(current, args.workspaceStatuses) === status) {
           continue
         }
+
         changedIds.push(worktreeId)
         updates.push({
           worktreeId,
@@ -80,15 +90,18 @@ export function useWorkspaceKanbanWorktreeActions(args: {
           executionHostId: current.hostId ?? 'local'
         })
       }
+
       if (changedIds.length === 0) {
         return
       }
+
       recordInteraction()
       void args.updateWorktreesMeta(updates)
       args.maybeSyncTaskStatuses(changedIds, status)
     },
     [args]
   )
+
   const dropWorktreesInStatus = useCallback(
     (drop: {
       worktreeIds: readonly string[]
@@ -97,8 +110,10 @@ export function useWorkspaceKanbanWorktreeActions(args: {
       writeManualOrder?: boolean
     }) => {
       const updates: WorktreeMetaBatchUpdate[] = []
+
       const writeManualOrder =
         drop.writeManualOrder ?? shouldWriteDropManualOrder(drop.worktreeIds, drop.status)
+
       const order = writeManualOrder
         ? buildManualOrderUpdatesForGroupDrop({
             groups: args.boardDragGroups,
@@ -110,28 +125,37 @@ export function useWorkspaceKanbanWorktreeActions(args: {
             allWorktreeIds: args.manualOrderCatalog.orderedIds
           })
         : { changed: false, updates: new Map<string, { manualOrder: number }>() }
+
       for (const worktreeId of drop.worktreeIds) {
         const current = args.worktreeById.get(worktreeId)
+
         if (!current) {
           continue
         }
+
         const next: Partial<WorktreeMeta> = {}
+
         if (getWorkspaceStatus(current, args.workspaceStatuses) !== drop.status) {
           next.workspaceStatus = drop.status
         }
+
         updates.push({
           worktreeId,
           updates: next,
           executionHostId: current.hostId ?? 'local'
         })
       }
+
       for (const [worktreeId, manualOrder] of order.updates) {
         const entry = updates.find((candidate) => candidate.worktreeId === worktreeId)
+
         if (entry) {
           entry.updates = { ...entry.updates, ...manualOrder }
           continue
         }
+
         const current = args.worktreeById.get(worktreeId)
+
         if (current) {
           updates.push({
             worktreeId,
@@ -140,19 +164,24 @@ export function useWorkspaceKanbanWorktreeActions(args: {
           })
         }
       }
+
       const changed = updates.filter((entry) => Object.keys(entry.updates).length > 0)
+
       if (changed.length === 0) {
         return
       }
+
       if (writeManualOrder && order.changed) {
         args.setSortBy('manual')
       }
+
       recordInteraction()
       void args.updateWorktreesMeta(changed)
       args.maybeSyncTaskStatuses(drop.worktreeIds, drop.status)
     },
     [args, shouldWriteDropManualOrder]
   )
+
   const dropPointerDraggedWorktreesInStatus = useCallback(
     (drop: { worktreeIds: readonly string[]; status: WorkspaceStatus; dropIndex: number }) => {
       dropWorktreesInStatus({
@@ -166,6 +195,7 @@ export function useWorkspaceKanbanWorktreeActions(args: {
     },
     [args.laneFullWorktreeIds, args.laneViews, dropWorktreesInStatus]
   )
+
   const dropWorktreesAtEndOfStatus = useCallback(
     (worktreeIds: readonly string[], status: WorkspaceStatus) => {
       dropWorktreesInStatus({
@@ -177,12 +207,15 @@ export function useWorkspaceKanbanWorktreeActions(args: {
     },
     [args.sortBy, args.worktreesByStatus, dropWorktreesInStatus]
   )
+
   const pinWorktree = useCallback(
     (worktreeId: string) => {
       const current = args.worktreeById.get(worktreeId)
+
       if (!current || current.isPinned) {
         return
       }
+
       void args.updateWorktreeMeta(
         worktreeId,
         { isPinned: true },
@@ -191,11 +224,14 @@ export function useWorkspaceKanbanWorktreeActions(args: {
     },
     [args]
   )
+
   const pinWorktrees = useCallback(
     (worktreeIds: readonly string[]) => {
       const updates: WorktreeMetaBatchUpdate[] = []
+
       for (const worktreeId of worktreeIds) {
         const current = args.worktreeById.get(worktreeId)
+
         if (current && !current.isPinned) {
           updates.push({
             worktreeId,
@@ -204,6 +240,7 @@ export function useWorkspaceKanbanWorktreeActions(args: {
           })
         }
       }
+
       if (updates.length > 0) {
         recordInteraction()
         void args.updateWorktreesMeta(updates)
@@ -211,6 +248,7 @@ export function useWorkspaceKanbanWorktreeActions(args: {
     },
     [args]
   )
+
   return {
     dropPointerDraggedWorktreesInStatus,
     dropWorktreesAtEndOfStatus,

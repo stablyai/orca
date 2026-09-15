@@ -16,9 +16,11 @@ import {
 
 function claudeRecord(model?: string): NativeChatSessionOptionRecord {
   const record = createNativeChatSessionOptionRecord('claude')
+
   if (model) {
     record.model = { value: model, source: 'dispatched' }
   }
+
   return record
 }
 
@@ -35,9 +37,11 @@ describe('buildNativeChatSessionOptionCommand', () => {
         record: claudeRecord()
       })
     ).toBe('/model opus')
+
     const effortApply = CLAUDE_SESSION_OPTION_CATALOG.models
       .find((model) => model.id === 'sonnet')!
       .options.find((option) => option.id === 'effort')!.apply
+
     expect(
       buildNativeChatSessionOptionCommand({
         optionId: 'effort',
@@ -55,6 +59,7 @@ describe('buildNativeChatSessionOptionCommand', () => {
     const fastModeApply = CLAUDE_SESSION_OPTION_CATALOG.models
       .find((model) => model.id === 'opus')!
       .options.find((option) => option.id === 'fastMode')!.apply
+
     expect(
       buildNativeChatSessionOptionCommand({
         optionId: 'fastMode',
@@ -100,12 +105,14 @@ describe('parseBuiltSessionOptionCommand', () => {
 describe('recordNativeChatSessionOptionCommand', () => {
   it('tracks a typed /model value as dispatched truth', () => {
     const record = claudeRecord()
+
     const result = recordNativeChatSessionOptionCommand({
       catalog: CLAUDE_SESSION_OPTION_CATALOG,
       models: CLAUDE_SESSION_OPTION_CATALOG.models,
       record,
       command: '/model sonnet'
     })
+
     expect(result).toEqual({ changed: true, opensAgentPicker: false })
     expect(record.model).toEqual({ value: 'sonnet', source: 'dispatched' })
   })
@@ -128,15 +135,18 @@ describe('recordNativeChatSessionOptionCommand', () => {
       record: claudeRecord('sonnet'),
       command: '/model'
     })
+
     expect(claudeResult.opensAgentPicker).toBe(true)
     const codexRecord = createNativeChatSessionOptionRecord('codex')
     codexRecord.model = { value: 'gpt-5.5', source: 'dispatched' }
+
     const codexResult = recordNativeChatSessionOptionCommand({
       catalog: CODEX_SESSION_OPTION_CATALOG,
       models: CODEX_SESSION_OPTION_CATALOG.models,
       record: codexRecord,
       command: '/model'
     })
+
     expect(codexResult).toEqual({ changed: true, opensAgentPicker: true })
     expect(codexRecord.model).toBeUndefined()
   })
@@ -239,9 +249,11 @@ describe('recordNativeChatSessionOptionCommand', () => {
 describe('recordNativeChatSessionOptionCommand for grok', () => {
   function grokRecord(model?: string): NativeChatSessionOptionRecord {
     const record = createNativeChatSessionOptionRecord('grok')
+
     if (model) {
       record.model = { value: model, source: 'dispatched' }
     }
+
     return record
   }
 

@@ -18,8 +18,11 @@ export type LinkBubbleState = {
 }
 
 const LINK_BUBBLE_VIEWPORT_MARGIN = 8
+
 const LINK_BUBBLE_MAX_WIDTH = 344
+
 const LINK_BUBBLE_HEIGHT = 40
+
 const LINK_BUBBLE_LAYOUT_ATTRIBUTES = ['aria-hidden', 'class', 'hidden', 'inert', 'style']
 
 function hasRectChanged(initialRect: DOMRect, nextRect: DOMRect): boolean {
@@ -42,8 +45,10 @@ function isAnchorVisible(anchorElement: HTMLElement): boolean {
   if (!anchorElement.isConnected || anchorElement.getClientRects().length === 0) {
     return false
   }
+
   for (let element: HTMLElement | null = anchorElement; element; element = element.parentElement) {
     const style = window.getComputedStyle(element)
+
     if (
       element.hidden ||
       element.inert ||
@@ -56,6 +61,7 @@ function isAnchorVisible(anchorElement: HTMLElement): boolean {
       return false
     }
   }
+
   return true
 }
 
@@ -66,10 +72,12 @@ function clampDocumentBubblePosition(linkBubble: LinkBubbleState): React.CSSProp
     LINK_BUBBLE_VIEWPORT_MARGIN,
     window.innerWidth - LINK_BUBBLE_MAX_WIDTH - LINK_BUBBLE_VIEWPORT_MARGIN
   )
+
   const maxTop = Math.max(
     LINK_BUBBLE_VIEWPORT_MARGIN,
     window.innerHeight - LINK_BUBBLE_HEIGHT - LINK_BUBBLE_VIEWPORT_MARGIN
   )
+
   return {
     position: 'fixed',
     left: Math.min(Math.max(linkBubble.left, LINK_BUBBLE_VIEWPORT_MARGIN), maxLeft),
@@ -82,11 +90,14 @@ export function getLinkBubblePosition(
   rootEl: HTMLElement | null
 ): { left: number; top: number } | null {
   const { from } = editor.state.selection
+
   try {
     const coords = editor.view.coordsAtPos(from)
+
     if (!rootEl) {
       return null
     }
+
     return {
       left: coords.left,
       top: coords.bottom + 4
@@ -103,6 +114,7 @@ export function isLinkEditCancelShortcut(
   if (event.key.toLowerCase() !== 'k') {
     return false
   }
+
   return isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
 }
 
@@ -122,6 +134,7 @@ function LinkEditInput({
     if (!input) {
       return
     }
+
     // Why: edit mode should start with the current URL selected, but typing
     // changes must not re-select the field on every value update.
     input.focus()
@@ -138,6 +151,7 @@ function LinkEditInput({
           e.preventDefault()
           onSave(value.trim())
         }
+
         if (e.key === 'Escape') {
           e.preventDefault()
           // Stop the bubble container's Escape handler (which calls onDismiss)
@@ -145,6 +159,7 @@ function LinkEditInput({
           e.stopPropagation()
           onCancel()
         }
+
         // Cmd/Ctrl+K while editing cancels the edit.
         if (isLinkEditCancelShortcut(e, isMac)) {
           e.preventDefault()
@@ -196,12 +211,15 @@ export function RichMarkdownLinkBubble({
   useEffect(() => {
     if (!anchorElement || !isAnchorVisible(anchorElement)) {
       onDismissRef.current()
+
       return
     }
 
     const dismiss = (): void => onDismissRef.current()
+
     const dismissOutside = (event: Event): void => {
       const target = event.target
+
       if (
         target instanceof Node &&
         !anchorElement.contains(target) &&
@@ -210,12 +228,15 @@ export function RichMarkdownLinkBubble({
         dismiss()
       }
     }
+
     const initialRect = anchorElement.getBoundingClientRect()
     const initialAnchorClassName = getStableAnchorClassName(anchorElement)
+
     const dismissIfLayoutInvalidated = (mutations: MutationRecord[] = []): void => {
       const anchorStyleChanged = mutations.some(
         (mutation) => mutation.target === anchorElement && mutation.attributeName === 'style'
       )
+
       if (
         !isAnchorVisible(anchorElement) ||
         hasRectChanged(initialRect, anchorElement.getBoundingClientRect()) ||
@@ -225,27 +246,34 @@ export function RichMarkdownLinkBubble({
         dismiss()
       }
     }
+
     const resizeObserver = new ResizeObserver(() => {
       dismissIfLayoutInvalidated()
     })
+
     const intersectionObserver = new IntersectionObserver(([entry]) => {
       if (!entry?.isIntersecting || !isAnchorVisible(anchorElement)) {
         dismiss()
       }
     })
+
     const mutationObserver = new MutationObserver(dismissIfLayoutInvalidated)
+
     const dismissOnScroll = (event: Event): void => {
       const target = event.target
+
       // Why: long URL inputs scroll horizontally to keep the caret visible;
       // only scrolling outside the bubble invalidates its document position.
       if (target instanceof Node && bubbleRef.current?.contains(target)) {
         return
       }
+
       dismiss()
     }
 
     resizeObserver.observe(anchorElement)
     intersectionObserver.observe(anchorElement)
+
     for (
       let element: HTMLElement | null = anchorElement;
       element;
@@ -256,12 +284,14 @@ export function RichMarkdownLinkBubble({
         attributeFilter: LINK_BUBBLE_LAYOUT_ATTRIBUTES
       })
     }
+
     window.addEventListener('pointerdown', dismissOutside, true)
     window.addEventListener('focusin', dismissOutside, true)
     window.addEventListener('scroll', dismissOnScroll, true)
     // Why: a bare resize listener also fires on the main process's reveal reflow, which changes
     // no dimensions — the bubble would dismiss on every window restore.
     const removeViewportListener = addViewportSizeChangeListener(dismiss)
+
     return () => {
       resizeObserver.disconnect()
       intersectionObserver.disconnect()
@@ -274,6 +304,7 @@ export function RichMarkdownLinkBubble({
   }, [anchorElement])
 
   const anchorRect = anchorElement?.getBoundingClientRect()
+
   const positionStyle: React.CSSProperties = portalToDocument
     ? clampDocumentBubblePosition(linkBubble)
     : {
@@ -298,22 +329,29 @@ export function RichMarkdownLinkBubble({
       }}
       onKeyDown={(event) => {
         event.stopPropagation()
+
         if (event.key === 'Escape') {
           event.preventDefault()
           onDismiss()
           anchorElement?.querySelector<HTMLElement>('[contenteditable="true"]')?.focus()
+
           return
         }
+
         if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
           return
         }
+
         const buttons = Array.from(
           bubbleRef.current?.querySelectorAll<HTMLButtonElement>('button:not([disabled])') ?? []
         )
+
         const currentIndex = buttons.indexOf(document.activeElement as HTMLButtonElement)
+
         if (currentIndex === -1 || buttons.length === 0) {
           return
         }
+
         event.preventDefault()
         const direction = event.key === 'ArrowRight' ? 1 : -1
         buttons[(currentIndex + direction + buttons.length) % buttons.length]?.focus()

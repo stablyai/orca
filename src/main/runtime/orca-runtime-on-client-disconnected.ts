@@ -29,17 +29,20 @@ export class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWithHasRecen
       if (soft.clientId !== clientId) {
         continue
       }
+
       clearTimeout(soft.timer)
       this.pendingSoftLeavers.delete(ptyId)
 
       // Cancel any in-flight 300ms restore timer too — we'll handle it inline.
       const pending = this.pendingRestoreTimers.get(ptyId)
+
       if (pending) {
         clearTimeout(pending.timer)
         this.pendingRestoreTimers.delete(ptyId)
       }
 
       const cur = this.layouts.get(ptyId)
+
       // Why: Indefinite hold (mobileAutoRestoreFitMs == null) keeps the PTY
       // at phone dims after the phone disconnects; the desktop banner's
       // Restore button is the explicit return path. See
@@ -54,6 +57,7 @@ export class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWithHasRecen
           void this.applyRemoteDesktopLayout(ptyId)
           continue
         }
+
         // Use the soft-leaver's snapshot baseline as a hint, falling
         // through to resolveDesktopRestoreTarget for missing values.
         const fallback = this.resolveDesktopRestoreTarget(ptyId)
@@ -61,6 +65,7 @@ export class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWithHasRecen
         const rows = soft.record.previousRows ?? fallback.rows
         void this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
       }
+
       this.setDriver(ptyId, { kind: 'idle' })
     }
 
@@ -69,19 +74,24 @@ export class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWithHasRecen
     // floor; only when the inner map empties do we transition to desktop.
     const ptysWithSurvivingPeers: string[] = []
     const ptysToRestore: { ptyId: string; baseline: { cols: number; rows: number } | null }[] = []
+
     for (const [ptyId, inner] of this.mobileSubscribers) {
       const subscriber = inner.get(clientId)
+
       if (!subscriber) {
         continue
       }
+
       // Snapshot baseline before deleting — needed once mobileSubscribers
       // entry is gone for the resolveDesktopRestoreTarget chain.
       const baseline =
         subscriber.previousCols != null && subscriber.previousRows != null
           ? { cols: subscriber.previousCols, rows: subscriber.previousRows }
           : null
+
       inner.delete(clientId)
       this.notifyRemoteTerminalViewPresenceChanged(ptyId)
+
       if (inner.size > 0) {
         ptysWithSurvivingPeers.push(ptyId)
       } else {
@@ -89,8 +99,10 @@ export class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWithHasRecen
         ptysToRestore.push({ ptyId, baseline })
       }
     }
+
     for (const { ptyId, baseline } of ptysToRestore) {
       const cur = this.layouts.get(ptyId)
+
       // Why: Indefinite hold gate — see soft-leaver branch above.
       if (this.remoteDesktopFloor.hasViewers(ptyId)) {
         this.setDriver(ptyId, { kind: 'idle' })
@@ -102,11 +114,13 @@ export class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWithHasRecen
           void this.applyRemoteDesktopLayout(ptyId)
           continue
         }
+
         const fallback = this.resolveDesktopRestoreTarget(ptyId)
         const cols = baseline?.cols ?? fallback.cols
         const rows = baseline?.rows ?? fallback.rows
         void this.enqueueLayout(ptyId, { kind: 'desktop', cols, rows })
       }
+
       this.setDriver(ptyId, { kind: 'idle' })
     }
 
@@ -115,25 +129,33 @@ export class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWithHasRecen
     // the floor.
     for (const ptyId of ptysWithSurvivingPeers) {
       const driver = this.getDriver(ptyId)
+
       if (driver.kind !== 'mobile' || driver.clientId !== clientId) {
         continue
       }
+
       const inner = this.mobileSubscribers.get(ptyId)
       const next = inner ? this.pickMostRecentActor(inner) : null
+
       if (!next) {
         continue
       }
+
       this.setDriver(ptyId, { kind: 'mobile', clientId: next.clientId })
 
       const mode = this.getMobileDisplayMode(ptyId)
+
       if (mode === 'desktop') {
         continue
       }
+
       const nextSub = inner!.get(next.clientId)
       const nextViewport = nextSub?.viewport
+
       if (!nextViewport) {
         continue
       }
+
       void this.enqueueLayout(ptyId, {
         kind: 'phone',
         cols: nextViewport.cols,
@@ -151,18 +173,23 @@ export class OrcaRuntimeWithOnClientDisconnected extends OrcaRuntimeWithHasRecen
       if (override.clientId !== clientId) {
         continue
       }
+
       if (this.mobileSubscribers.has(ptyId)) {
         continue
       }
+
       const cur = this.layouts.get(ptyId)
+
       if (cur?.kind !== 'phone') {
         continue
       }
+
       // Why: Indefinite hold gate — see soft-leaver branch above. Legacy
       // mobile clients (resizeForClient path) honor the same setting.
       if (this.getAutoRestoreFitMs() == null) {
         continue
       }
+
       const fallback = this.resolveDesktopRestoreTarget(ptyId)
       const cols = override.previousCols ?? fallback.cols
       const rows = override.previousRows ?? fallback.rows

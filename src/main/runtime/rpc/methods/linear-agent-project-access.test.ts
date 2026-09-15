@@ -27,11 +27,13 @@ describe('Linear agent project access helpers', () => {
   it('resolves Linear projects by UUID before searching names', async () => {
     const runtime = new OrcaRuntimeService()
     const tester = runtime as unknown as LinearProjectResolverTester
+
     const readById = vi.spyOn(tester, 'readLinearProjectByIdForCreate').mockResolvedValue({
       id: '11111111-1111-4111-8111-111111111111',
       name: 'Launch',
       teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
     } as never)
+
     const readByName = vi
       .spyOn(tester, 'readLinearProjectsForCreate')
       .mockResolvedValue([] as never)
@@ -50,6 +52,7 @@ describe('Linear agent project access helpers', () => {
     const runtime = new OrcaRuntimeService()
     const tester = runtime as unknown as LinearProjectResolverTester
     vi.spyOn(tester, 'readLinearProjectByIdForCreate').mockResolvedValue(null as never)
+
     const readByName = vi.spyOn(tester, 'readLinearProjectsForCreate').mockResolvedValue([
       {
         id: 'project-1',
@@ -57,6 +60,7 @@ describe('Linear agent project access helpers', () => {
         teams: [{ id: 'team-1', name: 'Engineering', key: 'ENG' }]
       }
     ] as never)
+
     const readExactName = vi
       .spyOn(tester, 'readLinearProjectsByExactNameForCreate')
       .mockResolvedValue([
@@ -213,6 +217,7 @@ describe('Linear agent project access helpers', () => {
 
   it('passes the resolved project id into agent issue create', async () => {
     vi.resetModules()
+
     const createIssueForAgent = vi.fn().mockResolvedValue({
       id: 'issue-created',
       identifier: 'ENG-123',
@@ -223,10 +228,13 @@ describe('Linear agent project access helpers', () => {
       parent: null,
       project: { id: 'project-1', name: 'Launch' }
     })
+
     vi.doMock('../../../linear/linear-issue-mutations', async (importOriginal) => {
       const actual = await importOriginal<typeof LinearIssueMutationsModule>()
+
       return { ...actual, createIssueForAgent }
     })
+
     try {
       const { OrcaRuntimeService: RuntimeService } = await import('../../orca-runtime')
       const runtime = new RuntimeService()

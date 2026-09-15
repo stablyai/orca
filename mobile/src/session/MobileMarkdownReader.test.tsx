@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('react-native', async () => {
   const React = await import('react')
+
   return {
     ActivityIndicator: 'ActivityIndicator',
     Platform: { OS: 'ios', select: (choices: Record<string, unknown>) => choices.ios },
@@ -33,9 +34,11 @@ vi.mock('../components/MobileRichMarkdownEditor', () => {
     (props: { onKeyboardInsetChange?: (bottom: number) => void }, ref: unknown) => {
       mocks.reportKeyboardInset = props.onKeyboardInsetChange ?? null
       useImperativeHandle(ref as never, () => ({ dismissKeyboard: mocks.dismissKeyboard }))
+
       return createElement('MobileRichMarkdownEditor')
     }
   )
+
   return { MobileRichMarkdownEditor: Editor }
 })
 
@@ -66,6 +69,7 @@ describe('MobileMarkdownReader', () => {
         })
       )
     })
+
     return renderer as unknown as ReactTestRenderer
   }
 

@@ -11,6 +11,7 @@ import { formatCost, formatTokens, formatUpdatedAt } from './usage-formatters'
 import { translate } from '@/i18n/i18n'
 
 const RANGE_OPTIONS: CodexUsageRange[] = ['7d', '30d', '90d', 'all']
+
 const SCOPE_OPTIONS: { value: CodexUsageScope; label: string }[] = [
   {
     value: 'orca',
@@ -25,6 +26,7 @@ const SCOPE_OPTIONS: { value: CodexUsageScope; label: string }[] = [
     }
   }
 ]
+
 const RANGE_LABELS: Record<CodexUsageRange, string> = {
   get '7d'() {
     return translate('auto.components.stats.CodexUsagePane.rangeLast7Days', 'Last 7 days')
@@ -66,6 +68,7 @@ export function CodexUsagePane(): React.JSX.Element {
   }
 
   const title = translate('auto.components.stats.CodexUsagePane.408210470c', 'Codex Usage Tracking')
+
   const enableLabel = translate(
     'auto.components.stats.CodexUsagePane.f7c1affbd5',
     'Enable Codex usage analytics'

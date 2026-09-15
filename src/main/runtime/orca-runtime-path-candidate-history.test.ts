@@ -15,15 +15,18 @@ describe('PTY path candidate history', () => {
     let candidates = previous
     let replacements = 0
     let byteLengthCalls = 0
+
     try {
       for (let index = 0; index < 4096; index += 1) {
         const next = appendRecentPtyPathCandidates(
           candidates,
           'ordinary compiler progress without a path\n'
         )
+
         if (next !== candidates) {
           replacements += 1
         }
+
         candidates = next
       }
     } finally {

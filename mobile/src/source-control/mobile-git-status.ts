@@ -8,9 +8,13 @@ import type {
 import type { RpcResponse } from '../transport/types'
 
 export type MobileGitFileStatus = GitFileStatus
+
 export type MobileGitStagingArea = GitStagingArea
+
 export type MobileGitStatusEntry = GitStatusEntry
+
 export type MobileGitUpstreamStatus = GitUpstreamStatus
+
 export type MobileGitStatusResult = GitStatusResult
 
 export type MobileSourceControlSection<TEntry extends MobileGitStatusEntry = MobileGitStatusEntry> =
@@ -41,9 +45,11 @@ function getConflictSortRank(entry: MobileGitStatusEntry): number {
   if (entry.conflictStatus === 'unresolved') {
     return 0
   }
+
   if (entry.conflictStatus === 'resolved_locally') {
     return 1
   }
+
   return 2
 }
 
@@ -55,8 +61,10 @@ export function buildMobileSourceControlSections<TEntry extends MobileGitStatusE
     title: AREA_TITLES[area],
     data: entries.filter((entry) => entry.area === area)
   })).filter((section) => section.data.length > 0)
+
   if (sections.some((section) => section.data.length > 1)) {
     const collator = new Intl.Collator(undefined, { numeric: true })
+
     for (const section of sections) {
       section.data.sort(
         (a, b) =>
@@ -64,6 +72,7 @@ export function buildMobileSourceControlSections<TEntry extends MobileGitStatusE
       )
     }
   }
+
   return sections
 }
 
@@ -116,6 +125,7 @@ export function readMobileGitRefusal(
 
 export function isMobileGitUnavailableReply(response: RpcResponse): boolean {
   const refusal = readMobileGitRefusal(response)
+
   return refusal !== null && isMobileGitUnavailable(refusal.code, refusal.message)
 }
 
@@ -132,5 +142,6 @@ export function isMobileGitTransientRefreshError(
   message: string | undefined
 ) {
   const normalized = message?.trim().toLowerCase()
+
   return code === 'request_aborted' || normalized === 'aborting' || normalized === 'request_aborted'
 }

@@ -24,6 +24,7 @@ describe('authoritative unknown turn duration at the shared status consumer', ()
         observedAt: 1_000,
         body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
       }
+
       const recoveredTurn: AgentJournalRenderItem = {
         itemId: 'legacy:codex:s:turn-lifecycle%3At1',
         revision: 2,
@@ -36,7 +37,9 @@ describe('authoritative unknown turn duration at the shared status consumer', ()
           ...(startedAt === undefined ? {} : { startedAt, userItemId: user.itemId })
         }
       }
+
       const keys = new Set([user.itemId])
+
       const running = reduceNativeChatTurnTiming(
         {},
         {
@@ -47,6 +50,7 @@ describe('authoritative unknown turn duration at the shared status consumer', ()
           now: 1_000
         }
       )
+
       const locallyStopped = reduceNativeChatTurnTiming(running, {
         activeTurnKey: user.itemId,
         validTurnKeys: keys,
@@ -54,6 +58,7 @@ describe('authoritative unknown turn duration at the shared status consumer', ()
         workingStartedAt: null,
         now: 60_000
       })
+
       const options = {
         activeTurnKey: user.itemId,
         isWorking: false,
@@ -79,6 +84,7 @@ describe('authoritative unknown turn duration at the shared status consumer', ()
         observedAt: 1_000,
         body: { kind: 'turn', turnId: 't1', state, startedAt: 1_000, userItemId: 'turn-1' }
       }
+
       const statuses = selectNativeChatTurnStatuses(
         {
           'turn-1': { startedAt: 1_000, workedSeconds: 59 },
@@ -91,6 +97,7 @@ describe('authoritative unknown turn duration at the shared status consumer', ()
           settledByTurn: selectStructuredAgentSettledTurns([userItem('turn-1'), item])
         }
       )
+
       expect(statuses.completedByTurn).toEqual({})
       expect(statuses.active).toEqual({ startedAt: 60_000, workedSeconds: null, thinking: false })
     }
@@ -105,6 +112,7 @@ describe('authoritative unknown turn duration at the shared status consumer', ()
       userItemId: 'turn-1',
       durationMs: 7_172
     }
+
     const statuses = selectNativeChatTurnStatuses(
       {
         'turn-1': { startedAt: 1_000, workedSeconds: 59 },
@@ -128,6 +136,7 @@ describe('authoritative unknown turn duration at the shared status consumer', ()
         ])
       }
     )
+
     expect(statuses.active?.workedSeconds).toBe(7)
     expect(statuses.completedByTurn.old?.workedSeconds).toBe(9)
   })

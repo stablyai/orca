@@ -57,6 +57,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
             lastConnectedAt,
             ...relayRecovery
           })
+
           return (
             <>
               <View style={styles.hostIdentity}>
@@ -71,9 +72,11 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
                   const verdict = headerVerdict
                   const isError = isErrorVerdict(verdict)
                   const showReconnectButton = isError && hostId && verdict.kind !== 'auth-failed'
+
                   if (!showReconnectButton) {
                     return null
                   }
+
                   return (
                     <Pressable
                       style={styles.reconnectButton}

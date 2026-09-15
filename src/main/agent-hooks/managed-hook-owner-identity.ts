@@ -5,11 +5,17 @@ import { join, win32 } from 'node:path'
 import { promisify } from 'node:util'
 
 const runtimeHostIdentity = `runtime:${randomUUID()}`
+
 const runtimeProcessIdentity = `runtime:${randomUUID()}`
+
 let hostIdentityPromise: Promise<string> | undefined
+
 let bootIdentityPromise: Promise<string | undefined> | undefined
+
 let selfProcessIdentityPromise: Promise<string | null | undefined> | undefined
+
 const HOST_TOKEN_PATTERN = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i
+
 const WINDOWS_PROCESS_IDENTITY_TIMEOUT_MS = 5_000
 
 function getWindowsPowerShellPath(): string {
@@ -32,20 +38,24 @@ function hasCode(error: unknown, code: string): boolean {
 
 export function parseLinuxStartTicks(statLine: string): string | null {
   const commandEnd = statLine.lastIndexOf(')')
+
   if (commandEnd === -1) {
     return null
   }
+
   // Field 22 is index 19 after removing pid and the parenthesized command.
   const startTicks = statLine
     .slice(commandEnd + 1)
     .trim()
     .split(/\s+/)[19]
+
   return startTicks ?? null
 }
 
 async function readLinuxPidNamespace(pid: number): Promise<string | undefined> {
   try {
     const namespace = await readlink(`/proc/${pid}/ns/pid`)
+
     return namespace.trim() || undefined
   } catch {
     return undefined
@@ -55,10 +65,13 @@ async function readLinuxPidNamespace(pid: number): Promise<string | undefined> {
 async function readPublishedHostToken(path: string, uid: number): Promise<string | undefined> {
   try {
     const stats = await lstat(path)
+
     if (!stats.isFile() || stats.uid !== uid || (stats.mode & 0o077) !== 0) {
       return undefined
     }
+
     const token = (await readFile(path, 'utf8')).trim()
+
     return HOST_TOKEN_PATTERN.test(token) ? token : undefined
   } catch {
     return undefined
@@ -67,14 +80,18 @@ async function readPublishedHostToken(path: string, uid: number): Promise<string
 
 async function readDurableHostToken(): Promise<string | undefined> {
   const uid = process.getuid?.()
+
   if ((process.platform !== 'linux' && process.platform !== 'darwin') || uid === undefined) {
     return undefined
   }
+
   const directory = join('/var', 'tmp', `orca-managed-hooks-${uid}`)
   const tokenPath = join(directory, 'host-id')
+
   try {
     await mkdir(directory, { recursive: true, mode: 0o700 })
     const directoryStats = await lstat(directory)
+
     if (
       !directoryStats.isDirectory() ||
       directoryStats.uid !== uid ||
@@ -82,13 +99,17 @@ async function readDurableHostToken(): Promise<string | undefined> {
     ) {
       return undefined
     }
+
     const existing = await readPublishedHostToken(tokenPath, uid)
+
     if (existing) {
       return existing
     }
+
     const token = randomUUID()
     const draftPath = join(directory, `host-id-draft-${token}`)
     await writeFile(draftPath, token, { encoding: 'utf8', flag: 'wx', mode: 0o600 })
+
     try {
       // Why: the hard link publishes a complete token atomically across relay processes.
       await link(draftPath, tokenPath).catch((error) => {
@@ -99,6 +120,7 @@ async function readDurableHostToken(): Promise<string | undefined> {
     } finally {
       await unlink(draftPath).catch(() => {})
     }
+
     return await readPublishedHostToken(tokenPath, uid)
   } catch {
     return undefined
@@ -107,14 +129,17 @@ async function readDurableHostToken(): Promise<string | undefined> {
 
 async function readHostIdentity(): Promise<string> {
   const durableToken = await readDurableHostToken()
+
   if (durableToken) {
     return `host-token:${durableToken}`
   }
+
   if (process.platform === 'linux') {
     // Why: an unverifiable host scope may acquire and release its own clean lock,
     // but a later process gets a different identity and cannot steal its residue.
     return runtimeHostIdentity
   }
+
   if (process.platform === 'win32') {
     try {
       const { stdout } = await promisify(execFile)(
@@ -122,12 +147,15 @@ async function readHostIdentity(): Promise<string> {
         ['query', 'HKLM\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid'],
         { encoding: 'utf8', timeout: 1_000, windowsHide: true }
       )
+
       const machineGuid = /^\s*MachineGuid\s+REG_\w+\s+(.+?)\s*$/im.exec(stdout)?.[1]
+
       return machineGuid ? `win32:${machineGuid.toLowerCase()}` : runtimeHostIdentity
     } catch {
       return runtimeHostIdentity
     }
   }
+
   if (process.platform === 'darwin') {
     try {
       const { stdout } = await promisify(execFile)(
@@ -138,12 +166,15 @@ async function readHostIdentity(): Promise<string> {
           timeout: 1_000
         }
       )
+
       const platformId = /"IOPlatformUUID"\s*=\s*"([^"]+)"/.exec(stdout)?.[1]
+
       return platformId ? `darwin:${platformId}` : runtimeHostIdentity
     } catch {
       return runtimeHostIdentity
     }
   }
+
   return runtimeHostIdentity
 }
 
@@ -151,6 +182,7 @@ export async function readBootIdentity(): Promise<string | undefined> {
   if (process.platform === 'linux') {
     try {
       const bootId = (await readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim()
+
       return bootId || undefined
     } catch {
       return undefined
@@ -163,7 +195,9 @@ export async function readBootIdentity(): Promise<string | undefined> {
         encoding: 'utf8',
         timeout: 1_000
       })
+
       const bootSessionId = stdout.trim()
+
       return bootSessionId || undefined
     } catch {
       return undefined
@@ -175,6 +209,7 @@ export async function readBootIdentity(): Promise<string | undefined> {
 
 export async function readManagedHookHostIdentity(): Promise<string> {
   hostIdentityPromise ??= readHostIdentity()
+
   return await hostIdentityPromise
 }
 
@@ -194,8 +229,10 @@ export async function readManagedHookProcessIdentity(
 ): Promise<string | null | undefined> {
   if (process.platform === 'win32' && pid === process.pid) {
     selfProcessIdentityPromise ??= readProcessIdentity(pid)
+
     return await selfProcessIdentityPromise
   }
+
   return await readProcessIdentity(pid)
 }
 
@@ -207,7 +244,9 @@ async function readProcessIdentity(pid: number): Promise<string | null | undefin
         readLinuxPidNamespace(pid),
         (bootIdentityPromise ??= readBootIdentity())
       ])
+
       const startTicks = parseLinuxStartTicks(statLine)
+
       return startTicks
         ? `linux:${pidNamespace ?? 'unknown-namespace'}:${bootIdentity ?? 'unknown-boot'}:${startTicks}`
         : undefined
@@ -215,6 +254,7 @@ async function readProcessIdentity(pid: number): Promise<string | null | undefin
       if (hasCode(error, 'ENOENT')) {
         return null
       }
+
       return pid === process.pid ? runtimeProcessIdentity : undefined
     }
   }
@@ -234,11 +274,14 @@ async function readProcessIdentity(pid: number): Promise<string | null | undefin
         ],
         { encoding: 'utf8', timeout: WINDOWS_PROCESS_IDENTITY_TIMEOUT_MS, windowsHide: true }
       )
+
       const startedAt = stdout.trim()
+
       return startedAt === 'missing' ? null : startedAt ? `win32:${pid}:${startedAt}` : undefined
     } catch {
       try {
         process.kill(pid, 0)
+
         return pid === process.pid ? runtimeProcessIdentity : undefined
       } catch (error) {
         return hasCode(error, 'ESRCH') ? null : undefined
@@ -248,6 +291,7 @@ async function readProcessIdentity(pid: number): Promise<string | null | undefin
 
   bootIdentityPromise ??= readBootIdentity()
   const bootIdentity = await bootIdentityPromise
+
   try {
     const { stdout } = await promisify(execFile)(
       'ps',
@@ -260,16 +304,20 @@ async function readProcessIdentity(pid: number): Promise<string | null | undefin
         env: { ...process.env, LC_ALL: 'C', LANG: 'C' }
       }
     )
+
     const startedAt = stdout.trim()
+
     return startedAt ? `${process.platform}:${bootIdentity ?? 'unknown-boot'}:${startedAt}` : null
   } catch {
     try {
       process.kill(pid, 0)
+
       return undefined
     } catch (error) {
       if (hasCode(error, 'ESRCH')) {
         return null
       }
+
       return pid === process.pid ? runtimeProcessIdentity : undefined
     }
   }

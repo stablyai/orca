@@ -4,8 +4,11 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const resolveHelperAppPathMock = vi.hoisted(() => vi.fn())
+
 const resolveHelperExecutablePathMock = vi.hoisted(() => vi.fn())
+
 const permissionStatusTempDir = '/tmp/orca-computer-use-permissions-test'
+
 const permissionStatusPath = join(permissionStatusTempDir, 'status.json')
 
 vi.mock('child_process', () => ({
@@ -18,11 +21,13 @@ vi.mock('child_process', () => ({
         if (event === 'close') {
           queueMicrotask(() => callback(0))
         }
+
         return child
       }),
       off: vi.fn(() => child),
       unref: vi.fn()
     }
+
     return child
   }),
   spawnSync: vi.fn()
@@ -70,6 +75,7 @@ describe('getComputerUsePermissionStatus', () => {
 
   it('wraps permission status helper launch failures', async () => {
     const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+
     const child = {
       stdout: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
       stderr: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
@@ -77,11 +83,13 @@ describe('getComputerUsePermissionStatus', () => {
         if (event === 'error') {
           queueMicrotask(() => callback(new Error('spawn ENOENT /private/path')))
         }
+
         return child
       }),
       off: vi.fn(() => child),
       unref: vi.fn()
     }
+
     vi.mocked(spawn).mockImplementationOnce(() => child as unknown as ReturnType<typeof spawn>)
 
     await expect(getComputerUsePermissionStatus()).rejects.toMatchObject({
@@ -97,6 +105,7 @@ describe('getComputerUsePermissionStatus', () => {
 
   it('removes permission status helper listeners after close', async () => {
     const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+
     const child = {
       stdout: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
       stderr: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
@@ -104,11 +113,13 @@ describe('getComputerUsePermissionStatus', () => {
         if (event === 'close') {
           queueMicrotask(() => callback(0))
         }
+
         return child
       }),
       off: vi.fn(() => child),
       unref: vi.fn()
     }
+
     vi.mocked(spawn).mockImplementationOnce(() => child as unknown as ReturnType<typeof spawn>)
 
     await expect(getComputerUsePermissionStatus()).resolves.toMatchObject({
@@ -124,6 +135,7 @@ describe('getComputerUsePermissionStatus', () => {
   it('times out when the permission status helper launch never closes', async () => {
     vi.useFakeTimers()
     const { getComputerUsePermissionStatus } = await import('./macos-computer-use-permissions')
+
     const child = {
       stdout: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
       stderr: { off: vi.fn(), on: vi.fn(), setEncoding: vi.fn() },
@@ -132,12 +144,15 @@ describe('getComputerUsePermissionStatus', () => {
       kill: vi.fn(),
       unref: vi.fn()
     }
+
     vi.mocked(spawn).mockImplementationOnce(() => child as unknown as ReturnType<typeof spawn>)
 
     let settled = false
+
     const statusPromise = getComputerUsePermissionStatus().then(
       (status) => {
         settled = true
+
         return status
       },
       (error: unknown) => {
@@ -145,6 +160,7 @@ describe('getComputerUsePermissionStatus', () => {
         throw error
       }
     )
+
     const rejection = expect(statusPromise).rejects.toMatchObject({
       name: 'RuntimeClientError',
       code: 'accessibility_error',

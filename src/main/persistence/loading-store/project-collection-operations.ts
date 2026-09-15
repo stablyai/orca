@@ -40,6 +40,7 @@ type ProjectCollectionOperationsRuntime = Pick<
 >
 
 const projectCollectionOperationsContext = Symbol('ProjectCollectionOperations')
+
 type ProjectCollectionOperationsContext = {
   runtime: ProjectCollectionOperationsRuntime
   repos: RepoLifecycleOperations
@@ -179,6 +180,7 @@ export function getProjectHostOperations(
         owner[projectCollectionOperationsContext].repos.removeProjectForHost(id, hostId),
       scheduleSave: () => scheduleSave(owner[projectCollectionOperationsContext].scheduling)
     })
+
   return owner[projectCollectionOperationsContext].runtime.projectHostOperations
 }
 
@@ -200,6 +202,7 @@ export function getProjectGroupOperations(
           matchesWorktreeId
         )
     })
+
   return owner[projectCollectionOperationsContext].runtime.projectGroupOperations
 }
 
@@ -222,6 +225,7 @@ export function getFolderWorkspaceOperations(
         ),
       hydrateRepo: (repo) => hydrateRepo(owner[projectCollectionOperationsContext].repos, repo)
     })
+
   return owner[projectCollectionOperationsContext].runtime.folderWorkspaceOperations
 }
 

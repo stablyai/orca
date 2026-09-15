@@ -9,6 +9,7 @@ import {
 } from './pane-terminal-mouse-wheel'
 
 const DOM_DELTA_PIXEL = 0
+
 const DOM_DELTA_LINE = 1
 
 class TestWheelEvent extends Event {
@@ -380,11 +381,13 @@ describe('terminal mouse wheel multiplier', () => {
   it('replays discrete TUI wheel ticks as line-mode reports', async () => {
     vi.stubGlobal('WheelEvent', TestWheelEvent)
     const handlers: ((event: WheelEvent) => boolean)[] = []
+
     const target = Object.assign(new EventTarget(), {
       classList: {
         contains: (className: string) => className === 'enable-mouse-events'
       }
     }) as unknown as EventTarget & HTMLElement
+
     const dispatched: WheelEvent[] = []
     target.addEventListener('wheel', (event) => dispatched.push(event as WheelEvent))
     attachTerminalMouseWheelMultiplier(
@@ -398,12 +401,14 @@ describe('terminal mouse wheel multiplier', () => {
       },
       { getTuiMouseWheelMultiplier: () => 1 }
     )
+
     const event = new TestWheelEvent('wheel', {
       bubbles: true,
       cancelable: true,
       deltaMode: DOM_DELTA_PIXEL,
       deltaY: 12
     }) as WheelEvent
+
     Object.defineProperty(event, 'wheelDeltaY', {
       configurable: true,
       value: -120
@@ -422,13 +427,16 @@ describe('terminal mouse wheel multiplier', () => {
   it('does not replay with a stale active mouse-reporting class', async () => {
     vi.stubGlobal('WheelEvent', TestWheelEvent)
     const handlers: ((event: WheelEvent) => boolean)[] = []
+
     const target = Object.assign(new EventTarget(), {
       classList: {
         contains: (className: string) => className === 'enable-mouse-events'
       }
     }) as unknown as EventTarget & HTMLElement
+
     const dispatched: WheelEvent[] = []
     target.addEventListener('wheel', (event) => dispatched.push(event as WheelEvent))
+
     const terminal = {
       attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
         handlers.push(handler)
@@ -437,6 +445,7 @@ describe('terminal mouse wheel multiplier', () => {
       modes: { mouseTrackingMode: 'none' as const },
       rows: 24
     }
+
     attachTerminalMouseWheelMultiplier(terminal)
 
     const event = new TestWheelEvent('wheel', {
@@ -445,6 +454,7 @@ describe('terminal mouse wheel multiplier', () => {
       deltaMode: DOM_DELTA_PIXEL,
       deltaY: 12
     }) as WheelEvent
+
     Object.defineProperty(event, 'wheelDeltaY', {
       configurable: true,
       value: -120
@@ -459,13 +469,16 @@ describe('terminal mouse wheel multiplier', () => {
   it('discards pending replay when mouse reporting turns off before drain', async () => {
     vi.stubGlobal('WheelEvent', TestWheelEvent)
     const handlers: ((event: WheelEvent) => boolean)[] = []
+
     const target = Object.assign(new EventTarget(), {
       classList: {
         contains: (className: string) => className === 'enable-mouse-events'
       }
     }) as unknown as EventTarget & HTMLElement
+
     const dispatched: WheelEvent[] = []
     target.addEventListener('wheel', (event) => dispatched.push(event as WheelEvent))
+
     const terminal = {
       attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
         handlers.push(handler)
@@ -474,6 +487,7 @@ describe('terminal mouse wheel multiplier', () => {
       modes: { mouseTrackingMode: 'any' as 'any' | 'none' },
       rows: 24
     }
+
     attachTerminalMouseWheelMultiplier(terminal)
 
     const event = new TestWheelEvent('wheel', {
@@ -482,6 +496,7 @@ describe('terminal mouse wheel multiplier', () => {
       deltaMode: DOM_DELTA_PIXEL,
       deltaY: 12
     }) as WheelEvent
+
     Object.defineProperty(event, 'wheelDeltaY', {
       configurable: true,
       value: -120
@@ -497,11 +512,13 @@ describe('terminal mouse wheel multiplier', () => {
   it('replays trackpad-like TUI pixel scrolling with responsive direction reversal', async () => {
     vi.stubGlobal('WheelEvent', TestWheelEvent)
     const handlers: ((event: WheelEvent) => boolean)[] = []
+
     const target = Object.assign(new EventTarget(), {
       classList: {
         contains: (className: string) => className === 'enable-mouse-events'
       }
     }) as unknown as EventTarget & HTMLElement
+
     const dispatched: WheelEvent[] = []
     target.addEventListener('wheel', (event) => dispatched.push(event as WheelEvent))
     attachTerminalMouseWheelMultiplier(
@@ -532,10 +549,12 @@ describe('terminal mouse wheel multiplier', () => {
         deltaMode: DOM_DELTA_PIXEL,
         deltaY
       }) as WheelEvent
+
       Object.defineProperty(event, 'timeStamp', {
         configurable: true,
         value: timeStamp
       })
+
       return event
     })
 
@@ -550,11 +569,13 @@ describe('terminal mouse wheel multiplier', () => {
   it('replays a fast trackpad-like flick as one full synthetic report batch', async () => {
     vi.stubGlobal('WheelEvent', TestWheelEvent)
     const handlers: ((event: WheelEvent) => boolean)[] = []
+
     const target = Object.assign(new EventTarget(), {
       classList: {
         contains: (className: string) => className === 'enable-mouse-events'
       }
     }) as unknown as EventTarget & HTMLElement
+
     const dispatched: WheelEvent[] = []
     target.addEventListener('wheel', (event) => dispatched.push(event as WheelEvent))
     attachTerminalMouseWheelMultiplier(
@@ -585,11 +606,13 @@ describe('terminal mouse wheel multiplier', () => {
   it('drains resolved TUI wheel reports without a frame-rate cap', async () => {
     vi.stubGlobal('WheelEvent', TestWheelEvent)
     const handlers: ((event: WheelEvent) => boolean)[] = []
+
     const target = Object.assign(new EventTarget(), {
       classList: {
         contains: (className: string) => className === 'enable-mouse-events'
       }
     }) as unknown as EventTarget & HTMLElement
+
     const dispatched: WheelEvent[] = []
     target.addEventListener('wheel', (event) => dispatched.push(event as WheelEvent))
     attachTerminalMouseWheelMultiplier(
@@ -605,12 +628,14 @@ describe('terminal mouse wheel multiplier', () => {
         getTuiMouseWheelMultiplier: () => 3
       }
     )
+
     const firstEvent = new TestWheelEvent('wheel', {
       bubbles: true,
       cancelable: true,
       deltaMode: DOM_DELTA_PIXEL,
       deltaY: 12
     }) as WheelEvent
+
     Object.defineProperty(firstEvent, 'wheelDeltaY', {
       configurable: true,
       value: -120
@@ -619,12 +644,14 @@ describe('terminal mouse wheel multiplier', () => {
       configurable: true,
       value: 0
     })
+
     const secondEvent = new TestWheelEvent('wheel', {
       bubbles: true,
       cancelable: true,
       deltaMode: DOM_DELTA_PIXEL,
       deltaY: 12
     }) as WheelEvent
+
     Object.defineProperty(secondEvent, 'wheelDeltaY', {
       configurable: true,
       value: -120

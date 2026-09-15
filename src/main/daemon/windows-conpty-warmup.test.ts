@@ -5,6 +5,7 @@ import { warmWindowsConptyOnce } from './windows-conpty-warmup'
 function setPlatform(platform: NodeJS.Platform): () => void {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   return () => Object.defineProperty(process, 'platform', { configurable: true, value: original })
 }
 
@@ -13,6 +14,7 @@ function flushImmediates(): Promise<void> {
 }
 
 let restorePlatform: (() => void) | null = null
+
 afterEach(() => {
   restorePlatform?.()
   restorePlatform = null
@@ -21,14 +23,17 @@ afterEach(() => {
 
 function makeFakePty(): { proc: pty.IPty; fireExit: () => void } {
   let exitListener: (() => void) | null = null
+
   const proc = {
     pid: 4321,
     kill: vi.fn(),
     onExit: vi.fn((listener: () => void) => {
       exitListener = listener
+
       return { dispose: () => undefined }
     })
   } as unknown as pty.IPty
+
   return { proc, fireExit: () => exitListener?.() }
 }
 
@@ -65,6 +70,7 @@ describe('warmWindowsConptyOnce', () => {
   it('kills the warm-up shell if it never exits', async () => {
     restorePlatform = setPlatform('win32')
     vi.useFakeTimers()
+
     try {
       const { proc } = makeFakePty()
       const spawnPty = vi.fn(() => proc) as unknown as typeof pty.spawn
@@ -81,6 +87,7 @@ describe('warmWindowsConptyOnce', () => {
 
   it('swallows spawn failures', async () => {
     restorePlatform = setPlatform('win32')
+
     const spawnPty = vi.fn(() => {
       throw new Error('conpty unavailable')
     }) as unknown as typeof pty.spawn

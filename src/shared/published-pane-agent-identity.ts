@@ -39,6 +39,7 @@ export function resolvePublishedPaneAgentIdentity(args: {
   title?: string | null
 }): TuiAgent | undefined {
   const titleAgent = args.title ? collectAgentTitleEvidence(args.title).agent : null
+
   return (
     resolvePaneAgentIdentity({
       evidence: [

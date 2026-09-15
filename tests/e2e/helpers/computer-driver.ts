@@ -12,13 +12,21 @@ import {
 } from './computer-cli-driver'
 
 const execFileAsync = promisify(execFile)
+
 let textEditTempDir: string | null = null
+
 let safariDraftTempDir: string | null = null
+
 let safariDraftTitle: string | null = null
+
 let linuxTempDir: string | null = null
+
 let windowsTempDir: string | null = null
+
 let geditProcess: ChildProcess | null = null
+
 let notepadProcess: ChildProcess | null = null
+
 let notepadAppSelector: string | null = null
 
 export { ensureOrcaRuntimeLaunched, parseJsonOutput, runOrcaCli, stopOrcaRuntime, type CliResult }
@@ -40,6 +48,7 @@ export async function killTextEdit(): Promise<void> {
   } catch {
     // TextEdit may already be closed by the user or the OS.
   }
+
   if (textEditTempDir) {
     await rm(textEditTempDir, { force: true, recursive: true })
     textEditTempDir = null
@@ -59,11 +68,13 @@ export async function ensureSafariDraftFixtureLaunched(): Promise<SafariDraftFix
   await execFileAsync('open', ['-F', '-a', 'Safari', filePath])
   await waitForMacAppWindow('Safari', 15000)
   await waitForComputerWindowTitle('com.apple.Safari', safariDraftTitle, 15000)
+
   return { title: safariDraftTitle }
 }
 
 export async function closeSafariDraftFixture(): Promise<void> {
   const title = safariDraftTitle
+
   if (title) {
     try {
       const envelope = parseJsonOutput<{
@@ -74,12 +85,15 @@ export async function closeSafariDraftFixture(): Promise<void> {
         (await runOrcaCli(['computer', 'list-windows', '--app', 'com.apple.Safari', '--json']))
           .stdout
       )
+
       const target = envelope.result.windows.find((window) => window.title.includes(title))
+
       if (target) {
         const targetArgs =
           target.id !== undefined && target.id !== null
             ? ['--window-id', String(target.id)]
             : ['--window-index', String(target.index)]
+
         await runOrcaCli([
           'computer',
           'hotkey',
@@ -96,8 +110,10 @@ export async function closeSafariDraftFixture(): Promise<void> {
     } catch {
       // The test-owned Safari tab may already be closed or the runtime may be gone.
     }
+
     safariDraftTitle = null
   }
+
   if (safariDraftTempDir) {
     await rm(safariDraftTempDir, { force: true, recursive: true })
     safariDraftTempDir = null
@@ -111,20 +127,24 @@ export async function activateFinder(): Promise<void> {
 
 async function waitForMacAppWindow(appName: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     try {
       const result = await execFileAsync('osascript', [
         '-e',
         `tell application "System Events" to tell process "${escapeAppleScript(appName)}" to count windows`
       ])
+
       if (Number.parseInt(result.stdout.trim(), 10) > 0) {
         return
       }
     } catch {
       // The app process may not have registered with System Events yet.
     }
+
     await delay(250)
   }
+
   throw new Error(`${appName} did not expose a visible window within ${timeoutMs}ms`)
 }
 
@@ -134,19 +154,23 @@ async function waitForComputerWindowTitle(
   timeoutMs: number
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     try {
       const envelope = parseJsonOutput<{
         result: { windows: { title: string }[] }
       }>((await runOrcaCli(['computer', 'list-windows', '--app', app, '--json'])).stdout)
+
       if (envelope.result.windows.some((window) => window.title.includes(title))) {
         return
       }
     } catch {
       // The browser window may not be visible to the provider yet.
     }
+
     await delay(250)
   }
+
   throw new Error(`${app} did not expose a window titled ${title} within ${timeoutMs}ms`)
 }
 
@@ -168,8 +192,10 @@ export async function killGedit(): Promise<void> {
     } catch {
       // The test-owned gedit process may already be closed.
     }
+
     geditProcess = null
   }
+
   if (linuxTempDir) {
     await rm(linuxTempDir, { force: true, recursive: true })
     linuxTempDir = null
@@ -194,15 +220,18 @@ export async function killNotepad(): Promise<void> {
   const notepadPid = notepadAppSelector?.startsWith('pid:')
     ? Number.parseInt(notepadAppSelector.slice(4), 10)
     : notepadProcess?.pid
+
   if (notepadPid) {
     try {
       await execFileAsync('taskkill.exe', ['/PID', String(notepadPid), '/T', '/F'])
     } catch {
       // The test-owned Notepad process may already be closed.
     }
+
     notepadProcess = null
     notepadAppSelector = null
   }
+
   if (windowsTempDir) {
     await rm(windowsTempDir, { force: true, recursive: true })
     windowsTempDir = null
@@ -213,6 +242,7 @@ export function getNotepadAppSelector(): string {
   if (!notepadAppSelector) {
     throw new Error('Notepad has not been launched')
   }
+
   return notepadAppSelector
 }
 
@@ -221,7 +251,9 @@ export function findRoleIndex(treeText: string, role: string | RegExp): number {
     typeof role === 'string'
       ? new RegExp(`^\\s*(\\d+)\\s+${escapeRegExp(role)}(?:\\s|$)`, 'm')
       : role
+
   const match = treeText.match(matcher)
+
   return match?.[1] ? Number.parseInt(match[1], 10) : -1
 }
 
@@ -231,6 +263,7 @@ function delay(ms: number): Promise<void> {
 
 async function findNotepadWindowPid(filePath: string): Promise<number> {
   const targetName = filePath.split(/[\\/]/).at(-1) ?? filePath
+
   const script = [
     `$targetName = ${powerShellSingleQuoted(targetName)}`,
     '$deadline = (Get-Date).AddSeconds(15)',
@@ -251,12 +284,14 @@ async function findNotepadWindowPid(filePath: string): Promise<number> {
     'if ($null -eq $target) { throw "No visible Notepad window found for $targetName" }',
     'Write-Output $target.Id'
   ].join('\n')
+
   const result = await execFileAsync('powershell.exe', [
     '-NoProfile',
     '-NonInteractive',
     '-Command',
     script
   ])
+
   return Number.parseInt(result.stdout.trim(), 10)
 }
 
@@ -270,6 +305,7 @@ function escapeAppleScript(value: string): string {
 
 function safariDraftFixtureHtml(title: string): string {
   const escapedTitle = escapeHtml(title)
+
   return [
     '<!doctype html>',
     '<html>',

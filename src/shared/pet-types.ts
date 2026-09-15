@@ -1,5 +1,7 @@
 export const PET_SIZE_MIN = 60
+
 export const PET_SIZE_MAX = 360
+
 export const PET_SIZE_DEFAULT = 180
 
 /** User-uploaded pet image metadata; renderer fetches bytes from main via pet:read (id, fileName), never learning the on-disk path. */

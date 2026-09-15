@@ -35,10 +35,12 @@ export function handleSshConnectionStateChange(targetId: string, state: SshConne
   // Why: an SSH reconnect must re-deploy the relay and rebuild providers; the guard below fires only for real reconnects, not an explicit connect's 'deploying'.
   const session = activeSessions.get(targetId)
   const sessionState = session?.getState()
+
   const transportReconnectStarted =
     state.status === 'reconnecting' &&
     (sessionState === 'ready' || sessionState === 'reconnecting') &&
     !pendingTransportReconnects.has(targetId)
+
   if (transportReconnectStarted) {
     rotateSshProviderAuthority(targetId)
     pendingTransportReconnects.add(targetId)
@@ -50,13 +52,16 @@ export function handleSshConnectionStateChange(targetId: string, state: SshConne
   ) {
     pendingTransportReconnects.delete(targetId)
   }
+
   const completedTransportReconnect =
     state.status === 'connected' && pendingTransportReconnects.delete(targetId)
+
   const shouldReconnectRelay =
     session !== undefined &&
     completedTransportReconnect &&
     state.reconnectAttempt === 0 &&
     (sessionState === 'ready' || sessionState === 'reconnecting')
+
   const relayReconnectAlreadyInFlight =
     !completedTransportReconnect &&
     state.status === 'connected' &&
@@ -108,10 +113,12 @@ export function handleSshConnectionStateChange(targetId: string, state: SshConne
   if (!session) {
     return
   }
+
   // Why: allow reconnect from both 'ready' and 'reconnecting'; without the latter, a failed relay deploy would permanently brick the session.
   if (shouldReconnectRelay) {
     const target = getSshTargetRegistryStore()?.getTarget(targetId)
     const conn = connectionManager?.getConnection(targetId)
+
     if (conn) {
       void session.reconnect(conn, relayGracePeriodForTarget(target))
     }
@@ -122,6 +129,7 @@ export function createSshConnectionCallbacks(): SshConnectionCallbacks {
   return {
     onCredentialRequest: (targetId, kind, detail, signal) => {
       credentialRequestedForTarget.add(targetId)
+
       return requestCredential(getCurrentMainWindow, targetId, kind, detail, signal)
     },
     onStateChange: handleSshConnectionStateChange

@@ -33,6 +33,7 @@ export class RuntimeGitHubReviewMutationCommands {
     options?: { headSha?: string; failedOnly?: boolean; prRepo?: GitHubOwnerRepo | null }
   ): Promise<Awaited<ReturnType<typeof rerunPRChecks>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return rerunPRChecks(
       repo.path,
       prNumber,
@@ -50,6 +51,7 @@ export class RuntimeGitHubReviewMutationCommands {
     prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof setPRCommentReaction>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return setPRCommentReaction(
       repo.path,
       reactionSubjectId,
@@ -68,6 +70,7 @@ export class RuntimeGitHubReviewMutationCommands {
     prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof resolveReviewThread>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return resolveReviewThread(
       repo.path,
       threadId,
@@ -88,6 +91,7 @@ export class RuntimeGitHubReviewMutationCommands {
     }
   ): Promise<Awaited<ReturnType<typeof setPRFileViewed>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return setPRFileViewed({
       repoPath: repo.path,
       connectionId: repo.connectionId ?? null,
@@ -103,6 +107,7 @@ export class RuntimeGitHubReviewMutationCommands {
     prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof updatePRTitle>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return updatePRTitle(
       repo.path,
       prNumber,
@@ -120,6 +125,7 @@ export class RuntimeGitHubReviewMutationCommands {
     prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof updatePRDetails>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return updatePRDetails(
       repo.path,
       prNumber,
@@ -137,6 +143,7 @@ export class RuntimeGitHubReviewMutationCommands {
     prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof mergePR>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return mergePR(
       repo.path,
       prNumber,
@@ -155,6 +162,7 @@ export class RuntimeGitHubReviewMutationCommands {
     prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof setPRAutoMerge>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return setPRAutoMerge(
       repo.path,
       prNumber,
@@ -172,6 +180,7 @@ export class RuntimeGitHubReviewMutationCommands {
     prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof markPRReadyForReview>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return markPRReadyForReview(
       repo.path,
       prNumber,
@@ -188,6 +197,7 @@ export class RuntimeGitHubReviewMutationCommands {
     prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof updatePRState>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return updatePRState(
       repo.path,
       prNumber,
@@ -205,6 +215,7 @@ export class RuntimeGitHubReviewMutationCommands {
     prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof requestPRReviewers>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return requestPRReviewers(
       repo.path,
       prNumber,
@@ -222,6 +233,7 @@ export class RuntimeGitHubReviewMutationCommands {
     prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof removePRReviewers>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return removePRReviewers(
       repo.path,
       prNumber,

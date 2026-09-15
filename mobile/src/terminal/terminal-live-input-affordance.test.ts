@@ -3,24 +3,30 @@ import { readFileSync } from 'node:fs'
 import { readMobileSessionRouteSource } from '../session/mobile-session-route-source-family.test-support'
 
 const commandDockSource = readMobileSessionRouteSource('../session/MobileSessionCommandDock.tsx')
+
 const terminalRuntimeSource = readMobileSessionRouteSource(
   '../session/use-mobile-session-terminal-runtime.ts'
 )
+
 const nativeChatSource = readMobileSessionRouteSource(
   '../session/use-mobile-session-native-chat-dictation.ts'
 )
+
 const liveInputStatusSource = readFileSync(
   new URL('../session/MobileTerminalLiveInputStatus.tsx', import.meta.url),
   'utf8'
 )
+
 const commandInputStylesSource = readFileSync(
   new URL('../session/mobile-session-command-input-styles.ts', import.meta.url),
   'utf8'
 )
+
 const liveInputFocusSource = readFileSync(
   new URL('./use-terminal-live-input-focus.ts', import.meta.url),
   'utf8'
 )
+
 const sendCompletionGenerationSource = readFileSync(
   new URL('../session/use-mobile-send-completion-generation.ts', import.meta.url),
   'utf8'
@@ -31,6 +37,7 @@ function liveInputBarBlock(): string {
   expect(start).toBeGreaterThanOrEqual(0)
   const end = commandDockSource.indexOf(') : (', start)
   expect(end).toBeGreaterThan(start)
+
   return commandDockSource.slice(start, end)
 }
 

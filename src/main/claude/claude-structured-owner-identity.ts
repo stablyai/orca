@@ -40,7 +40,9 @@ export async function claudeProcessIdentity(
   if (input.pid === undefined) {
     throw new Error('claude app-server started without a pid')
   }
+
   let processStartTimeMs: number | null = null
+
   for (
     let attempt = 0;
     attempt < START_TIME_READ_ATTEMPTS && processStartTimeMs === null;
@@ -48,11 +50,13 @@ export async function claudeProcessIdentity(
   ) {
     processStartTimeMs = await readStartTime(input.pid)
   }
+
   if (processStartTimeMs === null) {
     // Why: recording null makes every later owner probe indeterminate — a durable latch.
     // Failing here reaps the child and leaves a retryable refusal instead.
     throw new Error(`claude app-server start time for pid ${input.pid} could not be read`)
   }
+
   return {
     hostId: input.identity.hostId,
     pid: input.pid,

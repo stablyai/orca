@@ -30,7 +30,9 @@ import process from 'node:process'
 import { spawnSync } from 'node:child_process'
 
 const require = createRequire(import.meta.url)
+
 const ROOT = join(import.meta.dirname, '..', '..')
+
 const PREBUILDS_DIR = join(ROOT, 'out', 'orcad', 'prebuilds')
 
 /** Every slot a shipped matrix must fill. The single source of truth for the matrix. */
@@ -51,6 +53,7 @@ export function detectLibc(platform = process.platform, header = readReportHeade
   if (platform !== 'linux') {
     return 'none'
   }
+
   return header && typeof header === 'object' && 'glibcVersionRuntime' in header ? 'glibc' : 'musl'
 }
 
@@ -64,10 +67,13 @@ function readReportHeader() {
 
 export function slotName(argv = process.argv, platform = process.platform, arch = process.arch) {
   const forced = argv.find((arg) => arg.startsWith('--slot='))
+
   if (forced) {
     return forced.slice('--slot='.length)
   }
+
   const libc = detectLibc(platform)
+
   return libc === 'none' ? `${platform}-${arch}` : `${platform}-${arch}-${libc}`
 }
 
@@ -80,12 +86,15 @@ export function assertNodePtyPatchApplied(nodePtyDir) {
   const bindingGyp = readFileSync(join(nodePtyDir, 'binding.gyp'), 'utf8')
   const ptySource = readFileSync(join(nodePtyDir, 'src', 'unix', 'pty.cc'), 'utf8')
   const missing = []
+
   if (!bindingGyp.includes('--no-as-needed,-l:libutil.so.1')) {
     missing.push("binding.gyp is missing the '--no-as-needed,-l:libutil.so.1' ldflag")
   }
+
   if (!ptySource.includes('.symver openpty,openpty@')) {
     missing.push('src/unix/pty.cc is missing the .symver glibc pins')
   }
+
   if (missing.length > 0) {
     throw new Error(
       [
@@ -113,6 +122,7 @@ export function readManifest(prebuildsDir) {
  */
 export function mergeManifest(existing, next) {
   const slots = new Set([...(existing?.slots ?? []), next.slot])
+
   return {
     module: 'node-pty',
     version: next.version,
@@ -127,11 +137,15 @@ function nodePtyDir() {
 
 function compileNodePty(dir) {
   const built = join(dir, 'build', 'Release', 'pty.node')
+
   if (existsSync(built)) {
     console.log(`[orcad-prebuilds] reusing existing build at ${built}`)
+
     return built
   }
+
   console.log('[orcad-prebuilds] compiling node-pty from patched source ...')
+
   const result = spawnSync(
     process.platform === 'win32' ? 'npx.cmd' : 'npx',
     ['node-gyp', 'rebuild'],
@@ -142,12 +156,15 @@ function compileNodePty(dir) {
       windowsHide: true
     }
   )
+
   if (result.status !== 0) {
     throw new Error(`[orcad-prebuilds] node-gyp rebuild failed (status ${result.status})`)
   }
+
   if (!existsSync(built)) {
     throw new Error(`[orcad-prebuilds] node-gyp succeeded but ${built} is missing`)
   }
+
   return built
 }
 
@@ -155,14 +172,17 @@ function requireSlots() {
   const manifest = readManifest(PREBUILDS_DIR)
   const have = new Set(manifest?.slots ?? [])
   const missing = MATRIX_SLOTS.filter((slot) => !have.has(slot))
+
   if (missing.length > 0) {
     console.error(
       `[orcad-prebuilds] matrix incomplete — missing ${missing.join(', ')}. ` +
         'Hosts on those slots fall back to a source build and need a C/C++ toolchain.'
     )
     process.exitCode = 1
+
     return
   }
+
   console.log(`[orcad-prebuilds] matrix complete — ${MATRIX_SLOTS.length} slots`)
 }
 
@@ -183,9 +203,11 @@ function build() {
   // platform forks directly, so demanding one there fails a healthy Linux slot build.
   if (process.platform === 'darwin') {
     const helperSource = join(dirname(builtBinary), 'spawn-helper')
+
     if (!existsSync(helperSource)) {
       throw new Error(`[orcad-prebuilds] spawn-helper missing at ${helperSource}`)
     }
+
     copyFileSync(helperSource, join(slotDir, 'spawn-helper'))
     console.log(`[orcad-prebuilds] stored ${slot}/spawn-helper`)
   }
@@ -202,6 +224,7 @@ function build() {
     version: require('node-pty/package.json').version,
     nodeAbi: process.versions.modules
   })
+
   writeFileSync(join(PREBUILDS_DIR, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   console.log(
     `[orcad-prebuilds] manifest: node-pty ${manifest.version}, ABI ${manifest.nodeAbi}, slots ${manifest.slots.join(', ')}`

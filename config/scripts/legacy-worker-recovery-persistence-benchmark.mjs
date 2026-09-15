@@ -8,12 +8,17 @@ import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
+
 const runtimePath = join(repoRoot, 'src/main/runtime/orca-runtime.ts')
+
 const args = new Map(
   process.argv.slice(2).map((value, index, values) => [value, values[index + 1]])
 )
+
 const fixtureMiB = Number(args.get('--fixture-mib') ?? 24)
+
 const trials = Number(args.get('--trials') ?? 3)
+
 const jsonOutput = process.argv.includes('--json')
 
 if (!Number.isInteger(fixtureMiB) || fixtureMiB < 1 || !Number.isInteger(trials) || trials < 1) {
@@ -21,14 +26,18 @@ if (!Number.isInteger(fixtureMiB) || fixtureMiB < 1 || !Number.isInteger(trials)
 }
 
 const runtimeSource = await readFile(runtimePath, 'utf8')
+
 const recoveryStart = runtimeSource.indexOf(
   'private async persistLegacyWorkerTerminalRecoveryBatch'
 )
+
 const recoveryEnd = runtimeSource.indexOf(
   'private reconcileMissingLegacyWorkerTerminal',
   recoveryStart
 )
+
 const recoverySource = runtimeSource.slice(recoveryStart, recoveryEnd)
+
 if (
   recoveryStart === -1 ||
   recoveryEnd === -1 ||
@@ -39,6 +48,7 @@ if (
 }
 
 const root = await mkdtemp(join(tmpdir(), 'orca-legacy-recovery-benchmark-'))
+
 const filler = 'x'.repeat(fixtureMiB * 1024 * 1024)
 
 function payload(state) {
@@ -49,45 +59,53 @@ function writeDurableSync(path, body) {
   const tempPath = `${path}.sync.tmp`
   writeFileSync(tempPath, body)
   const fd = openSync(tempPath, 'r')
+
   try {
     fsyncSync(fd)
   } finally {
     closeSync(fd)
   }
+
   renameSync(tempPath, path)
 }
 
 async function writeDurableAsync(path, body) {
   const tempPath = `${path}.async.tmp`
   const handle = await open(tempPath, 'w')
+
   try {
     await handle.writeFile(body)
     await handle.sync()
   } finally {
     await handle.close()
   }
+
   await rename(tempPath, path)
 }
 
 async function measure(run) {
   let maxEventLoopDelayMs = 0
   let expected = performance.now() + 1
+
   const timer = setInterval(() => {
     const now = performance.now()
     maxEventLoopDelayMs = Math.max(maxEventLoopDelayMs, now - expected)
     expected = now + 1
   }, 1)
+
   await new Promise((resolve) => setTimeout(resolve, 5))
   const startedAt = performance.now()
   await run()
   const durationMs = performance.now() - startedAt
   await new Promise((resolve) => setTimeout(resolve, 5))
   clearInterval(timer)
+
   return { durationMs, maxEventLoopDelayMs }
 }
 
 function median(values) {
   const sorted = [...values].sort((a, b) => a - b)
+
   return sorted[Math.floor(sorted.length / 2)]
 }
 
@@ -112,10 +130,12 @@ async function runBatched(path) {
 try {
   const legacy = []
   const batched = []
+
   for (let index = 0; index < trials; index += 1) {
     legacy.push(await measure(() => runLegacy(join(root, `legacy-${index}.json`))))
     batched.push(await measure(() => runBatched(join(root, `batched-${index}.json`))))
   }
+
   const result = {
     benchmark: 'legacy-worker-recovery-persistence',
     fixtureMiB,
@@ -131,6 +151,7 @@ try {
       medianMaxEventLoopDelayMs: median(batched.map((sample) => sample.maxEventLoopDelayMs))
     }
   }
+
   if (jsonOutput) {
     console.log(JSON.stringify(result))
   } else {

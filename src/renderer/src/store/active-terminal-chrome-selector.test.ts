@@ -25,6 +25,7 @@ describe('selectActiveTerminalChromeState', () => {
 
   it('reuses the projection for stable inputs across selector fanout', () => {
     const tabs = [terminalTab('tab-1')]
+
     const state = {
       activeWorktreeId: 'wt-1',
       activeTabId: 'tab-1',
@@ -37,11 +38,14 @@ describe('selectActiveTerminalChromeState', () => {
     let distinctResults = 0
     let previous = first
     const iterations = 100_000
+
     for (let index = 0; index < iterations; index += 1) {
       const selected = selectActiveTerminalChromeState(state)
+
       if (selected !== previous) {
         distinctResults += 1
       }
+
       previous = selected
     }
 
@@ -51,6 +55,7 @@ describe('selectActiveTerminalChromeState', () => {
 
   it('reuses equivalent replacement inputs and invalidates visible scalar changes', () => {
     const tabs = [terminalTab('tab-1')]
+
     const state = {
       activeWorktreeId: 'wt-1',
       activeTabId: null,
@@ -60,18 +65,21 @@ describe('selectActiveTerminalChromeState', () => {
     } satisfies Parameters<typeof selectActiveTerminalChromeState>[0]
 
     const first = selectActiveTerminalChromeState(state)
+
     const equivalentReplacement = selectActiveTerminalChromeState({
       ...state,
       tabsByWorktree: { 'wt-1': tabs.map((tab) => ({ ...tab, title: 'new title' })) },
       canExpandPaneByTabId: { 'tab-1': false },
       expandedPaneByTabId: { 'tab-1': false }
     })
+
     expect(equivalentReplacement).toBe(first)
 
     const afterActiveTabId = selectActiveTerminalChromeState({
       ...state,
       activeTabId: 'tab-1'
     })
+
     expect(afterActiveTabId).not.toBe(first)
 
     const afterActiveWorktreeId = selectActiveTerminalChromeState({
@@ -79,12 +87,14 @@ describe('selectActiveTerminalChromeState', () => {
       activeWorktreeId: 'wt-2',
       tabsByWorktree: { 'wt-2': tabs }
     })
+
     expect(afterActiveWorktreeId).not.toBe(afterActiveTabId)
 
     const afterEffectiveActiveTabId = selectActiveTerminalChromeState({
       ...state,
       tabsByWorktree: { 'wt-1': [terminalTab('tab-2')] }
     })
+
     expect(afterEffectiveActiveTabId).not.toBe(afterActiveWorktreeId)
     expect(afterEffectiveActiveTabId.effectiveActiveTabId).toBe('tab-2')
 
@@ -92,6 +102,7 @@ describe('selectActiveTerminalChromeState', () => {
       ...state,
       canExpandPaneByTabId: { 'tab-1': true }
     })
+
     expect(afterCanExpand).not.toBe(afterEffectiveActiveTabId)
     expect(afterCanExpand.activeTabCanExpand).toBe(true)
 
@@ -100,6 +111,7 @@ describe('selectActiveTerminalChromeState', () => {
       canExpandPaneByTabId: { 'tab-1': true },
       expandedPaneByTabId: { 'tab-1': true }
     })
+
     expect(afterExpanded).not.toBe(afterCanExpand)
     expect(afterExpanded.effectiveActiveTabExpanded).toBe(true)
 
@@ -109,6 +121,7 @@ describe('selectActiveTerminalChromeState', () => {
         'wt-1': [...tabs, terminalTab('tab-2')]
       }
     })
+
     expect(afterTabCount).not.toBe(afterExpanded)
     expect(afterTabCount.tabCount).toBe(2)
   })

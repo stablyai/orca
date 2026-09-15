@@ -27,6 +27,7 @@ export function useRichMarkdownSearch({
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const keybindings = useAppStore((state) => state.keybindings)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+
   const findMatches = useMemo(
     () =>
       editor && isSearchOpen
@@ -34,6 +35,7 @@ export function useRichMarkdownSearch({
         : findRichMarkdownSearchMatches,
     [editor, isSearchOpen]
   )
+
   const [isReplaceMode, setIsReplaceMode] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [replaceQuery, setReplaceQuery] = useState('')
@@ -51,11 +53,15 @@ export function useRichMarkdownSearch({
   useEffect(() => {
     if (!searchQuery) {
       setDebouncedQuery('')
+
       return
     }
+
     const timer = setTimeout(() => setDebouncedQuery(searchQuery), 150)
+
     return () => clearTimeout(timer)
   }, [searchQuery])
+
   const searchRequestQuery = isMarkdownPreviewSearchQueryTooLarge(debouncedQuery)
     ? ''
     : debouncedQuery
@@ -64,6 +70,7 @@ export function useRichMarkdownSearch({
     if (!editor || !isSearchOpen || !searchRequestQuery) {
       return []
     }
+
     return findMatches(editor.state.doc, searchRequestQuery, {
       matchCase,
       wholeWord
@@ -83,6 +90,7 @@ export function useRichMarkdownSearch({
     ) {
       return []
     }
+
     // Why: replace mutates document ranges immediately, so it must use the
     // current input value instead of the debounced highlight match set.
     return findMatches(editor.state.doc, searchQuery, {
@@ -119,6 +127,7 @@ export function useRichMarkdownSearch({
 
   const openReplace = useCallback(() => {
     setIsReplaceMode(true)
+
     if (isSearchOpen) {
       searchInputRef.current?.focus()
       searchInputRef.current?.select()
@@ -151,7 +160,9 @@ export function useRichMarkdownSearch({
       if (!editor) {
         return
       }
+
       const tr = editor.state.tr
+
       // Why: empty replacement must delete the range — ProseMirror text nodes
       // can't hold an empty string, so insertText('') would be a no-op.
       if (replaceQuery) {
@@ -159,6 +170,7 @@ export function useRichMarkdownSearch({
       } else {
         tr.delete(from, to)
       }
+
       editor.view.dispatch(tr)
     },
     [editor, replaceQuery]
@@ -166,15 +178,20 @@ export function useRichMarkdownSearch({
 
   const replaceCurrentMatch = useCallback(() => {
     const liveMatches = getLiveMatches()
+
     if (liveMatches.length === 0) {
       return
     }
+
     const liveActiveMatchIndex =
       activeMatchIndex >= 0 && activeMatchIndex < liveMatches.length ? activeMatchIndex : 0
+
     const match = liveMatches[liveActiveMatchIndex]
+
     if (!match || liveMatches.some((candidate) => candidate.touchesReadOnlyAtom)) {
       return
     }
+
     // Why: removing the active match shifts the next match into the same index,
     // so leaving rawActiveMatchIndex untouched advances to it after recompute.
     replaceRange(match.from, match.to)
@@ -184,24 +201,30 @@ export function useRichMarkdownSearch({
     if (!editor) {
       return
     }
+
     const liveMatches = getLiveMatches()
+
     if (
       liveMatches.length === 0 ||
       liveMatches.some((candidate) => candidate.touchesReadOnlyAtom)
     ) {
       return
     }
+
     const tr = editor.state.tr
+
     // Why: process matches last-to-first so each edit can't invalidate the
     // positions of matches we haven't replaced yet, keeping it a single undo.
     for (let index = liveMatches.length - 1; index >= 0; index -= 1) {
       const match = liveMatches[index]
+
       if (replaceQuery) {
         tr.insertText(replaceQuery, match.from, match.to)
       } else {
         tr.delete(match.from, match.to)
       }
     }
+
     editor.view.dispatch(tr)
   }, [editor, getLiveMatches, replaceQuery])
 
@@ -217,6 +240,7 @@ export function useRichMarkdownSearch({
       // instead of computing (-1+1)%N = 0 and leaving the effect unchanged.
       setRawActiveMatchIndex((currentIndex) => {
         const baseIndex = Math.max(currentIndex, 0)
+
         return (baseIndex + direction + matchCount) % matchCount
       })
     },
@@ -246,6 +270,7 @@ export function useRichMarkdownSearch({
     }
 
     editor.on('update', handleEditorUpdate)
+
     return () => {
       editor.off('update', handleEditorUpdate)
     }
@@ -255,6 +280,7 @@ export function useRichMarkdownSearch({
     if (!isSearchOpen) {
       return
     }
+
     searchInputRef.current?.focus()
     searchInputRef.current?.select()
   }, [isSearchOpen])
@@ -283,6 +309,7 @@ export function useRichMarkdownSearch({
     })
 
     const activeMatch = query && activeMatchIndex >= 0 ? matches[activeMatchIndex] : null
+
     if (activeMatch) {
       tr.setSelection(TextSelection.create(tr.doc, activeMatch.from, activeMatch.to))
     }
@@ -296,6 +323,7 @@ export function useRichMarkdownSearch({
     // container mirrors the approach used by MarkdownPreview search.
     if (activeMatch) {
       const container = scrollContainerRef.current
+
       if (container) {
         const coords = editor.view.coordsAtPos(activeMatch.from)
         const containerRect = container.getBoundingClientRect()
@@ -309,12 +337,14 @@ export function useRichMarkdownSearch({
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       const root = rootRef.current
+
       if (!root) {
         return
       }
 
       const target = event.target
       const targetInsideEditor = target instanceof Node && root.contains(target)
+
       if (
         isMarkdownPreviewFindShortcut(event, getShortcutPlatform(), keybindings) &&
         targetInsideEditor
@@ -322,6 +352,7 @@ export function useRichMarkdownSearch({
         event.preventDefault()
         event.stopPropagation()
         openSearch()
+
         return
       }
 
@@ -332,6 +363,7 @@ export function useRichMarkdownSearch({
         event.preventDefault()
         event.stopPropagation()
         openReplace()
+
         return
       }
 
@@ -347,6 +379,7 @@ export function useRichMarkdownSearch({
     }
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
+
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
   }, [closeSearch, isSearchOpen, keybindings, openReplace, openSearch, rootRef])
 

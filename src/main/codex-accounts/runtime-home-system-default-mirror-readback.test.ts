@@ -22,6 +22,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -70,11 +71,13 @@ describe('CodexRuntimeHomeService', () => {
   it('reads back system-default token refreshes from runtime auth', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system-old')
+
     const refreshedAuth = createCodexAuthJson(
       'system@example.com',
       'acct-system',
       'system-refreshed'
     )
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const store = createStore(createSettings())
 
@@ -98,6 +101,7 @@ describe('CodexRuntimeHomeService', () => {
 
   it('reads back system-default token refreshes after a pre-provenance restart', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
+
     const systemAuth = createCodexAuthJson(
       'system@example.com',
       'acct-system',
@@ -105,6 +109,7 @@ describe('CodexRuntimeHomeService', () => {
       undefined,
       '2026-07-30T12:00:00.000Z'
     )
+
     const refreshedAuth = createCodexAuthJson(
       'system@example.com',
       'acct-system',
@@ -112,6 +117,7 @@ describe('CodexRuntimeHomeService', () => {
       undefined,
       '2026-07-31T12:00:00.000Z'
     )
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const store = createStore(createSettings())
 
@@ -129,6 +135,7 @@ describe('CodexRuntimeHomeService', () => {
 
   it('does not read back older same-identity auth without provenance', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
+
     const systemAuth = createCodexAuthJson(
       'system@example.com',
       'acct-system',
@@ -136,6 +143,7 @@ describe('CodexRuntimeHomeService', () => {
       undefined,
       '2026-07-31T12:00:00.000Z'
     )
+
     const staleRuntimeAuth = createCodexAuthJson(
       'system@example.com',
       'acct-system',
@@ -143,6 +151,7 @@ describe('CodexRuntimeHomeService', () => {
       undefined,
       '2026-07-30T12:00:00.000Z'
     )
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const store = createStore(createSettings())
 
@@ -290,6 +299,7 @@ describe('CodexRuntimeHomeService', () => {
 
   it('clears refreshed runtime auth after a pre-provenance external logout', async () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
+
     const systemAuth = createCodexAuthJson(
       'system@example.com',
       'acct-system',
@@ -297,6 +307,7 @@ describe('CodexRuntimeHomeService', () => {
       undefined,
       '2026-07-30T12:00:00.000Z'
     )
+
     const refreshedAuth = createCodexAuthJson(
       'system@example.com',
       'acct-system',
@@ -304,6 +315,7 @@ describe('CodexRuntimeHomeService', () => {
       undefined,
       '2026-07-31T12:00:00.000Z'
     )
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const store = createStore(createSettings())
 
@@ -323,11 +335,13 @@ describe('CodexRuntimeHomeService', () => {
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
     const refreshedAuth = createCodexAuthJson('system@example.com', 'acct-system', 'refreshed')
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
+
     const managedHomePath = createManagedAuth(
       testState.userDataDir,
       'account-1',
       '{"account":"managed"}\n'
     )
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -343,6 +357,7 @@ describe('CodexRuntimeHomeService', () => {
         }
       ]
     })
+
     const store = createStore(settings)
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -368,13 +383,16 @@ describe('CodexRuntimeHomeService', () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
     const managedAuth = createCodexAuthJson('managed@example.com', 'acct-managed', 'managed')
+
     const staleManagedRefresh = createCodexAuthJson(
       'managed@example.com',
       'acct-managed',
       'managed-refreshed'
     )
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -390,6 +408,7 @@ describe('CodexRuntimeHomeService', () => {
         }
       ]
     })
+
     const store = createStore(settings)
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
@@ -459,6 +478,7 @@ describe('CodexRuntimeHomeService', () => {
         activeCodexManagedAccountId: 'account-1'
       })
     )
+
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')

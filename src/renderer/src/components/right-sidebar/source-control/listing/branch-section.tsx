@@ -57,6 +57,7 @@ export function SourceControlBranchSection({
 }): React.JSX.Element {
   const baseRef = branchSummary.baseRef?.trim()
   const fileCount = filteredBranchEntries.length
+
   // Why: the heading counts files that differ from the compare base, not every
   // file the branch ever touched — a rebased branch makes the two read alike.
   // A narrowing filter changes what the number means, so the label goes silent
@@ -95,6 +96,7 @@ export function SourceControlBranchSection({
             className="px-1.5 text-muted-foreground hover:text-foreground"
             onClick={(e) => {
               e.stopPropagation()
+
               if (currentWorktreeId && worktreePath && branchSummary) {
                 openBranchAllDiffs(currentWorktreeId, worktreePath, branchSummary)
               }
@@ -121,6 +123,7 @@ export function SourceControlBranchSection({
                   />
                 )
               }
+
               return (
                 <BranchEntryRow
                   key={node.key}

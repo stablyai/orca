@@ -34,9 +34,11 @@ export function capPaletteSection<T>(
   if (!Number.isFinite(cap) || cap < 0 || items.length <= cap) {
     return { visible: items, overflowCount: 0 }
   }
+
   const visible = items.slice(0, cap)
   // Keep the selected match visible after reranking without increasing the DOM row cap.
   let retained: T | undefined
+
   if (retain) {
     for (let index = cap; index < items.length; index += 1) {
       if (retain(items[index])) {
@@ -45,9 +47,11 @@ export function capPaletteSection<T>(
       }
     }
   }
+
   if (retained !== undefined && cap > 0) {
     visible.splice(cap - 1, 1, retained)
   }
+
   return { visible, overflowCount: items.length - visible.length }
 }
 
@@ -70,6 +74,7 @@ export function softSplitPaletteSection<T>(
 ): SoftSplitSection<T> {
   const capped = capPaletteSection(items, hardCap, retain)
   const previewSize = Math.max(0, Math.min(previewCount, capped.visible.length))
+
   return {
     preview: capped.visible.slice(0, previewSize),
     rest: capped.visible.slice(previewSize),
@@ -131,12 +136,14 @@ export function layoutMultiPrimaryPaletteSections<T>({
     leadingHardCap,
     leadingRetain
   )
+
   const trailing = softSplitPaletteSection(
     trailingItems,
     trailingFloorCount,
     trailingHardCap,
     trailingRetain
   )
+
   return {
     leadingPreview: leading.preview,
     leadingRest: leading.rest,

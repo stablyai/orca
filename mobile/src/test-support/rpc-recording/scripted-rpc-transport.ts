@@ -41,11 +41,14 @@ export class ScriptedRpcTransport {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the physical client publishes the frame this transport just serialized.
       const payload = value as { id: string; method: string; params: unknown }
       const name = this.wireNames.shift()
+
       if (!name) {
         throw new Error('Unbound physical request')
       }
+
       this.bindings.set(name, { id: payload.id, params: payload.params, completed: false })
       this.payloads.push({ name, json: JSON.stringify(value) })
+
       return true
     }
   })
@@ -62,17 +65,20 @@ export class ScriptedRpcTransport {
         this.counts.set(args[0], occurrence)
         const name = `${args[0]}#${occurrence}`
         this.activeName = name
+
         const request = {
           name,
           args: captureArguments(args),
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a pending settlement has no settledAt yet.
           settlement: { status: 'pending', startedAt: this.now() } as Settlement
         }
+
         this.requests.push(request)
         const promise = this.logical.sendRequest(...args)
         observeSettlement(promise, this.now, (state) => {
           request.settlement = state
         })
+
         return promise
       }
     }
@@ -83,6 +89,7 @@ export class ScriptedRpcTransport {
       sendRequest: (...args) => {
         const name = this.activeName
         this.wireNames.push(name)
+
         return new Promise<RpcResponse>((resolve, reject) => {
           this.rejects.set(name, reject)
           this.tracker.sendRequest(...args).then(resolve, reject)
@@ -97,6 +104,7 @@ export class ScriptedRpcTransport {
       getLastConnectedAt: () => 0,
       onStateChange: (listener) => {
         this.listeners.add(listener)
+
         return () => {
           this.listeners.delete(listener)
         }
@@ -111,18 +119,22 @@ export class ScriptedRpcTransport {
   /** Whether a scripted name names a request that was sent and is still waiting for its reply. */
   outstanding(name: string): boolean {
     const binding = this.bindings.get(this.aliases.get(name) ?? name)
+
     return binding !== undefined && !binding.completed
   }
 
   bind(alias: string, name: string, params: unknown): void {
     name = this.aliases.get(name) ?? name
     const binding = this.bindings.get(name)
+
     if (!binding || this.aliases.has(alias)) {
       throw new Error(`Invalid request binding: ${alias}`)
     }
+
     if (JSON.stringify(captureValue(binding.params)) !== JSON.stringify(captureValue(params))) {
       throw new Error(`Binding params mismatch: ${alias}`)
     }
+
     this.aliases.set(alias, name)
   }
 
@@ -130,6 +142,7 @@ export class ScriptedRpcTransport {
     const alias = this.aliases.get(name)
     const requestedName = alias ?? name
     const method = requestedName.split('#')[0]
+
     if (
       !alias &&
       [...this.bindings].filter(([key, value]) => key.split('#')[0] === method && !value.completed)
@@ -137,23 +150,30 @@ export class ScriptedRpcTransport {
     ) {
       throw new Error(`Concurrent requests require a logical binding: ${name}`)
     }
+
     name = requestedName
     const binding = this.bindings.get(name)
+
     if (!binding || binding.completed) {
       throw new Error(`Missing or completed request: ${name}`)
     }
+
     if (JSON.stringify(captureValue(binding.params)) !== JSON.stringify(captureValue(params))) {
       throw new Error(`Request params mismatch: ${name}`)
     }
+
     binding.completed = true
+
     if (rejection) {
       const error =
         rejection.category === 'TypeError'
           ? new TypeError(rejection.message)
           : new Error(rejection.message)
+
       if (rejection.deliveryUnknown) {
         markRpcDeliveryUnknown(error)
       }
+
       // Resolve the physical tracker to cancel its deadline before injecting the scripted rejection.
       this.rejects.get(name)?.(error)
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario asked for a null result, which is a reply shape a host can send.
@@ -167,6 +187,7 @@ export class ScriptedRpcTransport {
   disconnect(): void {
     this.state = 'disconnected'
     this.tracker.rejectAll('Connection lost', { deliveryUnknown: true })
+
     for (const listener of this.listeners) {
       listener(this.state)
     }

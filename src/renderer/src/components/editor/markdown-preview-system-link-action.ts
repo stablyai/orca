@@ -31,32 +31,42 @@ export function handleMarkdownPreviewSystemLinkClick({
     resolvedSourceRuntimeEnvironmentId,
     worktreeRoot
   } = context
+
   if (!isMarkdownPreviewSystemBrowserModifier(event, isMac)) {
     return false
   }
+
   if (sourceOwner.kind === 'unknown') {
     return true
   }
+
   const osTarget = getMarkdownPreviewLinkTarget(href, filePath)
+
   if (!osTarget) {
     return true
   }
+
   let parsed: URL
+
   try {
     parsed = new URL(osTarget)
   } catch {
     return true
   }
+
   if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
     openHttpLink(
       parsed.toString(),
       resolveMarkdownPreviewHttpOpenOptions(event, isMac, sourceRoutingWorktreeId, sourceOwner)
     )
+
     return true
   }
+
   if (parsed.protocol !== 'file:') {
     return true
   }
+
   if (
     isLocalPathOpenBlocked(
       settingsForRuntimeOwner(useAppStore.getState().settings, resolvedSourceRuntimeEnvironmentId),
@@ -65,9 +75,12 @@ export function handleMarkdownPreviewSystemLinkClick({
   ) {
     // Why: the client OS cannot open server-local runtime or SSH paths.
     showLocalPathOpenBlockedToast()
+
     return true
   }
+
   const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
+
   if (
     classified?.kind === 'markdown' ||
     (classified?.kind === 'file' && classified.line !== undefined)
@@ -82,12 +95,17 @@ export function handleMarkdownPreviewSystemLinkClick({
             { value0: classified.relativePath ?? classified.absolutePath }
           )
         )
+
         return
       }
+
       void window.api.shell.openFileUri(cleanUri)
     })
+
     return true
   }
+
   void window.api.shell.openFileUri(parsed.toString())
+
   return true
 }

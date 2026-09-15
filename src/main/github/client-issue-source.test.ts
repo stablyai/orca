@@ -33,6 +33,7 @@ const {
 
 vi.mock('./gh-utils', async () => {
   const actual = await vi.importActual<typeof GhUtils>('./gh-utils')
+
   return {
     ...actual,
     execFileAsync: execFileAsyncMock,
@@ -58,6 +59,7 @@ vi.mock('./rate-limit', () => ({
 
 vi.mock('./github-api-repository', async (importOriginal) => {
   const actual = await importOriginal<typeof GithubApiRepositoryModule>()
+
   return {
     ...actual,
     // Why: these suites drive source resolution through the legacy gh-utils
@@ -102,6 +104,7 @@ function issueSearchArgs(
   options: { noCache?: boolean; query?: string } = {}
 ): string[] {
   const query = options.query ?? 'is:issue is:open'
+
   return [
     'api',
     ...(options.noCache ? [] : ['--cache', '120s']),
@@ -132,6 +135,7 @@ function decodedIssueSearchPath(callIndex: number): string {
   const args = ghExecFileAsyncMock.mock.calls[callIndex]?.[0] as string[] | undefined
   const apiPath = args?.find((arg) => arg.startsWith('search/issues?'))
   expect(apiPath).toBeDefined()
+
   return decodeURIComponent(apiPath ?? '')
 }
 
@@ -178,6 +182,7 @@ describe('GitHub issue source split', () => {
     resolvePRRepositoryCandidatesMock.mockImplementation(async (repoPath, connectionId) => {
       const origin = await getOwnerRepoMock(repoPath, connectionId)
       const repository = origin ? { host: 'github.com', ...origin } : null
+
       return { candidates: repository ? [repository] : [], headRepo: repository }
     })
     _resetOwnerRepoCache()

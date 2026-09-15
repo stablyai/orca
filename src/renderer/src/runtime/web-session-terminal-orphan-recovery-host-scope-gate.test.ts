@@ -24,24 +24,30 @@ const LEAVES = [{ leafId: 'leaf-1', handle: 'term-ghost' }]
  */
 async function recoverTwice(worktree: string, hostScope: Record<string, unknown> | null) {
   const state = makeState(worktree, LEAVES)
+
   const call = vi.fn(async ({ method }: { method: string }) => {
     if (method === 'terminal.list') {
       const listed = listResult(worktree, [])
+
       if (hostScope === null) {
         delete (listed as { hostScope?: unknown }).hostScope
       } else {
         listed.hostScope = hostScope as never
       }
+
       return { ok: true as const, result: listed }
     }
+
     return { ok: false as const, error: { code: 'conflict', message: 'unexpected' } }
   })
+
   await recoverWebSessionTerminalOrphansBeforeApply(
     state,
     makeSnapshot(worktree, 'epoch-1', LEAVES),
     ENVIRONMENT_ID,
     { call: call as never }
   )
+
   return recoverWebSessionTerminalOrphansBeforeApply(
     state,
     makeSnapshot(worktree, 'epoch-2', LEAVES),

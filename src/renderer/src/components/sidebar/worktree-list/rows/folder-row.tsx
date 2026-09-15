@@ -60,13 +60,16 @@ export function renderFolderWorkspaceVirtualRow(args: {
   const { ctx, row, vItem } = args
   const folderWorktree = folderWorkspaceToWorktree(row.folderWorkspace)
   const folderWorktreeIdentity = getWorktreeHostIdentity(folderWorktree)
+
   const pathStatus = ctx.getCachedFolderWorkspacePathStatus({
     scope: 'folder-workspace',
     folderWorkspaceId: row.folderWorkspace.id
   })
+
   const activationDisabled =
     pathStatus?.exists === false &&
     (isConfirmedStaleFolderPathStatus(pathStatus) || pathStatus.reason === 'ambiguous-connection')
+
   const folderPrDisplay = getFolderWorkspaceCardPrDisplay({
     folderWorkspaceId: row.folderWorkspace.id,
     workspaceLineageByChildKey: ctx.workspaceLineageByChildKey,
@@ -77,6 +80,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
     prCache: ctx.prCache,
     settings: ctx.settings
   })
+
   const { surfaceInset, cardContentIndent } = getFolderWorkspaceRowGeometry({
     experimentalNewWorktreeCardStyle: ctx.newCardStyle,
     isFolderBackedWorkspaceChild:
@@ -85,6 +89,7 @@ export function renderFolderWorkspaceVirtualRow(args: {
     groupDepth: row.groupDepth,
     lineageDepth: row.depth
   })
+
   return (
     <div
       key={vItem.key}

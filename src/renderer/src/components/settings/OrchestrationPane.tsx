@@ -62,18 +62,22 @@ export function OrchestrationPane({
 }: OrchestrationPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const showNestedWorkerDepth = !isPairedWebClientWindow()
+
   const searchEntries = getOrchestrationPaneSearchEntries({
     includeNestedWorkerDepth: showNestedWorkerDepth
   })
+
   const showOrchestration = matchesSettingsSearch(searchQuery, searchEntries)
   const [skillPromptOpen, setSkillPromptOpen] = useState(false)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+
   const orchestrationInstallCommand = !activeSkillRuntime.installDisabledReason
     ? buildSkillCommandForRuntime(
         ORCHESTRATION_SKILL_INSTALL_COMMAND,
         activeSkillRuntime.agentRuntime
       )
     : ORCHESTRATION_SKILL_INSTALL_COMMAND
+
   const orchestrationUpdateCommand = !activeSkillRuntime.installDisabledReason
     ? buildSkillCommandForRuntime(
         ORCHESTRATION_SKILL_UPDATE_COMMAND,

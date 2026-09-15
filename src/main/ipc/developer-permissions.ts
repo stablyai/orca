@@ -33,6 +33,7 @@ const DEVELOPER_PERMISSION_IDS: DeveloperPermissionId[] = [
   'usb',
   'bluetooth'
 ]
+
 const APPLE_EVENTS_PROMPT_TIMEOUT_MS = 3_000
 
 function unsupportedOffMac(): DeveloperPermissionStatus | null {
@@ -41,9 +42,11 @@ function unsupportedOffMac(): DeveloperPermissionStatus | null {
 
 function getMediaStatus(mediaType: 'microphone' | 'camera' | 'screen'): DeveloperPermissionStatus {
   const unsupported = unsupportedOffMac()
+
   if (unsupported) {
     return unsupported
   }
+
   try {
     return systemPreferences.getMediaAccessStatus(mediaType)
   } catch {
@@ -53,21 +56,27 @@ function getMediaStatus(mediaType: 'microphone' | 'camera' | 'screen'): Develope
 
 function getAccessibilityStatus(): DeveloperPermissionStatus {
   const unsupported = unsupportedOffMac()
+
   if (unsupported) {
     return unsupported
   }
+
   return systemPreferences.isTrustedAccessibilityClient(false) ? 'granted' : 'unknown'
 }
 
 async function openPrivacyPane(id: DeveloperPermissionId): Promise<boolean> {
   const url = PRIVACY_PANE_URLS[id]
+
   if (!url) {
     await shell.openExternal(
       'x-apple.systempreferences:com.apple.settings.PrivacySecurity.extension'
     )
+
     return true
   }
+
   await shell.openExternal(url)
+
   return true
 }
 
@@ -80,6 +89,7 @@ function triggerAppleEventsPrompt(): Promise<void> {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timeout)
       resolve()
@@ -91,6 +101,7 @@ function triggerAppleEventsPrompt(): Promise<void> {
       child?.kill()
       finish()
     }, APPLE_EVENTS_PROMPT_TIMEOUT_MS)
+
     if (typeof timeout.unref === 'function') {
       timeout.unref()
     }
@@ -113,29 +124,36 @@ function triggerLocalNetworkPrompt(): Promise<void> {
     const socket = dgram.createSocket({ type: 'udp4', reuseAddr: true })
     let settled = false
     let timeout: ReturnType<typeof setTimeout> | null = null
+
     function finish(): void {
       if (settled) {
         return
       }
+
       settled = true
       socket.removeListener('error', finish)
+
       if (timeout) {
         clearTimeout(timeout)
         timeout = null
       }
+
       try {
         socket.close()
       } catch {
         // Already closed or never fully bound.
       }
+
       resolve()
     }
+
     socket.on('error', finish)
     socket.bind(() => {
       const message = Buffer.from([0])
       socket.send(message, 0, message.length, 5353, '224.0.0.251', finish)
     })
     timeout = setTimeout(finish, 1000)
+
     if (typeof timeout.unref === 'function') {
       timeout.unref()
     }
@@ -174,14 +192,19 @@ async function requestPermission(
     // to 'denied'/'restricted'), it resolves false with no prompt — leaving
     // the user stuck. Fall through to the Privacy pane so they can toggle it.
     const granted = await systemPreferences.askForMediaAccess(id)
+
     if (granted) {
       return { id, status: 'granted', openedSystemSettings: false }
     }
+
     const status = getMediaStatus(id)
+
     if (status === 'denied' || status === 'restricted' || status === 'unknown') {
       await openPrivacyPane(id)
+
       return { id, status, openedSystemSettings: true }
     }
+
     return { id, status, openedSystemSettings: false }
   }
 
@@ -190,24 +213,30 @@ async function requestPermission(
     // time for a given bundle. Once the user has dismissed or denied, calling
     // it again is a no-op. Fall through to the Privacy pane when not granted.
     const trusted = systemPreferences.isTrustedAccessibilityClient(true)
+
     if (trusted) {
       return { id, status: 'granted', openedSystemSettings: false }
     }
+
     await openPrivacyPane(id)
+
     return { id, status: getAccessibilityStatus(), openedSystemSettings: true }
   }
 
   if (id === 'automation') {
     await triggerAppleEventsPrompt()
+
     return { id, status: 'unknown', openedSystemSettings: false }
   }
 
   if (id === 'local-network') {
     await triggerLocalNetworkPrompt()
+
     return { id, status: 'unknown', openedSystemSettings: false }
   }
 
   await openPrivacyPane(id)
+
   return { id, status: (await getPermissionState(id)).status, openedSystemSettings: true }
 }
 
@@ -228,6 +257,7 @@ export function registerDeveloperPermissionHandlers(): void {
       if (!DEVELOPER_PERMISSION_IDS.includes(args.id)) {
         return { id: args.id, status: 'unsupported', openedSystemSettings: false }
       }
+
       return requestPermission(args.id)
     }
   )

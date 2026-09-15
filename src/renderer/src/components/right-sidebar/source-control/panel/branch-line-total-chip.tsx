@@ -13,6 +13,7 @@ function buildAccessibleLabel(added: number, removed: number): string {
       { value0: added, value1: removed }
     )
   }
+
   if (added > 0) {
     return translate(
       'auto.components.right.sidebar.source.control.branch.line.total.chip.8a9b97b666',
@@ -20,6 +21,7 @@ function buildAccessibleLabel(added: number, removed: number): string {
       { value0: added }
     )
   }
+
   return translate(
     'auto.components.right.sidebar.source.control.branch.line.total.chip.52c366d88d',
     '{{value0}} lines deleted',
@@ -132,12 +134,15 @@ export const SourceControlBranchLineTotalChip = React.memo(
     const locale = getIntlLocale()
     const addedText = useMemo(() => added.toLocaleString(locale), [added, locale])
     const removedText = useMemo(() => removed.toLocaleString(locale), [removed, locale])
+
     const accessibleLabel = useMemo(() => {
       let label = buildAccessibleLabel(added, removed)
+
       // Zero test share still shows in the hover panel; don't announce noise.
       if (testAdded != null && testRemoved != null && (testAdded > 0 || testRemoved > 0)) {
         label = appendTestSplitToLabel(label, testAdded, testRemoved)
       }
+
       if (
         generatedAdded != null &&
         generatedRemoved != null &&
@@ -145,13 +150,16 @@ export const SourceControlBranchLineTotalChip = React.memo(
       ) {
         label = appendGeneratedSplitToLabel(label, generatedAdded, generatedRemoved)
       }
+
       return label
     }, [added, removed, testAdded, testRemoved, generatedAdded, generatedRemoved])
+
     const splitRows = useMemo<LineTotalSplitRow[]>(() => {
       // Why: the fields ship together today but the type is independent so a
       // host can gain one before the other; either alone is enough to render.
       const hasTest = testAdded != null && testRemoved != null
       const hasGenerated = generatedAdded != null && generatedRemoved != null
+
       if (!hasTest && !hasGenerated) {
         return []
       }
@@ -180,6 +188,7 @@ export const SourceControlBranchLineTotalChip = React.memo(
           removed: removed - (testRemoved ?? 0) - (generatedRemoved ?? 0)
         }
       ]
+
       if (hasTest) {
         rows.push({
           key: 'test',
@@ -191,6 +200,7 @@ export const SourceControlBranchLineTotalChip = React.memo(
           removed: testRemoved
         })
       }
+
       // Why: "no tests in this branch" is worth showing as +0 -0; "nothing was
       // generated" is the normal case, so that row is dropped instead.
       if (hasGenerated && (generatedAdded > 0 || generatedRemoved > 0)) {
@@ -204,6 +214,7 @@ export const SourceControlBranchLineTotalChip = React.memo(
           removed: generatedRemoved
         })
       }
+
       return rows
     }, [added, removed, testAdded, testRemoved, generatedAdded, generatedRemoved])
 
@@ -215,6 +226,7 @@ export const SourceControlBranchLineTotalChip = React.memo(
     // keeps digits from jittering between refreshes.
     // `cursor-help` signals hover detail without implying a click target.
     const hasBreakdown = splitRows.length > 0
+
     const chip = (
       <span
         role="group"

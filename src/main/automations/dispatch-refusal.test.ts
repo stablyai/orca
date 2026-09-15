@@ -58,18 +58,22 @@ function makeRunWriter(foldsRepeat: boolean): {
 } {
   const created: string[] = []
   const updated: { status: string; error?: string | null }[] = []
+
   const writer: AutomationRunWriter = {
     repeatSkip: () => (foldsRepeat ? makeRun('folded') : null),
     createRun: () => {
       const run = makeRun(`run-${created.length + 1}`)
       created.push(run.id)
+
       return run
     },
     updateRun: (args) => {
       updated.push({ status: args.status, error: args.error })
+
       return { ...makeRun(args.runId), status: args.status, error: args.error ?? null }
     }
   }
+
   return { writer, created, updated }
 }
 

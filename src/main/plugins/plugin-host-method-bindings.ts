@@ -62,19 +62,24 @@ function definePluginMethod(
   handler: BoundPluginHostMethod['handler']
 ): [string, BoundPluginHostMethod] {
   const spec = getPluginHostMethodSpec(name)
+
   if (!spec) {
     throw new Error(`no host API spec for method ${name}`)
   }
+
   return [name, { spec, handler }]
 }
 
 const HANDLERS = new Map<string, BoundPluginHostMethod>([
   definePluginMethod('workspace.readContext', async (_params, { services }) => {
     const context = await services.resolveActiveWorktreeContext()
+
     if (!context) {
       return null
     }
+
     const terminals = await services.listWorktreeTerminals(context.worktreeId)
+
     // Why: Orca worktree ids embed provider paths, so the public projection
     // must select safe fields instead of spreading the internal context.
     return {
@@ -95,38 +100,49 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
       text: string
       enter: boolean
     }
+
     const context = await services.resolveActiveWorktreeContext()
+
     if (!context) {
       throw new Error('no active worktree is available for terminal input')
     }
+
     // Why: terminal handles are provider-owned and can outlive focus changes;
     // re-list the resolved worktree immediately before routing plugin input.
     const terminals = await services.listWorktreeTerminals(context.worktreeId)
+
     if (!terminals.some((terminal) => terminal.id === terminalId)) {
       throw new Error('terminal is outside the active worktree')
     }
+
     const result = await services.sendTerminalText(terminalId, { text, enter })
+
     return { accepted: result.accepted }
   }),
   definePluginMethod('notifications.show', async (params, { pluginId, services }) => {
     const { title, body } = params as { title: string; body?: string }
+
     return services.dispatchPluginNotification({ pluginId, title, body })
   }),
   definePluginMethod('storage.get', async (params, { pluginId, services }) => {
     const { key } = params as { key: string }
+
     return { value: services.storage.get(pluginId, key) ?? null }
   }),
   definePluginMethod('storage.set', async (params, { pluginId, services }) => {
     const { key, value } = params as { key: string; value: unknown }
     const result = services.storage.set(pluginId, key, value)
+
     if (!result.ok) {
       throw new Error(result.error)
     }
+
     return { ok: true }
   }),
   definePluginMethod('storage.delete', async (params, { pluginId, services }) => {
     const { key } = params as { key: string }
     services.storage.delete(pluginId, key)
+
     return { ok: true }
   }),
   definePluginMethod('storage.keys', async (_params, { pluginId, services }) => {
@@ -135,22 +151,27 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
   definePluginMethod('secrets.get', async (params, { pluginId, services }) => {
     const { key } = params as { key: string }
     const result = services.secrets.get(pluginId, key)
+
     if (!result.ok) {
       throw new Error(result.error)
     }
+
     return { value: result.value }
   }),
   definePluginMethod('secrets.set', async (params, { pluginId, services }) => {
     const { key, value } = params as { key: string; value: string }
     const result = services.secrets.set(pluginId, key, value)
+
     if (!result.ok) {
       throw new Error(result.error)
     }
+
     return { ok: true }
   }),
   definePluginMethod('secrets.delete', async (params, { pluginId, services }) => {
     const { key } = params as { key: string }
     services.secrets.delete(pluginId, key)
+
     return { ok: true }
   }),
   definePluginMethod('settings.get', async (_params, { pluginId, services }) => {
@@ -159,13 +180,16 @@ const HANDLERS = new Map<string, BoundPluginHostMethod>([
   definePluginMethod('settings.set', async (params, { pluginId, services }) => {
     const { key, value } = params as { key: string; value: unknown }
     const result = services.settings.set(pluginId, key, value)
+
     if (!result.ok) {
       throw new Error(result.error)
     }
+
     return { ok: true }
   }),
   definePluginMethod('events.subscribe', async (params, { pluginId, services }) => {
     const { events } = params as { events: PluginEventName[] }
+
     return { subscribed: services.subscribeEvents(pluginId, events) }
   })
 ])

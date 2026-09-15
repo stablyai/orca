@@ -5,7 +5,9 @@
 
 /** Primary result codes; extended codes pack the primary code in the low byte. */
 const SQLITE_BUSY = 5
+
 const SQLITE_LOCKED = 6
+
 const SQLITE_CANTOPEN = 14
 
 // Shared with the Codex index-heal pass, which only ever sees a relayed message
@@ -16,7 +18,9 @@ function primaryErrcode(error: unknown): number | null {
   if (!error || typeof error !== 'object' || !('errcode' in error)) {
     return null
   }
+
   const errcode = (error as { errcode?: unknown }).errcode
+
   return typeof errcode === 'number' && Number.isFinite(errcode) ? errcode & 0xff : null
 }
 
@@ -31,9 +35,11 @@ function errorText(error: unknown): string {
  */
 export function isTransientSqliteContention(error: unknown): boolean {
   const errcode = primaryErrcode(error)
+
   if (errcode === SQLITE_BUSY || errcode === SQLITE_LOCKED) {
     return true
   }
+
   return CONTENTION_MESSAGE.test(errorText(error))
 }
 
@@ -68,10 +74,12 @@ export function classifySqliteReadFailure(args: {
   if (isTransientSqliteContention(args.error)) {
     return 'contended'
   }
+
   // SQLITE_CANTOPEN against a database that is right there names a companion
   // file — the wal-index a read-only WAL open needs — not the database itself.
   if (primaryErrcode(args.error) === SQLITE_CANTOPEN && args.databaseFileExists) {
     return 'wal-index-unavailable'
   }
+
   return 'unreadable'
 }

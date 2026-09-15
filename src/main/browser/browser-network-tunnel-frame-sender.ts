@@ -32,15 +32,18 @@ export class BrowserNetworkTunnelFrameSender {
     if (this.canSend && !this.canSend()) {
       return false
     }
+
     const accepted = sendBrowserNetworkTunnelFrame(this.sendBinary, {
       opcode,
       tunnelGeneration: this.tunnelGeneration,
       streamId,
       payload
     })
+
     if (!accepted) {
       this.onRejected?.()
     }
+
     return accepted
   }
 

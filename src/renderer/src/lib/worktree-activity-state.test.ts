@@ -135,6 +135,7 @@ describe('getWorktreeIdsWithLiveAgent', () => {
     const entries = {
       'tab-1:leaf-1': makeAgentEntry({ paneKey: 'tab-1:leaf-1', worktreeId: 'wt-1' })
     }
+
     expect(getWorktreeIdsWithLiveAgent(entries, {}, NOW)).toEqual(new Set(['wt-1']))
   })
 
@@ -144,6 +145,7 @@ describe('getWorktreeIdsWithLiveAgent', () => {
         paneKey: 'tab-1:00000000-0000-4000-8000-000000000000'
       })
     }
+
     expect(getWorktreeIdsWithLiveAgent(entries, { 'wt-1': [makeTab('tab-1')] }, NOW)).toEqual(
       new Set(['wt-1'])
     )
@@ -155,6 +157,7 @@ describe('getWorktreeIdsWithLiveAgent', () => {
         paneKey: 'orphan:00000000-0000-4000-8000-000000000000'
       })
     }
+
     expect(getWorktreeIdsWithLiveAgent(entries, {}, NOW)).toEqual(new Set())
   })
 

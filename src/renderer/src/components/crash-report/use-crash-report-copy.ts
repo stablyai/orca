@@ -29,6 +29,7 @@ export function useCrashReportCopy(
 ): (submissionFailure?: CrashReportCopySubmissionFailure) => Promise<void> {
   const reportId = report?.id ?? null
   const notesRef = useRef({ reportId, value: notes })
+
   // Why: a submission toast can outlive the render that created it while the
   // user edits or changes reports; keep live notes scoped to that report.
   if (notesRef.current.reportId === reportId) {
@@ -36,6 +37,7 @@ export function useCrashReportCopy(
   } else {
     notesRef.current = { reportId, value: notes }
   }
+
   const reportNotes = notesRef.current
 
   return useCallback(
@@ -46,10 +48,13 @@ export function useCrashReportCopy(
           notes: reportNotes.value,
           ...(submissionFailure ? { submissionFailure } : {})
         })
+
         if (!result.ok) {
           showCopyFailure(result.error)
+
           return
         }
+
         toast.dismiss(CRASH_REPORT_COPY_FAILURE_TOAST_ID)
         toast.success(
           translate(

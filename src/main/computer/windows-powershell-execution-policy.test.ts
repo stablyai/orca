@@ -60,6 +60,7 @@ describe('isExecutionPolicyBlocked', () => {
         'cannot be loaded because running scripts is disabled on this system',
         'non puo essere caricato'
       )
+
     expect(isExecutionPolicyBlocked(localized)).toBe(true)
   })
 
@@ -77,6 +78,7 @@ describe('windowsPowerShellRuntimeArgs', () => {
       PREFERRED_WINDOWS_EXECUTION_POLICY,
       ['-Serve']
     )
+
     expect(preferred).not.toContain(FALLBACK_WINDOWS_EXECUTION_POLICY)
     expect(preferred).toEqual([
       '-NoLogo',

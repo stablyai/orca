@@ -36,6 +36,7 @@ export default function NotificationsScreen({
       operations.preference(),
       operations.permission()
     ])
+
     setPushEnabled(enabled.enabled)
     setPermissionState(permission)
     setError(null)
@@ -57,12 +58,14 @@ export default function NotificationsScreen({
         )
       }
     })
+
     return () => subscription.remove()
   }, [refreshSettings])
 
   const togglePush = async (value: boolean) => {
     setError(null)
     setSaving(true)
+
     try {
       const permission = await operations.permission(value)
       setPermissionState(permission)
@@ -77,6 +80,7 @@ export default function NotificationsScreen({
 
   const switchEnabled = pushEnabled && permissionState.granted
   const notificationsBlocked = permissionState.status === 'denied'
+
   const hint = notificationsBlocked
     ? 'Notifications are disabled in system settings.'
     : (description ??

@@ -11,6 +11,7 @@ import { pickResumeWorktree } from './resume-worktree'
 import { WORKTREE_PS_FULL_LIMIT } from './worktree-catalog-snapshot-client'
 
 const ACTIVE_STATUSES = new Set(['working', 'active', 'permission'])
+
 // Why: a relay↔direct cutover rejects in-flight reads without ever leaving 'connected', so the
 // connect gate never re-arms. Re-issue on the replacement session; cap it so a migration loop
 // can't spin. See runtime-capability-probe.ts for the same hazard on status.get.
@@ -31,6 +32,7 @@ export function fetchHomeHostWorktreeInfo(
     setInfo((prev) => {
       const current = prev[hostId]
       const next = markHomeWorktreeCatalogUnavailable(current, hostId)
+
       return next === current ? prev : { ...prev, [hostId]: next }
     })
   }
@@ -41,10 +43,13 @@ export function fetchHomeHostWorktreeInfo(
         if (disposed()) {
           return
         }
+
         if (!response.ok) {
           markUnavailable()
+
           return
         }
+
         const result = response.result as { worktrees?: HomeWorktreeSummary[] }
         const worktrees = result.worktrees ?? []
         setCachedWorktrees(hostId, worktrees, { proven: true })
@@ -66,11 +71,13 @@ export function fetchHomeHostWorktreeInfo(
         if (disposed()) {
           return
         }
+
         // A cutover raises only after migrateTo installed an authenticated replacement, so the
         // read was interrupted, not answered — ask again instead of latching "Last known".
         if (cutoverRetriesLeft > 0 && isLogicalClientCutoverError(error)) {
           return attempt(cutoverRetriesLeft - 1)
         }
+
         // Any other rejection (socket died mid-request) is a failed refresh, not an empty host.
         markUnavailable()
       })

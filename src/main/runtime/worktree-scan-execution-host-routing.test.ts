@@ -9,6 +9,7 @@ const electronMocks = vi.hoisted(() => {
     removeListener: vi.fn(() => ipcMain),
     emit: vi.fn(() => true)
   }
+
   return {
     BrowserWindow: { fromId: vi.fn((): unknown => null) },
     webContents: { fromId: vi.fn((): unknown => null) },
@@ -16,9 +17,11 @@ const electronMocks = vi.hoisted(() => {
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
   }
 })
+
 vi.mock('electron', () => electronMocks)
 
 const getSshGitProviderMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
   getSshGitProviderGeneration: vi.fn(() => 0),
@@ -27,6 +30,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../git/worktree', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWorktreesStrict: listWorktreesStrictMock
@@ -39,10 +43,15 @@ vi.mock('./repo-worktree-admin-fingerprint', () => ({
 import { OrcaRuntimeService } from './orca-runtime'
 
 const TARGET_ID = 'remote-1'
+
 const REPO_ID = 'repo-remote'
+
 const REPO_PATH = '/srv/app'
+
 const WORKTREE_PATH = '/srv/app-feature'
+
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
+
 const MAIN_WORKTREE_ID = `${REPO_ID}::${REPO_PATH}`
 
 function makeMeta(overrides: Record<string, unknown> = {}) {
@@ -76,6 +85,7 @@ function makeStore(repoOverrides: Record<string, unknown>) {
       instanceId: '22222222-2222-4222-8222-222222222222'
     })
   }
+
   const repos = [
     {
       id: REPO_ID,
@@ -86,6 +96,7 @@ function makeStore(repoOverrides: Record<string, unknown>) {
       ...repoOverrides
     }
   ]
+
   const store = {
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
     getRepos: () => repos,
@@ -93,6 +104,7 @@ function makeStore(repoOverrides: Record<string, unknown>) {
     getWorktreeMeta: (id: string) => metaById[id],
     setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
       metaById[id] = { ...(metaById[id] ?? makeMeta()), ...meta } as never
+
       return metaById[id]
     },
     removeWorktreeMeta: () => {},
@@ -110,6 +122,7 @@ function makeStore(repoOverrides: Record<string, unknown>) {
     }),
     getProjects: () => []
   }
+
   return store
 }
 
@@ -122,6 +135,7 @@ function makeRuntime(repoOverrides: Record<string, unknown>): {
   list: () => Promise<{ id: string; path: string; hostId?: string }[]>
 } {
   const runtime = new OrcaRuntimeService(makeStore(repoOverrides) as never)
+
   return {
     runtime,
     list: () => (runtime as unknown as RuntimeInternals).listResolvedWorktrees()
@@ -140,6 +154,7 @@ describe('worktree scan execution-host routing', () => {
       { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
       { path: WORKTREE_PATH, head: 'def', branch: 'feature', isBare: false, isMainWorktree: false }
     ])
+
     getSshGitProviderMock.mockReturnValue({ listWorktrees })
     const { list } = makeRuntime({ executionHostId: `ssh:${TARGET_ID}` })
 

@@ -6,6 +6,7 @@ export type GitHubMentionOption = {
 }
 
 export const GITHUB_MENTION_QUERY_MAX_BYTES = 2 * 1024
+
 export const GITHUB_MENTION_OPTION_LIMIT = 8
 
 export function isGitHubMentionQueryTooLarge(
@@ -25,6 +26,7 @@ export function filterGitHubMentionOptions<T extends GitHubMentionOption>(
   }
 
   const normalizedQuery = query.toLowerCase()
+
   const filtered = normalizedQuery
     ? options.filter(
         (option) =>
@@ -32,5 +34,6 @@ export function filterGitHubMentionOptions<T extends GitHubMentionOption>(
           (option.name ?? '').toLowerCase().includes(normalizedQuery)
       )
     : options
+
   return filtered.slice(0, limit)
 }

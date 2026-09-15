@@ -6,10 +6,15 @@ import type { LinearConnectionStatus, LinearTeam } from '../../../../shared/line
 import { createLinearSlice } from './linear'
 
 const linearStatus = vi.fn()
+
 const linearConnect = vi.fn()
+
 const linearListIssues = vi.fn()
+
 const linearSearchIssues = vi.fn()
+
 const linearListTeams = vi.fn()
+
 const linearGetIssue = vi.fn()
 
 vi.mock('@/runtime/runtime-linear-client', () => ({
@@ -103,9 +108,11 @@ function status(
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((res) => {
     resolve = res
   })
+
   return { promise, resolve }
 }
 
@@ -225,13 +232,16 @@ describe('createLinearSlice invalidation', () => {
     linearStatus.mockReturnValueOnce(statusRefresh.promise)
 
     let resolved = false
+
     const connectPromise = store
       .getState()
       .connectLinear('linear-key')
       .then((result) => {
         resolved = true
+
         return result
       })
+
     await Promise.resolve()
 
     expect(resolved).toBe(false)

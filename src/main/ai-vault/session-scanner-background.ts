@@ -28,12 +28,15 @@ import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
 
 export function shouldUseAiVaultServiceProcess(): boolean {
   const configured = process.env.ORCA_AI_VAULT_SERVICE_PROCESS
+
   if (configured === '1') {
     return true
   }
+
   if (configured === '0') {
     return false
   }
+
   return process.env.NODE_ENV !== 'test'
 }
 

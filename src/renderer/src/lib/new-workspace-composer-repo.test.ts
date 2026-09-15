@@ -100,10 +100,12 @@ describe('new-workspace-composer-repo', () => {
 
   describe('resolveComposerActiveRepoId', () => {
     const localOrca = makeRepo('local-orca', { upstream: { owner: 'stablyai', repo: 'orca' } })
+
     const runtimeOrca = makeRepo('runtime-orca', {
       connectionId: 'runtime-ssh-orca-1',
       upstream: { owner: 'stablyai', repo: 'orca' }
     })
+
     const otherProject = makeRepo('noqa', { upstream: { owner: 'stablyai', repo: 'noqa' } })
     const repos = [otherProject, localOrca, runtimeOrca]
     const eligibleRepos = getComposerEligibleRepos(repos)

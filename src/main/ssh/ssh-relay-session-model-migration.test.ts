@@ -27,9 +27,11 @@ const { attachForReconnectMock, beginMigrationMock, muxRequestMock, openConsumer
   }))
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: openConsumerSessionMock
 }))
+
 vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   acceptSshPtyOutputData: vi.fn().mockResolvedValue(undefined),
   acceptSshPtyOutputExit: vi.fn().mockResolvedValue(undefined),
@@ -74,9 +76,11 @@ vi.mock('../providers/ssh-filesystem-provider', () => ({
     dispose = vi.fn()
   }
 }))
+
 vi.mock('../providers/ssh-git-provider', () => ({
   SshGitProvider: class MockSshGitProvider {}
 }))
+
 vi.mock('../ipc/pty', () => ({
   registerSshPtyProvider: vi.fn(),
   unregisterSshPtyProvider: vi.fn(),
@@ -88,11 +92,13 @@ vi.mock('../ipc/pty', () => ({
   restorePtyIncarnation: vi.fn(),
   setPtyOwnership: vi.fn()
 }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
   unregisterSshFilesystemProvider: vi.fn(),
   getSshFilesystemProvider: vi.fn().mockReturnValue({ dispose: vi.fn() })
 }))
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   registerSshGitProvider: vi.fn(),
   unregisterSshGitProvider: vi.fn()
@@ -100,13 +106,16 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 
 const { getPtyIdsForConnection, getSshPtyProvider, registerSshPtyProvider } =
   await import('../ipc/pty')
+
 const { getSshPtyAcceptedSourceCheckpoints } = await import('../ipc/ssh-pty-output-intake-registry')
 
 function pendingMigration() {
   let resolve!: (result: SettledMigration) => void
+
   const result = new Promise<SettledMigration>((promiseResolve) => {
     resolve = promiseResolve
   })
+
   return { result, resolve }
 }
 
@@ -172,12 +181,14 @@ describe('SshRelaySession model migration', () => {
       }
     ])
     const deps = createMockDeps()
+
     const session = new SshRelaySession(
       targetId,
       deps.getMainWindow,
       deps.mockStore,
       deps.mockPortForward
     )
+
     await session.establish(deps.mockConn)
     vi.mocked(getPtyIdsForConnection).mockReturnValue([appPtyId])
     vi.mocked(getSshPtyProvider).mockImplementation(
@@ -223,12 +234,14 @@ describe('SshRelaySession model migration', () => {
       settledMigration(appPtyId, 4).checkpoint
     ])
     const deps = createMockDeps()
+
     const session = new SshRelaySession(
       targetId,
       deps.getMainWindow,
       deps.mockStore,
       deps.mockPortForward
     )
+
     await session.establish(deps.mockConn)
     vi.mocked(getPtyIdsForConnection).mockReturnValue([appPtyId])
     vi.mocked(getSshPtyProvider).mockImplementation(

@@ -4,8 +4,11 @@ import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 
 export const AI_VAULT_SESSION_DRAG_TYPE = 'application/x-orca-ai-vault-session'
+
 export const AI_VAULT_SESSION_DRAG_START_EVENT = 'orca-ai-vault-session-drag-start'
+
 export const AI_VAULT_SESSION_DRAG_END_EVENT = 'orca-ai-vault-session-drag-end'
+
 export const AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES = 16 * 1024
 
 export type AiVaultSessionDragPayload = {
@@ -56,7 +59,9 @@ function isStructuredSession(
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const structured = value as Record<string, unknown>
+
   return isNonEmptyString(structured.sessionId) && isNonEmptyString(structured.workspaceId)
 }
 
@@ -64,6 +69,7 @@ function isStringRecord(value: unknown): value is Record<string, string> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   return Object.values(value).every((entry) => typeof entry === 'string')
 }
 
@@ -79,7 +85,9 @@ function isLaunchConfig(value: unknown): value is SleepingAgentLaunchConfig {
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const config = value as Partial<SleepingAgentLaunchConfig>
+
   return (
     (config.agentCommand === undefined || typeof config.agentCommand === 'string') &&
     typeof config.agentArgs === 'string' &&
@@ -92,7 +100,9 @@ function isSerializedPayload(value: unknown): value is SerializedAiVaultSessionD
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const payload = value as Partial<SerializedAiVaultSessionDragPayload>
+
   return (
     payload.kind === 'ai-vault-session' &&
     payload.version === 1 &&
@@ -123,7 +133,9 @@ function isResumeStartup(
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const startup = value as NonNullable<AiVaultSessionDragPayload['realHomeStartup']>
+
   return (
     isNonEmptyString(startup.command) &&
     (startup.env === undefined || isStringRecord(startup.env)) &&
@@ -137,12 +149,15 @@ export function writeAiVaultSessionDragData(
   payload: AiVaultSessionDragPayload
 ): void {
   const serialized = JSON.stringify({ kind: 'ai-vault-session', version: 1, ...payload })
+
   if (isAiVaultSessionDragPayloadTooLarge(serialized)) {
     activeAiVaultSessionDragPayload = null
     dataTransfer.effectAllowed = 'copy'
     dataTransfer.setData(AI_VAULT_SESSION_DRAG_TYPE, '')
+
     return
   }
+
   activeAiVaultSessionDragPayload = { ...payload }
   dataTransfer.effectAllowed = 'copy'
   // Why: avoid text/plain so terminal/native drop targets cannot paste the
@@ -162,18 +177,22 @@ export function readAiVaultSessionDragData(
   dataTransfer: DataTransfer
 ): AiVaultSessionDragPayload | null {
   const raw = dataTransfer.getData(AI_VAULT_SESSION_DRAG_TYPE)
+
   if (!raw) {
     return hasAiVaultSessionDragData(dataTransfer) ? activeAiVaultSessionDragPayload : null
   }
+
   if (isAiVaultSessionDragPayloadTooLarge(raw)) {
     return null
   }
 
   try {
     const parsed: unknown = JSON.parse(raw)
+
     if (!isSerializedPayload(parsed)) {
       return null
     }
+
     const {
       agent,
       sessionId,
@@ -189,6 +208,7 @@ export function readAiVaultSessionDragData(
       launchConfig,
       realHomeStartup
     } = parsed
+
     return {
       agent,
       sessionId,

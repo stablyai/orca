@@ -7,6 +7,7 @@ import { AgentStateDot, agentStateLabel, type AgentDotState } from './AgentState
 
 vi.mock('@/components/StateIndicatorTooltip', async () => {
   const { createElement } = await import('react')
+
   return {
     StateIndicatorTooltip: ({
       label,
@@ -135,6 +136,7 @@ describe('AgentStateDot', () => {
   // Typecheck-time guard: a new AgentDotState member that ALL_STATES omits
   // fails `pnpm tc`, so the tooltip case above can never silently skip a state.
   type UncoveredState = Exclude<AgentDotState, (typeof ALL_STATES)[number]>
+
   const _allStatesAreCovered: UncoveredState extends never ? true : never = true
   void _allStatesAreCovered
 

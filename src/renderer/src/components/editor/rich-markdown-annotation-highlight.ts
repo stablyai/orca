@@ -34,6 +34,7 @@ function createAnnotationDecorations(
     .map((range) => {
       const from = Math.min(range.range.from, range.range.to)
       const to = Math.max(range.range.from, range.range.to)
+
       return from === to
         ? null
         : Decoration.inline(from, to, {
@@ -43,6 +44,7 @@ function createAnnotationDecorations(
           })
     })
     .filter((decoration): decoration is Decoration => decoration !== null)
+
   return decorations.length === 0 ? DecorationSet.empty : DecorationSet.create(doc, decorations)
 }
 
@@ -59,6 +61,7 @@ function createRichMarkdownAnnotationHighlightPlugin(): Plugin<RichMarkdownAnnot
         const meta = tr.getMeta(richMarkdownAnnotationHighlightPluginKey) as
           | RichMarkdownAnnotationHighlightMeta
           | undefined
+
         if (meta === null) {
           return {
             activeRange: null,
@@ -66,23 +69,28 @@ function createRichMarkdownAnnotationHighlightPlugin(): Plugin<RichMarkdownAnnot
             decorations: createAnnotationDecorations(tr.doc, null, pluginState.noteRanges)
           }
         }
+
         if (meta) {
           const activeRange =
             meta.activeRange === undefined ? pluginState.activeRange : meta.activeRange
+
           const noteRanges =
             meta.noteRanges === undefined ? pluginState.noteRanges : meta.noteRanges
+
           return {
             activeRange,
             noteRanges,
             decorations: createAnnotationDecorations(tr.doc, activeRange, noteRanges)
           }
         }
+
         if (tr.docChanged) {
           return {
             ...pluginState,
             decorations: pluginState.decorations.map(tr.mapping, tr.doc)
           }
         }
+
         return pluginState
       }
     },

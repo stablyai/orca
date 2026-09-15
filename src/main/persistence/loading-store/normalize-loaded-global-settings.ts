@@ -30,6 +30,7 @@ export function normalizeLoadedGlobalSettings(
     migratedFloatingTerminalCwd,
     migratedFloatingTerminalTrustedCwds
   } = terminal
+
   const {
     migratedExperimentalActivity,
     migratedAutoRenameBranchFromWork,

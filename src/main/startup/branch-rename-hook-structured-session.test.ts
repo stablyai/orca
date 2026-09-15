@@ -4,19 +4,25 @@ import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 // Why the mocks: this file only proves the structured-session seam, and the real orchestrator's
 // import graph reaches git, electron, and the agent-hook installers.
 const { renameCalls } = vi.hoisted(() => ({ renameCalls: [] as unknown[][] }))
+
 vi.mock('../agent-hooks/first-work-branch-rename', () => ({
   maybeAutoRenameBranchOnFirstWork: (...args: unknown[]) => {
     renameCalls.push(args)
+
     return Promise.resolve()
   }
 }))
+
 vi.mock('../agent-hooks/branch-rename-failure-output', () => ({
   rememberBranchRenameFailureOutput: vi.fn()
 }))
+
 vi.mock('../agent-hooks/first-work-folder-rename', () => ({
   renameWorktreeFolderOnFirstWork: vi.fn()
 }))
+
 vi.mock('../git/worktree', () => ({ moveWorktree: vi.fn() }))
+
 vi.mock('electron', () => ({ app: { getPath: () => '', on: vi.fn(), isReady: () => true } }))
 
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../agent-hooks/first-work-structured-session-rename'

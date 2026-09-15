@@ -7,6 +7,7 @@ const INCOMPLETE_STATUS = '\x1b]9999;{"state":"working","prompt":"fragment'
 describe('OSC 9999 pending storage', () => {
   it('routes every retained pending frame through ownRetainedString', () => {
     const own = vi.spyOn(ownership, 'ownRetainedString')
+
     try {
       const process = createAgentStatusOscProcessor()
       expect(process('x'.repeat(32 * 1024) + INCOMPLETE_STATUS).cleanData).toHaveLength(32 * 1024)
@@ -17,6 +18,7 @@ describe('OSC 9999 pending storage', () => {
       for (let index = 0; index < 8; index += 1) {
         process('x'.repeat(512))
       }
+
       expect(own).toHaveBeenCalledTimes(9)
       expect(own).toHaveBeenLastCalledWith(INCOMPLETE_STATUS + 'x'.repeat(8 * 512))
     } finally {
@@ -40,6 +42,7 @@ describe('OSC 9999 pending storage', () => {
     }
 
     expect(cleanChars).toBe(size * count)
+
     for (const process of parsers) {
       expect(process('"}\x07after')).toEqual({
         cleanData: 'after',
@@ -73,6 +76,7 @@ describe('OSC 9999 pending storage', () => {
     const process = createAgentStatusOscProcessor()
     const marker = '\x1b]9999;{"state":"working"}'
     const pending = marker + ' '.repeat(64 * 1024 - marker.length)
+
     for (let offset = 0; offset < pending.length; offset += 512) {
       process(pending.slice(offset, offset + 512))
     }

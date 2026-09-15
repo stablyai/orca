@@ -6,7 +6,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { getPosixOmpShellWrapper } from './omp-shell-wrapper'
 
 const roots: string[] = []
+
 const zshAvailable = existsSync('/bin/zsh')
+
 const bashAvailable = existsSync('/bin/bash')
 
 /** Sources the omp wrapper from a startup file that already aliased `omp`, then
@@ -84,10 +86,12 @@ describe.skipIf(process.platform === 'win32' || !zshAvailable)('OMP wrapper glob
         `alias -g -- '${token}'`
       ].join('\n')
     )
+
     const result = spawnSync('/bin/zsh', ['-f', startup], {
       encoding: 'utf8',
       env: { ...process.env, HOME: root, ZDOTDIR: root }
     })
+
     expect(result.status, result.stderr).toBe(0)
     expect(result.stdout).toContain('parsed')
     expect(result.stdout).toContain('2>&1 | cat')

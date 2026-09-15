@@ -26,8 +26,11 @@ import { writeNotifyWithSettlement } from './daemon-client-notify-settlement'
 import { requestDaemonRpc } from './daemon-client-rpc-request'
 
 const CONNECT_TIMEOUT_MS = 5000
+
 const CONNECTION_ATTEMPT_WAIT_MS = CONNECT_TIMEOUT_MS * 4
+
 const REQUEST_TIMEOUT_MS = 30000
+
 const NOTIFY_SETTLEMENT_TIMEOUT_MS = 5000
 
 export type DaemonClientOptions = {
@@ -98,15 +101,18 @@ export class DaemonClient {
     if (this.connected) {
       return
     }
+
     if (this.connectingPromise) {
       // Why: a normal connection may legitimately consume one timeout for each
       // socket and hello; bounded teardown calls instead keep their one shared budget.
       const waiterTimeoutMs = sharedBudget ? timeoutMs : CONNECTION_ATTEMPT_WAIT_MS
+
       return waitForDaemonConnectionAttempt(this.connectingPromise, waiterTimeoutMs)
     }
 
     const attemptGeneration = this.connectionAttemptGeneration
     this.connectingPromise = this.doConnect(timeoutMs, attemptGeneration, sharedBudget)
+
     try {
       await this.connectingPromise
     } finally {
@@ -122,6 +128,7 @@ export class DaemonClient {
       if ((error as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
         return ''
       }
+
       throw error
     }
   }
@@ -133,9 +140,12 @@ export class DaemonClient {
   ): Promise<void> {
     const token = this.readToken()
     const deadlineMs = Date.now() + timeoutMs
+
     const remainingMs = (): number =>
       sharedBudget ? Math.max(1, deadlineMs - Date.now()) : timeoutMs
+
     const pendingListenerCleanups: (() => void)[] = []
+
     const cleanupPendingListeners = (): void => {
       for (const cleanup of pendingListenerCleanups.splice(0)) {
         cleanup()
@@ -147,12 +157,14 @@ export class DaemonClient {
       const pendingControlSocket = await connectDaemonSocket(this.socketPath, remainingMs())
       this.assertConnectionAttemptCurrent(attemptGeneration, pendingControlSocket)
       this.controlSocket = pendingControlSocket
+
       const controlIdentity = await this.sendHello(
         this.controlSocket,
         token,
         'control',
         remainingMs()
       )
+
       this.assertConnectionAttemptCurrent(attemptGeneration, this.controlSocket)
       pendingListenerCleanups.push(
         attachControlResponseReader(this.controlSocket, (response) =>
@@ -165,9 +177,11 @@ export class DaemonClient {
       this.streamSocket = pendingStreamSocket
       const streamIdentity = await this.sendHello(this.streamSocket, token, 'stream', remainingMs())
       this.assertConnectionAttemptCurrent(attemptGeneration, this.streamSocket)
+
       if (!sameDaemonIdentity(controlIdentity, streamIdentity)) {
         throw new DaemonProtocolError('Daemon identity changed during connection')
       }
+
       pendingListenerCleanups.push(
         attachStreamEventReader(this.streamSocket, (event) => {
           this.eventListeners.each((listener) => listener(event))
@@ -212,6 +226,7 @@ export class DaemonClient {
       // refusal by the daemon — see settleCreateCancellation's caller.
       throw new DaemonConnectionLostError('Not connected')
     }
+
     const generation = this.connectionGeneration
 
     return requestDaemonRpc<T>({
@@ -241,8 +256,10 @@ export class DaemonClient {
 
     const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
     const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
+
     try {
       this.controlSocket.write(encodeNdjson(msg))
+
       return true
     } catch {
       // Notifications are best-effort; an oversized payload must not tear down the caller.
@@ -262,6 +279,7 @@ export class DaemonClient {
     const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
     const socket = this.controlSocket
     const generation = this.connectionGeneration
+
     return await writeNotifyWithSettlement({
       socket,
       message: { id, type, ...(payload !== undefined ? { payload } : {}) },
@@ -301,6 +319,7 @@ export class DaemonClient {
     if (attemptGeneration === this.connectionAttemptGeneration) {
       return
     }
+
     socket?.destroy()
     throw new DaemonProtocolError('Disconnected')
   }
@@ -325,11 +344,14 @@ export class DaemonClient {
     if (!this.disconnectArmed || generation !== this.connectionGeneration) {
       return
     }
+
     this.disconnectArmed = false
     this.connectionAttemptGeneration++
+
     if (this.daemonIdentity) {
       this.observedAuthenticatedDisconnect = true
     }
+
     this.connected = false
     this.daemonIdentity = null
     this.cleanupActiveSocketListeners()

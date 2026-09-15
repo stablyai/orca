@@ -92,6 +92,7 @@ describe('remote agent-session launch routing', () => {
     const compatibilityError = Object.assign(new Error('runtime incompatible'), {
       code: 'runtime_compat_block'
     })
+
     const legacy = vi.fn().mockResolvedValue('legacy')
     mocks.supportsCapability.mockRejectedValue(compatibilityError)
 
@@ -123,6 +124,7 @@ describe('remote agent-session launch routing', () => {
   it('uses legacy only for the host pre-side-effect lower-owner response', async () => {
     const legacy = vi.fn().mockResolvedValue('legacy')
     mocks.supportsCapability.mockResolvedValue(true)
+
     const legacyRequired = new RuntimeRpcCallError({
       id: 'request-1',
       ok: false,
@@ -142,6 +144,7 @@ describe('remote agent-session launch routing', () => {
   it('uses legacy when a replaced old host does not recognize the structured method', async () => {
     const legacy = vi.fn().mockResolvedValue('legacy')
     mocks.supportsCapability.mockResolvedValue(true)
+
     const methodNotFound = new RuntimeRpcCallError({
       id: 'request-1',
       ok: false,

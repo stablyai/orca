@@ -6,6 +6,7 @@ import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
 const action = parse(readFileSync('.github/actions/install-node-dependencies/action.yml', 'utf8'))
+
 const installScript = action.runs.steps.find((step) => step.name === 'Install dependencies').run
 
 function run(command, args, options = {}) {
@@ -37,6 +38,7 @@ function createFixture() {
   const pnpm = join(bin, 'pnpm')
   writeFileSync(pnpm, '#!/bin/sh\nexit 0\n')
   chmodSync(pnpm, 0o755)
+
   return { bin, detachedCwd, root, workspace }
 }
 
@@ -54,6 +56,7 @@ function executeInstallScript(fixture) {
 describe('install-node-dependencies action', () => {
   it('skips the lockfile diff when a job container has no Git metadata', () => {
     const fixture = createFixture()
+
     try {
       rmSync(join(fixture.workspace, '.git'), { recursive: true, force: true })
 
@@ -67,6 +70,7 @@ describe('install-node-dependencies action', () => {
 
   it('skips the lockfile diff for a bare repository', () => {
     const fixture = createFixture()
+
     try {
       rmSync(join(fixture.workspace, '.git'), { recursive: true, force: true })
       expect(run('git', ['init', '--bare', '-q'], { cwd: fixture.workspace }).status).toBe(0)
@@ -85,6 +89,7 @@ describe('install-node-dependencies action', () => {
     ['pnpm-workspace.yaml', 'packages: []\nchanged: true\n']
   ])('rejects a changed %s when the composite step cwd is detached', (file, contents) => {
     const fixture = createFixture()
+
     try {
       const clean = executeInstallScript(fixture)
       expect(clean.status, clean.stderr || clean.stdout).toBe(0)

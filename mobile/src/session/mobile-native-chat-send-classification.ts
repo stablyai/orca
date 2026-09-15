@@ -24,7 +24,9 @@ export function classifyMobileNativeChatSend(
   if (!agent) {
     return 'chat'
   }
+
   const profile = getNativeChatAgentProfile(agent)
+
   return classifyNativeChatSend(
     text,
     getVerifiedNativeChatCommands(agent),

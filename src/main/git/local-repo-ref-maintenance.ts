@@ -30,7 +30,9 @@ export type RepoMaintenanceActivityProbe = () => boolean
 const REPO_BUSY_PROBE_MAX = 64
 
 let activityProbe: RepoMaintenanceActivityProbe | null = null
+
 let shared: RepoRefMaintenance | null = null
+
 // Why keyed here rather than captured in the target: a repo can be armed from
 // the fetch controller or from a user-initiated fetch, and every arming must see
 // the same "this repo has work in flight" answer, not whichever closure was last.
@@ -40,11 +42,14 @@ const repoBusyProbes = new Map<string, () => boolean>()
 export function setRepoRefMaintenanceBusyProbe(key: string, probe: () => boolean): void {
   repoBusyProbes.delete(key)
   repoBusyProbes.set(key, probe)
+
   while (repoBusyProbes.size > REPO_BUSY_PROBE_MAX) {
     const oldest = repoBusyProbes.keys().next()
+
     if (oldest.done) {
       break
     }
+
     repoBusyProbes.delete(oldest.value)
   }
 }
@@ -80,6 +85,7 @@ function localMaintenanceOptions(): RepoRefMaintenanceOptions {
 
 export function getLocalRepoRefMaintenance(): RepoRefMaintenance {
   shared ??= new RepoRefMaintenance(localMaintenanceOptions())
+
   return shared
 }
 
@@ -96,6 +102,7 @@ export function disposeLocalRepoRefMaintenance(): Promise<void> {
   shared?.dispose()
   shared = null
   repoBusyProbes.clear()
+
   return settling
 }
 
@@ -118,6 +125,7 @@ export async function withRepoRefMaintenancePaused<T>(
   // quit-time dispose; harmless, because a fresh one has no armed timers and its
   // activity probe is gone, so it fails closed.
   const release = await getLocalRepoRefMaintenance().pause(reason)
+
   try {
     return await run()
   } finally {
@@ -161,6 +169,7 @@ function refsDirectoryForMainProcess(commonDir: string, wslDistro: string | unde
   if (wslDistro && !isWslUncPath(commonDir) && !isWindowsAbsolutePathLike(commonDir)) {
     return win32.join(toWindowsWslPath(commonDir, wslDistro), 'refs')
   }
+
   // Decided by path syntax, not by platform: `win32.isAbsolute` accepts POSIX paths too.
   return (isWindowsAbsolutePathLike(commonDir) ? win32 : posix).join(commonDir, 'refs')
 }
@@ -187,6 +196,7 @@ export function isGitAutoMaintenanceDisabled(configOutput: string): boolean {
  */
 function gitCommonDirForMainProcess(commonDir: string, wslDistro: string | undefined): string {
   const refs = refsDirectoryForMainProcess(commonDir, wslDistro)
+
   return (isWindowsAbsolutePathLike(refs) ? win32 : posix).dirname(refs)
 }
 
@@ -206,6 +216,7 @@ export function armLocalRepoRefMaintenance(args: LocalRepoRefMaintenanceTargetAr
   if (isDisabled()) {
     return
   }
+
   getLocalRepoRefMaintenance().arm(createLocalRepoRefMaintenanceTarget(args))
 }
 
@@ -216,18 +227,22 @@ export function createLocalRepoRefMaintenanceTarget(
   // The engine always probes before it packs, so the pack reuses this answer
   // rather than spending a second rev-parse on the same repository.
   let commonDir: string | undefined
+
   const resolveCommonDir = async (signal?: AbortSignal): Promise<string | undefined> => {
     commonDir ??= await readRepoCommonDirFromGit(args.repoPath, {
       ...gitOptions,
       ...(signal ? { signal } : {})
     })
+
     return commonDir
   }
+
   return {
     key: args.key,
     isBusy: () => repoBusyProbes.get(args.key)?.() ?? false,
     async resolveRefsDirectory(signal: AbortSignal) {
       const resolved = await resolveCommonDir(signal)
+
       return resolved ? refsDirectoryForMainProcess(resolved, args.wslDistro) : undefined
     },
     async isOptedOut(signal: AbortSignal) {
@@ -236,6 +251,7 @@ export function createLocalRepoRefMaintenanceTarget(
           ['config', '--get-regexp', '^(maintenance\\.auto|gc\\.auto)$'],
           { cwd: args.repoPath, ...gitOptions, admissionTier: 'background', signal }
         )
+
         return isGitAutoMaintenanceDisabled(stdout)
       } catch {
         // Neither key set is the common case and exits non-zero; that is consent.
@@ -244,17 +260,22 @@ export function createLocalRepoRefMaintenanceTarget(
     },
     async packRefs(lock: PackedRefsLockReporter) {
       const resolved = await resolveCommonDir()
+
       const owner = resolved
         ? new PackRefsLockOwnership(gitCommonDirForMainProcess(resolved, args.wslDistro))
         : null
+
       const claim = owner ? await owner.claim() : { ok: true as const }
+
       if (!claim.ok) {
         throw new RefMaintenanceRepoLocked(claim.reason)
       }
+
       // Report the rewrite window rather than accepting a signal. A pack that is
       // killed mid-prune strands a `refs/**` lock about one time in five, and
       // Git never clears those; waiting out the window costs at most ~1.4s.
       const watch = owner?.watchLock((held) => lock.setHeld(held))
+
       try {
         await gitExecFileAsync([...PACK_REFS_ARGS], {
           cwd: args.repoPath,

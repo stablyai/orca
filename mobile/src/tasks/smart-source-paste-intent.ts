@@ -44,22 +44,31 @@ export function resolvePasteIntent(query: string): PasteIntent {
   if (!isSmartWorkspaceSourceQueryWithinLimit(query)) {
     return null
   }
+
   const trimmed = query.trim()
+
   if (!trimmed) {
     return null
   }
+
   const ghLink = parseGitHubIssueOrPRLink(trimmed)
+
   if (ghLink) {
     return { kind: 'github-link', link: ghLink }
   }
+
   const normalizedGh = normalizeGitHubLinkQuery(trimmed)
+
   if (normalizedGh.directNumber !== null && !/^https?:\/\//i.test(trimmed)) {
     return { kind: 'github-number', number: normalizedGh.directNumber }
   }
+
   const glLink = parseGitLabIssueOrMRLink(trimmed)
+
   if (glLink) {
     return { kind: 'gitlab-link', link: glLink }
   }
+
   return null
 }
 
@@ -76,11 +85,14 @@ export function deriveRepoSlug(repo: {
       ...(repo.upstream.host ? { host: repo.upstream.host } : {})
     }
   }
+
   const source = repo.gitRemoteIdentity?.remoteUrl ?? repo.gitRemoteIdentity?.canonicalKey ?? ''
   const match = /(?:github\.com[/:]|^)([^/\s:]+)\/([^/\s]+?)(?:\.git)?$/i.exec(source)
+
   if (match) {
     return { owner: match[1], repo: match[2] }
   }
+
   return null
 }
 
@@ -88,6 +100,7 @@ function slugsEqual(a: RepoSlug | null, b: RepoSlug | null): boolean {
   if (!a || !b) {
     return false
   }
+
   return githubRepoIdentityKey(a) === githubRepoIdentityKey(b)
 }
 
@@ -105,36 +118,45 @@ export async function findRepoMatchingSlugForPaste(
   cache: Map<string, RepoSlug | null>
 ): Promise<PasteRepoCandidate | null> {
   const projected = findRepoMatchingSlug(repos, slug)
+
   if (projected) {
     return projected
   }
+
   // Why: projected remote metadata is incomplete for SSH and GitHub Enterprise;
   // ask each repo's owning runtime instead of assuming github.com URL syntax.
   for (const repo of repos) {
     let resolved = cache.get(repo.id)
+
     if (!cache.has(repo.id)) {
       try {
         const reply = await githubRepoSlugRead.request(client, { repo: `id:${repo.id}` })
+
         // Why the raw refusal: a missing method retires the probe host-wide, and the acceptance
         // policy reports only that the reply was refused, not with which code.
         if (isMethodNotFoundRefusal(reply)) {
           // Why: RPC availability is host-wide; avoid repeating an unsupported
           // probe for every repo or on the next paste attempt.
           repos.forEach((candidate) => cache.set(candidate.id, null))
+
           return null
         }
+
         const slug = githubRepoSlugRead.interpret(reply)
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
         resolved = slug.accepted ? (slug.value as RepoSlug | null) : null
       } catch {
         resolved = null
       }
+
       cache.set(repo.id, resolved ?? null)
     }
+
     if (slugsEqual(resolved ?? null, slug)) {
       return repo
     }
   }
+
   return null
 }
 
@@ -147,8 +169,10 @@ export async function lookupGitHubItemByNumber(
     repo: `id:${repoId}`,
     number
   })
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   const item = githubWorkItemByNumberRead.interpret(reply) as GitHubWorkItem | null
+
   return item ? { ...item, repoId } : null
 }
 
@@ -167,8 +191,10 @@ export async function lookupGitHubItemByOwnerRepo(
     number,
     type
   })
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   const item = githubWorkItemBySlugRead.interpret(reply) as GitHubWorkItem | null
+
   return item ? { ...item, repoId } : null
 }
 
@@ -184,7 +210,9 @@ export async function lookupGitLabItemByPath(
     iid: link.number,
     type: link.type
   })
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   const item = gitlabWorkItemByPathRead.interpret(reply) as GitLabWorkItem | null
+
   return item ? { ...item, repoId } : null
 }

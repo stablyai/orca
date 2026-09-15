@@ -26,21 +26,29 @@ export class CodexCredentialAbsenceGrace {
   assess(authPath: string, now = Date.now()): CodexCredentialAbsenceVerdict {
     const state = readStoredCodexCredentialState(authPath)
     const key = normalizeRuntimePathForComparison(authPath)
+
     if (state === 'present' || state === 'incomplete' || state === 'no-credential') {
       this.firstAbsenceAtByPath.delete(key)
+
       return { state, durable: true }
     }
+
     // Why: rotation replaces auth.json inside an existing home; the home
     // directory itself being gone is structural, not a write in flight.
     if (state === 'missing' && !existsSync(dirname(authPath))) {
       this.firstAbsenceAtByPath.delete(key)
+
       return { state, durable: true }
     }
+
     const firstAbsenceAt = this.firstAbsenceAtByPath.get(key)
+
     if (firstAbsenceAt === undefined) {
       this.firstAbsenceAtByPath.set(key, now)
+
       return { state, durable: false }
     }
+
     return { state, durable: now - firstAbsenceAt >= this.graceMs }
   }
 }

@@ -9,6 +9,7 @@ const { forceTerminateProcessTreeMock, signalProcessTreeMock, spawnMock } = vi.h
 }))
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock, spawnSync: vi.fn() }))
+
 vi.mock('./process-tree-termination', () => ({
   forceTerminateProcessTree: forceTerminateProcessTreeMock,
   signalProcessTree: signalProcessTreeMock
@@ -23,6 +24,7 @@ function mockChild(): ChildProcess {
   child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() })
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
+
   return child as unknown as ChildProcess
 }
 
@@ -92,6 +94,7 @@ describe('runProcess termination failure', () => {
       forceTerminateProcessTreeMock.mockResolvedValue(true)
       spawnMock.mockReturnValue(mockChild())
       const onChildTerminated = vi.fn()
+
       const pending = runProcess({
         program: 'git',
         timeoutMs: 10,
@@ -110,12 +113,14 @@ describe('runProcess termination failure', () => {
     const onChildTerminated = vi.fn()
     const child = mockChild()
     spawnMock.mockReturnValue(child)
+
     const pending = runProcess({
       program: 'git',
       timeoutMs: 10,
       terminationBarrier: true,
       onChildTerminated
     })
+
     let settled = false
     void pending.then(() => {
       settled = true
@@ -136,6 +141,7 @@ describe('runProcess termination failure', () => {
     const controller = new AbortController()
     const child = mockChild()
     spawnMock.mockReturnValue(child)
+
     const pending = runProcess({
       program: 'git',
       timeoutMs: 60_000,
@@ -173,6 +179,7 @@ describe('runProcess termination failure', () => {
   it('kills the root when an object barrier cannot verify tree termination', async () => {
     const child = mockChild()
     spawnMock.mockReturnValue(child)
+
     const pending = runProcess({
       program: 'wsl.exe',
       timeoutMs: 10,
@@ -181,6 +188,7 @@ describe('runProcess termination failure', () => {
         force: vi.fn().mockResolvedValue(false)
       }
     })
+
     void pending.catch(() => {})
 
     await vi.advanceTimersByTimeAsync(2_010)

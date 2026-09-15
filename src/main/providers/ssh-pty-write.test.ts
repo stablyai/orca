@@ -17,6 +17,7 @@ describe('SSH PTY writes', () => {
       notify: vi.fn(),
       onNotification: vi.fn()
     }
+
     const provider = new SshPtyProvider('conn-1', mux as never)
 
     expect(provider.write('ssh:conn-1@@pty-1', 'pointer')).toBe(false)
@@ -25,6 +26,7 @@ describe('SSH PTY writes', () => {
 
   it('reports a failed transport settlement instead of enqueue acceptance', async () => {
     let settle: ((result: MultiplexerWriteSettlement) => void) | undefined
+
     const mux = {
       isDisposed: vi.fn().mockReturnValue(false),
       notify: vi.fn(),
@@ -33,6 +35,7 @@ describe('SSH PTY writes', () => {
       }),
       onNotification: vi.fn()
     }
+
     const provider = new SshPtyProvider('conn-1', mux as never)
 
     const pending = provider.writeWithSettlement('ssh:conn-1@@pty-1', 'pointer')
@@ -59,6 +62,7 @@ describe('SSH PTY writes', () => {
       notify: vi.fn(),
       onNotification: vi.fn()
     }
+
     const provider = new SshPtyProvider('conn-1', mux as never)
 
     expect(
@@ -73,6 +77,7 @@ describe('SSH PTY writes', () => {
       notifyWithSettlement: vi.fn(),
       onNotification: vi.fn()
     }
+
     const provider = new SshPtyProvider('conn-1', mux as never)
 
     await expect(
@@ -91,6 +96,7 @@ describe('SSH PTY writes', () => {
       onNotification: vi.fn(),
       dispose: vi.fn()
     }
+
     const provider = new SshPtyProvider('conn-1', mux as never)
 
     await expect(provider.writeWithSettlement('ssh:conn-1@@pty-1', 'pointer')).resolves.toEqual({
@@ -103,6 +109,7 @@ describe('SSH PTY writes', () => {
 
   it('reports a lost settlement as unverifiable, never as a proven refusal', async () => {
     vi.useFakeTimers()
+
     const mux = {
       isDisposed: vi.fn().mockReturnValue(false),
       notify: vi.fn(),
@@ -110,6 +117,7 @@ describe('SSH PTY writes', () => {
       onNotification: vi.fn(),
       dispose: vi.fn()
     }
+
     const provider = new SshPtyProvider('conn-1', mux as never)
     const pending = provider.writeWithSettlement('ssh:conn-1@@pty-1', 'pointer')
 
@@ -118,6 +126,7 @@ describe('SSH PTY writes', () => {
       reason: 'settlement_timeout',
       bytesHandedToTransport: true
     })
+
     await vi.advanceTimersByTimeAsync(SSH_PTY_WRITE_SETTLEMENT_TIMEOUT_MS - 1)
     expect(mux.dispose).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
@@ -129,6 +138,7 @@ describe('SSH PTY writes', () => {
   it('accepts a healthy settlement after the mux health window', async () => {
     vi.useFakeTimers()
     let settle: ((result: MultiplexerWriteSettlement) => void) | undefined
+
     const mux = {
       isDisposed: vi.fn().mockReturnValue(false),
       notify: vi.fn(),
@@ -144,6 +154,7 @@ describe('SSH PTY writes', () => {
       onNotification: vi.fn(),
       dispose: vi.fn()
     }
+
     const provider = new SshPtyProvider('conn-1', mux as never)
     const pending = provider.writeWithSettlement('ssh:conn-1@@pty-1', 'pointer')
 

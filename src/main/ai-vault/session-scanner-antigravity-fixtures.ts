@@ -3,6 +3,7 @@ import type { IncrementalAgentFixture } from './session-scanner-incremental-fixt
 export function antigravityFixture(): IncrementalAgentFixture {
   const record = (source: string, type: string, content: string, createdAt: string) =>
     JSON.stringify({ source, type, content, created_at: createdAt })
+
   return {
     agent: 'antigravity',
     fileName: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/.system_generated/logs/transcript.jsonl',

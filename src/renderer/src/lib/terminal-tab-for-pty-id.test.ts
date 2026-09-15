@@ -29,6 +29,7 @@ describe('resolveTerminalTabIdForPtyId', () => {
         ]
       }
     })
+
     expect(resolveTerminalTabIdForPtyId(s, 'wt', 'wt@@2')).toBe('tab-b')
   })
 
@@ -37,6 +38,7 @@ describe('resolveTerminalTabIdForPtyId', () => {
       tabs: { wt: [{ id: 'tab-a', ptyId: null }] },
       layouts: { 'tab-a': { ptyIdsByLeafId: { leaf1: 'wt@@1', leaf2: 'wt@@9' } } }
     })
+
     expect(resolveTerminalTabIdForPtyId(s, 'wt', 'wt@@9')).toBe('tab-a')
   })
 
@@ -45,6 +47,7 @@ describe('resolveTerminalTabIdForPtyId', () => {
       tabs: { wt: [{ id: 'tab-a', ptyId: null }] },
       livePtyIds: { 'tab-a': ['wt@@9'] }
     })
+
     expect(resolveTerminalTabIdForPtyId(s, 'wt', 'wt@@9')).toBe('tab-a')
   })
 
@@ -63,6 +66,7 @@ describe('resolveTerminalTabIdForPtyId', () => {
       },
       layouts: { 'tab-b': { ptyIdsByLeafId: { leaf2: 'wt@@1' } } }
     })
+
     expect(resolveTerminalTabIdForPtyId(s, 'wt', 'wt@@1')).toBeNull()
   })
 
@@ -110,6 +114,7 @@ describe('resolveTerminalTabPtyOwnership', () => {
         ]
       }
     })
+
     expect(
       resolveTerminalTabPtyOwnership(s, 'wt', 'wt@@1', { preferTabId: 'tab-minted-in' })
     ).toEqual({ kind: 'owned', tabId: 'tab-detached-to' })
@@ -125,6 +130,7 @@ describe('resolveTerminalTabPtyOwnership', () => {
       },
       layouts: { 'tab-detached-to': { ptyIdsByLeafId: { leaf1: 'wt@@1' } } }
     })
+
     expect(
       resolveTerminalTabPtyOwnership(s, 'wt', 'wt@@1', { preferTabId: 'tab-minted-in' })
     ).toEqual({ kind: 'owned', tabId: 'tab-detached-to' })
@@ -139,6 +145,7 @@ describe('resolveTerminalTabPtyOwnership', () => {
         ]
       }
     })
+
     expect(resolveTerminalTabPtyOwnership(s, 'wt', 'wt@@1', { preferTabId: 'tab-hinted' })).toEqual(
       { kind: 'owned', tabId: 'tab-hinted' }
     )
@@ -149,6 +156,7 @@ describe('resolveTerminalTabPtyOwnership', () => {
       tabs: { wt: [{ id: 'tab-a', ptyId: null }] },
       layouts: { 'tab-a': { ptyIdsByLeafId: { leaf1: 'wt@@1' } } }
     })
+
     expect(resolveTerminalTabPtyOwnership(s, 'wt', 'wt@@1', { preferTabId: 'tab-gone' })).toEqual({
       kind: 'owned',
       tabId: 'tab-a'
@@ -165,6 +173,7 @@ describe('resolveTerminalTabPtyOwnership', () => {
       },
       layouts: { 'tab-b': { ptyIdsByLeafId: { leaf2: 'wt@@1' } } }
     })
+
     expect(resolveTerminalTabPtyOwnership(s, 'wt', 'wt@@1')).toEqual({ kind: 'ambiguous' })
   })
 
@@ -178,6 +187,7 @@ describe('resolveTerminalTabPtyOwnership', () => {
       },
       layouts: { 'tab-b': { ptyIdsByLeafId: { leaf2: 'wt@@1' } } }
     })
+
     expect(resolveTerminalTabPtyOwnership(s, 'wt', 'wt@@1', { preferTabId: 'tab-b' })).toEqual({
       kind: 'owned',
       tabId: 'tab-b'
@@ -194,6 +204,7 @@ describe('resolveTerminalTabPtyOwnership', () => {
       },
       livePtyIds: { 'tab-a': ['wt@@1'], 'tab-b': ['wt@@1'] }
     })
+
     expect(resolveTerminalTabPtyOwnership(s, 'wt', 'wt@@1')).toEqual({ kind: 'ambiguous' })
     expect(resolveTerminalTabPtyOwnership(s, 'wt', 'wt@@1', { preferTabId: 'tab-b' })).toEqual({
       kind: 'owned',

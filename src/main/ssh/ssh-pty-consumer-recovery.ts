@@ -32,11 +32,15 @@ export function claimSshPtyConsumerRecovery(
   store: Store
 ): SshPtyConsumerRecoveryState {
   const current = recoveryByTarget.get(targetId)
+
   if (current?.detached) {
     current.detached = false
+
     return current
   }
+
   const persisted = current ? null : store.getSshPtyConsumerRecovery(targetId)
+
   if (!persisted) {
     // Deliberately not stabilized: this id is also the consumer session's ownership identity, and
     // reusing it without the generations the same dropped record carried would replay a stale
@@ -46,6 +50,7 @@ export function claimSshPtyConsumerRecovery(
       `[ssh-pty-consumer] no recovery record for ${targetId}; minting a new consumer identity. Relay PTYs the host attributes to this client's previous identity can no longer be swept.`
     )
   }
+
   const created: SshPtyConsumerRecoveryState = {
     clientInstanceId: persisted?.clientInstanceId ?? randomUUID(),
     detached: false,
@@ -55,7 +60,9 @@ export function claimSshPtyConsumerRecovery(
     checkpointsByAppPtyId: new Map(),
     modelMigrationsByAppPtyId: new Map()
   }
+
   recoveryByTarget.set(targetId, created)
+
   return created
 }
 
@@ -75,9 +82,11 @@ export async function rememberSshPtyConsumerRecovery(args: {
   store: Store
 }): Promise<void> {
   const current = recoveryByTarget.get(args.targetId)
+
   if (current?.clientInstanceId !== args.clientInstanceId || current.detached) {
     return
   }
+
   current.serverBuildId = args.serverBuildId
   current.owner = args.owner
   await args.store.upsertSshPtyConsumerRecovery({
@@ -97,6 +106,7 @@ export async function removeSshPtyConsumerOwnerRecovery(
   store: Store
 ): Promise<void> {
   const persisted = store.getSshPtyConsumerRecovery(targetId)
+
   if (persisted?.clientInstanceId === clientInstanceId) {
     await store.removeSshPtyConsumerRecovery(targetId)
   }
@@ -104,6 +114,7 @@ export async function removeSshPtyConsumerOwnerRecovery(
 
 export function detachSshPtyConsumerRecovery(targetId: string, clientInstanceId: string): void {
   const current = recoveryByTarget.get(targetId)
+
   if (current?.clientInstanceId === clientInstanceId) {
     current.detached = true
   }
@@ -115,8 +126,10 @@ export async function forgetSshPtyConsumerRecovery(
   store: Store
 ): Promise<void> {
   const current = recoveryByTarget.get(targetId)
+
   if (current?.clientInstanceId === clientInstanceId) {
     recoveryByTarget.delete(targetId)
   }
+
   await removeSshPtyConsumerOwnerRecovery(targetId, clientInstanceId, store)
 }

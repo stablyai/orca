@@ -36,6 +36,7 @@ export function sortWorkspaceCleanupFacets(
   sort: WorkspaceCleanupSortState
 ): WorkspaceCleanupFacets[] {
   const multiplier = sort.direction === 'asc' ? 1 : -1
+
   return facets.toSorted(
     (left, right) =>
       comparePrimary(left, right, sort.field, multiplier) || compareTieBreaks(left, right)
@@ -49,6 +50,7 @@ export function compareWorkspaceCleanupFacets(
   direction: WorkspaceCleanupSortDirectionState
 ): number {
   const multiplier = direction === 'asc' ? 1 : -1
+
   return comparePrimary(left, right, field, multiplier) || compareTieBreaks(left, right)
 }
 
@@ -59,9 +61,11 @@ function comparePrimary(
   multiplier: number
 ): number {
   const absence = compareAbsence(left, right, field)
+
   if (absence !== 0) {
     return absence
   }
+
   return compareNatural(left, right, field) * multiplier
 }
 
@@ -74,11 +78,14 @@ function compareAbsence(
   if (!ABSENT_LAST_FIELDS.has(field)) {
     return 0
   }
+
   const leftAbsent = isAbsent(left, field)
   const rightAbsent = isAbsent(right, field)
+
   if (leftAbsent === rightAbsent) {
     return 0
   }
+
   return leftAbsent ? 1 : -1
 }
 
@@ -86,27 +93,35 @@ function isAbsent(facets: WorkspaceCleanupFacets, field: WorkspaceCleanupSortFie
   if (field === 'size') {
     return facets.sizeBytes === null
   }
+
   if (field === 'last-visited') {
     return facets.lastVisitedAt === null
   }
+
   if (field === 'created') {
     return facets.createdAt === null
   }
+
   if (field === 'ahead') {
     return facets.upstreamAhead === null
   }
+
   if (field === 'behind') {
     return facets.upstreamBehind === null
   }
+
   if (field === 'workspace-status') {
     return facets.workspaceStatus === null
   }
+
   if (field === 'review') {
     return !facets.review.hasReview
   }
+
   if (field === 'ticket') {
     return facets.ticketSources.length === 0
   }
+
   return false
 }
 
@@ -180,8 +195,10 @@ function compareTieBreaks(left: WorkspaceCleanupFacets, right: WorkspaceCleanupF
 
 function getMaxBlockerSeverity(facets: WorkspaceCleanupFacets): number {
   let max = 0
+
   for (const blocker of facets.blockers) {
     max = Math.max(max, getWorkspaceCleanupBlockerSeverity(blocker))
   }
+
   return max
 }

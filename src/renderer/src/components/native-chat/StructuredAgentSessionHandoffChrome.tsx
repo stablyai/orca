@@ -26,11 +26,13 @@ function handoffStageCopy(status: AgentSessionHandoffStatus): string {
           'Finishing agent terminal…'
         )
   }
+
   if (status.stage === 'old-owner-stopped') {
     return status.direction === 'to-tui'
       ? translate('components.native-chat.handoff.stage.openingTerminal', 'Opening agent terminal…')
       : translate('components.native-chat.handoff.stage.resumingChat', 'Resuming chat session…')
   }
+
   if (status.stage === 'new-owner-proving') {
     return status.direction === 'to-tui'
       ? translate(
@@ -39,15 +41,18 @@ function handoffStageCopy(status: AgentSessionHandoffStatus): string {
         )
       : translate('components.native-chat.handoff.stage.verifyingChat', 'Verifying chat session…')
   }
+
   if (status.stage === 'recovering') {
     return translate('components.native-chat.handoff.stage.recovering', 'Recovering agent session…')
   }
+
   if (status.stage === 'manual-recovery') {
     return translate(
       'components.native-chat.handoff.stage.manualRecovery',
       'Agent session needs recovery'
     )
   }
+
   return translate('components.native-chat.handoff.switchingOwner', 'Switching session owner…')
 }
 
@@ -59,9 +64,11 @@ export function StructuredAgentSessionHandoffChrome({
   if (!status) {
     return null
   }
+
   const owner = status?.owner ?? 'native'
   const phase = status?.phase ?? 'idle'
   const switching = phase === 'switching' || phase === 'waiting-for-exit'
+
   return (
     <>
       <div className="flex min-h-9 items-center gap-2 border-b border-border px-3 py-1.5">

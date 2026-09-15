@@ -26,6 +26,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 }))
 
 const prRepo = { host: 'github.com', owner: 'stablyai', repo: 'orca-sta1015-sandbox' }
+
 const review: HostedReviewActionInfo = {
   provider: 'github',
   number: 1015,
@@ -33,9 +34,11 @@ const review: HostedReviewActionInfo = {
   status: 'success',
   mergeable: 'MERGEABLE'
 }
+
 const githubPR = { prRepo } as unknown as PRInfo
 
 let root: Root | null = null
+
 let latest: ReturnType<typeof useHostedReviewActions> | null = null
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -66,6 +69,7 @@ function HookProbe(props: {
     autoMergeAction: null,
     onRefreshReview: props.onRefreshReview
   })
+
   return null
 }
 
@@ -81,6 +85,7 @@ async function renderHook(
   await act(async () => {
     root?.render(createElement(HookProbe, { repo, onRefreshReview, pullRequest, isGitLab }))
   })
+
   return { onRefreshReview }
 }
 
@@ -112,6 +117,7 @@ describe('useHostedReviewActions', () => {
       act(() => root?.unmount())
       root = null
     }
+
     document.body.replaceChildren()
   })
 
@@ -274,6 +280,7 @@ describe('useHostedReviewActions', () => {
         ]
       }
     } as PRInfo
+
     await renderHook(makeRepo(), undefined, stackedPR)
 
     await act(async () => {
@@ -320,6 +327,7 @@ describe('useHostedReviewActions', () => {
         ]
       }
     } as PRInfo
+
     await renderHook(makeRepo(), undefined, stackedPR)
 
     await act(async () => {

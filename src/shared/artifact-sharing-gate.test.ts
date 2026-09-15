@@ -23,6 +23,7 @@ describe('artifact sharing capability gate', () => {
 
   it('throws a coded, actionable error when the capability is withheld', () => {
     expect(() => assertArtifactSharingAllowed(() => false)).toThrow(ArtifactSharingDisabledError)
+
     try {
       assertArtifactSharingAllowed(() => false)
       expect.unreachable('gate must throw')
@@ -32,6 +33,7 @@ describe('artifact sharing capability gate', () => {
         data: { nextSteps: expect.arrayContaining([expect.stringContaining('Settings')]) }
       })
     }
+
     expect(() => assertArtifactSharingAllowed(() => true)).not.toThrow()
   })
 })

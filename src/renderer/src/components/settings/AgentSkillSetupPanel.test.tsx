@@ -8,6 +8,7 @@ import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { TooltipProvider } from '../ui/tooltip'
 
 const INSTALL_COMMAND = 'npx skills add https://github.com/stablyai/orca --skill orca-cli --global'
+
 const UPDATE_COMMAND = 'npx skills update orca-cli --global'
 
 const mocks = vi.hoisted(() => ({
@@ -55,9 +56,12 @@ vi.mock('../onboarding/OnboardingInlineCommandTerminal', () => ({
   }) => {
     const [instance] = useState(() => {
       mocks.terminalInstanceCount += 1
+
       return mocks.terminalInstanceCount
     })
+
     mocks.terminalProps.push(props)
+
     return (
       <div
         data-testid="inline-command-terminal"
@@ -115,6 +119,7 @@ function buttonMarkupByLabel(html: string, label: string): string | undefined {
 }
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 async function renderInteractivePanel(
@@ -124,6 +129,7 @@ async function renderInteractivePanel(
   document.body.appendChild(container)
   root = createRoot(container)
   await rerenderInteractivePanel(overrides)
+
   return container
 }
 
@@ -144,7 +150,9 @@ function findButton(label: string): HTMLButtonElement {
   const button = Array.from((container ?? document.body).querySelectorAll('button')).find(
     (candidate) => candidate.textContent?.trim() === label
   )
+
   expect(button).toBeDefined()
+
   return button as HTMLButtonElement
 }
 
@@ -189,6 +197,7 @@ describe('AgentSkillSetupPanel', () => {
         root?.unmount()
       })
     }
+
     root = null
     container?.remove()
     container = null
@@ -285,9 +294,11 @@ describe('AgentSkillSetupPanel', () => {
 
   it('notifies sibling surfaces only after re-check finishes', async () => {
     let finishRecheck: (() => void) | null = null
+
     const recheck = new Promise<void>((resolve) => {
       finishRecheck = resolve
     })
+
     await renderInteractivePanel({ onRecheck: () => recheck })
 
     await clickButton('Re-check')
@@ -321,9 +332,11 @@ describe('AgentSkillSetupPanel', () => {
 
   it('refreshes first-install freshness only after the terminal re-check finishes', async () => {
     let finishRecheck: (() => void) | null = null
+
     const recheck = new Promise<void>((resolve) => {
       finishRecheck = resolve
     })
+
     const onRecheck = vi.fn(() => recheck)
     await renderInteractivePanel({ freshnessSkillName: 'orca-cli', onRecheck })
     await clickButton('Install')
@@ -390,6 +403,7 @@ describe('AgentSkillSetupPanel', () => {
 
   it('shows a visible pending state while CLI setup preflight is running', async () => {
     let resolvePreflight: (() => void) | null = null
+
     const preflight = new Promise<void>((resolve) => {
       resolvePreflight = resolve
     })
@@ -508,6 +522,7 @@ describe('AgentSkillSetupPanel', () => {
     const retryCommand = mocks.terminalProps
       .at(-1)
       ?.prepareCommandForShell?.(INSTALL_COMMAND, 'powershell.exe')
+
     expect(retryCommand).toMatch(/^cmd\.exe \/d \/s \/c /)
     expect(retryCommand).not.toContain('wsl.exe')
   })
@@ -576,17 +591,21 @@ describe('AgentSkillSetupPanel', () => {
 
   it('retries a failed command in a fresh interactive terminal', async () => {
     let finishRetryPreflight: (() => void) | null = null
+
     const retryPreflight = new Promise<void>((resolve) => {
       finishRetryPreflight = resolve
     })
+
     let preflightCount = 0
     await renderInteractivePanel({
       onBeforeOpenTerminal: () => {
         preflightCount += 1
+
         return preflightCount === 1 ? undefined : retryPreflight
       }
     })
     await clickButton('Install')
+
     const firstInstance = container
       ?.querySelector('[data-testid="inline-command-terminal"]')
       ?.getAttribute('data-instance')
@@ -654,9 +673,11 @@ describe('AgentSkillSetupPanel', () => {
     mocks.freshnessRefresh.mockImplementation(async () => {
       calls.push('freshness')
     })
+
     const onRecheck = vi.fn(() => {
       calls.push('recheck')
     })
+
     await renderInteractivePanel({ freshnessSkillName: 'orca-cli', onRecheck })
     await clickButton('Install')
     calls.length = 0

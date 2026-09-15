@@ -47,6 +47,7 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
     ])
+
     const repo = {
       ...store.getRepos()[0],
       externalWorktreeVisibility: 'hide' as const,
@@ -55,6 +56,7 @@ describe('OrcaRuntimeService', () => {
         builtIn: { claude: 'show' as const, gsd: 'hide' as const }
       }
     }
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getRepos: () => [repo],
@@ -95,11 +97,13 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
     ])
+
     const repo = {
       ...store.getRepos()[0],
       externalWorktreeVisibility: 'hide' as const,
       externalWorktreeVisibilityLegacy: false
     }
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getRepos: () => [repo],
@@ -115,6 +119,7 @@ describe('OrcaRuntimeService', () => {
     } as never)
 
     const summaries = await runtime.getWorktreePs()
+
     const target = await (
       runtime as unknown as {
         resolveKnownWorkspaceFileTarget: (
@@ -135,6 +140,7 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     runtime.registerPty('persisted-pty', TEST_WORKTREE_ID)
@@ -151,6 +157,7 @@ describe('OrcaRuntimeService', () => {
 
   it('attributes live legacy PTYs from saved layout bindings when their panes are hidden', async () => {
     const session = makeWorkspaceSessionWithHeadlessTerminal()
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...session,
       tabsByWorktree: {
@@ -160,6 +167,7 @@ describe('OrcaRuntimeService', () => {
         }))
       }
     })
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({
       write: vi.fn(() => true),
@@ -183,6 +191,7 @@ describe('OrcaRuntimeService', () => {
     const priorWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-before-rename`
     const migratedPtyId = `${priorWorktreeId}@@daemon-controller-pty`
     const session = makeWorkspaceSessionWithHeadlessTerminal()
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...session,
       tabsByWorktree: {
@@ -195,6 +204,7 @@ describe('OrcaRuntimeService', () => {
         'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: migratedPtyId })
       }
     })
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({
       write: vi.fn(() => true),
@@ -217,6 +227,7 @@ describe('OrcaRuntimeService', () => {
     const session = makeWorkspaceSessionWithHeadlessTerminal({
       activeWorktreeIdsOnShutdown: [TEST_WORKTREE_ID]
     })
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({
@@ -241,23 +252,27 @@ describe('OrcaRuntimeService', () => {
     const session = makeWorkspaceSessionWithHeadlessTerminal()
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
+
     const processLists = [
       [{ id: 'persisted-pty', cwd: TEST_WORKTREE_PATH, title: 'Shell' }],
       [],
       [],
       []
     ]
+
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
       stopAndWait: async (ptyId) => {
         runtime.onPtyExit(ptyId, -1)
+
         return true
       },
       getForegroundProcess: async () => null,
       listProcesses: async () => processLists.shift() ?? []
     })
     runtime.attachWindow(1)
+
     const publishStaleGraph = (): void => {
       runtime.syncWindowGraph(1, {
         tabs: [
@@ -280,6 +295,7 @@ describe('OrcaRuntimeService', () => {
         ]
       })
     }
+
     publishStaleGraph()
 
     await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
@@ -321,6 +337,7 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const { worktrees } = await runtime.getWorktreePs()
@@ -344,6 +361,7 @@ describe('OrcaRuntimeService', () => {
         issue: {}
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const { worktrees } = await runtime.getWorktreePs()
@@ -356,12 +374,15 @@ describe('OrcaRuntimeService', () => {
       name: 'GG',
       comment: 'dujiao-next-eval'
     })
+
     const projectGroup = makeFolderProjectGroup({ name: 'Store' })
+
     const runtime = new OrcaRuntimeService(
       createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
     )
 
     const { worktrees } = await runtime.getWorktreePs()
+
     const folderSummary = worktrees.find(
       (worktree) => worktree.worktreeId === TEST_FOLDER_WORKSPACE_KEY
     )
@@ -439,6 +460,7 @@ describe('OrcaRuntimeService', () => {
     const leafId = '33333333-3333-4333-8333-333333333333'
     const paneKey = `tab-1:${leafId}`
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -455,6 +477,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     const workerHandle = runtime.preAllocateHandleForPty('pty-1')
     runtime.setOrchestrationDb({
       getActiveDispatchForTerminal: vi.fn((handle: string) =>
@@ -520,6 +543,7 @@ describe('OrcaRuntimeService', () => {
     const now = Date.now()
     const folderWorkspace = makeFolderWorkspace({ name: 'GG' })
     const projectGroup = makeFolderProjectGroup({ name: 'Store' })
+
     const runtime = new OrcaRuntimeService(
       createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never,
       undefined,
@@ -551,6 +575,7 @@ describe('OrcaRuntimeService', () => {
   })
   it('projects monitoring over a title-derived working status', async () => {
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -567,6 +592,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     syncSinglePty(runtime, 'pty-1', { paneTitle: 'claude working' })
 
     const { worktrees } = await runtime.getWorktreePs()
@@ -576,6 +602,7 @@ describe('OrcaRuntimeService', () => {
   })
   it('keeps hook monitoring mode when a newer mode-less OSC row reports the same work', async () => {
     const now = Date.now()
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getAgentStatusSnapshot: () => [
         {
@@ -592,6 +619,7 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     syncSinglePty(runtime)
     runtime.onPtyData(
       'pty-1',

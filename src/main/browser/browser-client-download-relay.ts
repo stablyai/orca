@@ -13,6 +13,7 @@ import type { BrowserClientHostedPageInventory } from '../../shared/browser-clie
 import type { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
 
 export const BROWSER_CLIENT_FILE_CHANNEL_WRITE_METHOD = 'browser.clientHost.fileChannel.write'
+
 export const BROWSER_CLIENT_FILE_CHANNEL_ABORT_METHOD = 'browser.clientHost.fileChannel.abort'
 
 export type BrowserClientDownloadDestination = {
@@ -58,13 +59,17 @@ const nodeRelayFilesystem: RelayFilesystem = {
   },
   readChunks: async function* (filePath, chunkBytes) {
     const handle = await open(filePath, 'r')
+
     try {
       const buffer = Buffer.alloc(chunkBytes)
+
       for (;;) {
         const { bytesRead } = await handle.read(buffer, 0, chunkBytes, null)
+
         if (bytesRead === 0) {
           return
         }
+
         yield Buffer.from(buffer.subarray(0, bytesRead))
       }
     } finally {
@@ -96,6 +101,7 @@ export class BrowserClientDownloadRelay {
     }
   ) {
     this.filesystem = options.filesystem ?? nodeRelayFilesystem
+
     try {
       // Why: an abnormal exit leaves staged bytes behind, and nothing else ever revisits this root.
       this.filesystem.removeDirectorySync(options.stagingRoot)
@@ -111,14 +117,19 @@ export class BrowserClientDownloadRelay {
    */
   route(input: { guestWebContentsId: number }): BrowserClientDownloadRouteOutcome {
     const page = this.options.resolvePage(input.guestWebContentsId)
+
     if (!page) {
       return { kind: 'unowned' }
     }
+
     const availability = this.options.transport.availability
+
     if (availability !== 'negotiated') {
       return availability === 'unsupported' ? { kind: 'local-fallback' } : { kind: 'unavailable' }
     }
+
     const transferId = randomUUID()
+
     const transfer: StagedTransfer = {
       transferId,
       directory: path.join(this.options.stagingRoot, transferId),
@@ -126,11 +137,13 @@ export class BrowserClientDownloadRelay {
       canceled: false,
       aborting: null
     }
+
     try {
       this.filesystem.mkdirSync(transfer.directory)
     } catch {
       return { kind: 'unavailable' }
     }
+
     return {
       kind: 'remote',
       route: {
@@ -149,15 +162,19 @@ export class BrowserClientDownloadRelay {
     filename: string
   ): Promise<BrowserClientDownloadDestination> {
     const { transferId, stagingPath } = transfer
+
     try {
       assertNotCanceled(transfer)
+
       if (
         (await this.filesystem.size(stagingPath)) > BROWSER_CLIENT_FILE_CHANNEL_TRANSFER_MAX_BYTES
       ) {
         throw new Error('browser_client_download_too_large')
       }
+
       const authority = fileChannelAuthority(page)
       let offset = 0
+
       for await (const chunk of this.filesystem.readChunks(
         stagingPath,
         BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES
@@ -174,7 +191,9 @@ export class BrowserClientDownloadRelay {
         })
         offset += chunk.byteLength
       }
+
       assertNotCanceled(transfer)
+
       // Why: an empty download still needs one final chunk so the remote commits a zero-byte file.
       const workspaceRelativePath = await this.write(authority, {
         transferId,
@@ -183,9 +202,11 @@ export class BrowserClientDownloadRelay {
         offset,
         final: true
       })
+
       if (!workspaceRelativePath) {
         throw new Error('browser_client_download_destination_missing')
       }
+
       return { workspaceRelativePath, hostLabel: this.options.hostLabel }
     } catch (error) {
       await this.abort(page, transfer)
@@ -211,15 +232,19 @@ export class BrowserClientDownloadRelay {
         ...chunk
       })
     )
+
     if (!parsed.success) {
       throw new Error('browser_client_download_chunk_rejected')
     }
+
     if (!chunk.final) {
       return null
     }
+
     if (!parsed.data.workspaceRelativePath) {
       throw new Error('browser_client_download_destination_missing')
     }
+
     return parsed.data.workspaceRelativePath
   }
 
@@ -227,6 +252,7 @@ export class BrowserClientDownloadRelay {
     transfer.canceled = true
     // Why: a cancel and the streaming loop's own failure handler both abort the same transfer.
     transfer.aborting ??= this.dispatchAbort(page, transfer)
+
     return transfer.aborting
   }
 
@@ -235,9 +261,11 @@ export class BrowserClientDownloadRelay {
     transfer: StagedTransfer
   ): Promise<void> {
     await this.filesystem.removeDirectory(transfer.directory).catch(() => undefined)
+
     if (!this.options.transport.available) {
       return
     }
+
     await this.options.transport
       .request(BROWSER_CLIENT_FILE_CHANNEL_ABORT_METHOD, {
         ...fileChannelAuthority(page),

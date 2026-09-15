@@ -56,6 +56,7 @@ describe('waitForReplacementRuntime', () => {
           getUpdaterStatus: async () => idleSnapshot,
           getRuntimeStatus: async () => {
             ticks += 1
+
             return ticks > 1 ? runtime('1.5.0', 'runtime-new') : runtime('1.4.0', 'runtime-old')
           }
         },
@@ -109,10 +110,12 @@ describe('waitForReplacementRuntime', () => {
           // Both RPCs burn everything they are handed, so a stale budget doubles the tick.
           getUpdaterStatus: async (_environmentId, timeoutMs) => {
             clock += timeoutMs ?? 0
+
             return idleSnapshot
           },
           getRuntimeStatus: async (_environmentId, timeoutMs) => {
             clock += timeoutMs ?? 0
+
             return runtime('1.4.0', 'runtime-old')
           }
         },
@@ -139,6 +142,7 @@ describe('waitForReplacementRuntime', () => {
           getUpdaterStatus,
           getRuntimeStatus: async () => {
             clock += 2_000
+
             return runtime('1.4.0', 'runtime-old')
           }
         },

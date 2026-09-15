@@ -55,6 +55,7 @@ describe('useCodexResetCreditCapability', () => {
     probe.start.mockImplementation(
       (_client: RpcClient, onCapabilities: (capabilities: readonly string[]) => void) => {
         publish = onCapabilities
+
         return cancel
       }
     )
@@ -63,6 +64,7 @@ describe('useCodexResetCreditCapability', () => {
 
     function Harness() {
       const supported = useCodexResetCreditCapability(client, true)
+
       return createElement('CapabilityResult', { supported })
     }
 

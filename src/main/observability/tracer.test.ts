@@ -19,6 +19,7 @@ type CapturedSink = TracerSink & {
 
 function makeCapturingSink(): CapturedSink {
   const records: unknown[] = []
+
   return {
     records,
     push(r) {
@@ -39,6 +40,7 @@ beforeEach(() => {
   sink = makeCapturingSink()
   setActiveSink(sink)
 })
+
 afterEach(() => {
   _resetTracerForTests()
 })
@@ -118,9 +120,11 @@ describe('tracer — attributes and events', () => {
     const span = startSpan('test')
     span.addEvent('log', { 'log.message': `sk-ant-${'a'.repeat(50)}` })
     span.end()
+
     const r = sink.records[0] as {
       events: { name: string; attributes: Record<string, string> }[]
     }
+
     expect(r.events).toHaveLength(1)
     expect(r.events[0].name).toBe('log')
     expect(r.events[0].attributes['log.message']).toContain('[redacted:anthropic-key]')
@@ -150,11 +154,13 @@ describe('tracer — context propagation via AsyncLocalStorage', () => {
 
     // Two records: inner first (it ended first), then outer.
     expect(sink.records).toHaveLength(2)
+
     const inner = sink.records[0] as {
       name: string
       traceId: string
       parentSpanId?: string
     }
+
     const outer = sink.records[1] as { name: string; traceId: string; spanId: string }
     expect(inner.name).toBe('inner')
     expect(outer.name).toBe('outer')

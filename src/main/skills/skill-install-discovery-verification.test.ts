@@ -70,6 +70,7 @@ describe('WSL install discovery verification', () => {
     discoverSkillsInWslMock.mockResolvedValue(
       discovery(['/home/alice/.agents/skills', '/home/alice/.claude/skills'])
     )
+
     const result = await verifySkillInstallDiscovery({
       result: installResult([
         '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.agents\\skills\\review',
@@ -91,6 +92,7 @@ describe('WSL install discovery verification', () => {
 
   it('normalizes Windows-backed workspace paths to drvfs paths', async () => {
     discoverSkillsInWslMock.mockResolvedValue(discovery(['/mnt/c/work/repo/.agents/skills']))
+
     const result = await verifySkillInstallDiscovery({
       result: installResult(['C:\\work\\repo\\.agents\\skills\\review']),
       scope: 'workspace',
@@ -112,6 +114,7 @@ describe('WSL install discovery verification', () => {
     discoverSkillsInWslMock.mockResolvedValue(
       discovery(['/home/alice/.agents/skills', managedRoot])
     )
+
     const result = await verifySkillInstallDiscovery({
       result: installResult([
         '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.agents\\skills\\review',
@@ -139,6 +142,7 @@ describe('WSL install discovery verification', () => {
     discoverSkillsInWslMock.mockResolvedValue(
       discovery(['/home/alice/.agents/skills'], ['/home/alice/.agents/skills'])
     )
+
     const result = await verifySkillInstallDiscovery({
       result: installResult(['\\\\wsl.localhost\\Ubuntu\\home\\alice\\.agents\\skills\\review']),
       scope: 'global',
@@ -161,6 +165,7 @@ describe('WSL install discovery verification', () => {
         ['/home/alice/.agents/skills']
       )
     )
+
     const result = await verifySkillInstallDiscovery({
       result: installResult(['\\\\wsl.localhost\\Ubuntu\\home\\alice\\.claude\\skills\\review']),
       scope: 'global',

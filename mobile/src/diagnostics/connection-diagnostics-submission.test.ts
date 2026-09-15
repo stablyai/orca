@@ -9,12 +9,14 @@ describe('submitConnectionDiagnostics', () => {
     const encode = vi.spyOn(TextEncoder.prototype, 'encode')
     let output: string
     let calls: number
+
     try {
       output = boundConnectionDiagnosticsReport('x'.repeat(100_000))
       calls = encode.mock.calls.length
     } finally {
       encode.mockRestore()
     }
+
     expect(output).toBe('x'.repeat(64 * 1024))
     expect(calls).toBeLessThanOrEqual(1)
   })
@@ -37,6 +39,7 @@ describe('submitConnectionDiagnostics', () => {
 
   it('sends a bounded report through the diagnostics lane', async () => {
     const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }))
+
     const result = await submitConnectionDiagnostics(
       { report: 'x'.repeat(100_000), appVersion: '0.0.47', platform: 'android 36' },
       fetchImpl

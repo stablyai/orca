@@ -35,36 +35,47 @@ export function installPreviewTerminalAppMenuClipboard({
 }): () => void {
   const onAppMenuPaste = (event: Event): void => {
     const active = document.activeElement
+
     if (!active || !container.contains(active)) {
       return
     }
+
     event.preventDefault()
     event.stopPropagation()
     pasteClipboardText(active, 'app-menu')
   }
+
   const onAppMenuSelectionAction = (event: Event): void => {
     const active = document.activeElement
     const terminal = getTerminal()
+
     if (!active || !container.contains(active) || isEditableTarget(active) || !terminal) {
       return
     }
+
     const action = (event as CustomEvent<AppMenuSelectionAction>).detail
+
     if (action === 'select-all') {
       event.preventDefault()
       terminal.selectAll()
+
       return
     }
+
     if (!terminal.getSelection()) {
       return
     }
+
     event.preventDefault()
     void copyTerminalSelection({
       terminal,
       writeClipboardText: window.api.ui.writeTerminalClipboardText
     }).catch(() => undefined)
   }
+
   window.addEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
   window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
+
   return () => {
     window.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
     window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)

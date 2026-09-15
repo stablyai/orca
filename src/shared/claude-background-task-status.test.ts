@@ -16,7 +16,9 @@ import { readClaudeBackgroundAgentTasks } from './claude-background-task-invento
 import { makePaneKey } from './stable-pane-id'
 
 const SOURCE_PANE = makePaneKey('tab-source', '11111111-1111-4111-8111-111111111111')
+
 const TARGET_PANE = makePaneKey('tab-target', '22222222-2222-4222-8222-222222222222')
+
 const RUNNING_SHELL = {
   id: 'b8rs2wmxg',
   type: 'shell',
@@ -36,6 +38,7 @@ describe('Claude background task status', () => {
       type: 'subagent',
       status: 'running'
     }))
+
     const result = readClaudeBackgroundAgentTasks({
       background_tasks: [...agentTasks, { id: 'monitor-1', type: 'monitor', status: 'pending' }]
     })
@@ -60,11 +63,13 @@ describe('Claude background task status', () => {
         }).hasRunningNonAgentTask
       ).toBe(true)
     }
+
     expect(
       readClaudeBackgroundAgentTasks({
         background_tasks: [{ id: 'task-1', type: 'background_shell', status: 'starting' }]
       }).hasRunningNonAgentTask
     ).toBe(true)
+
     for (const task of [
       { id: 'task-1', status: 'running' },
       { id: 'task-1', type: 42, status: 'running' },
@@ -75,6 +80,7 @@ describe('Claude background task status', () => {
         hasRunningNonAgentTask: true
       })
     }
+
     expect(
       readClaudeBackgroundAgentTasks({ background_tasks: [null, 'shell'] }).hasRunningNonAgentTask
     ).toBe(true)
@@ -160,6 +166,7 @@ describe('Claude background task status', () => {
       hook_event_name: 'UserPromptSubmit',
       prompt: 'start the dev server'
     })
+
     const monitoring = claudeEvent(state, SOURCE_PANE, {
       hook_event_name: 'Stop',
       background_tasks: [RUNNING_SHELL]
@@ -174,6 +181,7 @@ describe('Claude background task status', () => {
 
     claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'delegate' })
     claudeEvent(state, SOURCE_PANE, { hook_event_name: 'SubagentStart', agent_id: 'child-1' })
+
     const childWorking = claudeEvent(state, SOURCE_PANE, {
       hook_event_name: 'Stop',
       background_tasks: [{ id: 'child-1', type: 'subagent', status: 'running' }]
@@ -189,6 +197,7 @@ describe('Claude background task status', () => {
     const state = createHookListenerState()
 
     claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'work' })
+
     const midTurn = claudeEvent(state, SOURCE_PANE, {
       hook_event_name: 'PreToolUse',
       tool_name: 'Bash'
@@ -203,6 +212,7 @@ describe('Claude background task status', () => {
 
     claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'start it' })
     markClaudeLeadTurnInterrupted(state, SOURCE_PANE)
+
     const interrupted = claudeEvent(state, SOURCE_PANE, {
       hook_event_name: 'Stop',
       background_tasks: [RUNNING_SHELL]
@@ -217,6 +227,7 @@ describe('Claude background task status', () => {
     const state = createHookListenerState()
 
     claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'quick job' })
+
     const finished = claudeEvent(state, SOURCE_PANE, {
       hook_event_name: 'Stop',
       background_tasks: [],
@@ -269,6 +280,7 @@ describe('Claude background task status', () => {
 
   it('keeps an interrupted Stop terminal even when its task inventory is still running', () => {
     const state = createHookListenerState()
+
     const interrupted = claudeEvent(state, SOURCE_PANE, {
       hook_event_name: 'Stop',
       is_interrupt: true,
@@ -364,6 +376,7 @@ describe('Claude background task status', () => {
         hook_event_name: 'Stop',
         session_crons: [{ id: 'cron-1' }]
       })
+
       return state
     }
 

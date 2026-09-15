@@ -15,13 +15,18 @@ import {
 import { useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
+
 let latestHookAgent: TuiAgent | null | undefined
+
 const hookRoots: Root[] = []
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {
   latestHookAgent = useTabAgent(tab)
+
   return null
 }
 
@@ -33,6 +38,7 @@ async function renderHookProbe(tab: TerminalTab): Promise<Root> {
   await act(async () => {
     root.render(createElement(HookProbe, { tab }))
   })
+
   return root
 }
 
@@ -149,6 +155,7 @@ describe('resolveLaunchedAgentExitEvidence shell-foreground gate', () => {
 
 describe('useTabAgent process signals', () => {
   const clearTabLaunchAgent = vi.fn()
+
   const baseTab: TerminalTab = {
     id: 'tab-1',
     ptyId: 'pty-1',

@@ -30,6 +30,7 @@ describe('codex process identity', () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(456)
+
     await expect(
       codexProcessIdentity({ identity: IDENTITY, spawnToken: 'spawn-a', pid: 4242 }, readStartTime)
     ).resolves.toMatchObject({ processStartTimeMs: 456 })

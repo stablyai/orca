@@ -7,12 +7,15 @@ export type DeviceScreenSize = { width: number; height: number }
 function toPixel(normalized: number, dimension: number): number {
   const rounded = Math.round(normalized * dimension)
   const max = dimension - 1
+
   if (rounded < 0) {
     return 0
   }
+
   if (rounded > max) {
     return max
   }
+
   return rounded
 }
 
@@ -49,8 +52,10 @@ const BUTTON_KEYCODES: Record<string, number> = {
 // EmulatorError('emulator_error', ...) on an unknown name.
 export function androidButtonKeycode(name: string): number {
   const keycode = BUTTON_KEYCODES[name]
+
   if (keycode === undefined) {
     throw new EmulatorError('emulator_error', `Unknown Android hardware button: ${name}`)
   }
+
   return keycode
 }

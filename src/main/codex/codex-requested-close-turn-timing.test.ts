@@ -18,6 +18,7 @@ describe('requested-close durable turn timing', () => {
       vi.setSystemTime(1_000)
       const terminalBodies: AgentJournalItemBody[] = []
       let refuseSettlement = true
+
       const sink: StructuredAgentSessionEventSink = {
         appendItem: () => {},
         appendTombstone: () => {},
@@ -26,20 +27,24 @@ describe('requested-close durable turn timing', () => {
           if (refuseSettlement) {
             return { accepted: false, reason: 'backpressure' }
           }
+
           for (const mutation of mutations) {
             if (mutation.kind === 'item') {
               terminalBodies.push(mutation.body)
             }
           }
+
           return { accepted: true }
         }
       }
+
       const translator = createCodexJournalTranslator({
         sink,
         sessionId: 'session-1',
         primaryThreadId: () => 'thread-1',
         now: () => Date.now()
       })
+
       expect(
         translator.handle({
           type: 'notification',
@@ -50,6 +55,7 @@ describe('requested-close durable turn timing', () => {
           observedAt: 1_000
         })
       ).toEqual({ accepted: true })
+
       const session: CodexSession = {
         connection: {
           pid: 4321,
@@ -74,6 +80,7 @@ describe('requested-close durable turn timing', () => {
         dispatchEchoes: createCodexDispatchEchoes(),
         translator
       }
+
       const sessions = new Map([['session-1', session]])
       const onEvent = vi.fn()
 

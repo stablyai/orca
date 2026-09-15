@@ -37,6 +37,7 @@ function renderObserver(): { root: Root; container: HTMLDivElement } {
   act(() => {
     root.render(<StarNagAgentValueMomentObserver />)
   })
+
   return { root, container }
 }
 
@@ -56,6 +57,7 @@ function renderObserverWithProfiler(): {
       </Profiler>
     )
   })
+
   return { root, container, getRenderCount: () => renderCount }
 }
 
@@ -73,9 +75,11 @@ function createDeferred<T>(): {
   resolve: (value: T) => void
 } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((innerResolve) => {
     resolve = innerResolve
   })
+
   return { promise, resolve }
 }
 
@@ -98,6 +102,7 @@ describe('StarNagAgentValueMomentObserver', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null
@@ -125,6 +130,7 @@ describe('StarNagAgentValueMomentObserver', () => {
         entry({ paneKey: `tab-${index}:leaf-1` })
       ])
     )
+
     useAppStore.setState({ agentStatusByPaneKey: entries, agentStatusEpoch: 1 })
     const rendered = renderObserverWithProfiler()
     root = rendered.root
@@ -143,6 +149,7 @@ describe('StarNagAgentValueMomentObserver', () => {
         }))
       })
     }
+
     expect(rendered.getRenderCount()).toBe(initialRenders)
 
     // A real transition bumps the epoch and must re-render.

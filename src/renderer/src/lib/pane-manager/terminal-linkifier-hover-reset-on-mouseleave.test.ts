@@ -15,18 +15,22 @@ type FakeLinkifier = {
 function createHarness(hasScreen = true) {
   let mouseLeaveHandler: (() => void) | null = null
   let blurHandler: (() => void) | null = null
+
   const addEventListener = vi.fn((_event: string, handler: () => void) => {
     if (_event === 'mouseleave') {
       mouseLeaveHandler = handler
     }
   })
+
   const removeEventListener = vi.fn((_event: string, handler: () => void) => {
     if (_event === 'mouseleave' && mouseLeaveHandler === handler) {
       mouseLeaveHandler = null
     }
   })
+
   const screen = { addEventListener, removeEventListener, classList: { remove: vi.fn() } }
   const querySelector = vi.fn(() => (hasScreen ? screen : null))
+
   const rendererWindow = {
     addEventListener: vi.fn((_event: string, handler: () => void) => {
       blurHandler = handler
@@ -37,20 +41,24 @@ function createHarness(hasScreen = true) {
       }
     })
   }
+
   const linkifier: FakeLinkifier = {
     _lastBufferCell: { x: 2, y: 3 },
     _activeLine: 3,
     _clearCurrentLink: vi.fn(),
     _currentLink: { link: 'https://example.com' }
   }
+
   const terminal = {
     element: { querySelector, ownerDocument: { defaultView: rendererWindow } },
     _core: { linkifier }
   } as unknown as Terminal
+
   const linkTooltip = {
     ownerDocument: { defaultView: rendererWindow },
     style: { display: '' }
   } as unknown as HTMLElement
+
   return {
     terminal,
     linkifier,
@@ -83,9 +91,11 @@ describe('installTerminalLinkifierHoverResetOnMouseLeave', () => {
   it('removes the listener on dispose', () => {
     const harness = createHarness()
     const disposable = installTerminalLinkifierHoverResetOnMouseLeave(harness.terminal)
+
     const mouseLeaveHandler = harness.addEventListener.mock.calls.find(
       ([eventName]) => eventName === 'mouseleave'
     )?.[1]
+
     expect(mouseLeaveHandler).toBeTypeOf('function')
 
     disposable.dispose()
@@ -115,6 +125,7 @@ describe('installTerminalLinkifierHoverResetOnMouseLeave', () => {
 
   it('clears the active link and tooltip when the renderer window blurs', () => {
     const harness = createHarness()
+
     const disposable = installTerminalLinkifierHoverResetOnWindowBlur(
       harness.terminal,
       harness.linkTooltip

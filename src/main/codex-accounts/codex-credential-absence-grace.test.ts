@@ -61,6 +61,7 @@ describe('CodexCredentialAbsenceGrace', () => {
     if (process.platform === 'win32' || process.getuid?.() === 0) {
       return
     }
+
     const grace = new CodexCredentialAbsenceGrace()
     writeFileSync(authPath, VALID_AUTH, 'utf-8')
     chmodSync(authPath, 0o000)

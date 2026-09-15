@@ -35,6 +35,7 @@ function createJarSession(
   let jar = [...initial]
   const removedNames: string[] = []
   const restoredNames: string[] = []
+
   const session: CookieClearSession & {
     names: () => string[]
     removedNames: () => string[]
@@ -46,6 +47,7 @@ function createJarSession(
         if (name === (options.failOn ?? 'stale')) {
           throw new Error('cookie store unavailable')
         }
+
         removedNames.push(name)
         jar = jar.filter((entry) => entry.name !== name)
       }
@@ -57,17 +59,21 @@ function createJarSession(
       if (options.arrivalDuringClear) {
         jar.push(options.arrivalDuringClear)
       }
+
       return options.snapshot ? await options.snapshot(items) : identitiesFromClearCookies(items)
     },
     restoreClearIdentities: async (identities) => {
       restoredNames.push(...identities.map((identity) => identity.name))
+
       if (options.restoreError) {
         throw options.restoreError
       }
+
       for (const identity of identities) {
         if (jar.some((entry) => entry.name === identity.name)) {
           continue
         }
+
         jar.push(cookie(identity.domain ?? '', identity.name, identity.path, identity.secure))
       }
     },
@@ -75,6 +81,7 @@ function createJarSession(
     removedNames: () => [...removedNames],
     restoredNames: () => [...restoredNames].sort()
   }
+
   return session
 }
 
@@ -138,6 +145,7 @@ describe('STA-4090 failed full cookie clear', () => {
 
   it('restores a partitioned identity through the captured restore channel', async () => {
     const identities: CookieClearIdentity[] = []
+
     const session: CookieClearSession = {
       cookies: {
         get: async () => [cookie('.example.com', 'removed-first'), cookie('.other.test', 'stale')],
@@ -209,6 +217,7 @@ describe('STA-4090 failed full cookie clear', () => {
   it('rolls a same-coordinate arrival back to its pre-clear value', async () => {
     let jar = [valueCookie('.example.com', 'session', 'pre-clear'), cookie('.other.test', 'stale')]
     const restored: CookieClearIdentity[] = []
+
     const session: CookieClearSession = {
       cookies: {
         get: async () => [...jar],
@@ -216,6 +225,7 @@ describe('STA-4090 failed full cookie clear', () => {
           if (name === 'stale') {
             throw new Error('cookie store unavailable')
           }
+
           jar = jar.filter((entry) => entry.name !== name)
         }
       },
@@ -225,14 +235,17 @@ describe('STA-4090 failed full cookie clear', () => {
         // emptied.
         jar = jar.filter((entry) => entry.name !== 'session')
         jar.push(valueCookie('.example.com', 'session', 'mid-clear'))
+
         return identities
       },
       restoreClearIdentities: async (identities) => {
         restored.push(...identities)
+
         for (const identity of identities) {
           if (jar.some((entry) => entry.name === identity.name)) {
             continue
           }
+
           jar.push(valueCookie(identity.domain ?? '', identity.name, identity.value))
         }
       }
@@ -256,6 +269,7 @@ describe('STA-4090 failed full cookie clear', () => {
   it('serializes concurrent clears on the same session', async () => {
     const activeClears: number[] = []
     let inClear = 0
+
     const session: CookieClearSession = {
       cookies: {
         get: async () => [cookie('.example.com', 'session')],

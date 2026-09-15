@@ -4,6 +4,7 @@ export function registerWorktreeChangeInvalidator(
   invalidator: (repoId: string) => void
 ): () => void {
   worktreeChangeInvalidators.add(invalidator)
+
   return () => {
     worktreeChangeInvalidators.delete(invalidator)
   }
@@ -11,6 +12,7 @@ export function registerWorktreeChangeInvalidator(
 
 export function runWorktreeChangeInvalidators(repoId: string): void {
   const invalidators = Array.from(worktreeChangeInvalidators)
+
   for (const invalidator of invalidators) {
     try {
       invalidator(repoId)

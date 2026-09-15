@@ -22,6 +22,7 @@ export function orderMobileNewTabAgents(
   disabledAgents?: unknown
 ): TuiAgent[] {
   const detected = new Set([...detectedAgents].filter(isMobileTuiAgent))
+
   const enabledDetected = filterEnabledMobileTuiAgents(
     MOBILE_TUI_AGENT_AUTO_PICK_ORDER,
     disabledAgents
@@ -30,6 +31,7 @@ export function orderMobileNewTabAgents(
   if (defaultAgent && defaultAgent !== 'blank' && enabledDetected.includes(defaultAgent)) {
     return [defaultAgent, ...enabledDetected.filter((agent) => agent !== defaultAgent)]
   }
+
   return enabledDetected
 }
 
@@ -40,6 +42,7 @@ export function buildMobileNewTabAgentOptions(
   if (!detectedAgentIds) {
     return []
   }
+
   return orderMobileNewTabAgents(
     settings?.defaultTuiAgent,
     detectedAgentIds,

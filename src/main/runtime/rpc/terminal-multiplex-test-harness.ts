@@ -13,6 +13,7 @@ import {
 } from '../../../shared/terminal-stream-protocol'
 
 export const SET_OUTPUT_PAUSED_OPCODE = 16 as TerminalStreamOpcode
+
 export const WRITE_UNAVAILABLE_OPCODE = 17 as TerminalStreamOpcode
 
 export function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRuntimeService {
@@ -20,6 +21,7 @@ export function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRu
     overrides.serializeAuthoritativeTerminalBuffer ??
     ((ptyId: string, opts?: { scrollbackRows?: number }) =>
       overrides.serializeTerminalBuffer?.(ptyId, opts))
+
   return {
     getRuntimeId: () => 'test-runtime',
     subscribeToPtyExit: vi.fn(() => vi.fn()),
@@ -55,11 +57,14 @@ export function startDesktopMultiplexSubscribe(
 ) {
   const messages: string[] = []
   const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
   const handlers = new Map<
     number,
     (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
   >()
+
   const registry = createSubscriptionRegistryDouble()
+
   const runtime = stubRuntime({
     readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
     serializeTerminalBuffer: vi.fn().mockResolvedValue({ data: 'snapshot', cols: 120, rows: 40 }),
@@ -81,12 +86,15 @@ export function startDesktopMultiplexSubscribe(
     waitForTerminal:
       overrides.waitForTerminal ?? vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
   })
+
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
   const dispatchPromise = dispatcher.dispatchStreaming(
     makeRequest('terminal.multiplex', {}),
     (msg) => {
       messages.push(msg)
       const type = JSON.parse(msg).result?.type
+
       if (type) {
         trace?.push(type)
       }
@@ -95,11 +103,14 @@ export function startDesktopMultiplexSubscribe(
       connectionId: 'conn-desktop-first-paint',
       sendBinary: (bytes) => {
         const sent = sendBinaryOverride?.(bytes)
+
         if (sent === false) {
           return false
         }
+
         binaryFrames.push(bytes)
         const opcode = decodeTerminalStreamFrame(bytes)?.opcode
+
         if (
           opcode === TerminalStreamOpcode.SnapshotStart ||
           opcode === TerminalStreamOpcode.SnapshotChunk ||
@@ -107,10 +118,12 @@ export function startDesktopMultiplexSubscribe(
         ) {
           trace?.push('snapshot')
         }
+
         return sent
       },
       registerBinaryStreamHandler: (streamId, handler) => {
         handlers.set(streamId, handler)
+
         return () => {
           if (handlers.get(streamId) === handler) {
             handlers.delete(streamId)
@@ -119,6 +132,7 @@ export function startDesktopMultiplexSubscribe(
       }
     }
   )
+
   return { messages, binaryFrames, handlers, registry, runtime, dispatchPromise }
 }
 

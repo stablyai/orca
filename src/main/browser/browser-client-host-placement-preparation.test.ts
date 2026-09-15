@@ -138,19 +138,25 @@ function createHarness(options?: {
 }) {
   const environments = options?.environments ?? [environment(7), environment(7), environment(7)]
   let environmentIndex = 0
+
   const resolveEnvironment = vi.fn(() => {
     const resolved = environments[Math.min(environmentIndex, environments.length - 1)]!
     environmentIndex += 1
+
     return resolved
   })
+
   const getStatus = vi.fn(async () => options?.status ?? runtimeStatus())
+
   const startHost = vi.fn(async () => ({
     authorityRuntimeId: 'runtime-a',
     authorityEpoch: 'epoch-a',
     browserHostClientId: 'browser-client-a',
     browserHostGeneration: 1
   }))
+
   const closeHost = vi.fn(async () => true)
+
   return {
     getStatus,
     startHost,
@@ -198,6 +204,7 @@ function runtimeStatus(
   options?: { responseRuntimeId?: string }
 ): RuntimeRpcResponse<RuntimeStatus> {
   const runtimeId = overrides.runtimeId ?? 'runtime-a'
+
   return {
     id: 'status.get',
     ok: true,

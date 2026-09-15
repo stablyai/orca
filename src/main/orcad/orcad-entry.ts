@@ -44,6 +44,7 @@ function createNodeAppEnvironment(): AppEnvironment {
       }
     }
   }
+
   return {
     getPath: resolveOrcadPath,
     getAppPath: () => resolveOrcadInstallRoot(),
@@ -116,6 +117,7 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
     headless: browserProvider !== null,
     ...(browserProvider ? { isAvailable: () => browserProvider.isAvailable() } : {})
   })
+
   return startOrcadWithLifecycle(
     (registerCleanup) => startOrcadRuntime(options, registerCleanup),
     async () => {
@@ -136,14 +138,18 @@ async function startOrcadRuntime(
 ): Promise<Pick<OrcadHandle, 'readiness'>> {
   const { OrcaRuntimeService } = await import('../runtime/orca-runtime')
   const { OrcaRuntimeRpcServer } = await import('../runtime/runtime-rpc')
+
   const { registerHeadlessPtyRuntime, getLocalPtyProvider, getSshPtyProvider } =
     await import('../ipc/pty')
+
   const { getAppEnvironment } = await import('../../shared/app-environment')
   const { resolveAdvertisedPairingEndpoint } = await import('../runtime/pairing-endpoint')
   const { ServeReadinessPublisher } = await import('../server/serve-readiness')
   const { Store } = await import('../persistence/loading-store/store')
+
   const { ensureActiveOrcaProfile, initOrcaProfilePaths } =
     await import('../orca-profiles/profile-index-store')
+
   const { initSshHostKeyStoreFile } = await import('../ssh/ssh-host-key-store')
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
   const { daemonOwnsFreshPersistentPtys } = await import('../daemon/daemon-init')
@@ -152,14 +158,18 @@ async function startOrcadRuntime(
   // its persistence and endpoint paths explicitly below.
   const { agentHookServer } = await import('../agent-hooks/server')
   const { isAgentStatusHooksEnabled } = await import('../agent-hooks/managed-agent-hook-controls')
+
   const { installHookStatusSessionTabsRepublish } =
     await import('../agent-hooks/hook-status-session-tabs-republish')
+
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
     await import('../runtime/agent-status-observed-pane-identity')
 
   let rpc: InstanceType<typeof OrcaRuntimeRpcServer> | null = null
   let uninstallHookStatusRepublish = (): void => {}
+
   let uninstallObservedStatusIdentity = (): void => {}
+
   registerCleanup(async () => {
     try {
       await rpc?.stop()
@@ -196,6 +206,7 @@ async function startOrcadRuntime(
   uninstallObservedStatusIdentity = agentHookServer.subscribeEnrichedStatus((enriched) =>
     observedStatusCapture.observe(enriched)
   )
+
   if (isAgentStatusHooksEnabled(store.getSettings())) {
     await agentHookServer.start({ env: 'production', userDataPath: runtimeUserDataPath })
   }
@@ -246,10 +257,12 @@ async function startOrcadRuntime(
   })
 
   const { installOrcadSessionSearchService } = await import('./orcad-session-search')
+
   const sessionSearch = await installOrcadSessionSearchService({
     userDataPath: runtimeUserDataPath,
     getSettings: () => store.getSettings()
   })
+
   getAppEnvironment().onWillQuit(() => sessionSearch?.dispose())
 
   // Why here too and not only on the desktop: nothing else republishes `session.tabs` when a
@@ -292,19 +305,23 @@ async function startOrcadRuntime(
     ...(options.port !== undefined ? { wsPort: options.port, preferPinnedWsPort: true } : {})
   })
   await rpc.start()
+
   const pushService = DesktopPushService.create({
     runtime,
     runtimeRpc: rpc,
     gatewayUrl: resolvePushGatewayOrigin(process.env, getAppEnvironment().isPackaged())
   })
+
   pushService?.start()
   getAppEnvironment().onWillQuit(() => pushService?.stop())
   console.error(`[orcad] ${describeOrcadBindExposure(bindHost)}`)
 
   const boundEndpoint = rpc.getWebSocketEndpoint()
+
   const advertised = boundEndpoint
     ? resolveAdvertisedPairingEndpoint(boundEndpoint, options.pairingAddress)
     : null
+
   const offer = options.noPairing
     ? ({
         available: false,
@@ -357,7 +374,9 @@ async function startOrcadRuntime(
  * that means "do not retry" and nothing else does.
  */
 export const ORCAD_EXIT_OK = 0
+
 export const ORCAD_EXIT_FAILED = 1
+
 export const ORCAD_EXIT_CONFIGURATION = 78
 
 /** Bounded so a wedged transport cannot hold a supervisor's stop past its own deadline. */
@@ -372,6 +391,7 @@ export function resolveOrcadExitCode(error: unknown): number {
 export async function main(argv: string[] = process.argv.slice(2)): Promise<void> {
   const handle = await startOrcad(parseArgs(argv))
   let stopping = false
+
   const shutdown = (signal: NodeJS.Signals): void => {
     if (stopping) {
       // Why escalate rather than ignore: a supervisor's second signal means the first
@@ -380,7 +400,9 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       console.error(`orcad: second ${signal} during shutdown — exiting immediately`)
       process.exit(ORCAD_EXIT_FAILED)
     }
+
     stopping = true
+
     // Why a self-imposed deadline as well: the supervisor's SIGKILL leaves no exit code and
     // no log line. Exiting ourselves keeps the failure attributable.
     const deadline = setTimeout(() => {
@@ -389,6 +411,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
       )
       process.exit(ORCAD_EXIT_FAILED)
     }, ORCAD_SHUTDOWN_DEADLINE_MS)
+
     deadline.unref()
     handle
       .stop()
@@ -400,6 +423,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<void
         process.exit(ORCAD_EXIT_FAILED)
       })
   }
+
   process.on('SIGINT', () => shutdown('SIGINT'))
   process.on('SIGTERM', () => shutdown('SIGTERM'))
 }

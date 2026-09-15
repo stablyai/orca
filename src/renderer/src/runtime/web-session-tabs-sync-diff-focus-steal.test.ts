@@ -19,7 +19,9 @@ vi.mock('../store', () => ({
 }))
 
 const HOST_GROUP = 'host-group-1'
+
 const DIFF_TAB_ID = 'local-diff-tab'
+
 const DIFF_FILE_ID = `${WT}::diff::unstaged::src/example.ts`
 
 function diffTab(): Tab {
@@ -63,6 +65,7 @@ describe('applyWebSessionTabsSnapshot — diff tab focus', () => {
 
   it('does not let a terminal status echo steal activation from an open diff', () => {
     const terminalTabId = toWebTerminalSurfaceTabId('host-tab-1')
+
     const state = makeState({
       activeTabType: 'editor',
       activeTabTypeByWorktree: { [WT]: 'editor' },

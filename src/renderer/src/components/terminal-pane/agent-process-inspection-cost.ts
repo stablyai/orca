@@ -20,8 +20,10 @@ export function isAgentProcessInspectionCostly(userAgent: string, ptyId: string 
   if (ptyId !== null && isRemoteExecutionHostPtyId(ptyId)) {
     return true
   }
+
   if (!userAgent.includes('Windows')) {
     return false
   }
+
   return ptyId !== null
 }

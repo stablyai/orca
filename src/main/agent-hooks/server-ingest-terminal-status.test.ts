@@ -243,6 +243,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
   it('forwards runtime terminal status through the normal listener and snapshot path', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()
@@ -298,6 +299,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
 
   it('accepts a runtime-owned legacy pane without opening legacy relay ingress', () => {
     const server = new AgentHookServer()
+
     const event = {
       paneKey: 'legacy-tab:7',
       tabId: 'legacy-tab',
@@ -342,10 +344,12 @@ describe('AgentHookServer ingestTerminalStatus', () => {
   it('suppresses exact duplicate runtime terminal status observations', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()
       server.setListener(listener)
+
       const event = {
         paneKey: PANE,
         tabId: 'tab-1',
@@ -380,6 +384,7 @@ describe('AgentHookServer ingestTerminalStatus', () => {
   it('preserves runtime terminal status connection identity', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       const listener = vi.fn()

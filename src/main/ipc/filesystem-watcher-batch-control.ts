@@ -27,10 +27,12 @@ export function createDebouncedBatch(): DebouncedBatch {
 export function cancelLocalBatchFlush(root: WatchedRoot): void {
   root.batch.cancelled = true
   root.batch.flushQueued = false
+
   if (root.batch.timer) {
     clearTimeout(root.batch.timer)
     root.batch.timer = null
   }
+
   root.batch.events = []
   root.batch.overflowed = false
   root.batch.firstEventAt = 0

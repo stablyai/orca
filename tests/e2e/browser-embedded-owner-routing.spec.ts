@@ -10,14 +10,18 @@ import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, getActiveWorktreeId, waitForActiveWorktree } from './helpers/store'
 
 const execFileAsync = promisify(execFile)
+
 // Why: Unix-domain helper sockets can exceed platform path limits under macOS's long temp root.
 const shortTempRoot =
   process.platform === 'win32' ? os.tmpdir() : path.join(path.parse(os.tmpdir()).root, 'tmp')
+
 const helperSocketDir = mkdtempSync(path.join(shortTempRoot, 'ob-'))
+
 const blockedBrowserPath = path.join(
   helperSocketDir,
   process.platform === 'win32' ? 'blocked-browser.cmd' : 'blocked-browser'
 )
+
 const externalLaunchMarker = `${blockedBrowserPath}.attempted`
 
 writeFileSync(
@@ -26,6 +30,7 @@ writeFileSync(
     ? '@echo off\r\ntype nul > "%~f0.attempted"\r\nexit /b 97\r\n'
     : '#!/bin/sh\n: > "$0.attempted"\nexit 97\n'
 )
+
 if (process.platform !== 'win32') {
   chmodSync(blockedBrowserPath, 0o755)
 }
@@ -63,8 +68,10 @@ async function startOwnershipServer(): Promise<{
         <body><h1 id="marker">${destination ? 'destination-webview' : 'source-webview'}</h1></body>
       </html>`)
   })
+
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+
   return {
     sourceUrl: `${origin}/source`,
     destinationUrl: `${origin}/destination`,
@@ -77,8 +84,10 @@ async function closeServer(server: Server): Promise<void> {
     server.close((error) => {
       if (error) {
         reject(error)
+
         return
       }
+
       resolve()
     })
   )
@@ -95,13 +104,16 @@ async function createBrowserTab(
         title: 'Embedded owner smoke',
         activate: true
       })
+
       return created?.activePageId ? { id: created.id, pageId: created.activePageId } : null
     },
     { targetWorktreeId: worktreeId, targetUrl: url }
   )
+
   if (!browserTab) {
     throw new Error('Failed to create the embedded browser page')
   }
+
   return browserTab
 }
 
@@ -124,9 +136,11 @@ async function readEmbeddedPage(
   return page.evaluate(async (targetBrowserTabId) => {
     const overlay = document.querySelector(`[data-browser-overlay-tab-id="${targetBrowserTabId}"]`)
     const webview = overlay?.querySelector('webview') as Electron.WebviewTag | null
+
     if (!webview) {
       return null
     }
+
     try {
       return (await webview.executeJavaScript(`({
         marker: document.querySelector('#marker')?.textContent ?? null,
@@ -141,6 +155,7 @@ async function readEmbeddedPage(
 
 function agentBrowserBinary(): string {
   const suffix = process.platform === 'win32' ? '.exe' : ''
+
   return path.join(
     process.cwd(),
     'node_modules',
@@ -169,13 +184,16 @@ test('stale helper cannot take goto or eval away from the real embedded webview'
     rmSync(helperSocketDir, { recursive: true, force: true })
   })
   const server = await startOwnershipServer()
+
   try {
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
     const worktreeId = await getActiveWorktreeId(orcaPage)
+
     if (!worktreeId) {
       throw new Error('Expected an active worktree for the embedded browser smoke test')
     }
+
     const browserTab = await createBrowserTab(orcaPage, worktreeId, server.sourceUrl)
 
     await expect
@@ -185,6 +203,7 @@ test('stale helper cannot take goto or eval away from the real embedded webview'
     const snapshot = await callBrowserRuntime(orcaPage, 'browser.snapshot', {
       page: browserTab.pageId
     })
+
     expect(snapshot, JSON.stringify(snapshot)).toMatchObject({ ok: true })
 
     const sessionName = `orca-tab-${browserTab.pageId}`
@@ -204,6 +223,7 @@ test('stale helper cannot take goto or eval away from the real embedded webview'
       page: browserTab.pageId,
       url: server.destinationUrl
     })
+
     expect(existsSync(externalLaunchMarker)).toBe(false)
     expect(navigation).toMatchObject({
       ok: true,
@@ -224,6 +244,7 @@ test('stale helper cannot take goto or eval away from the real embedded webview'
       page: browserTab.pageId,
       expression: 'document.querySelector("#marker")?.textContent'
     })
+
     expect(existsSync(externalLaunchMarker)).toBe(false)
     expect(evaluation).toMatchObject({
       ok: true,

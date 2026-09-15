@@ -13,16 +13,19 @@ export function mintDispatchCapability(
   }
 ): string {
   const dispatch = this.getDispatchContextById(params.dispatchId)
+
   if (!dispatch || (dispatch.status !== 'pending' && dispatch.status !== 'dispatched')) {
     throw new OrchestrationError(
       'dispatch_inactive',
       `Dispatch ${params.dispatchId} is not active.`
     )
   }
+
   const capability = `dcap_${randomBytes(32).toString('base64url')}`
   // Why: re-pointing the Dispatch at a pane/process must fence the prior consumer's Delivery in
   // the same transaction, or both processes keep acking one outstanding Delivery.
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     this.db
       .prepare(
@@ -44,6 +47,7 @@ export function mintDispatchCapability(
     this.db.exec('ROLLBACK')
     throw error
   }
+
   return capability
 }
 
@@ -57,15 +61,19 @@ export function verifyDispatchCapability(
   }
 ): { valid: true } | { valid: false; reason: string } {
   const dispatch = this.getDispatchContextById(params.dispatchId)
+
   if (!dispatch) {
     return { valid: false, reason: `Dispatch ${params.dispatchId} was not found.` }
   }
+
   if (!dispatch.capability_hash) {
     return { valid: false, reason: `Dispatch ${params.dispatchId} has no lifecycle capability.` }
   }
+
   if (dispatch.capability_revoked_at) {
     return { valid: false, reason: `Dispatch ${params.dispatchId} capability is revoked.` }
   }
+
   if (!params.capability) {
     // Why: a worker that omits the flag needs the flag name, not just the diagnosis.
     return {
@@ -74,11 +82,14 @@ export function verifyDispatchCapability(
         'The Dispatch capability is missing. Pass --dispatch-capability <token> from your dispatch preamble.'
     }
   }
+
   const expected = Buffer.from(dispatch.capability_hash, 'hex')
   const observed = Buffer.from(hashDispatchCapability(params.capability), 'hex')
+
   if (expected.length !== observed.length || !timingSafeEqual(expected, observed)) {
     return { valid: false, reason: 'The Dispatch capability is invalid.' }
   }
+
   if (
     !dispatch.assignee_pane_key ||
     !params.paneKey ||
@@ -86,6 +97,7 @@ export function verifyDispatchCapability(
   ) {
     return { valid: false, reason: 'The caller is not the Dispatch pane.' }
   }
+
   if (
     !dispatch.process_incarnation ||
     !params.processIncarnation ||
@@ -93,6 +105,7 @@ export function verifyDispatchCapability(
   ) {
     return { valid: false, reason: 'The Dispatch process incarnation changed.' }
   }
+
   return { valid: true }
 }
 

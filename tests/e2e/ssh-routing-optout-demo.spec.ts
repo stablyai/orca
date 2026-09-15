@@ -27,6 +27,7 @@ test('stages the per-host routing opt-out loop against a real forwarding-blocked
 }, testInfo) => {
   test.setTimeout((HOLD_MINUTES + 15) * 60_000)
   let target: DockerSshRelayTarget | null = null
+
   try {
     await waitForSessionReady(orcaPage)
     await orcaPage.evaluate(async () => {
@@ -49,9 +50,11 @@ test('stages the per-host routing opt-out loop against a real forwarding-blocked
     await orcaPage.evaluate(
       ({ worktreeId }) => {
         const state = window.__store?.getState()
+
         if (!state) {
           throw new Error('Store unavailable')
         }
+
         state.createBrowserTab(worktreeId, 'https://example.com/', {
           title: 'Routing demo',
           activate: true

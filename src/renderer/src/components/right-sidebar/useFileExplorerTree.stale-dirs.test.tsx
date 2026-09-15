@@ -6,10 +6,12 @@ import type { DirEntry } from '../../../../shared/filesystem-entry-types'
 import { useFileExplorerTree } from './useFileExplorerTree'
 
 const readDirectoryMock = vi.hoisted(() => vi.fn())
+
 vi.mock('./file-explorer-directory-listing', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readFileExplorerDirectory: readDirectoryMock
 }))
+
 vi.mock('./file-explorer-operation-owner', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getFileExplorerOperationOwner: () => ({ kind: 'local' as const })
@@ -96,11 +98,14 @@ describe('useFileExplorerTree stale collapsed dirs', () => {
     rerender()
 
     let releaseRoot!: () => void
+
     const rootGate = new Promise<void>((resolve) => {
       releaseRoot = resolve
     })
+
     readDirectoryMock.mockImplementationOnce(async () => {
       await rootGate
+
       return listing()
     })
 
@@ -155,6 +160,7 @@ describe('useFileExplorerTree stale collapsed dirs', () => {
 
   it('keeps the rendered cache bound to its loaded workspace until reset', async () => {
     const props = { path: '/repo', worktreeId: 'wt-1' }
+
     const { result, rerender } = renderHook(
       ({ path, worktreeId }: typeof props) => useFileExplorerTree(path, new Set(), worktreeId),
       { initialProps: props }

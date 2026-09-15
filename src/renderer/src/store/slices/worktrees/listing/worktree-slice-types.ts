@@ -15,6 +15,7 @@ import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-
 import type { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
 
 export type WorktreeSliceGet = Parameters<StateCreator<AppState>>[1]
+
 export type WorktreeSliceSet = Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0]
 
 export type BackgroundRuntimeRefreshOptions = {

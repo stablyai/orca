@@ -14,14 +14,17 @@ export type MarkdownTemplatePickerRequest = {
 type MarkdownTemplatePickerListener = (request: MarkdownTemplatePickerRequest) => void
 
 let listener: MarkdownTemplatePickerListener | null = null
+
 let nextRequestId = 0
 
 function once<T extends unknown[]>(fn: (...args: T) => void): (...args: T) => void {
   let called = false
+
   return (...args: T) => {
     if (called) {
       return
     }
+
     called = true
     fn(...args)
   }
@@ -31,6 +34,7 @@ export function subscribeMarkdownTemplatePicker(
   nextListener: MarkdownTemplatePickerListener
 ): () => void {
   listener = nextListener
+
   return () => {
     if (listener === nextListener) {
       listener = null

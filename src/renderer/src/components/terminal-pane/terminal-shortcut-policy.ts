@@ -175,6 +175,7 @@ export function resolveTerminalShortcutAction(
     const hasTrustedWindowsCsiU = windowsHost && getWindowsShiftEnterEncoding?.() === 'csi-u'
     // Why: CSI-u is application input, not universal; without trusted Windows evidence, require active KKP negotiation.
     const canSendCsiU = hasTrustedWindowsCsiU || (getKittyKeyboardFlagsActivePane?.() ?? 0) > 0
+
     return { type: 'sendInput', data: canSendCsiU ? '\x1b[13;2u' : '\x1b\r' }
   }
 
@@ -186,11 +187,13 @@ export function resolveTerminalShortcutAction(
     event.key === 'Enter'
   ) {
     const localWindowsConpty = isLocalWindowsConptyPane?.() === true
+
     // Why: preserve query-only TUI chords elsewhere; local ConPTY shells require negotiation or trusted consumer evidence (#12329).
     const canSendCsiU =
       !localWindowsConpty ||
       (getKittyKeyboardFlagsActivePane?.() ?? 0) > 0 ||
       hasCtrlEnterCsiUAuthority?.() === true
+
     return {
       type: 'sendInput',
       data: canSendCsiU ? '\x1b[13;5u' : '\r'
@@ -211,20 +214,25 @@ export function resolveTerminalShortcutAction(
     if (event.key === 'Backspace') {
       return { type: 'sendInput', data: '\x15' }
     }
+
     if (event.key === 'Delete') {
       return { type: 'sendInput', data: '\x0b' }
     }
+
     // Why: xterm.js has no Cmd+Arrow mapping; translate Cmd+←/→ to readline Ctrl+A/Ctrl+E for line start/end (iTerm2/Ghostty).
     if (event.key === 'ArrowLeft') {
       return { type: 'sendInput', data: '\x01' }
     }
+
     if (event.key === 'ArrowRight') {
       return { type: 'sendInput', data: '\x05' }
     }
+
     // Why: macOS users expect Cmd+↑/↓ to scroll scrollback, not write escape bytes to the shell.
     if (event.key === 'ArrowUp') {
       return { type: 'scrollViewport', position: 'top' }
     }
+
     if (event.key === 'ArrowDown') {
       return { type: 'scrollViewport', position: 'bottom' }
     }
@@ -241,6 +249,7 @@ export function resolveTerminalShortcutAction(
     if ((getKittyKeyboardFlagsActivePane?.() ?? 0) > 0) {
       return null
     }
+
     return { type: 'sendInput', data: '\x1b\x7f' }
   }
 
@@ -256,6 +265,7 @@ export function resolveTerminalShortcutAction(
     if ((getKittyKeyboardFlagsActivePane?.() ?? 0) > 0) {
       return null
     }
+
     // Why: readline doesn't bind xterm's \e[1;3D/C for alt+←/→, so translate to \eb/\ef for word-nav (iTerm2 "Esc+" behavior).
     return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
   }
@@ -272,6 +282,7 @@ export function resolveTerminalShortcutAction(
     if (isLocalWindowsConptyPane?.()) {
       return null
     }
+
     // Why: readline ignores xterm's \e[1;5D/C, so translate Ctrl+←/→ to \eb/\ef for word-nav; !isMac since Mac reserves Ctrl+Arrow.
     return { type: 'sendInput', data: event.key === 'ArrowLeft' ? '\x1bb' : '\x1bf' }
   }
@@ -283,6 +294,7 @@ export function resolveTerminalShortcutAction(
     getKittyKeyboardFlags: () => getKittyKeyboardFlagsActivePane?.() ?? 0,
     layoutCharacterForCode
   })
+
   if (optionAction) {
     return optionAction
   }

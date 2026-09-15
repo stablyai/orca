@@ -6,12 +6,17 @@ import { buildWorkspaceSessionPatch } from './workspace-session-patch'
 import { createWorktreeTabBucketProjection } from './worktree-tab-bucket-projection'
 
 type SessionRelevantField = (typeof SESSION_RELEVANT_FIELDS)[number]
+
 type TabsByWorktree = AppState['tabsByWorktree']
+
 type TerminalTab = TabsByWorktree[string][number]
+
 type UnifiedTabsByWorktree = AppState['unifiedTabsByWorktree']
+
 type UnifiedTab = UnifiedTabsByWorktree[string][number]
 
 const TERMINAL_TAB_LIVE_TITLE_KEYS = new Set<keyof TerminalTab>(['title'])
+
 // Why: this handoff flag is stripped from workspace sessions, so toggling it
 // alone should not rebuild and rewrite the durable session payload.
 const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>([
@@ -23,20 +28,25 @@ function terminalTabChangedForSession(prev: TerminalTab, next: TerminalTab): boo
   if (prev === next) {
     return false
   }
+
   const keys = new Set([
     ...(Object.keys(prev) as (keyof TerminalTab)[]),
     ...(Object.keys(next) as (keyof TerminalTab)[])
   ])
+
   for (const key of keys) {
     if (TERMINAL_TAB_LIVE_TITLE_KEYS.has(key) || TERMINAL_TAB_TRANSIENT_SESSION_KEYS.has(key)) {
       continue
     }
+
     if (prev[key] !== next[key]) {
       return true
     }
   }
+
   return prev.title !== next.title && !isDecorativeAgentTitleFrameChange(prev.title, next.title)
 }
+
 function createTerminalSessionTabsProjection() {
   return createWorktreeTabBucketProjection<TerminalTab, TerminalTab>({
     projectTab: (tab) => tab,
@@ -49,26 +59,33 @@ function unifiedTabChangedForSession(prev: UnifiedTab, next: UnifiedTab): boolea
   if (prev === next) {
     return false
   }
+
   const keys = new Set([
     ...(Object.keys(prev) as (keyof UnifiedTab)[]),
     ...(Object.keys(next) as (keyof UnifiedTab)[])
   ])
+
   for (const key of keys) {
     if (key === 'label') {
       continue
     }
+
     if (prev[key] !== next[key]) {
       return true
     }
   }
+
   if (prev.label === next.label) {
     return false
   }
+
   if (prev.contentType !== 'terminal' || next.contentType !== 'terminal') {
     return true
   }
+
   return !isDecorativeAgentTitleFrameChange(prev.label, next.label)
 }
+
 function createUnifiedSessionTabsProjection() {
   return createWorktreeTabBucketProjection<UnifiedTab, UnifiedTab>({
     projectTab: (tab) => tab,
@@ -150,21 +167,26 @@ export function createSessionWriteSubscriber({
     // builder — without this, such a change would silently start emitting
     // stale values for that field.
     const fresh = store.getState()
+
     // Why: a closed gate defers, it never discards. Returning with the pending set intact leaves
     // the write owed; the next store update or gate-open wake-up re-arms it. Nothing re-arms from
     // here, so a gate that never reopens costs no timer.
     if (!shouldPersistWorkspaceSession(fresh)) {
       return
     }
+
     if (shouldSchedulePersist && !shouldSchedulePersist()) {
       return
     }
+
     const changed = new Set(pendingChangedFields)
     pendingChangedFields.clear()
     const patch = buildWorkspaceSessionPatch(fresh, changed)
+
     if (Object.keys(patch).length === 0) {
       return
     }
+
     persist({ patch })
   }
 
@@ -172,6 +194,7 @@ export function createSessionWriteSubscriber({
     if (timer !== null) {
       clearTimeout(timer)
     }
+
     timer = setTimeout(flushPendingWrite, debounceMs)
   }
 
@@ -187,6 +210,7 @@ export function createSessionWriteSubscriber({
     if (prev === null) {
       return true
     }
+
     for (const key of SESSION_RELEVANT_FIELDS) {
       const unchanged =
         key === 'tabsByWorktree'
@@ -194,10 +218,12 @@ export function createSessionWriteSubscriber({
           : key === 'unifiedTabsByWorktree'
             ? state.unifiedTabsByWorktree === prevUnifiedTabsSource
             : prev[key] === state[key]
+
       if (!unchanged) {
         return true
       }
     }
+
     return false
   }
 
@@ -205,6 +231,7 @@ export function createSessionWriteSubscriber({
     if (!shouldPersistWorkspaceSession(state)) {
       return
     }
+
     // Why: this fires on every store write and almost none of them touch a session field. Scan
     // identities first so the common case never allocates the 35-field snapshot or the changed
     // list; only a real identity change pays for them.
@@ -212,17 +239,23 @@ export function createSessionWriteSubscriber({
       if (pendingChangedFields.size === 0) {
         return
       }
+
       if (shouldSchedulePersist && !shouldSchedulePersist()) {
         return
       }
+
       // An unrelated update may wake a deferred write but must never reset an armed debounce.
       if (timer !== null) {
         return
       }
+
       armFlushTimer()
+
       return
     }
+
     const next: Record<string, unknown> = {}
+
     for (const key of SESSION_RELEVANT_FIELDS) {
       const value = state[key]
       next[key] =
@@ -232,28 +265,36 @@ export function createSessionWriteSubscriber({
             ? unifiedTabsProjection.project(value as UnifiedTabsByWorktree)
             : value
     }
+
     const changedFields =
       prev === null
         ? [...SESSION_RELEVANT_FIELDS]
         : SESSION_RELEVANT_FIELDS.filter((key) => prev?.[key] !== next[key])
+
     // Equivalent projections still consume the new source identities.
     prevTabsSource = state.tabsByWorktree
     prevUnifiedTabsSource = state.unifiedTabsByWorktree
+
     if (changedFields.length === 0 && pendingChangedFields.size === 0) {
       return
     }
+
     prev = next
+
     for (const field of changedFields) {
       pendingChangedFields.add(field)
     }
+
     if (shouldSchedulePersist && !shouldSchedulePersist()) {
       return
     }
+
     // Why: an unrelated update may wake a deferred write but must never reset an armed debounce —
     // that reset storm is exactly what the changed-field gate above exists to prevent.
     if (timer !== null && changedFields.length === 0) {
       return
     }
+
     armFlushTimer()
   })
 
@@ -261,15 +302,18 @@ export function createSessionWriteSubscriber({
     if (pendingChangedFields.size === 0 || timer !== null) {
       return
     }
+
     armFlushTimer()
   })
 
   return () => {
     unsub()
     unsubGateOpen?.()
+
     if (timer !== null) {
       clearTimeout(timer)
     }
+
     pendingChangedFields.clear()
   }
 }

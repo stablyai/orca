@@ -27,15 +27,20 @@ async function selectionCellText(page: {
 }): Promise<string | null> {
   return page.evaluate(() => {
     const selection = window.getSelection()
+
     if (!selection || selection.rangeCount === 0) {
       return null
     }
+
     const node = selection.anchorNode
+
     if (!node) {
       return null
     }
+
     const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : node.parentElement
     const cell = element?.closest('td, th')
+
     return cell?.textContent?.trim() ?? null
   })
 }
@@ -45,9 +50,11 @@ async function tableRowCount(page: {
 }): Promise<number> {
   return page.evaluate(() => {
     const editorRoot = document.querySelector('.rich-markdown-editor')
+
     if (!editorRoot) {
       return -1
     }
+
     return editorRoot.querySelectorAll('tr').length
   })
 }

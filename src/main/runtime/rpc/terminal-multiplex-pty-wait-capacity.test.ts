@@ -24,11 +24,14 @@ describe('terminal multiplex RPC', () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
     const controller = new AbortController()
+
     const handlers = new Map<
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
+
     const cleanups = new Map<string, () => void>()
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
       waitForLeafPtyId: vi.fn(
@@ -44,6 +47,7 @@ describe('terminal multiplex RPC', () => {
         cleanups.set(id, cleanup)
       })
     })
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: TERMINAL_METHODS
@@ -60,6 +64,7 @@ describe('terminal multiplex RPC', () => {
         },
         registerBinaryStreamHandler: (streamId, handler) => {
           handlers.set(streamId, handler)
+
           return () => handlers.delete(streamId)
         }
       }
@@ -108,6 +113,7 @@ describe('terminal multiplex RPC', () => {
 
   it("waits for a desktop multiplex subscriber's PTY before retiring the terminal", async () => {
     let resolvePty: (ptyId: string) => void = () => {}
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
       requestRendererTerminalTabMount: vi.fn(),
@@ -118,6 +124,7 @@ describe('terminal multiplex RPC', () => {
           })
       )
     })
+
     const harness = startDesktopMultiplexSubscribe(runtime)
     await vi.waitFor(() =>
       expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
@@ -149,10 +156,12 @@ describe('terminal multiplex RPC', () => {
 
   it('cancels a pending desktop PTY wait when its multiplex slot unsubscribes', async () => {
     let resolvePty: (ptyId: string) => void = () => {}
+
     let waitSignal: AbortSignal | undefined
     const readTerminal = vi.fn().mockResolvedValue({ tail: [], truncated: false })
     const subscribeToTerminalData = vi.fn().mockReturnValue(vi.fn())
     const registerRemoteTerminalViewSubscriber = vi.fn().mockReturnValue(vi.fn())
+
     const waitForLeafPtyId = vi.fn(
       (_handle: string, _timeoutMs?: number, signal?: AbortSignal) =>
         new Promise<string>((resolve, reject) => {
@@ -163,6 +172,7 @@ describe('terminal multiplex RPC', () => {
           })
         })
     )
+
     const harness = startDesktopMultiplexSubscribe({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
       waitForLeafPtyId,
@@ -170,6 +180,7 @@ describe('terminal multiplex RPC', () => {
       subscribeToTerminalData,
       registerRemoteTerminalViewSubscriber
     })
+
     await vi.waitFor(() =>
       expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
     )
@@ -204,21 +215,25 @@ describe('terminal multiplex RPC', () => {
 
   it('cancels an older pending PTY wait when the same multiplex slot resubscribes', async () => {
     const waitSignals: AbortSignal[] = []
+
     const waitForLeafPtyId = vi.fn(
       (_handle: string, _timeoutMs?: number, signal?: AbortSignal) =>
         new Promise<string>((_resolve, reject) => {
           if (signal) {
             waitSignals.push(signal)
           }
+
           signal?.addEventListener('abort', () => reject(new Error('request_aborted')), {
             once: true
           })
         })
     )
+
     const harness = startDesktopMultiplexSubscribe({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
       waitForLeafPtyId
     })
+
     await vi.waitFor(() =>
       expect(harness.messages.some((message) => JSON.parse(message).result?.type === 'ready')).toBe(
         true
@@ -240,10 +255,12 @@ describe('terminal multiplex RPC', () => {
   it('admits 128 active streams, rejects the 129th, and reuses released capacity', async () => {
     let dataSubscriberCount = 0
     let viewSubscriberCount = 0
+
     const harness = startDesktopMultiplexSubscribe({
       subscribeToTerminalData: vi.fn(() => {
         dataSubscriberCount += 1
         let released = false
+
         return () => {
           if (!released) {
             released = true
@@ -254,6 +271,7 @@ describe('terminal multiplex RPC', () => {
       registerRemoteTerminalViewSubscriber: vi.fn(() => {
         viewSubscriberCount += 1
         let released = false
+
         return () => {
           if (!released) {
             released = true
@@ -262,11 +280,13 @@ describe('terminal multiplex RPC', () => {
         }
       })
     })
+
     await vi.waitFor(() =>
       expect(harness.messages.some((message) => JSON.parse(message).result?.type === 'ready')).toBe(
         true
       )
     )
+
     const sendSubscribe = (streamId: number): void => {
       harness.handlers.get(0)?.(
         decodeTerminalStreamFrame(
@@ -284,7 +304,9 @@ describe('terminal multiplex RPC', () => {
         )!
       )
     }
+
     expect(TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION).toBe(128)
+
     for (
       let streamId = 1;
       streamId <= TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION + 1;
@@ -295,9 +317,11 @@ describe('terminal multiplex RPC', () => {
 
     await vi.waitFor(() => {
       const results = harness.messages.map((message) => JSON.parse(message).result)
+
       const subscribedStreamIds = results
         .filter((result) => result?.type === 'subscribed')
         .map((result) => result.streamId)
+
       expect(subscribedStreamIds).toHaveLength(TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION)
       expect(subscribedStreamIds).toContain(44)
       expect(results).toContainEqual({
@@ -336,10 +360,12 @@ describe('terminal multiplex RPC', () => {
         .map((message) => JSON.parse(message).result)
         .filter((result) => result?.type === 'subscribed')
         .map((result) => result.streamId)
+
       expect(subscribedStreamIds).toContain(retriedStreamId)
       expect(
         harness.binaryFrames.some((bytes) => {
           const frame = decodeTerminalStreamFrame(bytes)
+
           return (
             frame?.streamId === retriedStreamId && frame.opcode === TerminalStreamOpcode.SnapshotEnd
           )
@@ -359,6 +385,7 @@ describe('terminal multiplex RPC', () => {
     const activeStreamCount = 44
     const waitSignals: AbortSignal[] = []
     const resolveWaits: ((ptyId: string) => void)[] = []
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn((terminal: string) =>
         terminal.startsWith('pending-') ? { ptyId: null } : { ptyId: `pty-${terminal}` }
@@ -369,6 +396,7 @@ describe('terminal multiplex RPC', () => {
             if (signal) {
               waitSignals.push(signal)
             }
+
             resolveWaits.push(resolve)
             signal?.addEventListener('abort', () => reject(new Error('request_aborted')), {
               once: true
@@ -376,12 +404,14 @@ describe('terminal multiplex RPC', () => {
           })
       )
     })
+
     const harness = startDesktopMultiplexSubscribe(runtime)
     await vi.waitFor(() =>
       expect(harness.messages.some((message) => JSON.parse(message).result?.type === 'ready')).toBe(
         true
       )
     )
+
     const sendSubscribe = (streamId: number, terminal: string): void => {
       harness.handlers.get(0)?.(
         decodeTerminalStreamFrame(
@@ -403,6 +433,7 @@ describe('terminal multiplex RPC', () => {
     for (let streamId = 1; streamId <= activeStreamCount; streamId += 1) {
       sendSubscribe(streamId, `active-${streamId}`)
     }
+
     await vi.waitFor(() =>
       expect(
         harness.messages.filter((message) => JSON.parse(message).result?.type === 'subscribed')
@@ -416,11 +447,14 @@ describe('terminal multiplex RPC', () => {
     ) {
       sendSubscribe(activeStreamCount + offset, `pending-${offset}`)
     }
+
     await vi.waitFor(() =>
       expect(waitSignals).toHaveLength(TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION)
     )
+
     const rejectedStreamId =
       activeStreamCount + TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION + 1
+
     await vi.waitFor(() => {
       const results = harness.messages.map((message) => JSON.parse(message).result)
       expect(results).toContainEqual({
@@ -434,6 +468,7 @@ describe('terminal multiplex RPC', () => {
     for (const [index, resolve] of resolveWaits.entries()) {
       resolve(`pty-pending-${index + 1}`)
     }
+
     await vi.waitFor(() => {
       const results = harness.messages.map((message) => JSON.parse(message).result)
       expect(results.filter((result) => result?.type === 'subscribed')).toHaveLength(
@@ -456,6 +491,7 @@ describe('terminal multiplex RPC', () => {
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
       waitForLeafPtyId: vi.fn().mockRejectedValue(new Error('timeout'))
     })
+
     const harness = startDesktopMultiplexSubscribe(runtime)
     await vi.waitFor(() =>
       expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
@@ -466,9 +502,11 @@ describe('terminal multiplex RPC', () => {
         harness.binaryFrames.map((frame) => decodeTerminalStreamFrame(frame)?.opcode)
       ).toContain(TerminalStreamOpcode.Error)
     )
+
     const errorFrame = harness.binaryFrames
       .map((frame) => decodeTerminalStreamFrame(frame))
       .find((frame) => frame?.opcode === TerminalStreamOpcode.Error)
+
     expect(errorFrame && decodeTerminalStreamText(errorFrame.payload)).toBe('no_connected_pty')
     harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
     await harness.dispatchPromise
@@ -479,6 +517,7 @@ describe('terminal multiplex RPC', () => {
       requestRendererTerminalTabMount: vi.fn(),
       waitForLeafPtyId: vi.fn()
     })
+
     const harness = startDesktopMultiplexSubscribe(runtime)
     await vi.waitFor(() =>
       expect(harness.messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
@@ -498,11 +537,14 @@ describe('terminal multiplex RPC', () => {
   it('preserves clientless multiplex subscriptions without a PTY wait', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
     const handlers = new Map<
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
+
     let cleanup: () => void = () => {}
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
       requestRendererTerminalTabMount: vi.fn(),
@@ -511,7 +553,9 @@ describe('terminal multiplex RPC', () => {
         cleanup = callback
       })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
     const dispatchPromise = dispatcher.dispatchStreaming(
       makeRequest('terminal.multiplex', {}),
       (msg) => messages.push(msg),
@@ -522,10 +566,12 @@ describe('terminal multiplex RPC', () => {
         },
         registerBinaryStreamHandler: (streamId, handler) => {
           handlers.set(streamId, handler)
+
           return () => handlers.delete(streamId)
         }
       }
     )
+
     await vi.waitFor(() =>
       expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
     )
@@ -546,9 +592,11 @@ describe('terminal multiplex RPC', () => {
     )
     expect(runtime.waitForLeafPtyId).not.toHaveBeenCalled()
     expect(runtime.requestRendererTerminalTabMount).not.toHaveBeenCalled()
+
     const errorFrame = binaryFrames
       .map((frame) => decodeTerminalStreamFrame(frame))
       .find((frame) => frame?.opcode === TerminalStreamOpcode.Error)
+
     expect(errorFrame && decodeTerminalStreamText(errorFrame.payload)).toBe('no_connected_pty')
     cleanup()
     await dispatchPromise
@@ -556,18 +604,22 @@ describe('terminal multiplex RPC', () => {
 
   it('preserves clientless legacy subscriptions without a PTY wait or mount', async () => {
     const messages: string[] = []
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
       waitForLeafPtyId: vi.fn(),
       requestRendererTerminalTabMount: vi.fn(),
       readTerminal: vi.fn().mockResolvedValue({ tail: ['scrollback'], truncated: false })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
     const dispatchPromise = dispatcher.dispatchStreaming(
       makeRequest('terminal.subscribe', { terminal: 'terminal-1' }),
       (msg) => messages.push(msg),
       { connectionId: 'conn-clientless-legacy' }
     )
+
     await dispatchPromise
     expect(runtime.waitForLeafPtyId).not.toHaveBeenCalled()
     expect(runtime.requestRendererTerminalTabMount).not.toHaveBeenCalled()
@@ -576,13 +628,16 @@ describe('terminal multiplex RPC', () => {
 
   it('waits for a desktop legacy subscriber PTY before the scrollback-only fallback', async () => {
     const messages: string[] = []
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: null }),
       waitForLeafPtyId: vi.fn().mockRejectedValue(new Error('timeout')),
       requestRendererTerminalTabMount: vi.fn().mockReturnValue(true),
       readTerminal: vi.fn().mockResolvedValue({ tail: ['scrollback'], truncated: false })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
     const dispatchPromise = dispatcher.dispatchStreaming(
       makeRequest('terminal.subscribe', {
         terminal: 'terminal-1',
@@ -591,6 +646,7 @@ describe('terminal multiplex RPC', () => {
       (msg) => messages.push(msg),
       { connectionId: 'conn-desktop-legacy' }
     )
+
     await dispatchPromise
     // Widened gate: a desktop client must mount + await its late PTY, not skip
     // straight to the bare scrollback path the way it did under the mobile-only gate.

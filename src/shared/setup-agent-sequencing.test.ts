@@ -21,6 +21,7 @@ import {
 } from './setup-agent-startup-policy'
 
 const TEMP_DIRS: string[] = []
+
 const WINDOWS_PROCESS_TEST_TIMEOUT_MS = 30_000
 
 afterEach(() => {
@@ -97,6 +98,7 @@ describe('createSequencedSetupAgentCommands', () => {
       platform: 'posix',
       nonce: 'nonce-1'
     })
+
     const script = commands.startupEnv?.ORCA_SEQUENCED_STARTUP_SCRIPT ?? ''
     // Why ordering: `eval`/`exec` never returns, so a later message never renders.
     expect(script.indexOf(SETUP_COMPLETE_MESSAGE)).toBeGreaterThan(-1)
@@ -112,10 +114,12 @@ describe('createSequencedSetupAgentCommands', () => {
       startupCommand: 'codex',
       nonce: 'nonce-2'
     })
+
     const decoded = Buffer.from(
       commands.startupCommand.split('-EncodedCommand ')[1] ?? '',
       'base64'
     ).toString('utf16le')
+
     expect(decoded).toContain(SETUP_COMPLETE_MESSAGE)
     expect(decoded.indexOf(SETUP_COMPLETE_MESSAGE)).toBeLessThan(
       decoded.indexOf('Invoke-Expression $startup')
@@ -130,6 +134,7 @@ describe('createSequencedSetupAgentCommands', () => {
         platform: 'posix',
         nonce: 'nonce-3'
       }).startupEnv?.ORCA_SEQUENCED_STARTUP_SCRIPT ?? ''
+
     // Silence on success is what made a healthy worktree look stuck.
     expect(script).toContain(SETUP_COMPLETE_MESSAGE)
     expect(script).toContain('Setup failed; skipping agent startup.')
@@ -158,6 +163,7 @@ describe('createSequencedSetupAgentCommands', () => {
       platform: 'posix',
       nonce: 'first-launch'
     })
+
     const second = createSequencedSetupAgentCommands({
       runnerScriptPath: '/repo/.git/orca/setup-runner.sh',
       startupCommand: 'codex',
@@ -267,6 +273,7 @@ describe('createSequencedSetupAgentCommands', () => {
       nonce: 'nonce-win',
       waitTimeoutSeconds: 3
     })
+
     const setupPowerShell = decodePowerShellScript(result.setupCommand)
     const startupPowerShell = decodePowerShellScript(result.startupCommand)
 
@@ -386,6 +393,7 @@ describe('createSequencedSetupAgentCommands', () => {
       const setupExit = await waitForExit(
         spawnWindowsCommand(tempDir, 'run-setup.cmd', commands.setupCommand)
       )
+
       expect(setupExit.code).toBe(0)
       expect(readIfExists(`${runnerScriptPath}.windows-sequence.done`)).toBe(
         'windows-sequence:0\r\n'
@@ -445,6 +453,7 @@ describe('createSequencedSetupAgentCommands', () => {
           env: { ...process.env, ...commands.startupEnv }
         })
       )
+
       await sleep(250)
       expect(readIfExists(logPath)).toBe('')
       expect(readFileSync(markerPath, 'utf8')).toBe('stale:0\n')
@@ -452,6 +461,7 @@ describe('createSequencedSetupAgentCommands', () => {
       const setupExit = await waitForExit(
         spawn('bash', ['-lc', commands.setupCommand], { stdio: 'pipe' })
       )
+
       expect(setupExit.code).toBe(0)
 
       const startupExit = await startupExitPromise
@@ -486,12 +496,14 @@ describe('createSequencedSetupAgentCommands', () => {
       const setupExitPromise = waitForExit(
         spawn('bash', ['-lc', commands.setupCommand], { stdio: 'pipe' })
       )
+
       const startupExit = await waitForExit(
         spawn('bash', ['-lc', commands.startupCommand], {
           stdio: 'pipe',
           env: { ...process.env, ...commands.startupEnv }
         })
       )
+
       const setupExit = await setupExitPromise
 
       expect(setupExit.code).toBe(0)
@@ -536,6 +548,7 @@ describe('createSequencedSetupAgentCommands', () => {
       const setupExitPromise = waitForExit(
         spawn('bash', ['-lc', commands.setupCommand], { stdio: 'pipe' })
       )
+
       const startupExit = await waitForExit(
         spawn('bash', ['-lc', commands.startupCommand], {
           stdio: 'pipe',
@@ -546,6 +559,7 @@ describe('createSequencedSetupAgentCommands', () => {
           }
         })
       )
+
       const setupExit = await setupExitPromise
 
       expect(setupExit.code).toBe(0)
@@ -601,6 +615,7 @@ function resultPathWsl(): string {
 function makeTempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'orca-setup-sequencing-'))
   TEMP_DIRS.push(dir)
+
   return dir
 }
 
@@ -637,6 +652,7 @@ function spawnWindowsCommand(
   // Why: /s strips the quotes Node adds for batch paths containing spaces;
   // argv spawning still exercises cmd.exe's native parser without that loss.
   writeFileSync(scriptPath, `@echo off\r\n${command}\r\nexit /b %ERRORLEVEL%\r\n`, 'utf8')
+
   return spawn('cmd.exe', ['/d', '/c', scriptPath], {
     stdio: 'pipe',
     env: { ...process.env, ...env }
@@ -645,9 +661,11 @@ function spawnWindowsCommand(
 
 function decodePowerShellScript(command: string): string {
   const encoded = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)?.[1]
+
   if (!encoded) {
     throw new Error('Missing PowerShell encoded command')
   }
+
   return Buffer.from(encoded, 'base64').toString('utf16le')
 }
 

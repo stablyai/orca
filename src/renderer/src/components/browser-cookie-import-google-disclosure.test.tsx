@@ -10,13 +10,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import en from '@/i18n/locales/en.json'
 
 const DISCLOSURE_TITLE = "Google logins aren't imported"
+
 const DISCLOSURE_DESCRIPTION = 'Sign in to Google directly in Orca.'
 
 vi.mock('@/components/ui/dropdown-menu', () => dropdownMenuStubs())
+
 vi.mock('../ui/dropdown-menu', () => dropdownMenuStubs())
+
 vi.mock('@/components/ui/popover', () => popoverStubs())
+
 vi.mock('@/store', () => ({ useAppStore: appStoreStub() }))
+
 vi.mock('../../store', () => ({ useAppStore: appStoreStub() }))
+
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 import { BrowserCookieImportDisclosure } from './BrowserCookieImportDisclosure'
@@ -134,6 +140,7 @@ function catalogEntry(key: string): unknown {
 function dropdownMenuStubs(): Record<string, unknown> {
   const passthrough = ({ children }: { children?: ReactNode }): ReactNode => children
   const block = ({ children }: { children?: ReactNode }): ReactNode => <div>{children}</div>
+
   return {
     DropdownMenu: passthrough,
     DropdownMenuContent: block,
@@ -155,6 +162,7 @@ function dropdownMenuStubs(): Record<string, unknown> {
 function popoverStubs(): Record<string, unknown> {
   const passthrough = ({ children }: { children?: ReactNode }): ReactNode => children
   const block = ({ children }: { children?: ReactNode }): ReactNode => <div>{children}</div>
+
   return { Popover: passthrough, PopoverContent: block, PopoverTrigger: passthrough }
 }
 
@@ -180,8 +188,11 @@ function appStoreStub(): unknown {
     setBrowserImportHintHidden: vi.fn(),
     settingsSearchQuery: ''
   }
+
   const useAppStore = (selector?: (s: typeof state) => unknown): unknown =>
     selector ? selector(state) : state
+
   useAppStore.getState = (): typeof state => state
+
   return useAppStore
 }

@@ -36,13 +36,16 @@ const DEFAULTED_FIELDS = Object.keys(WORKTREE_META_PERSISTED_DEFAULTS) as Defaul
 /** Serialize-side: drop slots still at their default. Returns the input when nothing is dropped. */
 export function omitDefaultWorktreeMetaFields(meta: WorktreeMeta): WorktreeMeta {
   let compacted: WorktreeMeta | undefined
+
   for (const field of DEFAULTED_FIELDS) {
     if (meta[field] !== WORKTREE_META_PERSISTED_DEFAULTS[field]) {
       continue
     }
+
     compacted ??= { ...meta }
     delete (compacted as Record<string, unknown>)[field]
   }
+
   return compacted ?? meta
 }
 
@@ -51,14 +54,18 @@ export function omitDefaultWorktreeMetaFieldsInMap<T extends Record<string, Work
   metaById: T
 ): T {
   let compacted: Record<string, WorktreeMeta> | undefined
+
   for (const [key, meta] of Object.entries(metaById)) {
     const next = omitDefaultWorktreeMetaFields(meta)
+
     if (next === meta) {
       continue
     }
+
     compacted ??= { ...metaById }
     compacted[key] = next
   }
+
   return (compacted as T | undefined) ?? metaById
 }
 

@@ -17,6 +17,7 @@ describe('createIpcPtyTransport', () => {
   it('suppresses the error toast when pty:spawn rejects with TerminalKilledError', async () => {
     // Why: a killed-session TerminalKilledError is intended, not a bug, so no toast; string is Electron's IPC-wrapped form to hit the real path.
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const spawnMock = vi
       .fn()
       .mockRejectedValue(
@@ -58,6 +59,7 @@ describe('createIpcPtyTransport', () => {
   it('still surfaces non-kill spawn errors via onError', async () => {
     // Why: keep TerminalKilledError suppression narrow so real spawn failures (bad cwd, missing shell) still reach the user.
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const spawnMock = vi.fn().mockRejectedValue(new Error('ENOENT: spawn /bin/nope not found'))
 
     ;(globalThis as { window: typeof window }).window = {
@@ -90,7 +92,9 @@ describe('createIpcPtyTransport', () => {
 
   it('surfaces the SSH-not-active toast for a regular SSH target with no PTY provider', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const spawnMock = vi.fn().mockRejectedValue(new Error('No PTY provider for connection ssh-1'))
+
     ;(globalThis as { window: typeof window }).window = {
       ...originalWindow,
       api: {
@@ -122,9 +126,11 @@ describe('createIpcPtyTransport', () => {
   it('suppresses the SSH-not-active toast for a runtime-owned (per-workspace-env) target', async () => {
     // Why: a runtime-owned SSH target disappearing is expected teardown (no reconnect dialog exists), so no toast should fire.
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const spawnMock = vi
       .fn()
       .mockRejectedValue(new Error('No PTY provider for connection runtime-ssh-orca-1'))
+
     ;(globalThis as { window: typeof window }).window = {
       ...originalWindow,
       api: {
@@ -158,6 +164,7 @@ describe('createIpcPtyTransport', () => {
     // SSH target re-adoption the other connection is the SAME machine — two `claude --resume` on one
     // transcript. The no-toast half of #7661 is still pinned below; the verdict half is now unverifiable.
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const spawnMock = vi
       .fn()
       .mockRejectedValue(
@@ -165,6 +172,7 @@ describe('createIpcPtyTransport', () => {
           'PTY ssh:ssh-1779863656395-57g1q1@@pty-3 belongs to SSH connection "ssh-1779863656395-57g1q1"'
         )
       )
+
     ;(globalThis as { window: typeof window }).window = {
       ...originalWindow,
       api: {
@@ -183,6 +191,7 @@ describe('createIpcPtyTransport', () => {
     } as unknown as typeof window
 
     const onError = vi.fn()
+
     const result = await createIpcPtyTransport({ connectionId: 'ssh-other' }).connect({
       url: '',
       sessionId: 'ssh:ssh-1779863656395-57g1q1@@pty-3',
@@ -199,7 +208,9 @@ describe('createIpcPtyTransport', () => {
     // Guards the other direction of the change above: only the client-side mismatch lost its
     // respawn licence. SSH_SESSION_EXPIRED is the relay's own absence verdict and must keep it.
     const { createIpcPtyTransport } = await import('./pty-transport')
+
     const spawnMock = vi.fn().mockRejectedValue(new Error('SSH_SESSION_EXPIRED: ssh:ssh-1@@pty-3'))
+
     ;(globalThis as { window: typeof window }).window = {
       ...originalWindow,
       api: {
@@ -218,6 +229,7 @@ describe('createIpcPtyTransport', () => {
     } as unknown as typeof window
 
     const onError = vi.fn()
+
     const result = await createIpcPtyTransport({ connectionId: 'ssh-1' }).connect({
       url: '',
       sessionId: 'ssh:ssh-1@@pty-3',
@@ -231,6 +243,7 @@ describe('createIpcPtyTransport', () => {
   it('surfaces terminal session state save failures without the Electron IPC wrapper', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const wrappedMessage = `Error invoking remote method 'pty:spawn': Error: ${createTerminalSessionStateSaveFailureMessage()}`
+
     const spawnMock = vi.fn().mockRejectedValue(new Error(wrappedMessage))
 
     ;(globalThis as { window: typeof window }).window = {

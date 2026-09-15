@@ -60,8 +60,10 @@ export function useCreateRepo(
           'Enter an SSH parent path.'
         )
       )
+
       return null
     }
+
     if (options.runtimeEnvironmentId?.trim()) {
       // Why: the native folder picker returns a client-local path. Runtime
       // project creation needs an explicit host parent path.
@@ -71,28 +73,36 @@ export function useCreateRepo(
           'Enter a host parent path.'
         )
       )
+
       return null
     }
+
     const gen = createGenRef.current
     const dir = await window.api.repos.pickDirectory()
+
     if (dir && gen === createGenRef.current && mountedRef.current) {
       setCreateParent(dir)
       setCreateError(null)
+
       return dir
     }
+
     return null
   }, [mountedRef, options.runtimeEnvironmentId, options.sshTargetId])
 
   const handleCreate = useCallback(async () => {
     const name = createName.trim()
     const parentPath = createParent.trim()
+
     if (!name || !parentPath) {
       return
     }
+
     const requestHostToken = hostTokenRef.current
     const gen = ++createGenRef.current
     setIsCreating(true)
     setCreateError(null)
+
     try {
       const target = options.runtimeEnvironmentId?.trim()
         ? { kind: 'environment' as const, environmentId: options.runtimeEnvironmentId.trim() }
@@ -100,9 +110,11 @@ export function useCreateRepo(
             ...useAppStore.getState().settings,
             activeRuntimeEnvironmentId: null
           })
+
       // Why: Create Project is intentionally Git-only; non-Git folders use the
       // existing add-folder flows instead of this path.
       const createKind = 'git' as const
+
       const result = options.sshTargetId
         ? await window.api.repos.createRemote({
             connectionId: options.sshTargetId,
@@ -126,6 +138,7 @@ export function useCreateRepo(
               name,
               kind: createKind
             })
+
       // Why: if the user closed the dialog or clicked Back mid-create,
       // createGenRef was bumped by resetCreateState. Ignore stale results.
       if (
@@ -135,10 +148,13 @@ export function useCreateRepo(
       ) {
         return
       }
+
       if ('error' in result) {
         setCreateError(result.error)
+
         return
       }
+
       const { alreadyPresent: wasDeduped, repo } = upsertAddedRepoWithProjectHostSetup(
         result.repo,
         {
@@ -146,6 +162,7 @@ export function useCreateRepo(
           sshConnectionId: options.sshTargetId
         }
       )
+
       // Why: the IPC handler dedupes by path (see repos:create) and returns
       // the existing repo unchanged. If its host identity is already in our store, the
       // handler took the dedup path — no new project was created, so don't
@@ -168,6 +185,7 @@ export function useCreateRepo(
           }
         )
       }
+
       if (isGitRepoKind(repo)) {
         // Why: Git repos use the shared default-checkout completion path.
         // Why: if refresh is temporarily non-authoritative, the shared opener
@@ -176,7 +194,9 @@ export function useCreateRepo(
           options.runtimeEnvironmentId,
           options.sshTargetId
         )
+
         await fetchWorktrees(repo.id, ownerOptions)
+
         if (
           gen !== createGenRef.current ||
           requestHostToken !== hostTokenRef.current ||
@@ -184,6 +204,7 @@ export function useCreateRepo(
         ) {
           return
         }
+
         await (ownerOptions.executionHostId
           ? onGitRepoReady?.(repo.id, ownerOptions.executionHostId)
           : onGitRepoReady?.(repo.id))
@@ -194,9 +215,11 @@ export function useCreateRepo(
           options.runtimeEnvironmentId,
           options.sshTargetId
         )
+
         await (ownerOptions.executionHostId
           ? fetchWorktrees(repo.id, { executionHostId: ownerOptions.executionHostId })
           : fetchWorktrees(repo.id))
+
         if (
           gen !== createGenRef.current ||
           requestHostToken !== hostTokenRef.current ||
@@ -204,6 +227,7 @@ export function useCreateRepo(
         ) {
           return
         }
+
         const folderWorktree = useAppStore
           .getState()
           .worktreesByRepo[repo.id]?.find(
@@ -211,6 +235,7 @@ export function useCreateRepo(
               ownerOptions.executionHostId === undefined ||
               worktree.hostId === ownerOptions.executionHostId
           )
+
         if (folderWorktree) {
           activateAndRevealWorktree(folderWorktree.id, {
             sidebarRevealBehavior: 'auto',
@@ -219,6 +244,7 @@ export function useCreateRepo(
               : {})
           })
         }
+
         await markOnboardingProjectAdded('addedFolder')
         closeModal()
       }
@@ -230,6 +256,7 @@ export function useCreateRepo(
       ) {
         return
       }
+
       setCreateError(extractIpcErrorMessage(err, String(err)))
     } finally {
       // Why: only clear the loading state if this invocation is still current;

@@ -32,13 +32,17 @@ export function broadcastSshState(
   // Why: runtime-owned (ephemeral-VM) targets are hidden from the renderer, so broadcasting their state only triggers wasted listTargets() lookups.
   if (isRuntimeOwnedSshTargetId(targetId)) {
     currentRuntime?.invalidateSshWorktreeScanCache?.(targetId)
+
     return
   }
+
   const enrichedState = withSshRemotePlatform(targetId, state)
   const win = getMainWindow()
+
   if (win && !win.isDestroyed()) {
     win.webContents.send('ssh:state-changed', { targetId, state: enrichedState })
   }
+
   // Why: paired remote clients have no ssh:state-changed IPC; without this their terminals keep a stale reconnect overlay.
   currentRuntime?.notifySshStateChanged?.(targetId, enrichedState)
 }
@@ -46,6 +50,7 @@ export function broadcastSshState(
 function withSshRemotePlatform(targetId: string, state: SshConnectionState): SshConnectionState {
   const remotePlatform = activeSessions.get(targetId)?.getHostPlatform()?.os
   const authority = getSshProviderAuthority(targetId)
+
   return {
     ...state,
     targetId,
@@ -78,6 +83,7 @@ export function connectionSupportsFolderDownload(targetId: string): boolean {
 
 export function getPublicSshState(targetId: string): SshConnectionState | undefined {
   const state = relayStateOverrides.get(targetId) ?? connectionManager!.getState(targetId)
+
   return state ? withSshRemotePlatform(targetId, state) : undefined
 }
 
@@ -86,9 +92,11 @@ export function broadcastPortForwards(
   targetId: string
 ): void {
   const win = getMainWindow()
+
   if (!win || win.isDestroyed()) {
     return
   }
+
   win.webContents.send('ssh:port-forwards-changed', {
     targetId,
     forwards: listForwardsEnriched(targetId)
@@ -102,9 +110,11 @@ export function broadcastDetectedPorts(
   options?: Parameters<typeof enrichSshDetectedPorts>[3]
 ): void {
   const win = getMainWindow()
+
   if (!win || win.isDestroyed()) {
     return
   }
+
   win.webContents.send('ssh:detected-ports-changed', {
     targetId,
     ports: enrichDetected(targetId, ports, options)
@@ -113,9 +123,11 @@ export function broadcastDetectedPorts(
 
 function listForwardsEnriched(targetId: string): ReturnType<SshPortForwardManager['listForwards']> {
   const raw = portForwardManager!.listForwards(targetId)
+
   if (!persistedStore) {
     return raw
   }
+
   return enrichSshForwardEntries(raw, getWorktreeIdsForConnection(persistedStore, targetId))
 }
 
@@ -127,6 +139,7 @@ export function enrichDetected(
   if (!persistedStore) {
     return ports
   }
+
   return enrichSshDetectedPorts(
     ports,
     getWorktreeIdsForConnection(persistedStore, targetId),

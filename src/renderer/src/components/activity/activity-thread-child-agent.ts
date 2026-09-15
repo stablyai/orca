@@ -19,15 +19,19 @@ export type ChildAgentClassifiableThread = {
 /** Every entry that can carry the pane's orchestration lineage, newest first. */
 function candidateEntries(thread: ChildAgentClassifiableThread): ChildAgentLineageEntry[] {
   const entries: ChildAgentLineageEntry[] = []
+
   if (thread.currentAgentEntry) {
     entries.push(thread.currentAgentEntry)
   }
+
   if (thread.latestEvent?.entry) {
     entries.push(thread.latestEvent.entry)
   }
+
   for (const event of thread.events ?? []) {
     entries.push(event.entry)
   }
+
   return entries
 }
 
@@ -37,6 +41,7 @@ function firstReportedTerminalHandle(thread: ChildAgentClassifiableThread): stri
       return entry.terminalHandle
     }
   }
+
   return undefined
 }
 
@@ -56,13 +61,17 @@ export function collectChildAgentPaneKeys(
     paneKey: thread.paneKey,
     entry: { terminalHandle: firstReportedTerminalHandle(thread) }
   }))
+
   const rowsByPaneKey = new Map<string, AgentLineageSourceRow>()
+
   for (const row of baseRows) {
     if (!rowsByPaneKey.has(row.paneKey)) {
       rowsByPaneKey.set(row.paneKey, row)
     }
   }
+
   const paneKeyByTerminalHandle = new Map<string, string>()
+
   for (const row of baseRows) {
     if (row.entry.terminalHandle && !paneKeyByTerminalHandle.has(row.entry.terminalHandle)) {
       paneKeyByTerminalHandle.set(row.entry.terminalHandle, row.paneKey)
@@ -71,18 +80,22 @@ export function collectChildAgentPaneKeys(
 
   const rows = threads.map((thread, index) => {
     const base = baseRows[index]
+
     for (const entry of candidateEntries(thread)) {
       if (!entry.orchestration) {
         continue
       }
+
       const probe: AgentLineageSourceRow = {
         paneKey: thread.paneKey,
         entry: { terminalHandle: base.entry.terminalHandle, orchestration: entry.orchestration }
       }
+
       if (resolveAgentRowParentPaneKey(probe, rowsByPaneKey, paneKeyByTerminalHandle)) {
         return probe
       }
     }
+
     return base
   })
 

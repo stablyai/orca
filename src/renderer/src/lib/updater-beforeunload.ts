@@ -20,6 +20,7 @@ export function registerUpdaterBeforeUnloadBypass(): () => void {
   const markInProgress = (): void => {
     intentionalAppRestartInProgress = true
   }
+
   const clearInProgress = (): void => {
     intentionalAppRestartInProgress = false
   }

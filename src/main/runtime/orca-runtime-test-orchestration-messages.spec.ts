@@ -24,6 +24,7 @@ export class InMemoryOrchestrationMessages {
     payload?: string
   }): MessageRow {
     this.sequence += 1
+
     const row: MessageRow = {
       id: `msg_${this.sequence}`,
       run_id: 'run_test',
@@ -41,7 +42,9 @@ export class InMemoryOrchestrationMessages {
       delivered_at: null,
       sender_pane_key: null
     }
+
     this.messages.push(row)
+
     return row
   }
 
@@ -62,12 +65,14 @@ export class InMemoryOrchestrationMessages {
     options?: { excludeTypes?: readonly string[]; limit?: number }
   ): MessageRow[] {
     const excluded = new Set(options?.excludeTypes ?? [])
+
     const rows = this.getUnreadMessages(toHandle, types).filter(
       (message) =>
         !message.delivered_at &&
         (message.pointer_enter_pending ?? 0) === 0 &&
         !excluded.has(message.type)
     )
+
     return options?.limit === undefined ? rows : rows.slice(0, Math.max(1, options.limit))
   }
 
@@ -110,21 +115,25 @@ export class InMemoryOrchestrationMessages {
     target: { ptyId: string; processIncarnation: string }
   ): boolean {
     const stagedIds = new Set(ids)
+
     const claimed = this.messages.filter(
       (message) =>
         stagedIds.has(message.id) &&
         message.read === 0 &&
         (message.pointer_enter_pending ?? 0) === 0
     )
+
     // Production claims all-or-nothing, so a stolen reservation must not half-succeed here.
     if (claimed.length !== ids.length) {
       return false
     }
+
     for (const message of claimed) {
       message.pointer_enter_pending = 1
       message.pointer_pty_id = target.ptyId
       message.pointer_process_incarnation = target.processIncarnation
     }
+
     return true
   }
 
@@ -148,11 +157,13 @@ export class InMemoryOrchestrationMessages {
     expectedPhases: readonly number[]
   ): void {
     const settled = this.matchMailboxPointerEnter(ids, target, expectedPhases)
+
     for (const message of this.messages) {
       if (settled.has(message.id)) {
         message.delivered_at ??= '1970-01-01 00:00:00'
       }
     }
+
     this.clearMailboxPointerEnter(settled)
   }
 
@@ -162,11 +173,13 @@ export class InMemoryOrchestrationMessages {
     expectedPhases: readonly number[]
   ): void {
     const released = this.matchMailboxPointerEnter(ids, target, expectedPhases)
+
     for (const message of this.messages) {
       if (released.has(message.id) && message.read === 0) {
         message.delivered_at = null
       }
     }
+
     this.clearMailboxPointerEnter(released)
   }
 
@@ -178,6 +191,7 @@ export class InMemoryOrchestrationMessages {
         )
         .map((message) => message.id)
     )
+
     const pendingIds = new Set(
       this.messages
         .filter(
@@ -185,6 +199,7 @@ export class InMemoryOrchestrationMessages {
         )
         .map((message) => message.id)
     )
+
     for (const message of this.messages) {
       if (reservedIds.has(message.id) && message.read === 0) {
         message.delivered_at = null
@@ -192,6 +207,7 @@ export class InMemoryOrchestrationMessages {
         message.delivered_at ??= '1970-01-01 00:00:00'
       }
     }
+
     this.clearMailboxPointerEnter(pendingIds)
   }
 
@@ -249,9 +265,11 @@ export class InMemoryOrchestrationMessages {
       (message) =>
         message.run_id === runId && message.to_handle === directHandle && message.read === 0
     )
+
     for (const message of routed) {
       message.to_handle = `run:${runId}`
     }
+
     return {
       routedCount: routed.length,
       hasMore: false,
@@ -269,21 +287,25 @@ export class InMemoryOrchestrationMessages {
 
   markAsDelivered(ids: string[]): void {
     const deliveredIds = new Set(ids)
+
     for (const message of this.messages) {
       if (deliveredIds.has(message.id)) {
         message.delivered_at = '1970-01-01 00:00:00'
       }
     }
+
     this.clearMailboxPointerEnter(deliveredIds)
   }
 
   markAsUndelivered(ids: string[]): void {
     const releasedIds = new Set(ids)
+
     for (const message of this.messages) {
       if (releasedIds.has(message.id) && message.read === 0) {
         message.delivered_at = null
       }
     }
+
     this.clearMailboxPointerEnter(releasedIds)
   }
 
@@ -304,6 +326,7 @@ export class InMemoryOrchestrationMessages {
     to: number
   ): boolean {
     const selected = new Set(ids)
+
     const advanced = this.messages.filter(
       (message) =>
         selected.has(message.id) &&
@@ -312,12 +335,15 @@ export class InMemoryOrchestrationMessages {
         message.pointer_pty_id === target.ptyId &&
         message.pointer_process_incarnation === target.processIncarnation
     )
+
     if (advanced.length !== ids.length) {
       return false
     }
+
     for (const message of advanced) {
       message.pointer_enter_pending = to
     }
+
     return true
   }
 

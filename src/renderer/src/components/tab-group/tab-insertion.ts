@@ -28,19 +28,25 @@ export function resolveTabInsertion(
 ): HoveredTabInsertion | null {
   const overData = event.over?.data.current
   const activeData = event.active.data.current
+
   if (!event.over || !isTabDragData(activeData) || !isTabDragData(overData)) {
     return null
   }
+
   // Why: dropping a tab onto itself is a no-op — suppress the indicator there
   // so users don't see a false positive target.
   if (activeData.unifiedTabId === overData.unifiedTabId) {
     return null
   }
+
   const center = getDragCenter(event)
+
   if (!center) {
     return null
   }
+
   const midpoint = event.over.rect.left + event.over.rect.width / 2
+
   return {
     groupId: overData.groupId,
     visibleTabId: overData.visibleTabId,
@@ -57,14 +63,17 @@ export function resolveTabIndicatorEdges(
   }
 
   const hoveredIndex = orderedVisibleTabIds.indexOf(hoveredTabInsertion.visibleTabId)
+
   if (hoveredIndex === -1) {
     return []
   }
 
   const insertionIndex = hoveredIndex + (hoveredTabInsertion.side === 'right' ? 1 : 0)
+
   if (insertionIndex < orderedVisibleTabIds.length) {
     return [{ visibleTabId: orderedVisibleTabIds[insertionIndex]!, side: 'left' }]
   }
+
   return [{ visibleTabId: orderedVisibleTabIds[insertionIndex - 1]!, side: 'right' }]
 }
 
@@ -72,6 +81,7 @@ function equal(a: HoveredTabInsertion | null, b: HoveredTabInsertion | null): bo
   if (a === b) {
     return true
   }
+
   return (
     a !== null &&
     b !== null &&
@@ -90,6 +100,7 @@ export function useHoveredTabInsertion(
   clear: () => void
 } {
   const [hoveredTabInsertion, setHoveredTabInsertion] = useState<HoveredTabInsertion | null>(null)
+
   const update = useCallback(
     (event: DragMoveEvent | DragOverEvent) => {
       const next = resolveTabInsertion(event, isTabDragData, getDragCenter)
@@ -97,6 +108,8 @@ export function useHoveredTabInsertion(
     },
     [isTabDragData, getDragCenter]
   )
+
   const clear = useCallback(() => setHoveredTabInsertion(null), [])
+
   return { hoveredTabInsertion, update, clear }
 }

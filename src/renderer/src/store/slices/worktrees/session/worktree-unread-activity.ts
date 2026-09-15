@@ -26,6 +26,7 @@ export function createMarkWorktreeUnread(
     // Why: attention dot stays until the user engages the worktree; cleared by pane interaction or activation.
     const now = Date.now()
     const workspaceScope = parseWorkspaceKey(worktreeId)
+
     if (workspaceScope?.type === 'folder') {
       const folderWorkspaceId = workspaceScope.folderWorkspaceId
       let shouldPersist = false
@@ -33,10 +34,13 @@ export function createMarkWorktreeUnread(
         const folderWorkspace = s.folderWorkspaces.find(
           (workspace) => workspace.id === folderWorkspaceId
         )
+
         if (!folderWorkspace || folderWorkspace.isUnread) {
           return s
         }
+
         shouldPersist = true
+
         return {
           folderWorkspaces: s.folderWorkspaces.map((workspace) =>
             workspace.id === folderWorkspaceId
@@ -46,26 +50,34 @@ export function createMarkWorktreeUnread(
           sortEpoch: s.sortEpoch + 1
         }
       })
+
       if (!shouldPersist) {
         return
       }
+
       void get().updateFolderWorkspace(folderWorkspaceId, {
         isUnread: true,
         lastActivityAt: now
       })
+
       return
     }
+
     let shouldPersist = false
     set((s) => {
       const worktree = findKnownWorktreeById(s, worktreeId)
+
       if (!worktree || worktree.isUnread) {
         return s
       }
+
       shouldPersist = true
+
       const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
         isUnread: true,
         lastActivityAt: now
       })
+
       const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
         s.detectedWorktreesByRepo,
         worktreeId,
@@ -74,6 +86,7 @@ export function createMarkWorktreeUnread(
           lastActivityAt: now
         }
       )
+
       return {
         ...(nextWorktrees !== s.worktreesByRepo
           ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
@@ -104,13 +117,17 @@ export function createObserveTerminalGitHubPullRequestLink(
   return (worktreeId, link) => {
     const state = get()
     const worktree = findKnownWorktreeById(state, worktreeId)
+
     if (!worktree || worktree.isBare || worktree.isArchived) {
       return
     }
+
     const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
+
     if (!repo || (repo.kind && repo.kind !== 'git')) {
       return
     }
+
     if (
       isGitHubPRSuppressed(worktree, link.number) ||
       (typeof worktree.linkedPR === 'number' && worktree.linkedPR !== link.number)
@@ -122,6 +139,7 @@ export function createObserveTerminalGitHubPullRequestLink(
     const alreadyLinked = worktree.linkedPR === link.number
 
     const fetchPRForBranch = get().fetchPRForBranch
+
     if (typeof fetchPRForBranch === 'function') {
       void fetchPRForBranch(repo.path, branch, {
         force: true,
@@ -151,10 +169,12 @@ export function createObserveTerminalGitHubPullRequestLink(
           )
         }
       })
+
       return
     }
 
     const fetchHostedReviewForBranch = get().fetchHostedReviewForBranch
+
     if (typeof fetchHostedReviewForBranch === 'function') {
       // Why: full app stores have fetchPRForBranch (syncs the hosted-review cache); this is only a slice-test fallback.
       void refreshHostedReviewCard(fetchHostedReviewForBranch, {
@@ -175,14 +195,18 @@ export function createClearWorktreeUnread(
 ): WorktreeSlice['clearWorktreeUnread'] {
   return (worktreeId) => {
     const workspaceScope = parseWorkspaceKey(worktreeId)
+
     if (workspaceScope?.type === 'folder') {
       const folderWorkspaceId = workspaceScope.folderWorkspaceId
+
       const folderWorkspace = get().folderWorkspaces.find(
         (workspace) => workspace.id === folderWorkspaceId
       )
+
       if (!folderWorkspace?.isUnread) {
         return
       }
+
       // Why: flip locally first — this runs per keystroke, so the guard above must dedupe before the IPC round-trip lands.
       set((s) => ({
         folderWorkspaces: s.folderWorkspaces.map((workspace) =>
@@ -190,19 +214,25 @@ export function createClearWorktreeUnread(
         )
       }))
       void get().updateFolderWorkspace(folderWorkspaceId, { isUnread: false })
+
       return
     }
+
     let shouldPersist = false
     set((s) => {
       const worktree = findKnownWorktreeById(s, worktreeId)
+
       if (!worktree || !worktree.isUnread) {
         // Why: return `s` (not {}) to keep the object reference on this hot-path no-op (every keystroke), avoiding selector churn.
         return s
       }
+
       shouldPersist = true
+
       const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
         isUnread: false
       })
+
       const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
         s.detectedWorktreesByRepo,
         worktreeId,
@@ -210,6 +240,7 @@ export function createClearWorktreeUnread(
           isUnread: false
         }
       )
+
       return {
         ...(nextWorktrees !== s.worktreesByRepo ? { worktreesByRepo: nextWorktrees } : {}),
         ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo
@@ -238,6 +269,7 @@ export function createBumpWorktreeActivity(
   return (worktreeId) => {
     const now = Date.now()
     const workspaceScope = parseWorkspaceKey(worktreeId)
+
     if (workspaceScope?.type === 'folder') {
       // Why: folder meta lives on the FolderWorkspace record — persistWorktreeMeta would write a
       // worktreeMeta['folder:…'] row that folderWorkspaces:list never reads back (#10251).
@@ -247,8 +279,10 @@ export function createBumpWorktreeActivity(
         if (!s.folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
           return s
         }
+
         shouldPersist = true
         const isActive = s.activeWorktreeId === worktreeId
+
         return {
           folderWorkspaces: s.folderWorkspaces.map((workspace) =>
             workspace.id === folderWorkspaceId ? { ...workspace, lastActivityAt: now } : workspace
@@ -257,24 +291,31 @@ export function createBumpWorktreeActivity(
           ...(isActive ? {} : { sortEpoch: s.sortEpoch + 1 })
         }
       })
+
       if (shouldPersist) {
         getFolderWorkspaceActivityPersistence(get).record(folderWorkspaceId, now)
       }
+
       return
     }
+
     let shouldPersist = false
     set((s) => {
       const worktree = findKnownWorktreeById(s, worktreeId)
+
       if (!worktree) {
         return s
       }
+
       shouldPersist = true
       // Why: skip sortEpoch bump for the active worktree — its PTY events are click side-effects (reorder-on-click bug, PR #209).
       // lastActivityAt is still persisted so the next background-driven sortEpoch bump includes this worktree's score.
       const isActive = s.activeWorktreeId === worktreeId
+
       const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, {
         lastActivityAt: now
       })
+
       const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
         s.detectedWorktreesByRepo,
         worktreeId,
@@ -282,6 +323,7 @@ export function createBumpWorktreeActivity(
           lastActivityAt: now
         }
       )
+
       return {
         ...(nextWorktrees !== s.worktreesByRepo
           ? {
@@ -300,16 +342,20 @@ export function createBumpWorktreeActivity(
     }
 
     const ownerSettings = trySettingsForWorktreeOwner(get(), worktreeId)
+
     if (!ownerSettings) {
       warnAmbiguousOwnerOnce(worktreeId, 'persist worktree activity timestamp')
+
       return
     }
+
     void persistWorktreeMeta(ownerSettings, worktreeId, {
       lastActivityAt: now
     }).catch((err) => {
       if (isRuntimeSelectorNotFoundError(err)) {
         return
       }
+
       console.error('Failed to persist worktree activity timestamp:', err)
       void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
     })

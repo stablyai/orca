@@ -16,13 +16,16 @@ describe('probeExactRefs', () => {
     const absent = 'refs/remotes/upstream/main'
     const unknown = 'refs/remotes/fork/main'
     const invalid = 'refs/remotes/origin/bad*'
+
     const runGit = vi.fn(async (argv: string[]) => {
       if (argv.at(-1) === absent) {
         throw Object.assign(new Error('no match'), { code: 1 })
       }
+
       if (argv.at(-1) === unknown) {
         throw Object.assign(new Error('transport failed'), { code: 128 })
       }
+
       return { stdout: '' }
     })
 
@@ -57,6 +60,7 @@ describe('probeExactRefs', () => {
     const refs = Array.from({ length: 20 }, (_, index) => `refs/remotes/remote-${index}/main`)
     let active = 0
     let maxActive = 0
+
     const runGit = vi.fn(async () => {
       active += 1
       maxActive = Math.max(maxActive, active)
@@ -77,10 +81,12 @@ describe('probeExactRefs', () => {
 describe('probeAnyExactRef', () => {
   it('stops scheduling once a ref is present', async () => {
     const refs = Array.from({ length: 20 }, (_, index) => `refs/remotes/remote-${index}/main`)
+
     const runGit = vi.fn(async (argv: string[]) => {
       if (argv.at(-1) === refs[0]) {
         return { stdout: '' }
       }
+
       await new Promise((resolve) => setTimeout(resolve, 0))
       throw Object.assign(new Error('no match'), { code: 1 })
     })

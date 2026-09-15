@@ -6,10 +6,12 @@ import { createDragReorderState } from './pane-drag-reorder'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 
 const detachPaneFromTree = vi.hoisted(() => vi.fn())
+
 const insertPaneNextTo = vi.hoisted(() => vi.fn())
 
 vi.mock('./pane-tree-ops', async (importOriginal) => {
   const actual = await importOriginal<typeof PaneTreeOpsModule>()
+
   return {
     ...actual,
     detachPaneFromTree,
@@ -85,6 +87,7 @@ class FakeElement {
     if (this.releasePointerCaptureError) {
       throw this.releasePointerCaptureError
     }
+
     this.capturedPointerIds.delete(pointerId)
   }
 
@@ -117,8 +120,10 @@ function pointerEvent(args: Partial<PointerEvent>): PointerEvent {
 function createPane(id: number, container: FakeElement): ManagedPaneInternal {
   const leafId =
     `${id}${id}${id}${id}${id}${id}${id}${id}-${id}${id}${id}${id}-4${id}${id}${id}-8${id}${id}${id}-${id}${id}${id}${id}${id}${id}${id}${id}${id}${id}${id}${id}` as TerminalLeafId
+
   container.dataset.paneId = String(id)
   container.dataset.leafId = leafId
+
   return {
     id,
     leafId,
@@ -176,6 +181,7 @@ describe('attachPaneDrag', () => {
   it('cleans pane drag state when pointer capture is cancelled', () => {
     const handle = new FakeElement()
     const root = new FakeElement(['pane-manager-root'])
+
     const sourceContainer = new FakeElement(['pane'], {
       left: 0,
       top: 0,
@@ -184,6 +190,7 @@ describe('attachPaneDrag', () => {
       width: 100,
       height: 100
     })
+
     const targetContainer = new FakeElement(['pane'], {
       left: 0,
       top: 100,
@@ -192,12 +199,15 @@ describe('attachPaneDrag', () => {
       width: 100,
       height: 100
     })
+
     const sourcePane = createPane(1, sourceContainer)
     const targetPane = createPane(2, targetContainer)
+
     const panes = new Map<number, ManagedPaneInternal>([
       [sourcePane.id, sourcePane],
       [targetPane.id, targetPane]
     ])
+
     const onDragActiveChange = vi.fn()
     const state = createDragReorderState()
 
@@ -239,6 +249,7 @@ describe('attachPaneDrag', () => {
   it('cleans pane drag state if releasing pointer capture fails during drop', () => {
     const handle = new FakeElement()
     const root = new FakeElement(['pane-manager-root'])
+
     const sourceContainer = new FakeElement(['pane'], {
       left: 0,
       top: 0,
@@ -247,6 +258,7 @@ describe('attachPaneDrag', () => {
       width: 100,
       height: 100
     })
+
     const targetContainer = new FakeElement(['pane'], {
       left: 0,
       top: 100,
@@ -255,12 +267,15 @@ describe('attachPaneDrag', () => {
       width: 100,
       height: 100
     })
+
     const sourcePane = createPane(1, sourceContainer)
     const targetPane = createPane(2, targetContainer)
+
     const panes = new Map<number, ManagedPaneInternal>([
       [sourcePane.id, sourcePane],
       [targetPane.id, targetPane]
     ])
+
     const onDragActiveChange = vi.fn()
     const state = createDragReorderState()
 
@@ -297,6 +312,7 @@ describe('attachPaneDrag', () => {
   it('drops onto an external target when no pane target is under the pointer', () => {
     const handle = new FakeElement()
     const root = new FakeElement(['pane-manager-root'])
+
     const sourcePane = createPane(
       1,
       new FakeElement(['pane'], {
@@ -308,6 +324,7 @@ describe('attachPaneDrag', () => {
         height: 100
       })
     )
+
     const siblingPane = createPane(
       2,
       new FakeElement(['pane'], {
@@ -319,15 +336,18 @@ describe('attachPaneDrag', () => {
         height: 100
       })
     )
+
     const panes = new Map<number, ManagedPaneInternal>([
       [sourcePane.id, sourcePane],
       [siblingPane.id, siblingPane]
     ])
+
     const externalTarget = {
       id: 'group-1',
       overlayKind: 'insertion' as const,
       rect: { left: 0, top: 0, right: 300, bottom: 32, width: 300, height: 32 } as DOMRect
     }
+
     const onExternalPaneDrop = vi.fn(() => true)
     const state = createDragReorderState()
 
@@ -373,10 +393,12 @@ describe('attachPaneDrag', () => {
     const targetContainer = new FakeElement(['pane'])
     const sourcePane = createPane(1, sourceContainer)
     const targetPane = createPane(2, targetContainer)
+
     const panes = new Map<number, ManagedPaneInternal>([
       [sourcePane.id, sourcePane],
       [targetPane.id, targetPane]
     ])
+
     const state = createDragReorderState()
 
     const cleanup = attachPaneDrag(handle as unknown as HTMLElement, sourcePane.id, state, {
@@ -412,10 +434,12 @@ describe('attachPaneDrag', () => {
     const root = new FakeElement(['pane-manager-root'])
     const sourcePane = createPane(1, new FakeElement(['pane']))
     const targetPane = createPane(2, new FakeElement(['pane']))
+
     const panes = new Map<number, ManagedPaneInternal>([
       [sourcePane.id, sourcePane],
       [targetPane.id, targetPane]
     ])
+
     const state = createDragReorderState()
 
     attachPaneDrag(handle as unknown as HTMLElement, sourcePane.id, state, {

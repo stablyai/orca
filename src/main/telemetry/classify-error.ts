@@ -20,10 +20,12 @@ export function classifyError(err: unknown): ClassifiedError {
     typeof err === 'object' && err !== null && 'code' in err
       ? (err as { code?: unknown }).code
       : undefined
+
   const syscall =
     typeof err === 'object' && err !== null && 'syscall' in err
       ? (err as { syscall?: unknown }).syscall
       : undefined
+
   const message =
     typeof err === 'object' && err !== null && 'message' in err
       ? (err as { message?: unknown }).message

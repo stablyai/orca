@@ -8,12 +8,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ toastError: vi.fn(), importExternalPaths: vi.fn() }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, message: vi.fn() } }))
+
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(() => undefined, { getState: () => ({}) })
 }))
+
 vi.mock('@/runtime/runtime-file-client', () => ({
   importExternalPathsToRuntime: (...args: unknown[]) => mocks.importExternalPaths(...args)
 }))
+
 vi.mock('./composer-drop-listener', () => ({ useComposerDropListener: vi.fn() }))
 
 import { useAttachmentDropState } from './attachment-drop-state'
@@ -38,6 +41,7 @@ function installFsApi(): void {
               "Error invoking remote method 'fs:stat': Error: ENOENT: no such file or directory"
             )
           }
+
           return { isDirectory: false }
         })
       }
@@ -69,6 +73,7 @@ beforeEach(() => {
 describe('local composer drop failures', () => {
   it('reports partially skipped paths in one aggregated toast and still attaches the rest', async () => {
     const attached: string[] = []
+
     const { result } = renderDropState((next) => {
       attached.push(...(typeof next === 'function' ? next([]) : next))
     })

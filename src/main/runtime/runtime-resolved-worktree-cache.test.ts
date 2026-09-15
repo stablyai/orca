@@ -18,8 +18,10 @@ describe('RuntimeResolvedWorktreeCache', () => {
   it('reuses a snapshot inside the TTL while the repo inventory is unchanged', async () => {
     const cache = new RuntimeResolvedWorktreeCache()
     let computes = 0
+
     const compute = async (): Promise<ResolvedWorktreeSnapshot> => {
       computes += 1
+
       return snapshotOf(['repo-1::/a'])
     }
 
@@ -51,8 +53,10 @@ describe('RuntimeResolvedWorktreeCache', () => {
   it('does not join an in-flight compute that started under a stale inventory', async () => {
     const cache = new RuntimeResolvedWorktreeCache()
     const computed: number[] = []
+
     const compute = async (): Promise<ResolvedWorktreeSnapshot> => {
       computed.push(computed.length)
+
       return snapshotOf([])
     }
 
@@ -80,10 +84,13 @@ describe('RuntimeResolvedWorktreeCache', () => {
     // the snapshot was dropped, not because the worktree is gone.
     const cache = new RuntimeResolvedWorktreeCache()
     let computes = 0
+
     const prime = async (): Promise<ResolvedWorktreeSnapshot> => {
       computes += 1
+
       return snapshotOf(['repo-restore::/tmp/restore-records'])
     }
+
     await cache.getSnapshot(prime, 60_000, getWorktreeScanMutationRevision())
 
     // A read that mints a scan generation for a repo nothing has scanned yet is not a mutation.

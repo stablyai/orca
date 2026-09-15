@@ -30,13 +30,17 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
   const isOpen = activeModal === 'confirm-non-git-folder'
   const folderPath = typeof modalData.folderPath === 'string' ? modalData.folderPath : ''
   const connectionId = typeof modalData.connectionId === 'string' ? modalData.connectionId : ''
+
   const runtimeEnvironmentId =
     typeof modalData.runtimeEnvironmentId === 'string' ? modalData.runtimeEnvironmentId : ''
+
   const displayName = typeof modalData.displayName === 'string' ? modalData.displayName.trim() : ''
+
   const runtimeEnvironmentName =
     runtimeEnvironmentId &&
     (runtimeEnvironments.find((environment) => environment.id === runtimeEnvironmentId)?.name ||
       runtimeEnvironmentId)
+
   const checkedHostDescription = connectionId
     ? translate(
         'auto.components.sidebar.NonGitFolderDialog.9a766f33ac',
@@ -58,23 +62,28 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
       void (async () => {
         try {
           const stateBeforeAdd = useAppStore.getState()
+
           const result = await window.api.repos.addRemote({
             connectionId,
             remotePath: folderPath,
             kind: 'folder',
             ...(displayName ? { displayName } : {})
           })
+
           if ('error' in result) {
             throw new Error(result.error)
           }
+
           const { repo } = upsertAddedRepoWithProjectHostSetup(result.repo, {
             sshConnectionId: connectionId
           })
+
           const state = useAppStore.getState()
           const hadProjectBeforeAdd = stateBeforeAdd.repos.length > 0
           await markOnboardingProjectAdded('addedFolder')
           const ownerOptions = worktreeRefreshOptions(undefined, connectionId)
           await state.fetchWorktrees(repo.id, ownerOptions)
+
           // Why: mirror the local non-git folder flow — without this the
           // dialog closes and the UI shows no visible change, making the
           // add feel like a no-op. Activating the synthetic folder
@@ -84,8 +93,10 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
             .worktreesByRepo[repo.id]?.find(
               (worktree) => worktree.hostId === ownerOptions.executionHostId
             )
+
           if (folderWorktree) {
             const onboarding = await window.api.onboarding.get().catch(() => null)
+
             // Why: SSH users can hit this dialog from Add Project after
             // dismissing onboarding, bypassing the local addNonGitFolder path.
             const launch = resolveDismissedOnboardingFolderAgentLaunch({
@@ -95,6 +106,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
               executionHostId: ownerOptions.executionHostId ?? connectionId,
               nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
             })
+
             await revealOnboardingFolderWithAgentLaunch({
               worktreeId: folderWorktree.id,
               executionHostId: ownerOptions.executionHostId,
@@ -120,6 +132,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
         ...(displayName ? { displayName } : {})
       })
     }
+
     closeModal()
   }, [addNonGitFolder, closeModal, displayName, folderPath, connectionId, runtimeEnvironmentId])
 

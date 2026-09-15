@@ -17,12 +17,14 @@ export async function readRelayFileRange(
 ): Promise<{ base64: string; bytesRead: number }> {
   const { position, length } = validateFileRangeRequest(rawPosition, rawLength)
   const handle = await open(filePath, 'r')
+
   try {
     // allocUnsafe over alloc: only `subarray(0, bytesRead)` is ever read back, so
     // uninitialised bytes cannot escape, and a tailing poll with a generous
     // `length` should not pay a memset over the whole window per call.
     const buffer = Buffer.allocUnsafe(length)
     const bytesRead = await readFullStreamChunk(handle, buffer, length, position)
+
     return { base64: buffer.subarray(0, bytesRead).toString('base64'), bytesRead }
   } finally {
     await handle.close()

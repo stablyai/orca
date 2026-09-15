@@ -6,6 +6,7 @@ const { appRelaunchMock, recordDurableCrashBreadcrumbMock } = vi.hoisted(() => (
 }))
 
 vi.mock('electron', () => ({ app: { relaunch: appRelaunchMock } }))
+
 vi.mock('./crash-reporting/durable-crash-breadcrumb', () => ({
   recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
 }))
@@ -22,6 +23,7 @@ const originalPath = process.env.PATH
 
 afterEach(() => {
   _resetHydrateShellPathCache()
+
   if (originalPath === undefined) {
     delete process.env.PATH
   } else {

@@ -26,7 +26,9 @@ import {
 } from '../sidebar/worktree-delete-request'
 
 const SHARED_ID = 'repo-1::/work/orca'
+
 const LOCAL: ExecutionHostId = 'local'
+
 const SSH: ExecutionHostId = 'ssh:build-box'
 
 function spaceRow(executionHostId: ExecutionHostId): WorkspaceSpaceWorktree {
@@ -55,11 +57,13 @@ function storeRow(hostId: ExecutionHostId): Worktree {
 }
 
 const localStoreRow = storeRow(LOCAL)
+
 const sshStoreRow = storeRow(SSH)
 
 /** Stands in for getWorktreeOnHostFromState: resolve on the named host. */
 function lookupOnHost(worktreeId: string, hostId: ExecutionHostId | undefined) {
   const matches = [localStoreRow, sshStoreRow].filter((row) => row.id === worktreeId)
+
   return hostId ? matches.find((row) => row.hostId === hostId) : matches[0]
 }
 
@@ -68,6 +72,7 @@ function identitiesForSpaceDelete(targets: readonly WorkspaceSpaceWorktree[]) {
   return toWorktreeDeleteIdentities(
     targets.flatMap((target) => {
       const row = lookupOnHost(target.worktreeId, target.executionHostId ?? undefined)
+
       return row ? [row] : []
     })
   )
@@ -105,10 +110,12 @@ describe('Space Manager delete routes to the row host', () => {
   it('selects only the confirmed host when two rows share an id', () => {
     const local = spaceRow(LOCAL)
     const ssh = spaceRow(SSH)
+
     const selected = getSelectedDeletableWorkspaceRows(
       [local, ssh],
       new Set([getWorkspaceSpaceWorktreeIdentity(ssh)])
     )
+
     expect(selected).toEqual([ssh])
 
     const targets = resolveWorktreeBatchDeleteTargets(
@@ -122,6 +129,7 @@ describe('Space Manager delete routes to the row host', () => {
   it('keeps both rows when both host-qualified identities are selected', () => {
     const local = spaceRow(LOCAL)
     const ssh = spaceRow(SSH)
+
     const selected = getSelectedDeletableWorkspaceRows(
       [local, ssh],
       new Set([getWorkspaceSpaceWorktreeIdentity(local), getWorkspaceSpaceWorktreeIdentity(ssh)])

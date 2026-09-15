@@ -28,6 +28,7 @@ vi.mock('electron', () => ({
 describe('orchestration detached mailbox routing', () => {
   afterEach(() => {
     vi.useRealTimers()
+
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -37,15 +38,18 @@ describe('orchestration detached mailbox routing', () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-mailbox-dispatch-')
     const harness = createRuntime(db)
+
     const run = db.createRun({
       objective: 'Worker Run',
       coordinatorHandle: 'term_coordinator',
       coordinatorPaneKey:
         '33333333-3333-4333-8333-333333333333:44444444-4444-4444-8444-444444444444'
     })
+
     const task = db.createTask({ spec: 'Worker task', runId: run.id })
     const dispatch = createRootDispatch(db, task.id, TERMINAL_HANDLE, PANE_KEY)
     await driveToLiveIdle(harness.runtime)
+
     const message = db.insertMessage({
       from: 'term_coordinator',
       to: TERMINAL_HANDLE,
@@ -77,19 +81,23 @@ describe('orchestration detached mailbox routing', () => {
     const harness = createRuntime(db)
     const runA = createBoundRun(db, 'Run A')
     const runB = createBoundRun(db, 'Run B')
+
     const rebound = db.bindRun({
       runId: runA.id,
       coordinatorHandle: 'term_new_coordinator',
       coordinatorPaneKey:
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
+
     const waiting = harness.runtime.waitForMessage(`run:${runA.id}`, { timeoutMs: 5_000 })
+
     const message = db.insertMessage({
       from: 'term_worker',
       to: TERMINAL_HANDLE,
       subject: 'Late Run A status',
       runId: runA.id
     })
+
     sqliteFor(db)
       .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
       .run(TERMINAL_HANDLE, message.id)
@@ -114,23 +122,29 @@ describe('orchestration detached mailbox routing', () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-mailbox-displaced-dispatch-')
     const harness = createRuntime(db)
+
     const workerRun = db.createRun({
       objective: 'Worker Run',
       coordinatorHandle: 'term_worker_coordinator',
       coordinatorPaneKey:
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
+
     const task = db.createTask({ spec: 'Worker task', runId: workerRun.id })
+
     const dispatch = createRootDispatch(
       db,
       task.id,
       'term_mailbox_before_remint',
       `99999999-9999-4999-8999-999999999999:${LEAF_ID}`
     )
+
     createBoundRun(db, 'Current coordinator Run')
+
     const waiting = harness.runtime.waitForMessage(`dispatch:${dispatch.id}`, {
       timeoutMs: 5_000
     })
+
     const message = db.insertMessage({
       from: 'term_worker_coordinator',
       to: TERMINAL_HANDLE,
@@ -183,15 +197,19 @@ describe('orchestration detached mailbox routing', () => {
     await driveToLiveIdle(harness.runtime)
 
     const waiting = checkBoundMailbox(harness.runtime, { wait: true })
+
     const internals = harness.runtime as unknown as {
       messageWaitersByHandle: Map<string, Set<unknown>>
     }
+
     for (let attempt = 0; attempt < 20; attempt += 1) {
       if (internals.messageWaitersByHandle.has(`run:${run.id}`)) {
         break
       }
+
       await Promise.resolve()
     }
+
     expect(internals.messageWaitersByHandle.has(`run:${run.id}`)).toBe(true)
 
     const message = insertDirectRunMessage(db, run.id, 'Wake the Run waiter')
@@ -212,9 +230,11 @@ describe('orchestration detached mailbox routing', () => {
     const harness = createRuntime(db)
     const run = createBoundRun(db, 'Stale leaf waiter')
     const waiting = checkBoundMailbox(harness.runtime, { wait: true })
+
     const waiterInternals = harness.runtime as unknown as {
       messageWaitersByHandle: Map<string, Set<unknown>>
     }
+
     await vi.waitFor(() => {
       expect(waiterInternals.messageWaitersByHandle.has(`run:${run.id}`)).toBe(true)
     })
@@ -239,6 +259,7 @@ describe('orchestration detached mailbox routing', () => {
     const run = createBoundRun(db, 'Detached direct recipient')
     const detachedHandle = 'term_detached_worker'
     const waiting = harness.runtime.waitForMessage(detachedHandle, { timeoutMs: 5_000 })
+
     const message = db.insertMessage({
       from: TERMINAL_HANDLE,
       to: detachedHandle,
@@ -259,17 +280,22 @@ describe('orchestration detached mailbox routing', () => {
     const db = createDatabase('orca-mailbox-detached-mixed-')
     const harness = createRuntime(db)
     const detachedHandle = 'term_retired_coordinator'
+
     const ownedRun = db.createRun({
       objective: 'Retired coordinator ownership',
       coordinatorHandle: detachedHandle,
       coordinatorPaneKey:
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
+
     const directRun = createBoundRun(db, 'Unowned detached recipient')
+
     const canonicalWait = harness.runtime.waitForMessage(`run:${ownedRun.id}`, {
       timeoutMs: 5_000
     })
+
     const directWait = harness.runtime.waitForMessage(detachedHandle, { timeoutMs: 5_000 })
+
     const owned = db.insertMessage({
       from: 'term_worker',
       to: detachedHandle,
@@ -278,9 +304,11 @@ describe('orchestration detached mailbox routing', () => {
       runId: ownedRun.id,
       deliveryContract: 'current_delivery'
     })
+
     sqliteFor(db)
       .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
       .run(detachedHandle, owned.id)
+
     const direct = db.insertMessage({
       from: TERMINAL_HANDLE,
       to: detachedHandle,
@@ -305,17 +333,21 @@ describe('orchestration detached mailbox routing', () => {
     const db = createDatabase('orca-mailbox-detached-filtered-direct-')
     const harness = createRuntime(db)
     const detachedHandle = 'term_detached_filtered'
+
     const ownedRun = db.createRun({
       objective: 'Owned detached mail',
       coordinatorHandle: detachedHandle,
       coordinatorPaneKey:
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
+
     const unownedRun = createBoundRun(db, 'Unowned detached mail')
+
     const waiting = harness.runtime.waitForMessage(detachedHandle, {
       typeFilter: ['worker_done'],
       timeoutMs: 5_000
     })
+
     let settled = false
     void waiting.then(() => {
       settled = true
@@ -328,6 +360,7 @@ describe('orchestration detached mailbox routing', () => {
       runId: unownedRun.id,
       deliveryContract: 'current_delivery'
     })
+
     const owned = db.insertMessage({
       from: 'term_worker',
       to: detachedHandle,
@@ -336,6 +369,7 @@ describe('orchestration detached mailbox routing', () => {
       runId: ownedRun.id,
       deliveryContract: 'current_delivery'
     })
+
     sqliteFor(db)
       .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
       .run(detachedHandle, owned.id)
@@ -353,20 +387,25 @@ describe('orchestration detached mailbox routing', () => {
   it('routes a stale-leaf reminted handle to its Dispatch waiter', async () => {
     const db = createDatabase('orca-mailbox-stale-leaf-reminted-dispatch-')
     const harness = createRuntime(db)
+
     const run = db.createRun({
       objective: 'Reminted Dispatch',
       coordinatorHandle: 'term_coordinator',
       coordinatorPaneKey:
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
+
     const task = db.createTask({ spec: 'Reminted worker', runId: run.id })
     const dispatch = createRootDispatch(db, task.id, 'term_before_remint', PANE_KEY)
+
     const waiting = harness.runtime.waitForMessage(`dispatch:${dispatch.id}`, {
       typeFilter: ['dispatch'],
       timeoutMs: 5_000
     })
+
     const internals = harness.runtime as unknown as { leaves: Map<string, unknown> }
     internals.leaves.clear()
+
     const message = db.insertMessage({
       from: 'term_coordinator',
       to: TERMINAL_HANDLE,
@@ -385,22 +424,27 @@ describe('orchestration detached mailbox routing', () => {
 
   it('deduplicates Dispatch ownership before limiting a routing page', () => {
     const db = createDatabase('orca-mailbox-duplicate-dispatch-owners-')
+
     const run = db.createRun({
       objective: 'Duplicate Dispatch ownership',
       coordinatorHandle: 'term_coordinator',
       coordinatorPaneKey:
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
+
     const task = db.createTask({ spec: 'Duplicate worker ownership', runId: run.id })
     const detachedHandle = 'term_duplicate_dispatch_owner'
     const sqlite = sqliteFor(db)
+
     const insertDispatch = sqlite.prepare(
       `INSERT INTO dispatch_contexts (id, run_id, task_id, assignee_handle, status)
        VALUES (?, ?, ?, ?, 'dispatched')`
     )
+
     for (let index = 0; index < 51; index += 1) {
       insertDispatch.run(`ctx_duplicate_${index}`, run.id, task.id, detachedHandle)
     }
+
     const messages = Array.from({ length: 52 }, (_, index) =>
       db.insertMessage({
         from: 'term_coordinator',
@@ -428,13 +472,16 @@ describe('orchestration detached mailbox routing', () => {
 
   it('does not rebind active Dispatch mail through coordinator history', () => {
     const db = createDatabase('orca-mailbox-coordinator-dispatch-overlap-')
+
     const run = db.createRun({
       objective: 'Coordinator and Dispatch overlap',
       coordinatorHandle: TERMINAL_HANDLE,
       coordinatorPaneKey: PANE_KEY
     })
+
     const task = db.createTask({ spec: 'Same-handle worker', runId: run.id })
     createRootDispatch(db, task.id, TERMINAL_HANDLE, PANE_KEY)
+
     const message = db.insertMessage({
       from: 'term_sender',
       to: TERMINAL_HANDLE,
@@ -457,13 +504,16 @@ describe('orchestration detached mailbox routing', () => {
 
   it('does not route active Dispatch mail through a paged Run check', () => {
     const db = createDatabase('orca-mailbox-paged-coordinator-dispatch-overlap-')
+
     const run = db.createRun({
       objective: 'Paged coordinator and Dispatch overlap',
       coordinatorHandle: TERMINAL_HANDLE,
       coordinatorPaneKey: PANE_KEY
     })
+
     const task = db.createTask({ spec: 'Same-handle worker', runId: run.id })
     const dispatch = createRootDispatch(db, task.id, TERMINAL_HANDLE, PANE_KEY)
+
     const message = db.insertMessage({
       from: 'term_sender',
       to: TERMINAL_HANDLE,
@@ -488,11 +538,13 @@ describe('orchestration detached mailbox routing', () => {
   it('uses primary-key lookups for bounded routing updates', () => {
     const db = createDatabase('orca-mailbox-bounded-routing-indexes-')
     const sqlite = sqliteFor(db)
+
     const run = db.createRun({
       objective: 'Bounded routing indexes',
       coordinatorHandle: TERMINAL_HANDLE,
       coordinatorPaneKey: PANE_KEY
     })
+
     const directMessage = db.insertMessage({
       from: 'term_sender',
       to: TERMINAL_HANDLE,
@@ -501,6 +553,7 @@ describe('orchestration detached mailbox routing', () => {
       runId: run.id,
       deliveryContract: 'current_delivery'
     })
+
     sqlite
       .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
       .run(TERMINAL_HANDLE, directMessage.id)
@@ -515,12 +568,14 @@ describe('orchestration detached mailbox routing', () => {
       deliveryContract: 'current_delivery'
     })
     const foreignHandle = 'term_foreign_bounded_routing'
+
     const foreignRun = db.createRun({
       objective: 'Foreign routing index',
       coordinatorHandle: foreignHandle,
       coordinatorPaneKey:
         '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
     })
+
     const foreignMessage = db.insertMessage({
       from: 'term_sender',
       to: foreignHandle,
@@ -529,6 +584,7 @@ describe('orchestration detached mailbox routing', () => {
       runId: foreignRun.id,
       deliveryContract: 'current_delivery'
     })
+
     sqlite
       .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
       .run(foreignHandle, foreignMessage.id)
@@ -545,15 +601,20 @@ describe('orchestration detached mailbox routing', () => {
           .filter((sql) => sql.includes('UPDATE messages') && sql.includes('id IN'))
       )
     ]
+
     expect(updateSql).toHaveLength(3)
+
     for (const sql of updateSql) {
       expect(sql).toContain('INDEXED BY idx_messages_id')
       const parameters = Array.from({ length: sql.split('?').length - 1 }, () => 'probe')
+
       const plan = sqlite.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...parameters) as {
         detail: string
       }[]
+
       expect(plan.map((row) => row.detail).join(' ')).toContain('idx_messages_id')
     }
+
     db.close()
   })
 })

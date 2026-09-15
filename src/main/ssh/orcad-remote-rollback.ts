@@ -72,7 +72,9 @@ export type OrcadRollbackResult =
   | { outcome: 'failed'; code: string; reason: string }
 
 const DEFAULT_READINESS_TIMEOUT_MS = 90_000
+
 const READINESS_POLL_MS = 500
+
 const STOP_WAIT_SECONDS = 20
 
 function exec(options: OrcadRollbackOptions, command: string): Promise<string> {
@@ -99,18 +101,23 @@ async function readStateWritesSinceActivation(
   if (!options.record.activatedAt) {
     return null
   }
+
   const activatedAtSeconds = Math.floor(Date.parse(options.record.activatedAt) / 1000)
+
   if (!Number.isFinite(activatedAtSeconds)) {
     return null
   }
+
   const newest = parseNewestStateMtimeSeconds(
     await exec(options, newestStateMtimeCommand(options.host, options.userDataDir)).catch(() => '')
   )
+
   return newest === null ? null : newest >= activatedAtSeconds
 }
 
 export async function rollbackOrcad(options: OrcadRollbackOptions): Promise<OrcadRollbackResult> {
   const now = options.now ?? ((): Date => new Date())
+
   const snapshotPresent = options.record.snapshot
     ? (
         await exec(
@@ -129,6 +136,7 @@ export async function rollbackOrcad(options: OrcadRollbackOptions): Promise<Orca
     census: options.census,
     stateWritesSinceActivation: await readStateWritesSinceActivation(options)
   })
+
   if (safety.safety === 'unsafe') {
     return { outcome: 'refused', code: safety.code, reason: safety.reason }
   }
@@ -139,12 +147,14 @@ export async function rollbackOrcad(options: OrcadRollbackOptions): Promise<Orca
       options.remoteHome,
       options.record.active
     )
+
     const stopped = parseOrcadStopOutcome(
       await exec(
         options,
         stopOrcadCommand(options.host, outgoingDir, { waitSeconds: STOP_WAIT_SECONDS })
       )
     )
+
     if (!orcadStopFreedTheHost(stopped)) {
       return {
         outcome: 'failed',
@@ -170,6 +180,7 @@ export async function rollbackOrcad(options: OrcadRollbackOptions): Promise<Orca
       )
     ).catch(() => 'FAILED')
   )
+
   if (restored !== 'restored') {
     return {
       outcome: 'failed',
@@ -196,19 +207,23 @@ export async function rollbackOrcad(options: OrcadRollbackOptions): Promise<Orca
   const deadline = Date.now() + (options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS)
   const sleep = options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)))
   let parsed = parseOrcadReadinessOutput('')
+
   while (Date.now() < deadline && parsed.state === 'pending') {
     options.signal?.throwIfAborted()
     parsed = parseOrcadReadinessOutput(
       await exec(options, readOrcadReadinessCommand(options.host, targetDir))
     )
+
     if (parsed.state === 'pending') {
       await sleep(READINESS_POLL_MS)
     }
   }
+
   const verdict = evaluateOrcadActivation(parsed.state === 'ready' ? parsed.readiness : null, {
     buildHash: options.targetBuildHash,
     fullVersion: safety.target
   })
+
   if (verdict.decision === 'reject') {
     return {
       outcome: 'failed',
@@ -229,6 +244,7 @@ export async function rollbackOrcad(options: OrcadRollbackOptions): Promise<Orca
     serializeOrcadActivationRecord(withRolledBackVersion(options.record, now())),
     { signal: options.signal }
   )
+
   return {
     outcome: 'rolled-back',
     target: safety.target,

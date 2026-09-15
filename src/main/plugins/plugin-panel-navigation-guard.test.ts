@@ -4,6 +4,7 @@ import { PluginPanelNavigationRegistry } from './plugin-panel-navigation-guard'
 
 function frame(input: { id: number; name?: string; url?: string }) {
   let destroyed = false
+
   return {
     frameTreeNodeId: input.id,
     name: input.name ?? '',

@@ -40,6 +40,7 @@ export async function inspectTerminalHostProcess(args: {
   onTier?: (tier: TerminalHostInspectionTier) => void
 }): Promise<TerminalHostProcessInspection> {
   const { sessionId, session, expectedIncarnationId, retiredIncarnation } = args
+
   if (!session || !session.isAlive) {
     if (
       retiredIncarnation &&
@@ -60,24 +61,30 @@ export async function inspectTerminalHostProcess(args: {
         }
       }
     }
+
     throw new SessionNotFoundError(sessionId)
   }
 
   const incarnationMatches =
     !expectedIncarnationId || expectedIncarnationId === session.incarnationId
+
   if (args.steadyState === true && incarnationMatches) {
     const anchored = await readAnchoredForeground(session)
+
     if (anchored !== null) {
       args.onTier?.('cheap')
+
       // No evidence member on purpose: a tty-less capture cannot fence anything, and a
       // fabricated fence would be read by remote/restore consumers as an observation.
       return { foregroundProcess: anchored, hasChildProcesses: true }
     }
   }
+
   args.onTier?.('full')
 
   const foregroundProcess = session.getForegroundProcess()
   let evidence: RemoteForegroundEvidence
+
   if (!incarnationMatches) {
     evidence = unverifiableEvidence(args, session, 'incarnation_mismatch')
   } else {
@@ -101,10 +108,13 @@ export async function inspectTerminalHostProcess(args: {
       clearSteadyStateAnchor(session)
     }
   }
+
   const nonShellForeground = foregroundProcess !== null && !isShellProcess(foregroundProcess)
+
   // Evidence names recognized agents only, so its null must not erase an ordinary command (#18078).
   const ordinaryForeground =
     nonShellForeground && !recognizeAgentProcess(foregroundProcess) ? foregroundProcess : null
+
   return {
     foregroundProcess:
       evidence.verdict === 'live'
@@ -124,17 +134,21 @@ export async function inspectTerminalHostProcess(args: {
  */
 async function readAnchoredForeground(session: Session): Promise<string | null> {
   const anchor = getSteadyStateAnchor(session)
+
   if (process.platform === 'win32' || !anchor) {
     return null
   }
+
   if (session.getForegroundProcess({ rawFallback: true }) !== anchor.rawFallback) {
     return null
   }
+
   try {
     const observed = await buildPaneProcessFingerprint(
       await getCheapProcessTableSnapshot(),
       session.pid
     )
+
     return observed !== null && observed === anchor.fingerprint ? anchor.agentName : null
   } catch {
     return null

@@ -10,9 +10,13 @@ import { app } from 'electron'
 // virtual X display via Xvfb when none is present. macOS/Windows need nothing.
 
 const XVFB_STARTUP_TIMEOUT_MS = 5_000
+
 const XVFB_POLL_INTERVAL_MS = 50
+
 const VIRTUAL_DISPLAY_NUMBER = 99
+
 const VIRTUAL_DISPLAY = `:${VIRTUAL_DISPLAY_NUMBER}`
+
 const XVFB_INSTALL_GUIDANCE =
   'Install `xvfb` on Debian/Ubuntu or `xorg-x11-server-Xvfb` on RPM-based systems.'
 
@@ -43,18 +47,22 @@ type DisplayLockProbe = 'alive' | 'dead' | 'missing'
 
 function probeDisplayLock(displayNumber: number): DisplayLockProbe {
   let pid: number
+
   try {
     pid = Number.parseInt(readFileSync(xDisplayLockPath(displayNumber), 'utf8').trim(), 10)
   } catch (error) {
     // An unreadable lock is a lock we cannot clear: treat it as dead, not absent.
     return (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? 'missing' : 'dead'
   }
+
   if (!Number.isInteger(pid) || pid <= 0) {
     return 'dead'
   }
+
   try {
     // signal 0 probes existence without affecting the process.
     process.kill(pid, 0)
+
     return 'alive'
   } catch (error) {
     // EPERM means the PID exists under another uid — a root-owned X server is still live.
@@ -108,12 +116,15 @@ function sleepSync(ms: number): void {
 function waitForDisplayReady(displayNumber: number, deadline: number): boolean {
   const isReady = (): boolean =>
     isUnixSocket(xvfbSocketPath(displayNumber)) && isManagedDisplayServerAlive(displayNumber)
+
   while (Date.now() < deadline) {
     if (isReady()) {
       return true
     }
+
     sleepSync(XVFB_POLL_INTERVAL_MS)
   }
+
   return isReady()
 }
 
@@ -125,6 +136,7 @@ export function hasUsableLinuxDisplay(env: NodeJS.ProcessEnv = process.env): boo
 
   const ozonePlatform = app.commandLine.getSwitchValue('ozone-platform').trim().toLowerCase()
   const ozonePlatformHint = env.ELECTRON_OZONE_PLATFORM_HINT?.trim().toLowerCase()
+
   const selectedPlatform =
     ozonePlatform === 'x11' || ozonePlatform === 'wayland'
       ? ozonePlatform
@@ -135,9 +147,11 @@ export function hasUsableLinuxDisplay(env: NodeJS.ProcessEnv = process.env): boo
   if (selectedPlatform === 'x11') {
     return hasUsableXDisplay(env.DISPLAY)
   }
+
   if (selectedPlatform === 'wayland') {
     return hasUsableWaylandDisplay(env)
   }
+
   return hasUsableXDisplay(env.DISPLAY) || hasUsableWaylandDisplay(env)
 }
 
@@ -153,15 +167,19 @@ export const MISSING_LINUX_DISPLAY_MESSAGE = [
 // possible. Refusing these was a hard startup failure with no workaround.
 function hasAbstractXSocket(displayNumber: number): boolean {
   let table: unknown
+
   try {
     table = readFileSync('/proc/net/unix', 'utf8')
   } catch {
     return false
   }
+
   if (typeof table !== 'string') {
     return false
   }
+
   const address = `@${xvfbSocketPath(displayNumber)}`
+
   return table
     .split('\n')
     .some((line) => line.slice(line.lastIndexOf(' ') + 1).trimEnd() === address)
@@ -177,16 +195,20 @@ function isUnixSocket(path: string): boolean {
 
 function hasUsableXDisplay(value: string | undefined): boolean {
   const display = value?.trim()
+
   if (!display) {
     return false
   }
 
   const localDisplay = /^(?:unix\/?)?:(\d+)(?:\.\d+)?$/i.exec(display)
+
   // Remote endpoints cannot be proven with local socket checks.
   if (!localDisplay) {
     return /^\S+:\d+(?:\.\d+)?$/.test(display)
   }
+
   const displayNumber = Number(localDisplay[1])
+
   if (isUnixSocket(xvfbSocketPath(displayNumber))) {
     // Why the managed number is never treated as foreign: Orca's own teardown unlinks the lock
     // before the socket, so a lockless socket on VIRTUAL_DISPLAY_NUMBER is our own half-finished
@@ -195,6 +217,7 @@ function hasUsableXDisplay(value: string | undefined): boolean {
       ? isManagedDisplayServerAlive(displayNumber)
       : isForeignDisplayServerAlive(displayNumber)
   }
+
   return hasAbstractXSocket(displayNumber)
 }
 
@@ -202,18 +225,23 @@ function hasUsableWaylandDisplay(env: NodeJS.ProcessEnv): boolean {
   // Why: WAYLAND_SOCKET is an already-connected fd handed over by the compositor, so there is no
   // path to stat and WAYLAND_DISPLAY may be unset entirely. Its presence IS the display.
   const inheritedFd = env.WAYLAND_SOCKET?.trim()
+
   if (inheritedFd && /^\d+$/.test(inheritedFd)) {
     return true
   }
+
   const display = env.WAYLAND_DISPLAY?.trim()
+
   if (!display) {
     return false
   }
+
   if (isAbsolute(display)) {
     return isUnixSocket(display)
   }
 
   const runtimeDir = env.XDG_RUNTIME_DIR?.trim()
+
   return Boolean(runtimeDir && isAbsolute(runtimeDir) && isUnixSocket(join(runtimeDir, display)))
 }
 
@@ -233,14 +261,17 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
   // Never delete artifacts from an externally managed display: a container may
   // expose its socket without the host lock/PID being visible here.
   const configuredDisplay = process.env.DISPLAY?.trim()
+
   if (configuredDisplay) {
     if (hasUsableXDisplay(configuredDisplay)) {
       return true
     }
+
     console.warn(
       `[serve] DISPLAY=${configuredDisplay} is not verifiably live; leaving it untouched. ` +
         'Unset DISPLAY to let Orca start its own Xvfb.'
     )
+
     return false
   }
 
@@ -250,8 +281,10 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
   if (isUnixSocket(xvfbSocketPath(VIRTUAL_DISPLAY_NUMBER))) {
     if (isManagedDisplayServerAlive(VIRTUAL_DISPLAY_NUMBER)) {
       process.env.DISPLAY = VIRTUAL_DISPLAY
+
       return true
     }
+
     // Why: stale socket/lock — clean them up so Xvfb can rebind the display
     // below instead of refusing to start on an "in use" number.
     removeStaleDisplayArtifacts(VIRTUAL_DISPLAY_NUMBER)
@@ -270,9 +303,11 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
     xvfbProcess.once('error', (error) => {
       console.warn('[serve] Xvfb failed to start:', error instanceof Error ? error.message : error)
     })
+
     // PATH lookup failures emit asynchronously, but a successful spawn has a PID immediately.
     if (xvfbProcess.pid === undefined) {
       xvfbProcess = null
+
       return false
     }
   } catch (error) {
@@ -280,16 +315,19 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
       '[serve] Could not start Xvfb:',
       error instanceof Error ? error.message : String(error)
     )
+
     return false
   }
 
   const ready = waitForDisplayReady(VIRTUAL_DISPLAY_NUMBER, Date.now() + XVFB_STARTUP_TIMEOUT_MS)
+
   if (!ready) {
     console.warn(
       `[serve] Xvfb did not take ownership of ${VIRTUAL_DISPLAY}; browser panes are unavailable. ` +
         'A stale socket from another user can block the rebind.'
     )
     stopVirtualDisplay()
+
     return false
   }
 
@@ -310,5 +348,6 @@ export function stopVirtualDisplay(): void {
       // already exiting
     }
   }
+
   xvfbProcess = null
 }

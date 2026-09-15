@@ -8,6 +8,7 @@ vi.mock('electron', () => ({
     getAppPath: () => '/host/app'
   }
 }))
+
 vi.mock('../persistence', () => ({
   getCanonicalUserDataPath: () => '/host/user-data'
 }))
@@ -43,6 +44,7 @@ function createFakeChild(): FakeChild {
   child.stderr = new EventEmitter()
   child.stdin = { end: vi.fn(), on: vi.fn() }
   child.kill = vi.fn()
+
   return child
 }
 
@@ -135,6 +137,7 @@ describe('buildHostCliEnv', () => {
       fileName: 'report.html',
       contentType: 'text/html' as const
     }
+
     const build = (targetId: string) =>
       buildHostCliEnv({
         hostEnv: {},
@@ -283,11 +286,13 @@ describe('runHostOrcaCliPassthrough', () => {
     expect(result).toEqual({ stdout: '{"ok":true}\n', stderr: 'warn\n', exitCode: 0 })
 
     expect(spawn).toHaveBeenCalledTimes(1)
+
     const [execPath, args, options] = spawn.mock.calls[0] as unknown as [
       string,
       string[],
       { env: NodeJS.ProcessEnv }
     ]
+
     expect(execPath).toBe('/host/electron')
     expect(args).toEqual([
       '/host/app/out/cli/index.js',
@@ -381,6 +386,7 @@ describe('runHostOrcaCliPassthrough', () => {
 
   it('kills the subprocess and reports an error when the kill timeout elapses', async () => {
     vi.useFakeTimers()
+
     try {
       const child = createFakeChild()
       const spawn = vi.fn(() => child)
@@ -411,9 +417,11 @@ describe('runHostOrcaCliPassthrough', () => {
 
     await Promise.resolve()
     const chunk = Buffer.alloc(3 * 1024 * 1024, 97)
+
     for (let i = 0; i < 4; i += 1) {
       child.stdout.emit('data', chunk)
     }
+
     child.emit('close', 0)
 
     const result = await resultPromise

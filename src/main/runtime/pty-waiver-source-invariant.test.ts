@@ -46,19 +46,23 @@ describe('the PTY-stop waiver is never derived from `force`', () => {
     // waiver from a branch that still exists must still fail loudly.
     const teardownCallSites =
       [...source.matchAll(/stopPtysForDestructiveWorktreeRemoval\(/g)].length - 1
+
     expect(teardownCallSites).toBeGreaterThan(0)
 
     const values = [...source.matchAll(/allowUnverifiedStop:\s*([^,\n}]+)/g)].map((match) =>
       match[1].trim()
     )
+
     // One per call site, plus the single conditional spread inside the helper.
     expect(values).toHaveLength(teardownCallSites + 1)
+
     for (const value of values) {
       expect(value).not.toMatch(/\bforce\b/)
       // Positive check too: "not literally force" would still admit any other
       // in-scope boolean being wired in by mistake.
       expect(value).toMatch(/^(?:args\.)?allowUnverifiedPtyStop$|^true$/)
     }
+
     // Only the helper's spread may hardcode `true`; a call site doing so would
     // waive unconditionally.
     expect(values.filter((value) => value === 'true')).toHaveLength(1)
@@ -71,7 +75,9 @@ describe('the PTY-stop waiver is never derived from `force`', () => {
     const conditions = [
       ...source.matchAll(/\.\.\.\(([\s\S]{0,200}?)\?\s*\{\s*allowUnverifiedStop:/g)
     ].map((match) => match[1].trim())
+
     expect(conditions).toHaveLength(1)
+
     for (const condition of conditions) {
       expect(condition).not.toMatch(/\bforce\b/i)
     }

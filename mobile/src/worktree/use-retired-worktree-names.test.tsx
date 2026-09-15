@@ -23,12 +23,14 @@ function mountNames() {
   const client = {
     sendRequest: (method: string, params: unknown) => {
       requests.push({ method, params })
+
       return new Promise<unknown>((resolve, reject) => pending.push({ resolve, reject }))
     }
   } as unknown as RpcClient
 
   function Probe({ repoId, refreshKey }: { repoId: string | null; refreshKey: string }) {
     latest = useRetiredWorktreeNames(client, repoId, refreshKey)
+
     return null
   }
 
@@ -36,6 +38,7 @@ function mountNames() {
   act(() => {
     renderer = create(createElement(Probe, { repoId: 'repo-1', refreshKey: 'a' }))
   })
+
   return {
     get registry(): RetiredNameRegistry {
       return latest

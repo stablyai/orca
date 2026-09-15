@@ -12,6 +12,7 @@ import { WindowsShellPathOwnership, createWindowsPathKey } from './windows-shell
 // Probe the profile-loading shell once instead of hard-coding every tool's install path.
 
 const DELIMITER = '__ORCA_SHELL_PATH__'
+
 // Why 10s: 5s was chosen without measurement and a real profile overruns it —
 // a bash -ilc loading nvm, rvm, conda and gcloud measures ~1s idle but 6-7s on a
 // loaded machine, so a cold start under load silently fell back to the seeded
@@ -41,7 +42,9 @@ export type HydrationResult =
     }
 
 let cached: Promise<HydrationResult> | null = null
+
 let probeQueue = Promise.resolve()
+
 // Why: patchPackagedProcessPath seeds a version-manager install dir ahead of
 // PATH. nvm's startup `use` honors whatever node is already on PATH over the
 // user's `default` alias, so a probe inheriting that seed comes back pinned to
@@ -57,15 +60,23 @@ let probeQueue = Promise.resolve()
 // capture the key alongside the value.
 const LAUNCH_PATH_KEY =
   process.platform === 'win32' && process.env.Path !== undefined ? 'Path' : 'PATH'
+
 const LAUNCH_PATH = process.env[LAUNCH_PATH_KEY] ?? null
+
 // Why: rc files that exec into a multiplexer or start a heavy prompt can outrun the
 // probe budget. This lets them detect the probe and take a fast path.
 const PROBE_MARKER_ENV_VAR = 'ORCA_SHELL_PATH_PROBE'
+
 let launchPathOverride: { key: string; value: string } | null = null
+
 let configuredWindowsShell = 'powershell.exe'
+
 let configuredWindowsGitBashPath: string | null = null
+
 let configuredWindowsFallbackShell: string | null = null
+
 let windowsShellConfigurationVersion = 0
+
 const windowsPathOwnership = new WindowsShellPathOwnership()
 
 /** @internal - tests need a clean hydration cache between cases. */
@@ -83,16 +94,22 @@ export function _resetHydrateShellPathCache(): void {
 export function resolveProfileLoadingShell(): string | null {
   if (process.platform === 'win32') {
     const family = resolveWindowsShellStartupFamily(configuredWindowsShell)
+
     if (family === 'cmd') {
       return null
     }
+
     if (family === 'posix') {
       return configuredWindowsGitBashPath
     }
+
     const basename = pathWin32.basename(configuredWindowsShell).toLowerCase()
+
     return basename === 'powershell.exe' || basename === 'pwsh.exe' ? configuredWindowsShell : null
   }
+
   const shell = process.env.SHELL
+
   return shell?.length ? shell : process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'
 }
 
@@ -102,17 +119,23 @@ export const resolveProfileLoadingFallbackShell = (): string | null =>
 function parseCapturedPath(stdout: string, pathDelimiter: string = delimiter): string[] {
   const cleaned = stdout.replace(ANSI_RE, '')
   const first = cleaned.indexOf(DELIMITER)
+
   if (first === -1) {
     return []
   }
+
   const second = cleaned.indexOf(DELIMITER, first + DELIMITER.length)
+
   if (second === -1) {
     return []
   }
+
   const value = cleaned.slice(first + DELIMITER.length, second).trim()
+
   if (!value) {
     return []
   }
+
   // Why: Set preserves insertion order, and PATH resolution is first-match-wins,
   // so de-duping this way keeps the user's rc-file ordering intact.
   return [
@@ -138,6 +161,7 @@ function applyLaunchPath(env: NodeJS.ProcessEnv, key: string, value: string | nu
   if (value === null) {
     return
   }
+
   // Why: Windows resolves env names case-insensitively even though a spread is
   // a plain object, so never leave both the captured key and another casing.
   for (const name of Object.keys(env)) {
@@ -145,6 +169,7 @@ function applyLaunchPath(env: NodeJS.ProcessEnv, key: string, value: string | nu
       delete env[name]
     }
   }
+
   env[key] = value
 }
 
@@ -153,6 +178,7 @@ function shellProbeEnv(): NodeJS.ProcessEnv {
   const key = launchPathOverride?.key ?? LAUNCH_PATH_KEY
   const value = launchPathOverride?.value ?? LAUNCH_PATH
   applyLaunchPath(env, key, value)
+
   return env
 }
 
@@ -160,11 +186,14 @@ function shellProbeEnv(): NodeJS.ProcessEnv {
 export function runWithLaunchPath<T>(action: () => T): T {
   const key = launchPathOverride?.key ?? LAUNCH_PATH_KEY
   const value = launchPathOverride?.value ?? LAUNCH_PATH
+
   if (value === null) {
     return action()
   }
+
   const previous = Object.entries(process.env).filter(([name]) => isLaunchPathKey(name, key))
   applyLaunchPath(process.env, key, value)
+
   try {
     return action()
   } finally {
@@ -173,6 +202,7 @@ export function runWithLaunchPath<T>(action: () => T): T {
         delete process.env[name]
       }
     }
+
     for (const [name, previousValue] of previous) {
       process.env[name] = previousValue
     }
@@ -182,17 +212,22 @@ export function runWithLaunchPath<T>(action: () => T): T {
 function shellPathProbe(shell: string): { args: string[]; pathDelimiter: string } {
   if (process.platform !== 'win32') {
     const command = `printf '%s' '${DELIMITER}'; printf '%s' "$PATH"; printf '%s' '${DELIMITER}'`
+
     return { args: ['-ilc', command], pathDelimiter: delimiter }
   }
+
   if (resolveWindowsShellStartupFamily(shell) === 'posix') {
     // Why: native child processes cannot resolve Git Bash's /c/... PATH entries.
     const command = `printf '%s' '${DELIMITER}'; cygpath -wp "$PATH"; printf '%s' '${DELIMITER}'`
+
     return { args: ['-ilc', command], pathDelimiter: ';' }
   }
+
   const command =
     `[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false); ` +
     `[Console]::Write('${DELIMITER}'); [Console]::Write($env:Path); ` +
     `[Console]::Write('${DELIMITER}')`
+
   // Why: omitting -NoProfile is the behavior this probe exists to capture.
   return { args: ['-NoLogo', '-Command', command], pathDelimiter: ';' }
 }
@@ -221,14 +256,17 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
         clearTimeout(timer)
         timer = null
       }
+
       child.stdout.off('data', onStdoutData)
       child.off('error', onError)
       child.off('close', onClose)
     }
+
     const finish = (result: HydrationResult): void => {
       if (finished) {
         return
       }
+
       finished = true
       cleanup()
       resolve(result)
@@ -243,6 +281,7 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
       } catch {
         // ignore
       }
+
       finish({ segments: [], ok: false, failureReason: 'timeout' })
     }, SPAWN_TIMEOUT_MS)
 
@@ -256,10 +295,13 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
 
     const onClose = (): void => {
       const segments = parseCapturedPath(stdout, probe.pathDelimiter)
+
       if (segments.length === 0) {
         finish({ segments: [], ok: false, failureReason: 'empty_path' })
+
         return
       }
+
       finish({ segments, ok: true, failureReason: 'none' })
     }
 
@@ -287,26 +329,36 @@ export function hydrateShellPath(options: HydrateOptions = {}): Promise<Hydratio
   if (cached && !options.force) {
     return cached
   }
+
   const platform = process.platform
   const configurationVersion = windowsShellConfigurationVersion
+
   const shell =
     options.shellOverride !== undefined ? options.shellOverride : resolveProfileLoadingShell()
+
   if (!shell) {
     cached = Promise.resolve({ segments: [], ok: false, failureReason: 'no_shell' })
+
     return cached
   }
+
   const spawner = options.spawner ?? spawnShellAndReadPath
   const fallbackShell = options.shellOverride === undefined ? configuredWindowsFallbackShell : null
+
   const probe = probeQueue.then(async () => {
     if (platform === 'win32') {
       windowsPathOwnership.restore(process.env)
     }
+
     const result = await spawner(shell)
+
     if (!result.ok && result.failureReason === 'spawn_error' && fallbackShell) {
       return spawner(fallbackShell)
     }
+
     return result
   })
+
   // Why: one rejected profile must not block later refreshes or shell changes.
   probeQueue = probe.then(
     () => undefined,
@@ -320,8 +372,10 @@ export function hydrateShellPath(options: HydrateOptions = {}): Promise<Hydratio
     ) {
       return hydrateShellPath()
     }
+
     return result
   })
+
   return cached
 }
 
@@ -331,6 +385,7 @@ export function configureWindowsShellPathHydration(
   fallbackShell: string | null = null
 ): void {
   const next = shell?.trim() || 'powershell.exe'
+
   if (
     next === configuredWindowsShell &&
     gitBashPath === configuredWindowsGitBashPath &&
@@ -338,6 +393,7 @@ export function configureWindowsShellPathHydration(
   ) {
     return
   }
+
   windowsPathOwnership.restore(process.env)
   configuredWindowsShell = next
   configuredWindowsGitBashPath = gitBashPath
@@ -348,12 +404,16 @@ export function configureWindowsShellPathHydration(
 
 function uniquePathSegments(segments: string[], pathKey: (segment: string) => string): string[] {
   const seen = new Set<string>()
+
   return segments.filter((segment) => {
     const key = pathKey(segment)
+
     if (seen.has(key)) {
       return false
     }
+
     seen.add(key)
+
     return true
   })
 }
@@ -367,26 +427,34 @@ export function mergePathSegments(segments: string[]): string[] {
   if (segments.length === 0) {
     return []
   }
+
   if (process.platform === 'win32') {
     windowsPathOwnership.restore(process.env)
   }
+
   const current = process.env.PATH ?? process.env.Path ?? ''
   const pathDelimiter = process.platform === 'win32' ? pathWin32.delimiter : delimiter
   const currentSegments = current.split(pathDelimiter).filter(Boolean)
+
   const pathKey =
     process.platform === 'win32' ? createWindowsPathKey() : (segment: string): string => segment
+
   const shellSegments = uniquePathSegments(segments, pathKey)
   const shellSegmentSet = new Set(shellSegments.map(pathKey))
   const existing = new Set(currentSegments.map(pathKey))
   const added = shellSegments.filter((segment) => !existing.has(pathKey(segment)))
+
   const merged = [
     ...shellSegments,
     ...currentSegments.filter((segment) => !shellSegmentSet.has(pathKey(segment)))
   ]
+
   const next = merged.join(pathDelimiter)
+
   if (next === current) {
     return []
   }
+
   // Why: shell-provided entries must win over hardcoded packaged-app fallbacks.
   // A seeded fallback can point at a stale CLI while the user's shell resolves
   // a healthy one from the same directory list in a different order.
@@ -395,5 +463,6 @@ export function mergePathSegments(segments: string[]): string[] {
   } else {
     process.env.PATH = next
   }
+
   return added
 }

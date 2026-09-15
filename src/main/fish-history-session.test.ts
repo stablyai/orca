@@ -12,7 +12,9 @@ import {
 } from './fish-history-session'
 
 const HASH_A = 'a1b2c3d4e5f60718'
+
 const HASH_B = '00112233445566ff'
+
 const SESSION_A = fishHistorySessionName(HASH_A)
 
 describe('fish history session naming', () => {
@@ -144,11 +146,13 @@ describe('orphaned fish history sweep', () => {
   it("never touches the user's own history files", () => {
     // The whole safety of the sweep rests on the orca_<hex>_ prefix.
     const untouched = ['fish_history', 'work_history', 'orca_history', 'orca_nothex_history']
+
     for (const name of untouched) {
       writeFileSync(join(fishDir, name), 'mine\n')
     }
 
     expect(sweepOrphanedFishHistoryFiles(new Set([HASH_A]), [fishDir])).toBe(0)
+
     for (const name of untouched) {
       expect(existsSync(join(fishDir, name))).toBe(true)
     }
@@ -189,6 +193,7 @@ describe('orphaned fish history sweep', () => {
   it('sweeps every candidate directory once', () => {
     const other = join(root, 'other', 'fish')
     mkdirSync(other, { recursive: true })
+
     for (const dir of [fishDir, other]) {
       writeFileSync(join(dir, `${fishHistorySessionName(HASH_B)}_history`), 'dead\n')
     }

@@ -15,6 +15,7 @@ type FixtureSubprocess = SubprocessHandle & { emitData: (data: string) => void }
 function createFixtureSubprocess(pid: number): FixtureSubprocess {
   let onData: ((data: string) => void) | undefined
   let onExit: ((code: number) => void) | undefined
+
   return {
     pid,
     getForegroundProcess: vi.fn(() => null),
@@ -46,10 +47,13 @@ describe('daemon PTY upgrade adoption', () => {
   afterEach(async () => {
     router?.dispose()
     router = null
+
     for (const adapter of adapters.splice(0)) {
       adapter.dispose()
     }
+
     await Promise.all(servers.splice(0).map((server) => server.shutdown()))
+
     for (const directory of directories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -67,6 +71,7 @@ describe('daemon PTY upgrade adoption', () => {
     const log: DaemonFileLog = { log: () => {}, close: () => {} }
     const legacySubprocesses: FixtureSubprocess[] = []
     const currentSubprocesses: FixtureSubprocess[] = []
+
     const legacyServer = new DaemonServer({
       socketPath: legacySocketPath,
       tokenPath: legacyTokenPath,
@@ -75,9 +80,11 @@ describe('daemon PTY upgrade adoption', () => {
       spawnSubprocess: () => {
         const subprocess = createFixtureSubprocess(30_030)
         legacySubprocesses.push(subprocess)
+
         return subprocess
       }
     })
+
     const currentServer = new DaemonServer({
       socketPath: currentSocketPath,
       tokenPath: currentTokenPath,
@@ -86,9 +93,11 @@ describe('daemon PTY upgrade adoption', () => {
       spawnSubprocess: () => {
         const subprocess = createFixtureSubprocess(31_031)
         currentSubprocesses.push(subprocess)
+
         return subprocess
       }
     })
+
     servers.push(legacyServer, currentServer)
     await Promise.all([legacyServer.start(), currentServer.start()])
 
@@ -97,12 +106,15 @@ describe('daemon PTY upgrade adoption', () => {
       tokenPath: legacyTokenPath,
       protocolVersion: legacyProtocol
     })
+
     adapters.push(oldAppAdapter)
+
     const original = await oldAppAdapter.spawn({
       sessionId: 'v30-stable-pane',
       cols: 80,
       rows: 24
     })
+
     legacySubprocesses[0]?.emitData('output-before-v31-upgrade')
     oldAppAdapter.dispose()
 
@@ -111,11 +123,13 @@ describe('daemon PTY upgrade adoption', () => {
       tokenPath: legacyTokenPath,
       protocolVersion: legacyProtocol
     })
+
     const currentAdapter = new DaemonPtyAdapter({
       socketPath: currentSocketPath,
       tokenPath: currentTokenPath,
       protocolVersion: currentProtocol
     })
+
     adapters.push(legacyAdapter, currentAdapter)
     router = new DaemonPtyRouter({ current: currentAdapter, legacy: [legacyAdapter] })
     await router.discoverLegacySessions()

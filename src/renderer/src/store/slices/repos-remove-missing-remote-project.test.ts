@@ -45,9 +45,13 @@ const localTwinRepo: Repo = {
 }
 
 const reposRemove = vi.fn()
+
 const reposRemoveForHost = vi.fn()
+
 const ptyKill = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 function answerRepoRmWith(code: string): void {
@@ -60,6 +64,7 @@ function answerRepoRmWith(code: string): void {
         _meta: { runtimeId: 'runtime-remote' }
       }
     }
+
     return { id: 'rpc-other', ok: true, result: {}, _meta: { runtimeId: 'runtime-remote' } }
   })
 }
@@ -70,12 +75,14 @@ function seedRemoteProjects(repos: readonly Repo[]): ReturnType<typeof createTes
     settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
     repos: [...repos]
   })
+
   return store
 }
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   vi.mocked(toast.error).mockReset()
+
   for (const mock of [
     reposRemove,
     reposRemoveForHost,
@@ -85,6 +92,7 @@ beforeEach(() => {
   ]) {
     mock.mockReset()
   }
+
   runtimeEnvironmentTransportCall.mockImplementation(
     (args: RuntimeEnvironmentCallRequest) =>
       createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)

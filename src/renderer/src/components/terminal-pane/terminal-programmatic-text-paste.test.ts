@@ -118,6 +118,7 @@ describe('terminal programmatic text paste', () => {
       getManager: () => makeManager(pane) as never,
       getPaneTransports: () => {
         transportLookupCount += 1
+
         return new Map([
           [pane.id, transportLookupCount === 1 ? originalTransport : replacementTransport]
         ]) as never
@@ -156,11 +157,13 @@ describe('terminal programmatic text paste', () => {
 
   it('uses the requested pane id instead of the active pane for targeted insertion', async () => {
     const activePane = makePane()
+
     const targetPane = {
       ...makePane(),
       id: 2,
       leafId: 'leaf-2'
     }
+
     const activeTransport = makeTransport()
     const targetTransport = makeTransport()
 

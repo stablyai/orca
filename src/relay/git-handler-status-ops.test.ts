@@ -18,15 +18,18 @@ function streamGitFromCapture(git: GitExec): RelayGitStreamExec {
       disableOptionalLocks: options.disableOptionalLocks,
       signal: options.signal
     })
+
     return { stoppedEarly: options.onStdout(stdout) === true }
   }
 }
 
 function buildLargeStatusOutput(count: number): string {
   const lines: string[] = []
+
   for (let index = 0; index < count; index += 1) {
     lines.push(`1 A. N... 100644 100644 100644 000000 111111 generated-${index}.txt`)
   }
+
   return lines.join('\n')
 }
 
@@ -51,12 +54,15 @@ describe('getStatusOp', () => {
 
   it('truncates huge status lists at the limit and flags didHitLimit', async () => {
     let emittedEntries = 0
+
     const git = vi.fn<GitExec>(async (args) => {
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
+
     const streamGit = vi.fn<RelayGitStreamExec>(async (_args, _cwd, options) => {
       for (let index = 0; index < LARGE_STATUS_ENTRY_COUNT; index += 1) {
         emittedEntries += 1
+
         if (
           options.onStdout(
             `1 A. N... 100644 100644 100644 000000 111111 generated-${index}.txt\n`
@@ -65,6 +71,7 @@ describe('getStatusOp', () => {
           return { stoppedEarly: true }
         }
       }
+
       return { stoppedEarly: false }
     })
 
@@ -90,13 +97,16 @@ describe('getStatusOp', () => {
 
   it('returns the full list and no limit flag when under the limit', async () => {
     const statusOutput = buildLargeStatusOutput(5)
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args.includes('status')) {
         return { stdout: statusOutput, stderr: '' }
       }
+
       if (args.includes('diff')) {
         return { stdout: '', stderr: '' }
       }
+
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
 
@@ -114,9 +124,11 @@ describe('getStatusOp', () => {
       if (args.includes('status')) {
         return { stdout: buildLargeStatusOutput(3), stderr: '' }
       }
+
       if (args.includes('diff')) {
         return { stdout: '', stderr: '' }
       }
+
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
 
@@ -138,10 +150,12 @@ describe('getStatusOp', () => {
         (_, i) => `u UU N... 100644 100644 100644 100644 aa bb cc conflict-${i}.ts`
       )
     ].join('\n')
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args.includes('status')) {
         return { stdout: `${lines}\n`, stderr: '' }
       }
+
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
 
@@ -164,10 +178,12 @@ describe('getStatusOp', () => {
       'u UU N... 100644 100644 100644 100644 aa bb cc conflict.ts',
       '? after.ts'
     ].join('\n')
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args.includes('status')) {
         return { stdout: `${lines}\n`, stderr: '' }
       }
+
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
 
@@ -186,21 +202,26 @@ describe('getStatusOp', () => {
 
   it('reuses unchanged line stats only for hinted safety reads', async () => {
     const statusOutput = `${buildBranchStatusOutput('head-1', '(detached)')}\n1 .M N... 100644 100644 100644 aaaa aaaa src/a.ts`
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args.includes('status')) {
         return { stdout: statusOutput, stderr: '' }
       }
+
       if (args.includes('diff')) {
         return { stdout: '3\t2\tsrc/a.ts\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
 
     await getStatusOp(git, streamGitFromCapture(git), { worktreePath: tmpDir })
+
     const reused = await getStatusOp(git, streamGitFromCapture(git), {
       worktreePath: tmpDir,
       reuseLineStats: true
     })
+
     await getStatusOp(git, streamGitFromCapture(git), { worktreePath: tmpDir })
 
     expect(reused.entries).toContainEqual(
@@ -211,23 +232,28 @@ describe('getStatusOp', () => {
 
   it('omits line stats without overwriting the reusable line-stats cache', async () => {
     const statusOutput = `${buildBranchStatusOutput('head-skip', '(detached)')}\n1 .M N... 100644 100644 100644 aaaa aaaa src/a.ts`
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args.includes('status')) {
         return { stdout: statusOutput, stderr: '' }
       }
+
       if (args.includes('diff')) {
         return { stdout: '3\t2\tsrc/a.ts\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
 
     const withStats = await getStatusOp(git, streamGitFromCapture(git), {
       worktreePath: tmpDir
     })
+
     const withoutStats = await getStatusOp(git, streamGitFromCapture(git), {
       worktreePath: tmpDir,
       includeLineStats: false
     })
+
     const reused = await getStatusOp(git, streamGitFromCapture(git), {
       worktreePath: tmpDir,
       reuseLineStats: true
@@ -242,6 +268,7 @@ describe('getStatusOp', () => {
 
   it('forwards the request abort signal to status and numstat subprocesses', async () => {
     const controller = new AbortController()
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args.includes('status')) {
         return {
@@ -249,9 +276,11 @@ describe('getStatusOp', () => {
           stderr: ''
         }
       }
+
       if (args.includes('diff')) {
         return { stdout: '1\t0\tsrc/a.ts\n', stderr: '' }
       }
+
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
 
@@ -263,6 +292,7 @@ describe('getStatusOp', () => {
     )
 
     expect(git.mock.calls).not.toHaveLength(0)
+
     for (const [, , options] of git.mock.calls) {
       expect(options?.signal).toBe(controller.signal)
     }
@@ -273,12 +303,15 @@ describe('getStatusOp', () => {
       if (args.includes('status')) {
         return { stdout: buildBranchStatusOutput('abc123', 'feature'), stderr: '' }
       }
+
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
       }
+
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
     })
 
@@ -302,19 +335,24 @@ describe('getStatusOp', () => {
   it('keeps no-effective-upstream probes cached beyond thirty seconds', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args.includes('status')) {
         return { stdout: buildBranchStatusOutput('abc123', 'feature'), stderr: '' }
       }
+
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature')
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
         throw new Error('missing remote branch')
       }
+
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
     })
 
@@ -332,17 +370,21 @@ describe('getStatusOp', () => {
       if (args.includes('status')) {
         return { stdout: buildBranchStatusOutput('abc123', 'feature'), stderr: '' }
       }
+
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'feature\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         await Promise.resolve()
         throw new Error('fatal: no upstream configured for branch feature')
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/feature')) {
         await Promise.resolve()
         throw new Error('missing remote branch')
       }
+
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
     })
 
@@ -364,19 +406,24 @@ describe('getStatusOp', () => {
 
   it('invalidates cached no-effective-upstream probes when the branch changes', async () => {
     let branch = 'feature'
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args.includes('status')) {
         return { stdout: buildBranchStatusOutput('abc123', branch), stderr: '' }
       }
+
       if (args[0] === 'symbolic-ref') {
         return { stdout: `${branch}\n`, stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error(`fatal: no upstream configured for branch ${branch}`)
       }
+
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
         throw new Error('missing remote branch')
       }
+
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
     })
 
@@ -399,30 +446,39 @@ describe('getStatusOp', () => {
       if (args.includes('status')) {
         return { stdout: buildBranchStatusOutput('abc123', 'feature/fix'), stderr: '' }
       }
+
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'feature/fix\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured for branch feature/fix')
       }
+
       if (args[0] === 'config' && args.includes('branch.feature/fix.pushRemote')) {
         return { stdout: 'fork\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('remote.pushDefault')) {
         throw new Error('missing push default')
       }
+
       if (args[0] === 'config' && args.includes('branch.feature/fix.remote')) {
         return { stdout: 'fork\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.feature/fix.merge')) {
         return { stdout: 'refs/heads/feature/fix\n', stderr: '' }
       }
+
       if (args[0] === 'config' && args.includes('branch.feature/fix.base')) {
         throw new Error('missing branch base')
       }
+
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
         throw new Error('missing remote branch')
       }
+
       throw new Error(`No upstream fixture for git ${args.join(' ')}`)
     })
 

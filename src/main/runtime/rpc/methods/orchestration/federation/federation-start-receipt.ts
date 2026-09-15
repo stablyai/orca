@@ -14,12 +14,14 @@ export function failFederatedAttachmentWithReceipt(args: {
 }): unknown {
   const reason = args.error instanceof Error ? args.error.message : String(args.error)
   const unknown = isFederationEffectUnknown(args.error, args.failedStage)
+
   const attachment = args.db.failRemoteAttachment(
     args.dispatchId,
     args.failedStage,
     reason,
     unknown
   )
+
   return {
     dispatchId: args.dispatchId,
     state: attachment.state === 'start_unknown' ? 'outcome_unknown' : attachment.state,

@@ -40,6 +40,7 @@ import {
 } from './windows-install-dir-acl.test-fixture'
 
 const INSTALL_DIR = 'C:\\Users\\neil\\AppData\\Local\\Programs\\orca'
+
 const APP_VERSION = '1.4.184'
 
 type Runner = (spec: ProcessSpec) => Promise<ProcessResult>
@@ -53,8 +54,10 @@ function probeThenRecover(
   options: { failRepair?: boolean } = {}
 ): Promise<ProcessSpec[]> {
   const specs: ProcessSpec[] = []
+
   const runProcessFn = async (spec: ProcessSpec): Promise<ProcessResult> => {
     specs.push(spec)
+
     return {
       code: options.failRepair === true ? 5 : 0,
       signal: null,
@@ -63,6 +66,7 @@ function probeThenRecover(
       timedOut: false
     }
   }
+
   return new Promise((resolve) => {
     probeWindowsInstallDirAcl({
       platform: 'win32',
@@ -109,6 +113,7 @@ describe('startWindowsInstallDirAclRepairIfPoisoned', () => {
     const specs = await probeThenRecover((target) =>
       icaclsDacl(target, [ORPHAN_PACKAGE_ACE, ALL_PACKAGES_ACE])
     )
+
     expect(specs).toHaveLength(0)
     expect(describeInstallDirAclPoison()).toBeNull()
   })
@@ -117,6 +122,7 @@ describe('startWindowsInstallDirAclRepairIfPoisoned', () => {
     const specs = await probeThenRecover((target) =>
       icaclsDacl(target, [ORPHAN_PACKAGE_ACE, RESTRICTED_PACKAGES_ACE])
     )
+
     expect(specs).toHaveLength(0)
     expect(describeInstallDirAclPoison()).toBeNull()
   })
@@ -127,6 +133,7 @@ describe('startWindowsInstallDirAclRepairIfPoisoned', () => {
     const specs = await probeThenRecover((target) =>
       icaclsDacl(target, [ORPHAN_PACKAGE_ACE, FRENCH_RESTRICTED_PACKAGES_ACE], FRENCH_BASELINE_ACES)
     )
+
     expect(specs).toHaveLength(0)
     expect(describeInstallDirAclPoison()).toBeNull()
   })
@@ -156,6 +163,7 @@ describe('startWindowsInstallDirAclRepairIfPoisoned', () => {
         }
       })
     })
+
     expect(specs).toHaveLength(0)
     expect(describeInstallDirAclPoison()).toBeNull()
   })
@@ -209,6 +217,7 @@ const POISON_VERDICT: CrashReportBreadcrumbData = {
   matchesPoisonSignature: true,
   wellKnownNameCheckReliable: true
 }
+
 const GPU_ENV = { appVersion: APP_VERSION, electronVersion: '43.4.1', platform: 'win32' } as const
 
 function recoveryOptions(userDataPath: string, run: Runner): WindowsInstallDirAclRecoveryOptions {
@@ -255,6 +264,7 @@ describe('install-dir ACL repair vs the GPU safe-graphics marker', () => {
         // Settles after the repair's own setImmediate hop and its two icacls passes.
         recordBreadcrumb: () => {
           setTimeout(resolve, 0)
+
           return undefined
         }
       })
@@ -281,6 +291,7 @@ describe('install-dir ACL repair vs the GPU safe-graphics marker', () => {
         ...recoveryOptions(userDataPath, okRun),
         recordBreadcrumb: () => {
           setTimeout(resolve, 0)
+
           return undefined
         }
       })
@@ -329,6 +340,7 @@ describe('isInstallDirAclSuspect', () => {
       stderr: 'Access is denied.',
       timedOut: false
     })
+
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-suspect-'))
     startWindowsInstallDirAclRepairIfPoisoned(
       POISON_VERDICT,
@@ -358,13 +370,17 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
 
   it('costs a healthy machine one absent-file read and no icacls', async () => {
     const specs: ProcessSpec[] = []
+
     const run: Runner = async (spec) => {
       specs.push(spec)
+
       return okRun(spec)
     }
+
     const mode = await repairKnownPoisonedInstallDirBeforeWindow(
       recoveryOptions(mkdtempSync(join(tmpdir(), 'orca-acl-gate-')), run)
     )
+
     expect(mode).toBe('not-marked')
     expect(specs).toHaveLength(0)
   })
@@ -389,10 +405,13 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
       GPU_ENV
     )
     const specs: ProcessSpec[] = []
+
     const run: Runner = async (spec) => {
       specs.push(spec)
+
       return okRun(spec)
     }
+
     const mode = await repairKnownPoisonedInstallDirBeforeWindow(recoveryOptions(userDataPath, run))
     expect(mode).toBe('repaired')
     // Both passes have already run by the time the window may be created.
@@ -417,6 +436,7 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
       ...recoveryOptions(userDataPath, (() => new Promise<never>(() => undefined)) as Runner),
       timeoutMs: 20
     })
+
     expect(mode).toBe('timeout')
   })
 
@@ -493,10 +513,13 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
     )
 
     let releaseIcacls: () => void = () => undefined
+
     const stalled = new Promise<void>((resolve) => {
       releaseIcacls = resolve
     })
+
     let repairReported: () => void = () => undefined
+
     const reported = new Promise<void>((resolve) => {
       repairReported = resolve
     })
@@ -504,14 +527,17 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
     const mode = await repairKnownPoisonedInstallDirBeforeWindow({
       ...recoveryOptions(userDataPath, async (spec) => {
         await stalled
+
         return okRun(spec)
       }),
       recordBreadcrumb: () => {
         setTimeout(repairReported, 0)
+
         return undefined
       },
       timeoutMs: 20
     })
+
     expect(mode).toBe('timeout')
 
     // The window is open now, and this launch's own probe reads the tree still poisoned.
@@ -540,10 +566,13 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
     )
 
     let releaseIcacls: () => void = () => undefined
+
     const stalled = new Promise<void>((resolve) => {
       releaseIcacls = resolve
     })
+
     let repairReported: () => void = () => undefined
+
     const reported = new Promise<void>((resolve) => {
       repairReported = resolve
     })
@@ -551,14 +580,17 @@ describe('repairKnownPoisonedInstallDirBeforeWindow', () => {
     const mode = await repairKnownPoisonedInstallDirBeforeWindow({
       ...recoveryOptions(userDataPath, async (spec) => {
         await stalled
+
         return okRun(spec)
       }),
       recordBreadcrumb: () => {
         setTimeout(repairReported, 0)
+
         return undefined
       },
       timeoutMs: 20
     })
+
     expect(mode).toBe('timeout')
 
     // The orphan claims success first; the claim is believed and takes the marker with it.
@@ -594,6 +626,7 @@ describe('a repair marker recording a completed repair', () => {
     resetWindowsInstallDirAclProbeForTest()
     resetWindowsInstallDirAclRepairForTest()
     resetWindowsInstallDirAclRecoveryForTest()
+
     return repairKnownPoisonedInstallDirBeforeWindow(recoveryOptions(userDataPath, run))
   }
 
@@ -624,10 +657,13 @@ describe('a repair marker recording a completed repair', () => {
 
     // Launch 3: the gate must repair, not congratulate itself on launch 1's work.
     const spent: ProcessSpec[] = []
+
     const mode = await gateLaunch(userDataPath, async (spec) => {
       spent.push(spec)
+
       return { code: 5, signal: null, stdout: '', stderr: 'Access is denied.', timedOut: false }
     })
+
     expect(mode).toBe('failed')
     expect(spent.map((spec) => spec.args?.[2])).toEqual([
       '*S-1-15-2-2:(OI)(CI)(RX)',
@@ -655,10 +691,13 @@ describe('a repair marker recording a completed repair', () => {
     )
     writeInstallDirAclPoisonMarker(userDataPath, INSTALL_DIR, APP_VERSION)
     const spent: ProcessSpec[] = []
+
     const mode = await gateLaunch(userDataPath, async (spec) => {
       spent.push(spec)
+
       return okRun(spec)
     })
+
     expect(mode).toBe('marker-hit')
     expect(spent).toHaveLength(0)
     expect(isInstallDirAclSuspect()).toBe(true)
@@ -750,15 +789,19 @@ describe('a repair marker recording a completed repair', () => {
     resetWindowsInstallDirAclRecoveryForTest()
     resetWindowsInstallDirAclRepairForTest()
     const spent: ProcessSpec[] = []
+
     const failing: Runner = async (spec) => {
       spent.push(spec)
+
       return { code: 5, signal: null, stdout: '', stderr: 'Access is denied.', timedOut: false }
     }
+
     await new Promise<void>((resolve) => {
       startWindowsInstallDirAclRepairIfPoisoned(POISON_VERDICT, {
         ...recoveryOptions(userDataPath, failing),
         recordBreadcrumb: () => {
           setTimeout(resolve, 0)
+
           return undefined
         }
       })
@@ -789,15 +832,19 @@ describe('a repair marker recording a completed repair', () => {
       })
     )
     const spent: ProcessSpec[] = []
+
     const run: Runner = async (spec) => {
       spent.push(spec)
+
       return okRun(spec)
     }
+
     await new Promise<void>((resolve) => {
       startWindowsInstallDirAclRepairIfPoisoned(POISON_VERDICT, {
         ...recoveryOptions(userDataPath, run),
         recordBreadcrumb: () => {
           setTimeout(resolve, 0)
+
           return undefined
         }
       })
@@ -857,6 +904,7 @@ describe('a clean probe verdict', () => {
   // repair with nothing left to fix must not re-accuse an install just read clean.
   it('outranks a repair verdict that lands after it', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-acl-clean-'))
+
     const failing: Runner = async () => ({
       code: 5,
       signal: null,
@@ -864,11 +912,13 @@ describe('a clean probe verdict', () => {
       stderr: 'Access is denied.',
       timedOut: false
     })
+
     let repairSettled = false
     startWindowsInstallDirAclRepairIfPoisoned(POISON_VERDICT, {
       ...recoveryOptions(userDataPath, failing),
       recordBreadcrumb: () => {
         repairSettled = true
+
         return undefined
       }
     })
@@ -900,8 +950,10 @@ describe('the probe-pending grace window', () => {
       spawnFn: fakeIcaclsSpawn((target) => icaclsDacl(target, [RESTRICTED_PACKAGES_ACE])).spawnFn,
       recordBreadcrumb: () => undefined
     }
+
     let settleVerdict: () => void = () => undefined
     const verdict = new Promise<void>((resolve) => (settleVerdict = resolve))
+
     // Launch, wired exactly as main-window-controller wires it.
     const dispatched = probeWindowsInstallDirAcl({
       ...probeArgs,
@@ -913,9 +965,11 @@ describe('the probe-pending grace window', () => {
         settleVerdict()
       }
     })
+
     if (dispatched) {
       noteWindowsInstallDirAclProbePending()
     }
+
     expect(dispatched).toBe(true)
     expect(isInstallDirAclSuspect()).toBe(true)
     await verdict
@@ -923,9 +977,11 @@ describe('the probe-pending grace window', () => {
 
     // Reopen: the probe declines, so nothing arms the grace window again.
     const reopened = probeWindowsInstallDirAcl({ ...probeArgs, onDone: () => undefined })
+
     if (reopened) {
       noteWindowsInstallDirAclProbePending()
     }
+
     expect(reopened).toBe(false)
     expect(isInstallDirAclSuspect()).toBe(false)
     expect(isInstallDirAclSuspect(Date.now() + 14_000)).toBe(false)
@@ -951,13 +1007,16 @@ describe('isBlockingInstallDirAclRepairInFlight', () => {
     resetWindowsInstallDirAclRepairForTest()
 
     let inFlightDuringRepair = false
+
     const gate = repairKnownPoisonedInstallDirBeforeWindow({
       ...recoveryOptions(userDataPath, async (spec) => {
         inFlightDuringRepair = isBlockingInstallDirAclRepairInFlight()
+
         return okRun(spec)
       }),
       timeoutMs: 5_000
     })
+
     expect(await gate).toBe('repaired')
     expect(inFlightDuringRepair).toBe(true)
     expect(isBlockingInstallDirAclRepairInFlight()).toBe(false)
@@ -974,6 +1033,7 @@ describe('isBlockingInstallDirAclRepairInFlight', () => {
       ...recoveryOptions(userDataPath, okRun),
       timeoutMs: 30_000
     })
+
     expect(mode).toBe('skipped')
     expect(isBlockingInstallDirAclRepairInFlight()).toBe(false)
   })

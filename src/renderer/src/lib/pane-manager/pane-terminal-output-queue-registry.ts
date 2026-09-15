@@ -19,8 +19,11 @@ import {
 export type TerminalOutputTarget = ForegroundTerminalOutputTarget
 
 export type TerminalOutputBeforeWrite = (data: string) => void
+
 type TerminalBacklogRecoveryRequest = () => boolean
+
 export type TerminalOutputParsedCallback = () => void
+
 type ForegroundRefreshSyncResolver = () => boolean
 
 export type WriteTerminalOutputOptions = {
@@ -86,16 +89,25 @@ export type QueueEntry = {
 }
 
 export const BACKGROUND_FLUSH_DELAY_MS = 50
+
 export const BACKGROUND_DRAIN_INTERVAL_MS = 16
+
 export const HIGH_PRIORITY_DRAIN_INTERVAL_MS = 4
+
 export const BACKGROUND_CHUNK_CHARS = 16 * 1024
+
 export const MAX_WRITES_PER_DRAIN = 2
+
 // Why 8: per-tick volume (8 x 16KB = 128KB ≈ 1.3ms parse) sets the sustained ceiling (~30MB/s) within DRAIN_TIME_BUDGET_MS; at 2 it was only 8MB/s against a ~100MB/s parser (see throughput bench).
 export const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 8
+
 export const DRAIN_TIME_BUDGET_MS = 8
+
 export const LARGE_BACKLOG_CHARS = 512 * 1024
+
 // Why mutable: the cap scales with the user's scrollback setting (terminalOutputBacklogCapChars), configured when settings apply; the chunk-count cap stays fixed.
 let maxQueueChars = TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS
+
 export const MAX_BACKGROUND_QUEUE_CHUNKS = 4096
 
 export function configureTerminalOutputBacklogCap(scrollbackRows: unknown): void {
@@ -105,27 +117,39 @@ export function configureTerminalOutputBacklogCap(scrollbackRows: unknown): void
 export function getTerminalOutputMaxQueueChars(): number {
   return maxQueueChars
 }
+
 // Why: leading CAN aborts any partial escape sequence before the style reset so the backlog warning renders cleanly.
 export const BACKGROUND_BACKLOG_WARNING =
   '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog grew too large.]\r\n'
+
 // Why a separate foreground message: a visible pane hitting the cap means the drain couldn't keep up with a flood (starved renderer), not merely output produced while hidden.
 export const FOREGROUND_BACKLOG_WARNING =
   '\x18\x1b[0m\r\n[Orca skipped a burst of terminal output because the backlog grew too large.]\r\n'
+
 export const ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY = (): boolean => true
 
 export const queuedByTerminal = new Map<TerminalOutputTarget, QueueEntry>()
+
 setTerminalOutputDebugQueueReader(() => queuedByTerminal.values())
+
 const backlogRecoveryByTerminal = new WeakMap<
   TerminalOutputTarget,
   TerminalBacklogRecoveryRequest
 >()
+
 let drainTimer: ReturnType<typeof setTimeout> | null = null
+
 let drainTimerDelayMs: number | null = null
+
 // Why a MessageChannel for zero-delay drains: Chromium clamps nested setTimeout(0) to ~4ms; a posted macrotask isn't clamped yet still yields to input/paint. Cancellation is by generation.
 let drainImmediatePending = false
+
 let drainImmediateGeneration = 0
+
 let useMessageChannelDrain = typeof MessageChannel !== 'undefined' && !isVitestEnv()
+
 let drainChannel: MessageChannel | null = null
+
 // Why indirect: the drain loop lives downstream of this module, so it registers itself here rather than being imported back into the queue state it operates on.
 let runDrain: (() => void) | null = null
 
@@ -149,10 +173,12 @@ function getDrainChannel(): MessageChannel {
       if (event.data !== drainImmediateGeneration || !drainImmediatePending) {
         return
       }
+
       drainImmediatePending = false
       runDrainTick()
     }
   }
+
   return drainChannel
 }
 
@@ -180,25 +206,32 @@ export function scheduleDrain(delayMs: number): void {
     // An immediate drain is already armed — nothing can beat zero delay.
     return
   }
+
   if (drainTimer !== null) {
     if (drainTimerDelayMs !== null && drainTimerDelayMs <= delayMs) {
       return
     }
+
     clearTimeout(drainTimer)
     drainTimer = null
     drainTimerDelayMs = null
   }
+
   if (queuedByTerminal.size === 0) {
     return
   }
+
   if (debugEnabled) {
     debugState.scheduledDrainCount++
   }
+
   if (delayMs === 0 && useMessageChannelDrain) {
     drainImmediatePending = true
     getDrainChannel().port2.postMessage(drainImmediateGeneration)
+
     return
   }
+
   drainTimer = setTimeout(runDrainTick, delayMs)
   drainTimerDelayMs = delayMs
 }
@@ -212,9 +245,11 @@ export function fireQueuedAckCredits(entry: QueueEntry): void {
 
 export function requestRegisteredTerminalBacklogRecovery(terminal: TerminalOutputTarget): boolean {
   const requestRecovery = backlogRecoveryByTerminal.get(terminal)
+
   if (!requestRecovery) {
     return false
   }
+
   return requestRecovery()
 }
 
@@ -223,6 +258,7 @@ export function registerTerminalBacklogRecovery(
   requestRecovery: TerminalBacklogRecoveryRequest
 ): () => void {
   backlogRecoveryByTerminal.set(terminal, requestRecovery)
+
   return () => {
     if (backlogRecoveryByTerminal.get(terminal) === requestRecovery) {
       backlogRecoveryByTerminal.delete(terminal)
@@ -233,10 +269,12 @@ export function registerTerminalBacklogRecovery(
 export function discardTerminalOutput(terminal: TerminalOutputTarget): void {
   exposeDebugApi()
   const entry = queuedByTerminal.get(terminal)
+
   if (entry) {
     // Why: discarded chunks still consumed their deliveries — credit them or main's in-flight window leaks (fireQueuedAckCredits).
     fireQueuedAckCredits(entry)
   }
+
   discardInFlightTerminalOutputAckCredits(terminal)
   queuedByTerminal.delete(terminal)
   discardForegroundRenderSettle(terminal)

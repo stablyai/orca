@@ -57,6 +57,7 @@ export function pickAllowedEnv(
   platform: NodeJS.Platform
 ): NodeJS.ProcessEnv {
   const windowsLookup = new Map<string, string>()
+
   if (platform === 'win32') {
     // Why: Windows resolves env names case-insensitively, so a lowercased
     // `codex_home` still reaches the child; folding on POSIX instead would
@@ -67,13 +68,17 @@ export function pickAllowedEnv(
       }
     }
   }
+
   const env: NodeJS.ProcessEnv = {}
+
   for (const key of keys) {
     const value = platform === 'win32' ? windowsLookup.get(key) : baseEnv[key]
+
     if (value !== undefined) {
       env[key === 'SYSTEMROOT' ? 'SystemRoot' : key] = value
     }
   }
+
   return env
 }
 
@@ -87,7 +92,9 @@ export function buildAiVaultServiceEnv(
     baseEnv,
     platform
   )
+
   env.ELECTRON_RUN_AS_NODE = '1'
+
   return env
 }
 

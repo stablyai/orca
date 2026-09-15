@@ -16,8 +16,10 @@ export function createGate(
   }
 ): DecisionGateRow {
   this.db.exec('SAVEPOINT create_gate')
+
   try {
     const task = this.getTask(gate.taskId)
+
     if (!task) {
       throw new OrchestrationError(
         'lifecycle_not_found',
@@ -25,8 +27,10 @@ export function createGate(
         { taskId: gate.taskId }
       )
     }
+
     const runId = task.run_id
     this.requireRun(runId)
+
     const active = this.db
       .prepare(
         `SELECT * FROM dispatch_contexts
@@ -34,6 +38,7 @@ export function createGate(
          ORDER BY rowid DESC LIMIT 1`
       )
       .get(gate.taskId) as DispatchContextRow | undefined
+
     if (
       gate.requester &&
       (!active ||
@@ -51,6 +56,7 @@ export function createGate(
         { taskId: gate.taskId, dispatchId: active?.id }
       )
     }
+
     const activeWorker = this.db
       .prepare(
         `SELECT active.id
@@ -61,6 +67,7 @@ export function createGate(
          ORDER BY active.rowid DESC LIMIT 1`
       )
       .get(gate.taskId) as { id: string } | undefined
+
     if (activeWorker) {
       throw new OrchestrationError(
         'task_not_startable',
@@ -68,6 +75,7 @@ export function createGate(
         { taskId: gate.taskId, dispatchId: activeWorker.id }
       )
     }
+
     const id = generateId('gate')
     const optionsJson = JSON.stringify(gate.options ?? [])
     this.db
@@ -82,10 +90,13 @@ export function createGate(
       from: task.status,
       to: 'blocked'
     })
+
     const created = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(id) as
       | DecisionGateRow
       | undefined
+
     this.db.exec('RELEASE create_gate')
+
     return created as DecisionGateRow
   } catch (error) {
     this.db.exec('ROLLBACK TO create_gate')
@@ -102,11 +113,13 @@ export function resolveGate(
   const gate = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
     | DecisionGateRow
     | undefined
+
   if (!gate) {
     return undefined
   }
 
   this.db.exec('SAVEPOINT resolve_gate')
+
   try {
     this.db
       .prepare(
@@ -114,10 +127,13 @@ export function resolveGate(
       )
       .run(resolution, gateId)
     this.updateTaskStatus(gate.task_id, 'ready')
+
     const resolved = this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
       | DecisionGateRow
       | undefined
+
     this.db.exec('RELEASE resolve_gate')
+
     return resolved
   } catch (error) {
     this.db.exec('ROLLBACK TO resolve_gate')
@@ -133,6 +149,7 @@ export function timeoutGate(this: OrchestrationDb, gateId: string): DecisionGate
       "UPDATE decision_gates SET status = 'timeout', resolved_at = datetime('now') WHERE id = ? AND status = 'pending'"
     )
     .run(gateId)
+
   return this.db.prepare('SELECT * FROM decision_gates WHERE id = ?').get(gateId) as
     | DecisionGateRow
     | undefined
@@ -147,16 +164,19 @@ export function listGates(
       .prepare('SELECT * FROM decision_gates WHERE task_id = ? AND status = ? ORDER BY created_at')
       .all(filter.taskId, filter.status) as DecisionGateRow[]
   }
+
   if (filter?.taskId) {
     return this.db
       .prepare('SELECT * FROM decision_gates WHERE task_id = ? ORDER BY created_at')
       .all(filter.taskId) as DecisionGateRow[]
   }
+
   if (filter?.status) {
     return this.db
       .prepare('SELECT * FROM decision_gates WHERE status = ? ORDER BY created_at')
       .all(filter.status) as DecisionGateRow[]
   }
+
   return this.db
     .prepare('SELECT * FROM decision_gates ORDER BY created_at')
     .all() as DecisionGateRow[]

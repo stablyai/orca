@@ -53,12 +53,14 @@ describe('skill provider placement reconciliation', () => {
       await mkdir(canonicalPath, { recursive: true })
       await writeFile(join(canonicalPath, 'SKILL.md'), 'private skill')
       await mkdir(providerRoot)
+
       if (kind === 'file') {
         await writeFile(destinationPath, 'unowned file')
       } else {
         await mkdir(destinationPath)
         await writeFile(join(destinationPath, 'SKILL.md'), 'unowned directory')
       }
+
       const observed = await nativeSkillInstallFilesystem.observeSkill(canonicalPath)
 
       const result = await reconcileSkillProviderPlacement({
@@ -76,6 +78,7 @@ describe('skill provider placement reconciliation', () => {
       })
       const destinationStat = await lstat(destinationPath)
       expect(kind === 'file' ? destinationStat.isFile() : destinationStat.isDirectory()).toBe(true)
+
       if (kind === 'file') {
         expect(await readFile(destinationPath, 'utf8')).toBe('unowned file')
       } else {
@@ -173,10 +176,13 @@ describe('skill provider placement reconciliation', () => {
     await mkdir(destinationPath, { recursive: true })
     await writeFile(join(canonicalPath, 'SKILL.md'), 'new skill')
     await writeFile(join(destinationPath, 'SKILL.md'), 'old skill')
+
     const previousDigest = (await nativeSkillInstallFilesystem.observeSkill(destinationPath))
       .observedDigest
+
     const nextDigest = (await nativeSkillInstallFilesystem.observeSkill(canonicalPath))
       .observedDigest
+
     const previous = receipt(canonicalPath, previousDigest)
     previous.placements = [
       {
@@ -210,10 +216,13 @@ describe('skill provider placement reconciliation', () => {
     await mkdir(destinationPath, { recursive: true })
     await writeFile(join(canonicalPath, 'SKILL.md'), 'new skill')
     await writeFile(join(destinationPath, 'SKILL.md'), 'old skill')
+
     const previousDigest = (await nativeSkillInstallFilesystem.observeSkill(destinationPath))
       .observedDigest
+
     const nextDigest = (await nativeSkillInstallFilesystem.observeSkill(canonicalPath))
       .observedDigest
+
     const previous = receipt(canonicalPath, previousDigest)
     previous.placements = [
       {

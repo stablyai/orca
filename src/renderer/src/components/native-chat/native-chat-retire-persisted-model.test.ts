@@ -153,6 +153,7 @@ describe('useNativeChatSessionOptions retirement on mount', () => {
 
   it('keeps PTY picks in the client settings record used by paired launches', async () => {
     mountPane()
+
     const persistSelection = mocks.createNativeChatPtySessionOptions.mock.calls[0]?.[0]
       ?.persistSelection as
       | ((pick: {

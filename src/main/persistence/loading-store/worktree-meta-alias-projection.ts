@@ -47,14 +47,18 @@ function identityKeyDerivedFromLocatorRow(alias: string, locatorRow: unknown): s
   if (!isPlainRecord(locatorRow)) {
     return undefined
   }
+
   const { hostId, instanceId } = locatorRow as WorktreeMeta
+
   if (typeof hostId !== 'string' || !hostId || typeof instanceId !== 'string' || !instanceId) {
     return undefined
   }
+
   // The alias must name the same host, or the key the reader derives is not the key it replaces.
   if (getExecutionHostIdFromWorktreeHostIdentity(alias) !== hostId) {
     return undefined
   }
+
   return canonicalWorktreeIdentity({
     worktreeId: getWorktreeIdFromHostIdentity(alias),
     executionHostId: hostId,
@@ -76,28 +80,37 @@ function derivableIdentityRows(
   const derivable = new Map<string, WorktreeMeta>()
   const aliases = state.worktreeIdentityAliases
   const worktreeMeta = state.worktreeMeta as unknown
+
   if (!isPlainRecord(aliases) || !isPlainRecord(worktreeMeta)) {
     return derivable
   }
+
   const contested = new Set<string>()
+
   for (const [alias, identityKeys] of Object.entries(aliases)) {
     if (!Array.isArray(identityKeys) || identityKeys.length !== 1) {
       continue
     }
+
     const locatorRow = worktreeMeta[getWorktreeIdFromHostIdentity(alias)]
     const derivedKey = identityKeyDerivedFromLocatorRow(alias, locatorRow)
+
     if (derivedKey === undefined || derivedKey !== identityKeys[0]) {
       continue
     }
+
     if (derivable.has(derivedKey)) {
       contested.add(derivedKey)
       continue
     }
+
     derivable.set(derivedKey, locatorRow as WorktreeMeta)
   }
+
   for (const key of contested) {
     derivable.delete(key)
   }
+
   return derivable
 }
 
@@ -110,17 +123,22 @@ export function projectWorktreeMetaByIdentityOntoLocators(
   state: WorktreeMetaAliasProjectionSource
 ): Record<string, WorktreeMeta> {
   let projected: Record<string, WorktreeMeta> | undefined
+
   for (const [identityKey, locatorRow] of derivableIdentityRows(state)) {
     const identityRow = worktreeMetaByIdentity[identityKey]
+
     if (!isPlainRecord(identityRow)) {
       continue
     }
+
     if (identityRow !== locatorRow && !isDeepStrictEqual(identityRow, locatorRow)) {
       continue
     }
+
     projected ??= { ...worktreeMetaByIdentity }
     delete projected[identityKey]
   }
+
   return projected ?? worktreeMetaByIdentity
 }
 
@@ -135,15 +153,19 @@ export function hydrateWorktreeMetaAliasProjection(
   parsed: WorktreeMetaAliasProjectionSource & Pick<PersistedState, 'worktreeMetaByIdentity'>
 ): Record<string, WorktreeMeta> | undefined {
   const worktreeMetaByIdentity = parsed.worktreeMetaByIdentity
+
   if (!isPlainRecord(worktreeMetaByIdentity)) {
     return worktreeMetaByIdentity
   }
+
   for (const [identityKey, locatorRow] of derivableIdentityRows(parsed)) {
     if (Object.hasOwn(worktreeMetaByIdentity, identityKey)) {
       continue
     }
+
     // Same reference in both maps, as every in-session write leaves it.
     worktreeMetaByIdentity[identityKey] = locatorRow
   }
+
   return worktreeMetaByIdentity
 }

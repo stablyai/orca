@@ -38,6 +38,7 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
       restoreRejectedDraft,
       sendStructured
     }).sendWithOutcome
+
     return null
   }
 

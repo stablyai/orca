@@ -40,6 +40,7 @@ function createDoc(atomLabel = 'locked') {
 function mountSearch() {
   let state = EditorState.create({ doc: createDoc() })
   const listeners = new Set<() => void>()
+
   const editor = {
     get state() {
       return state
@@ -52,12 +53,14 @@ function mountSearch() {
     view: {
       dispatch: (tr: EditorState['tr']) => {
         state = state.apply(tr)
+
         if (tr.docChanged) {
           listeners.forEach((listener) => listener())
         }
       }
     }
   } as unknown as Editor
+
   const hook = renderHook(() =>
     useRichMarkdownSearch({
       editor,
@@ -65,6 +68,7 @@ function mountSearch() {
       scrollContainerRef: { current: null }
     })
   )
+
   return {
     hook,
     editor,
@@ -89,10 +93,12 @@ describe('live rich markdown search reuse', () => {
     expect(walk).toHaveBeenCalledTimes(1)
     act(() => vi.advanceTimersByTime(150))
     expect(hook.result.current.searchState.matchCount).toBe(2)
+
     for (let index = 0; index < 20; index++) {
       act(() => hook.result.current.searchActions.setReplaceQuery(`replacement ${index}`))
       act(() => hook.result.current.searchActions.moveToMatch(1))
     }
+
     expect(walk).toHaveBeenCalledTimes(1)
     act(() => hook.result.current.searchActions.closeSearch())
     act(() => hook.result.current.openSearch())

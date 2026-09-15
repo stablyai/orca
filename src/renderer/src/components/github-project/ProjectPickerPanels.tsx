@@ -127,6 +127,7 @@ function ProjectViewPickerRow({
   onPick: (view: GitHubProjectViewSummary) => void | Promise<void>
 }): React.JSX.Element {
   const supported = view.layout === 'TABLE_LAYOUT' || view.layout === 'ROADMAP_LAYOUT'
+
   const layoutLabel =
     view.layout === 'TABLE_LAYOUT'
       ? translate('auto.components.github.project.ProjectPicker.1a2b8e512e', 'Table')
@@ -143,6 +144,7 @@ function ProjectViewPickerRow({
               'auto.components.github.project.ProjectPickerPanels.9fe1ac868c',
               'Unsupported'
             )
+
   return (
     <button
       type="button"
@@ -168,9 +170,11 @@ export function ProjectPickerPartialFailures({
     failures.length === 1 && failures[0].owner !== '*'
       ? `Couldn't load projects from ${failures[0].owner}.`
       : `Some organizations didn't load (${failures.length}).`
+
   const detail = failures
     .map((failure) => `${failure.owner === '*' ? 'orgs' : failure.owner}: ${failure.message}`)
     .join('\n')
+
   return (
     <div
       className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
@@ -208,6 +212,7 @@ export function ProjectPickerError({
       />
     )
   }
+
   return (
     <div className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
       <div>{error.message}</div>

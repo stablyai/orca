@@ -33,9 +33,11 @@ describe('ReviewIcon', () => {
   // would read exactly like a passing pipeline while GitLab still refuses the merge.
   it('does not paint a manual-blocked GitLab pipeline like a passing one', () => {
     const status = derivePipelineStatus({ status: 'manual' })
+
     const blocked = renderToStaticMarkup(
       <ReviewIcon review={{ ...gitlabReview, status }} className="size-3" />
     )
+
     const passing = renderToStaticMarkup(
       <ReviewIcon review={{ ...gitlabReview, status: 'success' }} className="size-3" />
     )
@@ -61,6 +63,7 @@ describe('ReviewIcon', () => {
         variant="generic"
       />
     )
+
     const closed = renderToStaticMarkup(
       <ReviewIcon
         review={{ provider: 'github', number: 1, title: 'Closed', state: 'closed' }}

@@ -15,6 +15,7 @@ const paths = [
   'İ.ts',
   'package-lock.json'
 ]
+
 const entries = paths.flatMap((path, index) =>
   (['staged', 'untracked', 'unstaged'] as const).map((area) => ({
     path,
@@ -29,6 +30,7 @@ const entries = paths.flatMap((path, index) =>
           : undefined
   }))
 )
+
 const reviewInput = {
   worktreeId: 'workspace',
   statusEntries: entries,
@@ -36,7 +38,9 @@ const reviewInput = {
   comments: [],
   reviewState: { version: 1 as const, files: {} }
 }
+
 const comparePath = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true })
+
 const conflictRank = (entry: MobileGitStatusEntry) =>
   entry.conflictStatus === 'unresolved' ? 0 : entry.conflictStatus === 'resolved_locally' ? 1 : 2
 
@@ -45,6 +49,7 @@ describe('mobile path sort collation', () => {
     const original = [...entries]
     const sections = buildMobileSourceControlSections(entries)
     expect(sections.map((section) => section.area)).toEqual(['unstaged', 'untracked', 'staged'])
+
     for (const section of sections) {
       expect(section.data).toEqual(
         entries
@@ -52,6 +57,7 @@ describe('mobile path sort collation', () => {
           .sort((a, b) => conflictRank(a) - conflictRank(b) || comparePath(a.path, b.path))
       )
     }
+
     expect(buildMobileBranchCompareSection(entries)?.data).toEqual(
       [...entries].sort((a, b) => comparePath(a.path, b.path))
     )
@@ -67,28 +73,34 @@ describe('mobile path sort collation', () => {
         buildMobileDiffReviewQueue({ ...reviewInput, statusEntries: [], branchEntries: [entry] })
       )
     ]
+
     const scopeRank = { unstaged: 0, staged: 1, branch: 2 }
+
     const expected = unsorted.sort(
       (a, b) =>
         scopeRank[a.scope] - scopeRank[b.scope] ||
         Number(a.isGeneratedOrLockFile) - Number(b.isGeneratedOrLockFile) ||
         comparePath(a.filePath, b.filePath)
     )
+
     expect(buildMobileDiffReviewQueue(reviewInput)).toEqual(expected)
   })
 
   it('resolves the current locale once per populated sort and never per comparison', () => {
     const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
     const NativeCollator = Intl.Collator
+
     const collator = vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
       return new NativeCollator(locales, options)
     })
+
     try {
       for (let call = 0; call < 2; call++) {
         buildMobileSourceControlSections(entries)
         buildMobileBranchCompareSection(entries)
         buildMobileDiffReviewQueue(reviewInput)
       }
+
       expect(localeCompare).not.toHaveBeenCalled()
       expect(collator).toHaveBeenCalledTimes(6)
       expect(collator).toHaveBeenCalledWith(undefined, { numeric: true })
@@ -100,12 +112,14 @@ describe('mobile path sort collation', () => {
 
   it('does not initialize collation for empty or singleton collections', () => {
     const collator = vi.spyOn(Intl, 'Collator')
+
     try {
       for (const rows of [[], [entries[0]]]) {
         buildMobileSourceControlSections(rows)
         buildMobileBranchCompareSection(rows)
         buildMobileDiffReviewQueue({ ...reviewInput, statusEntries: rows, branchEntries: [] })
       }
+
       expect(collator).not.toHaveBeenCalled()
     } finally {
       collator.mockRestore()

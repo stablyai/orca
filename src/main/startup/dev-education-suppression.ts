@@ -17,6 +17,7 @@ export function shouldSuppressDevEducation(args: {
   env?: NodeJS.ProcessEnv
 }): boolean {
   const env = args.env ?? process.env
+
   return (
     args.isDev &&
     env.ORCA_E2E_USER_DATA_DIR === undefined &&
@@ -26,6 +27,7 @@ export function shouldSuppressDevEducation(args: {
 
 export function suppressDevEducationForStore(store: DevEducationStore, now = Date.now()): void {
   const onboarding = store.getOnboarding()
+
   if (onboarding.closedAt === null) {
     // Why: default dev launches should behave like an already-productive
     // profile, while the env escape hatch keeps first-run surfaces testable.
@@ -43,15 +45,19 @@ export function suppressDevEducationForStore(store: DevEducationStore, now = Dat
   const nextFeatureInteractions = fillFeatureInteractions(ui.featureInteractions, now)
 
   const updates: Partial<PersistedUIState> = {}
+
   if (!sameArray(ui.featureTipsSeenIds, nextFeatureTipsSeenIds)) {
     updates.featureTipsSeenIds = nextFeatureTipsSeenIds
   }
+
   if (!sameArray(ui.contextualToursSeenIds, nextContextualToursSeenIds)) {
     updates.contextualToursSeenIds = nextContextualToursSeenIds
   }
+
   if (ui.contextualToursAutoEligible !== false) {
     updates.contextualToursAutoEligible = false
   }
+
   if (
     Object.keys(nextFeatureInteractions).length !== Object.keys(ui.featureInteractions ?? {}).length
   ) {
@@ -75,12 +81,14 @@ function fillFeatureInteractions(
   now: number
 ): FeatureInteractionState {
   const next: FeatureInteractionState = { ...current }
+
   for (const id of FEATURE_INTERACTION_IDS) {
     next[id] ??= {
       firstInteractedAt: now,
       interactionCount: 1
     }
   }
+
   return next
 }
 

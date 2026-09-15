@@ -28,11 +28,15 @@ vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
+
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 
 const NOW = 1_700_000_000_000
+
 const OLD_ID = 'ssh-1738000000000-a9f3x'
+
 const IDENTITY = { host: 'dev.example.com', port: 22, username: 'tim' }
 
 function desktopSshKey(targetId: string): string {
@@ -145,6 +149,7 @@ async function createStoreFromState(state: Record<string, unknown>) {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
+
   return new Store()
 }
 
@@ -154,12 +159,14 @@ async function reloadStore() {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('./persistence')
   initDataPath()
+
   return new Store()
 }
 
 async function createSshStore(state: Record<string, unknown>) {
   const store = await createStoreFromState(state)
   const { SshConnectionStore } = await import('./ssh/ssh-connection-store')
+
   return { store, ssh: new SshConnectionStore(store) }
 }
 
@@ -247,6 +254,7 @@ describe('SSH re-adoption migrates automations', () => {
       createdAt: NOW,
       updatedAt: NOW
     }
+
     const group: ProjectGroup = {
       id: 'group-1',
       name: 'Remote',
@@ -260,6 +268,7 @@ describe('SSH re-adoption migrates automations', () => {
       createdAt: NOW,
       updatedAt: NOW
     }
+
     // A folder workspace on SSH whose repo row is local: only the workspace pin names the host.
     const { store, ssh } = await createSshStore(
       removedHostState({
@@ -276,6 +285,7 @@ describe('SSH re-adoption migrates automations', () => {
         ]
       })
     )
+
     expect(store.listAutomationsForScope().items[0].selector).toEqual({
       kind: 'orphan',
       issue: 'Its SSH host is no longer registered.'

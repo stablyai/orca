@@ -82,6 +82,7 @@ describe('resolvePaneAgentActivity', () => {
       hasLivePty: true,
       now: NOW
     })
+
     expect(decision).toEqual({
       hookState: 'waiting',
       hookAgentType: 'claude',
@@ -99,6 +100,7 @@ describe('resolvePaneAgentActivity', () => {
       hasLivePty: true,
       now: NOW
     })
+
     expect(decision.hookState).toBe(null)
     expect(decision.source).toBe('title')
     expect(decision.confidence).toBe('fallback')
@@ -113,6 +115,7 @@ describe('resolvePaneAgentActivity', () => {
       hasLivePty: false,
       now: NOW
     })
+
     expect(decision.source).toBe('title')
     expect(decision.livePtyRequired).toBe(true)
   })
@@ -124,6 +127,7 @@ describe('resolvePaneAgentActivity', () => {
       hasLivePty: true,
       now: NOW
     })
+
     expect(decision).toEqual({
       hookState: null,
       hookAgentType: undefined,
@@ -141,6 +145,7 @@ describe('resolvePaneAgentActivity', () => {
       hasLivePty: true,
       now: NOW
     })
+
     expect(decision.hookState).toBe('done')
     expect(decision.source).toBe('hook')
   })

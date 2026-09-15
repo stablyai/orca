@@ -8,9 +8,13 @@ import {
 import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 
 type MarkdownTab = Extract<MobileSessionTab, { type: 'markdown' }>
+
 type FileTab = Extract<MobileSessionTab, { type: 'file' }>
+
 type BrowserTab = Extract<MobileSessionTab, { type: 'browser' }>
+
 type AgentSessionTab = Extract<MobileSessionTab, { type: 'agent-session' }>
+
 type SetActionTarget<T> = Dispatch<SetStateAction<T | null>>
 
 export function useMobileSessionTabActionTargets() {
@@ -18,6 +22,7 @@ export function useMobileSessionTabActionTargets() {
   const [markdownActionTarget, setMarkdownActionTarget] = useState<MarkdownTab | null>(null)
   const [fileActionTarget, setFileActionTarget] = useState<FileTab | null>(null)
   const [browserActionTarget, setBrowserActionTarget] = useState<BrowserTab | null>(null)
+
   const [agentSessionActionTarget, setAgentSessionActionTarget] = useState<AgentSessionTab | null>(
     null
   )
@@ -52,12 +57,14 @@ export function useMobileSessionTabActionSheetOpener(args: {
     setFileActionTarget,
     setMarkdownActionTarget
   } = args
+
   return useCallback(
     (tab: MobileSessionTab) => {
       if (tab.type === 'terminal') {
         if (typeof tab.terminal !== 'string') {
           return
         }
+
         setActionTarget({
           handle: tab.terminal,
           title: tab.title,

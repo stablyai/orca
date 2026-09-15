@@ -2,6 +2,7 @@ import { createRequire } from 'node:module'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const {
   buildNativeRebuildArgs,
   runElectronBuilderNativeRebuild
@@ -24,6 +25,7 @@ describe('electron-builder native rebuild hook', () => {
 
   it('returns false so electron-builder skips its optional module rebuild pass', () => {
     const calls = []
+
     const result = runElectronBuilderNativeRebuild(
       {
         platform: { nodeName: 'linux' },
@@ -71,6 +73,7 @@ describe('electron-builder native rebuild hook', () => {
 
   it('builds the native CLI launcher before packaging Windows resources', () => {
     const calls = []
+
     const result = runElectronBuilderNativeRebuild(
       {
         platform: { nodeName: 'win32' },

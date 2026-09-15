@@ -3,6 +3,7 @@ import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 
 const MOBILE_EMULATOR_HIDDEN_TOAST_ID = 'mobile-emulator-hidden'
+
 // Why: auto-dismiss the nudge after 30s so it can't linger forever; it stays
 // dismissible early and the Settings re-enable link is reachable until then.
 const MOBILE_EMULATOR_HIDDEN_TOAST_DURATION_MS = 30_000

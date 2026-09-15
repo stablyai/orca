@@ -16,7 +16,9 @@ export function isCodexSessionBackfillDate(value: unknown): value is CodexSessio
   if (!Array.isArray(value) || value.length !== 3) {
     return false
   }
+
   const key = value.join('-')
+
   // Why: shape alone accepts directories the calendar never produces (2026/99/99
   // from a corrupted marker, 2025/02/29); a UTC round-trip rejects them for free.
   // Deliberately no age or future bound — this also gates which managed rollouts
@@ -43,6 +45,7 @@ export function mergeCodexSessionBackfillDates(
   ...groups: readonly (readonly CodexSessionBackfillDate[] | undefined)[]
 ): CodexSessionBackfillDate[] {
   const merged = new Map<string, CodexSessionBackfillDate>()
+
   for (const group of groups) {
     for (const date of group ?? []) {
       if (isCodexSessionBackfillDate(date)) {
@@ -50,6 +53,7 @@ export function mergeCodexSessionBackfillDates(
       }
     }
   }
+
   return [...merged.values()].sort(compareCodexSessionBackfillDates)
 }
 
@@ -58,6 +62,7 @@ export function subtractCodexSessionBackfillDates(
   removed: readonly CodexSessionBackfillDate[]
 ): CodexSessionBackfillDate[] {
   const removedKeys = new Set(removed.map(toCodexSessionBackfillDateKey))
+
   return dates.filter((date) => !removedKeys.has(toCodexSessionBackfillDateKey(date)))
 }
 
@@ -75,10 +80,12 @@ export function getCodexSessionBackfillDatesBetween(
   const dates: CodexSessionBackfillDate[] = []
   const cursor = toUtcMidnight(startedAt)
   const last = toUtcMidnight(finishedAt)
+
   while (cursor <= last) {
     dates.push(getCodexSessionBackfillDate(cursor))
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
+
   return dates
 }
 
@@ -98,13 +105,16 @@ export function expandCodexSessionBackfillDatesThroughToday(
   if (dates.length === 0) {
     return []
   }
+
   const bounds = mergeCodexSessionBackfillDates(dates, [today])
   const first = toUtcDate(bounds[0])
   const last = toUtcDate(bounds.at(-1)!)
   const dateCount = (last.getTime() - first.getTime()) / 86_400_000 + 1
+
   if (dateCount > maxDates) {
     return null
   }
+
   return getCodexSessionBackfillDatesBetween(first, last)
 }
 

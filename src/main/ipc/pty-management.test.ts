@@ -42,6 +42,7 @@ vi.mock('../daemon/daemon-pty-router', () => {
       return this.allAdapters
     }
   }
+
   return { DaemonPtyRouter }
 })
 
@@ -60,12 +61,14 @@ vi.mock('../daemon/degraded-daemon-pty-provider', () => {
     }
     async recoverFreshSpawnRouting(): Promise<boolean> {
       this.routesFreshToFallback = false
+
       return true
     }
     getAllAdapters() {
       return this.allAdapters
     }
   }
+
   return { DegradedDaemonPtyProvider }
 })
 
@@ -73,10 +76,12 @@ type HandlerMap = Record<string, (event: unknown, args?: unknown) => unknown>
 
 function buildHandlerMap(): HandlerMap {
   const map: HandlerMap = {}
+
   for (const call of handleMock.mock.calls) {
     const [channel, handler] = call as [string, (event: unknown, args?: unknown) => unknown]
     map[channel] = handler
   }
+
   return map
 }
 
@@ -125,16 +130,19 @@ async function importFresh() {
   vi.resetModules()
   handleMock.mockClear()
   removeHandlerMock.mockClear()
+
   return import('./pty-management')
 }
 
 async function makeRouter(current: MockAdapter, legacy: MockAdapter[] = []) {
   const { DaemonPtyRouter } = await import('../daemon/daemon-pty-router')
+
   return new DaemonPtyRouter({ current: current as never, legacy: legacy as never })
 }
 
 async function makeDegradedProvider(current: MockAdapter, legacy: MockAdapter[] = []) {
   const { DegradedDaemonPtyProvider } = await import('../daemon/degraded-daemon-pty-provider')
+
   return new DegradedDaemonPtyProvider({
     current: current as never,
     legacy: legacy as never,
@@ -163,6 +171,7 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
+
       const result = (await handlers['pty:management:listSessions']({})) as {
         sessions: DaemonSessionInfo[]
         degraded: boolean
@@ -183,6 +192,7 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
+
       const result = (await handlers['pty:management:listSessions']({})) as {
         sessions: DaemonSessionInfo[]
         degraded: boolean
@@ -212,6 +222,7 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
+
       const result = (await handlers['pty:management:listSessions']({})) as {
         sessions: DaemonSessionInfo[]
       }
@@ -230,6 +241,7 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
+
       const result = (await handlers['pty:management:listSessions']({})) as {
         sessions: DaemonSessionInfo[]
       }
@@ -260,6 +272,7 @@ describe('pty:management IPC handlers', () => {
         remainingCount: number
         killedSessionIds: string[]
       }>
+
       // Why: advance the loop's sleeps one at a time. Between each sleep the
       // handler awaits collectSessions (a microtask), so we need to flush
       // pending microtasks before advancing the next timer.
@@ -268,6 +281,7 @@ describe('pty:management IPC handlers', () => {
         await Promise.resolve()
         await vi.advanceTimersByTimeAsync(100)
       }
+
       return resultPromise
     }
 
@@ -276,15 +290,18 @@ describe('pty:management IPC handlers', () => {
       const legacySessions = [makeSession('old-1', { protocolVersion: 3 })]
       const current = makeAdapter(5, [])
       const legacy = makeAdapter(3, [])
+
       // Why: shutdown removes the session from the adapter's backing list so
       // the next poll observes the shrinking set — mirrors a daemon that
       // actually reaped the processes.
       const removeFrom = (list: DaemonSessionInfo[], id: string): void => {
         const idx = list.findIndex((s) => s.sessionId === id)
+
         if (idx !== -1) {
           list.splice(idx, 1)
         }
       }
+
       current.listSessions = vi.fn(async () =>
         currentSessions.map(({ protocolVersion: _pv, ...rest }) => rest)
       )
@@ -352,10 +369,12 @@ describe('pty:management IPC handlers', () => {
       let pollCalls = 0
       current.listSessions = vi.fn(async () => {
         pollCalls += 1
+
         if (pollCalls === 1) {
           // Initial snapshot: a and b are alive.
           return liveSessions.map(({ protocolVersion: _pv, ...rest }) => rest)
         }
+
         // First poll onward: a and b have been reaped, but the renderer
         // respawned a fresh pane with id 'c'. 'c' was never in the initial
         // snapshot, so it must not count as remaining.
@@ -382,19 +401,23 @@ describe('pty:management IPC handlers', () => {
       current.listSessions = vi.fn(async () =>
         sessionsList.map(({ protocolVersion: _pv, ...rest }) => rest)
       )
+
       // Why: a rejecting shutdown for 'a' must not block the shutdown of 'b'.
       // Since shutdowns fire in parallel (Promise.allSettled), both must be
       // invoked regardless of 'a' throwing.
       const removeFrom = (id: string): void => {
         const idx = sessionsList.findIndex((s) => s.sessionId === id)
+
         if (idx !== -1) {
           sessionsList.splice(idx, 1)
         }
       }
+
       current.shutdown = vi.fn(async (id: string) => {
         if (id === 'a') {
           throw new Error('a is stuck')
         }
+
         removeFrom(id)
       })
       const { registerDaemonManagementHandlers } = await importFresh()
@@ -424,6 +447,7 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
+
       const result = (await handlers['pty:management:killOne']({}, { sessionId: 'old-1' })) as {
         success: boolean
       }
@@ -440,6 +464,7 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
+
       const result = (await handlers['pty:management:killOne']({}, { sessionId: 'ghost' })) as {
         success: boolean
       }
@@ -455,6 +480,7 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
+
       const result = (await handlers['pty:management:killOne']({}, { sessionId: '' })) as {
         success: boolean
       }
@@ -472,6 +498,7 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
+
       const result = (await handlers['pty:management:macTccAttribution']({})) as {
         health: string
       }
@@ -486,6 +513,7 @@ describe('pty:management IPC handlers', () => {
       registerDaemonManagementHandlers()
 
       const handlers = buildHandlerMap()
+
       const result = (await handlers['pty:management:macTccAttribution']({})) as {
         health: string
       }

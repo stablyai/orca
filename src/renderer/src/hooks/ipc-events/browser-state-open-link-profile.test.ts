@@ -10,12 +10,15 @@ const { createBrowserTabMock, storeState } = vi.hoisted(() => ({
 vi.mock('../../store', () => ({
   useAppStore: { getState: () => storeState.value }
 }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: () => null
 }))
+
 vi.mock('@/components/browser-pane/describe-page/live-browser-url-registry', () => ({
   rememberLiveBrowserUrl: vi.fn()
 }))
+
 vi.mock('./browser-automation-bootstrap-lease', () => ({
   acquireBrowserAutomationBootstrapLease: vi.fn()
 }))
@@ -32,12 +35,14 @@ function captureOpenLinkHandler(): (event: {
   let handler:
     | ((event: { browserPageId: string; url: string; activate?: boolean }) => void)
     | null = null
+
   const browserApi = new Proxy(
     {
       onOpenLinkInOrcaTab: (
         callback: (event: { browserPageId: string; url: string; activate?: boolean }) => void
       ) => {
         handler = callback
+
         return noopUnsubscribe
       }
     } as Record<string, unknown>,
@@ -46,18 +51,22 @@ function captureOpenLinkHandler(): (event: {
         property in target ? target[property as string] : () => noopUnsubscribe
     }
   )
+
   const api = new Proxy({ browser: browserApi } as Record<string, unknown>, {
     get: (target, property) =>
       property in target
         ? target[property as string]
         : new Proxy({}, { get: () => () => noopUnsubscribe })
   })
+
   ;(globalThis as { window?: unknown }).window = { api }
 
   registerBrowserStateIpcBridge([], () => false)
+
   if (!handler) {
     throw new Error('Expected the bridge to subscribe to browser:open-link-in-orca-tab')
   }
+
   return handler
 }
 

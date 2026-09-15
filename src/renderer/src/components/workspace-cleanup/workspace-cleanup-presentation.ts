@@ -10,15 +10,20 @@ import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-supp
 import { getWorkspaceCleanupCandidateHostId } from './workspace-cleanup-host-identity'
 
 export type WorkspaceCleanupSortKey = 'activity' | 'name' | 'repo' | 'review' | 'git'
+
 export type WorkspaceCleanupSortDirection = 'asc' | 'desc'
+
 export type WorkspaceCleanupTimeFilter = 'all' | '30d' | '90d' | 'archived'
+
 export type WorkspaceCleanupReviewFilter =
   | 'all'
   | 'no-review'
   | 'has-review'
   | 'open-review'
   | 'closed-review'
+
 export type WorkspaceCleanupGitFilter = 'all' | 'clean' | 'dirty' | 'unpushed' | 'unknown'
+
 export type WorkspaceCleanupContextFilter = 'all' | 'has-context' | 'no-context'
 
 export type WorkspaceCleanupFilters = {
@@ -63,12 +68,14 @@ export function getWorkspaceCleanupReviewInfo(
   const repo = findCandidateRepo(candidate, lookup)
   const worktree = findCandidateWorktree(candidate, repo, lookup)
   const cachedHostedReview = getCachedHostedReview(candidate, worktree, repo, state)
+
   const hostedReview =
     cachedHostedReview?.provider === 'github' &&
     worktree &&
     isGitHubPRSuppressed(worktree, cachedHostedReview.number)
       ? null
       : cachedHostedReview
+
   if (hostedReview) {
     return {
       hasReview: true,
@@ -80,6 +87,7 @@ export function getWorkspaceCleanupReviewInfo(
   }
 
   const linkedReview = getLinkedReviewFallback(worktree)
+
   if (linkedReview) {
     return {
       hasReview: true,
@@ -103,12 +111,15 @@ export function buildWorkspaceCleanupReviewLookup(
   state: Pick<WorkspaceCleanupRendererStateInputs, 'repos' | 'worktreesByRepo'>
 ): WorkspaceCleanupReviewLookup {
   const reposById = new Map<string, Repo[]>()
+
   for (const repo of state.repos) {
     const matches = reposById.get(repo.id) ?? []
     matches.push(repo)
     reposById.set(repo.id, matches)
   }
+
   const worktreesByRepoAndId = new Map<string, Worktree[]>()
+
   for (const [repoId, worktrees] of Object.entries(state.worktreesByRepo)) {
     for (const worktree of worktrees) {
       const key = `${repoId}\0${worktree.id}`
@@ -117,6 +128,7 @@ export function buildWorkspaceCleanupReviewLookup(
       worktreesByRepoAndId.set(key, matches)
     }
   }
+
   return { reposById, worktreesByRepoAndId }
 }
 
@@ -129,6 +141,7 @@ function getCachedHostedReview(
   if (!repo) {
     return null
   }
+
   const cacheKey = getHostedReviewCacheKey(
     repo.path,
     getBranchDisplayName(worktree?.branch ?? candidate.branch),
@@ -138,6 +151,7 @@ function getCachedHostedReview(
     repo.executionHostId,
     true
   )
+
   return state.hostedReviewCache[cacheKey]?.data ?? null
 }
 
@@ -146,11 +160,14 @@ function findCandidateRepo(
   lookup: WorkspaceCleanupReviewLookup
 ): Repo | null {
   const matches = lookup.reposById.get(candidate.repoId) ?? []
+
   if (!candidate.executionHostId && !candidate.connectionId) {
     return matches.length === 1 ? matches[0] : null
   }
+
   const hostId = getWorkspaceCleanupCandidateHostId(candidate)
   const hostMatches = matches.filter((repo) => getRepoExecutionHostId(repo) === hostId)
+
   return hostMatches.length === 1 ? hostMatches[0] : null
 }
 
@@ -161,13 +178,17 @@ function findCandidateWorktree(
 ): Worktree | null {
   const matches =
     lookup.worktreesByRepoAndId.get(`${candidate.repoId}\0${candidate.worktreeId}`) ?? []
+
   const hostId = getWorkspaceCleanupCandidateHostId(candidate)
   const hostMatches = matches.filter((worktree) => worktree.hostId === hostId)
+
   if (hostMatches.length === 1) {
     return hostMatches[0]
   }
+
   const legacyMatches = matches.filter((worktree) => !worktree.hostId)
   const repoMatches = lookup.reposById.get(candidate.repoId) ?? []
+
   return legacyMatches.length === 1 && repo && repoMatches.length === 1 ? legacyMatches[0] : null
 }
 
@@ -178,6 +199,7 @@ function getLinkedReviewFallback(worktree: Worktree | null): {
   if (!worktree) {
     return null
   }
+
   if (worktree.linkedGitLabMR != null) {
     return {
       label: translate(
@@ -188,6 +210,7 @@ function getLinkedReviewFallback(worktree: Worktree | null): {
       provider: 'gitlab'
     }
   }
+
   if (worktree.linkedPR != null) {
     return {
       label: translate(
@@ -198,6 +221,7 @@ function getLinkedReviewFallback(worktree: Worktree | null): {
       provider: 'github'
     }
   }
+
   return null
 }
 

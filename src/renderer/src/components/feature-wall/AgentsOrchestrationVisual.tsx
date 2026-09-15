@@ -6,6 +6,7 @@ import { UsagePage } from './agents-orchestration/UsagePage'
 import { OrchestrationPage } from './agents-orchestration/OrchestrationPage'
 
 const PANEL_HEIGHT_PX = 392
+
 const PANEL_WIDTH_PX = 520
 
 export function AgentsOrchestrationVisual(props: {
@@ -28,6 +29,7 @@ export function AgentsOrchestrationVisual(props: {
     orchestrationLoopMs,
     orchestrationShowResponseBeats
   } = props
+
   return (
     <div
       className="relative flex flex-col text-foreground"

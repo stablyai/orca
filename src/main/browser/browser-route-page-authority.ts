@@ -1,4 +1,5 @@
 const MAX_PAGE_ID_LENGTH = 256
+
 const MAX_PAGE_HOST_GENERATION = 0xffff_ffff
 
 export type BrowserRoutePageIdentity = Readonly<{

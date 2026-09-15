@@ -43,8 +43,10 @@ export function commitLegacyLifecycleOperation(
   duplicate: boolean
 } {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const principal = this.getLegacyCompatibilityPrincipal(params.principalId)
+
     if (
       !principal ||
       principal.role !== 'worker' ||
@@ -55,21 +57,27 @@ export function commitLegacyLifecycleOperation(
         `Legacy compatibility principal ${params.principalId} cannot send lifecycle work.`
       )
     }
+
     const dispatchId = principal.dispatch_id as string
     const existingReceipt = this.requireMatchingLegacyOperationReceipt(params)
+
     if (existingReceipt) {
       const response = JSON.parse(existingReceipt.response_json) as {
         messageId: string
         settlement?: WorkerReportSettlement
       }
+
       const message = this.getMessageById(response.messageId)
+
       if (!message) {
         throw new OrchestrationError(
           'operation_unknown',
           `Legacy operation ${params.operationKey} lost its recorded message.`
         )
       }
+
       this.db.exec('COMMIT')
+
       return {
         receipt: existingReceipt,
         message,
@@ -79,6 +87,7 @@ export function commitLegacyLifecycleOperation(
     }
 
     const dispatch = this.getDispatchContextById(dispatchId)
+
     if (
       !dispatch ||
       dispatch.run_id !== principal.run_id ||
@@ -89,6 +98,7 @@ export function commitLegacyLifecycleOperation(
         `Dispatch ${dispatchId} is not this principal's legacy attempt.`
       )
     }
+
     if (
       (principal.status === 'settled' || !['pending', 'dispatched'].includes(dispatch.status)) &&
       (!params.message.existingId || params.lifecycle.kind !== 'worker_report')
@@ -98,18 +108,23 @@ export function commitLegacyLifecycleOperation(
         `Dispatch ${dispatchId} is settled and only matching completion reconstruction is allowed.`
       )
     }
+
     let message = params.message.existingId
       ? this.getMessageById(params.message.existingId)
       : undefined
+
     const delivery = this.resolveLegacyWorkerCoordinatorDelivery(
       principal.run_id,
       params.message.to
     )
+
     if (params.message.existingId) {
       const matchesOriginalLegacyRoute =
         message?.delivery_contract === 'legacy_direct' && message.to_handle === params.message.to
+
       const matchesCurrentRoute =
         message?.delivery_contract === delivery.contract && message.to_handle === delivery.to
+
       if (
         !message ||
         message.run_id !== principal.run_id ||
@@ -137,6 +152,7 @@ export function commitLegacyLifecycleOperation(
     }
 
     let settlement: WorkerReportSettlement | undefined
+
     if (params.lifecycle.kind === 'heartbeat') {
       this.recordHeartbeat(dispatchId, params.lifecycle.at)
     } else if (params.lifecycle.kind === 'worker_report') {
@@ -150,6 +166,7 @@ export function commitLegacyLifecycleOperation(
               dispatch.status === 'failed'
             ? 'failed'
             : undefined
+
       settlement = persistedOutcome
         ? { action: 'settled', outcome: persistedOutcome, duplicate: true }
         : this.settleWorkerReportInTransaction({
@@ -158,9 +175,11 @@ export function commitLegacyLifecycleOperation(
             outcome: params.lifecycle.outcome,
             result: params.lifecycle.result
           })
+
       if (settlement.action === 'rejected') {
         throw new OrchestrationError(settlement.code, settlement.reason)
       }
+
       this.db
         .prepare(
           `UPDATE legacy_compatibility_principals
@@ -168,7 +187,9 @@ export function commitLegacyLifecycleOperation(
         )
         .run(principal.id)
     }
+
     const responseJson = JSON.stringify({ messageId: message.id, settlement })
+
     const receipt = this.insertLegacyOperationReceipt({
       principalId: principal.id,
       operationKey: params.operationKey,
@@ -177,7 +198,9 @@ export function commitLegacyLifecycleOperation(
       effectId: message.id,
       responseJson
     })
+
     this.db.exec('COMMIT')
+
     return { receipt, message, settlement, duplicate: false }
   } catch (error) {
     this.db.exec('ROLLBACK')

@@ -79,6 +79,7 @@ export class AgentAwakeService {
       })
     this.platform = options.platform ?? process.platform
     const resumeSource = options.powerMonitor === undefined ? powerMonitor : options.powerMonitor
+
     if (resumeSource) {
       const onResume = () => this.refresh('power-resume')
       resumeSource.on('resume', onResume)
@@ -94,9 +95,11 @@ export class AgentAwakeService {
 
   setMode(mode: ComputerAwakeMode): void {
     const normalized = normalizeComputerAwakeMode(mode)
+
     if (this.mode === normalized) {
       return
     }
+
     this.mode = normalized
     this.refresh('settings-change')
   }
@@ -111,6 +114,7 @@ export class AgentAwakeService {
     if (!this.statusLease.renew(status)) {
       return
     }
+
     if (this.mode === 'auto' && this.lastPublishedStatus?.active !== true) {
       this.applyAwakeDecision('status-freshness', 1)
     }
@@ -118,6 +122,7 @@ export class AgentAwakeService {
 
   getStatus(): ComputerAwakeStatus {
     const workingAgentCount = this.getEligibleRunningStatusCount()
+
     return {
       mode: this.mode,
       active: this.mode === 'on' || (this.mode === 'auto' && workingAgentCount > 0)
@@ -131,6 +136,7 @@ export class AgentAwakeService {
 
   subscribe(listener: (status: ComputerAwakeStatus) => void): () => void {
     this.statusListeners.add(listener)
+
     return () => this.statusListeners.delete(listener)
   }
 
@@ -149,31 +155,38 @@ export class AgentAwakeService {
 
   private applyAwakeDecision(reason: string, runningStatusCount: number): void {
     const shouldBlock = this.mode === 'on' || (this.mode === 'auto' && runningStatusCount > 0)
+
     if (shouldBlock) {
       const macosAssertionActive = this.startMacosAssertion(reason)
+
       if (this.platform !== 'darwin' || !macosAssertionActive) {
         this.startBlocker(reason, runningStatusCount)
       } else {
         this.stopBlocker('macos-assertion-active', runningStatusCount)
       }
+
       this.startLinuxAssertion(reason)
     } else {
       this.stopBlocker(reason, runningStatusCount)
       this.stopMacosAssertion(reason)
       this.stopLinuxAssertion(reason)
     }
+
     this.publishStatus(shouldBlock)
   }
 
   private publishStatus(active: boolean): void {
     const status = { mode: this.mode, active }
+
     if (
       this.lastPublishedStatus?.mode === status.mode &&
       this.lastPublishedStatus.active === status.active
     ) {
       return
     }
+
     this.lastPublishedStatus = status
+
     for (const listener of this.statusListeners) {
       listener(status)
     }
@@ -189,6 +202,7 @@ export class AgentAwakeService {
         return
       }
     }
+
     try {
       const id = this.blocker.start('prevent-display-sleep')
       this.blockerId = id
@@ -212,6 +226,7 @@ export class AgentAwakeService {
         mode: this.mode,
         error: err
       })
+
       return false
     }
   }
@@ -256,7 +271,9 @@ export class AgentAwakeService {
     if (this.blockerId === null) {
       return
     }
+
     const id = this.blockerId
+
     try {
       this.blocker.stop(id)
     } catch (err) {
@@ -268,6 +285,7 @@ export class AgentAwakeService {
         error: err
       })
     }
+
     this.reconcileBlocker('post-stop')
   }
 
@@ -275,12 +293,16 @@ export class AgentAwakeService {
     if (this.blockerId === null) {
       return false
     }
+
     const id = this.blockerId
+
     try {
       const isStarted = this.blocker.isStarted(id)
+
       if (!isStarted) {
         this.blockerId = null
       }
+
       return isStarted
     } catch (err) {
       this.logger.warn('[agent-awake] failed to reconcile blocker', {
@@ -288,6 +310,7 @@ export class AgentAwakeService {
         blockerId: id,
         error: err
       })
+
       return true
     }
   }

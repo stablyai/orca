@@ -18,6 +18,7 @@ export default function MermaidViewer({
 }: MermaidViewerProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
   const settings = useAppStore((s) => s.settings)
+
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -29,6 +30,7 @@ export default function MermaidViewer({
 
   useLayoutEffect(() => {
     const container = rootRef.current
+
     if (!container) {
       return
     }
@@ -39,6 +41,7 @@ export default function MermaidViewer({
       if (throttleTimer !== null) {
         clearTimeout(throttleTimer)
       }
+
       throttleTimer = setTimeout(() => {
         setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
         throttleTimer = null
@@ -46,6 +49,7 @@ export default function MermaidViewer({
     }
 
     container.addEventListener('scroll', onScroll, { passive: true })
+
     return () => {
       // Why: guard against writing 0 when the SVG has not rendered yet (e.g.,
       // StrictMode double-mount or quick tab switch before mermaid.render()
@@ -53,9 +57,11 @@ export default function MermaidViewer({
       if (container.scrollHeight > container.clientHeight || container.scrollTop > 0) {
         setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
       }
+
       if (throttleTimer !== null) {
         clearTimeout(throttleTimer)
       }
+
       container.removeEventListener('scroll', onScroll)
     }
   }, [scrollCacheKey])
@@ -63,6 +69,7 @@ export default function MermaidViewer({
   useLayoutEffect(() => {
     const container = rootRef.current
     const targetScrollTop = scrollTopCache.get(scrollCacheKey)
+
     if (!container || targetScrollTop === undefined) {
       return
     }
@@ -82,12 +89,14 @@ export default function MermaidViewer({
       }
 
       attempts += 1
+
       if (attempts < 30) {
         frameId = window.requestAnimationFrame(tryRestore)
       }
     }
 
     tryRestore()
+
     return () => window.cancelAnimationFrame(frameId)
   }, [scrollCacheKey, content])
 

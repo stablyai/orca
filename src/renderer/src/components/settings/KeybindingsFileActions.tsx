@@ -39,15 +39,18 @@ export function KeybindingsFileActions(): React.JSX.Element {
   const openFile = useAppStore((state) => state.openFile)
   const closeFile = useAppStore((state) => state.closeFile)
   const updateSettings = useAppStore((state) => state.updateSettings)
+
   const floatingTerminalEnabled = useAppStore(
     (state) => state.settings?.floatingTerminalEnabled === true
   )
+
   const floatingTerminalToggleFrameRef = React.useRef<number | null>(null)
 
   const cancelFloatingTerminalToggleFrame = React.useCallback((): void => {
     if (floatingTerminalToggleFrameRef.current === null) {
       return
     }
+
     cancelAnimationFrame(floatingTerminalToggleFrameRef.current)
     floatingTerminalToggleFrameRef.current = null
   }, [])
@@ -64,12 +67,14 @@ export function KeybindingsFileActions(): React.JSX.Element {
 
   const prepareKeybindingsPath = async (): Promise<string | null> => {
     const snapshot = await ensureKeybindingsFile()
+
     return snapshot?.path ?? keybindingSnapshot?.path ?? null
   }
 
   const editKeybindingsInOrca = async (): Promise<void> => {
     try {
       const filePath = await prepareKeybindingsPath()
+
       if (!filePath) {
         toast.error(
           translate(
@@ -77,16 +82,20 @@ export function KeybindingsFileActions(): React.JSX.Element {
             'Keybindings file is not available.'
           )
         )
+
         return
       }
+
       const existingFile = openFiles.find(
         (file) => file.filePath === filePath && file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID
       )
+
       if (existingFile && !existingFile.isDirty) {
         // Why: a prior denied read can leave a focused error tab. Reopen a
         // clean tab after authorization so the editor retries the file load.
         closeFile(existingFile.id)
       }
+
       openFile(
         {
           filePath,
@@ -98,12 +107,15 @@ export function KeybindingsFileActions(): React.JSX.Element {
         },
         { preview: false, suppressActiveRuntimeFallback: true }
       )
+
       if (!floatingTerminalEnabled) {
         await updateSettings({ floatingTerminalEnabled: true })
       }
+
       cancelFloatingTerminalToggleFrame()
       floatingTerminalToggleFrameRef.current = requestAnimationFrame(() => {
         floatingTerminalToggleFrameRef.current = null
+
         if (!isFloatingWorkspacePanelVisible()) {
           window.dispatchEvent(new CustomEvent(TOGGLE_FLOATING_TERMINAL_EVENT))
         }
@@ -123,6 +135,7 @@ export function KeybindingsFileActions(): React.JSX.Element {
   const openKeybindingsInExternalEditor = async (command: 'code' | 'cursor'): Promise<void> => {
     try {
       const filePath = await prepareKeybindingsPath()
+
       if (!filePath) {
         toast.error(
           translate(
@@ -130,9 +143,12 @@ export function KeybindingsFileActions(): React.JSX.Element {
             'Keybindings file is not available.'
           )
         )
+
         return
       }
+
       const result = await window.api.shell.openInExternalEditor({ path: filePath, command })
+
       if (!result.ok) {
         toast.error(openFailureMessage(result.reason))
       }

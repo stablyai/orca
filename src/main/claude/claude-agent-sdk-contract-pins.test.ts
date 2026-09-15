@@ -25,9 +25,13 @@ import { createClaudeStructuredLaunchResolver } from './claude-structured-launch
 // permission-callback semantics, and executable-path override.
 
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
+
 const SESSION_ID = '5348c19f-6a54-4c2e-9c68-9c2b1a3d4e5f'
+
 const LEAF_UUID = 'ad0f7c9e-1b2c-4d3e-8f90-abc123def456'
+
 const PINNED_SDK_VERSION = '0.3.251'
+
 const SDK_PLATFORM_PACKAGE_BASENAMES = [
   'claude-agent-sdk-darwin-arm64',
   'claude-agent-sdk-darwin-x64',
@@ -73,12 +77,14 @@ const RESULT_FRAME = {
 }
 
 type ScenarioStep = Record<string, unknown>
+
 type SpawnSeen = {
   command: string
   args: string[]
   cwd: string | undefined
   env: Record<string, string | undefined>
 }
+
 type ScriptedCliReport = {
   argv: string[]
   execPath: string
@@ -88,8 +94,10 @@ type ScriptedCliReport = {
 }
 
 const scratchDirs: string[] = []
+
 afterEach(() => {
   vi.unstubAllEnvs()
+
   for (const dir of scratchDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -109,6 +117,7 @@ function scriptScenario(
   const scenarioPath = join(dir, 'scenario.json')
   const reportPath = join(dir, 'report.json')
   writeFileSync(scenarioPath, JSON.stringify({ steps, controlResponses }))
+
   return {
     scenarioPath,
     reportPath,
@@ -133,6 +142,7 @@ function recordingSpawner(spawns: SpawnSeen[]) {
       cwd: opts.cwd,
       env: { ...opts.env }
     })
+
     return spawnProcess({
       program: opts.command,
       args: opts.args,
@@ -157,6 +167,7 @@ function resolvedLaunch(launchArgs: string[]) {
     providerHandleChain: [],
     launchArgs
   } as unknown as AgentSessionRecord
+
   return createClaudeStructuredLaunchResolver({
     store: { getRecord: () => record } as unknown as AgentSessionRecordStore,
     resolveWorkspacePath: async () => '/repos/workspace-1',
@@ -181,9 +192,11 @@ function singleUserTurn(): AsyncIterable<SDKUserMessage> {
 
 async function drainQuery(options: Options): Promise<Record<string, unknown>[]> {
   const messages: Record<string, unknown>[] = []
+
   for await (const message of query({ prompt: singleUserTurn(), options })) {
     messages.push(message as unknown as Record<string, unknown>)
   }
+
   return messages
 }
 
@@ -193,7 +206,9 @@ function normalizeArgv(args: string[]): string[] {
     if (!arg.startsWith('--')) {
       return [arg]
     }
+
     const eq = arg.indexOf('=')
+
     return eq === -1 ? [arg] : [arg.slice(0, eq), arg.slice(eq + 1)]
   })
 }
@@ -201,9 +216,11 @@ function normalizeArgv(args: string[]): string[] {
 /** Group the pre-SDK argv into flag/value pairs. */
 function flagTable(args: readonly string[]): { flag: string; value: string | null }[] {
   const table: { flag: string; value: string | null }[] = []
+
   for (let i = 0; i < args.length; i++) {
     const flag = args[i]!
     const next = args[i + 1]
+
     if (next !== undefined && !next.startsWith('-')) {
       table.push({ flag, value: next })
       i++
@@ -211,6 +228,7 @@ function flagTable(args: readonly string[]): { flag: string; value: string | nul
       table.push({ flag, value: null })
     }
   }
+
   return table
 }
 
@@ -222,6 +240,7 @@ describe('Claude Agent SDK contract pins', () => {
       uuid: 'uuid-unknown-1',
       payload: { alpha: 1, nested: { flags: ['a', 'b'] } }
     }
+
     const assistantWithUnknowns = {
       type: 'assistant',
       message: {
@@ -242,6 +261,7 @@ describe('Claude Agent SDK contract pins', () => {
       session_id: SESSION_ID,
       field_from_the_future: 'preserved'
     }
+
     const scenario = scriptScenario([
       { awaitUserMessage: true },
       { emit: { type: 'keep_alive' } },
@@ -249,7 +269,9 @@ describe('Claude Agent SDK contract pins', () => {
       { emit: assistantWithUnknowns },
       { emit: RESULT_FRAME }
     ])
+
     const spawns: SpawnSeen[] = []
+
     const messages = await drainQuery({
       pathToClaudeCodeExecutable: FAKE_CLI,
       cwd: scenario.cwd,
@@ -352,6 +374,7 @@ describe('Claude Agent SDK contract pins', () => {
 
     expect(spawns).toHaveLength(1)
     const argv = normalizeArgv(spawns[0]!.args)
+
     // Typed-first translation must not also spell the flag through extraArgs.
     for (const flag of ['--model', '--effort']) {
       expect(
@@ -359,22 +382,27 @@ describe('Claude Agent SDK contract pins', () => {
         `${flag} occurrences`
       ).toHaveLength(1)
     }
+
     expect(argv[argv.indexOf('--model') + 1]).toBe('claude-sonnet-4-5')
     expect(argv[argv.indexOf('--effort') + 1]).toBe('high')
     // Headless print mode is the SDK's only mode; `query()` never passes `-p`,
     // and if the SDK ever started passing it this pin would notice.
     const impliedByHeadlessQuery = new Set(['-p'])
+
     for (const entry of flagTable(PRE_SDK_ARGV)) {
       if (impliedByHeadlessQuery.has(entry.flag)) {
         expect(argv, `${entry.flag} is implied, never spelled`).not.toContain(entry.flag)
         continue
       }
+
       const at = argv.indexOf(entry.flag)
       expect(at, `SDK argv is missing ${entry.flag}`).toBeGreaterThanOrEqual(0)
+
       if (entry.value !== null) {
         expect(argv[at + 1], `value of ${entry.flag}`).toBe(entry.value)
       }
     }
+
     // The launch resolver always carries one of --session-id / --resume.
     const sessionAt = argv.indexOf('--session-id')
     expect(sessionAt).toBeGreaterThanOrEqual(0)
@@ -387,6 +415,7 @@ describe('Claude Agent SDK contract pins', () => {
     // this test says so instead of the degradation shipping silently.
     const settings = { env: { ANTHROPIC_BASE_URL: 'https://settings.example.test' } }
     const scenario = scriptScenario([{ delayMs: 3_000 }], { get_settings: settings })
+
     const session = query({
       prompt: singleUserTurn(),
       options: {
@@ -395,6 +424,7 @@ describe('Claude Agent SDK contract pins', () => {
         env: scenarioEnv(scenario)
       }
     })
+
     try {
       const read = claudeQuerySettingsReader(session)
       expect(read, 'the SDK no longer exposes get_settings at runtime').not.toBeNull()
@@ -445,10 +475,13 @@ describe('Claude Agent SDK contract pins', () => {
       { awaitControlResponse: 'perm-421' },
       { emit: RESULT_FRAME }
     ])
+
     const seen: { toolName: string; requestId: string; toolUseID: string }[] = []
     let abortFired = false
+
     const canUseTool: CanUseTool = (toolName, _input, { signal, requestId, toolUseID }) => {
       seen.push({ toolName, requestId, toolUseID })
+
       return new Promise((resolve) => {
         signal.addEventListener('abort', () => {
           abortFired = true
@@ -456,6 +489,7 @@ describe('Claude Agent SDK contract pins', () => {
         })
       })
     }
+
     const spawns: SpawnSeen[] = []
     await drainQuery({
       pathToClaudeCodeExecutable: FAKE_CLI,
@@ -467,10 +501,12 @@ describe('Claude Agent SDK contract pins', () => {
 
     expect(seen).toEqual([{ toolName: 'Bash', requestId: 'perm-421', toolUseID: 'tool-use-9' }])
     expect(abortFired).toBe(true)
+
     // The callback's settlement is written back onto the wire against the same id.
     const settled = scenario
       .readReport()
       .controlResponses.find((frame) => frame.response.request_id === 'perm-421')
+
     expect(settled?.response.response?.behavior).toBe('deny')
     // Exactly one process spawn per query, control traffic included.
     expect(spawns).toHaveLength(1)
@@ -478,6 +514,7 @@ describe('Claude Agent SDK contract pins', () => {
 
   it('runs the executable given via pathToClaudeCodeExecutable under the default spawner', async () => {
     const scenario = scriptScenario([{ awaitUserMessage: true }, { emit: RESULT_FRAME }])
+
     const messages = await drainQuery({
       pathToClaudeCodeExecutable: FAKE_CLI,
       cwd: scenario.cwd,
@@ -498,9 +535,11 @@ describe('Claude Agent SDK contract pins', () => {
 
   it('pins the SDK version the contract was verified against', () => {
     const sdkEntry = createRequire(__filename).resolve('@anthropic-ai/claude-agent-sdk')
+
     const manifest = JSON.parse(readFileSync(join(dirname(sdkEntry), 'package.json'), 'utf8')) as {
       version: string
     }
+
     expect(manifest.version).toBe(PINNED_SDK_VERSION)
   })
 
@@ -509,6 +548,7 @@ describe('Claude Agent SDK contract pins', () => {
     // The SDK's own scoped directory is where pnpm would link its optional
     // platform packages; ignoredOptionalDependencies must keep them all absent.
     const scopeDir = dirname(dirname(sdkEntry))
+
     for (const basename of SDK_PLATFORM_PACKAGE_BASENAMES) {
       expect(
         existsSync(join(scopeDir, basename, 'package.json')),

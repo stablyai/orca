@@ -20,14 +20,17 @@ function cacheWithChildren(paths: string[]): DirCache {
 
 function cacheWithMeasuredChildren(paths: string[], onPathRead: () => void): DirCache {
   const cache = cacheWithChildren(paths)
+
   for (let index = 0; index < paths.length; index++) {
     Object.defineProperty(cache.children[index]!, 'path', {
       get: () => {
         onPathRead()
+
         return paths[index]
       }
     })
   }
+
   return cache
 }
 
@@ -52,6 +55,7 @@ function processUpdate(args: {
     refreshDir,
     refreshTree: vi.fn()
   })
+
   return refreshDir
 }
 
@@ -65,7 +69,9 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
       '/srv/repo/Old/child': cacheWithChildren([]),
       '/srv/repo/old/keep': cacheWithChildren([])
     }
+
     type DirCacheUpdate = Parameters<Parameters<typeof purgeDirCacheSubtrees>[0]>[0]
+
     const setDirCache = (update: DirCacheUpdate): void => {
       cache = typeof update === 'function' ? update(cache) : update
     }
@@ -77,6 +83,7 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
 
   it('refreshes a cached parent when Windows reports a new file as update', () => {
     const root = 'C:\\Repo'
+
     const refreshDir = processUpdate({
       root,
       absolutePath: 'c:\\repo\\new-file.txt',
@@ -90,6 +97,7 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
 
   it('does not reread a directory for an existing file content update', () => {
     const root = 'C:\\Repo'
+
     const refreshDir = processUpdate({
       root,
       absolutePath: 'c:\\repo\\EXISTING.txt',
@@ -131,19 +139,25 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
 
   it('indexes cached directory keys once for a maximum update batch', () => {
     const root = 'C:\\Repo'
+
     const entries: Record<string, DirCache> = {
       [root]: cacheWithChildren([])
     }
+
     for (let index = 0; index < 2_000; index++) {
       entries[`${root}\\dir-${index}`] = cacheWithChildren([])
     }
+
     let cacheKeyReads = 0
+
     const cache = new Proxy(entries, {
       ownKeys(target) {
         cacheKeyReads++
+
         return Reflect.ownKeys(target)
       }
     })
+
     const refreshDir = vi.fn()
 
     processFileExplorerFsPayload({
@@ -174,10 +188,12 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
     const root = 'C:\\Repo'
     const cache: Record<string, DirCache> = { [root]: cacheWithChildren([]) }
     const expandedPaths: string[] = []
+
     for (let index = 0; index < 2_000; index++) {
       cache[`${root}\\dir-${index}`] = cacheWithChildren([])
       expandedPaths.push(`c:\\repo\\DIR-${index}`)
     }
+
     let expandedPathReads = 0
     const expanded = new Set(expandedPaths)
     const expandedIterator = expanded[Symbol.iterator].bind(expanded)
@@ -186,8 +202,10 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
         expandedPathReads++
         yield path
       }
+
       return undefined
     }
+
     const refreshDir = vi.fn()
 
     processFileExplorerFsPayload({
@@ -216,6 +234,7 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
 
   it('keeps POSIX child matching case-sensitive', () => {
     const root = '/repo'
+
     const refreshDir = processUpdate({
       root,
       absolutePath: '/repo/EXISTING.txt',
@@ -229,6 +248,7 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
   it('refreshes an existing directory when the update identifies it as a directory', () => {
     const root = '/repo'
     const child = '/repo/src'
+
     const refreshDir = processUpdate({
       root,
       absolutePath: child,
@@ -333,12 +353,14 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
     const targetDir = `${root}/target`
     const oldDir = `${sourceDir}/old`
     const newDir = `${targetDir}/new`
+
     const rename = {
       kind: 'rename' as const,
       oldAbsolutePath: oldDir,
       absolutePath: newDir,
       isDirectory: true
     }
+
     const setDirCache = vi.fn()
     const setSelectedPath = vi.fn()
     const refreshDir = vi.fn()
@@ -370,10 +392,12 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
     const worktreeId = 'watch-reconcile-perf'
     const entries: Record<string, DirCache> = { [root]: cacheWithChildren([]) }
     const expandedPaths: string[] = []
+
     const events = Array.from({ length: 1_000 }, (_, index) => {
       entries[`${root}/old-${index}`] = cacheWithChildren([])
       entries[`${root}/new-${index}`] = cacheWithChildren([])
       expandedPaths.push(`${root}/old-${index}`, `${root}/new-${index}`)
+
       return {
         kind: 'rename' as const,
         oldAbsolutePath: `${root}/old-${index}`,
@@ -381,22 +405,29 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
         isDirectory: true
       }
     })
+
     let keyVisits = 0
     const entryCount = Object.keys(entries).length
+
     const measured = (value: Record<string, DirCache>): Record<string, DirCache> =>
       new Proxy(value, {
         getOwnPropertyDescriptor(target, property) {
           keyVisits++
+
           return Reflect.getOwnPropertyDescriptor(target, property)
         }
       })
+
     let current = measured(entries)
+
     type DirCacheUpdate = Parameters<
       Parameters<typeof processFileExplorerFsPayload>[0]['setDirCache']
     >[0]
+
     const setDirCache = vi.fn((update: DirCacheUpdate) => {
       current = measured(typeof update === 'function' ? update(current) : update)
     })
+
     let expandedPathReads = 0
     const expanded = new Set(expandedPaths)
     const expandedIterator = expanded[Symbol.iterator].bind(expanded)
@@ -405,8 +436,10 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
         expandedPathReads++
         yield path
       }
+
       return undefined
     }
+
     const previousExpandedDirs = useAppStore.getState().expandedDirs
     let remainingExpanded: Set<string> | undefined
 

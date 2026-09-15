@@ -31,6 +31,7 @@ export function configureLocalPtyProvider(args: {
   if (!(localProvider instanceof LocalPtyProvider)) {
     return
   }
+
   const { runtime, getSettings, getSelectedCodexHomePath, trustedTerminalHandleEnv } = args
   localProvider.configure({
     isHistoryEnabled: () => getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
@@ -43,6 +44,7 @@ export function configureLocalPtyProvider(args: {
         ctx?.isWsl === true
           ? { runtime: 'wsl', wslDistro: ctx.wslDistro ?? null }
           : { runtime: 'host' }
+
       const selectedCodexHomePath = getCompatibleSelectedCodexHomePath(
         codexSelectionTarget,
         ctx?.codexHomePathOverride
@@ -52,8 +54,10 @@ export function configureLocalPtyProvider(args: {
               launchAgent: ctx?.launchAgent
             })) ?? null)
       )
+
       const skipCodexHomeEnv = ctx?.isWsl === true && !selectedCodexHomePath
       const ptySettings = getSettings?.()
+
       const env = buildPtyHostEnv(id, baseEnv, {
         isPackaged: getAppEnvironment().isPackaged(),
         resourcesPath: process.resourcesPath,
@@ -75,26 +79,33 @@ export function configureLocalPtyProvider(args: {
         networkProxySettings: ptySettings,
         routeBrowserOpensToClient: runtime?.shouldRelayTerminalBrowserOpens?.()
       })
+
       // Why: agents need their terminal handle at process start to self-identify in orchestration messages without an extra RPC.
       const requestedHandle = baseEnv.ORCA_TERMINAL_HANDLE
+
       const preAllocatedHandle =
         requestedHandle && trustedTerminalHandleEnv.has(requestedHandle)
           ? requestedHandle
           : runtime?.preAllocateHandleForPty(id)
+
       if (requestedHandle && requestedHandle !== preAllocatedHandle) {
         delete env.ORCA_TERMINAL_HANDLE
       }
+
       if (preAllocatedHandle) {
         env.ORCA_TERMINAL_HANDLE = preAllocatedHandle
       }
+
       stampWslOrchestrationCompatibilityHost(
         env,
         runtime?.getOrchestrationCompatibilityHostId?.(),
         ctx?.isWsl === true ? ctx.wslDistro : null
       )
+
       if (ctx?.isWsl === true) {
         addOrcaWslInteropEnv(env)
       }
+
       return env
     },
     onSpawned: (id, incarnationId) => runtime?.onPtySpawned(id, incarnationId),
@@ -102,6 +113,7 @@ export function configureLocalPtyProvider(args: {
       if (!isCurrentPtyExit({ id, incarnationId })) {
         return
       }
+
       clearProviderPtyState(id)
       ptyOwnership.delete(id)
       markClaudePtyExited(id)

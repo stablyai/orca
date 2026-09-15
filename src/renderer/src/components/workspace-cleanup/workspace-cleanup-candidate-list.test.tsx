@@ -11,6 +11,7 @@ import { makeCandidate } from './workspace-cleanup-presentation-fixtures'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function makeRows(count: number): WorkspaceCleanupCandidate[] {
@@ -30,6 +31,7 @@ describe('WorkspaceCleanupCandidateList', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null
@@ -47,6 +49,7 @@ describe('WorkspaceCleanupCandidateList', () => {
           scrollElement={null}
           renderRow={(candidate) => {
             rendered.push(candidate.worktreeId)
+
             return <div key={candidate.worktreeId} data-testid="row" />
           }}
         />
@@ -92,6 +95,7 @@ describe('WorkspaceCleanupCandidateList', () => {
       makeCandidate({ worktreeId: 'shared', executionHostId: 'local' }),
       makeCandidate({ worktreeId: 'shared', executionHostId: 'ssh:box' })
     ]
+
     const scrollElement = document.createElement('div')
     const asked: string[] = []
 
@@ -102,6 +106,7 @@ describe('WorkspaceCleanupCandidateList', () => {
           getRowKey={(candidate) => {
             const key = `${candidate.executionHostId ?? ''}|${candidate.worktreeId}`
             asked.push(key)
+
             return key
           }}
           scrollElement={scrollElement}

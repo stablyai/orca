@@ -220,6 +220,7 @@ export function JiraIssueWorkspaceContent({
         <div className="grid gap-1">
           {actionItems.map((item) => {
             const Icon = item.icon
+
             return (
               <Tooltip key={item.label}>
                 <TooltipTrigger asChild>

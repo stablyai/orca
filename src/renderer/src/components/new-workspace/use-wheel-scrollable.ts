@@ -21,29 +21,36 @@ export function useWheelScrollable<T extends HTMLElement>(): {
     detachRef.current?.()
     detachRef.current = null
     ref.current = node
+
     if (!node) {
       return
     }
+
     const onWheel = (event: WheelEvent): void => {
       if (node.scrollHeight <= node.clientHeight) {
         return
       }
+
       const delta =
         event.deltaMode === WheelEvent.DOM_DELTA_LINE
           ? event.deltaY * 16
           : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
             ? event.deltaY * node.clientHeight
             : event.deltaY
+
       const max = node.scrollHeight - node.clientHeight
       const next = Math.max(0, Math.min(max, node.scrollTop + delta))
+
       if (next === node.scrollTop) {
         // At an edge: let the event bubble so an ancestor can take the scroll.
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       node.scrollTop = next
     }
+
     node.addEventListener('wheel', onWheel, { passive: false })
     detachRef.current = () => node.removeEventListener('wheel', onWheel)
   }, [])

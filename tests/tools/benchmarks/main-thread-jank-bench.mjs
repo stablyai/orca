@@ -32,7 +32,9 @@ import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 
 const scriptDir = import.meta.dirname
+
 const repoRoot = resolve(scriptDir, '..', '..')
+
 const require = createRequire(import.meta.url)
 
 function parseArgs(argv) {
@@ -45,8 +47,10 @@ function parseArgs(argv) {
     headless: false,
     logStream: process.platform === 'darwin'
   }
+
   for (let i = 2; i < argv.length; i++) {
     const next = () => argv[++i]
+
     switch (argv[i]) {
       case '--label':
         args.label = next()
@@ -73,6 +77,7 @@ function parseArgs(argv) {
         throw new Error(`Unknown argument: ${argv[i]}`)
     }
   }
+
   return args
 }
 
@@ -87,6 +92,7 @@ function parseArgs(argv) {
 function ensureFixture(fixtureDir) {
   mkdirSync(fixtureDir, { recursive: true })
   const repoPath = join(fixtureDir, 'bench-repo')
+
   if (!existsSync(join(repoPath, '.git'))) {
     mkdirSync(repoPath, { recursive: true })
     run('git', ['init', repoPath])
@@ -96,7 +102,9 @@ function ensureFixture(fixtureDir) {
     run('git', ['-C', repoPath, 'add', '.'])
     run('git', ['-C', repoPath, 'commit', '-m', 'init', '--no-gpg-sign'])
   }
+
   const originPath = join(fixtureDir, 'bench-origin.git')
+
   if (!existsSync(originPath)) {
     run('git', ['init', '--bare', originPath])
     run('git', ['-C', repoPath, 'remote', 'add', 'origin', originPath])
@@ -104,12 +112,14 @@ function ensureFixture(fixtureDir) {
     // Push WITHOUT -u: same-name origin ref exists but no tracking config.
     run('git', ['-C', repoPath, 'push', 'origin', 'bench/feature'])
   }
+
   // A dirty file so every status poll parses a non-empty porcelain diff.
   writeFileSync(join(repoPath, 'dirty.txt'), `${Date.now()}\n`)
 
   const repoId = 'bench-repo'
   const worktreeId = `${repoId}::${repoPath}`
   const tabId = 'bench-tab-00000'
+
   const state = {
     schemaVersion: 1,
     repos: [
@@ -161,12 +171,15 @@ function ensureFixture(fixtureDir) {
       defaultTerminalTabsAppliedByWorktreeId: { [worktreeId]: true }
     }
   }
+
   writeFileSync(join(fixtureDir, 'orca-data.json'), JSON.stringify(state, null, 2))
+
   return repoPath
 }
 
 function run(command, args) {
   const result = spawnSync(command, args, { stdio: 'ignore' })
+
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(' ')} failed with ${result.status}`)
   }
@@ -174,9 +187,11 @@ function run(command, args) {
 
 function parseMainThreadLine(line) {
   const match = /^\[main-thread\] (\{.*\})$/.exec(line)
+
   if (!match) {
     return null
   }
+
   try {
     return JSON.parse(match[1])
   } catch {
@@ -203,18 +218,22 @@ function startPerfDiagnosticsLogStream(events) {
     ],
     { stdio: ['ignore', 'pipe', 'ignore'] }
   )
+
   let buffer = ''
   child.stdout.setEncoding('utf-8')
   child.stdout.on('data', (chunk) => {
     buffer += chunk
     let newlineIndex = buffer.indexOf('\n')
+
     while (newlineIndex !== -1) {
       const line = buffer.slice(0, newlineIndex)
       buffer = buffer.slice(newlineIndex + 1)
       newlineIndex = buffer.indexOf('\n')
+
       if (!line.startsWith('{')) {
         continue
       }
+
       try {
         const entry = JSON.parse(line)
         events.push({
@@ -231,6 +250,7 @@ function startPerfDiagnosticsLogStream(events) {
   child.on('error', () => {
     console.warn('[log-stream] failed to start `log stream`; continuing without it')
   })
+
   return child
 }
 
@@ -238,6 +258,7 @@ function killProcessTree(proc) {
   if (proc.exitCode !== null || proc.signalCode !== null) {
     return
   }
+
   if (process.platform === 'win32') {
     spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' })
   } else {
@@ -255,11 +276,13 @@ function aggregate(reports) {
   let maxGapMs = 0
   let gapsOver50Ms = 0
   let gapsOver250Ms = 0
+
   for (const report of reports) {
     spawnCount += report.spawnCount ?? 0
     maxGapMs = Math.max(maxGapMs, report.maxGapMs ?? 0)
     gapsOver50Ms += report.gapsOver50Ms ?? 0
     gapsOver250Ms += report.gapsOver250Ms ?? 0
+
     for (const [command, stats] of Object.entries(report.spawns ?? {})) {
       const entry = (perCommand[command] ??= { count: 0, blockMsTotal: 0, blockMsMax: 0 })
       entry.count += stats.count
@@ -267,14 +290,17 @@ function aggregate(reports) {
       entry.blockMsMax = Math.max(entry.blockMsMax, stats.blockMsMax)
     }
   }
+
   return { spawnCount, maxGapMs, gapsOver50Ms, gapsOver250Ms, perCommand }
 }
 
 async function main() {
   const args = parseArgs(process.argv)
+
   const fixtureDir = resolve(
     args.fixtureDir ?? join(repoRoot, '.bench-fixtures', 'main-thread-jank')
   )
+
   const repoPath = ensureFixture(fixtureDir)
   console.log(`[fixture] userData=${fixtureDir} repo=${repoPath}`)
 
@@ -282,6 +308,7 @@ async function main() {
   // a developer Codex profile while running against synthetic userData.
   const isolatedHome = join(fixtureDir, 'home')
   mkdirSync(isolatedHome, { recursive: true })
+
   const env = {
     ...process.env,
     ORCA_STARTUP_DIAGNOSTICS: '1',
@@ -291,8 +318,10 @@ async function main() {
     USERPROFILE: isolatedHome,
     ORCA_E2E_HOME_DIR: isolatedHome
   }
+
   delete env.CODEX_HOME
   delete env.ORCA_CODEX_HOME
+
   if (args.headless) {
     env.ORCA_E2E_HEADLESS = '1'
     console.warn(
@@ -306,6 +335,7 @@ async function main() {
   const child = spawn(command, commandArgs, { env, stdio: ['ignore', 'ignore', 'pipe'] })
 
   const perfDiagnosticsEvents = []
+
   const logStreamChild = args.logStream
     ? startPerfDiagnosticsLogStream(perfDiagnosticsEvents)
     : null
@@ -318,11 +348,13 @@ async function main() {
   child.stderr.on('data', (chunk) => {
     buffer += chunk
     let newlineIndex = buffer.indexOf('\n')
+
     while (newlineIndex !== -1) {
       const line = buffer.slice(0, newlineIndex).trimEnd()
       buffer = buffer.slice(newlineIndex + 1)
       newlineIndex = buffer.indexOf('\n')
       const report = parseMainThreadLine(line)
+
       if (report) {
         // Marker lines (e.g. updater-check-attempt) timestamp one-off
         // activities for correlation; they are not 5s report windows.
@@ -331,8 +363,10 @@ async function main() {
         } else {
           allReports.push({ ...report, wallMs: Date.now() })
         }
+
         continue
       }
+
       if (line.startsWith('[startup] ')) {
         startupEvents.push({ line, wallMs: Date.now() })
       }
@@ -352,15 +386,18 @@ async function main() {
   const measureStartWallMs = startedAtWallMs + args.warmupS * 1000
   const reports = allReports.filter((report) => report.wallMs >= measureStartWallMs)
   killProcessTree(child)
+
   if (logStreamChild) {
     killProcessTree(logStreamChild)
   }
+
   if (exitedEarly) {
     console.error('[bench] app exited before the measurement window completed')
   }
 
   const totals = aggregate(reports)
   const measuredMinutes = args.durationS / 60
+
   const result = {
     label: args.label,
     capturedAt: new Date(startedAtWallMs).toISOString(),
@@ -379,6 +416,7 @@ async function main() {
       byProcess: perfDiagnosticsEvents.reduce((acc, event) => {
         const key = event.process ?? 'unknown'
         acc[key] = (acc[key] ?? 0) + 1
+
         return acc
       }, {}),
       events: perfDiagnosticsEvents.slice(0, 200)
@@ -390,10 +428,12 @@ async function main() {
 
   const resultsDir = join(scriptDir, 'results')
   mkdirSync(resultsDir, { recursive: true })
+
   const outPath = join(
     resultsDir,
     `main-thread-jank-${args.label}-${new Date(startedAtWallMs).toISOString().replace(/[:.]/g, '-')}.json`
   )
+
   writeFileSync(outPath, JSON.stringify(result, null, 2))
 
   console.log(`\n[bench] label=${args.label} outcome=${result.outcome}`)
@@ -404,21 +444,25 @@ async function main() {
       `  stalls >50ms: ${totals.gapsOver50Ms}, >250ms: ${totals.gapsOver250Ms}`
   )
   const topCommands = Object.entries(totals.perCommand).sort((a, b) => b[1].count - a[1].count)
+
   for (const [commandKey, stats] of topCommands.slice(0, 10)) {
     console.log(
       `    ${commandKey}: ${stats.count} spawns, block ${stats.blockMsTotal}ms total / ${stats.blockMsMax}ms max`
     )
   }
+
   if (logStreamChild) {
     const byProcessSummary = perfDiagnosticsEvents.length
       ? ` (${Object.entries(result.perfDiagnostics.byProcess)
           .map(([proc, count]) => `${proc.split('/').pop()}: ${count}`)
           .join(', ')})`
       : ''
+
     console.log(
       `  macOS Performance Diagnostics log entries: ${perfDiagnosticsEvents.length}${byProcessSummary}`
     )
   }
+
   console.log(`  results: ${outPath}`)
 }
 

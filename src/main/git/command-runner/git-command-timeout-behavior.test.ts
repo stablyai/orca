@@ -46,6 +46,7 @@ void run()
 `
   )
   await chmod(script, 0o755)
+
   return {
     cwd,
     env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}` }

@@ -19,6 +19,7 @@ const status: OrcaProfileAuthStatus = {
     linkedAt: 0
   }
 }
+
 const persist = vi.fn().mockResolvedValue(undefined)
 
 beforeEach(() => {
@@ -40,6 +41,7 @@ beforeEach(() => {
     fetchOrcaProfileAuthStatus: vi.fn().mockResolvedValue(status)
   })
 })
+
 afterEach(() => {
   cleanup()
   vi.unstubAllEnvs()
@@ -176,6 +178,7 @@ describe('unexpected signout lifecycle', () => {
     } else {
       window.history.replaceState({}, '', '/?showSignoutCard=1')
     }
+
     useAppStore.setState({ orcaProfileAuthStatus: { ...status, state: 'local', cloud: undefined } })
     render(<UnexpectedSignoutCard />)
     await act(async () => {})

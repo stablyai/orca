@@ -27,6 +27,7 @@ const REPO_ICON_IMAGE_MIME_TYPES: Record<string, string> = {
 async function pathExists(pathValue: string): Promise<boolean> {
   try {
     await stat(pathValue)
+
     return true
   } catch {
     return false
@@ -37,12 +38,15 @@ async function validateLocalPathTarget(
   pathValue: string
 ): Promise<{ ok: true; path: string } | { ok: false; reason: 'not-absolute' | 'not-found' }> {
   const normalizedPath = normalize(pathValue)
+
   if (!isAbsolute(normalizedPath)) {
     return { ok: false, reason: 'not-absolute' }
   }
+
   if (!(await pathExists(normalizedPath))) {
     return { ok: false, reason: 'not-found' }
   }
+
   return { ok: true, path: normalizedPath }
 }
 
@@ -57,14 +61,18 @@ async function openInFileManager(
   if (hasActiveRuntime(store)) {
     return { ok: false, reason: 'remote-runtime-unsupported' }
   }
+
   const target = await validateLocalPathTarget(pathValue)
+
   if (!target.ok) {
     return target
   }
+
   try {
     // Why: the file-manager action uses reveal semantics, matching the
     // previous sidebar behavior while still validating the path per click.
     shell.showItemInFolder(target.path)
+
     return { ok: true }
   } catch {
     return { ok: false, reason: 'launch-failed' }
@@ -80,31 +88,41 @@ async function openInExternalEditor(
   }
 
   const connectionId = request.connectionId?.trim()
+
   if (connectionId) {
     const sshTarget = store.getSshTarget(connectionId)
+
     if (!sshTarget) {
       return { ok: false, reason: 'ssh-target-not-found' }
     }
+
     if (sshTarget.owner?.type === 'on-demand-runtime') {
       return { ok: false, reason: 'remote-runtime-unsupported' }
     }
+
     if (!posix.isAbsolute(request.path) && !win32.isAbsolute(request.path)) {
       return { ok: false, reason: 'not-absolute' }
     }
+
     const authority = resolveVsCodeSshAuthority(sshTarget)
+
     if (!authority.ok) {
       return authority
     }
+
     const launchSpec = resolveVsCodeRemoteSshLaunchSpec(
       request.command,
       request.path,
       authority.authority
     )
+
     if (!launchSpec) {
       return { ok: false, reason: 'remote-editor-unsupported' }
     }
+
     try {
       await launchExternalEditor(launchSpec)
+
       return { ok: true }
     } catch {
       return { ok: false, reason: 'launch-failed' }
@@ -112,11 +130,14 @@ async function openInExternalEditor(
   }
 
   const target = await validateLocalPathTarget(request.path)
+
   if (!target.ok) {
     return target
   }
+
   try {
     await launchExternalEditor(resolveExternalEditorLaunchSpec(request.command, target.path))
+
     return { ok: true }
   } catch {
     return { ok: false, reason: 'launch-failed' }
@@ -125,11 +146,14 @@ async function openInExternalEditor(
 
 async function openWithSystemDefault(pathValue: string): Promise<boolean> {
   const target = await validateLocalPathTarget(pathValue)
+
   if (!target.ok) {
     return false
   }
+
   try {
     const errorMessage = await shell.openPath(target.path)
+
     return errorMessage.length === 0
   } catch {
     return false
@@ -156,6 +180,7 @@ export function registerShellHandlers(store: Store): void {
 
   ipcMain.handle('shell:openUrl', (_event, rawUrl: string) => {
     let parsed: URL
+
     try {
       parsed = new URL(rawUrl)
     } catch {
@@ -175,6 +200,7 @@ export function registerShellHandlers(store: Store): void {
 
   ipcMain.handle('shell:openFileUri', async (_event, rawUri: string) => {
     let parsed: URL
+
     try {
       parsed = new URL(rawUri)
     } catch {
@@ -191,6 +217,7 @@ export function registerShellHandlers(store: Store): void {
     }
 
     let filePath: string
+
     try {
       filePath = fileURLToPath(parsed)
     } catch {
@@ -198,6 +225,7 @@ export function registerShellHandlers(store: Store): void {
     }
 
     const target = await validateLocalPathTarget(filePath)
+
     if (!target.ok) {
       return
     }
@@ -207,6 +235,7 @@ export function registerShellHandlers(store: Store): void {
 
   ipcMain.handle('shell:pathsExist', async (_event, paths: string[]): Promise<boolean[]> => {
     validatePathExistenceBatch(paths)
+
     return Promise.all(paths.map(pathExists))
   })
 
@@ -223,9 +252,11 @@ export function registerShellHandlers(store: Store): void {
         // creation can leave typed prefix directories behind on macOS.
         properties: ['openDirectory']
       })
+
       if (result.canceled || result.filePaths.length === 0) {
         return null
       }
+
       return result.filePaths[0]
     }
   )
@@ -236,9 +267,11 @@ export function registerShellHandlers(store: Store): void {
     const result = await dialog.showOpenDialog({
       properties: ['openFile']
     })
+
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
+
     return result.filePaths[0]
   })
 
@@ -251,9 +284,11 @@ export function registerShellHandlers(store: Store): void {
         { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico'] }
       ]
     })
+
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
+
     return result.filePaths[0]
   })
 
@@ -264,6 +299,7 @@ export function registerShellHandlers(store: Store): void {
         properties: ['openFile'],
         filters: [{ name: 'Repo icon images', extensions: ['png'] }]
       })
+
       if (result.canceled || result.filePaths.length === 0) {
         return null
       }
@@ -271,16 +307,19 @@ export function registerShellHandlers(store: Store): void {
       const filePath = result.filePaths[0]
       const extension = extname(filePath).toLowerCase()
       const mimeType = REPO_ICON_IMAGE_MIME_TYPES[extension]
+
       if (!mimeType) {
         throw new Error('Repo icons must be PNG files.')
       }
 
       const stats = await stat(filePath)
+
       if (stats.size > MAX_REPO_ICON_UPLOAD_BYTES) {
         throw new Error('Repo icon image must be 256KB or smaller.')
       }
 
       const buffer = await readFile(filePath)
+
       return {
         dataUrl: `data:${mimeType};base64,${buffer.toString('base64')}`,
         fileName: basename(filePath)
@@ -293,9 +332,11 @@ export function registerShellHandlers(store: Store): void {
       properties: ['openFile'],
       filters: [{ name: 'Audio', extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac'] }]
     })
+
     if (result.canceled || result.filePaths.length === 0) {
       return null
     }
+
     return result.filePaths[0]
   })
 
@@ -307,9 +348,11 @@ export function registerShellHandlers(store: Store): void {
     async (_event, args: { srcPath: string; destPath: string }): Promise<void> => {
       const src = normalize(args.srcPath)
       const dest = normalize(args.destPath)
+
       if (!isAbsolute(src) || !isAbsolute(dest)) {
         throw new Error('Both source and destination must be absolute paths')
       }
+
       // Why: COPYFILE_EXCL prevents silently overwriting an existing file.
       // The renderer-side deconfliction loop already picks a unique name, so
       // the dest should never exist — if it does, something is wrong and we

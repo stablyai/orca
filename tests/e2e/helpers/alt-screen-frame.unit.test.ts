@@ -10,6 +10,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { findMarkerFrame, readActiveScreen, readRenderedAltScreenFrame } from './alt-screen-frame'
 
 const MARKER = 'DUPLICATE_PTY_REVEAL_TEST'
+
 const TAB_ID = 'tab-under-test'
 
 type Harness = { page: Page; terminal: Terminal; serialize: () => string }
@@ -29,14 +30,18 @@ function createHarness(rows: number): Harness {
   const terminal = new Terminal({ cols: 80, rows, scrollback: 100, allowProposedApi: true })
   const serializeAddon = new SerializeAddon()
   terminal.loadAddon(serializeAddon)
+
   const pane = { terminal, serializeAddon }
+
   ;(globalThis as Record<string, unknown>).__paneManagers = new Map([
     [TAB_ID, { getPanes: () => [pane] }]
   ])
+
   const page = {
     evaluate: <Arg, Result>(fn: (arg: Arg) => Result, arg: Arg): Promise<Result> =>
       Promise.resolve(fn(arg))
   } as unknown as Page
+
   return { page, terminal, serialize: () => serializeAddon.serialize() }
 }
 
@@ -44,10 +49,13 @@ function createHarness(rows: number): Harness {
 function parseSerializedFrame(content: string, pick: 'first' | 'last'): number | null {
   const prefix = `${MARKER} frame `
   const start = pick === 'first' ? content.indexOf(prefix) : content.lastIndexOf(prefix)
+
   if (start < 0) {
     return null
   }
+
   const digits = content.slice(start + prefix.length).match(/^\d+/)?.[0]
+
   return digits ? Number(digits) : null
 }
 
@@ -70,6 +78,7 @@ describe('readRenderedAltScreenFrame', () => {
   it('reports no frame when the freshest marker scrolled off the visible rows', async () => {
     const harness = createHarness(8)
     await write(harness.terminal, `${frameLine(400)}\r\n`)
+
     for (let row = 0; row < 12; row += 1) {
       await write(harness.terminal, `filler row ${row}\r\n`)
     }

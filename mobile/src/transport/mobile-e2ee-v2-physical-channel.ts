@@ -5,6 +5,7 @@ import {
 import type { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 
 type ChannelState = 'awaiting-ready' | 'awaiting-authenticated' | 'ready'
+
 type OutboundItem = { kind: 'text'; plaintext: string } | { kind: 'binary'; plaintext: Uint8Array }
 
 export class MobileE2EEAuthenticationError extends Error {
@@ -71,6 +72,7 @@ export class MobileE2EEV2PhysicalChannel {
           this.args.onError(error instanceof Error ? error : new Error(String(error)))
         }
       })
+
     return this.inboundChain
   }
 
@@ -91,8 +93,10 @@ export class MobileE2EEV2PhysicalChannel {
     if (generation !== this.generation) {
       return
     }
+
     if (this.state === 'awaiting-ready') {
       this.acceptReady(raw)
+
       return
     }
 
@@ -100,16 +104,20 @@ export class MobileE2EEV2PhysicalChannel {
       typeof raw === 'string'
         ? this.args.session.openText(raw)
         : await this.openBinary(raw, generation)
+
     if (generation !== this.generation || plaintext === null) {
       return
     }
+
     if (this.state === 'awaiting-authenticated') {
       if (typeof plaintext === 'string' && isAuthenticationRejection(plaintext)) {
         throw new MobileE2EEAuthenticationError()
       }
+
       if (typeof plaintext !== 'string' || !this.isAuthenticated(plaintext)) {
         throw new Error('Invalid E2EE v2 authenticated response')
       }
+
       this.state = 'ready'
       this.args.onAuthenticated()
     } else if (typeof plaintext === 'string') {
@@ -123,15 +131,19 @@ export class MobileE2EEV2PhysicalChannel {
     if (typeof raw !== 'string') {
       throw new Error('Expected plaintext E2EE v2 ready')
     }
+
     let ready: unknown
+
     try {
       ready = JSON.parse(raw)
     } catch {
       throw new Error('Invalid E2EE v2 ready JSON')
     }
+
     if (!this.args.session.acceptReady(ready)) {
       throw new Error('Invalid E2EE v2 ready')
     }
+
     this.state = 'awaiting-authenticated'
     this.outboundQueue.enqueue({
       kind: 'text',
@@ -146,15 +158,18 @@ export class MobileE2EEV2PhysicalChannel {
 
   private async openBinary(raw: unknown, generation: number): Promise<Uint8Array | null> {
     const bytes = await this.args.decodeBinary(raw)
+
     if (!bytes || generation !== this.generation) {
       return null
     }
+
     return this.args.session.openBinary(bytes)
   }
 
   private isAuthenticated(plaintext: string): boolean {
     try {
       const message = JSON.parse(plaintext) as Record<string, unknown>
+
       return (
         Object.keys(message).sort().join(',') === 'transcriptHashB64,type,v' &&
         message.type === 'e2ee_authenticated' &&
@@ -170,7 +185,9 @@ export class MobileE2EEV2PhysicalChannel {
     if (this.state !== 'ready') {
       return false
     }
+
     this.outboundQueue.enqueue(item)
+
     return true
   }
 }
@@ -178,6 +195,7 @@ export class MobileE2EEV2PhysicalChannel {
 function isAuthenticationRejection(plaintext: string): boolean {
   try {
     const message = JSON.parse(plaintext) as Record<string, unknown>
+
     return message.type === 'e2ee_error'
   } catch {
     return false

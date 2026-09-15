@@ -167,9 +167,11 @@ describe('MobileRelayE2eeLink', () => {
 
   it('bounds an error when the platform never emits close', async () => {
     vi.useFakeTimers()
+
     try {
       const socket = new ThrowingSocket()
       const onError = vi.fn()
+
       const link = new MobileRelayE2eeLink({
         endpoint: {
           cellUrl: 'https://relay-c1.onorca.dev',
@@ -185,6 +187,7 @@ describe('MobileRelayE2eeLink', () => {
         onError,
         createSocket: () => socket as unknown as WebSocket
       })
+
       socket.onerror?.()
       await vi.advanceTimersByTimeAsync(250)
 
@@ -197,9 +200,11 @@ describe('MobileRelayE2eeLink', () => {
 
   it('cancels the missing-close timer when explicitly closed', async () => {
     vi.useFakeTimers()
+
     try {
       const socket = new ThrowingSocket()
       const onError = vi.fn()
+
       const link = new MobileRelayE2eeLink({
         endpoint: {
           cellUrl: 'https://relay-c1.onorca.dev',
@@ -215,6 +220,7 @@ describe('MobileRelayE2eeLink', () => {
         onError,
         createSocket: () => socket as unknown as WebSocket
       })
+
       socket.onerror?.()
       link.close()
       await vi.advanceTimersByTimeAsync(250)

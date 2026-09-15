@@ -88,19 +88,23 @@ export function identitiesFromClearCookies(
 export async function acquireCookieMutationLock(owner: object): Promise<() => void> {
   const previous = mutationLocks.get(owner) ?? Promise.resolve()
   let release!: () => void
+
   const current = new Promise<void>((resolve) => {
     release = resolve
   })
+
   mutationLocks.set(
     owner,
     previous.then(() => current)
   )
   await previous
+
   return release
 }
 
 export async function withCookieMutationLock<T>(owner: object, run: () => Promise<T>): Promise<T> {
   const release = await acquireCookieMutationLock(owner)
+
   try {
     return await run()
   } finally {
@@ -114,33 +118,40 @@ function removableCookieEntries(
   importScope: ImportedDomainScope
 ): { cookie: Cookie; url: string }[] {
   const removable: { cookie: Cookie; url: string }[] = []
+
   for (const cookie of cookies) {
     if (isNonTransplantableCookieDomain(cookie.domain ?? '')) {
       continue
     }
+
     // Why (STA-4797): a cookie for a site this import never mentions is not stale — it is the
     // user's live session, and signing them out of it buys the import nothing. The scope test
     // comes before the removal-URL derivation below so an unaddressable cookie parked in some
     // unrelated corner of the jar cannot fail an import that was never going to touch it.
     const scopedDomain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
+
     if (
       scopedDomain === null ||
       !domainIsInImportedScope(importScope, scopedDomain, cookie.hostOnly === true)
     ) {
       continue
     }
+
     // Why (STA-4300 I2): a family whose partition could not be read faithfully is neither written
     // nor removed. Filtering HERE keeps it out of the removal plan and — because the CDP snapshot
     // is taken from this same list — out of the restore set too, so it is never submitted to any
     // mutation at all.
     if (preserveFamilies.size > 0) {
       const family = registrableFamily(cookie.domain ?? '')
+
       if (family !== null && preserveFamilies.has(family)) {
         continue
       }
     }
+
     removable.push({ cookie, url: cookieRemovalUrl(cookie, scopedDomain) })
   }
+
   return removable
 }
 
@@ -149,6 +160,7 @@ function assertClearIdentitiesCoverRemovable(
   identities: readonly CookieClearIdentity[]
 ): void {
   const covered = new Set(identities.map((identity) => cookieClearKey(identity.url, identity.name)))
+
   for (const item of removable) {
     if (!covered.has(cookieClearKey(item.url, item.cookie.name))) {
       throw new Error('Could not clear existing cookies; the session was left unchanged')
@@ -160,12 +172,14 @@ function groupRemovableCookies(
   removable: readonly { cookie: Cookie; url: string }[]
 ): Map<string, { cookie: Cookie; url: string }[]> {
   const groups = new Map<string, { cookie: Cookie; url: string }[]>()
+
   for (const item of removable) {
     const key = cookieClearKey(item.url, item.cookie.name)
     const group = groups.get(key) ?? []
     group.push(item)
     groups.set(key, group)
   }
+
   return groups
 }
 
@@ -182,6 +196,7 @@ async function restoreClearedCookies(
       'Could not clear existing cookies; the session was left partially cleared'
     )
   }
+
   throw new AggregateError(
     failures,
     'Could not clear existing cookies; existing cookies were restored'
@@ -210,18 +225,23 @@ export async function removeTransplantableCookies(
 ): Promise<void> {
   return withCookieMutationLock(targetSession, async () => {
     const store = targetSession.cookies
+
     if (importScope.exact.size === 0) {
       return
     }
+
     const initialCookies = await store.get({})
+
     if (initialCookies.length === 0) {
       return
     }
 
     const initialRemovable = removableCookieEntries(initialCookies, preserveFamilies, importScope)
+
     if (initialRemovable.length === 0) {
       return
     }
+
     const identities = await targetSession.snapshotClearIdentities(initialRemovable)
     assertClearIdentitiesCoverRemovable(initialRemovable, identities)
     // Why (STA-4170): fixing the removal plan here, beside the identities that can undo it, is what
@@ -248,9 +268,11 @@ export async function removeTransplantableCookies(
         }
       }
     )
+
     const failures = results.flatMap((result) =>
       result.status === 'rejected' ? [result.reason] : []
     )
+
     if (failures.length > 0) {
       await restoreClearedCookies(targetSession, identities, failures)
     }

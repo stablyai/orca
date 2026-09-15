@@ -11,6 +11,7 @@ export function AutomationListStatusCell({ enabled }: { enabled: boolean }): Rea
       </span>
     )
   }
+
   return (
     <span className="inline-flex min-w-0 items-center gap-1 truncate text-muted-foreground">
       <X className="size-3.5 shrink-0" />

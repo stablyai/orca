@@ -8,9 +8,13 @@ import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-das
 import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
 
 const NOW = 1_000_000_000
+
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
+
 const PANE_1 = makePaneKey('tab1', LEAF_1)
+
 const PANE_2 = makePaneKey('tab2', LEAF_2)
 
 function worktree(id: string): Worktree {
@@ -107,10 +111,12 @@ describe('buildDashboardSnapshot rows cache', () => {
       ...first,
       runtimePaneTitlesByTabId: { ...first.runtimePaneTitlesByTabId, tab2: { 0: 'sh' } }
     }
+
     const cached = buildDashboardSnapshot(titleWrite, NOW + 500, {
       rowsCache: cache,
       rowsGeneration: 1
     })
+
     expect(cache.lastComputedWorktreeIds).toEqual(['w2'])
     expect(cached).toEqual(buildDashboardSnapshot(titleWrite, NOW + 500))
   })
@@ -125,6 +131,7 @@ describe('buildDashboardSnapshot rows cache', () => {
       ...state,
       acknowledgedAgentsByPaneKey: { [PANE_1]: NOW }
     }
+
     const after = buildDashboardSnapshot(acked, NOW + 500, { rowsCache: cache, rowsGeneration: 1 })
     // Why asserted: acks and statuses are card-assembly inputs the rows cache deliberately
     // does not key — they must still flow into every rebuild.
@@ -144,6 +151,7 @@ describe('buildDashboardSnapshot rows cache', () => {
   it('refreshes a retained row from a provider title published to its current tab', () => {
     const cache = createWorktreeAgentRowsCache()
     const retainedTab = { ...tab('tab1', 'w1'), title: 'Claude ready' }
+
     const retained: RetainedAgentEntry = {
       entry: {
         ...entry(PANE_1, 'tab1', 'w1'),
@@ -154,12 +162,14 @@ describe('buildDashboardSnapshot rows cache', () => {
       agentType: 'claude',
       startedAt: NOW - 10_000
     }
+
     const initial: DashboardSnapshotState = {
       ...baseState(),
       tabsByWorktree: { w1: [retainedTab], w2: [tab('tab2', 'w2')] },
       agentStatusByPaneKey: { [PANE_2]: entry(PANE_2, 'tab2', 'w2') },
       retainedAgentsByPaneKey: { [PANE_1]: retained }
     }
+
     expect(
       buildDashboardSnapshot(initial, NOW, { rowsCache: cache, rowsGeneration: 1 }).cards.find(
         (card) => card.paneKey === PANE_1
@@ -178,6 +188,7 @@ describe('buildDashboardSnapshot rows cache', () => {
         ]
       }
     }
+
     const refreshed = buildDashboardSnapshot(titled, NOW, {
       rowsCache: cache,
       rowsGeneration: 1

@@ -34,14 +34,18 @@ export function useRetiredWorktreeNames(
   useEffect(() => {
     if (!client || !activeRepoId) {
       setLoaded(null)
+
       return
     }
+
     let cancelled = false
+
     const settle = (registry: RetiredNameRegistry | null): void => {
       if (!cancelled) {
         setLoaded((previous) => retiredNamesAfterRefresh(previous, activeRepoId, registry))
       }
     }
+
     void client
       .sendRequest('worktree.listRetiredNames', { repo: `id:${activeRepoId}` })
       .then((response) =>
@@ -50,6 +54,7 @@ export function useRetiredWorktreeNames(
         )
       )
       .catch(() => settle(null))
+
     return () => {
       cancelled = true
     }

@@ -36,6 +36,7 @@ export function useTerminalController() {
   const activation = Object.assign(bulkClose, useTerminalActivationActions(bulkClose))
   useTerminalKeyboardShortcuts(activation)
   useTerminalWindowLifecycle(activation)
+
   return activation
 }
 

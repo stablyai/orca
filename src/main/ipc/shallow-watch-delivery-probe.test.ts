@@ -5,6 +5,7 @@ const { watchMock } = vi.hoisted(() => ({ watchMock: vi.fn() }))
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
   return { ...actual, watch: watchMock }
 })
 
@@ -17,6 +18,7 @@ import {
 function stubWatcher(onWatch?: (callback: () => void) => void) {
   return (_path: string, _options: unknown, callback: () => void) => {
     onWatch?.(callback)
+
     return { on: () => {}, close: () => {} }
   }
 }

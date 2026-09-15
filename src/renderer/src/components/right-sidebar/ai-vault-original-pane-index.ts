@@ -8,10 +8,13 @@ import {
 } from './ai-vault-original-pane'
 
 type LiveEntry = NonNullable<OriginalPaneState['agentStatusByPaneKey'][string]>
+
 type RetainedEntry = NonNullable<OriginalPaneState['retainedAgentsByPaneKey'][string]>
+
 type SleepingEntry = NonNullable<OriginalPaneState['sleepingAgentSessionsByPaneKey'][string]>
 
 type ProviderIndex<T> = Map<string, T[]>
+
 type AgentIndex<T> = Map<string, T[]>
 
 export type AiVaultOriginalPaneIndex = {
@@ -31,6 +34,7 @@ function providerKey(agent: string, sessionId: string): string {
 
 function appendToIndex<T>(index: Map<string, T[]>, key: string, value: T): void {
   const entries = index.get(key)
+
   if (entries) {
     entries.push(value)
   } else {
@@ -49,16 +53,19 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
     if (!entry?.agentType) {
       continue
     }
+
     if (entry.providerSession) {
       appendToIndex(liveByProvider, providerKey(entry.agentType, entry.providerSession.id), entry)
     } else if (entry.providerSession === undefined) {
       appendToIndex(liveWithoutProviderByAgent, entry.agentType, entry)
     }
   }
+
   for (const retained of Object.values(state.retainedAgentsByPaneKey)) {
     if (!retained?.agentType) {
       continue
     }
+
     if (retained.entry.providerSession) {
       appendToIndex(
         retainedByProvider,
@@ -69,6 +76,7 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
       appendToIndex(retainedWithoutProviderByAgent, retained.agentType, retained)
     }
   }
+
   for (const record of Object.values(state.sleepingAgentSessionsByPaneKey)) {
     if (record) {
       appendToIndex(
@@ -93,8 +101,10 @@ export function createLazyAiVaultOriginalPaneIndex(
   state: OriginalPaneState
 ): () => AiVaultOriginalPaneIndex {
   let index: AiVaultOriginalPaneIndex | null = null
+
   return () => {
     index ??= buildAiVaultOriginalPaneIndex(state)
+
     return index
   }
 }
@@ -113,24 +123,29 @@ export function findOriginalAiVaultSessionPaneInIndex(
       worktreeIdHint: entry.worktreeId,
       tabIdHint: entry.tabId
     })
+
     if (target) {
       return target
     }
   }
+
   for (const entry of index.liveWithoutProviderByAgent.get(session.agent) ?? []) {
     if (!promptsMatchSession(session, entry)) {
       continue
     }
+
     const target = resolveOriginalPaneTarget({
       state: index.state,
       paneKey: entry.paneKey,
       worktreeIdHint: entry.worktreeId,
       tabIdHint: entry.tabId
     })
+
     if (target) {
       promptMatchedTargets.push(target)
     }
   }
+
   for (const retained of index.retainedByProvider.get(key) ?? []) {
     const target = resolveOriginalPaneTarget({
       state: index.state,
@@ -138,24 +153,29 @@ export function findOriginalAiVaultSessionPaneInIndex(
       worktreeIdHint: retained.worktreeId,
       tabIdHint: retained.entry.tabId ?? retained.tab.id
     })
+
     if (target) {
       return target
     }
   }
+
   for (const retained of index.retainedWithoutProviderByAgent.get(session.agent) ?? []) {
     if (!promptsMatchSession(session, retained.entry)) {
       continue
     }
+
     const target = resolveOriginalPaneTarget({
       state: index.state,
       paneKey: retained.entry.paneKey,
       worktreeIdHint: retained.worktreeId,
       tabIdHint: retained.entry.tabId ?? retained.tab.id
     })
+
     if (target) {
       promptMatchedTargets.push(target)
     }
   }
+
   for (const record of index.sleepingByProvider.get(key) ?? []) {
     const target = resolveOriginalPaneTarget({
       state: index.state,
@@ -163,6 +183,7 @@ export function findOriginalAiVaultSessionPaneInIndex(
       worktreeIdHint: record.worktreeId,
       tabIdHint: record.tabId
     })
+
     if (target) {
       return target
     }
@@ -176,14 +197,18 @@ export function findAiVaultSessionLiveStateInIndex(
   session: AiVaultSession
 ): AgentStatusState | null {
   const direct = index.liveByProvider.get(providerKey(session.agent, session.sessionId))
+
   if (direct?.[0]) {
     return direct[0].state
   }
+
   const promptMatchedStates: AgentStatusState[] = []
+
   for (const entry of index.liveWithoutProviderByAgent.get(session.agent) ?? []) {
     if (promptsMatchSession(session, entry)) {
       promptMatchedStates.push(entry.state)
     }
   }
+
   return promptMatchedStates.length === 1 ? promptMatchedStates[0] : null
 }

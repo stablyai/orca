@@ -26,6 +26,7 @@ export function publishFederatedLifecycleSettlement(
   settlement: FederatedLifecycleSettlement
 ): void {
   const waiters = waitersByRuntime.get(runtime)?.get(settlementKey(dispatchId, sequence))
+
   for (const waiter of waiters ?? []) {
     waiter(settlement)
   }
@@ -40,24 +41,31 @@ export function waitForFederatedLifecycleSettlement(
   return new Promise((resolve) => {
     if (options.signal?.aborted) {
       resolve(undefined)
+
       return
     }
+
     const runtimeWaiters = getRuntimeWaiters(runtime)
     const key = settlementKey(dispatchId, sequence)
     const waiters = runtimeWaiters.get(key) ?? new Set<Waiter>()
     runtimeWaiters.set(key, waiters)
     let timer: ReturnType<typeof setTimeout> | undefined
+
     const finish = (settlement?: FederatedLifecycleSettlement) => {
       if (timer) {
         clearTimeout(timer)
       }
+
       options.signal?.removeEventListener('abort', onAbort)
       waiters.delete(onSettlement)
+
       if (waiters.size === 0) {
         runtimeWaiters.delete(key)
       }
+
       resolve(settlement)
     }
+
     const onSettlement: Waiter = (settlement) => finish(settlement)
     const onAbort = () => finish()
     waiters.add(onSettlement)
@@ -68,11 +76,14 @@ export function waitForFederatedLifecycleSettlement(
 
 function getRuntimeWaiters(runtime: OrcaRuntimeService): Map<string, Set<Waiter>> {
   const existing = waitersByRuntime.get(runtime)
+
   if (existing) {
     return existing
   }
+
   const created = new Map<string, Set<Waiter>>()
   waitersByRuntime.set(runtime, created)
+
   return created
 }
 

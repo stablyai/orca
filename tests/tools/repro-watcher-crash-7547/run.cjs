@@ -5,9 +5,11 @@
 'use strict'
 
 const { spawn } = require('node:child_process')
+
 const path = require('node:path')
 
 const CHILD = path.join(__dirname, 'child.cjs')
+
 const KNOWN = {
   3221226505: 'STATUS_STACK_BUFFER_OVERRUN (0xC0000409) — fail-fast/abort  << TARGET',
   3221225477: 'STATUS_ACCESS_VIOLATION (0xC0000005)',
@@ -25,6 +27,7 @@ function runOnce(scenario, durationMs) {
     const child = spawn(process.execPath, [CHILD, scenario, String(durationMs)], {
       stdio: ['ignore', 'inherit', 'pipe']
     })
+
     let stderr = ''
     child.stderr.on('data', (d) => {
       stderr += d
@@ -38,6 +41,7 @@ async function main() {
   const scenario = process.argv[2] || 'mixed'
   const iterations = Number(process.argv[3] || 10)
   const durationMs = Number(process.argv[4] || 15000)
+
   const scenarios =
     scenario === 'all'
       ? ['delete-root', 'unsub-churn', 'worker-mix', 'overflow', 'mixed']
@@ -45,6 +49,7 @@ async function main() {
 
   const results = []
   let crashed = false
+
   outer: for (const s of scenarios) {
     for (let i = 1; i <= iterations; i++) {
       const started = Date.now()
@@ -56,6 +61,7 @@ async function main() {
         `=== [${s}] iter ${i}: exit=${code} (${hex(code ?? -1)}) signal=${signal} ${meaning} after ${elapsed}ms`
       )
       results.push({ scenario: s, iteration: i, code, signal, elapsed })
+
       if (code !== 0 && code !== null) {
         crashed = true
         console.log(`\n*** NATIVE CRASH REPRODUCED in scenario "${s}" (exit ${hex(code)}) ***`)
@@ -65,11 +71,13 @@ async function main() {
   }
 
   console.log('\n──── summary ────')
+
   for (const r of results) {
     console.log(
       `${r.scenario.padEnd(12)} #${r.iteration} exit=${hex(r.code ?? -1)} ${r.signal || ''} ${r.elapsed}ms`
     )
   }
+
   process.exit(crashed ? 1 : 0)
 }
 

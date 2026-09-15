@@ -10,6 +10,7 @@ const DRIVE_ROOTS = [
 
 function processRootEvent(root: string, event: FsChangeEvent): ReturnType<typeof vi.fn> {
   const refreshDir = vi.fn()
+
   const rootCache: DirCache = {
     children: [],
     operationOwner: { kind: 'local' }

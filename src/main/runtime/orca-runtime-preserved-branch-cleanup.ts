@@ -146,9 +146,11 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     preparePlan: () => this.legacyWorkerRecoveryPersistence.prepare(),
     resolveWorkspace: async (candidate) => {
       const scope = await this.resolveTerminalWorkspaceLaunchScope(`id:${candidate.worktreeId}`)
+
       const resolved = scope.folderWorkspace
         ? this.folderWorkspaceToResolvedWorktree(scope.folderWorkspace)
         : await this.resolveWorktreeSelector(`id:${scope.id}`)
+
       return { scope, resolved }
     },
     refreshInventory: (worktrees, connectionId) =>
@@ -207,12 +209,15 @@ export class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTermin
     addRemoteRepo: async (remote) => {
       // The same registration the desktop IPC handler uses, so both surfaces agree on SSH hosts.
       const result = await addRemoteRepoFromPath(this.requireStore() as unknown as Store, remote)
+
       if ('error' in result) {
         throw new Error(result.error)
       }
+
       this.invalidateResolvedWorktreeCache()
       this.invalidateWorktreeScanCacheForRepo(result.repo.id)
       this.notifyReposChanged()
+
       return result.repo
     },
     cloneRepo: (url, destination, hostId) =>

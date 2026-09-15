@@ -17,7 +17,9 @@ type ThemeRoot = {
 }
 
 type ThemeMediaMatcher = (query: string) => Pick<MediaQueryList, 'matches'>
+
 type ThemeAnimationFrame = (callback: FrameRequestCallback) => number
+
 type ThemeCancelAnimationFrame = (handle: number) => void
 
 type ApplyDocumentThemeOptions = {
@@ -34,6 +36,7 @@ function cancelPendingTransitionDisableFrames(cancelFrame: ThemeCancelAnimationF
   for (const frameId of pendingTransitionDisableFrames) {
     cancelFrame(frameId)
   }
+
   pendingTransitionDisableFrames = []
 }
 
@@ -50,9 +53,11 @@ export function resolveDocumentTheme(
   if (theme === 'dark') {
     return true
   }
+
   if (theme === 'light') {
     return false
   }
+
   return systemPrefersDark(matchMedia)
 }
 
@@ -87,13 +92,16 @@ export function applyDocumentTheme(
     pendingTransitionDisableFrames = pendingTransitionDisableFrames.filter(
       (id) => id !== firstFrame
     )
+
     const secondFrame = requestFrame(() => {
       pendingTransitionDisableFrames = pendingTransitionDisableFrames.filter(
         (id) => id !== secondFrame
       )
       root.classList.remove(THEME_TRANSITION_DISABLED_CLASS)
     })
+
     pendingTransitionDisableFrames.push(secondFrame)
   })
+
   pendingTransitionDisableFrames.push(firstFrame)
 }

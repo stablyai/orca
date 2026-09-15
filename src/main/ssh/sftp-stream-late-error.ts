@@ -45,10 +45,12 @@ export function latchLateSftpStreamErrors(
       // The transfer's own listener owns this error and will reject with it.
       return
     }
+
     console.warn(
       `[sftp] Ignored late stream error for ${remotePath}: ${err instanceof Error ? err.message : String(err)}`
     )
   })
+
   return {
     markTransferSettled: () => {
       settled = true
@@ -70,6 +72,7 @@ export function latchLateSftpStreamErrors(
  */
 export function latchLateSftpSessionErrors(sftp: SftpSessionEmitter): void {
   const swallowLateSftpError = (): void => {}
+
   sftp.on('error', swallowLateSftpError)
   sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
 }
@@ -94,6 +97,7 @@ export function isSandboxedSftpNamespaceError(error: unknown): boolean {
  */
 export function describeSandboxedSftpFailure(error: unknown, remotePath: string): Error {
   const detail = error instanceof Error ? error.message : String(error)
+
   return Object.assign(
     new Error(
       `Relay install could not reach ${remotePath} over SFTP (${detail}). ` +

@@ -79,6 +79,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
   const getRepoMock = vi.fn<Store['getRepo']>()
   // Ownership resolution reads the catalog, not one id-keyed row, so the fake has to project one.
   const KNOWN_REPO_IDS = ['repo-target-1', 'repo-target-2', 'repo-reset', 'repo-newer']
+
   const store = {
     getRepo: getRepoMock,
     getRepos: () => KNOWN_REPO_IDS.map((repoId) => getRepoMock(repoId)).filter(Boolean)
@@ -133,9 +134,11 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
     expectedHostObservationTokensByTargetId?: unknown
   }): Promise<unknown> {
     const handler = handlers.get('remoteWorkspace:setForConnectedTargets')
+
     if (!handler) {
       throw new Error('remoteWorkspace:setForConnectedTargets handler was never registered')
     }
+
     return handler(null, args)
   }
 
@@ -145,19 +148,24 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
 
   function cachedObservationToken(targetId: string): string {
     const cached = getCachedRemoteWorkspaceSnapshot(targetId)
+
     if (!cached) {
       throw new Error(`No cached workspace observation for ${targetId}`)
     }
+
     return cached.hostObservationToken
   }
 
   it('serializes overlapping writes for the same target so they use fresh base revisions', async () => {
     let currentRevision = 7
     let releaseFirstPatch!: () => void
+
     const firstPatchCanFinish = new Promise<void>((resolve) => {
       releaseFirstPatch = resolve
     })
+
     const patchBaseRevisions: number[] = []
+
     const request = vi
       .fn()
       .mockImplementation(async (method: string, params: Record<string, unknown>) => {
@@ -172,25 +180,32 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
             currentRevision
           )
         }
+
         if (method === 'workspace.patch') {
           patchBaseRevisions.push(params.baseRevision as number)
+
           if (patchBaseRevisions.length === 1) {
             await firstPatchCanFinish
           }
+
           currentRevision += 1
           const patchedSnapshot = snapshot(patchSession(params), currentRevision)
           handleRemoteWorkspaceNotification('target-1', 'workspace.changed', {
             snapshot: patchedSnapshot,
             sourceClientId: CLIENT_ID
           })
+
           return {
             ok: true,
             snapshot: patchedSnapshot
           }
         }
+
         throw new Error(`Unexpected method ${method}`)
       })
+
     muxByTargetId.set('target-1', { request })
+
     const observationToken = observeSnapshot(
       'target-1',
       snapshot(
@@ -210,6 +225,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       expectedRevisionsByTargetId: { 'target-1': 7 },
       expectedHostObservationTokensByTargetId: { 'target-1': observationToken }
     })
+
     await vi.waitFor(() => expect(patchBaseRevisions).toEqual([7]))
 
     const second = callSetForConnectedTargets({
@@ -218,6 +234,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       expectedRevisionsByTargetId: { 'target-1': 7 },
       expectedHostObservationTokensByTargetId: { 'target-1': observationToken }
     })
+
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(patchBaseRevisions).toEqual([7])
 
@@ -257,8 +274,10 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       },
       7
     )
+
     const request = vi.fn()
     muxByTargetId.set('target-1', { request })
+
     const observationToken = observeSnapshot(
       'target-1',
       snapshot(
@@ -276,6 +295,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       snapshot: remoteSnapshot,
       sourceClientId: 'other-client'
     })
+
     const result = await callSetForConnectedTargets({
       session: sessionWithTab('repo-target-1::/remote/workspace', 'stale-local-tab'),
       hydratedTargetIds: ['target-1'],
@@ -308,10 +328,13 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       },
       8
     )
+
     let releasePatch!: () => void
+
     const patchCanFinish = new Promise<void>((resolve) => {
       releasePatch = resolve
     })
+
     const request = vi.fn(async (method: string) => {
       if (method === 'workspace.get') {
         return snapshot(
@@ -324,13 +347,18 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
           7
         )
       }
+
       if (method === 'workspace.patch') {
         await patchCanFinish
+
         return { ok: false, reason: 'stale-revision', snapshot: remoteSnapshot }
       }
+
       throw new Error(`Unexpected method ${method}`)
     })
+
     muxByTargetId.set('target-1', { request })
+
     const observationToken = observeSnapshot(
       'target-1',
       snapshot(
@@ -350,15 +378,18 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       expectedRevisionsByTargetId: { 'target-1': 7 },
       expectedHostObservationTokensByTargetId: { 'target-1': observationToken }
     })
+
     await vi.waitFor(() =>
       expect(request.mock.calls.filter(([method]) => method === 'workspace.patch')).toHaveLength(1)
     )
+
     const queued = callSetForConnectedTargets({
       session: sessionWithTab('repo-target-1::/remote/queued', 'queued-local-tab'),
       hydratedTargetIds: ['target-1'],
       expectedRevisionsByTargetId: { 'target-1': 7 },
       expectedHostObservationTokensByTargetId: { 'target-1': observationToken }
     })
+
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     handleRemoteWorkspaceNotification('target-1', 'workspace.changed', {
@@ -384,6 +415,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       },
       7
     )
+
     const replacement = snapshot(
       {
         activeWorktreePath: '/other-device',
@@ -395,12 +427,15 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       },
       7
     )
+
     const request = vi.fn(async (method: string, params: Record<string, unknown>) => {
       if (method !== 'workspace.patch') {
         throw new Error(`Unexpected method ${method}`)
       }
+
       return { ok: true, snapshot: snapshot(patchSession(params), 8) }
     })
+
     muxByTargetId.set('target-1', { request })
     handleRemoteWorkspaceNotification('target-1', 'workspace.changed', {
       snapshot: baseline,
@@ -409,17 +444,22 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
     const observationToken = cachedObservationToken('target-1')
 
     let releaseBlocker!: () => void
+
     const blockerCanFinish = new Promise<void>((resolve) => {
       releaseBlocker = resolve
     })
+
     let blockerStarted!: () => void
+
     const blockerDidStart = new Promise<void>((resolve) => {
       blockerStarted = resolve
     })
+
     const blocker = queueRemoteWorkspacePatch('target-1', async () => {
       blockerStarted()
       await blockerCanFinish
     })
+
     await blockerDidStart
 
     const queued = callSetForConnectedTargets({
@@ -428,6 +468,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       expectedRevisionsByTargetId: { 'target-1': 7 },
       expectedHostObservationTokensByTargetId: { 'target-1': observationToken }
     })
+
     await new Promise((resolve) => setTimeout(resolve, 0))
     handleRemoteWorkspaceNotification('target-1', 'workspace.changed', {
       snapshot: replacement,
@@ -455,18 +496,23 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       },
       7
     )
+
     const observationToken = observeSnapshot('target-1', baseline)
+
     for (let index = 0; index < REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES; index += 1) {
       observeSnapshot(`eviction-target-${index}`, baseline)
     }
+
     expect(getCachedRemoteWorkspaceSnapshot('target-1')).toBeUndefined()
 
     const request = vi.fn(async (method: string) => {
       if (method === 'workspace.get') {
         return baseline
       }
+
       throw new Error(`Unexpected method ${method}`)
     })
+
     muxByTargetId.set('target-1', { request })
 
     await expect(
@@ -493,6 +539,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       port: 22,
       username: 'alice'
     }
+
     getSshConnectionStoreMock.mockReturnValue({
       listTargets: () => [target, secondTarget]
     })
@@ -507,6 +554,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
           connectionId: 'target-1'
         } as never
       }
+
       if (repoId === 'repo-target-2') {
         return {
           id: 'repo-target-2',
@@ -517,13 +565,16 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
           connectionId: 'target-2'
         } as never
       }
+
       return undefined
     })
 
     let releaseFirstPatch!: () => void
+
     const firstPatchCanFinish = new Promise<void>((resolve) => {
       releaseFirstPatch = resolve
     })
+
     const previousSnapshot = snapshot(
       {
         activeWorktreePath: '/previous',
@@ -533,25 +584,33 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       },
       7
     )
+
     const slowRequest = vi.fn(async (method: string, params: Record<string, unknown>) => {
       if (method === 'workspace.get') {
         return previousSnapshot
       }
+
       if (method === 'workspace.patch') {
         await firstPatchCanFinish
+
         return { ok: true, snapshot: snapshot(patchSession(params), 8) }
       }
+
       throw new Error(`Unexpected method ${method}`)
     })
+
     const fastRequest = vi.fn(async (method: string, params: Record<string, unknown>) => {
       if (method === 'workspace.get') {
         return previousSnapshot
       }
+
       if (method === 'workspace.patch') {
         return { ok: true, snapshot: snapshot(patchSession(params), 8) }
       }
+
       throw new Error(`Unexpected method ${method}`)
     })
+
     muxByTargetId.set('target-1', { request: slowRequest })
     muxByTargetId.set('target-2', { request: fastRequest })
     const firstObservationToken = observeSnapshot('target-1', previousSnapshot)
@@ -609,6 +668,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       port: 22,
       username: 'alice'
     }
+
     getSshConnectionStoreMock.mockReturnValue({
       listTargets: () => [resetTarget]
     })
@@ -626,6 +686,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
     )
 
     const patchBaseRevisions: number[] = []
+
     const request = vi
       .fn()
       .mockImplementation(async (method: string, params: Record<string, unknown>) => {
@@ -640,8 +701,10 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
             7
           )
         }
+
         if (method === 'workspace.patch') {
           patchBaseRevisions.push(params.baseRevision as number)
+
           if (patchBaseRevisions.length === 1) {
             return {
               ok: false,
@@ -657,14 +720,18 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
               )
             }
           }
+
           return {
             ok: true,
             snapshot: snapshot(patchSession(params), 1)
           }
         }
+
         throw new Error(`Unexpected method ${method}`)
       })
+
     muxByTargetId.set('target-reset', { request })
+
     const observationToken = observeSnapshot(
       'target-reset',
       snapshot(
@@ -697,6 +764,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
       port: 22,
       username: 'alice'
     }
+
     getSshConnectionStoreMock.mockReturnValue({
       listTargets: () => [newerTarget]
     })
@@ -714,6 +782,7 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
     )
 
     const patchBaseRevisions: number[] = []
+
     const request = vi
       .fn()
       .mockImplementation(async (method: string, params: Record<string, unknown>) => {
@@ -728,8 +797,10 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
             7
           )
         }
+
         if (method === 'workspace.patch') {
           patchBaseRevisions.push(params.baseRevision as number)
+
           return {
             ok: false,
             reason: 'stale-revision',
@@ -744,9 +815,12 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
             )
           }
         }
+
         throw new Error(`Unexpected method ${method}`)
       })
+
     muxByTargetId.set('target-newer', { request })
+
     const observationToken = observeSnapshot(
       'target-newer',
       snapshot(

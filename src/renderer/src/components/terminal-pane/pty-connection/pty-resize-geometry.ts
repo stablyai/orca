@@ -16,9 +16,11 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
   session.handleObservedPaneGeometry = (): void => {
     session.pendingGeometryReportRaf = null
+
     if (session.disposed) {
       return
     }
+
     if (
       deferTerminalGeometryMutationDuringRebuild(
         session.pane.terminal,
@@ -28,20 +30,26 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
     ) {
       return
     }
+
     const paneGeometryChanged = session.pendingPaneGeometryChanged
     session.pendingPaneGeometryChanged = false
     const currentPtyId = session.transport.getPtyId()
+
     if (!currentPtyId) {
       // Why: ResizeObserver may deliver its initial measurement before the
       // remote binding completes; retain that passive baseline for the first
       // real focused resize instead of swallowing the user's first claim.
       const proposed = session.readProposedTerminalGrid()
+
       if (proposed) {
         session.lastObservedDesktopGrid = proposed
       }
+
       return
     }
+
     const fitOverride = getFitOverrideForPty(currentPtyId)
+
     if (!fitOverride) {
       if (session.pane.terminal.cols > 0 && session.pane.terminal.rows > 0) {
         // Why: record the local grid before a later remote hold parks xterm;
@@ -51,25 +59,33 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
           rows: session.pane.terminal.rows
         }
       }
+
       if (session.shouldSuppressDesktopPtyResize()) {
         return
       }
+
       requestStablePaneFit(session.pane as ManagedPaneInternal, () =>
         session.ptySizeReassertion.request({ fit: false })
       )
+
       return
     }
+
     let proposed: { cols: number; rows: number } | undefined
+
     try {
       proposed = session.pane.fitAddon.proposeDimensions()
     } catch {
       proposed = undefined
     }
+
     if (!proposed || proposed.cols <= 0 || proposed.rows <= 0) {
       return
     }
+
     const priorProposed = session.lastObservedDesktopGrid
     session.lastObservedDesktopGrid = proposed
+
     if (fitOverride.mode === 'remote-desktop-fit') {
       if (
         shouldClaimRemoteDesktopViewport({
@@ -86,26 +102,32 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
         // the park and update xterm before claiming so the owner does not keep
         // rendering the prior owner's stale grid.
         session.suppressViewportClaimTerminalResize = true
+
         try {
           session.pane.terminal.resize(proposed.cols, proposed.rows)
         } finally {
           session.suppressViewportClaimTerminalResize = false
         }
+
         session.transport.resize(proposed.cols, proposed.rows, { claim: true })
       }
+
       return
     }
+
     if (isRemoteRuntimePtyId(currentPtyId)) {
       session.transport.resize(proposed.cols, proposed.rows)
     } else {
       window.api.pty.reportGeometry(currentPtyId, proposed.cols, proposed.rows)
     }
   }
+
   session.geometryReportObserver =
     typeof ResizeObserver === 'undefined'
       ? null
       : new ResizeObserver(() => {
           const paneSize = session.readPaneSize()
+
           if (
             paneSize &&
             session.lastObservedPaneSize &&
@@ -114,14 +136,18 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
           ) {
             session.pendingPaneGeometryChanged = true
           }
+
           session.lastObservedPaneSize = paneSize
+
           if (session.pendingGeometryReportRaf !== null) {
             return
           }
+
           session.pendingGeometryReportRaf = requestAnimationFrame(
             session.handleObservedPaneGeometry
           )
         })
+
   // Why: pane.xtermContainer is created later in pane-lifecycle's
   // attachWebgl/initial-fit path; pane.container is always present at the
   // moment connectPanePty runs (it's the .pane element). Both report the
@@ -164,8 +190,10 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
         if (!safeFit(session.pane)) {
           return null
         }
+
         const cols = session.pane.terminal.cols
         const rows = session.pane.terminal.rows
+
         return cols > 0 && rows > 0 ? { cols, rows } : null
       },
       resize: (cols, rows) => {
@@ -196,17 +224,22 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
       if (typeof cancelAnimationFrame === 'function') {
         cancelAnimationFrame(session.connectFrame)
       }
+
       session.connectFrame = null
     }
   }
+
   session.measureStartupGrid = (): { cols: number; rows: number } | null => {
     if (!safeFit(session.pane)) {
       return null
     }
+
     const cols = session.pane.terminal.cols
     const rows = session.pane.terminal.rows
+
     return cols > 0 && rows > 0 ? { cols, rows } : null
   }
+
   session.shouldSettleStartupGridBeforeConnect = (): boolean =>
     Boolean(session.paneStartup?.command) &&
     session.deps.isVisibleRef.current &&
@@ -214,16 +247,20 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
     session.runtimeEnvironmentId === null
   session.isStartupGridReadyForConnect = (): boolean => {
     const setupSplitDirection = session.paneStartup?.waitForSetupSplitDirection
+
     if (!setupSplitDirection) {
       return true
     }
+
     // Why: the setup split reparents the main pane before its xterm grid
     // necessarily reflects the new flex geometry; wait for both to agree.
     return isSetupSplitGeometryReady(session.pane, session.manager, setupSplitDirection)
   }
+
   session.settleStartupGridBeforeConnect = (connect: () => void): void => {
     session.startupGridSettleHandle?.cancel()
     let settledSynchronously = false
+
     // Why: local startup commands can launch a TUI before the split-pane grid
     // has settled; spawn from a briefly stable grid so the TUI paints cleanly.
     const handle = waitForStableStartupGrid({
@@ -244,6 +281,7 @@ export function installPtyResizeGeometry(session: ConnectPanePtySession): void {
         }
       }
     })
+
     if (!settledSynchronously) {
       session.startupGridSettleHandle = handle
     }

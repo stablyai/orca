@@ -16,8 +16,11 @@ import {
 import { translate } from '@/i18n/i18n'
 
 const CLIPBOARD_VERSION = '1'
+
 const MARKER_ATTRIBUTE = 'data-rich-markdown-html-superscript-link'
+
 const SOURCE_ATTRIBUTE = 'data-orca-superscript-link-source'
+
 const clipboardEncoder = new TextEncoder()
 
 export function createRichMarkdownHtmlSuperscriptLink(
@@ -47,13 +50,17 @@ export function createRichMarkdownHtmlSuperscriptLink(
       start: skipInlineTransportStartScan,
       tokenize(source) {
         const matched = transport.match(source, 'html-superscript-link')
+
         if (!matched) {
           return undefined
         }
+
         const parsed = parseStructuredPayload(matched.value)
+
         if (!parsed) {
           return undefined
         }
+
         return {
           type: 'richMarkdownHtmlSuperscriptLink',
           raw: matched.raw,
@@ -63,9 +70,11 @@ export function createRichMarkdownHtmlSuperscriptLink(
     },
     parseMarkdown: (token, helpers) => {
       const citation = (token as { citation?: HtmlSuperscriptLinkSource }).citation
+
       if (token.type !== 'richMarkdownHtmlSuperscriptLink' || !citation) {
         return []
       }
+
       return helpers.createNode('richMarkdownHtmlSuperscriptLink', citation)
     },
     renderMarkdown: (node) => String(node.attrs?.source ?? ''),
@@ -84,12 +93,15 @@ export function createRichMarkdownHtmlSuperscriptLink(
       const citation = node.attrs as HtmlSuperscriptLinkSource
       const projectedHref = projectMarkdownHrefForClipboard(citation.href)
       const anchorAttributes: Record<string, string> = {}
+
       if (projectedHref !== null) {
         anchorAttributes.href = projectedHref
       }
+
       if (citation.title !== null) {
         anchorAttributes.title = citation.title
       }
+
       return [
         'sup',
         {
@@ -127,15 +139,19 @@ export function createRichMarkdownHtmlSuperscriptLink(
                   { value0: String(node.attrs.label ?? '') }
                 )
           )
+
           if (actionable) {
             label.setAttribute('role', 'link')
           } else {
             label.removeAttribute('role')
           }
+
           label.toggleAttribute('data-actionable', actionable)
         }
+
         updateActionability()
         const unsubscribe = context.subscribe(updateActionability)
+
         return { dom, destroy: unsubscribe }
       }
     }
@@ -144,15 +160,19 @@ export function createRichMarkdownHtmlSuperscriptLink(
 
 function parseStructuredPayload(value: string): HtmlSuperscriptLinkSource | null {
   let candidate: unknown
+
   try {
     candidate = JSON.parse(value)
   } catch {
     return null
   }
+
   if (!isCitationShape(candidate)) {
     return null
   }
+
   const parsed = parseHtmlSuperscriptLinkSource(candidate.source)
+
   return parsed && sameCitation(parsed, candidate) ? parsed : null
 }
 
@@ -163,7 +183,9 @@ function validateClipboardElement(element: HTMLElement): false | Record<string, 
   ) {
     return false
   }
+
   const source = element.getAttribute(SOURCE_ATTRIBUTE)
+
   if (
     !source ||
     source.length > HTML_SUPERSCRIPT_LINK_SOURCE_LIMIT ||
@@ -171,8 +193,10 @@ function validateClipboardElement(element: HTMLElement): false | Record<string, 
   ) {
     return false
   }
+
   const parsed = parseHtmlSuperscriptLinkSource(source)
   const anchor = element.firstElementChild
+
   if (
     !parsed ||
     element.childNodes.length !== 1 ||
@@ -189,11 +213,13 @@ function validateClipboardElement(element: HTMLElement): false | Record<string, 
   ) {
     return false
   }
+
   return parsed
 }
 
 function hasOnlyAttributes(element: Element, allowed: string[]): boolean {
   const allowedSet = new Set(allowed)
+
   return Array.from(element.attributes).every((attribute) => allowedSet.has(attribute.name))
 }
 
@@ -201,7 +227,9 @@ function isCitationShape(value: unknown): value is HtmlSuperscriptLinkSource {
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const candidate = value as Record<string, unknown>
+
   return (
     Object.keys(candidate).length === 4 &&
     typeof candidate.source === 'string' &&

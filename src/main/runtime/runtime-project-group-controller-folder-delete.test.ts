@@ -15,6 +15,7 @@ function createController(
   const teardownFolderWorkspacePtys = vi.fn(async () => undefined)
   const cleanupRemovedFolderWorkspaceState = vi.fn()
   const notifyReposChanged = vi.fn()
+
   const controller = new RuntimeProjectGroupController({
     getStore: () => ({ getFolderWorkspaces: () => [workspace], removeFolderWorkspace }) as never,
     resolveRepo: async () => {
@@ -25,6 +26,7 @@ function createController(
     teardownFolderWorkspacePtys,
     cleanupRemovedFolderWorkspaceState
   })
+
   return {
     controller,
     removeFolderWorkspace,
@@ -50,6 +52,7 @@ describe('RuntimeProjectGroupController.deleteFolderWorkspace', () => {
 
   it('still deletes when the folder host is ambiguous, skipping only the PTY sweep', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
     const deps = createController(() => {
       throw new Error('folder_workspace_connection_ambiguous')
     })

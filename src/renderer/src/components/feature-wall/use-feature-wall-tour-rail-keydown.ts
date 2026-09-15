@@ -23,16 +23,21 @@ export function useFeatureWallTourRailKeydown({
       if (!FEATURE_WALL_TOUR_NAVIGATION_KEYS.has(event.key)) {
         return
       }
+
       event.preventDefault()
+
       const nextIndex = getFeatureWallRailNavigationTarget({
         currentIndex: index,
         key: event.key as FeatureWallRailNavigationKey,
         itemCount: FEATURE_WALL_WORKFLOWS.length
       })
+
       const nextWorkflow = FEATURE_WALL_WORKFLOWS[nextIndex]
+
       if (!nextWorkflow) {
         return
       }
+
       onSelectWorkflow(nextWorkflow)
       railRefs.current[nextIndex]?.focus()
     },

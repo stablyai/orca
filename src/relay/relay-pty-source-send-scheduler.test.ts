@@ -60,6 +60,7 @@ function createScheduler(
   record: RelayPtySourceDeliveryRecord
 ) {
   const deliveries = new Map<string, RelayPtySourceDeliveryRecord>([['pty-1', record]])
+
   const session = {
     sourceDeliverySnapshotIfKnown: vi.fn(() => probe),
     sourceDeliverySnapshot: vi.fn(() => {
@@ -67,11 +68,13 @@ function createScheduler(
     }),
     reserveSourceSend: vi.fn(() => null)
   }
+
   const dispatcher = {
     onLegacyPtyCapacity: vi.fn(() => () => {}),
     producerDataBudget: vi.fn(() => 4096),
     tryNotifyPtyDataToClient: vi.fn(() => true)
   }
+
   const counters: RelayPtySourcePublicationCounters = {
     opened: 0,
     rotated: 0,
@@ -81,7 +84,9 @@ function createScheduler(
     exitCommitted: 0,
     exitRolledBack: 0
   }
+
   const capacityIds: string[] = []
+
   const scheduler = new RelayPtySourceSendScheduler(
     dispatcher as unknown as RelayDispatcher,
     session as unknown as SshPtyConsumerSessionAdapter,
@@ -89,6 +94,7 @@ function createScheduler(
     counters,
     (id) => capacityIds.push(id)
   )
+
   return { scheduler, deliveries, session, capacityIds }
 }
 
@@ -134,6 +140,7 @@ describe('RelayPtySourceSendScheduler close handling', () => {
       legacyExitAccepted: true,
       sourceExitState: 'published'
     })
+
     const harness = createScheduler(null, record)
 
     harness.scheduler.onCreditAvailable('pty-1')

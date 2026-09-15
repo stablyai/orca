@@ -82,6 +82,7 @@ describe('verifyRequiredReleaseAssets', () => {
     const assets = required.filter((name) => name !== 'Orca-1.4.27-arm64-mac.zip')
     const release = releaseWithAssets(tag, assets)
     const latestMacAsset = release.assets.find((asset) => asset.name === 'latest-mac.yml')
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse([release]))
@@ -97,6 +98,7 @@ describe('verifyRequiredReleaseAssets', () => {
         )
       )
       .mockResolvedValue(jsonResponse('version: 1.4.27\n'))
+
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(
@@ -110,6 +112,7 @@ describe('verifyRequiredReleaseAssets', () => {
     const required = getRequiredReleaseAssetNames(tag)
     const release = releaseWithAssets(tag, required)
     const arm64Manifest = release.assets.find((asset) => asset.name === 'latest-linux-arm64.yml')
+
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(jsonResponse([release]))
@@ -125,6 +128,7 @@ describe('verifyRequiredReleaseAssets', () => {
         )
       )
       .mockResolvedValue(jsonResponse('version: 1.4.27\n'))
+
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(

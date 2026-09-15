@@ -12,17 +12,29 @@ const {
 } = await vi.hoisted(async () => (await import('./updater-test-harness')).createUpdaterMocks())
 
 vi.mock('electron', () => moduleFactories.electron())
+
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
+
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
+
 vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
+
 vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
+
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
+
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
+
 vi.mock('./updater-nudge', () => moduleFactories.updaterNudge())
+
 vi.mock('./update-install-exit-watchdog', () => moduleFactories.updateInstallExitWatchdog())
+
 vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed())
+
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
+
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
 /** Mirrors AUTO_UPDATE_CHECK_INTERVAL_MS in updater.ts. */
@@ -55,6 +67,7 @@ describe('updater', () => {
     'uses the display label in the unsupported-platform %s pinned-build error',
     async (channel, tag, message) => {
       const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+
       try {
         const send = vi.fn()
         const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
@@ -83,6 +96,7 @@ describe('updater', () => {
   // reachable regardless.
   it('refuses to pin a Windows dev build from a signed build, and says what to do', async () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+
     try {
       appMock.getVersion.mockReturnValue('1.4.160')
       const send = vi.fn()
@@ -113,6 +127,7 @@ describe('updater', () => {
     'still pins %s from an unsigned Windows dev build',
     async (_label, channel, targetTag) => {
       const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+
       try {
         appMock.getVersion.mockReturnValue('1.4.160-hourly.202607281400')
         const send = vi.fn()
@@ -146,6 +161,7 @@ describe('updater', () => {
       autoUpdaterMock.checkForUpdates.mockImplementation(() => {
         autoUpdaterMock.emit('checking-for-update')
         autoUpdaterMock.emit('update-available', { version: '0.9.0-local.1' })
+
         return Promise.resolve(undefined)
       })
       const send = vi.fn()
@@ -201,8 +217,10 @@ describe('updater', () => {
     async () => {
       chooseLocalBuildMock.mockRejectedValue(new Error('invalid local build'))
       const send = vi.fn()
+
       const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu } =
         await loadUpdaterModule()
+
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })
@@ -241,11 +259,14 @@ describe('updater', () => {
       autoUpdaterMock.checkForUpdates.mockImplementationOnce(() => {
         autoUpdaterMock.emit('checking-for-update')
         autoUpdaterMock.emit('update-not-available')
+
         return Promise.resolve(undefined)
       })
       const send = vi.fn()
+
       const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu } =
         await loadUpdaterModule()
+
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })
@@ -283,8 +304,10 @@ describe('updater', () => {
       })
       autoUpdaterMock.checkForUpdates.mockRejectedValueOnce(new Error('local feed failed'))
       const send = vi.fn()
+
       const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu } =
         await loadUpdaterModule()
+
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })
@@ -325,12 +348,15 @@ describe('updater', () => {
       autoUpdaterMock.checkForUpdates.mockImplementation(() => {
         autoUpdaterMock.emit('checking-for-update')
         autoUpdaterMock.emit('update-available', { version: '0.9.0-local.1' })
+
         return Promise.resolve(undefined)
       })
       autoUpdaterMock.downloadUpdate.mockRejectedValue(new Error('local download failed'))
       const send = vi.fn()
+
       const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } =
         await loadUpdaterModule()
+
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })
@@ -347,6 +373,7 @@ describe('updater', () => {
       autoUpdaterMock.checkForUpdates.mockReset().mockImplementation(() => {
         autoUpdaterMock.emit('checking-for-update')
         autoUpdaterMock.emit('update-not-available')
+
         return Promise.resolve(undefined)
       })
 
@@ -381,11 +408,14 @@ describe('updater', () => {
       autoUpdaterMock.checkForUpdates.mockImplementation(() => {
         autoUpdaterMock.emit('checking-for-update')
         autoUpdaterMock.emit('update-available', { version: '0.9.0-local.1' })
+
         return Promise.resolve(undefined)
       })
       const send = vi.fn()
+
       const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu, dismissAvailableUpdate } =
         await loadUpdaterModule()
+
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })
@@ -427,12 +457,15 @@ describe('updater', () => {
       autoUpdaterMock.checkForUpdates.mockImplementation(() => {
         autoUpdaterMock.emit('checking-for-update')
         autoUpdaterMock.emit('update-available', { version: '0.9.0-local.1' })
+
         return Promise.resolve(undefined)
       })
       autoUpdaterMock.downloadUpdate.mockResolvedValue(undefined)
       const send = vi.fn()
+
       const { setupAutoUpdater, checkForUpdatesFromMenu, dismissAvailableUpdate, downloadUpdate } =
         await loadUpdaterModule()
+
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now()
       })

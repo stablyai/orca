@@ -34,6 +34,7 @@ export function findLegacyQuestionsBySemanticIdentity(
 }[] {
   const principal = this.requireCommittedLegacyPrincipal(params.principalId, 'worker')
   const runAddress = `run:${principal.run_id}`
+
   const rows = this.db
     .prepare(
       `SELECT q.*, m.id AS source_message_id,
@@ -62,15 +63,18 @@ export function findLegacyQuestionsBySemanticIdentity(
     source_message_id: string
     claimed_by_operation: number
   })[]
+
   if (rows.length > 500) {
     throw new OrchestrationError(
       'operation_unknown',
       'Legacy ask identity is too ambiguous to reconstruct safely.'
     )
   }
+
   return rows
     .filter((row) => {
       const message = this.getMessageById(row.source_message_id)
+
       return Boolean(
         message &&
         legacyMessageMatchesQuestion(message, params.question, params.options ?? [], [
@@ -106,6 +110,7 @@ export function resolveLegacyWorkerCoordinatorDelivery(
   const principal = this.getLegacyCoordinatorPrincipal(runId)
   // Why: `!== null` alone reads an unknown run (undefined) as taken over and misroutes it to run: delivery.
   const takenOver = run?.coordinator_handle != null && principal?.status !== 'committed'
+
   return takenOver
     ? { to: `run:${runId}`, contract: 'current_delivery' }
     : { to: retainedCoordinatorHandle, contract: 'legacy_direct' }

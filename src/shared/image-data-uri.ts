@@ -15,27 +15,35 @@ export function buildImageDataUri(
   if (!mimeType?.startsWith('image/')) {
     return null
   }
+
   const cleaned = base64Content.replace(/\s/g, '')
+
   if (!cleaned) {
     return null
   }
+
   // Only suppress when the header says the image is too large to render safely. An unreadable
   // header is not evidence of an oversized image, and the decoder handles formats we cannot parse.
   if (exceedsRasterImagePreviewLimits(cleaned, mimeType)) {
     return null
   }
+
   return `data:${mimeType};base64,${cleaned}`
 }
 
 /** Preserves non-raster data URIs and rejects unsafe known-raster data URIs. */
 export function validateRasterImageDataUri(dataUri: string): string | null {
   const match = /^data:([^;,]+)((?:;[^,]*)*),([\s\S]*)$/i.exec(dataUri)
+
   if (!match || !isKnownRasterImageMimeType(match[1])) {
     return dataUri
   }
+
   const parameters = match[2].split(';').filter(Boolean)
+
   if (!parameters.some((parameter) => parameter.toLowerCase() === 'base64')) {
     return null
   }
+
   return buildImageDataUri(match[1], match[3])
 }

@@ -55,16 +55,19 @@ describe('paired client background safety', () => {
     const showInactive = vi.fn()
     const focus = vi.fn()
     const getAllWindows = vi.fn(() => [{ isVisible: () => false, showInactive, focus }])
+
     const evaluate = vi.fn(async (callback) =>
       callback({
         app: { focus },
         BrowserWindow: { getAllWindows }
       })
     )
+
     const client = {
       app: { evaluate },
       page: { waitForFunction: vi.fn() }
     } as unknown as RevealablePairedClient
+
     return { client, showInactive, focus, getAllWindows }
   }
 

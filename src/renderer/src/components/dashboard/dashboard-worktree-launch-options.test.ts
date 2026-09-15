@@ -83,6 +83,7 @@ describe('buildDashboardWorktreeLaunchOptions', () => {
       executionHostId: 'local',
       workspaceKind: 'worktree'
     }
+
     const options = buildDashboardWorktreeLaunchOptions(
       state({ detectedAgentIds: ['claude', 'codex'] }),
       [],
@@ -132,6 +133,7 @@ describe('buildDashboardWorktreeLaunchOptions', () => {
 
   it('resolves folder workspace detection through its project host', () => {
     const worktreeId = folderWorkspaceKey('folder-1')
+
     const options = buildDashboardWorktreeLaunchOptions(
       state({
         folderWorkspaces: [

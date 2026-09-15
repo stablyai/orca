@@ -49,6 +49,7 @@ describe('Last-status persistence', () => {
     mkdirSync(join(userDataPath, 'agent-hooks'), { recursive: true })
     const receivedAt = recentTs()
     const stateStartedAt = recentTs(-1000)
+
     const fileContents = {
       version: 2,
       entries: {
@@ -66,6 +67,7 @@ describe('Last-status persistence', () => {
         }
       }
     }
+
     writeFileSync(lastStatusPath(), JSON.stringify(fileContents), 'utf8')
 
     const server = new AgentHookServer()
@@ -73,6 +75,7 @@ describe('Last-status persistence', () => {
       env: 'production',
       userDataPath
     })
+
     try {
       const listener = vi.fn()
       server.setListener(listener)
@@ -134,6 +137,7 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       const listener = vi.fn()
       server.setListener(listener)
@@ -178,6 +182,7 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       const restored = server.getStatusSnapshot()[0]
       expect(restored).toMatchObject({ state: 'working', restoredUnconfirmed: true })
@@ -210,6 +215,7 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       const statusListener = vi.fn()
       server.subscribeEnrichedStatus(statusListener)
@@ -277,6 +283,7 @@ describe('Last-status persistence', () => {
 
     const thirdServer = new AgentHookServer()
     await thirdServer.start({ env: 'production', userDataPath })
+
     try {
       expect(thirdServer._getStateForTests().claudeSubagentRosterByPaneKey.size).toBe(0)
 
@@ -305,6 +312,7 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       await postHookEvent(server, buildBody({ hook_event_name: 'Stop' }))
 
@@ -335,6 +343,7 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       const restored = server.getStatusSnapshot()[0]
       expect(restored).toMatchObject({ state: 'working', restoredUnconfirmed: true })
@@ -366,6 +375,7 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       await postHookEvent(
         server,
@@ -425,6 +435,7 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       const restored = server.getStatusSnapshot()[0]
       expect(restored).toMatchObject({

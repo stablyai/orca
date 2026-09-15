@@ -23,9 +23,11 @@ export function bestPaletteQualityRank(
   values: readonly (PaletteResultQualityClass | null | undefined)[]
 ): number {
   let best = NO_PALETTE_QUALITY_RANK
+
   for (const value of values) {
     best = Math.min(best, paletteQualityRank(value))
   }
+
   return best
 }
 
@@ -57,9 +59,11 @@ export function comparePaletteRankedItems(a: PaletteRankedItem, b: PaletteRanked
   } else if (a.rank !== b.rank) {
     return a.rank ? -1 : 1
   }
+
   if (a.order !== b.order) {
     return a.order - b.order
   }
+
   return a.identity < b.identity ? -1 : a.identity > b.identity ? 1 : 0
 }
 
@@ -83,5 +87,6 @@ export function shouldIntentSectionLeadPaletteSections(args: {
   if (args.bestEntityQualityRank <= paletteQualityRank('exact-visible')) {
     return false
   }
+
   return args.bestIntentQualityRank < args.bestEntityQualityRank
 }

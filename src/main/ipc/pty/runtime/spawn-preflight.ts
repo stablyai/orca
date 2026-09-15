@@ -47,14 +47,18 @@ export async function prepareRuntimePtySpawn(
   ctx: RuntimePtySpawnState
 ): Promise<PtySpawnResult | null> {
   const args = ctx.args
+
   if (!ctx.preAdoptedStablePane) {
     const pathUsable = ctx.deps.assertFolderWorkspacePtyPathUsable(args.worktreeId)
+
     if (pathUsable) {
       await pathUsable
     }
   }
+
   ctx.cwd = ctx.deps.resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
   ctx.provider = getProvider(args.connectionId)
+
   const freshSpawnRecovery = ctx.preAdoptedStablePane
     ? undefined
     : recoverFreshSpawnProviderRouting(
@@ -63,14 +67,18 @@ export async function prepareRuntimePtySpawn(
         args.sessionId,
         args.isNewSession
       )
+
   if (freshSpawnRecovery) {
     await freshSpawnRecovery
   }
+
   ctx.isClaudeLaunch =
     !ctx.preAdoptedStablePane && !args.connectionId && isClaudeLaunchCommand(args.command)
+
   if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
     throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }
+
   // Why: runtime-created terminals carry no renderer-computed projectRuntime; resolve from worktreeId to honor the project's Windows runtime.
   ctx.terminalRuntimeOptions =
     process.platform === 'win32' && !args.connectionId
@@ -116,6 +124,7 @@ export async function prepareRuntimePtySpawn(
     ctx.cwd,
     ctx.expectedWslDistro
   )
+
   const codexResumePreparation = ctx.preAdoptedStablePane
     ? null
     : ctx.deps.prepareCodexResumeHome({
@@ -126,9 +135,11 @@ export async function prepareRuntimePtySpawn(
         launchEnv: args.env,
         workspacePath: ctx.cwd
       })
+
   const codexResumeLaunch = codexResumePreparation
     ? await ctx.deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)
     : ctx.deps.noCodexResumeLaunch(ctx.preAdoptedStablePane ? undefined : args.command)
+
   const codexResumeHome = codexResumeLaunch.codexResumeHome
   // Why: the drop still applies here, but this controller's result has no field for
   // notifyResumeUnavailable — runtime/relay panes start fresh without the notice.
@@ -137,14 +148,17 @@ export async function prepareRuntimePtySpawn(
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
       ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
       : null
+
   if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
     throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }
+
   if (ctx.claudeAuth?.stripAuthEnv && hasClaudeAuthEnvConflict(args.env)) {
     throw new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
   }
 
   ctx.shouldPersistHostSessionBinding = args.persistHostSessionBinding === true
+
   if (ctx.shouldPersistHostSessionBinding) {
     if (
       !ctx.deps.store ||
@@ -156,6 +170,7 @@ export async function prepareRuntimePtySpawn(
     ) {
       throw new Error('Cannot persist runtime PTY binding without worktreeId, tabId, and leafId')
     }
+
     ctx.hostSessionBinding = {
       store: ctx.deps.store,
       worktreeId: args.worktreeId,
@@ -164,20 +179,24 @@ export async function prepareRuntimePtySpawn(
       ...(args.expectedSourceBinding ? { expectedSourceBinding: args.expectedSourceBinding } : {})
     }
   }
+
   const sshScopedEnv = stripRemotePaneEnvWhenHooksDisabled(args.connectionId, args.env)
   ctx.env = ctx.claudeAuth ? { ...sshScopedEnv, ...ctx.claudeAuth.envPatch } : sshScopedEnv
   ctx.requestedAgentTeamsPath = ctx.env?.ORCA_AGENT_TEAMS_TEAM_ID
     ? ctx.env[resolvePathEnvKey(ctx.env, process.platform)]
     : undefined
   ctx.env = ctx.deps.stripSequencedStartupResumeArgv(ctx.env, codexResumeLaunch)
+
   if (args.preAllocatedHandle) {
     ctx.env = { ...ctx.env, ORCA_TERMINAL_HANDLE: args.preAllocatedHandle }
   }
+
   const selectLaunchCodexHome = async (): Promise<string | null> =>
     (await ctx.deps.getSelectedCodexHomePath?.(ctx.codexSelectionTarget, ctx.env, {
       workspacePath: ctx.cwd,
       launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined
     })) ?? null
+
   ctx.selectedCodexHomePath =
     !ctx.preAdoptedStablePane && !args.connectionId
       ? getCompatibleSelectedCodexHomePath(
@@ -192,6 +211,7 @@ export async function prepareRuntimePtySpawn(
             : await selectLaunchCodexHome()
         )
       : null
+
   if (
     !ctx.preAdoptedStablePane &&
     args.launchAgent === 'codex' &&
@@ -220,11 +240,14 @@ export async function prepareRuntimePtySpawn(
           })) ?? null
         )
     })
+
     ctx.selectedCodexHomePath = resolution instanceof Promise ? await resolution : resolution
   }
+
   if (args.launchAgent === 'codex' && ctx.selectedCodexHomePath) {
     await ensureCodexStateDbBackfillRecoveryStarted(ctx.selectedCodexHomePath)
   }
+
   ctx.codexResumeHomeSelected = Boolean(
     codexResumeHome && codexHomePathsEqual(ctx.selectedCodexHomePath, codexResumeHome.codexHomePath)
   )
@@ -241,10 +264,12 @@ export async function prepareRuntimePtySpawn(
       skipCodexHomeEnv: ctx.skipCodexHomeEnv,
       settings: ptySettings
     })
+
   if (ctx.isDaemonHostSpawn && ctx.sessionId && !ctx.preAdoptedStablePane) {
     if (!isSafePtySessionId(ctx.sessionId, getAppEnvironment().getPath('userData'))) {
       throw new Error('Invalid PTY session id')
     }
+
     try {
       ctx.env = buildPtyHostEnv(ctx.sessionId, ctx.env ?? {}, {
         isPackaged: getAppEnvironment().isPackaged(),
@@ -275,6 +300,7 @@ export async function prepareRuntimePtySpawn(
       if (ctx.requestedSessionId === undefined) {
         clearProviderPtyState(ctx.sessionId)
       }
+
       throw error
     }
   }

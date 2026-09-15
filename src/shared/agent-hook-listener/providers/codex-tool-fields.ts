@@ -18,10 +18,12 @@ export function extractCodexToolFields(
   ) {
     const toolName = readString(hookPayload, 'tool_name') ?? readString(hookPayload, 'name')
     const rawInput = hookPayload.tool_input ?? hookPayload.input ?? hookPayload.arguments
+
     const toolInput =
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.input) ??
       deriveToolInputPreview(toolName, hookPayload.arguments)
+
     return toolUpdate(
       {
         toolName,
@@ -31,11 +33,14 @@ export function extractCodexToolFields(
       { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'input', 'arguments']) }
     )
   }
+
   if (eventName === 'Stop') {
     const message = readString(hookPayload, 'last_assistant_message')
+
     if (message) {
       return { lastAssistantMessage: message }
     }
   }
+
   return {}
 }

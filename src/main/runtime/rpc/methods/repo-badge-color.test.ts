@@ -18,6 +18,7 @@ describe('repo badge color RPC updates', () => {
         badgeColor: '#abcdef'
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
 
     const response = await dispatcher.dispatch(

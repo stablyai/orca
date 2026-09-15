@@ -23,46 +23,62 @@ export function handleTerminalBinaryFrame(
   options: TerminalBinaryFrameOptions
 ): void {
   const frame = decodeTerminalStreamFrame(bytes)
+
   if (!frame) {
     return
   }
+
   const listener = options.getListener(frame.streamId)
+
   if (!listener) {
     return
   }
+
   if (frame.opcode === TerminalStreamOpcode.Output) {
     listener({
       type: 'data',
       streamId: frame.streamId,
       chunk: decodeTerminalStreamText(frame.payload)
     })
+
     return
   }
+
   if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {
     const meta = decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
+
     if (!meta) {
       return
     }
+
     options.terminalSnapshots.set(frame.streamId, {
       streamId: frame.streamId,
       meta,
       chunks: []
     })
+
     return
   }
+
   if (frame.opcode === TerminalStreamOpcode.SnapshotChunk) {
     const snapshot = options.terminalSnapshots.get(frame.streamId)
+
     if (!snapshot) {
       return
     }
+
     snapshot.chunks.push(decodeTerminalStreamText(frame.payload))
+
     return
   }
+
   if (frame.opcode === TerminalStreamOpcode.SnapshotEnd) {
     const snapshot = options.terminalSnapshots.get(frame.streamId)
+
     if (!snapshot) {
       return
     }
+
     options.terminalSnapshots.delete(frame.streamId)
     const kind = snapshot.meta.kind === 'resized' ? 'resized' : 'scrollback'
     listener({
@@ -71,32 +87,42 @@ export function handleTerminalBinaryFrame(
       streamId: frame.streamId,
       serialized: snapshot.chunks.join('')
     })
+
     return
   }
+
   if (frame.opcode === TerminalStreamOpcode.Resized) {
     const meta = decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
+
     if (!meta) {
       return
     }
+
     listener({
       ...meta,
       type: 'resized',
       streamId: frame.streamId
     })
+
     return
   }
+
   if (frame.opcode === TerminalStreamOpcode.Metadata) {
     const meta = decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
+
     if (!meta) {
       return
     }
+
     listener({
       ...meta,
       type: 'metadata',
       streamId: frame.streamId
     })
+
     return
   }
+
   if (frame.opcode === TerminalStreamOpcode.Error) {
     listener({
       type: 'error',

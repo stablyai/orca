@@ -32,12 +32,15 @@ export function projectJournalBatch(input: {
     input.rows.map((row) => row.seq),
     input.afterSequence + 1
   )
+
   if (gap) {
     return { ok: false, reset: 'journal_gap' }
   }
+
   const aliases = submissionAliases(input.snapshot.submissions)
   const touchedItemIds = new Set<string>()
   const touchedClientMessageIds = new Set<string>()
+
   for (const row of input.rows) {
     if (row.kind === 'lifecycle-batch') {
       for (const mutation of row.mutations) {
@@ -47,14 +50,17 @@ export function projectJournalBatch(input: {
             mutation.itemId
         )
       }
+
       continue
     }
+
     if (row.kind === 'item' || row.kind === 'tombstone') {
       touchedItemIds.add(
         input.canonicalItemId?.(row.itemId) ?? aliases.get(row.itemId) ?? row.itemId
       )
       continue
     }
+
     if (row.kind === 'submission' || row.kind === 'dispatch') {
       touchedClientMessageIds.add(row.clientMessageId)
       touchedItemIds.add(agentJournalSubmissionKey(row.clientMessageId))
@@ -62,10 +68,12 @@ export function projectJournalBatch(input: {
   }
 
   const live = liveItemsById(input.snapshot.items)
+
   const items = [...touchedItemIds]
     .map((itemId) => live.get(itemId))
     .filter((item) => item !== undefined)
     .sort((a, b) => a.sequence - b.sequence)
+
   return {
     ok: true,
     batch: {
@@ -86,6 +94,7 @@ const liveItemsByTimeline = new WeakMap<
   readonly AgentJournalRenderItem[],
   ReadonlyMap<string, AgentJournalRenderItem>
 >()
+
 const aliasesBySubmissions = new WeakMap<
   readonly AgentJournalSubmission[],
   ReadonlyMap<string, string>
@@ -95,11 +104,14 @@ function liveItemsById(
   items: readonly AgentJournalRenderItem[]
 ): ReadonlyMap<string, AgentJournalRenderItem> {
   const cached = liveItemsByTimeline.get(items)
+
   if (cached) {
     return cached
   }
+
   const live = new Map(items.map((item) => [item.itemId, item]))
   liveItemsByTimeline.set(items, live)
+
   return live
 }
 
@@ -113,15 +125,20 @@ function submissionAliases(
   submissions: readonly AgentJournalSubmission[]
 ): ReadonlyMap<string, string> {
   const cached = aliasesBySubmissions.get(submissions)
+
   if (cached) {
     return cached
   }
+
   const aliases = new Map<string, string>()
+
   for (const submission of submissions) {
     if (submission.dispatchState === 'accepted' && submission.providerItemId) {
       aliases.set(submission.providerItemId, agentJournalSubmissionKey(submission.clientMessageId))
     }
   }
+
   aliasesBySubmissions.set(submissions, aliases)
+
   return aliases
 }

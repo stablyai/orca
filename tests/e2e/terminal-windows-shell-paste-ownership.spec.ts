@@ -25,12 +25,14 @@ function hasWslNodeRuntime(): boolean {
   if (process.platform !== 'win32') {
     return false
   }
+
   try {
     execFileSync('wsl.exe', ['--exec', 'sh', '-lc', 'command -v node'], {
       encoding: 'utf8',
       stdio: 'pipe',
       timeout: 15_000
     })
+
     return true
   } catch {
     return false
@@ -40,9 +42,11 @@ function hasWslNodeRuntime(): boolean {
 function toDefaultWslPath(windowsPath: string): string {
   const normalized = windowsPath.replace(/\\/g, '/')
   const driveMatch = normalized.match(/^([A-Za-z]):\/?(.*)$/)
+
   if (!driveMatch) {
     throw new Error(`Cannot convert Windows path to default WSL path: ${windowsPath}`)
   }
+
   return `/mnt/${driveMatch[1].toLowerCase()}/${driveMatch[2]}`
 }
 
@@ -77,10 +81,12 @@ process.stdin.on('data', (chunk) => {
 function countOccurrences(value: string, needle: string): number {
   let count = 0
   let index = value.indexOf(needle)
+
   while (index !== -1) {
     count += 1
     index = value.indexOf(needle, index + needle.length)
   }
+
   return count
 }
 
@@ -90,11 +96,14 @@ async function createWindowsDefaultShellTerminalTab(
 ): Promise<string> {
   const tabId = await page.evaluate(async (selectedShell) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const state = store.getState()
     const worktreeId = state.activeWorktreeId
+
     if (!worktreeId) {
       throw new Error('No active worktree')
     }
@@ -103,6 +112,7 @@ async function createWindowsDefaultShellTerminalTab(
     const terminal = store.getState().createTab(worktreeId)
     store.getState().setActiveTab(terminal.id)
     store.getState().setActiveTabType('terminal')
+
     return terminal.id
   }, shell)
 
@@ -116,24 +126,32 @@ async function createWindowsDefaultShellTerminalTab(
 async function configureActiveProjectWslRuntime(page: Page): Promise<string | null> {
   return page.evaluate(async () => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const [wslDistro] = await window.api.wsl.listDistros()
+
     if (!wslDistro) {
       return null
     }
+
     const state = store.getState()
     const worktreeId = state.activeWorktreeId
+
     if (!worktreeId) {
       throw new Error('No active worktree')
     }
+
     const activeWorktree = Object.values(state.worktreesByRepo)
       .flat()
       .find((worktree) => worktree.id === worktreeId)
+
     const activeProject = state.projects.find((project) =>
       activeWorktree ? project.sourceRepoIds.includes(activeWorktree.repoId) : false
     )
+
     if (!activeProject) {
       throw new Error('No active project')
     }
@@ -143,6 +161,7 @@ async function configureActiveProjectWslRuntime(page: Page): Promise<string | nu
     await state.updateProject(activeProject.id, {
       localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
     })
+
     return wslDistro
   })
 }
@@ -153,11 +172,14 @@ async function createWindowsProjectRuntimeTerminalTab(
 ): Promise<string> {
   const tabId = await page.evaluate(async () => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const state = store.getState()
     const worktreeId = state.activeWorktreeId
+
     if (!worktreeId) {
       throw new Error('No active worktree')
     }
@@ -165,6 +187,7 @@ async function createWindowsProjectRuntimeTerminalTab(
     const terminal = store.getState().createTab(worktreeId)
     store.getState().setActiveTab(terminal.id)
     store.getState().setActiveTabType('terminal')
+
     return terminal.id
   })
 
@@ -181,9 +204,11 @@ async function updateWindowsDefaultShellSetting(
 ): Promise<void> {
   await page.evaluate(async (selectedShell) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     await store.getState().updateSettings({ terminalWindowsShell: selectedShell })
   }, shell)
 }
@@ -212,6 +237,7 @@ test.describe('Windows terminal shell paste ownership', () => {
     const runId = randomUUID()
     const sentinel = `ORCA_E2E_POWERSHELL_DONE_${runId}`
     const powershellEscape = '`'
+
     const payload = [
       `ORCA_E2E_POWERSHELL_PASTE_${runId}`,
       `PowerShell metacharacters: ${powershellEscape} $ " ' ; | & < > @ { } ( )`,
@@ -220,6 +246,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       'Unicode: café 你好 مرحبا 😀',
       `mixed-newline-before\r\nlf-line\ncrlf-line\r\n${sentinel}`
     ].join('\n')
+
     const scriptPath = path.join(testRepoPath, `.orca-paste-powershell-shell-${runId}.mjs`)
     const expectedText = payload.replace(/\r?\n/g, '\r')
     writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, expectedText))
@@ -243,6 +270,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })
@@ -264,6 +292,7 @@ test.describe('Windows terminal shell paste ownership', () => {
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const runId = randomUUID()
     const sentinel = `ORCA_E2E_CMD_DONE_${runId}`
+
     const payload = [
       `ORCA_E2E_CMD_PASTE_${runId}`,
       'cmd metacharacters: %PATH% !PROMPT! ^ & | < >',
@@ -271,6 +300,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       'PowerShell metacharacters: ` $ " \' ; @ { } ( )',
       `mixed-newline-before\r\nlf-line\ncrlf-line\r\n${sentinel}`
     ].join('\n')
+
     const scriptPath = path.join(testRepoPath, `.orca-paste-cmd-shell-${runId}.mjs`)
     const expectedText = payload.replace(/\r?\n/g, '\r')
     writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, expectedText))
@@ -294,6 +324,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })
@@ -316,6 +347,7 @@ test.describe('Windows terminal shell paste ownership', () => {
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const runId = randomUUID()
     const sentinel = `ORCA_E2E_GIT_BASH_DONE_${runId}`
+
     const payload = [
       `ORCA_E2E_GIT_BASH_PASTE_${runId}`,
       'POSIX shell metacharacters: $ ` " \' ; | & < > * ? [ ] ( )',
@@ -323,6 +355,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       'POSIX path with spaces: /home/user/my project/file.txt',
       `mixed-newline-before\r\nlf-line\ncrlf-line\r\n${sentinel}`
     ].join('\n')
+
     const scriptPath = path.join(testRepoPath, `.orca-paste-git-bash-shell-${runId}.mjs`)
     const expectedText = payload.replace(/\r?\n/g, '\r')
     writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, expectedText))
@@ -346,6 +379,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })
@@ -370,6 +404,7 @@ test.describe('Windows terminal shell paste ownership', () => {
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const runId = randomUUID()
     const sentinel = `ORCA_E2E_WSL_DONE_${runId}`
+
     const payload = [
       `ORCA_E2E_WSL_PASTE_${runId}`,
       'POSIX shell metacharacters: $ ` " \' ; | & < > * ? [ ] ( )',
@@ -378,6 +413,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       'Unicode: café 你好 مرحبا 😀',
       `mixed-newline-before\r\nlf-line\ncrlf-line\r\n${sentinel}`
     ].join('\n')
+
     const scriptPath = path.join(testRepoPath, `.orca-paste-wsl-shell-${runId}.mjs`)
     const expectedText = payload.replace(/\r?\n/g, '\r')
     writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, expectedText))
@@ -405,6 +441,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })
@@ -429,6 +466,7 @@ test.describe('Windows terminal shell paste ownership', () => {
     const ptyId = await waitForActivePanePtyId(orcaPage)
     const runId = randomUUID()
     const sentinel = `ORCA_E2E_WSL_RETENTION_DONE_${runId}`
+
     const payload = [
       `ORCA_E2E_WSL_RETENTION_PASTE_${runId}`,
       'Default shell changed to cmd.exe after this WSL PTY was created.',
@@ -436,6 +474,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       'Windows path remains literal text: C:\\Users\\Name\\My Project\\file.txt',
       `mixed-newline-before\r\nlf-line\ncrlf-line\r\n${sentinel}`
     ].join('\n')
+
     const scriptPath = path.join(testRepoPath, `.orca-paste-wsl-retention-${runId}.mjs`)
     const expectedText = payload.replace(/\r?\n/g, '\r')
     writeFileSync(scriptPath, pasteCollectScript(runId, sentinel, expectedText))
@@ -470,6 +509,7 @@ test.describe('Windows terminal shell paste ownership', () => {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })

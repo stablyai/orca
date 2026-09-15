@@ -76,6 +76,7 @@ describe('workspaceSessionStateSchema field coverage', () => {
         (workspaceSessionStateSchema as unknown as z.ZodObject<Record<string, z.ZodTypeAny>>).shape
       )
     )
+
     const missing = Object.keys(PERSISTED_WORKSPACE_SESSION_FIELDS).filter(
       (field) => !schemaKeys.has(field)
     )

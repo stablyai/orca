@@ -10,6 +10,7 @@ import { buildSearchableWorkspaceTabs, searchWorkspaceTabs } from './workspace-t
 import { buildOpenTabSearchEntries } from '../components/tab-bar/open-tab-search-entries'
 
 const SHARED_WORKTREE_ID = 'repo-shared::/workspace'
+
 const RUNTIME_HOST_ID = 'runtime:paired-host'
 
 function makeWorktree(overrides: Partial<Worktree>): Worktree {
@@ -100,6 +101,7 @@ describe('Cmd-J host-qualified candidate ownership', () => {
     const [local, remote] = pairedWorktrees()
     const localWorkspace = makeBrowserWorkspace('local-browser')
     const remoteWorkspace = makeBrowserWorkspace('remote-browser')
+
     const entries = buildSearchableBrowserPages({
       worktrees: [local, remote],
       repoMap: new Map(),
@@ -236,6 +238,7 @@ describe('Cmd-J host-qualified candidate ownership', () => {
         createdAt: 1
       }
     ]
+
     const entries = buildSearchableWorkspaceTabs({
       worktrees: pairedWorktrees(),
       repoMap: new Map(),
@@ -347,6 +350,7 @@ describe('Cmd-J host-qualified candidate ownership', () => {
 
   it('retains one unambiguous legacy tab without guessing between sibling hosts', () => {
     const legacyWorktree = makeWorktree({ hostId: undefined })
+
     const entries = buildSearchableSimulatorTabs({
       worktrees: [legacyWorktree],
       repoMap: new Map(),
@@ -368,6 +372,7 @@ describe('Cmd-J host-qualified candidate ownership', () => {
   it('keeps hidden same-id hosts in the legacy ownership ambiguity set', () => {
     const ownershipWorktrees = pairedWorktrees()
     const browserWorkspace = makeBrowserWorkspace('legacy-browser')
+
     const unifiedTabsByWorktree = {
       [SHARED_WORKTREE_ID]: [
         makeTab({
@@ -380,6 +385,7 @@ describe('Cmd-J host-qualified candidate ownership', () => {
         makeTab({ id: 'legacy-terminal', entityId: 'legacy-terminal', executionHostId: undefined })
       ]
     }
+
     const entries = buildOpenTabSearchEntries(
       {
         activeBrowserTabId: null,

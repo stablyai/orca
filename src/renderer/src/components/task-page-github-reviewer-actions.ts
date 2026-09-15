@@ -61,28 +61,36 @@ export function createTaskPageGitHubReviewerActions({
     if (!repo || submitting) {
       return
     }
+
     const logins = normalizeGitHubReviewerLogins(
       requestedLogins ?? parseGitHubReviewerInputLogins(reviewerInput),
       selectedReviewerLogins
     )
+
     if (logins.length === 0) {
       toast.error(translate('auto.components.TaskPage.d00571d9b1', 'Enter a reviewer'))
+
       return
     }
+
     if (localReviewRequests.length + logins.length > 15) {
       toast.error(
         translate('auto.components.TaskPage.969e26577c', 'You can request up to 15 reviewers')
       )
+
       return
     }
+
     // Why: pre-network optimistic update via coordinator; local display follows
     // item.reviewRequests once patchWorkItem + reconcile land.
     const optimistic = buildRequestedReviewUsers(logins, reviewerCandidates, localReviewRequests)
+
     const intent = {
       type: 'addReviewers' as const,
       logins,
       candidates: reviewerCandidates
     }
+
     if (
       workItemMutation.isIntentPending({
         item,
@@ -92,8 +100,10 @@ export function createTaskPageGitHubReviewerActions({
     ) {
       return
     }
+
     setLocalReviewRequests(optimistic)
     setSubmitting(true)
+
     try {
       const outcome = await workItemMutation.run({
         item,
@@ -103,8 +113,10 @@ export function createTaskPageGitHubReviewerActions({
         errorToast: translate('auto.components.TaskPage.dc67f69962', 'Failed to request reviewer'),
         mutate: async () => {
           const target = getActiveRuntimeTarget(sourceSettings)
+
           const runtimeRepoId =
             sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
+
           return target.kind === 'environment'
             ? callRuntimeRpc<{
                 ok: boolean
@@ -132,6 +144,7 @@ export function createTaskPageGitHubReviewerActions({
               })
         }
       })
+
       // Why: only clear the typed reviewer on success — a failed request rolls
       // back, so keep the user's input instead of forcing a retype.
       if (outcome === 'confirmed') {
@@ -146,17 +159,22 @@ export function createTaskPageGitHubReviewerActions({
     if (!repo || submitting) {
       return
     }
+
     const selected = new Set(localReviewRequests.map((reviewer) => reviewer.login.toLowerCase()))
+
     const logins = reviewersToRemove
       .map((reviewer) => reviewer.trim().replace(/^@/, ''))
       .filter((reviewer) => reviewer.length > 0 && selected.has(reviewer.toLowerCase()))
+
     if (logins.length === 0) {
       return
     }
+
     const intent = {
       type: 'removeReviewers' as const,
       logins
     }
+
     if (
       workItemMutation.isIntentPending({
         item,
@@ -166,11 +184,13 @@ export function createTaskPageGitHubReviewerActions({
     ) {
       return
     }
+
     const removed = new Set(logins.map((login) => login.toLowerCase()))
     setLocalReviewRequests((current) =>
       current.filter((reviewer) => !removed.has(reviewer.login.toLowerCase()))
     )
     setSubmitting(true)
+
     try {
       const outcome = await workItemMutation.run({
         item,
@@ -183,8 +203,10 @@ export function createTaskPageGitHubReviewerActions({
         errorToast: translate('auto.components.TaskPage.ed1daeb49a', 'Failed to remove reviewer'),
         mutate: async () => {
           const target = getActiveRuntimeTarget(sourceSettings)
+
           const runtimeRepoId =
             sourceContext?.provider === 'github' ? (sourceContext.repoId ?? repo.id) : repo.id
+
           return target.kind === 'environment'
             ? callRuntimeRpc<{
                 ok: boolean
@@ -212,6 +234,7 @@ export function createTaskPageGitHubReviewerActions({
               })
         }
       })
+
       if (outcome === 'confirmed') {
         setReviewerInput('')
       }
@@ -233,6 +256,7 @@ export function createTaskPageGitHubReviewerActions({
           logins: [reviewer.login],
           candidates: reviewerCandidates
         }
+
     if (
       workItemMutation.isIntentPending({
         item,
@@ -242,6 +266,7 @@ export function createTaskPageGitHubReviewerActions({
     ) {
       return
     }
+
     // Close the popover immediately for responsiveness; the GitHub request/remove runs in the background and toasts on completion.
     setOpen(false)
     setReviewerInput('')

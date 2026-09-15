@@ -7,7 +7,9 @@ import {
 } from './browser-host-client-page-adoption'
 
 const CURRENT_RUNTIME_ID = 'runtime-new'
+
 const PREDECESSOR_RUNTIME_ID = 'runtime-old'
+
 const HOST_CLIENT_ID = 'client-a'
 
 const page = (
@@ -91,6 +93,7 @@ describe('selectAdoptableClientHostedPages', () => {
     const adoptableA = page({ browserPageId: 'page-adoptable-a' })
     const adoptableB = page({ browserPageId: 'page-adoptable-b' })
     const tracked = page({ browserPageId: 'page-tracked' })
+
     const rejected = [
       page({ browserPageId: 'page-dead', state: 'outcomeUnknown' }),
       page({ browserPageId: 'page-no-workspace', workspaceId: undefined }),
@@ -209,6 +212,7 @@ describe('buildClientPageAdoptionIntents', () => {
 
     expect(assigned).toHaveLength(unsortedPages.length)
     expect(new Set(assigned).size).toBe(assigned.length)
+
     for (const generation of assigned) {
       expect(generation).toBeGreaterThan(highestReported)
     }

@@ -46,6 +46,7 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
 
     expect(summary).toEqual({ scannedFiles: 2, linkedFiles: 1 })
     expect(runWslProcessMock).toHaveBeenCalledTimes(1)
+
     const spec = runWslProcessMock.mock.calls[0]?.[0] as {
       distro: string
       loginPath: string
@@ -53,6 +54,7 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
       script: string
       timeoutMs: number
     }
+
     expect(spec.distro).toBe('Ubuntu')
     expect(spec.loginPath).toBe('none')
     expect(spec.shell).toBe('bash')
@@ -118,6 +120,7 @@ describe('syncWslCodexSessionsIntoManagedHome', () => {
 
   it('coalesces duplicate background bridges for the same WSL target', async () => {
     mockRunWslProcessSuccess()
+
     const target = {
       distro: 'Ubuntu',
       systemCodexHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex',
@@ -209,6 +212,7 @@ exec /bin/ln "$@"
 `
       )
       chmodSync(lnShimPath, 0o755)
+
       const shellCommand = buildWslCodexSessionBridgeShellCommand({
         systemSessionsRoot: sourceSessionsRoot,
         managedSessionsRoot
@@ -243,6 +247,7 @@ exec /bin/ln "$@"
       mkdirSync(join(targetPath, '..'), { recursive: true })
       writeFileSync(sourcePath, '{"session":"retired"}\n{"event":"legacy"}\n', 'utf-8')
       writeFileSync(targetPath, '{"session":"retired"}\n', 'utf-8')
+
       const shellCommand = buildWslCodexSessionBridgeShellCommand({
         systemSessionsRoot: sourceSessionsRoot,
         managedSessionsRoot
@@ -270,6 +275,7 @@ exec /bin/ln "$@"
       mkdirSync(managedSessionsRoot, { recursive: true })
       writeFileSync(sourcePath, '{"session":"retired"}\n', 'utf-8')
       writeFileSync(blockingPath, 'not-a-directory\n', 'utf-8')
+
       const shellCommand = buildWslCodexSessionBridgeShellCommand({
         systemSessionsRoot: sourceSessionsRoot,
         managedSessionsRoot

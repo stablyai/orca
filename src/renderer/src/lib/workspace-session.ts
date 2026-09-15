@@ -109,6 +109,7 @@ type _MissingSessionField = Exclude<
   keyof WorkspaceSessionSnapshot,
   (typeof SESSION_RELEVANT_FIELDS)[number]
 >
+
 void (true satisfies [_MissingSessionField] extends [never] ? true : never)
 
 /** Build the editor-file portion of the workspace session for persistence.
@@ -129,6 +130,7 @@ export function buildEditorSessionData(
   const editFiles = openFiles.filter((f) => f.mode === 'edit')
   const byWorktree: Record<string, PersistedOpenFile[]> = {}
   const editFileIdsByWorktree: Record<string, Set<string>> = {}
+
   for (const f of editFiles) {
     const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
     // Why: never persist a dirty draft for a read-only tab — restoring one would reintroduce writable/hot-exit state for an agent transcript.
@@ -150,41 +152,51 @@ export function buildEditorSessionData(
         ? { lastKnownDiskSignature: f.lastKnownDiskSignature }
         : {})
     })
+
     const ids =
       editFileIdsByWorktree[f.worktreeId] ?? (editFileIdsByWorktree[f.worktreeId] = new Set())
+
     ids.add(f.id)
   }
 
   const activeFileEntries: [string, string][] = []
+
   for (const [worktreeId, fileId] of Object.entries(activeFileIdByWorktree)) {
     if (!fileId) {
       continue
     }
+
     if (editFileIdsByWorktree[worktreeId]?.has(fileId)) {
       activeFileEntries.push([worktreeId, fileId])
     }
   }
+
   const persistedActiveFileIdByWorktree = Object.fromEntries(activeFileEntries) as Record<
     string,
     string
   >
 
   const activeTabTypeEntries: [string, WorkspaceVisibleTabType][] = []
+
   for (const [worktreeId, tabType] of Object.entries(activeTabTypeByWorktree)) {
     if (tabType !== 'editor') {
       activeTabTypeEntries.push([worktreeId, tabType])
       continue
     }
+
     // Why: only keep the "editor" marker when it points at a restored file, else startup has no real editor tab to select.
     if (persistedActiveFileIdByWorktree[worktreeId]) {
       activeTabTypeEntries.push([worktreeId, tabType])
     }
   }
+
   const persistedActiveTabTypeByWorktree = Object.fromEntries(activeTabTypeEntries) as Record<
     string,
     WorkspaceVisibleTabType
   >
+
   const allEditFileIds = new Set(Object.values(editFileIdsByWorktree).flatMap((ids) => [...ids]))
+
   // Why: preserve the value so per-file hide overrides survive restart (map only carries `false`; visible is the default).
   const persistedMarkdownFrontmatterVisible = Object.fromEntries(
     Object.entries(markdownFrontmatterVisible ?? {}).filter(([fileId]) =>
@@ -212,6 +224,7 @@ export function buildSanitizedTabsByWorktree(
         const { pendingActivationSpawn: _unused, recovery: _recovery, ...rest } = tab
         void _unused
         void _recovery
+
         return rest
       })
     ])
@@ -237,8 +250,10 @@ export function buildTerminalSessionData(
   // ownership for the orphan sweep (terminal-orphan-helpers) and for retirement planning.
   const pendingReconnect = snapshot.pendingReconnectPtyIdByTabId ?? {}
   const deferredSshSessions = snapshot.deferredSshSessionIdsByTabId ?? {}
+
   const restoredSessionId = (tabId: string): string | undefined =>
     lastKnown[tabId] || pendingReconnect[tabId] || deferredSshSessions[tabId]
+
   const hasReconnectableSession = (tab: { id: string; ptyId: string | null }): boolean =>
     hasLivePty(tab.id) || (!tab.ptyId && Boolean(restoredSessionId(tab.id)))
 
@@ -251,22 +266,28 @@ export function buildTerminalSessionData(
       .flat()
       .map((worktree) => [worktree.id, worktree])
   )
+
   const repoById = new Map(snapshot.repos.map((repo) => [repo.id, repo]))
 
   // Why: derive here to avoid a fragile sync IPC round-trip during beforeunload (Chromium can drop it under shutdown pressure).
   // Why: pre-indexed above so large workspaces don't rescan every repo/worktree per terminal tab while the renderer is quitting.
   const remoteSessionIdsByTabId: Record<string, string> = {}
+
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     const worktree = worktreeById.get(worktreeId)
     const repo = worktree ? repoById.get(worktree.repoId) : null
+
     if (!repo?.connectionId) {
       continue
     }
+
     for (const tab of tabs) {
       if (!hasReconnectableSession(tab)) {
         continue
       }
+
       const sessionId = tab.ptyId || restoredSessionId(tab.id)
+
       if (sessionId) {
         remoteSessionIdsByTabId[tab.id] = sessionId
       }

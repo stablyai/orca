@@ -9,6 +9,7 @@ const LOG_EXCERPT_ERROR_LINE_PATTERN =
 function getLogExcerptScrollTop(pre: HTMLPreElement, logTail: string): number {
   const lines = logTail.split(/\r?\n/)
   let targetLineIndex = lines.length - 1
+
   for (let index = 0; index < lines.length; index += 1) {
     if (LOG_EXCERPT_ERROR_LINE_PATTERN.test(lines[index] ?? '')) {
       targetLineIndex = index
@@ -19,9 +20,11 @@ function getLogExcerptScrollTop(pre: HTMLPreElement, logTail: string): number {
   const approximateLineHeight = Number.isFinite(lineHeight) ? lineHeight : 16
   const targetScroll = targetLineIndex * approximateLineHeight
   const maxScroll = Math.max(0, pre.scrollHeight - pre.clientHeight)
+
   if (targetLineIndex < lines.length - 1) {
     return Math.min(maxScroll, Math.max(0, targetScroll - pre.clientHeight / 3))
   }
+
   return maxScroll
 }
 
@@ -48,6 +51,7 @@ function CopyButton({
   const setCopyButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
       isMountedRef.current = node !== null
+
       if (node === null) {
         clearCopiedResetTimer()
       }
@@ -62,6 +66,7 @@ function CopyButton({
         if (!isMountedRef.current) {
           return
         }
+
         clearCopiedResetTimer()
         setCopied(true)
         copiedResetTimerRef.current = window.setTimeout(() => {
@@ -96,9 +101,11 @@ export function CheckJobLogTail({
 
   useEffect(() => {
     const logPre = logPreRef.current
+
     if (!logPre) {
       return
     }
+
     // Why: noisy install/cache output buries failures at the top of the excerpt;
     // jump to the last error marker when present, otherwise the log end.
     logPre.scrollTop = getLogExcerptScrollTop(logPre, logTail)

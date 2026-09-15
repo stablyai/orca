@@ -35,6 +35,7 @@ export function readKeybindingFile(
   const keybindingPlatform = getKeybindingPlatform(platform)
   const diagnostics: KeybindingFileDiagnostic[] = []
   const readResult = readJsonDocument(path)
+
   if (!readResult.document) {
     return {
       path,
@@ -53,15 +54,19 @@ export function readKeybindingFile(
   }
 
   const document = readResult.document
+
   const commonOverrides =
     document.keybindings === undefined
       ? parseBindingSection(document, 'root', diagnostics, { skipRootKeys: true })
       : parseBindingSection(document.keybindings, 'keybindings', diagnostics)
+
   const platformOverrides = parsePlatformOverrides(document, diagnostics)
+
   const mergedOverrides = {
     ...commonOverrides,
     ...platformOverrides[keybindingPlatform]
   }
+
   const overrides = removeConflictingOverrides(keybindingPlatform, mergedOverrides, diagnostics)
 
   return {
@@ -79,6 +84,7 @@ export function ensureKeybindingFile(path: string): void {
   if (existsSync(path)) {
     return
   }
+
   writeJsonDocument(path, createEmptyDocument())
 }
 
@@ -90,6 +96,7 @@ export function migrateLegacyKeybindings(
   if (existsSync(path) || !legacyOverrides || Object.keys(legacyOverrides).length === 0) {
     return
   }
+
   const keybindingPlatform = getKeybindingPlatform(platform)
   const document = createEmptyDocument()
   document.platforms = {
@@ -124,6 +131,7 @@ export function seedLegacyTabSwitchBindings(
   const actionIds = Object.keys(legacyBindings) as KeybindingActionId[]
   const current = readKeybindingFile(path, platform)
   const activePlatformOverrides = current.platformOverrides[keybindingPlatform] ?? {}
+
   // Why: the new defaults can temporarily make a valid pre-swap customization
   // look conflicting and remove it from `current.overrides`. Inspect the parsed
   // common + active-platform sections directly so the seed never replaces it.
@@ -132,6 +140,7 @@ export function seedLegacyTabSwitchBindings(
       !Object.hasOwn(current.commonOverrides, actionId) &&
       !Object.hasOwn(activePlatformOverrides, actionId)
   )
+
   if (toSeed.length === 0) {
     return { seeded: false, snapshot: current }
   }
@@ -141,14 +150,18 @@ export function seedLegacyTabSwitchBindings(
   // and a fixed build retries the failed action without wiping the others.
   const pins: (readonly [KeybindingActionId, string[]])[] = []
   const failedActionIds: KeybindingActionId[] = []
+
   for (const actionId of toSeed) {
     const normalized = normalizeKeybindingArrayForAction(actionId, legacyBindings[actionId] ?? [])
+
     if (!Array.isArray(normalized)) {
       failedActionIds.push(actionId)
       continue
     }
+
     pins.push([actionId, normalized])
   }
+
   const snapshot =
     pins.length > 0
       ? writeActivePlatformSection(path, platform, current.commonOverrides, (activePlatform) => {
@@ -157,9 +170,11 @@ export function seedLegacyTabSwitchBindings(
           }
         })
       : current
+
   if (failedActionIds.length > 0) {
     throw new Error(`Could not normalize legacy binding for "${failedActionIds.join('", "')}".`)
   }
+
   return { seeded: pins.length > 0, snapshot }
 }
 
@@ -173,24 +188,31 @@ function writeActivePlatformSection(
 ): KeybindingFileSnapshot {
   const keybindingPlatform = getKeybindingPlatform(platform)
   const readResult = readJsonDocument(path)
+
   if (!readResult.document) {
     // Why: writes must never replace a user-owned file that could not be
     // parsed; callers surface the error (or retry the migration) after repair.
     throw new Error(readResult.error ?? 'Could not read keybindings file.')
   }
+
   const document = { ...readResult.document }
+
   const common = isJsonObject(document.keybindings)
     ? { ...document.keybindings }
     : { ...fallbackCommonOverrides }
+
   for (const rootKey of Object.keys(document)) {
     if (isKeybindingActionId(rootKey)) {
       delete document[rootKey]
     }
   }
+
   const platforms = isJsonObject(document.platforms) ? { ...document.platforms } : {}
+
   const activePlatform = isJsonObject(platforms[keybindingPlatform])
     ? { ...(platforms[keybindingPlatform] as JsonObject) }
     : {}
+
   mutateActivePlatform(activePlatform)
 
   document.version = FILE_VERSION
@@ -203,6 +225,7 @@ function writeActivePlatformSection(
     [keybindingPlatform]: activePlatform
   }
   writeJsonDocument(path, document)
+
   return readKeybindingFile(path, platform)
 }
 
@@ -215,19 +238,23 @@ export function writeKeybindingOverride(
   if (!isKeybindingActionId(actionId)) {
     throw new Error(`Unknown keybinding action "${actionId}".`)
   }
+
   const normalizedBindings = normalizeWriteBindingValue(actionId, bindings)
 
   const keybindingPlatform = getKeybindingPlatform(platform)
   const currentSnapshot = readKeybindingFile(path, platform)
   const candidateOverrides = { ...currentSnapshot.overrides }
+
   if (normalizedBindings === null) {
     delete candidateOverrides[actionId]
   } else {
     candidateOverrides[actionId] = normalizedBindings
   }
+
   const blockingConflict = findKeybindingConflicts(keybindingPlatform, candidateOverrides).find(
     (conflict) => conflict.actionIds.includes(actionId)
   )
+
   if (blockingConflict) {
     throw new Error(
       `${formatKeybindingList([blockingConflict.binding], keybindingPlatform)} conflicts with another shortcut.`

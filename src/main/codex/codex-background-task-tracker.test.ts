@@ -6,8 +6,11 @@ import {
 } from './codex-background-task-frames'
 
 const PRIMARY = 'parent-thread'
+
 const PARENT_TURN = 'parent-turn'
+
 const CHILD = 'child-thread'
+
 const CHILD_TURN = 'child-turn'
 
 function turn(
@@ -47,6 +50,7 @@ function runningChild(): CodexBackgroundTaskTracker {
   tracker.observe(turn('turn/started', PRIMARY, PARENT_TURN))
   tracker.observe(turn('turn/started', CHILD, CHILD_TURN))
   tracker.observe(activity())
+
   return tracker
 }
 
@@ -94,6 +98,7 @@ describe('readCodexBackgroundTaskFrame', () => {
 
   it('does not register the primary thread even when its activity path is missing', () => {
     const event = activity('interacted', PARENT_TURN, PRIMARY)
+
     ;(event.params as { item: { agentPath?: string } }).item.agentPath = undefined
     expect(readCodexBackgroundTaskFrame(event, PRIMARY)).toBeNull()
   })
@@ -110,11 +115,13 @@ describe('CodexBackgroundTaskTracker child execution ownership', () => {
 
   it('reports an executing child while the spawning turn is still open', () => {
     const tracker = runningChild()
+
     const running = {
       state: 'monitoring',
       supportsStopAll: false,
       tasks: [{ id: `codex-agent:${CHILD}`, kind: 'agent', description: 'count_a' }]
     }
+
     // The strip is a live view: a fan-out is reported while it runs, not once
     // the parent turn happens to end.
     expect(tracker.state).toEqual(running)
@@ -126,9 +133,11 @@ describe('CodexBackgroundTaskTracker child execution ownership', () => {
   it('never settles a child when a primary turn ends', () => {
     const tracker = runningChild()
     tracker.observe(turn('turn/completed', PRIMARY, PARENT_TURN))
+
     for (let index = 0; index < 300; index++) {
       expect(tracker.observe(turn('turn/completed', PRIMARY, `later-${index}`))).toBe(false)
     }
+
     expect(tracker.state?.tasks).toHaveLength(1)
   })
 
@@ -210,6 +219,7 @@ describe('CodexBackgroundTaskTracker child execution ownership', () => {
   it('bounds retained child history while allowing repeated completed runs', () => {
     const tracker = new CodexBackgroundTaskTracker(PRIMARY)
     tracker.observe(activity())
+
     for (let index = 0; index < 300; index++) {
       const id = `child-turn-${index}`
       tracker.observe(turn('turn/started', CHILD, id))

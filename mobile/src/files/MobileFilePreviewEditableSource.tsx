@@ -22,6 +22,7 @@ export function MobileFilePreviewEditableSource({
   const selectionTargetKey = lineColumn
     ? `${title}:${lineColumn.line}:${lineColumn.column ?? ''}`
     : ''
+
   const [selection, setSelection] = useState<{ start: number; end: number } | null>(null)
   const [revealedTargetKey, setRevealedTargetKey] = useState('')
 
@@ -30,6 +31,7 @@ export function MobileFilePreviewEditableSource({
     if (!lineColumn || !selectionTargetKey || revealedTargetKey === selectionTargetKey) {
       return
     }
+
     const offset = textOffsetForLineColumn(draftContent, lineColumn)
     const initialSelection = { start: offset, end: offset }
     setSelection(initialSelection)

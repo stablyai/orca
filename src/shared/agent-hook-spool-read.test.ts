@@ -17,6 +17,7 @@ afterEach(() => {
 function write(contents: string): string {
   const file = join(dir, 'spool.jsonl')
   writeFileSync(file, contents)
+
   return file
 }
 

@@ -46,12 +46,15 @@ test('keeps a client-hosted browser tab across a paired runtime restart', async 
   testRepoPath
 }, testInfo) => {
   test.setTimeout(420_000)
+
   const fixture = await startClientHostedMarkerFixture({
     created: 'restart-survivor',
     moved: 'moved-on'
   })
+
   const host = await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
   let client: PairedElectronClient | null = null
+
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
     client = await launchPairedElectronClient(host.offer, testInfo, CLIENT_NAME)
@@ -145,6 +148,7 @@ test('keeps a client-hosted browser tab across a paired runtime restart', async 
       await cleanupE2EDaemons(client.userDataDir).catch(() => undefined)
       await client.dispose()
     }
+
     await host.dispose()
     await fixture.close()
   }

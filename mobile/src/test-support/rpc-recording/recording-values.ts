@@ -14,30 +14,38 @@ export function captureValue(value: unknown): RecordedValue {
   if (value === undefined) {
     return { $rpc: 'undefined' }
   }
+
   if (value === null) {
     return { $rpc: 'null' }
   }
+
   if (Array.isArray(value)) {
     return value.map(captureValue)
   }
+
   if (typeof value === 'object') {
     if (![Object.prototype, null].includes(Object.getPrototypeOf(value))) {
       throw new Error('Observation requires an explicit projection for non-plain objects')
     }
+
     const entries = Object.keys(value)
       .sort()
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the plain-object branch above already narrowed the container.
       .map((key) => [key, captureValue((value as Record<string, unknown>)[key])] as const)
+
     return '$rpc' in value
       ? { $rpc: 'object', entries: entries.map(([key, entry]) => [key, entry]) }
       : Object.fromEntries(entries)
   }
+
   if (typeof value === 'number' && !Number.isFinite(value)) {
     return { $rpc: 'number', value: String(value) }
   }
+
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return value
   }
+
   throw new Error(`Unsupported observation: ${typeof value}`)
 }
 
@@ -54,6 +62,7 @@ export function captureError(error: unknown, depth = 0): RecordedValue {
   const detail = error as { code?: unknown; cause?: unknown }
   const code = error instanceof Error ? detail.code : undefined
   const cause = error instanceof Error && depth < 4 ? detail.cause : undefined
+
   return {
     category: error instanceof Error ? error.constructor.name : typeof error,
     message: error instanceof Error ? error.message : String(error),

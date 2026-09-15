@@ -23,6 +23,7 @@ export async function readCollection<T>(
     key,
     async () => {
       const entries = getClients(workspaceId)
+
       if (entries.length === 0) {
         return { items: [] }
       }
@@ -30,6 +31,7 @@ export async function readCollection<T>(
       const results = await Promise.all(
         entries.map(async (entry) => {
           await acquire()
+
           try {
             return await load(entry)
           } catch (error) {
@@ -38,9 +40,11 @@ export async function readCollection<T>(
             } else {
               console.warn('[linear] project/view read failed:', error)
             }
+
             if (shouldFailWholeRequest(workspaceId)) {
               throw error
             }
+
             return { items: [], errors: [workspaceError(entry, error)] }
           } finally {
             release()
@@ -67,5 +71,6 @@ export async function readConcreteCollection<T>(
   force = false
 ): Promise<LinearCollectionResult<T>> {
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
+
   return readCollection(key, concreteWorkspaceId, load, force)
 }

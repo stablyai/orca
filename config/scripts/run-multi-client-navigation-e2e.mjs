@@ -1,8 +1,11 @@
 import { spawnSync } from 'node:child_process'
 
 const rawExtraArgs = process.argv.slice(2)
+
 const extraArgs = rawExtraArgs[0] === '--' ? rawExtraArgs.slice(1) : rawExtraArgs
+
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+
 const env = {
   ...process.env,
   ORCA_E2E_WEB_CLIENT: '1'

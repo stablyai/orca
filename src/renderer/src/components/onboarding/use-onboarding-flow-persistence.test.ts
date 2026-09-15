@@ -52,7 +52,9 @@ function CloseWithProbe(props: { onReady: (closeWith: CloseWithCallback) => void
     startTimeRef: { current: probeStartTime },
     setError: vi.fn()
   })
+
   useEffect(() => props.onReady(closeWith), [closeWith, props])
+
   return null
 }
 
@@ -64,6 +66,7 @@ function renderCloseWithProbe(onReady: (closeWith: CloseWithCallback) => void): 
   document.body.appendChild(container)
   const root = createRoot(container)
   act(() => root.render(createElement(CloseWithProbe, { onReady })))
+
   return { root, container }
 }
 
@@ -84,6 +87,7 @@ describe('onboarding flow persistence', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null
@@ -140,6 +144,7 @@ describe('onboarding flow persistence', () => {
 
   it('schedules the star toast after every completed close path', async () => {
     let closeWith: CloseWithCallback | null = null
+
     ;({ root, container } = renderCloseWithProbe((callback) => {
       closeWith = callback
     }))
@@ -155,6 +160,7 @@ describe('onboarding flow persistence', () => {
         }
       }
     ).api
+
     expect(api.starNag.onboardingCompleted).not.toHaveBeenCalled()
 
     act(() => {

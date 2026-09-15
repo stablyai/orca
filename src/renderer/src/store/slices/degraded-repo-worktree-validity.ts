@@ -16,18 +16,23 @@ export function collectPersistedWorktreeIdsForSessionHydration(
   session: WorkspaceSessionState
 ): Set<string> {
   const persistedWorktreeIds = new Set<string>()
+
   for (const worktreeId of Object.keys(session.tabsByWorktree)) {
     persistedWorktreeIds.add(worktreeId)
   }
+
   for (const worktreeId of Object.keys(session.unifiedTabs ?? {})) {
     persistedWorktreeIds.add(worktreeId)
   }
+
   for (const worktreeId of Object.keys(session.openFilesByWorktree ?? {})) {
     persistedWorktreeIds.add(worktreeId)
   }
+
   for (const worktreeId of Object.keys(session.browserTabsByWorktree ?? {})) {
     persistedWorktreeIds.add(worktreeId)
   }
+
   return persistedWorktreeIds
 }
 
@@ -36,13 +41,16 @@ export function buildValidWorktreeIdsForSessionHydration(
   persistedWorktreeIds: Iterable<string>
 ): Set<string> {
   const worktreesByRepo = catalog.worktreesByRepo
+
   const validWorktreeIds = new Set(
     Object.values(worktreesByRepo)
       .flat()
       .map((worktree) => worktree.id)
   )
+
   const knownRepoIds = new Set(catalog.repos.map((repo) => repo.id))
   const detectedWorktreesByRepo = catalog.detectedWorktreesByRepo ?? {}
+
   const repoIdsWithLoadedWorktrees = new Set(
     Object.entries(worktreesByRepo)
       // Why (#1158): a metadata fallback can be non-empty yet partial (host-less metas are skipped on
@@ -55,6 +63,7 @@ export function buildValidWorktreeIdsForSessionHydration(
       )
       .map(([repoId]) => repoId)
   )
+
   const repoIdsWithAuthoritativeDetectedWorktrees = new Set(
     Object.entries(detectedWorktreesByRepo)
       .filter(([, detected]) => detected?.authoritative)
@@ -65,7 +74,9 @@ export function buildValidWorktreeIdsForSessionHydration(
     if (validWorktreeIds.has(worktreeId) || parseWorkspaceKey(worktreeId)?.type === 'folder') {
       continue
     }
+
     const repoId = getRepoIdFromWorktreeId(worktreeId)
+
     // Why (#1158): a failed scan cannot prove deletion, while loaded worktrees or an authoritative scan can.
     if (
       knownRepoIds.has(repoId) &&

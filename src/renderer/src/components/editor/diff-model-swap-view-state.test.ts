@@ -7,17 +7,22 @@ type ModelListener = () => void
 
 function modelEditorFixture() {
   let willChangeListener: ModelListener = () => {}
+
   let didChangeListener: ModelListener = () => {}
+
   const disposeWillChange = vi.fn()
   const disposeDidChange = vi.fn()
+
   return {
     editor: {
       onWillChangeModel: (listener: ModelListener) => {
         willChangeListener = listener
+
         return { dispose: disposeWillChange }
       },
       onDidChangeModel: (listener: ModelListener) => {
         didChangeListener = listener
+
         return { dispose: disposeDidChange }
       }
     } as unknown as editor.ICodeEditor,
@@ -37,6 +42,7 @@ describe('diff model swap view state', () => {
     const original = modelEditorFixture()
     const modified = modelEditorFixture()
     const viewState = { original: {}, modified: {} } as editor.IDiffEditorViewState
+
     const diffEditor = {
       getOriginalEditor: () => original.editor,
       getModifiedEditor: () => modified.editor,
@@ -44,9 +50,11 @@ describe('diff model swap view state', () => {
       saveViewState: vi.fn(() => viewState),
       restoreViewState: vi.fn()
     } as unknown as editor.IStandaloneDiffEditor
+
     const scheduledFrames: FrameRequestCallback[] = []
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
       scheduledFrames.push(callback)
+
       return scheduledFrames.length
     })
     vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {})
@@ -67,12 +75,14 @@ describe('diff model swap view state', () => {
   it('cancels pending work and listeners when the editor is disposed', () => {
     const original = modelEditorFixture()
     const modified = modelEditorFixture()
+
     const diffEditor = {
       getOriginalEditor: () => original.editor,
       getModifiedEditor: () => modified.editor,
       saveViewState: () => ({ original: {}, modified: {} }),
       restoreViewState: vi.fn()
     } as unknown as editor.IStandaloneDiffEditor
+
     vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(7)
     vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {})
     const subscription = preserveDiffViewStateAcrossModelSwaps(diffEditor)

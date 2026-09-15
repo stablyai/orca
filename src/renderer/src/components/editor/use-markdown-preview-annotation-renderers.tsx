@@ -49,6 +49,7 @@ export function useMarkdownPreviewAnnotationRenderers({
     renderedContent,
     updateDiffComment
   } = foundation
+
   const {
     getMarkdownCommentsForRange,
     handleAnnotatedMarkdownBlockClick,
@@ -64,9 +65,11 @@ export function useMarkdownPreviewAnnotationRenderers({
       if (!sourceWorktree || sourceRelativePath === null) {
         return null
       }
+
       if (!markdownAnnotationsEnabled) {
         return null
       }
+
       const commentsForBlock = getMarkdownCommentsForRange(range)
 
       const handleSubmit = async (body: string): Promise<boolean> => {
@@ -80,10 +83,13 @@ export function useMarkdownPreviewAnnotationRenderers({
           body,
           side: 'modified'
         })
+
         if (result) {
           setActiveAnnotationBlockKey(null)
+
           return true
         }
+
         return false
       }
 
@@ -218,19 +224,25 @@ export function useMarkdownPreviewAnnotationRenderers({
       rendered: React.ReactNode
     ): React.ReactNode => {
       const range = getMarkdownPreviewBlockRange(node)
+
       if (!range) {
         return rendered
       }
+
       const blockKey = `${tagName}:${range.startLine}-${range.endLine}`
+
       const controls = renderAnnotationControls(
         range,
         blockKey,
         getMarkdownPreviewAnnotationQuote(rendered)
       )
+
       if (!controls) {
         return rendered
       }
+
       const hasReviewNotes = getMarkdownCommentsForRange(range).length > 0
+
       return (
         <div
           className={`markdown-annotation-block ${hasReviewNotes ? 'has-review-notes' : ''}`.trim()}

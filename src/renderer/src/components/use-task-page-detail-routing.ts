@@ -6,6 +6,7 @@ import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { findTaskPageLinearIssue } from '@/components/task-page-cache-selectors'
 import { findTaskPageJiraIssue } from '@/components/task-page-jira-cache-selectors'
+
 export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
   const {
     pageData,
@@ -14,9 +15,12 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     jiraTaskSourceContext,
     setDialogWorkItem
   } = model
+
   const [selectedLinearIssueIdState, setSelectedLinearIssueId] = useState<string | null>(null)
+
   const [selectedLinearIssueFallbackState, setSelectedLinearIssueFallback] =
     useState<LinearIssue | null>(null)
+
   const [selectedLinearIssueCanFloatState, setSelectedLinearIssueCanFloat] = useState(false)
 
   // Why: subscribe to just the Linear caches so list and inline detail reflect optimistic cell edits without a second cache.
@@ -27,20 +31,25 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
       listCache: s.linearListCache
     }))
   )
+
   const cachedSelectedLinearIssue = findTaskPageLinearIssue(
     linearCacheSnapshot.issueCache,
     linearCacheSnapshot.searchCache,
     linearCacheSnapshot.listCache,
     pageData.openLinearIssue?.id ?? selectedLinearIssueIdState
   )
+
   const selectedLinearIssueId = pageData.openLinearIssue?.id ?? selectedLinearIssueIdState
   const selectedLinearIssueFallback = pageData.openLinearIssue ?? selectedLinearIssueFallbackState
+
   const selectedLinearIssueCanFloat = pageData.openLinearIssue
     ? true
     : selectedLinearIssueCanFloatState
+
   const selectedLinearIssue = selectedLinearIssueId
     ? (cachedSelectedLinearIssue ?? selectedLinearIssueFallback)
     : null
+
   const linearDetailSourceContext = useMemo(() => {
     if (
       selectedLinearIssue &&
@@ -49,6 +58,7 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     ) {
       return pageData.openLinearSourceContext
     }
+
     return linearTaskSourceContext
   }, [
     linearTaskSourceContext,
@@ -56,6 +66,7 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     pageData.openLinearSourceContext,
     selectedLinearIssue
   ])
+
   const setSelectedLinearIssue = useCallback(
     (
       issue: LinearIssue | null,
@@ -69,11 +80,13 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     },
     []
   )
+
   const clearSelectedLinearIssue = useCallback(() => {
     setSelectedLinearIssueCanFloat(false)
     setSelectedLinearIssueId(null)
     setSelectedLinearIssueFallback(null)
   }, [])
+
   const openLinearDetailPage = useCallback(
     (issue: LinearIssue) => {
       openTaskPage(
@@ -89,23 +102,28 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     },
     [linearTaskSourceContext, openTaskPage]
   )
+
   const openRelatedLinearIssue = useCallback(
     (issue: LinearIssue) => {
       openLinearDetailPage(issue)
     },
     [openLinearDetailPage]
   )
+
   const closeTaskDetailPage = useCallback(() => {
     const state = useAppStore.getState()
     const currentEntry = state.worktreeNavHistory[state.worktreeNavHistoryIndex]
+
     if (
       typeof currentEntry === 'object' &&
       currentEntry.kind === 'task-detail' &&
       state.worktreeNavHistoryIndex > 0
     ) {
       state.goBackWorktree()
+
       return
     }
+
     setDialogWorkItem(null)
     clearSelectedLinearIssue()
     useAppStore.setState((s) => ({
@@ -123,18 +141,23 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
       }
     }))
   }, [clearSelectedLinearIssue, setDialogWorkItem])
+
   const [selectedJiraIssueKeyState, setSelectedJiraIssueKey] = useState<string | null>(null)
+
   const [selectedJiraIssueFallbackState, setSelectedJiraIssueFallback] = useState<JiraIssue | null>(
     null
   )
+
   const selectedJiraIssueKey = pageData.openJiraIssue?.key ?? selectedJiraIssueKeyState
   const selectedJiraIssueFallback = pageData.openJiraIssue ?? selectedJiraIssueFallbackState
+
   const jiraCacheSnapshot = useAppStore(
     useShallow((s) => ({
       issueCache: s.jiraIssueCache,
       searchCache: s.jiraSearchCache
     }))
   )
+
   const cachedSelectedJiraIssue = findTaskPageJiraIssue(
     jiraCacheSnapshot.issueCache,
     jiraCacheSnapshot.searchCache,
@@ -144,9 +167,11 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
       siteId: selectedJiraIssueFallback?.siteId ?? pageData.openJiraIssue?.siteId ?? null
     }
   )
+
   const selectedJiraIssue = selectedJiraIssueKey
     ? (cachedSelectedJiraIssue ?? selectedJiraIssueFallback)
     : null
+
   const jiraDetailSourceContext = useMemo(() => {
     if (
       selectedJiraIssue &&
@@ -156,6 +181,7 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     ) {
       return pageData.openJiraSourceContext
     }
+
     return jiraTaskSourceContext
   }, [
     jiraTaskSourceContext,
@@ -163,10 +189,12 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     pageData.openJiraSourceContext,
     selectedJiraIssue
   ])
+
   const setSelectedJiraIssue = useCallback((issue: JiraIssue | null) => {
     setSelectedJiraIssueKey(issue?.key ?? null)
     setSelectedJiraIssueFallback(issue)
   }, [])
+
   const openJiraDetailPage = useCallback(
     (issue: JiraIssue) => {
       openTaskPage(
@@ -211,6 +239,7 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
     setSelectedJiraIssue: typeof setSelectedJiraIssue
     openJiraDetailPage: typeof openJiraDetailPage
   }
+
   nextModel.selectedLinearIssueId = selectedLinearIssueId
   nextModel.setSelectedLinearIssueId = setSelectedLinearIssueId
   nextModel.selectedLinearIssueFallback = selectedLinearIssueFallback
@@ -236,6 +265,8 @@ export function useTaskPageDetailRouting(model: TaskPageGitHubIssueDraftModel) {
   nextModel.jiraDetailSourceContext = jiraDetailSourceContext
   nextModel.setSelectedJiraIssue = setSelectedJiraIssue
   nextModel.openJiraDetailPage = openJiraDetailPage
+
   return nextModel
 }
+
 export type TaskPageDetailRoutingModel = ReturnType<typeof useTaskPageDetailRouting>

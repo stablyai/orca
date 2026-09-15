@@ -46,6 +46,7 @@ export function useSettingsPageEffects(
     settingsProjectList,
     showDesktopOnlySettings
   } = model
+
   const {
     closeSettingsPageWithPromptGuard,
     hasUnsavedSourceControlAiPromptChangesRef,
@@ -64,8 +65,10 @@ export function useSettingsPageEffects(
   useEffect(() => {
     if (!showDesktopOnlySettings) {
       setVoiceModelStatesLoading(false)
+
       return
     }
+
     let canceled = false
     // Why: modelStates starts empty, so Voice shouldn't look missing before the first speech-model scan reports state.
     setVoiceModelStatesLoading(true)
@@ -74,6 +77,7 @@ export function useSettingsPageEffects(
         setVoiceModelStatesLoading(false)
       }
     })
+
     return () => {
       canceled = true
     }
@@ -84,23 +88,29 @@ export function useSettingsPageEffects(
       if (event.key !== 'Escape' || event.defaultPrevented) {
         return
       }
+
       // Why: nested dialogs/menus own Escape before Settings page-level navigation.
       if (hasVisibleOverlay()) {
         return
       }
+
       // Why: IME composition owns Escape; ordinary controls should still close Settings.
       if (event.isComposing) {
         return
       }
+
       if (activeSectionId === 'shortcuts') {
         event.preventDefault()
         const now = Date.now()
+
         if (now <= shortcutsEscapeConfirmUntilRef.current) {
           shortcutsEscapeConfirmUntilRef.current = 0
           toast.dismiss(SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID)
           void closeSettingsPageWithPromptGuard()
+
           return
         }
+
         shortcutsEscapeConfirmUntilRef.current = now + SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS
         toast.info(
           translate(
@@ -113,12 +123,15 @@ export function useSettingsPageEffects(
             className: 'whitespace-nowrap'
           }
         )
+
         return
       }
+
       void closeSettingsPageWithPromptGuard()
     }
 
     document.addEventListener('keydown', handleKeyDown)
+
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [activeSectionId, closeSettingsPageWithPromptGuard, shortcutsEscapeConfirmUntilRef])
 
@@ -128,9 +141,11 @@ export function useSettingsPageEffects(
       if (isIntentionalAppRestartInProgress()) {
         return true
       }
+
       if (!hasUnsavedSourceControlAiPromptChangesRef.current) {
         return true
       }
+
       return promptDiscardSourceControlAiPromptChanges()
     })
   }, [hasUnsavedSourceControlAiPromptChangesRef, promptDiscardSourceControlAiPromptChanges])
@@ -140,19 +155,24 @@ export function useSettingsPageEffects(
       if (event.defaultPrevented) {
         return
       }
+
       if (!keybindingMatchesAction('settings.search', event, getShortcutPlatform(), keybindings)) {
         return
       }
+
       const input = searchInputRef.current
+
       if (!input) {
         return
       }
+
       event.preventDefault()
       input.focus()
       input.select()
     }
 
     document.addEventListener('keydown', handleFindShortcut)
+
     return () => document.removeEventListener('keydown', handleFindShortcut)
   }, [keybindings, searchInputRef])
 
@@ -166,11 +186,13 @@ export function useSettingsPageEffects(
       settingsNavigationTarget.repoId,
       repoIdToRepresentative
     )
+
     // Why: select the target repo's host before scrolling so its host-specific subsection anchor renders and the scroll lands.
     const targetRepoId = resolveSettingsTargetRepoId(
       settingsNavigationTarget,
       repoIdToHostSelection.keys()
     )
+
     if (targetRepoId) {
       const hostSelection = settingsNavigationTarget.hostId
         ? getSettingsTargetHostSelection(
@@ -179,6 +201,7 @@ export function useSettingsPageEffects(
             settingsNavigationTarget.hostId
           )
         : repoIdToHostSelection.get(targetRepoId)
+
       if (hostSelection) {
         setSettingsProjectHostSelection(
           hostSelection.projectId,
@@ -189,6 +212,7 @@ export function useSettingsPageEffects(
         )
       }
     }
+
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
     setHighlightedSettingsTargetId(
@@ -196,13 +220,16 @@ export function useSettingsPageEffects(
         ? (settingsNavigationTarget.sectionId ?? null)
         : null
     )
+
     // Why: ensure Appearance's nested status-bar section is open before scrolling so the row is visible.
     if (settingsNavigationTarget.pane === 'appearance') {
       const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
+
       if (accordion) {
         useAppStore.getState().setAppearanceAccordionDeepLink(accordion)
       }
     }
+
     if (settingsNavigationTarget.intent === 'add-quick-command') {
       setQuickCommandAddIntentSignal((signal) => signal + 1)
     } else if (settingsNavigationTarget.intent === 'add-ssh-host') {
@@ -210,10 +237,12 @@ export function useSettingsPageEffects(
     } else if (settingsNavigationTarget.intent === 'add-remote-orca-server') {
       setRemoteServerAddIntentSignal((signal) => signal + 1)
     }
+
     setMountedSectionIds((previous) => {
       if (previous.has(paneSectionId)) {
         return previous
       }
+
       return new Set(previous).add(paneSectionId)
     })
     // Why: bump state so the scroll effect runs even when the visible section set is unchanged (target is kept in refs).

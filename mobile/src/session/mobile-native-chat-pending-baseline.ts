@@ -39,13 +39,17 @@ export function rebaseMobileNativeChatPendingBaselines(
   if (current.every((item) => item.baselineResolved)) {
     return current
   }
+
   const baselineTailMessageId = messages.at(-1)?.id ?? null
+
   return current.map((item) => {
     if (item.baselineResolved) {
       return item
     }
+
     const reconcilesAgainstItsOwnTail =
       Boolean(item.images?.length) || normalizeReconcileText(item.text) === ''
+
     return item.baselineTailMessageId !== null || reconcilesAgainstItsOwnTail
       ? { ...item, baselineResolved: true }
       : { ...item, baselineResolved: true, baselineTailMessageId }

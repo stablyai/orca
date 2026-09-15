@@ -14,9 +14,11 @@ export function worktreeRetentionIdComparisonKey(
   platform: NodeJS.Platform
 ): string | null {
   const parsed = splitWorktreeId(worktreeId)
+
   if (!parsed?.repoId || !parsed.worktreePath) {
     return null
   }
+
   return JSON.stringify([
     parsed.repoId,
     worktreeRetentionPathComparisonKey(parsed.worktreePath, platform)

@@ -17,17 +17,21 @@ export function buildWorktreePurgeState(
   const normalizedTargets: WorktreePurgeTarget[] = worktreeTargets.map((target) =>
     typeof target === 'string' ? { id: target } : target
   )
+
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
   pruneHostedReviewLinkMutationGenerations(worktreeIdSet)
+
   // Why: ids are repo::path, so a worktree recreated at the same path must not inherit a stale sleep.
   for (const id of worktreeIdSet) {
     forgetWorktreeSleepIntent(id)
   }
+
   // Why: every authoritative and explicit purge converges here, so a deleted path can't inherit stale UI state.
   forgetHugeRepoWarningDismissalsForWorktrees(worktreeIdSet)
   forgetAmbiguousOwnerWarnings(worktreeIdSet)
 
   const doomed = collectWorktreePurgeDoomedIds(s, worktreeIdSet)
+
   const {
     omitByWorktree,
     omitWorkspaceLineageByWorktree,
@@ -51,21 +55,27 @@ export function buildWorktreePurgeState(
 
   const nextEverActivatedWorktreeIds = (() => {
     let hit = false
+
     for (const id of worktreeIdSet) {
       if (s.everActivatedWorktreeIds.has(id)) {
         hit = true
         break
       }
     }
+
     if (!hit) {
       return s.everActivatedWorktreeIds
     }
+
     const next = new Set(s.everActivatedWorktreeIds)
+
     for (const id of worktreeIdSet) {
       next.delete(id)
     }
+
     return next
   })()
+
   const nextAgentStatusByPaneKey = omitByPaneKeyTabPrefix(s.agentStatusByPaneKey)
 
   return {
@@ -205,7 +215,9 @@ export function buildWorktreePurgeState(
       if (s.activeWorkspaceKey && worktreeIdSet.has(s.activeWorkspaceKey)) {
         return null
       }
+
       const activeScope = s.activeWorkspaceKey ? parseWorkspaceKey(s.activeWorkspaceKey) : null
+
       return activeScope?.type === 'worktree' && worktreeIdSet.has(activeScope.worktreeId)
         ? null
         : s.activeWorkspaceKey

@@ -13,6 +13,7 @@ describe('structuredSlashCommands', () => {
     conversationCommands: ['clear', 'compact'] as const,
     runConversationCommand: async () => ({ accepted: true, error: null })
   }
+
   const REFUSAL = /is not available in chat sessions/
 
   // The composer menu and the dispatcher read the same policy. When they disagreed,
@@ -24,11 +25,13 @@ describe('structuredSlashCommands', () => {
     async (agent) => {
       const offered = structuredSlashCommands(['clear', 'compact'], agent)
       expect(offered.length).toBeGreaterThan(0)
+
       for (const command of offered) {
         const outcome = await dispatchStructuredAgentSessionComposerCommand(`/${command.name}`, {
           ...hostController,
           agent
         })
+
         expect(outcome.error ?? '').not.toMatch(REFUSAL)
       }
     }
@@ -115,6 +118,7 @@ describe('dispatchStructuredAgentSessionComposerCommand', () => {
     'handles %s conversation commands without message fallthrough',
     async (agent) => {
       const runConversationCommand = vi.fn(async () => ({ accepted: true, error: null }))
+
       for (const command of ['clear', 'compact'] as const) {
         const result = await dispatchStructuredAgentSessionComposerCommand(`/${command}`, {
           ...controller,
@@ -122,6 +126,7 @@ describe('dispatchStructuredAgentSessionComposerCommand', () => {
           conversationCommands: ['clear', 'compact'],
           runConversationCommand
         })
+
         expect(result).toEqual({ handled: true, accepted: true, error: null })
         expect(runConversationCommand).toHaveBeenLastCalledWith(command)
       }
@@ -149,6 +154,7 @@ describe('agent-implemented commands pass through to the agent', () => {
     invokeAction: async () => true,
     setOption: async () => true
   }
+
   const PASSED_THROUGH = { handled: false, accepted: false, error: null }
 
   // Claude's harness runs a slash command it finds in the message text, so

@@ -19,27 +19,35 @@ export function getExternalAutomationActionDisabledMessage(args: {
   if (args.actionInProgress) {
     return 'Another automation action is still running.'
   }
+
   if (args.manager.canManage) {
     return null
   }
+
   const providerLabel = args.providerLabel ?? getProviderLabel(args.manager.provider)
+
   const targetKindLabel =
     args.targetKindLabel ?? (args.manager.target.type === 'ssh' ? 'SSH host' : 'Local')
+
   if (args.manager.target.type === 'ssh') {
     if (isSshConnectionBusy(args.sshStatus)) {
       return `Wait for this ${targetKindLabel.toLowerCase()} to finish connecting.`
     }
+
     if (args.manager.error && !isSshDisconnectedError(args.manager.error)) {
       return args.manager.error
     }
+
     if (args.sshStatus !== 'connected') {
       return `Connect this ${targetKindLabel.toLowerCase()} before managing ${providerLabel} automations.`
     }
+
     return (
       args.manager.error ??
       `${providerLabel} cannot manage automations on this ${targetKindLabel.toLowerCase()}.`
     )
   }
+
   return (
     args.manager.error ??
     `${providerLabel} cannot manage automations on this ${targetKindLabel.toLowerCase()}.`

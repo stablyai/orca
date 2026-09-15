@@ -18,15 +18,19 @@ describe('SshGitProvider', () => {
   it('getStagedCommitContext reads branch, staged summary, and staged patch remotely', async () => {
     mux.request.mockImplementation(async (method, payload) => {
       expect(method).toBe('git.exec')
+
       if (payload.args[1] === '--show-current') {
         return { stdout: 'feature/ai-commit\n' }
       }
+
       if (payload.args[2] === '--name-status') {
         return { stdout: 'M\tREADME.md\n' }
       }
+
       if (payload.args[2] === '--patch') {
         return { stdout: 'diff --git a/README.md b/README.md\n+hello' }
       }
+
       throw new Error(`unexpected args: ${payload.args.join(' ')}`)
     })
 
@@ -49,6 +53,7 @@ describe('SshGitProvider', () => {
       if (payload.args[1] === '--show-current') {
         return { stdout: 'main\n' }
       }
+
       return { stdout: '' }
     })
 
@@ -61,9 +66,11 @@ describe('SshGitProvider', () => {
       if (payload.args[1] === '--show-current') {
         return { stdout: 'feature/ai-commit\n' }
       }
+
       if (payload.args[2] === '--name-status') {
         return { stdout: 'A\thuge.jsonl\n' }
       }
+
       throw Object.assign(new Error('git stdout exceeded maxBuffer.'), { code: 'ENOBUFS' })
     })
 
@@ -79,9 +86,11 @@ describe('SshGitProvider', () => {
       if (payload.args[1] === '--show-current') {
         return { stdout: 'feature/ai-commit\n' }
       }
+
       if (payload.args[2] === '--name-status') {
         return { stdout: 'M\tREADME.md\n' }
       }
+
       throw new Error('fatal: bad revision')
     })
 
@@ -92,6 +101,7 @@ describe('SshGitProvider', () => {
 
   it('keeps the transport alive for an agent response beyond the default request timeout', async () => {
     vi.useFakeTimers()
+
     try {
       const execResult = {
         stdout: 'Update docs',
@@ -99,12 +109,14 @@ describe('SshGitProvider', () => {
         exitCode: 0,
         timedOut: false
       }
+
       mux.request.mockImplementation((_method, _payload, options) => {
         return new Promise((resolve, reject) => {
           const timeout = setTimeout(
             () => reject(new Error('transport request timed out')),
             options?.timeoutMs ?? 30_000
           )
+
           setTimeout(() => {
             clearTimeout(timeout)
             resolve(execResult)
@@ -113,6 +125,7 @@ describe('SshGitProvider', () => {
       })
 
       let state: 'pending' | 'resolved' | 'rejected' = 'pending'
+
       const pending = provider
         .executeCommitMessagePlan(
           {
@@ -127,6 +140,7 @@ describe('SshGitProvider', () => {
         .then(
           (result) => {
             state = 'resolved'
+
             return result
           },
           (error) => {
@@ -134,6 +148,7 @@ describe('SshGitProvider', () => {
             throw error
           }
         )
+
       void pending.catch(() => {})
 
       await vi.advanceTimersByTimeAsync(30_000)
@@ -156,6 +171,7 @@ describe('SshGitProvider', () => {
       exitCode: 0,
       timedOut: false
     }
+
     mux.request.mockResolvedValue(execResult)
 
     const result = await provider.executeCommitMessagePlan(
@@ -190,6 +206,7 @@ describe('SshGitProvider', () => {
       if (method === 'agent.cancelExec') {
         return Promise.resolve({ canceled: true })
       }
+
       return new Promise((resolve) => {
         completeRequests.push(() =>
           resolve({
@@ -201,6 +218,7 @@ describe('SshGitProvider', () => {
         )
       })
     })
+
     const plan = {
       binary: 'codex',
       args: ['exec', 'PROMPT'],
@@ -209,6 +227,7 @@ describe('SshGitProvider', () => {
     }
 
     const commit = provider.executeCommitMessagePlan(plan, '/home/user/repo', 60_000)
+
     const pullRequest = provider.executeCommitMessagePlan(
       plan,
       '/home/user/repo',

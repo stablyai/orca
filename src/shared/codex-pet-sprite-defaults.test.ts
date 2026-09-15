@@ -32,6 +32,7 @@ describe('CODEX_PET_ANIMATIONS', () => {
     for (const [name, anim] of Object.entries(CODEX_PET_ANIMATIONS)) {
       expect(anim.frameDurationsMs, name).toBeDefined()
       expect(anim.frameDurationsMs, name).toHaveLength(anim.frames)
+
       for (const ms of anim.frameDurationsMs ?? []) {
         expect(ms, name).toBeGreaterThan(0)
       }
@@ -43,6 +44,7 @@ describe('CODEX_PET_ANIMATIONS', () => {
       (sum, ms) => sum + ms,
       0
     )
+
     expect(total).toBe(6600)
   })
 })
@@ -88,6 +90,7 @@ describe('applyCodexSpriteTimingDefaults', () => {
       sheetWidth: CODEX_PET_DEFAULT_COLUMNS * 32,
       sheetHeight: 9 * 32
     }
+
     expect(applyCodexSpriteTimingDefaults(sprite)).toBe(sprite)
   })
 

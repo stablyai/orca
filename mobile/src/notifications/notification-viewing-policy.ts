@@ -1,6 +1,7 @@
 import { AppState } from 'react-native'
 
 let viewing: { hostId: string; worktreeId: string } | null = null
+
 export function setNotificationViewingWorkspace(value: typeof viewing): void {
   viewing = value
 }

@@ -45,6 +45,7 @@ async function dirSignature(path: string): Promise<string> {
 async function hasGitMarker(dir: string): Promise<boolean> {
   try {
     await stat(join(dir, '.git'))
+
     return true
   } catch {
     return false
@@ -84,6 +85,7 @@ async function snapshotBase(
   const gateSignatures = [await dirSignature(rootPath)]
   const configs = [...repos.values()]
   const includeFlat = configs.some((config) => !config.nestWorkspaces)
+
   const nestedRepoNames = new Set(
     configs
       .filter((config) => config.nestWorkspaces)
@@ -95,18 +97,23 @@ async function snapshotBase(
   const rootEntries = await readdirSafe(rootPath)
 
   const candidates: string[] = []
+
   for (const entry of rootEntries) {
     if (!entry.isDirectory() && !entry.isSymbolicLink()) {
       continue
     }
+
     const entryPath = join(rootPath, entry.name)
+
     if (includeFlat) {
       candidates.push(entryPath)
     }
+
     if (nestedRepoNames.has(normalizeRuntimePathForComparison(entry.name))) {
       gateDirs.push(entryPath)
       gateSignatures.push(await dirSignature(entryPath))
       const subEntries = await readdirSafe(entryPath)
+
       for (const sub of subEntries) {
         if (sub.isDirectory() || sub.isSymbolicLink()) {
           candidates.push(join(entryPath, sub.name))
@@ -118,21 +125,25 @@ async function snapshotBase(
   await forEachWithConcurrency(candidates, MARKER_PROBE_CONCURRENCY, async (dir) => {
     markers.set(dir, await hasGitMarker(dir))
   })
+
   return { markers, gateDirs, gateSignatures }
 }
 
 function diffBase(prev: BaseSnapshot, next: BaseSnapshot): WorktreeBasePollEvent[] {
   const events: WorktreeBasePollEvent[] = []
+
   for (const [dir, marker] of next.markers) {
     if (marker && prev.markers.get(dir) !== true) {
       events.push({ type: 'create', path: join(dir, '.git') })
     }
   }
+
   for (const dir of prev.markers.keys()) {
     if (!next.markers.has(dir)) {
       events.push({ type: 'delete', path: dir })
     }
   }
+
   return events
 }
 
@@ -153,6 +164,7 @@ export async function startBasePoller(
   const pendingMarkerMaxTicks = options.pendingMarkerMaxTicks ?? PENDING_MARKER_MAX_TICKS
   // dir → first probe tick; null means backstop scans only
   const markerProbeStartedAt = new Map<string, number | null>()
+
   for (const [dir, marker] of snapshot.markers) {
     if (!marker) {
       markerProbeStartedAt.set(dir, 0)
@@ -163,10 +175,13 @@ export async function startBasePoller(
     options.onFullScan?.()
     const next = await snapshotBase(target.path, getRepos())
     await options.onSnapshotTaken?.(tickCount)
+
     if (disposed) {
       return
     }
+
     const events = diffBase(snapshot, next)
+
     for (const [dir, marker] of next.markers) {
       if (marker) {
         markerProbeStartedAt.delete(dir)
@@ -174,12 +189,15 @@ export async function startBasePoller(
         markerProbeStartedAt.set(dir, tickCount)
       }
     }
+
     for (const dir of markerProbeStartedAt.keys()) {
       if (!next.markers.has(dir)) {
         markerProbeStartedAt.delete(dir)
       }
     }
+
     snapshot = next
+
     if (events.length > 0) {
       onEvents(events)
     }
@@ -187,27 +205,33 @@ export async function startBasePoller(
 
   const checkPendingMarkers = async (): Promise<void> => {
     const dueDirs: string[] = []
+
     for (const [dir, firstSeenTick] of markerProbeStartedAt) {
       if (firstSeenTick === null) {
         continue
       }
+
       if (tickCount - firstSeenTick > pendingMarkerMaxTicks) {
         markerProbeStartedAt.set(dir, null)
         continue
       }
+
       dueDirs.push(dir)
     }
+
     const events: WorktreeBasePollEvent[] = []
     // Same bound as the full scan's fan-out: serial probes cost D x latency per tick,
     // which a WSL- or network-backed base directory pays for up to `pendingMarkerMaxTicks`.
     await forEachWithConcurrency(dueDirs, MARKER_PROBE_CONCURRENCY, async (dir) => {
       options.onPendingMarkerProbe?.(join(dir, '.git'))
+
       if (await hasGitMarker(dir)) {
         markerProbeStartedAt.delete(dir)
         snapshot.markers.set(dir, true)
         events.push({ type: 'create', path: join(dir, '.git') })
       }
     })
+
     if (!disposed && events.length > 0) {
       onEvents(events)
     }
@@ -215,20 +239,27 @@ export async function startBasePoller(
 
   const poll = async (forceFullScan = false): Promise<void> => {
     tickCount++
+
     if (forceFullScan || tickCount % WORKTREE_BASE_BACKSTOP_TICKS === 0) {
       await fullScan()
+
       return
     }
+
     // Idle fast path: when the dirs whose listings define the candidate set
     // are untouched, skip the readdir + per-candidate stat fan-out entirely.
     const signatures = await Promise.all(snapshot.gateDirs.map(dirSignature))
+
     const gateChanged =
       signatures.length !== snapshot.gateSignatures.length ||
       signatures.some((sig, index) => sig !== snapshot.gateSignatures[index])
+
     if (gateChanged) {
       await fullScan()
+
       return
     }
+
     if (markerProbeStartedAt.size > 0) {
       await checkPendingMarkers()
     }
@@ -236,20 +267,26 @@ export async function startBasePoller(
 
   const tick = async (forceFullScan = false): Promise<void> => {
     timer = null
+
     if (disposed) {
       return
     }
+
     if (!visibility.isWindowVisible()) {
       parkedWhileHidden = true
+
       return
     }
+
     if (ticking) {
       return
     }
+
     ticking = true
     // Why: measure from tick start so the cadence is start-to-start (like the old setInterval), not
     // gap-after-completion — otherwise each visible refresh lands a full scan-duration late every tick.
     const startedAt = Date.now()
+
     try {
       await poll(forceFullScan)
     } catch {
@@ -257,6 +294,7 @@ export async function startBasePoller(
     } finally {
       ticking = false
     }
+
     if (!disposed) {
       // Why: clamp to [0, pollIntervalMs]. Date.now() is not monotonic — a backward wall-clock jump (NTP) would
       // otherwise make elapsed negative and push the next tick out by the adjustment (suppressing refreshes for
@@ -265,6 +303,7 @@ export async function startBasePoller(
         0,
         Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
       )
+
       timer = setTimeout(() => void tick(), nextDelay)
       timer.unref?.()
     }
@@ -274,6 +313,7 @@ export async function startBasePoller(
     if (disposed || !parkedWhileHidden) {
       return
     }
+
     parkedWhileHidden = false
     // Why: the ordinary dir-signature gate can miss same-granule changes made
     // while hidden; resume must diff a fresh full snapshot against the baseline.
@@ -286,9 +326,11 @@ export async function startBasePoller(
   return {
     unsubscribe: async () => {
       disposed = true
+
       if (timer) {
         clearTimeout(timer)
       }
+
       unsubscribeVisibility()
     }
   }

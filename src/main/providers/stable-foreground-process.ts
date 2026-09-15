@@ -28,11 +28,13 @@ export function resolveStableForegroundProcess(
   if (resolution.available) {
     const isAgent =
       resolution.processName !== null && recognizeAgentProcess(resolution.processName) !== null
+
     return {
       processName: resolution.processName,
       lastRecognizedAgent: isAgent ? resolution.processName : null
     }
   }
+
   return {
     processName: lastRecognizedAgent ?? resolution.processName,
     lastRecognizedAgent

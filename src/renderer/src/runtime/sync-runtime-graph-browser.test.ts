@@ -54,6 +54,7 @@ describe('browser mobile session sync', () => {
         'wt-1': [makeBrowserWorkspace()]
       }
     })
+
     const changed = getRuntimeMobileSessionSyncKey(
       makeState({
         ...base,
@@ -143,13 +144,16 @@ describe('browser mobile session sync', () => {
       description: 'ERR_CERT_AUTHORITY_INVALID',
       validatedUrl: 'https://localhost:3443/'
     }
+
     const workspace = { ...makeBrowserWorkspace(), loadError: staleError }
+
     const activePage = {
       ...workspace,
       id: 'page-1',
       workspaceId: workspace.id,
       loadError: null
     }
+
     const state = makeState({
       activeBrowserTabIdByWorktree: { 'wt-1': workspace.id },
       browserTabsByWorktree: { 'wt-1': [workspace] },

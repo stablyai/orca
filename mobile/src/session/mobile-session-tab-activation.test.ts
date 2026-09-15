@@ -40,6 +40,7 @@ describe('mobile session tab activation', () => {
       .fn<RpcClient['sendRequest']>()
       .mockRejectedValueOnce(new LogicalClientCutoverError())
       .mockResolvedValueOnce(success())
+
     const params = {
       worktree: 'id:worktree-1',
       tabId: 'tab-1',

@@ -61,6 +61,7 @@ function replaceStore(
 ) {
   const get = vi.fn().mockResolvedValue(existing)
   const remove = overrides.remove ?? vi.fn().mockResolvedValue(undefined)
+
   const snapshotClearIdentities =
     overrides.snapshot ??
     vi
@@ -68,7 +69,9 @@ function replaceStore(
       .mockImplementation(async (cookies: readonly { cookie: Cookie; url: string }[]) =>
         identitiesFromClearCookies(cookies)
       )
+
   const restoreClearIdentities = overrides.restore ?? vi.fn().mockResolvedValue(undefined)
+
   return { get, remove, snapshotClearIdentities, restoreClearIdentities }
 }
 
@@ -82,6 +85,7 @@ describe('replaceCookiesForImportedDomains', () => {
       cookie('.google.com.evil.example', 'suffix-confusion'),
       cookie('.example.com', 'unrelated')
     ]
+
     const store = replaceStore(existing)
 
     const { removed } = await replaceCookiesForImportedDomains(store, ['accounts.google.com'])
@@ -145,7 +149,9 @@ describe('replaceCookiesForImportedDomains', () => {
       cookie('.example.com', 'first', '/one'),
       cookie('.example.com', 'second', '/two')
     ]
+
     const partitionKey = { topLevelSite: 'https://top.example', hasCrossSiteAncestor: true }
+
     const snapshot = vi
       .fn()
       .mockImplementation(async (cookies: readonly { cookie: Cookie; url: string }[]) =>
@@ -153,10 +159,12 @@ describe('replaceCookiesForImportedDomains', () => {
           identity.name === 'first' ? { ...identity, partitionKey } : identity
         )
       )
+
     const remove = vi
       .fn()
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error('cookie store unavailable'))
+
     const store = replaceStore(existing, { remove, snapshot })
 
     await expect(replaceCookiesForImportedDomains(store, ['example.com'])).rejects.toThrow(
@@ -176,11 +184,13 @@ describe('replaceCookiesForImportedDomains', () => {
       cookie('.example.com', 'first', '/one'),
       cookie('.example.com', 'second', '/two')
     ]
+
     const snapshot = vi
       .fn()
       .mockImplementation(async (cookies: readonly { cookie: Cookie; url: string }[]) =>
         identitiesFromClearCookies(cookies).filter((identity) => identity.name !== 'second')
       )
+
     const store = replaceStore(existing, { snapshot })
 
     await expect(replaceCookiesForImportedDomains(store, ['example.com'])).rejects.toThrow(
@@ -195,7 +205,9 @@ describe('replaceCookiesForImportedDomains', () => {
       .fn()
       .mockResolvedValueOnce(undefined)
       .mockRejectedValueOnce(new Error('cookie store unavailable'))
+
     const restore = vi.fn().mockRejectedValue(new Error('debugger detached'))
+
     const store = replaceStore(
       [cookie('.example.com', 'first', '/one'), cookie('.example.com', 'second', '/two')],
       { remove, restore }
@@ -246,11 +258,14 @@ describe('removeTransplantableCookies', () => {
       set: vi.fn().mockResolvedValue(undefined),
       ...overrides
     }
+
     const restoreClearIdentities = vi.fn().mockResolvedValue(undefined)
+
     const snapshotClearIdentities = vi.fn(
       async (items: Parameters<typeof identitiesFromClearCookies>[0]) =>
         identitiesFromClearCookies(items)
     )
+
     return {
       session: {
         cookies: store,
@@ -355,6 +370,7 @@ describe('removeTransplantableCookies', () => {
       cookie('.removed.test', 'gone-before-clear'),
       cookie('.survivor.test', 'survived')
     ]
+
     const get = vi
       .fn()
       .mockResolvedValue([
@@ -363,6 +379,7 @@ describe('removeTransplantableCookies', () => {
         cookie('.arrived.test', 'arrived-during-clear')
       ])
       .mockResolvedValueOnce(beforeAttempt)
+
     const { session, remove } = clearSession(beforeAttempt, { get })
 
     await removeTransplantableCookies(
@@ -386,10 +403,12 @@ describe('removeTransplantableCookies', () => {
       cookie('.example.com', 'first', '/one'),
       cookie('.example.com', 'second', '/two')
     ]
+
     const get = vi
       .fn()
       .mockResolvedValue([...beforeAttempt, cookie('.arrived.test', 'fresh-login')])
       .mockResolvedValueOnce(beforeAttempt)
+
     const { session, remove, restoreClearIdentities } = clearSession(beforeAttempt, {
       get,
       remove: vi.fn().mockImplementation(async (_url: string, name: string) => {
@@ -412,9 +431,11 @@ describe('removeTransplantableCookies', () => {
       ['https://example.com/two', 'second']
     ])
     expect(restoreClearIdentities).toHaveBeenCalledOnce()
+
     const restored = restoreClearIdentities.mock.calls[0][0].map(
       (identity: { name: string }) => identity.name
     )
+
     expect([...restored].sort()).toEqual(['first', 'second'])
   })
 
@@ -472,11 +493,14 @@ describe('removeTransplantableCookies', () => {
 
   it('bounds parallel removals so large cookie jars do not clear serially or fan out', async () => {
     let releaseRemovals: (() => void) | undefined
+
     const removalsReleased = new Promise<void>((resolve) => {
       releaseRemovals = resolve
     })
+
     let active = 0
     let maxActive = 0
+
     const { session, remove, set } = clearSession(
       [
         cookie('.google.com', 'SID'),
@@ -497,6 +521,7 @@ describe('removeTransplantableCookies', () => {
       new Set(),
       importedDomainScope(['google.com', 'example.com'])
     )
+
     await vi.waitFor(() => expect(remove).toHaveBeenCalledTimes(8))
     expect(maxActive).toBe(8)
     releaseRemovals?.()
@@ -508,9 +533,11 @@ describe('removeTransplantableCookies', () => {
 
   it('serializes cookies that share Electron removal coordinates', async () => {
     let releaseFirst: (() => void) | undefined
+
     const firstReleased = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
+
     const { session, remove } = clearSession(
       [
         cookie('.google.com', 'SID'),
@@ -530,6 +557,7 @@ describe('removeTransplantableCookies', () => {
       new Set(),
       importedDomainScope(['google.com', 'example.com'])
     )
+
     await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce())
     releaseFirst?.()
     await clearing

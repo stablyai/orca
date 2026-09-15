@@ -27,20 +27,25 @@ import { findOpenMRByHeadBase, parseMergeRequestPayload } from './merge-request-
 function execErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     const maybeExec = error as Error & { stderr?: unknown; stdout?: unknown }
+
     return [maybeExec.stderr, maybeExec.stdout, error.message]
       .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
       .join('\n')
       .trim()
   }
+
   return String(error)
 }
 
 function classifyCreateMRError(error: unknown): CreateHostedReviewResult {
   const message = execErrorMessage(error)
+
   if (message) {
     console.warn('createGitLabMergeRequest failed:', message)
   }
+
   const lower = message.toLowerCase()
+
   if (
     lower.includes('not logged') ||
     lower.includes('not authenticated') ||
@@ -55,6 +60,7 @@ function classifyCreateMRError(error: unknown): CreateHostedReviewResult {
         'Create MR failed: GitLab is not authenticated. Next step: run glab auth login in this environment.'
     }
   }
+
   if (lower.includes('already exists') || lower.includes('merge request already exists')) {
     return {
       ok: false,
@@ -62,6 +68,7 @@ function classifyCreateMRError(error: unknown): CreateHostedReviewResult {
       error: 'A merge request already exists for this branch.'
     }
   }
+
   if (lower.includes('timed out') || lower.includes('timeout')) {
     return {
       ok: false,
@@ -69,6 +76,7 @@ function classifyCreateMRError(error: unknown): CreateHostedReviewResult {
       error: 'MR creation may have completed. Refreshing branch review state...'
     }
   }
+
   if (lower.includes('validation failed') || lower.includes('http 422')) {
     return {
       ok: false,
@@ -77,6 +85,7 @@ function classifyCreateMRError(error: unknown): CreateHostedReviewResult {
         'Create MR failed: GitLab rejected the merge request. Check the base branch and branch state, then try again.'
     }
   }
+
   return {
     ok: false,
     code: 'unknown',
@@ -100,26 +109,33 @@ async function readMergeRequestTemplate(
     '.gitlab/merge_request_template.md',
     '.gitlab/MERGE_REQUEST_TEMPLATE.md'
   ]
+
   const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
+
   if (connectionId && !remoteProvider) {
     return ''
   }
+
   for (const relativeCandidate of relativeCandidates) {
     try {
       if (remoteProvider) {
         const result = await remoteProvider.readFile(
           joinWorktreeRelativePath(repoPath, relativeCandidate)
         )
+
         if (result.isBinary) {
           continue
         }
+
         return result.content
       }
+
       return await readFile(join(repoPath, relativeCandidate), 'utf8')
     } catch {
       // Try the next conventional GitLab merge-request template path.
     }
   }
+
   return ''
 }
 
@@ -145,6 +161,7 @@ export async function createGitLabMergeRequest(
     connectionId,
     ...hostedReviewExecutionOptionArgs(options)
   )
+
   if (!projectRef) {
     return {
       ok: false,
@@ -156,6 +173,7 @@ export async function createGitLabMergeRequest(
   const base = normalizeHostedReviewBaseRef(input.base)
   const head = input.head ? normalizeHostedReviewHeadRef(input.head) || undefined : undefined
   const title = input.title.trim()
+
   if (!base || !title) {
     return {
       ok: false,
@@ -163,6 +181,7 @@ export async function createGitLabMergeRequest(
       error: 'Create MR failed: base branch and title are required.'
     }
   }
+
   if (head && head.toLowerCase() === base.toLowerCase()) {
     return {
       ok: false,
@@ -172,11 +191,13 @@ export async function createGitLabMergeRequest(
   }
 
   await acquire()
+
   try {
     const body =
       input.useTemplate && !input.body?.trim()
         ? await readMergeRequestTemplate(repoPath, connectionId)
         : (input.body ?? '')
+
     const createArgs = [
       'mr',
       'create',
@@ -191,12 +212,15 @@ export async function createGitLabMergeRequest(
       '--yes',
       ...glabHostnameArgs(projectRef, connectionId)
     ]
+
     if (head) {
       createArgs.push('--source-branch', head)
     }
+
     if (input.draft) {
       createArgs.push('--draft')
     }
+
     try {
       const { stdout } = await glabExecFileAsync(createArgs, {
         ...glabRepoExecOptions(repoPath, connectionId),
@@ -204,10 +228,13 @@ export async function createGitLabMergeRequest(
         timeout: 60_000,
         idempotent: false
       })
+
       const created = parseMergeRequestPayload(stdout)
+
       if (created) {
         return { ok: true, ...created }
       }
+
       const found = head
         ? await findOpenMRByHeadBase({
             repoPath,
@@ -218,9 +245,11 @@ export async function createGitLabMergeRequest(
             options
           }).catch(() => null)
         : null
+
       if (found) {
         return { ok: true, ...found }
       }
+
       return {
         ok: false,
         code: 'unknown_completion',
@@ -228,6 +257,7 @@ export async function createGitLabMergeRequest(
       }
     } catch (error) {
       const classified = classifyCreateMRError(error)
+
       if (
         !classified.ok &&
         (classified.code === 'already_exists' || classified.code === 'unknown_completion') &&
@@ -241,6 +271,7 @@ export async function createGitLabMergeRequest(
           connectionId,
           options
         }).catch(() => null)
+
         if (existing) {
           return {
             ok: false,
@@ -250,6 +281,7 @@ export async function createGitLabMergeRequest(
           }
         }
       }
+
       return classified
     }
   } finally {

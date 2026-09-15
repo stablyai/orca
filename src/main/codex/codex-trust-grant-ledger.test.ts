@@ -11,6 +11,7 @@ import {
 } from './codex-trust-grant-ledger'
 
 let userDataDir: string
+
 let previousUserDataPath: string | undefined
 
 beforeEach(() => {
@@ -25,6 +26,7 @@ afterEach(() => {
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   rmSync(userDataDir, { recursive: true, force: true })
 })
 
@@ -83,12 +85,14 @@ describe('codex trust grant ledger', () => {
 
   it('matches binary stamps only on identical identity', () => {
     const stamp = { kind: 'native' as const, path: '/bin/codex', size: 1, mtimeMs: 2 }
+
     const wslStamp = {
       kind: 'wsl' as const,
       distro: 'Ubuntu',
       path: '/home/alice/.local/bin/codex',
       version: 'codex-cli 1.2.3'
     }
+
     expect(binaryStampsMatch(stamp, { ...stamp })).toBe(true)
     expect(binaryStampsMatch(stamp, { ...stamp, mtimeMs: 3 })).toBe(false)
     expect(binaryStampsMatch(stamp, { ...stamp, size: 9 })).toBe(false)

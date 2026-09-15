@@ -106,22 +106,28 @@ export class OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer extends Orca
     if (this.getDriver(ptyId).kind !== 'mobile') {
       return false
     }
+
     const subscribers = this.mobileSubscribers.get(ptyId)
+
     if (!subscribers) {
       return false
     }
+
     // Why: soft-leave resubscribe preserves the original subscription time but
     // reinserts the record. Elect fitted responders from that stable age, not
     // mutable Map order or passive desktop-mode watchers.
     let earliest: { clientId: string; subscribedAt: number } | null = null
+
     for (const subscriber of subscribers.values()) {
       if (!subscriber.wasResizedToPhone) {
         continue
       }
+
       if (earliest === null || subscriber.subscribedAt < earliest.subscribedAt) {
         earliest = subscriber
       }
     }
+
     return earliest?.clientId === clientId
   }
 
@@ -147,9 +153,11 @@ export class OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer extends Orca
     rows: number
   ): void {
     const listeners = this.fitOverrideListeners.get(ptyId)
+
     if (!listeners) {
       return
     }
+
     notifyRuntimeListeners(listeners, (listener) => listener({ mode, cols, rows }), 'fit-override')
   }
 
@@ -168,9 +176,11 @@ export class OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer extends Orca
       timeoutMs: AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
       retireOnTimeout: true
     })
+
     if (providerSnapshot) {
       return providerSnapshot
     }
+
     return this.serializeTerminalBufferFromAvailableState(ptyId, opts)
   }
 
@@ -180,6 +190,7 @@ export class OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer extends Orca
     if (data.length === 0 || this.getDriver(ptyId).kind === 'mobile') {
       return false
     }
+
     try {
       await assertTerminalInputWithinLimitWithYield(data)
       const admitted = agentSessionPtyWriteGate.assertAdmitted(ptyId)
@@ -196,6 +207,7 @@ export class OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer extends Orca
         },
         admitted
       )
+
       return true
     } catch {
       return false

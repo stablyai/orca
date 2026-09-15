@@ -107,6 +107,7 @@ describe('resolveWatcherRootPaths', () => {
       },
       platform: 'linux'
     })
+
     expect(watchRoot).toBe('/tmp/gone')
     expect(rewriteEventPath('/tmp/gone/a.ts')).toBe('/tmp/gone/a.ts')
   })
@@ -118,6 +119,7 @@ describe('resolveWatcherRootPaths', () => {
       realpath: () => '/private/tmp/real',
       platform: 'darwin'
     })
+
     expect(watchRoot).toBe('/private/tmp/real')
     expect(rewriteEventPath('/private/tmp/real/a.ts')).toBe('/tmp/link/a.ts')
   })
@@ -132,10 +134,12 @@ describe('rewriteWatcherEvents', () => {
 
   it('rewrites only the events that moved', () => {
     const rewrite = createRootPathRewriter('/tmp/link', '/private/tmp/real', 'darwin')
+
     const events = [
       { path: '/tmp/link/a.ts', type: 'update' as const },
       { path: '/private/tmp/real/b.ts', type: 'create' as const }
     ]
+
     expect(rewriteWatcherEvents(events, rewrite)).toEqual([
       { path: '/tmp/link/a.ts', type: 'update' },
       { path: '/tmp/link/b.ts', type: 'create' }

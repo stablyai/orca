@@ -4,6 +4,7 @@ import { buildAgentSessionContinuationPrompt } from '@/lib/agent-session-continu
 import { prepareAgentSessionContinuationFromPane } from './terminal-agent-session-continuation'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const store = {
   agentStatusByPaneKey: {} as Record<
     string,
@@ -18,9 +19,11 @@ const store = {
 }
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
+
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
+
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 function makePane(capturedText: string): ManagedPane {
@@ -82,6 +85,7 @@ describe('prepareAgentSessionContinuationFromPane', () => {
 
   it('prepares a generic request without serializing when a transcript exists', () => {
     const pane = makePane('unused scrollback')
+
     const request = prepareAgentSessionContinuationFromPane({
       pane,
       tabId: 'tab-1',

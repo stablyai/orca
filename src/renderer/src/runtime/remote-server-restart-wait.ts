@@ -40,17 +40,21 @@ export async function waitForReplacementRuntime(
   const deadline = now() + timing.reconnectTimeoutMs
   // Why: the install RPC returns before the installer fires, so an error on the first tick belongs to an earlier attempt.
   let probed = false
+
   while (now() < deadline) {
     // Why: an RPC allowed to outlive the deadline drags the whole wait past the budget the caller set.
     const rpcTimeoutMs = Math.min(RESTART_WAIT_RPC_TIMEOUT_MS, deadline - now())
     let installFailure: string | null = null
+
     try {
       const status = await transport.getRuntimeStatus(environmentId, rpcTimeoutMs)
       const version = status.appVersion?.trim() ?? ''
       const reachedTarget = hasReachedAppVersion(version, install.targetVersion)
+
       if (status.runtimeId !== install.runtimeId && reachedTarget) {
         return status
       }
+
       // Why: the status RPC already spent part of rpcTimeoutMs, so the probe re-reads what is left
       // rather than starting a second full budget of its own.
       const probeTimeoutMs = Math.min(RESTART_WAIT_RPC_TIMEOUT_MS, deadline - now())
@@ -68,14 +72,18 @@ export async function waitForReplacementRuntime(
     } catch {
       // A refused connection is expected while the server process is being replaced.
     }
+
     // Why: thrown outside the try so the loop's own catch cannot swallow the reason we came for.
     if (installFailure !== null) {
       throw new Error(installFailure)
     }
+
     const waitMs = Math.min(timing.pollIntervalMs, deadline - now())
+
     if (waitMs > 0) {
       await transport.wait(waitMs)
     }
   }
+
   throw new Error('remote_update_reconnect_timeout')
 }

@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { MOBILE_SESSION_ROUTE_SOURCE_FILES } from './mobile-session-route-source-family.test-support'
 
 const SESSION_FILES = MOBILE_SESSION_ROUTE_SOURCE_FILES
+
 const LOGIC_EXPANSION_NAMES = new Set([
   'useMobileSessionController',
   'useMobileSessionFoundation',
@@ -40,6 +41,7 @@ const LOGIC_EXPANSION_NAMES = new Set([
   'useMobileSessionPresentation',
   'useMobileSessionPanelRouteActions'
 ])
+
 const SURFACE_EXPANSION_NAMES = new Set([
   'MobileSessionSurface',
   'MobileSessionHeader',
@@ -48,7 +50,9 @@ const SURFACE_EXPANSION_NAMES = new Set([
   'MobileSessionCommandDock',
   'MobileSessionSheets'
 ])
+
 const CONTENT_COMPONENT_NAMES = ['MarkdownReader', 'DiffLineRow', 'FileReader'] as const
+
 const HOST_COMPONENT_NAMES = new Set([
   'ActivityIndicator',
   'Animated.View',
@@ -63,33 +67,51 @@ const HOST_COMPONENT_NAMES = new Set([
 ])
 
 const HEAD_MAIN_HOOK_SHA256 = 'c7a1bbc0588a5d27797bbab13168e76eb20200288921fdc3347632c2b4afd0ae'
+
 const HEAD_HOOK_BINDING_SHA256 = '06edf1a4314eba41b1d3e1cb67b0cfab2a936aef7d127c5dc48e789c9adc6c8f'
+
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   '2a9e4825df007f6ef53b81aa5004991d6318eee7507b44d625c07e630be432eb'
+
 const HEAD_CALLBACK_BODY_SHA256 = '85c4f4605e66c45e2b6bc7de739cb3493d9e2d0db9c9242c379db8ed34a8cefe'
+
 const HEAD_EFFECT_SHA256 = '73d80845e0a4b6363cfb4bb55551af97965b1f676b97adf0b2a8504219b9a501'
+
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
+
 const HEAD_NESTED_FUNCTION_SHA256 =
   '97ce5457d8059974f500022a4382ff687074e26843d6c1525be938d6c0537928'
+
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'cab85e4e4a3f43289ba93ddea9ccce57aea83e0bf14fd1620a965aad0c1cb49e'
+
 const HEAD_NATIVE_REMOVAL_SHA256 =
   '4c994574675a2a0f9c607b3ea89ab7a2ed5a83f7c72fa42342ddcb5f00fc3f4f'
+
 const HEAD_TIMER_CREATION_SHA256 =
   '1a31b625e2174c3db77272249843196d2b6b06ab1e654a96d8f7858e3082e66b'
+
 const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f34234541a2065ec3d1a8cd116'
+
 const HEAD_RUNTIME_STRING_SHA256 =
   '57ef354b97fb4fd3776fd1b09a34305d84022c04c43c6391bd130517bf6e37af'
+
 const HEAD_HOST_JSX_SHA256 = '390405926b1695fa3a33686f0bc192b432f5468d8576499d7cafbb4922defbb5'
+
 const HEAD_LEAF_JSX_SHA256 = '21dba981875e173f692590bf910d60964660c5f4cbb79f3a377c7e54f6a1f016'
+
 const HEAD_STYLE_REFERENCE_SHA256 =
   '295a3501c2c6d7bea7c8bbf38b3f3534f01344cd7e1b91bb8e07c040821d596a'
+
 const HEAD_IDENTITY_FIELD_SHA256 =
   '91146853930a34dd1f3d80e5c97fbacd7cf19fb93dd26fe8fc6f29169622f9d6'
+
 const HEAD_NAVIGATION_SHA256 = '9d96f5dad7de555d6553eac39c0fab00efad507470fd562cb9beaa32db16f512'
+
 const HEAD_CAPABILITY_SHA256 = '67c3154b71b542bb63a4365d3ea75aef19ef133c02f509318619618221786fab'
 
 type Definition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
+
 type HookFacts = {
   bindings: string[]
   callbackBodies: string[]
@@ -99,14 +121,18 @@ type HookFacts = {
 }
 
 const printer = ts.createPrinter({ removeComments: true })
+
 const sourceFiles = new Map<string, ts.SourceFile>()
 
 function parse(relativePath: string): ts.SourceFile {
   const cached = sourceFiles.get(relativePath)
+
   if (cached) {
     return cached
   }
+
   const filePath = fileURLToPath(new URL(relativePath, import.meta.url))
+
   const sourceFile = ts.createSourceFile(
     relativePath,
     readFileSync(filePath, 'utf8'),
@@ -114,7 +140,9 @@ function parse(relativePath: string): ts.SourceFile {
     true,
     relativePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS
   )
+
   sourceFiles.set(relativePath, sourceFile)
+
   return sourceFile
 }
 
@@ -128,16 +156,21 @@ function hash(values: readonly string[]): string {
 
 function readDefinitions(): Map<string, Definition> {
   const definitions = new Map<string, Definition>()
+
   for (const relativePath of SESSION_FILES) {
     const sourceFile = parse(relativePath)
+
     const visit = (node: ts.Node): void => {
       if (ts.isFunctionDeclaration(node) && node.name) {
         definitions.set(node.name.text, { declaration: node, sourceFile })
       }
+
       ts.forEachChild(node, visit)
     }
+
     visit(sourceFile)
   }
+
   return definitions
 }
 
@@ -148,13 +181,17 @@ function visitLogicalFunction(
   active = new Set<string>()
 ): void {
   const definition = definitions.get(name)
+
   if (!definition?.declaration.body) {
     throw new Error(`Missing session function: ${name}`)
   }
+
   if (active.has(name)) {
     throw new Error(`Recursive session function: ${name}`)
   }
+
   const nextActive = new Set(active).add(name)
+
   const visit = (node: ts.Node): void => {
     if (
       ts.isCallExpression(node) &&
@@ -162,11 +199,14 @@ function visitLogicalFunction(
       LOGIC_EXPANSION_NAMES.has(node.expression.text)
     ) {
       visitLogicalFunction(node.expression.text, definitions, onNode, nextActive)
+
       return
     }
+
     onNode(node, definition.sourceFile)
     ts.forEachChild(node, visit)
   }
+
   visit(definition.declaration.body)
 }
 
@@ -178,6 +218,7 @@ function readHookFacts(name: string, definitions: ReadonlyMap<string, Definition
     effects: [],
     hooks: []
   }
+
   visitLogicalFunction(name, definitions, (node, sourceFile) => {
     if (
       !ts.isCallExpression(node) ||
@@ -186,8 +227,10 @@ function readHookFacts(name: string, definitions: ReadonlyMap<string, Definition
     ) {
       return
     }
+
     const hookName = node.expression.text
     facts.hooks.push(hookName)
+
     const owner = ts.isVariableDeclaration(node.parent)
       ? node.parent.name.getText(sourceFile)
       : ts.isExpressionStatement(node.parent)
@@ -195,33 +238,43 @@ function readHookFacts(name: string, definitions: ReadonlyMap<string, Definition
         : ts.isCallExpression(node.parent) && ts.isIdentifier(node.parent.expression)
           ? `<argument:${node.parent.expression.text}>`
           : '<nested>'
+
     const lastArgument = node.arguments.at(-1)
+
     const dependencies =
       lastArgument && ts.isArrayLiteralExpression(lastArgument)
         ? canonical(lastArgument, sourceFile)
         : '<none>'
+
     facts.bindings.push(`${hookName}|${owner}|${dependencies}`)
+
     if (hookName === 'useCallback') {
       facts.callbacks.push(`${owner}|${dependencies}`)
       facts.callbackBodies.push(
         `${owner}|${canonical(node.arguments[0], sourceFile)}|${dependencies}`
       )
     }
+
     if (hookName === 'useEffect') {
       facts.effects.push(`${canonical(node.arguments[0], sourceFile)}|${dependencies}`)
     }
   })
+
   return facts
 }
 
 function readNestedFunctions(definitions: ReadonlyMap<string, Definition>): string[] {
   const functions: string[] = []
+
   const visitDefinition = (name: string, active: ReadonlySet<string>): void => {
     const definition = definitions.get(name)
+
     if (!definition?.declaration.body || active.has(name)) {
       throw new Error(`Invalid nested-function stage: ${name}`)
     }
+
     const nextActive = new Set(active).add(name)
+
     const visit = (node: ts.Node): void => {
       if (
         ts.isCallExpression(node) &&
@@ -229,17 +282,24 @@ function readNestedFunctions(definitions: ReadonlyMap<string, Definition>): stri
         LOGIC_EXPANSION_NAMES.has(node.expression.text)
       ) {
         visitDefinition(node.expression.text, nextActive)
+
         return
       }
+
       if (ts.isFunctionDeclaration(node) && node.name) {
         functions.push(`${node.name.text}|${canonical(node, definition.sourceFile)}`)
+
         return
       }
+
       ts.forEachChild(node, visit)
     }
+
     visit(definition.declaration.body)
   }
+
   visitDefinition('SessionScreen', new Set())
+
   return functions
 }
 
@@ -253,27 +313,33 @@ function readNativeAndTimerFacts(definitions: ReadonlyMap<string, Definition>): 
   const removals: string[] = []
   const creations: string[] = []
   const cleanups: string[] = []
+
   const collect = (node: ts.Node, sourceFile: ts.SourceFile): void => {
     if (!ts.isCallExpression(node)) {
       return
     }
+
     if (ts.isPropertyAccessExpression(node.expression)) {
       const receiver = node.expression.expression.getText(sourceFile)
       const method = node.expression.name.text
+
       if (
         ['BackHandler', 'AppState', 'Keyboard'].includes(receiver) &&
         ['addEventListener', 'addListener'].includes(method)
       ) {
         registrations.push(canonical(node, sourceFile))
       }
+
       if (method === 'remove') {
         removals.push(canonical(node, sourceFile))
       }
     }
+
     if (ts.isIdentifier(node.expression)) {
       if (['setTimeout', 'setInterval', 'requestAnimationFrame'].includes(node.expression.text)) {
         creations.push(canonical(node, sourceFile))
       }
+
       if (
         ['clearTimeout', 'clearInterval', 'cancelAnimationFrame'].includes(node.expression.text)
       ) {
@@ -281,8 +347,10 @@ function readNativeAndTimerFacts(definitions: ReadonlyMap<string, Definition>): 
       }
     }
   }
+
   visitLogicalFunction('FileReader', definitions, collect)
   visitLogicalFunction('SessionScreen', definitions, collect)
+
   return { cleanups, creations, registrations, removals }
 }
 
@@ -297,11 +365,13 @@ function isRuntimeNode(node: ts.Node): boolean {
       return false
     }
   }
+
   return true
 }
 
 function readRuntimeStrings(): string[] {
   const values: string[] = []
+
   for (const relativePath of SESSION_FILES) {
     const visit = (node: ts.Node): void => {
       if (isRuntimeNode(node)) {
@@ -314,14 +384,18 @@ function readRuntimeStrings(): string[] {
         ) {
           values.push(node.text)
         }
+
         if (ts.isJsxText(node) && node.text.trim()) {
           values.push(node.text.replace(/\s+/g, ' ').trim())
         }
       }
+
       ts.forEachChild(node, visit)
     }
+
     visit(parse(relativePath))
   }
+
   return values.sort()
 }
 
@@ -333,12 +407,16 @@ function readJsxFacts(definitions: ReadonlyMap<string, Definition>): {
   const host: string[] = []
   const leaf: string[] = []
   const active = new Set<string>()
+
   const visitDefinition = (name: string): void => {
     const definition = definitions.get(name)
+
     if (!definition?.declaration.body || active.has(name)) {
       throw new Error(`Invalid JSX stage: ${name}`)
     }
+
     active.add(name)
+
     const visit = (node: ts.Node): void => {
       if (
         ts.isCallExpression(node) &&
@@ -346,27 +424,36 @@ function readJsxFacts(definitions: ReadonlyMap<string, Definition>): {
         LOGIC_EXPANSION_NAMES.has(node.expression.text)
       ) {
         visitDefinition(node.expression.text)
+
         return
       }
+
       if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
         const opening = ts.isJsxElement(node) ? node.openingElement : node
         const tagName = opening.tagName.getText(definition.sourceFile)
+
         if (SURFACE_EXPANSION_NAMES.has(tagName)) {
           visitDefinition(tagName)
+
           return
         }
+
         const attributes = opening.attributes.properties
           .map((attribute) => {
             if (ts.isJsxSpreadAttribute(attribute)) {
               return `...${canonical(attribute.expression, definition.sourceFile)}`
             }
+
             const attributeName = attribute.name.getText(definition.sourceFile)
+
             if (!attribute.initializer) {
               return attributeName
             }
+
             if (ts.isStringLiteral(attribute.initializer)) {
               return `${attributeName}=${JSON.stringify(attribute.initializer.text)}`
             }
+
             return `${attributeName}=${
               attribute.initializer.expression
                 ? canonical(attribute.initializer.expression, definition.sourceFile)
@@ -374,38 +461,50 @@ function readJsxFacts(definitions: ReadonlyMap<string, Definition>): {
             }`
           })
           .join(',')
+
         ;(HOST_COMPONENT_NAMES.has(tagName) ? host : leaf).push(`${tagName}|${attributes}`)
+
         for (const attribute of opening.attributes.properties) {
           ts.forEachChild(attribute, visit)
         }
+
         if (ts.isJsxElement(node)) {
           for (const child of node.children) {
             visit(child)
           }
         }
+
         return
       }
+
       if (ts.isJsxFragment(node)) {
         for (const child of node.children) {
           visit(child)
         }
+
         return
       }
+
       ts.forEachChild(node, visit)
     }
+
     visit(definition.declaration.body)
     active.delete(name)
   }
+
   for (const name of CONTENT_COMPONENT_NAMES) {
     visitDefinition(name)
   }
+
   visitDefinition('SessionScreen')
   const styleReferences: string[] = []
+
   for (const record of [...host, ...leaf]) {
     for (const match of record.matchAll(/styles\.([A-Za-z0-9_]+)/g)) {
       styleReferences.push(match[1])
     }
   }
+
   return { host, leaf, styleReferences }
 }
 
@@ -421,11 +520,14 @@ function readCompatibilityFacts(definitions: ReadonlyMap<string, Definition>): {
     if (!isRuntimeNode(node)) {
       return
     }
+
     if (ts.isPropertyAssignment(node)) {
       const name = node.name.getText(sourceFile)
+
       if (['notifyClients', 'deviceToken', 'clientId'].includes(name)) {
         identityFields.push(`${name}|${canonical(node.initializer, sourceFile)}`)
       }
+
       if (
         name === 'client' &&
         ts.isObjectLiteralExpression(node.initializer) &&
@@ -439,9 +541,11 @@ function readCompatibilityFacts(definitions: ReadonlyMap<string, Definition>): {
         identityFields.push(`client|${canonical(node.initializer, sourceFile)}`)
       }
     }
+
     if (!ts.isCallExpression(node)) {
       return
     }
+
     if (
       ts.isPropertyAccessExpression(node.expression) &&
       node.expression.expression.getText(sourceFile) === 'router' &&
@@ -449,12 +553,15 @@ function readCompatibilityFacts(definitions: ReadonlyMap<string, Definition>): {
     ) {
       navigation.push(canonical(node, sourceFile))
     }
+
     const callName = ts.isIdentifier(node.expression)
       ? node.expression.text
       : ts.isPropertyAccessExpression(node.expression)
         ? node.expression.name.text
         : ''
+
     const callText = canonical(node, sourceFile)
+
     if (
       ['startRuntimeCapabilityProbe', 'supportsMobileQuickCommands'].includes(callName) ||
       (callName === 'includes' && callText.includes('capabilities.includes'))
@@ -462,6 +569,7 @@ function readCompatibilityFacts(definitions: ReadonlyMap<string, Definition>): {
       capabilities.push(callText)
     }
   })
+
   return { capabilities, identityFields, navigation }
 }
 
@@ -469,9 +577,11 @@ describe('mobile session route extraction parity', () => {
   it('preserves hooks, callbacks, effects, and nested action bodies', () => {
     const definitions = readDefinitions()
     const main = readHookFacts('SessionScreen', definitions)
+
     const contentBindings = CONTENT_COMPONENT_NAMES.flatMap(
       (name) => readHookFacts(name, definitions).bindings
     )
+
     expect(main.hooks).toHaveLength(269)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)

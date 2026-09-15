@@ -20,11 +20,14 @@ async function waitForHiddenTabPtyId(
       async () => {
         ptyId = await page.evaluate((targetTabId) => {
           const state = window.__store?.getState()
+
           if (!state) {
             return null
           }
+
           return state.ptyIdsByTabId[targetTabId]?.[0] ?? null
         }, tabId)
+
         return ptyId
       },
       {
@@ -37,6 +40,7 @@ async function waitForHiddenTabPtyId(
   if (!ptyId) {
     throw new Error(`waitForHiddenTabPtyId: tab ${tabId} has no PTY id`)
   }
+
   return ptyId
 }
 
@@ -50,6 +54,7 @@ async function mainSnapshotContains(
       const snapshot = await window.api.pty.getMainBufferSnapshot(targetPtyId, {
         scrollbackRows: 200
       })
+
       return snapshot?.data.includes(expectedText) ?? false
     },
     { targetPtyId: ptyId, expectedText: text }
@@ -68,16 +73,20 @@ test.describe('Automation hidden terminal first mount', () => {
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'background first-mount repro needs the seeded secondary worktree')
+
     if (!secondWorktreeId) {
       return
     }
 
     const runId = Date.now()
     const marker = `AUTO_FIRST_MOUNT_${runId}`
+
     const hiddenTabId = await orcaPage.evaluate(
       ({ worktreeId, marker, eventName }) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('Store unavailable')
         }
@@ -89,10 +98,12 @@ test.describe('Automation hidden terminal first mount', () => {
         )
 
         const state = store.getState()
+
         const tab = state.createTab(worktreeId, undefined, undefined, {
           activate: false,
           recordInteraction: false
         })
+
         state.queueTabStartupCommand(tab.id, {
           command: `node -e "console.log('${marker}')"`,
           telemetry: {
@@ -103,6 +114,7 @@ test.describe('Automation hidden terminal first mount', () => {
         state.setTabCustomTitle(tab.id, 'Automation hidden shell', {
           recordInteraction: false
         })
+
         return tab.id
       },
       {
@@ -130,9 +142,11 @@ test.describe('Automation hidden terminal first mount', () => {
 
     await orcaPage.evaluate((tabId) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Store unavailable')
       }
+
       const state = store.getState()
       state.setActiveTab(tabId)
       state.setActiveTabType('terminal')

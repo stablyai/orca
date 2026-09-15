@@ -15,6 +15,7 @@ function getGitArgs(call: unknown[]): string[] {
 function countCalls(runGit: ReturnType<typeof vi.fn>, expectedArgs: string[]): number {
   return runGit.mock.calls.filter((call) => {
     const args = getGitArgs(call)
+
     return (
       args.length === expectedArgs.length && args.every((arg, index) => arg === expectedArgs[index])
     )
@@ -23,9 +24,11 @@ function countCalls(runGit: ReturnType<typeof vi.fn>, expectedArgs: string[]): n
 
 function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolveDeferred: (value: T) => void = () => undefined
+
   const promise = new Promise<T>((resolve) => {
     resolveDeferred = resolve
   })
+
   return { promise, resolve: resolveDeferred }
 }
 
@@ -38,6 +41,7 @@ describe('createGitConfigSnapshotRunner', () => {
         'remote.pushdefault\nfork'
       ])
     }))
+
     const runner = createGitConfigSnapshotRunner(runGit)
 
     await runner(['config', '--get', 'branch.main.remote'])
@@ -56,6 +60,7 @@ describe('createGitConfigSnapshotRunner', () => {
         'remote.origin.url\ngit@example.com:org/repo.git'
       ])
     }))
+
     const runner = createGitConfigSnapshotRunner(runGit)
 
     await expect(runner(['config', '--get', 'branch.feature.remote'])).resolves.toEqual({
@@ -86,6 +91,7 @@ describe('createGitConfigSnapshotRunner', () => {
     const runGit = vi.fn(async () => ({
       stdout: listSnapshot(['remote.pushdefault\nfork'])
     }))
+
     const runner = createGitConfigSnapshotRunner(runGit)
 
     await expect(runner(['config', '--get', 'remote.pushDefault'])).resolves.toEqual({
@@ -97,6 +103,7 @@ describe('createGitConfigSnapshotRunner', () => {
     const runGit = vi.fn(async () => ({
       stdout: listSnapshot(['branch.feature.x.merge\nrefs/heads/feature.x'])
     }))
+
     const runner = createGitConfigSnapshotRunner(runGit)
 
     await expect(runner(['config', '--get', 'branch.feature.x.merge'])).resolves.toEqual({
@@ -111,6 +118,7 @@ describe('createGitConfigSnapshotRunner', () => {
         'branch.main.merge\nrefs/heads/new'
       ])
     }))
+
     const runner = createGitConfigSnapshotRunner(runGit)
 
     await expect(runner(['config', '--get', 'branch.main.merge'])).resolves.toEqual({
@@ -125,6 +133,7 @@ describe('createGitConfigSnapshotRunner', () => {
         'remote.origin.url\ngit@example.com:org/repo.git'
       ])
     }))
+
     const runner = createGitConfigSnapshotRunner(runGit)
 
     await expect(runner(['config', '--get', 'remote.origin.mirror'])).resolves.toEqual({
@@ -143,6 +152,7 @@ describe('createGitConfigSnapshotRunner', () => {
     const runGit = vi.fn(async () => ({
       stdout: listSnapshot(['branch.main.remote\norigin'])
     }))
+
     const runner = createGitConfigSnapshotRunner(runGit)
 
     await expect(runner(['config', '--get', 'branch.main.merge'])).rejects.toThrow(
@@ -153,6 +163,7 @@ describe('createGitConfigSnapshotRunner', () => {
     expect(
       runGit.mock.calls.filter((call) => {
         const args = getGitArgs(call)
+
         return args[0] === 'config' && args[1] === '--get'
       })
     ).toHaveLength(0)
@@ -168,6 +179,7 @@ describe('createGitConfigSnapshotRunner', () => {
       runner(['config', '--get', 'branch.main.merge']),
       runner(['config', '--get', 'remote.pushDefault'])
     ])
+
     await Promise.resolve()
 
     expect(countCalls(runGit, ['config', '--list', '-z'])).toBe(1)
@@ -192,11 +204,14 @@ describe('createGitConfigSnapshotRunner', () => {
       if (args[0] === 'config' && args[1] === '--list') {
         throw new Error('snapshot failed')
       }
+
       if (args[0] === 'config' && args[1] === '--get') {
         return { stdout: `real:${args[2]}` }
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
+
     const runner = createGitConfigSnapshotRunner(runGit)
 
     await expect(runner(['config', '--get', 'branch.main.remote'])).resolves.toEqual({

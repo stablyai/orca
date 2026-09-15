@@ -40,6 +40,7 @@ describe('agent process inspection rounds', () => {
         }
       })
     }
+
     // Well inside one 1s rate-limiter window: pre-fix only the 8 starts that window
     // allows are spent, so only 8 of the 300 panes are ever inspected.
     await vi.advanceTimersByTimeAsync(200)
@@ -63,6 +64,7 @@ describe('agent process inspection rounds', () => {
         }
       })
     }
+
     // Seven unshared panes still fit, which is what proves the round cost exactly one of
     // the eight starts rather than one per pane until the concurrency slots filled.
     for (let index = 0; index < 7; index += 1) {
@@ -75,6 +77,7 @@ describe('agent process inspection rounds', () => {
         }
       })
     }
+
     await vi.advanceTimersByTimeAsync(200)
 
     // One synchronous burst carries every pane, so they hit one process-table capture
@@ -97,6 +100,7 @@ describe('agent process inspection rounds', () => {
         }
       })
     }
+
     await vi.advanceTimersByTimeAsync(200)
 
     expect(started.length).toBeLessThanOrEqual(8)
@@ -115,6 +119,7 @@ describe('agent process inspection rounds', () => {
         }
       })
     }
+
     enqueueAgentProcessInspection({
       priority: 'pending-title',
       canRun: () => true,
@@ -142,6 +147,7 @@ describe('agent process inspection rounds', () => {
         }
       })
     }
+
     await vi.advanceTimersByTimeAsync(200)
 
     expect(inspected).toEqual(Array.from({ length: PANES / 2 }, (_unused, index) => index * 2))

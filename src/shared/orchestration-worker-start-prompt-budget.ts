@@ -11,6 +11,7 @@ import {
 
 const WORKER_START_PROMPT_INGEST_BUDGET_MS =
   ORCHESTRATION_WORKER_START_CLIENT_GRACE_MS - AGENT_PROMPT_EFFECT_TIMEOUT_MS
+
 const WORKER_START_PREAMBLE_RESERVED_BYTES = TERMINAL_INPUT_CHUNK_MAX_BYTES * 4
 
 /** Keeps worst-case Windows ingest plus effect settlement inside worker-start's fixed RPC grace. */

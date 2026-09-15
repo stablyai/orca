@@ -10,6 +10,7 @@ const order: string[] = []
 vi.mock('./orcad-native-preflight', () => ({
   runOrcadNativePreflight: () => {
     order.push('preflight')
+
     return true
   }
 }))

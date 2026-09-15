@@ -33,8 +33,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -55,6 +58,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -64,6 +68,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -84,6 +89,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -94,9 +100,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -106,9 +114,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -117,6 +127,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -157,6 +168,7 @@ describe('deliberate sleep keeps mounted panes cold', () => {
       tabsByWorktree: { 'wt-1': [{ id: 'tab-slept', ptyId: 'wt-1@@dead' }] }
     }
     markWorktreeSleepIntent('wt-1')
+
     const deps = createDeps({
       tabId: 'tab-slept',
       restoredLeafId: LEAF_1,
@@ -187,8 +199,10 @@ describe('deliberate sleep keeps mounted panes cold', () => {
 
   it('connects a waiting pane once the workspace is woken', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
       await import('@/lib/worktree-sleep-intent')
+
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     mockStoreState = {
@@ -197,6 +211,7 @@ describe('deliberate sleep keeps mounted panes cold', () => {
       tabsByWorktree: { 'wt-1': [{ id: 'tab-woken', ptyId: 'wt-1@@dead' }] }
     }
     markWorktreeSleepIntent('wt-1')
+
     const deps = createDeps({
       tabId: 'tab-woken',
       restoredLeafId: LEAF_1,
@@ -216,8 +231,10 @@ describe('deliberate sleep keeps mounted panes cold', () => {
 
   it('does not connect a waiting pane whose tab was remounted by the wake', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
       await import('@/lib/worktree-sleep-intent')
+
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     mockStoreState = {
@@ -226,12 +243,14 @@ describe('deliberate sleep keeps mounted panes cold', () => {
       tabsByWorktree: { 'wt-1': [{ id: 'tab-remounted', ptyId: 'wt-1@@dead', generation: 0 }] }
     }
     markWorktreeSleepIntent('wt-1')
+
     const deps = createDeps({
       tabId: 'tab-remounted',
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: 'wt-1@@dead' },
       isVisibleRef: { current: false }
     })
+
     connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
     await flushAsyncTicks()
 
@@ -248,8 +267,10 @@ describe('deliberate sleep keeps mounted panes cold', () => {
 
   it('resumes a waiting pane mounted under a unified tab id', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
       await import('@/lib/worktree-sleep-intent')
+
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     mockStoreState = {
@@ -274,14 +295,18 @@ describe('deliberate sleep keeps mounted panes cold', () => {
 
   it('re-arms after a wake so a second sleep can hold the pane again', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
       await import('@/lib/worktree-sleep-intent')
+
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     let releaseCwd: (cwd: string) => void = () => {}
+
     const cwdPromise = new Promise<string>((resolve) => {
       releaseCwd = resolve
     })
+
     markWorktreeSleepIntent('wt-1')
     const deps = createDeps({ tabId: 'tab-resleep', isVisibleRef: { current: false }, cwdPromise })
 
@@ -303,8 +328,10 @@ describe('deliberate sleep keeps mounted panes cold', () => {
 
   it('drops the wake listener when a waiting pane is disposed', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { clearWorktreeSleepIntent, markWorktreeSleepIntent } =
       await import('@/lib/worktree-sleep-intent')
+
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     markWorktreeSleepIntent('wt-1')
@@ -331,6 +358,7 @@ describe('deliberate sleep keeps mounted panes cold', () => {
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     markWorktreeSleepIntent('wt-1')
+
     const deps = createDeps({
       tabId: 'tab-slept-startup',
       isVisibleRef: { current: false },
@@ -347,6 +375,7 @@ describe('deliberate sleep keeps mounted panes cold', () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
+
     const deps = createDeps({
       tabId: 'tab-awake',
       restoredLeafId: LEAF_1,

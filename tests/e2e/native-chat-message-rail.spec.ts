@@ -11,6 +11,7 @@ import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from '.
 
 /** 30 user turns, so the rail is well past its 20-tick sampling cap. */
 const TRANSCRIPT_ROWS = 60
+
 const SHOT_DIR = path.join(os.tmpdir(), 'orca-rail-validation-larvacean', 'shots')
 
 async function enableNativeChatSetting(page: Page): Promise<void> {
@@ -44,31 +45,39 @@ async function toggleTerminalTabToChatView(
 ): Promise<void> {
   await page.evaluate(({ tabId, worktreeId }) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const state = store.getState()
+
     const unifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
       (tab) => tab.contentType === 'terminal' && tab.entityId === tabId
     )
+
     if (!unifiedTab) {
       throw new Error('Unified terminal tab not found for chat toggle')
     }
+
     state.toggleTabViewMode(unifiedTab.id)
   }, args)
 }
 
 function claudeTranscript(rowCount: number, sessionId: string): string {
   const startedAt = Date.now() - rowCount * 1_000
+
   return `${Array.from({ length: rowCount }, (_, index) => {
     const isUser = index % 2 === 0
     const turn = Math.floor(index / 2)
+
     const body = isUser
       ? `Question ${turn}: what does the rail do when I scroll a long reply?`
       : Array.from(
           { length: 6 + (turn % 7) * 3 },
           (_unused, line) => `Answer paragraph ${line + 1} for turn ${turn}.`
         ).join('\n\n')
+
     return JSON.stringify({
       sessionId,
       uuid: `${sessionId}-${index}`,
@@ -148,10 +157,13 @@ test.describe('Native chat message rail', () => {
     await expect(panel).not.toBeVisible()
     const target = transcriptWindow.locator('[data-index="10"]')
     const scroller = orcaPage.locator('[data-native-chat-scroll]')
+
     const targetOffset = async (): Promise<number> => {
       const [row, viewport] = await Promise.all([target.boundingBox(), scroller.boundingBox()])
+
       return row && viewport ? Math.abs(row.y - viewport.y) : Number.POSITIVE_INFINITY
     }
+
     await expect.poll(targetOffset).toBeLessThan(4)
 
     for (let revision = 0; revision < 3; revision += 1) {

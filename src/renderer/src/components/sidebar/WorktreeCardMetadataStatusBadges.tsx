@@ -64,6 +64,7 @@ export function LinearStateBadge({ stateName }: { stateName: string }): React.JS
   const cancelled = /cancel|canceled|duplicate|wontfix/.test(normalized)
   const active = /progress|doing|started|active/.test(normalized)
   const Icon = done ? CircleCheck : cancelled ? CircleX : active ? Clock : CircleDot
+
   const tone = done
     ? 'border-purple-500/25 bg-purple-500/5 text-purple-600 dark:text-purple-300'
     : cancelled

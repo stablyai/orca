@@ -24,6 +24,7 @@ export type StructuredSessionRecoveryResolutionDeps = {
 }
 
 const STOP_PROBES_PER_SIGNAL = 4
+
 const STOP_PROBE_INTERVAL_MS = 250
 
 const UNRESOLVED_REFUSALS: ReadonlySet<string> = new Set([
@@ -39,15 +40,19 @@ export function structuredSessionRecoveryIsResolvable(record: AgentSessionRecord
     // Settlement latches are cleared only by a successful journal retry, never by owner probing.
     return false
   }
+
   const { claimStatus, handoffStage, ownerProcess, runtimeKind } = record.lease
+
   if (handoffStage !== 'recovering' && handoffStage !== 'manual-recovery') {
     return false
   }
+
   if (claimStatus === 'conflicted') {
     // A conflict names one process. Re-asking is only meaningful against that name; with none
     // recorded there is nothing present-time evidence could settle, and the user decides.
     return ownerProcess !== null
   }
+
   // A TUI owner has its own recovery transport — but that transport needs a process to talk to
   // (`structuredManualRecoveryIsAdmissible` requires one). A TUI reservation that crashed before
   // its identity was committed names nobody, so nothing else in the system can exit it.
@@ -65,11 +70,14 @@ export async function resolveStructuredSessionRecovery(
   sessionId: string
 ): Promise<'resolved' | 'unresolved' | 'not-applicable'> {
   const record = deps.store.getRecord(sessionId)
+
   if (!record || !structuredSessionRecoveryIsResolvable(record)) {
     return 'not-applicable'
   }
+
   let probe = await deps.probeRecord(record)
   const owner = record.lease.ownerProcess
+
   if (
     owner &&
     owner.hostId === deps.store.hostId &&
@@ -80,6 +88,7 @@ export async function resolveStructuredSessionRecovery(
     // reconstructed, so the only way forward is to stop it and prove it gone.
     probe = await stopOwnerAndReprobe(deps, record, owner.pid)
   }
+
   try {
     await deps.store.evictProvenDeadOwner({
       sessionId,
@@ -87,13 +96,16 @@ export async function resolveStructuredSessionRecovery(
       probe,
       now: deps.now()
     })
+
     return 'resolved'
   } catch (error) {
     const code = error instanceof Error ? error.message : String(error)
+
     if (UNRESOLVED_REFUSALS.has(code)) {
       // No proof yet; the record is preserved untouched and the next attempt re-asks.
       return 'unresolved'
     }
+
     throw error
   }
 }
@@ -106,16 +118,21 @@ async function stopOwnerAndReprobe(
   const stop = deps.stopOwnerProcess ?? defaultStopOwnerProcess
   const delay = deps.delay ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)))
   let probe: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'owner stop requested' }
+
   for (const signal of ['SIGTERM', 'SIGKILL'] as const) {
     stop(pid, signal)
+
     for (let attempt = 0; attempt < STOP_PROBES_PER_SIGNAL; attempt += 1) {
       probe = await deps.probeRecord(record)
+
       if (isProvenDeadProbe(probe)) {
         return probe
       }
+
       await delay(STOP_PROBE_INTERVAL_MS)
     }
   }
+
   return probe
 }
 

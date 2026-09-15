@@ -63,9 +63,11 @@ export function ChecksTab({
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const updateRepo = useAppStore((s) => s.updateRepo)
+
   const repo = useAppStore((s) =>
     targetRepoId ? (s.repos.find((candidate) => candidate.id === targetRepoId) ?? null) : null
   )
+
   const repos = useAppStore((s) => s.repos)
   const projects = useAppStore((s) => s.projects)
   const [fixingChecks, setFixingChecks] = useState(false)
@@ -73,6 +75,7 @@ export function ChecksTab({
   const mountedRef = useMountedRef()
   const prRepo = useMemo(() => resolvePullRequestRepo(item), [item])
   const nextCheckDetailsRequestIdRef = useRef(0)
+
   const checkDetailsContextKey = [
     sourceContext ? getTaskSourceCacheScope(sourceContext) : 'local',
     repoId ?? item.repoId ?? '',
@@ -82,33 +85,41 @@ export function ChecksTab({
     item.number,
     headSha ?? ''
   ].join('\0')
+
   const [checksState, setChecksState] = useState(() =>
     createGitHubChecksTabState(checks, checkDetailsContextKey)
   )
+
   const resolvedChecksState = resolveGitHubChecksTabState(
     checksState,
     checks,
     checkDetailsContextKey
   )
+
   const committedChecksContextOwnerRef = useRef(resolvedChecksState.contextOwner)
   const nextChecksRefreshRequestIdRef = useRef(0)
   const activeChecksRefreshRequestIdRef = useRef<number | null>(null)
+
   const [refreshingOwner, setRefreshingOwner] = useState<{
     contextOwner: object
     requestId: number
   } | null>(null)
+
   const refreshing = refreshingOwner?.contextOwner === resolvedChecksState.contextOwner
   const [rerunningOwner, setRerunningOwner] = useState<object | null>(null)
   const rerunning = rerunningOwner === resolvedChecksState.contextOwner
   useLayoutEffect(() => {
     committedChecksContextOwnerRef.current = resolvedChecksState.contextOwner
   }, [resolvedChecksState.contextOwner])
+
   if (resolvedChecksState !== checksState) {
     // Why: reconcile before paint when a parent check refresh replaces the source list, so stale rows/details never show.
     setChecksState(resolvedChecksState)
   }
+
   const { localChecks, expandedCheckKey, detailsByCheckKey } = resolvedChecksState
   const list = useMemo(() => localChecks ?? checks ?? [], [checks, localChecks])
+
   const fixChecksRecipe = useMemo(
     () =>
       resolveSourceControlActionRecipe({
@@ -118,6 +129,7 @@ export function ChecksTab({
       }),
     [repo, settings]
   )
+
   const fixChecksLaunchPlatform = useMemo(
     () =>
       resolveSourceControlLaunchPlatform({
@@ -141,6 +153,7 @@ export function ChecksTab({
       }),
     [projects, repo?.connectionId, repo?.id, repo?.path, repos, settings]
   )
+
   // Why: parses a fresh host object per call, so memoize to keep the check action callbacks stable.
   const runtimeHost = useMemo(() => getGitHubSourceRuntimeHost(sourceContext), [sourceContext])
   const canUseChecksRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
@@ -148,6 +161,7 @@ export function ChecksTab({
   const failedChecks = getBrokenChecks(list)
   const counts = getCheckCounts(list)
   const summaryLabel = getChecksSummaryLabel(list)
+
   // Why: keying the green tick off `list.length` painted an all-neutral PR green above the words
   // "0 of N checks passing"; nothing passed, so it reads unresolved like the checks pill does.
   const SummaryIcon =
@@ -160,6 +174,7 @@ export function ChecksTab({
           : counts.passing > 0
             ? CHECK_ICON.success
             : CircleDashed
+
   const summaryColor =
     counts.failing > 0
       ? CHECK_COLOR.failure
@@ -170,6 +185,7 @@ export function ChecksTab({
           : counts.passing > 0
             ? CHECK_COLOR.success
             : 'text-muted-foreground'
+
   const canFixBrokenChecks = Boolean((repoId ?? item.repoId) && failedChecks.length > 0)
 
   const handleRefresh = useCallback(
@@ -272,9 +288,11 @@ export function ChecksTab({
     (check: PRCheckDetail): void => {
       const key = getCheckDetailsKey(check)
       setChecksState((current) => toggleGitHubChecksTabExpandedKey(current, key))
+
       if (detailsByCheckKey[key]) {
         return
       }
+
       requestCheckDetails(check, key)
     },
     [detailsByCheckKey, requestCheckDetails]
@@ -337,6 +355,7 @@ export function ChecksTab({
 
   const renderCheckRow = (check: PRCheckDetail): React.JSX.Element => {
     const key = getCheckDetailsKey(check)
+
     return (
       <CheckRow
         key={key}

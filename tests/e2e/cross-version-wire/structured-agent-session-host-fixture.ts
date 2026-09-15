@@ -68,6 +68,7 @@ export function structuredHostStub(
     subscribe: vi.fn(() => () => undefined),
     subscribeStatus: vi.fn((subscriber: { emit: (event: unknown) => void }) => {
       subscriber.emit({ type: 'snapshot', sessions: [] })
+
       return () => undefined
     }),
     unsubscribe: vi.fn()
@@ -75,6 +76,7 @@ export function structuredHostStub(
 }
 
 const TURN = { turnId: 'turn-1', state: 'completed' as const, startedAt: 1, completedAt: 6 }
+
 const TURN_ROW = { itemId: 'legacy:codex:s:turn-1', revision: 1, sequence: 1, observedAt: 1 }
 
 /** One completed turn the host journals, and the two ways the current host publishes it.
@@ -94,6 +96,7 @@ export const turnItemSkew = {
     current: { capabilities: readonly string[] }
   ) {
     const old = baseline.capabilities.filter((c) => c !== AGENT_SESSION_TURN_ITEM_CAPABILITY)
+
     return [
       [
         [...old, STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],

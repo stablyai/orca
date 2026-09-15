@@ -28,8 +28,11 @@ export function createAccumulator(): SearchAccumulator {
 // ─── Constants shared by both callers ────────────────────────────────
 
 export const MAX_MATCHES_PER_FILE = 100
+
 export const DEFAULT_SEARCH_MAX_RESULTS = 2000
+
 export const SEARCH_TIMEOUT_MS = 15_000
+
 export const SEARCH_JSON_STRUCTURE_LIMITS = {
   structuralTokens: 32 * 1024,
   nestingDepth: 16
@@ -65,26 +68,33 @@ export function buildRgArgs(query: string, target: string, opts: SearchOptionsLi
     '--max-filesize',
     `${Math.floor(SEARCH_MAX_FILE_SIZE / 1024 / 1024)}M`
   ]
+
   if (!opts.caseSensitive) {
     args.push('--ignore-case')
   }
+
   if (opts.wholeWord) {
     args.push('--word-regexp')
   }
+
   if (!opts.useRegex) {
     args.push('--fixed-strings')
   }
+
   if (opts.includePattern) {
     for (const pat of splitSearchGlobPatterns(opts.includePattern)) {
       args.push('--glob', pat)
     }
   }
+
   if (opts.excludePattern) {
     for (const pat of splitSearchGlobPatterns(opts.excludePattern)) {
       args.push('--glob', `!${pat}`)
     }
   }
+
   args.push('--', query, target)
+
   return args
 }
 
@@ -106,9 +116,11 @@ export function ingestRgJsonLine(
   if (acc.totalMatches >= maxResults) {
     return 'stop'
   }
+
   if (!line) {
     return 'continue'
   }
+
   let msg: {
     type?: string
     data?: {
@@ -118,25 +130,31 @@ export function ingestRgJsonLine(
       lines?: { text?: string }
     }
   }
+
   try {
     assertJsonTextStructureWithinLimits(line, SEARCH_JSON_STRUCTURE_LIMITS)
     msg = JSON.parse(line)
   } catch {
     return 'continue'
   }
+
   if (msg.type !== 'match' || !msg.data) {
     return 'continue'
   }
+
   const data = msg.data
   const rawPath = data.path?.text
+
   if (typeof rawPath !== 'string') {
     return 'continue'
   }
+
   const absPath = transformAbsPath ? transformAbsPath(rawPath) : rawPath
   const relPath = normalizeRelativePath(relativeToSearchRoot(rootPath, absPath))
   const lineContent = (data.lines?.text ?? '').replace(/\n$/, '')
   const lineNumber = data.line_number ?? 0
   let submatches = data.submatches ?? []
+
   if (submatches.length === 0) {
     // Why: some rg matches report a line but no submatch ranges; surface a navigable line-level result instead of a count-0 row.
     submatches = [{ start: 0, end: lineContent.length > 0 ? 1 : 0 }]
@@ -144,10 +162,12 @@ export function ingestRgJsonLine(
 
   for (const sub of submatches) {
     let fileResult = acc.fileMap.get(absPath)
+
     if (!fileResult) {
       fileResult = { filePath: absPath, relativePath: relPath, matches: [], matchCount: 0 }
       acc.fileMap.set(absPath, fileResult)
     }
+
     if (
       pushSearchMatch({
         fileResult,
@@ -162,6 +182,7 @@ export function ingestRgJsonLine(
       return 'stop'
     }
   }
+
   return 'continue'
 }
 
@@ -180,12 +201,15 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
     '--untracked',
     '--no-recurse-submodules'
   ]
+
   if (!opts.caseSensitive) {
     gitArgs.push('-i')
   }
+
   if (opts.wholeWord) {
     gitArgs.push('-w')
   }
+
   if (!opts.useRegex) {
     gitArgs.push('--fixed-strings')
   } else {
@@ -195,22 +219,26 @@ export function buildGitGrepArgs(query: string, opts: SearchOptionsLike): string
   gitArgs.push('-e', query, '--')
 
   let hasPathspecs = false
+
   if (opts.includePattern) {
     for (const pat of splitSearchGlobPatterns(opts.includePattern)) {
       gitArgs.push(toGitGlobPathspec(pat))
       hasPathspecs = true
     }
   }
+
   if (opts.excludePattern) {
     for (const pat of splitSearchGlobPatterns(opts.excludePattern)) {
       gitArgs.push(toGitGlobPathspec(pat, true))
       hasPathspecs = true
     }
   }
+
   // Why: git grep needs a pathspec to search the working tree; '.' means everything under cwd.
   if (!hasPathspecs) {
     gitArgs.push('.')
   }
+
   return gitArgs
 }
 
@@ -226,9 +254,11 @@ export function buildSubmatchRegex(
   opts: { useRegex?: boolean; wholeWord?: boolean; caseSensitive?: boolean }
 ): RegExp | null {
   let pattern = opts.useRegex ? query : escapeRegex(query)
+
   if (opts.wholeWord) {
     pattern = `\\b${pattern}\\b`
   }
+
   try {
     return new RegExp(pattern, `g${opts.caseSensitive ? '' : 'i'}`)
   } catch {
@@ -246,49 +276,61 @@ export function ingestGitGrepLine(
   if (acc.totalMatches >= maxResults) {
     return 'stop'
   }
+
   if (!line) {
     return 'continue'
   }
 
   // Why: modern git with --null -n emits filename\0linenum\0content; keep the colon parser too for hosts with older git output.
   const nullIdx = line.indexOf('\0')
+
   if (nullIdx === -1) {
     return 'continue'
   }
+
   const relPath = normalizeRelativePath(line.substring(0, nullIdx))
   const rest = line.substring(nullIdx + 1)
   const secondNullIdx = rest.indexOf('\0')
   let lineNumberText: string
   let lineContent: string
+
   if (secondNullIdx !== -1) {
     lineNumberText = rest.substring(0, secondNullIdx)
     lineContent = rest.substring(secondNullIdx + 1).replace(/\n$/, '')
   } else {
     const colonIdx = rest.indexOf(':')
+
     if (colonIdx === -1) {
       return 'continue'
     }
+
     lineNumberText = rest.substring(0, colonIdx)
     lineContent = rest.substring(colonIdx + 1).replace(/\n$/, '')
   }
+
   if (!/^\d+$/.test(lineNumberText)) {
     return 'continue'
   }
+
   const lineNum = Number(lineNumberText)
 
   const absPath = joinSearchRoot(rootPath, relPath)
+
   const getFileResult = (): SearchFileResult => {
     let fileResult = acc.fileMap.get(absPath)
+
     if (!fileResult) {
       fileResult = { filePath: absPath, relativePath: relPath, matches: [], matchCount: 0 }
       acc.fileMap.set(absPath, fileResult)
     }
+
     return fileResult
   }
 
   // Why: no JS-side submatch regex (git accepts patterns JS RegExp rejects); fall back to whole-line highlight so the hit still shows.
   if (submatchRegex === null) {
     const fileResult = getFileResult()
+
     return pushSearchMatch({
       fileResult,
       accumulator: acc,
@@ -303,9 +345,11 @@ export function ingestGitGrepLine(
   submatchRegex.lastIndex = 0
   let m: RegExpExecArray | null
   let acceptedLineMatch = false
+
   while ((m = submatchRegex.exec(lineContent)) !== null) {
     const fileResult = getFileResult()
     acceptedLineMatch = true
+
     if (
       pushSearchMatch({
         fileResult,
@@ -319,14 +363,17 @@ export function ingestGitGrepLine(
     ) {
       return 'stop'
     }
+
     // Prevent infinite loop on zero-length regex matches.
     if (m[0].length === 0) {
       submatchRegex.lastIndex++
     }
   }
+
   // Why: git grep confirmed the line but JS regex found no occurrence; keep it navigable, don't drop a git-confirmed hit.
   if (!acceptedLineMatch) {
     const fileResult = getFileResult()
+
     if (
       pushSearchMatch({
         fileResult,
@@ -341,6 +388,7 @@ export function ingestGitGrepLine(
       return 'stop'
     }
   }
+
   return 'continue'
 }
 

@@ -3,9 +3,11 @@ import { TERMINAL_METHODS } from './terminal'
 
 function readParams() {
   const method = TERMINAL_METHODS.find((candidate) => candidate.name === 'terminal.read')
+
   if (!method?.params) {
     throw new Error('Missing params schema for terminal.read')
   }
+
   return method.params
 }
 

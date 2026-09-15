@@ -10,24 +10,29 @@ const EXTERNAL_SWITCH = {
   address: '192.168.50.24',
   hasDefaultRoute: true
 } satisfies PairingNetworkInterface & { hasDefaultRoute: boolean }
+
 const DEFAULT_SWITCH: PairingNetworkInterface = {
   name: 'vEthernet (Default Switch)',
   address: '172.28.80.1',
   hasDefaultRoute: true
 }
+
 const WSL_SWITCH: PairingNetworkInterface = {
   name: 'vEthernet (WSL (Hyper-V firewall))',
   address: '172.20.96.1',
   hasDefaultRoute: true
 }
+
 const PHYSICAL_LAN: PairingNetworkInterface = {
   name: 'Ethernet',
   address: '192.168.50.25'
 }
+
 const HOST_LOCAL_BRIDGE: PairingNetworkInterface = {
   name: 'docker0',
   address: '172.17.0.1'
 }
+
 const AMBIGUOUS_SWITCH: PairingNetworkInterface = {
   name: 'vEthernet (Lab)',
   address: '10.40.0.1'

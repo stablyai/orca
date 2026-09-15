@@ -14,19 +14,23 @@ class ScriptedSocket extends EventEmitter implements BrowserNetworkTunnelSocket 
   }
   pause(): this {
     this.paused = true
+
     return this
   }
   resume(): this {
     this.paused = false
+
     return this
   }
   write(bytes: Uint8Array, callback?: () => void): boolean {
     this.written.push(bytes)
     callback?.()
+
     return true
   }
   end(): this {
     this.emit('end')
+
     return this
   }
   destroy(): this {
@@ -34,6 +38,7 @@ class ScriptedSocket extends EventEmitter implements BrowserNetworkTunnelSocket 
       this.destroyed = true
       this.emit('close')
     }
+
     return this
   }
 }

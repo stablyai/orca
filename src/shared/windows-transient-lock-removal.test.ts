@@ -15,6 +15,7 @@ const { rmSyncMock } = vi.hoisted(() => ({
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   return { ...actual, rmSync: rmSyncMock }
 })
 
@@ -23,7 +24,9 @@ function withPlatform(platform: NodeJS.Platform): void {
 }
 
 const SOURCE_ROOT = join(__dirname, '..')
+
 const OWNING_MODULE = 'shared/windows-transient-lock-removal.ts'
+
 /** A `const WINDOWS_RM_… =` line, i.e. a file stating the policy rather than importing it. */
 const POLICY_DECLARATION =
   /^\s*(?:export\s+)?const\s+WINDOWS_RM_(?:MAX_RETRIES|RETRY_DELAY_MS)\s*=/m
@@ -72,9 +75,11 @@ describe('transient lock removal options', () => {
 
   it('retries a transient EPERM instead of treating force: true as enough', () => {
     withPlatform('win32')
+
     const eperm = Object.assign(new Error('EPERM: operation not permitted, unlink'), {
       code: 'EPERM'
     })
+
     rmSyncMock.mockImplementationOnce(() => {
       throw eperm
     })

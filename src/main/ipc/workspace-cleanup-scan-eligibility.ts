@@ -17,12 +17,15 @@ export function shouldScanBroadWorkspaceCleanupWorktree(args: {
   scannedAt: number
 }): boolean {
   const { includeAllWorkspaces, repoIsFolder, worktree, scannedAt } = args
+
   if (includeAllWorkspaces) {
     return true
   }
+
   if (repoIsFolder || worktree.isMainWorktree) {
     return false
   }
+
   // Why: persisted stamps only; the filesystem read that refines them is the
   // expensive part this pre-filter exists to avoid.
   return isWorkspaceInactiveForCleanup(

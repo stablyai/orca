@@ -44,7 +44,9 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
   if (!conflict) {
     return null
   }
+
   let noticeBody = 'Conflict file details are unavailable'
+
   if (isRefreshing) {
     noticeBody = 'Refreshing conflict details…'
   } else if (conflict.localMergeClean) {
@@ -56,14 +58,17 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
     if (!conflict.mergeabilityRefreshCommands) {
       return
     }
+
     try {
       await Clipboard.setStringAsync(conflict.mergeabilityRefreshCommands)
     } catch {
       return
     }
+
     if (copiedResetTimerRef.current) {
       clearTimeout(copiedResetTimerRef.current)
     }
+
     setCommandsCopied(true)
     copiedResetTimerRef.current = setTimeout(() => {
       copiedResetTimerRef.current = null

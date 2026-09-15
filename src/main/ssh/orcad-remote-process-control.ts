@@ -29,6 +29,7 @@ export function stopOrcadCommand(
 ): string {
   assertPosixHost(host)
   const pidFile = shellEscape(joinRemotePath(host, remoteInstallDir, ORCAD_PID_FILENAME))
+
   return [
     posixProcessAliveShellFunction(),
     `pid=$(cat ${pidFile} 2>/dev/null);`,

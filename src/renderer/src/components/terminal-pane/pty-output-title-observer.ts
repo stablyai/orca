@@ -39,11 +39,14 @@ export function createPtyOutputTitleObserver({
 }: PtyOutputTitleObserverOptions): PtyOutputTitleObserver {
   let lastEmittedTitle: string | null =
     initialAgentTitle !== undefined ? normalizeTerminalTitle(initialAgentTitle) : null
+
   let staleTitleTimer: ReturnType<typeof setTimeout> | null = null
+
   const initialTrackerTitle =
     initialAgentTitle !== undefined && !isCursorNativeAgentTitle(initialAgentTitle)
       ? initialAgentTitle
       : undefined
+
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -60,17 +63,20 @@ export function createPtyOutputTitleObserver({
 
   function countWorkingTitles(titles: string[]): number {
     let count = 0
+
     for (const title of titles) {
       if (isWorkingTitle(normalizeTerminalTitle(title))) {
         count += 1
       }
     }
+
     return count
   }
 
   function applyObservedTerminalTitle(title: string, suppressAgentTracker = false): void {
     lastEmittedTitle = normalizeTerminalTitle(title)
     onTitleChange?.(lastEmittedTitle, title)
+
     if (!suppressAgentTracker) {
       agentTracker?.handleTitle(title)
     }
@@ -91,15 +97,19 @@ export function createPtyOutputTitleObserver({
     if (!onTitleChange) {
       return
     }
+
     if (titles.length > 0) {
       clearStaleTitleTimer()
+
       for (const title of titles) {
         if (isCursorNativeAgentTitle(title)) {
           if (!shouldSuppressCursorNativeTitle(lastEmittedTitle)) {
             applyObservedTerminalTitle(title, true)
           }
+
           continue
         }
+
         applyObservedTerminalTitle(title, suppressAgentTracker)
       }
     } else if (titleScanEffect === 'ignored-cursor-native') {
@@ -112,6 +122,7 @@ export function createPtyOutputTitleObserver({
       clearStaleTitleTimer()
       staleTitleTimer = setTimeout(() => {
         staleTitleTimer = null
+
         if (isWorkingTitle(lastEmittedTitle)) {
           const cleared = clearWorkingIndicators(lastEmittedTitle ?? '')
           lastEmittedTitle = cleared

@@ -1,6 +1,7 @@
 import { scheduleSharedControlReconnect } from './remote-runtime-shared-control-state'
 
 const ACTIVE_RECONNECT_DELAYS_MS = [250, 500, 1000, 2000, 4000, 8000, 15_000, 30_000]
+
 const IDLE_RECONNECT_DELAYS_MS = [...ACTIVE_RECONNECT_DELAYS_MS, 60_000, 120_000, 300_000]
 
 export class SharedControlReconnectScheduler {
@@ -24,8 +25,10 @@ export class SharedControlReconnectScheduler {
     if (this.timer || args.intentionallyClosed) {
       return
     }
+
     // Why: a passive subscription owns recovery until its caller closes it; roaming outages are unbounded.
     this.pendingOpen = args.open
+
     const scheduled = scheduleSharedControlReconnect({
       ...args,
       current: this.timer,
@@ -36,6 +39,7 @@ export class SharedControlReconnectScheduler {
         args.open()
       }
     })
+
     this.timer = scheduled.timer
     this.attempt = scheduled.reconnectAttempt
   }
@@ -66,10 +70,13 @@ export class SharedControlReconnectScheduler {
     ) {
       return
     }
+
     if (args.subscriptionCount > 0) {
       this.scheduleWithDefaultBackoff(args.intentionallyClosed, args.open)
+
       return
     }
+
     this.scheduleWithIdleBackoff(args.intentionallyClosed, args.open)
   }
 
@@ -78,11 +85,13 @@ export class SharedControlReconnectScheduler {
     if (!this.timer || !this.pendingOpen) {
       return false
     }
+
     clearTimeout(this.timer)
     this.timer = null
     const open = this.pendingOpen
     this.pendingOpen = null
     open()
+
     return true
   }
 
@@ -91,6 +100,7 @@ export class SharedControlReconnectScheduler {
       clearTimeout(this.timer)
       this.timer = null
     }
+
     this.pendingOpen = null
   }
 

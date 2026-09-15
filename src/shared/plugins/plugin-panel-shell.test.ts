@@ -37,11 +37,14 @@ describe('buildPluginPanelShellHtml', () => {
     const anchor = document.createElement('a')
     anchor.href = 'https://example.com/'
     document.body.appendChild(anchor)
+
     const clickAccepted = anchor.dispatchEvent(
       new MouseEvent('click', { bubbles: true, cancelable: true })
     )
+
     const form = document.createElement('form')
     document.body.appendChild(form)
+
     const submitAccepted = form.dispatchEvent(
       new Event('submit', { bubbles: true, cancelable: true })
     )

@@ -31,10 +31,13 @@ export function getPaletteHostBadge(
   if (!repo || (!alwaysShowHostLabel && !hasActiveRemoteHost(hostOptions))) {
     return null
   }
+
   const hostId = getRepoExecutionHostId(repo)
   const host = hostOptions.find((option) => option.id === hostId)
+
   if (!host) {
     return null
   }
+
   return { hostId, label: host.label }
 }

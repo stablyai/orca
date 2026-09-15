@@ -47,6 +47,7 @@ vi.mock('./checks-panel/checks-list', () => ({
 import { FolderWorkspacePrChecksRow } from './FolderWorkspacePrChecksRow'
 
 let container: HTMLDivElement
+
 let root: Root
 
 function makeWorktree(): Worktree {

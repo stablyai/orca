@@ -12,14 +12,17 @@ import { isWithinOnePaletteEdit } from './typo-distance'
 
 function ready(query: string) {
   const prepared = preparePaletteQuery(query)
+
   if (prepared.state !== 'ready') {
     throw new Error(`expected ready query, got ${prepared.state}`)
   }
+
   return prepared
 }
 
 function run(input: PaletteDocumentInput, query: string) {
   const prepared = ready(query)
+
   return matchPaletteDocument({
     document: buildPaletteDocument(input),
     tokens: prepared.tokens,
@@ -441,6 +444,7 @@ describe('container field matching', () => {
       ],
       evidence: []
     }
+
     const match = run(tabDoc, '4360')
     expect(match).not.toBeNull()
     expect(match?.rank.coverage).toBe(2)
@@ -468,6 +472,7 @@ describe('container field matching', () => {
       ],
       evidence: []
     }
+
     const match = run(tabDoc, '4360')
     expect(match).not.toBeNull()
     expect(match?.rank.coverage).toBe(0)
@@ -498,6 +503,7 @@ describe('container field matching', () => {
       },
       'alpha beta'
     )
+
     const mixed = run(
       {
         id: 'mixed',
@@ -526,6 +532,7 @@ describe('container field matching', () => {
     expect(mixed).not.toBeNull()
     expect(direct?.rank.coverage).toBe(1)
     expect(mixed?.rank.coverage).toBe(2)
+
     if (direct && mixed) {
       expect(comparePaletteDocumentRank(direct.rank, mixed.rank)).toBeLessThan(0)
     }

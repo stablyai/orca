@@ -4,12 +4,14 @@ import { fetchCodexRateLimitsViaPty } from './codex-pty-rate-limit-probe'
 describe('Codex PTY rate-limit probe cancellation', () => {
   it('does not resolve the process command after cancellation', async () => {
     const controller = new AbortController()
+
     const resolveCommand = vi.fn(() => ({
       command: 'codex',
       args: [],
       cwd: '.',
       env: {}
     }))
+
     controller.abort()
 
     await expect(

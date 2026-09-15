@@ -40,6 +40,7 @@ export function getOpenInAppPreset(
   application: Pick<OpenInApplication, 'command'>
 ): OpenInAppPreset | null {
   const command = application.command.trim().toLowerCase()
+
   return getOpenInAppPresets().find((preset) => preset.command === command) ?? null
 }
 
@@ -60,6 +61,7 @@ export function OpenInApplicationIcon({
   size?: number
 }): React.JSX.Element {
   const preset = getOpenInAppPreset(application)
+
   if (preset) {
     return (
       <img
@@ -73,5 +75,6 @@ export function OpenInApplicationIcon({
       />
     )
   }
+
   return <AppWindow width={size} height={size} />
 }

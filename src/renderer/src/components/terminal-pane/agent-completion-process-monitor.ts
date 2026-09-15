@@ -32,10 +32,13 @@ export function createAgentCompletionProcessMonitor({
     if (options.isRemotePtyId?.(ptyId) !== true) {
       return
     }
+
     const bindingKey = `${ptyId}\0${incarnationId ?? ''}`
+
     if (remoteInspection.bindingKey === bindingKey) {
       return
     }
+
     remoteInspection.bindingKey = bindingKey
     remoteInspection.authorityGeneration = null
     remoteInspection.observationEpoch = -1
@@ -43,12 +46,14 @@ export function createAgentCompletionProcessMonitor({
     // Invalidate reads queued for a prior same-id incarnation.
     state.inspectionGeneration += 1
   }
+
   const { clearPollTimer, scheduleNextPoll, shouldRunCadenceInspection } =
     createAgentCompletionPollScheduler({ options, state, pendingTitle, requestInspection })
 
   function handleRecognizedProcess(process: RecognizedAgentProcess): void {
     state.pendingProcessExitAgent = null
     const replayIdentity = identityScope.getLast()
+
     if (
       !state.lastForegroundAgent &&
       state.processSession > 0 &&
@@ -58,6 +63,7 @@ export function createAgentCompletionProcessMonitor({
     ) {
       identityScope.deleteLast()
     }
+
     if (state.lastForegroundAgent?.agent !== process.agent) {
       if (state.lastForegroundAgent && state.hasAgentRunEvidence) {
         if (
@@ -75,8 +81,10 @@ export function createAgentCompletionProcessMonitor({
           })
         }
       }
+
       state.processSession += 1
     }
+
     state.lastForegroundAgent = process
     establishAgentEvidence()
   }
@@ -85,13 +93,17 @@ export function createAgentCompletionProcessMonitor({
     if (state.disposed || state.inspectionInFlight || !options.isLive()) {
       return
     }
+
     if (priority === 'cadence' && !shouldRunCadenceInspection()) {
       return
     }
+
     const ptyId = options.getPtyId()
+
     if (!ptyId) {
       return
     }
+
     const expectedIncarnationIdAtRequest = options.getExpectedIncarnationId?.() ?? null
     bindRemoteInspectionGeneration(ptyId, expectedIncarnationIdAtRequest)
     state.inspectionInFlight = true
@@ -107,6 +119,7 @@ export function createAgentCompletionProcessMonitor({
       run: async () => {
         let inspectedRecognizedAgent = false
         let inspectionSucceeded = false
+
         try {
           // Only a cadence tick on a local pane reads nothing but the name; every other read
           // (pending-title, remote) needs the full capture and must not ask for the cheap one.
@@ -118,18 +131,22 @@ export function createAgentCompletionProcessMonitor({
               ? { steadyState: true }
               : {})
           }
+
           const result = await (Object.keys(inspectOptions).length > 0
             ? options.inspectProcess(options.getSettings(), ptyId, inspectOptions)
             : options.inspectProcess(options.getSettings(), ptyId))
+
           if (
             !state.disposed &&
             generationAtRequest === state.inspectionGeneration &&
             (options.getExpectedIncarnationId?.() ?? null) === expectedIncarnationIdAtRequest
           ) {
             const currentPendingTitle = pendingTitle.get()
+
             const appliesToCurrentPendingTitle =
               !currentPendingTitle ||
               (priority === 'pending-title' && currentPendingTitle.id === pendingTitleIdAtRequest)
+
             if (appliesToCurrentPendingTitle) {
               inspectedRecognizedAgent = handleAgentCompletionInspectionResult({
                 result,
@@ -146,6 +163,7 @@ export function createAgentCompletionProcessMonitor({
                 remoteInspection
               })
             }
+
             inspectionSucceeded = true
           }
         } catch {
@@ -153,6 +171,7 @@ export function createAgentCompletionProcessMonitor({
           state.consecutiveInspectionErrors += 1
         } finally {
           state.inspectionInFlight = false
+
           if (generationAtRequest !== state.inspectionGeneration) {
             if (pendingTitle.get()) {
               requestInspection('pending-title')
@@ -161,6 +180,7 @@ export function createAgentCompletionProcessMonitor({
             }
           } else {
             const currentPendingTitle = pendingTitle.get()
+
             if (currentPendingTitle) {
               if (
                 priority === 'pending-title' &&
@@ -175,6 +195,7 @@ export function createAgentCompletionProcessMonitor({
                 requestInspection('pending-title')
               }
             }
+
             scheduleNextPoll()
           }
         }
@@ -192,6 +213,7 @@ export function createAgentCompletionProcessMonitor({
     },
     recordActivity: () => {
       state.lastPaneActivityAt = Date.now()
+
       if (state.pollTimer === null || state.pollTimerTier === 'no-evidence') {
         scheduleNextPoll()
       }

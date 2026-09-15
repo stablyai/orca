@@ -59,11 +59,14 @@ export function buildMobileQuickCommandLaunch(
     if (!command.prompt.trim() || !supportsTerminalAgentQuickCommand(command.agent)) {
       return null
     }
+
     return { agent: command.agent, options: { agentPrompt: command.prompt } }
   }
+
   if (!command.command.trim()) {
     return null
   }
+
   return command.appendEnter === false
     ? {
         options: {
@@ -94,14 +97,17 @@ export function getQuickCommandPreview(command: TerminalQuickCommand): string {
   if (isTerminalAgentQuickCommand(command)) {
     return `${getQuickCommandAgentLabel(command.agent)}: ${command.prompt}`
   }
+
   return command.command
 }
 
 export function getQuickCommandDisplayPreview(command: TerminalQuickCommand): string {
   const preview = getQuickCommandPreview(command)
+
   if (preview.length <= MAX_QUICK_COMMAND_DISPLAY_PREVIEW_LENGTH) {
     return preview
   }
+
   // Why: one-line rows should not send up to 6 KB each through native text
   // layout; full command bodies remain available to search, edit, and launch.
   return `${preview.slice(0, MAX_QUICK_COMMAND_DISPLAY_PREVIEW_LENGTH - 1)}…`

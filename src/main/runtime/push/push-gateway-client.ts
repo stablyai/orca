@@ -91,7 +91,9 @@ export class PushGatewayClient {
         ...(input.apnsEnvironment ? { apnsEnvironment: input.apnsEnvironment } : {})
       }
     })
+
     const parsed = await readPushGatewayJson(response, RegisterResponseSchema)
+
     return parsed.ok ? { ok: true, registrationId: parsed.value.registrationId } : parsed
   }
 
@@ -99,10 +101,13 @@ export class PushGatewayClient {
     const response = await this.authorized(`/v1/devices/${encodeURIComponent(registrationId)}`, {
       method: 'DELETE'
     })
+
     if (!response.ok) {
       return false
     }
+
     await cancelUnreadResponseBody(response.response)
+
     // A gateway that no longer knows the registration is as deleted as it gets.
     return response.response.ok || response.response.status === 404
   }
@@ -119,7 +124,9 @@ export class PushGatewayClient {
         notification: input.notification
       }
     })
+
     const parsed = await readPushGatewayJson(response, SendResponseSchema)
+
     return parsed.ok ? { ok: true, results: parsed.value.results } : parsed
   }
 
@@ -128,19 +135,24 @@ export class PushGatewayClient {
     init: { method: string; body?: unknown }
   ): Promise<PushGatewayResponse> {
     const first = await this.sendAuthorized(path, init, null)
+
     if (!first.ok || first.response.status !== 401) {
       return first
     }
+
     // A 401 means that one session died server-side; one forced re-auth, then stop.
     await cancelUnreadResponseBody(first.response)
     const retried = await this.sendAuthorized(path, init, first.token)
+
     if (retried.ok && retried.response.status === 401) {
       await cancelUnreadResponseBody(retried.response)
+
       // A 401 that survives a freshly minted session is the gateway being unusable
       // right now, not this request being wrong: register should report it as
       // unreachable, and send should still spend its one retry.
       return { ok: false, reason: 'unreachable' }
     }
+
     return retried
   }
 
@@ -150,9 +162,11 @@ export class PushGatewayClient {
     staleToken: string | null
   ): Promise<AuthorizedResponse> {
     const outcome = await this.session.ensure(staleToken)
+
     if (!outcome.ok) {
       return outcome
     }
+
     try {
       const response = await this.fetchImpl(`${this.origin}${path}`, {
         method: init.method,
@@ -164,6 +178,7 @@ export class PushGatewayClient {
         signal: AbortSignal.timeout(PUSH_REQUEST_DEADLINE_MS),
         ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) })
       })
+
       return { ok: true, response, token: outcome.session.token }
     } catch {
       return { ok: false, reason: 'unreachable' }

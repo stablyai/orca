@@ -11,12 +11,14 @@ const testState = {
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   return { ...actual, mkdirSync: vi.fn(actual.mkdirSync) }
 })
 
 vi.mock('node:os', async () => {
   // eslint-disable-next-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const actual = await vi.importActual<typeof import('node:os')>('node:os')
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -33,11 +35,13 @@ beforeEach(() => {
 
 afterEach(() => {
   rmSync(testState.fakeHomeDir, { recursive: true, force: true })
+
   if (testState.previousConfigDir === undefined) {
     delete process.env.CLAUDE_CONFIG_DIR
   } else {
     process.env.CLAUDE_CONFIG_DIR = testState.previousConfigDir
   }
+
   testState.fakeHomeDir = ''
 })
 
@@ -48,6 +52,7 @@ describe('ClaudeRuntimePathResolver', () => {
       if (exists) {
         mkdirSync(join(testState.fakeHomeDir, '.claude'), { recursive: true })
       }
+
       vi.mocked(mkdirSync).mockClear()
       const resolver = new ClaudeRuntimePathResolver()
 

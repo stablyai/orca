@@ -14,32 +14,41 @@ function getDefaultProjectLabel(cwd: string | null): string {
   if (!cwd) {
     return 'Unknown location'
   }
+
   const parts = cwd.replace(/\\/g, '/').split('/').filter(Boolean)
+
   if (parts.length >= 2) {
     return parts.slice(-2).join('/')
   }
+
   return parts.at(-1) ?? cwd
 }
 
 function localDayFromTimestamp(timestamp: string): string | null {
   const parsed = new Date(timestamp)
+
   if (Number.isNaN(parsed.getTime())) {
     return null
   }
+
   const year = parsed.getFullYear()
   const month = String(parsed.getMonth() + 1).padStart(2, '0')
   const day = String(parsed.getDate()).padStart(2, '0')
+
   return `${year}-${month}-${day}`
 }
 
 function isContainingPath(candidatePath: string, targetPath: string): boolean {
   const useWin32 = looksLikeWindowsPath(candidatePath) || looksLikeWindowsPath(targetPath)
+
   const relativePath = useWin32
     ? win32.relative(candidatePath, targetPath)
     : posix.relative(candidatePath, targetPath)
+
   if (!relativePath) {
     return true
   }
+
   // Why: on Windows, `path.relative('C:\\repo', 'D:\\other')` returns an
   // absolute `D:\\other` path instead of a `..`-prefixed relative. Treating
   // that as "contained" would attribute off-drive Codex usage to the wrong
@@ -47,7 +56,9 @@ function isContainingPath(candidatePath: string, targetPath: string): boolean {
   const isAbsoluteRelative = useWin32
     ? win32.isAbsolute(relativePath)
     : posix.isAbsolute(relativePath)
+
   const parentPrefix = useWin32 ? `..${win32.sep}` : `..${posix.sep}`
+
   // Why: `..name` is a valid child path; only `..` and `../...` escape.
   return (
     !isAbsoluteRelative &&
@@ -62,14 +73,17 @@ function findContainingWorktree(
   worktrees: (CodexUsageWorktreeRef & { canonicalPath: string })[]
 ): CodexUsageWorktreeRef | null {
   const normalizedCwd = normalizeFsPath(cwd)
+
   for (const worktree of worktrees) {
     if (areWorktreePathsEqual(worktree.canonicalPath, normalizedCwd)) {
       return worktree
     }
+
     if (isContainingPath(worktree.canonicalPath, normalizedCwd)) {
       return worktree
     }
   }
+
   return null
 }
 
@@ -78,6 +92,7 @@ export async function attributeCodexUsageEvent(
   worktrees: (CodexUsageWorktreeRef & { canonicalPath: string })[]
 ): Promise<CodexUsageAttributedEvent | null> {
   const day = localDayFromTimestamp(event.timestamp)
+
   if (!day) {
     return null
   }
@@ -89,6 +104,7 @@ export async function attributeCodexUsageEvent(
 
   if (event.cwd) {
     const worktree = findContainingWorktree(event.cwd, worktrees)
+
     if (worktree) {
       repoId = worktree.repoId
       worktreeId = worktree.worktreeId

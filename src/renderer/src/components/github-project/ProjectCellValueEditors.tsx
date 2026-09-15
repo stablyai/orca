@@ -28,9 +28,11 @@ export function ProjectTextCell({
 }): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value)
+
   if (!editable) {
     return <span className="truncate text-xs">{value}</span>
   }
+
   if (!editing) {
     return (
       <button
@@ -45,12 +47,15 @@ export function ProjectTextCell({
       </button>
     )
   }
+
   const commit = (): void => {
     setEditing(false)
+
     if (draft !== value) {
       onCommit(draft)
     }
   }
+
   return (
     <Input
       autoFocus
@@ -85,9 +90,11 @@ export function ProjectDateCell({
   onCommit: (next: string) => void
 }): React.JSX.Element {
   const [draft, setDraft] = useState(value ?? '')
+
   if (!editable) {
     return <span className="text-xs">{value}</span>
   }
+
   return (
     <input
       type="date"
@@ -136,6 +143,7 @@ export function ProjectUserChip({ user }: { user: GitHubProjectUser }): React.JS
       />
     )
   }
+
   return (
     <span
       title={user.login}

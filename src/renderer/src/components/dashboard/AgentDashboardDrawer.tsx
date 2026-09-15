@@ -45,6 +45,7 @@ function AgentDashboardDrawerBody({
   const handleAckAgent = useCallback((paneKey: string) => {
     useAppStore.getState().acknowledgeAgents([paneKey])
   }, [])
+
   const handleRevealAgent = useCallback(
     (args: AgentRevealArgs) => {
       revealDashboardAgent(args)
@@ -98,6 +99,7 @@ export function AgentDashboardDrawer({
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const [menuOpen, setMenuOpen] = useState(false)
+
   // Why: like closeWorkspaceBoard, reset the menu flag on close — Radix never
   // reports close for a menu unmounted with the sheet (e.g. the pop-out
   // hand-off), and a stale true would block outside-dismiss on reopen.
@@ -105,6 +107,7 @@ export function AgentDashboardDrawer({
     setMenuOpen(false)
     setOpen(false)
   }, [setOpen])
+
   // Why: sidebar collapse (Cmd+B) and workspace-board exclusivity close the
   // drawer through the store setter, bypassing close(); sync the flag so a
   // menu unmounted that way can't block outside-dismiss on the next open.
@@ -113,6 +116,7 @@ export function AgentDashboardDrawer({
       setMenuOpen(false)
     }
   }, [open])
+
   const handleSheetOpenChange = useCallback(
     (nextOpen: boolean) => {
       // Why: Radix also requests dismissal for unguardable interactions (focus
@@ -124,6 +128,7 @@ export function AgentDashboardDrawer({
     },
     [setOpen]
   )
+
   const boardRef = useRef<HTMLDivElement | null>(null)
 
   useWorkspaceKanbanOutsideDismiss({
@@ -137,26 +142,33 @@ export function AgentDashboardDrawer({
     if (!open) {
       return
     }
+
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') {
         return
       }
+
       if (document.querySelector(AGENT_BOARD_ESCAPE_BLOCKING_OVERLAY_SELECTOR)) {
         return
       }
+
       event.preventDefault()
       close()
     }
+
     // Why: the board is a non-modal companion panel, so focus may be outside
     // the sheet when Escape should still dismiss it.
     document.addEventListener('keydown', handleKeyDown, true)
+
     return () => document.removeEventListener('keydown', handleKeyDown, true)
   }, [close, open])
 
   const drawerLeft = sidebarOpen ? sidebarWidth : 0
+
   const drawerLeftCss = sidebarOpen
     ? `var(--workspace-sidebar-live-width, ${sidebarWidth}px)`
     : '0px'
+
   // Why: App reserves a bottom status row while visible; the portalled board
   // must share that viewport bound instead of covering the status controls.
   const drawerBottom = `${statusBarVisible ? STATUS_BAR_RESERVE_HEIGHT : 0}px`
@@ -165,19 +177,24 @@ export function AgentDashboardDrawer({
     event: CustomEvent<{ originalEvent: PointerEvent | FocusEvent }>
   ): void => {
     const originalEvent = event.detail.originalEvent
+
     if (menuOpen || isWorkspaceBoardKeepOpenTarget(originalEvent.target)) {
       // Why: the first outside click should close a board menu, not also
       // dismiss the board that owns it.
       event.preventDefault()
+
       return
     }
+
     const liveDrawerLeft =
       boardRef.current?.closest<HTMLElement>('[data-slot="sheet-content"]')?.getBoundingClientRect()
         .left ?? drawerLeft
+
     const pointerX =
       'clientX' in originalEvent && typeof originalEvent.clientX === 'number'
         ? originalEvent.clientX
         : null
+
     if (pointerX !== null && pointerX < liveDrawerLeft) {
       // Why: keep the workspace sidebar interactive while the companion board stays open.
       event.preventDefault()

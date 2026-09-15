@@ -25,13 +25,16 @@ export function activateTabAndFocusPane(
   setActiveTabType('terminal')
   setActiveTab(tabId)
   cancelPendingFocusPaneFrame()
+
   if (leafId === null) {
     return
   }
+
   // Why: defer one frame so the new TerminalPane has mounted its
   // FOCUS_TERMINAL_PANE_EVENT listener before we dispatch.
   pendingFocusPaneFrameId = requestAnimationFrame(() => {
     pendingFocusPaneFrameId = null
+
     const detail: FocusTerminalPaneDetail = {
       tabId,
       leafId,
@@ -41,6 +44,7 @@ export function activateTabAndFocusPane(
         ? { scrollToBottomIfOutputSinceLastView: true }
         : {})
     }
+
     window.dispatchEvent(
       new CustomEvent<FocusTerminalPaneDetail>(FOCUS_TERMINAL_PANE_EVENT, {
         detail

@@ -29,12 +29,14 @@ export function resolveChecksPanelTerminalPtyId(context: TerminalPtyContext): st
   }
 
   const livePtyIds = context.ptyIdsByTabId[context.activeTabId] ?? []
+
   if (livePtyIds.length === 0) {
     return null
   }
 
   const layout = context.terminalLayoutsByTabId[context.activeTabId]
   const activeLeafPtyId = layout?.activeLeafId ? layout.ptyIdsByLeafId?.[layout.activeLeafId] : null
+
   if (activeLeafPtyId && livePtyIds.includes(activeLeafPtyId)) {
     return activeLeafPtyId
   }
@@ -42,6 +44,7 @@ export function resolveChecksPanelTerminalPtyId(context: TerminalPtyContext): st
   const firstLiveLayoutPtyId = Object.values(layout?.ptyIdsByLeafId ?? {}).find((ptyId) =>
     livePtyIds.includes(ptyId)
   )
+
   // Last tab PTY is the newest terminal when the split-pane layout is stale or unavailable.
   return firstLiveLayoutPtyId ?? livePtyIds.at(-1) ?? null
 }
@@ -52,30 +55,36 @@ export function resolveChecksPanelWorktreeFromTerminalCwd(
   worktrees: readonly Worktree[]
 ): Worktree | null {
   const terminalCwd = cwd?.trim()
+
   if (!terminalCwd || !isRuntimePathAbsolute(terminalCwd)) {
     return null
   }
 
   const normalizedCwd = normalizeRuntimePathForComparison(terminalCwd)
   let best: MatchedWorktreeCandidate | undefined
+
   for (const candidate of buildWorktreeCandidates(worktrees)) {
     if (!isTerminalCwdInsideWorktree(candidate.path, normalizedCwd)) {
       continue
     }
+
     // Why after the filter: most candidates never match, so normalizing every path is wasted work.
     const matched = {
       ...candidate,
       normalizedPathLength: normalizeRuntimePathForComparison(candidate.path).length
     }
+
     if (!best || compareWorktreeCandidates(matched, best) < 0) {
       best = matched
     }
   }
+
   return best?.worktree ?? null
 }
 
 function buildWorktreeCandidates(worktrees: readonly Worktree[]): WorktreeCandidate[] {
   const candidates: WorktreeCandidate[] = []
+
   for (const worktree of worktrees) {
     if (hasUsablePath(worktree.path)) {
       candidates.push({ worktree, path: worktree.path, source: 'current-path' })
@@ -83,17 +92,21 @@ function buildWorktreeCandidates(worktrees: readonly Worktree[]): WorktreeCandid
 
     for (const priorWorktreeId of worktree.priorWorktreeIds ?? []) {
       const parsed = splitWorktreeIdForFilesystem(priorWorktreeId)
+
       if (!parsed || parsed.repoId !== worktree.repoId || !hasUsablePath(parsed.worktreePath)) {
         continue
       }
+
       candidates.push({ worktree, path: parsed.worktreePath, source: 'prior-path' })
     }
   }
+
   return candidates
 }
 
 function hasUsablePath(pathValue: string): boolean {
   const trimmed = pathValue.trim()
+
   return Boolean(trimmed && isRuntimePathAbsolute(trimmed))
 }
 
@@ -104,6 +117,7 @@ function isTerminalCwdInsideWorktree(worktreePath: string, terminalCwd: string):
 
   // Windows hosts store WSL worktrees as UNC paths, while the terminal reports Linux paths.
   const wslPath = parseWslUncPath(worktreePath)
+
   return wslPath ? createNormalizedPathInsideOrEqualMatcher(wslPath.linuxPath)(terminalCwd) : false
 }
 
@@ -112,12 +126,15 @@ function compareWorktreeCandidates(
   right: MatchedWorktreeCandidate
 ): number {
   const lengthDifference = right.normalizedPathLength - left.normalizedPathLength
+
   if (lengthDifference !== 0) {
     return lengthDifference
   }
+
   if (left.source === right.source) {
     return 0
   }
+
   // Prefer the current path when a renamed worktree still has a matching prior path.
   return left.source === 'current-path' ? -1 : 1
 }

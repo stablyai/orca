@@ -71,13 +71,16 @@ export function registerMobileAndTerminalCloseIpcBridge(
       window.api.ui.onTerminalTabCloseRequest(
         ({ requestId, tabId, localPtyTeardownOwnedExternally, force }) => {
           let responded = false
+
           const respond = (error?: string): void => {
             if (responded) {
               return
             }
+
             responded = true
             window.api.ui.respondTerminalTabClose({ requestId, ...(error ? { error } : {}) })
           }
+
           closeTerminalTab(tabId, {
             rejectPinned: true,
             ...(force ? { force: true } : {}),

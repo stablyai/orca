@@ -18,6 +18,7 @@ function aggregate(tasks: unknown[]): Record<string, unknown> {
 
 function trackerAt(times: number[]): ClaudeBackgroundTaskTracker {
   let index = 0
+
   return new ClaudeBackgroundTaskTracker(() => times[Math.min(index++, times.length - 1)])
 }
 
@@ -423,10 +424,12 @@ describe('ClaudeBackgroundTaskTracker', () => {
 
   it('retracts a settled copy when an authoritative roster reports the task live again', () => {
     const tracker = trackerAt([100, 200, 300])
+
     const tasks = [
       { task_id: 'agent', task_type: 'local_agent', description: 'Review sample' },
       { task_id: 'shell', task_type: 'local_bash' }
     ]
+
     tracker.observe(aggregate(tasks))
     tracker.observe(system('task_notification', { task_id: 'agent', status: 'completed' }))
     expect(tracker.state?.settledTasks).toHaveLength(1)
@@ -529,6 +532,7 @@ describe('ClaudeBackgroundTaskTracker', () => {
         })
       )
     }
+
     expect(tracker.stoppableTaskIds.length).toBeLessThanOrEqual(256)
   })
 
@@ -642,9 +646,11 @@ describe('ClaudeBackgroundTaskTracker', () => {
   it('drops a backgrounded start the roster no longer lists but bounds what it retains', () => {
     const tracker = new ClaudeBackgroundTaskTracker()
     tracker.observe({ type: 'user' }, true)
+
     for (let index = 0; index < 300; index += 1) {
       tracker.observe(started(`fore-${index}`, false))
     }
+
     tracker.observe(
       aggregate([{ task_id: 'back-1', task_type: 'local_bash', description: 'bash' }])
     )

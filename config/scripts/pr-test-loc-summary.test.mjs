@@ -18,12 +18,17 @@ import {
 } from '../../.github/scripts/pr-test-loc-table.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const locScript = join(projectDir, '.github/scripts/pr-test-loc-summary.mjs')
+
 const locWorkflow = parse(
   readFileSync(join(projectDir, '.github/workflows/pr-test-loc.yml'), 'utf8')
 )
+
 const locJob = locWorkflow.jobs.loc
+
 const locStep = locJob.steps[0]
+
 const tempDirs = []
 
 function runLoc(args, { env } = {}) {
@@ -104,9 +109,11 @@ describe('PR test LoC summary', () => {
       token: 'test-token',
       fetchImpl: async (url) => {
         const page = pages[url]
+
         if (page == null) {
           throw new Error(`unexpected url ${String(url)}`)
         }
+
         return {
           ok: true,
           json: async () => page.body,
@@ -126,7 +133,9 @@ describe('PR test LoC summary', () => {
       { ok: false, status: 503, statusText: 'Service Unavailable' },
       { ok: true, status: 200, statusText: 'OK' }
     ]
+
     const requests = []
+
     const result = await updatePullRequest({
       owner: 'stablyai',
       repo: 'orca',
@@ -138,6 +147,7 @@ describe('PR test LoC summary', () => {
       },
       fetchImpl: async (url, options) => {
         requests.push({ url, options })
+
         if (requests.length === 1) {
           return {
             ok: true,
@@ -145,6 +155,7 @@ describe('PR test LoC summary', () => {
             json: async () => ({ body: '## Description\n' })
           }
         }
+
         return responses.shift()
       },
       sleepImpl: async () => {}
@@ -175,6 +186,7 @@ describe('PR test LoC summary', () => {
       test: { files: 1, added: 2, deleted: 1 },
       nonTest: { files: 1, added: 4, deleted: 0 }
     }
+
     const block = renderLocBlock(totals)
 
     expect(block).toContain(LOC_HANDS_OFF_COMMENT)

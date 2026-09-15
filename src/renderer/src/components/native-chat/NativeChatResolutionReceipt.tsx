@@ -13,9 +13,11 @@ export function NativeChatResolutionReceipt({
   if (body.resolution.state === 'pending') {
     return null
   }
+
   const { resolution } = body
   const title = body.kind === 'approval' ? body.title : body.question
   const answers = nativeChatReceiptAnswers(body)
+
   return (
     <div
       className="space-y-1 border-l border-border pl-3 text-xs text-muted-foreground"

@@ -1,4 +1,5 @@
 const RELAY_AI_VAULT_FAULT_WINDOW_MS = 60_000
+
 const RELAY_AI_VAULT_RESTART_DELAYS_MS = [250, 1_000, 5_000] as const
 
 export class RelayAiVaultRestartPolicy {
@@ -16,8 +17,10 @@ export class RelayAiVaultRestartPolicy {
   startError(forceStart: boolean): Error | null {
     if (forceStart) {
       this.circuitUntil = 0
+
       return null
     }
+
     return this.now() < this.circuitUntil
       ? new Error('Relay AI Vault service restart circuit is open.')
       : null
@@ -29,6 +32,7 @@ export class RelayAiVaultRestartPolicy {
       ...this.faults.filter((time) => now - time < RELAY_AI_VAULT_FAULT_WINDOW_MS),
       now
     ]
+
     if (this.faults.length >= 3) {
       this.circuitUntil = now + RELAY_AI_VAULT_FAULT_WINDOW_MS
     }
@@ -38,6 +42,7 @@ export class RelayAiVaultRestartPolicy {
     if (this.timer) {
       clearTimeout(this.timer)
     }
+
     const delay = RELAY_AI_VAULT_RESTART_DELAYS_MS[Math.min(this.faults.length - 1, 2)]
     this.timer = setTimeout(() => {
       this.timer = null

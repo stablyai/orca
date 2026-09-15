@@ -27,23 +27,29 @@ export class RuntimeTerminalWaiterRegistry {
     if (!signal) {
       return true
     }
+
     if (signal.aborted) {
       return false
     }
+
     const onAbort = (): void => {
       this.remove(waiter)
       waiter.reject(new Error('request_aborted'))
     }
+
     waiter.abortCleanup = () => signal.removeEventListener('abort', onAbort)
     signal.addEventListener('abort', onAbort, { once: true })
+
     return true
   }
 
   rejectHandle(handle: string, code: string): void {
     const waiters = this.byHandle.get(handle)
+
     if (!waiters) {
       return
     }
+
     for (const waiter of Array.from(waiters)) {
       this.remove(waiter)
       waiter.reject(new Error(code))
@@ -60,18 +66,24 @@ export class RuntimeTerminalWaiterRegistry {
     if (waiter.timeout) {
       clearTimeout(waiter.timeout)
     }
+
     if (waiter.cancelIdlePoll) {
       waiter.cancelIdlePoll()
     }
+
     if (waiter.abortCleanup) {
       waiter.abortCleanup()
       waiter.abortCleanup = null
     }
+
     const waiters = this.byHandle.get(waiter.handle)
+
     if (!waiters) {
       return
     }
+
     waiters.delete(waiter)
+
     if (waiters.size === 0) {
       this.byHandle.delete(waiter.handle)
     }

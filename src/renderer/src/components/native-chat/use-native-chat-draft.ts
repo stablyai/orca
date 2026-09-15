@@ -17,6 +17,7 @@ export function useNativeChatDraft(scopeKey: string): {
   // adjusting state during render rather than in an effect so the restored draft
   // is visible on the first paint after the switch.
   const lastScopeKey = useRef(scopeKey)
+
   if (lastScopeKey.current !== scopeKey) {
     lastScopeKey.current = scopeKey
     setDraftState(readNativeChatDraftCache(scopeKey))
@@ -29,6 +30,7 @@ export function useNativeChatDraft(scopeKey: string): {
       setDraftState((previous) => {
         const resolved = typeof next === 'function' ? next(previous) : next
         writeNativeChatDraftCache(scopeKey, resolved)
+
         return resolved
       })
     },

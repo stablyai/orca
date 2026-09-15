@@ -13,9 +13,11 @@ import { translate } from '@/i18n/i18n'
 
 export function normalizeUrl(url: string): string {
   const trimmed = url.trim()
+
   if (trimmed.length === 0) {
     return 'about:blank'
   }
+
   // Why: redact at this single URL sink so the Kagi bearer token can't reach BrowserPage.url, which is persisted to disk.
   return redactKagiSessionToken(trimmed)
 }
@@ -34,8 +36,10 @@ export function normalizeBrowserTitle(
     if (!title || isDocPreviewUrl(title)) {
       return basename(docLocation.filePath) || docLocation.filePath
     }
+
     return title
   }
+
   if (
     url === 'about:blank' ||
     url === ORCA_BROWSER_BLANK_URL ||
@@ -46,6 +50,7 @@ export function normalizeBrowserTitle(
     // Why: don't surface the internal blank-guest URL as a title (leaks an impl detail, looks broken); show "New Tab" instead.
     return 'New Tab'
   }
+
   return title
 }
 
@@ -62,6 +67,7 @@ export function buildBrowserPage(
   // and it is read by persistence, the mobile publisher, history and the address bar. A grant URL
   // reaching any of them would outlive the grant and name a document that machine cannot read.
   const normalizedUrl = docLocation ? ORCA_BROWSER_BLANK_URL : normalizeUrl(url)
+
   return {
     id: browserPageId ?? createBrowserUuid(),
     workspaceId,
@@ -113,6 +119,7 @@ export function mirrorWorkspaceFromActivePage(
   pages: BrowserPage[]
 ): BrowserWorkspace {
   const activePage = pages.find((page) => page.id === workspace.activePageId) ?? null
+
   if (!activePage) {
     return {
       ...workspace,
@@ -128,6 +135,7 @@ export function mirrorWorkspaceFromActivePage(
       docLocation: null
     }
   }
+
   return {
     ...workspace,
     activePageId: activePage.id,
@@ -149,6 +157,7 @@ export function browserWorkspaceMirrorFieldsEqual(
 ): boolean {
   const workspacePageIds = workspace.pageIds ?? []
   const mirroredPageIds = mirrored.pageIds ?? []
+
   return (
     workspace.activePageId === mirrored.activePageId &&
     workspacePageIds.length === mirroredPageIds.length &&
@@ -168,6 +177,7 @@ const browserWorkspaceByIdCache = new WeakMap<
   Record<string, BrowserWorkspace[]>,
   Map<string, BrowserWorkspace>
 >()
+
 const browserPageByIdCache = new WeakMap<Record<string, BrowserPage[]>, Map<string, BrowserPage>>()
 
 export function findWorkspace(
@@ -175,16 +185,21 @@ export function findWorkspace(
   workspaceId: string
 ): BrowserWorkspace | null {
   const cached = browserWorkspaceByIdCache.get(browserTabsByWorktree)
+
   if (cached) {
     return cached.get(workspaceId) ?? null
   }
+
   const workspaceById = new Map<string, BrowserWorkspace>()
+
   for (const workspaces of Object.values(browserTabsByWorktree)) {
     for (const workspace of workspaces) {
       workspaceById.set(workspace.id, workspace)
     }
   }
+
   browserWorkspaceByIdCache.set(browserTabsByWorktree, workspaceById)
+
   return workspaceById.get(workspaceId) ?? null
 }
 
@@ -193,15 +208,20 @@ export function findPage(
   pageId: string
 ): BrowserPage | null {
   const cached = browserPageByIdCache.get(browserPagesByWorkspace)
+
   if (cached) {
     return cached.get(pageId) ?? null
   }
+
   const pageById = new Map<string, BrowserPage>()
+
   for (const pages of Object.values(browserPagesByWorkspace)) {
     for (const page of pages) {
       pageById.set(page.id, page)
     }
   }
+
   browserPageByIdCache.set(browserPagesByWorkspace, pageById)
+
   return pageById.get(pageId) ?? null
 }

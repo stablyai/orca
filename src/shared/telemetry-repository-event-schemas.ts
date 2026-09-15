@@ -22,6 +22,7 @@ import {
 } from './telemetry-property-schemas'
 
 export const existingWorkspaceCountSchema = z.number().int().min(1).max(50)
+
 export const addRepoExistingWorkspaceContextSchema = {
   source: addRepoExistingWorkspaceSourceSchema,
   existing_workspace_count: existingWorkspaceCountSchema,
@@ -37,6 +38,7 @@ export const addRepoSetupStepActionEventSchema = z
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
+
 export const addRepoExistingWorkspacesDetectedSchema = z
   .object({
     ...addRepoExistingWorkspaceContextSchema,
@@ -48,6 +50,7 @@ export const addRepoExistingWorkspacesDetectedSchema = z
     nth_repo_added: nthRepoAddedSchema
   })
   .strict()
+
 export const addRepoDefaultCheckoutHandoffSchema = z
   .object({
     source: addRepoDefaultCheckoutHandoffSourceSchema,
@@ -67,7 +70,9 @@ export const workspaceCreateFailedSchema = z
   .strict()
 
 export const setupScriptPromptModeSchema = z.enum(['import_available', 'configure_needed'])
+
 export const setupScriptCountBucketSchema = z.enum(['0', '1', '2-3', '4+'])
+
 export const setupScriptPromptContextSchema = {
   mode: setupScriptPromptModeSchema,
   // Why: superRefine (not transform) keeps the top-level ZodObject shape that cohort injection probes.
@@ -94,6 +99,7 @@ export function validateSetupScriptPromptProvider(
       message: 'provider is required when a setup candidate is available'
     })
   }
+
   if (props.mode === 'configure_needed' && props.provider !== undefined) {
     ctx.addIssue({
       code: 'custom',
@@ -102,11 +108,13 @@ export function validateSetupScriptPromptProvider(
     })
   }
 }
+
 // Why: retention-cohort telemetry, not repo debugging — closed enums and count buckets only.
 export const setupScriptPromptShownSchema = z
   .object(setupScriptPromptContextSchema)
   .strict()
   .superRefine(validateSetupScriptPromptProvider)
+
 export const setupScriptDetectedSaveActions = [
   'save_detected_setup_clicked',
   'save_detected_setup_completed',
@@ -126,6 +134,7 @@ export function validateSetupScriptPromptAction(
 ): void {
   validateSetupScriptPromptProvider(props, ctx)
   const isDetectedSave = isSetupScriptDetectedSaveAction(props.action)
+
   if (isDetectedSave && props.provider !== 'package-manager') {
     ctx.addIssue({
       code: 'custom',
@@ -133,6 +142,7 @@ export function validateSetupScriptPromptAction(
       message: 'detected setup save actions require the package-manager provider'
     })
   }
+
   if (isDetectedSave && props.edited_before_save === undefined) {
     ctx.addIssue({
       code: 'custom',
@@ -140,6 +150,7 @@ export function validateSetupScriptPromptAction(
       message: 'edited_before_save is required for detected setup save actions'
     })
   }
+
   if (!isDetectedSave && props.edited_before_save !== undefined) {
     ctx.addIssue({
       code: 'custom',
@@ -165,18 +176,27 @@ export const setupScriptPromptActionSchema = z
   .superRefine(validateSetupScriptPromptAction)
 
 export const nestedRepoTelemetrySurfaceSchema = z.enum(NESTED_REPO_TELEMETRY_SURFACES)
+
 export const nestedRepoTelemetryRuntimeKindSchema = z.enum(NESTED_REPO_TELEMETRY_RUNTIME_KINDS)
+
 export const nestedRepoCountSchema = z
   .number()
   .int()
   .min(0)
   .max(NESTED_REPO_TELEMETRY_MAX_REPO_COUNT)
+
 export const nestedRepoCountBucketSchema = z.enum(NESTED_REPO_COUNT_BUCKETS)
+
 export const nestedRepoScanResultSchema = z.enum(NESTED_REPO_SCAN_RESULTS)
+
 export const nestedRepoImportActionSchema = z.enum(NESTED_REPO_IMPORT_ACTIONS)
+
 export const nestedRepoImportOutcomeSchema = z.enum(NESTED_REPO_IMPORT_OUTCOMES)
+
 export const nestedRepoScanPathKindSchema = z.enum(['git_repo', 'non_git_folder'])
+
 export const nestedRepoImportModeSchema = z.enum(['group', 'separate'])
+
 export const nestedRepoAttemptIdSchema = z.string().uuid()
 
 export function validateNestedRepoCountBucket(
@@ -187,9 +207,11 @@ export function validateNestedRepoCountBucket(
 ): void {
   const count = props[countKey]
   const bucket = props[bucketKey]
+
   if (typeof count !== 'number' || typeof bucket !== 'string') {
     return
   }
+
   if (bucketNestedRepoTelemetryCount(count) !== bucket) {
     ctx.addIssue({
       code: 'custom',

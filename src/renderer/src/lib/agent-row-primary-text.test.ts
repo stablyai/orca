@@ -91,6 +91,7 @@ You talk to the coordinator only through the CLI commands below.
 === TASK ===
 Fix the checkout race condition in payments`
     })
+
     expect(normalized).not.toBeNull()
     expect(
       getAgentRowPrimaryText({
@@ -113,8 +114,10 @@ Fix the checkout race condition in payments`
       { length: 40 },
       (_, i) => `orca orchestration send --to term_parent --type heartbeat --phase step-${i}`
     ).join('\n')
+
     const taskBody =
       'Release-fix task: orchestration fallback task preview for single-line normalization'
+
     const normalized = normalizeAgentStatusPayload({
       state: 'working',
       prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
@@ -129,6 +132,7 @@ ${longCliNoise}
 === TASK ===
 ${taskBody}`
     })
+
     expect(normalized).not.toBeNull()
     expect(normalized!.prompt.length).toBeLessThanOrEqual(200)
     expect(normalized!.prompt.includes('\n')).toBe(false)
@@ -150,6 +154,7 @@ Your task ID is: task_short
 === TASK ===
 Fix login form`
     })
+
     expect(getAgentRowPrimaryText({ prompt: normalized!.prompt })).toBe('Fix login form')
   })
 
@@ -164,6 +169,7 @@ ${'orca orchestration check\n'.repeat(30)}
 === TASK ===
 Implement the detailed worker instructions that should not stay as the final label`
     })
+
     expect(normalized).not.toBeNull()
 
     expect(getAgentRowPrimaryText({ prompt: normalized!.prompt })).toContain(
@@ -233,6 +239,7 @@ Your task ID is: task_9f3ab2
 === TASK ===
 body`
     })
+
     expect(getOrcaDispatchTaskId(normalized!.prompt)).toBe('task_9f3ab2')
   })
 

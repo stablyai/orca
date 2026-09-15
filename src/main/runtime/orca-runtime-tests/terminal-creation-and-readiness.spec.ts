@@ -95,6 +95,7 @@ describe('OrcaRuntimeService', () => {
   it('retires inherited launch authority when the agent command exits', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-authority', incarnationId: 'process-1' })
     const retireAuthority = vi.fn()
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       attestAgentHookCompatibilityAuthority: (candidate) => ({
         paneKey: candidate.paneKey,
@@ -102,6 +103,7 @@ describe('OrcaRuntimeService', () => {
       }),
       retireAgentHookCompatibilityAuthority: retireAuthority
     })
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -130,8 +132,10 @@ describe('OrcaRuntimeService', () => {
       launchAgent: 'codex',
       launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
     })
+
     const spawnEnv =
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+
     const evidence = {
       terminalHandle: terminal.handle,
       paneKey: spawnEnv.ORCA_PANE_KEY,
@@ -164,13 +168,16 @@ describe('OrcaRuntimeService', () => {
 
   it('retires only receipted restored PTY authority on command completion and exit', () => {
     const retireAuthority = vi.fn()
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       retireAgentHookCompatibilityAuthority: retireAuthority
     })
+
     const internals = runtime as unknown as {
       recordPtyWorktree: (ptyId: string, worktreeId: string, state: Record<string, unknown>) => void
       restoredOrchestrationAuthorityByPtyId: Map<string, Record<string, unknown>>
     }
+
     const firstPane = '11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222'
     const secondPane = '33333333-3333-4333-8333-333333333333:44444444-4444-4444-8444-444444444444'
     internals.recordPtyWorktree('pty-restored-command', TEST_WORKTREE_ID, {
@@ -223,10 +230,13 @@ describe('OrcaRuntimeService', () => {
   it('restores a retained coordinator handle after a late controller inventory', async () => {
     const paneKey = makePaneKey('host-tab', HEADLESS_LEAF_ID)
     const incarnationId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+
     const session = makeWorkspaceSessionWithHeadlessTerminal({
       terminalPtyIncarnationsByPaneKey: { [paneKey]: incarnationId }
     })
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       canRecoverPersistentLocalPtys: () => true,
       attestAgentHookCompatibilityAuthority: ({ paneKey: candidate, launchTokenHash }) =>
@@ -234,7 +244,9 @@ describe('OrcaRuntimeService', () => {
           ? { paneKey: candidate, source: 'hydrated_commitment' }
           : null
     })
+
     const controllerHandle = 'term_retained_coordinator'
+
     const listProcesses = vi
       .fn()
       .mockRejectedValueOnce(new Error('provider starting'))
@@ -249,6 +261,7 @@ describe('OrcaRuntimeService', () => {
           wslDistro: null
         }
       ])
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -302,6 +315,7 @@ describe('OrcaRuntimeService', () => {
 
   it('forgets synthetic handles when disconnected PTY records are pruned', () => {
     const runtime = new OrcaRuntimeService(store)
+
     const internals = runtime as unknown as {
       recordPtyWorktree: (
         ptyId: string,
@@ -312,9 +326,11 @@ describe('OrcaRuntimeService', () => {
       dropDisconnectedPtyRecord: (ptyId: string) => void
       syntheticTerminalHandles: Set<string>
     }
+
     const pty = internals.recordPtyWorktree('pty-pruned', TEST_WORKTREE_ID, {
       connected: false
     })
+
     const handle = internals.issuePtyHandle(pty)
     expect(internals.syntheticTerminalHandles.has(handle)).toBe(true)
 
@@ -329,6 +345,7 @@ describe('OrcaRuntimeService', () => {
     const paneKey = makePaneKey('host-tab', HEADLESS_LEAF_ID)
     const oldIncarnation = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
     const newIncarnation = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+
     const session = makeWorkspaceSessionWithHeadlessTerminal({
       tabsByWorktree: {
         [TEST_WORKTREE_ID]: [
@@ -349,13 +366,16 @@ describe('OrcaRuntimeService', () => {
       },
       terminalPtyIncarnationsByPaneKey: { [paneKey]: oldIncarnation }
     })
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
+
     const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
       attestAgentHookCompatibilityAuthority: ({ paneKey: candidate, launchTokenHash }) =>
         candidate === paneKey && launchTokenHash === RESTORED_AUTHORITY_TOKEN_HASH
           ? { paneKey: candidate, source: 'hydrated_commitment' }
           : null
     })
+
     const oldInventory = deferred<
       {
         id: string
@@ -367,18 +387,22 @@ describe('OrcaRuntimeService', () => {
         wslDistro: null
       }[]
     >()
+
     const newInventory =
       deferred<typeof oldInventory.promise extends Promise<infer T> ? T : never>()
+
     const listProcesses = vi
       .fn()
       .mockImplementationOnce(() => oldInventory.promise)
       .mockImplementationOnce(() => newInventory.promise)
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
       getForegroundProcess: async () => null,
       listProcesses
     })
+
     const internals = runtime as unknown as {
       refreshPtyWorktreeRecordsWithControllerInventory: (
         worktrees: [],
@@ -389,6 +413,7 @@ describe('OrcaRuntimeService', () => {
       ptysById: Map<string, { incarnationId: string | null }>
       restoredOrchestrationAuthorityByPtyId: Map<string, unknown>
     }
+
     const host = runtime.registerOrchestrationCompatibilitySshAttachment(
       targetId,
       'connection-incarnation'
@@ -400,12 +425,14 @@ describe('OrcaRuntimeService', () => {
       undefined,
       undefined
     )
+
     const currentRefresh = internals.refreshPtyWorktreeRecordsWithControllerInventory(
       [],
       null,
       undefined,
       targetId
     )
+
     newInventory.resolve([
       {
         id: ptyId,
@@ -471,11 +498,13 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     const receipts = (
       runtime as unknown as {
         restoredOrchestrationAuthorityByPtyId: Map<string, Record<string, unknown>>
       }
     ).restoredOrchestrationAuthorityByPtyId
+
     receipts.set('pty-moved', {
       ptyId: 'pty-moved',
       worktreeId: TEST_WORKTREE_ID,

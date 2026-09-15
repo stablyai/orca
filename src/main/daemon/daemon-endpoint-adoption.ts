@@ -33,10 +33,13 @@ export async function holdDaemonAdoptionLease(
   pidPath?: string
 ): Promise<DaemonProcessHandle> {
   const client = connectedClient ?? new DaemonClient({ socketPath, tokenPath })
+
   try {
     await client.ensureConnected()
+
     if (expectedIdentity) {
       const actualIdentity = readDaemonEndpointIdentity(client)
+
       if (
         !actualIdentity ||
         actualIdentity.pid !== expectedIdentity.pid ||
@@ -46,12 +49,15 @@ export async function holdDaemonAdoptionLease(
         throw new DaemonEndpointOwnershipError('Daemon endpoint ownership changed during startup')
       }
     }
+
     await reconcileDaemonPidOwnership(client, pidPath)
   } catch (error) {
     client.disconnect()
     throw error
   }
+
   handle.releaseAdoptionLease = () => client.disconnect()
+
   return handle
 }
 
@@ -60,14 +66,17 @@ export async function reconcileDaemonPidOwnership(
   pidPath?: string
 ): Promise<void> {
   const endpointIdentity = readDaemonEndpointIdentity(client)
+
   if (!pidPath || !endpointIdentity || pidRecordMatchesEndpoint(pidPath, endpointIdentity)) {
     return
   }
+
   // Why: the mismatched record's metadata describes a different daemon and must not be copied
   // onto this one. Re-derive it from the authenticated owner instead, so the repaired record
   // keeps the fields freshness, host pinning and pid-recycle detection depend on.
   const { pid, startedAtMs, launchNonce } = endpointIdentity
   const ownerMetadata = await readDaemonOwnerMetadata(endpointIdentity)
+
   if (!replaceDaemonPidFile(pidPath, { pid, startedAtMs, launchNonce, ...ownerMetadata })) {
     // Why: fail open. A record that disagrees with the endpoint is a diagnosable nuisance;
     // abandoning a healthy adoptable daemon over a failed file write costs the user every
@@ -75,8 +84,10 @@ export async function reconcileDaemonPidOwnership(
     console.warn(
       '[daemon] Could not repair daemon PID ownership; adopting the authenticated endpoint anyway'
     )
+
     return
   }
+
   console.warn('[daemon] Repaired daemon PID ownership to match the authenticated endpoint')
 }
 
@@ -94,20 +105,26 @@ async function readDaemonOwnerMetadata(
   identity: DaemonEndpointIdentity
 ): Promise<Partial<DaemonPidFile>> {
   const metadata: Partial<DaemonPidFile> = {}
+
   if (identity.entryPath) {
     metadata.entryPath = identity.entryPath
   }
+
   if (identity.appVersion) {
     metadata.appVersion = identity.appVersion
   }
+
   if (identity.spawnerExecPath) {
     metadata.spawnerExecPath = identity.spawnerExecPath
   }
+
   const incarnation = await readDaemonProcessIncarnation(identity.pid)
+
   if (incarnation) {
     metadata.linuxStartTicks = incarnation.linuxStartTicks
     metadata.bootId = incarnation.bootId
   }
+
   return metadata
 }
 
@@ -118,6 +135,7 @@ function pidRecordMatchesEndpoint(pidPath: string, identity: DaemonEndpointIdent
       startedAtMs?: unknown
       launchNonce?: unknown
     }
+
     return (
       record.pid === identity.pid &&
       record.startedAtMs === identity.startedAtMs &&
@@ -136,10 +154,13 @@ export function takeDaemonAdoptionLeaseRelease(
   handle: DaemonProcessHandle | null
 ): (() => void) | undefined {
   const release = handle?.releaseAdoptionLease
+
   if (!release || !handle) {
     return undefined
   }
+
   delete handle.releaseAdoptionLease
+
   return release
 }
 
@@ -149,6 +170,7 @@ export async function cleanupFailedDaemonAdoption(
   legacy: DaemonPtyAdapter[] = []
 ): Promise<void> {
   const handle = failedSpawner.getHandle()
+
   const results = await Promise.allSettled([
     Promise.resolve().then(() => releaseDaemonAdoptionLease(handle)),
     ...legacy.map((entry) => entry.disconnectOnly()),
@@ -162,9 +184,11 @@ export async function cleanupFailedDaemonAdoption(
       }
     })()
   ])
+
   const failures = results.flatMap((result) =>
     result.status === 'rejected' ? [result.reason] : []
   )
+
   if (failures.length > 0) {
     throw new AggregateError(failures, 'Daemon adoption cleanup failed')
   }

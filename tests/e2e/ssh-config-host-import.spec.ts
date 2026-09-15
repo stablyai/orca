@@ -50,6 +50,7 @@ async function seedPairConfig(
 ): Promise<{ alpha: SeededSshConfigHost; bravo: SeededSshConfigHost }> {
   const hosts = pairHosts(prefix)
   await seedIsolatedSshConfig(electronApp, buildSshConfigBody([hosts.alpha, hosts.bravo]))
+
   return hosts
 }
 
@@ -72,6 +73,7 @@ async function importPairThenDeleteAlias(
     timeout: 10_000
   })
   await removeSshTargetByAlias(page, aliasToDelete)
+
   return hosts
 }
 

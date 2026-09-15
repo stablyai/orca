@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { nativeChatAskDismissKey, type AskPrompt } from '../../../src/shared/native-chat-ask'
 
 type AskDismissal = { sessionKey: string | null; askKey: string }
+
 type DetectedAsk = { sessionKey: string | null; askKey: string | null }
 
 /** Track the answered-ask key so the lingering live status doesn't re-show the
@@ -34,9 +35,11 @@ export function useMobileNativeChatAskDismiss(args: {
   const askKey = useMemo(() => nativeChatAskDismissKey(ask), [ask])
   const detectedAskKey = useMemo(() => nativeChatAskDismissKey(detectedAsk), [detectedAsk])
   const detectedByScopeRef = useRef(new Map<string | null, DetectedAsk>())
+
   const [dismissedByScope, setDismissedByScope] = useState<Map<string | null, AskDismissal>>(
     () => new Map()
   )
+
   useEffect(() => {
     if (observing) {
       detectedByScopeRef.current.set(scopeKey, { sessionKey, askKey: detectedAskKey })
@@ -47,29 +50,37 @@ export function useMobileNativeChatAskDismiss(args: {
     if (observing) {
       setDismissedByScope((previous) => {
         const dismissed = previous.get(scopeKey)
+
         if (
           dismissed === undefined ||
           (dismissed.sessionKey === sessionKey && dismissed.askKey === detectedAskKey)
         ) {
           return previous
         }
+
         const next = new Map(previous)
         next.delete(scopeKey)
+
         return next
       })
     }
   }, [observing, detectedAskKey, scopeKey, sessionKey])
   const dismissed = dismissedByScope.get(scopeKey)
+
   const showAsk =
     askKey !== null && !(dismissed?.sessionKey === sessionKey && dismissed.askKey === askKey)
+
   const dismissAsk = (): void => {
     const detected = detectedByScopeRef.current.get(scopeKey)
+
     if (askKey !== null && detected?.sessionKey === sessionKey && detected.askKey === askKey) {
       setDismissedByScope((previous) => {
         const current = previous.get(scopeKey)
+
         if (current?.sessionKey === sessionKey && current.askKey === askKey) {
           return previous
         }
+
         return new Map(previous).set(scopeKey, { sessionKey, askKey })
       })
     }

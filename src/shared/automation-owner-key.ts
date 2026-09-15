@@ -22,7 +22,9 @@ import type {
  */
 
 const SEPARATOR = ':'
+
 const HOST_STABLE_NAMESPACE = 'host'
+
 const OWNER_NAMESPACE = 'owner'
 
 function encodePart(value: string): string {
@@ -36,11 +38,13 @@ function encodeNumber(value: number): string {
 
 function decodePart(raw: string): string | null {
   let decoded: string
+
   try {
     decoded = decodeURIComponent(raw)
   } catch {
     return null
   }
+
   // Why: require the canonical escaping so a non-round-tripping key is rejected rather than aliased.
   return decoded && encodePart(decoded) === raw ? decoded : null
 }
@@ -90,6 +94,7 @@ export function toStableCatalogRef(owner: AutomationOwnerRef): StableAutomationC
     owner.authority.kind === 'desktop'
       ? { kind: 'desktop' }
       : { kind: 'runtime', environmentId: owner.authority.environmentId }
+
   return owner.selector.kind === 'ssh'
     ? { authority, selector: { kind: 'ssh', targetId: owner.selector.targetId } }
     : { authority, selector: { kind: 'self' } }
@@ -112,10 +117,13 @@ function parseStableAuthority(
   if (parts[0] === 'desktop') {
     return { authority: { kind: 'desktop' }, rest: parts.slice(1) }
   }
+
   if (parts[0] !== 'runtime') {
     return null
   }
+
   const environmentId = parts[1] === undefined ? null : decodePart(parts[1])
+
   return environmentId
     ? { authority: { kind: 'runtime', environmentId }, rest: parts.slice(2) }
     : null
@@ -125,24 +133,32 @@ function parseStableSelector(parts: readonly string[]): StableAutomationCatalogS
   if (parts.length === 1 && (parts[0] === 'self' || parts[0] === 'orphan')) {
     return { kind: parts[0] }
   }
+
   if (parts.length !== 2 || parts[0] !== 'ssh') {
     return null
   }
+
   const targetId = decodePart(parts[1])
+
   return targetId ? { kind: 'ssh', targetId } : null
 }
 
 /** Inverse of {@link hostStableKey}; returns null for anything malformed. */
 export function parseHostStableKey(key: string): StableAutomationCatalogRef | null {
   const parts = key.split(SEPARATOR)
+
   if (parts[0] !== HOST_STABLE_NAMESPACE) {
     return null
   }
+
   const parsedAuthority = parseStableAuthority(parts.slice(1))
+
   if (!parsedAuthority) {
     return null
   }
+
   const selector = parseStableSelector(parsedAuthority.rest)
+
   return selector
     ? ({ authority: parsedAuthority.authority, selector } as StableAutomationCatalogRef)
     : null

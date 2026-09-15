@@ -12,6 +12,7 @@ import {
 import { isValidVersion } from './updater-fallback'
 
 const FETCH_TIMEOUT_MS = 8000
+
 const MAX_LISTED_BUILDS = 100
 
 function getReleasesApiUrl(repo: string): string {
@@ -35,6 +36,7 @@ function readAssetNames(assets: unknown): string[] {
   if (!Array.isArray(assets)) {
     return []
   }
+
   return assets
     .map((asset) => (asset as { name?: unknown })?.name)
     .filter((name): name is string => typeof name === 'string')
@@ -48,25 +50,31 @@ function parseReleaseEntry(
   if (typeof entry.tag_name !== 'string' || entry.draft === true) {
     return null
   }
+
   const tag = entry.tag_name
   const version = normalizeTagToVersion(tag)
   const channel = getVersionChannel(version)
+
   if (!isValidVersion(version) || !channel) {
     return null
   }
+
   // Why filter on assets rather than on a per-channel platform table: a release
   // is published as soon as one platform's leg finishes, and a leg can fail
   // outright. Asking what the release actually carries covers both without the
   // picker ever offering a row whose download 404s.
   const assetNames = readAssetNames(entry.assets)
+
   if (!hasInstallableArtifactForPlatform(platform, assetNames)) {
     return null
   }
+
   const installerAsset = findInstallerAssetName(platform, assetNames)
   // Why null when it merely repeats the tag: GitHub titles an untitled release
   // with its tag name, and hourlies predating the naming change were created that
   // way too. Neither says anything the version beside it does not.
   const name = typeof entry.name === 'string' ? entry.name.trim() : ''
+
   return {
     tag,
     version,
@@ -97,28 +105,36 @@ export async function listReleaseBuilds(
   platform: NodeJS.Platform = process.platform
 ): Promise<ReleaseBuild[]> {
   const repo = getReleaseRepoForChannel(channel)
+
   const res = await net.fetch(getReleasesApiUrl(repo), {
     headers: { Accept: 'application/vnd.github+json' },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
   })
+
   if (!res.ok) {
     if (res.status === 404) {
       throw new Error(`No releases repository found at ${repo}.`)
     }
+
     if (res.status === 403 || res.status === 429) {
       throw new Error('GitHub rate limit reached. Try again in a few minutes.')
     }
+
     throw new Error(`Could not list ${channel} builds (HTTP ${res.status}).`)
   }
+
   const payload: unknown = await res.json()
+
   if (!Array.isArray(payload)) {
     throw new Error(`Could not read the ${channel} release list.`)
   }
+
   const builds = payload
     .map((entry) => parseReleaseEntry(entry as GitHubReleaseEntry, repo, platform))
     .filter((build): build is ReleaseBuild => build !== null)
     // Why: the main repo serves both stable and rc, so filter to the asked-for channel.
     .filter((build) => build.channel === channel)
+
   return sortReleaseBuildsNewestFirst(builds)
 }
 
@@ -131,9 +147,12 @@ export type ResolvedTargetBuild = {
 /** Resolves a tag the user picked into a pinned generic feed URL. */
 export function resolveTargetBuild(channel: ReleaseChannel, tag: string): ResolvedTargetBuild {
   const version = normalizeTagToVersion(tag)
+
   if (!isValidVersion(version)) {
     throw new Error(`"${tag}" is not a valid release tag.`)
   }
+
   const repo = getReleaseRepoForChannel(channel)
+
   return { tag, version, feedUrl: getReleaseDownloadUrlForRepo(repo, tag) }
 }

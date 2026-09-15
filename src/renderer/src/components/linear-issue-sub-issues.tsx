@@ -16,10 +16,13 @@ function mergeLinearSubIssues(
   createdSubIssues: LinearIssueChildSummary[]
 ): LinearIssueChildSummary[] {
   const server = serverSubIssues ?? []
+
   if (createdSubIssues.length === 0) {
     return server
   }
+
   const serverIds = new Set(server.map((subIssue) => subIssue.id))
+
   return [...server, ...createdSubIssues.filter((subIssue) => !serverIds.has(subIssue.id))]
 }
 
@@ -43,21 +46,26 @@ export function LinearIssueSubIssues({
   const openRequestIdRef = useRef(0)
   const createRequestIdRef = useRef(0)
   const mountedRef = useMountedRef()
+
   const subIssues = useMemo(
     () => mergeLinearSubIssues(issue.subIssues, createdSubIssues),
     [createdSubIssues, issue.subIssues]
   )
+
   const handleOpenSubIssue = useCallback(
     async (subIssue: LinearIssueChildSummary) => {
       const requestId = ++openRequestIdRef.current
       setOpeningSubIssueId(subIssue.id)
+
       try {
         const fullIssue = await fetchLinearIssue(subIssue.id, issue.workspaceId, {
           sourceContext
         })
+
         if (!mountedRef.current || requestId !== openRequestIdRef.current) {
           return
         }
+
         if (fullIssue) {
           onOpenIssue(fullIssue)
         } else {
@@ -87,9 +95,11 @@ export function LinearIssueSubIssues({
 
   const handleCreate = useCallback(() => {
     const trimmed = title.trim()
+
     if (!trimmed) {
       return
     }
+
     const requestId = ++createRequestIdRef.current
     setSubmitting(true)
     void linearCreateSubIssue(providerSettings, {
@@ -103,6 +113,7 @@ export function LinearIssueSubIssues({
         if (!mountedRef.current || requestId !== createRequestIdRef.current) {
           return
         }
+
         if (result.ok) {
           const child = {
             id: result.id,
@@ -110,6 +121,7 @@ export function LinearIssueSubIssues({
             title: result.title || trimmed,
             url: result.url
           }
+
           setCreatedSubIssues((current) => {
             if (
               current.some((subIssue) => subIssue.id === child.id) ||
@@ -117,6 +129,7 @@ export function LinearIssueSubIssues({
             ) {
               return current
             }
+
             return [...current, child]
           })
           toast.success(

@@ -67,6 +67,7 @@ export function attachDocPreviewWebview({
       webview.removeEventListener('page-title-updated', onTitleUpdated)
       moveFocusToRendererBeforeWebviewDetach(webview)
       webview.remove()
+
       if (webviewRegistry.get(previewId) === webview) {
         unregisterPersistentWebview(previewId)
       }

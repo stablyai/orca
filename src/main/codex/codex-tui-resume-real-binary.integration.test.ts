@@ -11,19 +11,25 @@ import { openCodexThread } from './codex-structured-thread-open'
 import { proveCodexTuiRollout } from './codex-tui-rollout-proof'
 
 const codexCommand = resolveCodexCommand()
+
 const codexAvailable = spawnSync(codexCommand, ['--version']).status === 0
+
 const itWithCodex = codexAvailable ? it : it.skip
+
 const tempHomes: string[] = []
 
 async function waitForTuiStart(proc: pty.IPty): Promise<string> {
   let output = ''
+
   return new Promise<string>((resolve, reject) => {
     const timeout = setTimeout(
       () => reject(new Error(`Codex TUI did not initialize: ${output.slice(-500)}`)),
       15_000
     )
+
     proc.onData((data) => {
       output += data
+
       if (/OpenAI Codex|Welcome to Codex|Sign in with ChatGPT/i.test(output)) {
         clearTimeout(timeout)
         resolve(output)
@@ -40,17 +46,21 @@ async function waitForTuiStart(proc: pty.IPty): Promise<string> {
 
 async function waitForRollout(path: string, threadId: string): Promise<string> {
   const deadline = Date.now() + 5_000
+
   while (Date.now() < deadline) {
     try {
       const rollout = await readFile(path, 'utf8')
+
       if (rollout.includes(threadId)) {
         return rollout
       }
     } catch {
       // The rollout is created asynchronously after thread/start.
     }
+
     await new Promise((resolve) => setTimeout(resolve, 50))
   }
+
   throw new Error('Codex did not materialize the resumed rollout')
 }
 
@@ -81,16 +91,19 @@ describe('real Codex structured-to-TUI resume', () => {
           ''
         ].join('\n')
       )
+
       const connection = await openCodexAppServerConnection({
         command: codexCommand,
         args: ['app-server'],
         env: { CODEX_HOME: codexHome }
       })
+
       const opened = await openCodexThread(
         connection,
         { cwd: process.cwd(), resumeThreadId: null },
         15_000
       )
+
       await connection.request(
         'turn/start',
         {
@@ -105,6 +118,7 @@ describe('real Codex structured-to-TUI resume', () => {
 
       expect(opened.historyPath).toContain(opened.threadId)
       expect(opened.historyPath).toContain(join(codexHome, 'sessions'))
+
       const tui = pty.spawn(codexCommand, ['resume', '--no-alt-screen', opened.threadId], {
         name: 'xterm-256color',
         cols: 100,
@@ -117,9 +131,11 @@ describe('real Codex structured-to-TUI resume', () => {
           TERM: 'xterm-256color'
         }
       })
+
       const tuiExit = new Promise<number>((resolve) =>
         tui.onExit(({ exitCode }) => resolve(exitCode))
       )
+
       const kittyKeyboard = new TerminalKittyKeyboardModeTracker()
       let tuiOutput = ''
       let lastOutputAt: number | null = null
@@ -128,8 +144,10 @@ describe('real Codex structured-to-TUI resume', () => {
         lastOutputAt = Date.now()
         kittyKeyboard.scan(data)
       })
+
       try {
         await expect(waitForTuiStart(tui)).resolves.toMatch(/Codex/i)
+
         const proof = await proveCodexTuiRollout({
           codexHome,
           threadId: opened.threadId,
@@ -137,9 +155,11 @@ describe('real Codex structured-to-TUI resume', () => {
           readOutput: () => ({ text: tuiOutput, lastOutputAt }),
           write: (data) => {
             tui.write(data)
+
             return true
           }
         })
+
         expect(await realpath(proof.transcriptPath)).toBe(await realpath(opened.historyPath!))
       } finally {
         try {
@@ -147,6 +167,7 @@ describe('real Codex structured-to-TUI resume', () => {
         } catch {
           // Already exited.
         }
+
         await Promise.race([
           tuiExit,
           new Promise<never>((_resolve, reject) =>

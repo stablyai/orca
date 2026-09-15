@@ -44,6 +44,7 @@ function BrowserVisualFrame(props: {
   newBrowserShortcutLabel: string
 }): JSX.Element {
   const isSplit = isBrowserSplitPhase(props.state.phase)
+
   return (
     <div className="flex flex-col gap-2">
       <div className="relative w-full" style={{ height: 270 }}>

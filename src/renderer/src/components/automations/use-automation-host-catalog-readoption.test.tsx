@@ -26,7 +26,9 @@ const mocks = vi.hoisted(() => ({ state: {} as Record<string, unknown> }))
 vi.mock('@/store', () => {
   const useAppStore = (selector: (state: Partial<AppState>) => unknown): unknown =>
     selector(mocks.state as Partial<AppState>)
+
   useAppStore.getState = (): Partial<AppState> => mocks.state as Partial<AppState>
+
   return { useAppStore }
 })
 
@@ -42,11 +44,14 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 import { useAutomationHostCatalog } from './use-automation-host-catalog'
 
 const TARGET_ID = 'ssh-1'
+
 const SSH_STABLE_KEY = `host:desktop:ssh:${TARGET_ID}`
+
 const DESKTOP_AUTHORITY_KEY = 'authority:desktop'
 
 function storeState(targetGeneration: number): Record<string, unknown> {
   const noop = (): void => undefined
+
   return {
     repos: [],
     settings: null,
@@ -71,7 +76,9 @@ function scopedResponse(selector: AutomationListScopeSelector): unknown {
   if (selector.kind !== 'ssh') {
     return { automations: [], items: [], orphanCount: 0 }
   }
+
   const id = `a-gen${selector.expectedTargetGeneration}`
+
   return {
     automations: [{ id, name: id } as Automation],
     items: [
@@ -89,26 +96,33 @@ function scopedResponse(selector: AutomationListScopeSelector): unknown {
 }
 
 const scopeRequests: AutomationListScopeSelector[] = []
+
 /** Generation whose answer is held in flight; null lets every request answer at once. */
 let heldGeneration: number | null = null
+
 let releaseHeld: (() => void) | null = null
 
 function listScoped({ selector }: { selector: AutomationListScopeSelector }): Promise<unknown> {
   scopeRequests.push(selector)
+
   if (selector.kind === 'ssh' && selector.expectedTargetGeneration === heldGeneration) {
     return new Promise<unknown>((resolve) => {
       releaseHeld = () => resolve(scopedResponse(selector))
     })
   }
+
   return Promise.resolve(scopedResponse(selector))
 }
 
 const roots: Root[] = []
+
 let root: Root | null = null
+
 let view: AutomationHostCatalogView | null = null
 
 function Harness(): null {
   view = useAutomationHostCatalog()
+
   return null
 }
 
@@ -122,12 +136,14 @@ async function flush(): Promise<void> {
 
 async function renderWithGeneration(targetGeneration: number): Promise<void> {
   mocks.state = storeState(targetGeneration)
+
   if (!root) {
     const container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
     roots.push(root)
   }
+
   const current = root
   await act(async () => {
     current.render(<Harness />)
@@ -144,6 +160,7 @@ function sshRequestGenerations(): number[] {
 function sshHostAutomationIds(): string[] {
   const group = view?.rows.groups.find((entry) => entry.authorityKey === DESKTOP_AUTHORITY_KEY)
   const host = group?.hosts.find((candidate) => candidate.entry.stableKey === SSH_STABLE_KEY)
+
   return (host?.rows ?? []).map((row) => row.automation.id)
 }
 

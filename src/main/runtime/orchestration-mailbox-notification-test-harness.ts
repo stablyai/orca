@@ -12,23 +12,37 @@ import { RpcDispatcher } from './rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from './rpc/methods/orchestration'
 
 export const TAB_ID = '11111111-1111-4111-8111-111111111111'
+
 export const LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 export const PANE_KEY = `${TAB_ID}:${LEAF_ID}`
+
 export const PTY_ID = 'pty-mailbox'
+
 export const TERMINAL_HANDLE = 'term_mailbox_consistency'
+
 export const SECOND_TAB_ID = '33333333-3333-4333-8333-333333333333'
+
 export const SECOND_LEAF_ID = '44444444-4444-4444-8444-444444444444'
+
 export const SECOND_PANE_KEY = `${SECOND_TAB_ID}:${SECOND_LEAF_ID}`
+
 export const SECOND_PTY_ID = 'pty-mailbox-second'
+
 export const SECOND_TERMINAL_HANDLE = 'term_mailbox_consistency_second'
+
 export const SECOND_LAUNCH_TOKEN = 'mailbox-consistency-second-launch'
+
 export const WORKTREE_ID = 'repo-mailbox::/tmp/mailbox'
+
 export const LAUNCH_TOKEN = 'mailbox-consistency-launch'
+
 export const temporaryDirectories: string[] = []
 
 export function createDatabase(prefix: string): OrchestrationDb {
   const directory = mkdtempSync(join(tmpdir(), prefix))
   temporaryDirectories.push(directory)
+
   return new OrchestrationDb(join(directory, 'orchestration.db'))
 }
 
@@ -53,9 +67,11 @@ export function insertDirectRunMessage(db: OrchestrationDb, runId: string, subje
     runId,
     deliveryContract: 'current_delivery'
   })
+
   sqliteFor(db)
     .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
     .run(TERMINAL_HANDLE, message.id)
+
   return db.getMessageById(message.id)!
 }
 
@@ -98,6 +114,7 @@ export function createRuntime(
         ? { paneKey, source: 'current_hook' }
         : null
   })
+
   const write = vi.fn(() => true)
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
@@ -140,6 +157,7 @@ export function createRuntime(
       }
     ]
   })
+
   return { runtime, write }
 }
 
@@ -220,9 +238,11 @@ export async function checkBoundMailbox(
 ): Promise<MailboxCheckResult> {
   const response = await dispatchMailboxCheck(runtime, options)
   expect(response.ok).toBe(true)
+
   if (!response.ok) {
     throw new Error(response.error.message)
   }
+
   return response.result as MailboxCheckResult
 }
 
@@ -231,6 +251,7 @@ export async function dispatchMailboxCheck(
   options: MailboxCheckOptions = {}
 ) {
   const terminal = options.terminal ?? TERMINAL_HANDLE
+
   return new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS }).dispatch(
     {
       id: 'req-mailbox-consistency',

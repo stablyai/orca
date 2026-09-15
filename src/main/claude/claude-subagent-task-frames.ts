@@ -62,6 +62,7 @@ export function isClaudeSubagentTask(message: Record<string, unknown>): boolean 
   if (classifyClaudeBackgroundTaskKind(message.task_type) === 'agent') {
     return true
   }
+
   // Releases predating `task_type` still name the child in `subagent_type`. A
   // task_type Orca does not recognise is NOT covered: it is a type this build
   // has no reason to believe is an agent.
@@ -81,20 +82,26 @@ export function readClaudeSubagentTaskFrame(
   if (message.type !== 'system') {
     return null
   }
+
   const subtype = claudeText(message.subtype)
+
   if (!subtype || !TASK_SUBTYPES.has(subtype)) {
     return null
   }
+
   const taskId = claudeTaskId(message)
+
   if (!taskId) {
     return null
   }
+
   const patch = claudeRecord(message.patch)
   const toolUseId = claudeText(message.tool_use_id) ?? claudeText(patch?.tool_use_id)
   const announcement = subtype === 'task_started'
   // Housekeeping Claude runs for itself; the user never asked for it.
   const suppressed = message.ambient === true || message.skip_transcript === true
   const subagent = announcement && !suppressed && isClaudeSubagentTask(message)
+
   return {
     taskId,
     toolUseId: toolUseId && isBoundedClaudeTaskId(toolUseId) ? toolUseId : null,

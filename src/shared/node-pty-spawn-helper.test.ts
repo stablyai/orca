@@ -7,6 +7,7 @@ describe('usesNodePtySpawnHelper', () => {
     // spawn-helper target inside OS=="mac". Reading it as "every non-Windows platform"
     // is what reported spawn_helper_missing on healthy Linux hosts (#17844).
     expect(usesNodePtySpawnHelper('darwin')).toBe(true)
+
     for (const platform of ['linux', 'win32', 'freebsd', 'openbsd', 'sunos', 'aix']) {
       expect(usesNodePtySpawnHelper(platform)).toBe(false)
     }

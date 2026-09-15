@@ -10,6 +10,7 @@ function isMarkdownAnnotationNavigationClick(target: EventTarget | null): boolea
   if (!(target instanceof HTMLElement)) {
     return false
   }
+
   return !target.closest(
     'a,button,input,textarea,select,summary,[contenteditable="true"],.markdown-annotation-controls'
   )
@@ -37,21 +38,25 @@ export function useMarkdownPreviewReviewActions({
     markdownComments,
     activeReviewCommentId
   } = foundation
+
   const { clearReviewNotesCopiedResetTimer, clearCopiedReviewNoteResetTimer } = viewport
 
   const handleCopyMarkdownReviewNotes = useCallback(async (): Promise<void> => {
     if (markdownReviewNotes.length === 0) {
       return
     }
+
     try {
       const copied = await copyMarkdownReviewNotesForAgent({
         notes: markdownReviewNotes,
         content: renderedContent,
         writeClipboardText: window.api.ui.writeClipboardText
       })
+
       if (!copied || !reviewNotesCopyMountedRef.current) {
         return
       }
+
       clearReviewNotesCopiedResetTimer()
       setReviewNotesCopied(true)
       reviewNotesCopiedResetTimerRef.current = window.setTimeout(() => {
@@ -78,9 +83,11 @@ export function useMarkdownPreviewReviewActions({
           content: renderedContent,
           writeClipboardText: window.api.ui.writeClipboardText
         })
+
         if (!copied || !reviewNotesCopyMountedRef.current) {
           return
         }
+
         clearCopiedReviewNoteResetTimer()
         setCopiedReviewNoteId(note.id)
         copiedReviewNoteResetTimerRef.current = window.setTimeout(() => {
@@ -105,6 +112,7 @@ export function useMarkdownPreviewReviewActions({
       if (attentionReviewCommentTimeoutRef.current !== null) {
         window.clearTimeout(attentionReviewCommentTimeoutRef.current)
       }
+
       setAttentionReviewCommentId(null)
       window.requestAnimationFrame(() => {
         setAttentionReviewCommentId(commentId)
@@ -120,9 +128,11 @@ export function useMarkdownPreviewReviewActions({
   const findRenderedMarkdownReviewNoteCard = useCallback(
     (commentId: string): HTMLElement | null => {
       const root = rootRef.current
+
       if (!root) {
         return null
       }
+
       return (
         Array.from(root.querySelectorAll<HTMLElement>('[data-markdown-review-note-id]')).find(
           (candidate) => candidate.dataset.markdownReviewNoteId === commentId
@@ -151,19 +161,24 @@ export function useMarkdownPreviewReviewActions({
     (comment: DiffComment): void => {
       setActiveReviewCommentId(comment.id)
       const root = rootRef.current
+
       if (!root) {
         return
       }
+
       const blocks = root.querySelectorAll<HTMLElement>('[data-source-line][data-source-end-line]')
       let target: HTMLElement | null = null
+
       for (const block of blocks) {
         const startLine = Number(block.dataset.sourceLine)
         const endLine = Number(block.dataset.sourceEndLine)
+
         if (startLine <= comment.lineNumber && comment.lineNumber <= endLine) {
           target = block
           break
         }
       }
+
       target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     },
     [rootRef, setActiveReviewCommentId]
@@ -182,13 +197,17 @@ export function useMarkdownPreviewReviewActions({
       if (!isMarkdownAnnotationNavigationClick(event.target)) {
         return
       }
+
       const commentsForBlock = getMarkdownCommentsForRange(range)
+
       const comment =
         commentsForBlock.find((candidate) => candidate.id !== activeReviewCommentId) ??
         commentsForBlock[0]
+
       if (!comment) {
         return
       }
+
       scrollRenderedMarkdownReviewNoteIntoView(comment)
     },
     [activeReviewCommentId, getMarkdownCommentsForRange, scrollRenderedMarkdownReviewNoteIntoView]

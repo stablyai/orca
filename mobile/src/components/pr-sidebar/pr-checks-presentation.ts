@@ -79,22 +79,28 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
   if (checks.length === 0) {
     return { total: 0, passed: 0, pending: 0, failed: 0, outcome: 'none', label: 'No checks' }
   }
+
   // Counts and the worst-case rollup come from the shared summarizer; only the label wording is mobile's.
   const { total, passed, pending, failed, neutral, state } = summarizeProviderChecks(checks)
   const outcome = OUTCOME_BY_STATE[state]
   const parts: string[] = []
+
   if (failed > 0) {
     parts.push(`${failed} failing`)
   }
+
   if (pending > 0) {
     parts.push(`${pending} pending`)
   }
+
   if (passed > 0) {
     parts.push(`${passed} passed`)
   }
+
   if (neutral > 0) {
     parts.push(`${neutral} neutral`)
   }
+
   return {
     total,
     passed,
@@ -111,6 +117,7 @@ export function checkStatusLabel(check: PRCheckDetail): string {
   if (check.status !== 'completed') {
     return check.status === 'in_progress' ? 'In progress' : 'Pending'
   }
+
   switch (check.conclusion) {
     case 'success':
       return 'Successful'
@@ -151,9 +158,11 @@ export function prCheckKey(check: PRCheckDetail): string {
   if (typeof check.checkRunId === 'number') {
     return `run:${check.checkRunId}`
   }
+
   if (typeof check.workflowRunId === 'number') {
     return `wf:${check.workflowRunId}`
   }
+
   return `name:${check.name}`
 }
 
@@ -166,6 +175,7 @@ export function firstFailingCheckKey(checks: readonly PRCheckDetail[]): string |
       return prCheckKey(check)
     }
   }
+
   return null
 }
 
@@ -228,11 +238,14 @@ type ReviewDisplayItem = {
 // followed by any latest-review authors not already requested, deduped by login.
 export function getPRReviewerRows(item: ReviewDisplayItem): ReviewerRow[] {
   const byLogin = new Map<string, ReviewerRow>()
+
   for (const user of item.reviewRequests ?? []) {
     const login = user.login.trim()
+
     if (!login) {
       continue
     }
+
     byLogin.set(login.toLowerCase(), {
       login,
       name: user.name,
@@ -241,12 +254,15 @@ export function getPRReviewerRows(item: ReviewDisplayItem): ReviewerRow[] {
       token: 'statusAmber'
     })
   }
+
   for (const review of item.latestReviews ?? []) {
     const login = review.login.trim()
     const key = login.toLowerCase()
+
     if (!login || byLogin.has(key)) {
       continue
     }
+
     const { label, token } = reviewStateLabel(review.state)
     byLogin.set(key, {
       login,
@@ -256,5 +272,6 @@ export function getPRReviewerRows(item: ReviewDisplayItem): ReviewerRow[] {
       token
     })
   }
+
   return Array.from(byLogin.values())
 }

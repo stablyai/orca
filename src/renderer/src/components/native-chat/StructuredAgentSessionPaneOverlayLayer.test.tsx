@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/store', async () => {
   const { create } = await import('zustand')
+
   const useAppStore = create<MockAppState>(() => ({
     unifiedTabsByWorktree: {},
     groupsByWorktree: {},
@@ -29,7 +30,9 @@ vi.mock('@/store', async () => {
     runtimeEnvironmentId: null,
     focusGroup: mocks.focusGroup
   }))
+
   mocks.store = useAppStore
+
   return { useAppStore }
 })
 
@@ -50,6 +53,7 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 
 vi.mock('./NativeChatView', async () => {
   const { useEffect } = await import('react')
+
   return {
     default: function MockNativeChatView({
       tabId,
@@ -65,10 +69,12 @@ vi.mock('./NativeChatView', async () => {
       mocks.groupIdByTabId.set(tabId, groupId)
       useEffect(() => {
         mocks.mountsByTabId.set(tabId, (mocks.mountsByTabId.get(tabId) ?? 0) + 1)
+
         return () => {
           mocks.unmountsByTabId.set(tabId, (mocks.unmountsByTabId.get(tabId) ?? 0) + 1)
         }
       }, [tabId])
+
       return (
         <span
           data-chat-tab-id={tabId}
@@ -84,9 +90,13 @@ vi.mock('./NativeChatView', async () => {
 import StructuredAgentSessionPaneOverlayLayer from './StructuredAgentSessionPaneOverlayLayer'
 
 const WORKTREE_ID = 'wt-1'
+
 const GROUP_ID = 'group-1'
+
 const SECOND_GROUP_ID = 'group-2'
+
 const FIRST_TAB_ID = 'structured-agent-session-session-1'
+
 const SECOND_TAB_ID = 'structured-agent-session-session-2'
 
 describe('StructuredAgentSessionPaneOverlayLayer', () => {
@@ -104,6 +114,7 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     const view = render(
       <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
     )
+
     const firstBefore = chatSurface(view.container, FIRST_TAB_ID)
     const secondBefore = chatSurface(view.container, SECOND_TAB_ID)
 
@@ -145,6 +156,7 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     const view = render(
       <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
     )
+
     const slot = view.container.querySelector<HTMLElement>(
       `[data-structured-agent-session-overlay-tab-id="${FIRST_TAB_ID}"]`
     )
@@ -158,6 +170,7 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     const view = render(
       <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
     )
+
     const slot = view.container.querySelector<HTMLElement>(
       `[data-structured-agent-session-overlay-tab-id="${FIRST_TAB_ID}"]`
     )
@@ -194,6 +207,7 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
         activeGroupIdByWorktree: { [WORKTREE_ID]: SECOND_GROUP_ID }
       })
     })
+
     const view = render(
       <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
     )
@@ -209,6 +223,7 @@ describe('StructuredAgentSessionPaneOverlayLayer', () => {
     act(() => {
       mocks.store?.setState({ activeGroupIdByWorktree: { [WORKTREE_ID]: 'group-removed' } })
     })
+
     const view = render(
       <StructuredAgentSessionPaneOverlayLayer worktreeId={WORKTREE_ID} isWorktreeActive />
     )
@@ -260,8 +275,10 @@ function structuredTab(id: string, sessionId: string, sortOrder: number): Tab {
 
 function chatSurface(container: HTMLElement, tabId: string): HTMLElement {
   const surface = container.querySelector<HTMLElement>(`[data-chat-tab-id="${tabId}"]`)
+
   if (!surface) {
     throw new Error(`missing structured chat surface ${tabId}`)
   }
+
   return surface
 }

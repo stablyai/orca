@@ -63,11 +63,14 @@ export function TerminalQuickCommandScopeField({
             if (value === 'global') {
               setDraft((current) => ({ ...current, scope: { type: 'global' } }))
             }
+
             if (value === 'repo' && selectedScope.type !== 'repo') {
               const repoId = getQuickCommandProjectScopeRepoId(repos, lastRepoScopeId)
+
               if (!repoId) {
                 return
               }
+
               // Why: toggling Global should not discard the command's project
               // and silently move it to whichever repo is first in the list.
               rememberRepoScopeId(repoId)

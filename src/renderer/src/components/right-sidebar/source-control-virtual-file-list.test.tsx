@@ -55,15 +55,19 @@ function fireResizeObservers(target?: Element): void {
         ? [target]
         : []
       : Array.from(observer.elements)
+
     if (targets.length === 0) {
       continue
     }
+
     const entries = targets.map((element) => {
       const rect = element.getBoundingClientRect()
+
       const size: ResizeObserverBoxSize = {
         blockSize: rect.height,
         inlineSize: rect.width
       }
+
       return {
         target: element,
         contentRect: rect,
@@ -72,6 +76,7 @@ function fireResizeObservers(target?: Element): void {
         devicePixelContentBoxSize: [size]
       } satisfies ResizeObserverEntry
     })
+
     observer.callback(entries, observer as unknown as ResizeObserver)
   }
 }
@@ -81,7 +86,9 @@ function manyRows(count: number): string[] {
 }
 
 let host: HTMLDivElement
+
 let root: Root
+
 /** Synthetic layout tops for getBoundingClientRect (happy-dom has no layout). */
 let topsByElement: WeakMap<Element, number>
 
@@ -103,9 +110,11 @@ beforeEach(() => {
   )
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const top = topsByElement.get(this) ?? 0
+
     const height = this.classList.contains('overflow-auto')
       ? VIEWPORT_HEIGHT_PX
       : SOURCE_CONTROL_FILE_ROW_HEIGHT_PX
+
     return {
       top,
       bottom: top + height,
@@ -213,6 +222,7 @@ function MultiSectionHarness({
             value: node.scrollTop
           })
         }
+
         setScroller(node)
       }}
     >
@@ -238,21 +248,27 @@ function MultiSectionHarness({
 
 function syncListTop(aboveHeight: number): HTMLDivElement | null {
   const list = host.querySelector<HTMLDivElement>('[data-testid="source-control-virtual-list"]')
+
   if (list) {
     setTop(list, aboveHeight)
   }
+
   const scroller = host.querySelector<HTMLDivElement>('.overflow-auto')
+
   if (scroller) {
     setTop(scroller, 0)
   }
+
   return list
 }
 
 function syncMultiSectionListTops(firstRowCount: number): void {
   const lists = host.querySelectorAll<HTMLElement>('[data-testid="source-control-virtual-list"]')
+
   if (lists[0]) {
     setTop(lists[0], 0)
   }
+
   if (lists[1]) {
     setTop(lists[1], firstRowCount * SOURCE_CONTROL_FILE_ROW_HEIGHT_PX)
   }
@@ -389,6 +405,7 @@ describe('SourceControlVirtualFileList scroll-margin lifecycle', () => {
 
     const scroller = host.querySelector<HTMLDivElement>('.overflow-auto')
     expect(scroller).toBeTruthy()
+
     if (!scroller) {
       return
     }
@@ -408,6 +425,7 @@ describe('SourceControlVirtualFileList scroll-margin lifecycle', () => {
 
   it('updates a later virtual section when an earlier virtual section resizes', () => {
     let firstRows = manyRows(SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS + 10).map((row) => `first-${row}`)
+
     const secondRows = manyRows(SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS + 20).map(
       (row) => `second-${row}`
     )
@@ -434,9 +452,11 @@ describe('SourceControlVirtualFileList scroll-margin lifecycle', () => {
 
     const scroller = host.querySelector<HTMLDivElement>('.overflow-auto')
     expect(scroller).toBeTruthy()
+
     if (!scroller) {
       return
     }
+
     Object.defineProperty(scroller, 'scrollTop', {
       configurable: true,
       writable: true,

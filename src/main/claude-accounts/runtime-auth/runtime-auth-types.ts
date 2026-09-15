@@ -37,16 +37,21 @@ export type ClaudeReadBackResult =
       hasValidChangedRuntimeCredentials: boolean
       runtimeCredentialsJson?: string
     }
+
 export type ClaudeReadBackMatch =
   | { kind: 'matched'; account: ClaudeManagedAccount; managedCredentialsJson: string }
   | { kind: 'none' | 'ambiguous' }
+
 export type ClaudeKeychainReadResult =
   | { status: 'captured'; credentialsJson: string | null }
   | { status: 'failed' }
+
 export type ClaudeKeychainSnapshotValue =
   | { status: 'captured'; credentialsJson: string | null }
   | { status: 'unknown' }
+
 export type ClaudeRefreshTokenComparison = 'same' | 'different' | 'missing'
+
 export type ClaudeRuntimeCredentialCandidate = {
   credentialsJson: string
   runtimeOauthAccount: unknown

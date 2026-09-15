@@ -18,6 +18,7 @@ describe('createOAuthUsageError', () => {
     const error = await createOAuthUsageError(
       rateLimitedResponse({ 'retry-after': new Date(Date.now() + 90_000).toUTCString() })
     )
+
     expect(error.retryAfterMs).toBeGreaterThan(0)
     expect(error.retryAfterMs).toBeLessThanOrEqual(90_000)
   })
@@ -26,6 +27,7 @@ describe('createOAuthUsageError', () => {
     const error = await createOAuthUsageError(
       rateLimitedResponse({ 'retry-after': String(48 * 60 * 60) })
     )
+
     expect(error.retryAfterMs).toBe(24 * 60 * 60 * 1000)
   })
 
@@ -48,6 +50,7 @@ describe('createOAuthUsageError', () => {
         headers: { 'retry-after': '60' }
       })
     )
+
     expect(error.status).toBe(401)
     expect(error.retryAfterMs).toBeNull()
   })

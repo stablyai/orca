@@ -36,6 +36,7 @@ describe('workspace cleanup local Git routing', () => {
     const store = {
       getRepos: () => [REPO]
     } as Store
+
     getLocalProjectWorktreeGitOptionsMock.mockReturnValue({ wslDistro: 'Ubuntu' })
 
     await scanWorkspaceCleanup(store)

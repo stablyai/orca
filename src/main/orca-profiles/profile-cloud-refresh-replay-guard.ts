@@ -46,9 +46,11 @@ export function blocksAmbiguousRefreshReplay(
   now = Date.now()
 ): boolean {
   const attempt = ambiguousRefreshAttempts.get(key)
+
   if (!attempt || attempt.refreshToken !== refreshToken) {
     return false
   }
+
   // Why bounded rather than permanent: the token is only *possibly* spent. A
   // permanent block would sign out every desktop whose refresh merely timed out.
   return now - attempt.attemptedAt < AMBIGUOUS_REFRESH_REPLAY_DELAY_MS

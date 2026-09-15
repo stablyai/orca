@@ -30,6 +30,7 @@ describe('activateAndRevealWorktree', () => {
       hostId: 'local' as const,
       runtimeOwnerEnvironmentId: 'web-runtime-1'
     }
+
     const callRuntimeEnvironment = vi.fn(
       async (request: { method: string; params?: Record<string, unknown> }) =>
         request.method === 'session.tabs.createTerminal'
@@ -43,6 +44,7 @@ describe('activateAndRevealWorktree', () => {
             }
           : { ok: false, error: { code: 'test', message: 'stop after recording the request' } }
     )
+
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: callRuntimeEnvironment } }
@@ -90,6 +92,7 @@ describe('activateAndRevealWorktree', () => {
     const createRequests = callRuntimeEnvironment.mock.calls.filter(
       ([request]) => request.method === 'session.tabs.createTerminal'
     )
+
     expect(createRequests).toHaveLength(1)
     expect(createRequests[0]?.[0]).toEqual(
       expect.objectContaining({
@@ -110,10 +113,12 @@ describe('activateAndRevealWorktree', () => {
       hostId: 'local' as const,
       runtimeOwnerEnvironmentId: 'web-runtime-1'
     }
+
     const callRuntimeEnvironment = vi.fn().mockResolvedValue({
       ok: false,
       error: { code: 'test', message: 'stop after recording the request' }
     })
+
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: callRuntimeEnvironment } }
@@ -168,6 +173,7 @@ describe('activateAndRevealFolderWorkspace', () => {
             }
           : { ok: false, error: { code: 'test', message: 'stop after recording the request' } }
     )
+
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: callRuntimeEnvironment } }
@@ -212,17 +218,21 @@ describe('activateAndRevealFolderWorkspace', () => {
         )
       ).toHaveLength(1)
     )
+
     const createRequest = callRuntimeEnvironment.mock.calls.find(
       ([request]) => request.method === 'session.tabs.createTerminal'
     )?.[0]
+
     expect(createRequest).toEqual(
       expect.objectContaining({
         params: expect.objectContaining(expected)
       })
     )
+
     if (activation.agent === null) {
       expect(createRequest?.params).not.toHaveProperty('launchAgent')
     }
+
     await vi.waitFor(() =>
       expect(shouldSkipWebRuntimeWakeTerminalRespawn('folder:folder-1')).toBe(false)
     )
@@ -275,6 +285,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
     }))
     let createdIndex = 1
     const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+
     const store = createMockStore({
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
       createTab,
@@ -395,6 +406,7 @@ describe('ensureWorktreeHasInitialTerminal', () => {
         ? { ...state.settings, activeRuntimeEnvironmentId: 'web-runtime-1' }
         : ({ activeRuntimeEnvironmentId: 'web-runtime-1' } as unknown as typeof state.settings)
     }))
+
     const store = createMockStore({
       settings: { activeRuntimeEnvironmentId: 'web-runtime-1' },
       repos: [{ id: 'repo-1', executionHostId: 'local', connectionId: null }],

@@ -41,6 +41,7 @@ type MutationContext = {
 
 function readQuickCommands(result: unknown): TerminalQuickCommand[] | null {
   const list = (result as { terminalQuickCommands?: unknown } | null)?.terminalQuickCommands
+
   return parseNormalizedTerminalQuickCommands(list)
 }
 
@@ -80,9 +81,12 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
   useEffect(() => {
     if (!enabled || !client) {
       setReady(false)
+
       return
     }
+
     let mutationContext = mutationContextRef.current
+
     if (mutationContext?.client !== client) {
       // A request for an old host must not delay or update mutations on a new one.
       mutationContext = {
@@ -96,6 +100,7 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
       commandsRef.current = []
       setCommands([])
     }
+
     let stale = false
     const operationId = operationIdRef.current + 1
     operationIdRef.current = operationId
@@ -108,6 +113,7 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
         // A close/reopen can overlap an in-flight save. Read only after that
         // save settles so an older snapshot cannot replace its canonical result.
         await mutationContext.queue
+
         if (
           stale ||
           operationId !== operationIdRef.current ||
@@ -115,6 +121,7 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
         ) {
           return
         }
+
         const response = await loadQuickCommandsWithCutoverRetry(
           client,
           () =>
@@ -122,6 +129,7 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
             operationId !== operationIdRef.current ||
             mutationContextRef.current !== mutationContext
         )
+
         if (
           stale ||
           operationId !== operationIdRef.current ||
@@ -129,15 +137,21 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
         ) {
           return
         }
+
         if (!response.ok) {
           setError((response as RpcFailure).error.message || 'Failed to load quick commands')
+
           return
         }
+
         const next = readQuickCommands((response as RpcSuccess).result)
+
         if (!next) {
           setError('Failed to load quick commands')
+
           return
         }
+
         mutationContext.confirmed = next
         commandsRef.current = next
         setCommands(next)
@@ -171,13 +185,16 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
       // Why: the loaded list is the optimistic/rollback baseline; mutating
       // before it arrives would make failure recovery show invented state.
       const mutationContext = mutationContextRef.current
+
       if (!client || loading || !ready || mutationContext?.client !== client) {
         return false
       }
+
       const mutation: PendingMutation = {
         id: mutationContext.nextMutationId + 1,
         mutation: commandMutation
       }
+
       mutationContext.nextMutationId = mutation.id
       mutationContext.pending.push(mutation)
       const optimistic = applyTerminalQuickCommandMutation(commandsRef.current, commandMutation)
@@ -188,52 +205,65 @@ export function useQuickCommands({ client, enabled }: Args): QuickCommandsState 
       const send = async (): Promise<boolean> => {
         let succeeded = false
         let failureMessage: string | null = null
+
         try {
           const response = await client.sendRequest('settings.updateTerminalQuickCommands', {
             mutation: commandMutation
           })
+
           if (!response.ok) {
             throw new Error(
               (response as RpcFailure).error.message || 'Failed to save quick command'
             )
           }
+
           const confirmed = readQuickCommands((response as RpcSuccess).result)
+
           if (!confirmed) {
             // Why: treating an invalid success payload as [] would let the next
             // full-list mutation erase commands that still exist on the host.
             throw new Error('Failed to save quick command')
           }
+
           mutationContext.confirmed = confirmed
           succeeded = true
+
           return true
         } catch (err) {
           failureMessage = err instanceof Error ? err.message : 'Failed to save quick command'
+
           return false
         } finally {
           mutationContext.pending = mutationContext.pending.filter(
             (pending) => pending.id !== mutation.id
           )
+
           if (mutationContextRef.current === mutationContext) {
             const next = mutationContext.pending.reduce(
               (current, pending) => applyTerminalQuickCommandMutation(current, pending.mutation),
               mutationContext.confirmed
             )
+
             commandsRef.current = next
             setCommands(next)
+
             const hasNewerMutation = mutationContext.pending.some(
               (pending) => pending.id > mutation.id
             )
+
             if (!hasNewerMutation) {
               setError(succeeded ? null : failureMessage)
             }
           }
         }
       }
+
       const request = mutationContext.queue.then(send, send)
       mutationContext.queue = request.then(
         () => undefined,
         () => undefined
       )
+
       return await request
     },
     [client, loading, ready]

@@ -53,6 +53,7 @@ describe('compareWorktreeDisplayName', () => {
         if (x.lastActivityAt !== y.lastActivityAt) {
           return y.lastActivityAt - x.lastActivityAt
         }
+
         return compareWorktreeDisplayName(x, y)
       })
     ).not.toThrow()

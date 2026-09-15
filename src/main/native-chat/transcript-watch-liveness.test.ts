@@ -22,11 +22,14 @@ vi.mock('node:fs', async () => {
     if (watchState.error) {
       throw watchState.error
     }
+
     const watcher = Object.assign(new EventEmitter(), { close: vi.fn(), unref: vi.fn() })
     watchers.push(watcher)
     watchCallbacks.push(callback)
+
     return watcher as unknown as FSWatcher
   })
+
   return { ...actual, watch: watchMock }
 })
 
@@ -48,6 +51,7 @@ async function tempFile(initial: string): Promise<string> {
   roots.push(root)
   const filePath = join(root, 'transcript.jsonl')
   await writeFile(filePath, initial)
+
   return filePath
 }
 
@@ -63,10 +67,12 @@ function claudeLine(uuid: string, role: 'user' | 'assistant', text: string): str
 // fs.watch and filesystem mutations use the platform clock; poll observable callbacks to a deadline.
 async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
   const start = Date.now()
+
   while (!predicate()) {
     if (Date.now() - start > timeoutMs) {
       throw new Error('timed out waiting for condition')
     }
+
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
 }
@@ -77,6 +83,7 @@ describe('native chat transcript watcher liveness', () => {
     const filePath = await tempFile(claudeLine('seed', 'user', 'hello'))
     const snapshots = vi.fn()
     const appends = vi.fn()
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'session',
@@ -86,6 +93,7 @@ describe('native chat transcript watcher liveness', () => {
       debounceMs: 0,
       reconciliationIntervalMs: 20
     })
+
     await waitFor(() => snapshots.mock.calls.length === 1)
 
     await appendFile(filePath, claudeLine('poll-only', 'assistant', 'recovered'))
@@ -101,6 +109,7 @@ describe('native chat transcript watcher liveness', () => {
     const filePath = await tempFile(claudeLine('seed', 'user', 'hello'))
     const snapshots = vi.fn()
     const appends = vi.fn()
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'session',
@@ -110,6 +119,7 @@ describe('native chat transcript watcher liveness', () => {
       debounceMs: 0,
       reconciliationIntervalMs: 20
     })
+
     await waitFor(() => snapshots.mock.calls.length === 1)
 
     watchState.error = new Error('EPERM')
@@ -130,6 +140,7 @@ describe('native chat transcript watcher liveness', () => {
     const filePath = await tempFile(claudeLine('seed', 'user', 'hello'))
     const snapshots = vi.fn()
     const appends = vi.fn()
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'session',
@@ -139,6 +150,7 @@ describe('native chat transcript watcher liveness', () => {
       debounceMs: 0,
       reconciliationIntervalMs: 20
     })
+
     await waitFor(() => snapshots.mock.calls.length === 1)
 
     await appendFile(filePath, claudeLine('missed-event', 'assistant', 'recovered'))
@@ -158,6 +170,7 @@ describe('native chat transcript watcher liveness', () => {
     const filePath = await tempFile(prefixBefore + stableTail)
     const snapshots = vi.fn()
     const replacements = vi.fn()
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'session',
@@ -169,6 +182,7 @@ describe('native chat transcript watcher liveness', () => {
       debounceMs: 0,
       reconciliationIntervalMs: 10_000
     })
+
     await waitFor(() => snapshots.mock.calls.length === 1)
 
     await writeFile(filePath, prefixAfter + stableTail)
@@ -191,6 +205,7 @@ describe('native chat transcript watcher liveness', () => {
     const snapshots = vi.fn(() => renameSync(root, oldRoot))
     const replacements = vi.fn()
     const appends = vi.fn()
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'session',
@@ -202,6 +217,7 @@ describe('native chat transcript watcher liveness', () => {
       debounceMs: 0,
       reconciliationIntervalMs: 20
     })
+
     await waitFor(() => snapshots.mock.calls.length === 1)
 
     await mkdir(root)
@@ -220,6 +236,7 @@ describe('native chat transcript watcher liveness', () => {
     const filePath = await tempFile(claudeLine('seed', 'user', 'hello'))
     const snapshots = vi.fn()
     const appends = vi.fn()
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'session',
@@ -229,6 +246,7 @@ describe('native chat transcript watcher liveness', () => {
       debounceMs: 40,
       reconciliationIntervalMs: 10_000
     })
+
     await waitFor(() => snapshots.mock.calls.length === 1)
     await appendFile(filePath, claudeLine('sustained-events', 'assistant', 'bounded'))
 
@@ -248,6 +266,7 @@ describe('native chat transcript watcher liveness', () => {
     const filePath = await tempFile('')
     const snapshots = vi.fn()
     const appends = vi.fn()
+
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'session',

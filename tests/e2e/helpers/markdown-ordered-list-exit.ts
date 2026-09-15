@@ -6,6 +6,7 @@ import {
 } from './markdown-editor-fixture'
 
 const DRAFT_SERIALIZATION_TIMEOUT_MS = 10_000
+
 const FIXTURE_DIRECTORY = '.orca-e2e-markdown-ordered-list'
 
 export {
@@ -42,6 +43,7 @@ export async function expectSentinelParagraphOutsideOrderedList(
       async () =>
         page.evaluate((sentinel) => {
           const editor = document.querySelector('.rich-markdown-editor')
+
           if (!editor) {
             return false
           }
@@ -73,6 +75,7 @@ export async function expectSerializedDraftOutsideOrderedList(
         page.evaluate(
           ({ draftKey, sentinel }) => {
             const draft = window.__store?.getState().editorDrafts[draftKey]
+
             if (typeof draft !== 'string') {
               return false
             }
@@ -80,6 +83,7 @@ export async function expectSerializedDraftOutsideOrderedList(
             const sentinelLines = draft
               .split(/\r\n|\r|\n/)
               .filter((line) => line.includes(sentinel))
+
             return {
               hasPlainLine: sentinelLines.some((line) => line.trim() === sentinel),
               appearsOnNumberedLine: sentinelLines.some((line) => /^\s*\d+\.\s+/.test(line))
@@ -105,6 +109,7 @@ export async function assertLoadedThirdEmptyOrderedListItem(page: Page): Promise
           const thirdItem = listItems[2]
           const paragraph = thirdItem?.querySelector('p') ?? null
           const rect = paragraph?.getBoundingClientRect()
+
           return Boolean(
             thirdItem &&
             paragraph &&
@@ -125,6 +130,7 @@ export async function assertLoadedThirdEmptyOrderedListItem(page: Page): Promise
 async function selectionIsInsideThirdEmptyOrderedListItem(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const editor = document.querySelector('.rich-markdown-editor')
+
     const thirdItem = editor?.querySelectorAll('ol > li')[2] as
       | (Element & {
           pmViewDesc?: {
@@ -132,6 +138,7 @@ async function selectionIsInsideThirdEmptyOrderedListItem(page: Page): Promise<b
           }
         })
       | undefined
+
     const paragraph = thirdItem?.querySelector('p') as
       | (Element & {
           pmViewDesc?: {
@@ -140,6 +147,7 @@ async function selectionIsInsideThirdEmptyOrderedListItem(page: Page): Promise<b
           }
         })
       | null
+
     const tiptapEditor = (
       editor as
         | (Element & {
@@ -155,6 +163,7 @@ async function selectionIsInsideThirdEmptyOrderedListItem(page: Page): Promise<b
           })
         | null
     )?.editor
+
     const selection = tiptapEditor?.state?.selection
     const selectionFrom = selection?.from
     const selectionTo = selection?.to
@@ -198,7 +207,9 @@ export async function placeCaretInLoadedThirdEmptyItem(page: Page): Promise<void
             }
           })
         | null
+
       const thirdItem = editor?.querySelectorAll('ol > li')[2]
+
       const paragraph = thirdItem?.querySelector('p') as
         | (Element & {
             pmViewDesc?: {
@@ -206,7 +217,9 @@ export async function placeCaretInLoadedThirdEmptyItem(page: Page): Promise<void
             }
           })
         | null
+
       const selectionPosition = paragraph?.pmViewDesc?.posAtStart
+
       if (!editor?.editor?.commands || typeof selectionPosition !== 'number') {
         throw new Error('Cannot place caret in the loaded empty ordered-list item')
       }

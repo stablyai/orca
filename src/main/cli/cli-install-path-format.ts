@@ -7,6 +7,7 @@ export function splitPathEntries(platform: NodeJS.Platform, value: string | null
   if (!value) {
     return []
   }
+
   return value
     .split(platform === 'win32' ? ';' : ':')
     .map((entry) => entry.trim())
@@ -16,14 +17,18 @@ export function splitPathEntries(platform: NodeJS.Platform, value: string | null
 export function uniquePathEntries(platform: NodeJS.Platform, entries: string[]): string[] {
   const seen = new Set<string>()
   const result: string[] = []
+
   for (const entry of entries) {
     const key = platform === 'win32' ? normalizeWindowsPath(entry) : entry
+
     if (seen.has(key)) {
       continue
     }
+
     seen.add(key)
     result.push(entry)
   }
+
   return result
 }
 
@@ -42,16 +47,20 @@ export function samePathEntry(
 
 export function isPathInsideOrEqual(parentPath: string, childPath: string): boolean {
   const childRelative = relative(parentPath, childPath)
+
   return childRelative === '' || (!childRelative.startsWith('..') && !isAbsolute(childRelative))
 }
 
 export async function isExecutableFile(commandPath: string): Promise<boolean> {
   try {
     const stats = await stat(commandPath)
+
     if (!stats.isFile()) {
       return false
     }
+
     await access(commandPath, constants.X_OK)
+
     return true
   } catch {
     return false
@@ -81,5 +90,6 @@ export function isAbsoluteForPlatform(platform: NodeJS.Platform, value: string):
   if (platform === 'win32') {
     return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\')
   }
+
   return isAbsolute(value)
 }

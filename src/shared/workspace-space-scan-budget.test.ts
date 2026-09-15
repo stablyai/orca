@@ -12,6 +12,7 @@ describe('workspace space scan budget', () => {
   it('preserves entries exactly at the retained-byte cap', async () => {
     const entries = [{ name: 'first' }, { name: 'second' }]
     const parentPath = '/workspace'
+
     const exactBytes = entries.reduce(
       (total, entry) => total + estimateWorkspaceSpaceEntryRetainedBytes(entry.name),
       estimateWorkspaceSpaceListingRetainedBytes(parentPath)
@@ -30,6 +31,7 @@ describe('workspace space scan budget', () => {
 
   it('returns a failed listing’s charge so it cannot leak across directories', async () => {
     const budget = createWorkspaceSpaceScanBudget()
+
     async function* directory() {
       yield { name: 'accepted' }
       throw new Error('readdir exploded')
@@ -50,10 +52,12 @@ describe('workspace space scan budget', () => {
   it('frees capacity for later directories once a listing is released', async () => {
     const parentPath = '/workspace'
     const entries = [{ name: 'first' }, { name: 'second' }]
+
     const exactBytes = entries.reduce(
       (total, entry) => total + estimateWorkspaceSpaceEntryRetainedBytes(entry.name),
       estimateWorkspaceSpaceListingRetainedBytes(parentPath)
     )
+
     const budget = createWorkspaceSpaceScanBudget({ maxRetainedBytes: exactBytes })
 
     const first = await collectWorkspaceSpaceDirectoryEntries(
@@ -63,6 +67,7 @@ describe('workspace space scan budget', () => {
       budget,
       () => undefined
     )
+
     // Why: a cumulative counter would reject the identical second listing here.
     releaseWorkspaceSpaceScanEntries(budget, first.retainedBytes)
 
@@ -79,6 +84,7 @@ describe('workspace space scan budget', () => {
 
   it('closes an async directory iterator when the next entry exceeds the budget', async () => {
     let closed = false
+
     async function* directory() {
       try {
         yield { name: 'accepted' }

@@ -5,12 +5,15 @@ export function resolveNativeTerminalDropPane(
   paneLeafId: string | undefined
 ): ManagedPane | null {
   const panes = manager.getPanes()
+
   if (paneLeafId) {
     const targetedPane = panes.find((pane) => pane.leafId === paneLeafId)
+
     if (targetedPane) {
       return targetedPane
     }
   }
+
   return manager.getActivePane() ?? panes[0] ?? null
 }
 
@@ -19,12 +22,15 @@ export function resolveInternalTerminalDropPane(
   dropTarget: EventTarget | null | undefined
 ): ManagedPane | null {
   const panes = manager.getPanes()
+
   if (dropTarget) {
     const targetedPane = panes.find((pane) => paneContainsDropTarget(pane, dropTarget))
+
     if (targetedPane) {
       return targetedPane
     }
   }
+
   return manager.getActivePane() ?? panes[0] ?? null
 }
 

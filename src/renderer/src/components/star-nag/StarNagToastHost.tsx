@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 
 const ORCA_REPO_URL = 'https://github.com/stablyai/orca'
+
 type StarNagMode = 'gh' | 'web'
+
 type StarNagToastStatus = 'idle' | 'busy' | 'starred' | 'opened'
 
 type StarNagToastProps = {
@@ -29,6 +31,7 @@ function StarNagToast({
     if (busy) {
       return
     }
+
     toast.dismiss(id)
   }
 
@@ -36,6 +39,7 @@ function StarNagToast({
     if (busy) {
       return
     }
+
     markResolved()
     void window.api.starNag.later()
     toast.dismiss(id)
@@ -45,8 +49,10 @@ function StarNagToast({
     if (busy || status === 'starred') {
       return
     }
+
     setStatus('busy')
     setDismissSuppressed(true)
+
     if (mode === 'web') {
       try {
         await window.api.shell.openUrl(ORCA_REPO_URL)
@@ -57,20 +63,26 @@ function StarNagToast({
         setDismissSuppressed(false)
         setStatus('idle')
       }
+
       return
     }
+
     let ok = false
+
     try {
       ok = await window.api.starNag.starOrca()
     } catch {
       ok = false
     }
+
     if (!ok) {
       setMode('web')
       setDismissSuppressed(false)
       setStatus('idle')
+
       return
     }
+
     markResolved()
     setStatus('starred')
   }
@@ -89,6 +101,7 @@ function StarNagToast({
             : translate('auto.components.star.nag.StarNagToastHost.starOnGithub', 'Star on GitHub')
 
   const completedStar = status === 'starred'
+
   const primaryActionClass = completedStar
     ? 'min-w-0 flex-1 gap-1.5 border-amber-400/40 bg-amber-400/15 text-amber-700 hover:bg-amber-400/15 dark:text-amber-200'
     : 'min-w-0 flex-1 gap-1.5 border-amber-400/60 bg-amber-400/15 text-amber-800 hover:bg-amber-400/25 dark:text-amber-100'
@@ -177,23 +190,30 @@ export function StarNagToastHost(): null {
       if (activeToastIdRef.current === null) {
         return
       }
+
       activeToastResolvedRef.current?.()
       toast.dismiss(activeToastIdRef.current)
     }
+
     const unsubscribeShow = window.api.starNag.onShow((payload) => {
       if (payload?.surface !== 'toast') {
         return
       }
+
       dismissActiveToast()
       let resolved = false
       let dismissSuppressed = false
+
       const markResolved = (): void => {
         resolved = true
       }
+
       const setDismissSuppressed = (suppressed: boolean): void => {
         dismissSuppressed = suppressed
       }
+
       activeToastResolvedRef.current = markResolved
+
       const id = toast.custom(
         (toastId) => (
           <StarNagToast
@@ -213,6 +233,7 @@ export function StarNagToastHost(): null {
               activeToastIdRef.current = null
               activeToastResolvedRef.current = null
             }
+
             if (!resolved && !dismissSuppressed) {
               void window.api.starNag.dismiss()
             }
@@ -225,9 +246,12 @@ export function StarNagToastHost(): null {
           }
         }
       )
+
       activeToastIdRef.current = id
     })
+
     const unsubscribeHide = window.api.starNag.onHide(dismissActiveToast)
+
     return () => {
       unsubscribeShow()
       unsubscribeHide()

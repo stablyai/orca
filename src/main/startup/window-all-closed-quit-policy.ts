@@ -6,5 +6,6 @@ export function shouldQuitWhenAllWindowsClosed(options: {
   if (options.isServeMode && !options.isQuitting) {
     return false
   }
+
   return options.platform !== 'darwin' || options.isQuitting
 }

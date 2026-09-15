@@ -21,16 +21,20 @@ type Append = {
 function sinkState() {
   const items: Append[] = []
   const tombstones: AgentJournalItemIdentity[] = []
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity, body, options) => items.push({ identity, body, options }),
     appendTombstone: (identity) => tombstones.push(identity),
     publish: vi.fn()
   }
+
   const lifecycle = () =>
     items.flatMap((item) => {
       const turn = readAgentJournalTurn(item.body)
+
       return turn ? [{ ...turn, options: item.options }] : []
     })
+
   return { sink, items, tombstones, lifecycle }
 }
 
@@ -214,12 +218,14 @@ describe('Claude structured turn timing', () => {
     const claude = fakeClaude({ replayUuid: null })
     const events: ClaudeStructuredSessionEvent[] = []
     const adapter = await acquired(claude, {}, events)
+
     const dispatch = adapter.dispatch({
       sessionId: 'session-1',
       clientMessageId: 'client-1',
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'ship it' }] },
       fence: 7
     })
+
     await Promise.resolve()
     const connection = claude.connections[0]!
     connection.handlers.onMessage?.({
@@ -248,6 +254,7 @@ describe('Claude structured turn timing', () => {
     const messages = events.filter(
       (event) => event.type === 'message' && event.message.type !== 'system'
     )
+
     expect(messages).toEqual([
       expect.objectContaining({ startsTurn: true, observedAt: 1_700_000_000_500 }),
       expect.not.objectContaining({ observedAt: expect.anything() }),

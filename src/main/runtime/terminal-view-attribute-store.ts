@@ -23,6 +23,7 @@ let currentAttributes: TerminalViewAttributes | null = null
 // must also reach already-live emulators — cursor options under the replay
 // guard, plus the per-PTY override reset a theme apply implies.
 type TerminalViewAttributesApplier = (attributes: TerminalViewAttributes) => void
+
 const pushAppliers = new Set<TerminalViewAttributesApplier>()
 
 export function registerTerminalViewAttributesApplier(
@@ -41,7 +42,9 @@ export function setTerminalViewAttributes(attributes: TerminalViewAttributes): v
   if (currentAttributes && terminalViewAttributesEqual(currentAttributes, attributes)) {
     return
   }
+
   currentAttributes = attributes
+
   for (const applier of pushAppliers) {
     applier(attributes)
   }
@@ -59,6 +62,7 @@ export function getTerminalViewColorQueryReplyColors(): TerminalOscColorQueryRep
   if (!currentAttributes) {
     return null
   }
+
   return {
     foreground: rgbToCssHex(currentAttributes.foreground),
     background: rgbToCssHex(currentAttributes.background)

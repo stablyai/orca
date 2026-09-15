@@ -50,14 +50,17 @@ export const createProjectActions = (
           args.host
         )
       : null
+
     if (!options?.force && maybeKnownKey) {
       const cached = get().projectViewCache[maybeKnownKey]
+
       if (cached?.data && Date.now() - cached.fetchedAt < WORK_ITEMS_CACHE_TTL) {
         return { ok: true, data: cached.data }
       }
     }
 
     const existing = inflightProjectViewRequests.get(requestKey)
+
     if (existing) {
       // Why: a forcing caller must not dedupe to a non-forcing in-flight request; wait for it to settle, then issue a fresh forced call (mirrors fetchWorkItems).
       if (options?.force && !existing.force) {
@@ -69,6 +72,7 @@ export const createProjectActions = (
 
     const request = (async (): Promise<GetProjectViewTableResult> => {
       await acquireWorkItemSlot()
+
       try {
         const envelope =
           target.kind === 'environment'
@@ -79,8 +83,10 @@ export const createProjectActions = (
                 { timeoutMs: 60_000 }
               )
             : await window.api.gh.getProjectViewTable(args)
+
         if (envelope.ok) {
           const table = envelope.data
+
           const key = projectViewCacheKey(
             table.project.ownerType,
             table.project.owner,
@@ -90,6 +96,7 @@ export const createProjectActions = (
             sourceScope,
             table.project.host
           )
+
           set((s) => ({
             projectViewCache: withBoundedCacheEntry(s.projectViewCache, key, {
               data: table,
@@ -106,10 +113,12 @@ export const createProjectActions = (
             })
           }))
         }
+
         return envelope
       } catch (err) {
         // Why: the IPC boundary must not throw across the promise — wrap unexpected errors in the classified envelope for a single renderer shape.
         console.error('Failed to fetch GitHub project view:', err)
+
         return {
           ok: false,
           error: {
@@ -127,6 +136,7 @@ export const createProjectActions = (
       promise: request,
       force: Boolean(options?.force)
     })
+
     return request
   },
 
@@ -134,6 +144,7 @@ export const createProjectActions = (
     const state = get()
     const entry = state.projectViewCache[cacheKey]
     const table = entry?.data
+
     if (!table) {
       return {
         ok: false,
@@ -143,7 +154,9 @@ export const createProjectActions = (
         }
       }
     }
+
     const rowIndex = table.rows.findIndex((r) => r.id === rowId)
+
     if (rowIndex === -1) {
       return {
         ok: false,
@@ -153,20 +166,25 @@ export const createProjectActions = (
         }
       }
     }
+
     const previousRow = table.rows[rowIndex]
     // Optimistic patch: build a field value matching the mutation shape.
     const nextField = optimisticFieldValueFromMutation(table, fieldId, value)
     const optimisticFieldValues = { ...previousRow.fieldValuesByFieldId }
+
     if (nextField) {
       optimisticFieldValues[fieldId] = nextField
     }
+
     const optimisticRow: GitHubProjectRow = {
       ...previousRow,
       fieldValuesByFieldId: optimisticFieldValues
     }
+
     applyRowPatch(set, cacheKey, rowId, optimisticRow)
 
     const target = getActiveRuntimeTarget(settingsForProjectViewCacheKey(get().settings, cacheKey))
+
     const result =
       target.kind === 'environment'
         ? await callRuntimeRpc<GitHubProjectMutationResult>(
@@ -188,9 +206,11 @@ export const createProjectActions = (
             fieldId,
             value
           })
+
     if (!result.ok) {
       rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
     }
+
     return result
   },
 
@@ -198,6 +218,7 @@ export const createProjectActions = (
     const state = get()
     const entry = state.projectViewCache[cacheKey]
     const table = entry?.data
+
     if (!table) {
       return {
         ok: false,
@@ -207,7 +228,9 @@ export const createProjectActions = (
         }
       }
     }
+
     const rowIndex = table.rows.findIndex((r) => r.id === rowId)
+
     if (rowIndex === -1) {
       return {
         ok: false,
@@ -217,16 +240,20 @@ export const createProjectActions = (
         }
       }
     }
+
     const previousRow = table.rows[rowIndex]
     const optimisticFieldValues = { ...previousRow.fieldValuesByFieldId }
     delete optimisticFieldValues[fieldId]
+
     const optimisticRow: GitHubProjectRow = {
       ...previousRow,
       fieldValuesByFieldId: optimisticFieldValues
     }
+
     applyRowPatch(set, cacheKey, rowId, optimisticRow)
 
     const target = getActiveRuntimeTarget(settingsForProjectViewCacheKey(get().settings, cacheKey))
+
     const result =
       target.kind === 'environment'
         ? await callRuntimeRpc<GitHubProjectMutationResult>(
@@ -246,9 +273,11 @@ export const createProjectActions = (
             itemId: rowId,
             fieldId
           })
+
     if (!result.ok) {
       rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
     }
+
     return result
   }
 })

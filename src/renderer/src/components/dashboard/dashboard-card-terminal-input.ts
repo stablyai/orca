@@ -86,14 +86,17 @@ export function resolveDashboardCardTerminalInput(
   const state = withHydratedSlices(partialState)
   const sshPty = parseAppSshPtyId(args.ptyId)
   const runtimeEnvironmentId = getRemoteRuntimePtyEnvironmentId(args.ptyId)
+
   const connectionId =
     sshPty?.connectionId ??
     (runtimeEnvironmentId ? null : getConnectionIdFromState(state, args.worktreeId))
+
   const executionHostId = sshPty
     ? toSshExecutionHostId(sshPty.connectionId)
     : runtimeEnvironmentId
       ? toRuntimeExecutionHostId(runtimeEnvironmentId)
       : getExecutionHostIdForWorktree(state, args.worktreeId)
+
   const windowsPtyContext = {
     userAgent: args.userAgent,
     osRelease: args.osRelease,
@@ -102,6 +105,7 @@ export function resolveDashboardCardTerminalInput(
     shellOverride: args.shellOverride,
     executionHostId
   }
+
   const hostPlatform = resolveTerminalInputHostPlatform({
     clientPlatform: args.clientPlatform,
     state,
@@ -122,12 +126,14 @@ export function resolveDashboardCardTerminalInput(
             }
     }
   })
+
   const protectedPaste = resolveProtectedMultilinePasteOptionsForAgentEvidence({
     isWindowsClient: args.clientPlatform === 'win32',
     hostPlatform,
     foregroundAgent: state.paneForegroundAgentByPaneKey[args.paneKey]?.agent,
     entry: state.agentStatusByPaneKey[args.paneKey]
   })
+
   return {
     hostPlatform,
     localWindowsConpty: isLocalNativeWindowsConpty(windowsPtyContext),

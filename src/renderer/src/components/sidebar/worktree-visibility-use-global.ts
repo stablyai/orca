@@ -37,6 +37,7 @@ export function shouldUseGlobalWorktreeVisibility(
     visibilityDefaults ?? {},
     repoCustomSourceIds
   )
+
   return (
     provenance?.kind === 'project-override' &&
     globalWorktreeVisibilitySourceValue(source, visibilityDefaults) === visibility
@@ -60,6 +61,7 @@ export function createWorktreeVisibilityUseGlobalMutation(
         ) === effectiveExternalWorktreeVisibility({}, false, visibilityDefaults)
     }
   }
+
   if (source.kind === 'built-in') {
     return {
       updates: {
@@ -74,6 +76,7 @@ export function createWorktreeVisibilityUseGlobalMutation(
           effectiveBuiltInWorktreeSourceVisibility({}, source.id, visibilityDefaults)
     }
   }
+
   return {
     updates: {
       worktreeVisibilitySourcePreferences: removeCustomWorktreeSourcePreference(

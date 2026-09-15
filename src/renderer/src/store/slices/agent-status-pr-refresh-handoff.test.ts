@@ -10,6 +10,7 @@ function stubGitHubPRRefreshApi() {
       gh: { enqueuePRRefresh }
     }
   })
+
   return enqueuePRRefresh
 }
 

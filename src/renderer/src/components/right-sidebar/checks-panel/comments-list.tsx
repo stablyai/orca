@@ -50,6 +50,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
     onDeleteComment,
     onSetReaction
   } = props
+
   const {
     presentation,
     commentFilter,
@@ -75,6 +76,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
     renderAddCommentComposer,
     now
   } = useCommentsListState(props)
+
   return (
     <div className="border-t border-border">
       {/* Header */}
@@ -282,6 +284,7 @@ export function PRCommentsList(props: PRCommentsListProps): React.JSX.Element {
           <div className={presentation.audienceTabs}>
             {getPrCommentAudienceFilters().map((filter) => {
               const isActive = commentFilter === filter.value
+
               return (
                 <button
                   key={filter.value}

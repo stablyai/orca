@@ -13,13 +13,16 @@ export const AI_VAULT_LIMIT_MAX = 2000
 
 export const executionHostIdSchema = z.string().transform((value, ctx): `runtime:${string}` => {
   const parsed = parseExecutionHostId(value)
+
   if (parsed?.kind === 'runtime') {
     return parsed.id
   }
+
   ctx.addIssue({
     code: 'custom',
     message: 'Invalid runtime execution host id'
   })
+
   return z.NEVER
 })
 

@@ -64,6 +64,7 @@ export function createPluginExtensionRegistry(): PluginExtensionRegistry {
       const registrations = byPoint.get(point.key) ?? []
       const entry = { pluginId, providerId, implementation }
       byPoint.set(point.key, [...registrations, entry])
+
       return () => {
         const current = byPoint.get(point.key) ?? []
         byPoint.set(
@@ -77,6 +78,7 @@ export function createPluginExtensionRegistry(): PluginExtensionRegistry {
     },
     resolve<T>(point: PluginExtensionPoint<T>, pluginId: string, providerId?: string) {
       const registrations = (byPoint.get(point.key) ?? []) as PluginExtensionRegistration<T>[]
+
       // Why: without a providerId the first registration wins — only safe for
       // single-provider plugins; multi-provider callers must address by id.
       const match = registrations.find(
@@ -84,6 +86,7 @@ export function createPluginExtensionRegistry(): PluginExtensionRegistry {
           registration.pluginId === pluginId &&
           (providerId === undefined || registration.providerId === providerId)
       )
+
       return match?.implementation ?? null
     },
     clearPlugin(pluginId) {

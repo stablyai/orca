@@ -48,6 +48,7 @@ function windowTranscript(
   limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
 ): NativeChatMessage[] {
   const window = Math.min(Math.max(limit, 1), MOBILE_NATIVE_CHAT_MAX_WINDOW)
+
   return messages.length > window ? messages.slice(-window) : messages.slice()
 }
 
@@ -60,6 +61,7 @@ function windowForClient(
   limit = MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
 ): NativeChatMessage[] {
   const windowed = windowTranscript(messages, limit)
+
   return windowed.map((message) => sanitizeMessage(message, clientKind))
 }
 
@@ -69,6 +71,7 @@ export const NATIVE_CHAT_METHODS = [
     params: NativeChatSession,
     handler: async (params, { clientKind, signal }) => {
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+
       const result = await readNativeChatTranscriptTail(
         {
           agent: params.agent,
@@ -79,6 +82,7 @@ export const NATIVE_CHAT_METHODS = [
         },
         signal
       )
+
       return 'messages' in result
         ? {
             messages: windowForClient(result.messages, clientKind, limit),
@@ -96,8 +100,10 @@ export const NATIVE_CHAT_METHODS = [
       if (signal?.aborted) {
         return
       }
+
       let closed = false
       let unsubscribe = (): void => {}
+
       const setupController = new AbortController()
       // Why: the first drain is a bounded tail snapshot; later drains emit only
       // appended turns. This avoids parsing or shipping full long transcripts.
@@ -109,28 +115,36 @@ export const NATIVE_CHAT_METHODS = [
       const cleanupToken = params.subscriptionId ?? `${params.agent}:${params.sessionId}`
       const subscriptionId = `nativeChat:${connectionId ?? 'local'}:${cleanupToken}`
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
+
       const cleanup = (): void => {
         if (closed) {
           return
         }
+
         closed = true
         signal?.removeEventListener('abort', handleAbort)
         setupController.abort()
         unsubscribe()
         emit({ type: 'end' })
       }
+
       function handleAbort(): void {
         runtime.cleanupSubscription(subscriptionId)
       }
+
       signal?.addEventListener('abort', handleAbort, { once: true })
       runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
+
       if (signal?.aborted) {
         runtime.cleanupSubscription(subscriptionId)
+
         return
       }
+
       if (closed) {
         return
       }
+
       const subscribeArgs: SubscribeNativeChatTranscriptArgs = {
         agent: params.agent,
         sessionId: params.sessionId,
@@ -140,6 +154,7 @@ export const NATIVE_CHAT_METHODS = [
           if (closed) {
             return
           }
+
           // Forward an initial-drain error so a watching client's first frame carries it
           // instead of stranding the view at 'loading' when the read keeps throwing.
           emit({
@@ -164,6 +179,7 @@ export const NATIVE_CHAT_METHODS = [
           if (closed) {
             return
           }
+
           emit({
             type: 'replacement',
             messages: windowForClient(messages, clientKind, limit),
@@ -176,6 +192,7 @@ export const NATIVE_CHAT_METHODS = [
           if (closed) {
             return
           }
+
           emit({
             type: 'appended',
             messages: sanitizeAppendForClient(messages, clientKind),
@@ -183,20 +200,26 @@ export const NATIVE_CHAT_METHODS = [
           })
         }
       }
+
       let subscription: NativeChatTranscriptSubscription
+
       try {
         subscription = await subscribeNativeChatTranscript(subscribeArgs, setupController.signal)
       } catch (error) {
         if (closed || setupController.signal.aborted) {
           return
         }
+
         throw error
       }
+
       // The connection may have closed while the file was being resolved.
       if (closed) {
         subscription.unsubscribe()
+
         return
       }
+
       if (!subscription.watching) {
         emit({
           type: 'snapshot',
@@ -205,6 +228,7 @@ export const NATIVE_CHAT_METHODS = [
           error: 'Transcript unavailable'
         })
       }
+
       unsubscribe = subscription.unsubscribe
     }
   }),
@@ -213,11 +237,15 @@ export const NATIVE_CHAT_METHODS = [
     params: NativeChatUnsubscribe,
     handler: async (params, { runtime, connectionId }) => {
       const connection = connectionId ?? 'local'
+
       if (params.subscriptionId) {
         runtime.cleanupSubscription(`nativeChat:${connection}:${params.subscriptionId}`)
+
         return { unsubscribed: true }
       }
+
       runtime.cleanupSubscriptionsByPrefix(`nativeChat:${connection}:`)
+
       return { unsubscribed: true }
     }
   })

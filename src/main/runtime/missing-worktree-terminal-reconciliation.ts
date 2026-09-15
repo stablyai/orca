@@ -17,6 +17,7 @@ const MISSING_WORKTREE_TEARDOWN_CONCURRENCY = 4
 // exited, and a pre-shutdown snapshot would make the proof read stale rows.
 function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
   let snapshot: Promise<Awaited<ReturnType<IPtyProvider['listProcesses']>>> | null = null
+
   return new Proxy(provider, {
     get(target, property) {
       if (property !== 'listProcesses') {
@@ -25,10 +26,13 @@ function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
         // would silently read this sweep's cached snapshot instead of the live
         // host — the batching must not leak past the calls it was built for.
         const member: unknown = Reflect.get(target, property)
+
         return typeof member === 'function' ? member.bind(target) : member
       }
+
       return async (opts?: { deadlineMs?: number }) => {
         const pending = (snapshot ??= target.listProcesses(opts))
+
         try {
           return await pending
         } catch {
@@ -39,6 +43,7 @@ function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
           if (snapshot === pending) {
             snapshot = null
           }
+
           return target.listProcesses(opts)
         }
       }
@@ -72,6 +77,7 @@ export async function stopMissingWorktreeTerminals(
   deps: MissingWorktreeTerminalReconciliationDeps
 ): Promise<{ stoppedWorktreeIds: string[] }> {
   const detectedIds = new Set(detectedWorktreeIds)
+
   const missingIds = [
     ...new Set(
       knownWorktreeIds.filter(
@@ -80,6 +86,7 @@ export async function stopMissingWorktreeTerminals(
       )
     )
   ]
+
   if (missingIds.length === 0) {
     return { stoppedWorktreeIds: [] }
   }
@@ -87,7 +94,9 @@ export async function stopMissingWorktreeTerminals(
   const ownedProvider = repo.connectionId
     ? deps.getSshProvider(repo.connectionId)
     : deps.getLocalProvider()
+
   const provider = ownedProvider ? withSharedProcessSnapshot(ownedProvider) : ownedProvider
+
   if (!provider) {
     const stoppedWorktreeIds = (
       await mapWithConcurrency(
@@ -96,6 +105,7 @@ export async function stopMissingWorktreeTerminals(
         async (worktreeId) => {
           try {
             await deps.runtime.stopTerminalsForWorktree(worktreeId, hostFence(repo, worktreeId))
+
             return worktreeId
           } catch {
             return null
@@ -103,6 +113,7 @@ export async function stopMissingWorktreeTerminals(
         }
       )
     ).filter((worktreeId): worktreeId is string => worktreeId !== null)
+
     return { stoppedWorktreeIds }
   }
 
@@ -122,9 +133,11 @@ export async function stopMissingWorktreeTerminals(
             requirePhysicalStop: false,
             ...(repo.connectionId ? { includeLocalRegistry: false } : {})
           })
+
           return worktreeId
         } catch (error) {
           console.warn(`[worktree-teardown] Failed to stop missing workspace ${worktreeId}`, error)
+
           return null
         }
       }

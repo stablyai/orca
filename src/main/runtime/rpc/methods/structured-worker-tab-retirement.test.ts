@@ -20,29 +20,38 @@ import {
 } from '../../structured-worker-identity'
 
 const createSpy = vi.fn()
+
 vi.mock('./structured-agent-session-create', () => ({
   createStructuredAgentSessionForWorktree: (...args: unknown[]) => createSpy(...args)
 }))
 
 const { stopStructuredWorker } = await import('./orchestration-structured-worker-lifecycle')
+
 const { createStructuredWorkerSession } = await import('./orchestration-structured-worker-session')
+
 const { completeWorkerTerminalRelease } =
   await import('./orchestration/worker/worker-release-completion')
 
 const WORKTREE = 'workspace-1'
+
 const SESSION = 'session-1'
+
 const HANDLE = 'structworker_11111111-1111-4111-a111-111111111111'
+
 const HOST_SCOPE = { kind: 'local', hostId: 'local' } as const
 
 function installHost(options: { closeThrows?: boolean; lease?: Record<string, unknown> } = {}) {
   let attached = true
   const setSessionTabVisibility = vi.fn(async () => {})
+
   const close = vi.fn(async () => {
     if (options.closeThrows) {
       throw new Error('close is queued for retry')
     }
+
     attached = false
   })
+
   setStructuredAgentSessionHost({
     setSessionTabVisibility,
     close,
@@ -66,6 +75,7 @@ function installHost(options: { closeThrows?: boolean; lease?: Record<string, un
       }
     }
   } as never)
+
   return { close, setSessionTabVisibility }
 }
 
@@ -95,11 +105,13 @@ async function runtimeShowingStructuredTab(): Promise<{
     emit(snapshot)
     original(snapshot)
   }
+
   return { runtime, emit }
 }
 
 async function structuredTabIds(runtime: OrcaRuntimeService): Promise<string[]> {
   const snapshot = await runtime.listMobileSessionTabs(`id:${WORKTREE}`)
+
   return snapshot.tabs.map((tab) => tab.id)
 }
 
@@ -160,6 +172,7 @@ describe('structured worker stop retires the chat tab', () => {
   it('cannot turn a proven stop into a retained one when the prune throws', async () => {
     installHost()
     const identity = registerIdentity()
+
     const runtime = {
       forgetStructuredSessionMail: vi.fn(),
       retireStructuredAgentSessionTabFromSnapshot: vi.fn(() => {
@@ -189,6 +202,7 @@ describe('structured worker release retires the chat tab', () => {
     installHost()
     const identity = registerIdentity()
     const { runtime } = await runtimeShowingStructuredTab()
+
     const resource = {
       id: 'resource-1',
       terminal_handle: HANDLE,
@@ -198,6 +212,7 @@ describe('structured worker release retires the chat tab', () => {
       ownership_state: 'owned',
       release_state: 'requested'
     } as WorkerTerminalResourceRow
+
     const db = {
       getWorkerDispatch: () => ({
         agent_terminal_handle: HANDLE,
@@ -241,6 +256,7 @@ describe('structured worker release retires the chat tab', () => {
       }
     })
     const identity = registerIdentity()
+
     const resource = {
       id: 'resource-2',
       terminal_handle: HANDLE,
@@ -250,7 +266,9 @@ describe('structured worker release retires the chat tab', () => {
       ownership_state: 'owned',
       release_state: 'requested'
     } as unknown as WorkerTerminalResourceRow
+
     let stored: { kind?: string; content?: string } = {}
+
     const db = {
       getWorkerDispatch: () => ({
         agent_terminal_handle: HANDLE,
@@ -265,6 +283,7 @@ describe('structured worker release retires the chat tab', () => {
       getWorkerTerminalArchive: () => undefined,
       commitWorkerTerminalArchiveForRelease: (args: { kind?: string; content?: string }) => {
         stored = args
+
         return { ...resource, release_state: 'releasing' }
       },
       settleWorkerTerminalRelease: () => ({ ...resource, release_state: 'released' }),
@@ -310,6 +329,7 @@ describe('structured worker discard retires the chat tab', () => {
         agent: 'claude',
         activate: false
       })
+
       return { ok: false, refusal: { code: 'agent_session_operation_unknown', message: 'unknown' } }
     })
 

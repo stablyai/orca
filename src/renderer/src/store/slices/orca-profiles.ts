@@ -46,11 +46,13 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
 
   fetchOrcaProfiles: async () => {
     set({ orcaProfilesLoading: true })
+
     try {
       const [state, authStatus] = await Promise.all([
         window.api.orcaProfiles.list(),
         window.api.orcaProfiles.authStatus()
       ])
+
       set({
         activeOrcaProfileId: state.activeProfileId,
         orcaProfiles: state.profiles,
@@ -68,9 +70,11 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
     try {
       const authStatus = await window.api.orcaProfiles.authStatus()
       set({ orcaProfileAuthStatus: authStatus })
+
       return authStatus
     } catch (err) {
       console.error('Failed to fetch Orca profile auth status:', err)
+
       return null
     }
   },
@@ -83,6 +87,7 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
         orcaProfiles: state.profiles
       })
       void get().fetchOrcaProfileAuthStatus()
+
       return state.profile
     } catch (err) {
       console.error('Failed to create Orca profile:', err)
@@ -92,6 +97,7 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
           description: err instanceof Error ? err.message : String(err)
         }
       )
+
       return null
     }
   },
@@ -102,14 +108,18 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
     if (!profileId || profileId === get().activeOrcaProfileId) {
       return { status: 'already-active' }
     }
+
     set({ orcaProfileSwitching: true })
+
     try {
       const result = await window.api.orcaProfiles.switchProfile({ profileId })
+
       if (result?.status !== 'relaunching') {
         // Why: only a relaunch may keep the switcher locked; a stale
         // "already-active" answer would otherwise disable it forever.
         set({ orcaProfileSwitching: false })
       }
+
       return result
     } catch (err) {
       console.error('Failed to switch Orca profile:', err)
@@ -120,6 +130,7 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
           description: err instanceof Error ? err.message : String(err)
         }
       )
+
       return null
     }
   },
@@ -127,6 +138,7 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
   transferOrcaProfileProject: async (args) => {
     try {
       const result = await window.api.orcaProfiles.transferProject(args)
+
       if (result.status === 'duplicate-target') {
         toast.error(
           translate(
@@ -135,9 +147,11 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
           )
         )
       }
+
       if (result.status === 'transferred' && result.willRelaunch) {
         set({ orcaProfileSwitching: true })
       }
+
       return result
     } catch (err) {
       console.error('Failed to transfer Orca profile project:', err)
@@ -147,6 +161,7 @@ export const createOrcaProfilesSlice: StateCreator<AppState, [], [], OrcaProfile
           description: err instanceof Error ? err.message : String(err)
         }
       )
+
       return null
     }
   }

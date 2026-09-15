@@ -11,6 +11,7 @@ vi.mock('../github/gh-utils', () => ({
   ghExecFileAsync: vi.fn(),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
+
 vi.mock('../git/worktree-symlink-detection', () => ({
   findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock
 }))

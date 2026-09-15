@@ -26,6 +26,7 @@ export type MailDisposition = 'pending' | 'pushed' | 'pulled'
 
 function withMailDb<T>(userDataDir: string, read: (db: Database) => T): T {
   const db = new Database(path.join(userDataDir, 'orchestration.db'))
+
   try {
     return read(db)
   } finally {
@@ -69,6 +70,7 @@ export function insertDirectRunMail(
        ) VALUES (?, ?, 'current_delivery', 'e2e-worker', ?, ?, 'status')`
     ).run(id, params.runId, params.toHandle, params.subject)
   })
+
   return id
 }
 
@@ -98,8 +100,10 @@ export function mailDisposition(row: MailRow | undefined): MailDisposition | 'mi
   if (!row) {
     return 'missing'
   }
+
   if (row.read === 1) {
     return 'pulled'
   }
+
   return row.delivered_at === null ? 'pending' : 'pushed'
 }

@@ -42,6 +42,7 @@ describe('CliInstaller', () => {
       // Simulate arm64: point defaultMacCommandPath at a dir that does not exist
       // in the fixture so existsSync(dirname(...)) returns false.
       const absentUsrLocalBin = join(fixture.root, 'usr', 'local', 'bin', 'orca')
+
       const installer = new CliInstaller({
         platform: 'darwin',
         isPackaged: true,
@@ -77,6 +78,7 @@ describe('CliInstaller', () => {
       await mkdir(usrLocalBin, { recursive: true })
 
       const installPath = join(usrLocalBin, 'orca')
+
       const installer = new CliInstaller({
         platform: 'darwin',
         isPackaged: true,
@@ -470,6 +472,7 @@ describe('CliInstaller', () => {
       const homePath = join(fixture.root, 'home')
       const resourcesPath = await createPackagedMacLauncher(fixture.root)
       const absentUsrLocalBin = join(fixture.root, 'usr', 'local', 'bin', 'orca')
+
       const installer = new CliInstaller({
         platform: 'darwin',
         isPackaged: true,
@@ -496,6 +499,7 @@ describe('CliInstaller', () => {
       const homePath = join(fixture.root, 'home')
       const resourcesPath = await createPackagedMacLauncher(fixture.root)
       const absentUsrLocalBin = join(fixture.root, 'usr', 'local', 'bin', 'orca')
+
       const installer = new CliInstaller({
         platform: 'darwin',
         isPackaged: true,

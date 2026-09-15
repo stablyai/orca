@@ -24,9 +24,11 @@ describe('normalizeBrowserHistoryEntries', () => {
   })
   it('stops reading URLs once enough unique recent entries have been retained', () => {
     let reads = 0
+
     const history = Array.from({ length: 10_000 }, (_, index) => ({
       get url() {
         reads++
+
         return `https://example.com/${index}`
       },
       normalizedUrl: `https://example.com/${index}`,
@@ -34,6 +36,7 @@ describe('normalizeBrowserHistoryEntries', () => {
       lastVisitedAt: index,
       visitCount: 1
     }))
+
     const normalized = normalizeBrowserHistoryEntries(history)
     expect(reads).toBeLessThanOrEqual(400)
     expect(normalized).toHaveLength(200)
@@ -49,14 +52,18 @@ describe('normalizeBrowserHistoryEntries', () => {
       lastVisitedAt: 1,
       visitCount: 1
     }
+
     const session = { ...getDefaultWorkspaceSession(), browserUrlHistory: [entry] }
+
     for (let i = 0; i < 100; i++) {
       expect(pruneWorkspaceSessionBrowserHistory(session)).toBe(session)
     }
+
     const repaired = normalizeBrowserHistoryEntries([
       { ...entry, normalizedUrl: 'incorrect', lastVisitedAt: 3 },
       { ...entry, lastVisitedAt: 2 }
     ])
+
     expect(repaired).toEqual([{ ...entry, lastVisitedAt: 3 }])
     expect(
       normalizeBrowserHistoryEntries([{ ...entry, url: 'https://EXAMPLE.com/page' }])[0]

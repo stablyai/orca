@@ -31,12 +31,14 @@ export function renderCodexAccountRow(
     setRemoveCodexTarget,
     settings
   } = model
+
   const isActive = providerAccountIsActiveInView(
     account,
     codexAccounts,
     accountRuntime,
     accountVisibilityOptions
   )
+
   // Why: same remote gate as the section-level warning — the
   // desktop's rate-limit poll says nothing about server accounts.
   const accountAuthWarning = isRemoteAccountScope
@@ -48,6 +50,7 @@ export function renderCodexAccountRow(
         activeAccountId: activeCodexAccountId,
         accountId: account.id
       })
+
   const needsReauthentication = Boolean(accountAuthWarning)
   const accountDetail = getCodexAccountDisplayDetail(account, codexAccounts.accounts)
   const isReauthing = codexAction === `reauth:${account.id}`

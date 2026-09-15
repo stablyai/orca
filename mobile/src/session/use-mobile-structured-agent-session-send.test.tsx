@@ -63,10 +63,13 @@ describe('mobile structured send retries', () => {
   let storedOperations: Map<string, string>
   const onSendError = vi.fn()
   const sendRequest = vi.fn()
+
   const subscribe = vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
     listener = onData
+
     return vi.fn()
   })
+
   const client = { sendRequest, subscribe } as unknown as RpcClient
 
   function Harness(): null {
@@ -79,6 +82,7 @@ describe('mobile structured send retries', () => {
       agent: 'codex',
       onSendError
     } as never)
+
     return null
   }
 
@@ -132,10 +136,13 @@ describe('mobile structured send retries', () => {
       if (method !== 'agentSession.send') {
         return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
       }
+
       attempts += 1
+
       if (attempts === 1) {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
       }
+
       return sendResult('unknown')
     })
     await mountSession()
@@ -157,7 +164,9 @@ describe('mobile structured send retries', () => {
       if (method !== 'agentSession.send') {
         return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
       }
+
       attempts += 1
+
       return attempts === 1
         ? Promise.reject(markRpcDeliveryUnknown(new Error('Connection closed')))
         : sendResult('accepted')
@@ -166,9 +175,11 @@ describe('mobile structured send retries', () => {
     await act(async () => {
       expect(await hook!.sendWithOutcome('same text, later intent')).toBe('unknown')
     })
+
     const firstRequest = calls()[0]![1] as {
       envelope: { clientOperationId: string; payloadFingerprint: string }
     }
+
     const event = snapshotEvent()
     act(() =>
       listener?.({
@@ -201,7 +212,9 @@ describe('mobile structured send retries', () => {
       if (method !== 'agentSession.send') {
         return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
       }
+
       attempts += 1
+
       return attempts === 1
         ? Promise.reject(markRpcDeliveryUnknown(new Error('Connection closed')))
         : sendResult('unknown')
@@ -235,7 +248,9 @@ describe('mobile structured send retries', () => {
       if (method !== 'agentSession.send') {
         return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
       }
+
       attempts += 1
+
       return attempts === 1
         ? {
             id: 'request-1',
@@ -263,7 +278,9 @@ describe('mobile structured send retries', () => {
       if (method !== 'agentSession.send') {
         return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
       }
+
       attempts += 1
+
       return attempts === 1
         ? Promise.reject(markRpcDeliveryUnknown(new Error('Connection closed')))
         : sendResult('unknown')
@@ -308,7 +325,9 @@ describe('mobile structured send retries', () => {
         if (method !== 'agentSession.send') {
           return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
         }
+
         attempts += 1
+
         return attempts === 1
           ? {
               ok: false as const,
@@ -335,7 +354,9 @@ describe('mobile structured send retries', () => {
       if (method !== 'agentSession.send') {
         return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
       }
+
       attempts += 1
+
       return attempts === 1
         ? ok({
             ok: false,
@@ -364,10 +385,13 @@ describe('mobile structured send retries', () => {
       if (method !== 'agentSession.send') {
         return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
       }
+
       attempts += 1
+
       if (attempts === 1) {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
       }
+
       return attempts === 2
         ? ok({
             ok: false,
@@ -396,10 +420,13 @@ describe('mobile structured send retries', () => {
       if (method !== 'agentSession.send') {
         return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
       }
+
       attempts += 1
+
       if (attempts === 1) {
         throw markRpcDeliveryUnknown(new Error('Connection closed'))
       }
+
       return ok({
         ok: false,
         refusal: {

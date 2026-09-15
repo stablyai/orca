@@ -26,16 +26,19 @@ export function composePaletteEvidence(args: {
   const parts = args.parts
     .filter((part): part is PaletteEvidencePart => Boolean(part?.text.trim()))
     .map((part) => ({ ...part, text: part.text.trim() }))
+
   if (!parts.length) {
     return null
   }
 
   const fields: PaletteEvidenceFieldSource[] = []
   let text = ''
+
   for (const part of parts) {
     if (text) {
       text += PALETTE_EVIDENCE_SEPARATOR
     }
+
     fields.push({
       id: `${args.id}#${part.key}`,
       profile: part.profile,

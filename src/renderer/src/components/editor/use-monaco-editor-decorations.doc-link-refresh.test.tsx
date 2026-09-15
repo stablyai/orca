@@ -12,10 +12,12 @@ vi.mock('./monaco-markdown-doc-completions', () => ({
 }))
 
 const refresh = vi.fn()
+
 const controller: MarkdownDocLinkDecorationController = { refresh, dispose: () => {} }
 
 function Harness({ content, language }: { content: string; language: string }): null {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
+
   const decorations = useMonacoEditorDecorations({
     editorRef,
     mountedEditor: null,
@@ -24,11 +26,14 @@ function Harness({ content, language }: { content: string; language: string }): 
     markdownDocuments: undefined,
     conflictDecorationsEnabled: false
   })
+
   decorations.markdownDocLinkDecorationsRef.current = controller
+
   return null
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 describe('useMonacoEditorDecorations doc-link refresh', () => {

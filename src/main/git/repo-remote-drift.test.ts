@@ -8,6 +8,7 @@ const { gitExecFileAsyncMock, gitExecFileSyncMock } = vi.hoisted(() => ({
 
 vi.mock('./runner', async (importOriginal) => {
   const actual = await importOriginal<typeof GitRunner>()
+
   return {
     ...actual,
     gitExecFileAsync: gitExecFileAsyncMock,

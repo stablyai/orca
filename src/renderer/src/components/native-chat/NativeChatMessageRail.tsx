@@ -9,7 +9,9 @@ import type { NativeChatRailItem } from './native-chat-message-rail-items'
 import type { NativeChatMessageRailState } from './use-native-chat-message-rail'
 
 const WHEEL_DELTA_LINE = 1
+
 const WHEEL_DELTA_PAGE = 2
+
 /** Nominal line height for line-mode wheel deltas, which arrive as ~3 per notch. */
 const WHEEL_LINE_PX = 16
 
@@ -17,6 +19,7 @@ function railItemLabel(item: NativeChatRailItem): string {
   if (item.text.length > 0) {
     return item.text
   }
+
   return item.hasImages
     ? translate('components.native-chat.railImageMessage', 'Image attachment')
     : translate('components.native-chat.railEmptyMessage', 'Message')
@@ -36,18 +39,23 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const restoreFocus = useRef(false)
+
   const cancelClose = (): void => {
     if (closeTimer.current !== null) {
       clearTimeout(closeTimer.current)
     }
+
     closeTimer.current = null
   }
+
   const leavePreview = (): void => {
     cancelClose()
+
     if (mode === 'hover') {
       closeTimer.current = setTimeout(() => setMode(null), 120)
     }
   }
+
   useEffect(
     () => () => {
       if (closeTimer.current !== null) {
@@ -66,9 +74,11 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
       open={mode !== null}
       onOpenChange={(open) => {
         cancelClose()
+
         if (open) {
           restoreFocus.current = true
         }
+
         setMode(open ? 'interactive' : null)
       }}
     >
@@ -81,15 +91,19 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
             if (event.pointerType === 'touch') {
               return
             }
+
             cancelClose()
+
             if (mode === null) {
               restoreFocus.current = false
             }
+
             setMode((current) => current ?? 'hover')
           }}
           onPointerLeave={leavePreview}
           onClick={(event) => {
             cancelClose()
+
             if (mode === 'hover') {
               event.preventDefault()
               restoreFocus.current = true
@@ -102,15 +116,18 @@ export const NativeChatMessageRail = memo(function NativeChatMessageRail({
           // arrive in lines or pages on some platforms, not only in pixels.
           onWheel={(event) => {
             const element = scrollRef.current
+
             if (!element) {
               return
             }
+
             const scale =
               event.deltaMode === WHEEL_DELTA_LINE
                 ? WHEEL_LINE_PX
                 : event.deltaMode === WHEEL_DELTA_PAGE
                   ? element.clientHeight
                   : 1
+
             element.scrollTop += event.deltaY * scale
           }}
           className="group/rail absolute inset-y-0 right-[14px] z-10 flex w-4 cursor-default flex-col items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

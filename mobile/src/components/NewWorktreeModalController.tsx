@@ -47,6 +47,7 @@ export const NewWorktreeModalController = forwardRef<NewWorktreeModalControllerH
 
     const close = useCallback(() => {
       setManualVisible(false)
+
       if (routeVisible) {
         onRouteVisibleChange(false)
       }

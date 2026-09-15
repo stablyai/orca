@@ -44,6 +44,7 @@ export function SkillsSourcesPopover({
         <div className="scrollbar-sleek max-h-80 overflow-y-auto py-1">
           {entries.map((entry) => {
             const status = statusLabel(entry.status)
+
             return (
               <div key={entry.source.id} className="px-3 py-2">
                 <div className="flex items-baseline gap-2">

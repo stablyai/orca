@@ -27,6 +27,7 @@ export function isLinuxRendererHost(
   if (userAgent.startsWith('Node.js/')) {
     return false
   }
+
   return platform.includes('Linux') || userAgent.includes('Linux')
 }
 
@@ -49,17 +50,20 @@ function readWebglRendererInfo(): Pick<TerminalWebglAutoDecision, 'renderer' | '
   try {
     const canvas = document.createElement('canvas')
     const gl = canvas.getContext('webgl2')
+
     if (!gl) {
       return { hasWebgl2: false, hasRendererInfo: false, renderer: null, vendor: null }
     }
 
     const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
+
     if (!debugInfo) {
       return { hasWebgl2: true, hasRendererInfo: false, renderer: null, vendor: null }
     }
 
     const renderer = String(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) ?? '')
     const vendor = String(gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) ?? '')
+
     return {
       hasWebgl2: true,
       hasRendererInfo: renderer.length > 0 || vendor.length > 0,
@@ -83,6 +87,7 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
       renderer: null,
       vendor: null
     }
+
     return cachedDecision
   }
 
@@ -95,10 +100,12 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
       renderer: null,
       vendor: null
     }
+
     return cachedDecision
   }
 
   const rendererInfo = readWebglRendererInfo()
+
   if (!rendererInfo.hasWebgl2) {
     cachedDecision = {
       allowWebgl: false,
@@ -106,6 +113,7 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
       renderer: rendererInfo.renderer,
       vendor: rendererInfo.vendor
     }
+
     return cachedDecision
   }
 
@@ -118,10 +126,12 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
       renderer: rendererInfo.renderer,
       vendor: rendererInfo.vendor
     }
+
     return cachedDecision
   }
 
   const identity = `${rendererInfo.vendor ?? ''} ${rendererInfo.renderer ?? ''}`
+
   if (LINUX_SOFTWARE_RENDERER_PATTERN.test(identity)) {
     cachedDecision = {
       allowWebgl: false,
@@ -129,6 +139,7 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
       renderer: rendererInfo.renderer,
       vendor: rendererInfo.vendor
     }
+
     return cachedDecision
   }
 
@@ -138,5 +149,6 @@ export function getTerminalWebglAutoDecision(): TerminalWebglAutoDecision {
     renderer: rendererInfo.renderer,
     vendor: rendererInfo.vendor
   }
+
   return cachedDecision
 }

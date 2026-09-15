@@ -26,6 +26,7 @@ export function createTerminalQuickCommandDialogDraftMemory(
       agentPrompt: command.prompt
     }
   }
+
   return {
     terminalCommand: command.command,
     terminalAppendEnter: command.appendEnter,
@@ -45,6 +46,7 @@ export function rememberTerminalQuickCommandDialogDraft(
       agentPrompt: draft.prompt
     }
   }
+
   return {
     ...memory,
     terminalCommand: draft.command,
@@ -61,6 +63,7 @@ export function switchTerminalQuickCommandDialogAction(
   memory: TerminalQuickCommandDialogDraftMemory
 } {
   const nextMemory = rememberTerminalQuickCommandDialogDraft(memory, draft)
+
   const base = {
     id: draft.id,
     label: draft.label,

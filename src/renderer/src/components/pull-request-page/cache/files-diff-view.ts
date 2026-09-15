@@ -12,4 +12,5 @@ export type CachedPRFilesDiffViewState = {
 }
 
 export const prFilesDiffViewStateCache = new Map<string, CachedPRFilesDiffViewState>()
+
 export const prFilesDiffScrollTopCache = new Map<string, number>()

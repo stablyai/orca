@@ -58,11 +58,13 @@ export function resolveCreateReviewIntentEligibility({
     if (stagedCount > 0 && !hasMessage) {
       return { eligible: true, kind: 'message_required' }
     }
+
     return { eligible: stagedCount > 0 || hasStageableChanges, kind: 'dirty' }
   }
 
   if (hostedReviewCreation.blockedReason === 'no_upstream') {
     const hasPublishableCommits = branchCommitsAhead === undefined ? false : branchCommitsAhead > 0
+
     return {
       eligible: hasPublishableCommits || stagedCount > 0 || hasStageableChanges,
       kind: 'no_upstream'

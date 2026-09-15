@@ -33,20 +33,24 @@ function stripGitSuffix(path: string): string {
 // dropped and only the hostname is used.
 function hostIdentityFromUrl(url: URL): string {
   const protocol = url.protocol.toLowerCase()
+
   if (protocol === 'http:' || protocol === 'https:') {
     return url.host
   }
+
   return url.hostname
 }
 
 function makeProjectRefForTrustedHost(host: string, path: string): ProjectRef | null {
   const normalizedHost = normalizeGitLabHost(host)
   const normalizedPath = stripGitSuffix(path.replace(/^\/+/, '')).trim()
+
   // Reject paths without at least one group segment — `gitlab.com:foo`
   // alone is not a project reference.
   if (!normalizedPath.includes('/')) {
     return null
   }
+
   return { host: normalizedHost, path: normalizedPath }
 }
 
@@ -64,10 +68,12 @@ function knownHostMatches(urlHost: string, knownHost: string): boolean {
   if (urlHost === knownHost) {
     return true
   }
+
   if (hostnameOf(knownHost) === knownHost) {
     // Known entry has no port — match on hostname alone.
     return hostnameOf(urlHost) === knownHost
   }
+
   return false
 }
 
@@ -78,16 +84,20 @@ function makeProjectRef(
 ): ProjectRef | null {
   const normalizedHost = normalizeGitLabHost(host)
   const normalizedKnownHosts = knownHosts.map(normalizeGitLabHost)
+
   if (!normalizedKnownHosts.some((knownHost) => knownHostMatches(normalizedHost, knownHost))) {
     return null
   }
+
   return makeProjectRefForTrustedHost(normalizedHost, path)
 }
 
 export function parseRemoteProjectRefCandidate(remoteUrl: string): ProjectRef | null {
   const trimmed = remoteUrl.trim()
+
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
     const scpLike = trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+?)(?:\.git)?$/)
+
     if (scpLike) {
       return makeProjectRefForTrustedHost(scpLike[1], scpLike[2])
     }
@@ -95,9 +105,11 @@ export function parseRemoteProjectRefCandidate(remoteUrl: string): ProjectRef | 
 
   try {
     const url = new URL(trimmed)
+
     if (!['http:', 'https:', 'ssh:', 'git:', 'git+ssh:'].includes(url.protocol.toLowerCase())) {
       return null
     }
+
     return makeProjectRefForTrustedHost(hostIdentityFromUrl(url), url.pathname)
   } catch {
     return null
@@ -109,8 +121,10 @@ export function parseGitLabProjectRef(
   knownHosts: readonly string[] = DEFAULT_GITLAB_HOSTS
 ): ProjectRef | null {
   const trimmed = remoteUrl.trim()
+
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
     const scpLike = trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+?)(?:\.git)?$/)
+
     if (scpLike) {
       return makeProjectRef(scpLike[1], scpLike[2], knownHosts)
     }
@@ -118,9 +132,11 @@ export function parseGitLabProjectRef(
 
   try {
     const url = new URL(trimmed)
+
     if (!['http:', 'https:', 'ssh:', 'git:', 'git+ssh:'].includes(url.protocol.toLowerCase())) {
       return null
     }
+
     return makeProjectRef(hostIdentityFromUrl(url), url.pathname, knownHosts)
   } catch {
     return null

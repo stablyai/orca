@@ -38,6 +38,7 @@ function makeRow(
           ...(options.coordinatorHandle ? { coordinatorHandle: options.coordinatorHandle } : {})
         }
       : undefined
+
   const entry: AgentStatusEntry = {
     paneKey,
     state: 'done',
@@ -101,6 +102,7 @@ describe('buildAgentRowLineageTree', () => {
     // Why: terminal handles are minted per process, so after an app restart the
     // persisted coordinator handle names no live row; the durable pane key must win.
     const parent = makeRow('parent:1', { terminalHandle: 'term-parent-reminted' })
+
     const child = makeRow('child:1', {
       parentPaneKey: 'parent:1',
       parentTerminalHandle: 'term-parent-stale',
@@ -118,6 +120,7 @@ describe('buildAgentRowLineageTree', () => {
 
   it('keeps a child as a root when its parent pane key names no visible row', () => {
     const unrelated = makeRow('other:1', { terminalHandle: 'term-other' })
+
     const orphan = makeRow('child:1', {
       parentPaneKey: 'parent-closed:1',
       coordinatorHandle: 'term-parent-stale'
@@ -160,8 +163,10 @@ describe('buildAgentRowLineageTree', () => {
     const rows = Array.from({ length: 500 }, (_, index) =>
       makeRow(`pane-${index}`, index > 0 ? { parentPaneKey: `pane-${index - 1}` } : {})
     )
+
     const iterate = Set.prototype[Symbol.iterator]
     let visitedSetEntries = 0
+
     const spy = vi
       .spyOn(Set.prototype, Symbol.iterator)
       .mockImplementation(function (this: Set<unknown>) {
@@ -169,19 +174,25 @@ describe('buildAgentRowLineageTree', () => {
         const next = iterator.next.bind(iterator)
         iterator.next = () => {
           const result = next()
+
           if (!result.done) {
             visitedSetEntries += 1
           }
+
           return result
         }
+
         return iterator
       })
+
     let tree: ReturnType<typeof buildAgentRowLineageTree>
+
     try {
       tree = buildAgentRowLineageTree(rows)
     } finally {
       spy.mockRestore()
     }
+
     expect(tree.rootRows).toEqual([rows[0]])
     expect(tree.childPaneKeys.size).toBe(rows.length - 1)
     expect(visitedSetEntries).toBeLessThanOrEqual(rows.length * 2)
@@ -191,6 +202,7 @@ describe('buildAgentRowLineageTree', () => {
     const rows = Array.from({ length: 10_000 }, (_, index) =>
       makeRow(`pane-${index}`, index > 0 ? { parentPaneKey: `pane-${index - 1}` } : {})
     )
+
     const tree = buildAgentRowLineageTree(rows)
     expect(tree.rootRows).toEqual([rows[0]])
     expect(tree.childPaneKeys.size).toBe(rows.length - 1)
@@ -217,16 +229,20 @@ describe('unreachable lineage cleanup', () => {
   it('bounds pane-key reads while flattening disconnected cycles', () => {
     let paneKeyReads = 0
     const root = makeRow('root')
+
     const cycles = Array.from({ length: 200 }, (_, index) => {
       const row = makeRow(`cycle-${index}`, { parentPaneKey: `cycle-${index ^ 1}` })
       Object.defineProperty(row, 'paneKey', {
         get() {
           paneKeyReads++
+
           return `cycle-${index}`
         }
       })
+
       return row
     })
+
     const tree = buildAgentRowLineageTree([root, ...cycles])
     const measuredReads = paneKeyReads
     expect(tree.rootRows).toEqual([root, ...cycles])

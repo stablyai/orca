@@ -39,9 +39,11 @@ describe('RetiredPaneSurfaceRegistry', () => {
     const registry = new RetiredPaneSurfaceRegistry()
 
     registry.retire('pane-oldest')
+
     for (let index = 0; index < RETIRED_PANE_SURFACE_LIMIT - 1; index += 1) {
       registry.retire(`pane-${index}`)
     }
+
     registry.retire('pane-oldest')
     registry.retire('pane-overflow')
 

@@ -19,6 +19,7 @@ describe('scrapeScrollbackToMessages', () => {
     const messages = scrapeScrollbackToMessages(raw)
 
     expect(messages.length).toBeGreaterThan(1)
+
     for (const message of messages) {
       for (const block of message.blocks) {
         if (block.type === 'text') {
@@ -27,6 +28,7 @@ describe('scrapeScrollbackToMessages', () => {
         }
       }
     }
+
     // Order is preserved from the scrollback.
     expect(messages[0].id).toBe('scrape-0')
     expect(messages[1].id).toBe('scrape-1')
@@ -42,6 +44,7 @@ describe('scrapeScrollbackToMessages', () => {
     const messages = scrapeScrollbackToMessages(raw)
 
     expect(messages.length).toBeGreaterThan(0)
+
     for (const message of messages) {
       expect(message.source).toBe('scrape')
       expect(message.timestamp).toBeNull()

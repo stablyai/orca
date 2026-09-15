@@ -20,6 +20,7 @@ export function registerClaudeAccountHandlers(claudeAccounts: ClaudeAccountServi
       if (!args.runtime) {
         return claudeAccounts.selectAccount(args.accountId)
       }
+
       return claudeAccounts.selectAccountForTarget(args.accountId, args)
     }
   )

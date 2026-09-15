@@ -50,6 +50,7 @@ import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format
 
 const REQUIRE_WINDOWS_TERMINAL_RESTART_E2E =
   process.env.ORCA_REQUIRE_WINDOWS_TERMINAL_RESTART_E2E === '1'
+
 const MISSING_SEEDED_REPO_MESSAGE = 'Global setup did not produce a seeded test repo'
 
 // Why: each test in this file does a full quit→relaunch cycle, which spawns
@@ -62,11 +63,15 @@ function seededRepoPathOrSkip(): string {
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
     : ''
+
   const unavailable = !repoPath || !existsSync(repoPath)
+
   if (unavailable && REQUIRE_WINDOWS_TERMINAL_RESTART_E2E) {
     throw new Error('Required Windows restart E2E seeded repo is unavailable')
   }
+
   test.skip(unavailable, MISSING_SEEDED_REPO_MESSAGE)
+
   return repoPath
 }
 
@@ -91,9 +96,11 @@ async function bootstrapFirstLaunch(
   const hasPaneManager = await waitForActiveTerminalManager(page, 30_000)
     .then(() => true)
     .catch(() => false)
+
   if (!hasPaneManager && REQUIRE_WINDOWS_TERMINAL_RESTART_E2E) {
     throw new Error('Required Windows restart E2E TerminalPane manager did not mount')
   }
+
   test.skip(
     !hasPaneManager,
     'Electron automation in this environment never mounts the TerminalPane manager, so restart-persistence assertions would only fail on harness setup.'
@@ -101,6 +108,7 @@ async function bootstrapFirstLaunch(
   await waitForPaneCount(page, 1, 30_000)
 
   const ptyId = await discoverActivePtyId(page)
+
   return { worktreeId, ptyId }
 }
 
@@ -125,6 +133,7 @@ async function bootstrapRestoredLaunch(page: Page, expectedWorktreeId: string): 
 async function setPaneTitleFromTerminalMenu(page: Page, title: string): Promise<void> {
   const modifiers: ('Alt' | 'Control' | 'Meta' | 'Shift')[] =
     process.platform === 'win32' ? ['Control'] : []
+
   await page
     .locator('.xterm:visible')
     .first()
@@ -144,9 +153,11 @@ async function getTabCustomTitle(
   return page.evaluate(
     ({ targetWorktreeId, targetTabId }) => {
       const state = window.__store!.getState()
+
       const tab = (state.tabsByWorktree[targetWorktreeId] ?? []).find(
         (entry) => entry.id === targetTabId
       )
+
       return tab?.customTitle ?? null
     },
     { targetWorktreeId: worktreeId, targetTabId: tabId }
@@ -155,17 +166,22 @@ async function getTabCustomTitle(
 
 async function readTerminalActiveLine(page: Page): Promise<string | null> {
   const tabId = await getActiveTabId(page)
+
   if (!tabId) {
     return null
   }
+
   return page.evaluate((tabId) => {
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const buffer = pane?.terminal?.buffer.active
+
     if (!buffer) {
       return null
     }
+
     const cursorLine = buffer.baseY + buffer.cursorY
+
     return buffer.getLine(cursorLine)?.translateToString(true) ?? null
   }, tabId)
 }
@@ -179,9 +195,11 @@ async function waitForTerminalActiveLine(page: Page, expectedText: string): Prom
     .toBe(true)
 
   const activeLine = await readTerminalActiveLine(page)
+
   if (activeLine === null) {
     throw new Error('Terminal cursor line disappeared after settling')
   }
+
   return activeLine
 }
 
@@ -196,6 +214,7 @@ async function expectSavedLayoutToContainTitle(
         page.evaluate(
           ({ targetTabId, title }) => {
             const layout = window.__store!.getState().terminalLayoutsByTabId[targetTabId]
+
             return Object.values(layout?.titlesByLeafId ?? {}).includes(title)
           },
           { targetTabId: tabId, title }
@@ -255,9 +274,11 @@ test.describe('Terminal restart persistence', () => {
       if (secondApp) {
         await session.close(secondApp)
       }
+
       if (firstApp) {
         await session.close(firstApp)
       }
+
       await session.dispose()
     }
   })
@@ -278,10 +299,12 @@ test.describe('Terminal restart persistence', () => {
 
       const prompt = `ORCA_RESTART_PROMPT_${Date.now()}_GT `
       const marker = `ORCA_CURSOR_RESTART_${Date.now()}`
+
       const promptCommand =
         process.platform === 'win32'
           ? `function global:prompt { '${prompt}' }`
           : `export PS1='${prompt}'; PROMPT='${prompt}'`
+
       // Why: the Windows default shell is PowerShell, whose prompt is a
       // function; PS1/PROMPT assignments remain the Bash/Zsh path.
       await execInTerminal(firstLaunch.page, ptyId, promptCommand)
@@ -302,9 +325,11 @@ test.describe('Terminal restart persistence', () => {
         .poll(
           async () => {
             const activeLine = await readTerminalActiveLine(secondLaunch.page)
+
             if (!activeLine || activeLine.includes(marker)) {
               return false
             }
+
             // Why: daemon reattach may preserve the live shell process, or the
             // restored scrollback can land before a fresh shell prompt repaints.
             // The cursor-regression contract is that we settle on a prompt line,
@@ -321,9 +346,11 @@ test.describe('Terminal restart persistence', () => {
       if (secondApp) {
         await session.close(secondApp)
       }
+
       if (firstApp) {
         await session.close(firstApp)
       }
+
       await session.dispose()
     }
   })
@@ -347,9 +374,11 @@ test.describe('Terminal restart persistence', () => {
       // as the Cmd+T shortcut but doesn't depend on window focus timing.
       await firstLaunch.page.evaluate((worktreeId: string) => {
         const store = window.__store
+
         if (!store) {
           return
         }
+
         store.getState().createTab(worktreeId)
       }, worktreeId)
 
@@ -382,9 +411,11 @@ test.describe('Terminal restart persistence', () => {
       if (secondApp) {
         await session.close(secondApp)
       }
+
       if (firstApp) {
         await session.close(firstApp)
       }
+
       await session.dispose()
     }
   })
@@ -451,9 +482,11 @@ test.describe('Terminal restart persistence', () => {
       if (secondApp) {
         await session.close(secondApp)
       }
+
       if (firstApp) {
         await session.close(firstApp)
       }
+
       await session.dispose()
     }
   })
@@ -482,14 +515,18 @@ test.describe('Terminal restart persistence', () => {
         const api = (
           window as unknown as { api: { session: { set: (...args: unknown[]) => unknown } } }
         ).api
+
         let count = 0
         const originalSet = api.session.set.bind(api.session)
         api.session.set = (...args: unknown[]) => {
           count += 1
+
           return originalSet(...args)
         }
+
         await new Promise((resolve) => setTimeout(resolve, 10_000))
         api.session.set = originalSet
+
         return count
       })
 
@@ -498,6 +535,7 @@ test.describe('Terminal restart persistence', () => {
       if (app) {
         await session.close(app)
       }
+
       await session.dispose()
     }
   })

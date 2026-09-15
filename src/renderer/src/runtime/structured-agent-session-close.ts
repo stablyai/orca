@@ -18,6 +18,8 @@ export async function closeStructuredAgentSession(
   ) {
     return 'unsupported'
   }
+
   await callStructuredAgentSession(target, 'agentSession.close', { sessionId })
+
   return 'closed'
 }

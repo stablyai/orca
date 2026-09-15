@@ -10,9 +10,11 @@ function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {
     return 'darwin'
   }
+
   if (navigator.userAgent.includes('Windows')) {
     return 'win32'
   }
+
   return 'linux'
 }
 
@@ -26,6 +28,7 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
   const unsubscribeOpenSkillShare = window.api.ui.onOpenSkillShare?.((shareId) => {
     useAppStore.getState().openSkillShare(shareId)
   })
+
   if (unsubscribeOpenSkillShare) {
     unsubs.push(unsubscribeOpenSkillShare)
   }
@@ -41,6 +44,7 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
     .catch(() => {})
 
   const pendingSkillShare = window.api.ui.consumePendingSkillShare?.()
+
   if (pendingSkillShare && typeof pendingSkillShare.then === 'function') {
     void pendingSkillShare
       .then((shareId) => {
@@ -97,13 +101,17 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
   unsubs.push(
     window.api.settings.onChanged((updates) => {
       const store = useAppStore.getState()
+
       if (!store.settings) {
         return
       }
+
       const { worktreeVisibilityDefaults, ...activeOwnerUpdates } = updates
+
       const settingsUpdates = store.settings.activeRuntimeEnvironmentId
         ? activeOwnerUpdates
         : updates
+
       useAppStore.setState({
         settings: {
           ...store.settings,
@@ -122,6 +130,7 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
             }
           : {})
       })
+
       if ('worktreeVisibilityDefaults' in updates) {
         void store.fetchAllWorktrees({ visibilityOwnerHostId: 'local' })
       }
@@ -152,9 +161,11 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
   unsubs.push(
     window.api.ui.onToggleRightSidebar(() => {
       const store = useAppStore.getState()
+
       if (!canShowRightSidebarForView(store.activeView)) {
         return
       }
+
       store.toggleRightSidebar()
     })
   )
@@ -162,10 +173,13 @@ export function registerSettingsAndSidebarIpcBridge(unsubs: (() => void)[]): voi
   unsubs.push(
     window.api.ui.onToggleWorktreePalette(() => {
       const store = useAppStore.getState()
+
       if (store.activeModal === 'worktree-palette') {
         store.closeModal()
+
         return
       }
+
       store.openModal('worktree-palette')
     })
   )

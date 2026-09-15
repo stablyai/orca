@@ -45,9 +45,11 @@ describe('bounded agent hook status cache', () => {
       now
     })
     upsertBoundedAgentHookStatus(listener, status('done', 'done', now), { maxPanes: 3, now })
+
     const stale = listener.lastStatusByPaneKey.get('stale') as AgentHookEventPayload & {
       receivedAt: number
     }
+
     stale.receivedAt = now - AGENT_STATUS_STALE_AFTER_MS - 1
     listener.lastPromptByPaneKey.set('stale', 'cached prompt')
     listener.lastToolByPaneKey.set('stale\0tool', {} as never)

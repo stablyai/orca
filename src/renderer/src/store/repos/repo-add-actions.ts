@@ -35,6 +35,7 @@ export function createRepoAddActions(
         const target = getActiveRuntimeTarget(getAddRepoPathRouteSettings(options, get().settings))
         const displayName = options?.displayName?.trim() || undefined
         let repo: Repo
+
         try {
           if (target.kind === 'local') {
             const result = await window.api.repos.add({
@@ -42,9 +43,11 @@ export function createRepoAddActions(
               kind,
               ...(displayName ? { displayName } : {})
             })
+
             if ('error' in result) {
               throw new Error(result.error)
             }
+
             repo = result.repo
           } else {
             repo = (
@@ -58,11 +61,14 @@ export function createRepoAddActions(
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
+
           if (kind !== 'git' || !message.includes('Not a valid git repository')) {
             throw err
           }
+
           if (target.kind !== 'local') {
             const status = await fetchRuntimeAddProjectPathStatus({ target, path })
+
             if (status?.exists !== true) {
               const hostName = getRuntimeEnvironmentDisplayName(get(), target.environmentId)
               toast.error(
@@ -79,9 +85,11 @@ export function createRepoAddActions(
                   duration: ERROR_TOAST_DURATION
                 }
               )
+
               return null
             }
           }
+
           // Why: folder mode is a capability downgrade (no worktrees/SCM/PRs/checks), so confirm via dialog rather than silently falling back.
           const { openModal } = get()
           openModal('confirm-non-git-folder', {
@@ -89,20 +97,26 @@ export function createRepoAddActions(
             ...(displayName ? { displayName } : {}),
             ...(target.kind === 'environment' ? { runtimeEnvironmentId: target.environmentId } : {})
           })
+
           return null
         }
+
         repo = repoWithFetchedOwner(repo, target)
         const repoIdentity = getRepoHostIdentity(repo)
         const alreadyAdded = get().repos.some((r) => getRepoHostIdentity(r) === repoIdentity)
+
         if (alreadyAdded) {
           get().clearOrcaHookTrustForRepo(repo.id)
         }
+
         set((s) => {
           if (s.repos.some((r) => getRepoHostIdentity(r) === repoIdentity)) {
             return s
           }
+
           const nextRepos = [...s.repos, repo]
           const hostId = getRepoExecutionHostId(repo)
+
           return {
             repos: nextRepos,
             ...mergeProjectCompatibilityForHostRepoChange({
@@ -113,6 +127,7 @@ export function createRepoAddActions(
             folderWorkspacePathStatuses: {}
           }
         })
+
         if (alreadyAdded) {
           toast.info(translate('auto.store.slices.repos.a8e4b3af5b', 'Project already added'), {
             description: repo.displayName
@@ -131,6 +146,7 @@ export function createRepoAddActions(
           // Why after the set(): the project row carrying the runtime override only exists once the repo is in state.
           warnIfProjectCrossesWslFilesystemBoundary(repo, get().projects, get().settings)
         }
+
         return repo
       } catch (err) {
         console.error('Failed to add project:', err)
@@ -140,12 +156,14 @@ export function createRepoAddActions(
           description: message,
           duration
         })
+
         return null
       }
     },
 
     addRepo: async () => {
       const target = getActiveRuntimeTarget(get().settings)
+
       if (target.kind !== 'local') {
         // Why: OS folder pickers return client-local paths; remote environments need an explicit host path (Add Project dialog).
         toast.error(
@@ -154,12 +172,16 @@ export function createRepoAddActions(
             'Use Add Project to enter a path on the selected host.'
           )
         )
+
         return null
       }
+
       const path = await window.api.repos.pickFolder()
+
       if (!path) {
         return null
       }
+
       return get().addRepoPath(path)
     },
 
@@ -167,10 +189,13 @@ export function createRepoAddActions(
       try {
         const hadProjectBeforeAdd = get().repos.length > 0
         const repo = await get().addRepoPath(path, 'folder', options)
+
         if (!repo) {
           return null
         }
+
         await markOnboardingProjectAdded('addedFolder')
+
         // Why: focus the new folder so the add is visible; lazy-import worktree-activation to avoid a circular module load (it imports the store root).
         const executionHostId =
           options?.runtimeEnvironmentId === undefined
@@ -178,17 +203,22 @@ export function createRepoAddActions(
             : options.runtimeEnvironmentId
               ? toRuntimeExecutionHostId(options.runtimeEnvironmentId)
               : LOCAL_EXECUTION_HOST_ID
+
         await get().fetchWorktrees(repo.id, executionHostId ? { executionHostId } : undefined)
+
         const folderWorktree = get().worktreesByRepo[repo.id]?.find(
           (worktree) => executionHostId === undefined || worktree.hostId === executionHostId
         )
+
         if (folderWorktree) {
           const onboarding = await window.api.onboarding.get().catch(() => null)
+
           // Why: lazy-import to avoid a circular module load (the launch graph imports the store root).
           const {
             resolveDismissedOnboardingFolderAgentLaunch,
             revealOnboardingFolderWithAgentLaunch
           } = await import('@/lib/onboarding-folder-agent-launch')
+
           // Why: adding the first folder from Landing skips onboarding's completeRepo hook; carry the default agent into the first terminal here.
           const launch = resolveDismissedOnboardingFolderAgentLaunch({
             store: get(),
@@ -199,12 +229,14 @@ export function createRepoAddActions(
               repo.connectionId
             )
           })
+
           await revealOnboardingFolderWithAgentLaunch({
             worktreeId: folderWorktree.id,
             executionHostId,
             launch
           })
         }
+
         return repo
       } catch (err) {
         console.error('Failed to add folder:', err)
@@ -213,6 +245,7 @@ export function createRepoAddActions(
           description: message,
           duration: ERROR_TOAST_DURATION
         })
+
         return null
       }
     }

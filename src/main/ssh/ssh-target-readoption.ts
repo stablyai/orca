@@ -29,6 +29,7 @@ function tombstoneMatches(
 ): boolean {
   const targetAlias = meaningfulSshAlias(target)
   const tombstoneAlias = meaningfulSshAlias(tombstone)
+
   // Primary: matching ssh-config alias. Stable across remove/re-import.
   if (targetAlias && tombstoneAlias) {
     // Both carry a real alias — the alias is the identity. Different aliases
@@ -37,6 +38,7 @@ function tombstoneMatches(
     // or a second alias for the same endpoint would steal the first's workspaces.
     return targetAlias === tombstoneAlias
   }
+
   // Fallback: identical host+user+port. Used when either side has no real alias
   // (manual adds default configHost to host), so a different account or port on
   // the same host is correctly treated as a different target.
@@ -54,10 +56,13 @@ export function readoptOrphanedWorkspacesForTarget(
   newTarget: SshTarget
 ): SshRepoReadoption[] {
   const tombstones = store.getRemovedSshTargetTombstones()
+
   if (tombstones.length === 0) {
     return []
   }
+
   const readoptions: SshRepoReadoption[] = []
+
   for (const tombstone of tombstones) {
     // Why: a re-added target can't share the id of one that still exists, but
     // guard anyway so we never re-point a live target onto itself.
@@ -65,18 +70,23 @@ export function readoptOrphanedWorkspacesForTarget(
       store.releaseRemovedSshTargetTombstone(tombstone.oldTargetId)
       continue
     }
+
     if (!tombstoneMatches(tombstone, newTarget)) {
       continue
     }
+
     const repoIds = store.reassignSshTargetId(tombstone.oldTargetId, newTarget.id)
+
     if (repoIds.length > 0) {
       readoptions.push({ oldTargetId: tombstone.oldTargetId, newTargetId: newTarget.id, repoIds })
     }
+
     // Consume the tombstone whether or not it re-pointed anything: the host has
     // returned, so the record has served its purpose — unless an automation or the
     // persisted filter still depends on that removal evidence, which retains it.
     store.releaseRemovedSshTargetTombstone(tombstone.oldTargetId)
   }
+
   return readoptions
 }
 

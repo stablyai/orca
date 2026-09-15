@@ -7,13 +7,16 @@ function readDurableReviewHeadLocalRef(
 ): string {
   if (result && typeof result === 'object' && 'localRef' in result) {
     const localRef = (result as { localRef: unknown }).localRef
+
     if (typeof localRef === 'string') {
       const trimmed = localRef.trim()
+
       if (trimmed.startsWith('refs/orca/')) {
         return trimmed
       }
     }
   }
+
   throw new Error(
     `This SSH host did not return the durable ${kind} head ref. Reconnect to deploy the latest relay, then try again.`
   )
@@ -32,6 +35,7 @@ export class SshGitReviewHeadProvider extends SshGitRemoteSyncProvider {
           remote,
           mrIid
         })
+
         return readDurableReviewHeadLocalRef(result, 'merge request')
       })
     } catch (error) {
@@ -40,6 +44,7 @@ export class SshGitReviewHeadProvider extends SshGitRemoteSyncProvider {
           'This SSH host is running an older Orca relay that cannot fetch merge request heads. Reconnect to deploy the latest relay, then try again.'
         )
       }
+
       throw error
     }
   }
@@ -56,6 +61,7 @@ export class SshGitReviewHeadProvider extends SshGitRemoteSyncProvider {
           remote,
           prNumber
         })
+
         return readDurableReviewHeadLocalRef(result, 'pull request')
       })
     } catch (error) {
@@ -64,6 +70,7 @@ export class SshGitReviewHeadProvider extends SshGitRemoteSyncProvider {
           'This SSH host is running an older Orca relay that cannot fetch pull request heads. Reconnect to deploy the latest relay, then try again.'
         )
       }
+
       throw error
     }
   }

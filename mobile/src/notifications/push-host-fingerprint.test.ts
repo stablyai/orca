@@ -10,6 +10,7 @@ function expectedFingerprint(publicKey: Uint8Array): string {
 }
 
 const publicKey = Uint8Array.from({ length: 32 }, (_, index) => index)
+
 const publicKeyB64 = Buffer.from(publicKey).toString('base64')
 
 describe('deriveHostFingerprint', () => {
@@ -40,6 +41,7 @@ describe('deriveHostFingerprint', () => {
 
 describe('resolveHostIdForFingerprint', () => {
   const other = Uint8Array.from({ length: 32 }, (_, index) => index + 1)
+
   const hosts = [
     { id: 'host-corrupt', publicKeyB64: 'not-a-key' },
     { id: 'host-other', publicKeyB64: Buffer.from(other).toString('base64') },

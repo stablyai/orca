@@ -8,6 +8,7 @@ import {
 describe('mobile-file-preview-route', () => {
   it('normalizes valid route params without changing encoded-sensitive path characters', () => {
     const relativePath = 'docs/a #b?c%25 d\\note.md'
+
     const route = normalizeMobileFilePreviewRouteParams({
       hostId: 'host-1',
       worktreeId: 'wt-1',

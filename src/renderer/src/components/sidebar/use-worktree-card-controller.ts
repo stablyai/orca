@@ -12,6 +12,7 @@ import { useWorktreeCardWorkspaceActions } from './use-worktree-card-workspace-a
 export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
   const { worktree, repo } = props
   const foundation = useWorktreeCardFoundation({ worktree, repo })
+
   const review = useWorktreeCardReviewDetails({
     worktree,
     repo,
@@ -20,6 +21,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
     cardProps: foundation.cardProps,
     newCardStyle: foundation.newCardStyle
   })
+
   const linked = useWorktreeCardLinkedDetails({
     worktree,
     newCardStyle: foundation.newCardStyle,
@@ -89,6 +91,7 @@ export function useWorktreeCardController(props: ResolvedWorktreeCardProps) {
       isDeleting: linked.isDeleting,
       isMainWorktree: worktree.isMainWorktree
     })
+
   const workspaceActions = useWorktreeCardWorkspaceActions({
     worktree,
     lineageChildCount: props.lineageChildCount,

@@ -29,7 +29,9 @@ describe('ProtectedSecretPersistence', () => {
   it('evicts dynamic slots across repeated SSH recovery lifecycles', async () => {
     const { ProtectedSecretPersistence, sshPtyOwnerLeaseSecretSlot } =
       await import('./protected-secret-persistence')
+
     const secrets = new ProtectedSecretPersistence()
+
     const slots = Array.from({ length: 100 }, (_, index) =>
       sshPtyOwnerLeaseSecretSlot(`ssh-${index}`)
     )
@@ -40,6 +42,7 @@ describe('ProtectedSecretPersistence', () => {
     }
 
     cipherState.available = false
+
     for (const slot of slots) {
       expect(secrets.encrypt(slot, 'replacement-lease')).toEqual({ blob: '', degraded: true })
     }

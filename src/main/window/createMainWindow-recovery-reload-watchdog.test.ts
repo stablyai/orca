@@ -4,6 +4,7 @@ import type * as DurableCrashBreadcrumbModule from '../crash-reporting/durable-c
 const { recordDurableCrashBreadcrumbMock } = vi.hoisted(() => ({
   recordDurableCrashBreadcrumbMock: vi.fn()
 }))
+
 vi.mock('../crash-reporting/durable-crash-breadcrumb', async (importOriginal) => ({
   ...(await importOriginal<typeof DurableCrashBreadcrumbModule>()),
   recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
@@ -12,18 +13,24 @@ vi.mock('../crash-reporting/durable-crash-breadcrumb', async (importOriginal) =>
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
+
 vi.mock('@electron-toolkit/utils', async () =>
   (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
 )
+
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
+
 vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
+
 vi.mock('../browser/browser-client-page-renderer-runtime', async () => {
   const harness = await import('./createMainWindow-test-harness')
+
   return {
     attachBrowserClientPageRenderer: harness.attachClientPageRendererMock,
     retireBrowserClientPageRenderer: harness.retireClientPageRendererMock
@@ -43,9 +50,11 @@ import {
 } from './renderer-recovery-reload-watchdog'
 
 const DOCUMENT_URL = 'file:///opt/orca/renderer/index.html'
+
 // A real macOS install URL: the crash-report redactor's PATH_PATTERNS provably leave this one intact.
 const INSTALL_PATH_LOAD_ERROR =
   "ERR_FILE_NOT_FOUND (-6) loading 'file:///Users/jane.doe/Applications/Orca.app/Contents/Resources/app.asar/out/renderer/index.html'"
+
 const CRASH = { reason: 'crashed', exitCode: 5 } as Electron.RenderProcessGoneDetails
 
 /**
@@ -64,6 +73,7 @@ describe('renderer recovery reload watchdog', () => {
     // last-writer-wins would silently drop the watchdog's listener if registration order ever changed.
     const registered: Record<string, ((...args: any[]) => void)[]> = {}
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const register = (event: string, handler: (...args: any[]) => void): void => {
       const handlers = (registered[event] ??= [])
       handlers.push(handler)
@@ -73,10 +83,13 @@ describe('renderer recovery reload watchdog', () => {
         }
       }
     }
+
     // Loads stay pending unless a test settles one: that is exactly the stall being reproduced.
     const settleLoad: { resolve: () => void; reject: (error: Error) => void }[] = []
+
     const pendingLoad = (): Promise<void> =>
       new Promise<void>((resolve, reject) => settleLoad.push({ resolve, reject }))
+
     const webContents = {
       id: 143,
       getURL: vi.fn(() => DOCUMENT_URL),
@@ -88,6 +101,7 @@ describe('renderer recovery reload watchdog', () => {
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(register),
@@ -102,16 +116,20 @@ describe('renderer recovery reload watchdog', () => {
       loadFile: vi.fn(pendingLoad),
       loadURL: vi.fn(pendingLoad)
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const crashRenderer = (): void => {
       windowHandlers['render-process-gone']?.({} as never, CRASH)
       vi.advanceTimersByTime(250)
     }
+
     const reachMilestone = (milestone: 'committed' | 'dom-ready'): void =>
       windowHandlers[milestone === 'committed' ? 'did-navigate' : 'dom-ready']?.()
+
     return {
       browserWindowInstance,
       consoleError,
@@ -272,12 +290,14 @@ describe('renderer recovery reload watchdog', () => {
     const { browserWindowInstance, consoleError, crashRenderer, settleLoad } = createHarness()
 
     createMainWindow(null, { onRendererRecoveryExhausted })
+
     // Every recovery reload lands, and every landed document then dies with its renderer.
     for (let attempt = 1; attempt <= 3; attempt += 1) {
       crashRenderer()
       settleLoad[attempt]?.resolve()
       await vi.advanceTimersByTimeAsync(0)
     }
+
     crashRenderer()
     expect(onRendererRecoveryExhausted).toHaveBeenCalledTimes(1)
     const loads = browserWindowInstance.loadFile.mock.calls.length
@@ -295,6 +315,7 @@ describe('renderer recovery reload watchdog', () => {
     const { consoleError, crashRenderer } = createHarness()
 
     createMainWindow(null, { onRendererRecoveryExhausted })
+
     for (let attempt = 0; attempt < 5; attempt += 1) {
       crashRenderer()
     }
@@ -348,6 +369,7 @@ describe('renderer recovery reload watchdog', () => {
   it('does not escalate when another navigation aborts the live recovery load', async () => {
     const onRecoveryReloadOutcome = vi.fn()
     const onRendererRecoveryExhausted = vi.fn()
+
     const { browserWindowInstance, consoleError, crashRenderer, settleLoad, windowHandlers } =
       createHarness()
 
@@ -526,6 +548,7 @@ describe('renderer recovery reload watchdog', () => {
     const { consoleError, crashRenderer } = createHarness()
 
     createMainWindow(null, { onRendererRecoveryExhausted })
+
     for (let attempt = 0; attempt < 4; attempt += 1) {
       crashRenderer()
     }
@@ -546,9 +569,11 @@ describe('renderer recovery reload watchdog', () => {
     crashRenderer()
     // Sleep freezes the timer; on wake it would otherwise fire against a load that never got its budget.
     vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS - 1)
+
     const resume = powerMonitorOnMock.mock.calls.find(([event]) => event === 'resume')?.[1] as (
       ...args: unknown[]
     ) => void
+
     resume()
 
     vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS - 1)

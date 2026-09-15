@@ -12,8 +12,10 @@ export function areWorktreePathsEqual(
     if (!looksLikePosixAbsolutePath(leftPath) || !looksLikePosixAbsolutePath(rightPath)) {
       return false
     }
+
     const left = normalizePosixWorktreePathForComparison(leftPath, platform)
     const right = normalizePosixWorktreePathForComparison(rightPath, platform)
+
     return left === right
   }
 
@@ -24,12 +26,15 @@ export function areWorktreePathsEqual(
   ) {
     const left = normalizeWindowsWorktreePathForComparison(leftPath)
     const right = normalizeWindowsWorktreePathForComparison(rightPath)
+
     // Why: Git can report the same Windows path with different slash styles or
     // drive-letter casing; treating them as distinct creates duplicate worktrees.
     return left === right
   }
+
   const left = normalizePosixWorktreePathForComparison(leftPath, platform)
   const right = normalizePosixWorktreePathForComparison(rightPath, platform)
+
   return left === right
 }
 
@@ -37,9 +42,11 @@ export function worktreePathComparisonKey(pathValue: string, platform = process.
   if (looksLikePosixAbsolutePath(pathValue)) {
     return `posix:${normalizePosixWorktreePathForComparison(pathValue, platform)}`
   }
+
   if (platform === 'win32' || isWindowsAbsolutePathLike(pathValue)) {
     return `windows:${normalizeWindowsWorktreePathForComparison(pathValue)}`
   }
+
   return `posix:${normalizePosixWorktreePathForComparison(pathValue, platform)}`
 }
 
@@ -57,17 +64,21 @@ export function dedupeWorktreesByPath<T extends { path: string }>(
 
   for (const worktree of worktrees) {
     const pathValue = worktree.path
+
     if (looksLikePosixAbsolutePath(pathValue)) {
       const key = normalizePosixWorktreePathForComparison(pathValue, platform)
+
       if (posixAbsoluteKeys.has(key)) {
         continue
       }
+
       posixAbsoluteKeys.add(key)
       unique.push(worktree)
       continue
     }
 
     const windowsKey = normalizeWindowsWorktreePathForComparison(pathValue)
+
     if (platform === 'win32' || isWindowsAbsolutePathLike(pathValue)) {
       if (
         windowsKeys.has(windowsKey) ||
@@ -75,6 +86,7 @@ export function dedupeWorktreesByPath<T extends { path: string }>(
       ) {
         continue
       }
+
       windowsKeys.add(windowsKey)
       windowsPaths.push(pathValue)
       unique.push(worktree)
@@ -89,9 +101,11 @@ export function dedupeWorktreesByPath<T extends { path: string }>(
     ) {
       continue
     }
+
     relativePaths.push(pathValue)
     unique.push(worktree)
   }
+
   return unique
 }
 
@@ -108,11 +122,14 @@ function normalizePosixWorktreePathForComparison(
   platform: NodeJS.Platform
 ): string {
   const normalized = posix.normalize(posix.resolve(pathValue))
+
   if (platform !== 'darwin') {
     return normalized
   }
+
   if (normalized === '/private/tmp') {
     return '/tmp'
   }
+
   return normalized.startsWith('/private/tmp/') ? normalized.slice('/private'.length) : normalized
 }

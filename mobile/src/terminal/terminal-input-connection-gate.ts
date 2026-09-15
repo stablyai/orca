@@ -22,5 +22,6 @@ export function resolveMobileTerminalInputGate({
     activeSessionTabType !== 'markdown' &&
     activeSessionTabType !== 'file' &&
     activeSessionTabType !== 'browser'
+
   return { canCompose, canSend: canCompose && connState === 'connected' }
 }

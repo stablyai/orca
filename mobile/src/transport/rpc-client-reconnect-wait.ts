@@ -14,12 +14,15 @@ export function waitForRpcClientReconnected(
   timeoutMs: number
 ): Promise<boolean> {
   const state = client.getState()
+
   if (state === 'connected') {
     return Promise.resolve(true)
   }
+
   if (state === 'auth-failed') {
     return Promise.resolve(false)
   }
+
   return new Promise((resolve) => {
     let settled = false
     let unsubscribe: (() => void) | null = null
@@ -35,6 +38,7 @@ export function waitForRpcClientReconnected(
         finish(false)
       }
     })
+
     if (settled) {
       // The notification fired inside onStateChange, before we held the handle.
       unsubscribe()
@@ -45,6 +49,7 @@ export function waitForRpcClientReconnected(
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
       unsubscribe?.()

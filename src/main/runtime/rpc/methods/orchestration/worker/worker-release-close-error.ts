@@ -22,6 +22,7 @@ export function classifyWorkerTerminalCloseError(error: unknown): {
 } {
   const reason = error instanceof Error ? error.message : String(error)
   const disposed = isDisposedWorkerTerminalCloseError(reason)
+
   return {
     reason,
     transient: disposed || isTransientWorkerTerminalCloseError(reason),

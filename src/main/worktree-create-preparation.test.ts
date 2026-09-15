@@ -21,23 +21,29 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('node:fs/promises', () => ({ mkdir: mocks.mkdir }))
+
 vi.mock('./git/worktree', () => ({ listWorktreeGraph: mocks.listWorktreeGraph }))
+
 vi.mock('./git/worktree-create-preparation', () => ({
   prepareWorktreeCreateCheckout: mocks.prepareCheckout,
   finalizePreparedWorktree: mocks.finalize,
   discardPreparedWorktree: mocks.discard,
   unlockPreparedWorktree: mocks.unlock
 }))
+
 vi.mock('./git/worktree-base-ref-probe', () => ({
   resolveLocalWorktreeBaseRef: mocks.resolveBaseRef
 }))
+
 vi.mock('./git/worktree-base-divergence', () => ({
   measureRetargetDivergence: mocks.measureDivergence
 }))
+
 vi.mock('./project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: mocks.getWorktreeOptions,
   getWorktreeMirrorDistro: () => undefined
 }))
+
 vi.mock('./ipc/worktree-logic', async (importOriginal) => ({
   isOrphanedWorktreeError: (await importOriginal<typeof WorktreeLogic>()).isOrphanedWorktreeError,
   computeWorkspaceRoot: mocks.computeWorkspaceRoot,
@@ -65,7 +71,9 @@ const EXISTING_REFS = new Set([
   'refs/remotes/origin/main',
   'refs/remotes/origin/release'
 ])
+
 const repo = { id: 'repo-1', path: '/repo' } as Repo
+
 const store = { getSettings: () => ({}) } as unknown as Store
 
 beforeEach(() => {
@@ -137,6 +145,7 @@ describe('worktree create preparation registry', () => {
   it('namespaces native Windows preparation directories for long paths', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       await prepareWorktreeCreateForRepo(store, { ...repo, path: 'C:\\repo' }, 'origin/main')
 
@@ -391,9 +400,11 @@ describe('worktree create preparation registry', () => {
   it('prepares while stale removal is stalled, shares its scan, and settles removal on reset', async () => {
     const stalePath = '/workspace/.orca-preparing/999999999-11111111-1111-4111-8111-111111111111'
     let releaseRemoval!: () => void
+
     const removal = new Promise<void>((resolve) => {
       releaseRemoval = resolve
     })
+
     mocks.listWorktreeGraph.mockResolvedValueOnce([
       {
         path: stalePath,
@@ -409,9 +420,11 @@ describe('worktree create preparation registry', () => {
     )
     let ready = false
     let reset: Promise<void> | undefined
+
     const preparation = prepareWorktreeCreateForRepo(store, repo, 'origin/main').then(() => {
       ready = true
     })
+
     try {
       await flushBackgroundWork()
       expect(mocks.discard).toHaveBeenCalledWith(repo.path, stalePath, {})
@@ -439,6 +452,7 @@ describe('worktree create preparation registry', () => {
       await preparation
       await reset
     }
+
     expect(hasPendingStalePreparationCleanup()).toBe(false)
   })
 
@@ -578,6 +592,7 @@ describe('worktree create preparation registry', () => {
     for (const base of ['origin/one', 'origin/two', 'origin/three']) {
       await prepareWorktreeCreateForRepo(store, repo, base)
     }
+
     await flushBackgroundWork()
     expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedPath, {})
 
@@ -613,9 +628,11 @@ describe('worktree create preparation registry', () => {
     for (const base of ['origin/one', 'origin/two']) {
       await prepareWorktreeCreateForRepo(store, repo, base)
     }
+
     for (const base of ['origin/one', 'origin/two']) {
       await prepareWorktreeCreateForRepo(store, otherRepo, base)
     }
+
     await flushBackgroundWork()
     expect(mocks.discard).toHaveBeenCalledWith(repo.path, leakedHere, {})
     expect(mocks.discard).toHaveBeenCalledWith(otherRepo.path, leakedElsewhere, {})
@@ -629,6 +646,7 @@ describe('worktree create preparation registry', () => {
 
   it('stops retrying a preparation that never becomes removable', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       await prepareWorktreeCreateForRepo(store, repo, 'origin/main')
       const leakedPath = mocks.prepareCheckout.mock.calls[0][1] as string
@@ -637,12 +655,14 @@ describe('worktree create preparation registry', () => {
           throw new Error('EBUSY')
         }
       })
+
       const leakedDiscards = (): number =>
         mocks.discard.mock.calls.filter((call) => call[1] === leakedPath).length
 
       for (const base of ['origin/one', 'origin/two', 'origin/three']) {
         await prepareWorktreeCreateForRepo(store, repo, base)
       }
+
       await flushBackgroundWork()
       expect(leakedDiscards()).toBe(1)
 
@@ -650,6 +670,7 @@ describe('worktree create preparation registry', () => {
         await prepareWorktreeCreateForRepo(store, repo, base)
         await flushBackgroundWork()
       }
+
       expect(leakedDiscards()).toBe(3)
       expect(warn).toHaveBeenCalledWith(
         expect.stringContaining(`could not be discarded in 3 attempts; ${leakedPath}`),
@@ -676,6 +697,7 @@ describe('worktree create preparation registry', () => {
     for (const base of ['origin/one', 'origin/two', 'origin/three']) {
       await prepareWorktreeCreateForRepo(store, repo, base)
     }
+
     mocks.discard.mockRejectedValueOnce(new Error('EBUSY'))
     failCheckout(new Error('worktree add failed'))
     await failing.catch(() => {})
@@ -708,9 +730,11 @@ describe('worktree create preparation registry', () => {
     // Evict through each distro's own arming: the eviction scope includes the distro, so arming
     // under Ubuntu no longer reaches across and takes the Debian entry.
     mocks.getWorktreeOptions.mockReturnValue({ wslDistro: 'Ubuntu' })
+
     for (const base of ['origin/one', 'origin/two']) {
       await prepareWorktreeCreateForRepo(store, repo, base)
     }
+
     mocks.getWorktreeOptions.mockReturnValue({ wslDistro: 'Debian' })
     await prepareWorktreeCreateForRepo(store, repo, 'origin/one')
     mocks.getWorktreeOptions.mockReturnValue({ wslDistro: 'Ubuntu' })
@@ -737,6 +761,7 @@ describe('worktree create preparation registry', () => {
     for (const base of ['origin/one', 'origin/two', 'origin/three']) {
       await prepareWorktreeCreateForRepo(store, repo, base)
     }
+
     await _resetWorktreeCreatePreparationsForTests()
     // Past the rejection timer: the reset must have absorbed the failure, not raced ahead of it.
     await flushBackgroundWork(20)
@@ -767,6 +792,7 @@ describe('worktree create preparation registry', () => {
     for (const base of ['origin/one', 'origin/two', 'origin/three']) {
       await prepareWorktreeCreateForRepo(store, repo, base)
     }
+
     // The eviction's discard is still parked on the checkout, so the reset has to wait for it.
     const reset = _resetWorktreeCreatePreparationsForTests()
     await flushBackgroundWork(5)
@@ -789,6 +815,7 @@ describe('worktree create preparation registry', () => {
       })
     )
     const arming = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
+
     // Anchor on the scan actually starting, not on a fixed number of microtasks: an await added
     // ahead of it would otherwise make this pass vacuously rather than fail.
     while (mocks.listWorktreeGraph.mock.calls.length === 0) {

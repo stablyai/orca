@@ -14,7 +14,9 @@ export {
   safeFitAndThen,
   type SafeFitContinuationHandle
 } from './pane-fit'
+
 export { captureScrollState, restoreScrollState } from './pane-scroll'
+
 export { equalizePaneSplitSizes, findPaneChildren } from './pane-tree-equalization'
 
 // ---------------------------------------------------------------------------
@@ -43,18 +45,22 @@ export function refitPanesUnder(el: HTMLElement, panes: Map<number, ManagedPaneI
   if (el.classList.contains('pane')) {
     const paneId = Number(el.dataset.paneId)
     const pane = panes.get(paneId)
+
     if (pane) {
       safeFit(pane)
     }
+
     return
   }
 
   // If it's a split, refit all panes inside it
   if (el.classList.contains('pane-split')) {
     const paneEls = el.querySelectorAll('.pane[data-pane-id]')
+
     for (const paneEl of paneEls) {
       const paneId = Number((paneEl as HTMLElement).dataset.paneId)
       const pane = panes.get(paneId)
+
       if (pane) {
         safeFit(pane)
       }
@@ -69,6 +75,7 @@ export function refitPanesUnder(el: HTMLElement, panes: Map<number, ManagedPaneI
 export function detachPaneFromTree(pane: ManagedPaneInternal, callbacks: TreeOpsCallbacks): void {
   const container = pane.container
   const parent = container.parentElement
+
   if (!parent) {
     return
   }
@@ -76,6 +83,7 @@ export function detachPaneFromTree(pane: ManagedPaneInternal, callbacks: TreeOps
   if (!parent.classList.contains('pane-split')) {
     // Direct child of root — just remove it
     container.remove()
+
     return
   }
 
@@ -85,6 +93,7 @@ export function detachPaneFromTree(pane: ManagedPaneInternal, callbacks: TreeOps
       child instanceof HTMLElement &&
       (child.classList.contains('pane') || child.classList.contains('pane-split'))
   )
+
   const sibling = children.find((c) => c !== container) ?? null
 
   // Remove pane and dividers from the split
@@ -104,6 +113,7 @@ export function insertPaneNextTo(
 ): void {
   const targetContainer = target.container
   const parent = targetContainer.parentElement
+
   if (!parent) {
     return
   }
@@ -169,16 +179,20 @@ export function insertPaneNextTo(
   const requestReparentFrame =
     callbacks.requestPaneReparentFrame ??
     ((callback: FrameRequestCallback) => requestAnimationFrame(callback))
+
   requestReparentFrame(() => {
     if (callbacks.isDestroyed?.()) {
       return
     }
+
     if (sourceHadWebgl && source.gpuRenderingEnabled && !source.webglDisabledAfterContextLoss) {
       attachWebgl(source)
     }
+
     if (targetHadWebgl && target.gpuRenderingEnabled && !target.webglDisabledAfterContextLoss) {
       attachWebgl(target)
     }
+
     callbacks.safeFit(source)
     callbacks.safeFit(target)
   })
@@ -195,6 +209,7 @@ export function promoteSibling(
 ): void {
   if (sibling) {
     const grandparent = parent.parentElement
+
     if (grandparent) {
       if (grandparent === root) {
         sibling.style.flex = ''
@@ -210,6 +225,7 @@ export function promoteSibling(
         sibling.style.minHeight = parent.style.minHeight || '0'
         sibling.style.overflow = 'hidden'
       }
+
       grandparent.replaceChild(sibling, parent)
     }
   } else {
@@ -236,6 +252,7 @@ export function removeDividers(parent: HTMLElement): void {
     (child): child is HTMLElement =>
       child instanceof HTMLElement && child.classList.contains('pane-divider')
   )
+
   for (const d of dividers) {
     disposeDivider(d)
     d.remove()
@@ -254,6 +271,7 @@ export function wrapInSplit(
   opts?: { ratio?: number }
 ): void {
   const parent = existingContainer.parentElement
+
   if (!parent) {
     return
   }
@@ -284,6 +302,7 @@ export function wrapInSplit(
 
   // Apply custom ratio if provided
   const ratio = opts?.ratio
+
   if (ratio !== undefined && ratio > 0 && ratio < 1) {
     existingContainer.style.flex = `${ratio} 1 0%`
     newContainer.style.flex = `${1 - ratio} 1 0%`

@@ -51,6 +51,7 @@ describe('nativeChatAskDismissKey', () => {
   it('uses the full canonical prompt and stays stable across object instances', () => {
     const first = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))
     const same = parseAskFromStatus(JSON.stringify(QUESTIONS_INPUT))
+
     const changed = parseAskFromStatus(
       JSON.stringify({ questions: [{ question: 'Deploy?', options: [{ label: 'Later' }] }] })
     )
@@ -78,11 +79,13 @@ describe('extractPendingAsk', () => {
         result()
       ])
     ])
+
     expect(pending?.questions[0]?.question).toBe('Deploy?')
   })
 
   it("clears the ask when its own result arrives, keeping the newest ask's identity", () => {
     const first = { questions: [{ question: 'First?', options: [] }] }
+
     const pending = extractPendingAsk([
       message('m1', [
         call('AskUserQuestion', first),
@@ -91,6 +94,7 @@ describe('extractPendingAsk', () => {
         result()
       ])
     ])
+
     expect(pending?.questions[0]?.question).toBe('Deploy?')
   })
 
@@ -103,6 +107,7 @@ describe('extractPendingAsk', () => {
       message('m3', [call('AskUserQuestion', QUESTIONS_INPUT)]),
       message('m4', [result()])
     ])
+
     expect(pending).toBeNull()
   })
 
@@ -111,6 +116,7 @@ describe('extractPendingAsk', () => {
       message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
       interrupted('m2')
     ])
+
     expect(pending).toBeNull()
   })
 
@@ -120,6 +126,7 @@ describe('extractPendingAsk', () => {
       interrupted('m2'),
       message('m3', [call('AskUserQuestion', QUESTIONS_INPUT)])
     ])
+
     expect(pending?.questions[0]?.question).toBe('Deploy?')
   })
 
@@ -131,6 +138,7 @@ describe('extractPendingAsk', () => {
       userTurn('m2', 'never mind, do this instead'),
       message('m3', [{ type: 'text', text: 'on it' }])
     ])
+
     expect(pending).toBeNull()
   })
 
@@ -143,6 +151,7 @@ describe('extractPendingAsk', () => {
       message('m3', [call('AskUserQuestion', QUESTIONS_INPUT)]),
       toolTurn('m4')
     ])
+
     expect(pending).toBeNull()
   })
 
@@ -151,6 +160,7 @@ describe('extractPendingAsk', () => {
       message('m1', [call('AskUserQuestion', QUESTIONS_INPUT)]),
       toolTurn('m2')
     ])
+
     expect(pending).toBeNull()
   })
 
@@ -180,6 +190,7 @@ describe('parseAskFromStatus', () => {
     const prompt = parseAskFromStatus(
       JSON.stringify({ questions: [{ question: 'Pick', options: ['a', 'b'] }] })
     )
+
     expect(prompt?.questions[0]?.options.map((o) => o.label)).toEqual(['a', 'b'])
   })
 })

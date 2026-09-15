@@ -4,18 +4,22 @@ const asyncStorage = vi.hoisted(() => ({
   getItem: vi.fn(),
   setItem: vi.fn()
 }))
+
 const secureStore = vi.hoisted(() => ({
   getItemAsync: vi.fn(),
   setItemAsync: vi.fn(),
   deleteItemAsync: vi.fn()
 }))
+
 const platform = vi.hoisted(() => ({ OS: 'ios' }))
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
+
 vi.mock('expo-secure-store', () => ({
   WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WHEN_UNLOCKED_THIS_DEVICE_ONLY',
   ...secureStore
 }))
+
 vi.mock('react-native', () => ({ Platform: platform }))
 
 import {
@@ -93,6 +97,7 @@ describe('mobile relay credential bundle', () => {
         resumeExpiresAt: 50_000
       }
     })
+
     await writeMobileRelayCredentialBundle(bundle)
 
     await expect(readMobileRelayCredentialBundle('host-1')).resolves.toEqual(bundle)

@@ -15,6 +15,7 @@ describe('SSH types', () => {
       port: 22,
       username: 'deploy'
     }
+
     expect(target.id).toBe('target-1')
     expect(target.host).toBe('myserver.com')
   })
@@ -30,6 +31,7 @@ describe('SSH types', () => {
       'reconnection-failed',
       'error'
     ]
+
     expect(statuses).toHaveLength(8)
   })
 
@@ -42,6 +44,7 @@ describe('SSH types', () => {
       providerEpoch: 'provider-a' as SshProviderEpoch,
       connectionGeneration: 1
     }
+
     expect(state.status).toBe('connected')
     expect(state.error).toBeNull()
     expect(state.providerEpoch).toBe('provider-a')
@@ -57,6 +60,7 @@ describe('SSH types', () => {
       badgeColor: '#ff0000',
       addedAt: Date.now()
     }
+
     // Should compile without connectionId
     expect(repo.id).toBe('repo-1')
     expect('connectionId' in repo).toBe(false)
@@ -66,6 +70,7 @@ describe('SSH types', () => {
       ...repo,
       connectionId: 'target-1'
     }
+
     expect(remoteRepo.connectionId).toBe('target-1')
   })
 })

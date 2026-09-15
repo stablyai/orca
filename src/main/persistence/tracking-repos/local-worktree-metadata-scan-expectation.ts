@@ -59,6 +59,7 @@ function serializeMetadataRow(meta: WorktreeMeta | undefined): string | null | u
   if (!meta) {
     return undefined
   }
+
   try {
     return JSON.stringify(meta)
   } catch {
@@ -72,6 +73,7 @@ function captureRow(
 ): MetadataRowExpectation {
   const expectedPresent = Object.hasOwn(record ?? {}, key)
   const expectedMeta = record?.[key]
+
   return {
     expectedPresent,
     expectedMeta,
@@ -86,22 +88,28 @@ export function indexMetadataAliasesForWorktreeIds(
   worktreeIds: ReadonlySet<string>
 ): Map<string, MetadataAliasEntry[]> {
   const indexed = new Map<string, MetadataAliasEntry[]>()
+
   for (const [alias, identityKeys] of Object.entries(state.worktreeIdentityAliases ?? {})) {
     const matches = new Set<string>()
+
     if (worktreeIds.has(alias)) {
       matches.add(alias)
     }
+
     const separator = alias.indexOf('|')
     const suffix = separator === -1 ? alias : alias.slice(separator + 1)
+
     if (worktreeIds.has(suffix)) {
       matches.add(suffix)
     }
+
     for (const worktreeId of matches) {
       const entries = indexed.get(worktreeId) ?? []
       entries.push([alias, identityKeys])
       indexed.set(worktreeId, entries)
     }
   }
+
   return indexed
 }
 
@@ -113,6 +121,7 @@ export function captureNativeLocalWorktreeMetadataScanExpectation(
   const expectedRepo = matchingRepos.length === 1 ? matchingRepos[0] : undefined
   const expectedProject = state.projects.find((project) => project.sourceRepoIds.includes(repo.id))
   const candidateIds = new Set<string>()
+
   for (const [worktreeId, meta] of Object.entries(state.worktreeMeta)) {
     if (
       splitWorktreeId(worktreeId)?.repoId === repo.id &&
@@ -121,11 +130,14 @@ export function captureNativeLocalWorktreeMetadataScanExpectation(
       candidateIds.add(worktreeId)
     }
   }
+
   for (const alias of Object.keys(state.worktreeIdentityAliases ?? {})) {
     if (!isWorktreeHostIdentity(alias)) {
       continue
     }
+
     const worktreeId = getWorktreeIdFromHostIdentity(alias)
+
     if (
       alias === composeWorktreeHostIdentity(LOCAL_EXECUTION_HOST_ID, worktreeId) &&
       splitWorktreeId(worktreeId)?.repoId === repo.id
@@ -133,7 +145,9 @@ export function captureNativeLocalWorktreeMetadataScanExpectation(
       candidateIds.add(worktreeId)
     }
   }
+
   const aliasesByWorktreeId = indexMetadataAliasesForWorktreeIds(state, candidateIds)
+
   return {
     repo: {
       id: repo.id,
@@ -170,6 +184,7 @@ function rowStillMatches(
   expected: MetadataRowExpectation
 ): boolean {
   const current = record?.[key]
+
   return (
     Object.hasOwn(record ?? {}, key) === expected.expectedPresent &&
     current === expected.expectedMeta &&
@@ -188,9 +203,12 @@ function aliasesStillMatch(
   if (currentAliases.length !== expected.expectedAliases.length) {
     return false
   }
+
   const currentByAlias = new Map(currentAliases)
+
   return expected.expectedAliases.every((aliasExpectation) => {
     const current = currentByAlias.get(aliasExpectation.alias)
+
     return Boolean(
       current &&
       current === aliasExpectation.expectedAlias &&
@@ -218,15 +236,20 @@ export function isLocallyRemovableWorktreeMetadataRow(
   currentAliases: readonly MetadataAliasEntry[]
 ): boolean {
   const localAlias = composeWorktreeHostIdentity(LOCAL_EXECUTION_HOST_ID, worktreeId)
+
   if (currentAliases.some(([alias]) => alias !== localAlias)) {
     return false
   }
+
   const legacy = state.worktreeMeta[worktreeId]
   const identityKeys = state.worktreeIdentityAliases?.[localAlias]
+
   if (identityKeys && identityKeys.length !== 1) {
     return false
   }
+
   const canonical = identityKeys?.[0] ? state.worktreeMetaByIdentity?.[identityKeys[0]] : undefined
+
   return !(
     (legacy?.hostId && legacy.hostId !== LOCAL_EXECUTION_HOST_ID) ||
     (canonical?.hostId && canonical.hostId !== LOCAL_EXECUTION_HOST_ID) ||
@@ -249,12 +272,16 @@ export function removeRevalidatedLocalWorktreeMetadata(
   ) {
     return false
   }
+
   const localAlias = composeWorktreeHostIdentity(LOCAL_EXECUTION_HOST_ID, expected.worktreeId)
   const identityKeys = state.worktreeIdentityAliases?.[localAlias]
+
   if (identityKeys?.[0]) {
     removedIdentityKeys?.add(identityKeys[0])
   }
+
   delete state.worktreeMeta[expected.worktreeId]
   delete state.worktreeIdentityAliases?.[localAlias]
+
   return true
 }

@@ -60,6 +60,7 @@ describe('UI modal slot dismissal', () => {
     const store = createUIStore()
     const replacementDismissed = vi.fn()
     const reentrantDismissed = vi.fn()
+
     const firstDismissed = vi.fn(() => {
       store.getState().openModal('quick-open', dismissalData(reentrantDismissed))
     })
@@ -88,6 +89,7 @@ describe('UI modal slot dismissal', () => {
         })
       )
     }
+
     store.getState().closeModal()
 
     expect(dismissed.size).toBe(transitionCount)

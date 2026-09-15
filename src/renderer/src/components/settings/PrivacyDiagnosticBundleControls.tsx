@@ -155,8 +155,10 @@ export function getDiagnosticBundleDescription({
       { value0: ticketId }
     )
   }
+
   if (bundle) {
     const size = formatBytes(bundle.bytes)
+
     if (previewOpened) {
       return translate(
         'auto.components.settings.PrivacyDiagnosticBundleControls.fd7b3891af',
@@ -164,12 +166,14 @@ export function getDiagnosticBundleDescription({
         { value0: size }
       )
     }
+
     return translate(
       'auto.components.settings.PrivacyDiagnosticBundleControls.62340d4439',
       'Your review file is ready ({{value0}}). Open it to see what would be sent, then choose whether to send it to support.',
       { value0: size }
     )
   }
+
   return translate(
     'auto.components.settings.PrivacyDiagnosticBundleControls.19ec5e29b3',
     'Collects recent app activity and errors into a redacted file you can review before sending. Nothing is uploaded until you choose to send it.'
@@ -184,8 +188,10 @@ function formatBytes(bytes: number): string {
   if (bytes < 1024) {
     return `${bytes} B`
   }
+
   if (bytes < 1024 * 1024) {
     return `${Math.round(bytes / 1024)} KB`
   }
+
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }

@@ -7,19 +7,25 @@ function collectLayoutGroupIds(node: unknown, into: string[] = []): string[] {
   if (!node || typeof node !== 'object') {
     return into
   }
+
   const candidate = node as { type?: string; groupId?: string; first?: unknown; second?: unknown }
+
   if (candidate.type === 'leaf' && candidate.groupId) {
     into.push(candidate.groupId)
+
     return into
   }
+
   collectLayoutGroupIds(candidate.first, into)
   collectLayoutGroupIds(candidate.second, into)
+
   return into
 }
 
 describe('buildMobileSessionTabSnapshots', () => {
   it('preserves source-control diff metadata for mobile file tabs', () => {
     const diffId = 'wt-1::diff::unstaged::src/app.ts'
+
     const state = makeState({
       browserTabsByWorktree: {},
       tabBarOrderByWorktree: { 'wt-1': [diffId] },
@@ -52,6 +58,7 @@ describe('buildMobileSessionTabSnapshots', () => {
 
   it('omits unsupported branch and commit diff metadata from mobile file tabs', () => {
     const diffId = 'wt-1::diff::branch::src/app.ts'
+
     const state = makeState({
       browserTabsByWorktree: {},
       tabBarOrderByWorktree: { 'wt-1': [diffId] },
@@ -116,6 +123,7 @@ describe('buildMobileSessionTabSnapshots', () => {
   it('omits a browser tab located by a workspace document from mobile snapshots', () => {
     const docWorkspaceId = 'browser-doc'
     const urlWorkspaceId = 'browser-url'
+
     const state = makeState({
       tabBarOrderByWorktree: { 'wt-1': [docWorkspaceId, urlWorkspaceId] },
       browserTabsByWorktree: {
@@ -172,6 +180,7 @@ describe('buildMobileSessionTabSnapshots', () => {
   it('keeps a workspace document out of published tab groups as well as the tab list', () => {
     const docWorkspaceId = 'browser-doc'
     const urlWorkspaceId = 'browser-url'
+
     const state = makeState({
       // The document's group is the active one: if it survived anywhere, this is where it shows.
       activeGroupIdByWorktree: { 'wt-1': 'group-left' },
@@ -265,11 +274,13 @@ describe('buildMobileSessionTabSnapshots', () => {
     // Mechanical rather than by name: nothing a group points at may be missing from the tab list,
     // whatever the reason it was held back.
     const publishedTabIds = new Set(snapshot?.tabs.map((tab) => tab.id) ?? [])
+
     for (const group of snapshot?.tabGroups ?? []) {
       expect(group.tabOrder.filter((tabId) => !publishedTabIds.has(tabId))).toEqual([])
       expect((group.recentTabIds ?? []).filter((tabId) => !publishedTabIds.has(tabId))).toEqual([])
       expect(group.activeTabId === null || publishedTabIds.has(group.activeTabId)).toBe(true)
     }
+
     expect(snapshot?.activeTabId === null || publishedTabIds.has(snapshot.activeTabId)).toBe(true)
     // What the reader would actually see go wrong: a group held back has to leave the layout tree
     // with it, or the phone renders a split whose pane can never have anything in it.
@@ -278,6 +289,7 @@ describe('buildMobileSessionTabSnapshots', () => {
 
   it('does not recover unsupported combined diff tabs through split-group fallback', () => {
     const combinedId = 'wt-1::all-diffs::branch::main'
+
     const state = makeState({
       activeGroupIdByWorktree: { 'wt-1': 'group-right' },
       groupsByWorktree: {
@@ -323,6 +335,7 @@ describe('buildMobileSessionTabSnapshots', () => {
 
   it('publishes a missing non-markdown editor with its unified tab id and split group', () => {
     const fileId = '/repo/src/app.ts'
+
     const state = makeState({
       activeGroupIdByWorktree: { 'wt-1': 'group-left' },
       groupsByWorktree: {
@@ -450,6 +463,7 @@ describe('buildMobileSessionTabSnapshots', () => {
   it('does not conflate same-path edit and diff editor tabs in the fallback', () => {
     const fileId = '/repo/src/app.ts'
     const diffId = 'wt-1::diff::unstaged::src/app.ts'
+
     const state = makeState({
       activeGroupIdByWorktree: { 'wt-1': 'group-1' },
       groupsByWorktree: {
@@ -514,6 +528,7 @@ describe('buildMobileSessionTabSnapshots', () => {
 
   it('recovers a duplicate split editor tab for an already-emitted file id', () => {
     const fileId = '/repo/src/app.ts'
+
     const state = makeState({
       activeGroupIdByWorktree: { 'wt-1': 'group-left' },
       groupsByWorktree: {
@@ -601,6 +616,7 @@ describe('buildMobileSessionTabSnapshots', () => {
 
   it('uses unified editor ids in legacy no-group order without duplicating file ids', () => {
     const fileId = '/repo/src/app.ts'
+
     const state = makeState({
       tabBarOrderByWorktree: { 'wt-1': [fileId] },
       unifiedTabsByWorktree: {
@@ -637,6 +653,7 @@ describe('buildMobileSessionTabSnapshots', () => {
 
   it('recovers a missing diff unified tab in its split group', () => {
     const diffId = 'wt-1::diff::unstaged::src/app.ts'
+
     const state = makeState({
       activeGroupIdByWorktree: { 'wt-1': 'group-left' },
       groupsByWorktree: {
@@ -712,6 +729,7 @@ describe('buildMobileSessionTabSnapshots', () => {
 
   it('gates fallback editor active state on the worktree active tab type', () => {
     const fileId = '/repo/src/app.ts'
+
     const state = {
       activeFileId: '/repo/other-worktree.ts',
       activeFileIdByWorktree: { 'wt-1': fileId },
@@ -744,6 +762,7 @@ describe('buildMobileSessionTabSnapshots', () => {
         activeTabTypeByWorktree: { 'wt-1': 'terminal' }
       })
     )[0]
+
     const editorSnapshot = buildMobileSessionTabSnapshots(
       makeState({
         ...state,
@@ -766,6 +785,7 @@ describe('buildMobileSessionTabSnapshots', () => {
   it('keeps duplicate file ids scoped to their worktree', () => {
     const sharedRemotePath = '/home/dev/project/README.md'
     const previewId = `markdown-preview::${sharedRemotePath}`
+
     const state = makeState({
       browserTabsByWorktree: {},
       tabBarOrderByWorktree: {

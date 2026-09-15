@@ -85,22 +85,30 @@ export type AgentHookAuthorityAttestation = Readonly<{
 }>
 
 export type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
+
 export type StatusFreshnessListener = (status: AgentHookStatusFreshnessObservation) => void
+
 export type ProviderSessionChangeListener = (
   providerSessions: AgentHookProviderSessionIdentity[]
 ) => void
+
 export type AgentHookStatusRowIdentity = {
   paneKey: string
   worktreeId?: string
   terminalHandle?: string
 }
+
 export type AgentHookStatusRowMutation = {
   before: AgentHookStatusRowIdentity | null
   after: AgentHookStatusRowIdentity | null
 }
+
 export type StatusRowMutationListener = (mutation: AgentHookStatusRowMutation) => void
+
 export type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
+
 export type StatusDropListener = (paneKey: string) => void
+
 export type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
 
 export type PaneKeyAliasEntry = {
@@ -109,7 +117,9 @@ export type PaneKeyAliasEntry = {
   updatedAt: number
   authorityVerified: boolean
 }
+
 export type RetiredPaneAlias = { physicalPaneKey: string; entry: PaneKeyAliasEntry }
+
 /** What one retirement fenced, so a re-attach can lift exactly that set and no more. */
 export type RetiredPaneFence = {
   paneKeys: readonly string[]
@@ -134,4 +144,5 @@ export type NormalizedLocalHook = {
 }
 
 export type ServerStatusLineListener = ((event: ClaudeStatusLineRateLimits) => void) | null
+
 export type ServerAgentStatusListener = ((payload: EnrichedAgentHookEventPayload) => void) | null

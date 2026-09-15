@@ -63,6 +63,7 @@ describe('linear-issue-attribute-filter', () => {
       assignee: { kind: 'unassigned' },
       labelIds: []
     })
+
     expect(canonical.priorities).toEqual([0])
     expect(canonical.assignee).toEqual({ kind: 'unassigned' })
     expect(isEmptyLinearIssueAttributeFilter(canonical)).toBe(false)

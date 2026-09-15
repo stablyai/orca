@@ -31,6 +31,7 @@ export function createGitRemotePushPull(
       )
       let shouldRefreshAfterRejectedPush = false
       const runtimeSettings = options.runtimeTargetSettings ?? get().settings
+
       try {
         await pushRuntimeGit(
           { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
@@ -48,6 +49,7 @@ export function createGitRemotePushPull(
         throw error
       } finally {
         get().endRemoteOperation()
+
         if (shouldRefreshAfterRejectedPush) {
           const context = { settings: runtimeSettings, worktreeId, worktreePath, connectionId }
           // Why: the rejected push proved the branch moved; fetch first so legacy base-tracking worktrees discover origin/<branch>, then refresh ahead/behind.
@@ -60,10 +62,12 @@ export function createGitRemotePushPull(
             )
         }
       }
+
       void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
         runtimeTargetSettings: runtimeSettings
       })
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
+
       if (typeof refreshGitHubForWorktree === 'function') {
         refreshGitHubForWorktree(worktreeId)
       }
@@ -71,6 +75,7 @@ export function createGitRemotePushPull(
     pullBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
       get().beginRemoteOperation('pull')
       const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
+
       try {
         await pullRuntimeGit(
           { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
@@ -82,10 +87,12 @@ export function createGitRemotePushPull(
       } finally {
         get().endRemoteOperation()
       }
+
       void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
         runtimeTargetSettings: runtimeSettings
       })
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
+
       if (typeof refreshGitHubForWorktree === 'function') {
         refreshGitHubForWorktree(worktreeId)
       }
@@ -93,6 +100,7 @@ export function createGitRemotePushPull(
     fastForwardBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
       get().beginRemoteOperation('fast_forward')
       const runtimeSettings = options?.runtimeTargetSettings ?? get().settings
+
       try {
         await fastForwardRuntimeGit(
           { settings: runtimeSettings, worktreeId, worktreePath, connectionId },
@@ -104,10 +112,12 @@ export function createGitRemotePushPull(
       } finally {
         get().endRemoteOperation()
       }
+
       void get().fetchUpstreamStatus(worktreeId, worktreePath, connectionId, pushTarget, {
         runtimeTargetSettings: runtimeSettings
       })
       const refreshGitHubForWorktree = get().refreshGitHubForWorktree
+
       if (typeof refreshGitHubForWorktree === 'function') {
         refreshGitHubForWorktree(worktreeId)
       }

@@ -17,12 +17,14 @@ export function classifySshWorkspaceBrowserRouteError(
   if (message.includes('browser_local_route_forwarding_blocked')) {
     return 'forwarding-blocked'
   }
+
   if (
     message.includes('browser_local_route_ssh_unavailable') ||
     message.includes('browser_tunnel_execution_host_unavailable')
   ) {
     return 'ssh-unavailable'
   }
+
   return 'unknown'
 }
 
@@ -46,21 +48,27 @@ export function useSshWorkspaceBrowserRoute(
 } {
   const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
   const browserRoutingSettings = useAppStore((s) => s.settings)
+
   const probeSkippedTargetIds = useAppStore(
     (s) => s.settings?.browserSshWorkspaceRoutingProbeSkippedTargetIds
   )
+
   const updateSettings = useAppStore((s) => s.updateSettings)
+
   const routeEligibility = resolveSshWorkspaceBrowserRouteEligibility(
     executionHostId,
     browserRoutingSettings
   )
+
   const sshTargetId = routeEligibility?.targetId ?? null
   const targetId = routeEligibility?.eligible === true ? routeEligibility.targetId : null
   const browserProfileId = sessionProfileId ?? 'default'
+
   const [attempt, setAttempt] = useState<{ count: number; skipProbe: boolean }>({
     count: 0,
     skipProbe: false
   })
+
   const [state, setState] = useState<SshWorkspaceBrowserRouteState>(
     targetId ? { kind: 'preparing' } : { kind: 'unrouted' }
   )
@@ -72,8 +80,10 @@ export function useSshWorkspaceBrowserRoute(
   useEffect(() => {
     if (!targetId) {
       setState({ kind: 'unrouted' })
+
       return
     }
+
     let cancelled = false
     setState({ kind: 'preparing' })
     window.api.browser
@@ -97,6 +107,7 @@ export function useSshWorkspaceBrowserRoute(
           })
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -112,6 +123,7 @@ export function useSshWorkspaceBrowserRoute(
     : state.kind === 'unrouted' || (state.kind === 'ready' && state.targetId !== targetId)
       ? { kind: 'preparing' }
       : state
+
   return {
     state: effectiveState,
     targetId: sshTargetId,
@@ -126,13 +138,16 @@ export function useSshWorkspaceBrowserRoute(
           ]
         })
       }
+
       setAttempt((current) => ({ count: current.count + 1, skipProbe: true }))
     },
     browseFromThisDevice: () => {
       if (!sshTargetId) {
         return
       }
+
       const disabled = browserRoutingSettings?.browserSshWorkspaceRoutingDisabledTargetIds ?? []
+
       if (!disabled.includes(sshTargetId)) {
         updateSettings({
           browserSshWorkspaceRoutingDisabledTargetIds: [...disabled, sshTargetId]
@@ -151,16 +166,21 @@ export function useSshWorkspaceBrowserRoute(
 export function useSshWorkspaceProbeSkipRecheck(worktreeId: string): (() => void) | null {
   const executionHostId = useAppStore((s) => getExecutionHostIdForWorktree(s, worktreeId))
   const browserRoutingSettings = useAppStore((s) => s.settings)
+
   const probeSkippedTargetIds = useAppStore(
     (s) => s.settings?.browserSshWorkspaceRoutingProbeSkippedTargetIds
   )
+
   const updateSettings = useAppStore((s) => s.updateSettings)
+
   const targetId =
     resolveSshWorkspaceBrowserRouteEligibility(executionHostId, browserRoutingSettings)?.targetId ??
     null
+
   if (!targetId || probeSkippedTargetIds?.includes(targetId) !== true) {
     return null
   }
+
   return () =>
     updateSettings({
       browserSshWorkspaceRoutingProbeSkippedTargetIds: (probeSkippedTargetIds ?? []).filter(

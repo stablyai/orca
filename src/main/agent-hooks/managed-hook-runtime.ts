@@ -12,7 +12,9 @@ import {
 } from './managed-hook-owner-identity'
 
 const execFileAsync = promisify(execFile)
+
 const GROK_HOME_MAX_LENGTH = 4096
+
 const GROK_HOME_PROBE_TIMEOUT_MS = 8_000
 
 export type ManagedHookInstallSummary = {
@@ -27,6 +29,7 @@ function defaultGrokHome(home: string): string {
 function hasControlCharacter(value: string): boolean {
   return Array.from(value).some((character) => {
     const code = character.charCodeAt(0)
+
     return code <= 0x1f || code === 0x7f
   })
 }
@@ -42,23 +45,28 @@ function normalizeGrokHome(candidate: string): string | null {
   ) {
     return null
   }
+
   return candidate.replace(/\/+$/, '') || '/'
 }
 
 function resolveLoginShell(): string {
   const candidate = process.env.SHELL || userInfo().shell || '/bin/sh'
+
   if (!candidate.startsWith('/') || candidate.includes('\\') || hasControlCharacter(candidate)) {
     return '/bin/sh'
   }
+
   return candidate
 }
 
 export async function resolveRelayGrokHome(home: string, signal?: AbortSignal): Promise<string> {
   const fallback = defaultGrokHome(home)
+
   try {
     const shell = resolveLoginShell()
     const shellName = basename(shell)
     const mode = shellName === 'sh' || shellName === 'dash' ? '-c' : '-lc'
+
     // Why: agent PTYs start login shells, so read the same profile-derived
     // GROK_HOME without opening two additional SSH exec channels.
     const { stdout } = await execFileAsync(
@@ -66,9 +74,11 @@ export async function resolveRelayGrokHome(home: string, signal?: AbortSignal): 
       [mode, `printenv GROK_HOME | head -c ${GROK_HOME_MAX_LENGTH + 1}`],
       { encoding: 'utf8', timeout: GROK_HOME_PROBE_TIMEOUT_MS, signal }
     )
+
     return normalizeGrokHome(stdout.split(/\r?\n/, 1)[0] ?? '') ?? fallback
   } catch {
     signal?.throwIfAborted()
+
     return fallback
   }
 }
@@ -82,16 +92,20 @@ export async function installManagedHooks(options?: {
   options?.signal?.throwIfAborted()
   // Why: empty/omitted allowlist fails closed before any home/host probes.
   const agents = options?.agents ?? []
+
   if (agents.length === 0) {
     return { installers: 0, errors: 0 }
   }
+
   const home = homedir()
   const grokHomeDir = await resolveRelayGrokHome(home, options?.signal)
   options?.signal?.throwIfAborted()
+
   const hostIdentity = scopeManagedHookHostIdentity(
     await readManagedHookHostIdentity(),
     options?.hostKeyFingerprint
   )
+
   return await withManagedHookInstallLock(
     home,
     options?.signal,
@@ -106,6 +120,7 @@ export async function installManagedHooks(options?: {
           ...(options?.claudeVersion ? { claudeVersion: options.claudeVersion } : {})
         }
       )
+
       return {
         installers: results.length,
         errors: results.filter((result) => result.state === 'error').length

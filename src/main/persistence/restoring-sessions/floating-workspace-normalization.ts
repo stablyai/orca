@@ -5,14 +5,17 @@ export function expandFloatingWorkspaceHomePath(input: string, home: string): st
   if (input === '~') {
     return home
   }
+
   if (input.startsWith(`~${sep}`) || (process.platform === 'win32' && input.startsWith('~/'))) {
     return join(home, input.slice(2))
   }
+
   return input
 }
 
 export function resolveFloatingWorkspacePath(input: string, home: string): string {
   const expanded = expandFloatingWorkspaceHomePath(input, home)
+
   return isAbsolute(expanded) ? resolve(expanded) : resolve(home, expanded)
 }
 
@@ -21,11 +24,14 @@ export function canonicalizePersistedFloatingWorkspaceDirectory(
   home: string
 ): string | null {
   const trimmed = input.trim()
+
   if (!trimmed) {
     return null
   }
+
   try {
     const canonicalPath = resolve(realpathSync(resolveFloatingWorkspacePath(trimmed, home)))
+
     return statSync(canonicalPath).isDirectory() ? canonicalPath : null
   } catch {
     return null
@@ -46,23 +52,30 @@ export function normalizeFloatingWorkspaceTrustedCwds(
       changed = true
       continue
     }
+
     const trimmedTrustedCwd = rawTrustedCwd.trim()
+
     if (!trimmedTrustedCwd) {
       changed = true
       continue
     }
+
     const canonicalPath = canonicalizePersistedFloatingWorkspaceDirectory(trimmedTrustedCwd, home)
     const normalizedPath = canonicalPath ?? resolveFloatingWorkspacePath(trimmedTrustedCwd, home)
+
     if (!normalizedPath) {
       changed = true
       continue
     }
+
     if (seen.has(normalizedPath)) {
       changed = true
       continue
     }
+
     seen.add(normalizedPath)
     trustedCwds.push(normalizedPath)
+
     if (rawTrustedCwd !== normalizedPath) {
       changed = true
     }

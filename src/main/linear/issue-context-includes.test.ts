@@ -14,6 +14,7 @@ import {
 // rewrites inline uploads.linear.app URLs into temporary signed URLs. The plain
 // entry client is a distinct spy so a regression back to it fails these tests.
 const rawRequest = vi.fn()
+
 const plainRawRequest = vi.fn()
 
 vi.mock('./issue-context-client', () => ({
@@ -161,6 +162,7 @@ describe('Linear issue context includes', () => {
       expect(query).toContain('$after: String')
       expect(query).toContain('after: $after')
     }
+
     expect(ACTIVITY_QUERY).not.toContain('attachment { id title url source }')
   })
 
@@ -180,6 +182,7 @@ describe('Linear issue context includes', () => {
         }
       })
     }
+
     const { readOptionalIncludes } = await import('./issue-context-includes')
     const output = result()
 
@@ -217,6 +220,7 @@ describe('Linear issue context includes', () => {
         }
       })
     }
+
     const { readOptionalIncludes } = await import('./issue-context-includes')
     const output = result()
 
@@ -337,6 +341,7 @@ describe('Linear issue context includes', () => {
         }
       })
     }
+
     const { readOptionalIncludes } = await import('./issue-context-includes')
     const output = result()
 

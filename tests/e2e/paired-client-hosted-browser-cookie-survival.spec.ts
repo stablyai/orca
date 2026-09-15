@@ -9,7 +9,9 @@ import {
 } from './helpers/paired-electron-client'
 
 const COOKIE_NAME = 'sta4150'
+
 const COOKIE_VALUE = 'survivor'
+
 const ROUTE_PARTITION_RE = /^persist:orca-browser-v1-[a-f0-9]{64}$/
 
 type CookieFixture = {
@@ -28,6 +30,7 @@ type CookieFixture = {
  */
 async function startCookieFixture(): Promise<CookieFixture> {
   const observed: { cookie: string | null; path: string }[] = []
+
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1')
     const cookie = request.headers.cookie ?? null
@@ -47,6 +50,7 @@ async function startCookieFixture(): Promise<CookieFixture> {
       `<!doctype html><html><head><title>${marker}</title></head><body><h1 id="marker">${marker}</h1></body></html>`
     )
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
@@ -55,6 +59,7 @@ async function startCookieFixture(): Promise<CookieFixture> {
     })
   })
   const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+
   return {
     close: () =>
       new Promise<void>((resolve, reject) => {
@@ -94,9 +99,11 @@ async function waitForPairedWorktreeId(page: Page, repoPath: string): Promise<st
     })
     .not.toBeNull()
   const worktreeId = await findPairedWorktreeId(page, repoPath)
+
   if (!worktreeId) {
     throw new Error('Paired worktree disappeared after discovery')
   }
+
   return worktreeId
 }
 
@@ -112,6 +119,7 @@ async function selectPairedWorktreeGroup(
           ({ environmentId, worktreeId }) => {
             const state = window.__store?.getState()
             state?.setActiveWorktree(worktreeId, `runtime:${environmentId}`)
+
             return state?.activeGroupIdByWorktree[worktreeId] ?? null
           },
           { environmentId, worktreeId }
@@ -127,13 +135,17 @@ async function selectPairedWorktreeGroup(
 async function createProductBrowserPage(page: Page, url: string): Promise<void> {
   await page.evaluate(async (url) => {
     const state = window.__store?.getState()
+
     if (!state?.activeWorktreeId) {
       throw new Error('Paired client has no active worktree')
     }
+
     const groupId = state.activeGroupIdByWorktree[state.activeWorktreeId]
+
     if (!groupId) {
       throw new Error('Paired client has no active tab group')
     }
+
     state.setBrowserDefaultUrl(url)
     await state.openNewBrowserTabInActiveWorkspace(groupId)
   }, url)
@@ -147,12 +159,15 @@ async function findMirroredBrowserPage(
   return page.evaluate(
     ({ url, worktreeId }) => {
       const state = window.__store?.getState()
+
       for (const workspace of state?.browserTabsByWorktree[worktreeId] ?? []) {
         for (const browserPage of state?.browserPagesByWorkspace[workspace.id] ?? []) {
           if (!browserPage.url.startsWith(url)) {
             continue
           }
+
           const handle = state?.remoteBrowserPageHandlesByPageId[browserPage.id]
+
           return {
             localPageId: browserPage.id,
             placementKind: handle?.placement?.kind ?? null,
@@ -160,6 +175,7 @@ async function findMirroredBrowserPage(
           }
         }
       }
+
       return null
     },
     { url, worktreeId }
@@ -179,9 +195,11 @@ async function openClientHostedFixturePage(
     })
     .not.toBeNull()
   const mirrored = await findMirroredBrowserPage(client.page, worktreeId, url)
+
   if (!mirrored) {
     throw new Error(`Mirrored browser page disappeared for ${url}`)
   }
+
   expect(mirrored.placementKind, 'fixture page must be hosted on the viewing desktop').toBe(
     'client'
   )
@@ -193,6 +211,7 @@ async function openClientHostedFixturePage(
     },
     { browserPageId: mirrored.localPageId, worktreeId }
   )
+
   return mirrored
 }
 
@@ -203,10 +222,12 @@ async function readClientWebview(
   return page.evaluate(async (prefix) => {
     for (const candidate of document.querySelectorAll('webview')) {
       const webview = candidate as Electron.WebviewTag
+
       try {
         if (!webview.getURL().startsWith(prefix)) {
           continue
         }
+
         return {
           marker: (await webview.executeJavaScript(
             'document.querySelector("#marker")?.textContent ?? null'
@@ -217,6 +238,7 @@ async function readClientWebview(
         // The guest may still be attaching.
       }
     }
+
     return null
   }, url)
 }
@@ -233,9 +255,11 @@ async function waitForRenderedClientWebview(
     })
     .not.toBeNull()
   const rendered = await readClientWebview(page, url)
+
   if (!rendered?.marker || !rendered.partition) {
     throw new Error(`Client-hosted guest for ${url} lost its marker or partition`)
   }
+
   return { marker: rendered.marker, partition: rendered.partition }
 }
 
@@ -249,6 +273,7 @@ async function readClientSessionCookie(
     async ({ session }, { name, partition, url }) => {
       const target = partition === null ? session.defaultSession : session.fromPartition(partition)
       const cookies = await target.cookies.get({ name, url })
+
       return cookies[0]?.value ?? null
     },
     { name: COOKIE_NAME, partition, url }
@@ -261,6 +286,7 @@ async function refreshAuthorityRuntimeId(client: PairedElectronClient): Promise<
     .evaluate(async (environmentId) => {
       await window.api.runtimeEnvironments.connect({ selector: environmentId })
       await window.__store?.getState().refreshRuntimeEnvironmentStatus(environmentId)
+
       return (
         window.__store?.getState().runtimeStatusByEnvironmentId.get(environmentId)?.status
           ?.runtimeId ?? null
@@ -285,9 +311,11 @@ async function waitForRelaunchedRuntime(
     })
     .toEqual(expect.not.stringMatching(`^${previousRuntimeId}$`))
   const runtimeId = await refreshAuthorityRuntimeId(client)
+
   if (!runtimeId) {
     throw new Error('Paired client lost the runtime id after reconnecting')
   }
+
   return runtimeId
 }
 
@@ -298,6 +326,7 @@ test('keeps client-hosted browser cookies across a paired runtime restart', asyn
   const fixture = await startCookieFixture()
   const host = await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
   let client: PairedElectronClient | null = null
+
   try {
     await host.client.call('repo.add', { path: testRepoPath, kind: 'git' })
     client = await launchPairedElectronClient(
@@ -309,22 +338,26 @@ test('keeps client-hosted browser cookies across a paired runtime restart', asyn
     await selectPairedWorktreeGroup(client.page, client.environmentId, worktreeId)
 
     await openClientHostedFixturePage(client, worktreeId, fixture.loginUrl)
+
     const login = await waitForRenderedClientWebview(
       client.page,
       fixture.loginUrl,
       'client-hosted guest never rendered the login fixture'
     )
+
     expect(login.marker).toBe('login-marker')
     expect(login.partition, 'client-hosted pages must use a derived route partition').toMatch(
       ROUTE_PARTITION_RE
     )
 
     await openClientHostedFixturePage(client, worktreeId, fixture.echoBeforeUrl)
+
     const echoBefore = await waitForRenderedClientWebview(
       client.page,
       fixture.echoBeforeUrl,
       'client-hosted guest never rendered the pre-restart echo fixture'
     )
+
     expect(echoBefore.marker).toContain(`${COOKIE_NAME}=${COOKIE_VALUE}`)
     expect(echoBefore.partition).toBe(login.partition)
 
@@ -352,11 +385,13 @@ test('keeps client-hosted browser cookies across a paired runtime restart', asyn
     await selectPairedWorktreeGroup(client.page, client.environmentId, restartedWorktreeId)
 
     await openClientHostedFixturePage(client, restartedWorktreeId, fixture.echoAfterUrl)
+
     const echoAfter = await waitForRenderedClientWebview(
       client.page,
       fixture.echoAfterUrl,
       'client-hosted guest never rendered the post-restart echo fixture'
     )
+
     expect(
       echoAfter.partition,
       'a runtime restart must not mint a fresh client-hosted partition'
@@ -369,6 +404,7 @@ test('keeps client-hosted browser cookies across a paired runtime restart', asyn
     const afterRequest = fixture
       .observedCookieHeaders()
       .findLast((entry) => entry.path === '/echo/after')
+
     expect(afterRequest?.cookie, 'fixture server must have seen the surviving cookie').toContain(
       `${COOKIE_NAME}=${COOKIE_VALUE}`
     )

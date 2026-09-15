@@ -34,8 +34,10 @@ export async function fetchActiveClaudeRateLimits(
   if (options?.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+
   const attempts = { attemptedSources: [] }
   const allowCliFallback = options?.allowPtyFallback !== false
+
   const plan = resolveClaudeUsageRefreshPlan({
     authPreparation: options?.authPreparation,
     allowCliFallback
@@ -56,17 +58,21 @@ export async function fetchActiveClaudeRateLimits(
   const oauthCredentials = await readClaudeOAuthCredentials(
     resolveClaudeOAuthCredentialReadOptions(options?.authPreparation)
   )
+
   if (options?.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
 
   if (plan.steps.some((step) => step.source === 'oauth') && oauthCredentials.token) {
     recordClaudeUsageAttempt(attempts, 'oauth')
+
     try {
       const oauthLimits = await fetchClaudeOAuthUsage(oauthCredentials.token, options?.signal)
+
       if (options?.signal?.aborted) {
         return abortedClaudeRateLimitResult()
       }
+
       return await completeClaudeOAuthUsageSuccess({
         oauthLimits,
         oauthCredentials,
@@ -89,6 +95,7 @@ export async function fetchActiveClaudeRateLimits(
           attempts,
           options
         })
+
         if (legacyResult) {
           return legacyResult
         }
@@ -108,6 +115,7 @@ export async function fetchActiveClaudeRateLimits(
           attempts,
           oauthCredentials
         })
+
         if (repaired) {
           return repaired
         }
@@ -161,6 +169,7 @@ export async function fetchActiveClaudeRateLimits(
       attempts,
       oauthCredentials
     })
+
     if (repaired) {
       return repaired
     }
@@ -183,6 +192,7 @@ export async function fetchActiveClaudeRateLimits(
       })
     } catch (error) {
       warnClaudeUsageFetchFailure(options?.authPreparation, oauthCredentials, error)
+
       return makeClaudeUsageResult(
         'error',
         withMacTailscaleDnsHint(error instanceof Error ? error.message : 'Unknown error'),

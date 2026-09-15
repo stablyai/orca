@@ -38,6 +38,7 @@ export function MobileDiffCommentLineRow({
   const canComment = commentLine !== undefined
   // Why: review notes anchor to the modified side, so show that line number in the single mobile gutter.
   const gutterLineNumber = line.newLineNumber ?? line.oldLineNumber ?? ''
+
   return (
     <View style={styles.diffLineBlock}>
       <View

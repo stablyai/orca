@@ -29,6 +29,7 @@ export function createRemoteWorkspaceTargetSync(
   deps: RemoteWorkspaceTargetSyncDeps
 ): RemoteWorkspaceTargetSync {
   const arrivals = createRemoteWorkspaceSnapshotArrivalCoordinator()
+
   const deferredPlacementRetries = createDeferredSnapshotPlacementRetries({
     store: deps.store,
     getCurrentAuthority: deps.getCurrentAuthority,
@@ -46,6 +47,7 @@ export function createRemoteWorkspaceTargetSync(
     if (!isArrivalCurrent(authority.targetId, arrival)) {
       return
     }
+
     const state = deps.store.getState()
     state.clearRemoteWorkspaceHydrated(authority.targetId)
     state.setRemoteWorkspaceSyncStatus(authority.targetId, {
@@ -65,8 +67,10 @@ export function createRemoteWorkspaceTargetSync(
     initialToken: DirectSshSnapshotApplyToken
   ): Promise<void> => {
     let applyToken = initialToken
+
     for (let attempt = 0; attempt < MAX_SNAPSHOT_APPLY_ATTEMPTS; attempt += 1) {
       let unplacedTabWorktreePaths: readonly string[] = []
+
       const result = await applyDirectSshRemoteWorkspaceSnapshot({
         store: deps.store,
         snapshot,
@@ -82,40 +86,54 @@ export function createRemoteWorkspaceTargetSync(
           unplacedTabWorktreePaths = worktreePaths
         }
       })
+
       if (result === 'applied') {
         deferredPlacementRetries.watch(authority, unplacedTabWorktreePaths)
       }
+
       if (result !== 'stale' || !isArrivalCurrent(authority.targetId, arrival)) {
         return
       }
+
       if (attempt === MAX_SNAPSHOT_APPLY_ATTEMPTS - 1) {
         break
       }
+
       const input = await deps.capturePreparationInput(
         authority,
         'workspace-snapshot',
         snapshot.revision
       )
+
       if (!input || !isArrivalCurrent(authority.targetId, arrival)) {
         markSnapshotConflict(authority, snapshot, arrival)
+
         return
       }
+
       const prepared = await deps.prepareOnly(input)
+
       if (
         !prepared.token ||
         !deps.isPreparationTokenCurrent(prepared.token) ||
         !isArrivalCurrent(authority.targetId, arrival)
       ) {
         markSnapshotConflict(authority, snapshot, arrival)
+
         return
       }
+
       const refreshedToken = buildDirectSshSnapshotApplyToken(prepared.token, snapshot.revision)
+
       if (!refreshedToken) {
         markSnapshotConflict(authority, snapshot, arrival)
+
         return
       }
+
       applyToken = refreshedToken
     }
+
     markSnapshotConflict(authority, snapshot, arrival)
   }
 
@@ -126,9 +144,11 @@ export function createRemoteWorkspaceTargetSync(
   ): Promise<void> => {
     const { authority } = token
     const workspaceReady = await waitForRemoteWorkspaceSessionReady(deps.store, arrivalSignal)
+
     if (!isArrivalCurrent(authority.targetId, arrival) || !deps.isPreparationTokenCurrent(token)) {
       return
     }
+
     if (!workspaceReady) {
       deps.store.getState().setRemoteWorkspaceSyncStatus(authority.targetId, {
         phase: 'error',
@@ -138,21 +158,27 @@ export function createRemoteWorkspaceTargetSync(
           'Workspace sync waited for local session hydration and timed out'
         )
       })
+
       return
     }
+
     const stateBeforeGet = deps.store.getState()
     const worktreeIds = resolveExactDirectSshTargetWorktreeIds(stateBeforeGet, authority)
+
     const hasLocalTabs = [...worktreeIds].some(
       (worktreeId) => (stateBeforeGet.tabsByWorktree[worktreeId] ?? []).length > 0
     )
+
     stateBeforeGet.setRemoteWorkspaceSyncStatus(authority.targetId, {
       phase: 'pulling',
       direction: 'pull'
     })
     const snapshot = await deps.remoteWorkspace.get({ targetId: authority.targetId })
+
     if (!isArrivalCurrent(authority.targetId, arrival) || !deps.isPreparationTokenCurrent(token)) {
       return
     }
+
     if (!snapshot) {
       deps.store.getState().setRemoteWorkspaceSyncStatus(authority.targetId, {
         phase: 'offline',
@@ -162,10 +188,13 @@ export function createRemoteWorkspaceTargetSync(
           'Remote workspace sync unavailable'
         )
       })
+
       return
     }
+
     if (snapshot.revision > 0) {
       const applyToken = buildDirectSshSnapshotApplyToken(token, snapshot.revision)
+
       if (applyToken) {
         await applySnapshotWithCurrentPreparation(
           authority,
@@ -175,9 +204,12 @@ export function createRemoteWorkspaceTargetSync(
           applyToken
         )
       }
+
       return
     }
+
     deps.store.getState().markRemoteWorkspaceHydrated(authority.targetId)
+
     if (!hasLocalTabs) {
       deps.store.getState().setRemoteWorkspaceSyncStatus(authority.targetId, {
         phase: 'idle',
@@ -186,11 +218,14 @@ export function createRemoteWorkspaceTargetSync(
         hostObservationToken: snapshot.hostObservationToken,
         message: translate('auto.hooks.useIpcEvents.2ec42e1c52', 'No remote workspace yet')
       })
+
       return
     }
+
     if (!isArrivalCurrent(authority.targetId, arrival) || !deps.isPreparationTokenCurrent(token)) {
       return
     }
+
     const results = await deps.remoteWorkspace.setForConnectedTargets({
       session: buildWorkspaceSessionPayload(deps.store.getState()),
       hydratedTargetIds: [authority.targetId],
@@ -199,9 +234,11 @@ export function createRemoteWorkspaceTargetSync(
         [authority.targetId]: snapshot.hostObservationToken
       }
     })
+
     if (!isArrivalCurrent(authority.targetId, arrival) || !deps.isPreparationTokenCurrent(token)) {
       return
     }
+
     const result = results.find((entry) => entry.targetId === authority.targetId)?.result
     applyRemoteWorkspacePushStatus(deps.store.getState(), authority.targetId, result, snapshot)
   }
@@ -218,9 +255,11 @@ export function createRemoteWorkspaceTargetSync(
     arrivalSignal: AbortSignal
   ): Promise<void> => {
     const authority = deps.getCurrentAuthority(targetId)
+
     if (!authority) {
       return
     }
+
     const state = deps.store.getState()
     state.clearRemoteWorkspaceHydrated(authority.targetId)
     state.setRemoteWorkspaceSyncStatus(authority.targetId, {
@@ -230,31 +269,43 @@ export function createRemoteWorkspaceTargetSync(
       updatedAt: snapshot.updatedAt,
       hostObservationToken: snapshot.hostObservationToken
     })
+
     const input = await deps.capturePreparationInput(
       authority,
       'workspace-snapshot',
       snapshot.revision
     )
+
     if (!input) {
       markSnapshotConflict(authority, snapshot, arrival)
+
       return
     }
+
     if (!isArrivalCurrent(targetId, arrival)) {
       return
     }
+
     const prepared = await deps.prepareOnly(input)
+
     if (!prepared.token) {
       markSnapshotConflict(authority, snapshot, arrival)
+
       return
     }
+
     if (!isArrivalCurrent(targetId, arrival)) {
       return
     }
+
     const applyToken = buildDirectSshSnapshotApplyToken(prepared.token, snapshot.revision)
+
     if (!applyToken) {
       markSnapshotConflict(authority, snapshot, arrival)
+
       return
     }
+
     await applySnapshotWithCurrentPreparation(
       authority,
       snapshot,

@@ -24,9 +24,11 @@ function makeEntry(index: number, overrides: Record<string, unknown> = {}): neve
 
 function mapOf(indices: readonly number[]): AppState['agentStatusByPaneKey'] {
   const map: AppState['agentStatusByPaneKey'] = {}
+
   for (const index of indices) {
     map[`tab-${index}:leaf-0`] = makeEntry(index)
   }
+
   return map
 }
 
@@ -44,20 +46,25 @@ function countJoins(run: () => string): {
   const originalSort = Array.prototype.sort
   let joins = 0
   let sorts = 0
+
   const joinSpy = vi.spyOn(Array.prototype, 'join').mockImplementation(function (
     this: unknown[],
     separator?: string
   ) {
     joins += 1
+
     return originalJoin.call(this, separator)
   })
+
   const sortSpy = vi.spyOn(Array.prototype, 'sort').mockImplementation(function (
     this: unknown[],
     compare?: (a: unknown, b: unknown) => number
   ) {
     sorts += 1
+
     return originalSort.call(this, compare)
   })
+
   try {
     return { result: run(), joins, sorts }
   } finally {
@@ -97,12 +104,14 @@ describe('agent-status projection join short circuit', () => {
     const { joins, sorts } = countJoins(() =>
       buildRuntimeMobileAgentStatusProjectionForTests(again)
     )
+
     expect(joins).toBe(0)
     expect(sorts).toBe(0)
   })
 
   it('does not rejoin accumulated previews for timestamp-only heartbeats', () => {
     let map = mapOf(Array.from({ length: 500 }, (_, index) => index))
+
     for (const paneKey of Object.keys(map)) {
       map[paneKey] = {
         ...map[paneKey],
@@ -110,15 +119,18 @@ describe('agent-status projection join short circuit', () => {
         lastAssistantMessage: 'answer '.repeat(1_000)
       }
     }
+
     const first = buildRuntimeMobileAgentStatusProjectionForTests(map)
 
     const { result, joins } = countJoins(() => {
       let projection = first
+
       for (let index = 0; index < 50; index++) {
         const paneKey = `tab-${index}:leaf-0`
         map = { ...map, [paneKey]: { ...map[paneKey], updatedAt: 30_000_001 + index } }
         projection = buildRuntimeMobileAgentStatusProjectionForTests(map)
       }
+
       return projection
     })
 
@@ -142,6 +154,7 @@ describe('agent-status projection join short circuit', () => {
     const first = buildRuntimeMobileAgentStatusProjectionForTests(map)
 
     const changed = { ...map, 'tab-1:leaf-0': makeEntry(1, { state: 'idle' }) }
+
     const { result, joins } = countJoins(() =>
       buildRuntimeMobileAgentStatusProjectionForTests(changed)
     )

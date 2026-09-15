@@ -41,6 +41,7 @@ describe('resolveSshPaneConnectGate', () => {
       tabPtyId: 'ssh:conn-1@@pty-7',
       hasLeafSessionMap: true
     })
+
     expect(gate.pendingSessionId).toBeNull()
   })
 
@@ -50,6 +51,7 @@ describe('resolveSshPaneConnectGate', () => {
       sshStatus: 'connected',
       tabPtyId: 'ssh:conn-1@@pty-7'
     })
+
     expect(gate.pendingSessionId).toBeNull()
     expect(gate.enterDeferredFlow).toBe(false)
   })
@@ -61,6 +63,7 @@ describe('resolveSshPaneConnectGate', () => {
       deferredTabSessionId: 'ssh:conn-1@@pty-2',
       tabPtyId: 'ssh:conn-1@@pty-3'
     })
+
     expect(gate.pendingSessionId).toBe('ssh:conn-1@@pty-1')
   })
 
@@ -72,6 +75,7 @@ describe('resolveSshPaneConnectGate', () => {
       sshStatus: 'connected',
       isDeferredTarget: true
     })
+
     expect(gate.enterDeferredFlow).toBe(true)
   })
 
@@ -82,6 +86,7 @@ describe('resolveSshPaneConnectGate', () => {
       ...BASE,
       connectionId: 'runtime-ssh-env-1'
     })
+
     expect(gate.enterDeferredFlow).toBe(false)
   })
 })

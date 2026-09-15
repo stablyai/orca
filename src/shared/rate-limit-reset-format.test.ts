@@ -7,7 +7,9 @@ import {
 } from './rate-limit-reset-format'
 
 const MIN = 60_000
+
 const HOUR = 60 * MIN
+
 const DAY = 24 * HOUR
 
 describe('formatResetDuration', () => {

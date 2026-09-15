@@ -4,6 +4,7 @@ import { getRepoOwnerWorktreeVisibilityDefaults } from './worktree-visibility-de
 describe('getRepoOwnerWorktreeVisibilityDefaults', () => {
   it('resolves defaults from each repository owner', () => {
     const settings = { worktreeVisibilityDefaults: { external: 'hide' as const } }
+
     const defaultsByHost = {
       local: { external: 'hide' as const },
       'runtime:show-host': { external: 'show' as const },

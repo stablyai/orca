@@ -38,12 +38,14 @@ describe('useMissingWorktreeBounce', () => {
       resolution: props.resolution,
       bounce
     })
+
     return null
   }
 
   function render(worktreeId: string, resolution: WorktreeShowResolution): void {
     act(() => {
       const element = createElement(Harness, { worktreeId, resolution })
+
       if (renderer) {
         renderer.update(element)
       } else {

@@ -55,6 +55,7 @@ export type AgentClaimProviderDouble = Record<
 /** Provider doubles + the runtime-controller registration shared by every pty IPC suite file. */
 export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
   const { mainWindow } = ctx
+
   function createMockProc(): MockPtyProcess {
     let dataHandler: ((data: string) => void) | null = null
     let exitHandler: ((event: { exitCode: number }) => void) | null = null
@@ -63,10 +64,12 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
       proc: {
         onData: vi.fn((handler: (data: string) => void) => {
           dataHandler = handler
+
           return makeDisposable()
         }),
         onExit: vi.fn((handler: (event: { exitCode: number }) => void) => {
           exitHandler = handler
+
           return makeDisposable()
         }),
         write: vi.fn(),
@@ -81,10 +84,12 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
       }
     }
   }
+
   function installDaemonTestProvider(overrides: Record<string, unknown> = {}): Mock {
     const spawn = vi.fn(async (options: { sessionId?: string }) => ({
       id: options.sessionId ?? 'daemon-pty'
     }))
+
     const provider = {
       spawn,
       write: vi.fn(),
@@ -110,7 +115,9 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
       getProfiles: vi.fn(),
       ...overrides
     }
+
     setLocalPtyProvider(provider as never)
+
     return spawn
   }
 
@@ -118,6 +125,7 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
     const spawn = vi.fn(async (options: { sessionId?: string }) => ({
       id: options.sessionId ?? 'daemon-pty'
     }))
+
     const write = vi.fn()
     const pauseProducer = vi.fn()
     const resumeProducer = vi.fn()
@@ -125,9 +133,11 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
     const shutdown = vi.fn()
     let dataHandler: ((payload: { id: string; data: string }) => void) | null = null
     let exitHandler: ((payload: { id: string; code: number }) => void) | null = null
+
     let backgroundStreamHandler:
       | ((payload: { id: string; kind: 'dataGap'; droppedChars: number }) => void)
       | null = null
+
     const getBufferSnapshot = vi.fn()
     setLocalPtyProvider({
       spawn,
@@ -150,18 +160,21 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
       revive: vi.fn(),
       onData: vi.fn((handler: (payload: { id: string; data: string }) => void) => {
         dataHandler = handler
+
         return () => {}
       }),
       onReplay: vi.fn(() => () => {}),
       onBackgroundStreamEvent: vi.fn(
         (handler: (payload: { id: string; kind: 'dataGap'; droppedChars: number }) => void) => {
           backgroundStreamHandler = handler
+
           return () => {}
         }
       ),
       getBufferSnapshot,
       onExit: vi.fn((handler: (payload: { id: string; code: number }) => void) => {
         exitHandler = handler
+
         return () => {}
       }),
       listProcesses: vi.fn(async () => []),
@@ -169,6 +182,7 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+
     return {
       spawn,
       write,
@@ -229,6 +243,7 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
     worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     agent: 'codex' as const
   }
+
   const recoveredAgentSurface = {
     worktreeId: 'repo-1::/tmp/recovered-worktree',
     tabId: '11111111-1111-4111-8111-111111111111',
@@ -252,6 +267,7 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
           attach: (ptyId: string) => Promise<boolean>
         }
       | undefined
+
     const runtime = {
       setPtyController: vi.fn((next) => {
         controller = next
@@ -261,10 +277,13 @@ export function createPtyIpcProviderFixtures(ctx: { mainWindow: unknown }) {
       registerPty: vi.fn(),
       ...runtimeOverrides
     }
+
     registerPtyHandlers(mainWindow as never, runtime as never)
+
     if (!controller) {
       throw new Error('PTY controller was not registered')
     }
+
     return controller
   }
 

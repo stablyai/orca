@@ -24,6 +24,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
@@ -31,6 +32,7 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 // rejected after the environment is pruned.
 const rpcControl = vi.hoisted(() => {
   const deferreds: { resolve: (value: unknown) => void; reject: (error: unknown) => void }[] = []
+
   return {
     deferreds,
     callRuntimeRpc: vi.fn(
@@ -44,6 +46,7 @@ const rpcControl = vi.hoisted(() => {
 
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeRpcClientModule>()
+
   return { ...actual, callRuntimeRpc: rpcControl.callRuntimeRpc }
 })
 

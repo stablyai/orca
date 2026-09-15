@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useAutomationListFocusRecovery } from './use-automation-list-focus-recovery'
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -29,6 +30,7 @@ function Harness({ rowKeys }: { rowKeys: readonly string[] }): React.JSX.Element
   const listRef = useRef<HTMLDivElement>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
   useAutomationListFocusRecovery({ rowKeys, containerRef: listRef, fallbackRef: pickerRef })
+
   return (
     <div>
       {/* The header: outside the list container, exactly as the panel lays it out. */}
@@ -53,9 +55,11 @@ function render(rowKeys: readonly string[]): void {
 
 function node(testId: string): HTMLElement {
   const found = container.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
+
   if (!found) {
     throw new Error(`no node for ${testId}`)
   }
+
   return found
 }
 

@@ -57,14 +57,18 @@ export function setRichMarkdownImageResolverContext(
   context: RichMarkdownImageResolverContext
 ): boolean {
   const storage = editor.storage as unknown as RichMarkdownImageStorage
+
   const imageStorage = storage.image ?? {
     filePath: ''
   }
+
   const previousSignature = getRichMarkdownImageContextSignature({
     filePath: imageStorage.filePath,
     runtimeContext: imageStorage.runtimeContext
   })
+
   const nextSignature = getRichMarkdownImageContextSignature(context)
+
   if (previousSignature === nextSignature) {
     return false
   }
@@ -75,9 +79,11 @@ export function setRichMarkdownImageResolverContext(
   imageStorage.runtimeContext = context.runtimeContext
   imageStorage.contextVersion = (imageStorage.contextVersion ?? 0) + 1
   storage.image = imageStorage
+
   for (const listener of imageStorage.reloadListeners ?? []) {
     listener()
   }
+
   return true
 }
 

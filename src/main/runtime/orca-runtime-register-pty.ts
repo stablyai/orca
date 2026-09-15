@@ -29,30 +29,36 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     const existingPty = this.ptysById.get(ptyId)
     const replacementHandle = binding?.terminalHandle?.trim()
     const pendingReplacement = this.pendingPtyHandleReplacementFences.get(ptyId)
+
     const pendingReplacementMatches =
       pendingReplacement !== undefined &&
       pendingReplacement.pendingRegistration &&
       binding?.incarnationId !== undefined &&
       pendingReplacement.incarnationId === binding.incarnationId
+
     const incarnationChanged =
       existingPty !== undefined &&
       binding?.incarnationId !== undefined &&
       existingPty.incarnationId !== null &&
       existingPty.incarnationId !== binding.incarnationId
+
     if (incarnationChanged || pendingReplacementMatches) {
       // A reconnect can register a replacement before inventory reports its exported handle.
       // Drop every alias for the predecessor; a newly preallocated handle is retained only when
       // the caller can prove it is the replacement's handle.
       const directHandle = this.handleByPtyId.get(ptyId)
+
       const canPreserveReplacementHandle =
         replacementHandle !== undefined &&
         replacementHandle.startsWith('term_') &&
         directHandle === replacementHandle &&
         !pendingReplacement?.staleHandles.has(replacementHandle)
+
       const invalidated = this.invalidateAllHandlesForPty(
         ptyId,
         canPreserveReplacementHandle ? replacementHandle : undefined
       )
+
       if (binding?.incarnationId) {
         this.rememberPtyHandleReplacementFence(
           ptyId,
@@ -62,14 +68,17 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
         )
       }
     }
+
     this.ptyLivenessVerdictByPtyId.delete(ptyId)
     this.terminalViewSubscribers.markSpawnPublished(ptyId)
+
     // Why: record the renderer pane identity at spawn time so a stalled graph
     // sync can't hide that a live PTY already backs a pending mobile create.
     const paneKey =
       binding && isValidTerminalTabId(binding.tabId) && isTerminalLeafId(binding.leafId)
         ? makePaneKey(binding.tabId, binding.leafId)
         : null
+
     const pty = this.recordPtyWorktree(ptyId, worktreeId, {
       connected: true,
       connectionId,
@@ -80,7 +89,9 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
       ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {}),
       ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
     })
+
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
+
     if (paneKey && binding?.incarnationId && hostScope) {
       this._orchestrationDb?.retainReplacedWorkerTerminalResources({
         paneKey,
@@ -89,7 +100,9 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
         processIncarnation: `${ptyId}:${binding.incarnationId}`
       })
     }
+
     const agentLaunchAuthority = binding?.agentLaunchAuthority
+
     if (
       agentLaunchAuthority &&
       paneKey &&
@@ -105,7 +118,9 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
       pty.launchIncarnationId = binding.incarnationId
       pty.launchAgent = agentLaunchAuthority.launchAgent
     }
+
     const providerReattachLaunchIdentity = binding?.providerReattachLaunchIdentity
+
     if (
       providerReattachLaunchIdentity &&
       paneKey &&
@@ -117,7 +132,9 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
       // Why: daemon metadata owns the surviving process; its incarnation fence restores identity without minting renderer launch authority.
       pty.launchAgent = providerReattachLaunchIdentity.launchAgent
     }
+
     const pendingIncarnation = this.pendingPtyRegistrationIncarnations.get(ptyId)
+
     if (
       pendingIncarnation === null ||
       pendingIncarnation === undefined ||
@@ -126,12 +143,15 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     ) {
       this.pendingPtyRegistrationIncarnations.delete(ptyId)
     }
+
     if (pendingReplacement !== undefined) {
       const currentFence = this.pendingPtyHandleReplacementFences.get(ptyId)
+
       if (currentFence && (pendingReplacementMatches || !binding?.incarnationId)) {
         currentFence.pendingRegistration = false
       }
     }
+
     // Why: the renderer's own PTY spawn is the reliable signal that the pending
     // mobile create's tab is live; publish its surface main-side (#7587).
     if (binding && paneKey) {
@@ -151,7 +171,9 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     if (!this.earlyExitedPtyIncarnations.has(ptyId)) {
       return
     }
+
     const exitedIncarnation = this.earlyExitedPtyIncarnations.get(ptyId) ?? null
+
     if (
       exitedIncarnation === null ||
       candidateIncarnation === undefined ||
@@ -169,6 +191,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
 
   acceptPtyIncarnationForExit(ptyId: string, incarnationId: PtyIncarnationId): void {
     const pty = this.ptysById.get(ptyId)
+
     if (pty) {
       // Why: a reconnect attach reply can prove the exit generation after stale local proof was cleared.
       pty.incarnationId = incarnationId
@@ -177,14 +200,17 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
 
   cancelPendingPtyRegistration(ptyId: string, incarnationId?: PtyIncarnationId): void {
     const pending = this.pendingPtyRegistrationIncarnations.get(ptyId)
+
     if (
       !this.pendingPtyRegistrationIncarnations.has(ptyId) ||
       (pending !== null && incarnationId !== undefined && pending !== incarnationId)
     ) {
       return
     }
+
     this.pendingPtyRegistrationIncarnations.delete(ptyId)
     const exited = this.earlyExitedPtyIncarnations.get(ptyId)
+
     if (
       exited === null ||
       exited === undefined ||
@@ -202,6 +228,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     if (this.earlyExitedPtyIncarnations.has(ptyId)) {
       const exitedIncarnation = this.earlyExitedPtyIncarnations.get(ptyId) ?? null
       const nextIncarnation = candidateIncarnation ?? null
+
       if (
         exitedIncarnation === null ||
         nextIncarnation === null ||
@@ -209,6 +236,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
       ) {
         throw new Error('agent_session_exited_during_start')
       }
+
       this.earlyExitedPtyIncarnations.delete(ptyId)
     }
   }

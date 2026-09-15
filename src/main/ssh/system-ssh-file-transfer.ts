@@ -46,12 +46,15 @@ export async function uploadDirectoryViaSystemSsh(
   options?: SystemSshOperationOptions
 ): Promise<void> {
   throwIfAborted(options?.signal)
+
   if (options?.hostPlatform && isWindowsRemoteHost(options.hostPlatform)) {
     await uploadDirectoryViaSystemSshWindows(target, localDir, remoteDir, options)
+
     return
   }
 
   const sshPath = findSystemSsh()
+
   if (!sshPath) {
     throw new Error('No system ssh binary found. Install OpenSSH to use system SSH transport.')
   }
@@ -60,7 +63,9 @@ export async function uploadDirectoryViaSystemSsh(
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true
   })
+
   const remoteCommand = `mkdir -p ${shellEscape(remoteDir)} && tar -xzf - -C ${shellEscape(remoteDir)}`
+
   const sshExtract = spawn(
     sshPath,
     [...buildSshArgs(target, options), wrapRemoteCommandForPosixShell(remoteCommand)],
@@ -72,6 +77,7 @@ export async function uploadDirectoryViaSystemSsh(
 
   let tarResult: ProcessResult | null = null
   let sshResult: ProcessResult | null = null
+
   try {
     ;[tarResult, sshResult] = await awaitWithSystemSshAbort(
       options?.signal,
@@ -94,6 +100,7 @@ export async function uploadDirectoryViaSystemSsh(
   if (tarResult?.stderr.trim()) {
     console.warn(`[ssh-system] ${tarResult.label} stderr: ${tarResult.stderr.trim()}`)
   }
+
   if (sshResult?.stderr.trim()) {
     console.warn(`[ssh-system] ${sshResult.label} stderr: ${sshResult.stderr.trim()}`)
   }
@@ -116,11 +123,14 @@ async function uploadDirectoryViaSystemSshWindows(
   options: SystemSshOperationOptions
 ): Promise<void> {
   const hostPlatform = options.hostPlatform
+
   if (!hostPlatform) {
     throw new Error('Windows system SSH upload requires a remote host platform')
   }
+
   const plan = await collectWindowsUploadPlan(localDir, remoteDir, hostPlatform, options.signal)
   await createWindowsUploadDirectories(target, plan.directories, options)
+
   for (const file of plan.files) {
     throwIfAborted(options.signal)
     // Reuses the single-file upload: it already opens O_NOFOLLOW, verifies the source did not
@@ -150,20 +160,25 @@ async function collectWindowsUploadPlan(
 ): Promise<WindowsUploadPlan> {
   plan.directories.push(remoteDir)
   const dirEntries = await readdir(localDir, { withFileTypes: true })
+
   for (const entry of dirEntries) {
     throwIfAborted(signal)
     const localPath = pathJoin(localDir, entry.name)
     const remotePath = joinRemotePath(hostPlatform, remoteDir, entry.name)
     const statResult = await lstat(localPath)
+
     if (statResult.isSymbolicLink() || (!statResult.isFile() && !statResult.isDirectory())) {
       continue
     }
+
     if (statResult.isDirectory()) {
       await collectWindowsUploadPlan(localPath, remotePath, hostPlatform, signal, plan)
       continue
     }
+
     plan.files.push({ localPath, remotePath })
   }
+
   return plan
 }
 
@@ -182,10 +197,12 @@ async function createWindowsUploadDirectories(
 ): Promise<void> {
   let batch: string[] = []
   let batchBytes = 0
+
   const flush = async (): Promise<void> => {
     if (batch.length === 0) {
       return
     }
+
     const pending = batch
     const payload = JSON.stringify(batch)
     batch = []
@@ -201,6 +218,7 @@ async function createWindowsUploadDirectories(
           if (!isSftpPathUnsupportedError(error)) {
             throw error
           }
+
           await createWindowsUploadDirectoriesViaPowerShell(target, payload, options)
         }
       },
@@ -208,14 +226,18 @@ async function createWindowsUploadDirectories(
       isSftpUnavailableError
     )
   }
+
   for (const directory of directories) {
     const entryBytes = Buffer.byteLength(directory) + 4
+
     if (batch.length > 0 && batchBytes + entryBytes > WINDOWS_STDIN_WRITE_CHUNK_BYTES) {
       await flush()
     }
+
     batch.push(directory)
     batchBytes += entryBytes
   }
+
   await flush()
 }
 
@@ -228,14 +250,17 @@ async function createWindowsUploadDirectoriesViaPowerShell(
     wrapCommand: false,
     ...getSystemSshBuildArgsFromOperationOptions(options)
   })
+
   const closePromise = awaitWithSystemSshAbort(
     options.signal,
     () => channel.close(),
     waitForChannelClose(channel, 'windows relay upload mkdir', WINDOWS_STDIN_WRITE_TIMEOUT_MS)
   )
+
   if (!options.signal?.aborted) {
     channel.stdin.end(payload)
   }
+
   await closePromise
 }
 

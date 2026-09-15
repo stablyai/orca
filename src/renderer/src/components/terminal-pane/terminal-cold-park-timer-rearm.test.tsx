@@ -13,6 +13,7 @@ import { act, useEffect, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const park = vi.hoisted(() => ({
@@ -23,6 +24,7 @@ const park = vi.hoisted(() => ({
 
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
+
   const useAppStore = create(() => ({
     pendingStartupByTabId: {} as Record<string, unknown>,
     ptyIdsByTabId: {} as Record<string, string[]>,
@@ -33,6 +35,7 @@ vi.mock('../../store', async () => {
     sleepingAgentSessionsByPaneKey: {} as Record<string, unknown>,
     tabsByWorktree: {} as Record<string, TerminalTab[]>
   }))
+
   return { useAppStore }
 })
 
@@ -49,6 +52,7 @@ const COLD_PARK_DELAY_MS = 60_000
 vi.mock('./terminal-parking-e2e-overrides', () => ({
   getTerminalParkingPolicyOverrides: () => {
     park.effectRuns += 1
+
     return { coldParkDelayMs: 60_000, hotRetainMs: 60_000 }
   }
 }))
@@ -57,9 +61,13 @@ import { useAppStore } from '../../store'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
 const TAB_IDS = ['tab-a', 'tab-b', 'tab-c', 'tab-d', 'tab-e'] as const
+
 const EMPTY_ASSIGNMENTS = new Map<string, { groupId: string; isActiveInGroup: boolean }>()
+
 const EMPTY_PORTALS: never[] = []
+
 const TITLE_FLOOD_WRITES = 40
+
 const TICK_MS = 10_000
 
 type ParkingStoreState = { tabsByWorktree: Record<string, TerminalTab[]> }
@@ -91,6 +99,7 @@ function ParkingHost({ writes }: { writes: number }): null {
   const terminalTabs = useAppStore(
     (state) => (state as ParkingStoreState).tabsByWorktree[park.worktreeId]
   ) as TerminalTab[]
+
   latestParkedTabIds = useTerminalTabColdParking({
     worktreeId: park.worktreeId,
     terminalTabs,
@@ -107,13 +116,16 @@ function ParkingHost({ writes }: { writes: number }): null {
     if (written >= writes) {
       return
     }
+
     publishTitle(written)
     setWritten((current) => current + 1)
   }, [writes, written])
+
   return null
 }
 
 let container: HTMLDivElement
+
 let root: Root | undefined
 
 beforeEach(() => {
@@ -147,10 +159,12 @@ function firstParkedElapsedMs(options: { publishTitles: boolean }): number {
     act(() => vi.advanceTimersByTime(TICK_MS))
     // Both runs re-render every tick; only the flooded one publishes titles.
     act(() => root?.render(<ParkingHost writes={options.publishTitles ? tick : 0} />))
+
     if (latestParkedTabIds.size > 0) {
       return tick * TICK_MS
     }
   }
+
   throw new Error('never parked')
 }
 

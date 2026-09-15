@@ -33,6 +33,7 @@ function isUnknownMethod(error: unknown): boolean {
   if (!error || typeof error !== 'object' || !('code' in error)) {
     return false
   }
+
   return error.code === -32601 || error.code === 'method_not_found'
 }
 
@@ -47,19 +48,25 @@ export function createSessionSearchClient(
     searchSessions: async (request) => {
       const parsed = AiVaultSearchRequestSchema.parse(request)
       let raw: unknown
+
       try {
         raw = await call('aiVault.searchSessions', parsed)
       } catch (error) {
         if (isUnknownMethod(error)) {
           return { kind: 'unavailable', reason: 'no-service' }
         }
+
         throw error
       }
+
       const result = AiVaultSearchResponseSchema.parse(raw)
+
       if (result.kind !== 'results') {
         return result
       }
+
       const { debug, ...fields } = result
+
       return {
         ...fields,
         hits: result.hits.map((hit) => redactForTransport(hit, transport)),
@@ -76,6 +83,7 @@ export function createSessionSearchClient(
         if (isUnknownMethod(error)) {
           return unavailableSessionSearchStatus()
         }
+
         throw error
       }
     }

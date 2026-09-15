@@ -5,6 +5,7 @@ import { useAutomationSourceHostAvailability } from './use-automation-source-hos
 /** Keeps source-host probing behind the page controller's small state contract. */
 export function useAutomationSourceAvailability(rows: readonly AutomationListRow[]) {
   const automationSourceHostAvailabilityByRowKey = useAutomationSourceHostAvailability(rows)
+
   return { automationSourceHostAvailabilityByRowKey }
 }
 

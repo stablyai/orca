@@ -4,13 +4,16 @@ import { PromiseSettlementWaiters } from './promise-settlement-waiters'
 describe('PromiseSettlementWaiters', () => {
   it('removes ten thousand aborted callers while one anchor remains pending', async () => {
     let resolveBase: (value: number) => void = () => {}
+
     const basePromise = new Promise<number>((resolve) => {
       resolveBase = resolve
     })
+
     const thenSpy = vi.spyOn(basePromise, 'then')
     const waiters = new PromiseSettlementWaiters(basePromise)
     const anchor = waiters.wait()
     const controllers = Array.from({ length: 10_000 }, () => new AbortController())
+
     const cancelled = controllers.map((controller) =>
       waiters.wait({ signal: controller.signal }).catch((error) => error)
     )
@@ -18,6 +21,7 @@ describe('PromiseSettlementWaiters', () => {
     for (const controller of controllers) {
       controller.abort()
     }
+
     await Promise.all(cancelled)
 
     expect(waiters.waiterCount).toBe(1)
@@ -29,16 +33,20 @@ describe('PromiseSettlementWaiters', () => {
 
   it('removes timed-out callers and clears their timers on settlement', async () => {
     vi.useFakeTimers()
+
     try {
       let resolveBase: () => void = () => {}
+
       const waiters = new PromiseSettlementWaiters(
         new Promise<void>((resolve) => {
           resolveBase = resolve
         })
       )
+
       const timedOut = waiters
         .wait({ timeoutMs: 10, createTimeoutError: () => new Error('late') })
         .catch((error) => error)
+
       const active = waiters.wait({ timeoutMs: 100 })
 
       await vi.advanceTimersByTimeAsync(10)

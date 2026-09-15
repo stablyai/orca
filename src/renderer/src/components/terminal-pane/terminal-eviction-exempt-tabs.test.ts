@@ -7,9 +7,13 @@ vi.mock('@/store', () => ({
 import { selectEvictionExemptTerminalTabLayoutKey } from './terminal-eviction-exempt-tabs'
 
 const TAB_ID = 'tab-1'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const PTY_ID = 'repo::/worktree@@session-1'
+
 const TABS = [{ id: TAB_ID, ptyId: PTY_ID }]
 
 function layoutState(ptyIdsByLeafId: Record<string, string>) {

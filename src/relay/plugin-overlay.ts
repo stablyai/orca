@@ -35,17 +35,24 @@ import type { PiAgentKind } from '../shared/pi-agent-kind'
 type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
 
 const RELAY_HOOKS_DIR = '.orca-relay'
+
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
+
 const PI_OVERLAY_SUBDIR_BY_KIND: Record<LegacyOverlayAgentKind, string> = {
   pi: 'pi-overlays',
   omp: 'omp-overlays'
 }
+
 const OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
+
 const PI_EXTENSION_FILE = 'orca-agent-status.ts'
+
 const PI_AGENT_SUBDIR = 'agent'
+
 // Why: bare-shell OMP still needs ORCA_OMP_STATUS_EXTENSION without mkdir ~/.omp.
 // Mirror local userData/omp-managed-status-extension under the relay home root.
 const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
+
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
 
 function withOrcaManagedPiExtensionMarker(source: string): string {
@@ -53,6 +60,7 @@ function withOrcaManagedPiExtensionMarker(source: string): string {
     ? source
     : `// ${ORCA_MANAGED_EXTENSION_MARKER}\n${source}`
 }
+
 // Why: source-dir resolution is keyed off the launching agent (Pi or OMP).
 // Both consume `PI_CODING_AGENT_DIR` but default to different `~/.<kind>/agent`
 // paths on the remote disk. The renderer-chosen launch command flows in via
@@ -133,12 +141,15 @@ export class PluginOverlayManager {
     if (typeof sources.opencodePluginSource === 'string') {
       this.opencodePluginSource = sources.opencodePluginSource
     }
+
     if (typeof sources.piExtensionSource === 'string') {
       this.piExtensionSources.pi = withOrcaManagedPiExtensionMarker(sources.piExtensionSource)
     }
+
     if (typeof sources.ompExtensionSource === 'string') {
       this.piExtensionSources.omp = withOrcaManagedPiExtensionMarker(sources.ompExtensionSource)
     }
+
     if (typeof sources.primeAgentExtensionSource === 'string') {
       this.piExtensionSources['prime-agent'] = withOrcaManagedPiExtensionMarker(
         sources.primeAgentExtensionSource
@@ -154,11 +165,13 @@ export class PluginOverlayManager {
     if (kind) {
       return this.getPiExtensionSource(kind) !== null
     }
+
     return Object.values(this.piExtensionSources).some((source) => source !== null)
   }
 
   private getPiExtensionSource(kind: PiAgentKind): string | null {
     const source = this.piExtensionSources[kind]
+
     return source ?? (kind === 'omp' ? this.piExtensionSources.pi : null)
   }
 
@@ -169,6 +182,7 @@ export class PluginOverlayManager {
       if (entry.name === 'plugins') {
         const isSymlink = entry.isSymbolicLink()
         let isLinkPointingToDir = false
+
         if (isSymlink) {
           try {
             isLinkPointingToDir = statSync(sourcePath).isDirectory()
@@ -181,15 +195,18 @@ export class PluginOverlayManager {
           const resolvedSource = isLinkPointingToDir ? realpathSync(sourcePath) : sourcePath
           const overlayPluginsDir = join(overlayDir, 'plugins')
           mkdirSync(overlayPluginsDir, { recursive: true })
+
           for (const pluginEntry of readdirSync(resolvedSource, { withFileTypes: true })) {
             if (pluginEntry.name === OPENCODE_PLUGIN_FILE) {
               continue
             }
+
             mirrorEntry(
               join(resolvedSource, pluginEntry.name),
               join(overlayPluginsDir, pluginEntry.name)
             )
           }
+
           continue
         }
       }
@@ -202,11 +219,13 @@ export class PluginOverlayManager {
     const pluginsDir = join(overlayDir, 'plugins')
     mkdirSync(pluginsDir, { recursive: true })
     const pluginPath = join(pluginsDir, OPENCODE_PLUGIN_FILE)
+
     try {
       unlinkSync(pluginPath)
     } catch {
       // Fresh overlay or no same-named stale symlink.
     }
+
     writeFileSync(pluginPath, this.opencodePluginSource!)
   }
 
@@ -220,25 +239,32 @@ export class PluginOverlayManager {
     if (!this.opencodePluginSource || !isUsableId(id)) {
       return null
     }
+
     const dir = join(this.opencodeRoot, safeDirName(id))
+
     try {
       safeRemoveOverlay(dir, this.opencodeRoot)
       mkdirSync(dir, { recursive: true })
+
       if (existingConfigDir) {
         if (!existsSync(existingConfigDir)) {
           return null
         }
+
         // Why: OPENCODE_CONFIG_DIR is a single config root. Mirror the user's
         // remote root into the overlay before adding Orca's plugin so status
         // reporting does not hide their auth, models, keybinds, or plugins.
         this.mirrorOpenCodeConfig(existingConfigDir, dir)
       }
+
       this.writeOpenCodePlugin(dir)
+
       return dir
     } catch (err) {
       process.stderr.write(
         `[plugin-overlay] failed to materialize OpenCode overlay: ${err instanceof Error ? err.message : String(err)}\n`
       )
+
       return null
     }
   }
@@ -257,18 +283,23 @@ export class PluginOverlayManager {
 
   private writeOmpManagedStatusExtension(extensionSource: string): string | null {
     const fallbackDir = join(this.homeDir, RELAY_HOOKS_DIR, OMP_MANAGED_STATUS_EXTENSION_DIR)
+
     try {
       mkdirSync(fallbackDir, { recursive: true })
       const fallbackPath = join(fallbackDir, PI_EXTENSION_FILE)
+
       if (!this.canOverwritePiExtension(fallbackPath)) {
         return null
       }
+
       writeFileSync(fallbackPath, extensionSource)
+
       return fallbackPath
     } catch (err) {
       process.stderr.write(
         `[plugin-overlay] failed to write OMP managed status extension: ${err instanceof Error ? err.message : String(err)}\n`
       )
+
       return null
     }
   }
@@ -288,31 +319,42 @@ export class PluginOverlayManager {
     options?: { materializeDefaultHome?: boolean }
   ): MaterializePiResult | null {
     const extensionSource = this.getPiExtensionSource(kind)
+
     if (!extensionSource || !isUsableId(id)) {
       return null
     }
+
     try {
       const sourceAgentDir = existingAgentDir ?? this.getDefaultPiAgentDir(kind)
+
       if (existingAgentDir && !existsSync(existingAgentDir)) {
         return null
       }
+
       const materializeDefaultHome = options?.materializeDefaultHome !== false
+
       if (!existingAgentDir && !existsSync(sourceAgentDir) && !materializeDefaultHome) {
         // Why: match local titlebar-extension-service bare-shell OMP policy —
         // status wrapper only, never mkdir ~/.omp for unused agents.
         if (kind === 'omp') {
           const statusExtensionPath = this.writeOmpManagedStatusExtension(extensionSource)
+
           return statusExtensionPath ? { statusExtensionPath } : null
         }
+
         return null
       }
+
       const extensionsDir = join(sourceAgentDir, 'extensions')
       mkdirSync(extensionsDir, { recursive: true })
       const extensionPath = join(extensionsDir, PI_EXTENSION_FILE)
+
       if (!this.canOverwritePiExtension(extensionPath)) {
         return null
       }
+
       writeFileSync(extensionPath, extensionSource)
+
       return {
         sourceAgentDir,
         statusExtensionPath: extensionPath
@@ -321,6 +363,7 @@ export class PluginOverlayManager {
       process.stderr.write(
         `[plugin-overlay] failed to install ${kind} extension: ${err instanceof Error ? err.message : String(err)}\n`
       )
+
       return null
     }
   }
@@ -333,7 +376,9 @@ export class PluginOverlayManager {
     if (!isUsableId(id)) {
       return
     }
+
     const safe = safeDirName(id)
+
     // Why: sweep all overlay roots (OpenCode + each Pi-kind) because PTY exit
     // doesn't know which kind materialized this id. Per-root scoping inside
     // safeRemoveOverlay keeps each call bounded to its own tree.

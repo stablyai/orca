@@ -34,8 +34,11 @@ vi.mock('../pwsh', () => ({
 // tests run on non-Windows CI. The real resolver (which skips the Store App
 // Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('../providers/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -48,6 +51,7 @@ vi.mock('../providers/windows-powershell-executable', () => ({
 
 vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
+
   return {
     ...actual,
     resolveUnixShellPath: resolveUnixShellPathMock,
@@ -59,6 +63,7 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
 vi.mock('../providers/agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
     const value = await resolveAgentForegroundProcessMock(...args)
+
     return value && typeof value === 'object' && 'available' in value
       ? value
       : { available: true, processName: value }
@@ -78,6 +83,7 @@ import { createPtySubprocess } from './pty-subprocess'
 import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
 
 const POWERSHELL_OSC133_COMMAND_ARGS = ['-NoLogo', '-NoExit', '-EncodedCommand', expect.any(String)]
+
 const CODEX_LAUNCH_PREFLIGHT = 'C:\\Program Files\\Orca\\orca.exe'
 
 describe('createPtySubprocess', () => {
@@ -250,6 +256,7 @@ describe('createPtySubprocess', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
 
     let handle: Awaited<ReturnType<typeof createPtySubprocess>>
+
     try {
       handle = await createPtySubprocess({
         sessionId: 'test',
@@ -280,6 +287,7 @@ describe('createPtySubprocess', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
 
     let handle: Awaited<ReturnType<typeof createPtySubprocess>>
+
     try {
       handle = await createPtySubprocess({
         sessionId: 'test',
@@ -378,6 +386,7 @@ describe('createPtySubprocess', () => {
       if (options.cwd === '/c/Users/alice/project') {
         throw new Error('Cannot create process, error code: 267')
       }
+
       return proc
     })
 
@@ -428,6 +437,7 @@ describe('createPtySubprocess', () => {
       } else {
         process.env.ORCA_APP_VERSION = previousVersion
       }
+
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }

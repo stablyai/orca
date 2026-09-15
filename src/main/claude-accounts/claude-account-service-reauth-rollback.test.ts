@@ -49,6 +49,7 @@ describe('ClaudeAccountService credential capture', () => {
 
   afterEach(() => {
     restorePlatform()
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
     }
@@ -63,6 +64,7 @@ describe('ClaudeAccountService credential capture', () => {
     writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
     writeFileSync(join(managedAuthPath, '.credentials.json'), '{"old":true}\n', 'utf-8')
     writeFileSync(join(managedAuthPath, 'oauth-account.json'), '{"oldOauth":true}\n', 'utf-8')
+
     let settings = {
       claudeManagedAccounts: [
         {
@@ -79,13 +81,16 @@ describe('ClaudeAccountService credential capture', () => {
       ],
       activeClaudeManagedAccountId: 'account-1'
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {}),
@@ -93,13 +98,16 @@ describe('ClaudeAccountService credential capture', () => {
         throw new Error('materialize failed')
       })
     }
+
     const rateLimits = { evictInactiveClaudeCache: vi.fn(), refreshForClaudeAccountChange: vi.fn() }
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,
       runtimeAuth as never
     )
+
     ;(
       service as unknown as {
         runClaudeLoginAndCapture(): Promise<{
@@ -136,6 +144,7 @@ describe('ClaudeAccountService credential capture', () => {
     vi.mocked(writeManagedClaudeKeychainCredentials)
       .mockResolvedValueOnce()
       .mockRejectedValueOnce(new Error('managed restore failed'))
+
     let settings = {
       claudeManagedAccounts: [
         {
@@ -152,13 +161,16 @@ describe('ClaudeAccountService credential capture', () => {
       ],
       activeClaudeManagedAccountId: 'account-1'
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {}),
@@ -166,13 +178,16 @@ describe('ClaudeAccountService credential capture', () => {
         throw new Error('materialize failed')
       })
     }
+
     const rateLimits = { evictInactiveClaudeCache: vi.fn(), refreshForClaudeAccountChange: vi.fn() }
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,
       runtimeAuth as never
     )
+
     ;(
       service as unknown as {
         runClaudeLoginAndCapture(): Promise<{
@@ -210,6 +225,7 @@ describe('ClaudeAccountService credential capture', () => {
     vi.mocked(writeManagedClaudeKeychainCredentials)
       .mockRejectedValueOnce(new Error('new credentials failed'))
       .mockRejectedValueOnce(new Error('credential rollback failed'))
+
     let settings = {
       claudeManagedAccounts: [
         {
@@ -226,25 +242,31 @@ describe('ClaudeAccountService credential capture', () => {
       ],
       activeClaudeManagedAccountId: 'account-1'
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {}),
       syncForCurrentSelection: vi.fn()
     }
+
     const rateLimits = { evictInactiveClaudeCache: vi.fn(), refreshForClaudeAccountChange: vi.fn() }
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,
       runtimeAuth as never
     )
+
     ;(
       service as unknown as {
         runClaudeLoginAndCapture(): Promise<{
@@ -286,6 +308,7 @@ describe('ClaudeAccountService credential capture', () => {
     writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
     writeFileSync(join(managedAuthPath, '.credentials.json'), '{"old":true}\n', 'utf-8')
     writeFileSync(oauthPath, '{"oldOauth":true}\n', 'utf-8')
+
     let settings = {
       claudeManagedAccounts: [
         {
@@ -302,13 +325,16 @@ describe('ClaudeAccountService credential capture', () => {
       ],
       activeClaudeManagedAccountId: 'account-1'
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {}),
@@ -318,13 +344,16 @@ describe('ClaudeAccountService credential capture', () => {
         throw new Error('materialize failed')
       })
     }
+
     const rateLimits = { evictInactiveClaudeCache: vi.fn(), refreshForClaudeAccountChange: vi.fn() }
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,
       runtimeAuth as never
     )
+
     ;(
       service as unknown as {
         runClaudeLoginAndCapture(): Promise<{
@@ -357,6 +386,7 @@ describe('ClaudeAccountService credential capture', () => {
     writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
     writeFileSync(join(managedAuthPath, '.credentials.json'), '{"old":true}\n', 'utf-8')
     writeFileSync(join(managedAuthPath, 'oauth-account.json'), '{"oldOauth":true}\n', 'utf-8')
+
     let settings = {
       claudeManagedAccounts: [
         {
@@ -373,28 +403,35 @@ describe('ClaudeAccountService credential capture', () => {
       ],
       activeClaudeManagedAccountId: null
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
       syncForCurrentSelection: vi.fn(async () => {}),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
+
     const rateLimits = {
       evictInactiveClaudeCache: vi.fn(),
       refreshForClaudeAccountChange: vi.fn(async () => ({ accounts: [], activeAccountId: null }))
     }
+
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       store as never,
       rateLimits as never,
       runtimeAuth as never
     )
+
     ;(
       service as unknown as {
         runClaudeLoginAndCapture(): Promise<{

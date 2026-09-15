@@ -28,6 +28,7 @@ type PatchResult =
     }
 
 const SNAPSHOT_SCHEMA_VERSION = 1
+
 const PRESENCE_TTL_MS = 45_000
 
 function emptySession(): Record<string, unknown> {
@@ -42,6 +43,7 @@ function emptySession(): Record<string, unknown> {
 
 function sanitizeNamespace(namespace: unknown): string {
   const raw = typeof namespace === 'string' && namespace.trim() ? namespace.trim() : 'default'
+
   return raw.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 160) || 'default'
 }
 
@@ -71,6 +73,7 @@ export class WorkspaceSessionHandler {
 
   private read(namespace: string): RemoteWorkspaceSnapshot {
     const path = this.snapshotPath(namespace)
+
     if (!existsSync(path)) {
       return {
         namespace,
@@ -83,6 +86,7 @@ export class WorkspaceSessionHandler {
 
     try {
       const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<RemoteWorkspaceSnapshot>
+
       return {
         namespace,
         revision:
@@ -129,11 +133,13 @@ export class WorkspaceSessionHandler {
     const namespace = sanitizeNamespace(params.namespace)
     const current = this.read(namespace)
     const baseRevision = Number(params.baseRevision)
+
     if (Number.isFinite(baseRevision) && baseRevision !== current.revision) {
       return { ok: false, reason: 'stale-revision', snapshot: current }
     }
 
     const patch = params.patch as { kind?: unknown; session?: unknown } | undefined
+
     if (
       !patch ||
       patch.kind !== 'replace-session' ||
@@ -151,6 +157,7 @@ export class WorkspaceSessionHandler {
       schemaVersion: SNAPSHOT_SCHEMA_VERSION,
       session: patch.session as Record<string, unknown>
     }
+
     this.write(snapshot)
     publishWorkspaceSnapshotChange(
       this.dispatcher,
@@ -161,6 +168,7 @@ export class WorkspaceSessionHandler {
       },
       namespace
     )
+
     return { ok: true, snapshot }
   }
 
@@ -172,11 +180,13 @@ export class WorkspaceSessionHandler {
     this.clientsByNamespace.set(namespace, clients)
 
     const now = Date.now()
+
     for (const [id, client] of clients) {
       if (now - client.lastSeenAt > PRESENCE_TTL_MS) {
         clients.delete(id)
       }
     }
+
     if (clientId) {
       clients.set(clientId, {
         clientId,

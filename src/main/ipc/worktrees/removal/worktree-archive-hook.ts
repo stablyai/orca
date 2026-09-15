@@ -16,6 +16,7 @@ export async function getArchiveHooksForRemoval(repo: Repo): Promise<OrcaHooks |
   }
 
   const fsProvider = getSshFilesystemProvider(repo.connectionId)
+
   if (!fsProvider) {
     return getEffectiveHooksFromConfig(repo, null)
   }
@@ -23,6 +24,7 @@ export async function getArchiveHooksForRemoval(repo: Repo): Promise<OrcaHooks |
   try {
     const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
     const yamlHooks = result.isBinary ? null : parseOrcaYaml(result.content)
+
     return getEffectiveHooksFromConfig(repo, yamlHooks)
   } catch {
     return getEffectiveHooksFromConfig(repo, null)
@@ -41,6 +43,7 @@ export async function runRemoteArchiveHook(
   const provider = requireSshGitProvider(repo.connectionId)
   const env = getSetupRunnerEnvVars(repo, worktreePath)
   const isWindowsRemote = isWindowsAbsolutePathLike(worktreePath)
+
   const result = await provider
     .execNonInteractive(
       isWindowsRemote ? 'cmd.exe' : '/bin/bash',
@@ -57,6 +60,7 @@ export async function runRemoteArchiveHook(
       timedOut: false,
       spawnError: error instanceof Error ? error.message : String(error)
     }))
+
   const output = [
     result.stdout,
     result.stderr,

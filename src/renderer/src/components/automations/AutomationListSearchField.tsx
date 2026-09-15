@@ -32,6 +32,7 @@ export function AutomationListSearchField({
 }: AutomationListSearchFieldProps): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
   const hasText = query !== ''
+
   const tooLargeMessage = isTooLarge
     ? translate(
         'auto.components.automations.AutomationListSearchField.tooLong',
@@ -75,19 +76,25 @@ export function AutomationListSearchField({
             // Why: ArrowUp/Down should step the visible list instead of moving the input caret.
             event.preventDefault()
             onArrowNavigate(event.key)
+
             return
           }
+
           if (onEnter && shouldHandleAutomationListSearchEnterKey(event)) {
             event.preventDefault()
             onEnter()
+
             return
           }
+
           if (event.key !== 'Escape' || event.nativeEvent.isComposing) {
             return
           }
+
           if (!hasText) {
             return
           }
+
           event.preventDefault()
           onClear()
         }}

@@ -7,7 +7,9 @@ import type { SearchableWorkspaceTab } from './workspace-tab-palette-search'
 import { createPaletteSearchContext } from './palette-match/palette-ranking'
 
 const REPO_NAME = 'octo/rocket'
+
 const WORKTREE_NAME = 'Aurora Workspace'
+
 const BRANCH_NAME = 'main'
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -68,6 +70,7 @@ function makeEntry({
   secondaryText?: string
 } = {}): SearchableWorkspaceTab {
   const secondarySearchTexts = secondaryText ? [secondaryText] : []
+
   return {
     tab: makeTab(id, contentType, createdAt) as SearchableWorkspaceTab['tab'],
     worktree,
@@ -116,6 +119,7 @@ describe('searchWorkspaceTabs lastActiveAt', () => {
       createdAt: 1000,
       worktree: makeWorktree({ lastActivityAt: 5000 })
     })
+
     const [result] = searchWorkspaceTabs([entry], '')
     expect(result.lastActiveAt).toBe(1000)
   })
@@ -125,6 +129,7 @@ describe('searchWorkspaceTabs lastActiveAt', () => {
       worktree: makeWorktree({ lastActivityAt: 1000 }),
       agentLastActivityAt: 9000
     })
+
     const [result] = searchWorkspaceTabs([entry], '')
     expect(result.lastActiveAt).toBe(9000)
   })
@@ -134,6 +139,7 @@ describe('searchWorkspaceTabs lastActiveAt', () => {
       worktree: makeWorktree({ lastActivityAt: 9000 }),
       agentLastActivityAt: 1000
     })
+
     const [result] = searchWorkspaceTabs([entry], '')
     expect(result.lastActiveAt).toBe(1000)
   })
@@ -143,6 +149,7 @@ describe('searchWorkspaceTabs lastActiveAt', () => {
       createdAt: 4000,
       worktree: makeWorktree({ lastActivityAt: 1000 })
     })
+
     const [result] = searchWorkspaceTabs([entry], '')
     expect(result.lastActiveAt).toBe(4000)
   })
@@ -152,6 +159,7 @@ describe('searchWorkspaceTabs lastActiveAt', () => {
       id: 'tab-focused',
       createdAt: 1000
     })
+
     entry.tab.lastFocusedAt = 6000
     const [result] = searchWorkspaceTabs([entry], '')
     expect(result.lastActiveAt).toBe(6000)
@@ -163,6 +171,7 @@ describe('searchWorkspaceTabs lastActiveAt', () => {
       createdAt: 1000,
       agentLastActivityAt: 3000
     })
+
     entry.tab.lastFocusedAt = 8000
 
     const [result] = searchWorkspaceTabs([entry], '')
@@ -176,6 +185,7 @@ describe('searchWorkspaceTabs lastActiveAt', () => {
       createdAt: 1000,
       agentLastActivityAt: 8000
     })
+
     entry.tab.lastFocusedAt = 3000
 
     const [result] = searchWorkspaceTabs([entry], '')
@@ -208,6 +218,7 @@ describe('searchWorkspaceTabs ranking', () => {
   it.each(['atl', 'atlas'])('keeps the Atlas reference fixture order for %s', (query) => {
     const now = 100 * 24 * 60 * 60 * 1000
     const age = (milliseconds: number): number => now - milliseconds
+
     const entries = [
       makeEntry({
         id: 'old-prefix-2d',

@@ -22,6 +22,7 @@ describe('mobile subagent roster bounds', () => {
     if (block.type !== 'subagent-group') {
       throw new Error('expected a subagent-group block')
     }
+
     expect(block.agents[0]?.id).not.toBe(block.agents[1]?.id)
     expect(block.agents[0]?.id).toHaveLength(512)
     // The label is display text and still clips.

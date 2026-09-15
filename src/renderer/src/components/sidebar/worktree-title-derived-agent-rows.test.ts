@@ -6,6 +6,7 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildWorktreeAgentRows } from './worktree-agent-rows'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
+
 const LEAF_ID_2 = '88888888-8888-4888-8888-888888888888'
 
 function makeTab(id: string, overrides: Partial<TerminalTab> = {}): TerminalTab {
@@ -96,6 +97,7 @@ describe('buildTitleDerivedAgentRows', () => {
     ['!', 'waiting']
   ])('retains hook-less OMP rows for owner marker %s', (marker, state) => {
     const title = `OMP ${marker} Run a long task`
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent: 'omp' })],
       entries: [],
@@ -105,6 +107,7 @@ describe('buildTitleDerivedAgentRows', () => {
       terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
       now: 2000
     })
+
     expect(rows.map((row) => [row.agentType, row.state, row.entry.terminalTitle])).toEqual([
       ['omp', state, title]
     ])
@@ -149,6 +152,7 @@ describe('buildTitleDerivedAgentRows', () => {
   it('uses runtime orchestration metadata for title-derived worker rows', () => {
     const parentPaneKey = makePaneKey('tab-parent', LEAF_ID_1)
     const childPaneKey = makePaneKey('tab-child', LEAF_ID_2)
+
     const rows = applyAgentRowLineage(
       buildWorktreeAgentRows({
         tabs: [makeTab('tab-parent'), makeTab('tab-child')],
@@ -224,6 +228,7 @@ describe('buildTitleDerivedAgentRows', () => {
 
   it('attributes a spinner-only title to the launched agent when the title has no identity', () => {
     const launchAgent: TuiAgent = 'codex'
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent })],
       entries: [],
@@ -244,6 +249,7 @@ describe('buildTitleDerivedAgentRows', () => {
 
   it('keeps explicit title identity over the launched agent', () => {
     const launchAgent: TuiAgent = 'claude'
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent })],
       entries: [],
@@ -278,6 +284,7 @@ describe('buildTitleDerivedAgentRows', () => {
 
   it('does not turn generic Codex-launched task titles into Claude Code rows', () => {
     const launchAgent: TuiAgent = 'codex'
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent })],
       entries: [],

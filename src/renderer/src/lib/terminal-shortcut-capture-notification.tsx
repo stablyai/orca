@@ -12,6 +12,7 @@ import { useAppStore } from '../store'
 import { translate } from '@/i18n/i18n'
 
 const STORAGE_PREFIX = 'orca.terminalShortcutCapturedNotice.'
+
 const NOTICE_DURATION_MS = 20_000
 
 function hasShownNotice(actionId: KeybindingActionId): boolean {
@@ -50,18 +51,22 @@ export function showTerminalShortcutCaptureNotification({
   keybindings?: KeybindingOverrides
 }): void {
   const definition = getKeybindingDefinition(actionId)
+
   if (!definition || !isKeybindingPotentialTerminalConflict(definition)) {
     return
   }
+
   if (hasShownNotice(actionId)) {
     return
   }
+
   markNoticeShown(actionId)
 
   const bindingLabel = formatKeybindingList(
     getEffectiveKeybindingsForAction(actionId, platform, keybindings),
     platform
   )
+
   // Why: this toast stays up longer than normal, so keep it compact while still
   // exposing the captured shortcut and the edit path.
   toast.message(

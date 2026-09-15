@@ -15,6 +15,7 @@ import { SERVE_COMMAND_SPECS } from './specs/serve'
 const UNTRANSLATED_GLOBAL_FLAGS = new Set(['help', 'pairing-code', 'environment'])
 
 const serveSpec = SERVE_COMMAND_SPECS.find((spec) => spec.path.join(' ') === 'serve')
+
 const translatedFlags = [...new Set(serveSpec?.allowedFlags ?? [])].filter(
   (flag) => !UNTRANSLATED_GLOBAL_FLAGS.has(flag)
 )
@@ -26,14 +27,17 @@ describe('serve flag parity between the CLI spec and the Electron argv rewrite',
 
   it.each(translatedFlags)('rewrites CLI-form --%s into the --serve-* form', (flag) => {
     const takesValue = !BOOLEAN_FLAGS.has(flag)
+
     const argv = takesValue
       ? ['/AppRun', 'serve', `--${flag}`, 'value']
       : ['/AppRun', 'serve', `--${flag}`]
+
     const expected = takesValue
       ? ['/AppRun', '--serve', `--serve-${flag}`, 'value']
       : ['/AppRun', '--serve', `--serve-${flag}`]
 
     expect(normalizeServeModeArgv(argv)).toEqual(expected)
+
     if (takesValue) {
       // The equals form is the other shape `orca serve` accepts; normalize it to the internal shape.
       expect(normalizeServeModeArgv(['/AppRun', 'serve', `--${flag}=value`])).toEqual(expected)
@@ -48,6 +52,7 @@ describe('serve flag parity between the CLI spec and the Electron argv rewrite',
         `--${flag}=false`
       ])
     }
+
     // Idempotent: `orca serve` spawns the app already in this shape, and the rewrite runs over it too.
     expect(normalizeServeModeArgv(expected)).toEqual(expected)
   })
@@ -56,10 +61,12 @@ describe('serve flag parity between the CLI spec and the Electron argv rewrite',
     // Why source text: serveOrcaApp spawns a real process; keeping both names visible here makes
     // the rewrite/parser contract fail loudly if either side drifts.
     const launchSource = readFileSync(join(process.cwd(), 'src/cli/runtime/launch.ts'), 'utf8')
+
     const serveOptionsSource = readFileSync(
       join(process.cwd(), 'src/main/startup/serve-options.ts'),
       'utf8'
     )
+
     const start = serveOptionsSource.indexOf('export function getServeOptions(')
     // Why bound the anchor: an unresolved indexOf slices to EOF and passes vacuously.
     expect(start).toBeGreaterThanOrEqual(0)

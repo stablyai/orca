@@ -13,6 +13,7 @@ import {
 // under test so a drifted constant cannot make this reference silently disagree for a reason
 // unrelated to the change.
 const BUCKET_MS = AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS_FOR_TESTS
+
 function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
   return JSON.stringify(
     Object.entries(map)
@@ -72,9 +73,11 @@ describe('mobile agent-status projection equivalence', () => {
     shapes.push({ 'tab-0:leaf-0': makeEntry(0) })
     shapes.push({ 'tab-0:leaf-0': makeEntry(0, { workingMode: 'monitoring' }) })
     const many: AppState['agentStatusByPaneKey'] = {}
+
     for (let index = 0; index < 12; index += 1) {
       many[`tab-${index}:leaf-0`] = makeEntry(index)
     }
+
     shapes.push(many)
     // Optional fields absent entirely, which the ?? null fallbacks must cover.
     shapes.push({
@@ -107,6 +110,7 @@ describe('mobile agent-status projection equivalence', () => {
     // be observable in the projection — a sub-bucket updatedAt nudge is not, so a
     // stale-entry reuse bug would slip through.
     let current = many
+
     for (let round = 0; round < 4; round += 1) {
       current = {
         ...current,
@@ -129,9 +133,11 @@ describe('mobile agent-status projection equivalence', () => {
     // Keys where locale and code-unit order disagree: 'tab-1:' sorts after 'tab-10:' by code unit
     // (':' > '0') and before it by locale, and case/accent handling differs too.
     const map: AppState['agentStatusByPaneKey'] = {}
+
     for (const paneKey of ['tab-1:leaf-0', 'tab-10:leaf-0', 'B:leaf-0', 'a:leaf-0', 'á:leaf-0']) {
       map[paneKey] = makeEntry(0, { paneKey })
     }
+
     const localeCompareOrderedEntries = JSON.parse(
       JSON.stringify(
         Object.entries(map)
@@ -139,9 +145,11 @@ describe('mobile agent-status projection equivalence', () => {
           .map(([paneKey]) => paneKey)
       )
     ) as string[]
+
     const projected = (
       JSON.parse(buildRuntimeMobileAgentStatusProjectionForTests(map)) as { paneKey: string }[]
     ).map((entry) => entry.paneKey)
+
     expect([...projected].sort()).toEqual([...localeCompareOrderedEntries].sort())
     expect(projected).toHaveLength(localeCompareOrderedEntries.length)
   })

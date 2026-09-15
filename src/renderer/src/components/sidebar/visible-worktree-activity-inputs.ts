@@ -3,6 +3,7 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { createWorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 
 export type TerminalActivityTab = Pick<TerminalTab, 'id'>
+
 export type BrowserActivityTab = Pick<BrowserWorkspace, 'id'>
 
 export function createVisibleWorktreeTerminalActivityProjection(

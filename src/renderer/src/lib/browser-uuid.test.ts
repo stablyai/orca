@@ -20,6 +20,7 @@ describe('createBrowserUuid', () => {
         for (let index = 0; index < bytes.length; index += 1) {
           bytes[index] = index
         }
+
         return bytes
       }
     })

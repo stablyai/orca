@@ -119,6 +119,7 @@ describe('getWorkItemDetails PR file viewed state', () => {
     getPRChecksMock.mockResolvedValue([])
     ghExecFileAsyncMock.mockImplementation((args: string[]) => {
       const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+
       if (query.includes('viewerViewedState')) {
         return Promise.resolve({
           stdout: JSON.stringify({
@@ -139,6 +140,7 @@ describe('getWorkItemDetails PR file viewed state', () => {
           })
         })
       }
+
       if (query.includes('participants')) {
         return Promise.resolve({
           stdout: JSON.stringify({
@@ -146,7 +148,9 @@ describe('getWorkItemDetails PR file viewed state', () => {
           })
         })
       }
+
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
+
       if (endpoint === 'repos/stablyai/orca/pulls/42') {
         return Promise.resolve({
           stdout: JSON.stringify({
@@ -156,6 +160,7 @@ describe('getWorkItemDetails PR file viewed state', () => {
           })
         })
       }
+
       if (endpoint === 'repos/stablyai/orca/pulls/42/files?per_page=100') {
         return Promise.resolve({
           stdout: JSON.stringify([
@@ -178,6 +183,7 @@ describe('getWorkItemDetails PR file viewed state', () => {
           ])
         })
       }
+
       return Promise.reject(new Error(`unexpected gh call: ${args.join(' ')}`))
     })
 
@@ -239,6 +245,7 @@ describe('getWorkItemDetails PR file viewed state', () => {
     )
     ghExecFileAsyncMock.mockImplementation((args: string[]) => {
       const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+
       if (query.includes('viewerViewedState')) {
         return Promise.resolve({
           stdout: JSON.stringify({
@@ -253,6 +260,7 @@ describe('getWorkItemDetails PR file viewed state', () => {
           })
         })
       }
+
       if (query.includes('participants')) {
         return Promise.resolve({
           stdout: JSON.stringify({
@@ -260,7 +268,9 @@ describe('getWorkItemDetails PR file viewed state', () => {
           })
         })
       }
+
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
+
       if (endpoint === 'repos/stablyai/orca/pulls/42') {
         return Promise.resolve({
           stdout: JSON.stringify({
@@ -270,9 +280,11 @@ describe('getWorkItemDetails PR file viewed state', () => {
           })
         })
       }
+
       if (endpoint === 'repos/stablyai/orca/pulls/42/files?per_page=100') {
         return Promise.resolve({ stdout: '[]' })
       }
+
       return Promise.reject(new Error(`unexpected gh call: ${args.join(' ')}`))
     })
 

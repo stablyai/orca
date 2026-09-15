@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const handlers = new Map<string, (event: unknown, args: unknown) => Promise<unknown>>()
+
 const { handleMock, streamMock, sweepMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   streamMock: vi.fn(),
@@ -12,12 +13,15 @@ vi.mock('electron', () => ({
   ipcMain: { handle: handleMock },
   app: { getPath: () => '/user-data' }
 }))
+
 vi.mock('./runtime-upload-file-stream', () => ({
   streamExternalFileToRuntime: streamMock
 }))
+
 vi.mock('./runtime-upload-temp-sweep', () => ({
   sweepAbandonedRuntimeUploadTempPath: sweepMock
 }))
+
 vi.mock('../../shared/runtime-environment-store', () => ({
   resolveEnvironment: (_userDataPath: string, selector: string) => ({
     id: selector === 'env-alias' ? 'env-1' : selector
@@ -75,6 +79,7 @@ describe('fs:uploadExternalFileToRuntime', () => {
       expect(args.userDataPath).toBe('/user-data')
       expect(args.signal.aborted).toBe(false)
       expect(listenerCount(sender)).toBe(3)
+
       return { byteLength: 42 }
     })
 

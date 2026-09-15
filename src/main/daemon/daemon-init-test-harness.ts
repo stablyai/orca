@@ -27,9 +27,13 @@ export type DaemonInitMocks = DaemonInitMockState &
   }
 
 export const FAKE_USER_DATA_PATH = '/fake/userData'
+
 export const FAKE_RUNTIME_DIR = join(FAKE_USER_DATA_PATH, 'daemon')
+
 export const FAKE_APP_PATH = '/fake/app'
+
 export const FAKE_APP_OUT_MAIN_PATH = join(FAKE_APP_PATH, 'out', 'main')
+
 export const FAKE_DAEMON_ENTRY_PATH = join(FAKE_APP_OUT_MAIN_PATH, 'daemon-entry.js')
 
 // Why: we only care about runRestartDaemon's observable sequencing/identity invariants, so every non-daemon-init dependency is a minimal stub.
@@ -40,26 +44,33 @@ function createDaemonInitMockState(): DaemonInitMockState {
 
   const probeSocketExistsMock = vi.fn((_path?: string) => false)
   const writeFileSyncMock = vi.fn()
+
   // Why: readFileSync throws by default so legacyDaemonProcessMayBeAlive treats every legacy pid file as unreadable (pre-fix cleanup behavior).
   const readFileSyncMock = vi.fn((): string => {
     throw new Error('ENOENT')
   })
+
   const unlinkSyncMock = vi.fn()
   const forkMock = vi.fn()
+
   const netConnectMock = vi.fn((): MockProbeSocket => {
     // Why: stub the socket so probeSocket's 'error' path fires and cleanupDaemonForProtocol's alive=false branch runs without side effects.
     const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+
     return {
       on(event: string, cb: () => void) {
         handlers[event]?.push(cb)
+
         if (event === 'error') {
           // Fire after microtask so destroy()/resolve ordering matches real net
           queueMicrotask(() => cb())
         }
+
         return this
       },
       removeListener(event: string, cb: () => void) {
         handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+
         return this
       },
       destroy() {}
@@ -72,14 +83,18 @@ function createDaemonInitMockState(): DaemonInitMockState {
   const getMacDaemonTccAttributionHealthMock = vi.fn(async () => 'unknown')
   const getDaemonLaunchIdentityMock = vi.fn(() => 'match')
   const isDaemonStaleForCurrentBundleMock = vi.fn(() => false)
+
   const killStaleDaemonMock = vi.fn(async () => ({
     killed: true,
     liveOwnerSurvived: false
   }))
+
   const getProcessStartedAtMsMock = vi.fn((): number | null => 1_000_000)
+
   const parseDaemonPidFileMock = vi.fn(
     (): { pid: number; startedAtMs: number | null } | null => null
   )
+
   const replaceDaemonPidFileMock = vi.fn(() => true)
   const getDaemonCommandLineMock = vi.fn(async (_pid: number): Promise<string | null> => null)
   const unlinkOwnedDaemonPidFileMock = vi.fn(() => true)
@@ -90,6 +105,7 @@ function createDaemonInitMockState(): DaemonInitMockState {
     const child = forkMock.mock.results.at(-1)?.value as { pid?: unknown } | undefined
     const launchNonceIndex = Array.isArray(args) ? args.indexOf('--launch-nonce') : -1
     const launchNonce = launchNonceIndex >= 0 ? args[launchNonceIndex + 1] : undefined
+
     return typeof child?.pid === 'number' && typeof launchNonce === 'string'
       ? {
           pid: child.pid,
@@ -120,6 +136,7 @@ function createDaemonInitMockState(): DaemonInitMockState {
   const adapterInstances: MockAdapter[] = []
   // Why: adapters are built inside initDaemonPtyProvider, so tests set this before init to make listSessions report live sessions.
   const defaultListSessionsSessions: { sessionId: string }[] = []
+
   const listProcessesControl: {
     current: null | (() => Promise<{ sessionId: string }[]>)
   } = { current: null }
@@ -150,6 +167,7 @@ function createDaemonInitMockState(): DaemonInitMockState {
     onReplay: vi.fn(() => () => {}),
     onExit: vi.fn(() => () => {})
   }
+
   const getLocalPtyProviderMock = vi.fn(() => localFallbackProvider)
   const setLocalPtyProviderMock = vi.fn()
   const unbindLocalProviderListenersMock = vi.fn()

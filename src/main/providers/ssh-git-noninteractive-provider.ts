@@ -60,10 +60,13 @@ export class SshGitNoninteractiveProvider extends SshGitReadProvider {
   async cancelNonInteractiveExec(cwd: string, operation?: string): Promise<void> {
     const queue = this.nonInteractiveExecQueues.get(this.nonInteractiveLaneKey(cwd, operation))
     const queuedEntry = queue?.find((entry) => !entry.started && !entry.canceled)
+
     if (queuedEntry) {
       queuedEntry.canceled = true
+
       return
     }
+
     await this.cancelActiveNonInteractiveExec(cwd, operation)
   }
 
@@ -107,6 +110,7 @@ export class SshGitNoninteractiveProvider extends SshGitReadProvider {
     const queue = this.nonInteractiveExecQueues.get(laneKey) ?? []
     const previous = queue.at(-1)?.done ?? Promise.resolve()
     let releaseEntry!: () => void
+
     const entry: NonInteractiveExecQueueEntry = {
       started: false,
       canceled: false,
@@ -120,15 +124,20 @@ export class SshGitNoninteractiveProvider extends SshGitReadProvider {
         ),
       release: () => releaseEntry()
     }
+
     queue.push(entry)
     this.nonInteractiveExecQueues.set(laneKey, queue)
+
     const abortEntry = (): void => {
       if (!entry.started) {
         entry.canceled = true
+
         return
       }
+
       void this.cancelActiveNonInteractiveExec(cwd, operation)
     }
+
     if (signal?.aborted) {
       entry.canceled = true
     } else {
@@ -136,6 +145,7 @@ export class SshGitNoninteractiveProvider extends SshGitReadProvider {
     }
 
     await previous.catch(() => {})
+
     try {
       if (entry.canceled) {
         return {
@@ -146,7 +156,9 @@ export class SshGitNoninteractiveProvider extends SshGitReadProvider {
           canceled: true
         }
       }
+
       entry.started = true
+
       return (await this.mux.request('agent.execNonInteractive', payload, {
         timeoutMs: payload.timeoutMs + NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS
       })) as RemoteCommitMessageExecResult
@@ -155,9 +167,11 @@ export class SshGitNoninteractiveProvider extends SshGitReadProvider {
       entry.release()
       const currentQueue = this.nonInteractiveExecQueues.get(laneKey)
       const entryIndex = currentQueue?.indexOf(entry) ?? -1
+
       if (entryIndex >= 0) {
         currentQueue?.splice(entryIndex, 1)
       }
+
       if (currentQueue?.length === 0) {
         this.nonInteractiveExecQueues.delete(laneKey)
       }

@@ -18,6 +18,7 @@ const rendererPage: RuntimeMobileSessionBrowserTab = {
   canGoForward: false,
   isActive: false
 }
+
 const clientPage: RuntimeMobileSessionBrowserTab = {
   ...rendererPage,
   id: 'client',
@@ -30,6 +31,7 @@ const clientPage: RuntimeMobileSessionBrowserTab = {
     pageHostGeneration: 1
   }
 }
+
 const snapshot: RuntimeMobileSessionTabsSnapshot = {
   worktree: 'wt',
   publicationEpoch: 'renderer:1',
@@ -51,12 +53,14 @@ function reconcile(
   existing: RuntimeMobileSessionTabsSnapshot = snapshot
 ): RuntimeMobileSessionTabsSnapshot | undefined {
   const storeMobileSessionSnapshot = vi.fn()
+
   const runtime = OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs.prototype as unknown as {
     reconcileHeadlessMobileSessionBrowserTabs(
       worktreeId: string,
       existing: RuntimeMobileSessionTabsSnapshot
     ): void
   }
+
   runtime.reconcileHeadlessMobileSessionBrowserTabs.call(
     {
       buildHeadlessMobileSessionBrowserTabs: () => host.live ?? [],
@@ -67,6 +71,7 @@ function reconcile(
     'wt',
     existing
   )
+
   return storeMobileSessionSnapshot.mock.calls[0]?.[1]
 }
 
@@ -127,6 +132,7 @@ it('does not republish when a client row merely sits before a renderer row', () 
 
 it('keeps the renderer publication epoch when selecting a client-hosted browser tab', () => {
   const storeMobileSessionSnapshot = vi.fn()
+
   const runtime = OrcaRuntimeWithCloseStructuredAgentSessionTab.prototype as unknown as {
     markHeadlessBrowserSessionTabActive(
       worktreeId: string,

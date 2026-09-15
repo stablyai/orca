@@ -77,25 +77,32 @@ function compareEmptyQueryResults(
   if (a.isCurrentTab !== b.isCurrentTab) {
     return a.isCurrentTab ? -1 : 1
   }
+
   if (a.isCurrentWorktree !== b.isCurrentWorktree) {
     return a.isCurrentWorktree ? -1 : 1
   }
+
   if (a.score !== b.score) {
     return a.score - b.score
   }
+
   const worktreeCmp = compareText(a.worktreeName, b.worktreeName)
+
   if (worktreeCmp !== 0) {
     return worktreeCmp
   }
+
   return compareText(a.title, b.title)
 }
 
 function positionScore(entry: SearchableWorkspaceTab): number {
   // Why: current tab, then current worktree, then rendered tab order.
   const base = entry.worktreeSortIndex * 100 + entry.groupSortIndex * 10 + entry.tabSortIndex
+
   if (entry.isCurrentTab) {
     return base - 4000
   }
+
   return entry.isCurrentWorktree ? base - 1000 : base
 }
 
@@ -113,6 +120,7 @@ function baseResult(
 ): WorkspaceTabPaletteSearchResult {
   const executionHostId = getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree)
   const activity = preparePaletteActivity(resolveWorkspaceTabLastActiveAt(entry), context)
+
   return {
     ...(executionHostId ? { executionHostId } : {}),
     paletteIdentity: encodePaletteIdentity([
@@ -157,13 +165,16 @@ function matchEntry(
   fieldMode: 'all' | 'omnibox'
 ): WorkspaceTabPaletteSearchResult | null {
   const unrestrictedMatch = matchPaletteTabDocument(entry.document, query)
+
   if (!unrestrictedMatch) {
     // Why kept separate: agent text is not part of the structured field set, so it
     // never contributes to token coverage — it only recovers a row nothing else found.
     const snippet = matchWorkspaceTabAgentSnippet(entry.agentMetadata, query)
+
     if (!snippet) {
       return null
     }
+
     return {
       ...baseResult(entry, context),
       secondaryText: snippet.text,
@@ -180,6 +191,7 @@ function matchEntry(
       : matchPaletteTabDocument(entry.document, query, {
           isFieldAllowed: isOmniboxPaletteTabFieldAllowed
         })
+
   if (!match) {
     return null
   }
@@ -188,6 +200,7 @@ function matchEntry(
     match.secondary !== null
       ? (entry.secondarySearchTexts[match.secondary.index] ?? entry.secondaryText)
       : entry.secondaryText
+
   const alias =
     match.typeAlias !== null ? (entry.typeSearchAliases ?? [])[match.typeAlias.index] : undefined
 
@@ -224,17 +237,22 @@ export function searchWorkspaceTabs(
   } = {}
 ): WorkspaceTabPaletteSearchResult[] {
   const context = options.context ?? createPaletteSearchContext(Date.now())
+
   if (isPaletteTabQueryRejected(query)) {
     return []
   }
+
   const prepared = preparePaletteTabQuery(query)
+
   if (!prepared) {
     return entries.map((entry) => baseResult(entry, context)).sort(compareEmptyQueryResults)
   }
 
   const results: WorkspaceTabPaletteSearchResult[] = []
+
   for (const entry of entries) {
     const result = matchEntry(entry, prepared, context, options.fieldMode ?? 'all')
+
     if (result) {
       results.push(result)
     }

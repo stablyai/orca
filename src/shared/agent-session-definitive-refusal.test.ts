@@ -31,6 +31,7 @@ describe('definitive agent-session create refusals', () => {
     const definitive = AGENT_SESSION_WIRE_REFUSAL_CODES.filter((code) =>
       isDefinitiveAgentSessionCreateRefusal(code)
     )
+
     expect(definitive).toEqual(['structured_agent_session_unsupported'])
   })
 

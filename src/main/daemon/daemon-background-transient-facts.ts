@@ -55,6 +55,7 @@ export class BackgroundTransientFactRelay {
     if (background === this.isBackgrounded(sessionId)) {
       return false
     }
+
     if (background) {
       this.trackersBySessionId.set(
         sessionId,
@@ -73,6 +74,7 @@ export class BackgroundTransientFactRelay {
     } else {
       this.disposeTracker(sessionId)
     }
+
     return true
   }
 
@@ -82,17 +84,21 @@ export class BackgroundTransientFactRelay {
    *  partial tail contains no complete sequence, so this can never fire. */
   seedSessionScanState(sessionId: string, partialEscapeTailAnsi: string): void {
     let mode2031State = this.mode2031ReplyScanStateBySessionId.get(sessionId)
+
     if (!mode2031State && partialEscapeTailAnsi.length > 0) {
       mode2031State = scanMode2031ReplyDecision(
         INITIAL_MODE_2031_REPLY_SCAN_STATE,
         partialEscapeTailAnsi
       ).state
+
       if (mode2031State.tail.length > 0) {
         this.mode2031ReplyScanStateBySessionId.set(sessionId, mode2031State)
       }
     }
+
     mode2031State ??= INITIAL_MODE_2031_REPLY_SCAN_STATE
     const scanSeedAnsi = mode2031State.tail || partialEscapeTailAnsi
+
     if (scanSeedAnsi.length > 0) {
       this.trackersBySessionId.get(sessionId)?.handleChunk(scanSeedAnsi, {
         titleScanData: '',
@@ -105,17 +111,20 @@ export class BackgroundTransientFactRelay {
    *  facts must be captured even when the chunk is later keep-tail dropped. */
   onSessionData(sessionId: string, data: string): void {
     const previousMode2031State = this.mode2031ReplyScanStateBySessionId.get(sessionId)
+
     if (previousMode2031State || data.includes('\x1b') || data.includes('\x9b')) {
       const mode2031Result = scanMode2031ReplyDecision(
         previousMode2031State ?? INITIAL_MODE_2031_REPLY_SCAN_STATE,
         data
       )
+
       if (mode2031Result.state.tail.length > 0 || mode2031Result.state.pendingSubscribe) {
         this.mode2031ReplyScanStateBySessionId.set(sessionId, mode2031Result.state)
       } else {
         this.mode2031ReplyScanStateBySessionId.delete(sessionId)
       }
     }
+
     // titleScanData:'' skips title extraction (titles stay main-authoritative)
     // and keeps the stale-working-title timer permanently unarmed — only the
     // four transient scanners consume the chunk.
@@ -137,6 +146,7 @@ export class BackgroundTransientFactRelay {
     for (const sessionId of Array.from(this.trackersBySessionId.keys())) {
       this.disposeTracker(sessionId)
     }
+
     this.mode2031ReplyScanStateBySessionId.clear()
   }
 

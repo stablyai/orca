@@ -39,6 +39,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
@@ -65,6 +66,7 @@ import {
 } from './store-test-helpers'
 
 const WT1 = 'repo1::/path/wt1'
+
 const WT2 = 'repo1::/path/wt2'
 
 function makeWorkspace(id: string, worktreeId: string): BrowserWorkspace {

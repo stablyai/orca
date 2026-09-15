@@ -22,6 +22,7 @@ export function createFileWatchEventBatcher(
     if (!timer) {
       return
     }
+
     clearTimeout(timer)
     timer = null
   }
@@ -31,9 +32,11 @@ export function createFileWatchEventBatcher(
     const nextEvents = events.splice(0)
     overflowed = false
     firstEventAt = 0
+
     if (nextEvents.length === 0) {
       return
     }
+
     emit({ type: 'changed', worktree, events: nextEvents })
   }
 
@@ -42,8 +45,10 @@ export function createFileWatchEventBatcher(
       if (nextEvents.length === 0) {
         return
       }
+
       if (!overflowed) {
         const incomingOverflow = nextEvents.find((event) => event.kind === 'overflow')
+
         if (incomingOverflow) {
           events = [incomingOverflow]
           overflowed = true
@@ -63,18 +68,24 @@ export function createFileWatchEventBatcher(
           }
         }
       }
+
       const now = Date.now()
+
       if (firstEventAt === 0) {
         firstEventAt = now
       }
+
       if (now - firstEventAt >= WATCH_BATCH_MAX_WAIT_MS) {
         flush()
+
         return
       }
+
       clearTimer()
       // Why: remote file-watch events cross the runtime WebSocket before the
       // renderer refreshes the tree. Match local watcher batching here.
       timer = setTimeout(flush, WATCH_BATCH_TRAILING_MS)
+
       if (typeof timer.unref === 'function') {
         timer.unref()
       }

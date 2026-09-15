@@ -15,6 +15,7 @@ describe('remote runtime shared-control transport boundary', () => {
     (root) => {
       const offenders = collectTypeScriptFiles(root).filter((file) => {
         const source = readFileSync(file, 'utf8')
+
         return collectModuleSpecifiers(file, source).some((specifier) =>
           FORBIDDEN_REMOTE_SERVER_IMPORTS.some((pattern) => specifier.includes(pattern))
         )
@@ -28,17 +29,21 @@ describe('remote runtime shared-control transport boundary', () => {
 function collectTypeScriptFiles(root: string): string[] {
   const entries = readdirSync(root)
   const files: string[] = []
+
   for (const entry of entries) {
     const path = join(root, entry)
     const stat = statSync(path)
+
     if (stat.isDirectory()) {
       files.push(...collectTypeScriptFiles(path))
       continue
     }
+
     if (path.endsWith('.ts') || path.endsWith('.tsx')) {
       files.push(path)
     }
   }
+
   return files
 }
 
@@ -54,6 +59,7 @@ function collectModuleSpecifiers(fileName: string, source: string): string[] {
     ) {
       specifiers.push(node.moduleSpecifier.text)
     }
+
     if (
       ts.isImportTypeNode(node) &&
       ts.isLiteralTypeNode(node.argument) &&
@@ -61,6 +67,7 @@ function collectModuleSpecifiers(fileName: string, source: string): string[] {
     ) {
       specifiers.push(node.argument.literal.text)
     }
+
     if (
       ts.isCallExpression(node) &&
       isModuleLoader(node.expression) &&
@@ -69,10 +76,12 @@ function collectModuleSpecifiers(fileName: string, source: string): string[] {
     ) {
       specifiers.push(node.arguments[0].text)
     }
+
     ts.forEachChild(node, visit)
   }
 
   visit(file)
+
   return specifiers
 }
 

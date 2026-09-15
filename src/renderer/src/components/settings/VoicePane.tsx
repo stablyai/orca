@@ -82,6 +82,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         }
       })
       .catch(() => {})
+
     return () => {
       cancelled = true
     }
@@ -91,6 +92,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
     const cleanup = window.api.speech.onDownloadProgress(() => {
       refreshModelStates()
     })
+
     return cleanup
   }, [refreshModelStates])
 
@@ -135,6 +137,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   }
 
   const selectedModel = catalog.find((m) => m.id === voiceSettings.sttModel)
+
   const showOpenAiSettingsRow =
     voiceSettings.openAiApiKeyConfigured ||
     selectedModel?.provider === 'openai' ||
@@ -149,6 +152,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
 
   const saveOpenAiApiKey = async (): Promise<void> => {
     setOpenAiKeyPending(true)
+
     try {
       await window.api.speech.saveOpenAiApiKey(openAiApiKeyDraft)
       updateVoiceSettings({
@@ -180,6 +184,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
 
   const clearOpenAiApiKey = async (): Promise<void> => {
     setOpenAiKeyPending(true)
+
     try {
       await window.api.speech.clearOpenAiApiKey()
       updateVoiceSettings({

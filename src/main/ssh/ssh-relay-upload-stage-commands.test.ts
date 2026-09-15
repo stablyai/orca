@@ -26,10 +26,15 @@ import {
 } from './ssh-relay-upload-stage-commands'
 
 const posix = getRemoteHostPlatform('linux-x64')
+
 const windows = getRemoteHostPlatform('win32-x64')
+
 const owner = '.sftp-namespace-123e4567e89b12d3a456426614174000'
+
 const roots: string[] = []
+
 const configuredPowerShell = process.env.ORCA_POWERSHELL_EXECUTABLE
+
 const powerShellExecutable = [
   configuredPowerShell,
   ...(process.platform === 'win32' ? ['pwsh.exe', 'powershell.exe'] : ['pwsh'])
@@ -43,6 +48,7 @@ const powerShellExecutable = [
 
 function decodePowerShellCommand(command: string): string {
   const encoded = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/u)?.[1] ?? ''
+
   return Buffer.from(encoded, 'base64').toString('utf16le')
 }
 
@@ -51,6 +57,7 @@ function createPool(): string {
   roots.push(root)
   const pool = join(root, 'pool')
   mkdirSync(pool)
+
   return pool
 }
 
@@ -59,6 +66,7 @@ function runCommand(host: RemoteHostPlatform, command: string, prefix = '') {
     if (!powerShellExecutable) {
       throw new Error('PowerShell is unavailable')
     }
+
     return spawnSync(
       powerShellExecutable,
       [
@@ -70,6 +78,7 @@ function runCommand(host: RemoteHostPlatform, command: string, prefix = '') {
       { encoding: 'utf8' }
     )
   }
+
   return spawnSync('/bin/sh', ['-c', `${prefix}\n${command}`], { encoding: 'utf8' })
 }
 
@@ -86,19 +95,25 @@ function createStage(
   expect(reservation.status, reservation.stderr).toBe(0)
   const slot = join(pool, `slot-${index}`)
   const stage = join(pool, `${state}-${index}`)
+
   if (stage !== slot) {
     expect(existsSync(stage)).toBe(false)
     renameSync(slot, stage)
   }
+
   const marker = join(stage, '.orca-upload-owner')
+
   if (stageOwner !== reservedOwner) {
     writeFileSync(marker, stageOwner)
   }
+
   writeFileSync(join(stage, 'payload', 'relay.js'), `relay-${index}`)
+
   if (stale) {
     const old = new Date(Date.now() - 60 * 60_000)
     utimesSync(marker, old, old)
   }
+
   return stage
 }
 
@@ -126,14 +141,17 @@ describe.each([
   (_label, host) => {
     it.each([0, 1, 7, 8, 9])('bounds reservation with %i occupied entries', (count) => {
       const pool = createPool()
+
       for (let index = 0; index < Math.min(count, RELAY_UPLOAD_STAGE_SLOT_COUNT); index += 1) {
         createStage(host, pool, index)
       }
+
       if (count > RELAY_UPLOAD_STAGE_SLOT_COUNT) {
         mkdirSync(join(pool, 'foreign-extra'))
       }
 
       const result = runCommand(host, reserveRelayUploadStageCommand(host, pool, owner))
+
       if (count < RELAY_UPLOAD_STAGE_SLOT_COUNT) {
         expect(result.status, result.stderr).toBe(0)
         expect(parseReservedRelayUploadStage(host, pool, owner, result.stdout).slotName).toBe(
@@ -150,6 +168,7 @@ describe.each([
       const destination = join(pool, 'destination')
       mkdirSync(destination)
       createStage(host, pool, 0)
+
       const stage = parseReservedRelayUploadStage(
         host,
         pool,
@@ -182,6 +201,7 @@ describe.each([
         rmSync(join(stagePath, 'payload', 'relay.js'))
         writeFileSync(foreign, 'foreign')
         symlinkSync(foreign, join(stagePath, 'payload', 'relay.js'))
+
         const stage = parseReservedRelayUploadStage(
           host,
           pool,
@@ -238,12 +258,14 @@ describe('POSIX ownership race fencing', () => {
     const destination = join(pool, 'destination')
     mkdirSync(destination)
     createStage(posix, pool, 0)
+
     const stage = parseReservedRelayUploadStage(
       posix,
       pool,
       owner,
       `__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0`
     )
+
     const prefix = [
       'raced=0',
       'mv() {',
@@ -275,12 +297,14 @@ describe('POSIX ownership race fencing', () => {
     mkdirSync(foreign)
     writeFileSync(join(foreign, 'sentinel'), 'alive')
     createStage(posix, pool, 0)
+
     const stage = parseReservedRelayUploadStage(
       posix,
       pool,
       owner,
       `__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0`
     )
+
     const prefix = [
       'raced=0',
       'mv() {',
@@ -312,12 +336,14 @@ describe.runIf(powerShellExecutable)(
       const destination = join(pool, 'destination')
       mkdirSync(destination)
       createStage(windows, pool, 0)
+
       const stage = parseReservedRelayUploadStage(
         windows,
         pool,
         owner,
         `__ORCA_UPLOAD_STAGE_SLOT__${owner}:slot-0`
       )
+
       const prefix = [
         '$script:raced = $false',
         'function Move-Item {',

@@ -20,11 +20,13 @@ export async function assertExplicitWorkerTerminalUsable(args: {
   const explicitTerminal = await runtime.showTerminal(terminal)
   const targetPane = runtime.getTerminalPaneKey(terminal)
   const callerPane = coordinatorPane ?? runtime.getTerminalPaneKey(from)
+
   // A structured coordinator has no terminal to show, so its own identity is the raw handle plus
   // the pane key; showing `from` unconditionally would throw for exactly those callers.
   const coordinatorHandle = isStructuredWorkerHandle(from)
     ? from
     : (await runtime.showTerminal(from)).handle
+
   if (
     explicitTerminal.handle === coordinatorHandle ||
     (targetPane !== null && targetPane === callerPane)
@@ -34,12 +36,14 @@ export async function assertExplicitWorkerTerminalUsable(args: {
       `Terminal ${terminal} is this coordinator's own terminal. Pass --terminal for a different agent pane, or omit it so worker-start creates one.`
     )
   }
+
   if (explicitTerminal.worktreeId !== resolvedWorktreeId) {
     throw new OrchestrationError(
       'terminal_worktree_mismatch',
       `Terminal ${terminal} does not belong to worktree ${resolvedWorktreeId}.`
     )
   }
+
   if (!(await runtime.isTerminalRunningAgent(terminal))) {
     throw new OrchestrationError(
       'agent_unconfigured',

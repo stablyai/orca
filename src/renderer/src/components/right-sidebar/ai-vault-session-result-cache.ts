@@ -30,11 +30,14 @@ export function readCachedAiVaultSessionResult(args: {
   scopePaths: readonly string[]
 }): AiVaultListResult | null {
   const cached = cachedSessionResults.get(args.key)
+
   if (!cached || !aiVaultSessionDepthCovers(cached.limit, args.limit)) {
     return null
   }
+
   cachedSessionResults.delete(args.key)
   cachedSessionResults.set(args.key, cached)
+
   return truncateAiVaultListResult(cached.result, args.limit, args.scopePaths)
 }
 
@@ -53,21 +56,26 @@ export function cacheAiVaultSessionResult(args: {
     }
   } else {
     const cached = cachedSessionResults.get(args.key)
+
     if (cached && aiVaultSessionDepthCovers(cached.limit, args.limit)) {
       return
     }
   }
+
   cachedSessionResults.delete(args.key)
   cachedSessionResults.set(args.key, {
     executionHostScope: args.executionHostScope,
     limit: args.limit,
     result: args.result
   })
+
   while (cachedSessionResults.size > MAX_CACHED_SESSION_SCOPES) {
     const oldestKey = cachedSessionResults.keys().next().value
+
     if (oldestKey === undefined) {
       break
     }
+
     cachedSessionResults.delete(oldestKey)
   }
 }

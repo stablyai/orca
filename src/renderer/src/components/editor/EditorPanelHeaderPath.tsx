@@ -17,6 +17,7 @@ import { useEditorHeaderFileRename } from './editor-header-file-rename'
 import { getEditorHeaderCopyState } from './editor-header'
 
 const isMac = navigator.userAgent.includes('Mac')
+
 const isLinux = navigator.userAgent.includes('Linux')
 
 /** Platform-appropriate label: macOS -> Finder, Windows -> File Explorer, Linux -> Files */
@@ -58,6 +59,7 @@ export function EditorPanelHeaderPath({
   const canCopyHeaderPath = headerCopyState.copyText !== null
   const isVirtualEditorTab = activeFile.mode === 'check-details'
   const markdownPreviewShortcutLabel = useShortcutLabel('editor.markdownPreview')
+
   const {
     canRename,
     currentFileName,
@@ -71,6 +73,7 @@ export function EditorPanelHeaderPath({
   useEffect(() => {
     const closeMenu = (): void => setPathMenuOpen(false)
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
 
@@ -151,6 +154,7 @@ export function EditorPanelHeaderPath({
             if (!skipMenuFocusRestoreRef.current) {
               return
             }
+
             skipMenuFocusRestoreRef.current = false
             event.preventDefault()
           }}

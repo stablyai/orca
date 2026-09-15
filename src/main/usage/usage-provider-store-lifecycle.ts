@@ -82,6 +82,7 @@ export abstract class UsageProviderStoreLifecycle<
   async setEnabled(enabled: boolean): Promise<PublicUsageProviderScanState<DataPresenceKey>> {
     this.state.scanState.enabled = enabled
     await this.writeToDisk()
+
     return this.getScanState()
   }
 
@@ -89,14 +90,19 @@ export abstract class UsageProviderStoreLifecycle<
     if (!this.state.scanState.enabled) {
       return this.getScanState()
     }
+
     const currentWorktreeFingerprint = await this.getCurrentWorktreeFingerprint()
+
     if (!force && this.state.scanState.lastScanCompletedAt) {
       const ageMs = Date.now() - this.state.scanState.lastScanCompletedAt
+
       if (ageMs < STALE_MS && this.state.worktreeFingerprint === currentWorktreeFingerprint) {
         return this.getScanState()
       }
     }
+
     await this.runScan()
+
     return this.getScanState()
   }
 
@@ -106,12 +112,16 @@ export abstract class UsageProviderStoreLifecycle<
 
   private load(): State {
     const defaults = this.config.createDefaultState()
+
     try {
       const cacheFile = this.config.resolveCacheFile()
+
       if (!existsSync(cacheFile)) {
         return defaults
       }
+
       const parsed = JSON.parse(readFileSync(cacheFile, 'utf-8')) as State
+
       return this.config.normalizeState({
         ...defaults,
         ...parsed,
@@ -119,6 +129,7 @@ export abstract class UsageProviderStoreLifecycle<
       })
     } catch (error) {
       console.error(`${this.config.logTag} Failed to load persisted state, starting fresh:`, error)
+
       return defaults
     }
   }
@@ -126,6 +137,7 @@ export abstract class UsageProviderStoreLifecycle<
   private async runScan(): Promise<void> {
     if (this.scanPromise) {
       await this.scanPromise
+
       return
     }
 
@@ -138,12 +150,14 @@ export abstract class UsageProviderStoreLifecycle<
         const repos = this.store.getRepos()
         const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
         const worktreeFingerprint = getUsageWorktreeFingerprint(worktreesByRepo)
+
         const result = await this.config.scan(
           createWorktreeRefs(repos, worktreesByRepo),
           this.state.worktreeFingerprint === worktreeFingerprint
             ? this.state[this.config.sourceKey]
             : this.config.createDefaultState()[this.config.sourceKey]
         )
+
         this.state[this.config.sourceKey] = result[this.config.sourceKey]
         this.state.sessions = result.sessions
         this.state.dailyAggregates = result.dailyAggregates
@@ -165,6 +179,7 @@ export abstract class UsageProviderStoreLifecycle<
 
   private async getCurrentWorktreeFingerprint(): Promise<string> {
     const repos = this.store.getRepos()
+
     return getUsageWorktreeFingerprint(loadKnownUsageWorktreesByRepo(this.store, repos))
   }
 }

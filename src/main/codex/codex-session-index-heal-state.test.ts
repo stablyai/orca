@@ -12,6 +12,7 @@ import {
 } from './codex-session-index-heal-state'
 
 const WINDOWS_SESSIONS_ROOT = 'C:\\Users\\Me\\.codex\\sessions'
+
 const THREAD_ID = '019f0000-1111-7222-8333-000000000001'
 
 let tempRoots: string[] = []
@@ -20,12 +21,14 @@ afterEach(() => {
   for (const root of tempRoots) {
     rmSync(root, { recursive: true, force: true })
   }
+
   tempRoots = []
 })
 
 function createPaths(systemSessionsRoot = WINDOWS_SESSIONS_ROOT): CodexSessionIndexHealPaths {
   const stateDir = mkdtempSync(join(tmpdir(), 'orca-codex-heal-state-'))
   tempRoots.push(stateDir)
+
   return {
     auditLogPath: join(stateDir, 'audit.jsonl'),
     systemSessionsRoot,
@@ -109,6 +112,7 @@ describe('codex session index heal state', () => {
 
   it('leaves the main thread free while walking a large audit ledger', async () => {
     const paths = createPaths()
+
     for (let index = 0; index < 20_000; index += 1) {
       appendAuditRecord(
         paths,
@@ -116,7 +120,9 @@ describe('codex session index heal state', () => {
         `audit-${index}`
       )
     }
+
     let ticks = 0
+
     const ticker = setInterval(() => {
       ticks += 1
     }, 1)

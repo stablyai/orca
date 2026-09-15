@@ -5,6 +5,7 @@ vi.mock('./preload-api/web-runtime-worktree-catalog', () => ({
     if (path.includes('missing')) {
       throw new Error('not found')
     }
+
     return path
   })
 }))

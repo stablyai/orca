@@ -214,10 +214,12 @@ describe('BrowserClientPageRendererBridgeRegistry', () => {
 
   it('times out exactly once and releases admission for later work', async () => {
     vi.useFakeTimers()
+
     try {
       const harness = createHarness({ maxPending: 1, timeoutMs: 25 })
       const renderer = harness.registry.attachRenderer(harness.endpoint)
       const timedOut = renderer.mountPage(page, new AbortController().signal)
+
       const timedOutExpectation = expect(timedOut).rejects.toThrow(
         'browser_client_page_renderer_request_timeout'
       )
@@ -235,12 +237,14 @@ describe('BrowserClientPageRendererBridgeRegistry', () => {
 
   it('ignores a late rekey reply after timeout and admits an exact replacement', async () => {
     vi.useFakeTimers()
+
     try {
       const harness = createHarness({ maxPending: 1, timeoutMs: 25 })
       const renderer = harness.registry.attachRenderer(harness.endpoint)
       const next = { ...page, pageHostGeneration: 8 }
       const timedOut = renderer.rekeyPage!(page, next, new AbortController().signal)
       const staleRequest = sentRequest(harness.endpoint)
+
       const timedOutExpectation = expect(timedOut).rejects.toThrow(
         'browser_client_page_renderer_request_timeout'
       )

@@ -14,6 +14,7 @@ export function assertExternalSshReadOwnership(
   expectedExternalSshTargetId: string | undefined
 ): void {
   const expectedTargetId = expectedExternalSshTargetId?.trim()
+
   if (
     expectedTargetId &&
     (getActiveRuntimeTarget(settings).kind === 'environment' || connectionId !== expectedTargetId)
@@ -31,6 +32,7 @@ export function withSshMutationExpectation<T extends object>(
   expectedSshConnectionGeneration?: number
 } {
   const sshTargetId = context.expectedSshTargetId ?? context.connectionId
+
   return {
     ...params,
     expectedExecutionHostId:
@@ -50,6 +52,7 @@ export function getRuntimeFileReadScope(
   connectionId: string | undefined
 ): string | undefined {
   const target = getActiveRuntimeTarget(settings)
+
   return target.kind === 'environment' ? `runtime:${target.environmentId}` : connectionId
 }
 
@@ -80,13 +83,17 @@ export function getRemoteFileArgs(
   relativePath: string
 } | null {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind !== 'environment' || !context.worktreeId) {
     return null
   }
+
   const relativePath = getRelativePathInsideWorktree(context.worktreePath, absolutePath)
+
   if (relativePath === null) {
     return null
   }
+
   return {
     target,
     worktreeId: context.worktreeId,
@@ -114,17 +121,21 @@ export function getRelativePathInsideWorktree(
   if (!worktreePath) {
     return null
   }
+
   return relativePathInsideRoot(worktreePath, absolutePath)
 }
 
 export function joinRuntimeRelativePath(basePath: string, relativePath: string): string {
   const normalizedBase = normalizeRelativePath(basePath)
   const normalizedRelative = normalizeRelativePath(relativePath)
+
   if (!normalizedBase) {
     return normalizedRelative
   }
+
   if (!normalizedRelative) {
     return normalizedBase
   }
+
   return `${normalizedBase}/${normalizedRelative}`
 }

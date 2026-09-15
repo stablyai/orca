@@ -46,6 +46,7 @@ export function useCreatePullRequestBaseRefDiscovery({
     if (!open || repoDefaultBaseRef) {
       return
     }
+
     let stale = false
     void getRuntimeRepoBaseRefDefault(settings, repoId)
       .then((result) => {
@@ -54,6 +55,7 @@ export function useCreatePullRequestBaseRefDiscovery({
         }
       })
       .catch(() => undefined)
+
     return () => {
       stale = true
     }
@@ -63,6 +65,7 @@ export function useCreatePullRequestBaseRefDiscovery({
     if (!open || base || !repoDefaultBaseRef) {
       return
     }
+
     setBase(repoDefaultBaseRef)
   }, [base, open, repoDefaultBaseRef, setBase])
 
@@ -71,10 +74,13 @@ export function useCreatePullRequestBaseRefDiscovery({
       setBaseResults([])
       setBaseSearchPending(false)
       setBaseSearchError(null)
+
       return
     }
+
     let stale = false
     setBaseSearchPending(true)
+
     const timer = window.setTimeout(() => {
       void searchRuntimeRepoBaseRefDetails(settings, repoId, baseQuery.trim(), 20)
         .then((results) => {
@@ -95,6 +101,7 @@ export function useCreatePullRequestBaseRefDiscovery({
           }
         })
     }, 200)
+
     return () => {
       stale = true
       window.clearTimeout(timer)

@@ -9,6 +9,7 @@ const { collectPtyIds } = vi.hoisted(() => ({ collectPtyIds: vi.fn() }))
 vi.mock('./terminal-provider-snapshot-capability', async (importOriginal) => {
   const actual = await importOriginal<typeof SnapshotCapabilityModule>()
   collectPtyIds.mockImplementation(actual.collectTerminalProviderSnapshotPtyIds)
+
   return { ...actual, collectTerminalProviderSnapshotPtyIds: collectPtyIds }
 })
 
@@ -16,7 +17,9 @@ import { useAppStore } from '@/store'
 import { createTerminalProviderSnapshotBoundPtyIdsSelector } from './terminal-provider-snapshot-bound-pty-ids'
 
 const initialState = useAppStore.getInitialState()
+
 const TAB_COUNT = 40
+
 const WORKTREE_ID = 'repo::worktree-0'
 
 function tabId(index: number): string {
@@ -44,9 +47,11 @@ function seedWorkspace(): void {
   const worktrees = Array.from({ length: 8 }, (_, index) =>
     makeWorktree({ id: `repo::worktree-${index}`, repoId: 'repo' })
   )
+
   const tabs = Array.from({ length: TAB_COUNT }, (_, index) =>
     makeTab({ id: tabId(index), worktreeId: WORKTREE_ID, ptyId: `pty-${index}` })
   )
+
   useAppStore.setState({
     worktreesByRepo: { repo: worktrees },
     tabsByWorktree: { [WORKTREE_ID]: tabs },
@@ -88,6 +93,7 @@ describe('createTerminalProviderSnapshotBoundPtyIdsSelector', () => {
     for (let index = 0; index < TAB_COUNT; index += 1) {
       useAppStore.getState().updateTabTitle(tabId(index), `agent frame ${index}`)
     }
+
     for (let index = 0; index < TAB_COUNT; index += 1) {
       useAppStore.getState().setTabLayout(tabId(index), leafLayout(index, `leaf-b-${index}`))
     }
@@ -105,6 +111,7 @@ describe('createTerminalProviderSnapshotBoundPtyIdsSelector', () => {
       mutate()
       expect(collectPtyIds.mock.calls.length, label).toBeGreaterThan(before)
       expect(boundPtyIds, label).not.toBe(previousBoundPtyIds)
+
       return boundPtyIds
     }
 

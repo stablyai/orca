@@ -23,8 +23,10 @@ export function waitForWsClose(ws: WebSocket): Promise<void> {
   return new Promise((resolve) => {
     if (ws.readyState === ws.CLOSED) {
       resolve()
+
       return
     }
+
     ws.once('close', () => resolve())
   })
 }
@@ -85,6 +87,7 @@ export function createEncryptedWsResponseReader(session: AuthenticatedMobileWs):
     predicate: (response: Record<string, unknown>) => boolean
     resolve: (response: Record<string, unknown>) => void
   }
+
   const queue: Record<string, unknown>[] = []
   const waiters: Waiter[] = []
 
@@ -93,10 +96,13 @@ export function createEncryptedWsResponseReader(session: AuthenticatedMobileWs):
     predicate: (response: Record<string, unknown>) => boolean
   ): Record<string, unknown> | null => {
     const index = queue.findIndex((response) => response.id === id && predicate(response))
+
     if (index === -1) {
       return null
     }
+
     const [response] = queue.splice(index, 1)
+
     return response ?? null
   }
 
@@ -105,15 +111,20 @@ export function createEncryptedWsResponseReader(session: AuthenticatedMobileWs):
       typeof data === 'string' ? data : data.toString('utf-8'),
       session.sharedKey
     )
+
     expect(decrypted).toBeTruthy()
     const response = JSON.parse(decrypted!) as Record<string, unknown>
+
     const waiterIndex = waiters.findIndex(
       (waiter) => response.id === waiter.id && waiter.predicate(response)
     )
+
     if (waiterIndex === -1) {
       queue.push(response)
+
       return
     }
+
     const [waiter] = waiters.splice(waiterIndex, 1)
     waiter?.resolve(response)
   }
@@ -123,9 +134,11 @@ export function createEncryptedWsResponseReader(session: AuthenticatedMobileWs):
   return {
     next: (id: string, predicate: (response: Record<string, unknown>) => boolean = () => true) => {
       const queued = takeQueued(id, predicate)
+
       if (queued) {
         return Promise.resolve(queued)
       }
+
       return new Promise<Record<string, unknown>>((resolve) => {
         waiters.push({ id, predicate, resolve })
       })

@@ -29,6 +29,7 @@ export async function updateIssue(
     connectionId,
     localGitOptions
   )
+
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
@@ -39,9 +40,11 @@ export async function updateIssue(
   // State change requires a separate command
   if (updates.state) {
     await acquire()
+
     try {
       if (updates.state === 'closed') {
         const closeArgs = ['issue', 'close', String(issueNumber), '--repo', repo]
+
         if (updates.stateReason === 'completed') {
           closeArgs.push('--reason', 'completed')
         } else if (updates.stateReason === 'not_planned') {
@@ -49,12 +52,14 @@ export async function updateIssue(
         } else if (updates.stateReason === 'duplicate' && updates.duplicateOf) {
           closeArgs.push('--duplicate-of', String(updates.duplicateOf))
         }
+
         await ghExecFileAsync(closeArgs, ghOptions)
       } else {
         await ghExecFileAsync(['issue', 'reopen', String(issueNumber), '--repo', repo], ghOptions)
       }
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
+
       // Treat "already closed/open" as a no-op
       if (!stderr.toLowerCase().includes('already')) {
         errors.push(classifyGhError(stderr).message)
@@ -66,6 +71,7 @@ export async function updateIssue(
 
   if (updates.body !== undefined) {
     await acquire()
+
     try {
       await ghExecFileAsync(
         [
@@ -94,18 +100,22 @@ export async function updateIssue(
     editArgs.push('--title', updates.title)
     hasEditArgs = true
   }
+
   for (const label of updates.addLabels ?? []) {
     editArgs.push('--add-label', label)
     hasEditArgs = true
   }
+
   for (const label of updates.removeLabels ?? []) {
     editArgs.push('--remove-label', label)
     hasEditArgs = true
   }
+
   for (const assignee of updates.addAssignees ?? []) {
     editArgs.push('--add-assignee', assignee)
     hasEditArgs = true
   }
+
   for (const assignee of updates.removeAssignees ?? []) {
     editArgs.push('--remove-assignee', assignee)
     hasEditArgs = true
@@ -113,6 +123,7 @@ export async function updateIssue(
 
   if (hasEditArgs) {
     await acquire()
+
     try {
       await ghExecFileAsync(editArgs, ghOptions)
     } catch (err) {
@@ -126,5 +137,6 @@ export async function updateIssue(
   if (errors.length > 0) {
     return { ok: false, error: errors.join('; ') }
   }
+
   return { ok: true }
 }

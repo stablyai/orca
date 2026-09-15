@@ -8,7 +8,9 @@ import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 
 export const WORKSPACE_FILE_PATH_MIME = 'text/x-orca-file-path'
+
 export const WORKSPACE_FILE_PATHS_MIME = 'text/x-orca-file-paths'
+
 export const WORKSPACE_FILE_DRAG_SOURCE_MIME = 'application/x-orca-workspace-file-source'
 
 const WORKSPACE_FILE_DRAG_SOURCE_MAX_BYTES = 4096
@@ -69,6 +71,7 @@ export function writeWorkspaceFileDragSourceIfResolved(
   ) {
     return
   }
+
   writeWorkspaceFileDragSource(dataTransfer, { executionHostId, workspaceId })
 }
 
@@ -76,9 +79,11 @@ export function readWorkspaceFileDragSource(
   dataTransfer: Pick<DataTransfer, 'getData'>
 ): WorkspaceFileDragSource | null {
   const data = dataTransfer.getData(WORKSPACE_FILE_DRAG_SOURCE_MIME)
+
   if (!data) {
     return null
   }
+
   if (
     measureClipboardTextByteLength(data, {
       stopAfterBytes: WORKSPACE_FILE_DRAG_SOURCE_MAX_BYTES
@@ -86,20 +91,27 @@ export function readWorkspaceFileDragSource(
   ) {
     return null
   }
+
   try {
     const parsed: unknown = JSON.parse(data)
+
     if (!parsed || typeof parsed !== 'object') {
       return null
     }
+
     const executionHostValue = 'executionHostId' in parsed ? parsed.executionHostId : null
+
     const executionHostId =
       typeof executionHostValue === 'string' ? normalizeExecutionHostId(executionHostValue) : null
+
     const workspaceValue = 'workspaceId' in parsed ? parsed.workspaceId : null
     const workspaceId = typeof workspaceValue === 'string' ? workspaceValue.trim() : ''
     const version = 'version' in parsed ? parsed.version : null
+
     if (version !== 1 || !executionHostId || !workspaceId) {
       return null
     }
+
     return { executionHostId, workspaceId }
   } catch {
     return null
@@ -115,6 +127,7 @@ export function hasWorkspaceFileDragType(dataTransfer: Pick<DataTransfer, 'types
 
 export function decodeWorkspaceFilePaths(data: string): string[] {
   const result = decodeWorkspaceFilePathPayload(data)
+
   return result.status === 'accepted' ? result.paths : []
 }
 
@@ -125,17 +138,21 @@ function decodeWorkspaceFilePathPayload(
   if (!data) {
     return { pathCount: 0, paths: [], status: 'accepted' }
   }
+
   try {
     const parsed: unknown = JSON.parse(data)
+
     if (Array.isArray(parsed)) {
       return collectDecodedWorkspaceFilePaths(parsed, options.maxPaths)
     }
   } catch {
     // Plain path string from legacy single-file drags.
   }
+
   if (options.maxPaths !== undefined && options.maxPaths < 1) {
     return { pathCount: 1, reason: 'too-many-paths', status: 'rejected' }
   }
+
   return { pathCount: 1, paths: [data], status: 'accepted' }
 }
 
@@ -145,18 +162,23 @@ function collectDecodedWorkspaceFilePaths(
 ): WorkspaceFilePathDecodeResult {
   const paths: string[] = []
   let pathCount = 0
+
   for (const value of values) {
     if (typeof value !== 'string') {
       continue
     }
+
     pathCount += 1
+
     if (maxPaths === undefined || pathCount <= maxPaths) {
       paths.push(value)
     }
   }
+
   if (maxPaths !== undefined && pathCount > maxPaths) {
     return { pathCount, reason: 'too-many-paths', status: 'rejected' }
   }
+
   return { pathCount, paths, status: 'accepted' }
 }
 
@@ -164,8 +186,10 @@ function isNormalizedRuntimePathInsideOrEqual(rootPath: string, candidatePath: s
   if (candidatePath === rootPath) {
     return true
   }
+
   const rootWithBoundary =
     rootPath === '/' || /^[a-z]:\/$/i.test(rootPath) ? rootPath : `${rootPath.replace(/\/+$/, '')}/`
+
   return candidatePath.startsWith(rootWithBoundary)
 }
 
@@ -174,16 +198,20 @@ function getUniqueWorkspaceFilePathEntries(
 ): NormalizedWorkspaceFilePath[] {
   const uniquePaths: NormalizedWorkspaceFilePath[] = []
   const seenNormalizedPaths = new Set<string>()
+
   for (const path of paths) {
     if (!path) {
       continue
     }
+
     const normalizedPath = normalizeRuntimePathForComparison(path)
+
     if (!seenNormalizedPaths.has(normalizedPath)) {
       seenNormalizedPaths.add(normalizedPath)
       uniquePaths.push({ normalizedPath, path })
     }
   }
+
   return uniquePaths
 }
 
@@ -218,11 +246,13 @@ export function readWorkspaceFileDragPaths(
   const maxPaths = options.maxPaths ?? NATIVE_FILE_DROP_MAX_PATHS
   const multiPathData = dataTransfer.getData(WORKSPACE_FILE_PATHS_MIME)
   const data = multiPathData || dataTransfer.getData(WORKSPACE_FILE_PATH_MIME)
+
   if (!data) {
     return { byteLength: 0, pathCount: 0, paths: [], status: 'accepted' }
   }
 
   const rawMeasurement = measureClipboardTextByteLength(data, { stopAfterBytes: maxPathBytes })
+
   if (rawMeasurement.exceededLimit) {
     return {
       byteLength: rawMeasurement.byteLength,
@@ -233,6 +263,7 @@ export function readWorkspaceFileDragPaths(
   }
 
   const decodedPathResult = decodeWorkspaceFilePathPayload(data, { maxPaths })
+
   if (decodedPathResult.status === 'rejected') {
     return {
       byteLength: 0,
@@ -244,6 +275,7 @@ export function readWorkspaceFileDragPaths(
 
   const decodedPaths = decodedPathResult.paths
   const validation = validateNativeFileDropPaths(decodedPaths, { maxPathBytes, maxPaths })
+
   if (validation.status === 'rejected') {
     return {
       byteLength: validation.byteLength,
@@ -254,6 +286,7 @@ export function readWorkspaceFileDragPaths(
   }
 
   const paths = getTopLevelWorkspaceFilePaths(decodedPaths)
+
   return {
     byteLength: validation.byteLength,
     pathCount: paths.length,
@@ -264,6 +297,7 @@ export function readWorkspaceFileDragPaths(
 
 export function getWorkspaceFileDragPaths(dataTransfer: Pick<DataTransfer, 'getData'>): string[] {
   const result = readWorkspaceFileDragPaths(dataTransfer)
+
   return result.status === 'accepted' ? result.paths : []
 }
 
@@ -273,5 +307,6 @@ export function getWorkspaceFileDragRejectionMessage(
   if (reason === 'too-many-paths') {
     return 'Drop contains too many paths.'
   }
+
   return 'Drop path list is too large.'
 }

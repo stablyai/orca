@@ -51,6 +51,7 @@ describe('SshReconnectLadder', () => {
       now += 50
       const decision = ladder.next(now)
       expect(decision.kind).toBe('retry')
+
       if (decision.kind === 'retry') {
         expect(decision.delayMs + CONNECT_TIMEOUT_MS + RELAY_REESTABLISH_BUDGET_MS).toBeLessThan(
           MIN_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
@@ -58,6 +59,7 @@ describe('SshReconnectLadder', () => {
         now += decision.delayMs
       }
     }
+
     expect(FLAP_DELAY_CAP_MS).toBe(5_000)
   })
 
@@ -68,9 +70,11 @@ describe('SshReconnectLadder', () => {
     for (let i = 0; i < RECONNECT_BACKOFF_MS.length - 1; i++) {
       ladder.markAttemptFailed()
       const decision = ladder.next(i * 1000)
+
       if (decision.kind === 'retry') {
         delays.push(decision.delayMs)
       }
+
       expect(ladder.failedAttemptStreak).toBe(i + 1)
     }
 
@@ -86,6 +90,7 @@ describe('SshReconnectLadder', () => {
     const failureIndexes: number[] = []
 
     let now = 0
+
     for (let i = 0; i < RECONNECT_BACKOFF_MS.length; i++) {
       dropLadder.markConnected(now)
       now += 50
@@ -93,13 +98,16 @@ describe('SshReconnectLadder', () => {
       const failureDecision = failureLadder.next(now)
       expect(dropDecision.kind).toBe('retry')
       expect(failureDecision.kind).toBe('retry')
+
       if (dropDecision.kind === 'retry') {
         dropDelays.push(dropDecision.delayMs)
         dropIndexes.push(dropDecision.attemptIndex)
       }
+
       if (failureDecision.kind === 'retry') {
         failureIndexes.push(failureDecision.attemptIndex)
       }
+
       failureLadder.markAttemptFailed()
       now += 50
     }
@@ -112,11 +120,13 @@ describe('SshReconnectLadder', () => {
   it('never reaches give-up on a flap streak, even with a later handshake failure', () => {
     const ladder = new SshReconnectLadder()
     let now = 0
+
     for (let i = 0; i < 12; i++) {
       ladder.markConnected(now)
       now += 50
       const decision = ladder.next(now)
       expect(decision.kind).toBe('retry')
+
       if (decision.kind === 'retry') {
         now += decision.delayMs
       }
@@ -144,6 +154,7 @@ describe('SshReconnectLadder', () => {
 
   it('resets the delay ladder exactly once for a stable connection', () => {
     const ladder = new SshReconnectLadder()
+
     for (let i = 0; i < 5; i++) {
       ladder.next(i)
     }
@@ -168,6 +179,7 @@ describe('SshReconnectLadder', () => {
 
     let now = 0
     let last = ladder.next(now)
+
     for (let i = 0; i < RECONNECT_BACKOFF_MS.length; i++) {
       ladder.markAttemptFailed()
       now += STABLE_CONNECTION_MS * 2
@@ -179,6 +191,7 @@ describe('SshReconnectLadder', () => {
 
   it('returns to the head of the ladder after reset()', () => {
     const ladder = new SshReconnectLadder()
+
     for (let i = 0; i < RECONNECT_BACKOFF_MS.length; i++) {
       ladder.markAttemptFailed()
       ladder.next(i)

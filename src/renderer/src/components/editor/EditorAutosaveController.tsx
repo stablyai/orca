@@ -12,6 +12,7 @@ export default function EditorAutosaveController(): null {
     // Why: restored dirty tabs must be conflict-checked app-level, before any
     // panel mounts — autosave can otherwise write over an offline agent edit.
     const detachConflictScan = attachRestoredTabConflictScan(useAppStore)
+
     return () => {
       detachAutosave()
       detachConflictScan()

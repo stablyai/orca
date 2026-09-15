@@ -23,11 +23,13 @@ class FakeClient implements RpcClient {
   getLastConnectedAt = () => null
   onStateChange = (listener: (state: ConnectionState) => void) => {
     this.listeners.add(listener)
+
     return () => this.listeners.delete(listener)
   }
 
   publishState(state: ConnectionState): void {
     this.state = state
+
     for (const listener of this.listeners) {
       listener(state)
     }
@@ -53,12 +55,15 @@ describe('mobile direct endpoint probe', () => {
 
   it('uses the first authenticated candidate without waiting for a stale primary', async () => {
     const clients = new Map<string, FakeClient>()
+
     const openDirect = vi.fn((endpoint: string) => {
       const client = new FakeClient('connecting')
       clients.set(endpoint, client)
+
       if (endpoint.includes('100.64.0.2')) {
         setTimeout(() => client.publishState('connected'), 100)
       }
+
       return client
     })
 
@@ -77,10 +82,12 @@ describe('mobile direct endpoint probe', () => {
     // the direct client's 500/1000/2000ms redials, while the probe sat on the
     // 'connecting' phase and held the supervisor mutex for the whole 12s bound.
     const clients: FakeClient[] = []
+
     const openDirect = vi.fn(() => {
       const client = new FakeClient('connecting')
       clients.push(client)
       setTimeout(() => client.publishState('reconnecting'), 20)
+
       return client
     })
 
@@ -90,9 +97,11 @@ describe('mobile direct endpoint probe', () => {
     await expect(probing).resolves.toBeNull()
 
     expect(clients).toHaveLength(2)
+
     for (const client of clients) {
       expect(client.close).toHaveBeenCalledOnce()
     }
+
     // No 12s timer is left behind to fire into a settled probe.
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -102,10 +111,12 @@ describe('mobile direct endpoint probe', () => {
     // dial must not book a direct failure and its 60s cooldown.
     const openDirect = vi.fn((endpoint: string) => {
       const client = new FakeClient('connecting')
+
       if (endpoint.includes('100.64.0.2')) {
         setTimeout(() => client.publishState('reconnecting'), 20)
         setTimeout(() => client.publishState('connected'), 600)
       }
+
       return client
     })
 
@@ -122,12 +133,14 @@ describe('mobile direct endpoint probe', () => {
     // capability RPC, so real work needs more than one grace window.
     const openDirect = vi.fn((endpoint: string) => {
       const client = new FakeClient('connecting')
+
       if (endpoint.includes('100.64.0.2')) {
         setTimeout(() => client.publishState('reconnecting'), 20)
         setTimeout(() => client.publishState('handshaking'), 1_500)
         // Past the first grace window: only the re-arm keeps this probe alive.
         setTimeout(() => client.publishState('connected'), 3_000)
       }
+
       return client
     })
 
@@ -144,6 +157,7 @@ describe('mobile direct endpoint probe', () => {
       setTimeout(() => client.publishState('handshaking'), 1_500)
       // A restarted handshake must not buy a second extension.
       setTimeout(() => client.publishState('handshaking'), 2_500)
+
       return client
     })
 
@@ -165,6 +179,7 @@ describe('mobile direct endpoint probe', () => {
     const openDirect = vi.fn(() => {
       const client = new FakeClient('connecting')
       setTimeout(() => client.publishState('reconnecting'), 20)
+
       return client
     })
 

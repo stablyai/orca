@@ -11,6 +11,7 @@ export type { BrowserGuestPolicy, BrowserGuestRegistration } from './browser-man
 export class BrowserManager extends BrowserManagerFinal {}
 
 export const browserManager = new BrowserManager()
+
 export const browserCertificateTrustController = new BrowserCertificateTrustController({
   resolveManagedGuestContext: (webContentsId) =>
     browserManager.getManagedBrowserGuestContext(webContentsId),
@@ -20,4 +21,5 @@ export const browserCertificateTrustController = new BrowserCertificateTrustCont
   onFailureChanged: (webContentsId, failure, navigationUrl) =>
     browserManager.notifyCertificateFailureChanged(webContentsId, failure, navigationUrl)
 })
+
 browserManager.setCertificateTrustController(browserCertificateTrustController)

@@ -23,20 +23,26 @@ export class RuntimePtyForegroundAgent {
 
   read(ptyId: string, afterTitle = 0): Promise<PtyForegroundProcessRead> | null {
     const controller = this.deps.getController()
+
     if (!controller) {
       return null
     }
+
     const pending = this.reads.get(ptyId)
+
     if (pending?.controller === controller && pending.startedAfterTitleObservation >= afterTitle) {
       return pending.promise
     }
+
     if (pending?.controller === controller) {
       return pending.promise.then(
         () => this.read(ptyId, afterTitle) ?? { controller, process: null, available: false }
       )
     }
+
     const unavailable: PtyForegroundProcessRead = { controller, process: null, available: false }
     let processRead: Promise<string | null>
+
     try {
       processRead = Promise.resolve(controller.getForegroundProcess(ptyId))
     } catch {
@@ -45,38 +51,49 @@ export class RuntimePtyForegroundAgent {
         startedAfterTitleObservation: afterTitle,
         promise: Promise.resolve(unavailable)
       }
+
       entry.promise = entry.promise.finally(() => this.deleteRead(ptyId, entry))
       this.reads.set(ptyId, entry)
+
       return entry.promise
     }
+
     let entry: PtyForegroundProcessReadEntry
+
     const promise = processRead
       .then((process) => ({ controller, process, available: true }))
       .catch(() => unavailable)
       .finally(() => this.deleteRead(ptyId, entry))
+
     entry = { controller, startedAfterTitleObservation: afterTitle, promise }
     this.reads.set(ptyId, entry)
+
     return entry.promise
   }
 
   refresh(ptyId: string, afterTitle = 0): Promise<boolean> {
     const pending = this.refreshes.get(ptyId)
+
     if (pending) {
       pending.requestedAfterTitleObservation = Math.max(
         pending.requestedAfterTitleObservation,
         afterTitle
       )
+
       return pending.promise
     }
+
     const entry: PtyForegroundAgentRefresh = {
       promise: Promise.resolve(false),
       startedAfterTitleObservation: afterTitle,
       requestedAfterTitleObservation: afterTitle
     }
+
     entry.promise = (async () => {
       while (true) {
         entry.startedAfterTitleObservation = entry.requestedAfterTitleObservation
         const changed = await this.load(ptyId, entry.startedAfterTitleObservation)
+
         if (changed || entry.requestedAfterTitleObservation <= entry.startedAfterTitleObservation) {
           return changed
         }
@@ -87,6 +104,7 @@ export class RuntimePtyForegroundAgent {
       }
     })
     this.refreshes.set(ptyId, entry)
+
     return entry.promise
   }
 
@@ -104,6 +122,7 @@ export class RuntimePtyForegroundAgent {
       if (this.delayedTitles.get(ptyId) !== titleAt) {
         return
       }
+
       this.delayedTitles.delete(ptyId)
       this.deps.finishDelayedSnapshot(ptyId, changed)
     })
@@ -120,19 +139,26 @@ export class RuntimePtyForegroundAgent {
   private async load(ptyId: string, afterTitle: number): Promise<boolean> {
     const controller = this.deps.getController()
     const pty = this.deps.getPty(ptyId)
+
     if (!controller || !pty?.connected || pty.launchAgent) {
       return false
     }
+
     const result = await this.read(ptyId, afterTitle)
+
     if (!result || result.controller !== this.deps.getController() || !result.available) {
       return false
     }
+
     const agent = result.process ? (recognizeAgentProcess(result.process)?.agent ?? null) : null
+
     if (pty.foregroundAgent === agent) {
       return false
     }
+
     pty.foregroundAgent = agent
     this.deps.touchSnapshot(ptyId)
+
     return true
   }
 

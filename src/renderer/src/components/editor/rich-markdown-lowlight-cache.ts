@@ -1,6 +1,7 @@
 import type { AutoOptions, createLowlight, LanguageFn, Options } from 'lowlight'
 
 type Lowlight = ReturnType<typeof createLowlight>
+
 type HighlightResult = ReturnType<Lowlight['highlight']>
 
 type HighlightCacheEntry = {
@@ -65,25 +66,32 @@ export function createCachedLowlight(
 
     const key = createKey()
     const cached = cache.get(key)
+
     if (cached) {
       cache.delete(key)
       cache.set(key, cached)
+
       return cached.result
     }
+
     const result = highlight()
     cache.set(key, { result, sourceCharacters })
     retainedSourceCharacters += sourceCharacters
+
     while (
       cache.size > limits.maxEntries ||
       retainedSourceCharacters > limits.maxSourceCharacters
     ) {
       const oldest = cache.entries().next()
+
       if (oldest.done) {
         break
       }
+
       retainedSourceCharacters -= oldest.value[1].sourceCharacters
       cache.delete(oldest.value[0])
     }
+
     return result
   }
 
@@ -92,6 +100,7 @@ export function createCachedLowlight(
     grammar?: LanguageFn
   ): undefined => {
     clear()
+
     return typeof grammarsOrName === 'string'
       ? lowlight.register(grammarsOrName, grammar as LanguageFn)
       : lowlight.register(grammarsOrName)
@@ -102,6 +111,7 @@ export function createCachedLowlight(
     alias?: readonly string[] | string
   ): undefined => {
     clear()
+
     return typeof aliasesOrName === 'string'
       ? lowlight.registerAlias(aliasesOrName, alias as readonly string[] | string)
       : lowlight.registerAlias(aliasesOrName)

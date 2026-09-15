@@ -12,11 +12,15 @@ export function parseAgentStatusPaneIdentity(
   if (!paneKey) {
     return null
   }
+
   const parsed = parsePaneKey(paneKey)
+
   if (parsed) {
     return { tabId: parsed.tabId, paneId: parsed.leafId }
   }
+
   const legacy = parseLegacyNumericPaneKey(paneKey)
+
   return legacy ? { tabId: legacy.tabId, paneId: legacy.numericPaneId } : null
 }
 
@@ -27,6 +31,7 @@ export function resolveAgentStatusWorktreeId(
 ): string | null {
   const paneIdentity = parseAgentStatusPaneIdentity(entry.paneKey)
   const parentIdentity = parseAgentStatusPaneIdentity(orchestration?.parentPaneKey)
+
   return (
     worktreeIdByTabId.get(paneIdentity?.tabId ?? '') ??
     entry.worktreeId ??
@@ -42,6 +47,7 @@ export function mergeAgentStatusOrchestration(
   if (!entry.orchestration) {
     return runtimeOrchestration
   }
+
   if (
     !runtimeOrchestration ||
     entry.orchestration.taskId !== runtimeOrchestration.taskId ||
@@ -49,5 +55,6 @@ export function mergeAgentStatusOrchestration(
   ) {
     return entry.orchestration
   }
+
   return { ...entry.orchestration, ...runtimeOrchestration }
 }

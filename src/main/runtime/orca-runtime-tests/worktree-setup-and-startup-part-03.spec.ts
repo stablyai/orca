@@ -24,13 +24,16 @@ describe('OrcaRuntimeService', () => {
         setupScriptLaunchMode: 'split-horizontal' as const
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const activateWorktree = vi.fn()
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg-setup-split' })
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-bg-split-main' })
       .mockResolvedValueOnce({ id: 'pty-bg-split-setup' })
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -107,12 +110,15 @@ describe('OrcaRuntimeService', () => {
         setupScriptLaunchMode: 'split-horizontal' as const
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-active-setup-split' })
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-active-split-main' })
       .mockResolvedValueOnce({ id: 'pty-active-split-setup' })
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -176,23 +182,28 @@ describe('OrcaRuntimeService', () => {
         })
       )
     )
+
     const splitRevealPayload = revealTerminalSession.mock.lastCall?.[1] as
       | { surfaceOwner?: boolean }
       | undefined
+
     expect(splitRevealPayload).not.toHaveProperty('surfaceOwner')
   })
 
   it('does not warn when setup is explicitly skipped for CLI-created worktrees', async () => {
     const metaById: Record<string, WorktreeMeta> = {}
+
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       }
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-cli-setup-skip' })
     runtime.setPtyController({
@@ -247,24 +258,30 @@ describe('OrcaRuntimeService', () => {
 
   it('materializes default tabs for inactive local managed worktree creates', async () => {
     const metaById: Record<string, WorktreeMeta> = {}
+
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       }
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-default-dev' })
       .mockResolvedValueOnce({ id: 'pty-default-test' })
+
     const revealTerminalSession = vi
       .fn()
       .mockResolvedValueOnce({ tabId: 'tab-default-dev' })
       .mockResolvedValueOnce({ tabId: 'tab-default-test' })
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -340,6 +357,7 @@ describe('OrcaRuntimeService', () => {
     })
     detectInstalledAgentsWithShellPathHydrationMock.mockResolvedValue(['claude'])
     const metaById: Record<string, WorktreeMeta> = {}
+
     const runtimeStore = {
       ...store,
       getSettings: () => ({
@@ -351,9 +369,11 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       }
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-startup-draft' })
     const write = vi.fn().mockReturnValue(true)
@@ -392,6 +412,7 @@ describe('OrcaRuntimeService', () => {
     ])
 
     const draftUrl = 'https://github.com/stablyai/orca/issues/123'
+
     const result = await runtime.createManagedWorktree({
       repoSelector: 'id:repo-1',
       name: 'runtime-startup-draft',
@@ -426,6 +447,7 @@ describe('OrcaRuntimeService', () => {
     onTestFinished(() => {
       vi.useRealTimers()
     })
+
     const runtimeStore = {
       ...store,
       getSettings: () => ({
@@ -434,6 +456,7 @@ describe('OrcaRuntimeService', () => {
         agentCmdOverrides: {}
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-opencode-draft-timeout' })
     const write = vi.fn().mockReturnValue(true)
@@ -496,6 +519,7 @@ describe('OrcaRuntimeService', () => {
         disabledTuiAgents: ['codex' as const]
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-disabled-startup' })
     runtime.setPtyController({
@@ -520,6 +544,7 @@ describe('OrcaRuntimeService', () => {
 
   it('launches explicit startup agents with prompts for CLI-created worktrees', async () => {
     const metaById: Record<string, WorktreeMeta> = {}
+
     const runtimeStore = {
       ...store,
       getSettings: () => ({
@@ -530,9 +555,11 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       }
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-cli-agent-startup' })
     runtime.setPtyController({

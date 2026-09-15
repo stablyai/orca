@@ -9,11 +9,14 @@ export class ClaudeRuntimeAuthCredentialMatching extends ClaudeRuntimeAuthRuntim
   ): Promise<ClaudeReadBackMatch> {
     const matches: { account: ClaudeManagedAccount; managedCredentialsJson: string }[] = []
     let unverifiableCount = 0
+
     for (const account of this.store.getSettings().claudeManagedAccounts) {
       const managedCredentialsJson = await this.readManagedCredentials(account)
+
       if (!managedCredentialsJson) {
         continue
       }
+
       const match = this.runtimeCredentialsMatchAccount(
         runtimeCredentialsJson,
         runtimeOauthAccount,
@@ -21,6 +24,7 @@ export class ClaudeRuntimeAuthCredentialMatching extends ClaudeRuntimeAuthRuntim
         managedCredentialsJson,
         await this.readManagedOauthAccount(account)
       )
+
       if (match === 'match') {
         matches.push({ account, managedCredentialsJson })
       } else if (match === 'unverifiable') {
@@ -31,6 +35,7 @@ export class ClaudeRuntimeAuthCredentialMatching extends ClaudeRuntimeAuthRuntim
     if (matches.length === 1 && unverifiableCount === 0) {
       return { kind: 'matched', ...matches[0] }
     }
+
     return { kind: matches.length === 0 && unverifiableCount === 0 ? 'none' : 'ambiguous' }
   }
 
@@ -42,12 +47,15 @@ export class ClaudeRuntimeAuthCredentialMatching extends ClaudeRuntimeAuthRuntim
     managedOauthAccount: unknown
   ): 'match' | 'mismatch' | 'unverifiable' {
     const identity = this.readIdentityFromCredentials(runtimeCredentialsJson)
+
     if (!identity) {
       return 'mismatch'
     }
+
     const managedIdentity = this.readIdentityFromCredentials(managedCredentialsJson)
     const managedOauthIdentity = this.readIdentityFromOauthAccount(managedOauthAccount)
     const runtimeOauthIdentity = this.readIdentityFromOauthAccount(runtimeOauthAccount)
+
     const credentialOauthConflict =
       (identity.accountUuid &&
         runtimeOauthIdentity.accountUuid &&
@@ -58,6 +66,7 @@ export class ClaudeRuntimeAuthCredentialMatching extends ClaudeRuntimeAuthRuntim
       (identity.organizationUuid &&
         runtimeOauthIdentity.organizationUuid &&
         identity.organizationUuid !== runtimeOauthIdentity.organizationUuid)
+
     if (credentialOauthConflict) {
       return 'mismatch'
     }
@@ -68,41 +77,54 @@ export class ClaudeRuntimeAuthCredentialMatching extends ClaudeRuntimeAuthRuntim
         managedIdentity?.organizationUuid ??
         managedOauthIdentity.organizationUuid
     )
+
     const oauthAccountMatches =
       Boolean(managedOauthIdentity.accountUuid) &&
       managedOauthIdentity.accountUuid === runtimeOauthIdentity.accountUuid &&
       Boolean(runtimeOauthIdentity.email || runtimeOauthIdentity.organizationUuid)
+
     const runtimeEmail = identity.email ?? runtimeOauthIdentity.email
+
     const runtimeOrganizationUuid =
       identity.organizationUuid ?? runtimeOauthIdentity.organizationUuid
+
     const refreshTokenComparison = this.compareRefreshTokens(
       runtimeCredentialsJson,
       managedCredentialsJson
     )
+
     if (!runtimeEmail) {
       if (refreshTokenComparison === 'same') {
         return 'match'
       }
+
       if (identity.organizationUuid) {
         if (selectedOrganizationUuid && selectedOrganizationUuid !== identity.organizationUuid) {
           return 'mismatch'
         }
+
         return 'unverifiable'
       }
+
       if (oauthAccountMatches) {
         return 'match'
       }
+
       if (!runtimeOrganizationUuid && refreshTokenComparison === 'different') {
         return 'mismatch'
       }
+
       return 'unverifiable'
     }
+
     if (account.email && this.normalizeField(account.email) !== runtimeEmail) {
       return 'mismatch'
     }
+
     if (selectedOrganizationUuid && !runtimeOrganizationUuid) {
       return refreshTokenComparison === 'same' || oauthAccountMatches ? 'match' : 'unverifiable'
     }
+
     if (
       selectedOrganizationUuid &&
       runtimeOrganizationUuid &&
@@ -110,6 +132,7 @@ export class ClaudeRuntimeAuthCredentialMatching extends ClaudeRuntimeAuthRuntim
     ) {
       return 'mismatch'
     }
+
     if (!selectedOrganizationUuid && runtimeOrganizationUuid) {
       return refreshTokenComparison === 'same' ? 'match' : 'unverifiable'
     }
@@ -130,18 +153,22 @@ export class ClaudeRuntimeAuthCredentialMatching extends ClaudeRuntimeAuthRuntim
       managedCredentialsJson,
       managedOauthAccount
     )
+
     if (match === 'match') {
       return true
     }
+
     const identity = this.readIdentityFromCredentials(runtimeCredentialsJson)
     const managedIdentity = this.readIdentityFromCredentials(managedCredentialsJson)
     const managedOauthIdentity = this.readIdentityFromOauthAccount(managedOauthAccount)
     const runtimeOauthIdentity = this.readIdentityFromOauthAccount(this.readRuntimeOauthAccount())
+
     const selectedOrganizationUuid = this.normalizeField(
       account.organizationUuid ??
         managedIdentity?.organizationUuid ??
         managedOauthIdentity.organizationUuid
     )
+
     return (
       match === 'unverifiable' &&
       Boolean(selectedOrganizationUuid) &&

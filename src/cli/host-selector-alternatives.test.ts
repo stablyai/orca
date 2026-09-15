@@ -11,6 +11,7 @@ import {
 import type { RuntimeClient } from './runtime-client'
 
 const SSH_TARGETS = [{ id: 'ssh-1755000000000-a1b2c3', label: 'openclaw' }]
+
 const ENVIRONMENTS = [{ id: '03ef704c-b180-4b10-998d-e28fbd5de9a3', name: 'awin' }]
 
 function clientReturning(targets: { id: string; label: string }[]): RuntimeClient {
@@ -107,10 +108,12 @@ describe('listSshTargets', () => {
   // targets" would reject an ssh id that is valid on that host.
   it('falls back to the older listing when the newer method is absent', async () => {
     const { RuntimeClientError } = await import('./runtime/types.js')
+
     const call = vi.fn(async (method: string) => {
       if (method === 'ssh.listTargetSummaries') {
         throw new RuntimeClientError('method_not_found', 'Unknown method')
       }
+
       return { result: { targets: SSH_TARGETS } }
     })
 
@@ -120,13 +123,16 @@ describe('listSshTargets', () => {
 
   it('enriches legacy target rows from host-owned connection state', async () => {
     const { RuntimeClientError } = await import('./runtime/types.js')
+
     const call = vi.fn(async (method: string) => {
       if (method === 'ssh.listTargetSummaries') {
         throw new RuntimeClientError('method_not_found', 'Unknown method')
       }
+
       if (method === 'ssh.getState') {
         return { result: { state: { status: 'connected', remotePlatform: 'win32' } } }
       }
+
       return { result: { targets: SSH_TARGETS } }
     })
 
@@ -154,6 +160,7 @@ describe('ambiguous names never resolve silently', () => {
     { id: 'ssh-1-a', label: 'openclaw' },
     { id: 'ssh-2-b', label: 'openclaw' }
   ]
+
   const twoAwin = [
     { id: 'env-1', name: 'awin' },
     { id: 'env-2', name: 'awin' }

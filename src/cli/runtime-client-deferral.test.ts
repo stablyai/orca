@@ -24,6 +24,7 @@ const {
 // constructed, so a forwarding assertion needs an environment that actually resolves.
 vi.mock('./runtime/environments', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     listEnvironments: () => [{ id: 'env-1', name: 'env-1' }]
@@ -54,6 +55,7 @@ vi.mock('./runtime-client', () => {
       constructorArgsMock(...args)
     }
   }
+
   return { RuntimeClient, getDefaultUserDataPath: () => testUserDataPathRef.current }
 })
 
@@ -97,12 +99,15 @@ describe('RuntimeClient module-graph deferral', () => {
     'execution-host-flag.ts'
   ])('%s imports error classes from ./runtime/types, not the barrel', (file) => {
     const source = readFileSync(join(CLI_DIR, file), 'utf8')
+
     const valueImports = source
       .split('\n')
       .filter((line) => line.startsWith('import ') && line.includes("'./runtime-client'"))
+
     for (const line of valueImports) {
       expect(line, `${file}: "${line}" must be type-only`).toMatch(/^import type /)
     }
+
     // Why: format.ts re-exports its error formatters; the guarded import lives in cli-error.ts.
     if (file !== 'format.ts') {
       expect(source).toContain("} from './runtime/types'")
@@ -159,10 +164,12 @@ describe('RuntimeClient module-graph deferral', () => {
 
       const calls = constructorArgsMock.mock.calls
       expect(calls.length, `${argv.join(' ')} client constructions`).toBe(constructs)
+
       for (const call of calls) {
         expect(call[2], `${argv.join(' ')} pairing code`).toBeNull()
         expect(call[3], `${argv.join(' ')} environment`).toBeNull()
       }
+
       if (argv.join(' ') === 'agent hooks off') {
         expect(
           applyAgentStatusHooksEnabledMock,
@@ -190,6 +197,7 @@ describe('RuntimeClient module-graph deferral', () => {
       vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
       vi.stubEnv('ORCA_ENVIRONMENT', 'some-environment')
       const dispatchSpy = vi.spyOn(dispatchModule, 'dispatch').mockResolvedValue(undefined)
+
       try {
         await main(argv, '/tmp/repo')
 
@@ -212,6 +220,7 @@ describe('RuntimeClient module-graph deferral', () => {
   it('forwards undefined remote selection for a non-suppressed group', async () => {
     vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
     const dispatchSpy = vi.spyOn(dispatchModule, 'dispatch').mockResolvedValue(undefined)
+
     try {
       await main(['worktree', 'list'], '/tmp/repo')
 

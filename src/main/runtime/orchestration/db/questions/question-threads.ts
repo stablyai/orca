@@ -14,9 +14,11 @@ export function createQuestion(
   }
 ): { question: QuestionRow; message: MessageRow } {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     this.requireRun(params.runId)
     const dispatch = this.getDispatchContextById(params.dispatchId)
+
     if (
       !dispatch ||
       dispatch.run_id !== params.runId ||
@@ -27,6 +29,7 @@ export function createQuestion(
         `Dispatch ${params.dispatchId} is not active in Run ${params.runId}.`
       )
     }
+
     const message = this.insertMessage({
       from: `dispatch:${params.dispatchId}`,
       to: `run:${params.runId}`,
@@ -41,6 +44,7 @@ export function createQuestion(
       }),
       runId: params.runId
     })
+
     this.db.prepare('UPDATE messages SET thread_id = ? WHERE id = ?').run(message.id, message.id)
     this.db
       .prepare(
@@ -52,6 +56,7 @@ export function createQuestion(
     const question = this.getQuestionRaw(message.id) as QuestionRow
     const storedMessage = this.getMessageById(message.id) as MessageRow
     this.db.exec('COMMIT')
+
     return { question: exposeQuestionTimestamps(question), message: storedMessage }
   } catch (error) {
     this.db.exec('ROLLBACK')
@@ -61,6 +66,7 @@ export function createQuestion(
 
 export function getQuestion(this: OrchestrationDb, messageId: string): QuestionRow | undefined {
   const question = this.getQuestionRaw(messageId)
+
   return question ? exposeQuestionTimestamps(question) : undefined
 }
 
@@ -80,21 +86,25 @@ export function answerQuestion(
   }
 ): { question: QuestionRow; message: MessageRow; duplicate: boolean } {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     this.requireCurrentConsumer(params.runId, params.consumerGeneration)
     const question = this.getQuestionRaw(params.messageId)
+
     if (!question || question.run_id !== params.runId) {
       throw new OrchestrationError(
         'question_not_found',
         `Question ${params.messageId} was not found in Run ${params.runId}.`
       )
     }
+
     if (question.status === 'closed') {
       throw new OrchestrationError(
         'dispatch_inactive',
         `Question ${params.messageId} is closed because its Dispatch is inactive.`
       )
     }
+
     if (question.status === 'answered') {
       if (question.answer_body !== params.body || !question.answer_message_id) {
         throw new OrchestrationError(
@@ -102,11 +112,15 @@ export function answerQuestion(
           `Question ${params.messageId} already has a different answer.`
         )
       }
+
       const message = this.getMessageById(question.answer_message_id)
+
       if (!message) {
         throw new Error(`Recorded answer message ${question.answer_message_id} was not found.`)
       }
+
       this.db.exec('COMMIT')
+
       return { question: exposeQuestionTimestamps(question), message, duplicate: true }
     }
 
@@ -118,6 +132,7 @@ export function answerQuestion(
       threadId: question.message_id,
       runId: params.runId
     })
+
     // Why: ask returns thread state directly; leaving its answer unread would deliver it again via check.
     this.markAsRead([message.id])
     this.db
@@ -131,6 +146,7 @@ export function answerQuestion(
     const answered = this.getQuestionRaw(question.message_id) as QuestionRow
     const storedMessage = this.getMessageById(message.id) as MessageRow
     this.db.exec('COMMIT')
+
     return {
       question: exposeQuestionTimestamps(answered),
       message: storedMessage,
@@ -146,14 +162,17 @@ export function closeQuestionsForDispatch(this: OrchestrationDb, dispatchId: str
   const rows = this.db
     .prepare("SELECT message_id FROM question_threads WHERE dispatch_id = ? AND status = 'pending'")
     .all(dispatchId) as { message_id: string }[]
+
   if (rows.length === 0) {
     return []
   }
+
   this.db
     .prepare(
       "UPDATE question_threads SET status = 'closed', closed_at = datetime('now') WHERE dispatch_id = ? AND status = 'pending'"
     )
     .run(dispatchId)
+
   return rows.map((row) => row.message_id)
 }
 

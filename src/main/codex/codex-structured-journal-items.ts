@@ -54,6 +54,7 @@ export class CodexJournalItems {
       maxMetadataBytes: deps.maxMetadataBytes,
       identityFor: (threadId, params, item) => {
         const turnId = readCodexTurnId(params) ?? this.activeTurn(threadId)
+
         return this.identityFor(threadId, turnId, item)
       }
     })
@@ -71,38 +72,51 @@ export class CodexJournalItems {
       typeof event.params === 'object' && event.params !== null
         ? (event.params as Record<string, unknown>)
         : {}
+
     const item = readCodexThreadItem(params.item)
+
     if (!item) {
       return { handled: false }
     }
+
     const turnId = readCodexTurnId(event.params) ?? this.activeTurn(event.threadId)
     const identity = this.identityFor(event.threadId, turnId, item)
+
     // Count echoes for stable resume ordinals, but user bubbles come from submissions.
     if (source === 'live' && item.type === 'userMessage') {
       const echo = readCodexDispatchEcho(item, identity)
+
       if (echo) {
         this.deps.onUserMessageEcho?.(echo.clientMessageId, echo.providerIdentity)
       }
+
       return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
     }
+
     if (item.type === 'contextCompaction' && event.method === 'item/started') {
       return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
     }
+
     if (
       event.method !== 'item/completed' &&
       !this.streams.canTrack(event.threadId, item, identity)
     ) {
       return { handled: true, admission: { accepted: false, reason: 'failed' } }
     }
+
     const translated = codexJournalItem(item)
     const command = readCodexJournalString(item, 'command')
+
     if (command) {
       const boundedCommand = Buffer.from(command, 'utf8')
         .subarray(0, MAX_CODEX_DETAIL_BYTES)
         .toString('utf8')
+
       this.details.set(codexStructuredItemKey(event.threadId, item.id), boundedCommand)
     }
+
     const itemKey = codexStructuredItemKey(event.threadId, item.id)
+
     if (!translated.body) {
       if (event.method === 'item/completed') {
         this.streams.forget(event.threadId, item.id)
@@ -110,26 +124,33 @@ export class CodexJournalItems {
       } else {
         this.track(event.threadId, turnId, item, identity)
         const admission = this.trimActiveState()
+
         if (!admission.accepted) {
           return { handled: true, admission }
         }
       }
+
       return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
     }
+
     const admission = this.appendTranslated(event.method, identity, translated)
+
     if (!admission.accepted) {
       return { handled: true, admission }
     }
+
     if (event.method === 'item/completed') {
       this.streams.forget(event.threadId, item.id)
       this.activeItems.delete(itemKey)
     } else {
       this.track(event.threadId, turnId, item, identity)
       const trimAdmission = this.trimActiveState()
+
       if (!trimAdmission.accepted) {
         return { handled: true, admission: trimAdmission }
       }
     }
+
     return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
   }
 
@@ -148,17 +169,23 @@ export class CodexJournalItems {
     if (!translated.body) {
       return CODEX_JOURNAL_ADMITTED
     }
+
     if (method === 'item/completed') {
       const admission = appendCodexLifecycleItem(this.deps.sink, identity, translated.body)
+
       return admission.accepted ? publishCodexLifecycle(this.deps.sink) : admission
     }
+
     const options = requiresTerminalSettlement(translated.body) ? { lifecycle: true } : {}
+
     const admission = this.deps.sink.tryAppendItem
       ? this.deps.sink.tryAppendItem(identity, translated.body, options)
       : (this.deps.sink.appendItem(identity, translated.body), CODEX_JOURNAL_ADMITTED)
+
     if (!admission.accepted) {
       return admission
     }
+
     return this.deps.sink.tryPublish
       ? this.deps.sink.tryPublish(options)
       : (this.deps.sink.publish(options), CODEX_JOURNAL_ADMITTED)
@@ -173,6 +200,7 @@ export class CodexJournalItems {
     const retainedItem = codexCommandOutlivesTurn(item)
       ? (boundStreamItem(item) as CodexThreadItem)
       : item
+
     this.streams.track(threadId, retainedItem, identity)
     this.activeItems.set(codexStructuredItemKey(threadId, item.id), {
       threadId,
@@ -189,23 +217,30 @@ export class CodexJournalItems {
   ): AgentJournalItemIdentity {
     const key = codexStructuredItemKey(threadId, item.id)
     const existing = this.identities.get(key)
+
     if (existing) {
       return existing
     }
+
     const identity = codexItemIdentity({ threadId, turnId, item, ordinals: this.ordinals })
     this.identities.set(key, identity)
+
     while (this.identities.size > MAX_CODEX_IDENTITY_ENTRIES) {
       const oldest = this.identities.keys().next().value
+
       if (typeof oldest === 'string') {
         this.identities.delete(oldest)
       }
     }
+
     while (this.details.size > MAX_CODEX_DETAIL_ENTRIES) {
       const oldest = this.details.keys().next().value
+
       if (typeof oldest === 'string') {
         this.details.delete(oldest)
       }
     }
+
     return identity
   }
 
@@ -214,31 +249,41 @@ export class CodexJournalItems {
       const oldest = [...this.activeItems].find(
         ([, active]) => !codexCommandOutlivesTurn(active.item)
       )?.[0]
+
       if (typeof oldest !== 'string') {
         break
       }
+
       const evicted = this.activeItems.get(oldest)
+
       if (evicted) {
         const translated = codexJournalItem(evicted.item).body
+
         if (translated) {
           const admission = appendCodexLifecycleItem(
             this.deps.sink,
             evicted.identity,
             evictedActiveBody(translated)
           )
+
           if (!admission.accepted) {
             return admission
           }
+
           const published = publishCodexLifecycle(this.deps.sink)
+
           if (!published.accepted) {
             return published
           }
         }
+
         this.streams.forget(evicted.threadId, evicted.item.id)
         this.suppress(evicted.threadId, evicted.turnId ?? 'outside-turn')
       }
+
       this.activeItems.delete(oldest)
     }
+
     return CODEX_JOURNAL_ADMITTED
   }
 }
@@ -247,6 +292,7 @@ function evictedActiveBody(body: AgentJournalItemBody): AgentJournalItemBody {
   if (body.kind === 'tool-call' && body.state === 'running') {
     return { ...body, state: 'failed' }
   }
+
   if (
     (body.kind === 'approval' || body.kind === 'question') &&
     body.resolution.state === 'pending'
@@ -261,5 +307,6 @@ function evictedActiveBody(body: AgentJournalItemBody): AgentJournalItemBody {
       }
     }
   }
+
   return body
 }

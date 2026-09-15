@@ -57,11 +57,14 @@ export class ExternalAutomationProbeScheduler {
 
   schedule<T>(job: ExternalAutomationProbeJob<T>): Promise<T> {
     const existing = this.shared.get(job.key)
+
     if (existing) {
       return existing as Promise<T>
     }
+
     const controller = new AbortController()
     let settled!: Promise<T>
+
     const promise = new Promise<T>((resolve, reject) => {
       const entry: QueuedProbe = {
         key: job.key,
@@ -81,20 +84,25 @@ export class ExternalAutomationProbeScheduler {
             .then(resolve, reject)
             .finally(() => {
               this.active.delete(entry)
+
               if (this.shared.get(entry.key) === settled) {
                 this.shared.delete(entry.key)
               }
+
               this.pump()
             })
         }
       }
+
       this.queue.push(entry)
     })
+
     settled = promise.finally(() => {
       this.pump()
     })
     this.shared.set(job.key, settled)
     this.pump()
+
     return settled
   }
 
@@ -102,10 +110,12 @@ export class ExternalAutomationProbeScheduler {
   beginPriorityWork(): () => void {
     this.priorityHolds += 1
     let released = false
+
     return () => {
       if (released) {
         return
       }
+
       released = true
       this.priorityHolds = Math.max(0, this.priorityHolds - 1)
       this.pump()
@@ -125,12 +135,14 @@ export class ExternalAutomationProbeScheduler {
   private cancelWhere(shouldCancel: (scopeKey: string) => boolean): void {
     for (let index = this.queue.length - 1; index >= 0; index -= 1) {
       const entry = this.queue[index]
+
       if (entry && shouldCancel(entry.scopeKey)) {
         this.queue.splice(index, 1)
         entry.reject(new ExternalAutomationProbeCancelledError())
         this.shared.delete(entry.key)
       }
     }
+
     for (const entry of this.active) {
       if (shouldCancel(entry.scopeKey)) {
         entry.controller.abort()
@@ -141,9 +153,11 @@ export class ExternalAutomationProbeScheduler {
   private pump(): void {
     while (this.priorityHolds === 0 && this.active.size < this.concurrency) {
       const next = this.queue.shift()
+
       if (!next) {
         return
       }
+
       next.start()
     }
   }

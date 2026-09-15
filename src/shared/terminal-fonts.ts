@@ -1,7 +1,11 @@
 export const DEFAULT_TERMINAL_FONT_WEIGHT = 500
+
 export const TERMINAL_FONT_WEIGHT_MIN = 100
+
 export const TERMINAL_FONT_WEIGHT_MAX = 900
+
 export const TERMINAL_FONT_WEIGHT_STEP = 100
+
 export const DEFAULT_TERMINAL_FONT_WEIGHT_BOLD = 700
 
 function normalizeWeight(fontWeight: number | null | undefined, fallback: number): number {

@@ -1,11 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
+
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
+
 const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
+
 const originalPaneKey = process.env.ORCA_PANE_KEY
 
 vi.mock('../format', () => ({ printResult: vi.fn() }))
+
 vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
 
 import { printResult } from '../format'
@@ -52,11 +56,13 @@ afterEach(() => {
   } else {
     process.env.ORCA_TERMINAL_HANDLE = originalTerminalHandle
   }
+
   if (originalPaneKey === undefined) {
     delete process.env.ORCA_PANE_KEY
   } else {
     process.env.ORCA_PANE_KEY = originalPaneKey
   }
+
   vi.restoreAllMocks()
 })
 
@@ -118,6 +124,7 @@ describe('orchestration timeout flag validation', () => {
     const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
       result: { messages: { id: string }[]; count: number; formatted?: string }
     }
+
     expect(response.result.messages.map((message) => message.id)).toEqual(['msg_new'])
     expect(response.result.count).toBe(1)
     expect(response.result.formatted).toBeUndefined()
@@ -142,12 +149,14 @@ describe('orchestration timeout flag validation', () => {
 
   it('warns when a pre-peek runtime returned a full 100-row page', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+
     const rows = Array.from({ length: 100 }, (_, index) => ({
       id: `msg_${index}`,
       from_handle: 'a',
       subject: `s${index}`,
       read: index === 0 ? 0 : 1
     }))
+
     callMock.mockResolvedValue({ result: { messages: rows, count: 100 } })
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 

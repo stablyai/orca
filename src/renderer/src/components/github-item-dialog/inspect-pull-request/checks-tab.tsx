@@ -65,6 +65,7 @@ export function ChecksTab({
   const mountedRef = useMountedRef()
   const prRepo = useMemo(() => resolvePullRequestRepo(item), [item])
   const nextCheckDetailsRequestIdRef = useRef(0)
+
   const checkDetailsContextKey = [
     sourceContext ? getTaskSourceCacheScope(sourceContext) : 'local',
     repoId ?? item.repoId ?? '',
@@ -74,31 +75,38 @@ export function ChecksTab({
     item.number,
     headSha ?? ''
   ].join('\0')
+
   const [checksState, setChecksState] = useState(() =>
     createGitHubChecksTabState(checks, checkDetailsContextKey)
   )
+
   const resolvedChecksState = resolveGitHubChecksTabState(
     checksState,
     checks,
     checkDetailsContextKey
   )
+
   const committedChecksContextOwnerRef = useRef(resolvedChecksState.contextOwner)
   const nextChecksRefreshRequestIdRef = useRef(0)
   const activeChecksRefreshRequestIdRef = useRef<number | null>(null)
+
   const [refreshingOwner, setRefreshingOwner] = useState<{
     contextOwner: object
     requestId: number
   } | null>(null)
+
   const refreshing = refreshingOwner?.contextOwner === resolvedChecksState.contextOwner
   const [rerunningOwner, setRerunningOwner] = useState<object | null>(null)
   const rerunning = rerunningOwner === resolvedChecksState.contextOwner
   useLayoutEffect(() => {
     committedChecksContextOwnerRef.current = resolvedChecksState.contextOwner
   }, [resolvedChecksState.contextOwner])
+
   if (resolvedChecksState !== checksState) {
     // Why: a parent check refresh replaces the source list; reset local state before stale rows/details can paint.
     setChecksState(resolvedChecksState)
   }
+
   const { localChecks, expandedCheckKey, detailsByCheckKey } = resolvedChecksState
   const list = useMemo(() => localChecks ?? checks ?? [], [checks, localChecks])
   const runtimeHost = getGitHubSourceRuntimeHost(sourceContext)
@@ -249,9 +257,11 @@ export function ChecksTab({
     (check: PRCheckDetail): void => {
       const key = getCheckDetailsKey(check)
       setChecksState((current) => toggleGitHubChecksTabExpandedKey(current, key))
+
       if (detailsByCheckKey[key]) {
         return
       }
+
       requestCheckDetails(check, key)
     },
     [detailsByCheckKey, requestCheckDetails]
@@ -276,6 +286,7 @@ export function ChecksTab({
       void handleFixBrokenChecks()
     }
   })
+
   const compactHeader = (
     <ChecksTabCompactHeader
       SummaryIcon={SummaryIcon}
@@ -299,6 +310,7 @@ export function ChecksTab({
       </>
     )
   }
+
   if (list.length === 0) {
     if (variant === 'page') {
       return (
@@ -321,6 +333,7 @@ export function ChecksTab({
         </div>
       )
     }
+
     return (
       <>
         {compactHeader}
@@ -333,8 +346,10 @@ export function ChecksTab({
       </>
     )
   }
+
   if (variant === 'page') {
     const countChips = getCheckCountChips(counts)
+
     return (
       <div className="flex flex-col gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
@@ -380,6 +395,7 @@ export function ChecksTab({
       </div>
     )
   }
+
   return (
     <>
       {compactHeader}

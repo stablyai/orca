@@ -22,6 +22,7 @@ export function discoverAndroidSdk(options: DiscoverAndroidSdkOptions): AndroidS
 
   for (const sdkRoot of candidateSdkRoots(env, platform, homedir)) {
     const paths = resolveToolPaths(sdkRoot, win32)
+
     // Require both tools the backend depends on: adb (devices/input/stream) and
     // the emulator binary (boot + list AVDs). A partial SDK isn't usable.
     if (exists(paths.adb) && exists(paths.emulator)) {
@@ -38,13 +39,17 @@ function candidateSdkRoots(
   homedir: string
 ): string[] {
   const roots: string[] = []
+
   if (env.ANDROID_HOME) {
     roots.push(env.ANDROID_HOME)
   }
+
   if (env.ANDROID_SDK_ROOT) {
     roots.push(env.ANDROID_SDK_ROOT)
   }
+
   roots.push(defaultSdkRoot(env, platform, homedir))
+
   return roots
 }
 
@@ -55,11 +60,14 @@ function defaultSdkRoot(
 ): string {
   if (platform === 'win32') {
     const localAppData = env.LOCALAPPDATA ?? join(homedir, 'AppData', 'Local')
+
     return join(localAppData, 'Android', 'Sdk')
   }
+
   if (platform === 'darwin') {
     return join(homedir, 'Library', 'Android', 'sdk')
   }
+
   return join(homedir, 'Android', 'Sdk')
 }
 

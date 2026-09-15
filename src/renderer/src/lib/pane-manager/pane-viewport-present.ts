@@ -10,51 +10,69 @@ import {
 // about DOM visibility, not about the renderer.
 
 const DISPLAYED_PRESENT_RETRY_FRAMES = 16
+
 type ViewportPresentMode = 'preserve-synchronized-output' | 'force-current-buffer'
+
 type DisplayedPresentRetry = { frames: number; mode: ViewportPresentMode }
+
 const pendingDisplayedPresentRetries = new WeakMap<ManagedPaneInternal, DisplayedPresentRetry>()
 
 function schedulePresentWhenDisplayed(pane: ManagedPaneInternal, mode: ViewportPresentMode): void {
   if (typeof globalThis.requestAnimationFrame !== 'function') {
     return
   }
+
   const pending = pendingDisplayedPresentRetries.get(pane)
+
   if (pending) {
     if (mode === 'force-current-buffer') {
       pending.mode = mode
     }
+
     return
   }
+
   pendingDisplayedPresentRetries.set(pane, {
     frames: DISPLAYED_PRESENT_RETRY_FRAMES,
     mode
   })
+
   const tick = (): void => {
     const retry = pendingDisplayedPresentRetries.get(pane)
+
     if (!retry || retry.frames <= 0 || !pane.terminal) {
       pendingDisplayedPresentRetries.delete(pane)
+
       return
     }
+
     if (isManagedPaneDisplayNone(pane)) {
       if (retry.frames === 1) {
         pendingDisplayedPresentRetries.delete(pane)
+
         return
       }
+
       retry.frames -= 1
       globalThis.requestAnimationFrame(tick)
+
       return
     }
+
     pendingDisplayedPresentRetries.delete(pane)
     presentPaneViewportWithMode(pane, retry.mode)
   }
+
   globalThis.requestAnimationFrame(tick)
 }
 
 function presentPaneViewportWithMode(pane: ManagedPane, mode: ViewportPresentMode): void {
   const internal = pane as ManagedPaneInternal
+
   if (internal.webglDisabledAfterContextLoss) {
     return
   }
+
   try {
     // Why: on reveal xterm's IntersectionObserver can still report the pane as
     // not intersecting, so a plain refresh() is swallowed by RenderService's
@@ -80,12 +98,15 @@ function presentPaneViewportWithMode(pane: ManagedPane, mode: ViewportPresentMod
       // canvas keeps pre-hide pixels until a user resize. Retry once the box
       // exists so the full present actually runs.
       schedulePresentWhenDisplayed(internal, mode)
+
       return
     }
+
     const presented =
       mode === 'force-current-buffer'
         ? forceFullViewportPresent(pane.terminal)
         : requestFullViewportPresent(pane.terminal)
+
     if (!presented) {
       // Why: refresh even without a WebGL addon so recovery never silently
       // no-ops — a DOM-rendered pane can hold stale pixels after reveal too.

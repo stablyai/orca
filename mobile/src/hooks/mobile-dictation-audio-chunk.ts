@@ -23,13 +23,16 @@ export function enqueueMobileDictationAudioChunk(
   const raw = event.data
   const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw)
   const byteLength = bytes.byteLength
+
   if (!queue.pendingAudioBudget.tryReserve(byteLength)) {
     queue.failActiveDictation(
       dictationId,
       new Error(MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE)
     )
+
     return
   }
+
   const sendChunk = client
     .sendRequest('speech.dictation.chunk', {
       dictationId,
@@ -46,7 +49,9 @@ export function enqueueMobileDictationAudioChunk(
       if (queue.shouldReleaseBudget(dictationId)) {
         queue.pendingAudioBudget.release(byteLength)
       }
+
       queue.pendingChunks.delete(sendChunk)
     })
+
   queue.pendingChunks.add(sendChunk)
 }

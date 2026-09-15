@@ -18,7 +18,9 @@ export function useWindowVisibilityEffects(): void {
         actions.reportVisibleGitHubPRRefreshCandidates([], Date.now())
       }
     }
+
     document.addEventListener('visibilitychange', handler)
+
     return () => document.removeEventListener('visibilitychange', handler)
   }, [actions])
 
@@ -30,13 +32,17 @@ export function useWindowVisibilityEffects(): void {
     if (!isMac || isPairedWebClientWindow()) {
       return
     }
+
     const handler = (): void => {
       if (document.visibilityState !== 'visible') {
         return
       }
+
       window.api?.ui?.notifyWindowRevealed?.()
     }
+
     document.addEventListener('visibilitychange', handler)
+
     return () => document.removeEventListener('visibilitychange', handler)
   }, [])
 }

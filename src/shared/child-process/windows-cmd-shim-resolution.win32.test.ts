@@ -40,11 +40,13 @@ describeOnWindows('resolved .cmd shim spawn', () => {
 
   it('delivers the whole adversarial corpus through the resolved shim', async () => {
     const values = WINDOWS_ARGUMENT_CORPUS.map((entry) => entry.value)
+
     const result = await runProcess({
       program: shim,
       args: values,
       timeoutMs: 30_000
     })
+
     expect(result.code).toBe(0)
     expect(decode(result.stdout)).toEqual(values)
   })
@@ -54,11 +56,13 @@ describeOnWindows('resolved .cmd shim spawn', () => {
     // fallback path has to reject this input. Resolving the shim is what makes
     // it expressible.
     const prompt = 'Fix "src/a b.ts"\n- run tests\r\n- report 100% & stop'
+
     const result = await runProcess({
       program: shim,
       args: [prompt],
       timeoutMs: 30_000
     })
+
     expect(result.code).toBe(0)
     expect(decode(result.stdout)).toEqual([prompt])
   })

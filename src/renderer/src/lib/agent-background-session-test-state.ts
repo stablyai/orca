@@ -120,6 +120,7 @@ export function createAgentBackgroundSessionTestState(mocks: {
     registerAgentLaunchConfig: mocks.registerAgentLaunchConfig,
     clearAgentLaunchConfig: vi.fn()
   }
+
   return state
 }
 
@@ -169,6 +170,7 @@ export function useRemoteAgentBackgroundRuntime(state: AgentBackgroundSessionTes
 export function expectReservedAgentBackgroundTabId(spawn: TestMock): string {
   const tabId = spawn.mock.calls[0]?.[0]?.tabId
   expect(tabId).toMatch(AGENT_BACKGROUND_SESSION_UUID_RE)
+
   return tabId
 }
 
@@ -180,6 +182,7 @@ export function expectStableAgentBackgroundPaneSpawn(spawn: TestMock): string {
   expect(typeof leafId).toBe('string')
   expect(leafId).toMatch(AGENT_BACKGROUND_SESSION_UUID_RE)
   expect(paneKey).toBe(`${expectReservedAgentBackgroundTabId(spawn)}:${leafId}`)
+
   return paneKey
 }
 
@@ -238,6 +241,7 @@ export function resetAgentBackgroundSessionTestHarness(args: {
   args.createTab.mockImplementation((_worktreeId, _groupId, _shellOverride, options) => {
     const tab = { id: options?.id ?? 'tab-1', title: 'Terminal 1' }
     args.state.tabsByWorktree['wt-1'].push(tab)
+
     return tab
   })
   args.closeTab.mockImplementation((tabId: string) => {
@@ -258,6 +262,7 @@ export function resetAgentBackgroundSessionTestHarness(args: {
   })
   args.runtimeSubscribe.mockImplementation(async (_request, callbacks) => {
     queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+
     return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
   })
   args.subscribeToData.mockReturnValue(vi.fn())

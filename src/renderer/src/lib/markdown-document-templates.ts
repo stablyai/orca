@@ -9,7 +9,9 @@ import {
 import { basename, joinPath, normalizeRelativePath } from './path'
 
 const MARKDOWN_TEMPLATE_ROOT = '.orca/templates'
+
 const MARKDOWN_TEMPLATE_MAX_DEPTH = 8
+
 const MARKDOWN_TEMPLATE_MAX_COUNT = 100
 
 export type MarkdownDocumentTemplate = {
@@ -29,6 +31,7 @@ export type MarkdownTemplatePlaceholderValues = {
 
 function isMarkdownTemplateName(name: string): boolean {
   const lowerName = name.toLowerCase()
+
   return lowerName.endsWith('.md') || lowerName.endsWith('.mdx') || lowerName.endsWith('.markdown')
 }
 
@@ -53,18 +56,23 @@ function titleFromName(name: string): string {
 function foldMarkdownTemplateTitleWhitespace(value: string): string {
   let normalized = ''
   let pendingWhitespace = false
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (isMarkdownTemplateTitleWhitespace(code)) {
       pendingWhitespace = normalized.length > 0
       continue
     }
+
     if (pendingWhitespace) {
       normalized += ' '
       pendingWhitespace = false
     }
+
     normalized += value.charAt(index)
   }
+
   return normalized
 }
 
@@ -100,6 +108,7 @@ function isMissingPathError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }
+
   return /ENOENT|not found|no such file/i.test(error.message)
 }
 
@@ -118,6 +127,7 @@ export function applyMarkdownTemplatePlaceholders(
   const now = values.now ?? new Date()
   const date = formatDate(now)
   const time = formatTime(now)
+
   const replacements: Record<string, string> = {
     title: values.title,
     filename: values.filename,
@@ -154,12 +164,14 @@ export async function listMarkdownDocumentTemplates(
     }
 
     let entries: DirEntry[]
+
     try {
       entries = await readRuntimeDirectory(context, dirPath)
     } catch (error) {
       if (relativeDir === '' && isMissingPathError(error)) {
         return
       }
+
       throw error
     }
 
@@ -171,12 +183,14 @@ export async function listMarkdownDocumentTemplates(
       const entryRelativePath = normalizeRelativePath(
         relativeDir ? `${relativeDir}/${entry.name}` : entry.name
       )
+
       const entryPath = joinPath(rootPath, entryRelativePath)
 
       if (entry.isDirectory) {
         if (!shouldSkipTemplateDirectory(entry)) {
           await visitDirectory(entryPath, entryRelativePath, depth + 1)
         }
+
         continue
       }
 
@@ -185,9 +199,11 @@ export async function listMarkdownDocumentTemplates(
       }
 
       const templateRelativePath = entryRelativePath
+
       const rootRelativePath = normalizeRelativePath(
         `${MARKDOWN_TEMPLATE_ROOT}/${templateRelativePath}`
       )
+
       templates.push({
         id: rootRelativePath,
         name: titleFromName(entry.name),
@@ -203,6 +219,7 @@ export async function listMarkdownDocumentTemplates(
 
   return templates.sort((a, b) => {
     const nameCompare = a.name.localeCompare(b.name)
+
     return nameCompare === 0
       ? a.templateRelativePath.localeCompare(b.templateRelativePath)
       : nameCompare

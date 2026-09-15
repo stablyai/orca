@@ -34,9 +34,11 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const activeTourId = useAppStore((s) => s.activeContextualTourId)
   const activeStepIndex = useAppStore((s) => s.activeContextualTourStepIndex)
   const activeTourSource = useAppStore((s) => s.activeContextualTourSource)
+
   const wasFeaturePreviouslyInteracted = useAppStore(
     (s) => s.activeContextualTourWasFeaturePreviouslyInteracted
   )
+
   const activeModal = useAppStore((s) => s.activeModal)
   const onboardingVisible = useAppStore((s) => s.contextualToursOnboardingVisible)
   const blockingSurfaceVisible = useAppStore((s) => s.contextualToursBlockingSurfaceVisible)
@@ -83,6 +85,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
       ) {
         return
       }
+
       telemetryOutcomeSentRef.current = true
       const furthestStepIndex = telemetryFurthestStepIndexRef.current
       trackContextualTourOutcome({
@@ -105,8 +108,10 @@ export function ContextualTourOverlay(): JSX.Element | null {
   useLayoutEffect(() => {
     if (!activeTourId) {
       setRenderState(null)
+
       return
     }
+
     // Why: reset before the measurement layout effect below, otherwise the
     // first passive effect can hide a freshly measured tour until the next tick.
     markedTourIdRef.current = null
@@ -123,6 +128,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (!activeTour || !activeTourId) {
       return
     }
+
     if (
       onboardingVisible ||
       blockingSurfaceVisible ||
@@ -147,10 +153,12 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (!activeTour || activeTourId === null) {
       measuredTargetRef.current = null
       setRenderState(null)
+
       return
     }
 
     telemetryDefinedStepCountRef.current = activeTour.steps.length
+
     const measurement = measureContextualTourOverlayRenderState({
       tour: activeTour,
       activeStepIndex,
@@ -158,6 +166,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
       keybindings,
       previousTelemetryTotalSteps: telemetryTotalStepsRef.current
     })
+
     telemetryTotalStepsRef.current = Math.max(
       telemetryTotalStepsRef.current,
       measurement.kind === 'render' ? measurement.telemetryTotalSteps : 0
@@ -168,16 +177,21 @@ export function ContextualTourOverlay(): JSX.Element | null {
       // probing an element the step no longer uses (and may have detached).
       measuredTargetRef.current = null
     }
+
     if (measurement.kind === 'advance') {
       advanceContextualTour()
+
       return
     }
+
     if (measurement.kind === 'wait') {
       return
     }
+
     if (measurement.kind === 'cancel') {
       emitContextualTourOutcome('cancelled')
       cancelContextualTour(activeTourId)
+
       return
     }
 
@@ -205,30 +219,37 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (!activeTourId) {
       return
     }
+
     // Why: all three triggers land on one frame, and scroll — which the
     // capture-phase listener receives for every scrollable pane in the app —
     // pays one rect read unless the tour's own target actually moved. Step
     // targets appearing or vanishing are still caught by the 500ms pass.
     let frame: number | null = null
     let fullPassQueued = false
+
     const scheduleMeasure = (fullPass: boolean): void => {
       fullPassQueued = fullPassQueued || fullPass
+
       if (frame !== null) {
         return
       }
+
       frame = window.requestAnimationFrame(() => {
         frame = null
         const runFullPass = fullPassQueued
         fullPassQueued = false
+
         if (runFullPass || hasContextualTourTargetMoved(measuredTargetRef.current)) {
           measureTourOverlay()
         }
       })
     }
+
     const scheduleTargetMeasure = (): void => scheduleMeasure(false)
     const scheduleFullMeasure = (): void => scheduleMeasure(true)
     window.addEventListener('resize', scheduleFullMeasure)
     window.addEventListener('scroll', scheduleTargetMeasure, true)
+
     // Why gated: a hidden window paints no frames, so the queued rAF never runs
     // and the pass is pure wakeup. The becoming-visible run re-queues it, and
     // the layout effect measures on every render, so nothing is missed.
@@ -236,10 +257,12 @@ export function ContextualTourOverlay(): JSX.Element | null {
       run: scheduleFullMeasure,
       intervalMs: 500
     })
+
     return () => {
       if (frame !== null) {
         window.cancelAnimationFrame(frame)
       }
+
       window.removeEventListener('resize', scheduleFullMeasure)
       window.removeEventListener('scroll', scheduleTargetMeasure, true)
       stopFullPassInterval()
@@ -254,6 +277,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (!activeTourId || !renderState || markedTourIdRef.current === activeTourId) {
       return
     }
+
     // Why: a tour is considered seen only after its first measured target
     // paints, so missing or removed surfaces can retry on a later visit.
     markedTourIdRef.current = activeTourId
@@ -264,6 +288,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (!activeTourId || !renderState || telemetryTourIdRef.current === activeTourId) {
       return
     }
+
     telemetryTourIdRef.current = activeTourId
     telemetryStepsSeenRef.current.add(activeStepIndex)
     telemetryFurthestStepIndexRef.current = Math.max(
@@ -281,6 +306,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (!activeTourId || !renderState) {
       return
     }
+
     telemetryStepsSeenRef.current.add(activeStepIndex)
     telemetryFurthestStepIndexRef.current = Math.max(
       telemetryFurthestStepIndexRef.current,
@@ -298,6 +324,7 @@ export function ContextualTourOverlay(): JSX.Element | null {
     }
 
     window.addEventListener('beforeunload', emitPendingCancellation)
+
     return () => {
       window.removeEventListener('beforeunload', emitPendingCancellation)
       // Why: analytics expects every shown tour to have an outcome, even when
@@ -310,13 +337,17 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (!activeTourId || !renderState) {
       return
     }
+
     const focusKey = `${activeTourId}:${activeStepIndex}`
+
     if (focusedStepRef.current === focusKey) {
       return
     }
+
     focusedStepRef.current = focusKey
 
     const currentFocus = document.activeElement
+
     if (
       !previousFocusRef.current &&
       currentFocus instanceof HTMLElement &&
@@ -327,9 +358,12 @@ export function ContextualTourOverlay(): JSX.Element | null {
 
     const timeout = window.setTimeout(() => {
       const panel = panelRef.current
+
       const firstFocusable = panel ? getContextualTourFocusableElements(panel)[0] : null
+
       ;(firstFocusable ?? panel)?.focus({ preventScroll: true })
     }, 0)
+
     return () => window.clearTimeout(timeout)
   }, [activeStepIndex, activeTourId, renderState])
 
@@ -337,9 +371,11 @@ export function ContextualTourOverlay(): JSX.Element | null {
     if (activeTourId) {
       return
     }
+
     focusedStepRef.current = null
     const previousFocus = previousFocusRef.current
     previousFocusRef.current = null
+
     if (previousFocus?.isConnected) {
       previousFocus.focus({ preventScroll: true })
     }

@@ -41,14 +41,18 @@ export function queueBrowserNetworkSourceData(
   ) {
     return false
   }
+
   const releaseApplicationBytes = claimApplicationBytes(payload.byteLength)
+
   if (!releaseApplicationBytes) {
     return false
   }
+
   stream.receiveCredit -= payload.byteLength
   stream.pendingToSocket.push({ bytes: payload.slice(), releaseApplicationBytes })
   stream.pendingToSocketBytes += payload.byteLength
   flushBrowserNetworkSourceData(stream)
+
   return true
 }
 
@@ -59,20 +63,26 @@ export function settleBrowserNetworkSourceData(
   if (!Number.isSafeInteger(bytes) || bytes < 0) {
     return false
   }
+
   let remaining = bytes
+
   while (remaining > 0) {
     const settlement = stream.unsettledToSocket[0]
+
     if (!settlement) {
       return false
     }
+
     const consumed = Math.min(remaining, settlement.bytes)
     settlement.bytes -= consumed
     remaining -= consumed
+
     if (settlement.bytes === 0) {
       stream.unsettledToSocket.shift()
       settlement.releaseApplicationBytes()
     }
   }
+
   return true
 }
 
@@ -91,7 +101,9 @@ export function grantBrowserNetworkSourceReceiveCredit(
   if (stream.receiveCredit + bytes > maxCredit) {
     return false
   }
+
   stream.receiveCredit += bytes
+
   return true
 }
 
@@ -101,8 +113,10 @@ export function finishBrowserNetworkSourceData(
   if (stream.remoteEnded) {
     return false
   }
+
   stream.remoteEnded = true
   flushBrowserNetworkSourceData(stream)
+
   return true
 }
 
@@ -115,10 +129,12 @@ function flushBrowserNetworkSourceData(stream: BrowserNetworkTunnelSourceReceive
       bytes: bytes.byteLength,
       releaseApplicationBytes: pending.releaseApplicationBytes
     })
+
     if (!stream.socket.push(Buffer.from(bytes))) {
       stream.readableDemand = false
     }
   }
+
   if (stream.remoteEnded && stream.pendingToSocket.length === 0 && !stream.readableEnded) {
     stream.readableEnded = true
     stream.socket.push(null)

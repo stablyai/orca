@@ -58,25 +58,32 @@ export function buildToolchainProbeCommand(): string {
   const toolLoop = `for t in ${PROBED_TOOLS.join(
     ' '
   )}; do if command -v "$t" >/dev/null 2>&1; then echo "HAVE $t"; fi; done`
+
   const pkgList = PACKAGE_MANAGER_HINTS.map((hint) => hint.bin).join(' ')
   const pkgLoop = `for p in ${pkgList}; do if command -v "$p" >/dev/null 2>&1; then echo "PKG $p"; break; fi; done`
+
   return `${toolLoop}; ${pkgLoop}`
 }
 
 export function parseBuildToolchainProbe(output: string): BuildToolchainStatus {
   const present = new Set<string>()
   let packageManager: string | null = null
+
   for (const line of output.split('\n')) {
     const haveMatch = line.trim().match(/^HAVE (\S+)$/)
+
     if (haveMatch) {
       present.add(haveMatch[1])
       continue
     }
+
     const pkgMatch = line.trim().match(/^PKG (\S+)$/)
+
     if (pkgMatch && !packageManager) {
       packageManager = pkgMatch[1]
     }
   }
+
   return {
     present: PROBED_TOOLS.filter((tool) => present.has(tool)),
     packageManager,
@@ -86,9 +93,11 @@ export function parseBuildToolchainProbe(output: string): BuildToolchainStatus {
 
 export function shouldProbeBuildToolchainAfterNativeDepsFailure(message: string): boolean {
   const lower = message.toLowerCase()
+
   if (!lower.includes('gyp') && !lower.includes('node-gyp')) {
     return false
   }
+
   return (
     /\bnot found:\s*(make|gmake|gcc|g\+\+|cc|c\+\+|clang|clang\+\+|python|python3)\b/i.test(
       message
@@ -104,15 +113,19 @@ export function shouldProbeBuildToolchainAfterNativeDepsFailure(message: string)
 function missingToolNames(status: BuildToolchainStatus): string[] {
   const present = new Set(status.present)
   const missing: string[] = []
+
   if (!present.has('make')) {
     missing.push('make')
   }
+
   if (!hasCxxCompiler(present)) {
     missing.push('a C++ compiler (g++ or clang++)')
   }
+
   if (!hasPython(present)) {
     missing.push('python3')
   }
+
   return missing
 }
 
@@ -121,9 +134,11 @@ export function toolchainInstallHintLines(status: BuildToolchainStatus): string[
   const tailored = status.packageManager
     ? PACKAGE_MANAGER_HINTS.find((hint) => hint.bin === status.packageManager)?.install
     : null
+
   if (tailored) {
     return [`  ${tailored}`]
   }
+
   return [
     '  Debian/Ubuntu:  sudo apt-get install -y build-essential python3',
     '  Fedora/RHEL:    sudo dnf install -y make gcc gcc-c++ python3',
@@ -137,10 +152,12 @@ export function formatSkippedNodePtyWarning(status: BuildToolchainStatus): strin
   // Why: with no package manager detected the hint list is the cross-distro menu, whose first line
   // is Debian's — quoting it alone would name the wrong distro, so stay neutral instead.
   const hintLines = toolchainInstallHintLines(status)
+
   const hint =
     hintLines.length === 1
       ? hintLines[0].trim()
       : 'install a C/C++ toolchain (make, a C++ compiler, python3)'
+
   return (
     `missing build tools (${missingToolNames(status).join(', ')}); skipping node-pty so the ` +
     `connection still serves files and git. Remote terminals need: ${hint}`
@@ -161,6 +178,7 @@ export function formatMissingToolchainError(
     '',
     `Underlying install error: ${underlyingError}`
   ]
+
   return lines.join('\n')
 }
 
@@ -224,5 +242,6 @@ export function formatNodeHeadersDownloadError(
         '  - Allow outbound HTTPS to nodejs.org, or point npm at a mirror: ' +
           'npm config set disturl https://<mirror>/dist'
       ]
+
   return [...lines, '', `Underlying install error: ${underlyingError}`].join('\n')
 }

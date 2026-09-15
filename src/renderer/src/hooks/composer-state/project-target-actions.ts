@@ -86,12 +86,14 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
     (projectId: string): void => {
       initialProjectGroupAppliedRef.current = true
       const projectGroupId = getProjectGroupIdFromNewWorkspaceOptionId(projectId)
+
       if (projectGroupId) {
         const nextProjectGroup = findActionableFolderProjectGroup({
           projectGroups,
           groupId: projectGroupId,
           actionableHostIds
         })
+
         if (!nextProjectGroup) {
           setSelectedProjectGroupId(null)
           setProjectError(
@@ -100,8 +102,10 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
               'Choose or add a project before creating a workspace.'
             )
           )
+
           return
         }
+
         const nextSourceRepo = getFolderSourceRepos(repos, projectGroups, nextProjectGroup)[0]
         setSelectedProjectGroupId(nextProjectGroup.id)
         setProjectError(null)
@@ -110,10 +114,12 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
         setLinkedPR(null)
         setLinkedGitLabIssue(null)
         setLinkedGitLabMR(null)
+
         if (linkedWorkItem && !shouldPreserveWorkspaceSourceOnRepoChange(linkedWorkItem)) {
           setLinkedWorkItem(null)
           setLinkedTaskSourceContext(null)
         }
+
         setSparseEnabled(false)
         setSparseDirectories('')
         setSparseSelectedPresetId(null)
@@ -126,12 +132,15 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
         setReuseSelectedBranch(false)
         setForkPushWarning(null)
         setStartFromResetHint(null)
+
         return
       }
 
       setSelectedProjectGroupId(null)
+
       const preferredHostId =
         selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target.hostId : null
+
       // Why: pass the current host as a preference (focusedHostScope), not a hard hostId — pinning made selecting a project set up only on another host a silent no-op.
       const nextRepoId = resolveWorkspaceCreationRepoId({
         eligibleRepos,
@@ -141,9 +150,11 @@ export function useProjectTargetActions(input: ProjectTargetActionsInput) {
         focusedHostScope: preferredHostId ?? workspaceHostScope,
         actionableHostIds
       })
+
       if (!nextRepoId) {
         return
       }
+
       handleRepoChange(nextRepoId, { forceResetStartFrom: isProjectGroupTarget })
     },
     [

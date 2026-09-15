@@ -357,10 +357,13 @@ describe('openTabEntryWithOperations', () => {
 
   it('stops after authorization when ownership becomes remote or ambiguous', async () => {
     let releaseAuthorization: (() => void) | undefined
+
     const authorization = new Promise<void>((resolve) => {
       releaseAuthorization = resolve
     })
+
     let allowed = true
+
     const operations = makeOperations({
       authorizeExternalPath: vi.fn(() => authorization),
       assertAbsolutePathAllowed: vi.fn(() => {
@@ -376,10 +379,13 @@ describe('openTabEntryWithOperations', () => {
       query: '/tmp/notes.md',
       operations
     })
+
     await vi.waitFor(() => expect(operations.authorizeExternalPath).toHaveBeenCalledTimes(1))
+
     const rejection = expect(opening).rejects.toThrow(
       TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE
     )
+
     allowed = false
     releaseAuthorization?.()
     await rejection

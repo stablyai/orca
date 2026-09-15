@@ -123,25 +123,32 @@ export function createTerminalTitleTracker(
     onMode2031Subscribe,
     onMode2031Unsubscribe
   } = callbacks
+
   let bellDetector = onBell ? createBellDetector() : null
+
   // Why: created only when a consumer exists so headless serve never pays the per-chunk 133/URL scans.
   const commandFinishedScanner = onCommandFinished
     ? createOsc133CommandFinishedScanner(onCommandFinished)
     : null
+
   let prLinkDetector = onPrLink ? createTerminalGitHubPRLinkDetector() : null
   let transientSideEffectScanningEnabled = true
   let transientFactScanningSuppressed = false
   let mode2031ReplyScanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
+
   // Why: seed both so a mid-session tracker behaves as if it had observed the pane's last live title (renderer parity).
   let lastEmittedTitle: string | null =
     options.initialTitle !== undefined ? normalizeTerminalTitle(options.initialTitle) : null
+
   let staleTitleTimer: ReturnType<typeof setTimeout> | null = null
   // Why: flags the stale-timer clear so its idle callback carries timer provenance, not a genuine task-complete.
   let applyingStaleWorkingTitleClear = false
+
   const initialAgentStatusTitle =
     options.initialTitle !== undefined && !isCursorNativeAgentTitle(options.initialTitle)
       ? options.initialTitle
       : undefined
+
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -170,12 +177,15 @@ export function createTerminalTitleTracker(
       if (shouldSuppressCursorNativeTitle(lastEmittedTitle)) {
         return
       }
+
       // Why: a hookless Cursor pane needs the literal once so it has an identity (#10258),
       // but never as activity — its null status would read as an exit in the status tracker.
       lastEmittedTitle = normalizeTerminalTitle(rawTitle)
       onTitle?.(lastEmittedTitle, rawTitle)
+
       return
     }
+
     lastEmittedTitle = normalizeTerminalTitle(rawTitle)
     onTitle?.(lastEmittedTitle, rawTitle)
     agentTracker?.handleTitle(rawTitle)
@@ -185,15 +195,19 @@ export function createTerminalTitleTracker(
     const titleScanData = options.titleScanData ?? data
     // Why: hot path — scan for the OSC introducer once and share it with the bell detector's fast-path gate.
     const containsOscIntroducer = data.includes('\x1b]')
+
     // Why: consume every chunk so cross-chunk OSC escape state survives; but none while suppressed, since delivered bytes may be gapped.
     const containsBell =
       bellDetector && !transientFactScanningSuppressed
         ? bellDetector.chunkContainsBell(data, { containsOscIntroducer })
         : false
+
     // Why: feed every OSC title in byte order; a last-title reader drops intra-chunk working→idle transitions in coalesced payloads (issue #1083).
     const titles = titleScanData.includes('\x1b]') ? extractAllOscTitles(titleScanData) : []
+
     if (titles.length > 0) {
       clearStaleTitleTimer()
+
       for (const title of titles) {
         applyObservedTitle(title)
       }
@@ -206,11 +220,13 @@ export function createTerminalTitleTracker(
       clearStaleTitleTimer()
       staleTitleTimer = setTimeout(() => {
         staleTitleTimer = null
+
         if (lastEmittedTitle && detectAgentStatusFromTitle(lastEmittedTitle) === 'working') {
           const cleared = clearWorkingIndicators(lastEmittedTitle)
           lastEmittedTitle = cleared
           // Why: tag timer-synthesized facts so downstream distinguishes a merely-paused agent from a genuine working→idle completion.
           applyingStaleWorkingTitleClear = true
+
           try {
             onTitle?.(cleared, cleared, { staleWorkingTitleClear: true })
             agentTracker?.handleTitle(cleared)
@@ -220,20 +236,25 @@ export function createTerminalTitleTracker(
         }
       }, STALE_WORKING_TITLE_TIMEOUT_MS)
     }
+
     // Fact order (matches renderer drain): titles → command-finished → pr-link → 2031-subscribe → bell; bell last.
     if (!transientFactScanningSuppressed) {
       commandFinishedScanner?.scan(data)
+
       if (prLinkDetector) {
         for (const link of prLinkDetector(data)) {
           onPrLink?.(link)
         }
       }
+
       if (transientSideEffectScanningEnabled && (onMode2031Subscribe || onMode2031Unsubscribe)) {
         const previousMode2031ReplyScanState = options.mode2031PendingSubscribe
           ? { ...mode2031ReplyScanState, pendingSubscribe: true }
           : mode2031ReplyScanState
+
         const result = scanMode2031ReplyDecision(previousMode2031ReplyScanState, data)
         mode2031ReplyScanState = result.state
+
         if (result.decision === 'subscribed') {
           onMode2031Subscribe?.()
         } else if (result.decision === 'unsubscribed') {
@@ -241,6 +262,7 @@ export function createTerminalTitleTracker(
         }
       }
     }
+
     if (containsBell) {
       onBell?.()
     }
@@ -249,12 +271,15 @@ export function createTerminalTitleTracker(
   function applySyntheticTitleFrame(frame: string): void {
     // Why: parse statelessly — the stateful chunk bell detector could mint or swallow bells around a real cross-chunk OSC split.
     const titles = extractAllOscTitles(frame)
+
     if (titles.length > 0) {
       clearStaleTitleTimer()
+
       for (const title of titles) {
         applyObservedTitle(title)
       }
     }
+
     // The permission BEL rides outside the OSC title; a FRESH detector avoids touching the chunk detector's cross-chunk escape state.
     if (
       transientSideEffectScanningEnabled &&
@@ -273,7 +298,9 @@ export function createTerminalTitleTracker(
       if (lastEmittedTitle !== null || !rawTitle) {
         return
       }
+
       lastEmittedTitle = normalizeTerminalTitle(rawTitle)
+
       // Why: the cursor-agent literal seeds identity only — feeding its null status to the
       // tracker would make the next real frame look like an agent exit.
       if (!isCursorNativeAgentTitle(rawTitle)) {
@@ -288,12 +315,15 @@ export function createTerminalTitleTracker(
       if (suppressed === transientFactScanningSuppressed) {
         return
       }
+
       transientFactScanningSuppressed = suppressed
+
       if (!suppressed) {
         // Cross-chunk carry predates the gapped span; reset it so stale state can't swallow real bells or mint phantom facts.
         bellDetector?.reset()
         commandFinishedScanner?.reset()
         mode2031ReplyScanState = INITIAL_MODE_2031_REPLY_SCAN_STATE
+
         if (prLinkDetector) {
           prLinkDetector = createTerminalGitHubPRLinkDetector()
         }
@@ -303,6 +333,7 @@ export function createTerminalTitleTracker(
       if (enabled === transientSideEffectScanningEnabled) {
         return
       }
+
       transientSideEffectScanningEnabled = enabled
       bellDetector?.reset()
       bellDetector = enabled && onBell ? createBellDetector() : null

@@ -15,13 +15,17 @@ const defaultFiles = [
 ]
 
 const cliArguments = process.argv.slice(2)
+
 const powerShellFlag = cliArguments.indexOf('--powershell')
+
 const configuredPowerShell =
   powerShellFlag !== -1 ? cliArguments[powerShellFlag + 1] : process.env.ORCA_POWERSHELL_EXECUTABLE
+
 if (powerShellFlag !== -1 && !configuredPowerShell) {
   console.error('--powershell requires an executable path')
   process.exit(2)
 }
+
 const powerShellExecutable = [
   configuredPowerShell,
   ...(process.platform === 'win32' ? ['pwsh.exe', 'powershell.exe'] : ['pwsh'])
@@ -29,6 +33,7 @@ const powerShellExecutable = [
   if (!candidate) {
     return false
   }
+
   return (
     spawnSync(
       candidate,
@@ -37,19 +42,24 @@ const powerShellExecutable = [
     ).status === 0
   )
 })
+
 if (!powerShellExecutable) {
   console.error('A native PowerShell executable is required')
   process.exit(2)
 }
+
 const powerShellVersion = spawnSync(
   powerShellExecutable,
   ['-NoProfile', '-NonInteractive', '-Command', '$PSVersionTable.PSVersion.ToString()'],
   { encoding: 'utf8' }
 ).stdout.trim()
+
 console.log(`SSH staged-upload reliability: PowerShell ${powerShellVersion}`)
+
 const requestedFiles = cliArguments.filter(
   (_argument, index) => index !== powerShellFlag && index !== powerShellFlag + 1
 )
+
 const files = requestedFiles.length > 0 ? requestedFiles : defaultFiles
 
 const result = spawnSync(
@@ -78,4 +88,5 @@ if (result.error) {
   console.error(result.error.message)
   process.exit(1)
 }
+
 process.exit(result.status ?? 1)

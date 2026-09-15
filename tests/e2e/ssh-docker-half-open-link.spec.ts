@@ -25,6 +25,7 @@ import {
 } from './helpers/terminal'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 /** Generous: the point is that a verdict arrives at all, not its exact latency. */
 const LOST_VERDICT_BUDGET_MS = 90_000
 
@@ -53,6 +54,7 @@ test.describe('Docker SSH half-open link', () => {
     test.setTimeout(420_000)
     let target: DockerSshRelayTarget | null = null
     let paused = false
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       const captured = target
@@ -82,6 +84,7 @@ test.describe('Docker SSH half-open link', () => {
         .poll(
           async () => {
             verdict = await readSshStatus(orcaPage, remote.targetId)
+
             return verdict
           },
           { timeout: LOST_VERDICT_BUDGET_MS, message: 'frozen host remained connected' }
@@ -117,6 +120,7 @@ test.describe('Docker SSH half-open link', () => {
           // The container may already be gone; cleanup below is authoritative.
         }
       }
+
       if (target) {
         cleanupDockerSshRelayTarget(target)
       }

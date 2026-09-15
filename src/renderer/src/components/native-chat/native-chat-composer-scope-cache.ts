@@ -14,11 +14,14 @@ export function setBoundedScopeCacheEntry<T>(
 ): void {
   cache.delete(scopeKey)
   cache.set(scopeKey, value)
+
   while (cache.size > NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX) {
     const oldest = cache.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     cache.delete(oldest)
   }
 }

@@ -21,12 +21,15 @@ function isConfirmedSignedOut(provider: ProviderRateLimits): boolean {
   if (provider.usageMetadata?.failureKind === 'missing-credentials') {
     return true
   }
+
   // Why: credential refresh and network failures can mention auth while live
   // sessions remain valid; only explicit signed-out copy earns a sign-in CTA.
   if (provider.usageMetadata?.failureKind) {
     return false
   }
+
   const error = provider.error
+
   return Boolean(error && CONFIRMED_SIGN_OUT_PATTERNS.some((pattern) => pattern.test(error)))
 }
 
@@ -37,6 +40,7 @@ export function getUsageRosterRowState(
   if (hasUsage) {
     return { kind: 'usage', statusLabel: null }
   }
+
   if (provider.status === 'idle' || provider.status === 'fetching') {
     return {
       kind: 'loading',
@@ -46,6 +50,7 @@ export function getUsageRosterRowState(
       )
     }
   }
+
   if (isConfirmedSignedOut(provider)) {
     return {
       kind: 'sign-in',
@@ -55,9 +60,11 @@ export function getUsageRosterRowState(
       )
     }
   }
+
   if (provider.status === 'error') {
     return { kind: 'error', statusLabel: getProviderUsageStatusLabel(provider) }
   }
+
   if (provider.status === 'unavailable') {
     return {
       kind: 'unavailable',
@@ -67,6 +74,7 @@ export function getUsageRosterRowState(
       )
     }
   }
+
   return {
     kind: 'empty',
     statusLabel: translate(

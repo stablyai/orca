@@ -8,6 +8,7 @@ const runtime = vi.hoisted(() => ({ cancel: vi.fn().mockResolvedValue(undefined)
 
 vi.mock('@/runtime/runtime-git-client', async (importOriginal) => {
   const original = await importOriginal<typeof RuntimeGitClient>()
+
   return { ...original, cancelRuntimeGeneratePullRequestFields: runtime.cancel }
 })
 
@@ -40,7 +41,9 @@ describe('useChecksPanelGeneration cancellation ownership', () => {
       error: null,
       hydrated: false
     } satisfies NonNullable<GenerationInput['activePullRequestGenerationRecord']>
+
     const updateRecord: GenerationInput['updatePullRequestGenerationRecord'] = vi.fn()
+
     const input: GenerationInput = {
       activePullRequestGenerationKey: 'repo-1::owner-worktree',
       activePullRequestGenerationRecord: record,
@@ -62,6 +65,7 @@ describe('useChecksPanelGeneration cancellation ownership', () => {
       setPullRequestGenerationRecord: vi.fn(),
       updatePullRequestGenerationRecord: updateRecord
     }
+
     const { result } = renderHook(() => useChecksPanelGeneration(input))
 
     act(() => result.current.handleCancelGeneratePullRequestFieldsForActive())

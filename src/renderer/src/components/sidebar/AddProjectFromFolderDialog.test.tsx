@@ -31,15 +31,19 @@ function textContent(node: ReactModule.ReactNode): string {
   if (node == null || typeof node === 'boolean') {
     return ''
   }
+
   if (typeof node === 'string' || typeof node === 'number') {
     return String(node)
   }
+
   if (Array.isArray(node)) {
     return node.map(textContent).join('')
   }
+
   if (typeof node === 'object' && 'props' in node) {
     return textContent((node as { props?: { children?: ReactModule.ReactNode } }).props?.children)
   }
+
   return ''
 }
 
@@ -53,6 +57,7 @@ vi.mock('@/store', () => {
       }
     }
   )
+
   return { useAppStore }
 })
 
@@ -77,6 +82,7 @@ vi.mock('@/components/ui/button', () => ({
     disabled?: boolean
   }) => {
     mocks.buttons.push({ label: textContent(children), onClick, disabled })
+
     return (
       <button disabled={disabled} onClick={onClick}>
         {children}
@@ -111,17 +117,21 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
 
 async function clickAddProject(): Promise<void> {
   const button = mocks.buttons.find((entry) => entry.label.includes('Add Project'))
+
   if (!button?.onClick) {
     throw new Error('Add Project button not found')
   }
+
   await button.onClick()
 }
 
 function getButton(label: string): ButtonCapture {
   const button = mocks.buttons.find((entry) => entry.label.includes(label))
+
   if (!button?.onClick) {
     throw new Error(`${label} button not found`)
   }
+
   return button
 }
 
@@ -174,6 +184,7 @@ describe('AddProjectFromFolderDialog', () => {
   it('leaves local non-Git folders on the existing Open as Folder confirmation path', async () => {
     mocks.state.addRepoPath.mockImplementation(async (folderPath: string) => {
       mocks.state.openModal('confirm-non-git-folder', { folderPath })
+
       return null
     })
     const { default: AddProjectFromFolderDialog } = await import('./AddProjectFromFolderDialog')
@@ -279,6 +290,7 @@ describe('AddProjectFromFolderDialog', () => {
   it('does not finish the handoff after the user cancels during refresh', async () => {
     const repo = makeRepo()
     let resolveRefresh: (value: boolean) => void = () => {}
+
     mocks.state.addRepoPath.mockResolvedValue(repo)
     mocks.state.fetchWorktrees.mockReturnValue(
       new Promise<boolean>((resolve) => {

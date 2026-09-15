@@ -39,17 +39,20 @@ export function useSourceControlSubmoduleStatus(
   const activeRuntimeRouteKey = activeRepoSettings?.activeRuntimeEnvironmentId?.trim() ?? ''
   const activeConnectionRouteKey = getConnectionId(activeWorktreeId ?? null) ?? ''
   const submoduleStatusScopeKey = `${activeConnectionRouteKey}\0${activeRuntimeRouteKey}\0${activeWorktreeId ?? ''}\0${worktreePath ?? ''}`
+
   // Why: scope lives in the status store so a late response from a previous
   // worktree/host can no-op in the updater instead of mutating a render-time ref.
   const [submoduleStatusStore, setSubmoduleStatusStore] = useState<{
     scope: string
     byKey: Record<string, SubmoduleStatusState>
   }>(() => ({ scope: submoduleStatusScopeKey, byKey: {} }))
+
   // Why: reset during render so a worktree/host switch never paints the previous expansion.
   if (submoduleStatusStore.scope !== submoduleStatusScopeKey) {
     setSubmoduleStatusStore({ scope: submoduleStatusScopeKey, byKey: {} })
     setExpandedSubmoduleKeys(new Set())
   }
+
   const submoduleStatusByKey = submoduleStatusStore.byKey
 
   const fetchSubmoduleStatus = useCallback(
@@ -57,10 +60,13 @@ export function useSourceControlSubmoduleStatus(
       if (!worktreePath) {
         return
       }
+
       const parsed = parseSubmoduleExpansionKey(expansionKey)
+
       if (!parsed) {
         return
       }
+
       const { area, path: submodulePath } = parsed
       const scopeAtStart = submoduleStatusScopeKey
       // Why: keep any already-loaded children visible during a poll-driven
@@ -73,8 +79,10 @@ export function useSourceControlSubmoduleStatus(
               byKey: { ...prev.byKey, [expansionKey]: { status: 'loading' } }
             }
       )
+
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
+
         const result = await getRuntimeGitSubmoduleStatus(
           {
             // Why: route by the repo OWNER host, matching the rest of this panel.
@@ -86,6 +94,7 @@ export function useSourceControlSubmoduleStatus(
           submodulePath,
           area
         )
+
         setSubmoduleStatusStore((prev) =>
           prev.scope !== scopeAtStart
             ? prev
@@ -125,11 +134,13 @@ export function useSourceControlSubmoduleStatus(
     const expansionKey = getSubmoduleExpansionKey(entry)
     setExpandedSubmoduleKeys((prev) => {
       const next = new Set(prev)
+
       if (next.has(expansionKey)) {
         next.delete(expansionKey)
       } else {
         next.add(expansionKey)
       }
+
       return next
     })
   }, [])
@@ -141,6 +152,7 @@ export function useSourceControlSubmoduleStatus(
     const visibleExpandableKeys = new Set(
       entries.filter(isExpandableSubmoduleEntry).map(getSubmoduleExpansionKey)
     )
+
     for (const expansionKey of expandedSubmoduleKeys) {
       if (visibleExpandableKeys.has(expansionKey)) {
         void fetchSubmoduleStatus(expansionKey)

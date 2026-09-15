@@ -27,6 +27,7 @@ export function useMobileBridgeChatPromptWrites(args: {
   stop: () => void
 } {
   const { client, enabled, handleRef, deviceTokenRef, streamIdentity, onSendError } = args
+
   const { answerAsk, cancelPending } = useMobileNativeChatAnswerSend({
     client,
     enabled,
@@ -37,6 +38,7 @@ export function useMobileBridgeChatPromptWrites(args: {
     streamIdentity,
     onSendError
   })
+
   const cancelAsk = useMobileNativeChatCancelAsk({
     client,
     enabled,
@@ -45,6 +47,7 @@ export function useMobileBridgeChatPromptWrites(args: {
     cancelPending,
     onSendError
   })
+
   const respondPermission = useMobileNativeChatPermissionSend({
     client,
     enabled,
@@ -52,6 +55,7 @@ export function useMobileBridgeChatPromptWrites(args: {
     deviceTokenRef,
     onSendError
   })
+
   const stop = useMobileNativeChatStop({
     client,
     enabled,
@@ -61,5 +65,6 @@ export function useMobileBridgeChatPromptWrites(args: {
     cancelPending,
     onSendError
   })
+
   return { answerAsk, cancelAsk, respondPermission, stop }
 }

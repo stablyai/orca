@@ -12,18 +12,22 @@ export function attachDurableMutationRecovery(
   if (method !== 'terminal.send' || !requestId || !(error instanceof RuntimeClientError)) {
     return attachMutationRecovery(error, requestId, originalCommand)
   }
+
   const message = `${error.message} Terminal prompt request ID: ${requestId}. Re-issue the exact command with --retry-request ${requestId} --wait-submit <seconds>; do not retry it without that ID.`
+
   const data = {
     ...(error.data && typeof error.data === 'object' ? error.data : {}),
     orchestrationRequestId: requestId,
     ...(originalCommand ? { originalCommand } : {})
   }
+
   if (error instanceof RuntimeRpcFailureError) {
     return new RuntimeRpcFailureError({
       ...error.response,
       error: { ...error.response.error, message, data }
     })
   }
+
   return new RuntimeClientError(error.code, message, data)
 }
 
@@ -31,6 +35,7 @@ export function attachLegacyTerminalPromptRecovery(error: unknown): unknown {
   if (!(error instanceof RuntimeClientError)) {
     return error
   }
+
   return attachUnknownTerminalPromptRecovery(
     error,
     'The legacy host cannot prove whether the prompt was delivered',
@@ -49,6 +54,7 @@ export function attachUnverifiedTerminalPromptRecovery(error: unknown): RuntimeC
           'runtime_error',
           error instanceof Error ? error.message : String(error)
         )
+
   return attachUnknownTerminalPromptRecovery(
     normalized,
     'Orca cannot prove whether the prompt was delivered by the prompt-delivery-capable runtime from the preflight',
@@ -73,9 +79,11 @@ export function didAnotherRuntimeHandleTerminalPrompt(
     error instanceof RuntimeRpcFailureError
       ? (error.response._meta?.runtimeId ?? null)
       : targetRuntimeId
+
   if (handledBy === null) {
     return false
   }
+
   return (
     typeof preflightRuntimeId !== 'string' ||
     preflightRuntimeId.length === 0 ||
@@ -89,20 +97,24 @@ function attachUnknownTerminalPromptRecovery(
   nextSteps: string[]
 ): RuntimeClientError {
   const message = `${error.message} ${reason}; inspect the terminal before deciding what to do, and do not resend automatically.`
+
   const data: Record<string, unknown> = {
     ...(error.data && typeof error.data === 'object' ? error.data : {}),
     deliveryOutcome: 'unknown',
     retrySafe: false,
     nextSteps
   }
+
   delete data.orchestrationRequestId
   delete data.originalCommand
   delete data.recovery
+
   if (error instanceof RuntimeRpcFailureError) {
     return new RuntimeRpcFailureError({
       ...error.response,
       error: { ...error.response.error, message, data }
     })
   }
+
   return new RuntimeClientError(error.code, message, data)
 }

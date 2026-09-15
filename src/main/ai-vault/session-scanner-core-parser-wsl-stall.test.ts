@@ -21,6 +21,7 @@ vi.mock('node:fs/promises', async (importOriginal) => ({
 // Derived sibling paths must retain Windows separators in this cross-platform test.
 vi.mock('node:path', async (importOriginal) => {
   const actual = await importOriginal<typeof NodePathModule>()
+
   return { ...actual.win32, default: actual.win32 }
 })
 
@@ -40,7 +41,9 @@ function uncPath(distro: string, ...segments: string[]): string {
 }
 
 const KIMI_HOME = ['.kimi-code', 'sessions', 'wd_app_9f2', 'session_abc']
+
 const GROK_DIR = ['.grok', 'sessions', 'ses-1']
+
 const OPENCODE_ROOT = ['.local', 'share', 'opencode', 'storage']
 
 const KIMI_STATE = JSON.stringify({
@@ -95,10 +98,12 @@ function stallingHandle() {
 
 function servingHandle(body: string) {
   const bytes = Buffer.from(body)
+
   return {
     read: vi.fn(async (buffer: Buffer, offset: number, length: number, position: number) => {
       const slice = bytes.subarray(position, Math.min(position + length, bytes.length))
       slice.copy(buffer, offset)
+
       return { bytesRead: slice.length, buffer }
     }),
     close: vi.fn(async () => {})
@@ -141,6 +146,7 @@ async function expectRefusal(target: SessionFileCandidate): Promise<void> {
   const refusal = expect(parseAgentSessionFileCached(target, 'linux')).rejects.toBeInstanceOf(
     WslTranscriptFsError
   )
+
   await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
   await refusal
 }

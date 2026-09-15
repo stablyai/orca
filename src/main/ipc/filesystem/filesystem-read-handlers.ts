@@ -35,21 +35,26 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
     async (_event, args: { dirPath: string; connectionId?: string }): Promise<DirEntry[]> => {
       // Why: fs:readDir throws surface as opaque IPC errors; record the throw site + redacted path shape to keep them diagnosable.
       let throwSite: ReadDirThrowSite = 'authorize'
+
       try {
         if (args.connectionId) {
           throwSite = 'ssh-provider'
           const provider = requireSshFilesystemProvider(args.connectionId)
+
           // Why: re-sort locally — the remote relay may be an older build with lexicographic ordering.
           return sortDirEntries(await provider.readDir(args.dirPath))
         }
+
         const dirPath = await resolveAuthorizedPath(args.dirPath, store)
         throwSite = 'readdir'
         const entries = await readdir(dirPath, { withFileTypes: true })
+
         const mapped = entries.map((entry) => ({
           name: entry.name,
           isDirectory: isDirectoryEntry(entry),
           isSymlink: entry.isSymbolicLink()
         }))
+
         return sortDirEntries(mapped)
       } catch (error: unknown) {
         recordCrashBreadcrumb(
@@ -80,15 +85,20 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
     }> => {
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
+
         return provider.readFile(args.filePath)
       }
+
       const filePath = await resolveAuthorizedPath(args.filePath, store)
+
       if (args.includeLocalLogMetadata === true) {
         return readLocalLogSnapshot(filePath)
       }
+
       const stats = await stat(filePath)
       const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
       const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+
       if (stats.size > sizeLimit) {
         throw new Error(
           `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
@@ -97,6 +107,7 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
 
       if (mimeType) {
         const buffer = await readFile(filePath)
+
         return {
           content: buffer.toString('base64'),
           isBinary: true,
@@ -112,9 +123,11 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       }
 
       const buffer = await readFile(filePath)
+
       if (isBinaryBuffer(buffer)) {
         return { content: '', isBinary: true }
       }
+
       return { content: buffer.toString('utf-8'), isBinary: false }
     }
   )
@@ -128,9 +141,12 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         const relativePaths = await provider.listFiles(args.rootPath)
+
         return markdownDocumentsFromRelativePaths(args.rootPath, relativePaths)
       }
+
       const rootPath = await resolveRegisteredWorktreePath(args.rootPath, store)
+
       return listMarkdownDocuments(rootPath)
     }
   )
@@ -144,10 +160,13 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
         const result = await provider.stat(args.filePath)
+
         return { size: result.size, isDirectory: result.type === 'directory', mtime: result.mtime }
       }
+
       const filePath = await resolveAuthorizedPath(args.filePath, store)
       const stats = await stat(filePath)
+
       return { size: stats.size, isDirectory: stats.isDirectory(), mtime: stats.mtimeMs }
     }
   )
@@ -160,9 +179,11 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
     ): Promise<PathExistenceResult[]> => {
       validatePathExistenceBatch(args.filePaths)
       const provider = args.connectionId ? requireSshFilesystemProvider(args.connectionId) : null
+
       if (provider?.pathsExist) {
         return provider.pathsExist(args.filePaths)
       }
+
       return Promise.all(
         args.filePaths.map((filePath) =>
           capturePathExistence(async () => {
@@ -170,11 +191,13 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
               await (provider
                 ? provider.stat(filePath)
                 : stat(await resolveAuthorizedPath(filePath, store)))
+
               return true
             } catch (error) {
               if (isENOENT(error)) {
                 return false
               }
+
               throw error
             }
           })
@@ -190,15 +213,19 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
         if (args.connectionId) {
           const provider = requireSshFilesystemProvider(args.connectionId)
           await provider.stat(args.filePath)
+
           return true
         }
+
         const filePath = await resolveAuthorizedPath(args.filePath, store)
         await stat(filePath)
+
         return true
       } catch (error) {
         if (isENOENT(error)) {
           return false
         }
+
         throw error
       }
     }

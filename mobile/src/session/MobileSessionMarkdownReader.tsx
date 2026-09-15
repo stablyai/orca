@@ -29,6 +29,7 @@ export function MarkdownReader({
   // Native Keyboard events under-report the WebView editor's covered area, so prefer the larger WebView-measured inset.
   const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)
   const effectiveKeyboardLift = Math.max(keyboardLift, webviewKeyboardInset)
+
   if (!doc || doc.status === 'loading') {
     return (
       <View style={styles.markdownState}>
@@ -36,6 +37,7 @@ export function MarkdownReader({
       </View>
     )
   }
+
   if (doc.status === 'error') {
     return (
       <View style={styles.markdownState}>
@@ -55,6 +57,7 @@ export function MarkdownReader({
       : doc.stale
         ? 'Changed on desktop'
         : null
+
   const showRefresh = (doc.stale && !doc.isDirty) || !doc.editable
   const showCopy = doc.saveError || !doc.editable
   const showSave = doc.isDirty || doc.saving

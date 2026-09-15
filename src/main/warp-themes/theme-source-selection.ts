@@ -26,7 +26,9 @@ export async function filesFromDirectory(
 ): Promise<ThemeSourceSelection> {
   const { sourceLabel, rootReadable, files, skippedFiles, themeFileLimitHit } =
     await scanWarpThemeDirectory(directoryPath, budget, { themeFileLimit, reportThemeFileLimit })
+
   const effectiveSourceLabel = sourceLabelOverride ?? sourceLabel
+
   return {
     canceled: false,
     sourceLabel: effectiveSourceLabel,

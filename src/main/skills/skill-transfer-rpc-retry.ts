@@ -17,14 +17,18 @@ export async function retrySkillTransferRpc<T>(input: {
 }): Promise<T> {
   for (let attempt = 1; ; attempt += 1) {
     throwIfSkillTransferCancelled(input.signal)
+
     try {
       const result = await input.call()
+
       if (input.checkCancellationAfterSuccess !== false) {
         throwIfSkillTransferCancelled(input.signal)
       }
+
       return result
     } catch (error) {
       throwIfSkillTransferCancelled(input.signal)
+
       if (attempt >= TRANSFER_RPC_ATTEMPTS || input.retryable?.(error) === false) {
         throw error
       }

@@ -1,7 +1,9 @@
 import type { WorkspaceKey } from '../folder-workspace-types'
 
 export type WorktreeLineageOrigin = 'orchestration' | 'cli' | 'manual'
+
 export type WorktreeLineageCaptureConfidence = 'explicit' | 'inferred'
+
 export type WorktreeLineageCaptureSource =
   | 'explicit-cli-flag'
   | 'env-workspace'

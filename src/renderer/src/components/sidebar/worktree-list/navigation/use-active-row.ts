@@ -22,13 +22,16 @@ export function usePrimaryActiveWorktreeRow(args: {
     pinnedDisplayPolicy,
     onImmediateWorktreeActivate
   } = args
+
   const activeIdentity = activeWorktreeId
     ? composeWorktreeHostIdentity(activeWorkspaceExecutionHostId ?? undefined, activeWorktreeId)
     : null
+
   const rowsRef = useRef(rows)
   useLayoutEffect(() => {
     rowsRef.current = rows
   }, [rows])
+
   const [primaryActiveWorktreeRow, setPrimaryActiveWorktreeRow] = useState<{
     worktreeIdentity: string
     rowKey: string
@@ -37,12 +40,15 @@ export function usePrimaryActiveWorktreeRow(args: {
   useLayoutEffect(() => {
     if (activeWorktreeId === null) {
       setPrimaryActiveWorktreeRow(null)
+
       return
     }
+
     setPrimaryActiveWorktreeRow((current) => {
       if (current === null || current.worktreeIdentity !== activeIdentity) {
         return null
       }
+
       const rowStillVisible = rows.some(
         (row) =>
           row.type === 'item' &&
@@ -50,6 +56,7 @@ export function usePrimaryActiveWorktreeRow(args: {
             current.worktreeIdentity &&
           row.rowKey === current.rowKey
       )
+
       return rowStillVisible ? current : null
     })
   }, [activeIdentity, activeWorktreeId, rows])
@@ -57,9 +64,11 @@ export function usePrimaryActiveWorktreeRow(args: {
   const getActiveSurfaceVariant = useCallback(
     (row: WorktreeItemRow): ActiveSurfaceVariant => {
       const rowIdentity = composeWorktreeHostIdentity(row.worktree.hostId, row.worktree.id)
+
       if (primaryActiveWorktreeRow?.worktreeIdentity === rowIdentity) {
         return primaryActiveWorktreeRow.rowKey === row.rowKey ? 'primary' : 'secondary'
       }
+
       if (
         pinnedDisplayPolicy === 'duplicate-in-groups' &&
         activeWorktreeId === row.worktree.id &&
@@ -67,6 +76,7 @@ export function usePrimaryActiveWorktreeRow(args: {
       ) {
         return 'secondary'
       }
+
       return 'primary'
     },
     [activeWorktreeId, pinnedDisplayPolicy, primaryActiveWorktreeRow]
@@ -80,6 +90,7 @@ export function usePrimaryActiveWorktreeRow(args: {
           candidate.worktree.id === worktreeId &&
           candidate.rowKey === rowKey
       )
+
       setPrimaryActiveWorktreeRow(
         rowKey && row?.type === 'item'
           ? {

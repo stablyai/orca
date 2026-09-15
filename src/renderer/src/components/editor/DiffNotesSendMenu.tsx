@@ -46,22 +46,28 @@ export function DiffNotesSendMenu({
   // clock either burns a tick per second or reads stale at the moment it matters.
   const hasPendingOpenRequest = respondToOpenRequest && openRequest?.worktreeId === worktreeId
   const openRequestNonce = hasPendingOpenRequest ? (openRequest?.nonce ?? null) : null
+
   const openRequestExpiresAt = hasPendingOpenRequest
     ? (openRequest?.issuedAt ?? 0) + OPEN_REQUEST_TTL_MS
     : null
+
   const handleOpenRequestHandled = useCallback(
     () => consumeOpenRequest(worktreeId),
     [consumeOpenRequest, worktreeId]
   )
+
   const unsentNotes = useMemo(() => comments.filter((comment) => !comment.sentAt), [comments])
   const unsentPrompt = useMemo(() => formatDiffComments(unsentNotes), [unsentNotes])
+
   const fileNotes = useMemo(
     () => (filePath ? comments.filter((comment) => comment.filePath === filePath) : []),
     [comments, filePath]
   )
+
   const unsentFileNotes = useMemo(() => fileNotes.filter((comment) => !comment.sentAt), [fileNotes])
   const unsentFilePrompt = useMemo(() => formatDiffComments(unsentFileNotes), [unsentFileNotes])
   const canSendFileScope = showFileScope && Boolean(filePath)
+
   const scopes = useMemo<NotesSendMenuScope<DiffComment>[]>(() => {
     const allNotesScope = {
       id: 'all',
@@ -69,9 +75,11 @@ export function DiffNotesSendMenu({
       notes: unsentNotes,
       prompt: unsentPrompt
     }
+
     if (!canSendFileScope) {
       return [allNotesScope]
     }
+
     return [
       {
         id: 'file',

@@ -44,6 +44,7 @@ function pasteEvent(items: Partial<DataTransferItem>[]): ClipboardEvent {
 function editorAt(position: number, destroyedRef: { current: boolean } = { current: false }) {
   const dom = document.createElement('div')
   document.body.appendChild(dom)
+
   return {
     get isDestroyed() {
       return destroyedRef.current
@@ -135,6 +136,7 @@ describe('rich markdown image paste', () => {
     const editor = editorAt(5, destroyedRef)
     vi.mocked(window.api.ui.saveClipboardImageAsTempFile).mockImplementation(async () => {
       destroyedRef.current = true
+
       return '/tmp/orca-paste-image.png'
     })
 

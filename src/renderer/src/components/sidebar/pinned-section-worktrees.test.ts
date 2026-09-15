@@ -32,10 +32,12 @@ describe('getPinnedSectionWorktrees', () => {
   const child = makeWorktree('child')
   const grandchild = makeWorktree('grandchild')
   const sibling = makeWorktree('sibling')
+
   const lineageById = {
     [child.id]: makeLineage(child, parent),
     [grandchild.id]: makeLineage(grandchild, child)
   }
+
   const worktreeMap = new Map([
     [parent.id, parent],
     [child.id, child],
@@ -54,6 +56,7 @@ describe('getPinnedSectionWorktrees', () => {
 
   it('does not include an unpinned row with the same id on another host', () => {
     const pinnedLocal = makeWorktree('shared', { hostId: 'local', isPinned: true })
+
     const unpinnedSsh = makeWorktree('shared', {
       hostId: 'ssh:box',
       instanceId: 'shared-ssh-instance'
@@ -118,10 +121,12 @@ describe('getPinnedSectionWorktrees', () => {
     const depth = 6_000
     const worktrees: Worktree[] = []
     const lineageById: Record<string, WorktreeLineage> = {}
+
     for (let index = 0; index < depth; index++) {
       const current = makeWorktree(`deep-${index}`, { isPinned: index === 0 })
       worktrees.push(current)
       const parent = worktrees[index - 1]
+
       if (parent) {
         lineageById[current.id] = makeLineage(current, parent)
       }
@@ -140,10 +145,12 @@ describe('getPinnedSectionWorktrees', () => {
     const depth = 6_000
     const worktrees: Worktree[] = []
     const lineageById: Record<string, WorktreeLineage> = {}
+
     for (let index = 0; index < depth; index++) {
       const current = makeWorktree(`rendered-deep-${index}`, { isPinned: true })
       worktrees.push(current)
       const parent = worktrees[index - 1]
+
       if (parent) {
         lineageById[current.id] = makeLineage(current, parent)
       }
@@ -171,6 +178,7 @@ describe('isPinnedSectionWorktree', () => {
   const parent = makeWorktree('parent', { isPinned: true })
   const child = makeWorktree('child')
   const lineageById = { [child.id]: makeLineage(child, parent) }
+
   const worktreeMap = new Map([
     [parent.id, parent],
     [child.id, child]

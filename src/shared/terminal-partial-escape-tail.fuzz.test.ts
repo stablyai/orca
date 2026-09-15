@@ -17,6 +17,7 @@ import {
 
 const oracle = (pending: string, chunk: string): string => {
   const tail = extractPartialEscapeTail(pending + chunk)
+
   return tail.length > MAX_PARTIAL_ESCAPE_TAIL_LENGTH ? '' : tail
 }
 
@@ -91,14 +92,18 @@ const SEQUENCES = [
 // not be exhaustive at depth N the way the test names claim.
 function* stringsUpTo(maxDepth: number): Generator<{ depth: number; text: string }> {
   yield { depth: 0, text: '' }
+
   for (let depth = 1; depth <= maxDepth; depth++) {
     const digits = Array.from({ length: depth }, () => 0)
+
     for (;;) {
       yield { depth, text: digits.map((digit) => ALPHABET[digit]).join('') }
       let place = depth - 1
+
       while (place >= 0 && ++digits[place] === ALPHABET.length) {
         digits[place--] = 0
       }
+
       if (place < 0) {
         break
       }
@@ -109,6 +114,7 @@ function* stringsUpTo(maxDepth: number): Generator<{ depth: number; text: string
 describe('advancePartialEscapeTail differential fuzz', () => {
   let checked = 0
   let foldSplits = 0
+
   // Why the sweep and not just `advance(extract(pending), chunk)`: every PENDINGS entry is
   // already a tail, so `extract(pending) === pending` makes that form a tautology. Only
   // re-splitting the combined stream lands a boundary inside oscEsc/stringEsc, where the
@@ -117,30 +123,39 @@ describe('advancePartialEscapeTail differential fuzz', () => {
     if (text.length > 32) {
       return // keeps the cap corpus (5000-char chunks) out of an O(n^2) sweep
     }
+
     const whole = extractPartialEscapeTail(text)
+
     for (let cut = 0; cut <= text.length; cut++) {
       foldSplits++
+
       const folded = extractPartialEscapeTail(
         extractPartialEscapeTail(text.slice(0, cut)) + text.slice(cut)
       )
+
       if (folded !== whole) {
         expect.fail(`fold property broke: ${JSON.stringify({ text, cut, whole, folded })}`)
       }
     }
   }
+
   const check = (pending: string, chunk: string): void => {
     checked++
     const actual = advancePartialEscapeTail(pending, chunk)
+
     if (actual !== oracle(pending, chunk)) {
       expect.fail(`gate diverged: ${JSON.stringify({ pending, chunk, actual })}`)
     }
+
     const whole = extractPartialEscapeTail(pending + chunk)
+
     if (
       whole.length <= MAX_PARTIAL_ESCAPE_TAIL_LENGTH &&
       advancePartialEscapeTail(extractPartialEscapeTail(pending), chunk) !== whole
     ) {
       expect.fail(`fold property broke: ${JSON.stringify({ pending, chunk })}`)
     }
+
     checkFolds(pending + chunk)
   }
 
@@ -150,6 +165,7 @@ describe('advancePartialEscapeTail differential fuzz', () => {
         check(pending, chunk)
       }
     }
+
     for (const { depth, text: chunk } of stringsUpTo(4)) {
       if (depth === 4) {
         check('', chunk)
@@ -163,6 +179,7 @@ describe('advancePartialEscapeTail differential fuzz', () => {
       for (let cut = 0; cut <= sequence.length; cut++) {
         const afterPrefix = advancePartialEscapeTail('', sequence.slice(0, cut))
         check('', sequence.slice(0, cut))
+
         for (let cut2 = cut; cut2 <= sequence.length; cut2++) {
           check(afterPrefix, sequence.slice(cut, cut2))
           check(
@@ -176,8 +193,10 @@ describe('advancePartialEscapeTail differential fuzz', () => {
 
   it('matches across the tail-length cap', () => {
     const max = MAX_PARTIAL_ESCAPE_TAIL_LENGTH
+
     for (const length of [max - 1, max, max + 1, max + 100]) {
       const osc = `\x1b]0;${'x'.repeat(length - 4)}`
+
       for (const chunk of ['', 'y', '\x07', '\x1b\\', '\x1b', 'plain\n', 'x'.repeat(5000)]) {
         check(osc, chunk)
         check('', osc + chunk)

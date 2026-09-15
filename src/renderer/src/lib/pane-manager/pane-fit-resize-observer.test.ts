@@ -27,12 +27,15 @@ class MockResizeObserver {
 }
 
 let mockResizeObservers: MockResizeObserver[] = []
+
 let nextRafId = 1
+
 let pendingRafs = new Map<number, FrameRequestCallback>()
 
 function flushAnimationFrames(timestamp = 16): void {
   const callbacks = Array.from(pendingRafs.entries())
   pendingRafs = new Map()
+
   for (const [, callback] of callbacks) {
     callback(timestamp)
   }
@@ -43,6 +46,7 @@ function createPane(
   options: { rect?: { width: number; height: number } } = {}
 ): ManagedPaneInternal {
   const leafId = '11111111-1111-4111-8111-111111111111' as never
+
   return {
     id: 1,
     leafId,
@@ -96,6 +100,7 @@ describe('attachPaneFitResizeObserver', () => {
       vi.fn((callback: FrameRequestCallback) => {
         const id = nextRafId++
         pendingRafs.set(id, callback)
+
         return id
       })
     )
@@ -133,6 +138,7 @@ describe('attachPaneFitResizeObserver', () => {
       { cols: 81, rows: 24 },
       { cols: 81, rows: 24 }
     ]
+
     const pane = createPane(() => proposed.shift() ?? { cols: 81, rows: 24 })
 
     attachPaneFitResizeObserver(pane)
@@ -153,6 +159,7 @@ describe('attachPaneFitResizeObserver', () => {
       { cols: 81, rows: 24 },
       { cols: 81, rows: 24 }
     ]
+
     const onSettled = vi.fn()
     const pane = createPane(() => proposed.shift() ?? { cols: 81, rows: 24 })
 
@@ -227,8 +234,10 @@ describe('attachPaneFitResizeObserver', () => {
 
   it('throttles an endlessly unstable grid instead of fitting every frame', () => {
     let cols = 80
+
     const pane = createPane(() => {
       cols = cols === 80 ? 81 : 80
+
       return { cols, rows: 24 }
     })
 

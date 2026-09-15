@@ -16,6 +16,7 @@ describe('mobile hosted check status', () => {
       pending: 0,
       neutral: 1
     }
+
     expect(getHostedChecksLabel({ checksSummary: summary })).toBe('Unresolved checks')
     expect(getHostedReviewSignalTone({ checksSummary: summary }, 'checks')).toBe('neutral')
   })

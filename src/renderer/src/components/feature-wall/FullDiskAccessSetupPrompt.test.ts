@@ -61,6 +61,7 @@ async function renderPrompt(): Promise<{ container: HTMLDivElement; root: Root }
   await act(async () => {
     await Promise.resolve()
   })
+
   return { container, root }
 }
 
@@ -94,10 +95,12 @@ describe('FullDiskAccessSetupPrompt state helpers', () => {
 
   it('refreshes macOS Full Disk Access status when Orca regains focus', async () => {
     setUserAgent('Macintosh')
+
     const getStatus = vi
       .fn()
       .mockResolvedValueOnce([{ id: 'full-disk-access', status: 'unknown' }])
       .mockResolvedValueOnce([{ id: 'full-disk-access', status: 'granted' }])
+
     installDeveloperPermissionsApi({ getStatus })
 
     const { container, root } = await renderPrompt()
@@ -116,13 +119,16 @@ describe('FullDiskAccessSetupPrompt state helpers', () => {
   it('keeps the latest macOS status when overlapping refreshes finish out of order', async () => {
     setUserAgent('Macintosh')
     let resolveFirst!: (states: DeveloperPermissionState[]) => void
+
     const firstRefresh = new Promise<DeveloperPermissionState[]>((resolve) => {
       resolveFirst = resolve
     })
+
     const getStatus = vi
       .fn()
       .mockReturnValueOnce(firstRefresh)
       .mockResolvedValueOnce([{ id: 'full-disk-access', status: 'granted' }])
+
     installDeveloperPermissionsApi({ getStatus })
 
     const { container, root } = await renderPrompt()

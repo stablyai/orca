@@ -31,6 +31,7 @@ const { guestExecuteJavaScriptMock, guestOnMock, rendererSendMock } = grabMocks
 describe('browserManager grab operations', () => {
   const primaryModifier =
     process.platform === 'darwin' ? { meta: true, control: false } : { meta: false, control: true }
+
   let guest: Electron.WebContents
 
   beforeEach(() => {
@@ -42,6 +43,7 @@ describe('browserManager grab operations', () => {
       const handler = guestOnMock.mock.calls.find(
         ([eventName]) => eventName === 'before-input-event'
       )?.[1]
+
       expect(handler).toBeTypeOf('function')
 
       guestExecuteJavaScriptMock.mockResolvedValueOnce(true)
@@ -68,6 +70,7 @@ describe('browserManager grab operations', () => {
       const handler = guestOnMock.mock.calls.find(
         ([eventName]) => eventName === 'before-input-event'
       )?.[1]
+
       expect(handler).toBeTypeOf('function')
 
       guestExecuteJavaScriptMock.mockResolvedValueOnce(false)
@@ -97,6 +100,7 @@ describe('browserManager grab operations', () => {
       const handler = guestOnMock.mock.calls.find(
         ([eventName]) => eventName === 'before-input-event'
       )?.[1]
+
       expect(handler).toBeTypeOf('function')
 
       const preventDefault = vi.fn()
@@ -125,6 +129,7 @@ describe('browserManager grab operations', () => {
       const handlers = guestOnMock.mock.calls
         .filter(([eventName]) => eventName === 'before-input-event')
         .map(([, handler]) => handler)
+
       const forwardingHandler = handlers[1]
       expect(forwardingHandler).toBeTypeOf('function')
 

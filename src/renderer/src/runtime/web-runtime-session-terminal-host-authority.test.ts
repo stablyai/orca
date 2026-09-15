@@ -53,6 +53,7 @@ vi.mock('./web-session-tabs-sync', () => ({
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     // The production caller invokes the returned settle receipt.
     return () => {}
   },
@@ -92,6 +93,7 @@ describe('createWebRuntimeSessionTerminal', () => {
     mocks.setActiveWorktree.mockImplementation((_worktreeId: string, executionHostId?: string) => {
       selectedHosts.push(executionHostId)
     })
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -100,6 +102,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         result: { tab: { id: 'host-tab-1', leafId: 'host-leaf-1' } }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: runtimeCall } }
     })
@@ -123,6 +126,7 @@ describe('createWebRuntimeSessionTerminal', () => {
     'keeps $sessionKind host creation background with activate=$activate while focus stays client-owned',
     async ({ sessionKind, activate }) => {
       const hostTabId = `host-${sessionKind}-${activate ? 'active' : 'background'}`
+
       const runtimeCall = vi.fn(async (request: { method: string }) => {
         if (request.method === 'status.get') {
           return {
@@ -137,6 +141,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             }
           }
         }
+
         if (
           request.method === 'terminal.createAgentSession' ||
           request.method === 'terminal.ensureAgentSession'
@@ -155,8 +160,10 @@ describe('createWebRuntimeSessionTerminal', () => {
             }
           }
         }
+
         return { id: 'list', ok: true, result: makeSnapshot() }
       })
+
       vi.stubGlobal('window', {
         api: { runtimeEnvironments: { call: runtimeCall } }
       })
@@ -178,9 +185,11 @@ describe('createWebRuntimeSessionTerminal', () => {
 
       const authorityMethod =
         sessionKind === 'resume' ? 'terminal.ensureAgentSession' : 'terminal.createAgentSession'
+
       const authorityRequest = runtimeCall.mock.calls.find(
         ([request]) => request.method === authorityMethod
       )?.[0]
+
       expect(authorityRequest).toMatchObject({
         selector: ENVIRONMENT_ID,
         method: authorityMethod,
@@ -219,6 +228,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             }
           }
         }
+
         if (request.method === 'terminal.ensureAgentSession') {
           return {
             id: 'ensure',
@@ -234,6 +244,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             }
           }
         }
+
         if (request.method === 'session.tabs.createTerminal') {
           return {
             id: 'legacy-create',
@@ -241,8 +252,10 @@ describe('createWebRuntimeSessionTerminal', () => {
             result: { tab: { id: 'host-tab-kimi', leafId: FOCUS_LEAF_ID } }
           }
         }
+
         return { id: 'list', ok: true, result: makeSnapshot() }
       })
+
       vi.stubGlobal('window', {
         api: { runtimeEnvironments: { call: runtimeCall } }
       })
@@ -282,6 +295,7 @@ describe('createWebRuntimeSessionTerminal', () => {
         }
       ]
     }
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -414,6 +428,7 @@ describe('createWebRuntimeSessionTerminal', () => {
             }
           }
         }
+
         if (request.method === 'terminal.createAgentSession') {
           return {
             id: 'create',
@@ -432,11 +447,14 @@ describe('createWebRuntimeSessionTerminal', () => {
             }
           }
         }
+
         if (request.method === failedMethod) {
           throw new Error(`${failedMethod} unavailable`)
         }
+
         return { id: 'ok', ok: true, result: makeSnapshot() }
       })
+
       vi.stubGlobal('window', {
         api: { runtimeEnvironments: { call: runtimeCall } }
       })
@@ -461,6 +479,7 @@ describe('createWebRuntimeSessionTerminal', () => {
   it('replays an ambiguous fresh-create failure with the same operation ID', async () => {
     const operationIds: string[] = []
     let createAttempts = 0
+
     const runtimeCall = vi.fn(async (request: { method: string; params?: unknown }) => {
       if (request.method === 'status.get') {
         return {
@@ -475,12 +494,15 @@ describe('createWebRuntimeSessionTerminal', () => {
           }
         }
       }
+
       if (request.method === 'terminal.createAgentSession') {
         operationIds.push((request.params as { clientOperationId: string }).clientOperationId)
         createAttempts += 1
+
         if (createAttempts === 1) {
           throw new Error('connection closed before response')
         }
+
         return {
           id: 'create',
           ok: true,
@@ -495,8 +517,10 @@ describe('createWebRuntimeSessionTerminal', () => {
           }
         }
       }
+
       return { id: 'list', ok: true, result: makeSnapshot() }
     })
+
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: runtimeCall } }
     })
@@ -528,6 +552,7 @@ describe('createWebRuntimeSessionTerminal', () => {
           }
         }
       }
+
       if (request.method === 'terminal.createAgentSession') {
         return {
           id: 'create',
@@ -543,8 +568,10 @@ describe('createWebRuntimeSessionTerminal', () => {
           }
         }
       }
+
       return { id: 'list', ok: true, result: makeSnapshot() }
     })
+
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: runtimeCall } }
     })
@@ -564,6 +591,7 @@ describe('createWebRuntimeSessionTerminal', () => {
     const createRequest = runtimeCall.mock.calls.find(
       ([request]) => request.method === 'terminal.createAgentSession'
     )?.[0]
+
     expect(createRequest).toMatchObject({ params: { agent: 'claude' } })
     expect(createRequest?.params).not.toHaveProperty('prompt')
     expect(mocks.deliverLaunchPromptToAgentTab).toHaveBeenCalledWith({
@@ -590,6 +618,7 @@ describe('createWebRuntimeSessionTerminal', () => {
           }
         }
       }
+
       if (request.method === 'terminal.createAgentSession') {
         return {
           id: 'create',
@@ -605,8 +634,10 @@ describe('createWebRuntimeSessionTerminal', () => {
           }
         }
       }
+
       return { id: 'list', ok: true, result: makeSnapshot() }
     })
+
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: runtimeCall } }
     })

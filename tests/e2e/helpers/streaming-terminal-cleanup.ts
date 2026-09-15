@@ -18,9 +18,11 @@ export async function closeStreamingTerminals(
       }
     })
   )
+
   const failures = results.flatMap((result) =>
     result.status === 'rejected' ? [result.reason] : []
   )
+
   if (failures.length > 0) {
     throw new AggregateError(failures, `Failed to close ${failures.length} streaming terminal(s)`)
   }

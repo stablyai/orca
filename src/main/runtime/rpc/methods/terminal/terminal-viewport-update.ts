@@ -13,9 +13,11 @@ export async function updateViewportForClient(
   claim = false
 ): Promise<{ updated: boolean; applied: boolean }> {
   const type = client.type ?? defaultType
+
   if (type === 'mobile') {
     return runtime.updateMobileViewport(ptyId, client.id, viewport)
   }
+
   // Why: stream attachment observes geometry without taking control; a later claim frame makes it authoritative.
   const updated =
     registration === 'refresh'
@@ -34,5 +36,6 @@ export async function updateViewportForClient(
           viewport.rows,
           claim
         )
+
   return { updated, applied: updated }
 }

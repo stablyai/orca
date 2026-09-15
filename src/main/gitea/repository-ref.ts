@@ -19,6 +19,7 @@ const KNOWN_NON_GITEA_HOSTS = new Set([
   'dev.azure.com',
   'ssh.dev.azure.com'
 ])
+
 const repoRefProbeCache = createRemoteRefProbeCache(parseGiteaRepoRef)
 
 /** @internal - exposed for tests only */
@@ -41,16 +42,19 @@ function decodeSegment(value: string): string {
 
 function parsePath(pathname: string): { owner: string; repo: string; basePath: string } | null {
   const withoutSuffix = pathname.replace(/\/+$/, '').replace(/\.git$/i, '')
+
   const parts = withoutSuffix
     .split('/')
     .map((part) => part.trim())
     .filter(Boolean)
+
   if (parts.length < 2) {
     return null
   }
 
   const owner = decodeSegment(parts.at(-2) ?? '')
   const repo = decodeSegment(parts.at(-1) ?? '')
+
   if (!owner || !repo) {
     return null
   }
@@ -68,6 +72,7 @@ function apiBaseUrlFromWebBase(webBaseUrl: string): string {
 
 function makeRepoRef(host: string, path: string, webOrigin: string): GiteaRepoRef | null {
   const normalizedHost = host.toLowerCase()
+
   if (
     !normalizedHost ||
     KNOWN_NON_GITEA_HOSTS.has(normalizedHost) ||
@@ -77,6 +82,7 @@ function makeRepoRef(host: string, path: string, webOrigin: string): GiteaRepoRe
   }
 
   const parsed = parsePath(path)
+
   if (!parsed) {
     return null
   }
@@ -86,6 +92,7 @@ function makeRepoRef(host: string, path: string, webOrigin: string): GiteaRepoRe
   const webBaseUrl = parsed.basePath
     ? `${webOrigin.replace(/\/+$/, '')}/${parsed.basePath}`
     : webOrigin
+
   return {
     host: normalizedHost,
     owner: parsed.owner,
@@ -97,11 +104,14 @@ function makeRepoRef(host: string, path: string, webOrigin: string): GiteaRepoRe
 
 export function parseGiteaRepoRef(remoteUrl: string): GiteaRepoRef | null {
   const trimmed = remoteUrl.trim()
+
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
     const scpLike = trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+?)(?:\.git)?$/)
+
     if (scpLike) {
       const host = scpLike[1]
       const path = scpLike[2]
+
       return makeRepoRef(host, path, `https://${host.toLowerCase()}`)
     }
   }
@@ -109,11 +119,13 @@ export function parseGiteaRepoRef(remoteUrl: string): GiteaRepoRef | null {
   try {
     const url = new URL(trimmed)
     const protocol = url.protocol.toLowerCase()
+
     if (!['http:', 'https:', 'ssh:', 'git+ssh:'].includes(protocol)) {
       return null
     }
 
     const parsed = parsePath(url.pathname)
+
     if (!parsed) {
       return null
     }
@@ -122,6 +134,7 @@ export function parseGiteaRepoRef(remoteUrl: string): GiteaRepoRef | null {
       protocol === 'http:' || protocol === 'https:'
         ? `${protocol}//${url.host}`
         : `https://${url.hostname.toLowerCase()}`
+
     return makeRepoRef(url.hostname, url.pathname, webOrigin)
   } catch {
     return null

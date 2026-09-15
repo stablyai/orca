@@ -31,6 +31,7 @@ function makeProgress(): FeatureWallSetupProgress {
 
 function SettingsProgressProbe(): React.JSX.Element {
   const progress = useSettingsSetupGuideProgress(true)
+
   return <span>{`${progress.doneCount}/${progress.total}`}</span>
 }
 

@@ -65,7 +65,9 @@ export type RelayEndpointIncumbent = {
 }
 
 const PROBE_BEGIN = 'ORCA-INCUMBENT-BEGIN'
+
 const PROBE_END = 'ORCA-INCUMBENT-END'
+
 const CONNECT_PROBE_TIMEOUT_MS = 1000
 
 // Why ES5 syntax: nodePath may be a host-resolved system node, not the bundled one.
@@ -94,6 +96,7 @@ export class RelayProbeCleanupUnconfirmedError extends Error {
 export function relayEndpointIncumbentProbeCommand(nodePath: string, sockPath: string): string {
   const sock = shellEscape(sockPath)
   const node = shellEscape(nodePath)
+
   return [
     `sock=${sock}`,
     `node=${node}`,
@@ -143,15 +146,19 @@ export function parseRelayEndpointIncumbentProbe(
   output: string
 ): RelayEndpointIncumbent {
   const lines = output.split('\n').map((line) => line.trim())
+
   if (!lines.includes(PROBE_BEGIN) || !lines.includes(PROBE_END)) {
     return unverifiableEndpoint(sockPath)
   }
+
   if (lines.includes('PROBE_CLEANUP=unconfirmed')) {
     throw new RelayProbeCleanupUnconfirmedError()
   }
+
   const socketPresent = lines.includes('PRESENT=yes')
   const listen = lines.find((line) => line.startsWith('LISTEN='))?.slice('LISTEN='.length) ?? ''
   const holdersEnumerable = lines.includes('HOLDERS_SOURCE=lsof')
+
   const holders = lines
     .filter((line) => line.startsWith('HOLDER='))
     .map((line) => parseHolder(line.slice('HOLDER='.length)))
@@ -167,6 +174,7 @@ export function parseRelayEndpointIncumbentProbe(
       holdersEnumerable
     }
   }
+
   if (holders.length > 0) {
     // The inode is held by a running process that is not accepting — wedged, not gone.
     return {
@@ -178,6 +186,7 @@ export function parseRelayEndpointIncumbentProbe(
       holdersEnumerable
     }
   }
+
   if (holdersEnumerable && (listen === 'refused' || listen === 'absent')) {
     return {
       sockPath,
@@ -188,15 +197,18 @@ export function parseRelayEndpointIncumbentProbe(
       holdersEnumerable
     }
   }
+
   return { ...unverifiableEndpoint(sockPath), socketPresent, holders, holdersEnumerable }
 }
 
 function parseHolder(value: string): RelayEndpointHolder | null {
   const [rawPid, rawMatch, rawKids, rawUnrecognized] = value.split(/\s+/)
   const pid = Number.parseInt(rawPid ?? '', 10)
+
   if (!Number.isInteger(pid) || pid <= 0) {
     return null
   }
+
   return {
     pid,
     matchesRelayArgv: rawMatch === 'yes',
@@ -208,6 +220,7 @@ function parseHolder(value: string): RelayEndpointHolder | null {
 /** `unknown`, a missing field, and anything unparseable are all "could not tell" — never 0. */
 function parseChildCount(raw: string | undefined): number | null {
   const count = Number.parseInt(raw ?? '', 10)
+
   return Number.isInteger(count) && count >= 0 ? count : null
 }
 
@@ -234,11 +247,13 @@ export async function probeRelayEndpointIncumbent(
   if (isWindowsRemoteHost(hostPlatform)) {
     return unverifiableEndpoint(sockPath)
   }
+
   try {
     const output = await execCommand(conn, relayEndpointIncumbentProbeCommand(nodePath, sockPath), {
       wrapCommand: true,
       signal: options?.signal
     })
+
     return parseRelayEndpointIncumbentProbe(sockPath, output)
   } catch (err) {
     // An exec whose channel never confirmed close may still be running remotely; the caller
@@ -249,6 +264,7 @@ export async function probeRelayEndpointIncumbent(
     ) {
       throw err
     }
+
     // Any other unanswered probe observes nothing. It is never evidence of death.
     return unverifiableEndpoint(sockPath)
   }
@@ -264,6 +280,7 @@ export function withHandshakeRefusalEvidence(
   if (incumbent.verdict === 'live') {
     return incumbent
   }
+
   return { ...incumbent, verdict: 'live', evidence: 'handshake-refusal' }
 }
 
@@ -292,10 +309,13 @@ export function isReapableRelayHusk(incumbent: RelayEndpointIncumbent): boolean 
   if (incumbent.verdict !== 'live' || !incumbent.holdersEnumerable) {
     return false
   }
+
   if (incumbent.holders.length !== 1) {
     return false
   }
+
   const [holder] = incumbent.holders
+
   return holder.matchesRelayArgv && holder.unrecognizedChildCount === 0
 }
 
@@ -307,6 +327,7 @@ export function describeRelayEndpointIncumbent(incumbent: RelayEndpointIncumbent
         `unrecognized=${holder.unrecognizedChildCount ?? 'unknown'})`
     )
     .join(',')
+
   return (
     `${incumbent.sockPath} verdict=${incumbent.verdict} evidence=${incumbent.evidence} ` +
     `holders=${incumbent.holdersEnumerable ? holders || 'none' : 'unenumerable'}`

@@ -24,6 +24,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const setAgentStatus = vi.fn()
     const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
     let resolveSnapshot!: (entries: AgentStatusSetData[]) => void
+
     const getSnapshot = vi.fn(
       () =>
         new Promise<AgentStatusSetData[]>((resolve) => {
@@ -45,6 +46,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       useAppStore: {
         subscribe: vi.fn((listener: StoreSubscribeListener) => {
           subscribeListenerRef.current = listener
+
           return () => {
             subscribeListenerRef.current = null
           }
@@ -124,6 +126,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const observeAgentHookCompletionForNotification = vi.fn()
     const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
     let resolveSnapshot!: (entries: AgentStatusSetData[]) => void
+
     const getSnapshot = vi.fn(
       () =>
         new Promise<AgentStatusSetData[]>((resolve) => {
@@ -146,6 +149,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       useAppStore: {
         subscribe: vi.fn((listener: StoreSubscribeListener) => {
           subscribeListenerRef.current = listener
+
           return () => {
             subscribeListenerRef.current = null
           }
@@ -228,6 +232,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const setAgentStatus = vi.fn()
     const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
     let resolveSnapshot!: (entries: AgentStatusSetData[]) => void
+
     const getSnapshot = vi.fn(
       () =>
         new Promise<AgentStatusSetData[]>((resolve) => {
@@ -249,6 +254,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       useAppStore: {
         subscribe: vi.fn((listener: StoreSubscribeListener) => {
           subscribeListenerRef.current = listener
+
           return () => {
             subscribeListenerRef.current = null
           }
@@ -308,9 +314,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('accepts WSL-relayed status events for a local repo (wsl:* is transport provenance, not ownership)', async () => {
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     const storeState: StoreLike = buildStoreState({
       setAgentStatus,
       workspaceSessionReady: true,
@@ -341,6 +349,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -350,6 +359,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     useIpcEvents()
     await Promise.resolve()
+
     if (typeof onSetListenerRef.current !== 'function') {
       throw new Error('Expected agentStatus.onSet listener to be registered')
     }
@@ -378,9 +388,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('still rejects WSL-relayed status events against an SSH-owned repo', async () => {
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     const storeState: StoreLike = buildStoreState({
       setAgentStatus,
       workspaceSessionReady: true,
@@ -411,6 +423,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -420,6 +433,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     useIpcEvents()
     await Promise.resolve()
+
     if (typeof onSetListenerRef.current !== 'function') {
       throw new Error('Expected agentStatus.onSet listener to be registered')
     }
@@ -440,9 +454,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('still rejects remote status events once the pane resolves to a local repo', async () => {
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     const storeState: StoreLike = buildStoreState({
       setAgentStatus,
       workspaceSessionReady: true,
@@ -473,6 +489,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -482,6 +499,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
     useIpcEvents()
     await Promise.resolve()
+
     if (typeof onSetListenerRef.current !== 'function') {
       throw new Error('Expected agentStatus.onSet listener to be registered')
     }
@@ -503,6 +521,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
   it('tracks ready push events whose paneKey does not resolve to a renderer tab', async () => {
     const setAgentStatus = vi.fn()
     const track = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
@@ -529,6 +548,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })

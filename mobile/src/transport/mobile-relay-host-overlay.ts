@@ -24,8 +24,10 @@ export const MobileRelayHostOverlaySchema = z
   .superRefine((overlay, context) => {
     if ((overlay.relayHostId === undefined) !== (overlay.relay === undefined)) {
       context.addIssue({ code: 'custom', message: 'Relay identity and endpoint must coexist' })
+
       return
     }
+
     if (overlay.relay && overlay.relay.relayHostId !== overlay.relayHostId) {
       context.addIssue({
         code: 'custom',
@@ -33,7 +35,9 @@ export const MobileRelayHostOverlaySchema = z
         message: 'Relay host identity mismatch'
       })
     }
+
     const relayEndpointCount = overlay.endpoints.filter(({ kind }) => kind === 'relay').length
+
     if (relayEndpointCount !== (overlay.relay ? 1 : 0)) {
       context.addIssue({
         code: 'custom',
@@ -44,4 +48,5 @@ export const MobileRelayHostOverlaySchema = z
   })
 
 export type MobileAccessEndpoint = z.infer<typeof MobileAccessEndpointSchema>
+
 export type MobileRelayHostOverlay = z.infer<typeof MobileRelayHostOverlaySchema>

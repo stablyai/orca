@@ -8,13 +8,16 @@ import { generateInstallId, readInstallId } from './install-id'
 // need the two methods install-id.ts consumes.
 function makeFakeStore(initial: Partial<GlobalSettings>): Store {
   let settings = { ...initial } as GlobalSettings
+
   const store = {
     getSettings: vi.fn(() => settings),
     updateSettings: vi.fn((updates: Partial<GlobalSettings>) => {
       settings = { ...settings, ...updates } as GlobalSettings
+
       return settings
     })
   }
+
   return store as unknown as Store
 }
 
@@ -40,6 +43,7 @@ describe('install-id', () => {
           existedBeforeTelemetryRelease: false
         }
       })
+
       expect(readInstallId(store)).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
     })
 

@@ -3,7 +3,9 @@ import { MARINE_CREATURES } from '../../../src/shared/marine-creatures'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
 
 const pickFirst = () => 0
+
 const lower = (index: number) => MARINE_CREATURES[index].toLowerCase()
+
 const retiring = (...names: string[]) => ({ exhaustedTiers: 0, names })
 
 describe('getSuggestedCreatureName (mobile)', () => {

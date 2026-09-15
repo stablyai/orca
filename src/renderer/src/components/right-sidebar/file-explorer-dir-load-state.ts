@@ -30,10 +30,13 @@ export function markFileExplorerDirsLoading(
   if (dirPaths.every((dirPath) => prev.has(dirPath))) {
     return prev
   }
+
   const next = new Set(prev)
+
   for (const dirPath of dirPaths) {
     next.add(dirPath)
   }
+
   return next
 }
 
@@ -45,10 +48,13 @@ export function clearFileExplorerDirsLoading(
   if (!dirPaths.some((dirPath) => prev.has(dirPath))) {
     return prev
   }
+
   const next = new Set(prev)
+
   for (const dirPath of dirPaths) {
     next.delete(dirPath)
   }
+
   return next.size === 0 ? EMPTY_FILE_EXPLORER_LOADING_DIRS : next
 }
 
@@ -65,12 +71,16 @@ export function withPendingFileExplorerDirCacheEntries(
   dirPaths: readonly string[]
 ): Record<string, DirCache> {
   const missing = dirPaths.filter((dirPath) => prev[dirPath] === undefined)
+
   if (missing.length === 0) {
     return prev
   }
+
   const next = { ...prev }
+
   for (const dirPath of missing) {
     next[dirPath] = { children: [] }
   }
+
   return next
 }

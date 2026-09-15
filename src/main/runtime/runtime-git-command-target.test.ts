@@ -26,6 +26,7 @@ describe('runtime Git target routing', () => {
     const provider = { getStatus: async () => ({ entries: [] }) }
     registerSshGitProvider(connectionId, provider as never)
     registered.push(connectionId)
+
     return provider
   }
 

@@ -13,10 +13,12 @@ test('Create more clears the GitHub PR source before the next worktree', async (
 }, testInfo) => {
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
+
   const sha = execFileSync('git', ['rev-parse', 'HEAD'], {
     cwd: testRepoPath,
     encoding: 'utf8'
   }).trim()
+
   await electronApp.evaluate(({ ipcMain }, baseBranch) => {
     ipcMain.removeHandler('worktrees:resolvePrBase')
     ipcMain.handle('worktrees:resolvePrBase', () => ({ baseBranch }))
@@ -30,6 +32,7 @@ test('Create more clears the GitHub PR source before the next worktree', async (
   await orcaPage.evaluate(() => {
     const store = window.__store!
     const repoId = store.getState().repos[0].id
+
     const item = {
       id: 'pr-4242',
       provider: 'github' as const,
@@ -43,6 +46,7 @@ test('Create more clears the GitHub PR source before the next worktree', async (
       author: 'e2e',
       repoId
     }
+
     store.setState({
       getCachedWorkItems: () => [item],
       fetchWorkItems: async () => [item],
@@ -98,6 +102,7 @@ test('Create more clears the GitHub PR source before the next worktree', async (
           .__store!.getState()
           .allWorktrees()
           .find((entry) => entry.displayName === 'next-independent-worktree')
+
         return worktree ? { linkedPR: worktree.linkedPR, linkedIssue: worktree.linkedIssue } : null
       })
     )

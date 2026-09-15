@@ -112,17 +112,21 @@ function getRuntimeLivenessTargetWorktrees(
   targetWorktreeId?: string
 ): Map<string, string> {
   const targets = new Map<string, string>()
+
   const worktreeIds = targetWorktreeId
     ? Object.hasOwn(state.tabsByWorktree, targetWorktreeId)
       ? [targetWorktreeId]
       : []
     : Object.keys(state.tabsByWorktree)
+
   for (const worktreeId of worktreeIds) {
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+
     if (runtimeEnvironmentId) {
       targets.set(worktreeId, runtimeEnvironmentId)
     }
   }
+
   return targets
 }
 
@@ -130,9 +134,11 @@ function getTypedRuntimePtyId(terminal: RuntimeTerminalSummary): string | null {
   if (terminal.ptyId) {
     return terminal.ptyId
   }
+
   if (terminal.tabId.startsWith('pty:') && terminal.tabId === terminal.leafId) {
     return terminal.tabId.slice('pty:'.length) || null
   }
+
   return null
 }
 
@@ -143,23 +149,29 @@ async function collectRuntimePtyLiveness(
   const targets = getRuntimeLivenessTargetWorktrees(state, targetWorktreeId)
   const runtimeLivePtyIdsByWorktreeId: Record<string, string[]> = {}
   const runtimeLivenessRequiredWorktreeIds = [...targets.keys()]
+
   if (targets.size === 0) {
     // Why: an all-local install has nothing to ask, so it must not pay the status scan below.
     return { runtimeLivePtyIdsByWorktreeId, runtimeLivenessRequiredWorktreeIds }
   }
+
   const completedTabIds = new Set<string>()
+
   for (const entry of Object.values(state.agentStatusByPaneKey)) {
     const tabId = entry?.state === 'done' ? getEntryTabId(entry) : null
+
     if (tabId) {
       completedTabIds.add(tabId)
     }
   }
+
   await Promise.all(
     [...targets].map(async ([worktreeId, runtimeEnvironmentId]) => {
       if (!state.tabsByWorktree[worktreeId]?.some((tab) => completedTabIds.has(tab.id))) {
         // Skipped owners still require host evidence if an agent completes during this pass.
         return
       }
+
       try {
         const result = await callRuntimeRpc<RuntimeTerminalListResult>(
           { kind: 'environment', environmentId: runtimeEnvironmentId },
@@ -172,19 +184,25 @@ async function collectRuntimePtyLiveness(
           },
           { timeoutMs: 10_000 }
         )
+
         if (result.truncated) {
           return
         }
+
         const ptyIds = new Set<string>()
+
         for (const terminal of result.terminals) {
           if (!terminal.connected || terminal.worktreeId !== worktreeId) {
             continue
           }
+
           const ptyId = getTypedRuntimePtyId(terminal)
+
           if (ptyId) {
             ptyIds.add(ptyId)
           }
         }
+
         runtimeLivePtyIdsByWorktreeId[worktreeId] = [...ptyIds].sort()
       } catch {
         // Why: stale runtime liveness is unsafe for all-or-nothing hibernation;
@@ -192,6 +210,7 @@ async function collectRuntimePtyLiveness(
       }
     })
   )
+
   return { runtimeLivePtyIdsByWorktreeId, runtimeLivenessRequiredWorktreeIds }
 }
 
@@ -206,6 +225,7 @@ async function currentCandidates(now: number, targetWorktreeId?: string) {
     now,
     idleMs: getEffectiveAgentHibernationIdleMs(freshState.settings?.agentHibernationIdleMs)
   })
+
   return planAgentHibernationCandidates(
     snapshotFromState(freshState, now, runtimeLiveness, targetWorktreeId)
   )
@@ -214,6 +234,7 @@ async function currentCandidates(now: number, targetWorktreeId?: string) {
         freshState,
         candidate.worktreeId
       )
+
       return !runtimeEnvironmentId || candidate.expectedRuntimePtyIds.length === 1
     })
     .map((candidate) => ({
@@ -228,20 +249,26 @@ async function hibernatePaneIfStillEligible(
   confirmedCandidate: AgentHibernationCandidate
 ): Promise<void> {
   const { id, worktreeId } = confirmedCandidate
+
   if (coordinator.shuttingDownCandidateIds.has(id)) {
     return
   }
+
   // Why: the confirmed pane can only be authorized by its owning worktree. A
   // global sweep here made C pane teardowns issue C×W fresh runtime listings.
   const candidates = await currentCandidates(coordinator.now(), worktreeId)
+
   const stillEligible = candidates.some(
     (candidate) =>
       candidate.id === confirmedCandidate.id && candidate.signature === confirmedCandidate.signature
   )
+
   if (!stillEligible) {
     return
   }
+
   coordinator.shuttingDownCandidateIds.add(id)
+
   try {
     const state = useAppStore.getState()
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
@@ -265,13 +292,17 @@ export async function runAgentHibernationTick(): Promise<void> {
   if (coordinator.tickInFlight) {
     return
   }
+
   coordinator.tickInFlight = true
+
   try {
     const plan = confirmAgentHibernationCandidates(
       coordinator.confirmationState,
       await currentCandidates(coordinator.now())
     )
+
     coordinator.confirmationState = plan.confirmationState
+
     // Why: drain sequentially. Each shutdown re-runs a full runtime-liveness sweep and
     // then a stopExact RPC, so firing the whole confirmed set at once meant ~100
     // concurrent sweeps plus ~100 concurrent stops on the first pass after a backlog —
@@ -293,6 +324,7 @@ export function startAgentHibernationCoordinator(
   if (coordinator.interval !== null) {
     return stopAgentHibernationCoordinator
   }
+
   coordinator.now = options.now ?? (() => Date.now())
   const intervalMs = options.intervalMs ?? AGENT_HIBERNATION_TICK_MS
   coordinator.interval = setInterval(() => {
@@ -303,6 +335,7 @@ export function startAgentHibernationCoordinator(
     if (!getWindowParkVisible()) {
       return
     }
+
     void runAgentHibernationTick()
   }, intervalMs)
   // Why: confirmationState survives the hidden gap, so without a resume run the "two
@@ -312,6 +345,7 @@ export function startAgentHibernationCoordinator(
       void runAgentHibernationTick()
     }
   })
+
   return stopAgentHibernationCoordinator
 }
 
@@ -320,6 +354,7 @@ export function stopAgentHibernationCoordinator(): void {
     clearInterval(coordinator.interval)
     coordinator.interval = null
   }
+
   coordinator.unsubscribeVisibility?.()
   coordinator.unsubscribeVisibility = null
   coordinator.confirmationState = {}

@@ -13,6 +13,7 @@ export const REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS = {
 
 export function parseRemoteRuntimeJsonText(content: string): unknown {
   assertJsonTextStructureWithinLimits(content, REMOTE_RUNTIME_JSON_STRUCTURE_LIMITS)
+
   return JSON.parse(content) as unknown
 }
 
@@ -40,6 +41,7 @@ export function invalidRemoteRuntimeResponseError(message: string): RemoteRuntim
 
 export function parseReadyFrame(frame: string): RemoteRuntimeClientError | null {
   let ready: unknown
+
   try {
     ready = parseRemoteRuntimeJsonText(frame)
   } catch {
@@ -47,6 +49,7 @@ export function parseReadyFrame(frame: string): RemoteRuntimeClientError | null 
       'Remote Orca runtime returned an invalid E2EE handshake frame.'
     )
   }
+
   if (
     typeof ready !== 'object' ||
     ready === null ||
@@ -56,11 +59,13 @@ export function parseReadyFrame(frame: string): RemoteRuntimeClientError | null 
       'Remote Orca runtime returned an unexpected E2EE handshake frame.'
     )
   }
+
   return null
 }
 
 export function parseAuthenticatedFrame(plaintext: string): RemoteRuntimeClientError | null {
   let authenticated: unknown
+
   try {
     authenticated = parseRemoteRuntimeJsonText(plaintext)
   } catch {
@@ -68,21 +73,26 @@ export function parseAuthenticatedFrame(plaintext: string): RemoteRuntimeClientE
       'Remote Orca runtime returned an invalid E2EE auth frame.'
     )
   }
+
   const type = (authenticated as { type?: unknown }).type
+
   if (type === 'e2ee_authenticated') {
     return null
   }
+
   const code =
     typeof authenticated === 'object' &&
     authenticated !== null &&
     (authenticated as { error?: { code?: unknown } }).error?.code === 'unauthorized'
       ? 'unauthorized'
       : 'invalid_runtime_response'
+
   return new RemoteRuntimeClientError(code, 'Remote Orca runtime rejected the pairing token.')
 }
 
 export function parseRemoteRuntimeRpcFrame(plaintext: string): ParsedRemoteRuntimeFrame {
   let raw: unknown
+
   try {
     raw = parseRemoteRuntimeJsonText(plaintext)
   } catch {
@@ -93,10 +103,13 @@ export function parseRemoteRuntimeRpcFrame(plaintext: string): ParsedRemoteRunti
       )
     }
   }
+
   if (isKeepaliveFrame(raw)) {
     return { type: 'keepalive' }
   }
+
   const parsed = RuntimeRpcEnvelopeSchema.safeParse(raw)
+
   if (!parsed.success || '_keepalive' in parsed.data) {
     return {
       type: 'error',
@@ -105,5 +118,6 @@ export function parseRemoteRuntimeRpcFrame(plaintext: string): ParsedRemoteRunti
       )
     }
   }
+
   return { type: 'response', response: parsed.data as RuntimeRpcResponse<unknown> }
 }

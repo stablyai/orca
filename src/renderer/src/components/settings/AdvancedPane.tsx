@@ -23,6 +23,7 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
   const http1CompatibilityInitialRef = useRef(Boolean(settings.electronHttp1CompatibilityMode))
   const [http1CompatibilityRelaunching, setHttp1CompatibilityRelaunching] = useState(false)
   const http1CompatibilityEnabled = Boolean(settings.electronHttp1CompatibilityMode)
+
   const http1CompatibilityRestartRequired =
     http1CompatibilityEnabled !== http1CompatibilityInitialRef.current
 
@@ -34,6 +35,7 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
     setHttp1CompatibilityRelaunching(true)
     void window.api.app.relaunch().catch((error) => {
       console.error('[settings] failed to relaunch for HTTP/1.1 compatibility:', error)
+
       if (mountedRef.current) {
         setHttp1CompatibilityRelaunching(false)
       }

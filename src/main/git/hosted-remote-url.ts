@@ -22,17 +22,21 @@ const shorthandHosts: Record<string, { host: string; provider: HostedRemoteProvi
 
 function providerForHost(host: string): HostedRemoteHost | null {
   const normalized = host.toLowerCase()
+
   if (normalized === 'github.com' || normalized === 'ssh.github.com') {
     // Why: GitHub documents ssh.github.com:443 as the SSH-over-HTTPS host,
     // but browser links and account identity still belong to github.com.
     return { host: 'github.com', provider: 'github' }
   }
+
   if (normalized === 'gitlab.com') {
     return { host: 'gitlab.com', provider: 'gitlab' }
   }
+
   if (normalized === 'bitbucket.org') {
     return { host: 'bitbucket.org', provider: 'bitbucket' }
   }
+
   return null
 }
 
@@ -51,37 +55,46 @@ function decodeRemotePathPart(pathPart: string): string {
 function cleanRemotePath(path: string): string | null {
   const normalized = trimGitSuffix(path.replace(/^\/+/, '').replace(/\/+$/, ''))
   const parts = normalized.split('/').filter(Boolean)
+
   if (parts.length < 2) {
     return null
   }
+
   return parts.map(decodeRemotePathPart).join('/')
 }
 
 export function parseHostedRemote(remoteUrl: string): HostedRemote | null {
   const trimmed = remoteUrl.trim().replace(/^git\+/, '')
   const shorthand = trimmed.match(/^([a-z]+):([^/].+)$/i)
+
   if (shorthand) {
     const host = shorthandHosts[shorthand[1].toLowerCase()]
     const path = cleanRemotePath(shorthand[2])
+
     return host && path ? { ...host, path } : null
   }
 
   if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) {
     const scpLike = trimmed.match(/^(?:[^@/:]+@)?([^:\s/]+):([^\s]+)$/)
+
     if (scpLike) {
       const hosted = providerForHost(scpLike[1])
       const path = cleanRemotePath(scpLike[2])
+
       return hosted && path ? { host: hosted.host, path, provider: hosted.provider } : null
     }
   }
 
   try {
     const url = new URL(trimmed)
+
     if (!['git:', 'http:', 'https:', 'ssh:'].includes(url.protocol.toLowerCase())) {
       return null
     }
+
     const hosted = providerForHost(url.hostname)
     const path = cleanRemotePath(url.pathname)
+
     return hosted && path ? { host: hosted.host, path, provider: hosted.provider } : null
   } catch {
     return null
@@ -98,6 +111,7 @@ function encodeRelativePath(path: string): string {
 
 function encodeBitbucketFileLineFragment(path: string, line: number): string {
   const fileName = path.replaceAll('\\', '/').split('/').findLast(Boolean)
+
   return fileName ? `#${encodeURIComponent(`${fileName}-${line}`)}` : ''
 }
 
@@ -108,6 +122,7 @@ export function buildHostedRemoteFileUrl(
   line: number
 ): string | null {
   const remote = parseHostedRemote(remoteUrl)
+
   if (!remote) {
     return null
   }
@@ -121,18 +136,23 @@ export function buildHostedRemoteFileUrl(
   if (remote.provider === 'github') {
     return `${baseUrl}/blob/${encodedBranch}${filePathSuffix}#L${line}`
   }
+
   if (remote.provider === 'gitlab') {
     return `${baseUrl}/-/blob/${encodedBranch}${filePathSuffix}#L${line}`
   }
+
   return `${baseUrl}/src/${encodedBranch}${filePathSuffix}${encodeBitbucketFileLineFragment(relativePath, line)}`
 }
 
 export function buildHostedRemoteCommitUrl(remoteUrl: string, sha: string): string | null {
   const normalizedSha = sha.trim()
+
   if (!normalizedSha) {
     return null
   }
+
   const remote = parseHostedRemote(remoteUrl)
+
   if (!remote) {
     return null
   }
@@ -143,8 +163,10 @@ export function buildHostedRemoteCommitUrl(remoteUrl: string, sha: string): stri
   if (remote.provider === 'gitlab') {
     return `${baseUrl}/-/commit/${encodedSha}`
   }
+
   if (remote.provider === 'bitbucket') {
     return `${baseUrl}/commits/${encodedSha}`
   }
+
   return `${baseUrl}/commit/${encodedSha}`
 }

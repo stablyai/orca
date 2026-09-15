@@ -23,6 +23,7 @@ export function toggleAutoRenameBranchFromWork(args: {
 }): void {
   const nextEnabled = !args.enabled
   void args.updateSettings({ autoRenameBranchFromWork: nextEnabled })
+
   if (nextEnabled) {
     args.dispatchEvent(new Event(CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT))
   }

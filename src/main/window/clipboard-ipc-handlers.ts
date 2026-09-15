@@ -55,6 +55,7 @@ async function saveClipboardImageBufferForTarget(
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
   const runtimeEnvironmentId = args?.runtimeEnvironmentId?.trim()
+
   // Why (#17679): with a runtime owner, a connectionId names one of the RUNTIME's SSH
   // connections (nested Remote Server -> SSH), not one this process dialed. Looking it up
   // in the local provider registry can only miss, so the runtime must perform the save.
@@ -66,6 +67,7 @@ async function saveClipboardImageBufferForTarget(
       args?.connectionId ?? null
     )
   }
+
   return saveClipboardImageBufferAsTempFile(buffer, args)
 }
 
@@ -102,12 +104,14 @@ export function registerClipboardHandlers(store: Store): void {
 
   ipcMain.handle('clipboard:readText', async (event, options?: ReadClipboardTextOptions) => {
     assertTrustedClipboardTextSender(event)
+
     return assertClipboardTextWithinLimitWithYield(clipboard.readText(), options)
   })
   ipcMain.handle(
     'clipboard:readSelectionText',
     async (event, options?: ReadClipboardTextOptions) => {
       assertTrustedClipboardSender(event)
+
       return assertClipboardTextWithinLimitWithYield(clipboard.readText('selection'), options)
     }
   )
@@ -115,6 +119,7 @@ export function registerClipboardHandlers(store: Store): void {
   // the clipboard in memory before the (slower) save lands.
   ipcMain.handle('clipboard:readImageThumbnail', (event): ClipboardImageThumbnail | null => {
     assertTrustedClipboardSender(event)
+
     return buildClipboardImageThumbnail(clipboard.readImage())
   })
   // Why: terminals need to detect clipboard images to support tools like Claude
@@ -125,10 +130,12 @@ export function registerClipboardHandlers(store: Store): void {
     async (event, args?: SaveClipboardImageAsTempFileArgs) => {
       assertTrustedClipboardSender(event)
       const image = clipboard.readImage()
+
       if (image.isEmpty()) {
         if (process.platform !== 'win32') {
           return null
         }
+
         const copiedFilePng = await readWindowsClipboardImageFileAsPng(
           {
             fileNameW: clipboard.readBuffer('FileNameW'),
@@ -139,9 +146,12 @@ export function registerClipboardHandlers(store: Store): void {
             openFile: (filePath) => open(filePath, 'r')
           }
         )
+
         return copiedFilePng ? saveClipboardImageBufferForTarget(copiedFilePng, args) : null
       }
+
       assertClipboardImageDimensionsWithinLimit(image.getSize())
+
       return saveClipboardImageBufferForTarget(image.toPNG(), args)
     }
   )
@@ -152,21 +162,26 @@ export function registerClipboardHandlers(store: Store): void {
     (event, args: unknown): ClipboardFileResult | Promise<ClipboardFileResult> => {
       assertTrustedClipboardSender(event)
       const request = normalizeClipboardWriteFileRequest(args)
+
       if (!request) {
         return { ok: false, reason: 'invalid-path' }
       }
+
       const deps = makeClipboardFileDeps(async (path) => {
         try {
           const authorizedPath = await resolveAuthorizedPath(path, store)
           await stat(authorizedPath)
+
           return { ok: true, path: authorizedPath }
         } catch (error) {
           if (error instanceof Error && error.message === PATH_ACCESS_DENIED_MESSAGE) {
             return { ok: false, reason: 'access-denied' }
           }
+
           return { ok: false, reason: isENOENT(error) ? 'not-found' : 'invalid-path' }
         }
       })
+
       if (request.connectionId) {
         return writeRemoteFileToClipboard({
           remotePath: request.filePath,
@@ -174,19 +189,23 @@ export function registerClipboardHandlers(store: Store): void {
           deps
         })
       }
+
       return writeFileToClipboard(request.filePath, deps)
     }
   )
   ipcMain.handle('clipboard:writeText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)
+
     return clipboard.writeText(await assertClipboardTextWriteWithinLimitWithYield(text))
   })
   ipcMain.handle('clipboard:writeTerminalText', async (event, text: string) => {
     assertTrustedClipboardTextSender(event)
+
     return writeClipboardTextAndVerify(await assertClipboardTextWriteWithinLimitWithYield(text))
   })
   ipcMain.handle('clipboard:writeSelectionText', async (event, text: string) => {
     assertTrustedClipboardSender(event)
+
     return clipboard.writeText(
       await assertClipboardTextWriteWithinLimitWithYield(text),
       'selection'
@@ -198,34 +217,43 @@ export function registerClipboardHandlers(store: Store): void {
     // data to the clipboard. The renderer already validates the prefix, but
     // defense-in-depth applies here too.
     const prefix = 'data:image/png;base64,'
+
     if (typeof dataUrl !== 'string' || !dataUrl.startsWith(prefix)) {
       return
     }
+
     const contentBase64 = dataUrl.slice(prefix.length)
+
     try {
       assertClipboardImageBase64LengthWithinLimit(contentBase64.length)
     } catch {
       return
     }
+
     // Why: use createFromBuffer instead of createFromDataURL — the latter
     // silently returns an empty image on some macOS + Electron combinations
     // when the data URL is large (>500KB). Decoding the base64 manually and
     // using createFromBuffer is more reliable.
     const buffer = Buffer.from(contentBase64, 'base64')
+
     try {
       assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
     } catch {
       return
     }
+
     const image = nativeImage.createFromBuffer(buffer)
+
     if (image.isEmpty()) {
       return
     }
+
     try {
       assertClipboardImageDimensionsWithinLimit(image.getSize())
     } catch {
       return
     }
+
     clipboard.writeImage(image)
   })
 }
@@ -234,17 +262,23 @@ function normalizeClipboardWriteFileRequest(args: unknown): ClipboardWriteFileRe
   if (typeof args === 'string') {
     return { filePath: args }
   }
+
   if (!args || typeof args !== 'object' || Array.isArray(args)) {
     return null
   }
+
   const filePath = (args as { filePath?: unknown }).filePath
+
   if (typeof filePath !== 'string') {
     return null
   }
+
   const connectionId = (args as { connectionId?: unknown }).connectionId
+
   if (typeof connectionId === 'string' && connectionId.trim() !== '') {
     return { filePath, connectionId }
   }
+
   return { filePath }
 }
 
@@ -278,11 +312,13 @@ function isTrustedClipboardRenderer(sender: WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
   }
+
   if (trustedClipboardRendererWebContentsId != null) {
     return sender.id === trustedClipboardRendererWebContentsId
   }
 
   const senderUrl = sender.getURL()
+
   if (process.env.ELECTRON_RENDERER_URL) {
     try {
       return new URL(senderUrl).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin

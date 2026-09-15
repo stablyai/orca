@@ -64,7 +64,9 @@ export function useRichMarkdownProgrammaticSync({
     if (!editor) {
       return
     }
+
     isApplyingProgrammaticUpdateRef.current = true
+
     try {
       setRichMarkdownImageResolverContext(
         editor,
@@ -95,7 +97,9 @@ export function useRichMarkdownProgrammaticSync({
     if (!editor || !markdownDocuments) {
       return
     }
+
     isApplyingProgrammaticUpdateRef.current = true
+
     try {
       const storage = editor.storage as unknown as RichMarkdownEditorStorage
       storage.markdownDocLink.documents = markdownDocuments
@@ -109,9 +113,11 @@ export function useRichMarkdownProgrammaticSync({
     if (!editor) {
       return
     }
+
     if (content === lastCommittedMarkdownRef.current) {
       return
     }
+
     if (editor.getMarkdown() === content) {
       // Why: disk bytes changed but already render-equal to the current doc (e.g.
       // an external tool canonicalized byte-level style). Skip the disruptive
@@ -120,9 +126,12 @@ export function useRichMarkdownProgrammaticSync({
       lastCommittedMarkdownRef.current = content
       originalSourceRef.current = content
       baseCanonicalRef.current = content
+
       return
     }
+
     isApplyingProgrammaticUpdateRef.current = true
+
     try {
       applyExternalRichMarkdownContent(
         editor,
@@ -135,6 +144,7 @@ export function useRichMarkdownProgrammaticSync({
     } finally {
       isApplyingProgrammaticUpdateRef.current = false
     }
+
     syncSlashMenu(editor, rootRef.current, slashMenuSetter)
     syncDocLinkMenu(editor, rootRef.current, docLinkMenuSetter)
   }, [
@@ -178,6 +188,7 @@ function applyExternalRichMarkdownContent(
     // so subsequent edits preserve the new source style, not the pre-reload one.
     originalSourceRef.current = content
     baseCanonicalRef.current = editor.getMarkdown()
+
     if (hadFocus) {
       const docSize = editor.state.doc.content.size
       editor

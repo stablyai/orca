@@ -21,26 +21,33 @@ export function useTerminalWebReadyWatchdog(
 
   const armWebReadyWatchdog = useCallback(() => {
     clearWebReadyWatchdog()
+
     const fire = () => {
       watchdogRef.current = null
+
       if (isWebReadyRef.current) {
         return
       }
+
       if (AppState.currentState !== 'active') {
         // Why: backgrounded WebViews legitimately stall; only judge foreground loads.
         watchdogRef.current = setTimeout(fire, WEB_READY_WATCHDOG_MS)
+
         return
       }
+
       reportEngineError(
         'Terminal did not initialize - no ready signal from the terminal view',
         true
       )
     }
+
     watchdogRef.current = setTimeout(fire, WEB_READY_WATCHDOG_MS)
   }, [clearWebReadyWatchdog, isWebReadyRef, reportEngineError])
 
   useEffect(() => {
     armWebReadyWatchdog()
+
     return clearWebReadyWatchdog
   }, [armWebReadyWatchdog, clearWebReadyWatchdog])
 

@@ -18,6 +18,7 @@ function resolveRenderedAnchorId(
   if (renderedWorktreeIds.includes(anchorId)) {
     return null
   }
+
   return renderedWorktreeIds.find((id) => selectedWorktreeIds.has(id)) ?? null
 }
 
@@ -34,12 +35,15 @@ export function useWorkspaceKanbanSelection(
     () => boardWorktrees.map(getWorktreeHostIdentity),
     [boardWorktrees]
   )
+
   const renderedWorktreeIds = useMemo(
     () => renderedWorktrees.map(getWorktreeHostIdentity),
     [renderedWorktrees]
   )
+
   const [selectedWorktreeIds, setSelectedWorktreeIds] = useState<Set<string>>(new Set())
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
+
   const selectedWorktrees = useMemo(
     () =>
       boardWorktrees.filter((worktree) =>
@@ -52,16 +56,19 @@ export function useWorkspaceKanbanSelection(
     if (selectedWorktreeIds.size > 0) {
       setSelectedWorktreeIds(new Set())
     }
+
     if (selectionAnchorId !== null) {
       setSelectionAnchorId(null)
     }
   } else {
     const pruned = pruneWorktreeSelection(selectedWorktreeIds, selectionAnchorId, boardWorktreeIds)
+
     // Why: the drawer can keep rendering while rows are filtered/reordered.
     // Prune stale local selection before children see ids that no longer exist.
     if (!areWorktreeSelectionsEqual(selectedWorktreeIds, pruned.selectedIds)) {
       setSelectedWorktreeIds(pruned.selectedIds)
     }
+
     if (selectionAnchorId !== pruned.anchorId) {
       setSelectionAnchorId(pruned.anchorId)
     }
@@ -70,6 +77,7 @@ export function useWorkspaceKanbanSelection(
   const updateSelectionForGesture = useCallback(
     (event: React.MouseEvent<HTMLElement>, worktreeId: string): boolean => {
       const intent = getWorktreeSelectionIntent(event, navigator.userAgent.includes('Mac'))
+
       // Why: a search can hide the anchor while leaving the rest of the
       // selection on screen. updateWorktreeSelection reads an anchor missing
       // from visibleIds as "no anchor" and collapses the range to the click,
@@ -79,6 +87,7 @@ export function useWorkspaceKanbanSelection(
           ? (resolveRenderedAnchorId(renderedWorktreeIds, selectedWorktreeIds, selectionAnchorId) ??
             selectionAnchorId)
           : selectionAnchorId
+
       const result = updateWorktreeSelection({
         visibleIds: renderedWorktreeIds,
         previousSelectedIds: selectedWorktreeIds,
@@ -86,11 +95,13 @@ export function useWorkspaceKanbanSelection(
         targetId: worktreeId,
         intent
       })
+
       // Why: a range replaces the selection, exactly like a plain click and a
       // non-additive marquee. Carrying hidden cards through it would leave the
       // user with a selection they cannot see, count, or narrow.
       setSelectedWorktreeIds(result.selectedIds)
       setSelectionAnchorId(result.anchorId)
+
       return intent !== 'replace'
     },
     [renderedWorktreeIds, selectedWorktreeIds, selectionAnchorId]
@@ -99,11 +110,14 @@ export function useWorkspaceKanbanSelection(
   const selectForContextMenu = useCallback(
     (_event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
       const worktreeIdentity = getWorktreeHostIdentity(worktree)
+
       if (selectedWorktreeIds.has(worktreeIdentity) && selectedWorktreeIds.size > 1) {
         return selectedWorktrees
       }
+
       setSelectedWorktreeIds(new Set([worktreeIdentity]))
       setSelectionAnchorId(worktreeIdentity)
+
       return [worktree]
     },
     [selectedWorktreeIds, selectedWorktrees]
@@ -123,6 +137,7 @@ export function useWorkspaceKanbanSelection(
         areaIds,
         additive
       })
+
       setSelectedWorktreeIds((previous) =>
         areWorktreeSelectionsEqual(previous, result.selectedIds) ? previous : result.selectedIds
       )

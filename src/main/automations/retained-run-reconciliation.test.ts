@@ -32,6 +32,7 @@ async function createStore() {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
+
   return new Store()
 }
 
@@ -57,6 +58,7 @@ const AFTER_SETTLE_MS = 10 * 60 * 1000
 
 function createAutomation(store: TestStore): Automation {
   store.addRepo(makeRepo())
+
   return store.createAutomation({
     name: 'Nightly check',
     prompt: 'Check the repo',
@@ -73,6 +75,7 @@ function createAutomation(store: TestStore): Automation {
 /** A run left behind by a quit while its agent was mid-task. */
 function retainDispatchedRun(store: TestStore, automation: Automation): AutomationRun {
   const run = store.createAutomationRun(automation, Date.now() - 60_000, 'manual')
+
   return store.updateAutomationRun({
     runId: run.id,
     status: 'dispatched',
@@ -83,9 +86,11 @@ function retainDispatchedRun(store: TestStore, automation: Automation): Automati
 
 function readRun(store: TestStore, automationId: string, runId: string): AutomationRun {
   const run = store.listAutomationRuns(automationId).find((entry) => entry.id === runId)
+
   if (!run) {
     throw new Error('run missing')
   }
+
   return run
 }
 
@@ -99,11 +104,13 @@ function createPaneSurface(): {
   const state = { mounted: false }
   const observedHandles: string[] = []
   let resolveObservation: ((value: AutomationRunCompletionObservation) => void) | null = null
+
   return {
     observer: {
       resolveRunTerminal: (run) => (state.mounted && run.terminalPaneKey ? 'handle-1' : null),
       observeCompletion: (handle) => {
         observedHandles.push(handle)
+
         return new Promise<AutomationRunCompletionObservation>((resolve) => {
           resolveObservation = resolve
         })
@@ -181,11 +188,13 @@ describe('reconciling retained runs against a graph that has not published yet',
     const persist = store.updateAutomationRun.bind(store)
     vi.spyOn(store, 'updateAutomationRun').mockImplementation((update) => {
       const before = store.listAutomationRuns(automation.id).find((r) => r.id === update.runId)
+
       if (before && !isFinalAutomationRunStatus(before.status)) {
         if (isFinalAutomationRunStatus(update.status)) {
           transitions.push(update.status)
         }
       }
+
       return persist(update)
     })
 
@@ -216,6 +225,7 @@ describe('reconciling retained runs against a graph that has not published yet',
     const automation = createAutomation(store)
     const retained = retainDispatchedRun(store, automation)
     const surface = createPaneSurface()
+
     const service = new AutomationService(store, {
       headlessDispatcher: async () => ({ ...LAUNCH_TARGET }),
       terminalObserver: surface.observer

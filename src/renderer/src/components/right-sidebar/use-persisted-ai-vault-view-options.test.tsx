@@ -68,6 +68,7 @@ describe('usePersistedAiVaultViewOptions', () => {
     const setItem = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
       throw new Error('quota exceeded')
     })
+
     const hook = renderHook(() => usePersistedAiVaultViewOptions())
 
     act(() => hook.result.current.setSort('created'))

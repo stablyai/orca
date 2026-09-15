@@ -8,7 +8,9 @@ import {
 } from './refactor-hook-contract.test-support'
 
 const TASK_PAGE_FLAT_SOURCE_PATTERN = /^(?:use-task-page-.*\.ts|task-page-.*\.tsx?)$/
+
 const TASK_PAGE_DIRECTORY = 'task-page'
+
 const TASK_PAGE_EXTRACTED_LOWERCASE_FILES = new Set([
   'task-page-draft-storage.tsx',
   'task-page-github-landing-refresh-run.tsx',
@@ -30,9 +32,11 @@ function readTaskPageDirectory(relativeDirectory: string): string[] {
   return readdirSync(join(__dirname, relativeDirectory), { withFileTypes: true }).flatMap(
     (entry) => {
       const relativePath = `${relativeDirectory}/${entry.name}`
+
       if (entry.isDirectory()) {
         return readTaskPageDirectory(relativePath)
       }
+
       return /\.tsx?$/.test(entry.name) && isSourceFile(entry.name) ? [relativePath] : []
     }
   )
@@ -74,6 +78,7 @@ export function readFlattenedTaskPageHookFacts(): HookContractFact[] {
     })),
     (name) => name === 'TaskPage' || name.startsWith('useTaskPage')
   )
+
   return readFlattenedHookFacts(definitions, 'TaskPage')
 }
 

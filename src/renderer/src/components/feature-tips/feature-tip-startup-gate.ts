@@ -58,5 +58,6 @@ export function getFeatureTipsAppOpenDecision(args: {
   })
 
   const nextTip = unseenTips[0]
+
   return nextTip ? { kind: 'open', tipId: nextTip.id } : { kind: 'skip' }
 }

@@ -25,6 +25,7 @@ async function writeFixture(prefix: string, records: unknown[]): Promise<string>
   tempRoots.push(root)
   const filePath = join(root, 'transcript.jsonl')
   await writeFile(filePath, jsonLines(records))
+
   return filePath
 }
 
@@ -45,6 +46,7 @@ describe('readNativeChatTranscript (claude)', () => {
 
   it('returns ordered user/assistant/tool messages with no 5-message cap', async () => {
     const records: unknown[] = []
+
     // 4 user/assistant turns = 8 messages, well past the AI-Vault preview cap.
     for (let turn = 0; turn < 4; turn++) {
       records.push({
@@ -60,6 +62,7 @@ describe('readNativeChatTranscript (claude)', () => {
         message: { role: 'assistant', content: [{ type: 'text', text: `Reply _${turn}_` }] }
       })
     }
+
     // A tool_use then a tool_result (carried on a user record).
     records.push({
       type: 'assistant',
@@ -83,6 +86,7 @@ describe('readNativeChatTranscript (claude)', () => {
     const filePath = await writeFixture('orca-native-chat-claude-', records)
     const result = await readNativeChatTranscript('claude', 'sess', { filePath })
     expect('messages' in result).toBe(true)
+
     if (!('messages' in result)) {
       return
     }
@@ -159,10 +163,13 @@ describe('readNativeChatTranscript (claude)', () => {
         }
       }
     ])
+
     const result = await readNativeChatTranscript('claude', 'sess', { filePath })
+
     if (!('messages' in result)) {
       throw new Error('expected messages')
     }
+
     expect(result.messages.map((m) => m.id)).toEqual([
       'u-real',
       'u-meta-toolresult',
@@ -184,10 +191,13 @@ describe('readNativeChatTranscript (claude)', () => {
         message: { role: 'assistant', content: [{ type: 'thinking', thinking: 'pondering' }] }
       }
     ])
+
     const result = await readNativeChatTranscript('claude', 'sess', { filePath })
+
     if (!('messages' in result)) {
       throw new Error('expected messages')
     }
+
     expect(result.messages[0].blocks[0]).toEqual({ type: 'text', text: 'pondering' })
   })
 })
@@ -239,6 +249,7 @@ describe('readNativeChatTranscript (codex)', () => {
     ])
 
     const result = await readNativeChatTranscript('codex', 'codex-sess', { filePath })
+
     if (!('messages' in result)) {
       throw new Error(`expected messages, got error`)
     }
@@ -268,7 +279,9 @@ describe('readNativeChatTranscript (errors)', () => {
     const result = await readNativeChatTranscript('claude', 'sess', {
       filePath: join(tmpdir(), 'orca-native-chat-does-not-exist.jsonl')
     })
+
     expect('error' in result).toBe(true)
+
     if ('error' in result) {
       expect(result.notFound).toBe(true)
     }
@@ -280,6 +293,7 @@ describe('readNativeChatTranscript (errors)', () => {
     // A directory instead of a file fails the read with a non-ENOENT error.
     const result = await readNativeChatTranscript('claude', 'sess', { filePath: root })
     expect('error' in result).toBe(true)
+
     if ('error' in result) {
       expect(result.notFound).toBeUndefined()
     }
@@ -291,10 +305,13 @@ describe('readNativeChatTranscript (errors)', () => {
   it('marks an unresolved session as notFound so callers know to retry', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-noresolve-'))
     tempRoots.push(root)
+
     const result = await readNativeChatTranscript('claude', 'missing', {
       claudeProjectsDir: join(root, 'empty')
     })
+
     expect('error' in result).toBe(true)
+
     if ('error' in result) {
       expect(result.notFound).toBe(true)
     }
@@ -315,6 +332,7 @@ describe('readNativeChatTranscriptTailFile', () => {
 
   it('windows to nothing for a non-positive limit instead of the whole tail', async () => {
     const decode = nativeChatLineDecoderForAgent('claude')!
+
     const filePath = await writeFixture('orca-native-chat-tail-limit-', [
       {
         type: 'assistant',

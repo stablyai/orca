@@ -19,6 +19,7 @@ import {
 } from './ipc-tab-switch'
 
 const WT = 'wt-1'
+
 const GROUP = 'group-1'
 
 function terminalTab(id: string, entityId: string, sortOrder: number): Tab {
@@ -42,6 +43,7 @@ function stateWithGroupOrder(tabOrder: string[]) {
     terminalTab('tab-2', 'term-2', 1),
     terminalTab('tab-3', 'term-3', 2)
   ]
+
   const store = {
     activeWorktreeId: WT,
     activeTabType: 'terminal' as const,
@@ -64,12 +66,14 @@ function stateWithGroupOrder(tabOrder: string[]) {
     activateTab: vi.fn(),
     getActiveTab: (_worktreeId: string): unknown => null
   }
+
   // Why the real resolver: a hand-written stub would decide the group-scoped answer the code
   // under test is meant to exercise.
   store.getActiveTab = createTabsFocusActions(
     (() => {}) as unknown as TabsSliceSet,
     (() => store) as unknown as TabsSliceGet
   ).getActiveTab
+
   return store
 }
 

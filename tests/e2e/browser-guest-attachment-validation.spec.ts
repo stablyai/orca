@@ -28,9 +28,11 @@ async function createBrowserFixture(
   await waitForActiveWorktree(page)
   await ensureTerminalVisible(page)
   const worktreeId = await getActiveWorktreeId(page)
+
   if (!worktreeId) {
     throw new Error('Expected an active worktree')
   }
+
   const browserTab = await page.evaluate(
     ({ targetWorktreeId, targetUrl }) =>
       window.__store?.getState().createBrowserTab(targetWorktreeId, targetUrl, {
@@ -39,9 +41,11 @@ async function createBrowserFixture(
       }),
     { targetWorktreeId: worktreeId, targetUrl: fixtureUrl }
   )
+
   if (!browserTab?.activePageId) {
     throw new Error('Failed to create browser attachment fixture tab')
   }
+
   return {
     browserTab: { activePageId: browserTab.activePageId, id: browserTab.id },
     fixtureUrl
@@ -51,18 +55,23 @@ async function createBrowserFixture(
 async function readGuestState(page: Page, browserTabId: string) {
   return page.evaluate(async (targetBrowserTabId) => {
     const chromePresent = Boolean(document.querySelector(`[data-tab-id="${targetBrowserTabId}"]`))
+
     const webview = document.querySelector(
       `[data-browser-overlay-tab-id="${targetBrowserTabId}"] webview`
     ) as Electron.WebviewTag | null
+
     if (!webview) {
       return { chromePresent, marker: null, url: null, webContentsId: null }
     }
+
     try {
       const webContentsId = webview.getWebContentsId()
+
       const guest = (await webview.executeJavaScript(`({
         marker: document.querySelector('#attachment-marker')?.textContent ?? null,
         url: location.href
       })`)) as { marker: string | null; url: string }
+
       return { chromePresent, ...guest, webContentsId }
     } catch {
       return { chromePresent, marker: null, url: null, webContentsId: null }
@@ -79,6 +88,7 @@ test('resume validation waits for an attaching guest without replacing it', asyn
     orcaPage,
     registerPostElectronShutdownCleanup
   )
+
   await expect
     .poll(() => readGuestState(orcaPage, browserTab.id))
     .toMatchObject({ marker: 'painted-attachment-guest', url: fixtureUrl })
@@ -89,6 +99,7 @@ test('resume validation waits for an attaching guest without replacing it', asyn
     const webview = document.querySelector(
       `[data-browser-overlay-tab-id="${targetBrowserTabId}"] webview`
     ) as Electron.WebviewTag
+
     const getWebContentsId = webview.getWebContentsId.bind(webview)
     let failedReads = 1
     webview.dataset.attachingGuestIdentity = 'original'
@@ -100,7 +111,9 @@ test('resume validation waits for an attaching guest without replacing it', asyn
           webview.dataset.attachingGuestForcedRead = 'true'
           throw new Error('guest still attaching')
         }
+
         webview.dataset.attachingGuestSuccessfulRead = 'true'
+
         return getWebContentsId()
       }
     })
@@ -136,6 +149,7 @@ test('resume validation waits for an attaching guest without replacing it', asyn
         const webview = document.querySelector(
           `[data-browser-overlay-tab-id="${targetBrowserTabId}"] webview`
         ) as Electron.WebviewTag | null
+
         return {
           forcedRead: webview?.dataset.attachingGuestForcedRead ?? null,
           identity: webview?.dataset.attachingGuestIdentity ?? null,

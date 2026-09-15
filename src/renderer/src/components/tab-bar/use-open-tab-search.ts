@@ -44,6 +44,7 @@ export function useOpenTabSearch({
   const state = useAppStore(
     useShallow((store) => (enabled ? selectOpenTabSearchEntryState(store, worktreeId) : null))
   )
+
   // Why snapshot: agent status is a high-frequency stream; tab search metadata
   // stays stable while the menu is open and refreshes when its tab set changes.
   const agentState = useMemo(
@@ -51,16 +52,21 @@ export function useOpenTabSearch({
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Refresh on open or tab-set changes, never agent-status churn.
     [enabled, state?.tabsByWorktree, state?.unifiedTabsByWorktree, worktreeId]
   )
+
   const entries = useMemo(
     () => (state && agentState ? buildOpenTabSearchEntries(state, agentState) : null),
     [agentState, state]
   )
+
   const deferredQuery = useDeferredValue(query)
+
   const evaluationSnapshot = useMemo(
     () => ({ deferredQuery, enabled, entries }),
     [deferredQuery, enabled, entries]
   )
+
   const context = usePaletteSearchEvaluationContext(evaluationSnapshot)
+
   const candidates = useMemo(
     () =>
       entries

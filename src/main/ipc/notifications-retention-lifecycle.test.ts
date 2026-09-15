@@ -36,6 +36,7 @@ beforeEach(() => {
   vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
   vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
 })
+
 afterEach(() => vi.unstubAllEnvs())
 
 describe('registerNotificationHandlers', () => {
@@ -52,6 +53,7 @@ describe('registerNotificationHandlers', () => {
     const restore = vi.fn()
     const show = vi.fn()
     const focus = vi.fn()
+
     const popoutWindow = {
       isDestroyed: () => false,
       isFocused: () => true,
@@ -60,6 +62,7 @@ describe('registerNotificationHandlers', () => {
       focus: popoutFocus,
       webContents: { send: popoutSend }
     }
+
     const mainWindow = {
       isDestroyed: () => false,
       isFocused: () => false,
@@ -69,6 +72,7 @@ describe('registerNotificationHandlers', () => {
       focus,
       webContents: { send: webContentsSend }
     }
+
     getAllWindowsMock.mockReturnValue([popoutWindow, mainWindow] as never)
     getTrustedUIRendererWindowMock.mockReturnValue(mainWindow)
     registerNotificationHandlers({
@@ -138,6 +142,7 @@ describe('registerNotificationHandlers', () => {
 
   it('releases retained notifications when native delivery fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       registerNotificationHandlers({
         getSettings: () => ({

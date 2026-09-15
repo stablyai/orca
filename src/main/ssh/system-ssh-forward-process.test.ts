@@ -10,6 +10,7 @@ const { existsSyncMock, spawnMock, connectMock, createServerMock } = vi.hoisted(
 
 vi.mock('fs', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     existsSync: existsSyncMock
@@ -75,6 +76,7 @@ function createFakeProcess(): FakeChildProcess {
   child.kill = vi.fn().mockReturnValue(true)
   child.exitCode = null
   child.signalCode = null
+
   return child
 }
 
@@ -82,6 +84,7 @@ function createFakeSocket(): FakeSocket {
   const socket = new EventEmitter() as FakeSocket
   socket.setTimeout = vi.fn()
   socket.destroy = vi.fn()
+
   return socket
 }
 
@@ -90,11 +93,14 @@ function createFakeServer() {
     listen: ReturnType<typeof vi.fn>
     close: ReturnType<typeof vi.fn>
   }
+
   server.listen = vi.fn().mockImplementation(() => {
     queueMicrotask(() => server.emit('listening'))
+
     return server
   })
   server.close = vi.fn().mockImplementation((cb?: () => void) => cb?.())
+
   return server
 }
 
@@ -216,6 +222,7 @@ describe('system SSH forward process', () => {
     const server = createFakeServer()
     server.listen.mockImplementation(() => {
       queueMicrotask(() => server.emit('error', new Error('EADDRINUSE')))
+
       return server
     })
     createServerMock.mockReturnValue(server)
@@ -280,6 +287,7 @@ describe('system SSH forward process', () => {
     connectMock.mockImplementation(() => {
       const socket = createFakeSocket()
       queueMicrotask(() => socket.emit('error', new Error('ECONNREFUSED')))
+
       return socket
     })
 
@@ -308,6 +316,7 @@ describe('system SSH forward process', () => {
     const child = createFakeProcess()
 
     let resolved = false
+
     const pending = waitForSystemSshForwardStop(child as never).then(() => {
       resolved = true
     })
@@ -325,6 +334,7 @@ describe('system SSH forward process', () => {
     const child = createFakeProcess()
 
     let resolved = false
+
     const pending = waitForSystemSshForwardStop(child as never).then(() => {
       resolved = true
     })

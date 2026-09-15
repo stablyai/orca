@@ -26,10 +26,12 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
     string,
     RuntimeWorktreeAgentSource & { payload: ParsedAgentStatusPayload }
   >()
+
   for (const entry of args.hookSnapshots) {
     if (entry.restoredUnconfirmed === true || entry.providerSessionOnly === true) {
       continue
     }
+
     const hookPayload = pickParsedAgentStatusPayload(entry)
     rowSources.set(entry.paneKey, {
       paneKey: entry.paneKey,
@@ -54,13 +56,17 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
       ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {})
     })
   }
+
   const sources: RuntimeWorktreeAgentSource[] = []
+
   for (const source of rowSources.values()) {
     const tabId =
       source.tabId ??
       parsePaneKey(source.paneKey)?.tabId ??
       parseLegacyNumericPaneKey(source.paneKey)?.tabId
+
     const mirroredWorktreeId = tabId ? args.mirroredWorktreeIdByTabId.get(tabId) : undefined
+
     // Why a structured row skips the connected-process gate: it has no PTY, and the host that
     // holds the session drops the row itself on close, so its presence is the liveness evidence.
     if (
@@ -75,8 +81,10 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
     ) {
       continue
     }
+
     const worktreeId = mirroredWorktreeId ?? source.worktreeId
     sources.push({ ...source, tabId, worktreeId })
   }
+
   return sources
 }

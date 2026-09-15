@@ -43,6 +43,7 @@ export const noopPtyPowerSurface: PtyPowerSurface = {
 }
 
 let currentIpc: PtyIpcSurface = noopPtyIpcSurface
+
 let currentPower: PtyPowerSurface = noopPtyPowerSurface
 
 /**

@@ -7,6 +7,7 @@ export async function confirmTerminalHostForegroundProcess(
   if (!session || !session.isAlive) {
     return null
   }
+
   return session.confirmForegroundProcess()
 }
 
@@ -17,7 +18,9 @@ export async function confirmTerminalHostShellForeground(
   if (session?.isAlive !== true) {
     return false
   }
+
   const confirmed = await session.confirmShellForeground()
+
   return confirmed && currentSession() === session && session.isAlive
 }
 
@@ -28,6 +31,7 @@ export function getTerminalHostSnapshot(
   if (!session || !session.isAlive) {
     return null
   }
+
   return session.getSnapshot(opts)
 }
 
@@ -38,7 +42,9 @@ export async function getSettledTerminalHostSnapshot(
   if (!session || !session.isAlive) {
     return null
   }
+
   await session.settleShellOwnershipConfirmation()
+
   return session.getSnapshot(opts)
 }
 
@@ -46,6 +52,7 @@ export function getTerminalHostPartialEscapeTail(session: Session | undefined): 
   if (!session || !session.isAlive) {
     return ''
   }
+
   return session.getPartialEscapeTailAnsi()
 }
 
@@ -55,6 +62,7 @@ export function getTerminalHostAppliedSize(
   if (!session || !session.isAlive) {
     return null
   }
+
   return session.getAppliedSize()
 }
 
@@ -66,5 +74,6 @@ export function takeTerminalHostPendingOutput(
   if (!session || !session.isAlive) {
     return null
   }
+
   return session.takePendingOutput(includeSnapshot, opts)
 }

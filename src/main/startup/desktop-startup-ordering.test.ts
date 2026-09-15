@@ -8,30 +8,36 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/window/attach-main-window-services.ts'),
       'utf8'
     )
+
     const startupSource = readFileSync(
       join(process.cwd(), 'src/main/startup/main-process-pty-startup.ts'),
       'utf8'
     )
+
     const coreSource = readFileSync(
       join(process.cwd(), 'src/main/startup/main-window-core-services.ts'),
       'utf8'
     )
+
     const runtimeLaunchSource = readFileSync(
       join(process.cwd(), 'src/main/startup/main-process-runtime-launch.ts'),
       'utf8'
     )
+
     const attachStart = attachSource.indexOf('export function attachMainWindowServices(')
     const attachEnd = attachSource.indexOf('  registerSshHandlers(', attachStart)
     const attachBlock = attachSource.slice(attachStart, attachEnd)
     // Why: anchor on the destructure head only — the settled-result variable's name is not the
     // contract, and pinning it turns a rename into a cryptic `expected -1` failure here.
     const desktopStart = runtimeLaunchSource.indexOf('async function launchDesktopMode(')
+
     // Why: anchor on code, not a comment — the previous comment anchor was silently reworded, so
     // this was -1 and sliced to EOF, letting the assertions below pass against never-run code.
     const desktopEnd = runtimeLaunchSource.indexOf(
       '\nexport async function initializeMainProcessRuntimeLaunch',
       desktopStart
     )
+
     const desktopStartup = runtimeLaunchSource.slice(desktopStart, desktopEnd)
 
     // Why: bound every anchor, not just the desktop pair — an unresolved one slices to EOF.
@@ -80,13 +86,16 @@ describe('startup ordering', () => {
 
   it('resolves the browser hosting identity with nothing awaited before it', () => {
     const entrySource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+
     const foundationSource = readFileSync(
       join(process.cwd(), 'src/main/startup/main-process-ready-foundation.ts'),
       'utf8'
     )
+
     const readyIndex = entrySource.indexOf('void app.whenReady().then(async () => {')
     const initReadyIndex = entrySource.indexOf('initializeMainProcessReady({')
     const profileIndex = foundationSource.indexOf('const profile = ensureActiveOrcaProfile()')
+
     const initIndex = foundationSource.indexOf(
       'initializeBrowserClientHostId(profile.profileDirectory)'
     )
@@ -109,13 +118,16 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-process-pty-startup.ts'),
       'utf8'
     )
+
     const sweepStart = source.indexOf(
       'export async function reapRestoredSubagentsWithoutLiveAgent()'
     )
+
     const sweepEnd = source.indexOf(
       'export function startTerminalRuntimeStartupServices()',
       sweepStart
     )
+
     const sweep = source.slice(sweepStart, sweepEnd)
 
     expect(sweepStart).toBeGreaterThanOrEqual(0)
@@ -130,28 +142,36 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-process-ipc-bootstrap.ts'),
       'utf8'
     )
+
     const foundationSource = readFileSync(
       join(process.cwd(), 'src/main/startup/main-process-ready-foundation.ts'),
       'utf8'
     )
+
     const runtimeSource = readFileSync(
       join(process.cwd(), 'src/main/startup/main-process-runtime-launch.ts'),
       'utf8'
     )
+
     const barrierStart = barrierSource.indexOf(
       "ipcMain.handle('app:awaitFirstWindowStartupServices'"
     )
+
     const barrierEnd = barrierSource.indexOf("'app:startupDiagnostic'", barrierStart)
     const barrier = barrierSource.slice(barrierStart, barrierEnd)
+
     const reconciliationStart = foundationSource.indexOf(
       'state.managedWslCliReconciliationReady = reconcileManagedWslCliRegistrations('
     )
+
     const serveStart = runtimeSource.indexOf('async function launchServeMode(')
     const serveEnd = runtimeSource.indexOf('\nasync function launchDesktopMode', serveStart)
     const serveStartup = runtimeSource.slice(serveStart, serveEnd)
+
     const desktopStart = runtimeSource.indexOf(
       "  if (process.platform === 'win32' && app.isPackaged && !serveOptions)"
     )
+
     const desktopEnd = runtimeSource.indexOf("  app.on('activate'", desktopStart)
     const desktopStartup = runtimeSource.slice(desktopStart, desktopEnd)
 
@@ -193,17 +213,21 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-process-ipc-bootstrap.ts'),
       'utf8'
     )
+
     const launchSource = readFileSync(
       join(process.cwd(), 'src/main/startup/main-process-runtime-launch.ts'),
       'utf8'
     )
+
     const gitBarrierStart = barrierSource.indexOf(
       "ipcMain.handle('app:awaitGitEnvironmentStartupBarrier'"
     )
+
     const gitBarrierEnd = barrierSource.indexOf(
       "'app:prepareTerminalStartupRestoration'",
       gitBarrierStart
     )
+
     expect(gitBarrierStart).toBeGreaterThanOrEqual(0)
     expect(gitBarrierEnd).toBeGreaterThan(gitBarrierStart)
     const gitBarrier = barrierSource.slice(gitBarrierStart, gitBarrierEnd)
@@ -217,14 +241,17 @@ describe('startup ordering', () => {
     expect(launchSource.indexOf('state.shellPathReady = shellPathReady')).toBeLessThan(
       launchSource.indexOf('await launchDesktopMode(')
     )
+
     // Terminal restoration itself must still fence on the first-window services.
     const restorationStart = barrierSource.indexOf(
       "ipcMain.handle('app:prepareTerminalStartupRestoration'"
     )
+
     const restorationEnd = barrierSource.indexOf(
       "'app:recoverLegacyWorkerTerminalsForRendererStartup'",
       restorationStart
     )
+
     expect(barrierSource.slice(restorationStart, restorationEnd)).toContain(
       'state.firstWindowStartupServicesReady'
     )
@@ -235,17 +262,21 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-process-pty-startup.ts'),
       'utf8'
     )
+
     const startupStart = source.indexOf('export function startTerminalRuntimeStartupServices()')
     expect(startupStart).toBeGreaterThanOrEqual(0)
     const startup = source.slice(startupStart)
     const daemonInitIndex = startup.indexOf('await initDaemonPtyProvider(signal')
+
     const retainedPaneGateIndex = startup.indexOf(
       'hasRecordedManagedHostCodexPane()',
       daemonInitIndex
     )
+
     const inventoryIndex = startup.indexOf('await listLiveDaemonPtyIds()', daemonInitIndex)
     const reconciliation = 'state.codexRuntimeHome?.reconcileLegacySharedHomeForRetainedPanes()'
     const reconciliationIndex = startup.indexOf(reconciliation, inventoryIndex)
+
     const hookReconciliationIndex = startup.indexOf(
       'reconcileRetainedCodexHookHomes({',
       inventoryIndex
@@ -268,10 +299,12 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-process-serve.ts'),
       'utf8'
     )
+
     const runtimeSource = readFileSync(
       join(process.cwd(), 'src/main/startup/main-process-runtime-launch.ts'),
       'utf8'
     )
+
     const foundationSource = readFileSync(
       join(process.cwd(), 'src/main/startup/main-process-ready-foundation.ts'),
       'utf8'
@@ -302,6 +335,7 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-process-serve.ts'),
       'utf8'
     )
+
     const readyStart = source.indexOf('await state.serveReadinessPublisher.publish(')
     const supervisorReady = source.indexOf('notifyServeSupervisorReady(', readyStart)
 
@@ -314,6 +348,7 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-window-core-services.ts'),
       'utf8'
     )
+
     const attachIndex = source.indexOf('rateLimits.attach(window)')
     const startIndex = source.indexOf('rateLimits.start({ fetchImmediately: false })')
 
@@ -326,6 +361,7 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-window-lifecycle-flags.ts'),
       'utf8'
     )
+
     const windowSource = readFileSync(
       join(process.cwd(), 'src/main/startup/main-window-controller.ts'),
       'utf8'
@@ -347,14 +383,17 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-window-core-services.ts'),
       'utf8'
     )
+
     const windowSource = readFileSync(
       join(process.cwd(), 'src/main/startup/main-window-controller.ts'),
       'utf8'
     )
+
     const quitSource = readFileSync(
       join(process.cwd(), 'src/main/startup/main-process-quit.ts'),
       'utf8'
     )
+
     const attachIndex = coreSource.indexOf('attachMainWindowServices(')
     const tccNoticeIndex = coreSource.indexOf('initTccPromptNotice(window', attachIndex)
     const quitAbortStart = windowSource.indexOf('onQuitAborted:')
@@ -377,6 +416,7 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-process-quit.ts'),
       'utf8'
     )
+
     const beforeQuitStart = source.indexOf("app.on('before-quit'")
     const willQuitStart = source.indexOf("app.on('will-quit'", beforeQuitStart)
     const windowAllClosedStart = source.indexOf("app.on('window-all-closed'", willQuitStart)
@@ -398,6 +438,7 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-process-quit.ts'),
       'utf8'
     )
+
     const willQuitStart = source.indexOf("app.on('will-quit'")
     const willQuitEnd = source.indexOf("app.on('window-all-closed'", willQuitStart)
     const willQuit = source.slice(willQuitStart, willQuitEnd)
@@ -415,16 +456,20 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-process-quit.ts'),
       'utf8'
     )
+
     const willQuitStart = source.indexOf("app.on('will-quit'")
     const windowAllClosedStart = source.indexOf("app.on('window-all-closed'", willQuitStart)
     const willQuit = source.slice(willQuitStart, windowAllClosedStart)
     const cleanupStart = willQuit.indexOf('const browserShutdown')
+
     const offscreenCleanupStart = willQuit.indexOf(
       'runtime?.getOffscreenBrowserBackend()?.destroyAll?.()'
     )
+
     const residualCleanupStart = willQuit.indexOf(
       'runtime?.getAgentBrowserBridge()?.destroyAllSessions()'
     )
+
     const barrierStart = willQuit.indexOf('settleTeardownWithinDeadline([')
 
     expect(willQuitStart).toBeGreaterThanOrEqual(0)
@@ -441,6 +486,7 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-process-runtime-launch.ts'),
       'utf8'
     )
+
     const serveStart = source.indexOf('async function launchServeMode(')
     const signalHandlers = source.indexOf('registerServeSignalHandlers(process', serveStart)
     const serveReady = source.indexOf('await printServeReady(serveOptions)', serveStart)
@@ -455,18 +501,22 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-process-runtime-launch.ts'),
       'utf8'
     )
+
     const windowSource = readFileSync(
       join(process.cwd(), 'src/main/startup/main-window-core-services.ts'),
       'utf8'
     )
+
     const serveStart = source.indexOf('async function launchServeMode(')
     const serveReady = source.indexOf('await printServeReady(serveOptions)', serveStart)
     const serveEnd = source.indexOf('\nasync function launchDesktopMode', serveStart)
     const runtimeRpcStart = source.indexOf('await runtimeRpc.start()', serveStart)
     const automationStart = source.indexOf('state.automations?.start()', serveStart)
+
     const desktopSetWebContents = windowSource.indexOf(
       'automations.setWebContents(window.webContents)'
     )
+
     const desktopAutomationStart = windowSource.indexOf(
       'automations.start()',
       desktopSetWebContents + 1
@@ -492,6 +542,7 @@ describe('startup ordering', () => {
       join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
       'utf8'
     )
+
     const install = 'installServeSupervisorDisconnectQuit(state.isServeMode)'
     const appEnvironmentIndex = source.indexOf('setAppEnvironment(new ElectronAppEnvironment())')
     const dataPathIndex = source.indexOf('initDataPath()')
@@ -512,6 +563,7 @@ describe('startup ordering', () => {
     // inside app.whenReady() — the ordering above still holds but a parent that dies in the gap
     // leaves the serve process orphaned on its port, which is the failure this handler prevents.
     expect(source).toContain('export function runMainProcessPreflight(')
+
     // Why only statements at block indentation: the span covers unrelated helper bodies, and an
     // `await` inside one of those is not what this guards against — the risk is this call itself
     // being parked behind one.
@@ -520,6 +572,7 @@ describe('startup ordering', () => {
       .split('\n')
       .filter((line) => /^ {2}\S/.test(line) && !line.trim().startsWith('//'))
       .join('\n')
+
     expect(blockStatements).not.toContain('await')
   })
 })

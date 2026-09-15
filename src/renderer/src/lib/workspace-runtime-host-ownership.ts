@@ -27,10 +27,12 @@ export function indexWorkspaceRuntimeHostOwnership(
 } {
   const repoIdByWorktreeId = new Map<string, string>()
   const runtimeHostIdByWorktreeId = new Map<string, ExecutionHostId | null>()
+
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const worktree of worktrees) {
       repoIdByWorktreeId.set(worktree.id, worktree.repoId)
       const runtimeOwner = worktree.runtimeOwnerEnvironmentId?.trim()
+
       if (runtimeOwner) {
         recordRuntimeHost(
           runtimeHostIdByWorktreeId,
@@ -39,11 +41,14 @@ export function indexWorkspaceRuntimeHostOwnership(
         )
         continue
       }
+
       const parsedWorktreeHost = parseExecutionHostId(worktree.hostId)
+
       if (parsedWorktreeHost?.kind === 'runtime') {
         recordRuntimeHost(runtimeHostIdByWorktreeId, worktree.id, parsedWorktreeHost.id)
       }
     }
   }
+
   return { repoIdByWorktreeId, runtimeHostIdByWorktreeId }
 }

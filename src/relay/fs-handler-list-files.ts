@@ -40,13 +40,16 @@ export function listFilesWithRg(
   options: { signal?: AbortSignal; maxResults?: number; searchQuery?: string } = {}
 ): Promise<string[]> {
   const { signal, maxResults, searchQuery } = options
+
   if (signal?.aborted) {
     return Promise.reject(fileListingCancellationError(signal))
   }
+
   return new Promise((resolve, reject) => {
     const files = new Set<string>()
     let rankedPaths: string[] | null = null
     let done = false
+
     const children: {
       child: ChildProcess
       isDone: () => boolean
@@ -64,25 +67,33 @@ export function listFilesWithRg(
 
     const processLine = (rawLine: string, attemptRanker: QuickOpenPathRanker | null): boolean => {
       const relPath = normalizeQuickOpenRgLine(rawLine, { kind: 'cwd-relative' })
+
       if (relPath === null) {
         return false
       }
+
       // Why: correctness backstop. The rg globs prune most blocklisted dirs,
       // but a glob edge case could still surface e.g. a .git/ or .npm/ hit.
       if (!shouldIncludeQuickOpenPath(relPath)) {
         return true
       }
+
       if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
         return true
       }
+
       if (attemptRanker) {
         attemptRanker.consider(relPath)
+
         return true
       }
+
       files.add(relPath)
+
       if (maxResults !== undefined && files.size >= maxResults) {
         finishAtLimit()
       }
+
       return true
     }
 
@@ -90,6 +101,7 @@ export function listFilesWithRg(
       new Promise((passResolve, passReject) => {
         const attemptRanker =
           searchQuery === undefined ? null : new QuickOpenPathRanker(searchQuery, maxResults ?? 16)
+
         let passBuf = ''
         let passDone = false
         let passFileCount = 0
@@ -103,6 +115,7 @@ export function listFilesWithRg(
         // search target. Without cwd, nested-worktree exclusions silently
         // stop working.
         let child: ChildProcess
+
         try {
           child = spawn('rg', ['--no-messages', ...args], {
             cwd: rootPath,
@@ -116,12 +129,15 @@ export function listFilesWithRg(
               )
             : error
         }
+
         let timer: ReturnType<typeof setTimeout> | null = null
+
         const cleanup = (): void => {
           if (timer) {
             clearTimeout(timer)
             timer = null
           }
+
           child.stdout!.off('data', handleStdoutData)
           child.stderr!.off('data', handleStderrData)
           child.off('error', handleError)
@@ -131,36 +147,45 @@ export function listFilesWithRg(
             unavailableExitObserved
           })
         }
+
         const rejectPass = (error: Error): void => {
           if (passDone) {
             return
           }
+
           passDone = true
           passBuf = ''
           cleanup()
           passReject(error)
         }
+
         const resolvePass = (): void => {
           if (passDone) {
             return
           }
+
           passDone = true
           cleanup()
+
           if (attemptRanker) {
             rankedPaths = attemptRanker.result().paths
           }
+
           passResolve()
         }
+
         const rejectLaunchFailure = (error: Error): void => {
           if (launchFailureCheck) {
             return
           }
+
           launchFailureCheck = isRipgrepUnavailableAfterLaunchFailure(rootPath).then(
             (unavailable) => {
               rejectPass(unavailable ? new RipgrepUnavailableError() : error)
             }
           )
         }
+
         children.push({
           child,
           isDone: () => passDone,
@@ -178,38 +203,51 @@ export function listFilesWithRg(
           passBuf += chunk
           let start = 0
           let idx = passBuf.indexOf('\n', start)
+
           while (idx !== -1) {
             if (processLine(passBuf.substring(start, idx), attemptRanker)) {
               passFileCount++
             }
+
             if (done) {
               return
             }
+
             start = idx + 1
             idx = passBuf.indexOf('\n', start)
           }
+
           passBuf = start < passBuf.length ? passBuf.substring(start) : ''
         }
+
         function handleStderrData(): void {
           /* drain to prevent backpressure stalls */
         }
+
         function handleError(err: NodeJS.ErrnoException): void {
           processErrorObserved = true
+
           if (isTransientRipgrepSpawnError(err)) {
             rejectPass(new RipgrepLaunchFailureError(`rg failed to start (${err.code})`))
+
             return
           }
+
           if (isRipgrepUnavailableExit(child, null, null)) {
             passBuf = ''
             rejectLaunchFailure(err)
+
             return
           }
+
           rejectPass(err)
         }
+
         function handleClose(code: number | null, signal: NodeJS.Signals | null): void {
           if (passDone) {
             return
           }
+
           if (
             isRipgrepUnavailableExit(child, code, signal, {
               classifyNativeLauncherExit: true
@@ -218,21 +256,26 @@ export function listFilesWithRg(
             unavailableExitObserved = true
             passBuf = ''
             rejectLaunchFailure(new Error(`rg exited with code ${code}`))
+
             return
           }
+
           // Why signal != null is a failure: the only way spawn gets a signal
           // is if the process was killed (timeout, OOM, external SIGKILL).
           // Trusting its stdout could surface a truncated list as a success.
           if (signal) {
             rejectPass(new Error(`rg killed by ${signal}`))
+
             return
           }
+
           // Flush residual line only on clean exit.
           if (passBuf) {
             if (processLine(passBuf, attemptRanker)) {
               passFileCount++
             }
           }
+
           // exit 0 = matches found, 1 = no files (still success for --files).
           // exit 2 is documented as "a subdirectory could not be searched"
           // (e.g. EACCES on .ssh), but rg also returns 2 for fatal errors
@@ -259,6 +302,7 @@ export function listFilesWithRg(
         if (!(error instanceof RipgrepLaunchFailureError) || signal?.aborted || done) {
           throw error
         }
+
         return runPassOnce(args)
       })
 
@@ -271,9 +315,11 @@ export function listFilesWithRg(
         if (entry.isDone()) {
           continue
         }
+
         if (entry.child.exitCode === null && entry.child.signalCode === null) {
           killSpawnedRipgrepProcess(entry.child)
         }
+
         entry.reject(new Error(reason))
       }
     }
@@ -282,6 +328,7 @@ export function listFilesWithRg(
       if (done) {
         return
       }
+
       done = true
       signal?.removeEventListener('abort', onAbort)
       killSurvivors('rg list reached bounded result limit')
@@ -295,10 +342,12 @@ export function listFilesWithRg(
       if (done) {
         return
       }
+
       done = true
       killSurvivors('rg list cancelled')
       reject(fileListingCancellationError(signal))
     }
+
     signal?.addEventListener('abort', onAbort, { once: true })
 
     const passes =
@@ -306,6 +355,7 @@ export function listFilesWithRg(
         ? runPass(ignoredPass)
         : (() => {
             const primaryPass = runPass(primary)
+
             return maxResults === undefined
               ? children[0]?.child.pid === undefined
                 ? primaryPass.then(() => runPass(ignoredPass))
@@ -322,6 +372,7 @@ export function listFilesWithRg(
         if (done) {
           return
         }
+
         done = true
         signal?.removeEventListener('abort', onAbort)
         resolve(rankedPaths ?? Array.from(files))
@@ -330,6 +381,7 @@ export function listFilesWithRg(
         if (done) {
           return
         }
+
         done = true
         signal?.removeEventListener('abort', onAbort)
         killSurvivors('rg list canceled after sibling failure')

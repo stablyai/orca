@@ -12,6 +12,7 @@ import { openSessionSearchDatabase } from './session-search-schema'
 // debugging session; a refactor that reintroduces the trap fails here.
 
 const FIRST_ROWID = 101
+
 const SECOND_ROWID = 202
 
 let tempRoots: string[] = []
@@ -24,6 +25,7 @@ afterEach(async () => {
 async function openDatabase(): Promise<SyncDatabase> {
   const root = await mkdtemp(join(tmpdir(), 'orca-fts5-contract-'))
   tempRoots.push(root)
+
   return openSessionSearchDatabase(join(root, 'index.sqlite'))
 }
 
@@ -46,6 +48,7 @@ describe('FTS5 aux functions take the table name, never an alias', () => {
     const scored = db
       .prepare('SELECT bm25(messages_fts) AS score FROM messages_fts WHERE messages_fts MATCH ?')
       .all('alpha') as { score: number }[]
+
     expect(scored).toHaveLength(1)
     expect(Number.isFinite(scored[0]?.score)).toBe(true)
     db.close()
@@ -75,12 +78,15 @@ describe('a rowid constraint beside MATCH is honoured only as a subselect', () =
     const rows = db
       .prepare('SELECT rowid FROM messages_fts WHERE messages_fts MATCH ? AND rowid = ?')
       .all('alpha', SECOND_ROWID) as { rowid: number }[]
+
     // The planner drops the constraint entirely: both rows come back.
     expect(rows.map((row) => row.rowid)).toEqual([FIRST_ROWID, SECOND_ROWID])
+
     // A caller reading one row therefore gets the first match, not the one asked for.
     const single = db
       .prepare('SELECT rowid FROM messages_fts WHERE messages_fts MATCH ? AND rowid = ?')
       .get('alpha', SECOND_ROWID) as { rowid: number } | undefined
+
     expect(single?.rowid).toBe(FIRST_ROWID)
     db.close()
   })
@@ -93,6 +99,7 @@ describe('a rowid constraint beside MATCH is honoured only as a subselect', () =
     const rows = db
       .prepare('SELECT rowid FROM messages_fts WHERE messages_fts MATCH ? AND rowid IN (?)')
       .all('alpha', SECOND_ROWID) as { rowid: number }[]
+
     expect(rows.map((row) => row.rowid)).toEqual([FIRST_ROWID, SECOND_ROWID])
     db.close()
   })
@@ -103,9 +110,11 @@ describe('a rowid constraint beside MATCH is honoured only as a subselect', () =
       `INSERT INTO sessions(id,agent,session_id,file_path,title,resume_command)
        VALUES (1,'claude','1','/synthetic/1','fixture','')`
     ).run()
+
     for (const rowid of [FIRST_ROWID, SECOND_ROWID]) {
       db.prepare("INSERT INTO messages(id,session_row_id,role) VALUES (?,1,'user')").run(rowid)
     }
+
     insertMessageRow(db, FIRST_ROWID, 'alpha marmoset one')
     insertMessageRow(db, SECOND_ROWID, 'alpha capybara two')
 
@@ -121,6 +130,7 @@ describe('a rowid constraint beside MATCH is honoured only as a subselect', () =
          WHERE messages_fts MATCH ? AND messages_fts.rowid IN (SELECT ?)`
       )
       .get('alpha', SECOND_ROWID) as { s: string } | undefined
+
     expect(snippet?.s).toContain('capybara')
     expect(snippet?.s).not.toContain('marmoset')
     db.close()
@@ -130,10 +140,12 @@ describe('a rowid constraint beside MATCH is honoured only as a subselect', () =
 describe('sessions.file_path is deliberately not unique', () => {
   it('accepts two sessions sharing one store path', async () => {
     const db = await openDatabase()
+
     const insert = db.prepare(
       `INSERT INTO sessions(agent, session_id, file_path, title, resume_command)
        VALUES (?, ?, ?, ?, ?)`
     )
+
     // OpenCode and Cursor keep every session in one SQLite store; files.path is the key.
     const storePath = '/home/user/.local/share/opencode/storage.db'
     insert.run('opencode', 'ses_one', storePath, 'first', 'opencode --session ses_one')
@@ -144,6 +156,7 @@ describe('sessions.file_path is deliberately not unique', () => {
     const rows = db
       .prepare('SELECT session_id FROM sessions WHERE file_path = ? ORDER BY session_id')
       .all(storePath) as { session_id: string }[]
+
     expect(rows.map((row) => row.session_id)).toEqual(['ses_one', 'ses_two'])
     db.close()
   })
@@ -159,9 +172,12 @@ describe('the planner tokenizer draws the same boundaries as unicode61', () => {
     const db = await openDatabase()
     // The vocabulary is the engine's own object, not the store's.
     ensureSessionSearchQuerySchema(db)
+
     const corpus =
       'resolveTerminalPath src/main/foo-bar.ts a.b C++ #123 修复 café naïve MAX_TOKEN x'
+
     insertMessageRow(db, FIRST_ROWID, corpus)
+
     const indexed = (
       db.prepare('SELECT term FROM messages_vocab ORDER BY term').all() as { term: string }[]
     ).map((row) => row.term)

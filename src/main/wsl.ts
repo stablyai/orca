@@ -20,6 +20,7 @@ import {
 // Why re-exported rather than defined here: the relay bundle needs the path
 // conversion without this module's distro-probing subprocess graph.
 export { toLinuxPath, toWindowsWslPath } from '../shared/wsl-paths'
+
 export {
   getCachedWslAvailability,
   hasCachedWslAvailability,
@@ -69,10 +70,13 @@ export function wslUncDirectoryExists(uncPath: string): boolean | null {
   if (process.platform !== 'win32') {
     return null
   }
+
   const info = parseWslUncPath(uncPath)
+
   if (!info) {
     return null
   }
+
   try {
     const stdout = execFileSync('wsl.exe', getWslDirectoryProbeArgs(info), {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -80,6 +84,7 @@ export function wslUncDirectoryExists(uncPath: string): boolean | null {
       encoding: 'utf8',
       cwd: resolveWslInteropSpawnCwd()
     })
+
     return parseWslDirectoryProbeOutput(stdout)
   } catch {
     return null
@@ -90,10 +95,13 @@ export function wslUncDirectoryExistsAsync(uncPath: string): Promise<boolean | n
   if (process.platform !== 'win32') {
     return Promise.resolve(null)
   }
+
   const info = parseWslUncPath(uncPath)
+
   if (!info) {
     return Promise.resolve(null)
   }
+
   return new Promise((resolve) => {
     const probeOpts = { timeout: 5000, cwd: resolveWslInteropSpawnCwd() }
     execFile('wsl.exe', getWslDirectoryProbeArgs(info), probeOpts, (_error, stdout) => {
@@ -106,24 +114,34 @@ export function wslUncDirectoryExistsAsync(uncPath: string): Promise<boolean | n
 // ─── WSL home directory resolution ──────────────────────────────────
 
 const wslHomeCache = new Map<string, string>()
+
 const wslHomeProbeCache = new Map<string, Promise<string | null>>()
+
 let wslDistroCache: string[] | null = null
+
 let wslDistroListInFlight: Promise<string[]> | null = null
+
 // Why: a wsl.exe failure must stay retryable (a transient error would
 // otherwise hide every distro until restart), but repeated failures cannot
 // re-spawn a blocking wsl.exe on every caller; brief negative caching bounds
 // the spawn rate on machines where WSL is absent or persistently broken.
 // Empty and failed probes back off from 15 seconds to a five-minute cap.
 let wslDistroListRetryAfterMs = 0
+
 let wslDistroListEmptyStreak = 0
+
 let wslDistroProbeSequence = 0
+
 let wslDistroCacheSequence = 0
+
 function armWslDistroListRetry(): void {
   const now = Date.now()
+
   // Concurrent completions belong to the retry window already armed by the first result.
   if (now < wslDistroListRetryAfterMs) {
     return
   }
+
   wslDistroListEmptyStreak += 1
   wslDistroListRetryAfterMs = now + wslDistroListRetryDelayMs(wslDistroListEmptyStreak)
 }
@@ -134,6 +152,7 @@ function armWslDistroListRetry(): void {
 // for reads, so a missing distro stays visible to `isKnownMissingDistro`.
 function cacheWslDistroList(rawDistros: string[], probeSequence: number): string[] {
   const userDistros = filterUserWslDistros(rawDistros)
+
   // An older positive result must not replace the newer lifetime-stable list.
   if (
     probeSequence < wslDistroCacheSequence &&
@@ -141,20 +160,25 @@ function cacheWslDistroList(rawDistros: string[], probeSequence: number): string
   ) {
     return wslDistroCache ?? []
   }
+
   // Why: probes overlap and can resolve out of order — a slow pre-registration wsl.exe
   // can land after a fast one that already found the distro. A late empty answer must
   // not erase that list, or provisioning reverts to "no distros" and backs off again.
   if (userDistros.length === 0 && wslDistroCache !== null && wslDistroCache.length > 0) {
     return wslDistroCache
   }
+
   if (userDistros.length > 0) {
     dropStaleWslAvailabilityFailure()
   }
+
   wslDistroCacheSequence = probeSequence
   wslDistroCache = userDistros
+
   if (wslDistroCache.length === 0) {
     armWslDistroListRetry()
   }
+
   return wslDistroCache
 }
 
@@ -172,6 +196,7 @@ export function listWslDistros(): string[] {
 
   if (process.platform !== 'win32') {
     wslDistroCache = []
+
     return wslDistroCache
   }
 
@@ -181,15 +206,18 @@ export function listWslDistros(): string[] {
 
   try {
     const probeSequence = ++wslDistroProbeSequence
+
     const output = execFileSync('wsl.exe', ['--list', '--quiet'], {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 5000,
       cwd: resolveWslInteropSpawnCwd()
     })
+
     return cacheWslDistroList(parseWslDistros(output), probeSequence)
   } catch {
     armWslDistroListRetry()
+
     return wslDistroCache ?? []
   }
 }
@@ -199,6 +227,7 @@ export async function listWslDistrosAsync(): Promise<string[]> {
   if (wslDistroCache !== null && wslDistroCache.length > 0) {
     return wslDistroCache
   }
+
   // Why ahead of the negative cache: a synchronous caller can land an empty result and arm
   // the retry window mid-probe, and handing this caller that [] would strand it even though
   // the pending probe is about to see the distro that just finished provisioning.
@@ -212,6 +241,7 @@ export async function listWslDistrosAsync(): Promise<string[]> {
 
   if (process.platform !== 'win32') {
     wslDistroCache = []
+
     return wslDistroCache
   }
 
@@ -223,10 +253,12 @@ export async function listWslDistrosAsync(): Promise<string[]> {
   // lands; one host-wide answer must cost one wsl.exe spawn. `catch` sits ahead of the
   // stored promise, so joiners get the same fail-safe [] a per-caller catch returned.
   const probeSequence = ++wslDistroProbeSequence
+
   const probe = execFileUtf8('wsl.exe', ['--list', '--quiet'])
     .then((output) => cacheWslDistroList(parseWslDistros(output), probeSequence))
     .catch(() => {
       armWslDistroListRetry()
+
       return wslDistroCache ?? []
     })
     .finally(() => {
@@ -235,7 +267,9 @@ export async function listWslDistrosAsync(): Promise<string[]> {
         wslDistroListInFlight = null
       }
     })
+
   wslDistroListInFlight = probe
+
   return probe
 }
 
@@ -245,6 +279,7 @@ export async function listRunningWslDistrosAsync(): Promise<string[]> {
   if (process.platform !== 'win32') {
     return []
   }
+
   return resolveRunningWslDistros(() =>
     execFileUtf8('wsl.exe', ['--list', '--running', '--quiet'], {
       ...process.env,
@@ -297,6 +332,7 @@ export function getWslHome(distro: string): string | null {
 
     const uncPath = toWindowsWslPath(home, distro)
     wslHomeCache.set(distro, uncPath)
+
     return uncPath
   } catch {
     return null
@@ -313,7 +349,9 @@ export async function getWslHomeAsync(distro: string): Promise<string | null> {
   if (wslHomeCache.has(distro)) {
     return wslHomeCache.get(distro)!
   }
+
   const inflight = wslHomeProbeCache.get(distro)
+
   if (inflight) {
     return inflight
   }
@@ -321,11 +359,14 @@ export async function getWslHomeAsync(distro: string): Promise<string | null> {
   const probe = execFileUtf8('wsl.exe', ['-d', distro, '--exec', 'bash', '-c', 'echo $HOME'])
     .then((output) => {
       const home = output.trim()
+
       if (!home || !home.startsWith('/')) {
         return null
       }
+
       const uncPath = toWindowsWslPath(home, distro)
       wslHomeCache.set(distro, uncPath)
+
       return uncPath
     })
     .catch(() => null)
@@ -334,7 +375,9 @@ export async function getWslHomeAsync(distro: string): Promise<string | null> {
         wslHomeProbeCache.delete(distro)
       }
     })
+
   wslHomeProbeCache.set(distro, probe)
+
   return probe
 }
 
@@ -343,6 +386,7 @@ export async function listRunningWslHomeDirsAsync(): Promise<string[]> {
   const homes = await Promise.all(
     (await listRunningWslDistrosAsync()).map((distro) => getWslHomeAsync(distro))
   )
+
   return homes.filter((home): home is string => Boolean(home))
 }
 
@@ -377,6 +421,7 @@ export function _setWslCachesForTests(args: {
   // Why: seed through the real cache path so an empty seed arms the retry window
   // too — otherwise a seeded [] lets the next call spawn a real 5s wsl.exe.
   resetWslDistroListState()
+
   if (args.distros) {
     cacheWslDistroList(args.distros, ++wslDistroProbeSequence)
   }
@@ -397,8 +442,10 @@ function execFileUtf8(command: string, args: string[], env?: NodeJS.ProcessEnv):
       (error, stdout) => {
         if (error) {
           reject(error)
+
           return
         }
+
         resolve(stdout)
       }
     )

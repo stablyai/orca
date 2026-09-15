@@ -60,6 +60,7 @@ function registerWorkspaceDocPage(browserPageId: string): void {
     entryRelativePath: 'index.html',
     browserPageId
   })
+
   const guest = {
     isFocused: () => false,
     isDestroyed: () => false,
@@ -69,6 +70,7 @@ function registerWorkspaceDocPage(browserPageId: string): void {
     setWindowOpenHandler: vi.fn(),
     setWebRTCIPHandlingPolicy: vi.fn()
   }
+
   installDocPreviewGuestPolicy(guest as never, { id: rendererWebContentsId, send: vi.fn() })
 }
 
@@ -104,6 +106,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -134,6 +137,7 @@ describe('browserManager', () => {
         off: guestOffMock,
         openDevTools: guestOpenDevToolsMock
       }
+
       webContentsFromIdMock.mockReturnValue(guest)
       browserManager.attachGuestPolicies(guest as never)
       const browserPageId = 'doc-page-1'
@@ -185,6 +189,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
     expect(
       browserManager.registerOffscreenGuest({
@@ -208,6 +213,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
     browserManager.attachGuestPolicies(guest as never)
     browserManager.registerGuest({
@@ -246,6 +252,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -271,6 +278,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -314,6 +322,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockReturnValue(mainWindowContents)
 
     browserManager.registerGuest({
@@ -339,6 +348,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.registerGuest({
@@ -386,6 +396,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -393,6 +404,7 @@ describe('browserManager', () => {
     const destroyedHandler = guestOnMock.mock.calls.find(
       ([event]) => event === 'destroyed'
     )?.[1] as (() => void) | undefined
+
     expect(destroyedHandler).toBeTypeOf('function')
 
     destroyedHandler?.()
@@ -416,6 +428,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -428,12 +441,15 @@ describe('browserManager', () => {
     const destroyedHandler = guestOnMock.mock.calls.find(
       ([event]) => event === 'destroyed'
     )?.[1] as (() => void) | undefined
+
     destroyedHandler?.()
 
     expect(browserManager.getGuestWebContentsId('browser-destroyed-after-register')).toBeNull()
+
     const managerState = browserManager as unknown as {
       tabIdByWebContentsId: Map<number, string>
     }
+
     expect(managerState.tabIdByWebContentsId.has(guest.id)).toBe(false)
   })
 
@@ -448,6 +464,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -469,6 +486,7 @@ describe('browserManager', () => {
       grabShortcutCleanupByTabId: Map<string, () => void>
       shortcutForwardingCleanupByTabId: Map<string, () => void>
     }
+
     expect(internals.rendererWebContentsIdByTabId.has('browser-stale')).toBe(true)
     expect(internals.workspaceIdByPageId.has('browser-stale')).toBe(true)
     expect(internals.sessionProfileIdByPageId.has('browser-stale')).toBe(true)
@@ -498,6 +516,7 @@ describe('browserManager', () => {
     const oldGuestOffMock = vi.fn()
     const newGuestOnMock = vi.fn()
     const newGuestOffMock = vi.fn()
+
     const oldGuest = {
       id: 501,
       isDestroyed: vi.fn(() => false),
@@ -509,6 +528,7 @@ describe('browserManager', () => {
       openDevTools: guestOpenDevToolsMock,
       getURL: vi.fn(() => 'https://old.example')
     }
+
     const newGuest = {
       id: 502,
       isDestroyed: vi.fn(() => false),
@@ -525,12 +545,15 @@ describe('browserManager', () => {
       if (id === oldGuest.id) {
         return oldGuest
       }
+
       if (id === newGuest.id) {
         return newGuest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -559,6 +582,7 @@ describe('browserManager', () => {
           isMainFrame: boolean
         ) => void)
       | undefined
+
     const newDidFailLoadHandler = newGuestOnMock.mock.calls.find(
       ([event]) => event === 'did-fail-load'
     )?.[1] as
@@ -612,6 +636,7 @@ describe('browserManager', () => {
       reload: vi.fn(),
       executeJavaScript: vi.fn()
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -640,6 +665,7 @@ describe('browserManager', () => {
   it('never attaches a debugger to a browsing guest and drops its detach listener on unregister', () => {
     const debuggerHandlers = new Map<string, () => void>()
     const debuggerAttachMock = vi.fn()
+
     const guest = {
       id: 809,
       isDestroyed: vi.fn(() => false),
@@ -664,6 +690,7 @@ describe('browserManager', () => {
         })
       }
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)

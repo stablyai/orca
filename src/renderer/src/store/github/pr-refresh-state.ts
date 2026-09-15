@@ -24,9 +24,13 @@ export type PRRefreshStateClearToken = {
 }
 
 const PR_REFRESH_ACTIVE_STALE_MS = 120_000
+
 const PR_REFRESH_PAUSED_GRACE_MS = 5_000
+
 const MAX_PR_REFRESH_STATE_ENTRIES = 2000
+
 const SETTLED_PR_REFRESH_STATUSES = new Set<PRRefreshState['status']>(['error', 'skipped'])
+
 export const ACTIVE_PR_REFRESH_STATUSES = new Set<PRRefreshState['status']>([
   'queued',
   'in-flight',
@@ -45,6 +49,7 @@ export function buildGitHubPRRefreshStateClearToken(
   if (!state) {
     return null
   }
+
   return {
     sequence: sequences[cacheKey] ?? 0,
     status: state.status,
@@ -56,19 +61,23 @@ export function getGitHubPRRefreshStateExpiryAt(state: PRRefreshState | undefine
   if (!state) {
     return null
   }
+
   if (state.status === 'queued' || state.status === 'in-flight') {
     return Number.isFinite(state.updatedAt) ? state.updatedAt + PR_REFRESH_ACTIVE_STALE_MS : 0
   }
+
   if (state.status === 'paused') {
     return Number.isFinite(state.pausedUntil)
       ? (state.pausedUntil ?? 0) + PR_REFRESH_PAUSED_GRACE_MS
       : 0
   }
+
   return null
 }
 
 export function isExpiredActivePRRefreshState(state: PRRefreshState, now: number): boolean {
   const expiryAt = getGitHubPRRefreshStateExpiryAt(state)
+
   return ACTIVE_PR_REFRESH_STATUSES.has(state.status) && expiryAt !== null && now > expiryAt
 }
 
@@ -78,6 +87,7 @@ export function getEffectiveGitHubPRRefreshState(
   now = Date.now()
 ): PRRefreshState | undefined {
   const state = states[cacheKey]
+
   return !state || isExpiredActivePRRefreshState(state, now) ? undefined : state
 }
 
@@ -86,13 +96,16 @@ export function pruneExpiredPRRefreshStates(
   now = Date.now()
 ): Record<string, PRRefreshState> {
   let next: Record<string, PRRefreshState> | null = null
+
   for (const [cacheKey, state] of Object.entries(states)) {
     if (!isExpiredActivePRRefreshState(state, now)) {
       continue
     }
+
     next ??= { ...states }
     delete next[cacheKey]
   }
+
   return next ?? states
 }
 
@@ -102,34 +115,43 @@ export function capPrRefreshStates(
 ): Record<string, PRRefreshState> {
   const keys = Object.keys(states)
   let toEvict = keys.length - maxEntries
+
   if (toEvict <= 0) {
     return states
   }
+
   const evicted = new Set<string>()
+
   for (const key of keys) {
     if (toEvict === 0) {
       break
     }
+
     if (SETTLED_PR_REFRESH_STATUSES.has(states[key].status)) {
       evicted.add(key)
       toEvict -= 1
     }
   }
+
   for (const key of keys) {
     if (toEvict === 0) {
       break
     }
+
     if (!evicted.has(key)) {
       evicted.add(key)
       toEvict -= 1
     }
   }
+
   const capped: Record<string, PRRefreshState> = {}
+
   for (const key of keys) {
     if (!evicted.has(key)) {
       capped[key] = states[key]
     }
   }
+
   return capped
 }
 

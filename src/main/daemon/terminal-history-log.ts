@@ -16,12 +16,17 @@ import type { PendingOutputRecord } from './types'
 // corrupt checkpoint is worse than reading a slightly stale one").
 
 const LOG_MAGIC = 'OCKL'
+
 const LOG_FORMAT_VERSION = 1
+
 export const LOG_HEADER_BYTES = 9
 
 const FRAME_BATCH = 0x01
+
 const FRAME_OUTPUT = 0x02
+
 const FRAME_RESIZE = 0x03
+
 const FRAME_CLEAR = 0x04
 
 export type TerminalHistoryLogBatch = {
@@ -42,6 +47,7 @@ export function encodeLogHeader(generation: number): Buffer {
   header.write(LOG_MAGIC, 0, 'ascii')
   header.writeUInt8(LOG_FORMAT_VERSION, 4)
   header.writeUInt32LE(generation >>> 0, 5)
+
   return header
 }
 
@@ -51,17 +57,21 @@ export function decodeLogHeader(buffer: Buffer): number | null {
   if (buffer.length < LOG_HEADER_BYTES) {
     return null
   }
+
   if (buffer.toString('ascii', 0, 4) !== LOG_MAGIC) {
     return null
   }
+
   if (buffer.readUInt8(4) !== LOG_FORMAT_VERSION) {
     return null
   }
+
   return buffer.readUInt32LE(5)
 }
 
 export function encodeLogBatch(seq: number, records: PendingOutputRecord[]): Buffer {
   const frames: Buffer[] = [encodeFrame(FRAME_BATCH, encodeSeqPayload(seq))]
+
   for (const record of records) {
     if (record.kind === 'output') {
       frames.push(encodeFrame(FRAME_OUTPUT, Buffer.from(record.data, 'utf8')))
@@ -74,6 +84,7 @@ export function encodeLogBatch(seq: number, records: PendingOutputRecord[]): Buf
       frames.push(encodeFrame(FRAME_CLEAR, Buffer.alloc(0)))
     }
   }
+
   return Buffer.concat(frames)
 }
 
@@ -84,6 +95,7 @@ export function encodeLogBatch(seq: number, records: PendingOutputRecord[]): Buf
  *  replaying it would corrupt the restored terminal. */
 export function decodeTerminalHistoryLog(buffer: Buffer): TerminalHistoryLogContents | null {
   const generation = decodeLogHeader(buffer)
+
   if (generation === null) {
     return null
   }
@@ -98,10 +110,12 @@ export function decodeTerminalHistoryLog(buffer: Buffer): TerminalHistoryLogCont
       truncatedTail = true
       break
     }
+
     const kind = buffer.readUInt8(offset)
     const payloadLength = buffer.readUInt32LE(offset + 1)
     const payloadStart = offset + 5
     const payloadEnd = payloadStart + payloadLength
+
     if (payloadEnd > buffer.length) {
       truncatedTail = true
       break
@@ -111,10 +125,13 @@ export function decodeTerminalHistoryLog(buffer: Buffer): TerminalHistoryLogCont
       if (payloadLength !== 4) {
         return null
       }
+
       const seq = buffer.readUInt32LE(payloadStart)
+
       if (current && seq !== current.seq + 1) {
         return null
       }
+
       current = { seq, records: [] }
       batches.push(current)
     } else if (!current) {
@@ -130,6 +147,7 @@ export function decodeTerminalHistoryLog(buffer: Buffer): TerminalHistoryLogCont
       if (payloadLength !== 4) {
         return null
       }
+
       current.records.push({
         kind: 'resize',
         cols: buffer.readUInt16LE(payloadStart),
@@ -139,6 +157,7 @@ export function decodeTerminalHistoryLog(buffer: Buffer): TerminalHistoryLogCont
       if (payloadLength !== 0) {
         return null
       }
+
       current.records.push({ kind: 'clear' })
     } else {
       return null
@@ -154,12 +173,14 @@ function encodeFrame(kind: number, payload: Buffer): Buffer {
   const header = Buffer.alloc(5)
   header.writeUInt8(kind, 0)
   header.writeUInt32LE(payload.length, 1)
+
   return Buffer.concat([header, payload])
 }
 
 function encodeSeqPayload(seq: number): Buffer {
   const payload = Buffer.alloc(4)
   payload.writeUInt32LE(seq >>> 0, 0)
+
   return payload
 }
 

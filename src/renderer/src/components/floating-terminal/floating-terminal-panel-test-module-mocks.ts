@@ -23,24 +23,29 @@ export function createReactHookOverrides() {
     useRef: <T>(initialValue: T) => {
       const index = hookRuntime.index
       hookRuntime.index += 1
+
       if (hookRuntime.values[index] === undefined) {
         hookRuntime.values[index] = { current: initialValue }
       }
+
       return hookRuntime.values[index] as { current: T }
     },
     useState: <T>(initialValue: T | (() => T)) => {
       const index = hookRuntime.index
       hookRuntime.index += 1
+
       if (hookRuntime.values[index] === undefined) {
         hookRuntime.values[index] =
           typeof initialValue === 'function' ? (initialValue as () => T)() : initialValue
       }
+
       const setValue = (nextValue: T | ((current: T) => T)): void => {
         hookRuntime.values[index] =
           typeof nextValue === 'function'
             ? (nextValue as (current: T) => T)(hookRuntime.values[index] as T)
             : nextValue
       }
+
       return [hookRuntime.values[index] as T, setValue] as const
     }
   }
@@ -54,6 +59,7 @@ export function createAppStoreModule() {
       getState: () => storeBox.state as FloatingPanelStoreState
     }
   )
+
   return { useAppStore }
 }
 
@@ -122,6 +128,7 @@ export function createTerminalSaveDialogModule() {
           mocks.markFileDirty(saveDialogBox.fileId, false)
           mocks.closeFile(saveDialogBox.fileId)
         }
+
         saveDialogBox.fileId = null
       },
       handleSaveDialogSave: () => {
@@ -131,10 +138,13 @@ export function createTerminalSaveDialogModule() {
         const file = (storeBox.state as FloatingPanelStoreState).openFiles.find(
           (candidate) => candidate.id === fileId
         )
+
         if (file?.isDirty) {
           saveDialogBox.fileId = fileId
+
           return
         }
+
         mocks.closeFile(fileId)
       },
       saveDialogFile: saveDialogBox.fileId

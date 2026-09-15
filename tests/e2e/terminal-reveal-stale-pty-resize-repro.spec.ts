@@ -72,11 +72,13 @@ type CycleFailure = {
 }
 
 const CONVERGE_TIMEOUT_MS = 6_000
+
 // Why: sweep the applied-size read delay across the gap between the reveal
 // fit's PTY resize landing in the daemon and the ResizeObserver follow-up
 // request — the window where the stale forward fires. Fast idle machines
 // rescue within ~30-50ms; the field (SSH/relay, loaded frames) may never.
 const GETSIZE_DELAY_SWEEP_MS = [15, 20, 25, 30, 40, 60]
+
 const VIEWPORTS = [
   { width: 1280, height: 800 },
   { width: 940, height: 640 },
@@ -112,6 +114,7 @@ async function readGridSnapshot(page: Page, ptyId: string): Promise<GridSnapshot
   return page.evaluate(async (ptyId) => {
     const win = window as StaleResizeReproWindow
     let xterm: { cols: number; rows: number } | null = null
+
     for (const manager of win.__paneManagers?.values() ?? []) {
       for (const pane of manager.getPanes?.() ?? []) {
         if (pane.container?.dataset?.ptyId === ptyId) {
@@ -119,9 +122,11 @@ async function readGridSnapshot(page: Page, ptyId: string): Promise<GridSnapshot
         }
       }
     }
+
     // Why: the delay seam only affects the product's own readback wiring in
     // pty-connection, so probing window.api.pty.getSize directly stays fast.
     const applied = (await window.api?.pty?.getSize?.(ptyId)) ?? null
+
     return { xterm, applied }
   }, ptyId)
 }
@@ -129,10 +134,13 @@ async function readGridSnapshot(page: Page, ptyId: string): Promise<GridSnapshot
 async function closeRightSidebarAndFeatureTips(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       return
     }
+
     store.getState().markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+
     if (store.getState().rightSidebarOpen) {
       store.getState().setRightSidebarOpen(false)
     }
@@ -175,6 +183,7 @@ async function driveHiddenResizeRevealCycles(args: CycleDriverArgs): Promise<Cyc
   const firstWorktreeId = await waitForActiveWorktree(page)
   const secondWorktreeId = (await getAllWorktreeIds(page)).find((id) => id !== firstWorktreeId)
   test.skip(!secondWorktreeId, 'stale-resize repro needs the seeded secondary worktree')
+
   if (!secondWorktreeId) {
     return []
   }
@@ -201,10 +210,12 @@ async function driveHiddenResizeRevealCycles(args: CycleDriverArgs): Promise<Cyc
 
   const failures: CycleFailure[] = []
   let viewportIndex = 0
+
   for (let cycle = 0; cycle < cycles; cycle += 1) {
     if (args.delaySweepMs) {
       await armSlowAppliedSizeRead(page, args.delaySweepMs[cycle % args.delaySweepMs.length])
     }
+
     await switchToWorktree(page, firstWorktreeId)
     await expect.poll(() => getActiveWorktreeId(page), { timeout: 10_000 }).toBe(firstWorktreeId)
     // Why: the field shape — the window changes while the idle TUI worktree
@@ -223,25 +234,32 @@ async function driveHiddenResizeRevealCycles(args: CycleDriverArgs): Promise<Cyc
     // for the wrong grid in that window); record every desynced sample.
     for (let sample = 0; sample < 20; sample += 1) {
       const snapshot = await readGridSnapshot(page, ptyId)
+
       if (!gridsConverged(snapshot) && snapshot.xterm !== null && snapshot.applied !== null) {
         args.onRevealSample?.({ cycle, snapshot })
       }
+
       await page.waitForTimeout(10)
     }
 
     let lastSnapshot: GridSnapshot = { xterm: null, applied: null }
     const deadline = Date.now() + CONVERGE_TIMEOUT_MS
     let converged = false
+
     while (Date.now() < deadline) {
       lastSnapshot = await readGridSnapshot(page, ptyId)
+
       if (gridsConverged(lastSnapshot)) {
         converged = true
         break
       }
+
       await page.waitForTimeout(150)
     }
+
     if (!converged) {
       failures.push({ cycle, snapshot: lastSnapshot })
+
       if (failures.length <= 3) {
         const screenshotPath = testInfo.outputPath(`${label}-cycle-${cycle}.png`)
         await page.screenshot({ path: screenshotPath, fullPage: true })
@@ -252,6 +270,7 @@ async function driveHiddenResizeRevealCycles(args: CycleDriverArgs): Promise<Cyc
       }
     }
   }
+
   return failures
 }
 
@@ -261,6 +280,7 @@ test.describe('Terminal reveal stale PTY resize repro', () => {
     testRepoPath
   }, testInfo: TestInfo) => {
     test.setTimeout(300_000)
+
     const failures = await driveHiddenResizeRevealCycles({
       page: orcaPage,
       testInfo,
@@ -268,6 +288,7 @@ test.describe('Terminal reveal stale PTY resize repro', () => {
       cycles: 8,
       label: 'natural-order'
     })
+
     expect(
       failures,
       `PTY applied size stayed desynced from xterm after reveal: ${JSON.stringify(failures)}`
@@ -280,6 +301,7 @@ test.describe('Terminal reveal stale PTY resize repro', () => {
   }, testInfo: TestInfo) => {
     test.setTimeout(300_000)
     const staleSamples: { cycle: number; snapshot: GridSnapshot }[] = []
+
     const failures = await driveHiddenResizeRevealCycles({
       page: orcaPage,
       testInfo,
@@ -289,9 +311,11 @@ test.describe('Terminal reveal stale PTY resize repro', () => {
       delaySweepMs: GETSIZE_DELAY_SWEEP_MS,
       onRevealSample: (sample) => staleSamples.push(sample)
     })
+
     if (staleSamples.length > 0) {
       console.log(`[repro] desynced post-reveal samples: ${JSON.stringify(staleSamples)}`)
     }
+
     expect(
       staleSamples,
       `PTY applied size diverged from xterm after reveal (stale resize fired): ${JSON.stringify(staleSamples)}`

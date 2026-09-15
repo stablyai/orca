@@ -419,6 +419,7 @@ describe('buildNewWorkspaceProjectOptions', () => {
     const oversizedQuery = 'secret-project-option'.repeat(
       NEW_WORKSPACE_PROJECT_OPTION_QUERY_MAX_BYTES
     )
+
     const throwingOptions = [
       {
         id: 'secret',
@@ -460,6 +461,7 @@ describe('buildNewWorkspaceFolderSourceOptions', () => {
 describe('buildNewWorkspaceCreateTargetOptions', () => {
   it('includes folder-backed repo groups and excludes organizational groups', async () => {
     const { buildNewWorkspaceCreateTargetOptions } = await import('./new-workspace-project-options')
+
     const options = buildNewWorkspaceCreateTargetOptions({
       projects: [project()],
       projectHostSetups: [setup({ id: 'local-setup', repoId: 'local-repo' })],

@@ -33,9 +33,11 @@ function getScopeSummaryLabel({
       'Global'
     )
   }
+
   if (selectedRepo) {
     return selectedRepo.displayName || selectedRepo.path
   }
+
   return translate(
     'auto.components.terminal.quick.commands.TerminalQuickCommandScopeField.3834d24243',
     'Project'

@@ -136,19 +136,25 @@ function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']
       </span>
     )
   }
+
   const { contentType } = option
+
   if (contentType === 'terminal') {
     return <TerminalSquare className="size-3.5 shrink-0" aria-hidden="true" />
   }
+
   if (contentType === 'browser') {
     return <BrowserFavicon faviconUrl={option.faviconUrl} className="size-3.5" />
   }
+
   if (contentType === 'simulator') {
     return <Smartphone className="size-3.5 shrink-0" aria-hidden="true" />
   }
+
   if (contentType === 'editor') {
     return <FileText className="size-3.5 shrink-0" aria-hidden="true" />
   }
+
   return <GitCompare className="size-3.5 shrink-0" aria-hidden="true" />
 }
 
@@ -175,6 +181,7 @@ function getActionPresentation(
       ) : (
         <TerminalSquare className="size-3.5 shrink-0" aria-hidden="true" />
       )
+
     return {
       detail: '',
       icon,
@@ -182,6 +189,7 @@ function getActionPresentation(
       showDetail: false
     }
   }
+
   if (option.kind === 'tab') {
     return {
       detail: option.option.matchedTexts?.length
@@ -192,9 +200,11 @@ function getActionPresentation(
       showDetail: true
     }
   }
+
   if (option.kind === 'history') {
     const { entry } = option.option
     const url = formatBrowserHistoryUrl(entry.url)
+
     return {
       // Why the title is detail, not label: the label span is shrink-0 whenever a
       // detail shows, so a variable-length title there would refuse to truncate.
@@ -204,6 +214,7 @@ function getActionPresentation(
       showDetail: true
     }
   }
+
   if (option.kind === 'agent') {
     return {
       detail: option.option.label,
@@ -214,7 +225,9 @@ function getActionPresentation(
       showDetail: true
     }
   }
+
   const { classification } = option.option
+
   if (classification.kind === 'search') {
     return {
       detail: classification.query,
@@ -228,6 +241,7 @@ function getActionPresentation(
       showDetail: true
     }
   }
+
   if (classification.kind === 'explicit-url' || classification.kind === 'host-url') {
     return {
       detail: classification.url,
@@ -236,6 +250,7 @@ function getActionPresentation(
       showDetail: true
     }
   }
+
   if (classification.kind === 'existing-file' || classification.kind === 'absolute-file') {
     return {
       detail:
@@ -248,6 +263,7 @@ function getActionPresentation(
       showDetail: true
     }
   }
+
   return {
     detail: classification.relativePath,
     icon: <FilePlus className="size-3.5 shrink-0" aria-hidden="true" />,

@@ -68,9 +68,11 @@ async function installLinearFilterBackend(electronApp: ElectronApplication): Pro
 async function openLinearTasks(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     await store.getState().checkLinearConnection(true)
     store.getState().openTaskPage({ taskSource: 'linear' })
   })

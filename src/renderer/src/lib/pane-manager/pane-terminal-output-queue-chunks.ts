@@ -8,6 +8,7 @@ import type {
 import { recordTerminalOutputQueueDebugPressure as recordQueueDebugPressure } from './pane-terminal-output-scheduler-debug'
 
 type ForegroundRefreshSyncResolver = () => boolean
+
 const ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY = (): boolean => true
 
 export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
@@ -29,12 +30,15 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
 
   while (remaining > 0 && entry.chunkIndex < entry.chunks.length) {
     const chunk = entry.chunks[entry.chunkIndex]
+
     if (foreground !== null && chunk.foreground !== foreground) {
       break
     }
+
     foreground ??= chunk.foreground
     forceForegroundRefresh ||= chunk.forceForegroundRefresh
     followupForegroundRefresh ||= chunk.followupForegroundRefresh
+
     // Why: one drained write can combine chunks from different renderer states or producers; preserve every forced policy and prep hook.
     if (chunk.forceForegroundRefresh) {
       if (shouldRefreshForegroundSynchronously === null) {
@@ -47,7 +51,9 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
         additionalRefreshSyncResolvers.push(chunk.shouldRefreshForegroundSynchronously)
       }
     }
+
     stripTransientCursorShows ||= chunk.stripTransientCursorShows
+
     if (!beforeWrite) {
       beforeWrite = chunk.beforeWrite
     } else if (
@@ -58,6 +64,7 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
       additionalBeforeWriteCallbacks ??= []
       additionalBeforeWriteCallbacks.push(chunk.beforeWrite)
     }
+
     if (chunk.data.length <= remaining) {
       if (dataParts) {
         dataParts.push(chunk.data)
@@ -67,6 +74,7 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
         dataParts = [data, chunk.data]
         data = ''
       }
+
       dataLength += chunk.data.length
       remaining -= chunk.data.length
       entry.queuedChars -= chunk.data.length
@@ -81,16 +89,20 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
         stripTransientCursorShows: false
       }
       entry.chunkIndex += 1
+
       if (chunk.onParsed) {
         parsedCallbacks.push(chunk.onParsed)
       }
+
       if (chunk.ackCredit) {
         ackCredits.push(chunk.ackCredit)
       }
+
       continue
     }
 
     const prefix = chunk.data.slice(0, remaining)
+
     if (dataParts) {
       dataParts.push(prefix)
     } else if (dataLength === 0) {
@@ -99,6 +111,7 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
       dataParts = [data, prefix]
       data = ''
     }
+
     dataLength += prefix.length
     const residual = chunk.data.slice(remaining)
     // Geometric flattening bounds retained parents while keeping total copy work linear.
@@ -113,11 +126,14 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
   }
 
   compactConsumedChunks(entry)
+
   if (entry.queuedChars < 0) {
     entry.queuedChars = 0
   }
+
   recordQueueDebugPressure()
   const assembledData = dataParts ? dataParts.join('') : data
+
   return assembledData
     ? {
         data: assembledData,
@@ -135,6 +151,7 @@ export function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite |
           additionalBeforeWriteCallbacks && beforeWrite
             ? (queuedData) => {
                 beforeWrite(queuedData)
+
                 for (const callback of additionalBeforeWriteCallbacks) {
                   callback(queuedData)
                 }
@@ -157,11 +174,14 @@ export function compactConsumedChunks(entry: QueueEntry): void {
   if (entry.chunkIndex === 0) {
     return
   }
+
   if (entry.chunkIndex === entry.chunks.length) {
     entry.chunks.length = 0
     entry.chunkIndex = 0
+
     return
   }
+
   if (entry.chunkIndex >= 64) {
     entry.chunks.splice(0, entry.chunkIndex)
     entry.chunkIndex = 0

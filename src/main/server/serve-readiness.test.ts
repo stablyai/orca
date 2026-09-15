@@ -105,6 +105,7 @@ describe('ServeReadinessPublisher', () => {
         guidance: 'Choose an unused --port.'
       }
     }
+
     expect(() =>
       renderServeReadiness(unavailable, { mode: 'recipe-json', projectRoot: '/workspace' })
     ).toThrow('websocket_unavailable. Choose an unused --port.')
@@ -148,6 +149,7 @@ describe('ServeReadinessPublisher', () => {
         }
       }
     }
+
     const human = renderServeReadiness(failed, { mode: 'human' })
     // An operator reading the ready block must not have to infer this from a missing line.
     expect(human).toContain('PTY self-test FAILED')
@@ -156,12 +158,14 @@ describe('ServeReadinessPublisher', () => {
 
   it('rejects concurrent and later duplicate publications', async () => {
     let finishWrite: (() => void) | undefined
+
     const publisher = new ServeReadinessPublisher(
       () =>
         new Promise<void>((resolve) => {
           finishWrite = resolve
         })
     )
+
     const first = publisher.publish(ready, { mode: 'json' })
 
     await expect(publisher.publish(ready, { mode: 'json' })).rejects.toThrow(

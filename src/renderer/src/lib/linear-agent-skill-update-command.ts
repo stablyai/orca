@@ -24,9 +24,11 @@ export function getLinearAgentSkillUpdateTarget(
   const canonicalSkillInstalled = hasInstalledAgentSkill(skills, ORCA_LINEAR_SKILL_NAME, {
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
   const legacySkillInstalled = hasInstalledAgentSkill(skills, LINEAR_TICKETS_SKILL_NAME, {
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
   return !installed || canonicalSkillInstalled || !legacySkillInstalled
     ? { skillName: ORCA_LINEAR_SKILL_NAME, command: ORCA_LINEAR_SKILL_UPDATE_COMMAND }
     : { skillName: LINEAR_TICKETS_SKILL_NAME, command: LINEAR_TICKETS_SKILL_UPDATE_COMMAND }

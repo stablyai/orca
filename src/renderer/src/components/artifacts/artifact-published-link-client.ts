@@ -9,8 +9,10 @@ export async function getPublishedArtifactLink(sourceKey: string): Promise<strin
     'artifacts.getPublishedLink',
     { sourceKey }
   )
+
   if (result.status === 'ok') {
     return result.value?.shareUrl ?? null
   }
+
   throw new Error(result.status)
 }

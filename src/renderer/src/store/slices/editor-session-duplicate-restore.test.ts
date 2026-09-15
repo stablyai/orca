@@ -7,17 +7,23 @@ import { createStoreSessionMockApi } from './store-session-test-harness'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 createStoreSessionMockApi()
 
 const WORKTREE_ID = 'repo-1::/workspace'
+
 const FILE_PATH = '/workspace/.scratch/preview.png'
+
 const SSH_FOLDER_ID = 'ssh-folder'
+
 const SSH_FOLDER_KEY = folderWorkspaceKey(SSH_FOLDER_ID)
+
 const SSH_FILE_PATH = '/srv/workspace/.scratch/preview.png'
 
 function prepareStore() {
@@ -31,6 +37,7 @@ function prepareStore() {
     },
     activeWorktreeId: WORKTREE_ID
   })
+
   return store
 }
 
@@ -57,6 +64,7 @@ function prepareSshFolderStore() {
     ],
     activeWorktreeId: SSH_FOLDER_KEY
   })
+
   return store
 }
 
@@ -67,6 +75,7 @@ function corruptSession(worktreeId = WORKTREE_ID, filePath = FILE_PATH): Workspa
     worktreeId,
     language: 'image'
   }
+
   const editorTab = (id: string, sortOrder: number) => ({
     id,
     entityId: filePath,
@@ -79,6 +88,7 @@ function corruptSession(worktreeId = WORKTREE_ID, filePath = FILE_PATH): Workspa
     sortOrder,
     createdAt: 1_788_002_466_152
   })
+
   return {
     activeRepoId: 'repo-1',
     activeWorktreeId: worktreeId,
@@ -127,6 +137,7 @@ function closeAndRestart(
   const restartedStore = prepare()
   restartedStore.getState().hydrateTabsSession(persistedAfterClose)
   restartedStore.getState().hydrateEditorSession(persistedAfterClose)
+
   return restartedStore.getState()
 }
 
@@ -147,6 +158,7 @@ describe('corrupt editor session restore', () => {
       corruptSession(SSH_FOLDER_KEY, SSH_FILE_PATH),
       SSH_FOLDER_KEY
     )
+
     expect(restarted.openFiles).toEqual([])
     expect(restarted.unifiedTabsByWorktree[SSH_FOLDER_KEY] ?? []).toEqual([])
   })

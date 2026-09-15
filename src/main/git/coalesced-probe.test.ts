@@ -7,11 +7,14 @@ function deferred<T>(): {
   reject: (error: unknown) => void
 } {
   let resolve: (value: T) => void = () => {}
+
   let reject: (error: unknown) => void = () => {}
+
   const promise = new Promise<T>((settle, fail) => {
     resolve = settle
     reject = fail
   })
+
   return { promise, resolve, reject }
 }
 
@@ -29,6 +32,7 @@ describe('runCoalescedProbe', () => {
     const probes: CoalescedProbes<string> = new Map()
     const first = deferred<string>()
     const second = deferred<string>()
+
     const createProbe = vi
       .fn<() => Promise<string>>()
       .mockReturnValueOnce(first.promise)
@@ -55,6 +59,7 @@ describe('runCoalescedProbe', () => {
     const probes: CoalescedProbes<string> = new Map()
     const first = deferred<string>()
     const second = deferred<string>()
+
     const createProbe = vi
       .fn<() => Promise<string>>()
       .mockReturnValueOnce(first.promise)

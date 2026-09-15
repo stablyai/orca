@@ -7,9 +7,11 @@ import { AutoRenameFailedDialog } from './AutoRenameFailedDialog'
 
 const getBranchRenameFailureOutput =
   vi.fn<(args: { worktreeId: string }) => Promise<string | null>>()
+
 const writeClipboardText = vi.fn<(text: string) => Promise<void>>()
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -105,6 +107,7 @@ describe('AutoRenameFailedDialog unbroken output containment', () => {
     const gridChild = Array.from(dialog?.children ?? []).find((child) =>
       child.contains(output ?? null)
     )
+
     expect(gridChild?.className).toContain('min-w-0')
   })
 })

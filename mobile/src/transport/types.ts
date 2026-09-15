@@ -11,6 +11,7 @@ import {
 import { MobileRelayEndpointSchema } from '../../../src/shared/mobile-relay-credential-contract'
 
 export { PairingOfferSchema }
+
 export type { PairingOffer }
 
 export type RpcRequest = {

@@ -10,8 +10,11 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('fs/promises', () => ({ stat: vi.fn() }))
+
 vi.mock('@parcel/watcher', () => ({ subscribe: vi.fn() }))
+
 vi.mock('./filesystem-watcher-wsl', () => ({ createWslWatcher: vi.fn() }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: getSshFilesystemProviderMock,
   onSshFilesystemProviderRegistered: () => () => {}
@@ -27,9 +30,11 @@ describe('remote filesystem watcher cancellation', () => {
   beforeEach(async () => {
     handleMock.mockReset()
     getSshFilesystemProviderMock.mockReset()
+
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
+
     handleMock.mockImplementation((channel, handler) => {
       handlers[channel] = handler
     })
@@ -41,6 +46,7 @@ describe('remote filesystem watcher cancellation', () => {
     let installSignal: AbortSignal | undefined
     let resolveInstall: ((unwatch: () => void) => void) | undefined
     const lateUnwatch = vi.fn()
+
     const watchMock = vi.fn(
       (_rootPath, _callback, options?: { signal?: AbortSignal }) =>
         new Promise<() => void>((resolve) => {
@@ -48,6 +54,7 @@ describe('remote filesystem watcher cancellation', () => {
           resolveInstall = resolve
         })
     )
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
     const args = { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
     const senderOne = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
@@ -56,6 +63,7 @@ describe('remote filesystem watcher cancellation', () => {
     const second = handlers['fs:watchWorktree']({ sender: senderTwo }, args) as Promise<unknown>
 
     await Promise.resolve()
+
     try {
       expect(watchMock).toHaveBeenCalledTimes(1)
       expect(installSignal?.aborted).toBe(false)
@@ -71,6 +79,7 @@ describe('remote filesystem watcher cancellation', () => {
       resolveInstall?.(lateUnwatch)
       await Promise.all([first, second])
     }
+
     expect(lateUnwatch).toHaveBeenCalledTimes(1)
   })
 
@@ -78,6 +87,7 @@ describe('remote filesystem watcher cancellation', () => {
     let firstSignal: AbortSignal | undefined
     let secondCallback: ((events: unknown[]) => void) | undefined
     const secondUnwatch = vi.fn()
+
     const watchMock = vi
       .fn()
       .mockImplementationOnce(
@@ -97,8 +107,10 @@ describe('remote filesystem watcher cancellation', () => {
       )
       .mockImplementationOnce((_rootPath, callback) => {
         secondCallback = callback
+
         return Promise.resolve(secondUnwatch)
       })
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
     const args = { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
     const firstSender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
@@ -125,14 +137,17 @@ describe('remote filesystem watcher cancellation', () => {
       string,
       { signal: AbortSignal | undefined; resolve: (unwatch: () => void) => void }
     >()
+
     const watchMock = vi.fn(
       (rootPath: string, _callback, options?: { signal?: AbortSignal }) =>
         new Promise<() => void>((resolve) => {
           installs.set(rootPath, { signal: options?.signal, resolve })
         })
     )
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
     const destroyedCallbacks: (() => void)[] = []
+
     const destroyedSender = {
       isDestroyed: () => false,
       send: vi.fn(),
@@ -143,7 +158,9 @@ describe('remote filesystem watcher cancellation', () => {
       }),
       id: 1
     }
+
     const destroyedArgs = { worktreePath: '/destroyed', connectionId: 'conn-1' }
+
     const destroyedWatch = handlers['fs:watchWorktree'](
       { sender: destroyedSender },
       destroyedArgs
@@ -158,6 +175,7 @@ describe('remote filesystem watcher cancellation', () => {
 
     const shutdownSender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 2 }
     const shutdownArgs = { worktreePath: '/shutdown', connectionId: 'conn-1' }
+
     const shutdownWatch = handlers['fs:watchWorktree'](
       { sender: shutdownSender },
       shutdownArgs
@@ -173,6 +191,7 @@ describe('remote filesystem watcher cancellation', () => {
   it('keeps the shared install alive when a replacement sender joins before the deferred abort fires', async () => {
     let installSignal: AbortSignal | undefined
     let resolveInstall: ((unwatch: () => void) => void) | undefined
+
     const watchMock = vi.fn(
       (_rootPath, _callback, options?: { signal?: AbortSignal }) =>
         new Promise<() => void>((resolve) => {
@@ -180,6 +199,7 @@ describe('remote filesystem watcher cancellation', () => {
           resolveInstall = resolve
         })
     )
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
     const args = { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
     const senderOne = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
@@ -207,6 +227,7 @@ describe('remote filesystem watcher cancellation', () => {
     let firstSignal: AbortSignal | undefined
     let resolveFirst: ((unwatch: () => void) => void) | undefined
     const lateUnwatch = vi.fn()
+
     const watchMock = vi.fn(
       (_rootPath, _callback, options?: { signal?: AbortSignal }) =>
         new Promise<() => void>((resolve) => {
@@ -214,6 +235,7 @@ describe('remote filesystem watcher cancellation', () => {
           resolveFirst = resolve
         })
     )
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
     const args = { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
     const firstSender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
@@ -249,12 +271,14 @@ describe('remote filesystem watcher cancellation', () => {
       string,
       { signal: AbortSignal | undefined; resolve: (unwatch: () => void) => void }
     >()
+
     const watchMock = vi.fn(
       (rootPath: string, _callback, options?: { signal?: AbortSignal }) =>
         new Promise<() => void>((resolve) => {
           installs.set(rootPath, { signal: options?.signal, resolve })
         })
     )
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
     const args = { worktreePath: '/home/me/repo', connectionId: 'conn-1' }
     const reopenArgs = { worktreePath: '/home/me/other', connectionId: 'conn-1' }
@@ -279,10 +303,12 @@ describe('remote filesystem watcher cancellation', () => {
     // Shutdown bumps the generation, then a genuine new watch reopens the subsystem
     // (clearing the boolean latch) before the joiner resumes.
     await closeAllWatchers()
+
     const reopen = handlers['fs:watchWorktree'](
       { sender: reopenSender },
       reopenArgs
     ) as Promise<unknown>
+
     await Promise.resolve()
     expect(watchMock).toHaveBeenCalledTimes(2)
 

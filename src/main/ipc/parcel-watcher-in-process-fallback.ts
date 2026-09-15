@@ -25,8 +25,10 @@ export async function subscribeWithInProcessWatcher(
       'subscribe_aborted'
     )
   }
+
   let abortListener: (() => void) | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
+
   const cancellation = new Promise<never>((_resolve, reject) => {
     if (hooks.signal) {
       abortListener = () =>
@@ -39,6 +41,7 @@ export async function subscribeWithInProcessWatcher(
         )
       hooks.signal.addEventListener('abort', abortListener, { once: true })
     }
+
     if (hooks.subscribeTimeoutMs !== undefined) {
       timer = setTimeout(() => {
         reject(
@@ -52,15 +55,19 @@ export async function subscribeWithInProcessWatcher(
       timer.unref?.()
     }
   })
+
   const clearPendingControls = (): void => {
     if (abortListener && hooks.signal) {
       hooks.signal.removeEventListener('abort', abortListener)
     }
+
     if (timer) {
       clearTimeout(timer)
     }
   }
+
   let watcher: typeof ParcelWatcher
+
   try {
     // Why: setup ownership starts before module loading; an abort or timeout
     // during the import must settle the caller just like one during the crawl.
@@ -69,13 +76,16 @@ export async function subscribeWithInProcessWatcher(
     clearPendingControls()
     throw error
   }
+
   let active = true
+
   const eventDelivery = createWatcherProcessEventDeliveryQueue(
     hooks.delivery,
     async (events) => {
       if (!active) {
         return
       }
+
       if (events === null) {
         hooks.onOverflow?.()
       } else {
@@ -84,21 +94,27 @@ export async function subscribeWithInProcessWatcher(
     },
     (error) => callback(error instanceof Error ? error : new Error(String(error)), [])
   )
+
   const subscriptionPromise = watcher.subscribe(
     dir,
     (err, events) => {
       if (!active) {
         return
       }
+
       if (err) {
         callback(err, [])
+
         return
       }
+
       eventDelivery.enqueue(events)
     },
     opts as ParcelWatcher.Options
   )
+
   let subscription: ParcelWatcher.AsyncSubscription
+
   try {
     subscription = await Promise.race([subscriptionPromise, cancellation])
   } catch (error) {
@@ -113,7 +129,9 @@ export async function subscribeWithInProcessWatcher(
       .catch(() => undefined)
     throw error
   }
+
   clearPendingControls()
+
   return {
     unsubscribe: async (): Promise<void> => {
       active = false

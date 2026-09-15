@@ -27,16 +27,20 @@ export function githubProjectKeys(repos: readonly Repo[]): string[] {
   const keys = repos
     .filter((repo) => isGitHubBackedRepo(repo))
     .map((repo) => getProjectIdentityKey(repo))
+
   return [...new Set(keys)].sort()
 }
 
 function readRecord(issueId: string): DismissalRecord | null {
   try {
     const raw = localStorage.getItem(storageKey(issueId))
+
     if (!raw) {
       return null
     }
+
     const parsed = JSON.parse(raw) as DismissalRecord
+
     return Array.isArray(parsed?.githubKeys) ? parsed : null
   } catch {
     return null
@@ -47,11 +51,14 @@ function readRecord(issueId: string): DismissalRecord | null {
  *  since. A GitHub key present now but absent from the snapshot re-surfaces it. */
 export function isPreflightIssueDismissed(issueId: string, repos: readonly Repo[]): boolean {
   const record = readRecord(issueId)
+
   if (!record) {
     return false
   }
+
   const snapshot = new Set(record.githubKeys)
   const hasNewGithubProject = githubProjectKeys(repos).some((key) => !snapshot.has(key))
+
   return !hasNewGithubProject
 }
 

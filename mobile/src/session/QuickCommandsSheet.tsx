@@ -43,6 +43,7 @@ export function QuickCommandsSheet({
     client,
     enabled: visible
   })
+
   const [view, setView] = useState<SheetView>('list')
   const [query, setQuery] = useState('')
   const [draft, setDraft] = useState<QuickCommandDraft | null>(null)
@@ -50,8 +51,10 @@ export function QuickCommandsSheet({
   const savingRef = useRef(false)
 
   const [wasVisible, setWasVisible] = useState(visible)
+
   if (visible !== wasVisible) {
     setWasVisible(visible)
+
     if (visible) {
       setView('list')
       setQuery('')
@@ -72,6 +75,7 @@ export function QuickCommandsSheet({
 
   const visibleCommands = useMemo(() => {
     const trimmed = query.trim().toLowerCase()
+
     return searchableCommands
       .filter((entry) => !trimmed || entry.searchText.includes(trimmed))
       .map((entry) => entry.command)
@@ -86,6 +90,7 @@ export function QuickCommandsSheet({
     if (!command && commands.length >= MAX_QUICK_COMMANDS) {
       return
     }
+
     setDraft(
       command
         ? quickCommandToDraft(command)
@@ -123,15 +128,20 @@ export function QuickCommandsSheet({
     if (!draft || savingRef.current) {
       return
     }
+
     const built = draftToQuickCommand(draft)
+
     if (!built) {
       return
     }
+
     // Why: state cannot lock out a second tap until React commits the disabled UI.
     savingRef.current = true
     setSaving(true)
+
     try {
       const ok = await persist({ type: 'upsert', command: built })
+
       if (ok) {
         setView('list')
         setDraft(null)

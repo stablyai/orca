@@ -13,12 +13,15 @@ export const createReviewThreadActions = (
     const repo = get().repos?.find((candidate) =>
       options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
     )
+
     const repoId = options?.repoId ?? repo?.id
+
     const requestSettings = getGitHubRepoSourceSettings(
       get().settings,
       repo,
       options?.sourceContext
     )
+
     const cacheKey = sourceScopedRepoCacheKey(
       repoPath,
       repoId,
@@ -32,6 +35,7 @@ export const createReviewThreadActions = (
 
     // Optimistic toggle of isResolved for this thread; reverts if the API call fails.
     const prev = get().commentsCache[cacheKey]?.data
+
     if (prev) {
       set((s) => ({
         commentsCache: {
@@ -51,7 +55,9 @@ export const createReviewThreadActions = (
       repoPath,
       options?.sourceContext
     )
+
     let ok = false
+
     try {
       ok =
         requestContext.target.kind === 'environment'
@@ -78,6 +84,7 @@ export const createReviewThreadActions = (
       console.error('Failed to update review thread:', err)
       ok = false
     }
+
     if (!ok && prev) {
       // Revert optimistic update on failure
       set((s) => ({
@@ -87,6 +94,7 @@ export const createReviewThreadActions = (
         }
       }))
     }
+
     return ok
   }
 })

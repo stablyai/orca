@@ -18,6 +18,7 @@ function createTerminal(linkifier: FakeLinkifier | null | undefined): {
 } {
   const registrations: ListenerRegistration[] = []
   const removeEventListener = vi.fn()
+
   const element = {
     addEventListener: (
       name: string,
@@ -26,6 +27,7 @@ function createTerminal(linkifier: FakeLinkifier | null | undefined): {
     ) => registrations.push([name, listener, options]),
     removeEventListener
   }
+
   return {
     terminal: {
       _core: linkifier ? { linkifier } : undefined,
@@ -57,7 +59,9 @@ function getMouseDownHandler(registrations: ListenerRegistration[]): EventListen
       options !== null &&
       options.capture === true
   )?.[1]
+
   expect(handler).toBeDefined()
+
   return handler!
 }
 
@@ -69,6 +73,7 @@ describe('installTerminalLinkifierClickPriming', () => {
   it('primes a fresh OSC link before xterm snapshots a macOS mousedown', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const order: string[] = []
+
     const linkifier: FakeLinkifier = {
       _activeLine: 14,
       _lastBufferCell: { x: 8, y: 14 },
@@ -80,6 +85,7 @@ describe('installTerminalLinkifierClickPriming', () => {
         order.push('prime')
       }
     }
+
     const { terminal, registrations } = createTerminal(linkifier)
     installTerminalLinkifierClickPriming(terminal)
 
@@ -107,12 +113,14 @@ describe('installTerminalLinkifierClickPriming', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const currentLink = { link: 'https://example.com/hovered' }
     const lastBufferCell = { x: 3, y: 5 }
+
     const linkifier: FakeLinkifier = {
       _activeLine: 5,
       _currentLink: currentLink,
       _lastBufferCell: lastBufferCell,
       _handleMouseMove: vi.fn()
     }
+
     const { terminal, registrations } = createTerminal(linkifier)
     installTerminalLinkifierClickPriming(terminal)
 

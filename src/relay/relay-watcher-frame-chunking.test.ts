@@ -6,8 +6,11 @@ import { emitRelayWatcherEvents } from './relay-watcher-event-emitter'
 
 // Node >=22 defaults the socket highWaterMark to 64 KiB, Node <=21 to 16 KiB.
 const NODE_22_HIGH_WATER_MARK = 64 * 1024
+
 const NODE_22_PRODUCER_CAPACITY = 49_152
+
 const NODE_21_HIGH_WATER_MARK = 16 * 1024
+
 const NODE_21_PRODUCER_CAPACITY = 12_288
 
 type WatcherEventPayload = {
@@ -24,18 +27,23 @@ type ClientCapture = {
 
 function captureFrames(): { capture: ClientCapture; write: (frame: Buffer) => boolean } {
   const frames: Buffer[] = []
+
   const decode = (frame: Buffer): { method: string; events: WatcherEventPayload[] } => {
     const payloadLength = frame.readUInt32BE(9)
+
     const message = parseJsonRpcMessage(
       frame.subarray(HEADER_LENGTH, HEADER_LENGTH + payloadLength)
     ) as { method?: string; params?: { events?: WatcherEventPayload[] } }
+
     return { method: message.method ?? '', events: message.params?.events ?? [] }
   }
+
   const framedEvents = (): WatcherEventPayload[][] =>
     frames
       .map((frame) => decode(frame))
       .filter((decoded) => decoded.method === 'fs.changed')
       .map((decoded) => decoded.events)
+
   return {
     capture: {
       frames,
@@ -44,6 +52,7 @@ function captureFrames(): { capture: ClientCapture; write: (frame: Buffer) => bo
     },
     write: (frame) => {
       frames.push(Buffer.from(frame))
+
       return true
     }
   }
@@ -59,12 +68,15 @@ function createDispatcher(
 } {
   const { capture, write } = captureFrames()
   const detached: number[] = []
+
   const dispatcher = new RelayDispatcher(write, {
     writableHighWaterMark: () => highWaterMark,
     writableLength: () => 0,
     ...sinkOptions
   })
+
   dispatcher.onClientDetached((clientId) => detached.push(clientId))
+
   return { dispatcher, capture, detached }
 }
 
@@ -94,16 +106,19 @@ function frameBytesFor(events: readonly WatcherEventPayload[]): number {
 function batchEncodingTo(targetBytes: number): WatcherProcessEvent[] {
   const events = watcherBatch(400)
   let fitting = 1
+
   while (
     fitting < events.length &&
     frameBytesFor(expectedPayloads(events.slice(0, fitting + 1))) <= targetBytes
   ) {
     fitting++
   }
+
   const batch = events.slice(0, fitting)
   const last = batch[fitting - 1]
   const padding = targetBytes - frameBytesFor(expectedPayloads(batch))
   batch[fitting - 1] = { ...last, path: `${last.path}${'a'.repeat(padding)}` }
+
   return batch
 }
 
@@ -119,6 +134,7 @@ function expectedPayloads(events: readonly WatcherProcessEvent[]): WatcherEventP
 function expectMaximallyPackedChunks(capture: ClientCapture, capacity: number): void {
   const chunks = capture.framedEvents()
   expect(chunks.length).toBeGreaterThan(1)
+
   for (let index = 0; index + 1 < chunks.length; index++) {
     expect(frameBytesFor([...chunks[index], chunks[index + 1][0]])).toBeGreaterThan(capacity)
   }
@@ -137,9 +153,11 @@ describe('relay watcher fs.changed frame chunking', () => {
       emitRelayWatcherEvents(dispatcher, '/workspace', false, events)
 
       expect(detached).toEqual([])
+
       for (const frame of capture.frames) {
         expect(frame.length).toBeLessThanOrEqual(NODE_21_PRODUCER_CAPACITY)
       }
+
       expectMaximallyPackedChunks(capture, NODE_21_PRODUCER_CAPACITY)
       expect(capture.fsChangedEvents()).toEqual(expectedPayloads(events))
     } finally {
@@ -155,9 +173,11 @@ describe('relay watcher fs.changed frame chunking', () => {
       emitRelayWatcherEvents(dispatcher, '/workspace', false, events)
 
       expect(detached).toEqual([])
+
       for (const frame of capture.frames) {
         expect(frame.length).toBeLessThanOrEqual(NODE_22_PRODUCER_CAPACITY)
       }
+
       expectMaximallyPackedChunks(capture, NODE_22_PRODUCER_CAPACITY)
       expect(capture.fsChangedEvents()).toEqual(expectedPayloads(events))
     } finally {
@@ -173,9 +193,11 @@ describe('relay watcher fs.changed frame chunking', () => {
       emitRelayWatcherEvents(dispatcher, '/workspace', false, events)
 
       expect(detached).toEqual([])
+
       for (const frame of capture.frames) {
         expect(frame.length).toBeLessThanOrEqual(NODE_21_PRODUCER_CAPACITY)
       }
+
       expectMaximallyPackedChunks(capture, NODE_21_PRODUCER_CAPACITY)
       expect(capture.fsChangedEvents()).toEqual(expectedPayloads(events))
     } finally {
@@ -189,6 +211,7 @@ describe('relay watcher fs.changed frame chunking', () => {
     const events = [...exact, ...watcherBatch(50)]
 
     const { dispatcher, capture, detached } = createDispatcher(NODE_21_HIGH_WATER_MARK)
+
     try {
       emitRelayWatcherEvents(dispatcher, '/workspace', false, events)
 
@@ -207,14 +230,17 @@ describe('relay watcher fs.changed frame chunking', () => {
     expect(frameBytesFor(expectedPayloads(overshoot))).toBe(NODE_21_PRODUCER_CAPACITY + 1)
 
     const { dispatcher, capture, detached } = createDispatcher(NODE_21_HIGH_WATER_MARK)
+
     try {
       emitRelayWatcherEvents(dispatcher, '/workspace', false, overshoot)
 
       expect(detached).toEqual([])
       expect(capture.frames).toHaveLength(2)
+
       for (const frame of capture.frames) {
         expect(frame.length).toBeLessThanOrEqual(NODE_21_PRODUCER_CAPACITY)
       }
+
       expect(capture.fsChangedEvents()).toEqual(expectedPayloads(overshoot))
     } finally {
       dispatcher.dispose()
@@ -235,12 +261,15 @@ describe('relay watcher fs.changed frame chunking', () => {
       emitRelayWatcherEvents(dispatcher, '/workspace', false, events)
 
       expect(detached).toEqual([])
+
       for (const frame of capture.frames) {
         expect(frame.length).toBeLessThanOrEqual(NODE_22_PRODUCER_CAPACITY)
       }
+
       for (const frame of attachedCapture.frames) {
         expect(frame.length).toBeLessThanOrEqual(NODE_21_PRODUCER_CAPACITY)
       }
+
       expect(capture.fsChangedEvents()).toEqual(expectedPayloads(events))
       expect(attachedCapture.fsChangedEvents()).toEqual(expectedPayloads(events))
     } finally {
@@ -251,6 +280,7 @@ describe('relay watcher fs.changed frame chunking', () => {
   it('resyncs without closing when a single event cannot fit any frame', () => {
     vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const { dispatcher, capture, detached } = createDispatcher(NODE_21_HIGH_WATER_MARK)
+
     const oversized: WatcherProcessEvent[] = [
       { type: 'update', path: `/workspace/${'p'.repeat(20_000)}.txt`, isDirectory: false }
     ]
@@ -268,11 +298,13 @@ describe('relay watcher fs.changed frame chunking', () => {
   it('delivers the prefix then resyncs when an oversized event appears mid-batch', () => {
     vi.spyOn(process.stderr, 'write').mockReturnValue(true)
     const { dispatcher, capture, detached } = createDispatcher(NODE_21_HIGH_WATER_MARK)
+
     const oversized = {
       type: 'update',
       path: `/workspace/${'p'.repeat(20_000)}.txt`,
       isDirectory: false
     } as WatcherProcessEvent
+
     const events = [...watcherBatch(300), oversized, ...watcherBatch(50)]
 
     try {
@@ -285,6 +317,7 @@ describe('relay watcher fs.changed frame chunking', () => {
       const prefix = delivered.slice(0, -1)
       expect(prefix).toEqual(expectedPayloads(events.filter((event) => event !== oversized)))
       expect(prefix.some((event) => event.absolutePath === oversized.path)).toBe(false)
+
       for (const frame of capture.frames) {
         expect(frame.length).toBeLessThanOrEqual(NODE_21_PRODUCER_CAPACITY)
       }
@@ -295,10 +328,12 @@ describe('relay watcher fs.changed frame chunking', () => {
 
   it('keeps the client alive when retained chunks exhaust the producer queue budget', () => {
     vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     // An unsettled sink models retained relay stdout writes.
     const { dispatcher, capture, detached } = createDispatcher(NODE_21_HIGH_WATER_MARK, {
       supportsWriteCallback: true
     })
+
     const emitted: WatcherProcessEvent[] = []
 
     try {
@@ -317,6 +352,7 @@ describe('relay watcher fs.changed frame chunking', () => {
         { kind: 'overflow', absolutePath: '/workspace' }
       ])
       expect(producerEvents).toEqual(expectedPayloads(emitted).slice(0, producerEvents.length))
+
       for (const frame of capture.frames) {
         expect(frame.length).toBeLessThanOrEqual(NODE_21_PRODUCER_CAPACITY)
       }
@@ -327,11 +363,14 @@ describe('relay watcher fs.changed frame chunking', () => {
 
   it('does not notify at all when no client is attached', () => {
     const { capture, write } = captureFrames()
+
     const dispatcher = new RelayDispatcher(write, {
       writableHighWaterMark: () => NODE_21_HIGH_WATER_MARK,
       writableLength: () => 0
     })
+
     const notify = vi.spyOn(dispatcher, 'notify')
+
     try {
       dispatcher.invalidateClient()
       emitRelayWatcherEvents(dispatcher, '/workspace', false, watcherBatch(10))

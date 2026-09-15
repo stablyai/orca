@@ -33,14 +33,19 @@ export function AgentCapabilitiesSetupAction(props: {
   const { readiness } = capabilitySetupStatus
   const featureSetupDefaultsAppliedRef = useRef(false)
   const featureSetupChangedByUserRef = useRef(false)
+
   const [featureSetup, setFeatureSetup] = useState<OnboardingFeatureSetupSelection>(
     DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION
   )
+
   const [featureSetupCommand, setFeatureSetupCommand] = useState<string | null>(null)
+
   const [featureSetupCommandSelection, setFeatureSetupCommandSelection] =
     useState<OnboardingFeatureSetupSelection | null>(null)
+
   const [featureSetupRuntime, setFeatureSetupRuntime] =
     useState<OnboardingFeatureSetupRuntimeContext | null>(null)
+
   const [setupBusyLabel, setSetupBusyLabel] = useState<string | null>(null)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
@@ -54,33 +59,44 @@ export function AgentCapabilitiesSetupAction(props: {
     if (featureSetupDefaultsAppliedRef.current || featureSetupChangedByUserRef.current) {
       return
     }
+
     if (isAgentCapabilityReadinessChecking(readiness)) {
       return
     }
+
     featureSetupDefaultsAppliedRef.current = true
     setFeatureSetup(getDefaultAgentCapabilitySetupSelection(readiness))
   }, [readiness])
+
   const handleFeatureSetupChange = useCallback((value: OnboardingFeatureSetupSelection): void => {
     featureSetupChangedByUserRef.current = true
     setFeatureSetup(value)
   }, [])
+
   const handleStartFeatureSetup = useCallback(async (): Promise<void> => {
     if (setupBusyLabel !== null || featureSetupCommand !== null) {
       return
     }
+
     setSetupBusyLabel('Setting up capabilities...')
+
     try {
       const result = await runOnboardingFeatureSetup(featureSetup, undefined, activeSkillRuntime)
+
       if (featureSetup.browserUse) {
         recordFeatureInteraction('agent-browser-setup')
       }
+
       if (featureSetup.computerUse) {
         recordFeatureInteraction('computer-use-setup')
       }
+
       if (featureSetup.orchestration) {
         recordFeatureInteraction('agent-orchestration-setup')
       }
+
       const firstWarning = result.warnings[0]
+
       if (firstWarning) {
         toast.warning(
           translate(
@@ -92,6 +108,7 @@ export function AgentCapabilitiesSetupAction(props: {
           }
         )
       }
+
       if (result.skillCommandsCopied) {
         toast.success(
           translate(
@@ -106,6 +123,7 @@ export function AgentCapabilitiesSetupAction(props: {
           }
         )
       }
+
       if (result.computerUsePermissionsOpened) {
         toast.message(
           translate(
@@ -114,6 +132,7 @@ export function AgentCapabilitiesSetupAction(props: {
           )
         )
       }
+
       if (result.skillInstallCommand) {
         setFeatureSetupCommandSelection(featureSetup)
         setFeatureSetupRuntime(activeSkillRuntime)
@@ -269,6 +288,7 @@ function AgentCapabilitySetupChecklist(props: {
         {AGENT_CAPABILITY_SETUP_ROWS.map((row) => {
           const selected = props.value[row.id]
           const installStatus = props.installStatus[row.id]
+
           return (
             <button
               key={row.id}

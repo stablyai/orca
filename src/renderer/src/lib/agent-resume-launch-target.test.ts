@@ -10,6 +10,7 @@ function setNavigatorUserAgent(userAgent: string): () => void {
       userAgent
     }
   })
+
   return () => {
     if (original) {
       Object.defineProperty(globalThis, 'navigator', original)
@@ -31,6 +32,7 @@ async function resolveWith(
   overrides: Partial<AgentResumeLaunchTargetArgs>
 ): Promise<{ platform: NodeJS.Platform; shell: string | undefined }> {
   const { resolveAgentResumeLaunchTarget } = await import('./agent-resume-launch-target')
+
   return resolveAgentResumeLaunchTarget({
     ...LOCAL_WINDOWS_ARGS,
     ...overrides

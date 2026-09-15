@@ -220,9 +220,11 @@ describe('matchWorktreePaletteTaskUrl', () => {
 
   it('gates a stored GitHub work item with no URL on the repo remote identity', () => {
     const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/issues/14198')
+
     const worktree = makeWorktree({
       linkedWorkItem: { provider: 'github', type: 'issue', number: 14198, title: 'Bug', url: '' }
     })
+
     expect(
       matchWorktreePaletteTaskUrl({
         worktree,
@@ -259,6 +261,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
 
   it('matches GitHub remotes whose host is an SSH alias or www form of github.com', () => {
     const intent = parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/pull/12789')
+
     for (const canonicalKey of [
       // ssh://git@ssh.github.com:443/... — GitHub's port-443 workaround.
       'ssh.github.com/stablyai/orca',
@@ -274,6 +277,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         })
       ).toMatchObject({ matchedFields: ['pr'] })
     }
+
     // A real, resolvable host is evidence of a different forge, not an alias.
     expect(
       matchWorktreePaletteTaskUrl({
@@ -319,6 +323,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         remoteUrl: 'git@github.com:stablyai/orca.git'
       }
     }
+
     const intent = parseCmdJTaskSourceUrl('https://github.com/me/orca/pull/12789')
     expect(
       matchWorktreePaletteTaskUrl({
@@ -504,6 +509,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
 
   it('matches GitLab remotes whose host is an SSH alias or www form of gitlab.com', () => {
     const intent = parseCmdJTaskSourceUrl('https://gitlab.com/acme/orca/-/merge_requests/17')
+
     for (const canonicalKey of [
       // altssh.gitlab.com is GitLab's port-443 SSH endpoint; `gitlab-work` is an ssh-config alias.
       'altssh.gitlab.com/acme/orca',
@@ -518,6 +524,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         })
       ).toMatchObject({ matchedFields: ['mr'] })
     }
+
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedGitLabMR: 17 }),
@@ -556,6 +563,7 @@ describe('matchWorktreePaletteTaskUrl', () => {
         remoteUrl: 'git@gitlab.com:acme/orca.git'
       }
     }
+
     expect(
       matchWorktreePaletteTaskUrl({
         worktree: makeWorktree({ linkedGitLabMR: 17 }),
@@ -829,6 +837,7 @@ describe('getCmdJTaskUrlCreatePreview', () => {
     const preview = getCmdJTaskUrlCreatePreview(
       parseCmdJTaskSourceUrl('https://github.com/stablyai/orca/issues/14198')!
     )!
+
     expect(
       withResolvedCmdJGitHubPreview(preview, 'Agent terminals disappearing randomly', false)
     ).toEqual(

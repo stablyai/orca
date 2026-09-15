@@ -18,18 +18,23 @@ function createSocket(): TestSocket {
 
 function createBatcher(options?: ConstructorParameters<typeof DaemonStreamDataBatcher>[1]) {
   const sockets = new Map<string, TestSocket>()
+
   const socketFor = (clientId: string): TestSocket => {
     let socket = sockets.get(clientId)
+
     if (!socket) {
       socket = createSocket()
       sockets.set(clientId, socket)
     }
+
     return socket
   }
+
   const batcher = new DaemonStreamDataBatcher(
     (clientId) => ({ streamSocket: socketFor(clientId) }),
     options
   )
+
   return { batcher, socketFor }
 }
 
@@ -42,10 +47,13 @@ function pendingBatch(
       pendingByClient: Map<string, PendingStreamDataBatch>
     }
   ).pendingByClient
+
   const batch = pendingByClient.get(clientId)
+
   if (!batch) {
     throw new Error(`Missing pending batch for ${clientId}`)
   }
+
   return batch
 }
 
@@ -76,6 +84,7 @@ describe('DaemonStreamDataBatcher droppable membership', () => {
     for (let index = 0; index < sessionCount; index++) {
       batcher.enqueue('client-1', `session-${index}`, 'seed')
     }
+
     const batch = pendingBatch(batcher)
     const mapGet = vi.spyOn(batch.queuedCharsBySession, 'get')
     const mapSet = vi.spyOn(batch.queuedCharsBySession, 'set')
@@ -172,17 +181,21 @@ describe('DaemonStreamDataBatcher droppable membership', () => {
 
   it('preserves queued-session Map order when growth re-trims members', () => {
     const salvageDroppedData = vi.fn((_dropped: string) => '')
+
     const { batcher } = createBatcher({
       isSessionDroppable: () => true,
       salvageDroppedData
     })
+
     const queuedPerSession = 800 * 1024
 
     // A zero total reserves the first Map position without joining the Set.
     batcher.enqueue('client-1', 'session-a', '', { transformed: true })
+
     for (const id of ['b', 'c', 'd', 'e']) {
       batcher.enqueue('client-1', `session-${id}`, id.repeat(queuedPerSession))
     }
+
     batcher.enqueue('client-1', 'session-a', 'a'.repeat(queuedPerSession))
     salvageDroppedData.mockClear()
 
@@ -229,9 +242,11 @@ describe('DaemonStreamDataBatcher droppable membership', () => {
 
   it('does not lower the last evaluated count during shrink and regrow refreshes', () => {
     const backgrounded = new Set<string>()
+
     const { batcher } = createBatcher({
       isSessionDroppable: (sessionId) => backgrounded.has(sessionId)
     })
+
     const queuedPerSession = 600 * 1024
 
     for (let index = 0; index < 6; index++) {
@@ -239,6 +254,7 @@ describe('DaemonStreamDataBatcher droppable membership', () => {
       backgrounded.add(sessionId)
       batcher.enqueue('client-1', sessionId, 'x'.repeat(queuedPerSession))
     }
+
     const batch = pendingBatch(batcher)
     expect(batch.lastEvaluatedDroppableSessionCount).toBe(6)
 
@@ -264,6 +280,7 @@ describe('DaemonStreamDataBatcher droppable membership', () => {
       } else if ((JSON.parse(String(line)) as { payload?: { data?: string } }).payload?.data) {
         socket.writableLength = 128 * 1024
       }
+
       return true
     })
 

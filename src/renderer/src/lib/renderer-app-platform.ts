@@ -7,22 +7,30 @@ export function getRendererAppPlatform(): NodeJS.Platform {
   if (cachedAppPlatform) {
     return cachedAppPlatform
   }
+
   const preloadPlatform =
     typeof window === 'undefined' ? undefined : window.api?.platform?.get?.()?.platform
+
   if (preloadPlatform) {
     cachedAppPlatform = preloadPlatform
+
     return preloadPlatform
   }
+
   const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+
   if (userAgent.includes('Windows')) {
     return 'win32'
   }
+
   if (userAgent.includes('Mac')) {
     return 'darwin'
   }
+
   if (userAgent) {
     return 'linux'
   }
+
   return 'win32'
 }
 

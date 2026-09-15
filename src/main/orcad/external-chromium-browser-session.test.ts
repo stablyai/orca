@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runProcessMock = vi.fn()
+
 vi.mock('../../shared/child-process/run-process', () => ({
   runProcess: (spec: unknown) => runProcessMock(spec)
 }))
+
 vi.mock('node:fs/promises', () => ({
   mkdir: vi.fn(async () => undefined),
   readFile: vi.fn(async () => Buffer.from('')),
@@ -68,6 +70,7 @@ describe('orcad external-chromium agent-browser environment', () => {
       const data = spec.args?.includes('tab')
         ? { tabs: [{ active: true, tabId: 'tab-live', title: 'x', url: 'https://example.test' }] }
         : {}
+
       return Promise.resolve({
         code: 0,
         signal: null,
@@ -82,6 +85,7 @@ describe('orcad external-chromium agent-browser environment', () => {
       { executablePath: BASE.executablePath, provider: 'chromium' },
       '/state'
     )
+
     await expect(session.start()).resolves.toBe('tab-live')
 
     const issued = commands().map((args) => args.filter((arg) => !arg.startsWith('-')))
@@ -96,9 +100,11 @@ describe('orcad external-chromium agent-browser environment', () => {
     runProcessMock.mockImplementation((spec: Spec) => {
       if (spec.args?.includes('tab')) {
         listed += 1
+
         // First probe finds nothing; after `open` the page exists.
         const tabs =
           listed === 1 ? [] : [{ active: true, tabId: 'tab-1', title: 'x', url: 'about:blank' }]
+
         return Promise.resolve({
           code: 0,
           signal: null,
@@ -107,6 +113,7 @@ describe('orcad external-chromium agent-browser environment', () => {
           timedOut: false
         })
       }
+
       return Promise.resolve({
         code: 0,
         signal: null,
@@ -121,6 +128,7 @@ describe('orcad external-chromium agent-browser environment', () => {
       { executablePath: BASE.executablePath, provider: 'chromium' },
       '/state'
     )
+
     await expect(session.start()).resolves.toBe('tab-1')
 
     const issued = commands().map((args) => args.filter((arg) => !arg.startsWith('-')))

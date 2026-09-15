@@ -88,10 +88,12 @@ describe('getGroupVisibleTabOrder', () => {
       activeTabId: 'tab-a1',
       tabOrder: ['tab-t1', 'tab-a1']
     }
+
     const tabs: Tab[] = [
       terminalTab('tab-t1', 'g1', 'term-1', 0),
       agentSessionTab('tab-a1', 'g1', 'session-1', 1)
     ]
+
     expect(getGroupVisibleTabOrder(group, tabs, new Set(['term-1']), new Set(), new Set())).toEqual(
       [
         { type: 'terminal', id: 'term-1', tabId: 'tab-t1' },
@@ -107,11 +109,13 @@ describe('getGroupVisibleTabOrder', () => {
       activeTabId: 'tab-t1',
       tabOrder: ['tab-t1', 'tab-e1', 'tab-t2']
     }
+
     const tabs: Tab[] = [
       terminalTab('tab-t1', 'g1', 'term-1', 0),
       editorTab('tab-e1', 'g1', '/repo/file.md', 1),
       terminalTab('tab-t2', 'g1', 'term-2', 2)
     ]
+
     expect(
       getGroupVisibleTabOrder(
         group,
@@ -138,11 +142,13 @@ describe('getGroupVisibleTabOrder', () => {
       activeTabId: 'tab-t1',
       tabOrder: ['tab-t2', 'tab-t3', 'tab-t1']
     }
+
     const tabs: Tab[] = [
       terminalTab('tab-t1', 'g1', 'term-1', 0),
       terminalTab('tab-t2', 'g1', 'term-2', 1),
       terminalTab('tab-t3', 'g1', 'term-3', 2)
     ]
+
     expect(
       getGroupVisibleTabOrder(
         group,
@@ -161,10 +167,12 @@ describe('getGroupVisibleTabOrder', () => {
       activeTabId: 'tab-t1',
       tabOrder: ['tab-t1', 'tab-t2']
     }
+
     const tabs: Tab[] = [
       terminalTab('tab-t1', 'g1', 'term-1', 0),
       terminalTab('tab-t2', 'g1', 'term-zombie', 1)
     ]
+
     expect(getGroupVisibleTabOrder(group, tabs, new Set(['term-1']), new Set(), new Set())).toEqual(
       [{ type: 'terminal', id: 'term-1', tabId: 'tab-t1' }]
     )
@@ -177,11 +185,13 @@ describe('getGroupVisibleTabOrder', () => {
       activeTabId: 'tab-b1',
       tabOrder: ['tab-t1', 'tab-b1', 'tab-e1']
     }
+
     const tabs: Tab[] = [
       terminalTab('tab-t1', 'g1', 'term-1', 0),
       browserTab('tab-b1', 'g1', 'browser-1', 1),
       editorTab('tab-e1', 'g1', '/repo/file.md', 2)
     ]
+
     expect(
       getGroupVisibleTabOrder(
         group,
@@ -204,11 +214,13 @@ describe('getGroupVisibleTabOrder', () => {
       activeTabId: 'tab-s1',
       tabOrder: ['tab-t1', 'tab-s1', 'tab-e1']
     }
+
     const tabs: Tab[] = [
       terminalTab('tab-t1', 'g1', 'term-1', 0),
       simulatorTab('tab-s1', 'g1', 1),
       editorTab('tab-e1', 'g1', '/repo/file.md', 2)
     ]
+
     expect(
       getGroupVisibleTabOrder(
         group,
@@ -232,6 +244,7 @@ describe('getGroupVisibleTabOrder', () => {
       activeTabId: 'tab-t2',
       tabOrder: ['tab-t1', 'tab-t2']
     }
+
     const tabs: Tab[] = [
       terminalTab('tab-t1', 'g1', 'term-1', 0),
       terminalTab('tab-t2', 'g1', 'term-1', 1)
@@ -249,6 +262,7 @@ describe('getGroupVisibleTabOrder', () => {
       activeTabId: 'tab-t1',
       tabOrder: ['tab-b1', 'tab-t1']
     }
+
     const tabs: Tab[] = [
       browserTab('tab-b1', 'g1', 'collision', 0),
       terminalTab('tab-t1', 'g1', 'collision', 1)
@@ -272,6 +286,7 @@ describe('getGroupVisibleTabOrder', () => {
       activeTabId: 'tab-b1',
       tabOrder: ['tab-b1', 'tab-t1']
     }
+
     const tabs: Tab[] = [
       browserTab('tab-b1', 'g1', 'collision', 0),
       terminalTab('tab-t1', 'g1', 'collision', 1)
@@ -327,11 +342,13 @@ describe('getActiveTabNavOrder', () => {
       // Drag-reordered: canonical order is [t2, t3, t1]
       tabOrder: ['tab-t2', 'tab-t3', 'tab-t1']
     }
+
     const tabs: Tab[] = [
       terminalTab('tab-t1', 'g1', 'term-1', 0),
       terminalTab('tab-t2', 'g1', 'term-2', 1),
       terminalTab('tab-t3', 'g1', 'term-3', 2)
     ]
+
     const state = makeState({
       activeGroupIdByWorktree: { wt: 'g1' },
       groupsByWorktree: { wt: [group] },
@@ -343,6 +360,7 @@ describe('getActiveTabNavOrder', () => {
         wt: [{ id: 'term-1' }, { id: 'term-2' }, { id: 'term-3' }]
       }
     })
+
     expect(getActiveTabNavOrder(state, 'wt').map((t) => t.id)).toEqual([
       'term-2',
       'term-3',
@@ -357,18 +375,21 @@ describe('getActiveTabNavOrder', () => {
       activeTabId: 'tab-e1',
       tabOrder: ['tab-e1', 'tab-t1']
     }
+
     const otherGroup: TabGroup = {
       id: 'g2',
       worktreeId: 'wt',
       activeTabId: 'tab-e2',
       tabOrder: ['tab-e2', 'tab-t2']
     }
+
     const tabs: Tab[] = [
       editorTab('tab-e1', 'g1', '/repo/file.md', 0),
       terminalTab('tab-t1', 'g1', 'term-1', 1),
       editorTab('tab-e2', 'g2', '/repo/file.md', 2),
       terminalTab('tab-t2', 'g2', 'term-2', 3)
     ]
+
     const state = makeState({
       activeGroupIdByWorktree: { wt: 'g1' },
       groupsByWorktree: { wt: [activeGroup, otherGroup] },
@@ -400,6 +421,7 @@ describe('getActiveTabNavOrder', () => {
       // @ts-expect-error — minimal shape
       openFiles: [{ id: 'e1', worktreeId: 'wt' }]
     })
+
     expect(getActiveTabNavOrder(state, 'wt')).toEqual([
       { type: 'terminal', id: 'term-1' },
       { type: 'simulator', id: 'sim-1' },
@@ -413,18 +435,23 @@ describe('getActiveTabNavOrder', () => {
 describe('group order matches the rendered tab strip', () => {
   function renderedStripIds(group: TabGroup, tabs: Tab[]): string[] {
     const groupTabs = tabs.filter((tab) => tab.groupId === group.id)
+
     const tabBarOrder = group.tabOrder.map((tabId) => {
       const tab = groupTabs.find((candidate) => candidate.id === tabId)
+
       if (!tab) {
         return tabId
       }
+
       return tab.contentType === 'terminal' || tab.contentType === 'browser' ? tab.entityId : tab.id
     })
+
     const terminalMap = new Map(
       groupTabs
         .filter((tab) => tab.contentType === 'terminal')
         .map((tab) => [tab.entityId, { id: tab.entityId, unifiedTabId: tab.id }])
     )
+
     return buildOrderedTabItems({
       tabBarOrder,
       terminalIds: groupTabs
@@ -450,6 +477,7 @@ describe('group order matches the rendered tab strip', () => {
       // Hydration race: tab-t2 is in the group but not yet in the persisted order.
       tabOrder: ['tab-t1']
     }
+
     const tabs: Tab[] = [
       terminalTab('tab-t1', 'g1', 'term-1', 0),
       terminalTab('tab-t2', 'g1', 'term-2', 1)
@@ -471,6 +499,7 @@ describe('group order matches the rendered tab strip', () => {
       tabOrder: ['tab-t3', 'tab-t2'],
       recentTabIds: []
     }
+
     const tabs: Tab[] = [
       terminalTab('tab-t1', 'g1', 'term-1', 0),
       terminalTab('tab-t2', 'g1', 'term-2', 1),
@@ -496,6 +525,7 @@ describe('group order matches the rendered tab strip', () => {
       activeTabId: 'tab-t1',
       tabOrder: ['tab-t1']
     }
+
     const tabs: Tab[] = [
       terminalTab('tab-t1', 'g1', 'term-1', 0),
       editorTab('tab-e1', 'g1', '/repo/closed.md', 1)

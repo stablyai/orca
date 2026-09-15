@@ -20,7 +20,9 @@ import {
 import { cleanupOwnerLossTrial } from './macos-computer-helper-owner-loss-trial-cleanup.mjs'
 
 const describeMacOS = process.platform === 'darwin' ? describe : describe.skip
+
 const spawnedPids = new Set()
+
 const temporaryDirectories = new Set()
 
 afterEach(() => {
@@ -29,21 +31,26 @@ afterEach(() => {
       process.kill(pid, 'SIGKILL')
     } catch {}
   }
+
   spawnedPids.clear()
+
   for (const temporaryDirectory of temporaryDirectories) {
     rmSync(temporaryDirectory, { recursive: true, force: true })
   }
+
   temporaryDirectories.clear()
 })
 
 describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
   it('enforces a hard timeout when the trial ignores SIGTERM', () => {
     const startedAt = Date.now()
+
     const result = spawnBenchmarkProcess(
       process.execPath,
       ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1_000)"],
       { stdio: 'ignore', timeout: 100 }
     )
+
     expect(result.error?.code).toBe('ETIMEDOUT')
     expect(result.signal).toBe('SIGKILL')
     expect(Date.now() - startedAt).toBeLessThan(2_000)
@@ -71,6 +78,7 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
     } catch (error) {
       thrown = error
     }
+
     expect(completed).toEqual([1, 2, 3])
     expect(thrown).toBeInstanceOf(AggregateError)
     expect(thrown.errors.map((error) => error.message)).toEqual(['first failure', 'last failure'])
@@ -78,11 +86,13 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
 
   it('preserves malformed-result and cleanup failures', () => {
     let trialError
+
     try {
       parseBenchmarkTrialResult('{malformed')
     } catch (error) {
       trialError = error
     }
+
     const cleanupError = new Error('cleanup failed')
     let thrown
 
@@ -91,6 +101,7 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
     } catch (error) {
       thrown = error
     }
+
     expect(trialError).toBeInstanceOf(SyntaxError)
     expect(thrown).toBeInstanceOf(AggregateError)
     expect(thrown.errors).toEqual([trialError, cleanupError])
@@ -124,6 +135,7 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
     const childPidPath = path.join(temporaryDirectory, 'child.pid')
     const environmentName = `ORCA_OWNER_GROUP_${process.pid}`
     const environmentValue = `${Date.now()}`
+
     const fixture = `
       const { spawn } = require('node:child_process')
       const { writeFileSync } = require('node:fs')
@@ -133,11 +145,13 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
       writeFileSync(${JSON.stringify(childPidPath)}, String(child.pid))
       setInterval(() => {}, 1000)
     `
+
     const result = spawnBenchmarkProcess(process.execPath, ['-e', fixture], {
       env: { ...process.env, [environmentName]: environmentValue },
       stdio: 'ignore',
       timeout: 100
     })
+
     const childPid = Number(readFileSync(childPidPath, 'utf8'))
     spawnedPids.add(childPid)
     const environmentFragment = `${environmentName}=${environmentValue}`
@@ -157,6 +171,7 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
       .poll(() => {
         try {
           process.kill(childPid, 0)
+
           return true
         } catch {
           return false
@@ -169,10 +184,12 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
 
   it('resumes the group after post-stop revalidation fails', () => {
     const marker = 'ORCA_OWNER_GROUP=trial'
+
     const members = [
       { pid: 41, pgid: 41, command: `/launcher ${marker}` },
       { pid: 42, pgid: 41, command: `/child ${marker}` }
     ]
+
     const signals = []
     let scanCount = 0
 
@@ -185,9 +202,11 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
         {
           processIdentities: () => {
             scanCount += 1
+
             if (scanCount === 3) {
               throw new Error('transient group inspection failure')
             }
+
             return members
           },
           signalProcess: (pid, signal) => {
@@ -219,6 +238,7 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
         {
           processIdentities: () => {
             scanCount += 1
+
             return scanCount === 1 ? [anchor] : [replacement]
           },
           signalProcess: (pid, signal) => {
@@ -239,12 +259,15 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
     const signals = []
     let scanCount = 0
     const groupState = { stopped: false }
+
     const operations = {
       processIdentities: () => {
         scanCount += 1
+
         if (scanCount === 4) {
           throw new Error('transient final inspection failure')
         }
+
         return members
       },
       signalProcess: (pid, signal) => {
@@ -265,18 +288,22 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
 
   it('resumes a previously frozen group when final anchor stop fails', () => {
     const marker = 'ORCA_OWNER_GROUP=trial'
+
     const members = [
       { pid: 41, pgid: 41, command: `/launcher ${marker}` },
       { pid: 42, pgid: 41, command: `/child ${marker}` }
     ]
+
     const signals = []
     let finalCall = false
     const groupState = { stopped: false }
     const missingProcessError = Object.assign(new Error('anchor exited'), { code: 'ESRCH' })
+
     const operations = {
       processIdentities: () => members,
       signalProcess: (pid, signal) => {
         signals.push([pid, signal])
+
         if (finalCall && pid === 41 && signal === 'SIGSTOP') {
           throw missingProcessError
         }
@@ -297,9 +324,11 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
     const signals = []
     let scanCount = 0
     const groupState = { stopped: false }
+
     const operations = {
       processIdentities: () => {
         scanCount += 1
+
         return scanCount === 5 ? [replacement, child] : [anchor, child]
       },
       signalProcess: (pid, signal) => {
@@ -321,24 +350,30 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
     const temporaryDirectory = mkdtempSync(
       path.join(tmpdir(), 'orca-owner-benchmark-cleanup-test-')
     )
+
     temporaryDirectories.add(temporaryDirectory)
     const recordPath = path.join(temporaryDirectory, 'helper.json')
     const marker = `orca-owner-cleanup-${process.pid}-${Date.now()}`
+
     const helper = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1_000)', marker], {
       detached: true,
       stdio: 'ignore'
     })
+
     spawnedPids.add(helper.pid)
     helper.unref()
     const exited = new Promise((resolve) => helper.once('exit', resolve))
+
     const command = execFileSync('ps', ['-p', String(helper.pid), '-o', 'command='], {
       encoding: 'utf8'
     }).trim()
+
     const processGroup = Number(
       execFileSync('ps', ['-p', String(helper.pid), '-o', 'pgid='], {
         encoding: 'utf8'
       }).trim()
     )
+
     writeProcessRecord(recordPath, { pid: helper.pid, pgid: processGroup, command })
 
     expect(processGroup).toBe(helper.pid)
@@ -351,22 +386,26 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
 
   it('kills every unrecorded helper using its unique trial command', async () => {
     const marker = `orca-owner-unrecorded-${process.pid}-${Date.now()}`
+
     const helpers = Array.from({ length: 2 }, () =>
       spawn(process.execPath, ['-e', 'setInterval(() => {}, 1_000)', marker], {
         detached: true,
         stdio: 'ignore'
       })
     )
+
     for (const helper of helpers) {
       spawnedPids.add(helper.pid)
       helper.unref()
     }
+
     const exited = Promise.all(
       helpers.map((helper) => new Promise((resolve) => helper.once('exit', resolve)))
     )
 
     expect(killProcessMatchingCommand([process.execPath, marker])).toBe(true)
     await exited
+
     for (const helper of helpers) {
       expect(() => process.kill(helper.pid, 0)).toThrow()
       spawnedPids.delete(helper.pid)
@@ -375,10 +414,12 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
 
   it('continues exact-match cleanup after an earlier match fails', () => {
     const marker = `orca-owner-multiple-${process.pid}-${Date.now()}`
+
     const matches = [
       { pid: 41, pgid: 41, command: `/helper ${marker}` },
       { pid: 42, pgid: 42, command: `/helper ${marker}` }
     ]
+
     const attempted = []
     let scanCount = 0
 
@@ -386,13 +427,16 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
       killProcessMatchingCommand(['/helper', marker], {
         processIdentities: () => {
           scanCount += 1
+
           return scanCount === 1 ? matches : [matches[0]]
         },
         signalProcessIdentity: (identity) => {
           attempted.push(identity.pid)
+
           if (identity.pid === matches[0].pid) {
             throw new Error('identity changed')
           }
+
           return true
         },
         waitForIdentityExit: () => {}
@@ -423,9 +467,11 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
       signalProcessIdentity(identity, 'marker', 'SIGKILL', {
         processIdentity: () => {
           inspectionCount += 1
+
           if (inspectionCount === 2) {
             throw new Error('transient ps failure after stop')
           }
+
           return identity
         },
         signalProcess: (pid, signal) => {
@@ -449,6 +495,7 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
       signalProcessIdentity(identity, 'marker', 'SIGKILL', {
         processIdentity: () => {
           inspectionCount += 1
+
           return inspectionCount === 1 ? identity : replacement
         },
         signalProcess: (pid, signal) => {
@@ -472,6 +519,7 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
       signalProcessIdentity(identity, 'marker', 'SIGKILL', {
         processIdentity: () => {
           inspectionCount += 1
+
           return inspectionCount === 1 ? identity : replacement
         },
         signalProcess: (_pid, signal) => {
@@ -483,6 +531,7 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
     } catch (error) {
       thrown = error
     }
+
     expect(thrown).toBeInstanceOf(AggregateError)
     expect(thrown.errors.map((error) => error.message)).toEqual([
       'Recorded benchmark helper PID changed before signaling',
@@ -509,19 +558,24 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
     const temporaryDirectory = mkdtempSync(
       path.join(tmpdir(), 'orca-owner-benchmark-fallback-test-')
     )
+
     temporaryDirectories.add(temporaryDirectory)
     const recordPath = path.join(temporaryDirectory, 'helper.json')
     const marker = `orca-owner-invalid-record-${process.pid}-${Date.now()}`
+
     const helper = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1_000)', marker], {
       detached: true,
       stdio: 'ignore'
     })
+
     spawnedPids.add(helper.pid)
     helper.unref()
     const exited = new Promise((resolve) => helper.once('exit', resolve))
+
     const command = execFileSync('ps', ['-p', String(helper.pid), '-o', 'command='], {
       encoding: 'utf8'
     }).trim()
+
     writeProcessRecord(recordPath, { pid: helper.pid, pgid: helper.pid - 1, command })
 
     expect(() =>
@@ -537,17 +591,22 @@ describeMacOS('macOS helper owner-loss benchmark process cleanup', () => {
     const temporaryDirectory = mkdtempSync(
       path.join(tmpdir(), 'orca-owner-benchmark-identity-test-')
     )
+
     temporaryDirectories.add(temporaryDirectory)
     const recordPath = path.join(temporaryDirectory, 'helper.json')
     const marker = `orca-owner-invalid-identity-${process.pid}-${Date.now()}`
+
     const helper = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1_000)', marker], {
       stdio: 'ignore'
     })
+
     spawnedPids.add(helper.pid)
     helper.unref()
+
     const command = execFileSync('ps', ['-p', String(helper.pid), '-o', 'command='], {
       encoding: 'utf8'
     }).trim()
+
     writeProcessRecord(recordPath, { pid: helper.pid, pgid: helper.pid - 1, command })
 
     expect(() => killRecordedProcess(recordPath, marker)).toThrow(

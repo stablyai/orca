@@ -40,6 +40,7 @@ export function SshDestructiveActionDialog({
         if (isBusy && !nextOpen) {
           return
         }
+
         onOpenChange(nextOpen)
       }}
     >

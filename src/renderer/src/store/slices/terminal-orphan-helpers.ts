@@ -61,6 +61,7 @@ export function getOrphanTerminalIds(
   worktreeId: string
 ): Set<string> {
   const runtimeTabs = state.tabsByWorktree[worktreeId] ?? []
+
   const unifiedTerminalEntityIds = new Set(
     (state.unifiedTabsByWorktree[worktreeId] ?? [])
       .filter((tab) => tab.contentType === 'terminal')
@@ -73,12 +74,14 @@ export function getOrphanTerminalIds(
         if (unifiedTerminalEntityIds.has(tab.id)) {
           return false
         }
+
         // A missing PTY is not proof that the user closed the tab: the host
         // may have gone away and emitted a synthetic exit. Keep the row until
         // a replacement binds or the user explicitly closes it.
         if (state.unverifiedPtyLossTabIds[tab.id]) {
           return false
         }
+
         // Why: a tab is orphaned only when it owns NO live/reconnecting PTY; a
         // tab whose session survives in a reconnect map (SSH relay / daemon
         // reattach) is alive and must not be swept before reconnect rebinds it
@@ -138,6 +141,7 @@ export function buildOrphanTerminalCleanupPatch(
   const nextTabs = (state.tabsByWorktree[worktreeId] ?? []).filter(
     (tab) => !orphanTerminalIds.has(tab.id)
   )
+
   const nextPtyIdsByTabId = { ...state.ptyIdsByTabId }
   const nextRuntimePaneTitlesByTabId = { ...state.runtimePaneTitlesByTabId }
   const nextExpandedPaneByTabId = { ...state.expandedPaneByTabId }
@@ -147,17 +151,21 @@ export function buildOrphanTerminalCleanupPatch(
   const nextPendingInitialCwdByTabId = { ...state.pendingInitialCwdByTabId }
   const nextPendingSetupSplitByTabId = { ...state.pendingSetupSplitByTabId }
   const nextPendingIssueCommandSplitByTabId = { ...state.pendingIssueCommandSplitByTabId }
+
   const nextAutomaticAgentResumeClaimsByTabId = {
     ...state.automaticAgentResumeClaimsByTabId
   }
+
   const nextNativeChatLaunchPromptByTabId = { ...state.nativeChatLaunchPromptByTabId }
   const nextNativeChatLaunchDraftByTabId = { ...state.nativeChatLaunchDraftByTabId }
+
   const nextTabBarOrderByWorktree = {
     ...state.tabBarOrderByWorktree,
     [worktreeId]: (state.tabBarOrderByWorktree[worktreeId] ?? []).filter(
       (tabId) => !orphanTerminalIds.has(tabId)
     )
   }
+
   const nextCacheTimerByKey = { ...state.cacheTimerByKey }
 
   // Why: orphan runtime terminals no longer have a backing unified tab or live
@@ -177,6 +185,7 @@ export function buildOrphanTerminalCleanupPatch(
     delete nextAutomaticAgentResumeClaimsByTabId[orphanTabId]
     delete nextNativeChatLaunchPromptByTabId[orphanTabId]
     delete nextNativeChatLaunchDraftByTabId[orphanTabId]
+
     for (const key of Object.keys(nextCacheTimerByKey)) {
       if (key.startsWith(`${orphanTabId}:`)) {
         delete nextCacheTimerByKey[key]

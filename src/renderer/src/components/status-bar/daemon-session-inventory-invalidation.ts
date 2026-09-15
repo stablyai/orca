@@ -4,6 +4,7 @@ const listeners = new Set<() => void>()
 
 export function subscribeDaemonSessionInventoryInvalidated(listener: () => void): () => void {
   listeners.add(listener)
+
   return () => {
     listeners.delete(listener)
   }
@@ -12,6 +13,7 @@ export function subscribeDaemonSessionInventoryInvalidated(listener: () => void)
 export function notifyDaemonSessionInventoryInvalidated(): void {
   // Copy so a listener unsubscribing during dispatch cannot skip its neighbours.
   const snapshot = [...listeners]
+
   for (const listener of snapshot) {
     listener()
   }

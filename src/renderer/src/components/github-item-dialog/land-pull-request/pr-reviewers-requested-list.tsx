@@ -31,11 +31,13 @@ export function PRReviewersRequestedList({
       </div>
     )
   }
+
   if (reviewers.length > 0) {
     return (
       <div className="flex flex-col gap-2">
         {reviewers.map((reviewer) => {
           const canRemoveReviewer = selectedReviewerLogins.has(reviewer.login.toLowerCase())
+
           return (
             <div key={reviewer.login} className="flex min-w-0 items-center gap-2">
               <ReviewerAvatar login={reviewer.login} avatarUrl={reviewer.avatarUrl} />
@@ -82,6 +84,7 @@ export function PRReviewersRequestedList({
       </div>
     )
   }
+
   return (
     <div className="py-1 text-[12px] text-muted-foreground">
       {translate('auto.components.GitHubItemDialog.36f9ac4a47', 'No reviewers requested.')}

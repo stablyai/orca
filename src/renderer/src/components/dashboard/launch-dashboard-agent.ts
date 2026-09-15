@@ -9,10 +9,13 @@ export function launchDashboardAgent({ worktreeId, agent }: DashboardSpawnAgentA
   const state = useAppStore.getState()
   const executionHostId = getExecutionHostIdForWorktree(state, worktreeId)
   const worktree = state.getKnownWorktreeById(worktreeId, executionHostId)
+
   if (!worktree || !isTuiAgentEnabled(agent, state.settings?.disabledTuiAgents)) {
     return false
   }
+
   state.setActiveWorktree(worktreeId, executionHostId)
+
   return (
     launchAgentInNewTab({
       agent,

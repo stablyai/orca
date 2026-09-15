@@ -6,8 +6,11 @@ export type TerminalImeAnchor = {
 }
 
 const CURSOR_AGENT_HEADER = 'Cursor Agent'
+
 const CURSOR_AGENT_INPUT_MARKER = '→'
+
 const CURSOR_AGENT_EMPTY_PROMPTS = ['Plan, search, build anything', 'Add a follow-up'] as const
+
 const CURSOR_AGENT_HEADER_SCAN_ROWS = 6
 
 export function resolveCursorAgentImeAnchor(args: {
@@ -19,9 +22,11 @@ export function resolveCursorAgentImeAnchor(args: {
   knownCursorAgent?: boolean
 }): TerminalImeAnchor | null {
   const cursorLine = getVisibleLine(args.buffer, args.cursorY)
+
   if (args.cursorX !== 0 || !isBlankLine(cursorLine)) {
     return null
   }
+
   return findCursorAgentScreenInputAnchor(args)
 }
 
@@ -37,10 +42,13 @@ function findCursorAgentScreenInputAnchor(args: {
   // transcript line containing "→ " (e.g. a rename diff) must not win.
   for (let row = args.rows - 1; row >= 0; row--) {
     const line = getVisibleLine(args.buffer, row)
+
     if (!line) {
       continue
     }
+
     const column = resolveCursorAgentInputColumn(line, args.cols, Boolean(allowTypedInput))
+
     if (column !== null) {
       return { row, column: Math.min(column, Math.max(args.cols - 1, 0)) }
     }
@@ -55,11 +63,13 @@ function getVisibleLine(buffer: IBuffer, row: number): IBufferLine | undefined {
 
 function hasCursorAgentHeader(buffer: IBuffer, rows: number): boolean {
   const scanRows = Math.min(rows, CURSOR_AGENT_HEADER_SCAN_ROWS)
+
   for (let row = 0; row < scanRows; row++) {
     if (getVisibleLine(buffer, row)?.translateToString(true).trim() === CURSOR_AGENT_HEADER) {
       return true
     }
   }
+
   return false
 }
 
@@ -69,15 +79,18 @@ function resolveCursorAgentInputColumn(
   allowTypedInput: boolean
 ): number | null {
   const inputColumn = findCursorAgentInputStartColumn(line, cols)
+
   if (inputColumn === null) {
     return null
   }
 
   const inputText = line.translateToString(true, inputColumn, cols)
   const isEmptyPrompt = CURSOR_AGENT_EMPTY_PROMPTS.some((prompt) => inputText.startsWith(prompt))
+
   if (!inputText.trim() || isEmptyPrompt) {
     return inputColumn
   }
+
   if (!allowTypedInput) {
     return null
   }
@@ -87,17 +100,21 @@ function resolveCursorAgentInputColumn(
 
 function findCursorAgentInputStartColumn(line: IBufferLine, cols: number): number | null {
   const maxColumn = Math.min(line.length, cols)
+
   for (let column = 0; column < maxColumn - 1; column++) {
     const markerCell = line.getCell(column)
+
     if (!isCellChar(markerCell, CURSOR_AGENT_INPUT_MARKER)) {
       continue
     }
 
     const nextColumn = column + Math.max(markerCell.getWidth(), 1)
+
     if (nextColumn < maxColumn && isCellChar(line.getCell(nextColumn), ' ')) {
       return nextColumn + 1
     }
   }
+
   return null
 }
 
@@ -107,13 +124,17 @@ function findLineContentEndColumn(
   cols: number
 ): number | null {
   const maxColumn = Math.min(line.length, cols)
+
   for (let column = maxColumn - 1; column >= startColumn; column--) {
     const cell = line.getCell(column)
+
     if (!cell || cell.getWidth() === 0 || getCellChars(cell) === ' ') {
       continue
     }
+
     return column + Math.max(cell.getWidth(), 1)
   }
+
   return null
 }
 

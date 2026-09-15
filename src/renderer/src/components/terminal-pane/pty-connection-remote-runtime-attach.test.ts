@@ -40,8 +40,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -62,6 +65,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -71,6 +75,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -91,6 +96,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -101,9 +107,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -113,9 +121,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -124,6 +134,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -160,6 +171,7 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
@@ -286,10 +298,12 @@ describe('connectPanePty', () => {
       await vi.waitFor(() => expect(parseCallbacks.length).toBeGreaterThan(0))
       parseCallbacks.shift()?.()
       await flushAsyncTicks()
+
       if (vi.mocked(window.api.pty.reportRendererSerializerReady!).mock.calls.length > 0) {
         break
       }
     }
+
     expect(writes.join('')).toContain('delayed restored prompt $ ')
     await vi.waitFor(() =>
       expect(window.api.pty.reportRendererSerializerReady).toHaveBeenCalledWith(
@@ -308,16 +322,20 @@ describe('connectPanePty', () => {
     transport.connect.mockImplementation(
       async ({ callbacks, sessionId }: Record<string, unknown>) => {
         capturedDataCallback.current = (callbacks as ConnectCallbacks | undefined)?.onData ?? null
+
         if (sessionId) {
           throw new Error('slept remote runtime PTYs must not reattach by sessionId')
         }
+
         const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
           | ((ptyId: string) => void)
           | undefined
+
         onPtySpawn?.(freshPtyId)
         const connectCallbacks = callbacks as ConnectCallbacks | undefined
         connectCallbacks?.onReplayData?.('shell ready\r\n')
         connectCallbacks?.onConnect?.()
+
         return freshPtyId
       }
     )
@@ -354,6 +372,7 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => callback?.())
     const manager = createManager(1)
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: restoredPtyId }
@@ -567,8 +586,10 @@ describe('connectPanePty', () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
+
     const setupWorktreeId =
       'ephemeral-setup-terminal:settings-mobile-emulator-orca-cli-skill-terminal'
+
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: { [setupWorktreeId]: [{ id: 'tab-1', ptyId: null }] },
@@ -593,8 +614,10 @@ describe('connectPanePty', () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
+
     const setupWorktreeId =
       'ephemeral-setup-terminal:settings-mobile-emulator-orca-cli-skill-terminal'
+
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: { [setupWorktreeId]: [{ id: 'tab-1', ptyId: null }] },
@@ -664,6 +687,7 @@ describe('connectPanePty', () => {
       worktreeId: 'wt-remote',
       cwd: '/tmp/orca-docker-relay-perf-repo'
     })
+
     connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
 
     expect(createIpcPtyTransport).not.toHaveBeenCalled()
@@ -736,6 +760,7 @@ describe('connectPanePty', () => {
         }
       ]
     } as StoreState
+
     const deps = createDeps({
       restoredLeafId: LEAF_1,
       restoredPtyIdByLeafId: { [LEAF_1]: hostPtyId }

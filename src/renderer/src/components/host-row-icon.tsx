@@ -12,5 +12,6 @@ export function HostRowIcon({
   className?: string
 }): React.JSX.Element {
   const Icon = hostId === LOCAL_EXECUTION_HOST_ID ? Monitor : Server
+
   return <Icon className={className ?? 'size-3.5 shrink-0 text-muted-foreground'} />
 }

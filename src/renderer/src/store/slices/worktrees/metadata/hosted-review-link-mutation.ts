@@ -33,10 +33,12 @@ export const CLEARED_HOSTED_REVIEW_LINK_UPDATES: Pick<
 }
 
 export const hostedReviewLinkMutationGenerationByWorktreeId = new Map<string, number>()
+
 export const hostedReviewLinkClearTombstonesByWorktreeId = new Map<
   string,
   { branch: string; branchIdentity: string; generation: number; head?: string }
 >()
+
 export const hostedReviewLinkWorktreeIdAliases = new Map<string, string>()
 
 export function hasHostedReviewLinks(worktree: Worktree): boolean {
@@ -76,6 +78,7 @@ export function pruneHostedReviewLinkMutationGenerations(worktreeIds: Iterable<s
     hostedReviewLinkMutationGenerationByWorktreeId.delete(worktreeId)
     hostedReviewLinkClearTombstonesByWorktreeId.delete(worktreeId)
     hostedReviewLinkWorktreeIdAliases.delete(worktreeId)
+
     for (const [oldWorktreeId, newWorktreeId] of hostedReviewLinkWorktreeIdAliases) {
       if (newWorktreeId === worktreeId) {
         hostedReviewLinkWorktreeIdAliases.delete(oldWorktreeId)
@@ -87,14 +90,18 @@ export function pruneHostedReviewLinkMutationGenerations(worktreeIds: Iterable<s
 export function resolveHostedReviewLinkWorktreeId(worktreeId: string): string {
   let current = worktreeId
   const seen = new Set<string>()
+
   while (!seen.has(current)) {
     seen.add(current)
     const next = hostedReviewLinkWorktreeIdAliases.get(current)
+
     if (!next) {
       return current
     }
+
     current = next
   }
+
   return worktreeId
 }
 
@@ -115,6 +122,7 @@ export function migrateHostedReviewLinkMutationGeneration(
   newWorktreeId: string
 ): void {
   const tombstone = hostedReviewLinkClearTombstonesByWorktreeId.get(oldWorktreeId)
+
   for (const [alias, target] of hostedReviewLinkWorktreeIdAliases) {
     if (target === oldWorktreeId) {
       if (tombstone) {
@@ -124,10 +132,13 @@ export function migrateHostedReviewLinkMutationGeneration(
       }
     }
   }
+
   const hasGeneration = hostedReviewLinkMutationGenerationByWorktreeId.has(oldWorktreeId)
+
   if (tombstone) {
     hostedReviewLinkWorktreeIdAliases.set(oldWorktreeId, newWorktreeId)
   }
+
   if (hasGeneration) {
     hostedReviewLinkMutationGenerationByWorktreeId.set(
       newWorktreeId,
@@ -135,6 +146,7 @@ export function migrateHostedReviewLinkMutationGeneration(
     )
     hostedReviewLinkMutationGenerationByWorktreeId.delete(oldWorktreeId)
   }
+
   if (tombstone) {
     hostedReviewLinkClearTombstonesByWorktreeId.set(newWorktreeId, tombstone)
     hostedReviewLinkClearTombstonesByWorktreeId.delete(oldWorktreeId)
@@ -196,9 +208,11 @@ export function sanitizeHostedReviewLinksForBranchClear<
 >(worktree: T, currentWorktrees?: readonly T[]): T {
   const hostedReviewWorktreeId = resolveHostedReviewLinkWorktreeId(worktree.id)
   const tombstone = hostedReviewLinkClearTombstonesByWorktreeId.get(hostedReviewWorktreeId)
+
   const hasBranchScopedContext =
     HOSTED_REVIEW_LINK_KEYS.some((key) => worktree[key] != null) ||
     worktree.pushTarget !== undefined
+
   if (
     !tombstone ||
     tombstone.generation !== getHostedReviewLinkMutationGeneration(hostedReviewWorktreeId) ||
@@ -206,19 +220,23 @@ export function sanitizeHostedReviewLinksForBranchClear<
   ) {
     return worktree
   }
+
   const current = currentWorktrees?.find(
     (entry) =>
       entry.id === worktree.id ||
       resolveHostedReviewLinkWorktreeId(entry.id) === hostedReviewWorktreeId
   )
+
   const currentClean =
     current &&
     !HOSTED_REVIEW_LINK_KEYS.some((key) => current[key] != null) &&
     current.pushTarget === undefined
       ? current
       : null
+
   const guardBranch = currentClean ? currentClean.branch : tombstone.branch
   const guardHead = currentClean ? currentClean.head : tombstone.head
+
   return {
     ...worktree,
     branch: guardBranch,
@@ -232,13 +250,17 @@ export function sanitizeHostedReviewLinksForBranchClears<
     Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget' | 'head'>>
 >(worktrees: readonly T[], currentWorktrees?: readonly T[]): T[] {
   let changed = false
+
   const sanitized = worktrees.map((worktree) => {
     const next = sanitizeHostedReviewLinksForBranchClear(worktree, currentWorktrees)
+
     if (next !== worktree) {
       changed = true
     }
+
     return next
   })
+
   return changed ? sanitized : [...worktrees]
 }
 
@@ -252,17 +274,20 @@ export function applyHostedReviewLinkClear(
       worktreeId,
       CLEARED_HOSTED_REVIEW_LINK_UPDATES
     )
+
     const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
       s.detectedWorktreesByRepo,
       worktreeId,
       CLEARED_HOSTED_REVIEW_LINK_UPDATES
     )
+
     if (
       nextWorktrees === s.worktreesByRepo &&
       nextDetectedWorktrees === s.detectedWorktreesByRepo
     ) {
       return s
     }
+
     return {
       ...(nextWorktrees !== s.worktreesByRepo
         ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
@@ -282,6 +307,7 @@ export function getPositiveHostedReviewLinkUpdateKey(
       return key
     }
   }
+
   return null
 }
 
@@ -290,18 +316,23 @@ export function clearOlderHostedReviewLinksForReplacement(
   existingWorktree: Worktree
 ): Partial<WorktreeMeta> {
   const replacementKey = getPositiveHostedReviewLinkUpdateKey(updates)
+
   if (!replacementKey) {
     return updates
   }
+
   let normalized = updates
+
   for (const key of HOSTED_REVIEW_LINK_KEYS) {
     if (key === replacementKey || existingWorktree[key] == null) {
       continue
     }
+
     // Why: one branch pushes to one hosted-review head; stale provider links would win the target lookup after replacement.
     normalized = normalized === updates ? { ...updates } : normalized
     normalized[key] = null
   }
+
   return normalized
 }
 
@@ -323,6 +354,7 @@ export function encodePushTargetClearForRuntimeRpc(
   if (!hasExplicitPushTargetClear(updates)) {
     return updates
   }
+
   // Why: remote runtime RPC is JSON-shaped and drops undefined, so null is the wire signal for clearing persisted pushTarget metadata.
   return { ...updates, pushTarget: null }
 }

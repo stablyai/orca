@@ -52,6 +52,7 @@ function pressInterruptKey(
   presses = 1
 ): boolean {
   const row = server.getStatusSnapshotForPane(PANE)[0]
+
   return server.inferInterrupt({
     paneKey: PANE,
     baselineUpdatedAt: row.receivedAt,
@@ -66,6 +67,7 @@ function pressInterruptKey(
 function collectPublishedStates(server: AgentHookServer): EnrichedAgentHookEventPayload[] {
   const published: EnrichedAgentHookEventPayload[] = []
   server.subscribeEnrichedStatus((payload) => published.push(payload))
+
   return published
 }
 
@@ -422,6 +424,7 @@ describe('navigation Escape over the loopback hook listener', () => {
       vi.useRealTimers()
       const server = new AgentHookServer()
       await server.start({ env: 'production' })
+
       try {
         await postHookEvent(
           server,
@@ -435,6 +438,7 @@ describe('navigation Escape over the loopback hook listener', () => {
             tool_input: { command: 'pnpm migrate' }
           })
         )
+
         if (hookEventName === 'PostToolUse') {
           await postHookEvent(
             server,

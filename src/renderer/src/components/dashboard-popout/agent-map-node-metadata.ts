@@ -15,7 +15,9 @@ export function agentMapDurationMinutes(card: DashboardCard, now: number): numbe
   if (!Number.isFinite(card.startedAt) || card.startedAt <= 0) {
     return 0
   }
+
   const end = card.finishedAt && card.finishedAt >= card.startedAt ? card.finishedAt : now
+
   return Math.max(0, (end - card.startedAt) / 60_000)
 }
 
@@ -23,6 +25,7 @@ export function agentMapNodeStatus(card: DashboardCard): AgentMapNodeStatus {
   if (card.dotState === 'done') {
     return card.unseen ? 'done' : 'done-seen'
   }
+
   return dashboardCardDisplayState(card)
 }
 
@@ -33,6 +36,7 @@ export type AgentMapFlareStatus = Extract<DashboardCardDotState, 'waiting' | 'do
  *  animating. Must stay in step with the `agent-map-status-flare` duration in
  *  `agent-map.css`, or the element unmounts mid-ripple. */
 export const AGENT_MAP_STATUS_FLARE_MS = 1_400
+
 // Static status emphasis remains uncapped; this bounds animated SVG paint only.
 export const AGENT_MAP_MAX_CONCURRENT_STATUS_FLARES = 4
 
@@ -48,11 +52,15 @@ export function agentMapRecentFlareStatus(
   if (card.dotState !== 'waiting' && (card.dotState !== 'done' || !card.unseen)) {
     return null
   }
+
   const changedAt = agentMapFlareChangedAt(card)
+
   if (changedAt <= 0) {
     return null
   }
+
   const elapsed = currentTime - changedAt
+
   // A fleet that loads with old status changes must not flare all at once.
   return elapsed >= 0 && elapsed < AGENT_MAP_STATUS_FLARE_MS ? card.dotState : null
 }
@@ -63,27 +71,36 @@ export function selectAgentMapRecentFlareStatuses(
 ): ReadonlyMap<string, AgentMapFlareStatus> {
   const currentTime = Date.now()
   const recent: { paneKey: string; changedAt: number; status: AgentMapFlareStatus }[] = []
+
   for (const card of cards) {
     const status = agentMapRecentFlareStatus(card, currentTime)
+
     if (!status) {
       continue
     }
+
     const changedAt = agentMapFlareChangedAt(card)
+
     const index = recent.findIndex(
       (item) =>
         changedAt > item.changedAt || (changedAt === item.changedAt && card.paneKey < item.paneKey)
     )
+
     if (index === -1) {
       if (recent.length < AGENT_MAP_MAX_CONCURRENT_STATUS_FLARES) {
         recent.push({ paneKey: card.paneKey, changedAt, status })
       }
+
       continue
     }
+
     recent.splice(index, 0, { paneKey: card.paneKey, changedAt, status })
+
     if (recent.length > AGENT_MAP_MAX_CONCURRENT_STATUS_FLARES) {
       recent.pop()
     }
   }
+
   return new Map(recent.map((item) => [item.paneKey, item.status]))
 }
 

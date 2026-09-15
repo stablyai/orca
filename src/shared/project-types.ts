@@ -34,11 +34,13 @@ export type ProjectUpdateArgs = {
 }
 
 export type ProjectHostSetupState = 'ready' | 'not-set-up' | 'setting-up' | 'error' | 'unsupported'
+
 export type ProjectHostSetupMethod =
   | 'legacy-repo'
   | 'imported-existing-folder'
   | 'cloned'
   | 'provisioned'
+
 export type RepoProjectHostSetupMethod = Extract<
   ProjectHostSetupMethod,
   'imported-existing-folder' | 'cloned'

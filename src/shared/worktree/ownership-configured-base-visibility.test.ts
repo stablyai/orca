@@ -126,6 +126,7 @@ describe('a configured worktree base that collides with a built-in visibility so
       externalWorktreeVisibility: 'hide',
       worktreeVisibilitySourcePreferences: { builtIn: { claude: 'show' } }
     })
+
     const linkedCheckout = '/orca/workspaces/OrbisCXM/feature-x'
     const settings = makeSettings()
 

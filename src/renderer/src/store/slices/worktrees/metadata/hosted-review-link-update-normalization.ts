@@ -10,5 +10,6 @@ export function normalizeHostedReviewLinkReplacementUpdates(
   const replacementUpdates = existingWorktree
     ? clearOlderHostedReviewLinksForReplacement(updates, existingWorktree)
     : updates
+
   return normalizeGitHubPRSuppressionUpdate(replacementUpdates)
 }

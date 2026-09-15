@@ -61,10 +61,12 @@ export class MobileNotificationReplayBuffer {
   record(event: MobileNotificationEvent): number {
     const seq = ++this.seq
     this.buffer.push({ ...event, notificationSeq: seq, notificationEpoch: this.epochId })
+
     if (this.buffer.length > this.capacity) {
       // Why: insertion-order array; oldest entries sit at the front.
       this.buffer.splice(0, this.buffer.length - this.capacity)
     }
+
     return seq
   }
 
@@ -81,9 +83,11 @@ export class MobileNotificationReplayBuffer {
     if (epoch !== undefined && epoch !== this.epochId) {
       return [...this.buffer]
     }
+
     if (lastSeenSeq >= this.seq) {
       return []
     }
+
     return this.buffer.filter((entry) => entry.notificationSeq > lastSeenSeq)
   }
 

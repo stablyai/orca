@@ -19,21 +19,34 @@ import {
 import { compareTerminalScreenshots } from './terminal-screenshot-diff'
 
 const RUN_REPRO = process.env.ORCA_E2E_CODEX_SKILL_PREVIEW_REPRO === '1'
+
 const EXPECT_NO_ARTIFACTS = process.env.ORCA_E2E_EXPECT_NO_CODEX_SKILL_PREVIEW_ARTIFACTS === '1'
+
 const FULLSCREEN_MIN_SIZE = { width: 1200, height: 760 }
+
 const MIN_REPRO_DIFF_RATIO = 0.006
+
 const MAX_CLEAN_DIFF_RATIO = 0.0015
+
 const ORCA_REPO_PATH = realpathSync(process.cwd())
+
 const ARTIFACT_DIR = path.join(process.cwd(), '.tmp', 'codex-skill-preview-real-flow')
 
 const CODEX_READY_RE = /Ask Codex|OpenAI Codex/i
+
 const CODEX_TRUST_PROMPT_RE =
   /Do you trust|trust this folder|Trust this|Working with untrusted contents/i
+
 const CODEX_UPDATE_PROMPT_RE = /update available|install update|Skip for now|Skip until next/i
+
 const CODEX_SKILL_PREVIEW_RE = /Press enter to insert|esc to close|electron|orca-cli|orca-emulator/i
+
 const SETUP_PANE_ACTIVITY_RE = /install-orca-skills|pnpm|Progress:|Packages:|Lockfile/i
+
 const CLEAN_SKILL_ROW_RE = /^  [A-Za-z][A-Za-z0-9 .-]{1,32}\s+\[Skill\]\s/
+
 const CODEX_READY_SETTLE_MS = 3_500
+
 const SETUP_CHANGES_AFTER_PREVIEW = 3
 
 type PaneDescriptor = {
@@ -68,12 +81,15 @@ async function setStableFullscreenWindow(
 ): Promise<void> {
   await electronApp.evaluate(({ BrowserWindow }) => {
     const window = BrowserWindow.getAllWindows()[0]
+
     if (!window) {
       throw new Error('No BrowserWindow available')
     }
+
     if (window.isMinimized()) {
       window.restore()
     }
+
     window.show()
     window.focus()
     window.setFullScreen(true)
@@ -84,6 +100,7 @@ async function setStableFullscreenWindow(
         const [fullscreen, size] = await Promise.all([
           electronApp.evaluate(({ BrowserWindow }) => {
             const window = BrowserWindow.getAllWindows()[0]
+
             return window?.isFullScreen() ?? false
           }),
           page.evaluate(() => ({
@@ -91,6 +108,7 @@ async function setStableFullscreenWindow(
             height: window.innerHeight
           }))
         ])
+
         return (
           fullscreen &&
           size.width >= FULLSCREEN_MIN_SIZE.width &&
@@ -115,12 +133,15 @@ async function addRealOrcaRepo(page: Page, repoPath: string): Promise<string> {
     })
 
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store unavailable')
     }
+
     const state = store.getState()
     await state.fetchRepos()
     const repo = store.getState().repos.find((candidate) => candidate.path === repoPath)
+
     if (!repo) {
       throw new Error(`Real Orca repo did not load: ${repoPath}`)
     }
@@ -136,9 +157,11 @@ async function addRealOrcaRepo(page: Page, repoPath: string): Promise<string> {
     await store.getState().fetchWorktrees(repo.id)
 
     const nextState = store.getState()
+
     const worktree = (nextState.worktreesByRepo[repo.id] ?? []).find(
       (candidate) => candidate.path === repoPath
     )
+
     if (!worktree) {
       throw new Error(`Real Orca worktree did not load: ${repoPath}`)
     }
@@ -155,6 +178,7 @@ async function addRealOrcaRepo(page: Page, repoPath: string): Promise<string> {
     nextState.setActiveWorktree(worktree.id)
     nextState.setRightSidebarOpen(false)
     nextState.setSidebarOpen(true)
+
     return repo.id
   }, repoPath)
 }
@@ -189,12 +213,14 @@ async function createWorkspaceThroughComposer(page: Page, workspaceName: string)
       async () =>
         page.evaluate((workspaceName) => {
           const state = window.__store?.getState()
+
           const worktree = Object.values(state?.worktreesByRepo ?? {})
             .flat()
             .find(
               (candidate) =>
                 candidate.displayName === workspaceName || candidate.path.endsWith(workspaceName)
             )
+
           return worktree?.id ?? null
         }, workspaceName),
       {
@@ -206,17 +232,21 @@ async function createWorkspaceThroughComposer(page: Page, workspaceName: string)
 
   const createdId = await page.evaluate((workspaceName) => {
     const state = window.__store?.getState()
+
     const worktree = Object.values(state?.worktreesByRepo ?? {})
       .flat()
       .find(
         (candidate) =>
           candidate.displayName === workspaceName || candidate.path.endsWith(workspaceName)
       )
+
     return worktree?.id ?? null
   }, workspaceName)
+
   if (!createdId) {
     throw new Error(`Workspace ${workspaceName} disappeared after creation`)
   }
+
   await expect
     .poll(() => getActiveWorktreeId(page), {
       timeout: 30_000,
@@ -224,6 +254,7 @@ async function createWorkspaceThroughComposer(page: Page, workspaceName: string)
     })
     .toBe(createdId)
   expect(createdId).not.toBe(previousWorktreeId)
+
   return createdId
 }
 
@@ -231,15 +262,18 @@ async function forceTerminalWebgl(page: Page): Promise<boolean> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     if (!tabId) {
       throw new Error('No active terminal tab')
     }
+
     window.__paneManagers?.get(tabId)?.setTerminalGpuAcceleration?.('on')
   })
 
@@ -248,13 +282,16 @@ async function forceTerminalWebgl(page: Page): Promise<boolean> {
       () => {
         const state = window.__store?.getState()
         const worktreeId = state?.activeWorktreeId
+
         const tabId =
           state?.activeTabType === 'terminal'
             ? state.activeTabId
             : worktreeId
               ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
               : null
+
         const diagnostics = window.__paneManagers?.get(tabId ?? '')?.getRenderingDiagnostics?.()
+
         return (diagnostics ?? []).filter((diagnostic) => diagnostic.hasWebgl).length >= 2
       },
       undefined,
@@ -268,45 +305,59 @@ async function describeActiveTerminalPanes(page: Page): Promise<PaneDescriptor[]
   return page.evaluate(async () => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const panes = manager?.getPanes?.() ?? []
+
     if (!tabId || !manager || panes.length < 2) {
       throw new Error('Expected a split terminal tab with at least two panes')
     }
+
     const diagnostics = manager.getRenderingDiagnostics?.() ?? []
+
     return Promise.all(
       [...panes]
         .sort((a, b) => {
           const aRect = a.container.getBoundingClientRect()
           const bRect = b.container.getBoundingClientRect()
+
           return aRect.x - bRect.x || aRect.y - bRect.y
         })
         .map(async (pane) => {
           const ptyId = pane.container.dataset.ptyId
+
           if (!ptyId) {
             throw new Error(`Terminal pane ${pane.id} has no PTY binding`)
           }
+
           const rect = pane.container.getBoundingClientRect()
+
           const screenRect = pane.container
             .querySelector<HTMLElement>('.xterm-screen')
             ?.getBoundingClientRect()
+
           const rendering = diagnostics.find((diagnostic) => diagnostic.paneId === pane.id)
           let proposed: { cols: number; rows: number } | null = null
+
           try {
             proposed = pane.fitAddon.proposeDimensions() ?? null
           } catch {
             proposed = null
           }
+
           const appliedPtySize = await window.api.pty.getSize(ptyId).catch(() => null)
+
           const terminalCore = pane.terminal as typeof pane.terminal & {
             _core?: { _bufferService?: { isUserScrolling?: boolean } }
           }
+
           return {
             tabId,
             paneId: pane.id,
@@ -334,12 +385,15 @@ async function describeActiveTerminalPanes(page: Page): Promise<PaneDescriptor[]
 async function focusTerminalPane(page: Page, pane: PaneDescriptor): Promise<void> {
   await page.evaluate(({ tabId, ptyId }) => {
     const manager = window.__paneManagers?.get(tabId)
+
     const pane = manager
       ?.getPanes?.()
       .find((candidate) => candidate.container.dataset.ptyId === ptyId)
+
     if (!pane) {
       throw new Error('Terminal pane disappeared before focus')
     }
+
     manager?.setActivePane(pane.id, { focus: true })
     pane.terminal.options.cursorBlink = false
     pane.terminal.options.cursorStyle = 'block'
@@ -350,19 +404,24 @@ async function focusTerminalPane(page: Page, pane: PaneDescriptor): Promise<void
 
 async function focusLeftTerminalPane(page: Page): Promise<PaneDescriptor> {
   const [leftPane] = await describeActiveTerminalPanes(page)
+
   if (!leftPane) {
     throw new Error('Left terminal pane is unavailable')
   }
+
   await focusTerminalPane(page, leftPane)
+
   return leftPane
 }
 
 async function getRightTerminalPane(page: Page): Promise<PaneDescriptor> {
   const panes = await describeActiveTerminalPanes(page)
   const rightPane = panes.at(-1)
+
   if (!rightPane) {
     throw new Error('Right setup terminal pane is unavailable')
   }
+
   return rightPane
 }
 
@@ -375,10 +434,13 @@ async function readPaneContent(
   return page.evaluate(
     ({ tabId, ptyId, charLimit }) => {
       const manager = window.__paneManagers?.get(tabId)
+
       const pane = manager
         ?.getPanes?.()
         .find((candidate) => candidate.container.dataset.ptyId === ptyId)
+
       const content = pane?.serializeAddon?.serialize?.() ?? ''
+
       return content.slice(-charLimit)
     },
     { tabId, ptyId, charLimit }
@@ -389,18 +451,23 @@ async function readPaneVisibleContent(page: Page, tabId: string, ptyId: string):
   return page.evaluate(
     ({ tabId, ptyId }) => {
       const manager = window.__paneManagers?.get(tabId)
+
       const pane = manager
         ?.getPanes?.()
         .find((candidate) => candidate.container.dataset.ptyId === ptyId)
+
       if (!pane) {
         return ''
       }
+
       const terminal = pane.terminal
       const viewportY = terminal.buffer.active.viewportY
       const lines: string[] = []
+
       for (let row = 0; row < terminal.rows; row += 1) {
         lines.push(terminal.buffer.active.getLine(viewportY + row)?.translateToString(true) ?? '')
       }
+
       return lines.join('\n')
     },
     { tabId, ptyId }
@@ -416,6 +483,7 @@ async function readPaneObservableContent(
     readPaneContent(page, tabId, ptyId, 12_000),
     readPaneVisibleContent(page, tabId, ptyId)
   ])
+
   return `${serialized}\n${visible}`
 }
 
@@ -443,34 +511,42 @@ async function waitForPaneVisibleContentChanges(
   const deadline = Date.now() + timeoutMs
   let changes = 0
   let previous = await readPaneVisibleContent(page, pane.tabId, pane.ptyId)
+
   while (Date.now() < deadline && changes < expectedChanges) {
     await page.waitForTimeout(450)
     const next = await readPaneVisibleContent(page, pane.tabId, pane.ptyId)
+
     if (next !== previous) {
       changes += 1
       previous = next
     }
   }
+
   return changes
 }
 
 async function dismissCodexPromptsIfPresent(page: Page, pane: PaneDescriptor): Promise<void> {
   const deadline = Date.now() + 25_000
+
   while (Date.now() < deadline) {
     const content = await readPaneObservableContent(page, pane.tabId, pane.ptyId)
+
     if (CODEX_READY_RE.test(content) && !CODEX_TRUST_PROMPT_RE.test(content)) {
       return
     }
+
     if (CODEX_TRUST_PROMPT_RE.test(content)) {
       await sendToTerminal(page, pane.ptyId, '1\r')
       await page.waitForTimeout(400)
       continue
     }
+
     if (CODEX_UPDATE_PROMPT_RE.test(content)) {
       await sendToTerminal(page, pane.ptyId, '3\r')
       await page.waitForTimeout(400)
       continue
     }
+
     await page.waitForTimeout(250)
   }
 }
@@ -485,6 +561,7 @@ async function clickPaneAfterEvidenceCapture(page: Page, pane: PaneDescriptor): 
 async function screenshotPane(page: Page, ptyId: string): Promise<Buffer> {
   const screen = page.locator(`[data-pty-id="${ptyId}"] .xterm-screen`).first()
   await expect(screen).toBeVisible({ timeout: 10_000 })
+
   return Buffer.from(await screen.screenshot({ animations: 'disabled' }))
 }
 
@@ -492,6 +569,7 @@ function persistEvidenceFile(name: string, body: Buffer | string): string {
   mkdirSync(ARTIFACT_DIR, { recursive: true })
   const filePath = path.join(ARTIFACT_DIR, name)
   writeFileSync(filePath, body)
+
   return filePath
 }
 
@@ -521,6 +599,7 @@ async function captureClickEvidence(
   const beforeWindowPath = persistEvidenceFile('full-window-before-click.png', beforeFullPage)
   const afterPanePath = persistEvidenceFile('left-pane-after-click.png', afterPane)
   const bufferPath = persistEvidenceFile('left-pane-buffer.txt', beforeContent)
+
   const metricsPath = persistEvidenceFile(
     'left-pane-metrics.json',
     `${JSON.stringify(pane, null, 2)}\n`
@@ -572,6 +651,7 @@ test.describe('Codex skill preview terminal artifact repro @headful', () => {
     for (const id of createdWorktreeIds) {
       await removeWorktreeViaStore(orcaPage, id)
     }
+
     createdWorktreeIds.length = 0
   })
 
@@ -635,6 +715,7 @@ test.describe('Codex skill preview terminal artifact repro @headful', () => {
       CODEX_SKILL_PREVIEW_RE,
       30_000
     )
+
     const setupChangesAfterPreview = await waitForPaneVisibleContentChanges(
       orcaPage,
       rightPane,
@@ -644,8 +725,10 @@ test.describe('Codex skill preview terminal artifact repro @headful', () => {
 
     const evidence = await captureClickEvidence(orcaPage, leftPane, testInfo)
     const overpaintedSkillRows = getOverpaintedSkillRows(evidence.beforeContent)
+
     const detectedArtifact =
       overpaintedSkillRows.length >= 2 || evidence.diffRatio >= MIN_REPRO_DIFF_RATIO
+
     testInfo.annotations.push({
       type: 'codex-skill-preview-click-diff',
       description: JSON.stringify({

@@ -13,6 +13,7 @@ function formatStatusEntriesForCleanCheck(entries: GitStatusResult['entries']): 
   if (entries.length === 0) {
     return undefined
   }
+
   return entries.map((entry) => `${entry.area} ${entry.status}: ${entry.path}`).join('\n')
 }
 
@@ -20,6 +21,7 @@ function filterUntrackedPorcelainStatus(stdout: string | undefined): string | un
   const trackedLines = (stdout ?? '')
     .split(/\r?\n/)
     .filter((line) => line.trim().length > 0 && !line.startsWith('?? '))
+
   return trackedLines.length > 0 ? trackedLines.join('\n') : undefined
 }
 
@@ -48,6 +50,7 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
     if (options?.signal) {
       return this.requestWorktreeList(repoPath, options.signal)
     }
+
     return this.worktreeListDedupe.run(stableInFlightKey(['listWorktrees', repoPath]), () =>
       this.requestWorktreeList(repoPath)
     )
@@ -59,6 +62,7 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
     signal?: AbortSignal
   ): Promise<GitWorktreeInfo[]> {
     const response = await this.mux.request('git.listWorktrees', { repoPath }, { signal })
+
     // Why (#14004): relays before this fix answered a failed worktree scan with `[]`. Mixed versions are
     // normal, so refuse the shape here too — a Git repo always lists its own checkout.
     return assertAuthoritativeWorktreeCatalog<GitWorktreeInfo>(response, repoPath)
@@ -106,13 +110,17 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
           worktreePath,
           ...(options.includeUntracked === false ? { includeUntracked: false } : {})
         })) as { clean: boolean; stdout?: string }
+
         if (options.includeUntracked === false) {
           if (!result.clean && result.stdout === undefined) {
             return result
           }
+
           const trackedStdout = filterUntrackedPorcelainStatus(result.stdout)
+
           return { clean: !trackedStdout, ...(trackedStdout ? { stdout: trackedStdout } : {}) }
         }
+
         return result
       },
       async () => {
@@ -122,12 +130,16 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
             '[ssh-git] Relay does not implement git.worktreeIsClean; falling back to git.status clean check'
           )
         }
+
         const status = await this.getStatus(worktreePath)
+
         const entries =
           options.includeUntracked === false
             ? status.entries.filter((entry) => entry.area !== 'untracked')
             : status.entries
+
         const clean = entries.length === 0
+
         return { clean, stdout: formatStatusEntriesForCleanCheck(entries) }
       },
       isJsonRpcMethodNotFoundError
@@ -162,6 +174,7 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
       if (!isJsonRpcMethodNotFoundError(error)) {
         throw error
       }
+
       if (!this.loggedMarkRemoteOrcaCreatedFallback) {
         this.loggedMarkRemoteOrcaCreatedFallback = true
         console.warn(
@@ -190,6 +203,7 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
           'This SSH host is running an older Orca relay that cannot delete preserved branches. Reconnect to deploy the latest relay, then try again.'
         )
       }
+
       throw error
     }
   }

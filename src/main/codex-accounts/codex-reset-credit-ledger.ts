@@ -79,8 +79,10 @@ export class CodexResetCreditLedger {
       promise: null,
       settledOutcome: null
     }
+
     this.attemptsByKey.set(idempotencyKey, attempt)
     this.attemptKeyByOffer.set(attempt.scopeKey, idempotencyKey)
+
     return attempt
   }
 
@@ -93,14 +95,19 @@ export class CodexResetCreditLedger {
       accountId: account.id,
       accountRevision: account.updatedAt
     })
+
     const idempotencyKey = this.unresolvedKeyByAccountScope.get(accountScopeKey)
+
     if (!idempotencyKey) {
       return null
     }
+
     const attempt = this.attemptsByKey.get(idempotencyKey)
+
     if (attempt?.state !== 'providerPending') {
       throw new Error('Codex reset-credit attempt state is inconsistent.')
     }
+
     // Why: a durable providerPending attempt can only be resolved with its original key.
     return { idempotencyKey, expectedScope: attempt.expectedScope }
   }
@@ -133,6 +140,7 @@ export class CodexResetCreditLedger {
     })
     attempt.state = 'settled'
     attempt.settledOutcome = outcome
+
     if (this.unresolvedKeyByAccountScope.get(attempt.accountScopeKey) === idempotencyKey) {
       this.unresolvedKeyByAccountScope.delete(attempt.accountScopeKey)
     }
@@ -142,7 +150,9 @@ export class CodexResetCreditLedger {
     if (attempt.state !== 'fresh') {
       return
     }
+
     this.attemptsByKey.delete(idempotencyKey)
+
     if (this.attemptKeyByOffer.get(attempt.scopeKey) === idempotencyKey) {
       this.attemptKeyByOffer.delete(attempt.scopeKey)
     }
@@ -155,14 +165,18 @@ export class CodexResetCreditLedger {
     const staleAttempts = [...this.attemptsByKey].filter(
       ([, attempt]) => attempt.expectedScope.accountId === accountId
     )
+
     if (staleAttempts.length === 0) {
       return
     }
+
     const staleKeySet = new Set(staleAttempts.map(([idempotencyKey]) => idempotencyKey))
+
     if (this.durableLedger) {
       const attempts = this.durableLedger.attempts.filter(
         (attempt) => !staleKeySet.has(attempt.idempotencyKey)
       )
+
       if (attempts.length !== this.durableLedger.attempts.length) {
         const nextLedger: CodexResetCreditAttemptLedger = { version: 1, attempts }
         // Persist first so a failed durability barrier leaves the in-memory
@@ -171,11 +185,14 @@ export class CodexResetCreditLedger {
         this.durableLedger = structuredClone(nextLedger)
       }
     }
+
     for (const [idempotencyKey, attempt] of staleAttempts) {
       this.attemptsByKey.delete(idempotencyKey)
+
       if (this.attemptKeyByOffer.get(attempt.scopeKey) === idempotencyKey) {
         this.attemptKeyByOffer.delete(attempt.scopeKey)
       }
+
       if (this.unresolvedKeyByAccountScope.get(attempt.accountScopeKey) === idempotencyKey) {
         this.unresolvedKeyByAccountScope.delete(attempt.accountScopeKey)
       }
@@ -186,6 +203,7 @@ export class CodexResetCreditLedger {
     try {
       const ledger = this.store.getCodexResetCreditAttemptLedger()
       this.durableLedger = ledger
+
       for (const durable of ledger.attempts) {
         const attempt: CodexResetCreditAttempt = {
           expectedScope: durable.expectedScope,
@@ -195,8 +213,10 @@ export class CodexResetCreditLedger {
           promise: null,
           settledOutcome: durable.state === 'settled' ? durable.outcome : null
         }
+
         this.attemptsByKey.set(durable.idempotencyKey, attempt)
         this.attemptKeyByOffer.set(attempt.scopeKey, durable.idempotencyKey)
+
         if (durable.state === 'providerPending') {
           this.unresolvedKeyByAccountScope.set(attempt.accountScopeKey, durable.idempotencyKey)
         }
@@ -211,15 +231,19 @@ export class CodexResetCreditLedger {
     if (!this.durableLedger) {
       throw this.loadError ?? new Error('Codex reset-credit attempt ledger is unavailable')
     }
+
     const index = this.durableLedger.attempts.findIndex(
       (attempt) => attempt.idempotencyKey === nextAttempt.idempotencyKey
     )
+
     const attempts = [...this.durableLedger.attempts]
+
     if (index === -1) {
       attempts.push(nextAttempt)
     } else {
       attempts[index] = nextAttempt
     }
+
     const nextLedger: CodexResetCreditAttemptLedger = { version: 1, attempts }
     this.store.replaceCodexResetCreditAttemptLedgerAndFlush(nextLedger)
     this.durableLedger = structuredClone(nextLedger)

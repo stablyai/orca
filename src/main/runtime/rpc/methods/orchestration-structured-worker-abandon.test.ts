@@ -28,12 +28,14 @@ describe('workerAbandon settles the structured hold', () => {
 
   async function startedDispatch(): Promise<string> {
     const task = state.db.createTask({ spec: 'do it' })
+
     const started = state.db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
+
     return started.dispatch.id
   }
 

@@ -30,6 +30,7 @@ export function recordClaudeUsageAttempt(
   if (!state.attemptedSources.includes(source)) {
     state.attemptedSources.push(source)
   }
+
   return state.attemptedSources
 }
 
@@ -108,6 +109,7 @@ export function mergeClaudeUsageWindows(
   if (!supplement) {
     return primary
   }
+
   return {
     ...primary,
     session: primary.session ?? supplement.session,

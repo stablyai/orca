@@ -7,12 +7,19 @@ import type { AppState } from '../store/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
 export const FUTURE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 export const STALE_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 export const ORPHAN_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+
 export const TAB_1_LEAF_ID = '44444444-4444-4444-8444-444444444444'
+
 export const FUTURE_PANE_KEY = makePaneKey('tab-future', FUTURE_LEAF_ID)
+
 export const STALE_PANE_KEY = makePaneKey('tab-future', STALE_LEAF_ID)
+
 export const ORPHAN_PANE_KEY = makePaneKey('tab-orphan', ORPHAN_LEAF_ID)
+
 export const TAB_1_PANE_KEY = makePaneKey('tab-1', TAB_1_LEAF_ID)
 
 export function expectWorktreeRouting(worktreeId: string): unknown {
@@ -48,19 +55,25 @@ export type AgentStatusSetData = {
   receivedAt: number
   stateStartedAt: number
 }
+
 export type StoreLike = Record<string, unknown>
+
 export type StoreSubscribeListener = (state: StoreLike, previousState: StoreLike) => void
+
 export type MobileFitEvent = {
   ptyId: string
   mode: 'mobile-fit' | 'desktop-fit'
   cols: number
   rows: number
 }
+
 export type MobileFitListener = (event: MobileFitEvent) => void
+
 export type MobileDriverListener = (event: {
   ptyId: string
   driver: { kind: 'mobile'; clientId: string }
 }) => void
+
 export type MobileBrowserDriverListener = (event: {
   browserPageId: string
   driver: { kind: 'mobile'; clientId: string }
@@ -75,8 +88,10 @@ export function applyMockAgentStatusUpdate(
     | ({ agentType?: string; state?: string; updatedAt?: number } & Record<string, unknown>)
     | undefined
   >
+
   const existing = statuses[update.paneKey]
   const updatedAt = update.timing?.updatedAt
+
   if (
     existing?.updatedAt !== undefined &&
     updatedAt !== undefined &&
@@ -84,7 +99,9 @@ export function applyMockAgentStatusUpdate(
   ) {
     return false
   }
+
   const next = { ...statuses }
+
   if (update.kind === 'providerSession') {
     delete next[update.paneKey]
   } else {
@@ -95,7 +112,9 @@ export function applyMockAgentStatusUpdate(
       providerSession: update.metadata?.providerSession
     }
   }
+
   state.agentStatusByPaneKey = next
+
   return true
 }
 
@@ -109,23 +128,30 @@ export function installMockAgentStatusTransaction(state: StoreLike): void {
         ...(state.agentStatusByPaneKey as Record<string, unknown>)
       }
     }
+
     const attemptedUpdates: AgentStatusBatchUpdate[] = []
     const effects: (() => void)[] = []
+
     const result = operation({
       getState: () => stagedState as AppState,
       apply: (update) => {
         attemptedUpdates.push(update)
+
         return applyMockAgentStatusUpdate(stagedState, update)
       },
       afterCommit: (effect) => effects.push(effect)
     })
+
     const setStatuses = state.setAgentStatuses as (
       updates: readonly AgentStatusBatchUpdate[]
     ) => readonly boolean[]
+
     setStatuses(attemptedUpdates)
+
     for (const effect of effects) {
       effect()
     }
+
     return result
   }
 }
@@ -185,20 +211,24 @@ export function buildStoreState(overrides: StoreLike): StoreLike {
     settings: { terminalFontSize: 13 },
     ...overrides
   }
+
   if (!('updateTabTitles' in overrides)) {
     state.updateTabTitles = vi.fn((updates: readonly { tabId: string; title: string }[]) => {
       const updateTitle = state.updateTabTitle as AppState['updateTabTitle']
+
       for (const { tabId, title } of updates) {
         updateTitle(tabId, title)
       }
     })
   }
+
   if (!('setAgentStatuses' in overrides)) {
     state.setAgentStatuses = vi.fn((updates: readonly AgentStatusBatchUpdate[]) =>
       updates.map((update) => {
         if (update.kind === 'providerSession') {
           const recordProviderSession =
             state.recordAgentProviderSession as AppState['recordAgentProviderSession']
+
           recordProviderSession(
             update.paneKey,
             update.agent,
@@ -218,10 +248,13 @@ export function buildStoreState(overrides: StoreLike): StoreLike {
             update.metadata
           )
         }
+
         return true
       })
     )
   }
+
   installMockAgentStatusTransaction(state)
+
   return state
 }

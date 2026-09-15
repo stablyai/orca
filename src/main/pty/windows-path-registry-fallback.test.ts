@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { WindowsPathRegistryFallback } from './windows-path-registry-fallback'
 
 const success = (segments: string[]) => ({ failed: false, segments })
+
 const failure = () => ({ failed: true, segments: [] })
 
 describe('WindowsPathRegistryFallback', () => {

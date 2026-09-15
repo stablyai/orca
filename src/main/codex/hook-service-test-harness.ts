@@ -56,6 +56,7 @@ export function setupCodexHookHomes(
       if (name === 'userData') {
         return homes.userDataDir
       }
+
       throw new Error(`unexpected app.getPath(${name})`)
     })
   })
@@ -64,11 +65,13 @@ export function setupCodexHookHomes(
     restoreCodexTrustSessionsForTests()
     rmSync(homes.tmpHome, { recursive: true, force: true })
     rmSync(homes.userDataDir, { recursive: true, force: true })
+
     if (previousUserDataPath === undefined) {
       delete process.env.ORCA_USER_DATA_PATH
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
     }
+
     vi.clearAllMocks()
   })
 
@@ -77,6 +80,7 @@ export function setupCodexHookHomes(
 
 export function isCodexManagedCommand(command: string | undefined): boolean {
   const scriptFileName = process.platform === 'win32' ? 'codex-hook.cmd' : 'codex-hook.sh'
+
   return createManagedCommandMatcher(scriptFileName)(command)
 }
 
@@ -86,6 +90,7 @@ export function escapeTomlBasicString(value: string): string {
 
 export function hookTrustHeader(key: string, useDefaultCodexHome = false): string {
   const canonicalKey = canonicalizeHookTrustKeyForTest(key, useDefaultCodexHome)
+
   return /^[A-Za-z]:[\\/]|^\\\\/.test(canonicalKey) && !canonicalKey.includes("'")
     ? `[hooks.state.'${canonicalKey}']`
     : `[hooks.state."${escapeTomlBasicString(canonicalKey)}"]`
@@ -95,12 +100,16 @@ function canonicalizeHookTrustKeyForTest(key: string, useDefaultCodexHome: boole
   const lastColon = key.lastIndexOf(':')
   const secondLast = lastColon === -1 ? -1 : key.lastIndexOf(':', lastColon - 1)
   const thirdLast = secondLast === -1 ? -1 : key.lastIndexOf(':', secondLast - 1)
+
   if (thirdLast === -1) {
     return key
   }
+
   const sourcePath = key.slice(0, thirdLast)
+
   const trustSourcePath = useDefaultCodexHome
     ? normalizeCodexHookSourcePath(sourcePath)
     : getCodexExplicitHomeHookSourcePath(sourcePath)
+
   return `${trustSourcePath}${key.slice(thirdLast)}`
 }

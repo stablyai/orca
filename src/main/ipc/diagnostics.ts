@@ -37,9 +37,11 @@ import {
 } from '../observability/diagnostic-upload-endpoint'
 
 export type DiagnosticsBundlePreview = Omit<CollectedBundle, 'payload'>
+
 type UploadBundleIpcResult = UploadBundleResult | { canceled: true }
 
 const PENDING_BUNDLE_TTL_MS = 15 * 60 * 1000
+
 const MAX_PENDING_BUNDLES = 8
 
 type PendingBundle = {
@@ -58,11 +60,14 @@ function prunePendingBundles(now = Date.now()): void {
       deletePendingBundle(id)
     }
   }
+
   while (pendingBundles.size > MAX_PENDING_BUNDLES) {
     const oldest = pendingBundles.keys().next().value as string | undefined
+
     if (!oldest) {
       break
     }
+
     deletePendingBundle(oldest)
   }
 }
@@ -86,9 +91,11 @@ function schedulePendingBundleExpiry(bundleSubmissionId: string): ReturnType<typ
   const timer = setTimeout(() => {
     deletePendingBundle(bundleSubmissionId)
   }, PENDING_BUNDLE_TTL_MS)
+
   if (typeof timer === 'object' && 'unref' in timer) {
     timer.unref()
   }
+
   return timer
 }
 
@@ -110,14 +117,18 @@ function getPendingBundleForUpload(bundleSubmissionId: unknown): {
   ) {
     throw new Error('bundleSubmissionId has invalid format')
   }
+
   prunePendingBundles()
   const pending = pendingBundles.get(bundleSubmissionId)
+
   if (!pending) {
     throw new Error('review file has expired; create a new one before sending')
   }
+
   if (!pending.previewOpened) {
     throw new Error('open the review file before sending')
   }
+
   // Why: the preview file is user-editable once opened in the OS. Upload only
   // the redacted bytes main collected and retained before preview.
   return { bundle: pending.bundle, payload: pending.bundle.payload }
@@ -130,11 +141,14 @@ function getPendingPreviewFilePath(bundleSubmissionId: unknown): string {
   ) {
     throw new Error('bundleSubmissionId has invalid format')
   }
+
   prunePendingBundles()
   const pending = pendingBundles.get(bundleSubmissionId)
+
   if (!pending) {
     throw new Error('review file has expired; create a new one before opening')
   }
+
   return pending.previewFilePath
 }
 
@@ -145,11 +159,13 @@ function discardPendingBundle(bundleSubmissionId: unknown): void {
   ) {
     throw new Error('bundleSubmissionId has invalid format')
   }
+
   deletePendingBundle(bundleSubmissionId)
 }
 
 function deletePendingBundle(bundleSubmissionId: string): void {
   const pending = pendingBundles.get(bundleSubmissionId)
+
   if (pending) {
     clearTimeout(pending.ttlTimer)
     deletePreviewFile(pending.previewFilePath)
@@ -159,11 +175,13 @@ function deletePendingBundle(bundleSubmissionId: string): void {
 
 function getPreviewDirectory(): string {
   let base: string
+
   try {
     base = app.getPath('temp')
   } catch {
     base = tmpdir()
   }
+
   return join(base, 'orca-diagnostic-bundle-previews')
 }
 
@@ -172,6 +190,7 @@ function writeBundlePreviewFile(bundle: CollectedBundle): string {
   mkdirSync(previewDirectory, { mode: 0o700, recursive: true })
   const previewFilePath = join(previewDirectory, `${bundle.bundleSubmissionId}.ndjson`)
   writeFileSync(previewFilePath, bundle.payload, { encoding: 'utf8', mode: 0o600 })
+
   return previewFilePath
 }
 
@@ -201,6 +220,7 @@ async function confirmBundleUpload(bundle: CollectedBundle): Promise<boolean> {
       bundle.bytes / 1024
     )} KB`
   })
+
   return result.response === 0
 }
 
@@ -217,9 +237,11 @@ export function registerDiagnosticsHandlers(): void {
       // malicious renderer must not be able to assemble a bundle when the
       // user has disabled diagnostic-bundle collection in Settings → Privacy.
       const status = getDiagnosticsStatus()
+
       if (!status.bundleEnabled) {
         throw new Error('creating review files is disabled')
       }
+
       // Renderer-controlled input → narrow at the boundary. The default
       // (DEFAULT_LOOKBACK_MINUTES in bundle.ts) is fine for the common
       // "last 30 minutes" case the Privacy pane button triggers.
@@ -227,6 +249,7 @@ export function registerDiagnosticsHandlers(): void {
         typeof lookbackMinutesIn === 'number' && Number.isFinite(lookbackMinutesIn)
           ? Math.max(1, Math.min(30 * 24 * 60, Math.floor(lookbackMinutesIn)))
           : undefined
+
       const bundle = collectDiagnosticBundle({
         appVersion: app.getVersion(),
         platform: osPlatform(),
@@ -235,7 +258,9 @@ export function registerDiagnosticsHandlers(): void {
         orcaChannel: resolveDiagnosticOrcaChannel(),
         ...(lookbackMinutes !== undefined ? { lookbackMinutes } : {})
       })
+
       rememberBundle(bundle)
+
       return toBundlePreview(bundle)
     }
   )
@@ -246,35 +271,46 @@ export function registerDiagnosticsHandlers(): void {
       // Why: the renderer is in the threat model. Upload only a payload main
       // collected and retained for preview, never renderer-supplied bytes.
       const pendingForConfirmation = getPendingBundleForUpload(bundleSubmissionId)
+
       // Consent gate: main is the consent enforcement boundary; the
       // renderer-side button-hide is UX, not security. Re-check here in case
       // the user toggled the setting off between collect and upload.
       if (!getDiagnosticsStatus().bundleEnabled) {
         throw new Error('sending diagnostics is disabled')
       }
+
       const confirmed = await confirmBundleUpload(pendingForConfirmation.bundle)
+
       if (!confirmed) {
         return { canceled: true }
       }
+
       // Why: the preview can be discarded or diagnostics can be disabled
       // while the native confirmation dialog is open.
       const { bundle, payload } = getPendingBundleForUpload(bundleSubmissionId)
+
       if (!getDiagnosticsStatus().bundleEnabled) {
         throw new Error('sending diagnostics is disabled')
       }
+
       const tokenEndpoint = resolveDiagnosticTokenEndpoint()
+
       if (!tokenEndpoint) {
         throw new Error('sending diagnostics is not configured for this build')
       }
+
       const result = await uploadDiagnosticBundle({
         tokenEndpoint,
         payload,
         bundleSubmissionId: bundle.bundleSubmissionId
       })
+
       const uploadedPending = pendingBundles.get(bundle.bundleSubmissionId)
+
       if (uploadedPending) {
         deletePendingBundle(bundle.bundleSubmissionId)
       }
+
       return result
     }
   )
@@ -282,10 +318,13 @@ export function registerDiagnosticsHandlers(): void {
   ipcMain.handle('diagnostics:openBundlePreview', async (_event, bundleSubmissionId: unknown) => {
     const previewFilePath = getPendingPreviewFilePath(bundleSubmissionId)
     const errorMessage = await shell.openPath(previewFilePath)
+
     if (errorMessage) {
       throw new Error('could not open review file')
     }
+
     const pending = pendingBundles.get(bundleSubmissionId as string)
+
     if (pending) {
       pending.previewOpened = true
     }
@@ -299,10 +338,13 @@ export function registerDiagnosticsHandlers(): void {
     if (!isTicketId(ticketId)) {
       throw new Error('ticketId has invalid format')
     }
+
     const tokenEndpoint = resolveDiagnosticTokenEndpoint()
+
     if (!tokenEndpoint) {
       throw new Error('diagnostic upload endpoint is not configured for this build')
     }
+
     await deleteDiagnosticBundle({ tokenEndpoint, ticketId })
   })
 }

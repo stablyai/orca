@@ -14,8 +14,11 @@ import {
 import { BrowserRouteWebContentsRegistry } from './browser-route-webcontents-registry'
 
 const GESTURE_CLICK_AT = 1_700_000_000_000
+
 const partition = `persist:orca-browser-v1-${'a'.repeat(64)}`
+
 const otherPartition = `persist:orca-browser-v1-${'b'.repeat(64)}`
+
 const page = {
   partition,
   browserPageId: 'page-a',
@@ -88,6 +91,7 @@ describe('route guest OAuth popups', () => {
       expect(allowed.action).toBe('allow')
       allowed.createWindow?.(popupOptions(createPopupContents()))
     }
+
     expect(popups()).toHaveLength(4)
 
     guest.emitInput('mouseDown')
@@ -282,16 +286,19 @@ function attachGuest() {
       opened.push(record)
       const closedListeners: (() => void)[] = []
       const prepared = prepareContent(contents as unknown as WebContents)
+
       if (prepared) {
         contents.order.push('load')
         record.loaded = true
       } else {
         record.closed = true
       }
+
       return {
         contentWebContents: contents,
         close: () => {
           record.closed = true
+
           for (const listener of closedListeners.splice(0)) {
             listener()
           }
@@ -299,8 +306,10 @@ function attachGuest() {
         onClosed: (listener: () => void) => {
           if (record.closed) {
             listener()
+
             return
           }
+
           closedListeners.push(listener)
         }
       }
@@ -310,6 +319,7 @@ function attachGuest() {
   const pageAuthority = Symbol('page-authority')
   const blocked: { openerWebContentsId: number; url: string }[] = []
   let prepared = true
+
   const registry = new BrowserRouteWebContentsRegistry({
     reportBlockedPopup: (input) => {
       blocked.push(input)
@@ -322,12 +332,15 @@ function attachGuest() {
       prepared && input.browserPageId === page.browserPageId ? pageAuthority : null,
     retirePreparedPage: () => {
       prepared = false
+
       return true
     },
     retirePreparedPagesOwnedByRenderer: () => 0
   })
+
   const guest = createRouteGuest(routeSession)
   expect(registry.attachGuest(guest.guest)).toBe(true)
+
   return { registry, guest, popups: () => opened, blockedPopups: () => blocked }
 }
 
@@ -335,14 +348,17 @@ function attachRegisteredGuest() {
   const harness = attachGuest()
   expect(harness.registry.registerGuest(page)).toBe(true)
   expect(harness.registry.grantNavigation(page)).toBe(true)
+
   return harness
 }
 
 function createRouteGuest(session: Session) {
   const listeners = new Map<string, Set<(...args: unknown[]) => void>>()
   let destroyed = false
+
   let windowOpenHandler: ((details: { url: string }) => Electron.WindowOpenHandlerResponse) | null =
     null
+
   const guest = {
     id: page.webContentsId,
     session,
@@ -369,6 +385,7 @@ function createRouteGuest(session: Session) {
       windowOpenHandler = handler
     }
   }
+
   return {
     guest: guest as unknown as WebContents,
     emitInput: (type: string) => {
@@ -380,6 +397,7 @@ function createRouteGuest(session: Session) {
       windowOpenHandler?.({ url }) ?? ({ action: 'deny' } as Electron.WindowOpenHandlerResponse),
     destroy: () => {
       destroyed = true
+
       for (const listener of listeners.get('destroyed') ?? []) {
         listener()
       }
@@ -408,14 +426,18 @@ function createPopupContents(options: { partition?: string; webRtcPolicyThrows?:
 } {
   const order: string[] = []
   const listeners = new Map<string, Set<(...args: unknown[]) => void>>()
+
   let windowOpenHandler: ((details: { url: string }) => Electron.WindowOpenHandlerResponse) | null =
     null
+
   let destroyed = false
+
   const add = (event: string, listener: (...args: unknown[]) => void): void => {
     const bucket = listeners.get(event) ?? new Set()
     bucket.add(listener)
     listeners.set(event, bucket)
   }
+
   return {
     id: ++nextPopupWebContentsId,
     order,
@@ -424,6 +446,7 @@ function createPopupContents(options: { partition?: string; webRtcPolicyThrows?:
       if (options.webRtcPolicyThrows) {
         throw new Error('policy unavailable')
       }
+
       order.push('webrtc-policy')
     }),
     emitInput: (type: string) => {
@@ -433,6 +456,7 @@ function createPopupContents(options: { partition?: string; webRtcPolicyThrows?:
     },
     emitDestroyed: () => {
       destroyed = true
+
       for (const listener of listeners.get('destroyed') ?? []) {
         listener()
       }

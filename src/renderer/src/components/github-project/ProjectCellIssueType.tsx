@@ -31,10 +31,12 @@ export function ProjectIssueTypeCell({
   const [loading, setLoading] = useState(false)
   const [owner, repo] = (row.content.repository ?? '').split('/')
   const { lookupSlug } = useRepoSlugIndex()
+
   const matchedRepo = useMemo(
     () => lookupSlug(row.content.repository, sourceHost)[0] ?? null,
     [lookupSlug, row.content.repository, sourceHost]
   )
+
   const ownerSettings = useAppStore(
     useShallow((state) => getSettingsForRepoRuntimeOwner(state, matchedRepo?.id ?? null))
   )
@@ -43,9 +45,11 @@ export function ProjectIssueTypeCell({
     if (!open || !owner || !repo) {
       return
     }
+
     let cancelled = false
     setLoading(true)
     const target = getActiveRuntimeTarget(matchedRepo ? ownerSettings : sourceSettings)
+
     const request =
       target.kind === 'environment'
         ? callRuntimeRpc<ListIssueTypesBySlugResult>(
@@ -59,6 +63,7 @@ export function ProjectIssueTypeCell({
             repo,
             ...(sourceHost ? { host: sourceHost } : {})
           })
+
     void request
       .then((result) => {
         if (!cancelled && result.ok) {
@@ -70,6 +75,7 @@ export function ProjectIssueTypeCell({
           setLoading(false)
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -92,9 +98,11 @@ export function ProjectIssueTypeCell({
       )}
     </span>
   )
+
   if (!editable) {
     return <div>{trigger}</div>
   }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>

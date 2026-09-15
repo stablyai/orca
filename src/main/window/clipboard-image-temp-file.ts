@@ -19,6 +19,7 @@ function joinRemotePath(basePath: string, fileName: string): string {
   if (isWindowsAbsolutePathLike(basePath)) {
     return path.win32.join(basePath, fileName)
   }
+
   return path.posix.join(basePath, fileName)
 }
 
@@ -37,6 +38,7 @@ export async function saveClipboardImageBufferAsTempFile(
     // Why: SSH terminal agents run on the remote host, so the pasted path must
     // name a remote file. The provider's base64 path writes binary bytes via SFTP.
     await provider.writeFileBase64(remotePath, buffer.toString('base64'))
+
     return remotePath
   }
 
@@ -45,5 +47,6 @@ export async function saveClipboardImageBufferAsTempFile(
   // Why: the OS temp dir is outside every allowed root, so without this the
   // composer's own thumbnail/preview read of the file it just wrote is denied.
   authorizeExternalPath(tempPath)
+
   return tempPath
 }

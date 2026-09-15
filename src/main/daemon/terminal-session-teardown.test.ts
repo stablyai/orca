@@ -3,6 +3,7 @@ import { TerminalSessionTeardown } from './terminal-session-teardown'
 import type { Session } from './session'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
@@ -85,8 +86,10 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
     const teardown = new TerminalSessionTeardown(sessions)
 
     await teardown.killSession('s1', session, true)
+
     const ownsRoot = (killWithDescendantSweepMock.mock.calls[0][2] as { ownsRoot: () => boolean })
       .ownsRoot
+
     expect(ownsRoot()).toBe(true)
 
     // A natural exit or reap must stop us from taskkilling a recycled PID.
@@ -144,7 +147,9 @@ describe('pty job ownership reaches the daemon teardown path', () => {
     const deps = killWithDescendantSweepMock.mock.calls[0][2] as {
       terminateOwnedTree?: () => string
     }
+
     expect(deps.terminateOwnedTree, 'sweep ran without job ownership').toBeTypeOf('function')
+
     return deps.terminateOwnedTree!
   }
 

@@ -27,6 +27,7 @@ function resolveModelStates(
   if (previous.length !== next.length) {
     return next
   }
+
   return previous.every((state, index) => sameSpeechModelState(state, next[index]))
     ? previous
     : next
@@ -36,6 +37,7 @@ export const createDictationSlice: StateCreator<AppState, [], [], DictationSlice
   const setModelStates = (states: SpeechModelState[]): void => {
     set((prev) => {
       const modelStates = resolveModelStates(prev.modelStates, states)
+
       return modelStates === prev.modelStates ? prev : { modelStates }
     })
   }

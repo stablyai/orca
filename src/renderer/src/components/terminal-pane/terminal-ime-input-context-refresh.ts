@@ -39,6 +39,7 @@ export function refreshTerminalImeInputContext(
   options: TerminalImeInputContextRefreshOptions
 ): boolean {
   const isMac = options.isMac ?? isMacUserAgent()
+
   if (!isMac || !helper.isConnected) {
     return false
   }
@@ -47,6 +48,7 @@ export function refreshTerminalImeInputContext(
   // Why: Electron/Chromium can keep a stale NSTextInputContext on the xterm
   // helper after focus handoffs; blur/refocus rebuilds it so CJK IMEs work.
   refreshingHelpers.add(helper)
+
   try {
     helper.blur()
   } finally {
@@ -57,16 +59,22 @@ export function refreshTerminalImeInputContext(
   schedule(() => {
     if (!helper.isConnected) {
       options.onRefocusSkipped?.(ownerDocument.activeElement)
+
       return
     }
+
     const active = ownerDocument.activeElement
+
     if (active === helper || isDocumentBodyOrNull(active, ownerDocument)) {
       helper.focus()
+
       if (ownerDocument.activeElement !== helper) {
         options.onRefocusSkipped?.(ownerDocument.activeElement)
       }
+
       return
     }
+
     options.onRefocusSkipped?.(active)
   })
 

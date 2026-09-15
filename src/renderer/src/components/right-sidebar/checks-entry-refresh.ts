@@ -37,6 +37,7 @@ export function shouldEntryRefresh(input: EntryRefreshInput): boolean {
     if (checksFetchedAt === undefined || checksFetchedAt < cutoff) {
       return true
     }
+
     if (commentsFetchedAt === undefined || commentsFetchedAt < cutoff) {
       return true
     }

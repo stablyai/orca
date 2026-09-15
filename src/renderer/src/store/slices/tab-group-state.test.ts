@@ -32,6 +32,7 @@ describe('findTabAndWorktree', () => {
       w1: [makeTab({ id: 't1', worktreeId: 'w1' })],
       w2: [makeTab({ id: 't2', worktreeId: 'w2' })]
     }
+
     const result = findTabAndWorktree(tabs, 't2')
     expect(result).not.toBeNull()
     expect(result!.worktreeId).toBe('w2')
@@ -165,6 +166,7 @@ describe('patchTab', () => {
     const tabs: Record<string, Tab[]> = {
       w1: [makeTab({ id: 't1', worktreeId: 'w1', label: 'old' })]
     }
+
     const result = patchTab(tabs, 't1', { label: 'new' })
     expect(result).not.toBeNull()
     expect(result!.unifiedTabsByWorktree.w1[0].label).toBe('new')
@@ -174,6 +176,7 @@ describe('patchTab', () => {
     const tabs: Record<string, Tab[]> = {
       w1: [makeTab({ id: 't1', worktreeId: 'w1' })]
     }
+
     const result = patchTab(tabs, 't1', { isPinned: true, isPreview: false })
     expect(result).not.toBeNull()
     expect(result!.unifiedTabsByWorktree.w1[0].isPinned).toBe(true)
@@ -191,6 +194,7 @@ describe('patchTab', () => {
         makeTab({ id: 't2', worktreeId: 'w1', label: 'b' })
       ]
     }
+
     const result = patchTab(tabs, 't1', { label: 'changed' })
     expect(result!.unifiedTabsByWorktree.w1[1].label).toBe('b')
   })

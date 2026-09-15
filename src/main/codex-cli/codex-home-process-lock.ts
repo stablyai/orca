@@ -12,6 +12,7 @@ const lockTails = new Map<string, Promise<unknown>>()
 
 export function resolveCodexHomeProcessLockKey(codexHomePath?: string | null): string {
   const home = codexHomePath ?? process.env.CODEX_HOME ?? join(homedir(), '.codex')
+
   return normalizeRuntimePathForComparison(home)
 }
 
@@ -23,6 +24,7 @@ export function resolveCodexHomeProcessLockKeyForSpawnEnv(
     // buildWslLauncherEnv forwards only explicit values that differ from the
     // host process; all other cases use the distro user's default home.
     const codexHome = env?.CODEX_HOME !== process.env.CODEX_HOME ? (env?.CODEX_HOME ?? null) : null
+
     // Why: WSL spawns carry a Linux CODEX_HOME; key it through the same UNC
     // normalization the probe's \\wsl$ home path uses so both lanes collide.
     // Without an explicit home the distro default is unknowable from the host;
@@ -31,25 +33,30 @@ export function resolveCodexHomeProcessLockKeyForSpawnEnv(
       `//wsl$/${wslDistro}${codexHome ?? '/.orca-default-codex-home'}`
     )
   }
+
   // An explicit env is the child's complete environment. If CODEX_HOME was
   // deliberately stripped, the child uses ~/.codex regardless of our ambient env.
   const codexHome = env === undefined ? process.env.CODEX_HOME : env.CODEX_HOME
+
   return normalizeRuntimePathForComparison(codexHome ?? join(homedir(), '.codex'))
 }
 
 export function withCodexHomeProcessLock<T>(lockKey: string, fn: () => Promise<T>): Promise<T> {
   const prior = lockTails.get(lockKey) ?? Promise.resolve()
   const run = prior.then(fn)
+
   // Why: keep the queue alive past a failed run so later entrants still start.
   const tail = run.then(
     () => undefined,
     () => undefined
   )
+
   lockTails.set(lockKey, tail)
   void tail.then(() => {
     if (lockTails.get(lockKey) === tail) {
       lockTails.delete(lockKey)
     }
   })
+
   return run
 }

@@ -40,20 +40,26 @@ export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
 export function markCursorWorkspaceTrusted(workspacePath: string): void {
   const absPath = canonicalize(workspacePath)
   const slug = cursorWorkspaceSlug(absPath)
+
   if (!slug) {
     return
   }
+
   const trustDir = join(homedir(), '.cursor', 'projects', slug)
   const trustFile = join(trustDir, '.workspace-trusted')
+
   if (existsSync(trustFile)) {
     return
   }
+
   mkdirSync(trustDir, { recursive: true })
+
   const payload = JSON.stringify(
     { trustedAt: new Date().toISOString(), workspacePath: absPath },
     null,
     2
   )
+
   writeFileAtomically(trustFile, `${payload}\n`)
 }
 
@@ -72,10 +78,12 @@ export function markCopilotFolderTrusted(workspacePath: string): void {
   const configDir = join(homedir(), '.copilot')
   const configPath = join(configDir, 'config.json')
   let config: Record<string, unknown> = {}
+
   try {
     if (existsSync(configPath)) {
       const raw = readFileSync(configPath, 'utf-8')
       const parsed = JSON.parse(raw)
+
       if (parsed && typeof parsed === 'object') {
         config = parsed as Record<string, unknown>
       }
@@ -86,18 +94,24 @@ export function markCopilotFolderTrusted(workspacePath: string): void {
     // after the user accepts the trust prompt manually.
     return
   }
+
   const existing = Array.isArray(config.trustedFolders) ? (config.trustedFolders as unknown[]) : []
+
   const normalizedExisting = existing.map((entry) =>
     typeof entry === 'string' ? canonicalize(entry) : null
   )
+
   if (normalizedExisting.includes(absPath)) {
     return
   }
+
   const next = [...existing.filter((e) => typeof e === 'string'), absPath]
   config.trustedFolders = next
+
   if (!existsSync(configDir)) {
     mkdirSync(configDir, { recursive: true })
   }
+
   writeFileAtomically(configPath, `${JSON.stringify(config, null, 2)}\n`)
 }
 
@@ -115,6 +129,7 @@ export function markCodexProjectTrusted(workspacePath: string): Promise<void> {
   // Why: Orca-launched Codex runs with an Orca-owned CODEX_HOME, so the trust
   // preset must also update the runtime config Codex will actually read.
   const runtimeTomlPath = join(getOrcaManagedCodexHomePath(), 'config.toml')
+
   // Why (#16441): hook installs now await a codex app-server grant, so an
   // unqueued write here can land inside their capture->restore window and be
   // reverted. Same runtime-before-system lock order the installer takes.
@@ -128,33 +143,44 @@ export function markCodexProjectTrusted(workspacePath: string): Promise<void> {
 
 function resolveCodexProjectTrustRoot(workspacePath: string): string {
   const absPath = canonicalize(workspacePath)
+
   try {
     const gitDirReference = readFileSync(join(absPath, '.git'), 'utf-8').trim()
+
     if (!gitDirReference.startsWith('gitdir:')) {
       return absPath
     }
+
     const gitDirPath = gitDirReference.slice('gitdir:'.length).trim()
+
     if (!gitDirPath) {
       return absPath
     }
+
     const gitDir = resolve(absPath, gitDirPath)
     const worktreesDir = dirname(gitDir)
+
     if (basename(worktreesDir) !== 'worktrees') {
       return absPath
     }
+
     // Why: workspace-controlled .git metadata must not broaden trust without Git's reciprocal link.
     const gitDirBacklink = readFileSync(join(gitDir, 'gitdir'), 'utf-8').trim()
+
     if (!gitDirBacklink) {
       return absPath
     }
+
     const resolvedBacklink = resolve(gitDir, gitDirBacklink)
     const workspaceGitFile = join(absPath, '.git')
+
     if (
       resolvedBacklink !== workspaceGitFile &&
       canonicalize(resolvedBacklink) !== canonicalize(workspaceGitFile)
     ) {
       return absPath
     }
+
     // Why: mirror Codex's validated .git/worktrees/<name> traversal instead of trusting arbitrary commondir contents.
     return canonicalize(dirname(dirname(worktreesDir)))
   } catch {
@@ -174,6 +200,7 @@ function canonicalize(p: string): string {
   } catch {
     // Fall through to the raw input.
   }
+
   return p
 }
 
@@ -182,5 +209,6 @@ function cursorWorkspaceSlug(absPath: string): string {
   // Why: Windows absolute paths include characters such as ":" that cannot
   // be used in the ~/.cursor/projects/<slug> directory name.
   const slug = stripped.replace(/[\\/:*?"<>|]+/g, '-')
+
   return slug
 }

@@ -24,6 +24,7 @@ function Harness({
   onSettled: (confirmed: boolean) => void
 }): React.JSX.Element {
   const confirm = useConfirmationDialog()
+
   return (
     <button type="button" onClick={() => void confirm(options).then(onSettled)}>
       ask
@@ -38,6 +39,7 @@ function renderDialog(options: ConfirmationDialogOptions): { onSettled: ReturnTy
       <Harness options={options} onSettled={onSettled} />
     </ConfirmationDialogProvider>
   )
+
   return { onSettled }
 }
 
@@ -50,6 +52,7 @@ describe('ConfirmationDialogProvider', () => {
       confirmLabel: 'Clear filters and reveal',
       initialFocus: 'confirm'
     })
+
     await userEvent.click(screen.getByRole('button', { name: 'ask' }))
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Clear filters and reveal' })).toHaveFocus()
@@ -63,6 +66,7 @@ describe('ConfirmationDialogProvider', () => {
       title: 'Reveal hidden workspace?',
       initialFocus: 'confirm'
     })
+
     await userEvent.click(screen.getByRole('button', { name: 'ask' }))
     await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm' })).toHaveFocus())
     await userEvent.keyboard('{Escape}')
@@ -85,6 +89,7 @@ describe('ConfirmationDialogProvider', () => {
 
   it('runs the skip callback when confirmed with the box checked', async () => {
     const onConfirmed = vi.fn()
+
     const { onSettled } = renderDialog({
       title: 'Delete artifact?',
       confirmLabel: 'Delete',
@@ -101,6 +106,7 @@ describe('ConfirmationDialogProvider', () => {
 
   it('never saves the preference when the user backs out', async () => {
     const onConfirmed = vi.fn()
+
     const { onSettled } = renderDialog({
       title: 'Delete artifact?',
       dontAskAgain: { onConfirmed }

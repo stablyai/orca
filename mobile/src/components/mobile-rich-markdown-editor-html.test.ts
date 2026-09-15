@@ -8,41 +8,50 @@ function editorScript(): string {
   const html = buildMobileRichMarkdownEditorHtml()
   const script = html.match(/<script>([\s\S]*)<\/script>/)?.[1]
   expect(script).toBeTruthy()
+
   return script ?? ''
 }
 
 function extractBracedSource(script: string, start: number, label: string): string {
   const bodyStart = script.indexOf('{', start)
   let depth = 0
+
   for (let index = bodyStart; index < script.length; index += 1) {
     const char = script[index]
+
     if (char === '{') {
       depth += 1
     }
+
     if (char === '}') {
       depth -= 1
+
       if (depth === 0) {
         return script.slice(start, index + 1)
       }
     }
   }
+
   throw new Error(`Could not extract ${label}`)
 }
 
 function extractFunctionSource(script: string, name: string): string {
   const start = script.indexOf(`function ${name}`)
   expect(start).toBeGreaterThanOrEqual(0)
+
   return extractBracedSource(script, start, name)
 }
 
 function extractEditorListenerSource(script: string, type: string): string {
   const start = script.indexOf(`editor.addEventListener('${type}'`)
   expect(start).toBeGreaterThanOrEqual(0)
+
   return `${extractBracedSource(script, start, `${type} listener`)});`
 }
 
 function runtimeMarkdownToHtml(markdown: string, editable: boolean): string {
   const script = editorScript()
+
   const sources = [
     'var editable = arguments[1];',
     extractFunctionSource(script, 'decodeMarkdownEntities'),
@@ -61,17 +70,20 @@ function runtimeMarkdownToHtml(markdown: string, editable: boolean): string {
     extractFunctionSource(script, 'markdownToHtml'),
     'return markdownToHtml(arguments[0]);'
   ].join('\n')
+
   return new Function(sources)(markdown, editable) as string
 }
 
 function runtimeListMarkdown(): (list: unknown) => string {
   const script = editorScript()
+
   const sources = [
     'function listItemText(li) { return li.text; }',
     'function directNestedLists(li) { return li.nestedLists || []; }',
     extractFunctionSource(script, 'listMarkdown'),
     'return function (list) { return listMarkdown(list, 0); };'
   ].join('\n')
+
   return new Function(sources)() as (list: unknown) => string
 }
 
@@ -91,6 +103,7 @@ function createFakeRange(container: unknown): FakeRange {
     },
     collapse: () => {}
   }
+
   return range
 }
 
@@ -125,6 +138,7 @@ function createSelectionRuntime(caretContainer: string | null) {
       listeners.set(type, handler)
     }
   }
+
   const fakeDocument: {
     activeElement: unknown
     createRange: () => FakeRange
@@ -134,6 +148,7 @@ function createSelectionRuntime(caretContainer: string | null) {
     createRange: () => createFakeRange('detached'),
     caretRangeFromPoint: () => (caretAtPoint ? createFakeRange(caretAtPoint) : null)
   }
+
   const fakeWindow = {
     getSelection: () => ({
       get rangeCount() {
@@ -150,6 +165,7 @@ function createSelectionRuntime(caretContainer: string | null) {
   }
 
   const script = editorScript()
+
   const sources = [
     'var editor = arguments[0];',
     'var document = arguments[1];',
@@ -168,6 +184,7 @@ function createSelectionRuntime(caretContainer: string | null) {
     extractEditorListenerSource(script, 'click'),
     'return { dismissKeyboard: dismissKeyboard, restoreSelectionOrEnd: restoreSelectionOrEnd };'
   ].join('\n')
+
   const api = new Function(sources)(editor, fakeDocument, fakeWindow) as {
     dismissKeyboard: () => void
     restoreSelectionOrEnd: () => void
@@ -194,7 +211,9 @@ function createSelectionRuntime(caretContainer: string | null) {
       if (ranges.length === 0) {
         return null
       }
+
       const container = ranges[0].commonAncestorContainer
+
       return container === editor ? 'editor-end' : (container as string)
     },
     get focused() {
@@ -237,6 +256,7 @@ describe('mobile rich markdown editor HTML', () => {
     expect(html).toContain('<li><p>Sibling</p></li></ul>')
 
     const listMarkdown = runtimeListMarkdown()
+
     const fakeList = {
       tagName: 'UL',
       getAttribute: () => null,
@@ -301,6 +321,7 @@ describe('mobile rich markdown editor HTML', () => {
     expect(html).toContain('data-list-number="3"')
 
     const listMarkdown = runtimeListMarkdown()
+
     const fakeList = {
       tagName: 'OL',
       getAttribute: () => null,
@@ -327,6 +348,7 @@ describe('mobile rich markdown editor HTML', () => {
 
   it('serializes ordered lists from parent start when item metadata is missing', () => {
     const listMarkdown = runtimeListMarkdown()
+
     const fakeList = {
       tagName: 'OL',
       getAttribute: (name: string) => (name === 'start' ? '8' : null),

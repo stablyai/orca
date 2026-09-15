@@ -7,7 +7,9 @@ import { build } from 'esbuild'
 import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
 
 const baseline = process.argv[2] ?? '20ab9950654'
+
 const file = 'src/renderer/src/components/editor/markdown-rich-mode.ts'
+
 async function load(contents) {
   const result = await build({
     stdin: { contents, loader: 'ts', resolveDir: dirname(resolve(file)) },
@@ -33,15 +35,19 @@ async function load(contents) {
       }
     ]
   })
+
   return import(
     `data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`
   )
 }
+
 const arms = {
   before: await load(execFileSync('git', ['show', `${baseline}:${file}`], { encoding: 'utf8' })),
   after: await load(readFileSync(file, 'utf8'))
 }
+
 const results = []
+
 for (const [name, content] of [
   ['plain', '# Heading\nOrdinary prose with <placeholder>.'],
   ['complete', '<!-- metadata --><span>text</span>'],
@@ -54,31 +60,40 @@ for (const [name, content] of [
     arms.before.getMarkdownRichModeUnsupportedReason(content)
   )
   const iterations = name.includes('unclosed') ? 2 : 100
+
   function run(arm) {
     global.gc?.()
     const start = performance.now()
     const cpuStart = process.cpuUsage()
+
     for (let i = 0; i < iterations; i++) {
       arms[arm].getMarkdownRichModeUnsupportedReason(content)
     }
+
     const cpu = process.cpuUsage(cpuStart)
+
     return {
       ms: (performance.now() - start) / iterations,
       cpuMs: (cpu.user + cpu.system) / 1000 / iterations
     }
   }
+
   run('before')
   run('after')
   const samples = { before: [], after: [] }
+
   for (const pair of buildCounterbalancedSchedule(10, 'before', 'after')) {
     for (const arm of pair) {
       samples[arm].push(run(arm))
     }
   }
+
   const median = (values) => {
     const sorted = [...values].sort((a, b) => a - b)
+
     return (sorted[4] + sorted[5]) / 2
   }
+
   results.push({
     name,
     beforeCpuMs: median(samples.before.map((s) => s.cpuMs)),
@@ -88,6 +103,7 @@ for (const [name, content] of [
     samples
   })
 }
+
 console.log(
   JSON.stringify(
     {

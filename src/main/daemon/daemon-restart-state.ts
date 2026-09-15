@@ -15,8 +15,10 @@ export function runCoalescedDaemonRestart(
   if (restartInFlight) {
     return restartInFlight
   }
+
   restartInFlight = run().finally(() => {
     restartInFlight = null
   })
+
   return restartInFlight
 }

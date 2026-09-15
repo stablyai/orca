@@ -38,6 +38,7 @@ function openTerminal(): Rig {
   const terminal = new Terminal({ cols: 80, rows: 30 })
   terminal.open(container)
   openTerminals.push(terminal)
+
   return { container, terminal }
 }
 
@@ -53,12 +54,14 @@ function write(terminal: Terminal, data: string): Promise<void> {
 async function writeAwaitingRender(terminal: Terminal, data: string): Promise<void> {
   await write(terminal, data)
   await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+
   const rendered = new Promise<void>((resolve) => {
     const listener = terminal.onRender(() => {
       listener.dispose()
       resolve()
     })
   })
+
   terminal.refresh(0, terminal.rows - 1)
   await rendered
 }
@@ -70,14 +73,18 @@ function cursorCell(container: HTMLElement): Element | null {
 function describeCells(terminal: Terminal, count: number): string[] {
   const buffer = terminal.buffer.active
   const line = buffer.getLine(buffer.cursorY)
+
   if (!line) {
     throw new Error('cursor row is missing')
   }
+
   const cells: string[] = []
+
   for (let x = 0; x < count; x++) {
     const cell = line.getCell(x)
     cells.push(`${cell?.getChars() ?? ''}:${cell?.getWidth() ?? -1}`)
   }
+
   return cells
 }
 
@@ -93,6 +100,7 @@ describe('#12729 — the cursor is not displaced by full-width text', () => {
     while (openTerminals.length > 0) {
       openTerminals.pop()?.dispose()
     }
+
     vi.restoreAllMocks()
     document.body.replaceChildren()
   })

@@ -11,6 +11,7 @@ const mockStore = vi.hoisted(() => {
     retentionSuppressedPaneKeys: {} as Record<string, true>,
     applyActivityClearedAt: vi.fn((patch: Record<string, number | null>) => {
       const next = { ...state.activityClearedAtByPaneKey }
+
       for (const [key, value] of Object.entries(patch)) {
         if (value === null) {
           delete next[key]
@@ -18,16 +19,20 @@ const mockStore = vi.hoisted(() => {
           next[key] = value
         }
       }
+
       state.activityClearedAtByPaneKey = next
     }),
     dismissRetainedAgents: vi.fn((paneKeys: readonly string[]) => {
       const next = { ...state.retainedAgentsByPaneKey }
+
       for (const key of paneKeys) {
         if (state.agentStatusByPaneKey[key]) {
           state.retentionSuppressedPaneKeys[key] = true
         }
+
         delete next[key]
       }
+
       state.retainedAgentsByPaneKey = next
     }),
     clearRetentionSuppressedPaneKeys: vi.fn((paneKeys: string[]) => {
@@ -37,12 +42,15 @@ const mockStore = vi.hoisted(() => {
     }),
     retainAgents: vi.fn((entries: RetainedAgentEntry[]) => {
       const next = { ...state.retainedAgentsByPaneKey }
+
       for (const retained of entries) {
         next[retained.entry.paneKey] = retained
       }
+
       state.retainedAgentsByPaneKey = next
     })
   }
+
   return state
 })
 
@@ -51,6 +59,7 @@ const toastSpy = vi.hoisted(() => vi.fn())
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => mockStore }
 }))
+
 vi.mock('sonner', () => ({ toast: toastSpy }))
 
 import {
@@ -97,9 +106,13 @@ function doneEvent(interrupted: boolean): ActivityEvent {
 }
 
 const workingThread = makeThread('t-working:1', { currentAgentState: 'working' })
+
 const blockedThread = makeThread('t-blocked:1', { currentAgentState: 'blocked' })
+
 const waitingThread = makeThread('t-waiting:1', { currentAgentState: 'waiting' })
+
 const doneThread = makeThread('t-done:1', { latestEvent: doneEvent(false) })
+
 const interruptedThread = makeThread('t-interrupted:1', { latestEvent: doneEvent(true) })
 
 function makeRetained(paneKey: string): RetainedAgentEntry {
@@ -161,6 +174,7 @@ describe('clearCompletedActivity', () => {
       [workingThread, blockedThread, doneThread, interruptedThread],
       mockStore
     )
+
     expect(plan.clearedThreadCount).toBe(2)
     expect(plan.cutoffPatch).toEqual({ 't-done:1': 5_000, 't-interrupted:1': 5_000 })
     expect(plan.restorePatch).toEqual({ 't-done:1': null, 't-interrupted:1': null })
@@ -175,11 +189,13 @@ describe('clearCompletedActivity', () => {
       't-interrupted:1': 5_000
     })
     expect(mockStore.dismissRetainedAgents).toHaveBeenCalledWith(['t-done:1'])
+
     const drop = (
       window as unknown as {
         api: { agentStatus: { dropPersistedBatch: ReturnType<typeof vi.fn> } }
       }
     ).api.agentStatus.dropPersistedBatch
+
     expect(drop).not.toHaveBeenCalled()
 
     lastToastOptions().onAutoClose()
@@ -228,11 +244,13 @@ describe('clearCompletedActivity', () => {
     expect(mockStore.retainedAgentsByPaneKey['t-done:1']).toBeDefined()
 
     lastToastOptions().onAutoClose()
+
     const drop = (
       window as unknown as {
         api: { agentStatus: { dropPersistedBatch: ReturnType<typeof vi.fn> } }
       }
     ).api.agentStatus.dropPersistedBatch
+
     expect(drop).not.toHaveBeenCalled()
   })
 
@@ -303,13 +321,16 @@ describe('clearCompletedActivity', () => {
 
   it('evicts after the fallback window when no toast close callback ever fires', () => {
     vi.useFakeTimers()
+
     try {
       clearCompletedActivity([doneThread])
+
       const drop = (
         window as unknown as {
           api: { agentStatus: { dropPersistedBatch: ReturnType<typeof vi.fn> } }
         }
       ).api.agentStatus.dropPersistedBatch
+
       expect(drop).not.toHaveBeenCalled()
 
       vi.advanceTimersByTime(CLEAR_COMPLETED_EVICTION_FALLBACK_MS)
@@ -324,15 +345,18 @@ describe('clearCompletedActivity', () => {
 
   it('undo cancels the fallback eviction timer', () => {
     vi.useFakeTimers()
+
     try {
       clearCompletedActivity([doneThread])
       lastToastOptions().action.onClick()
       vi.advanceTimersByTime(CLEAR_COMPLETED_EVICTION_FALLBACK_MS)
+
       const drop = (
         window as unknown as {
           api: { agentStatus: { dropPersistedBatch: ReturnType<typeof vi.fn> } }
         }
       ).api.agentStatus.dropPersistedBatch
+
       expect(drop).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
@@ -355,11 +379,13 @@ describe('clearCompletedActivity', () => {
 
   it('pagehide flush evicts a clear whose undo toast is still open', () => {
     clearCompletedActivity([doneThread])
+
     const drop = (
       window as unknown as {
         api: { agentStatus: { dropPersistedBatch: ReturnType<typeof vi.fn> } }
       }
     ).api.agentStatus.dropPersistedBatch
+
     expect(drop).not.toHaveBeenCalled()
 
     // Quit/reload path: the toast's close callbacks never fire.
@@ -375,11 +401,13 @@ describe('clearCompletedActivity', () => {
     clearCompletedActivity([doneThread])
     lastToastOptions().action.onClick()
     flushPendingClearCompletedEvictions()
+
     const drop = (
       window as unknown as {
         api: { agentStatus: { dropPersistedBatch: ReturnType<typeof vi.fn> } }
       }
     ).api.agentStatus.dropPersistedBatch
+
     expect(drop).not.toHaveBeenCalled()
   })
 })

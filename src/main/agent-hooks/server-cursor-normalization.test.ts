@@ -33,6 +33,7 @@ describe('Cursor hook normalization', () => {
       buildBody({ hook_event_name: 'beforeSubmitPrompt', prompt: 'add a README' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.agentType).toBe('cursor')
     expect(result?.payload.prompt).toBe('add a README')
@@ -44,6 +45,7 @@ describe('Cursor hook normalization', () => {
       buildBody({ hook_event_name: 'stop', status: 'completed' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('done')
     expect(result?.payload.agentType).toBe('cursor')
     expect(result?.payload.interrupted).toBeUndefined()
@@ -55,6 +57,7 @@ describe('Cursor hook normalization', () => {
       buildBody({ hook_event_name: 'stop', status: 'cancelled' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('done')
     expect(result?.payload.interrupted).toBe(true)
   })
@@ -65,6 +68,7 @@ describe('Cursor hook normalization', () => {
       buildBody({ hook_event_name: 'beforeShellExecution', command: 'rm -rf /tmp/foo' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('Shell')
     expect(result?.payload.toolInput).toBe('rm -rf /tmp/foo')
@@ -76,6 +80,7 @@ describe('Cursor hook normalization', () => {
       buildBody({ hook_event_name: 'beforeMCPExecution', tool_name: 'fetch', url: 'https://x' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('fetch')
   })
@@ -90,6 +95,7 @@ describe('Cursor hook normalization', () => {
       }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.toolName).toBe('Read')
     expect(result?.payload.toolInput).toBe('/repo/src/app.ts')
@@ -105,6 +111,7 @@ describe('Cursor hook normalization', () => {
       }),
       'production'
     )
+
     const failed = _internals.normalizeHookPayload(
       'cursor',
       buildBody({
@@ -115,6 +122,7 @@ describe('Cursor hook normalization', () => {
       }),
       'production'
     )
+
     // Why: keeping toolName would let the compact sidebar show the tool instead of the failure text, hiding the error.
     expect(failed?.payload).toMatchObject({
       state: 'working',
@@ -130,6 +138,7 @@ describe('Cursor hook normalization', () => {
       buildBody({ hook_event_name: 'afterAgentResponse', text: 'Done — wrote the README.' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.lastAssistantMessage).toBe('Done — wrote the README.')
   })
@@ -140,10 +149,13 @@ describe('Cursor hook normalization', () => {
       buildBody({ hook_event_name: 'beforeSubmitPrompt', prompt: 'add tests' }),
       'production'
     )
+
     expect(submit).not.toBeNull()
+
     if (!submit) {
       throw new Error('expected Cursor beforeSubmitPrompt to normalize')
     }
+
     agentHookServer.ingestRemote(
       {
         paneKey: submit.paneKey,
@@ -159,10 +171,13 @@ describe('Cursor hook normalization', () => {
       buildBody({ hook_event_name: 'stop', status: 'completed' }),
       'production'
     )
+
     expect(stop).not.toBeNull()
+
     if (!stop) {
       throw new Error('expected Cursor stop to normalize')
     }
+
     agentHookServer.ingestRemote(
       {
         paneKey: stop.paneKey,
@@ -178,8 +193,10 @@ describe('Cursor hook normalization', () => {
       buildBody({ hook_event_name: 'afterAgentResponse', text: 'All set.' }),
       'production'
     )
+
     expect(response?.payload.state).toBe('done')
     expect(response?.payload.lastAssistantMessage).toBe('All set.')
+
     if (!response) {
       throw new Error('expected Cursor afterAgentResponse to normalize')
     }
@@ -210,12 +227,15 @@ describe('Cursor hook normalization', () => {
       buildBody({ hook_event_name: 'beforeSubmitPrompt', prompt: 'run checks' }),
       'production'
     )
+
     const shell = _internals.normalizeHookPayload(
       'cursor',
       buildBody({ hook_event_name: 'beforeShellExecution', command: 'pnpm test' }),
       'production'
     )
+
     expect(shell?.payload.state).toBe('working')
+
     const tool = _internals.normalizeHookPayload(
       'cursor',
       buildBody({
@@ -225,12 +245,15 @@ describe('Cursor hook normalization', () => {
       }),
       'production'
     )
+
     expect(tool?.payload.state).toBe('working')
+
     const stop = _internals.normalizeHookPayload(
       'cursor',
       buildBody({ hook_event_name: 'stop', status: 'completed' }),
       'production'
     )
+
     expect(stop?.payload.state).toBe('done')
     expect(stop?.payload.prompt).toBe('run checks')
   })
@@ -245,11 +268,13 @@ describe('Cursor hook normalization', () => {
       }),
       'production'
     )
+
     const result = _internals.normalizeHookPayload(
       'cursor',
       buildBody({ hook_event_name: 'beforeSubmitPrompt', prompt: 'new turn' }),
       'production'
     )
+
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.prompt).toBe('new turn')
     expect(result?.payload.toolName).toBeUndefined()
@@ -262,11 +287,13 @@ describe('Cursor hook normalization', () => {
       buildBody({ hook_event_name: 'beforeSubmitPrompt', prompt: 'add tests' }),
       'production'
     )
+
     const stop = _internals.normalizeHookPayload(
       'cursor',
       buildBody({ hook_event_name: 'stop', status: 'completed' }),
       'production'
     )
+
     expect(stop?.payload.state).toBe('done')
     expect(stop?.payload.prompt).toBe('add tests')
   })
@@ -277,6 +304,7 @@ describe('Cursor hook normalization', () => {
       buildBody({ hook_event_name: 'somethingElse' }),
       'production'
     )
+
     expect(result).toBeNull()
   })
 })

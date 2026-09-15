@@ -19,6 +19,7 @@ const SSH_HOST = 'ssh:devbox' as ExecutionHostId
 
 function makeThread(overrides: Partial<AgentPaneThread> = {}): AgentPaneThread {
   const worktree = makeWorktree()
+
   return {
     paneKey: PANE_KEY,
     paneTitle: 'Test Agent',
@@ -54,9 +55,11 @@ describe('threadMatchesActivityScope', () => {
 
   it('filters by execution host, falling back to the default host for local worktrees', () => {
     const local = makeThread()
+
     const remote = makeThread({
       worktree: { ...makeWorktree(), hostId: SSH_HOST }
     })
+
     const localOnly = makeScope({ visibleHostIds: [LOCAL_EXECUTION_HOST_ID] })
     expect(threadMatchesActivityScope(local, localOnly)).toBe(true)
     expect(threadMatchesActivityScope(remote, localOnly)).toBe(false)
@@ -78,11 +81,13 @@ describe('threadMatchesActivityScope', () => {
 describe('filterThreadsByActivityScope', () => {
   it('returns the input array by identity when the scope is inactive', () => {
     const threads = [makeThread(), makeThread({ paneKey: 'pane-2', repo: null })]
+
     const result = filterThreadsByActivityScope({
       threads,
       scope: makeScope(),
       exemptPaneKey: null
     })
+
     expect(result.threads).toBe(threads)
     expect(result.matchingThreads).toBe(threads)
     expect(result.hiddenCount).toBe(0)
@@ -90,11 +95,13 @@ describe('filterThreadsByActivityScope', () => {
 
   it('returns the input array by identity when an active scope hides nothing', () => {
     const threads = [makeThread()]
+
     const result = filterThreadsByActivityScope({
       threads,
       scope: makeScope({ visibleHostIds: [LOCAL_EXECUTION_HOST_ID] }),
       exemptPaneKey: null
     })
+
     expect(result.threads).toBe(threads)
     expect(result.matchingThreads).toBe(threads)
     expect(result.hiddenCount).toBe(0)
@@ -102,19 +109,23 @@ describe('filterThreadsByActivityScope', () => {
 
   it('hides scoped-out threads but keeps the exempt pane, counting only real hides', () => {
     const local = makeThread()
+
     const remote = makeThread({
       paneKey: 'pane-remote',
       worktree: { ...makeWorktree(), hostId: SSH_HOST }
     })
+
     const exemptRemote = makeThread({
       paneKey: 'pane-exempt',
       worktree: { ...makeWorktree(), hostId: SSH_HOST }
     })
+
     const result = filterThreadsByActivityScope({
       threads: [local, remote, exemptRemote],
       scope: makeScope({ visibleHostIds: [LOCAL_EXECUTION_HOST_ID] }),
       exemptPaneKey: 'pane-exempt'
     })
+
     expect(result.threads).toEqual([local, exemptRemote])
     expect(result.matchingThreads).toEqual([local])
     expect(result.hiddenCount).toBe(1)

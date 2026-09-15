@@ -44,7 +44,9 @@ export function WorkspaceCleanupBrowseToolbar({
     () => listActiveWorkspaceCleanupFacetGroups(browse.filters).length,
     [browse.filters]
   )
+
   const activeFilters = browse.filters.query.trim().length > 0 || activeFacetGroupCount > 0
+
   return (
     <>
       {spaceScanning || facetRows.unmeasuredSizeCount > 0 ? (

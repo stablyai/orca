@@ -5,7 +5,9 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 
 const isArmed = vi.fn()
+
 const setArmed = vi.fn()
+
 vi.mock('../terminal-pane/terminal-render-desync-trigger', () => ({
   isTerminalRenderDesyncSentinelArmed: (...args: unknown[]) => isArmed(...args),
   setTerminalRenderDesyncSentinelArmed: (...args: unknown[]) => setArmed(...args)

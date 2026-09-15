@@ -14,14 +14,17 @@ function statusLabel(task: NativeChatTask): string {
   if (task.status === 'completed') {
     return translate('components.native-chat.taskList.completed', 'Completed')
   }
+
   if (task.status === 'in_progress') {
     return translate('components.native-chat.taskList.inProgress', 'In progress')
   }
+
   return translate('components.native-chat.taskList.pending', 'Pending')
 }
 
 function changeLabel(change: NativeChatTaskChange): string {
   const values = { task: change.task.content }
+
   switch (change.kind) {
     case 'added':
       return translate('components.native-chat.taskList.added', 'Added {{task}}', values)
@@ -43,6 +46,7 @@ function changeLabel(change: NativeChatTaskChange): string {
 function TaskRow({ task, label }: { task: NativeChatTask; label?: string }): React.JSX.Element {
   const Icon =
     task.status === 'completed' ? CircleCheck : task.status === 'in_progress' ? CircleDot : Circle
+
   return (
     <li
       className={cn(
@@ -91,6 +95,7 @@ export function NativeChatTaskList({
   presentation?: 'inline' | 'composer'
 }): React.JSX.Element {
   const completed = list.tasks.filter((task) => task.status === 'completed').length
+
   if (presentation === 'composer') {
     return (
       <Collapsible className="rounded-md border border-border bg-muted/30">
@@ -124,7 +129,9 @@ export function NativeChatTaskList({
       </Collapsible>
     )
   }
+
   const changes = previous ? diffNativeChatTaskLists(previous, list) : null
+
   return (
     <div className="space-y-1 py-1">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

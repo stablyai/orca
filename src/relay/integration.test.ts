@@ -139,9 +139,11 @@ describe('Integration: Client Mux ↔ Relay Dispatcher', () => {
 
     it('stat returns file metadata', async () => {
       writeFileSync(path.join(tmpDir, 'sized.txt'), 'abcdef')
+
       const result = (await mux.request('fs.stat', {
         filePath: path.join(tmpDir, 'sized.txt')
       })) as { size: number; type: string; mtime: number }
+
       expect(result).toMatchObject({ type: 'file', size: 6 })
       expect(typeof result.mtime).toBe('number')
     })
@@ -319,6 +321,7 @@ describe('Integration: Client Mux ↔ Relay Dispatcher', () => {
       const result = await mux.request('git.conflictOperation', {
         worktreePath: tmpDir
       })
+
       expect(result).toBe('unknown')
     })
 

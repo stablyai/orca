@@ -5,6 +5,7 @@ export function useAutomationDispatchEvents(): void {
   useEffect(() => {
     const unsubscribe = window.api.automations.onDispatchRequested(handleAutomationDispatchRequest)
     void window.api.automations.rendererReady()
+
     return unsubscribe
   }, [])
 }

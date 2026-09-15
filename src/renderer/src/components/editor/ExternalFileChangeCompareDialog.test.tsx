@@ -13,15 +13,19 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/runtime/runtime-file-client', () => ({
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
+
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   settingsForRuntimeOwner: () => null
 }))
+
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: mocks.getConnectionIdForFile
 }))
+
 vi.mock('@/store', () => ({
   useAppStore: { getState: mocks.getState }
 }))
+
 // Why: the lazy DiffViewer chunk cannot resolve under happy-dom; a stub that
 // echoes its props pins the disk-left/buffer-right wiring instead.
 vi.mock('@/lib/lazy-with-retry', () => ({

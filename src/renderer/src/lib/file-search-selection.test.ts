@@ -12,6 +12,7 @@ afterEach(() => {
   while (unregisterCallbacks.length > 0) {
     unregisterCallbacks.pop()?.()
   }
+
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })

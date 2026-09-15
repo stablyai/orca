@@ -20,17 +20,20 @@ vi.mock('../../../providers/ssh-git-dispatch', () => ({
 
 vi.mock('./ssh-worktree-fallback', async (importOriginal) => {
   const actual = await importOriginal<typeof SshWorktreeFallbackModule>()
+
   return {
     ...actual,
     // Both builders are counted: the point is that NO index is built on the connected path.
     createSshWorktreeMetaIndex: (...args: Parameters<typeof actual.createSshWorktreeMetaIndex>) => {
       indexBuildSpy('all-hosts', ...args)
+
       return actual.createSshWorktreeMetaIndex(...args)
     },
     createSshWorktreeMetaIndexForRepo: (
       ...args: Parameters<typeof actual.createSshWorktreeMetaIndexForRepo>
     ) => {
       indexBuildSpy('repo-scoped', ...args)
+
       return actual.createSshWorktreeMetaIndexForRepo(...args)
     }
   }
@@ -53,6 +56,7 @@ function createStore(): Store {
     // Other repos' rows share the host snapshot; only this repo's bucket is ever read back.
     'repo-2::/home/user/other': { instanceId: 'instance-2' }
   }
+
   return {
     getRepos: () => [repo],
     getRepo: () => repo,

@@ -22,6 +22,7 @@ const WORKSPACE_BOARD_KEEP_OPEN_SELECTOR = [
 export function isWorkspaceBoardKeepOpenTarget(target: EventTarget | null): boolean {
   const element =
     target instanceof Element ? target : target instanceof Node ? target.parentElement : null
+
   // Why: board-owned menus and confirmation dialogs portal to document.body,
   // so DOM containment alone would treat their clicks/focus as board exits.
   return Boolean(element?.closest(WORKSPACE_BOARD_KEEP_OPEN_SELECTOR))
@@ -42,22 +43,28 @@ export function useWorkspaceKanbanOutsideDismiss(params: {
 
     const handlePointerDown = (event: PointerEvent): void => {
       const content = boardRef.current?.closest<HTMLElement>('[data-slot="sheet-content"]')
+
       if (!content || preserveOpenForMenu) {
         return
       }
+
       if (event.target instanceof Node && content.contains(event.target)) {
         return
       }
+
       if (isWorkspaceBoardKeepOpenTarget(event.target)) {
         return
       }
+
       const rect = content.getBoundingClientRect()
+
       if (event.clientX > rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom) {
         onOpenChange(false)
       }
     }
 
     document.addEventListener('pointerdown', handlePointerDown, true)
+
     return () => document.removeEventListener('pointerdown', handlePointerDown, true)
   }, [boardRef, onOpenChange, open, preserveOpenForMenu])
 }

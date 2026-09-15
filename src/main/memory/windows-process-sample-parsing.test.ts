@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 async function loadWindowsProcessSampleParsing() {
   vi.resetModules()
+
   return await import('./windows-process-sample-parsing')
 }
 
@@ -69,6 +70,7 @@ describe('parseWindowsProcessOutput', () => {
 describe('parseTypeperfProcessOutput', () => {
   it('joins PID, parent PID, and working-set counters by process instance', async () => {
     const { parseTypeperfProcessOutput } = await loadWindowsProcessSampleParsing()
+
     const stdout = [
       '"(PDH-CSV 4.0)","\\\\HOST\\Process(node)\\ID Process","\\\\HOST\\Process(node#1)\\ID Process","\\\\HOST\\Process(node)\\Creating Process ID","\\\\HOST\\Process(node#1)\\Creating Process ID","\\\\HOST\\Process(node)\\Working Set","\\\\HOST\\Process(node#1)\\Working Set"',
       '"07/15/2026 01:44:54.514","100.000000","200.000000","1.000000","100.000000","2048.000000","4096.000000"'
@@ -82,6 +84,7 @@ describe('parseTypeperfProcessOutput', () => {
 
   it('joins the Private Bytes counter onto the same process instance', async () => {
     const { parseTypeperfProcessOutput } = await loadWindowsProcessSampleParsing()
+
     const stdout = [
       '"(PDH-CSV 4.0)","\\\\HOST\\Process(codex)\\ID Process","\\\\HOST\\Process(codex)\\Creating Process ID","\\\\HOST\\Process(codex)\\Working Set","\\\\HOST\\Process(codex)\\Private Bytes"',
       '"07/15/2026 01:44:54.514","100.000000","1.000000","100663296.000000","5734400000.000000"'
@@ -94,6 +97,7 @@ describe('parseTypeperfProcessOutput', () => {
 
   it('leaves committed bytes absent when the Private Bytes counter is missing', async () => {
     const { parseTypeperfProcessOutput } = await loadWindowsProcessSampleParsing()
+
     const stdout = [
       '"(PDH-CSV 4.0)","\\\\HOST\\Process(codex)\\ID Process","\\\\HOST\\Process(codex)\\Creating Process ID","\\\\HOST\\Process(codex)\\Working Set"',
       '"time","100.000000","1.000000","2048.000000"'
@@ -109,12 +113,15 @@ describe('parseTypeperfProcessOutput', () => {
     const instanceCount = 2100
     const headers = ['"(PDH-CSV 4.0)"']
     const values = ['"time"']
+
     for (let index = 0; index < instanceCount; index += 1) {
       for (const counter of ['ID Process', 'Creating Process ID', 'Working Set', 'Private Bytes']) {
         headers.push(`"\\\\HOST\\Process(node#${index})\\${counter}"`)
       }
+
       values.push(`"${1000 + index}"`, '"1"', '"2048"', '"4096"')
     }
+
     const stdout = [headers.join(','), values.join(',')].join('\r\n')
 
     const rows = parseTypeperfProcessOutput(stdout)
@@ -130,6 +137,7 @@ describe('parseTypeperfProcessOutput', () => {
 
   it('ignores aggregate and incomplete rows and clamps invalid memory', async () => {
     const { parseTypeperfProcessOutput } = await loadWindowsProcessSampleParsing()
+
     const stdout = [
       '"(PDH-CSV 4.0)","\\\\HOST\\Process(_Total)\\ID Process","\\\\HOST\\Process(cmd)\\ID Process","\\\\HOST\\Process(orphan)\\ID Process","\\\\HOST\\Process(_Total)\\Creating Process ID","\\\\HOST\\Process(cmd)\\Creating Process ID","\\\\HOST\\Process(_Total)\\Working Set","\\\\HOST\\Process(cmd)\\Working Set"',
       '"time","0.000000","100.000000","200.000000","0.000000","1.000000","999999.000000","-1.000000"'

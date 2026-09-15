@@ -43,6 +43,7 @@ export function buildRuntimeMobileTabsProjection(
   }
 
   const previousEntries = graphState.cachedTabsProjection?.entries
+
   const entries = new Map<
     string,
     {
@@ -51,9 +52,12 @@ export function buildRuntimeMobileTabsProjection(
       projection: string
     }
   >()
+
   const parts: string[] = []
+
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     const previous = previousEntries?.get(worktreeId)
+
     const entry =
       previous?.tabs === tabs
         ? previous
@@ -72,19 +76,23 @@ export function buildRuntimeMobileTabsProjection(
               }))
             )
           }
+
     entries.set(worktreeId, entry)
     parts.push(`${entry.worktreeIdJson}:${entry.projection}`)
   }
+
   graphState.cachedTabsProjection = {
     source: tabsByWorktree,
     entries,
     projection: `{${parts.join(',')}}`
   }
+
   return graphState.cachedTabsProjection.projection
 }
 
 export function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openFiles']): string {
   const cached = graphState.cachedOpenFilesProjection
+
   if (cached?.source === openFiles) {
     return cached.projection
   }
@@ -93,8 +101,10 @@ export function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openF
   const previousEntries = cached?.entries
   const entries = new Map<string, OpenFilesProjectionCacheEntry>()
   const parts: string[] = []
+
   for (const file of openFiles) {
     const previous = previousEntries?.get(file.id)
+
     const entry =
       previous?.file === file
         ? previous
@@ -114,11 +124,14 @@ export function buildRuntimeMobileOpenFilesProjection(openFiles: AppState['openF
               markdownPreviewSourceFileId: file.markdownPreviewSourceFileId
             })
           }
+
     entries.set(file.id, entry)
     parts.push(entry.projection)
   }
+
   const projection = `[${parts.join(',')}]`
   graphState.cachedOpenFilesProjection = { source: openFiles, entries, projection }
+
   return projection
 }
 
@@ -126,6 +139,7 @@ function buildBrowserWorkspacesProjection(
   browserTabsByWorktree: AppState['browserTabsByWorktree']
 ): string {
   const cached = graphState.cachedBrowserWorkspacesProjection
+
   if (cached?.source === browserTabsByWorktree) {
     return cached.projection
   }
@@ -133,8 +147,10 @@ function buildBrowserWorkspacesProjection(
   const previousEntries = cached?.entries
   const entries = new Map<string, BrowserWorkspacesProjectionCacheEntry>()
   const parts: string[] = []
+
   for (const [worktreeId, workspaces] of Object.entries(browserTabsByWorktree)) {
     const previous = previousEntries?.get(worktreeId)
+
     const entry =
       previous?.workspaces === workspaces
         ? previous
@@ -153,15 +169,18 @@ function buildBrowserWorkspacesProjection(
               }))
             )
           }
+
     entries.set(worktreeId, entry)
     parts.push(`${entry.keyJson}:${entry.projection}`)
   }
+
   const projection = `{${parts.join(',')}}`
   graphState.cachedBrowserWorkspacesProjection = {
     source: browserTabsByWorktree,
     entries,
     projection
   }
+
   return projection
 }
 
@@ -169,6 +188,7 @@ function buildBrowserPagesProjection(
   browserPagesByWorkspace: AppState['browserPagesByWorkspace']
 ): string {
   const cached = graphState.cachedBrowserPagesProjection
+
   if (cached?.source === browserPagesByWorkspace) {
     return cached.projection
   }
@@ -176,8 +196,10 @@ function buildBrowserPagesProjection(
   const previousEntries = cached?.entries
   const entries = new Map<string, BrowserPagesProjectionCacheEntry>()
   const parts: string[] = []
+
   for (const [workspaceId, pages] of Object.entries(browserPagesByWorkspace)) {
     const previous = previousEntries?.get(workspaceId)
+
     const entry =
       previous?.pages === pages
         ? previous
@@ -195,15 +217,18 @@ function buildBrowserPagesProjection(
               }))
             )
           }
+
     entries.set(workspaceId, entry)
     parts.push(`${entry.keyJson}:${entry.projection}`)
   }
+
   const projection = `{${parts.join(',')}}`
   graphState.cachedBrowserPagesProjection = {
     source: browserPagesByWorkspace,
     entries,
     projection
   }
+
   return projection
 }
 
@@ -221,6 +246,7 @@ export function buildRuntimeMobileBrowserProjection(state: AppState): string {
  */
 function getEditorDraftHashCache(editorDrafts: AppState['editorDrafts']): EditorDraftHashCache {
   const cached = graphState.cachedEditorDraftHashes
+
   if (cached?.source === editorDrafts) {
     return cached
   }
@@ -229,9 +255,11 @@ function getEditorDraftHashCache(editorDrafts: AppState['editorDrafts']): Editor
   const entries = new Map<string, EditorDraftHashCacheEntry>()
   const hashByFileId = new Map<string, string>()
   const parts: string[] = []
+
   for (const [fileId, content] of Object.entries(editorDrafts)) {
     const previous = previousEntries?.get(fileId)
     let entry: EditorDraftHashCacheEntry
+
     if (previous?.content === content) {
       entry = previous
     } else {
@@ -239,17 +267,21 @@ function getEditorDraftHashCache(editorDrafts: AppState['editorDrafts']): Editor
       const hash = stableHashString(content)
       entry = { content, hash, fileIdJson, projection: `${fileIdJson}:${JSON.stringify(hash)}` }
     }
+
     entries.set(fileId, entry)
     hashByFileId.set(fileId, entry.hash)
     parts.push(entry.projection)
   }
+
   const next: EditorDraftHashCache = {
     source: editorDrafts,
     entries,
     hashByFileId,
     projection: `{${parts.join(',')}}`
   }
+
   graphState.cachedEditorDraftHashes = next
+
   return next
 }
 

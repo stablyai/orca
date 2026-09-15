@@ -12,6 +12,7 @@ import type { AskAnswerSelection, AskPrompt } from './native-chat-interactive-pr
 // first option / the raw label).
 
 let container: HTMLDivElement
+
 let root: ReturnType<typeof createRoot>
 
 beforeEach(() => {
@@ -46,6 +47,7 @@ function click(button: Element | undefined, describe: string): void {
   if (!button) {
     throw new Error(`button not found: ${describe}`)
   }
+
   act(() => button.dispatchEvent(new MouseEvent('click', { bubbles: true })))
 }
 
@@ -55,6 +57,7 @@ function clickOption(label: string): void {
   const row = [...container.querySelectorAll('button[aria-pressed]')].find((b) =>
     b.textContent?.includes(label)
   )
+
   click(row, `option ${label}`)
 }
 
@@ -66,6 +69,7 @@ function clickAction(text: string): void {
   const button = [...container.querySelectorAll('button')].find(
     (b) => b.textContent?.trim() === text
   )
+
   click(button, text)
 }
 

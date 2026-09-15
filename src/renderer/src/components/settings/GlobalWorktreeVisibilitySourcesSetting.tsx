@@ -37,10 +37,12 @@ export function GlobalWorktreeVisibilitySourcesSetting({
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const pendingRef = useRef(false)
+
   const customSources = useMemo(
     () => normalizeCustomWorktreeVisibilitySources(defaults.customSources) ?? [],
     [defaults.customSources]
   )
+
   const removableSourceIds = useMemo(
     () => new Set(customSources.map((source) => source.id)),
     [customSources]
@@ -51,11 +53,14 @@ export function GlobalWorktreeVisibilitySourcesSetting({
       if (pendingRef.current) {
         return false
       }
+
       pendingRef.current = true
       setPending(true)
       setError(null)
+
       try {
         await updateSettings({ worktreeVisibilityDefaults: next })
+
         return true
       } catch {
         setError(
@@ -64,6 +69,7 @@ export function GlobalWorktreeVisibilitySourcesSetting({
             'Could not save visibility defaults.'
           )
         )
+
         return false
       } finally {
         pendingRef.current = false
@@ -76,19 +82,24 @@ export function GlobalWorktreeVisibilitySourcesSetting({
   const handleToggle = useCallback(
     async (source: WorktreeVisibilitySourceRow, checked: boolean) => {
       const visibility = checked ? 'show' : 'hide'
+
       if (source.kind === 'other') {
         await commit(
           sourceDefaultsSupported ? { ...defaults, external: visibility } : { external: visibility }
         )
+
         return
       }
+
       if (!sourceDefaultsSupported) {
         return
       }
+
       const match =
         source.kind === 'built-in'
           ? ({ kind: 'built-in', id: source.id } as const)
           : ({ kind: 'custom', id: source.source.id } as const)
+
       await commit({
         ...defaults,
         sourcePreferences: buildDefaultWorktreeSourcePreferenceUpdate(defaults, match, visibility)
@@ -102,18 +113,24 @@ export function GlobalWorktreeVisibilitySourcesSetting({
       if (!sourceDefaultsSupported) {
         return 'save-failed'
       }
+
       if (customSources.length >= MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES) {
         return 'limit'
       }
+
       const id = crypto.randomUUID().replaceAll('-', '')
       const candidate = normalizeCustomWorktreeVisibilitySources([{ id, rootPath }])?.[0]
+
       if (!candidate) {
         return 'invalid-path'
       }
+
       const nextSources = normalizeCustomWorktreeVisibilitySources([...customSources, candidate])
+
       if (!nextSources || nextSources.length !== customSources.length + 1) {
         return 'duplicate-path'
       }
+
       const saved = await commit({
         ...defaults,
         customSources: nextSources,
@@ -123,6 +140,7 @@ export function GlobalWorktreeVisibilitySourcesSetting({
           'hide'
         )
       })
+
       return saved ? 'added' : 'save-failed'
     },
     [commit, customSources, defaults, sourceDefaultsSupported]
@@ -133,6 +151,7 @@ export function GlobalWorktreeVisibilitySourcesSetting({
       if (!sourceDefaultsSupported) {
         return
       }
+
       await commit({
         ...defaults,
         customSources: customSources.filter((candidate) => candidate.id !== source.id),

@@ -12,20 +12,25 @@ import { projectNativeChatTaskListFrames } from './native-chat-task-list-frames'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 
 let restoreViewport = (): void => {}
+
 beforeAll(() => {
   restoreViewport = installNativeChatMessageListTestViewport()
 })
+
 afterAll(() => restoreViewport())
+
 afterEach(cleanup)
 
 function frame(id: number, status: string, overrides: { kind?: string; truncated?: boolean } = {}) {
   const kind = overrides.kind ?? 'notification:turn/plan/updated'
+
   const head = JSON.stringify({
     threadId: 'thread',
     turnId: 'turn',
     explanation: 'Keep verification visible',
     plan: [{ step: 'Verify', status }]
   })
+
   const body: AgentJournalStatusItem = {
     kind: 'status',
     text: `codex · ${kind}`,
@@ -40,6 +45,7 @@ function frame(id: number, status: string, overrides: { kind?: string; truncated
       }
     }
   }
+
   const message = projectStructuredItemToNativeChat({
     itemId: `frame-${id}`,
     revision: 1,
@@ -47,9 +53,11 @@ function frame(id: number, status: string, overrides: { kind?: string; truncated
     observedAt: id,
     body
   })
+
   if (!message) {
     throw new Error('Expected a projected message')
   }
+
   return message
 }
 
@@ -120,6 +128,7 @@ describe('live Codex checklist frames', () => {
         }
       ]
     }
+
     render(transcript([tool, frame(3, 'completed')]))
     fireEvent.click(screen.getByRole('button', { name: 'Tasks 1 of 1 tasks completed' }))
     expect(screen.getAllByText('Verify')).toHaveLength(2)
@@ -137,12 +146,15 @@ describe('live Codex checklist frames', () => {
     const otherProvider = frame(4, 'pending')
     const malformedBlock = malformed.blocks[0]
     const otherBlock = otherProvider.blocks[0]
+
     if (malformedBlock.type === 'text' && malformedBlock.providerFrame) {
       malformedBlock.providerFrame.payload.head = '{"plan":null}'
     }
+
     if (otherBlock.type === 'text' && otherBlock.providerFrame) {
       otherBlock.providerFrame.provider = 'claude'
     }
+
     const messages = [truncated, document, malformed, otherProvider]
     const projected = projectNativeChatTaskListFrames(messages)
     projected.forEach((message, index) => expect(message).toBe(messages[index]))
@@ -162,6 +174,7 @@ describe('live Codex checklist frames', () => {
         { type: 'tool-result', output: 'Verification failed', isError: true }
       ]
     }
+
     render(transcript([frame(1, 'pending'), command]))
     expect(screen.getByRole('button', { name: 'Tasks 0 of 1 tasks completed' })).toBeInTheDocument()
     expect(screen.getByText('Verification failed', { selector: 'pre' })).toHaveClass(
@@ -190,6 +203,7 @@ describe('NativeChatMessageList task list history', () => {
         }
       ]
     }
+
     const last = {
       ...first,
       id: 'last-list',
@@ -208,6 +222,7 @@ describe('NativeChatMessageList task list history', () => {
         }
       ]
     }
+
     const { rerender } = render(transcript([last]))
     fireEvent.click(screen.getByRole('button', { name: 'Tasks 1 of 2 tasks completed' }))
     rerender(transcript([first, last]))

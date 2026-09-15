@@ -25,6 +25,7 @@ export function useMetadataListRequest<T>({
     loading: false,
     error: null
   })
+
   const activeKeyRef = useRef<string | null>(null)
   const loadLatest = useEffectEvent(load)
 
@@ -34,13 +35,17 @@ export function useMetadataListRequest<T>({
     }
 
     const cached = getFreshMetadata(store, cacheKey)
+
     if (cached) {
       if (activeKeyRef.current !== cacheKey) {
         setState({ data: cached.data, loading: false, error: null })
       }
+
       activeKeyRef.current = cacheKey
+
       return
     }
+
     activeKeyRef.current = cacheKey
     const requestKey = cacheKey
     setState((current) => ({
@@ -59,6 +64,7 @@ export function useMetadataListRequest<T>({
         if (activeKeyRef.current !== requestKey) {
           return
         }
+
         activeKeyRef.current = null
         setState((current) => ({
           ...current,

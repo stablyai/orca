@@ -38,9 +38,11 @@ describe('filesystem watcher unwatchable root cache', () => {
   beforeEach(async () => {
     handleMock.mockReset()
     vi.mocked(stat).mockReset()
+
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
+
     handleMock.mockImplementation((channel, handler) => {
       handlers[channel] = handler
     })
@@ -56,6 +58,7 @@ describe('filesystem watcher unwatchable root cache', () => {
     for (let i = 0; i < 257; i += 1) {
       await handlers['fs:watchWorktree']({ sender }, { worktreePath: `/tmp/missing-${i}` })
     }
+
     expect(stat).toHaveBeenCalledTimes(257)
 
     await handlers['fs:watchWorktree']({ sender }, { worktreePath: '/tmp/missing-0' })

@@ -33,10 +33,12 @@ describe('OrcaRuntimeService', () => {
     computeWorktreePathMock.mockReturnValue(process.cwd())
     ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
     vi.mocked(getBranchConflictKind).mockResolvedValueOnce(null)
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'rev-parse' && args.includes('refs/heads/feature/fix^{commit}')) {
         throw new Error('missing local branch')
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -61,6 +63,7 @@ describe('OrcaRuntimeService', () => {
   it('creates SSH-backed worktrees through the SSH provider for mobile/runtime callers', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
+
     const created = {
       path: '/remote/repo-mobile-feature',
       head: 'def',
@@ -68,7 +71,9 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const metaById: Record<string, WorktreeMeta> = {}
+
     const remoteStore = {
       ...store,
       getRepos: () => [
@@ -85,31 +90,39 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       }
     }
+
     const provider = {
       exec: vi.fn(async (args: string[]) => {
         if (args[0] === 'config') {
           return { stdout: 'Remote User\n', stderr: '' }
         }
+
         if (args[0] === 'branch') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'symbolic-ref') {
           return { stdout: 'origin/main\n', stderr: '' }
         }
+
         if (isOriginMainBaseRefProbe(args)) {
           return { stdout: 'main-sha\n', stderr: '' }
         }
+
         if (args[0] === 'fetch') {
           return { stdout: '', stderr: '' }
         }
+
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([created])
     }
+
     registerSshGitProvider('ssh-1', provider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
     const runtime = new OrcaRuntimeService(remoteStore as never)
@@ -145,6 +158,7 @@ describe('OrcaRuntimeService', () => {
   it('records lineage for SSH-backed CLI-created worktrees', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
+
     const remoteRepo = {
       id: TEST_REPO_ID,
       path: '/remote/repo',
@@ -159,6 +173,7 @@ describe('OrcaRuntimeService', () => {
         scripts: { setup: '', archive: '' }
       }
     }
+
     const parent = {
       path: '/remote/repo-parent',
       head: 'abc',
@@ -166,6 +181,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const created = {
       path: '/remote/child-feature',
       head: 'def',
@@ -173,12 +189,16 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const parentId = `${TEST_REPO_ID}::${parent.path}`
     const childId = `${TEST_REPO_ID}::${created.path}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' })
     }
+
     const lineageById: Record<string, WorktreeLineage> = {}
+
     const remoteStore = {
       ...store,
       getRepos: () => [remoteRepo],
@@ -187,36 +207,45 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       },
       getWorktreeLineage: (worktreeId: string) => lineageById[worktreeId],
       setWorktreeLineage: vi.fn((worktreeId: string, lineage: WorktreeLineage) => {
         lineageById[worktreeId] = lineage
+
         return lineage
       })
     }
+
     const provider = {
       exec: vi.fn(async (args: string[]) => {
         if (args[0] === 'config') {
           return { stdout: 'Remote User\n', stderr: '' }
         }
+
         if (args[0] === 'branch') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'symbolic-ref') {
           return { stdout: 'origin/main\n', stderr: '' }
         }
+
         if (isOriginMainBaseRefProbe(args)) {
           return { stdout: 'main-sha\n', stderr: '' }
         }
+
         if (args[0] === 'fetch') {
           return { stdout: '', stderr: '' }
         }
+
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValueOnce([parent]).mockResolvedValue([parent, created])
     }
+
     registerSshGitProvider('ssh-1', provider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
     const runtime = new OrcaRuntimeService(remoteStore as never)
@@ -253,6 +282,7 @@ describe('OrcaRuntimeService', () => {
   // provenance — the same user action must not carry different cleanup semantics per host.
   it('records an app-selected parent workspace as a manual action', async () => {
     vi.mocked(addWorktree).mockClear()
+
     const created = {
       path: '/tmp/workspaces/manual-child',
       head: 'def',
@@ -260,18 +290,22 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const childId = `${TEST_REPO_ID}::${created.path}`
     const metaById: Record<string, WorktreeMeta> = {}
+
     const runtimeStore = {
       ...createFolderWorkspaceRuntimeStore(),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       },
       setWorkspaceLineage: vi.fn((lineage: WorkspaceLineage) => lineage)
     }
+
     computeWorktreePathMock.mockReturnValue(created.path)
     ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
     vi.mocked(listWorktrees).mockResolvedValueOnce([created])
@@ -297,6 +331,7 @@ describe('OrcaRuntimeService', () => {
 
   it('records folder workspace lineage inferred from environment context', async () => {
     vi.mocked(addWorktree).mockClear()
+
     const created = {
       path: '/tmp/workspaces/folder-child',
       head: 'def',
@@ -304,22 +339,27 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const childId = `${TEST_REPO_ID}::${created.path}`
     const metaById: Record<string, WorktreeMeta> = {}
     const workspaceLineageByChildKey: Record<string, WorkspaceLineage> = {}
+
     const runtimeStore = {
       ...createFolderWorkspaceRuntimeStore(),
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       },
       setWorkspaceLineage: vi.fn((lineage: WorkspaceLineage) => {
         workspaceLineageByChildKey[lineage.childWorkspaceKey] = lineage
+
         return lineage
       })
     }
+
     computeWorktreePathMock.mockReturnValue(created.path)
     ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
     vi.mocked(listWorktrees).mockResolvedValueOnce([created])
@@ -360,6 +400,7 @@ describe('OrcaRuntimeService', () => {
   it('activates SSH worktrees created with startup agents', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
+
     const created = {
       path: '/remote/agent-feature',
       head: 'def',
@@ -367,6 +408,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const remoteRepo = {
       id: TEST_REPO_ID,
       path: '/remote/repo',
@@ -381,7 +423,9 @@ describe('OrcaRuntimeService', () => {
         scripts: { setup: '', archive: '' }
       }
     }
+
     const metaById: Record<string, WorktreeMeta> = {}
+
     const remoteStore = {
       ...store,
       getSettings: () => ({
@@ -395,31 +439,39 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       }
     }
+
     const provider = {
       exec: vi.fn(async (args: string[]) => {
         if (args[0] === 'config') {
           return { stdout: 'Remote User\n', stderr: '' }
         }
+
         if (args[0] === 'branch') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'symbolic-ref') {
           return { stdout: 'origin/main\n', stderr: '' }
         }
+
         if (isOriginMainBaseRefProbe(args)) {
           return { stdout: 'main-sha\n', stderr: '' }
         }
+
         if (args[0] === 'fetch') {
           return { stdout: '', stderr: '' }
         }
+
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([created])
     }
+
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-agent-startup' })
     const activateWorktree = vi.fn()
     registerSshGitProvider('ssh-1', provider as never)
@@ -480,6 +532,7 @@ describe('OrcaRuntimeService', () => {
   it('quotes startup prompts for Windows SSH worktrees using PowerShell syntax', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(addWorktree).mockClear()
+
     const created = {
       path: 'C:/remote/agent-feature',
       head: 'def',
@@ -487,6 +540,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const remoteRepo = {
       id: TEST_REPO_ID,
       path: 'C:/remote/repo',
@@ -495,7 +549,9 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-1'
     }
+
     const metaById: Record<string, WorktreeMeta> = {}
+
     const remoteStore = {
       ...store,
       getSettings: () => ({
@@ -508,31 +564,39 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       }
     }
+
     const provider = {
       exec: vi.fn(async (args: string[]) => {
         if (args[0] === 'config') {
           return { stdout: 'Remote User\n', stderr: '' }
         }
+
         if (args[0] === 'branch') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'symbolic-ref') {
           return { stdout: 'origin/main\n', stderr: '' }
         }
+
         if (isOriginMainBaseRefProbe(args)) {
           return { stdout: 'main-sha\n', stderr: '' }
         }
+
         if (args[0] === 'fetch') {
           return { stdout: '', stderr: '' }
         }
+
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([created])
     }
+
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-remote-windows-agent' })
     registerSshGitProvider('ssh-1', provider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })

@@ -43,10 +43,12 @@ export async function releaseEvictedBrowserRoutePartitionStorage(
   if (partitions.length === 0) {
     return
   }
+
   const released = await releaseBrowserRoutePartitionStorage(
     browserRoutePartitionStorageDependencies(isPartitionLive),
     partitions
   )
+
   for (const failure of released.failures) {
     console.warn(
       '[browser-route-partition] binding eviction failed:',

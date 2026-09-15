@@ -17,6 +17,7 @@ function createTerminal(bracketedPasteMode = true) {
     input: vi.fn(),
     paste: vi.fn()
   }
+
   return terminal
 }
 

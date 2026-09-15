@@ -4,6 +4,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { AgentHookServer } from './server'
 
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn(() => ({})) }))
 
 const PANE_KEY = makePaneKey('manual-compact', '11111111-1111-4111-8111-111111111111')
@@ -27,6 +28,7 @@ function compactEvent(hookEventName: string, state: 'working' | 'done') {
 describe('manual compact status cleanup', () => {
   it('retires authority with pane, tab, and server cleanup', () => {
     const server = new AgentHookServer()
+
     const begin = (): void => {
       server.ingestRemote(compactEvent('UserPromptSubmit', 'working'), 'conn-a')
       server.ingestRemote(compactEvent('PreCompact', 'working'), 'conn-a')

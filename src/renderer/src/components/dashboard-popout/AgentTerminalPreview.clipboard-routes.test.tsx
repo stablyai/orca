@@ -36,6 +36,7 @@ const terminalHarness = vi.hoisted(() => ({
 }))
 
 const platformState = vi.hoisted(() => ({ value: 'linux' }))
+
 const storeState = vi.hoisted(() => ({
   settings: null as { terminalRightClickToPaste?: boolean } | null,
   keybindings: {} as Record<string, string[]>
@@ -93,6 +94,7 @@ vi.mock('@xterm/xterm', () => ({
     })
     onData = vi.fn((listener: (data: string) => void) => {
       this.onDataListener = listener
+
       return { dispose: vi.fn() }
     })
 
@@ -101,22 +103,28 @@ vi.mock('@xterm/xterm', () => ({
     }
   }
 }))
+
 vi.mock(import('@/lib/pane-manager/pane-terminal-options'), async (importOriginal) => ({
   ...(await importOriginal()),
   buildDefaultTerminalOptions: () => ({})
 }))
+
 vi.mock('@/components/terminal-pane/terminal-user-input-signal', () => ({
   subscribeToTerminalUserInput: (_terminal: unknown, listener: () => void) => {
     terminalHarness.userInputListener = listener
+
     return { dispose: terminalHarness.userInputDispose }
   }
 }))
+
 vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
+
 vi.mock('@/lib/shortcut-platform', () => ({
   getShortcutPlatform: () => platformState.value
 }))
+
 vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => ({
   installTerminalImeNativeTextForwarder: (args: {
     sendInput: (data: string) => void
@@ -130,20 +138,26 @@ vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => (
       // forwarder, so the test reads what a real commit would read.
       getKittyKeyboardFlags: args.getKittyKeyboardFlags ?? ((): number => 0)
     }
+
     imeHarness.forwarders.push(forwarder)
+
     return forwarder
   }
 }))
+
 vi.mock('@/components/terminal-pane/terminal-ime-composition-tracker', () => ({
   installTerminalImeCompositionTracker: () => {
     const tracker = { isActive: () => false, dispose: vi.fn() }
     imeHarness.trackers.push(tracker)
+
     return tracker
   }
 }))
+
 vi.mock('@/store', () => {
   const useAppStore = (selector: (s: typeof storeState) => unknown): unknown => selector(storeState)
   useAppStore.getState = (): typeof storeState => storeState
+
   return { useAppStore }
 })
 
@@ -166,6 +180,7 @@ describe('AgentTerminalPreview clipboard routes', () => {
     const focusTarget = document.createElement(tagName)
     host.appendChild(focusTarget)
     focusTarget.focus()
+
     return focusTarget
   }
 
@@ -227,6 +242,7 @@ describe('AgentTerminalPreview clipboard routes', () => {
 
   it('encodes a leading newline for a remote Windows Codex preview without submitting', async () => {
     readClipboardText.mockResolvedValueOnce('\nsecond line')
+
     const view = render(
       <AgentTerminalPreview
         ptyId="remote:windows-box@@pty-1"
@@ -240,6 +256,7 @@ describe('AgentTerminalPreview clipboard routes', () => {
         }}
       />
     )
+
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
     const terminal = terminalHarness.instances[0]!
     focusInsidePreview(view.container)
@@ -345,6 +362,7 @@ describe('AgentTerminalPreview clipboard routes', () => {
       ctrlKey: true,
       cancelable: true
     })
+
     expect(terminal.customKeyHandler!(plain)).toBe(false)
     expect(plain.defaultPrevented).toBe(true)
     await waitFor(() => expect(terminal.paste).toHaveBeenCalledWith('clip-text'))
@@ -375,6 +393,7 @@ describe('AgentTerminalPreview clipboard routes', () => {
       shiftKey: true,
       cancelable: true
     })
+
     expect(terminal.customKeyHandler!(shifted)).toBe(false)
     expect(shifted.defaultPrevented).toBe(true)
     await waitFor(() => expect(terminal.paste).toHaveBeenCalledWith('clip-text'))
@@ -394,6 +413,7 @@ describe('AgentTerminalPreview clipboard routes', () => {
     const plain = terminal.customKeyHandler!(
       new KeyboardEvent('keydown', { key: 'v', code: 'KeyV', metaKey: true })
     )
+
     expect(plain).toBe(true)
     expect(readClipboardText).not.toHaveBeenCalled()
   })
@@ -486,9 +506,11 @@ describe('AgentTerminalPreview clipboard routes', () => {
     act(() => {
       dispatchAppMenuPasteEvent()
     })
+
     const expectedChunks = Math.ceil(
       encoder.encode(expectedPaste).byteLength / TERMINAL_PASTE_CHUNK_MAX_BYTES
     )
+
     await waitFor(() => expect(input).toHaveBeenCalledTimes(expectedChunks))
 
     const payloads = input.mock.calls.map(([, data]) => data as string)
@@ -512,6 +534,7 @@ describe('AgentTerminalPreview clipboard routes', () => {
     view.container.appendChild(outsideInput)
     input.mockImplementationOnce(async () => {
       outsideInput.focus()
+
       return true
     })
 

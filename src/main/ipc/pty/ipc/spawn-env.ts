@@ -23,21 +23,27 @@ import { assemblePtyIpcSpawnCodexEnv } from './spawn-env-codex'
 
 export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
+
   if (ctx.isClaudeLaunch && isClaudeAuthSwitchInProgress()) {
     throw new Error(CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE)
   }
+
   if (ctx.claudeAuth?.stripAuthEnv && hasClaudeAuthEnvConflict(args.env)) {
     throw new Error(CLAUDE_AUTH_ENV_CONFLICT_MESSAGE)
   }
+
   // Why: the daemon-backed provider skips LocalPtyProvider's buildSpawnEnv, so assemble the same host-local env here for parity.
   // Safety: skip entirely for SSH — every injection is a loopback secret or a local path that leaks or misleads on the remote host.
   // Why: forward pane env to SSH only when the relay hook path is enabled, or a newer relay could emit statuses this build can't route.
   const sshSourceEnv = stripRemotePaneEnvWhenHooksDisabled(args.connectionId, args.env)
+
   const baseEnvWithAuth = ctx.claudeAuth
     ? { ...sshSourceEnv, ...ctx.claudeAuth.envPatch }
     : sshSourceEnv
+
   const spawnPaneKey = baseEnvWithAuth?.ORCA_PANE_KEY
   const parsedSpawnPaneKey = parseValidPaneKey(spawnPaneKey)
+
   const verifiedPaneKey =
     parsedSpawnPaneKey &&
     typeof args.tabId === 'string' &&
@@ -45,6 +51,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     args.leafId === parsedSpawnPaneKey.leafId
       ? makePaneKey(parsedSpawnPaneKey.tabId, parsedSpawnPaneKey.leafId)
       : null
+
   ctx.verifiedLeafId = verifiedPaneKey && parsedSpawnPaneKey ? parsedSpawnPaneKey.leafId : null
   ctx.metadataLeafId =
     typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : null
@@ -71,6 +78,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
       : null
   ctx.stablePaneKey = verifiedPaneKey ?? ctx.migrationUnsupportedPaneKey ?? ctx.metadataPaneKey
   ctx.baseEnv = baseEnvWithAuth ? { ...baseEnvWithAuth } : undefined
+
   const shouldRefreshAgentTeamsEnv =
     !ctx.preAdoptedStablePane &&
     !args.connectionId &&
@@ -80,29 +88,35 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
       command: args.command,
       launchConfig: args.launchConfig
     })
+
   ctx.effectiveLaunchConfig = args.launchConfig
+
   const shouldPreAllocateTerminalHandle =
     ctx.deps.runtime !== undefined &&
     ((!(ctx.provider instanceof LocalPtyProvider) &&
       !routesFreshSpawnsToLocalProvider(ctx.provider)) ||
       shouldRefreshAgentTeamsEnv)
+
   const runtime = ctx.deps.runtime
   ctx.preAllocatedHandle = shouldPreAllocateTerminalHandle
     ? (ctx.preAdoptedStablePane?.owner.handle ??
       runtime?.createPreAllocatedTerminalHandle() ??
       null)
     : null
+
   if (shouldRefreshAgentTeamsEnv && ctx.preAllocatedHandle && runtime) {
     // Why: Agent Teams ids/tokens are process-local, so the team env must be regenerated for the new leader PTY.
     const prepared = await runtime.prepareClaudeAgentTeamsLeaderForHandle({
       handle: ctx.preAllocatedHandle,
       baseEnv: ctx.baseEnv ?? {}
     })
+
     ctx.agentTeamsLeaderHandle = ctx.preAllocatedHandle
     ctx.baseEnv = {
       ...ctx.baseEnv,
       ...prepared.env
     }
+
     if (args.launchConfig) {
       ctx.effectiveLaunchConfig = {
         ...args.launchConfig,
@@ -113,18 +127,22 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
       }
     }
   }
+
   ctx.requestedAgentTeamsPath = ctx.baseEnv?.ORCA_AGENT_TEAMS_TEAM_ID
     ? ctx.baseEnv[resolvePathEnvKey(ctx.baseEnv, process.platform)]
     : undefined
   ctx.agentTeamsEnvToDelete = shouldRefreshAgentTeamsEnv ? ['TERM_PROGRAM'] : undefined
   const canForwardPaneEnv = !args.connectionId || isRemoteAgentHooksEnabled()
+
   if (ctx.baseEnv && ctx.stablePaneKey && canForwardPaneEnv) {
     ctx.baseEnv.ORCA_PANE_KEY = ctx.stablePaneKey
+
     if (typeof args.tabId === 'string') {
       ctx.baseEnv.ORCA_TAB_ID = args.tabId
     } else if (!args.connectionId) {
       delete ctx.baseEnv.ORCA_TAB_ID
     }
+
     if (typeof args.worktreeId === 'string') {
       ctx.baseEnv.ORCA_WORKTREE_ID = args.worktreeId
     } else if (!args.connectionId) {
@@ -137,6 +155,7 @@ export async function assemblePtyIpcSpawnEnv(ctx: PtyIpcSpawnState): Promise<voi
     delete ctx.baseEnv.ORCA_WORKTREE_ID
     delete ctx.baseEnv.ORCA_AGENT_LAUNCH_TOKEN
   }
+
   ctx.validatedPaneKey = ctx.stablePaneKey
   // Why: SSH can strip ORCA_PANE_KEY when remote hooks are off; IPC tab/leaf metadata still names the pane.
   ctx.reservationPaneKey = ctx.metadataPaneKey ?? ctx.validatedPaneKey

@@ -40,15 +40,19 @@ export function mapAzureDevOpsPullRequestState(
   raw: Pick<RawAzureDevOpsPullRequest, 'isDraft' | 'status'>
 ): AzureDevOpsPullRequestInfo['state'] {
   const status = raw.status?.trim().toLowerCase()
+
   if (status === 'completed') {
     return 'merged'
   }
+
   if (status === 'abandoned') {
     return 'closed'
   }
+
   if (raw.isDraft) {
     return 'draft'
   }
+
   return 'open'
 }
 
@@ -91,16 +95,21 @@ export function deriveAzureDevOpsStatus(statuses: readonly RawAzureDevOpsStatus[
   if (statuses.length === 0) {
     return 'neutral'
   }
+
   const classified = statuses.map((status) => classifyAzureDevOpsStatus(status.state))
+
   if (classified.includes('failure')) {
     return 'failure'
   }
+
   if (classified.includes('pending')) {
     return 'pending'
   }
+
   if (classified.every((status) => status === 'success')) {
     return 'success'
   }
+
   return 'neutral'
 }
 
@@ -112,7 +121,9 @@ export function mapAzureDevOpsPullRequest(
   if (typeof raw.pullRequestId !== 'number' || !raw.title) {
     return null
   }
+
   const headSha = raw.lastMergeSourceCommit?.commitId?.trim()
+
   return {
     number: raw.pullRequestId,
     title: raw.title,

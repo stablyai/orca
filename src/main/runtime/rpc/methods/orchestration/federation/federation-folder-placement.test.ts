@@ -17,9 +17,11 @@ describe('orchestration federated folder placement', () => {
       id: 'folder-repo',
       kind: 'folder'
     } as never)
+
     const method = ORCHESTRATION_METHODS.find(
       (candidate) => candidate.name === 'orchestration.federationAttachStart'
     )
+
     if (!method) {
       throw new Error('federationAttachStart method is not registered')
     }

@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest'
 import { copyScriptWithLocalModules } from './script-module-dependencies.mjs'
 
 const sourceScriptPath = fileURLToPath(new URL('./ensure-native-runtime.mjs', import.meta.url))
+
 // The import walk sees `from './x.mjs'` only, so the createRequire'd CJS
 // siblings have to be named. Without them the temp project cannot even load.
 const REQUIRED_CJS_SIBLINGS = [
@@ -48,9 +49,11 @@ describe('ensure-native-runtime', () => {
       const log = readFileSync(logPath, 'utf8')
       expect(log).toContain('pnpm exec node-gyp rebuild\n')
       expect(log).toContain(join('node_modules', 'node-pty'))
+
       if (process.platform === 'linux') {
         expect(log).toMatch(/^cxxflags=(?:.*\s)?-std=gnu\+\+2a$/m)
       }
+
       expect(log.split('\n').filter((line) => line.startsWith('node-pty child '))).toEqual([
         expect.stringMatching(/^node-pty child (?:conpty|pty) marker=false$/),
         expect.stringMatching(/^node-pty child (?:conpty|pty) marker=true$/)
@@ -200,12 +203,14 @@ function mkTempProject() {
   // Walked, not listed: the script imports windows-process-tree-gyp-rebuild.mjs, and a fixture
   // missing it fails every case with a module-resolution error instead of the defect under test.
   copyScriptWithLocalModules(sourceScriptPath, join(projectDir, 'config', 'scripts'))
+
   for (const name of REQUIRED_CJS_SIBLINGS) {
     copyFileSync(
       fileURLToPath(new URL(`./${name}`, import.meta.url)),
       join(projectDir, 'config', 'scripts', name)
     )
   }
+
   return projectDir
 }
 
@@ -214,6 +219,7 @@ function envWithPrependedPath(binDir, extraEnv) {
     process.platform === 'win32'
       ? (Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ?? 'Path')
       : 'PATH'
+
   return {
     ...process.env,
     ...extraEnv,
@@ -299,15 +305,18 @@ function writeFakeWindowsRegistry(projectDir, { requiresMarker = false } = {}) {
   if (process.platform !== 'win32') {
     return
   }
+
   const registryDir = join(projectDir, 'node_modules', '@orca', 'windows-registry')
   mkdirSync(registryDir, { recursive: true })
   writeFileSync(
     join(registryDir, 'package.json'),
     '{"name":"@orca/windows-registry","version":"1.0.0","main":"index.js"}\n'
   )
+
   const markerGate = requiresMarker
     ? `if (!require('node:fs').existsSync(process.env.ORCA_NATIVE_TEST_MARKER)) { throw new Error('registry ABI mismatch sentinel') }`
     : ''
+
   writeFileSync(
     join(registryDir, 'index.js'),
     `exports.HK = { CU: 0x80000001 }; exports.getRegistryKey = () => { ${markerGate}; return {} }\n`
@@ -325,14 +334,18 @@ function writeNodePtyPatchFile(projectDir) {
 function writePatchedNodePtyBuildArtifacts(projectDir) {
   const buildDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release')
   mkdirSync(buildDir, { recursive: true })
+
   if (process.platform === 'win32') {
     writeFileSync(join(buildDir, 'conpty.node'), '')
     mkdirSync(join(buildDir, 'conpty'), { recursive: true })
     writeFileSync(join(buildDir, 'conpty', 'conpty.dll'), '')
     writeFileSync(join(buildDir, 'conpty', 'OpenConsole.exe'), '')
+
     return
   }
+
   writeFileSync(join(buildDir, 'pty.node'), '')
+
   if (process.platform === 'darwin') {
     writeFileSync(join(buildDir, 'spawn-helper'), '')
   }

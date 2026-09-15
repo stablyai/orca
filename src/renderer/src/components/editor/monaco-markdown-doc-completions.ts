@@ -9,7 +9,9 @@ import {
 type MonacoApi = Parameters<OnMount>[1]
 
 let provider: IDisposable | null = null
+
 let providerMonaco: MonacoApi = null
+
 const documentsByModel = new Map<string, MarkdownDocument[]>()
 
 export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
@@ -19,10 +21,12 @@ export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
   if (provider && providerMonaco === monaco) {
     return
   }
+
   if (provider) {
     provider.dispose()
     documentsByModel.clear()
   }
+
   providerMonaco = monaco
 
   provider = monaco.languages.registerCompletionItemProvider('markdown', {
@@ -30,12 +34,14 @@ export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {
     provideCompletionItems(model, position) {
       const line = model.getLineContent(position.lineNumber)
       const context = getMarkdownDocCompletionContext(line.slice(0, position.column - 1))
+
       if (!context) {
         return { suggestions: [] }
       }
 
       const documents = documentsByModel.get(model.uri.toString()) ?? []
       const suffix = line.slice(position.column - 1)
+
       const range = {
         startLineNumber: position.lineNumber,
         startColumn: position.column - context.partial.length,

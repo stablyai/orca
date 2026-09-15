@@ -6,6 +6,7 @@ import ko from '@/i18n/locales/ko.json'
 import zh from '@/i18n/locales/zh.json'
 
 const englishLabels = en.auto.components.dictation.DictationIndicator as Record<string, string>
+
 const translatedLabels = { es, ja, ko, zh }
 
 describe('DictationIndicator localization', () => {

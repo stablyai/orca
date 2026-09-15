@@ -39,6 +39,7 @@ const AGENT_IDENTITY_ALIASES_LOWER: Readonly<Record<string, readonly string[]>> 
 }
 
 const STATUS_WITH_CONTEXT_RE = /^(?:ready|idle|done)(?:\s+\([^)]*\))?$/i
+
 const DEFAULT_TERMINAL_TITLE_RE = /^terminal \d+$/i
 
 function isIdentityStatusTitle(titleLower: string, identityLower: string): boolean {
@@ -62,6 +63,7 @@ function isAgentIdentityStatusTitle(
   if (isIdentityStatusTitle(titleLower, agentTypeLabelLower)) {
     return true
   }
+
   return (
     AGENT_IDENTITY_ALIASES_LOWER[agentType ?? '']?.some((identity) =>
       isIdentityStatusTitle(titleLower, identity)
@@ -75,6 +77,7 @@ function isCwdLikeTitle(title: string): boolean {
   if (/^(?:~|[\\/]|[A-Za-z]:[\\/])/.test(title)) {
     return true
   }
+
   // A single path-ish token ("orca/workspaces") is still a cwd, not a name.
   return !/\s/.test(title) && /[\\/]/.test(title)
 }
@@ -86,10 +89,13 @@ function conversationNameFromLiveTitle(
   defaultTitle: string | undefined
 ): string | null {
   const stripped = stripLeadingAgentTitleDecorationOrEmpty(liveTitle.trim()).trim()
+
   if (!stripped) {
     return null
   }
+
   const lower = stripped.toLowerCase()
+
   if (
     SYNTHETIC_STATUS_TITLES_LOWER.has(lower) ||
     lower === FALLBACK_TAB_TITLE_LOWER ||
@@ -101,9 +107,11 @@ function conversationNameFromLiveTitle(
   ) {
     return null
   }
+
   if (defaultTitle && stripped === defaultTitle.trim()) {
     return null
   }
+
   return stripped
 }
 
@@ -124,21 +132,28 @@ export function getAgentRowConversationName(
   providerSessionId?: string
 ): string | null {
   const customTitle = tab.customTitle?.trim()
+
   if (customTitle) {
     return customTitle
   }
+
   const quickCommandLabel = tab.quickCommandLabel?.trim()
+
   if (quickCommandLabel) {
     return quickCommandLabel
   }
+
   const liveTitle =
     paneLiveTitle === undefined ? (tab.title?.trim() ?? '') : (paneLiveTitle?.trim() ?? '')
+
   if (isMeaningfulOpenCodeTerminalTitle(liveTitle)) {
     return liveTitle
   }
+
   // Provider titles belong to their session, not every pane in the tab.
   const aiVaultTitle = tab.aiVaultTitle
   const providerTitle = aiVaultTitle?.title.trim()
+
   if (
     aiVaultTitle &&
     providerTitle &&
@@ -147,13 +162,17 @@ export function getAgentRowConversationName(
   ) {
     return providerTitle
   }
+
   const generatedTitle = generatedTitlesEnabled ? tab.generatedTitle?.trim() : ''
+
   if (generatedTitle) {
     return generatedTitle
   }
+
   if (!liveTitle) {
     return null
   }
+
   return conversationNameFromLiveTitle(
     liveTitle,
     agentType,

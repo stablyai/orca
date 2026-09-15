@@ -11,9 +11,11 @@ function session(id: string): DaemonSession {
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -35,10 +37,12 @@ describe('useResourceSessionInventory', () => {
         listSessions,
         onSpawned: (callback: (data: { id: string }) => void) => {
           spawnedCallback = callback
+
           return unsubscribeSpawned
         },
         onExit: (callback: (data: { id: string; code: number }) => void) => {
           exitCallback = callback
+
           return unsubscribeExit
         }
       }
@@ -53,6 +57,7 @@ describe('useResourceSessionInventory', () => {
 
   it('seeds from the daemon inventory and resets when session restore is not ready', async () => {
     listSessions.mockResolvedValue([session('one'), session('two')])
+
     const { result, rerender } = renderHook(({ ready }) => useResourceSessionInventory(ready), {
       initialProps: { ready: false }
     })
@@ -274,6 +279,7 @@ describe('useResourceSessionInventory', () => {
 
   it('ignores inventory invalidation before session restore is ready and after unmount', async () => {
     listSessions.mockResolvedValue([session('one')])
+
     const { unmount } = renderHook(({ ready }) => useResourceSessionInventory(ready), {
       initialProps: { ready: false }
     })

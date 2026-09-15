@@ -5,6 +5,7 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Store } from '../persistence'
 
 const handlers = new Map<string, (_event: unknown, ...args: unknown[]) => unknown>()
+
 const {
   handleMock,
   trackMock,
@@ -24,17 +25,21 @@ const {
 }))
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
+
 vi.mock('../telemetry/client', () => ({
   track: trackMock,
   setOptIn: setOptInMock,
   persistBannerAcknowledgeWithoutEmitting: persistBannerAcknowledgeMock
 }))
+
 vi.mock('../telemetry/burst-cap', () => ({
   consumeConsentMutationToken: consumeConsentMutationTokenMock
 }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({
   getCohortAtEmit: getCohortAtEmitMock
 }))
+
 vi.mock('../telemetry/onboarding-cohort-classifier', () => ({
   getOnboardingCohortAtEmit: getOnboardingCohortAtEmitMock
 }))
@@ -43,29 +48,35 @@ import { _resetStoreForTests, registerTelemetryHandlers } from './telemetry'
 
 function captureHandlers(): void {
   handlers.clear()
+
   for (const call of handleMock.mock.calls) {
     const [channel, handler] = call as [
       string,
       typeof handlers extends Map<string, infer V> ? V : never
     ]
+
     handlers.set(channel, handler)
   }
 }
 
 // Fake Store whose `telemetry` block tests reassign between invocations to seed derivation states.
 type FakeStoreState = { settings: GlobalSettings }
+
 function makeFakeStore(telemetry: GlobalSettings['telemetry']): {
   store: Store
   state: FakeStoreState
 } {
   const state: FakeStoreState = { settings: { telemetry } as unknown as GlobalSettings }
+
   const store = {
     getSettings: vi.fn(() => state.settings),
     updateSettings: vi.fn((updates: Partial<GlobalSettings>) => {
       state.settings = { ...state.settings, ...updates } as GlobalSettings
+
       return state.settings
     })
   } as unknown as Store
+
   return { store, state }
 }
 
@@ -73,6 +84,7 @@ function registerWith(telemetry: GlobalSettings['telemetry']): FakeStoreState {
   const { store, state } = makeFakeStore(telemetry)
   registerTelemetryHandlers(store)
   captureHandlers()
+
   return state
 }
 

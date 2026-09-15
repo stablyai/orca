@@ -58,14 +58,20 @@ const BENCH_ENABLED = process.env.ORCA_TYPING_BENCH === '1'
 
 function readPositiveInt(name: string, fallback: number): number {
   const value = Number(process.env[name])
+
   return Number.isInteger(value) && value > 0 ? value : fallback
 }
 
 const LOAD_PANES = readPositiveInt('ORCA_TYPING_BENCH_LOAD_PANES', 4)
+
 const LOAD_RATE_KBPS = readPositiveInt('ORCA_TYPING_BENCH_RATE_KBPS', 256)
+
 const KEY_COUNT = readPositiveInt('ORCA_TYPING_BENCH_KEYS', 32)
+
 const KEY_CADENCE_MS = readPositiveInt('ORCA_TYPING_BENCH_KEY_CADENCE_MS', 250)
+
 const CPU_WORKERS = readPositiveInt('ORCA_TYPING_BENCH_CPU_WORKERS', 0)
+
 const BENCH_LABEL = process.env.ORCA_TYPING_BENCH_LABEL ?? 'dev'
 
 // Load must outlive setup (pane splits, worktree switches) plus the typing
@@ -122,6 +128,7 @@ function spawnCpuPressureWorkers(): ChildProcess[] {
     'benchmarks',
     'cpu-pressure-worker.mjs'
   )
+
   return Array.from({ length: CPU_WORKERS }, () =>
     spawn(process.execPath, [workerPath, String((LOAD_DURATION_S + 120) * 1000)], {
       stdio: 'ignore'
@@ -152,17 +159,22 @@ function writeBenchReport(
     scheduler,
     mainDelivery
   }
+
   mkdirSync(RESULTS_DIR, { recursive: true })
   const stamp = report.timestamp.replace(/[:.]/g, '-')
+
   const outPath = path.join(
     RESULTS_DIR,
     `multi-workspace-typing-${BENCH_LABEL}-${scenario}-${stamp}.json`
   )
+
   writeFileSync(outPath, JSON.stringify(report, null, 2))
+
   const fmt = (stats: LatencyStats | null): string =>
     stats
       ? `p50 ${stats.p50.toFixed(1)}ms p90 ${stats.p90.toFixed(1)}ms max ${stats.max.toFixed(1)}ms`
       : 'n/a'
+
   testInfo.annotations.push({
     type: `multi-workspace-typing-${scenario}`,
     description:
@@ -187,6 +199,7 @@ async function startSustainedLoadInPanes(
       `node ${JSON.stringify(scriptPath)} ${index} ${LOAD_RATE_KBPS} ${LOAD_DURATION_S}\r`
     )
   }
+
   // Readiness is signalled via files, not terminal markers: a streaming pane
   // scrolls its READY line out of the buffer before sequential checks get to
   // it once several panes start together.
@@ -194,6 +207,7 @@ async function startSustainedLoadInPanes(
     panes
       .map((_, index) => index)
       .filter((index) => !existsSync(sustainedLoadReadyFilePath(readyFileDirectory, runId, index)))
+
   await expect
     .poll(() => missingReadyPanes().length, {
       timeout: 30_000,
@@ -243,13 +257,16 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
     const probePath = path.join(testRepoPath, `.orca-mwt-probe-${runId}.mjs`)
     const sidecarPath = path.join(testRepoPath, `.orca-mwt-arrivals-${runId}.jsonl`)
     writeTypingEchoProbeScript(probePath, runId, sidecarPath)
+
     try {
       await resetDeliveryDebug(orcaPage)
       await startTypingProbe(orcaPage, typingPtyId, probePath, runId)
+
       const measurement = await measurePacedTyping(orcaPage, runId, sidecarPath, {
         keyCount: KEY_COUNT,
         keyCadenceMs: KEY_CADENCE_MS
       })
+
       writeBenchReport(
         testInfo,
         'baseline',
@@ -275,6 +292,7 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
     const typingWorktreeId = await waitForActiveWorktree(orcaPage)
     const loadWorktreeId = (await getAllWorktreeIds(orcaPage)).find((id) => id !== typingWorktreeId)
     expect(Boolean(loadWorktreeId), 'bench needs the seeded secondary worktree').toBe(true)
+
     if (!loadWorktreeId) {
       return
     }
@@ -288,6 +306,7 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
 
     const cpuWorkers = spawnCpuPressureWorkers()
     let loadPanes: TerminalLoadPane[] = []
+
     try {
       await switchToWorktree(orcaPage, loadWorktreeId)
       loadPanes = await ensureActiveWorktreePaneLoad(orcaPage, LOAD_PANES)
@@ -312,10 +331,12 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
         .toBeGreaterThan(0)
 
       await startTypingProbe(orcaPage, typingPtyId, probePath, runId)
+
       const measurement = await measurePacedTyping(orcaPage, runId, sidecarPath, {
         keyCount: KEY_COUNT,
         keyCadenceMs: KEY_CADENCE_MS
       })
+
       writeBenchReport(
         testInfo,
         `hidden-load-${LOAD_PANES}x${LOAD_RATE_KBPS}kbps-cpu${CPU_WORKERS}`,
@@ -332,6 +353,7 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
       for (const worker of cpuWorkers) {
         worker.kill('SIGKILL')
       }
+
       await switchToWorktree(orcaPage, loadWorktreeId).catch(() => undefined)
       await stopPtysQuietly(
         orcaPage,
@@ -364,6 +386,7 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
 
     const cpuWorkers = spawnCpuPressureWorkers()
     let panes: TerminalLoadPane[] = []
+
     try {
       // Pane 0 types; the rest replay the agent stream side by side — the
       // "Claude Code running in a visible split" shape.
@@ -374,10 +397,12 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
 
       await resetDeliveryDebug(orcaPage)
       await startTypingProbe(orcaPage, typingPane.ptyId, probePath, runId)
+
       const measurement = await measurePacedTyping(orcaPage, runId, sidecarPath, {
         keyCount: KEY_COUNT,
         keyCadenceMs: KEY_CADENCE_MS
       })
+
       writeBenchReport(
         testInfo,
         `visible-split-${LOAD_RATE_KBPS}kbps-cpu${CPU_WORKERS}`,
@@ -390,6 +415,7 @@ test.describe('Multi-workspace sustained typing latency bench', () => {
       for (const worker of cpuWorkers) {
         worker.kill('SIGKILL')
       }
+
       await stopPtysQuietly(
         orcaPage,
         panes.map((pane) => pane.ptyId)

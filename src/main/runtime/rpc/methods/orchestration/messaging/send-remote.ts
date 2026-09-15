@@ -29,6 +29,7 @@ export async function sendRemoteMessage(args: {
 }): Promise<unknown> {
   const { params, runtime, db, from, senderPaneKey, remoteAttachment } = args
   rejectFederatedExplicitTarget(params)
+
   if (
     !db.verifyRemoteAttachmentAuthority({
       dispatchId: remoteAttachment.dispatch_id,
@@ -45,6 +46,7 @@ export async function sendRemoteMessage(args: {
 
   const type = (params.type ?? 'status') as MessageType
   const payload = parseRemoteWorkerPayload(params.payload)
+
   if (
     typeof payload.dispatchId === 'string' &&
     payload.dispatchId !== remoteAttachment.dispatch_id
@@ -54,10 +56,12 @@ export async function sendRemoteMessage(args: {
       `Dispatch ${payload.dispatchId} is not the active remote Dispatch for this pane.`
     )
   }
+
   const outcome =
     type === 'worker_done' && (payload.outcome === 'succeeded' || payload.outcome === 'failed')
       ? payload.outcome
       : undefined
+
   if (type === 'worker_done' && !outcome) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -68,6 +72,7 @@ export async function sendRemoteMessage(args: {
   const supportsLifecycleSettlement =
     remoteAttachment.protocol_version >=
     ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
+
   const relay = db.enqueueFederationRelay({
     dispatchId: remoteAttachment.dispatch_id,
     direction: 'to_home',
@@ -83,6 +88,7 @@ export async function sendRemoteMessage(args: {
     }),
     ...(!supportsLifecycleSettlement && outcome ? { settleRemoteOutcome: outcome } : {})
   })
+
   const lifecycle =
     outcome && supportsLifecycleSettlement
       ? await waitForFederatedLifecycleSettlement(runtime, relay.dispatch_id, relay.sequence, {
@@ -95,12 +101,14 @@ export async function sendRemoteMessage(args: {
             authority: 'worker_server_legacy' as const
           }
         : undefined
+
   if (outcome && supportsLifecycleSettlement && !lifecycle) {
     throw new OrchestrationError(
       'operation_unknown',
       'worker_done was queued, but the Run-home runtime did not confirm settlement. Verify the Task and Dispatch before retrying.'
     )
   }
+
   return {
     relay: {
       messageId: relay.message_id,

@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+
 export type WorkspaceCreateErrorDisplay = {
   title: string
   message: string

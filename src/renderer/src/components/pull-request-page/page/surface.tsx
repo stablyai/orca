@@ -52,16 +52,19 @@ export default function PullRequestPage({
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
   const [linkCopyState, setLinkCopyState] = useState(() => createGitHubLinkCopyState(workItemId))
   const resolvedLinkCopyState = resolveGitHubLinkCopyState(linkCopyState, workItemId)
+
   if (resolvedLinkCopyState !== linkCopyState) {
     // Why: reconcile before paint so switching items doesn't flash the previous item's copied indicator.
     setLinkCopyState(resolvedLinkCopyState)
   }
+
   const linkCopied = resolvedLinkCopyState.copied
   const workItemState = workItem?.state
   const workItemLabels = workItem?.labels
   const workItemType = workItem?.type
   const effectiveRepoId = repoId ?? workItem?.repoId ?? null
   const allWorktrees = useAllWorktrees()
+
   const attachedWorkspace = useMemo(
     () =>
       workItem?.type === 'pr'
@@ -69,6 +72,7 @@ export default function PullRequestPage({
         : null,
     [allWorktrees, effectiveRepoId, workItem]
   )
+
   const attachedWorkspaceLabel = attachedWorkspace
     ? getWorktreeAttachmentLabel(attachedWorkspace)
     : null
@@ -78,10 +82,13 @@ export default function PullRequestPage({
     if (!repoPath && !effectiveRepoId) {
       return undefined
     }
+
     return s.repos.find((r) => (effectiveRepoId ? r.id === effectiveRepoId : r.path === repoPath))
       ?.issueSourcePreference
   })
+
   const canUseDetailsRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
+
   const { details, loading, error, detailsLoaded, detailsCacheKey, appendOptimisticComment } =
     usePullRequestDetails({
       workItem,
@@ -109,6 +116,7 @@ export default function PullRequestPage({
     if (!workItem) {
       return
     }
+
     const targetRepoId = effectiveRepoId
     onUse(
       targetRepoId && targetRepoId !== workItem.repoId
@@ -121,18 +129,23 @@ export default function PullRequestPage({
     if (!workItem) {
       return
     }
+
     const targetRepoId = effectiveRepoId
+
     const currentAttached = findGithubPrWorkspaceAttachment(
       useAppStore.getState().allWorktrees(),
       targetRepoId,
       workItem.number
     )
+
     if (!currentAttached) {
       handleUseWorkItem()
+
       return
     }
 
     const result = activateAndRevealWorktree(currentAttached.id)
+
     if (result === false) {
       toast.error(
         translate(
@@ -148,24 +161,32 @@ export default function PullRequestPage({
     if (!workItem) {
       return
     }
+
     let cancelled = false
     let count = 0
     let frameId: number | null = null
+
     const tick = (): void => {
       frameId = null
+
       if (cancelled) {
         return
       }
+
       if (document.body.style.pointerEvents === 'none') {
         document.body.style.pointerEvents = ''
       }
+
       if (count++ < 5) {
         frameId = requestAnimationFrame(tick)
       }
     }
+
     tick()
+
     return () => {
       cancelled = true
+
       if (frameId !== null) {
         cancelAnimationFrame(frameId)
       }
@@ -183,13 +204,16 @@ export default function PullRequestPage({
             ? GitPullRequestDraft
             : GitPullRequest
       : CircleDot
+
   const displayWorkItem = useMemo<GitHubWorkItem | null>(() => {
     if (!workItem) {
       return null
     }
+
     if (!details?.item) {
       return workItem
     }
+
     return { ...workItem, ...details.item, repoId: workItem.repoId }
   }, [details?.item, workItem])
 
@@ -202,6 +226,7 @@ export default function PullRequestPage({
     ) {
       return
     }
+
     // Why: PR details can carry fresher reviewer metadata than the list row; push it back so the Tasks review chip isn't stale.
     // Why: keyed on identity, not the whole item, so replacing the same PR object doesn't repush unchanged reviewers.
     onReviewRequestsChange?.(
@@ -219,16 +244,20 @@ export default function PullRequestPage({
   // Why: clipboard IPC can resolve after unmount; skip copied-state feedback rather than start a reset timer on a stale surface.
   const linkCopyMountedRef = useRef(false)
   const linkCopiedResetTimerRef = useRef<number | null>(null)
+
   const clearLinkCopiedResetTimer = useCallback((): void => {
     if (linkCopiedResetTimerRef.current === null) {
       return
     }
+
     window.clearTimeout(linkCopiedResetTimerRef.current)
     linkCopiedResetTimerRef.current = null
   }, [])
+
   const setLinkCopyButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
       linkCopyMountedRef.current = node !== null
+
       if (node === null) {
         // Why: clear the copied-state timer on ref detach instead of via a passive cleanup Effect.
         clearLinkCopiedResetTimer()
@@ -241,12 +270,15 @@ export default function PullRequestPage({
     if (!workItem) {
       return
     }
+
     try {
       // Why: Electron clipboard IPC works even when browser clipboard APIs lose focus/activation in nested overlays.
       await window.api.ui.writeClipboardText(workItem.url)
+
       if (!linkCopyMountedRef.current) {
         return
       }
+
       clearLinkCopiedResetTimer()
       const copiedWorkItemId = workItem.id
       setLinkCopyState(markGitHubLinkCopied(copiedWorkItemId))
@@ -266,6 +298,7 @@ export default function PullRequestPage({
     if (!workItem) {
       return
     }
+
     // Why: local repos invalidate all source-preference variants; runtime-only entries need their exact source-scoped key (no local path).
     if (repoPath) {
       invalidateWorkItemDetailsCacheByMatch({
@@ -274,8 +307,10 @@ export default function PullRequestPage({
         type: workItem.type,
         number: workItem.number
       })
+
       return
     }
+
     if (detailsCacheKey) {
       invalidateWorkItemDetailsCacheForKey(detailsCacheKey)
     }

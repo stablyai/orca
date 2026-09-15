@@ -184,12 +184,14 @@ export async function setupFloatingTerminalPanelTest(): Promise<void> {
   mocks.isWebRuntimeSessionActive.mockReturnValue(false)
   mocks.pickFloatingMarkdownDocument.mockResolvedValue(null)
   mocks.shouldDeferParkedPtyExitTabClose.mockReturnValue(false)
+
   const localStorage = {
     clear: vi.fn(),
     getItem: vi.fn(() => null),
     removeItem: vi.fn(),
     setItem: vi.fn()
   }
+
   vi.stubGlobal('window', {
     addEventListener: vi.fn(),
     dispatchEvent: vi.fn(),
@@ -208,6 +210,7 @@ export async function setupFloatingTerminalPanelTest(): Promise<void> {
     localStorage,
     requestAnimationFrame: vi.fn((callback: FrameRequestCallback) => {
       callback(0)
+
       return 1
     }),
     removeEventListener: vi.fn()

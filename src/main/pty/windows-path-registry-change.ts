@@ -12,6 +12,7 @@ export function installWindowsPathRegistryChangeListener(
   if ((options.platform ?? process.platform) !== 'win32' || !window.hookWindowMessage) {
     return
   }
+
   window.hookWindowMessage(
     WINDOWS_SETTING_CHANGE_MESSAGE,
     options.invalidate ?? invalidatePersistedWindowsPathCache

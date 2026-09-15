@@ -10,6 +10,7 @@ import {
 import { markHostCredentialWrite } from './host-credential-write-revision'
 
 const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
+
 const ResumeCredentialSchema = z
   .object({
     token: Base64Url32ByteSchema,
@@ -52,12 +53,14 @@ export function promotePairingJournalCredential(args: {
   installed: DeviceCredentialInstalled
 }): MobileRelayCredentialBundle {
   const { journal, installed } = args
+
   if (
     installed.reqId !== journal.metadata.installReqId ||
     installed.authorizationMode !== journal.metadata.authorizationMode
   ) {
     throw new Error('relay credential install result does not match pairing journal')
   }
+
   return MobileRelayCredentialBundleSchema.parse({
     v: 1,
     hostId: journal.metadata.host.id,
@@ -76,11 +79,14 @@ export async function readMobileRelayCredentialBundle(
 ): Promise<MobileRelayCredentialBundle | null> {
   requireNativeSecretStore()
   const raw = await readPairingKeychainItem(credentialKey(hostId))
+
   if (raw === null) {
     return null
   }
+
   try {
     const result = MobileRelayCredentialBundleSchema.safeParse(JSON.parse(raw))
+
     return result.success && result.data.hostId === hostId ? result.data : null
   } catch {
     return null
@@ -100,6 +106,7 @@ export async function deleteMobileRelayCredentialBundle(hostId: string): Promise
   if (Platform.OS === 'web') {
     return
   }
+
   await deletePairingKeychainItem(credentialKey(hostId))
 }
 

@@ -23,6 +23,7 @@ describe('AgentMap', () => {
       finishedAt: NOW - 60_000,
       unseen: true
     })
+
     renderMap([card(), finished])
 
     const workingNode = screen.getByRole('button', { name: /Agent alpha/ })
@@ -55,20 +56,24 @@ describe('AgentMap', () => {
       dotState: 'done',
       finishedAt: NOW - 60_000
     })
+
     const waiting = card({
       paneKey: 'waiting',
       conversationName: 'Question agent',
       bucket: 'attention',
       dotState: 'waiting'
     })
+
     const { container } = renderMap([card(), waiting, done])
 
     const workingNode = screen.getByRole('button', { name: /Agent alpha/ })
     const waitingNode = screen.getByRole('button', { name: /Question agent/ })
     const doneNode = screen.getByRole('button', { name: /Finished agent/ })
+
     const workingRing = screen.getByRole('button', {
       name: /Open Agent map worktree details/
     })
+
     const doneRing = screen.getByRole('button', {
       name: /Open Finished worktree worktree details/
     })
@@ -95,6 +100,7 @@ describe('AgentMap', () => {
   it('keeps glow markup bounded for a large visible worktree', () => {
     const cards = Array.from({ length: 120 }, (_, index) => {
       const working = index % 2 === 0
+
       return card({
         paneKey: `pane-${index}`,
         ptyId: `pty-${index}`,
@@ -106,6 +112,7 @@ describe('AgentMap', () => {
         finishedAt: working ? null : NOW - 60_000
       })
     })
+
     const { container } = renderMap(cards, { selectedPaneKey: 'pane-0' })
 
     expect(container.querySelectorAll('[data-agent-map-agent-status-glow]')).toHaveLength(60)
@@ -126,8 +133,10 @@ describe('AgentMap', () => {
         unseen: index === 0
       })
     )
+
     const { container } = renderMap(fleet)
     const marker = container.querySelector<SVGCircleElement>('[data-agent-unread-marker]')!
+
     const agentMark =
       marker.parentElement!.querySelector<SVGCircleElement>('.agent-map-agent-mark')!
 
@@ -237,21 +246,25 @@ describe('AgentMap', () => {
 
   it('connects spawned workers beneath their visible parent', () => {
     const parent = card({ paneKey: 'parent', conversationName: 'Coordinator' })
+
     const child = card({
       paneKey: 'child',
       parentPaneKey: 'parent',
       conversationName: 'Worker'
     })
+
     const nested = card({
       paneKey: 'nested',
       parentPaneKey: 'child',
       conversationName: 'Subagent'
     })
+
     const orphan = card({
       paneKey: 'orphan',
       parentPaneKey: 'filtered-parent',
       conversationName: 'Orphaned worker'
     })
+
     const { container } = renderMap([parent, child, nested, orphan])
     const workerLink = container.querySelector('[data-child-pane-key="child"]')
     const nestedLink = container.querySelector('[data-child-pane-key="nested"]')
@@ -278,6 +291,7 @@ describe('AgentMap', () => {
       worktreeName: 'Parent workspace',
       conversationName: 'Coordinator'
     })
+
     const child = card({
       paneKey: 'child',
       worktreeId: 'child-worktree',
@@ -285,6 +299,7 @@ describe('AgentMap', () => {
       parentPaneKey: 'parent',
       conversationName: 'Worker'
     })
+
     const nested = card({
       paneKey: 'nested',
       worktreeId: 'nested-worktree',
@@ -292,6 +307,7 @@ describe('AgentMap', () => {
       parentPaneKey: 'child',
       conversationName: 'Subagent'
     })
+
     const { container } = renderMap([parent, child, nested])
     const workerLink = container.querySelector('[data-child-pane-key="child"]')
     const nestedLink = container.querySelector('[data-child-pane-key="nested"]')
@@ -310,6 +326,7 @@ describe('AgentMap', () => {
         conversationName: `Agent ${index}`
       })
     )
+
     const { container } = renderMap(cards, { selectedPaneKey: 'agent-0' })
 
     expect(container.querySelectorAll('[data-agent-map-lineage-link]')).toHaveLength(239)
@@ -327,6 +344,7 @@ describe('AgentMap', () => {
       card({ paneKey: 'parent', conversationName: 'Coordinator' }),
       card({ paneKey: 'child', parentPaneKey: 'parent', conversationName: 'Worker' })
     ]
+
     const crossWorktree = [
       card({ paneKey: 'far-parent', worktreeId: 'wt-a', worktreeName: 'A' }),
       card({
@@ -336,6 +354,7 @@ describe('AgentMap', () => {
         parentPaneKey: 'far-parent'
       })
     ]
+
     const cards = [...sameWorktree, ...crossWorktree]
 
     const shown = renderMap(cards)
@@ -374,6 +393,7 @@ describe('AgentMap', () => {
         })
       )
     ]
+
     const { container } = renderMap(cards, { selectedPaneKey: 'cycle-a' })
 
     expect(container.querySelector('[data-child-pane-key="cycle-a"]')).not.toBeNull()
@@ -396,6 +416,7 @@ describe('AgentMap', () => {
         parentWorktreeId: 'filtered-parent'
       })
     ])
+
     const links = container.querySelectorAll('[data-agent-map-worktree-lineage-link]')
 
     expect(links).toHaveLength(1)
@@ -466,6 +487,7 @@ describe('AgentMap', () => {
       'requestAnimationFrame',
       vi.fn((callback: FrameRequestCallback) => {
         frames.push(callback)
+
         return frames.length
       })
     )
@@ -493,16 +515,21 @@ describe('AgentMap', () => {
     const selected = card()
     const view = renderMap([selected], { selectedPaneKey: selected.paneKey })
     const svg = view.container.querySelector<SVGSVGElement>('.agent-map-canvas > svg')!
+
     const selectedNode = (): SVGGElement =>
       view.container.querySelector<SVGGElement>('.agent-map-agent-node.is-selected')!
+
     const nodeCenter = (): [number, number] => {
       const match = selectedNode()
         .getAttribute('transform')
         ?.match(/translate\(([^ ]+) ([^)]+)\)/)
+
       return [Number(match?.[1]), Number(match?.[2])]
     }
+
     const viewportCenter = (): [number, number] => {
       const [x, y, width, height] = svg.getAttribute('viewBox')!.split(' ').map(Number)
+
       return [x + width / 2, y + height / 2]
     }
 
@@ -532,6 +559,7 @@ describe('AgentMap', () => {
   it('increases map label scale when users zoom out', () => {
     const { container } = renderMap([card()])
     const labelGroup = container.querySelector('.agent-map-worktree-label')?.parentElement
+
     const initialScale = Number(
       labelGroup?.getAttribute('transform')?.match(/scale\(([^)]+)\)/)?.[1]
     )
@@ -542,16 +570,20 @@ describe('AgentMap', () => {
     const zoomedScale = Number(
       labelGroup?.getAttribute('transform')?.match(/scale\(([^)]+)\)/)?.[1]
     )
+
     expect(environment.boundsSpy).toHaveBeenCalledTimes(readsBeforeZoom)
     expect(zoomedScale).toBeGreaterThan(initialScale)
   })
 
   it('avoids idle pointer layout reads and batches active viewport updates by frame', () => {
     const frames: FrameRequestCallback[] = []
+
     const requestFrame = vi.fn((callback: FrameRequestCallback) => {
       frames.push(callback)
+
       return frames.length
     })
+
     vi.stubGlobal('requestAnimationFrame', requestFrame)
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
     const { container } = renderMap([card()])
@@ -581,6 +613,7 @@ describe('AgentMap', () => {
 
     requestFrame.mockClear()
     const readsBeforeWheel = environment.boundsSpy.mock.calls.length
+
     const wheel = (): void => {
       const event = new Event('wheel', { bubbles: true, cancelable: true })
       Object.defineProperties(event, {
@@ -591,6 +624,7 @@ describe('AgentMap', () => {
       fireEvent(svg, event)
       expect(event.defaultPrevented).toBe(true)
     }
+
     wheel()
     wheel()
     expect(environment.boundsSpy).toHaveBeenCalledTimes(readsBeforeWheel + 1)
@@ -608,6 +642,7 @@ describe('AgentMap', () => {
       finishedAt: NOW - 60_000,
       unseen: false
     })
+
     const { container } = renderMap([card(), quiet])
     const labels = [...container.querySelectorAll('.agent-map-worktree-label')]
     const activeGroup = labels.find((label) => label.textContent === 'Agent map')?.parentElement
@@ -626,6 +661,7 @@ describe('AgentMap', () => {
       finishedAt: NOW - 60_000,
       unseen: false
     })
+
     const newResult = card({
       paneKey: 'new',
       conversationName: 'New result',
@@ -634,6 +670,7 @@ describe('AgentMap', () => {
       finishedAt: NOW - 2 * 60_000,
       unseen: true
     })
+
     renderMap([card(), seenResult, newResult])
 
     expect(screen.getByRole('button', { name: /Agent alpha/ })).toBeInTheDocument()
@@ -656,6 +693,7 @@ describe('AgentMap', () => {
       dotState: 'done',
       finishedAt: NOW - 60_000
     })
+
     renderMap([card(), done], { enabledStates: new Set<AgentMapState>(['done']) })
 
     expect(screen.queryByRole('button', { name: /Agent alpha/ })).not.toBeInTheDocument()
@@ -667,6 +705,7 @@ describe('AgentMap', () => {
     const all = new Set<AgentMapState>(['attention', 'working', 'done', 'idle'])
     const view = renderMap([agent], { enabledStates: all })
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+
     const viewBox = view.container
       .querySelector<SVGSVGElement>('.agent-map-canvas > svg')!
       .getAttribute('viewBox')
@@ -695,6 +734,7 @@ describe('AgentMap', () => {
     const agent = card()
     const view = renderMap([agent])
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+
     const viewBox = view.container
       .querySelector<SVGSVGElement>('.agent-map-canvas > svg')!
       .getAttribute('viewBox')
@@ -720,6 +760,7 @@ describe('AgentMap', () => {
         unseen: true
       })
     )
+
     const view = renderMap(results)
     const { container } = view
 

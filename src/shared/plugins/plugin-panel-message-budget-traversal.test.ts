@@ -18,6 +18,7 @@ describe('plugin message budget traversal', () => {
         yield entry
       }
     }
+
     expect(structuredCloneMessageBytes(value, 64)).toBe(65)
     expect(visits).toBeLessThan(10)
   })
@@ -25,15 +26,18 @@ describe('plugin message budget traversal', () => {
   it('stops reading object values after an earlier property exceeds the budget', () => {
     const value: Record<string, unknown> = { first: 'x'.repeat(1000) }
     let reads = 0
+
     for (let i = 0; i < 1000; i++) {
       Object.defineProperty(value, `tail-${i}`, {
         enumerable: true,
         get: () => {
           reads++
+
           return i
         }
       })
     }
+
     expect(structuredCloneMessageBytes(value, 64)).toBe(65)
     expect(reads).toBe(0)
   })
@@ -65,6 +69,7 @@ describe('plugin message budget traversal', () => {
     Object.defineProperty(value, 1, {
       get: () => {
         reads++
+
         return 1
       }
     })

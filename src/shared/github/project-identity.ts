@@ -12,6 +12,7 @@ export type GitHubProjectIdentity = {
 export function githubProjectIdentityKey(project: GitHubProjectIdentity): string {
   const projectKey = `${project.ownerType}:${project.owner.toLowerCase()}:${project.number}`
   const host = project.host?.trim().toLowerCase()
+
   return host && !isDefaultGitHubHost(host) ? `${host}:${projectKey}` : projectKey
 }
 
@@ -19,5 +20,6 @@ export function githubProjectIdentityKey(project: GitHubProjectIdentity): string
  * redirect a host-less persisted project to an Enterprise server. */
 export function githubProjectHost(host?: string | null): string {
   const trimmed = host?.trim()
+
   return trimmed || 'github.com'
 }

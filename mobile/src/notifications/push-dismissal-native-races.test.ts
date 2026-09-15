@@ -6,7 +6,9 @@ import { foregroundNotificationBehavior } from './push-receive'
 import { loadNotificationDeliveryPreferences } from './notification-delivery-preferences'
 
 const memory = vi.hoisted(() => new Map<string, string>())
+
 const nativeLedger = vi.hoisted(() => new Map<string, number>())
+
 vi.mock('./native-push-dismissal', () => ({
   nativePushDismissal: {
     remember: vi.fn(async (payload) => {
@@ -15,6 +17,7 @@ vi.mock('./native-push-dismissal', () => ({
         payload.notificationEpoch,
         payload.notificationId
       ])
+
       nativeLedger.set(key, Math.max(nativeLedger.get(key) ?? 0, payload.notificationSeq))
     }),
     wasDismissed: vi.fn(
@@ -29,6 +32,7 @@ vi.mock('./native-push-dismissal', () => ({
     )
   }
 }))
+
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: vi.fn(async (key: string) => memory.get(key) ?? null),
@@ -37,15 +41,21 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     })
   }
 }))
+
 vi.mock('expo-notifications', () => ({ getPresentedNotificationsAsync: async () => [] }))
+
 vi.mock('../transport/host-store', () => ({ loadHostCatalog: async () => [{ id: 'host' }] }))
+
 vi.mock('./push-host-fingerprint', () => ({ resolveHostIdForFingerprint: () => 'host' }))
+
 vi.mock('../storage/preferences', () => ({
   loadPushNotificationsEnabled: async () => true
 }))
+
 vi.mock('./notification-viewing-policy', () => ({
   shouldSuppressNotificationWhileViewing: () => false
 }))
+
 vi.mock('./notification-delivery-preferences', () => ({
   loadNotificationDeliveryPreferences: vi.fn(async () => ({ sound: true }))
 }))
@@ -56,6 +66,7 @@ const payload = {
   notificationId: 'note',
   notificationSeq: 20
 }
+
 const fence = { ...payload, notificationSeq: 21 }
 
 beforeEach(() => {
@@ -80,6 +91,7 @@ it('rechecks a negative native snapshot overtaken by a dismissal', async () => {
     await new Promise<void>((resolve) => {
       finish = resolve
     })
+
     return false
   })
   const pending = wasPushDismissed(payload)
@@ -104,8 +116,10 @@ it('suppresses presentation when dismissal completes during the handler sound re
     await new Promise<void>((resolve) => {
       finish = resolve
     })
+
     return { sound: true } as Awaited<ReturnType<typeof loadNotificationDeliveryPreferences>>
   })
+
   const pending = foregroundNotificationBehavior({
     request: {
       identifier: 'foreground-alert',
@@ -113,6 +127,7 @@ it('suppresses presentation when dismissal completes during the handler sound re
       content: { title: null, subtitle: null, body: null, sound: null, data: { orca: payload } }
     }
   })
+
   await vi.waitFor(() => expect(finish).toBeDefined())
   await foregroundNotificationBehavior({
     request: { content: { data: { orca: { ...fence, kind: 'dismiss' } } } }

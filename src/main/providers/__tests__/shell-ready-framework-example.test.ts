@@ -20,12 +20,14 @@ vi.mock('electron', () => ({
       if (name === 'userData') {
         return getUserDataPathMock()
       }
+
       throw new Error(`unexpected app.getPath(${name})`)
     }
   }
 }))
 
 const hasZsh = process.platform !== 'win32' && spawnSync('which', ['zsh']).status === 0
+
 const describeIfZsh = hasZsh ? describe : describe.skip
 
 describeIfZsh('shell-script-literal framework example', () => {

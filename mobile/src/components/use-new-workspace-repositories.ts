@@ -21,9 +21,11 @@ export function useNewWorkspaceRepositories(args: {
   loading: boolean
 } {
   const { client, hostId, visible } = args
+
   const [initialRepos] = useState(() =>
     hostId ? (getCachedRepos(hostId) as MobileWorkspaceRepo[] | null) : null
   )
+
   const [repos, setRepos] = useState<MobileWorkspaceRepo[]>(initialRepos ?? [])
   const [selectedRepo, setSelectedRepo] = useState<MobileWorkspaceRepo | null>(null)
   const [loading, setLoading] = useState(initialRepos == null)
@@ -33,12 +35,16 @@ export function useNewWorkspaceRepositories(args: {
     if (!visible || !lastVisitedRepo.loaded || selectedRepo || repos.length === 0) {
       return
     }
+
     const eligibleRepos = getMobileNewWorkspaceDialogEligibleRepos(repos)
+
     const preferredRepoId = resolveMobileNewWorkspaceDialogRepoId({
       eligibleRepos,
       activeRepoId: lastVisitedRepo.repoId
     })
+
     const preferredRepo = repos.find((repo) => repo.id === preferredRepoId) ?? null
+
     if (preferredRepo) {
       setSelectedRepo(preferredRepo)
     }
@@ -48,6 +54,7 @@ export function useNewWorkspaceRepositories(args: {
     if (!visible || !client) {
       return
     }
+
     let stale = false
     setLoading(true)
     void client
@@ -56,11 +63,14 @@ export function useNewWorkspaceRepositories(args: {
         if (stale || !response.ok) {
           return
         }
+
         const result = (response as RpcSuccess).result as { repos: MobileWorkspaceRepo[] }
         setRepos(result.repos)
+
         if (hostId) {
           setCachedRepos(hostId, result.repos)
         }
+
         setSelectedRepo((current) =>
           refreshMobileNewWorkspaceDialogSelectedRepo(result.repos, current)
         )
@@ -71,6 +81,7 @@ export function useNewWorkspaceRepositories(args: {
           setLoading(false)
         }
       })
+
     return () => {
       stale = true
     }

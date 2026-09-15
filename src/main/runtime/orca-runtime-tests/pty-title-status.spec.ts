@@ -82,6 +82,7 @@ describe('OrcaRuntimeService', () => {
     syncSinglePty(runtime)
     runtime.onPtyData('pty-1', '\x1b]0;Codex working\x07', 100)
     const [terminal] = (await runtime.listTerminals()).terminals
+
     const wait = runtime.waitForTerminal(terminal.handle, {
       condition: 'tui-idle',
       timeoutMs: 1_000
@@ -125,6 +126,7 @@ describe('OrcaRuntimeService', () => {
   // is exactly why the title cannot tell a live pane from a dead one.
   it('only records the bare Cursor native title via the stale-working clear', async () => {
     vi.useFakeTimers()
+
     try {
       const ptyId = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-bg`
       const runtime = createRuntime()
@@ -157,6 +159,7 @@ describe('OrcaRuntimeService', () => {
   // liveness, so both must refuse.
   it('refuses a bare Cursor title while the foreground read is unavailable', async () => {
     vi.useFakeTimers()
+
     try {
       const ptyId = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-bg`
       const runtime = createRuntime()
@@ -188,6 +191,7 @@ describe('OrcaRuntimeService', () => {
 
   it('does not treat a bare Cursor title as an agent once the shell owns the foreground', async () => {
     vi.useFakeTimers()
+
     try {
       const ptyId = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-bg`
       const runtime = createRuntime()
@@ -225,6 +229,7 @@ describe('OrcaRuntimeService', () => {
   // is what unlocks a live Cursor pane — and is the layer to fix if one is ever refused.
   it('accepts a bare Cursor title when the foreground read confirms cursor-agent', async () => {
     vi.useFakeTimers()
+
     try {
       const ptyId = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-bg`
       const runtime = createRuntime()
@@ -255,6 +260,7 @@ describe('OrcaRuntimeService', () => {
   // never reach, so nothing else would notice it being widened.
   it('refuses a bare Cursor title on a runtime pty with no controller attached', async () => {
     vi.useFakeTimers()
+
     try {
       const ptyId = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-bg`
       const runtime = createRuntime()
@@ -281,6 +287,7 @@ describe('OrcaRuntimeService', () => {
 
   it('clears a stale working title after 3s of title-less output', async () => {
     vi.useFakeTimers()
+
     try {
       const ptyId = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-bg`
       const runtime = createRuntime()
@@ -311,6 +318,7 @@ describe('OrcaRuntimeService', () => {
 
   it('cancels the stale-title timer when the PTY exits', async () => {
     vi.useFakeTimers()
+
     try {
       const ptyId = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-bg`
       const runtime = createRuntime()
@@ -340,6 +348,7 @@ describe('OrcaRuntimeService', () => {
 
   it('keeps stale-title timers isolated per PTY', async () => {
     vi.useFakeTimers()
+
     try {
       const ptyA = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-a`
       const ptyB = `${TEST_REPO_ID}::/tmp/worktree-a@@pty-b`

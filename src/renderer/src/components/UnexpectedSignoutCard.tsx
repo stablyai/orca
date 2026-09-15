@@ -12,10 +12,12 @@ function readPreviewFlag(): boolean {
   if (!import.meta.env.DEV) {
     return false
   }
+
   try {
     if (new URLSearchParams(window.location.search).get('showSignoutCard') === '1') {
       return true
     }
+
     return window.localStorage.getItem('orca-debug-show-signout-card') === '1'
   } catch {
     return false
@@ -60,6 +62,7 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
   useEffect(() => {
     let cancelled = false
     let attempts = 0
+
     const refresh = (): void => {
       attempts += 1
       void useAppStore
@@ -69,6 +72,7 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
           if (cancelled) {
             return
           }
+
           if (status != null) {
             setAuthRefreshReady(true)
           } else if (attempts < 3) {
@@ -76,7 +80,9 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
           }
         })
     }
+
     refresh()
+
     return () => {
       cancelled = true
     }
@@ -96,18 +102,21 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
           setAppVersion(null)
         }
       })
+
     return () => {
       cancelled = true
     }
   }, [])
 
   const dismissedVersion = dismissedVersions[0] ?? persistedDismissedVersion
+
   const eligible = shouldShowUnexpectedSignoutCard({
     authStatus,
     persistedUIReady,
     appVersion,
     dismissedVersion: appearance === 'visible' ? null : dismissedVersion
   })
+
   const visible = preview
     ? persistedUIReady && !previewDismissed
     : authRefreshReady && appearance !== 'closed' && eligible
@@ -117,6 +126,7 @@ export function UnexpectedSignoutCard(): React.JSX.Element | null {
     if (preview) {
       return
     }
+
     if (visible && appearance === 'unseen' && appVersion) {
       setAppearance('visible')
       dismissForVersion(appVersion)

@@ -15,7 +15,9 @@ import { SessionSearchStore } from './session-search-store'
 // tests are about what may be handed that id in the meantime.
 
 let index: SessionSearchIndexFile
+
 let store: SessionSearchStore
+
 let errors: unknown[]
 
 beforeEach(async () => {
@@ -30,7 +32,9 @@ afterEach(async () => {
 })
 
 const OLD_MTIME = 1_000
+
 const LIVE_MTIME = 1_000_000
+
 const LIVE_PATH = '/live.jsonl'
 
 function count(db: SyncDatabase, table: string): number {
@@ -51,9 +55,11 @@ function matches(db: SyncDatabase, term: string): number {
 
 function indexFile(path: string, mtimeMs: number, text: string, rows: number): void {
   const write = store.beginWrite(syntheticCandidate({ path, mtimeMs }), 'replace', 0)!
+
   for (const message of userMessages(text, rows)) {
     write.add(message)
   }
+
   expect(write.commit({ session: syntheticSession(), byteOffset: 50, incomplete: false })).toBe(
     true
   )
@@ -82,11 +88,14 @@ it('never hands a live session the rows of a purged one', async () => {
       if (appended || count(index.db, 'sessions') > 0) {
         return
       }
+
       appended = true
       const write = store.beginWrite(live, 'append', 50)!
+
       for (const message of userMessages('liveneedle', 2)) {
         write.add(message)
       }
+
       expect(
         write.commit({ session: syntheticSession(), byteOffset: 120, incomplete: false })
       ).toBe(true)
@@ -106,6 +115,7 @@ it('never reissues a session row id a delete freed', () => {
   for (const path of ['/a.jsonl', '/b.jsonl', '/c.jsonl']) {
     indexFile(path, OLD_MTIME, 'seeded', 1)
   }
+
   const before = (index.db.prepare('SELECT max(id) AS id FROM sessions').get() as { id: number }).id
   index.db.exec('DELETE FROM sessions')
 

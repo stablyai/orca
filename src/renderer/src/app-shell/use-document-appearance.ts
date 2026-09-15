@@ -16,20 +16,26 @@ export function useDocumentAppearance(): void {
 
     if (theme === 'dark') {
       applyDocumentTheme('dark')
+
       return undefined
     } else if (theme === 'light') {
       applyDocumentTheme('light')
+
       return undefined
     }
+
     // system
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
     applyDocumentTheme('system')
+
     const handler = (): void => {
       applyDocumentTheme('system')
       // System theme changes don't mutate the store, so mobile terminal colors need an explicit graph republish.
       scheduleRuntimeGraphSync()
     }
+
     mq.addEventListener('change', handler)
+
     return () => mq.removeEventListener('change', handler)
   }, [theme])
 

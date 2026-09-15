@@ -105,6 +105,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
     updatePullRequestGenerationRecord,
     updateWorktreeMeta
   } = model
+
   const handlePullRequestCreated = useCallback(
     async (result: {
       provider: HostedReviewProvider
@@ -114,13 +115,17 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
       if (!repo || !branch) {
         return
       }
+
       setRightSidebarOpen(true)
       setRightSidebarTab('checks')
+
       try {
         const createdLink = resolveCreatedHostedReviewLink(result.provider, result.number)
+
         if (activeWorktreeId && result.provider !== 'unsupported') {
           await updateWorktreeMeta(activeWorktreeId, createdLink.worktree)
         }
+
         const linkedReviewNumbers = {
           linkedGitHubPR: linkedPR,
           fallbackGitHubPR: fallbackGitHubPRNumber,
@@ -130,6 +135,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
           linkedGiteaPR,
           ...createdLink.lookup
         }
+
         if (result.provider === 'gitlab') {
           const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
             repoPath: repo.path,
@@ -137,15 +143,19 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
             branch,
             ...linkedReviewNumbers
           })
+
           const refreshedGitLabReview =
             refreshedReview?.provider === 'gitlab' ? refreshedReview : null
+
           await fetchGitLabDetails({
             mrNumberOverride: result.number,
             headShaOverride: refreshedGitLabReview?.headSha,
             commitAsCurrent: true
           })
+
           return
         }
+
         if (result.provider !== 'github') {
           await refreshHostedReviewCard(fetchHostedReviewForBranch, {
             repoPath: repo.path,
@@ -153,8 +163,10 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
             branch,
             ...linkedReviewNumbers
           })
+
           return
         }
+
         await refreshLinkedGitHubPullRequest(result.number)
       } catch {
         // The success toast keeps the hosted URL available; Checks can be refreshed manually.
@@ -186,12 +198,15 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
       }
 
       const requestContextKey = panelContextKey
+
       const isCurrentCreateRequest = (): boolean =>
         panelContextKeyRef.current === requestContextKey &&
         createPrInFlightRef.current === requestContextKey
+
       const base = stripBaseRef(prBase).trim()
       const title = prTitle.trim()
       const worktreePath = activeWorktreePath ?? repo.path
+
       if (!title) {
         setCreatePrError(
           translate(
@@ -202,8 +217,10 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
             }
           )
         )
+
         return
       }
+
       if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(branch).toLowerCase()) {
         setCreatePrError(
           translate(
@@ -212,6 +229,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
             { value0: hostedReviewCreateCopy.reviewLabel }
           )
         )
+
         return
       }
 
@@ -219,20 +237,27 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
       setIsCreatingPr(true)
       setCreatePrError(null)
       let pushed = false
+
       try {
         const shouldPushBeforeCreate =
           createPrPushFirst || hostedReviewCreation?.blockedReason === 'needs_push'
+
         if (shouldPushBeforeCreate) {
           const ok = await pushBeforeCreatePullRequest()
+
           if (!isCurrentCreateRequest()) {
             return
           }
+
           if (!ok) {
             setCreatePrError('Push failed. Resolve the push error, then try again.')
+
             return
           }
+
           pushed = true
         }
+
         const createInput = {
           repoId: repo.id,
           provider: hostedReviewCreateProvider,
@@ -244,29 +269,36 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
           worktreePath,
           useTemplate: prCreationDefaults.useTemplate
         }
+
         const result = stacked
           ? await createStackedHostedReview(repo.path, createInput)
           : await createHostedReview(repo.path, createInput)
+
         if (!isCurrentCreateRequest()) {
           return
         }
+
         if (result.ok) {
           await handlePullRequestCreated({
             provider: hostedReviewCreateProvider,
             number: result.number,
             url: result.url
           })
+
           if (prCreationDefaults.openAfterCreate) {
             openHttpLink(result.url, { worktreeId: activeWorktreeId })
           }
+
           if (activePullRequestGenerationKey) {
             updatePullRequestGenerationRecord(
               activePullRequestGenerationKey,
               clearPullRequestGenerationRequiresPushBeforeCreate
             )
           }
+
           return
         }
+
         if ('existingReview' in result && result.existingReview?.url) {
           const number = result.existingReview.number
           toast.success(
@@ -292,26 +324,31 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
               }
             }
           )
+
           if (number) {
             await handlePullRequestCreated({
               provider: hostedReviewCreateProvider,
               number,
               url: result.existingReview.url
             })
+
             if (activePullRequestGenerationKey) {
               updatePullRequestGenerationRecord(
                 activePullRequestGenerationKey,
                 clearPullRequestGenerationRequiresPushBeforeCreate
               )
             }
+
             return
           }
         }
+
         // Why: stacked creation can create the pull request and still fail to register
         // the stack. Link the review that exists before surfacing the stack failure, or
         // the workspace stays unaware of a PR the user can already see on GitHub.
         if ('createdReview' in result && result.createdReview?.url) {
           const { number, url } = result.createdReview
+
           if (number) {
             await handlePullRequestCreated({
               provider: hostedReviewCreateProvider,
@@ -320,11 +357,13 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
             })
           }
         }
+
         setCreatePrError(formatCreateError(result, pushed, hostedReviewCreateCopy.shortLabel))
       } catch (error) {
         if (!isCurrentCreateRequest()) {
           return
         }
+
         setCreatePrError(
           error instanceof Error
             ? error.message
@@ -376,6 +415,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
       setCreatePrError
     ]
   )
+
   return { handlePullRequestCreated, handleCreatePullRequest }
 }
 

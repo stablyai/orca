@@ -23,6 +23,7 @@ function isValidPtyId(value: unknown): value is string {
 function isTerminalPreviewRenderer(sender: WebContents): boolean {
   return isDashboardPopoutRenderer(sender) || isTrustedUIRenderer(sender)
 }
+
 /** Pop-out terminal transport with an atomic snapshot/live boundary. */
 export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.removeHandler('terminalPreview:connect')
@@ -42,12 +43,15 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
 
   const releaseFitClaim = (contentsId: number, ptyId: string): void => {
     const claimed = fitClaimsByContents.get(contentsId)
+
     if (!claimed?.delete(ptyId)) {
       return
     }
+
     if (claimed.size === 0) {
       fitClaimsByContents.delete(contentsId)
     }
+
     void runtime
       .unregisterRemoteDesktopViewer(ptyId, previewViewerKey(contentsId))
       .catch(() => undefined)
@@ -55,6 +59,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
 
   const removeSubscription = (subscription: TerminalPreviewOutputStream): void => {
     const perPty = subscriptionsByContents.get(subscription.contents.id)
+
     if (perPty?.get(subscription.ptyId) === subscription) {
       perPty.delete(subscription.ptyId)
     }
@@ -62,12 +67,15 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
 
   const disposeContents = (contentsId: number): void => {
     const perPty = subscriptionsByContents.get(contentsId)
+
     if (perPty) {
       for (const subscription of perPty.values()) {
         subscription.dispose()
       }
+
       subscriptionsByContents.delete(contentsId)
     }
+
     // Why: releasing one claim mutates this map while the remaining claims still need teardown.
     for (const ptyId of fitClaimsByContents.get(contentsId)?.keys() ?? []) {
       releaseFitClaim(contentsId, ptyId)
@@ -76,11 +84,13 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
 
   const subscriptionsFor = (contents: WebContents): Map<string, TerminalPreviewOutputStream> => {
     let perPty = subscriptionsByContents.get(contents.id)
+
     if (!perPty) {
       perPty = new Map()
       subscriptionsByContents.set(contents.id, perPty)
       contents.once('destroyed', () => disposeContents(contents.id))
     }
+
     return perPty
   }
 
@@ -93,6 +103,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       if (!isTerminalPreviewRenderer(event.sender) || !isValidPtyId(args?.ptyId)) {
         return { snapshot: null, replay: [] }
       }
+
       const ptyId = args.ptyId
       const perPty = subscriptionsFor(event.sender)
       perPty.get(ptyId)?.dispose()
@@ -103,10 +114,13 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
         runtime.registerRawTerminalViewSubscriber(ptyId),
         removeSubscription
       )
+
       const unsubscribeData = runtime.subscribeToTerminalData(ptyId, (data, meta) =>
         subscription.append(data, meta)
       )
+
       let previewSize = runtime.getTerminalSize(ptyId)
+
       // Why: any grid change (dialog fit landing, host reclaim, phone takeover)
       // invalidates bytes parsed at the old width — push a resync so the
       // renderer reconnects and repaints from a snapshot at the new grid.
@@ -114,9 +128,11 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
         if (previewSize?.cols === event.cols && previewSize.rows === event.rows) {
           return
         }
+
         previewSize = { cols: event.cols, rows: event.rows }
         subscription.requestResync()
       })
+
       subscription.setDataSubscription(() => {
         unsubscribeData()
         unsubscribeResize()
@@ -124,16 +140,21 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       perPty.set(ptyId, subscription)
 
       const requestedRows = args.opts?.scrollbackRows
+
       const scrollbackRows =
         typeof requestedRows === 'number' && Number.isFinite(requestedRows)
           ? Math.max(0, Math.min(1000, Math.floor(requestedRows)))
           : undefined
+
       let snapshot: TerminalPreviewSnapshot | null
       let resyncRequired = false
+
       try {
         snapshot = await runtime.serializeTerminalBuffer(ptyId, { scrollbackRows })
+
         if (subscription.consumeInitialOverflow() && !subscription.disposed) {
           snapshot = await runtime.serializeTerminalBuffer(ptyId, { scrollbackRows })
+
           if (subscription.consumeInitialOverflow()) {
             // Why: never replay a tail with a silently missing middle; the renderer keeps its old frame while reconnecting.
             resyncRequired = true
@@ -141,23 +162,30 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
         }
       } catch {
         subscription.dispose()
+
         return { snapshot: null, replay: [] }
       }
+
       if (subscription.disposed) {
         return { snapshot: null, replay: [] }
       }
+
       if (!snapshot) {
         // Why: a failed lookup has no future live boundary; release raw presence even if the renderer never invokes unsubscribe.
         subscription.dispose()
+
         return { snapshot: null, replay: [] }
       }
+
       previewSize = { cols: snapshot.cols, rows: snapshot.rows }
 
       const replay = subscription.completeSnapshot(snapshot.seq)
+
       if (resyncRequired) {
         // Why: no live writes may outlive this stream and acknowledge bytes against its replacement.
         subscription.pauseForReconnect()
       }
+
       return { snapshot, replay, ...(resyncRequired ? { resyncRequired: true } : {}) }
     }
   )
@@ -172,6 +200,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       ) {
         return Promise.resolve(false)
       }
+
       return runtime.writeTerminalPreviewInput(args.ptyId, args.data)
     }
   )
@@ -189,6 +218,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       ) {
         return
       }
+
       subscriptionsByContents.get(event.sender.id)?.get(args.ptyId)?.acknowledge(args.bytes)
     }
   )
@@ -213,18 +243,22 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       ) {
         return null
       }
+
       const ptyId = args.ptyId
       // Why: guarantees the destroyed hook exists even if this claim outlives
       // the current output stream across a resync reconnect.
       subscriptionsFor(event.sender)
       let claimed = fitClaimsByContents.get(event.sender.id)
+
       if (!claimed) {
         claimed = new Map()
         fitClaimsByContents.set(event.sender.id, claimed)
       }
+
       const claimToken = Symbol('terminal-preview-fit')
       claimed.set(ptyId, claimToken)
       const viewerKey = previewViewerKey(event.sender.id)
+
       try {
         const applied = await runtime.updateRemoteDesktopViewer(
           ptyId,
@@ -233,19 +267,24 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
           args.cols,
           args.rows
         )
+
         if (fitClaimsByContents.get(event.sender.id)?.get(ptyId) !== claimToken) {
           return null
         }
+
         if (!applied) {
           releaseFitClaim(event.sender.id, ptyId)
+
           return null
         }
       } catch {
         if (fitClaimsByContents.get(event.sender.id)?.get(ptyId) === claimToken) {
           releaseFitClaim(event.sender.id, ptyId)
         }
+
         return null
       }
+
       return runtime.getTerminalSize(ptyId)
     }
   )
@@ -254,6 +293,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
     if (!isTerminalPreviewRenderer(event.sender) || !isValidPtyId(args?.ptyId)) {
       return
     }
+
     subscriptionsByContents.get(event.sender.id)?.get(args.ptyId)?.dispose()
     releaseFitClaim(event.sender.id, args.ptyId)
   })

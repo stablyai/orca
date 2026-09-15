@@ -66,15 +66,19 @@ async function readRecordedCodexPaneLanes(
   // Why filtered: main only records daemon host spawns, so asking about a
   // remote or SSH pane is a guaranteed miss.
   const localPtyIds = ptyIds.filter((ptyId) => !isForeignMachineCodexPtyId(ptyId))
+
   if (localPtyIds.length === 0) {
     return {}
   }
+
   const listRecordedPaneLanes = window.api.codexAccounts.listRecordedPaneLanes
+
   // Why the shape check: a preload older than this handler has no such method,
   // and reaching that case must read as "no records", not as a scan failure.
   if (typeof listRecordedPaneLanes !== 'function') {
     return {}
   }
+
   return await listRecordedPaneLanes({ ptyIds: localPtyIds }).catch(() => ({}))
 }
 
@@ -104,7 +108,9 @@ async function isConfirmedCodexForegroundDespiteShellReading(
   ) {
     return false
   }
+
   const confirmed = await confirmRuntimeTerminalForegroundProcess(state.settings, ptyId)
+
   return isCodexForegroundProcess(confirmed)
 }
 
@@ -131,6 +137,7 @@ async function scanCodexPanes(
         .filter((ptyId) => args.ptyIdFilter === null || args.ptyIdFilter.has(ptyId))
         .map((ptyId) => ({ tab, ptyId }))
     )
+
   const recordedLanes = await readRecordedCodexPaneLanes(panes.map((pane) => pane.ptyId))
 
   // Why: Codex sessions are not reliably discoverable from tab labels. Tabs keep
@@ -145,6 +152,7 @@ async function scanCodexPanes(
         ptyId,
         recordedLaneKey: recordedLanes[ptyId]
       })
+
       if (!args.isLaneInScope(lane.laneKey)) {
         // Why not inconclusive: a pane's lane is fixed at spawn, so this is a
         // final answer and the sweep must not spend a retry rung re-asking.
@@ -158,11 +166,13 @@ async function scanCodexPanes(
           laneSource: lane.source
         }
       }
+
       const inspection = await inspectRuntimeTerminalProcess(state.settings, ptyId).then(
         (result) => result,
         // Why: one stale remote pane must not hide restart notices for other confirmed Codex panes.
         () => null
       )
+
       const eligible =
         inspection !== null &&
         (isCodexRestartEligiblePane({ inspection, launchAgent: tab.launchAgent }) ||
@@ -172,6 +182,7 @@ async function scanCodexPanes(
             tab.launchAgent,
             inspection
           )))
+
       return {
         ptyId,
         eligible,
@@ -206,6 +217,7 @@ export async function markLiveCodexSessionsForRestart(args: {
   clearsEveryWslDistro?: boolean
 }): Promise<void> {
   const state = useAppStore.getState()
+
   const scans = await scanCodexPanes(state, {
     ptyIdFilter: null,
     isLaneInScope: getCodexAccountSwitchLaneMatcher({
@@ -214,12 +226,15 @@ export async function markLiveCodexSessionsForRestart(args: {
       clearsEveryWslDistro: args.clearsEveryWslDistro
     })
   })
+
   const liveCodexSessionPtyIds = scans.filter((scan) => scan.eligible).map((scan) => scan.ptyId)
+
   if (liveCodexSessionPtyIds.length === 0) {
     return
   }
 
   const recordedLiveScans = scans.filter((scan) => scan.eligible && scan.laneSource === 'recorded')
+
   // Why: a reauth can report null -> A even though a pane's immutable launch
   // route was already A; main's per-PTY record is the restart authority.
   const authoritativeStalePanes =
@@ -228,9 +243,11 @@ export async function markLiveCodexSessionsForRestart(args: {
       : await window.api.codexAccounts
           .listStalePanes({ ptyIds: recordedLiveScans.map((scan) => scan.ptyId) })
           .catch(() => null)
+
   const authoritativeStaleByPtyId = authoritativeStalePanes
     ? new Map(authoritativeStalePanes.map((pane) => [pane.ptyId, pane]))
     : null
+
   if (authoritativeStaleByPtyId) {
     for (const scan of recordedLiveScans) {
       if (!authoritativeStaleByPtyId.has(scan.ptyId)) {
@@ -244,11 +261,14 @@ export async function markLiveCodexSessionsForRestart(args: {
       if (!scan.eligible) {
         return []
       }
+
       if (authoritativeStaleByPtyId && scan.laneSource === 'recorded') {
         const stalePane = authoritativeStaleByPtyId.get(scan.ptyId)
+
         if (!stalePane) {
           return []
         }
+
         return [
           {
             ptyId: scan.ptyId,
@@ -260,6 +280,7 @@ export async function markLiveCodexSessionsForRestart(args: {
           }
         ]
       }
+
       return [
         {
           ptyId: scan.ptyId,
@@ -295,22 +316,28 @@ export async function markRestoredStaleCodexSessionsForRestart(args?: {
   ptyIds?: readonly string[]
 }): Promise<CodexPaneScanResult[]> {
   const state = useAppStore.getState()
+
   const scans = await scanCodexPanes(state, {
     ptyIdFilter: args?.ptyIds ? new Set(args.ptyIds) : null,
     isLaneInScope: isLocalCodexSelectionLaneKey
   })
+
   const liveCodexSessionPtyIds = scans.filter((scan) => scan.eligible).map((scan) => scan.ptyId)
+
   if (liveCodexSessionPtyIds.length === 0) {
     return scans
   }
+
   const stalePanes = await window.api.codexAccounts.listStalePanes({
     ptyIds: liveCodexSessionPtyIds
   })
+
   if (stalePanes.length === 0) {
     return scans
   }
 
   const resolveAccountLabel = await createCodexAccountLabelResolver()
+
   const noticedPtyIds = useAppStore.getState().markCodexRestartNotices(
     stalePanes.map((pane) => ({
       ptyId: pane.ptyId,
@@ -323,10 +350,12 @@ export async function markRestoredStaleCodexSessionsForRestart(args?: {
       ...(pane.reason === 'home-route-change' ? { homeRouteChanged: true as const } : {})
     }))
   )
+
   // Why not every stale pane: the bind sweep suppresses a "notified" pane for the
   // rest of the session, so a pane whose notice the store dropped must not claim
   // one — that trades a missing prompt for a permanently missing prompt.
   const notifiedPtyIds = new Set(noticedPtyIds)
+
   return scans.map((scan) => (notifiedPtyIds.has(scan.ptyId) ? { ...scan, notified: true } : scan))
 }
 
@@ -338,14 +367,19 @@ export function resolveCodexRestartPromptAccountLabel(
   if (accountId == null) {
     return translate('auto.lib.codex.session.restart.4bd4a3a9c7', 'System default')
   }
+
   const account = accounts.find((entry) => entry.id === accountId)
+
   if (!account) {
     return translate('auto.lib.codex.session.restart.9f0b1c2d3e', 'Codex account')
   }
+
   const email = normalizeCodexAccountEmail(account.email)
+
   const sharesEmail = accounts.some(
     (entry) => entry.id !== account.id && normalizeCodexAccountEmail(entry.email) === email
   )
+
   return sharesEmail ? getCodexAccountDisplayLabel(account, accounts) : account.email
 }
 
@@ -353,5 +387,6 @@ async function createCodexAccountLabelResolver(): Promise<(accountId: string | n
   // Why: a failed roster read still yields usable prompts — the account ids are
   // already known, only their friendly emails are missing.
   const accounts = await window.api.codexAccounts.list().catch(() => null)
+
   return (accountId) => resolveCodexRestartPromptAccountLabel(accounts?.accounts ?? [], accountId)
 }

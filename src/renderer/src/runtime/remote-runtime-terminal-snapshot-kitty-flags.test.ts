@@ -35,17 +35,22 @@ class KittyFlagsServer {
 
   receive(bytes: Uint8Array<ArrayBufferLike>): void {
     const frame = decodeTerminalStreamFrame(bytes)
+
     if (!frame) {
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.Subscribe) {
       this.streamId = decodeTerminalStreamJson<{ streamId: number }>(frame.payload)?.streamId ?? 0
       this.sendSnapshot('INITIAL', {})
+
       return
     }
+
     if (frame.opcode !== TerminalStreamOpcode.SnapshotRequest) {
       return
     }
+
     const requestId = decodeTerminalStreamJson<{ requestId?: number }>(frame.payload)?.requestId
     this.sendSnapshot('REQUESTED', { ...this.nextMeta, requestId })
   }
@@ -83,6 +88,7 @@ class KittyFlagsServer {
 
 describe('SnapshotStart kitty keyboard flags', () => {
   let server: KittyFlagsServer
+
   const snapshots: {
     data: string
     meta?: { seq?: number; kittyKeyboardFlags?: number }
@@ -99,6 +105,7 @@ describe('SnapshotStart kitty keyboard flags', () => {
           subscribe: vi.fn(async (_args: unknown, callbacks: SubscribeCallbacks) => {
             server = new KittyFlagsServer((bytes) => callbacks.onBinary?.(bytes))
             queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+
             return {
               unsubscribe: vi.fn(),
               sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => server.receive(bytes)
@@ -124,8 +131,10 @@ describe('SnapshotStart kitty keyboard flags', () => {
         }
       }
     })
+
     await Promise.resolve()
     await Promise.resolve()
+
     return stream
   }
 
@@ -139,6 +148,7 @@ describe('SnapshotStart kitty keyboard flags', () => {
     const outcome = await stream.serializeBufferOutcome({
       scrollbackRows: 100
     })
+
     expect(outcome.snapshot).toMatchObject({
       seq: 7,
       kittyKeyboardFlags: flags
@@ -166,6 +176,7 @@ describe('SnapshotStart kitty keyboard flags', () => {
     const outcome = await stream.serializeBufferOutcome({
       scrollbackRows: 100
     })
+
     expect(outcome.snapshot?.kittyKeyboardFlags).toBeUndefined()
   })
 
@@ -176,6 +187,7 @@ describe('SnapshotStart kitty keyboard flags', () => {
     const outcome = await stream.serializeBufferOutcome({
       scrollbackRows: 100
     })
+
     expect(outcome.availability).toEqual({ kind: 'snapshot' })
     expect(outcome.snapshot?.data).toBe('REQUESTED')
     expect(outcome.snapshot?.kittyKeyboardFlags).toBeUndefined()

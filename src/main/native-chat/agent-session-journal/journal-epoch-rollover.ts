@@ -42,6 +42,7 @@ export function publishNewEpoch(input: {
   }
 
   input.db.exec('BEGIN IMMEDIATE')
+
   try {
     deleteAllJournalRows(input.db)
     clearJournalRepairMarker(input.db, input.sessionId)

@@ -9,6 +9,7 @@ type Props = {
 export function OrcaLogo({ size = 24, color = colors.textPrimary }: Props) {
   const aspectRatio = 318.6 / 202.67
   const width = size * aspectRatio
+
   return (
     <Svg width={width} height={size} viewBox="0 0 318.60232 202.66667">
       <Defs />

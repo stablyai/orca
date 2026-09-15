@@ -23,6 +23,7 @@ function createEntry(
 
 function admitOrThrow(admission: DispatcherWriterAdmission, entry: DispatcherWriterEntry): void {
   const result = admission.admit(entry, Number.MAX_SAFE_INTEGER)
+
   if (!result.accepted) {
     throw new Error(`entry rejected from ${entry.lane}`)
   }
@@ -33,9 +34,11 @@ function shiftOrThrow(
   lane: DispatcherWriterLane
 ): DispatcherWriterEntry {
   const entry = admission.shift(lane)
+
   if (!entry) {
     throw new Error(`missing queued entry from ${lane}`)
   }
+
   return entry
 }
 
@@ -43,6 +46,7 @@ describe('DispatcherWriterAdmission', () => {
   it('drains a release-scale lane in FIFO order across compactions', () => {
     const entryCount = 30_000
     const admission = new DispatcherWriterAdmission(DEFAULT_PRODUCER_QUEUE_MAX_BYTES)
+
     const entries = Array.from({ length: entryCount }, (_, index) =>
       createEntry('ordinary', index, 64)
     )
@@ -50,16 +54,20 @@ describe('DispatcherWriterAdmission', () => {
     for (const entry of entries) {
       admitOrThrow(admission, entry)
     }
+
     expect(admission.queuedEntries).toBe(entryCount)
     expect(admission.retainedProducerBytes).toBe(entryCount * 64)
     expect(admission.peek('ordinary')).toBe(entries[0])
 
     for (let index = 0; index < entries.length; index++) {
       const shifted = shiftOrThrow(admission, 'ordinary')
+
       if (shifted !== entries[index]) {
         throw new Error(`FIFO mismatch at ${index}`)
       }
+
       admission.release(shifted)
+
       if (index === 0 || index === Math.floor(entryCount / 2)) {
         expect(admission.peek('ordinary')).toBe(entries[index + 1])
       }
@@ -73,31 +81,38 @@ describe('DispatcherWriterAdmission', () => {
   it('keeps accounting retained until shifted entries are released', () => {
     const producerAdmission = new DispatcherWriterAdmission(4)
     const producerEntries = Array.from({ length: 4 }, (_, index) => createEntry('ordinary', index))
+
     for (const entry of producerEntries) {
       admitOrThrow(producerAdmission, entry)
       expect(shiftOrThrow(producerAdmission, 'ordinary')).toBe(entry)
     }
+
     expect(producerAdmission.queuedEntries).toBe(0)
     expect(producerAdmission.retainedProducerBytes).toBe(4)
     expect(producerAdmission.canAdmitProducer(1, 1)).toBe(false)
     producerAdmission.release(producerEntries[0])
     expect(producerAdmission.canAdmitProducer(1, 1)).toBe(true)
+
     for (const entry of producerEntries.slice(1)) {
       producerAdmission.release(entry)
     }
 
     const controlAdmission = new DispatcherWriterAdmission(1)
+
     const controlEntries = Array.from({ length: DISPATCHER_CONTROL_QUEUE_MAX_FRAMES }, (_, index) =>
       createEntry('control', index)
     )
+
     for (const entry of controlEntries) {
       admitOrThrow(controlAdmission, entry)
       expect(shiftOrThrow(controlAdmission, 'control')).toBe(entry)
     }
+
     expect(controlAdmission.queuedEntries).toBe(0)
     expect(controlAdmission.canAdmitControl(1)).toBe(false)
     controlAdmission.release(controlEntries[0])
     expect(controlAdmission.canAdmitControl(1)).toBe(true)
+
     for (const entry of controlEntries.slice(1)) {
       controlAdmission.release(entry)
     }
@@ -133,17 +148,21 @@ describe('DispatcherWriterAdmission', () => {
   it('takes only the live suffix after deep partial drains and refills', () => {
     const admission = new DispatcherWriterAdmission(10_000)
     const initial = Array.from({ length: 4_096 }, (_, index) => createEntry('ordinary', index))
+
     for (const entry of initial) {
       admitOrThrow(admission, entry)
     }
+
     for (let index = 0; index < 3_000; index++) {
       const shifted = shiftOrThrow(admission, 'ordinary')
       expect(shifted).toBe(initial[index])
       admission.release(shifted)
     }
+
     const refill = Array.from({ length: 2_048 }, (_, index) =>
       createEntry('ordinary', initial.length + index)
     )
+
     for (const entry of refill) {
       admitOrThrow(admission, entry)
     }
@@ -153,9 +172,11 @@ describe('DispatcherWriterAdmission', () => {
     expect(queued).toEqual(expected)
     expect(admission.queuedEntries).toBe(0)
     expect(admission.retainedProducerBytes).toBe(expected.length)
+
     for (const entry of queued) {
       admission.release(entry)
     }
+
     expect(admission.retainedProducerBytes).toBe(0)
   })
 
@@ -169,6 +190,7 @@ describe('DispatcherWriterAdmission', () => {
     const ordinaryOne = createEntry('ordinary', 6)
     const ordinaryTwo = createEntry('ordinary', 7)
     const bulk = createEntry('bulk', 8)
+
     for (const entry of [
       fixedBulk,
       liveness,
@@ -193,9 +215,11 @@ describe('DispatcherWriterAdmission', () => {
       fixedBulk,
       bulk
     ])
+
     for (const entry of queued) {
       admission.release(entry)
     }
+
     expect(admission.queuedEntries).toBe(0)
     expect(admission.retainedProducerBytes).toBe(0)
     expect(admission.canAdmitControl(1)).toBe(true)

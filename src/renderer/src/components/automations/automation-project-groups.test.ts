@@ -67,6 +67,7 @@ describe('getAutomationProjectGroups', () => {
       ],
       'ssh'
     )
+
     const group = getAutomationProjectGroupForRepo(groups, 'ssh')
 
     expect(group).not.toBeNull()

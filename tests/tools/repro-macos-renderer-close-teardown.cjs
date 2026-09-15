@@ -2,8 +2,11 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
 
 const modeArg = process.argv.find((arg) => arg.startsWith('--mode='))
+
 const mode = modeArg ? modeArg.slice('--mode='.length) : 'natural-close'
+
 const timeoutArg = process.argv.find((arg) => arg.startsWith('--timeout-ms='))
+
 const timeoutMs = timeoutArg ? Number(timeoutArg.slice('--timeout-ms='.length)) : 5000
 
 const validModes = new Set([
@@ -26,12 +29,19 @@ if (!validModes.has(mode) || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
 }
 
 let win = null
+
 let closeConfirmed = false
+
 let windowClosing = false
+
 let rendererPid = 0
+
 let renderProcessGoneDetails = null
+
 let crashRecorderWouldRunBeforeFix = false
+
 let crashRecorderWouldRunAfterFix = false
+
 let timeout = null
 
 function log(event, data = {}) {
@@ -53,6 +63,7 @@ function finish(exitCode = 0) {
     clearTimeout(timeout)
     timeout = null
   }
+
   log('summary', {
     renderProcessGoneDetails,
     crashRecorderWouldRunBeforeFix,
@@ -62,6 +73,7 @@ function finish(exitCode = 0) {
     if (win && !win.isDestroyed()) {
       win.destroy()
     }
+
     app.exit(exitCode)
   }, 50)
 }
@@ -69,8 +81,10 @@ function finish(exitCode = 0) {
 function killRenderer(reason) {
   if (!rendererPid) {
     log('kill-renderer-skipped', { reason, skipped: 'missing-renderer-pid' })
+
     return
   }
+
   try {
     process.kill(rendererPid, 'SIGKILL')
     log('sent-sigkill', { reason })
@@ -116,10 +130,12 @@ app.whenReady().then(async () => {
 
   win.on('close', (event) => {
     log('window-close')
+
     if (!closeConfirmed) {
       event.preventDefault()
       log('window-close-prevented-pending-confirm')
       win.webContents.send('harness:close-requested')
+
       return
     }
 
@@ -136,6 +152,7 @@ app.whenReady().then(async () => {
 
   win.on('closed', () => {
     log('window-closed')
+
     if (!renderProcessGoneDetails) {
       finish()
     }
@@ -144,6 +161,7 @@ app.whenReady().then(async () => {
   ipcMain.on('harness:confirm-close', () => {
     closeConfirmed = true
     log('renderer-confirmed-close')
+
     if (mode === 'sigkill-before-close') {
       killRenderer('before-close')
     } else {

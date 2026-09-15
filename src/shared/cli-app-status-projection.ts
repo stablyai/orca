@@ -6,6 +6,7 @@ export function resolveDesktopWindowStatus(
   if (status.desktopWindowStatus) {
     return status.desktopWindowStatus
   }
+
   // Why: older desktop runtimes predate the explicit status but a positive
   // Electron id still proves that a real window owns the graph.
   return status.authoritativeWindowId !== null && status.authoritativeWindowId > 0
@@ -21,6 +22,7 @@ export function resolveDesktopWindowStatus(
 // A pid is not knowable across the boundary, so it stays null.
 export function projectRemoteAppStatus(status: RuntimeStatus): CliStatusResult['app'] {
   const desktopWindowStatus = resolveDesktopWindowStatus(status)
+
   return {
     running: desktopWindowStatus === 'available',
     pid: null,

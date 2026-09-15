@@ -12,20 +12,26 @@ const tempDirs = []
 function tempReportPath() {
   const dir = mkdtempSync(join(tmpdir(), 'orca-terminal-perf-gate-'))
   tempDirs.push(dir)
+
   return join(dir, 'report.json')
 }
 
 function makeSpawnSync({ onScaleRun, scaleStatus = 0 } = {}) {
   const calls = []
+
   const spawnSyncImpl = vi.fn((command, args, options) => {
     calls.push({ args, command, options })
+
     if (args[0] === 'config/scripts/run-terminal-scale-perf-e2e.mjs') {
       onScaleRun?.()
       writeSync(options.stdio[1], '{"suites":[]}')
+
       return { signal: null, status: scaleStatus }
     }
+
     return { signal: null, status: 0 }
   })
+
   return { calls, spawnSyncImpl }
 }
 
@@ -138,6 +144,7 @@ describe('run-terminal-scale-perf-report-gate', () => {
 
   it('preserves the report when Playwright clears the target report directory', () => {
     const reportPath = tempReportPath()
+
     const { spawnSyncImpl } = makeSpawnSync({
       onScaleRun: () => {
         rmSync(dirname(reportPath), { force: true, recursive: true })

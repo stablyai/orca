@@ -9,8 +9,11 @@ import {
 } from './palette-ranking'
 
 const HOUR = 60 * 60 * 1000
+
 const DAY = 24 * HOUR
+
 const WEEK = 7 * DAY
+
 const NOW = 100 * DAY
 
 function rank(overrides: Partial<PaletteDocumentRank> = {}): PaletteDocumentRank {
@@ -34,6 +37,7 @@ function item(args: {
   identity?: string
 }) {
   const context = createPaletteSearchContext(NOW)
+
   return {
     rank: args.rank ?? rank(),
     activity: preparePaletteActivity(args.timestamp, context),
@@ -61,6 +65,7 @@ describe('palette activity preparation', () => {
   it('keeps every known old timestamp ahead of invalid or unknown activity', () => {
     const context = createPaletteSearchContext(NOW)
     const old = preparePaletteActivity(1, context)
+
     for (const invalid of [undefined, null, 0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
       const unknown = preparePaletteActivity(invalid, context)
       expect(old.ageBucket).not.toBeNull()
@@ -135,6 +140,7 @@ describe('palette entity comparator', () => {
         identity: encodePaletteIdentity(['tab', 'host-b', '1'])
       })
     ]
+
     const expected = [...rows].sort(comparePaletteEntityRanks).map((row) => row.identity)
     expect(
       rows
@@ -149,6 +155,7 @@ describe('palette entity comparator', () => {
     const laterFuture = NOW + 2 * HOUR
     const before = createPaletteSearchContext(NOW)
     const afterEarlier = createPaletteSearchContext(NOW + HOUR + 1)
+
     const build = (timestamp: number, context: ReturnType<typeof createPaletteSearchContext>) => ({
       rank: rank(),
       activity: preparePaletteActivity(timestamp, context),

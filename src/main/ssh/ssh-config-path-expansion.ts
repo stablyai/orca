@@ -23,25 +23,32 @@ function programDataTokenRemainder(filepath: string): string | null {
   if (!filepath.startsWith(PROGRAMDATA_TOKEN)) {
     return null
   }
+
   const rest = filepath.slice(PROGRAMDATA_TOKEN.length)
+
   if (rest === '') {
     return rest
   }
+
   // Both separators, because this path is Windows-shaped but may be parsed anywhere.
   return rest.startsWith('\\') || rest.startsWith('/') ? rest : null
 }
 
 export function resolveSshConfigHomePath(filepath: string): string {
   const programDataRest = programDataTokenRemainder(filepath)
+
   if (programDataRest !== null) {
     // Left alone when the variable is unset rather than guessed: a wrong path reads as "absent",
     // which is the failure this expansion exists to prevent, so it must not be invented.
     const programData = process.env.ProgramData
+
     return programData ? join(programData, programDataRest) : filepath
   }
+
   if (filepath === '~') {
     return homedir()
   }
+
   if (filepath.startsWith('~/') || filepath.startsWith('~\\')) {
     return join(
       homedir(),
@@ -51,5 +58,6 @@ export function resolveSshConfigHomePath(filepath: string): string {
         .filter(Boolean)
     )
   }
+
   return filepath
 }

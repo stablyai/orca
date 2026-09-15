@@ -101,6 +101,7 @@ describe('agentMapRecentFlareStatus', () => {
 
   it('samples the wall clock once and caps mixed bursty fleet updates', () => {
     const clock = vi.spyOn(Date, 'now').mockReturnValue(NOW)
+
     const selected = selectAgentMapRecentFlareStatuses(
       Array.from({ length: 200 }, (_, index) =>
         card({

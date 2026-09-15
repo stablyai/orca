@@ -6,6 +6,7 @@ type LocalJiraSearchArgs = { jql: string; limit?: number; siteId?: JiraSiteSelec
 function createJiraSearchAbortError(): Error {
   const error = new Error('Jira search aborted')
   error.name = 'AbortError'
+
   return error
 }
 
@@ -22,17 +23,23 @@ export async function searchLocalJiraIssues(
   if (signal.aborted) {
     throw createJiraSearchAbortError()
   }
+
   const requestId = createBrowserUuid()
+
   const handleAbort = (): void => {
     void window.api.jira.cancelSearchIssues({ requestId }).catch(() => {})
   }
+
   signal.addEventListener('abort', handleAbort, { once: true })
+
   try {
     const issues = await window.api.jira.searchIssues({ ...args, requestId })
+
     // Why: cancel can race ahead of main-process registration; drop late successes.
     if (signal.aborted) {
       throw createJiraSearchAbortError()
     }
+
     return issues
   } finally {
     signal.removeEventListener('abort', handleAbort)

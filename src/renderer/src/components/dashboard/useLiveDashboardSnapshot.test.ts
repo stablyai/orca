@@ -11,8 +11,11 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
 
 const NOW = 1_000_000_000
+
 const TAB_ID = 'tab-1'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 
 const initialAppState = useAppStore.getInitialState()

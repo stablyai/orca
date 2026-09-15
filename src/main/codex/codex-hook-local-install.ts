@@ -54,6 +54,7 @@ export async function installCodexHooksExclusively(
   // delete them once the system config stops backing them.
   promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
   const config = readHooksJson(configPath)
+
   if (!config) {
     return {
       agent: 'codex',
@@ -68,6 +69,7 @@ export async function installCodexHooksExclusively(
   const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
   const command = getManagedCommand(scriptPath)
   const hookPlan = getRuntimeHooksWithSystemUserHooks(config.hooks, isManagedCommand, configPath)
+
   if (!hookPlan) {
     return {
       agent: 'codex',
@@ -77,6 +79,7 @@ export async function installCodexHooksExclusively(
       detail: 'Could not read system Codex hooks.json'
     }
   }
+
   const nextHooks = hookPlan.hooks
   const managedEvents = new Set<string>(CODEX_EVENTS)
 
@@ -85,11 +88,14 @@ export async function installCodexHooksExclusively(
     if (managedEvents.has(eventName)) {
       continue
     }
+
     if (!Array.isArray(definitions)) {
       // Why: a non-array event value would make removeManagedCommands throw; skip the unparsable entry, managed events below still install.
       continue
     }
+
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
     if (cleaned.length === 0) {
       delete nextHooks[eventName]
     } else {
@@ -101,15 +107,19 @@ export async function installCodexHooksExclusively(
   const mirroredUserTrustEntries = moveMirroredRuntimeUserTrustAfterManagedStatusHook(
     hookPlan.trustEntries
   )
+
   const mirroredTrustEntries: CodexTrustEntry[] = mirroredUserTrustEntries.map(({ entry }) => entry)
   const managedTrustEntries: CodexTrustEntry[] = []
   const trustSourcePath = getCodexExplicitHomeHookSourcePath(configPath)
+
   for (const eventName of CODEX_EVENTS) {
     const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
+
     const definition: HookDefinition = {
       hooks: [buildManagedCommandHook(command)]
     }
+
     nextHooks[eventName] = [definition, ...cleaned]
     // Why: the status hook must run before user hooks so a slow
     // PostToolUse/Stop hook cannot leave the sidebar stuck on the previous
@@ -125,12 +135,14 @@ export async function installCodexHooksExclusively(
       timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
     })
   }
+
   const trustEntries: CodexTrustEntry[] = [...mirroredTrustEntries, ...managedTrustEntries]
   let recentGrantEntries: readonly CodexTrustEntry[] = []
 
   config.hooks = nextHooks
   writeManagedScript(scriptPath, getManagedScript())
   writeCodexHooksJson(configPath, nextHooks)
+
   // Why: trust entries write last so a half-write can't leave a hash pointing at a nonexistent hook.
   // Why: surface trust-write failures — otherwise getStatus reports green for a hook Codex won't fire.
   try {
@@ -139,6 +151,7 @@ export async function installCodexHooksExclusively(
       runtimeHomePath,
       systemHomePath: getSystemCodexHomePath()
     })
+
     // Why: Codex is the only authority on its trust-hash algorithm, so the
     // managed entries are granted through codex app-server RPCs (verified by
     // re-list) whenever the installed CLI supports them; the granted entries
@@ -153,6 +166,7 @@ export async function installCodexHooksExclusively(
       host: { kind: 'native' },
       telemetryLane: 'managed'
     })
+
     if (grant.lane === 'rpc') {
       recentGrantEntries = grant.entries
       upsertHookTrustEntries(tomlPath, mirroredTrustEntries)
@@ -169,6 +183,7 @@ export async function installCodexHooksExclusively(
       upsertHookTrustEntries(tomlPath, trustEntries)
       removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
     }
+
     applyMirroredRuntimeUserHookTrustStates(tomlPath, mirroredUserTrustEntries)
   } catch (error) {
     return {
@@ -179,7 +194,9 @@ export async function installCodexHooksExclusively(
       detail: `Hooks installed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
     }
   }
+
   snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
   await cleanupLegacyManagedHookRepresentations()
+
   return getStatusAfterInstall(recentGrantEntries, runtimeHomePath)
 }

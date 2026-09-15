@@ -35,6 +35,7 @@ describe('composer catalog authority', () => {
         }
       }
     )
+
     expect(result.current.agentCommands.map(({ name }) => name)).toEqual([
       'model',
       'effort',
@@ -76,6 +77,7 @@ describe('composer catalog authority', () => {
         }
       }
     )
+
     expect(result.current).toEqual({ agentCommands: [], sessionSkillNames: [] })
     rerender({ reported: [{ name: 'custom-command', kind: 'command' }] })
     expect(result.current).toEqual({
@@ -90,11 +92,14 @@ it('Enter completes a known pre-init skill while still dispatching a built-in co
     { name: 'clear', kind: 'command' as const, kindUnspecified: true as const },
     { name: 'project-skill', kind: 'command' as const, kindUnspecified: true as const }
   ]
+
   const complete = vi.fn(),
     dispatch = vi.fn()
+
   const { result, rerender } = renderHook(
     ({ activeSuggestion }) => {
       const catalog = useNativeChatComposerCatalog('claude', transport(reported))
+
       const items = buildNativeChatPickerItems(
         catalog.agentCommands,
         [
@@ -116,6 +121,7 @@ it('Enter completes a known pre-init skill while still dispatching a built-in co
         '/',
         catalog.sessionSkillNames
       )
+
       return useNativeChatComposerKeyDown({
         autocomplete: {
           mode: 'slash',
@@ -146,9 +152,11 @@ it('Enter completes a known pre-init skill while still dispatching a built-in co
     },
     { initialProps: { activeSuggestion: 1 } }
   )
+
   const enter = { key: 'Enter', nativeEvent: {}, preventDefault: vi.fn() } as unknown as Parameters<
     typeof result.current
   >[0]
+
   result.current(enter)
   expect(complete).toHaveBeenCalledWith(
     expect.objectContaining({ name: 'project-skill', kind: 'skill' })

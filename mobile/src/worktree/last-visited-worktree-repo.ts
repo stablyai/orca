@@ -20,8 +20,10 @@ export function readLastVisitedWorktreeRecord(
   if (!raw) {
     return null
   }
+
   try {
     const parsed: unknown = JSON.parse(raw)
+
     if (
       !isRecord(parsed) ||
       typeof parsed.hostId !== 'string' ||
@@ -32,6 +34,7 @@ export function readLastVisitedWorktreeRecord(
     ) {
       return null
     }
+
     return { hostId: parsed.hostId, worktreeId: parsed.worktreeId }
   } catch {
     return null
@@ -40,9 +43,12 @@ export function readLastVisitedWorktreeRecord(
 
 export function readLastVisitedWorktreeRepoId(raw: string | null, hostId: string): string | null {
   const record = readLastVisitedWorktreeRecord(raw)
+
   if (!record || record.hostId !== hostId) {
     return null
   }
+
   const repoId = getRepoIdFromMobileWorktreeId(record.worktreeId).trim()
+
   return repoId || null
 }

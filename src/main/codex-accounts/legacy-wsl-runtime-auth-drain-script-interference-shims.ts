@@ -32,6 +32,7 @@ export function installDrainInterferenceShims(
   `
   )
   chmodSync(shimPath, 0o755)
+
   if (options.killAfterDestinationInstall || options.killAfterSourceRemoval) {
     const mvShimPath = join(binDir, 'mv')
     writeFileSync(

@@ -8,6 +8,7 @@ function fakeClient(result: unknown, calls: Call[]): RpcClient {
   return {
     sendRequest: async (method: string, params?: unknown) => {
       calls.push({ method, params: (params ?? {}) as Record<string, unknown> })
+
       return { id: '1', ok: true, result, _meta: { runtimeId: 'r' } }
     }
   } as unknown as RpcClient

@@ -38,6 +38,7 @@ describe('orchestration federation', () => {
     workerCapabilities = [...(workerRuntime.getStatus().capabilities ?? [])]
     workerPeerFingerprint = 'windows_peer_fingerprint'
     loseNextAckResponse = false
+
     const transport: OrchestrationEnvironmentTransport = {
       resolve: () => ({
         environmentId: 'environment_windows',
@@ -54,6 +55,7 @@ describe('orchestration federation', () => {
             _meta: { runtimeId: workerRuntime.getRuntimeId() }
           }
         }
+
         const response = (await workerDispatcher.dispatch({
           id: `remote_${method}`,
           authToken: 'run-home-device-token',
@@ -63,13 +65,16 @@ describe('orchestration federation', () => {
           orchestrationRequestId: envelope?.orchestrationRequestId,
           orchestrationCapability: envelope?.orchestrationCapability
         })) as RuntimeRpcResponse<unknown>
+
         if (method === 'orchestration.federationAck' && loseNextAckResponse) {
           loseNextAckResponse = false
           throw new Error('connection lost after acknowledgment')
         }
+
         return response
       }
     }
+
     homeRuntime = new OrcaRuntimeService(null, undefined, {
       orchestrationEnvironmentTransport: transport
     })
@@ -86,6 +91,7 @@ describe('orchestration federation', () => {
 
   afterEach(() => {
     homeRuntime.stopOrchestrationFederationRelay()
+
     for (const db of databases.splice(0)) {
       db.close()
     }
@@ -97,6 +103,7 @@ describe('orchestration federation', () => {
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     })
+
     return homeDb.createTask({ spec: 'Audit Windows behavior', runId: run.id })
   }
 
@@ -308,6 +315,7 @@ describe('orchestration federation', () => {
         })
       }
     })
+
     expect(sent).toMatchObject({ ok: true, result: { lifecycle: { action: 'completed' } } })
     expect(homeDb.getTask(task.id)?.status).toBe('completed')
 
@@ -339,6 +347,7 @@ describe('orchestration federation', () => {
     const dispatch = homeDb.getDispatchContext(task.id)!
     const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
     const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
+
     const ask = workerDispatcher.dispatch({
       id: 'rpc_remote_ask',
       authToken: 'worker-local-token',
@@ -353,6 +362,7 @@ describe('orchestration federation', () => {
         timeoutMs: 60_000
       }
     })
+
     await vi.waitFor(() =>
       expect(
         workerDb.listFederationRelay({
@@ -364,9 +374,11 @@ describe('orchestration federation', () => {
     )
 
     await syncFederationBarrier(homeRuntime, homeDb)
+
     const question = homeDb
       .getRunMailboxHistory(task.run_id, 10)
       .find((message) => message.type === 'question')
+
     expect(question).toMatchObject({
       body: 'Should I include slow integration tests?'
     })
@@ -383,6 +395,7 @@ describe('orchestration federation', () => {
         from: 'term_coord'
       }
     })
+
     expect(reply).toMatchObject({ ok: true, result: { question: { status: 'answered' } } })
     await syncFederationBarrier(homeRuntime, homeDb)
 
@@ -408,6 +421,7 @@ describe('orchestration federation', () => {
     await homeDispatcher.dispatch(startRequest(task.id))
     const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
     const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
+
     const timedOut = await workerDispatcher.dispatch({
       id: 'rpc_remote_ask_timeout',
       authToken: 'worker-local-token',
@@ -421,6 +435,7 @@ describe('orchestration federation', () => {
         timeoutMs: 1
       }
     })
+
     expect(timedOut).toMatchObject({
       ok: true,
       result: { timedOut: true, messageId: expect.stringMatching(/^relay_/) }
@@ -428,6 +443,7 @@ describe('orchestration federation', () => {
     const questionId = (timedOut as { result: { messageId: string } }).result.messageId
 
     await syncFederationBarrier(homeRuntime, homeDb)
+
     const lateReply = await homeDispatcher.dispatch({
       id: 'rpc_home_late_reply',
       authToken: 'coordinator-token',
@@ -436,9 +452,11 @@ describe('orchestration federation', () => {
       method: 'orchestration.reply',
       params: { id: questionId, body: 'yes', from: 'term_coord' }
     })
+
     // A rejected reply enqueues no relay, which would only surface as the resume timing out.
     expect(lateReply).toMatchObject({ ok: true, result: { question: { status: 'answered' } } })
     restartWorkerRuntime()
+
     const resumed = workerDispatcher.dispatch({
       id: 'rpc_remote_ask_resume',
       authToken: 'worker-local-token',
@@ -448,6 +466,7 @@ describe('orchestration federation', () => {
       method: 'orchestration.ask',
       params: { from: 'term_windows_worker', resume: questionId, timeoutMs: 5_000 }
     })
+
     await syncFederationBarrier(homeRuntime, homeDb)
 
     await expect(resumed).resolves.toMatchObject({
@@ -487,9 +506,11 @@ describe('orchestration federation', () => {
         .getRunMailboxHistory(task.run_id, 10)
         .filter((message) => message.subject === 'Checkpoint')
     ).toHaveLength(1)
+
     const acknowledgments = remoteCall.mock.calls.filter(
       ([, method]) => method === 'orchestration.federationAck'
     )
+
     expect(acknowledgments).toHaveLength(2)
   })
 
@@ -533,6 +554,7 @@ describe('orchestration federation', () => {
       },
       lifecycle: { kind: 'none' }
     })
+
     const recovered = homeDb.importFederatedRelayItem({
       dispatchId: dispatch.id,
       sequence: 2,
@@ -548,6 +570,7 @@ describe('orchestration federation', () => {
       },
       lifecycle: { kind: 'none' }
     })
+
     const duplicate = homeDb.importFederatedRelayItem({
       dispatchId: dispatch.id,
       sequence: 2,
@@ -628,6 +651,7 @@ describe('orchestration federation', () => {
       method: 'orchestration.workerShow',
       params: { dispatch: dispatch.id }
     })
+
     expect(shown).toMatchObject({
       ok: true,
       result: {
@@ -676,12 +700,14 @@ describe('orchestration federation', () => {
       writable: false
     } as never)
     vi.mocked(workerRuntime.getTerminalLivenessVerdict).mockReturnValue({ status: 'exited' })
+
     const shown = await homeDispatcher.dispatch({
       id: 'rpc_remote_show_after_stop',
       authToken: 'coordinator-token',
       method: 'orchestration.workerShow',
       params: { dispatch: dispatch.id }
     })
+
     expect(shown).toMatchObject({
       ok: true,
       result: { observation: { status: 'exited', exactWorker: true } }
@@ -700,6 +726,7 @@ describe('orchestration federation', () => {
       method: 'orchestration.workerShow',
       params: { dispatch: dispatch.id }
     })
+
     const stopped = await homeDispatcher.dispatch({
       id: 'rpc_changed_peer_stop',
       authToken: 'coordinator-token',
@@ -722,20 +749,25 @@ describe('orchestration federation', () => {
     homeRuntime.stopOrchestrationFederationRelay()
 
     let releasePull!: () => void
+
     const blockedPull = new Promise<void>((resolve) => {
       releasePull = resolve
     })
+
     let pullCount = 0
     vi.spyOn(homeRuntime, 'callOrchestrationWorkerServer').mockImplementation(
       async (_selector, method) => {
         if (method === 'status.get') {
           return { runtimeId: workerRuntime.getRuntimeId(), capabilities: workerCapabilities }
         }
+
         if (method !== 'orchestration.federationPull') {
           throw new Error(`Unexpected relay method ${method}`)
         }
+
         pullCount += 1
         await blockedPull
+
         return { runtimeEpoch: workerRuntime.getRuntimeId(), items: [] }
       }
     )
@@ -779,9 +811,11 @@ describe('orchestration federation', () => {
         if (method === 'status.get') {
           return { runtimeId: workerRuntime.getRuntimeId(), capabilities: workerCapabilities }
         }
+
         if (method === 'orchestration.federationStop') {
           throw new Error('connection lost')
         }
+
         throw new Error(`Unexpected relay method ${method}`)
       }
     )
@@ -817,6 +851,7 @@ describe('orchestration federation', () => {
       method: 'orchestration.workerRead',
       params: { dispatch: dispatch.id }
     })
+
     const stopped = await homeDispatcher.dispatch({
       id: 'rpc_replacement_stop',
       authToken: 'coordinator-token',

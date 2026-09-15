@@ -14,11 +14,14 @@ vi.mock('./host-app-version-store', () => ({
 describe('useHostStatusGates', () => {
   it('clears every prior-host gate and ignores its late response while the client is replaced', async () => {
     let resolveOldStatus: ((response: unknown) => void) | null = null
+
     const pendingOldStatus = new Promise((resolve) => {
       resolveOldStatus = resolve
     })
+
     const oldSendRequest = vi.fn().mockReturnValue(pendingOldStatus)
     const oldClient = { sendRequest: oldSendRequest } as unknown as RpcClient
+
     const newSendRequest = vi.fn().mockResolvedValue({
       ok: true,
       result: {
@@ -26,6 +29,7 @@ describe('useHostStatusGates', () => {
         floatingWorkspaceEnabled: true
       }
     })
+
     const newClient = { sendRequest: newSendRequest } as unknown as RpcClient
     let gates: HostStatusGates | null = null
     const firstRenderByHost = new Map<string, HostStatusGates>()
@@ -33,9 +37,11 @@ describe('useHostStatusGates', () => {
 
     function Probe({ hostId, client }: { hostId: string; client: RpcClient }): null {
       gates = useHostStatusGates({ hostId, client, connState: 'connected' })
+
       if (!firstRenderByHost.has(hostId)) {
         firstRenderByHost.set(hostId, gates)
       }
+
       return null
     }
 
@@ -88,12 +94,14 @@ describe('useHostStatusGates', () => {
         floatingWorkspaceEnabled: true
       }
     })
+
     const client = { sendRequest } as unknown as RpcClient
     let gates: HostStatusGates | null = null
     let renderer: ReactTestRenderer | null = null
 
     function Probe({ hostId }: { hostId: string }): null {
       gates = useHostStatusGates({ hostId, client, connState: 'connected' })
+
       return null
     }
 
@@ -117,9 +125,11 @@ describe('useHostStatusGates', () => {
 
   it('keeps the proven gates while the same client reconnects, pending until it re-answers', async () => {
     let resolveReconnect: ((response: unknown) => void) | null = null
+
     const pendingReconnect = new Promise((resolve) => {
       resolveReconnect = resolve
     })
+
     const sendRequest = vi
       .fn()
       .mockResolvedValueOnce({
@@ -127,12 +137,14 @@ describe('useHostStatusGates', () => {
         result: { capabilities: ['browser.screencast.v1'], floatingWorkspaceEnabled: true }
       })
       .mockReturnValueOnce(pendingReconnect)
+
     const client = { sendRequest } as unknown as RpcClient
     let gates: HostStatusGates | null = null
     let renderer: ReactTestRenderer | null = null
 
     function Probe({ connState }: { connState: 'connected' | 'disconnected' }): null {
       gates = useHostStatusGates({ hostId: 'host-1', client, connState })
+
       return null
     }
 
@@ -186,14 +198,17 @@ describe('useHostStatusGates', () => {
         result: { capabilities: ['browser.screencast.v1'], floatingWorkspaceEnabled: true }
       })
     } as unknown as RpcClient
+
     const secondClient = {
       sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
     } as unknown as RpcClient
+
     let gates: HostStatusGates | null = null
     let renderer: ReactTestRenderer | null = null
 
     function Probe({ client }: { client: RpcClient }): null {
       gates = useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
+
       return null
     }
 

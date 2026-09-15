@@ -104,6 +104,7 @@ function readUsageData<T extends UsageShape<string, string, UsageSnapshot>>(
   prefix: string
 ): UsageData<T> {
   const values = state as unknown as Record<string, unknown>
+
   return Object.fromEntries(
     usageDataFields.map((field) => [field, values[usageDataKey(prefix, field)]])
   ) as UsageData<T>
@@ -130,22 +131,26 @@ function createUsageProviderSlice<
   return (set, get) => {
     const update = (patch: Partial<UsageData<T>>): void =>
       set(createUsagePatch(config.prefix, patch))
+
     const read = (): UsageData<T> => readUsageData<T>(get(), config.prefix)
 
     const fetchUsage = async (opts?: { forceRefresh?: boolean }): Promise<void> => {
       try {
         const api = config.getApi()
         const scanState = (await api.getScanState()) as T['snapshot']['scanState'] | undefined
+
         // Desktop-only usage APIs resolve undefined in paired web clients.
         if (!scanState) {
           return
         }
 
         const current = read()
+
         const preserveLoading =
           opts?.forceRefresh === true &&
           current.scanState?.enabled === true &&
           current.summary === null
+
         update({
           scanState: preserveLoading
             ? {
@@ -156,16 +161,19 @@ function createUsageProviderSlice<
               }
             : scanState
         })
+
         if (!scanState.enabled) {
           return
         }
 
         const selection = read()
+
         const snapshot = await api.getSnapshot({
           scope: selection.scope,
           range: selection.range,
           limit: 10
         })
+
         if (
           snapshot.scanState.lastScanCompletedAt !== null ||
           config.hasCachedData(snapshot.scanState)
@@ -200,9 +208,11 @@ function createUsageProviderSlice<
         const nextScanState = (await config.getApi().setEnabled({ enabled })) as
           | T['snapshot']['scanState']
           | undefined
+
         if (!nextScanState) {
           return
         }
+
         update({
           scanState: enabled
             ? {
@@ -218,6 +228,7 @@ function createUsageProviderSlice<
           projectBreakdown: [],
           recentSessions: []
         })
+
         if (enabled) {
           await fetchUsage({ forceRefresh: true })
         }
@@ -256,11 +267,15 @@ function createUsageProviderSlice<
 }
 
 type ClaudeUsageShape = UsageShape<ClaudeUsageScope, ClaudeUsageRange, ClaudeUsageSnapshot>
+
 type CodexUsageShape = UsageShape<CodexUsageScope, CodexUsageRange, CodexUsageSnapshot>
+
 type OpenCodeUsageShape = UsageShape<OpenCodeUsageScope, OpenCodeUsageRange, OpenCodeUsageSnapshot>
 
 export type ClaudeUsageSlice = ProviderUsageSlice<'claude', 'Claude', ClaudeUsageShape>
+
 export type CodexUsageSlice = ProviderUsageSlice<'codex', 'Codex', CodexUsageShape>
+
 export type OpenCodeUsageSlice = ProviderUsageSlice<'openCode', 'OpenCode', OpenCodeUsageShape>
 
 export const createClaudeUsageSlice = createUsageProviderSlice<

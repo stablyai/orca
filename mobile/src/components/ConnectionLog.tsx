@@ -29,12 +29,15 @@ function formatTime(ts: number, baseTs: number): string {
   // Why: show elapsed seconds since the first entry — absolute wall-clock
   // time isn't actionable when debugging "why is connecting stuck".
   const elapsed = Math.max(0, ts - baseTs) / 1000
+
   if (elapsed < 10) {
     return `+${elapsed.toFixed(2)}s`
   }
+
   if (elapsed < 100) {
     return `+${elapsed.toFixed(1)}s`
   }
+
   return `+${Math.round(elapsed)}s`
 }
 
@@ -44,6 +47,7 @@ export function ConnectionLog({ entries, title, fillAvailableHeight = false }: P
   if (entries.length === 0) {
     return null
   }
+
   const baseTs = entries[0]!.ts
   const keyOccurrences = new Map<string, number>()
 
@@ -66,6 +70,7 @@ export function ConnectionLog({ entries, title, fillAvailableHeight = false }: P
           const occurrence = keyOccurrences.get(entry.id) ?? 0
           keyOccurrences.set(entry.id, occurrence + 1)
           const renderKey = occurrence === 0 ? entry.id : `${entry.id}:${occurrence}`
+
           return (
             <View key={renderKey} style={styles.row}>
               <Text style={styles.timestamp}>{formatTime(entry.ts, baseTs)}</Text>

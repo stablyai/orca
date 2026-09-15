@@ -14,6 +14,7 @@ import {
 } from './artifact-share-record-store'
 
 const createdPaths: string[] = []
+
 const scopeA: ArtifactShareScope = {
   cloudUserId: 'user-a',
   cloudProfileId: 'cloud-a',
@@ -24,6 +25,7 @@ const scopeA: ArtifactShareScope = {
 async function userDataPath(): Promise<string> {
   const path = await mkdtemp(join(tmpdir(), 'orca-artifact-records-'))
   createdPaths.push(path)
+
   return path
 }
 
@@ -68,6 +70,7 @@ describe('artifact share record store', () => {
 
   it('removes every source mapping for a deleted slug in the matching scope', async () => {
     const path = await userDataPath()
+
     for (const sourceKey of ['/repo/report.html', '/repo/report-copy.html']) {
       saveArtifactShareRecord('local-profile', path, sourceKey, {
         ...scopeA,
@@ -138,6 +141,7 @@ describe('artifact share record store', () => {
     const path = await userDataPath()
     clearArtifactShareRecords('local-profile', path)
     const recordsPath = join(path, 'profiles', 'local-profile', 'artifact-shares.json')
+
     const shares = Object.fromEntries(
       Array.from({ length: 10_001 }, (_, index) => [
         `/repo/report-${String(index).padStart(5, '0')}.html`,
@@ -151,6 +155,7 @@ describe('artifact share record store', () => {
         }
       ])
     )
+
     await writeFile(recordsPath, JSON.stringify({ version: 2, lifecycleGeneration: 0, shares }))
 
     expect(
@@ -159,9 +164,11 @@ describe('artifact share record store', () => {
     expect(
       getArtifactShareRecord('local-profile', path, '/repo/report-00000.html', scopeA)
     ).toBeNull()
+
     const persisted = JSON.parse(await readFile(recordsPath, 'utf8')) as {
       shares: Record<string, unknown>
     }
+
     expect(Object.keys(persisted.shares)).toHaveLength(10_000)
   })
 
@@ -209,6 +216,7 @@ describe('artifact share record store', () => {
     const persisted = JSON.parse(await readFile(recordsPath, 'utf8')) as {
       shares: Record<string, { cloudOrganizationId?: string; savedAt?: number }>
     }
+
     expect(persisted.shares['/repo/legacy.html']?.cloudOrganizationId).toBe('org-a')
     expect(persisted.shares['/repo/legacy.html']?.savedAt).toEqual(expect.any(Number))
     expect(persisted.shares['/repo/new.html']?.savedAt).toEqual(expect.any(Number))
@@ -247,10 +255,12 @@ describe('artifact share record store', () => {
 
     expect(() => clearArtifactShareRecords('local-profile', path)).not.toThrow()
     expect(isArtifactShareLifecycleCurrent('local-profile', path, lifecycle)).toBe(false)
+
     const persisted = JSON.parse(await readFile(recordsPath, 'utf8')) as {
       lifecycleNonce?: string
       shares: object
     }
+
     expect(persisted.lifecycleNonce).toMatch(/^[0-9a-f-]{36}$/)
     expect(persisted.shares).toEqual({})
   })

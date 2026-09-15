@@ -34,15 +34,18 @@ describe('palette phrase placement', () => {
     const document = documentWithTitle('baaa '.repeat(1000))
     const field = document.visibleFields[0]
     let reads = 0
+
     for (const word of field.words) {
       const start = word.start
       Object.defineProperty(word, 'start', {
         get: () => {
           reads += 1
+
           return start
         }
       })
     }
+
     const match = matchPaletteTabDocument(document, preparePaletteTabQuery('aa')!)
     expect(match?.rank.placement).toBe(2)
     expect(match?.titleRanges).toEqual([{ start: 1, end: 3 }])

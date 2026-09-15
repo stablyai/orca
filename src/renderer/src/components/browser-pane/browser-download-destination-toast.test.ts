@@ -7,6 +7,7 @@ import {
 } from './browser-download-destination-toast'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn() } }))
+
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values: Record<string, string>) =>
     fallback.replace(/{{(\w+)}}/g, (_match, name: string) => values[name] ?? '')

@@ -95,6 +95,7 @@ describe('RateLimitService', () => {
   it('sanitizes renderer-provided polling intervals before scheduling timers', () => {
     vi.useFakeTimers()
     const intervalSpy = vi.spyOn(globalThis, 'setInterval')
+
     try {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
       vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
@@ -142,6 +143,7 @@ describe('RateLimitService', () => {
 
   it('performs a one-shot active-window fetch when startup focus was missed', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
       vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
@@ -167,6 +169,7 @@ describe('RateLimitService', () => {
 
   it('recovers a failed deferred-startup Claude fetch on the next focus', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits)
         .mockResolvedValueOnce(errorProvider('claude', 'auth restarting'))
@@ -202,6 +205,7 @@ describe('RateLimitService', () => {
 
   it('backs off repeated active-window retries while Claude is still failing', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(errorProvider('claude', 'still failing'))
       vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))
@@ -254,6 +258,7 @@ describe('RateLimitService', () => {
 
   it('resets the retry backoff once Claude recovers', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits)
         .mockResolvedValueOnce(errorProvider('claude', 'still failing'))
@@ -312,6 +317,7 @@ describe('RateLimitService', () => {
 
   it('counts a stale-driven full fetch as the failing provider retry attempt', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits).mockImplementation(async () =>
         errorProvider('claude', 'still failing')
@@ -357,6 +363,7 @@ describe('RateLimitService', () => {
 
   it('waits out Retry-After before automated Claude refetches, then recovers', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits)
         .mockImplementationOnce(async () => ({
@@ -400,6 +407,7 @@ describe('RateLimitService', () => {
 
   it('lets a user-directed refresh bypass the Claude Retry-After gate', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits)
         .mockImplementationOnce(async () => ({
@@ -425,6 +433,7 @@ describe('RateLimitService', () => {
 
   it('keeps last-known usage through a rate-limited window past the generic stale threshold', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits)
         .mockImplementationOnce(async () => okProvider('claude', 18))
@@ -454,6 +463,7 @@ describe('RateLimitService', () => {
 
   it('keeps a settled error chip settled during background refetches instead of flashing fetching', async () => {
     vi.useFakeTimers()
+
     try {
       const secondClaude = deferred<ProviderRateLimits>()
       vi.mocked(fetchClaudeRateLimits)
@@ -497,6 +507,7 @@ describe('RateLimitService', () => {
 
   it('keeps a full-fetch retry on the 5-minute cadence for a provider without a dedicated fetch cycle', async () => {
     vi.useFakeTimers()
+
     try {
       // Kimi has no individual fetch cycle, so recovering it re-runs fetchAll
       // (which hits Claude's tight-budget endpoint). A durable Kimi error must
@@ -542,6 +553,7 @@ describe('RateLimitService', () => {
 
   it('debounces unavailable providers on active window events', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(unavailableProvider('claude'))
       vi.mocked(fetchCodexRateLimits).mockResolvedValue(unavailableProvider('codex'))
@@ -584,6 +596,7 @@ describe('RateLimitService', () => {
 
   it('still debounces a focus event within the window after a successful fetch', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 12))
       vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 24))

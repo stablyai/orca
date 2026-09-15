@@ -41,6 +41,7 @@ function modelPill(result: AgentSessionOptionsResult): SessionOptionDescriptor |
     CLAUDE_SESSION_OPTION_CATALOG,
     result
   )
+
   return structuredAgentSessionOptionSnapshot(state).find((d) => d.category === 'model')
 }
 
@@ -52,6 +53,7 @@ function modelSource(result: AgentSessionOptionsResult): string | undefined {
 
 function modelValue(result: AgentSessionOptionsResult): string | undefined {
   const kind = modelPill(result)?.kind
+
   return kind?.type === 'select' ? kind.currentValue : undefined
 }
 
@@ -61,6 +63,7 @@ describe('structured option confirmation reaches the pill', () => {
       initModel: 'claude-sonnet-5',
       routes: { list_models: () => CATALOG }
     })
+
     const adapter = await acquired(claude)
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
 
@@ -74,6 +77,7 @@ describe('structured option confirmation reaches the pill', () => {
       initModel: 'claude-sonnet-5',
       routes: { list_models: () => CATALOG }
     })
+
     const adapter = await acquired(claude)
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
     claude.connections[0]!.handlers.onMessage?.(initFrame('claude-haiku-4-5-20251001'))
@@ -89,6 +93,7 @@ describe('structured option confirmation reaches the pill', () => {
       settings: { applied: {}, effective: {}, sources: {} },
       routes: { list_models: () => CATALOG }
     })
+
     const adapter = await acquired(claude)
     // `max` is session-scoped and absent from the persisted settings, so it records
     // without a readback — recorded, never vouched for.
@@ -105,6 +110,7 @@ describe('structured option confirmation reaches the pill', () => {
       settings: { applied: { effort: 'low' }, effective: { effortLevel: 'low' }, sources: {} },
       routes: { list_models: () => CATALOG }
     })
+
     const adapter = await acquired(claude)
     await adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'low', fence: 7 })
 
@@ -119,6 +125,7 @@ describe('structured option confirmation reaches the pill', () => {
       models: [{ id: 'haiku', label: 'Haiku', isDefault: false, efforts: [] }],
       current: { model: 'haiku' }
     }
+
     expect(modelSource(result)).toBe('dispatched')
     expect(modelValue(result)).toBe('haiku')
   })
@@ -130,6 +137,7 @@ describe('the provider report corrects the pill', () => {
       initModel: 'claude-sonnet-5',
       routes: { list_models: () => CATALOG }
     })
+
     const adapter = await acquired(claude)
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
     expect(modelValue(await adapter.readOptions({ sessionId: 'session-1', fence: 7 }))).toBe(
@@ -148,6 +156,7 @@ describe('the provider report corrects the pill', () => {
       initModel: 'claude-sonnet-5',
       routes: { list_models: () => CATALOG }
     })
+
     const adapter = await acquired(claude)
     claude.connections[0]!.handlers.onMessage?.(initFrame('claude-sonnet-5'))
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
@@ -162,6 +171,7 @@ describe('confirmation never outlives the write it belongs to', () => {
   it('drops an earlier effort confirmation when the value changes', async () => {
     const calls: string[] = []
     let reported = 'low'
+
     const session = {
       options: new Map<string, string>([['model', 'sonnet']]),
       reportedOptions: {},

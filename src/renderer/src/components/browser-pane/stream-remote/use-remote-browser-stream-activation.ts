@@ -32,7 +32,9 @@ export function useRemoteBrowserStreamActivation({
     if (!isActive || !windowVisibleForStream || stagedPage) {
       return
     }
+
     const closeStream = lifecycle.open()
+
     return () => {
       closeStream()
       clearPendingRemoteWheel()

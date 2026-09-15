@@ -30,19 +30,23 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     subscribeToTerminal,
     fetchTerminals
   } = scope
+
   async function handleRenameTerminal(value: string) {
     if (!client || !renameTarget) {
       return
     }
+
     const target = renameTarget
     setRenameTarget(null)
 
     try {
       const title = value.trim()
+
       const response = await client.sendRequest('terminal.rename', {
         terminal: target.handle,
         title
       })
+
       if (response.ok) {
         setTerminals((prev) => {
           const next = prev.map((terminal) =>
@@ -50,7 +54,9 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
               ? { ...terminal, title: title || 'Terminal' }
               : terminal
           )
+
           terminalsRef.current = next
+
           return next
         })
         scheduleDelayedAction(() => void fetchTerminals(), 300)
@@ -69,6 +75,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       const response = await client.sendRequest('terminal.close', {
         terminal: target.handle
       })
+
       if (response.ok) {
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
@@ -77,11 +84,13 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         const next = terminals.filter((terminal) => terminal.handle !== target.handle)
         setTerminals(next)
         terminalsRef.current = next
+
         if (activeHandleRef.current === target.handle) {
           const replacement = next[0] ?? null
           activeHandleRef.current = replacement?.handle ?? null
           pendingActiveTerminalHandleRef.current = replacement?.handle ?? null
           setActiveHandle(replacement?.handle ?? null)
+
           if (replacement) {
             subscribeToTerminal(replacement.handle)
           }
@@ -96,6 +105,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     if (!client) {
       return
     }
+
     try {
       const response = await client.sendRequest('session.tabs.close', {
         worktree: `id:${worktreeId}`,
@@ -104,12 +114,15 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         // the unknown field and keep their legacy behavior.
         reason: 'user'
       })
+
       if (response.ok) {
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
         reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
+
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
           pendingBrowserFocusPageIdRef.current = null
         }
+
         if (tab.type === 'terminal' && typeof tab.terminal === 'string') {
           const terminalHandle = tab.terminal
           unsubscribeTerminal(terminalHandle)
@@ -117,10 +130,12 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           initializedHandlesRef.current.delete(terminalHandle)
           clearTerminalLiveInputDefault(terminalHandle)
         }
+
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)
         // Why: tombstone the closed tab and rely on the snapshot, not a blind refetch that often re-added the not-yet-closed tab.
         closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
+
         // Why: bulk close re-activates the anchor before awaiting each close;
         // the render-synced ref sees that switch while this closure would not,
         // so comparing against the ref keeps the anchor from being nulled out.
@@ -137,6 +152,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       // Close failed — keep the authoritative session snapshot visible.
     }
   }
+
   return {
     handleRenameTerminal,
     handleCloseTerminal,

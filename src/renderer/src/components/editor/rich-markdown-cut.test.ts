@@ -66,6 +66,7 @@ function simulateCut(
 } {
   const $from = editor.state.doc.resolve(pos)
   const path: string[] = []
+
   for (let d = 0; d <= $from.depth; d++) {
     path.push($from.node(d).type.name)
   }
@@ -83,18 +84,22 @@ function simulateCut(
   }
 
   let cutDepth = $from.depth
+
   for (let d = $from.depth - 1; d >= 1; d--) {
     const name = $from.node(d).type.name
+
     if (name === 'listItem' || name === 'taskItem') {
       cutDepth = d
       break
     }
+
     if (name === 'tableCell' || name === 'tableHeader') {
       break
     }
   }
 
   const cutNode = $from.node(cutDepth)
+
   return {
     depth: $from.depth,
     cutDepth,
@@ -113,6 +118,7 @@ function countParagraphs(editor: Editor): number {
       count++
     }
   })
+
   return count
 }
 
@@ -123,6 +129,7 @@ function createClipboardEventMock(options?: { failReadback?: boolean }): {
 } {
   const data = new Map<string, string>()
   const preventDefault = vi.fn()
+
   const event = {
     clipboardData: {
       setData: vi.fn((type: string, value: string) => {
@@ -191,6 +198,7 @@ describe('rich markdown cut handler behavior', () => {
 
   it('Cmd+X cuts only a visual line inside a hard-wrapped paragraph', () => {
     const editor = createEditor('Alpha segment stays\nMiddle segment is cut\nOmega segment stays')
+
     try {
       normalizeEmptyListItems(editor)
       expect(countParagraphs(editor)).toBe(1)
@@ -210,6 +218,7 @@ describe('rich markdown cut handler behavior', () => {
       vi.spyOn(paragraphElement, 'getBoundingClientRect').mockReturnValue(
         DOMRect.fromRect({ x: 20, y: 0, width: 600, height: 60 })
       )
+
       const view = {
         get state() {
           return viewState
@@ -222,9 +231,11 @@ describe('rich markdown cut handler behavior', () => {
           if (pos === paraStart) {
             return { top: 0, bottom: 20, left: 20, right: 20 }
           }
+
           if (pos === paraEnd) {
             return { top: 40, bottom: 60, left: 280, right: 280 }
           }
+
           return { top: 20, bottom: 40, left: 120, right: 120 }
         }),
         posAtCoords: vi.fn((coords: { top: number }) => {
@@ -255,11 +266,14 @@ describe('rich markdown cut handler behavior', () => {
 
   it('surfaces cut-limit feedback when clipboard readback fails', () => {
     const editor = createEditor('Body text to cut.\n')
+
     try {
       const pos = 1
+
       let viewState = editor.state.apply(
         editor.state.tr.setSelection(TextSelection.create(editor.state.doc, pos))
       )
+
       const view = {
         get state() {
           return viewState
@@ -295,6 +309,7 @@ describe('rich markdown cut handler behavior', () => {
     doc.forEach((node, offset) => {
       if (node.type.name === 'paragraph') {
         count++
+
         if (count === 2) {
           secondParaPos = offset + 1
         }
@@ -319,12 +334,15 @@ describe('rich markdown cut handler behavior', () => {
       if (node.type.name === 'paragraph' && secondItemPos === -1) {
         // Check if parent path includes listItem
         const $pos = doc.resolve(pos + 1)
+
         for (let d = $pos.depth; d >= 1; d--) {
           if ($pos.node(d).type.name === 'listItem') {
             listItemCount++
+
             if (listItemCount === 2) {
               secondItemPos = pos + 1
             }
+
             break
           }
         }
@@ -359,6 +377,7 @@ describe('rich markdown cut handler behavior', () => {
         paraPos = offset + 1
       }
     })
+
     if (paraPos > 0) {
       const safeResult = simulateCut(editor, paraPos)
       expect(safeResult.wouldBail).toBe(false)
@@ -394,6 +413,7 @@ describe('rich markdown cut handler behavior', () => {
     doc.descendants((node, pos) => {
       if (node.type.name === 'paragraph' && firstParaInBq === -1) {
         const $pos = doc.resolve(pos + 1)
+
         for (let d = $pos.depth; d >= 1; d--) {
           if ($pos.node(d).type.name === 'blockquote') {
             firstParaInBq = pos + 1

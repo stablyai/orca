@@ -38,6 +38,7 @@ describe('mobile markdown bridge', () => {
       readFile: vi.fn().mockResolvedValue({ content: 'disk', isBinary: false })
     })
     const detach = attachMobileMarkdownBridge()
+
     const unregisterFlush = registerPendingEditorFlush('/repo/README.md', () => {
       useAppStore.getState().setEditorDraft('/repo/README.md', '# pending\n')
       useAppStore.getState().markFileDirty('/repo/README.md', true)
@@ -91,13 +92,16 @@ describe('mobile markdown bridge', () => {
   it('saves through the editor save controller and verifies written content', async () => {
     openMarkdownFile()
     let diskContent = 'original'
+
     const readFile = vi.fn().mockImplementation(async () => ({
       content: diskContent,
       isBinary: false
     }))
+
     const writeFile = vi.fn().mockImplementation(async ({ content }) => {
       diskContent = content
     })
+
     setupWindow({ readFile, writeFile })
     const detachBridge = attachMobileMarkdownBridge()
     const detachAutosave = attachEditorAutosaveController(useAppStore as never)

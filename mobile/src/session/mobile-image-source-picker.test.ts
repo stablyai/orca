@@ -5,9 +5,11 @@ vi.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: vi.fn(),
   launchImageLibraryAsync: vi.fn()
 }))
+
 vi.mock('expo-document-picker', () => ({
   getDocumentAsync: vi.fn()
 }))
+
 vi.mock('expo-file-system', () => ({
   File: vi.fn()
 }))
@@ -22,15 +24,18 @@ import {
 const granted = { granted: true } as Awaited<
   ReturnType<typeof import('expo-image-picker').requestMediaLibraryPermissionsAsync>
 >
+
 const denied = { granted: false } as typeof granted
 
 async function collectImages(
   images: AsyncIterable<PickedMobileImage>
 ): Promise<PickedMobileImage[]> {
   const collected: PickedMobileImage[] = []
+
   for await (const image of images) {
     collected.push(image)
   }
+
   return collected
 }
 
@@ -40,18 +45,23 @@ function fileFactory(
 ) {
   const close = vi.fn()
   const chunks = [bytes]
+
   const readBytes = vi.fn(() => {
     if (options?.readError) {
       throw options.readError
     }
+
     return chunks.shift() ?? new Uint8Array()
   })
+
   const open = vi.fn(() => ({
     size: options?.handleSize ?? options?.fileSize ?? bytes.length,
     readBytes,
     close
   }))
+
   const createFile = vi.fn(() => ({ size: options?.fileSize ?? bytes.length, open }))
+
   return { close, createFile, open }
 }
 
@@ -61,13 +71,16 @@ describe('pickMobileImage', () => {
   it('reads a photo URI without relying on React Native fetch', async () => {
     const bytes = new Uint8Array([0, 1, 2, 3])
     const file = fileFactory(bytes)
+
     const launchLibrary = vi.fn().mockResolvedValue({
       canceled: false,
       assets: [{ uri: 'file:///x.jpg', fileSize: bytes.length }]
     })
+
     const fetchSpy = vi
       .spyOn(globalThis, 'fetch')
       .mockRejectedValue(new Error('Network request failed'))
+
     const result = await pickMobileImage('library', {
       requestLibraryPermission: vi.fn().mockResolvedValue(granted),
       launchLibrary,
@@ -89,9 +102,11 @@ describe('pickMobileImage', () => {
       ['file:///b.jpg', new Uint8Array([2])],
       ['file:///c.jpg', new Uint8Array([3])]
     ])
+
     const createFile = vi.fn((uri: string) => {
       const bytes = bytesByUri.get(uri)!
       let read = false
+
       return {
         size: bytes.length,
         open: () => ({
@@ -100,13 +115,16 @@ describe('pickMobileImage', () => {
             if (read) {
               return new Uint8Array()
             }
+
             read = true
+
             return bytes
           },
           close: vi.fn()
         })
       }
     })
+
     const launchLibrary = vi.fn().mockResolvedValue({
       canceled: false,
       assets: [...bytesByUri].map(([uri, bytes]) => ({ uri, fileSize: bytes.length }))

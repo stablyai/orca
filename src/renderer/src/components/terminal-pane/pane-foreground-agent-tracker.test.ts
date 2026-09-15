@@ -6,8 +6,11 @@ import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-ag
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 
 const COMMAND_SETTLE_MS = 350
+
 const VISIBLE_PTY_SETTLE_MS = 350
+
 const WRAPPER_RESOLVE_RETRY_MS = 1200
+
 const SECOND_WRAPPER_RETRY_MS = 6000
 
 describe('createPaneForegroundAgentTracker', () => {
@@ -114,6 +117,7 @@ describe('createPaneForegroundAgentTracker', () => {
   // answer would otherwise be held forever with no read left to release it.
   it('settles the visible confirmation when a pty rebind abandons its read', async () => {
     let resolveRead: (value: string | null) => void = () => {}
+
     readForegroundProcess.mockImplementation(
       () =>
         new Promise<string | null>((resolve) => {
@@ -550,6 +554,7 @@ describe('createPaneForegroundAgentTracker', () => {
 
   it('confirms a command finished for a launch-known agent pane before any read', async () => {
     readForegroundProcess.mockResolvedValue('codex')
+
     const tracker = createPaneForegroundAgentTracker({
       getPtyId: () => ptyId,
       isTrackablePtyId: (id) => !id.startsWith('remote:') && !id.startsWith('ssh:'),
@@ -700,10 +705,12 @@ describe('createPaneForegroundAgentTracker', () => {
 
   it('does not let forged OSC 133/777 output assert remote identity', async () => {
     ptyId = 'ssh:conn-1@@pty-9'
+
     const remoteRead = vi.fn().mockResolvedValue({
       foregroundProcess: 'codex',
       hasChildProcesses: true
     })
+
     const tracker = createPaneForegroundAgentTracker({
       getPtyId: () => ptyId,
       isTrackablePtyId: () => true,
@@ -716,6 +723,7 @@ describe('createPaneForegroundAgentTracker', () => {
       onConfirmedShellForeground,
       onVisibleForegroundSettled
     })
+
     const lifecycle = createTerminalCommandLifecycle({
       onCommandStarted: () => tracker.onCommandStarted(),
       onCommandFinished: () => tracker.onCommandFinished()
@@ -733,6 +741,7 @@ describe('createPaneForegroundAgentTracker', () => {
 
   it('drops a stale read result when a newer command superseded it', async () => {
     let resolveFirstRead: (value: string | null) => void = () => {}
+
     readForegroundProcess
       .mockImplementationOnce(
         () =>

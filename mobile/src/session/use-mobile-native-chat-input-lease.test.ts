@@ -20,6 +20,7 @@ describe('useMobileNativeChatInputLease', () => {
 
   function Harness({ connected }: { connected: boolean }): null {
     lease = useMobileNativeChatInputLease({ activeHandle: 'terminal', connected })
+
     return null
   }
 
@@ -77,6 +78,7 @@ describe('useSettledMobileNativeChatInputLock', () => {
 
   function Harness({ reason }: { reason: 'waiting' | 'disconnected' | null }): null {
     settled = useSettledMobileNativeChatInputLock(reason)
+
     return null
   }
 

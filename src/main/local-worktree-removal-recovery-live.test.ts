@@ -11,18 +11,22 @@ const tempRoots: string[] = []
 
 function git(cwd: string, args: string[]): string {
   const result = spawnSync('git', args, { cwd, encoding: 'utf8' })
+
   if (result.status !== 0) {
     throw new Error(result.stderr || result.stdout || `git ${args.join(' ')} failed`)
   }
+
   return result.stdout.trim()
 }
 
 async function waitForPath(targetPath: string): Promise<void> {
   const deadline = Date.now() + 5_000
+
   while (!existsSync(targetPath)) {
     if (Date.now() >= deadline) {
       throw new Error(`Timed out waiting for ${targetPath}`)
     }
+
     await delay(20)
   }
 }
@@ -31,13 +35,16 @@ async function stopProcess(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) {
     return
   }
+
   const exited = new Promise<void>((resolve) => child.once('exit', () => resolve()))
   child.kill()
   await Promise.race([exited, delay(500)])
+
   if (child.exitCode === null && child.pid) {
     spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], { stdio: 'ignore' })
     await Promise.race([exited, delay(2_000)])
   }
+
   if (child.exitCode === null && child.signalCode === null) {
     throw new Error('Failed to stop the filesystem churn process')
   }
@@ -95,10 +102,12 @@ describe('local Windows worktree removal recovery (live Git)', () => {
 
       try {
         await waitForPath(path.join(worktreePath, 'churn'))
+
         const removal = spawnSync('git', ['worktree', 'remove', worktreePath], {
           cwd: repoPath,
           encoding: 'utf8'
         })
+
         expect(removal.status).not.toBe(0)
         expect(git(repoPath, ['worktree', 'list', '--porcelain'])).not.toContain(worktreePath)
         expect(existsSync(worktreePath)).toBe(true)

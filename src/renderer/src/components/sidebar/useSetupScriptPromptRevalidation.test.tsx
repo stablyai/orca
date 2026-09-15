@@ -10,6 +10,7 @@ import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
 
 const GIT_REPO = { id: 'repo-1', kind: 'git' } as unknown as Repo
+
 type OkSetupScriptPromptState = Extract<SetupScriptPromptState, { status: 'ok' }>
 
 function missingSetup(repoId: string, hostId = 'local'): OkSetupScriptPromptState {
@@ -36,6 +37,7 @@ function inspectionError(repoId: string, hostId = 'local'): SetupScriptPromptSta
 }
 
 const RUNTIME_ENVIRONMENT_ID = 'env-1'
+
 const RUNTIME_REPO = {
   id: 'repo-1',
   kind: 'git',
@@ -62,6 +64,7 @@ type HarnessProps = {
 
 function Harness(props: HarnessProps): null {
   useSetupScriptPromptRevalidation(props)
+
   return null
 }
 
@@ -74,6 +77,7 @@ async function render(props: HarnessProps): Promise<(next: HarnessProps) => Prom
   await act(async () => {
     root.render(<Harness {...props} />)
   })
+
   return async (next: HarnessProps) => {
     await act(async () => {
       root.render(<Harness {...next} />)
@@ -169,6 +173,7 @@ describe('useSetupScriptPromptRevalidation', () => {
 
   it('re-inspects when a worktree activates while the prompt shows no effective setup', async () => {
     const requestRevalidation = vi.fn()
+
     // Mirror the card's real lifecycle: promptState is null on mount, so the
     // activation effect does not fire until a negative result has been cached.
     const rerender = await render({
@@ -178,6 +183,7 @@ describe('useSetupScriptPromptRevalidation', () => {
       promptState: null,
       requestRevalidation
     })
+
     await rerender({
       activeRepo: GIT_REPO,
       isDismissed: false,
@@ -194,6 +200,7 @@ describe('useSetupScriptPromptRevalidation', () => {
 
   it('does not re-inspect on worktree activation once setup is effective', async () => {
     const requestRevalidation = vi.fn()
+
     const rerender = await render({
       activeRepo: GIT_REPO,
       isDismissed: false,
@@ -201,6 +208,7 @@ describe('useSetupScriptPromptRevalidation', () => {
       promptState: null,
       requestRevalidation
     })
+
     await rerender({
       activeRepo: GIT_REPO,
       isDismissed: false,
@@ -231,6 +239,7 @@ describe('useSetupScriptPromptRevalidation', () => {
 
   it('replays a worktree activation that landed while the prompt state was unsettled', async () => {
     const requestRevalidation = vi.fn()
+
     const rerender = await render({
       activeRepo: GIT_REPO,
       isDismissed: false,
@@ -238,6 +247,7 @@ describe('useSetupScriptPromptRevalidation', () => {
       promptState: missingSetup('repo-1'),
       requestRevalidation
     })
+
     // The card nulls its state for the whole inspection round trip, so the
     // activation lands while nothing is revalidatable.
     await rerender({

@@ -44,10 +44,13 @@ const lstatFaults = vi.hoisted(() => {
       if (typeof target !== 'string' || !state.held.has(target)) {
         return
       }
+
       state.reads.set(target, (state.reads.get(target) ?? 0) + 1)
+
       const error: NodeJS.ErrnoException = new Error(
         `EPERM: operation not permitted, lstat '${target}'`
       )
+
       error.code = 'EPERM'
       error.errno = -4048
       error.syscall = 'lstat'
@@ -55,19 +58,23 @@ const lstatFaults = vi.hoisted(() => {
       throw error
     }
   }
+
   return state
 })
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const original = actual.lstatSync as (...args: unknown[]) => unknown
+
   const patched: Record<string, unknown> = {
     ...actual,
     lstatSync: Object.assign((...args: unknown[]): unknown => {
       lstatFaults.consume(args[0])
+
       return original(...args)
     }, original)
   }
+
   return { ...patched, default: patched }
 })
 
@@ -79,6 +86,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -91,16 +99,19 @@ async function createServiceWithSelectedAccount(): Promise<{
   managedHomePath: string
 }> {
   writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
+
   const managedHomePath = createManagedAuth(
     testState.userDataDir,
     'account-a',
     createCodexAuthJson('a@example.com', 'acct-a', 'refresh-a')
   )
+
   createManagedAuth(
     testState.userDataDir,
     'account-b',
     createCodexAuthJson('b@example.com', 'acct-b', 'refresh-b')
   )
+
   const store = createStore(
     createSettings({
       shellStartupEnvProbeSupported: true,
@@ -117,7 +128,9 @@ async function createServiceWithSelectedAccount(): Promise<{
       activeCodexManagedAccountIdsByRuntime: { host: 'account-a', wsl: {} }
     })
   )
+
   const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+
   return { service: new CodexRuntimeHomeService(store as never), store, managedHomePath }
 }
 
@@ -134,6 +147,7 @@ describe('CodexRuntimeHomeService.resolveSelectedHostAccountCodexHomePathForResu
 
   it('refuses the resume while the selected account marker is locked, instead of reporting no selection', async () => {
     const { service, store, managedHomePath } = await createServiceWithSelectedAccount()
+
     const { ManagedCodexHomeTemporarilyUnavailableError } =
       await import('./host-codex-managed-home-ownership')
 

@@ -130,12 +130,14 @@ export function SkillInstallReview({
   children: ReactNode
 }): React.JSX.Element {
   const version = preview.version
+
   const hasConflict =
     result?.status === 'conflict' ||
     (destinationPreview &&
       ['modified', 'unowned', 'external-link', 'name-collision'].includes(
         destinationPreview.currentState
       ))
+
   return (
     <div className="space-y-4">
       <div className="space-y-3 rounded-xl border border-border/70 bg-card/40 p-3.5">

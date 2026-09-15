@@ -23,14 +23,19 @@ export function normalizeCopilotEvent(
   const normalizedEventName = normalizeCopilotEventName(
     resolveCopilotEventName(eventName, hookPayload)
   )
+
   const notificationType = readFirstString(hookPayload, ['notification_type', 'notificationType'])
+
   const isBlockingNotification =
     normalizedEventName === 'Notification' &&
     (notificationType === 'permission_prompt' || notificationType === 'elicitation_dialog')
+
   const toolSnapshot = extractToolFields('copilot', normalizedEventName, hookPayload)
+
   const isAskUserPrompt =
     (normalizedEventName === 'PreToolUse' || normalizedEventName === 'PermissionRequest') &&
     isAskUserTool(toolSnapshot.toolName)
+
   const stateName =
     normalizedEventName === 'SessionStart' ||
     normalizedEventName === 'UserPromptSubmit' ||

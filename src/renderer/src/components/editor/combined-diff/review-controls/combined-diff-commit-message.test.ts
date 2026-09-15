@@ -27,9 +27,11 @@ describe('getCombinedDiffCommitMessageBody', () => {
 
     expect(result.startsWith('Body line\nBody line')).toBe(true)
     expect(result).not.toContain('\r\n')
+
     const usedCrlfReplace = replace.mock.calls.some(
       ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r\\n'
     )
+
     expect(usedCrlfReplace).toBe(false)
     expect(split).not.toHaveBeenCalled()
   })

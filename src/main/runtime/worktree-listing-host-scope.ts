@@ -24,6 +24,7 @@ export function buildWorktreeListingPage<TRow extends { hostId?: ExecutionHostId
   truncated: boolean
 } {
   const page = selectHostBalancedPage(rows, limit, (row) => row.hostId)
+
   return {
     worktrees: page,
     hostScope: buildWorktreeListingHostScope({
@@ -50,17 +51,21 @@ export function buildWorktreeListingHostScope(args: {
   knownHostIds: Iterable<ExecutionHostId>
 }): RuntimeListingHostScope {
   const covered = new Set<ExecutionHostId>()
+
   for (const hostId of args.pageHostIds) {
     if (hostId) {
       covered.add(hostId)
     }
   }
+
   const omitted = new Set<ExecutionHostId>()
+
   for (const hostId of [...args.matchedHostIds, ...args.knownHostIds]) {
     if (hostId && !covered.has(hostId)) {
       omitted.add(hostId)
     }
   }
+
   return { hostIds: [...covered].sort(), omittedHostIds: [...omitted].sort() }
 }
 

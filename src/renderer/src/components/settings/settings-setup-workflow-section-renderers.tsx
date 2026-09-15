@@ -14,6 +14,7 @@ export function renderOrcaAccountSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
+
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="orca-account"
@@ -31,6 +32,7 @@ export function renderOrcaAccountSettingsSection(
 
 export function renderSetupGuideSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { navigation, view } = context
+
   return (
     <SettingsSection
       id="setup-guide"
@@ -49,6 +51,7 @@ export function renderSetupGuideSettingsSection(context: SettingsRenderContext):
 
 export function renderGeneralSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { model, interactions, navigation, terminal, view } = context
+
   return (
     <SettingsSection
       id="general"
@@ -80,6 +83,7 @@ export function renderIntegrationsSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element {
   const { navigation, view } = context
+
   return (
     <SettingsSection
       id="integrations"
@@ -100,6 +104,7 @@ export function renderMobileSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
+
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="mobile"
@@ -120,6 +125,7 @@ export function renderAutomationsSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element {
   const { model, navigation, view } = context
+
   return (
     <SettingsSection
       id="automations"
@@ -139,6 +145,7 @@ export function renderAutomationsSettingsSection(
 
 export function renderArtifactsSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { model, navigation, view } = context
+
   return (
     <SettingsSection
       id="artifacts"
@@ -161,6 +168,7 @@ export function renderShareSkillsSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element {
   const { navigation, view } = context
+
   return (
     <SettingsSection
       id="share-skills"

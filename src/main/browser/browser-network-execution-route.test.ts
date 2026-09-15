@@ -13,6 +13,7 @@ describe('browser network execution route', () => {
       providerEpoch: 'c',
       connectionGeneration: 2
     })
+
     const second = browserNetworkExecutionHostKey({
       kind: 'ssh',
       targetId: 'a',
@@ -56,16 +57,20 @@ describe('browser network execution route', () => {
       providerEpoch: 'provider-a',
       connectionGeneration: 3
     }
+
     const key = browserNetworkExecutionHostKey(host)
 
     expect(parseBrowserNetworkExecutionHostKey(key)).toEqual(host)
+
     const wsl = {
       kind: 'wsl' as const,
       runtimeId: 'runtime-a',
       revision: 4,
       distro: 'Ubuntu'
     }
+
     expect(parseBrowserNetworkExecutionHostKey(browserNetworkExecutionHostKey(wsl))).toEqual(wsl)
+
     for (const malformed of [
       'ssh:ssh-a:provider-a:3',
       ' ["ssh","ssh-a","provider-a",3]',

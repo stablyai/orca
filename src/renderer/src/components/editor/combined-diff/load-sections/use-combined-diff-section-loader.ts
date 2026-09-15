@@ -47,6 +47,7 @@ export function useCombinedDiffSectionLoader({
     renderableBranchEntries,
     uncommittedEntries
   } = entrySet
+
   const {
     deferredLoadRequestsRef,
     generationRef,
@@ -64,14 +65,18 @@ export function useCombinedDiffSectionLoader({
       if (sectionsRef.current[index]?.loadOnDemand && !deferredLoadRequestsRef.current.has(index)) {
         return
       }
+
       deferredLoadRequestsRef.current.delete(index)
+
       if (loadedIndicesRef.current.has(index) || loadingIndicesRef.current.has(index)) {
         return
       }
+
       loadingIndicesRef.current.add(index)
 
       const gen = generationRef.current
       const loadToken = sectionLoadTokensRef.current.get(index) ?? 0
+
       const entries: (GitStatusEntry | GitBranchChangeEntry)[] = isAllMode
         ? allEntries
         : isBranchMode
@@ -79,14 +84,18 @@ export function useCombinedDiffSectionLoader({
           : isCommitMode
             ? commitEntries
             : uncommittedEntries
+
       const entry = entries[index]
+
       if (!entry) {
         loadingIndicesRef.current.delete(index)
+
         return
       }
 
       let result: GitDiffResult
       let error: string | undefined
+
       try {
         result = await fetchCombinedDiffSection({
           branchCompare,
@@ -122,13 +131,17 @@ export function useCombinedDiffSectionLoader({
         // index may own the entry now — deleting it here would hide that load from the guard above.
         return
       }
+
       loadingIndicesRef.current.delete(index)
+
       if ((sectionLoadTokensRef.current.get(index) ?? 0) !== loadToken) {
         // Why: an invalidation landed mid-flight and deferred its reload to this settle point, so
         // the refetch happens once here instead of racing a second fetch against this one.
         requestSectionReloadRef.current(index)
+
         return
       }
+
       const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
       const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
       loadedIndicesRef.current.add(index)
@@ -136,6 +149,7 @@ export function useCombinedDiffSectionLoader({
       // A revalidation lands on a section that is already showing content. If the refetch matches
       // what's on screen, committing it would swap Monaco models and re-measure for nothing.
       const wasShowingContent = current !== undefined && !current.loading
+
       if (
         wasShowingContent &&
         isUnchangedDiffSectionReload(current, {
@@ -148,10 +162,12 @@ export function useCombinedDiffSectionLoader({
       ) {
         return
       }
+
       if (wasShowingContent) {
         // Why: content really changed, so the old Monaco height no longer describes this row.
         setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       }
+
       setSections((prev) => {
         return prev.map((s, i) =>
           i === index
@@ -190,6 +206,7 @@ export function useCombinedDiffSectionLoader({
       uncommittedEntries
     ]
   )
+
   loadSectionRef.current = loadSectionNow
 
   // Progressive loading: queue diff content when a section becomes visible.
@@ -198,6 +215,7 @@ export function useCombinedDiffSectionLoader({
       if (sectionsRef.current[index]?.collapsed || sectionsRef.current[index]?.loadOnDemand) {
         return
       }
+
       loadSchedulerRef.current.request(index)
     },
     [loadSchedulerRef, sectionsRef]
@@ -206,9 +224,11 @@ export function useCombinedDiffSectionLoader({
   const loadDeferredSection = useCallback(
     (index: number): void => {
       const section = sectionsRef.current[index]
+
       if (!section?.loadOnDemand) {
         return
       }
+
       deferredLoadRequestsRef.current.add(index)
       setSections((prev) =>
         prev.map((item, itemIndex) =>
@@ -223,6 +243,7 @@ export function useCombinedDiffSectionLoader({
   useEffect(() => {
     // Why: queue the first rows deterministically so the visible viewport doesn't depend on IntersectionObserver delivery.
     const currentSections = sectionsRef.current
+
     for (let index = 0; index < currentSections.length; index += 1) {
       if (currentSections[index]?.loading && loadedIndicesRef.current.has(index)) {
         loadedIndicesRef.current.delete(index)

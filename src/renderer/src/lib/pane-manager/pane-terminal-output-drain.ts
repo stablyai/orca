@@ -28,6 +28,7 @@ function hasDrainableBacklog(): boolean {
       return true
     }
   }
+
   return false
 }
 
@@ -35,30 +36,40 @@ function hasDrainableBacklog(): boolean {
 
 function takeNextDrainableEntry(): QueueEntry | null {
   let largeBacklogEntry: QueueEntry | null = null
+
   for (const entry of queuedByTerminal.values()) {
     if (!isEntryDrainable(entry)) {
       continue
     }
+
     // Why: active/foreground output should be chosen first, not left in insertion order behind older background terminals.
     if (entry.highPriority) {
       queuedByTerminal.delete(entry.terminal)
+
       return entry
     }
+
     if (!largeBacklogEntry && entry.queuedChars > LARGE_BACKLOG_CHARS) {
       largeBacklogEntry = entry
     }
   }
+
   if (largeBacklogEntry) {
     queuedByTerminal.delete(largeBacklogEntry.terminal)
+
     return largeBacklogEntry
   }
+
   for (const entry of queuedByTerminal.values()) {
     if (!isEntryDrainable(entry)) {
       continue
     }
+
     queuedByTerminal.delete(entry.terminal)
+
     return entry
   }
+
   return null
 }
 
@@ -68,6 +79,7 @@ function getDrainNow(): number {
   if (typeof performance !== 'undefined') {
     return performance.now()
   }
+
   return Date.now()
 }
 
@@ -80,13 +92,16 @@ export function drainQueuedOutputImpl(): void {
 
   while (queuedByTerminal.size > 0 && writes < maxWrites) {
     const entry = takeNextDrainableEntry()
+
     if (!entry) {
       break
     }
 
     const writeKind = writeQueuedChunk(entry)
+
     if (writeKind) {
       writes++
+
       if (debugEnabled) {
         if (writeKind === 'foreground') {
           debugState.deferredForegroundWriteCount++
@@ -95,12 +110,14 @@ export function drainQueuedOutputImpl(): void {
         }
       }
     }
+
     if (hasQueuedChunks(entry)) {
       queuedByTerminal.set(entry.terminal, entry)
     } else {
       entry.highPriority = false
       clearForegroundRelease(entry)
     }
+
     // Why: xterm parsing and DOM work share the renderer thread with input; keep draining cooperative so WSL/agent output can't pin the UI.
     if (writes > 0 && getDrainNow() - startedAt >= DRAIN_TIME_BUDGET_MS) {
       break
@@ -111,7 +128,9 @@ export function drainQueuedOutputImpl(): void {
     debugState.drainWrites.push(writes)
     debugState.drainHighPriority.push(highPriority)
   }
+
   recordQueueDebugPressure()
+
   if (queuedByTerminal.size > 0 && hasDrainableBacklog()) {
     // Why 0 on the channel path: a posted message already yields (input/paint serviced between macrotasks), so the 4ms interval only deepened the queue; timer path keeps it for fake-timer tests.
     scheduleDrain(

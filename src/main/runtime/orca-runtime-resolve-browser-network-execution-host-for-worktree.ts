@@ -33,10 +33,13 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     hostId?: ExecutionHostId
   }): BrowserNetworkExecutionHost | Promise<BrowserNetworkExecutionHost> {
     const repo = worktree?.repoId ? this.requireStore().getRepo(worktree.repoId) : undefined
+
     const executionHostId = worktree
       ? getWorktreeExecutionHostId(worktree, repo)
       : LOCAL_EXECUTION_HOST_ID
+
     const parsedHost = parseExecutionHostId(executionHostId)
+
     return resolveRuntimeBrowserNetworkExecutionHost({
       runtimeId: this.getRuntimeId(),
       runtimeRevision: this.getStartedAt(),
@@ -58,6 +61,7 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
   protected async resolveEmulatorCleanupWorkspaceId(selector: string): Promise<string> {
     const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
     const parsed = parseWorkspaceKey(workspaceSelector)
+
     return parsed?.type === 'folder'
       ? folderWorkspaceKey(parsed.folderWorkspaceId)
       : this.resolveEmulatorWorkspaceId(selector)
@@ -65,6 +69,7 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
 
   protected folderWorkspaceToResolvedWorktree(folderWorkspace: FolderWorkspace): ResolvedWorktree {
     const worktree = folderWorkspaceToWorktree(folderWorkspace)
+
     return {
       ...worktree,
       parentWorktreeId: null,
@@ -99,6 +104,7 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     const floatingTerminalSelector =
       selector === FLOATING_TERMINAL_WORKTREE_ID ||
       selector === `id:${FLOATING_TERMINAL_WORKTREE_ID}`
+
     if (floatingTerminalSelector) {
       // Why: the floating sentinel is terminal-only — no backing repo/worktree record for other workspace APIs.
       return {
@@ -114,6 +120,7 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     }
 
     const folderScope = await this.resolveFolderWorkspaceLaunchScope(selector)
+
     if (folderScope) {
       return {
         scope: folderScope,
@@ -130,9 +137,11 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     // spawns its PTY on the client with the remote cwd (#11163). Loss of a usable answer is
     // `unresolved`, never `local`.
     const resolution = resolveWorktreeLaunchHost(this.store?.getRepos() ?? [], worktree)
+
     if (resolution.kind === 'ambiguous') {
       throw new Error('worktree_execution_host_unresolved')
     }
+
     // Metadata only (display name, hook settings); the routing decision is `resolution.connectionId`.
     const repo = resolution.repo ?? this.store?.getRepo(worktree.repoId) ?? null
     triggerTerminalSpawnPushTargetMaterialization(
@@ -143,6 +152,7 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
       worktree.repoId,
       worktree.id
     )
+
     return {
       scope: {
         id: worktree.id,
@@ -163,9 +173,11 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
     agentTeamsEnv?: Record<string, string>
   ): Record<string, string> {
     const cleanBaseEnv = { ...baseEnv }
+
     for (const key of AGENT_HOOK_RUNTIME_ENV_KEYS) {
       delete cleanBaseEnv[key]
     }
+
     const env = {
       ...cleanBaseEnv,
       ...agentTeamsEnv,
@@ -174,9 +186,11 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
       ORCA_TAB_ID: tabId,
       ORCA_WORKTREE_ID: scope.id
     }
+
     if (!scope.folderWorkspace) {
       return env
     }
+
     return {
       ...env,
       ORCA_WORKSPACE_ID: scope.id,
@@ -187,6 +201,7 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
 
   protected getValidatedExplicitWorktreeIdSelector(selector: string | undefined): string | null {
     const worktreeId = getExplicitWorktreeIdSelector(selector)
+
     if (
       worktreeId &&
       !worktreeId.includes(WORKTREE_ID_SEPARATOR) &&
@@ -195,6 +210,7 @@ export class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree extend
       // Why: a registered repo id is a known-invalid worktree id; reject early before fast paths or Git/SSH scans hide the mistake.
       throw new WorktreeIdRequiresFullPathError()
     }
+
     return worktreeId
   }
 }

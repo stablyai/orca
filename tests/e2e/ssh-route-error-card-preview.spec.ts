@@ -44,9 +44,11 @@ test('shows the SSH routing error cards and holds for review', async ({
   await orcaPage.evaluate((path) => {
     const state = window.__store?.getState()
     const worktree = state?.allWorktrees().find((candidate) => candidate.path === path)
+
     if (!worktree) {
       throw new Error('worktree missing')
     }
+
     state?.setActiveWorktree(worktree.id)
   }, testRepoPath)
 
@@ -62,12 +64,16 @@ test('shows the SSH routing error cards and holds for review', async ({
         username: 'preview'
       }
     })) as { target?: { id?: string } }
+
     const id = added?.target?.id
+
     if (!id) {
       throw new Error(`addTarget returned ${JSON.stringify(added)}`)
     }
+
     return id
   })
+
   await orcaPage.evaluate((id) => {
     // Why: the active-workspace host id wins resolution precedence and was
     // stamped 'local' at activation; the gate consults it first.

@@ -64,6 +64,7 @@ export function MobileEmulatorAvailabilityDetails({
   if (!availability) {
     return null
   }
+
   const android = availability.android ?? { sdkFound: false, sdkPath: undefined, message: '' }
   const iosOk = Boolean(availability.simctl?.ok && availability.serveSim?.ok)
   const showIos = availability.platform === 'darwin'
@@ -73,6 +74,7 @@ export function MobileEmulatorAvailabilityDetails({
       const picked = await window.api.shell.pickDirectory({
         defaultPath: android.sdkPath ?? configuredPath ?? undefined
       })
+
       if (picked) {
         await onSetAndroidSdkPath(picked)
       }

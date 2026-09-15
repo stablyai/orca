@@ -11,17 +11,21 @@ const { trackMock, accessSyncMock, existsSyncMock, readFileSyncMock, getVersionM
     getVersionMock: vi.fn(() => '1.4.191')
   })
 )
+
 vi.mock('../telemetry/client', () => ({ track: trackMock }))
+
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   accessSync: accessSyncMock,
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock
 }))
+
 vi.mock('node:os', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   homedir: () => '/Users/alice'
 }))
+
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getVersion: getVersionMock })
 }))
@@ -43,7 +47,9 @@ const stalePidRecord: ParsedDaemonPid = {
   spawnerExecPath:
     '/Users/alice/Library/Caches/com.stablyai.orca.ShipIt/u/Orca.app/Contents/MacOS/Orca'
 }
+
 const origin = { app_version_match: 'different', spawner_path_class: 'updater-cache' } as const
+
 const PID_PATH = '/fake/daemon.pid'
 
 beforeEach(() => {

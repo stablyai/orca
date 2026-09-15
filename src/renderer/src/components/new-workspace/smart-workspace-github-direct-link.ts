@@ -49,9 +49,11 @@ export async function resolveSmartWorkspaceGithubDirectLink({
       directLink.slug,
       repoSlugCache
     )
+
     if (!matchingTarget) {
       return { items: [], prompt: null }
     }
+
     const item = await lookupGitHubWorkItemByOwnerRepoForSource({
       repoPath: matchingTarget.repo.path,
       repoId: matchingTarget.repo.id,
@@ -62,19 +64,25 @@ export async function resolveSmartWorkspaceGithubDirectLink({
       number: directLink.number,
       type: directLink.type
     })
+
     // Why: transient GHES slug failures must remain retryable.
     handledCrossRepoUrlRef.current = query
+
     return {
       items: item ? [{ ...item, repoId: matchingTarget.repo.id } as GitHubWorkItem] : [],
       prompt: null
     }
   }
+
   if (!selectedRepo?.path) {
     return { items: [], prompt: null }
   }
+
   const selectedSlug = await getRepoSlugCached(selectedRepo, githubSourceContext, repoSlugCache)
+
   if (!selectedSlug || sameSlug(selectedSlug, directLink.slug)) {
     handledCrossRepoUrlRef.current = query
+
     const item = await lookupSmartGitHubSubmitItem({
       repoPath: selectedRepo.path,
       repoId: selectedRepo.id,
@@ -90,8 +98,10 @@ export async function resolveSmartWorkspaceGithubDirectLink({
       workItem: lookupGitHubWorkItemForSource,
       workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
     })
+
     return { items: item ? [item] : [], prompt: null }
   }
+
   const matchingTarget = await findMatchingRepoForSlug(
     repos.map((repo) => ({
       repo,
@@ -104,6 +114,7 @@ export async function resolveSmartWorkspaceGithubDirectLink({
     directLink.slug,
     repoSlugCache
   )
+
   return {
     items: [],
     prompt: { link: directLink, matchingRepo: matchingTarget?.repo ?? null }

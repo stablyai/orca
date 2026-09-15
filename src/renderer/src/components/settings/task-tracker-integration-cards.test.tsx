@@ -35,6 +35,7 @@ vi.mock('@/store', () => ({
     if (!mocks.store.current) {
       throw new Error('Store state was not installed')
     }
+
     return selector(mocks.store.current)
   }
 }))
@@ -48,6 +49,7 @@ vi.mock('@/components/linear-api-key-dialog', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function installStore(
@@ -78,7 +80,9 @@ function installStore(
     openSettingsPage: vi.fn(),
     openSettingsTarget: vi.fn()
   }
+
   mocks.store.current = state
+
   return state
 }
 
@@ -93,6 +97,7 @@ async function renderCard(): Promise<HTMLDivElement> {
       </TooltipProvider>
     )
   })
+
   return container
 }
 
@@ -114,6 +119,7 @@ describe('LinearIntegrationCard account scope', () => {
         root?.unmount()
       })
     }
+
     root = null
     container?.remove()
     container = null

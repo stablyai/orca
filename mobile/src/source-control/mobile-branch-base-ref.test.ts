@@ -16,11 +16,13 @@ function fail(message: string): RpcResponse {
 
 function clientWith(responses: RpcResponse[]) {
   const calls: { method: string; params?: Record<string, unknown> }[] = []
+
   return {
     calls,
     client: {
       sendRequest: async (method: string, params?: Record<string, unknown>) => {
         calls.push({ method, params })
+
         return responses.shift() ?? fail(`unexpected ${method}`)
       }
     } as Pick<RpcClient, 'sendRequest'> as RpcClient

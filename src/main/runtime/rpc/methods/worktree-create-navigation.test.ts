@@ -36,6 +36,7 @@ describe('worktree.create navigation authority', () => {
         showRepo: vi.fn().mockResolvedValue(repo),
         createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
       await dispatcher.dispatchStreaming(
@@ -60,6 +61,7 @@ describe('worktree.create navigation authority', () => {
       showRepo: vi.fn().mockResolvedValue(repo),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -85,6 +87,7 @@ describe('worktree.create navigation authority', () => {
       showRepo: vi.fn().mockResolvedValue(repo),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -105,6 +108,7 @@ describe('worktree.create navigation authority', () => {
       showRepo: vi.fn().mockResolvedValue(repo),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     await dispatcher.dispatchStreaming(
@@ -130,6 +134,7 @@ describe('worktree.create navigation authority', () => {
       showRepo: vi.fn().mockResolvedValue(repo),
       createManagedWorktree: vi.fn().mockResolvedValue({ worktree: { id: 'wt-1' } })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 
     await dispatcher.dispatchStreaming(

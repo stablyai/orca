@@ -70,6 +70,7 @@ describe('browserManager', () => {
 
   it('queues permission denials and download requests until the guest registers', () => {
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 407,
       isDestroyed: vi.fn(() => false),
@@ -80,6 +81,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const item = {
       setSavePath: vi.fn(),
       on: vi.fn(),
@@ -92,13 +94,16 @@ describe('browserManager', () => {
       getURL: vi.fn(() => 'https://example.com/report.csv'),
       getReceivedBytes: vi.fn(() => 0)
     }
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -150,6 +155,7 @@ describe('browserManager', () => {
 
   it('sets the download save path immediately and reports progress and completion', () => {
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 408,
       isDestroyed: vi.fn(() => false),
@@ -160,14 +166,17 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const item = createDownloadItem()
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -220,6 +229,7 @@ describe('browserManager', () => {
 
   it('flushes started and terminal snapshots for downloads that finish before registration', () => {
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 409,
       isDestroyed: vi.fn(() => false),
@@ -230,14 +240,17 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const item = createDownloadItem()
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -272,6 +285,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const item = createDownloadItem()
     webContentsFromIdMock.mockReturnValue(guest)
 
@@ -284,6 +298,7 @@ describe('browserManager', () => {
     const destroyedHandler = guestOnMock.mock.calls.find(
       ([event]) => event === 'destroyed'
     )?.[1] as (() => void) | undefined
+
     destroyedHandler?.()
 
     expect(item.cancel).toHaveBeenCalledTimes(1)
@@ -292,6 +307,7 @@ describe('browserManager', () => {
 
   it('cancels active downloads when the owning browser tab closes', () => {
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 410,
       isDestroyed: vi.fn(() => false),
@@ -302,14 +318,17 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const item = createDownloadItem()
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -336,6 +355,7 @@ describe('browserManager', () => {
 
   it('reports setSavePath failures without leaving a hidden download running', () => {
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 411,
       isDestroyed: vi.fn(() => false),
@@ -346,18 +366,22 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const item = createDownloadItem({
       setSavePath: vi.fn(() => {
         throw new Error('cannot set path')
       }) as never
     })
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 

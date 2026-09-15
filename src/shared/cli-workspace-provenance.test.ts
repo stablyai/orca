@@ -19,6 +19,7 @@ describe('buildCliWorkspaceProvenance', () => {
       { createdAt: 9_999 } as Parameters<typeof buildCliWorkspaceProvenance>[0],
       { createdAt: 5 }
     )
+
     expect(provenance?.createdAt).toBe(5)
   })
 

@@ -22,6 +22,7 @@ export function normalizeAntigravityEvent(
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
   const transcriptPath = readFirstString(hookPayload, ['transcriptPath', 'transcript_path'])
+
   if (eventName === 'PreInvocation') {
     state.antigravityCompletedTranscriptByPaneKey.delete(paneKey)
   } else if (
@@ -35,6 +36,7 @@ export function normalizeAntigravityEvent(
 
   const toolName = readAntigravityToolCall(hookPayload).toolName
   const stopStillBusy = eventName === 'Stop' && isAntigravityStopStillBusy(hookPayload)
+
   const stateName =
     eventName === 'PreToolUse' && isAntigravityFeedbackTool(toolName)
       ? 'waiting'
@@ -56,8 +58,10 @@ export function normalizeAntigravityEvent(
   const resetsTurn = isNewTurnEvent('antigravity', eventName)
   // Why: once the prompt is cached for this pane, avoid rescanning the (potentially large) Antigravity transcript per hook.
   const cachedPrompt = resetsTurn ? undefined : state.lastPromptByPaneKey.get(paneKey)
+
   const effectivePrompt =
     promptText || cachedPrompt || readLastUserPromptFromTranscript(transcriptPath) || ''
+
   const snapshot = resolveToolState(
     state,
     paneKey,
@@ -77,9 +81,11 @@ export function normalizeAntigravityEvent(
     lastAssistantMessage: snapshot.lastAssistantMessage,
     lastAssistantMessageIsToolOutput: snapshot.lastAssistantMessageIsToolOutput
   })
+
   // Why: Antigravity can emit Stop with fullyIdle=false between tool steps; only a fully idle Stop is terminal, else the sidebar bounces done -> working and ignores later tool updates.
   if (eventName === 'Stop' && !stopStillBusy && transcriptPath) {
     state.antigravityCompletedTranscriptByPaneKey.set(paneKey, transcriptPath)
   }
+
   return payload
 }

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const callMock = vi.fn()
 
 vi.mock('../format', () => ({ printResult: vi.fn() }))
+
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { printResult } from '../format'
@@ -27,6 +28,7 @@ describe('legacy orchestration CLI inspection', () => {
       ],
       count: 1
     }
+
     callMock.mockResolvedValue({ result })
 
     await ORCHESTRATION_HANDLERS['orchestration check']({
@@ -59,6 +61,7 @@ describe('legacy orchestration CLI inspection', () => {
       count: 1,
       formatted: '[Reply: orca orchestration reply --id msg_legacy --from term_coord --body "..."]'
     }
+
     callMock.mockResolvedValue({ result })
 
     await ORCHESTRATION_HANDLERS['orchestration check']({
@@ -100,6 +103,7 @@ describe('legacy orchestration CLI inspection', () => {
       count: 1,
       formatted: '[Reply: orca orchestration reply --id msg_legacy --body "..."]'
     }
+
     callMock.mockResolvedValue({ result })
 
     await ORCHESTRATION_HANDLERS['orchestration check']({
@@ -138,6 +142,7 @@ describe('legacy orchestration CLI inspection', () => {
         count: 1,
         formatted
       }
+
       callMock.mockResolvedValue({ result })
 
       await ORCHESTRATION_HANDLERS['orchestration check']({
@@ -154,6 +159,7 @@ describe('legacy orchestration CLI inspection', () => {
       const response = vi.mocked(printResult).mock.calls[0]?.[0] as {
         result: typeof result & { formatted: string }
       }
+
       expect(response.result.formatted).toContain('msg_legacy [legacy, read-only]')
       expect(response.result.formatted).toContain('Tests are running.')
       expect(response.result.formatted).toContain('[payload]\n  {"phase":"testing"}')
@@ -194,6 +200,7 @@ describe('legacy orchestration CLI inspection', () => {
         '[Reply: orca orchestration reply --id msg_current --from term_coord --body "..."]'
       ].join('\n\n')
     }
+
     callMock.mockResolvedValue({ result })
 
     await ORCHESTRATION_HANDLERS['orchestration check']({
@@ -235,6 +242,7 @@ describe('legacy orchestration CLI inspection', () => {
       count: 1,
       formatted: '[Reply: current Run action]'
     }
+
     callMock.mockResolvedValue({ result })
 
     await ORCHESTRATION_HANDLERS['orchestration check']({
@@ -266,6 +274,7 @@ describe('legacy orchestration CLI inspection', () => {
       ],
       count: 1
     }
+
     callMock.mockResolvedValue({ result })
 
     await ORCHESTRATION_HANDLERS['orchestration inbox']({

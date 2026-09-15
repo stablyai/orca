@@ -41,6 +41,7 @@ const localWorktree: Worktree = {
   sortOrder: 0,
   lastActivityAt: 1
 }
+
 const sshWorktree: Worktree = { ...localWorktree, hostId: 'ssh:build-box' }
 
 const localFolder: FolderWorkspace = {
@@ -59,6 +60,7 @@ const localFolder: FolderWorkspace = {
   createdAt: 1,
   updatedAt: 1
 }
+
 const runtimeFolder: FolderWorkspace = {
   ...localFolder,
   folderPath: '/remote/orca',
@@ -126,6 +128,7 @@ describe('projectWorkspaceSurfaces', () => {
     const worktrees = [localWorktree]
 
     const withoutActiveId = project({ worktrees, folderWorkspaces, activeWorkspaceId: null })
+
     for (const activeWorkspaceId of [
       'folder:folder-shared',
       'folder:other-workspace',
@@ -133,6 +136,7 @@ describe('projectWorkspaceSurfaces', () => {
     ]) {
       expect(project({ worktrees, folderWorkspaces, activeWorkspaceId })).toEqual(withoutActiveId)
     }
+
     warn.mockRestore()
   })
 
@@ -181,11 +185,13 @@ describe('projectWorkspaceSurfaces', () => {
     // Ownership resolves to null while the folder-owner index still reads the
     // colliding id as ambiguous, so the projection first-wins until it lands.
     const folderWorkspaces = [localFolder, runtimeFolder]
+
     const hydrating = project({
       folderWorkspaces,
       activeWorkspaceId: 'folder:folder-shared',
       activeWorkspaceResolvedHostId: null
     })
+
     const hydrated = project({
       folderWorkspaces,
       activeWorkspaceId: 'folder:folder-shared',
@@ -225,10 +231,12 @@ describe('projectWorkspaceSurfaces', () => {
 // fixes, so every shape that reaches the workbench is pinned against dropping one.
 describe('projectWorkspaceSurfaces never under-selects', () => {
   const unqualifiedWorktree: Worktree = { ...localWorktree, hostId: undefined }
+
   const secondSshWorktree: Worktree = {
     ...localWorktree,
     hostId: 'ssh:ci-box'
   }
+
   const localOnlyFolder: FolderWorkspace = {
     ...localFolder,
     id: 'folder-local-only',
@@ -241,10 +249,12 @@ describe('projectWorkspaceSurfaces never under-selects', () => {
       id: 'repo-shared::/work/orca-ssh-only',
       path: '/work/orca-ssh-only'
     }
+
     const distinctFolder: FolderWorkspace = {
       ...runtimeFolder,
       id: 'folder-runtime-only'
     }
+
     const worktrees = [localWorktree, sshWorktree, secondSshWorktree, distinctWorktree]
     const folderWorkspaces = [localFolder, runtimeFolder, localOnlyFolder, distinctFolder]
 
@@ -254,6 +264,7 @@ describe('projectWorkspaceSurfaces never under-selects', () => {
       ...worktrees.map((worktree) => worktree.id),
       ...folderWorkspaces.map((workspace) => `folder:${workspace.id}`)
     ])
+
     expect(new Set(surfaceIds)).toEqual(expectedIds)
     expect(surfaceIds).toHaveLength(expectedIds.size)
   })
@@ -383,11 +394,13 @@ describe('Terminal workbench surface feed', () => {
 
   it('has exactly one projection call site, so no second flatten can hide beside it', () => {
     const componentsDir = join(process.cwd(), 'src/renderer/src/components')
+
     const callSiteFiles = readdirSync(componentsDir)
       .filter((name) => /\.tsx?$/.test(name) && !name.includes('.test.'))
       .filter((name) =>
         readFileSync(join(componentsDir, name), 'utf8').includes('projectWorkspaceSurfaces(')
       )
+
     expect(callSiteFiles.sort()).toEqual([
       'use-terminal-workspace-foundation.ts',
       'workspace-surface-projection.ts'

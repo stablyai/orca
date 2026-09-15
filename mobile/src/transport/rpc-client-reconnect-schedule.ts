@@ -1,5 +1,7 @@
 const RECONNECT_DELAYS = [500, 1000, 2000, 4000, 8000, 15_000, 30_000, 60_000]
+
 export const RPC_RECONNECT_ATTEMPT_LIMIT = 12
+
 const TRICKLE_RECONNECT_DELAY_MS = 90_000
 
 type ReconnectScheduleOptions = {
@@ -25,6 +27,7 @@ export class RpcClientReconnectSchedule {
   schedule(): void {
     const trickle = this.attempt >= RPC_RECONNECT_ATTEMPT_LIMIT
     let delayMs: number
+
     if (trickle) {
       delayMs = TRICKLE_RECONNECT_DELAY_MS
       this.options.rejectConnectWaiters('Connection retry limit reached')
@@ -32,6 +35,7 @@ export class RpcClientReconnectSchedule {
       delayMs = RECONNECT_DELAYS[Math.min(this.attempt, RECONNECT_DELAYS.length - 1)]!
       this.attempt++
     }
+
     console.log('[net] scheduleReconnect', {
       delayMs,
       attempt: this.attempt,
@@ -49,9 +53,11 @@ export class RpcClientReconnectSchedule {
 
   redialNow(resetAttempts: boolean): void {
     this.cancel()
+
     if (resetAttempts) {
       this.attempt = 0
     }
+
     this.options.openConnection()
   }
 

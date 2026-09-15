@@ -32,6 +32,7 @@ describe('cleanupFailedEphemeralVmWorkspace', () => {
     await cleanupFailedEphemeralVmWorkspace(request(), {
       deleteProjectHostSetup: vi.fn(async () => {
         order.push('setup')
+
         return { id: 'setup-1' }
       }),
       cleanupRuntime: vi.fn(async () => {

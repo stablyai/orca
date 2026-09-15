@@ -12,7 +12,9 @@ function createTransport(): MultiplexerTransport & {
   written: Buffer[]
 } {
   let deliver = (_data: Buffer): void => {}
+
   const written: Buffer[] = []
+
   return {
     write: (data) => {
       written.push(data)
@@ -47,7 +49,9 @@ function requestPayloads(transport: ReturnType<typeof createTransport>): Record<
     if (frame[0] !== MessageType.Regular) {
       return []
     }
+
     const payloadLength = frame.readUInt32BE(9)
+
     return [
       JSON.parse(frame.subarray(HEADER_LENGTH, HEADER_LENGTH + payloadLength).toString()) as Record<
         string,
@@ -63,11 +67,14 @@ async function waitForRequest(
 ): Promise<Record<string, unknown>> {
   for (let turn = 0; turn < 10; turn += 1) {
     const request = requestPayloads(transport).find((payload) => payload.method === method)
+
     if (request) {
       return request
     }
+
     await Promise.resolve()
   }
+
   throw new Error(`request not dispatched: ${method}`)
 }
 
@@ -196,6 +203,7 @@ describe('SSH fresh agent-session create operations', () => {
       })
     )
     const abort = new AbortController()
+
     const spawn = provider.spawn({
       cols: 80,
       rows: 24,
@@ -241,6 +249,7 @@ describe('SSH fresh agent-session create operations', () => {
     const exactProvider = new SshPtyProvider('conn-1', mux)
     const onData = vi.fn()
     exactProvider.onData(onData)
+
     const claim = {
       digestVersion: 1 as const,
       keyId: 'key',
@@ -248,17 +257,20 @@ describe('SSH fresh agent-session create operations', () => {
       worktreeScopeDigest: 'b'.repeat(43),
       agent: 'codex' as const
     }
+
     const surface = {
       worktreeId: 'worktree',
       tabId: 'tab',
       leafId: '11111111-1111-4111-8111-111111111111',
       terminalHandle: 'term_claimed'
     }
+
     const spawn = exactProvider.spawn({
       cols: 80,
       rows: 24,
       agentSessionEnsure: { claim, surface }
     })
+
     const capabilityRequest = await waitForRequest(transport, 'pty.getCapabilities')
     transport.deliver(
       responseFrame(
@@ -268,6 +280,7 @@ describe('SSH fresh agent-session create operations', () => {
       )
     )
     const spawnRequest = await waitForRequest(transport, 'pty.spawn')
+
     const oldActivation = {
       status: 'pending',
       clientGeneration: 2,
@@ -277,6 +290,7 @@ describe('SSH fresh agent-session create operations', () => {
       checkpointSourceEndSu: 0,
       recoveryEndSu: 3
     }
+
     transport.deliver(
       Buffer.concat([
         responseFrame(
@@ -339,9 +353,11 @@ describe('SSH fresh agent-session create operations', () => {
     })
 
     const replacement = exactProvider.spawn({ cols: 80, rows: 24 })
+
     const replacementRequest = requestPayloads(transport).findLast(
       (payload) => payload.method === 'pty.spawn'
     )
+
     expect(replacementRequest).toBeDefined()
     transport.deliver(
       Buffer.concat([

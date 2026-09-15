@@ -32,6 +32,7 @@ import {
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { translate } from '@/i18n/i18n'
 import { resolveAvailableBrowserSessionHostId } from './browser-session-host-selection'
+
 export { getBrowserPaneCombinedSearchEntries }
 
 type BrowserPaneProps = {
@@ -44,6 +45,7 @@ function cancelBrowserSessionCookieScrollFrames(frameIds: MutableRefObject<numbe
   for (const frameId of frameIds.current) {
     cancelAnimationFrame(frameId)
   }
+
   frameIds.current = []
 }
 
@@ -74,11 +76,14 @@ export function BrowserPane({
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
   const nonDefaultProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
   const persistedHomePageDraft = browserDefaultUrl ?? ''
+
   const [homePageDraftState, setHomePageDraftState] = useState(() =>
     createBrowserHomePageDraftState(persistedHomePageDraft)
   )
+
   const [newProfileDialogOpen, setNewProfileDialogOpen] = useState(false)
   const sessionCookieScrollFrameIdsRef = useRef<number[]>([])
+
   const resolvedHomePageDraftState = resolveBrowserHomePageDraftState(
     homePageDraftState,
     persistedHomePageDraft
@@ -87,7 +92,9 @@ export function BrowserPane({
   if (resolvedHomePageDraftState !== homePageDraftState) {
     setHomePageDraftState(resolvedHomePageDraftState)
   }
+
   const homePageDraft = resolvedHomePageDraftState.value
+
   const setHomePageDraft = (value: string): void => {
     setHomePageDraftState((current) => ({ ...current, value }))
   }
@@ -96,6 +103,7 @@ export function BrowserPane({
     if (node !== null) {
       return
     }
+
     cancelBrowserSessionCookieScrollFrames(sessionCookieScrollFrameIdsRef)
   }, [])
 
@@ -105,27 +113,36 @@ export function BrowserPane({
   const showSearchEngine = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[1]])
   const showDefaultZoom = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[2]])
   const showLinkRouting = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[3]])
+
   const showLinkRoutingModifier = matchesSettingsSearch(searchQuery, [
     getBrowserPaneSearchEntries()[4]
   ])
+
   const showTerminalLinkActions = matchesSettingsSearch(searchQuery, [
     getBrowserPaneSearchEntries()[5]
   ])
+
   const showLocalhostLabels = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[6]])
   const showCookies = matchesSettingsSearch(searchQuery, [getBrowserPaneSearchEntries()[7]])
+
   const showClientHostedRemote = matchesSettingsSearch(searchQuery, [
     getBrowserPaneSearchEntries()[8]
   ])
+
   const showSshWorkspaceRouting = matchesSettingsSearch(searchQuery, [
     getBrowserPaneSearchEntries()[9]
   ])
+
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
+
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
     { isMac },
     settings.openLinksInAppModifierInverts === true
   )
+
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
+
   const browserSessionHostOptions = useMemo(
     () =>
       buildSidebarHostOptions({
@@ -159,14 +176,18 @@ export function BrowserPane({
       hostLabelOverrides
     ]
   )
+
   const settingsFocusedHostId = getSettingsFocusedExecutionHostId(settings)
+
   const selectedBrowserSessionHostId = resolveAvailableBrowserSessionHostId(
     browserSessionHostOptions,
     browserSessionHostIdOverride,
     settingsFocusedHostId
   )
+
   useEffect(() => {
     const requestedHostId = browserSessionHostIdOverride ?? settingsFocusedHostId
+
     if (selectedBrowserSessionHostId !== requestedHostId) {
       void setBrowserSessionHostId(selectedBrowserSessionHostId)
     }
@@ -176,6 +197,7 @@ export function BrowserPane({
     setBrowserSessionHostId,
     settingsFocusedHostId
   ])
+
   const selectBrowserSessionHost = useCallback(
     (hostId: ExecutionHostId) => {
       void setBrowserSessionHostId(hostId)
@@ -188,13 +210,16 @@ export function BrowserPane({
     let frameId: number | undefined
     frameId = requestAnimationFrame((timestamp) => {
       completed = true
+
       if (frameId !== undefined) {
         sessionCookieScrollFrameIdsRef.current = sessionCookieScrollFrameIdsRef.current.filter(
           (pendingFrameId) => pendingFrameId !== frameId
         )
       }
+
       callback(timestamp)
     })
+
     if (!completed) {
       sessionCookieScrollFrameIdsRef.current.push(frameId)
     }
@@ -206,9 +231,11 @@ export function BrowserPane({
     requestSessionCookieScrollFrame(() => {
       requestSessionCookieScrollFrame(() => {
         const el = document.getElementById('browser-session-cookies')
+
         if (!el) {
           return
         }
+
         el.scrollIntoView({ behavior: 'smooth', block: 'start' })
       })
     })

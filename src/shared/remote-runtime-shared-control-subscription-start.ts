@@ -25,7 +25,9 @@ export async function startSharedControlSubscription<TResult>(args: {
     method: args.method,
     params: args.params
   })
+
   const requestId = randomUUID()
+
   const subscription = createSharedControlSubscription({
     requestId,
     method: args.method,
@@ -33,7 +35,9 @@ export async function startSharedControlSubscription<TResult>(args: {
     retainedParamsBytes,
     callbacks: args.callbacks
   })
+
   args.subscriptions.set(requestId, subscription as SharedControlLogicalSubscription<unknown>)
+
   try {
     await args.ensureReady()
   } catch (error) {
@@ -44,10 +48,13 @@ export async function startSharedControlSubscription<TResult>(args: {
     )
     throw error
   }
+
   if (args.subscriptions.get(requestId) !== subscription) {
     throw remoteRuntimeUnavailableError('Remote runtime subscription closed before it started.')
   }
+
   args.sendSubscription(subscription as SharedControlLogicalSubscription<unknown>)
+
   return {
     requestId,
     close: () => args.closeSubscription(requestId),

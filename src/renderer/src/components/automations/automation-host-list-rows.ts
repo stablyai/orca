@@ -104,6 +104,7 @@ export function automationHostEntriesInView(
   if (input.resolution.effective.kind === 'all') {
     return input.catalog.entries
   }
+
   return input.resolution.entry ? [input.resolution.entry] : []
 }
 
@@ -111,9 +112,11 @@ export function resolveAutomationHostListRows(
   input: AutomationHostListRowsInput
 ): AutomationHostListRows {
   const entries = automationHostEntriesInView(input)
+
   if (entries.length === 0) {
     return EMPTY_ROWS
   }
+
   const rows: AutomationListRow[] = []
   const seen = new Set<string>()
   const groups: AutomationHostGroup[] = []
@@ -123,19 +126,25 @@ export function resolveAutomationHostListRows(
 
   for (const entry of entries) {
     const cached = input.entry(entry.stableKey)
+
     if (cached && cached.fetchedAt !== null) {
       answered = true
     }
+
     const authorityKey = automationAuthorityCatalogKey(entry.stableRef.authority)
     const hostRows: AutomationListRow[] = []
+
     for (const row of cached?.data ?? []) {
       // Scoped to the authority: another authority's identically named record is
       // a different record, and dropping it would hide a row the user stored.
       const recordKey = automationAuthorityRecordKey(authorityKey, row.automation.id)
+
       if (seen.has(recordKey)) {
         continue
       }
+
       seen.add(recordKey)
+
       const listRow: AutomationListRow = {
         key: automationListRowKey(entry.stableKey, row.automation.id),
         automation: row.automation,
@@ -143,16 +152,20 @@ export function resolveAutomationHostListRows(
         hostLabel: entry.label,
         usageSummary: row.usageSummary ?? null
       }
+
       capturedRows.push({ rowKey: listRow.key, row })
       rows.push(listRow)
       hostRows.push(listRow)
     }
+
     let group = groupByKey.get(authorityKey)
+
     if (!group) {
       group = { authorityKey, authorityLabel: entry.authorityLabel, hosts: [] }
       groupByKey.set(authorityKey, group)
       groups.push(group)
     }
+
     group.hosts.push({ entry, rows: hostRows })
   }
 

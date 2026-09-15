@@ -11,9 +11,13 @@ export type LocalGitExecOptions = {
 }
 
 const GLAB_KNOWN_HOSTS_TIMEOUT_MS = 10_000
+
 const UNAUTHENTICATED_HOSTS_MAX_ENTRIES = 128
+
 const knownHostsCacheByExecutionContext = new Map<string, readonly string[]>()
+
 const knownHostsInFlightByExecutionContext: CoalescedProbes<readonly string[]> = new Map()
+
 const unauthenticatedHostExpiries = new Map<string, number>()
 
 function knownHostsExecutionKey(
@@ -24,6 +28,7 @@ function knownHostsExecutionKey(
     // Why: reconnecting can replace the SSH/relay execution host under the same id.
     return `connection:${connectionId}:${getSshGitProviderGeneration(connectionId)}`
   }
+
   return localGitOptions.wslDistro ? `wsl:${localGitOptions.wslDistro}` : 'native'
 }
 
@@ -62,13 +67,17 @@ export function isGlabHostKnownUnauthenticated(
 ): boolean {
   const key = unauthenticatedHostKey(host, connectionId, localGitOptions)
   const expiresAt = unauthenticatedHostExpiries.get(key)
+
   if (expiresAt === undefined) {
     return false
   }
+
   if (expiresAt > Date.now()) {
     return true
   }
+
   unauthenticatedHostExpiries.delete(key)
+
   return false
 }
 
@@ -81,11 +90,14 @@ export function rememberGlabHostUnauthenticated(
     unauthenticatedHostKey(host, connectionId, localGitOptions),
     Date.now() + NEGATIVE_ENTRY_TTL_MS
   )
+
   while (unauthenticatedHostExpiries.size > UNAUTHENTICATED_HOSTS_MAX_ENTRIES) {
     const oldestKey = unauthenticatedHostExpiries.keys().next().value
+
     if (oldestKey === undefined) {
       return
     }
+
     unauthenticatedHostExpiries.delete(oldestKey)
   }
 }
@@ -107,20 +119,25 @@ export function rememberGlabKnownHosts(
   const cached = knownHostsCacheByExecutionContext.get(key) ?? DEFAULT_GITLAB_HOSTS
   const seen = new Set(cached.map(normalizeGitLabHost))
   const additions: string[] = []
+
   for (const host of hosts) {
     const normalizedHost = normalizeGitLabHost(host)
+
     if (seen.has(normalizedHost)) {
       continue
     }
+
     seen.add(normalizedHost)
     additions.push(normalizedHost)
     unauthenticatedHostExpiries.delete(
       unauthenticatedHostKey(normalizedHost, connectionId, localGitOptions)
     )
   }
+
   if (additions.length === 0) {
     return
   }
+
   knownHostsCacheByExecutionContext.set(key, [...cached, ...additions])
 }
 
@@ -130,9 +147,11 @@ export async function getGlabKnownHosts(
 ): Promise<readonly string[]> {
   const key = knownHostsExecutionKey(connectionId, localGitOptions)
   const cached = knownHostsCacheByExecutionContext.get(key)
+
   if (cached) {
     return cached
   }
+
   // Why: only join a probe still young enough to answer, so a wedged one cannot
   // pin every later retry for the life of the process (P1-D).
   return runCoalescedProbe(knownHostsInFlightByExecutionContext, key, () =>
@@ -159,10 +178,12 @@ async function probeGlabKnownHosts(
         : {}),
       ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
     })
+
     const hosts = parseGlabAuthStatusHosts(`${stdout}\n${stderr}`)
     const remembered = knownHostsCacheByExecutionContext.get(key) ?? []
     const merged = Array.from(new Set([...DEFAULT_GITLAB_HOSTS, ...remembered, ...hosts]))
     knownHostsCacheByExecutionContext.set(key, merged)
+
     return merged
   } catch {
     // Keep failures uncached so auth or tunnel recovery is discovered later.
@@ -172,14 +193,17 @@ async function probeGlabKnownHosts(
 
 export function parseGlabAuthStatusHosts(output: string): string[] {
   const hosts = new Set<string>()
+
   // Why: self-hosted GitLab can run on a non-default port; preserve it so
   // services on the same hostname remain distinct downstream.
   for (const match of output.matchAll(/logged in to ([a-zA-Z0-9.-]+(?::\d+)?)/gi)) {
     hosts.add(match[1].toLowerCase())
   }
+
   for (const line of output.split('\n')) {
     const bareLine = line.trim()
     const hostLine = bareLine.endsWith(':') ? bareLine.slice(0, -1) : bareLine
+
     if (
       line === bareLine &&
       /^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?(?::\d+)?$/.test(hostLine)
@@ -187,5 +211,6 @@ export function parseGlabAuthStatusHosts(output: string): string[] {
       hosts.add(hostLine.toLowerCase())
     }
   }
+
   return Array.from(hosts)
 }

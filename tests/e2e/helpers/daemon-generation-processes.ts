@@ -2,7 +2,9 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
+
 const PROCESS_QUERY_TIMEOUT_MS = 5_000
+
 const PROCESS_QUERY_MAX_BYTES = 8 * 1024 * 1024
 
 const processQueryOptions = {
@@ -27,12 +29,15 @@ export async function waitForCondition(
   timeoutMs = 10_000
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() <= deadline) {
     if (await predicate()) {
       return
     }
+
     await new Promise<void>((resolve) => setTimeout(resolve, 25))
   }
+
   throw new Error(`Timed out waiting for ${description}`)
 }
 
@@ -48,19 +53,24 @@ async function readWindowsProcessRows(): Promise<ProcessRow[]> {
     '};',
     '$rows | ConvertTo-Json -Compress'
   ].join(' ')
+
   const { stdout } = await execFileAsync(
     'powershell.exe',
     ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command],
     processQueryOptions
   )
+
   const parsed = JSON.parse(stdout || '[]') as
     | { pid?: unknown; parentPid?: unknown; startedAt?: unknown }
     | { pid?: unknown; parentPid?: unknown; startedAt?: unknown }[]
+
   const rows = Array.isArray(parsed) ? parsed : [parsed]
+
   return rows.flatMap((row) => {
     const pid = Number(row.pid)
     const parentPid = Number(row.parentPid)
     const startedAtMs = typeof row.startedAt === 'string' ? Date.parse(row.startedAt) : Number.NaN
+
     return Number.isInteger(pid) && Number.isInteger(parentPid) && Number.isFinite(startedAtMs)
       ? [{ pid, parentPid, startedAtMs }]
       : []
@@ -73,12 +83,16 @@ async function readPosixProcessRows(): Promise<ProcessRow[]> {
     // Why: start identity must not depend on a CI host's locale or timezone.
     env: { ...process.env, LANG: 'C', LC_ALL: 'C', TZ: 'UTC0' }
   })
+
   return stdout.split('\n').flatMap((line) => {
     const match = /^\s*(\d+)\s+(\d+)\s+(.+?)\s*$/.exec(line)
+
     if (!match) {
       return []
     }
+
     const startedAtMs = Date.parse(`${match[3]} UTC`)
+
     return Number.isFinite(startedAtMs)
       ? [{ pid: Number(match[1]), parentPid: Number(match[2]), startedAtMs }]
       : []
@@ -93,15 +107,19 @@ export async function recordProcessIdentity(pid: number): Promise<RecordedProces
   if (!Number.isInteger(pid) || pid <= 0) {
     throw new Error(`Cannot record invalid fixture pid ${pid}`)
   }
+
   const row = (await readProcessRows()).find((candidate) => candidate.pid === pid)
+
   if (!row) {
     throw new Error(`Could not record process-start identity for fixture pid ${pid}`)
   }
+
   return { pid, startedAtMs: row.startedAtMs }
 }
 
 export async function processIdentityIsAlive(identity: RecordedProcessIdentity): Promise<boolean> {
   const current = (await readProcessRows()).find((row) => row.pid === identity.pid)
+
   return current !== undefined && current.startedAtMs === identity.startedAtMs
 }
 
@@ -109,9 +127,11 @@ export async function processIdentityLiveness(
   identities: readonly RecordedProcessIdentity[]
 ): Promise<Map<number, boolean>> {
   const rowsByPid = new Map((await readProcessRows()).map((row) => [row.pid, row]))
+
   return new Map(
     identities.map((identity) => {
       const current = rowsByPid.get(identity.pid)
+
       return [identity.pid, current !== undefined && current.startedAtMs === identity.startedAtMs]
     })
   )
@@ -122,26 +142,33 @@ export async function recordProcessTree(
 ): Promise<RecordedProcessIdentity[]> {
   const rows = await readProcessRows()
   const currentRoot = rows.find((row) => row.pid === root.pid)
+
   if (!currentRoot || currentRoot.startedAtMs !== root.startedAtMs) {
     throw new Error(`Fixture root pid ${root.pid} changed incarnation before tree capture`)
   }
 
   const childrenByParent = new Map<number, ProcessRow[]>()
+
   for (const row of rows) {
     const children = childrenByParent.get(row.parentPid) ?? []
     children.push(row)
     childrenByParent.set(row.parentPid, children)
   }
+
   const recorded: RecordedProcessIdentity[] = [root]
   const pending = [...(childrenByParent.get(root.pid) ?? [])]
+
   while (pending.length > 0) {
     const row = pending.pop()
+
     if (!row) {
       continue
     }
+
     recorded.push({ pid: row.pid, startedAtMs: row.startedAtMs })
     pending.push(...(childrenByParent.get(row.pid) ?? []))
   }
+
   return recorded
 }
 
@@ -152,6 +179,7 @@ async function terminateRecordedProcess(identity: RecordedProcessIdentity): Prom
     } else {
       process.kill(identity.pid, 'SIGKILL')
     }
+
     return true
   } catch {
     // The exact process incarnation may exit between validation and signalling.
@@ -165,21 +193,26 @@ export async function terminateRecordedTree(
 ): Promise<boolean> {
   const unique = [...new Map(identities.map((identity) => [identity.pid, identity])).values()]
   let signalled = false
+
   for (const identity of unique.toReversed()) {
     // Why: PID reuse between tree capture and cleanup must never authorize a
     // signal to a process incarnation the fixture did not create.
     if (!(await processIdentityIsAlive(identity))) {
       continue
     }
+
     signalled = (await terminateRecordedProcess(identity)) || signalled
   }
+
   await waitForCondition(
     'recorded fixture process tree to be absent',
     async () => {
       const liveness = await processIdentityLiveness(unique)
+
       return unique.every((identity) => !liveness.get(identity.pid))
     },
     5_000
   )
+
   return signalled
 }

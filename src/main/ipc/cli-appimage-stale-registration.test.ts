@@ -84,12 +84,14 @@ function status(
 
 function installStatusHandler(): () => Promise<CliInstallStatus> {
   registerCliHandlers()
+
   return cliHandler('cli:getInstallStatus')
 }
 
 function cliHandler(channelName: string): () => Promise<CliInstallStatus> {
   const call = mocks.handle.mock.calls.find(([channel]) => channel === channelName)
   expect(call).toBeTruthy()
+
   return call![1]
 }
 
@@ -115,9 +117,11 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllEnvs()
+
   if (originalPlatform) {
     Object.defineProperty(process, 'platform', originalPlatform)
   }
+
   vi.restoreAllMocks()
 })
 
@@ -171,9 +175,11 @@ describe('AppImage CLI registration startup repair', () => {
     const stale = status('stale')
     const installed = status('installed')
     let finishRepair: (result: CliInstallStatus) => void = () => {}
+
     const repair = new Promise<CliInstallStatus>((resolve) => {
       finishRepair = resolve
     })
+
     mocks.getStatus.mockResolvedValue(stale)
     mocks.install.mockReturnValue(repair)
     const handler = installStatusHandler()
@@ -260,9 +266,11 @@ describe('AppImage CLI registration startup repair', () => {
   it('serializes concurrent explicit installs', async () => {
     const installed = status('installed')
     let finishFirstInstall: (result: CliInstallStatus) => void = () => {}
+
     const firstInstall = new Promise<CliInstallStatus>((resolve) => {
       finishFirstInstall = resolve
     })
+
     mocks.install.mockReturnValueOnce(firstInstall).mockResolvedValueOnce(installed)
     registerCliHandlers()
     const handler = cliHandler('cli:install')
@@ -280,9 +288,11 @@ describe('AppImage CLI registration startup repair', () => {
     const stale = status('stale')
     const notInstalled = status('not_installed')
     let finishRemove: (result: CliInstallStatus) => void = () => {}
+
     const removal = new Promise<CliInstallStatus>((resolve) => {
       finishRemove = resolve
     })
+
     mocks.getStatus.mockResolvedValueOnce(stale).mockResolvedValueOnce(notInstalled)
     mocks.remove.mockReturnValue(removal)
     registerCliHandlers()
@@ -301,9 +311,11 @@ describe('AppImage CLI registration startup repair', () => {
     const stale = status('stale')
     const notInstalled = status('not_installed')
     let finishRemove: (result: CliInstallStatus) => void = () => {}
+
     const removal = new Promise<CliInstallStatus>((resolve) => {
       finishRemove = resolve
     })
+
     mocks.getStatus.mockResolvedValue(stale)
     mocks.remove.mockReturnValue(removal)
     mocks.install.mockRejectedValue(new Error('temporary failure'))
@@ -350,6 +362,7 @@ describe('AppImage CLI registration startup repair', () => {
       ...status('stale'),
       currentTarget: '/cache/current/resources/bin/orca-ide'
     }
+
     mocks.getStatus.mockResolvedValue(stale)
     mocks.isAppImageRegistrationOwnedBySibling.mockReturnValue(true)
 

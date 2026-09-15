@@ -26,23 +26,28 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
       browserPageId,
       async (_sessionName, target) => {
         const wc = this.getWebContents(target.webContentsId)
+
         if (!wc || wc.isDestroyed()) {
           throw new BrowserError(
             'browser_tab_not_found',
             `Browser page ${target.browserPageId} is no longer available`
           )
         }
+
         const cdpButton = normalizeCdpMouseButton(button)
         const buttons = cdpPointerButtonMask(cdpButton)
         const cdpModifiers = cdpMouseModifierMask(modifiers)
         const lease = acquireElectronDebugger(wc)
+
         try {
           wc.focus()
+
           const point =
             cdpButton === 'left'
               ? // Why: DOM activation can't carry Cmd/Ctrl/Alt/Shift, so modifier clicks use the adjusted point and let CDP dispatch the event.
                 await resolveMobileTouchClickPoint(wc.debugger, x, y, radius, cdpModifiers === 0)
               : { x, y, adjusted: false, handled: false }
+
           // Why: land the tap as one atomic op — separate move/down/up CLI calls visibly hover and can miss small controls.
           // Why: mobile-emulated BrowserViews can ignore CDP mouse clicks, so the runtime may already have activated DOM controls.
           if (!point.handled) {
@@ -65,6 +70,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
               clickCount: 1
             })
           }
+
           return {
             clicked: {
               x: point.x,
@@ -94,9 +100,11 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
   ): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       const args = ['find', locator, value, action]
+
       if (text) {
         args.push(text)
       }
+
       return await this.execAgentBrowser(sessionName, args)
     })
   }
@@ -112,9 +120,11 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
   async setOffline(state?: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       const args = ['set', 'offline']
+
       if (state) {
         args.push(state)
       }
+
       return await this.execAgentBrowser(sessionName, args)
     })
   }
@@ -148,12 +158,15 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
   ): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       const args = ['set', 'media']
+
       if (colorScheme) {
         args.push(colorScheme)
       }
+
       if (reducedMotion) {
         args.push(reducedMotion)
       }
+
       return await this.execAgentBrowser(sessionName, args)
     })
   }

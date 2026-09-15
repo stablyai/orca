@@ -15,7 +15,9 @@ import { SessionSearchStore } from './session-search-store'
 // about which of the two is holding.
 
 let index: SessionSearchIndexFile
+
 let store: SessionSearchStore
+
 let errors: unknown[]
 
 beforeEach(async () => {
@@ -43,12 +45,15 @@ function indexRead(previousByteOffset: number, byteOffset: number, text: string)
     previousByteOffset === 0 ? 'replace' : 'append',
     previousByteOffset
   )
+
   if (!write) {
     return false
   }
+
   for (const message of userMessages(text, 2)) {
     write.add(message)
   }
+
   return write.commit({
     session: syntheticSession(),
     byteOffset,
@@ -67,9 +72,11 @@ it('refuses an append whose predecessor offset is not the committed cursor', () 
 
 it('refuses to commit a write whose cursor moved underneath it', () => {
   const stale = store.beginWrite(syntheticCandidate(), 'replace', 0)!
+
   for (const message of userMessages('stalegeneration', 40)) {
     stale.add(message)
   }
+
   // A second read of the same path finishes first. Without the parse file lane
   // this is the overlap that would otherwise resurrect the stale rows.
   expect(indexRead(0, 200, 'winninggeneration')).toBe(true)
@@ -90,9 +97,11 @@ it('refuses to commit a write whose cursor moved underneath it', () => {
 it('refuses to commit a write whose file was removed mid-read', () => {
   expect(indexRead(0, 100, 'firstgeneration')).toBe(true)
   const write = store.beginWrite(syntheticCandidate(), 'append', 100)!
+
   for (const message of userMessages('afterremoval', 10)) {
     write.add(message)
   }
+
   store.removeFile(SYNTHETIC_TRANSCRIPT)
 
   // Committing here would put a source back that its owner proved was deleted.
@@ -111,14 +120,17 @@ it('refuses to commit a write whose file was removed mid-read', () => {
 
 it('declines a behind cursor in beginRead before it ever reaches the store', () => {
   const attempted: number[] = []
+
   const stub = {
     indexedFile: () => ({ byteOffset: 100, mtimeMs: 1, sizeBytes: 1 }),
     beginWrite: (_candidate: unknown, _mode: unknown, previousByteOffset: number) => {
       attempted.push(previousByteOffset)
+
       return { add: () => undefined, commit: () => true }
     },
     setFileState: () => undefined
   } as unknown as SessionSearchStore
+
   const consumer = new SessionSearchIndexConsumer(stub)
 
   expect(
@@ -142,6 +154,7 @@ it('declines a behind cursor in beginRead before it ever reaches the store', () 
 
 it("hands the read's identity accessor to the store", () => {
   const captured: unknown[] = []
+
   const stub = {
     indexedFile: () => null,
     beginWrite: (
@@ -151,10 +164,12 @@ it("hands the read's identity accessor to the store", () => {
       identity: unknown
     ) => {
       captured.push(identity)
+
       return { add: () => undefined, commit: () => true }
     },
     setFileState: () => undefined
   } as unknown as SessionSearchStore
+
   const identity = (): null => null
 
   new SessionSearchIndexConsumer(stub).beginRead({
@@ -175,10 +190,13 @@ it('treats half a recorded identity as no identity at all', () => {
     ...syntheticCandidate({ dev: 7 }),
     agent: 'claude' as const
   }
+
   const write = store.beginWrite(partial, 'replace', 0)!
+
   for (const message of userMessages('halfidentity', 2)) {
     write.add(message)
   }
+
   write.commit({
     session: syntheticSession(),
     byteOffset: 100,
@@ -206,12 +224,14 @@ it.each([
   ]
 ])('never combines partial stats with the previous identity %j', (initial, expected) => {
   const observations = [initial ?? {}, { dev: 9 }, { ino: 13 }, { dev: 17, ino: 19 }]
+
   for (const [position, identity] of observations.entries()) {
     const write = store.beginWrite(
       syntheticCandidate(identity),
       position ? 'append' : 'replace',
       position * 100
     )!
+
     expect(
       write.commit({
         session: syntheticSession(),

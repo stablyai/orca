@@ -35,10 +35,13 @@ export function planWorktreeFolderRename(args: {
   if (args.isRemote || args.platform === 'win32') {
     return null
   }
+
   const newPath = computeWorktreePath(args.newLeaf, args.repoPath, args.settings)
+
   if (!newPath || newPath === args.oldWorktreePath) {
     return null
   }
+
   // Why: keep this a pure rename. If path settings changed since creation the
   // computed target could sit under a different parent — moving there would
   // relocate, not rename, so skip rather than surprise the user.
@@ -47,6 +50,7 @@ export function planWorktreeFolderRename(args: {
   if (posix.dirname(newPath) !== posix.dirname(args.oldWorktreePath)) {
     return null
   }
+
   return {
     oldPath: args.oldWorktreePath,
     newPath,

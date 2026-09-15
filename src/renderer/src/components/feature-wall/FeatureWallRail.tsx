@@ -53,6 +53,7 @@ export function FeatureWallRail(props: {
     reviewStepDone,
     onSelectReviewStep
   } = props
+
   return (
     <nav
       className="scrollbar-sleek h-full max-h-72 overflow-y-auto border-b border-border bg-card p-2 md:max-h-none md:border-b-0"
@@ -62,6 +63,7 @@ export function FeatureWallRail(props: {
         {FEATURE_WALL_WORKFLOWS.map((workflow, index) => {
           const isSelected = workflow.id === selectedId
           const isDone = workflowDone[workflow.id] === true
+
           const subSteps =
             workflow.id === 'agents-orchestration'
               ? {
@@ -85,7 +87,9 @@ export function FeatureWallRail(props: {
                       onSelect: (id: string) => onSelectReviewStep(id as ReviewStepId)
                     }
                   : null
+
           const showSubSteps = subSteps !== null && isSelected
+
           return (
             <div key={workflow.id}>
               <button
@@ -141,6 +145,7 @@ export function FeatureWallRail(props: {
                         const isStepActive = step.id === subSteps.activeId
                         const isStepDone = subSteps.done[step.id] === true
                         const label = SUB_STEP_LABELS[stepIdx] ?? String(stepIdx + 1)
+
                         return (
                           <button
                             key={step.id}

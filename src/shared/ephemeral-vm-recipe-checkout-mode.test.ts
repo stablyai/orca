@@ -30,6 +30,7 @@ describe('ephemeral VM recipe checkout mode', () => {
       pairingCode: 'orca://pair?code=test',
       projectRoot: '/workspace/repo'
     }
+
     expect(getEphemeralVmRecipeCheckoutModeError(defaultRecipe, provisionedRootResult)).toBe(
       'Recipe result requests provisioned-root checkout, but the recipe is not configured for it.'
     )

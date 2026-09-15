@@ -16,7 +16,9 @@ import { createPtyOutputProcessor } from './pty-transport'
 import { createTerminalCommandLifecycle } from './terminal-command-lifecycle'
 
 const ESC = '\x1b'
+
 const BEL = '\x07'
+
 const ST = `${ESC}\\`
 
 type TitleFactEvent =
@@ -36,6 +38,7 @@ type TitleFactPath = {
 // decides what to queue against a `lastEmittedTitle` that only later chunks advance.
 function createRendererPath(initialTitle?: string, deferDrain = false): TitleFactPath {
   const events: TitleFactEvent[] = []
+
   const processor = createPtyOutputProcessor({
     onTitleChange: (normalized, raw) => events.push({ kind: 'title', normalized, raw }),
     onAgentBecameWorking: () => events.push({ kind: 'became-working' }),
@@ -44,11 +47,14 @@ function createRendererPath(initialTitle?: string, deferDrain = false): TitleFac
     onBell: () => events.push({ kind: 'bell' }),
     initialAgentTitle: initialTitle
   })
+
   const callbacks = { onData: () => {} }
+
   return {
     events,
     feed(chunk: string): void {
       processor.processData(chunk, callbacks)
+
       // Why: the renderer defers side effects behind a setTimeout(0) drain to
       // protect xterm paint. Flush synchronously so both paths observe each
       // chunk at the same fake-timer instant.
@@ -65,6 +71,7 @@ function createMainPath(initialTitle?: string): TitleFactPath {
   // Why: mirrors OrcaRuntimeService.onPtyData — the per-PTY OSC 9999
   // processor strips status payloads before the title tracker sees the chunk.
   const processAgentStatusChunk = createAgentStatusOscProcessor()
+
   const tracker = createTerminalTitleTracker(
     {
       onTitle: (normalized, raw) => events.push({ kind: 'title', normalized, raw }),
@@ -75,6 +82,7 @@ function createMainPath(initialTitle?: string): TitleFactPath {
     },
     initialTitle !== undefined ? { initialTitle } : undefined
   )
+
   return {
     events,
     feed(chunk: string): void {
@@ -109,6 +117,7 @@ describe('main title tracker parity with the renderer transport processor', () =
       new URL('../../../../main/runtime/__fixtures__/omp-native-title-win32.txt', import.meta.url),
       'utf8'
     )
+
     feedBoth(paths, captured)
     expect(paths.main.events).toEqual(paths.renderer.events)
     expect(paths.main.events.some((event) => event.kind === 'became-working')).toBe(true)
@@ -125,6 +134,7 @@ describe('main title tracker parity with the renderer transport processor', () =
       `${ESC}]0;⠋ π - cwd${BEL}response text\r\n` +
       `${ESC}]0;⠙ π - cwd${BEL}more text\r\n` +
       `${ESC}]0;π - cwd${BEL}`
+
     feedBoth(paths, chunk)
 
     expect(paths.main.events).toEqual(paths.renderer.events)
@@ -353,15 +363,19 @@ function createRendererLifecyclePath(): LifecycleFactPath {
   // Why: mirrors pty-connection's dataCallback wiring — the transport
   // processor strips OSC 9999 before the lifecycle/PR-link byte scans run.
   const processAgentStatusChunk = createAgentStatusOscProcessor()
+
   const lifecycle = createTerminalCommandLifecycle({
     onCommandFinished: (exitCode) => events.push(['command-finished', exitCode])
   })
+
   const detectPRLinks = createTerminalGitHubPRLinkDetector()
+
   return {
     events,
     feed(chunk: string): void {
       const clean = processAgentStatusChunk(chunk).cleanData
       lifecycle.handlePtyData(clean)
+
       for (const link of detectPRLinks(clean)) {
         events.push(['pr-link', link.url, link.number])
       }
@@ -372,10 +386,12 @@ function createRendererLifecyclePath(): LifecycleFactPath {
 function createMainLifecyclePath(): LifecycleFactPath {
   const events: LifecycleFactEvent[] = []
   const processAgentStatusChunk = createAgentStatusOscProcessor()
+
   const tracker = createTerminalTitleTracker({
     onCommandFinished: (exitCode) => events.push(['command-finished', exitCode]),
     onPrLink: (link) => events.push(['pr-link', link.url, link.number])
   })
+
   return {
     events,
     feed(chunk: string): void {
@@ -444,11 +460,13 @@ type CommandCodeFactPath = {
 function createCommandCodePath(options: { stripStatusPayloads: boolean }): CommandCodeFactPath {
   const events: CommandCodeFactEvent[] = []
   const processAgentStatusChunk = createAgentStatusOscProcessor()
+
   const detector = createCommandCodeOutputStatusDetector({
     startupCommand: null,
     onWorking: (prompt) => events.push(['working', prompt]),
     onDone: (prompt) => events.push(['done', prompt])
   })
+
   return {
     events,
     feed(chunk: string): void {
@@ -502,6 +520,7 @@ describe('main Command Code scrape parity with the renderer byte detector', () =
       '❯ say hi\r\n✻ Thinking...',
       '\r\n:: Hi!\r\n❯ Ask your question...'
     ]
+
     for (const chunk of payloadThenPrompt) {
       feedBoth(paths, chunk)
     }

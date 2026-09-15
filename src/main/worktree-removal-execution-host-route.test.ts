@@ -15,6 +15,7 @@ import {
 } from './worktree-removal-execution-host-route'
 
 const HOST_A = 'target-a'
+
 const HOST_B = 'target-b'
 
 function gitProvider(name: string): never {

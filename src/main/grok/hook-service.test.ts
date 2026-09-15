@@ -21,6 +21,7 @@ const { homedirMock } = vi.hoisted(() => ({
 
 vi.mock('os', async () => {
   const actual = (await vi.importActual('os')) as Record<string, unknown>
+
   return {
     ...actual,
     homedir: homedirMock
@@ -35,6 +36,7 @@ import {
 } from '../agent-hooks/hook-stdin-contract'
 
 const GROK_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
+
 const WINDOWS_POWERSHELL_LAUNCHER =
   /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
 
@@ -55,13 +57,16 @@ type WindowsGrokHookRun = {
 function createWindowsGrokHookEnvironment(grokHome?: string): NodeJS.ProcessEnv {
   const env = { ...process.env } as NodeJS.ProcessEnv
   delete env.ORCA_AGENT_HOOK_ENDPOINT
+
   if (grokHome === undefined) {
     delete env.GROK_HOME
   } else {
     env.GROK_HOME = grokHome
   }
+
   env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
   env.ORCA_PANE_KEY = 'pane-test'
+
   return env
 }
 
@@ -71,6 +76,7 @@ async function runWindowsGrokHook(
   input: string
 ): Promise<WindowsGrokHookRun> {
   let request: WindowsGrokHookRun['request']
+
   const server = createServer((incoming, response) => {
     let body = ''
     incoming.setEncoding('utf8')
@@ -82,6 +88,7 @@ async function runWindowsGrokHook(
       response.writeHead(204).end()
     })
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
@@ -90,16 +97,20 @@ async function runWindowsGrokHook(
     })
   })
   const address = server.address()
+
   if (!address || typeof address === 'string') {
     throw new Error('Could not resolve Windows Grok hook test listener port')
   }
+
   env.ORCA_AGENT_HOOK_PORT = String(address.port)
+
   try {
     const result = await new Promise<Omit<WindowsGrokHookRun, 'request'>>((resolve, reject) => {
       const child = spawn(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', scriptPath], {
         env,
         stdio: ['pipe', 'pipe', 'pipe']
       })
+
       let stderr = ''
       let stdout = ''
       child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
@@ -112,6 +123,7 @@ async function runWindowsGrokHook(
       child.once('close', (status) => resolve({ status, stderr, stdout }))
       child.stdin.end(input)
     })
+
     return { ...result, request }
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()))
@@ -153,12 +165,14 @@ describe('GrokHookService', () => {
     async () => {
       const scriptPath = join(homeDir, 'grok-hook-unset.cmd')
       writeFileSync(scriptPath, buildWindowsGrokHookScript(), 'utf8')
+
       // Why: delete GROK_HOME rather than set '' so cmd sees "not defined".
       const result = await runWindowsGrokHook(
         scriptPath,
         createWindowsGrokHookEnvironment(),
         '{"hook_event_name":"SessionStart"}'
       )
+
       expect(result.status, `stderr=${result.stderr}\nstdout=${result.stdout}`).toBe(0)
       expect(`${result.stderr ?? ''}${result.stdout ?? ''}`).not.toMatch(
         /syntax of the command is incorrect|命令语法不正确/i
@@ -176,11 +190,13 @@ describe('GrokHookService', () => {
       const scriptPath = join(homeDir, 'grok-hook-slash.cmd')
       writeFileSync(scriptPath, buildWindowsGrokHookScript(), 'utf8')
       const trailing = `${join(homeDir, 'grok-home-with-slash')}\\`
+
       const result = await runWindowsGrokHook(
         scriptPath,
         createWindowsGrokHookEnvironment(trailing),
         '{"hook_event_name":"UserPromptSubmit"}'
       )
+
       expect(result.status, `stderr=${result.stderr}\nstdout=${result.stdout}`).toBe(0)
       expect(`${result.stderr ?? ''}${result.stdout ?? ''}`).not.toMatch(
         /syntax of the command is incorrect|命令语法不正确/i
@@ -197,11 +213,13 @@ describe('GrokHookService', () => {
     async () => {
       const scriptPath = join(homeDir, 'grok-hook-oversized.cmd')
       writeFileSync(scriptPath, buildWindowsGrokHookScript(), 'utf8')
+
       const result = await runWindowsGrokHook(
         scriptPath,
         createWindowsGrokHookEnvironment(`C:\\${'a'.repeat(9000)}`),
         '{"hook_event_name":"UserPromptSubmit"}'
       )
+
       expect(result.status, `stderr=${result.stderr}\nstdout=${result.stdout}`).toBe(0)
       expect(`${result.stderr ?? ''}${result.stdout ?? ''}`).not.toMatch(
         /syntax of the command is incorrect|命令语法不正确/i
@@ -220,11 +238,13 @@ describe('GrokHookService', () => {
       writeFileSync(scriptPath, buildWindowsGrokHookScript(), 'utf8')
       const trailingAtLimit = `C:\\${'a'.repeat(4092)}\\`
       expect(trailingAtLimit).toHaveLength(4096)
+
       const result = await runWindowsGrokHook(
         scriptPath,
         createWindowsGrokHookEnvironment(trailingAtLimit),
         '{"hook_event_name":"UserPromptSubmit"}'
       )
+
       expect(result.status, `stderr=${result.stderr}\nstdout=${result.stdout}`).toBe(0)
       expect(result.request?.path).toBe('/hook/grok')
       const form = new URLSearchParams(result.request?.body)
@@ -245,6 +265,7 @@ describe('GrokHookService', () => {
     ) as {
       hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>
     }
+
     expect(Object.keys(config.hooks).sort()).toEqual(
       [
         'Notification',
@@ -279,6 +300,7 @@ describe('GrokHookService', () => {
     const bareStar = ['*', ''].join('')
     expect(() => new RegExp(bareStar)).toThrow()
     expect(registersManagedGrokScript(config.hooks.PostToolUse[0].hooks[0].command)).toBe(true)
+
     if (process.platform !== 'win32') {
       const command = config.hooks.PostToolUse[0].hooks[0].command
       expect(command).toContain(join(homeDir, '.orca'))
@@ -291,7 +313,9 @@ describe('GrokHookService', () => {
       join(homeDir, '.orca', 'agent-hooks', GROK_SCRIPT_FILE_NAME),
       'utf8'
     )
+
     expect(script).toContain('/hook/grok')
+
     if (process.platform === 'win32') {
       expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
       // Why: windows-grok-hook-script.test.ts pins the GROK_HOME guard shape itself,
@@ -328,6 +352,7 @@ describe('GrokHookService', () => {
       const spaceHome = join(tmpdir(), 'orca grok home with spaces')
       mkdirSync(spaceHome, { recursive: true })
       homedirMock.mockReturnValue(spaceHome)
+
       try {
         expect(new GrokHookService().install().state).toBe('installed')
 
@@ -349,6 +374,7 @@ describe('GrokHookService', () => {
     const grokHome = mkdtempSync(join(tmpdir(), 'orca-grok-home-env-'))
     const previous = process.env.GROK_HOME
     process.env.GROK_HOME = grokHome
+
     try {
       const status = new GrokHookService().install()
       expect(status.state).toBe('installed')
@@ -366,6 +392,7 @@ describe('GrokHookService', () => {
       } else {
         process.env.GROK_HOME = previous
       }
+
       rmSync(grokHome, { recursive: true, force: true })
     }
   })
@@ -551,9 +578,11 @@ describe('GrokHookService', () => {
     const config = JSON.parse(readFileSync(configPath, 'utf8')) as {
       hooks: Record<string, { hooks: { command: string }[] }[]>
     }
+
     const commands = config.hooks.Notification.flatMap((definition) =>
       definition.hooks.map((hook) => hook.command)
     )
+
     expect(commands).toContain('/usr/local/bin/user-hook')
     expect(commands.some(registersManagedGrokScript)).toBe(true)
   })

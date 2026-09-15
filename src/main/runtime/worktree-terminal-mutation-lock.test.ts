@@ -9,16 +9,20 @@ const KEY = 'repo::/tmp/worktree'
 describe('WorktreeTerminalMutationLock', () => {
   it('grants concurrent spawns without serializing them', async () => {
     const lock = new WorktreeTerminalMutationLock()
+
     const releases = await Promise.all([
       lock.acquire(KEY, 'shared'),
       lock.acquire(KEY, 'shared'),
       lock.acquire(KEY, 'shared'),
       lock.acquire(KEY, 'shared')
     ])
+
     expect(releases).toHaveLength(4)
+
     for (const release of releases) {
       release()
     }
+
     expect(lock.trackedKeyCount).toBe(0)
   })
 
@@ -38,10 +42,13 @@ describe('WorktreeTerminalMutationLock', () => {
     const releaseSpawnB = await lock.acquire(KEY, 'shared')
 
     let sleepAcquired = false
+
     const sleep = lock.acquire(KEY, 'exclusive').then((release) => {
       sleepAcquired = true
+
       return release
     })
+
     await Promise.resolve()
     expect(sleepAcquired).toBe(false)
 
@@ -61,10 +68,13 @@ describe('WorktreeTerminalMutationLock', () => {
     const releaseSleep = await lock.acquire(KEY, 'exclusive')
 
     let spawnAcquired = false
+
     const spawn = lock.acquire(KEY, 'shared').then((release) => {
       spawnAcquired = true
+
       return release
     })
+
     await Promise.resolve()
     expect(spawnAcquired).toBe(false)
 
@@ -79,13 +89,17 @@ describe('WorktreeTerminalMutationLock', () => {
     const releaseFirstSpawn = await lock.acquire(KEY, 'shared')
 
     const order: string[] = []
+
     const sleep = lock.acquire(KEY, 'exclusive').then((release) => {
       order.push('exclusive')
+
       return release
     })
+
     // Queued after the sleep, so it must not jump ahead even though spawns share.
     const laterSpawn = lock.acquire(KEY, 'shared').then((release) => {
       order.push('shared')
+
       return release
     })
 
@@ -104,6 +118,7 @@ describe('WorktreeTerminalMutationLock', () => {
 
   it('expires a queued sleep at its deadline and never grants it later', async () => {
     vi.useFakeTimers()
+
     try {
       const lock = new WorktreeTerminalMutationLock()
       const releaseSpawn = await lock.acquire(KEY, 'shared')
@@ -133,14 +148,17 @@ describe('WorktreeTerminalMutationLock', () => {
 
   it('hands the turn onward when a queued sleep abandons ahead of a spawn', async () => {
     vi.useFakeTimers()
+
     try {
       const lock = new WorktreeTerminalMutationLock()
       const releaseSpawn = await lock.acquire(KEY, 'shared')
       const sleep = lock.acquire(KEY, 'exclusive', Date.now() + 1_000)
       const rejection = expect(sleep).rejects.toThrow(WORKTREE_TERMINAL_SLEEP_TIMEOUT_ERROR)
       let laterSpawnAcquired = false
+
       const laterSpawn = lock.acquire(KEY, 'shared').then((release) => {
         laterSpawnAcquired = true
+
         return release
       })
 
@@ -167,10 +185,13 @@ describe('WorktreeTerminalMutationLock', () => {
 
     // The double release must not have dropped the sibling spawn's hold.
     let sleepAcquired = false
+
     const sleep = lock.acquire(KEY, 'exclusive').then((release) => {
       sleepAcquired = true
+
       return release
     })
+
     await Promise.resolve()
     expect(sleepAcquired).toBe(false)
     releaseOther()

@@ -51,11 +51,13 @@ export function useMobileImageAttachment({
   beforeTerminalSend
 }: UseMobileImageAttachmentArgs): MobileImageAttachment {
   const [isAttaching, setIsAttaching] = useState(false)
+
   const attachImage = useCallback(
     async (source: MobileImageSource): Promise<void> => {
       if (!client || !activeHandle || !canSend) {
         return
       }
+
       try {
         const sent = await attachMobileImageToTerminal(source, {
           client,
@@ -66,24 +68,32 @@ export function useMobileImageAttachment({
           onUploadStart: () => setIsAttaching(true),
           beforeTerminalSend
         })
+
         // Cancelled picker: no error, no toast.
         if (sent) {
           onSuccess()
         }
       } catch (error) {
         onError()
+
         if (connState !== 'connected') {
           showToast('Attach failed (disconnected)', 1500)
+
           return
         }
+
         if (error instanceof ImageLibraryPermissionError) {
           showToast('Photo permission denied', 1500)
+
           return
         }
+
         if (getErrorMessage(error) === 'Clipboard image is too large') {
           showToast('Image too large to attach', 1500)
+
           return
         }
+
         showToast('Attach failed', 1500)
       } finally {
         setIsAttaching(false)

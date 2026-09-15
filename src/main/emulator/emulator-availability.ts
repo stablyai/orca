@@ -17,6 +17,7 @@ export function pickDefaultSimulatorDevice(devices: SimulatorDevice[]): Simulato
   const available = devices.filter((device) => device.isAvailable !== false)
   const booted = available.filter((device) => device.state === 'Booted')
   const bootedIphone = booted.find((device) => /iPhone/i.test(device.name || ''))
+
   return (
     bootedIphone ||
     booted[0] ||
@@ -41,6 +42,7 @@ async function inspectIosAvailability(bridge: EmulatorBridge): Promise<IosAvaila
 
   try {
     devices = await bridge.listSimulators()
+
     if (devices.length === 0) {
       simctl = {
         ok: false,
@@ -98,6 +100,7 @@ export async function inspectEmulatorAvailability(
 
   const devices = [...ios.devices, ...android.devices.map(toSimulatorRow)]
   const available = ios.available || android.available
+
   // Why: on non-macOS hosts the iOS messages are irrelevant, so surface the
   // Android setup message instead of "requires macOS".
   const message = available

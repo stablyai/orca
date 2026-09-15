@@ -58,6 +58,7 @@ export function UntitledFileRenameDialog({
         // deferred focus frame runs. Cancel it from the ref cleanup path.
         cancelFocusFrame()
       }
+
       nameInputRef.current = node
     },
     [cancelFocusFrame]
@@ -67,6 +68,7 @@ export function UntitledFileRenameDialog({
   // Radix's open lifecycle below so this does not need a post-render Effect.
   if (open) {
     const seeded = seededOpenStateRef.current
+
     if (!seeded.open || seeded.baseName !== baseName || seeded.worktreePath !== worktreePath) {
       seededOpenStateRef.current = { open: true, baseName, worktreePath }
       setName(baseName)
@@ -79,36 +81,47 @@ export function UntitledFileRenameDialog({
 
   const handleBrowse = useCallback(async () => {
     const picked = await window.api.shell.pickDirectory({ defaultPath: dir || worktreePath })
+
     if (!picked) {
       return
     }
+
     if (!mountedRef.current) {
       return
     }
+
     setDir(picked)
     setError(null)
   }, [dir, mountedRef, worktreePath])
 
   const handleSubmit = useCallback(() => {
     const trimmedName = name.trim().replace(/\.md$/, '')
+
     if (!trimmedName) {
       setError('Name cannot be empty')
+
       return
     }
+
     if (/[/\\]/.test(trimmedName)) {
       setError('Name cannot contain path separators')
+
       return
     }
 
     const trimmedDir = dir.trim().replace(/[\\/]+$/, '')
+
     if (!trimmedDir) {
       setError('Folder path cannot be empty')
+
       return
     }
 
     const relDir = getRelativePathInsideRoot(trimmedDir, worktreePath)
+
     if (relDir === null) {
       setError('Folder must be inside the current workspace')
+
       return
     }
 

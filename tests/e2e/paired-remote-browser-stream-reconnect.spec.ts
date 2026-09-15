@@ -31,9 +31,11 @@ async function callEnvironment<TResult>(
         method,
         params
       })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { environmentId, method, params }
@@ -58,9 +60,11 @@ test('bounds remote browser stream retries, then offers reconnect', async ({
         message: 'paired client never saw a host worktree'
       })
       .toBeGreaterThan(0)
+
     const worktreeId = await page.evaluate(
       () => window.__store?.getState().allWorktrees()[0]?.id ?? null
     )
+
     if (!worktreeId) {
       throw new Error('paired client did not receive the host worktree')
     }
@@ -71,6 +75,7 @@ test('bounds remote browser stream retries, then offers reconnect', async ({
       'browser.tabCreate',
       { worktree: `id:${worktreeId}`, url: 'about:blank', activate: true }
     )
+
     // The client mirrors the host's browser tabs on its own, so this opens the pane a user would
     // click into. It used to build a second local pane for the same runtime page, which is not a
     // state a user can reach: two panes on one connection means two screencast subscribers, and the
@@ -102,6 +107,7 @@ test('bounds remote browser stream retries, then offers reconnect', async ({
     const remotePane = page
       .getByTestId('remote-browser-pane')
       .filter({ has: page.getByTestId('remote-browser-frame') })
+
     const addressBar = remotePane.locator('[data-orca-browser-address-bar="true"]')
     await addressBar.click()
     await addressBar.fill('about:config')
@@ -148,6 +154,7 @@ test('bounds remote browser stream retries, then offers reconnect', async ({
         () =>
           page.evaluate(async (selector) => {
             const response = await window.api.runtimeEnvironments.connect({ selector })
+
             return response.ok
           }, client!.environmentId),
         { timeout: 60_000, message: 'paired client never reconnected to the host runtime' }
@@ -193,9 +200,11 @@ test('offers reconnect when the remote browser never opens at all', async ({
         message: 'paired client never saw a host worktree'
       })
       .toBeGreaterThan(0)
+
     const worktreeId = await page.evaluate(
       () => window.__store?.getState().allWorktrees()[0]?.id ?? null
     )
+
     if (!worktreeId) {
       throw new Error('paired client did not receive the host worktree')
     }
@@ -214,6 +223,7 @@ test('offers reconnect when the remote browser never opens at all', async ({
       remotePageId: created.browserPageId,
       worktreeId
     }
+
     await waitForMaterializedRemoteBrowserPane(page, target)
 
     // Drop the connection BEFORE the pane mounts, so the very first open fails and no stream ever
@@ -244,6 +254,7 @@ test('offers reconnect when the remote browser never opens at all', async ({
         () =>
           page.evaluate(async (selector) => {
             const response = await window.api.runtimeEnvironments.connect({ selector })
+
             return response.ok
           }, client!.environmentId),
         { timeout: 60_000, message: 'paired client never reconnected to the host runtime' }

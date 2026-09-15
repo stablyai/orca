@@ -9,8 +9,10 @@ export function chooseInitialContinuationAgent(args: {
   if (args.sourceAgent && args.availableAgents.includes(args.sourceAgent)) {
     return args.sourceAgent
   }
+
   if (isTuiAgent(args.defaultAgent) && args.availableAgents.includes(args.defaultAgent)) {
     return args.defaultAgent
   }
+
   return args.availableAgents[0] ?? null
 }

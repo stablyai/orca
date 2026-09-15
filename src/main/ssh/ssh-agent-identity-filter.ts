@@ -16,11 +16,14 @@ type AgentPublicKey = ParsedKey | Buffer | string | PublicKeyEntry
 function comparablePublicKey(key: AgentPublicKey): ParsedKey | Buffer | string {
   if (typeof key === 'object' && 'pubKey' in key) {
     const pubKey = key.pubKey
+
     if (typeof pubKey === 'object' && 'pubKey' in pubKey) {
       return pubKey.pubKey
     }
+
     return pubKey
   }
+
   return key
 }
 
@@ -34,6 +37,7 @@ class IdentityFilteredAgent extends BaseAgent<ParsedKey | Buffer | string> {
     private readonly allowedKeys: ParsedKey[]
   ) {
     super()
+
     if (agent.getStream) {
       this.getStream = agent.getStream.bind(agent)
     }
@@ -43,8 +47,10 @@ class IdentityFilteredAgent extends BaseAgent<ParsedKey | Buffer | string> {
     this.agent.getIdentities((error, keys) => {
       if (error) {
         callback(error)
+
         return
       }
+
       callback(
         undefined,
         keys?.filter((key) =>
@@ -62,8 +68,10 @@ class IdentityFilteredAgent extends BaseAgent<ParsedKey | Buffer | string> {
   ): void {
     if (typeof optionsOrCallback === 'function') {
       this.agent.sign(pubKey, data, optionsOrCallback)
+
       return
     }
+
     this.agent.sign(pubKey, data, optionsOrCallback ?? {}, callback)
   }
 }
@@ -71,9 +79,11 @@ class IdentityFilteredAgent extends BaseAgent<ParsedKey | Buffer | string> {
 function parseIdentityKeyFile(filePath: string): ParsedKey | undefined {
   try {
     const parsed = utils.parseKey(readFileSync(filePath)) as ParsedKey | ParsedKey[] | Error
+
     if (parsed instanceof Error) {
       return undefined
     }
+
     return Array.isArray(parsed) ? parsed[0] : parsed
   } catch {
     return undefined
@@ -82,13 +92,16 @@ function parseIdentityKeyFile(filePath: string): ParsedKey | undefined {
 
 function readIdentityKeys(paths: string[]): ParsedKey[] {
   const keys: ParsedKey[] = []
+
   for (const path of paths) {
     const identityPath = resolveSshConfigHomePath(path)
     const key = parseIdentityKeyFile(`${identityPath}.pub`) ?? parseIdentityKeyFile(identityPath)
+
     if (key) {
       keys.push(key)
     }
   }
+
   return keys
 }
 
@@ -97,9 +110,11 @@ export function createIdentityFilteredAgent(
   identityFilePaths: string[]
 ): BaseAgent | undefined {
   const identityKeys = readIdentityKeys(identityFilePaths)
+
   if (identityKeys.length === 0) {
     return undefined
   }
+
   // Why: IdentitiesOnly must not offer every key loaded in the agent. ssh2 has
   // no built-in equivalent, so wrap the agent and expose only IdentityFile keys.
   return new IdentityFilteredAgent(agentSocket, createAgent(agentSocket), identityKeys)

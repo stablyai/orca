@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Button } from '@/components/ui/button'
+
 export function TaskPageGitHubRows({
   model
 }: {
@@ -61,21 +62,26 @@ export function TaskPageGitHubRows({
     handleUseWorkItem,
     handleOpenOrUseGitHubWorkItem
   } = model
+
   return (
     <div className="divide-y divide-border/40">
       {!showGitHubTaskSkeletons &&
         filteredWorkItems.map((item) => {
           const itemRepo = repoMap.get(item.repoId) ?? null
+
           const attachedWorkspace = findGithubWorkItemWorkspaceAttachment(
             allWorktrees,
             item.repoId,
             item.type,
             item.number
           )
+
           const attachedWorkspaceLabel = attachedWorkspace
             ? getWorktreeAttachmentLabel(attachedWorkspace)
             : null
+
           const prDelta = item.type === 'pr' ? formatPRDelta(item) : null
+
           const githubTaskIdPill = (
             <span
               // Why: no fill — a muted wash on the pill stacks on the
@@ -101,6 +107,7 @@ export function TaskPageGitHubRows({
               <span className="font-mono text-[11px] font-normal">#{item.number}</span>
             </span>
           )
+
           return (
             // Why: clickable div not a <button> — it nests buttons, and button-in-button is invalid HTML that breaks hydration.
             <div

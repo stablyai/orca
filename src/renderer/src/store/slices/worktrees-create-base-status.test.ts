@@ -115,6 +115,7 @@ describe('createWorktree base status merge', () => {
 
   it('passes linked work item and creation agent metadata through the create IPC payload', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -126,6 +127,7 @@ describe('createWorktree base status merge', () => {
       workspaceStatus: 'in-review',
       pendingFirstAgentMessageRename: true
     })
+
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
 
     await store
@@ -175,6 +177,7 @@ describe('createWorktree base status merge', () => {
 
   it('adopts an explicit provisioned root without calling ordinary worktree create', async () => {
     const store = createTestStore()
+
     const adopted = makeWorktree({
       id: 'repo1::/workspace/repo',
       repoId: 'repo1',
@@ -183,6 +186,7 @@ describe('createWorktree base status merge', () => {
       isMainWorktree: true,
       ephemeralVmCheckoutMode: 'provisioned-root'
     })
+
     mockApi.worktrees.adoptProvisionedRoot.mockResolvedValue({ worktree: adopted })
 
     await store
@@ -238,6 +242,7 @@ describe('createWorktree base status merge', () => {
 
   it('stamps the owning runtime host onto worktrees created on a remote runtime', async () => {
     const store = createTestStore()
+
     const created = makeWorktree({
       id: 'repo-remote::/remote/feature',
       repoId: 'repo-remote',
@@ -245,6 +250,7 @@ describe('createWorktree base status merge', () => {
       // Why: the remote reports the worktree from its own perspective, so it comes back with the default local host.
       hostId: 'local'
     })
+
     store.setState({
       repos: [
         {
@@ -278,18 +284,21 @@ describe('createWorktree base status merge', () => {
 
   it('passes the active folder workspace as parent for in-app worktree creates', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
       instanceId: 'child-instance'
     })
+
     const workspaceLineage = makeWorkspaceLineage({
       childWorkspaceKey: worktreeWorkspaceKey(wt.id),
       childInstanceId: 'child-instance',
       parentWorkspaceKey: folderWorkspaceKey('folder-1'),
       capture: { source: 'active-workspace', confidence: 'explicit' }
     })
+
     store.setState({
       activeWorkspaceKey: folderWorkspaceKey('folder-1')
     } as Partial<AppState>)
@@ -311,15 +320,18 @@ describe('createWorktree base status merge', () => {
 
   it('merges create result metadata into a worktree inserted by the watcher race', async () => {
     const store = createTestStore()
+
     const watcherWorktree = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1'
     })
+
     const createdWorktree = makeWorktree({
       ...watcherWorktree,
       baseRef: 'refs/remotes/origin/main'
     })
+
     store.setState({
       worktreesByRepo: { repo1: [watcherWorktree] }
     } as Partial<AppState>)
@@ -336,15 +348,18 @@ describe('createWorktree base status merge', () => {
 
   it('requests a warning dialog when creation falls back to a local base', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1'
     })
+
     const baseFallback = {
       requestedRef: 'origin/main',
       localRef: 'main'
     }
+
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt, baseFallback })
 
     await store.getState().createWorktree('repo1', 'feature', 'origin/main')
@@ -370,12 +385,14 @@ describe('createWorktree base status merge', () => {
     expectedReason: string
   }[])('warns when local base ref refresh returns $status', async ({ status, expectedReason }) => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
       displayName: 'feature-wt'
     })
+
     mockApi.worktrees.create.mockResolvedValue({
       worktree: wt,
       localBaseRefRefresh: {
@@ -401,6 +418,7 @@ describe('createWorktree base status merge', () => {
     expect(description).not.toContain('try again')
     expect(description).not.toContain('AI tools')
     expect(description).not.toContain('git diff')
+
     // Owner path is only meaningful for the dirty-owner skip; do not leak it into other reasons.
     if (status === 'skipped_dirty_worktree') {
       expect(description).toContain('/repo')
@@ -411,12 +429,14 @@ describe('createWorktree base status merge', () => {
 
   it('falls back to the generic dirty detail when ownerWorktreePath is missing', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
       displayName: 'feature-wt'
     })
+
     mockApi.worktrees.create.mockResolvedValue({
       worktree: wt,
       localBaseRefRefresh: {
@@ -436,6 +456,7 @@ describe('createWorktree base status merge', () => {
 
   it('names the toast from branch when displayName is blank', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -443,6 +464,7 @@ describe('createWorktree base status merge', () => {
       branch: 'refs/heads/feature',
       displayName: '   '
     })
+
     mockApi.worktrees.create.mockResolvedValue({
       worktree: wt,
       localBaseRefRefresh: {
@@ -464,11 +486,13 @@ describe('createWorktree base status merge', () => {
 
   it('does not warn when the local base ref refresh succeeds', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1'
     })
+
     mockApi.worktrees.create.mockResolvedValue({
       worktree: wt,
       localBaseRefRefresh: {
@@ -485,11 +509,13 @@ describe('createWorktree base status merge', () => {
 
   it('does not warn when local base ref refresh is omitted from the create result', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1'
     })
+
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
 
     await store.getState().createWorktree('repo1', 'feature', 'origin/main')
@@ -499,11 +525,13 @@ describe('createWorktree base status merge', () => {
 
   it('suggests turning on local main freshness when the create result reports a stale local base', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1'
     })
+
     mockApi.worktrees.create.mockResolvedValue({
       worktree: wt,
       localBaseRefUpdateSuggestion: {
@@ -543,6 +571,7 @@ describe('createWorktree base status merge', () => {
     const options = vi.mocked(toast.info).mock.calls.at(-1)?.[1] as unknown as {
       onDismiss: () => void
     }
+
     // The close (X)/swipe path persists the decline flag.
     options.onDismiss()
     await Promise.resolve()
@@ -569,6 +598,7 @@ describe('createWorktree base status merge', () => {
     const options = vi.mocked(toast.info).mock.calls.at(-1)?.[1] as unknown as {
       onDismiss: () => void
     }
+
     // Turn On dismisses the toast (firing onDismiss); that must not be recorded as a decline.
     options.onDismiss()
     await Promise.resolve()
@@ -582,12 +612,14 @@ describe('createWorktree base status merge', () => {
     const store = createTestStore()
     store.setState({ sortBy: 'manual' } as Partial<AppState>)
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(123_456)
+
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
       path: '/path/wt1',
       manualOrder: 123_456
     })
+
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
 
     try {
@@ -608,12 +640,14 @@ describe('createWorktree base status merge', () => {
 
   it('passes branchNameOverride through the local create IPC payload', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/feature-something',
       repoId: 'repo1',
       path: '/path/feature-something',
       branch: 'feature/something'
     })
+
     mockApi.worktrees.create.mockResolvedValue({ worktree: wt })
 
     await store
@@ -646,15 +680,18 @@ describe('createWorktree base status merge', () => {
 
   it('retries a suffixed branchNameOverride when local IPC reports a branch conflict', async () => {
     const store = createTestStore()
+
     const error = new Error(
       'Branch "feature/something" already exists. Pick a different worktree name.'
     )
+
     const wt = makeWorktree({
       id: 'repo1::/path/feature-something-2',
       repoId: 'repo1',
       path: '/path/feature-something-2',
       branch: 'feature/something-2'
     })
+
     mockApi.worktrees.create.mockRejectedValueOnce(error)
     mockApi.worktrees.create.mockResolvedValueOnce({ worktree: wt })
 
@@ -706,6 +743,7 @@ describe('createWorktree base status merge', () => {
         behind: 2,
         recentSubjects: ['new base commit']
       })
+
       return {
         worktree: wt,
         initialBaseStatus: {

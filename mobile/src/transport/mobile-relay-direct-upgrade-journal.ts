@@ -31,6 +31,7 @@ export function createMobileRelayDirectUpgradeJournal(
   randomBytes: (length: number) => Uint8Array
 ): MobileRelayDirectUpgradeJournal {
   const pendingResumeToken = encodeBase64Url(randomBytes(32))
+
   return MobileRelayDirectUpgradeJournalSchema.parse({
     v: 1,
     hostId,
@@ -45,11 +46,14 @@ export async function readMobileRelayDirectUpgradeJournal(
 ): Promise<MobileRelayDirectUpgradeJournal | null> {
   requireNativeSecretStore()
   const raw = await readPairingKeychainItem(journalKey(hostId))
+
   if (!raw) {
     return null
   }
+
   try {
     const parsed = MobileRelayDirectUpgradeJournalSchema.safeParse(JSON.parse(raw))
+
     return parsed.success && parsed.data.hostId === hostId ? parsed.data : null
   } catch {
     return null
@@ -69,14 +73,17 @@ export async function deleteMobileRelayDirectUpgradeJournal(hostId: string): Pro
   if (Platform.OS === 'web') {
     return
   }
+
   await deletePairingKeychainItem(journalKey(hostId))
 }
 
 function encodeBase64Url(value: Uint8Array): string {
   let binary = ''
+
   for (const byte of value) {
     binary += String.fromCharCode(byte)
   }
+
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 

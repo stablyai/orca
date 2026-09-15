@@ -30,6 +30,7 @@ export function isSessionInActiveWorktree(
   if (!activeWorktreePath || !session.cwd) {
     return false
   }
+
   return isPathInsideOrEqual(activeWorktreePath, session.cwd)
 }
 
@@ -40,6 +41,7 @@ export function buildMobileAgentHistoryCard(
 ): MobileAgentHistoryCard {
   const latestTurn = latestSessionConversationTurn(session)
   const updatedAtMs = Date.parse(session.updatedAt ?? session.modifiedAt)
+
   return {
     id: session.id,
     agent: session.agent,

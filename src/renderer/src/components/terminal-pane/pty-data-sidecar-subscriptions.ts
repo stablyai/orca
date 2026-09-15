@@ -10,18 +10,24 @@ export function subscribeToPtyData(ptyId: string, watcher: (data: string) => voi
   // hidden-delivery gate (terminal-side-effect-authority.md, Open Items).
   const releaseDeliveryInterest = acquirePtyDeliveryInterest(ptyId)
   let set = ptyDataSidecars.get(ptyId)
+
   if (!set) {
     set = new Set()
     ptyDataSidecars.set(ptyId, set)
   }
+
   set.add(watcher)
+
   return () => {
     releaseDeliveryInterest()
     const current = ptyDataSidecars.get(ptyId)
+
     if (!current) {
       return
     }
+
     current.delete(watcher)
+
     if (current.size === 0) {
       ptyDataSidecars.delete(ptyId)
     }

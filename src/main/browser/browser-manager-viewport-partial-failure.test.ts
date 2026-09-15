@@ -24,6 +24,7 @@ vi.mock('electron', () => ({
   screen: { getCursorScreenPoint: mocks.screenGetCursorScreenPointMock },
   webContents: { fromId: mocks.webContentsFromIdMock }
 }))
+
 vi.mock('./popup-origin-bar-window', () => ({
   openPopupWithOriginBar: mocks.openPopupWithOriginBarMock
 }))
@@ -37,6 +38,7 @@ import {
 import { createViewportGuestFactory } from './browser-manager-viewport-test-fixtures'
 
 const makeGuest = createViewportGuestFactory(mocks)
+
 const OVERRIDE = { width: 375, height: 667, deviceScaleFactor: 2, mobile: true } as const
 
 describe('browserManager viewport partial failure', () => {
@@ -76,6 +78,7 @@ describe('browserManager viewport partial failure', () => {
     const beforeMouseEvent = mocks.guestOnMock.mock.calls.findLast(
       ([event]) => event === 'before-mouse-event'
     )?.[1] as ((event: Electron.Event, mouse: Electron.MouseInputEvent) => void) | undefined
+
     expect(beforeMouseEvent).toBeDefined()
     const preventDefault = vi.fn()
     beforeMouseEvent?.(
@@ -129,6 +132,7 @@ describe('browserManager viewport partial failure', () => {
     const beforeMouseEvent = mocks.guestOnMock.mock.calls.findLast(
       ([event]) => event === 'before-mouse-event'
     )?.[1] as ((event: Electron.Event, mouse: Electron.MouseInputEvent) => void) | undefined
+
     expect(beforeMouseEvent).toBeDefined()
     const preventDefault = vi.fn()
     beforeMouseEvent?.(

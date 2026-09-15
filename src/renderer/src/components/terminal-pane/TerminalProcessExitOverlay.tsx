@@ -13,6 +13,7 @@ export function TerminalProcessExitOverlay({
   onClose: () => void
 }): React.JSX.Element {
   const capacityError = processExit.reason === 'git-bash-console-capacity'
+
   const title = capacityError
     ? translate(
         'auto.components.terminal.pane.TerminalProcessExitOverlay.capacityTitle',
@@ -22,6 +23,7 @@ export function TerminalProcessExitOverlay({
         'auto.components.terminal.pane.TerminalProcessExitOverlay.failedTitle',
         'Terminal exited'
       )
+
   const detail = capacityError
     ? translate(
         'auto.components.terminal.pane.TerminalProcessExitOverlay.capacityDetail',

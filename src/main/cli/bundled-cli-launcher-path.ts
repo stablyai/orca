@@ -13,11 +13,14 @@ export function getBundledLauncherPath(
   if (platform === 'darwin') {
     return join(resourcesPath, 'bin', 'orca')
   }
+
   if (platform === 'linux') {
     return join(resourcesPath, 'bin', LINUX_CLI_COMMAND_NAME)
   }
+
   if (platform === 'win32') {
     return join(resourcesPath, 'bin', 'orca.exe')
   }
+
   return null
 }

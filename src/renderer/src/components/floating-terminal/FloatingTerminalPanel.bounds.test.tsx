@@ -26,6 +26,7 @@ import {
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const { createReactHookOverrides } = await import('./floating-terminal-panel-test-module-mocks')
+
   return { ...actual, ...createReactHookOverrides() }
 })
 
@@ -250,6 +251,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       width: 920,
       height: 560
     }
+
     setViewport(520, 360)
     getMockedLocalStorage().getItem.mockImplementation((key: string) =>
       key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY ? JSON.stringify(savedBounds) : null
@@ -278,6 +280,7 @@ describe('FloatingTerminalPanel close behavior', () => {
 
   it('does not persist a plain click on a default-positioned panel', async () => {
     const element = await renderPanel(true)
+
     const panel = findByProp(element, 'data-floating-terminal-panel')
 
     ;(panel.props.onMouseUp as (event: unknown) => void)({
@@ -296,6 +299,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     Object.setPrototypeOf(titlebarTarget, HTMLElement.prototype)
     vi.stubGlobal('document', { activeElement: null })
     const startBounds = getDefaultFloatingTerminalBounds()
+
     const expectedBounds = clampFloatingTerminalBounds({
       ...startBounds,
       left: startBounds.left + 24,
@@ -334,6 +338,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const element = await renderPanel(true)
     const resizeHandles = findByTypeName(element, 'FloatingTerminalResizeHandles')
     const startBounds = getDefaultFloatingTerminalBounds()
+
     const previewBounds = {
       ...startBounds,
       width: startBounds.width - 80,
@@ -367,7 +372,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     )
 
     let element = await renderPanel(true)
+
     const controls = findByTypeName(element, 'FloatingTerminalWindowControls')
+
     ;(controls.props.onToggleMaximized as () => void)()
 
     element = await renderPanel(true)
@@ -380,6 +387,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     )
 
     const restoredControls = findByTypeName(element, 'FloatingTerminalWindowControls')
+
     ;(restoredControls.props.onToggleMaximized as () => void)()
     element = await renderPanel(true)
 
@@ -398,6 +406,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       if (key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY) {
         return JSON.stringify(savedBounds)
       }
+
       return key === FLOATING_TERMINAL_PANEL_VIEW_STATE_STORAGE_KEY
         ? JSON.stringify({ open: true, maximized: true })
         : null
@@ -407,6 +416,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(getPanelStyleBounds(element)).toEqual(getMaximizedFloatingTerminalBounds())
 
     const controls = findByTypeName(element, 'FloatingTerminalWindowControls')
+
     ;(controls.props.onToggleMaximized as () => void)()
     element = await renderPanel(true)
 
@@ -422,20 +432,25 @@ describe('FloatingTerminalPanel close behavior', () => {
       width: 920,
       height: 560
     }
+
     setViewport(520, 360)
     getMockedLocalStorage().getItem.mockImplementation((key: string) =>
       key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY ? JSON.stringify(savedBounds) : null
     )
 
     let element = await renderPanel(true)
+
     const controls = findByTypeName(element, 'FloatingTerminalWindowControls')
+
     ;(controls.props.onToggleMaximized as () => void)()
 
     element = await renderPanel(true)
     expect(getPanelStyleBounds(element)).toEqual(getMaximizedFloatingTerminalBounds())
 
     setViewport(1200, 800)
+
     const restoredControls = findByTypeName(element, 'FloatingTerminalWindowControls')
+
     ;(restoredControls.props.onToggleMaximized as () => void)()
     element = await renderPanel(true)
 

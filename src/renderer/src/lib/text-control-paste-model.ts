@@ -1,6 +1,9 @@
 export const TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES = 64 * 1024
+
 export const TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES = 16 * 1024
+
 export const TEXT_CONTROL_PASTE_MAX_BYTES = 16 * 1024 * 1024
+
 export const TEXT_CONTROL_PASTE_MEASURE_YIELD_CODE_UNITS = 64 * 1024
 
 export type TextControlPasteSource = 'app-menu' | 'clipboard' | 'primary-selection' | 'programmatic'

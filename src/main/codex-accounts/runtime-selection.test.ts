@@ -23,6 +23,7 @@ function createAccount(
   overrides: Partial<CodexManagedAccount> & Pick<CodexManagedAccount, 'id'>
 ): CodexManagedAccount {
   const { id, ...rest } = overrides
+
   return {
     id,
     email: `${id}@example.com`,
@@ -45,6 +46,7 @@ describe('Codex runtime account selection', () => {
     const first = setSelectedCodexAccountIdForTarget({ host: null, wsl: {} }, 'host-account', {
       runtime: 'host'
     })
+
     const next = setSelectedCodexAccountIdForTarget(first, 'wsl-account', {
       runtime: 'wsl',
       wslDistro: 'Ubuntu'

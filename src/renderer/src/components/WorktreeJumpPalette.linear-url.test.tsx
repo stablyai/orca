@@ -27,6 +27,7 @@ vi.mock('@/lib/cmd-j-github-url-lookup', () => ({
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
+
   return {
     ...actual,
     useTranslation: () => ({
@@ -63,6 +64,7 @@ vi.mock('@/components/cmd-j/palette-host-badge', () => ({
 
 vi.mock('@/components/ui/command', async () => {
   const React = await import('react')
+
   return {
     Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     CommandGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -78,6 +80,7 @@ vi.mock('@/components/ui/command', async () => {
       onOpenChange?: (open: boolean) => void
     }) => {
       requestCommandDialogClose = () => onOpenChange?.(false)
+
       return open ? (
         <div data-command-dialog="true" data-command-value={commandProps?.value ?? ''}>
           {children}
@@ -92,6 +95,7 @@ vi.mock('@/components/ui/command', async () => {
       onValueChange?: (next: string) => void
     }) => {
       setCommandQuery = onValueChange ?? null
+
       return (
         <input
           data-command-input="true"
@@ -134,10 +138,15 @@ vi.mock('@/components/ui/command', async () => {
 })
 
 const LINEAR_URL = 'https://linear.app/stably/issue/STA-4084/restore-osc-133-shell-integration'
+
 const initialAppState = useAppStore.getInitialState()
+
 let testRoot: Root
+
 let testContainer: HTMLDivElement
+
 let setCommandQuery: ((next: string) => void) | null = null
+
 let requestCommandDialogClose: (() => void) | null = null
 
 function makeLinearIssue(patch: Partial<LinearIssue> = {}): LinearIssue {
@@ -162,6 +171,7 @@ function makeLinearIssue(patch: Partial<LinearIssue> = {}): LinearIssue {
 
 function deferredValue<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   return {
     promise: new Promise<T>((next) => {
       resolve = next
@@ -278,6 +288,7 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     const pendingRow = testContainer.querySelector<HTMLElement>(
       '[data-cmd-j-linear-issue-preview="true"]'
     )
+
     expect(getRenderedRowIds().find(Boolean)).toBe('__create_worktree__')
     expect(getCommandValue()).toBe('__create_worktree__')
     expect(pendingRow?.dataset.cmdJLinearIssueState).toBe('loading')
@@ -321,6 +332,7 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
     const resolvedRow = testContainer.querySelector<HTMLElement>(
       '[data-cmd-j-linear-issue-preview="true"]'
     )
+
     expect(resolvedRow?.dataset.cmdJLinearIssueState).toBe('resolved')
     expect(resolvedRow?.textContent).toContain('STA-4084')
     expect(resolvedRow?.textContent).toContain('Restore OSC 133 shell integration')
@@ -392,6 +404,7 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
       kind: 'folder' as const,
       executionHostId: 'runtime:folder-env'
     }
+
     const fetchLinearIssue = vi.fn(async () => makeLinearIssue())
     const prefetchWorktreeCreateBase = vi.fn(async () => {})
     await renderPalette({
@@ -450,17 +463,20 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
 
   it('maps a runtime-owned active repo to its eligible project sibling', async () => {
     const unrelatedRepo = { ...makeRepo(), id: 'unrelated-repo' }
+
     const localSibling = {
       ...makeRepo(),
       id: 'local-sibling',
       upstream: { owner: 'stablyai', repo: 'orca' }
     }
+
     const runtimeOwnedRepo = {
       ...makeRepo(),
       id: 'runtime-owned',
       connectionId: 'runtime-ssh-workspace-1',
       upstream: { owner: 'stablyai', repo: 'orca' }
     }
+
     const fetchLinearIssue = vi.fn(async () => makeLinearIssue())
     await renderPalette({
       activeRepoId: runtimeOwnedRepo.id,
@@ -585,9 +601,11 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
 
     await act(async () => {
       flushSync(() => setCommandQuery?.('https://linear.app/stably/issue/STA-4099/second'))
+
       const currentPendingRow = testContainer.querySelector<HTMLElement>(
         '[data-cmd-j-linear-issue-preview="true"]'
       )
+
       expect(currentPendingRow?.getAttribute('aria-label')).toBe(
         'Create worktree from Linear issue STA-4099'
       )
@@ -628,6 +646,7 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
       linkedLinearIssue: 'STA-4084',
       linkedLinearIssueOrganizationUrlKey: 'stably'
     })
+
     const other = makeWorktree('wt-other', 'Unrelated workspace')
     await renderPalette({
       fetchLinearIssue: vi.fn(async () => makeLinearIssue()),
@@ -647,6 +666,7 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
 
   it('resolves a pasted GitHub issue URL and opens create with the linked issue', async () => {
     const githubIssueUrl = 'https://github.com/stablyai/orca/issues/14198'
+
     const githubIssue = {
       id: 'issue-14198',
       type: 'issue',
@@ -659,6 +679,7 @@ describe('WorktreeJumpPalette Linear URL intent', () => {
       author: 'nwparker',
       repoId: 'repo-1'
     } satisfies GitHubWorkItem
+
     lookupCmdJGitHubUrlWorkItem.mockResolvedValue(githubIssue)
     await renderPalette({
       prefetchWorktreeCreateBase: vi.fn(async () => {})

@@ -10,14 +10,18 @@ export function markSimulatorDeviceState(
   }
 
   let changed = false
+
   const next = devices.map((device) => {
     if (device.udid !== target && device.name !== target) {
       return device
     }
+
     if (device.state === state) {
       return device
     }
+
     changed = true
+
     return { ...device, state }
   })
 

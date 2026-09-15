@@ -13,6 +13,7 @@ import type { ScrollState } from './pane-manager-types'
 
 function createTerminal(viewportY: number, baseY: number) {
   const active = { type: 'normal', viewportY, baseY }
+
   return {
     buffer: { active },
     scrollToBottom: vi.fn(() => {
@@ -26,9 +27,11 @@ function createTerminal(viewportY: number, baseY: number) {
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = (): void => {}
+
   const promise = new Promise<void>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -54,6 +57,7 @@ describe('terminal structural replay coordinator', () => {
       terminal.buffer.active.viewportY = 200
       terminal.buffer.active.baseY = 200
     })
+
     const second = coordinator.run(async () => {
       starts.push('second')
       terminal.buffer.active.viewportY = 0
@@ -116,6 +120,7 @@ describe('terminal structural replay coordinator', () => {
       })
       await neverParsed
     })
+
     await Promise.resolve()
     await Promise.resolve()
     coordinator.dispose()
@@ -131,19 +136,24 @@ describe('terminal structural replay coordinator', () => {
     const cancelAnimationFrame = vi.fn()
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       rafCallbacks.push(callback)
+
       return rafCallbacks.length
     })
     vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
+
     const terminal = createTerminal(80, 100) as ReturnType<typeof createTerminal> & {
       element: object | null
     }
+
     terminal.element = null
+
     const staleState: ScrollState = {
       bufferType: 'normal',
       wasAtBottom: false,
       viewportY: 20,
       baseY: 100
     }
+
     restoreScrollStateAfterFit(terminal as never, staleState, {
       onRestored: vi.fn(),
       shouldRestore: () => true
@@ -153,6 +163,7 @@ describe('terminal structural replay coordinator', () => {
     markTerminalPinnedViewport(terminal)
     const coordinator = createTerminalStructuralReplayCoordinator(terminal)
     const parsed = deferred()
+
     const completion = coordinator.run(async () => {
       terminal.buffer.active.viewportY = 0
       terminal.buffer.active.baseY = 0
@@ -160,6 +171,7 @@ describe('terminal structural replay coordinator', () => {
       terminal.buffer.active.viewportY = 200
       terminal.buffer.active.baseY = 200
     })
+
     await Promise.resolve()
     await Promise.resolve()
     expect(cancelAnimationFrame).toHaveBeenCalledWith(1)
@@ -216,6 +228,7 @@ describe('terminal structural replay coordinator', () => {
         }
       }
     )
+
     const second = coordinator.run(() => {
       events.push('second-replay')
     })
@@ -233,6 +246,7 @@ describe('terminal structural replay coordinator', () => {
     const coordinator = createTerminalStructuralReplayCoordinator(terminal)
     const fitNeverCompletes = new Promise<void>(() => {})
     const fitStarted = deferred()
+
     const completion = coordinator.run(() => undefined, {
       afterRestore: async () => {
         fitStarted.resolve()

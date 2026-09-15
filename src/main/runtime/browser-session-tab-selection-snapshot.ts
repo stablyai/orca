@@ -25,8 +25,10 @@ export function applyBrowserSessionTabSelection(args: {
 }): BrowserSessionTabSelectionResult {
   const { snapshot, tabId, targetGroupId, focusesHost } = args
   const groups = snapshot.tabGroups ?? []
+
   const placedInTargetGroup =
     targetGroupId !== undefined && groups.some((group) => group.id === targetGroupId)
+
   // Why: move the new browser into the group whose "+" was clicked, removing it from wherever the
   // rebuild placed it. Only the TARGET group's activeTabId (and the global active) change — every
   // other group's active tab is left intact, so creating in the right group never resets the left
@@ -34,6 +36,7 @@ export function applyBrowserSessionTabSelection(args: {
   const nextGroups = placedInTargetGroup
     ? groups.map((group) => {
         const withoutTab = group.tabOrder.filter((id) => id !== tabId)
+
         if (group.id === targetGroupId) {
           return {
             ...group,
@@ -41,6 +44,7 @@ export function applyBrowserSessionTabSelection(args: {
             ...(focusesHost ? { activeTabId: tabId } : {})
           }
         }
+
         return withoutTab.length === group.tabOrder.length
           ? group
           : { ...group, tabOrder: withoutTab }
@@ -50,6 +54,7 @@ export function applyBrowserSessionTabSelection(args: {
           group.tabOrder.includes(tabId) ? { ...group, activeTabId: tabId } : group
         )
       : groups
+
   return {
     groups: nextGroups,
     placedInTargetGroup,

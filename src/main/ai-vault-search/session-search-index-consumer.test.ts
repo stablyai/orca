@@ -13,7 +13,9 @@ import {
 import { SessionSearchStore } from './session-search-store'
 
 let index: SessionSearchIndexFile
+
 let store: SessionSearchStore
+
 let errors: unknown[]
 
 beforeEach(async () => {
@@ -53,6 +55,7 @@ it('appends onto its own cursor and carries the content hash forward', async () 
     messages: userMessages('first half', 3),
     outcome: { byteOffset: 100 }
   })
+
   const first = index.db
     .prepare('SELECT content_hash AS hash, content_hash_count AS count FROM sessions')
     .get() as { hash: string; count: number }
@@ -66,9 +69,11 @@ it('appends onto its own cursor and carries the content hash forward', async () 
 
   expect(indexedMessages()).toBe(5)
   expect(cursor()).toBe(220)
+
   const second = index.db
     .prepare('SELECT content_hash AS hash, content_hash_count AS count FROM sessions')
     .get() as { hash: string; count: number }
+
   expect(second.count).toBe(first.count + 2)
   expect(second.hash).not.toBe(first.hash)
   expect(owed()).toMatchObject({ state: 'current', fail_count: 0 })
@@ -209,6 +214,7 @@ it('writes nothing for a source whose parser cannot reach the channel', async ()
     ...syntheticCandidate({ path: '/opencode/opencode.db#session-1' }),
     agent: 'opencode' as const
   }
+
   replayTranscriptRead({
     candidate,
     messages: [],

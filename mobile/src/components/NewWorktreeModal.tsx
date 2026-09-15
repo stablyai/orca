@@ -39,6 +39,7 @@ export function NewWorktreeModal(props: NewWorktreeModalProps) {
   // this subtree, and a counter bumped during a render React then throws away
   // would restart the session for an opening that never committed.
   const [session, setSession] = useState({ openEpoch: 0, visible: props.visible })
+
   if (session.visible !== props.visible) {
     setSession({
       openEpoch: props.visible ? session.openEpoch + 1 : session.openEpoch,
@@ -65,48 +66,60 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     onCreated,
     onClose
   } = props
+
   const { repos, selectedRepo, setSelectedRepo, loading } = useNewWorkspaceRepositories({
     client,
     hostId,
     visible
   })
+
   const navigation = useNewWorktreeDrawerNavigation(visible)
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const runtime = useNewWorkspaceRuntimeContext(client, visible, hostId)
+
   const { tasksSupported, hostPlatform, getWorktreeCreateCutoverSupport } =
     useNewWorktreeRuntimeCapabilities(client, visible)
+
   const selectedRepoConnectionId = selectedRepo?.connectionId ?? null
+
   const executionTarget = useNewWorkspaceExecutionTarget({
     client,
     connectionId: selectedRepoConnectionId,
     visible
   })
+
   const setupScript = useNewWorkspaceSetupScript({ client, selectedRepo })
+
   const selectedRepoWorktreeBranches = useMemo(
     () => getComposerRepoWorktreeBranches(existingWorktrees ?? [], selectedRepo?.id ?? null),
     [existingWorktrees, selectedRepo]
   )
+
   const composer = useMobileComposerSource({
     client,
     selectedRepoId: selectedRepo?.id ?? null,
     worktreeBranches: selectedRepoWorktreeBranches,
     onError: setError
   })
+
   const agentSelection = useNewWorkspaceAgentSelection({
     visible,
     runtimeSettings: runtime.runtimeSettings,
     detectedAgentIds: executionTarget.detectedAgentIds
   })
+
   const retiredNamesRefreshKey = useMemo(
     () => buildRetiredWorktreeNamesRefreshKey(existingWorktreePaths),
     [existingWorktreePaths]
   )
+
   const retiredWorktreeNames = useRetiredWorktreeNames(
     client,
     selectedRepo?.id,
     retiredNamesRefreshKey
   )
+
   const createSubmit = useNewWorkspaceCreateSubmit({
     client,
     selectedRepo,
@@ -136,6 +149,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   })
 
   const selectedRepoIsGit = selectedRepo ? selectedRepo.kind !== 'folder' : true
+
   const sourceAvailability: SmartModeAvailabilityInput = {
     textOnly: selectedRepo != null && !selectedRepoIsGit,
     tasksSupported,
@@ -144,6 +158,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     gitlabAvailable: runtime.availableProviders.includes('gitlab'),
     linearAvailable: runtime.availableProviders.includes('linear')
   }
+
   const pasteRepos = useMemo<PasteRepoCandidate[]>(
     () =>
       repos.map((repo) => ({
@@ -153,18 +168,24 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       })),
     [repos]
   )
+
   const projectPickerItems = useMemo(() => buildNewWorkspaceProjectOptions(repos), [repos])
   const selectedProjectId = selectedRepo ? getProjectIdentityKey(selectedRepo) : null
+
   const selectedProject =
     projectPickerItems.find((project) => project.id === selectedProjectId) ?? null
+
   const runTargetPickerItems = useMemo(
     () => buildNewWorkspaceRunTargetOptions(repos, selectedProjectId, hostPlatform),
     [hostPlatform, repos, selectedProjectId]
   )
+
   const selectedRunTarget = selectedRepo
     ? getNewWorkspaceRunTarget(selectedRepo, hostPlatform)
     : null
+
   const needsSetupChoice = Boolean(setupScript.setupCommand) && setupScript.setupRunPolicy === 'ask'
+
   const canCreate =
     selectedRepo != null &&
     !createSubmit.creating &&
@@ -179,6 +200,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   function selectRepo(repo: MobileWorkspaceRepo, clearRepoScopedSource: boolean): void {
     const repoChanged = repo.id !== selectedRepo?.id
     setSelectedRepo(repo)
+
     if (
       clearRepoScopedSource &&
       repoChanged &&

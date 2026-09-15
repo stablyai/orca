@@ -10,6 +10,7 @@ export class HostClientOpenRegistry {
 
   getActivePromise(hostId: string): Promise<void> | null {
     const ticket = this.pending.get(hostId)
+
     return ticket && !ticket.cancelled ? ticket.promise : null
   }
 
@@ -19,18 +20,22 @@ export class HostClientOpenRegistry {
       generation: this.advanceGeneration(hostId),
       promise
     }
+
     this.pending.set(hostId, ticket)
+
     return ticket
   }
 
   cancel(hostId: string): void {
     const ticket = this.pending.get(hostId)
+
     if (ticket) {
       ticket.cancelled = true
       // Why: the host lookup may never settle; release the registry's strong
       // reference immediately while the ticket still cancels its continuation.
       this.pending.delete(hostId)
     }
+
     this.advanceGeneration(hostId)
   }
 
@@ -53,12 +58,14 @@ export class HostClientOpenRegistry {
       ticket.cancelled = true
       this.advanceGeneration(hostId)
     }
+
     this.pending.clear()
   }
 
   private advanceGeneration(hostId: string): number {
     const generation = (this.generations.get(hostId) ?? 0) + 1
     this.generations.set(hostId, generation)
+
     return generation
   }
 }

@@ -90,18 +90,22 @@ describe('isNativeChatSkillForAgent', () => {
         }
       ]
     } satisfies Pick<SkillDiscoveryResult, 'sources'>
+
     // A symlinked skill deduped under the Codex root but also reachable
     // through the shared root stays visible to every agent.
     const merged = skill({
       rootPath: '/Users/test/.codex/skills',
       rootPaths: ['/Users/test/.codex/skills', '/Users/test/.agents/skills']
     })
+
     expect(isNativeChatSkillForAgent('claude', merged, result)).toBe(true)
     expect(isNativeChatSkillForAgent('codex', merged, result)).toBe(true)
+
     const codexOnly = skill({
       rootPath: '/Users/test/.codex/skills',
       rootPaths: ['/Users/test/.codex/skills']
     })
+
     expect(isNativeChatSkillForAgent('claude', codexOnly, result)).toBe(false)
   })
 })

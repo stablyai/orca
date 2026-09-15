@@ -132,11 +132,13 @@ export default function OnboardingFlow({
   const copy = stepCopy[currentStep.id]
   const shouldShowSkipToProjectSetup = currentStep.id !== 'notifications'
   const shouldShowFooterBusy = Boolean(busyLabel)
+
   const footerPrimaryLabel =
     busyLabel ??
     (currentStep.id === 'notifications'
       ? translate('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
       : translate('components.onboarding.flow.actions.continue', 'Continue'))
+
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
   const { next: flowNext, dismissOnboarding: flowDismissOnboarding } = flow
@@ -148,6 +150,7 @@ export default function OnboardingFlow({
       if (busyLabel || skipConfirmOpen) {
         return
       }
+
       skipConfirmAdvancedViaRef.current = advancedVia
       setSkipConfirmOpen(true)
     },
@@ -169,15 +172,19 @@ export default function OnboardingFlow({
       if (isEditableTarget(event.target)) {
         return
       }
+
       // Why: onboarding continue is screen-local submit behavior, not a
       // user-configurable app command.
       if (!isScreenSubmitShortcut(event)) {
         return
       }
+
       event.preventDefault()
       void flowNext('keyboard')
     }
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
+
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [flowNext])
 
@@ -186,10 +193,13 @@ export default function OnboardingFlow({
       if (event.key !== 'Escape' || skipConfirmOpen) {
         return
       }
+
       event.preventDefault()
       requestSkipConfirmation('keyboard')
     }
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
+
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [requestSkipConfirmation, skipConfirmOpen])
 
@@ -202,6 +212,7 @@ export default function OnboardingFlow({
           if (!shouldRequestOnboardingSkipConfirmation(event)) {
             return
           }
+
           requestSkipConfirmation('button')
         }}
       >
@@ -242,6 +253,7 @@ export default function OnboardingFlow({
                 const isActive = realStepIndex === stepIndex
                 const isDone = realStepIndex < stepIndex
                 const stepTooltipLabel = stepTooltipLabels[step.id].value
+
                 return (
                   <Tooltip key={step.id}>
                     <TooltipTrigger asChild>

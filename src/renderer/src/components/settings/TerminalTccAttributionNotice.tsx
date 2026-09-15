@@ -27,11 +27,14 @@ export function useMacTccAttributionSevered(refreshRevision = 0): boolean {
 
   useEffect(() => {
     void refresh()
+
     // Why: a daemon restart or drain changes the verdict without a pane remount.
     const onFocus = (): void => {
       void refresh()
     }
+
     window.addEventListener('focus', onFocus)
+
     return () => window.removeEventListener('focus', onFocus)
   }, [refresh, refreshRevision])
 

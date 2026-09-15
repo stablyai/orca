@@ -47,6 +47,7 @@ async function resumeCodexThread(
   if (resumeMetadataUnsupported.has(connection)) {
     return connection.request('thread/resume', params, { timeoutMs })
   }
+
   try {
     return await connection.request(
       'thread/resume',
@@ -57,7 +58,9 @@ async function resumeCodexThread(
     if (!isExcludeTurnsUnsupported(error)) {
       throw error
     }
+
     resumeMetadataUnsupported.add(connection)
+
     return connection.request('thread/resume', params, { timeoutMs })
   }
 }
@@ -74,25 +77,33 @@ export async function openCodexThread(
         ...(launch.resumePath ? { path: launch.resumePath } : {})
       }
     : null
+
   const opened = resumeParams
     ? await resumeCodexThread(connection, resumeParams, timeoutMs)
     : await connection.request('thread/start', { cwd: launch.cwd }, { timeoutMs })
+
   const threadId = readCodexThreadId(opened)
+
   if (!threadId) {
     throw new Error('codex app-server did not name the thread it opened')
   }
+
   if (launch.resumeThreadId && threadId !== launch.resumeThreadId) {
     throw new Error(`codex app-server resumed ${threadId} instead of ${launch.resumeThreadId}`)
   }
+
   const result = opened as Record<string, unknown>
+
   const thread =
     typeof result.thread === 'object' && result.thread !== null
       ? (result.thread as Record<string, unknown>)
       : {}
+
   const model = nonEmptyString(result.model)
   const effort = nonEmptyString(result.reasoningEffort)
   const serviceTierKnown = Object.hasOwn(result, 'serviceTier')
   const serviceTier = nonEmptyString(result.serviceTier)
+
   return {
     threadId,
     thread,

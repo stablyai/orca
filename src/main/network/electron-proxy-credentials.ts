@@ -37,6 +37,7 @@ function normalizeProxyHost(host: string): string {
 export function separateElectronProxyCredentials(proxyUrl: string): ElectronProxyConfig {
   const url = new URL(proxyUrl)
   const hasCredentials = Boolean(url.username || url.password)
+
   const credentials = hasCredentials
     ? {
         host: normalizeProxyHost(url.hostname),
@@ -45,9 +46,11 @@ export function separateElectronProxyCredentials(proxyUrl: string): ElectronProx
         password: decodeProxyCredential(url.password)
       }
     : null
+
   url.username = ''
   url.password = ''
   const normalized = normalizeProxyUrl(url.toString())
+
   return { proxyRules: normalized.ok ? normalized.value : '', credentials }
 }
 
@@ -97,11 +100,15 @@ export function handleElectronProxyLogin(
   if (!authInfo.isProxy) {
     return
   }
+
   const proxySession = webContents?.session ?? defaultProxySession
+
   if (!proxySession) {
     return
   }
+
   const credentials = proxyCredentialsBySession.get(proxySession)
+
   if (
     !credentials ||
     credentials.host !== normalizeProxyHost(authInfo.host) ||
@@ -109,6 +116,7 @@ export function handleElectronProxyLogin(
   ) {
     return
   }
+
   event.preventDefault()
   callback(credentials.username, credentials.password)
 }

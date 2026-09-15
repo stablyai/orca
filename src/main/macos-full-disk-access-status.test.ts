@@ -6,7 +6,9 @@ import {
 } from './macos-full-disk-access-status'
 
 const originalPlatform = process.platform
+
 const homeDirectory = join('Users', 'tester')
+
 const databasePath = join(
   homeDirectory,
   'Library',

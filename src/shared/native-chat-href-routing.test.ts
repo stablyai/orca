@@ -64,9 +64,11 @@ describe('routeNativeChatHref', () => {
 
   it('bounds nested renderer file target decoding', () => {
     let href = '/tmp/report.html'
+
     for (let depth = 0; depth < 4; depth += 1) {
       href = createNativeChatFileHref(` ${href}`)
     }
+
     expect(routeNativeChatHref(href)).toEqual({
       kind: 'file',
       pathText: '/tmp/report.html',

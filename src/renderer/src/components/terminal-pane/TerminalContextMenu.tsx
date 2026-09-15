@@ -80,6 +80,7 @@ type TerminalContextMenuProps = {
 
 export default function TerminalContextMenu(props: TerminalContextMenuProps): React.JSX.Element {
   const { open, onOpenChange, menuPoint, menuOpenedAtRef } = props
+
   return (
     <DropdownMenu
       open={open}
@@ -87,6 +88,7 @@ export default function TerminalContextMenu(props: TerminalContextMenuProps): Re
         if (!nextOpen && Date.now() - menuOpenedAtRef.current < 100) {
           return
         }
+
         onOpenChange(nextOpen)
       }}
       modal={false}
@@ -183,9 +185,11 @@ function TerminalContextMenuItems({
     }),
     [keybindings]
   )
+
   const showEqualizeShortcut = shortcuts.equalize !== 'Unassigned'
   const showSetTitleShortcut = shortcuts.setTitle !== 'Unassigned'
   const showClearPaneTitleShortcut = shortcuts.clearPaneTitle !== 'Unassigned'
+
   return (
     <>
       <DropdownMenuItem onSelect={onCopy}>

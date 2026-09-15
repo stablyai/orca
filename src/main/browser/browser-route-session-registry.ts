@@ -41,13 +41,16 @@ import type {
 } from './browser-route-session-state'
 
 export type { BrowserRouteElectronSession } from './browser-route-session-policy'
+
 export type {
   BrowserRoutePartitionBindingStore,
   BrowserRouteSessionRegistryDependencies
 } from './browser-route-session-registry-contract'
 
 const DEFAULT_MAX_LIVE_PARTITIONS = 64
+
 const DEFAULT_MAX_PAGES_PER_PARTITION = 64
+
 export class BrowserRouteSessionRegistry {
   private readonly derivePartition: NonNullable<
     BrowserRouteSessionRegistryDependencies['derivePartition']
@@ -117,9 +120,11 @@ export class BrowserRouteSessionRegistry {
       input.rendererWebContentsId
     )
     const rendererFence = this.rendererPrepareFences.begin(input.rendererWebContentsId)
+
     try {
       const handle = await this.preparePageForCurrentRenderer(input, rendererFence)
       rendererFence.assertCurrent()
+
       return handle
     } finally {
       rendererFence.release()
@@ -131,15 +136,19 @@ export class BrowserRouteSessionRegistry {
     rendererFence: BrowserRouteRendererPrepareFence
   ): Promise<BrowserRouteSessionHandle> {
     this.dependencies.validateProfile(input.identity.browserProfileId)
+
     const derived = resolveBrowserRouteSessionPartition(
       this.dependencies,
       input,
       this.derivePartition
     )
+
     let state = this.live.get(derived.partition)
+
     if (state) {
       this.assertReusable(state, derived, input.proxyEndpoint)
       rendererFence.assertCurrent()
+
       return this.linkPage(
         state,
         input.browserPageId,
@@ -149,20 +158,25 @@ export class BrowserRouteSessionRegistry {
     }
 
     const pending = this.pending.get(derived.partition)
+
     if (pending) {
       this.assertReusable(pending, derived, input.proxyEndpoint)
+
       return this.linkPendingPage(pending, input, rendererFence)
     }
 
     if (this.live.size + this.pending.size >= this.maxLivePartitions) {
       throw new Error('browser_route_partition_capacity')
     }
+
     persistBrowserRouteSessionBinding(this.dependencies, derived, input.storageScope)
+
     const promise = this.preparePartition(
       derived,
       input.identity.browserProfileId,
       input.proxyEndpoint
     )
+
     const pendingState = {
       partition: derived.partition,
       bindingFingerprint: derived.bindingFingerprint,
@@ -172,7 +186,9 @@ export class BrowserRouteSessionRegistry {
       waiters: 0,
       admitted: false
     }
+
     this.pending.set(derived.partition, pendingState)
+
     return this.linkPendingPage(pendingState, input, rendererFence)
   }
 
@@ -188,16 +204,20 @@ export class BrowserRouteSessionRegistry {
     if (pending.waiters >= this.maxPagesPerPartition) {
       throw new Error('browser_route_partition_pending_capacity')
     }
+
     pending.waiters += 1
+
     try {
       const state = await pending.promise
       pending.state = state
       rendererFence.assertCurrent()
+
       if (!pending.admitted) {
         this.live.set(state.partition, state)
         this.partitionBySession.set(state.session, state.partition)
         pending.admitted = true
       }
+
       try {
         return this.linkPage(
           state,
@@ -211,10 +231,12 @@ export class BrowserRouteSessionRegistry {
       }
     } finally {
       pending.waiters -= 1
+
       if (pending.waiters === 0) {
         if (this.pending.get(pending.partition) === pending) {
           this.pending.delete(pending.partition)
         }
+
         if (!pending.admitted && pending.state) {
           this.clearUnadmittedPartition(pending.state)
         }
@@ -230,6 +252,7 @@ export class BrowserRouteSessionRegistry {
     if (state.bindingFingerprint !== derived.bindingFingerprint) {
       throw new Error('browser_route_partition_binding_conflict')
     }
+
     if (!sameBrowserRouteProxyEndpoint(state.proxyEndpoint, proxyEndpoint)) {
       throw new Error('browser_route_partition_proxy_retarget')
     }
@@ -246,6 +269,7 @@ export class BrowserRouteSessionRegistry {
       proxyEndpoint,
       dependencies: this.dependencies
     })
+
     return {
       partition: derived.partition,
       bindingFingerprint: derived.bindingFingerprint,
@@ -263,6 +287,7 @@ export class BrowserRouteSessionRegistry {
     rendererWebContentsId: number
   ): BrowserRouteSessionHandle {
     const page = state.pages.link(browserPageId, pageHostGeneration, rendererWebContentsId)
+
     return {
       partition: state.partition,
       release: () => void this.retirePreparedPage(page)
@@ -271,6 +296,7 @@ export class BrowserRouteSessionRegistry {
 
   private settlePageRetirement(state: PreparedPartition, page: BrowserRoutePageAuthority): void {
     let retired = false
+
     try {
       retired = this.dependencies.retirePageAuthority({
         ...page,
@@ -279,9 +305,11 @@ export class BrowserRouteSessionRegistry {
     } catch {
       // Keep route policy installed until exact guest destruction can be confirmed.
     }
+
     if (retired) {
       state.pages.completeRetirement(page)
     }
+
     this.finalizePartitionIfIdle(state)
   }
 
@@ -302,7 +330,9 @@ export class BrowserRouteSessionRegistry {
     if (!state.pages.isIdle() || this.live.get(state.partition) !== state) {
       return
     }
+
     this.live.delete(state.partition)
+
     try {
       this.dependencies.clearPolicies({ partition: state.partition, session: state.session })
     } catch {

@@ -44,10 +44,12 @@ function agentNames(
   agentByRootPath: ReadonlyMap<string, string>
 ): string[] {
   const roots = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
+
   const labels = roots
     .map((root) => agentByRootPath.get(root))
     .filter((agent): agent is string => Boolean(agent))
     .map(skillAgentLabel)
+
   return [...new Set(labels)].sort((left, right) => left.localeCompare(right))
 }
 
@@ -83,6 +85,7 @@ export function SkillDetailDialog({
 
   const revealSkill = async (): Promise<void> => {
     const result = await window.api.shell.openInFileManager(skill.skillFilePath)
+
     if (!result.ok) {
       toast.error(
         translate('auto.components.skills.SkillsPage.995fde8337', 'Could not reveal skill file')

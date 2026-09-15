@@ -17,6 +17,7 @@ export function formatInProcessRemoteCliResult(
   json: boolean
 ): RemoteOrcaCliResult {
   const command = parsed.commandPath.join(' ')
+
   const formatted =
     command === 'orchestration check'
       ? formatRemoteOrchestrationCheck(
@@ -30,7 +31,9 @@ export function formatInProcessRemoteCliResult(
         : json
           ? { stdout: `${JSON.stringify(response, null, 2)}\n`, stderr: '' }
           : formatRemoteCli(response)
+
   const postOutput = getRemoteCliPostOutput(parsed, env, response)
+
   return {
     stdout: formatted.stdout,
     stderr: formatted.stderr,

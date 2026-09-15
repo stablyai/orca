@@ -2,17 +2,22 @@ import { spawn } from 'node:child_process'
 import type { SystemResolverHealth } from '../daemon/types'
 
 const MAC_RESOLVER_CHECK_TIMEOUT_MS = 1_500
+
 const MAC_NO_DNS_CONFIGURATION_RE = /\bNo DNS configuration available\b/i
+
 const MAC_DNS_CONFIGURATION_RE = /^DNS configuration\b/m
+
 const MAC_NAMESERVER_RE = /nameserver\[\d+\]\s*:/m
 
 export function classifyMacSystemResolverHealth(scutilOutput: string): SystemResolverHealth {
   if (MAC_NO_DNS_CONFIGURATION_RE.test(scutilOutput)) {
     return 'unhealthy'
   }
+
   if (MAC_DNS_CONFIGURATION_RE.test(scutilOutput) && MAC_NAMESERVER_RE.test(scutilOutput)) {
     return 'healthy'
   }
+
   return 'unknown'
 }
 
@@ -28,28 +33,36 @@ export async function readCurrentProcessMacSystemResolverHealth(
     let stderr = ''
     let settled = false
     let timer: ReturnType<typeof setTimeout> | null = null
+
     const child = spawn('/usr/sbin/scutil', ['--dns'], {
       stdio: ['ignore', 'pipe', 'pipe']
     })
+
     const onStdoutData = (chunk: string): void => {
       stdout += chunk
     }
+
     const onStderrData = (chunk: string): void => {
       stderr += chunk
     }
+
     const onAbort = (): void => {
       child.kill('SIGKILL')
       finish()
     }
+
     const finish = (): void => {
       if (settled) {
         return
       }
+
       settled = true
+
       if (timer !== null) {
         clearTimeout(timer)
         timer = null
       }
+
       child.stdout.off('data', onStdoutData)
       child.stderr.off('data', onStderrData)
       child.off('error', finish)
@@ -57,6 +70,7 @@ export async function readCurrentProcessMacSystemResolverHealth(
       signal?.removeEventListener('abort', onAbort)
       resolve(classifyMacSystemResolverHealth(`${stdout}\n${stderr}`))
     }
+
     timer = setTimeout(() => {
       child.kill()
       // Why: this runs inside the daemon request path, so the timeout must

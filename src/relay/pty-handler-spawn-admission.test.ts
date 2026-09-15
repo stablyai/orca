@@ -94,6 +94,7 @@ describe('PtyHandler', () => {
 
   it('rescans the process table for a close decision but not for a poll', async () => {
     const hasChildren = vi.mocked(ptyChildProcessInspection.processHasChildren)
+
     const snapshot = vi
       .spyOn(processTableSnapshotReader, 'getStrictProcessTableSnapshotWithAge')
       .mockResolvedValue({
@@ -111,6 +112,7 @@ describe('PtyHandler', () => {
         ],
         capturedAgeMs: 0
       })
+
     const { id } = (await spawnPty({ cols: 80, rows: 24 })) as { id: string }
     hasChildren.mockClear()
 
@@ -134,6 +136,7 @@ describe('PtyHandler', () => {
     const snapshot = vi
       .spyOn(processTableSnapshotReader, 'getStrictProcessTableSnapshotWithAge')
       .mockRejectedValue(new Error('process table unreadable: capture_over_budget'))
+
     const hasChildren = vi.spyOn(ptyChildProcessInspection, 'inspectPtyChildProcesses')
     const foregroundName = vi.spyOn(ptyShellUtils, 'getForegroundProcessName')
 
@@ -193,6 +196,7 @@ describe('PtyHandler', () => {
       { cols: 80, rows: 24, agentSessionCreateOperationId: operationId },
       { isStale: () => mockPtySpawn.mock.calls.length > 0 }
     )
+
     const replayed = await dispatcher.callRequest('pty.spawn', {
       cols: 80,
       rows: 24,
@@ -217,6 +221,7 @@ describe('PtyHandler', () => {
         throw new Error('listener publication failed')
       })
     })
+
     const request = {
       cols: 80,
       rows: 24,
@@ -235,16 +240,20 @@ describe('PtyHandler', () => {
 
   it('releases a canceled operation before native spawn after module preflight', async () => {
     let finishModuleLoad!: (value: { spawn: typeof mockPtySpawn }) => void
+
     const moduleLoad = new Promise<{ spawn: typeof mockPtySpawn }>((resolve) => {
       finishModuleLoad = resolve
     })
+
     const internals = handler as unknown as {
       loadPty(): Promise<{ spawn: typeof mockPtySpawn } | null>
     }
+
     const loadPty = vi.spyOn(internals, 'loadPty').mockReturnValueOnce(moduleLoad)
     const abort = new AbortController()
     const operationId = 'c'.repeat(43)
     const request = { cols: 80, rows: 24, agentSessionCreateOperationId: operationId }
+
     const spawning = dispatcher.callRequest('pty.spawn', request, {
       isStale: () => abort.signal.aborted,
       signal: abort.signal
@@ -291,6 +300,7 @@ describe('PtyHandler', () => {
       rows: 24,
       agentSessionEnsure
     })) as Record<string, unknown>
+
     const second = (await dispatcher.callRequest('pty.spawn', {
       cols: 80,
       rows: 24,
@@ -330,6 +340,7 @@ describe('PtyHandler', () => {
     // install it never probed for.
     const thrown =
       'Failed to load native module: conpty.node, checked: build/Release, prebuilds/win32-x64'
+
     mockPtySpawn.mockImplementationOnce(() => {
       throw new Error(thrown)
     })
@@ -379,6 +390,7 @@ describe('PtyHandler', () => {
   it('spawns a PTY without post-Node-18 array copy methods', async () => {
     const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'toReversed')
     Reflect.deleteProperty(Array.prototype, 'toReversed')
+
     try {
       await expect(dispatcher.callRequest('pty.spawn', {})).resolves.toMatchObject({
         id: testPtyId(1)
@@ -433,7 +445,9 @@ describe('PtyHandler', () => {
     const state = JSON.stringify([
       { id: 'pty-7', pid: process.pid, cols: 80, rows: 24, cwd: process.cwd() }
     ])
+
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
@@ -443,6 +457,7 @@ describe('PtyHandler', () => {
     const serialized = (await dispatcher.callRequest('pty.serialize', {
       ids: ['pty-7']
     })) as string
+
     const spawned = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
 
     expect(JSON.parse(serialized)).toMatchObject([{ id: 'pty-7' }])
@@ -451,10 +466,13 @@ describe('PtyHandler', () => {
 
   it('does not advance its sequence from a revived foreign mint epoch', async () => {
     const foreignId = 'pty2:previous-mint-epoch:40'
+
     const state = JSON.stringify([
       { id: foreignId, pid: process.pid, cols: 80, rows: 24, cwd: process.cwd() }
     ])
+
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
     try {
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
@@ -464,6 +482,7 @@ describe('PtyHandler', () => {
     const serialized = (await dispatcher.callRequest('pty.serialize', {
       ids: [foreignId]
     })) as string
+
     const spawned = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
 
     expect(JSON.parse(serialized)).toMatchObject([{ id: foreignId }])
@@ -487,6 +506,7 @@ describe('PtyHandler', () => {
   // exactly what routing both through one resolver is supposed to make impossible.
   it('fences a folder-workspace instance id on the directory the spawn will use', async () => {
     const workspaceRoot = mkdtempSync(join(tmpdir(), 'orca-relay-fence-'))
+
     try {
       const finishCreation = vi.fn()
       const beginWorktreePtySpawn = vi.fn((_operationPath: string) => finishCreation)
@@ -506,12 +526,15 @@ describe('PtyHandler', () => {
 
   it('fences both sibling worktree identity and removing cwd with rollback', async () => {
     const finishSiblingAdmission = vi.fn()
+
     const beginWorktreePtySpawn = vi.fn((operationPath: string) => {
       if (operationPath === '/repo/removing/nested') {
         throw new Error('Remote worktree deletion already in progress')
       }
+
       return finishSiblingAdmission
     })
+
     handler.setWorktreeRemovalCoordinator({ beginWorktreePtySpawn })
 
     await expect(
@@ -562,6 +585,7 @@ describe('PtyHandler', () => {
       await spawnPty()
 
       const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
+
       try {
         await expect(
           attachPty({ id: testPtyId(1), suppressReplayNotification: true })
@@ -607,9 +631,11 @@ describe('PtyHandler', () => {
       let spawnCall = 0
       mockPtySpawn.mockImplementation(() => {
         spawnCall += 1
+
         if (spawnCall === 1) {
           throw new Error('posix_spawnp failed')
         }
+
         return { ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() }
       })
       const poolEmpty = vi.fn()
@@ -670,9 +696,11 @@ describe('PtyHandler', () => {
 
     it('fires for a revived PTY whose creation was admitted before the pool was empty', async () => {
       await spawnPty({ cols: 80, rows: 24, cwd: '/tmp' })
+
       const state = (await dispatcher.callRequest('pty.serialize', {
         ids: [testPtyId(1)]
       })) as string
+
       await handler.dispose({ waitForPhysicalExit: false })
       dispatcher = createMockDispatcher()
       handler = createTestPtyHandler(dispatcher)
@@ -681,6 +709,7 @@ describe('PtyHandler', () => {
       handler.onPtyPoolActive(poolActive)
 
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
       try {
         await dispatcher.callRequest('pty.revive', { state })
       } finally {

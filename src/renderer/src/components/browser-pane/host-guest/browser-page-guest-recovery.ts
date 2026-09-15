@@ -1,7 +1,11 @@
 export const BROWSER_GUEST_RECOVERY_ERROR_CODE = -10_000
+
 export const BROWSER_GUEST_RECOVERY_TIMEOUT_MS = 8_000
+
 export const BROWSER_GUEST_VALIDATION_RETRY_DELAY_MS = 1_000
+
 export const BROWSER_GUEST_VALIDATION_TIMEOUT_MS = 3_000
+
 export const BROWSER_GUEST_VALIDATION_MAX_ATTEMPTS = 3
 
 type BrowserPageGuestRecoveryOptions = {
@@ -48,55 +52,68 @@ export function createBrowserPageGuestRecovery(
       recoveryTimer = null
     }
   }
+
   const clearValidationRetry = (): void => {
     if (validationRetryTimer !== null) {
       window.clearTimeout(validationRetryTimer)
       validationRetryTimer = null
     }
   }
+
   const clearValidationTimeout = (): void => {
     if (validationTimeoutTimer !== null) {
       window.clearTimeout(validationTimeoutTimer)
       validationTimeoutTimer = null
     }
   }
+
   const finish = (): boolean => {
     const completedRecovery = recoveryStarted
     recoveryStarted = false
     options.setPending(false)
     clearRecoveryTimer()
+
     return completedRecovery
   }
+
   const showRecoveryFailure = (): void => {
     if (disposed || !options.browserPageExists()) {
       return
     }
+
     recoveryTimer = null
     options.setPending(false)
     options.onRecoveryFailed()
   }
+
   const watchRecovery = (): void => {
     clearRecoveryTimer()
     recoveryTimer = window.setTimeout(showRecoveryFailure, BROWSER_GUEST_RECOVERY_TIMEOUT_MS)
   }
+
   const replaceGuestWithTimeout = (): Promise<void> => {
     let timeoutTimer: number | null = null
+
     const deadline = new Promise<never>((_resolve, reject) => {
       timeoutTimer = window.setTimeout(() => {
         reject(new Error('Guest replacement timed out'))
       }, BROWSER_GUEST_RECOVERY_TIMEOUT_MS)
     })
+
     const replacement = Promise.resolve().then(() => options.replaceGuest())
+
     return Promise.race([replacement, deadline]).finally(() => {
       if (timeoutTimer !== null) {
         window.clearTimeout(timeoutTimer)
       }
     })
   }
+
   const replaceGuest = (): void => {
     if (disposed || replacementRequested || !options.browserPageExists()) {
       return
     }
+
     replacementRequired = true
     replacementRequested = true
     lifecycleGeneration += 1
@@ -107,23 +124,29 @@ export function createBrowserPageGuestRecovery(
     void replaceGuestWithTimeout().then(
       () => {
         replacementRequired = false
+
         if (disposed || !options.browserPageExists()) {
           options.setPending(false)
+
           return
         }
+
         options.onReplacementReady()
       },
       (error: unknown) => {
         options.setPending(false)
         replacementRequested = false
+
         if (disposed || !options.browserPageExists()) {
           return
         }
+
         console.warn('[browser] guest replacement failed:', error)
         options.onRecoveryFailed()
       }
     )
   }
+
   const recoverRenderer = (): void => {
     if (
       disposed ||
@@ -133,12 +156,14 @@ export function createBrowserPageGuestRecovery(
     ) {
       return
     }
+
     recoveryStarted = true
     lifecycleGeneration += 1
     validationFailureCount = 0
     options.setPending(true)
     clearValidationRetry()
     watchRecovery()
+
     try {
       // Why: reload keeps Chromium history and guest identity while starting a fresh renderer.
       options.webview.reload()
@@ -146,6 +171,7 @@ export function createBrowserPageGuestRecovery(
       replaceGuest()
     }
   }
+
   const scheduleValidationRetry = (): void => {
     clearValidationRetry()
     validationRetryTimer = window.setTimeout(() => {
@@ -153,6 +179,7 @@ export function createBrowserPageGuestRecovery(
       validateAfterResume()
     }, BROWSER_GUEST_VALIDATION_RETRY_DELAY_MS)
   }
+
   const validateRegistrationWithTimeout = (): Promise<boolean | null> => {
     const deadline = new Promise<never>((_resolve, reject) => {
       validationTimeoutTimer = window.setTimeout(() => {
@@ -160,8 +187,10 @@ export function createBrowserPageGuestRecovery(
         reject(new Error('Guest registration validation timed out'))
       }, BROWSER_GUEST_VALIDATION_TIMEOUT_MS)
     })
+
     return Promise.race([options.validateRegistration(), deadline]).finally(clearValidationTimeout)
   }
+
   function validateAfterResume(): void {
     if (
       disposed ||
@@ -173,6 +202,7 @@ export function createBrowserPageGuestRecovery(
     ) {
       return
     }
+
     validationInFlight = true
     clearValidationRetry()
     const validationGeneration = lifecycleGeneration
@@ -182,11 +212,13 @@ export function createBrowserPageGuestRecovery(
         if (validationGeneration !== lifecycleGeneration) {
           return
         }
+
         if (registered === true) {
           validationFailureCount = 0
           options.onRecoverySucceeded()
         } else if (registered === false) {
           validationFailureCount = 0
+
           if (!options.isPending() && options.isCurrentWebview()) {
             replaceGuest()
           }
@@ -198,6 +230,7 @@ export function createBrowserPageGuestRecovery(
           options.isCurrentWebview()
         ) {
           validationFailureCount += 1
+
           if (validationFailureCount >= BROWSER_GUEST_VALIDATION_MAX_ATTEMPTS) {
             validationFailureCount = 0
             options.onRecoveryFailed()
@@ -210,7 +243,9 @@ export function createBrowserPageGuestRecovery(
         if (validationGeneration !== lifecycleGeneration) {
           return
         }
+
         console.warn('[browser] guest registration validation failed:', error)
+
         if (
           disposed ||
           options.isPending() ||
@@ -220,16 +255,21 @@ export function createBrowserPageGuestRecovery(
         ) {
           return
         }
+
         validationFailureCount += 1
+
         if (validationFailureCount >= BROWSER_GUEST_VALIDATION_MAX_ATTEMPTS) {
           validationFailureCount = 0
           options.onRecoveryFailed()
+
           return
         }
+
         retryValidation = true
       })
       .finally(() => {
         validationInFlight = false
+
         if (
           validationGeneration !== lifecycleGeneration &&
           registrationConfirmedGeneration !== lifecycleGeneration &&
@@ -274,13 +314,17 @@ export function createBrowserPageGuestRecovery(
       ) {
         return
       }
+
       recoveryStarted = false
       options.setPending(false)
+
       if (replacementRequired) {
         recoveryStarted = true
         replaceGuest()
+
         return
       }
+
       recoverRenderer()
     },
     validateAfterResume

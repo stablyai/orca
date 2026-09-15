@@ -18,6 +18,7 @@ const LINEAR_PRIORITY_LABELS: Record<number, string> = {
   3: 'Medium',
   4: 'Low'
 }
+
 const LINEAR_INLINE_FIELD_MAX_CHARS = 800
 
 function normalizeInline(value: string): string {
@@ -31,21 +32,27 @@ function foldLinearInlineWhitespace(value: string, maxChars: number): string {
   const bodyLimit = Math.max(0, maxChars - suffix.length)
   let normalized = ''
   let pendingWhitespace = false
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (isLinearInlineWhitespace(code)) {
       pendingWhitespace = normalized.length > 0
       continue
     }
+
     if (pendingWhitespace) {
       normalized += ' '
       pendingWhitespace = false
     }
+
     normalized += value.charAt(index)
+
     if (normalized.length > bodyLimit) {
       return `${normalized.slice(0, bodyLimit).trimEnd()}${suffix}`
     }
   }
+
   return normalized
 }
 
@@ -67,11 +74,14 @@ function isLinearInlineWhitespace(code: number): boolean {
 
 function truncateText(value: string, maxChars: number): string {
   const trimmed = value.trim()
+
   if (trimmed.length <= maxChars) {
     return trimmed
   }
+
   const suffix = `\n${TRUNCATED_MARKER}`
   const bodyLimit = Math.max(0, maxChars - suffix.length)
+
   return `${trimmed.slice(0, bodyLimit).trimEnd()}${suffix}`
 }
 
@@ -82,6 +92,7 @@ function applyTotalCap(value: string, maxChars: number): string {
 
   const suffix = `\n[context truncated to ${maxChars} chars]`
   const budget = maxChars - suffix.length
+
   if (budget <= 0) {
     return suffix.trim().slice(0, maxChars)
   }
@@ -92,11 +103,13 @@ function applyTotalCap(value: string, maxChars: number): string {
 function findLinearContextCapEnd(value: string, budget: number): number {
   let lastLineBreak = -1
   const scanEnd = Math.min(value.length, budget + 1)
+
   for (let index = 0; index < scanEnd; index += 1) {
     if (value.charCodeAt(index) === 10) {
       lastLineBreak = index
     }
   }
+
   return lastLineBreak > 0 ? lastLineBreak : budget
 }
 
@@ -106,14 +119,18 @@ function getPriorityLabel(priority: number): string {
 
 function formatLabels(labels: string[]): string | null {
   const normalized = labels.map(normalizeInline).filter(Boolean)
+
   if (normalized.length === 0) {
     return null
   }
+
   const shown = normalized.slice(0, LINEAR_ISSUE_CONTEXT_CAPS.labels)
   const omitted = normalized.length - shown.length
+
   if (omitted > 0) {
     shown.push(`[${omitted} more labels]`)
   }
+
   return shown.join(', ')
 }
 
@@ -121,6 +138,7 @@ function sortComments(comments: LinearComment[]): LinearComment[] {
   return comments
     .map((comment, index) => {
       const time = Date.parse(comment.createdAt)
+
       return {
         comment,
         index,
@@ -131,17 +149,22 @@ function sortComments(comments: LinearComment[]): LinearComment[] {
       if (a.time !== null && b.time !== null && a.time !== b.time) {
         return b.time - a.time
       }
+
       if (a.time !== null && b.time === null) {
         return -1
       }
+
       if (a.time === null && b.time !== null) {
         return 1
       }
+
       const aId = typeof a.comment.id === 'string' ? a.comment.id.trim() : ''
       const bId = typeof b.comment.id === 'string' ? b.comment.id.trim() : ''
+
       if (aId && bId && aId !== bId) {
         return aId.localeCompare(bId)
       }
+
       return a.index - b.index
     })
     .map((entry) => entry.comment)
@@ -170,6 +193,7 @@ export function buildLinearIssueContextSnapshot(
   ]
 
   const workspace = normalizeInline(issue.workspaceName ?? issue.workspaceId ?? '')
+
   if (workspace) {
     lines.push(`Workspace: ${workspace}`)
   }
@@ -181,6 +205,7 @@ export function buildLinearIssueContextSnapshot(
   }
 
   const labels = formatLabels(issue.labels)
+
   if (labels) {
     lines.push(`Labels: ${labels}`)
   }
@@ -188,6 +213,7 @@ export function buildLinearIssueContextSnapshot(
   lines.push(`Updated: ${normalizeInline(issue.updatedAt)}`)
 
   const description = issue.description?.trim()
+
   if (description) {
     lines.push(
       '',
@@ -197,29 +223,37 @@ export function buildLinearIssueContextSnapshot(
   }
 
   const childIssues = issue.subIssues ?? []
+
   if (childIssues.length > 0) {
     lines.push('', 'Child issues:')
+
     for (const child of childIssues.slice(0, LINEAR_ISSUE_CONTEXT_CAPS.childIssues)) {
       lines.push(
         `- ${normalizeInline(child.identifier)} ${normalizeInline(child.title)} (${normalizeInline(child.url)})`
       )
     }
+
     const omitted = childIssues.length - LINEAR_ISSUE_CONTEXT_CAPS.childIssues
+
     if (omitted > 0) {
       lines.push(`[${omitted} more child issues]`)
     }
   }
 
   const sortedComments = sortComments(comments)
+
   if (sortedComments.length > 0) {
     lines.push('', 'Recent comments:')
+
     for (const comment of sortedComments.slice(0, LINEAR_ISSUE_CONTEXT_CAPS.comments)) {
       const author = normalizeInline(comment.user?.displayName ?? 'Unknown')
       const createdAt = normalizeInline(comment.createdAt)
       const body = truncateText(comment.body, LINEAR_ISSUE_CONTEXT_CAPS.commentBodyChars)
       lines.push(`- ${createdAt} ${author}:`, indentBlock(body || '(empty comment)'))
     }
+
     const omitted = sortedComments.length - LINEAR_ISSUE_CONTEXT_CAPS.comments
+
     if (omitted > 0) {
       lines.push(`[${omitted} older comments]`)
     }

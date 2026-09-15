@@ -8,6 +8,7 @@ import {
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 
 type RuntimeFileMutationTarget = { kind: 'environment'; environmentId: string }
+
 export type RuntimeFileImportSession = {
   target: RuntimeFileMutationTarget
   expectedEnvironmentPairingRevision: number | undefined
@@ -24,7 +25,9 @@ export async function assertRuntimeFileMutationCapability(
     timeoutMs: 15_000,
     expectedEnvironmentPairingRevision
   })
+
   assertFileMutationOwnershipCapability(status)
+
   return status.runtimeId
 }
 
@@ -39,7 +42,9 @@ export async function callRuntimeFileMutation<TResult>(
     target.environmentId,
     expectedEnvironmentPairingRevision
   )
+
   await assertRuntimeFileMutationCapability(target, requestRevision)
+
   return callRuntimeRpc<TResult>(target, method, params, {
     timeoutMs,
     expectedEnvironmentPairingRevision: requestRevision
@@ -56,6 +61,7 @@ export function createRuntimeImportSessionGuard(
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
       throw new Error('Runtime pairing changed; retry the import.')
     }
+
     // Why: a replacement runtime keeps the pairing but invalidates its predecessor's capability proof.
     if (
       getRuntimeEnvironmentConnectionGeneration(environmentId) !==
@@ -63,6 +69,7 @@ export function createRuntimeImportSessionGuard(
     ) {
       throw new Error('Runtime connection changed; retry the import.')
     }
+
     assertCallerCurrent?.()
   }
 }
@@ -74,6 +81,7 @@ export function callRuntimeFileImportMutation<TResult>(
   timeoutMs: number
 ): Promise<TResult> {
   session.assertCurrent()
+
   return callRuntimeRpc<TResult>(session.target, method, params, {
     timeoutMs,
     expectedEnvironmentPairingRevision: session.expectedEnvironmentPairingRevision,

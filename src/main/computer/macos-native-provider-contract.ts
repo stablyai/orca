@@ -40,6 +40,7 @@ export function assertMacOSProviderCapability(
   capability: string
 ): boolean {
   const groupCapabilities = capabilities?.supports[group] as Record<string, boolean> | undefined
+
   return groupCapabilities?.[capability] === true
 }
 
@@ -57,6 +58,7 @@ export function macOSActionCapabilityKey(
     pasteText: 'pasteText',
     setValue: 'setValue'
   } satisfies Record<NativeActionMethod, keyof ComputerProviderCapabilities['supports']['actions']>
+
   return keys[method]
 }
 
@@ -65,8 +67,10 @@ export function writeNativeProviderLine(transport: net.Socket, line: string): Pr
     transport.write(line, (error) => {
       if (error) {
         reject(error)
+
         return
       }
+
       resolve()
     })
   })

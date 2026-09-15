@@ -74,9 +74,11 @@ export function handleRichMarkdownEditorClick({
   const sourceSnapshot = htmlSuperscriptLinkContext.getSnapshot()
   const sourceOwner = sourceSnapshot.sourceOwner
   const modKey = isMac ? event.metaKey : event.ctrlKey
+
   if (!editor) {
     return false
   }
+
   if (!modKey) {
     const selectedComment = getRichMarkdownCommentAtPos(
       editor,
@@ -84,12 +86,16 @@ export function handleRichMarkdownEditorClick({
       markdownSourceLineOffsetRef.current,
       pos
     )
+
     if (selectedComment) {
       scrollRichMarkdownReviewNoteCardIntoView(selectedComment.id)
     }
+
     return false
   }
+
   const clickedNode = view.state.doc.nodeAt(pos)
+
   if (clickedNode?.type.name === 'image') {
     return activateMarkdownImageClick({
       activateMarkdownLink,
@@ -101,27 +107,35 @@ export function handleRichMarkdownEditorClick({
       worktreeRoot
     })
   }
+
   if (clickedNode?.type.name === 'markdownDocLink') {
     onOpenDocLinkRef.current?.(clickedNode.attrs.target as string)
+
     return true
   }
+
   const href =
     clickedNode?.type.name === 'richMarkdownHtmlSuperscriptLink'
       ? String(clickedNode.attrs.href ?? '')
       : getClickedLinkHref(view, pos)
+
   if (
     clickedNode?.type.name === 'richMarkdownHtmlSuperscriptLink' &&
     !classifyHtmlSuperscriptLinkAction(href, sourceSnapshot)
   ) {
     return true
   }
+
   if (!href) {
     return false
   }
+
   if (href.startsWith('#')) {
     scrollToAnchorInEditor(rootRef.current, href.slice(1))
+
     return true
   }
+
   if (event.shiftKey) {
     openMarkdownLinkInClientOs({
       href,
@@ -131,8 +145,10 @@ export function handleRichMarkdownEditorClick({
       settings,
       worktreeRoot
     })
+
     return true
   }
+
   void activateMarkdownLink(href, {
     sourceFilePath: filePath,
     worktreeId,
@@ -140,6 +156,7 @@ export function handleRichMarkdownEditorClick({
     runtimeEnvironmentId,
     sourceOwner
   })
+
   return true
 }
 
@@ -163,6 +180,7 @@ function activateMarkdownImageClick({
   if (!src) {
     return false
   }
+
   void activateMarkdownLink(src, {
     sourceFilePath: filePath,
     worktreeId,
@@ -170,6 +188,7 @@ function activateMarkdownImageClick({
     runtimeEnvironmentId,
     sourceOwner
   })
+
   return true
 }
 
@@ -178,6 +197,7 @@ function getClickedLinkHref(view: EditorView, pos: number): string {
     .resolve(pos)
     .marks()
     .find((mark) => mark.type.name === 'link')
+
   return linkMark ? (linkMark.attrs.href as string) || '' : ''
 }
 
@@ -199,19 +219,25 @@ function openMarkdownLinkInClientOs({
   if (sourceOwner.kind === 'unknown') {
     return
   }
+
   const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
+
   if (!classified) {
     return
   }
+
   if (classified.kind === 'external') {
     // Why: deliberate divergence from the preview — this path hands the link to the
     // client OS unconditionally, so it does not follow the invert setting.
     openHttpLink(classified.url, { forceSystemBrowser: true, sourceOwner })
+
     return
   }
+
   if (classified.kind === 'anchor') {
     return
   }
+
   if (
     isLocalPathOpenBlocked(settingsForRuntimeOwner(settings, runtimeEnvironmentId), {
       connectionId: sourceOwner.kind === 'ssh' ? sourceOwner.connectionId : undefined
@@ -220,8 +246,10 @@ function openMarkdownLinkInClientOs({
     // Why: Shift-click opens through the client OS, which cannot safely resolve
     // server-local paths from SSH or remote runtime worktrees.
     showLocalPathOpenBlockedToast()
+
     return
   }
+
   if (classified.kind === 'markdown') {
     void window.api.shell.pathExists(classified.absolutePath).then((exists) => {
       if (!exists) {
@@ -232,11 +260,15 @@ function openMarkdownLinkInClientOs({
             { value0: classified.relativePath }
           )
         )
+
         return
       }
+
       void window.api.shell.openFileUri(toFileUrlForOsEscape(classified.absolutePath))
     })
+
     return
   }
+
   void window.api.shell.openFileUri(classified.uri)
 }

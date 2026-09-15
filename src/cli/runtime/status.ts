@@ -16,6 +16,7 @@ export async function getCliStatus(
 ): Promise<RuntimeRpcSuccess<CliStatusResult>> {
   const metadata = tryReadMetadata(userDataPath)
   const transport = metadata ? findTransport(metadata, 'unix', 'named-pipe') : null
+
   if (!transport || !metadata?.authToken) {
     return buildCliStatusResponse({
       app: {
@@ -38,11 +39,14 @@ export async function getCliStatus(
 
   try {
     const response = await sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, 1000)
+
     if (response.ok === false) {
       throw new RuntimeRpcFailureError(response)
     }
+
     const graphState = response.result.graphStatus
     const desktopWindowStatus = resolveDesktopWindowStatus(response.result)
+
     return buildCliStatusResponse({
       app: {
         running: true,
@@ -70,6 +74,7 @@ export async function getCliStatus(
     })
   } catch {
     const running = isProcessRunning(metadata.pid)
+
     return buildCliStatusResponse({
       app: {
         running,
@@ -103,8 +108,10 @@ function isProcessRunning(pid: number | null | undefined): boolean {
   if (!pid || pid <= 0) {
     return false
   }
+
   try {
     process.kill(pid, 0)
+
     return true
   } catch {
     return false

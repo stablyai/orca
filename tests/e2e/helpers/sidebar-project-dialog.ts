@@ -16,6 +16,7 @@ export async function openSidebarWorkspaceComposer(page: Page): Promise<void> {
     name: 'New workspace',
     exact: true
   })
+
   await expect(createButton).toBeVisible()
   await createButton.click()
 }

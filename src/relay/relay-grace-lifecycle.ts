@@ -50,6 +50,7 @@ export class RelayGraceLifecycle {
     if (this.options.ptyHandler.graceTimerActive) {
       relayLogLine(`[relay] Grace canceled: ${reason}`)
     }
+
     this.graceDeadlineAt = null
     this.graceReason = null
     this.graceBranch = null
@@ -67,6 +68,7 @@ export class RelayGraceLifecycle {
       emptyDetachedStartupGraceMs: this.options.emptyDetachedStartupGraceMs,
       idleRelayGraceMs: this.options.idleRelayGraceMs
     })
+
     this.graceBranch = decision.branch
     this.graceDeadlineAt = decision.timeoutMs === 0 ? null : Date.now() + decision.timeoutMs
     this.graceReason = reason
@@ -77,8 +79,10 @@ export class RelayGraceLifecycle {
       if (this.graceBranch === 'idle-no-ptys' && !this.isRelayIdle()) {
         relayLogLine(`[relay] Grace expired (${reason}) but relay is no longer idle; re-evaluating`)
         this.start(reason)
+
         return
       }
+
       relayLogLine(`[relay] Grace expired (${reason}); shutting down`)
       this.shutdown()
     }, decision.timeoutMs)
@@ -113,6 +117,7 @@ export class RelayGraceLifecycle {
     if (this.shutdownInFlight) {
       return
     }
+
     this.shutdownInFlight = true
     relayLogLine(
       `[relay] Shutdown: ptys=${this.options.ptyHandler.activePtyCount}, clients=${this.options.readSocketClientCount()}, ownsSocket=${this.options.ownsSocketPath()}`
@@ -134,6 +139,7 @@ export class RelayGraceLifecycle {
         relayLogLine(
           `[relay] Shutdown deferred: ${error instanceof Error ? error.message : String(error)}`
         )
+
         if (this.options.readSocketClientCount() === 0) {
           this.start('shutdown deferred', { retryDeferredShutdown: true })
         }

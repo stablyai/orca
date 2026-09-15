@@ -25,23 +25,29 @@ vi.mock('./browser-session-registry', () => ({
     clearPendingCookieImport: clearPendingCookieImportMock
   }
 }))
+
 vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   return {
     ...actual,
     copyFileSync: (...args: Parameters<typeof actual.copyFileSync>) => {
       copyFileSyncMock(...args)
+
       return actual.copyFileSync(...args)
     }
   }
 })
+
 vi.mock('electron', () => ({
   app: { getPath: appGetPathMock },
   BrowserWindow: { fromWebContents: vi.fn() },
   dialog: { showOpenDialog: vi.fn() },
   session: { fromPartition: sessionFromPartitionMock }
 }))
+
 vi.mock('./browser-cookie-clear-store', () => ({
   openCookieClearStore: (targetSession: {
     cookies: {
@@ -129,6 +135,7 @@ describe('validated import partition fidelity', () => {
   function writeCookieFile(cookies: unknown[]): string {
     const filePath = join(tmpDir, 'cookies.json')
     writeFileSync(filePath, JSON.stringify(cookies))
+
     return filePath
   }
 
@@ -204,6 +211,7 @@ describe('validated import partition fidelity', () => {
         set: unreachableCookieSet
       }
     })
+
     const filePath = writeCookieFile([
       {
         domain: '.app.example',
@@ -232,15 +240,19 @@ describe('validated import partition fidelity', () => {
         sameSite: 'lax'
       }
     ]
+
     const remove = vi.fn(async (_url: string, name: string) => {
       const index = targetJar.findIndex((cookie) => cookie.name === name)
+
       if (index !== -1) {
         targetJar.splice(index, 1)
       }
     })
+
     sessionFromPartitionMock.mockReturnValue({
       cookies: { get: vi.fn(async () => targetJar), remove, set: unreachableCookieSet }
     })
+
     const filePath = writeCookieFile([
       {
         domain: '.preserved.example',
@@ -295,12 +307,15 @@ describe('validated import partition fidelity', () => {
         sameSite: 'lax'
       }
     ]
+
     const remove = vi.fn(async (_url: string, name: string) => {
       const index = targetJar.findIndex((cookie) => cookie.name === name)
+
       if (index !== -1) {
         targetJar.splice(index, 1)
       }
     })
+
     sessionFromPartitionMock.mockReturnValue({
       cookies: {
         get: vi.fn(async () => targetJar),
@@ -308,6 +323,7 @@ describe('validated import partition fidelity', () => {
         set: unreachableCookieSet
       }
     })
+
     const filePath = writeCookieFile([
       {
         domain: '.preserved.example',
@@ -328,9 +344,11 @@ describe('validated import partition fidelity', () => {
     const result = await importCookiesFromFile(filePath, 'persist:test')
 
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     expect(targetJar).toEqual([
       expect.objectContaining({ name: 'apex-session', value: 'apex-live' }),
       expect.objectContaining({ name: 'sub-session', value: 'sub-live' })
@@ -466,6 +484,7 @@ describe('native Chromium import partition fidelity', () => {
         canReportPartitionSkippedCookies: false
       }
     )
+
     expect(blocked.ok).toBe(false)
     expect(blocked.ok || blocked.reason).toContain('cannot report')
     expect(cookieWriteMock).not.toHaveBeenCalled()
@@ -507,6 +526,7 @@ describe('native Chromium import partition fidelity', () => {
       join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies'),
       []
     ).close()
+
     const targetJar = [
       {
         name: 'live-session',
@@ -518,13 +538,17 @@ describe('native Chromium import partition fidelity', () => {
         sameSite: 'lax'
       }
     ]
+
     const clearData = vi.fn(async () => targetJar.splice(0))
+
     const remove = vi.fn(async (_url: string, name: string) => {
       const index = targetJar.findIndex((cookie) => cookie.name === name)
+
       if (index !== -1) {
         targetJar.splice(index, 1)
       }
     })
+
     sessionFromPartitionMock.mockReturnValue({
       cookies: {
         get: vi.fn(async () => targetJar),
@@ -639,6 +663,7 @@ describe('Firefox import partition fidelity', () => {
          '^partitionKey=(https,top.example,f)', 0)
     `)
     sourceDb.close()
+
     const get = vi.fn().mockResolvedValue([
       {
         name: 'existing-session',
@@ -652,6 +677,7 @@ describe('Firefox import partition fidelity', () => {
         sameSite: 'lax'
       }
     ])
+
     const remove = vi.fn().mockResolvedValue(undefined)
     sessionFromPartitionMock.mockReturnValue({ cookies: { get, remove } })
 
@@ -668,6 +694,7 @@ describe('Firefox import partition fidelity', () => {
     expect(writeCookieIdentityMock).not.toHaveBeenCalled()
 
     get.mockResolvedValue([])
+
     const supportedResult = await importCookiesFromBrowser(
       firefoxBrowser(sourceCookiesPath),
       'persist:test'

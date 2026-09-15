@@ -130,14 +130,17 @@ export function AddressPicker({
   const listRef = useRef<HTMLDivElement>(null)
   const restoreFocusAfterRemovalRef = useRef(false)
   const typeaheadRef = useRef({ query: '', updatedAt: 0 })
+
   const handleListRef = useCallback((node: HTMLDivElement | null) => {
     listRef.current = node
     setListId(node?.id)
   }, [])
+
   const isCustomSelection =
     value !== undefined &&
     value !== '' &&
     (valueIsCustom ?? !options.some((option) => option.value === value))
+
   const displayedCustomOptions = useMemo(() => {
     if (
       !isCustomSelection ||
@@ -146,15 +149,19 @@ export function AddressPicker({
     ) {
       return customOptions
     }
+
     return [...customOptions, { value, label: formatCustomLabel(value) }]
   }, [customOptions, formatCustomLabel, isCustomSelection, value])
+
   const selectedOption =
     (isCustomSelection
       ? displayedCustomOptions.find((option) => option.value === value)
       : options.find((option) => option.value === value)) ??
     displayedCustomOptions.find((option) => option.value === value)
+
   const selectedCommandValue = value ? `${isCustomSelection ? 'custom' : 'detected'}:${value}` : ''
   const customValueChange = onCustomValueChange ?? onValueChange
+
   const firstCommandValue =
     selectedCommandValue ||
     (options[0]
@@ -167,10 +174,12 @@ export function AddressPicker({
     if (!pickerOpen) {
       return
     }
+
     const commandValueExists =
       commandValue === 'add-custom-address' ||
       options.some((option) => commandValue === `detected:${option.value}`) ||
       displayedCustomOptions.some((option) => commandValue === `custom:${option.value}`)
+
     if (!commandValueExists) {
       setCommandValue(firstCommandValue)
     }
@@ -180,6 +189,7 @@ export function AddressPicker({
     if (!pickerOpen || !restoreFocusAfterRemovalRef.current) {
       return
     }
+
     restoreFocusAfterRemovalRef.current = false
     listRef.current?.focus()
   }, [displayedCustomOptions, pickerOpen])
@@ -188,21 +198,26 @@ export function AddressPicker({
     if (!pickerOpen) {
       return
     }
+
     const frame = window.requestAnimationFrame(() => {
       const list = listRef.current
       const activeOption = list?.querySelector<HTMLElement>('[cmdk-item][aria-selected="true"]')
+
       if (list && activeOption?.id) {
         list.setAttribute('aria-activedescendant', activeOption.id)
       }
     })
+
     return () => window.cancelAnimationFrame(frame)
   }, [commandValue, displayedCustomOptions, options, pickerOpen])
 
   const handlePickerOpenChange = (nextOpen: boolean): void => {
     typeaheadRef.current = { query: '', updatedAt: 0 }
+
     if (nextOpen) {
       setCommandValue(firstCommandValue)
     }
+
     setPickerOpen(nextOpen)
   }
 
@@ -210,8 +225,10 @@ export function AddressPicker({
     if (event.key === ' ') {
       event.preventDefault()
       listRef.current?.querySelector<HTMLElement>('[cmdk-item][aria-selected="true"]')?.click()
+
       return
     }
+
     if (
       event.key.length !== 1 ||
       event.altKey ||
@@ -221,6 +238,7 @@ export function AddressPicker({
     ) {
       return
     }
+
     event.preventDefault()
     const now = Date.now()
     const previous = typeaheadRef.current
@@ -228,6 +246,7 @@ export function AddressPicker({
     typeaheadRef.current = { query, updatedAt: now }
     const repeatedKey = [...query].every((character) => character === query[0])
     const prefix = (repeatedKey ? event.key : query).toLocaleLowerCase()
+
     const items = [
       ...options.map((option) => ({ command: `detected:${option.value}`, label: option.label })),
       ...displayedCustomOptions.map((option) => ({
@@ -236,10 +255,13 @@ export function AddressPicker({
       })),
       { command: 'add-custom-address', label: addCustomLabel }
     ]
+
     const currentIndex = items.findIndex((item) => item.command === commandValue)
+
     const nextItem = [...items.slice(currentIndex + 1), ...items.slice(0, currentIndex + 1)].find(
       (item) => item.label.toLocaleLowerCase().startsWith(prefix)
     )
+
     if (nextItem) {
       setCommandValue(nextItem.command)
     }
@@ -247,6 +269,7 @@ export function AddressPicker({
 
   const selectValue = (next: string, custom: boolean): void => {
     setPickerOpen(false)
+
     if (custom) {
       customValueChange(next)
     } else {
@@ -258,7 +281,9 @@ export function AddressPicker({
     if (beforeCustomConfirm && !(await beforeCustomConfirm(next))) {
       return false
     }
+
     customValueChange(next)
+
     return true
   }
 

@@ -19,6 +19,7 @@ function getJiraSourceStatusMessage(jiraSource: JiraUrlSourceState): string {
       'Loading Jira issue…'
     )
   }
+
   switch (jiraSource.errorKind) {
     case 'disconnected':
       return translate(
@@ -98,12 +99,14 @@ export function renderSmartWorkspaceNameField(
               const nextMode = next as typeof mode
               onActiveSourceModeChange?.(nextMode)
               setMode(nextMode)
+
               if (!disabled && nextMode !== 'text' && selectedSource === null) {
                 markSourcePopoverUserEngaged()
                 setOpen(true)
               } else {
                 setOpen(false)
               }
+
               cancelLocalInputFocusFrame()
               localInputFocusFrameRef.current = requestAnimationFrame(() => {
                 localInputFocusFrameRef.current = null
@@ -121,12 +124,15 @@ export function renderSmartWorkspaceNameField(
                 const previous = event.relatedTarget as HTMLElement | null
                 const list = tabsListRef.current
                 const input = localInputRef.current
+
                 if (!list || !input) {
                   return
                 }
+
                 if (!previous || previous === input || list.contains(previous)) {
                   return
                 }
+
                 event.stopPropagation()
                 input.focus({ preventScroll: true })
               }}
@@ -158,6 +164,7 @@ export function renderSmartWorkspaceNameField(
             if (isQueryStale) {
               return
             }
+
             setCommandValue(next)
           }}
           shouldFilter={false}

@@ -35,9 +35,11 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
     setWorkspaceRepoPickerItem,
     workspaceRepos
   } = model
+
   if (!actionItem) {
     return null
   }
+
   return (
     <View style={styles.actionGroup}>
       <Pressable
@@ -46,8 +48,10 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
         onPress={() => {
           if (actionItem.provider === 'linear' && workspaceRepos.length > 1) {
             setWorkspaceRepoPickerItem(actionItem)
+
             return
           }
+
           openWorkspaceCreate(actionItem)
         }}
       >

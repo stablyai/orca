@@ -4,6 +4,7 @@ import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DiscardAllDeps, DiscardAllResult, DiscardAllArea } from './discard-all-sequence'
 import type { SourceControlToastTestOptions } from './source-control-toast-test-options'
+
 type DiscardAllRunner = (
   area: DiscardAllArea,
   paths: readonly string[],
@@ -16,8 +17,11 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, dismiss: vi.fn() } }))
+
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+
 vi.mock('@/runtime/runtime-git-client', () => ({ bulkUnstageRuntimeGitPaths: vi.fn() }))
+
 vi.mock('./discard-all-sequence', () => ({
   getDiscardAllPaths: () => [],
   runDiscardAllForArea: (area: DiscardAllArea, paths: readonly string[], deps: DiscardAllDeps) =>
@@ -73,6 +77,7 @@ describe('discard-all failure descriptions', () => {
   it('unwraps the IPC transport noise on a partial failure, like the per-row toast does', async () => {
     mocks.runDiscardAllForArea.mockImplementation(async (_area, _paths, handlers) => {
       handlers.onError?.(new Error(WRAPPED))
+
       return { aborted: false, discarded: [], failed: ['a.ts'] }
     })
 
@@ -86,6 +91,7 @@ describe('discard-all failure descriptions', () => {
   it('unwraps it on the aborted-before-discard path too', async () => {
     mocks.runDiscardAllForArea.mockImplementation(async (_area, _paths, handlers) => {
       handlers.onError?.(new Error(WRAPPED))
+
       return { aborted: true, discarded: [], failed: [] }
     })
 

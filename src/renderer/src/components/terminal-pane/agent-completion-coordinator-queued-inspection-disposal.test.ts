@@ -15,7 +15,9 @@ describe('agent completion coordinator queued inspections', () => {
     const blockers = Array.from({ length: 4 }, () =>
       createDeferred<RuntimeTerminalProcessInspection>()
     )
+
     const blockerInspectors = blockers.map((inspection) => vi.fn(() => inspection.promise))
+
     const blockerCoordinators = blockerInspectors.map((inspectProcess, index) =>
       createAgentCompletionCoordinator({
         paneKey: `tab-1:blocked-${index}`,
@@ -36,6 +38,7 @@ describe('agent completion coordinator queued inspections', () => {
     const staleInspectProcesses = Array.from({ length: 8 }, () =>
       vi.fn(async () => processResult(null, false))
     )
+
     const staleCoordinators = staleInspectProcesses.map((inspectProcess, index) =>
       createAgentCompletionCoordinator({
         paneKey: `tab-1:stale-${index}`,
@@ -46,7 +49,9 @@ describe('agent completion coordinator queued inspections', () => {
         isLive: () => true
       })
     )
+
     const liveInspectProcess = vi.fn(async () => processResult(null, false))
+
     const liveCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:live',
       getPtyId: () => 'pty-live',
@@ -60,6 +65,7 @@ describe('agent completion coordinator queued inspections', () => {
       coordinator.observeTitle(`Codex working ${index}`)
       coordinator.observeTitle(`~/stale-${index}`)
     }
+
     liveCoordinator.observeTitle('Codex working')
     liveCoordinator.observeTitle('~/live')
     staleCoordinators.forEach((coordinator) => coordinator.dispose())

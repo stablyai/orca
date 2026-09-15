@@ -28,9 +28,11 @@ import { mainProcessState as state } from './main-process-state'
 
 export function initializeMainProcessAccountServices(): void {
   const store = state.store
+
   if (!store || !state.claudeUsage || !state.codexUsage || !state.openCodeUsage) {
     throw new Error('Usage stores must be initialized before account services')
   }
+
   state.rateLimits = new RateLimitService()
   state.codexRuntimeHome = new CodexRuntimeHomeService(store)
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
@@ -77,15 +79,18 @@ export function initializeMainProcessAccountServices(): void {
     resolveKimiHome(getKimiRuntimeTarget(store.getSettings()))
   )
   state.rateLimits.setClaudeFetchTarget(getInitialClaudeRateLimitTarget(store.getSettings()))
+
   const syncAccountRuntimeTargets = createAccountRuntimeTargetSettingsSync(
     state.rateLimits,
     store.getSettings()
   )
+
   store.onSettingsChanged((updates, settings) => {
     // Why: auto is a live policy; retarget only providers whose settings-derived runtime changed.
     void syncAccountRuntimeTargets(updates, settings).catch((error) =>
       console.warn('[rate-limits] Failed to apply account runtime target:', error)
     )
+
     // Why: these three pick the MiniMax host and quota bucket, so a stale snapshot from the
     // previous endpoint would otherwise sit in the status bar until the next poll.
     if (
@@ -111,6 +116,7 @@ export function initializeMainProcessAccountServices(): void {
   })
   state.rateLimits.setOpenCodeGoConfigResolver(() => {
     const settings = store.getSettings()
+
     return {
       sessionCookie: settings.opencodeSessionCookie,
       workspaceIdOverride: settings.opencodeWorkspaceId
@@ -119,6 +125,7 @@ export function initializeMainProcessAccountServices(): void {
   state.rateLimits.setMiniMaxConfigResolver(() => {
     const settings = store.getSettings()
     const apiKey = readMiniMaxApiKey() ?? ''
+
     return {
       sessionCookie: apiKey ? '' : (readMiniMaxSessionCookie() ?? ''),
       groupId: settings.minimaxGroupId,
@@ -140,12 +147,14 @@ export function initializeMainProcessAccountServices(): void {
   browserManager.setSettingsResolver(() => ({ keybindings: state.keybindings?.getOverrides() }))
   state.rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store.getSettings()
+
     const activeIds = new Set(
       [
         normalizeClaudeRuntimeSelection(settings).host,
         ...Object.values(normalizeClaudeRuntimeSelection(settings).wsl)
       ].filter(Boolean)
     )
+
     return settings.claudeManagedAccounts
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({
@@ -158,12 +167,14 @@ export function initializeMainProcessAccountServices(): void {
   })
   state.rateLimits.setInactiveCodexAccountsResolver(() => {
     const settings = store.getSettings()
+
     const activeIds = new Set(
       [
         normalizeCodexRuntimeSelection(settings).host,
         ...Object.values(normalizeCodexRuntimeSelection(settings).wsl)
       ].filter(Boolean)
     )
+
     return settings.codexManagedAccounts
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({
@@ -171,6 +182,7 @@ export function initializeMainProcessAccountServices(): void {
         resolveHome: () => {
           const resolved =
             state.codexRuntimeHome!.resolveCodexManagedAccountHomeForInactiveFetch(account)
+
           return resolved.kind === 'ready'
             ? { kind: 'ready' as const, managedHomePath: resolved.homePath }
             : { kind: 'skip' as const }

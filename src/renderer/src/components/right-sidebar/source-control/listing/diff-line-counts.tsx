@@ -10,9 +10,11 @@ export function DiffLineCounts({
 }): React.JSX.Element | null {
   const hasAdded = typeof added === 'number' && added > 0
   const hasRemoved = typeof removed === 'number' && removed > 0
+
   if (!hasAdded && !hasRemoved) {
     return null
   }
+
   return (
     <span className="shrink-0 tabular-nums text-[10px]">
       {hasAdded && <span style={{ color: 'var(--git-decoration-added)' }}>+{added}</span>}

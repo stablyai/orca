@@ -33,18 +33,23 @@ export function getTabEntryAllowAbsolutePaths(
   worktreeId: string
 ): boolean {
   const worktree = state.getKnownWorktreeById(worktreeId)
+
   if (!worktree) {
     return false
   }
+
   const workspaceKey = parseWorkspaceKey(worktreeId)
+
   if (workspaceKey?.type === 'folder') {
     return (
       getResolvedExecutionHostIdForWorktree(state, worktreeId) === 'local' &&
       getFolderWorkspaceConnectionId(state, workspaceKey.folderWorkspaceId) === null
     )
   }
+
   try {
     const runtimeContext = getEditorFileOperationContext(state, { worktreeId }, worktree.path)
+
     return isTabEntryAbsolutePathAllowed(runtimeContext)
   } catch {
     return false
@@ -57,6 +62,7 @@ export function getTabEntryFileOperationContext(
   worktreePath: string
 ): RuntimeFileOperationArgs {
   const workspaceKey = parseWorkspaceKey(worktreeId)
+
   if (workspaceKey?.type === 'folder') {
     if (
       getResolvedExecutionHostIdForWorktree(state, worktreeId) === 'local' &&
@@ -72,6 +78,7 @@ export function getTabEntryFileOperationContext(
       }
     }
   }
+
   return getEditorFileOperationContext(state, { worktreeId }, worktreePath)
 }
 
@@ -81,10 +88,12 @@ export function createTabEntryAllowAbsolutePathsSelector(
 ): (state: ReturnType<typeof useAppStore.getState>) => boolean {
   let previousSlices: TabEntryAbsolutePathOwnerState | null = null
   let previousResult = false
+
   return (state) => {
     if (skip) {
       return false
     }
+
     if (
       previousSlices?.settings === state.settings &&
       previousSlices.repos === state.repos &&
@@ -103,6 +112,7 @@ export function createTabEntryAllowAbsolutePathsSelector(
     ) {
       return previousResult
     }
+
     previousSlices = {
       settings: state.settings,
       repos: state.repos,
@@ -118,6 +128,7 @@ export function createTabEntryAllowAbsolutePathsSelector(
       sshStateByEnvironment: state.sshStateByEnvironment
     }
     previousResult = getTabEntryAllowAbsolutePaths(state, worktreeId)
+
     return previousResult
   }
 }

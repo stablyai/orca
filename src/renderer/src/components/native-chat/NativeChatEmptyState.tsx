@@ -14,6 +14,7 @@ export function NativeChatEmptyState({
   agent?: NativeChatSession['agent']
 }): React.JSX.Element {
   const copy = emptyStateCopy(kind, message, agent)
+
   return (
     <div className="flex h-full w-full flex-col items-center justify-center gap-3 p-6 text-center">
       <div
@@ -80,6 +81,7 @@ function emptyStateCopy(
       }
     case 'empty': {
       const agentName = agent ? formatAgentTypeLabel(agent) : 'the agent'
+
       return {
         title: translate(
           'components.native-chat.state.empty.title',

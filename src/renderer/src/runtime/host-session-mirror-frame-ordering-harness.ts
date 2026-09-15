@@ -29,16 +29,20 @@ import { resetWebSessionTabsSnapshotFreshnessForTests } from './web-session-tabs
 const initialState = useAppStore.getInitialState()
 
 export type RuntimeSubscribe = typeof window.api.runtimeEnvironments.subscribe
+
 export type RuntimeSubscription = {
   request: Parameters<RuntimeSubscribe>[0]
   callbacks: Parameters<RuntimeSubscribe>[1]
 }
 
 export const subscriptions: RuntimeSubscription[] = []
+
 // Why: a resolved listAll would settle the mirror on its own and hide the race.
 export const runtimeCall = vi.fn((_request: { method: string }) => new Promise(() => {}))
+
 export const runtimeSubscribe = vi.fn<RuntimeSubscribe>(async (request, callbacks) => {
   subscriptions.push({ request, callbacks })
+
   return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
 })
 
@@ -52,11 +56,14 @@ export function seedState(): void {
   const runtimeEnvironments = [
     { id: ENV, createdAt: 100, pairingRevision: REVISION }
   ] as PublicKnownRuntimeEnvironment[]
+
   replaceRuntimeEnvironmentRevisions(runtimeEnvironments)
+
   const worktrees = [
     makeWorktree(WT, '/workspace/feature'),
     makeWorktree(BG_WT, '/workspace/background')
   ]
+
   useAppStore.setState(
     {
       ...initialState,
@@ -123,14 +130,17 @@ export function seedSleepingRecord(tabId: string, worktreeId: string, sessionId:
       }
     }
   }))
+
   return paneKey
 }
 
 export function findSubscription(method: string, occurrence = 0): RuntimeSubscription {
   const subscription = subscriptions.filter(({ request }) => request.method === method)[occurrence]
+
   if (!subscription) {
     throw new Error(`Missing ${method} subscription ${occurrence}`)
   }
+
   return subscription
 }
 
@@ -181,6 +191,7 @@ export function installFrameOrderingHarness(options: { fakeTimers?: boolean } = 
     if (options.fakeTimers) {
       vi.useFakeTimers()
     }
+
     subscriptions.length = 0
     runtimeCall.mockClear().mockImplementation(() => new Promise(() => {}))
     runtimeSubscribe.mockClear()
@@ -192,9 +203,11 @@ export function installFrameOrderingHarness(options: { fakeTimers?: boolean } = 
       configurable: true,
       value: { runtimeEnvironments: { call: runtimeCall, subscribe: runtimeSubscribe } }
     })
+
     if (options.fakeTimers) {
       setDocumentVisibility('visible')
     }
+
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetHostSessionMirrorHydrationForTests()
     setRuntimeEnvironmentConnectionGenerationForTests(ENV, 1)
@@ -208,6 +221,7 @@ export function installFrameOrderingHarness(options: { fakeTimers?: boolean } = 
     resetWebSessionTabsSnapshotFreshnessForTests()
     resetHostSessionMirrorHydrationForTests()
     clearRuntimeEnvironmentConnectionGenerationsForTests()
+
     if (options.fakeTimers) {
       resetStaleDocumentVisibilityForTesting()
       setDocumentVisibility('visible')

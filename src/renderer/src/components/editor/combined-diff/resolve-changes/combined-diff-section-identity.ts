@@ -2,7 +2,9 @@ import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-com
 import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
 
 export type CombinedDiffFileTreeMode = 'all' | 'uncommitted' | 'branch' | 'commit'
+
 export type CombinedDiffFileTreeEntry = GitStatusEntry | GitBranchChangeEntry
+
 export type CombinedDiffBranchTreeArea = 'combined-branch' | 'combined-commit'
 
 export function getCombinedDiffFileTreeSectionKey(
@@ -12,6 +14,7 @@ export function getCombinedDiffFileTreeSectionKey(
   if ((mode === 'all' || mode === 'uncommitted') && 'area' in entry) {
     return `${entry.area}:${entry.path}`
   }
+
   return `${mode === 'commit' ? 'combined-commit' : 'combined-branch'}:${entry.path}`
 }
 

@@ -61,29 +61,39 @@ export function scanSourceTree(
 ): ScannedFile[] {
   const extensions = options.extensions ?? /\.tsx?$/
   const found: ScannedFile[] = []
+
   const visit = (directory: string): void => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const name = entry.name
+
       if (IGNORED_DIRECTORIES.has(name) || name.startsWith('.') || name === '__fixtures__') {
         continue
       }
+
       const path = join(directory, name)
+
       // Ordinary entries carry their type from readdir.
       if (directoryEntryNeedsStat(entry) ? statSync(path).isDirectory() : entry.isDirectory()) {
         visit(path)
         continue
       }
+
       if (!extensions.test(name)) {
         continue
       }
+
       const relativePath = relative(root, path).replace(/\\/g, '/')
+
       if (!options.includeTests && isTestFile(relativePath)) {
         continue
       }
+
       found.push({ path, relativePath, source: readFileSync(path, 'utf8') })
     }
   }
+
   visit(root)
+
   return found
 }
 
@@ -109,9 +119,11 @@ export function stripComments(source: string): string {
   let out = ''
   let index = 0
   let quote: string | null = null
+
   while (index < source.length) {
     const char = source[index]!
     const next = source[index + 1]
+
     if (quote) {
       // Only a template literal may span lines. Resetting at a newline stops an
       // apostrophe in prose, or a quote inside a regex literal, from swallowing
@@ -122,24 +134,29 @@ export function stripComments(source: string): string {
         index += 1
         continue
       }
+
       if (char === '\\') {
         out += '  '
         index += 2
         continue
       }
+
       if (char === quote) {
         quote = null
       }
+
       out += char
       index += 1
       continue
     }
+
     if (char === "'" || char === '"' || char === '`') {
       quote = char
       out += char
       index += 1
       continue
     }
+
     if (char === '/' && next === '*') {
       const end = source.indexOf('*/', index + 2)
       const stop = end === -1 ? source.length : end + 2
@@ -148,6 +165,7 @@ export function stripComments(source: string): string {
       index = stop
       continue
     }
+
     if (char === '/' && next === '/') {
       const end = source.indexOf('\n', index)
       const stop = end === -1 ? source.length : end
@@ -155,9 +173,11 @@ export function stripComments(source: string): string {
       index = stop
       continue
     }
+
     out += char
     index += 1
   }
+
   return out
 }
 
@@ -204,12 +224,15 @@ function startsRegexLiteral(prev: string | undefined): boolean {
 /** End index (exclusive) of the regex literal opening at `start`, or -1. */
 function findRegexLiteralEnd(source: string, start: number): number {
   let inClass = false
+
   for (let index = start + 1; index < source.length; index += 1) {
     const char = source[index]
+
     if (char === '\\') {
       index += 1
       continue
     }
+
     // A `/` inside `[...]` is literal, so it must not close the pattern.
     if (char === '[') {
       inClass = true
@@ -221,6 +244,7 @@ function findRegexLiteralEnd(source: string, start: number): number {
       return index + 1
     }
   }
+
   return -1
 }
 
@@ -232,8 +256,10 @@ export function blankStringContents(source: string, reportDesync = false): strin
   // Brace depth per interpolation, so a `}` inside `${ { a: 1 } }` does not
   // close it. A plain counter mistook the first `}` for the closer.
   const templates: number[] = []
+
   while (index < source.length) {
     const char = source[index]!
+
     if (quote === '`' && char === '$' && source[index + 1] === '{') {
       templates.push(0)
       quote = null
@@ -242,8 +268,10 @@ export function blankStringContents(source: string, reportDesync = false): strin
       index += 2
       continue
     }
+
     if (quote === null && templates.length > 0) {
       const depth = templates.at(-1) ?? 0
+
       if (char === '{') {
         templates[templates.length - 1] = depth + 1
       } else if (char === '}') {
@@ -255,9 +283,11 @@ export function blankStringContents(source: string, reportDesync = false): strin
           index += 1
           continue
         }
+
         templates[templates.length - 1] = depth - 1
       }
     }
+
     if (quote) {
       // Same rule stripComments uses: only a template may span lines, so an
       // apostrophe in a regex literal cannot invert the rest of the file. That
@@ -268,11 +298,13 @@ export function blankStringContents(source: string, reportDesync = false): strin
         index += 1
         continue
       }
+
       if (char === '\\') {
         out += '  '
         index += 2
         continue
       }
+
       if (char === quote) {
         quote = null
         out += char
@@ -280,9 +312,11 @@ export function blankStringContents(source: string, reportDesync = false): strin
       } else {
         out += char === '\n' ? char : ' '
       }
+
       index += 1
       continue
     }
+
     // A regex literal can carry a lone apostrophe (`/'/g` in a shell quoter),
     // which reads as a string opener and desyncs the rest of the file. The
     // classic prev-token test disambiguates it from division: after a value a
@@ -291,8 +325,10 @@ export function blankStringContents(source: string, reportDesync = false): strin
     // comments first, but this runs standalone too, and at index 0 a file
     // starting with a banner comment read as one giant regex.
     const next = source[index + 1]
+
     if (char === '/' && next !== '/' && next !== '*' && startsRegexLiteral(lastSignificantChar)) {
       const end = findRegexLiteralEnd(source, index)
+
       if (end !== -1) {
         out += `/${' '.repeat(end - index - 1)}`
         lastSignificantChar = '/'
@@ -300,17 +336,23 @@ export function blankStringContents(source: string, reportDesync = false): strin
         continue
       }
     }
+
     if (char === "'" || char === '"' || char === '`') {
       quote = char
     }
+
     out += char
+
     if (/\S/.test(char)) {
       lastSignificantChar = char
     }
+
     index += 1
   }
+
   if (reportDesync) {
     return quote !== null || templates.length > 0 ? 'desynced' : ''
   }
+
   return out
 }

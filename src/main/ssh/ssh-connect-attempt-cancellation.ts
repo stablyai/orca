@@ -1,4 +1,5 @@
 const CANCELLED_CONNECT_ATTEMPT_MESSAGE = 'SSH connection attempt was cancelled'
+
 const CANCELLED_CONNECT_ATTEMPT_NAME = 'SshConnectAttemptCancelledError'
 
 // Why: cancellation means a newer attempt (or disconnect) already owns the connection, so it must be
@@ -6,6 +7,7 @@ const CANCELLED_CONNECT_ATTEMPT_NAME = 'SshConnectAttemptCancelledError'
 export function createCancelledConnectAttemptError(): Error {
   const error = new Error(CANCELLED_CONNECT_ATTEMPT_MESSAGE)
   error.name = CANCELLED_CONNECT_ATTEMPT_NAME
+
   return error
 }
 

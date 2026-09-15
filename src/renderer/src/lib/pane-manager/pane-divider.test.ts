@@ -10,10 +10,13 @@ describe('createDividerFlexFrameScheduler', () => {
   it('coalesces repeated drag updates into one flex write per animation frame', () => {
     const apply = vi.fn()
     const queuedFrames: FrameRequestCallback[] = []
+
     const requestFrame = vi.fn((callback: FrameRequestCallback) => {
       queuedFrames.push(callback)
+
       return queuedFrames.length
     })
+
     const cancelFrame = vi.fn()
     const scheduler = createDividerFlexFrameScheduler({ apply, requestFrame, cancelFrame })
 
@@ -52,6 +55,7 @@ describe('disposeDivider', () => {
     const dividerListeners = new Map<string, EventListener>()
     const onDragActiveChange = vi.fn()
     const preventDefault = vi.fn()
+
     const divider = {
       style: {
         setProperty: vi.fn()
@@ -70,6 +74,7 @@ describe('disposeDivider', () => {
       previousElementSibling: null,
       nextElementSibling: null
     } as unknown as HTMLElement
+
     vi.stubGlobal('document', {
       createElement: vi.fn(() => divider)
     })
@@ -97,6 +102,7 @@ describe('disposeDivider', () => {
     const onDragActiveChange = vi.fn()
     const previousPane = createSizedPaneElement({ width: 0, height: 200 })
     const nextPane = createSizedPaneElement({ width: 0, height: 200 })
+
     const divider = {
       style: {
         setProperty: vi.fn()
@@ -115,6 +121,7 @@ describe('disposeDivider', () => {
       previousElementSibling: previousPane,
       nextElementSibling: nextPane
     } as unknown as HTMLElement
+
     vi.stubGlobal('document', {
       createElement: vi.fn(() => divider)
     })
@@ -142,6 +149,7 @@ describe('disposeDivider', () => {
     const capturedPointerIds = new Set<number>()
     const previousPane = createSizedPaneElement({ width: 100, height: 200 })
     const nextPane = createSizedPaneElement({ width: 300, height: 200 })
+
     const divider = {
       style: {
         setProperty: vi.fn()
@@ -168,6 +176,7 @@ describe('disposeDivider', () => {
       previousElementSibling: previousPane,
       nextElementSibling: nextPane
     } as unknown as HTMLElement
+
     const refitPanesUnder = vi.fn()
     const onLayoutChanged = vi.fn()
     vi.stubGlobal('document', {
@@ -218,6 +227,7 @@ describe('disposeDivider', () => {
     const capturedPointerIds = new Set<number>()
     const previousPane = createSizedPaneElement({ width: 100, height: 200 })
     const nextPane = createSizedPaneElement({ width: 300, height: 200 })
+
     const divider = {
       style: {
         setProperty: vi.fn()
@@ -244,6 +254,7 @@ describe('disposeDivider', () => {
       previousElementSibling: previousPane,
       nextElementSibling: nextPane
     } as unknown as HTMLElement
+
     const refitPanesUnder = vi.fn()
     const onLayoutChanged = vi.fn()
     vi.stubGlobal('document', {
@@ -291,6 +302,7 @@ describe('disposeDivider', () => {
     const capturedPointerIds = new Set<number>()
     const previousPane = createSizedPaneElement({ width: 30, height: 200 })
     const nextPane = createSizedPaneElement({ width: 40, height: 200 })
+
     const divider = {
       style: {
         setProperty: vi.fn()
@@ -313,6 +325,7 @@ describe('disposeDivider', () => {
       previousElementSibling: previousPane,
       nextElementSibling: nextPane
     } as unknown as HTMLElement
+
     vi.stubGlobal('document', {
       createElement: vi.fn(() => divider)
     })
@@ -350,6 +363,7 @@ describe('disposeDivider', () => {
     const nextPane = createSizedPaneElement({ width: 300, height: 200 })
     previousPane.style.flex = '2 1 0%'
     nextPane.style.flex = '3 1 0%'
+
     const divider = {
       style: {
         setProperty: vi.fn()
@@ -372,6 +386,7 @@ describe('disposeDivider', () => {
       previousElementSibling: previousPane,
       nextElementSibling: nextPane
     } as unknown as HTMLElement
+
     const refitPanesUnder = vi.fn()
     const onLayoutChanged = vi.fn()
     vi.stubGlobal('document', {
@@ -387,6 +402,7 @@ describe('disposeDivider', () => {
       'requestAnimationFrame',
       vi.fn((callback: FrameRequestCallback) => {
         queuedFrames.push(callback)
+
         return queuedFrames.length
       })
     )
@@ -417,11 +433,14 @@ describe('disposeDivider', () => {
     const dividerListeners = new Map<string, EventListener>()
     const windowListeners = new Map<string, EventListener>()
     const capturedPointerIds = new Set<number>()
+
     const previousPane = createSizedPaneElement(
       { width: 100, height: 200 },
       { classNames: ['pane'] }
     )
+
     const nextPane = createSizedPaneElement({ width: 300, height: 200 }, { classNames: ['pane'] })
+
     const divider = {
       style: {
         setProperty: vi.fn()
@@ -444,6 +463,7 @@ describe('disposeDivider', () => {
       previousElementSibling: previousPane,
       nextElementSibling: nextPane
     } as unknown as HTMLElement
+
     vi.stubGlobal('document', {
       createElement: vi.fn(() => divider)
     })
@@ -482,6 +502,7 @@ describe('disposeDivider', () => {
     const listeners = new Map<string, EventListener>()
     const previousPane = createSizedPaneElement({ width: 100, height: 200 })
     const nextPane = createSizedPaneElement({ width: 300, height: 200 })
+
     const divider = {
       style: {
         setProperty: vi.fn()
@@ -504,6 +525,7 @@ describe('disposeDivider', () => {
       previousElementSibling: previousPane,
       nextElementSibling: nextPane
     } as unknown as HTMLElement
+
     vi.stubGlobal('document', {
       createElement: vi.fn(() => divider)
     })
@@ -553,6 +575,7 @@ function createSizedPaneElement(
   style: Record<string, string>
 } {
   const classNames = new Set(options?.classNames ?? [])
+
   return {
     style: {},
     classList: {

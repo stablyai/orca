@@ -136,6 +136,7 @@ export function createDeferredStructuredAgentSessionEventSink(
   } = {}
 ): DeferredStructuredAgentSessionEventSink {
   const watermarks = { ...DEFAULT_WATERMARKS, ...deps.watermarks }
+
   const queue = new StructuredAgentSessionSinkQueue({
     watermarks,
     ...(deps.onError ? { onError: deps.onError } : {}),
@@ -205,18 +206,22 @@ export function createDeferredStructuredAgentSessionEventSink(
         ),
       tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity) => {
         const bytes = estimateStructuredAgentSessionItemBytes(identitySizeBound, body)
+
         return queue.submit(
           {
             bytes,
             lifecycle: true,
             run: async (bound) => {
               const identity = resolveIdentity(bound.journal)
+
               if (identity === null) {
                 return
               }
+
               if (estimateStructuredAgentSessionItemBytes(identity, body) > bytes) {
                 throw new Error('structured agent-session item identity exceeded its reserved size')
               }
+
               await bound.journal.appendItem(identity, body, { fence: bound.fence })
               bound.publish()
             }
@@ -227,6 +232,7 @@ export function createDeferredStructuredAgentSessionEventSink(
       journalEpoch: queue.journalEpoch,
       appendLifecycleBatch: (settlementId, mutations, options = {}) => {
         const admission = appendLifecycleBatch(settlementId, mutations, options)
+
         if (!admission.accepted) {
           deps.onError?.(
             new Error(
@@ -234,6 +240,7 @@ export function createDeferredStructuredAgentSessionEventSink(
             )
           )
         }
+
         return admission
       },
       tryAppendLifecycleBatch: appendLifecycleBatch,

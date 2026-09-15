@@ -9,6 +9,7 @@ import { useAppStore } from '@/store'
 import { useLinearProviderConnected } from './useLinearProviderConnected'
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 describe('useLinearProviderConnected', () => {
@@ -16,6 +17,7 @@ describe('useLinearProviderConnected', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     root = null
     container?.remove()
     container = null
@@ -37,6 +39,7 @@ describe('useLinearProviderConnected', () => {
     function Probe(): null {
       renders += 1
       connected = useLinearProviderConnected()
+
       return null
     }
 
@@ -77,6 +80,7 @@ describe('useLinearProviderConnected', () => {
 
     function Probe(): null {
       connected = useLinearProviderConnected()
+
       return null
     }
 

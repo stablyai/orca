@@ -43,38 +43,47 @@ export function sessionSearchReadDecision(args: {
 }): SessionSearchReadDecision {
   const { candidate, row, cursor, cutoffMs } = args
   const file = candidate.file
+
   // Retention first: a file outside the window is not worth reading whatever
   // else is true of it, and the purge is what removes any row it still has.
   if (cutoffMs !== null && file.mtimeMs < cutoffMs) {
     return 'skip'
   }
+
   if (!row) {
     // Nothing held for this path. Not `whole`, because the reader can continue
     // from wherever it likes: there is no span this index has to reach past.
     return 'any'
   }
+
   if (heldOut(row, file.mtimeMs)) {
     return 'skip'
   }
+
   if (row.state === 'due') {
     // The index is behind on a span no append reaches: a declined append, or a
     // window that widened to admit this file.
     return 'whole'
   }
+
   if (cursor === null || requiresWholeRead(cursor)) {
     // A different file at the same name, or a chunked read that left a prefix
     // and no cursor. Appending onto either would splice two spans together.
     return 'whole'
   }
+
   const size = file.sizeBytes
+
   if (typeof size === 'number' && cursor.byteOffset !== null && cursor.byteOffset > size) {
     // Shorter than the index read to: this is not the file that cursor came from.
     return 'whole'
   }
+
   if (row.state === 'failed') {
     // Still within its retries, or the stat moved since it last failed.
     return 'any'
   }
+
   return statMatches(row, file) ? 'skip' : 'any'
 }
 

@@ -25,8 +25,10 @@ function installFakeAbortSignalTimeout(): AbortController[] {
       () => controller.abort(new DOMException('The operation timed out.', 'TimeoutError')),
       timeoutMs
     )
+
     return controller.signal
   })
+
   return controllers
 }
 
@@ -45,12 +47,15 @@ describe('local worktree path presence', () => {
       if (pathValue === '/missing') {
         throw fsError('ENOENT')
       }
+
       if (pathValue === '/not-a-directory') {
         throw fsError('ENOTDIR')
       }
+
       if (pathValue === '/permission-denied') {
         throw fsError('EACCES')
       }
+
       return {}
     })
 
@@ -102,6 +107,7 @@ describe('local worktree path presence', () => {
       '/first-3',
       '/first-4'
     ])
+
     const second = localWorktreePathsExistOrAreUnverifiable([
       '/second-1',
       '/second-2',
@@ -110,10 +116,12 @@ describe('local worktree path presence', () => {
     ])
 
     let resolved = 0
+
     while (resolved < 8) {
       while (pending.length === 0) {
         await Promise.resolve()
       }
+
       pending.shift()?.()
       resolved += 1
       await Promise.resolve()
@@ -202,6 +210,7 @@ describe('local worktree path presence', () => {
       const result = localWorktreePathsExistOrAreUnverifiable(paths, {
         signal: controller.signal
       })
+
       await vi.advanceTimersByTimeAsync(0)
       expect(statMock).toHaveBeenCalledTimes(2)
 

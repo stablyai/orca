@@ -23,6 +23,7 @@ export abstract class AgentBrowserBridgeShutdown extends AgentBrowserBridgeLifec
 
   async destroyAllSessions(options?: AgentBrowserCleanupOptions): Promise<void> {
     this.shutdownStarted = true
+
     // Why the union: a session still being created has already spawned its daemon but is not in
     // `sessions` yet, so closing only `sessions` lets that daemon outlive the quit (#16367).
     const sessionNames = new Set([
@@ -30,6 +31,7 @@ export abstract class AgentBrowserBridgeShutdown extends AgentBrowserBridgeLifec
       ...this.pendingSessionCreation.keys(),
       ...this.pendingSessionDestruction.keys()
     ])
+
     await mapSettledWithConcurrency(
       [...sessionNames],
       AGENT_BROWSER_CLEANUP_CONCURRENCY,

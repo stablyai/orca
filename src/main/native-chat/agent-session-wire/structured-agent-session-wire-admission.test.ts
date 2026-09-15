@@ -20,10 +20,13 @@ import { readAgentSessionHistory } from './agent-session-history-page'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 
 const SESSION = 'wire-admission-session'
+
 const LARGE_TEXT = 'x'.repeat(250 * 1024)
 
 let root: string
+
 let journal: AgentSessionJournal
+
 const journals = createTrackedJournalOpener()
 
 beforeEach(async () => {
@@ -38,6 +41,7 @@ beforeEach(async () => {
     },
     journalDir: root
   })
+
   for (let ordinal = 1; ordinal <= 20; ordinal += 1) {
     await journal.appendItem(item(ordinal), body(`${ordinal}:${LARGE_TEXT}`), { fence: 1 })
   }
@@ -56,6 +60,7 @@ describe('structured agent-session outbound admission', () => {
 
     const subscribers = new AgentSessionSubscribers()
     const initial: AgentSessionSubscribeEvent[] = []
+
     const dispose = subscribers.open({
       id: 'initial',
       sessionId: SESSION,
@@ -63,6 +68,7 @@ describe('structured agent-session outbound admission', () => {
       fence: 1,
       emit: (event) => initial.push(event)
     })
+
     expect(initial).toHaveLength(1)
     expect(initial[0]).toMatchObject({ type: 'snapshot', page: { hasOlder: true } })
     expectAdmitted(initial[0])
@@ -89,11 +95,13 @@ describe('structured agent-session outbound admission', () => {
     })
     expect(epochReset[0]).toMatchObject({ type: 'reset', reset: 'epoch_changed' })
     expectAdmitted(epochReset[0])
+
     const epochHistory = readAgentSessionHistory(journal, {
       sessionId: SESSION,
       direction: 'before',
       cursor: { epoch: 'retired-epoch', sequence: 1 }
     })
+
     expect(epochHistory).toMatchObject({ ok: false, reset: 'epoch_changed' })
     expectAdmitted(epochHistory)
 
@@ -103,11 +111,13 @@ describe('structured agent-session outbound admission', () => {
     // where this file's subject — is such a frame admitted outbound? — now lives.
     const cursorBefore = journal.cursor()
     const overBudget = await reopenWithOversizedRemoval(cursorBefore.sequence)
+
     const history = readAgentSessionHistory(overBudget, {
       sessionId: SESSION,
       direction: 'after',
       cursor: cursorBefore
     })
+
     expect(history).toMatchObject({ ok: false, reset: 'cursor_compacted' })
     expectAdmitted(history)
     expect(initial.some((event) => event.type === 'end')).toBe(false)
@@ -161,6 +171,7 @@ function body(text: string): AgentJournalItemBody {
 async function reopenWithOversizedRemoval(afterSequence: number): Promise<AgentSessionJournal> {
   const hugeItemId = `codex:thread-1:${'h'.repeat(5 * 1024 * 1024)}:1`
   const base = { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, epoch: journal.epoch, fence: 1, ts: 1 }
+
   const rows: JournalRow[] = [
     {
       ...base,
@@ -172,17 +183,22 @@ async function reopenWithOversizedRemoval(afterSequence: number): Promise<AgentS
     },
     { ...base, kind: 'tombstone', itemId: hugeItemId, revision: 2, seq: afterSequence + 2 }
   ]
+
   await journal.close()
   const opened = openJournalDatabase(journalDatabaseFile(root))
+
   try {
     opened.db.exec('BEGIN IMMEDIATE')
+
     for (const row of rows) {
       insertJournalRow(opened.db, SESSION, row)
     }
+
     opened.db.exec('COMMIT')
   } finally {
     opened.db.close()
   }
+
   return journals.open({
     identity: {
       sessionId: SESSION,

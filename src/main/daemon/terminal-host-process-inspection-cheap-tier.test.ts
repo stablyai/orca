@@ -6,7 +6,9 @@ const { execFileMock, runProcessMock } = vi.hoisted(() => ({
   execFileMock: vi.fn(),
   runProcessMock: vi.fn()
 }))
+
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+
 vi.mock('../../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
 
 import { resetCheapProcessTableSnapshotForTests } from '../../shared/cheap-process-table-snapshot-reader'
@@ -20,8 +22,11 @@ import { getSteadyStateAnchor } from './terminal-host-steady-state-anchor'
 import type { Session } from './session'
 
 const SHELL_PID = 4242
+
 const AGENT_PID = 4300
+
 const START_SHELL = 'Thu Sep  3 16:02:01 2026'
+
 const START_AGENT = 'Thu Sep  3 16:02:05 2026'
 
 type Table = { agent: 'claude' | 'stopped' | 'gone' | 'replaced'; children?: number }
@@ -30,6 +35,7 @@ type Table = { agent: 'claude' | 'stopped' | 'gone' | 'replaced'; children?: num
 function renderTable(table: Table): { full: string; cheap: string } {
   const shellTpgid = table.agent === 'claude' || table.agent === 'replaced' ? AGENT_PID : SHELL_PID
   const shellStat = shellTpgid === SHELL_PID ? 'Ss+' : 'Ss'
+
   const rows: { cheap: string; full: string }[] = [
     {
       cheap: `${SHELL_PID} 1 ${SHELL_PID} ${shellTpgid} ${shellStat} ${START_SHELL}`,
@@ -40,6 +46,7 @@ function renderTable(table: Table): { full: string; cheap: string } {
       full: `9000 1 9000 9000 Ss+ ttys009 Thu Sep  3 12:00:00 2026 -zsh`
     }
   ]
+
   if (table.agent !== 'gone') {
     const stat = table.agent === 'stopped' ? 'T' : 'S+'
     const start = table.agent === 'replaced' ? 'Thu Sep  3 16:30:00 2026' : START_AGENT
@@ -47,6 +54,7 @@ function renderTable(table: Table): { full: string; cheap: string } {
       cheap: `${AGENT_PID} ${SHELL_PID} ${AGENT_PID} ${shellTpgid} ${stat} ${start}`,
       full: `${AGENT_PID} ${SHELL_PID} ${AGENT_PID} ${shellTpgid} ${stat} ttys004 ${start} node /usr/local/bin/claude`
     })
+
     for (let i = 0; i < (table.children ?? 0); i += 1) {
       const pid = AGENT_PID + 10 + i
       rows.push({
@@ -55,6 +63,7 @@ function renderTable(table: Table): { full: string; cheap: string } {
       })
     }
   }
+
   return {
     full: `${rows.map((r) => r.full).join('\n')}\n`,
     cheap: `${rows.map((r) => r.cheap).join('\n')}\n`
@@ -62,6 +71,7 @@ function renderTable(table: Table): { full: string; cheap: string } {
 }
 
 const forks = { full: 0, cheap: 0 }
+
 let table: Table = { agent: 'claude' }
 
 function installPs(): void {
@@ -76,6 +86,7 @@ function installPs(): void {
   runProcessMock.mockImplementation(async (spec: { args: readonly string[] }) => {
     expect(spec.args[1]).not.toContain('command=')
     forks.cheap += 1
+
     return {
       code: 0,
       signal: null,
@@ -88,6 +99,7 @@ function installPs(): void {
 
 function createSession(processName: () => string): Session {
   let dead = false
+
   const tracker = createPtyForegroundProcessTracker({
     process: {
       pid: SHELL_PID,
@@ -100,6 +112,7 @@ function createSession(processName: () => string): Session {
     startupAgentRecognition: null,
     isDead: () => dead
   })
+
   return {
     pid: SHELL_PID,
     incarnationId: 'inc-1',
@@ -123,6 +136,7 @@ async function inspect(
   result: Awaited<ReturnType<typeof inspectTerminalHostProcess>>
 }> {
   let tier: TerminalHostInspectionTier = 'full'
+
   const result = await inspectTerminalHostProcess({
     sessionId: 'wt-1:pane-1',
     session,
@@ -133,6 +147,7 @@ async function inspect(
       tier = t
     }
   })
+
   return { tier, result }
 }
 
@@ -167,6 +182,7 @@ describe('daemon cheap-tier process inspection', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
@@ -180,18 +196,21 @@ describe('daemon cheap-tier process inspection', () => {
     expect(first.tier).toBe('full')
     expect(first.result.foregroundProcess).toBe('claude')
     expect(getSteadyStateAnchor(session)?.agentName).toBe('claude')
+
     return session
   }
 
   it('a pane with NO recognized anchor never takes the cheap path, even when asked', async () => {
     table = { agent: 'gone' }
     const session = createSession(() => 'zsh')
+
     for (let tick = 0; tick < 5; tick += 1) {
       await advance(2_000)
       const { tier, result } = await inspect(session, { steadyState: true })
       expect(tier).toBe('full')
       expect(result.foregroundProcessEvidence).toBeDefined()
     }
+
     expect(forks.cheap).toBe(0)
     expect(forks.full).toBe(5)
   })
@@ -199,6 +218,7 @@ describe('daemon cheap-tier process inspection', () => {
   it('serves an unchanged anchored pane from the cheap tier and OMITS evidence rather than faking it', async () => {
     const session = await anchoredSession()
     const fullBefore = forks.full
+
     for (let tick = 0; tick < 4; tick += 1) {
       await advance(2_000)
       const { tier, result } = await inspect(session, { steadyState: true })
@@ -207,6 +227,7 @@ describe('daemon cheap-tier process inspection', () => {
       expect(result.hasChildProcesses).toBe(true)
       expect(result).not.toHaveProperty('foregroundProcessEvidence')
     }
+
     expect(forks.cheap).toBe(4)
     expect(forks.full).toBe(fullBefore)
   })

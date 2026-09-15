@@ -6,33 +6,40 @@ import type { E2EEKeypair } from '../e2ee-keypair'
 import type { PushHostChallenge, PushHostProofContext } from './push-host-proof'
 
 const encoder = new TextEncoder()
+
 export const PUSH_PROOF_DOMAIN = 'orca-push-host-proof/v1'
+
 export const PUSH_CHALLENGE_DOMAIN = 'orca-push-host-challenge/v1'
 
 function concat(parts: readonly Uint8Array[]): Uint8Array {
   const output = new Uint8Array(parts.reduce((total, part) => total + part.byteLength, 0))
   let offset = 0
+
   for (const part of parts) {
     output.set(part, offset)
     offset += part.byteLength
   }
+
   return output
 }
 
 function uint32(value: number): Uint8Array {
   const bytes = new Uint8Array(4)
   new DataView(bytes.buffer).setUint32(0, value, false)
+
   return bytes
 }
 
 function uint64(value: number): Uint8Array {
   const bytes = new Uint8Array(8)
   new DataView(bytes.buffer).setBigUint64(0, BigInt(value), false)
+
   return bytes
 }
 
 function field(name: string, value: Uint8Array): Uint8Array {
   const encodedName = encoder.encode(name)
+
   return concat([uint32(encodedName.byteLength), encodedName, uint32(value.byteLength), value])
 }
 
@@ -75,6 +82,7 @@ export function pushAckProof(secret: Uint8Array, transcript: Uint8Array): string
 
 export function createPushHostKeypair(): E2EEKeypair {
   const keys = nacl.box.keyPair()
+
   return {
     publicKey: keys.publicKey,
     secretKey: keys.secretKey,
@@ -97,6 +105,7 @@ export function buildPushChallengeFixture(input: {
   const secret = randomBytes(32)
   const expiresAt = input.issuedAt + 10_000
   const challengeId = input.challengeId ?? 'challenge-1'
+
   const transcript = buildPushTranscript({
     gatewayOrigin: input.gatewayOrigin,
     gatewayKey: gatewayKeys.publicKey,
@@ -108,12 +117,14 @@ export function buildPushChallengeFixture(input: {
     hostKey: input.hostKeypair.publicKey,
     ...input.transcript
   })
+
   const plaintext = concat([
     text(`${PUSH_CHALLENGE_DOMAIN}\0`),
     uint32(transcript.byteLength),
     transcript,
     secret
   ])
+
   return {
     challenge: {
       challengeId,

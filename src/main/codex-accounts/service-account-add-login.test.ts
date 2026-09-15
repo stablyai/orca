@@ -25,6 +25,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -38,8 +39,10 @@ describe('CodexAccountService config sync', () => {
     vi.resetModules()
 
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+
     const canonicalConfig =
       'model_provider = "openai"\napproval_policy = "never"\nsandbox_mode = "danger-full-access"\n'
+
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
 
     const spawnMock = vi.fn(
@@ -49,6 +52,7 @@ describe('CodexAccountService config sync', () => {
           stderr: PassThrough
           kill: () => void
         }
+
         child.stdout = new PassThrough()
         child.stderr = new PassThrough()
         child.kill = vi.fn()
@@ -60,6 +64,7 @@ describe('CodexAccountService config sync', () => {
         const payload = Buffer.from(JSON.stringify({ email: 'user@example.com' })).toString(
           'base64url'
         )
+
         writeFileSync(
           join(loginHome!, 'auth.json'),
           JSON.stringify({
@@ -71,6 +76,7 @@ describe('CodexAccountService config sync', () => {
         )
 
         queueMicrotask(() => child.emit('close', 0))
+
         return child
       }
     )
@@ -89,6 +95,7 @@ describe('CodexAccountService config sync', () => {
     const runtimeHome = createRuntimeHome()
 
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
@@ -110,6 +117,7 @@ describe('CodexAccountService config sync', () => {
     vi.resetModules()
     let fixture: Awaited<ReturnType<typeof createCanonicalHookTrustFixture>>
     let readHookTrustEntries: typeof ReadHookTrustEntries
+
     const spawnMock = vi.fn(
       (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
         const child = new EventEmitter() as EventEmitter & {
@@ -117,6 +125,7 @@ describe('CodexAccountService config sync', () => {
           stderr: PassThrough
           kill: () => void
         }
+
         child.stdout = new PassThrough()
         child.stderr = new PassThrough()
         child.kill = vi.fn()
@@ -124,9 +133,11 @@ describe('CodexAccountService config sync', () => {
         const loginHome = options.env.CODEX_HOME
         expect(loginHome).toBeTruthy()
         const entries = readHookTrustEntries(join(loginHome!, 'config.toml'))
+
         for (const key of fixture.orcaKeys) {
           expect(entries.has(key)).toBe(false)
         }
+
         expect(entries.has(fixture.userKey)).toBe(false)
         writeFileSync(
           join(loginHome!, 'auth.json'),
@@ -135,6 +146,7 @@ describe('CodexAccountService config sync', () => {
         )
 
         queueMicrotask(() => child.emit('close', 0))
+
         return child
       }
     )
@@ -154,6 +166,7 @@ describe('CodexAccountService config sync', () => {
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
@@ -169,6 +182,7 @@ describe('CodexAccountService config sync', () => {
     vi.resetModules()
 
     const canonicalConfigPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
+
     const canonicalConfig = [
       'model_provider = "codex-lb"',
       'model = "gpt-5.2-codex"',
@@ -179,6 +193,7 @@ describe('CodexAccountService config sync', () => {
       'env_key = "EXAMPLE_GATEWAY_TOKEN"',
       ''
     ].join('\n')
+
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
 
     const spawnMock = vi.fn()
@@ -191,6 +206,7 @@ describe('CodexAccountService config sync', () => {
       const rateLimits = createRateLimits()
       const runtimeHome = createRuntimeHome()
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,
@@ -222,6 +238,7 @@ describe('CodexAccountService config sync', () => {
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')
 
     const managedHomePath = join(testState.userDataDir, 'codex-accounts', 'account-1', 'home')
+
     const spawnMock = vi.fn(
       (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
         const loginHome = options.env.CODEX_HOME
@@ -234,6 +251,7 @@ describe('CodexAccountService config sync', () => {
           stderr: PassThrough
           kill: () => void
         }
+
         child.stdout = new PassThrough()
         child.stderr = new PassThrough()
         child.kill = vi.fn()
@@ -243,6 +261,7 @@ describe('CodexAccountService config sync', () => {
           'utf-8'
         )
         queueMicrotask(() => child.emit('close', 0))
+
         return child
       }
     )
@@ -271,12 +290,14 @@ describe('CodexAccountService config sync', () => {
       ],
       activeCodexManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
@@ -343,6 +364,7 @@ describe('CodexAccountService config sync', () => {
       updatedAt: index + 1,
       lastAuthenticatedAt: index + 1
     }))
+
     const wslAccount = {
       id: 'account-wsl',
       email: 'account-wsl@example.com',
@@ -362,6 +384,7 @@ describe('CodexAccountService config sync', () => {
       updatedAt: 3,
       lastAuthenticatedAt: 3
     }
+
     const settings = createSettings({
       codexManagedAccounts: [...hostAccounts, wslAccount],
       activeCodexManagedAccountId: 'account-1',
@@ -370,8 +393,10 @@ describe('CodexAccountService config sync', () => {
         wsl: { Ubuntu: 'account-wsl' }
       }
     })
+
     const store = createStore(settings)
     const runtimeHome = createRuntimeHome()
+
     const spawnMock = vi.fn(
       (_command: string, _args: string[], options: { env: NodeJS.ProcessEnv }) => {
         const child = new EventEmitter() as EventEmitter & {
@@ -379,6 +404,7 @@ describe('CodexAccountService config sync', () => {
           stderr: PassThrough
           kill: () => void
         }
+
         child.stdout = new PassThrough()
         child.stderr = new PassThrough()
         child.kill = vi.fn()
@@ -391,19 +417,24 @@ describe('CodexAccountService config sync', () => {
             wsl: { Ubuntu: null }
           }
         })
+
         if (testCase.outcome === 'login-failure') {
           queueMicrotask(() => child.emit('close', 1))
+
           return child
         }
+
         writeFileSync(
           join(options.env.CODEX_HOME!, 'auth.json'),
           createCodexAuthJson('reauthenticated@example.com', 'provider-new', 'refresh-new'),
           'utf-8'
         )
         queueMicrotask(() => child.emit('close', 0))
+
         return child
       }
     )
+
     vi.doMock('node:child_process', () => ({
       execFileSync: vi.fn(),
       spawn: spawnMock
@@ -416,6 +447,7 @@ describe('CodexAccountService config sync', () => {
       if (testCase.outcome !== 'runtime-validation-failure') {
         return
       }
+
       const current = store.getSettings()
       store.updateSettings({
         activeCodexManagedAccountId: null,
@@ -427,6 +459,7 @@ describe('CodexAccountService config sync', () => {
     })
     const rateLimits = createRateLimits()
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
@@ -434,6 +467,7 @@ describe('CodexAccountService config sync', () => {
     )
 
     let result: CodexRateLimitAccountsState | null = null
+
     if (testCase.outcome === 'login-failure') {
       await expect(service.reauthenticateAccount(testCase.accountId)).rejects.toThrow(
         'Codex login exited with code 1.'
@@ -443,12 +477,14 @@ describe('CodexAccountService config sync', () => {
     }
 
     expect(result?.activeAccountId ?? null).toBe(testCase.expectedActiveAccountId)
+
     if (result) {
       expect(result.activeAccountIdsByRuntime).toEqual({
         host: testCase.expectedActiveAccountId,
         wsl: { Ubuntu: null }
       })
     }
+
     expect(store.getSettings()).toMatchObject({
       activeCodexManagedAccountId: testCase.expectedActiveAccountId,
       activeCodexManagedAccountIdsByRuntime: {
@@ -458,12 +494,14 @@ describe('CodexAccountService config sync', () => {
     })
     const completedLogin = testCase.outcome !== 'login-failure'
     expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(completedLogin ? 1 : 0)
+
     if (completedLogin) {
       expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledWith({ runtime: 'host' })
       expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalledWith(undefined, {
         runtime: 'host'
       })
     }
+
     expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalledTimes(completedLogin ? 1 : 0)
     expect(store.updateSettings).toHaveBeenCalledTimes(testCase.expectedUpdateCount)
   })
@@ -471,12 +509,14 @@ describe('CodexAccountService config sync', () => {
   it('does not recreate a missing managed home at a different account path', async () => {
     vi.resetModules()
     const managedHomePath = join(testState.userDataDir, 'codex-accounts', 'other-account', 'home')
+
     const expectedManagedHomePath = join(
       testState.userDataDir,
       'codex-accounts',
       'account-1',
       'home'
     )
+
     const spawnMock = vi.fn()
 
     vi.doMock('node:child_process', () => ({
@@ -499,12 +539,14 @@ describe('CodexAccountService config sync', () => {
         }
       ]
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
@@ -545,12 +587,14 @@ describe('CodexAccountService config sync', () => {
         }
       ]
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,

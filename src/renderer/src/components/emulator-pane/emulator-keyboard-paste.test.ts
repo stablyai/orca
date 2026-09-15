@@ -13,9 +13,11 @@ describe('emulator keyboard paste', () => {
     const plan = buildEmulatorKeyboardPastePlan('ab\r\nc', { maxFramesPerChunk: 4 })
 
     expect(plan.status).toBe('accepted')
+
     if (plan.status !== 'accepted') {
       return
     }
+
     expect(plan.chunks.map((chunk) => chunk.length)).toEqual([4, 4])
     expect(plan.chunks.every((chunk) => chunk.length <= 4)).toBe(true)
   })
@@ -24,9 +26,11 @@ describe('emulator keyboard paste', () => {
     const plan = buildEmulatorKeyboardPastePlan('ab\r\nc', { maxFramesPerChunk: 4 })
 
     expect(plan.status).toBe('accepted')
+
     if (plan.status !== 'accepted') {
       return
     }
+
     expect(plan.chunks).toEqual([...iterateEmulatorKeyboardPasteChunks('ab\r\nc', 4)])
   })
 
@@ -82,6 +86,7 @@ describe('emulator keyboard paste', () => {
   it('sends chunks only after the previous chunk delay elapses', async () => {
     vi.useFakeTimers()
     const sendKeyboardFrames = vi.fn(() => true)
+
     const resultPromise = pasteTextIntoEmulatorKeyboard({
       frameDelayMs: 5,
       maxFramesPerChunk: 2,
@@ -108,6 +113,7 @@ describe('emulator keyboard paste', () => {
     vi.useFakeTimers()
     let cancelled = false
     const sendKeyboardFrames = vi.fn(() => true)
+
     const resultPromise = pasteTextIntoEmulatorKeyboard({
       frameDelayMs: 5,
       isCancelled: () => cancelled,

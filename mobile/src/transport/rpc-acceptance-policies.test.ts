@@ -116,6 +116,7 @@ describe('a refusal carrying stray success fields', () => {
       error: { code: 'method_not_found', message: 'Nope' },
       _meta: meta
     } as unknown as RpcResponse
+
     expect(isMethodNotFoundRefusal(straySuccess)).toBe(false)
   })
 })
@@ -152,6 +153,7 @@ describe('isStreamingOpenerReply', () => {
       streaming: flag,
       _meta: meta
     } as unknown as RpcResponse
+
     expect(isStreamingOpenerReply(response)).toBe(false)
   })
 
@@ -163,6 +165,7 @@ describe('isStreamingOpenerReply', () => {
       streaming: true,
       _meta: meta
     } as unknown as RpcResponse
+
     expect(isStreamingOpenerReply(response)).toBe(false)
   })
 })

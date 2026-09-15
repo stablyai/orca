@@ -14,13 +14,16 @@ import { getShortcutPlatform } from '@/lib/shortcut-platform'
 // affordance without another round of styling decisions.
 export function HiddenExperimentalGroup(): React.JSX.Element {
   const isMac = getShortcutPlatform() === 'darwin'
+
   const [renderDiagnosticsArmed, setRenderDiagnosticsArmed] = useState(
     isTerminalRenderDesyncSentinelArmed
   )
+
   const onRenderDiagnosticsChange = (armed: boolean): void => {
     setTerminalRenderDesyncSentinelArmed(armed)
     setRenderDiagnosticsArmed(armed)
   }
+
   return (
     <section className="space-y-3 rounded-lg border border-orange-500/40 bg-orange-500/5 p-3">
       <h4 className="text-sm font-semibold text-orange-500 dark:text-orange-300">

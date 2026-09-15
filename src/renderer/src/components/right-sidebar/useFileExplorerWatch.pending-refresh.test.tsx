@@ -9,6 +9,7 @@ import type {
 } from './file-explorer-types'
 
 const ownerRef = vi.hoisted(() => ({ current: { kind: 'local' } as FileExplorerOperationOwner }))
+
 const runtimeWatch = vi.hoisted(() => ({
   handler: null as ((payload: FsChangedPayload) => void) | null,
   subscribe: vi.fn()
@@ -19,10 +20,12 @@ vi.mock('@/store', () => ({
     getState: () => ({})
   })
 }))
+
 vi.mock('./file-explorer-operation-owner', () => ({
   getFileExplorerOperationOwner: () => ownerRef.current,
   getFileExplorerOperationOwnerFromState: () => ownerRef.current
 }))
+
 vi.mock('@/runtime/runtime-file-client', () => ({
   subscribeRuntimeFileChanges: runtimeWatch.subscribe
 }))
@@ -45,6 +48,7 @@ describe('useFileExplorerWatch pending refreshes', () => {
     runtimeWatch.subscribe.mockImplementation(
       async (_context: unknown, handler: WatchHandler): Promise<() => void> => {
         runtimeWatch.handler = handler
+
         return () => undefined
       }
     )
@@ -56,6 +60,7 @@ describe('useFileExplorerWatch pending refreshes', () => {
         fs: {
           onFsChanged: vi.fn((handler: WatchHandler) => {
             mainWatchHandler = handler
+
             return vi.fn()
           })
         }
@@ -144,13 +149,16 @@ describe('useFileExplorerWatch pending refreshes', () => {
       executionHostId: 'runtime:runtime-1'
     }
     let releaseSubscription!: () => void
+
     const subscriptionReady = new Promise<void>((resolve) => {
       releaseSubscription = resolve
     })
+
     runtimeWatch.subscribe.mockImplementation(
       async (_context: unknown, handler: WatchHandler): Promise<() => void> => {
         runtimeWatch.handler = handler
         await subscriptionReady
+
         return () => undefined
       }
     )

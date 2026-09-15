@@ -18,6 +18,7 @@ type WatcherFrameEvent = { kind: string; absolutePath: string; isDirectory?: boo
 function frameMessage(frame: Buffer): { method: string; params?: Record<string, unknown> } {
   const payloadLength = frame.readUInt32BE(9)
   const message = parseJsonRpcMessage(frame.subarray(HEADER_LENGTH, HEADER_LENGTH + payloadLength))
+
   return 'method' in message
     ? { method: message.method, params: message.params as Record<string, unknown> | undefined }
     : { method: '' }
@@ -29,6 +30,7 @@ function frameMethod(frame: Buffer): string {
 
 function frameEvents(frame: Buffer): WatcherFrameEvent[] {
   const params = frameMessage(frame).params
+
   return (params?.events ?? []) as WatcherFrameEvent[]
 }
 
@@ -44,14 +46,19 @@ function createRecordingSink(highWaterMark?: number): {
   const drainWaiters: (() => void)[] = []
   let closes = 0
   let blocked = false
+
   const write: RelayClientWrite = (frame) => {
     frames.push(Buffer.from(frame))
+
     if (blocked) {
       blocked = false
+
       return false
     }
+
     return true
   }
+
   const options: RelayClientSinkOptions = {
     ...(highWaterMark === undefined ? {} : { writableHighWaterMark: () => highWaterMark }),
     close: () => {
@@ -59,14 +66,17 @@ function createRecordingSink(highWaterMark?: number): {
     },
     waitWriteDrain: (callback) => {
       drainWaiters.push(callback)
+
       return () => {
         const index = drainWaiters.indexOf(callback)
+
         if (index !== -1) {
           drainWaiters.splice(index, 1)
         }
       }
     }
   }
+
   return {
     frames,
     closes: () => closes,
@@ -88,11 +98,14 @@ function createCallbackSink(): {
 } {
   const frames: Buffer[] = []
   const settlements: ((result: { ok: true }) => void)[] = []
+
   const write: RelayClientWrite = (frame, onSettled) => {
     frames.push(Buffer.from(frame))
     settlements.push(onSettled)
+
     return true
   }
+
   return {
     frames,
     settle: (index) => settlements[index]?.({ ok: true }),
@@ -116,6 +129,7 @@ function parentDir(absolutePath: string): string {
 // Fills the 2 MB producer queue so every subsequent watcher batch is rejected on the producer lane.
 function saturateProducerQueue(dispatcher: RelayDispatcher): void {
   let admitted = 0
+
   for (const chunk of [40_000, 1_000, 1]) {
     while (
       admitted < 5_000 &&
@@ -124,6 +138,7 @@ function saturateProducerQueue(dispatcher: RelayDispatcher): void {
       admitted += 1
     }
   }
+
   expect(admitted).toBeGreaterThan(0)
   expect(admitted).toBeLessThan(5_000)
 }
@@ -132,10 +147,13 @@ function saturateProducerQueue(dispatcher: RelayDispatcher): void {
 function parkProducerBytes(dispatcher: RelayDispatcher, bytes: number): number {
   const chunk = 'x'.repeat(40_000)
   let parked = 0
+
   while (parked < bytes && dispatcher.tryNotifyPtyData({ paneId: 'pane', data: chunk })) {
     parked += chunk.length
   }
+
   expect(parked).toBeGreaterThanOrEqual(bytes)
+
   return parked
 }
 
@@ -147,13 +165,16 @@ function parkProducerBytesForClient(
 ): number {
   const chunk = 'x'.repeat(40_000)
   let parked = 0
+
   while (
     parked < bytes &&
     dispatcher.publishProducerNotification(clientId, 'pty.data', { paneId: 'pane', data: chunk })
   ) {
     parked += chunk.length
   }
+
   expect(parked).toBeGreaterThanOrEqual(bytes)
+
   return parked
 }
 
@@ -204,6 +225,7 @@ describe('relay watcher overflow suppression key', () => {
     const source = readFileSync(
       fileURLToPath(new URL('./relay-watcher-event-emitter.ts', import.meta.url))
     )
+
     expect(source.includes(0)).toBe(false)
   })
 
@@ -309,6 +331,7 @@ describe('relay watcher overflow suppression key', () => {
 
     try {
       const clientId = dispatcher.activeClientIds()[0]
+
       for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
         dispatcher.notifyClient(clientId, `control.${index}`)
       }
@@ -335,9 +358,11 @@ describe('relay watcher overflow suppression key', () => {
     try {
       const clientId = dispatcher.activeClientIds()[0]
       dispatcher.tryNotifyPtyData({ paneId: 'pane', data: 'x' })
+
       for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
         dispatcher.notifyClient(clientId, `control.${index}`)
       }
+
       emitRelayWatcherOverflow(dispatcher, '/workspace', false)
       expect(watcherFrames(sink.frames)).toHaveLength(0)
 
@@ -364,9 +389,11 @@ describe('relay watcher overflow suppression key', () => {
 
     try {
       const clientId = dispatcher.activeClientIds()[0]
+
       const markerParams = {
         events: [{ kind: 'overflow', absolutePath: '/workspace' }]
       }
+
       const markerBytes = dispatcher.notificationFrameBytes('fs.changed', markerParams)
       const emptyFillBytes = dispatcher.notificationFrameBytes('control.byte-fill', { data: '' })
       const fillDataBytes = DISPATCHER_CONTROL_QUEUE_MAX_BYTES - markerBytes + 1 - emptyFillBytes
@@ -397,6 +424,7 @@ describe('relay watcher overflow suppression key', () => {
 
     try {
       const clientId = dispatcher.activeClientIds()[0]
+
       for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
         dispatcher.notifyClient(clientId, `control.${index}`)
       }
@@ -405,6 +433,7 @@ describe('relay watcher overflow suppression key', () => {
         emitRelayWatcherOverflow(dispatcher, '/workspace', false)
         emitRelayWatcherOverflow(dispatcher, '/other', false)
       }
+
       sink.drainWaiters.shift()?.()
 
       // A retained root must neither duplicate nor suppress a peer root's resync.
@@ -426,9 +455,11 @@ describe('relay watcher overflow suppression key', () => {
 
     try {
       const clientId = dispatcher.activeClientIds()[0]
+
       for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
         dispatcher.notifyClient(clientId, `control.${index}`)
       }
+
       emitRelayWatcherOverflow(dispatcher, '/workspace', false)
       expect(watcherFrames(stalled.frames)).toHaveLength(0)
 
@@ -451,9 +482,11 @@ describe('relay watcher overflow suppression key', () => {
 
     try {
       const clientId = dispatcher.activeClientIds()[0]
+
       for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
         dispatcher.notifyClient(clientId, `control.${index}`)
       }
+
       emitRelayWatcherOverflow(dispatcher, '/workspace', false)
       expect(watcherFrames(stalled.frames)).toHaveLength(0)
 
@@ -478,9 +511,11 @@ describe('relay watcher overflow suppression key', () => {
 
     try {
       const secondaryId = dispatcher.attachClient(secondary.write, secondary.options)
+
       for (let index = 0; index < DISPATCHER_CONTROL_QUEUE_MAX_FRAMES; index += 1) {
         dispatcher.notifyClient(secondaryId, `control.${index}`)
       }
+
       emitRelayWatcherOverflow(dispatcher, '/workspace', false)
       expect(watcherFrames(secondary.frames)).toHaveLength(0)
 
@@ -556,8 +591,10 @@ describe('relay watcher batch chunking', () => {
         if (typeof value !== 'object' || value === null) {
           return false
         }
+
         return 'kind' in value && 'absolutePath' in value
       })
+
       expect(sizedEvents).toHaveLength(events.length)
       expect(primary.frames.flatMap(frameEvents)).toHaveLength(events.length)
       expect(secondary.frames.flatMap(frameEvents)).toHaveLength(events.length)
@@ -625,6 +662,7 @@ describe('relay watcher batch chunking', () => {
           { type: 'create', path: `/workspace/file-${index}`, isDirectory: false }
         ])
       }
+
       // A second root must still get its own marker, or that tree silently desyncs.
       emitRelayWatcherEvents(dispatcher, '/other', false, [
         { type: 'create', path: '/other/file', isDirectory: false }
@@ -632,9 +670,11 @@ describe('relay watcher batch chunking', () => {
       expect(sink.closes()).toBe(0)
 
       sink.drainWaiters.shift()?.()
+
       const markers = sink.frames
         .filter((frame) => frameMethod(frame) === 'fs.changed')
         .flatMap(frameEvents)
+
       expect(markers).toEqual([
         { kind: 'overflow', absolutePath: '/workspace' },
         { kind: 'overflow', absolutePath: '/other' }
@@ -658,6 +698,7 @@ describe('relay watcher batch chunking', () => {
     const dispatcher = new RelayDispatcher(sink.write, sink.options)
     const directoryCount = 8
     const replacedPath = '/workspace/project/src/module-7/component-0.tsx'
+
     const events: WatcherProcessEvent[] = [
       ...Array.from({ length: 200 }, (_unused, index) => ({
         type: 'create' as const,
@@ -671,9 +712,11 @@ describe('relay watcher batch chunking', () => {
       emitRelayWatcherEvents(dispatcher, '/workspace', false, events)
 
       expect(sink.frames.length).toBeGreaterThan(1)
+
       const frameDirs = sink.frames.map(
         (frame) => new Set(frameEvents(frame).map((event) => parentDir(event.absolutePath)))
       )
+
       const dirs = Array.from(new Set(events.map((event) => parentDir(event.path))))
       expect(dirs).toHaveLength(directoryCount)
       // Each directory in one frame; the renderer dedupes refreshes per payload, so extra frames = extra readDir RPCs.
@@ -681,13 +724,16 @@ describe('relay watcher batch chunking', () => {
       expect(refreshes).toBeLessThanOrEqual(directoryCount + sink.frames.length - 1)
 
       const delivered = sink.frames.flatMap(frameEvents)
+
       for (const dir of dirs) {
         const positions = delivered
           .map((event, index) => ({ event, index }))
           .filter((entry) => parentDir(entry.event.absolutePath) === dir)
           .map((entry) => entry.index)
+
         expect(positions.at(-1)! - positions[0]).toBe(positions.length - 1)
       }
+
       // Stable grouping keeps per-path order: the create still precedes the delete of the same path.
       expect(
         delivered.filter((event) => event.absolutePath === replacedPath).map((event) => event.kind)
@@ -729,6 +775,7 @@ describe('relay watcher batch chunking', () => {
 
       const totalBytes = sink.frames.reduce((total, frame) => total + frame.length, 0)
       expect(sink.frames.length).toBeLessThanOrEqual(Math.ceil(totalBytes / capacity) + 1)
+
       for (const frame of sink.frames.slice(0, -1)) {
         expect(frame.length).toBeGreaterThanOrEqual(capacity * 0.9)
       }
@@ -752,10 +799,12 @@ describe('relay watcher batch chunking', () => {
 
       const watcherFrames = sink.frames.filter((frame) => frameMethod(frame) === 'fs.changed')
       expect(watcherFrames.map(isOverflowFrame)).toEqual([true])
+
       // The flood injected nothing: the interactive lane keeps the whole reserve instead of ~425 KB less.
       const injected = watcherFrames
         .filter((frame) => !isOverflowFrame(frame))
         .reduce((total, frame) => total + frame.length, 0)
+
       expect(injected).toBe(0)
       expect(injected).toBeLessThan(
         DEFAULT_PRODUCER_QUEUE_MAX_BYTES - LEGACY_CLIENT_RETAINED_BYTES_LOW
@@ -809,9 +858,11 @@ describe('relay watcher batch chunking', () => {
 
       const stalledWatcher = watcherFrames(stalled.frames)
       expect(stalledWatcher.map(isOverflowFrame)).toEqual([true])
+
       const injected = stalledWatcher
         .filter((frame) => !isOverflowFrame(frame))
         .reduce((total, frame) => total + frame.length, 0)
+
       // Nothing injected: the congested client keeps its whole reserve for interactive PTY frames.
       expect(injected).toBe(0)
       expect(watcherFrames(healthy.frames).some(isOverflowFrame)).toBe(false)
@@ -855,6 +906,7 @@ describe('relay watcher batch chunking', () => {
         absolutePath: event.path,
         isDirectory: event.isDirectory
       }))
+
       expect(healthy.frames).toHaveLength(1)
       expect(frameEvents(healthy.frames[0])).toEqual(expected)
       expect(small.frames.length).toBeGreaterThan(1)

@@ -33,6 +33,7 @@ export class RuntimeLinearCreateCommands extends RuntimeLinearSaveFieldCommands 
     if ((params.body?.length ?? 0) > LINEAR_WRITE_BODY_CAP) {
       throw linearError('linear_body_too_large', 'Linear issue body is too large.')
     }
+
     const parent =
       params.parentInput || params.parentCurrent
         ? await this.resolveLinearAgentWriteTarget({
@@ -42,20 +43,24 @@ export class RuntimeLinearCreateCommands extends RuntimeLinearSaveFieldCommands 
             context: params.context
           })
         : null
+
     if (parent && params.workspaceId && params.workspaceId !== parent.workspaceId) {
       throw linearError(
         'linear_invalid_workspace',
         'The parent issue belongs to a different workspace.'
       )
     }
+
     const team = await this.resolveLinearCreateTeam(
       params.teamInput ?? params.teamKey,
       params.workspaceId,
       parent
     )
+
     const createFields = await this.resolveLinearCreateFields(params, team)
     const parentId = parent?.issue.id ?? null
     const writeId = params.writeId ?? randomUUID()
+
     const existing =
       params.writeId !== undefined
         ? await this.getMatchingLinearCreatedIssue(
@@ -67,10 +72,12 @@ export class RuntimeLinearCreateCommands extends RuntimeLinearSaveFieldCommands 
             createFields
           )
         : null
+
     if (existing) {
       if (parent) {
         await this.notifyLinearLinkedIssueUpdated(parent.workspaceId, parent.issue.identifier)
       }
+
       return this.linearCreateResult(existing, team.workspaceId, writeId, true)
     }
 
@@ -89,12 +96,14 @@ export class RuntimeLinearCreateCommands extends RuntimeLinearSaveFieldCommands 
               signal
             }
           )
+
           if (!this.linearCreatedIssueMatchesIntent(created, createFields)) {
             throw new LinearWriteFailure(
               'unconfirmed',
               'Linear issue create could not be confirmed with the requested task fields.'
             )
           }
+
           return created
         },
         (cause) =>
@@ -107,9 +116,11 @@ export class RuntimeLinearCreateCommands extends RuntimeLinearSaveFieldCommands 
             cause
           })
       )
+
       if (parent) {
         await this.notifyLinearLinkedIssueUpdated(parent.workspaceId, parent.issue.identifier)
       }
+
       return this.linearCreateResult(issue, team.workspaceId, writeId, false)
     } catch (error) {
       if (error instanceof LinearWriteFailure && error.kind === 'duplicate_id') {
@@ -128,11 +139,14 @@ export class RuntimeLinearCreateCommands extends RuntimeLinearSaveFieldCommands 
               createFields
             })
         )
+
         if (parent) {
           await this.notifyLinearLinkedIssueUpdated(parent.workspaceId, parent.issue.identifier)
         }
+
         return this.linearCreateResult(issue, team.workspaceId, writeId, true)
       }
+
       throw error
     }
   }

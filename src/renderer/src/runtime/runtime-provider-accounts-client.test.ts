@@ -19,6 +19,7 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const LOCAL = { activeRuntimeEnvironmentId: null }
+
 const REMOTE = { activeRuntimeEnvironmentId: 'env-1' }
 
 function emptyClaudeState(): ClaudeRateLimitAccountsState {
@@ -50,14 +51,23 @@ type SubscriptionCallbacks = {
 }
 
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
+
 const runtimeEnvironmentSubscribe = vi.fn()
+
 const claudeListLocal = vi.fn()
+
 const codexListLocal = vi.fn()
+
 const claudeSelectLocal = vi.fn()
+
 const codexSelectLocal = vi.fn()
+
 const claudeRemoveLocal = vi.fn()
+
 const codexRemoveLocal = vi.fn()
+
 const unsubscribe = vi.fn()
 
 let subscriptionCallbacks: SubscriptionCallbacks | null = null
@@ -65,6 +75,7 @@ let subscriptionCallbacks: SubscriptionCallbacks | null = null
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
   vi.restoreAllMocks()
+
   for (const mock of [
     runtimeEnvironmentCall,
     runtimeEnvironmentTransportCall,
@@ -79,6 +90,7 @@ beforeEach(() => {
   ]) {
     mock.mockReset()
   }
+
   subscriptionCallbacks = null
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
@@ -86,6 +98,7 @@ beforeEach(() => {
   runtimeEnvironmentSubscribe.mockImplementation(
     async (_args: unknown, callbacks: SubscriptionCallbacks) => {
       subscriptionCallbacks = callbacks
+
       return { unsubscribe, sendBinary: () => false }
     }
   )
@@ -138,6 +151,7 @@ describe('watchProviderAccounts', () => {
 
   it('does not deliver a late local snapshot after close', async () => {
     let resolveClaude: (state: ClaudeRateLimitAccountsState) => void = () => {}
+
     claudeListLocal.mockImplementation(
       () => new Promise<ClaudeRateLimitAccountsState>((resolve) => (resolveClaude = resolve))
     )
@@ -148,6 +162,7 @@ describe('watchProviderAccounts', () => {
       onSnapshot: (snapshot) => snapshots.push(snapshot),
       onError: () => {}
     })
+
     watcher.close()
     resolveClaude(emptyClaudeState())
     await flushMicrotasks()
@@ -229,12 +244,14 @@ describe('watchProviderAccounts', () => {
 
   it('streams remote snapshots from accounts.subscribe and unsubscribes on close', async () => {
     const snapshots: ProviderAccountsSnapshot[] = []
+
     const watcher = watchProviderAccounts(REMOTE, {
       onSnapshot: (snapshot) => snapshots.push(snapshot),
       onError: () => {
         throw new Error('unexpected error')
       }
     })
+
     await flushMicrotasks()
 
     expect(runtimeEnvironmentSubscribe).toHaveBeenCalledWith(
@@ -447,6 +464,7 @@ describe('provider account mutations', () => {
     const methods = runtimeEnvironmentCall.mock.calls.map(
       (call) => (call[0] as { method: string; params: unknown }).method
     )
+
     expect(methods).toEqual([
       'accounts.selectCodex',
       'accounts.selectClaude',

@@ -20,17 +20,21 @@ export function isUpdateCardVisible({
   if (status.state === 'checking' && !isUserInitiated) {
     return false
   }
+
   if (status.state === 'not-available' && (!isUserInitiated || autoDismissed)) {
     return false
   }
+
   if (status.state === 'idle') {
     return false
   }
+
   if (cachedVersion && dismissedVersion === cachedVersion && !updateUserInitiatedCycle) {
     if (status.state !== 'downloading' && status.state !== 'error') {
       return false
     }
   }
+
   return !(
     collapsed &&
     (status.state === 'downloading' || status.state === 'downloaded' || status.state === 'error')
@@ -58,6 +62,7 @@ export function getUpdateCardAriaLabel(status: UpdateStatus): string {
 
 export function isHttp2ProtocolError(message: string): boolean {
   const normalized = message.toLowerCase()
+
   return (
     normalized.includes('err_http2_protocol_error') ||
     normalized.includes('http2_protocol_error') ||

@@ -29,6 +29,7 @@ import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 
 const isMac = navigator.userAgent.includes('Mac')
+
 const isLinux = navigator.userAgent.includes('Linux')
 
 /** Platform-appropriate label: macOS → Finder, Windows → File Explorer, Linux → Files */
@@ -135,6 +136,7 @@ export function EditorFileTabContextMenu({
           if (!skipMenuFocusRestoreRef.current) {
             return
           }
+
           skipMenuFocusRestoreRef.current = false
           event.preventDefault()
           // Why: opening the input in onSelect lets the still-closing menu reclaim
@@ -256,8 +258,10 @@ export function EditorFileTabContextMenu({
               )
             ) {
               showLocalPathOpenBlockedToast()
+
               return
             }
+
             window.api.shell.openPath(file.filePath)
           }}
         >

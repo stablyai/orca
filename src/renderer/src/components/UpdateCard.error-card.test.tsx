@@ -8,13 +8,21 @@ import { UpdateCard } from './UpdateCard'
 import { NotificationCardStack } from './NotificationCardStack'
 
 const openUrl = vi.fn()
+
 const download = vi.fn()
+
 const check = vi.fn()
+
 const quitAndInstall = vi.fn()
+
 const getInstructions = vi.fn()
+
 const showLinuxPackage = vi.fn()
+
 const writeClipboardText = vi.fn()
+
 const relaunch = vi.fn()
+
 const setSettings = vi.fn()
 
 const PACKAGE_RECOVERY: LinuxPackageInstallRecovery = {
@@ -32,6 +40,7 @@ function renderWithInitialStatus(updateStatus: UpdateStatus): RenderResult {
     updateCardCollapsed: false,
     updateReassuranceSeen: true
   })
+
   return render(
     <NotificationCardStack>
       <UpdateCard />
@@ -99,6 +108,7 @@ describe('UpdateCard Windows signature failures', () => {
   it('does not offer the rejected version as a manual publisher-check bypass', () => {
     const message =
       'New version 1.4.200 is not signed by the application owner: publisherNames: Orca'
+
     renderAfterAvailableStatus()
 
     act(() => useAppStore.getState().setUpdateStatus({ state: 'error', message }))
@@ -115,6 +125,7 @@ describe('UpdateCard Windows signature failures', () => {
   it('keeps the blocked-check error collapsed while preserving retry and details', () => {
     const message =
       'Command failed: powershell.exe Get-AuthenticodeSignature -LiteralPath update.exe'
+
     renderAfterAvailableStatus()
 
     act(() => useAppStore.getState().setUpdateStatus({ state: 'error', message }))
@@ -137,6 +148,7 @@ describe('UpdateCard Windows signature failures', () => {
   it('routes a signature verdict raised during install to the security-stop card', () => {
     const message =
       'New version 1.4.200 is not signed by the application owner: publisherNames: Orca'
+
     renderAfterAvailableStatus()
 
     act(() => useAppStore.getState().setUpdateStatus({ state: 'error', message }))
@@ -326,6 +338,7 @@ describe('UpdateCard Linux package-install recovery', () => {
   it('links unusable package metadata to the release without offering a futile retry', () => {
     const message =
       'The downloaded package metadata could not be verified. Quit Orca before downloading and installing the update from the official release page.'
+
     renderWithInitialStatus({
       state: 'error',
       message,
@@ -355,6 +368,7 @@ describe('UpdateCard Linux package-install recovery', () => {
   it('shows the appended install cause behind the generic card details', () => {
     const message =
       'Could not start the update installer. Orca remains open. (Command failed: pkexec must be setuid root)'
+
     renderAfterAvailableStatus()
 
     act(() => useAppStore.getState().setUpdateStatus({ state: 'error', message }))

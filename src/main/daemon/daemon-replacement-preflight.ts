@@ -48,30 +48,37 @@ export async function prepareDaemonReplacement(
     releaseAdoptionClient,
     preserveDaemon
   } = options
+
   let pendingReplacement:
     | {
         reason: Parameters<typeof trackDaemonReplaced>[0]
         liveSessionCount: number | null
       }
     | undefined
+
   let confirmedReplacement = false
   const health = await checkDaemonHealth(socketPath, tokenPath)
+
   if (health === 'healthy') {
     const resolverHealth = await getMacDaemonSystemResolverHealth(socketPath, tokenPath)
+
     if (resolverHealth === 'unhealthy') {
       const liveSessionCount = await getAliveDaemonSessionCount(
         socketPath,
         tokenPath,
         recoveryDeadlineMs
       )
+
       if (liveSessionCount !== 0) {
         console.warn(
           liveSessionCount === null
             ? '[daemon] Preserving daemon with unavailable macOS system resolver because live session state could not be verified'
             : `[daemon] Preserving daemon with unavailable macOS system resolver because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
         )
+
         return preserveDaemon()
       }
+
       console.warn('[daemon] Replacing daemon with unavailable macOS system resolver')
       pendingReplacement = {
         reason: 'unhealthy_resolver',
@@ -81,6 +88,7 @@ export async function prepareDaemonReplacement(
     } else {
       // Why: a protocol-healthy daemon can outlive its launching app bundle (dev worktree rebuild, or packaged update replacing the app path).
       const identity = await getDaemonLaunchIdentity(runtimeDir, socketPath, tokenPath, entryPath)
+
       const stalePackagedBundle =
         getAppEnvironment().isPackaged() &&
         (await isDaemonStaleForCurrentBundle(
@@ -89,11 +97,13 @@ export async function prepareDaemonReplacement(
           tokenPath,
           getAppEnvironment().getVersion()
         ))
+
       if (identity === 'mismatch' || stalePackagedBundle) {
         // Why: replacing a healthy daemon kills its child PTYs; defer code freshness until no live sessions would be lost.
         const replacementLabel = stalePackagedBundle
           ? 'launched before the current app bundle was installed'
           : 'launched from a different app path'
+
         if (
           await shouldPreserveDaemonWithLiveSessions(
             socketPath,
@@ -104,6 +114,7 @@ export async function prepareDaemonReplacement(
         ) {
           return preserveDaemon()
         }
+
         console.warn(
           stalePackagedBundle
             ? '[daemon] Replacing daemon launched before the current app bundle was installed'
@@ -122,6 +133,7 @@ export async function prepareDaemonReplacement(
           socketPath,
           tokenPath
         )
+
         if (attributionHealth === 'severed') {
           // Why: replacing with live sessions would kill them; Settings → Developer
           // Permissions surfaces the Manage Sessions → Restart remedy instead.
@@ -130,6 +142,7 @@ export async function prepareDaemonReplacement(
             tokenPath,
             recoveryDeadlineMs
           )
+
           if (liveSessionCount === 0) {
             console.warn(
               '[daemon] Replacing daemon whose macOS TCC attribution is severed (spawning app binary no longer exists)'
@@ -153,10 +166,12 @@ export async function prepareDaemonReplacement(
       tokenPath,
       recoveryDeadlineMs
     )
+
     // Why: a wedged-but-connectable daemon (Windows update relaunch) may still own live sessions, so grace-retry before replacing; a permanent wedge (#8689) exhausts the grace, and 'rejected' skips it (handshake refused = never adoptable).
     // Why the clock term: without it the grace is however long the probes happen to take, which
     // ran past the startup PTY gate's fail-open cap and hung terminal restore (STA-5732).
     let graceRetry = 0
+
     while (
       liveSessionCount === null &&
       health !== 'rejected' &&
@@ -170,18 +185,23 @@ export async function prepareDaemonReplacement(
       liveSessionCount = await getAliveDaemonSessionCount(socketPath, tokenPath, recoveryDeadlineMs)
       graceRetry++
     }
+
     if (liveSessionCount !== null && liveSessionCount > 0) {
       if (health === 'pty-spawn-unhealthy') {
         console.warn(
           `[daemon] DEGRADED MODE: preserving daemon that failed the PTY spawn health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).`
         )
+
         return preserveDaemon('degraded-new-pty-fallback')
       }
+
       console.warn(
         `[daemon] Preserving daemon that failed the health check because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
       )
+
       return preserveDaemon()
     }
+
     // Why: the sibling replace branches announce themselves, but this one used
     // to kill a daemon silently — leaving no way to tell a replacement apart
     // from an adoption after the fact. A cold start also lands here with
@@ -193,6 +213,7 @@ export async function prepareDaemonReplacement(
         `[daemon] Replacing daemon that failed the health check (health=${health}, liveSessions=${liveSessionCount ?? 'unverifiable'}, graceRetries=${graceRetry})`
       )
     }
+
     // Why: unlike the log above, telemetry gates on confirmedReplacement below — the
     // post-kill truth — so a cold start that killed nothing never reports a replacement.
     pendingReplacement = {
@@ -204,6 +225,7 @@ export async function prepareDaemonReplacement(
   // Why: a raw socket can outlive a broken daemon; kill by PID before respawn so the new daemon doesn't race the stale one.
   releaseAdoptionClient()
   const killOutcome = await killStaleDaemon(runtimeDir, socketPath, tokenPath)
+
   if (killOutcome.liveOwnerSurvived) {
     // Why: forking beside a daemon we could not prove dead is precisely how the endpoint
     // owner and the session host diverge. But refusing outright would leave the user with
@@ -212,6 +234,7 @@ export async function prepareDaemonReplacement(
     console.warn(
       '[daemon] DEGRADED MODE: adopting a daemon that could not be confirmed stopped. Existing sessions keep working; fresh terminals run on the local provider WITHOUT daemon persistence until you restart the daemon (Manage Sessions → Restart).'
     )
+
     try {
       return await preserveDaemon('degraded-new-pty-fallback')
     } catch {
@@ -221,7 +244,9 @@ export async function prepareDaemonReplacement(
       )
     }
   }
+
   confirmedReplacement = killOutcome.killed || confirmedReplacement
+
   // Why: rank by how well each reason is evidenced. A confirmed kill whose reason positively
   // identified the daemon outranks the attribution, so a stale bundle caught here is not billed
   // to the resolver. failed_health_check is the residual "couldn't tell" bucket though — it also
@@ -234,6 +259,7 @@ export async function prepareDaemonReplacement(
     pendingReplacement.reason !== 'failed_health_check'
       ? pendingReplacement
       : null
+
   if (identifiedReplacement) {
     trackDaemonReplaced(identifiedReplacement.reason, identifiedReplacement.liveSessionCount)
   } else if (attributedReason) {
@@ -241,6 +267,7 @@ export async function prepareDaemonReplacement(
   } else if (pendingReplacement && confirmedReplacement) {
     trackDaemonReplaced(pendingReplacement.reason, pendingReplacement.liveSessionCount)
   }
+
   return null
 }
 
@@ -255,13 +282,16 @@ async function shouldPreserveDaemonWithLiveSessions(
     tokenPath,
     recoveryDeadlineMs
   )
+
   if (liveSessionCount === 0) {
     return false
   }
+
   console.warn(
     liveSessionCount === null
       ? `[daemon] Preserving daemon ${replacementLabel} because live session state could not be verified`
       : `[daemon] Preserving daemon ${replacementLabel} because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
   )
+
   return true
 }

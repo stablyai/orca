@@ -40,14 +40,17 @@ function getLocalProjectGitExecOptionsForRuntime(
   if (!projectRuntime) {
     return { cwd: repo.path }
   }
+
   if (projectRuntime.status === 'repair-required') {
     throw new Error(
       `Project runtime requires repair before git execution: ${projectRuntime.repair.reason}`
     )
   }
+
   if (projectRuntime.runtime.kind === 'wsl') {
     return { cwd: repo.path, wslDistro: projectRuntime.runtime.distro }
   }
+
   return { cwd: repo.path }
 }
 
@@ -56,6 +59,7 @@ export function getLocalProjectWorktreeGitOptions(
   repo: Repo
 ): LocalProjectWorktreeGitOptions {
   const { wslDistro } = getLocalProjectGitExecOptions(store, repo)
+
   return wslDistro ? { wslDistro } : {}
 }
 
@@ -74,10 +78,13 @@ export function getWorktreeCreatePrefetchGitOptions(
   if (isFolderRepo(repo)) {
     return {}
   }
+
   const projectRuntime = resolveLocalProjectRuntimeForRepo(store, repo)
+
   if (!projectRuntime || projectRuntime.status !== 'resolved') {
     return {}
   }
+
   return getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
 }
 
@@ -88,6 +95,7 @@ export function getLocalProjectWorktreeGitOptionsForRuntime(
   // Why: callers that already batch-resolved project runtimes must not rescan
   // every project once per repo on a polling path.
   const { wslDistro } = getLocalProjectGitExecOptionsForRuntime(repo, projectRuntime)
+
   return wslDistro ? { wslDistro } : {}
 }
 
@@ -111,5 +119,6 @@ export function getWorktreeMirrorDistroForRuntime(
   if (!projectRuntime || projectRuntime.status !== 'resolved') {
     return undefined
   }
+
   return projectRuntime.runtime.kind === 'wsl' ? projectRuntime.runtime.distro : undefined
 }

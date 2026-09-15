@@ -28,10 +28,15 @@ function row(worktree: Worktree): HostSectionRow {
 }
 
 const local = { id: 'shared', repoId: 'repo', hostId: 'local' } as unknown as Worktree
+
 const remote = { id: 'shared', repoId: 'repo', hostId: 'ssh:host-b' } as unknown as Worktree
+
 const rows = [row(local), row(remote)]
+
 let container: HTMLDivElement
+
 let root: Root
+
 let selection: Selection
 
 function Probe(): null {
@@ -39,6 +44,7 @@ function Probe(): null {
     sectionRows: rows,
     pinnedDisplayPolicy: 'single-location'
   })
+
   return null
 }
 

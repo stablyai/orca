@@ -23,6 +23,7 @@ function runtimeWith(settings: Record<string, unknown>): OrcaRuntimeService {
 async function installedDeps(settings: Record<string, unknown>): Promise<InstalledDeps> {
   installStructuredAgentSessionHost.mockClear()
   await runtimeWith(settings).ensureStructuredAgentSessionHost()
+
   return installStructuredAgentSessionHost.mock.calls[0]?.[0] as InstalledDeps
 }
 

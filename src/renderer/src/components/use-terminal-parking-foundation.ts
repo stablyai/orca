@@ -46,24 +46,30 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
   const [backgroundMountRevision, setBackgroundMountRevision] = useState(0)
   const [terminalParkingRevision, setTerminalParkingRevision] = useState(0)
   const [browserGuestRetentionRevision, setBrowserGuestRetentionRevision] = useState(0)
+
   const [parkedTerminalWorktreeIds, setParkedTerminalWorktreeIds] = useState<ReadonlySet<string>>(
     () => new Set()
   )
+
   const manuallyParkedTerminalWorktreeIds = useManualTerminalWorktreeParking({
     activeView,
     renderedActiveWorktreeId
   })
+
   const effectiveParkedTerminalWorktreeIds = useMemo(
     () =>
       combineTerminalWorktreeParkIds(parkedTerminalWorktreeIds, manuallyParkedTerminalWorktreeIds),
     [manuallyParkedTerminalWorktreeIds, parkedTerminalWorktreeIds]
   )
+
   const [forceParkedTerminalWorktreeIds, setForceParkedTerminalWorktreeIds] = useState<
     ReadonlySet<string>
   >(() => new Set())
+
   const [evictionExemptTerminalTabIds, setEvictionExemptTerminalTabIds] = useState<
     ReadonlySet<string>
   >(() => new Set())
+
   const forceParkedCaptureDoneRef = useRef(new Set<string>())
   const backgroundMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
   const activationDeferredMountTabIdsByWorktreeRef = useRef(new Map<string, ReadonlySet<string>>())
@@ -75,6 +81,7 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
   useEffect(() => {
     const timers = measurableBackgroundWorktreeTimersRef.current
     const closeDialogDebounceTimers = closeDialogDebounceTimersRef.current
+
     const applyBackgroundMount = (detail: BackgroundMountTerminalWorktreeDetail): void => {
       const worktreeId = detail.worktreeId
       applyBackgroundMountTabRestriction(
@@ -83,9 +90,11 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
         worktreeId,
         detail.tabIds
       )
+
       const worktreeTabIds = (useAppStore.getState().tabsByWorktree[worktreeId] ?? []).map(
         (tab) => tab.id
       )
+
       revealActivationDeferredTabs({
         restrictions: backgroundMountTabIdsByWorktreeRef.current,
         deferredMountTabIdsByWorktree: activationDeferredMountTabIdsByWorktreeRef.current,
@@ -103,34 +112,43 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
         clearTimeoutFn: window.clearTimeout
       })
     }
+
     const onBackgroundMountTerminalWorktree = (event: Event): void => {
       const customEvent = event as CustomEvent<BackgroundMountTerminalWorktreeDetail>
       const worktreeId = customEvent.detail?.worktreeId
       const pending = takePendingBackgroundTerminalWorktreeMount(worktreeId)
       const detail = pending ?? customEvent.detail
+
       if (detail?.worktreeId) {
         applyBackgroundMount(detail)
       }
     }
+
     window.addEventListener(
       BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
       onBackgroundMountTerminalWorktree as EventListener
     )
+
     for (const pending of takeAllPendingBackgroundTerminalWorktreeMounts()) {
       applyBackgroundMount(pending)
     }
+
     return () => {
       window.removeEventListener(
         BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT,
         onBackgroundMountTerminalWorktree as EventListener
       )
+
       for (const timer of timers.values()) {
         window.clearTimeout(timer)
       }
+
       timers.clear()
+
       for (const timer of closeDialogDebounceTimers) {
         window.clearTimeout(timer)
       }
+
       closeDialogDebounceTimers.clear()
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs and setters preserve their original stable identities.
@@ -138,10 +156,12 @@ export function useTerminalParkingFoundation(controller: TerminalEditorCloseCont
 
   useEffect(() => {
     const timers = terminalWorktreeParkingTimersRef.current
+
     return () => {
       for (const timer of timers.values()) {
         window.clearTimeout(timer)
       }
+
       timers.clear()
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- the controller ref preserves its original stable identity.

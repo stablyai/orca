@@ -53,11 +53,13 @@ export function ClaudeSwitcherMenu({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [accountsExpanded, setAccountsExpanded] = useState(false)
+
   const [accounts, setAccounts] = useState<ClaudeRateLimitAccountsState>({
     accounts: [],
     activeAccountId: null,
     activeAccountIdsByRuntime: { host: null, wsl: {} }
   })
+
   const [isSwitching, setIsSwitching] = useState(false)
   const mountedRef = useRef(true)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -72,37 +74,45 @@ export function ClaudeSwitcherMenu({
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const hasActiveRuntimeEnvironment = Boolean(settings?.activeRuntimeEnvironmentId?.trim())
   const runtimeTarget = useMemo(() => getActiveRuntimeTarget(settings), [settings])
+
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
     ? (runtimeEnvironments.find(
         (environment) => environment.id === settings?.activeRuntimeEnvironmentId?.trim()
       )?.name ??
       translate('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
     : undefined
+
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     navigator.userAgent.includes('Windows') || hasActiveRuntimeEnvironment,
     false,
     getWindowsTerminalCapabilityOwnerKey(settings?.activeRuntimeEnvironmentId),
     runtimeTarget
   )
+
   const claudeAccountSyncKey = useAppStore((s) => getClaudeAccountSyncKey(s.settings))
   const accountState = resolveClaudeStatusAccountState(settings, accounts)
 
   useEffect(() => {
     mountedRef.current = true
+
     return () => {
       mountedRef.current = false
     }
   }, [])
 
   const activeRuntimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
+
   // Why: keyed on owner id, not settings identity, so routine settings mutations don't re-run the remote snapshot fetch.
   const loadAccounts = useCallback(async () => {
     const snapshot = await fetchProviderAccountsSnapshot({ activeRuntimeEnvironmentId })
+
     // Why: a failed Claude half is a substituted empty roster; keep prior state.
     if (snapshot.failedProviders?.includes('claude')) {
       console.error('Claude account list failed; keeping previous status bar state.')
+
       return
     }
+
     if (mountedRef.current) {
       setAccounts(snapshot.claude)
     }
@@ -116,6 +126,7 @@ export function ClaudeSwitcherMenu({
 
   const handleOpenChange = useCallback((nextOpen: boolean): void => {
     setOpen(nextOpen)
+
     if (!nextOpen) {
       setAccountsExpanded(false)
     }
@@ -125,6 +136,7 @@ export function ClaudeSwitcherMenu({
   const handleAccountsExpandedToggle = useCallback((): void => {
     const nextExpanded = !accountsExpanded
     setAccountsExpanded(nextExpanded)
+
     if (nextExpanded && !hasActiveRuntimeEnvironment) {
       void fetchInactiveClaudeAccountUsage()
     }
@@ -137,21 +149,27 @@ export function ClaudeSwitcherMenu({
     if (isSwitching) {
       return
     }
+
     setIsSwitching(true)
+
     try {
       const next = await selectClaudeProviderAccount(settings, {
         accountId,
         runtime: target.runtime,
         wslDistro: target.wslDistro
       })
+
       recordFeatureInteraction('claude-account-switching')
+
       if (mountedRef.current) {
         setAccounts(next)
       }
+
       // Why: remote selections live on the server; local GlobalSettings are untouched, so refetching is pure churn.
       if (!hasActiveRuntimeEnvironment) {
         await fetchSettings()
       }
+
       if (mountedRef.current) {
         setAccountsExpanded(false)
       }
@@ -168,10 +186,13 @@ export function ClaudeSwitcherMenu({
     const currentKey = getCodexStatusRuntimeKey(
       normalizeClaudeStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(claudeTarget))
     )
+
     if (group.key === currentKey) {
       return
     }
+
     setAccountsExpanded(false)
+
     try {
       await refreshClaudeRateLimitsForTarget(group.runtimeTarget)
     } catch (error) {
@@ -182,10 +203,12 @@ export function ClaudeSwitcherMenu({
   const selectedRuntimeKey = getCodexStatusRuntimeKey(
     normalizeClaudeStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(claudeTarget))
   )
+
   const fallbackWslDistro = getStatusBarPreferredWslDistro(
     settings,
     windowsTerminalCapabilities.wslDistros
   )
+
   const switchGroups = buildClaudeStatusSwitchGroups(
     accountState,
     toCodexStatusRuntimeTarget(claudeTarget),
@@ -195,8 +218,10 @@ export function ClaudeSwitcherMenu({
       hostLabel: providerAccountHostLabel
     }
   )
+
   const selectedGroup =
     switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
+
   const activeTarget = selectedGroup?.targets.find((target) => target.active)
 
   return (
@@ -265,6 +290,7 @@ export function ClaudeSwitcherMenu({
                   disabled={isSwitching || target.active}
                   onSelect={(event) => {
                     event.preventDefault()
+
                     if (!target.active) {
                       void handleSelectAccount(target.id, target.runtimeTarget)
                     }

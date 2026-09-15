@@ -18,15 +18,20 @@ import {
 import { performAttach } from './structured-agent-session-attach-flow'
 
 const NOW = 1_800_000_000_000
+
 const SESSION = 'legacy-session'
+
 const CREATE_OPERATION = `${NOW}-${'1'.padStart(32, '0')}`
+
 const RESUME_OPERATION = `${NOW}-${'2'.padStart(32, '0')}`
+
 let root: string | null = null
 
 afterEach(async () => {
   if (root) {
     await rm(root, { recursive: true, force: true })
   }
+
   root = null
 })
 
@@ -55,6 +60,7 @@ function attachParams(
     ...(options ? { options } : {}),
     providerHandle: { kind: 'codex', threadId: 'legacy-thread' }
   }
+
   return {
     ...params,
     envelope: {
@@ -113,21 +119,26 @@ function expectSettledAttachLease(record: AgentSessionRecord | null): void {
 describe('structured session acquisition options', () => {
   it('samples provider history before acquiring a replacement child', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-history-before-acquire-'))
+
     const initialStore = await AgentSessionRecordStore.open({
       directory: join(root, 'store'),
       hostId: 'local'
     })
+
     let childAcquired = false
+
     const historyWindow = (): ProviderHistoryWindow => ({
       items: [],
       boundaryConsistent: true,
       turnInFlight: childAcquired
     })
+
     const withHistory = (origin: 'created' | 'resumed'): StructuredAgentSessionAdapter => {
       const sessionAdapter = adapter({ origin })
       const acquire = vi.mocked(sessionAdapter.acquire)
       acquire.mockImplementation(async (input) => {
         childAcquired = true
+
         return {
           process: {
             hostId: 'local',
@@ -145,10 +156,12 @@ describe('structured session acquisition options', () => {
         }
       })
       sessionAdapter.providerHistoryWindow = vi.fn(async () => historyWindow())
+
       return sessionAdapter
     }
 
     let firstJournal: AgentSessionJournal | undefined
+
     const first = await performAttach({
       store: initialStore,
       adapter: withHistory('created'),
@@ -166,6 +179,7 @@ describe('structured session acquisition options', () => {
         firstJournal = attached.journal
       }
     })
+
     expect(first).toMatchObject({ ok: true })
     await firstJournal!.appendSubmission({
       clientMessageId: 'crashed-send',
@@ -178,10 +192,12 @@ describe('structured session acquisition options', () => {
       fence: 1
     })
     await firstJournal!.close()
+
     const store = await AgentSessionRecordStore.open({
       directory: join(root, 'store'),
       hostId: 'local'
     })
+
     await store.reconcileOnRestart({
       probe: async () => ({ outcome: 'pid-absent' }),
       now: NOW + 1
@@ -215,10 +231,12 @@ describe('structured session acquisition options', () => {
 
   it('persists create defaults before the first provider acquisition', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-create-options-'))
+
     const store = await AgentSessionRecordStore.open({
       directory: join(root, 'store'),
       hostId: 'local'
     })
+
     const sessionAdapter = adapter({ origin: 'created' })
     const options = { model: 'gpt-5.6-sol', effort: 'medium', fastMode: 'false' }
 
@@ -245,11 +263,14 @@ describe('structured session acquisition options', () => {
 
   it('replays a create retried after the host re-resolved different options', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-create-retry-'))
+
     const store = await AgentSessionRecordStore.open({
       directory: join(root, 'store'),
       hostId: 'local'
     })
+
     const sessionAdapter = adapter({ origin: 'created' })
+
     const attempt = async (options: Readonly<Record<string, string>>, spawnToken: string) =>
       performAttach({
         store,
@@ -297,6 +318,7 @@ describe('structured session acquisition options', () => {
       now: () => NOW,
       onAttached: () => {}
     })
+
     expect(created).toMatchObject({ ok: true })
     expect(store.getRecord(SESSION)?.options).toBeUndefined()
     await store.replaceSessionOptions({
@@ -310,11 +332,13 @@ describe('structured session acquisition options', () => {
       directory: storeDir,
       hostId: 'local'
     })
+
     await resumedStore.reconcileOnRestart({
       probe: async () => ({ outcome: 'pid-absent' }),
       now: NOW + 1
     })
     const releasedFence = resumedStore.getRecord(SESSION)?.lease.runtimeFence ?? 0
+
     const resumed = await performAttach({
       store: resumedStore,
       adapter: adapter({
@@ -350,10 +374,12 @@ describe('structured session acquisition options', () => {
 
   it('clears a rejected Fast restore instead of retaining the prior encoded value', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-acquisition-fast-restore-'))
+
     const store = await AgentSessionRecordStore.open({
       directory: join(root, 'store'),
       hostId: 'local'
     })
+
     const sessionAdapter = adapter({
       origin: 'created',
       options: { current: { model: 'gpt-standard' }, models: [] },
@@ -385,11 +411,14 @@ describe('structured session acquisition options', () => {
 
   it('releases an acquisition when provider options cannot be read', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-acquisition-options-failure-'))
+
     const store = await AgentSessionRecordStore.open({
       directory: join(root, 'store'),
       hostId: 'local'
     })
+
     const releaseAcquisition = vi.fn(async () => true)
+
     const failingAdapter: StructuredAgentSessionAdapter = {
       ...adapter({ origin: 'created' }),
       readOptions: vi.fn(async () => {
@@ -435,13 +464,16 @@ describe('structured session acquisition options', () => {
       root = await mkdtemp(join(tmpdir(), `orca-acquisition-${failurePoint}-`))
       const storeDir = join(root, 'store')
       const store = await AgentSessionRecordStore.open({ directory: storeDir, hostId: 'local' })
+
       const base = adapter({
         origin: 'created',
         options: { current: { model: 'gpt-5.6-terra' }, models: [] }
       })
+
       const injected = new Error(`${failurePoint} failed`)
       const acquire = vi.mocked(base.acquire)
       const readOptions = vi.mocked(base.readOptions!)
+
       if (failurePoint === 'acquire') {
         acquire.mockRejectedValueOnce(injected)
       } else if (failurePoint === 'options') {
@@ -467,12 +499,15 @@ describe('structured session acquisition options', () => {
           }
         }))
       }
+
       const releaseAcquisition = vi.fn(async () => {
         if (cleanup === 'throws') {
           throw new Error('cleanup failed')
         }
+
         return cleanup
       })
+
       const failingAdapter = {
         ...base,
         acquire,
@@ -482,6 +517,7 @@ describe('structured session acquisition options', () => {
           ? { historyFilePath: vi.fn().mockRejectedValueOnce(injected).mockResolvedValue(null) }
           : {})
       }
+
       const perform = (
         target: AgentSessionRecordStore,
         operationId: string,
@@ -511,6 +547,7 @@ describe('structured session acquisition options', () => {
         directory: storeDir,
         hostId: 'local'
       })
+
       const failedRecord = reopened.getRecord(SESSION)
       expectSettledAttachLease(failedRecord)
       expect(

@@ -34,10 +34,13 @@ describe('status bar runtime switch groups', () => {
           wsl: runtime === 'wsl' ? { Ubuntu: 'account-b' } : {}
         }
       }
+
       const target = { runtime, wslDistro: runtime === 'wsl' ? 'Ubuntu' : null }
+
       const group = buildCodexStatusSwitchGroups(state, target).find(
         (entry) => entry.runtimeTarget.runtime === runtime
       )!
+
       expect(group.targets.slice(1)).toEqual([
         {
           id: 'account-a',
@@ -82,6 +85,7 @@ describe('status bar runtime switch groups', () => {
       activeAccountId: null,
       activeAccountIdsByRuntime: { host: null, wsl: { Ubuntu: null } }
     }
+
     const groups = buildCodexStatusSwitchGroups(state, { runtime: 'host', wslDistro: null })
     expect(groups.flatMap((group) => group.targets.slice(1).map((target) => target.label))).toEqual(
       ['same@example.com (Personal (Plus))', 'same@example.com (Personal (Plus))']
@@ -262,6 +266,7 @@ describe('status bar runtime switch groups', () => {
       activeAccountId: 'server-codex-1',
       activeAccountIdsByRuntime: { host: 'server-codex-1', wsl: {} }
     }
+
     const settings = {
       activeRuntimeEnvironmentId: 'env-1',
       activeCodexManagedAccountId: 'desktop-codex-1',
@@ -294,6 +299,7 @@ describe('status bar runtime switch groups', () => {
       activeAccountId: null,
       activeAccountIdsByRuntime: { host: null, wsl: {} }
     }
+
     const settings = {
       activeRuntimeEnvironmentId: 'env-1',
       activeClaudeManagedAccountId: 'desktop-claude-1',

@@ -28,5 +28,6 @@ export function toVisibleWorktree(
     visible: _visible,
     ...base
   } = worktree
+
   return base
 }

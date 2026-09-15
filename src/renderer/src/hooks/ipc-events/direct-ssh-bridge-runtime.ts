@@ -24,6 +24,7 @@ import type { AppState } from '../../store/types'
 type DirectSshTerminalActions = Partial<
   Pick<AppState, 'invalidateStaleDirectSshTargetPtyBindings' | 'retryDirectSshTargetPanes'>
 >
+
 type AuthorityDeadline = { timer: ReturnType<typeof setTimeout>; settle: () => void }
 
 export type DirectSshBridgeRuntime = {
@@ -48,8 +49,10 @@ export function createDirectSshBridgeRuntime(): DirectSshBridgeRuntime {
   const reconnectAuthorityByTarget = new Map<string, DirectSshAuthority>()
   const deadlines = new Set<AuthorityDeadline>()
   let stopped = false
+
   const currentAuthority = (targetId: string): DirectSshAuthority | null => {
     const state = useAppStore.getState().sshConnectionStates?.get(targetId)
+
     if (
       state?.status !== 'connected' ||
       state.targetId !== targetId ||
@@ -58,12 +61,14 @@ export function createDirectSshBridgeRuntime(): DirectSshBridgeRuntime {
     ) {
       return null
     }
+
     return {
       targetId,
       providerEpoch: state.providerEpoch,
       connectionGeneration: state.connectionGeneration
     }
   }
+
   const scheduler = createDirectSshWorktreeRefreshScheduler({
     startAttempt: (key) => {
       const acquired = acquireDirectSshDetectedWorktreeRefresh(useAppStore, {
@@ -76,6 +81,7 @@ export function createDirectSshBridgeRuntime(): DirectSshBridgeRuntime {
         },
         requireAuthoritative: key.authorityRequirement === 'required'
       })
+
       return {
         providerRequestId: acquired.providerRequestId,
         result: acquired.result.then((result) => acquired.merge(result)),
@@ -83,12 +89,14 @@ export function createDirectSshBridgeRuntime(): DirectSshBridgeRuntime {
       }
     }
   })
+
   const hostHydration = createDirectSshHostHydration({
     store: useAppStore,
     isCurrentAuthority: (authority) =>
       directSshAuthoritiesEqual(currentAuthority(authority.targetId), authority),
     listRepos: (authority) => {
       const executionHostId = toSshExecutionHostId(authority.targetId)
+
       return (
         window.api.repos.listForExecutionHost?.({
           executionHostId,
@@ -99,6 +107,7 @@ export function createDirectSshBridgeRuntime(): DirectSshBridgeRuntime {
     },
     listLineage: (authority) => {
       const executionHostId = toSshExecutionHostId(authority.targetId)
+
       return (
         window.api.worktrees.listLineageForHost?.({
           executionHostId,
@@ -108,9 +117,12 @@ export function createDirectSshBridgeRuntime(): DirectSshBridgeRuntime {
       )
     }
   })
+
   const terminalActions = (): DirectSshTerminalActions =>
     useAppStore.getState() as DirectSshTerminalActions
+
   let remoteWorkspaceTargetSync: RemoteWorkspaceTargetSync | null = null
+
   const reconnectCoordinator = createDirectSshReconnectCoordinator({
     scheduler,
     isCurrentConnectedAuthority: (authority) =>
@@ -127,7 +139,9 @@ export function createDirectSshBridgeRuntime(): DirectSshBridgeRuntime {
     syncRemoteWorkspaceAfterConnect: (token) => remoteWorkspaceTargetSync?.syncAfterConnect(token),
     onTelemetry: createDirectSshReconnectProductTelemetryAdapter()
   })
+
   const remoteWorkspaceApi = window.api.remoteWorkspace
+
   if (remoteWorkspaceApi) {
     remoteWorkspaceTargetSync = createRemoteWorkspaceTargetSync({
       store: useAppStore,
@@ -143,6 +157,7 @@ export function createDirectSshBridgeRuntime(): DirectSshBridgeRuntime {
           : 0
     })
   }
+
   const prepareAndSync: DirectSshBridgeRuntime['prepareAndSync'] = async (
     authority,
     reason,
@@ -152,14 +167,18 @@ export function createDirectSshBridgeRuntime(): DirectSshBridgeRuntime {
       if (!options?.authorityAlreadyReplaced) {
         reconnectCoordinator.replaceAuthority(authority)
       }
+
       const input: DirectSshPreparationInput | null = await hostHydration.capturePreparationInput(
         authority,
         reason
       )
+
       if (!input) {
         return
       }
+
       const prepared = await reconnectCoordinator.prepareOnly(input)
+
       if (prepared.token && hostHydration.isPreparationTokenCurrent(prepared.token)) {
         await remoteWorkspaceTargetSync?.syncAfterConnect(prepared.token)
       }
@@ -172,6 +191,7 @@ export function createDirectSshBridgeRuntime(): DirectSshBridgeRuntime {
       }
     }
   }
+
   return {
     reconnectAuthorityByTarget,
     reconnectCoordinator,
@@ -185,10 +205,12 @@ export function createDirectSshBridgeRuntime(): DirectSshBridgeRuntime {
     removeDeadline: (deadline) => deadlines.delete(deadline),
     stop: () => {
       stopped = true
+
       for (const deadline of deadlines) {
         clearTimeout(deadline.timer)
         deadline.settle()
       }
+
       deadlines.clear()
       remoteWorkspaceTargetSync?.stop()
       hostHydration.stop()

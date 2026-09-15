@@ -29,10 +29,14 @@ import * as path from 'node:path'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 const NOW = 1_700_000_000_000
+
 const HOST_A_HOST_ID: ExecutionHostId = 'local'
+
 const HOST_B_HOST_ID: ExecutionHostId = 'ssh:ssh-1'
+
 const HOST_UNRESOLVED_MESSAGE =
   'Orca cannot tell which host owns this workspace. Refresh projects and review it again.'
+
 const WORKSPACE_GONE_MESSAGE = 'Workspace no longer exists.'
 
 const mockApi = {
@@ -69,7 +73,9 @@ import type {
 } from '../../../../shared/workspace-cleanup'
 
 const WORKTREE_ID = 'repo1::/shared/workspace/path'
+
 const WORKTREE_PATH = '/shared/workspace/path'
+
 const FIRST_WORKTREE_ID = 'repo1::/first/very-long-workspace/path'
 
 /**
@@ -85,6 +91,7 @@ function makeHostCandidate(
   force = false
 ): WorkspaceCleanupCandidate {
   const workspacePath = worktreeId.slice(worktreeId.indexOf('::') + 2)
+
   return {
     worktreeId,
     repoId: 'repo1',
@@ -147,6 +154,7 @@ function createHostDirectories(): HostDirectories {
   const hostBMarkerPath = path.join(hostBWorktreeDir, 'HOST_B_MARKER')
   fs.writeFileSync(hostAMarkerPath, 'uncommitted-data-on-host-a')
   fs.writeFileSync(hostBMarkerPath, 'uncommitted-data-on-host-b')
+
   return { hostARoot, hostBRoot, hostAMarkerPath, hostBMarkerPath }
 }
 
@@ -161,12 +169,14 @@ function installRemovalTransport(
       routedHostIds.push(args.hostId ?? '<missing>')
       routedForce?.push(args.force === true)
       const hostRoot = args.hostId ? hostRootsByHostId[args.hostId] : undefined
+
       if (hostRoot) {
         fs.rmSync(path.join(hostRoot, toHostRelativePath(args.worktreeId)), {
           recursive: true,
           force: true
         })
       }
+
       return { ok: true }
     }
   )
@@ -186,6 +196,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks()
+
   for (const cleanup of hostDirCleanup.splice(0)) {
     cleanup()
   }
@@ -337,24 +348,28 @@ describe('STA-4343: cleanup deletes on the confirmed host, never the active one'
     seedScan([firstCandidate, secondCandidate])
 
     const store = createTestStore()
+
     const firstWorktree = makeWorktree({
       id: FIRST_WORKTREE_ID,
       repoId: 'repo1',
       path: '/first/very-long-workspace/path',
       hostId: HOST_A_HOST_ID
     })
+
     const secondHostAWorktree = makeWorktree({
       id: WORKTREE_ID,
       repoId: 'repo1',
       path: WORKTREE_PATH,
       hostId: HOST_A_HOST_ID
     })
+
     const secondHostBWorktree = makeWorktree({
       id: WORKTREE_ID,
       repoId: 'repo1',
       path: WORKTREE_PATH,
       hostId: HOST_B_HOST_ID
     })
+
     seedStore(store, {
       worktreesByRepo: { repo1: [firstWorktree, secondHostAWorktree] }
     } as Partial<AppState>)
@@ -362,6 +377,7 @@ describe('STA-4343: cleanup deletes on the confirmed host, never the active one'
     store.setState({
       removeWorktree: vi.fn(async (...args: Parameters<typeof originalRemoveWorktree>) => {
         const result = await originalRemoveWorktree(...args)
+
         if (args[0].id === FIRST_WORKTREE_ID) {
           store.setState({
             activeWorktreeId: WORKTREE_ID,
@@ -369,6 +385,7 @@ describe('STA-4343: cleanup deletes on the confirmed host, never the active one'
             worktreesByRepo: { repo1: [secondHostAWorktree, secondHostBWorktree] }
           })
         }
+
         return result
       })
     })

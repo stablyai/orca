@@ -33,19 +33,23 @@ async function flushAsyncTicks(count = 6): Promise<void> {
 
 async function drainFakeTimerWork(limit = 20): Promise<void> {
   await flushAsyncTicks(20)
+
   if (!vi.isFakeTimers()) {
     return
   }
+
   for (let iteration = 0; iteration < limit && vi.getTimerCount() > 0; iteration += 1) {
     await vi.runOnlyPendingTimersAsync()
     await flushAsyncTicks(20)
   }
+
   vi.clearAllTimers()
   await flushAsyncTicks(20)
   vi.clearAllTimers()
 }
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
+
 const LEAF_2 = '22222222-2222-4222-8222-222222222222' as const
 
 function leafIdForPane(paneId: number): string {
@@ -84,13 +88,19 @@ type MockTransport = {
 }
 
 const scheduleRuntimeGraphSync = vi.fn()
+
 const shouldSeedCacheTimerOnInitialTitle = vi.fn(() => false)
+
 const toastInfo = vi.fn()
+
 const notifyCodexPaneBoundForStaleSweep = vi.fn()
 
 let mockStoreState: Record<string, unknown>
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: Record<string, unknown>) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -102,6 +112,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: Record<string, unknown>) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -112,6 +123,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   const isGeminiTerminalTitle = actual.isGeminiTerminalTitle as (title: string) => boolean
+
   return {
     ...actual,
     isGeminiTerminalTitle: vi.fn((title: string) => isGeminiTerminalTitle(title)),
@@ -136,6 +148,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -146,9 +159,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -158,9 +173,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -168,6 +185,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -176,6 +194,7 @@ vi.mock('./pty-dispatcher', async (importOriginal) => {
 
 function createMockTransport(initialPtyId: string | null = null): MockTransport {
   let ptyId = initialPtyId
+
   const transport = {
     attach: vi.fn(({ existingPtyId }: { existingPtyId: string }) => {
       ptyId = existingPtyId
@@ -183,8 +202,10 @@ function createMockTransport(initialPtyId: string | null = null): MockTransport 
     connect: vi.fn().mockImplementation(async (opts: { sessionId?: string }) => {
       if (opts.sessionId) {
         ptyId = opts.sessionId
+
         return { id: opts.sessionId }
       }
+
       return ptyId
     }),
     disconnect: vi.fn(() => {
@@ -197,9 +218,11 @@ function createMockTransport(initialPtyId: string | null = null): MockTransport 
     getConnectionId: vi.fn(() => null),
     serializeBuffer: undefined
   } as MockTransport
+
   const sendInput = transport.sendInput as unknown as (data: string) => boolean
   transport.sendInputImmediate = vi.fn((data: string) => sendInput(data))
   transport.sendInputAccepted = vi.fn(async (data: string) => sendInput(data))
+
   return transport
 }
 
@@ -209,11 +232,13 @@ function createPaneContainer(): HTMLElement {
     configurable: true,
     value: {}
   })
+
   return container
 }
 
 function createPane(paneId: number) {
   const leafId = leafIdForPane(paneId)
+
   const activeBuffer = {
     type: 'normal' as const,
     viewportY: 0,
@@ -221,6 +246,7 @@ function createPane(paneId: number) {
     cursorY: 0,
     cursorX: 0
   }
+
   const terminal = {
     cols: 120,
     rows: 40,
@@ -242,6 +268,7 @@ function createPane(paneId: number) {
     },
     write: vi.fn<(data: string, callback?: () => void) => void>(function write(...args): void {
       const [data, callback] = args
+
       if (data === '' || callback?.name === 'runParsedSteps') {
         callback?.()
       }
@@ -271,6 +298,7 @@ function createPane(paneId: number) {
       registerOscHandler: vi.fn(() => ({ dispose: vi.fn() }))
     }
   }
+
   return {
     id: paneId,
     leafId,
@@ -286,10 +314,12 @@ function createPane(paneId: number) {
 
 function createManager(paneCount = 1, initialActivePaneId: number | null = null) {
   let activePaneId = initialActivePaneId
+
   const panes = Array.from({ length: paneCount }, (_, index) => ({
     id: index + 1,
     leafId: leafIdForPane(index + 1)
   }))
+
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
@@ -338,12 +368,14 @@ function createDeps(overrides: Record<string, unknown> = {}) {
     updateTabPtyId: vi.fn((tabId: string, ptyId: string, replacedPtyId?: string) => {
       const byTab = (mockStoreState.ptyIdsByTabId ?? {}) as Record<string, string[]>
       const current = byTab[tabId] ?? []
+
       const next =
         replacedPtyId && current.includes(replacedPtyId)
           ? current.map((candidate) => (candidate === replacedPtyId ? ptyId : candidate))
           : current.includes(ptyId)
             ? current
             : [...current, ptyId]
+
       mockStoreState.ptyIdsByTabId = { ...byTab, [tabId]: next }
     }),
     markWorktreeUnread: vi.fn(),
@@ -368,21 +400,27 @@ function createDeferred<T>(): {
 } {
   let resolveDeferred!: (value: T) => void
   let rejectDeferred!: (reason?: unknown) => void
+
   const promise = new Promise<T>((resolve, reject) => {
     resolveDeferred = resolve
     rejectDeferred = reject
   })
+
   return { promise, resolve: resolveDeferred, reject: rejectDeferred }
 }
 
 // ── Scenario identities ─────────────────────────────────────────────────────
 const REMOTE_PTY_ID = 'remote:env-1@@terminal-agent-1'
+
 // Overflows the renderer's hidden background queue (2MB lossy cap), dropping the
 // backlog and latching model restore — mirrors the real remote pause semantics
 // where hidden-time bytes exist ONLY in the host's authoritative buffer.
 const HIDDEN_BYTES = 'x'.repeat(2 * 1024 * 1024 + 1)
+
 const LIVE_AGENT_CHUNK = 'LIVE_AGENT_CHUNK\r\n'
+
 const HOST_SNAPSHOT_MARKER = 'HOST_SNAPSHOT_HIDDEN_AGENT_CONTENT'
+
 const HOST_SNAPSHOT = {
   data: `${HOST_SNAPSHOT_MARKER}\r\n`,
   cols: 120,
@@ -390,6 +428,7 @@ const HOST_SNAPSHOT = {
   seq: HIDDEN_BYTES.length + LIVE_AGENT_CHUNK.length,
   source: 'headless'
 }
+
 const BANNER_FRAGMENT = 'main recovery was unavailable'
 
 type HostSnapshot = typeof HOST_SNAPSHOT
@@ -409,11 +448,14 @@ async function connectHiddenRemoteAgentPane(
   const { connectPanePty } = await import('./pty-connection')
   const transport = createMockTransport(REMOTE_PTY_ID)
   transport.serializeBuffer = serializeBuffer
+
   const capturedDataCallback: {
     current: ((data: string, meta?: { seq?: number; rawLength?: number }) => void) | null
   } = { current: null }
+
   transport.connect.mockImplementation(async ({ callbacks }: { callbacks?: ConnectCallbacks }) => {
     capturedDataCallback.current = callbacks?.onData ?? null
+
     return REMOTE_PTY_ID
   })
   transportFactoryQueue.push(transport)
@@ -423,6 +465,7 @@ async function connectHiddenRemoteAgentPane(
   const disposable = connectPanePty(pane as never, manager as never, deps as never)
   await flushAsyncTicks(6)
   expect(capturedDataCallback.current).not.toBeNull()
+
   return {
     transport,
     pane,
@@ -472,6 +515,7 @@ function observeFinalPaneState(drive: RemotePaneDrive): {
 } {
   const written = drive.writtenChunks()
   const joined = written.join('')
+
   return {
     localMainSnapshotCalls: vi.mocked(window.api.pty.getMainBufferSnapshot).mock.calls.length,
     rawHiddenBacklogWritten: joined.includes('x'.repeat(1024)),
@@ -543,6 +587,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
           string,
           { launchConfig: unknown } | undefined
         >
+
         return byPaneKey[entry.paneKey]?.launchConfig
       }),
       getAgentLaunchConfigForStatusMetadata: vi.fn(() => undefined),
@@ -622,6 +667,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     }
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       callback(0)
+
       return 1
     })
     globalThis.cancelAnimationFrame = vi.fn()
@@ -631,23 +677,27 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     await drainFakeTimerWork()
     vi.useRealTimers()
     vi.restoreAllMocks()
+
     if (originalRequestAnimationFrame) {
       globalThis.requestAnimationFrame = originalRequestAnimationFrame
     } else {
       delete (globalThis as { requestAnimationFrame?: typeof requestAnimationFrame })
         .requestAnimationFrame
     }
+
     if (originalCancelAnimationFrame) {
       globalThis.cancelAnimationFrame = originalCancelAnimationFrame
     } else {
       delete (globalThis as { cancelAnimationFrame?: typeof cancelAnimationFrame })
         .cancelAnimationFrame
     }
+
     if (originalDocument) {
       globalThis.document = originalDocument
     } else {
       delete (globalThis as { document?: Document }).document
     }
+
     delete (globalThis as unknown as { window?: unknown }).window
     resetAgentStartupDelayedDeliveryForTests()
   })
@@ -658,6 +708,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     const serializeBuffer = vi.fn(async () =>
       serializeBuffer.mock.calls.length <= 4 ? null : HOST_SNAPSHOT
     )
+
     const drive = await connectHiddenRemoteAgentPane(serializeBuffer)
     vi.useFakeTimers()
     driveHiddenBacklogThenReveal(drive)
@@ -738,6 +789,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     const serializeBuffer = vi.fn(async () =>
       serializeBuffer.mock.calls.length <= 4 ? null : HOST_SNAPSHOT
     )
+
     const drive = await connectHiddenRemoteAgentPane(serializeBuffer)
     vi.useFakeTimers()
     driveHiddenBacklogThenReveal(drive)
@@ -803,9 +855,11 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     for (let step = 0; step < 6; step += 1) {
       await allowSelfHealWindow()
     }
+
     const bannerCount = drive
       .writtenChunks()
       .filter((data) => data.includes(BANNER_FRAGMENT)).length
+
     expect(bannerCount).toBe(1)
     const settledRequests = serializeBuffer.mock.calls.length
     // Re-armed past the initial budget, but bounded — no permanent polling.
@@ -815,6 +869,7 @@ describe('remote hidden-output restore abandonment (issue2-hidden-output-skip)',
     for (let step = 0; step < 4; step += 1) {
       await allowSelfHealWindow()
     }
+
     expect(serializeBuffer.mock.calls.length).toBe(settledRequests)
     expect(drive.writtenChunks().filter((data) => data.includes(BANNER_FRAGMENT)).length).toBe(1)
     drive.disposable.dispose()

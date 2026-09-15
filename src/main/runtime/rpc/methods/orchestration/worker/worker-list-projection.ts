@@ -47,7 +47,9 @@ export function projectWorkerFleet(args: {
         : null
     }
   })
+
   const durable = new Map(workers.map((worker) => [worker.dispatchId, worker]))
+
   if (!args.completeProjection) {
     return {
       ...projectOrchestrationFleet({
@@ -61,6 +63,7 @@ export function projectWorkerFleet(args: {
   }
 
   const projections: ReturnType<typeof projectOrchestrationFleet>['workers'] = []
+
   for (let offset = 0; offset < workers.length; offset += ORCHESTRATION_FLEET_PAGE_MAX) {
     projections.push(
       ...projectOrchestrationFleet({
@@ -71,6 +74,7 @@ export function projectWorkerFleet(args: {
       }).workers
     )
   }
+
   return {
     workers: projections,
     page: { limit: workers.length, total: workers.length, hasMore: false, nextCursor: null },

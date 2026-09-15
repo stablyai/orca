@@ -12,6 +12,7 @@ type VideoFrameMessage = {
   keyFrame: boolean
   bytes: ArrayBuffer
 }
+
 type VideoMetaMessage = {
   streamId: string
   deviceId: string
@@ -48,19 +49,26 @@ export function useEmulatorVideoStream(
 
   useEffect(() => {
     const api = (window as { api?: { emulator?: EmulatorVideoApi } }).api?.emulator
+
     if (!enabled || !deviceId) {
       setError(null)
+
       return
     }
+
     if (!api?.startVideoStream) {
       return
     }
+
     setError(null)
     const DecoderCtor = (globalThis as { VideoDecoder?: typeof VideoDecoder }).VideoDecoder
+
     const ChunkCtor = (globalThis as { EncodedVideoChunk?: typeof EncodedVideoChunk })
       .EncodedVideoChunk
+
     if (!DecoderCtor || !ChunkCtor) {
       setError('This build does not support WebCodecs H.264 decoding.')
+
       return
     }
 
@@ -74,6 +82,7 @@ export function useEmulatorVideoStream(
     let unsubFrame: (() => void) | undefined
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d') ?? null
+
     if (canvas) {
       const context = canvas.getContext('2d')
       context?.clearRect(0, 0, canvas.width, canvas.height)
@@ -83,14 +92,17 @@ export function useEmulatorVideoStream(
       output: (frame) => {
         if (!disposed && ctx && canvas) {
           clearFirstFrameTimeout()
+
           // Resizing the canvas reallocates its backing store and forces a
           // reflow, so only do it when the frame dimensions actually change.
           if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
             canvas.width = frame.displayWidth
             canvas.height = frame.displayHeight
           }
+
           ctx.drawImage(frame, 0, 0)
         }
+
         frame.close()
       },
       error: (err) => fatal(err.message)
@@ -118,6 +130,7 @@ export function useEmulatorVideoStream(
       if (disposed) {
         return
       }
+
       disposed = true
       clearFirstFrameTimeout()
       unsubMeta?.()
@@ -125,6 +138,7 @@ export function useEmulatorVideoStream(
       unsubMeta = undefined
       unsubFrame = undefined
       stopStream()
+
       if (decoder.state !== 'closed') {
         decoder.close()
       }
@@ -134,6 +148,7 @@ export function useEmulatorVideoStream(
       if (disposed) {
         return
       }
+
       setError(message)
       cleanup()
     }
@@ -148,7 +163,9 @@ export function useEmulatorVideoStream(
       if (disposed || msg.streamId !== streamId || msg.deviceId !== deviceId) {
         return
       }
+
       const data = new Uint8Array(msg.bytes)
+
       // The config packet carries SPS/PPS; configure once and stash it to prepend
       // to the next keyframe (Annex-B), since WebCodecs needs them with the IDR.
       if (msg.config) {
@@ -159,26 +176,35 @@ export function useEmulatorVideoStream(
             decoder.configure({ codec: H264_CODEC, optimizeForLatency: true })
           } catch (err) {
             fatal(err instanceof Error ? err.message : 'Failed to configure the H.264 decoder.')
+
             return
           }
+
           configured = true
         }
+
         configBytes = data
+
         return
       }
+
       if (!configured) {
         return
       }
+
       if (decoder.state === 'closed') {
         return
       }
+
       let chunkData = data
+
       if (msg.keyFrame && configBytes) {
         chunkData = new Uint8Array(configBytes.length + data.length)
         chunkData.set(configBytes, 0)
         chunkData.set(data, configBytes.length)
         configBytes = null
       }
+
       // decode() can throw synchronously (DataError/InvalidStateError on malformed
       // wire bytes); the async error callback won't catch it, so surface via fatal().
       try {

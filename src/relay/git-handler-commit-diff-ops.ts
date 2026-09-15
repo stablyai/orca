@@ -15,11 +15,13 @@ function assertFullGitObjectId(value: string, label: string): void {
 export async function commitCompare(git: GitExec, worktreePath: string, commitId: string) {
   assertFullGitObjectId(commitId, 'commitId')
   let commitOid = ''
+
   try {
     const { stdout } = await git(
       ['rev-parse', '--verify', '--end-of-options', `${commitId}^{commit}`],
       worktreePath
     )
+
     commitOid = stdout.trim()
   } catch {
     return {
@@ -50,6 +52,7 @@ export async function commitCompare(git: GitExec, worktreePath: string, commitId
       ['rev-list', '--parents', '-n', '1', commitOid],
       worktreePath
     )
+
     const firstParent = parseGitRevListFirstParentOid(parentsOut)
     summary.parentOid = firstParent
     summary.baseRef = firstParent ? firstParent.slice(0, 7) : 'empty tree'
@@ -79,6 +82,7 @@ export async function commitCompare(git: GitExec, worktreePath: string, commitId
           '-C',
           commitOid
         ]
+
     const numstatArgs = summary.parentOid
       ? [
           '-c',
@@ -102,12 +106,15 @@ export async function commitCompare(git: GitExec, worktreePath: string, commitId
           '-C',
           commitOid
         ]
+
     const [{ stdout }, { stdout: numstat }] = await Promise.all([
       git(diffArgs, worktreePath),
       git(numstatArgs, worktreePath)
     ])
+
     const entries = parseBranchDiff(stdout, parseNumstat(numstat))
     summary.changedFiles = entries.length
+
     return { summary, entries }
   } catch (error) {
     return {
@@ -132,15 +139,20 @@ export async function commitDiffEntry(
   }
 ) {
   assertFullGitObjectId(args.commitOid, 'commitOid')
+
   if (args.parentOid) {
     assertFullGitObjectId(args.parentOid, 'parentOid')
   }
+
   try {
     const oldPath = args.oldPath ?? args.filePath
+
     const left = args.parentOid
       ? await readBlobAtOid(gitBuffer, worktreePath, args.parentOid, oldPath)
       : { content: '', isBinary: false }
+
     const right = await readBlobAtOid(gitBuffer, worktreePath, args.commitOid, args.filePath)
+
     return buildDiffResult(
       left.content,
       right.content,

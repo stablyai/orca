@@ -21,6 +21,7 @@ import { isFileListingCancellation } from '../shared/file-listing-cancellation'
 
 function createMockProcess(): ChildProcess {
   const p = new EventEmitter() as unknown as ChildProcess
+
   ;(p as unknown as Record<string, unknown>).stdout = new EventEmitter()
   ;(
     (p as unknown as Record<string, unknown>).stdout as EventEmitter & {
@@ -32,6 +33,7 @@ function createMockProcess(): ChildProcess {
   ;(p as unknown as Record<string, unknown>).exitCode = null
   ;(p as unknown as Record<string, unknown>).signalCode = null
   Object.defineProperty(p, 'pid', { configurable: true, value: 1 })
+
   return p
 }
 
@@ -52,6 +54,7 @@ describe('relay list-files cancellation', () => {
     )
 
     const controller = new AbortController()
+
     const promise = listFilesWithRg('/remote/root', [], { signal: controller.signal })
 
     // Partial output before the abort — must be discarded, not resolved.
@@ -102,6 +105,7 @@ describe('relay list-files cancellation', () => {
     spawnMock.mockImplementation(() => {
       const proc = createMockProcess()
       procs.push(proc)
+
       return proc
     })
 

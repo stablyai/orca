@@ -63,10 +63,12 @@ function SpriteFrame({
   restartKey: number
 }): React.JSX.Element {
   const baseId = useId().replace(/[^a-zA-Z0-9_-]/g, '')
+
   const anim =
     sprite.animations?.[animationName] ||
     (sprite.defaultAnimation && sprite.animations?.[sprite.defaultAnimation]) ||
     (sprite.animations ? Object.values(sprite.animations)[0] : undefined)
+
   const row = anim?.row ?? 0
   // Why: clamp to >=1 so an empty/invalid manifest can't produce steps(0),
   // which is rejected as invalid CSS and freezes the animation.
@@ -85,6 +87,7 @@ function SpriteFrame({
   const bgH = sprite.sheetHeight * scale
   const startX = 0
   const startY = -(row * sprite.frameHeight * scale)
+
   const { keyframesCss, animationCss } = buildSpriteAnimationCss({
     keyframesId: animKeyframesId,
     frames,
@@ -94,6 +97,7 @@ function SpriteFrame({
     rowOffsetY: startY,
     frameDurationsMs: anim?.frameDurationsMs
   })
+
   return (
     <>
       <style>{keyframesCss}</style>
@@ -141,40 +145,52 @@ function DetectedSpriteFrame({
   const { footprintW, footprintH } = useMemo(() => {
     let w = 0
     let h = 0
+
     for (const f of detected.frames) {
       const s = Math.min(maxSize / f.w, maxSize / f.h)
       w = Math.max(w, f.w * s)
       h = Math.max(h, f.h * s)
     }
+
     return { footprintW: Math.max(1, Math.round(w)), footprintH: Math.max(1, Math.round(h)) }
   }, [detected, maxSize])
 
   useEffect(() => {
     const canvas = canvasRef.current
+
     if (!canvas) {
       return
     }
+
     const ctx = canvas.getContext('2d')
+
     if (!ctx) {
       return
     }
+
     canvas.width = footprintW
     canvas.height = footprintH
     // Why: reset playback when the underlying sprite changes so the new
     // animation starts from frame 0 rather than wherever the prior one stopped.
     frameIndexRef.current = 0
     lastTimeRef.current = 0
+
     if (detected.frames.length === 0) {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
+
       return
     }
+
     let raf = 0
+
     const draw = (): void => {
       const f = detected.frames[frameIndexRef.current % detected.frames.length]
       const bmp = detected.bitmaps[frameIndexRef.current % detected.bitmaps.length]
+
       if (!f || !bmp) {
         return
       }
+
       ctx.imageSmoothingEnabled = false
       ctx.clearRect(0, 0, canvas.width, canvas.height)
       const scale = Math.min(maxSize / f.w, maxSize / f.h)
@@ -184,22 +200,28 @@ function DetectedSpriteFrame({
       // sizes stay aligned without resizing the canvas per frame.
       ctx.drawImage(bmp, (footprintW - w) / 2, (footprintH - h) / 2, w, h)
     }
+
     const tick = (now: number): void => {
       const dt = now - lastTimeRef.current
+
       if (dt >= 1000 / fps) {
         lastTimeRef.current = now
         frameIndexRef.current = (frameIndexRef.current + 1) % detected.frames.length
         draw()
       }
+
       if (animate) {
         raf = requestAnimationFrame(tick)
       }
     }
+
     draw()
+
     if (animate) {
       lastTimeRef.current = performance.now()
       raf = requestAnimationFrame(tick)
     }
+
     return () => {
       if (raf) {
         cancelAnimationFrame(raf)
@@ -219,20 +241,26 @@ function useDocumentVisible(): boolean {
   const [visible, setVisible] = useState(() =>
     typeof document === 'undefined' ? true : document.visibilityState === 'visible'
   )
+
   useEffect(() => {
     const onChange = (): void => {
       setVisible(document.visibilityState === 'visible')
     }
+
     document.addEventListener('visibilitychange', onChange)
+
     return () => document.removeEventListener('visibilitychange', onChange)
   }, [])
+
   return visible
 }
 
 // Why: keep a default for the cached helpers below; the live size now comes
 // from the store so the user can resize from the status-bar menu.
 const SIZE = 180
+
 const POSITION_STORAGE_KEY = 'pet-overlay-position'
+
 const LEGACY_POSITION_STORAGE_KEY = 'sidekick-overlay-position'
 
 export type Position = { x: number; y: number }
@@ -244,6 +272,7 @@ export function clampPositionToViewport(
 ): Position {
   const maxX = Math.max(0, viewport.width - size)
   const maxY = Math.max(0, viewport.height - size)
+
   return {
     x: Math.min(Math.max(0, pos.x), maxX),
     y: Math.min(Math.max(0, pos.y), maxY)
@@ -254,6 +283,7 @@ function clampToViewport(pos: Position, size: number = SIZE): Position {
   if (typeof window === 'undefined') {
     return pos
   }
+
   return clampPositionToViewport(pos, size, {
     width: window.innerWidth,
     height: window.innerHeight
@@ -264,20 +294,27 @@ function loadStoredPosition(size: number = SIZE): Position | null {
   if (typeof window === 'undefined') {
     return null
   }
+
   try {
     let raw = window.localStorage.getItem(POSITION_STORAGE_KEY)
     let migratedFromLegacy = false
+
     if (!raw) {
       raw = window.localStorage.getItem(LEGACY_POSITION_STORAGE_KEY)
+
       if (!raw) {
         return null
       }
+
       migratedFromLegacy = true
     }
+
     const parsed = JSON.parse(raw) as Partial<Position>
+
     if (typeof parsed.x !== 'number' || typeof parsed.y !== 'number') {
       return null
     }
+
     if (migratedFromLegacy) {
       try {
         window.localStorage.setItem(POSITION_STORAGE_KEY, raw)
@@ -285,6 +322,7 @@ function loadStoredPosition(size: number = SIZE): Position | null {
         // ignore storage failures
       }
     }
+
     // Why: clamp using the live overlay size so a persisted position from a
     // larger overlay doesn't slip off the bottom/right edge after a shrink.
     return clampToViewport({ x: parsed.x, y: parsed.y }, size)
@@ -297,6 +335,7 @@ function defaultPosition(size: number = SIZE): Position {
   if (typeof window === 'undefined') {
     return { x: 0, y: 0 }
   }
+
   // Matches previous bottom-4 right-16 (right: 4rem, bottom: 1rem).
   return clampToViewport(
     {
@@ -311,6 +350,7 @@ function defaultPosition(size: number = SIZE): Position {
 // out of i18n so translated locales cannot invalidate the keyframes.
 const PET_BOB_KEYFRAMES_CSS =
   '@keyframes pet-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }'
+
 export function PetOverlay(): React.JSX.Element {
   const documentVisible = useDocumentVisible()
   const reducedMotion = usePrefersReducedMotion()
@@ -326,21 +366,26 @@ export function PetOverlay(): React.JSX.Element {
     // before the `size` prop binding settles, and `loadStoredPosition` would
     // otherwise default to SIZE and clip a previously-saved position.
     const currentSize = useAppStore.getState().petSize ?? SIZE
+
     return {
       size: currentSize,
       position: loadStoredPosition(currentSize) ?? defaultPosition(currentSize)
     }
   })
+
   let position = positionState.position
+
   if (positionState.size !== size) {
     position = clampToViewport(positionState.position, size)
     setPositionState({ size, position })
   }
+
   const setPosition = useCallback(
     (nextPosition: Position | ((current: Position) => Position)): void => {
       setPositionState((current) => {
         const currentPosition =
           current.size === size ? current.position : clampToViewport(current.position, size)
+
         return {
           size,
           position:
@@ -350,6 +395,7 @@ export function PetOverlay(): React.JSX.Element {
     },
     [size]
   )
+
   const { dragging, dragAnimation, hovering, dragGeneration, handlers } = usePetPointerInteraction(
     position,
     (next) => setPosition(clampToViewport(next, size))
@@ -358,6 +404,7 @@ export function PetOverlay(): React.JSX.Element {
   useEffect(() => {
     const onResize = (): void => setPosition((prev) => clampToViewport(prev, size))
     window.addEventListener('resize', onResize)
+
     return () => window.removeEventListener('resize', onResize)
   }, [setPosition, size])
 
@@ -365,6 +412,7 @@ export function PetOverlay(): React.JSX.Element {
     if (dragging) {
       return
     }
+
     try {
       window.localStorage.setItem(POSITION_STORAGE_KEY, JSON.stringify(position))
     } catch {

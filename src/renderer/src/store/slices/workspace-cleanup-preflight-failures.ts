@@ -66,9 +66,11 @@ export function getWorkspaceCleanupRepoScanFailure(
         target.executionHostId === null ||
         entry.executionHostId === target.executionHostId)
   )
+
   if (!error) {
     return null
   }
+
   return {
     worktreeId: target.worktreeId,
     ...(target.executionHostId ? { executionHostId: target.executionHostId } : {}),

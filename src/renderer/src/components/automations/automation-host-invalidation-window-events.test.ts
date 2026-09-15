@@ -24,9 +24,13 @@ import {
 } from './automation-host-invalidation-window-events'
 
 const DESKTOP: StableAutomationAuthorityRef = { kind: 'desktop' }
+
 const RUNTIME: StableAutomationAuthorityRef = { kind: 'runtime', environmentId: 'env-1' }
+
 const DESKTOP_SELF: StableAutomationCatalogRef = { authority: DESKTOP, selector: { kind: 'self' } }
+
 const RUNTIME_SELF: StableAutomationCatalogRef = { authority: RUNTIME, selector: { kind: 'self' } }
+
 const RUNTIME_SSH: StableAutomationCatalogRef = {
   authority: RUNTIME,
   selector: { kind: 'ssh', targetId: 'target-1' }
@@ -47,21 +51,26 @@ function seeded(): AutomationHostCache {
     catalogGeneration: () => 0,
     connectionGeneration: () => 0
   })
+
   for (const ref of [DESKTOP_SELF, RUNTIME_SELF, RUNTIME_SSH]) {
     cache.commit(cache.beginRequest(ref), { rows: [row('a')] })
   }
+
   return cache
 }
 
 function subscribedCache(): { cache: AutomationHostCache; invalidated: ReturnType<typeof vi.fn> } {
   const cache = seeded()
   const invalidated = vi.fn()
+
   const invalidation = createAutomationHostInvalidation({
     cache,
     onInvalidated: invalidated,
     schedule: (flush) => flush()
   })
+
   subscribeAutomationHostInvalidation(invalidation.handle)
+
   return { cache, invalidated }
 }
 
@@ -130,11 +139,13 @@ describe('automationsChanged window event attribution', () => {
   it('stops delivering once unsubscribed', () => {
     const cache = seeded()
     const invalidated = vi.fn()
+
     const invalidation = createAutomationHostInvalidation({
       cache,
       onInvalidated: invalidated,
       schedule: (flush) => flush()
     })
+
     const unsubscribe = subscribeAutomationHostInvalidation(invalidation.handle)
 
     unsubscribe()

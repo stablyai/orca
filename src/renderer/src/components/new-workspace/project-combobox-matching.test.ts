@@ -11,7 +11,9 @@ function project(id: string, displayName: string, detail: string): NewWorkspaceP
 }
 
 const orca = project('orca', 'orca', 'stablyai/orca')
+
 const relay = project('relay', 'orca-relay', 'stablyai/orca-relay')
+
 const gateway = project('gateway', 'api-gateway', 'acme/api-gateway')
 
 describe('rankProjectOptions', () => {

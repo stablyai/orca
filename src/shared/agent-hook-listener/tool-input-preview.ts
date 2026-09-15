@@ -107,23 +107,31 @@ export function deriveToolInputPreview(
   if (typeof toolInput === 'string') {
     return toolInput
   }
+
   if (typeof toolInput !== 'object' || toolInput === null) {
     return undefined
   }
+
   if (!toolName) {
     return undefined
   }
+
   const keys = TOOL_INPUT_KEYS_BY_TOOL[toolName]
+
   if (!keys) {
     return undefined
   }
+
   const record = toolInput as Record<string, unknown>
+
   for (const key of keys) {
     const value = record[key]
+
     if (typeof value === 'string' && value.trim().length > 0) {
       return value
     }
   }
+
   return undefined
 }
 
@@ -131,21 +139,27 @@ export function deriveFallbackToolInputPreview(toolInput: unknown): string | und
   if (typeof toolInput === 'string') {
     return toolInput
   }
+
   if (typeof toolInput !== 'object' || toolInput === null) {
     return undefined
   }
+
   const record = toolInput as Record<string, unknown>
+
   for (const key of FALLBACK_TOOL_INPUT_KEYS) {
     const value = record[key]
+
     if (typeof value === 'string' && value.trim().length > 0) {
       return value
     }
   }
+
   return undefined
 }
 
 export function readString(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key]
+
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 

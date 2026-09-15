@@ -28,6 +28,7 @@ describe('skill provider runtime roots', () => {
       CLAUDE_CONFIG_DIR: '../claude',
       GROK_HOME: '../grok'
     })
+
     expect(roots).toEqual({})
     const managedClaudeRoot = resolve('/managed/claude')
     expect(withClaudeSkillProviderRoot(roots, managedClaudeRoot)).toEqual({
@@ -57,12 +58,14 @@ describe('skill provider runtime roots', () => {
 
   it('defaults the Hermes skills root under LOCALAPPDATA on Windows', () => {
     const localAppData = resolve('/local')
+
     const resolved = resolveDefaultHermesSkillsRoot({
       homeDir: join('/users', 'alice'),
       platform: 'win32',
       env: { LOCALAPPDATA: localAppData },
       directoryExists: (candidate) => candidate === join(localAppData, 'hermes')
     })
+
     expect(resolved).toBe(join(localAppData, 'hermes', 'skills'))
   })
 
@@ -73,31 +76,37 @@ describe('skill provider runtime roots', () => {
       env: { LOCALAPPDATA: join('/local') },
       directoryExists: (candidate) => candidate === join('/users', 'alice', '.hermes')
     })
+
     expect(resolved).toBe(join('/users', 'alice', '.hermes', 'skills'))
   })
 
   it('prefers the LOCALAPPDATA tree on Windows when both layouts exist', () => {
     const localAppData = resolve('/local')
+
     const resolved = resolveDefaultHermesSkillsRoot({
       homeDir: join('/users', 'alice'),
       platform: 'win32',
       env: { LOCALAPPDATA: localAppData },
       directoryExists: () => true
     })
+
     expect(resolved).toBe(join(localAppData, 'hermes', 'skills'))
   })
 
   it('falls back to the dotfolder when Windows exposes no usable LOCALAPPDATA', () => {
     const seen: string[] = []
+
     const resolved = resolveDefaultHermesSkillsRoot({
       homeDir: join('/users', 'alice'),
       platform: 'win32',
       env: { LOCALAPPDATA: 'relative\\local' },
       directoryExists: (candidate) => {
         seen.push(candidate)
+
         return true
       }
     })
+
     expect(resolved).toBe(join('/users', 'alice', '.hermes', 'skills'))
     // A rejected LOCALAPPDATA must not cost a stat: there is nothing to compare.
     expect(seen).toEqual([])

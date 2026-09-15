@@ -5,6 +5,7 @@ import { FEATURE_TIPS, type FeatureTip } from '../../../../shared/feature-tips'
 import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
 
 const shortcutLabelMock = vi.hoisted(() => vi.fn(() => '⌘J'))
+
 const formatShortcutLabelMock = vi.hoisted(() => vi.fn(() => '⌘J'))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
@@ -31,9 +32,11 @@ vi.mock('./FeatureTipActions', () => ({
 
 function getCmdJPaletteTip(): FeatureTip {
   const tip = FEATURE_TIPS.find((entry) => entry.id === 'cmd-j-palette')
+
   if (!tip) {
     throw new Error('Expected cmd-j-palette feature tip fixture')
   }
+
   return { ...tip }
 }
 

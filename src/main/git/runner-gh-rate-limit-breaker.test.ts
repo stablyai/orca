@@ -87,6 +87,7 @@ describe('ghExecFileAsync rate-limit breaker', () => {
     ).resolves.toMatchObject({ stdout: '[]' })
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       await expect(
         ghExecFileAsync(['api', 'repos/a/b/pulls'], { wslDistro: 'Ubuntu' })
@@ -97,6 +98,7 @@ describe('ghExecFileAsync rate-limit breaker', () => {
         value: originalPlatform
       })
     }
+
     expect(spawnMock).toHaveBeenCalledTimes(5)
   })
 
@@ -106,6 +108,7 @@ describe('ghExecFileAsync rate-limit breaker', () => {
   ])('scopes an explicit %s hostname ahead of process GH_HOST', async (_name, hostnameArgs) => {
     const originalGhHost = process.env.GH_HOST
     process.env.GH_HOST = 'github.acme-corp.com'
+
     try {
       mockGhFailure(PRIMARY_RATE_LIMIT_STDERR)
       await expect(ghExecFileAsync(['api', ...hostnameArgs, 'repos/a/b/pulls'])).rejects.toThrow(
@@ -155,6 +158,7 @@ describe('ghExecFileAsync rate-limit breaker', () => {
     registerGhRateLimitResetProbe(probe)
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       mockGhFailure(PRIMARY_RATE_LIMIT_STDERR)
       await expect(

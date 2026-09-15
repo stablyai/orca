@@ -28,11 +28,14 @@ export class MobileRelayDirectGraceTimer {
   // an already-failed direct path (recovery owns that) never open a relay socket.
   arm(): void {
     const state = this.logical.getState()
+
     if (this.timer || (state !== 'connecting' && state !== 'handshaking')) {
       return
     }
+
     this.timer = this.dependencies.setTimer(() => {
       this.timer = null
+
       if (this.logical.getState() !== 'connected') {
         this.dialRelay()
       }

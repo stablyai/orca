@@ -13,15 +13,21 @@ describe('SSH port-forward snapshot barrier', () => {
   it('holds only the first matching request while its snapshot is unresolved', async () => {
     const handlers = new Map<string, InvokeHandler>()
     let resolveFirstSnapshot: (value: string[]) => void = () => {}
+
     const firstSnapshot = new Promise<string[]>((resolve) => {
       resolveFirstSnapshot = resolve
     })
+
     let callCount = 0
+
     const originalHandler = vi.fn(() => {
       callCount += 1
+
       return callCount === 1 ? firstSnapshot : Promise.resolve(['later-snapshot'])
     })
+
     handlers.set('ssh:listPortForwards', originalHandler)
+
     const app = {
       evaluate: (
         callback: (electron: unknown, arg?: unknown) => unknown,
@@ -32,9 +38,11 @@ describe('SSH port-forward snapshot barrier', () => {
 
     let heldRequestStarted = false
     await installSshPortForwardSnapshotBarrier(app, 'target-1')
+
     try {
       const wrappedHandler = handlers.get('ssh:listPortForwards')
       expect(wrappedHandler).toBeTypeOf('function')
+
       if (!wrappedHandler) {
         throw new Error('Wrapped handler unavailable')
       }
@@ -60,9 +68,11 @@ describe('SSH port-forward snapshot barrier', () => {
       await expect(firstRequest).resolves.toEqual(['held-snapshot'])
     } finally {
       resolveFirstSnapshot(['cleanup-snapshot'])
+
       if (heldRequestStarted) {
         await releaseSshPortForwardSnapshotBarrier(app)
       }
+
       await restoreSshPortForwardSnapshotHandler(app)
     }
   })

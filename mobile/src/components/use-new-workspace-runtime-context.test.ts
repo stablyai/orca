@@ -7,13 +7,16 @@ import type { RpcResponse } from '../transport/types'
 import { useNewWorkspaceRuntimeContext } from './use-new-workspace-runtime-context'
 
 type RuntimeContext = ReturnType<typeof useNewWorkspaceRuntimeContext>
+
 type PublishedState = Pick<
   RuntimeContext,
   'runtimeSettings' | 'trustedOrcaHooks' | 'availableProviders'
 >
 
 const TRUSTED_HOOKS = { '/repo/orca.yaml': 'sha-1' }
+
 const UI_WITH_TRUST = { ui: { trustedOrcaHooks: TRUSTED_HOOKS } }
+
 const SETTINGS = { defaultTuiAgent: 'codex', visibleTaskProviders: ['github', 'linear'] }
 
 function reply(result: unknown): RpcResponse {
@@ -35,6 +38,7 @@ function clientAnswering(settingsResult: unknown, uiResult: unknown): RpcClient 
         return reply({ connected: false })
     }
   })
+
   return client
 }
 
@@ -50,6 +54,7 @@ describe('useNewWorkspaceRuntimeContext', () => {
 
   function Harness({ client }: { client: RpcClient }): null {
     context = useNewWorkspaceRuntimeContext(client, true)
+
     return null
   }
 
@@ -65,6 +70,7 @@ describe('useNewWorkspaceRuntimeContext', () => {
     })
     await act(async () => {})
     const { runtimeSettings, trustedOrcaHooks, availableProviders } = context!
+
     return { runtimeSettings, trustedOrcaHooks, availableProviders }
   }
 

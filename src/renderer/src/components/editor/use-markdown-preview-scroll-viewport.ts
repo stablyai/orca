@@ -13,6 +13,7 @@ export function useMarkdownPreviewScrollViewport({
 
   useLayoutEffect(() => {
     const container = rootRef.current
+
     if (!container) {
       return
     }
@@ -23,6 +24,7 @@ export function useMarkdownPreviewScrollViewport({
       if (throttleTimer !== null) {
         clearTimeout(throttleTimer)
       }
+
       throttleTimer = setTimeout(() => {
         setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
         throttleTimer = null
@@ -30,14 +32,17 @@ export function useMarkdownPreviewScrollViewport({
     }
 
     container.addEventListener('scroll', onScroll, { passive: true })
+
     return () => {
       // Why: StrictMode's zero-height mount must not clobber a valid cached position.
       if (container.scrollHeight > container.clientHeight || container.scrollTop > 0) {
         setWithLRU(scrollTopCache, scrollCacheKey, container.scrollTop)
       }
+
       if (throttleTimer !== null) {
         clearTimeout(throttleTimer)
       }
+
       container.removeEventListener('scroll', onScroll)
     }
   }, [rootRef, scrollCacheKey])
@@ -45,6 +50,7 @@ export function useMarkdownPreviewScrollViewport({
   useLayoutEffect(() => {
     const container = rootRef.current
     const targetScrollTop = scrollTopCache.get(scrollCacheKey)
+
     if (!container || targetScrollTop === undefined) {
       return
     }
@@ -62,12 +68,14 @@ export function useMarkdownPreviewScrollViewport({
       }
 
       attempts += 1
+
       if (attempts < 30) {
         frameId = window.requestAnimationFrame(tryRestore)
       }
     }
 
     tryRestore()
+
     return () => window.cancelAnimationFrame(frameId)
   }, [rootRef, scrollCacheKey, renderedContent])
 }

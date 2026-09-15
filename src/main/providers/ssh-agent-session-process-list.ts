@@ -10,6 +10,7 @@ export function mapSshPtyProcessList(
     if (session.agentSessionOwners?.length && !isPtyIncarnationId(session.incarnationId)) {
       throw new Error('agent_session_ownership_unknown')
     }
+
     return {
       ...session,
       id: toAppPtyId(session.id),
@@ -19,6 +20,7 @@ export function mapSshPtyProcessList(
               if (!isAgentSessionOwnerBinding(owner) || owner.ptyId !== session.id) {
                 throw new Error('agent_session_ownership_unknown')
               }
+
               return { ...owner, ptyId: toAppPtyId(owner.ptyId) }
             })
           }

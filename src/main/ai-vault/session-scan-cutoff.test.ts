@@ -13,9 +13,11 @@ function session(time: number | string, overrides: Partial<AiVaultSession> = {})
     }),
     'linux'
   )
+
   if (!parsed) {
     throw new Error('Expected a session fixture')
   }
+
   return Object.freeze({
     ...parsed,
     updatedAt: typeof time === 'number' ? new Date(time).toISOString() : time,
@@ -26,6 +28,7 @@ function session(time: number | string, overrides: Partial<AiVaultSession> = {})
 function collection(rows: AiVaultSession[]): CodexSessionCollection {
   const result = new CodexSessionCollection()
   rows.forEach((row) => result.add(row))
+
   return result
 }
 
@@ -33,10 +36,12 @@ function sortedReference(rows: AiVaultSession[], limit: number, next: number | u
   if (rows.length < limit || typeof next !== 'number') {
     return false
   }
+
   const cutoff = rows
     .map(sessionSortTime)
     .sort((left, right) => right - left)
     .at(limit - 1)
+
   return typeof cutoff === 'number' && next < cutoff
 }
 
@@ -70,6 +75,7 @@ describe('canStopParsingSessions', () => {
       sessionId: 'same',
       filePath: '/sessions/rollout-same.jsonl'
     }
+
     const sessions = collection([session(100, { ...alias, codexHome: '/custom' }), session(100)])
     expect(canStopParsingSessions(sessions, 2, 50)).toBe(true)
     const preferred = session(10, { ...alias, codexHome: null })
@@ -85,6 +91,7 @@ describe('canStopParsingSessions', () => {
     const rows = [session(0), session('invalid'), session(20)]
     const sessions = collection(rows)
     expect(canStopParsingSessions(sessions, 1, 10)).toBe(false)
+
     for (const candidate of [rows, rows.toReversed(), [rows[2], rows[0], rows[1]]]) {
       for (const limit of [1, 2, 3]) {
         for (const next of [-1, 0, 10, 20]) {
@@ -110,6 +117,7 @@ describe('canStopParsingSessions', () => {
       session('+010000-01-01T00:00:00Z'),
       session(0)
     ]
+
     for (const limit of [0, -1, -5, 0.5, 1.5, Number.NaN, Infinity, -Infinity, 1, 2, 4, 5]) {
       for (const next of [undefined, Number.NaN, -Infinity, Infinity, -1, 0, 1, 2000]) {
         expect(canStopParsingSessions(collection(rows), limit, next)).toBe(

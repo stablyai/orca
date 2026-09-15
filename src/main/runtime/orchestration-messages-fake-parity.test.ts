@@ -36,6 +36,7 @@ describe.each(STORES)('mailbox pointer reservations (%s)', (_name, createStore) 
 
   it('refuses a claim another flight already holds', () => {
     const store = createStore()
+
     const message = store.insertMessage({
       runId: 'run_legacy_local',
       from: 'a',
@@ -50,18 +51,21 @@ describe.each(STORES)('mailbox pointer reservations (%s)', (_name, createStore) 
 
   it('rolls the whole batch back when one row is already claimed', () => {
     const store = createStore()
+
     const free = store.insertMessage({
       runId: 'run_legacy_local',
       from: 'a',
       to: 'run:run-1',
       subject: 'free'
     })
+
     const taken = store.insertMessage({
       runId: 'run_legacy_local',
       from: 'a',
       to: 'run:run-1',
       subject: 'taken'
     })
+
     expect(store.stageMailboxPointerEnter([taken.id], rival)).toBe(true)
 
     expect(store.stageMailboxPointerEnter([free.id, taken.id], mine)).toBe(false)
@@ -78,6 +82,7 @@ describe.each(STORES)('mailbox pointer reservations (%s)', (_name, createStore) 
       subject: 'reserved',
       type: 'escalation'
     })
+
     const kept = store.insertMessage({
       runId: 'run_legacy_local',
       from: 'a',

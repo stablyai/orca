@@ -25,10 +25,13 @@ export const SetupDecision = z.enum(['inherit', 'run', 'skip']).optional()
 
 export const ExecutionHostId = requiredString('Missing host id').transform((value, ctx) => {
   const hostId = normalizeExecutionHostId(value)
+
   if (!hostId) {
     ctx.addIssue({ code: 'custom', message: 'Invalid host id' })
+
     return z.NEVER
   }
+
   return hostId
 })
 

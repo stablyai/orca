@@ -9,11 +9,13 @@ describe('buildRows project grouping order', () => {
   const repoA: Repo = { ...repo, id: 'repo-a', displayName: 'alpha' }
   const repoB: Repo = { ...repo, id: 'repo-b', displayName: 'beta' }
   const repoC: Repo = { ...repo, id: 'repo-c', displayName: 'gamma' }
+
   const map = new Map([
     [repoA.id, repoA],
     [repoB.id, repoB],
     [repoC.id, repoC]
   ])
+
   // Activity: C (300) is freshest, then A (200), then B (100). wAStale (50) is
   // an older sibling of A so a repo's rank is its max child, not its first.
   const wA: Worktree = {
@@ -23,6 +25,7 @@ describe('buildRows project grouping order', () => {
     displayName: 'a',
     lastActivityAt: 200
   }
+
   const wAStale: Worktree = {
     ...worktree,
     id: 'wt-a-stale',
@@ -30,6 +33,7 @@ describe('buildRows project grouping order', () => {
     displayName: 'a2',
     lastActivityAt: 50
   }
+
   const wB: Worktree = {
     ...worktree,
     id: 'wt-b',
@@ -37,6 +41,7 @@ describe('buildRows project grouping order', () => {
     displayName: 'b',
     lastActivityAt: 100
   }
+
   const wC: Worktree = {
     ...worktree,
     id: 'wt-c',
@@ -52,6 +57,7 @@ describe('buildRows project grouping order', () => {
       [repoA.id, 1],
       [repoC.id, 2]
     ])
+
     const rows = buildRows('repo', [wC, wA, wB], map, null, new Set(), repoOrder)
     const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
     expect(headerKeys).toEqual(['repo:repo-b', 'repo:repo-a', 'repo:repo-c'])
@@ -74,6 +80,7 @@ describe('buildRows project grouping order', () => {
       [repoA.id, 1],
       [repoC.id, 2]
     ])
+
     const rows = buildRows(
       'repo',
       [wA, wB, wC],
@@ -84,6 +91,7 @@ describe('buildRows project grouping order', () => {
       undefined,
       'recent'
     )
+
     const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
     expect(headerKeys).toEqual(['repo:repo-c', 'repo:repo-a', 'repo:repo-b'])
   })
@@ -121,6 +129,7 @@ describe('buildRows project grouping order', () => {
       isMainWorktree: true,
       lastActivityAt: 10
     }
+
     const freshChild = {
       ...wA,
       id: 'wt-a-fresh-child',
@@ -128,6 +137,7 @@ describe('buildRows project grouping order', () => {
       isMainWorktree: false,
       lastActivityAt: 500
     }
+
     const rows = buildRows(
       'repo',
       [freshChild, wB, main],
@@ -154,6 +164,7 @@ describe('buildRows project grouping order', () => {
       [repoA.id, 1],
       [repoC.id, 2]
     ])
+
     const rows = buildRows('repo', [wC, wA, wB], map, null, new Set(), repoOrder)
     const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
     expect(headerKeys).toEqual(['repo:repo-b', 'repo:repo-a', 'repo:repo-c'])
@@ -162,9 +173,11 @@ describe('buildRows project grouping order', () => {
   it('builds rows for a very large repo-group list', () => {
     const count = 130_000
     const repos = new Map<string, Repo>()
+
     const worktrees = Array.from({ length: count }, (_, index) => {
       const repoId = `repo-${index}`
       repos.set(repoId, { ...repo, id: repoId, displayName: `repo ${index}` })
+
       return { ...worktree, id: `wt-${index}`, repoId, displayName: `workspace ${index}` }
     })
 
@@ -180,10 +193,12 @@ describe('buildRows Recent project order fallbacks', () => {
   const active: Repo = { ...repo, id: 'repo-active', displayName: 'active', addedAt: 0 }
   // Empty project has no visible worktrees, so Recent falls back to addedAt.
   const empty: Repo = { ...repo, id: 'repo-empty', displayName: 'empty', addedAt: 999 }
+
   const map = new Map([
     [active.id, active],
     [empty.id, empty]
   ])
+
   const activeWorktree: Worktree = {
     ...worktree,
     id: 'wt-active',
@@ -211,6 +226,7 @@ describe('buildRows Recent project order fallbacks', () => {
       [],
       new Set([empty.id])
     )
+
     const headerKeys = rows.filter((r) => r.type === 'header').map((r) => r.key)
     expect(headerKeys).toEqual(['repo:repo-active', 'repo:repo-empty'])
   })
@@ -230,6 +246,7 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const repoA: Repo = {
       ...repo,
       id: 'repo-a',
@@ -237,6 +254,7 @@ describe('project groups', () => {
       projectGroupId: group.id,
       projectGroupOrder: 1
     }
+
     const repoB: Repo = {
       ...repo,
       id: 'repo-b',
@@ -244,12 +262,15 @@ describe('project groups', () => {
       projectGroupId: group.id,
       projectGroupOrder: 0
     }
+
     const worktreeA: Worktree = { ...worktree, id: 'wt-a', repoId: repoA.id }
     const worktreeB: Worktree = { ...worktree, id: 'wt-b', repoId: repoB.id }
+
     const groupedMap = new Map([
       [repoA.id, repoA],
       [repoB.id, repoB]
     ])
+
     const repoOrder = new Map([
       [repoA.id, 0],
       [repoB.id, 1]
@@ -291,14 +312,17 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const repoA: Repo = { ...repo, id: 'repo-a', displayName: 'alpha', projectGroupId: group.id }
     const repoB: Repo = { ...repo, id: 'repo-b', displayName: 'beta', projectGroupId: group.id }
     const repoC: Repo = { ...repo, id: 'repo-c', displayName: 'gamma', projectGroupId: group.id }
+
     const groupedMap = new Map([
       [repoA.id, repoA],
       [repoB.id, repoB],
       [repoC.id, repoC]
     ])
+
     const repoOrder = new Map([
       [repoA.id, 0],
       [repoB.id, 1],
@@ -346,8 +370,10 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const repoA: Repo = { ...repo, id: 'repo-a', displayName: 'alpha', projectGroupId: group.id }
     const repoB: Repo = { ...repo, id: 'repo-b', displayName: 'beta', projectGroupId: group.id }
+
     const repoC: Repo = {
       ...repo,
       id: 'repo-c',
@@ -355,11 +381,13 @@ describe('project groups', () => {
       projectGroupId: group.id,
       projectGroupOrder: 500
     }
+
     const groupedMap = new Map([
       [repoA.id, repoA],
       [repoB.id, repoB],
       [repoC.id, repoC]
     ])
+
     const repoOrder = new Map([
       [repoA.id, 0],
       [repoB.id, 1],
@@ -407,7 +435,9 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const groupB: ProjectGroup = { ...groupA, id: 'group-b', name: 'Infra', tabOrder: 0 }
+
     // Inside group A: repoStale ordered first by projectGroupOrder, but repoFresh
     // is more recently active so recent mode must lift it above repoStale.
     const repoStale: Repo = {
@@ -417,6 +447,7 @@ describe('project groups', () => {
       projectGroupId: groupA.id,
       projectGroupOrder: 0
     }
+
     const repoFresh: Repo = {
       ...repo,
       id: 'repo-fresh',
@@ -424,10 +455,12 @@ describe('project groups', () => {
       projectGroupId: groupA.id,
       projectGroupOrder: 1
     }
+
     const groupedMap = new Map([
       [repoStale.id, repoStale],
       [repoFresh.id, repoFresh]
     ])
+
     const worktrees = [
       { ...worktree, id: 'wt-stale', repoId: repoStale.id, lastActivityAt: 10 },
       { ...worktree, id: 'wt-fresh', repoId: repoFresh.id, lastActivityAt: 500 }
@@ -472,12 +505,14 @@ describe('project groups', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const rootB: ProjectGroup = {
       ...rootA,
       id: 'group-root-b',
       name: 'Infrastructure',
       tabOrder: 10
     }
+
     const childLate: ProjectGroup = {
       ...rootA,
       id: 'group-child-late',
@@ -485,6 +520,7 @@ describe('project groups', () => {
       parentGroupId: rootB.id,
       tabOrder: 30
     }
+
     const childEarly: ProjectGroup = {
       ...rootA,
       id: 'group-child-early',

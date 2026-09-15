@@ -6,6 +6,7 @@ import { normalizeAgentSessionsDir } from './session-scanner-values'
 // read back by renderer-supplied path (Claude and OMP). Discovery scans these;
 // the IPC listers use the root enumerations below to reject arbitrary paths.
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects')
+
 export const OMP_SESSIONS_DIR = normalizeAgentSessionsDir(
   process.env.OMP_CODING_AGENT_DIR?.trim() || join(homedir(), '.omp', 'agent', 'sessions'),
   '.omp'
@@ -44,14 +45,18 @@ export function ompSessionsRootDirs(args: {
 export function normalizedWslHomeDirs(homeDirs: readonly string[] | undefined): string[] {
   const seen = new Set<string>()
   const unique: string[] = []
+
   for (const homeDir of homeDirs ?? []) {
     const trimmed = homeDir.trim()
+
     if (!trimmed || seen.has(trimmed)) {
       continue
     }
+
     seen.add(trimmed)
     unique.push(trimmed)
   }
+
   return unique
 }
 

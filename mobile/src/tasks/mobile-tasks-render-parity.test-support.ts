@@ -21,8 +21,10 @@ function parseSource(relativePath: string): ts.SourceFile {
 
 function renderDefinitions(): Map<string, RenderDefinition> {
   const definitions = new Map<string, RenderDefinition>()
+
   for (const relativePath of MOBILE_TASKS_SOURCE_FILES) {
     const sourceFile = parseSource(relativePath)
+
     function visit(node: ts.Node): void {
       if (
         ts.isFunctionDeclaration(node) &&
@@ -33,18 +35,23 @@ function renderDefinitions(): Map<string, RenderDefinition> {
       ) {
         definitions.set(node.name.text, { body: node.body, sourceFile })
       }
+
       ts.forEachChild(node, visit)
     }
+
     visit(sourceFile)
   }
+
   return definitions
 }
 
 function returnedExpression(body: ts.Block): ts.Expression {
   const statement = body.statements.find(ts.isReturnStatement)
+
   if (!statement?.expression) {
     throw new Error('Mobile Tasks renderer has no return expression')
   }
+
   return statement.expression
 }
 
@@ -70,10 +77,12 @@ function appendRenderTokens(
   if (ts.isCallExpression(node)) {
     const name = rendererName(node)
     const definition = name ? definitions.get(name) : undefined
+
     if (name && definition) {
       if (active.has(name)) {
         throw new Error(`Recursive Mobile Tasks renderer: ${name}`)
       }
+
       appendRenderTokens(
         returnedExpression(definition.body),
         definition.sourceFile,
@@ -81,38 +90,51 @@ function appendRenderTokens(
         new Set([...active, name]),
         tokens
       )
+
       return
     }
   }
+
   if (ts.isParenthesizedExpression(node) || ts.isJsxExpression(node)) {
     if (node.expression) {
       appendRenderTokens(node.expression, sourceFile, definitions, active, tokens)
     }
+
     return
   }
+
   if (
     ts.isAsExpression(node) &&
     ts.isStringLiteralLike(node.expression) &&
     node.expression.text === ' '
   ) {
     appendRenderTokens(node.expression, sourceFile, definitions, active, tokens)
+
     return
   }
+
   if (ts.isStringLiteralLike(node)) {
     tokens.push(`string:${JSON.stringify(node.text)}`)
+
     return
   }
+
   if (ts.isJsxText(node)) {
     const text = normalizedJsxText(node, sourceFile)
+
     if (text) {
       tokens.push(`text:${text}`)
     }
+
     return
   }
+
   if (ts.isIdentifier(node) || node.getChildCount(sourceFile) === 0) {
     tokens.push(`${ts.SyntaxKind[node.kind]}:${node.getText(sourceFile)}`)
+
     return
   }
+
   tokens.push(`open:${ts.SyntaxKind[node.kind]}`)
   ts.forEachChild(node, (child) =>
     appendRenderTokens(child, sourceFile, definitions, active, tokens)
@@ -123,9 +145,11 @@ function appendRenderTokens(
 export function readFlattenedMobileTasksRenderTokens(): string[] {
   const definitions = renderDefinitions()
   const root = definitions.get('MobileTasksLegacySurface')
+
   if (!root) {
     throw new Error('Missing MobileTasksLegacySurface renderer')
   }
+
   const tokens: string[] = []
   appendRenderTokens(
     returnedExpression(root.body),
@@ -134,5 +158,6 @@ export function readFlattenedMobileTasksRenderTokens(): string[] {
     new Set(['MobileTasksLegacySurface']),
     tokens
   )
+
   return tokens
 }

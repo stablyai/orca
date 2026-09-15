@@ -32,15 +32,19 @@ export function useBranchCompareRefreshTriggers({
   useEffect(() => {
     if (!activeWorktreeId || !worktreePath || !isBranchVisible || !compareBaseRef || isFolder) {
       branchCompareStatusHeadRef.current = null
+
       return
     }
+
     const current = {
       baseRef: compareBaseRef,
       statusHead: activeGitStatusHead,
       worktreeId: activeWorktreeId
     }
+
     const previous = branchCompareStatusHeadRef.current
     branchCompareStatusHeadRef.current = current
+
     if (shouldRefreshBranchCompareForStatusHead(previous, current)) {
       void refreshBranchCompareRef.current()
     }
@@ -57,8 +61,10 @@ export function useBranchCompareRefreshTriggers({
   useEffect(() => {
     if (!activeWorktreeId || !worktreePath || !isBranchVisible || !compareBaseRef || isFolder) {
       branchCompareRemoteStatusRef.current = null
+
       return
     }
+
     // Why: pushing a branch can move its remote base and ahead count without changing local HEAD, which the HEAD-change effect alone misses.
     const current = {
       ahead: remoteStatus?.ahead ?? null,
@@ -68,8 +74,10 @@ export function useBranchCompareRefreshTriggers({
       upstreamName: remoteStatus?.upstreamName ?? null,
       worktreeId: activeWorktreeId
     }
+
     const previous = branchCompareRemoteStatusRef.current
     branchCompareRemoteStatusRef.current = current
+
     if (shouldRefreshBranchCompareForRemoteStatus(previous, current)) {
       void refreshBranchCompareRef.current()
     }

@@ -49,6 +49,7 @@ function baseTooltip(): string {
   if (!devIndicator) {
     return 'Orca'
   }
+
   return devIndicator.label ? `Orca DEV (${devIndicator.label})` : 'Orca DEV'
 }
 
@@ -69,20 +70,24 @@ function applyTrayImage(): void {
         // Why: disabling template tinting makes the amber dot possible, but the
         // glyph then needs literal pixels chosen for the current menu-bar theme.
         const useLightGlyph = nativeTheme.shouldUseDarkColors
+
         const attentionImage = composeTrayAttentionIcon(
           tintTrayTemplateForAttention(baseTrayImage, useLightGlyph)
         )
+
         if (baseTrayImage.getScaleFactors().includes(2)) {
           // Why: toBitmap reads only the 1x pixels, so rebuild the @2x
           // representation or the glyph blurs on Retina during attention.
           const retinaAttentionImage = composeTrayAttentionIcon(
             tintTrayTemplateForAttention(baseTrayImage, useLightGlyph, 2)
           )
+
           attentionImage.addRepresentation({
             scaleFactor: 2,
             dataURL: retinaAttentionImage.toDataURL()
           })
         }
+
         attentionImage.setTemplateImage(false)
         tray.setImage(attentionImage)
         tray.setToolTip(
@@ -90,6 +95,7 @@ function applyTrayImage(): void {
             ? `${baseTooltip()} - ${translateMain('tray.activityWaitingSuffix', 'activity waiting')}`
             : translateMain('tray.activityWaiting', 'Orca - activity waiting')
         )
+
         return
       } catch (error) {
         // Why: this path runs inside unguarded callbacks (nativeTheme 'updated',
@@ -102,6 +108,7 @@ function applyTrayImage(): void {
     baseTrayImage.setTemplateImage(true)
     tray.setImage(baseTrayImage)
     tray.setToolTip(baseTooltip())
+
     return
   }
 
@@ -118,6 +125,7 @@ function scheduleTrayImage(): void {
   if (trayImageRepaintPending) {
     return
   }
+
   trayImageRepaintPending = true
   deferAppKitSceneMutation(() => {
     trayImageRepaintPending = false
@@ -128,13 +136,16 @@ function scheduleTrayImage(): void {
 function createMacMenuBarImage(): NativeImage | null {
   const image = nativeImage.createFromPath(menuBarIconPath)
   const { width, height } = image.getSize()
+
   if (width <= 0 || height <= 0) {
     console.warn('[system-tray] macOS menu bar icon could not be loaded')
+
     return null
   }
 
   const retinaImage = nativeImage.createFromPath(menuBarIconRetinaPath)
   const retinaSize = retinaImage.getSize()
+
   if (retinaSize.width > 0 && retinaSize.height > 0) {
     try {
       // Why: importing the @2x asset guarantees it is packaged; adding the
@@ -153,7 +164,9 @@ function createMacMenuBarImage(): NativeImage | null {
     // glyph on a modern display is diagnosable, matching the base-image warning.
     console.warn('[system-tray] macOS retina menu bar icon could not be loaded')
   }
+
   image.setTemplateImage(true)
+
   return image
 }
 
@@ -165,6 +178,7 @@ function createMacMenuBarImage(): NativeImage | null {
 function stampMacDevBadge(base: NativeImage): NativeImage {
   try {
     const stamped = stampTrayDevBadge(base)
+
     if (base.getScaleFactors().includes(2)) {
       // Why: createFromBitmap starts from 1x pixels only, so the @2x
       // representation must be rebuilt or the badge blurs on Retina.
@@ -174,12 +188,15 @@ function stampMacDevBadge(base: NativeImage): NativeImage {
         dataURL: retinaStamped.toDataURL()
       })
     }
+
     stamped.setTemplateImage(true)
+
     return stamped
   } catch (error) {
     // Why: the badge is diagnostics-only chrome; a NativeImage failure must
     // degrade to the plain icon, not abort tray creation.
     console.warn('[system-tray] dev badge could not be stamped; showing plain icon', error)
+
     return base
   }
 }
@@ -188,12 +205,14 @@ function watchMacAppearance(): void {
   if (nativeThemeUpdatedListener) {
     return
   }
+
   nativeThemeUpdatedListener = () => {
     if (attentionActive) {
       // Why: 'updated' fires from AppKit's appearance-change dispatch.
       scheduleTrayImage()
     }
   }
+
   nativeTheme.on('updated', nativeThemeUpdatedListener)
 }
 
@@ -201,6 +220,7 @@ function stopWatchingMacAppearance(): void {
   if (!nativeThemeUpdatedListener) {
     return
   }
+
   nativeTheme.removeListener('updated', nativeThemeUpdatedListener)
   nativeThemeUpdatedListener = null
 }
@@ -226,6 +246,7 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
   if (process.platform !== 'win32' && process.platform !== 'darwin') {
     return null
   }
+
   if (tray && !tray.isDestroyed()) {
     return tray
   }
@@ -234,9 +255,11 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
 
   if (process.platform === 'darwin') {
     baseTrayImage = createMacMenuBarImage()
+
     if (!baseTrayImage) {
       return null
     }
+
     if (devIndicator) {
       baseTrayImage = stampMacDevBadge(baseTrayImage)
     }
@@ -281,7 +304,9 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
       : []),
     { label: translateMain('tray.quit', 'Quit'), click: safeMenuAction(() => opts.onQuit()) }
   ])
+
   tray.setContextMenu(menu)
+
   if (process.platform === 'win32') {
     tray.setToolTip(baseTooltip())
     // Why: a left-click on the tray icon is the conventional Windows gesture to
@@ -293,6 +318,7 @@ export function createSystemTray(opts: SystemTrayOptions): Tray | null {
   } else {
     watchMacAppearance()
   }
+
   return tray
 }
 
@@ -301,10 +327,13 @@ export function setMacMenuBarIconVisible(visible: boolean, opts: SystemTrayOptio
   if (process.platform !== 'darwin') {
     return null
   }
+
   if (!visible) {
     destroySystemTray()
+
     return null
   }
+
   return createSystemTray(opts)
 }
 
@@ -318,6 +347,7 @@ export function setTrayAttention(active: boolean): void {
   if (attentionActive === active) {
     return
   }
+
   // Why: the dedup latch must settle synchronously or rapid show/hide mis-dedupes;
   // only the native scene mutation moves off the caller's (AppKit) stack.
   attentionActive = active
@@ -327,9 +357,11 @@ export function setTrayAttention(active: boolean): void {
 /** Destroys the tray icon if present. Safe to call repeatedly or with no tray. */
 export function destroySystemTray(): void {
   stopWatchingMacAppearance()
+
   if (tray && !tray.isDestroyed()) {
     tray.destroy()
   }
+
   tray = null
   baseTrayImage = null
   // Why: attention is owned by the notification/visibility flow, and must

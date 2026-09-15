@@ -7,6 +7,7 @@ describe('BrowserRoutePreparedPageLedger rekey', () => {
   it('moves one exact active authority without changing its capability token', () => {
     const ledger = new BrowserRoutePreparedPageLedger(partition, 4)
     const previous = ledger.link('page-a', 7, 11)
+
     const nextOwner = {
       partition,
       browserPageId: 'page-a',

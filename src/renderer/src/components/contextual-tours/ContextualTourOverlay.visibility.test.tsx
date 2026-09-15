@@ -7,6 +7,7 @@ import { ContextualTourOverlay } from './ContextualTourOverlay'
 import { useAppStore } from '@/store'
 
 let container: HTMLDivElement
+
 let root: Root
 
 function tourTarget(name: string, top: number): { moveTo: (top: number) => void } {
@@ -27,6 +28,7 @@ function tourTarget(name: string, top: number): { moveTo: (top: number) => void 
     })
   })
   document.body.appendChild(element)
+
   return {
     moveTo: (next) => {
       currentTop = next

@@ -11,6 +11,7 @@ export function toAiVaultProjectKey(
     // them again would split active scope and resolved session keys.
     return projectId.startsWith('repo:') ? projectId : `project:${projectId}`
   }
+
   return repoId ? `repo:${repoId}` : null
 }
 
@@ -26,6 +27,7 @@ export function resolveActiveProjectKey(
   const setup =
     (activeRepo ? setupByRepoId.get(activeRepo.id) : null) ??
     (activeWorktree ? setupByRepoId.get(activeWorktree.repoId) : null)
+
   if (setup) {
     return toAiVaultProjectKey(setup.projectId, setup.repoId || activeRepo?.id)
   }

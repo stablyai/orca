@@ -100,6 +100,7 @@ vi.mock('@/lib/telemetry', () => ({
 
 vi.mock('@/lib/tui-agent-startup', async () => {
   const actual = await vi.importActual<typeof TuiAgentStartupModule>('@/lib/tui-agent-startup')
+
   return {
     ...actual,
     buildAgentDraftLaunchPlan: vi.fn(actual.buildAgentDraftLaunchPlan),
@@ -111,6 +112,7 @@ vi.mock('../../../shared/tui-agent-selection', async () => {
   const actual = await vi.importActual<typeof TuiAgentSelectionModule>(
     '../../../shared/tui-agent-selection'
   )
+
   return {
     ...actual,
     pickTuiAgent: vi.fn(actual.pickTuiAgent)
@@ -121,6 +123,7 @@ vi.mock('@/lib/launch-work-item-direct-agent-routing', async () => {
   const actual = await vi.importActual<typeof DirectAgentRoutingModule>(
     '@/lib/launch-work-item-direct-agent-routing'
   )
+
   return {
     ...actual,
     settleDirectWorkItemStructuredLaunch: vi.fn(actual.settleDirectWorkItemStructuredLaunch)
@@ -411,6 +414,7 @@ describe('launchWorkItemDirect', () => {
       'Linked Linear issue: ENG-42',
       'https://linear.app/acme/issue/ENG-42/ship-linear-parity'
     ].join('\n')
+
     expect(buildAgentDraftLaunchPlan).toHaveBeenCalledWith({
       agent: 'claude',
       draft: `${expectedDraft}\n`,

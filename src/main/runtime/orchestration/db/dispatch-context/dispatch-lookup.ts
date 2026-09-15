@@ -14,14 +14,17 @@ const ACTIVE_DISPATCH_BY_HANDLE_SQL =
   `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
        WHERE assignee_handle = ? AND status IN ('pending', 'dispatched')
        ORDER BY rowid DESC LIMIT 1`
+
 const ACTIVE_DISPATCH_BY_PANE_KEY_SQL = `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
        WHERE assignee_pane_key = ? AND status IN ('pending', 'dispatched')
        ORDER BY rowid DESC LIMIT 1`
+
 const ACTIVE_DISPATCH_BY_PANE_SUFFIX_SQL = `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts
        WHERE assignee_pane_key IS NOT NULL
          AND status IN ('pending', 'dispatched') AND instr(assignee_pane_key, ':') > 1
          AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?
        ORDER BY rowid DESC LIMIT 1`
+
 const LATEST_DISPATCH_BY_HANDLE_SQL = `SELECT ${DISPATCH_CONTEXT_COLUMN_LIST} FROM dispatch_contexts WHERE assignee_handle = ? ORDER BY rowid DESC LIMIT 1`
 
 export function getActiveDispatchForTerminal(
@@ -46,6 +49,7 @@ export function hasAnyDispatchContexts(this: OrchestrationDb): boolean {
     const row = this.db.prepare('SELECT 1 FROM dispatch_contexts LIMIT 1').get()
     this.hasAnyDispatchContextsCache = row !== undefined
   }
+
   return this.hasAnyDispatchContextsCache
 }
 
@@ -69,6 +73,7 @@ export function getActiveDispatchMailboxOwners(
        ORDER BY rowid DESC`
     )
     .all(handle) as DispatchContextRow[]
+
   if (byHandle.length > 0 || !paneKey) {
     return byHandle
   }
@@ -80,9 +85,11 @@ export function getActiveDispatchMailboxOwners(
        ORDER BY rowid DESC`
     )
     .all(paneKey) as DispatchContextRow[]
+
   if (byExactPane.length > 0 || !parsePaneKey(paneKey)) {
     return byExactPane
   }
+
   return (
     this.db
       .prepare(
@@ -110,12 +117,15 @@ export function isDispatchMessageSender(
   }
 ): boolean {
   const dispatch = this.getDispatchContextById(params.dispatchId)
+
   if (!dispatch || !['pending', 'dispatched'].includes(dispatch.status)) {
     return false
   }
+
   if (params.allowCanonicalDispatchHandle && params.handle === `dispatch:${dispatch.id}`) {
     return true
   }
+
   if (
     params.paneKey &&
     dispatch.assignee_pane_key &&
@@ -123,6 +133,7 @@ export function isDispatchMessageSender(
   ) {
     return true
   }
+
   return (
     params.handle === dispatch.assignee_handle && (!params.paneKey || !dispatch.assignee_pane_key)
   )
@@ -136,6 +147,7 @@ export function findActiveDispatchForAssignee(
   const byHandle = this.db.prepare(ACTIVE_DISPATCH_BY_HANDLE_SQL).get(assigneeHandle) as
     | DispatchContextRow
     | undefined
+
   if (byHandle) {
     return byHandle
   }
@@ -147,12 +159,15 @@ export function findActiveDispatchForAssignee(
   const exactPane = this.db.prepare(ACTIVE_DISPATCH_BY_PANE_KEY_SQL).get(assigneePaneKey) as
     | DispatchContextRow
     | undefined
+
   if (exactPane) {
     return exactPane
   }
+
   if (!parsePaneKey(assigneePaneKey)) {
     return undefined
   }
+
   return this.db
     .prepare(ACTIVE_DISPATCH_BY_PANE_SUFFIX_SQL)
     .get(paneKeyMatchSuffix(assigneePaneKey)) as DispatchContextRow | undefined

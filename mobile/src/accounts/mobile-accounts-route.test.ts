@@ -8,6 +8,7 @@ import {
 } from '../navigation/host-stack-navigation'
 
 const homeSource = readFileSync(new URL('../home/MobileHomeScreen.tsx', import.meta.url), 'utf8')
+
 const accountCardsSource = readFileSync(
   new URL('../home/MobileHomeAccountUsageCards.tsx', import.meta.url),
   'utf8'
@@ -16,18 +17,22 @@ const accountCardsSource = readFileSync(
 function navigationHarness(initialState: HostStackNavigationState) {
   const stateListeners = new Set<() => void>()
   let state = initialState
+
   const navigation = {
     addListener: vi.fn((_event: 'state', listener: () => void) => {
       stateListeners.add(listener)
+
       return () => stateListeners.delete(listener)
     }),
     dispatch: vi.fn(),
     getState: () => state
   }
+
   return {
     navigation,
     setState(nextState: HostStackNavigationState) {
       state = nextState
+
       for (const listener of stateListeners) {
         listener()
       }

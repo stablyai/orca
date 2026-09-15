@@ -17,6 +17,7 @@ vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   fsMock.linkSync.mockImplementation(actual.linkSync)
   fsMock.renameSync.mockImplementation(actual.renameSync)
+
   return { ...actual, linkSync: fsMock.linkSync, renameSync: fsMock.renameSync }
 })
 
@@ -32,6 +33,7 @@ describe('writeFileAtomically', () => {
 
   function setup(): string {
     dir = mkdtempSync(join(tmpdir(), 'orca-fs-utils-'))
+
     return dir
   }
 
@@ -43,6 +45,7 @@ describe('writeFileAtomically', () => {
 
   it('writes a file atomically', () => {
     setup()
+
     try {
       const target = join(dir, 'test.json')
       writeFileAtomically(target, '{"key":"value"}\n')
@@ -55,6 +58,7 @@ describe('writeFileAtomically', () => {
 
   it('overwrites an existing file', () => {
     setup()
+
     try {
       const target = join(dir, 'test.json')
       writeFileAtomically(target, 'old')
@@ -72,6 +76,7 @@ describe('writeFileAtomically', () => {
     }
 
     setup()
+
     try {
       const target = join(dir, 'secret.json')
       writeFileAtomically(target, '{"token":"abc"}\n', { mode: 0o600 })
@@ -85,6 +90,7 @@ describe('writeFileAtomically', () => {
 
   it('cleans up temp file on write failure', () => {
     setup()
+
     try {
       const target = join(dir, 'nonexistent-dir', 'nested', 'test.json')
 
@@ -95,6 +101,7 @@ describe('writeFileAtomically', () => {
             .readdirSync(dir)
             .filter((f: string) => f.endsWith('.tmp'))
         : []
+
       expect(tmpFiles).toHaveLength(0)
     } finally {
       cleanup()
@@ -103,6 +110,7 @@ describe('writeFileAtomically', () => {
 
   it('replaces only the expected file generation', () => {
     setup()
+
     try {
       const target = join(dir, 'guarded.toml')
       writeFileSync(target, 'baseline')
@@ -120,6 +128,7 @@ describe('writeFileAtomically', () => {
 
   it('validates the generation moved after a Windows rename retry', () => {
     setup()
+
     try {
       const target = join(dir, 'guarded.toml')
       writeFileSync(target, 'baseline')
@@ -140,6 +149,7 @@ describe('writeFileAtomically', () => {
 
   it('preserves a replacement created before guarded publication', () => {
     setup()
+
     try {
       const target = join(dir, 'guarded.toml')
       writeFileSync(target, 'baseline')
@@ -158,6 +168,7 @@ describe('writeFileAtomically', () => {
 
   it('recovers an interrupted guarded operation before retrying', () => {
     setup()
+
     try {
       const target = join(dir, 'guarded.toml')
       const held = `${target}.orca-guarded`
@@ -173,6 +184,7 @@ describe('writeFileAtomically', () => {
 
   it('fails before moving the target when hard-link publication is unsupported', () => {
     setup()
+
     try {
       const target = join(dir, 'guarded.toml')
       writeFileSync(target, 'baseline')
@@ -192,6 +204,7 @@ describe('writeFileAtomically', () => {
 
   it('removes only the expected file generation', () => {
     setup()
+
     try {
       const target = join(dir, 'guarded-auth.json')
       writeFileSync(target, 'baseline')
@@ -207,6 +220,7 @@ describe('writeFileAtomically', () => {
 
   it('returns false when the target disappears during the removal probe', () => {
     setup()
+
     try {
       const target = join(dir, 'guarded-auth.json')
       writeFileSync(target, 'baseline')
@@ -224,6 +238,7 @@ describe('writeFileAtomically', () => {
 
   it('preserves a replacement created while the expected generation is quarantined', () => {
     setup()
+
     try {
       const target = join(dir, 'guarded-auth.json')
       writeFileSync(target, 'baseline')
@@ -246,6 +261,7 @@ describe('retrying file operations', () => {
 
   function setup(): string {
     dir = mkdtempSync(join(tmpdir(), 'orca-fs-utils-'))
+
     return dir
   }
 
@@ -257,6 +273,7 @@ describe('retrying file operations', () => {
 
   it('renames a file through the retry wrapper', () => {
     setup()
+
     try {
       const source = join(dir, 'source.txt')
       const target = join(dir, 'target.txt')
@@ -273,6 +290,7 @@ describe('retrying file operations', () => {
 
   it('copies a file through the retry wrapper', () => {
     setup()
+
     try {
       const source = join(dir, 'source.txt')
       const target = join(dir, 'target.txt')

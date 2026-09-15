@@ -5,8 +5,10 @@ import type { WorktreeNavHistoryViewEntry } from '@/store/slices/worktree-nav-hi
 export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): void {
   if (entry === 'automations' || entry === 'artifacts' || entry === 'skills') {
     useAppStore.getState().setActiveView(entry)
+
     return
   }
+
   if (entry === 'tasks') {
     useAppStore.setState((state) => ({
       activeView: 'tasks',
@@ -24,8 +26,10 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
         openJiraSourceContext: undefined
       }
     }))
+
     return
   }
+
   if (entry.source === 'github') {
     useAppStore.setState((state) => ({
       activeView: 'tasks',
@@ -44,8 +48,10 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
         openJiraSourceContext: undefined
       }
     }))
+
     return
   }
+
   if (entry.source === 'gitlab') {
     useAppStore.setState((state) => ({
       activeView: 'tasks',
@@ -65,8 +71,10 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
         openJiraSourceContext: undefined
       }
     }))
+
     return
   }
+
   if (entry.source === 'jira') {
     useAppStore.setState((state) => ({
       activeView: 'tasks',
@@ -85,8 +93,10 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
         openJiraSourceContext: entry.sourceContext
       }
     }))
+
     return
   }
+
   useAppStore.setState((state) => ({
     activeView: 'tasks',
     githubTaskDrawerWorkItem: null,

@@ -18,9 +18,11 @@ describe('openWindowsConsoleInput', () => {
     const closeSync = vi.fn()
     const opened = openWindowsConsoleInput({ platform: 'win32', openSync, closeSync })
     expect(opened).not.toBe('inherit')
+
     if (opened === 'inherit') {
       return
     }
+
     expect(openSync).toHaveBeenCalledWith(WINDOWS_CONSOLE_INPUT_DEVICE, 'r+')
     expect(opened.fd).toBe(11)
     opened.dispose()
@@ -33,6 +35,7 @@ describe('openWindowsConsoleInput', () => {
     const openSync = vi.fn(() => {
       throw new Error('no console')
     })
+
     expect(openWindowsConsoleInput({ platform: 'win32', openSync })).toBe('inherit')
   })
 })
@@ -44,6 +47,7 @@ describe('stdioForWindowsInteractiveChild', () => {
       openSync: vi.fn(() => 11),
       closeSync: vi.fn()
     })
+
     expect(stdio).toEqual([11, process.stderr, 'inherit'])
     dispose()
   })
@@ -54,6 +58,7 @@ describe('stdioForWindowsInteractiveChild', () => {
       openSync: vi.fn(() => 11),
       closeSync: vi.fn()
     })
+
     expect(stdio).toEqual([11, 'inherit', 'inherit'])
     dispose()
   })

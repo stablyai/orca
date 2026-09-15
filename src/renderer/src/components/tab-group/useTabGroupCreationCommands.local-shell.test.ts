@@ -29,7 +29,9 @@ vi.mock('../../lib/focus-terminal-tab-surface', () => ({
 }))
 
 const WORKTREE_ID = 'repo::C:/Users/neil/orca/workspaces/orca/aug23-triage'
+
 const GROUP_ID = 'group-1'
+
 const FOCUSED_ENVIRONMENT_ID = 'arch-dev'
 
 const storeState = {
@@ -84,6 +86,7 @@ describe('tab group "+" menu shell launch on a locally-owned workspace', () => {
 
   it('opens the shell locally without consulting the focused runtime environment', async () => {
     const { useTabGroupCreationCommands } = await import('./useTabGroupCreationCommands')
+
     const commands = useTabGroupCreationCommands({
       groupId: GROUP_ID,
       worktreeId: WORKTREE_ID,
@@ -100,6 +103,7 @@ describe('tab group "+" menu shell launch on a locally-owned workspace', () => {
 
   it('leaves the workspace on its own execution host', async () => {
     const { useTabGroupCreationCommands } = await import('./useTabGroupCreationCommands')
+
     const commands = useTabGroupCreationCommands({
       groupId: GROUP_ID,
       worktreeId: WORKTREE_ID,

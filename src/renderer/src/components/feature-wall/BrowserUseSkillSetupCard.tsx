@@ -27,9 +27,11 @@ export function BrowserUseSkillSetupCard(props: {
 }): JSX.Element {
   const { compact, terminalHeightPx, skill } = props
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+
   const installCommand = !activeSkillRuntime.installDisabledReason
     ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_INSTALL_COMMAND, activeSkillRuntime.agentRuntime)
     : ORCA_CLI_SKILL_INSTALL_COMMAND
+
   const updateCommand = !activeSkillRuntime.installDisabledReason
     ? buildSkillCommandForRuntime(ORCA_CLI_SKILL_UPDATE_COMMAND, activeSkillRuntime.agentRuntime)
     : ORCA_CLI_SKILL_UPDATE_COMMAND
@@ -85,5 +87,6 @@ export function BrowserUseSkillSetupCard(props: {
   if (compact) {
     return <div className="flex min-h-24 flex-1 items-center justify-center pt-3">{setupPanel}</div>
   }
+
   return <div className="flex">{setupPanel}</div>
 }

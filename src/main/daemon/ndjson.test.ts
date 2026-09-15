@@ -177,6 +177,7 @@ describe('createNdjsonParser', () => {
     const records: unknown[] = []
     const rejected: unknown[] = []
     let paused = true
+
     const framer = createIncrementalNdjsonFramer(
       (record) => records.push(record),
       (error) => rejected.push(error),
@@ -197,6 +198,7 @@ describe('createNdjsonParser', () => {
   it('queues many complete records while paused without treating them as one oversized suffix', () => {
     const records: unknown[] = []
     let paused = true
+
     const framer = createIncrementalNdjsonFramer(
       (record) => records.push(record),
       () => {
@@ -204,6 +206,7 @@ describe('createNdjsonParser', () => {
       },
       { shouldPause: () => paused }
     )
+
     const count = 100_000
     framer.feed(`${JSON.stringify({ index: 0 })}\n`)
     framer.feed(
@@ -222,6 +225,7 @@ describe('createNdjsonParser', () => {
   it('does not drop data fed after queued records when the consumer resumes', () => {
     const records: unknown[] = []
     let paused = true
+
     const framer = createIncrementalNdjsonFramer(
       (record) => records.push(record),
       (error) => {
@@ -240,9 +244,11 @@ describe('createNdjsonParser', () => {
   it('does not dispatch a pending suffix ahead of queued records after re-pause', () => {
     const records: unknown[] = []
     let paused = true
+
     const framer = createIncrementalNdjsonFramer(
       (record) => {
         records.push(record)
+
         if ((record as { index?: number }).index === 1) {
           paused = true
         }
@@ -270,6 +276,7 @@ describe('createNdjsonParser', () => {
     const records: unknown[] = []
     const rejected: unknown[] = []
     let paused = true
+
     const framer = createIncrementalNdjsonFramer(
       (record) => records.push(record),
       (error) => rejected.push(error),

@@ -18,27 +18,36 @@ vi.mock('./combined-diff-file-tree-row', async (importOriginal) => {
   const actual = (await importOriginal()) as {
     CombinedDiffFileTreeRow: typeof CombinedDiffFileTreeRowComponent
   }
+
   const react = await import('react')
   const Row = actual.CombinedDiffFileTreeRow
+
   const CountingRow = react.memo((props: React.ComponentProps<typeof Row>) => {
     react.useEffect(() => {
       mountedRows.count += 1
+
       return () => {
         mountedRows.count -= 1
       }
     }, [])
+
     return react.createElement(Row, props)
   })
+
   return { ...actual, CombinedDiffFileTreeRow: CountingRow }
 })
 
 const { CombinedDiffFileTree } = await import('./combined-diff-file-tree')
+
 const { createCombinedDiffSectionIndexMap } =
   await import('../resolve-changes/combined-diff-section-identity')
+
 const { getCombinedDiffBranchEntriesInTreeOrder } = await import('./combined-diff-file-tree-filter')
 
 const VIEWPORT_HEIGHT_PX = 600
+
 const TREE_ROW_HEIGHT_PX = 24
+
 const EMPTY_VIEWED_KEYS: ReadonlySet<string> = new Set()
 
 class NoopResizeObserver implements ResizeObserver {
@@ -48,6 +57,7 @@ class NoopResizeObserver implements ResizeObserver {
 }
 
 let host: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -66,6 +76,7 @@ beforeEach(() => {
     const height = this.classList.contains('overflow-auto')
       ? VIEWPORT_HEIGHT_PX
       : TREE_ROW_HEIGHT_PX
+
     return {
       top: 0,
       bottom: height,
@@ -93,6 +104,7 @@ function buildEntries(fileCount: number, directoryCount: number): GitBranchChang
     path: `src/dir${String(index % directoryCount).padStart(2, '0')}/file-${String(index).padStart(4, '0')}.ts`,
     status: 'modified'
   }))
+
   return getCombinedDiffBranchEntriesInTreeOrder('commit', raw)
 }
 
@@ -100,6 +112,7 @@ function renderTree(entries: readonly GitBranchChangeEntry[]): void {
   const sectionIndexByKey = createCombinedDiffSectionIndexMap(
     entries.map((entry) => ({ key: `combined-commit:${entry.path}` }))
   )
+
   act(() => {
     root.render(
       <CombinedDiffFileTree

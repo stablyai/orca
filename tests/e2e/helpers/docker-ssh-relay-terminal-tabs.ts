@@ -6,14 +6,18 @@ import { waitForActivePanePtyId, waitForActiveTerminalManager } from './terminal
 export async function createRemoteTerminalTab(page: Page, worktreeId: string): Promise<void> {
   const tabId = await page.evaluate((id) => {
     const state = window.__store?.getState()
+
     if (!state) {
       throw new Error('Store unavailable')
     }
+
     const tab = state.createTab(id, undefined, undefined, { activate: true })
     state.setActiveTab(tab.id)
     state.setActiveTabType('terminal')
+
     return tab.id
   }, worktreeId)
+
   await expect
     .poll(() => page.evaluate(() => window.__store?.getState().activeTabId ?? null), {
       timeout: 10_000

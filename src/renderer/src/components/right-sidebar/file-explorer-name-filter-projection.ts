@@ -24,11 +24,13 @@ export function getNextNameFilterCollapsedPaths(
   isExpanded: boolean
 ): Set<string> {
   const next = new Set(collapsedPaths)
+
   if (isExpanded) {
     next.add(dirPath)
   } else {
     next.delete(dirPath)
   }
+
   return next
 }
 
@@ -39,8 +41,10 @@ export function getNameFilterCollapsedPathsAfterExpand(
   if (!collapsedPaths.has(dirPath)) {
     return new Set(collapsedPaths)
   }
+
   const next = new Set(collapsedPaths)
   next.delete(dirPath)
+
   return next
 }
 
@@ -49,6 +53,7 @@ export function isFileExplorerNameFilterQueryTooLarge(
   maxBytes = FILE_EXPLORER_NAME_FILTER_QUERY_MAX_BYTES
 ): boolean {
   const value = query ?? ''
+
   return isClipboardTextByteLengthOverLimit(value, maxBytes)
 }
 
@@ -56,6 +61,7 @@ export function getFileExplorerNameFilterTokens(query: string | undefined): stri
   if (isFileExplorerNameFilterQueryTooLarge(query)) {
     return []
   }
+
   return splitFileExplorerNameFilterTokens(query ?? '')
 }
 
@@ -64,19 +70,24 @@ export function getFileExplorerNameFilterTokens(query: string | undefined): stri
 function splitFileExplorerNameFilterTokens(query: string): string[] {
   const tokens: string[] = []
   let tokenStart = -1
+
   for (let index = 0; index <= query.length; index += 1) {
     const isEnd = index === query.length
+
     if (!isEnd && !isFileExplorerNameFilterWhitespace(query.charCodeAt(index))) {
       if (tokenStart === -1) {
         tokenStart = index
       }
+
       continue
     }
+
     if (tokenStart !== -1) {
       tokens.push(query.slice(tokenStart, index).toLocaleLowerCase())
       tokenStart = -1
     }
   }
+
   return tokens
 }
 
@@ -100,8 +111,10 @@ function relativePathMatchesNameFilter(relativePath: string, tokens: readonly st
   if (tokens.length === 0) {
     return true
   }
+
   // Why: callers pass already-normalized paths — lowercasing only, no second normalize per path per keystroke.
   const haystack = relativePath.toLocaleLowerCase()
+
   return tokens.every((token) => haystack.includes(token))
 }
 
@@ -112,10 +125,13 @@ export function getFileExplorerNameFilterIgnoredQueryRelativePaths(
   if (isFileExplorerNameFilterQueryTooLarge(source.query)) {
     return []
   }
+
   if (source.relativePaths === null) {
     return []
   }
+
   const tokens = getFileExplorerNameFilterTokens(source.query)
+
   return source.relativePaths
     .map((relativePath) => normalizeRelativePath(relativePath))
     .filter(
@@ -166,10 +182,13 @@ export function createNameFilteredFileExplorerProjection({
 }): FileExplorerRowProjection {
   const visibleFlatRows: TreeNode[] = []
   const rowsByPath = new Map<string, TreeNode>()
+
   if (isFileExplorerNameFilterQueryTooLarge(nameFilter.query)) {
     return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
   }
+
   const nameFilterTokens = getFileExplorerNameFilterTokens(nameFilter.query)
+
   if (nameFilterTokens.length === 0 || nameFilter.relativePaths === null) {
     // Why: empty queries use the normal explorer projection, and loading filters must not
     // fall back to a partial cached path list.
@@ -177,17 +196,22 @@ export function createNameFilteredFileExplorerProjection({
   }
 
   const rootChildren = new Map<string, SyntheticTreeEntry>()
+
   for (const rawRelativePath of nameFilter.relativePaths) {
     const relativePath = normalizeRelativePath(rawRelativePath)
+
     if (!relativePath) {
       continue
     }
+
     if (!showDotfiles && isDotfileRelativePath(relativePath)) {
       continue
     }
+
     if (!showGitIgnoredFiles && isPathIgnored(ignoredSet, relativePath)) {
       continue
     }
+
     if (!relativePathMatchesNameFilter(relativePath, nameFilterTokens)) {
       continue
     }
@@ -195,11 +219,13 @@ export function createNameFilteredFileExplorerProjection({
     const segments = splitPathSegments(relativePath)
     let currentChildren = rootChildren
     let currentRelativePath = ''
+
     for (let index = 0; index < segments.length; index += 1) {
       const name = segments[index]
       currentRelativePath = currentRelativePath ? joinPath(currentRelativePath, name) : name
       const isDirectory = index < segments.length - 1
       let entry = currentChildren.get(name)
+
       if (!entry) {
         entry = {
           node: createSyntheticNode(
@@ -216,11 +242,13 @@ export function createNameFilteredFileExplorerProjection({
       } else if (isDirectory && !entry.node.isDirectory) {
         entry.node = { ...entry.node, isDirectory: true }
       }
+
       currentChildren = entry.children
     }
   }
 
   appendNameFilteredEntries(rootChildren.values(), visibleFlatRows, rowsByPath, collapsedPaths)
+
   return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
 }
 
@@ -234,11 +262,14 @@ function appendNameFilteredEntries(
     if (a.node.isDirectory !== b.node.isDirectory) {
       return a.node.isDirectory ? -1 : 1
     }
+
     return compareFileNames(a.node.name, b.node.name)
   })
+
   for (const entry of sortedEntries) {
     visibleFlatRows.push(entry.node)
     rowsByPath.set(entry.node.path, entry.node)
+
     if (entry.children.size > 0 && !collapsedPaths?.has(entry.node.path)) {
       appendNameFilteredEntries(
         entry.children.values(),
@@ -263,12 +294,15 @@ export function getFileExplorerNameFilterExpandedPaths(
 
   const expandedPaths = new Set<string>()
   const count = rowProjection.getVisibleCount()
+
   for (let index = 0; index < count - 1; index += 1) {
     const row = rowProjection.getRowAtIndex(index)
     const nextRow = rowProjection.getRowAtIndex(index + 1)
+
     if (row?.isDirectory && nextRow && nextRow.depth > row.depth) {
       expandedPaths.add(row.path)
     }
   }
+
   return expandedPaths
 }

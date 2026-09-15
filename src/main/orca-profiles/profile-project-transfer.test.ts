@@ -22,6 +22,7 @@ vi.mock('electron', () => ({
 
 async function loadTransferModule() {
   vi.resetModules()
+
   return import('./profile-project-transfer')
 }
 
@@ -43,6 +44,7 @@ function writeIndex(activeProfileId = 'personal'): void {
     activeProfileId,
     profiles: [profile('personal', 'Personal'), profile('work', 'Work')]
   }
+
   writeFileSync(join(testState.dir, 'orca-profile-index.json'), JSON.stringify(index), 'utf-8')
 }
 
@@ -91,6 +93,7 @@ function makeWorktreeMeta(overrides: Partial<WorktreeMeta> = {}): WorktreeMeta {
 
 function makeState(overrides: Partial<PersistedState> = {}): PersistedState {
   const defaults = getDefaultPersistedState('/Users/tester')
+
   return {
     ...defaults,
     ...overrides,
@@ -157,6 +160,7 @@ describe('profile project transfer', () => {
     writeProfileState('work', makeState())
 
     const { transferOrcaProfileProject } = await loadTransferModule()
+
     const result = transferOrcaProfileProject(
       {
         sourceProfileId: 'personal',
@@ -196,6 +200,7 @@ describe('profile project transfer', () => {
 
   it('moves a project, preserving SSH identity and restorable workspace session state', async () => {
     const sourceWorktreeId = 'repo-ssh::/srv/orca-feature'
+
     const sshTarget: SshTarget = {
       id: 'ssh-1',
       label: 'Builder',
@@ -203,6 +208,7 @@ describe('profile project transfer', () => {
       port: 22,
       username: 'dev'
     }
+
     writeProfileState(
       'personal',
       makeState({
@@ -250,6 +256,7 @@ describe('profile project transfer', () => {
     writeProfileState('work', makeState())
 
     const { transferOrcaProfileProject } = await loadTransferModule()
+
     const result = transferOrcaProfileProject(
       {
         sourceProfileId: 'personal',
@@ -305,6 +312,7 @@ describe('profile project transfer', () => {
     )
 
     const { transferOrcaProfileProject } = await loadTransferModule()
+
     const result = transferOrcaProfileProject(
       {
         sourceProfileId: 'personal',

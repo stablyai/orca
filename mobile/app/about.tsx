@@ -9,15 +9,18 @@ import AboutScreen from '../src/settings/about-screen'
 // Android — different concepts, same role (monotonic native build id).
 function getVersionLabel(): string {
   const version = Constants.expoConfig?.version ?? '?.?.?'
+
   const build =
     Platform.OS === 'ios'
       ? Constants.expoConfig?.ios?.buildNumber
       : String(Constants.expoConfig?.android?.versionCode ?? '')
+
   return build ? `v${version} (${build})` : `v${version}`
 }
 
 export default function NativeAboutRoute() {
   const router = useRouter()
+
   return (
     <AboutScreen
       onBack={() => router.back()}

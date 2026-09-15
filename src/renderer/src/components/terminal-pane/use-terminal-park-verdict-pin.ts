@@ -30,11 +30,13 @@ export function haveSameTerminalTabIds(
   if (left.size !== right.size) {
     return false
   }
+
   for (const id of left) {
     if (!right.has(id)) {
       return false
     }
   }
+
   return true
 }
 
@@ -64,12 +66,15 @@ export function useTerminalParkVerdictPin(args: {
     if (pinnedTabIds.size === 0) {
       return candidateParkedTabIds
     }
+
     const parked = new Set<string>()
+
     for (const tabId of candidateParkedTabIds) {
       if (!pinnedTabIds.has(tabId)) {
         parked.add(tabId)
       }
     }
+
     return parked
   }, [candidateParkedTabIds, pinnedTabIds])
 
@@ -83,29 +88,37 @@ export function useTerminalParkVerdictPin(args: {
       nextParkedTabIds: parkedTabIds,
       nowMs
     })
+
     const { pinnedTabIds: nextPinnedTabIds, earliestPinExpiryMs } = selectParkVerdictPinnedTabIds({
       records: flipRecords,
       tabIds: liveTabIds,
       nowMs
     })
+
     if (!haveSameTerminalTabIds(pinnedTabIdsRef.current, nextPinnedTabIds)) {
       pinnedTabIdsRef.current = nextPinnedTabIds
       setPinnedTabIds(nextPinnedTabIds)
     }
+
     const armed = armedPinExpiryRef.current
+
     if (earliestPinExpiryMs === null) {
       if (armed) {
         window.clearTimeout(armed.timer)
         armedPinExpiryRef.current = null
       }
+
       return
     }
+
     if (armed?.deadlineMs === earliestPinExpiryMs) {
       return
     }
+
     if (armed) {
       window.clearTimeout(armed.timer)
     }
+
     armedPinExpiryRef.current = {
       deadlineMs: earliestPinExpiryMs,
       timer: window.setTimeout(
@@ -119,6 +132,7 @@ export function useTerminalParkVerdictPin(args: {
   // live timer across its own re-runs, so its cleanup cannot own disposal.
   useEffect(() => {
     const armedPinExpiry = armedPinExpiryRef
+
     return () => {
       if (armedPinExpiry.current) {
         window.clearTimeout(armedPinExpiry.current.timer)

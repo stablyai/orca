@@ -13,12 +13,15 @@ function createGesture(): {
   let selected = false
   const element = document.createElement('div')
   document.body.appendChild(element)
+
   const terminal = {
     element,
     hasSelection: () => selected
   } as unknown as Terminal
+
   const gesture = installTerminalLinkPointerGesture(terminal)
   activeGestures.add(gesture)
+
   return {
     gesture,
     element,
@@ -36,6 +39,7 @@ afterEach(() => {
   for (const gesture of activeGestures) {
     gesture.dispose()
   }
+
   activeGestures.clear()
   document.body.replaceChildren()
   vi.unstubAllGlobals()

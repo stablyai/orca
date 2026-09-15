@@ -16,6 +16,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -30,9 +31,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -196,6 +199,7 @@ describe('Store', () => {
     const store = await createStore()
     const worktreeId = 'repo::/empty-worktree'
     store.setWorktreeMeta(worktreeId, { displayName: 'Empty worktree' })
+
     const stale = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -228,6 +232,7 @@ describe('Store', () => {
         }
       }
     })
+
     const revisionBeforeDelete =
       store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo ?? 0
 

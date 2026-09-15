@@ -21,17 +21,22 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
     setActiveTabType,
     windowCloseAfterDirtyRef
   } = controller
+
   useEffect(() => {
     const handler = (event: BeforeUnloadEvent): void => {
       if (isIntentionalAppRestartInProgress()) {
         return
       }
+
       const dirtyFiles = useAppStore.getState().openFiles.filter((file) => file.isDirty)
+
       if (dirtyFiles.length > 0) {
         preventUnloadAndScheduleShutdownCheckpointReset(event, window)
       }
     }
+
     window.addEventListener('beforeunload', handler)
+
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
@@ -39,21 +44,28 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
     setWindowCloseRequestHandler(({ isQuitting }) => {
       if (isIntentionalAppRestartInProgress()) {
         window.api.ui.confirmWindowClose()
+
         return
       }
+
       if (windowCloseAfterDirtyRef.current) {
         return
       }
+
       const dirtyFiles = useAppStore.getState().openFiles.filter((file) => file.isDirty)
+
       if (dirtyFiles.length > 0) {
         queueEditorCloseRequests(
           dirtyFiles.map((file) => file.id),
           { isQuitting }
         )
+
         return
       }
+
       proceedToNativeWindowClose(isQuitting)
     })
+
     return () => setWindowCloseRequestHandler(null)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
   }, [proceedToNativeWindowClose, queueEditorCloseRequests])
@@ -68,6 +80,7 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
   useEffect(() => {
     let prevBrowserTabs = useAppStore.getState().browserTabsByWorktree
     let prevBrowserPages = useAppStore.getState().browserPagesByWorkspace
+
     return useAppStore.subscribe((state) => {
       if (
         state.browserTabsByWorktree === prevBrowserTabs &&
@@ -75,17 +88,21 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
       ) {
         return
       }
+
       prevBrowserTabs = state.browserTabsByWorktree
       prevBrowserPages = state.browserPagesByWorkspace
+
       const currentIds = collectBrowserWebviewIds(
         state.browserTabsByWorktree,
         state.browserPagesByWorkspace
       )
+
       for (const prevId of prevBrowserWebviewIdsRef.current) {
         if (!currentIds.has(prevId)) {
           destroyRemovedBrowserWebview(prevId)
         }
       }
+
       prevBrowserWebviewIdsRef.current = currentIds
     })
   }, [])
@@ -94,6 +111,7 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
     const activeWorktreeBrowserTabs = renderedActiveWorktreeId
       ? (useAppStore.getState().browserTabsByWorktree[renderedActiveWorktreeId] ?? [])
       : []
+
     if (
       activeTabType === 'browser' &&
       renderedActiveWorktreeId &&
@@ -101,6 +119,7 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
         !activeWorktreeBrowserTabs.some((tab) => tab.id === activeBrowserTabId))
     ) {
       const fallbackBrowserTab = activeWorktreeBrowserTabs[0]
+
       if (fallbackBrowserTab) {
         setActiveBrowserTab(fallbackBrowserTab.id)
       } else {

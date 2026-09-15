@@ -22,13 +22,16 @@ export function loadKnownUsageWorktreesByRepo(
   // Why: all three usage scanners revisit persisted worktree metadata; index
   // repos once instead of linearly searching the full list for every row.
   const localReposById = new Map<string, Repo>()
+
   for (const repo of localRepos) {
     const repoId = repo.id
+
     // Preserve the former Array.find behavior if corrupt state repeats an ID.
     if (!localReposById.has(repoId)) {
       localReposById.set(repoId, repo)
     }
   }
+
   const worktreesByRepo = new Map<string, UsageWorktreeRef[]>()
   const seenPathsByRepo = new Map<string, Set<string>>()
 
@@ -47,20 +50,27 @@ export function loadKnownUsageWorktreesByRepo(
   // `git worktree list` here; it can re-touch macOS protected folders.
   for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
     const parsed = splitWorktreeId(worktreeId)
+
     if (!parsed) {
       continue
     }
+
     const repo = localReposById.get(parsed.repoId)
+
     if (!repo) {
       continue
     }
+
     const worktreePath = isFolderRepo(repo)
       ? (splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? parsed.worktreePath)
       : parsed.worktreePath
+
     const seenPaths = seenPathsByRepo.get(parsed.repoId)
+
     if (seenPaths?.has(worktreePath)) {
       continue
     }
+
     seenPaths?.add(worktreePath)
     worktreesByRepo.get(parsed.repoId)?.push({
       worktreeId,

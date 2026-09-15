@@ -113,8 +113,11 @@ export const DEFAULT_COMMIT_MESSAGE_AGENT_ID: TuiAgent = 'claude'
 // sentinel avoids polluting TuiAgent (which is shared with PTY launch /
 // new-workspace flows that have nothing to do with this feature).
 export const CUSTOM_AGENT_ID = 'custom' as const
+
 export type CustomAgentId = typeof CUSTOM_AGENT_ID
+
 export type CommitMessageAgentChoice = TuiAgent | CustomAgentId
+
 export type DefaultTuiAgentPreference = TuiAgent | 'blank' | null | undefined
 
 export function isCustomAgentId(id: string | null | undefined): id is CustomAgentId {
@@ -133,6 +136,7 @@ export function resolveCommitMessageAgentChoice(
   if (configuredAgentId) {
     return configuredAgentId
   }
+
   if (
     defaultTuiAgent &&
     defaultTuiAgent !== 'blank' &&
@@ -140,6 +144,7 @@ export function resolveCommitMessageAgentChoice(
   ) {
     return getCommitMessageAgentSpec(defaultTuiAgent) ? defaultTuiAgent : null
   }
+
   return isTuiAgentEnabled(DEFAULT_COMMIT_MESSAGE_AGENT_ID, disabledTuiAgents)
     ? DEFAULT_COMMIT_MESSAGE_AGENT_ID
     : null
@@ -151,9 +156,11 @@ export function getCommitMessageModel(
 ): CommitMessageModel | undefined {
   const spec = getCommitMessageAgentSpec(agentId)
   const model = spec?.models.find((m) => m.id === modelId)
+
   if (model || !spec || spec.modelSource !== 'dynamic' || modelId.trim().length === 0) {
     return model
   }
+
   return {
     id: modelId,
     label: labelFromModelId(modelId),
@@ -187,6 +194,7 @@ export function getCommitMessageAgentCapability(
   agentId: TuiAgent
 ): CommitMessageAgentCapability | undefined {
   const spec = getCommitMessageAgentSpec(agentId)
+
   return spec ? toCommitMessageAgentCapability(spec) : undefined
 }
 

@@ -112,7 +112,9 @@ export class PairedRuntimeBrowserClientHostComposition<
     if (this.closed) {
       return Promise.reject(new Error('paired_runtime_browser_client_host_composition_closed'))
     }
+
     this.startPromise ??= this.host.start()
+
     return this.startPromise
   }
 
@@ -120,16 +122,20 @@ export class PairedRuntimeBrowserClientHostComposition<
     if (this.closed) {
       return Promise.reject(new Error('paired_runtime_browser_client_host_composition_closed'))
     }
+
     const error = new Error('Browser client host runtime authority was replaced')
     this.authorityReplacementWait.cancel()
     this.hostGeneration += 1
+
     try {
       this.routeSets.retireCurrent(error)
       this.executor.beginAuthorityTransition()
     } catch (transitionError) {
       return Promise.reject(transitionError)
     }
+
     this.startPromise = this.finishAuthorityReplacement(input, error)
+
     return this.startPromise
   }
 
@@ -137,18 +143,22 @@ export class PairedRuntimeBrowserClientHostComposition<
     if (this.closed) {
       throw new Error('paired_runtime_browser_client_host_composition_closed')
     }
+
     if (!(await this.host.retirePage(browserPageId, pageHostGeneration))) {
       return false
     }
+
     if (
       !(await this.executor.retirePage(browserPageId, pageHostGeneration)) &&
       this.executor.hasUnresolvedPage(browserPageId, pageHostGeneration)
     ) {
       throw new Error('browser_client_page_retirement_cleanup_pending')
     }
+
     if (!this.host.forgetPage(browserPageId, pageHostGeneration)) {
       throw new Error('browser_client_page_retirement_forget_failed')
     }
+
     return true
   }
 
@@ -157,14 +167,18 @@ export class PairedRuntimeBrowserClientHostComposition<
       this.closed = true
       this.authorityReplacementWait.cancel()
       this.hostGeneration += 1
+
       try {
         this.options.onClosing?.()
       } catch (closingError) {
         this.reportCleanupError(asCompositionError(closingError))
       }
+
       this.fenceTerminalAuthority(error)
     }
+
     this.closePromise ??= this.closeComposition(error)
+
     return this.closePromise
   }
 
@@ -172,6 +186,7 @@ export class PairedRuntimeBrowserClientHostComposition<
     if (!this.closePromise) {
       throw new Error('paired_runtime_browser_client_host_composition_open')
     }
+
     await this.closePromise
     await this.deferredExecutorClose
   }
@@ -179,13 +194,16 @@ export class PairedRuntimeBrowserClientHostComposition<
   private createHost(input: Start, requiresReconciliation: boolean): ComposedClientHost {
     const generation = ++this.hostGeneration
     let publishedInventory: readonly BrowserClientHostedPageInventory[] | null = null
+
     return this.options.createHost(input, {
       handler: (event, signal) => this.handleCommand(generation, event, signal),
       getPageInventory: () => {
         if (this.hostGeneration !== generation) {
           return []
         }
+
         publishedInventory = this.executor.snapshotPageInventory()
+
         return publishedInventory
       },
       onAuthority: (authority) => {
@@ -197,6 +215,7 @@ export class PairedRuntimeBrowserClientHostComposition<
           ) {
             throw new Error('browser_client_page_reconciliation_unsupported')
           }
+
           this.routeSets.activate(input, authority)
         }
       },
@@ -218,13 +237,17 @@ export class PairedRuntimeBrowserClientHostComposition<
             this.handleHostError(error)
           }
         }
+
         if (this.hostGeneration !== generation) {
           return
         }
+
         if (this.closed || !isBrowserClientHostAuthorityReplaced(error)) {
           this.handleHostError(error)
+
           return
         }
+
         this.authorityReplacementWait.arm(fatal)
       }
     })
@@ -236,15 +259,19 @@ export class PairedRuntimeBrowserClientHostComposition<
   ): Promise<BrowserClientHostLeaseAuthority> {
     const previousHost = this.host
     const settled = await previousHost.close(error)
+
     if (!settled) {
       await previousHost.whenHandlersSettled()
     }
+
     if (this.closed) {
       throw new Error('paired_runtime_browser_client_host_composition_closed')
     }
+
     this.executor.completeAuthorityTransition(input)
     const replacementHost = this.createHost(input, true)
     this.host = replacementHost
+
     return replacementHost.start()
   }
 
@@ -256,10 +283,13 @@ export class PairedRuntimeBrowserClientHostComposition<
     if (this.hostGeneration !== generation) {
       throw new Error('browser_client_host_command_aborted')
     }
+
     await this.routeSets.waitForRecovery(signal)
+
     if (this.closed || signal.aborted || this.hostGeneration !== generation) {
       throw new Error('browser_client_host_command_aborted')
     }
+
     return this.executor.handle(event, signal)
   }
 
@@ -267,6 +297,7 @@ export class PairedRuntimeBrowserClientHostComposition<
     if (this.closed || this.inventoryRefreshPromise) {
       return
     }
+
     const refresh = this.host.refreshPageInventory()
     this.inventoryRefreshPromise = refresh
     void refresh
@@ -280,6 +311,7 @@ export class PairedRuntimeBrowserClientHostComposition<
 
   private fenceTerminalAuthority(error: Error): void {
     this.routeSets.fence(error)
+
     try {
       this.executor.fenceNavigation()
     } catch (navigationError) {
@@ -309,7 +341,9 @@ export class PairedRuntimeBrowserClientHostComposition<
     if (this.errorReported) {
       return
     }
+
     this.errorReported = true
+
     try {
       this.options.onError?.(error)
     } catch {}

@@ -37,18 +37,24 @@ function installRuntime(supported = true): ReturnType<typeof vi.fn> {
         })
       )
     }
+
     if (method === 'settings.getTerminalQuickCommands') {
       return Promise.resolve(success({ terminalQuickCommands: [savedCommand] }))
     }
+
     if (method === 'settings.updateTerminalQuickCommands') {
       const mutation = (params as { mutation: { command?: TerminalQuickCommand } }).mutation
+
       return Promise.resolve(
         success({ terminalQuickCommands: mutation.command ? [mutation.command] : [] })
       )
     }
+
     throw new Error(`Unexpected method: ${method}`)
   })
+
   vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
+
   return call
 }
 
@@ -108,10 +114,13 @@ describe('terminal quick command host collections', () => {
 
   it('does not let an older load overwrite a concurrent mutation', async () => {
     let resolveLoad: (value: ReturnType<typeof success>) => void = () => undefined
+
     const staleLoad = new Promise<ReturnType<typeof success>>((resolve) => {
       resolveLoad = resolve
     })
+
     const edited = { ...savedCommand, command: 'pnpm test' }
+
     const call = vi.fn(({ method, params }: { method: string; params?: unknown }) => {
       if (method === 'status.get') {
         return Promise.resolve(
@@ -124,14 +133,18 @@ describe('terminal quick command host collections', () => {
           })
         )
       }
+
       if (method === 'settings.getTerminalQuickCommands') {
         return staleLoad
       }
+
       if (method === 'settings.updateTerminalQuickCommands') {
         return Promise.resolve(success({ terminalQuickCommands: [edited] }))
       }
+
       throw new Error(`Unexpected method: ${method} ${String(params)}`)
     })
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
     const store = createTestStore()
 

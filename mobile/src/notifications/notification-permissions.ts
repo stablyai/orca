@@ -14,6 +14,7 @@ export type NotificationPermissionState = {
 
 export async function getNotificationPermissionState(): Promise<NotificationPermissionState> {
   const { status, canAskAgain } = await Notifications.getPermissionsAsync()
+
   return {
     granted: status === 'granted',
     status,
@@ -27,10 +28,12 @@ export async function getNotificationPermissionState(): Promise<NotificationPerm
 // Why: re-read OS state every call — users can change it in Settings while Orca is backgrounded.
 export async function ensureNotificationPermissions(): Promise<boolean> {
   const existing = await getNotificationPermissionState()
+
   if (existing.granted) {
     return true
   }
 
   const { status } = await Notifications.requestPermissionsAsync()
+
   return status === 'granted'
 }

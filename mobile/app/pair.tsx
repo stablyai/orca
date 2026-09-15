@@ -18,24 +18,31 @@ export default function PairRedirectScreen() {
 
     async function redirectToConfirm() {
       const codeParam = Array.isArray(params.code) ? params.code[0] : params.code
+
       if (codeParam) {
         router.replace({ pathname: '/pair-confirm', params: { code: codeParam } })
+
         return
       }
 
       const initialUrl = await Linking.getInitialURL().catch(() => null)
       const code = initialUrl ? extractPairingCodeFromUrl(initialUrl) : null
+
       if (disposed) {
         return
       }
+
       if (code) {
         router.replace({ pathname: '/pair-confirm', params: { code } })
+
         return
       }
+
       setMissingCode(true)
     }
 
     void redirectToConfirm()
+
     return () => {
       disposed = true
     }

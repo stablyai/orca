@@ -10,8 +10,10 @@ export function resolveAgentSessionResumeArgs(input: {
   if (input.requestArgs !== undefined) {
     return input.requestArgs
   }
+
   if (input.persistedArgs !== undefined) {
     return input.persistedArgs.map((arg) => quoteStartupArg(arg, input.shell)).join(' ')
   }
+
   return input.defaultArgs
 }

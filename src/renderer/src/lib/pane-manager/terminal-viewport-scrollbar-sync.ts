@@ -4,11 +4,13 @@ import type { Terminal } from '@xterm/xterm'
 // A synchronous one-line jiggle updates the scrollbar without a visible paint.
 export function forceTerminalViewportScrollbarSync(terminal: Terminal): void {
   const buf = terminal.buffer.active
+
   if (buf.viewportY >= buf.baseY) {
     // Why: jiggle-scrolling at bottom makes xterm stop following active output
     // after split-pane resizes; scrollToBottom already places the thumb there.
     return
   }
+
   if (buf.viewportY > 0) {
     safeScrollCall(() => terminal.scrollLines(-1))
     safeScrollCall(() => terminal.scrollLines(1))

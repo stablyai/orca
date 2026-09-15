@@ -23,10 +23,13 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const entryPath = join(projectDir, 'out', 'main', 'daemon-entry.js')
 
 const READY_TIMEOUT_MS = 30_000
+
 const PTY_HEALTH_TIMEOUT_MS = 10_000
+
 const SHUTDOWN_TIMEOUT_MS = 10_000
 
 function log(message) {
@@ -39,9 +42,11 @@ function readProtocolVersion() {
   const protocolSourcePath = 'src/main/daemon/daemon-protocol-version.ts'
   const source = readFileSync(join(projectDir, protocolSourcePath), 'utf8')
   const match = source.match(/PROTOCOL_VERSION\s*=\s*(\d+)/)
+
   if (!match) {
     throw new Error(`could not read PROTOCOL_VERSION from ${protocolSourcePath}`)
   }
+
   return Number(match[1])
 }
 
@@ -51,6 +56,7 @@ function makeSocketPath(userDataDir) {
   if (process.platform === 'win32') {
     return `\\\\.\\pipe\\orca-daemon-smoke-${process.pid}-${randomUUID()}`
   }
+
   return join(userDataDir, 'daemon.sock')
 }
 
@@ -58,10 +64,12 @@ function makeSocketPath(userDataDir) {
 function probeEndpoint(socketPath) {
   return new Promise((resolveProbe) => {
     const socket = connect(socketPath)
+
     const settle = (result) => {
       socket.destroy()
       resolveProbe(result)
     }
+
     socket.on('connect', () => settle('connected'))
     socket.on('error', () => settle('unreachable'))
   })
@@ -72,19 +80,23 @@ function runDaemonRpc(socketPath, tokenPath, protocolVersion, request, timeoutMs
     let settled = false
     let buffer = ''
     const socket = connect(socketPath)
+
     const finish = (error, response) => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
       socket.destroy()
+
       if (error) {
         rejectRpc(error)
       } else {
         resolveRpc(response)
       }
     }
+
     const timer = setTimeout(() => finish(new Error(`${request.type} timed out`)), timeoutMs)
 
     socket.on('error', (error) => finish(error))
@@ -103,29 +115,37 @@ function runDaemonRpc(socketPath, tokenPath, protocolVersion, request, timeoutMs
     socket.on('data', (chunk) => {
       buffer += chunk.toString('utf8')
       let newlineIdx = buffer.indexOf('\n')
+
       while (newlineIdx !== -1) {
         const line = buffer.slice(0, newlineIdx)
         buffer = buffer.slice(newlineIdx + 1)
         let msg
+
         try {
           msg = JSON.parse(line)
         } catch {
           finish(new Error('invalid response line'))
+
           return
         }
+
         if (msg.type === 'hello') {
           if (!msg.ok) {
             finish(new Error(`hello rejected: ${msg.error ?? 'unknown'}`))
+
             return
           }
+
           socket.write(`${JSON.stringify(request)}\n`)
         } else if (msg.id === request.id) {
           finish(
             msg.ok === true ? undefined : new Error(msg.error ?? `${request.type} failed`),
             msg
           )
+
           return
         }
+
         newlineIdx = buffer.indexOf('\n')
       }
     })
@@ -142,9 +162,11 @@ async function runPtySpawnHealthCheck(socketPath, tokenPath, protocolVersion) {
       { id: 'health-1', type: 'ptySpawnHealth' },
       PTY_HEALTH_TIMEOUT_MS
     )
+
     return true
   } catch (error) {
     log(`PTY spawn health check skipped (best-effort): ${error.message}`)
+
     return false
   }
 }
@@ -158,6 +180,7 @@ async function main() {
   const protocolVersion = readProtocolVersion()
 
   log(`forking ${entryPath} under plain Node (${process.execPath})`)
+
   const child = fork(
     entryPath,
     [
@@ -196,6 +219,7 @@ async function main() {
         // already gone
       }
     }
+
     rmSync(userDataDir, { recursive: true, force: true })
   }
 
@@ -208,6 +232,7 @@ async function main() {
           )
         )
       }, READY_TIMEOUT_MS)
+
       child.on('message', (msg) => {
         if (msg && typeof msg === 'object' && msg.type === 'ready') {
           clearTimeout(timer)
@@ -229,6 +254,7 @@ async function main() {
     })
     log('daemon signaled ready')
     const pidRecord = JSON.parse(readFileSync(pidPath, 'utf8'))
+
     if (
       pidRecord.pid !== child.pid ||
       pidRecord.launchNonce !== launchNonce ||
@@ -237,14 +263,18 @@ async function main() {
     ) {
       throw new Error('daemon readiness did not publish the expected PID ownership record')
     }
+
     log('PID ownership record matches the ready daemon')
+
     const endpointPublished =
       process.platform === 'win32'
         ? (await probeEndpoint(socketPath)) === 'connected'
         : existsSync(socketPath)
+
     if (!endpointPublished) {
       throw new Error('daemon did not publish its endpoint at the canonical socket path')
     }
+
     log('endpoint published at the canonical socket path')
     // Production releases startup-only handles after ready; they can pin the child on Windows.
     // Diagnostics past this point therefore carry the tail captured up to readiness only.
@@ -253,6 +283,7 @@ async function main() {
     child.disconnect()
 
     const ptyHealthy = await runPtySpawnHealthCheck(socketPath, tokenPath, protocolVersion)
+
     if (ptyHealthy) {
       log('ptySpawnHealth OK — daemon spawned a real PTY end-to-end')
     }
@@ -261,6 +292,7 @@ async function main() {
       const timer = setTimeout(() => {
         rejectExit(new Error(`daemon did not exit within ${SHUTDOWN_TIMEOUT_MS}ms of shutdown RPC`))
       }, SHUTDOWN_TIMEOUT_MS)
+
       child.on('exit', (code, signal) => {
         clearTimeout(timer)
         log(`daemon exited after shutdown RPC (code=${code}, signal=${signal})`)
@@ -281,19 +313,23 @@ async function main() {
         rejectExit(error)
       })
     })
+
     if (existsSync(pidPath)) {
       throw new Error('daemon left its PID ownership record behind after shutdown')
     }
+
     // Why not "the entry is gone": a departing daemon deliberately leaves its endpoint behind
     // for the next publisher to replace in one rename. What must be true is that nothing
     // answers there any more.
     if (process.platform !== 'win32' && (await probeEndpoint(socketPath)) === 'connected') {
       throw new Error('daemon still answers its endpoint after shutdown')
     }
+
     // The private bind name is consumed by the publish, and nothing sweeps the runtime dir any
     // more, so a leak here is permanent. Match what the code actually generates rather than a
     // literal prefix: this check silently matched nothing after the namespace moved from .b.
     const leaked = readdirSync(userDataDir).filter((entry) => /^\.[a-z][0-9a-f]{10}$/.test(entry))
+
     if (leaked.length > 0) {
       throw new Error(`daemon leaked private bind names: ${leaked.join(', ')}`)
     }

@@ -47,14 +47,17 @@ type SectionProps = { session: AiVaultSession; resume?: AiVaultSubagentResumeAct
 
 export function SessionSubagentsSection(props: SectionProps): React.JSX.Element | null {
   const expansion = useSubagentExpansion()
+
   if (
     props.session.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
     props.session.subagentTranscriptCount === 0
   ) {
     return null
   }
+
   const key = subagentTranscriptKey(props.session)
   const branch = <SubagentsBranch key={key} {...props} ancestors={[key]} />
+
   return expansion ? (
     branch
   ) : (
@@ -68,6 +71,7 @@ function SubagentsBranch({
   ancestors
 }: SectionProps & { ancestors: string[] }): React.JSX.Element {
   const subagents = useSubagentSessions(session)
+
   return (
     <section className="space-y-1.5" aria-busy={subagents.status === 'loading'}>
       <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
@@ -128,17 +132,21 @@ function SubagentBranchRow({
   const contentId = useId()
   const locator = subagentTranscriptKey(session)
   const key = JSON.stringify([...ancestors, locator])
+
   const expandable =
     session.agent === 'omp' &&
     session.executionHostId === LOCAL_EXECUTION_HOST_ID &&
     session.subagentTranscriptCount > 0 &&
     !ancestors.includes(locator)
+
   const open = expandable && Boolean(expansion?.expanded.has(key))
+
   const label = translate(
     'auto.components.right.sidebar.AiVaultSessionSubagents.subagentsCount',
     'Subagents ({{value0}})',
     { value0: session.subagentTranscriptCount }
   )
+
   return (
     <Collapsible open={open} onOpenChange={(value) => expansion?.setExpanded(key, value)}>
       <SubagentSessionLine
@@ -198,6 +206,7 @@ function SubagentSessionLine({
 }): React.JSX.Element {
   const resumeState =
     resume && isIndependentlyResumableSubagent(session) ? resume.getState(session) : null
+
   const dotState = session.subagent?.status ? SUBAGENT_DOT_STATES[session.subagent.status] : null
 
   return (
@@ -228,6 +237,7 @@ function SubagentSessionLine({
             aria-label={aiVaultSessionResumeLabel(resumeState)}
             onClick={(event) => {
               event.stopPropagation()
+
               if (resumeState.worktreeId && !resumeState.blocked) {
                 resume?.onResume(session, resumeState.worktreeId)
               }

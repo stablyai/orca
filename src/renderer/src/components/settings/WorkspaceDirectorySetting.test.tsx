@@ -12,7 +12,9 @@ vi.mock('../sidebar/use-sidebar-host-scope-options', () => ({
 }))
 
 let container: HTMLDivElement
+
 let root: Root
+
 let pickFolderMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
@@ -54,9 +56,11 @@ function renderWorkspaceDirectorySetting(args: {
 
 function getInput(): HTMLInputElement {
   const input = container.querySelector('input')
+
   if (!input) {
     throw new Error('workspace directory input was not rendered')
   }
+
   return input
 }
 
@@ -80,12 +84,15 @@ function blurInput(): void {
 function pressInputKey(key: string, options?: { isComposing?: boolean; keyCode?: number }): void {
   act(() => {
     const event = new KeyboardEvent('keydown', { key, bubbles: true })
+
     if (options?.isComposing !== undefined) {
       Object.defineProperty(event, 'isComposing', { value: options.isComposing })
     }
+
     if (options?.keyCode !== undefined) {
       Object.defineProperty(event, 'keyCode', { value: options.keyCode })
     }
+
     getInput().dispatchEvent(event)
   })
 }
@@ -94,9 +101,11 @@ function getBrowseButton(): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll('button')).find(
     (entry) => entry.textContent?.trim() === 'Browse'
   )
+
   if (!button) {
     throw new Error('browse button was not rendered')
   }
+
   return button
 }
 

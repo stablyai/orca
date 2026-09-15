@@ -48,6 +48,7 @@ export class Session {
     this.wslDistro = opts.wslDistro ?? null
     this.subprocess = opts.subprocess
     this.onSessionExit = opts.onExit
+
     const pipeline = createSessionOutputPipeline({
       cols: opts.cols,
       rows: opts.rows,
@@ -57,6 +58,7 @@ export class Session {
       subprocess: this.subprocess,
       isAlive: () => !this._disposed && this._state !== 'exited'
     })
+
     this.output = pipeline.output
     this.recoveryBarrier = pipeline.recoveryBarrier
     this.producerPause = new SessionProducerPause(this.subprocess)
@@ -163,6 +165,7 @@ export class Session {
     if (this._state === 'exited' || this._disposed || !isValidPtySize(cols, rows)) {
       return
     }
+
     this.output.resize(cols, rows)
     this.subprocess.resize(cols, rows)
   }
@@ -173,6 +176,7 @@ export class Session {
     if (this._state === 'exited' || this._disposed) {
       return
     }
+
     this.producerPause.pause()
   }
 
@@ -210,6 +214,7 @@ export class Session {
 
   detachClient(token: symbol): void {
     this.output.detachClient(token)
+
     // Why: with no attached client nobody will send resumePty, so a paused shell would wedge until the failsafe; resume eagerly.
     if (!this.output.hasAttachedClients) {
       this.producerPause.release({ resume: true })
@@ -223,6 +228,7 @@ export class Session {
 
   getSnapshot(opts: { scrollbackRows?: number } = {}): TerminalSnapshot | null {
     this.startupIngress.snapshotBarrier()
+
     return this.output.getSnapshot(opts)
   }
 
@@ -241,8 +247,10 @@ export class Session {
     if (this._disposed) {
       return null
     }
+
     const releasedHeldBytes =
       includeSnapshot && opts.teardownSnapshot === true ? this.prepareForFinalSnapshot() : ''
+
     return this.output.takePendingOutput(includeSnapshot, releasedHeldBytes, () =>
       this.getSnapshot()
     )
@@ -280,6 +288,7 @@ export class Session {
     // Why last: snapshotBarrier can emit held spans into the barrier, and a
     // teardown checkpoint mid-episode must not lose the barrier's queued bytes.
     this.recoveryBarrier.flushPending()
+
     return held
   }
 
@@ -299,12 +308,14 @@ export class Session {
     this.recoveryBarrier.flushPending()
     const wasTerminating = this.termination.isTerminating && this._state !== 'exited'
     const clientsToNotify = wasTerminating ? this.output.snapshotClients() : []
+
     if (wasTerminating) {
       try {
         this.subprocess.forceKill()
       } catch {
         /* child may already be gone */
       }
+
       this._exitCode = -1
       this.termination.clearTerminating()
     }
@@ -345,6 +356,7 @@ export class Session {
     if (this._disposed) {
       return
     }
+
     this._disposed = true
     this.output.markDisposed()
     // Why: never leave a paused fd behind on teardown; the handle's dead-guard makes this a no-op once the child is reaped.
@@ -356,6 +368,7 @@ export class Session {
 
   private handleSubprocessExit(code: number, cause?: TerminalExitCause): void {
     this.termination.markPhysicalExit()
+
     if (this._disposed) {
       return
     }

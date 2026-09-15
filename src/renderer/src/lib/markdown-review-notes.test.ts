@@ -51,6 +51,7 @@ describe('markdown review notes', () => {
 
   it('extracts CRLF annotated markdown lines without splitting the full document', () => {
     const split = vi.spyOn(String.prototype, 'split')
+
     const excerpt = getMarkdownReviewExcerpt(
       'one\r\ntwo\r\nthree',
       note({ startLine: 2, lineNumber: 3 })
@@ -107,14 +108,17 @@ describe('markdown review notes', () => {
       const sourceLines = content
         .split('\n')
         .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
+
       for (let start = -1; start <= sourceLines.length + 1; start += 1) {
         for (let end = start; end <= sourceLines.length + 1; end += 1) {
           const first = Math.max(1, start)
           const selected = sourceLines.slice(first - 1, Math.max(first, end))
+
           const bounded =
             selected.length <= 8
               ? selected
               : [...selected.slice(0, 4), '...', ...selected.slice(-4)]
+
           expect(
             getMarkdownReviewExcerpt(content, note({ startLine: start, lineNumber: end }))
           ).toBe(bounded.map((line) => `> ${line}`).join('\n'))

@@ -1,4 +1,5 @@
 export type BufferedTerminalDraftValue = string | ((current: string) => string)
+
 export type BufferedTerminalDraftRestorationToken = { handle: string }
 
 export function updateBufferedTerminalDraft(
@@ -9,8 +10,10 @@ export function updateBufferedTerminalDraft(
   if (!handle) {
     return currentDrafts
   }
+
   const current = currentDrafts[handle] ?? ''
   const next = typeof value === 'function' ? value(current) : value
+
   return next === current ? currentDrafts : { ...currentDrafts, [handle]: next }
 }
 
@@ -20,6 +23,7 @@ export function beginBufferedTerminalDraftRestoration(
 ): BufferedTerminalDraftRestorationToken {
   const token = { handle }
   pendingRestorations.set(handle, token)
+
   return token
 }
 
@@ -36,10 +40,13 @@ export function settleBufferedTerminalDraftRestoration(
   token: BufferedTerminalDraftRestorationToken
 ): boolean {
   const currentHandle = pendingRestorations.get(handle) === token ? handle : token.handle
+
   if (pendingRestorations.get(currentHandle) !== token) {
     return false
   }
+
   pendingRestorations.delete(currentHandle)
+
   return true
 }
 
@@ -49,10 +56,13 @@ export function remapBufferedTerminalDraftRestoration(
   nextHandle: string
 ): void {
   const token = pendingRestorations.get(previousHandle)
+
   if (!token || pendingRestorations.has(nextHandle)) {
     pendingRestorations.delete(previousHandle)
+
     return
   }
+
   pendingRestorations.delete(previousHandle)
   token.handle = nextHandle
   pendingRestorations.set(nextHandle, token)
@@ -66,11 +76,15 @@ export function remapBufferedTerminalDraft(
   if (previousHandle === nextHandle || !Object.hasOwn(currentDrafts, previousHandle)) {
     return currentDrafts
   }
+
   const next = { ...currentDrafts }
+
   if (!Object.hasOwn(currentDrafts, nextHandle)) {
     next[nextHandle] = currentDrafts[previousHandle] ?? ''
   }
+
   delete next[previousHandle]
+
   return next
 }
 
@@ -83,6 +97,7 @@ export function restoreRejectedBufferedTerminalDraft(
   if ((currentDrafts[originHandle] ?? '').length > 0) {
     return currentDrafts
   }
+
   return updateBufferedTerminalDraft(currentDrafts, originHandle, rejectedDraft)
 }
 
@@ -91,15 +106,19 @@ export function pruneBufferedTerminalDrafts(
   retainedHandles: ReadonlySet<string>
 ): Record<string, string> {
   let next = currentDrafts
+
   for (const handle of Object.keys(currentDrafts)) {
     if (retainedHandles.has(handle)) {
       continue
     }
+
     if (next === currentDrafts) {
       next = { ...currentDrafts }
     }
+
     delete next[handle]
   }
+
   return next
 }
 

@@ -65,9 +65,11 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
     // duplicate id across hosts makes that second lookup throw selector_ambiguous
     // even though the caller's selector was unique — losing the sweep entirely.
     const detected = await this.listDetectedWorktreesForResolvedRepo(repo)
+
     if (!detected.authoritative) {
       return { stoppedWorktreeIds: [] }
     }
+
     return stopMissingWorktreeTerminals(
       repo,
       knownWorktreeIds,
@@ -120,9 +122,11 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
 
   async showManagedTerminalWorkspace(worktreeSelector: string) {
     const target = await this.resolveTerminalWorkspaceLaunchTarget(worktreeSelector)
+
     if (!target.managedWorktree) {
       throw new Error('selector_not_found')
     }
+
     return target.managedWorktree
   }
 
@@ -142,6 +146,7 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
         .getRepos()
         .map((repo) => [repo.id, repo])
     )
+
     return filterWorkspacePortProbes(
       (await this.listResolvedWorktrees()).map((worktree) => ({
         id: worktree.id,
@@ -160,6 +165,7 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
     // before killing PTYs). The notifier tells the renderer to run its own
     // sleep flow so all cleanup happens in the correct order.
     this.notifier?.sleepWorktree(worktree.id)
+
     return { worktreeId: worktree.id }
   }
 }

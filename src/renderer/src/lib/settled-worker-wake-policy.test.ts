@@ -24,6 +24,7 @@ it('resumes a settled worker and an ordinary agent once each in the same wake sw
     // Old clients can still publish the withdrawn policy field.
     ...(id === 'settled-worker' ? { automaticResumeBlockedBy: 'legacy-orchestration-worker' } : {})
   }))
+
   useAppStore.setState({
     tabsByWorktree: { 'wt-1': [] },
     sleepingAgentSessionsByPaneKey: Object.fromEntries(records.map((r) => [r.paneKey, r]))
@@ -35,13 +36,16 @@ it('resumes a settled worker and an ordinary agent once each in the same wake sw
   const tabs = state.tabsByWorktree['wt-1']
   expect(tabs).toHaveLength(2)
   const commands = tabs.map((tab) => state.pendingStartupByTabId[tab.id]?.command ?? '')
+
   for (const record of records) {
     expect(commands.filter((command) => command.includes(record.providerSession.id))).toHaveLength(
       1
     )
   }
+
   for (const command of commands) {
     expect(command.match(/--resume/g)).toHaveLength(1)
   }
+
   expect(state.sleepingAgentSessionsByPaneKey).toEqual({})
 })

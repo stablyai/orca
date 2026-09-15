@@ -62,6 +62,7 @@ describe('resolveWatcherProcessEntryPath', () => {
 
   it('uses resourcesPath for packaged Electron-as-Node serve processes', () => {
     const resourcesPath = path.join('Applications', 'Orca.app', 'Contents', 'Resources')
+
     const packagedEntry = path.join(
       resourcesPath,
       'app.asar.unpacked',

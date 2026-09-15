@@ -23,10 +23,12 @@ function createPendingListMux(): { mux: MockMultiplexer; listDeferreds: Deferred
     if (method !== 'git.listWorktrees') {
       return Promise.resolve(undefined)
     }
+
     return new Promise((resolve, reject) => {
       listDeferreds.push({ resolve, reject })
     })
   })
+
   return { mux, listDeferreds }
 }
 

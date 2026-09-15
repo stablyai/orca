@@ -8,6 +8,7 @@ import type { FileContent } from './editor-panel-content-types'
 import { useLocalLogTail } from './useLocalLogTail'
 
 const FILE_PATH = '/home/user/.codex/sessions/log.jsonl'
+
 const FILE_IDENTITY = '1:2:3'
 
 const openFile = {
@@ -25,6 +26,7 @@ const openFile = {
 
 function encodedResult(content: string, fromByteOffset: number) {
   const bytes = Buffer.from(content)
+
   return {
     contentBase64: bytes.toString('base64'),
     nextByteOffset: fromByteOffset + bytes.byteLength,
@@ -36,10 +38,15 @@ function encodedResult(content: string, fromByteOffset: number) {
 }
 
 let changedListener: ((payload: LocalLogTailChangedPayload) => void) | undefined
+
 let startMock: ReturnType<typeof vi.fn>
+
 let stopMock: ReturnType<typeof vi.fn>
+
 let readMock: ReturnType<typeof vi.fn>
+
 let reloadMock: Mock<(file: OpenFile) => void>
+
 let warnMock: ReturnType<typeof vi.spyOn>
 
 beforeEach(() => {
@@ -58,6 +65,7 @@ beforeEach(() => {
         readLocalLogTail: readMock,
         onLocalLogTailChanged: vi.fn((listener: (payload: LocalLogTailChangedPayload) => void) => {
           changedListener = listener
+
           return vi.fn()
         })
       }
@@ -75,12 +83,14 @@ function useHarness(files: OpenFile[], initialContent: FileContent) {
   const [contents, setContents] = useState<Record<string, FileContent>>({
     [FILE_PATH]: initialContent
   })
+
   useLocalLogTail({
     openFiles: files,
     fileContents: contents,
     setFileContents: setContents,
     reloadContent: reloadMock
   })
+
   return contents
 }
 
@@ -116,11 +126,13 @@ describe('useLocalLogTail', () => {
           resolveStart = resolve
         })
     )
+
     const snapshot: FileContent = {
       content: 'complete\n',
       isBinary: false,
       fileIdentity: FILE_IDENTITY
     }
+
     const { rerender } = renderHook(({ files }) => useHarness(files, snapshot), {
       initialProps: { files: [openFile] }
     })
@@ -155,6 +167,7 @@ describe('useLocalLogTail', () => {
     readMock
       .mockResolvedValueOnce({ ...first, fileSize: first.fileSize + 1, hasMore: true })
       .mockRejectedValueOnce(new Error('temporary read failure'))
+
     const { result } = renderHook(() =>
       useHarness([openFile], {
         content: 'old\n',

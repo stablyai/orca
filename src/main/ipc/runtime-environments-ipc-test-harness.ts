@@ -10,11 +10,13 @@ import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-
 /** Keep IPC tests on the production owner while replacing only its transport. */
 export function withRuntimeStatusOwners<T extends Record<string, Mock>>(transport: T) {
   const owners = new Map<string, RuntimeHostStatusOwner>()
+
   return {
     ...transport,
     getRuntimeEnvironmentStatusOwner: (profile: string, selector: string) => {
       const environment = resolveEnvironment(profile, selector)
       let owner = owners.get(environment.id)
+
       if (!owner || owner.read().retired) {
         owner = createRuntimeEnvironmentStatusOwner(profile, environment, {
           isReady: () =>
@@ -39,10 +41,12 @@ export function withRuntimeStatusOwners<T extends Record<string, Mock>>(transpor
           pause: () => transport.pauseRemoteRuntimeSharedControlRetry?.(environment.id)
         })
         owners.set(environment.id, owner)
+
         if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
           owner.dispose()
         }
       }
+
       return owner
     },
     getRuntimeEnvironmentStatusSnapshots: () => [...owners.values()].map((owner) => owner.read()),
@@ -74,6 +78,7 @@ export function channelHandlerLookup(handleMock: Mock) {
   ): (_event: unknown, args: TArgs) => TResult | Promise<TResult> {
     const match = handleMock.mock.calls.find((call) => call[0] === channel)
     expect(match).toBeTruthy()
+
     return match![1] as (_event: unknown, args: TArgs) => TResult | Promise<TResult>
   }
 }

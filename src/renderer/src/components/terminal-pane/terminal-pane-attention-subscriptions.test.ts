@@ -25,6 +25,7 @@ vi.mock('@/store', () => ({
       }) => void
     ) => {
       storeMock.subscribers.push(listener)
+
       return () => {
         storeMock.subscribers = storeMock.subscribers.filter((candidate) => candidate !== listener)
       }
@@ -39,7 +40,9 @@ import {
 } from './terminal-pane-attention-subscriptions'
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
+
 const LEAF_3 = '33333333-3333-4333-8333-333333333333'
 
 function emitStoreChange(): void {
@@ -50,6 +53,7 @@ function emitStoreChange(): void {
 
 function createPane(leafId: string) {
   const attributes = new Set<string>()
+
   return {
     leafId,
     container: {

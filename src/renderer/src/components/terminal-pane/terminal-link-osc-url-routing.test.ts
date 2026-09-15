@@ -14,6 +14,7 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
+
 const { storeState, deps, openUrlMock, createBrowserTabMock, setActiveWorktreeMock } = doubles
 
 vi.mock('@/store', () => ({
@@ -174,8 +175,10 @@ describe('handleOscLink', () => {
   it('waits for the first-use preference before routing terminal http links', async () => {
     setPlatform('Macintosh')
     storeState.settings = { openLinksInApp: false, openLinksInAppPreferencePrompted: false }
+
     const requestOpenLinksInAppPreference = vi.fn(async () => {
       storeState.settings = { openLinksInApp: true, openLinksInAppPreferencePrompted: true }
+
       return true
     })
 

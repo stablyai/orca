@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const COMPONENT_ROOT = __dirname
+
 const PRODUCTION_MODULES = [
   'WorkspaceSpaceManagerPanel.tsx',
   'use-workspace-space-decision-projection.ts',

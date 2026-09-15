@@ -32,6 +32,7 @@ export function getLatestUnreadDirectMessageSequenceForRun(
        ORDER BY sequence DESC LIMIT 1`
     )
     .get(runId, directHandle) as { sequence: number } | undefined
+
   return row?.sequence
 }
 
@@ -45,8 +46,10 @@ export function routeDirectMessagePage(
   preserveActiveDispatchOwnership = false
 ): MailboxRoutingPage {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const throughClause = throughSequence === undefined ? '' : ' AND sequence <= ?'
+
     const dispatchOwnershipClause = preserveActiveDispatchOwnership
       ? ` AND NOT EXISTS (
            SELECT 1 FROM dispatch_contexts
@@ -55,11 +58,15 @@ export function routeDirectMessagePage(
              AND dispatch_contexts.status IN ('pending', 'dispatched')
          )`
       : ''
+
     const params: (string | number)[] = [runId, directHandle]
+
     if (throughSequence !== undefined) {
       params.push(throughSequence)
     }
+
     params.push(ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1)
+
     const rows = this.db
       .prepare(
         `SELECT id, type FROM messages
@@ -68,12 +75,17 @@ export function routeDirectMessagePage(
          ORDER BY sequence LIMIT ?`
       )
       .all(...params) as { id: string; type: MessageType }[]
+
     const page = rows.slice(0, ORCHESTRATION_DELIVERY_BATCH_LIMIT)
+
     if (page.length === 0) {
       this.db.exec('COMMIT')
+
       return { routedCount: 0, hasMore: false, types: [] }
     }
+
     const placeholders = page.map(() => '?').join(',')
+
     const result = this.db
       .prepare(
         `UPDATE messages INDEXED BY idx_messages_id SET to_handle = ?
@@ -81,7 +93,9 @@ export function routeDirectMessagePage(
            AND delivery_contract = 'current_delivery' AND id IN (${placeholders})`
       )
       .run(mailboxHandle, runId, directHandle, ...page.map((row) => row.id))
+
     this.db.exec('COMMIT')
+
     return {
       routedCount: Number(result.changes),
       hasMore: rows.length > ORCHESTRATION_DELIVERY_BATCH_LIMIT,
@@ -120,13 +134,17 @@ export function routeUnreadDispatchMailboxToRunMailbox(
 ): MailboxRoutingPage {
   const dispatchMailbox = `dispatch:${dispatchId}`
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     const throughClause = throughSequence === undefined ? '' : ' AND sequence <= ?'
     const params: (string | number)[] = [runId, dispatchMailbox]
+
     if (throughSequence !== undefined) {
       params.push(throughSequence)
     }
+
     params.push(ORCHESTRATION_DELIVERY_BATCH_LIMIT + 1)
+
     const rows = this.db
       .prepare(
         `SELECT id, type FROM messages INDEXED BY idx_messages_unread_current_inbox
@@ -135,12 +153,17 @@ export function routeUnreadDispatchMailboxToRunMailbox(
          ORDER BY sequence LIMIT ?`
       )
       .all(...params) as { id: string; type: MessageType }[]
+
     const page = rows.slice(0, ORCHESTRATION_DELIVERY_BATCH_LIMIT)
+
     if (page.length === 0) {
       this.db.exec('COMMIT')
+
       return { routedCount: 0, hasMore: false, types: [] }
     }
+
     const placeholders = page.map(() => '?').join(',')
+
     const result = this.db
       .prepare(
         `UPDATE messages INDEXED BY idx_messages_id SET to_handle = ?
@@ -149,7 +172,9 @@ export function routeUnreadDispatchMailboxToRunMailbox(
            AND id IN (${placeholders})`
       )
       .run(`run:${runId}`, runId, dispatchMailbox, ...page.map((row) => row.id))
+
     this.db.exec('COMMIT')
+
     return {
       routedCount: Number(result.changes),
       hasMore: rows.length > ORCHESTRATION_DELIVERY_BATCH_LIMIT,
@@ -172,6 +197,7 @@ export function getLatestUnreadMessageSequence(
        ORDER BY sequence DESC LIMIT 1`
     )
     .get(mailboxHandle) as { sequence: number } | undefined
+
   return row?.sequence
 }
 

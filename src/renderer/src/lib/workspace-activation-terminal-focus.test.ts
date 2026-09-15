@@ -2,7 +2,9 @@ import type * as SyncRuntimeGraphModule from '@/runtime/sync-runtime-graph'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const focusTerminalTabSurfaceMock = vi.hoisted(() => vi.fn())
+
 const focusRuntimeTerminalSurfaceMock = vi.hoisted(() => vi.fn())
+
 const getStateMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
@@ -48,6 +50,7 @@ describe('queueWorkspaceActivationTerminalFocus', () => {
     pendingFrame = null
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       pendingFrame = () => callback(0)
+
       return 1
     })
     focusRuntimeTerminalSurfaceMock.mockReturnValue(false)
@@ -108,8 +111,10 @@ describe('queueWorkspaceActivationTerminalFocus', () => {
     const runtime = await vi.importActual<typeof SyncRuntimeGraphModule>(
       '@/runtime/sync-runtime-graph'
     )
+
     focusRuntimeTerminalSurfaceMock.mockImplementation(runtime.focusRuntimeTerminalSurface)
     const focus = vi.fn()
+
     const pane = {
       id: 1,
       leafId: CHAT_VIEW_LEAF_ID,
@@ -119,6 +124,7 @@ describe('queueWorkspaceActivationTerminalFocus', () => {
       },
       terminal: { focus }
     }
+
     const manager = {
       getPanes: () => [pane],
       getActivePane: () => pane,
@@ -126,6 +132,7 @@ describe('queueWorkspaceActivationTerminalFocus', () => {
       getNumericIdForLeaf: () => pane.id,
       setActivePane: vi.fn()
     }
+
     const unregister = runtime.registerRuntimeTerminalTab({
       tabId: 'tab-1',
       worktreeId: 'wt-1',
@@ -134,6 +141,7 @@ describe('queueWorkspaceActivationTerminalFocus', () => {
       getPtyIdForPane: () => null,
       getTabWideAgentHintLeafId: () => null
     })
+
     try {
       setFocusState({
         activeWorktreeId: 'wt-1',
@@ -197,6 +205,7 @@ describe('queueWorkspaceActivationTerminalFocus', () => {
       activeTabType: 'terminal',
       activeTabId: 'tab-1'
     }
+
     setFocusState(state)
 
     queueWorkspaceActivationTerminalFocus('wt-1', { primaryTabId: 'tab-1' })

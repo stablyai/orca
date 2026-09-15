@@ -26,14 +26,17 @@ export type ResolvedSkillInstallDestination = {
 
 async function requireDirectory(path: string, category: string): Promise<string> {
   const stat = await lstat(path).catch(() => null)
+
   if (!stat || !stat.isDirectory() || stat.isSymbolicLink()) {
     throw new Error(category)
   }
+
   return realpath(path)
 }
 
 function requireContained(root: string, path: string): void {
   const child = relative(resolve(root), resolve(path))
+
   if (
     child === '..' ||
     child.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) ||
@@ -51,15 +54,19 @@ export async function resolveSkillInstallDestination(
     authority.homeDirectory,
     'skill-install-home-unavailable'
   )
+
   if (destination.scope === 'global') {
     if (destination.environmentId && destination.environmentId !== authority.environmentId) {
       throw new Error('skill-install-environment-mismatch')
     }
+
     if (destination.executionTarget?.kind === 'wsl') {
       const wsl = await authority.resolveWsl?.(destination.executionTarget.distro)
+
       if (!wsl) {
         throw new Error('skill-install-wsl-unavailable')
       }
+
       return {
         scope: 'global',
         homeDirectory: await requireDirectory(
@@ -70,9 +77,11 @@ export async function resolveSkillInstallDestination(
         wslDistro: destination.executionTarget.distro
       }
     }
+
     if (destination.executionTarget?.kind === 'ssh') {
       throw new Error('skill-install-ssh-dispatch-required')
     }
+
     return {
       scope: 'global',
       homeDirectory,
@@ -83,15 +92,20 @@ export async function resolveSkillInstallDestination(
   const workspace = destination.worktreeId
     ? await authority.resolveWorktree(destination.worktreeId)
     : await authority.resolveFolderWorkspace(destination.folderWorkspaceId!)
+
   const expectedId = destination.worktreeId ?? destination.folderWorkspaceId
+
   if (!workspace || workspace.id !== expectedId) {
     throw new Error('skill-install-workspace-not-found')
   }
+
   const workspaceDirectory = await requireDirectory(
     workspace.path,
     'skill-install-workspace-unavailable'
   )
+
   requireContained(workspaceDirectory, workspaceDirectory)
+
   return {
     scope: 'workspace',
     homeDirectory,

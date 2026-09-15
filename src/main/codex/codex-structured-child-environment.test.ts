@@ -41,6 +41,7 @@ describe('buildCodexStructuredChildEnvironment', () => {
       resumeThreadId: null,
       env: {}
     }
+
     const sessionId = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
     expect(buildCodexStructuredChildEnvironment(launch, 'spawn-token', sessionId)).toEqual({
       [CODEX_SPAWN_TOKEN_ENV]: 'spawn-token',
@@ -58,6 +59,7 @@ describe('buildCodexStructuredChildEnvironment', () => {
       worktreeId: 'wt_1',
       hostScope: { kind: 'local', hostId: 'local' }
     })
+
     try {
       const env = buildCodexStructuredChildEnvironment(launch, 'spawn-token', sessionId)
       expect(env.ORCA_TERMINAL_HANDLE).toBe(handle)

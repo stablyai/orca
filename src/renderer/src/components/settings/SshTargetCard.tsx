@@ -56,20 +56,25 @@ function formatGraceDuration(seconds: number): string {
   if (seconds % 86_400 === 0) {
     return `${seconds / 86_400}d`
   }
+
   if (seconds % 3_600 === 0) {
     return `${seconds / 3_600}h`
   }
+
   if (seconds % 60 === 0) {
     return `${seconds / 60}m`
   }
+
   return `${seconds}s`
 }
 
 function formatTerminalPersistence(target: SshTarget): string {
   const graceSeconds = target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
+
   if (graceSeconds === 0) {
     return translate('auto.components.settings.SshTargetCard.8ce71262f4', 'terminals until reset')
   }
+
   return translate(
     'auto.components.settings.SshTargetCard.a883f5a00f',
     'terminal timeout: {{value0}}',
@@ -107,17 +112,21 @@ export function SshTargetCard({
   onRemove
 }: SshTargetCardProps): React.JSX.Element {
   const status: SshConnectionStatus = state?.status ?? 'disconnected'
+
   const [actionInFlight, setActionInFlight] = useState<
     'connect' | 'disconnect' | 'terminate' | 'reset' | null
   >(null)
+
   const hasActionInFlight = actionInFlight !== null || busyAction !== undefined
   const terminateInFlight = actionInFlight === 'terminate' || busyAction === 'terminate'
   const resetInFlight = actionInFlight === 'reset' || busyAction === 'reset'
   const removeInFlight = busyAction === 'remove'
   const mountedRef = useRef(true)
+
   const endpoint = target.username
     ? `${target.username}@${target.host}:${target.port}`
     : `${target.host}:${target.port}`
+
   const terminalPersistence = formatTerminalPersistence(target)
 
   const handleCardRef = useCallback((node: HTMLDivElement | null): void => {
@@ -136,6 +145,7 @@ export function SshTargetCard({
     if (actionInFlight) {
       return
     }
+
     setActionInFlight('connect')
     void Promise.resolve(onConnect(target.id)).finally(clearActionInFlight)
   }
@@ -144,6 +154,7 @@ export function SshTargetCard({
     if (actionInFlight) {
       return
     }
+
     setActionInFlight('disconnect')
     void Promise.resolve(onDisconnect(target.id)).finally(clearActionInFlight)
   }
@@ -152,6 +163,7 @@ export function SshTargetCard({
     if (actionInFlight) {
       return
     }
+
     setActionInFlight('terminate')
     void Promise.resolve(onTerminateSessions(target.id)).finally(clearActionInFlight)
   }
@@ -160,6 +172,7 @@ export function SshTargetCard({
     if (actionInFlight) {
       return
     }
+
     setActionInFlight('reset')
     void Promise.resolve(onResetRelay(target.id)).finally(clearActionInFlight)
   }

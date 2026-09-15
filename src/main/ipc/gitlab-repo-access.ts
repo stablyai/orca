@@ -17,9 +17,12 @@ export type GitLabRepoSelectorArgs = {
 function findRegisteredGitLabRepo(args: GitLabRepoSelectorArgs, store: Store): Repo | undefined {
   const sourceRepoId =
     args.sourceContext?.provider === 'gitlab' ? args.sourceContext.repoId?.trim() : null
+
   const repoId = args.repoId?.trim() || sourceRepoId || null
+
   if (args.repoOwnerExecutionHostId) {
     const resolvedRepoPath = resolve(args.repoPath)
+
     const matches = store
       .getRepos()
       .filter(
@@ -28,15 +31,20 @@ function findRegisteredGitLabRepo(args: GitLabRepoSelectorArgs, store: Store): R
           resolve(repo.path) === resolvedRepoPath &&
           getRepoExecutionHostId(repo) === args.repoOwnerExecutionHostId
       )
+
     return matches.length === 1 ? matches[0] : undefined
   }
+
   if (repoId) {
     const repo = store.getRepo(repoId)
+
     if (repo) {
       return repo
     }
   }
+
   const resolvedRepoPath = resolve(args.repoPath)
+
   return store.getRepos().find((r) => resolve(r.path) === resolvedRepoPath)
 }
 
@@ -46,15 +54,18 @@ function findRegisteredGitLabRepo(args: GitLabRepoSelectorArgs, store: Store): R
 // task fetched from one machine cannot mutate a same-path repo on another.
 export function assertRegisteredRepo(args: GitLabRepoSelectorArgs, store: Store): Repo {
   const repo = findRegisteredGitLabRepo(args, store)
+
   if (!repo) {
     throw new Error('Access denied: unknown repository path')
   }
+
   if (
     args.sourceContext?.provider === 'gitlab' &&
     args.sourceContext.hostId !== getRepoExecutionHostId(repo)
   ) {
     throw new Error('Access denied: GitLab source host does not match repository host')
   }
+
   return repo
 }
 
@@ -64,6 +75,7 @@ export function repoConnectionId(repo: Repo): string | null {
 
 export function localGitOptionArgs(store: Store, repo: Repo): [] | [LocalGitExecOptions] {
   const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+
   return localGitOptions.wslDistro ? [{ wslDistro: localGitOptions.wslDistro }] : []
 }
 
@@ -72,6 +84,7 @@ export function hostedReviewOptionArgs(
   repo: Repo
 ): [] | [HostedReviewExecutionOptions] {
   const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+
   return localGitOptions.wslDistro
     ? [{ localGitExecOptions: { wslDistro: localGitOptions.wslDistro } }]
     : []

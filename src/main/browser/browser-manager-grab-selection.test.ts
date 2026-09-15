@@ -150,6 +150,7 @@ describe('browserManager grab operations', () => {
       const result = await browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
       expect(result.kind).toBe('selected')
       expect(result.opId).toBe('op-1')
+
       if (result.kind === 'selected') {
         expect(result.payload.target.tagName).toBe('button')
       }
@@ -191,6 +192,7 @@ describe('browserManager grab operations', () => {
 
       const result = await browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
       expect(result.kind).toBe('selected')
+
       if (result.kind === 'selected') {
         expect(result.payload.target.tagName).toBe('button')
       }
@@ -201,6 +203,7 @@ describe('browserManager grab operations', () => {
 
       const result = await browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
       expect(result.kind).toBe('error')
+
       if (result.kind === 'error') {
         expect(result.reason).toContain('Script failed')
       }
@@ -212,6 +215,7 @@ describe('browserManager grab operations', () => {
 
       const result = await browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
       expect(result.kind).toBe('error')
+
       if (result.kind === 'error') {
         expect(result.reason).toContain('invalid payload')
       }
@@ -276,6 +280,7 @@ describe('browserManager grab operations', () => {
       guestExecuteJavaScriptMock.mockResolvedValueOnce(mockPayload)
       const result = await browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
       expect(result.kind).toBe('selected')
+
       if (result.kind === 'selected') {
         const attrs = result.payload.target.attributes
         // Safe value passes through
@@ -345,6 +350,7 @@ describe('browserManager grab operations', () => {
       guestExecuteJavaScriptMock.mockResolvedValueOnce(mockPayload)
       const result = await browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
       expect(result.kind).toBe('selected')
+
       if (result.kind === 'selected') {
         // Query string and hash should be stripped by main-side sanitization
         expect(result.payload.page.sanitizedUrl).toBe('https://example.com/page')
@@ -384,9 +390,11 @@ describe('browserManager grab operations', () => {
       // Why: distinguish teardown from awaitClick — both contain 'cancelAwait',
       // but only the teardown script contains 'if (!grab) return true;'.
       const newCalls = guestExecuteJavaScriptMock.mock.calls.slice(callCountBefore)
+
       const teardownCalls = newCalls.filter(([script]) =>
         (script as string).includes('if (!grab) return true;')
       )
+
       expect(teardownCalls).toHaveLength(0)
     })
 
@@ -494,6 +502,7 @@ describe('browserManager grab operations', () => {
 
       const result = await promise
       expect(result.kind).toBe('cancelled')
+
       if (result.kind === 'cancelled') {
         expect(result.reason).toBe('navigation')
       }

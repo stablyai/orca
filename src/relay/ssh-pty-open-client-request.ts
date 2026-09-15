@@ -13,14 +13,17 @@ export function parseOpenClientParams(params: Record<string, unknown>): OpenClie
     typeof params.resume === 'object' && params.resume !== null
       ? (params.resume as Record<string, unknown>)
       : undefined
+
   const capabilities =
     typeof params.capabilities === 'object' && params.capabilities !== null
       ? (params.capabilities as Record<string, unknown>)
       : undefined
+
   const outputFlowControl =
     typeof capabilities?.outputFlowControl === 'object' && capabilities.outputFlowControl !== null
       ? (capabilities.outputFlowControl as Record<string, unknown>)
       : undefined
+
   return {
     protocolVersion: Number(params.protocolVersion),
     clientInstanceId: String(params.clientInstanceId ?? ''),
@@ -52,5 +55,6 @@ export function requireIdentity(context: RequestContext): RelayClientSessionIden
   if (!context.sessionIdentity) {
     throw new Error('SSH PTY consumer transport identity is unavailable')
   }
+
   return context.sessionIdentity
 }

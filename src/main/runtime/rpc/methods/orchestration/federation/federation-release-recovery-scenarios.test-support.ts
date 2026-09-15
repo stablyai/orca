@@ -112,6 +112,7 @@ export function registerFederatedReleaseRecoveryScenarios(harness: RecoveryScena
     const dispatchId = await harness.startSettledRemoteWorker()
     vi.mocked(harness.runtime().closeTerminal).mockImplementation(async () => {
       harness.setWorkerTerminalAvailable(false)
+
       return {
         ptyKilled: false,
         ptyStopVerdict: 'unverifiable',
@@ -127,6 +128,7 @@ export function registerFederatedReleaseRecoveryScenarios(harness: RecoveryScena
       method: 'orchestration.workerRelease',
       params: { dispatch: dispatchId }
     })
+
     expect(uncertain).toMatchObject({
       ok: true,
       result: {
@@ -141,12 +143,14 @@ export function registerFederatedReleaseRecoveryScenarios(harness: RecoveryScena
     })
 
     harness.restartWorkerRuntime(true)
+
     const archived = await harness.dispatch({
       id: 'rpc_remote_read_interrupted_archive',
       authToken: 'coordinator-token',
       method: 'orchestration.workerRead',
       params: { dispatch: dispatchId }
     })
+
     expect(archived).toMatchObject({
       ok: true,
       result: {
@@ -164,6 +168,7 @@ export function registerFederatedReleaseRecoveryScenarios(harness: RecoveryScena
       method: 'orchestration.workerRelease',
       params: { dispatch: dispatchId }
     })
+
     expect(retried).toMatchObject({
       ok: true,
       result: {
@@ -249,6 +254,7 @@ export function registerFederatedReleaseRecoveryScenarios(harness: RecoveryScena
       method: 'orchestration.workerRelease',
       params: { dispatch: dispatchId }
     })
+
     expect(retry).toMatchObject({
       ok: true,
       result: {

@@ -14,23 +14,41 @@ import {
 } from './hang-watchdog-process-metrics.mjs'
 
 const INTERNAL_ENV = 'ORCA_HANG_WATCHDOG_BENCH_INTERNAL'
+
 const BOUNDARY_ENV = 'ORCA_HANG_WATCHDOG_BENCH_BOUNDARY'
+
 const RESULT_PREFIX = 'ORCA_HANG_WATCHDOG_BENCH_RESULT='
+
 const DEFAULT_TRIALS = 7
+
 const SETTLE_MS = 2_000
+
 const SAMPLE_COUNT = 5
+
 const SAMPLE_INTERVAL_MS = 200
+
 const VERIFY_TIMEOUT_MS = 500
+
 const VERIFY_CHECK_INTERVAL_MS = 50
+
 const VERIFY_BLOCK_MS = 1_200
+
 const PRODUCTION_HEARTBEAT_INTERVAL_MS = 2_000
+
 const PRODUCTION_TIMEOUT_MS = 45_000
+
 const PRODUCTION_CHECK_INTERVAL_MS = 5_000
+
 const PRODUCTION_SAMPLE_MS = 30_000
+
 const MAX_LAUNCH_ATTEMPTS = 3
+
 const MIB = 1024 * 1024
+
 const scriptPath = import.meta.filename
+
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
+
 const entryPath = path.join(repoRoot, 'out', 'main', 'main-thread-hang-watchdog-entry.js')
 
 function sleep(ms) {
@@ -41,15 +59,18 @@ function forceGc() {
   if (typeof global.gc !== 'function') {
     throw new Error('Electron did not expose GC; keep --js-flags=--expose-gc in the harness')
   }
+
   global.gc()
   global.gc()
 }
 
 function blockMainThread(ms) {
   const startedAt = Date.now()
+
   while (Date.now() - startedAt < ms) {
     // Intentional synchronous stall.
   }
+
   return { startedAt, endedAt: Date.now() }
 }
 
@@ -67,28 +88,35 @@ async function verifyBlockedMainDetection(markerPath, sendHeartbeat) {
   sendHeartbeat()
   const deadline = Date.now() + VERIFY_TIMEOUT_MS
   let resolved
+
   do {
     resolved = readMarker(markerPath)
+
     if (resolved?.selfRecovered === true) {
       break
     }
+
     await sleep(VERIFY_CHECK_INTERVAL_MS)
   } while (Date.now() < deadline)
+
   const verified =
     detected?.detectedAt >= block.startedAt &&
     detected.detectedAt <= block.endedAt &&
     detected.selfRecovered === false &&
     resolved?.selfRecovered === true
+
   if (!verified) {
     throw new Error(
       `Built watchdog failed blocked-main verification: ${JSON.stringify({ detected, resolved })}`
     )
   }
+
   return true
 }
 
 function startChild(markerPath, timeoutMs, checkIntervalMs) {
   const startedAt = process.hrtime.bigint()
+
   const child = fork(entryPath, [], {
     stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     env: {
@@ -100,7 +128,9 @@ function startChild(markerPath, timeoutMs, checkIntervalMs) {
       ORCA_HANG_WATCHDOG_CHECK_INTERVAL_MS: String(checkIntervalMs)
     }
   })
+
   const startupMs = Number(process.hrtime.bigint() - startedAt) / 1e6
+
   return {
     pids: [process.pid, child.pid],
     startupMs,
@@ -109,11 +139,14 @@ function startChild(markerPath, timeoutMs, checkIntervalMs) {
       if (child.exitCode !== null) {
         return
       }
+
       const exitPromise = new Promise((resolve) => child.once('exit', resolve))
       child.send?.({ type: 'shutdown' })
+
       if (child.connected) {
         child.disconnect()
       }
+
       await exitPromise
     }
   }
@@ -121,6 +154,7 @@ function startChild(markerPath, timeoutMs, checkIntervalMs) {
 
 function startWorker(markerPath, timeoutMs, checkIntervalMs) {
   const startedAt = process.hrtime.bigint()
+
   const worker = new Worker(entryPath, {
     workerData: {
       parentPid: process.pid,
@@ -129,7 +163,9 @@ function startWorker(markerPath, timeoutMs, checkIntervalMs) {
       checkIntervalMs
     }
   })
+
   const startupMs = Number(process.hrtime.bigint() - startedAt) / 1e6
+
   return {
     pids: [process.pid],
     startupMs,
@@ -138,6 +174,7 @@ function startWorker(markerPath, timeoutMs, checkIntervalMs) {
       if (worker.threadId === -1) {
         return
       }
+
       const exitPromise = new Promise((resolve) => worker.once('exit', resolve))
       worker.postMessage({ type: 'shutdown' })
       await exitPromise
@@ -148,8 +185,10 @@ function startWorker(markerPath, timeoutMs, checkIntervalMs) {
 async function verifyBoundary(markerPath, startBoundary) {
   const boundary = startBoundary(markerPath, VERIFY_TIMEOUT_MS, VERIFY_CHECK_INTERVAL_MS)
   const heartbeat = setInterval(boundary.sendHeartbeat, 100)
+
   try {
     await sleep(SETTLE_MS)
+
     return await verifyBlockedMainDetection(markerPath, boundary.sendHeartbeat)
   } finally {
     clearInterval(heartbeat)
@@ -161,31 +200,38 @@ async function measureChild(markerPath) {
   forceGc()
   await sleep(SETTLE_MS)
   forceGc()
+
   const before = await sampleMemory(
     () => process.memoryUsage().rss,
     () => physicalFootprintBytes([process.pid]),
     { sampleCount: SAMPLE_COUNT, sampleIntervalMs: SAMPLE_INTERVAL_MS, sleep }
   )
+
   const child = startChild(markerPath, PRODUCTION_TIMEOUT_MS, PRODUCTION_CHECK_INTERVAL_MS)
   let measurements
+
   try {
     await sleep(SETTLE_MS)
     forceGc()
+
     const childRss = await sampleMemory(
       () => childRssBytes(child.pids[1]),
       () => physicalFootprintBytes([child.pids[1]]),
       { sampleCount: SAMPLE_COUNT, sampleIntervalMs: SAMPLE_INTERVAL_MS, sleep }
     )
+
     const total = await sampleMemory(
       () => process.memoryUsage().rss + childRssBytes(child.pids[1]),
       () => physicalFootprintBytes(child.pids),
       { sampleCount: SAMPLE_COUNT, sampleIntervalMs: SAMPLE_INTERVAL_MS, sleep }
     )
+
     const performance = await sampleProductionPerformance(child, {
       heartbeatIntervalMs: PRODUCTION_HEARTBEAT_INTERVAL_MS,
       sampleMs: PRODUCTION_SAMPLE_MS,
       sleep
     })
+
     measurements = {
       rssBytes: childRss.rssBytes,
       summedProcessRssDeltaBytes: Math.max(0, total.rssBytes - before.rssBytes),
@@ -199,7 +245,9 @@ async function measureChild(markerPath) {
   } finally {
     await child.shutdown()
   }
+
   rmSync(markerPath, { force: true })
+
   return {
     ...measurements,
     blockedMainThreadVerified: await verifyBoundary(markerPath, startChild)
@@ -210,26 +258,32 @@ async function measureWorker(markerPath) {
   forceGc()
   await sleep(SETTLE_MS)
   forceGc()
+
   const before = await sampleMemory(
     () => process.memoryUsage().rss,
     () => physicalFootprintBytes([process.pid]),
     { sampleCount: SAMPLE_COUNT, sampleIntervalMs: SAMPLE_INTERVAL_MS, sleep }
   )
+
   const worker = startWorker(markerPath, PRODUCTION_TIMEOUT_MS, PRODUCTION_CHECK_INTERVAL_MS)
   let measurements
+
   try {
     await sleep(SETTLE_MS)
     forceGc()
+
     const after = await sampleMemory(
       () => process.memoryUsage().rss,
       () => physicalFootprintBytes([process.pid]),
       { sampleCount: SAMPLE_COUNT, sampleIntervalMs: SAMPLE_INTERVAL_MS, sleep }
     )
+
     const performance = await sampleProductionPerformance(worker, {
       heartbeatIntervalMs: PRODUCTION_HEARTBEAT_INTERVAL_MS,
       sampleMs: PRODUCTION_SAMPLE_MS,
       sleep
     })
+
     const rssBytes = Math.max(0, after.rssBytes - before.rssBytes)
     measurements = {
       rssBytes,
@@ -244,7 +298,9 @@ async function measureWorker(markerPath) {
   } finally {
     await worker.shutdown()
   }
+
   rmSync(markerPath, { force: true })
+
   return {
     ...measurements,
     blockedMainThreadVerified: await verifyBoundary(markerPath, startWorker)
@@ -255,13 +311,16 @@ async function runInternal() {
   if (process.platform !== 'darwin') {
     throw new Error('The production watchdog is macOS-only; run this benchmark on macOS')
   }
+
   const { app } = await import('electron')
   const boundary = process.env[BOUNDARY_ENV]
   const profileDir = mkdtempSync(path.join(tmpdir(), 'orca-watchdog-bench-'))
   app.setPath('userData', profileDir)
+
   try {
     await app.whenReady()
     const markerPath = path.join(profileDir, 'main-thread-hang.json')
+
     const result =
       boundary === 'child'
         ? await measureChild(markerPath)
@@ -270,6 +329,7 @@ async function runInternal() {
           : (() => {
               throw new Error(`Unsupported boundary: ${boundary}`)
             })()
+
     process.stdout.write(`${RESULT_PREFIX}${JSON.stringify(result)}\n`)
   } finally {
     app.quit()
@@ -279,31 +339,38 @@ async function runInternal() {
 
 function parseArgs(argv) {
   const options = { boundary: '', trials: DEFAULT_TRIALS, output: '' }
+
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index]
     const value = argv[index + 1]
+
     if (arg === '--boundary' || arg === '--trials' || arg === '--output') {
       if (!value) {
         throw new Error(`Missing value for ${arg}`)
       }
+
       options[arg.slice(2)] = arg === '--trials' ? Number(value) : value
       index += 1
     } else {
       throw new Error(`Unknown argument: ${arg}`)
     }
   }
+
   if (!['child', 'worker'].includes(options.boundary)) {
     throw new Error('--boundary must be child or worker')
   }
+
   if (!Number.isInteger(options.trials) || options.trials < 1) {
     throw new Error('--trials must be a positive integer')
   }
+
   return options
 }
 
 function electronPath() {
   const requirePath = import.meta.resolve('electron')
   const electronModulePath = fileURLToPath(requirePath)
+
   return execFileSync(
     process.execPath,
     ['-e', `process.stdout.write(require(${JSON.stringify(electronModulePath)}))`],
@@ -330,6 +397,7 @@ function runTrial(executable, boundary) {
 })\n`
     )
     let result
+
     try {
       result = spawnSync(executable, ['--js-flags=--expose-gc', launcherDir], {
         cwd: repoRoot,
@@ -340,20 +408,25 @@ function runTrial(executable, boundary) {
     } finally {
       rmSync(launcherDir, { recursive: true, force: true })
     }
+
     if (result.status !== 0) {
       throw new Error(
         `Electron trial failed (${result.error?.message ?? result.signal ?? result.status}):\n` +
           `${result.stderr || result.stdout}`
       )
     }
+
     const line = result.stdout.split('\n').find((candidate) => candidate.startsWith(RESULT_PREFIX))
+
     if (line) {
       return { ...JSON.parse(line.slice(RESULT_PREFIX.length)), launchAttempts: attempt }
     }
+
     if (attempt === MAX_LAUNCH_ATTEMPTS || result.stderr || result.stdout) {
       throw new Error(`Electron trial did not report a result (status ${result.status})`)
     }
   }
+
   throw new Error('Electron trial exhausted launcher attempts')
 }
 
@@ -361,13 +434,16 @@ function runBenchmark() {
   if (process.platform !== 'darwin') {
     throw new Error('The production watchdog is macOS-only; run this benchmark on macOS')
   }
+
   if (!existsSync(entryPath)) {
     throw new Error(`Missing ${entryPath}; run pnpm exec electron-vite build first`)
   }
+
   const options = parseArgs(process.argv.slice(2))
   const builtEntry = readFileSync(entryPath, 'utf8')
   const hasChildContract = builtEntry.includes('ORCA_HANG_WATCHDOG_PARENT_PID')
   const hasWorkerContract = builtEntry.includes('workerData') && builtEntry.includes('parentPort')
+
   if (
     (options.boundary === 'child' && !hasChildContract) ||
     (options.boundary === 'worker' && !hasWorkerContract)
@@ -376,10 +452,13 @@ function runBenchmark() {
       `Built watchdog does not implement the requested ${options.boundary} boundary; rebuild the matching revision`
     )
   }
+
   const executable = electronPath()
+
   const results = Array.from({ length: options.trials }, () =>
     runTrial(executable, options.boundary)
   )
+
   const rssBytes = results.map((result) => result.rssBytes)
   const summedProcessRssDeltaBytes = results.map((result) => result.summedProcessRssDeltaBytes)
   const physicalFootprintDeltaBytes = results.map((result) => result.physicalFootprintDeltaBytes)
@@ -388,6 +467,7 @@ function runBenchmark() {
   const eventLoopDelayP95Ms = results.map((result) => result.eventLoopDelayP95Ms)
   const eventLoopDelayP99Ms = results.map((result) => result.eventLoopDelayP99Ms)
   const eventLoopDelayMaxMs = results.map((result) => result.eventLoopDelayMaxMs)
+
   const report = {
     benchmark: 'hang-watchdog-memory',
     boundary: options.boundary,
@@ -429,8 +509,10 @@ function runBenchmark() {
     launchAttempts: results.map((result) => result.launchAttempts),
     blockedMainThreadVerified: results.every((result) => result.blockedMainThreadVerified)
   }
+
   const serialized = `${JSON.stringify(report, null, 2)}\n`
   process.stdout.write(serialized)
+
   if (options.output) {
     writeFileSync(path.resolve(options.output), serialized)
   }

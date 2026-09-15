@@ -24,11 +24,14 @@ function normalizedEditFiles(
   derive: () => NativeChatEditFile[] | null
 ): NativeChatEditFile[] | null {
   const cached = normalizedEdits.get(call)
+
   if (cached && cached.result === result) {
     return cached.files
   }
+
   const files = derive()
   normalizedEdits.set(call, { result, files })
+
   return files
 }
 
@@ -46,11 +49,14 @@ export const NO_EDIT_CARDS: EditCardModel = { editCards: new Map(), consumedResu
 export function buildEditCards(blocks: NativeChatBlock[]): EditCardModel {
   const editCards: EditCardModel['editCards'] = new Map()
   const consumedResults: EditCardModel['consumedResults'] = new Set()
+
   for (const [index, pair] of pairToolBlocks(blocks).entries()) {
     const call = pair.call
+
     if (!call || !isEditToolName(call.name)) {
       continue
     }
+
     const files = normalizedEditFiles(call, pair.result, () =>
       editFilesFromToolPair({
         name: call.name,
@@ -67,14 +73,18 @@ export function buildEditCards(blocks: NativeChatBlock[]): EditCardModel {
           : {})
       })
     )
+
     if (!files || files.length === 0) {
       continue
     }
+
     editCards.set(call, { files, key: `${call.name}:${index}` })
+
     if (pair.result) {
       consumedResults.add(pair.result)
     }
   }
+
   return { editCards, consumedResults }
 }
 
@@ -95,8 +105,10 @@ export function buildDiffSummaries(blocks: NativeChatBlock[]): Map<
   }
 > {
   const summaries = new Map<NativeChatBlock, { files: NativeChatEditFileSummary[]; key: string }>()
+
   for (const [index, pair] of pairToolBlocks(blocks).entries()) {
     const { call, result } = pair
+
     if (
       !call ||
       call.name !== 'Diff' ||
@@ -108,7 +120,9 @@ export function buildDiffSummaries(blocks: NativeChatBlock[]): Map<
     ) {
       continue
     }
+
     const input = call.input
+
     if (
       !input ||
       typeof input !== 'object' ||
@@ -118,15 +132,19 @@ export function buildDiffSummaries(blocks: NativeChatBlock[]): Map<
     ) {
       continue
     }
+
     const cached = diffSummaries.get(call)
     let files = cached?.result === result ? cached.files : undefined
+
     if (files === undefined) {
       files = editFilesFromPatchText(result.output, input.path, true)
       diffSummaries.set(call, { result, files })
     }
+
     if (files?.length) {
       summaries.set(call, { files, key: `${call.name}:${index}` })
     }
   }
+
   return summaries
 }

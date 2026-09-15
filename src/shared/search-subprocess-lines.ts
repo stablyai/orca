@@ -1,4 +1,5 @@
 export const SEARCH_SUBPROCESS_MAX_LINE_BYTES = 64 * 1024 * 1024
+
 const SEARCH_SUBPROCESS_INITIAL_LINE_BUFFER_BYTES = 4 * 1024
 
 export class SearchSubprocessLineAccumulator {
@@ -21,19 +22,25 @@ export class SearchSubprocessLineAccumulator {
     ) {
       const lines = rawChunk.split('\n')
       lines.pop()
+
       for (const line of lines) {
         onLine(line)
       }
+
       return true
     }
+
     const chunk = Buffer.isBuffer(rawChunk) ? rawChunk : Buffer.from(rawChunk, 'utf8')
     let cursor = 0
+
     while (cursor < chunk.length) {
       const newline = chunk.indexOf(0x0a, cursor)
       const end = newline === -1 ? chunk.length : newline
       const segmentBytes = end - cursor
+
       if (this.bytes + segmentBytes > this.maxLineBytes) {
         this.clear()
+
         return false
       }
 
@@ -41,6 +48,7 @@ export class SearchSubprocessLineAccumulator {
         onLine(chunk.toString('utf8', cursor, end))
       } else if (segmentBytes > 0) {
         this.append(chunk.subarray(cursor, end))
+
         if (newline !== -1) {
           onLine(this.takeLine())
         }
@@ -51,8 +59,10 @@ export class SearchSubprocessLineAccumulator {
       if (newline === -1) {
         return true
       }
+
       cursor = newline + 1
     }
+
     return true
   }
 
@@ -67,16 +77,20 @@ export class SearchSubprocessLineAccumulator {
 
   private append(segment: Buffer): void {
     const requiredBytes = this.bytes + segment.length
+
     if (!this.buffer || this.buffer.length < requiredBytes) {
       const doubledCapacity = this.buffer?.length ? this.buffer.length * 2 : 0
+
       const nextCapacity = Math.min(
         this.maxLineBytes,
         Math.max(SEARCH_SUBPROCESS_INITIAL_LINE_BUFFER_BYTES, doubledCapacity, requiredBytes)
       )
+
       const next = Buffer.allocUnsafe(nextCapacity)
       this.buffer?.copy(next, 0, 0, this.bytes)
       this.buffer = next
     }
+
     segment.copy(this.buffer, this.bytes)
     this.bytes = requiredBytes
   }
@@ -84,6 +98,7 @@ export class SearchSubprocessLineAccumulator {
   private takeLine(): string {
     const line = this.buffer?.toString('utf8', 0, this.bytes) ?? ''
     this.clear()
+
     return line
   }
 }

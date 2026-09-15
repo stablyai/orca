@@ -39,9 +39,11 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -319,10 +321,12 @@ describe('push notification preference', () => {
     vi.mocked(AsyncStorage.setItem).mockImplementation(async (key, value) => {
       storage.set(key, value)
     })
+
     for (const enabled of [true, false]) {
       await savePushNotificationsEnabled(enabled)
       await expect(loadPushNotificationsEnabled()).resolves.toBe(enabled)
     }
+
     expect([...storage]).toEqual([['orca:pushServiceNotificationsEnabled', 'false']])
   })
 })

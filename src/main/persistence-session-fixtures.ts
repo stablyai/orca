@@ -3,8 +3,11 @@ import type { WorkspaceSessionState } from '../shared/workspace-session-state-ty
 import { makeTerminalTab } from './persistence-test-harness'
 
 export const TEST_LEAF_1 = '11111111-1111-4111-8111-111111111111'
+
 export const TEST_LEAF_2 = '22222222-2222-4222-8222-222222222222'
+
 export const TEST_LEAF_LIVE = '33333333-3333-4333-8333-333333333333'
+
 export const TEST_LEAF_EXPIRED = '44444444-4444-4444-8444-444444444444'
 
 export function makeSessionWithTerminalBuffers(): WorkspaceSessionState {
@@ -68,7 +71,9 @@ export function makeBalancedLegacyPaneLayout(start: number, end: number): Termin
   if (end - start === 1) {
     return { type: 'leaf', leafId: `pane:${start + 1}` }
   }
+
   const midpoint = Math.floor((start + end) / 2)
+
   return {
     type: 'split',
     direction: 'horizontal',

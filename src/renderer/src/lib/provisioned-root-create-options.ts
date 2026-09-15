@@ -13,6 +13,7 @@ export function getProvisionedRootCreateOptions(
   if (request.ephemeralVmCheckoutMode !== 'provisioned-root') {
     return null
   }
+
   if (
     !request.ephemeralVmRuntimeId ||
     !request.workspaceRunContext ||
@@ -20,6 +21,7 @@ export function getProvisionedRootCreateOptions(
   ) {
     throw new Error('Provisioned-root workspace identity is incomplete.')
   }
+
   return {
     runtimeId: request.ephemeralVmRuntimeId,
     executionHostId: request.workspaceRunContext.hostId,

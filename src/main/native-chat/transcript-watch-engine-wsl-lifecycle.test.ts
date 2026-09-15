@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
 
 const UNC_PATH = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions\\rollout.jsonl'
+
 const EMPTY_STATS = { size: 0, mtimeMs: 1, ctimeMs: 1, ino: 1, dev: 1 }
 
 const mocks = vi.hoisted(() => ({
@@ -18,10 +19,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: mocks.filterRunning
 }))
+
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFsPromisesModule>()),
   stat: mocks.stat
 }))
+
 vi.mock('./transcript-native-watcher', () => ({
   createTranscriptNativeWatcher: () => ({
     bind: mocks.bind,
@@ -30,6 +33,7 @@ vi.mock('./transcript-native-watcher', () => ({
     needsRebind: () => mocks.rebindNeeded
   })
 }))
+
 vi.mock('./wsl-transcript-running-observer', () => ({
   observeWslTranscriptRunningState: mocks.observe
 }))
@@ -42,6 +46,7 @@ describe('installed WSL transcript watcher lifecycle', () => {
     mocks.rebindNeeded = true
     mocks.bind.mockReset().mockImplementation(() => {
       mocks.rebindNeeded = false
+
       return true
     })
     mocks.dispose.mockReset()
@@ -52,6 +57,7 @@ describe('installed WSL transcript watcher lifecycle', () => {
     mocks.observation = undefined
     mocks.observe.mockReset().mockImplementation((_path, onRunning, onStopped) => {
       mocks.observation = (running) => (running ? onRunning() : onStopped())
+
       return vi.fn()
     })
     mocks.stat.mockReset().mockResolvedValue(EMPTY_STATS)
@@ -63,6 +69,7 @@ describe('installed WSL transcript watcher lifecycle', () => {
 
   it('settles the guarded initial drain when the distro stops after install', async () => {
     const onInitialSnapshot = vi.fn()
+
     const subscription = await installTranscriptWatcher(UNC_PATH, () => null, {
       agent: 'codex',
       sessionId: 'wsl-session',
@@ -70,6 +77,7 @@ describe('installed WSL transcript watcher lifecycle', () => {
       onAppend: () => {},
       onInitialSnapshot
     })
+
     expect(subscription).not.toBeNull()
 
     mocks.filterRunning.mockResolvedValue([])
@@ -83,12 +91,14 @@ describe('installed WSL transcript watcher lifecycle', () => {
 
   it('does not settle after unsubscribe wins a delayed running probe', async () => {
     const onInitialSnapshot = vi.fn()
+
     const subscription = await installTranscriptWatcher(UNC_PATH, () => null, {
       agent: 'codex',
       sessionId: 'wsl-session',
       onAppend: () => {},
       onInitialSnapshot
     })
+
     let finishProbe: (() => void) | undefined
     mocks.filterRunning.mockImplementationOnce(
       () =>
@@ -113,6 +123,7 @@ describe('installed WSL transcript watcher lifecycle', () => {
       reconciliationIntervalMs: 100,
       onAppend: () => {}
     })
+
     await vi.advanceTimersByTimeAsync(50)
     const statsBeforeStop = mocks.stat.mock.calls.length
 
@@ -135,6 +146,7 @@ describe('installed WSL transcript watcher lifecycle', () => {
       sessionId: 'wsl-session',
       onAppend: () => {}
     })
+
     await vi.advanceTimersByTimeAsync(50)
     let finishStat: (() => void) | undefined
     mocks.stat.mockImplementationOnce(
@@ -158,6 +170,7 @@ describe('installed WSL transcript watcher lifecycle', () => {
       sessionId: 'wsl-session',
       onAppend: () => {}
     })
+
     await vi.advanceTimersByTimeAsync(50)
     mocks.filterRunning.mockClear().mockResolvedValue([])
     mocks.stat.mockClear().mockRejectedValueOnce(new Error('distro stopped'))

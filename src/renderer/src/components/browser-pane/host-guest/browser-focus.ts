@@ -15,12 +15,14 @@ type PendingBrowserFocusRequest = {
 }
 
 const pendingBrowserFocusByPageId = new Map<string, PendingBrowserFocusRequest>()
+
 let expiredRequestCleanupTimer: ReturnType<typeof setTimeout> | null = null
 
 function clearExpiredRequestCleanupTimerIfIdle(): void {
   if (pendingBrowserFocusByPageId.size > 0 || expiredRequestCleanupTimer === null) {
     return
   }
+
   clearTimeout(expiredRequestCleanupTimer)
   expiredRequestCleanupTimer = null
 }
@@ -31,6 +33,7 @@ function purgeExpiredFocusRequests(now = Date.now()): void {
       pendingBrowserFocusByPageId.delete(pageId)
     }
   }
+
   clearExpiredRequestCleanupTimerIfIdle()
 }
 
@@ -38,10 +41,13 @@ function scheduleExpiredRequestCleanup(): void {
   if (expiredRequestCleanupTimer !== null || pendingBrowserFocusByPageId.size === 0) {
     return
   }
+
   let nextExpiresAt = Infinity
+
   for (const request of pendingBrowserFocusByPageId.values()) {
     nextExpiresAt = Math.min(nextExpiresAt, request.expiresAt)
   }
+
   expiredRequestCleanupTimer = setTimeout(
     () => {
       expiredRequestCleanupTimer = null
@@ -73,10 +79,13 @@ export function requestBrowserFocus(detail: BrowserFocusRequestDetail): void {
 export function consumeBrowserFocusRequest(pageId: string): BrowserFocusTarget | null {
   purgeExpiredFocusRequests()
   const pending = pendingBrowserFocusByPageId.get(pageId) ?? null
+
   if (!pending) {
     return null
   }
+
   pendingBrowserFocusByPageId.delete(pageId)
   clearExpiredRequestCleanupTimerIfIdle()
+
   return pending.target
 }

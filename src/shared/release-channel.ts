@@ -22,12 +22,17 @@ export const RELEASE_CHANNEL_LABELS: Readonly<Record<ReleaseChannel, string>> = 
  *  releases atom feed, which only exposes the 10 newest entries — 24 hourly
  *  tags a day would evict every stable/RC entry and strand real users. */
 export const HOURLY_RELEASE_REPO = 'stablyai/orca-hourly'
+
 export const DAILY_RELEASE_REPO = 'stablyai/orca-daily'
+
 export const ADHOC_RELEASE_REPO = 'stablyai/orca-adhoc'
+
 export const MAIN_RELEASE_REPO = 'stablyai/orca'
 
 export const HOURLY_PRERELEASE_IDENTIFIER = 'hourly'
+
 export const DAILY_PRERELEASE_IDENTIFIER = 'daily'
+
 export const ADHOC_PRERELEASE_IDENTIFIER = 'adhoc'
 
 /** The dev channels, each published to its own repo rather than the main one. */
@@ -80,6 +85,7 @@ export function isChannelSupportedOnPlatform(
   if (!hasDedicatedReleaseRepo(channel)) {
     return true
   }
+
   return DEV_CHANNEL_PLATFORMS[channel].includes(platform)
 }
 
@@ -108,9 +114,11 @@ export function requiresManualDevChannelInstall(options: {
   targetChannel: ReleaseChannel
 }): boolean {
   const { platform, runningChannel, targetChannel } = options
+
   if (platform !== 'win32' || !hasDedicatedReleaseRepo(targetChannel)) {
     return false
   }
+
   return runningChannel === null || !hasDedicatedReleaseRepo(runningChannel)
 }
 
@@ -148,11 +156,14 @@ const ADHOC_VERSION = /^\d+\.\d+\.\d+-adhoc\.(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})
  */
 function parseStampedVersion(version: string, pattern: RegExp): Date | null {
   const match = normalizeTagToVersion(version).match(pattern)
+
   if (!match) {
     return null
   }
+
   const [year, month, day, hour, minute, second = 0] = match.slice(1).map(Number)
   const parsed = new Date(Date.UTC(year, month - 1, day, hour, minute, second))
+
   // Why the round-trip: Date.UTC silently rolls impossible dates forward, so a
   // corrupt `...hourly.202602300000` would render as March 2 rather than fail.
   if (
@@ -165,6 +176,7 @@ function parseStampedVersion(version: string, pattern: RegExp): Date | null {
   ) {
     return null
   }
+
   return parsed
 }
 
@@ -219,18 +231,23 @@ export function parseDevBuildStamp(version: string): Date | null {
 
 export function getVersionChannel(version: string): ReleaseChannel | null {
   const normalized = normalizeTagToVersion(version)
+
   if (!isValidAppVersion(normalized)) {
     return null
   }
+
   if (isHourlyVersion(normalized)) {
     return 'hourly'
   }
+
   if (isDailyVersion(normalized)) {
     return 'daily'
   }
+
   if (isAdhocVersion(normalized)) {
     return 'adhoc'
   }
+
   // Why the dev channels are tested first: they are prereleases too, so this
   // catch-all would otherwise file every one of them under rc.
   return normalized.includes('-') ? 'rc' : 'stable'
@@ -245,6 +262,7 @@ export function getVersionChannel(version: string): ReleaseChannel | null {
 export function getReleaseNotesUrlForVersion(version: string | null): string {
   const channel = version ? getVersionChannel(version) : null
   const repo = channel ? getReleaseRepoForChannel(channel) : MAIN_RELEASE_REPO
+
   return version
     ? `https://github.com/${repo}/releases/tag/v${normalizeTagToVersion(version)}`
     : `https://github.com/${repo}/releases`
@@ -274,11 +292,13 @@ export function hasInstallableArtifactForPlatform(
   assetNames: readonly string[]
 ): boolean {
   const manifests = getUpdateManifestNamesForPlatform(platform)
+
   // Why permissive on an unknown platform: a filter that hides every build is a
   // worse failure than one that offers a build the download step will report on.
   if (manifests.length === 0) {
     return true
   }
+
   return manifests.some((manifest) => assetNames.includes(manifest))
 }
 
@@ -296,9 +316,11 @@ export function findInstallerAssetName(
   assetNames: readonly string[]
 ): string | null {
   const pattern = PLATFORM_INSTALLER_PATTERNS[platform]
+
   if (!pattern) {
     return null
   }
+
   return assetNames.find((name) => pattern.test(name)) ?? null
 }
 

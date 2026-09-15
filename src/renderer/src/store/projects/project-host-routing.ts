@@ -31,6 +31,7 @@ export function getProjectSetupRuntimeTarget(
   hostId: ProjectHostSetupExistingFolderArgs['hostId']
 ): RuntimeClientTarget {
   const parsedHost = parseExecutionHostId(hostId)
+
   return parsedHost?.kind === 'runtime'
     ? { kind: 'environment', environmentId: parsedHost.environmentId }
     : { kind: 'local' }
@@ -41,10 +42,13 @@ export function getProjectUpdateRuntimeTarget(
   projectId: string
 ): RuntimeClientTarget {
   const target = getActiveRuntimeTarget(state.settings)
+
   if (target.kind !== 'environment') {
     return target
   }
+
   const runtimeHostId = getRuntimeTargetHostId(target)
+
   return state.projectHostSetups.some(
     (setup) => setup.projectId === projectId && setup.hostId === runtimeHostId
   )
@@ -60,10 +64,13 @@ export function setupWithFetchedOwner(
   // adoption step, so it is where the declared field types stop being aspirational.
   const adopted = normalizeProjectHostSetupRow(setup)
   const hostId = getRuntimeTargetHostId(target)
+
   if (target.kind !== 'environment') {
     return adopted
   }
+
   const executionHostId = adopted.executionHostId ?? adopted.hostId
+
   return {
     ...adopted,
     hostId,
@@ -87,6 +94,7 @@ async function assertProjectHostSetupRuntimeCapability(target: RuntimeClientTarg
   if (target.kind !== 'environment') {
     return
   }
+
   await assertRuntimeEnvironmentCapability(
     target.environmentId,
     PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
@@ -109,15 +117,19 @@ export async function fetchProjectHostSetupCompatibility(
           }
         }
       ).projects
+
       if (!projectsApi?.list || !projectsApi.listHostSetups) {
         throw new Error('projects_api_unavailable')
       }
+
       return normalizeProjectCatalogProjection({
         projects: await projectsApi.list(),
         setups: await projectsApi.listHostSetups()
       })
     }
+
     await assertProjectHostSetupRuntimeCapability(target)
+
     const [projectResponse, setupResponse] = await Promise.all([
       callRuntimeRpc<{ projects: Project[] }>(target, 'project.list', undefined, {
         timeoutMs: 15_000
@@ -126,6 +138,7 @@ export async function fetchProjectHostSetupCompatibility(
         timeoutMs: 15_000
       })
     ])
+
     return {
       // Why projects too: the same wire response carries them, and a remote host on another
       // Orca version can publish a row whose declared field types do not hold.
@@ -144,6 +157,7 @@ export async function assertProjectHostSetupMutationRuntimeCapabilities(
   if (target.kind !== 'environment') {
     return
   }
+
   await assertProjectHostSetupRuntimeCapability(target)
   await assertRuntimeEnvironmentCapability(
     target.environmentId,

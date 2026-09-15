@@ -11,6 +11,7 @@ export async function attachSshRecoveryInputObservation(
   const observation = await page.evaluate(
     async ({ targetId, originalPtyId }) => {
       const state = window.__store?.getState()
+
       const panes = [...(window.__paneManagers?.entries() ?? [])].flatMap(([tabId, manager]) =>
         manager.getPanes().map((pane) => ({
           tabId,
@@ -19,7 +20,9 @@ export async function attachSshRecoveryInputObservation(
           active: manager.getActivePane()?.id === pane.id
         }))
       )
+
       let timer: ReturnType<typeof setTimeout> | undefined
+
       try {
         const runtime = await Promise.race([
           window.api.runtime
@@ -33,6 +36,7 @@ export async function attachSshRecoveryInputObservation(
             timer = setTimeout(() => resolve({ error: 'Observation timed out' }), 1000)
           })
         ])
+
         return {
           originalPtyId,
           authority: state?.sshConnectionStates.get(targetId),
@@ -46,6 +50,7 @@ export async function attachSshRecoveryInputObservation(
     },
     { targetId, originalPtyId }
   )
+
   await testInfo.attach(`ssh-input-${label}.json`, {
     body: JSON.stringify(observation, null, 2),
     contentType: 'application/json'

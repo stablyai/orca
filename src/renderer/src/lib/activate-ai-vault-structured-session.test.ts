@@ -141,9 +141,11 @@ describe('activateAiVaultStructuredSession', () => {
   it('runs one activation per session however many times the row is clicked', async () => {
     // Three clicks on a slow row used to run three full sequences and land three toasts.
     let release!: (outcome: 'gone') => void
+
     const pending = new Promise<'gone'>((resolve) => {
       release = resolve
     })
+
     const parts = deps({ activate: vi.fn(() => false), reveal: vi.fn(() => pending) })
 
     const clicks = [
@@ -151,6 +153,7 @@ describe('activateAiVaultStructuredSession', () => {
       activateAiVaultStructuredSession(structuredSession, parts),
       activateAiVaultStructuredSession(structuredSession, parts)
     ]
+
     release('gone')
     await Promise.all(clicks)
 

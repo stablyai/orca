@@ -17,7 +17,9 @@ function setup() {
       onCommit: vi.fn(),
       getScrollContainer: () => scrollContainer
     })
+
     controller.current = drag
+
     return (
       <div
         data-host-header-drag-id="ssh:host-a"
@@ -30,6 +32,7 @@ function setup() {
   const header = view.container.querySelector<HTMLElement>('[data-host-header-drag-id]')!
   header.setPointerCapture = vi.fn()
   header.releasePointerCapture = vi.fn()
+
   return { controller, header }
 }
 

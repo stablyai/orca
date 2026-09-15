@@ -14,12 +14,14 @@ describe('remote runtime pty latched-pane retention', () => {
   const runtimeSubscribe = vi.fn()
   const refreshSessionTabsSnapshot = vi.fn(async () => {})
   const subscriptionSendBinary = vi.fn()
+
   let subscriptionCallbacks: {
     onResponse: (response: unknown) => void
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
     onError?: (error: { code: string; message: string }) => void
     onClose?: () => void
   } | null = null
+
   let hostListCalls = 0
 
   function emitMultiplexReady(): void {
@@ -30,13 +32,17 @@ describe('remote runtime pty latched-pane retention', () => {
     const frame = subscriptionSendBinary.mock.calls
       .map((call) => decodeTerminalStreamFrame(call[0]))
       .findLast((candidate) => candidate?.opcode === TerminalStreamOpcode.Subscribe)
+
     if (!frame) {
       throw new Error('missing terminal subscribe frame')
     }
+
     const payload = decodeTerminalStreamJson<{ streamId: number; terminal: string }>(frame.payload)
+
     if (!payload) {
       throw new Error('invalid terminal subscribe payload')
     }
+
     return payload
   }
 
@@ -72,6 +78,7 @@ describe('remote runtime pty latched-pane retention', () => {
       activeTabType: 'terminal' as const,
       tabs: Array.from({ length: PANE_COUNT }, (_unused, pane) => {
         const identity = paneIdentity(pane)
+
         return {
           type: 'terminal' as const,
           id: `${identity.hostTabId}::${identity.leafId}`,
@@ -89,6 +96,7 @@ describe('remote runtime pty latched-pane retention', () => {
   async function attachStalePane(pane: number) {
     const identity = paneIdentity(pane)
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: identity.tabId,
@@ -96,6 +104,7 @@ describe('remote runtime pty latched-pane retention', () => {
       onPtyExit: vi.fn(),
       onPtyRebind: vi.fn()
     })
+
     const subscribesBefore = subscribeFrameCount()
     transport.attach({
       existingPtyId: `remote:env-1@@${identity.handle}`,
@@ -115,12 +124,14 @@ describe('remote runtime pty latched-pane retention', () => {
         message: 'terminal_handle_stale'
       }
     })
+
     return transport
   }
 
   async function registries() {
     const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
     const recoveryState = await import('./remote-runtime-pty-recovery-state')
+
     return {
       subscribers: handleEvents.getWebSessionTerminalHandleSubscriberCountForTests(),
       scheduled: recoveryState.getScheduledRemoteRuntimePtyRecoveryCountForTests()
@@ -140,16 +151,20 @@ describe('remote runtime pty latched-pane retention', () => {
     runtimeCall.mockImplementation(async (request: { method: string; params?: unknown }) => {
       if (request.method === 'session.tabs.list') {
         hostListCalls += 1
+
         return { ok: true, result: hostSnapshot(hostListCalls + 1, 'epoch-1') }
       }
+
       if (request.method === 'session.tabs.activate') {
         return { ok: true, result: hostSnapshot(1, 'epoch-1') }
       }
+
       if (request.method === 'terminal.resolvePane') {
         const params = request.params as { paneKey: string; worktreeId: string }
         const separator = params.paneKey.indexOf(':')
         const paneTabId = params.paneKey.slice(0, separator)
         const pane = Number(paneTabId.slice(paneTabId.lastIndexOf('-') + 1))
+
         return {
           ok: true,
           result: {
@@ -162,12 +177,14 @@ describe('remote runtime pty latched-pane retention', () => {
           }
         }
       }
+
       return { ok: true, result: {} }
     })
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
         queueMicrotask(emitMultiplexReady)
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
@@ -178,6 +195,7 @@ describe('remote runtime pty latched-pane retention', () => {
 
   it('returns listener and retry-registry counts to baseline across destroy cycles', async () => {
     vi.useFakeTimers()
+
     try {
       expect(await registries()).toEqual({ subscribers: 0, scheduled: 0 })
       const latched: { subscribers: number; scheduled: number }[] = []
@@ -205,8 +223,10 @@ describe('remote runtime pty latched-pane retention', () => {
 
   it('returns to baseline when a latched pane is detached rather than destroyed', async () => {
     vi.useFakeTimers()
+
     try {
       const settled: { subscribers: number; scheduled: number }[] = []
+
       for (let cycle = 0; cycle < 20; cycle += 1) {
         const transport = await attachStalePane(cycle)
         await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
@@ -215,6 +235,7 @@ describe('remote runtime pty latched-pane retention', () => {
         await vi.advanceTimersByTimeAsync(1_000)
         settled.push(await registries())
       }
+
       expect(settled).toEqual(Array.from({ length: 20 }, () => ({ subscribers: 0, scheduled: 0 })))
       expect(vi.getTimerCount()).toBe(0)
     } finally {
@@ -224,18 +245,22 @@ describe('remote runtime pty latched-pane retention', () => {
 
   it('holds one listener and one registry entry per concurrently latched pane', async () => {
     vi.useFakeTimers()
+
     try {
       const transports: Awaited<ReturnType<typeof attachStalePane>>[] = []
+
       for (let pane = 0; pane < 8; pane += 1) {
         transports.push(await attachStalePane(pane))
         await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       }
+
       // Retention is per live pane, not per timeout: eight latched panes hold eight of each.
       expect(await registries()).toEqual({ subscribers: 8, scheduled: 8 })
 
       for (const transport of transports) {
         transport.destroy?.()
       }
+
       await vi.advanceTimersByTimeAsync(1_000)
       expect(await registries()).toEqual({ subscribers: 0, scheduled: 0 })
       expect(vi.getTimerCount()).toBe(0)
@@ -246,6 +271,7 @@ describe('remote runtime pty latched-pane retention', () => {
 
   it('leaves a latched pane fully quiescent — no timers, no RPCs, no growth', async () => {
     vi.useFakeTimers()
+
     try {
       const transport = await attachStalePane(0)
       await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
@@ -274,9 +300,11 @@ describe('remote runtime pty latched-pane retention', () => {
 
   it('does not stack listeners, registry entries or timers across repeated revive cycles', async () => {
     vi.useFakeTimers()
+
     try {
       const { retryAllRemoteRuntimePtyRecoveriesNow } =
         await import('./remote-runtime-pty-recovery-state')
+
       const transport = await attachStalePane(0)
       await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
@@ -284,6 +312,7 @@ describe('remote runtime pty latched-pane retention', () => {
       const baseline = await registries()
       const timersAtFirstLatch = vi.getTimerCount()
       const subscribesAtFirstLatch = subscribeFrameCount()
+
       const observed: {
         subscribers: number
         scheduled: number
@@ -323,6 +352,7 @@ describe('remote runtime pty latched-pane retention', () => {
 
   it('does not stack anything when host snapshots arrive repeatedly at a latched pane', async () => {
     vi.useFakeTimers()
+
     try {
       const handleEvents = await import('../../runtime/web-session-terminal-handle-events')
       const transport = await attachStalePane(0)

@@ -46,9 +46,11 @@ async function installMockSkillDiscovery(
     electron.ipcMain.removeHandler('skills:discover')
     electron.ipcMain.handle('skills:discover', () => {
       const latest = (globalThis as MockSkillDiscoveryGlobal).__orcaSettingsSkillDiscoveryResult
+
       if (!latest) {
         throw new Error('Missing mocked skill discovery result')
       }
+
       return latest
     })
   }, result)

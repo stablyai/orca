@@ -61,8 +61,10 @@ export function useSourceControlCreatePrIntentFlows(
     updateWorktreeGitIdentity,
     worktreePath
   } = foundation
+
   const { generateCommitMessageForCreatePrIntent, handleCommit, isGenerating, runRemoteAction } =
     commitFlows
+
   const { handlePullRequestCreated, prBase, prBody, prGenerating } = reviewFlows
 
   const createPrIntentReview = useSourceControlCreatePrIntentReview({
@@ -82,6 +84,7 @@ export function useSourceControlCreatePrIntentFlows(
     setCreatePrIntentNoticeForWorktree,
     settings
   })
+
   const createPrIntentProbes = useSourceControlCreatePrIntentProbes({
     activeRepo,
     activeRepoSettings,
@@ -101,6 +104,7 @@ export function useSourceControlCreatePrIntentFlows(
     setUpstreamStatus,
     updateWorktreeGitIdentity
   })
+
   const createPrIntentRun = useSourceControlCreatePrIntentRun({
     activeRepo,
     activeWorktreeId,

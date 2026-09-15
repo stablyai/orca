@@ -34,6 +34,7 @@ export function createFolderPathStatusActions(
       const cacheKey = get().getFolderWorkspacePathStatusCacheKey(request, options)
       const cached = state.folderWorkspacePathStatuses[cacheKey]
       const requestSnapshot = getFolderWorkspacePathStatusRequestSnapshotForRead(state, request)
+
       return getFreshFolderWorkspacePathStatusFromCache({ entry: cached, requestSnapshot })
     },
 
@@ -41,17 +42,21 @@ export function createFolderPathStatusActions(
       const cacheKey = get().getFolderWorkspacePathStatusCacheKey(request, options)
       const requestSnapshot = getFolderWorkspaceStatusRequestSnapshot(get(), request)
       const cached = get().folderWorkspacePathStatuses[cacheKey]
+
       const freshCachedStatus = getFreshFolderWorkspacePathStatusFromCache({
         entry: cached,
         requestSnapshot
       })
+
       if (!options?.force && freshCachedStatus) {
         return freshCachedStatus
       }
+
       try {
         const target = getActiveRuntimeTarget(
           getFolderWorkspacePathStatusRouteSettings(options, get().settings)
         )
+
         const status =
           target.kind === 'local'
             ? await window.api.folderWorkspaces.getPathStatus(request)
@@ -63,6 +68,7 @@ export function createFolderPathStatusActions(
                   { timeoutMs: 15_000 }
                 )
               ).status
+
         set((state) => ({
           folderWorkspacePathStatuses:
             requestSnapshot !== null &&
@@ -73,9 +79,11 @@ export function createFolderPathStatusActions(
                 }
               : state.folderWorkspacePathStatuses
         }))
+
         return status
       } catch (err) {
         console.error('Failed to fetch folder workspace path status:', err)
+
         return null
       }
     }

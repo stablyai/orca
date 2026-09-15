@@ -8,7 +8,9 @@ import { useCallback, useSyncExternalStore } from 'react'
 // clear only its own acquisition, so a settle that lands after the lock was dropped (a test
 // reset, an explicit end) cannot take down a newer connect's lock.
 const inFlightLockIds = new Map<string, number>()
+
 let lastLockId = 0
+
 const listeners = new Set<() => void>()
 
 function emit(): void {
@@ -19,6 +21,7 @@ function emit(): void {
 
 export function subscribeSshConnectInFlight(listener: () => void): () => void {
   listeners.add(listener)
+
   return () => {
     listeners.delete(listener)
   }
@@ -26,12 +29,15 @@ export function subscribeSshConnectInFlight(listener: () => void): () => void {
 
 function acquire(targetId: string): number {
   const held = inFlightLockIds.get(targetId)
+
   if (held !== undefined) {
     return held
   }
+
   lastLockId += 1
   inFlightLockIds.set(targetId, lastLockId)
   emit()
+
   return lastLockId
 }
 
@@ -39,6 +45,7 @@ function releaseOwned(targetId: string, lockId: number): void {
   if (inFlightLockIds.get(targetId) !== lockId) {
     return
   }
+
   inFlightLockIds.delete(targetId)
   emit()
 }
@@ -51,6 +58,7 @@ export function endSshConnect(targetId: string): void {
   if (!inFlightLockIds.delete(targetId)) {
     return
   }
+
   emit()
 }
 
@@ -66,16 +74,20 @@ export function isSshConnectInFlight(targetId: string): boolean {
  */
 export function trackSshConnect<T>(targetId: string, request: Promise<T>): Promise<T> {
   const lockId = acquire(targetId)
+
   const release = (): void => {
     releaseOwned(targetId, lockId)
   }
+
   // Two-arg then, not finally: a derived rejected promise here would go unhandled.
   void request.then(release, release)
+
   return request
 }
 
 export function useSshConnectInFlight(targetId: string): boolean {
   const getSnapshot = useCallback(() => inFlightLockIds.has(targetId), [targetId])
+
   return useSyncExternalStore(subscribeSshConnectInFlight, getSnapshot, getSnapshot)
 }
 

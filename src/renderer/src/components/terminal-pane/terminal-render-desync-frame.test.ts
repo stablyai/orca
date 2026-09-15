@@ -38,22 +38,27 @@ describe('measureDivergence', () => {
     { name: 'light', background: [255, 255, 255] as const, ink: [0, 0, 0] as const }
   ])('detects missing and rendered cells against a $name theme', ({ background, ink }) => {
     const pixels = new Uint8ClampedArray(4 * 4 * 4)
+
     for (let index = 0; index < pixels.length; index += 4) {
       pixels[index] = background[0]
       pixels[index + 1] = background[1]
       pixels[index + 2] = background[2]
       pixels[index + 3] = 255
     }
+
     const context = {
       drawImage: vi.fn(),
       getImageData: vi.fn(() => ({ data: pixels }))
     }
+
     const createElement = vi.fn(() => ({
       width: 0,
       height: 0,
       getContext: () => context
     }))
+
     vi.stubGlobal('document', { createElement })
+
     const internals: SentinelRenderInternals = {
       rows: 1,
       cols: 1,

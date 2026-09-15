@@ -19,6 +19,7 @@ import { registerTerminalPaneMountReadiness } from './helpers/terminal-pane-moun
 // Why: keep the suite serial so the headful pane tests never ask Playwright to
 // open multiple visible Electron windows at once.
 test.describe.configure({ mode: 'serial' })
+
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
 
@@ -32,9 +33,11 @@ test.describe('Terminal Panes', () => {
 
     const beforeClose = await waitForPaneIdentitySnapshot(orcaPage, 3)
     const closedLeafId = beforeClose.activeLeafId ?? beforeClose.panes.at(-1)?.leafId
+
     if (!closedLeafId) {
       throw new Error('No active split pane leaf id found before close')
     }
+
     const survivingLeafIds = beforeClose.panes
       .map((pane) => pane.leafId)
       .filter((leafId) => leafId !== closedLeafId)
@@ -58,9 +61,11 @@ test.describe('Terminal Panes', () => {
 
     const beforeClose = await waitForPaneIdentitySnapshot(orcaPage, 3)
     const closedLeafId = beforeClose.activeLeafId ?? beforeClose.panes.at(-1)?.leafId
+
     if (!closedLeafId) {
       throw new Error('No active split pane leaf id found before close/remake')
     }
+
     const survivingBindings = Object.fromEntries(
       beforeClose.panes
         .filter((pane) => pane.leafId !== closedLeafId)
@@ -74,9 +79,11 @@ test.describe('Terminal Panes', () => {
     expect(Object.keys(afterClose.ptyIdsByLeafId).sort()).toEqual(
       Object.keys(survivingBindings).sort()
     )
+
     for (const [leafId, ptyId] of Object.entries(survivingBindings)) {
       expect(afterClose.ptyIdsByLeafId[leafId]).toBe(ptyId)
     }
+
     expect(afterClose.ptyIdsByLeafId[closedLeafId]).toBeUndefined()
 
     await splitActiveTerminalPane(orcaPage, 'horizontal')
@@ -85,9 +92,11 @@ test.describe('Terminal Panes', () => {
     const afterRemake = await waitForPaneIdentitySnapshot(orcaPage, 3)
     const remadeLeafIds = afterRemake.panes.map((pane) => pane.leafId)
     expect(remadeLeafIds).not.toContain(closedLeafId)
+
     for (const [leafId, ptyId] of Object.entries(survivingBindings)) {
       expect(afterRemake.ptyIdsByLeafId[leafId]).toBe(ptyId)
     }
+
     expect(new Set(remadeLeafIds).size).toBe(3)
   })
 
@@ -103,9 +112,11 @@ test.describe('Terminal Panes', () => {
     const beforeOrder = await readTerminalPaneDomLeafOrder(orcaPage)
     const source = beforeMove.panes.at(-1)
     const target = beforeMove.panes[0]
+
     if (!source || !target) {
       throw new Error('Need source and target panes for move test')
     }
+
     const bindingsBefore = { ...beforeMove.ptyIdsByLeafId }
 
     await moveTerminalPaneByLeafId(orcaPage, source.leafId, target.leafId, 'left')
@@ -135,6 +146,7 @@ test.describe('Terminal Panes', () => {
     const beforeOrder = await readTerminalPaneDomLeafOrder(orcaPage)
     const source = beforeDrag.panes.at(-1)
     const target = beforeDrag.panes[0]
+
     if (!source || !target) {
       throw new Error('Need source and target panes for drag test')
     }
@@ -142,6 +154,7 @@ test.describe('Terminal Panes', () => {
     const sourceHandle = orcaPage.locator(
       `.pane[data-leaf-id="${source.leafId}"] .pane-drag-handle`
     )
+
     await expect(sourceHandle).toBeVisible({ timeout: 3_000 })
     const sourceBox = await sourceHandle.boundingBox()
     const targetBox = await orcaPage.locator(`.pane[data-leaf-id="${target.leafId}"]`).boundingBox()

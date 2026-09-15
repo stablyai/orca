@@ -30,11 +30,17 @@ import { randomBytes } from 'node:crypto'
 import process from 'node:process'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const serveEntry = join(projectDir, 'out', 'main', 'index.js')
+
 const ORCAD_ENTRY = join(projectDir, 'out', 'orcad', 'orcad.js')
+
 const READY_TIMEOUT_MS = 120_000
+
 const OUTPUT_TIMEOUT_MS = 30_000
+
 const SHUTDOWN_TIMEOUT_MS = 15_000
+
 // Why a random high port: a fixed one collides with a developer's own `orca serve`.
 const PORT = 6800 + Math.floor(Number(process.env.ORCA_SMOKE_PORT_OFFSET ?? '0'))
 
@@ -53,6 +59,7 @@ function fail(message) {
  */
 function resolveCli() {
   const built = join(projectDir, 'out', 'cli', 'index.js')
+
   return existsSync(built)
     ? { command: process.execPath, prefix: [built] }
     : { command: 'orca', prefix: [] }
@@ -61,6 +68,7 @@ function resolveCli() {
 /** The `orca` CLI, driven with an explicit pairing code so it targets this server only. */
 function orca(pairingCode, args) {
   const cli = resolveCli()
+
   const result = spawnSync(
     cli.command,
     [...cli.prefix, ...args, '--pairing-code', pairingCode, '--json'],
@@ -71,19 +79,25 @@ function orca(pairingCode, args) {
       shell: false
     }
   )
+
   if (result.error) {
     throw new Error(`orca ${args[0]} failed to spawn: ${result.error.message}`)
   }
+
   const line = (result.stdout ?? '').trim()
+
   if (!line.startsWith('{')) {
     throw new Error(`orca ${args.join(' ')} produced no JSON:\n${result.stdout}\n${result.stderr}`)
   }
+
   const parsed = JSON.parse(line)
+
   if (parsed.ok === false) {
     throw new Error(
       `orca ${args.join(' ')} returned ${parsed.error?.code}: ${parsed.error?.message}`
     )
   }
+
   return parsed.result
 }
 
@@ -91,10 +105,12 @@ function waitForReady(child) {
   return new Promise((resolvePromise, rejectPromise) => {
     let buffered = ''
     let serverErr = ''
+
     const timer = setTimeout(
       () => rejectPromise(new Error(`no ready payload within ${READY_TIMEOUT_MS}ms`)),
       READY_TIMEOUT_MS
     )
+
     // Why read stderr at all: an unread pipe can fill and block the child, and without it
     // a boot failure surfaces only as "exited with 1", which says nothing actionable.
     child.stderr.setEncoding('utf8')
@@ -104,15 +120,19 @@ function waitForReady(child) {
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk) => {
       buffered += chunk
+
       for (const line of buffered.split('\n')) {
         if (!line.startsWith('{')) {
           continue
         }
+
         try {
           const payload = JSON.parse(line)
+
           if (payload.type === 'orca_server_ready') {
             clearTimeout(timer)
             resolvePromise(payload)
+
             return
           }
         } catch {
@@ -135,26 +155,34 @@ function waitForReady(child) {
 
 function pairingCodeFrom(payload) {
   const url = payload?.pairing?.url
+
   if (!url) {
     throw new Error('ready payload carried no pairing offer')
   }
+
   const code = new URL(url).searchParams.get('code')
+
   if (!code) {
     throw new Error(`pairing url had no code: ${url}`)
   }
+
   return code
 }
 
 async function waitForNonce(pairingCode, terminalHandle, nonce) {
   const deadline = Date.now() + OUTPUT_TIMEOUT_MS
+
   while (Date.now() < deadline) {
     const read = orca(pairingCode, ['terminal', 'read', '--terminal', terminalHandle])
     const tail = (read?.terminal?.tail ?? []).map((entry) => String(entry)).join('\n')
+
     if (tail.includes(nonce)) {
       return true
     }
+
     await new Promise((r) => setTimeout(r, 1_000))
   }
+
   return false
 }
 
@@ -170,8 +198,10 @@ function resolveLaunch(userDataDir) {
   // Why a flag and not just an env var: package scripts have to set this on Windows too,
   // and `FOO=bar cmd` is not portable there.
   const flagIndex = process.argv.indexOf('--target')
+
   const target =
     flagIndex !== -1 ? process.argv[flagIndex + 1] : (process.env.ORCA_SMOKE_TARGET ?? 'electron')
+
   if (target === 'orcad') {
     return {
       label: `orcad (${ORCAD_ENTRY})`,
@@ -180,11 +210,13 @@ function resolveLaunch(userDataDir) {
       env: { ORCA_USER_DATA: userDataDir }
     }
   }
+
   if (target !== 'electron') {
     throw new Error(
       `--target (or ORCA_SMOKE_TARGET) must be 'electron' or 'orcad', got '${target}'`
     )
   }
+
   const serveArgs = [
     serveEntry,
     '--serve',
@@ -193,7 +225,9 @@ function resolveLaunch(userDataDir) {
     '--serve-json',
     `--user-data-dir=${userDataDir}`
   ]
+
   const override = process.env.ORCA_SMOKE_ELECTRON
+
   return {
     label: `electron (${serveEntry})`,
     command: override ?? 'npx',
@@ -206,17 +240,21 @@ function resolveLaunch(userDataDir) {
 function seedGitRepo() {
   const dir = mkdtempSync(join(tmpdir(), 'orca-smoke-repo-'))
   writeFileSync(join(dir, 'README.md'), '# orca smoke\n')
+
   const git = (...args) => {
     const result = spawnSync('git', args, { cwd: dir, encoding: 'utf8' })
+
     if (result.status !== 0) {
       throw new Error(`git ${args.join(' ')} failed: ${result.stderr || result.stdout}`)
     }
   }
+
   git('init', '-b', 'main')
   git('config', 'user.email', 'smoke@orca.test')
   git('config', 'user.name', 'Orca Smoke')
   git('add', '-A')
   git('commit', '-m', 'seed')
+
   return dir
 }
 
@@ -248,11 +286,13 @@ async function main() {
     seeded = { repoPath }
     log(`seeded repo at ${repoPath}`)
     const repo = orca(pairingCode, ['repo', 'add', '--path', repoPath])?.repo
+
     if (!repo?.id) {
       throw new Error('repo.add returned no repo id')
     }
 
     const worktreeName = `smoke-${randomBytes(4).toString('hex')}`
+
     const created = orca(pairingCode, [
       'worktree',
       'create',
@@ -263,9 +303,11 @@ async function main() {
       '--setup',
       'skip'
     ])?.worktree
+
     if (!created?.id) {
       throw new Error('worktree.create returned no worktree id')
     }
+
     seeded.worktreeId = created.id
     log(`created worktree ${created.id}`)
 
@@ -273,22 +315,28 @@ async function main() {
     // reads a shared dev profile that can already hold more worktrees than the cap. The
     // point is that the server persisted and can resolve THIS worktree.
     const shown = orca(pairingCode, ['worktree', 'show', '--worktree', created.id])?.worktree
+
     if (shown?.id !== created.id) {
       throw new Error('worktree.create succeeded but worktree.show cannot resolve it')
     }
+
     log(`server resolves ${shown.id}`)
+
     if (process.argv.includes('--browser')) {
       const status = orca(pairingCode, ['status'])
+
       if (!status?.runtime?.capabilities?.includes('browser.headless.v1')) {
         throw new Error(
           `status omitted browser.headless.v1: ${JSON.stringify(status?.runtime?.capabilities)}`
         )
       }
+
       const fixturePath = join(userDataDir, 'browser-smoke.html')
       writeFileSync(
         fixturePath,
         '<!doctype html><title>Orcad Browser Smoke</title><main>browser-ready</main>'
       )
+
       const browserPageId = orca(pairingCode, [
         'tab',
         'create',
@@ -297,35 +345,45 @@ async function main() {
         '--url',
         'about:blank'
       ])?.browserPageId
+
       if (!browserPageId) {
         throw new Error('browser.tabCreate returned no browser page id')
       }
+
       const targetFlags = ['--worktree', created.id, '--page', browserPageId]
       const targetUrl = pathToFileURL(fixturePath).href
       const navigation = orca(pairingCode, ['goto', ...targetFlags, '--url', targetUrl])
+
       if (navigation?.url !== targetUrl || navigation?.title !== 'Orcad Browser Smoke') {
         throw new Error(`browser.goto returned the wrong page: ${JSON.stringify(navigation)}`)
       }
+
       const evaluated = orca(pairingCode, [
         'eval',
         ...targetFlags,
         '--expression',
         'document.querySelector("main")?.textContent'
       ])
+
       if (evaluated?.result !== 'browser-ready') {
         throw new Error(`browser.eval returned ${JSON.stringify(evaluated)}`)
       }
+
       const screenshot = orca(pairingCode, ['screenshot', ...targetFlags])
+
       if (screenshot?.format !== 'png' || typeof screenshot.data !== 'string' || !screenshot.data) {
         throw new Error('browser.screenshot returned no PNG data')
       }
+
       log('browser navigate/evaluate/screenshot round trip OK')
     }
 
     const terminal = orca(pairingCode, ['terminal', 'create', '--worktree', created.id])?.terminal
+
     if (!terminal?.handle) {
       throw new Error('terminal.create returned no handle')
     }
+
     log(`created ${terminal.handle}`)
 
     // Why invoke node rather than `echo`: the shell differs per platform, node does not.
@@ -346,6 +404,7 @@ async function main() {
           `the server started and answered RPC, but its PTY path is dead`
       )
     }
+
     log('terminal round trip OK')
   } catch (error) {
     fail(error instanceof Error ? error.message : String(error))
@@ -353,6 +412,7 @@ async function main() {
     // Why before SIGTERM: worktree removal is a server operation, so it needs the server.
     if (seeded?.worktreeId && pairing) {
       const cleanupCli = resolveCli()
+
       const removed = spawnSync(
         cleanupCli.command,
         [
@@ -368,12 +428,15 @@ async function main() {
         ],
         { encoding: 'utf8' }
       )
+
       // Why the parent too: `worktree rm` removes the worktree directory, leaving the
       // empty `<workspaces>/<repo-name>/` container behind. Every run would leak one.
       const worktreePath = seeded.worktreeId.split('::')[1]
+
       if (removed.status === 0 && worktreePath) {
         rmSync(dirname(worktreePath), { recursive: true, force: true })
       }
+
       if (removed.status !== 0) {
         log(
           `WARN: could not remove seeded worktree ${seeded.worktreeId}: ` +
@@ -381,21 +444,26 @@ async function main() {
         )
       }
     }
+
     // Why the exitCode guard: a server that died during boot has already exited, and
     // waiting for a second 'exit' that will never fire reported a bogus shutdown failure
     // stacked on top of the real error.
     if (child.exitCode === null && child.signalCode === null) {
       child.kill('SIGTERM')
+
       const exited = await Promise.race([
         new Promise((r) => child.on('exit', () => r(true))),
         new Promise((r) => setTimeout(() => r(false), SHUTDOWN_TIMEOUT_MS))
       ])
+
       if (!exited) {
         child.kill('SIGKILL')
         fail(`server did not exit within ${SHUTDOWN_TIMEOUT_MS}ms of SIGTERM`)
       }
     }
+
     rmSync(userDataDir, { recursive: true, force: true })
+
     if (seeded?.repoPath) {
       rmSync(seeded.repoPath, { recursive: true, force: true })
     }

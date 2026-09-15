@@ -27,11 +27,13 @@ export class RuntimeLinearReadCommands extends RuntimeLinearContextCommands {
   }): Promise<LinearTeamListResult> {
     try {
       const result = await listLinearTeamsForAgent(params.workspaceId)
+
       const workspaceErrors = result.errors.map((error) => ({
         workspace: { id: error.workspaceId, name: error.workspaceName ?? error.workspaceId },
         code: this.linearWorkspaceErrorCode(error.type),
         message: sanitizeLinearErrorMessage(error.message)
       }))
+
       return {
         teams: result.teams.map((team) => this.linearTeamSummary(team)),
         meta: {
@@ -51,8 +53,10 @@ export class RuntimeLinearReadCommands extends RuntimeLinearContextCommands {
     workspaceId?: string
   }): Promise<LinearTeamMembersResult> {
     const team = await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
+
     try {
       const members = await getLinearTeamMembersOrThrow(team.id, team.workspaceId)
+
       return {
         team: this.linearTeamSummary(team),
         members: members.map((member) => ({
@@ -73,6 +77,7 @@ export class RuntimeLinearReadCommands extends RuntimeLinearContextCommands {
   }): Promise<LinearTeamStatesResult> {
     const team = await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
     const states = await this.getLinearTeamStatesForWrite(team.id, team.workspaceId)
+
     return {
       team: this.linearTeamSummary(team),
       states: states.map((state) => ({
@@ -92,6 +97,7 @@ export class RuntimeLinearReadCommands extends RuntimeLinearContextCommands {
   }): Promise<LinearTeamLabelsResult> {
     const team = await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
     const labels = await this.getLinearTeamLabelsForWrite(team.id, team.workspaceId)
+
     return {
       team: this.linearTeamSummary(team),
       labels: labels.map((label) => ({ id: label.id, name: label.name, color: label.color })),
@@ -105,8 +111,10 @@ export class RuntimeLinearReadCommands extends RuntimeLinearContextCommands {
     workspaceId?: (string & {}) | 'all'
   }): Promise<LinearProjectListResult> {
     const limit = clampLinearSearchLimit(params.limit)
+
     try {
       const result = await this.linearListProjects(params.query, limit, params.workspaceId, true)
+
       const projects = result.items.slice(0, limit).map((project) => ({
         id: project.id,
         name: project.name,
@@ -115,12 +123,15 @@ export class RuntimeLinearReadCommands extends RuntimeLinearContextCommands {
         ...(project.workspaceName ? { workspaceName: project.workspaceName } : {}),
         ...(project.teams ? { teams: project.teams } : {})
       }))
+
       const workspaceErrors = (result.errors ?? []).map((error) => ({
         workspace: { id: error.workspaceId, name: error.workspaceName ?? error.workspaceId },
         code: this.linearWorkspaceErrorCode(error.type),
         message: sanitizeLinearErrorMessage(error.message)
       }))
+
       const hasMore = result.hasMore === true || result.items.length > limit
+
       return {
         projects,
         truncated: hasMore,
@@ -147,14 +158,18 @@ export class RuntimeLinearReadCommands extends RuntimeLinearContextCommands {
   }): Promise<LinearIssueListResult> {
     const filter = params.filter ?? 'assigned'
     const limit = clampLinearIssueListLimit(params.limit)
+
     const team = params.teamInput
       ? await this.resolveLinearTeamInput(params.teamInput, params.workspaceId)
       : null
+
     const workspaceId = team?.workspaceId ?? params.workspaceId
+
     try {
       const result = await listLinearIssues(filter, limit, workspaceId, {
         teamId: team?.id
       })
+
       return {
         issues: result.items.map((issue) => ({
           id: issue.id,

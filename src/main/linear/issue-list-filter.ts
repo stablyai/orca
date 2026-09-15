@@ -23,6 +23,7 @@ export type LinearGraphQLIssueFilter = {
 const ACTIVE_STATE_FILTER: LinearGraphQLIssueFilter = {
   state: { type: { nin: ['completed', 'canceled'] } }
 }
+
 const COMPLETED_STATE_FILTER: LinearGraphQLIssueFilter = {
   state: { type: { in: ['completed', 'canceled'] } }
 }
@@ -31,9 +32,11 @@ function listFilterForState(filter: LinearListFilter): LinearGraphQLIssueFilter 
   if (filter === 'assigned' || filter === 'created' || filter === 'open') {
     return ACTIVE_STATE_FILTER
   }
+
   if (filter === 'completed') {
     return COMPLETED_STATE_FILTER
   }
+
   return undefined
 }
 
@@ -73,33 +76,41 @@ function mergeIssueFilters(
   ...parts: (LinearGraphQLIssueFilter | undefined)[]
 ): LinearGraphQLIssueFilter | undefined {
   const defined = parts.filter((part): part is LinearGraphQLIssueFilter => part !== undefined)
+
   if (defined.length === 0) {
     return undefined
   }
+
   if (defined.length === 1) {
     return defined[0]
   }
 
   const merged: LinearGraphQLIssueFilter = {}
+
   for (const part of defined) {
     if (part.state) {
       // Why: preset state.type and attribute state.id must coexist; a top-level
       // spread would overwrite one nested constraint.
       merged.state = { ...merged.state, ...part.state }
     }
+
     if (part.team) {
       merged.team = part.team
     }
+
     if (part.priority) {
       merged.priority = part.priority
     }
+
     if (part.assignee) {
       merged.assignee = part.assignee
     }
+
     if (part.labels) {
       merged.labels = part.labels
     }
   }
+
   return merged
 }
 
@@ -109,9 +120,12 @@ export function buildLinearListIssueFilter(options: {
   attributeFilter?: LinearIssueAttributeFilter | null
 }): LinearGraphQLIssueFilter | undefined {
   const stateFilter = listFilterForState(options.filter)
+
   const teamFilter: LinearGraphQLIssueFilter | undefined = options.teamId
     ? { team: { id: { eq: options.teamId } } }
     : undefined
+
   const attributes = attributeFacetFilter(options.attributeFilter)
+
   return mergeIssueFilters(stateFilter, teamFilter, attributes)
 }

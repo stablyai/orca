@@ -34,10 +34,12 @@ function baseSession(overrides: Record<string, unknown> = {}): Record<string, un
 describe('parseWorkspaceSessionSalvaging', () => {
   it('restores outer diagnostics after a nested collection', () => {
     const schema = salvagingArray(z.string())
+
     const outer = collectSalvageDrops(() => {
       schema.parse([1])
       const inner = collectSalvageDrops(() => schema.parse([2]))
       schema.parse([3])
+
       return inner
     })
 
@@ -49,7 +51,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
     const result = parseWorkspaceSessionSalvaging(
       baseSession({ tabsByWorktree: { [WT]: [terminalTab('tab-1')] } })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths).toEqual([])
       expect(result.value.tabsByWorktree[WT]).toHaveLength(1)
@@ -66,13 +70,16 @@ describe('parseWorkspaceSessionSalvaging', () => {
       generation: 3,
       startupCwd: '/home/user/project'
     }
+
     const result = parseWorkspaceSessionSalvaging(
       baseSession({
         tabsByWorktree: { [WT]: [terminalTab('tab-1'), terminalTab('tab-2'), truncated] },
         sleepingAgentSessionsByPaneKey: {}
       })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths).toEqual([`tabsByWorktree.${WT}.2`])
       expect(result.value.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-1', 'tab-2'])
@@ -87,7 +94,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
         }
       })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths).toEqual(['sleepingAgentSessionsByPaneKey.tab-bad:leaf'])
       expect(result.value.sleepingAgentSessionsByPaneKey).toBeUndefined()
@@ -108,7 +117,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
         }
       })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths).toEqual(['terminalLayoutsByTabId.tab-1.ptyIdsByLeafId.leaf-2'])
       const layout = result.value.terminalLayoutsByTabId['tab-1']
@@ -134,7 +145,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
         }
       })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       // Why: the entry is the smallest self-contained unit, so dropped counts
       // reflect distinct corrupt records rather than symptoms.
@@ -149,6 +162,7 @@ describe('parseWorkspaceSessionSalvaging', () => {
 
   it('salvages systemic single-field corruption without inflating the dropped count', () => {
     const layouts: Record<string, unknown> = {}
+
     for (let i = 0; i < 20; i += 1) {
       layouts[`tab-${i}`] = {
         root: { type: 'leaf', leafId: i },
@@ -156,8 +170,10 @@ describe('parseWorkspaceSessionSalvaging', () => {
         expandedLeafId: null
       }
     }
+
     const result = parseWorkspaceSessionSalvaging(baseSession({ terminalLayoutsByTabId: layouts }))
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.terminalLayoutsByTabId).toEqual({})
       expect(result.droppedPaths).toHaveLength(20)
@@ -168,7 +184,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
     const result = parseWorkspaceSessionSalvaging(
       baseSession({ terminalSurfaceTombstonesByPaneKey: { 'tab-1:leaf-1': { worktreeId: 42 } } })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths).toEqual(['terminalSurfaceTombstonesByPaneKey.tab-1:leaf-1'])
       expect(result.value.terminalSurfaceTombstonesByPaneKey).toEqual({})
@@ -190,7 +208,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
         }
       })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths).toEqual(['terminalSurfaceTombstonesByPaneKey.tab-1:leaf-1'])
       expect(result.value.terminalSurfaceTombstonesByPaneKey).toEqual({})
@@ -208,7 +228,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
         }
       })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths.toSorted()).toEqual([
         'terminalLayoutsByTabId.a',
@@ -231,18 +253,23 @@ describe('parseWorkspaceSessionSalvaging', () => {
       sortOrder: 0,
       createdAt: 1_700_000_000_000
     }
+
     const missingCustomLabel = { ...goodUnified, id: 'tab-2', entityId: 'tab-2' } as Record<
       string,
       unknown
     >
+
     delete missingCustomLabel.customLabel
+
     const result = parseWorkspaceSessionSalvaging(
       baseSession({
         tabsByWorktree: { [WT]: [terminalTab('tab-1')] },
         unifiedTabs: { [WT]: [goodUnified, missingCustomLabel], 'repo-2::/other': [] }
       })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths).toEqual([`unifiedTabs.${WT}.1`])
       expect(result.value.unifiedTabs?.[WT]?.map((tab) => tab.id)).toEqual(['tab-1'])
@@ -256,7 +283,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
         terminalPtyIncarnationsByPaneKey: { 'tab-1:leaf-1': 'inc-1', 'tab-2:leaf-2': 123 }
       })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths).toEqual(['terminalPtyIncarnationsByPaneKey.tab-2:leaf-2'])
       expect(result.value.terminalPtyIncarnationsByPaneKey).toEqual({ 'tab-1:leaf-1': 'inc-1' })
@@ -270,7 +299,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
         terminalPtyIncarnationsByPaneKey: { 'tab-1:leaf-1': 42 }
       })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths).toHaveLength(2)
       expect(result.value.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-1'])
@@ -283,10 +314,13 @@ describe('parseWorkspaceSessionSalvaging', () => {
     // issue list that used to overflow.
     const worktreeId = 'repo-1::/huge'
     const tabs = Array.from({ length: 200_000 }, (_, i) => ({ id: `bad-${i}` }))
+
     const result = parseWorkspaceSessionSalvaging(
       baseSession({ tabsByWorktree: { [worktreeId]: tabs } })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedCount).toBe(200_000)
       expect(result.droppedPaths).toHaveLength(100)
@@ -303,7 +337,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
     const result = parseWorkspaceSessionSalvaging(
       baseSession({ terminalTopologyRevisionByRepoId: 'nope' })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths).toEqual(['terminalTopologyRevisionByRepoId'])
       expect(result.value.terminalTopologyRevisionByRepoId).toBeUndefined()
@@ -318,13 +354,17 @@ describe('parseWorkspaceSessionSalvaging', () => {
     // same wrong shape across every entry it touches. The dropped count is
     // unbounded so that case stays a salvage instead of a full-session reset.
     const incarnations: Record<string, unknown> = {}
+
     for (let i = 0; i < 400; i += 1) {
       incarnations[`tab-${i}:leaf-${i}`] = i % 2 === 0 ? i : `inc-${i}`
     }
+
     const result = parseWorkspaceSessionSalvaging(
       baseSession({ terminalPtyIncarnationsByPaneKey: incarnations })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedCount).toBe(200)
       expect(result.droppedPaths).toHaveLength(100)
@@ -334,6 +374,7 @@ describe('parseWorkspaceSessionSalvaging', () => {
 
   it('drops many corrupt tab records across worktrees in a single session load', () => {
     const tabsByWorktree: Record<string, unknown> = {}
+
     for (let w = 0; w < 20; w += 1) {
       const worktreeId = `repo-1::/w${w}`
       tabsByWorktree[worktreeId] = [
@@ -343,8 +384,10 @@ describe('parseWorkspaceSessionSalvaging', () => {
         { id: `bad-b-${w}`, worktreeId }
       ]
     }
+
     const result = parseWorkspaceSessionSalvaging(baseSession({ tabsByWorktree }))
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths).toHaveLength(40)
       expect(result.value.tabsByWorktree['repo-1::/w7']?.map((tab) => tab.id)).toEqual([
@@ -364,7 +407,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
         terminalPtyIncarnationsByPaneKey: { 'tab-1:leaf-1': 'inc-1' }
       })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths.toSorted()).toEqual(['activeRepoId', 'tabsByWorktree'])
       expect(result.value.tabsByWorktree).toEqual({})
@@ -392,7 +437,9 @@ describe('parseWorkspaceSessionSalvaging', () => {
         }
       })
     )
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths).toEqual([`tabGroupLayouts.${WT}`])
       expect(result.value.tabGroupLayouts?.[WT]).toBeUndefined()
@@ -402,6 +449,7 @@ describe('parseWorkspaceSessionSalvaging', () => {
 
   it('drops a recursive entry whose validator overflows instead of resetting the session', () => {
     let layout: Record<string, unknown> = { type: 'leaf', groupId: 'group-deep' }
+
     for (let depth = 0; depth < 3_000; depth += 1) {
       layout = {
         type: 'split',
@@ -410,6 +458,7 @@ describe('parseWorkspaceSessionSalvaging', () => {
         second: { type: 'leaf', groupId: `group-${depth}` }
       }
     }
+
     const result = parseWorkspaceSessionSalvaging(
       baseSession({
         tabsByWorktree: { [WT]: [terminalTab('tab-keep')] },
@@ -418,6 +467,7 @@ describe('parseWorkspaceSessionSalvaging', () => {
     )
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.droppedPaths).toEqual([`tabGroupLayouts.${WT}`])
       expect(result.value.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual(['tab-keep'])

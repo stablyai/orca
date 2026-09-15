@@ -26,19 +26,24 @@ export async function releaseClaudeAcquisition(input: {
   onBackgroundTasksChanged?: ClaudeStructuredSessionAdapterDeps['onBackgroundTasksChanged']
 }): Promise<boolean> {
   const exit = input.exits.get(input.sessionId)
+
   if (!exit || input.sessions.has(input.sessionId) || input.acquisitions.get(input.sessionId)) {
     return closeClaudeSession(input)
   }
+
   const firstProof = exit.closePromise ? await exit.closePromise : false
   // A failed exit-path proof is retained as evidence, not as a terminal result;
   // a release retry must drive a fresh tree verification on the same connection.
   const retriedProof = firstProof || (await exit.connection.close())
+
   if (retriedProof) {
     await input.onExitProven?.(input.sessionId, exit)
     // Keep the first-hand exit evidence indexed until the tree proof succeeds;
     // a failed close must be retryable and cannot look like an absent session.
     input.exits.delete(input.sessionId)
+
     return true
   }
+
   throw claudeAcquisitionCleanupError(exit.connection, exit.error)
 }

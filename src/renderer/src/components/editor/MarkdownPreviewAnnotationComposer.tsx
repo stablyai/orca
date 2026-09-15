@@ -60,9 +60,11 @@ export function MarkdownPreviewAnnotationComposer({
   // Why: scope the add-review-note chord to this composer subtree.
   useEffect(() => {
     const composer = composerRef.current
+
     if (!composer) {
       return
     }
+
     return installOpenDraftAddReviewNoteGuard(composer)
   }, [])
 
@@ -76,12 +78,16 @@ export function MarkdownPreviewAnnotationComposer({
     if (submitting || !trimmed) {
       return
     }
+
     setSubmitting(true)
+
     try {
       const ok = await onSubmit(trimmed)
+
       if (!mountedRef.current) {
         return
       }
+
       if (ok) {
         setBody('')
       }
@@ -119,8 +125,10 @@ export function MarkdownPreviewAnnotationComposer({
           if (event.key === 'Escape') {
             event.preventDefault()
             onCancel()
+
             return
           }
+
           if (event.key === 'Enter' && !event.nativeEvent.isComposing && !event.shiftKey) {
             event.preventDefault()
             void submit()

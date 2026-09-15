@@ -38,16 +38,19 @@ export function createRemountTerminalTabForRecovery(
       trigger: 'external',
       now: Date.now()
     }
+
     let result: TerminalRecoveryRemountResult = {
       remounted: false,
       declinedBy: 'tab-missing'
     }
+
     set((s) => {
       const location = locateTerminalTab(s.tabsByWorktree, tabId)
       // Why re-admit inside the write: the caller's read happened before an
       // async liveness probe, and a concurrent detector may have consumed the
       // budget across it. Locating the row and spending its budget is one step.
       const admission = admitTerminalRecoveryRemount(location?.tab, remountRequest)
+
       if (!location || !admission.admitted) {
         if (admission.admitted) {
           result = { remounted: false, declinedBy: 'tab-missing' }
@@ -55,13 +58,16 @@ export function createRemountTerminalTabForRecovery(
           const { admitted: _admitted, ...decline } = admission
           result = { remounted: false, ...decline }
         }
+
         return s
       }
+
       const { worktreeId, index, tab } = location
       const nextTabs = s.tabsByWorktree[worktreeId].slice()
       const pendingStartup = s.pendingStartupByTabId[tabId]
       // Why: bump generation to remount a pane whose renderer died while its PTY stayed alive, so it reattaches, not spawns.
       const nextTabGeneration = (tab.generation ?? 0) + 1
+
       // An external remount is not a heal attempt, so it writes no ledger. The
       // generation bump alone supersedes any ledger already on the row, which
       // is exactly right: an external remount IS a new trigger.
@@ -69,6 +75,7 @@ export function createRemountTerminalTabForRecovery(
         remountRequest.trigger === 'external'
           ? tab.recovery
           : nextTerminalRecoveryLedger(tab, remountRequest, nextTabGeneration)
+
       nextTabs[index] = {
         ...tab,
         generation: nextTabGeneration,
@@ -81,6 +88,7 @@ export function createRemountTerminalTabForRecovery(
         ...(recovery ? { recovery } : {})
       }
       result = { remounted: true, generation: recovery?.generation ?? 0 }
+
       return {
         tabsByWorktree: {
           ...s.tabsByWorktree,
@@ -98,6 +106,7 @@ export function createRemountTerminalTabForRecovery(
           : {})
       }
     })
+
     return result
   }
 }
@@ -109,16 +118,21 @@ export function createSettleTerminalTabRecovery(
   return (tabId, generation, outcome) => {
     set((s) => {
       const location = locateTerminalTab(s.tabsByWorktree, tabId)
+
       if (!location) {
         return s
       }
+
       const { worktreeId, index, tab } = location
       const recovery = settledTerminalRecoveryLedger(tab, generation, outcome)
+
       if (!recovery) {
         return s
       }
+
       const nextTabs = s.tabsByWorktree[worktreeId].slice()
       nextTabs[index] = { ...tab, recovery }
+
       return { tabsByWorktree: { ...s.tabsByWorktree, [worktreeId]: nextTabs } }
     })
   }
@@ -145,11 +159,14 @@ export function createPurgeWorktreeTerminalState(
   return (worktreeTargets) => {
     const purgeableWorktreeTargets = worktreeTargets.filter((target) => {
       const worktreeId = typeof target === 'string' ? target : target.id
+
       return worktreeId !== FLOATING_TERMINAL_WORKTREE_ID
     })
+
     if (purgeableWorktreeTargets.length === 0) {
       return
     }
+
     set((s) => buildWorktreePurgeState(s, purgeableWorktreeTargets))
   }
 }

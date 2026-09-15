@@ -24,6 +24,7 @@ import {
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const { createReactHookOverrides } = await import('./floating-terminal-panel-test-module-mocks')
+
   return { ...actual, ...createReactHookOverrides() }
 })
 
@@ -178,7 +179,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     runEffects()
     await flushAsyncWork()
     element = await renderPanel(true)
+
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onNewFileTab as () => void)()
     await flushAsyncWork()
 
@@ -204,7 +207,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     })
 
     const element = await renderPanel(true)
+
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onOpenFileTab as () => void)()
     await flushAsyncWork()
 
@@ -247,7 +252,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     ])
 
     const element = await renderPanel(true)
+
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onCloseAllFiles as () => void)()
 
     expect(saveDialogBox.fileId).toBe('file-a')
@@ -263,7 +270,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     ])
 
     const element = await renderPanel(true)
+
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onCloseOthers as (tabId: string) => void)('tab-file-b')
     expect(saveDialogBox.fileId).toBe('file-a')
 
@@ -271,7 +280,9 @@ describe('FloatingTerminalPanel close behavior', () => {
     mocks.closeFile.mockClear()
     hookRuntime.values = []
     const nextElement = await renderPanel(true)
+
     const nextTabBar = findByTypeName(nextElement, 'TabBar')
+
     ;(nextTabBar.props.onCloseToRight as (tabId: string) => void)('tab-file-a')
     expect(saveDialogBox.fileId).toBe('file-b')
     expect(mocks.closeFile).not.toHaveBeenCalledWith('file-c')

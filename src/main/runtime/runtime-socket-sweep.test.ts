@@ -60,9 +60,11 @@ describe('sweepOrphanedRuntimeSockets', () => {
     const userDataPath = '/tmp'
     const transport = createRuntimeTransportMetadata(userDataPath, 12345, 'linux', 'rt_abcdef')
     expect(transport.kind).toBe('unix')
+
     if (transport.kind !== 'unix') {
       throw new Error('expected unix transport')
     }
+
     const socketName = basename(transport.endpoint)
     expect(RUNTIME_SOCKET_NAME_REGEX.test(socketName)).toBe(true)
   })
@@ -73,9 +75,11 @@ describe('sweepOrphanedRuntimeSockets', () => {
     // regex must still match that shape.
     const userDataPath = '/tmp'
     const transport = createRuntimeTransportMetadata(userDataPath, 99, 'darwin', '!!!!')
+
     if (transport.kind !== 'unix') {
       throw new Error('expected unix transport')
     }
+
     const socketName = basename(transport.endpoint)
     expect(RUNTIME_SOCKET_NAME_REGEX.test(socketName)).toBe(true)
     expect(socketName).toBe('o-99-rt.sock')

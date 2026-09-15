@@ -22,9 +22,11 @@ import { normalizeManualRepoOrder } from '../../shared/manual-repo-order'
 
 function rewriteSshPtyId(ptyId: string, oldTargetId: string, newTargetId: string): string | null {
   const parsed = parseAppSshPtyId(ptyId)
+
   if (!parsed || parsed.connectionId !== oldTargetId) {
     return null
   }
+
   return toAppSshPtyId(newTargetId, parsed.relayPtyId)
 }
 
@@ -36,14 +38,18 @@ function rewriteSshPtyIdRecordValues(
   if (!record) {
     return false
   }
+
   let changed = false
+
   for (const [key, ptyId] of Object.entries(record)) {
     const next = rewriteSshPtyId(ptyId, oldTargetId, newTargetId)
+
     if (next) {
       record[key] = next
       changed = true
     }
   }
+
   return changed
 }
 
@@ -54,26 +60,32 @@ export function migrateWorkspaceSessionSshTargetId(
   newTargetId: string
 ): boolean {
   let changed = false
+
   for (const tabs of Object.values(session.tabsByWorktree ?? {})) {
     for (const tab of tabs) {
       if (!tab.ptyId) {
         continue
       }
+
       const next = rewriteSshPtyId(tab.ptyId, oldTargetId, newTargetId)
+
       if (next) {
         tab.ptyId = next
         changed = true
       }
     }
   }
+
   for (const layout of Object.values(session.terminalLayoutsByTabId ?? {})) {
     if (rewriteSshPtyIdRecordValues(layout.ptyIdsByLeafId, oldTargetId, newTargetId)) {
       changed = true
     }
   }
+
   if (rewriteSshPtyIdRecordValues(session.remoteSessionIdsByTabId, oldTargetId, newTargetId)) {
     changed = true
   }
+
   if (session.activeConnectionIdsAtShutdown?.includes(oldTargetId)) {
     session.activeConnectionIdsAtShutdown = [
       ...new Set(
@@ -82,12 +94,14 @@ export function migrateWorkspaceSessionSshTargetId(
     ]
     changed = true
   }
+
   for (const record of Object.values(session.sleepingAgentSessionsByPaneKey ?? {})) {
     if (record.connectionId === oldTargetId) {
       record.connectionId = newTargetId
       changed = true
     }
   }
+
   return changed
 }
 
@@ -106,16 +120,19 @@ export function migrateFolderWorkspaceHostSshTargetId(
   const oldHostId = toSshExecutionHostId(oldTargetId)
   const newHostId = toSshExecutionHostId(newTargetId)
   let changed = false
+
   for (const entry of [...(scope.folderWorkspaces ?? []), ...(scope.projectGroups ?? [])]) {
     if (entry.connectionId === oldTargetId) {
       entry.connectionId = newTargetId
       changed = true
     }
+
     if (entry.executionHostId === oldHostId) {
       entry.executionHostId = newHostId
       changed = true
     }
   }
+
   return changed
 }
 
@@ -128,22 +145,26 @@ export function migrateUiHostScopeSshTargetId(
   const oldHostId = toSshExecutionHostId(oldTargetId)
   const newHostId = toSshExecutionHostId(newTargetId)
   let changed = false
+
   if (ui.workspaceHostScope === oldHostId) {
     ui.workspaceHostScope = newHostId
     changed = true
   }
+
   if (ui.visibleWorkspaceHostIds?.includes(oldHostId)) {
     ui.visibleWorkspaceHostIds = [
       ...new Set(ui.visibleWorkspaceHostIds.map((id) => (id === oldHostId ? newHostId : id)))
     ]
     changed = true
   }
+
   if (ui.workspaceHostOrder?.includes(oldHostId)) {
     ui.workspaceHostOrder = [
       ...new Set(ui.workspaceHostOrder.map((id) => (id === oldHostId ? newHostId : id)))
     ]
     changed = true
   }
+
   if (ui.manualRepoOrder?.some((entry) => entry.hostId === oldHostId)) {
     ui.manualRepoOrder = normalizeManualRepoOrder(
       ui.manualRepoOrder.map((entry) =>
@@ -152,5 +173,6 @@ export function migrateUiHostScopeSshTargetId(
     )
     changed = true
   }
+
   return changed
 }

@@ -14,11 +14,13 @@ import type {
 
 // The turn record this host writes, and the legacy status row an older host sends.
 const turnItem: AgentJournalItemBody = { kind: 'turn', turnId: 'turn-1', state: 'running' }
+
 const legacyTurnRow: AgentJournalItemBody = {
   kind: 'status',
   text: 'Codex is working…',
   turnLifecycle: { turnId: 'turn-1', state: 'running' }
 }
+
 const reasoningRow: AgentJournalItemBody = {
   kind: 'message',
   role: 'reasoning',
@@ -30,10 +32,13 @@ function journalItem(sequence: number, body: AgentJournalItemBody): AgentJournal
 }
 
 let restoreViewport = (): void => {}
+
 beforeAll(() => {
   restoreViewport = installNativeChatMessageListTestViewport()
 })
+
 afterAll(() => restoreViewport())
+
 afterEach(cleanup)
 
 const session: NativeChatLiveSession = {
@@ -238,6 +243,7 @@ describe('NativeChatMessageList turn indicator', () => {
         }
       ]
     }
+
     const { container, rerender } = render(
       <NativeChatMessageList
         session={workingSession}
@@ -473,6 +479,7 @@ describe('NativeChatMessageList turn indicator', () => {
 
   it('keeps the completed duration below the user message', () => {
     const startedAt = Date.now() - 3000
+
     const turnSession: NativeChatLiveSession = {
       ...session,
       status: 'working',
@@ -493,6 +500,7 @@ describe('NativeChatMessageList turn indicator', () => {
         }
       ]
     }
+
     const { rerender } = render(
       <NativeChatMessageList
         session={turnSession}

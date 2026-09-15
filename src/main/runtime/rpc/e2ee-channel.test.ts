@@ -15,6 +15,7 @@ function publicKeyToBase64(key: Uint8Array): string {
 
 function createMockWs() {
   const sent: string[] = []
+
   return {
     OPEN: 1 as const,
     readyState: 1,
@@ -50,11 +51,13 @@ function doHandshake(ctx: ReturnType<typeof setup>) {
     type: 'e2ee_hello',
     publicKeyB64: publicKeyToBase64(ctx.clientKeys.publicKey)
   })
+
   ctx.channel.handleRawMessage(hello)
   const sharedKey = deriveSharedKey(ctx.clientKeys.secretKey, ctx.serverKeys.publicKey)
   ctx.channel.handleRawMessage(
     encrypt(JSON.stringify({ type: 'e2ee_auth', deviceToken: 'valid-token' }), sharedKey)
   )
+
   return sharedKey
 }
 
@@ -82,10 +85,12 @@ describe('E2EEChannel', () => {
 
       const readyMsg = JSON.parse(ctx.ws.sent[0]!)
       expect(readyMsg).toEqual({ type: 'e2ee_ready' })
+
       const authMsg = decrypt(
         ctx.ws.sent[1]!,
         deriveSharedKey(ctx.clientKeys.secretKey, ctx.serverKeys.publicKey)
       )
+
       expect(JSON.parse(authMsg!)).toEqual({ type: 'e2ee_authenticated' })
     })
 
@@ -109,6 +114,7 @@ describe('E2EEChannel', () => {
             ? { deviceId: 'device-1', deviceToken: token, scope: 'runtime' }
             : null
       })
+
       ctx.channel.handleRawMessage(
         JSON.stringify({
           type: 'e2ee_hello',
@@ -361,6 +367,7 @@ describe('E2EEChannel', () => {
       for (let i = 0; i < 4; i++) {
         ctx.channel.handleRawMessage(encrypt('bad', badKey))
       }
+
       expect(ctx.onError).not.toHaveBeenCalled()
 
       ctx.channel.handleRawMessage(encrypt('bad', badKey))
@@ -384,6 +391,7 @@ describe('E2EEChannel', () => {
       for (let i = 0; i < 4; i++) {
         ctx.channel.handleRawMessage(encrypt('bad', badKey))
       }
+
       expect(ctx.onError).not.toHaveBeenCalled()
     })
   })

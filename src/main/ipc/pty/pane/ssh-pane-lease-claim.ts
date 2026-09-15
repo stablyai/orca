@@ -24,11 +24,14 @@ export function claimSshPaneLease(args: {
   leafId: string | undefined
 }): void {
   const { store, connectionId } = args
+
   if (!store || !connectionId) {
     return
   }
+
   const leafId =
     typeof args.leafId === 'string' && isTerminalLeafId(args.leafId) ? args.leafId : null
+
   store.upsertSshRemotePtyLease({
     targetId: connectionId,
     ptyId: getRelayPtyId(connectionId, args.ptyId),
@@ -38,6 +41,7 @@ export function claimSshPaneLease(args: {
     state: 'attached',
     lastAttachedAt: Date.now()
   })
+
   if (leafId) {
     store.supersedeSshRemotePtyLeasesForBoundPane(connectionId, leafId)
   }

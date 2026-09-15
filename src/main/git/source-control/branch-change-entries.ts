@@ -35,6 +35,7 @@ export async function loadBranchChanges(
     ...gitOptionsForWorktree(worktreePath, options),
     maxBuffer: MAX_GIT_SHOW_BYTES
   }
+
   // Why: both diffs are independent, so run them concurrently instead of serializing.
   const [{ stdout }, { stdout: numstat }] = await Promise.all([
     gitExecFileAsync(
@@ -46,19 +47,24 @@ export async function loadBranchChanges(
       gitOptions
     )
   ])
+
   const statsByPath = parseNumstat(numstat)
 
   const entries: GitBranchChangeEntry[] = []
+
   // Why: split on /\r?\n/ so Git's CRLF output on Windows leaves no trailing \r in paths.
   for (const line of stdout.split(/\r?\n/)) {
     if (!line) {
       continue
     }
+
     const entry = parseBranchChangeLine(line)
+
     if (entry) {
       entries.push({ ...entry, ...statsByPath.get(entry.path) })
     }
   }
+
   return entries
 }
 
@@ -83,6 +89,7 @@ export async function loadCommitChanges(
         '-C',
         commitOid
       ]
+
   const numstatArgs = parentOid
     ? ['-c', 'core.quotePath=false', 'diff', '-z', '--numstat', '-M', '-C', parentOid, commitOid]
     : [
@@ -98,27 +105,34 @@ export async function loadCommitChanges(
         '-C',
         commitOid
       ]
+
   const gitOptions = {
     ...gitOptionsForWorktree(worktreePath, options),
     maxBuffer: MAX_GIT_SHOW_BYTES
   }
+
   // Why: the two git queries are independent, so run them in parallel.
   const [{ stdout }, { stdout: numstat }] = await Promise.all([
     gitExecFileAsync(args, gitOptions),
     gitExecFileAsync(numstatArgs, gitOptions)
   ])
+
   const statsByPath = parseNumstat(numstat)
 
   const entries: GitBranchChangeEntry[] = []
+
   for (const line of stdout.split(/\r?\n/)) {
     if (!line) {
       continue
     }
+
     const entry = parseBranchChangeLine(line)
+
     if (entry) {
       entries.push({ ...entry, ...statsByPath.get(entry.path) })
     }
   }
+
   return entries
 }
 
@@ -130,13 +144,16 @@ export function parseBranchChangeLine(line: string): GitBranchChangeEntry | null
   if (rawStatus.startsWith('R') || rawStatus.startsWith('C')) {
     const oldPath = decodeGitCQuotedPath(parts[1] ?? '')
     const path = decodeGitCQuotedPath(parts[2] ?? '')
+
     if (!path) {
       return null
     }
+
     return { path, oldPath, status }
   }
 
   const path = decodeGitCQuotedPath(parts[1] ?? '')
+
   if (!path) {
     return null
   }

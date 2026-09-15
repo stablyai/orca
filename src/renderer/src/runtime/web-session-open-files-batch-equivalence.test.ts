@@ -18,16 +18,22 @@ import {
 vi.mock('../store', () => ({ useAppStore: { setState: vi.fn() } }))
 
 const ENV = 'web-env-1'
+
 const NOW = 1_700_000_000_000
+
 const WORKTREES = ['repo::/w0', 'repo::/w1', 'repo::/w2', 'repo::/bystander']
+
 const PATHS = ['/repo/a.ts', '/repo/b.ts', '/repo/c.ts', '/repo/d.ts']
+
 const ENVS: (string | null | undefined)[] = [ENV, 'other-env', null, undefined]
 
 /** Deterministic LCG so a failing case is reproducible from its seed. */
 function makeRandom(seed: number): () => number {
   let value = seed >>> 0
+
   return () => {
     value = (value * 1664525 + 1013904223) >>> 0
+
     return value / 0x100000000
   }
 }
@@ -83,6 +89,7 @@ function makeCase(seed: number): {
   const random = makeRandom(seed)
   const openFiles: OpenFile[] = []
   const fileCount = Math.floor(random() * 9)
+
   for (let i = 0; i < fileCount; i += 1) {
     const path = pick(random, PATHS)
     const isPreview = random() < 0.2
@@ -104,16 +111,20 @@ function makeCase(seed: number): {
 
   const snapshots: RuntimeMobileSessionTabsResult[] = []
   const snapshotCount = 1 + Math.floor(random() * 7)
+
   for (let s = 0; s < snapshotCount; s += 1) {
     const worktree = pick(random, WORKTREES)
     const tabs: RuntimeMobileSessionTabsResult['tabs'] = []
     const editorCount = Math.floor(random() * 4)
     const usedPaths = new Set<string>()
+
     for (let e = 0; e < editorCount; e += 1) {
       const path = pick(random, PATHS)
+
       if (usedPaths.has(path)) {
         continue
       }
+
       usedPaths.add(path)
       const relativePath = path.slice('/repo/'.length)
       tabs.push(
@@ -145,6 +156,7 @@ function makeCase(seed: number): {
             } as RuntimeMobileSessionTabsResult['tabs'][number])
       )
     }
+
     const activeTab = tabs[0]
     snapshots.push({
       worktree,
@@ -158,6 +170,7 @@ function makeCase(seed: number): {
   }
 
   const activeFile = openFiles[Math.floor(random() * Math.max(openFiles.length, 1))]
+
   return {
     state: baseState({
       openFiles,
@@ -177,20 +190,24 @@ describe('batched open-file reconciliation', () => {
 
   it('matches repeated single-snapshot reconciliation for every seeded case', () => {
     const divergences: string[] = []
+
     for (let seed = 1; seed <= 400; seed += 1) {
       const { state, snapshots } = makeCase(seed)
       const stateCopy = structuredClone(state)
 
       resetModuleState()
       let sequential = state
+
       for (const snapshot of snapshots) {
         const patch = applyWebSessionTabsSnapshot(sequential, snapshot, ENV, NOW)
+
         if (patch !== sequential) {
           sequential = { ...sequential, ...patch }
         }
       }
 
       resetModuleState()
+
       const batched = {
         ...state,
         ...applyWebSessionTabsSnapshots(state, snapshots, ENV, NOW)
@@ -209,6 +226,7 @@ describe('batched open-file reconciliation', () => {
         )
       }
     }
+
     expect(divergences).toEqual([])
   })
 })

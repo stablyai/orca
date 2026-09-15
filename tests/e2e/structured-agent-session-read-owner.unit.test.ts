@@ -23,6 +23,7 @@ import { AgentSessionSubscribers } from '../../src/main/native-chat/agent-sessio
 import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-status-feed'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
+
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call,
   subscribeStructuredAgentSession: mocks.subscribe
@@ -34,14 +35,18 @@ import {
 } from '../../src/renderer/src/components/native-chat/structured-agent-session-read-owner'
 
 const SESSION = 'cursor-body-regression'
+
 const target = { kind: 'local' } as const
+
 const journals = createTrackedJournalOpener()
+
 let root: string
 
 beforeEach(async () => {
   vi.resetAllMocks()
   root = await mkdtemp(join(tmpdir(), 'orca-cursor-body-'))
 })
+
 afterEach(async () => {
   resetStructuredAgentSessionReadOwnersForTests()
   await journals.closeAll()
@@ -59,6 +64,7 @@ async function fixture() {
     },
     journalDir: join(root, 'journal')
   })
+
   async function appendOutput(index: number) {
     await journal.appendItem(
       { provider: 'orca', clientMessageId: `output-${index}` },
@@ -66,9 +72,11 @@ async function fixture() {
       { fence: 1 }
     )
   }
+
   for (let index = 1; index < 99; index += 1) {
     await appendOutput(index)
   }
+
   await journal.appendSubmission({
     clientMessageId: 'pending-send',
     payloadFingerprint: 'prompt',
@@ -76,9 +84,11 @@ async function fixture() {
     fence: 1
   })
   expect(journal.cursor().sequence).toBe(100)
+
   const initial = structuredClone(
     readAgentSessionHistory(journal, { sessionId: SESSION, direction: 'tail' })
   )
+
   const accept = () =>
     journal.resolveDispatch({
       clientMessageId: 'pending-send',
@@ -86,26 +96,32 @@ async function fixture() {
       state: 'accepted',
       providerIdentity: { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 }
     })
+
   return { journal, initial, appendOutput, accept }
 }
 
 describe('structured session cursor/body regression', () => {
   it('replaces retained pending submissions together with a real bounded snapshot at 140', async () => {
     const { journal, initial, appendOutput, accept } = await fixture()
+
     const retained = reduceStructuredAgentSession(EMPTY_STRUCTURED_AGENT_SESSION, {
       type: 'event',
       event: { type: 'snapshot', sessionId: SESSION, page: initial.page, fence: 1 }
     })
+
     expect(retained.submissions[0]?.dispatchState).toBe('pending')
     await accept()
+
     for (let index = 102; index <= 140; index += 1) {
       await appendOutput(index)
     }
+
     const bounded = readAgentSessionHistory(journal, {
       sessionId: SESSION,
       direction: 'tail',
       limit: 1
     }).page
+
     expect(bounded.liveCursor?.sequence).toBe(140)
     expect(bounded.items).not.toContainEqual(retained.items.at(-1))
     expect(bounded.submissions).toEqual([])
@@ -114,6 +130,7 @@ describe('structured session cursor/body regression', () => {
       type: 'event',
       event: { type: 'snapshot', sessionId: SESSION, page: bounded, fence: 1 }
     })
+
     expect(replaced.cursor).toEqual(bounded.liveCursor)
     expect(replaced.submissions).toEqual(bounded.submissions)
     expect(hasUnansweredStructuredAgentSessionDispatch(replaced.submissions, 1)).toBe(false)
@@ -124,6 +141,7 @@ describe('structured session cursor/body regression', () => {
     async (missedRows) => {
       const { journal, appendOutput, accept } = await fixture()
       let hostSummary: AgentSessionStatusSummary | undefined
+
       const feed = new StructuredAgentSessionStatusFeed({
         sessions: new Map([
           [
@@ -141,9 +159,11 @@ describe('structured session cursor/body regression', () => {
           hostSummary = summary
         }
       })
+
       const subscribers = new AgentSessionSubscribers({
         onJournalPublished: (sessionId, published) => feed.publish(sessionId, published)
       })
+
       const delayedOlder = Promise.withResolvers<AgentSessionHistoryResult>()
       let warm = false
       mocks.call.mockImplementation((_target, _method, request: AgentSessionHistoryRequest) => {
@@ -151,10 +171,12 @@ describe('structured session cursor/body regression', () => {
         if (warm && missedRows === 40 && request.direction === 'before') {
           return delayedOlder.promise
         }
+
         const result = readAgentSessionHistory(journal, {
           ...request,
           ...(warm && missedRows === 40 ? { limit: 1 } : {})
         })
+
         return Promise.resolve(
           structuredClone({
             ...result,
@@ -193,14 +215,17 @@ describe('structured session cursor/body regression', () => {
       deactivate()
 
       await accept()
+
       for (let index = 102; index <= 100 + missedRows; index += 1) {
         await appendOutput(index)
       }
+
       const tail = readAgentSessionHistory(journal, {
         sessionId: SESSION,
         direction: 'tail',
         limit: missedRows === 40 ? 1 : 200
       }).page
+
       expect(tail.liveCursor?.sequence).toBe(100 + missedRows)
       expect(tail.submissions).toEqual([])
       feed.publish(SESSION, journal)
@@ -211,6 +236,7 @@ describe('structured session cursor/body regression', () => {
 
       await vi.waitFor(() => expect(owner.getSnapshot().state.cursor).toEqual(journal.cursor()))
       const caughtUp = owner.getSnapshot().state
+
       if (missedRows === 40) {
         expect({
           cursor: caughtUp.cursor?.sequence,

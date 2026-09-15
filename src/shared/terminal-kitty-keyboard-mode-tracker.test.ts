@@ -84,9 +84,11 @@ describe('TerminalKittyKeyboardModeTracker', () => {
 
   it('caps the mirrored stack without losing the current flags', () => {
     const tracker = new TerminalKittyKeyboardModeTracker()
+
     for (let i = 0; i < 40; i++) {
       tracker.scan(`\x1b[>${(i % 3) + 1}u`)
     }
+
     expect(tracker.flags).toBe((39 % 3) + 1)
   })
 
@@ -179,6 +181,7 @@ describe('TerminalKittyKeyboardModeTracker', () => {
     it('ignores values that are not non-negative safe integers', () => {
       const tracker = new TerminalKittyKeyboardModeTracker()
       tracker.resetForSnapshot()
+
       for (const invalid of [-1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 2]) {
         tracker.restoreSnapshotFlags(invalid)
         expect(tracker.snapshotFlags).toBeUndefined()

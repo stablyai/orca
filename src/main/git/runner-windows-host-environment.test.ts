@@ -35,20 +35,24 @@ function createMockChildProcess(pid: number): MockChildProcess {
   child.stderr = new EventEmitter()
   child.pid = pid
   child.kill = vi.fn()
+
   return child
 }
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
+
   const promise = new Promise<void>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return await fn()
   } finally {
@@ -67,6 +71,7 @@ describe('Windows host Git environment readiness', () => {
   afterEach(() => {
     _resetGitAdmissionForTests()
     configureWindowsHostGitEnvironmentReadiness(null)
+
     if (originalPath === undefined) {
       delete process.env.Path
     } else {
@@ -81,6 +86,7 @@ describe('Windows host Git environment readiness', () => {
       const child = createMockChildProcess(1234)
       execFileMock.mockImplementation((_cmd, _args, _options, callback) => {
         callback(null, 'ok', '')
+
         return child
       })
       configureWindowsHostGitEnvironmentReadiness(waitUntilReady)
@@ -162,6 +168,7 @@ describe('Windows host Git environment readiness', () => {
         signal: controller.signal,
         stdio: ['ignore', 'ignore', 'pipe']
       })
+
       controller.abort()
 
       await expect(spawned).rejects.toMatchObject({ name: 'AbortError' })
@@ -180,6 +187,7 @@ describe('Windows host Git environment readiness', () => {
         cwd: String.raw`C:\repo`,
         signal: controller.signal
       })
+
       controller.abort()
 
       await expect(operation).rejects.toMatchObject({ name: 'AbortError' })
@@ -209,6 +217,7 @@ describe('Windows host Git environment readiness', () => {
       const child = createMockChildProcess(1234)
       execFileMock.mockImplementation((_cmd, _args, _options, callback) => {
         callback(null, 'ok', '')
+
         return child
       })
       configureWindowsHostGitEnvironmentReadiness(waitUntilReady)
@@ -231,6 +240,7 @@ describe('Windows host Git environment readiness', () => {
       const child = createMockChildProcess(1234)
       execFileMock.mockImplementation((_cmd, _args, _options, callback) => {
         callback(null, Buffer.from('blob'), Buffer.alloc(0))
+
         return child
       })
       configureWindowsHostGitEnvironmentReadiness(() => ready.promise)
@@ -256,6 +266,7 @@ describe('Windows host Git environment readiness', () => {
         env: { Path: 'stale-stream-path' },
         onStdout: () => {}
       })
+
       expect(spawnMock).not.toHaveBeenCalled()
       ready.resolve()
       await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())

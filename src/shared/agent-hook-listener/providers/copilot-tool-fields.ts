@@ -17,6 +17,7 @@ export function normalizeCopilotEventName(eventName: unknown): unknown {
   if (typeof eventName !== 'string') {
     return eventName
   }
+
   const eventMap: Record<string, string> = {
     sessionStart: 'SessionStart',
     sessionEnd: 'SessionEnd',
@@ -34,6 +35,7 @@ export function normalizeCopilotEventName(eventName: unknown): unknown {
     permissionRequest: 'PermissionRequest',
     notification: 'Notification'
   }
+
   return eventMap[eventName] ?? eventName
 }
 
@@ -44,26 +46,33 @@ export function resolveCopilotEventName(
   const explicit =
     eventName ??
     readFirstString(hookPayload, ['hook_event_name', 'hookEventName', 'hook_type', 'hookType'])
+
   if (explicit) {
     return explicit
   }
+
   if (readFirstString(hookPayload, ['initial_prompt', 'initialPrompt'])) {
     return 'SessionStart'
   }
+
   if (readString(hookPayload, 'prompt')) {
     return 'UserPromptSubmit'
   }
+
   if (readFirstString(hookPayload, ['notification_type', 'notificationType'])) {
     return 'Notification'
   }
+
   if (
     readFirstString(hookPayload, ['transcript_path', 'transcriptPath', 'stop_reason', 'stopReason'])
   ) {
     return 'Stop'
   }
+
   if (hookPayload.error || readFirstString(hookPayload, ['error_context', 'errorContext'])) {
     return 'ErrorOccurred'
   }
+
   if (
     Array.isArray(hookPayload.toolCalls) ||
     readFirstString(hookPayload, ['tool_name', 'toolName', 'name'])
@@ -76,8 +85,10 @@ export function resolveCopilotEventName(
     ) {
       return 'PostToolUse'
     }
+
     return 'PreToolUse'
   }
+
   return eventName
 }
 
@@ -86,14 +97,19 @@ export function readCopilotToolCall(hookPayload: Record<string, unknown>): {
   toolInputSource?: unknown
 } {
   const toolCalls = hookPayload.toolCalls
+
   if (!Array.isArray(toolCalls) || toolCalls.length === 0) {
     return {}
   }
+
   const first = toolCalls[0]
+
   if (typeof first !== 'object' || first === null) {
     return {}
   }
+
   const record = first as Record<string, unknown>
+
   return {
     toolName: readFirstString(record, ['name', 'toolName', 'tool_name']),
     toolInputSource:
@@ -113,6 +129,7 @@ export function extractCopilotToolFields(
   hookPayload: Record<string, unknown>
 ): ToolSnapshot {
   const update: ToolSnapshot = {}
+
   if (eventName === 'PostToolUseFailure' || eventName === 'ErrorOccurred') {
     Object.assign(update, clearActiveToolFieldsUpdate())
   } else if (
@@ -121,8 +138,10 @@ export function extractCopilotToolFields(
     eventName === 'PermissionRequest'
   ) {
     const copilotToolCall = readCopilotToolCall(hookPayload)
+
     const toolName =
       readFirstString(hookPayload, ['tool_name', 'toolName', 'name']) ?? copilotToolCall.toolName
+
     const toolInput =
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.toolInput) ??
@@ -130,6 +149,7 @@ export function extractCopilotToolFields(
       deriveToolInputPreview(toolName, hookPayload.input) ??
       deriveToolInputPreview(toolName, hookPayload.arguments) ??
       deriveToolInputPreview(toolName, copilotToolCall.toolInputSource)
+
     Object.assign(
       update,
       toolUpdate(
@@ -146,21 +166,25 @@ export function extractCopilotToolFields(
         }
       )
     )
+
     if (isAskUserTool(toolName) && toolInput) {
       update.lastAssistantMessage = toolInput
     }
   }
+
   if (eventName === 'PostToolUse') {
     const responseText =
       extractToolResponseText(hookPayload.tool_result) ??
       extractToolResponseText(hookPayload.toolResult) ??
       extractToolResponseText(hookPayload.tool_response) ??
       extractToolResponseText(hookPayload.toolResponse)
+
     if (responseText) {
       update.lastAssistantMessage = responseText
       update.lastAssistantMessageIsToolOutput = true
     }
   }
+
   if (eventName === 'PostToolUseFailure' || eventName === 'ErrorOccurred') {
     const errorText =
       extractToolResponseText(hookPayload.tool_result) ??
@@ -168,32 +192,39 @@ export function extractCopilotToolFields(
       extractToolResponseText(hookPayload.tool_response) ??
       extractToolResponseText(hookPayload.toolResponse) ??
       readFirstString(hookPayload, ['error_message', 'errorMessage', 'error', 'message'])
+
     if (errorText) {
       update.lastAssistantMessage = errorText
       update.lastAssistantMessageIsToolOutput = true
     }
   }
+
   if (eventName === 'Notification') {
     const notificationType = readFirstString(hookPayload, ['notification_type', 'notificationType'])
+
     if (notificationType === 'permission_prompt' || notificationType === 'elicitation_dialog') {
       const message = readFirstString(hookPayload, ['message', 'body', 'text', 'title'])
+
       if (message) {
         update.lastAssistantMessage = message
       }
     }
   }
+
   if (eventName === 'Stop') {
     const direct = readFirstString(hookPayload, [
       'last_assistant_message',
       'lastAssistantMessage',
       'message'
     ])
+
     if (direct) {
       update.lastAssistantMessage = direct
     } else {
       const lastFromTranscript = readLastAssistantFromTranscript(
         hookPayload.transcript_path ?? hookPayload.transcriptPath
       )
+
       if (lastFromTranscript) {
         update.lastAssistantMessage = lastFromTranscript
       } else {
@@ -201,5 +232,6 @@ export function extractCopilotToolFields(
       }
     }
   }
+
   return update
 }

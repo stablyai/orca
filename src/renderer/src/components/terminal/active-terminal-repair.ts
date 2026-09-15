@@ -22,8 +22,10 @@ export function resolveRepairedActiveTerminalTabId(args: {
   if (!shouldRepairActiveTerminalTab(args)) {
     return null
   }
+
   if (args.rememberedTabId && args.tabs.some((tab) => tab.id === args.rememberedTabId)) {
     return args.rememberedTabId
   }
+
   return args.tabs[0].id
 }

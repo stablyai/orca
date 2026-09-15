@@ -13,7 +13,9 @@ import {
 import { claudeStructuredAuthPolicyForSettings } from './claude-structured-auth-policy'
 
 const HOST_ACCOUNT = { id: 'host-a', managedAuthRuntime: 'host' } as ClaudeManagedAccount
+
 const WSL_ACCOUNT = { id: 'wsl-b', managedAuthRuntime: 'wsl' } as ClaudeManagedAccount
+
 const LEGACY_ACCOUNT = { id: 'legacy-c' } as ClaudeManagedAccount
 
 function settings(

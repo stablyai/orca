@@ -9,6 +9,7 @@ const { readSession, configuration } = vi.hoisted(() => ({
 }))
 
 vi.mock('./profile-cloud-session-store', () => ({ readOrcaCloudSession: readSession }))
+
 vi.mock('./profile-cloud-auth-config', () => ({
   getOrcaCloudAuthConfig: () => configuration,
   isOrcaCloudDevAuthEnabled: () => false
@@ -34,6 +35,7 @@ function activeProfile(linked: boolean): ActiveOrcaProfileState {
         }
       : {})
   }
+
   return {
     profile,
     index: { schemaVersion: 1, activeProfileId: profile.id, profiles: [profile] },

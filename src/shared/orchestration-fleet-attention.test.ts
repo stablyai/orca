@@ -41,6 +41,7 @@ describe('orchestration fleet attention', () => {
       outcome: 'succeeded',
       liveness: { verdict: 'exited' }
     })
+
     const root = projectOrchestrationFleetAttention({
       isRoot: true,
       outcome: 'succeeded',
@@ -64,6 +65,7 @@ describe('orchestration fleet attention', () => {
         liveness: { verdict: facts.outcome === 'in_progress' ? 'live' : 'exited' }
       })
     )
+
     const counts = wave
       .flatMap((entry) => entry.categories)
       .reduce<Record<string, number>>(

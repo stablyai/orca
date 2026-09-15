@@ -3,6 +3,7 @@ import type { LegacyWorkerTerminalRecoveryRow } from './types'
 import { planLegacyWorkerTerminalRecovery } from './orchestration-legacy-worker-terminal-recovery'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const INCARNATION_ID = '22222222-2222-4222-8222-222222222222'
 
 function recoveryRow(

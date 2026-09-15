@@ -13,12 +13,15 @@ async function assertCreatedFileRendered(
   filePath: string
 ): Promise<void> {
   const fileName = path.basename(filePath)
+
   const fileId = await page.evaluate(
     ({ fileName, filePath, worktreeId }) => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('Paired web store is unavailable')
       }
+
       state.openFile({
         filePath,
         relativePath: fileName,
@@ -26,16 +29,20 @@ async function assertCreatedFileRendered(
         language: 'plaintext',
         mode: 'edit'
       })
+
       const file = window.__store
         ?.getState()
         .openFiles.find(
           (candidate) => candidate.filePath === filePath && candidate.worktreeId === worktreeId
         )
+
       if (!file) {
         throw new Error(`Paired web editor did not open ${filePath}`)
       }
+
       state.setActiveFile(file.id)
       state.setActiveTabType('editor')
+
       return file.id
     },
     { fileName, filePath, worktreeId }
@@ -62,11 +69,14 @@ async function assertPairedWebFilesystemMutations(
     const match = Object.values(window.__store?.getState().worktreesByRepo ?? {})
       .flat()
       .find((candidate) => candidate.id === id)
+
     if (!match) {
       throw new Error(`Paired web worktree ${id} is unavailable`)
     }
+
     return { hostId: match.hostId ?? 'local', path: match.path }
   }, worktreeId)
+
   const directory = `orca-web-mutation-${Date.now().toString(36)}`
   const join = worktree.hostId.startsWith('ssh:') ? path.posix.join : path.join
   const directoryPath = join(worktree.path, directory)

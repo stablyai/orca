@@ -24,6 +24,7 @@ async function activateWorktree(page: Page, repoPath: string, timeout = 60_000):
               .find((worktree) => {
                 const normalize = (value: string): string =>
                   value.startsWith('/private/var/') ? value.slice('/private'.length) : value
+
                 return normalize(worktree.path) === normalize(targetPath)
               })?.id ?? null,
           repoPath
@@ -31,18 +32,24 @@ async function activateWorktree(page: Page, repoPath: string, timeout = 60_000):
       { timeout, message: 'paired client never received the large-tree worktree' }
     )
     .not.toBeNull()
+
   return page.evaluate((targetPath) => {
     const state = window.__store?.getState()
+
     const worktree = state?.allWorktrees().find((entry) => {
       const normalize = (value: string): string =>
         value.startsWith('/private/var/') ? value.slice('/private'.length) : value
+
       return normalize(entry.path) === normalize(targetPath)
     })
+
     if (!state || !worktree) {
       throw new Error('large-tree worktree is unavailable')
     }
+
     state.setActiveRepo(worktree.repoId)
     state.setActiveWorktree(worktree.id)
+
     return worktree.id
   }, repoPath)
 }
@@ -61,25 +68,31 @@ async function expectQuickOpenAndRuntimeHealthy(
   const input = dialog.getByPlaceholder('Go to file...')
   const loading = dialog.getByText('Loading files...')
   await client.page.clock.install()
+
   const queryOracle = async (targetPath: string) =>
     client.page.evaluate(
       async ({ environmentId, worktreeId, targetPath }) => {
         const query = targetPath.split('/').at(-1)!
+
         const response = await window.api.runtimeEnvironments.call({
           selector: environmentId,
           method: 'files.searchPaths',
           params: { worktree: `id:${worktreeId}`, query, limit: 32, mode: 'quick-open' }
         })
+
         if (!response.ok) {
           throw new Error(`files.searchPaths oracle failed: ${JSON.stringify(response)}`)
         }
+
         const oracle = {
           files: response.result.files.map((file) => file.relativePath),
           totalCount: response.result.totalCount,
           truncated: response.result.truncated
         }
+
         const encodedOracle = new TextEncoder().encode(JSON.stringify(oracle))
         const digest = await crypto.subtle.digest('SHA-256', encodedOracle)
+
         return {
           ...oracle,
           oracleByteLength: encodedOracle.byteLength,
@@ -91,8 +104,10 @@ async function expectQuickOpenAndRuntimeHealthy(
       },
       { environmentId: client.environmentId, worktreeId, targetPath }
     )
+
   for (const targetPath of [fixture.gitIgnoredTargetPath, fixture.orcaIgnoredTargetPath]) {
     const filename = targetPath.split('/').at(-1)!
+
     const stat = await client.page.evaluate(
       async ({ environmentId, worktreeId, targetPath }) => {
         const response = await window.api.runtimeEnvironments.call({
@@ -100,13 +115,16 @@ async function expectQuickOpenAndRuntimeHealthy(
           method: 'files.stat',
           params: { worktree: `id:${worktreeId}`, relativePath: targetPath }
         })
+
         if (!response.ok) {
           throw new Error(`files.stat oracle failed: ${JSON.stringify(response)}`)
         }
+
         return response.result
       },
       { environmentId: client.environmentId, worktreeId, targetPath }
     )
+
     expect(stat.isDirectory).toBe(false)
     expect(stat.size).toBeGreaterThanOrEqual(0)
 
@@ -158,7 +176,9 @@ async function expectQuickOpenAndRuntimeHealthy(
       }),
     { environmentId: client.environmentId }
   )
+
   expect(response.ok).toBe(true)
+
   if (response.ok) {
     expect(response.result.worktrees.some((worktree) => worktree.id === worktreeId)).toBe(true)
   }
@@ -170,10 +190,12 @@ test('finds paths beyond the old prefix on a headed paired runtime @headful', as
   test.setTimeout(240_000)
   const fixture = createPairedQuickOpenLargeTreeFixture()
   let client: PairedElectronClient | null = null
+
   try {
     await waitForSessionReady(orcaPage)
     await orcaPage.evaluate(async (repoPath) => {
       const store = window.__store
+
       if (!store || !(await store.getState().addRepoPath(repoPath))) {
         throw new Error('headed host could not add the large-tree repo')
       }
@@ -198,11 +220,13 @@ test('finds paths beyond the old prefix on a headless paired runtime', async (//
   const fixture = createPairedQuickOpenLargeTreeFixture()
   const host = await launchHeadlessPairedRuntimeHost()
   let client: PairedElectronClient | null = null
+
   try {
     const added = await host.client.call<{ repo: { id: string } }>('repo.add', {
       path: fixture.root,
       kind: 'git'
     })
+
     await host.client.call('repo.update', {
       repo: `id:${added.result.repo.id}`,
       updates: { externalWorktreeVisibility: 'show' }

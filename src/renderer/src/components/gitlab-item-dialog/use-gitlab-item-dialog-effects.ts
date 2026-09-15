@@ -16,8 +16,10 @@ export function useGitLabItemDetailsEffect(
       setLoading(false)
       setError(null)
       setEditingDetails(false)
+
       return
     }
+
     let stale = false
     setLoading(true)
     setError(null)
@@ -27,10 +29,13 @@ export function useGitLabItemDetailsEffect(
         if (stale) {
           return
         }
+
         if (!data) {
           setError('Item not found.')
+
           return
         }
+
         setDetails(data as GitLabWorkItemDetails)
       })
       .catch((err) => {
@@ -43,6 +48,7 @@ export function useGitLabItemDetailsEffect(
           setLoading(false)
         }
       })
+
     return () => {
       stale = true
     }
@@ -72,6 +78,7 @@ export function useGitLabItemScopeResetEffect(
     setReviewerUpdating,
     setTitleDraft
   } = state
+
   // Why: clear item-scoped dialog state when the sheet target changes. The
   // top-level comment draft is reconciled during render so it cannot flash stale.
   useEffect(() => {

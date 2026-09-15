@@ -27,7 +27,9 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     if (session.disposed) {
       return
     }
+
     const currentPtyId = session.transport.getPtyId()
+
     if (
       !currentPtyId ||
       // Why: this exit was already handled — onExit guards it too, but skipping here avoids a redundant shouldReconcile evaluation.
@@ -42,6 +44,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     ) {
       return
     }
+
     session.onExit(currentPtyId)
   }
 
@@ -50,6 +53,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     livenessRequestedAt = performance.now()
   ): void => {
     const requestedPtyId = session.transport.getPtyId()
+
     if (
       !requestedPtyId ||
       requestedPtyId === session.handledExitPtyId ||
@@ -60,6 +64,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     }
 
     let livenessPromise: Promise<boolean | null>
+
     try {
       livenessPromise = Promise.resolve(hasPty(requestedPtyId))
     } catch {
@@ -71,7 +76,9 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
         if (session.disposed) {
           return
         }
+
         const currentPtyId = session.transport.getPtyId()
+
         if (
           !currentPtyId ||
           currentPtyId !== requestedPtyId ||
@@ -86,6 +93,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
         ) {
           return
         }
+
         session.onExit(currentPtyId)
       })
       .catch(() => {})
@@ -96,6 +104,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.agentCompletionCoordinator.startProcessTracking()
       // Why: the hidden-delivery gate must follow every pane visibility flip.
       session.syncHiddenRendererPtyDelivery()
+
       if (!session.deps.isVisibleRef.current) {
         session.pendingVisibleRemoteViewportClaim = false
       }
@@ -120,18 +129,24 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
         if (claimedProviderSessions?.has(session.hibernatedWakeInFlightClaimKey)) {
           return null
         }
+
         claimedProviderSessions?.add(session.hibernatedWakeInFlightClaimKey)
+
         return session.hibernatedWakeInFlightClaimKey
       }
+
       const consumedClaimKey = session.consumeHibernatedAgentWake(claimedProviderSessions)
+
       if (consumedClaimKey) {
         return consumedClaimKey
       }
+
       // Why: wake arrived mid-hibernation-kill before onExit armed the wake target (transport still bound to the dying PTY).
       // Only the exact PTY marked for suppressed shutdown may latch — never a stale/manual record beside an ordinary live PTY.
       const state = useAppStore.getState()
       const recordEntry = session.getSleepingRecordForPane(state)
       const currentPtyId = session.transport.getPtyId()
+
       if (
         recordEntry &&
         isPassiveCompletedHibernationEvidence(recordEntry.record) &&
@@ -143,13 +158,17 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
         session.transport.getPtyId() === currentPtyId
       ) {
         const claimKey = getProviderSessionClaimKey(recordEntry.record)
+
         if (claimedProviderSessions?.has(claimKey)) {
           return null
         }
+
         claimedProviderSessions?.add(claimKey)
         session.pendingHibernatedWakeTarget = { ptyId: currentPtyId, record: recordEntry.record }
+
         return claimKey
       }
+
       return null
     },
     sampleForegroundAgentOnFocus() {
@@ -160,6 +179,7 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       if (session.shiftEnterReconfirmTimer !== null) {
         clearTimeout(session.shiftEnterReconfirmTimer)
       }
+
       // Why: confirm the composer only after the Shift+Enter burst goes idle, preserving rapid multiline input.
       session.shiftEnterReconfirmTimer = setTimeout(() => {
         session.shiftEnterReconfirmTimer = null
@@ -179,16 +199,20 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       // A successor can claim the numeric pane slot before this retired
       // binding's disposal callback runs; do not clear its pane-scoped error.
       const currentPaneTransport = session.deps.paneTransportsRef.current.get(session.pane.id)
+
       if (!currentPaneTransport || currentPaneTransport === session.transport) {
         session.deps.onPtyErrorClearedRef?.current?.(session.pane.id)
       }
+
       // Why: a detached client stops observing the pane's bytes, so it must cede
       // agent-status authority back to the host on the next mirrored snapshot.
       session.releaseRendererOwnedAgentStatusPane?.()
       session.directSshPaneRetrySettlementCancelled = true
+
       for (const timer of session.directSshPaneRetrySettlementTimers) {
         clearTimeout(timer)
       }
+
       session.directSshPaneRetrySettlementTimers.clear()
       // Why: a stalled xterm replay may never reach its finally; release live-frame credit when this renderer no longer owns the stream.
       const queue = session.deferredReattachLiveData
@@ -214,17 +238,21 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.startupGridSettleHandle?.cancel()
       session.startupGridSettleHandle = null
       session.ptySizeReassertion.dispose()
+
       if (session.pendingForegroundGridDriftCheckRaf !== null) {
         cancelAnimationFrame(session.pendingForegroundGridDriftCheckRaf)
         session.pendingForegroundGridDriftCheckRaf = null
       }
+
       // Why: a pane unmount must never leave its PTY delivery gated — the parked watcher or remounted pane re-decides.
       session.releaseHiddenRendererPtyDelivery()
+
       if (session.terminalKeyTargetSupportsEvents) {
         session.terminalKeyTarget.removeEventListener('keydown', session.onTerminalKeyDown, {
           capture: true
         })
       }
+
       session.clearPendingTerminalInputIntent()
       session.pendingTerminalInputWrite = null
       session.interruptInference.dispose()
@@ -232,19 +260,23 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       // Why release, not cancel: the pending settle belongs to the turn, not to
       // this pane — a park mid-settle hands it to the parked watcher instead.
       session.releaseCommandCodeDoneSettleExecutor()
+
       if (session.shiftEnterReconfirmTimer !== null) {
         clearTimeout(session.shiftEnterReconfirmTimer)
         session.shiftEnterReconfirmTimer = null
       }
+
       // Why: resolve in-flight passphrase-gate waits so their zustand subscribers + async IIFEs don't hang when the pane is torn down before SSH state changes.
       while (session.waitTeardowns.length > 0) {
         const teardown = session.waitTeardowns.pop()
         teardown?.()
       }
+
       if (session.startupInjectTimer !== null) {
         clearTimeout(session.startupInjectTimer)
         session.startupInjectTimer = null
       }
+
       session.cleanupStartupDraftPasteTimers()
       session.releaseUnattemptedStartupDraftPasteDelivery()
       session.unregisterAgentHookTerminalLifecycle()
@@ -253,10 +285,12 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.pendingTerminalBellNotification = false
       session.clearTerminalBellNotificationTimer()
       session.clearReattachIdleAgentCursorResetTimer()
+
       if (session.alternateScreenBackgroundRepaintTimer !== null) {
         clearTimeout(session.alternateScreenBackgroundRepaintTimer)
         session.alternateScreenBackgroundRepaintTimer = null
       }
+
       session.cleanupHiddenOutputRestoreDeferredRetry()
       session.cleanupHiddenOutputRestoreForegroundDeadline()
       session.cleanupHiddenOutputRestoreFloodRepaint()
@@ -270,22 +304,27 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
       session.clearPanePtyFitBinding()
       discardTerminalOutput(session.pane.terminal)
       session.unregisterE2ePtyDataInjection()
+
       if (session.agentTaskCompleteSettingsUnsubscribe !== null) {
         session.agentTaskCompleteSettingsUnsubscribe()
         session.agentTaskCompleteSettingsUnsubscribe = null
       }
+
       if (session.unsubscribeWindowsDoneTerminalModeReset !== null) {
         session.unsubscribeWindowsDoneTerminalModeReset()
         session.unsubscribeWindowsDoneTerminalModeReset = null
       }
+
       if (session.connectFrame !== null) {
         // Why: cancel the queued connect frame so a disposed pane (StrictMode/split-group remount) can't reattach the PTY and steal the live pane's handler wiring.
         session.cancelScheduledConnectFrame()
       }
+
       if (session.connectFallbackTimer !== null) {
         clearTimeout(session.connectFallbackTimer)
         session.connectFallbackTimer = null
       }
+
       session.imeCompositionRouteDisposable.dispose()
       session.onDataDisposable.dispose()
       session.userInputActivityDisposable?.dispose()
@@ -296,10 +335,12 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
         session.onHeldPtyResizeFlush
       )
       session.geometryReportObserver?.disconnect()
+
       if (session.pendingGeometryReportRaf !== null) {
         cancelAnimationFrame(session.pendingGeometryReportRaf)
         session.pendingGeometryReportRaf = null
       }
+
       session.commandLifecycle.dispose()
       session.deferredCommandFinishedStatusDrop = null
       session.visibleForegroundSamplePending = false

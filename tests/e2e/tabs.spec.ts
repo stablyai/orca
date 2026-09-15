@@ -50,6 +50,7 @@ async function closeTabFromTabBar(page: Page, tabId: string): Promise<void> {
       timeout: 5_000
     })
     .toBe(true)
+
   if (await confirmation.isVisible()) {
     await confirmation.getByRole('button', { name: 'Stop and Close', exact: true }).click()
   }
@@ -69,6 +70,7 @@ async function countRenderedTabs(page: Page): Promise<number> {
 async function getDomActiveTabId(page: Page): Promise<string | null> {
   return page.evaluate((selector) => {
     const match = document.querySelector(`${selector}[data-active="true"]`)
+
     return match?.getAttribute('data-tab-id') ?? null
   }, SORTABLE_TAB)
 }
@@ -76,9 +78,11 @@ async function getDomActiveTabId(page: Page): Promise<string | null> {
 async function getFocusedTerminalTabId(page: Page): Promise<string | null> {
   return page.evaluate(() => {
     const active = document.activeElement
+
     if (!(active instanceof HTMLElement) || !active.classList.contains('xterm-helper-textarea')) {
       return null
     }
+
     return active.closest('[data-terminal-tab-id]')?.getAttribute('data-terminal-tab-id') ?? null
   })
 }
@@ -165,14 +169,17 @@ test.describe('Tabs', () => {
       (knownFileIds) => {
         const state = window.__store?.getState()
         const file = state?.openFiles.find((candidate) => candidate.id === state.activeFileId)
+
         if (!file || knownFileIds.includes(file.id)) {
           return null
         }
+
         return { id: file.id, filePath: file.filePath }
       },
       preExistingFileIds,
       { timeout: 25_000 }
     )
+
     const createdFile = (await createdFileHandle.jsonValue())!
     createdFilePath = createdFile.filePath
 
@@ -311,10 +318,12 @@ test.describe('Tabs', () => {
     const domOrderBefore = await orcaPage.$$eval(SORTABLE_TAB, (nodes) =>
       nodes.map((n) => (n as HTMLElement).dataset.tabId ?? '')
     )
+
     expect(domOrderBefore.length).toBeGreaterThanOrEqual(2)
 
     await orcaPage.evaluate((targetWorktreeId) => {
       const store = window.__store
+
       if (!store) {
         return
       }
@@ -322,6 +331,7 @@ test.describe('Tabs', () => {
       const state = store.getState()
       const groups = state.groupsByWorktree[targetWorktreeId] ?? []
       const activeGroupId = state.activeGroupIdByWorktree[targetWorktreeId]
+
       const activeGroup = activeGroupId
         ? groups.find((group) => group.id === activeGroupId)
         : groups[0]
@@ -332,11 +342,14 @@ test.describe('Tabs', () => {
           activeGroup.tabOrder[0],
           ...activeGroup.tabOrder.slice(2)
         ]
+
         state.reorderUnifiedTabs(activeGroup.id, nextOrder)
+
         return
       }
 
       const terminalOrder = (state.tabsByWorktree[targetWorktreeId] ?? []).map((tab) => tab.id)
+
       if (terminalOrder.length >= 2) {
         state.setTabBarOrder(targetWorktreeId, [
           terminalOrder[1],
@@ -366,11 +379,14 @@ test.describe('Tabs', () => {
 
     await orcaPage.evaluate((targetWorktreeId) => {
       const store = window.__store
+
       if (!store) {
         return
       }
+
       const state = store.getState()
       const existing = (state.tabsByWorktree[targetWorktreeId] ?? []).length
+
       for (let i = existing; i < 2; i++) {
         state.createTab(targetWorktreeId)
       }
@@ -382,6 +398,7 @@ test.describe('Tabs', () => {
     const domOrderBefore = await orcaPage.$$eval(SORTABLE_TAB, (nodes) =>
       nodes.map((n) => (n as HTMLElement).dataset.tabId ?? '')
     )
+
     const [firstTabId, secondTabId] = domOrderBefore
     expect(firstTabId).toBeTruthy()
     expect(secondTabId).toBeTruthy()
@@ -446,11 +463,14 @@ test.describe('Tabs', () => {
     // already exercised by other tests in this file.
     await orcaPage.evaluate((targetWorktreeId) => {
       const store = window.__store
+
       if (!store) {
         return
       }
+
       const state = store.getState()
       const existing = (state.tabsByWorktree[targetWorktreeId] ?? []).length
+
       for (let i = existing; i < 3; i++) {
         state.createTab(targetWorktreeId)
       }
@@ -469,18 +489,23 @@ test.describe('Tabs', () => {
     // the end so the visible order becomes [b, c, a].
     await orcaPage.evaluate((targetWorktreeId) => {
       const store = window.__store
+
       if (!store) {
         return
       }
+
       const state = store.getState()
       const groups = state.groupsByWorktree[targetWorktreeId] ?? []
       const activeGroupId = state.activeGroupIdByWorktree[targetWorktreeId]
+
       const activeGroup = activeGroupId
         ? groups.find((group) => group.id === activeGroupId)
         : groups[0]
+
       if (!activeGroup) {
         return
       }
+
       const [first, ...rest] = activeGroup.tabOrder
       state.reorderUnifiedTabs(activeGroup.id, [...rest, first])
     }, worktreeId)
@@ -522,10 +547,13 @@ test.describe('Tabs', () => {
     // Need a second tab so we can close one without deactivating the worktree.
     await orcaPage.evaluate((targetWorktreeId) => {
       const store = window.__store
+
       if (!store) {
         return
       }
+
       const state = store.getState()
+
       if ((state.tabsByWorktree[targetWorktreeId] ?? []).length < 2) {
         state.createTab(targetWorktreeId)
       }
@@ -560,10 +588,13 @@ test.describe('Tabs', () => {
 
     await orcaPage.evaluate((targetWorktreeId) => {
       const store = window.__store
+
       if (!store) {
         return
       }
+
       const state = store.getState()
+
       if ((state.tabsByWorktree[targetWorktreeId] ?? []).length < 2) {
         state.createTab(targetWorktreeId)
       }

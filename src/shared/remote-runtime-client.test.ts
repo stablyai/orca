@@ -31,6 +31,7 @@ afterEach(async () => {
           for (const client of server.clients) {
             client.close()
           }
+
           server.close(() => resolve())
         })
     )
@@ -88,6 +89,7 @@ describe('subscribeRemoteRuntimeRequest', () => {
     const server = await createSubscriptionServer()
     const onResponse = vi.fn()
     const onError = vi.fn()
+
     const subscription = await subscribeRemoteRuntimeRequest(
       server.pairing,
       'network.browserTunnel',
@@ -120,15 +122,19 @@ describe('subscribeRemoteRuntimeRequest', () => {
     const releaseSocket = vi.fn()
     const canSend = vi.fn(() => false)
     let readBufferedAmount: (() => number) | undefined
+
     const outboundMemoryBudget = {
       claimQueuedBytes: vi.fn(() => releaseQueued),
       registerBufferedAmount: vi.fn((read: () => number) => {
         readBufferedAmount = read
+
         return { canSend, release: releaseSocket }
       })
     }
+
     const onResponse = vi.fn()
     const onClose = vi.fn()
+
     const subscription = await subscribeRemoteRuntimeRequest(
       server.pairing,
       'network.browserTunnel',
@@ -140,6 +146,7 @@ describe('subscribeRemoteRuntimeRequest', () => {
         outboundQueue: { softCapBytes: 1, maxQueuedBytes: 1024, maxQueuedFrames: 8 }
       }
     )
+
     await vi.waitFor(() => expect(onResponse).toHaveBeenCalled())
 
     expect(subscription.sendBinary(new Uint8Array([9]))).toBe(true)
@@ -160,6 +167,7 @@ describe('subscribeRemoteRuntimeRequest', () => {
     const server = await createSubscriptionServer()
     const releaseSocket = vi.fn()
     const onError = vi.fn()
+
     const subscription = await subscribeRemoteRuntimeRequest(
       server.pairing,
       'network.browserTunnel',
@@ -187,6 +195,7 @@ describe('subscribeRemoteRuntimeRequest', () => {
 
   it('detaches subscription socket listeners after close', async () => {
     const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
+
     try {
       const server = await createSubscriptionServer()
       const onResponse = vi.fn()
@@ -251,6 +260,7 @@ describe('subscribeRemoteRuntimeRequest', () => {
 
   it('closes established subscription sockets after terminal protocol errors', async () => {
     const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
+
     try {
       const server = await createSubscriptionServer({ sendMismatchedResponseAfterSubscribe: true })
       const onResponse = vi.fn()
@@ -289,6 +299,7 @@ describe('subscribeRemoteRuntimeRequest', () => {
 describe('sendRemoteRuntimeRequest', () => {
   it('keeps generic native authentication free of Electron placement support', async () => {
     let receivedAuth: Record<string, unknown> | null = null
+
     const server = await createOneShotServer({
       onAuth: (auth) => {
         receivedAuth = auth
@@ -309,6 +320,7 @@ describe('sendRemoteRuntimeRequest', () => {
 
   it('advertises browser placement support only when the Electron caller opts in', async () => {
     let receivedAuth: Record<string, unknown> | null = null
+
     const server = await createOneShotServer({
       onAuth: (auth) => {
         receivedAuth = auth
@@ -390,12 +402,15 @@ describe('sendRemoteRuntimeRequest', () => {
 
   it('aborts and closes an in-flight one-shot socket', async () => {
     let requestObserved: () => void = () => {}
+
     const observed = new Promise<void>((resolve) => {
       requestObserved = resolve
     })
+
     const server = await createOneShotServer({ onRequest: requestObserved })
     const closeSpy = vi.spyOn(WebSocketClient.prototype, 'close')
     const controller = new AbortController()
+
     try {
       const request = sendRemoteRuntimeRequest(
         server.pairing,
@@ -405,6 +420,7 @@ describe('sendRemoteRuntimeRequest', () => {
         undefined,
         controller.signal
       )
+
       await observed
 
       controller.abort()
@@ -451,6 +467,7 @@ describe('sendRemoteRuntimeRequest', () => {
 
   it('sends orchestration authentication fields in the admitted encrypted request', async () => {
     let receivedRequest: Record<string, unknown> | null = null
+
     const server = await createOneShotServer({
       onRequest: (request) => {
         receivedRequest = request
@@ -480,6 +497,7 @@ describe('sendRemoteRuntimeRequest', () => {
 
   it('omits optional request fields for hosts that predate them', async () => {
     let receivedRequest: Record<string, unknown> | null = null
+
     const server = await createOneShotServer({
       onRequest: (request) => {
         receivedRequest = request
@@ -500,6 +518,7 @@ describe('sendRemoteRuntimeRequest', () => {
 
   it('detaches one-shot socket listeners after a successful response', async () => {
     const offSpy = vi.spyOn(WebSocketClient.prototype, 'off')
+
     try {
       const server = await createOneShotServer()
 
@@ -532,19 +551,24 @@ async function createSubscriptionServer(
 }> {
   const serverKeyPair = generateKeyPair()
   let resolveBinary: (bytes: Uint8Array) => void = () => {}
+
   const nextBinary = new Promise<Uint8Array>((resolve) => {
     resolveBinary = resolve
   })
+
   let resolveAuth: (auth: unknown) => void = () => {}
+
   const nextAuth = new Promise<unknown>((resolve) => {
     resolveAuth = resolve
   })
+
   // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
   const wss = new WebSocketServer({
     host: '127.0.0.1',
     port: 0,
     autoPong: options.disableAutoPong !== true
   })
+
   servers.push(wss)
 
   wss.on('connection', (ws) => {
@@ -556,14 +580,18 @@ async function createSubscriptionServer(
         if (!sharedKey) {
           return
         }
+
         const plaintext = decryptBytes(new Uint8Array(data as Buffer), sharedKey)
+
         if (plaintext) {
           resolveBinary(plaintext)
         }
+
         return
       }
 
       const frame = data.toString()
+
       if (!sharedKey) {
         const hello = JSON.parse(frame) as { publicKeyB64: string }
         sharedKey = deriveSharedKey(
@@ -571,17 +599,21 @@ async function createSubscriptionServer(
           publicKeyFromBase64(hello.publicKeyB64)
         )
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))
+
         return
       }
 
       const plaintext = decrypt(frame, sharedKey)
+
       if (!plaintext) {
         return
       }
+
       if (!authenticated) {
         resolveAuth(JSON.parse(plaintext))
         authenticated = true
         sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
+
         return
       }
 
@@ -593,6 +625,7 @@ async function createSubscriptionServer(
         result: { type: 'subscribed' },
         _meta: { runtimeId: 'runtime-test' }
       })
+
       if (options.sendMismatchedResponseAfterSubscribe) {
         sendEncrypted(ws, sharedKey, {
           id: `${request.id}-mismatch`,
@@ -607,6 +640,7 @@ async function createSubscriptionServer(
 
   await new Promise<void>((resolve) => wss.once('listening', resolve))
   const address = wss.address() as AddressInfo
+
   const pairing = parsePairingCode(
     encodePairingOffer({
       v: 2,
@@ -615,9 +649,11 @@ async function createSubscriptionServer(
       publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
     })
   )
+
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
+
   return { pairing, nextBinary, nextAuth }
 }
 
@@ -638,6 +674,7 @@ async function createClosingServer(
 
   await new Promise<void>((resolve) => wss.once('listening', resolve))
   const address = wss.address() as AddressInfo
+
   const pairing = parsePairingCode(
     encodePairingOffer({
       v: 2,
@@ -646,9 +683,11 @@ async function createClosingServer(
       publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
     })
   )
+
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
+
   return { pairing }
 }
 
@@ -662,6 +701,7 @@ async function createInvalidHandshakeServer(): Promise<{ pairing: PairingOffer }
 
   await new Promise<void>((resolve) => wss.once('listening', resolve))
   const address = wss.address() as AddressInfo
+
   const pairing = parsePairingCode(
     encodePairingOffer({
       v: 2,
@@ -670,9 +710,11 @@ async function createInvalidHandshakeServer(): Promise<{ pairing: PairingOffer }
       publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
     })
   )
+
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
+
   return { pairing }
 }
 
@@ -696,7 +738,9 @@ async function createOneShotServer(
       if (isBinary) {
         return
       }
+
       const frame = data.toString()
+
       if (!sharedKey) {
         const hello = JSON.parse(frame) as { publicKeyB64: string }
         sharedKey = deriveSharedKey(
@@ -704,30 +748,39 @@ async function createOneShotServer(
           publicKeyFromBase64(hello.publicKeyB64)
         )
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))
+
         return
       }
 
       const plaintext = decrypt(frame, sharedKey)
+
       if (!plaintext) {
         return
       }
+
       if (!authenticated) {
         options.onAuth?.(JSON.parse(plaintext) as Record<string, unknown>)
         authenticated = true
         sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
+
         return
       }
 
       const request = JSON.parse(plaintext) as { id: string } & Record<string, unknown>
       options.onRequest?.(request)
+
       if (options.sendUndecryptableResponse) {
         ws.send('not-an-encrypted-frame')
+
         return
       }
+
       const key = sharedKey
+
       const keepalive = setInterval(() => {
         sendEncrypted(ws, key, { _keepalive: true })
       }, 100)
+
       ws.once('close', () => clearInterval(keepalive))
       setTimeout(() => {
         clearInterval(keepalive)
@@ -747,6 +800,7 @@ async function createOneShotServer(
 
   await new Promise<void>((resolve) => wss.once('listening', resolve))
   const address = wss.address() as AddressInfo
+
   const pairing = parsePairingCode(
     encodePairingOffer({
       v: 2,
@@ -755,8 +809,10 @@ async function createOneShotServer(
       publicKeyB64: publicKeyToBase64(serverKeyPair.publicKey)
     })
   )
+
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
+
   return { pairing }
 }

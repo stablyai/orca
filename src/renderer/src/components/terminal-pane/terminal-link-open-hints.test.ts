@@ -73,6 +73,7 @@ describe('terminalUrlOpenHintOptionsFor', () => {
   // "open in Orca" there would advertise a click that lands somewhere else.
   it('drops inversion while a remote runtime is active', () => {
     stubPlatform(true)
+
     const options = terminalUrlOpenHintOptionsFor({
       openLinksInApp: false,
       openLinksInAppModifierInverts: true,
@@ -109,6 +110,7 @@ describe('terminalUrlOpenHintOptionsFor', () => {
     ['unknown', { kind: 'unknown' }] as const
   ])('drops inversion for a %s-owned pane without an active runtime', (_kind, sourceOwner) => {
     stubPlatform(true)
+
     const options = terminalUrlOpenHintOptionsFor(
       {
         openLinksInApp: false,
@@ -126,6 +128,7 @@ describe('terminalUrlOpenHintOptionsFor', () => {
   // can still reach Orca while some other pane's runtime is active.
   it('keeps inversion for a local pane while a remote runtime is active', () => {
     stubPlatform(true)
+
     const options = terminalUrlOpenHintOptionsFor(
       {
         openLinksInApp: false,

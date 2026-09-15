@@ -5,17 +5,28 @@ import type { WebContents } from 'electron'
 // creates a new BrowserWindow and re-calls registerPtyHandlers, leaking
 // duplicate listeners that forward every event twice.
 export let localDataUnsub: (() => void) | null = null
+
 export let localExitUnsub: (() => void) | null = null
+
 export let localBackgroundStreamUnsub: (() => void) | null = null
+
 export let localWriteUnavailableUnsub: (() => void) | null = null
+
 export let didFinishLoadHandler: (() => void) | null = null
+
 export let didFinishLoadWebContents: WebContents | null = null
+
 export let rendererLifecycleResetWebContents: WebContents | null = null
+
 export let rendererLifecycleResetHandler: (() => void) | null = null
+
 // Why: the hidden-delivery gate registries mirror renderer state; a reload/crash destroys owners without unregistering, so they reset when the renderer is replaced (drop memory preserved).
 export let rendererGateResetLoadHandler: (() => void) | null = null
+
 export let rendererGateResetGoneHandler: (() => void) | null = null
+
 export let rendererGateResetWebContents: WebContents | null = null
+
 // Why: the backgrounded-delivery dedupe map lives in the registerPtyHandlers closure but teardown funnels through module-scope clearProviderPtyState.
 // Why null-init + wrapper fn: see delivery/debug.ts — rolldown const-folds `export let fn = noop` bridges (STA-5661).
 let clearBackgroundedDeliverySyncForPtyImpl: ((id: string) => void) | null = null
@@ -36,6 +47,7 @@ export let rendererDidStartNavigationHandler:
 
 // Why: Restart daemon must re-bind provider→renderer listeners after replaceDaemonProvider swaps localProvider, else subscribers stay bound to the disposed adapter and new PTY data silently drops.
 export let rebindProviderListeners: (() => void) | null = null
+
 export let sshOutputIntakeCleanup: (() => void) | null = null
 
 export function rebindLocalProviderListeners(): void {

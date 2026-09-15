@@ -45,6 +45,7 @@ import { cancelAllPendingLocalPtySpawns } from './local-pty-spawn-state'
 import { killAllLocalPtys, killOrphanedLocalPtys, shutdownLocalPty } from './local-pty-termination'
 
 export type { LocalPtyProviderOptions } from './local-pty-provider-types'
+
 export {
   LOCAL_PTY_FORCE_KILL_RETRY_MS,
   LOCAL_PTY_GRACEFUL_FORCE_TIMEOUT_MS,
@@ -132,6 +133,7 @@ export class LocalPtyProvider implements IPtyProvider {
   async inspectProcess(id: string): Promise<PtyProcessInspection> {
     const foregroundProcess = await getLocalPtyForegroundProcess(id)
     const childProcessEvidence = inspectLocalPtyChildProcesses(id)
+
     return {
       foregroundProcess,
       hasChildProcesses: childProcessEvidence === 'children',
@@ -209,8 +211,10 @@ export class LocalPtyProvider implements IPtyProvider {
 export function _resetLocalPtyProviderStateForTest(): void {
   cancelAllPendingLocalPtySpawns()
   pendingLocalPtySpawns.clear()
+
   for (const id of ptyProcesses.keys()) {
     clearPtyState(id)
   }
+
   resetLoadGeneration()
 }

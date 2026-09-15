@@ -7,9 +7,13 @@ import { abortRuntimeGitMerge, abortRuntimeGitRebase } from './runtime-git-clien
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 
 const gitAbortMerge = vi.fn()
+
 const gitAbortRebase = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
+
 const runtimeCall = vi.fn()
 
 beforeEach(() => {

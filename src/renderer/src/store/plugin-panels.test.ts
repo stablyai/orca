@@ -49,6 +49,7 @@ describe('plugin panel list loading', () => {
         }
       ]
     }
+
     const pending = { ...enabled, pluginKey: 'orca-samples.pending', status: 'pending' as const }
 
     expect(collectActivePluginCommands([enabled, pending])).toEqual([
@@ -78,6 +79,7 @@ describe('plugin panel list loading', () => {
         }
       ]
     }
+
     usePluginPanelsStore.getState().setPlugins([installed])
     usePluginPanelsStore.getState().setPanelHealth('plugin:orca-samples.current/dashboard', 'error')
     expect(usePluginPanelsStore.getState().panelErrors).toEqual({
@@ -97,10 +99,12 @@ describe('plugin panel list loading', () => {
   it('does not let an older request overwrite a newer plugin list', async () => {
     let resolveFirst!: (plugins: PluginHostListEntry[]) => void
     let resolveSecond!: (plugins: PluginHostListEntry[]) => void
+
     const list = vi
       .fn()
       .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
       .mockImplementationOnce(() => new Promise((resolve) => (resolveSecond = resolve)))
+
     vi.stubGlobal('window', { api: { plugins: { list } } })
 
     const first = usePluginPanelsStore.getState().fetchPlugins()
@@ -134,10 +138,12 @@ describe('plugin panel list loading', () => {
 
   it('recovers automatically from a transient list failure with bounded backoff', async () => {
     vi.useFakeTimers()
+
     const list = vi
       .fn()
       .mockRejectedValueOnce(new Error('transport starting'))
       .mockResolvedValueOnce([plugin('orca-samples.recovered')])
+
     vi.stubGlobal('window', { api: { plugins: { list } } })
 
     await usePluginPanelsStore.getState().fetchPlugins()

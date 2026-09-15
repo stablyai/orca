@@ -8,6 +8,7 @@ it.each([0, 255])(
   async (filler) => {
     const controller = new RuntimeMobileNotificationController()
     let stop!: () => void
+
     const ctx = {
       runtime: {
         onNotificationDispatched: controller.onDispatched.bind(controller),
@@ -18,14 +19,18 @@ it.each([0, 255])(
         }
       }
     } as unknown as RpcContext
+
     const subscribe = NOTIFICATION_METHODS.find(
       (m) => m.name === 'notifications.subscribe'
     ) as RpcStreamingMethod
+
     const replay = NOTIFICATION_METHODS.find(
       (m) => m.name === 'notifications.getMissedSince'
     ) as RpcMethod
+
     const live: unknown[] = []
     const pending = subscribe.handler(undefined, ctx, (e) => live.push(e))
+
     try {
       controller.dispatch({
         type: 'notification',
@@ -44,18 +49,23 @@ it.each([0, 255])(
         emittedAt: 10250
       })
       expect(live).toHaveLength(2)
+
       for (let i = 0; i < filler; i++) {
         controller.dispatch({ type: 'dismiss', notificationId: `other-${i}` })
       }
+
       const result = (await replay.handler(
         { lastSeenSeq: 1, epoch: controller.getEpoch() },
         ctx
       )) as { notifications: { type: string }[] }
+
       expect(result.notifications.filter((e) => e.type === 'notification')).toEqual([])
+
       const all = (await replay.handler(
         { lastSeenSeq: 1, epoch: controller.getEpoch(), includeDesktopSuppressed: true },
         ctx
       )) as { notifications: { title?: string }[] }
+
       expect(all.notifications.some((e) => e.title === 'suppressed')).toBe(true)
     } finally {
       stop()

@@ -21,6 +21,7 @@ describe('CodexUsageStore', () => {
 
   it('returns automation usage for a single matching worktree session', async () => {
     const worktreeId = 'repo-1::/workspace/repo'
+
     const store = createStoreWithState({
       scanState: {
         enabled: true,
@@ -93,6 +94,7 @@ describe('CodexUsageStore', () => {
         }
       ]
     })
+
     const refreshMock = vi.fn().mockResolvedValue({
       enabled: true,
       isScanning: false,
@@ -101,8 +103,10 @@ describe('CodexUsageStore', () => {
       lastScanError: null,
       hasAnyCodexData: true
     })
+
     ;(store as unknown as { refresh: typeof store.refresh }).refresh = refreshMock
     const completedAt = new Date('2026-04-10T15:06:00.000Z').getTime()
+
     const request = {
       worktreeId,
       terminalSessionId: 'tab-1',

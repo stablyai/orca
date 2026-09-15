@@ -7,6 +7,7 @@ function outputText(value: unknown): string {
   if (typeof value === 'string') {
     return value
   }
+
   return Buffer.isBuffer(value) ? value.toString('utf8') : ''
 }
 
@@ -25,18 +26,23 @@ export function readWslHostFailureDiagnostic(
   if (!command.wsl || !error || typeof error !== 'object') {
     return null
   }
+
   const { code, status, stdout, stderr } = error as {
     code?: unknown
     status?: unknown
     stdout?: unknown
     stderr?: unknown
   }
+
   const exitCode = typeof code === 'number' ? code : typeof status === 'number' ? status : null
+
   // A guest failure always explains itself on stderr; an empty one plus this exit is the host.
   if (exitCode !== WSL_HOST_FAILURE_EXIT_CODE || outputText(stderr).trim().length > 0) {
     return null
   }
+
   const diagnostic = outputText(stdout).replaceAll('\u0000', '').trim()
+
   return diagnostic.length > 0 ? diagnostic : 'wsl.exe reported no diagnostic.'
 }
 
@@ -46,10 +52,13 @@ export function readWslHostFailureDiagnostic(
  */
 export function annotateWslHostFailure(error: unknown, command: ResolvedCommand): unknown {
   const diagnostic = readWslHostFailureDiagnostic(error, command)
+
   if (diagnostic === null || !(error instanceof Error) || !command.wsl) {
     return error
   }
+
   const distro = command.wsl.distro
   error.message = `wsl.exe host failure (distro "${distro}"): ${diagnostic}\n${error.message}`
+
   return Object.assign(error, { wslHostFailure: true, wslDistro: distro })
 }

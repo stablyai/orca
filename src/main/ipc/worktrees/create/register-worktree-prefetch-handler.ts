@@ -11,9 +11,11 @@ export function registerWorktreePrefetchHandler(context: WorktreeIpcContext): vo
     'worktrees:prefetchCreateBase',
     async (_event, args: { repoId: string; baseBranch?: string }): Promise<void> => {
       const repo = store.getRepo(args.repoId)
+
       if (!repo) {
         return
       }
+
       try {
         await prefetchWorktreeCreateBase({
           repo,

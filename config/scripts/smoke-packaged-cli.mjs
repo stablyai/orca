@@ -9,15 +9,19 @@ const execFileAsync = promisify(execFile)
 
 function readAppDirArg(argv) {
   const explicit = argv.find((arg) => arg.startsWith('--app-dir='))
+
   if (explicit) {
     return explicit.slice('--app-dir='.length)
   }
+
   if (process.platform === 'darwin') {
     return 'dist/mac-arm64/Orca.app'
   }
+
   if (process.platform === 'win32') {
     return 'dist/win-unpacked'
   }
+
   return 'dist/linux-unpacked'
 }
 
@@ -25,22 +29,28 @@ function getPackagedCliPath(appDir) {
   if (process.platform === 'darwin' || appDir.endsWith('.app')) {
     return join(appDir, 'Contents', 'Resources', 'bin', 'orca')
   }
+
   if (process.platform === 'win32') {
     return join(appDir, 'resources', 'bin', 'orca.exe')
   }
+
   return join(appDir, 'resources', 'bin', 'orca-ide')
 }
 
 const appDir = resolve(readAppDirArg(process.argv.slice(2)))
+
 const tempRoot = await mkdtemp(join(tmpdir(), 'orca-packaged-cli-smoke-'))
+
 const copiedAppDir = join(tempRoot, basename(appDir))
 
 let smokeFailure = null
+
 try {
   await cp(appDir, copiedAppDir, { recursive: true, verbatimSymlinks: true })
   const cliPath = getPackagedCliPath(copiedAppDir)
   const env = { ...process.env, NODE_PATH: '' }
   delete env.ORCA_CLI_CWD
+
   const run = (args) =>
     execFileAsync(cliPath, args, {
       env,
@@ -54,6 +64,7 @@ try {
   assert(list.topics.some((topic) => topic.name === 'orca-cli'))
   assert.match((await run(['skills', 'get', 'orca-cli'])).stdout, /name: orca-cli/)
   assert.match((await run(['skills', 'get', 'computer-use'])).stdout, /name: computer-use/)
+
   const install = JSON.parse(
     (
       await run([
@@ -68,9 +79,11 @@ try {
       ])
     ).stdout
   )
+
   const update = JSON.parse(
     (await run(['skills', 'update', '--skill', 'orca-cli', '--dry-run', '--json'])).stdout
   )
+
   assert.equal(install.executed, false)
   assert.equal(update.executed, false)
   console.log(`[packaged-cli-smoke] help and skills commands passed via ${cliPath}`)
@@ -97,8 +110,10 @@ if (smokeFailure) {
   if (cleanupFailure) {
     console.warn(`[packaged-cli-smoke] temp cleanup failed: ${cleanupFailure.message}`)
   }
+
   throw smokeFailure
 }
+
 if (cleanupFailure) {
   throw cleanupFailure
 }

@@ -31,6 +31,7 @@ export async function refreshTerminalArtifactSourceAfterGrantFailure(
   if (response.ok || !isTerminalArtifactGrantFailure(response, options)) {
     return null
   }
+
   const refreshed = await client.sendRequest('files.resolveTerminalPath', {
     worktree: `id:${source.worktreeId}`,
     pathText: source.pathText ?? source.absolutePath,
@@ -38,16 +39,21 @@ export async function refreshTerminalArtifactSourceAfterGrantFailure(
     ...(source.terminalHandle ? { terminal: source.terminalHandle } : {}),
     ...(source.nativeChatContext ? { nativeChatContext: source.nativeChatContext } : {})
   })
+
   if (!refreshed.ok) {
     return null
   }
+
   const result = (refreshed as RpcSuccess).result
+
   if (!isTerminalArtifactResolution(result)) {
     return null
   }
+
   if (result.openTarget.absolutePath !== source.absolutePath) {
     return null
   }
+
   return {
     source: 'terminalArtifact',
     worktreeId: source.worktreeId,
@@ -68,6 +74,7 @@ function isTerminalArtifactGrantFailure(
   if (options.refreshGrant === false) {
     return false
   }
+
   return isTerminalArtifactGrantError(`${response.error.code} ${response.error.message}`)
 }
 
@@ -79,11 +86,13 @@ function isTerminalArtifactResolution(result: unknown): result is {
   if (!result || typeof result !== 'object') {
     return false
   }
+
   const resolution = result as {
     exists?: unknown
     isDirectory?: unknown
     openTarget?: { kind?: unknown; absolutePath?: unknown; grantId?: unknown }
   }
+
   return (
     resolution.exists === true &&
     resolution.isDirectory === false &&

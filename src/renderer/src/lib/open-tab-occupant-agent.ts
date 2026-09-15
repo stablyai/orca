@@ -50,20 +50,26 @@ export function resolveOpenTabOccupantAgent({
 }: OpenTabOccupantAgentInput): TuiAgent | null {
   const hookAgent = resolveFocusedTabAgent(agentStatusByPaneKey, layout, tabId)
   const siblingHookAgent = resolveSiblingTabAgent(agentStatusByPaneKey, layout, tabId)
+
   const focusedCompletedHookAgent =
     resolveFocusedCompletedTabAgent(agentStatusByPaneKey, layout, tabId) ??
     resolveFocusedRetainedTabAgent(retainedAgentsByPaneKey, layout, tabId)
+
   const siblingCompletedHookAgent =
     resolveSiblingCompletedTabAgent(agentStatusByPaneKey, layout, tabId) ??
     resolveSiblingRetainedTabAgent(retainedAgentsByPaneKey, layout, tabId)
+
   const focusedPaneKey = focusedPaneKeyFor(tabId, layout)
   const process = focusedPaneKey ? paneForegroundAgentByPaneKey?.[focusedPaneKey] : undefined
   const processAgent = process?.agent ?? null
+
   const sleepingSessionAgent = focusedPaneKey
     ? (sleepingAgentSessionsByPaneKey[focusedPaneKey]?.agent ?? null)
     : null
+
   const oscTitle = title?.trim() || ''
   const explicitTitleAgent = resolveExplicitTerminalTitleAgentType(oscTitle)
+
   const fallbackAgentSignal = launchAgent
     ? explicitTitleAgent === launchAgent
     : Boolean(explicitTitleAgent || siblingHookAgent)
@@ -92,5 +98,6 @@ function focusedPaneKeyFor(
   layout: TerminalLayoutSnapshot | undefined
 ): string | null {
   const activeLeafId = layout?.activeLeafId
+
   return activeLeafId && isTerminalLeafId(activeLeafId) ? makePaneKey(tabId, activeLeafId) : null
 }

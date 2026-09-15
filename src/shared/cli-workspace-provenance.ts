@@ -14,6 +14,7 @@ export function buildCliWorkspaceProvenance(
   if (!request) {
     return undefined
   }
+
   return {
     kind: 'created-by-cli',
     createdAt: options.createdAt,

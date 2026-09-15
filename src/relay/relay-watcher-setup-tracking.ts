@@ -8,12 +8,15 @@ export function trackRelayWatcherSetup(
   setup: Promise<void>
 ): Promise<void> {
   let tracked!: RelayWatcherPendingSetup
+
   const trackedPromise = setup.finally(() => {
     if (pendingSetups.get(rootKey) === tracked) {
       pendingSetups.delete(rootKey)
     }
   })
+
   tracked = new PromiseSettlementWaiters(trackedPromise)
   pendingSetups.set(rootKey, tracked)
+
   return tracked.promise
 }

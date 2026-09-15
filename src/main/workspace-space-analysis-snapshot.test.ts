@@ -14,10 +14,12 @@ const { snapshotWriteSpy, userDataDirHolder } = vi.hoisted(() => ({
 
 vi.mock('./sidecar-snapshot-file', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   const writeSidecarSnapshot = actual.writeSidecarSnapshot as (
     file: string,
     payload: unknown
   ) => Promise<void>
+
   return {
     ...actual,
     writeSidecarSnapshot: async (file: string, payload: unknown) => {
@@ -37,6 +39,7 @@ import {
 } from './workspace-space-analysis-snapshot'
 
 const SNAPSHOT_FILE = 'orca-workspace-space-analysis.json'
+
 const NOW = 1_700_000_000_000
 
 function makeWorktreeRow(overrides: Partial<WorkspaceSpaceWorktree> = {}): WorkspaceSpaceWorktree {
@@ -70,6 +73,7 @@ function makeWorktreeRow(overrides: Partial<WorkspaceSpaceWorktree> = {}): Works
 function makeAnalysis(worktrees: WorkspaceSpaceWorktree[]): WorkspaceSpaceAnalysis {
   const okRows = worktrees.filter((row) => row.status === 'ok')
   const rowsByHost = Map.groupBy(worktrees, (row) => row.executionHostId ?? 'local')
+
   return {
     scannedAt: NOW,
     totalSizeBytes: worktrees.reduce((sum, row) => sum + row.sizeBytes, 0),
@@ -79,6 +83,7 @@ function makeAnalysis(worktrees: WorkspaceSpaceWorktree[]): WorkspaceSpaceAnalys
     unavailableWorktreeCount: worktrees.length - okRows.length,
     repos: [...rowsByHost.entries()].map(([executionHostId, rows]) => {
       const scanned = rows.filter((row) => row.status === 'ok')
+
       return {
         repoId: 'repo-1',
         executionHostId,
@@ -188,6 +193,7 @@ describe('workspace space analysis snapshot', () => {
 
   it('prunes a removed worktree row and rebalances totals', async () => {
     const removed = makeWorktreeRow({ sizeBytes: 3000, reclaimableBytes: 3000 })
+
     const kept = makeWorktreeRow({
       worktreeId: 'repo-1::/repo-kept',
       path: '/repo-kept',
@@ -195,6 +201,7 @@ describe('workspace space analysis snapshot', () => {
       sizeBytes: 1000,
       reclaimableBytes: 0
     })
+
     await persistWorkspaceSpaceAnalysisSnapshot(
       userDataDirHolder.dir,
       makeAnalysis([removed, kept])
@@ -230,12 +237,14 @@ describe('workspace space analysis snapshot', () => {
 
   it('coalesces local and remote row rebalancing into one write', async () => {
     const localCollision = makeWorktreeRow({ sizeBytes: 1000, reclaimableBytes: 1000 })
+
     const remoteCollision = makeWorktreeRow({
       executionHostId: 'ssh:ssh-1',
       isRemote: true,
       sizeBytes: 2000,
       reclaimableBytes: 2000
     })
+
     const localRemoved = makeWorktreeRow({
       worktreeId: 'repo-1::/local-removed',
       path: '/local-removed',
@@ -243,6 +252,7 @@ describe('workspace space analysis snapshot', () => {
       sizeBytes: 3000,
       reclaimableBytes: 0
     })
+
     const remoteRemoved = makeWorktreeRow({
       worktreeId: 'repo-1::/remote-removed',
       executionHostId: 'ssh:ssh-1',
@@ -251,12 +261,14 @@ describe('workspace space analysis snapshot', () => {
       sizeBytes: 4000,
       reclaimableBytes: 4000
     })
+
     const kept = makeWorktreeRow({
       worktreeId: 'repo-1::/kept',
       path: '/kept',
       sizeBytes: 500,
       reclaimableBytes: 500
     })
+
     await persistWorkspaceSpaceAnalysisSnapshot(
       userDataDirHolder.dir,
       makeAnalysis([localCollision, remoteCollision, localRemoved, remoteRemoved, kept])
@@ -303,6 +315,7 @@ describe('workspace space analysis snapshot', () => {
 
   it('keeps profile snapshots isolated', async () => {
     const otherProfile = await mkdtemp(join(tmpdir(), 'orca-space-snapshot-other-'))
+
     try {
       await persistWorkspaceSpaceAnalysisSnapshot(
         userDataDirHolder.dir,
@@ -317,16 +330,19 @@ describe('workspace space analysis snapshot', () => {
 
   it('does not let an analysis started before bulk removal restore pruned rows', async () => {
     const local = makeWorktreeRow()
+
     const remote = makeWorktreeRow({
       worktreeId: 'repo-1::/remote-feature',
       executionHostId: 'ssh:ssh-1',
       isRemote: true,
       path: '/remote-feature'
     })
+
     const staleAnalysis = {
       ...makeAnalysis([local, remote]),
       scannedAt: Date.now() - 1
     }
+
     await pruneWorkspaceSpaceAnalysisSnapshots(userDataDirHolder.dir, [
       { worktreeId: local.worktreeId, executionHostId: 'local' },
       { worktreeId: remote.worktreeId, executionHostId: 'ssh:ssh-1' }
@@ -376,12 +392,14 @@ describe('workspace space analysis snapshot', () => {
 
   it('prunes host-colliding workspace ids without corrupting surviving totals', async () => {
     const local = makeWorktreeRow({ sizeBytes: 1000, reclaimableBytes: 1000 })
+
     const remote = makeWorktreeRow({
       executionHostId: 'ssh:ssh-1',
       isRemote: true,
       sizeBytes: 3000,
       reclaimableBytes: 3000
     })
+
     await persistWorkspaceSpaceAnalysisSnapshot(
       userDataDirHolder.dir,
       makeAnalysis([local, remote])
@@ -413,12 +431,14 @@ describe('workspace space analysis snapshot', () => {
 
   it('prunes every host-colliding row when the host is unknown', async () => {
     const local = makeWorktreeRow({ sizeBytes: 1000, reclaimableBytes: 1000 })
+
     const remote = makeWorktreeRow({
       executionHostId: 'ssh:ssh-1',
       isRemote: true,
       sizeBytes: 3000,
       reclaimableBytes: 3000
     })
+
     await persistWorkspaceSpaceAnalysisSnapshot(
       userDataDirHolder.dir,
       makeAnalysis([local, remote])

@@ -16,6 +16,7 @@ export function useMobileSessionTabsFetchReporting<Result extends DiagnosticTabs
   onFetchErrored: (error: unknown) => void
 } {
   const { worktreeId, diagnosticsRef } = args
+
   return useMemo(
     () => ({
       onFetchStarted: () => diagnosticsRef.current.tabsFetchStarted(worktreeId),

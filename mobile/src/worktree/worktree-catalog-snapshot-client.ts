@@ -34,11 +34,13 @@ export function admitWorktreeCatalogResponse<T>(
   if (!result || typeof result !== 'object') {
     return { kind: 'invalid' }
   }
+
   const response = result as {
     snapshotId?: unknown
     unchanged?: unknown
     worktrees?: unknown
   }
+
   // Why: a full response is defined by carrying rows, so discriminate on that rather
   // than on the presence of `unchanged` — the latter could collide with a future
   // catalog field and silently reclassify a full response.
@@ -51,9 +53,11 @@ export function admitWorktreeCatalogResponse<T>(
   }
 
   const snapshotId = validSnapshotId(response.snapshotId)
+
   if (response.unchanged === true && snapshotId && snapshotId === requestedSnapshotId) {
     return { kind: 'unchanged', snapshotId }
   }
+
   return { kind: 'invalid' }
 }
 
@@ -70,18 +74,23 @@ export class WorktreeCatalogSnapshotClient {
       this.snapshotId = null
       this.confirmedWorktrees = null
     }
+
     const requestedSnapshotId = this.snapshotId
+
     const response = await client.sendRequest('worktree.ps', {
       limit: WORKTREE_PS_FULL_LIMIT,
       afterSnapshotId: requestedSnapshotId
     })
+
     if (!response.ok) {
       const code = (response as RpcFailure).error?.code
+
       return {
         kind: 'request_failed',
         code: typeof code === 'string' && code.length > 0 ? code : 'request_failed'
       }
     }
+
     return {
       kind: 'response',
       pending: {
@@ -100,20 +109,25 @@ export class WorktreeCatalogSnapshotClient {
     if (!pending) {
       return null
     }
+
     // Why: a response from a superseded client/host is stale, not wrong — dropping it
     // must not invalidate the token the current client/host just established.
     if (pending.client !== this.client || pending.hostId !== this.hostId) {
       return null
     }
+
     if (pending.admission.kind === 'invalid') {
       this.snapshotId = null
+
       return null
     }
 
     this.snapshotId = pending.admission.snapshotId
+
     if (pending.admission.kind === 'full') {
       this.confirmedWorktrees = pending.admission.worktrees
     }
+
     // Why: unchanged responses still return the confirmed rows so every poll reasserts
     // host truth over optimistic local edits, exactly as the full-payload path did.
     return this.confirmedWorktrees

@@ -36,7 +36,9 @@ export async function runAutomationNowFenced(input: {
     ) {
       input.service.recordRefusedRun(input.automationId)
     }
+
     throw error
   }
+
   return await input.service.runNow(input.automationId)
 }

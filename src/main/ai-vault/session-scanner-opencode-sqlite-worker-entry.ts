@@ -15,6 +15,7 @@ import type {
 if (!parentPort) {
   throw new Error('OpenCode SQLite worker must run with a parent port.')
 }
+
 const port = parentPort
 
 async function handleRequest(
@@ -23,18 +24,22 @@ async function handleRequest(
   try {
     if (request.kind === 'list') {
       const issues: AiVaultScanIssue[] = []
+
       const candidates = await listOpenCodeSqliteSessions({
         dbPaths: request.dbPaths,
         limit: request.limit,
         issues
       })
+
       return { id: request.id, ok: true, value: { candidates, issues } }
     }
+
     const session = await parseOpenCodeSqliteSession({
       dbPath: request.dbPath,
       sessionId: request.sessionId,
       platform: request.platform
     })
+
     return { id: request.id, ok: true, value: session }
   } catch (err) {
     return { id: request.id, ok: false, error: err instanceof Error ? err.message : String(err) }

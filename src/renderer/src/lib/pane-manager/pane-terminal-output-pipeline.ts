@@ -38,19 +38,25 @@ export function writeBackgroundTerminalChunk(
   const runOnParsed = onParsed
     ? (): void => runGuardedWriteCompletionStep('background-on-parsed', onParsed)
     : undefined
+
   const runOnWriteFailure = onWriteFailure
     ? (): void => runGuardedWriteCompletionStep('background-on-write-failure', onWriteFailure)
     : undefined
+
   try {
     if (!runOnParsed || terminal.write.length < 2) {
       terminal.write(data)
       runOnParsed?.()
+
       return true
     }
+
     terminal.write(data, runOnParsed)
+
     return true
   } catch {
     runOnWriteFailure?.()
+
     return false
   }
 }
@@ -106,20 +112,26 @@ export function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background'
     // The drain owns this detached entry, so map-based discard cannot see it.
     discardDetachedQueueEntry(entry)
     discardTerminalOutput(entry.terminal)
+
     return null
   }
+
   const queuedWrite = takeQueuedChunk(entry, BACKGROUND_CHUNK_CHARS)
+
   if (!queuedWrite) {
     return null
   }
+
   const pacer = entry.highPriority ? makeParseClockPacer() : undefined
   const ackCreditsParsed = registerTerminalOutputAckCredits(entry.terminal, queuedWrite.ackCredits)
   // Why armed BEFORE the write: a wedged WriteBuffer (issue #2836) or disposed xterm (6.1.0-beta.287) never runs the parsed callback, so the watch must be live first to catch it.
   armTerminalWriteStallWatch(entry.terminal, {
     onCertifiedDead: () => discardTerminalOutput(entry.terminal)
   })
+
   try {
     queuedWrite.beforeWrite?.(queuedWrite.data)
+
     const writeAccepted = queuedWrite.foreground
       ? writeForegroundTerminalChunk(
           entry.terminal,
@@ -145,6 +157,7 @@ export function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background'
           composeParsedCallback(entry.terminal, queuedWrite.onParsed, ackCreditsParsed, pacer),
           composeWriteFailureCallback(entry.terminal, ackCreditsParsed)
         )
+
     if (!writeAccepted) {
       // Why: the failure callback credited the submitted chunk; credit and abandon the detached tail so the drain can't retry a certified-dead xterm.
       fireQueuedAckCredits(entry)
@@ -153,6 +166,7 @@ export function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background'
       entry.queuedChars = 0
       clearForegroundRelease(entry)
       recordQueueDebugPressure()
+
       return null
     }
   } catch {
@@ -165,7 +179,9 @@ export function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background'
     entry.queuedChars = 0
     clearForegroundRelease(entry)
     recordQueueDebugPressure()
+
     return null
   }
+
   return queuedWrite.foreground ? 'foreground' : 'background'
 }

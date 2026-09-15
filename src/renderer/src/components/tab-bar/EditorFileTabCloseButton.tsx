@@ -13,6 +13,7 @@ export function EditorFileTabCloseButton({
   onClose: () => void
 }): React.JSX.Element {
   const closeShortcut = useOptionalShortcutLabel('tab.close')
+
   const closeLabel = translate(
     'auto.components.tab.bar.EditorFileTabCloseButton.a768f428f1',
     'Close tab'

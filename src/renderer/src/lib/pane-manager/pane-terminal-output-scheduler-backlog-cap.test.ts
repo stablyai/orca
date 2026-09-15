@@ -40,6 +40,7 @@ describe('pane terminal output scheduler', () => {
     for (let i = 0; i < 5; i++) {
       writeTerminalOutput(terminal, chunk, { foreground: false })
     }
+
     writeTerminalOutput(terminal, 'after-cap\r\n', { foreground: false })
 
     vi.advanceTimersByTime(0)
@@ -62,6 +63,7 @@ describe('pane terminal output scheduler', () => {
     for (let i = 0; i < 5; i++) {
       writeTerminalOutput(terminal, chunk, { foreground: true, latencySensitive: false })
     }
+
     writeTerminalOutput(terminal, 'after-cap\r\n', { foreground: true, latencySensitive: false })
 
     vi.advanceTimersByTime(0)
@@ -101,9 +103,11 @@ describe('pane terminal output scheduler', () => {
     // 50k-row scrollback ⇒ 6 MB cap: a 2.5 MB flood that would trip the
     // 2 MB floor must survive intact.
     configureTerminalOutputBacklogCap(50_000)
+
     for (let i = 0; i < 5; i++) {
       writeTerminalOutput(terminal, chunk, { foreground: true, latencySensitive: false })
     }
+
     vi.advanceTimersByTime(0)
 
     let output = terminal.write.mock.calls.map(([data]) => data).join('')
@@ -112,9 +116,11 @@ describe('pane terminal output scheduler', () => {
 
     // But the scaled cap still bounds a runaway flood.
     terminal.write.mockClear()
+
     for (let i = 0; i < 13; i++) {
       writeTerminalOutput(terminal, chunk, { foreground: true, latencySensitive: false })
     }
+
     vi.advanceTimersByTime(0)
     output = terminal.write.mock.calls.map(([data]) => data).join('')
     expect(output).toContain('Orca skipped a burst of terminal output')
@@ -157,8 +163,10 @@ describe('pane terminal output scheduler', () => {
 
   it('requests registered recovery instead of flushing a dropped hidden backlog', async () => {
     vi.useFakeTimers()
+
     const { flushTerminalOutput, registerTerminalBacklogRecovery, writeTerminalOutput } =
       await loadScheduler()
+
     const terminal = createTerminal()
     const requestRecovery = vi.fn(() => true)
     const unregister = registerTerminalBacklogRecovery(terminal, requestRecovery)

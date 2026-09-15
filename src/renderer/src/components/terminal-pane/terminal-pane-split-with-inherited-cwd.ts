@@ -18,6 +18,7 @@ export function splitTerminalPaneWithInheritedCwd(args: {
   source: TerminalPaneSplitSource
 }): void {
   const ptyId = args.paneTransports.get(args.pane.id)?.getPtyId() ?? null
+
   if (
     splitWebRuntimeTerminal(ptyId, args.direction, args.source, {
       worktreeId: args.worktreeId,
@@ -27,20 +28,27 @@ export function splitTerminalPaneWithInheritedCwd(args: {
   ) {
     return
   }
+
   const manager = args.getManager ? args.getManager() : args.manager
+
   if (!manager) {
     return
   }
+
   const cached = args.paneCwdMap.get(args.pane.id)
+
   if (cached?.confirmed && cached.cwd) {
     const createdPane = manager.splitPane(args.pane.id, args.direction, { cwd: cached.cwd })
     recordCreatedTerminalPaneSplit(createdPane, {
       source: args.source,
       direction: args.direction
     })
+
     return
   }
+
   const paneId = args.pane.id
+
   const cwdPromise =
     cached?.pendingCwd ??
     resolveSplitCwd({
@@ -49,6 +57,7 @@ export function splitTerminalPaneWithInheritedCwd(args: {
       sourcePtyId: ptyId,
       fallbackCwd: args.fallbackCwd
     })
+
   const createdPane = manager.splitPane(paneId, args.direction, { cwdPromise })
   recordCreatedTerminalPaneSplit(createdPane, {
     source: args.source,

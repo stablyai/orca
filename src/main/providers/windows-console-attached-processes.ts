@@ -38,7 +38,9 @@ export function readWindowsConsoleAttachedProcessIds(
   if (!Number.isSafeInteger(rootPid) || rootPid <= 0) {
     return Promise.resolve(null)
   }
+
   let child: ChildProcess
+
   try {
     child = (deps.forkProcess ?? fork)(
       (deps.resolveAgentPath ?? resolveNodePtyConsoleListAgent)(),
@@ -51,10 +53,12 @@ export function readWindowsConsoleAttachedProcessIds(
 
   return new Promise((resolve) => {
     let settled = false
+
     const finish = (value: ReadonlySet<number> | null): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timeout)
       child.removeListener('message', onMessage)
@@ -62,14 +66,18 @@ export function readWindowsConsoleAttachedProcessIds(
       // teardown listeners stay until exit so they cannot crash the daemon.
       resolve(value)
     }
+
     const onFailure = (): void => finish(null)
+
     const onExit = (): void => {
       child.removeListener('error', onFailure)
       finish(null)
     }
+
     const onMessage = (message: ProcessListMessage): void => {
       const value = message?.consoleProcessList
       const helperPid = child.pid
+
       if (
         !Array.isArray(value) ||
         helperPid === undefined ||
@@ -78,18 +86,22 @@ export function readWindowsConsoleAttachedProcessIds(
         value.some((pid) => !Number.isSafeInteger(pid) || pid <= 0)
       ) {
         finish(null)
+
         return
       }
+
       // Why: GetConsoleProcessList includes this helper; removing it makes a
       // root-only set authoritative shell-only evidence instead of a false child.
       const consoleProcessIds = new Set(value)
       consoleProcessIds.delete(helperPid)
       finish(consoleProcessIds)
     }
+
     const timeout = setTimeout(() => {
       child.kill()
       finish(null)
     }, deps.timeoutMs ?? CONPTY_PROCESS_LIST_TIMEOUT_MS)
+
     child.once('message', onMessage)
     child.once('error', onFailure)
     child.once('exit', onExit)

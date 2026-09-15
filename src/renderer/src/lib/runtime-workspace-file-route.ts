@@ -25,15 +25,19 @@ function workspaceMatchesExecutionHost(
   executionHostId: ExecutionHostId
 ): boolean {
   const parsedHost = parseExecutionHostId(executionHostId)
+
   if (parsedHost?.kind === 'runtime') {
     return (
       getExplicitRuntimeEnvironmentIdForWorktree(state, workspaceId) === parsedHost.environmentId
     )
   }
+
   const explicit = resolveExplicitWorktreeOperationRouteResult(state, workspaceId)
+
   if (explicit.kind === 'resolved') {
     return explicit.route.executionHostId === executionHostId
   }
+
   return (
     executionHostId === 'local' && getExecutionHostIdForWorktree(state, workspaceId) === 'local'
   )
@@ -49,14 +53,17 @@ export function findWorkspaceFileRoute(
       ? [{ workspaceId: worktree.id, rootPath: worktree.path, executionHostId }]
       : []
   )
+
   for (const workspace of state.folderWorkspaces) {
     const workspaceId = folderWorkspaceKey(workspace.id)
+
     if (workspaceMatchesExecutionHost(state, workspaceId, executionHostId)) {
       roots.push({ workspaceId, rootPath: workspace.folderPath, executionHostId })
     }
   }
 
   const owner = findRuntimeWorkspaceFileOwner(roots, absolutePath, executionHostId)
+
   return owner && owner.relativePath !== ''
     ? { worktreeId: owner.workspaceId, relativePath: owner.relativePath, executionHostId }
     : null
@@ -68,9 +75,12 @@ export function findRuntimeWorkspaceFileRoute(
   absolutePath: string
 ): RuntimeWorkspaceFileRoute | null {
   const ownerId = runtimeEnvironmentId.trim()
+
   if (!ownerId) {
     return null
   }
+
   const executionHostId = toRuntimeExecutionHostId(ownerId)
+
   return findWorkspaceFileRoute(state, executionHostId, absolutePath)
 }

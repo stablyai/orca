@@ -46,33 +46,43 @@ export async function handleInternalTerminalFileDrop({
   dropTarget
 }: InternalArgs): Promise<InternalTerminalFileDropResult> {
   const dragPaths = readWorkspaceFileDragPaths(dataTransfer)
+
   if (dragPaths.status === 'rejected') {
     toast.error(getTerminalInternalFileDropRejectionMessage(dragPaths.reason))
+
     return { status: 'rejected', reason: dragPaths.reason }
   }
 
   const paths = dragPaths.paths
+
   if (paths.length === 0) {
     return { status: 'ignored', reason: 'empty' }
   }
 
   const pane = resolveInternalTerminalDropPane(manager, dropTarget)
+
   if (!pane) {
     return { status: 'ignored', reason: 'no-pane' }
   }
+
   const transport = paneTransports.get(pane.id)
+
   if (!transport) {
     return { status: 'ignored', reason: 'no-transport' }
   }
+
   const dropTargetSnapshot = captureTerminalDropTarget(pane, transport)
 
   const state = useAppStore.getState()
   const worktreePath = resolveTerminalDropWorktreePath(worktreeId, cwd) ?? paths[0]
+
   if (!worktreePath) {
     return { status: 'ignored', reason: 'worktree-unavailable' }
   }
+
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   const connectionId = getConnectionId(worktreeId)
+
   if (!runtimeEnvironmentId && connectionId === undefined) {
     // Why: unresolved connection metadata means we cannot know whether these
     // worktree-owned paths belong to a local, WSL, or SSH terminal.
@@ -82,8 +92,10 @@ export async function handleInternalTerminalFileDrop({
         'Worktree not ready — try again in a moment.'
       )
     )
+
     return { status: 'ignored', reason: 'worktree-unavailable' }
   }
+
   const targetShell = resolveTerminalDropTargetShell({
     activeRuntimeEnvironmentId: runtimeEnvironmentId,
     worktreePath,
@@ -100,13 +112,17 @@ export async function handleInternalTerminalFileDrop({
     paths,
     targetShell
   })
+
   showTerminalDropWriteFailure(writeResult.failureReason)
+
   if (writeResult.sentAnyPath) {
     recordTerminalUserInputForLeaf(tabId, pane.leafId)
   }
+
   if (writeResult.targetCurrent) {
     pane.terminal.focus()
   }
+
   if (writeResult.failureReason) {
     return {
       status: 'cancelled',
@@ -114,5 +130,6 @@ export async function handleInternalTerminalFileDrop({
       pathCount: writeResult.pathsWritten
     }
   }
+
   return { status: 'pasted', pathCount: writeResult.pathsWritten }
 }

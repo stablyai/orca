@@ -15,12 +15,14 @@ import { assertWin32 } from './platform-guard.mjs'
 import { runCommandSync } from './powershell-runner.mjs'
 
 const PRODUCT_NAME = 'Orca'
+
 const EXE_NAME = 'Orca.exe'
 
 /** Programs root that per-user oneClick NSIS installs into. */
 function programsRoot() {
   const localAppData =
     process.env.LOCALAPPDATA ?? path.join(process.env.USERPROFILE ?? '', 'AppData', 'Local')
+
   return path.join(localAppData, 'Programs')
 }
 
@@ -34,26 +36,34 @@ export function resolveInstaller({ localPath, releaseTag, assetPattern }) {
     if (!existsSync(localPath)) {
       throw new Error(`Installer not found: ${localPath}`)
     }
+
     return path.resolve(localPath)
   }
+
   if (!releaseTag) {
     throw new Error('resolveInstaller: neither localPath nor releaseTag provided')
   }
+
   const outDir = mkdtempSync(path.join(tmpdir(), 'orca-e2e-installer-'))
+
   const result = spawnSync(
     'gh',
     ['release', 'download', releaseTag, '--pattern', assetPattern, '--dir', outDir],
     { encoding: 'utf8' }
   )
+
   if (result.status !== 0) {
     throw new Error(
       `gh release download ${releaseTag} failed (exit ${result.status}): ${result.stderr || result.stdout}`
     )
   }
+
   const found = findSetupExe(outDir)
+
   if (!found) {
     throw new Error(`No installer matching "${assetPattern}" in downloaded release ${releaseTag}`)
   }
+
   return found
 }
 
@@ -62,7 +72,9 @@ function findSetupExe(dir) {
     `Get-ChildItem -Path '${dir}' -Filter '*.exe' -Recurse -ErrorAction SilentlyContinue | ` +
       `Select-Object -First 1 -ExpandProperty FullName`
   )
+
   const line = stdout.trim().split('\n')[0]?.trim()
+
   return line && existsSync(line) ? line : null
 }
 
@@ -78,16 +90,21 @@ function findSetupExe(dir) {
  */
 export function silentInstall(setupExe, { timeoutMs = 180_000, installDir = null } = {}) {
   assertWin32('silentInstall')
+
   if (!existsSync(setupExe)) {
     throw new Error(`Installer not found: ${setupExe}`)
   }
+
   // /S is the NSIS silent switch; the electron-builder oneClick installer needs
   // no other flags for a per-user install. /D, when present, MUST be last.
   const args = ['/S']
+
   if (installDir) {
     args.push(`/D=${String(installDir)}`)
   }
+
   const proc = spawnSync(setupExe, args, { encoding: 'utf8' })
+
   if (proc.error) {
     throw new Error(`Failed to launch installer ${setupExe}: ${proc.error.message}`)
   }
@@ -97,6 +114,7 @@ export function silentInstall(setupExe, { timeoutMs = 180_000, installDir = null
   // overwritten — to avoid reading the pre-update binary mid-copy.
   const targetVersion = getExeVersion(setupExe)
   const exePath = waitForInstalledExe(timeoutMs, installDir, targetVersion)
+
   if (!exePath && locateInstalledExe(installDir)) {
     // Version-gated wait failed but SOME exe exists — surface both versions so a
     // comparison bug reads as itself, not as "installer produced nothing".
@@ -106,10 +124,12 @@ export function silentInstall(setupExe, { timeoutMs = 180_000, installDir = null
         `(${getExeVersion(found)}) never matched the installer's (${targetVersion}) within ${timeoutMs}ms`
     )
   }
+
   if (!exePath) {
     const where = installDir ?? programsRoot()
     throw new Error(`Installed ${EXE_NAME} did not appear under ${where} within ${timeoutMs}ms`)
   }
+
   return { exePath, version: getExeVersion(exePath) }
 }
 
@@ -123,21 +143,26 @@ export function silentInstall(setupExe, { timeoutMs = 180_000, installDir = null
 // not rely on it.
 function normalizeExeVersion(version) {
   const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version ?? '')
+
   return match ? `${match[1]}.${match[2]}.${match[3]}` : null
 }
 
 function waitForInstalledExe(timeoutMs, installDir = null, expectedVersion = null) {
   const deadline = Date.now() + timeoutMs
   const expected = normalizeExeVersion(expectedVersion)
+
   while (Date.now() < deadline) {
     const exe = locateInstalledExe(installDir)
+
     // An unparseable version on either side skips the gate (presence-only wait)
     // rather than spinning until timeout on a comparison that can never succeed.
     if (exe && (!expected || normalizeExeVersion(getExeVersion(exe)) === expected)) {
       return exe
     }
+
     sleepSync(1000)
   }
+
   return null
 }
 
@@ -149,24 +174,31 @@ function waitForInstalledExe(timeoutMs, installDir = null, expectedVersion = nul
 export function locateInstalledExe(installDir = null) {
   if (installDir) {
     const exe = path.join(installDir, EXE_NAME)
+
     return existsSync(exe) ? exe : null
   }
+
   const root = programsRoot()
+
   if (!existsSync(root)) {
     return null
   }
+
   const { stdout } = runCommandSync(
     `Get-ChildItem -Path '${root}' -Directory -ErrorAction SilentlyContinue | ` +
       `ForEach-Object { Join-Path $_.FullName '${EXE_NAME}' } | ` +
       `Where-Object { Test-Path $_ } | Select-Object -First 1`
   )
+
   const line = stdout.trim().split('\n')[0]?.trim()
+
   return line && existsSync(line) ? line : null
 }
 
 /** Read the ProductVersion string from an exe's version resource. */
 export function getExeVersion(exePath) {
   const { stdout } = runCommandSync(`(Get-Item '${exePath}').VersionInfo.ProductVersion`)
+
   return stdout.trim() || null
 }
 
@@ -184,29 +216,38 @@ export function getExeVersion(exePath) {
  */
 export function silentUninstall(installDir, { allowDefaultLocation = false } = {}) {
   assertWin32('silentUninstall')
+
   if (typeof installDir !== 'string' || installDir.trim() === '') {
     throw new Error('silentUninstall requires an explicit install directory (no scan fallback)')
   }
+
   const resolved = path.resolve(installDir)
+
   if (!allowDefaultLocation && pathsEqual(resolved, path.join(programsRoot(), PRODUCT_NAME))) {
     throw new Error(
       `Refusing to uninstall the default install location "${resolved}" — this is where a ` +
         `developer's REAL Orca lives. Isolated mode must target a separate --install-dir.`
     )
   }
+
   const exe = path.join(resolved, EXE_NAME)
+
   if (!existsSync(exe)) {
     return false
   }
+
   const exeDir = resolved
   const uninstaller = path.join(exeDir, `Uninstall ${PRODUCT_NAME}.exe`)
+
   if (!existsSync(uninstaller)) {
     return false
   }
+
   // NSIS uninstallers must be run from a copy (they relocate themselves); _?=
   // forces synchronous, in-place uninstall so we can assert completion.
   spawnSync(uninstaller, ['/S', `_?=${exeDir}`], { encoding: 'utf8' })
   sleepSync(2000)
+
   return !existsSync(exe)
 }
 
@@ -217,6 +258,7 @@ function pathsEqual(a, b) {
       .resolve(p)
       .replace(/[\\/]+$/, '')
       .toLowerCase()
+
   return norm(a) === norm(b)
 }
 

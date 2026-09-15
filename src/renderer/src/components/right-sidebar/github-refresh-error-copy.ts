@@ -24,6 +24,7 @@ export function getGitHubUnavailableEmptyStateCopy(
       )
     }
   }
+
   if (errorType === 'network') {
     return {
       title: translate(
@@ -36,6 +37,7 @@ export function getGitHubUnavailableEmptyStateCopy(
       )
     }
   }
+
   if (errorType === 'rate_limited') {
     return {
       title: translate(
@@ -48,6 +50,7 @@ export function getGitHubUnavailableEmptyStateCopy(
       )
     }
   }
+
   // Non-outage errors (auth, permission, unknown) keep the caller's generic copy.
   return null
 }
@@ -65,18 +68,21 @@ export function getChecksPanelRefreshErrorBannerLine(
       "Couldn't refresh. GitHub's API is temporarily unavailable. Showing the last known status."
     )
   }
+
   if (errorType === 'network') {
     return translate(
       'auto.components.right.sidebar.github.refresh.error.copy.6ec12cee0c',
       "Couldn't refresh. GitHub is unreachable right now. Showing the last known status."
     )
   }
+
   if (errorType === 'rate_limited') {
     return translate(
       'auto.components.right.sidebar.github.refresh.error.copy.de088015e8',
       "Couldn't refresh. GitHub is rate-limiting requests. Showing the last known status."
     )
   }
+
   return translate(
     'auto.components.right.sidebar.github.refresh.error.copy.d9dd7c6687',
     "Couldn't refresh from GitHub. Showing the last known status."

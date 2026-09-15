@@ -11,16 +11,19 @@ describe('SSH claimed PTY incarnation validation', () => {
       worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       agent: 'codex' as const
     }
+
     const surface = {
       worktreeId: 'worktree',
       tabId: 'tab',
       leafId: '11111111-1111-4111-8111-111111111111',
       terminalHandle: 'term_claimed'
     }
+
     const request = vi.fn(async (method: string) => {
       if (method === 'pty.getCapabilities') {
         return { agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION }
       }
+
       if (method === 'pty.spawn') {
         return {
           id: 'pty-invalid-incarnation',
@@ -37,8 +40,10 @@ describe('SSH claimed PTY incarnation validation', () => {
           }
         }
       }
+
       return undefined
     })
+
     const provider = new SshPtyProvider('conn-1', {
       request,
       notify: vi.fn(),

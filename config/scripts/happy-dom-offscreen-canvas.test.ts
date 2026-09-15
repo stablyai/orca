@@ -17,6 +17,7 @@ describe('happy-dom OffscreenCanvas compatibility', () => {
     while (openTerminals.length > 0) {
       openTerminals.pop()?.dispose()
     }
+
     vi.restoreAllMocks()
     document.body.replaceChildren()
   })
@@ -24,12 +25,15 @@ describe('happy-dom OffscreenCanvas compatibility', () => {
   it('delegates adapter-less 2D contexts to the existing HTML canvas double', () => {
     const offscreenCanvas = (globalThis as { OffscreenCanvas?: TestOffscreenCanvas })
       .OffscreenCanvas
+
     if (!offscreenCanvas) {
       expect(installHappyDomOffscreenCanvasCompatibility()).toBe(false)
+
       return
     }
 
     const context = { measureText: () => ({ width: 10 }) }
+
     const getContext = vi
       .spyOn(HTMLCanvasElement.prototype, 'getContext')
       .mockReturnValue(context as unknown as CanvasRenderingContext2D)
@@ -42,6 +46,7 @@ describe('happy-dom OffscreenCanvas compatibility', () => {
   it('does not turn unsupported non-2D contexts into test doubles', () => {
     const offscreenCanvas = (globalThis as { OffscreenCanvas?: TestOffscreenCanvas })
       .OffscreenCanvas
+
     if (!offscreenCanvas) {
       return
     }

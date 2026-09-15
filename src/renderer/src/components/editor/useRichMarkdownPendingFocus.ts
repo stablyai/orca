@@ -29,24 +29,31 @@ export function useRichMarkdownPendingFocus({
 }: PendingFocusOptions): void {
   const pendingEditorFocusRequest = useAppStore((s) => {
     const request = s.pendingEditorFocusRequest
+
     return matchesPendingEditorFocusRequest(request, { fileId, worktreeId, viewStateId })
       ? request
       : null
   })
+
   const consumeEditorFocusRequest = useAppStore((s) => s.consumeEditorFocusRequest)
 
   useEffect(() => {
     if (!pendingEditorFocusRequest) {
       return
     }
+
     if (pendingEditorFocusRequest.expiresAt <= Date.now()) {
       consumeEditorFocusRequest(pendingEditorFocusRequest.token)
+
       return
     }
+
     if (!editor || editor.isDestroyed) {
       return
     }
+
     let consumed = false
+
     const consumeIfFocused = (): void => {
       if (
         consumed ||
@@ -54,9 +61,11 @@ export function useRichMarkdownPendingFocus({
       ) {
         return
       }
+
       consumed = true
       consumeEditorFocusRequest(pendingEditorFocusRequest.token)
     }
+
     editor.on('focus', consumeIfFocused)
     cancelAutoFocusRef.current?.()
     cancelAutoFocusRef.current = autoFocusRichEditor(
@@ -65,12 +74,15 @@ export function useRichMarkdownPendingFocus({
       true,
       () => pendingEditorFocusRequest.expiresAt > Date.now()
     )
+
     const expiryTimer = window.setTimeout(() => {
       cancelAutoFocusRef.current?.()
       cancelAutoFocusRef.current = null
       consumeEditorFocusRequest(pendingEditorFocusRequest.token)
     }, pendingEditorFocusRequest.expiresAt - Date.now())
+
     consumeIfFocused()
+
     return () => {
       window.clearTimeout(expiryTimer)
       editor.off('focus', consumeIfFocused)

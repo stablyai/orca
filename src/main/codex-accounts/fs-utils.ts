@@ -10,11 +10,13 @@ export function writeFileAtomically(
   options?: { mode?: number }
 ): void {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
+
   try {
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
     renameFileWithWindowsRetry(tmpPath, targetPath)
   } catch (error) {
     rmSync(tmpPath, { force: true })
+
     // Why: on Windows, Chromium's renderer initialization calls
     // SetNamedSecurityInfo on the userData folder with a Protected DACL
     // that propagates empty inherited ACEs to child directories, causing
@@ -25,9 +27,11 @@ export function writeFileAtomically(
       try {
         grantDirAcl(dirname(targetPath))
         const retryTmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
+
         try {
           writeFileSync(retryTmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
           renameFileWithWindowsRetry(retryTmpPath, targetPath)
+
           return
         } catch {
           rmSync(retryTmpPath, { force: true })
@@ -36,6 +40,7 @@ export function writeFileAtomically(
         // icacls failure is not actionable; re-throw the original EPERM
       }
     }
+
     throw error
   }
 }
@@ -52,7 +57,9 @@ export function writeFileAtomicallyIfUnchanged(
     if (!isPermissionError(error) || process.platform !== 'win32') {
       throw error
     }
+
     grantDirAcl(dirname(targetPath))
+
     return attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
   }
 }
@@ -63,28 +70,36 @@ export function removeFileAtomicallyIfUnchanged(
 ): boolean {
   const heldPath = getGuardedOperationHeldPath(targetPath)
   recoverInterruptedGuardedOperation(heldPath, targetPath)
+
   try {
     assertHardLinkPublicationSupported(targetPath, targetPath)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return false
     }
+
     throw error
   }
+
   try {
     renameFileWithWindowsRetry(targetPath, heldPath)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return false
     }
+
     throw error
   }
+
   try {
     if (!nodeFileContentsEqualSync(heldPath, expectedContents)) {
       restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+
       return false
     }
+
     rmSync(heldPath, { force: true })
+
     return !existsSync(targetPath)
   } catch (error) {
     restoreMovedFileWithoutOverwrite(heldPath, targetPath)
@@ -100,6 +115,7 @@ function restoreMovedFileWithoutOverwrite(sourcePath: string, targetPath: string
   if (!existsSync(sourcePath)) {
     return
   }
+
   publishFileWithoutOverwrite(sourcePath, targetPath)
   rmSync(sourcePath, { force: true })
 }
@@ -112,6 +128,7 @@ function recoverInterruptedGuardedOperation(heldPath: string, targetPath: string
   if (!existsSync(heldPath)) {
     return
   }
+
   publishFileWithoutOverwrite(heldPath, targetPath)
   rmSync(heldPath, { force: true })
 }
@@ -125,29 +142,40 @@ function attemptGuardedAtomicWrite(
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
   const heldPath = getGuardedOperationHeldPath(targetPath)
   recoverInterruptedGuardedOperation(heldPath, targetPath)
+
   try {
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
+
     if (expectedContents === null) {
       return publishFileWithoutOverwrite(tmpPath, targetPath)
     }
+
     assertHardLinkPublicationSupported(tmpPath, targetPath)
+
     try {
       renameFileWithWindowsRetry(targetPath, heldPath)
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         return false
       }
+
       throw error
     }
+
     if (!nodeFileContentsEqualSync(heldPath, expectedContents)) {
       restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+
       return false
     }
+
     if (!publishFileWithoutOverwrite(tmpPath, targetPath)) {
       rmSync(heldPath, { force: true })
+
       return false
     }
+
     rmSync(heldPath, { force: true })
+
     return true
   } catch (error) {
     restoreMovedFileWithoutOverwrite(heldPath, targetPath)
@@ -159,6 +187,7 @@ function attemptGuardedAtomicWrite(
 
 function assertHardLinkPublicationSupported(sourcePath: string, targetPath: string): void {
   const probePath = `${targetPath}.${process.pid}.${randomUUID()}.link-probe`
+
   try {
     if (!publishFileWithoutOverwrite(sourcePath, probePath)) {
       throw new Error(`Guarded file publication probe already exists: ${probePath}`)
@@ -171,23 +200,29 @@ function assertHardLinkPublicationSupported(sourcePath: string, targetPath: stri
 function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): boolean {
   try {
     linkSync(sourcePath, targetPath)
+
     return true
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
       return false
     }
+
     if (isPermissionError(error) && process.platform === 'win32') {
       grantDirAcl(dirname(targetPath))
+
       try {
         linkSync(sourcePath, targetPath)
+
         return true
       } catch (retryError) {
         if ((retryError as NodeJS.ErrnoException).code === 'EEXIST') {
           return false
         }
+
         throw retryError
       }
     }
+
     throw error
   }
 }
@@ -207,16 +242,20 @@ export function copyFileWithWindowsRetry(source: string, target: string): void {
 
 function runFileOperationWithWindowsRetry(operation: () => void): void {
   const maxAttempts = process.platform === 'win32' ? 6 : 1
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       operation()
+
       return
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
+
       if (attempt < maxAttempts && (code === 'EPERM' || code === 'EACCES' || code === 'EBUSY')) {
         sleepSync(attempt * 50)
         continue
       }
+
       throw error
     }
   }
@@ -225,6 +264,7 @@ function runFileOperationWithWindowsRetry(operation: () => void): void {
 // Why: writeFileAtomically is a sync API called from sync paths, so the retry
 // backoff must park the thread instead of burning CPU in a Date.now() loop.
 const sleepBuffer = new Int32Array(new SharedArrayBuffer(4))
+
 function sleepSync(ms: number): void {
   Atomics.wait(sleepBuffer, 0, 0, ms)
 }

@@ -29,14 +29,17 @@ export async function installWslGuestHooks(options: {
 }): Promise<void> {
   const { mux, guestHome, codexHomePath, distro, installHooks, settings, warn, installCodex } =
     options
+
   let agents
   let claudeVersion: string | null = null
+
   try {
     const detected = readManagedHookDetectionResult(
       await mux.request('preflight.detectAgents', {
         commands: buildManagedHookDetectionCommands(settings, 'linux')
       })
     )
+
     agents = detected.agents
     claudeVersion = detected.claudeVersion
   } catch (error) {
@@ -45,14 +48,18 @@ export async function installWslGuestHooks(options: {
         error instanceof Error ? error.message : String(error)
       }`
     )
+
     return
   }
+
   if (agents.length === 0) {
     return
   }
+
   if (agents.includes('codex') && codexHomePath) {
     try {
       const status = await installCodex(codexHomePath, distro)
+
       if (status?.state === 'error') {
         warn(
           `[agent-hooks] WSL Codex hook install for '${distro}' failed: ${status.detail ?? 'unknown error'}`
@@ -64,14 +71,18 @@ export async function installWslGuestHooks(options: {
       )
     }
   }
+
   // Codex is redirected into the runtime home and must use the canonical
   // runtime-host writer above; the relay adapter owns all other agents.
   const remoteAgents = agents.filter((agent) => agent !== 'codex')
+
   const results = await installHooks(createWslHookSftpAdapter(mux), guestHome, {
     agents: remoteAgents,
     ...(claudeVersion ? { claudeVersion } : {})
   })
+
   const failed = results.filter((r) => r.state === 'error').length
+
   if (failed > 0) {
     warn(
       `[agent-hooks] WSL hook install for '${distro}': ${failed}/${results.length} agents failed`
@@ -94,6 +105,7 @@ const ERRNO_TO_SFTP_CODE: Record<string, number> = {
 function toSftpError(failure: { errno?: string; message?: string }): Error {
   const err = new Error(failure.message ?? 'wsl fs bridge failure') as Error & { code?: number }
   err.code = ERRNO_TO_SFTP_CODE[failure.errno ?? ''] ?? 5
+
   return err
 }
 
@@ -108,14 +120,18 @@ export function createWslHookSftpAdapter(mux: SshChannelMultiplexer): SFTPWrappe
       .request(method, params)
       .then((raw) => {
         const result = raw as WslFsResult<Wire>
+
         if (!result || typeof result !== 'object' || result.ok !== true) {
           callback(toSftpError((result ?? {}) as { errno?: string; message?: string }))
+
           return
         }
+
         callback(null, pick(result))
       })
       .catch((err) => callback(err instanceof Error ? err : new Error(String(err))))
   }
+
   const callVoid = (
     method: string,
     params: Record<string, unknown>,

@@ -19,6 +19,7 @@ function mockChild(pid = 4321): ChildProcess {
   child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() })
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
+
   return child as unknown as ChildProcess
 }
 
@@ -66,6 +67,7 @@ describe('hosted CLI deadline logging', () => {
     const rejection = expect(
       ghExecFileAsync(['api', '--include', 'user/starred/stablyai/orca'], { timeout: 15_000 })
     ).rejects.toThrow('timed out')
+
     await vi.advanceTimersByTimeAsync(15_000)
     await vi.advanceTimersByTimeAsync(15_000)
     await rejection
@@ -85,6 +87,7 @@ describe('hosted CLI deadline logging', () => {
         signal: controller.signal
       })
     ).rejects.toThrow()
+
     controller.abort()
     await vi.advanceTimersByTimeAsync(15_000)
     await rejection

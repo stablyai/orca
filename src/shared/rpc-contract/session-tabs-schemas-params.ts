@@ -65,25 +65,33 @@ export function parseTerminalPaneLayoutNode(value: unknown): TerminalPaneLayoutN
   // stack (no recursion) enforcing caps, then build bottom-up.
   let nodeCount = 0
   const stack: { raw: unknown; depth: number }[] = [{ raw: value, depth: 0 }]
+
   while (stack.length > 0) {
     const { raw, depth } = stack.pop()!
+
     if (depth > MAX_PANE_LAYOUT_DEPTH || ++nodeCount > MAX_PANE_LAYOUT_NODES) {
       return null
     }
+
     if (typeof raw !== 'object' || raw === null) {
       return null
     }
+
     const node = raw as Record<string, unknown>
+
     if (node.type === 'leaf') {
       if (typeof node.leafId !== 'string' || node.leafId.length < 1 || node.leafId.length > 128) {
         return null
       }
+
       continue
     }
+
     if (node.type === 'split') {
       if (node.direction !== 'horizontal' && node.direction !== 'vertical') {
         return null
       }
+
       if (
         node.ratio !== undefined &&
         (typeof node.ratio !== 'number' ||
@@ -93,11 +101,14 @@ export function parseTerminalPaneLayoutNode(value: unknown): TerminalPaneLayoutN
       ) {
         return null
       }
+
       stack.push({ raw: node.first, depth: depth + 1 }, { raw: node.second, depth: depth + 1 })
       continue
     }
+
     return null
   }
+
   return value as TerminalPaneLayoutNodeInput
 }
 
@@ -176,6 +187,7 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
       message: 'Agent prompt requires an agent preset'
     })
   }
+
   if (value.agentPrompt !== undefined && value.command !== undefined) {
     context.addIssue({
       code: 'custom',

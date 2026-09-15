@@ -33,6 +33,7 @@ export function useCombinedDiffVirtualizer({
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: (index) => {
       const section = sections[index]
+
       if (!section) {
         return 88
       }
@@ -44,10 +45,12 @@ export function useCombinedDiffVirtualizer({
     // Why: mark every virtualizer-issued scroll so events are attributed to the user only when this code didn't cause them.
     scrollToFn: (offset, options, instance) => {
       const target = offset + (options.adjustments ?? 0)
+
       // Why: writing the current position emits no scroll event; a mark here would go stale and claim a later user scroll.
       if (instance.scrollElement?.scrollTop !== target) {
         programmaticScrollMarks.mark(target)
       }
+
       elementScroll(offset, options, instance)
     },
     // Why: TanStack re-runs getItemKey for every index on each measurement pass, so the key is

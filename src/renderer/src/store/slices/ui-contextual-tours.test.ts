@@ -306,11 +306,13 @@ describe('createUISlice contextual tours', () => {
 
   it('advances across visible steps and leaves completion to the overlay', () => {
     const store = createUIStore()
+
     const visibleSelectors = [
       '[data-contextual-tour-target="browser-grab-control"]',
       '[data-contextual-tour-target="browser-annotation-control"]',
       '[data-contextual-tour-target="browser-import-cookies-control"]'
     ]
+
     stubContextualTourTargets(visibleSelectors)
     store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
     store.getState().requestContextualTour('browser', 'browser_visible')
@@ -325,10 +327,12 @@ describe('createUISlice contextual tours', () => {
 
   it('advances the browser tour to the cookie step before Import Cookies is measurable', () => {
     const store = createUIStore()
+
     const visibleSelectors = [
       '[data-contextual-tour-target="browser-grab-control"]',
       '[data-contextual-tour-target="browser-annotation-control"]'
     ]
+
     stubContextualTourTargets(visibleSelectors)
     store.getState().hydratePersistedUI(makeAutoTourEligibleUI())
     store.getState().requestContextualTour('browser', 'browser_visible')

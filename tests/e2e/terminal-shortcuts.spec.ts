@@ -42,17 +42,21 @@ async function setActivePaneForegroundAgent(
   return page.evaluate((agent) => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!state || !tabId || !pane) {
       throw new Error('No active terminal pane for foreground-agent setup')
     }
+
     const paneKey = `${tabId}:${pane.leafId}`
     state.setPaneForegroundAgent(paneKey, {
       agent,
@@ -61,6 +65,7 @@ async function setActivePaneForegroundAgent(
       // belong to this PTY; keep the fixture aligned with that trust gate.
       routingTrusted: agent === 'droid'
     })
+
     return paneKey
   }, agent)
 }
@@ -75,20 +80,25 @@ async function dispatchCtrlCToActiveTerminalTextarea(
   return page.evaluate((dispatchOptions) => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     const textarea = pane?.container.querySelector(
       '.xterm-helper-textarea'
     ) as HTMLTextAreaElement | null
+
     if (!pane || !textarea) {
       throw new Error('No active terminal textarea for Ctrl+C dispatch')
     }
+
     pane.terminal.clearSelection()
     pane.terminal.focus()
     textarea.focus()
@@ -101,8 +111,10 @@ async function dispatchCtrlCToActiveTerminalTextarea(
         bubbles: true,
         cancelable: true
       })
+
       Object.defineProperty(event, 'keyCode', { get: () => 67 })
       Object.defineProperty(event, 'which', { get: () => 67 })
+
       return event
     }
 
@@ -112,6 +124,7 @@ async function dispatchCtrlCToActiveTerminalTextarea(
     textarea.dispatchEvent(keydown)
     const keyup = createEvent('keyup', dispatchOptions.keyupCtrlKey !== false)
     textarea.dispatchEvent(keyup)
+
     return {
       keydownDefaultPrevented: keydown.defaultPrevented,
       keyupDefaultPrevented: keyup.defaultPrevented
@@ -135,11 +148,14 @@ async function seedFloatingTerminalTabSwitchScenario(page: Page): Promise<{
 }> {
   return page.evaluate((floatingWorktreeId) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const state = store.getState()
     const backgroundWorktreeId = state.activeWorktreeId
+
     if (!backgroundWorktreeId) {
       throw new Error('No active background worktree')
     }
@@ -150,6 +166,7 @@ async function seedFloatingTerminalTabSwitchScenario(page: Page): Promise<{
       ) ??
       state.tabsByWorktree[backgroundWorktreeId]?.find((tab) => tab.id === state.activeTabId) ??
       state.createTab(backgroundWorktreeId)
+
     state.createTab(backgroundWorktreeId)
     state.setActiveTab(backgroundFirst.id)
     state.setActiveTabType('terminal')
@@ -157,13 +174,17 @@ async function seedFloatingTerminalTabSwitchScenario(page: Page): Promise<{
     const floatingFirst = state.createTab(floatingWorktreeId, undefined, undefined, {
       activate: false
     })
+
     state.activateTab(floatingFirst.id)
+
     const floatingGroupId =
       state.activeGroupIdByWorktree[floatingWorktreeId] ??
       state.groupsByWorktree[floatingWorktreeId]?.[0]?.id
+
     const floatingSecond = state.createTab(floatingWorktreeId, floatingGroupId, undefined, {
       activate: false
     })
+
     state.activateTab(floatingFirst.id)
 
     return {
@@ -177,19 +198,24 @@ async function seedFloatingTerminalTabSwitchScenario(page: Page): Promise<{
 async function getActiveFloatingTerminalTabId(page: Page): Promise<string | null> {
   return page.evaluate((floatingWorktreeId) => {
     const state = window.__store?.getState()
+
     if (!state) {
       return null
     }
+
     const groupId = state.activeGroupIdByWorktree[floatingWorktreeId]
+
     const group =
       (groupId
         ? state.groupsByWorktree[floatingWorktreeId]?.find((candidate) => candidate.id === groupId)
         : null) ??
       state.groupsByWorktree[floatingWorktreeId]?.find((candidate) => candidate.activeTabId) ??
       null
+
     const activeTab = group?.activeTabId
       ? state.unifiedTabsByWorktree[floatingWorktreeId]?.find((tab) => tab.id === group.activeTabId)
       : null
+
     return activeTab?.contentType === 'terminal' ? activeTab.entityId : null
   }, FLOATING_TERMINAL_WORKTREE_ID)
 }
@@ -198,6 +224,7 @@ async function getActiveBackgroundTerminalTabId(page: Page): Promise<string | nu
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     return worktreeId ? (state.activeTabIdByWorktree[worktreeId] ?? state.activeTabId) : null
   })
 }
@@ -208,18 +235,22 @@ async function getActiveTerminalViewport(
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const buffer = pane?.terminal.buffer.active
+
     if (!buffer) {
       throw new Error('No active terminal buffer')
     }
+
     return {
       viewportY: buffer.viewportY,
       baseY: buffer.baseY
@@ -231,17 +262,21 @@ async function enableKittyKeyboardReporting(page: Page, flags: number): Promise<
   await page.evaluate(async (flags) => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('No active terminal pane for kitty keyboard setup')
     }
+
     await new Promise<void>((resolve) => {
       pane.terminal.write(`\x1b[=${flags}u`, resolve)
     })
@@ -252,20 +287,24 @@ async function getKittyKeyboardFlags(page: Page): Promise<number | null> {
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     const terminal = pane?.terminal as
       | {
           core?: { coreService?: { kittyKeyboard?: { flags?: number } } }
           _core?: { coreService?: { kittyKeyboard?: { flags?: number } } }
         }
       | undefined
+
     return (
       terminal?.core?.coreService?.kittyKeyboard?.flags ??
       terminal?._core?.coreService?.kittyKeyboard?.flags ??
@@ -284,21 +323,26 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     pane?.terminal.focus()
+
     const textarea = pane?.container.querySelector(
       '.xterm-helper-textarea'
     ) as HTMLTextAreaElement | null
+
     if (!textarea) {
       throw new Error('No xterm helper textarea to receive keyboard input')
     }
+
     textarea.focus()
 
     const keydown = new KeyboardEvent('keydown', {
@@ -308,6 +352,7 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
       bubbles: true,
       cancelable: true
     })
+
     Object.defineProperty(keydown, 'keyCode', { get: () => 65 })
     Object.defineProperty(keydown, 'which', { get: () => 65 })
     textarea.dispatchEvent(keydown)
@@ -329,6 +374,7 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
       bubbles: true,
       cancelable: true
     })
+
     Object.defineProperty(keypress, 'keyCode', { get: () => 1060 })
     Object.defineProperty(keypress, 'charCode', { get: () => 1060 })
     Object.defineProperty(keypress, 'which', { get: () => 1060 })
@@ -342,6 +388,7 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
         cancelable: false,
         composed: false
       })
+
       // Why: older Linux Chromium builds can ignore InputEventInit fields on
       // synthetic events; xterm's input fallback reads these exact properties.
       Object.defineProperties(input, {
@@ -349,6 +396,7 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
         inputType: { get: () => 'insertText' },
         composed: { get: () => false }
       })
+
       return input
     }
 
@@ -364,6 +412,7 @@ async function pressShiftedRussianLayoutKey(page: Page): Promise<{
       bubbles: true,
       cancelable: true
     })
+
     Object.defineProperty(keyup, 'keyCode', { get: () => 65 })
     Object.defineProperty(keyup, 'which', { get: () => 65 })
     textarea.dispatchEvent(keyup)
@@ -394,6 +443,7 @@ async function pressAndExpectWrite(
 ): Promise<void> {
   await clearPtyWriteLog(app)
   await focusActiveTerminalInput(page)
+
   for (let index = 0; index < repetitions; index++) {
     await page.keyboard.press(chord)
   }
@@ -411,6 +461,7 @@ async function pressAndExpectWrite(
 }
 
 const isMac = process.platform === 'darwin'
+
 const mod = isMac ? 'Meta' : 'Control'
 
 // Why: split chords differ by platform. On macOS Cmd+D splits vertically and
@@ -418,6 +469,7 @@ const mod = isMac ? 'Meta' : 'Control'
 // (see terminal-shortcut-policy.ts and #586), so vertical is Ctrl+Shift+D
 // and horizontal is Alt+Shift+D (Windows Terminal convention).
 const splitVerticalChord = isMac ? `${mod}+d` : `${mod}+Shift+d`
+
 const splitHorizontalChord = isMac ? `${mod}+Shift+d` : 'Alt+Shift+d'
 
 // Why: a freshly split pane can transiently still report a running child, so
@@ -440,6 +492,7 @@ async function closeActivePaneAndSettle(page: Page, expectedCount: number): Prom
             console.warn('closeActivePaneAndSettle: confirm click failed', err)
           })
         }
+
         return countVisibleTerminalPanes(page)
       },
       {
@@ -455,14 +508,17 @@ async function closeActivePaneAndSettle(page: Page, expectedCount: number): Prom
 // a single main-process singleton. Parallel execution would interleave chord
 // effects and corrupt assertions.
 test.describe.configure({ mode: 'serial' })
+
 test.describe('Terminal Shortcuts', () => {
   test.beforeEach(async ({ orcaPage }) => {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
+
     const hasPaneManager = await waitForActiveTerminalManager(orcaPage, 30_000)
       .then(() => true)
       .catch(() => false)
+
     test.skip(
       !hasPaneManager,
       'Electron automation in this environment never mounts the live TerminalPane manager.'
@@ -475,6 +531,7 @@ test.describe('Terminal Shortcuts', () => {
     const ptyId = await waitForActivePanePtyId(orcaPage)
 
     await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b\r')
+
     if (process.platform === 'win32') {
       return
     }
@@ -501,6 +558,7 @@ test.describe('Terminal Shortcuts', () => {
     await installMainProcessPtyWriteSpy(electronApp)
     await waitForActivePanePtyId(orcaPage)
     const paneKey = await setActivePaneForegroundAgent(orcaPage, 'droid')
+
     try {
       await pressAndExpectWrite(orcaPage, electronApp, 'Shift+Enter', '\x1b[13;2u', 2)
       await setActivePaneForegroundAgent(orcaPage, 'antigravity')
@@ -536,6 +594,7 @@ test.describe('Terminal Shortcuts', () => {
     if (process.platform === 'win32') {
       await pressAndExpectWrite(orcaPage, electronApp, 'Control+Enter', '\r')
       const paneKey = await setActivePaneForegroundAgent(orcaPage, 'droid')
+
       try {
         // Droid queries CSI-u without activating live flags; trusted process evidence preserves cue/queue.
         await pressAndExpectWrite(orcaPage, electronApp, 'Control+Enter', '\x1b[13;5u')
@@ -545,6 +604,7 @@ test.describe('Terminal Shortcuts', () => {
           paneKey
         )
       }
+
       return
     }
 
@@ -608,31 +668,39 @@ test.describe('Terminal Shortcuts', () => {
     const hasPane = await orcaPage.evaluate(() => {
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId
+
       const tabId =
         state?.activeTabType === 'terminal'
           ? state.activeTabId
           : worktreeId
             ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
             : null
+
       const manager = tabId ? window.__paneManagers?.get(tabId) : null
       manager?.setTerminalGpuAcceleration('auto')
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
       return Boolean(pane)
     })
+
     test.skip(!hasPane, 'No active terminal pane for renderer validation')
+
     const webglActive = await orcaPage
       .waitForFunction(
         () => {
           const state = window.__store?.getState()
           const worktreeId = state?.activeWorktreeId
+
           const tabId =
             state?.activeTabType === 'terminal'
               ? state.activeTabId
               : worktreeId
                 ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
                 : null
+
           const manager = tabId ? window.__paneManagers?.get(tabId) : null
           const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
           return Boolean(pane?.webglAddon)
         },
         null,
@@ -640,6 +708,7 @@ test.describe('Terminal Shortcuts', () => {
       )
       .then(() => true)
       .catch(() => false)
+
     test.skip(!webglActive, 'WebGL was not active in this headful environment')
 
     const ptyId = await waitForActivePanePtyId(orcaPage)
@@ -653,18 +722,23 @@ test.describe('Terminal Shortcuts', () => {
           orcaPage.evaluate((expectedMarker) => {
             const state = window.__store?.getState()
             const worktreeId = state?.activeWorktreeId
+
             const tabId =
               state?.activeTabType === 'terminal'
                 ? state.activeTabId
                 : worktreeId
                   ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
                   : null
+
             const manager = tabId ? window.__paneManagers?.get(tabId) : null
             const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
             const terminalText = pane?.terminal.buffer.active
               .translateBufferLineToString(pane.terminal.buffer.active.cursorY, true)
               .trim()
+
             const visibleText = pane?.container.textContent ?? ''
+
             return {
               markerVisible:
                 visibleText.includes(expectedMarker) || terminalText === expectedMarker,
@@ -688,9 +762,11 @@ test.describe('Terminal Shortcuts', () => {
     const scenario = await seedFloatingTerminalTabSwitchScenario(orcaPage)
     await orcaPage.evaluate(async () => {
       const state = window.__store?.getState()
+
       if (state?.settings?.floatingTerminalEnabled !== true) {
         await state?.updateSettings({ floatingTerminalEnabled: true })
       }
+
       if (!document.querySelector('[data-floating-terminal-panel][aria-hidden="false"]')) {
         window.dispatchEvent(new CustomEvent('orca-toggle-floating-terminal'))
       }
@@ -807,11 +883,14 @@ test.describe('Terminal Shortcuts', () => {
       orcaPage.evaluate(() => {
         const state = window.__store?.getState()
         const tabId = state?.activeTabId
+
         if (!state || !tabId) {
           return false
         }
+
         return state.expandedPaneByTabId[tabId] === true
       })
+
     expect(await readExpanded()).toBe(false)
     await focusActiveTerminalInput(orcaPage)
     await orcaPage.keyboard.press(`${mod}+Shift+Enter`)
@@ -868,6 +947,7 @@ test.describe('Terminal Shortcuts', () => {
       .poll(
         async () => {
           const viewport = await getActiveTerminalViewport(orcaPage)
+
           return viewport.baseY > 0 && viewport.viewportY === viewport.baseY
         },
         {
@@ -894,6 +974,7 @@ test.describe('Terminal Shortcuts', () => {
       .poll(
         async () => {
           const viewport = await getActiveTerminalViewport(orcaPage)
+
           return viewport.viewportY === viewport.baseY
         },
         {

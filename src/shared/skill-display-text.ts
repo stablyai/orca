@@ -5,6 +5,7 @@
 // divergent copies.
 export function isSafeDisplayCharacter(character: string): boolean {
   const code = character.codePointAt(0) ?? 0
+
   return !(
     code <= 0x1f ||
     (code >= 0x7f && code <= 0x9f) ||

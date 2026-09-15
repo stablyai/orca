@@ -6,6 +6,7 @@ import {
 } from './shell-startup-output-scanner'
 
 const READY_MARKER = '\x1b]777;orca-shell-ready\x07'
+
 const IDENTITY_MARKER = '\x1b]777;orca-shell-start:12345\x07'
 
 function scanChunks(chunks: string[]): {
@@ -27,6 +28,7 @@ function scanChunks(chunks: string[]): {
     ready ||= scanned.ready
     postMarkerBytesObserved ||= scanned.postMarkerBytesObserved
   }
+
   return { output, shellPid, ready, postMarkerBytesObserved }
 }
 
@@ -39,6 +41,7 @@ function expectEverySplitToProduce(
       input.slice(0, split),
       input.slice(split)
     ])
+
     expect(scanned, `split ${split}`).toEqual(expected)
   }
 }

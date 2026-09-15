@@ -54,6 +54,7 @@ describe('settings-form-option-filter', () => {
     const oversizedQuery = 'secret-terminal-theme-search'.repeat(
       SETTINGS_FORM_OPTION_QUERY_MAX_BYTES
     )
+
     const theme = {
       value: 'theme',
       group: 'built-in',
@@ -72,6 +73,7 @@ describe('settings-form-option-filter', () => {
 
   it('rejects oversized font queries before reading suggestion text', () => {
     const oversizedQuery = 'secret-font-search'.repeat(SETTINGS_FORM_OPTION_QUERY_MAX_BYTES)
+
     const font = {
       toLowerCase(): string {
         throw new Error('oversized font searches must not scan font names')
@@ -108,6 +110,7 @@ describe('settings-form-option-filter', () => {
 
   it('keeps a highlighted late font visible inside the render cap', () => {
     const lateFontIndex = FONT_SUGGESTION_RENDER_LIMIT + 12
+
     const suggestions = Array.from(
       { length: lateFontIndex + 1 },
       (_value, index) => `System Font ${index}`

@@ -13,6 +13,7 @@ describe('createWslCliReconciliationStartupBarrier', () => {
       const reconciliation = new Promise<void>((resolve) => {
         resolveReconciliation = resolve
       })
+
       const barrier = createWslCliReconciliationStartupBarrier(reconciliation)
       let barrierSettled = false
       void barrier.then(() => {
@@ -38,6 +39,7 @@ describe('createWslCliReconciliationStartupBarrier', () => {
       const reconciliation = new Promise<void>((_resolve, reject) => {
         rejectReconciliation = reject
       })
+
       const barrier = createWslCliReconciliationStartupBarrier(reconciliation)
       let barrierSettled = false
       void barrier.then(() => {
@@ -68,8 +70,10 @@ describe('createWslCliReconciliationStartupBarrier', () => {
       }).then(() => {
         reconciliationCompleted = true
       })
+
       const barrier = createWslCliReconciliationStartupBarrier(reconciliation)
       let rpcReady = false
+
       const serveRpcReadiness = barrier.then(() => {
         rpcReady = true
       })
@@ -102,6 +106,7 @@ describe('createWslCliReconciliationStartupBarrier', () => {
       }).catch((error) => {
         reportedErrors.push(error instanceof Error ? error.message : String(error))
       })
+
       const barrier = createWslCliReconciliationStartupBarrier(reconciliation, { timeoutMs: 10 })
 
       await vi.advanceTimersByTimeAsync(10)

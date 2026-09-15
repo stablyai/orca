@@ -9,12 +9,14 @@ import { XTERM_HTML } from './terminal-webview-html'
 function iifeSource(): string {
   const start = XTERM_HTML.indexOf('(function() {')
   const end = XTERM_HTML.lastIndexOf('})();')
+
   return XTERM_HTML.slice(start, end + '})();'.length)
 }
 
 function bodyMarkup(): string {
   const start = XTERM_HTML.indexOf('<body>') + '<body>'.length
   const end = XTERM_HTML.indexOf('<script>', start)
+
   return XTERM_HTML.slice(start, end)
 }
 
@@ -36,9 +38,11 @@ function makeTerminal(lineRef: { current: string }, mouseTrackingMode = 'none') 
         type: 'normal' as const,
         getLine(row: number) {
           const text = row === 0 ? lineRef.current : undefined
+
           if (text === undefined) {
             return null
           }
+
           return {
             // Honor (trimRight, startCol, endCol) like real xterm so the
             // cell→string-index conversion (cellColToStringIndex) resolves correctly.
@@ -85,6 +89,7 @@ function boot(
   w.Terminal = function () {
     return makeTerminal(lineRef, mouseTrackingMode)
   }
+
   w.ReactNativeWebView = {
     postMessage(s: string) {
       posted.push(JSON.parse(s))
@@ -98,6 +103,7 @@ function boot(
       data: JSON.stringify({ type: 'init', cols: 80, rows: 24, initialData: '', oscLinks })
     })
   )
+
   return {
     posted,
     setLine: (nextLine: string) => {
@@ -251,18 +257,22 @@ describe('terminal WebView tap routing', () => {
       endCol: 10,
       uri: `file:///tmp/result-${index}.json#L1`
     }))
+
     const { posted } = boot('plain text', oscLinks)
     await settle()
 
     const OriginalURL = window.URL
     let parseCount = 0
+
     const CountingURL = class extends OriginalURL {
       constructor(url: string | URL, base?: string | URL) {
         parseCount += 1
         super(url, base)
       }
     }
+
     Object.defineProperty(window, 'URL', { value: CountingURL, configurable: true })
+
     try {
       fireTouch('touchstart', [{ x: screenXForCol(5), y: tapY }])
       fireTouch('touchend', [])

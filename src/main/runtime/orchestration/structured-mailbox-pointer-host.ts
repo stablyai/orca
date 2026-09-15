@@ -42,9 +42,11 @@ export function readStructuredSessionGateFacts(
   sessionId: string
 ): StructuredSessionGateFacts | null {
   const host = getStructuredAgentSessionHost()
+
   if (!host) {
     return null
   }
+
   try {
     return structuredSessionGateFacts(host.journalSnapshot(sessionId).items)
   } catch (error) {
@@ -52,6 +54,7 @@ export function readStructuredSessionGateFacts(
     if ((error as Error)?.message !== AGENT_SESSION_NOT_ATTACHED.code) {
       console.warn('[orchestration] structured journal unreadable', sessionId, error)
     }
+
     return null
   }
 }
@@ -70,9 +73,11 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
 
     async send(input) {
       const host = getStructuredAgentSessionHost()
+
       if (!host) {
         return { kind: 'unattached' }
       }
+
       const result = await host.send(
         {
           callerKey: input.dispatchId
@@ -89,13 +94,16 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
           body: input.body
         }
       )
+
       if (!result.ok) {
         return result.refusal.code === AGENT_SESSION_NOT_ATTACHED.code
           ? { kind: 'unattached' }
           : { kind: 'sent', state: 'rejected' }
       }
+
       // `pending` is not yet an acknowledgement; only `accepted` may consume mail.
       const state = result.value.submission.dispatchState
+
       return {
         kind: 'sent',
         state: state === 'accepted' ? 'accepted' : state === 'rejected' ? 'rejected' : 'unknown'

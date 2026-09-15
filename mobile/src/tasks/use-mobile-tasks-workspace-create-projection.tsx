@@ -68,14 +68,17 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     workspaceSshConnecting,
     workspaceSshState
   } = model
+
   const getWorkspaceTargetRepo = useCallback(
     (item: ActionableTaskItem, repoIdOverride?: string): RepoSummary | null => {
       if (item.provider === 'github' || item.provider === 'gitlab') {
         return repos.find((entry) => entry.id === item.source.repoId) ?? null
       }
+
       if (repoIdOverride) {
         return workspaceRepos.find((entry) => entry.id === repoIdOverride) ?? null
       }
+
       return workspaceRepos[0] ?? null
     },
     [repos, workspaceRepos]
@@ -88,20 +91,26 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
         : null,
     [getWorkspaceTargetRepo, workspaceCreateDraft]
   )
+
   const workspaceCreateTargetConnectionId = workspaceCreateTargetRepo?.connectionId ?? null
+
   const workspaceCreateSshGate = deriveWorkspaceSshGate({
     connectionId: workspaceCreateTargetConnectionId,
     state: workspaceSshState,
     connecting: workspaceSshConnecting
   })
+
   const workspaceCreateSshStatus = workspaceCreateSshGate.status
   const workspaceCreateRequiresSshConnection = workspaceCreateSshGate.requiresConnection
   const workspaceCreateSshConnectInProgress = workspaceCreateSshGate.connectInProgress
   const workspaceCreateSshError = workspaceCreateSshGate.error
+
   const workspaceCreateCanPickRepo =
     workspaceCreateDraft?.item.provider === 'linear' && workspaceRepos.length > 1
+
   const workspaceSparseCheckoutAvailable =
     workspaceCreateTargetRepo != null && !workspaceCreateTargetRepo.connectionId
+
   const workspaceSparseDraftParsed = useMemo(
     () =>
       workspaceSparseDraft
@@ -109,7 +118,9 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
         : null,
     [workspaceSparseDraft]
   )
+
   const workspaceSparseDraftName = workspaceSparseDraft?.name.trim() ?? ''
+
   const workspaceSparseDraftNameCollision =
     workspaceSparseDraft && workspaceSparseDraftName
       ? (workspaceSparsePresets.find(
@@ -118,6 +129,7 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
             preset.name.toLowerCase() === workspaceSparseDraftName.toLowerCase()
         ) ?? null)
       : null
+
   const workspaceSparseDraftError =
     workspaceSparseDraft && workspaceSparseDraftName.length === 0
       ? 'Name is required.'
@@ -126,6 +138,7 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
         : workspaceSparseDraftNameCollision
           ? `"${workspaceSparseDraftNameCollision.name}" already exists.`
           : (workspaceSparseDraftParsed?.error ?? null)
+
   const canSaveWorkspaceSparseDraft =
     workspaceSparseDraft !== null &&
     workspaceCreateTargetRepo !== null &&
@@ -141,10 +154,12 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
       MOBILE_TUI_AGENT_AUTO_PICK_ORDER,
       runtimeTaskSettings.disabledTuiAgents
     )
+
     const availableAgents =
       workspaceDetectedAgentIds === null
         ? new Set<TuiAgent>(enabledAgents)
         : new Set<TuiAgent>(enabledAgents.filter((agent) => workspaceDetectedAgentIds.has(agent)))
+
     if (
       workspaceAgent &&
       workspaceAgent !== 'blank' &&
@@ -153,7 +168,9 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     ) {
       availableAgents.add(workspaceAgent)
     }
+
     const agents = MOBILE_TUI_AGENT_AUTO_PICK_ORDER.filter((agent) => availableAgents.has(agent))
+
     return [
       ...agents.map((agent) => ({
         value: agent,
@@ -169,6 +186,7 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
       }
     ]
   }, [runtimeTaskSettings.disabledTuiAgents, workspaceAgent, workspaceDetectedAgentIds])
+
   const openWorkspaceCreate = useCallback((item: ActionableTaskItem, repoIdOverride?: string) => {
     const suggestedName = taskWorkspaceSuggestedName(item)
     setWorkspaceCreateDraft({ item, ...(repoIdOverride ? { repoIdOverride } : {}) })
@@ -206,10 +224,12 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
       } else if (workspaceNameDraft !== workspaceLastAutoName) {
         setWorkspaceLastAutoName('')
       }
+
       if (workspaceBranchNameOverride && nextName !== workspaceBranchAutoName) {
         setWorkspaceBranchNameOverride(undefined)
         setWorkspaceBranchAutoName('')
       }
+
       setWorkspaceNameDraft(nextName)
     },
     [
@@ -228,13 +248,16 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
         currentName: workspaceNameDraft,
         lastAutoName: workspaceLastAutoName
       })
+
       setWorkspaceBaseBranch(branch)
       setWorkspaceBranchAutoName(selection.branchAutoName)
       setWorkspaceBranchNameOverride(selection.branchNameOverride)
+
       if (selection.name !== undefined && selection.lastAutoName !== undefined) {
         setWorkspaceNameDraft(selection.name)
         setWorkspaceLastAutoName(selection.lastAutoName)
       }
+
       setShowWorkspaceBaseBranchPicker(false)
     },
     [workspaceLastAutoName, workspaceNameDraft]
@@ -246,6 +269,7 @@ export function useMobileTasksWorkspaceCreateProjection(model: ProjectMetadataLo
     setWorkspaceBranchNameOverride(undefined)
     setShowWorkspaceBaseBranchPicker(false)
   }, [])
+
   return Object.assign(model, {
     getWorkspaceTargetRepo,
     workspaceCreateTargetRepo,

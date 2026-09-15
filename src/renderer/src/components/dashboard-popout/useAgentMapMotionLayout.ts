@@ -7,6 +7,7 @@ import type {
 } from './agent-map-layout'
 
 export const AGENT_MAP_EXIT_DURATION_MS = 260
+
 export const AGENT_MAP_ENTER_DURATION_MS = 420
 
 function allAgentIds(layout: AgentMapLayout): Set<string> {
@@ -44,6 +45,7 @@ function reconcileAgents(
 ): AgentMapAgentNode[] {
   const previousById = new Map(previous.agents.map((agent) => [agent.card.paneKey, agent]))
   const nextIds = new Set(next.agents.map((agent) => agent.card.paneKey))
+
   const agents = next.agents.map((agent) =>
     retainMotionState(previousById.get(agent.card.paneKey), agent)
   )
@@ -53,6 +55,7 @@ function reconcileAgents(
       agents.push({ ...agent, motionState: 'exiting' })
     }
   }
+
   return agents
 }
 
@@ -80,11 +83,14 @@ function reconcileWorktrees(
 ): AgentMapWorktreeRing[] {
   const previousById = new Map(previous.worktrees.map((worktree) => [worktree.id, worktree]))
   const nextIds = new Set(next.worktrees.map((worktree) => worktree.id))
+
   const worktrees = next.worktrees.map((worktree) => {
     const previousWorktree = previousById.get(worktree.id)
+
     if (!previousWorktree) {
       return enteringWorktree(worktree)
     }
+
     return {
       ...retainMotionState(previousWorktree, worktree),
       agents: reconcileAgents(previousWorktree, worktree, nextAgentIds)
@@ -96,6 +102,7 @@ function reconcileWorktrees(
       worktrees.push(exitingWorktree(worktree))
     }
   }
+
   return worktrees
 }
 
@@ -131,11 +138,14 @@ export function reconcileAgentMapMotionLayout(
   const nextProjectIds = new Set(next.projects.map((project) => project.id))
   const nextAgentIds = allAgentIds(next)
   const nextWorktreeIds = allWorktreeIds(next)
+
   const projects = next.projects.map((project) => {
     const previousProject = previousById.get(project.id)
+
     if (!previousProject) {
       return enteringProject(project)
     }
+
     return {
       ...retainMotionState(previousProject, project),
       worktrees: reconcileWorktrees(previousProject, project, nextAgentIds, nextWorktreeIds)
@@ -147,6 +157,7 @@ export function reconcileAgentMapMotionLayout(
       projects.push(exitingProject(project))
     }
   }
+
   return {
     ...next,
     projects
@@ -163,6 +174,7 @@ function motionNodeSignature(layout: AgentMapLayout, motionState: 'entering' | '
         .map((agent) => `agent:${agent.card.paneKey}`)
     ])
   ])
+
   return nodeIds.length > 0 ? JSON.stringify(nodeIds) : ''
 }
 
@@ -210,9 +222,11 @@ export function useAgentMapMotionLayout(
     reducedMotion,
     motionLayout: layout
   }))
+
   const enterTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   let motionLayout = motionState.motionLayout
+
   // Reconcile before commit so metadata refreshes do not render the full scene twice.
   if (motionState.inputLayout !== layout || motionState.reducedMotion !== reducedMotion) {
     motionLayout = reducedMotion
@@ -234,9 +248,11 @@ export function useAgentMapMotionLayout(
       clearTimeout(enterTimerRef.current)
       enterTimerRef.current = null
     }
+
     if (reducedMotion || !enteringSignature) {
       return
     }
+
     enterTimerRef.current = setTimeout(() => {
       enterTimerRef.current = null
       setMotionState((previous) => ({
@@ -244,6 +260,7 @@ export function useAgentMapMotionLayout(
         motionLayout: clearEnteringAgentMapLayout(previous.motionLayout)
       }))
     }, AGENT_MAP_ENTER_DURATION_MS)
+
     return () => {
       if (enterTimerRef.current) {
         clearTimeout(enterTimerRef.current)
@@ -257,9 +274,11 @@ export function useAgentMapMotionLayout(
       clearTimeout(exitTimerRef.current)
       exitTimerRef.current = null
     }
+
     if (reducedMotion || !exitingSignature) {
       return
     }
+
     exitTimerRef.current = setTimeout(() => {
       exitTimerRef.current = null
       setMotionState((previous) => ({
@@ -267,6 +286,7 @@ export function useAgentMapMotionLayout(
         motionLayout: pruneExitingAgentMapLayout(previous.motionLayout)
       }))
     }, AGENT_MAP_EXIT_DURATION_MS)
+
     return () => {
       if (exitTimerRef.current) {
         clearTimeout(exitTimerRef.current)

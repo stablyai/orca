@@ -19,6 +19,7 @@ const { handleMock, randomUUIDMock, mockStore } = vi.hoisted(() => ({
 
 vi.mock('crypto', async (importOriginal) => {
   const actual = await importOriginal<typeof CryptoModule>()
+
   return {
     ...actual,
     randomUUID: randomUUIDMock
@@ -72,6 +73,7 @@ function makePreset(
 
 describe('sparse preset repo IPC handlers', () => {
   const handlers: HandlerMap = new Map()
+
   const mainWindow = {
     isDestroyed: () => false,
     webContents: { send: vi.fn() }

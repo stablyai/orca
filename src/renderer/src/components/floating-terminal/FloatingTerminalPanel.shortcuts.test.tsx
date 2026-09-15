@@ -30,6 +30,7 @@ import {
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const { createReactHookOverrides } = await import('./floating-terminal-panel-test-module-mocks')
+
   return { ...actual, ...createReactHookOverrides() }
 })
 
@@ -182,11 +183,14 @@ describe('FloatingTerminalPanel close behavior', () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
     const element = await renderPanel(true)
     const panel = findByProp(element, 'data-floating-terminal-panel')
+
     const titlebarTarget = {
       closest: vi.fn().mockReturnValue({}),
       getAttribute: vi.fn().mockReturnValue(null)
     }
+
     Object.setPrototypeOf(titlebarTarget, HTMLElement.prototype)
+
     const preventDefault = vi.fn()
 
     ;(panel.props.onKeyDownCapture as (event: unknown) => void)(
@@ -211,11 +215,14 @@ describe('FloatingTerminalPanel close behavior', () => {
   it('routes titlebar Cmd+Shift+O to the floating markdown picker', async () => {
     const element = await renderPanel(true)
     const panel = findByProp(element, 'data-floating-terminal-panel')
+
     const titlebarTarget = {
       closest: vi.fn().mockReturnValue({}),
       getAttribute: vi.fn().mockReturnValue(null)
     }
+
     Object.setPrototypeOf(titlebarTarget, HTMLElement.prototype)
+
     const preventDefault = vi.fn()
 
     ;(panel.props.onKeyDownCapture as (event: unknown) => void)(
@@ -240,12 +247,14 @@ describe('FloatingTerminalPanel close behavior', () => {
     const element = await renderPanel(true)
     const panel = findByProp(element, 'data-floating-terminal-panel')
     const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+
     const target = {
       classList: { contains: vi.fn((token: string) => token === 'xterm-helper-textarea') },
       closest: vi.fn((selector: string) =>
         selector === '[data-floating-terminal-panel]' ? panelElement : null
       )
     }
+
     Object.setPrototypeOf(target, HTMLElement.prototype)
     attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', {
@@ -254,14 +263,17 @@ describe('FloatingTerminalPanel close behavior', () => {
       removeEventListener: vi.fn()
     })
     runEffects()
+
     const keydownListener = vi
       .mocked(window.addEventListener)
       .mock.calls.find(([type]) => type === 'keydown')?.[1] as
       | ((event: unknown) => void)
       | undefined
+
     const keyupListener = vi
       .mocked(window.addEventListener)
       .mock.calls.find(([type]) => type === 'keyup')?.[1] as ((event: unknown) => void) | undefined
+
     if (!keydownListener || !keyupListener) {
       throw new Error('keyboard listeners not registered')
     }
@@ -277,6 +289,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       shiftKey: true,
       target
     }
+
     const firstPreventDefault = vi.fn()
     keydownListener({ ...modifierEvent, preventDefault: firstPreventDefault })
     keyupListener({ ...modifierEvent })
@@ -313,12 +326,14 @@ describe('FloatingTerminalPanel close behavior', () => {
     const element = await renderPanel(true)
     const panel = findByProp(element, 'data-floating-terminal-panel')
     const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+
     const target = {
       classList: { contains: vi.fn((token: string) => token === 'xterm-helper-textarea') },
       closest: vi.fn((selector: string) =>
         selector === '[data-floating-terminal-panel]' ? panelElement : null
       )
     }
+
     Object.setPrototypeOf(target, HTMLElement.prototype)
     attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', {
@@ -327,17 +342,21 @@ describe('FloatingTerminalPanel close behavior', () => {
       removeEventListener: vi.fn()
     })
     runEffects()
+
     const keydownListener = vi
       .mocked(window.addEventListener)
       .mock.calls.find(([type]) => type === 'keydown')?.[1] as
       | ((event: unknown) => void)
       | undefined
+
     const keyupListener = vi
       .mocked(window.addEventListener)
       .mock.calls.find(([type]) => type === 'keyup')?.[1] as ((event: unknown) => void) | undefined
+
     const blurListener = vi
       .mocked(window.addEventListener)
       .mock.calls.find(([type]) => type === 'blur')?.[1] as (() => void) | undefined
+
     if (!keydownListener || !keyupListener || !blurListener) {
       throw new Error('keyboard listeners not registered')
     }
@@ -353,6 +372,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       shiftKey: true,
       target
     }
+
     keydownListener({ ...modifierEvent, preventDefault: vi.fn() })
     keyupListener({ ...modifierEvent })
     blurListener()
@@ -375,12 +395,14 @@ describe('FloatingTerminalPanel close behavior', () => {
     const panel = findByProp(element, 'data-floating-terminal-panel')
     const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
     const activeElement = { closest: vi.fn().mockReturnValue(panelElement) }
+
     const target = {
       classList: { contains: vi.fn((token: string) => token === 'xterm-helper-textarea') },
       closest: vi.fn((selector: string) =>
         selector === '[data-floating-terminal-panel]' ? panelElement : null
       )
     }
+
     Object.setPrototypeOf(activeElement, HTMLElement.prototype)
     Object.setPrototypeOf(target, HTMLElement.prototype)
     attachRef(panel.props.ref, panelElement)
@@ -390,14 +412,17 @@ describe('FloatingTerminalPanel close behavior', () => {
       removeEventListener: vi.fn()
     })
     runEffects()
+
     const keydownListener = vi
       .mocked(window.addEventListener)
       .mock.calls.find(([type]) => type === 'keydown')?.[1] as
       | ((event: unknown) => void)
       | undefined
+
     if (!keydownListener) {
       throw new Error('keydown listener not registered')
     }
+
     const preventDefault = vi.fn()
     const stopPropagation = vi.fn()
     const stopImmediatePropagation = vi.fn()
@@ -483,6 +508,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const state = storeBox.state as FloatingPanelStoreState
     const groupId = 'floating-group'
     const terminalTab = makeTab({ id: 'terminal-tab' })
+
     const simulatorTab: Tab = {
       id: 'simulator-tab',
       entityId: 'simulator-tab',
@@ -495,6 +521,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       sortOrder: 1,
       createdAt: 1
     }
+
     const browserTab: BrowserTab = {
       id: 'browser-tab',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
@@ -507,6 +534,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       loadError: null,
       createdAt: 2
     }
+
     const browserUnifiedTab: Tab = {
       id: 'browser-unified-tab',
       entityId: browserTab.id,
@@ -519,6 +547,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       sortOrder: 2,
       createdAt: 2
     }
+
     const terminalUnifiedTab: Tab = {
       id: terminalTab.id,
       entityId: terminalTab.id,
@@ -531,6 +560,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       sortOrder: 0,
       createdAt: terminalTab.createdAt
     }
+
     state.tabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [terminalTab] }
     state.browserTabsByWorktree = { [FLOATING_TERMINAL_WORKTREE_ID]: [browserTab] }
     state.unifiedTabsByWorktree = {
@@ -632,12 +662,14 @@ describe('FloatingTerminalPanel close behavior', () => {
     const element = await renderPanel(true)
     const panel = findByProp(element, 'data-floating-terminal-panel')
     const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+
     const target = {
       classList: { contains: vi.fn((token: string) => token === 'xterm-helper-textarea') },
       closest: vi.fn((selector: string) =>
         selector === '[data-floating-terminal-panel]' ? panelElement : null
       )
     }
+
     Object.setPrototypeOf(target, HTMLElement.prototype)
     attachRef(panel.props.ref, panelElement)
     vi.stubGlobal('document', {
@@ -646,12 +678,15 @@ describe('FloatingTerminalPanel close behavior', () => {
       removeEventListener: vi.fn()
     })
     runEffects()
+
     const keydownListener = vi.mocked(window.addEventListener).mock.calls.find(([type]) => {
       return type === 'keydown'
     })?.[1] as ((event: unknown) => void) | undefined
+
     if (!keydownListener) {
       throw new Error('keydown listener not registered')
     }
+
     const ctrlPreventDefault = vi.fn()
     const ctrlStopPropagation = vi.fn()
     const ctrlStopImmediatePropagation = vi.fn()
@@ -770,10 +805,12 @@ describe('FloatingTerminalPanel close behavior', () => {
     const onOpenChange = vi.fn()
     const element = await renderPanel(true, onOpenChange)
     const panel = findByProp(element, 'data-floating-terminal-panel')
+
     const emptyStateTarget = {
       closest: vi.fn().mockReturnValue({}),
       getAttribute: vi.fn().mockReturnValue(null)
     }
+
     Object.setPrototypeOf(emptyStateTarget, HTMLElement.prototype)
 
     ;(panel.props.onKeyDownCapture as (event: unknown) => void)(

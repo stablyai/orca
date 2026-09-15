@@ -20,6 +20,7 @@ describe('RuntimeSkillInstallQueries', () => {
 
   it('sends only worktrees owned by the requested SSH host to inventory', async () => {
     const worktreeId = 'repo-1::/workspace/app'
+
     const host: RuntimeSkillCommandHost = {
       getRuntimeId: () => 'runtime-1',
       getUserDataPath: () => '/tmp/orca-runtime-skill-test',
@@ -53,6 +54,7 @@ describe('RuntimeSkillInstallQueries', () => {
 
   it('accepts a legacy worktree without hostId only when its repo has one host owner', async () => {
     const worktreeId = 'repo-1::/workspace/app'
+
     const host: RuntimeSkillCommandHost = {
       getRuntimeId: () => 'runtime-1',
       getUserDataPath: () => '/tmp/orca-runtime-skill-test',
@@ -79,6 +81,7 @@ describe('RuntimeSkillInstallQueries', () => {
 
   it('rejects legacy hostless inventory rows when the repo id spans hosts', async () => {
     const worktreeId = 'repo-1::/workspace/app'
+
     const host: RuntimeSkillCommandHost = {
       getRuntimeId: () => 'runtime-1',
       getUserDataPath: () => '/tmp/orca-runtime-skill-test',

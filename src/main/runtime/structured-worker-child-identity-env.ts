@@ -45,15 +45,19 @@ export function structuredWorkerChildIdentityEnv(
   childEnv: Record<string, string>
 ): Record<string, string> {
   const identity = structuredWorkerIdentities.getBySessionId(sessionId)
+
   if (!identity) {
     return { ...childEnv, [ORCA_STRUCTURED_SESSION_ENV]: '1' }
   }
+
   const env: Record<string, string> = {
     ...childEnv,
     ORCA_TERMINAL_HANDLE: identity.handle,
     ORCA_CLI_COMMAND: 'orca'
   }
+
   applyOrcaCliPath(env)
+
   return env
 }
 
@@ -65,6 +69,7 @@ function applyOrcaCliPath(env: Record<string, string>): void {
   if (!hasAppEnvironment()) {
     return
   }
+
   const app = getAppEnvironment()
   prependOrcaCliDirToChildPath(env, {
     isPackaged: app.isPackaged(),

@@ -11,6 +11,7 @@ import {
 } from './config-toml-trust-test-fixtures'
 
 let tmpDir: string
+
 let configPath: string
 
 beforeEach(() => {
@@ -32,6 +33,7 @@ describe('readHookTrustEntries', () => {
   it('returns key→hash entries for each [hooks.state."<key>"] block', () => {
     const keyA = '/x/hooks.json:pre_tool_use:0:0'
     const keyB = '/y/hooks.json:post_tool_use:1:0'
+
     const original = [
       `[hooks.state."${keyA}"]`,
       'enabled = true',
@@ -42,6 +44,7 @@ describe('readHookTrustEntries', () => {
       'trusted_hash = "sha256:BBB"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const result = readHookTrustEntries(configPath)
@@ -104,6 +107,7 @@ describe('readHookTrustEntries', () => {
 
   it('recognizes and removes a first trust block after a leading BOM', () => {
     const key = '/x/hooks.json:stop:0:0'
+
     const content = [
       `\uFEFF[hooks.state."${key}"]`,
       'trusted_hash = "sha256:ORCA"',
@@ -118,6 +122,7 @@ describe('readHookTrustEntries', () => {
 
   it('does not let triple quotes in comments hide later trust entries', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       '# user note mentions triple quote: """',
       `[hooks.state."${key}"]`,
@@ -125,6 +130,7 @@ describe('readHookTrustEntries', () => {
       'trusted_hash = "sha256:AAA"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const result = readHookTrustEntries(configPath)
@@ -134,6 +140,7 @@ describe('readHookTrustEntries', () => {
 
   it('does not let triple quotes in single-line strings hide later trust entries', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       'note = "\\"\\"\\""',
       'literal_note = \'"""\'',
@@ -142,6 +149,7 @@ describe('readHookTrustEntries', () => {
       'trusted_hash = "sha256:AAA"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const result = readHookTrustEntries(configPath)
@@ -157,6 +165,7 @@ describe('readHookTrustEntries', () => {
       'trusted_hash = "sha256:WIN"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const result = readHookTrustEntries(configPath)
@@ -165,12 +174,14 @@ describe('readHookTrustEntries', () => {
 
   it('reads a literal-string hook table key', () => {
     const rawKey = 'C:\\foo\\hooks.json:session_start:0:0'
+
     const original = [
       `[hooks.state.'${rawKey}']`,
       'enabled = false',
       'trusted_hash = "sha256:LITERAL"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const result = readHookTrustEntries(configPath)
@@ -184,12 +195,14 @@ describe('readHookTrustEntries', () => {
     // Why: Codex and realpathSync.native can disagree on path casing, but lookups must still match.
     const rawKey = 'C:\\Users\\rod\\AppData\\Roaming\\orca\\hooks.json:session_start:0:0'
     const lookupKey = 'C:/Users/Rod/AppData/Roaming/orca/hooks.json:session_start:0:0'
+
     const original = [
       `[hooks.state.'${rawKey}']`,
       'enabled = true',
       'trusted_hash = "sha256:CASE"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const result = readHookTrustEntries(configPath)
@@ -253,12 +266,14 @@ describe('readHookTrustEntries', () => {
 
   it('reads entries from a CRLF-terminated config', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       `[hooks.state."${key}"]`,
       'enabled = true',
       'trusted_hash = "sha256:CRLF"',
       ''
     ].join('\r\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const result = readHookTrustEntries(configPath)
@@ -278,12 +293,14 @@ describe('readHookTrustEntries', () => {
 
   it('reads disabled state alongside a valid trusted hash', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
+
     const original = [
       `[hooks.state."${key}"]`,
       'enabled = false',
       'trusted_hash = "sha256:DISABLED"',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const result = readHookTrustEntries(configPath)
@@ -300,6 +317,7 @@ describe('readHookTrustEntries', () => {
       '"""',
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const result = readHookTrustEntries(configPath)
@@ -316,6 +334,7 @@ describe('readHookTrustEntries', () => {
       "'''",
       ''
     ].join('\n')
+
     writeFileSync(configPath, original, 'utf-8')
 
     const result = readHookTrustEntries(configPath)

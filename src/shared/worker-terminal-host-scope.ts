@@ -33,7 +33,9 @@ export function readWorkerTerminalHostScope(
   if (!value) {
     return { kind: 'absent' }
   }
+
   let parsed: unknown
+
   try {
     parsed = JSON.parse(value)
   } catch {
@@ -42,13 +44,17 @@ export function readWorkerTerminalHostScope(
       ? { kind: 'local', id: 'local', scope: null }
       : { kind: 'unreadable' }
   }
+
   if (!parsed || typeof parsed !== 'object') {
     return { kind: 'unreadable' }
   }
+
   const scope = parsed as Record<string, unknown>
   const hostId = typeof scope.hostId === 'string' ? scope.hostId : null
+
   const targetId =
     typeof scope.targetId === 'string' && scope.targetId.length > 0 ? scope.targetId : null
+
   if (scope.kind === 'local') {
     return {
       kind: 'local',
@@ -56,27 +62,33 @@ export function readWorkerTerminalHostScope(
       scope: hostId === 'local' ? { kind: 'local', hostId: 'local' } : null
     }
   }
+
   // A WSL pane runs on this machine; the distro names the guest, not another host, so a
   // stray target id on the row does not make it remote.
   if (scope.kind === 'wsl' && hostId === 'local') {
     const distro = typeof scope.distro === 'string' && scope.distro.length > 0 ? scope.distro : null
+
     return {
       kind: 'local',
       id: 'local',
       scope: distro ? { kind: 'wsl', hostId: 'local', distro } : null
     }
   }
+
   if (scope.kind === 'ssh' && targetId) {
     return { kind: 'remote', id: targetId, targetId, scope: { kind: 'ssh', targetId } }
   }
+
   if (typeof scope.kind === 'string') {
     return { kind: 'remote', id: targetId ?? hostId ?? scope.kind, targetId, scope: null }
   }
+
   return { kind: 'unreadable' }
 }
 
 /** The strict scope, for callers that must act on the exact host kind. */
 export function parseWorkerTerminalHostScope(value: string | null): WorkerTerminalHostScope | null {
   const read = readWorkerTerminalHostScope(value)
+
   return read.kind === 'local' || read.kind === 'remote' ? read.scope : null
 }

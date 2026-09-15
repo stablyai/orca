@@ -20,13 +20,17 @@ export async function migrateRestoredEditorFileOwner(
 ): Promise<RestoredEditorOwnerMigrationResult> {
   const state = useAppStore.getState()
   const source = state.openFiles.find((file) => file.id === fileId)
+
   const initialRoute = source
     ? findWorkspaceFileRoute(state, route.executionHostId, source.filePath)
     : null
+
   if (!source || !routesMatch(initialRoute, route)) {
     return { ok: false, reason: 'stale' }
   }
+
   let targetOperationProvenance: EditorFileOperationProvenance
+
   try {
     targetOperationProvenance = captureEditorFileOperationProvenance(
       state,
@@ -37,6 +41,7 @@ export async function migrateRestoredEditorFileOwner(
   } catch {
     return { ok: false, reason: 'owner-changed' }
   }
+
   if (!state.setRestoredEditorOwnerMigrationPending(fileId, true)) {
     return { ok: false, reason: 'stale' }
   }
@@ -47,11 +52,14 @@ export async function migrateRestoredEditorFileOwner(
     useAppStore.getState().setRestoredEditorOwnerMigrationPending(fileId, false)
     throw error
   }
+
   const currentState = useAppStore.getState()
   const currentSource = currentState.openFiles.find((file) => file.id === fileId)
+
   const currentRoute = currentSource
     ? findWorkspaceFileRoute(currentState, route.executionHostId, currentSource.filePath)
     : null
+
   try {
     if (
       currentSource?.filePath !== source.filePath ||
@@ -63,8 +71,10 @@ export async function migrateRestoredEditorFileOwner(
     }
   } catch {
     currentState.setRestoredEditorOwnerMigrationPending(fileId, false)
+
     return { ok: false, reason: 'owner-changed' }
   }
+
   return currentState.reparentRestoredEditorFileOwner({
     fileId,
     targetWorktreeId: route.worktreeId,

@@ -6,6 +6,7 @@
 import type { GitHubProjectField, GitHubProjectView } from '../../../../shared/github/project-types'
 
 export const TYPE_FIELD_ID = '__type__'
+
 export const TYPE_FIELD_DATA_TYPE = '__TYPE__'
 
 // Why: synthetic "Type" column derives from row.itemType — there is no
@@ -21,9 +22,11 @@ export const TYPE_FIELD: GitHubProjectField = {
 export function getAvailableColumns(view: GitHubProjectView): GitHubProjectField[] {
   const fields = view.fields
   const titleIdx = fields.findIndex((f) => f.dataType === 'TITLE')
+
   if (titleIdx === -1) {
     return [TYPE_FIELD, ...fields]
   }
+
   return [...fields.slice(0, titleIdx + 1), TYPE_FIELD, ...fields.slice(titleIdx + 1)]
 }
 
@@ -34,10 +37,13 @@ type HiddenMap = Record<string, string[]>
 function readMap(): HiddenMap {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
+
     if (!raw) {
       return {}
     }
+
     const parsed = JSON.parse(raw)
+
     return parsed && typeof parsed === 'object' ? (parsed as HiddenMap) : {}
   } catch {
     return {}
@@ -54,15 +60,18 @@ function writeMap(map: HiddenMap): void {
 
 export function loadHiddenColumns(scopeKey: string): ReadonlySet<string> {
   const map = readMap()
+
   return new Set(map[scopeKey] ?? [])
 }
 
 export function saveHiddenColumns(scopeKey: string, hidden: ReadonlySet<string>): void {
   const map = readMap()
+
   if (hidden.size === 0) {
     delete map[scopeKey]
   } else {
     map[scopeKey] = Array.from(hidden)
   }
+
   writeMap(map)
 }

@@ -36,7 +36,9 @@ function withoutUnstoppableRows(
   if (!state.tasks?.some((task) => task.stoppable === false)) {
     return state
   }
+
   const tasks = state.tasks.filter((task) => task.stoppable !== false)
+
   return tasks.length > 0 ? { ...state, tasks } : null
 }
 
@@ -45,6 +47,7 @@ function projectState(
   ctx: BackgroundTaskReader
 ): AgentSessionBackgroundTaskState | null | undefined {
   const rows = !state || honoursRowStop(ctx) ? state : withoutUnstoppableRows(state)
+
   // Legacy readers always offer a stop; retain their pre-producer empty strip.
   return rows?.supportsStopAll === false && !rows.supportsTaskStop && !supportsReadOnlyTasks(ctx)
     ? null
@@ -56,6 +59,7 @@ export function projectBackgroundTaskHistory(
   ctx: BackgroundTaskReader
 ): AgentSessionHistoryResult {
   const state = projectState(result.page.backgroundTasks, ctx)
+
   return state === result.page.backgroundTasks
     ? result
     : { ...result, page: { ...result.page, backgroundTasks: state } }
@@ -68,6 +72,8 @@ export function projectBackgroundTaskEvent(
   if (!('backgroundTasks' in event)) {
     return event
   }
+
   const state = projectState(event.backgroundTasks, ctx)
+
   return state === event.backgroundTasks ? event : { ...event, backgroundTasks: state }
 }

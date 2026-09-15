@@ -53,6 +53,7 @@ export async function installPairedTerminalSnapshotProbe(
   await page.evaluate(
     async ({ environmentId, target }) => {
       const probe: SnapshotProbe = { errors: [], receipts: [], unsubscribe: () => {} }
+
       const subscription = await window.api.runtimeEnvironments.subscribe(
         {
           selector: environmentId,
@@ -64,12 +65,16 @@ export async function installPairedTerminalSnapshotProbe(
           onResponse: (response) => {
             if (!response.ok) {
               probe.errors.push(`${response.error.code}: ${response.error.message}`)
+
               return
             }
+
             const event = response.result as
               | ({ type: 'snapshot' | 'updated' } & RuntimeMobileSessionTabsResult)
               | { type: 'snapshots'; snapshots: RuntimeMobileSessionTabsResult[] }
+
             const snapshots = event.type === 'snapshots' ? event.snapshots : [event]
+
             for (const snapshot of snapshots) {
               const surface = snapshot.tabs.find(
                 (tab) =>
@@ -77,9 +82,11 @@ export async function installPairedTerminalSnapshotProbe(
                   tab.parentTabId === target.parentTabId &&
                   tab.leafId === target.leafId
               )
+
               if (surface?.type !== 'terminal') {
                 continue
               }
+
               probe.receipts.push({
                 leafId: surface.leafId,
                 parentTabId: surface.parentTabId,
@@ -95,6 +102,7 @@ export async function installPairedTerminalSnapshotProbe(
           onError: (error) => probe.errors.push(`${error.code}: ${error.message}`)
         }
       )
+
       probe.unsubscribe = subscription.unsubscribe
       const probeWindow = window as ProbeWindow
       probeWindow.__serveRestartSnapshotProbe = probe
@@ -120,9 +128,11 @@ export async function readPairedTerminalSnapshotProbe(
 ): Promise<{ errors: string[]; receipts: PairedTerminalSnapshotReceipt[] }> {
   return page.evaluate(() => {
     const probe = (window as ProbeWindow).__serveRestartSnapshotProbe
+
     if (!probe) {
       throw new Error('Serve-restart snapshot probe is unavailable')
     }
+
     return { errors: probe.errors, receipts: probe.receipts }
   })
 }
@@ -130,9 +140,11 @@ export async function readPairedTerminalSnapshotProbe(
 export async function clearPairedTerminalSnapshotProbeErrors(page: Page): Promise<void> {
   await page.evaluate(() => {
     const probe = (window as ProbeWindow).__serveRestartSnapshotProbe
+
     if (!probe) {
       throw new Error('Serve-restart snapshot probe is unavailable')
     }
+
     probe.errors.length = 0
   })
 }
@@ -143,9 +155,11 @@ export async function installPairedTerminalBindingProbe(
 ): Promise<void> {
   await page.evaluate((target) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Paired-client store is unavailable')
     }
+
     const probe: BindingProbe = {
       capture: () => {},
       lastKey: '',
@@ -153,12 +167,16 @@ export async function installPairedTerminalBindingProbe(
       transitions: [],
       unsubscribe: () => {}
     }
+
     probe.capture = () => {
       const state = store.getState()
+
       const tab = (state.tabsByWorktree[target.worktreeId] ?? []).find(
         (candidate) => candidate.id === target.webTabId
       )
+
       const layout = state.terminalLayoutsByTabId[target.webTabId]
+
       const transition: PairedTerminalBindingTransition = {
         binding: layout?.ptyIdsByLeafId?.[target.leafId] ?? null,
         bindings: Object.entries(layout?.ptyIdsByLeafId ?? {}).sort(([left], [right]) =>
@@ -171,12 +189,15 @@ export async function installPairedTerminalBindingProbe(
         tabPresent: Boolean(tab),
         tabPtyId: tab?.ptyId ?? null
       }
+
       const key = JSON.stringify(transition)
+
       if (key !== probe.lastKey) {
         probe.lastKey = key
         probe.transitions.push(transition)
       }
     }
+
     probe.capture()
     probe.unsubscribe = store.subscribe(probe.capture)
     const probeWindow = window as ProbeWindow
@@ -190,9 +211,11 @@ export async function setPairedTerminalProbePhase(
 ): Promise<void> {
   await page.evaluate((phase) => {
     const probe = (window as ProbeWindow).__serveRestartBindingProbe
+
     if (!probe) {
       throw new Error('Serve-restart binding probe is unavailable')
     }
+
     probe.phase = phase
     probe.capture()
   }, phase)
@@ -203,9 +226,11 @@ export async function readPairedTerminalBindingTransitions(
 ): Promise<PairedTerminalBindingTransition[]> {
   return page.evaluate(() => {
     const probe = (window as ProbeWindow).__serveRestartBindingProbe
+
     if (!probe) {
       throw new Error('Serve-restart binding probe is unavailable')
     }
+
     return probe.transitions
   })
 }

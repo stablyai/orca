@@ -26,6 +26,7 @@ export function beginDirectoryLoad(
 ): DirectoryLoadToken {
   const revision = (revisions.revisionsByPath.get(relativePath) ?? 0) + 1
   revisions.revisionsByPath.set(relativePath, revision)
+
   return { generation: revisions.generation, relativePath, revision, scope }
 }
 

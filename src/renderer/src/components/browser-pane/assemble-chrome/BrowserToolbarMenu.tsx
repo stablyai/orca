@@ -39,17 +39,21 @@ export function BrowserToolbarMenu({
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
   const setBrowserPageViewportPreset = useAppStore((s) => s.setBrowserPageViewportPreset)
+
   const browserCookieTourStepActive = useAppStore(
     (s) => s.activeContextualTourId === 'browser' && s.activeContextualTourStepIndex === 2
   )
+
   const browserImportHintHidden = useAppStore((s) => s.browserImportHintHidden)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
+
   // The tour prefers the always-visible Import button; only force this overflow
   // menu open to expose Import Cookies once that hint button is dismissed.
   const importHintVisible = shouldShowBrowserImportHint({
     persistedUIReady,
     browserImportHintHidden
   })
+
   const shouldForceMenuOpen = browserCookieTourStepActive && isActive && !importHintVisible
 
   const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void => {
@@ -63,9 +67,11 @@ export function BrowserToolbarMenu({
   const [newProfileName, setNewProfileName] = useState('')
   const [useNativeUserAgent, setUseNativeUserAgent] = useState(false)
   const [isCreatingProfile, setIsCreatingProfile] = useState(false)
+
   const [pendingSwitchProfileId, setPendingSwitchProfileId] = useState<string | null | undefined>(
     undefined
   )
+
   const [menuOpen, setMenuOpen] = useState(false)
   const mountedRef = useMountedRef()
 
@@ -79,11 +85,13 @@ export function BrowserToolbarMenu({
     if (shouldForceMenuOpen && !open) {
       return
     }
+
     setMenuOpen(open)
   }
 
   const handleNewProfileDialogOpenChange = (open: boolean): void => {
     setNewProfileDialogOpen(open)
+
     if (!open) {
       setNewProfileName('')
       setUseNativeUserAgent(false)
@@ -93,6 +101,7 @@ export function BrowserToolbarMenu({
   const effectiveProfileId = currentProfileId ?? 'default'
 
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
+
   // Why: Default profile always appears first in the list and cannot be deleted.
   // Non-default profiles follow in their natural order.
   const allProfiles = defaultProfile
@@ -101,9 +110,11 @@ export function BrowserToolbarMenu({
 
   const handleSwitchProfile = (profileId: string | null): void => {
     const targetId = profileId ?? 'default'
+
     if (targetId === effectiveProfileId) {
       return
     }
+
     setPendingSwitchProfileId(profileId)
   }
 
@@ -111,6 +122,7 @@ export function BrowserToolbarMenu({
     if (pendingSwitchProfileId === undefined) {
       return
     }
+
     const targetId = pendingSwitchProfileId ?? 'default'
     const profile = browserSessionProfiles.find((p) => p.id === targetId)
     // Why: Must destroy before store update. The webviewRegistry is keyed by
@@ -132,17 +144,20 @@ export function BrowserToolbarMenu({
 
   const handleCreateProfile = async (): Promise<void> => {
     const trimmed = newProfileName.trim()
+
     if (!trimmed) {
       return
     }
 
     setIsCreatingProfile(true)
+
     try {
       const profile = await createBrowserSessionProfile(
         'isolated',
         trimmed,
         useNativeUserAgent ? { userAgentMode: 'native' } : undefined
       )
+
       if (!profile) {
         if (mountedRef.current) {
           toast.error(
@@ -152,6 +167,7 @@ export function BrowserToolbarMenu({
             )
           )
         }
+
         return
       }
 
@@ -184,6 +200,7 @@ export function BrowserToolbarMenu({
     browserProfile?: string
   ): Promise<void> => {
     const result = await importCookiesFromBrowser(effectiveProfileId, browserFamily, browserProfile)
+
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       emitBrowserCookieImportToast(
@@ -215,6 +232,7 @@ export function BrowserToolbarMenu({
 
   const handleImportFromFile = async (): Promise<void> => {
     const result = await importCookiesToProfile(effectiveProfileId)
+
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,

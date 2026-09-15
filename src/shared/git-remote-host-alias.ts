@@ -16,12 +16,14 @@ export function foldWwwHostAlias(host: string): string {
 
 export function normalizeGitHubRemoteHost(host: string): string {
   const normalizedHost = normalizeRemoteHost(host)
+
   // Why: GitHub documents ssh.github.com as SSH-over-HTTPS for github.com repos.
   return normalizedHost === 'ssh.github.com' ? 'github.com' : normalizedHost
 }
 
 export function normalizeGitLabRemoteHost(host: string): string {
   const normalizedHost = normalizeRemoteHost(host)
+
   // Why: GitLab documents altssh.gitlab.com as SSH-over-443 for gitlab.com projects.
   return normalizedHost === 'altssh.gitlab.com' ? 'gitlab.com' : normalizedHost
 }

@@ -20,13 +20,17 @@ export function mergeGitHubAssignableUsers(
   seeds: GitHubAssignableUser[]
 ): GitHubAssignableUser[] {
   const byLogin = new Map<string, GitHubAssignableUser>()
+
   for (const user of [...users, ...seeds]) {
     const login = user.login.trim()
+
     if (!login || byLogin.has(login.toLowerCase())) {
       continue
     }
+
     byLogin.set(login.toLowerCase(), { ...user, login })
   }
+
   return [...byLogin.values()]
 }
 
@@ -36,16 +40,21 @@ export function getGitHubReviewerSeedUsers(item: {
   author?: string | null
 }): GitHubAssignableUser[] {
   const byLogin = new Map<string, GitHubAssignableUser>()
+
   const add = (user: GitHubAssignableUser): void => {
     const login = user.login.trim()
+
     if (!login || byLogin.has(login.toLowerCase())) {
       return
     }
+
     byLogin.set(login.toLowerCase(), { ...user, login })
   }
+
   for (const user of item.reviewRequests ?? []) {
     add(user)
   }
+
   for (const review of item.latestReviews ?? []) {
     add({
       login: review.login,
@@ -53,9 +62,11 @@ export function getGitHubReviewerSeedUsers(item: {
       avatarUrl: review.avatarUrl ?? null
     })
   }
+
   if (item.author) {
     add({ login: item.author, name: null, avatarUrl: null })
   }
+
   return [...byLogin.values()]
 }
 
@@ -90,16 +101,21 @@ export function sortLinearIssues(
   if (issues.length < 2) {
     return [...issues]
   }
+
   if (orderBy === 'identifier') {
     const collator = new Intl.Collator(undefined, { numeric: true })
+
     return [...issues].sort((a, b) => collator.compare(a.identifier, b.identifier))
   }
+
   const keyed = issues.map((issue) => ({
     issue,
     updatedAt: taskTime(issue.updatedAt),
     priority: orderBy === 'updated' ? 0 : getLinearPriorityRank(issue.priority)
   }))
+
   keyed.sort((a, b) => a.priority - b.priority || b.updatedAt - a.updatedAt)
+
   return keyed.map(({ issue }) => issue)
 }
 
@@ -114,6 +130,7 @@ export function getLinearIssueGroup(
   if (groupBy === 'status') {
     return { key: `status:${issue.state.name}`, label: issue.state.name, color: issue.state.color }
   }
+
   if (groupBy === 'assignee') {
     return {
       key: `assignee:${issue.assignee?.id ?? issue.assignee?.displayName ?? 'unassigned'}`,
@@ -121,6 +138,7 @@ export function getLinearIssueGroup(
       color: colors.accentBlue
     }
   }
+
   if (groupBy === 'priority') {
     return {
       key: `priority:${issue.priority}`,
@@ -128,9 +146,11 @@ export function getLinearIssueGroup(
       color: issue.priority === 1 ? colors.statusRed : colors.accentBlue
     }
   }
+
   if (groupBy === 'team') {
     return { key: `team:${issue.team.id}`, label: issue.team.name, color: issue.state.color }
   }
+
   return { key: 'all', label: 'Issues', color: colors.accentBlue }
 }
 
@@ -157,19 +177,23 @@ function groupOrderedLinearIssues(
   if (groupBy === 'none') {
     return [{ key: 'all', label: 'Issues', color: colors.accentBlue, issues: sorted }]
   }
+
   const sections = new Map<
     string,
     { key: string; label: string; color: string; issues: LinearIssue[] }
   >()
+
   for (const issue of sorted) {
     const group = getLinearIssueGroup(issue, groupBy)
     const section = sections.get(group.key)
+
     if (section) {
       section.issues.push(issue)
     } else {
       sections.set(group.key, { ...group, issues: [issue] })
     }
   }
+
   return [...sections.values()]
 }
 
@@ -178,21 +202,27 @@ export function linearIssueSecondaryParts(
   displayProperties: ReadonlySet<LinearDisplayProperty>
 ): string[] {
   const parts = [issue.identifier]
+
   if (displayProperties.has('priority')) {
     parts.push(getLinearPriorityLabel(issue.priority))
   }
+
   if (displayProperties.has('assignee') && issue.assignee?.displayName) {
     parts.push(issue.assignee.displayName)
   }
+
   if (displayProperties.has('team')) {
     parts.push(issue.team.name)
   }
+
   if (displayProperties.has('labels') && issue.labels.length > 0) {
     parts.push(issue.labels.slice(0, 2).join(', '))
   }
+
   if (displayProperties.has('updated')) {
     parts.push(formatUpdatedAt(issue.updatedAt))
   }
+
   return parts
 }
 
@@ -203,8 +233,10 @@ export function reconcileTeamSelection(
   if (!saved) {
     return new Set(teams.map((team) => team.id))
   }
+
   const available = new Set(teams.map((team) => team.id))
   const next = new Set(saved.filter((id) => available.has(id)))
+
   return next.size === 0 ? new Set(teams.map((team) => team.id)) : next
 }
 

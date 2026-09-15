@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 const RELEASE_WORKFLOW = '.github/workflows/release-cut.yml'
+
 const EXPECTED_MATRIX = {
   '.github/workflows/docs.yml#check': { contents: 'read' },
   '.github/workflows/docs.yml#production': { contents: 'read' },
@@ -39,7 +40,9 @@ const EXPECTED_MATRIX = {
   [`${RELEASE_WORKFLOW}#terminal-rendering-golden`]: { contents: 'read' },
   [`${RELEASE_WORKFLOW}#terminal-rendering-release-evidence`]: { contents: 'read' }
 }
+
 const PUBLISH_TAG_JOBS = new Set(['build', 'create-release'])
+
 const RELEASE_TAG_EXECUTION_JOBS = [
   'build',
   'create-release',
@@ -48,13 +51,16 @@ const RELEASE_TAG_EXECUTION_JOBS = [
   'terminal-rendering-golden',
   'terminal-rendering-release-evidence'
 ]
+
 const REUSABLE_CALL_JOBS = ['homebrew-bump', 'homebrew-bump-published-rc-draft']
 
 function readWorkflow(relativePath) {
   const ref = process.env.RELEASE_CUT_WORKFLOW_REF
+
   const source = ref
     ? execFileSync('git', ['show', `${ref}:${relativePath}`], { encoding: 'utf8' })
     : readFileSync(relativePath, 'utf8')
+
   return parse(source)
 }
 
@@ -62,6 +68,7 @@ function normalizePermissions(permissions) {
   if (!permissions || typeof permissions !== 'object' || Array.isArray(permissions)) {
     throw new Error(`Expected an explicit permission map, received ${String(permissions)}`)
   }
+
   return Object.fromEntries(
     Object.entries(permissions).sort(([left], [right]) => left.localeCompare(right))
   )
@@ -70,11 +77,13 @@ function normalizePermissions(permissions) {
 function intersectPermissions(granted, requested) {
   const rank = { none: 0, read: 1, write: 2 }
   const scopes = new Set([...Object.keys(granted), ...Object.keys(requested)])
+
   return Object.fromEntries(
     [...scopes]
       .map((scope) => {
         const grantedLevel = granted[scope] ?? 'none'
         const requestedLevel = requested[scope] ?? 'none'
+
         return [scope, rank[grantedLevel] < rank[requestedLevel] ? grantedLevel : requestedLevel]
       })
       .filter(([, level]) => level !== 'none')
@@ -89,15 +98,19 @@ function resolveWorkflowMatrix(workflow, workflowPath, inheritedPermissions, pre
 
   return Object.entries(workflow.jobs).reduce((matrix, [jobName, job]) => {
     const requested = job.permissions ? normalizePermissions(job.permissions) : workflowPermissions
+
     if (!requested) {
       throw new Error(`${workflowPath}#${jobName} has no resolvable permissions`)
     }
+
     const effective = inheritedPermissions
       ? intersectPermissions(inheritedPermissions, requested)
       : requested
+
     const identity = prefix
       ? `${prefix} -> ${workflowPath}#${jobName}`
       : `${workflowPath}#${jobName}`
+
     matrix[identity] = effective
 
     if (job.uses?.startsWith('./.github/workflows/')) {
@@ -107,6 +120,7 @@ function resolveWorkflowMatrix(workflow, workflowPath, inheritedPermissions, pre
         resolveWorkflowMatrix(readWorkflow(calledPath), calledPath, effective, identity)
       )
     }
+
     return matrix
   }, {})
 }
@@ -115,8 +129,10 @@ function applyFault(workflow) {
   if (process.env.RELEASE_CUT_PERMISSION_FAULT !== 'inherit-write') {
     return workflow
   }
+
   workflow.permissions = { contents: 'write' }
   delete workflow.jobs.cut.permissions
+
   return workflow
 }
 
@@ -126,6 +142,7 @@ function checkoutRef(job) {
 
 function discoverDispatchedWorkflowPaths(workflow) {
   const names = new Set()
+
   for (const job of Object.values(workflow.jobs)) {
     for (const step of job.steps ?? []) {
       for (const [key, value] of Object.entries(step.env ?? {})) {
@@ -133,11 +150,13 @@ function discoverDispatchedWorkflowPaths(workflow) {
           names.add(value)
         }
       }
+
       for (const match of step.run?.matchAll(/\bgh workflow run ([\w.-]+\.ya?ml)\b/g) ?? []) {
         names.add(match[1])
       }
     }
   }
+
   return [...names].sort().map((name) => `.github/workflows/${name}`)
 }
 
@@ -156,6 +175,7 @@ function discoverStandaloneReusablePaths(workflow) {
 function releaseTagExecutionJobs(workflow) {
   return Object.entries(workflow.jobs).filter(([, job]) => {
     const checkoutIndex = job.steps?.findIndex((step) => step.uses === 'actions/checkout@v6') ?? -1
+
     return (
       checkoutRef(job) === 'refs/tags/${{ needs.cut.outputs.tag }}' &&
       job.steps.slice(checkoutIndex + 1).some((step) => step.run || step.uses?.startsWith('./'))
@@ -165,10 +185,12 @@ function releaseTagExecutionJobs(workflow) {
 
 describe('release-cut token permissions', () => {
   const workflow = applyFault(readWorkflow(RELEASE_WORKFLOW))
+
   const reachedWorkflowPaths = [
     ...discoverDispatchedWorkflowPaths(workflow),
     ...discoverStandaloneReusablePaths(workflow)
   ]
+
   const matrix = reachedWorkflowPaths.reduce(
     (result, workflowPath) =>
       Object.assign(result, resolveWorkflowMatrix(readWorkflow(workflowPath), workflowPath)),
@@ -182,6 +204,7 @@ describe('release-cut token permissions', () => {
   it('runs release-tagged non-publishing code with read-only contents access', () => {
     const tagJobs = releaseTagExecutionJobs(workflow)
     expect(tagJobs.map(([jobName]) => jobName).sort()).toEqual(RELEASE_TAG_EXECUTION_JOBS)
+
     for (const [jobName] of tagJobs) {
       if (!PUBLISH_TAG_JOBS.has(jobName)) {
         expect(matrix[`${RELEASE_WORKFLOW}#${jobName}`]).toEqual({ contents: 'read' })
@@ -201,6 +224,7 @@ describe('release-cut token permissions', () => {
         expect(workflow.jobs[jobName].if).toBe("needs.cut.outputs.should_release == 'true'")
       }
     }
+
     for (const jobName of REUSABLE_CALL_JOBS) {
       expect(workflow.jobs[jobName].uses).toBe('./.github/workflows/homebrew-bump.yml')
       expect(matrix[`${RELEASE_WORKFLOW}#${jobName}`]).toEqual({ contents: 'read' })
@@ -211,6 +235,7 @@ describe('release-cut token permissions', () => {
     expect(checkoutRef(macWorkflow.jobs['build-mac'])).toBe('refs/tags/${{ inputs.tag }}')
 
     const e2eWorkflow = readWorkflow('.github/workflows/e2e.yml')
+
     for (const jobName of Object.keys(e2eWorkflow.jobs)) {
       expect(matrix[`.github/workflows/e2e.yml#${jobName}`]).toEqual({ contents: 'read' })
     }

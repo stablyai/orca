@@ -12,7 +12,9 @@ export const ephemeralVmApi = {
       _event: Electron.IpcRendererEvent,
       event: { provisionId: string; stream: 'stdout' | 'stderr'; chunk: string }
     ): void => callback(event)
+
     ipcRenderer.on('ephemeralVm:provisionEvent', listener)
+
     return () => ipcRenderer.removeListener('ephemeralVm:provisionEvent', listener)
   },
   listRuntimes: () => ipcRenderer.invoke('ephemeralVm:listRuntimes'),

@@ -30,15 +30,21 @@ import {
 import { resolvePaneKey } from '@/hooks/ipc-events/agent-status-routing'
 
 const WORKTREES = 423
+
 const EVENTS = 1_000
+
 const BATCH_SIZE = 8
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const BASE_TIME = 2_000_000_000
 
 const counters = { maps: 0, sets: 0, tabComparisons: 0 }
 
 const NativeMap = globalThis.Map
+
 const NativeSet = globalThis.Set
+
 const nativeArrayIterator = Array.prototype[Symbol.iterator]
 
 function withAllocationCounting<T>(run: () => T): T {
@@ -48,16 +54,19 @@ function withAllocationCounting<T>(run: () => T): T {
       counters.maps += 1
     }
   }
+
   class CountingSet<V> extends NativeSet<V> {
     constructor(values?: readonly V[] | null) {
       super(values)
       counters.sets += 1
     }
   }
+
   counters.maps = 0
   counters.sets = 0
   globalThis.Map = CountingMap as unknown as MapConstructor
   globalThis.Set = CountingSet as unknown as SetConstructor
+
   try {
     return run()
   } finally {
@@ -70,16 +79,20 @@ function withAllocationCounting<T>(run: () => T): T {
 class CountingTabList<T> extends Array<T> {
   [Symbol.iterator](): IterableIterator<T> {
     const inner = nativeArrayIterator.call(this) as IterableIterator<T>
+
     const wrapped: IterableIterator<T> = {
       next: () => {
         const result = inner.next()
+
         if (!result.done) {
           counters.tabComparisons += 1
         }
+
         return result
       },
       [Symbol.iterator]: () => wrapped
     }
+
     return wrapped
   }
 }
@@ -91,11 +104,13 @@ function buildFixture(countTabIteration: boolean) {
   const worktrees = []
   const paneKeys: string[] = []
   const owners: { tabId: string; worktreeId: string }[] = []
+
   for (let index = 0; index < WORKTREES; index += 1) {
     const worktreeId = `wt-${index}`
     worktrees.push(makeWorktree({ id: worktreeId, repoId: TEST_REPO.id }))
     const tabs = []
     const unified = []
+
     for (let tab = 0; tab < (index % 2 === 0 ? 1 : 2); tab += 1) {
       const tabId = `tab-${index}-${tab}`
       tabs.push(makeTab({ id: tabId, worktreeId, title: `Terminal ${index}-${tab}` }))
@@ -110,11 +125,13 @@ function buildFixture(countTabIteration: boolean) {
       paneKeys.push(makePaneKey(tabId, LEAF_ID))
       owners.push({ tabId, worktreeId })
     }
+
     tabsByWorktree[worktreeId] = countTabIteration
       ? (CountingTabList.from(tabs) as unknown as typeof tabs)
       : tabs
     unifiedTabsByWorktree[worktreeId] = unified
   }
+
   store.setState({
     repos: [TEST_REPO],
     worktreesByRepo: { [TEST_REPO.id]: worktrees },
@@ -124,12 +141,14 @@ function buildFixture(countTabIteration: boolean) {
     setGeneratedTabTitlesFromAgentPrompts: () => {},
     settings: { ...store.getState().settings, tabAutoGenerateTitle: false }
   } as Partial<AppState>)
+
   return { store, paneKeys, owners }
 }
 
 function measure(run: () => void): number {
   const start = performance.now()
   run()
+
   return performance.now() - start
 }
 
@@ -143,6 +162,7 @@ function runIndexedRouting(store: ReturnType<typeof createTestStore>, paneKeys: 
     if (event % BATCH_SIZE === 0) {
       store.setState({ agentStatusEpoch: event } as Partial<AppState>)
     }
+
     const index = createAgentStatusPaneRoutingIndex(store.getState())
     resolvePaneKeyFromRoutingIndex(index, paneKeys[event % paneKeys.length])
   }
@@ -159,6 +179,7 @@ function buildBatches(
   paneKeys: string[]
 ): AgentStatusBatchUpdate[][] {
   const batches: AgentStatusBatchUpdate[][] = []
+
   for (let event = 0; event < EVENTS; event += 1) {
     const batchIndex = Math.floor(event / BATCH_SIZE)
     const owner = owners[event % owners.length]
@@ -170,6 +191,7 @@ function buildBatches(
       routing: { tabId: owner.tabId, worktreeId: owner.worktreeId }
     })
   }
+
   return batches
 }
 
@@ -187,6 +209,7 @@ async function runCommitPass(
     const elapsed = measure(() => {
       store.getState().setAgentStatuses(batch)
     })
+
     onBatch?.(elapsed)
     // Each 33 ms burst is its own tick in production; let the deferred freshness scan run.
     await nextTick()
@@ -246,25 +269,30 @@ describe('agent-status hot path benchmark', () => {
       let freshnessEntryVisits = 0
       Object.assign = ((target: object, ...sources: object[]) => {
         objectAssignCalls += 1
+
         for (const source of sources) {
           if (source && typeof source === 'object') {
             objectAssignPropertyCopies += Object.keys(source).length
           }
         }
+
         return nativeObjectAssign(target, ...sources)
       }) as typeof Object.assign
       Object.values = ((value: object) => {
         const result = nativeObjectValues(value)
         freshnessEntryVisits += result.length
+
         return result
       }) as typeof Object.values
       const countedBatches = buildBatches(counted.owners, counted.paneKeys)
+
       try {
         await runCommitPass(counted.store, countedBatches)
       } finally {
         Object.assign = nativeObjectAssign
         Object.values = nativeObjectValues
       }
+
       report['commit.objectAssignCallsPer1kUpdates'] = per1k(objectAssignCalls)
       report['commit.stagedPropertyCopiesPer1kUpdates'] = per1k(objectAssignPropertyCopies)
       report['commit.freshnessEntryVisitsPer1kUpdates'] = per1k(freshnessEntryVisits)
@@ -283,6 +311,7 @@ describe('agent-status hot path benchmark', () => {
 
     const outputPath =
       process.env.ORCA_AGENT_STATUS_BENCH_OUTPUT ?? '/tmp/agent-status-hot-path-benchmark.json'
+
     writeFileSync(
       outputPath,
       `${JSON.stringify({ worktrees: WORKTREES, events: EVENTS, report }, null, 2)}\n`

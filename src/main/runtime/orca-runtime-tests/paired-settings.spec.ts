@@ -19,6 +19,7 @@ describe('OrcaRuntimeService', () => {
         scope: { type: 'global' as const }
       }
     ]
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => ({
@@ -60,15 +61,19 @@ describe('OrcaRuntimeService', () => {
       appendEnter: true,
       scope: { type: 'global' as const }
     }
+
     let settings = { ...store.getSettings(), terminalQuickCommands: [existing] }
+
     const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
       settings = { ...settings, ...updates }
     })
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => settings,
       updateSettings
     } as never)
+
     const command = {
       id: 'status',
       label: 'Status',
@@ -77,6 +82,7 @@ describe('OrcaRuntimeService', () => {
       appendEnter: true,
       scope: { type: 'global' as const }
     }
+
     const commands = [existing, command]
 
     expect(runtime.updateClientTerminalQuickCommands({ type: 'upsert', command })).toEqual(commands)
@@ -94,9 +100,11 @@ describe('OrcaRuntimeService', () => {
         claude: { model: 'opus', valuesByModel: { opus: { effort: 'high' } } }
       }
     }
+
     const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
       settings = { ...settings, ...updates }
     })
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => settings,
@@ -135,9 +143,11 @@ describe('OrcaRuntimeService', () => {
       ...store.getSettings(),
       nativeChatSessionOptions: { grok: { model: 'grok-5' } }
     }
+
     const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
       settings = { ...settings, ...updates }
     })
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => settings,
@@ -168,7 +178,9 @@ describe('OrcaRuntimeService', () => {
       appendEnter: true,
       scope: { type: 'global' as const }
     }))
+
     const updateSettings = vi.fn()
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => ({ ...store.getSettings(), terminalQuickCommands }),
@@ -200,10 +212,13 @@ describe('OrcaRuntimeService', () => {
       minimaxUsageModels: 'general',
       minimaxEndpoint: 'overseas'
     }
+
     const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
       settings = { ...settings, ...updates }
+
       return settings
     })
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => settings,
@@ -246,6 +261,7 @@ describe('OrcaRuntimeService', () => {
 
   it('broadcasts visibility default changes to paired clients', async () => {
     let settings = { ...store.getSettings(), worktreeVisibilityDefaults: { external: 'hide' } }
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => settings,
@@ -253,6 +269,7 @@ describe('OrcaRuntimeService', () => {
         settings = { ...settings, ...updates }
       }
     } as never)
+
     const events: unknown[] = []
     runtime.onClientEvent((event) => events.push(event))
 
@@ -263,15 +280,19 @@ describe('OrcaRuntimeService', () => {
 
   it('reconciles hooks only when paired-client hook settings change', async () => {
     electronMocks.app.isPackaged = true
+
     let settings = {
       ...store.getSettings(),
       agentStatusHooksEnabled: true,
       disabledTuiAgents: ['codex', 'claude']
     }
+
     const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
       settings = { ...settings, ...updates }
+
       return settings
     })
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => settings,
@@ -299,14 +320,18 @@ describe('OrcaRuntimeService', () => {
       agentStatusHooksEnabled: true,
       disabledTuiAgents: ['codex', 'claude']
     }
+
     const updateSettings = vi.fn((updates: Partial<typeof settings>) => {
       settings = { ...settings, ...updates }
+
       return settings
     })
+
     const firstReconciliation = deferred<[]>()
     applyAgentStatusHooksEnabledMock
       .mockImplementationOnce(() => firstReconciliation.promise)
       .mockResolvedValueOnce([])
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getSettings: () => settings,

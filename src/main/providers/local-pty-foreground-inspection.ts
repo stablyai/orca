@@ -24,15 +24,19 @@ import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows-
 
 export function inspectLocalPtyChildProcesses(id: string): PtyChildProcessVerdict {
   const proc = ptyProcesses.get(id)
+
   if (!proc) {
     return 'no-children'
   }
+
   try {
     const foreground = proc.process
     const shell = ptyShellName.get(id)
+
     if (!shell) {
       return 'children'
     }
+
     return foreground === shell ? 'no-children' : 'children'
   } catch {
     // An unreadable PTY is not evidence that its children exited.
@@ -58,14 +62,17 @@ async function revalidateCachedPosixAgent(
   fallbackProcess: string | null
 ): Promise<boolean> {
   const steady = cachedEntry.steady
+
   if (!steady || steady.fallbackProcess !== fallbackProcess) {
     return false
   }
+
   try {
     const observed = await buildPaneProcessFingerprint(
       await getCheapProcessTableSnapshot(),
       proc.pid
     )
+
     return observed !== null && observed === steady.fingerprint
   } catch {
     return false
@@ -74,18 +81,23 @@ async function revalidateCachedPosixAgent(
 
 export async function getLocalPtyForegroundProcess(id: string): Promise<string | null> {
   const proc = ptyProcesses.get(id)
+
   if (!proc) {
     ptyLastRecognizedForeground.delete(id)
+
     return null
   }
+
   const fallbackProcess = resolveForegroundFallbackProcess(
     proc.process || null,
     ptyShellName.get(id)
   )
+
   const cachedEntry = ptyLastRecognizedForeground.get(id)
   const cachedAgent = cachedEntry?.name ?? null
   let paneMembershipUnavailable = false
   let cachedAgentAliveInJob = false
+
   // Why: job membership preserves a live cached agent without the whole-table
   // scan (incomplete under Windows load). Job, not console: this asks "is
   // anything besides the shell alive?", which needs no console attachment and
@@ -96,9 +108,11 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
   ) {
     try {
       const paneProcessIds = readWindowsPtyJobProcessIds(proc)
+
       if (ptyProcesses.get(id) !== proc) {
         return null
       }
+
       const verdict = judgeCachedAgentJobEvidence({
         jobProcessIds: paneProcessIds,
         jobSupported: isWindowsPtyJobReadable(),
@@ -106,9 +120,11 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
         anchorProcessId: cachedEntry?.pid ?? null,
         identityAgeMs: Date.now() - (cachedEntry?.at ?? 0)
       })
+
       if (verdict === 'confirmed' || verdict === 'unproven') {
         return cachedAgent
       }
+
       if (verdict === 'exited') {
         // The shell stands alone in a complete, inescapable job list: no
         // successor is possible, so the identity retires before the scan.
@@ -120,12 +136,14 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
         // here made a degraded scan read a mid-restart agent as an exit.
         ptyLastRecognizedForeground.set(id, { ...cachedEntry, pid: null })
       }
+
       cachedAgentAliveInJob = verdict === 'recheck'
       paneMembershipUnavailable = verdict === 'unavailable'
     } catch {
       paneMembershipUnavailable = true
     }
   }
+
   if (
     process.platform !== 'win32' &&
     cachedEntry &&
@@ -135,9 +153,12 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
     if (ptyProcesses.get(id) !== proc) {
       return null
     }
+
     ptyLastRecognizedForeground.set(id, { ...cachedEntry, at: Date.now() })
+
     return cachedAgent
   }
+
   try {
     const resolution = await resolveAgentForegroundProcessWithAvailability(
       proc.pid,
@@ -149,18 +170,23 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
           : {})
       }
     )
+
     // Why: the scan can outlive PTY teardown/id reuse; stale results must not resurrect cache for a foreign id.
     if (ptyProcesses.get(id) !== proc) {
       return null
     }
+
     // Why: a degraded scan reporting shell-as-foreground fires a false "agent done"; keep last recognized agent instead.
     const lastRecognizedAgent = ptyLastRecognizedForeground.get(id)?.name ?? null
+
     const resolvedAgent = resolution.processName
       ? recognizeAgentProcessFromCommandLine(resolution.processName)
       : null
+
     // A recycled anchor pid keeps job membership truthful but the identity
     // dead; the scan proving the pid now runs a non-agent settles it.
     const anchorContradicted = resolution.anchorPidForeign === true
+
     // Why: incomplete snapshot + unavailable job read isn't exit proof; and an
     // anchor pid still alive in the job outranks a snapshot that lost its row.
     const stableResolution =
@@ -169,7 +195,9 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
       resolvedAgent === null
         ? { ...resolution, available: false }
         : resolution
+
     const stable = resolveStableForegroundProcess(stableResolution, lastRecognizedAgent)
+
     if (stable.lastRecognizedAgent && stableResolution.available) {
       // Only a positive recognition restarts the age bound.
       ptyLastRecognizedForeground.set(id, {
@@ -185,17 +213,20 @@ export async function getLocalPtyForegroundProcess(id: string): Promise<string |
       // The anchor pid in the job is proof of life; restamp so the
       // short-circuit resumes instead of scanning on every call.
       const entry = ptyLastRecognizedForeground.get(id)
+
       if (entry) {
         ptyLastRecognizedForeground.set(id, { ...entry, at: Date.now() })
       }
     } else if (!stable.lastRecognizedAgent) {
       ptyLastRecognizedForeground.delete(id)
     }
+
     return stable.processName
   } catch {
     if (ptyProcesses.get(id) !== proc) {
       return null
     }
+
     // Why: an inspection error is a degraded read; fall back to last recognized agent (null reads as an exit).
     return ptyLastRecognizedForeground.get(id)?.name ?? null
   }
@@ -210,8 +241,10 @@ async function readPosixSteadyState(
   if (process.platform === 'win32') {
     return null
   }
+
   try {
     const fingerprint = await buildPaneProcessFingerprint(await getProcessTableSnapshot(), shellPid)
+
     return fingerprint === null ? null : { fingerprint, fallbackProcess }
   } catch {
     return null
@@ -220,9 +253,11 @@ async function readPosixSteadyState(
 
 export async function confirmLocalPtyForegroundProcess(id: string): Promise<string | null> {
   const proc = ptyProcesses.get(id)
+
   if (!proc) {
     return null
   }
+
   try {
     const resolution = await resolveAgentForegroundProcessWithAvailability(
       proc.pid,
@@ -239,10 +274,12 @@ export async function confirmLocalPtyForegroundProcess(id: string): Promise<stri
           : {})
       }
     )
+
     // Why: a fresh scan can outlive this PTY id; never publish identity from an exited or same-id-reusing session.
     if (ptyProcesses.get(id) !== proc) {
       return null
     }
+
     return resolution.available ? resolution.processName : null
   } catch {
     return null
@@ -251,9 +288,11 @@ export async function confirmLocalPtyForegroundProcess(id: string): Promise<stri
 
 export async function confirmLocalPtyShellForeground(id: string): Promise<boolean> {
   const proc = ptyProcesses.get(id)
+
   if (!proc) {
     return false
   }
+
   const confirmed = await confirmShellForegroundProcess(
     proc.pid,
     ptyShellName.get(id),
@@ -261,5 +300,6 @@ export async function confirmLocalPtyShellForeground(id: string): Promise<boolea
       ? { readWindowsPtyJobProcessIds: () => readWindowsPtyJobProcessIds(proc) }
       : {}
   )
+
   return ptyProcesses.get(id) === proc && confirmed
 }

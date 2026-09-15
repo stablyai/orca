@@ -13,13 +13,17 @@ describe('createSharedNowClock', () => {
     let now = 1_000
     const intervalCallbacks: (() => void)[] = []
     const handle = {} as ReturnType<typeof setInterval>
+
     const setIntervalMock = vi.fn((callback: () => void) => {
       intervalCallbacks.push(callback)
+
       return handle
     })
+
     const clearIntervalMock = vi.fn()
     const first = vi.fn()
     const second = vi.fn()
+
     const clock = createSharedNowClock(30_000, {
       now: () => now,
       setInterval: setIntervalMock,
@@ -34,9 +38,11 @@ describe('createSharedNowClock', () => {
     expect(second).not.toHaveBeenCalled()
     now = 31_000
     const intervalCallback = intervalCallbacks[0]
+
     if (!intervalCallback) {
       throw new Error('expected shared clock to schedule an interval')
     }
+
     intervalCallback()
     expect(clock.getSnapshot()).toBe(31_000)
     expect(first).toHaveBeenCalledTimes(2)
@@ -55,6 +61,7 @@ describe('createSharedNowClock', () => {
     const clearIntervalMock = vi.fn()
     const first = vi.fn()
     const second = vi.fn()
+
     const clock = createSharedNowClock(30_000, {
       now: () => now,
       setInterval: setIntervalMock,
@@ -91,6 +98,7 @@ describe('createSharedNowClock', () => {
     const setIntervalMock = vi.fn(() => handle)
     const clearIntervalMock = vi.fn()
     const listener = vi.fn()
+
     const clock = createSharedNowClock(30_000, {
       now: () => now,
       setInterval: setIntervalMock,
@@ -132,9 +140,11 @@ describe('useNow', () => {
   it('does not tick or hold the shared timer open while disabled', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     const hook = renderHook(({ enabled }: { enabled: boolean }) => useNow(1_000, enabled), {
       initialProps: { enabled: false }
     })
+
     expect(hook.result.current).toBe(1_000)
 
     // A disabled caller must not arm the shared interval on its own.

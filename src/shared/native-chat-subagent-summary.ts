@@ -40,6 +40,7 @@ export function normalizeSubagentState(state: string): NativeChatSubagentState {
   if (state === 'working') {
     return 'working'
   }
+
   return TERMINAL_SUBAGENT_STATES.has(state) ? (state as NativeChatSubagentState) : 'unverifiable'
 }
 
@@ -78,12 +79,15 @@ const LATCHED_SUBAGENT_STATES: ReadonlySet<string> = new Set([
  *  it, so a straggler progress tick cannot re-light a settled row. */
 export function canReplaceSubagentState(current: string, next: string): boolean {
   const from = normalizeSubagentState(current)
+
   if (from === 'working') {
     return true
   }
+
   if (LATCHED_SUBAGENT_STATES.has(from)) {
     return false
   }
+
   // `from` is `unverifiable`: only a real verdict may land.
   return LATCHED_SUBAGENT_STATES.has(normalizeSubagentState(next))
 }
@@ -118,26 +122,34 @@ export function summarizeSubagentGroup(
   let tokens: number | null = null
   let startedAt: number | null = null
   let settledAt: number | null = null
+
   for (const agent of agents) {
     const state = normalizeSubagentState(agent.state)
+
     if (state === 'working') {
       working += 1
     } else {
       counts.set(state, (counts.get(state) ?? 0) + 1)
     }
+
     if (typeof agent.tokens === 'number' && Number.isFinite(agent.tokens)) {
       tokens = (tokens ?? 0) + agent.tokens
     }
+
     if (typeof agent.startedAt === 'number') {
       startedAt = startedAt === null ? agent.startedAt : Math.min(startedAt, agent.startedAt)
     }
+
     if (typeof agent.settledAt === 'number') {
       settledAt = settledAt === null ? agent.settledAt : Math.max(settledAt, agent.settledAt)
     }
   }
+
   const settledState =
     working > 0 ? null : (SETTLED_PRECEDENCE.find((state) => counts.has(state)) ?? null)
+
   const adverseState = ADVERSE_PRECEDENCE.find((state) => counts.has(state)) ?? null
+
   return {
     total: agents.length,
     working,
@@ -193,6 +205,7 @@ export function subagentGroupFallbackText(agents: readonly NativeChatSubagentEnt
   const { total, working, adverseState, adverseCount } = summarizeSubagentGroup(agents)
   const noun = total === 1 ? 'subagent' : 'subagents'
   const adverse = adverseState === null ? '' : ` (${adverseCount} ${adverseState})`
+
   return `${working > 0 ? 'Kicked off' : 'Ran'} ${total} ${noun}${adverse}`
 }
 

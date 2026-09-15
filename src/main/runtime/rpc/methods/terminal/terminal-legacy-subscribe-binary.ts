@@ -24,13 +24,17 @@ import type { TerminalOutputChunk } from './terminal-stream-types'
 import { publishLegacyBinaryInitialSnapshot } from './terminal-legacy-subscribe-snapshot'
 import { activateLegacyBinarySubscription } from './terminal-legacy-subscribe-live'
 import { registerLegacyBinaryControlFrames } from './terminal-legacy-binary-control-frames'
+
 const TERMINAL_QUERY_REPLAY_MAX_CHARS = 16 * 1024
+
 export async function runTerminalBinarySubscription(args: TerminalSubscriptionArgs): Promise<void> {
   const { params, runtime, connectionId, sendBinary, signal, emit, ptyId, clientId, isMobile } =
     args
+
   if (!sendBinary) {
     throw new Error('binary_terminal_stream_required')
   }
+
   let registeredRemoteDesktopDriver = false
   const streamId = allocateTerminalSubscriptionStreamId()
   const remoteDesktopSubscriptionKey = `stream:${streamId}`
@@ -49,19 +53,28 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
   let pendingQueryChars = 0
   let pendingQueryOverflowed = false
   let unsubscribeData = (): void => {}
+
   let unsubscribeResize = (): void => {}
+
   let unsubscribeFit = (): void => {}
+
   let unregisterBinaryHandler = (): void => {}
+
   let abortRendererMountWait = (): void => {}
+
   let stopWatchingLifetime = (): void => {}
+
   let lateRendererReadyPromise: Promise<boolean> | null = null
   let outputBatcher: TerminalOutputBatcher | null = null
   let resolveStream = (): void => {}
+
   const streamClosed = new Promise<void>((resolve) => {
     resolveStream = resolve
   })
+
   // Why: register cleanup before any await so a mid-subscribe disconnect still removes mobile presence; client-scoped ids also allow parallel desktop subscribers.
   const subscriptionId = clientId ? `${params.terminal}:${clientId}` : params.terminal
+
   const registration = runtime.registerOwnedSubscriptionCleanup(
     subscriptionId,
     () => {
@@ -74,21 +87,26 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
       unsubscribeFit()
       unregisterBinaryHandler()
       abortRendererMountWait()
+
       if (isMobile && clientId) {
         runtime.handleMobileUnsubscribe(ptyId, clientId)
       } else if (registeredRemoteDesktopDriver && clientId) {
         runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
       }
+
       emit({ type: 'end' })
       resolveStream()
     },
     connectionId
   )
+
   stopWatchingLifetime = watchSubscriptionLifetime(runtime, ptyId, signal, registration)
+
   if (closed) {
     // Why: an already-exited pty releases synchronously, so cleanup ran before this setup registers anything.
     return
   }
+
   const sendFrame = (
     opcode: TerminalStreamOpcode,
     payload: Uint8Array<ArrayBufferLike> = new Uint8Array(),
@@ -97,8 +115,10 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     if (closed || !sendBinary) {
       return
     }
+
     sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: frameSeq, payload }))
   }
+
   outputBatcher = createTerminalOutputBatcher((data, meta) => {
     if (meta?.cwd !== undefined) {
       sendFrame(
@@ -107,6 +127,7 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
         meta.seq
       )
     }
+
     for (const chunk of iterateTerminalOutputFrameChunks(data, meta)) {
       sendFrame(chunk.opcode ?? TerminalStreamOpcode.Output, chunk.bytes, chunk.seq)
     }
@@ -131,12 +152,15 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
       sendFrame
     }
   )
+
   const unsubscribeStreamData = runtime.subscribeToTerminalData(ptyId, (data, meta) => {
     if (closed) {
       return
     }
+
     if (buffering) {
       const rawLength = meta?.rawLength
+
       if (
         typeof meta?.seq === 'number' &&
         typeof rawLength === 'number' &&
@@ -147,37 +171,47 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
           meta.seq - rawLength,
           pendingQueryScanState
         )
+
         pendingQueryScanState = scan.state
+
         for (const query of scan.queries) {
           if (pendingQueryChars + query.data.length > TERMINAL_QUERY_REPLAY_MAX_CHARS) {
             pendingQueryOverflowed = true
             break
           }
+
           pendingQuerySequences.push(query)
           pendingQueryChars += query.data.length
         }
       } else {
         pendingQueryScanState = EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE
       }
+
       const remainingBudget = Math.max(1, TERMINAL_MULTIPLEX_PENDING_MAX_BYTES - pendingOutputBytes)
+
       const measurement = measureTerminalStreamByteLength(data, {
         stopAfterBytes: remainingBudget
       })
+
       pendingOutput.push({ data, bytes: measurement.byteLength, meta })
       pendingOutputBytes += measurement.byteLength
       const trimmed = trimPendingOutputToBudget(pendingOutput, pendingOutputBytes)
       pendingOutputBytes = trimmed.bytes
       pendingOutputOverflowed ||= trimmed.overflowed
+
       return
     }
+
     outputBatcher?.push(data, meta)
   })
+
   // Why: capture live bytes before mobile-fit awaits; registering presence first would suppress main while no view held the query.
   const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(ptyId)
   unsubscribeData = () => {
     releaseViewSubscriber()
     unsubscribeStreamData()
   }
+
   const state: LegacyBinarySubscriptionState = {
     streamId,
     remoteDesktopSubscriptionKey,
@@ -272,15 +306,19 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     streamClosed,
     sendFrame
   }
+
   try {
     await publishLegacyBinaryInitialSnapshot(args, state)
+
     if (state.closed || signal?.aborted) {
       return
     }
+
     activateLegacyBinarySubscription(args, state)
   } catch (error) {
     registration.releaseIfCurrent()
     throw error
   }
+
   await streamClosed
 }

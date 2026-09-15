@@ -83,6 +83,7 @@ export function fleetWorkerIdentity(worker: {
   if (!worker.agentTerminalHandle) {
     return { kind: 'unidentifiable' }
   }
+
   return worker.paneKey
     ? {
         kind: 'pane_and_terminal',

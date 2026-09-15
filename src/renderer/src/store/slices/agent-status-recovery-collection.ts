@@ -31,11 +31,13 @@ export function collectSleepingAgentSessionRecordsForWorktree(
   const isManualWorktreeSleep = collectOptions.captureMode === 'manual-worktree-sleep'
   const isCompletedAgentHibernation = collectOptions.captureMode === 'completed-agent-hibernation'
   const isWorktreeOwnedCapture = isManualWorktreeSleep || isCompletedAgentHibernation
+
   // Why: hibernated completions are intentional worktree-owned records; wake treats
   // originless completed records as ambiguous legacy captures.
   const origin: SleepingAgentSessionRecord['origin'] | undefined = isWorktreeOwnedCapture
     ? 'worktree-sleep'
     : undefined
+
   const tabPrefixes = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
   const records: Record<string, SleepingAgentSessionRecord> = {}
   const promotedLiveRecoveryPaneKeys = new Set<string>()
@@ -43,6 +45,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
   if (isManualWorktreeSleep) {
     for (const existing of Object.values(state.sleepingAgentSessionsByPaneKey)) {
       const liveEntry = state.agentStatusByPaneKey[existing.paneKey]
+
       if (
         existing.worktreeId !== worktreeId ||
         existing.origin !== 'live' ||
@@ -53,6 +56,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       ) {
         continue
       }
+
       // Why: Pi identity is resumable with no turn row and while idle after done, so manual
       // sleep must promote both instead of deleting the checkpoint.
       records[existing.paneKey] = {
@@ -70,17 +74,21 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (isCompletedAgentHibernation) {
       continue
     }
+
     if (allowedPaneKeys && !allowedPaneKeys.has(retained.entry.paneKey)) {
       continue
     }
+
     if (retained.worktreeId !== worktreeId) {
       continue
     }
+
     // Why: the promoted checkpoint carries recovery identity (transcript, connection) a retained
     // turn row lacks, so it must not be overwritten by a re-derived record.
     if (promotedLiveRecoveryPaneKeys.has(retained.entry.paneKey)) {
       continue
     }
+
     const record = sleepingRecordFromEntry({
       state,
       entry: isManualWorktreeSleep
@@ -92,10 +100,12 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       launchConfig: getLaunchConfigForEntry(state, retained.entry),
       origin
     })
+
     if (record) {
       if (isManualWorktreeSleep) {
         markManualSleepLazyRestore(record)
       }
+
       records[record.paneKey] = record
     }
   }
@@ -104,19 +114,24 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (allowedPaneKeys && !allowedPaneKeys.has(paneKey)) {
       continue
     }
+
     // Why: the promoted checkpoint carries recovery identity (transcript, connection) the live
     // turn row lacks, so it must not be overwritten by a re-derived record.
     if (promotedLiveRecoveryPaneKeys.has(paneKey)) {
       continue
     }
+
     const belongsToWorktree =
       entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
+
     if (!belongsToWorktree) {
       continue
     }
+
     if (isCompletedAgentHibernation && !isValidCompletedAgentHibernationEntry(entry)) {
       continue
     }
+
     const record = sleepingRecordFromEntry({
       state,
       entry: isManualWorktreeSleep ? manualSleepCaptureEntry(entry, capturedAt) : entry,
@@ -125,10 +140,12 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       launchConfig: getLaunchConfigForEntry(state, entry),
       origin
     })
+
     if (record) {
       if (isManualWorktreeSleep) {
         markManualSleepLazyRestore(record)
       }
+
       records[record.paneKey] = record
     }
   }
@@ -142,13 +159,17 @@ export function collectHibernatedCompletionEvidenceForWorktree(
   paneKeys?: readonly string[]
 ): RetainedAgentEntry[] {
   const allowedPaneKeys = normalizePaneKeySet(paneKeys)
+
   if (!allowedPaneKeys || allowedPaneKeys.size === 0) {
     return []
   }
+
   const tabPrefixes = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
   const retained: RetainedAgentEntry[] = []
+
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
     const agentType = entry.agentType
+
     if (
       !allowedPaneKeys.has(paneKey) ||
       entry.state !== 'done' ||
@@ -157,12 +178,16 @@ export function collectHibernatedCompletionEvidenceForWorktree(
     ) {
       continue
     }
+
     const belongsToWorktree =
       entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
+
     if (!belongsToWorktree) {
       continue
     }
+
     retained.push(retainedAgentEntryFromLive(state, worktreeId, entry, agentType))
   }
+
   return retained
 }

@@ -3,11 +3,14 @@ import type { NotificationDeliveryProbeResult } from '../../shared/notification-
 import { activeNotifications } from './native-notification-lifecycle'
 
 const NOTIFICATION_PROBE_RESULT_TIMEOUT_MS = 3000
+
 const NOTIFICATION_PROBE_BANNER_CLOSE_DELAY_MS = 4000
 
 // Why: no API to read macOS auth, so track the last scheduled notification's outcome; session-scoped since permission can change between runs.
 let lastObservedDeliveryOutcome: 'delivered' | 'failed' | null = null
+
 let deliveryProbeInFlight: Promise<NotificationDeliveryProbeResult> | null = null
+
 // Why: firing one probe instantiates Electron's presenter and pops the macOS permission dialog; once per session is enough.
 let permissionDialogTriggeredThisSession = false
 
@@ -41,6 +44,7 @@ export function probeNotificationDelivery(): Promise<NotificationDeliveryProbeRe
   if (deliveryProbeInFlight) {
     return deliveryProbeInFlight
   }
+
   permissionDialogTriggeredThisSession = true
 
   const probe = new Notification({
@@ -48,6 +52,7 @@ export function probeNotificationDelivery(): Promise<NotificationDeliveryProbeRe
     body: 'Orca will alert you when agents finish or terminals need attention.',
     silent: true
   })
+
   activeNotifications.add(probe)
 
   deliveryProbeInFlight = new Promise<NotificationDeliveryProbeResult>((resolve) => {
@@ -65,11 +70,14 @@ export function probeNotificationDelivery(): Promise<NotificationDeliveryProbeRe
       if (settled) {
         return
       }
+
       settled = true
+
       if (timeoutTimer) {
         clearTimeout(timeoutTimer)
         timeoutTimer = null
       }
+
       lastObservedDeliveryOutcome = state === 'delivered' ? 'delivered' : 'failed'
       resolve({ state, authoritative: false })
     }
@@ -78,6 +86,7 @@ export function probeNotificationDelivery(): Promise<NotificationDeliveryProbeRe
       settle('delivered')
       // Why: the probe banner doubles as the user-facing confirmation, so let it linger briefly instead of vanishing instantly.
       const closeTimer = setTimeout(releaseProbe, NOTIFICATION_PROBE_BANNER_CLOSE_DELAY_MS)
+
       if (typeof closeTimer.unref === 'function') {
         closeTimer.unref()
       }
@@ -99,6 +108,7 @@ export function probeNotificationDelivery(): Promise<NotificationDeliveryProbeRe
         releaseProbe()
       }
     }, NOTIFICATION_PROBE_RESULT_TIMEOUT_MS)
+
     if (typeof timeoutTimer.unref === 'function') {
       timeoutTimer.unref()
     }

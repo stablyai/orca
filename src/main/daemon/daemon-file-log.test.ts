@@ -9,6 +9,7 @@ let dir: string
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'daemon-file-log-'))
 })
+
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true })
 })
@@ -38,6 +39,7 @@ describe('createDaemonFileLog', () => {
   it('rotates at the byte cap and keeps only the configured rotated files', () => {
     const filePath = join(dir, 'daemon.log')
     const log = createDaemonFileLog(filePath, { maxBytes: 150, maxRotatedFiles: 2 })
+
     for (let i = 0; i < 40; i++) {
       log.log('tick', { i })
     }

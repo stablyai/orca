@@ -25,6 +25,7 @@ function firstEmptyParagraphPosition(editor: Editor): number {
   editor.state.doc.descendants((node, pos) => {
     if (node.type.name === 'paragraph' && node.content.size === 0) {
       position = pos + 1
+
       return false
     }
 

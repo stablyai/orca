@@ -24,11 +24,13 @@ export function NativeChatTurnActivityLine({
   // "Thinking" carry no duration.
   const counting = status != null && !thinking && !activity?.text
   const elapsedSeconds = useNativeChatElapsedSeconds(status?.startedAt ?? null, counting)
+
   const resolved = describeNativeChatActiveTurnLabel({
     activityText: activity?.text,
     thinking,
     elapsedSeconds
   })
+
   const label =
     resolved.source === 'activity'
       ? resolved.text

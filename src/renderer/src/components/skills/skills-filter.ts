@@ -30,17 +30,22 @@ export function filterSkills(
   if (isSkillsFilterQueryTooLarge(filters.query)) {
     return []
   }
+
   const query = normalize(filters.query)
+
   return skills.filter((skill) => {
     if (filters.sourceKind !== 'all' && skill.sourceKind !== filters.sourceKind) {
       return false
     }
+
     if (!skillMatchesAgent(skill, filters.agent, agentByRootPath)) {
       return false
     }
+
     if (!query) {
       return true
     }
+
     const haystack = [
       skill.name,
       skill.description ?? '',
@@ -50,6 +55,7 @@ export function filterSkills(
     ]
       .join(' ')
       .toLowerCase()
+
     return haystack.includes(query)
   })
 }
@@ -60,6 +66,7 @@ export function countSkillsBySource(
   return skills.reduce<Record<SkillSourceKind, number>>(
     (counts, skill) => {
       counts[skill.sourceKind] += 1
+
       return counts
     },
     { home: 0, repo: 0, bundled: 0, plugin: 0 }

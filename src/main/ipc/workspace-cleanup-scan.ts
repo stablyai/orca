@@ -47,6 +47,7 @@ import {
 import { isWorktreeMetaOwnedByRepo } from '../worktree-metadata-ownership'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
+
 // Why: SSH repos pay a worktree-list round trip each; strictly serial repos
 // made scan wall-clock the sum of per-repo network latencies.
 const REPO_SCAN_CONCURRENCY = 2
@@ -65,18 +66,24 @@ export async function scanWorkspaceCleanup(
   throwIfWorkspaceCleanupScanAborted(options.signal)
   const scannedAt = Date.now()
   const targetWorktreeIdsByRepo = getTargetWorktreeIdsByRepo(args)
+
   if (hasTargetedWorkspaceCleanupScan(args) && targetWorktreeIdsByRepo.size === 0) {
     return { scannedAt, candidates: [], errors: [] }
   }
+
   const allRepos = store.getRepos()
+
   const repos =
     targetWorktreeIdsByRepo.size > 0
       ? allRepos.filter((repo) => targetWorktreeIdsByRepo.has(repo.id))
       : allRepos
+
   const repoOwnerCountById = new Map<string, number>()
+
   for (const repo of allRepos) {
     repoOwnerCountById.set(repo.id, (repoOwnerCountById.get(repo.id) ?? 0) + 1)
   }
+
   const progress = createWorkspaceCleanupProgressEmitter(args.scanId, scannedAt, options)
   const errors: WorkspaceCleanupScanResult['errors'] = []
   const candidates: WorkspaceCleanupCandidate[] = []
@@ -87,6 +94,7 @@ export async function scanWorkspaceCleanup(
       REPO_SCAN_CONCURRENCY,
       async (repo) => {
         throwIfWorkspaceCleanupScanAborted(options.signal)
+
         return scanRepoWorkspaces({
           store,
           repo,
@@ -103,10 +111,12 @@ export async function scanWorkspaceCleanup(
         })
       }
     )
+
     for (const result of repoResults) {
       appendWorkspaceCleanupItems(candidates, result.candidates)
       appendWorkspaceCleanupItems(errors, result.errors)
     }
+
     return { scannedAt, candidates, errors }
   } finally {
     progress.flush()
@@ -140,6 +150,7 @@ async function scanRepoWorkspaces(
     onCandidateScanned,
     onErrors
   } = args
+
   const errors: WorkspaceCleanupScanResult['errors'] = []
   const repoIsFolder = isFolderRepo(repo)
   let route: WorkspaceCleanupGitRoute
@@ -153,6 +164,7 @@ async function scanRepoWorkspaces(
     if (error instanceof WorkspaceCleanupScanCancelledError) {
       throw error
     }
+
     return handleRepoWorktreeListError({
       repo,
       targeted: targetWorktreeIds !== undefined,
@@ -176,10 +188,13 @@ async function scanRepoWorkspaces(
             includeAllWorkspaces
           )
         : []
+
     onWorktreesDiscovered?.(candidates.length)
+
     for (const candidate of candidates) {
       onCandidateScanned?.(candidate)
     }
+
     return { scannedAt, candidates, errors: [] }
   }
 
@@ -191,10 +206,13 @@ async function scanRepoWorkspaces(
           // Host-qualified first: the same repoId::path is a different checkout on each host.
           const hostMeta = readWorktreeMetaForHost(store, worktreeId, route.hostId)
           const meta = store.getWorktreeMeta(worktreeId)
+
           const ownedMeta =
             hostMeta ?? (isWorktreeMetaOwnedByRepo(repo, meta, repoOwnerCount) ? meta : undefined)
+
           return mergeWorktree(repo.id, gitWorktree, ownedMeta, repo.displayName)
         })
+
   // Why: with includeAllWorkspaces the browser shows every workspace and lets
   // filters narrow it; an age threshold here would hide rows from all views.
   const candidateWorktrees = targetWorktreeIds
@@ -207,18 +225,22 @@ async function scanRepoWorkspaces(
           scannedAt
         })
       )
+
   // Why: with a target list or the full-list browser, every filtered row will
   // be reported; counting them upfront keeps the progress bar honest instead
   // of advancing discovered/scanned in lockstep at ~100%.
   const reportDiscoveredUpfront = targetWorktreeIds !== undefined || includeAllWorkspaces
+
   if (reportDiscoveredUpfront && candidateWorktrees.length > 0) {
     onWorktreesDiscovered?.(candidateWorktrees.length)
   }
+
   // Why: fs stat has no cancellation, so on a hung network/WSL mount every
   // timed-out row would abandon more threadpool work. After the first timeout,
   // stop statting this repo and use persisted activity only.
   let activityStatsUnavailable = false
   const fsActivityCache: WorkspaceCleanupFsActivityCache = new Map()
+
   const candidatesWithSkipped = await mapWorkspaceCleanupWithConcurrency(
     candidateWorktrees,
     WORKTREE_SCAN_CONCURRENCY,
@@ -227,10 +249,12 @@ async function scanRepoWorkspaces(
       // Why: externally-created worktrees can miss Orca activity stamps; local
       // filesystem metadata is a conservative guard before suggesting deletion.
       const persistedActivityWorktree = resolvePersistedWorkspaceCleanupActivityWorktree(worktree)
+
       const persistedActivityIsRecent = !isWorkspaceInactiveForCleanup(
         persistedActivityWorktree,
         scannedAt
       )
+
       const worktreeWithActivity =
         activityStatsUnavailable ||
         (targetWorktreeIds ? !refreshTargetActivity : persistedActivityIsRecent)
@@ -244,13 +268,17 @@ async function scanRepoWorkspaces(
               signal,
               fsActivityCache
             )
+
       const isInactive = isWorkspaceInactiveForCleanup(worktreeWithActivity, scannedAt)
+
       if (!targetWorktreeIds && !includeAllWorkspaces && !isInactive) {
         return null
       }
+
       if (!reportDiscoveredUpfront) {
         onWorktreesDiscovered?.(1)
       }
+
       const candidate = await buildWorkspaceCleanupCandidate({
         repo,
         worktree: worktreeWithActivity,
@@ -265,13 +293,18 @@ async function scanRepoWorkspaces(
         if (error instanceof WorkspaceCleanupScanCancelledError) {
           throw error
         }
+
         console.error('Workspace cleanup candidate scan failed', error)
+
         return buildWorkspaceCleanupCandidateFromError(repo, worktreeWithActivity, scannedAt)
       })
+
       onCandidateScanned?.(candidate)
+
       return candidate
     }
   )
+
   const candidates = candidatesWithSkipped.filter(
     (candidate): candidate is WorkspaceCleanupCandidate => candidate !== null
   )
@@ -304,8 +337,10 @@ async function resolveCleanupActivityWithTimeout(
     if (error instanceof WorkspaceCleanupScanCancelledError) {
       throw error
     }
+
     onActivityStatsUnavailable()
     console.warn('Workspace cleanup activity scan failed', error)
+
     return resolvePersistedWorkspaceCleanupActivityWorktree(worktree)
   }
 }

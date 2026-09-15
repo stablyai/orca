@@ -16,6 +16,7 @@ export function removeModelDownloadFiles(
   legacyArchivePath: string
 ): void {
   removeModelDownloadStaging(stagingDir, legacyArchivePath)
+
   try {
     rmSync(modelDir, { recursive: true, force: true })
   } catch {

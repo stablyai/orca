@@ -16,5 +16,6 @@ export async function copyMarkdownReviewNotesForAgent({
   }
 
   await writeClipboardText(formatMarkdownReviewNotes(notes, content))
+
   return true
 }

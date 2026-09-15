@@ -30,15 +30,19 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
     setActiveTabType,
     setTabBarOrder
   } = controller
+
   const handleNewTab = useCallback(
     (shellOverride?: string) => {
       if (!activeWorktreeId) {
         return
       }
+
       const targetGroupId =
         useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
         useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
+
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+
       if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         void createWebRuntimeSessionTerminal({
           worktreeId: activeWorktreeId,
@@ -47,12 +51,16 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
           command: shellOverride,
           activate: true
         })
+
         return
       }
+
       if (!shellOverride && targetGroupId) {
         void openNewTerminalTabInActiveWorkspace(targetGroupId)
+
         return
       }
+
       const newTab = createTab(activeWorktreeId, undefined, shellOverride)
       setActiveTabType('terminal')
       const state = useAppStore.getState()
@@ -66,12 +74,14 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
       const validIds = new Set([...termIds, ...editorIds, ...browserIds])
       const base = (stored ?? []).filter((id) => validIds.has(id))
       const inBase = new Set(base)
+
       for (const id of [...termIds, ...editorIds, ...browserIds]) {
         if (!inBase.has(id)) {
           base.push(id)
           inBase.add(id)
         }
       }
+
       const order = base.filter((id) => id !== newTab.id)
       order.push(newTab.id)
       setTabBarOrder(activeWorktreeId, order)
@@ -91,16 +101,20 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
       if (!activeWorktreeId) {
         return
       }
+
       const state = useAppStore.getState()
+
       const targetGroupId =
         state.activeGroupIdByWorktree[activeWorktreeId] ??
         state.groupsByWorktree[activeWorktreeId]?.[0]?.id
+
       const result = launchAgentInNewTab({
         agent,
         worktreeId: activeWorktreeId,
         groupId: targetGroupId,
         launchSource: 'shortcut'
       })
+
       if (!result) {
         toast.error(
           translate(
@@ -118,9 +132,11 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
     if (!activeWorktreeId) {
       return
     }
+
     const targetGroupId =
       useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
       useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
+
     void openMobileEmulatorTab(activeWorktreeId, {
       placement: 'rightSplit',
       targetGroupId: targetGroupId ?? undefined
@@ -131,31 +147,42 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
     if (!activeWorktreeId) {
       return
     }
+
     const targetGroupId =
       useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
       useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
+
     if (targetGroupId) {
       void openNewBrowserTabInActiveWorkspace(targetGroupId).catch(showClientCreationActionError)
+
       return
     }
+
     const state = useAppStore.getState()
+
     const browserAvailability = getClientCreationActionPolicy(state, activeWorktreeId)[
       'managed-browser'
     ]
+
     if (browserAvailability.state !== 'enabled') {
       toast.error(browserAvailability.reason)
+
       return
     }
+
     const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
     const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+
     if (browserAvailability.provider === 'paired-runtime' && runtimeEnvironmentId) {
       void createWebRuntimeSessionBrowserTab({
         worktreeId: activeWorktreeId,
         environmentId: runtimeEnvironmentId,
         url: defaultUrl
       }).catch(showClientCreationActionError)
+
       return
     }
+
     createBrowserTab(activeWorktreeId, defaultUrl, {
       title: translate('auto.components.Terminal.37da0d736f', 'New Browser Tab'),
       focusAddressBar: true,
@@ -172,20 +199,27 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
       if (!activeWorktreeId) {
         return
       }
+
       const state = useAppStore.getState()
       const tabs = state.browserTabsByWorktree[activeWorktreeId] ?? []
       const source = tabs.find((tab) => tab.id === browserTabId)
+
       if (!source) {
         return
       }
+
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+
       const browserAvailability = getClientCreationActionPolicy(state, activeWorktreeId)[
         'managed-browser'
       ]
+
       if (browserAvailability.state !== 'enabled') {
         toast.error(browserAvailability.reason)
+
         return
       }
+
       if (
         browserAvailability.provider === 'paired-runtime' &&
         runtimeEnvironmentId &&
@@ -197,8 +231,10 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
           url: source.url,
           profileId: source.sessionProfileId
         }).catch(showClientCreationActionError)
+
         return
       }
+
       try {
         createBrowserTab(activeWorktreeId, source.url, {
           ...buildDuplicatedBrowserTabOptions(source),
@@ -215,12 +251,15 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
     if (!activeWorktreeId) {
       return
     }
+
     const targetGroupId =
       useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
       useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
+
     if (!targetGroupId) {
       return
     }
+
     await openNewMarkdownInActiveWorkspace(targetGroupId)
   }, [activeWorktreeId, openNewMarkdownInActiveWorkspace])
 

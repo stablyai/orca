@@ -4,7 +4,9 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { WorktreeCreate } from './worktree-create-schemas'
 
 type WorktreeCreateParams = z.infer<typeof WorktreeCreate>
+
 type ManagedWorktreeCreateArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]
+
 type CreateProvenance = Pick<
   ManagedWorktreeCreateArgs,
   'automationProvenance' | 'cliProvenance' | 'creatorProvenance'

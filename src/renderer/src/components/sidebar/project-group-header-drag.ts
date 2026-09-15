@@ -48,11 +48,14 @@ export function useProjectGroupHeaderDrag({
   const refreshHeaderRects = useCallback(() => {
     const container = getContainerRef.current()
     const session = dragSessionRef.current
+
     if (!container || !session) {
       return []
     }
+
     const rects = measureProjectGroupHeaderDragRects(container, session.bucketKey)
     session.headerRects = rects
+
     return rects
   }, [])
 
@@ -60,10 +63,13 @@ export function useProjectGroupHeaderDrag({
     (pointerY: number): { dropIndex: number; dropIndicatorY: number } | null => {
       const session = dragSessionRef.current
       const container = getContainerRef.current()
+
       if (!session || !container) {
         return null
       }
+
       const containerRect = container.getBoundingClientRect()
+
       return computeProjectGroupHeaderDropPreview({
         pointerY,
         containerTop: containerRect.top,
@@ -79,9 +85,11 @@ export function useProjectGroupHeaderDrag({
   const applyDrop = useCallback(
     (groupId: string, drop: { dropIndex: number; dropIndicatorY: number } | null) => {
       latestDropIndexRef.current = drop?.dropIndex ?? null
+
       const nextState: ProjectGroupDragState = drop
         ? { draggingGroupId: groupId, ...drop }
         : { draggingGroupId: groupId, dropIndex: null, dropIndicatorY: null }
+
       setState((prev) =>
         prev.draggingGroupId === nextState.draggingGroupId &&
         prev.dropIndex === nextState.dropIndex &&
@@ -98,6 +106,7 @@ export function useProjectGroupHeaderDrag({
       window.cancelAnimationFrame(autoscrollFrameIdRef.current)
       autoscrollFrameIdRef.current = null
     }
+
     autoscrollLastFrameTimeRef.current = null
   }, [])
 
@@ -105,26 +114,33 @@ export function useProjectGroupHeaderDrag({
     (commit: boolean) => {
       cancelAutoscroll()
       const session = dragSessionRef.current
+
       if (!session) {
         setState(INITIAL_PROJECT_GROUP_DRAG_STATE)
         setSessionArmed(false)
+
         return
       }
+
       try {
         session.handleEl.releasePointerCapture(session.pointerId)
       } catch {
         // capture may already be released (pointercancel, element unmounted)
       }
+
       if (session.promoted) {
         clickSwallowTimeoutRef.current = swallowNextClickOnDragHandle(session.handleEl)
       }
+
       const sidebarDropIndex =
         commit && session.promoted && latestDropIndexRef.current !== null
           ? latestDropIndexRef.current
           : null
+
       dragSessionRef.current = null
       setState(INITIAL_PROJECT_GROUP_DRAG_STATE)
       setSessionArmed(false)
+
       if (sidebarDropIndex === null) {
         return
       }
@@ -144,13 +160,16 @@ export function useProjectGroupHeaderDrag({
       autoscrollFrameIdRef.current = null
       const session = dragSessionRef.current
       const container = getContainerRef.current()
+
       if (!session?.promoted || !container) {
         cancelAutoscroll()
+
         return
       }
 
       const previousFrameTime = autoscrollLastFrameTimeRef.current ?? frameTime
       autoscrollLastFrameTimeRef.current = frameTime
+
       const autoscroll = getWorktreeSidebarDragAutoscroll({
         point: { clientX: 0, clientY: session.latestPointerY },
         containerRect: container.getBoundingClientRect(),
@@ -159,6 +178,7 @@ export function useProjectGroupHeaderDrag({
         clientHeight: container.clientHeight,
         elapsedMs: frameTime - previousFrameTime
       })
+
       if (autoscroll) {
         container.scrollTop = autoscroll.scrollTop
         refreshHeaderRects()
@@ -175,6 +195,7 @@ export function useProjectGroupHeaderDrag({
     if (autoscrollFrameIdRef.current !== null) {
       return
     }
+
     autoscrollLastFrameTimeRef.current = null
     autoscrollFrameIdRef.current = window.requestAnimationFrame(runAutoscrollFrame)
   }, [runAutoscrollFrame])
@@ -183,26 +204,35 @@ export function useProjectGroupHeaderDrag({
     if (!sessionArmed) {
       return
     }
+
     const onPointerMove = (event: PointerEvent): void => {
       const session = dragSessionRef.current
+
       if (!session || event.pointerId !== session.pointerId) {
         return
       }
+
       if (hasPointerBeenReleased(event)) {
         endDrag(false)
+
         return
       }
+
       session.latestPointerY = event.clientY
+
       if (!session.promoted) {
         const dx = event.clientX - session.startX
         const dy = event.clientY - session.startY
+
         if (
           dx * dx + dy * dy <
           PROJECT_GROUP_HEADER_DRAG_THRESHOLD_PX * PROJECT_GROUP_HEADER_DRAG_THRESHOLD_PX
         ) {
           return
         }
+
         session.promoted = true
+
         // Why: virtualized headers may detach during drag; global listeners
         // still keep the operation alive if pointer capture is unavailable.
         if (session.handleEl.isConnected) {
@@ -212,32 +242,42 @@ export function useProjectGroupHeaderDrag({
             // Ignore capture failure; global listeners will handle the drag.
           }
         }
+
         refreshHeaderRects()
         setState({ draggingGroupId: session.groupId, dropIndex: null, dropIndicatorY: null })
       }
+
       refreshHeaderRects()
       applyDrop(session.groupId, computeDrop(event.clientY))
       ensureAutoscroll()
     }
+
     const onPointerUp = (event: PointerEvent): void => {
       const session = dragSessionRef.current
+
       if (!session || event.pointerId !== session.pointerId) {
         return
       }
+
       endDrag(true)
     }
+
     const onPointerCancel = (event: PointerEvent): void => {
       const session = dragSessionRef.current
+
       if (!session || event.pointerId !== session.pointerId) {
         return
       }
+
       endDrag(false)
     }
+
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         endDrag(false)
       }
     }
+
     const onBlur = (): void => endDrag(false)
 
     window.addEventListener('pointermove', onPointerMove)
@@ -245,6 +285,7 @@ export function useProjectGroupHeaderDrag({
     window.addEventListener('pointercancel', onPointerCancel)
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('blur', onBlur)
+
     return () => {
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
@@ -252,6 +293,7 @@ export function useProjectGroupHeaderDrag({
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('blur', onBlur)
       cancelAutoscroll()
+
       if (clickSwallowTimeoutRef.current !== null) {
         clearTimeout(clickSwallowTimeoutRef.current)
         clickSwallowTimeoutRef.current = null
@@ -271,11 +313,13 @@ export function useProjectGroupHeaderDrag({
     if (state.draggingGroupId === null) {
       return
     }
+
     const body = document.body
     const prevCursor = body.style.cursor
     const prevUserSelect = body.style.userSelect
     body.style.cursor = 'grabbing'
     body.style.userSelect = 'none'
+
     return () => {
       body.style.cursor = prevCursor
       body.style.userSelect = prevUserSelect
@@ -291,9 +335,11 @@ export function useProjectGroupHeaderDrag({
         sidebarProjectGroupHeaderIdsByBucket: sidebarProjectGroupHeaderIdsByBucketRef.current,
         getScrollContainer: getContainerRef.current
       })
+
       if (!session) {
         return
       }
+
       dragSessionRef.current = session
       setSessionArmed(true)
     },

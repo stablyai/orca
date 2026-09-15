@@ -18,11 +18,13 @@ function makeRuntime(overrides: Partial<OrcaRuntimeService>): OrcaRuntimeService
 describe('terminal agent prompt send RPC', () => {
   it('routes an explicit CLI agent prompt through settled prompt delivery', async () => {
     const sendTerminal = vi.fn()
+
     const sendTerminalAgentPrompt = vi.fn().mockResolvedValue({
       handle: 'terminal-1',
       accepted: true,
       bytesWritten: 19
     })
+
     const runtime = makeRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
@@ -30,6 +32,7 @@ describe('terminal agent prompt send RPC', () => {
       sendTerminal,
       sendTerminalAgentPrompt
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -57,7 +60,9 @@ describe('terminal agent prompt send RPC', () => {
       accepted: true,
       bytesWritten: 7
     })
+
     const sendTerminalAgentPrompt = vi.fn()
+
     const runtime = makeRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
@@ -65,6 +70,7 @@ describe('terminal agent prompt send RPC', () => {
       sendTerminal,
       sendTerminalAgentPrompt
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -92,12 +98,14 @@ describe('terminal agent prompt send RPC', () => {
       accepted: true,
       bytesWritten: 7
     })
+
     const runtime = makeRuntime({
       resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
       isTerminalRunningSettledPromptAgent: vi.fn().mockResolvedValue(false),
       sendTerminal
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
     const controller = new AbortController()
 

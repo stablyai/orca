@@ -10,14 +10,17 @@ import { TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
 describe('OrcaRuntimeService', () => {
   it('batches attention queries across unchanged graph publishes', () => {
     const runtime = new OrcaRuntimeService(store)
+
     const terminals = Array.from({ length: 12 }, (_, index) => ({
       tabId: `tab-attention-batch-${index}`,
       leafId: `10000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
       ptyId: `pty-attention-batch-${index}`,
       paneRuntimeId: index + 1
     }))
+
     const handles = terminals.map((terminal) => runtime.preAllocateHandleForPty(terminal.ptyId))
     const db = new OrchestrationDb(':memory:')
+
     try {
       const run = db.createRun({
         objective: 'bounded attention query oracle',
@@ -27,6 +30,7 @@ describe('OrcaRuntimeService', () => {
           '20000000-0000-4000-8000-000000000000'
         )
       })
+
       for (const [index, terminal] of terminals.entries()) {
         const task = db.createTask({ spec: `worker ${index}`, runId: run.id })
         createRootDispatch(
@@ -36,10 +40,12 @@ describe('OrcaRuntimeService', () => {
           makePaneKey(terminal.tabId, terminal.leafId)
         )
       }
+
       const getWorkerAttentionFacts = vi.spyOn(db, 'getWorkerAttentionFacts')
       const prepare = vi.spyOn(db.db, 'prepare')
       runtime.setOrchestrationDb(db)
       runtime.attachWindow(1)
+
       const graph = {
         tabs: terminals.map((terminal) => ({
           tabId: terminal.tabId,
@@ -71,6 +77,7 @@ describe('OrcaRuntimeService', () => {
             (sql.includes('AS pending_input') && sql.includes('json_each(?)')) ||
             (sql.includes('attempt_observation_facts') && sql.includes('json_each(?)'))
         )
+
       expect(Object.keys(unchanged.agentOrchestrationByPaneKey ?? {})).toHaveLength(12)
       expect(getWorkerAttentionFacts).not.toHaveBeenCalled()
       expect(attentionSql).toHaveLength(2)

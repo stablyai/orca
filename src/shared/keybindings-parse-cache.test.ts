@@ -27,6 +27,7 @@ describe('parseKeybinding memoization', () => {
     for (let index = 0; index < 2000; index++) {
       expect(parseKeybinding(`Mod+Alt+F${(index % 24) + 1}`)?.key).toBe(`F${(index % 24) + 1}`)
     }
+
     // A cleared cache must still return the right answer, not a stale neighbour.
     expect(parseKeybinding('Mod+Shift+K')?.key).toBe('K')
     expect(parseKeybinding('DoubleTap+Shift')?.doubleTapModifier).toBe('Shift')
@@ -67,9 +68,11 @@ describe('parseKeybinding memoization', () => {
       'nonsense',
       ''
     ]
+
     for (const token of tokens) {
       expect(normalizeKeyToken(token)).toBe(normalizeKeyToken(token))
     }
+
     expect(normalizeKeyToken(' ')).toBe('Space')
     expect(normalizeKeyToken('pgdn')).toBe('PageDown')
     expect(normalizeKeyToken('subtract')).toBe('NumpadSubtract')

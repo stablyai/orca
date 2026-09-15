@@ -22,6 +22,8 @@ export function emitBrowserRemoteDownloadToast(event: BrowserDownloadFinishedEve
   if (event.status !== 'completed' || !event.remoteDestination) {
     return false
   }
+
   toast.success(formatBrowserRemoteDownloadMessage(event.remoteDestination))
+
   return true
 }

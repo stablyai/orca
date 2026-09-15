@@ -32,6 +32,7 @@ import { registerTerminalPaneMountReadiness } from './helpers/terminal-pane-moun
 // Why: keep the suite serial so the headful pane tests never ask Playwright to
 // open multiple visible Electron windows at once.
 test.describe.configure({ mode: 'serial' })
+
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
 
@@ -105,8 +106,10 @@ test.describe('Terminal Panes', () => {
    */
   test('terminal pane retains content when switching worktrees and back', async ({ orcaPage }) => {
     const allWorktreeIds = await getAllWorktreeIds(orcaPage)
+
     if (allWorktreeIds.length < 2) {
       test.skip(true, 'Need at least 2 worktrees to test worktree switching')
+
       return
     }
 

@@ -55,10 +55,13 @@ export function sourceControlAiSettingsFromLegacy(
   legacy: CommitMessageAiSettings | null | undefined
 ): SourceControlAiSettings {
   const defaults = getDefaultSourceControlAiSettings()
+
   if (!legacy) {
     return defaults
   }
+
   const legacyActionRecipe = actionRecipeFromLegacyCommitMessageAi(legacy)
+
   return {
     ...defaults,
     enabled: legacy.enabled,
@@ -94,23 +97,28 @@ export function normalizeSourceControlAiSettings(
 ): SourceControlAiSettings {
   const base = value ?? sourceControlAiSettingsFromLegacy(legacy)
   const defaults = getDefaultSourceControlAiSettings()
+
   const normalizedLaunchActionDefaults = normalizeSourceControlAiActionDefaults(
     base.launchActionDefaults
   )
+
   const normalizedActions = {
     ...normalizedLaunchActionDefaults,
     ...normalizeSourceControlAiActionDefaults(base.actions)
   }
+
   const migratedTextActions = Object.fromEntries(
     SOURCE_CONTROL_TEXT_ACTION_IDS.map((actionId) => {
       const existing = readSourceControlActionDefault(normalizedActions, actionId)
       const instruction = base.instructionsByOperation?.[actionId]
       const legacyInstruction = actionId === 'commitMessage' ? legacy?.customPrompt : undefined
       const resolvedInstruction = instruction ?? legacyInstruction
+
       const instructionTemplate =
         instruction || legacyInstruction
           ? commandTemplateFromOperationInstruction(actionId, resolvedInstruction)
           : undefined
+
       const shouldApplyInstructionTemplate =
         instructionTemplate !== undefined &&
         (existing.commandInputTemplate === undefined ||
@@ -121,6 +129,7 @@ export function normalizeSourceControlAiSettings(
             resolvedInstruction,
             existing.commandInputTemplate
           ))
+
       return [
         actionId,
         {
@@ -132,6 +141,7 @@ export function normalizeSourceControlAiSettings(
       ]
     })
   ) as SourceControlAiSettings['actions']
+
   return {
     ...defaults,
     ...base,

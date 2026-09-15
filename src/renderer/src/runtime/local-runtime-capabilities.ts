@@ -3,6 +3,7 @@ import type { RuntimeCapability } from '../../../shared/protocol-version'
 // `null` while no successful probe has landed. "Not asked yet" and "host says no" are
 // different answers, and a caller that routes on them must be able to tell them apart.
 let localRuntimeCapabilities: readonly RuntimeCapability[] | null = null
+
 let refreshPromise: Promise<readonly RuntimeCapability[]> | null = null
 
 export function readLocalRuntimeCapabilities(): readonly RuntimeCapability[] {
@@ -30,7 +31,9 @@ export async function ensureLocalRuntimeCapabilities(): Promise<
   if (localRuntimeCapabilities !== null) {
     return localRuntimeCapabilities
   }
+
   await refreshLocalRuntimeCapabilities()
+
   return localRuntimeCapabilities
 }
 
@@ -48,17 +51,20 @@ export function refreshLocalRuntimeCapabilities(): Promise<readonly RuntimeCapab
   refreshPromise ??= startLocalRuntimeCapabilityProbe()
     .then((status) => {
       localRuntimeCapabilities = [...(status.capabilities ?? [])]
+
       return localRuntimeCapabilities
     })
     .catch(() => {
       // Stays unknown rather than becoming an empty (== unsupported) list: a failed probe
       // is not evidence about the host.
       localRuntimeCapabilities = null
+
       return []
     })
     .finally(() => {
       refreshPromise = null
     })
+
   return refreshPromise
 }
 

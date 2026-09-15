@@ -22,8 +22,11 @@ import { describe, expect, it } from 'vitest'
  * from a variable.
  */
 const REPOSITORY_ROOT = resolve(__dirname, '..', '..')
+
 const MAIN_DIRECTORY = 'src/main/'
+
 const SCANNED_EXTENSIONS = ['.ts', '.tsx']
+
 const IGNORED_DIRECTORIES = new Set([
   'node_modules',
   'dist',
@@ -93,15 +96,19 @@ function scanSourceFiles(directory: string, found: string[] = []): string[] {
     if (IGNORED_DIRECTORIES.has(entry)) {
       continue
     }
+
     const path = join(directory, entry)
+
     if (statSync(path).isDirectory()) {
       scanSourceFiles(path, found)
       continue
     }
+
     if (SCANNED_EXTENSIONS.some((extension) => entry.endsWith(extension)) && !isTestFile(path)) {
       found.push(path)
     }
   }
+
   return found
 }
 

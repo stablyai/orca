@@ -54,6 +54,7 @@ describe('HeroFlow height', () => {
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()
+
     if (originalScrollHeight) {
       Object.defineProperty(HTMLElement.prototype, 'scrollHeight', originalScrollHeight)
     }
@@ -283,6 +284,7 @@ describe('HeroFlow height', () => {
       onRefreshNetworkInterfaces: vi.fn(),
       refreshingNetworkInterfaces: false
     }
+
     const { rerender } = render(<MobileHeroPairingStep {...props} />)
     screen.getByRole('button', { name: 'Retry Relay' }).focus()
 
@@ -324,6 +326,7 @@ describe('HeroFlow height', () => {
       onRefreshNetworkInterfaces: vi.fn(),
       refreshingNetworkInterfaces: false
     }
+
     const { rerender } = render(<MobileHeroPairingStep {...props} />)
     const refresh = screen.getByRole('button', { name: 'Refresh network interfaces' })
     refresh.focus()
@@ -366,6 +369,7 @@ describe('HeroFlow height', () => {
       onRefreshNetworkInterfaces: vi.fn(),
       refreshingNetworkInterfaces: false
     }
+
     const user = userEvent.setup()
     const { rerender } = render(<MobileHeroPairingStep {...props} />)
     expect(screen.queryByText('Network')).toBeNull()
@@ -385,6 +389,7 @@ describe('HeroFlow height', () => {
 
   it('keeps a custom address visible on Orca Relay', () => {
     const address = 'host.example:6768'
+
     const props: React.ComponentProps<typeof MobileHeroPairingStep> = {
       pairQrDataUrl: null,
       pairingUrl: null,
@@ -410,6 +415,7 @@ describe('HeroFlow height', () => {
       onRefreshNetworkInterfaces: vi.fn(),
       refreshingNetworkInterfaces: false
     }
+
     render(<MobileHeroPairingStep {...props} />)
     expect(screen.getByText('Network')).toBeVisible()
     // Why: a trigger here could not collapse the pinned-open row, so it would be

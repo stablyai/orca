@@ -6,22 +6,38 @@ import { countUnchangedObserverHistoryReads } from './automation-dispatch-observ
 const mockDispatchEvent = vi.fn()
 
 const mockLaunchAgentBackgroundSession = vi.fn()
+
 const mockLaunchWorktreeBackgroundTerminals = vi.fn()
+
 const mockFindReusableAutomationSession = vi.fn()
+
 const mockObserveExistingAutomationSession = vi.fn()
+
 const mockSubmitPromptToAgentPty = vi.fn()
+
 const mockCreateWorktree = vi.fn()
+
 const mockMarkDispatchResult = vi.fn()
+
 const mockOnDispatchRequested = vi.fn()
+
 const mockRendererReady = vi.fn()
+
 const mockFinalizeTerminalOwnership = vi.fn()
+
 const mockReleaseTerminalOwnership = vi.fn()
+
 const mockSshNeedsPassphrasePrompt = vi.fn()
+
 const mockSshGetState = vi.fn()
+
 const mockSshConnect = vi.fn()
+
 let latestStoreSubscriber: (() => void) | null = null
+
 const mockStoreSubscribe = vi.fn((listener: () => void) => {
   latestStoreSubscriber = listener
+
   return () => {}
 })
 
@@ -36,7 +52,9 @@ const createdWorktree = {
   displayName: 'Automation worktree',
   path: '/repo/worktree'
 }
+
 type TestWorktree = typeof createdWorktree
+
 type TestRepo = {
   id: string
   connectionId: string | null
@@ -105,6 +123,7 @@ function makeRun() {
 async function registerAndDispatch(automation = makeAutomation()): Promise<void> {
   vi.doMock('react', async () => {
     const actual = await vi.importActual<typeof ReactModule>('react')
+
     return {
       ...actual,
       useEffect: (effect: () => void | (() => void)) => {
@@ -112,13 +131,17 @@ async function registerAndDispatch(automation = makeAutomation()): Promise<void>
       }
     }
   })
+
   const { useAutomationDispatchEvents: registerAutomationDispatchEvents } =
     await import('./useAutomationDispatchEvents')
+
   registerAutomationDispatchEvents()
   const handler = mockOnDispatchRequested.mock.calls[0]?.[0]
+
   if (!handler) {
     throw new Error('dispatch handler was not registered')
   }
+
   await handler({
     automation,
     run: makeRun(),
@@ -262,6 +285,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
     mockLaunchAgentBackgroundSession.mockImplementation(async () => {
       order.push('agent')
+
       return { tabId: 'agent-tab', ptyId: 'agent-pty', startupPlan: {} }
     })
 
@@ -303,6 +327,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       tabs: [{ title: 'Dev', command: 'pnpm dev' }],
       runCommands: true
     }
+
     mockCreateWorktree.mockResolvedValue({
       worktree: createdWorktree,
       setup: setupLaunch,
@@ -379,6 +404,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       displayName: 'Existing workspace',
       path: '/repo/existing'
     }
+
     state.allWorktrees.mockReturnValue([existingWorktree])
 
     await registerAndDispatch(
@@ -406,6 +432,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       displayName: 'SSH folder',
       path: '/srv/project'
     }
+
     state.repos = [
       {
         id: 'repo-1',
@@ -459,6 +486,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       displayName: 'Local folder',
       path: '/project'
     }
+
     state.folderWorkspaces = [
       {
         id: 'fw-local',
@@ -491,6 +519,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       displayName: 'Other host',
       path: '/srv/other'
     }
+
     state.folderWorkspaces = [
       {
         id: 'fw-other',
@@ -554,10 +583,12 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
     mockFinalizeTerminalOwnership.mockImplementation(() => {
       order.push('finalize')
+
       return true
     })
     mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
       launchArgs = args
+
       return {
         tabId: 'agent-tab',
         paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
@@ -596,8 +627,10 @@ describe('useAutomationDispatchEvents setup launch', () => {
     let launchArgs: {
       onAgentStatus?: (payload: { state: string; sessionBoundary?: boolean }) => void
     } = {}
+
     mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
       launchArgs = args
+
       return {
         tabId: 'agent-tab',
         paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
@@ -642,9 +675,11 @@ describe('useAutomationDispatchEvents setup launch', () => {
         ]
       }
     }
+
     if (!latestStoreSubscriber) {
       throw new Error('agent status observer was not registered')
     }
+
     latestStoreSubscriber()
 
     await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
@@ -684,6 +719,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
         stateHistory: [{ state: 'done', prompt: 'old turn', startedAt: transitionStartedAt }]
       }
     }
+
     if (!latestStoreSubscriber) {
       throw new Error('agent status observer was not registered')
     }
@@ -722,9 +758,11 @@ describe('useAutomationDispatchEvents setup launch', () => {
         stateHistory: [{ state: 'working', prompt: 'turn', startedAt: workingStartedAt }]
       }
     }
+
     if (!latestStoreSubscriber) {
       throw new Error('agent status observer was not registered')
     }
+
     latestStoreSubscriber()
     await Promise.resolve()
 
@@ -753,8 +791,10 @@ describe('useAutomationDispatchEvents setup launch', () => {
       onAgentStatus?: (payload: { state: string }) => void
       onExit?: (ptyId: string, code: number) => void
     } = {}
+
     mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
       launchArgs = args
+
       return {
         tabId: 'agent-tab',
         paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
@@ -785,6 +825,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     let onExit: ((ptyId: string, code: number) => void) | undefined
     mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
       onExit = args.onExit
+
       return {
         tabId: 'agent-tab',
         paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
@@ -826,6 +867,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
       .mockResolvedValueOnce(undefined)
     mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
       args.onAgentStatus?.({ state: 'done' })
+
       return {
         tabId: 'agent-tab',
         paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',
@@ -854,6 +896,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     mockMarkDispatchResult.mockResolvedValueOnce(undefined).mockRejectedValueOnce(persistenceError)
     mockLaunchAgentBackgroundSession.mockImplementation(async (args) => {
       onAgentStatus = args.onAgentStatus
+
       return {
         tabId: 'agent-tab',
         paneKey: 'agent-tab:7c6fb4e5-3bf1-4ff4-8259-03f7ae81c40d',

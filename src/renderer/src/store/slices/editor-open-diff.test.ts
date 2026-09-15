@@ -13,6 +13,7 @@ vi.mock('sonner', () => ({
 const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
   notifyHostOfMirroredEditorCloseMock: vi.fn()
 }))
+
 vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
@@ -348,6 +349,7 @@ describe('createEditorSlice openDiff', () => {
 
   it('rebinds an existing external tab when it is reopened from a new SSH host', () => {
     const store = createEditorStore()
+
     const file = {
       filePath: '/tmp/ssh-preview.png',
       relativePath: '/tmp/ssh-preview.png',
@@ -437,6 +439,7 @@ describe('createEditorSlice openDiff', () => {
     const store = createEditorTabsStore()
     const sourceTab = store.getState().createUnifiedTab('wt-1', 'terminal', { id: 'terminal-1' })
     const targetGroupId = store.getState().createEmptySplitGroup('wt-1', sourceTab.groupId, 'right')
+
     if (!targetGroupId) {
       throw new Error('expected split group')
     }
@@ -459,9 +462,11 @@ describe('createEditorSlice openDiff', () => {
 
     store.getState().openDiff('wt-1', '/repo/file.ts', 'file.ts', 'typescript', false)
     const diffFileId = 'wt-1::diff::unstaged::file.ts'
+
     const diffTab = store
       .getState()
       .unifiedTabsByWorktree['wt-1']?.find((tab) => tab.contentType === 'diff')
+
     if (!diffTab) {
       throw new Error('expected diff tab')
     }

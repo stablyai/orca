@@ -32,6 +32,7 @@ export class RuntimeJiraCommands {
 
   jiraDisconnect(siteId?: string): { ok: true } {
     disconnect(siteId)
+
     return { ok: true }
   }
 

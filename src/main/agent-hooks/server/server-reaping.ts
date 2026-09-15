@@ -25,8 +25,10 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
     isLocalPaneLivenessEvidenceCurrent: (paneKey: string) => boolean
   ): Promise<number> {
     const candidates: { paneKey: string; entry: EnrichedAgentHookEventPayload }[] = []
+
     for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
       const enriched = entry as EnrichedAgentHookEventPayload
+
       if (
         enriched.payload.agentType === 'claude' &&
         enriched.connectionId === null &&
@@ -45,6 +47,7 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
         candidates.push({ paneKey, entry: enriched })
       }
     }
+
     const liveness = await Promise.all(
       candidates.map(async (candidate) => {
         try {
@@ -54,9 +57,12 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
         }
       })
     )
+
     let changedPanes = 0
+
     for (const [index, candidate] of candidates.entries()) {
       const { paneKey, entry: enriched } = candidate
+
       if (
         liveness[index] ||
         !isLocalPaneLivenessEvidenceCurrent(paneKey) ||
@@ -66,6 +72,7 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
       ) {
         continue
       }
+
       if (!reapRestoredClaudeSubagentsForDeadPane(this.state, paneKey)) {
         // Why: the roster reap only speaks for restored child rows. A pane whose PTY is provably
         // gone and whose claim is a lead row or a latch has nothing for it to reap, so retire the
@@ -81,11 +88,14 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
           this.clearPaneState(paneKey)
           changedPanes += 1
         }
+
         continue
       }
+
       changedPanes += 1
       const roster = this.state.claudeSubagentRosterByPaneKey.get(paneKey)
       const subagents = claudeRosterToSnapshots(roster)
+
       // Why: the pane's persisted 'working' was the child gate holding a finished
       // lead open (subagent events never set lead state). With the last working row
       // gone and no process left to report, 'done' is the only truthful state — and
@@ -94,13 +104,17 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
         enriched.payload.state === 'working' && !claudeRosterHasWorkingSubagent(roster)
           ? 'done'
           : enriched.payload.state
+
       const stateChanged = state !== enriched.payload.state
+
       const reconciledAt = stateChanged
         ? Math.max(Date.now(), enriched.receivedAt + 1)
         : enriched.receivedAt
+
       // Why: a reconciled `done` is process-probe-verified, not hydrated guesswork — carrying
       // restoredUnconfirmed onto it would make freshness gates suppress a legitimate completion.
       const { restoredUnconfirmed, ...reconciledBase } = enriched
+
       const reconciled: EnrichedAgentHookEventPayload = {
         ...reconciledBase,
         ...(state !== 'done' && restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
@@ -113,13 +127,16 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
           subagents
         }
       }
+
       this.state.lastStatusByPaneKey.set(paneKey, reconciled)
       this.commitStatusRowMutation(enriched, reconciled)
     }
+
     if (changedPanes > 0) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
     }
+
     return changedPanes
   }
 }

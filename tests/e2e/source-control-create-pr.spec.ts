@@ -18,9 +18,11 @@ type CreatePRPayload = {
 async function openSourceControl(page: Page, expectedWorktreeId: string): Promise<void> {
   await page.evaluate((expectedWorktreeId) => {
     const state = window.__store?.getState()
+
     if (state && state.activeWorktreeId !== expectedWorktreeId) {
       state.setActiveWorktree(expectedWorktreeId)
     }
+
     state?.setRightSidebarOpen(true)
     state?.setRightSidebarTab('source-control')
   }, expectedWorktreeId)
@@ -29,18 +31,23 @@ async function openSourceControl(page: Page, expectedWorktreeId: string): Promis
       async () =>
         page.evaluate((expectedWorktreeId) => {
           const state = window.__store?.getState()
+
           if (!state) {
             return false
           }
+
           if (state.activeWorktreeId !== expectedWorktreeId) {
             state.setActiveWorktree(expectedWorktreeId)
           }
+
           state.setRightSidebarOpen(true)
           state.setRightSidebarTab('source-control')
           const current = window.__store.getState()
+
           const activeWorktree = Object.values(current.worktreesByRepo)
             .flat()
             .some((entry) => entry.id === expectedWorktreeId)
+
           return (
             activeWorktree &&
             current.activeWorktreeId === expectedWorktreeId &&
@@ -81,9 +88,11 @@ async function forceCreatePREligibleStatus(
 
 function getCreatePRComposer(page: Page): Locator {
   const titleInput = page.getByRole('textbox', { name: 'Pull request title' })
+
   const descriptionLabelPredicate =
     'translate(@aria-label, "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")=' +
     '"pull request description"'
+
   return titleInput.locator(
     `
     xpath=ancestor::*[.//textarea[${descriptionLabelPredicate}]
@@ -104,25 +113,33 @@ async function seedCreatePREligibleBranch(
 ): Promise<{ branch: string; worktreeId: string }> {
   return page.evaluate(async ({ createResult }) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const state = store.getState()
     const worktrees = Object.values(state.worktreesByRepo).flat()
+
     const worktree = worktrees.find(
       (entry) => entry.branch.replace(/^refs\/heads\//, '') === 'e2e-secondary'
     )
+
     if (!worktree) {
       throw new Error('seeded e2e-secondary worktree not found')
     }
+
     // Why: the worker-scoped test repo can accumulate extra non-main
     // worktrees; use the seeded secondary worktree as the stable PR target.
     state.setActiveWorktree(worktree.id)
     const repo = state.repos.find((entry) => entry.id === worktree.repoId)
+
     if (!repo) {
       throw new Error('active repo not found')
     }
+
     const branch = worktree.branch.replace(/^refs\/heads\//, '')
+
     const pr = {
       number: 73,
       title: 'Create PR from E2E',
@@ -132,6 +149,7 @@ async function seedCreatePREligibleBranch(
       updatedAt: '2026-05-15T00:00:00.000Z',
       mergeable: 'UNKNOWN' as const
     }
+
     const eligibility = {
       provider: 'github' as const,
       review: null,
@@ -178,6 +196,7 @@ async function seedCreatePREligibleBranch(
             }
           }
         }))
+
         return pr
       },
       fetchPRChecks: async () => [],
@@ -187,9 +206,11 @@ async function seedCreatePREligibleBranch(
           repoPath,
           input
         })
+
         if (createResult) {
           return createResult
         }
+
         return {
           ok: true as const,
           number: 73,
@@ -200,6 +221,7 @@ async function seedCreatePREligibleBranch(
 
     state.setRightSidebarOpen(true)
     state.setRightSidebarTab('source-control')
+
     return { branch, worktreeId: worktree.id }
   }, options)
 }
@@ -216,9 +238,11 @@ test.describe('Source Control create pull request', () => {
     await forceCreatePREligibleStatus(orcaPage, worktreeId, branch)
 
     const titleInput = orcaPage.getByRole('textbox', { name: 'Pull request title' })
+
     const descriptionInput = orcaPage.getByRole('textbox', {
       name: 'Pull request description'
     })
+
     const createButton = getCreatePRComposerSubmitButton(orcaPage)
     await expect(createButton).toBeVisible({ timeout: 10_000 })
     await expect(createButton).toBeEnabled()
@@ -246,6 +270,7 @@ test.describe('Source Control create pull request', () => {
     const payloads = await orcaPage.evaluate(
       () => (window as unknown as { __createPRPayloads: CreatePRPayload[] }).__createPRPayloads
     )
+
     expect(payloads).toHaveLength(1)
     expect(payloads[0].input).toMatchObject({
       provider: 'github',
@@ -261,6 +286,7 @@ test.describe('Source Control create pull request', () => {
     orcaPage
   }) => {
     const failureMessage = 'Create PR failed: GitHub API rate limit exceeded'
+
     const { branch, worktreeId } = await seedCreatePREligibleBranch(orcaPage, {
       createResult: {
         ok: false,
@@ -268,13 +294,16 @@ test.describe('Source Control create pull request', () => {
         error: failureMessage
       }
     })
+
     await openSourceControl(orcaPage, worktreeId)
     await forceCreatePREligibleStatus(orcaPage, worktreeId, branch)
 
     const titleInput = orcaPage.getByRole('textbox', { name: 'Pull request title' })
+
     const descriptionInput = orcaPage.getByRole('textbox', {
       name: 'Pull request description'
     })
+
     const createButton = getCreatePRComposerSubmitButton(orcaPage)
     await expect(createButton).toBeVisible({ timeout: 10_000 })
     await titleInput.fill('Failing PR from E2E')

@@ -5,12 +5,14 @@ export type PosixHookEmptyPayloadPolicy = 'exit' | 'empty-object'
 // the shell's built-in default PATH, so it also survives hosts without /bin/cat
 // (NixOS) and ignores a worktree-local `cat` that could capture the payload.
 export const POSIX_HOOK_STDIN_READER = '{ command -p cat 2>/dev/null || cat; }'
+
 export const POSIX_HOOK_STDIN_DRAIN_COMMAND = `${POSIX_HOOK_STDIN_READER} >/dev/null 2>&1 || :`
 
 /** Seconds the JSON reader waits for the writer's first byte before giving up.
  *  Comfortably inside Grok's 10s hook timeout, and far enough above process
  *  startup that a loaded or remote host cannot lose a payload that is merely late. */
 export const POSIX_HOOK_JSON_STDIN_FIRST_BYTE_TIMEOUT_SECONDS = 5
+
 /** Seconds of silence that end a payload which never parses as JSON (the `cat` shape). */
 export const POSIX_HOOK_JSON_STDIN_IDLE_TIMEOUT_SECONDS = 1.5
 
@@ -70,6 +72,7 @@ const POSIX_HOOK_JSON_STDIN_PYTHON = [
 // the reader chain, and `-c '<600 chars>'` twice is an EDR oversized-command-line
 // signal as well as unreadable in the generated hook.
 const POSIX_HOOK_JSON_STDIN_PYTHON_VAR = 'orca_hook_json_stdin_py'
+
 export const POSIX_HOOK_JSON_STDIN_PRELUDE: readonly string[] = [
   `${POSIX_HOOK_JSON_STDIN_PYTHON_VAR}='${POSIX_HOOK_JSON_STDIN_PYTHON}'`
 ]
@@ -109,6 +112,7 @@ export function buildPosixHookPayloadCapture(
 ): string[] {
   const emptyPayloadLines =
     emptyPayloadPolicy === 'empty-object' ? ["  payload='{}'"] : ['  exit 0']
+
   return [
     ...stdinReader.prelude,
     `payload=$(${stdinReader.reader})`,
@@ -126,6 +130,7 @@ export function buildPosixHookSpoolLines(source: string, eventNameVar?: string):
   // where a command substitution would be emitted literally.
   const eventFormat = eventNameVar ? '"hookEventName":"%s",' : ''
   const eventArg = eventNameVar ? ` "$(spool_json_escape "\${${eventNameVar}:-}")"` : ''
+
   const spoolRecordLine = "  { printf '\\n{".concat(
     eventFormat,
     '"paneKey":"%s","tabId":"%s","worktreeId":"%s","env":"%s","version":"%s","launchToken":"%s","source":"%s","receivedAt":%s,"payload":%s}\\n\'',
@@ -134,6 +139,7 @@ export function buildPosixHookSpoolLines(source: string, eventNameVar?: string):
     source,
     '")" "$spool_now" "$payload"; } >> "$spool_file" 2>/dev/null || :'
   )
+
   return [
     'spool_hook_event() {',
     eventNameVar
@@ -165,9 +171,11 @@ export function buildPosixHookSpoolLines(source: string, eventNameVar?: string):
 }
 
 export const WINDOWS_HOOK_STDIN_DRAIN_LABEL = 'orca_agent_hook_drain_stdin'
+
 // Why: qualify the stdin reader because Windows searches the worktree for
 // executables before PATH and hook payloads must not reach repo-local code.
 export const WINDOWS_HOOK_STDIN_READER = '"%SystemRoot%\\System32\\more.com"'
+
 export const WINDOWS_HOOK_STDIN_DRAIN_COMMAND = `${WINDOWS_HOOK_STDIN_READER} >nul 2>nul`
 
 // The Orca context a hook needs before it may own stdin; see the rule below.

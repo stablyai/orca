@@ -36,12 +36,16 @@ import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshConnection } from './ssh-connection'
 
 const conn = {} as SshConnection
+
 const mockExec = vi.mocked(execCommand)
+
 const mockExists = vi.mocked(existsSync)
+
 const mockRead = vi.mocked(readFileSync)
 
 function decodePowerShellCommand(command: string): string {
   const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
+
   return match ? Buffer.from(match[1], 'base64').toString('utf16le') : ''
 }
 
@@ -112,6 +116,7 @@ describe('isRelayAlreadyInstalled', () => {
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
+
     mockExec.mockRejectedValueOnce(sessionLimitError)
 
     await expect(isRelayAlreadyInstalled(conn, '/r')).resolves.toBe(false)
@@ -121,6 +126,7 @@ describe('isRelayAlreadyInstalled', () => {
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
+
     mockExec.mockRejectedValueOnce(sessionLimitError)
 
     await expect(
@@ -244,6 +250,7 @@ describe('acquireInstallLock', () => {
     const promise = tryAcquireRelayRepairLock(conn, '/r', undefined, {
       signal: abortController.signal
     })
+
     abortController.abort()
 
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
@@ -252,30 +259,38 @@ describe('acquireInstallLock', () => {
 
   it('polls until the lock becomes available (concurrent installer wins, then we acquire)', async () => {
     vi.useFakeTimers()
+
     try {
       let createAttempts = 0
       mockExec.mockImplementation(async (_conn: unknown, command: string) => {
         if (command.includes('.gc-claim')) {
           return 'OPEN'
         }
+
         if (command.startsWith('mkdir -p')) {
           return ''
         }
+
         if (command.includes('lock_tombstone')) {
           return 'BUSY'
         }
+
         if (command.includes('.install-lock')) {
           createAttempts++
+
           return createAttempts >= 3 ? 'OK' : 'BUSY'
         }
+
         return ''
       })
 
       const promise = acquireInstallLock(conn, '/r')
+
       // Drive the polling loop: each iteration awaits a 1s timer.
       for (let i = 0; i < 5; i++) {
         await vi.advanceTimersByTimeAsync(1_000)
       }
+
       await promise
       const cmds = mockExec.mock.calls.map(([, c]) => c)
       const mkdirAttempts = cmds.filter((c) => c.includes('mkdir') && c.includes('.install-lock'))
@@ -302,21 +317,26 @@ describe('acquireInstallLock', () => {
 
   it('retries stale takeover when a fresh lock ages out during the wait', async () => {
     vi.useFakeTimers({ now: 1_700_000_000_000 })
+
     try {
       const recoverableAt = Date.now() + 60_000
       mockExec.mockImplementation(async (_conn: unknown, cmd: string) => {
         if (cmd.includes('.gc-claim')) {
           return 'OPEN'
         }
+
         if (cmd.startsWith('mkdir -p')) {
           return ''
         }
+
         if (cmd.includes('lock_tombstone')) {
           return Date.now() >= recoverableAt ? 'OK' : 'BUSY'
         }
+
         if (cmd.includes('mkdir') && cmd.includes('.install-lock')) {
           return 'BUSY'
         }
+
         return ''
       })
 
@@ -334,29 +354,36 @@ describe('acquireInstallLock', () => {
 
   it('throws if the timeout elapses and the lock is fresh', async () => {
     vi.useFakeTimers({ now: 1_700_000_000_000 })
+
     try {
       mockExec.mockImplementation(async (_conn: unknown, cmd: string) => {
         if (cmd.includes('.gc-claim')) {
           return 'OPEN'
         }
+
         if (cmd.startsWith('mkdir -p')) {
           return ''
         }
+
         if (cmd.includes('lock_tombstone')) {
           return 'BUSY'
         }
+
         if (cmd.includes('mkdir') && cmd.includes('.install-lock')) {
           return 'BUSY'
         }
+
         if (cmd.includes('stat')) {
           return '0\n'
         }
+
         return ''
       })
 
       const rejection = expect(acquireInstallLock(conn, '/r')).rejects.toThrow(
         /another install is still in progress/i
       )
+
       await vi.advanceTimersByTimeAsync(905_000)
       await rejection
     } finally {
@@ -366,6 +393,7 @@ describe('acquireInstallLock', () => {
 
   it('stops polling when the caller aborts the lock wait', async () => {
     vi.useFakeTimers()
+
     try {
       const abortController = new AbortController()
       mockExec.mockImplementation(async (_conn: unknown, cmd: string) =>
@@ -375,6 +403,7 @@ describe('acquireInstallLock', () => {
       const promise = acquireInstallLock(conn, '/r', undefined, {
         signal: abortController.signal
       })
+
       await vi.advanceTimersByTimeAsync(1_000)
       abortController.abort()
       await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
@@ -389,18 +418,22 @@ describe('acquireInstallLock', () => {
 
   it('keeps waiting while a slow first installer is within the deploy bound', async () => {
     vi.useFakeTimers({ now: 1_700_000_000_000 })
+
     try {
       const availableAt = Date.now() + 500_000
       mockExec.mockImplementation(async (_conn: unknown, cmd: string) => {
         if (cmd.includes('.gc-claim')) {
           return 'OPEN'
         }
+
         if (cmd.startsWith('mkdir -p')) {
           return ''
         }
+
         if (cmd.includes('mkdir') && cmd.includes('.install-lock')) {
           return Date.now() >= availableAt ? 'OK' : 'BUSY'
         }
+
         return ''
       })
 
@@ -590,6 +623,7 @@ describe('gcOldRelayVersions', () => {
     const removeCommands = mockExec.mock.calls
       .map(([, command]) => command)
       .filter((command) => command.startsWith('rm -rf'))
+
     expect(removeCommands).toEqual([
       "rm -rf '/home/u/.orca-remote/relay-0.1.0+abc.gc-tombstone.123.456'"
     ])
@@ -624,6 +658,7 @@ describe('gcOldRelayVersions', () => {
     const removeCommands = mockExec.mock.calls
       .map(([, command]) => command)
       .filter((command) => command.startsWith('rm -rf'))
+
     expect(removeCommands).toHaveLength(2)
   })
 
@@ -649,6 +684,7 @@ describe('gcOldRelayVersions', () => {
     const releaseCommands = mockExec.mock.calls
       .map(([, command]) => command)
       .filter((command) => command.includes('.gc-owner') && command.includes('echo RELEASED'))
+
     expect(releaseCommands).toHaveLength(2)
   })
 
@@ -896,6 +932,7 @@ describe('gcOldRelayVersions', () => {
     const unconfirmed = Object.assign(new Error('move timed out'), {
       sshChannelCloseConfirmed: false
     })
+
     mockExec
       .mockResolvedValueOnce('relay-0.1.0+aaa\n')
       .mockResolvedValueOnce('OPEN')
@@ -914,6 +951,7 @@ describe('gcOldRelayVersions', () => {
     const releaseCommands = mockExec.mock.calls
       .map(([, command]) => command)
       .filter((command) => command.includes('relay-0.1.0+aaa.gc-claim') && command.startsWith('rm'))
+
     expect(releaseCommands).toHaveLength(0)
   })
 })

@@ -29,6 +29,7 @@ describe('decodeOmpTranscriptLine', () => {
       message('user', [{ type: 'text', text: 'resume' }]),
       'f'
     )
+
     expect(decoded).toEqual({
       id: 'rec-1',
       role: 'user',
@@ -47,6 +48,7 @@ describe('decodeOmpTranscriptLine', () => {
       ]),
       'f'
     )
+
     expect(decoded?.role).toBe('assistant')
     expect(decoded?.blocks).toEqual([
       { type: 'text', text: 'Checking the goal' },
@@ -60,6 +62,7 @@ describe('decodeOmpTranscriptLine', () => {
       message('assistant', [{ type: 'thinking', thinking: 'Weighing two options' }]),
       'f'
     )
+
     expect(decoded?.role).toBe('assistant')
     expect(decoded?.blocks).toEqual([{ type: 'text', text: 'Weighing two options' }])
   })
@@ -71,6 +74,7 @@ describe('decodeOmpTranscriptLine', () => {
       ]),
       'f'
     )
+
     expect(decoded?.blocks[0]).toEqual({
       type: 'tool-call',
       name: 'goal',
@@ -87,6 +91,7 @@ describe('decodeOmpTranscriptLine', () => {
       }),
       'f'
     )
+
     expect(decoded?.role).toBe('tool')
     expect(decoded?.blocks).toEqual([{ type: 'tool-result', output: 'ok' }])
   })
@@ -99,6 +104,7 @@ describe('decodeOmpTranscriptLine', () => {
       }),
       'f'
     )
+
     expect(decoded?.blocks[0]).toEqual({ type: 'tool-result', output: 'boom', isError: true })
   })
 
@@ -112,6 +118,7 @@ describe('decodeOmpTranscriptLine', () => {
         content: [{ type: 'text', text: 'Investigation summary' }],
         timestamp: '2026-07-16T00:27:02.222Z'
       })
+
     expect(decodeOmpTranscriptLine(custom(true), 'f')).toEqual({
       id: 'rec-c',
       role: 'system',
@@ -127,6 +134,7 @@ describe('decodeOmpTranscriptLine', () => {
       line({ type: 'custom_message', id: 'rec-s', display: true, content: 'peer said hi' }),
       'f'
     )
+
     expect(decoded?.blocks).toEqual([{ type: 'text', text: 'peer said hi' }])
   })
 
@@ -140,6 +148,7 @@ describe('decodeOmpTranscriptLine', () => {
       }),
       'f'
     )
+
     expect(decoded?.role).toBe('tool')
     expect(decoded?.blocks).toEqual([
       { type: 'tool-call', name: 'bash', input: 'ls -a' },
@@ -161,6 +170,7 @@ describe('decodeOmpTranscriptLine', () => {
       }),
       'f'
     )
+
     expect(decoded?.blocks).toEqual([
       { type: 'tool-call', name: 'python', input: 'raise SystemExit(2)' },
       { type: 'tool-result', output: 'boom', isError: true }
@@ -179,6 +189,7 @@ describe('decodeOmpTranscriptLine', () => {
       }),
       'f'
     )
+
     expect(decoded?.blocks[1]).toEqual({ type: 'tool-result', output: 'partial', isError: true })
   })
 
@@ -198,6 +209,7 @@ describe('decodeOmpTranscriptLine', () => {
       }),
       'f'
     )
+
     expect(decoded?.role).toBe('system')
     expect(decoded?.blocks).toEqual([{ type: 'text', text: '@src/a.ts\n@src/b.ts' }])
     expect(JSON.stringify(decoded)).not.toContain('SECRET FILE BODY')
@@ -212,6 +224,7 @@ describe('decodeOmpTranscriptLine', () => {
         id: 'rec-l',
         message: { role, customType: 'irc:incoming', display, content: 'peer note' }
       })
+
     expect(decodeOmpTranscriptLine(legacy('custom', false), 'f')).toBeNull()
     expect(decodeOmpTranscriptLine(legacy('hookMessage', false), 'f')).toBeNull()
     expect(decodeOmpTranscriptLine(legacy('custom', true), 'f')).toMatchObject({
@@ -225,6 +238,7 @@ describe('decodeOmpTranscriptLine', () => {
       message('developer', [{ type: 'text', text: 'context note' }]),
       'f'
     )
+
     expect(decoded?.role).toBe('system')
   })
 
@@ -248,6 +262,7 @@ describe('decodeOmpTranscriptLine', () => {
       }),
       'f'
     )
+
     expect(decoded?.role).toBe('system')
     expect(decoded?.blocks).toEqual([{ type: 'text', text: 'Conversation interrupted' }])
   })
@@ -259,6 +274,7 @@ describe('decodeOmpTranscriptLine', () => {
       message('assistant', [{ type: 'text', text: 'Partial answer' }], { stopReason: 'aborted' }),
       'f'
     )
+
     expect(decoded?.role).toBe('assistant')
     expect(decoded?.blocks).toEqual([{ type: 'text', text: 'Partial answer' }])
   })
@@ -274,6 +290,7 @@ describe('decodeOmpTranscriptLine', () => {
       line({ type: 'message', message: { role: 'user', content: [{ type: 'text', text: 'hi' }] } }),
       'fallback-9'
     )
+
     expect(decoded?.id).toBe('fallback-9')
     expect(decoded?.timestamp).toBeNull()
   })

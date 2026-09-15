@@ -4,7 +4,9 @@ import type { ExecutionHostId } from './execution-host'
 import { getWorkspaceCleanupCandidateHostId } from './workspace-cleanup-host-identity'
 
 export const WORKSPACE_CLEANUP_CLASSIFIER_VERSION = 2
+
 export const WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS = 7 * 24 * 60 * 60 * 1000
+
 export const WORKSPACE_CLEANUP_IDLE_MS = 30 * 24 * 60 * 60 * 1000
 
 export type WorkspaceCleanupTier = 'ready' | 'review' | 'protected'
@@ -209,9 +211,11 @@ export function applyWorkspaceCleanupPolicy(
   candidate: WorkspaceCleanupPolicyInput
 ): WorkspaceCleanupCandidate {
   const canSelect = canSelectWorkspaceCleanupCandidate(candidate)
+
   const hasHardBlocker = candidate.blockers.some((blocker) =>
     LEGACY_WORKSPACE_CLEANUP_HARD_BLOCKERS.has(blocker)
   )
+
   const tier: WorkspaceCleanupTier = hasHardBlocker ? 'protected' : canSelect ? 'ready' : 'review'
 
   return {
@@ -230,6 +234,7 @@ export function createWorkspaceCleanupFingerprint(args: {
 }): string {
   const version = args.classifierVersion ?? WORKSPACE_CLEANUP_CLASSIFIER_VERSION
   const lastActivityBucket = Math.floor((args.lastActivityAt || 0) / (24 * 60 * 60 * 1000))
+
   return [
     version,
     args.branch,
@@ -244,15 +249,18 @@ export function getWorkspaceCleanupInactivityReasons(
   scannedAt: number
 ): WorkspaceCleanupReason[] {
   const reasons: WorkspaceCleanupReason[] = []
+
   if (
     workspace.isArchived &&
     scannedAt - workspace.lastActivityAt >= WORKSPACE_CLEANUP_ARCHIVED_IDLE_MS
   ) {
     reasons.push('archived')
   }
+
   if (scannedAt - workspace.lastActivityAt >= WORKSPACE_CLEANUP_IDLE_MS) {
     reasons.push('idle-clean')
   }
+
   return reasons
 }
 
@@ -263,6 +271,7 @@ export function getPersistedWorkspaceCleanupActivityAt(workspace: {
 }): number {
   const lastActivityAt = Number.isFinite(workspace.lastActivityAt) ? workspace.lastActivityAt : 0
   const createdAt = Number.isFinite(workspace.createdAt) ? (workspace.createdAt ?? 0) : 0
+
   return Math.max(lastActivityAt, createdAt)
 }
 

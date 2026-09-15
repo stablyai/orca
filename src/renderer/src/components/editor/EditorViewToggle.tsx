@@ -103,6 +103,7 @@ export default function EditorViewToggle({
   // Why: metadata labels are lightweight getters, so subscribe this compact
   // control to repaint when the active language changes.
   useTranslation()
+
   return (
     <TooltipProvider delayDuration={300}>
       <ToggleGroup
@@ -125,9 +126,11 @@ export default function EditorViewToggle({
           const override = (
             metadataOverride as Partial<Record<EditorToggleValue, ViewModeMetadata>> | undefined
           )?.[viewMode]
+
           const metadata = override ?? DEFAULT_VIEW_MODE_METADATA[viewMode]
           const Icon = metadata.icon
           const tooltipLabel = metadata.title ?? metadata.label
+
           return (
             <Tooltip key={viewMode}>
               <TooltipTrigger asChild>

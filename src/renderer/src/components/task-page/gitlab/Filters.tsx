@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { LoaderCircle, RefreshCw } from 'lucide-react'
+
 export function TaskPageGitLabFilters({
   model
 }: {
@@ -30,6 +31,7 @@ export function TaskPageGitLabFilters({
     gitlabTodosLoading,
     activeGitlabFilter
   } = model
+
   return (
     <>
       <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -37,6 +39,7 @@ export function TaskPageGitLabFilters({
           {(['issues', 'mrs', 'todos'] as const).map((view) => {
             const active = gitlabView === view
             const label = view === 'issues' ? 'Issues' : view === 'mrs' ? 'MRs' : 'My Todos'
+
             return (
               <button
                 key={view}
@@ -102,6 +105,7 @@ export function TaskPageGitLabFilters({
                 ? (gitlabView === 'issues' ? gitLabIssueFilters : gitLabMRFilters).map(
                     ({ id, label }) => {
                       const active = activeGitlabFilter === id
+
                       return (
                         <button
                           key={id}

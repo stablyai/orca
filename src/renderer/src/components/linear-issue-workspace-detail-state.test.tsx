@@ -21,6 +21,7 @@ const runtimeMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@/runtime/runtime-linear-issue-mutations', () => runtimeMocks)
+
 vi.mock('@/components/LinearItemDrawer', () => ({
   initLinearIssueEditState: (selected: LinearIssue) => ({
     state: selected.state,
@@ -41,9 +42,11 @@ type Deferred<T> = {
 
 function deferred<T>(): Deferred<T> {
   let resolve = (_value: T): void => undefined
+
   const promise = new Promise<T>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
 
@@ -77,6 +80,7 @@ function Harness({
     providerSettings: sourceContext,
     requestKey: `${sourceContext.hostId}:${selected.workspaceId}:${selected.id}`
   })
+
   return (
     <div>
       <span data-testid="title">{detail.displayed.title}</span>
@@ -120,11 +124,13 @@ describe('Linear issue workspace detail state', () => {
       priority: 1,
       estimate: 8
     }
+
     const fetched = {
       ...issue('1', 'Server'),
       project: { id: 'project-server', name: 'Server project' },
       dueDate: '2026-09-01'
     }
+
     // Why: list issues never carry `project`, so hydration owns it.
     expect(mergeLinearIssueHydration(fetched, current, true)).toEqual({
       ...current,
@@ -140,10 +146,12 @@ describe('Linear issue workspace detail state', () => {
       { id: 'server', body: 'Server', createdAt: '2026-08-01', user: { displayName: 'Ada' } },
       { id: 'local', body: 'Local', createdAt: '2026-08-02', user: { displayName: 'You' } }
     ]
+
     const optimistic: LinearComment[] = [
       fetched[1],
       { id: 'pending', body: 'Pending', createdAt: '2026-08-03', user: { displayName: 'You' } }
     ]
+
     expect(mergeLinearIssueComments(fetched, optimistic).map((comment) => comment.id)).toEqual([
       'server',
       'local',
@@ -157,6 +165,7 @@ describe('Linear issue workspace detail state', () => {
       hostId: 'runtime:environment-1',
       projectId: 'project-group-1'
     })!
+
     const issueA = deferred<LinearIssue | null>()
     const issueB = deferred<LinearIssue | null>()
     const commentsA = deferred<LinearComment[]>()

@@ -5,6 +5,7 @@ import {
   normalizePullRequestLookupData,
   type PullRequestLookupData
 } from './pull-request-lookup-data'
+
 export async function hydratePullRequestLookupData(
   ownerRepo: OwnerRepo,
   data: PullRequestLookupData,
@@ -12,8 +13,10 @@ export async function hydratePullRequestLookupData(
   executionScope: string
 ): Promise<PullRequestLookupData> {
   const normalized = normalizePullRequestLookupData(data)
+
   const hasRichMergeFields =
     'reviewDecision' in data || 'mergeStateStatus' in data || 'autoMergeRequest' in data
+
   const mergeMetadata = hasRichMergeFields
     ? await detectRepositoryMergeMetadata(
         ownerRepo,
@@ -22,6 +25,7 @@ export async function hydratePullRequestLookupData(
         executionScope
       )
     : undefined
+
   return {
     ...normalized,
     ...(mergeMetadata ? { mergeQueueRequired: mergeMetadata.mergeQueueRequired } : {}),

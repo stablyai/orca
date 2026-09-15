@@ -53,6 +53,7 @@ export function shouldRouteSubscriptionBySupport(method: string): boolean {
   if (method === 'browser.screencast' || method === 'terminal.multiplex') {
     return false
   }
+
   return (
     method === 'runtime.clientEvents.subscribe' ||
     method === 'session.tabs.subscribe' ||
@@ -121,6 +122,7 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
 }): Promise<RemoteRuntimeSubscription> {
   let markedUsed = false
   let supportOutcome: SupportRoute['outcome'] | null = null
+
   const callbacks = subscriptionCallbacks(args, () => {
     if (
       markedUsed ||
@@ -129,9 +131,12 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
     ) {
       return false
     }
+
     markedUsed = true
+
     return true
   })
+
   const routed = await routeRuntimeEnvironmentSubscriptionBySupport({
     userDataPath: args.userDataPath,
     environment: args.environment,
@@ -139,6 +144,7 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
     isCurrent: args.isCurrent,
     supported: (route) => {
       supportOutcome = route.outcome
+
       return subscribeRemoteRuntimeSharedControlRequest(
         args.environment.id,
         route.pairing,
@@ -150,6 +156,7 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
     },
     unsupported: (route) => {
       supportOutcome = route.outcome
+
       return subscribeRemoteRuntimeRequest(
         route.pairing,
         args.method,
@@ -160,6 +167,7 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
       )
     }
   })
+
   return routed.subscription
 }
 
@@ -175,35 +183,45 @@ export async function routeRuntimeEnvironmentCallBySupport(args: {
   markUsed: (environmentId: string, response: RuntimeRpcResponse<unknown>) => void
 }): Promise<RuntimeRpcResponse<unknown>> {
   let environment = args.initialEnvironment
+
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const revisionFailure = runtimeEnvironmentRevisionFailure(
       environment,
       args.expectedPairingRevision,
       args.method
     )
+
     if (revisionFailure) {
       return revisionFailure
     }
+
     const pairing = getPreferredPairingOffer(environment)
+
     const outcome = await waitForPromiseWithSignal(
       supportsSharedControl(args.userDataPath, environment, pairing, args.timeoutMs),
       args.signal
     )
+
     if (
       outcome.kind !== 'stale_incarnation' &&
       isRuntimeEnvironmentCapabilityOutcomeCurrent(outcome)
     ) {
       const route = { environment, pairing, outcome }
+
       const response = await (outcome.kind === 'supported'
         ? args.supported(route)
         : args.unsupported(route))
+
       if (isRuntimeEnvironmentCapabilityOutcomeCurrent(outcome)) {
         args.markUsed(environment.id, response)
       }
+
       return response
     }
+
     environment = resolveEnvironment(args.userDataPath, environment.id)
   }
+
   return runtimeEnvironmentChangedFailure(environment, args.method)
 }
 
@@ -216,12 +234,14 @@ export async function routeRuntimeEnvironmentSubscriptionBySupport<TSubscription
   unsupported: (route: SupportRoute) => Promise<TSubscription>
 }): Promise<{ subscription: TSubscription; outcome: SupportRoute['outcome'] }> {
   const pairing = getPreferredPairingOffer(args.environment)
+
   const outcome = await supportsSharedControl(
     args.userDataPath,
     args.environment,
     pairing,
     args.timeoutMs
   )
+
   if (
     outcome.kind === 'stale_incarnation' ||
     !args.isCurrent() ||
@@ -229,10 +249,13 @@ export async function routeRuntimeEnvironmentSubscriptionBySupport<TSubscription
   ) {
     throw new Error('Runtime environment pairing changed; refresh and try again')
   }
+
   const route = { environment: args.environment, pairing, outcome }
+
   const subscription = await (outcome.kind === 'supported'
     ? args.supported(route)
     : args.unsupported(route))
+
   return { subscription, outcome }
 }
 
@@ -259,6 +282,7 @@ function subscriptionCallbacks(
   shouldMarkUsed: () => boolean
 ) {
   const pairing = getPreferredPairingOffer(args.environment)
+
   return {
     onResponse: (response: RuntimeRpcResponse<unknown>) => {
       if (response.ok && shouldMarkUsed()) {
@@ -266,6 +290,7 @@ function subscriptionCallbacks(
           runtimeId: response._meta.runtimeId
         })
       }
+
       args.callbacks.onEvent({ type: 'response' as const, response })
     },
     onBinary: (bytes: Uint8Array<ArrayBufferLike>) =>

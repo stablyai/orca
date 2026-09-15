@@ -36,9 +36,11 @@ function escapeRegex(value: string): string {
 
 function buildNestedDirectoryRegex(ignoreDirs: readonly string[]): string {
   const alternatives = ignoreDirs.map(escapeRegex).join('|')
+
   if (process.platform === 'win32') {
     return `^(?:[^\\\\/]+[\\\\/])*(?:${alternatives})(?:[\\\\/].*)?$`
   }
+
   // Why: backslash is a legal POSIX filename character, not a path separator.
   return `^(?:[^/]+/)*(?:${alternatives})(?:/.*)?$`
 }
@@ -49,14 +51,17 @@ export function buildParcelWatcherIgnoreOptions(
   if (ignoreDirs.length === 0) {
     return {}
   }
+
   if (process.platform !== 'darwin') {
     // Why: Parcel 2.5.6 turns leading-** globs into nested-lookahead regexes
     // that are pathological in native std::regex (10-17x slower upstream).
     // One component-aware regex preserves nested pruning without that CPU cost.
     return { ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs)] }
   }
+
   const daemonExcludedDirs = ignoreDirs.slice(0, MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
   const remainingDirs = ignoreDirs.slice(MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
+
   return {
     ignore: [...daemonExcludedDirs],
     ...(remainingDirs.length > 0 ? { ignoreGlobs: [buildNestedDirectoryRegex(remainingDirs)] } : {})

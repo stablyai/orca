@@ -33,6 +33,7 @@ type LinearIssueMarkdownDescriptionEditorProps = {
 
 function createLinearIssueMarkdownExtensions(codec: RichMarkdownEditorCodec) {
   const extensions = createRichMarkdownExtensions({ codec })
+
   return [
     ...extensions,
     Placeholder.configure({
@@ -57,19 +58,24 @@ export function LinearIssueMarkdownDescriptionEditor({
   const lastEditorMarkdownRef = useRef(value)
   const editorScrollRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor | null>(null)
+
   const richMarkdownSpellcheckEnabled = useAppStore(
     (s) => s.settings?.richMarkdownSpellcheckEnabled ?? true
   )
+
   // Why: changing language recreates Tiptap and re-registers tokenizers, so it
   // must also receive a fresh private Marked registry instead of growing one.
   const codec = useMemo(() => {
     void language
+
     return createRichMarkdownEditorCodec()
   }, [language])
+
   const linearIssueMarkdownExtensions = useMemo(() => {
     // Why: Tiptap freezes extension options when the editor is created; the
     // language value is the recreation key for translated extension options.
     void language
+
     return createLinearIssueMarkdownExtensions(codec)
   }, [codec, language])
 
@@ -90,8 +96,10 @@ export function LinearIssueMarkdownDescriptionEditor({
           if (!isScreenSubmitShortcut(event)) {
             return false
           }
+
           event.preventDefault()
           editorRef.current?.commands.blur()
+
           return true
         }
       },
@@ -113,6 +121,7 @@ export function LinearIssueMarkdownDescriptionEditor({
     },
     [codec, language]
   )
+
   useRichMarkdownSpellcheckAttribute(editor, richMarkdownSpellcheckEnabled)
 
   useEffect(() => {
@@ -129,8 +138,10 @@ export function LinearIssueMarkdownDescriptionEditor({
     }
 
     const currentMarkdown = editor.getMarkdown()
+
     if (currentMarkdown === value) {
       lastEditorMarkdownRef.current = value
+
       return
     }
 

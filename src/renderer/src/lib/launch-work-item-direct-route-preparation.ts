@@ -42,6 +42,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   planLaunch: typeof planAgentSessionLaunch
 }): Promise<DirectWorkItemAgentLaunchPreparation> {
   const launchConnectionId = getConnectionId(args.worktreeId) ?? args.repoConnectionId
+
   const agentSelection = await resolveDirectWorkItemAgent({
     agentOverride: args.agentOverride,
     launchConnectionId,
@@ -49,6 +50,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
     detectedAgentsPromise: args.detectedAgentsPromise,
     latestStore: args.latestStore
   })
+
   if (agentSelection.unavailable) {
     return {
       launchConnectionId,
@@ -63,6 +65,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   }
 
   const effectiveAgent = agentSelection.agent
+
   if (effectiveAgent) {
     // Persist the choice so ownership and removal safety see the selected agent.
     void args.latestStore
@@ -71,6 +74,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
         // Non-critical: activation still has the explicit startup below.
       })
   }
+
   const { startupPlan, draftLaunchedNatively, startupPlanFailed } = buildDirectWorkItemStartup({
     agent: effectiveAgent,
     agentArgs: args.agentArgs,
@@ -101,6 +105,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
           tuiCustomization: { agentArgs: args.agentArgs },
           initialSessionOptions: startupPlan?.sessionOptions
         })
+
   const structuredLaunch = plan?.route === 'structured-native-chat'
 
   await markDirectWorkItemAgentTrusted({

@@ -9,16 +9,21 @@ function getIntensity(totalTokens: number, maxTokens: number): 0 | 1 | 2 | 3 | 4
   if (totalTokens <= 0 || maxTokens <= 0) {
     return 0
   }
+
   const ratio = totalTokens / maxTokens
+
   if (ratio <= 0.25) {
     return 1
   }
+
   if (ratio <= 0.5) {
     return 2
   }
+
   if (ratio <= 0.75) {
     return 3
   }
+
   return 4
 }
 
@@ -37,6 +42,7 @@ export function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDail
       codexTokens: 0,
       openCodeTokens: 0
     }
+
     const total = getClaudeDailyTotal(entry)
     current.totalTokens += total
     current.claudeTokens += total
@@ -51,6 +57,7 @@ export function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDail
       codexTokens: 0,
       openCodeTokens: 0
     }
+
     current.totalTokens += entry.totalTokens
     current.codexTokens += entry.totalTokens
     byDay.set(entry.day, current)
@@ -64,17 +71,20 @@ export function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDail
       codexTokens: 0,
       openCodeTokens: 0
     }
+
     current.totalTokens += entry.totalTokens
     current.openCodeTokens += entry.totalTokens
     byDay.set(entry.day, current)
   }
 
   let maxTokens = 0
+
   // Why: usage history can be large enough to exceed V8's argument limit if
   // every day is spread into Math.max.
   for (const entry of byDay.values()) {
     maxTokens = Math.max(maxTokens, entry.totalTokens)
   }
+
   return [...byDay.values()]
     .sort((left, right) => left.day.localeCompare(right.day))
     .map((entry) => ({
@@ -87,6 +97,7 @@ function formatLocalDay(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
+
   return `${year}-${month}-${day}`
 }
 
@@ -101,6 +112,7 @@ export function getRecentUsageDays(
   end.setHours(0, 0, 0, 0)
 
   const result: UsageOverviewDailyPoint[] = []
+
   for (let offset = count - 1; offset >= 0; offset--) {
     const date = new Date(end)
     date.setDate(end.getDate() - offset)
@@ -116,5 +128,6 @@ export function getRecentUsageDays(
       }
     )
   }
+
   return result
 }

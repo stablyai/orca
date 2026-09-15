@@ -31,6 +31,7 @@ describe('agent map keyboard navigation visibility', () => {
     const quietCards = Array.from({ length: 5 }, (_, index) =>
       card(`quiet-${index}`, 'quiet-worktree', true)
     )
+
     const active = card('active', 'active-worktree', false)
     const layout = deriveAgentMapLayout([...quietCards, active], NOW)
 

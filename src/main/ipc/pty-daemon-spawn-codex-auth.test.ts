@@ -16,45 +16,61 @@ import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-age
 import { registerPtyHandlers, resolveCodexHomeAfterManagedAuthReadiness } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -77,9 +93,11 @@ describe('registerPtyHandlers', () => {
           if (!filePath.endsWith('auth.json')) {
             return ''
           }
+
           if (!authReady) {
             throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
           }
+
           return TEST_CODEX_AUTH_JSON
         })
         const daemonSpawn = setupDaemonAdapter()
@@ -99,6 +117,7 @@ describe('registerPtyHandlers', () => {
           rows: 24,
           launchAgent: 'codex'
         })
+
         await vi.advanceTimersByTimeAsync(0)
         expect(daemonSpawn).not.toHaveBeenCalled()
 
@@ -115,6 +134,7 @@ describe('registerPtyHandlers', () => {
         readFileSyncMock.mockReturnValue(TEST_CODEX_AUTH_JSON)
         const resolveCurrent = vi.fn(() => TEST_CODEX_HOME)
         const resolveAfterUnavailable = vi.fn(() => null)
+
         const settings = {
           codexManagedAccounts: [
             {
@@ -146,9 +166,11 @@ describe('registerPtyHandlers', () => {
           if (filePath === join(TEST_CODEX_HOME, 'auth.json') && !originalAuthReady) {
             throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
           }
+
           if (filePath.endsWith('auth.json')) {
             return TEST_CODEX_AUTH_JSON
           }
+
           return ''
         })
         const daemonSpawn = setupDaemonAdapter()
@@ -167,6 +189,7 @@ describe('registerPtyHandlers', () => {
           rows: 24,
           launchAgent: 'codex'
         })
+
         await vi.advanceTimersByTimeAsync(0)
         selectedHome = nextHome
         originalAuthReady = true
@@ -184,6 +207,7 @@ describe('registerPtyHandlers', () => {
           if (filePath.endsWith('auth.json')) {
             throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
           }
+
           return ''
         })
         const daemonSpawn = setupDaemonAdapter()
@@ -211,6 +235,7 @@ describe('registerPtyHandlers', () => {
           if (filePath.endsWith('auth.json')) {
             throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
           }
+
           return ''
         })
         const daemonSpawn = setupDaemonAdapter()
@@ -243,13 +268,16 @@ describe('registerPtyHandlers', () => {
             sessionId: string
           }): Promise<{ id: string }>
         }
+
         readFileSyncMock.mockImplementation((filePath: string) => {
           if (filePath.endsWith('auth.json')) {
             throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
           }
+
           return ''
         })
         const daemonSpawn = setupDaemonAdapter()
+
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
@@ -258,6 +286,7 @@ describe('registerPtyHandlers', () => {
           onPtyExit: vi.fn(),
           onPtyData: vi.fn()
         }
+
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never, () => TEST_CODEX_HOME, (() => ({
           codexManagedAccounts: [
@@ -285,9 +314,11 @@ describe('registerPtyHandlers', () => {
           if (filePath.endsWith('auth.json')) {
             throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
           }
+
           return ''
         })
         const daemonSpawn = setupDaemonAdapter()
+
         const resolveHome = vi.fn(
           (
             _target?: unknown,
@@ -295,6 +326,7 @@ describe('registerPtyHandlers', () => {
             context?: { unavailableManagedHomePath?: string }
           ) => (context?.unavailableManagedHomePath ? null : TEST_CODEX_HOME)
         )
+
         handlers.clear()
         registerPtyHandlers(mainWindow as never, undefined, resolveHome, (() => ({
           codexManagedAccounts: [
@@ -311,6 +343,7 @@ describe('registerPtyHandlers', () => {
           rows: 24,
           launchAgent: 'codex'
         })
+
         await vi.advanceTimersByTimeAsync(2_000)
         await spawnPromise
 
@@ -329,9 +362,11 @@ describe('registerPtyHandlers', () => {
           if (filePath.endsWith('auth.json')) {
             throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
           }
+
           return ''
         })
         const daemonSpawn = setupDaemonAdapter()
+
         const resolveHome = vi.fn(
           (
             _target?: unknown,
@@ -344,6 +379,7 @@ describe('registerPtyHandlers', () => {
                 ? secondHome
                 : thirdHome
         )
+
         handlers.clear()
         registerPtyHandlers(mainWindow as never, undefined, resolveHome, (() => ({
           codexManagedAccounts: [TEST_CODEX_HOME, secondHome, thirdHome].map(
@@ -360,9 +396,11 @@ describe('registerPtyHandlers', () => {
           rows: 24,
           launchAgent: 'codex'
         })
+
         const rejection = expect(spawnPromise).rejects.toThrow(
           'The selected Codex account credentials are temporarily unavailable. Try opening the terminal again.'
         )
+
         await vi.advanceTimersByTimeAsync(4_000)
         await rejection
 
@@ -378,14 +416,17 @@ describe('registerPtyHandlers', () => {
         type RuntimeSpawnController = {
           spawn(args: { cols: number; rows: number; launchAgent: 'codex' }): Promise<{ id: string }>
         }
+
         vi.useFakeTimers()
         readFileSyncMock.mockImplementation((filePath: string) => {
           if (filePath.endsWith('auth.json')) {
             throw Object.assign(new Error('missing auth'), { code: 'ENOENT' })
           }
+
           return ''
         })
         const daemonSpawn = setupDaemonAdapter()
+
         const resolveHome = vi.fn(
           (
             _target?: unknown,
@@ -393,6 +434,7 @@ describe('registerPtyHandlers', () => {
             context?: { unavailableManagedHomePath?: string }
           ) => (context?.unavailableManagedHomePath ? null : TEST_CODEX_HOME)
         )
+
         const runtime = {
           setPtyController: vi.fn(),
           registerPty: vi.fn(),
@@ -401,6 +443,7 @@ describe('registerPtyHandlers', () => {
           onPtyExit: vi.fn(),
           onPtyData: vi.fn()
         }
+
         handlers.clear()
         registerPtyHandlers(mainWindow as never, runtime as never, resolveHome, (() => ({
           codexManagedAccounts: [
@@ -430,6 +473,7 @@ describe('registerPtyHandlers', () => {
         const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
           OPENCODE_CONFIG_DIR: undefined
         })
+
         expect(openCodeBuildPtyEnvMock).toHaveBeenCalled()
         expect(env.OPENCODE_CONFIG_DIR).toBe('/tmp/orca-opencode-config')
         expect(env.ORCA_OPENCODE_HOOK_PORT).toBe('4567')
@@ -450,6 +494,7 @@ describe('registerPtyHandlers', () => {
           OPENCODE_CONFIG_DIR: '/tmp/parent-orca-opencode-overlay',
           ORCA_OPENCODE_SOURCE_CONFIG_DIR: '/user/custom/opencode'
         })
+
         expect(openCodeBuildPtyEnvMock).toHaveBeenCalledWith(
           expect.any(String),
           '/user/custom/opencode'
@@ -498,6 +543,7 @@ describe('registerPtyHandlers', () => {
           undefined,
           { command: 'omp' }
         )
+
         expect(piBuildPtyEnvMock).toHaveBeenCalledWith(
           expect.any(String),
           '/user/.omp/agent',

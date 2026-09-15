@@ -14,6 +14,7 @@ const temporaryHomes: string[] = []
 async function createHome(): Promise<string> {
   const home = await mkdtemp(join(tmpdir(), 'orca-codex-state-db-'))
   temporaryHomes.push(home)
+
   return home
 }
 
@@ -25,6 +26,7 @@ function createBackfillDb(home: string, version: number, status: string): string
       `INSERT INTO backfill_state (id, status) VALUES (1, '${status}')`
   )
   db.close()
+
   return path
 }
 

@@ -28,6 +28,7 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
     clientNavigationId?: string
   ): RuntimeMobileSessionTabsResult {
     let callerSnapshot: RuntimeMobileSessionTabsResult | null = null
+
     if (navigationTargetsClients(navigation)) {
       // Why: follow is live intent; disconnected devices must not inherit stale navigation on reconnect.
       const ids = new Set(
@@ -35,16 +36,20 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
           .map((subscription) => subscription.clientNavigationId)
           .filter((id): id is string => Boolean(id))
       )
+
       if (clientNavigationId) {
         ids.add(clientNavigationId)
       }
+
       for (const id of ids) {
         const projected = this.clientSessionTabSelections.activate(
           this.withClientHostedPagesHold(snapshot, id),
           id,
           activeTabId
         )
+
         this.emitMobileSessionTabsSnapshotToClient(projected, id, true)
+
         if (id === clientNavigationId) {
           callerSnapshot = projected
         }
@@ -58,17 +63,21 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
       )
       this.emitMobileSessionTabsSnapshotToClient(callerSnapshot, clientNavigationId)
     }
+
     if (clientNavigationId) {
       return callerSnapshot ?? this.projectMobileSessionTabsForClient(snapshot, clientNavigationId)
     }
+
     if (navigation === 'caller') {
       const selection = activateClientSessionTabSelection(
         snapshot,
         deriveClientSessionTabSelection(snapshot),
         activeTabId
       )
+
       return projectClientSessionTabSelection(snapshot, selection).snapshot
     }
+
     return snapshot
   }
 
@@ -87,6 +96,7 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
       this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[
         makePaneKey(tab.parentTabId, tab.leafId)
       ]
+
     // Why: 'live'/'quit' captures describe a pane that was still running, so a reconnect
     // must still mint its replacement PTY (#11542). Only a worktree-owned capture records
     // a deliberate takedown the user did not ask to undo.
@@ -112,9 +122,11 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
     if (snapshot.publicationEpoch.includes(':headless-merge:')) {
       return false
     }
+
     if (this.authoritativeWindowId !== null && this.graphStatus === 'ready') {
       return false
     }
+
     return this.shouldMaterializeHeadlessMobileSessionTab(snapshot, tab)
   }
 
@@ -127,6 +139,7 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
       ...candidate,
       isActive: candidate.id === activeTab.id
     }))
+
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
@@ -141,6 +154,7 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
       ),
       tabs
     }
+
     this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab)
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
@@ -160,14 +174,18 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
     direction: 'horizontal' | 'vertical'
   }): boolean {
     const session = this.getWorkspaceSessionForWorktree(args.worktreeId)
+
     if (!session || !this.store?.setWorkspaceSession) {
       return false
     }
+
     const existing = session.terminalLayoutsByTabId?.[args.tabId]
+
     const nextLayout = buildHeadlessTerminalSplitLayout(
       existing ? cloneTerminalLayoutSnapshot(existing) : undefined,
       args
     )
+
     this.setWorkspaceSessionForWorktree(args.worktreeId, {
       ...session,
       terminalLayoutsByTabId: {
@@ -175,6 +193,7 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
         [args.tabId]: nextLayout
       }
     })
+
     return true
   }
 
@@ -183,10 +202,13 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
     tab: RuntimeMobileSessionTerminalTab
   ): void {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
+
     if (!session || !this.store?.setWorkspaceSession) {
       return
     }
+
     const existingLayout = session.terminalLayoutsByTabId?.[tab.parentTabId]
+
     const nextLayouts = existingLayout
       ? {
           ...session.terminalLayoutsByTabId,
@@ -196,6 +218,7 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
           }
         }
       : session.terminalLayoutsByTabId
+
     this.setWorkspaceSessionForWorktree(worktreeId, {
       ...session,
       activeTabId: tab.parentTabId,

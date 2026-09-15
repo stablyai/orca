@@ -44,6 +44,7 @@ describe('resolveInitialNativeChatSessionOptions', () => {
       ...settings,
       nativeChatSessionOptions: { grok: { model: 'grok-4.5' } }
     }
+
     expect(
       resolveInitialNativeChatSessionOptions(grokSettings, {
         agent: 'grok',

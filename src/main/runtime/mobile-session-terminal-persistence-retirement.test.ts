@@ -6,6 +6,7 @@ import {
 } from './mobile-session-terminal-persistence-retirement'
 
 const WORKTREE_ID = 'repo::/worktree'
+
 const REPO_ID = 'repo'
 
 describe('mobile session terminal persistence retirement', () => {
@@ -267,6 +268,7 @@ describe('mobile session terminal persistence retirement', () => {
       },
       terminalPtyIncarnationsByPaneKey: { 'terminal:left': 'incarnation-a' }
     }
+
     const retired = retireTerminalSurfaceFromPersistence(staleSession, {
       worktreeId: WORKTREE_ID,
       parentTabId: 'terminal',
@@ -291,12 +293,14 @@ describe('mobile session terminal persistence retirement', () => {
       },
       afterRestart
     )
+
     expect(untrustedReplacement.tabsByWorktree[WORKTREE_ID]).toEqual([])
     expect(untrustedReplacement.terminalPtyIncarnationsByPaneKey).toBeUndefined()
   })
 
   it('rebases a host partition that no longer carries the closed web-terminal layout', () => {
     const tabId = 'web-terminal-24aa462c-589c-45fa-b332-6aa233cd84cf'
+
     const prior = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -323,10 +327,12 @@ describe('mobile session terminal persistence retirement', () => {
       },
       terminalTopologyRevisionByRepoId: { [REPO_ID]: 1 }
     }
+
     const incoming = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: { [WORKTREE_ID]: [] }
     }
+
     const partialIncoming: Partial<typeof incoming> = incoming
     delete partialIncoming.terminalLayoutsByTabId
 
@@ -338,6 +344,7 @@ describe('mobile session terminal persistence retirement', () => {
 
   it('replays a legacy retirement when its host partition omits terminal layouts', () => {
     const tabId = 'web-terminal-24aa462c-589c-45fa-b332-6aa233cd84cf'
+
     const incoming = {
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {
@@ -365,6 +372,7 @@ describe('mobile session terminal persistence retirement', () => {
         }
       }
     }
+
     const partialIncoming: Partial<typeof incoming> = incoming
     delete partialIncoming.terminalLayoutsByTabId
 
@@ -399,6 +407,7 @@ describe('mobile session terminal persistence retirement', () => {
 
   it('keeps retirement state proportional to repos across many worktrees and closed panes', () => {
     let session = getDefaultWorkspaceSession()
+
     for (let index = 0; index < 1_000; index += 1) {
       session = retireTerminalSurfaceFromPersistence(session, {
         worktreeId: `${REPO_ID}::/worktree-${index}`,

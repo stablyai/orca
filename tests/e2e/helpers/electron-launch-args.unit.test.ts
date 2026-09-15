@@ -19,6 +19,7 @@ describe('getOrcaElectronLaunchArgs', () => {
       expect(args.includes('--use-gl=angle')).toBe(enabled)
       expect(args.includes('--use-angle=swiftshader')).toBe(enabled)
       expect(args.includes('--enable-unsafe-swiftshader')).toBe(enabled)
+
       if (enabled) {
         expect(args).toContain('--disable-gpu-sandbox')
         expect(args).not.toContain('--disable-gpu')
@@ -31,6 +32,7 @@ describe('getOrcaElectronLaunchArgs', () => {
     const mainPath = join(root, 'out', 'main', 'index.js')
 
     const args = getOrcaElectronLaunchArgs(mainPath, true)
+
     if (process.platform === 'darwin') {
       expect(args).toEqual([
         '--password-store=basic',
@@ -42,6 +44,7 @@ describe('getOrcaElectronLaunchArgs', () => {
     } else {
       expect(args.at(-1)).toBe(root)
     }
+
     expect(getOrcaElectronLaunchArgs(mainPath, false)).toContain(root)
   })
 })

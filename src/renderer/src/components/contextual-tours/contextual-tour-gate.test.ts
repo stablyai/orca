@@ -42,8 +42,10 @@ describe('contextual tour gate', () => {
 
   it('can start the floating workspace tour from the non-empty surface fallback', () => {
     const tour = getContextualTour('floating-workspace')
+
     const fallbackSelector =
       '[data-contextual-tour-target="floating-workspace-new-terminal"], [data-contextual-tour-target="floating-workspace-surface"]'
+
     const decision = getContextualTourRequestDecision({
       tour,
       persistedUIReady: true,
@@ -110,6 +112,7 @@ describe('contextual tour gate', () => {
         height: 32
       })
     }
+
     const visibleElement = {
       closest: () => null,
       getBoundingClientRect: () => ({
@@ -147,6 +150,7 @@ describe('contextual tour gate', () => {
         height: 28
       })
     }
+
     const menuRow = {
       closest: () => null,
       getBoundingClientRect: () => ({
@@ -161,6 +165,7 @@ describe('contextual tour gate', () => {
 
     const selector =
       '[data-contextual-tour-target="browser-import-hint"], [data-contextual-tour-target="browser-import-cookies-control"]'
+
     const target = getMeasurableContextualTourTarget(selector, {
       // querySelectorAll returns matches in document order: hint button first.
       querySelectorAll: () => [hintButton, menuRow]
@@ -184,6 +189,7 @@ describe('contextual tour gate', () => {
         height: 28
       })
     }
+
     const menuRow = {
       closest: () => null,
       getBoundingClientRect: () => ({
@@ -198,6 +204,7 @@ describe('contextual tour gate', () => {
 
     const selector =
       '[data-contextual-tour-target="browser-import-hint"], [data-contextual-tour-target="browser-import-cookies-control"]'
+
     const target = getMeasurableContextualTourTarget(selector, {
       querySelectorAll: () => [hiddenHintButton, menuRow]
     } as unknown as ParentNode)

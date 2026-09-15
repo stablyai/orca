@@ -47,6 +47,7 @@ export type SparseCheckoutChangeListener = (
 ) => void
 
 const sparseCheckoutStateCache = new Map<string, SparseCheckoutCacheEntry>()
+
 let changeListener: SparseCheckoutChangeListener | undefined
 
 // Distro last so the repo- and worktree-scoped prefix deletes below still match every variant.
@@ -85,19 +86,24 @@ export async function detectSparseCheckoutCached(
 ): Promise<boolean> {
   const key = cacheKey(repoPath, worktreePath, options)
   const cached = sparseCheckoutStateCache.get(key)
+
   if (!cached) {
     const isSparse = await detectSparseCheckout(worktreePath, options)
     sparseCheckoutStateCache.set(key, { isSparse, cachedAt: Date.now() })
+
     return isSparse
   }
+
   if (Date.now() - cached.cachedAt < SPARSE_CHECKOUT_CACHE_RECONCILE_INTERVAL_MS) {
     return cached.isSparse
   }
+
   // Stale-while-revalidate: serve the still-cached value now and correct it in the background,
   // deduplicated so concurrent readers past the window don't each start their own probe. Whichever
   // reader wins the dedupe re-probes with the entry's own distro, because that distro is what
   // routed it to this key.
   cached.revalidating ??= revalidateInBackground(key, repoPath, worktreePath, cached, options)
+
   return cached.isSparse
 }
 
@@ -110,6 +116,7 @@ async function revalidateInBackground(
 ): Promise<void> {
   try {
     const isSparse = await detectSparseCheckout(worktreePath, options)
+
     // Identity guard against a race with an explicit invalidate/clear -- or a remove+recreate at
     // the same path that repopulates the key with a fresh cold read -- while this was in flight.
     // A `has()`/presence check can't tell "still mine" from "someone else's fresh value" sharing
@@ -117,6 +124,7 @@ async function revalidateInBackground(
     if (sparseCheckoutStateCache.get(key) === startingEntry) {
       sparseCheckoutStateCache.set(key, { isSparse, cachedAt: Date.now() })
     }
+
     if (isSparse !== startingEntry.isSparse) {
       changeListener?.(repoPath, worktreePath, isSparse)
     }

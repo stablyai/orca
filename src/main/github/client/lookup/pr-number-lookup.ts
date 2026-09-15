@@ -15,6 +15,7 @@ import {
 } from './pull-request-lookup-data'
 import { hydratePullRequestLookupData } from './pull-request-lookup-hydration'
 import { isGitObjectId, isUsableRestStackMetadata } from './rest-stack-metadata-validation'
+
 export async function getRestPRByNumber(
   ownerRepo: GitHubApiRepository,
   number: number,
@@ -25,12 +26,16 @@ export async function getRestPRByNumber(
     ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${number}`],
     { ...ghOptions, ...githubHostExecOptions(ownerRepo) }
   )
+
   const parsed = JSON.parse(stdout) as unknown
+
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     throw new Error('invalid response shape')
   }
+
   const restData = parsed as RestPullRequest
   const mapped = mapRestPullRequest(restData)
+
   if (
     options.requireUsableStackMetadata &&
     restData.stack !== undefined &&
@@ -40,10 +45,12 @@ export async function getRestPRByNumber(
     if (!isUsableRestStackMetadata(restData.stack) || !mapped.stack) {
       throw new Error('malformed stack')
     }
+
     if (!isGitObjectId(restData.head?.sha)) {
       throw new Error('missing head SHA')
     }
   }
+
   return mapped
 }
 
@@ -67,7 +74,9 @@ export async function getPRByNumber(
       ],
       { ...ghOptions, ...githubHostExecOptions(ownerRepo) }
     )
+
     const exactData = JSON.parse(stdout) as PullRequestLookupData
+
     return hydratePullRequestLookupData(
       ownerRepo,
       {
@@ -83,11 +92,13 @@ export async function getPRByNumber(
     if (isNotFoundGhError(err)) {
       return null
     }
+
     try {
       const restData =
         knownPullRequestData === undefined
           ? await getRestPRByNumber(ownerRepo, number, ghOptions)
           : knownPullRequestData
+
       return restData
         ? hydratePullRequestLookupData(ownerRepo, restData, ghOptions, executionScope)
         : null
@@ -95,9 +106,11 @@ export async function getPRByNumber(
       if (isNotFoundGhError(restErr)) {
         return null
       }
+
       if (!shouldStopAfterExactLookupError(restErr)) {
         return null
       }
+
       throw restErr
     }
   }
@@ -117,9 +130,11 @@ export async function lookupPRByNumber(args: {
         args.ghOptions,
         args.executionScope
       )
+
       if (!linkedData) {
         continue
       }
+
       return { data: linkedData, dataRepo: candidate }
     } catch (err) {
       if (shouldStopAfterExactLookupError(err)) {
@@ -138,6 +153,7 @@ export async function lookupPRByNumber(args: {
       ['pr', 'view', String(args.number), '--json', PR_LOOKUP_JSON_FIELDS],
       args.ghOptions
     )
+
     return {
       data: normalizePullRequestLookupData(JSON.parse(stdout) as PullRequestLookupData),
       dataRepo: null
@@ -147,6 +163,7 @@ export async function lookupPRByNumber(args: {
       // Why: stale cached fallback numbers shouldn't error every poll when the PR was deleted or belongs to another repo.
       return { data: null, dataRepo: null }
     }
+
     throw err
   }
 }

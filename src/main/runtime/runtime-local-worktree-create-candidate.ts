@@ -69,8 +69,10 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
   let branchConflictKind: 'local' | 'remote' | null = null
   let worktreePath = ''
   let worktreePathResolved = false
+
   const shouldRetireGeneratedName =
     args.request.nameWasGenerated === true && isGeneratedWorktreeCreateName(sanitizedName)
+
   const retiredNameRegistry =
     shouldRetireGeneratedName &&
     args.store?.getRetiredWorktreeNameRegistry &&
@@ -83,7 +85,9 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
           args.settings
         )
       : null
+
   const isRetiredName = retiredNameRegistry ? createRetiredNameLookup(retiredNameRegistry) : null
+
   for (let suffix = 1, attempts = 0; attempts < WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS; suffix += 1) {
     effectiveSanitizedName = shouldRetireGeneratedName
       ? getGeneratedWorktreeCreateCandidate(
@@ -97,9 +101,11 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       : args.request.name.trim()
         ? getWorktreeCreateCandidate(args.request.name, suffix)
         : effectiveSanitizedName
+
     if (isRetiredName?.(effectiveSanitizedName)) {
       continue
     }
+
     attempts += 1
     branchName = await resolveCreateBranchName(
       args.repo.path,
@@ -110,6 +116,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
       args.username,
       args.localWorktreeGitOptions
     )
+
     const tryExistingBranch = async (): Promise<boolean> => {
       checkoutExistingBranch = await canCheckoutExistingLocalBranch(
         args.repo.path,
@@ -117,11 +124,14 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
         args.baseBranch,
         ...args.localWorktreeGitOptionArgs
       )
+
       return checkoutExistingBranch
     }
+
     const preferExistingBranch = Boolean(
       args.request.branchNameOverride || selectedExistingLocalBranchName
     )
+
     checkoutExistingBranch = preferExistingBranch && (await tryExistingBranch())
     branchConflictKind = checkoutExistingBranch
       ? null
@@ -132,17 +142,22 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
           args.localWorktreeGitOptions,
           preferExistingBranch ? undefined : tryExistingBranch
         )
+
     if (checkoutExistingBranch && !selectedExistingLocalBranchName) {
       selectedExistingLocalBranchName = branchName
     }
+
     const allowedPushTargetRemoteConflict =
       branchConflictKind &&
       isAllowedPushTargetRemoteConflict(branchConflictKind, branchName, args.request)
+
     let selectedReviewConflictMatched = false
+
     if (branchConflictKind) {
       if (allowedPushTargetRemoteConflict) {
         let existingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
         const selectedReview = getSelectedReviewBranch(args.request)
+
         if (selectedReview?.provider === 'github') {
           try {
             existingPR = await getLocalGitHubPrForBranch(
@@ -151,6 +166,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
               args.localWorktreeGitOptions
             )
           } catch {}
+
           if (isMatchingSelectedGitHubPr(existingPR, args.request, branchName)) {
             branchConflictKind = null
             selectedReviewConflictMatched = true
@@ -162,18 +178,22 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
             args.request,
             args.hostedReviewExecutionContext
           ).catch(() => null)
+
           if (review?.matchesSelected) {
             branchConflictKind = null
             selectedReviewConflictMatched = true
           }
         }
       }
+
       if (branchConflictKind) {
         continue
       }
     }
+
     if (!checkoutExistingBranch && !selectedReviewConflictMatched) {
       let existingPR: Awaited<ReturnType<typeof getPRForBranch>> | null = null
+
       try {
         existingPR = await getLocalGitHubPrForBranch(
           args.repo.path,
@@ -181,29 +201,35 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
           args.localWorktreeGitOptions
         )
       } catch {}
+
       if (existingPR && !isMatchingSelectedGitHubPr(existingPR, args.request, branchName)) {
         continue
       }
     }
+
     worktreePath = ensurePathWithinWorkspace(
       computeWorktreePath(effectiveSanitizedName, args.repo.path, args.worktreePathSettings),
       args.workspaceRoot
     )
+
     if (!(await runtimePathExists(worktreePath))) {
       worktreePathResolved = true
       break
     }
   }
+
   if (!worktreePathResolved) {
     if (branchConflictKind) {
       throw new Error(
         `Branch "${branchName}" already exists ${branchConflictKind === 'local' ? 'locally' : 'on a remote'}.`
       )
     }
+
     throw new Error(
       `Could not find an available worktree path for "${sanitizedName}". Pick a different worktree name.`
     )
   }
+
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
     args.request.displayName,
     args.request.displayNameKind,
@@ -211,6 +237,7 @@ export async function resolveRuntimeLocalWorktreeCreateCandidate(args: {
     args.request.cliProvenance?.kind === 'created-by-cli',
     args.request.nameWasGenerated === true
   )
+
   return {
     effectiveRequestedName,
     requestedDisplayName: displayNameRequest.value,

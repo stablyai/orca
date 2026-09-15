@@ -13,12 +13,14 @@ function getLinuxProcessStartedAtMs(pid: number): number | null {
     const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
     const startTicks = parseLinuxProcStartTicks(stat)
     const bootTimeSeconds = parseLinuxBootTimeSeconds(readFileSync('/proc/stat', 'utf8'))
+
     const ticksPerSecond = Number(
       execFileSync('getconf', ['CLK_TCK'], {
         encoding: 'utf8',
         timeout: 1_000
       }).trim()
     )
+
     if (
       !Number.isFinite(startTicks) ||
       !Number.isFinite(bootTimeSeconds) ||
@@ -27,6 +29,7 @@ function getLinuxProcessStartedAtMs(pid: number): number | null {
     ) {
       return null
     }
+
     return bootTimeSeconds * 1000 + (startTicks / ticksPerSecond) * 1000
   } catch {
     return null
@@ -35,11 +38,13 @@ function getLinuxProcessStartedAtMs(pid: number): number | null {
 
 export function parseLinuxProcStartTicks(stat: string): number {
   const commandEndIndex = stat.lastIndexOf(')')
+
   if (commandEndIndex === -1) {
     return Number.NaN
   }
 
   const fields = getProcessOutputFields(stat.slice(commandEndIndex + 1), 20)
+
   return Number(fields[19])
 }
 
@@ -48,8 +53,10 @@ export function parseLinuxBootTimeSeconds(procStat: string): number {
     if (!line.startsWith('btime ')) {
       continue
     }
+
     return Number(getProcessOutputFields(line, 2)[1])
   }
+
   return Number.NaN
 }
 
@@ -87,5 +94,6 @@ export function startTimesWithinTolerance(
   if (expectedStartedAtMs === null || actualStartedAtMs === null) {
     return true
   }
+
   return Math.abs(actualStartedAtMs - expectedStartedAtMs) <= toleranceMs
 }

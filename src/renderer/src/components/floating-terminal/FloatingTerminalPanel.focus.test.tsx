@@ -22,6 +22,7 @@ import {
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   const { createReactHookOverrides } = await import('./floating-terminal-panel-test-module-mocks')
+
   return { ...actual, ...createReactHookOverrides() }
 })
 
@@ -187,6 +188,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       classList: { contains: (token: string) => token === 'xterm-helper-textarea' },
       closest: vi.fn().mockReturnValue({})
     }
+
     Object.setPrototypeOf(newerFloatingInput, HTMLElement.prototype)
     mocks.focusTerminalTabSurface.mock.calls[0]?.[2].onImeRefocusSkipped(newerFloatingInput)
     // Relatched onto the floating xterm: panel ⊇ terminal, both true.
@@ -201,6 +203,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     const element = await renderPanel(true)
     const panel = findByProp(element, 'data-floating-terminal-panel')
     const panelElement = { contains: vi.fn().mockReturnValue(true), focus: vi.fn() }
+
     const terminalInput = {
       blur: vi.fn(),
       classList: { contains: vi.fn((token: string) => token === 'xterm-helper-textarea') },
@@ -208,6 +211,7 @@ describe('FloatingTerminalPanel close behavior', () => {
         if (selector === '[data-floating-terminal-panel]') {
           return panelElement
         }
+
         return selector === '[data-leaf-id]'
           ? {
               getAttribute: (attribute: string) => (attribute === 'data-leaf-id' ? 'leaf-1' : null)
@@ -216,6 +220,7 @@ describe('FloatingTerminalPanel close behavior', () => {
       }),
       isConnected: true
     }
+
     Object.setPrototypeOf(panelElement, HTMLElement.prototype)
     Object.setPrototypeOf(terminalInput, HTMLElement.prototype)
     attachRef(panel.props.ref, panelElement)
@@ -226,20 +231,25 @@ describe('FloatingTerminalPanel close behavior', () => {
       target: terminalInput
     })
     expect(mocks.setFloatingFocus).not.toHaveBeenCalled()
+
     const documentState = {
       activeElement: terminalInput as unknown as HTMLElement | null,
       addEventListener: vi.fn(),
       body: {} as HTMLElement,
       removeEventListener: vi.fn()
     }
+
     vi.stubGlobal('document', documentState)
     runEffects()
+
     const blurListener = vi
       .mocked(window.addEventListener)
       .mock.calls.findLast(([type]) => type === 'blur')?.[1] as (() => void) | undefined
+
     const focusListener = vi
       .mocked(window.addEventListener)
       .mock.calls.find(([type]) => type === 'focus')?.[1] as (() => void) | undefined
+
     if (!blurListener || !focusListener) {
       throw new Error('floating terminal window focus listeners not registered')
     }
@@ -335,6 +345,7 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     // The last-pane close authority (L3 → onCloseTab) closes the tab while the panel owns focus.
     const terminalPane = findByTypeName(element, 'TerminalPane')
+
     ;(terminalPane.props.onCloseTab as () => void)()
     expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
       'tab-1',
@@ -371,6 +382,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     runEffects()
 
     const terminalPane = findByTypeName(element, 'TerminalPane')
+
     ;(terminalPane.props.onCloseTab as () => void)()
 
     // Emptying schedules the reclaim frame (id 42, callback not yet run); unmounting cancels it.
@@ -402,6 +414,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     runEffects()
 
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-2')
 
     expect(mocks.closeTerminalTab).toHaveBeenCalledWith(
@@ -434,6 +447,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     runEffects()
 
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-1')
 
     // The panel owned focus and this close would empty it, yet arming rides on the real close via
@@ -463,6 +477,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     runEffects()
 
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-file-a')
 
     // The close is parked on the save dialog: nothing closed yet, so nothing reclaims focus yet.
@@ -498,6 +513,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     runEffects()
 
     const tabBar = findByTypeName(element, 'TabBar')
+
     ;(tabBar.props.onClose as (tabId: string) => void)('tab-file-a')
     ;(findByTypeName(element, 'Dialog').props.onOpenChange as (open: boolean) => void)(false)
 

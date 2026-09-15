@@ -45,7 +45,9 @@ type CachedLineStats = {
 // the porcelain identity stays "modified" (added/removed are excluded from the
 // reuse identity), so a missed watcher signal pins counts for at most this long.
 export const GIT_STATUS_LINE_STATS_CACHE_MAX_AGE_MS = 2 * 60_000
+
 const GIT_STATUS_LINE_STATS_CACHE_MAX_ENTRIES = 128
+
 const lineStatsByWorktree = new Map<string, CachedLineStats>()
 
 // Why: wall-clock steps (NTP, VM resume) must not extend or shrink the TTL.
@@ -75,11 +77,14 @@ function trimLineStatsCache(now: number): void {
       lineStatsByWorktree.delete(key)
     }
   }
+
   while (lineStatsByWorktree.size > GIT_STATUS_LINE_STATS_CACHE_MAX_ENTRIES) {
     const oldestKey = lineStatsByWorktree.keys().next().value
+
     if (oldestKey === undefined) {
       return
     }
+
     lineStatsByWorktree.delete(oldestKey)
   }
 }
@@ -92,14 +97,17 @@ export function applyCachedGitStatusLineStats(input: {
 }): boolean {
   const now = input.now ?? monotonicNowMs()
   const cached = lineStatsByWorktree.get(input.cacheKey)
+
   if (!cached) {
     return false
   }
+
   if (
     now - cached.storedAt >= GIT_STATUS_LINE_STATS_CACHE_MAX_AGE_MS ||
     cached.identity !== createInputIdentity(input.head, input.entries)
   ) {
     lineStatsByWorktree.delete(input.cacheKey)
+
     return false
   }
 
@@ -107,13 +115,16 @@ export function applyCachedGitStatusLineStats(input: {
   lineStatsByWorktree.set(input.cacheKey, cached)
   input.entries.forEach((entry, index) => {
     const stats = cached.stats[index]
+
     if (stats?.added !== undefined) {
       entry.added = stats.added
     }
+
     if (stats?.removed !== undefined) {
       entry.removed = stats.removed
     }
   })
+
   return true
 }
 
@@ -128,6 +139,7 @@ export function readCachedGitBranchLineTotal(input: {
   mergeBase: string
 }): GitBranchLineTotal | undefined {
   const total = lineStatsByWorktree.get(input.cacheKey)?.branchLineTotal
+
   return total?.mergeBase === input.mergeBase ? total : undefined
 }
 
@@ -145,10 +157,13 @@ export function updateCachedGitBranchLineTotal(input: {
   if (!isWriteTokenCurrent(input.writeToken)) {
     return
   }
+
   const cached = lineStatsByWorktree.get(input.cacheKey)
+
   if (!cached || cached.identity !== createInputIdentity(input.head, input.entries)) {
     return
   }
+
   cached.branchLineTotal = input.branchLineTotal
 }
 
@@ -161,9 +176,11 @@ export function storeGitStatusLineStats(input: {
   branchLineTotal?: GitBranchLineTotal
 }): void {
   const writeToken = input.writeToken ?? beginGitStatusLineStatsCacheWrite(input.cacheKey)
+
   if (!isWriteTokenCurrent(writeToken)) {
     return
   }
+
   markGitStatusLineStatsStored(input.cacheKey, writeToken.beginSeq)
   const now = input.now ?? monotonicNowMs()
   const identity = createInputIdentity(input.head, input.entries)
@@ -171,9 +188,11 @@ export function storeGitStatusLineStats(input: {
   // snapshot must carry it forward or the next recompute would drop it and the
   // chip could never appear on a repo where the diff is always slow.
   const previous = lineStatsByWorktree.get(input.cacheKey)
+
   const branchLineTotal =
     input.branchLineTotal ??
     (previous?.identity === identity ? previous.branchLineTotal : undefined)
+
   lineStatsByWorktree.delete(input.cacheKey)
   lineStatsByWorktree.set(input.cacheKey, {
     identity,
@@ -197,6 +216,7 @@ export function storeGitStatusLineStats(input: {
 function createGitStatusLineStatsAbortError(): Error {
   const error = new Error('The operation was aborted.')
   error.name = 'AbortError'
+
   return error
 }
 
@@ -219,6 +239,7 @@ export async function reuseOrRecomputeGitStatusLineStats(input: {
     // completed status result (including a cache-hit reuse path).
     throw createGitStatusLineStatsAbortError()
   }
+
   if (
     input.reuse &&
     applyCachedGitStatusLineStats({
@@ -230,13 +251,16 @@ export async function reuseOrRecomputeGitStatusLineStats(input: {
     if (input.isAborted()) {
       throw createGitStatusLineStatsAbortError()
     }
+
     return reuseCachedBranchLineTotal(input)
   }
+
   // Why: started before the await below so both diffs run concurrently, and
   // pre-caught so an aborted total can never surface as an unhandled rejection
   // when recompute rejects first.
   const totalPromise = input.branchLineTotal?.compute().catch(() => undefined)
   const complete = await input.recompute()
+
   const branchLineTotal = totalPromise
     ? await settleGitBranchLineTotalWithinSoftDeadline({
         total: totalPromise,
@@ -250,6 +274,7 @@ export async function reuseOrRecomputeGitStatusLineStats(input: {
           })
       })
     : undefined
+
   if (input.isAborted()) {
     // Why: an aborted pass never reached storeGitStatusLineStats, so there is
     // nothing partial to undo; clearing here would instead evict a concurrent
@@ -257,11 +282,13 @@ export async function reuseOrRecomputeGitStatusLineStats(input: {
     // Reject so the caller cannot treat this pass as a successful status.
     throw createGitStatusLineStatsAbortError()
   }
+
   if (!complete) {
     // Why: the total comes from its own ranged diff, so a failed per-area
     // numstat leaves it exact even though the entry stats are uncacheable.
     return branchLineTotal === undefined ? {} : { branchLineTotal }
   }
+
   storeGitStatusLineStats({
     cacheKey: input.cacheKey,
     head: input.head,
@@ -269,9 +296,11 @@ export async function reuseOrRecomputeGitStatusLineStats(input: {
     writeToken: input.writeToken,
     ...(branchLineTotal === undefined ? {} : { branchLineTotal })
   })
+
   if (!input.branchLineTotal) {
     return {}
   }
+
   // Why: read back rather than return the local — the store carries forward a
   // total that arrived late on an unchanged snapshot, which is the only way the
   // chip ever appears where the diff always outruns the soft deadline.
@@ -279,6 +308,7 @@ export async function reuseOrRecomputeGitStatusLineStats(input: {
     cacheKey: input.cacheKey,
     mergeBase: input.branchLineTotal.mergeBase
   })
+
   return published === undefined ? {} : { branchLineTotal: published }
 }
 
@@ -296,13 +326,16 @@ async function reuseCachedBranchLineTotal(input: {
   if (!input.branchLineTotal) {
     return {}
   }
+
   const cached = readCachedGitBranchLineTotal({
     cacheKey: input.cacheKey,
     mergeBase: input.branchLineTotal.mergeBase
   })
+
   if (cached) {
     return { branchLineTotal: cached }
   }
+
   // The snapshot predates this feature or was computed against another fork
   // point; compute once and backfill so the next reuse hit is free. A reuse pass
   // exists to be cheap, so it waits no longer than any other for the diff.
@@ -315,17 +348,22 @@ async function reuseCachedBranchLineTotal(input: {
       writeToken: input.writeToken
     })
   }
+
   const branchLineTotal = await settleGitBranchLineTotalWithinSoftDeadline({
     total: input.branchLineTotal.compute().catch(() => undefined),
     onLateArrival: backfill
   })
+
   if (input.isAborted()) {
     throw createGitStatusLineStatsAbortError()
   }
+
   if (branchLineTotal === undefined) {
     return {}
   }
+
   backfill(branchLineTotal)
+
   return { branchLineTotal }
 }
 
@@ -341,6 +379,7 @@ export function clearGitStatusLineStatsCacheKey(
   if (writeToken !== undefined && !isWriteTokenCurrent(writeToken)) {
     return
   }
+
   if (writeToken === undefined) {
     bumpGitStatusLineStatsKeyGeneration(cacheKey)
   } else {
@@ -348,5 +387,6 @@ export function clearGitStatusLineStatsCacheKey(
     // older in-flight scan can't store pre-purge counts and repopulate this key.
     markGitStatusLineStatsStored(cacheKey, writeToken.beginSeq)
   }
+
   lineStatsByWorktree.delete(cacheKey)
 }

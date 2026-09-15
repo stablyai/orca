@@ -59,10 +59,12 @@ export function useActivityThreadActionBindings({
     () => markAllReadThreads.some((t) => t.unread),
     [markAllReadThreads]
   )
+
   const hasCompletedThreads = useMemo(
     () => visibleThreads.some(isClearableActivityThread),
     [visibleThreads]
   )
+
   const handleClearCompleted = useCallback(() => {
     clearCompletedActivity(visibleThreadsRef.current)
   }, [])

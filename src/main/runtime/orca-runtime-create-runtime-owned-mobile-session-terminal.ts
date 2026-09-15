@@ -37,10 +37,13 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
     const cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, opts.cwd)
+
     // Why: SshPtyProvider treats sessionId as a relay reattach; only synthesize local serve ids so SSH fresh terminals still call pty.spawn.
     const stableSessionId =
       opts.identity?.sessionId ?? (workspace.connectionId ? undefined : `serve-${randomUUID()}`)
+
     const isNewSession = stableSessionId !== undefined && opts.identity?.sessionId === undefined
+
     const terminal = await this.createTerminal(`id:${worktreeId}`, {
       focus: false,
       command: opts.command,
@@ -66,17 +69,23 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       deferMobileSessionPublish: true,
       signal: opts.signal
     })
+
     const livePty = this.getLivePtyForHandle(terminal.handle)
+
     if (!livePty) {
       throw new Error('terminal_handle_stale')
     }
+
     const parentTabId = livePty.pty.tabId ?? `pty:${livePty.pty.ptyId}`
     const leafId = parsePaneKey(livePty.pty.paneKey ?? '')?.leafId ?? randomUUID()
+
     if (opts.viewMode) {
       // Why: the runtime-owned binding must survive a serve restart with the same initial mode, not a later client's local default.
       this.persistHeadlessSessionTabProps(worktreeId, parentTabId, { viewMode: opts.viewMode })
     }
+
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+
     const existingSurface =
       existing?.tabs.find(
         (candidate): candidate is RuntimeMobileSessionTerminalTab =>
@@ -84,11 +93,13 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
           candidate.parentTabId === parentTabId &&
           candidate.leafId === leafId
       ) ?? null
+
     const parentLayout = buildMaterializedHeadlessParentLayout(
       leafId,
       livePty.pty.ptyId,
       existingSurface?.parentLayout
     )
+
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${parentTabId}::${leafId}`,
@@ -103,6 +114,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       parentLayout,
       isActive: activate
     }
+
     const tabs = (existing?.tabs ?? [])
       .filter((candidate) => candidate.id !== tab.id)
       .map((candidate) => ({
@@ -112,12 +124,15 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
           : {}),
         isActive: activate ? false : candidate.isActive
       }))
+
     const insertAfter = afterTabId ? tabs.findIndex((candidate) => candidate.id === afterTabId) : -1
+
     if (insertAfter >= 0) {
       tabs.splice(insertAfter + 1, 0, tab)
     } else {
       tabs.push(tab)
     }
+
     const next: RuntimeMobileSessionTabsSnapshot = {
       worktree: worktreeId,
       // Why: a fresh epoch retires the current publisher, so clients drop its later tab updates.
@@ -141,21 +156,26 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
     }
+
     // Why: emit the stored snapshot, not the pre-store one — storing grafts on retirement
     // proofs, and subscribers dedupe on version so they would never see them otherwise.
     const stored = this.storeMobileSessionSnapshot(worktreeId, next)
     const result = this.toMobileSessionTabsResult(stored)
     const changeSequence = ++this.mobileSessionTabsChangeSequence
+
     for (const subscription of this.mobileSessionTabListeners) {
       subscription.listener(
         this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
         changeSequence
       )
     }
+
     const created = result.tabs.find((candidate) => candidate.id === tab.id)
+
     if (!created || created.type !== 'terminal') {
       throw new Error('terminal_handle_stale')
     }
+
     return {
       tab: created,
       publicationEpoch: result.publicationEpoch,

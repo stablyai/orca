@@ -24,10 +24,15 @@ export const JOURNEY_STEPS = [
 export type JourneyStep = (typeof JOURNEY_STEPS)[number]
 
 const TERMINAL_HANDLE = 'terminal-journey'
+
 const FIRST_INPUT = 'echo cross-version\r'
+
 const SECOND_INPUT = 'echo after-reconnect\r'
+
 const LIVE_OUTPUT = 'cross-version live output\r\n'
+
 const INITIAL_BUFFER = 'initial scrollback\r\n'
+
 const BARRIER_TIMEOUT_MS = 10_000
 
 export type JourneyRecord = {
@@ -60,6 +65,7 @@ export type JourneyRecord = {
 
 function nameOpcode(build: TerminalWireBuild, opcode: number): string {
   const name = build.codec.TerminalStreamOpcode[opcode]
+
   return typeof name === 'string' ? name : `Opcode${opcode}`
 }
 
@@ -97,10 +103,12 @@ export async function runTerminalSkewJourney(args: {
 }): Promise<JourneyRecord> {
   const { hostBuild, clientBuild } = args
   const barrierTimeoutMs = args.barrierTimeoutMs ?? BARRIER_TIMEOUT_MS
+
   const hostStub: HostTerminalRuntimeStub = createHostTerminalRuntimeStub({
     terminalHandle: TERMINAL_HANDLE,
     initialBuffer: INITIAL_BUFFER
   })
+
   const link = createTerminalWireLink({ hostBuild, clientBuild, hostStub })
 
   const record: JourneyRecord = {
@@ -145,6 +153,7 @@ export async function runTerminalSkewJourney(args: {
     Object.keys(hostBuild.codec.TerminalStreamOpcode).length
       ? clientBuild
       : hostBuild
+
   const collectFrameSequence = (): void => {
     record.frameSequence = link.observed.map(
       (frame) =>
@@ -153,6 +162,7 @@ export async function runTerminalSkewJourney(args: {
   }
 
   const snapshotStartOpcode = Number(clientBuild.codec.TerminalStreamOpcode.SnapshotStart)
+
   const collectSnapshotStarts = (): void => {
     record.snapshotStarts = link.observed
       .filter(
@@ -162,6 +172,7 @@ export async function runTerminalSkewJourney(args: {
   }
 
   let subscribedCount = 0
+
   const callbacks = {
     onData: (data: string) => {
       record.dataRendered.push(data)
@@ -219,9 +230,11 @@ export async function runTerminalSkewJourney(args: {
 
     // Hide/reveal: the pane drops xterm and asks the host to re-publish the buffer.
     const revealed = await terminal.serializeBuffer({ scrollbackRows: 200 })
+
     if (!revealed) {
       throw new Error('reveal-snapshot: host returned no buffer snapshot on reveal')
     }
+
     record.revealSnapshot = { data: revealed.data, cols: revealed.cols, rows: revealed.rows }
     record.completed.push('reveal-snapshot')
 

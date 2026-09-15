@@ -13,6 +13,7 @@ vi.mock('../runtime-client', async () => {
   // against ./runtime/types, so a look-alike would collapse every CLI error
   // code into the generic `runtime_error` shape.
   const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
+
   return { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError }
 })
 

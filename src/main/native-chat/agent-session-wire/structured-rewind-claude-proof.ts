@@ -15,6 +15,7 @@ export function claudeRewindAcquisitionProofs(input: {
   const { record, store } = input
   const pending = record.rewind
   const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle
+
   if (
     record.provider !== 'claude' ||
     pending?.phase !== 'prepared' ||
@@ -22,6 +23,7 @@ export function claudeRewindAcquisitionProofs(input: {
   ) {
     return input.rewind ? { rewind: input.rewind } : {}
   }
+
   const checkpoint = async (leafUuid?: string): Promise<void> => {
     await store.transitionHandoff(record.sessionId, (current) => {
       if (
@@ -32,16 +34,20 @@ export function claudeRewindAcquisitionProofs(input: {
       ) {
         throw new Error('agent_session_checkpoint_stale')
       }
+
       if (leafUuid === undefined) {
         return {
           ...current,
           rewind: { ...pending, phase: 'refused', reason: 'outcome-unknown', retained: [] }
         }
       }
+
       if (leafUuid !== input.rewind?.targetUuid) {
         throw new Error('agent_session_rewind:proof-mismatch')
       }
+
       const observedAt = input.now()
+
       return {
         ...recordAgentSessionProviderHandle({
           record: current,
@@ -59,11 +65,14 @@ export function claudeRewindAcquisitionProofs(input: {
       }
     })
   }
+
   if (input.rewind) {
     return { rewind: { ...input.rewind, onProved: checkpoint } }
   }
+
   if (!head.leafUuid) {
     throw new Error('agent_session_rewind:invalid-target')
   }
+
   return { rewindRecovery: { leafUuid: head.leafUuid, onProved: () => checkpoint() } }
 }

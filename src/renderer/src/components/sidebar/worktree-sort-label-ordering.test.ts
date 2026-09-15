@@ -59,6 +59,7 @@ function makeWorktree(index: number, displayName: string | null): Worktree {
   // Trailing separators and Windows separators exercise `basename()`'s
   // normalisation on the rows whose displayName is blank.
   const suffixes = ['', '/', '//', '\\']
+
   return {
     id: `w${index}`,
     repoId: index % 2 === 0 ? 'repo1' : 'repo2',
@@ -102,11 +103,13 @@ const repoMap = new Map<string, Repo>([
 ])
 
 const SORT_MODES: readonly SortBy[] = ['name', 'smart', 'recent', 'repo', 'manual']
+
 const NOW = 1_700_000_000_000
 
 describe('worktree sort label ordering', () => {
   it('matches the pre-precompute comparator on every pair', () => {
     const labels = buildWorktreeSortLabels(corpus)
+
     for (const a of corpus) {
       for (const b of corpus) {
         expect(Math.sign(compareWorktreeSortLabel(a, b, labels))).toBe(
@@ -119,12 +122,15 @@ describe('worktree sort label ordering', () => {
   it('produces byte-for-byte identical sort output in every mode', () => {
     for (const sortBy of SORT_MODES) {
       const attention = new Map()
+
       const withLabels = [...corpus].sort(
         buildWorktreeComparator(sortBy, repoMap, NOW, attention, buildWorktreeSortLabels(corpus))
       )
+
       const withoutLabels = [...corpus].sort(
         buildWorktreeComparator(sortBy, repoMap, NOW, attention)
       )
+
       expect(withLabels.map((w) => w.id)).toEqual(withoutLabels.map((w) => w.id))
     }
   })

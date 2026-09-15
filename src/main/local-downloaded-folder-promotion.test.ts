@@ -38,6 +38,7 @@ describe('promoteLocalDownloadedFolder', () => {
     const destinationPath = join(root, 'downloaded')
     await mkdir(join(tempPath, 'nested'), { recursive: true })
     await writeFile(join(tempPath, 'nested', 'file.txt'), 'remote')
+
     return { root, tempPath, destinationPath }
   }
 
@@ -87,6 +88,7 @@ describe('promoteLocalDownloadedFolder', () => {
     const sourcePath = join(root, 'remote.txt')
     const destinationPath = join(root, 'published.txt')
     await writeFile(sourcePath, 'remote')
+
     const signal = {
       throwIfAborted: () => {
         writeFileSync(destinationPath, 'third-party mutation')
@@ -142,10 +144,13 @@ describe('promoteLocalDownloadedFolder', () => {
     await symlink('a-first.txt', join(tempPath, 'z-unsupported-link'))
 
     const promotion = promoteLocalDownloadedFolder(tempPath, destinationPath)
+
     const failure = expect(promotion).rejects.toThrow(
       "Unexpected local download entry 'z-unsupported-link'"
     )
+
     const publishedFile = join(destinationPath, 'a-first.txt')
+
     for (;;) {
       try {
         await readFile(publishedFile)
@@ -154,6 +159,7 @@ describe('promoteLocalDownloadedFolder', () => {
         await new Promise<void>((resolve) => setImmediate(resolve))
       }
     }
+
     await writeFile(publishedFile, 'third-party mutation')
 
     await failure
@@ -175,6 +181,7 @@ describe('promoteLocalDownloadedFolder', () => {
 
     const promotion = promoteLocalDownloadedFolder(tempPath, destinationPath, controller.signal)
     const failure = expect(promotion).rejects.toThrow('window closed')
+
     for (;;) {
       try {
         await readFile(join(destinationPath, '000.txt'))
@@ -183,6 +190,7 @@ describe('promoteLocalDownloadedFolder', () => {
         await new Promise<void>((resolve) => setImmediate(resolve))
       }
     }
+
     controller.abort(new Error('window closed'))
 
     await failure
@@ -201,6 +209,7 @@ describe('promoteLocalDownloadedFolder', () => {
 
     const copying = copyLocalDownloadedFileNoClobber(sourcePath, destinationPath, controller.signal)
     const failure = expect(copying).rejects.toThrow('copy canceled')
+
     for (;;) {
       try {
         await lstat(destinationPath)
@@ -209,6 +218,7 @@ describe('promoteLocalDownloadedFolder', () => {
         await new Promise<void>((resolve) => setImmediate(resolve))
       }
     }
+
     controller.abort(new Error('copy canceled'))
 
     await failure

@@ -5,6 +5,7 @@ describe('parseAllowStaleBaseFromSpec', () => {
   it('matches canonical form on its own line and strips it', () => {
     const spec = `Do the work
 allow-stale-base: true`
+
     const { allowStale, strippedSpec } = parseAllowStaleBaseFromSpec(spec)
     expect(allowStale).toBe(true)
     expect(strippedSpec).toBe('Do the work\n')
@@ -14,6 +15,7 @@ allow-stale-base: true`
   it('matches case-insensitively', () => {
     const spec = `Do the work
 Allow-Stale-Base: TRUE`
+
     const { allowStale, strippedSpec } = parseAllowStaleBaseFromSpec(spec)
     expect(allowStale).toBe(true)
     expect(strippedSpec).not.toMatch(/[Aa]llow-[Ss]tale-[Bb]ase/)
@@ -22,6 +24,7 @@ Allow-Stale-Base: TRUE`
   it('does not match allow-stale-base: false', () => {
     const spec = `Do the work
 allow-stale-base: false`
+
     const { allowStale, strippedSpec } = parseAllowStaleBaseFromSpec(spec)
     expect(allowStale).toBe(false)
     expect(strippedSpec).toBe(spec)
@@ -30,6 +33,7 @@ allow-stale-base: false`
   it('does not match allow-stale-base: truthy', () => {
     const spec = `Do the work
 allow-stale-base: truthy`
+
     const { allowStale, strippedSpec } = parseAllowStaleBaseFromSpec(spec)
     expect(allowStale).toBe(false)
     expect(strippedSpec).toBe(spec)

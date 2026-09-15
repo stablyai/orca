@@ -30,9 +30,11 @@ export async function parseOpenCodeSessionFile(
   messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const record = asRecord(JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown)
+
   if (!record) {
     return null
   }
+
   const sessionId = extractString(record.id) ?? sessionIdFromFileName(file.path)
   const accumulator = createAccumulator({ agent: 'opencode', file, sessionId, messages })
   accumulator.title = normalizeTitleText(extractString(record.title) ?? '')
@@ -40,6 +42,7 @@ export async function parseOpenCodeSessionFile(
   updateTimeline(accumulator, timeObjectValue(record.time, 'created'))
   updateTimeline(accumulator, timeObjectValue(record.time, 'updated'))
   await consumeOpenCodeMessages(accumulator, findOpenCodeStorageRoot(file.path), sessionId)
+
   return finalizeSession(accumulator, platform)
 }
 
@@ -49,6 +52,7 @@ export async function parseOpenCodeSessionFile(
 // missing timestamp can never displace a real first turn.
 async function readOpenCodeMessagesInOrder(messageDir: string): Promise<Record<string, unknown>[]> {
   let entries
+
   try {
     entries = await wslGatedReaddir(messageDir, 'scan')
   } catch (error) {
@@ -57,14 +61,19 @@ async function readOpenCodeMessagesInOrder(messageDir: string): Promise<Record<s
     if (error instanceof WslTranscriptFsError) {
       throw error
     }
+
     return []
   }
+
   const messages: { name: string; createdMs: number; message: Record<string, unknown> }[] = []
+
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith('.json')) {
       continue
     }
+
     let message: Record<string, unknown> | null = null
+
     try {
       message = asRecord(
         JSON.parse(await wslGatedReadFile(join(messageDir, entry.name), 'utf-8', 'scan')) as unknown
@@ -76,11 +85,14 @@ async function readOpenCodeMessagesInOrder(messageDir: string): Promise<Record<s
       if (error instanceof WslTranscriptFsError) {
         throw error
       }
+
       continue
     }
+
     if (!message) {
       continue
     }
+
     const createdMs = timestampMs(timeObjectValue(message.time, 'created'))
     messages.push({
       name: entry.name,
@@ -88,6 +100,7 @@ async function readOpenCodeMessagesInOrder(messageDir: string): Promise<Record<s
       message
     })
   }
+
   return messages
     .sort((a, b) => a.createdMs - b.createdMs || a.name.localeCompare(b.name))
     .map((entry) => entry.message)
@@ -101,17 +114,21 @@ export async function consumeOpenCodeMessages(
   if (!storageRoot) {
     return
   }
+
   for (const message of await readOpenCodeMessagesInOrder(
     join(storageRoot, 'message', sessionId)
   )) {
     const role = extractString(message.role)
+
     if (role === 'user' || role === 'assistant') {
       accumulator.messageCount++
       updateTimeline(accumulator, timeObjectValue(message.time, 'created'))
       const summary = asRecord(message.summary)
+
       if (role === 'user') {
         accumulator.title ??= extractString(summary?.title) ?? extractString(summary?.body)
       }
+
       // Why: the summary fallbacks are AI-generated. Seed the copyable first
       // prompt from real typed content only, never from a summary of a
       // harness-injected turn. Extraction stays inside the thunk so list scans

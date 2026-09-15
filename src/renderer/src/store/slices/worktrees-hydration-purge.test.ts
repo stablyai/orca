@@ -48,6 +48,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     badgeColor: '#000',
     addedAt: 0
   }
+
   const repoB = {
     id: 'repoB',
     path: '/repos/b',
@@ -60,6 +61,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     'hydrates connecting SSH worktrees with hydration purge completed=%s',
     async (hasHydratedWorktreePurge) => {
       const store = createTestStore()
+
       const sshRepo = {
         id: 'repo-ssh',
         path: '/home/orca/repo',
@@ -68,12 +70,14 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
         addedAt: 0,
         connectionId: 'ssh-1'
       }
+
       const queued = makeWorktree({
         id: 'repo-ssh::/home/orca/queued',
         repoId: 'repo-ssh',
         path: '/home/orca/queued',
         displayName: 'queued'
       })
+
       listKnownForExecutionHostMock.mockResolvedValueOnce({
         status: 'complete',
         repoId: sshRepo.id,
@@ -115,24 +119,28 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
 
   it('preserves resolved inline legacy lineage when side-map hydration is absent', async () => {
     const store = createTestStore()
+
     const parent = makeWorktree({
       id: 'repoA::/a/parent',
       instanceId: 'parent-instance',
       repoId: 'repoA',
       path: '/a/parent'
     })
+
     const child = makeWorktree({
       id: 'repoA::/a/child',
       instanceId: 'child-instance',
       repoId: 'repoA',
       path: '/a/child'
     })
+
     const lineage = makeLineage({
       worktreeId: child.id,
       worktreeInstanceId: child.instanceId!,
       parentWorktreeId: parent.id,
       parentWorktreeInstanceId: parent.instanceId!
     })
+
     const resolvedParent = {
       ...parent,
       parentWorktreeId: null,
@@ -140,6 +148,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
       lineage: null,
       workspaceLineage: null
     }
+
     const resolvedChild = {
       ...child,
       parentWorktreeId: parent.id,
@@ -147,6 +156,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
       lineage,
       workspaceLineage: null
     }
+
     mockApi.worktrees.listDetected.mockResolvedValueOnce(
       makeDetectedResult('repoA', [resolvedParent, resolvedChild])
     )
@@ -181,6 +191,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
       if (repoId === 'repoA') {
         return [wtA]
       }
+
       throw new Error('git error')
     })
 
@@ -206,6 +217,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
       if (repoId === 'repoA') {
         return [wtA]
       }
+
       return [wtB]
     })
 
@@ -415,6 +427,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
 
   it('preserves sibling host worktrees during hydrated refresh when repo ids are duplicated', async () => {
     const store = createTestStore()
+
     const localRepo = {
       id: 'same-repo',
       path: '/repos/local',
@@ -423,6 +436,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
       addedAt: 0,
       executionHostId: 'local'
     }
+
     const runtimeRepo = {
       id: 'same-repo',
       path: '/repos/remote',
@@ -431,17 +445,20 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
       addedAt: 1,
       executionHostId: 'runtime:env-1'
     }
+
     const localWorktree = makeWorktree({
       id: 'same-repo::/local/wt',
       repoId: 'same-repo',
       path: '/local/wt'
     })
+
     const staleRemoteWorktree = makeWorktree({
       id: 'same-repo::/remote/stale',
       repoId: 'same-repo',
       path: '/remote/stale',
       hostId: 'runtime:env-1'
     })
+
     const refreshedRemoteWorktree = makeWorktree({
       id: 'same-repo::/remote/fresh',
       repoId: 'same-repo',
@@ -507,6 +524,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
 
   it('bounds concurrent repo scans during hydration-time refresh', async () => {
     const store = createTestStore()
+
     const repos = Array.from({ length: WORKTREE_REFRESH_CONCURRENCY + 2 }, (_, index) => ({
       id: `repo-${index}`,
       path: `/repos/${index}`,
@@ -514,6 +532,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
       badgeColor: '#000',
       addedAt: 0
     }))
+
     let activeScans = 0
     let maxActiveScans = 0
 
@@ -522,6 +541,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
       maxActiveScans = Math.max(maxActiveScans, activeScans)
       await new Promise((resolve) => setTimeout(resolve, 5))
       activeScans -= 1
+
       return [makeWorktree({ id: `${repoId}::/wt`, repoId, path: `/wt/${repoId}` })]
     })
 
@@ -536,6 +556,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
 
   it('bounds concurrent repo scans after the hydration purge has run', async () => {
     const store = createTestStore()
+
     const repos = Array.from({ length: WORKTREE_REFRESH_CONCURRENCY + 2 }, (_, index) => ({
       id: `repo-${index}`,
       path: `/repos/${index}`,
@@ -543,6 +564,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
       badgeColor: '#000',
       addedAt: 0
     }))
+
     let activeScans = 0
     let maxActiveScans = 0
 
@@ -551,6 +573,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
       maxActiveScans = Math.max(maxActiveScans, activeScans)
       await new Promise((resolve) => setTimeout(resolve, 5))
       activeScans -= 1
+
       return [makeWorktree({ id: `${repoId}::/wt`, repoId, path: `/wt/${repoId}` })]
     })
 
@@ -569,6 +592,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
   it('reuses an offline runtime preflight across hydrated all-worktree refresh repos', async () => {
     const store = createTestStore()
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const repos = Array.from({ length: WORKTREE_REFRESH_CONCURRENCY + 2 }, (_, index) => ({
       id: `runtime-repo-${index}`,
       path: `/remote/repos/${index}`,
@@ -587,6 +611,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
           _meta: { runtimeId: 'runtime-offline' }
         })
       }
+
       return runtimeEnvironmentCall(args)
     })
 
@@ -632,6 +657,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => {
       if (method === 'worktree.detectedList') {
         scanStartedCount += 1
+
         return new Promise((resolve) => {
           scanReleases.push(() =>
             resolve({
@@ -643,6 +669,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
           )
         })
       }
+
       return Promise.resolve({ id: method, ok: true, result: {}, _meta: {} })
     })
 
@@ -665,6 +692,7 @@ describe('fetchAllWorktrees hydration-time purge (design §4.4)', () => {
     const wtA = makeWorktree({ id: 'repoA::/a/wt1', repoId: 'repoA', path: '/a/wt1' })
     const wtB = makeWorktree({ id: 'repoB::/b/wt1', repoId: 'repoB', path: '/b/wt1' })
     const staleId = 'repoA::/a/zombie'
+
     const floatingFile = {
       id: 'floating-file',
       worktreeId: FLOATING_TERMINAL_WORKTREE_ID,

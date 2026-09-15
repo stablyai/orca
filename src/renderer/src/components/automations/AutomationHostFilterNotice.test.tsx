@@ -16,6 +16,7 @@ import type {
 } from './automation-host-filter-resolution'
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {

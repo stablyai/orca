@@ -10,7 +10,9 @@ import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fi
  * parse, not a hand-built snapshot.
  */
 const LEAF_ID = '77777777-7777-4777-8777-777777777777'
+
 const REMINTED_LEAF_ID = '88888888-8888-4888-8888-888888888888'
+
 const PANE_KEY = `tab-dismiss:${LEAF_ID}`
 
 function wiredRuntime(incarnationId?: string): {
@@ -40,6 +42,7 @@ function wiredRuntime(incarnationId?: string): {
       }
     ]
   })
+
   if (incarnationId) {
     runtime.registerPty('dismiss-pty', TEST_WORKTREE_ID, null, {
       tabId: 'tab-dismiss',
@@ -47,6 +50,7 @@ function wiredRuntime(incarnationId?: string): {
       incarnationId
     })
   }
+
   return { runtime, statusWiring }
 }
 
@@ -82,6 +86,7 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
     const { runtime, statusWiring } = wiredRuntime()
     const republish = vi.spyOn(runtime, 'touchMobileSessionTabsForWorktree')
     const uninstall = statusWiring.attach(runtime)
+
     try {
       emitWorkingStatus(runtime, 1)
       expect(republish).toHaveBeenCalledWith(TEST_WORKTREE_ID)
@@ -116,14 +121,17 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
       const { runtime, statusWiring } = wiredRuntime(incarnationId)
       emitWorkingStatus(runtime, 1)
       const row = statusWiring.statusStore.getStatusSnapshot()[0]!
+
       const internals = runtime as unknown as {
         handleByLeafKey: Map<string, string>
         handleByPtyIncarnation: Map<string, { handle: string }>
         ptysById: Map<string, { paneKey: string | null; tabId: string | null }>
       }
+
       const pty = internals.ptysById.get('dismiss-pty')!
       pty.paneKey = null
       pty.tabId = null
+
       if (clearLeafBinding) {
         expect(internals.handleByPtyIncarnation.get('dismiss-pty')?.handle).toBe(row.terminalHandle)
         internals.handleByLeafKey.clear()
@@ -200,6 +208,7 @@ describe('worktree ps follows a dismissal out of the agent-status store', () => 
     const events: Awaited<ReturnType<typeof runtime.listMobileSessionTabs>>[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
     const uninstall = statusWiring.attach(runtime)
+
     try {
       emitWorkingStatus(runtime, 2)
       await vi.waitFor(() => expect(events).toHaveLength(1))

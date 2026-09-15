@@ -25,6 +25,7 @@ export const OMP_SESSION_ARTIFACT_DIR_PATTERN = new RegExp(`^${OMP_SESSION_DIR_N
 // nobody — matching the local direct-children-only readdir. The greedy prefix
 // only matters for a stamped dir nested under another, which OMP never emits.
 const OMP_SUBAGENT_SUBTREE_PATTERN = new RegExp(String.raw`[\\/]${OMP_SESSION_DIR_NAME}[\\/]`, 'i')
+
 const OMP_SUBAGENT_DIRECT_CHILD_PATTERN = new RegExp(
   String.raw`^(.*[\\/]${OMP_SESSION_DIR_NAME})[\\/][^\\/]+\.jsonl$`,
   'i'
@@ -32,6 +33,7 @@ const OMP_SUBAGENT_DIRECT_CHILD_PATTERN = new RegExp(
 
 export function ompArtifactDirFor(transcriptFilePath: string): string {
   const stem = basename(transcriptFilePath, extname(transcriptFilePath))
+
   return join(dirname(transcriptFilePath), stem)
 }
 
@@ -50,11 +52,13 @@ export function isOmpSubagentTranscriptFileName(name: string, isFile: boolean): 
  */
 export async function countOmpSubagentTranscripts(transcriptFilePath: string): Promise<number> {
   let entries
+
   try {
     entries = await wslGatedReaddir(ompArtifactDirFor(transcriptFilePath), 'scan')
   } catch {
     return 0
   }
+
   return entries.filter((entry) => isOmpSubagentTranscriptFileName(entry.name, entry.isFile()))
     .length
 }
@@ -72,12 +76,15 @@ export function partitionOmpSubagentTranscriptPaths(
 ): SubagentTranscriptPartition {
   const sessionFilePaths: string[] = []
   const subagentTranscriptCounts = new Map<string, number>()
+
   for (const path of paths) {
     if (!OMP_SUBAGENT_SUBTREE_PATTERN.test(path)) {
       sessionFilePaths.push(path)
       continue
     }
+
     const directChild = OMP_SUBAGENT_DIRECT_CHILD_PATTERN.exec(path)
+
     if (directChild) {
       const parentTranscriptPath = `${directChild[1]}.jsonl`
       subagentTranscriptCounts.set(
@@ -86,6 +93,7 @@ export function partitionOmpSubagentTranscriptPaths(
       )
     }
   }
+
   return { sessionFilePaths, subagentTranscriptCounts }
 }
 
@@ -106,11 +114,14 @@ export function withOmpSubagentTranscriptCount(
     touchFile: (file) => state.touchFile(file),
     finalize: async (platform, options) => {
       const session = await state.finalize(platform, options)
+
       const ownsTranscriptDisk =
         !options?.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
+
       if (!session || !ownsTranscriptDisk) {
         return session
       }
+
       return {
         ...session,
         subagentTranscriptCount: await countOmpSubagentTranscripts(transcriptFilePath)

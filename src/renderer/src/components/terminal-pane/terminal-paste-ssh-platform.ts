@@ -6,5 +6,6 @@ export function getTerminalPasteSshRemotePlatform(
   if (!connectionId) {
     return null
   }
+
   return useAppStore.getState().sshConnectionStates.get(connectionId)?.remotePlatform ?? null
 }

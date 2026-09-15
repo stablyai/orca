@@ -14,12 +14,15 @@ export function adjudicateRestartedAgentSessionHandoff(
     probe,
     observedAt: now
   })
+
   if (adjudication.disposition === 'readopt') {
     return updateLease(record, { ...record.lease, unreconciled: false, lastRenewedAt: now })
   }
+
   if (adjudication.disposition === 'settlement-pending') {
     return updateLease(record, { ...record.lease, unreconciled: false, lastRenewedAt: now })
   }
+
   if (adjudication.disposition === 'free') {
     return updateLease(record, {
       ...record.lease,
@@ -30,6 +33,7 @@ export function adjudicateRestartedAgentSessionHandoff(
       lastRenewedAt: now
     })
   }
+
   if (adjudication.disposition !== 'evicted') {
     return updateLease(record, {
       ...record.lease,
@@ -41,6 +45,7 @@ export function adjudicateRestartedAgentSessionHandoff(
       lastRenewedAt: now
     })
   }
+
   if (record.lease.handoffStage === 'new-owner-proving' && record.lease.runtimeKind === 'native') {
     // The attempted new owner is proven absent; no writer remains to roll back or readopt.
     return updateLease(record, {
@@ -57,8 +62,10 @@ export function adjudicateRestartedAgentSessionHandoff(
       deathEvidence: adjudication.evidence
     })
   }
+
   const provingTuiTarget =
     record.lease.handoffStage === 'new-owner-proving' && record.lease.runtimeKind === 'tui'
+
   return updateLease(record, {
     ...record.lease,
     runtimeKind: provingTuiTarget ? 'native' : record.lease.runtimeKind,

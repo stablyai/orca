@@ -56,6 +56,7 @@ async function setNarrowTerminalViewport(page: Page): Promise<void> {
   await page.waitForTimeout(250)
   await page.evaluate(() => {
     const store = window.__store
+
     if (store?.getState().rightSidebarOpen) {
       store.getState().setRightSidebarOpen(false)
     }
@@ -68,6 +69,7 @@ async function setRenderedTableViewport(page: Page): Promise<void> {
   await page.waitForTimeout(250)
   await page.evaluate(() => {
     const store = window.__store
+
     if (store?.getState().rightSidebarOpen) {
       store.getState().setRightSidebarOpen(false)
     }
@@ -80,31 +82,40 @@ async function scrollActiveTerminalLikeUser(page: Page): Promise<void> {
     const store = window.__store
     const state = store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('Active terminal pane unavailable')
     }
+
     pane.terminal.focus()
     pane.terminal.scrollToBottom()
+
     const viewport =
       pane.container.querySelector<HTMLElement>('.xterm-viewport') ??
       pane.container.querySelector<HTMLElement>('.xterm')
+
     if (!viewport) {
       throw new Error('Active terminal viewport unavailable')
     }
+
     const rect = viewport.getBoundingClientRect()
+
     return {
       x: rect.left + rect.width / 2,
       y: rect.top + rect.height / 2
     }
   })
+
   await page.mouse.move(target.x, target.y)
   await page.mouse.wheel(0, -1800)
   await page.waitForTimeout(250)
@@ -115,20 +126,26 @@ async function readActiveTerminalVisibleText(page: Page): Promise<string> {
     const store = window.__store
     const state = store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('Active terminal pane unavailable')
     }
+
     const buffer = pane.terminal.buffer.active
+
     return Array.from({ length: pane.terminal.rows }, (_, row) => {
       const line = buffer.getLine(buffer.viewportY + row)
+
       return line?.translateToString(true) ?? ''
     }).join('\n')
   })
@@ -137,9 +154,11 @@ async function readActiveTerminalVisibleText(page: Page): Promise<string> {
 async function forceDarkTerminalRendererPath(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store unavailable')
     }
+
     const state = store.getState()
     store.setState({
       settings: {
@@ -149,12 +168,14 @@ async function forceDarkTerminalRendererPath(page: Page): Promise<void> {
       }
     })
     const worktreeId = state.activeWorktreeId
+
     const tabId =
       state.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     manager?.setTerminalGpuAcceleration('auto')
   })
@@ -170,21 +191,25 @@ async function readTerminalRightEdgeOverpaint(page: Page): Promise<{
     const store = window.__store
     const state = store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.container.querySelector<HTMLElement>('.xterm-screen')
     const rows = pane?.container.querySelector<HTMLElement>('.xterm-rows')
+
     if (!pane || !screen) {
       throw new Error('Active terminal DOM unavailable')
     }
 
     const screenRect = screen.getBoundingClientRect()
+
     if (!rows) {
       // Why: WebGL renders rows into a canvas; DOM-span overpaint checks only
       // apply to the DOM renderer, while buffer wrap checks still run below.
@@ -197,9 +222,11 @@ async function readTerminalRightEdgeOverpaint(page: Page): Promise<{
 
     const cellWidth = pane.terminal._core?._renderService?.dimensions?.css?.cell?.width ?? 0
     const maxRight = screenRect.right + Math.max(1, cellWidth * 0.5)
+
     const offenders = Array.from(rows.querySelectorAll<HTMLElement>('span'))
       .map((span) => {
         const rect = span.getBoundingClientRect()
+
         return {
           text: span.textContent ?? '',
           right: rect.right,
@@ -229,33 +256,43 @@ async function readTerminalBoxTableWrapDiagnostics(page: Page): Promise<{
     const store = window.__store
     const state = store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('Active terminal pane unavailable')
     }
+
     const buffer = pane.terminal.buffer.active
     const lineCount = buffer.baseY + buffer.length
+
     const lines = Array.from({ length: lineCount }, (_, index) => {
       const line = buffer.getLine(index)
+
       return {
         index,
         isWrapped: line?.isWrapped === true,
         text: line?.translateToString(true) ?? ''
       }
     })
+
     const wrappedBoxLines = lines
       .filter((line) => line.isWrapped && /[┌┬┐├┼┤└┴┘│─]/.test(line.text))
       .slice(0, 20)
+
     const singerIndex = lines.findIndex((line) => line.text.includes('Singer'))
+
     const nearSinger =
       singerIndex === -1 ? [] : lines.slice(Math.max(0, singerIndex - 4), singerIndex + 7)
+
     return {
       cols: pane.terminal.cols,
       rows: pane.terminal.rows,
@@ -271,6 +308,7 @@ async function closeFeatureTips(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
     store?.getState().markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+
     if (store?.getState().activeModal === 'feature-tips') {
       store.getState().closeModal()
     }
@@ -282,28 +320,35 @@ async function readTerminalRenderDiagnostics(page: Page): Promise<TerminalRender
     const store = window.__store
     const state = store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('Active terminal pane unavailable')
     }
+
     const buffer = pane.terminal.buffer.active
     const visibleLineTails: string[] = []
+
     for (let row = 0; row < pane.terminal.rows; row += 1) {
       const line = buffer.getLine(buffer.viewportY + row)
       visibleLineTails.push(line?.translateToString(true).slice(-48) ?? '')
     }
+
     const terminalCore = (
       pane.terminal as unknown as {
         _core?: { coreService?: { isCursorHidden?: boolean } }
       }
     )._core
+
     const allPaneStates = Array.from(window.__paneManagers?.entries?.() ?? []).flatMap(
       ([managerTabId, paneManager]) =>
         (paneManager.getPanes?.() ?? []).map((managedPane) => {
@@ -311,9 +356,12 @@ async function readTerminalRenderDiagnostics(page: Page): Promise<TerminalRender
             const line = managedPane.terminal.buffer.active.getLine(
               managedPane.terminal.buffer.active.viewportY + row
             )
+
             return line?.translateToString(true) ?? ''
           }).join('\n')
+
           const serializedText = managedPane.serializeAddon?.serialize?.() ?? visibleText
+
           return {
             tabId: managerTabId,
             paneId: managedPane.id,
@@ -323,6 +371,7 @@ async function readTerminalRenderDiagnostics(page: Page): Promise<TerminalRender
           }
         })
     )
+
     return {
       cols: pane.terminal.cols,
       rows: pane.terminal.rows,
@@ -350,10 +399,13 @@ test.describe('Terminal long table scroll restore repro', () => {
         .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
     })
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'long table restore repro needs the seeded secondary worktree')
+
     if (!secondWorktreeId) {
       return
     }
@@ -412,10 +464,13 @@ test.describe('Terminal long table scroll restore repro', () => {
         .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
     })
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'narrow signer table repro needs the seeded secondary worktree')
+
     if (!secondWorktreeId) {
       return
     }
@@ -485,10 +540,13 @@ test.describe('Terminal long table scroll restore repro', () => {
         .markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
     })
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
+
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
     )
+
     test.skip(!secondWorktreeId, 'real emoji table repro needs the seeded secondary worktree')
+
     if (!secondWorktreeId) {
       return
     }
@@ -496,10 +554,12 @@ test.describe('Terminal long table scroll restore repro', () => {
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
     await setNarrowTerminalViewport(orcaPage)
+
     const renderedTableTerminalCols = await waitForRenderedTerminalColumnsAtMost(
       orcaPage,
       NARROW_TERMINAL_MAX_COLS
     )
+
     const ptyId = await waitForActivePanePtyId(orcaPage)
     await waitForPtyColumnsAtMost(orcaPage, ptyId, renderedTableTerminalCols)
     const runId = randomUUID()
@@ -527,9 +587,11 @@ test.describe('Terminal long table scroll restore repro', () => {
         })
         .toContain(marker)
       const generatedWidthContent = await getTerminalContent(orcaPage, 30_000)
+
       const generatedWidthMatch = generatedWidthContent.match(
         new RegExp(`${emojiFixtureTableWidthMarker(runId)}(\\d+)`)
       )
+
       expect(generatedWidthMatch).not.toBeNull()
       const generatedTableWidth = Number(generatedWidthMatch?.[1] ?? 0)
 

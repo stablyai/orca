@@ -23,13 +23,17 @@ export function getWorkspaceSpaceDeleteState(
   hasSameIdSibling: boolean
 ): WorkspaceSpaceDeleteState | undefined {
   const qualifiedState = deleteStateByWorktreeId[getWorkspaceSpaceWorktreeIdentity(worktree)]
+
   if (qualifiedState) {
     return qualifiedState
   }
+
   const legacyState = deleteStateByWorktreeId[worktree.worktreeId]
+
   if (!hasSameIdSibling || !legacyState) {
     return legacyState
   }
+
   return legacyState.executionHostId !== undefined &&
     legacyState.executionHostId === worktree.executionHostId
     ? legacyState

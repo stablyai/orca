@@ -6,6 +6,7 @@ export type CsvParseResult = {
 export const CSV_DELIMITER_SNIFF_SCAN_CODE_UNITS = 64 * 1024
 
 const LINE_FEED_CODE_UNIT = 10
+
 const CARRIAGE_RETURN_CODE_UNIT = 13
 
 // Why: RFC 4180-compatible CSV parsing with quote handling and CRLF support.
@@ -36,11 +37,14 @@ export function parseCsv(source: string, delimiter: string = ','): CsvParseResul
     row.push(field)
     field = ''
   }
+
   const pushRow = (): void => {
     pushField()
+
     if (row.length > maxColumns) {
       maxColumns = row.length
     }
+
     rows.push(row)
     row = []
     recordHasContent = false
@@ -60,6 +64,7 @@ export function parseCsv(source: string, delimiter: string = ','): CsvParseResul
       } else {
         field += ch
       }
+
       continue
     }
 
@@ -70,22 +75,27 @@ export function parseCsv(source: string, delimiter: string = ','): CsvParseResul
       recordHasContent = true
       continue
     }
+
     if (ch === delimiter) {
       pushField()
       recordHasContent = true
       continue
     }
+
     if (ch === '\r') {
       if (source[i + 1] === '\n') {
         i += 1
       }
+
       pushRow()
       continue
     }
+
     if (ch === '\n') {
       pushRow()
       continue
     }
+
     field += ch
     recordHasContent = true
   }
@@ -107,21 +117,25 @@ export function detectCsvDelimiter(filePath: string, content: string): string {
   if (filePath.toLowerCase().endsWith('.tsv')) {
     return '\t'
   }
+
   // Why: sniff the first non-empty line for tab vs comma to handle CSVs that
   // were saved with a different extension. Semicolons/pipes are out of scope;
   // this tool is a viewer, not a general data importer.
   // Why: strip a leading UTF-8 BOM so it doesn't get counted as part of the
   // first cell's characters (and so BOM-prefixed TSVs still sniff correctly).
   let text = content
+
   if (text.charCodeAt(0) === 0xfeff) {
     text = text.slice(1)
   }
+
   // Why: skip leading blank/whitespace-only lines before sniffing. A file that
   // starts with one or more empty lines would otherwise be classified as comma
   // (0 tabs vs 0 commas, tie goes to comma), misdetecting blank-leading TSVs.
   const firstLine = findFirstNonEmptyCsvSniffLine(text)
   const tabs = countDelimiterOutsideQuotes(firstLine, '\t')
   const commas = countDelimiterOutsideQuotes(firstLine, ',')
+
   return tabs > commas ? '\t' : ','
 }
 
@@ -134,10 +148,12 @@ function findFirstNonEmptyCsvSniffLine(text: string): string {
 
   for (let index = 0; index < scanLength; index += 1) {
     const codeUnit = text.charCodeAt(index)
+
     if (codeUnit === LINE_FEED_CODE_UNIT || codeUnit === CARRIAGE_RETURN_CODE_UNIT) {
       if (lineHasContent) {
         return text.slice(lineStart, index)
       }
+
       if (
         codeUnit === CARRIAGE_RETURN_CODE_UNIT &&
         index + 1 < scanLength &&
@@ -145,10 +161,12 @@ function findFirstNonEmptyCsvSniffLine(text: string): string {
       ) {
         index += 1
       }
+
       lineStart = index + 1
       lineHasContent = false
       continue
     }
+
     if (!lineHasContent && !isCsvSniffWhitespace(codeUnit)) {
       lineHasContent = true
     }
@@ -170,19 +188,24 @@ function isCsvSniffWhitespace(codeUnit: number): boolean {
 function countDelimiterOutsideQuotes(line: string, delimiter: string): number {
   let count = 0
   let inQuotes = false
+
   for (let i = 0; i < line.length; i += 1) {
     const ch = line[i]
+
     if (ch === '"') {
       if (inQuotes && line[i + 1] === '"') {
         i += 1
       } else {
         inQuotes = !inQuotes
       }
+
       continue
     }
+
     if (!inQuotes && ch === delimiter) {
       count += 1
     }
   }
+
   return count
 }

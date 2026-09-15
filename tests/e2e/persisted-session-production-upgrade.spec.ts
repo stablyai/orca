@@ -24,6 +24,7 @@ const FIXTURE_PATH = path.join(
   'persisted-sessions',
   'legacy-workspace-session-daemon-terminal.json'
 )
+
 // This fixture captures a legacy production schema boundary; the test runs the current build.
 const RESTORED_TITLE = 'Production agent session'
 
@@ -49,13 +50,16 @@ function installProductionSessionFixture(
     DEFAULT_LOCAL_ORCA_PROFILE_ID,
     'orca-data.json'
   )
+
   const profile = JSON.parse(readFileSync(profilePath, 'utf8')) as Record<string, unknown>
   const fixture = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8')) as FixtureSession
   const fixtureTabs = fixture.tabsByWorktree.__WORKTREE_ID__
   const fixtureLayout = fixture.terminalLayoutsByTabId['production-agent-tab']
+
   if (!fixtureTabs || !fixtureLayout) {
     throw new Error('Production session fixture is missing its terminal records')
   }
+
   delete fixture._fixtureProvenance
   fixture.activeRepoId = repoId
   fixture.activeWorktreeId = worktreeId
@@ -95,6 +99,7 @@ async function expectProductionSessionRestored(
   expect(
     await page.evaluate(() => {
       const state = window.__store?.getState()
+
       return {
         activeRepoId: state?.activeRepoId,
         activeWorktreeId: state?.activeWorktreeId,
@@ -113,9 +118,11 @@ async function expectProductionSessionRestored(
 test('upgrades a legacy daemon session and keeps it stable after relaunch', async (// oxlint-disable-next-line no-empty-pattern -- this upgrade test owns its Electron launches.
 {}, testInfo) => {
   test.setTimeout(300_000)
+
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
     : ''
+
   test.skip(!repoPath || !existsSync(repoPath), 'Seeded E2E repository is unavailable')
 
   const session = createRestartSession(testInfo)
@@ -137,10 +144,12 @@ test('upgrades a legacy daemon session and keeps it stable after relaunch', asyn
     const marker = `PRODUCTION_UPGRADE_${Date.now()}`
     await execInTerminal(oldLaunch.page, ptyId, `echo ${marker}`)
     await waitForTerminalOutput(oldLaunch.page, marker)
+
     const repoId = await oldLaunch.page.evaluate(
       (repoPath) => window.__store?.getState().repos.find((repo) => repo.path === repoPath)?.id,
       repoPath
     )
+
     if (!repoId) {
       throw new Error('Active repository was unavailable before fixture installation')
     }
@@ -166,6 +175,7 @@ test('upgrades a legacy daemon session and keeps it stable after relaunch', asyn
         await session.close(app).catch(() => {})
       }
     }
+
     await session.dispose()
   }
 })

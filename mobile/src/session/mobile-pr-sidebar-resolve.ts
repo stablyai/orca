@@ -9,8 +9,10 @@ export function resolveLinkedPrNumber(
   if (typeof branchHint === 'number') {
     return branchHint
   }
+
   if (typeof worktreeLinkedPR === 'number') {
     return worktreeLinkedPR
   }
+
   return null
 }

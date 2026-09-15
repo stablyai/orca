@@ -53,6 +53,7 @@ export function SkillSharePackageSummary({
   const skillCount = preview.skillCount ?? preview.skills?.length ?? 1
   const bundle = skillCount > 1
   const risk = summarizeShareRisk(preview)
+
   return (
     <section className="space-y-2">
       <div className="min-w-0">

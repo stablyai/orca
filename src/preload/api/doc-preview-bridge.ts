@@ -20,13 +20,17 @@ export const docPreviewApi = {
   onExternalLink: (callback: (payload: { url: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: { url: string }): void =>
       callback(payload)
+
     ipcRenderer.on(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, listener)
+
     return () => ipcRenderer.removeListener(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, listener)
   },
   onLoadFailure: (callback: (payload: DocPreviewFailure) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: DocPreviewFailure): void =>
       callback(payload)
+
     ipcRenderer.on(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, listener)
+
     return () => ipcRenderer.removeListener(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, listener)
   }
 } satisfies PreloadApi['docPreview']

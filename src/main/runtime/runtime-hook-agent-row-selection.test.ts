@@ -7,12 +7,16 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../shared/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+
 const OTHER_PANE_KEY = 'tab-1:22222222-2222-4222-8222-222222222222'
+
 const HANDLE = 'term_selection'
+
 const PROVIDER_SESSION = { key: 'session_id' as const, id: 'session-1' }
 
 function row(overrides: Partial<AgentStatusIpcPayload> = {}): AgentStatusIpcPayload {
   const now = Date.now()
+
   return {
     paneKey: PANE_KEY,
     tabId: 'tab-1',
@@ -35,6 +39,7 @@ describe('selectFreshExplicitAgentStatus', () => {
       paneKey: OTHER_PANE_KEY,
       hookRows: [row()]
     })
+
     expect(selected).toMatchObject({ status: 'working' })
   })
 
@@ -77,6 +82,7 @@ describe('selectFreshExplicitAgentStatus', () => {
 
   it('prefers a permission row over a working row stamped at the same instant', () => {
     const at = Date.now()
+
     const selected = selectFreshExplicitAgentStatus({
       handle: HANDLE,
       paneKey: PANE_KEY,
@@ -85,6 +91,7 @@ describe('selectFreshExplicitAgentStatus', () => {
         row({ paneKey: OTHER_PANE_KEY, state: 'blocked', receivedAt: at })
       ]
     })
+
     expect(selected?.status).toBe('permission')
   })
 })
@@ -99,6 +106,7 @@ describe('selectFreshAgentRowForMobileTab', () => {
         row({ prompt: 'this pane', receivedAt: Date.now() - 50 })
       ]
     })
+
     expect(selected?.payload.prompt).toBe('this pane')
   })
 
@@ -108,6 +116,7 @@ describe('selectFreshAgentRowForMobileTab', () => {
       terminalHandle: HANDLE,
       hookRows: [row()]
     })
+
     expect(selected).toMatchObject({ paneKey: PANE_KEY, payload: { prompt: 'ship it' } })
   })
 
@@ -117,6 +126,7 @@ describe('selectFreshAgentRowForMobileTab', () => {
       terminalHandle: HANDLE,
       hookRows: [row({ providerSession: PROVIDER_SESSION })]
     })
+
     expect(selected?.providerSession).toEqual(PROVIDER_SESSION)
   })
 

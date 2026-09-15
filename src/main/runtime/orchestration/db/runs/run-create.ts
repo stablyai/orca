@@ -14,6 +14,7 @@ export function createRun(
 ): RunRow {
   const id = generateId('run')
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     this.unbindOtherRunsForPane(params.coordinatorPaneKey)
     this.db
@@ -30,6 +31,7 @@ export function createRun(
     this.db.exec('ROLLBACK')
     throw error
   }
+
   return this.getRun(id) as RunRow
 }
 

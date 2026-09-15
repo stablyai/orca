@@ -3,10 +3,13 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const READY_PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+
 const WORKING_PANE_KEY = 'tab-1:22222222-2222-4222-8222-222222222222'
 
 let mockAgents: unknown[] = []
+
 let mockStoreState: Record<string, unknown> = {}
+
 const mockSendPromptToSidebarAgentTarget = vi.fn()
 
 function agentRow(paneKey: string, state: string, now: number): unknown {

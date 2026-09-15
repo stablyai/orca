@@ -40,6 +40,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 import { AgentDashboardSettingsMenu } from './AgentDashboardSettingsMenu'
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 afterEach(() => {
@@ -62,6 +63,7 @@ describe('AgentDashboardSettingsMenu', () => {
     const toggle = container.querySelector<HTMLButtonElement>(
       'button[role="switch"][aria-label="Show idle agents"]'
     )
+
     expect(toggle).not.toBeNull()
 
     act(() => toggle?.click())

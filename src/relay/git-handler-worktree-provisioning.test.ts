@@ -63,10 +63,12 @@ describe('GitHandler', () => {
   describe('refreshLocalBaseRefForWorktreeCreate', () => {
     function setupMockedRefreshHandler() {
       const localDispatcher = createMockDispatcher()
+
       const localHandler = new GitHandler(
         localDispatcher as unknown as RelayDispatcher,
         new RelayContext()
       )
+
       const gitMock =
         vi.fn<
           (
@@ -75,7 +77,9 @@ describe('GitHandler', () => {
             opts?: { maxBuffer?: number }
           ) => Promise<{ stdout: string; stderr: string }>
         >()
+
       ;(localHandler as unknown as { git: typeof gitMock }).git = gitMock
+
       return { localDispatcher, gitMock }
     }
 
@@ -85,16 +89,20 @@ describe('GitHandler', () => {
       gitCommit(tmpDir, 'initial')
       const branchRef = currentBranchFullRef(tmpDir)
       const ownerPath = reportedWorktreePath(tmpDir)
+
       const firstSha = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       writeFileSync(path.join(tmpDir, 'base.txt'), 'remote')
       gitCommit(tmpDir, 'remote update')
+
       const remoteSha = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       execFileSync('git', ['update-ref', 'refs/remotes/origin/main', remoteSha], {
         cwd: tmpDir,
         stdio: 'pipe'
@@ -112,6 +120,7 @@ describe('GitHandler', () => {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       expect(actual).toBe(remoteSha)
       await expect(fs.readFile(path.join(tmpDir, 'base.txt'), 'utf-8')).resolves.toBe('remote')
     })
@@ -123,10 +132,12 @@ describe('GitHandler', () => {
       execFileSync('git', ['branch', 'main-copy'], { cwd: tmpDir, stdio: 'pipe' })
       writeFileSync(path.join(tmpDir, 'base.txt'), 'remote')
       gitCommit(tmpDir, 'remote update')
+
       const remoteSha = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       execFileSync('git', ['update-ref', 'refs/remotes/origin/main', remoteSha], {
         cwd: tmpDir,
         stdio: 'pipe'
@@ -143,6 +154,7 @@ describe('GitHandler', () => {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       expect(actual).toBe(remoteSha)
     })
 
@@ -151,16 +163,20 @@ describe('GitHandler', () => {
       writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
       gitCommit(tmpDir, 'initial')
       execFileSync('git', ['branch', 'main-copy'], { cwd: tmpDir, stdio: 'pipe' })
+
       const originalSha = execFileSync('git', ['rev-parse', 'refs/heads/main-copy'], {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       writeFileSync(path.join(tmpDir, 'base.txt'), 'remote')
       gitCommit(tmpDir, 'remote update')
+
       const remoteSha = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       execFileSync('git', ['update-ref', 'refs/remotes/origin/main', remoteSha], {
         cwd: tmpDir,
         stdio: 'pipe'
@@ -177,6 +193,7 @@ describe('GitHandler', () => {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       expect(actual).toBe(originalSha)
     })
 
@@ -198,16 +215,20 @@ describe('GitHandler', () => {
       gitCommit(tmpDir, 'initial')
       const branchRef = currentBranchFullRef(tmpDir)
       const ownerPath = reportedWorktreePath(tmpDir)
+
       const firstSha = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       writeFileSync(path.join(tmpDir, 'base.txt'), 'remote')
       gitCommit(tmpDir, 'remote update')
+
       const remoteSha = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       execFileSync('git', ['update-ref', 'refs/remotes/origin/main', remoteSha], {
         cwd: tmpDir,
         stdio: 'pipe'
@@ -228,6 +249,7 @@ describe('GitHandler', () => {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       expect(actual).toBe(firstSha)
       await expect(fs.readFile(path.join(tmpDir, 'base.txt'), 'utf-8')).resolves.toBe('local dirty')
     })
@@ -237,10 +259,12 @@ describe('GitHandler', () => {
       writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
       gitCommit(tmpDir, 'initial')
       const branchRef = currentBranchFullRef(tmpDir)
+
       const headSha = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       execFileSync('git', ['update-ref', 'refs/remotes/origin/main', headSha], {
         cwd: tmpDir,
         stdio: 'pipe'
@@ -263,10 +287,12 @@ describe('GitHandler', () => {
       execFileSync('git', ['branch', 'main-copy'], { cwd: tmpDir, stdio: 'pipe' })
       writeFileSync(path.join(tmpDir, 'remote.txt'), 'remote')
       gitCommit(tmpDir, 'remote update')
+
       const remoteSha = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       execFileSync('git', ['update-ref', 'refs/remotes/origin/main', remoteSha], {
         cwd: tmpDir,
         stdio: 'pipe'
@@ -274,6 +300,7 @@ describe('GitHandler', () => {
       execFileSync('git', ['checkout', 'main-copy'], { cwd: tmpDir, stdio: 'pipe' })
       writeFileSync(path.join(tmpDir, 'local.txt'), 'local')
       gitCommit(tmpDir, 'local update')
+
       const localSha = execFileSync('git', ['rev-parse', 'refs/heads/main-copy'], {
         cwd: tmpDir,
         encoding: 'utf-8'
@@ -292,6 +319,7 @@ describe('GitHandler', () => {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       expect(actual).toBe(localSha)
     })
 
@@ -301,27 +329,34 @@ describe('GitHandler', () => {
         if (args[0] === 'check-ref-format') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'rev-parse' && args[2] === 'refs/remotes/origin/main^{commit}') {
           return { stdout: 'remote-oid\n', stderr: '' }
         }
+
         if (args[0] === 'rev-parse') {
           return { stdout: 'old-local-oid\n', stderr: '' }
         }
+
         if (args[0] === 'merge-base') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'worktree') {
           return {
             stdout: 'worktree /repo\nHEAD old-local-oid\nbranch refs/heads/main\n',
             stderr: ''
           }
         }
+
         if (args[0] === 'status') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'reset') {
           return { stdout: '', stderr: '' }
         }
+
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       })
 
@@ -352,18 +387,23 @@ describe('GitHandler', () => {
         if (args[0] === 'check-ref-format') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'rev-parse' && args[2] === 'refs/remotes/origin/main^{commit}') {
           return { stdout: 'remote-oid\n', stderr: '' }
         }
+
         if (args[0] === 'rev-parse') {
           return { stdout: 'old-local-oid\n', stderr: '' }
         }
+
         if (args[0] === 'merge-base') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'worktree') {
           throw new Error('worktree list failed')
         }
+
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       })
 
@@ -393,11 +433,14 @@ describe('GitHandler', () => {
     // Why: mock git to control exit codes (e.g. --get exit 1 vs other) deterministically, independent of host git config.
     function setupMockedHandler(roots: string[]) {
       const ctx = new RelayContext()
+
       for (const r of roots) {
         ctx.registerRoot(r)
       }
+
       const localDispatcher = createMockDispatcher()
       const handler = new GitHandler(localDispatcher as unknown as RelayDispatcher, ctx)
+
       const gitMock =
         vi.fn<
           (
@@ -406,7 +449,9 @@ describe('GitHandler', () => {
             opts?: { maxBuffer?: number }
           ) => Promise<{ stdout: string; stderr: string }>
         >()
+
       ;(handler as unknown as { git: typeof gitMock }).git = gitMock
+
       return { localDispatcher, gitMock }
     }
 

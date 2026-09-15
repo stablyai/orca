@@ -15,35 +15,45 @@ export function collectPersistedTerminalLeafIds(
   if (!layout) {
     return []
   }
+
   const leafIds = new Set<string>()
+
   const visit = (node: TerminalLayoutSnapshot['root']): void => {
     if (!node) {
       return
     }
+
     if (node.type === 'leaf') {
       if (isTerminalLeafId(node.leafId)) {
         leafIds.add(node.leafId)
       }
+
       return
     }
+
     visit(node.first)
     visit(node.second)
   }
+
   visit(layout.root)
+
   if (layout.activeLeafId && isTerminalLeafId(layout.activeLeafId)) {
     leafIds.add(layout.activeLeafId)
   }
+
   for (const leafId of Object.keys(layout.ptyIdsByLeafId ?? {})) {
     if (isTerminalLeafId(leafId)) {
       leafIds.add(leafId)
     }
   }
+
   return [...leafIds]
 }
 
 export function deriveHeadlessLegacyTerminalLeafId(tabId: string): string {
   const hash = createHash('sha256').update(`headless-terminal-leaf:${tabId}`).digest('hex')
   const variant = ((Number.parseInt(hash.slice(16, 17), 16) & 0x3) | 0x8).toString(16)
+
   const leafId = [
     hash.slice(0, 8),
     hash.slice(8, 12),
@@ -51,9 +61,11 @@ export function deriveHeadlessLegacyTerminalLeafId(tabId: string): string {
     `${variant}${hash.slice(17, 20)}`,
     hash.slice(20, 32)
   ].join('-')
+
   if (!isTerminalLeafId(leafId)) {
     return randomUUID()
   }
+
   return leafId
 }
 
@@ -65,18 +77,23 @@ export function cloneTerminalLayoutSnapshot(
     activeLeafId: layout.activeLeafId,
     expandedLeafId: layout.expandedLeafId
   }
+
   if (layout.ptyIdsByLeafId) {
     cloned.ptyIdsByLeafId = { ...layout.ptyIdsByLeafId }
   }
+
   if (layout.buffersByLeafId) {
     cloned.buffersByLeafId = { ...layout.buffersByLeafId }
   }
+
   if (layout.scrollbackRefsByLeafId) {
     cloned.scrollbackRefsByLeafId = { ...layout.scrollbackRefsByLeafId }
   }
+
   if (layout.titlesByLeafId) {
     cloned.titlesByLeafId = { ...layout.titlesByLeafId }
   }
+
   return cloned
 }
 
@@ -88,6 +105,7 @@ export function isPersistedTerminalLeafActive(
   layout: TerminalLayoutSnapshot | undefined
 ): boolean {
   const activeTabId = session.activeTabIdByWorktree?.[worktreeId] ?? session.activeTabId
+
   return activeTabId === tabId && (!layout?.activeLeafId || layout.activeLeafId === leafId)
 }
 
@@ -102,12 +120,14 @@ export function collectHeadlessParentTabOrder(
 ): string[] {
   const order: string[] = []
   const seen = new Set<string>()
+
   for (const tab of tabs) {
     if (!seen.has(tab.parentTabId)) {
       seen.add(tab.parentTabId)
       order.push(tab.parentTabId)
     }
   }
+
   return order
 }
 
@@ -119,13 +139,16 @@ export function collectHeadlessTopLevelTabOrder(
 ): string[] {
   const order: string[] = []
   const seen = new Set<string>()
+
   for (const tab of tabs) {
     const topLevelId = tab.type === 'terminal' ? tab.parentTabId : tab.id
+
     if (!seen.has(topLevelId)) {
       seen.add(topLevelId)
       order.push(topLevelId)
     }
   }
+
   return order
 }
 
@@ -151,6 +174,7 @@ export function buildHeadlessMobileSessionTabGroups(
   const liveTopLevelIds = new Set(arrivalOrder)
   const tabOrder: string[] = []
   const placed = new Set<string>()
+
   for (const group of existingGroups ?? []) {
     for (const tabId of group.tabOrder) {
       if (liveTopLevelIds.has(tabId) && !placed.has(tabId)) {
@@ -159,19 +183,23 @@ export function buildHeadlessMobileSessionTabGroups(
       }
     }
   }
+
   for (const tabId of arrivalOrder) {
     if (!placed.has(tabId)) {
       tabOrder.push(tabId)
       placed.add(tabId)
     }
   }
+
   const topLevelOf = (tab: RuntimeMobileSessionSnapshotTab): string =>
     tab.type === 'terminal' ? tab.parentTabId : tab.id
+
   const activeTopLevelId =
     (activeTab ? topLevelOf(activeTab) : null) ??
     existingGroups?.[0]?.activeTabId ??
     (() => {
       const active = tabs.find((tab) => tab.isActive)
+
       return active ? topLevelOf(active) : null
     })() ??
     tabOrder[0] ??
@@ -189,6 +217,7 @@ export function buildHeadlessMobileSessionTabGroups(
   }
 
   const groupId = existingGroups?.[0]?.id ?? getHeadlessMobileSessionGroupId(worktreeId)
+
   return [
     {
       id: groupId,
@@ -211,29 +240,37 @@ export function distributeHeadlessTabsAcrossGroups(
   newTabAssignment?: { tabId: string; groupId: string }
 ): RuntimeMobileSessionTabGroup[] {
   const groupIdByTabId = new Map<string, string>()
+
   for (const group of existingGroups) {
     for (const tabId of group.tabOrder) {
       groupIdByTabId.set(tabId, group.id)
     }
   }
+
   // Why: route a freshly-created tab to the group its "+" was clicked in,
   // when that group still exists; otherwise fall through to the active group.
   const hasTargetGroup =
     newTabAssignment !== undefined &&
     existingGroups.some((group) => group.id === newTabAssignment.groupId)
+
   if (hasTargetGroup) {
     groupIdByTabId.set(newTabAssignment!.tabId, newTabAssignment!.groupId)
   }
+
   const activeGroupId =
     (activeTopLevelId ? groupIdByTabId.get(activeTopLevelId) : undefined) ?? existingGroups[0]!.id
+
   const orderByGroup = new Map<string, string[]>(existingGroups.map((group) => [group.id, []]))
+
   for (const tabId of tabOrder) {
     const groupId = groupIdByTabId.get(tabId) ?? activeGroupId
     orderByGroup.get(groupId)?.push(tabId)
   }
+
   return existingGroups
     .map((group) => {
       const nextOrder = orderByGroup.get(group.id) ?? []
+
       return {
         ...group,
         tabOrder: nextOrder,
@@ -262,6 +299,7 @@ export function buildMaterializedHeadlessParentLayout(
       ptyIdsByLeafId: { [leafId]: ptyId }
     }
   }
+
   // Why: a split must insert the new leaf into the live layout tree with the
   // requested direction, or the published snapshot keeps the old single-leaf
   // root and the split renders with a fallback direction ("Split Right" lands
@@ -274,6 +312,7 @@ export function buildMaterializedHeadlessParentLayout(
       direction: split.direction
     })
   }
+
   return {
     ...cloneTerminalLayoutSnapshot(existingLayout),
     ptyIdsByLeafId: {

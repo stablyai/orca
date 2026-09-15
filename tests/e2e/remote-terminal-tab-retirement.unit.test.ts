@@ -16,10 +16,15 @@ vi.mock('../../src/renderer/src/store', () => ({
 }))
 
 const WORKTREE_ID = 'repo::/remote-worktree'
+
 const TAB_ID = 'host-terminal'
+
 const LEAF_ID = 'terminal-leaf'
+
 const PTY_ID = 'remote-pty'
+
 const INCARNATION_ID = 'remote-pty-incarnation'
+
 const VIEWER_IDS = ['paired-desktop-a', 'paired-desktop-b'] as const
 
 function makeViewerState(): WebSessionTabsSyncState {
@@ -60,6 +65,7 @@ function makeHostSnapshot(): RuntimeMobileSessionTabsSnapshot {
     expandedLeafId: null,
     ptyIdsByLeafId: { [LEAF_ID]: PTY_ID }
   }
+
   return {
     worktree: WORKTREE_ID,
     publicationEpoch: 'host-publication',
@@ -129,6 +135,7 @@ describe('remote terminal tab retirement publication', () => {
   it('removes a permanent host exit from simultaneous viewers without stale resurrection', async () => {
     let session = makePersistedSession()
     const flushOrThrow = vi.fn()
+
     const runtime = new OrcaRuntimeService({
       getWorkspaceSession: () => session,
       setWorkspaceSession: (next) => {
@@ -136,6 +143,7 @@ describe('remote terminal tab retirement publication', () => {
       },
       flushOrThrow
     } as never)
+
     runtime.attachWindow(1)
     const staleLiveSnapshot = makeHostSnapshot()
     runtime.syncWindowGraph(1, {
@@ -167,10 +175,12 @@ describe('remote terminal tab retirement publication', () => {
 
     const livePublication = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
     const viewerStates = new Map<string, WebSessionTabsSyncState>()
+
     for (const viewerId of VIEWER_IDS) {
       expect(shouldApplyWebSessionTabsSnapshot(livePublication, viewerId)).toBe(true)
       viewerStates.set(viewerId, reconcileViewer(makeViewerState(), livePublication, viewerId))
     }
+
     expect(
       [...viewerStates.values()].every((state) => state.tabsByWorktree[WORKTREE_ID]?.[0]?.ptyId)
     ).toBe(true)
@@ -180,9 +190,11 @@ describe('remote terminal tab retirement publication', () => {
     runtime.onPtyExit(PTY_ID, 0, INCARNATION_ID)
     const retiredPublication = publications.at(-1)
     expect(retiredPublication).toBeDefined()
+
     if (!retiredPublication) {
       throw new Error('host did not publish terminal retirement')
     }
+
     expect(publications).toHaveLength(1)
     expect(retiredPublication.publicationEpoch).toBe(livePublication.publicationEpoch)
     expect(retiredPublication.snapshotVersion).toBeGreaterThan(livePublication.snapshotVersion)
@@ -205,6 +217,7 @@ describe('remote terminal tab retirement publication', () => {
       expect(replayed.tabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
       expect(shouldApplyWebSessionTabsSnapshot(livePublication, viewerId)).toBe(false)
     }
+
     unsubscribe()
   })
 })

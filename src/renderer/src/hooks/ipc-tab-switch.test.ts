@@ -78,12 +78,14 @@ function makeStore(activeTabType: ActiveTabType, overrides: Partial<MockStore> =
     getActiveTab: () => null,
     ...overrides
   }
+
   // Why the real resolver: the group-scoped active tab is what the code under test reads, so a
   // hand-written stub here would decide the answer instead of exercising it.
   store.getActiveTab = createTabsFocusActions(
     (() => {}) as unknown as TabsSliceSet,
     (() => store) as unknown as TabsSliceGet
   ).getActiveTab
+
   return store
 }
 

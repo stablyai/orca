@@ -63,22 +63,28 @@ function resolvePaneDropTarget(
   const elements = Array.from(
     document.querySelectorAll<HTMLElement>('[data-tab-group-body-id][data-worktree-id]')
   )
+
   for (const element of elements) {
     if (element.dataset.worktreeId !== worktreeId) {
       continue
     }
+
     const groupId = element.dataset.tabGroupBodyId
     const rect = element.getBoundingClientRect()
+
     if (!groupId || rect.width <= 0 || rect.height <= 0 || !containsPoint(rect, point.x, point.y)) {
       continue
     }
+
     const zone = resolveDropZone(rect, point)
+
     return {
       groupId,
       zone,
       overlayStyle: getZoneOverlayStyle(rect, layerRect, zone)
     }
   }
+
   return null
 }
 
@@ -109,18 +115,25 @@ export default function AiVaultSessionDropLayer({
     ): PaneDropTarget | null => {
       if (!hasAiVaultSessionDragData(dataTransfer)) {
         setTarget(null)
+
         return null
       }
+
       const layerElement = layerRef.current
+
       if (!layerElement) {
         setTarget(null)
+
         return null
       }
+
       const layerRect = layerElement.getBoundingClientRect()
+
       const nextTarget = resolvePaneDropTarget(worktreeId, layerRect, {
         x: point.x,
         y: point.y
       })
+
       setTarget((current) => {
         if (
           current?.groupId === nextTarget?.groupId &&
@@ -132,8 +145,10 @@ export default function AiVaultSessionDropLayer({
         ) {
           return current
         }
+
         return nextTarget
       })
+
       return nextTarget
     },
     [worktreeId]
@@ -156,6 +171,7 @@ export default function AiVaultSessionDropLayer({
       const dropTarget = updateTarget(dataTransfer, point) ?? target
       const payload = readAiVaultSessionDragData(dataTransfer)
       clearDragState()
+
       if (!dropTarget) {
         if (wasInsideLayer) {
           toast.error(
@@ -165,8 +181,10 @@ export default function AiVaultSessionDropLayer({
             )
           )
         }
+
         return wasInsideLayer
       }
+
       if (!payload) {
         toast.error(
           translate(
@@ -174,18 +192,22 @@ export default function AiVaultSessionDropLayer({
             'Could not read the session drag payload.'
           )
         )
+
         return true
       }
+
       if (payload.structuredSession) {
         // Same row, same reveal as clicking Resume. Activating by id alone cannot reach a chat
         // whose tab is closed, which is the case this drop is most often used for.
         void activateAiVaultStructuredSession(payload)
+
         return true
       }
 
       const state = useAppStore.getState()
       const targetStatus = getAiVaultResumeWorkspaceTargetStatus(state, worktreeId)
       const targetExecutionHostId = getAiVaultResumeWorkspaceExecutionHostId(state, worktreeId)
+
       if (targetStatus === 'unknown') {
         toast.error(
           translate(
@@ -193,8 +215,10 @@ export default function AiVaultSessionDropLayer({
             'Open a workspace before resuming a session.'
           )
         )
+
         return true
       }
+
       if (
         !canResumeAiVaultSessionOnTarget({
           sessionFilePath: payload.sessionFilePath ?? null,
@@ -209,6 +233,7 @@ export default function AiVaultSessionDropLayer({
             'This session belongs to a different host. Drop it onto a workspace on the same host.'
           )
         )
+
         return true
       }
 
@@ -220,6 +245,7 @@ export default function AiVaultSessionDropLayer({
           )
         )
       }
+
       const preparation =
         payload.sessionFilePath &&
         payload.sessionExecutionHostId &&
@@ -237,6 +263,7 @@ export default function AiVaultSessionDropLayer({
               codexHome: payload.codexHome
             })
           : Promise.resolve<AiVaultPrepareSessionResumeResult>({ useRealCodexHome: false })
+
       void preparation
         .then((result) => {
           const startup = result.useRealCodexHome
@@ -249,6 +276,7 @@ export default function AiVaultSessionDropLayer({
                   worktreeId
                 })
               : payload
+
           if (!startup) {
             // Why: the host just proved the prebuilt command pins another
             // account's home, so an unrepinnable payload (older serializer)
@@ -259,11 +287,13 @@ export default function AiVaultSessionDropLayer({
                 : 'Orca could not prepare this legacy Codex session. Retry resume.'
             )
           }
+
           const providerSession = getAiVaultAgentProviderSession({
             agent: payload.agent,
             sessionId: payload.sessionId,
             filePath: payload.sessionFilePath
           })
+
           const launchResult = launchAiVaultSessionInNewTab({
             agent: payload.agent,
             worktreeId,
@@ -276,6 +306,7 @@ export default function AiVaultSessionDropLayer({
             targetGroupId: dropTarget.groupId,
             splitDirection: dropTarget.zone === 'center' ? undefined : dropTarget.zone
           })
+
           if (launchResult.tabId === null) {
             void launchResult.runtimeLaunch.then((outcome) => {
               if (outcome.status === 'failed') {
@@ -287,12 +318,16 @@ export default function AiVaultSessionDropLayer({
                       { value0: payload.agent }
                     )
                 )
+
                 return
               }
+
               showQueuedToast()
             })
+
             return
           }
+
           showQueuedToast()
         })
         .catch((error: unknown) => {
@@ -305,6 +340,7 @@ export default function AiVaultSessionDropLayer({
                 )
           )
         })
+
       return true
     },
     [clearDragState, target, updateTarget, worktreeId]
@@ -313,6 +349,7 @@ export default function AiVaultSessionDropLayer({
   useEffect(() => {
     if (!enabled) {
       clearDragState()
+
       return
     }
 
@@ -330,6 +367,7 @@ export default function AiVaultSessionDropLayer({
       if (!event.dataTransfer || !hasAiVaultSessionDragData(event.dataTransfer)) {
         return
       }
+
       // Electron sometimes accepts dragover on the overlay but skips React's
       // delegated drop handler; capture keeps the visible target and action in sync.
       if (handleSessionDrop(event.dataTransfer, { x: event.clientX, y: event.clientY })) {
@@ -345,6 +383,7 @@ export default function AiVaultSessionDropLayer({
     window.addEventListener('dragend', clearDragState, true)
     window.addEventListener(AI_VAULT_SESSION_DRAG_START_EVENT, markDragActive)
     window.addEventListener(AI_VAULT_SESSION_DRAG_END_EVENT, clearDragState)
+
     return () => {
       window.removeEventListener('dragenter', markIfVaultDrag, true)
       window.removeEventListener('dragover', markIfVaultDrag, true)
@@ -361,13 +400,16 @@ export default function AiVaultSessionDropLayer({
       if (!hasAiVaultSessionDragData(event.dataTransfer)) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       setIsDragActive(true)
+
       const nextTarget = updateTarget(event.dataTransfer, {
         x: event.clientX,
         y: event.clientY
       })
+
       event.dataTransfer.dropEffect = nextTarget ? 'copy' : 'none'
     },
     [updateTarget]
@@ -378,6 +420,7 @@ export default function AiVaultSessionDropLayer({
       if (!hasAiVaultSessionDragData(event.dataTransfer)) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       handleSessionDrop(event.dataTransfer, {
@@ -390,9 +433,11 @@ export default function AiVaultSessionDropLayer({
 
   const handleDragLeave = useCallback((event: React.DragEvent<HTMLDivElement>) => {
     const relatedTarget = event.relatedTarget
+
     if (relatedTarget instanceof Node && event.currentTarget.contains(relatedTarget)) {
       return
     }
+
     setTarget(null)
   }, [])
 

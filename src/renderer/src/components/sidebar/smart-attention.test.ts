@@ -23,7 +23,9 @@ function hookPanes(entries: AgentStatusEntry[]): PaneInput[] {
 }
 
 const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()
+
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
 
 function paneKey(tabId: string, leafId: string): string {
@@ -88,6 +90,7 @@ describe('mostRecentAttentionInHistory', () => {
       makeHistory('blocked', NOW - 2_000),
       makeHistory('working', NOW - 1_000)
     ])
+
     expect(result).toBe(NOW - 2_000)
   })
 
@@ -138,6 +141,7 @@ describe('resolveAttention', () => {
       stateStartedAt: NOW - 60_000,
       updatedAt: NOW - 30_000
     })
+
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
       cls: 1,
       attentionTimestamp: NOW - 60_000,
@@ -152,6 +156,7 @@ describe('resolveAttention', () => {
       stateStartedAt: NOW - 60_000,
       updatedAt: NOW - 30_000
     })
+
     expect(resolveAttention([hookPane(entry)], NOW).cls).toBe(1)
   })
 
@@ -162,6 +167,7 @@ describe('resolveAttention', () => {
       stateStartedAt: NOW - 90_000,
       updatedAt: NOW - 30_000
     })
+
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
       cls: 2,
       attentionTimestamp: NOW - 90_000
@@ -176,6 +182,7 @@ describe('resolveAttention', () => {
       stateStartedAt: NOW - 90_000,
       updatedAt: NOW - 30_000
     })
+
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
   })
 
@@ -187,6 +194,7 @@ describe('resolveAttention', () => {
       stateStartedAt: NOW - 1_000,
       updatedAt: NOW - 500
     })
+
     expect(resolveAttention([hookPane(boundary)], NOW)).toEqual(IDLE)
 
     boundary.stateHistory = [makeHistory('done', NOW - 90_000)]
@@ -203,6 +211,7 @@ describe('resolveAttention', () => {
       stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS,
       updatedAt: NOW - 1_000
     })
+
     expect(resolveAttention([hookPane(justInside)], NOW)).toEqual({
       cls: 2,
       attentionTimestamp: NOW - AGENT_STATUS_STALE_AFTER_MS
@@ -214,6 +223,7 @@ describe('resolveAttention', () => {
       stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
       updatedAt: NOW - 1_000
     })
+
     expect(resolveAttention([hookPane(justOutside)], NOW)).toEqual(IDLE)
   })
 
@@ -226,6 +236,7 @@ describe('resolveAttention', () => {
       stateStartedAt: NOW - 32 * 60_000,
       updatedAt: NOW - 29 * 60_000
     })
+
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
   })
 
@@ -236,12 +247,14 @@ describe('resolveAttention', () => {
       stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 60_000,
       updatedAt: NOW - 1_000
     })
+
     const working = makeEntry({
       paneKey: 't:2',
       state: 'working',
       stateStartedAt: NOW - 10_000,
       updatedAt: NOW - 1_000
     })
+
     expect(resolveAttention(hookPanes([expiredDone, working]), NOW)).toEqual({
       cls: 3,
       attentionTimestamp: NOW - 10_000
@@ -257,6 +270,7 @@ describe('resolveAttention', () => {
       updatedAt: NOW - 500,
       stateHistory: [makeHistory('done', NOW - AGENT_STATUS_STALE_AFTER_MS - 1)]
     })
+
     expect(resolveAttention([hookPane(boundary)], NOW)).toEqual(IDLE)
   })
 
@@ -268,6 +282,7 @@ describe('resolveAttention', () => {
       updatedAt: NOW - 1_000,
       stateHistory: [makeHistory('done', NOW - 5 * 60_000)]
     })
+
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
       cls: 3,
       attentionTimestamp: NOW - 5 * 60_000
@@ -283,6 +298,7 @@ describe('resolveAttention', () => {
       updatedAt: NOW - 500,
       stateHistory: [makeHistory('done', NOW - 30 * 60_000)]
     })
+
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
       cls: 3,
       attentionTimestamp: NOW - 2_000
@@ -297,6 +313,7 @@ describe('resolveAttention', () => {
       updatedAt: NOW - 1_000,
       stateHistory: []
     })
+
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
       cls: 3,
       attentionTimestamp: NOW - 10_000
@@ -311,6 +328,7 @@ describe('resolveAttention', () => {
       updatedAt: NOW - 1_000,
       stateHistory: [makeHistory('done', NOW - 60_000, true)]
     })
+
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual({
       cls: 3,
       attentionTimestamp: NOW - 10_000
@@ -324,6 +342,7 @@ describe('resolveAttention', () => {
       stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 60_000,
       updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 60_000
     })
+
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
   })
 
@@ -334,18 +353,21 @@ describe('resolveAttention', () => {
       stateStartedAt: NOW - 30_000,
       updatedAt: NOW - 1_000
     })
+
     const done = makeEntry({
       paneKey: 't:2',
       state: 'done',
       stateStartedAt: NOW - 5_000,
       updatedAt: NOW - 1_000
     })
+
     const working = makeEntry({
       paneKey: 't:3',
       state: 'working',
       stateStartedAt: NOW - 1_000,
       updatedAt: NOW - 100
     })
+
     expect(resolveAttention(hookPanes([done, working, blocked]), NOW).cls).toBe(1)
   })
 
@@ -356,12 +378,14 @@ describe('resolveAttention', () => {
       stateStartedAt: NOW - 60_000,
       updatedAt: NOW - 1_000
     })
+
     const newerBlocked = makeEntry({
       paneKey: 't:2',
       state: 'blocked',
       stateStartedAt: NOW - 5_000,
       updatedAt: NOW - 1_000
     })
+
     expect(resolveAttention(hookPanes([olderBlocked, newerBlocked]), NOW)).toEqual({
       cls: 1,
       attentionTimestamp: NOW - 5_000,
@@ -378,6 +402,7 @@ describe('resolveAttention', () => {
       stateStartedAt: Number.NaN,
       updatedAt: NOW - 1_000
     })
+
     expect(resolveAttention([hookPane(corrupted)], NOW)).toEqual(IDLE)
   })
 
@@ -421,6 +446,7 @@ describe('resolveAttention', () => {
       stateStartedAt: NOW - 30_000,
       updatedAt: NOW - 1_000
     })
+
     expect(
       resolveAttention(
         [
@@ -441,6 +467,7 @@ describe('resolveAttention', () => {
       stateStartedAt: NOW - 30_000,
       updatedAt: NOW - 1_000
     })
+
     expect(
       resolveAttention(
         [
@@ -491,9 +518,11 @@ describe('buildAttentionByWorktree', () => {
 
   function ptyMap(tabIds: string[]): Record<string, string[]> {
     const out: Record<string, string[]> = {}
+
     for (const id of tabIds) {
       out[id] = ['pty-1']
     }
+
     return out
   }
 
@@ -506,6 +535,7 @@ describe('buildAttentionByWorktree', () => {
   it('uses fresh worktree attribution before a headless tab is mirrored', () => {
     const w = makeWorktree('wt-1')
     const key = paneKey('headless-tab', LEAF_1)
+
     const entries = {
       [key]: makeEntry({
         paneKey: key,
@@ -529,6 +559,7 @@ describe('buildAttentionByWorktree', () => {
     const current = makeWorktree('current-worktree')
     const tab = makeTab('tab-1', current.id)
     const key = paneKey(tab.id, LEAF_1)
+
     const entries = {
       [key]: makeEntry({
         paneKey: key,
@@ -560,6 +591,7 @@ describe('buildAttentionByWorktree', () => {
   it('aggregates entries across multiple panes on the same tab', () => {
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
+
     const entries: Record<string, AgentStatusEntry> = {
       [paneKey(tab.id, LEAF_1)]: makeEntry({
         paneKey: paneKey(tab.id, LEAF_1),
@@ -574,6 +606,7 @@ describe('buildAttentionByWorktree', () => {
         updatedAt: NOW - 1_000
       })
     }
+
     const map = buildAttentionByWorktree([w], { [w.id]: [tab] }, entries, {}, ptyMap([tab.id]), NOW)
     expect(map.get(w.id)).toEqual({
       cls: 1,
@@ -585,6 +618,7 @@ describe('buildAttentionByWorktree', () => {
   it('skips malformed paneKeys (no colon)', () => {
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
+
     const map = buildAttentionByWorktree(
       [w],
       { [w.id]: [tab] },
@@ -600,12 +634,14 @@ describe('buildAttentionByWorktree', () => {
       ptyMap([tab.id]),
       NOW
     )
+
     expect(map.get(w.id)).toEqual(IDLE)
   })
 
   it('title-heuristic Class 1: hookless pane with permission title → Class 1 with ts = now', () => {
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
+
     const map = buildAttentionByWorktree(
       [w],
       { [w.id]: [tab] },
@@ -614,6 +650,7 @@ describe('buildAttentionByWorktree', () => {
       ptyMap([tab.id]),
       NOW
     )
+
     expect(map.get(w.id)).toEqual({
       cls: 1,
       attentionTimestamp: NOW,
@@ -624,6 +661,7 @@ describe('buildAttentionByWorktree', () => {
   it('title-heuristic Class 3: hookless pane with working title → ts = worktree.lastActivityAt', () => {
     const w = { ...makeWorktree('wt-1'), lastActivityAt: NOW - 30_000 }
     const tab = makeTab('tab-1', w.id)
+
     const map = buildAttentionByWorktree(
       [w],
       { [w.id]: [tab] },
@@ -632,12 +670,14 @@ describe('buildAttentionByWorktree', () => {
       ptyMap([tab.id]),
       NOW
     )
+
     expect(map.get(w.id)).toEqual({ cls: 3, attentionTimestamp: NOW - 30_000 })
   })
 
   it('hook overrides title on the same pane (hook=done + working-style title stays Class 2)', () => {
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
+
     const entries: Record<string, AgentStatusEntry> = {
       [paneKey(tab.id, LEAF_1)]: makeEntry({
         paneKey: paneKey(tab.id, LEAF_1),
@@ -646,6 +686,7 @@ describe('buildAttentionByWorktree', () => {
         updatedAt: NOW - 1_000
       })
     }
+
     const map = buildAttentionByWorktree(
       [w],
       { [w.id]: [tab] },
@@ -657,6 +698,7 @@ describe('buildAttentionByWorktree', () => {
       undefined,
       splitLayout(tab.id)
     )
+
     expect(map.get(w.id)).toEqual({ cls: 2, attentionTimestamp: NOW - 30_000 })
   })
 
@@ -664,6 +706,7 @@ describe('buildAttentionByWorktree', () => {
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
     const key = paneKey(tab.id, LEAF_1)
+
     const map = buildAttentionByWorktree(
       [w],
       { [w.id]: [tab] },
@@ -692,6 +735,7 @@ describe('buildAttentionByWorktree', () => {
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
     const key = paneKey(tab.id, LEAF_1)
+
     const map = buildAttentionByWorktree(
       [w],
       { [w.id]: [tab] },
@@ -714,6 +758,7 @@ describe('buildAttentionByWorktree', () => {
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
     const key = paneKey(tab.id, LEAF_1)
+
     const map = buildAttentionByWorktree(
       [w],
       { [w.id]: [tab] },
@@ -739,6 +784,7 @@ describe('buildAttentionByWorktree', () => {
   it('per-pane authority across panes: pane A fresh hook=done, pane B no hook + permission title → Class 1', () => {
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
+
     const entries: Record<string, AgentStatusEntry> = {
       [paneKey(tab.id, LEAF_1)]: makeEntry({
         paneKey: paneKey(tab.id, LEAF_1),
@@ -747,6 +793,7 @@ describe('buildAttentionByWorktree', () => {
         updatedAt: NOW - 1_000
       })
     }
+
     const map = buildAttentionByWorktree(
       [w],
       { [w.id]: [tab] },
@@ -758,6 +805,7 @@ describe('buildAttentionByWorktree', () => {
       undefined,
       splitLayout(tab.id)
     )
+
     expect(map.get(w.id)).toEqual({
       cls: 1,
       attentionTimestamp: NOW,
@@ -771,6 +819,7 @@ describe('buildAttentionByWorktree', () => {
     // working pattern would leak into the comparator.
     const w = makeWorktree('wt-1')
     const tab = makeTab('tab-1', w.id)
+
     const map = buildAttentionByWorktree(
       [w],
       { [w.id]: [tab] },
@@ -780,6 +829,7 @@ describe('buildAttentionByWorktree', () => {
       {},
       NOW
     )
+
     expect(map.get(w.id)).toEqual(IDLE)
   })
 })

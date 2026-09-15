@@ -43,6 +43,7 @@ export function findLargeTextControlPasteTarget(
   if (!(eventTarget instanceof Element)) {
     return null
   }
+
   return findOwnedPasteEventTextControlTarget(eventTarget, activeElement)
 }
 
@@ -52,31 +53,37 @@ export function handleLargeTextControlPasteEvent(
 ): LargeTextControlPasteResult {
   const now = options.now ?? getNowMs
   const startedAtMs = now()
+
   if (event.defaultPrevented) {
     return { status: 'ignored', reason: 'already-handled' }
   }
 
   const target = findLargeTextControlPasteTarget(event.target)
+
   if (!target) {
     return { status: 'ignored', reason: 'not-text-control' }
   }
 
   const text = getPlainTextFromPasteEvent(event)
+
   if (!text) {
     return { status: 'ignored', reason: 'empty' }
   }
 
   const maxBytes = options.maxBytes ?? TEXT_CONTROL_PASTE_MAX_BYTES
+
   const ownership = classifyTextControlPastePayloadOwnership(text, {
     directMaxBytes: options.directMaxBytes,
     maxBytes
   })
+
   if (ownership.action === 'allow-native') {
     return { status: 'ignored', reason: 'small' }
   }
 
   event.preventDefault()
   event.stopPropagation()
+
   if (ownership.action === 'reject') {
     options.onPasteResult?.(
       createTextControlRejectedResult(
@@ -86,8 +93,10 @@ export function handleLargeTextControlPasteEvent(
         now() - startedAtMs
       )
     )
+
     return { status: 'rejected', reason: 'too-large' }
   }
+
   // Why: browser-native insertion is one synchronous value mutation; large
   // text controls need Orca-owned chunking so the renderer can keep yielding.
   void pasteTextIntoTextControl(target, text, {
@@ -111,8 +120,10 @@ export function addLargeTextControlPasteListener(
   const onPaste = (event: Event): void => {
     handleLargeTextControlPasteEvent(event as ClipboardEvent, options)
   }
+
   // Why: claim large input/textarea paste before component handlers synchronously
   // inspect the same clipboard payload or schedule stale target-specific work.
   target.addEventListener('paste', onPaste, { capture: true })
+
   return () => target.removeEventListener('paste', onPaste, { capture: true })
 }

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 // depending on the helper's Vitest-only setTimeout fallback.
 const { events, yieldToEventLoop } = vi.hoisted(() => {
   const events: string[] = []
+
   return {
     events,
     yieldToEventLoop: vi.fn(async () => {
@@ -45,10 +46,13 @@ afterEach(() => {
 describe('terminal paste executor default yield', () => {
   it('yields after every chunk through the shared event-loop helper, never a timer', async () => {
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+
     const writePty = vi.fn((chunk: string) => {
       events.push(`write:${chunk}`)
+
       return true
     })
+
     const plan = chunkedPlan()
     expect(plan.mode).toBe('chunked')
 
@@ -81,8 +85,10 @@ describe('terminal paste executor default yield', () => {
       events.push('yield')
       current = false
     })
+
     const writePty = vi.fn((chunk: string) => {
       events.push(`write:${chunk}`)
+
       return true
     })
 

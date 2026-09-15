@@ -2,10 +2,15 @@ import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-con
 import { chargedPtyRetainedStringBytes } from '../../shared/pty-retained-string-memory'
 
 export const SSH_PTY_RECOVERY_PER_PTY_MAX_SOURCE_SU = DEFAULT_PTY_SOURCE_WINDOW_SU
+
 export const SSH_PTY_RECOVERY_PER_PTY_MAX_BYTES = 2 * 1024 * 1024
+
 export const SSH_PTY_RECOVERY_PER_PTY_MAX_FRAMES = 1_024
+
 export const SSH_PTY_RECOVERY_SESSION_MAX_SOURCE_SU = 50 * DEFAULT_PTY_SOURCE_WINDOW_SU
+
 export const SSH_PTY_RECOVERY_SESSION_MAX_BYTES = 64 * 1024 * 1024
+
 export const SSH_PTY_RECOVERY_SESSION_MAX_FRAMES = 64 * 1_024
 
 export type SshPtyRecoveryRetentionLimits = Readonly<{
@@ -44,8 +49,10 @@ export class SshPtyRecoveryRetentionBudget {
     if (!Number.isSafeInteger(sourceSu) || sourceSu < 0) {
       return false
     }
+
     const retained = this.retainedByPty.get(ptyId) ?? { sourceSu: 0, bytes: 0, frames: 0 }
     const chargedBytes = chargedPtyRetainedStringBytes(data)
+
     if (
       retained.sourceSu + sourceSu > this.limits.perPtySourceSu ||
       retained.bytes + chargedBytes > this.limits.perPtyBytes ||
@@ -56,6 +63,7 @@ export class SshPtyRecoveryRetentionBudget {
     ) {
       return false
     }
+
     retained.sourceSu += sourceSu
     retained.bytes += chargedBytes
     retained.frames++
@@ -63,14 +71,17 @@ export class SshPtyRecoveryRetentionBudget {
     this.sourceSu += sourceSu
     this.bytes += chargedBytes
     this.frames++
+
     return true
   }
 
   release(ptyId: string): void {
     const retained = this.retainedByPty.get(ptyId)
+
     if (!retained) {
       return
     }
+
     this.retainedByPty.delete(ptyId)
     this.sourceSu -= retained.sourceSu
     this.bytes -= retained.bytes

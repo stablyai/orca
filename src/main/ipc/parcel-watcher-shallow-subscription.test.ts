@@ -16,6 +16,7 @@ const { watcherState } = vi.hoisted(() => ({
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual('node:fs')
+
   return {
     ...actual,
     watch: vi.fn(
@@ -27,6 +28,7 @@ vi.mock('node:fs', async () => {
         const watcher = new EventEmitter() as EventEmitter & { close: () => void }
         watcher.close = () => watcher.emit('close')
         watcherState.set(path, { callback, watcher })
+
         return watcher
       }
     )
@@ -46,15 +48,18 @@ describe('shallow watcher subscription', () => {
 
   it('emits only included primary files, including an existing nested directory', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-shallow-watcher-'))
+
     try {
       await mkdir(join(root, 'logs'))
       const events: string[] = []
       const { promise, resolve } = Promise.withResolvers<void>()
+
       const subscription = startShallowWatcher(
         root,
         ['HEAD', 'config', 'logs/HEAD'],
         (nextEvents) => {
           events.push(...nextEvents.map((event) => event.path))
+
           if (
             events.includes(join(root, 'config')) &&
             events.includes(join(root, 'logs', 'HEAD'))
@@ -82,8 +87,10 @@ describe('shallow watcher subscription', () => {
 
   it('does not forward events after unsubscribe', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-shallow-watcher-'))
+
     try {
       const events: string[] = []
+
       const subscription = startShallowWatcher(
         root,
         ['HEAD'],
@@ -92,6 +99,7 @@ describe('shallow watcher subscription', () => {
           throw error
         }
       )
+
       await subscription.unsubscribe()
       emit(root, 'HEAD')
       const { promise, resolve } = Promise.withResolvers<void>()
@@ -105,9 +113,11 @@ describe('shallow watcher subscription', () => {
 
   it('rebinds a nested directory that is replaced, which leaves fs.watch deaf', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-shallow-watcher-'))
+
     try {
       await mkdir(join(root, 'logs'))
       const events: string[] = []
+
       const subscription = startShallowWatcher(
         root,
         ['HEAD', 'logs/HEAD'],
@@ -116,6 +126,7 @@ describe('shallow watcher subscription', () => {
           throw error
         }
       )
+
       const firstNested = watcherState.get(join(root, 'logs'))?.watcher
 
       // A 'rename' for the nested dir means the inode was swapped, so the old
@@ -134,8 +145,10 @@ describe('shallow watcher subscription', () => {
 
   it('reuses the nested binding for an ordinary change event', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-shallow-watcher-'))
+
     try {
       await mkdir(join(root, 'logs'))
+
       const subscription = startShallowWatcher(
         root,
         ['logs/HEAD'],
@@ -144,6 +157,7 @@ describe('shallow watcher subscription', () => {
           throw error
         }
       )
+
       const firstNested = watcherState.get(join(root, 'logs'))?.watcher
       watcherState.get(root)?.callback('change', 'logs')
       expect(watcherState.get(join(root, 'logs'))?.watcher).toBe(firstNested)

@@ -35,20 +35,25 @@ describe('workspace cleanup late settlement reconciliation', () => {
       branch: 'parent',
       path: '/repo/p'
     })
+
     const child = makeCandidate({
       worktreeId: 'repo-1::/repo/p/child-long',
       displayName: 'child',
       branch: 'child',
       path: '/repo/p/child-long'
     })
+
     const unrelated = makeCandidate({
       worktreeId: 'repo-1::/repo/other',
       displayName: 'other',
       branch: 'other',
       path: '/repo/other'
     })
+
     let resolveChild: (result: WorkspaceCleanupRemoveResult) => void = () => {}
+
     let resolveUnrelated: (result: WorkspaceCleanupRemoveResult) => void = () => {}
+
     const removeCandidates = vi
       .fn()
       .mockImplementationOnce(
@@ -68,6 +73,7 @@ describe('workspace cleanup late settlement reconciliation', () => {
         removedIdentities: [parent.worktreeId],
         failures: []
       })
+
     const onResult = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
@@ -112,26 +118,32 @@ describe('workspace cleanup late settlement reconciliation', () => {
       branch: 'first-parent',
       path: '/repo/a'
     })
+
     const firstChild = makeCandidate({
       worktreeId: 'repo-1::/repo/a/child-long',
       displayName: 'first child',
       branch: 'first-child',
       path: '/repo/a/child-long'
     })
+
     const secondParent = makeCandidate({
       worktreeId: 'repo-1::/repo/bb',
       displayName: 'second parent',
       branch: 'second-parent',
       path: '/repo/bb'
     })
+
     const secondChild = makeCandidate({
       worktreeId: 'repo-1::/repo/bb/c',
       displayName: 'second child',
       branch: 'second-child',
       path: '/repo/bb/c'
     })
+
     let resolveFirstChild: (result: WorkspaceCleanupRemoveResult) => void = () => {}
+
     let resolveSecondChild: (result: WorkspaceCleanupRemoveResult) => void = () => {}
+
     const removeCandidates = vi
       .fn()
       .mockImplementationOnce(
@@ -152,6 +164,7 @@ describe('workspace cleanup late settlement reconciliation', () => {
         removedIdentities: [secondParent.worktreeId],
         failures: []
       })
+
     const onLateResult = vi.fn()
 
     startWorkspaceCleanupBackgroundRemoval({
@@ -217,13 +230,16 @@ describe('workspace cleanup late settlement reconciliation', () => {
       branch: 'parent',
       path: '/repo/parent'
     })
+
     const child = makeCandidate({
       worktreeId: 'repo-1::/repo/parent/child',
       displayName: 'child',
       branch: 'child',
       path: '/repo/parent/child'
     })
+
     let resolveChild: (result: WorkspaceCleanupRemoveResult) => void = () => {}
+
     const removeCandidates = vi
       .fn()
       .mockImplementationOnce(
@@ -237,6 +253,7 @@ describe('workspace cleanup late settlement reconciliation', () => {
         removedIdentities: [parent.worktreeId],
         failures: []
       })
+
     vi.mocked(toast.success).mockImplementationOnce(() => {
       throw new Error('toast renderer failed')
     })

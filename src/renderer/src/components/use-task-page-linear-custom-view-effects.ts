@@ -12,6 +12,7 @@ import type {
   LinearProjectSummary
 } from '../../../shared/linear/project-types'
 import { clampLinearIssueListLimit } from '../../../shared/linear/issue-read-limits'
+
 export function useTaskPageLinearCustomViewEffects(
   model: TaskPageLinearCollectionEffectsPreludeModel
 ) {
@@ -41,25 +42,32 @@ export function useTaskPageLinearCustomViewEffects(
     setLinearCustomViewContentsError,
     filteredLinearIssues
   } = model
+
   useEffect(() => {
     if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'views') {
       return
     }
+
     if (!linearConnected || selectedLinearCustomView) {
       return
     }
+
     let cancelled = false
+
     const cachedResults = LINEAR_CUSTOM_VIEW_MODELS.map((model) =>
       getCachedLinearCustomViews(model, LINEAR_ITEM_LIMIT, undefined, {
         sourceContext: linearTaskSourceContext
       })
     )
+
     const allCached = cachedResults.every(
       (result): result is LinearCollectionResult<LinearCustomViewSummary> => result !== null
     )
+
     if (allCached) {
       setLinearCustomViewsResult(mergeLinearCollectionResults(cachedResults))
     }
+
     const force = linearRefreshNonce > 0
     setLinearCustomViewsLoading(force || !allCached)
     setLinearCustomViewsError(null)
@@ -86,6 +94,7 @@ export function useTaskPageLinearCustomViewEffects(
           setLinearCustomViewsLoading(false)
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -110,12 +119,15 @@ export function useTaskPageLinearCustomViewEffects(
       setLinearCustomViewProjectsResult({
         items: []
       })
+
       return
     }
+
     let cancelled = false
     setLinearCustomViewContentsLoading(true)
     setLinearCustomViewContentsError(null)
     const issueLimit = clampLinearIssueListLimit(linearCustomViewIssueLimit)
+
     const request =
       selectedLinearCustomView.model === 'issue'
         ? listLinearCustomViewIssues(
@@ -136,16 +148,19 @@ export function useTaskPageLinearCustomViewEffects(
               sourceContext: linearTaskSourceContext
             }
           )
+
     void request
       .then((result) => {
         if (cancelled) {
           return
         }
+
         if (selectedLinearCustomView.model === 'issue') {
           setLinearCustomViewIssuesResult(result as LinearCollectionResult<LinearIssue>)
         } else {
           setLinearCustomViewProjectsResult(result as LinearCollectionResult<LinearProjectSummary>)
         }
+
         setLinearCustomViewContentsLoading(false)
       })
       .catch((error) => {
@@ -156,6 +171,7 @@ export function useTaskPageLinearCustomViewEffects(
           setLinearCustomViewContentsLoading(false)
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -175,14 +191,18 @@ export function useTaskPageLinearCustomViewEffects(
     if (!taskResumeApplied || taskSource !== 'linear') {
       return
     }
+
     if (!linearConnected) {
       clearSelectedLinearIssue()
+
       return
     }
+
     if (filteredLinearIssues.length === 0) {
       if (!selectedLinearIssueCanFloat) {
         clearSelectedLinearIssue()
       }
+
       return
     }
 
@@ -203,8 +223,10 @@ export function useTaskPageLinearCustomViewEffects(
     taskResumeApplied,
     taskSource
   ])
+
   return model
 }
+
 export type TaskPageLinearCustomViewEffectsModel = ReturnType<
   typeof useTaskPageLinearCustomViewEffects
 >

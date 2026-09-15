@@ -17,6 +17,7 @@ describe('mobile E2EE v2 key schedule', () => {
   it('matches the desktop normative HKDF vector', () => {
     const { hello, ready, sharedSecret } = createMobileE2EEV2Fixture()
     const handshake = validateMobileE2EEV2Handshake(hello, ready)!
+
     const schedule = deriveMobileE2EEV2KeySchedule({
       sharedSecret,
       transcript: encodeMobileE2EEV2Transcript(handshake),
@@ -33,26 +34,31 @@ describe('mobile E2EE v2 key schedule', () => {
   it('derives unique direction keys and session IDs across fresh client nonces', () => {
     const { hello, ready, sharedSecret } = createMobileE2EEV2Fixture()
     const fingerprints = new Set<string>()
+
     for (let index = 0; index < 128; index++) {
       const nonce = new Uint8Array(32)
       new DataView(nonce.buffer).setUint32(28, index, false)
       const clientNonceB64 = Buffer.from(nonce).toString('base64')
+
       const handshake = validateMobileE2EEV2Handshake(
         { ...hello, clientNonceB64 },
         { ...ready, clientNonceB64 }
       )!
+
       const schedule = deriveMobileE2EEV2KeySchedule({
         sharedSecret,
         transcript: encodeMobileE2EEV2Transcript(handshake),
         clientNonce: handshake.clientNonce,
         desktopNonce: handshake.desktopNonce
       })
+
       fingerprints.add(
         [schedule.mobileToDesktopKey, schedule.desktopToMobileKey, schedule.sessionId]
           .map(hex)
           .join(':')
       )
     }
+
     expect(fingerprints.size).toBe(128)
   })
 })

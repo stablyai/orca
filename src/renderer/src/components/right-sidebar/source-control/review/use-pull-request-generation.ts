@@ -62,15 +62,18 @@ export function useSourceControlPullRequestGeneration({
     repoId: activeRepo?.id,
     branch: branchName
   })
+
   const activePullRequestGenerationRecordCandidate = activePullRequestGenerationKey
     ? (prGenerationRecords[activePullRequestGenerationKey] ?? null)
     : null
+
   const activePullRequestGenerationRecord =
     activePullRequestGenerationRecordCandidate &&
     activePullRequestGenerationRecordCandidate.context.repoId === activeRepo?.id &&
     activePullRequestGenerationRecordCandidate.context.branch === branchName
       ? activePullRequestGenerationRecordCandidate
       : null
+
   const activePullRequestGenerationSeedRestoreKey = getPullRequestGenerationSeedRestoreKey({
     recordKey: activePullRequestGenerationKey,
     record: activePullRequestGenerationRecord
@@ -85,13 +88,17 @@ export function useSourceControlPullRequestGeneration({
       if (!activeRepo || !activePullRequestGenerationKey || !worktreePath || !branchName) {
         return
       }
+
       const generationKey = activePullRequestGenerationKey
+
       if (
         useAppStore.getState().pullRequestGenerationRecords[generationKey]?.status === 'running'
       ) {
         return
       }
+
       const requestId = allocatePullRequestGenerationRequestId()
+
       const context: PullRequestGenerationContext = {
         worktreeId: activeWorktreeId,
         worktreePath,
@@ -101,6 +108,7 @@ export function useSourceControlPullRequestGeneration({
         branch: branchName,
         runtimeTargetSettings: activeRepoSettings
       }
+
       const seed = { ...fields }
       // Why: SourceControl can unmount on tab switches; the persisted record lets the PR composer resume on return.
       setPullRequestGenerationRecord(
@@ -127,12 +135,15 @@ export function useSourceControlPullRequestGeneration({
           },
           overrides
         )
+
         if (result.branchChangedByPreparation) {
           await refreshGitStatusAfterPullRequestGeneration(context)
         }
+
         if (result.success) {
           useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
         }
+
         updatePullRequestGenerationRecord(generationKey, (record) => {
           if (!result.success) {
             return resolvePullRequestGenerationFailure({
@@ -142,9 +153,11 @@ export function useSourceControlPullRequestGeneration({
               error: result.canceled ? null : result.error
             })
           }
+
           if (!record) {
             return null
           }
+
           return resolvePullRequestGenerationSuccess({
             record,
             requestId,
@@ -187,15 +200,19 @@ export function useSourceControlPullRequestGeneration({
     if (!activePullRequestGenerationKey) {
       return
     }
+
     const record = prGenerationRecords[activePullRequestGenerationKey]
+
     if (!record || record.status !== 'running') {
       return
     }
+
     const generationKey = activePullRequestGenerationKey
     updatePullRequestGenerationRecord(generationKey, (current) => {
       if (!current || current.context.requestId !== record.context.requestId) {
         return null
       }
+
       return resolvePullRequestGenerationCancel(current)
     })
     void cancelRuntimeGeneratePullRequestFields({
@@ -209,6 +226,7 @@ export function useSourceControlPullRequestGeneration({
         if (!current || current.context.requestId !== record.context.requestId) {
           return null
         }
+
         return {
           ...current,
           status: 'failed',
@@ -223,6 +241,7 @@ export function useSourceControlPullRequestGeneration({
     if (!activePullRequestGenerationKey || !activePullRequestGenerationRecord) {
       return
     }
+
     const requestId = activePullRequestGenerationRecord.context.requestId
     updatePullRequestGenerationRecord(activePullRequestGenerationKey, (record) =>
       markPullRequestGenerationTerminalSeedRestored({

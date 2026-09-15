@@ -45,6 +45,7 @@ async function listRuntimeSessionHostIdsForStartup(): Promise<ExecutionHostId[]>
     )
   } catch (err) {
     console.warn('Failed to list runtime session hosts for startup:', err)
+
     return []
   }
 }
@@ -85,6 +86,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
     void (async () => {
       const startupStartedAt = performance.now()
       logRendererStartupDiagnostic('startup-chain-start')
+
       try {
         // Why: nothing in the hydration chain reads profile state synchronously, so don't let it add a serial IPC round-trip before fetchSettings.
         void actions.fetchOrcaProfiles()
@@ -97,15 +99,19 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           useAppStore.getState().settings,
           getSystemPrefersDark()
         )
+
         // Why: start keybindings + onboarding now so their IPC overlaps the local catalog scans; await them at their original spots. The .catch marks rejections handled if an earlier await throws first.
         // Why: browser session profiles are NOT started early — on a remote runtime the RPC may be unconnected and a failed fetch clears the list.
         const keybindingsPromise = timeRendererStartupStep('fetch-keybindings', () =>
           actions.fetchKeybindings()
         )
+
         keybindingsPromise.catch(() => {})
+
         const onboardingPromise = timeRendererStartupStep('onboarding-get', () =>
           window.api.onboarding.get()
         )
+
         onboardingPromise.catch(() => {})
         // Why: await ui.get() (not overlap) so persisted view settings hydrate before the local catalog/session steps and first paint reflects them.
         const persistedUI = await timeRendererStartupStep('ui-get', () => window.api.ui.get())
@@ -116,6 +122,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             hydratePersistedUI: actions.hydratePersistedUI
           })
         )
+
         // Why: list-runtime-session-hosts reads no repo state, so overlap it with the repo scan
         // instead of paying its IPC round-trip serially before repos. .catch marks rejections handled
         // if an earlier await throws first; the value is awaited below and surfaces any error there.
@@ -123,6 +130,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           'list-runtime-session-hosts',
           listRuntimeSessionHostIdsForStartup
         )
+
         runtimeHostsPromise.catch(() => {})
         // Why: saved remote runtimes can spend the full connect timeout; load only the local catalog for first paint and refresh remotes after hydration.
         await timeRendererStartupStep('fetch-repos-local', () =>
@@ -131,6 +139,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         await timeRendererStartupStep('repo-catalog-settlement', () =>
           actions.awaitLocalRepoCatalogSettlement()
         )
+
         // Why: folder workspaces merge against projectGroups (repos.ts fetchFolderWorkspacesForAllHosts),
         // so keep this chain ordered while overlapping it with session-scoped hydration.
         const localCatalogChain = (async () => {
@@ -141,6 +150,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             actions.fetchFolderWorkspacesForAllHosts({ remoteHosts: 'skip' })
           )
         })()
+
         const sessionReadPromise = runtimeHostsPromise.then((startupRuntimeHostIds) =>
           // Why: include saved runtime host ids so per-host worktree session slices restore from local settings without waiting on network reachability; unreadable partitions skip.
           timeRendererStartupStep('session-get', () =>
@@ -151,18 +161,22 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             )
           )
         )
+
         const hydrationSessionChain = sessionReadPromise.then(async (sessionRead) => {
           const hydrationRepoIds = collectWorktreeHydrationRepoIdsFromSession(
             sessionRead.session,
             sessionRead.runtimeHostIdByWorkspaceSessionKey
           )
+
           const hydrationRepoIdSet = new Set(hydrationRepoIds)
+
           const hydrationRepos = useAppStore.getState().repos.filter(
             (repo) =>
               hydrationRepoIdSet.has(repo.id) &&
               // Why: disconnected SSH repos hydrate from local metadata; only runtime-owned repos use placeholders.
               parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'runtime'
           )
+
           // Why this barrier and not the first-window one: worktree refresh can spawn host Git,
           // which needs the shell-PATH generation and the managed WSL CLI registration. It never
           // needs the daemon PTY provider or the hook-server bind, and `prepare-terminal-startup-restoration`
@@ -175,28 +189,35 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
               actions.fetchWorktrees(repo.id, { executionHostId: getRepoExecutionHostId(repo) })
             )
           )
+
           return sessionRead
         })
+
         // Why: wait for both writers to settle before recovery so neither can mutate hydrated state afterward.
         const [sessionOutcome, catalogOutcome] = await Promise.allSettled([
           hydrationSessionChain,
           localCatalogChain
         ])
+
         if (sessionOutcome.status === 'rejected') {
           throw sessionOutcome.reason
         }
+
         if (catalogOutcome.status === 'rejected') {
           throw catalogOutcome.reason
         }
+
         const sessionRead = sessionOutcome.value
         await keybindingsPromise
         await timeRendererStartupStep('repo-catalog-final-settlement', () =>
           actions.awaitLocalRepoCatalogSettlement()
         )
+
         if (!cancelled) {
           const sessionHydrationOptions = {
             additionalValidWorkspaceKeys: collectFolderWorkspaceKeysFromSession(sessionRead.session)
           }
+
           timeRendererStartupSyncStep('hydrate-session-stores', () => {
             actions.hydrateWorkspaceSession(sessionRead.session, {
               ...sessionHydrationOptions,
@@ -215,9 +236,11 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           await timeRendererStartupStep('prepare-terminal-startup-restoration', () =>
             window.api.app.prepareTerminalStartupRestoration()
           )
+
           if (cancelled) {
             return
           }
+
           // Why: prune visit timestamps AFTER hydration (earlier, worktreesByRepo may be empty and prune would drop entries for worktrees about to appear); seed the active worktree if missing.
           // See docs/cmd-j-empty-query-ordering.md.
           timeRendererStartupSyncStep('visit-timestamp-prune', () => {
@@ -233,6 +256,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             actions.fetchBrowserSessionProfiles()
           ).catch(() => {})
           const onboardingState = await onboardingPromise
+
           if (!cancelled) {
             onOnboardingLoadedRef.current(onboardingState)
           }
@@ -242,6 +266,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           const connectionIds = (sessionRead.session.activeConnectionIdsAtShutdown ?? []).filter(
             (targetId) => !isRuntimeOwnedSshTargetId(targetId)
           )
+
           if (connectionIds.length > 0) {
             try {
               // Why scoped: an unreachable host used to hold every restored terminal — local ones
@@ -250,6 +275,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
               const blockingConnectionIds = collectActiveWorkspaceSshTargetIds(
                 useAppStore.getState()
               )
+
               await restoreSshConnectionsForStartup({
                 connectionIds,
                 blockingConnectionIds,
@@ -281,14 +307,17 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           await timeRendererStartupStep('recover-legacy-worker-terminals-post-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
+
           if (useAppStore.getState().settings?.experimentalStructuredNativeChat === true) {
             await timeRendererStartupStep('project-structured-session-tabs', () =>
               restoreLocalStructuredSessionTabsOnce()
             )
           }
+
           if (cancelled) {
             return
           }
+
           // Why here: reconnect just published restored PTY ids; sweeping them now
           // re-offers stale Codex panes whose tabs never mount this session.
           sweepRestoredCodexPanesForStaleAccounts(useAppStore.getState())
@@ -296,6 +325,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           // Why (issue #1158): unlock the session writer only after hydration and all dependent steps succeeded, so a mid-startup throw can't serialize partially-mutated state to disk.
           actions.setHydrationSucceeded(true)
           actions.setTerminalStartupRestorationReady(true)
+
           // Why the explicit opt-in: unconditional seeding hijacks every empty dev
           // profile's active workspace, making onboarding/empty-state flows untestable.
           if (
@@ -304,8 +334,10 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           ) {
             const { seedDevActivityFixture } =
               await import('../components/activity/dev-activity-fixture')
+
             seedDevActivityFixture()
           }
+
           logRendererStartupDiagnostic('startup-hydration-done', {
             durationMs: Math.round(performance.now() - startupStartedAt)
           })
@@ -324,6 +356,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
               } catch (err) {
                 console.warn('Remote startup catalog refresh failed:', err)
               }
+
               if (!cancelled) {
                 try {
                   await timeRendererStartupStep('remote-worktree-refresh', async () => {
@@ -357,6 +390,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           abortSignal: abortController.signal
         })
       }
+
       void actions.initGitHubCache()
     })()
 

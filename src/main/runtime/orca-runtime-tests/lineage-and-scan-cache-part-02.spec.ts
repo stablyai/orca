@@ -14,16 +14,20 @@ describe('OrcaRuntimeService', () => {
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ instanceId: 'child-instance' })
     }
+
     const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
       metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+
       return metaById[worktreeId]
     })
+
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     await runtime.updateManagedWorktreeMeta(`id:${TEST_WORKTREE_ID}`, {
@@ -41,17 +45,21 @@ describe('OrcaRuntimeService', () => {
     const childPath = '/tmp/worktree-b'
     const parentId = `${TEST_REPO_ID}::${parentPath}`
     const childId = `${TEST_REPO_ID}::${childPath}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'new-parent-instance' }),
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
     }
+
     const setWorktreeLineage = vi.fn((_worktreeId, lineage) => lineage)
+
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+
         return metaById[worktreeId]
       },
       getWorktreeLineage: (worktreeId: string) =>
@@ -68,6 +76,7 @@ describe('OrcaRuntimeService', () => {
           : undefined,
       setWorktreeLineage
     }
+
     vi.mocked(listWorktrees).mockResolvedValue([
       {
         path: parentPath,
@@ -106,21 +115,25 @@ describe('OrcaRuntimeService', () => {
     const childPath = '/tmp/worktree-child'
     const parentId = `${TEST_REPO_ID}::${parentPath}`
     const childId = `${TEST_REPO_ID}::${childPath}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta(),
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
     }
+
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+
         return metaById[worktreeId]
       },
       getWorktreeLineage: () => undefined,
       setWorktreeLineage: vi.fn((_worktreeId: string, lineage) => lineage)
     }
+
     vi.mocked(listWorktrees).mockResolvedValue([
       {
         path: parentPath,
@@ -153,10 +166,12 @@ describe('OrcaRuntimeService', () => {
     const childPath = '/tmp/worktree-child'
     const parentId = `${TEST_REPO_ID}::${parentPath}`
     const childId = `${TEST_REPO_ID}::${childPath}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'old-parent-instance' }),
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
     }
+
     const lineageById: Record<string, WorktreeLineage> = {
       [childId]: {
         worktreeId: childId,
@@ -168,13 +183,16 @@ describe('OrcaRuntimeService', () => {
         createdAt: 1
       }
     }
+
     const setWorktreeLineage = vi.fn((_worktreeId: string, lineage) => lineage)
+
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+
         return metaById[worktreeId]
       },
       getWorktreeLineage: (worktreeId: string) => lineageById[worktreeId],
@@ -184,6 +202,7 @@ describe('OrcaRuntimeService', () => {
       }),
       setWorktreeLineage
     }
+
     vi.mocked(listWorktrees)
       .mockResolvedValueOnce([
         {
@@ -238,10 +257,12 @@ describe('OrcaRuntimeService', () => {
     const childPath = '/tmp/worktree-child'
     const parentId = `${TEST_REPO_ID}::${parentPath}`
     const childId = `${TEST_REPO_ID}::${childPath}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' }),
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
     }
+
     const lineageById: Record<string, WorktreeLineage> = {
       [childId]: {
         worktreeId: childId,
@@ -253,20 +274,24 @@ describe('OrcaRuntimeService', () => {
         createdAt: 1
       }
     }
+
     const removeWorktreeLineage = vi.fn((worktreeId: string) => {
       delete lineageById[worktreeId]
     })
+
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+
         return metaById[worktreeId]
       }),
       getAllWorktreeLineage: () => lineageById,
       removeWorktreeLineage
     }
+
     vi.mocked(listWorktrees).mockRejectedValueOnce(new Error('git unavailable'))
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
@@ -280,11 +305,13 @@ describe('OrcaRuntimeService', () => {
 
   it('returns a non-authoritative detected list when a runtime local worktree scan fails', async () => {
     const removeWorktreeLineage = vi.fn()
+
     const runtimeStore = {
       ...store,
       getAllWorktreeLineage: () => ({}),
       removeWorktreeLineage
     }
+
     vi.mocked(listWorktrees).mockRejectedValueOnce(new Error('git unavailable'))
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
@@ -301,6 +328,7 @@ describe('OrcaRuntimeService', () => {
   it('revalidates missing worktrees before stopping their local provider sessions', async () => {
     const deletedId = `${TEST_REPO_ID}::/tmp/deleted`
     const survivingId = `${TEST_REPO_ID}::/tmp/surviving`
+
     const localProvider = {
       listProcesses: vi.fn(async () => [
         { id: `${deletedId}@@deleted-session`, cwd: '/tmp/deleted', title: 'shell' },
@@ -308,9 +336,11 @@ describe('OrcaRuntimeService', () => {
       ]),
       shutdown: vi.fn(async () => {})
     }
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getLocalProvider: () => localProvider as never
     })
+
     vi.spyOn(
       runtime as unknown as { listDetectedWorktreesForResolvedRepo: () => unknown },
       'listDetectedWorktreesForResolvedRepo'
@@ -342,12 +372,14 @@ describe('OrcaRuntimeService', () => {
   // directory would strand those PTYs permanently — nothing asks a second time.
   it('revalidates against a fresh scan instead of a warm worktree-scan cache', async () => {
     const deletedId = `${TEST_REPO_ID}::/tmp/deleted`
+
     const localProvider = {
       listProcesses: vi.fn(async () => [
         { id: `${deletedId}@@deleted-session`, cwd: '/tmp/deleted', title: 'shell' }
       ]),
       shutdown: vi.fn(async () => {})
     }
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getLocalProvider: () => localProvider as never
     })
@@ -361,6 +393,7 @@ describe('OrcaRuntimeService', () => {
 
     // The worktree is now gone; the cached scan must not mask that.
     vi.mocked(listWorktrees).mockResolvedValue([])
+
     const result = await runtime.teardownMissingManagedWorktreeTerminals(`id:${TEST_REPO_ID}`, [
       deletedId
     ])
@@ -377,9 +410,11 @@ describe('OrcaRuntimeService', () => {
       listProcesses: vi.fn(async () => []),
       shutdown: vi.fn(async () => {})
     }
+
     const runtime = new OrcaRuntimeService(store, undefined, {
       getLocalProvider: () => localProvider as never
     })
+
     vi.spyOn(
       runtime as unknown as { listDetectedWorktreesForResolvedRepo: () => unknown },
       'listDetectedWorktreesForResolvedRepo'
@@ -402,18 +437,22 @@ describe('OrcaRuntimeService', () => {
   // `path:`/`name:` selector fail repo_not_found on this path alone.
   it('resolves non-id selectors when a connection identity is supplied', async () => {
     const deletedId = `${TEST_REPO_ID}::/tmp/deleted`
+
     const localProvider = {
       listProcesses: vi.fn(async () => [
         { id: `${deletedId}@@deleted-session`, cwd: '/tmp/deleted', title: 'shell' }
       ]),
       shutdown: vi.fn(async () => {})
     }
+
     const localRepo = store.getRepos()[0]
+
     const runtime = new OrcaRuntimeService(
       { ...store, getRepos: () => [localRepo, { ...localRepo, connectionId: 'ssh-1' }] } as never,
       undefined,
       { getLocalProvider: () => localProvider as never }
     )
+
     vi.spyOn(
       runtime as unknown as { listDetectedWorktreesForResolvedRepo: () => unknown },
       'listDetectedWorktreesForResolvedRepo'
@@ -440,18 +479,22 @@ describe('OrcaRuntimeService', () => {
 
   it('uses the connection-scoped repo when local and SSH repo ids collide', async () => {
     const deletedId = `${TEST_REPO_ID}::/tmp/deleted`
+
     const localProvider = {
       listProcesses: vi.fn(async () => []),
       shutdown: vi.fn(async () => {})
     }
+
     const sshProvider = {
       listProcesses: vi.fn(async () => [
         { id: `${deletedId}@@ssh-session`, cwd: '/tmp/deleted', title: 'shell' }
       ]),
       shutdown: vi.fn(async () => {})
     }
+
     const localRepo = store.getRepos()[0]
     const sshRepo = { ...localRepo, connectionId: 'ssh-1' }
+
     const runtime = new OrcaRuntimeService(
       {
         ...store,
@@ -464,6 +507,7 @@ describe('OrcaRuntimeService', () => {
           connectionId === 'ssh-1' ? (sshProvider as never) : undefined
       }
     )
+
     vi.spyOn(
       runtime as unknown as { listDetectedWorktreesForResolvedRepo: () => unknown },
       'listDetectedWorktreesForResolvedRepo'
@@ -488,10 +532,12 @@ describe('OrcaRuntimeService', () => {
     const childPath = join(tmpdir(), 'worktree-child')
     const parentId = `${TEST_REPO_ID}::${parentPath}`
     const childId = `${TEST_REPO_ID}::${childPath}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' }),
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
     }
+
     const lineageById: Record<string, WorktreeLineage> = {
       [childId]: {
         worktreeId: childId,
@@ -503,12 +549,14 @@ describe('OrcaRuntimeService', () => {
         createdAt: 1
       }
     }
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       getAllWorktreeLineage: () => lineageById
     } as never)
+
     vi.mocked(listWorktrees).mockResolvedValue([
       makeWorktreeInfo(childPath),
       makeWorktreeInfo(parentPath)
@@ -540,12 +588,15 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       kind: 'folder' as const
     }
+
     const parentId = `${folderRepo.id}::${folderRepo.path}`
     const childId = `${parentId}::workspace:child-instance`
+
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({ instanceId: 'parent-instance' }),
       [childId]: makeWorktreeMeta({ instanceId: 'child-instance' })
     }
+
     const lineageById: Record<string, WorktreeLineage> = {
       [childId]: {
         worktreeId: childId,
@@ -557,6 +608,7 @@ describe('OrcaRuntimeService', () => {
         createdAt: 1
       }
     }
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getRepos: () => [folderRepo],
@@ -565,6 +617,7 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       },
       getAllWorktreeLineage: () => lineageById
@@ -596,13 +649,16 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       kind: 'folder' as const
     }
+
     const remoteRepo = {
       ...localRepo,
       displayName: 'remote-folder',
       connectionId: 'ssh-1'
     }
+
     const rootId = `${localRepo.id}::${localRepo.path}`
     const childId = `${rootId}::workspace:local-child`
+
     const metaById: Record<string, WorktreeMeta> = {
       [rootId]: makeWorktreeMeta({
         hostId: 'local',
@@ -616,7 +672,9 @@ describe('OrcaRuntimeService', () => {
         displayName: 'local-child-name'
       })
     }
+
     const setWorktreeMeta = vi.fn()
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getRepos: () => [localRepo, remoteRepo],

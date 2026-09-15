@@ -12,13 +12,17 @@ export class OrcaRuntimeWithHandleMobileUnsubscribe extends OrcaRuntimeWithHandl
   // driver, we re-elect the most-recent surviving subscriber.
   handleMobileUnsubscribe(ptyId: string, clientId: string): void {
     const inner = this.mobileSubscribers.get(ptyId)
+
     if (!inner) {
       return
     }
+
     const subscriber = inner.get(clientId)
+
     if (!subscriber) {
       return
     }
+
     const wasResizedToPhone = subscriber.wasResizedToPhone
 
     inner.delete(clientId)
@@ -36,25 +40,31 @@ export class OrcaRuntimeWithHandleMobileUnsubscribe extends OrcaRuntimeWithHandl
         !this.pickEarliestRestoreTarget(inner)
       ) {
         let earliestSurvivor: { clientId: string; subscribedAt: number } | null = null
+
         for (const sub of inner.values()) {
           if (earliestSurvivor === null || sub.subscribedAt < earliestSurvivor.subscribedAt) {
             earliestSurvivor = { clientId: sub.clientId, subscribedAt: sub.subscribedAt }
           }
         }
+
         if (earliestSurvivor) {
           const heir = inner.get(earliestSurvivor.clientId)
+
           if (heir) {
             heir.previousCols = subscriber.previousCols
             heir.previousRows = subscriber.previousRows
           }
         }
       }
+
       // Peers still on the line. If the disconnecting client was the active
       // mobile driver, re-elect the most-recent surviving subscriber so the
       // banner remains correct and active phone-fit dims follow them.
       const driver = this.getDriver(ptyId)
+
       if (driver.kind === 'mobile' && driver.clientId === clientId) {
         const next = this.pickMostRecentActor(inner)
+
         if (next) {
           this.setDriver(ptyId, { kind: 'mobile', clientId: next.clientId })
           // Fire-and-forget — handleMobileUnsubscribe stays sync; applyLayout
@@ -62,6 +72,7 @@ export class OrcaRuntimeWithHandleMobileUnsubscribe extends OrcaRuntimeWithHandl
           void this.applyMobileDisplayMode(ptyId)
         }
       }
+
       return
     }
 
@@ -74,22 +85,28 @@ export class OrcaRuntimeWithHandleMobileUnsubscribe extends OrcaRuntimeWithHandl
     // desktop banner. See docs/mobile-presence-lock.md.
     const SOFT_LEAVE_GRACE_MS = 250
     const existingSoft = this.pendingSoftLeavers.get(ptyId)
+
     if (existingSoft) {
       clearTimeout(existingSoft.timer)
       this.pendingSoftLeavers.delete(ptyId)
     }
+
     const softTimer = setTimeout(() => {
       this.pendingSoftLeavers.delete(ptyId)
+
       if (!this.mobileSubscribers.has(ptyId)) {
         this.setDriver(ptyId, { kind: 'idle' })
+
         if (this.remoteDesktopFloor.hasViewers(ptyId)) {
           void this.applyRemoteDesktopLayout(ptyId)
         }
       }
     }, SOFT_LEAVE_GRACE_MS)
+
     if (typeof softTimer.unref === 'function') {
       softTimer.unref()
     }
+
     this.pendingSoftLeavers.set(ptyId, {
       clientId,
       timer: softTimer,
@@ -106,16 +123,19 @@ export class OrcaRuntimeWithHandleMobileUnsubscribe extends OrcaRuntimeWithHandl
 
     if (mode === 'auto' && wasResizedToPhone) {
       const existingTimer = this.pendingRestoreTimers.get(ptyId)
+
       if (existingTimer) {
         clearTimeout(existingTimer.timer)
         this.pendingRestoreTimers.delete(ptyId)
       }
+
       // Why: scheduling is conditional on the user's mobileAutoRestoreFitMs
       // preference. `null` (default, "Indefinite") leaves the PTY at phone
       // dims until the user clicks Restore on the desktop banner — the
       // central UX promise of docs/mobile-fit-hold.md. A finite value runs
       // the restore that long after the last unsubscribe.
       const autoRestoreMs = this.getAutoRestoreFitMs()
+
       if (autoRestoreMs == null) {
         // Indefinite hold: the fit override persists, the SOFT_LEAVE_GRACE
         // driver-state grace above still releases the input lock, and the
@@ -128,25 +148,33 @@ export class OrcaRuntimeWithHandleMobileUnsubscribe extends OrcaRuntimeWithHandl
         // wrong). The disconnecting subscriber's baseline is the correct
         // restore target.
         const fallback = this.lastRendererSizes.get(ptyId)
+
         const restoreCols =
           subscriber.previousCols ?? fallback?.cols ?? this.getTerminalSize(ptyId)?.cols ?? 80
+
         const restoreRows =
           subscriber.previousRows ?? fallback?.rows ?? this.getTerminalSize(ptyId)?.rows ?? 24
+
         const timer = setTimeout(() => {
           this.pendingRestoreTimers.delete(ptyId)
+
           if (this.isMobileSubscriberActive(ptyId)) {
             return
           }
+
           if (this.remoteDesktopFloor.hasLayoutState(ptyId)) {
             void this.applyRemoteDesktopLayout(ptyId)
+
             return
           }
+
           void this.enqueueLayout(ptyId, {
             kind: 'desktop',
             cols: restoreCols,
             rows: restoreRows
           })
         }, autoRestoreMs)
+
         // Why: a delayed mobile restore should not keep Electron main alive
         // after the last window/runtime transport has otherwise shut down.
         if (typeof timer.unref === 'function') {

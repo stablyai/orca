@@ -22,6 +22,7 @@ function statusPill(status: SkillFreshnessDisplayStatus): React.JSX.Element {
       </IntegrationStatusPill>
     )
   }
+
   if (status === 'needs-attention') {
     return (
       <IntegrationStatusPill tone="attention">
@@ -32,6 +33,7 @@ function statusPill(status: SkillFreshnessDisplayStatus): React.JSX.Element {
       </IntegrationStatusPill>
     )
   }
+
   if (status === 'up-to-date') {
     return (
       <IntegrationStatusPill tone="connected">
@@ -39,6 +41,7 @@ function statusPill(status: SkillFreshnessDisplayStatus): React.JSX.Element {
       </IntegrationStatusPill>
     )
   }
+
   return (
     <IntegrationStatusPill tone="connected">
       {translate('auto.components.skills.SkillFreshnessStatusPill.installed', 'Installed')}
@@ -52,6 +55,7 @@ function statusPill(status: SkillFreshnessDisplayStatus): React.JSX.Element {
 // case, which is real drift the user would otherwise have no way to see.
 export function SkillFreshnessStatusPill({ skillName }: { skillName: string }): React.JSX.Element {
   const { inventory, loading, error } = useSkillFreshness()
+
   if (loading && !inventory) {
     return (
       <IntegrationStatusPill tone="neutral">
@@ -59,6 +63,7 @@ export function SkillFreshnessStatusPill({ skillName }: { skillName: string }): 
       </IntegrationStatusPill>
     )
   }
+
   if (error && !inventory) {
     return (
       <IntegrationStatusPill tone="attention">
@@ -66,6 +71,7 @@ export function SkillFreshnessStatusPill({ skillName }: { skillName: string }): 
       </IntegrationStatusPill>
     )
   }
+
   const status = getSkillFreshnessDisplayStatus(inventory, skillName)
   // Why: the dialog lists every placement, so Details is offered whenever a placement
   // is what drove the status — an available update, or a copy that blocked one.
@@ -74,6 +80,7 @@ export function SkillFreshnessStatusPill({ skillName }: { skillName: string }): 
   // correctly beside the locations they describe. Marking the way in is enough here —
   // the dialog does the explaining, with every location and cause it knows about.
   const needsAttention = hasSkillCopyNeedingAttention(inventory, skillName)
+
   return (
     <span className="inline-flex items-center gap-2">
       {statusPill(status)}

@@ -18,19 +18,25 @@ const noopCloseMarkdownTableOfContents = (): void => {}
 
 export function getMarkdownSourceLineOffset(frontMatterRaw: string): number {
   let offset = 0
+
   for (let index = 0; index < frontMatterRaw.length; index++) {
     const code = frontMatterRaw.charCodeAt(index)
+
     if (code === 13) {
       offset++
+
       if (frontMatterRaw.charCodeAt(index + 1) === 10) {
         index++
       }
+
       continue
     }
+
     if (code === 10) {
       offset++
     }
   }
+
   return offset
 }
 
@@ -95,23 +101,29 @@ export function EditorContent({
     viewStateScopeId === activeFile.id
       ? activeFile.filePath
       : `${activeFile.filePath}::${viewStateScopeId}`
+
   const diffViewStateKey =
     viewStateScopeId === activeFile.id ? activeFile.id : `${activeFile.id}::${viewStateScopeId}`
+
   const markdownPreviewViewStateKey =
     viewStateScopeId === activeFile.id
       ? `${activeFile.id}:preview`
       : `${activeFile.id}::${viewStateScopeId}:preview`
+
   // Why: only the single-pane edit path gets PDF scroll memory — diff and conflict review mount several viewers on one path.
   const pdfViewStateKey =
     viewStateScopeId === activeFile.id
       ? `${activeFile.filePath}:pdf`
       : `${activeFile.filePath}::${viewStateScopeId}:pdf`
+
   const monacoLanguage = resolvedLanguage === 'notebook' ? 'json' : resolvedLanguage
   const reloadOpenCheckRunDetailsTab = useAppStore((state) => state.reloadOpenCheckRunDetailsTab)
   const markdownDocuments = useMarkdownDocuments(activeFile, isMarkdown, mdViewMode, handleSave)
   const getConflictNavigation = useEditorConflictNavigation()
+
   const activeConflictEntry =
     worktreeEntries.find((entry) => entry.path === activeFile.relativePath) ?? null
+
   const isCombinedDiff =
     activeFile.mode === 'diff' &&
     (activeFile.diffSource === 'combined-all' ||
@@ -121,6 +133,7 @@ export function EditorContent({
 
   if (activeFile.mode === 'check-details') {
     const checkRunDetails = activeFile.checkRunDetails
+
     if (!checkRunDetails) {
       return (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -131,7 +144,9 @@ export function EditorContent({
         </div>
       )
     }
+
     const details = checkRunDetails.details
+
     return (
       <CheckRunDetailsPanel
         check={checkRunDetails.check}
@@ -177,6 +192,7 @@ export function EditorContent({
 
   if (activeFile.mode === 'markdown-preview') {
     const fileContent = fileContents[activeFile.id]
+
     if (!fileContent) {
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -184,6 +200,7 @@ export function EditorContent({
         </div>
       )
     }
+
     if (fileContent.loadError) {
       return (
         <EditorFileLoadErrorView
@@ -192,6 +209,7 @@ export function EditorContent({
         />
       )
     }
+
     if (fileContent.isBinary) {
       return (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
@@ -202,7 +220,9 @@ export function EditorContent({
         </div>
       )
     }
+
     const previewSourceFileId = activeFile.markdownPreviewSourceFileId ?? activeFile.filePath
+
     return (
       <div className="min-h-0 flex-1">
         <MarkdownPreview

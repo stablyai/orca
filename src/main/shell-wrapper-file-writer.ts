@@ -22,6 +22,7 @@ export function writeShellWrapperFiles(
       // Why temp+rename: a shell reading the wrapper concurrently sees either
       // the old file or the new one, never a truncated prefix of the new one.
       const temporaryPath = `${path}.orca-tmp-${process.pid}`
+
       try {
         writeFileSync(temporaryPath, content, 'utf8')
         chmodSync(temporaryPath, 0o644)
@@ -31,14 +32,17 @@ export function writeShellWrapperFiles(
         throw error
       }
     }
+
     return true
   } catch (error) {
     const errorMessage =
       error instanceof Error
         ? `${error.message} (${(error as NodeJS.ErrnoException).code || 'unknown'})`
         : String(error)
+
     console.error(`${logPrefix} Failed to write shell wrapper files: ${errorMessage}`)
     console.error(`${logPrefix} Shell will launch unwrapped`)
+
     return false
   }
 }

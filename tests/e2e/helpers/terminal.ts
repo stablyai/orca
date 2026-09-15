@@ -41,26 +41,33 @@ export async function focusActiveTerminalInput(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!state || !tabId || !pane) {
       throw new Error('No active terminal pane to focus')
     }
+
     state.setActiveTab(tabId)
     state.setActiveTabType('terminal')
     pane.terminal.focus()
+
     const textarea = pane.container.querySelector(
       '.xterm-helper-textarea'
     ) as HTMLTextAreaElement | null
+
     if (!textarea) {
       throw new Error('Active terminal has no xterm helper textarea')
     }
+
     textarea.focus()
   })
 }
@@ -71,6 +78,7 @@ export async function waitForActivePanePtyId(page: Page, timeoutMs = 15_000): Pr
     .poll(
       async () => {
         const tabId = await resolveActiveTabId(page)
+
         if (!tabId) {
           return null
         }
@@ -78,8 +86,10 @@ export async function waitForActivePanePtyId(page: Page, timeoutMs = 15_000): Pr
         resolvedPtyId = await page.evaluate((tabId) => {
           const manager = window.__paneManagers?.get(tabId)
           const activePane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
           return activePane?.container?.dataset?.ptyId ?? null
         }, tabId)
+
         return resolvedPtyId
       },
       {
@@ -92,6 +102,7 @@ export async function waitForActivePanePtyId(page: Page, timeoutMs = 15_000): Pr
   if (!resolvedPtyId) {
     throw new Error('waitForActivePanePtyId: active pane has no PTY binding')
   }
+
   return resolvedPtyId
 }
 
@@ -100,11 +111,13 @@ export async function waitForPaneIdentitySnapshot(
   paneCount: number
 ): Promise<PaneIdentitySnapshot> {
   let latestSnapshot: PaneIdentitySnapshot | null = null
+
   try {
     await expect
       .poll(
         async () => {
           latestSnapshot = await readPaneIdentitySnapshot(page)
+
           return Boolean(
             latestSnapshot &&
             latestSnapshot.panes.length === paneCount &&
@@ -131,9 +144,11 @@ export async function waitForPaneIdentitySnapshot(
   }
 
   const snapshot = await readPaneIdentitySnapshot(page)
+
   if (!snapshot) {
     throw new Error('Pane identity snapshot disappeared after settling')
   }
+
   return snapshot
 }
 

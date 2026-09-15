@@ -19,8 +19,11 @@ import { readBlobAtOid, type GitBufferExec, type GitExec } from './git-handler-o
  * doesn't re-read `.gitmodules` over the (possibly high-latency) SSH link.
  */
 export const SUBMODULE_PATHS_CACHE_TTL_MS = 5_000
+
 export const MAX_SUBMODULE_PATHS_CACHE_ENTRIES = 512
+
 type SubmodulePathsCacheEntry = { paths: string[]; expiresAt: number }
+
 export type SubmodulePathsCache = {
   entries: Map<string, SubmodulePathsCacheEntry>
   generation: number
@@ -47,15 +50,20 @@ function getCachedSubmodulePaths(
   now: number
 ): string[] | null {
   const cached = cache.entries.get(worktreePath)
+
   if (!cached) {
     return null
   }
+
   if (cached.expiresAt <= now) {
     cache.entries.delete(worktreePath)
+
     return null
   }
+
   cache.entries.delete(worktreePath)
   cache.entries.set(worktreePath, cached)
+
   return cached.paths
 }
 
@@ -75,11 +83,14 @@ function rememberSubmodulePaths(
 ): void {
   cache.entries.delete(worktreePath)
   cache.entries.set(worktreePath, { paths, expiresAt: now + SUBMODULE_PATHS_CACHE_TTL_MS })
+
   while (cache.entries.size > MAX_SUBMODULE_PATHS_CACHE_ENTRIES) {
     const oldestPath = cache.entries.keys().next().value
+
     if (oldestPath === undefined) {
       break
     }
+
     cache.entries.delete(oldestPath)
   }
 }
@@ -97,17 +108,21 @@ export async function listSubmodulePathsCached(
   now: number = Date.now()
 ): Promise<string[]> {
   const cached = getCachedSubmodulePaths(cache, worktreePath, now)
+
   if (cached) {
     return cached
   }
+
   // Why: prune on misses so disconnected worktrees cannot accumulate while
   // repeated SSH diff clicks keep their O(1) cache-hit path.
   pruneExpiredSubmodulePaths(cache, now)
   const cacheGeneration = cache.generation
   const paths = await listSubmodulePaths(git, worktreePath)
+
   if (cacheGeneration === cache.generation) {
     rememberSubmodulePaths(cache, worktreePath, paths, now)
   }
+
   return paths
 }
 
@@ -121,10 +136,12 @@ export async function listSubmodulePaths(git: GitExec, worktreePath: string): Pr
       ['config', '--file', '.gitmodules', '--get-regexp', '^submodule\\..*\\.path$'],
       worktreePath
     )
+
     return stdout
       .split(/\r?\n/)
       .map((line) => {
         const spaceIndex = line.indexOf(' ')
+
         return spaceIndex === -1
           ? ''
           : line
@@ -141,6 +158,7 @@ export async function listSubmodulePaths(git: GitExec, worktreePath: string): Pr
 export function findContainingSubmodule(submodulePaths: string[], filePath: string): string | null {
   const normalized = filePath.replace(/\\/g, '/').replace(/\/+$/, '')
   let best: string | null = null
+
   for (const sub of submodulePaths) {
     if (normalized === sub || normalized.startsWith(`${sub}/`)) {
       if (!best || sub.length > best.length) {
@@ -148,6 +166,7 @@ export function findContainingSubmodule(submodulePaths: string[], filePath: stri
       }
     }
   }
+
   return best
 }
 
@@ -157,11 +176,14 @@ export function resolveSubmoduleWorktreePath(worktreePath: string, submodulePath
   if (!submodulePath || submodulePath.includes('\0') || path.isAbsolute(submodulePath)) {
     throw new Error('Access denied: invalid submodule path')
   }
+
   const resolved = path.resolve(worktreePath, submodulePath)
   const rel = path.relative(path.resolve(worktreePath), resolved)
+
   if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
     throw new Error('Access denied: submodule path resolves outside the worktree')
   }
+
   return resolved
 }
 
@@ -173,6 +195,7 @@ async function readGitlinkOidFromTree(
 ): Promise<string> {
   try {
     const { stdout } = await git(['ls-tree', ref, '--', submodulePath], worktreePath)
+
     return stdout.match(/^160000 commit ([0-9a-f]+)\t/m)?.[1] ?? ''
   } catch {
     return ''
@@ -186,6 +209,7 @@ async function readGitlinkOidFromIndex(
 ): Promise<string> {
   try {
     const { stdout } = await git(['ls-files', '-s', '--', submodulePath], worktreePath)
+
     return stdout.match(/^160000 ([0-9a-f]+) /m)?.[1] ?? ''
   } catch {
     return ''
@@ -198,6 +222,7 @@ async function readWorkingSubmoduleHead(
 ): Promise<string> {
   try {
     const { stdout } = await git(['rev-parse', 'HEAD'], submoduleWorktreePath)
+
     return stdout.trim()
   } catch {
     return ''
@@ -215,13 +240,16 @@ export async function resolveSubmoduleCommitRange(
   staged = false
 ): Promise<{ fromOid: string; toOid: string }> {
   const submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
+
   const fromOid = staged
     ? await readGitlinkOidFromTree(git, worktreePath, 'HEAD', submodulePath)
     : (await readGitlinkOidFromIndex(git, worktreePath, submodulePath)) ||
       (await readGitlinkOidFromTree(git, worktreePath, 'HEAD', submodulePath))
+
   const toOid = staged
     ? await readGitlinkOidFromIndex(git, worktreePath, submodulePath)
     : await readWorkingSubmoduleHead(git, submoduleWorktreePath)
+
   return { fromOid, toOid }
 }
 
@@ -238,6 +266,7 @@ export async function computeSubmoduleRangeEntries(
 ): Promise<Record<string, unknown>[]> {
   let nameStatus = ''
   let numstat = ''
+
   try {
     const [statusResult, numstatResult] = await Promise.all([
       git(
@@ -249,11 +278,13 @@ export async function computeSubmoduleRangeEntries(
         submoduleWorktreePath
       )
     ])
+
     nameStatus = statusResult.stdout
     numstat = numstatResult.stdout
   } catch {
     return []
   }
+
   return parseBranchDiff(nameStatus, parseNumstat(numstat)).map((entry) => ({
     ...entry,
     area: 'unstaged'
@@ -273,6 +304,7 @@ export async function buildSubmoduleInnerCommitRangeDiff(
 ) {
   const left = await readBlobAtOid(gitBuffer, submoduleWorktreePath, fromOid, innerPath)
   const right = await readBlobAtOid(gitBuffer, submoduleWorktreePath, toOid, innerPath)
+
   return buildDiffResult(left.content, right.content, left.isBinary, right.isBinary, innerPath)
 }
 
@@ -290,6 +322,7 @@ export async function computeSubmodulePointerDiff(
   const submoduleWorktreePath = resolveSubmoduleWorktreePath(worktreePath, submodulePath)
   let leftOid = ''
   let rightOid = ''
+
   if (staged) {
     leftOid = await readGitlinkOidFromTree(git, worktreePath, 'HEAD', submodulePath)
     rightOid = await readGitlinkOidFromIndex(git, worktreePath, submodulePath)
@@ -302,6 +335,7 @@ export async function computeSubmodulePointerDiff(
       (await readGitlinkOidFromTree(git, worktreePath, 'HEAD', submodulePath))
     rightOid = await readWorkingSubmoduleHead(git, submoduleWorktreePath)
   }
+
   return buildDiffResult(
     leftOid ? `Subproject commit ${leftOid}\n` : '',
     rightOid ? `Subproject commit ${rightOid}\n` : '',

@@ -19,18 +19,21 @@ function sendMockRequest(method: string, params?: Record<string, unknown>): RpcR
     {} as WebSocket
   )
   expect(response).toBeDefined()
+
   return response!
 }
 
 function listedTerminalWorktreeIds(worktree?: string): string[] {
   const response = sendMockRequest('terminal.list', worktree ? { worktree } : undefined)
   const result = response.result as { terminals: Array<{ worktreeId: string }> }
+
   return [...new Set(result.terminals.map((terminal) => terminal.worktreeId))]
 }
 
 describe('mock server terminal fixture routing', () => {
   it('follows worktree creation and activation', () => {
     const worktreeResponse = sendMockRequest('worktree.ps')
+
     const initialWorktreeId = (
       worktreeResponse.result as { worktrees: Array<{ worktreeId: string }> }
     ).worktrees[0]!.worktreeId
@@ -39,6 +42,7 @@ describe('mock server terminal fixture routing', () => {
       repo: 'id:repo-1',
       name: 'terminal-fixture-routing'
     })
+
     const createdWorktreeId = (createResponse.result as { worktree: { id: string } }).worktree.id
     expect(listedTerminalWorktreeIds()).toEqual([createdWorktreeId])
     expect(listedTerminalWorktreeIds(`id:${initialWorktreeId}`)).toEqual([initialWorktreeId])

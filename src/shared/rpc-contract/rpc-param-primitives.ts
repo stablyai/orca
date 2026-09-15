@@ -46,9 +46,11 @@ export const TriStateLinkedIssue = z
     if (value === null) {
       return null
     }
+
     if (typeof value === 'number' && Number.isFinite(value)) {
       return value
     }
+
     return undefined
   })
   .pipe(z.union([z.number(), z.null(), z.undefined()]))

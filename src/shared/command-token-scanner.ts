@@ -8,37 +8,45 @@ export function getFirstCommandToken(command: string): string {
   while (index < scanLimit && isCommandTokenWhitespace(command.charCodeAt(index))) {
     index += 1
   }
+
   if (index >= scanLimit) {
     return ''
   }
 
   const quote = command[index]
+
   if ((quote === '"' || quote === "'") && index + 1 < scanLimit) {
     const tokenStart = index + 1
+
     for (let end = tokenStart; end < scanLimit; end += 1) {
       if (command[end] === quote) {
         if (end > tokenStart) {
           return command.slice(tokenStart, end)
         }
+
         break
       }
     }
   }
 
   const tokenStart = index
+
   while (index < scanLimit && !isCommandTokenWhitespace(command.charCodeAt(index))) {
     index += 1
   }
+
   return command.slice(tokenStart, index)
 }
 
 export function getCommandTokenPathBasename(token: string): string {
   for (let index = token.length - 1; index >= 0; index -= 1) {
     const code = token.charCodeAt(index)
+
     if (code === 47 || code === 92) {
       return token.slice(index + 1)
     }
   }
+
   return token
 }
 
@@ -54,10 +62,13 @@ export function commandContainsToken(command: string, expectedToken: string): bo
     while (index < scanLimit && isCommandTokenWhitespace(command.charCodeAt(index))) {
       index += 1
     }
+
     const tokenStart = index
+
     while (index < scanLimit && !isCommandTokenWhitespace(command.charCodeAt(index))) {
       index += 1
     }
+
     if (tokenStart < index && command.slice(tokenStart, index) === expectedToken) {
       return true
     }

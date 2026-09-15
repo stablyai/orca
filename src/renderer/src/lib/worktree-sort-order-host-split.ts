@@ -22,15 +22,18 @@ export function splitWorktreeSortOrderByHost(
   orderedIds: readonly string[]
 ): WorktreeSortOrderHostGroup[] {
   const groups = new Map<string, string[]>()
+
   for (const id of orderedIds) {
     const environmentId = getRuntimeEnvironmentIdForWorktree(state, id)
     const hostId = environmentId ? toRuntimeExecutionHostId(environmentId) : LOCAL_EXECUTION_HOST_ID
     const existing = groups.get(hostId)
+
     if (existing) {
       existing.push(id)
     } else {
       groups.set(hostId, [id])
     }
   }
+
   return [...groups.entries()].map(([hostId, ids]) => ({ hostId, orderedIds: ids }))
 }

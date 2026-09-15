@@ -17,6 +17,7 @@ const searchOption: TabEntryOption = {
   id: 'search:readme',
   classification: { kind: 'search', engine: 'google', query: 'readme' }
 }
+
 const newFileOption: TabEntryOption = {
   id: 'new-file:readme',
   classification: { kind: 'new-file', relativePath: 'readme' }

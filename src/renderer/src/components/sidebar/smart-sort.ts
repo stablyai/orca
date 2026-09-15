@@ -37,6 +37,7 @@ export const CREATE_GRACE_MS = 5 * 60 * 1000
  */
 export function effectiveRecentActivity(worktree: Worktree, now: number): number {
   const { lastActivityAt, createdAt } = worktree
+
   // Why bound by now: a worktree with createdAt set but no subsequent activity
   // should not retain artificially-high recency forever; the floor exists to
   // absorb the noisy creation window only. Without this bound, a worktree
@@ -45,6 +46,7 @@ export function effectiveRecentActivity(worktree: Worktree, now: number): number
   if (createdAt === undefined || now >= createdAt + CREATE_GRACE_MS) {
     return lastActivityAt
   }
+
   return Math.max(lastActivityAt, createdAt + CREATE_GRACE_MS)
 }
 
@@ -52,6 +54,7 @@ export type WorktreeSortLabelInput = Pick<Worktree, 'displayName' | 'path' | 'id
 
 export function getWorktreeSortLabel(worktree: WorktreeSortLabelInput): string {
   const displayName = typeof worktree.displayName === 'string' ? worktree.displayName.trim() : ''
+
   if (displayName) {
     return displayName
   }
@@ -59,6 +62,7 @@ export function getWorktreeSortLabel(worktree: WorktreeSortLabelInput): string {
   // Why: persisted or remote worktree state can briefly omit displayName after
   // a custom workspace name is removed; sorting must stay render-safe.
   const pathLabel = typeof worktree.path === 'string' ? basename(worktree.path).trim() : ''
+
   return pathLabel || worktree.id
 }
 
@@ -76,9 +80,11 @@ export function buildWorktreeSortLabels<T extends WorktreeSortLabelInput>(
   worktrees: readonly T[]
 ): Map<WorktreeSortLabelInput, string> {
   const labels = new Map<WorktreeSortLabelInput, string>()
+
   for (const worktree of worktrees) {
     labels.set(worktree, getWorktreeSortLabel(worktree))
   }
+
   return labels
 }
 
@@ -115,6 +121,7 @@ export function buildWorktreeComparator(
       case 'smart': {
         const aw = attentionByWorktree.get(a.id) ?? IDLE
         const bw = attentionByWorktree.get(b.id) ?? IDLE
+
         return (
           // Why: 1 < 2 < 3 < 4 < 5 — lower class outranks higher.
           aw.cls - bw.cls ||
@@ -126,6 +133,7 @@ export function buildWorktreeComparator(
           compareWorktreeSortLabel(a, b, labels)
         )
       }
+
       case 'recent':
         // Why effectiveRecentActivity (not raw lastActivityAt): newly-created
         // worktrees get a CREATE_GRACE_MS floor on top of lastActivityAt so
@@ -146,8 +154,10 @@ export function buildWorktreeComparator(
         const ra = repoMap.get(a.repoId)?.displayName ?? ''
         const rb = repoMap.get(b.repoId)?.displayName ?? ''
         const cmp = ra.localeCompare(rb)
+
         return cmp !== 0 ? cmp : compareWorktreeSortLabel(a, b, labels)
       }
+
       case 'manual':
         // Why fallback to sortOrder: existing users have a persisted smart-sort
         // snapshot but no manualOrder yet, so Manual starts from a familiar
@@ -194,6 +204,7 @@ export function sortWorktreesSmart(
 
   const now = Date.now()
   const labels = buildWorktreeSortLabels(worktrees)
+
   if (!hasAnyLivePty && !hasFreshAttributedAgentStatus(agentStatusByPaneKey, now, tabsByWorktree)) {
     // Cold start: use persisted sortOrder snapshot until the agent-status
     // snapshot lands and a warm sort runs.

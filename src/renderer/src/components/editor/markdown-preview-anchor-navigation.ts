@@ -4,6 +4,7 @@ export function getMarkdownPreviewAnchorScrollTop(
 ): number {
   const containerTop = container.getBoundingClientRect().top
   const targetTop = target.getBoundingClientRect().top
+
   return Math.max(0, targetTop - containerTop + container.scrollTop - 12)
 }
 

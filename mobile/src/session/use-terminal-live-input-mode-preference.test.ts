@@ -25,12 +25,15 @@ type Deferred<T> = {
 
 function createDeferred<T>(): Deferred<T> {
   let resolve: ((value: T) => void) | null = null
+
   const promise = new Promise<T>((innerResolve) => {
     resolve = innerResolve
   })
+
   if (!resolve) {
     throw new Error('deferred resolver was not initialized')
   }
+
   return { promise, resolve }
 }
 
@@ -43,12 +46,14 @@ function createTerminalLiveInputModePreferenceHarness(): TerminalLiveInputModePr
       hostId: 'host-1',
       worktreeId: 'worktree-1'
     })
+
     return null
   }
 
   act(() => {
     renderer = create(createElement(Harness))
   })
+
   if (!current || !renderer) {
     throw new Error('terminal live input mode preference hook did not render')
   }
@@ -58,6 +63,7 @@ function createTerminalLiveInputModePreferenceHarness(): TerminalLiveInputModePr
       if (!current) {
         throw new Error('terminal live input mode preference hook is not mounted')
       }
+
       return current
     },
     unmount: () => {

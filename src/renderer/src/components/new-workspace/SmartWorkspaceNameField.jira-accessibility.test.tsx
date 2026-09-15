@@ -33,9 +33,13 @@ const jiraMock = vi.hoisted(() => ({
     errorKind: 'disconnected' | 'site-not-connected' | 'read-failed' | 'update-runtime' | null
   }
 }))
+
 const shellMock = vi.hoisted(() => ({ openUrl: vi.fn() }))
+
 const popoverMock = vi.hoisted(() => ({ contentMounted: true }))
+
 const jiraSearchMock = vi.hoisted(() => vi.fn(async (): Promise<JiraIssue[]> => []))
+
 const jiraConnectionMock = vi.hoisted(() => ({
   status: {
     connected: false,
@@ -43,6 +47,7 @@ const jiraConnectionMock = vi.hoisted(() => ({
     sites: []
   }
 }))
+
 const originalWindowApi = window.api
 
 vi.mock('./use-jira-url-source', () => ({
@@ -79,8 +84,10 @@ vi.mock('@/store', () => {
     searchLinearIssues: vi.fn(),
     settings: null
   }
+
   const useAppStore = (selector: (value: typeof state) => unknown): unknown => selector(state)
   useAppStore.getState = () => state
+
   return { useAppStore }
 })
 
@@ -128,6 +135,7 @@ vi.mock('@/components/ui/tabs', () => ({
         const value = (event.target as HTMLElement)
           .closest<HTMLElement>('[data-tab-value]')
           ?.getAttribute('data-tab-value')
+
         if (value) {
           onValueChange?.(value)
         }
@@ -228,6 +236,7 @@ describe('SmartWorkspaceNameField Jira accessibility', () => {
 
   afterEach(() => {
     cleanup()
+
     if (originalWindowApi === undefined) {
       Reflect.deleteProperty(window, 'api')
     } else {
@@ -353,6 +362,7 @@ describe('SmartWorkspaceNameField Jira accessibility', () => {
     renderField({ value: 'existing-name', onValueChange })
     const jiraUrl = 'https://company.atlassian.net/browse/ORCA-456'
     const input = screen.getByRole('textbox')
+
     const event = createEvent.paste(input, {
       clipboardData: { getData: () => jiraUrl }
     })
@@ -367,6 +377,7 @@ describe('SmartWorkspaceNameField Jira accessibility', () => {
     const onValueChange = vi.fn()
     renderField({ value: 'my--bug', onValueChange })
     const input = screen.getByRole('textbox')
+
     const event = createEvent.paste(input, {
       clipboardData: { getData: () => 'jira' }
     })

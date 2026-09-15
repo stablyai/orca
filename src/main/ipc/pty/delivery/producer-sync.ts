@@ -11,12 +11,15 @@ export function updateProducerFlowControl(session: PtyIpcSession, id: string): v
   if (!PRODUCER_FLOW_CONTROL_ENABLED) {
     return
   }
+
   if (session.sourceCreditPendingPtys.has(id)) {
     if (session.pendingData.get(id)) {
       return
     }
+
     session.sourceCreditPendingPtys.delete(id)
   }
+
   session.producerFlowControl.update(id, session.pendingData.get(id)?.data.length ?? 0)
 }
 
@@ -28,13 +31,17 @@ export function syncPtyBackgroundedDelivery(
   const background =
     session.rendererPtyIsKnownHidden(id) &&
     !(session.runtime?.hasRawTerminalViewSubscriber?.(id) ?? false)
+
   if (session.backgroundedDeliverySyncByPty.get(id) === background) {
     return
   }
+
   const provider = tryGetProviderForPty(id)
+
   if (!provider?.setPtyBackgrounded) {
     return
   }
+
   recordDaemonStreamBacklogEvent('mainBackgroundSync', {
     sessionIdSuffix: id.slice(-10),
     background,
@@ -44,6 +51,7 @@ export function syncPtyBackgroundedDelivery(
   })
   const previous = session.backgroundedDeliverySyncByPty.get(id)
   session.backgroundedDeliverySyncByPty.set(id, background)
+
   try {
     provider.setPtyBackgrounded(id, background)
   } catch (error) {
@@ -53,6 +61,7 @@ export function syncPtyBackgroundedDelivery(
     } else {
       session.backgroundedDeliverySyncByPty.set(id, previous)
     }
+
     console.error('[pty] setPtyBackgrounded failed; delivery sync state rolled back', error)
   }
 }

@@ -33,6 +33,7 @@ export async function gitPush(
     if (pushTarget) {
       await validateGitPushTarget(worktreePath, pushTarget, options)
     }
+
     // Why: push to the branch's configured upstream when one exists. PR-created
     // worktrees can track a contributor fork remote; hardcoding origin here
     // would send review commits to the upstream repository instead.
@@ -48,12 +49,14 @@ export async function gitPush(
       : await resolveConfiguredGitPushTarget((args) =>
           gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
         )
+
     const args = [
       'push',
       ...(options.forceWithLease ? ['--force-with-lease'] : []),
       '--set-upstream',
       ...(target ? [target.remote, target.refspec] : ['origin', 'HEAD'])
     ]
+
     await gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
   } catch (error) {
     throw new Error(normalizeGitErrorMessage(error, 'push'))
@@ -73,11 +76,14 @@ async function gitPullWithArgs(
         ['pull', ...effectiveArgs, target.remoteName, target.branchName],
         gitOptionsForWorktree(worktreePath, options)
       )
+
       return
     }
+
     const upstream = await resolveEffectiveGitUpstream((args) =>
       gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
     )
+
     if (upstream && !upstream.isConfiguredUpstream) {
       // Why: legacy Orca branches may still track origin/main while pushes
       // target origin/<branch>. Pull the same effective branch the UI reports.
@@ -85,6 +91,7 @@ async function gitPullWithArgs(
         ['pull', ...effectiveArgs, upstream.remoteName, upstream.branchName],
         gitOptionsForWorktree(worktreePath, options)
       )
+
       return
     }
 
@@ -138,6 +145,7 @@ export async function gitFetch(
   // running idle pack holds while it rewrites -- ~1.4s at most. This is the user
   // clicking Fetch, so wait that window out rather than letting it fail on the lock.
   postponeRepoRefMaintenance()
+
   try {
     await withRepoRefMaintenancePaused('git-fetch', async () => {
       if (pushTarget) {
@@ -152,8 +160,10 @@ export async function gitFetch(
               () => undefined
             )
         )
+
         return
       }
+
       await gitExecFileAsync(['fetch', '--prune'], gitOptionsForWorktree(worktreePath, options))
     })
   } catch (error) {

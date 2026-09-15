@@ -8,12 +8,14 @@ import { readCodexAuthIdentity } from './codex-auth-identity'
 /** Encodes a JWT whose payload carries the given claims; only the payload segment is read. */
 function idTokenWithClaims(claims: Record<string, unknown>): string {
   const payload = Buffer.from(JSON.stringify(claims), 'utf-8').toString('base64url')
+
   return `header.${payload}.signature`
 }
 
 function homeWithAuthJson(auth: Record<string, unknown>): string {
   const home = mkdtempSync(join(tmpdir(), 'codex-identity-'))
   writeFileSync(join(home, 'auth.json'), JSON.stringify(auth), 'utf-8')
+
   return home
 }
 

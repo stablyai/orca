@@ -21,6 +21,7 @@ describe('ElectronSecretStore', () => {
   function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
     const original = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
     try {
       return run()
     } finally {
@@ -68,6 +69,7 @@ describe('ElectronSecretStore', () => {
       const probe = safeStorageMock.getSelectedStorageBackend
       // @ts-expect-error deleting a required member is the condition under test
       delete safeStorageMock.getSelectedStorageBackend
+
       try {
         withPlatform('linux', () => {
           expect(() => new ElectronSecretStore().describeProtectionGap()).not.toThrow()
@@ -140,6 +142,7 @@ describe('ElectronSecretStore', () => {
     safeStorageMock.isEncryptionAvailable.mockReturnValue(false)
     const reason = new ElectronSecretStore().describeProtectionGap()
     expect(reason).toContain('unencrypted')
+
     if (process.platform === 'linux') {
       expect(reason).toContain('keyring')
     }

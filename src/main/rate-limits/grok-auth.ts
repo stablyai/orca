@@ -40,6 +40,7 @@ function getGrokAuthReadError(err: unknown): string {
   if (err instanceof SyntaxError) {
     return 'Grok auth file is invalid'
   }
+
   // Why: filesystem errors often include the full auth path; renderer/mobile
   // account state should not expose local usernames or custom GROK_HOME values.
   return 'Unable to read Grok auth file'
@@ -49,10 +50,13 @@ function parseAuthEntry(value: unknown): TokenizedGrokAuthEntry | null {
   if (typeof value !== 'object' || value === null) {
     return null
   }
+
   const entry = value as GrokAuthEntry
+
   if (typeof entry.key !== 'string' || entry.key.length === 0) {
     return null
   }
+
   return entry as TokenizedGrokAuthEntry
 }
 
@@ -60,7 +64,9 @@ function parseExpiresAtMs(iso: string | undefined): number | null {
   if (!iso) {
     return null
   }
+
   const ms = Date.parse(iso)
+
   return Number.isFinite(ms) ? ms : null
 }
 
@@ -84,41 +90,54 @@ function isPreferredGrokAuthKey(key: string): boolean {
 
 export function readGrokAuthSession(): GrokAuthReadResult {
   const path = getGrokAuthPath()
+
   if (!existsSync(path)) {
     return { status: 'missing' }
   }
+
   try {
     const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
+
     if (typeof parsed !== 'object' || parsed === null) {
       return { status: 'error', error: 'Grok auth file is invalid' }
     }
+
     let preferredKeySeen = false
     let expiredPreferred: GrokAuthSession | null = null
     let fallback: GrokAuthSession | null = null
+
     for (const [key, entry] of Object.entries(parsed as Record<string, unknown>)) {
       const isPreferred = isPreferredGrokAuthKey(key)
       preferredKeySeen ||= isPreferred
       const authEntry = parseAuthEntry(entry)
+
       if (!authEntry) {
         continue
       }
+
       const session = sessionFromAuthEntry(authEntry)
+
       if (isPreferred) {
         if (isGrokAccessTokenFresh(session)) {
           return { status: 'ok', session }
         }
+
         expiredPreferred ??= session
         continue
       }
+
       if (!fallback) {
         fallback = session
       }
     }
+
     // Why: alternate issuers are compatibility fallbacks only when no default entry exists.
     const selectedSession = expiredPreferred ?? (preferredKeySeen ? null : fallback)
+
     if (selectedSession) {
       return { status: 'ok', session: selectedSession }
     }
+
     // Why: a token-less file (e.g. after grok logout) means signed out, not a
     // failure — 'error' would keep a status-bar alert visible for that user.
     return { status: 'missing' }
@@ -137,5 +156,6 @@ export function isGrokAccessTokenFresh(session: GrokAuthSession): boolean {
     // Why: auth.json may lack expiry; a bad token still surfaces as billing HTTP 401.
     return true
   }
+
   return session.expiresAtMs - Date.now() > TOKEN_SKEW_MS
 }

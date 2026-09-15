@@ -80,6 +80,7 @@ export function SkillInstallAgentPicker({
   const { canonical, selectable } = groupSkillInstallProviders(scope, detectedAgents)
   const installed = detectedAgents ? new Set(detectedAgents) : null
   const canonicalRoot = scope === 'global' ? '~/.agents/skills' : '.agents/skills'
+
   const chosen = [
     ...canonical.map((provider) => provider.displayName),
     ...selectable
@@ -90,21 +91,26 @@ export function SkillInstallAgentPicker({
   const selectableChosenCount = selectable.filter((choice) =>
     selected.has(choice.provider.id)
   ).length
+
   const allSelectableChosen = selectable.length > 0 && selectableChosenCount === selectable.length
 
   const selectAll = (): void => {
     const next = new Set(selected)
+
     for (const choice of selectable) {
       next.add(choice.provider.id)
     }
+
     onChange(next)
   }
 
   const clearSelectable = (): void => {
     const next = new Set(selected)
+
     for (const choice of selectable) {
       next.delete(choice.provider.id)
     }
+
     onChange(next)
   }
 

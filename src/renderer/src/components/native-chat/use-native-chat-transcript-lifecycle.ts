@@ -26,20 +26,26 @@ export function useNativeChatTranscriptLifecycle(): readonly [
     revisionRef.current += 1
     setState({ lifecycle })
   }, [])
+
   const reset = useCallback((): void => replace(undefined), [replace])
+
   const append = useCallback((lifecycle: NativeChatTurnLifecycle | undefined): void => {
     if (!lifecycle) {
       return
     }
+
     revisionRef.current += 1
     setState({ lifecycle })
   }, [])
+
   const revision = useCallback((): number => revisionRef.current, [])
+
   const replaceFromPagination = useCallback(
     (lifecycle: NativeChatTurnLifecycle | undefined, expectedRevision: number): void => {
       if (!lifecycle || revisionRef.current !== expectedRevision) {
         return
       }
+
       revisionRef.current += 1
       setState((current) => ({ ...current, lifecycle }))
     },
@@ -50,5 +56,6 @@ export function useNativeChatTranscriptLifecycle(): readonly [
     () => ({ reset, replace, append, revision, replaceFromPagination }),
     [append, replace, replaceFromPagination, reset, revision]
   )
+
   return [state.lifecycle, control]
 }

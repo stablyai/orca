@@ -30,10 +30,13 @@ const nodePlatformSchema = z.enum([
 
 const executionHostIdSchema = z.string().transform((value, ctx) => {
   const normalized = normalizeExecutionHostId(value)
+
   if (normalized) {
     return normalized
   }
+
   ctx.addIssue({ code: 'custom', message: 'Invalid execution host id' })
+
   return z.NEVER
 })
 
@@ -105,24 +108,32 @@ const aiVaultListResultEnvelopeSchema = z.object({
 
 export function parseAiVaultListResult(value: unknown): AiVaultListResult {
   const envelope = aiVaultListResultEnvelopeSchema.safeParse(value)
+
   if (!envelope.success) {
     throw new Error(envelope.error.issues[0]?.message ?? 'unexpected result shape')
   }
+
   const sessions: AiVaultSession[] = []
   let malformedSessionCount = 0
   let wellFormedSessionCount = 0
+
   for (const session of envelope.data.sessions) {
     const parsed = aiVaultSessionSchema.safeParse(session)
+
     if (!parsed.success) {
       malformedSessionCount += 1
       continue
     }
+
     wellFormedSessionCount += 1
+
     if (!isAiVaultAgent(parsed.data.agent)) {
       continue
     }
+
     sessions.push({ ...parsed.data, agent: parsed.data.agent })
   }
+
   if (
     envelope.data.sessions.length > 0 &&
     malformedSessionCount > 0 &&
@@ -130,20 +141,27 @@ export function parseAiVaultListResult(value: unknown): AiVaultListResult {
   ) {
     throw new Error('all supplied Agent Session History sessions were invalid')
   }
+
   const issues: AiVaultScanIssue[] = []
   let malformedIssueCount = 0
+
   for (const issue of envelope.data.issues) {
     const parsed = aiVaultScanIssueSchema.safeParse(issue)
+
     if (!parsed.success) {
       malformedIssueCount += 1
       continue
     }
+
     if (!isAiVaultAgent(parsed.data.agent)) {
       continue
     }
+
     issues.push({ ...parsed.data, agent: parsed.data.agent })
   }
+
   const invalidCount = malformedSessionCount + malformedIssueCount
+
   if (invalidCount > 0) {
     issues.push({
       agent: 'codex',
@@ -151,5 +169,6 @@ export function parseAiVaultListResult(value: unknown): AiVaultListResult {
       message: `Skipped ${invalidCount} invalid Agent Session History result ${invalidCount === 1 ? 'entry' : 'entries'}.`
     })
   }
+
   return { sessions, issues, scannedAt: envelope.data.scannedAt }
 }

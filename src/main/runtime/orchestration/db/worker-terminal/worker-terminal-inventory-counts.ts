@@ -27,10 +27,12 @@ function buildInventoryScope(params: WorkerTerminalInventoryParams): {
   const orderExpression = 'COALESCE(w.created_at, d.created_at)'
   const where: string[] = []
   const values: (string | number)[] = []
+
   if (params.runId) {
     where.push('d.run_id = ?')
     values.push(params.runId)
   }
+
   if (params.snapshot) {
     if ('databaseId' in params.snapshot) {
       where.push('d.rowid <= ?')
@@ -40,6 +42,7 @@ function buildInventoryScope(params: WorkerTerminalInventoryParams): {
       values.push(params.snapshot.createdAt, params.snapshot.createdAt, params.snapshot.dispatchId)
     }
   }
+
   return { where, values }
 }
 
@@ -72,6 +75,7 @@ export function scanWorkerTerminalStates(
     ownership_state: WorkerTerminalOwnershipState | null
     release_state: WorkerTerminalReleaseState | null
   }[]
+
   return rows.map((row) => ({
     dispatchId: row.dispatch_id,
     databaseId: row.database_id,
@@ -99,11 +103,13 @@ export function countWorkerTerminalInventory(
   const { where, values } = buildInventoryScope(params)
   const rows = scanWorkerTerminalStates.call(this, where, values)
   const counts: Partial<Record<WorkerTerminalListState, number>> = {}
+
   for (const row of rows) {
     if (row.terminalState) {
       counts[row.terminalState] = (counts[row.terminalState] ?? 0) + 1
     }
   }
+
   return {
     total: params.terminalState ? (counts[params.terminalState] ?? 0) : rows.length,
     counts

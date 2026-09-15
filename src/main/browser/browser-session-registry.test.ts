@@ -114,13 +114,16 @@ describe('BrowserSessionRegistry', () => {
     }))
 
     let ready = false
+
     const creation = browserSessionRegistry
       .createProfile('isolated', 'Proxy Ready')
       .then((profile) => {
         ready = true
         navigate(profile?.partition)
+
         return profile
       })
+
     await vi.waitFor(() => expect(proxySession.setProxy).toHaveBeenCalledTimes(1))
     expect(ready).toBe(false)
     expect(navigate).not.toHaveBeenCalled()
@@ -198,6 +201,7 @@ describe('BrowserSessionRegistry', () => {
     const profile = await browserSessionRegistry.createProfile('isolated', 'Invalid UA', {
       userAgentMode: 'rotating' as never
     })
+
     expect(profile).toBeNull()
   })
 
@@ -250,10 +254,12 @@ describe('BrowserSessionRegistry', () => {
   it('updates profile source', async () => {
     const profile = await browserSessionRegistry.createProfile('imported', 'Source Test')
     expect(profile).not.toBeNull()
+
     const updated = browserSessionRegistry.updateProfileSource(profile!.id, {
       browserFamily: 'edge',
       importedAt: Date.now()
     })
+
     expect(updated).not.toBeNull()
     expect(updated!.source?.browserFamily).toBe('edge')
   })
@@ -261,10 +267,12 @@ describe('BrowserSessionRegistry', () => {
   it('updates profile source with comet family', async () => {
     const profile = await browserSessionRegistry.createProfile('imported', 'Comet Source Test')
     expect(profile).not.toBeNull()
+
     const updated = browserSessionRegistry.updateProfileSource(profile!.id, {
       browserFamily: 'comet',
       importedAt: Date.now()
     })
+
     expect(updated).not.toBeNull()
     expect(updated!.source?.browserFamily).toBe('comet')
   })
@@ -329,6 +337,7 @@ describe('BrowserSessionRegistry', () => {
       label: 'Hydrated',
       source: { browserFamily: 'manual' as const, importedAt: 1000 }
     }
+
     browserSessionRegistry.hydrateFromPersisted([fakeProfile])
     expect(browserSessionRegistry.getProfile('00000000-0000-0000-0000-000000000001')).not.toBeNull()
     expect(browserSessionRegistry.isAllowedPartition(fakeProfile.partition)).toBe(true)
@@ -365,6 +374,7 @@ describe('BrowserSessionRegistry', () => {
   it('applies and clears existing browser-profile policy on an opaque route partition', async () => {
     const partition =
       'persist:orca-browser-v1-1111111111111111222222222222222233333333333333334444444444444444'
+
     setBrowserNetworkProxySettingsResolver(() => ({
       httpProxyUrl: 'http://app-proxy.example:8080',
       httpProxyBypassRules: ''
@@ -478,6 +488,7 @@ describe('BrowserSessionRegistry', () => {
     const selectHidHandler = mockSession.on.mock.calls.find(
       ([eventName]) => eventName === 'select-hid-device'
     )?.[1]
+
     const hidCallback = vi.fn()
     selectHidHandler(
       { preventDefault: vi.fn() },
@@ -495,6 +506,7 @@ describe('BrowserSessionRegistry', () => {
     const selectWebAuthnHandler = mockSession.on.mock.calls.find(
       ([eventName]) => eventName === 'select-webauthn-account'
     )?.[1]
+
     const webAuthnCallback = vi.fn()
     selectWebAuthnHandler(
       { preventDefault: vi.fn() },
@@ -536,6 +548,7 @@ describe('BrowserSessionRegistry', () => {
         { urls: ['https://*/*'] },
         expect.any(Function)
       )
+
       return onBeforeSendHeaders.mock.calls[0][1]
     }
 

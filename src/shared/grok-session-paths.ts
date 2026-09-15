@@ -16,10 +16,13 @@ export {
 } from './grok-session-path-lookup-queue'
 
 export const GROK_CHAT_HISTORY_FILE = 'chat_history.jsonl'
+
 // Why: Grok URL-encodes the cwd for the sessions group directory. When that
 // encoded name exceeds 255 bytes it switches to a slug+hash layout.
 export const GROK_ENCODED_CWD_DIR_MAX_BYTES = 255
+
 export const GROK_SESSION_ID_MAX_LENGTH = 128
+
 // Why: session discovery runs in hook/main hot paths; one corrupt or enormous
 // sessions root must not cause unbounded candidate probes.
 export const GROK_SESSION_GROUP_SCAN_MAX_ENTRIES = 2_048
@@ -55,19 +58,24 @@ export function resolveGrokSessionsDir(
 /** Return Grok's safe cwd-group component, or null for slug/invalid layouts. */
 export function grokEncodedCwdDirName(cwd: string): string | null {
   const trimmed = cwd.trim()
+
   if (!trimmed) {
     return null
   }
+
   let encoded: string
+
   try {
     encoded = encodeURIComponent(trimmed)
   } catch {
     return null
   }
+
   // encodeURIComponent deliberately leaves dots untouched; reject path syntax.
   if (encoded === '.' || encoded === '..' || encoded.includes('/') || encoded.includes('\\')) {
     return null
   }
+
   return Buffer.byteLength(encoded, 'utf8') <= GROK_ENCODED_CWD_DIR_MAX_BYTES ? encoded : null
 }
 
@@ -78,18 +86,25 @@ export function buildGrokChatHistoryPathCandidates(args: {
   sessionsDir: string
 }): string[] {
   const sessionId = args.sessionId.trim()
+
   if (!isSafeGrokSessionId(sessionId)) {
     return []
   }
+
   const cwd = args.cwd?.trim()
+
   if (!cwd) {
     return []
   }
+
   const encoded = grokEncodedCwdDirName(cwd)
+
   if (!encoded) {
     return []
   }
+
   const candidate = join(args.sessionsDir, encoded, sessionId, GROK_CHAT_HISTORY_FILE)
+
   return isPathWithin(args.sessionsDir, candidate) ? [candidate] : []
 }
 
@@ -102,9 +117,11 @@ export function resolveGrokChatHistoryPathSync(args: {
   homeDir?: string
 }): string | null {
   const sessionId = args.sessionId.trim()
+
   if (!isSafeGrokSessionId(sessionId)) {
     return null
   }
+
   const sessionsDir =
     args.sessionsDir ?? resolveGrokSessionsDir(args.env ?? process.env, args.homeDir ?? homedir())
 
@@ -117,6 +134,7 @@ export function resolveGrokChatHistoryPathSync(args: {
       return candidate
     }
   }
+
   return null
 }
 
@@ -134,7 +152,9 @@ type GrokSessionDirectoryOpener = (sessionsDir: string) => Promise<GrokSessionDi
 
 const defaultSessionDirectoryOpener: GrokSessionDirectoryOpener = (sessionsDir) =>
   opendir(sessionsDir)
+
 let sessionDirectoryOpener = defaultSessionDirectoryOpener
+
 const sessionPathLookupQueue = new GrokSessionPathLookupQueue(scanGrokChatHistoryBySessionId)
 
 /** Read a previously resolved path without filesystem work (hook retry path). */
@@ -143,9 +163,11 @@ export function getCachedGrokChatHistoryBySessionId(
   sessionId: string
 ): string | null {
   const trimmedId = sessionId.trim()
+
   if (!isSafeGrokSessionId(trimmedId)) {
     return null
   }
+
   return sessionPathLookupQueue.getCached(sessionsDir, trimmedId)
 }
 
@@ -156,9 +178,11 @@ export function findGrokChatHistoryBySessionId(
   maxGroupEntries = GROK_SESSION_GROUP_SCAN_MAX_ENTRIES
 ): Promise<string | null> {
   const trimmedId = sessionId.trim()
+
   if (!isSafeGrokSessionId(trimmedId)) {
     return Promise.resolve(null)
   }
+
   return sessionPathLookupQueue.find(sessionsDir, trimmedId, maxGroupEntries)
 }
 
@@ -168,28 +192,36 @@ async function scanGrokChatHistoryBySessionId(
   maxGroupEntries: number
 ): Promise<string | null> {
   const max = normalizeGroupEntryLimit(maxGroupEntries)
+
   if (max === 0) {
     return null
   }
+
   let directory: GrokSessionDirectory | undefined
+
   try {
     directory = await sessionDirectoryOpener(sessionsDir)
     let eligibleEntries = 0
+
     // Why: the filesystem's iteration order defines the bounded subset; sorting
     // would first materialize an unbounded sessions root on the main process.
     for await (const entry of directory) {
       if (!entry.isDirectory() || entry.isSymbolicLink()) {
         continue
       }
+
       eligibleEntries += 1
       const history = join(sessionsDir, entry.name, sessionId, GROK_CHAT_HISTORY_FILE)
+
       if (await isSafeChatHistoryFile(sessionsDir, history)) {
         return history
       }
+
       if (eligibleEntries >= max) {
         return null
       }
     }
+
     return null
   } catch {
     return null
@@ -230,6 +262,7 @@ export function setGrokSessionPathScannerForTests(scanner: GrokSessionPathScanne
 
 function isPathWithin(root: string, candidate: string): boolean {
   const rel = relative(resolve(root), resolve(candidate))
+
   return rel.length > 0 && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel)
 }
 
@@ -241,11 +274,13 @@ function isSafeChatHistoryFileSync(sessionsDir: string, candidate: string): bool
   if (!isPathWithin(sessionsDir, candidate)) {
     return false
   }
+
   try {
     const sessionDir = candidateSessionDir(candidate)
     const groupStat = lstatSync(dirname(sessionDir))
     const sessionStat = lstatSync(sessionDir)
     const fileStat = lstatSync(candidate)
+
     return (
       groupStat.isDirectory() &&
       !groupStat.isSymbolicLink() &&
@@ -263,13 +298,16 @@ async function isSafeChatHistoryFile(sessionsDir: string, candidate: string): Pr
   if (!isPathWithin(sessionsDir, candidate)) {
     return false
   }
+
   try {
     const sessionDir = candidateSessionDir(candidate)
+
     const [groupStat, sessionStat, fileStat] = await Promise.all([
       lstat(dirname(sessionDir)),
       lstat(sessionDir),
       lstat(candidate)
     ])
+
     return (
       groupStat.isDirectory() &&
       !groupStat.isSymbolicLink() &&
@@ -286,6 +324,7 @@ async function isSafeChatHistoryFile(sessionsDir: string, candidate: string): Pr
 /** True when path looks like a Grok chat history under a safe session id. */
 export function isGrokChatHistoryPath(path: string, sessionId: string): boolean {
   const trimmedId = sessionId.trim()
+
   return (
     isSafeGrokSessionId(trimmedId) &&
     basename(path) === GROK_CHAT_HISTORY_FILE &&

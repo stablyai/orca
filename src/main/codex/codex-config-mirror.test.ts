@@ -17,6 +17,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
+
   return {
     ...actual,
     homedir: homedirMock
@@ -31,7 +32,9 @@ import {
 } from './codex-config-mirror'
 
 let fakeHomeDir: string
+
 let userDataDir: string
+
 let previousUserDataPath: string | undefined
 
 function getSystemCodexHomePath(): string {
@@ -56,6 +59,7 @@ beforeEach(() => {
     if (name === 'userData') {
       return userDataDir
     }
+
     throw new Error(`unexpected app.getPath(${name})`)
   })
   mkdirSync(getSystemCodexHomePath(), { recursive: true })
@@ -64,11 +68,13 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(fakeHomeDir, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   vi.clearAllMocks()
 })
 
@@ -238,11 +244,13 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
       "sqlite_home = 'C:\\Users\\example\\state'",
       'experimental_compact_prompt_file = "file://server/prompts/compact.md"'
     ]
+
     writeFileSync(getSystemConfigPath(), `${passthroughLines.join('\n')}\n`, 'utf-8')
 
     syncSystemConfigIntoManagedCodexHome()
 
     const runtimeConfig = readFileSync(getRuntimeConfigPath(), 'utf-8')
+
     for (const line of passthroughLines) {
       expect(runtimeConfig).toContain(line)
     }
@@ -264,6 +272,7 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
 
   it('preserves an existing runtime config when the system config is missing', () => {
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+
     const runtimeConfig = [
       'model = "runtime-model"',
       '',
@@ -274,6 +283,7 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
       'trust_level = "trusted"',
       ''
     ].join('\n')
+
     writeFileSync(getRuntimeConfigPath(), runtimeConfig, 'utf-8')
 
     syncSystemConfigIntoManagedCodexHome()
@@ -286,9 +296,11 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
     // Why: a 0-byte config.toml is what a half-written or unhydrated
     // cloud-synced home shows, not a deliberate "erase all my settings".
     mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+
     const runtimeConfig = ['model = "runtime-model"', '', '[features]', 'hooks = true', ''].join(
       '\n'
     )
+
     writeFileSync(getRuntimeConfigPath(), runtimeConfig, 'utf-8')
     writeFileSync(getSystemConfigPath(), '', 'utf-8')
 

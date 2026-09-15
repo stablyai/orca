@@ -18,6 +18,7 @@ export function useMobileSessionPreferenceFocus(scope: MobileSessionKeyboardStat
           setTerminalTextScale(scale)
         }
       })
+
       return () => {
         active = false
       }
@@ -33,6 +34,7 @@ export function useMobileSessionPreferenceFocus(scope: MobileSessionKeyboardStat
           setAutocompleteEnabled(enabled)
         }
       })
+
       return () => {
         active = false
       }
@@ -48,6 +50,7 @@ export function useMobileSessionPreferenceFocus(scope: MobileSessionKeyboardStat
           setTerminalLinkOpenMode(mode)
         }
       })
+
       return () => {
         active = false
       }

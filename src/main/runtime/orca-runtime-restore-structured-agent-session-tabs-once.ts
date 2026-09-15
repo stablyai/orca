@@ -30,6 +30,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
   async replaceStructuredAgentSessionTab(replacement: ConversationReplacement): Promise<void> {
     const prior = this.mobileSessionTabsByWorktree.get(replacement.workspaceId)
     const next = prior ? replaceConversationInSnapshot(prior, replacement) : null
+
     if (next && next !== prior) {
       const stored = this.storeMobileSessionSnapshot(replacement.workspaceId, next)
       this.emitMobileSessionTabsSnapshot(stored)
@@ -49,34 +50,44 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
   protected async restoreStructuredAgentSessionTabsOnce(): Promise<void> {
     await this.prepareStructuredAgentSessionStartupRestoration()
     const host = getStructuredAgentSessionHost()
+
     const persistedVisibleIndex =
       typeof host?.getPersistedVisibleSessionTabIndex === 'function'
         ? host.getPersistedVisibleSessionTabIndex()
         : { present: false, sessionIds: [] }
+
     const profileIds = collectSavedStructuredAgentSessionIds(
       this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
     )
+
     await host?.restoreReadableSessions(
       persistedVisibleIndex.present ? persistedVisibleIndex.sessionIds : profileIds
     )
+
     for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
         onlyRuntimeOwnedTerminals: true
       })
     }
+
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
+
     for (const replacement of host?.conversationReplacements?.() ?? []) {
       await this.replaceStructuredAgentSessionTab(replacement)
     }
+
     for (const session of host?.listSessionTabs() ?? []) {
       if (session.agent !== 'codex' && session.agent !== 'claude') {
         continue
       }
+
       let sessionId = session.sessionId
+
       while (sessionId.startsWith('agent-session:')) {
         sessionId = sessionId.slice('agent-session:'.length)
       }
+
       await this.publishStructuredAgentSessionTab({
         ...session,
         agent: session.agent,
@@ -96,23 +107,29 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     replacesSessionId?: string
   }): Promise<void> {
     const host = getStructuredAgentSessionHost()
+
     if (typeof host?.setSessionTabVisibility === 'function') {
       await host.setSessionTabVisibility(input.sessionId, true)
     }
+
     const existing = this.mobileSessionTabsByWorktree.get(input.workspaceId)
     const id = `agent-session:${input.sessionId}`
+
     if (existing?.tabs.some((tab) => tab.id === id)) {
       // A background re-publish is a no-op — no store write, no emit — so it cannot re-surface a
       // client whose mirror lost the tab; healing one needs `activate` or an explicit republish.
       if (!input.activate) {
         return
       }
+
       const priorGroups = existing.tabGroups ?? []
+
       const groupId =
         priorGroups.find((group) => group.tabOrder.includes(id))?.id ??
         (priorGroups.some((group) => group.id === existing.activeGroupId)
           ? existing.activeGroupId
           : priorGroups[0]?.id)
+
       const snapshot: RuntimeMobileSessionTabsSnapshot = {
         ...existing,
         snapshotVersion: existing.snapshotVersion + 1,
@@ -124,12 +141,16 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
         ),
         tabs: existing.tabs.map((tab) => ({ ...tab, isActive: tab.id === id }))
       }
+
       const stored = this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
+
       if (input.notify !== false) {
         this.emitMobileSessionTabsSnapshot(stored)
       }
+
       return
     }
+
     const tab: RuntimeMobileSessionAgentTab = {
       type: 'agent-session',
       id,
@@ -139,11 +160,14 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       agent: input.agent,
       isActive: input.activate
     }
+
     const tabs = [...(existing?.tabs ?? [])].map((candidate) => ({
       ...candidate,
       isActive: input.activate ? false : candidate.isActive
     }))
+
     tabs.push(tab)
+
     const priorGroups = existing?.tabGroups ?? [
       {
         id: getHeadlessMobileSessionGroupId(input.workspaceId),
@@ -151,9 +175,11 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
         tabOrder: []
       }
     ]
+
     const groupId = priorGroups.some((group) => group.id === existing?.activeGroupId)
       ? existing!.activeGroupId!
       : priorGroups[0]!.id
+
     const tabGroups = priorGroups.map((group) =>
       group.id === groupId
         ? {
@@ -163,6 +189,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
           }
         : group
     )
+
     const snapshot: RuntimeMobileSessionTabsSnapshot = {
       worktree: input.workspaceId,
       publicationEpoch: existing?.publicationEpoch ?? `structured:${Date.now().toString(36)}`,
@@ -174,7 +201,9 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
     }
+
     const stored = this.storeMobileSessionSnapshot(input.workspaceId, snapshot)
+
     if (input.notify !== false) {
       this.emitMobileSessionTabsSnapshot(stored)
     }
@@ -185,9 +214,11 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean }
   ): Promise<PtyProcessInspection> {
     const leaf = this.resolveLiveLeafForHandle(terminalSelector)
+
     if (!leaf?.ptyId || !this.ptyController) {
       throw new Error('terminal_gone')
     }
+
     if (this.ptyController.inspectProcess) {
       // Preserve the legacy one-argument call shape when no incarnation
       // fence was requested; some providers use arity to distinguish the
@@ -196,18 +227,23 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
         options === undefined
           ? await this.ptyController.inspectProcess(leaf.ptyId)
           : await this.ptyController.inspectProcess(leaf.ptyId, options)
+
       const evidence = inspection.foregroundProcessEvidence
       // The runtime handle is the request identity on this wire; keep the
       // host-owned leaf PTY id out of the client-facing comparison.
       const relayPtyId = parseAppSshPtyId(leaf.ptyId)?.relayPtyId
+
       const evidenceBelongsToLeaf =
         evidence !== undefined && (evidence.ptyId === leaf.ptyId || evidence.ptyId === relayPtyId)
+
       return evidenceBelongsToLeaf
         ? { ...inspection, foregroundProcessEvidence: { ...evidence, ptyId: terminalSelector } }
         : inspection
     }
+
     const foregroundProcess = await this.ptyController.getForegroundProcess(leaf.ptyId)
     const hasChildProcesses = (await this.ptyController.hasChildProcesses?.(leaf.ptyId)) ?? false
+
     return { foregroundProcess, hasChildProcesses }
   }
 
@@ -224,14 +260,17 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     worktreeSelector?: string
   }): Promise<{ repo: Repo; repoPath: string }> {
     const repo = await this.resolveRepoSelector(args.repoSelector)
+
     if (!args.worktreeSelector) {
       return { repo, repoPath: repo.path }
     }
 
     const worktree = await this.resolveWorktreeSelector(args.worktreeSelector)
+
     if (worktree.repoId !== repo.id) {
       throw new Error('Access denied: worktree does not belong to repository')
     }
+
     return { repo, repoPath: worktree.path }
   }
 
@@ -250,6 +289,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
       ...this.getLocalGitExecutionOptionArgs(repo)[0],
       ...(admissionTier && { admissionTier })
     }
+
     return Object.keys(localGitOptions).length > 0
       ? { localGitExecOptions: localGitOptions }
       : undefined
@@ -257,6 +297,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
 
   protected getLocalGitExecutionOptionArgs(repo: Repo): [] | [{ wslDistro?: string }] {
     const localGitOptions = getLocalProjectWorktreeGitOptions(this.requireStore(), repo)
+
     return Object.keys(localGitOptions).length > 0 ? [localGitOptions] : []
   }
 
@@ -264,6 +305,7 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     const projectRuntime = repo.connectionId
       ? undefined
       : resolveLocalProjectRuntimeForRepo(this.requireStore(), repo)
+
     return getAgentLaunchPlatformForRepo(repo, projectRuntime)
   }
 
@@ -273,9 +315,11 @@ export class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce extends OrcaRu
     if (scope.repo) {
       return this.getAgentLaunchPlatformForRepo(scope.repo)
     }
+
     if (scope.connectionId) {
       return isWindowsAbsolutePathLike(scope.path) ? 'win32' : 'linux'
     }
+
     return isWslUncPath(scope.path) ? 'linux' : process.platform
   }
 }

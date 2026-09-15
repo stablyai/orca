@@ -30,32 +30,41 @@ export function handleFocusTerminalPaneDetail(
   if (!detail?.tabId || detail.tabId !== tabId) {
     return
   }
+
   if (!manager || !detail.leafId) {
     return
   }
+
   const resolution = resolveLeafIdForManager(
     tabId,
     detail.leafId,
     manager,
     detail.ackPaneKeyOnSuccess ?? null
   )
+
   if (resolution.status !== 'resolved') {
     // Why: stale pane keys must fail closed instead of focusing a sibling pane.
     if (resolution.leafId) {
       surfaceStaleAgentRow(tabId, resolution.leafId)
     }
+
     return
   }
+
   manager.setActivePane(resolution.numericPaneId, { focus: true })
+
   if (detail.scrollToBottomIfOutputSinceLastView) {
     scrollToBottomIfOutputSinceLastView?.(resolution.numericPaneId)
   }
+
   if (detail.flashFocusedPane) {
     const pane = manager.getPanes().find((candidate) => candidate.id === resolution.numericPaneId)
+
     if (pane) {
       flashFocusedPaneRim(pane.container)
     }
   }
+
   if (detail.ackPaneKeyOnSuccess) {
     acknowledgeAgents([detail.ackPaneKeyOnSuccess])
   }

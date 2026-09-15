@@ -23,16 +23,20 @@ export async function fetchPrHeadTrackingRef(
   options: { localGitExecOptions?: LocalGitExecOptions } = {}
 ): Promise<void> {
   const ref = `refs/remotes/${remote}/${branch}`
+
   if (!repo.connectionId) {
     await gitExecFileAsync(
       ['fetch', remote, `+refs/heads/${branch}:${ref}`],
       options.localGitExecOptions ?? { cwd: repo.path }
     )
+
     return
   }
+
   if (!sshGitProvider) {
     throw new Error('SSH Git provider is not available. Reconnect to this target and try again.')
   }
+
   await sshGitProvider.fetchRemoteTrackingRef(repo.path, remote, branch, ref)
 }
 
@@ -46,9 +50,11 @@ export async function fetchGitHubPullRequestHeadRef(
   if (!isValidReviewHeadNumber(prNumber)) {
     throw new Error(`Invalid pull request number: ${String(prNumber)}`)
   }
+
   if (!isSafeReviewHeadFetchRemote(remote)) {
     throw new Error('Pull request fetch remote must not start with "-".')
   }
+
   if (!repo.connectionId) {
     const localGitExecOptions = options.localGitExecOptions ?? { cwd: repo.path }
     const remoteComponent = await getReviewHeadRemoteComponent(remote, localGitExecOptions)
@@ -61,10 +67,13 @@ export async function fetchGitHubPullRequestHeadRef(
         timeout: REVIEW_HEAD_FETCH_TIMEOUT_MS
       }
     )
+
     return localRef
   }
+
   if (!sshGitProvider) {
     throw new Error('SSH Git provider is not available. Reconnect to this target and try again.')
   }
+
   return sshGitProvider.fetchGitHubPullRequestHead(repo.path, remote, prNumber)
 }

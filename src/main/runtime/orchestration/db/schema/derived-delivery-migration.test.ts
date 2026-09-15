@@ -16,43 +16,54 @@ describe('derived delivery migration', () => {
     for (const db of connections.splice(0)) {
       db.close()
     }
+
     for (const directory of directories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
   })
+
   function open(path: string) {
     const db = new OrchestrationDb(path)
     connections.push(db)
+
     return db
   }
+
   function databasePath() {
     const directory = mkdtempSync(join(tmpdir(), 'orca-derived-delivery-'))
     directories.push(directory)
+
     return join(directory, 'orchestration.db')
   }
 
   it('preserves batch identity and terminal facts while removing a persisted wedge', () => {
     const path = databasePath()
     const original = open(path)
+
     const run = original.createRun({
       objective: 'upgrade',
       coordinatorHandle: 'coord',
       coordinatorPaneKey: 'tab:11111111-1111-4111-8111-111111111111'
     })
+
     const params = { runId: run.id, consumerGeneration: run.consumer_generation }
+
     const old = original.insertMessage({
       runId: run.id,
       from: 'worker',
       to: `run:${run.id}`,
       subject: 'old'
     })
+
     const batch = original.getDeliveryRaw(original.getOrCreateRunDelivery(params)!.delivery.id)!
+
     const next = original.insertMessage({
       runId: run.id,
       from: 'worker',
       to: `run:${run.id}`,
       subject: 'next'
     })
+
     connections.pop()!.close()
     const raw = new Database(path)
     dropDerivedDeliverySchema(raw)
@@ -93,22 +104,27 @@ describe('derived delivery migration', () => {
 
   it('enforces one active batch using the same derived view and permits history', () => {
     const db = open(':memory:')
+
     const run = db.createRun({
       objective: 'constraint',
       coordinatorHandle: 'coord',
       coordinatorPaneKey: 'tab:11111111-1111-4111-8111-111111111111'
     })
+
     const message = db.insertMessage({
       runId: run.id,
       from: 'worker',
       to: `run:${run.id}`,
       subject: 'one'
     })
+
     const params = { runId: run.id, consumerGeneration: run.consumer_generation }
     const first = db.getDeliveryRaw(db.getOrCreateRunDelivery(params)!.delivery.id)!
+
     const insert = db.db.prepare(`INSERT INTO deliveries
       (id, run_id, mailbox_handle, consumer_generation, message_ids, acknowledged_at, status)
       VALUES (?, ?, ?, ?, ?, ?, ?)`)
+
     const values = [run.id, `run:${run.id}`, run.consumer_generation, JSON.stringify([message.id])]
     expect(() => insert.run('duplicate', ...values, null, 'outstanding')).toThrow(
       'Mailbox already has an outstanding delivery'
@@ -126,27 +142,33 @@ describe('derived delivery migration', () => {
   it('shares a single batch across connections and rejects replaced consumers after it is consumed', () => {
     const path = databasePath()
     const first = open(path)
+
     const run = first.createRun({
       objective: 'connections',
       coordinatorHandle: 'coord',
       coordinatorPaneKey: 'tab:11111111-1111-4111-8111-111111111111'
     })
+
     const params = { runId: run.id, consumerGeneration: run.consumer_generation }
+
     const message = first.insertMessage({
       runId: run.id,
       from: 'worker',
       to: `run:${run.id}`,
       subject: 'one'
     })
+
     const second = open(path)
     const batch = first.getOrCreateRunDelivery(params)!
     expect(second.getOrCreateRunDelivery(params)?.delivery.id).toBe(batch.delivery.id)
     second.markAsRead([message.id])
+
     const replacement = second.bindRun({
       runId: run.id,
       coordinatorHandle: 'replacement',
       coordinatorPaneKey: 'other:22222222-2222-4222-9222-222222222222'
     })!
+
     expect(first.getDeliveryRaw(batch.delivery.id)).toMatchObject({
       status: 'fenced',
       acknowledged_at: null
@@ -171,15 +193,18 @@ describe('derived delivery migration', () => {
     (consumerSource) => {
       const path = databasePath()
       const db = open(path)
+
       const run = db.createRun({
         objective: 'worker connections',
         coordinatorHandle: 'coord',
         coordinatorPaneKey: 'tab:11111111-1111-4111-8111-111111111111'
       })
+
       const dispatchId =
         consumerSource === 'dispatch'
           ? createRootDispatch(db, db.createTask({ spec: 'work', runId: run.id }).id, 'worker').id
           : 'ctx_remote'
+
       if (consumerSource === 'attachment') {
         db.createRemoteDispatchAttachment({
           runId: run.id,
@@ -196,22 +221,27 @@ describe('derived delivery migration', () => {
           }
         })
       }
+
       const mailboxHandle = `dispatch:${dispatchId}`
+
       const message = db.insertMessage({
         runId: run.id,
         from: 'coord',
         to: mailboxHandle,
         subject: 'old'
       })
+
       const params = { runId: run.id, mailboxHandle, consumerGeneration: 0, consumerSource }
       const batch = db.getOrCreateMailboxDelivery(params)!
       const peer = open(path)
       peer.markAsRead([message.id])
+
       const authority = {
         dispatchId,
         paneKey: 'other:22222222-2222-4222-9222-222222222222',
         processIncarnation: 'worker:2'
       }
+
       if (consumerSource === 'dispatch') {
         peer.mintDispatchCapability(authority)
       } else {
@@ -223,6 +253,7 @@ describe('derived delivery migration', () => {
           effects: []
         })
       }
+
       expect(db.getDeliveryRaw(batch.delivery.id)).toMatchObject({
         status: 'fenced',
         acknowledged_at: null
@@ -245,9 +276,11 @@ describe('derived delivery migration', () => {
     expect(
       (db.db.pragma('table_info(deliveries)') as { name: string }[]).map((c) => c.name)
     ).toContain('status')
+
     const index = db.db
       .prepare("SELECT sql FROM sqlite_master WHERE name = 'idx_deliveries_one_outstanding'")
       .get() as { sql: string }
+
     expect(index.sql).not.toContain('UNIQUE')
     expect(index.sql).toContain("status = 'outstanding' AND mailbox_handle != ''")
     // Why: a v40 binary probes exactly these objects before trusting the stamp; nothing it needs is gone.

@@ -34,15 +34,19 @@ export function promoteAgentTeamsShimPath(
   if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
     return
   }
+
   const normalizedRequestedPath =
     process.platform === 'win32'
       ? expandWindowsEnvironmentVariables(requestedPath, env)
       : requestedPath
+
   const pathDelimiter = process.platform === 'win32' ? ';' : delimiter
   const shimDir = normalizedRequestedPath.split(pathDelimiter)[0]
+
   if (!shimDir) {
     return
   }
+
   const pathKey = resolvePathEnvKey(env, process.platform)
   const currentParts = env[pathKey]?.split(pathDelimiter).filter(Boolean) ?? []
   env[pathKey] = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
@@ -55,7 +59,9 @@ export function getWslContextFromWorktreeId(
   const worktreePath = worktreeId
     ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
     : undefined
+
   const wslInfo = worktreePath ? parseWslPath(worktreePath) : null
+
   return wslInfo ? { distro: wslInfo.distro, treatPosixCwdAsWsl: true } : undefined
 }
 
@@ -63,6 +69,7 @@ export function getWslContextFromPreferredDistro(
   distro: string | null | undefined
 ): { distro: string; treatPosixCwdAsWsl: true } | undefined {
   const trimmed = distro?.trim()
+
   return trimmed ? { distro: trimmed, treatPosixCwdAsWsl: true } : undefined
 }
 
@@ -71,6 +78,7 @@ export function normalizeLocalCallerSessionId(
   allowNumeric = false
 ): string | null {
   const requested = sessionId?.trim()
+
   return !requested || (!allowNumeric && /^\d+$/.test(requested)) ? null : requested
 }
 
@@ -78,6 +86,7 @@ export function normalizeForegroundProcessName(
   processName: string | null | undefined
 ): string | null {
   const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
+
   return !trimmed || trimmed === 'xterm-256color' ? null : trimmed.split(/[\\/]/).pop() || null
 }
 
@@ -88,6 +97,7 @@ export function resolveForegroundFallbackProcess(
   if (process.platform !== 'win32' || normalizeForegroundProcessName(processName)) {
     return processName || null
   }
+
   return shellName ?? processName ?? null
 }
 

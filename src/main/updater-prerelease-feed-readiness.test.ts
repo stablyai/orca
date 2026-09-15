@@ -24,6 +24,7 @@ function buildAtomFeed(tags: string[]): string {
 
 function buildManifest(tag: string): string {
   const version = tag.replace(/^v/i, '')
+
   return [
     `version: ${version}`,
     'files:',
@@ -71,8 +72,10 @@ function respondWithAtom(
     }
 
     const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z]+)?\.yml$/)
+
     if (manifestMatch) {
       const tag = decodeURIComponent(manifestMatch[1])
+
       if (unavailableManifests.has(tag)) {
         return Promise.resolve({
           ok: false,
@@ -80,6 +83,7 @@ function respondWithAtom(
           text: () => Promise.resolve('')
         })
       }
+
       return Promise.resolve({
         ok: !missingManifests.has(tag),
         status: missingManifests.has(tag) ? missingManifestStatus : 200,
@@ -88,6 +92,7 @@ function respondWithAtom(
     }
 
     const assetMatch = url.match(/\/releases\/download\/([^/]+)\/(.+)$/)
+
     if (assetMatch && init?.method === 'HEAD') {
       return Promise.resolve({
         ok: !missingAssets.has(decodeURIComponent(assetMatch[1])),
@@ -127,6 +132,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
             text: () => Promise.resolve(buildAtomFeed(['v1.4.190']))
           })
         }
+
         if (isPlatformManifestRequest(url)) {
           return Promise.resolve({
             ok: true,
@@ -134,10 +140,13 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
             text: () => Promise.resolve(buildWindowsManifest('1.4.190'))
           })
         }
+
         if (init?.method === 'HEAD') {
           assetRequestInits.push(init)
+
           return Promise.resolve({ ok: false, status: 302, text: () => Promise.resolve('') })
         }
+
         return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
       }
     )
@@ -161,6 +170,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
           text: () => Promise.resolve(buildAtomFeed(['v1.4.190']))
         })
       }
+
       if (isPlatformManifestRequest(url)) {
         return Promise.resolve({
           ok: true,
@@ -168,9 +178,11 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
           text: () => Promise.resolve(buildWindowsManifest('1.4.190'))
         })
       }
+
       if (init?.method === 'HEAD') {
         return Promise.resolve({ ok: false, status, text: () => Promise.resolve('') })
       }
+
       return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
     })
 
@@ -192,6 +204,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
           text: () => Promise.resolve(buildAtomFeed(['v1.4.190']))
         })
       }
+
       if (isPlatformManifestRequest(url)) {
         return Promise.resolve({
           ok: true,
@@ -199,9 +212,11 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
           text: () => Promise.resolve(buildWindowsManifest('1.4.190'))
         })
       }
+
       if (init?.method === 'HEAD') {
         return Promise.reject(new Error('network down'))
       }
+
       return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
     })
 
@@ -218,9 +233,11 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
     vi.useFakeTimers()
     setPlatformForTest('win32')
     let resolveAsset: (() => void) | undefined
+
     const pendingAsset = new Promise<{ ok: boolean; status: number }>((resolve) => {
       resolveAsset = () => resolve({ ok: false, status: 503 })
     })
+
     netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
       if (url === 'https://github.com/stablyai/orca/releases.atom') {
         return Promise.resolve({
@@ -229,6 +246,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
           text: () => Promise.resolve(buildAtomFeed(['v1.4.190']))
         })
       }
+
       if (isPlatformManifestRequest(url)) {
         return Promise.resolve({
           ok: true,
@@ -236,9 +254,11 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
           text: () => Promise.resolve(buildWindowsManifest('1.4.190'))
         })
       }
+
       if (init?.method === 'HEAD') {
         return pendingAsset
       }
+
       return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
     })
 
@@ -349,6 +369,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
           text: () => Promise.resolve(buildAtomFeed(['v1.4.28']))
         })
       }
+
       return Promise.reject(new Error('ETIMEDOUT'))
     })
 
@@ -372,8 +393,10 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
       }
 
       const manifestMatch = url.match(/\/releases\/download\/([^/]+)\/latest(?:-[a-z]+)?\.yml$/)
+
       if (manifestMatch) {
         const version = decodeURIComponent(manifestMatch[1]).replace(/^v/i, '')
+
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -396,6 +419,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
         const latest = url.includes('/v1.4.28/')
         const unavailable = latest && url.endsWith('/Orca-1.4.28-mac.zip')
         const missing = latest && url.endsWith('/orca-windows-setup.exe')
+
         return Promise.resolve({
           ok: !missing && !unavailable,
           status: missing ? publishingIncident.missingWindowsAssetStatus : unavailable ? 503 : 200,
@@ -426,6 +450,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
           text: () => Promise.resolve(buildAtomFeed(['v1.4.28']))
         })
       }
+
       if (isPlatformManifestRequest(url)) {
         return Promise.resolve({
           ok: true,
@@ -443,14 +468,17 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
             )
         })
       }
+
       if (init?.method === 'HEAD') {
         const isWindowsAsset = url.endsWith('/orca-windows-setup.exe')
+
         return Promise.resolve({
           ok: false,
           status: isWindowsAsset ? publishingIncident.missingWindowsAssetStatus : 503,
           text: () => Promise.resolve('')
         })
       }
+
       return Promise.resolve({ ok: false, status: 503, text: () => Promise.resolve('') })
     })
 
@@ -490,6 +518,7 @@ describe('fetchNewerReleaseTagsWithReadiness', () => {
 
       if (init?.method === 'HEAD') {
         assetUrls.push(url)
+
         return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('') })
       }
 

@@ -6,6 +6,7 @@ const wslMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../wsl', () => ({ listRunningWslHomeDirsAsync: wslMocks.listRunningWslHomeDirsAsync }))
+
 vi.mock('../wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: wslMocks.filterPathsToRunningWslDistrosAsync
 }))
@@ -21,9 +22,12 @@ import {
 import { WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
+
 const DEBIAN_HOME = '\\\\wsl.localhost\\Debian\\home\\other'
+
 const ROLLOUT_LINUX =
   '/home/ada/.local/share/orca/codex-runtime-home/home/sessions/2026/07/24/rollout-sess.jsonl'
+
 const ROLLOUT_UNC =
   '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home\\sessions\\2026\\07\\24\\rollout-sess.jsonl'
 
@@ -77,6 +81,7 @@ describe('toHostReadableTranscriptPath', () => {
         platform: 'win32',
         pathExists: async (candidate) => {
           seen.push(candidate)
+
           return true
         },
         listWslHomeDirs: async () => [UBUNTU_HOME]
@@ -124,6 +129,7 @@ describe('toHostReadableTranscriptPath', () => {
         platform: 'win32',
         pathExists: async (candidate) => {
           seen.push(candidate)
+
           return true
         },
         listWslHomeDirs: async () => [DEBIAN_HOME, UBUNTU_HOME]
@@ -142,6 +148,7 @@ describe('toHostReadableTranscriptPath', () => {
         wslDistro: 'Ubuntu',
         pathExists: async (candidate) => {
           seen.push(candidate)
+
           return candidate.includes('Ubuntu') || candidate.includes('Debian')
         },
         listWslHomeDirs: async () => [DEBIAN_HOME, UBUNTU_HOME]
@@ -216,6 +223,7 @@ describe('toHostReadableTranscriptPath', () => {
           if (candidate.includes('Debian')) {
             throw new WslTranscriptFsError('timeout', 'slow share')
           }
+
           return candidate.includes('Ubuntu')
         },
         listWslHomeDirs: async () => [DEBIAN_HOME, UBUNTU_HOME]
@@ -232,6 +240,7 @@ describe('toHostReadableTranscriptPath', () => {
           if (candidate.includes('Debian')) {
             throw refusal
           }
+
           return false
         },
         listWslHomeDirs: async () => [DEBIAN_HOME, UBUNTU_HOME]
@@ -255,6 +264,7 @@ describe('toHostReadableTranscriptPath', () => {
     // Why: getWslHomeAsync does not cache failures; re-spawning wsl.exe on every
     // 500ms poll tick would hammer the main process.
     const listWslHomeDirs = vi.fn(async () => [UBUNTU_HOME])
+
     for (let tick = 0; tick < 5; tick += 1) {
       await toHostReadableTranscriptPath(ROLLOUT_LINUX, {
         platform: 'win32',
@@ -262,6 +272,7 @@ describe('toHostReadableTranscriptPath', () => {
         listWslHomeDirs
       })
     }
+
     await wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs })
     expect(listWslHomeDirs).toHaveBeenCalledTimes(1)
   })
@@ -271,6 +282,7 @@ describe('toHostReadableTranscriptPath', () => {
     // out on a cold boot. Latching that partial list for the process lifetime
     // would leave that distro's transcripts permanently unresolvable (#10326).
     vi.useFakeTimers()
+
     try {
       const listWslHomeDirs = vi
         .fn<() => Promise<string[]>>()
@@ -278,6 +290,7 @@ describe('toHostReadableTranscriptPath', () => {
         .mockResolvedValue([UBUNTU_HOME, DEBIAN_HOME])
 
       const debianRollout = '\\\\wsl.localhost\\Debian\\home\\other\\x.jsonl'
+
       const call = (): Promise<string | null> =>
         toHostReadableTranscriptPath('/home/other/x.jsonl', {
           platform: 'win32',

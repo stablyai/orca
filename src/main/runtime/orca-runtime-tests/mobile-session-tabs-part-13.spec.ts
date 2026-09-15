@@ -28,6 +28,7 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
     ])
+
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => ({
@@ -35,6 +36,7 @@ describe('OrcaRuntimeService', () => {
         [otherWorktreeId]: makeWorktreeMeta({ displayName: 'other' })
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setNotifier({
       focusTerminal: vi.fn(),
@@ -52,15 +54,18 @@ describe('OrcaRuntimeService', () => {
       terminalDriverChanged: vi.fn()
     })
     const webContents = { send: vi.fn() }
+
     const send = vi.fn((_channel: string, payload: { requestId: string; worktreeId: string }) => {
       const parentTabId =
         payload.worktreeId === TEST_WORKTREE_ID ? 'tab-renderer-a' : 'tab-renderer-b'
+
       ipcMain.emit(
         'terminal:tabCreateReply',
         { sender: webContents },
         { requestId: payload.requestId, tabId: parentTabId, title: 'Terminal' }
       )
     })
+
     webContents.send = send
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -73,14 +78,17 @@ describe('OrcaRuntimeService', () => {
       activate: false,
       clientMutationId: 'mutation-1'
     })
+
     const secondCreate = runtime.createMobileSessionTerminal(`id:${otherWorktreeId}`, {
       activate: false,
       clientMutationId: 'mutation-1'
     })
+
     await vi.waitFor(() => {
       const createRequests = send.mock.calls.filter(
         ([channel]) => channel === 'terminal:requestTabCreate'
       )
+
       expect(createRequests).toHaveLength(2)
     })
     runtime.syncWindowGraph(1, {
@@ -147,6 +155,7 @@ describe('OrcaRuntimeService', () => {
     const createRequests = send.mock.calls.filter(
       ([channel]) => channel === 'terminal:requestTabCreate'
     )
+
     expect(createRequests).toHaveLength(2)
     expect(first.tab).toMatchObject({ parentTabId: 'tab-renderer-a' })
     expect(second.tab).toMatchObject({ parentTabId: 'tab-renderer-b' })
@@ -154,6 +163,7 @@ describe('OrcaRuntimeService', () => {
 
   it('materializes a renderer-created mobile terminal whose surface stays pending', async () => {
     vi.useFakeTimers()
+
     try {
       const pendingLeafId = '33333333-3333-4333-8333-333333333333'
       const closeTerminal = vi.fn()
@@ -182,6 +192,7 @@ describe('OrcaRuntimeService', () => {
         terminalDriverChanged: vi.fn()
       })
       const webContents = { send: vi.fn() }
+
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
           'terminal:tabCreateReply',
@@ -189,6 +200,7 @@ describe('OrcaRuntimeService', () => {
           { requestId: payload.requestId, tabId: 'tab-pending', title: 'Terminal' }
         )
       })
+
       webContents.send = send
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -201,10 +213,13 @@ describe('OrcaRuntimeService', () => {
         activate: true,
         viewMode: 'terminal'
       })
+
       let settled = false
+
       const settledCreate = create.finally(() => {
         settled = true
       })
+
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
       runtime.syncWindowGraph(1, {
@@ -275,6 +290,7 @@ describe('OrcaRuntimeService', () => {
 
   it('rolls back a half-created terminal whose surface never publishes', async () => {
     vi.useFakeTimers()
+
     try {
       const closeTerminal = vi.fn()
       const runtime = new OrcaRuntimeService(store)
@@ -295,6 +311,7 @@ describe('OrcaRuntimeService', () => {
       })
       // Why: reply with a tabId but never sync a surface graph, so waitForMobileTerminalSurface times out and rollback runs.
       const webContents = { send: vi.fn() }
+
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
           'terminal:tabCreateReply',
@@ -302,6 +319,7 @@ describe('OrcaRuntimeService', () => {
           { requestId: payload.requestId, tabId: 'tab-ghost', title: 'Terminal' }
         )
       })
+
       webContents.send = send
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -313,10 +331,12 @@ describe('OrcaRuntimeService', () => {
       const pending = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
         activate: false
       })
+
       const settled = pending.then(
         () => ({ ok: true as const }),
         (error: Error) => ({ ok: false as const, error })
       )
+
       await vi.advanceTimersByTimeAsync(11_000)
       const outcome = await settled
 
@@ -329,6 +349,7 @@ describe('OrcaRuntimeService', () => {
 
   it('rolls back a mobile create when the materialize spawn fails and no live PTY backs the tab', async () => {
     vi.useFakeTimers()
+
     try {
       const pendingLeafId = '99999999-9999-4999-8999-999999999999'
       const closeTerminal = vi.fn()
@@ -343,6 +364,7 @@ describe('OrcaRuntimeService', () => {
       })
       runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
       const webContents = { send: vi.fn() }
+
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
           'terminal:tabCreateReply',
@@ -350,6 +372,7 @@ describe('OrcaRuntimeService', () => {
           { requestId: payload.requestId, tabId: 'tab-pending', title: 'Terminal' }
         )
       })
+
       webContents.send = send
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -361,10 +384,12 @@ describe('OrcaRuntimeService', () => {
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
         activate: true
       })
+
       const settled = create.then(
         () => ({ ok: true as const }),
         (error: Error) => ({ ok: false as const, error })
       )
+
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
       // Only the tab shell publishes (no ptyId → never ready); no PTY ever binds.
@@ -406,6 +431,7 @@ describe('OrcaRuntimeService', () => {
 
   it('keeps a mobile-created terminal alive when the renderer never publishes the surface', async () => {
     vi.useFakeTimers()
+
     try {
       const leafId = '44444444-4444-4444-8444-444444444444'
       const closeTerminal = vi.fn()
@@ -413,6 +439,7 @@ describe('OrcaRuntimeService', () => {
       runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
       // Why: reply with a tabId but never sync a matching graph, reproducing a renderer that spawns the PTY but stalls graph-sync past the surface timeout (#7587).
       const webContents = { send: vi.fn() }
+
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
           'terminal:tabCreateReply',
@@ -420,6 +447,7 @@ describe('OrcaRuntimeService', () => {
           { requestId: payload.requestId, tabId: 'tab-alive', title: 'Terminal' }
         )
       })
+
       webContents.send = send
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -432,10 +460,13 @@ describe('OrcaRuntimeService', () => {
         activate: true,
         viewMode: 'chat'
       })
+
       let settled = false
+
       const settledCreate = create.finally(() => {
         settled = true
       })
+
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
       // A shell-only snapshot can win the first race but omit launch props; the later PTY rescue must fill the explicit mode.
@@ -491,6 +522,7 @@ describe('OrcaRuntimeService', () => {
 
   it('keeps a mobile-created terminal alive when the renderer PTY spawn races ahead of the reply', async () => {
     vi.useFakeTimers()
+
     try {
       const leafId = '55555555-5555-4555-8555-555555555555'
       const closeTerminal = vi.fn()
@@ -498,6 +530,7 @@ describe('OrcaRuntimeService', () => {
       runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
       // Why: spawn and tabCreate reply are independent IPC channels; here the PTY registers before the reply, so the pre-wait check resolves it.
       const webContents = { send: vi.fn() }
+
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         runtime.registerPty('pty-early', TEST_WORKTREE_ID, null, {
           tabId: 'tab-early',
@@ -509,6 +542,7 @@ describe('OrcaRuntimeService', () => {
           { requestId: payload.requestId, tabId: 'tab-early', title: 'Terminal' }
         )
       })
+
       webContents.send = send
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -520,10 +554,13 @@ describe('OrcaRuntimeService', () => {
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
         activate: true
       })
+
       let settled = false
+
       const settledCreate = create.finally(() => {
         settled = true
       })
+
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
       // Resolves via the immediate pre-wait rescue, well under the 10s timeout (not the catch path).
@@ -546,9 +583,11 @@ describe('OrcaRuntimeService', () => {
 
   it('delivers the agent launch command when a create settles over a bare renderer PTY', async () => {
     vi.useFakeTimers()
+
     try {
       const leafId = '77777777-7777-4777-8777-777777777777'
       const write = vi.fn((_ptyId: string, _data: string) => true)
+
       const runtime = new OrcaRuntimeService({
         ...store,
         getSettings: () => ({
@@ -557,6 +596,7 @@ describe('OrcaRuntimeService', () => {
           agentCmdOverrides: {}
         })
       } as never)
+
       runtime.setPtyController({
         spawn: vi.fn(),
         write,
@@ -565,6 +605,7 @@ describe('OrcaRuntimeService', () => {
       })
       runtime.setNotifier(createMobileCreateTestNotifier(vi.fn()))
       const webContents = { send: vi.fn() }
+
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         // Why: the pane spawned before its startup queue landed (the #7587
         // renderer-stall class), so no spawn command is recorded for the PTY.
@@ -575,6 +616,7 @@ describe('OrcaRuntimeService', () => {
           { requestId: payload.requestId, tabId: 'tab-bare', title: 'Terminal' }
         )
       })
+
       webContents.send = send
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -587,6 +629,7 @@ describe('OrcaRuntimeService', () => {
         agent: 'codex',
         activate: true
       })
+
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
       await vi.advanceTimersByTimeAsync(50)
       const result = await create

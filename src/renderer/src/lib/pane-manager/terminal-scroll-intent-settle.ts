@@ -15,8 +15,10 @@ export function syncTerminalScrollIntentSoon(
     if (options.shouldSync?.() === false) {
       return
     }
+
     syncTerminalScrollIntentFromViewport(terminal, options)
   }
+
   queueMicrotask(sync)
   requestAnimationFrame(sync)
   requestAnimationFrame(() => requestAnimationFrame(sync))

@@ -14,13 +14,17 @@ export const agentStatusApi = {
   onSet: (callback: (data: AgentStatusIpcPayload) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: AgentStatusIpcPayload) =>
       callback(data)
+
     ipcRenderer.on('agentStatus:set', listener)
+
     return () => ipcRenderer.removeListener('agentStatus:set', listener)
   },
   onClear: (callback: (data: AgentStatusClearIpcPayload) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: AgentStatusClearIpcPayload) =>
       callback(data)
+
     ipcRenderer.on('agentStatus:clear', listener)
+
     return () => ipcRenderer.removeListener('agentStatus:clear', listener)
   },
   /** Pull cached hook statuses after renderer hydration, so startup replays aren't lost before tabs exist. */
@@ -35,12 +39,15 @@ export const agentStatusApi = {
   ): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, entry: MigrationUnsupportedPtyEntry) =>
       callback(entry)
+
     ipcRenderer.on('agentStatus:migrationUnsupported', listener)
+
     return () => ipcRenderer.removeListener('agentStatus:migrationUnsupported', listener)
   },
   onMigrationUnsupportedClear: (callback: (data: { ptyId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { ptyId: string }) => callback(data)
     ipcRenderer.on('agentStatus:migrationUnsupportedClear', listener)
+
     return () => ipcRenderer.removeListener('agentStatus:migrationUnsupportedClear', listener)
   },
   onLegacyWorkerTerminalRecovery: (
@@ -58,7 +65,9 @@ export const agentStatusApi = {
         ptyId?: string
       }
     ) => callback(data)
+
     ipcRenderer.on('agentStatus:legacyWorkerTerminalRecovery', listener)
+
     return () => ipcRenderer.removeListener('agentStatus:legacyWorkerTerminalRecovery', listener)
   },
   getMigrationUnsupportedSnapshot: (): Promise<MigrationUnsupportedPtyEntry[]> =>

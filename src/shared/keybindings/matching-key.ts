@@ -14,6 +14,7 @@ export function platformModifiers(
   platform: NodeJS.Platform
 ): { meta: boolean; control: boolean; alt: boolean; shift: boolean } {
   const isMac = platform === 'darwin'
+
   return {
     meta: parsed.meta || (parsed.mod && isMac),
     control: parsed.control || (parsed.mod && !isMac),
@@ -28,6 +29,7 @@ export function modifierStateMatches(
   platform: NodeJS.Platform
 ): boolean {
   const expected = platformModifiers(parsed, platform)
+
   return (
     hasModifier(input, 'meta') === expected.meta &&
     hasModifier(input, 'control') === expected.control &&
@@ -71,9 +73,11 @@ export function letterKeyMatches(
   platform: NodeJS.Platform
 ): boolean {
   const logicalKey = logicalKeyTokenFromInput(input)
+
   if (logicalKey && logicalKey.length === 1 && logicalKey >= 'A' && logicalKey <= 'Z') {
     return logicalKey === letter.toUpperCase()
   }
+
   return (
     (canFallBackToPhysicalCode(input, platform) ||
       shouldUseMacOptionLetterPhysicalFallback(parsed, input, platform)) &&
@@ -87,19 +91,23 @@ export function digitKeyMatches(
   platform: NodeJS.Platform
 ): boolean {
   const logicalKey = logicalKeyTokenFromInput(input)
+
   if (logicalKey && logicalKey.length === 1 && logicalKey >= '0' && logicalKey <= '9') {
     return logicalKey === digit
   }
+
   return canFallBackToPhysicalCode(input, platform) && input.code === `Digit${digit}`
 }
 
 export function semanticPunctuationKey(input: KeybindingInput): string | null {
   const logicalKey = logicalKeyTokenFromInput(input)
+
   return isPunctuationKeyToken(logicalKey) ? logicalKey : null
 }
 
 export function physicalPunctuationKey(input: KeybindingInput): string | null {
   const physicalKey = physicalCodeKeyTokenFromInput(input)
+
   return isPunctuationKeyToken(physicalKey) ? physicalKey : null
 }
 
@@ -120,6 +128,7 @@ export function shouldUseSemanticPunctuation(
   ) {
     return false
   }
+
   return true
 }
 
@@ -132,6 +141,7 @@ export function keyMatches(
   if (parsedKey.length === 1 && parsedKey >= 'A' && parsedKey <= 'Z') {
     return letterKeyMatches(input, parsedKey, parsed, platform)
   }
+
   if (parsedKey.length === 1 && parsedKey >= '0' && parsedKey <= '9') {
     return digitKeyMatches(input, parsedKey, platform)
   }
@@ -146,12 +156,15 @@ export function keyMatches(
   if (isPunctuationKeyToken(parsedKey)) {
     // Why: shortcut labels name logical punctuation, but international layouts can report it from different physical codes.
     const semanticKey = semanticPunctuationKey(input)
+
     if (semanticKey !== null) {
       if (!shouldUseSemanticPunctuation(parsed, input, platform)) {
         return false
       }
+
       return semanticKey === parsedKey
     }
+
     return (
       (canFallBackToPhysicalCode(input, platform) ||
         shouldUseMacOptionPunctuationPhysicalFallback(parsed, input, platform)) &&
@@ -160,9 +173,11 @@ export function keyMatches(
   }
 
   const logicalKey = logicalKeyTokenFromInput(input)
+
   if (logicalKey !== null) {
     return logicalKey === parsedKey
   }
+
   return (
     canFallBackToPhysicalCode(input, platform) && physicalCodeKeyTokenFromInput(input) === parsedKey
   )

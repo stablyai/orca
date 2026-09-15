@@ -7,6 +7,7 @@ import { OrchestrationDb } from '../orchestration-db'
 import { createRootDispatch } from '../root-dispatch-test-fixture'
 
 type Settlement = 'local completion' | 'local failure' | 'remote stop' | 'remote failure'
+
 type DeliveryOperation = 'create' | 'acknowledge'
 
 describe('mailbox consumer lifecycle fencing', () => {
@@ -17,6 +18,7 @@ describe('mailbox consumer lifecycle fencing', () => {
     for (const db of connections.splice(0)) {
       db.close()
     }
+
     for (const directory of directories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -25,12 +27,14 @@ describe('mailbox consumer lifecycle fencing', () => {
   function open(path: string): OrchestrationDb {
     const db = new OrchestrationDb(path)
     connections.push(db)
+
     return db
   }
 
   function databasePath(): string {
     const directory = mkdtempSync(join(tmpdir(), 'orca-mailbox-consumer-lifecycle-'))
     directories.push(directory)
+
     return join(directory, 'orchestration.db')
   }
 
@@ -48,15 +52,19 @@ describe('mailbox consumer lifecycle fencing', () => {
   } {
     const path = databasePath()
     const db = open(path)
+
     const run = db.createRun({
       objective: 'Fence settled mailbox consumers',
       coordinatorHandle: 'coord',
       coordinatorPaneKey: 'tab:11111111-1111-4111-8111-111111111111'
     })
+
     const remote = settlement.startsWith('remote')
+
     const dispatchId = remote
       ? `ctx_${settlement.replace(' ', '_')}`
       : createRootDispatch(db, db.createTask({ runId: run.id, spec: settlement }).id, 'worker').id
+
     let consumerGeneration = 0
 
     if (remote) {
@@ -74,6 +82,7 @@ describe('mailbox consumer lifecycle fencing', () => {
           payloadHash: `hash_${dispatchId}`
         }
       })
+
       if (settlement === 'remote stop') {
         db.prepareRemoteAttachmentAuthority({
           dispatchId,
@@ -90,13 +99,16 @@ describe('mailbox consumer lifecycle fencing', () => {
     }
 
     const mailboxHandle = `dispatch:${dispatchId}`
+
     const message = db.insertMessage({
       runId: run.id,
       from: 'coord',
       to: mailboxHandle,
       subject: 'must remain unread'
     })
+
     const peer = open(path)
+
     const settle = (): void => {
       if (settlement === 'local completion') {
         peer.completeDispatch(dispatchId)
@@ -132,6 +144,7 @@ describe('mailbox consumer lifecycle fencing', () => {
     }
   ): number | undefined {
     const dispatchId = params.mailboxHandle.slice('dispatch:'.length)
+
     return params.consumerSource === 'dispatch'
       ? db.getDispatchContextById(dispatchId)?.consumer_generation
       : db.getRemoteDispatchAttachment(dispatchId)?.consumer_generation
@@ -151,6 +164,7 @@ describe('mailbox consumer lifecycle fencing', () => {
     { operation: 'acknowledge', settlement: 'remote failure' }
   ])('rejects $operation after $settlement on another connection', ({ operation, settlement }) => {
     const { db, peer, messageId, params, settle } = setup(settlement)
+
     const delivery =
       operation === 'acknowledge' ? db.getOrCreateMailboxDelivery(params)?.delivery : undefined
 
@@ -160,9 +174,11 @@ describe('mailbox consumer lifecycle fencing', () => {
       operation === 'create'
         ? db.getOrCreateMailboxDelivery(params)
         : db.acknowledgeMailboxDelivery({ ...params, deliveryId: delivery!.id })
+
     expect(operationCall).toThrow(expect.objectContaining({ code: 'consumer_fenced' }))
     expect(db.getMessageById(messageId)?.read).toBe(0)
     expect(currentGeneration(peer, params)).toBe(params.consumerGeneration)
+
     if (delivery) {
       expect(db.getDeliveryRaw(delivery.id)?.acknowledged_at).toBeNull()
     }
@@ -173,11 +189,13 @@ describe('mailbox consumer lifecycle fencing', () => {
     (state) => {
       const path = databasePath()
       const db = open(path)
+
       const run = db.createRun({
         objective: 'Preserve unverifiable remote consumers',
         coordinatorHandle: 'coord',
         coordinatorPaneKey: 'tab:11111111-1111-4111-8111-111111111111'
       })
+
       const dispatchId = `ctx_${state}`
       db.createRemoteDispatchAttachment({
         runId: run.id,
@@ -194,6 +212,7 @@ describe('mailbox consumer lifecycle fencing', () => {
         }
       })
       let consumerGeneration = 0
+
       if (state === 'start_unknown') {
         db.failRemoteAttachment(dispatchId, 'start_unknown', 'contact lost', true)
       } else {
@@ -211,7 +230,9 @@ describe('mailbox consumer lifecycle fencing', () => {
         db.markRemoteAttachmentStopUnknown(dispatchId, 'contact lost')
         consumerGeneration = 1
       }
+
       const mailboxHandle = `dispatch:${dispatchId}`
+
       const message = db.insertMessage({
         runId: run.id,
         from: 'coord',

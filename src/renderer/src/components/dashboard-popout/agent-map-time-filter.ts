@@ -1,12 +1,16 @@
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 
 export type AgentMapTimeField = 'lifespan' | 'sinceMessage' | 'timeInState'
+
 /** Inclusive stop indices into `AGENT_MAP_TIME_STOPS`. */
 export type AgentMapTimeRange = { min: number; max: number }
+
 export type AgentMapTimeRanges = Record<AgentMapTimeField, AgentMapTimeRange>
 
 const MINUTE = 60_000
+
 const HOUR = 60 * MINUTE
+
 const DAY = 24 * HOUR
 
 /** Non-linear stops: minutes matter as much as days, so a linear axis would
@@ -30,6 +34,7 @@ export const AGENT_MAP_TIME_STOPS: readonly number[] = [
 ]
 
 export const AGENT_MAP_TIME_MAX_INDEX = AGENT_MAP_TIME_STOPS.length - 1
+
 export const AGENT_MAP_TIME_FIELDS: readonly AgentMapTimeField[] = [
   'lifespan',
   'sinceMessage',
@@ -55,18 +60,23 @@ export function isFullAgentMapTimeRange(range: AgentMapTimeRange): boolean {
 
 export function agentMapTimeStopLabel(index: number): string {
   const ms = AGENT_MAP_TIME_STOPS[Math.min(Math.max(index, 0), AGENT_MAP_TIME_MAX_INDEX)]
+
   if (!Number.isFinite(ms)) {
     return '∞'
   }
+
   if (ms === 0) {
     return '0'
   }
+
   if (ms < HOUR) {
     return `${Math.round(ms / MINUTE)}m`
   }
+
   if (ms < DAY) {
     return `${Math.round(ms / HOUR)}h`
   }
+
   return `${Math.round(ms / DAY)}d`
 }
 
@@ -79,6 +89,7 @@ export function agentMapDurations(
   const enteredState = validTimestamp(card.stateChangedAt) ? card.stateChangedAt : startedAt
   const lastMessage = validTimestamp(card.statusUpdatedAt) ? card.statusUpdatedAt : enteredState
   const finishedAt = validTimestamp(card.finishedAt) ? card.finishedAt : null
+
   return {
     lifespan: startedAt === null ? 0 : Math.max(0, (finishedAt ?? now) - startedAt),
     // No per-message timestamp rides the snapshot; the last accepted hook update
@@ -96,6 +107,7 @@ function withinRange(value: number, range: AgentMapTimeRange): boolean {
   if (value < AGENT_MAP_TIME_STOPS[Math.max(0, range.min)]) {
     return false
   }
+
   return range.max >= AGENT_MAP_TIME_MAX_INDEX || value <= AGENT_MAP_TIME_STOPS[range.max]
 }
 
@@ -105,6 +117,7 @@ export function matchesAgentMapTimeRanges(
   now: number
 ): boolean {
   const durations = agentMapDurations(card, now)
+
   return AGENT_MAP_TIME_FIELDS.every((field) => withinRange(durations[field], ranges[field]))
 }
 

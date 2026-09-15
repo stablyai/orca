@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { ExternalLink } from 'lucide-react'
+
 export function TaskPageGitHubModeControls({
   model
 }: {
@@ -30,6 +31,7 @@ export function TaskPageGitHubModeControls({
     selectedGitHubRepoExternalLink,
     handleSelectGithubTaskKind
   } = model
+
   return taskSource === 'github' ? (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
       {projectModeVisible ? (
@@ -39,6 +41,7 @@ export function TaskPageGitHubModeControls({
               mode.id === 'project'
                 ? githubMode === 'project'
                 : githubMode === 'items' && activeGithubTaskKind === mode.id
+
             return (
               <button
                 key={mode.id}
@@ -49,8 +52,10 @@ export function TaskPageGitHubModeControls({
                     setTaskResumeState({
                       githubMode: 'project'
                     })
+
                     return
                   }
+
                   setGithubMode('items')
                   setTaskResumeState({
                     githubMode: 'items'
@@ -117,6 +122,7 @@ export function TaskPageGitHubModeControls({
               if (!selectedGitHubRepoExternalLink?.url) {
                 return
               }
+
               void window.api.shell.openUrl(selectedGitHubRepoExternalLink.url)
             }}
             aria-label={

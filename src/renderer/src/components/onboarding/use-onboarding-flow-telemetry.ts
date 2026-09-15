@@ -11,6 +11,7 @@ import {
   type TaskSourcesExitAction
 } from './onboarding-flow-state'
 import type { StepNumber, STEPS } from './use-onboarding-flow-types'
+
 type OnboardingTelemetryArgs = {
   remappedLastCompletedStep: number
   currentStep: (typeof STEPS)[number]
@@ -35,6 +36,7 @@ export function useOnboardingFlowTelemetry({
     if (startedTrackedRef.current) {
       return
     }
+
     startedTrackedRef.current = true
     const lastCompleted = remappedLastCompletedStep
     track(
@@ -81,6 +83,7 @@ export function useOnboardingFlowTelemetry({
         duration_ms: durationMs,
         advanced_via: advancedVia
       }
+
       track('onboarding_task_sources_snapshot', payload)
     },
     [linearStatus, linearStatusChecked, preflightStatus, preflightStatusLoading]

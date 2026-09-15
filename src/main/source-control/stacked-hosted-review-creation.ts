@@ -18,17 +18,21 @@ export async function createStackedHostedReview(
   options: HostedReviewExecutionOptions = {}
 ): Promise<CreateStackedHostedReviewResult> {
   const plan = await prepareGitHubStackedPullRequest(repoPath, input, executionHostId, options)
+
   if (!plan.ok) {
     return plan
   }
 
   let currentReview: (HostedReviewSummary & { number: number }) | null = plan.currentReview
+
   if (!currentReview) {
     const created = await createHostedReview(repoPath, input, executionHostId, options)
+
     if (!created.ok) {
       if (!created.existingReview?.number) {
         return created
       }
+
       return {
         ok: false,
         code: 'validation',
@@ -40,8 +44,10 @@ export async function createStackedHostedReview(
         }
       }
     }
+
     currentReview = { number: created.number, url: created.url }
   }
+
   if (!currentReview) {
     return {
       ok: false,

@@ -33,16 +33,20 @@ export async function stopOrphanAgentSessionChildren(input: {
   stop?: (pid: number, signal: AgentSessionOrphanStopSignal) => void
 }): Promise<number[]> {
   const observed = await (input.scan ?? scanAgentSessionSpawnTokenProcesses)()
+
   if (observed === null || observed.size === 0) {
     return []
   }
+
   const stop = input.stop ?? defaultStop
   const stopped: number[] = []
+
   for (const token of input.store.listOrphanSpawnTokens([...observed.keys()])) {
     for (const pid of observed.get(token) ?? []) {
       stop(pid, 'SIGTERM')
       stopped.push(pid)
     }
   }
+
   return stopped
 }

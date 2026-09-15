@@ -60,12 +60,15 @@ describe('expected teardown state', () => {
     now = 3_600_000
     markSystemSessionEnding()
     now = 0
+
     const rollbackScope = resolveExpectedTeardownScope({
       isQuitting: false,
       isQuittingForUpdate: false,
       isExpectedRendererReload: false
     })
+
     now = 3_600_001
+
     const catchUpScope = resolveExpectedTeardownScope({
       isQuitting: false,
       isQuittingForUpdate: false,
@@ -79,12 +82,15 @@ describe('expected teardown state', () => {
   it('does not resurrect session-end after expiry and an injected backtrack', () => {
     markSystemSessionEnding()
     now += WINDOWS_SESSION_END_CRASH_SUPPRESSION_WINDOW_MS
+
     const expiredScope = resolveExpectedTeardownScope({
       isQuitting: false,
       isQuittingForUpdate: false,
       isExpectedRendererReload: false
     })
+
     now -= 1
+
     const backtrackScope = resolveExpectedTeardownScope({
       isQuitting: false,
       isQuittingForUpdate: false,
@@ -113,6 +119,7 @@ describe('expected teardown state', () => {
   it('classifies killed/1 just inside the session-end window as app shutdown', () => {
     markSystemSessionEnding()
     now += WINDOWS_SESSION_END_CRASH_SUPPRESSION_WINDOW_MS - 1
+
     const scope = resolveExpectedTeardownScope({
       isQuitting: false,
       isQuittingForUpdate: false,
@@ -126,12 +133,15 @@ describe('expected teardown state', () => {
   it('keeps killed/1 reportable at and just outside the session-end boundary', () => {
     markSystemSessionEnding()
     now += WINDOWS_SESSION_END_CRASH_SUPPRESSION_WINDOW_MS
+
     const boundaryScope = resolveExpectedTeardownScope({
       isQuitting: false,
       isQuittingForUpdate: false,
       isExpectedRendererReload: false
     })
+
     now += 1
+
     const outsideScope = resolveExpectedTeardownScope({
       isQuitting: false,
       isQuittingForUpdate: false,
@@ -145,12 +155,14 @@ describe('expected teardown state', () => {
 
   it('excludes session-end from recovery while preserving in-app quit suppression', () => {
     markSystemSessionEnding()
+
     const sessionEndScope = resolveExpectedTeardownScope({
       isQuitting: false,
       isQuittingForUpdate: false,
       isExpectedRendererReload: false,
       includeSystemSessionEnd: false
     })
+
     const inAppQuitScope = resolveExpectedTeardownScope({
       isQuitting: true,
       isQuittingForUpdate: false,

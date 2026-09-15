@@ -62,14 +62,18 @@ export function getParentPrChecksRefreshCandidates({
   knownReviewIdentities?: ReadonlySet<string>
 }): ParentPrChecksRefreshCandidate[] {
   const repoById = new Map(repos.map((repo) => [repo.id, repo]))
+
   return worktrees
     .map((worktree) => {
       const repo = repoById.get(worktree.repoId)
       const branch = getBranchName(worktree)
+
       if (!repo || isFolderRepo(repo) || worktree.isBare || !branch) {
         return null
       }
+
       const identity = getParentPrChecksRefreshIdentity(worktree, repo, branch)
+
       return {
         identity,
         worktree,
@@ -102,18 +106,21 @@ export async function runLimitedParentPrChecksRefreshes({
       cursor += 1
       outcomes.set(candidate.identity, { kind: 'loading' })
       onOutcome?.(candidate.identity, { kind: 'loading' })
+
       const outcome = await refreshParentPrChecksCandidate(
         candidate,
         fetchHostedReviewForBranch,
         fetchPRChecks,
         force
       )
+
       outcomes.set(candidate.identity, outcome)
       onOutcome?.(candidate.identity, outcome)
     }
   }
 
   await Promise.all(Array.from({ length: workerCount }, runWorker))
+
   return outcomes
 }
 
@@ -135,12 +142,14 @@ async function refreshParentPrChecksCandidate(
       currentHeadOid: candidate.worktree.head ?? null,
       staleWhileRevalidate: true
     })
+
     if (!review) {
       // Why: the existing hosted-review API can collapse provider errors and
       // successful misses into null. Keep null neutral so the overview neither
       // claims "No PR" nor overstates that a provider failed.
       return { kind: 'unavailable' }
     }
+
     if (review.provider === 'github') {
       await fetchPRChecks?.(
         candidate.repo.path,
@@ -151,6 +160,7 @@ async function refreshParentPrChecksCandidate(
         { repoId: candidate.repo.id, force }
       )
     }
+
     return { kind: 'found', review }
   } catch (error) {
     return { kind: 'error', error }
@@ -163,6 +173,7 @@ function compareRefreshCandidates(
 ): number {
   const leftPriority = getRefreshPriority(left)
   const rightPriority = getRefreshPriority(right)
+
   return (
     leftPriority - rightPriority ||
     (right.worktree.lastActivityAt ?? 0) - (left.worktree.lastActivityAt ?? 0) ||
@@ -174,14 +185,17 @@ function getRefreshPriority(candidate: ParentPrChecksRefreshCandidate): number {
   if (candidate.linkedReview) {
     return 0
   }
+
   if (candidate.knownReview) {
     return 1
   }
+
   return 2
 }
 
 function getBranchName(worktree: Worktree): string | null {
   const identity = getWorktreeGitIdentityDisplay(worktree)
+
   return identity?.kind === 'branch' ? identity.branchName : null
 }
 

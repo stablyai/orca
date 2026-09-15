@@ -8,11 +8,15 @@ import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pair
 import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
 import { MobileHeroPairingStep } from './MobileHeroPairingStep'
 import { MobileAndroidInstallHelp } from './MobileAndroidInstallHelp'
+
 export { HeroIntro } from './MobileHeroIntro'
+
 export { HeroPaired, type PairedDevice } from './MobileHeroPairedDevices'
+
 import { translate } from '@/i18n/i18n'
 
 export type Platform = 'ios' | 'android'
+
 export type StepIndex = 0 | 1
 
 type HeroFlowProps = {
@@ -100,6 +104,7 @@ export function HeroFlow({
 
   useLayoutEffect(() => {
     const activeScreen = screenRefs.current[stepIdx]
+
     if (!activeScreen) {
       return
     }
@@ -110,8 +115,10 @@ export function HeroFlow({
     if (typeof ResizeObserver === 'undefined') {
       return
     }
+
     const observer = new ResizeObserver(measure)
     observer.observe(activeScreen)
+
     return () => observer.disconnect()
   }, [stepIdx])
 

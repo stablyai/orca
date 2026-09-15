@@ -76,11 +76,13 @@ describe('orchestration RPC methods', () => {
             ? 'tab_worker:leaf_worker'
             : null
       )
+
       const attestedEvidence = {
         terminalHandle: 'term_attested',
         paneKey: 'tab_attested:leaf_attested',
         launchToken: 'attested-launch-token'
       } as const
+
       vi.spyOn(runtime, 'verifyOrchestrationCompatibilityCaller').mockReturnValue({
         terminalHandle: attestedEvidence.terminalHandle,
         paneKey: attestedEvidence.paneKey,
@@ -321,6 +323,7 @@ describe('orchestration RPC methods', () => {
         if (selector === `id:${FLOATING_TERMINAL_WORKTREE_ID}`) {
           throw new Error('selector_not_found')
         }
+
         return { id: 'repo::other', repoId: 'repo' } as never
       })
       vi.mocked(runtime.showManagedTerminalWorkspace).mockResolvedValue({
@@ -523,6 +526,7 @@ describe('orchestration RPC methods', () => {
         id: 'repo',
         kind: 'git'
       } as never)
+
       const create = vi.spyOn(runtime, 'createManagedWorktree').mockResolvedValue({
         worktree: { id: 'repo::child', repoId: 'repo' },
         startupTerminal: { spawned: true, handle: 'term_worker' },
@@ -534,6 +538,7 @@ describe('orchestration RPC methods', () => {
           terminalHandle: 'term_setup'
         }
       } as never)
+
       vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
         terminals: [
           { handle: 'term_worker', title: 'Codex' },

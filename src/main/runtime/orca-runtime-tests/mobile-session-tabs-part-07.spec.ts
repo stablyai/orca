@@ -20,6 +20,7 @@ import { makePendingAgentTabActivationRuntime } from '../orca-runtime-test-scena
 describe('OrcaRuntimeService', () => {
   it('briefly preserves abnormal SSH exits for paired pane recovery', async () => {
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
       const runtime = new OrcaRuntimeService(store)
@@ -99,6 +100,7 @@ describe('OrcaRuntimeService', () => {
 
   it('briefly preserves an unregistered SSH pane while a restarted HUB rebuilds PTY state', async () => {
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
       const runtime = new OrcaRuntimeService(store)
@@ -173,6 +175,7 @@ describe('OrcaRuntimeService', () => {
 
   it('hydrates a persisted SSH-owned pane before an attached renderer publishes its graph', async () => {
     const ptyId = 'ssh:ssh-1@@pty-persisted'
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
@@ -194,6 +197,7 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.syncWindowGraph(1, {
       tabs: [],
@@ -223,6 +227,7 @@ describe('OrcaRuntimeService', () => {
 
   it('hydrates a persisted SSH-owned pane when the restarted renderer has not published sessions', async () => {
     const ptyId = 'ssh:ssh-1@@pty-persisted'
+
     const sshSession = makeWorkspaceSessionWithHeadlessTerminal({
       tabsByWorktree: {
         [TEST_WORKTREE_ID]: [
@@ -242,11 +247,14 @@ describe('OrcaRuntimeService', () => {
         'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: ptyId })
       }
     })
+
     const localSession = getDefaultWorkspaceSession()
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
+
     const getWorkspaceSession = vi.fn((hostId?: string | null) =>
       hostId === 'ssh:ssh-1' ? sshSession : localSession
     )
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getRepos: () => [remoteRepo],
@@ -270,6 +278,7 @@ describe('OrcaRuntimeService', () => {
 
   it('publishes a recovered SSH pane when its relay becomes ready after an empty restart replay', async () => {
     const ptyId = 'ssh:ssh-1@@pty-recovered'
+
     const sshSession = makeWorkspaceSessionWithHeadlessTerminal({
       tabsByWorktree: {
         [TEST_WORKTREE_ID]: [
@@ -289,8 +298,10 @@ describe('OrcaRuntimeService', () => {
         'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: ptyId })
       }
     })
+
     const localSession = getDefaultWorkspaceSession()
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getRepos: () => [remoteRepo],
@@ -298,6 +309,7 @@ describe('OrcaRuntimeService', () => {
       getWorkspaceSession: (hostId?: string | null) =>
         hostId === 'ssh:ssh-1' ? sshSession : localSession
     } as never)
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -323,6 +335,7 @@ describe('OrcaRuntimeService', () => {
     })
     const events: RuntimeMobileSessionTabsResult[] = []
     runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+
     const reconcile = vi
       .spyOn(runtime, 'reconcileLegacyWorkerTerminals')
       .mockReturnValue(new Promise(() => undefined))
@@ -354,8 +367,10 @@ describe('OrcaRuntimeService', () => {
 
   it('uses only a recent expired SSH lease as a bounded pane-recovery tombstone', async () => {
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(new Date('2026-01-01T00:00:00Z'))
+
       const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
         makeWorkspaceSessionWithHeadlessTerminal({
           tabsByWorktree: {
@@ -377,8 +392,10 @@ describe('OrcaRuntimeService', () => {
           }
         })
       )
+
       let leaseState: 'expired' | 'terminated' = 'expired'
       let leaseUpdatedAt = Date.now()
+
       const getSshRemotePtyLeases = vi.fn(() => [
         {
           targetId: 'ssh-1',
@@ -391,14 +408,17 @@ describe('OrcaRuntimeService', () => {
           updatedAt: leaseUpdatedAt
         }
       ])
+
       const runtime = new OrcaRuntimeService({
         ...runtimeStore,
         getSshRemotePtyLeases
       } as never)
+
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
         webContents: { send: vi.fn() }
       })
+
       const publishEmpty = (snapshotVersion: number): void => {
         runtime.syncWindowGraph(1, {
           tabs: [],
@@ -490,6 +510,7 @@ describe('OrcaRuntimeService', () => {
   it('hydrates persisted serve-owned mobile session terminals while a renderer is attached', async () => {
     const focusTerminal = vi.fn()
     const spawn = vi.fn().mockResolvedValue({ id: 'serve-persisted-pty', isReattach: true })
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
@@ -511,6 +532,7 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({
       spawn,

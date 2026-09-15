@@ -15,6 +15,7 @@ export function normalizeCursorEvent(
 ): ParsedAgentStatusPayload | null {
   // Why: Cursor can emit final response text after `stop`; enrich the completed row, don't resurrect the agent as working.
   const previousStatus = state.lastStatusByPaneKey.get(paneKey)?.payload
+
   const stateName =
     eventName === 'beforeSubmitPrompt' ||
     eventName === 'sessionStart' ||

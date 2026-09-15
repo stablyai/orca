@@ -19,9 +19,11 @@ export function structuredHandoffSuccess(
   status: AgentSessionHandoffResult['status']
 ): AgentSessionMutationResult<AgentSessionHandoffResult> {
   const record = deps.store.getRecord(sessionId)
+
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
+
   return {
     ok: true,
     replayed,

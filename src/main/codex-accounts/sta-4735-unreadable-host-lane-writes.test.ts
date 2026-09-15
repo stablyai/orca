@@ -37,10 +37,13 @@ const denials = vi.hoisted(() => {
       if (typeof target !== 'string' || !state.paths.has(target)) {
         return
       }
+
       state.reads.set(target, (state.reads.get(target) ?? 0) + 1)
+
       const error: NodeJS.ErrnoException = new Error(
         `EPERM: operation not permitted, ${syscall} '${target}'`
       )
+
       error.code = 'EPERM'
       error.errno = -4048
       error.syscall = syscall
@@ -48,19 +51,25 @@ const denials = vi.hoisted(() => {
       throw error
     }
   }
+
   return state
 })
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   const guard = (fn: unknown, syscall: string): unknown => {
     const original = fn as (...args: unknown[]) => unknown
+
     const wrapped = (...args: unknown[]): unknown => {
       denials.check(args[0], syscall)
+
       return original(...args)
     }
+
     return Object.assign(wrapped, original)
   }
+
   const patched: Record<string, unknown> = {
     ...actual,
     readFileSync: guard(actual.readFileSync, 'read'),
@@ -74,6 +83,7 @@ vi.mock('node:fs', async (importOriginal) => {
       actual.existsSync
     )
   }
+
   return { ...patched, default: patched }
 })
 
@@ -81,6 +91,7 @@ vi.mock('electron', () => ({ app: { getPath: () => testState.userDataDir } }))
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return { ...actual, homedir: () => testState.fakeHomeDir }
 })
 
@@ -111,6 +122,7 @@ describe('STA-4735 an unreadable runtime auth.json must not be written over', ()
       'account-1',
       createCodexAuthJson('user@example.com', 'acct-1', 'refresh-1')
     )
+
     const store = createStore(
       createSettings({
         codexManagedAccounts: [
@@ -120,7 +132,9 @@ describe('STA-4735 an unreadable runtime auth.json must not be written over', ()
         activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
       })
     )
+
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+
     return new CodexRuntimeHomeService(store as never) as unknown as RuntimeAuthWriter
   }
 

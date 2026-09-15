@@ -29,6 +29,7 @@ type GitHubMetadataOptions = {
 }
 
 const ghLabelStore = createMetadataRequestStore<string[]>()
+
 const ghAssigneeStore = createMetadataRequestStore<GitHubAssignableUser[]>()
 
 export function useRepoLabels(
@@ -38,7 +39,9 @@ export function useRepoLabels(
 ): MetadataListState<string> {
   const runtimeEnvironmentId =
     options?.runtimeEnvironmentId?.trim() || options?.activeRuntimeEnvironmentId?.trim() || null
+
   const repoSelector = repoId ?? repoPath ?? ''
+
   const cacheKey =
     repoPath || repoId
       ? runtimeEnvironmentId
@@ -71,7 +74,9 @@ export function useRepoAssignees(
 ): MetadataListState<GitHubAssignableUser> {
   const runtimeEnvironmentId =
     options?.runtimeEnvironmentId?.trim() || options?.activeRuntimeEnvironmentId?.trim() || null
+
   const repoSelector = repoId ?? repoPath ?? ''
+
   const cacheKey =
     repoPath || repoId
       ? runtimeEnvironmentId
@@ -98,7 +103,9 @@ export function useRepoAssignees(
 }
 
 const linearStateStore = createMetadataRequestStore<LinearWorkflowState[]>()
+
 const linearLabelStore = createMetadataRequestStore<LinearLabel[]>()
+
 const linearMemberStore = createMetadataRequestStore<LinearMember[]>()
 
 function linearMetadataCacheKey(
@@ -108,8 +115,10 @@ function linearMetadataCacheKey(
 ): string {
   const runtimeSettings =
     settings && 'kind' in settings ? getTaskSourceRuntimeSettings(settings) : settings
+
   const target = getActiveRuntimeTarget(runtimeSettings)
   const workspaceKey = workspaceId ?? 'selected'
+
   return target.kind === 'environment'
     ? `runtime:${target.environmentId}:${workspaceKey}:${teamId}`
     : `${workspaceKey}:${teamId}`
@@ -127,6 +136,7 @@ export function useTeamStates(
   workspaceId?: string | null
 ): MetadataListState<LinearWorkflowState> {
   const selectedTeamId = teamId ?? ''
+
   return useMetadataListRequest({
     cacheKey: selectedTeamId ? linearMetadataCacheKey(selectedTeamId, settings, workspaceId) : null,
     store: linearStateStore,
@@ -141,6 +151,7 @@ export function useTeamLabels(
   workspaceId?: string | null
 ): MetadataListState<LinearLabel> {
   const selectedTeamId = teamId ?? ''
+
   return useMetadataListRequest({
     cacheKey: selectedTeamId ? linearMetadataCacheKey(selectedTeamId, settings, workspaceId) : null,
     store: linearLabelStore,
@@ -155,6 +166,7 @@ export function useTeamMembers(
   workspaceId?: string | null
 ): MetadataListState<LinearMember> {
   const selectedTeamId = teamId ?? ''
+
   return useMetadataListRequest({
     cacheKey: selectedTeamId ? linearMetadataCacheKey(selectedTeamId, settings, workspaceId) : null,
     store: linearMemberStore,
@@ -180,12 +192,14 @@ function useTeamsMetadataList<T extends { id: string }>(
     loading: false,
     error: null
   })
+
   const activeKeyRef = useRef<string | null>(null)
   const settingsRef = useRef(settings)
   settingsRef.current = settings
 
   // Why: parents often pass a fresh teamIds array each render; key on joined ids.
   const teamIdsKey = teamIds.filter((id) => id.trim().length > 0).join('\0')
+
   const stableTeamIds = useMemo(
     () => [...new Set(teamIdsKey.length === 0 ? [] : teamIdsKey.split('\0'))],
     [teamIdsKey]
@@ -202,17 +216,21 @@ function useTeamsMetadataList<T extends { id: string }>(
     if (!requestKey || stableTeamIds.length === 0) {
       activeKeyRef.current = null
       setState({ data: [], loading: false, error: null })
+
       return
     }
 
     activeKeyRef.current = requestKey
+
     const cachedGroups = stableTeamIds.map(
       (teamId) =>
         getFreshMetadata(store, linearMetadataCacheKey(teamId, settingsRef.current, workspaceId))
           ?.data
     )
+
     if (cachedGroups.every((group): group is T[] => group !== undefined)) {
       setState({ data: unionLinearMetadataById(cachedGroups), loading: false, error: null })
+
       return
     }
 
@@ -226,6 +244,7 @@ function useTeamsMetadataList<T extends { id: string }>(
     void Promise.all(
       stableTeamIds.map((teamId) => {
         const cacheKey = linearMetadataCacheKey(teamId, settingsRef.current, workspaceId)
+
         return loadMetadata(store, cacheKey, () =>
           loadTeam(settingsRef.current, teamId, workspaceId)
         )
@@ -235,6 +254,7 @@ function useTeamsMetadataList<T extends { id: string }>(
         if (activeKeyRef.current !== requestKey) {
           return
         }
+
         setState({
           data: unionLinearMetadataById(groups),
           loading: false,
@@ -245,6 +265,7 @@ function useTeamsMetadataList<T extends { id: string }>(
         if (activeKeyRef.current !== requestKey) {
           return
         }
+
         activeKeyRef.current = null
         setState((s) => ({
           ...s,

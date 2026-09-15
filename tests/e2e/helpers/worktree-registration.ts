@@ -29,27 +29,35 @@ async function resolveE2eWorktreeId(
         worktreeId = await page.evaluate(
           async ({ repoPath, targetWorktreePath }) => {
             const store = window.__store
+
             if (!store) {
               throw new Error('window.__store is not available')
             }
+
             await store.getState().fetchRepos()
             const repo = store.getState().repos.find((entry) => entry.path === repoPath)
+
             if (!repo) {
               throw new Error(`Seeded E2E repo was not registered: ${repoPath}`)
             }
+
             // Why: use the store's own fetch (like loadWorktreesUntilPathsPresent)
             // so both TTL workarounds stay behaviorally identical.
             await store.getState().fetchWorktrees(repo.id)
             const listedWorktrees = store.getState().worktreesByRepo[repo.id] ?? []
+
             const normalize = (value: string): string =>
               value.startsWith('/private/var/') ? value.slice('/private'.length) : value
+
             const worktree = listedWorktrees.find(
               (entry) => normalize(entry.path) === normalize(targetWorktreePath)
             )
+
             return worktree?.id ?? null
           },
           { repoPath, targetWorktreePath }
         )
+
         return worktreeId
       },
       {
@@ -62,6 +70,7 @@ async function resolveE2eWorktreeId(
   if (!worktreeId) {
     throw new Error(`E2E worktree was not loaded: ${targetWorktreePath}`)
   }
+
   return worktreeId
 }
 
@@ -82,19 +91,25 @@ export async function openSourceControlForWorktree(
   await page.evaluate(
     async ({ worktreeId, commitMessageAi }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       const worktree = Object.values(store.getState().worktreesByRepo)
         .flat()
         .find((entry) => entry.id === worktreeId)
+
       if (!worktree) {
         throw new Error(`E2E worktree disappeared from the store: ${worktreeId}`)
       }
+
       store.getState().setActiveWorktree(worktree.id)
+
       if (commitMessageAi) {
         await store.getState().updateSettings({ commitMessageAi })
       }
+
       const status = await window.api.git.status({ worktreePath: worktree.path })
       store.getState().setGitStatus(worktree.id, status)
       store.getState().setRightSidebarTab('source-control')
@@ -108,6 +123,7 @@ export async function openSourceControlForWorktree(
       async () =>
         page.evaluate(() => {
           const state = window.__store?.getState()
+
           return Boolean(state?.rightSidebarOpen && state?.rightSidebarTab === 'source-control')
         }),
       { timeout: 5_000 }
@@ -131,13 +147,17 @@ export async function loadWorktreesUntilPathsPresent(
         page.evaluate(
           async ({ repoId, expectedPaths }) => {
             const store = window.__store
+
             if (!store) {
               throw new Error('window.__store is not available')
             }
+
             await store.getState().fetchWorktrees(repoId)
+
             const registered = new Set(
               (store.getState().worktreesByRepo[repoId] ?? []).map((entry) => entry.path)
             )
+
             return expectedPaths.every((entry) => registered.has(entry))
           },
           { repoId, expectedPaths }

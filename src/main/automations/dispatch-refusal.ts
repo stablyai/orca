@@ -33,6 +33,7 @@ export function describeScheduledRefusal(input: {
   if (!input.target.ok) {
     return input.target.error
   }
+
   return input.canDispatch ? null : NO_DISPATCH_HOST
 }
 
@@ -52,6 +53,7 @@ export function recordRefusedAutomationRun(input: {
   const target = resolveAutomationRunTarget(input.store, input.automation, {
     allowRemoteHostScheduling: input.allowRemoteHostScheduling
   })
+
   const run = input.runs.createRun(input.automation, Date.now(), 'manual')
   input.runs.updateRun({
     runId: run.id,
@@ -72,12 +74,14 @@ export function recordUnevaluableAutomation(input: {
   error: unknown
 }): void {
   const { automation } = input
+
   try {
     // nextRunAt deliberately stays put: the record is retried so a repaired schedule resumes
     // on its own. The fold is what keeps that from writing a row — and logging — every tick.
     if (input.runs.repeatSkip(automation.id, UNEVALUABLE_SCHEDULE, automation.nextRunAt)) {
       return
     }
+
     console.error('[automations] failed to evaluate automation:', automation.id, input.error)
     const run = input.runs.createRun(automation, automation.nextRunAt)
     input.runs.updateRun({
@@ -109,6 +113,7 @@ export function sendRendererDispatch(
 ): AutomationRun {
   try {
     channel?.send('automations:dispatchRequested', payload)
+
     return run
   } catch (error) {
     return runs.updateRun({

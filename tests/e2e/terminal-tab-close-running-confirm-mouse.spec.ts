@@ -30,9 +30,11 @@ async function startBusyTerminal(page: Page): Promise<string> {
   await waitForSessionReady(page)
   await waitForActiveWorktree(page)
   await ensureTerminalVisible(page)
+
   const hasPaneManager = await waitForActiveTerminalManager(page, 30_000)
     .then(() => true)
     .catch(() => false)
+
   test.skip(!hasPaneManager, 'Electron automation never mounted the live TerminalPane manager.')
   await waitForPaneCount(page, 1, 30_000)
 
@@ -49,6 +51,7 @@ async function startBusyTerminal(page: Page): Promise<string> {
       { timeout: 20_000, message: 'sleep 300 never became the foreground process' }
     )
     .toBe('sleep')
+
   return (await getActiveTabId(page))!
 }
 

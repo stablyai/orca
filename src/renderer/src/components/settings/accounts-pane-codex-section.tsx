@@ -32,6 +32,7 @@ export function renderCodexAccountsSection(model: AccountsPaneSectionModel): Rea
     visibleCodexAccounts,
     wslCapabilitiesLoading
   } = model
+
   return (
     <section key="codex-accounts" id="accounts-codex" className="space-y-4 scroll-mt-6">
       <div className="space-y-1">

@@ -29,6 +29,7 @@ function formatSize(bytes: number | null): string {
   if (!bytes) {
     return ''
   }
+
   return `${Math.round(bytes / 1_000_000)} MB`
 }
 
@@ -38,22 +39,27 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+
   const refresh = useCallback(async (): Promise<boolean | undefined> => {
     if (!client) {
       return false
     }
+
     try {
       const next = await fetchDictationSetup(client)
       setSetup(next)
       setError(null)
+
       return next.models.some(isModelInFlight)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load')
+
       return undefined
     }
   }, [client])
 
   const polling = setup?.models.some(isModelInFlight) ?? false
+
   const refreshSetup = useDictationSetupPoller({
     visible: visible && client !== null,
     polling,
@@ -72,8 +78,10 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
       if (!client) {
         return
       }
+
       setBusy(model.id)
       setError(null)
+
       try {
         await downloadDictationModel(client, model.id)
         await refreshSetup()
@@ -92,8 +100,10 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
       if (!client) {
         return
       }
+
       setBusy(model.id)
       setError(null)
+
       try {
         const next = await setDictationConfig(client, { enabled: true, modelId: model.id })
         setSetup(next)
@@ -114,7 +124,9 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
       if (!client) {
         return
       }
+
       setError(null)
+
       try {
         setSetup(await setDictationConfig(client, { enabled }))
       } catch (err) {
@@ -149,6 +161,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
               const isSelected = model.id === setup.selectedModelId
               const inFlight = isModelInFlight(model)
               const rowBusy = busy === model.id
+
               return (
                 <View key={model.id} style={styles.modelRow}>
                   <View style={styles.modelInfo}>

@@ -29,6 +29,7 @@ import {
 } from './helpers/fake-agent-command-override'
 
 type SpawnEvent = { args: string[]; pid: number }
+
 type TerminalIdentity = Pick<
   RuntimeTerminalSummary,
   'handle' | 'incarnationId' | 'leafId' | 'ptyId' | 'tabId'
@@ -37,10 +38,15 @@ type TerminalIdentity = Pick<
 const PROVIDER_SESSION_ID = '019fc155-00e1-7102-99a9-e7c72e532a8e'
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-live-mount-cli-'))
+
 const spawnLedgerPath = path.join(fakeCliDir, 'codex-spawn.jsonl')
+
 const setupLedgerPath = path.join(fakeCliDir, 'setup-spawn.jsonl')
+
 const canaryLedgerPath = path.join(fakeCliDir, 'canary-spawn.jsonl')
+
 const signalLedgerPath = path.join(fakeCliDir, 'terminal-signals.jsonl')
+
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const args = process.argv.slice(2)
@@ -95,6 +101,7 @@ function readSpawnLedger(): SpawnEvent[] {
   if (!existsSync(spawnLedgerPath)) {
     return []
   }
+
   return readFileSync(spawnLedgerPath, 'utf8')
     .split(/\r?\n/)
     .filter(Boolean)
@@ -105,6 +112,7 @@ function readJsonLines<T>(filePath: string): T[] {
   if (!existsSync(filePath)) {
     return []
   }
+
   return readFileSync(filePath, 'utf8')
     .split(/\r?\n/)
     .filter(Boolean)
@@ -130,6 +138,7 @@ function createSourceRepo(): string {
     ['-c', 'user.name=Orca E2E', '-c', 'user.email=orca-e2e@example.com', 'commit', '-m', 'seed'],
     { cwd: repoPath }
   )
+
   return repoPath
 }
 
@@ -142,6 +151,7 @@ async function readWorktreeTerminals(
     limit: 20,
     requireFreshPtyLiveness: true
   })
+
   return listed.result.terminals
     .filter((terminal) => terminal.worktreeId === worktreeId)
     .sort((a, b) => a.handle.localeCompare(b.handle))
@@ -152,11 +162,13 @@ async function terminalOutput(client: RuntimeClient, handle: string): Promise<st
     terminal: handle,
     limit: 300
   })
+
   return read.result.terminal.tail.join('\n')
 }
 
 function terminalIdentity(terminal: RuntimeTerminalSummary): TerminalIdentity {
   const { handle, incarnationId, leafId, ptyId, tabId } = terminal
+
   return { handle, incarnationId, leafId, ptyId, tabId }
 }
 
@@ -173,10 +185,13 @@ function readDaemonPid(userDataDir: string): number {
     path.join(userDataDir, 'daemon', `daemon-v${PROTOCOL_VERSION}.pid`),
     'utf8'
   )
+
   const parsed = JSON.parse(raw) as { pid?: unknown }
+
   if (typeof parsed.pid !== 'number' || parsed.pid <= 0) {
     throw new Error(`Daemon pid file did not contain a positive pid: ${raw}`)
   }
+
   return parsed.pid
 }
 
@@ -190,9 +205,11 @@ async function seedAgentRecoveryMetadata(
   await page.evaluate(
     ({ agent, launchToken, paneKey, providerSessionId, worktreeId }) => {
       const state = window.__store?.getState()
+
       if (!state) {
         throw new Error('Renderer store unavailable')
       }
+
       const providerSession = { key: 'session_id' as const, id: providerSessionId }
       state.registerAgentLaunchConfig(
         paneKey,
@@ -228,6 +245,7 @@ async function seedAgentRecoveryMetadata(
           const state = window.__store?.getState()
           const live = state?.agentStatusByPaneKey[paneKey]
           const sleeping = state?.sleepingAgentSessionsByPaneKey[paneKey]
+
           return {
             liveProviderSessionId: live?.providerSession?.id ?? null,
             sleeping: sleeping
@@ -263,6 +281,7 @@ async function seedAgentRecoveryMetadata(
 async function readRendererBindings(page: Page, identities: TerminalIdentity[]) {
   return page.evaluate((targets) => {
     const state = window.__store?.getState()
+
     return targets.map(({ leafId, tabId }) => ({
       tabId,
       tabPtyId:
@@ -286,6 +305,7 @@ async function readPersistedBindings(
   return page.evaluate(
     async ({ identities, worktreeId }) => {
       const session = await window.api.session.get()
+
       return identities.map(({ leafId, tabId }) => ({
         tabId,
         tabPtyId:
@@ -358,6 +378,7 @@ async function assertNoInterruption(
   const outputs = await Promise.all(
     terminals.map((terminal) => terminalOutput(client, terminal.handle))
   )
+
   expect(outputs.join('\n')).not.toContain('Conversation interrupted')
 }
 
@@ -373,6 +394,7 @@ async function faultProjectionAndActivate(
         ({ tabIds, worktreeId }) => {
           const state = window.__store?.getState()
           const tabs = state?.tabsByWorktree[worktreeId] ?? []
+
           return tabIds.every(
             (tabId) =>
               tabs.some((tab) => tab.id === tabId) &&
@@ -388,9 +410,11 @@ async function faultProjectionAndActivate(
   await page.evaluate(
     ({ activeTabId, identities, worktreeId }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Renderer store unavailable')
       }
+
       store.setState((state) => {
         const tabsByWorktree = { ...state.tabsByWorktree }
         tabsByWorktree[worktreeId] = (tabsByWorktree[worktreeId] ?? []).map((tab) =>
@@ -398,9 +422,11 @@ async function faultProjectionAndActivate(
         )
         const ptyIdsByTabId = { ...state.ptyIdsByTabId }
         const terminalLayoutsByTabId = { ...state.terminalLayoutsByTabId }
+
         for (const identity of identities) {
           ptyIdsByTabId[identity.tabId] = []
           const layout = terminalLayoutsByTabId[identity.tabId]
+
           if (layout) {
             const ptyIdsByLeafId = { ...layout.ptyIdsByLeafId }
             delete ptyIdsByLeafId[identity.leafId]
@@ -410,6 +436,7 @@ async function faultProjectionAndActivate(
             }
           }
         }
+
         return { tabsByWorktree, ptyIdsByTabId, terminalLayoutsByTabId }
       })
       const next = store.getState()
@@ -452,9 +479,11 @@ async function enableTerminalAccessibility(page: Page, tabId: string): Promise<v
   await page.evaluate((id) => {
     const manager = window.__paneManagers?.get(id)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+
     if (!pane) {
       throw new Error(`Terminal pane unavailable: ${id}`)
     }
+
     pane.terminal.options.screenReaderMode = true
     pane.terminal.refresh(0, pane.terminal.rows - 1)
   }, tabId)
@@ -470,10 +499,13 @@ function terminalAccessibility(page: Page, tabId: string) {
 async function terminalViewportText(page: Page, tabId: string): Promise<string> {
   return page.evaluate((id) => {
     const pane = window.__paneManagers?.get(id)?.getActivePane?.()
+
     if (!pane) {
       throw new Error(`Terminal pane unavailable: ${id}`)
     }
+
     const buffer = pane.terminal.buffer.active
+
     return Array.from(
       { length: pane.terminal.rows },
       (_, row) => buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? ''
@@ -497,16 +529,19 @@ async function assertExactPtyReceivedMarker(
   await expect
     .poll(async () => {
       const entries = await readTerminalPtyWriteEntries(electronApp)
+
       return entries
         .filter((entry) => entry.id === ptyId)
         .map((entry) => entry.data)
         .join('')
     })
     .toContain(command)
+
   const unrelatedWrites = (await readTerminalPtyWriteEntries(electronApp))
     .filter((entry) => entry.id !== ptyId)
     .map((entry) => entry.data)
     .join('')
+
   expect(unrelatedWrites).not.toContain(command)
 }
 
@@ -530,16 +565,19 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
     if (createdWorktreePath) {
       rmSync(createdWorktreePath, { recursive: true, force: true })
     }
+
     rmSync(sourceRepo, { recursive: true, force: true })
   })
   await waitForSessionReady(orcaPage)
   await installTerminalPtyWriteSpy(electronApp)
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const client = new RuntimeClient(userDataDir, 30_000, null, null)
+
   const added = await client.call<{ repo: { id: string } }>('repo.add', {
     path: sourceRepo,
     kind: 'git'
   })
+
   const repoId = added.result.repo.id
   await expect
     .poll(() =>
@@ -548,9 +586,11 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
           const state = window.__store?.getState()
           await state?.fetchRepos()
           const repo = window.__store?.getState().repos.find((candidate) => candidate.id === repoId)
+
           if (!repo) {
             return false
           }
+
           await window.__store?.getState().updateRepo(repoId, {
             hookSettings: { ...repo.hookSettings, setupAgentStartupPolicy: 'start-immediately' }
           })
@@ -561,6 +601,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
             setupScriptLaunchMode: 'new-tab',
             terminalHiddenViewParking: false
           })
+
           return true
         },
         { repoId, command: fakeCodexCommand, windowsShell: FAKE_AGENT_WINDOWS_SHELL }
@@ -577,17 +618,21 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
     startupAgent: 'codex',
     startupPrompt: 'keep running'
   })
+
   const worktreeId = created.result.worktree.id
   createdWorktreePath = created.result.worktree.path
+
   const createdCanary = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
     worktree: `id:${worktreeId}`,
     title: 'Unrelated canary',
     command: 'node canary-live.js'
   })
+
   let originals: RuntimeTerminalSummary[] = []
   await expect
     .poll(async () => {
       originals = await readWorktreeTerminals(client, worktreeId)
+
       return originals.map(({ connected, writable }) => ({ connected, writable }))
     })
     .toEqual([
@@ -605,12 +650,15 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
   expect(new Set(originals.map((terminal) => terminal.incarnationId)).size).toBe(3)
   expect(new Set(originals.map(({ leafId, tabId }) => makePaneKey(tabId, leafId))).size).toBe(3)
   const agent = originals.find((terminal) => terminal.handle === created.result.agentTerminalHandle)
+
   const canary = originals.find(
     (terminal) => terminal.handle === createdCanary.result.terminal.handle
   )
+
   const setup = originals.find(
     (terminal) => terminal.handle !== agent?.handle && terminal.handle !== canary?.handle
   )
+
   expect(agent).toBeTruthy()
   expect(setup).toBeTruthy()
   expect(canary).toBeTruthy()
@@ -714,6 +762,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
     authoritativeWindowId: beforeStatus.result.authoritativeWindowId
   })
   expect(readDaemonPid(userDataDir)).toBe(daemonPid)
+
   const beforeReloadDelivery = await orcaPage.evaluate(() =>
     window.api.pty.getRendererDeliveryDebugSnapshot()
   )
@@ -724,6 +773,7 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
     .poll(
       async () => {
         const status = (await client.call<RuntimeStatus>('status.get')).result
+
         return {
           runtimeId: status.runtimeId,
           rendererGraphEpoch: status.rendererGraphEpoch,
@@ -741,11 +791,13 @@ test('adopts runtime-owned agent and Setup PTYs on first mount', async ({
       authoritativeWindowId: beforeStatus.result.authoritativeWindowId,
       daemonPid
     })
+
   const postReloadDelivery = {
     rendererLifecycleResetCount: beforeReloadDelivery.rendererLifecycleResetCount + 1,
     rendererPtyDispatcherReady: true,
     rendererDispatcherReadyForcedCount: beforeReloadDelivery.rendererDispatcherReadyForcedCount
   }
+
   await expect
     .poll(() => orcaPage.evaluate(() => window.api.pty.getRendererDeliveryDebugSnapshot()))
     .toMatchObject(postReloadDelivery)

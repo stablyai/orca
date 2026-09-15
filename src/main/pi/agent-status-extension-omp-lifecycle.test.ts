@@ -19,6 +19,7 @@ describe('OMP agent_end contract', () => {
     'keeps %s working when agent_end will continue',
     async (_name, args) => {
       vi.useFakeTimers()
+
       try {
         const harness = createAgentStatusExtensionHarness(args)
         const context = { isIdle: vi.fn(() => true) }
@@ -71,6 +72,7 @@ describe('OMP agent_end contract', () => {
 
   it('does not apply the OMP contract to Pi or Prime', async () => {
     vi.useFakeTimers()
+
     try {
       for (const kind of ['pi', 'prime-agent'] as const) {
         const harness = createAgentStatusExtensionHarness({ kind })
@@ -89,6 +91,7 @@ describe('OMP agent_end contract', () => {
 
   it('preserves non-terminal agent_end handling for Pi and Prime', async () => {
     vi.useFakeTimers()
+
     try {
       for (const kind of ['pi', 'prime-agent'] as const) {
         const harness = createAgentStatusExtensionHarness({ kind })

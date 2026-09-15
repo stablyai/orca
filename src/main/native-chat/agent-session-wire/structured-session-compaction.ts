@@ -33,18 +33,23 @@ export class StructuredSessionCompaction {
     if (this.pending.has(sessionId)) {
       throw new Error('Compaction is already running.')
     }
+
     let timer: ReturnType<typeof setTimeout>
     let expired = false
+
     const completion = new Promise<{ error?: string }>((resolve, reject) => {
       const finish = (result: { error?: string }) => {
         this.pending.delete(sessionId)
+
         if (expired && onLateResult) {
           void onLateResult(result).catch((error) =>
             console.warn('Could not persist late compaction completion', error)
           )
         }
+
         resolve(result)
       }
+
       this.pending.set(sessionId, {
         identity,
         commandTurnId,
@@ -57,19 +62,24 @@ export class StructuredSessionCompaction {
       }, this.timeoutMs)
       timer.unref?.()
     })
+
     // Observe rejection even while invoke is waiting for its own receipt.
     void completion.catch(() => {})
+
     try {
       const admission = record(await invoke())
+
       if (typeof admission.error === 'string') {
         this.pending.get(sessionId)?.finish({ error: admission.error })
       }
+
       return await completion
     } catch (error) {
       expired = this.pending.has(sessionId)
       throw error
     } finally {
       clearTimeout(timer!)
+
       if (!expired) {
         this.pending.delete(sessionId)
       }
@@ -95,16 +105,21 @@ export class StructuredSessionCompaction {
   codex(sessionId: string, method: string, value: unknown): void {
     const pending = this.pending.get(sessionId)
     const params = record(value)
+
     if (!pending || params.threadId !== pending.identity) {
       return
     }
+
     const turn = record(params.turn)
+
     if (method === 'turn/started' && typeof turn.id === 'string') {
       pending.turnId = turn.id
     }
+
     if (isCodexCompactionComplete(method, params)) {
       pending.compacted = true
     }
+
     if (method === 'turn/completed' && turn.id === pending.turnId) {
       const error = record(turn.error).message
       pending.finish(
@@ -117,16 +132,20 @@ export class StructuredSessionCompaction {
 
   claude(sessionId: string, message: Record<string, unknown>): void {
     const pending = this.pending.get(sessionId)
+
     if (!pending || message.session_id !== pending.identity) {
       return
     }
+
     if (message.compact_result === 'failed') {
       pending.error =
         typeof message.compact_error === 'string' ? message.compact_error : 'Compaction failed.'
     }
+
     if (message.compact_result === 'success' || message.subtype === 'compact_boundary') {
       pending.compacted = true
     }
+
     if (message.type === 'result') {
       if (
         message.is_error === true ||
@@ -134,9 +153,11 @@ export class StructuredSessionCompaction {
       ) {
         pending.error ??= 'Compaction did not complete.'
       }
+
       const error =
         pending.error ??
         (pending.compacted ? undefined : 'Compaction was not confirmed by the provider.')
+
       pending.finish(error ? { error } : {})
     }
   }

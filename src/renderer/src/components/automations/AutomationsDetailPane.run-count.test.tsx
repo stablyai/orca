@@ -60,12 +60,15 @@ async function renderRunsTab(historyUnavailable: boolean): Promise<HTMLButtonEle
       />
     )
   })
+
   const runsTab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((tab) =>
     tab.textContent?.includes('Runs')
   )
+
   if (!runsTab) {
     throw new Error('Runs tab was not rendered')
   }
+
   return runsTab
 }
 

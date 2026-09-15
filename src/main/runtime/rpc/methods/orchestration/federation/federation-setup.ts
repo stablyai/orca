@@ -32,7 +32,9 @@ export function persistFederatedSetupSpawnFailure(args: FederationSetupStageArgs
   if (args.setup.startupPolicy !== 'wait-for-setup' || args.setup.state !== 'spawn_failed') {
     return false
   }
+
   recordStage(args, 'setup_start')
+
   return true
 }
 
@@ -40,6 +42,7 @@ export function persistFederatedSetupWaitOutcome(
   args: FederationSetupStageArgs & { wait: { satisfied: boolean; status: string } }
 ): void {
   applyWaitForSetupOutcome(args.setup, args.effects, args.wait)
+
   if (args.setup.startupPolicy === 'wait-for-setup') {
     recordStage(args, args.setup.state === 'failed' ? 'setup_failed' : 'setup_settled')
   }
@@ -51,6 +54,7 @@ export function monitorFederatedSetup(
   const setupTerminal = args.effects.find(
     (effect) => effect.kind === 'terminal' && effect.role === 'setup' && effect.id
   )
+
   if (
     !setupTerminal?.id ||
     args.setup.startupPolicy !== 'start-immediately' ||
@@ -58,21 +62,26 @@ export function monitorFederatedSetup(
   ) {
     return
   }
+
   void args.runtime
     .waitForSetupTerminalCompletion(setupTerminal.id)
     .then((completion) => {
       const setupState = completion.exitCode === 0 ? 'succeeded' : 'failed'
+
       const effects = args.effects.map((effect) =>
         effect.kind === 'setup' ? { ...effect, state: setupState } : effect
       )
+
       const evidence = args.db.updateRemoteAttachmentSetupEvidence({
         dispatchId: args.dispatchId,
         setupState,
         effects
       })
+
       if (!evidence.changed) {
         return
       }
+
       args.db.enqueueFederationRelay({
         dispatchId: args.dispatchId,
         direction: 'to_home',

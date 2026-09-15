@@ -7,6 +7,7 @@ function setup() {
     ok: true,
     result: { ok: true, value: { command: 'compact', state: 'completed' } }
   }))
+
   const input: Parameters<typeof dispatchMobileStructuredCommand>[0] = {
     text: '/compact',
     hasAttachments: false,
@@ -27,8 +28,10 @@ function setup() {
     onError: vi.fn(),
     timeoutMs: 15000
   }
+
   return { input, sendRequest }
 }
+
 describe('mobile structured conversation commands', () => {
   it.each(['/clear', '/compact'])(
     'uses the command RPC for %s without an ordinary send',
@@ -80,18 +83,23 @@ describe('mobile structured conversation commands', () => {
     'guards %s without provider dispatch',
     async (reason) => {
       const { input, sendRequest } = setup()
+
       if (reason === 'attachments') {
         input.hasAttachments = true
       }
+
       if (reason === 'old host') {
         input.controller.conversationCommands = undefined
       }
+
       if (reason === 'arguments') {
         input.text = '/compact instructions'
       }
+
       if (reason === 'pending work') {
         input.canRun = () => false
       }
+
       expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
       expect(sendRequest).not.toHaveBeenCalled()
       expect(input.onError).toHaveBeenCalled()

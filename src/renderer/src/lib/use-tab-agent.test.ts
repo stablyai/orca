@@ -12,13 +12,18 @@ import { resolveTabAgentFromSignals } from './tab-agent-from-signals'
 import { useTabAgent } from './use-tab-agent'
 
 const initialAppState = useAppStore.getInitialState()
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 let latestHookAgent: TuiAgent | null | undefined
+
 const hookRoots: Root[] = []
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {
   latestHookAgent = useTabAgent(tab)
+
   return null
 }
 
@@ -31,6 +36,7 @@ async function renderHookProbe(tab: TerminalTab): Promise<Root> {
     root.render(createElement(HookProbe, { tab }))
   })
   await flushHookEffects()
+
   return root
 }
 
@@ -296,6 +302,7 @@ describe('resolveTabAgentFromSignals', () => {
         ).toBe('opencode')
       }
     }
+
     // Real pane reuse: the title PRESENTS Claude, so it still reclaims the pane.
     expect(
       resolveTabAgentFromSignals({
@@ -544,6 +551,7 @@ describe('useTabAgent', () => {
   const originalApi = window.api
   const getForegroundProcess = vi.fn()
   const clearTabLaunchAgent = vi.fn()
+
   const baseTab: TerminalTab = {
     id: 'tab-1',
     ptyId: 'pty-1',
@@ -846,12 +854,14 @@ describe('useTabAgent', () => {
 
   it('does not clear launch identity on the commit that switches pane generations', async () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
+
     const boundLayout = {
       root: { type: 'leaf', leafId: LEAF_ID } as const,
       activeLeafId: LEAF_ID,
       expandedLeafId: null,
       ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
     }
+
     useAppStore.setState({
       terminalLayoutsByTabId: { 'tab-1': boundLayout },
       agentStatusByPaneKey: { [paneKey]: workingAgentStatus(paneKey) }

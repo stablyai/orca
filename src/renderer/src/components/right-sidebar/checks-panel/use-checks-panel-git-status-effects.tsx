@@ -58,7 +58,9 @@ type ChecksPanelGitStatusEffectsInput = Pick<
   >
 
 const GIT_STATUS_FAILURE_RETRY_MS = 3000
+
 const CHECKS_PANEL_GIT_STATUS_MIN_INTERVAL_MS = 3000
+
 const CHECKS_PANEL_GIT_STATUS_SLOW_BACKOFF = {
   idleMultiplier: 1,
   changeSignalMultiplier: 1,
@@ -105,8 +107,10 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
     sshConnectionStatus,
     updateWorktreeGitIdentity
   } = model
+
   const gitStatusRequestRef = useRef<(() => Promise<void>) | null>(null)
   const gitStatusPollRunnerRef = useRef<CoalescedPollRunner | null>(null)
+
   const gitStatusPollingReady = Boolean(
     repo &&
     !isFolder &&
@@ -125,10 +129,13 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
         slowTaskBackoff: CHECKS_PANEL_GIT_STATUS_SLOW_BACKOFF
       }
     )
+
     gitStatusPollRunnerRef.current = runner
+
     return () => {
       gitStatusRequestRef.current = null
       runner.dispose()
+
       if (gitStatusPollRunnerRef.current === runner) {
         gitStatusPollRunnerRef.current = null
       }
@@ -149,30 +156,38 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
         clearTimeout(gitStatusSnapshotRetryTimerRef.current)
         gitStatusSnapshotRetryTimerRef.current = null
       }
+
       gitStatusRequestRef.current = null
+
       // Why: hiding the panel or losing SSH should stop new work, not erase same-context Create PR eligibility that can still be retried.
       return
     }
+
     let stale = false
     const requestContextKey = panelContextKey
     const connectionId = activeConnectionId ?? undefined
+
     // Why: global status maps are keyed only by worktree; use their changes as invalidation signals, then fetch a local snapshot.
     if (gitStatusSnapshotRetryTimerRef.current) {
       clearTimeout(gitStatusSnapshotRetryTimerRef.current)
       gitStatusSnapshotRetryTimerRef.current = null
     }
+
     setGitStatusSnapshot((snapshot) =>
       shouldClearChecksPanelGitStatusSnapshot(snapshot, requestContextKey) ? null : snapshot
     )
+
     const context = {
       settings: ownerSettings,
       worktreeId: activeWorktreeId,
       worktreePath: activeWorktreePath,
       connectionId
     }
+
     const runRequest = async (): Promise<void> => {
       try {
         const status = await getRuntimeGitStatus(context, { admissionTier: 'status' })
+
         if (
           !stale &&
           shouldCommitChecksPanelGitStatusSnapshot(panelContextKeyRef.current, requestContextKey)
@@ -183,7 +198,9 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
             branch: status.branch ?? (status.head ? null : undefined)
           })
         }
+
         let freshRemoteStatus = status.upstreamStatus
+
         if (activeWorktreePushTarget) {
           freshRemoteStatus = await getRuntimeGitUpstreamStatus(context, activeWorktreePushTarget)
         } else if (
@@ -194,6 +211,7 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
         ) {
           freshRemoteStatus = await getRuntimeGitUpstreamStatus(context)
         }
+
         if (
           !stale &&
           shouldCommitChecksPanelGitStatusSnapshot(panelContextKeyRef.current, requestContextKey)
@@ -212,19 +230,23 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
         }
       } catch (error) {
         console.warn('[ChecksPanel] git status refresh before eligibility failed', error)
+
         if (!stale) {
           // Why: transient SSH/runtime flakes shouldn't hide an already-valid Create PR state for this branch; retry while visible.
           setGitStatusSnapshot((snapshot) =>
             shouldClearChecksPanelGitStatusSnapshot(snapshot, requestContextKey) ? null : snapshot
           )
+
           // Mark the probe failed so the empty state shows "Could not check branch status" instead of an indefinite "Checking branch status".
           if (
             shouldCommitChecksPanelGitStatusSnapshot(panelContextKeyRef.current, requestContextKey)
           ) {
             setGitStatusProbeErrorContextKey(requestContextKey)
           }
+
           gitStatusSnapshotRetryTimerRef.current = setTimeout(() => {
             gitStatusSnapshotRetryTimerRef.current = null
+
             if (
               shouldCommitChecksPanelGitStatusSnapshot(
                 panelContextKeyRef.current,
@@ -237,13 +259,17 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
         }
       }
     }
+
     gitStatusRequestRef.current = runRequest
     gitStatusPollRunnerRef.current?.run()
+
     return () => {
       stale = true
+
       if (gitStatusRequestRef.current === runRequest) {
         gitStatusRequestRef.current = null
       }
+
       if (gitStatusSnapshotRetryTimerRef.current) {
         clearTimeout(gitStatusSnapshotRetryTimerRef.current)
         gitStatusSnapshotRetryTimerRef.current = null
@@ -277,14 +303,18 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
   useEffect(() => {
     if (!repo || isFolder || !branch) {
       setHostedReviewCreationSnapshot(null)
+
       return
     }
+
     if (!isPanelVisible || !gitStatusReadyForPanelContext) {
       return
     }
+
     let stale = false
     const requestContextKey = panelContextKey
     const requestStartedAt = Date.now()
+
     const requestGitFingerprint = buildChecksPanelEligibilityGitFingerprint({
       headOid: eligibilityHeadOidRef.current,
       hasUncommittedChanges,
@@ -296,6 +326,7 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
       repoConnectionId,
       localExecutionScope
     })
+
     void getHostedReviewCreationEligibility({
       repoPath: repo.path,
       repoId: repo.id,
@@ -331,6 +362,7 @@ export function useChecksPanelGitStatusEffects(model: ChecksPanelGitStatusEffect
       .catch(() => {
         // Why: a transient GitHub outage rethrows here; don't tear down the last confirmed snapshot so a clean composer survives the outage.
       })
+
     return () => {
       stale = true
     }

@@ -46,20 +46,24 @@ async function openSeededEditorTabs(
   return page.evaluate(
     ({ wId, relPaths }) => {
       const store = window.__store
+
       if (!store) {
         return []
       }
 
       const state = store.getState()
+
       const worktree = Object.values(state.worktreesByRepo)
         .flat()
         .find((entry) => entry.id === wId)
+
       if (!worktree) {
         return []
       }
 
       const separator = worktree.path.includes('\\') ? '\\' : '/'
       const ids: string[] = []
+
       for (const relPath of relPaths) {
         const filePath = `${worktree.path}${separator}${relPath}`
         state.openFile({
@@ -76,10 +80,12 @@ async function openSeededEditorTabs(
           mode: 'edit'
         })
         const latest = store.getState().openFiles.find((f) => f.filePath === filePath)
+
         if (latest) {
           ids.push(latest.id)
         }
       }
+
       return ids
     },
     { wId: worktreeId, relPaths: relativePaths }
@@ -92,6 +98,7 @@ async function setActiveFile(
 ): Promise<void> {
   await page.evaluate((id) => {
     const store = window.__store
+
     if (!store) {
       return
     }
@@ -136,6 +143,7 @@ test.describe('Tab Close Navigation', () => {
       'README.md',
       'tsconfig.json'
     ])
+
     expect(fileIds.length).toBe(3)
 
     // Activate the middle tab and close it. The neighbor-picking logic in
@@ -182,18 +190,22 @@ test.describe('Tab Close Navigation', () => {
       'package.json',
       'README.md'
     ])
+
     expect(editorIds.length).toBe(2)
 
     const diffId = await orcaPage.evaluate((wId) => {
       const store = window.__store
+
       if (!store) {
         return null
       }
 
       const state = store.getState()
+
       const worktree = Object.values(state.worktreesByRepo)
         .flat()
         .find((entry) => entry.id === wId)
+
       if (!worktree) {
         return null
       }
@@ -206,6 +218,7 @@ test.describe('Tab Close Navigation', () => {
         'typescript',
         false
       )
+
       return store.getState().activeFileId
     }, worktreeId)
 
@@ -254,11 +267,13 @@ test.describe('Tab Close Navigation', () => {
     // happens to leave activeWorktreeId untouched.
     await orcaPage.evaluate((wId) => {
       const store = window.__store
+
       if (!store) {
         return
       }
 
       const state = store.getState()
+
       // Close every terminal tab in this worktree so removing the last editor
       // leaves nothing visible. Terminal tabs persist in tabsByWorktree even
       // when activeTabType flips to 'editor'.
@@ -296,17 +311,23 @@ test.describe('Tab Close Navigation', () => {
         () =>
           orcaPage.evaluate((wId) => {
             const store = window.__store
+
             if (!store) {
               throw new Error('window.__store is not available')
             }
+
             const state = store.getState()
+
             for (const tab of state.tabsByWorktree[wId] ?? []) {
               state.closeTab(tab.id)
             }
+
             for (const bt of state.browserTabsByWorktree[wId] ?? []) {
               state.closeBrowserTab(bt.id)
             }
+
             const next = store.getState()
+
             return {
               terminals: (next.tabsByWorktree[wId] ?? []).length,
               browserTabs: (next.browserTabsByWorktree[wId] ?? []).length

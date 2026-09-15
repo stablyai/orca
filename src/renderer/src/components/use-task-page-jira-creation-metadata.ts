@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { jiraListIssueTypes, jiraListCreateFields } from '@/runtime/runtime-jira-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+
 export function useTaskPageJiraCreationMetadata(model: TaskPageJiraCreationStateModel) {
   const {
     settings,
@@ -19,12 +20,15 @@ export function useTaskPageJiraCreationMetadata(model: TaskPageJiraCreationState
     newJiraIssueTargetProject,
     newJiraIssueTargetType
   } = model
+
   useEffect(() => {
     if (!newJiraIssueOpen || !jiraConnected || !newJiraIssueTargetProject) {
       setAvailableJiraIssueTypes([])
       setJiraIssueTypesLoading(false)
+
       return
     }
+
     let cancelled = false
     setAvailableJiraIssueTypes([])
     setJiraIssueTypesLoading(true)
@@ -37,6 +41,7 @@ export function useTaskPageJiraCreationMetadata(model: TaskPageJiraCreationState
         if (cancelled) {
           return
         }
+
         setAvailableJiraIssueTypes(issueTypes)
         setNewJiraIssueTypeId(issueTypes[0]?.id ?? null)
       })
@@ -52,6 +57,7 @@ export function useTaskPageJiraCreationMetadata(model: TaskPageJiraCreationState
           setJiraIssueTypesLoading(false)
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -76,8 +82,10 @@ export function useTaskPageJiraCreationMetadata(model: TaskPageJiraCreationState
       setJiraCreateFieldsLoading(false)
       setJiraCreateFieldsError(null)
       setNewJiraIssueCustomFieldValues({})
+
       return
     }
+
     let cancelled = false
     setJiraCreateFields([])
     setJiraCreateFieldsLoading(true)
@@ -109,6 +117,7 @@ export function useTaskPageJiraCreationMetadata(model: TaskPageJiraCreationState
           setJiraCreateFieldsLoading(false)
         }
       })
+
     return () => {
       // Why: create fields are scoped to project + issue type; ignore late responses after switching either selector.
       cancelled = true
@@ -129,4 +138,5 @@ export function useTaskPageJiraCreationMetadata(model: TaskPageJiraCreationState
   // Why: defense-in-depth — keep stale cache rows from leaking across the issue/PR split tabs.
   return model
 }
+
 export type TaskPageJiraCreationMetadataModel = ReturnType<typeof useTaskPageJiraCreationMetadata>

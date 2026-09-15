@@ -23,10 +23,12 @@ function editablePasteChord(): string {
 function countOccurrences(value: string, needle: string): number {
   let count = 0
   let index = value.indexOf(needle)
+
   while (index !== -1) {
     count += 1
     index = value.indexOf(needle, index + needle.length)
   }
+
   return count
 }
 
@@ -36,11 +38,13 @@ async function getActiveTabTitle(page: Page, worktreeId: string): Promise<string
   const tabs = await getWorktreeTabs(page, worktreeId)
   const tab = tabs.find((entry) => entry.id === activeId)
   expect(tab).toBeDefined()
+
   return tab!.customTitle ?? tab!.title ?? ''
 }
 
 function tabLocatorByTitle(page: Page, title: string): ReturnType<Page['locator']> {
   const escaped = title.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+
   return page.locator(`[data-testid="sortable-tab"][data-tab-title="${escaped}"]`).first()
 }
 
@@ -57,6 +61,7 @@ test.describe('tab rename paste ownership', () => {
 
     const worktreeId = (await getActiveWorktreeId(orcaPage))!
     const originalTitle = await getActiveTabTitle(orcaPage, worktreeId)
+
     const renameInput = orcaPage.getByRole('textbox', {
       name: `Rename tab ${originalTitle}`,
       exact: true

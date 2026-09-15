@@ -12,6 +12,7 @@ import {
 } from './LinearAgentSkillSetupPrompt'
 
 const HOST_DISMISS_STORAGE_KEY = 'orca.linearTicketsSkill.setupDismissed.host'
+
 const FEDORA_DISMISS_STORAGE_KEY = 'orca.linearTicketsSkill.setupDismissed.wsl.Fedora'
 
 const projectHostRuntime: ProjectExecutionRuntimeResolution = {
@@ -80,6 +81,7 @@ vi.mock('../settings/CliSkillRuntimeSetup', () => ({
 vi.mock('../settings/AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: (props: Record<string, unknown> & { children?: ReactNode }) => {
     mocks.panelProps.push(props)
+
     return (
       <section data-testid="linear-skill-inline-panel">
         <h2>{String(props.title)}</h2>
@@ -102,6 +104,7 @@ vi.mock('../settings/AgentSkillSetupPanel', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function installLocalStorageShim(): void {
@@ -144,10 +147,13 @@ async function renderPrompt(
   await act(async () => {
     root?.render(<LinearAgentSkillSetupPrompt {...props} />)
   })
+
   if (props.surface === 'modal') {
     await import('./LinearAgentSkillSetupDialog')
   }
+
   await act(async () => {})
+
   return container
 }
 
@@ -166,6 +172,7 @@ async function unmountPrompt(): Promise<void> {
       root?.unmount()
     })
   }
+
   root = null
   container?.remove()
   container = null
@@ -336,6 +343,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     const setupButton = Array.from(rendered.querySelectorAll('button')).find(
       (button) => button.textContent === 'Set up'
     )
+
     await act(async () => {
       setupButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -358,6 +366,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     const installButton = Array.from(document.body.querySelectorAll('button')).find(
       (button) => button.textContent === 'Mock install'
     )
+
     await act(async () => {
       installButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -430,6 +439,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     const setupButton = Array.from(rendered.querySelectorAll('button')).find(
       (button) => button.textContent === 'Set up'
     )
+
     await act(async () => {
       setupButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -441,6 +451,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     const installButton = Array.from(document.body.querySelectorAll('button')).find(
       (button) => button.textContent === 'Mock install'
     )
+
     await act(async () => {
       installButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -472,6 +483,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     const closeButton = Array.from(document.body.querySelectorAll('button')).find(
       (button) => button.textContent === 'Close'
     )
+
     await act(async () => {
       closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -589,6 +601,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     const recheckButton = Array.from(rendered.querySelectorAll('button')).find(
       (button) => button.textContent === 'Re-check'
     )
+
     await act(async () => {
       recheckButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
@@ -618,7 +631,9 @@ describe('LinearAgentSkillSetupPrompt', () => {
     await renderPrompt({ linked: true, remote: false, surface: 'modal' })
 
     let resolveCliStatus: (status: CliInstallStatus) => void = () => {}
+
     let resolveSkillRefresh: () => void = () => {}
+
     mocks.getCliStatus.mockReturnValue(
       new Promise<CliInstallStatus>((resolve) => {
         resolveCliStatus = resolve
@@ -660,6 +675,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     })
 
     let resolveWslStatus: (status: CliInstallStatus) => void = () => {}
+
     mocks.getWslCliStatus.mockReturnValueOnce(
       new Promise<CliInstallStatus>((resolve) => {
         resolveWslStatus = resolve
@@ -702,6 +718,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     mocks.ensureCli.mockImplementationOnce(
       async (options?: { onStatusChange?: (status: CliInstallStatus) => void }) => {
         reportHostCliStatus = options?.onStatusChange ?? null
+
         return null
       }
     )
@@ -743,12 +760,14 @@ describe('LinearAgentSkillSetupPrompt', () => {
   it('accepts same-context prerequisite CLI status callbacks after a newer Re-check', async () => {
     let reportHostCliStatus: ((status: CliInstallStatus) => void) | null = null
     let resolveEnsureCli: () => void = () => {}
+
     mocks.ensureCli.mockImplementationOnce(
       async (options?: { onStatusChange?: (status: CliInstallStatus) => void }) => {
         reportHostCliStatus = options?.onStatusChange ?? null
         await new Promise<void>((resolve) => {
           resolveEnsureCli = resolve
         })
+
         return null
       }
     )
@@ -781,10 +800,13 @@ describe('LinearAgentSkillSetupPrompt', () => {
 
   it('ignores older same-context CLI refreshes that finish after a newer Re-check', async () => {
     const rendered = await renderPrompt({ linked: true, remote: false })
+
     const recheckButton = Array.from(rendered.querySelectorAll('button')).find(
       (button) => button.textContent === 'Re-check'
     )
+
     let resolveOlderCliStatus: (status: CliInstallStatus) => void = () => {}
+
     mocks.getCliStatus.mockReturnValueOnce(
       new Promise<CliInstallStatus>((resolve) => {
         resolveOlderCliStatus = resolve
@@ -920,6 +942,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     const dismissButton = document.body.querySelector<HTMLButtonElement>(
       'button[aria-label="Don\'t show again"]'
     )
+
     await act(async () => {
       dismissButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })

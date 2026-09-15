@@ -15,9 +15,12 @@ function hasCodexEffortOverride(tokens: readonly string[]): boolean {
   if (hasFlag(tokens, ['--reasoning-effort'])) {
     return true
   }
+
   const optionTokens = agentArgOptionTokens(tokens)
+
   return optionTokens.some((token, index) => {
     const previous = optionTokens[index - 1]
+
     return (
       (token.startsWith('model_reasoning_effort=') &&
         (previous === '-c' || previous === '--config')) ||
@@ -31,17 +34,22 @@ function hasCodexEffortOverride(tokens: readonly string[]): boolean {
 function removeCodexEffortOverride(tokens: readonly string[]): string[] {
   const withoutFlag = removeAgentArgOption(tokens, ['--reasoning-effort'])
   const result: string[] = []
+
   for (let index = 0; index < withoutFlag.length; index += 1) {
     const token = withoutFlag[index]
+
     if (token === '--') {
       result.push(...withoutFlag.slice(index))
       break
     }
+
     const next = withoutFlag[index + 1]
+
     if ((token === '-c' || token === '--config') && next?.startsWith('model_reasoning_effort=')) {
       index += 1
       continue
     }
+
     if (
       token.startsWith('-cmodel_reasoning_effort=') ||
       token.startsWith('-c=model_reasoning_effort=') ||
@@ -49,8 +57,10 @@ function removeCodexEffortOverride(tokens: readonly string[]): string[] {
     ) {
       continue
     }
+
     result.push(token)
   }
+
   return result
 }
 
@@ -98,6 +108,7 @@ export function createClaudeCatalogOptions(args: {
   const effortChoices = EXTENDED_EFFORT_CHOICES.filter((choice) =>
     args.effortLevelIds.includes(choice.value)
   )
+
   return [
     ...(effortChoices.length > 0 ? [claudeEffortWithChoices(effortChoices)] : []),
     ...(args.supportsFastMode ? [CLAUDE_FAST_MODE] : [])
@@ -193,6 +204,7 @@ const CODEX_EFFORT_CHOICES = [
 // Why: Codex can clamp higher values, so expose only each model's advertised levels.
 function codexEffort(ceiling: 'xhigh' | 'max' | 'ultra'): CatalogOption {
   const ceilingIndex = CODEX_EFFORT_CHOICES.findIndex((choice) => choice.value === ceiling)
+
   return {
     id: 'effort',
     label: 'Reasoning effort',

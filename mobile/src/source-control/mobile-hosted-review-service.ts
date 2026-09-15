@@ -22,6 +22,7 @@ import type { MobileSourceControlRpcSender } from './mobile-source-control-rpc-s
 export function mobileRepoSelectorFromWorktreeId(worktreeId: string): string {
   const separatorIdx = worktreeId.indexOf('::')
   const repoId = separatorIdx === -1 ? worktreeId : worktreeId.slice(0, separatorIdx)
+
   return `id:${repoId}`
 }
 
@@ -55,7 +56,9 @@ export async function fetchMobileHostedReviewEligibility(
     linkedGitHubPR: input.linkedGitHubPR ?? null,
     linkedGitLabMR: input.linkedGitLabMR ?? null
   })
+
   const eligibility = hostedReviewEligibilityRead.interpret(reply)
+
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   return eligibility.accepted ? (eligibility.value as HostedReviewCreationEligibility) : null
 }
@@ -95,9 +98,11 @@ export async function resolveMobileHostedReviewPrefill(
     title: args.title,
     body: ''
   }
+
   if (!args.branch) {
     return { ...fallback, canCreate: false, blockedReason: 'detached_head', nextAction: null }
   }
+
   try {
     const eligibility = await fetchMobileHostedReviewEligibility(client, worktreeId, {
       branch: args.branch,
@@ -106,6 +111,7 @@ export async function resolveMobileHostedReviewPrefill(
       ahead: args.ahead,
       behind: args.behind
     })
+
     if (!eligibility) {
       // Eligibility itself could not be resolved: the review lookup is unproven.
       return {
@@ -116,6 +122,7 @@ export async function resolveMobileHostedReviewPrefill(
         reviewLookupOutcome: 'unavailable'
       }
     }
+
     return {
       provider: eligibility.provider,
       base: eligibility.defaultBaseRef || 'main',
@@ -190,6 +197,7 @@ async function pushMobileBranchBeforeCreate(
     { worktree: `id:${worktreeId}` },
     PUSH_BEFORE_CREATE_ERROR
   )
+
   return pushed.ok ? { ok: true } : { ok: false, error: PUSH_BEFORE_CREATE_ERROR }
 }
 
@@ -201,10 +209,13 @@ function formatMobileHostedReviewCreateError(
   if (result.ok) {
     return ''
   }
+
   if (!pushed) {
     return result.error
   }
+
   const prefix = new RegExp(`^Create ${shortLabel} failed:\\s*`, 'i')
+
   return `Push succeeded, but ${shortLabel} creation failed: ${result.error.replace(prefix, '')}`
 }
 
@@ -216,11 +227,13 @@ async function finishMobileHostedReviewCreateSuccess(
   existing?: boolean
 ): Promise<MobileHostedReviewCreateOutcome> {
   const baseRef = input.base.trim()
+
   const linked = await linkMobileHostedReview(client, worktreeId, input.provider, result.number, {
     // Why: mobile branch compare cannot infer the new hosted review's target
     // base from renderer cache; persist the submitted base for the refresh.
     baseRef
   })
+
   return {
     ok: true,
     url: result.url,
@@ -236,19 +249,25 @@ export async function createMobileHostedReview(
   input: MobileHostedReviewCreateInput
 ): Promise<MobileHostedReviewCreateOutcome> {
   let pushed = false
+
   try {
     if (input.pushBeforeCreate) {
       const push = await pushMobileBranchBeforeCreate(client, worktreeId)
+
       if (!push.ok) {
         return push
       }
+
       pushed = true
     }
+
     const reply = await hostedReviewCreateRun.request(
       client,
       buildMobileHostedReviewCreateParams(worktreeId, input)
     )
+
     let result: CreateHostedReviewResult
+
     try {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
       result = hostedReviewCreateRun.interpret(reply) as CreateHostedReviewResult
@@ -258,11 +277,14 @@ export async function createMobileHostedReview(
         error: refusedRpcMessageOrFallback(error, 'Failed to create pull request')
       }
     }
+
     if (result.ok) {
       return finishMobileHostedReviewCreateSuccess(client, worktreeId, input, result)
     }
+
     if (result.existingReview?.url) {
       const number = result.existingReview.number
+
       if (!number) {
         return {
           ok: true,
@@ -270,6 +292,7 @@ export async function createMobileHostedReview(
           existing: true
         }
       }
+
       return finishMobileHostedReviewCreateSuccess(
         client,
         worktreeId,
@@ -278,6 +301,7 @@ export async function createMobileHostedReview(
         true
       )
     }
+
     return {
       ok: false,
       error:

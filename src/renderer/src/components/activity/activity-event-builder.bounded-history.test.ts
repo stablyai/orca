@@ -22,6 +22,7 @@ function build(args: {
   const repo = makeRepo()
   const worktree = makeWorktree()
   const tab = makeTab()
+
   return buildActivityEvents({
     agentStatusByPaneKey: args.entries ?? {},
     retainedAgentsByPaneKey: {},
@@ -37,9 +38,11 @@ function build(args: {
 describe('newestActivityHistoryEntries', () => {
   it('takes only the newest cap-many eligible entries without scanning results past the cap', () => {
     const history: AgentStateHistoryEntry[] = []
+
     for (let i = 0; i < 10_000; i += 1) {
       history.push(historyEntry(i + 1, i % 2 === 0 ? 'done' : 'working'))
     }
+
     const newest = newestActivityHistoryEntries(history, EVENTS_PER_PANE_CAP)
     expect(newest).toHaveLength(EVENTS_PER_PANE_CAP)
     // Only done/blocked/waiting are eligible; newest five eligible are the last five even-indexed rows, oldest-first.
@@ -57,9 +60,11 @@ describe('newestActivityHistoryEntries', () => {
 describe('buildActivityEvents bounded history', () => {
   it('produces identical visible events for a pane with unbounded history as the per-pane cap allows', () => {
     const longHistory: AgentStateHistoryEntry[] = []
+
     for (let i = 0; i < 1_000; i += 1) {
       longHistory.push(historyEntry(i + 1, 'done'))
     }
+
     const entry: AgentStatusEntry = {
       state: 'done',
       prompt: 'latest',
@@ -69,6 +74,7 @@ describe('buildActivityEvents bounded history', () => {
       stateHistory: longHistory,
       agentType: 'claude'
     }
+
     const { events } = build({ entries: { [PANE_KEY]: entry } })
     // Per-pane cap holds: newest events only, newest-first ordering preserved.
     expect(events).toHaveLength(EVENTS_PER_PANE_CAP)
@@ -92,6 +98,7 @@ describe('buildActivityEvents cleared cutoff', () => {
       entries: { [PANE_KEY]: doneEntry },
       activityClearedAtByPaneKey: { [PANE_KEY]: 2_000 }
     })
+
     expect(events).toHaveLength(0)
   })
 
@@ -100,6 +107,7 @@ describe('buildActivityEvents cleared cutoff', () => {
       entries: { [PANE_KEY]: doneEntry },
       activityClearedAtByPaneKey: { [PANE_KEY]: 1_000 }
     })
+
     expect(events.map((event) => event.timestamp)).toEqual([2_000])
   })
 
@@ -110,11 +118,13 @@ describe('buildActivityEvents cleared cutoff', () => {
       updatedAt: 99_000,
       stateStartedAt: 99_000
     }
+
     const { events, liveAgentByPaneKey } = build({
       entries: { [PANE_KEY]: workingEntry },
       activityClearedAtByPaneKey: { [PANE_KEY]: 98_000 },
       now: 99_500
     })
+
     expect(liveAgentByPaneKey[PANE_KEY]?.state).toBe('working')
     // The historical done at 1_000 stays hidden by the cutoff.
     expect(events).toHaveLength(1)

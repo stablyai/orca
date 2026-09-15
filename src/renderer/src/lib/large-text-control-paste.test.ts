@@ -11,6 +11,7 @@ function appendTextarea(value = ''): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
   textarea.value = value
   document.body.appendChild(textarea)
+
   return textarea
 }
 
@@ -19,11 +20,13 @@ function makePasteEvent(text: string): ClipboardEvent {
     bubbles: true,
     cancelable: true
   }) as ClipboardEvent
+
   Object.defineProperty(event, 'clipboardData', {
     value: {
       getData: (type: string) => (type === 'text/plain' ? text : '')
     }
   })
+
   return event
 }
 
@@ -32,6 +35,7 @@ function captureInputEvents(target: HTMLElement): InputEvent[] {
   target.addEventListener('input', (event) => {
     events.push(event as InputEvent)
   })
+
   return events
 }
 
@@ -71,12 +75,14 @@ describe('large text control paste', () => {
     const event = makePasteEvent(text)
 
     textarea.dispatchEvent(event)
+
     const result = handleLargeTextControlPasteEvent(event, {
       directMaxBytes: 8,
       chunkMaxBytes: 6,
       yieldToEventLoop,
       onPasteResult: pasteResult
     })
+
     await flushPromises()
 
     expect(result).toEqual({ status: 'handled' })
@@ -101,6 +107,7 @@ describe('large text control paste', () => {
     const event = makePasteEvent(text)
 
     textarea.dispatchEvent(event)
+
     const result = handleLargeTextControlPasteEvent(event, {
       chunkMaxBytes: 64,
       directMaxBytes: 4,
@@ -161,6 +168,7 @@ describe('large text control paste', () => {
     now.mockReturnValueOnce(20).mockReturnValueOnce(27)
 
     textarea.dispatchEvent(event)
+
     const result = handleLargeTextControlPasteEvent(event, {
       directMaxBytes: 2,
       maxBytes: 5,
@@ -192,6 +200,7 @@ describe('large text control paste', () => {
     const event = makePasteEvent('😀'.repeat(100))
 
     textarea.dispatchEvent(event)
+
     const result = handleLargeTextControlPasteEvent(event, {
       directMaxBytes: 2,
       maxBytes: 5,

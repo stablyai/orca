@@ -31,23 +31,29 @@ export class HostOpenRetryScheduler {
     this.states.set(hostId, state)
     const delayIndex = Math.min(failureCount - 1, RETRY_DELAYS_MS.length - 1)
     const nextDelayMs = RETRY_DELAYS_MS[delayIndex]
+
     if (!this.options.canRetry(hostId, generation)) {
       return { failureCount, nextDelayMs }
     }
+
     state.timer = this.setTimer(() => {
       state.timer = null
+
       if (this.states.get(hostId) === state && this.options.canRetry(hostId, generation)) {
         this.options.open(hostId)
       }
     }, nextDelayMs)
+
     return { failureCount, nextDelayMs }
   }
 
   expedite(hostId: string): void {
     const state = this.states.get(hostId)
+
     if (!state || !this.options.canRetry(hostId, state.generation)) {
       return
     }
+
     this.clearStateTimer(state)
     this.options.open(hostId)
   }
@@ -55,6 +61,7 @@ export class HostOpenRetryScheduler {
   recordSuccess(hostId: string): number {
     const priorFailureCount = this.states.get(hostId)?.failureCount ?? 0
     this.cancel(hostId)
+
     return priorFailureCount
   }
 
@@ -67,6 +74,7 @@ export class HostOpenRetryScheduler {
     for (const state of this.states.values()) {
       this.clearStateTimer(state)
     }
+
     this.states.clear()
   }
 

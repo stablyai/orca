@@ -15,28 +15,35 @@ import { installNativeChatMessageListTestViewport } from './native-chat-message-
 // Counting real per-row work rather than a render counter: a future refactor could keep the
 // render count low while still re-deriving every row's markdown.
 const proseCalls = vi.hoisted(() => ({ count: 0 }))
+
 vi.mock('./native-chat-prose', async (importOriginal) => {
   const actual = await importOriginal<typeof NativeChatProseModule>()
+
   return {
     ...actual,
     nativeChatProseToMarkdown: (prose: Parameters<typeof actual.nativeChatProseToMarkdown>[0]) => {
       proseCalls.count += 1
+
       return actual.nativeChatProseToMarkdown(prose)
     }
   }
 })
 
 const patchCalls = vi.hoisted(() => ({ detailed: 0, summary: 0 }))
+
 vi.mock('../../../../shared/native-chat-unified-patch', async (importOriginal) => {
   const actual = await importOriginal<typeof UnifiedPatchModule>()
+
   return {
     ...actual,
     editLinesFromUnifiedPatch: (...args: Parameters<typeof actual.editLinesFromUnifiedPatch>) => {
       patchCalls.detailed += 1
+
       return actual.editLinesFromUnifiedPatch(...args)
     },
     summarizeUnifiedPatch: (...args: Parameters<typeof actual.summarizeUnifiedPatch>) => {
       patchCalls.summary += 1
+
       return actual.summarizeUnifiedPatch(...args)
     }
   }
@@ -45,10 +52,13 @@ vi.mock('../../../../shared/native-chat-unified-patch', async (importOriginal) =
 const { NativeChatMessageList } = await import('./NativeChatMessageList')
 
 let restoreViewport = (): void => {}
+
 beforeAll(() => {
   restoreViewport = installNativeChatMessageListTestViewport()
 })
+
 afterAll(() => restoreViewport())
+
 afterEach(cleanup)
 
 const TRANSCRIPT_LENGTH = 120
@@ -79,6 +89,7 @@ function sessionWith(messages: NativeChatMessage[]): NativeChatLiveSession {
 describe('native chat transcript re-render cost during a streaming turn', () => {
   it('rebuilds only the rows whose blocks changed, not the whole transcript per frame', () => {
     const messages = settledMessages()
+
     const { rerender } = render(
       <NativeChatMessageList
         session={sessionWith(messages)}
@@ -93,11 +104,13 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
 
     // A streaming turn publishes a frame per SDK event; only the tail message's blocks change.
     const STREAM_FRAMES = 20
+
     for (let frame = 1; frame <= STREAM_FRAMES; frame += 1) {
       const streaming = messages.slice(0, -1).concat({
         ...messages.at(-1)!,
         blocks: [{ type: 'text' as const, text: `streaming token ${frame}` }]
       })
+
       rerender(
         <NativeChatMessageList
           session={sessionWith(streaming)}
@@ -117,6 +130,7 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
   it('keeps structured diff rows lazy and reuses counts across journal updates', () => {
     patchCalls.detailed = 0
     patchCalls.summary = 0
+
     const user: AgentJournalRenderItem = {
       itemId: 'user',
       revision: 1,
@@ -124,6 +138,7 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
       observedAt: 1000,
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Edit a file' }] }
     }
+
     const diff: AgentJournalRenderItem = {
       itemId: 'diff',
       revision: 1,
@@ -140,6 +155,7 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
         }
       }
     }
+
     const view = (items: AgentJournalRenderItem[]) => (
       <NativeChatMessageList
         session={sessionWith(projectStructuredAgentSessionMessages(items, [], []))}
@@ -149,8 +165,10 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
         fontScale={1}
       />
     )
+
     const { rerender } = render(view([user, diff]))
     expect(patchCalls).toEqual({ summary: 1, detailed: 0 })
+
     for (let frame = 0; frame < 20; frame += 1) {
       rerender(
         view([
@@ -170,6 +188,7 @@ describe('native chat transcript re-render cost during a streaming turn', () => 
         ])
       )
     }
+
     expect(patchCalls).toEqual({ summary: 1, detailed: 0 })
     fireEvent.click(screen.getByRole('button', { name: /1 changed file/ }))
     expect(patchCalls.detailed).toBe(0)

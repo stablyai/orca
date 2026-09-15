@@ -32,6 +32,7 @@ export function isMainWindowPtyIpcEvent(
 }
 
 export type PtyWritePayload = { id: string; data: string }
+
 export type PtyViewportClaimPayload = { id: string; cols: number; rows: number }
 
 export function createPtyWriteInput(deps: {
@@ -59,16 +60,20 @@ export function createPtyWriteInput(deps: {
     ) {
       return
     }
+
     mainWindow.webContents.send('pty:writeUnavailable', { id })
   }
 
   /** Single lease check for every byte-entry point this module owns. */
   const admitAgentSessionPtyWrite = (id: string): AgentSessionPtyWriteAdmittance | null => {
     const admission = agentSessionPtyWriteGate.admit(id)
+
     if (admission.admitted) {
       return { sessionId: admission.sessionId, runtimeFence: admission.runtimeFence }
     }
+
     reportAgentSessionWriteRefusal(mainWindow, id, admission.refusal)
+
     return null
   }
 
@@ -78,10 +83,13 @@ export function createPtyWriteInput(deps: {
     admitted: AgentSessionPtyWriteAdmittance
   ): boolean => {
     const admission = agentSessionPtyWriteGate.readmit(id, admitted)
+
     if (admission.admitted) {
       return true
     }
+
     reportAgentSessionWriteRefusal(mainWindow, id, admission.refusal)
+
     return false
   }
 
@@ -93,15 +101,21 @@ export function createPtyWriteInput(deps: {
   ): boolean | Promise<boolean> => {
     const chunks = iterateTerminalInputChunks(data)
     const first = chunks.next()
+
     if (first.done) {
       provider.write(id, data)
+
       return true
     }
+
     const second = chunks.next()
+
     if (second.done) {
       provider.write(id, first.value)
+
       return true
     }
+
     return writePtyProviderInputChunks(provider, id, chunks, first.value, second.value, admitted)
   }
 
@@ -113,22 +127,27 @@ export function createPtyWriteInput(deps: {
   ): boolean | Promise<boolean> => {
     try {
       const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
+
       if (typeof tooLarge === 'boolean') {
         return tooLarge ? false : writePtyProviderInputWithinLimit(provider, id, data, admitted)
       }
+
       return tooLarge
         .then((result) => {
           if (result || !readmitAgentSessionPtyWrite(id, admitted)) {
             return false
           }
+
           return writePtyProviderInputWithinLimit(provider, id, data, admitted)
         })
         .catch((error) => {
           reportUnavailablePtyWrite(id, error)
+
           return false
         })
     } catch (error) {
       reportUnavailablePtyWrite(id, error)
+
       return false
     }
   }
@@ -145,23 +164,29 @@ export function createPtyWriteInput(deps: {
       let chunk: IteratorResult<string> = { done: false, value: firstChunk }
       let nextChunk: IteratorResult<string> = { done: false, value: secondChunk }
       let first = true
+
       while (!chunk.done) {
         if (!first && !readmitAgentSessionPtyWrite(id, admitted)) {
           return false
         }
+
         first = false
         provider.write(id, chunk.value)
+
         if (!nextChunk.done) {
           // setImmediate, not setTimeout(0): the yield exists to let abort/data callbacks run
           // between chunks, and a clamped timer tick per 16 KiB is pure latency.
           await new Promise((resolve) => setImmediate(resolve))
         }
+
         chunk = nextChunk
         nextChunk = chunks.next()
       }
+
       return true
     } catch (error) {
       reportUnavailablePtyWrite(id, error)
+
       return false
     }
   }
@@ -195,21 +220,28 @@ export function createPtyWriteInput(deps: {
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return false
     }
+
     const admitted = admitAgentSessionPtyWrite(args.id)
+
     if (!admitted) {
       return false
     }
+
     const provider = ptyOwnership.has(args.id) ? tryGetProviderForPty(args.id) : undefined
+
     if (!provider) {
       return false
     }
+
     try {
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
       interactiveOutputCharsByPty.set(args.id, 0)
+
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
+
       return writePtyProviderInput(provider, args.id, args.data, admitted)
     } catch {
       return false
@@ -220,25 +252,33 @@ export function createPtyWriteInput(deps: {
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return false
     }
+
     const admitted = admitAgentSessionPtyWrite(args.id)
+
     if (!admitted) {
       return false
     }
+
     // Why: the ack infers Ctrl+C/Escape reached the local PTY; SSH providers are fire-and-forget relay notifications and can't truthfully acknowledge yet.
     if (ptyOwnership.get(args.id) !== null) {
       return false
     }
+
     const provider = tryGetProviderForPty(args.id)
+
     if (!provider?.hasPty?.(args.id)) {
       return false
     }
+
     try {
       const now = performance.now()
       lastInputAtByPty.set(args.id, now)
       interactiveOutputCharsByPty.set(args.id, 0)
+
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
+
       return writePtyProviderInput(provider, args.id, args.data, admitted)
     } catch {
       return false

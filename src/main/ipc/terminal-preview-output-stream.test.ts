@@ -8,6 +8,7 @@ function makeStream(): TerminalPreviewOutputStream {
     isDestroyed: () => false,
     send: vi.fn()
   } as unknown as WebContents
+
   return new TerminalPreviewOutputStream(
     contents,
     'p1',

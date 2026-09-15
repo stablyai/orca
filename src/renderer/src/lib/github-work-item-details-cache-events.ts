@@ -27,6 +27,8 @@ export function onGitHubWorkItemDetailsCacheMutation(
   const handler = (event: Event): void => {
     listener((event as CustomEvent<GitHubWorkItemDetailsCacheMutation>).detail)
   }
+
   window.addEventListener(GITHUB_WORK_ITEM_DETAILS_CACHE_MUTATED_EVENT, handler)
+
   return () => window.removeEventListener(GITHUB_WORK_ITEM_DETAILS_CACHE_MUTATED_EVENT, handler)
 }

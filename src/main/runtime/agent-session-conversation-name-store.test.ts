@@ -8,7 +8,9 @@ import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
+
 const SESSION = 'session-alpha'
+
 const NATIVE: AgentSessionExecutionLocation = {
   executionHostId: 'local',
   wslDistro: null,
@@ -17,9 +19,11 @@ const NATIVE: AgentSessionExecutionLocation = {
 }
 
 let counter = 0
+
 /** Same shape the store's own suite uses: `<now>-<32 hex>`. */
 function operationId(): string {
   counter += 1
+
   return `${NOW}-${String(counter)
     .padStart(32, '0')
     .replaceAll(/[^0-9a-f]/g, '0')}`
@@ -45,6 +49,7 @@ let directory: string
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-conversation-name-store-'))
 })
+
 afterEach(async () => {
   await rm(directory, { recursive: true, force: true })
 })
@@ -52,6 +57,7 @@ afterEach(async () => {
 async function reservedStore(): Promise<AgentSessionRecordStore> {
   const store = await AgentSessionRecordStore.open({ directory, hostId: 'local' })
   await store.reserveOwner(reserveRequest())
+
   return store
 }
 

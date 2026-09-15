@@ -28,10 +28,15 @@ import {
 } from './web-session-focus-intent'
 
 const WT = 'repo::/worktree'
+
 const ENV = 'web-env-1'
+
 const NOW = 1_700_000_000_000
+
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
+
 const LEAF_C = '33333333-3333-4333-8333-333333333333'
 
 function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSessionTabsSyncState {
@@ -87,6 +92,7 @@ function makeSnapshot(
 ): RuntimeMobileSessionTabsResult {
   const tabs = terminals.map(terminalSnapshotTab)
   const active = terminals.find((t) => t.active)
+
   return {
     worktree: WT,
     publicationEpoch: `epoch-${overrides.snapshotVersion ?? 1}`,
@@ -110,6 +116,7 @@ function makeSnapshot(
 // them, so a snapshot reconcile has a realistic prior state to compare against.
 function localTerminal(parentTab: string, sortOrder: number, active: boolean) {
   const id = toWebTerminalSurfaceTabId(parentTab)
+
   const unified: Tab = {
     id,
     entityId: id,
@@ -124,6 +131,7 @@ function localTerminal(parentTab: string, sortOrder: number, active: boolean) {
     isPreview: false,
     isPinned: false
   }
+
   return {
     id,
     parentTab,
@@ -146,6 +154,7 @@ function stateWithLocalTerminals(
   locals: ReturnType<typeof localTerminal>[]
 ): WebSessionTabsSyncState {
   const active = locals.find((l) => l.active) ?? locals[0]
+
   return makeState({
     activeTabId: active?.id ?? null,
     activeTabIdByWorktree: active ? { [WT]: active.id } : {},
@@ -171,6 +180,7 @@ function stateWithLocalTerminals(
 function groupOrder(patch: Partial<WebSessionTabsSyncState>): string[] {
   return patch.groupsByWorktree?.[WT]?.[0]?.tabOrder ?? []
 }
+
 function groupActive(patch: Partial<WebSessionTabsSyncState>): string | null {
   return patch.groupsByWorktree?.[WT]?.[0]?.activeTabId ?? null
 }
@@ -189,7 +199,9 @@ describe('parity §3: remote terminal create appends rightmost (matches local)',
       localTerminal('host-tab-1', 0, true),
       localTerminal('host-tab-2', 1, false)
     ])
+
     recordWebSessionFocusIntent({ environmentId: ENV }, WT, `host-tab-3::${LEAF_C}`)
+
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([
@@ -216,7 +228,9 @@ describe('parity §3: remote terminal create appends rightmost (matches local)',
       localTerminal('host-tab-1', 0, false),
       localTerminal('host-tab-2', 1, true)
     ])
+
     recordWebSessionFocusIntent({ environmentId: ENV }, WT, `host-tab-3::${LEAF_C}`)
+
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([
@@ -227,6 +241,7 @@ describe('parity §3: remote terminal create appends rightmost (matches local)',
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
+
     expect(groupOrder(patch)).toEqual([
       toWebTerminalSurfaceTabId('host-tab-1'),
       toWebTerminalSurfaceTabId('host-tab-2'),
@@ -242,6 +257,7 @@ describe('parity §4: remote create focuses new tab; echoes never steal focus', 
   it('a client-initiated create focuses the new terminal (intent honored)', () => {
     const prior = stateWithLocalTerminals([localTerminal('host-tab-1', 0, true)])
     recordWebSessionFocusIntent({ environmentId: ENV }, WT, `host-tab-2::${LEAF_B}`)
+
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([
@@ -251,6 +267,7 @@ describe('parity §4: remote create focuses new tab; echoes never steal focus', 
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
+
     expect(patch.activeTabIdByWorktree?.[WT]).toBe(toWebTerminalSurfaceTabId('host-tab-2'))
     expect(groupActive(patch)).toBe(toWebTerminalSurfaceTabId('host-tab-2'))
   })
@@ -260,6 +277,7 @@ describe('parity §4: remote create focuses new tab; echoes never steal focus', 
       localTerminal('host-tab-1', 0, false), // agent tab
       localTerminal('host-tab-2', 1, true) // user is here
     ])
+
     // No focus intent recorded — this is an agent "thinking" echo marking tab-1 active.
     const patch = applyWebSessionTabsSnapshot(
       prior,
@@ -270,6 +288,7 @@ describe('parity §4: remote create focuses new tab; echoes never steal focus', 
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
+
     // Focus stays on the user's current tab (tab-2), not the echoed tab-1. Under
     // client-owned placement the strongest form holds: groups are not rewritten at all.
     const effectiveGroups = patch.groupsByWorktree?.[WT] ?? prior.groupsByWorktree[WT]
@@ -283,14 +302,17 @@ describe('parity §4: remote create focuses new tab; echoes never steal focus', 
 describe('parity §2: snapshot freshness (no split-brain from stale updates)', () => {
   it('ignores a stale lower-version snapshot after a newer version applied', () => {
     const prior = stateWithLocalTerminals([localTerminal('host-tab-1', 0, true)])
+
     const newer = makeSnapshot([{ parentTab: 'host-tab-1', leaf: LEAF_A, active: true }], {
       snapshotVersion: 3,
       publicationEpoch: 'epoch-x'
     })
+
     const older = makeSnapshot([{ parentTab: 'host-tab-1', leaf: LEAF_A, active: true }], {
       snapshotVersion: 2,
       publicationEpoch: 'epoch-x'
     })
+
     const first = applyFreshWebSessionTabsSnapshot(prior, newer, ENV, NOW + 10)
     const afterNewer = { ...prior, ...(first as Partial<WebSessionTabsSyncState>) }
     // Re-applying an older version of the same epoch must be a no-op (returns state).
@@ -313,6 +335,7 @@ describe('parity §11: remote browser create focuses the new browser tab', () =>
       undefined,
       toWebTerminalSurfaceTabId('host-tab-1')
     )
+
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([{ parentTab: 'host-tab-1', leaf: LEAF_A, active: false }], {
@@ -344,6 +367,7 @@ describe('parity §11: remote browser create focuses the new browser tab', () =>
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
+
     // Visible type flips to browser and the active browser workspace is the new page.
     expect(patch.activeTabTypeByWorktree?.[WT]).toBe('browser')
     expect(patch.activeBrowserTabIdByWorktree?.[WT]).toBe(pageId)
@@ -351,6 +375,7 @@ describe('parity §11: remote browser create focuses the new browser tab', () =>
 
   it('a browser status echo without intent does not steal focus from a terminal', () => {
     const pageId = 'browser-page-1'
+
     const prior = makeState({
       activeTabId: toWebTerminalSurfaceTabId('host-tab-1'),
       activeTabIdByWorktree: { [WT]: toWebTerminalSurfaceTabId('host-tab-1') },
@@ -389,6 +414,7 @@ describe('parity §11: remote browser create focuses the new browser tab', () =>
         ]
       }
     })
+
     // No intent — server snapshot marks the (pre-existing) browser active.
     const patch = applyWebSessionTabsSnapshot(
       prior,
@@ -415,6 +441,7 @@ describe('parity §11: remote browser create focuses the new browser tab', () =>
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
+
     // No focus theft: the visible type must NOT flip to browser. The reconcile
     // emits no change for an unchanged field, so it's either absent (unchanged)
     // or still 'terminal' — never 'browser'.
@@ -430,14 +457,17 @@ describe('parity §11: remote browser create focuses the new browser tab', () =>
 describe('parity §1: empty host snapshot does not fabricate tabs', () => {
   it('an empty snapshot with existing local terminals does not add a phantom tab', () => {
     const prior = stateWithLocalTerminals([localTerminal('host-tab-1', 0, true)])
+
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([], { activeTabId: null, activeTabType: null }),
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
+
     // No new fabricated terminal ids beyond what existed.
     const order = groupOrder(patch)
+
     for (const id of order) {
       expect(id).toBe(toWebTerminalSurfaceTabId('host-tab-1'))
     }

@@ -5,6 +5,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 
 const ownerToken = randomUUID()
+
 const OWNER_FILE_PATTERN = /^owner-([\da-f-]{36})\.json$/i
 
 type GrokHookOwner = { token: string; pid: number }
@@ -20,6 +21,7 @@ function ownerPath(directory = ownerDirectory()): string {
 export function registerGrokHookOwner(): void {
   const directory = ownerDirectory()
   mkdirSync(directory, { recursive: true })
+
   try {
     writeFileSync(
       ownerPath(directory),
@@ -40,6 +42,7 @@ export function unregisterGrokHookOwnerSync(): void {
 export async function releaseGrokHookOwnerAndCheckForPeers(): Promise<boolean> {
   const directory = ownerDirectory()
   await rm(ownerPath(directory), { force: true })
+
   return await hasLivePeer(directory, ownerToken, probeProcess)
 }
 
@@ -59,25 +62,31 @@ export async function hasLivePeer(
   probe: (pid: number) => Promise<boolean | undefined>
 ): Promise<boolean> {
   let entries: string[]
+
   try {
     entries = await readdir(directory)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return false
     }
+
     // Why: unverifiable ownership must preserve the shared hook, never delete it.
     return true
   }
 
   for (const entry of entries) {
     const token = OWNER_FILE_PATTERN.exec(entry)?.[1]
+
     if (!token || token === currentToken) {
       continue
     }
+
     const path = join(directory, entry)
     let owner: GrokHookOwner | null = null
+
     try {
       const candidate = JSON.parse(await readFile(path, 'utf8')) as Partial<GrokHookOwner>
+
       if (
         candidate.token === token &&
         Number.isSafeInteger(candidate.pid) &&
@@ -88,24 +97,30 @@ export async function hasLivePeer(
     } catch {
       // Invalid Orca-owned records cannot prove a live peer and are pruned below.
     }
+
     if (!owner) {
       await rm(path, { force: true })
       continue
     }
+
     const live = await probe(owner.pid)
+
     if (live === false) {
       await rm(path, { force: true })
       continue
     }
+
     // true proves liveness; undefined means the platform could not prove death.
     return true
   }
+
   return false
 }
 
 async function probeProcess(pid: number): Promise<boolean | undefined> {
   try {
     process.kill(pid, 0)
+
     return true
   } catch (error) {
     return (error as NodeJS.ErrnoException).code === 'ESRCH' ? false : undefined

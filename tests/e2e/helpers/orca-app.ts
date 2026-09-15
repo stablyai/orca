@@ -73,17 +73,22 @@ type OrcaWorkerFixtures = {
 // Why: parse + warn at module scope so a bad ORCA_E2E_SLOWMO_MS value logs once
 // per worker instead of once per test (otherwise hundreds of lines per CI run).
 const ORCA_E2E_SLOWMO_MS_RAW = process.env.ORCA_E2E_SLOWMO_MS
+
 const ORCA_E2E_SLOWMO_MS = ((): number => {
   if (ORCA_E2E_SLOWMO_MS_RAW === undefined) {
     return 0
   }
+
   const parsed = Number(ORCA_E2E_SLOWMO_MS_RAW)
+
   if (!Number.isFinite(parsed)) {
     console.warn(
       `[orca-e2e] ORCA_E2E_SLOWMO_MS="${ORCA_E2E_SLOWMO_MS_RAW}" is not a number; ignoring (using 0).`
     )
+
     return 0
   }
+
   return Math.max(parsed, 0)
 })()
 
@@ -91,11 +96,13 @@ async function removeUserDataDirAfterShutdown(userDataDir: string): Promise<void
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
       rmSync(userDataDir, { recursive: true, force: true })
+
       return
     } catch (error) {
       if (attempt === 4) {
         throw error
       }
+
       // Why: Windows can briefly keep Electron profile files locked after the
       // process exits; retrying avoids turning a passed flow into teardown noise.
       await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
@@ -109,6 +116,7 @@ function shouldLaunchHeadful(testInfo: TestInfo): boolean {
   if (process.env.ORCA_E2E_FORCE_HEADFUL === '1') {
     return true
   }
+
   return testInfo.project.metadata.orcaHeadful === true
 }
 
@@ -149,9 +157,11 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       const persistedRepoPath = existsSync(TEST_REPO_PATH_FILE)
         ? readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
         : ''
+
       const repoPath = isValidGitRepo(persistedRepoPath)
         ? persistedRepoPath
         : createSeededTestRepo()
+
       await provideFixture(repoPath)
     },
     { scope: 'worker' }
@@ -165,6 +175,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     async ({}, provideFixture) => {
       const cleanups: (() => Promise<void>)[] = []
       await provideFixture((cleanup) => cleanups.push(cleanup))
+
       for (const cleanup of cleanups.toReversed()) {
         await cleanup()
       }
@@ -201,6 +212,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
       )
     }
+
     const headful = shouldLaunchHeadful(testInfo)
     // Why: strip ELECTRON_RUN_AS_NODE before spawning. Some host shells (e.g.
     // Orca's own agent runtime) set it so Electron behaves as a plain Node
@@ -208,12 +220,14 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // which Node rejects with "bad option" and the process exits immediately.
     const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
     void _unused
+
     const homeIsolation = createElectronHomeIsolation({
       inheritedEnv: cleanEnv,
       launchEnv,
       extraEnv: orcaAppExtraEnv,
       userDataDir
     })
+
     // Why: ORCA_E2E_SLOWMO_MS adds a pause between every Playwright action so a
     // developer running with ORCA_E2E_FORCE_HEADFUL=1 can actually watch what
     // the test does. Defaults to 0 (no slowdown) for normal runs.
@@ -225,9 +239,11 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // dir may not exist when the fixture initializes, and Electron silently
     // drops the recording. mkdir up-front so the recorder always has a home.
     const recordVideoDir = process.env.ORCA_E2E_RECORD_VIDEO === '1' ? testInfo.outputDir : null
+
     if (recordVideoDir) {
       mkdirSync(recordVideoDir, { recursive: true })
     }
+
     const app = await electron.launch({
       args: [...orcaAppExtraArgs, ...getOrcaElectronLaunchArgs(mainPath, headful)],
       ...(slowMo > 0 ? { slowMo } : {}),
@@ -256,11 +272,14 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
       }
     })
+
     forwardElectronProcessLogs(app, testInfo)
+
     try {
       const resolvedHome = await retryTransientMainEvaluate(() =>
         app.evaluate(({ app }) => app.getPath('home'))
       )
+
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
     } catch (error) {
       await closeElectronAppForE2E(app)
@@ -268,6 +287,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       await removeUserDataDirAfterShutdown(userDataDir)
       throw error
     }
+
     await provideFixture(app)
     // Why: the Playwright close promise can settle before all Electron and PTY
     // descendants are gone in CI; worker teardown then hangs on open handles.
@@ -310,6 +330,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         { timeout: 30_000 }
       )
       await provideFixture(page)
+
       return
     }
 
@@ -321,9 +342,11 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // initializes properly.
     const seededRepoId = await page.evaluate(async (repoPath) => {
       const result = await window.api.repos.add({ path: repoPath })
+
       if ('error' in result) {
         throw new Error(result.error)
       }
+
       return result.repo.id
     }, repoPath)
 
@@ -340,17 +363,22 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         () =>
           page.evaluate(async (repoId) => {
             const store = window.__store
+
             if (!store) {
               return false
             }
+
             await store.getState().fetchRepos()
             const repo = store.getState().repos.find((candidate) => candidate.id === repoId)
+
             if (!repo) {
               return false
             }
+
             // Why: the fixture deliberately creates external Git worktrees. New
             // repos hide those by default after the visibility rollout.
             await store.getState().updateRepo(repo.id, { externalWorktreeVisibility: 'show' })
+
             return true
           }, seededRepoId),
         {
@@ -367,9 +395,11 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     await page
       .evaluate(async (repoId) => {
         const store = window.__store
+
         if (!store) {
           return
         }
+
         await store.getState().fetchWorktrees(repoId)
       }, seededRepoId)
       .catch(() => false)
@@ -382,10 +412,13 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         () =>
           page.evaluate(async (repoId) => {
             const store = window.__store
+
             if (!store) {
               return 0
             }
+
             await store.getState().fetchWorktrees(repoId)
+
             return store.getState().worktreesByRepo[repoId]?.length ?? 0
           }, seededRepoId),
         {
@@ -399,6 +432,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     await page.waitForFunction(
       () => {
         const store = window.__store
+
         return store?.getState().workspaceSessionReady === true
       },
       null,
@@ -411,16 +445,19 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // the seeded repo instead of the "Select a worktree" empty state.
     await page.evaluate((repoId: string) => {
       const store = window.__store
+
       if (!store) {
         return
       }
 
       const state = store.getState()
+
       // Why: provider-returned identity is stable across Windows path casing
       // and separator normalization, unlike comparing renderer path strings.
       const testWorktree = state.worktreesByRepo[repoId]?.find(
         (worktree) => worktree.isMainWorktree
       )
+
       if (testWorktree) {
         state.setActiveWorktree(testWorktree.id)
       }
@@ -433,14 +470,19 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // terminal suites on tab creation timing.
     await page.evaluate(() => {
       const store = window.__store
+
       if (!store) {
         return
       }
+
       const state = store.getState()
+
       if (!state.activeWorktreeId) {
         return
       }
+
       const tabs = state.tabsByWorktree[state.activeWorktreeId] ?? []
+
       if (tabs.length === 0) {
         state.createTab(state.activeWorktreeId)
       }

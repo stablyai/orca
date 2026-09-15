@@ -70,6 +70,7 @@ export function resolveOsc52ClipboardGate(input: {
   // is therefore dropped silently. Fixing it means tagging chunks at queue time; a lost copy the user
   // can repeat is the cheaper side of that trade.
   const allowClipboardWrite = !input.replaying && input.settingEnabled === true
+
   return {
     allowClipboardWrite,
     // Why not toast on replay or pre-hydration: the toast latches once per renderer session, and neither
@@ -97,14 +98,17 @@ export function createOsc52OscHandler(deps: {
   // flood to roughly one write per xterm parse yield, not to one write overall.
   let pendingText: string | null = null
   let flushScheduled = false
+
   const writeCoalesced = (text: string): Promise<void> => {
     pendingText = text
+
     if (!flushScheduled) {
       flushScheduled = true
       queueMicrotask(() => {
         flushScheduled = false
         const next = pendingText
         pendingText = null
+
         if (next !== null) {
           // Why try/catch and not just .catch(): the write moved out of the guarded
           // parser handler into a microtask, where a sync throw (or a preload that
@@ -120,6 +124,7 @@ export function createOsc52OscHandler(deps: {
         }
       })
     }
+
     // Always resolve here: failure toast is raised in the microtask above.
     // Passing onWriteFailure to handleOsc52ClipboardRequest would be dead.
     return Promise.resolve()
@@ -130,6 +135,7 @@ export function createOsc52OscHandler(deps: {
       settingEnabled: deps.getSettingEnabled(),
       replaying: deps.getReplaying()
     })
+
     return handleOsc52ClipboardRequest(data, {
       allowClipboardWrite: gate.allowClipboardWrite,
       writeClipboardText: writeCoalesced,
@@ -143,26 +149,31 @@ export function handleOsc52ClipboardRequest(
   options: Osc52ClipboardRequestOptions
 ): boolean {
   const parsed = parseOsc52(data)
+
   if (parsed.kind !== 'write') {
     return true
   }
 
   if (!options.allowClipboardWrite) {
     options.onBlockedWrite?.()
+
     return true
   }
 
   void options.writeClipboardText(parsed.text).catch(() => {
     reportOsc52ClipboardWriteFailure(options.onWriteFailure)
   })
+
   return true
 }
 
 export function parseOsc52(data: string): Osc52ParseResult {
   const semi = data.indexOf(';')
+
   if (semi === -1) {
     return { kind: 'invalid', reason: 'missing selection/data separator' }
   }
+
   // Why accept empty Pc: tmux copies via `\e]52;;<base64>` (window-copy.c passes an
   // empty clip through the `Ms` capability). XTerm would read that as `s0`; we merge
   // every kind into the clipboard regardless (see header). Zellij always sends `c`/`p`.
@@ -185,15 +196,18 @@ export function parseOsc52(data: string): Osc52ParseResult {
   }
 
   const decoded = decodeBase64Utf8(payload)
+
   if (decoded === null) {
     return { kind: 'invalid', reason: 'payload is not valid base64' }
   }
+
   // Why reject empty: this is XTerm's "clear the selection", which we decline to
   // honor — with the gate default-on, any PTY could blank the clipboard for free.
   // (A truncated sequence never lands here; xterm only calls us on parse success.)
   if (decoded === '') {
     return { kind: 'invalid', reason: 'empty payload' }
   }
+
   return { kind: 'write', selections, text: decoded }
 }
 
@@ -203,15 +217,19 @@ function decodeBase64Utf8(b64: string): string | null {
   // else that doesn't match the base64 alphabet so we don't silently
   // accept garbage.
   const stripped = normalizeBase64Payload(b64)
+
   if (stripped === null) {
     return null
   }
+
   try {
     const binary = atob(stripped)
     const bytes = new Uint8Array(binary.length)
+
     for (let i = 0; i < binary.length; i++) {
       bytes[i] = binary.charCodeAt(i)
     }
+
     return new TextDecoder('utf-8', { fatal: false }).decode(bytes)
   } catch {
     return null
@@ -221,22 +239,28 @@ function decodeBase64Utf8(b64: string): string | null {
 function normalizeBase64Payload(value: string): string | null {
   let stripped = ''
   let sawWhitespace = false
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (isWhitespaceCode(code)) {
       if (!sawWhitespace) {
         stripped = value.slice(0, index)
         sawWhitespace = true
       }
+
       continue
     }
+
     if (!isBase64Code(code)) {
       return null
     }
+
     if (sawWhitespace) {
       stripped += value[index]
     }
   }
+
   return sawWhitespace ? stripped : value
 }
 

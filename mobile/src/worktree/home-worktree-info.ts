@@ -33,11 +33,13 @@ export function markHomeWorktreeCatalogUnavailable(
   if (current?.catalogUnavailable) {
     return current
   }
+
   if (current) {
     // Why: `current` predates this failure, so its counts are proven host truth — a dropped
     // socket must not erase them, only flag them as no longer live.
     return { ...current, catalogUnavailable: true, staleCounts: true }
   }
+
   return {
     hostId,
     totalWorktrees: 0,
@@ -55,13 +57,16 @@ export function homeHostWorktreeSummary(
   if (!info) {
     return null
   }
+
   // Why (STA-3123): a catalog that never loaded must not assert a count the host has not proven.
   if (info.catalogUnavailable && !info.staleCounts) {
     return 'Worktree list unavailable'
   }
+
   const counts = `${info.totalWorktrees} worktree${info.totalWorktrees === 1 ? '' : 's'}${
     info.activeCount > 0 ? ` · ${info.activeCount} active` : ''
   }`
+
   // Age bounds liveness, not the counts themselves: a failed refresh — or a rehydrated snapshot the
   // host has not re-confirmed — is still the last thing it told us, so keep it and drop the claim
   // that it is current.

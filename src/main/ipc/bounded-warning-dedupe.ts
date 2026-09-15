@@ -10,10 +10,13 @@ export function shouldEmitBoundedWarning(
   if (warningKeys.has(key)) {
     return false
   }
+
   // Why: evicting during a stable max+1 scan cascades into re-emitting every warning.
   if (warningKeys.size >= maxKeys) {
     return true
   }
+
   warningKeys.add(key)
+
   return true
 }

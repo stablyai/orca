@@ -21,6 +21,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
@@ -41,8 +42,11 @@ globalThis.window = { api: mockApi }
 import { createTestStore, seedStore, makeWorktree, makeTab } from './store-test-helpers'
 
 const WT1 = 'repo1::/path/wt1'
+
 const WT2 = 'repo1::/path/wt2'
+
 const TAB1 = 'tab-wt1'
+
 const TAB2 = 'tab-wt2'
 
 function draft(tabId: string, text: string) {

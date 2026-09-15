@@ -47,9 +47,11 @@ export function getClient(workspaceId?: string | null): LinearClient | null {
     force: true,
     workspaceId: resolveWorkspaceId(workspaceId) ?? undefined
   })
+
   if (!token) {
     return null
   }
+
   return new (loadLinearSdk().LinearClient)({ apiKey: token })
 }
 
@@ -58,13 +60,16 @@ export function getClients(
 ): LinearClientForWorkspace[] {
   const state = getWorkspaceState()
   const isAllSelection = workspaceId === 'all'
+
   const selectedWorkspaces = isAllSelection
     ? state.workspaces
     : state.workspaces.filter((workspace) => workspace.id === resolveWorkspaceId(workspaceId))
 
   const clients: LinearClientForWorkspace[] = []
+
   for (const workspace of selectedWorkspaces) {
     let token: string | null
+
     try {
       token = loadToken({ force: true, workspaceId: workspace.id })
     } catch (error) {
@@ -76,17 +81,21 @@ export function getClients(
       if (isAllSelection && error instanceof CredentialDecryptionError) {
         continue
       }
+
       throw error
     }
+
     if (!token) {
       continue
     }
+
     clients.push({
       workspace,
       client: new (loadLinearSdk().LinearClient)({ apiKey: token }),
       apiKey: token
     })
   }
+
   return clients
 }
 
@@ -121,6 +130,7 @@ export async function connect(
 
     saveWorkspaceToken(workspace.id, apiKey)
     const legacyWorkspace = getLegacyWorkspace()
+
     if (
       legacyWorkspace &&
       legacyWorkspace.organizationName === workspace.organizationName &&
@@ -130,10 +140,13 @@ export async function connect(
       clearLegacyViewerOnDisk()
       forgetLegacyViewer()
     }
+
     upsertWorkspace(workspace, { select: true })
+
     return { ok: true, viewer: workspace, workspace }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to validate API key'
+
     return { ok: false, error: message }
   }
 }
@@ -144,6 +157,7 @@ export function disconnect(workspaceId?: string): void {
 
 export function selectWorkspace(workspaceId: LinearWorkspaceSelection): LinearConnectionStatus {
   const state = getWorkspaceState()
+
   if (
     workspaceId !== 'all' &&
     !state.workspaces.some((workspace) => workspace.id === workspaceId)
@@ -158,15 +172,18 @@ export function selectWorkspace(workspaceId: LinearWorkspaceSelection): LinearCo
     selectedWorkspaceId: workspaceId,
     workspaces: file.workspaces
   })
+
   return getStatus()
 }
 
 export function getStatus(): LinearConnectionStatus {
   const state = getWorkspaceState()
+
   const selectedWorkspace =
     state.selectedWorkspaceId && state.selectedWorkspaceId !== 'all'
       ? state.workspaces.find((workspace) => workspace.id === state.selectedWorkspaceId)
       : null
+
   const activeWorkspace =
     selectedWorkspace ??
     state.workspaces.find((workspace) => workspace.id === state.activeWorkspaceId) ??
@@ -193,16 +210,21 @@ export async function testConnection(
   { ok: true; viewer: LinearViewer; workspace: LinearWorkspace } | { ok: false; error: string }
 > {
   const resolvedWorkspaceId = resolveWorkspaceId(workspaceId)
+
   if (!resolvedWorkspaceId) {
     return { ok: false, error: 'No API key stored.' }
   }
+
   let token: string | null
+
   try {
     token = loadToken({ force: true, workspaceId: resolvedWorkspaceId })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Test failed'
+
     return { ok: false, error: message }
   }
+
   if (!token) {
     return { ok: false, error: 'No API key stored.' }
   }
@@ -212,18 +234,22 @@ export async function testConnection(
     const me = await client.viewer
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)
+
     if (resolvedWorkspaceId === LEGACY_WORKSPACE_ID) {
       replaceLegacyWorkspace(workspace, token)
     } else {
       saveWorkspaceToken(workspace.id, token)
       upsertWorkspace(workspace, { select: true })
     }
+
     return { ok: true, viewer: workspace, workspace }
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(resolvedWorkspaceId)
     }
+
     const message = error instanceof Error ? error.message : 'Test failed'
+
     return { ok: false, error: message }
   }
 }

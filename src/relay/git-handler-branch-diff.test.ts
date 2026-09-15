@@ -20,9 +20,13 @@ import {
 } from './git-handler-test-setup'
 
 const BASE_OID = 'a'.repeat(40)
+
 const HEAD_OID = 'b'.repeat(40)
+
 const OTHER_HEAD_OID = 'c'.repeat(40)
+
 const MERGE_BASE_OID = 'd'.repeat(40)
+
 const FILE_PATH = 'src/file.ts'
 
 type GitBufferTarget = {
@@ -35,9 +39,11 @@ type GitTarget = {
 
 function deferredBuffer(): { promise: Promise<Buffer>; resolve: (content: string) => void } {
   let resolve!: (value: Buffer) => void
+
   const promise = new Promise<Buffer>((innerResolve) => {
     resolve = innerResolve
   })
+
   return { promise, resolve: (content) => resolve(Buffer.from(content)) }
 }
 
@@ -71,18 +77,23 @@ describe('pinned relay branch diff operation', () => {
     const createGitBuffer = (): GitBufferExec =>
       vi.fn<GitBufferExec>(async (args) => {
         const value = args[2].startsWith(`${BASE_OID}:`) ? left : right
+
         if (value instanceof Error) {
           throw value
         }
+
         return value
       })
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args[0] === 'rev-parse' && args.includes('HEAD')) {
         return { stdout: `${HEAD_OID}\n`, stderr: '' }
       }
+
       if (args[0] === 'rev-parse' || args[0] === 'merge-base') {
         return { stdout: `${BASE_OID}\n`, stderr: '' }
       }
+
       return { stdout: status, stderr: '' }
     })
 
@@ -93,6 +104,7 @@ describe('pinned relay branch diff operation', () => {
       HEAD_OID,
       FILE_PATH
     )
+
     const legacy = await branchDiffEntries(git, createGitBuffer(), '/repo', BASE_OID, {
       includePatch: true,
       filePath: FILE_PATH
@@ -130,6 +142,7 @@ describe('pinned relay branch diff operation', () => {
   it('recognizes only full object ids', () => {
     expect(isFullGitObjectId(BASE_OID)).toBe(true)
     expect(isFullGitObjectId('A'.repeat(64))).toBe(true)
+
     for (const value of ['origin/main', 'abc123', '', 'g'.repeat(40), null, undefined, 123, {}]) {
       expect(isFullGitObjectId(value)).toBe(false)
     }
@@ -179,12 +192,15 @@ describe('GitHandler pinned branch diff route', () => {
       if (args[0] === 'rev-parse' && args.includes('HEAD')) {
         return { stdout: `${HEAD_OID}\n`, stderr: '' }
       }
+
       if (args[0] === 'rev-parse') {
         return { stdout: `${BASE_OID}\n`, stderr: '' }
       }
+
       if (args[0] === 'merge-base') {
         return { stdout: `${MERGE_BASE_OID}\n`, stderr: '' }
       }
+
       return { stdout: nameStatus, stderr: '' }
     })
   }
@@ -192,17 +208,21 @@ describe('GitHandler pinned branch diff route', () => {
   it('starts exactly two pinned blob reads concurrently without metadata commands', async () => {
     const left = deferredBuffer()
     const right = deferredBuffer()
+
     const gitBufferSpy = vi
       .spyOn(handler as unknown as GitBufferTarget, 'gitBuffer')
       .mockImplementation((args) => {
         if (args[2] === `${BASE_OID}:${FILE_PATH}`) {
           return left.promise
         }
+
         if (args[2] === `${HEAD_OID}:${FILE_PATH}`) {
           return right.promise
         }
+
         throw new Error(`unexpected blob spec: ${args[2]}`)
       })
+
     const gitSpy = vi
       .spyOn(handler as unknown as GitTarget, 'git')
       .mockRejectedValue(new Error('metadata command should not run'))
@@ -231,6 +251,7 @@ describe('GitHandler pinned branch diff route', () => {
 
   it('reads the old path only from the base OID', async () => {
     const oldPath = 'src/old-file.ts'
+
     const gitBufferSpy = vi
       .spyOn(handler as unknown as GitBufferTarget, 'gitBuffer')
       .mockImplementation(async (args) => Buffer.from(args[2].startsWith(BASE_OID) ? 'old' : 'new'))
@@ -245,6 +266,7 @@ describe('GitHandler pinned branch diff route', () => {
 
   it('coalesces the same head OID while keeping different heads independent', async () => {
     const pending = deferredBuffer()
+
     const gitBufferSpy = vi
       .spyOn(handler as unknown as GitBufferTarget, 'gitBuffer')
       .mockImplementation(() => pending.promise)
@@ -275,6 +297,7 @@ describe('GitHandler pinned branch diff route', () => {
   it('accepts SHA-256 object IDs', async () => {
     const baseOid = 'A'.repeat(64)
     const headOid = 'b'.repeat(64)
+
     const gitBufferSpy = vi
       .spyOn(handler as unknown as GitBufferTarget, 'gitBuffer')
       .mockResolvedValue(Buffer.from('content\n'))
@@ -290,6 +313,7 @@ describe('GitHandler pinned branch diff route', () => {
   // Why: a symbolic base ref used to select the pinned route and then throw.
   it('selects the pinned route only when the base ref is a full object id', async () => {
     const gitSpy = mockLegacyGit(`M\t${FILE_PATH}\n`)
+
     const gitBufferSpy = vi
       .spyOn(handler as unknown as GitBufferTarget, 'gitBuffer')
       .mockResolvedValue(Buffer.from('content\n'))
@@ -352,10 +376,12 @@ describe('GitHandler pinned branch diff route', () => {
 
   it('keeps the requested head pinned after repository HEAD moves', async () => {
     const repoPath = mkdtempSync(path.join(tmpdir(), 'relay-pinned-branch-diff-'))
+
     try {
       gitInit(repoPath)
       writeFileSync(path.join(repoPath, 'file.txt'), 'base\n')
       gitCommit(repoPath, 'base')
+
       const baseOid = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd: repoPath,
         encoding: 'utf8'
@@ -363,6 +389,7 @@ describe('GitHandler pinned branch diff route', () => {
 
       writeFileSync(path.join(repoPath, 'file.txt'), 'pinned\n')
       gitCommit(repoPath, 'pinned')
+
       const pinnedHeadOid = execFileSync('git', ['rev-parse', 'HEAD'], {
         cwd: repoPath,
         encoding: 'utf8'

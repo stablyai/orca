@@ -62,6 +62,7 @@ export function parseExpectedThumbprints(value = process.env.ORCA_WINDOWS_EXPECT
 
 export function parseSignatureJson(stdout) {
   const trimmed = typeof stdout === 'string' ? stdout.trim() : ''
+
   if (trimmed === '') {
     throw new Error('PowerShell did not return signature JSON.')
   }
@@ -80,6 +81,7 @@ export function classifySignature(signature, options = {}) {
   const signerSubject = normalizeSignerSubject(signature?.signerSubject)
   const signerThumbprint = normalizeThumbprint(signature?.signerThumbprint)
   const subjectAllowed = expectedSigners.includes(signerSubject)
+
   const thumbprintAllowed =
     expectedThumbprints.length > 0 &&
     signerThumbprint !== '' &&
@@ -183,6 +185,7 @@ export function verifyWindowsInnerSignature({
 
   const signature = parseSignatureJson(getPowerShellSignatureJson(executablePath, spawnSyncImpl))
   const classification = classifySignature(signature, { expectedSigners, expectedThumbprints })
+
   if (!classification.ok) {
     throw new Error(`${classification.message}\n${formatSignatureSummary(signature)}`)
   }

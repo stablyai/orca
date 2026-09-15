@@ -61,6 +61,7 @@ describe('config.toml partial and stale writes', () => {
     const partial = ['model = "gpt-5"', '[mcp_servers.partial', 'command = "still-user-data'].join(
       '\n'
     )
+
     const updated = trustApi.upsertProjectTrustLevelInContent(
       partial,
       'C:/Remote/Repo',
@@ -76,9 +77,11 @@ describe('config.toml partial and stale writes', () => {
     const fixture = createTrustConfigFixture()
     fixtures.push(fixture.tmpDir)
     const original = 'model = "gpt-5"\n'
+
     const first = trustApi.upsertProjectTrustLevelInContent(original, '/remote/first', 'trusted', {
       alreadyCanonical: true
     })
+
     const second = trustApi.upsertProjectTrustLevelInContent(
       original,
       '/remote/second',

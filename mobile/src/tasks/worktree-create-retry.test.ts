@@ -19,6 +19,7 @@ type Attempt = { method: string; params: Record<string, unknown> }
 const IDEMPOTENT_CREATE_SUPPORT = {
   dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS
 }
+
 const LEGACY_HOST_REPLAY_WINDOW_MS = getWorktreeCreateReplayWindowMs(IDEMPOTENT_CREATE_SUPPORT)
 
 // Drives the transport state a replay has to wait on. Production couples the two:
@@ -30,14 +31,17 @@ function connectionController(): {
 } {
   let state: ConnectionState = 'connected'
   const listeners = new Set<(next: ConnectionState) => void>()
+
   return {
     getState: () => state,
     onStateChange: (listener) => {
       listeners.add(listener)
+
       return () => listeners.delete(listener)
     },
     set: (next) => {
       state = next
+
       for (const listener of listeners) {
         listener(next)
       }
@@ -70,6 +74,7 @@ function scriptedClient(
   lastInboundAt?: number | (() => number)
 ): RpcClient {
   let call = 0
+
   return {
     getState: () => connection?.getState() ?? 'connected',
     getLastInboundAt: () =>
@@ -80,18 +85,23 @@ function scriptedClient(
       attempts.push({ method, params: (params ?? {}) as Record<string, unknown> })
       const outcome = outcomes[Math.min(call, outcomes.length - 1)]!
       call += 1
+
       if ('throws' in outcome) {
         if (outcome.takesMs !== undefined) {
           await new Promise((resolve) => setTimeout(resolve, outcome.takesMs))
         }
+
         if (outcome.dropsConnection) {
           connection?.set('reconnecting')
+
           if (outcome.reconnectsAfterMs !== undefined) {
             setTimeout(() => connection?.set('connected'), outcome.reconnectsAfterMs)
           }
         }
+
         throw outcome.throws
       }
+
       if ('errorMessage' in outcome) {
         return {
           id: '1',
@@ -100,6 +110,7 @@ function scriptedClient(
           _meta: { runtimeId: 'r' }
         }
       }
+
       return {
         id: '1',
         ok: true,
@@ -121,10 +132,12 @@ describe('createWorktreeWithNameRetry', () => {
   // exhaustion), and `warning` is the only place the host says so.
   it('returns the host create warning alongside the worktree', async () => {
     const attempts: Attempt[] = []
+
     const client = scriptedClient(
       [{ id: 'wt-warned', warning: 'Failed to create the startup terminal for /w: no pty' }],
       attempts
     )
+
     await expect(
       createWorktreeWithNameRetry({
         client,
@@ -156,9 +169,11 @@ describe('createWorktreeWithNameRetry', () => {
     const attempts: Attempt[] = []
     const client = scriptedClient([{ id: 'wt-ready' }], attempts)
     let resolveSupport!: (supported: WorktreeCreateIdempotencySupport) => void
+
     const support = new Promise<WorktreeCreateIdempotencySupport>((resolve) => {
       resolveSupport = resolve
     })
+
     const pending = createWorktreeWithNameRetry({
       client,
       baseName: 'puffin',
@@ -179,6 +194,7 @@ describe('createWorktreeWithNameRetry', () => {
   it('stamps a clientMutationId on the create request', async () => {
     const attempts: Attempt[] = []
     const client = scriptedClient([{ id: 'wt-1' }], attempts)
+
     const result = await createWorktreeWithNameRetry({
       client,
       baseName: 'otter',
@@ -186,6 +202,7 @@ describe('createWorktreeWithNameRetry', () => {
       worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
       mintMutationId: () => 'key-1'
     })
+
     expect(result).toEqual({ worktreeId: 'wt-1', name: 'otter' })
     expect(attempts).toHaveLength(1)
     expect(attempts[0]!.params).toMatchObject({ name: 'otter', clientMutationId: 'key-1' })
@@ -193,10 +210,12 @@ describe('createWorktreeWithNameRetry', () => {
 
   it('retries a connection-migration cutover with the SAME key, then succeeds', async () => {
     const attempts: Attempt[] = []
+
     const client = scriptedClient(
       [{ throws: new LogicalClientCutoverError() }, { id: 'wt-2' }],
       attempts
     )
+
     const result = await createWorktreeWithNameRetry({
       client,
       baseName: 'seal',
@@ -204,6 +223,7 @@ describe('createWorktreeWithNameRetry', () => {
       worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
       mintMutationId: () => 'key-mig'
     })
+
     expect(result).toEqual({ worktreeId: 'wt-2', name: 'seal' })
     expect(attempts).toHaveLength(2)
     // Idempotency: both the interrupted send and the retry carry one key so the
@@ -248,11 +268,14 @@ describe('createWorktreeWithNameRetry', () => {
 
   it('mints a fresh key per candidate when a name collision bumps the suffix', async () => {
     const attempts: Attempt[] = []
+
     const client = scriptedClient(
       [{ errorMessage: 'already exists locally' }, { id: 'wt-3' }],
       attempts
     )
+
     let n = 0
+
     const result = await createWorktreeWithNameRetry({
       client,
       baseName: 'topic',
@@ -260,6 +283,7 @@ describe('createWorktreeWithNameRetry', () => {
       worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
       mintMutationId: () => `key-${(n += 1)}`
     })
+
     expect(result).toEqual({ worktreeId: 'wt-3', name: 'topic-2' })
     expect(attempts).toHaveLength(2)
     // A collision is a genuinely different create, so it gets a distinct key.
@@ -270,6 +294,7 @@ describe('createWorktreeWithNameRetry', () => {
 
   it('uses the host-selected display name after a collision retry', async () => {
     const attempts: Attempt[] = []
+
     const client = scriptedClient(
       [{ errorMessage: 'already exists locally' }, { id: 'wt-host-name', displayName: 'topic-3' }],
       attempts
@@ -287,6 +312,7 @@ describe('createWorktreeWithNameRetry', () => {
 
   it('falls back to the client candidate when an older host omits displayName', async () => {
     const attempts: Attempt[] = []
+
     const client = scriptedClient(
       [{ errorMessage: 'already exists locally' }, { id: 'wt-legacy' }],
       attempts
@@ -304,6 +330,7 @@ describe('createWorktreeWithNameRetry', () => {
 
   it('advances generated retries without nesting suffixes', async () => {
     const attempts: Attempt[] = []
+
     const client = scriptedClient(
       [{ errorMessage: 'already exists locally' }, { id: 'wt-generated' }],
       attempts
@@ -340,6 +367,7 @@ describe('createWorktreeWithNameRetry', () => {
   it('replays a delivery-ambiguous socket drop with the SAME key once the transport returns', async () => {
     const attempts: Attempt[] = []
     const connection = connectionController()
+
     const client = scriptedClient(
       [
         {
@@ -375,10 +403,12 @@ describe('createWorktreeWithNameRetry', () => {
 
   it('does not replay a delivery-ambiguous drop when the host lacks idempotency support', async () => {
     const attempts: Attempt[] = []
+
     const client = scriptedClient(
       [{ throws: markRpcDeliveryUnknown(new Error('Connection interrupted')) }],
       attempts
     )
+
     await expect(
       createWorktreeWithNameRetry({
         client,
@@ -395,6 +425,7 @@ describe('createWorktreeWithNameRetry', () => {
   it('disables ambiguous replay for a malformed advertisement', async () => {
     const attempts: Attempt[] = []
     const connection = connectionController()
+
     const client = scriptedClient(
       [
         {
@@ -405,6 +436,7 @@ describe('createWorktreeWithNameRetry', () => {
       attempts,
       connection
     )
+
     await expect(
       createWorktreeWithNameRetry({
         client,
@@ -420,9 +452,11 @@ describe('createWorktreeWithNameRetry', () => {
 
   it('gives up after the delivery-ambiguity replay budget, still inside the dedupe TTL', async () => {
     vi.useFakeTimers()
+
     try {
       const attempts: Attempt[] = []
       const connection = connectionController()
+
       const client = scriptedClient(
         [
           {
@@ -434,8 +468,10 @@ describe('createWorktreeWithNameRetry', () => {
         attempts,
         connection
       )
+
       const startedAt = Date.now()
       let settledAt = -1
+
       const pending = createWorktreeWithNameRetry({
         client,
         baseName: 'barnacle',
@@ -446,6 +482,7 @@ describe('createWorktreeWithNameRetry', () => {
         settledAt = Date.now()
         throw error
       })
+
       const settled = expect(pending).rejects.toThrow('Connection interrupted')
       await vi.advanceTimersByTimeAsync(WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS)
       await settled
@@ -464,9 +501,11 @@ describe('createWorktreeWithNameRetry', () => {
 
   it('surfaces the original ambiguity when the transport never comes back', async () => {
     vi.useFakeTimers()
+
     try {
       const attempts: Attempt[] = []
       const connection = connectionController()
+
       const client = scriptedClient(
         [
           {
@@ -485,6 +524,7 @@ describe('createWorktreeWithNameRetry', () => {
         worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
         mintMutationId: () => 'key-stuck'
       })
+
       const settled = expect(pending).rejects.toThrow('Connection interrupted')
       // A phone that never reconnects must not leave the Create spinner parked.
       await vi.advanceTimersByTimeAsync(60_000)
@@ -499,9 +539,11 @@ describe('createWorktreeWithNameRetry', () => {
 
   it('stops replaying when the host-advertised dedupe record has expired', async () => {
     vi.useFakeTimers()
+
     try {
       const attempts: Attempt[] = []
       const connection = connectionController()
+
       const client = scriptedClient(
         [
           {
@@ -523,6 +565,7 @@ describe('createWorktreeWithNameRetry', () => {
         worktreeCreateIdempotency: { dedupeTtlMs: 20_000 },
         mintMutationId: () => 'key-short-ttl'
       })
+
       const settled = expect(pending).rejects.toThrow('Connection interrupted')
       await vi.advanceTimersByTimeAsync(30_000)
       await settled
@@ -534,9 +577,11 @@ describe('createWorktreeWithNameRetry', () => {
 
   it('does not replay an ambiguity that surfaced while the transport stayed connected', async () => {
     vi.useFakeTimers()
+
     try {
       const attempts: Attempt[] = []
       const connection = connectionController()
+
       const client = scriptedClient(
         [
           {
@@ -562,6 +607,7 @@ describe('createWorktreeWithNameRetry', () => {
         worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
         mintMutationId: () => 'key-expired'
       })
+
       const settled = expect(pending).rejects.toThrow('Request timed out')
       await vi.advanceTimersByTimeAsync(WORKTREE_CREATE_TIMEOUT_MS)
       await settled
@@ -579,9 +625,11 @@ describe('createWorktreeWithNameRetry', () => {
 
   it('clamps a later reconnect wait to what is left of the replay window', async () => {
     vi.useFakeTimers()
+
     try {
       const attempts: Attempt[] = []
       const connection = connectionController()
+
       const client = scriptedClient(
         [
           {
@@ -604,6 +652,7 @@ describe('createWorktreeWithNameRetry', () => {
 
       const startedAt = Date.now()
       let settledAt = -1
+
       const pending = createWorktreeWithNameRetry({
         client,
         baseName: 'nautilus',
@@ -614,6 +663,7 @@ describe('createWorktreeWithNameRetry', () => {
         settledAt = Date.now()
         throw error
       })
+
       const settled = expect(pending).rejects.toThrow('Connection interrupted')
       await vi.advanceTimersByTimeAsync(LEGACY_HOST_REPLAY_WINDOW_MS)
       await settled
@@ -630,10 +680,12 @@ describe('createWorktreeWithNameRetry', () => {
 
   it('refuses a replay when the ambiguity surfaced long after the last inbound frame', async () => {
     vi.useFakeTimers()
+
     try {
       const attempts: Attempt[] = []
       const connection = connectionController()
       const startedAt = Date.now()
+
       const client = scriptedClient(
         [
           {
@@ -649,6 +701,7 @@ describe('createWorktreeWithNameRetry', () => {
         connection,
         startedAt + 2_000
       )
+
       const pending = createWorktreeWithNameRetry({
         client,
         baseName: 'limpet',
@@ -656,6 +709,7 @@ describe('createWorktreeWithNameRetry', () => {
         worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
         mintMutationId: () => 'key-stale'
       })
+
       const settled = expect(pending).rejects.toThrow('Connection interrupted')
       await vi.advanceTimersByTimeAsync(700_000)
       await settled
@@ -671,10 +725,12 @@ describe('createWorktreeWithNameRetry', () => {
 
   it('still replays a long-running create whose socket stayed live until it dropped', async () => {
     vi.useFakeTimers()
+
     try {
       const attempts: Attempt[] = []
       const connection = connectionController()
       const startedAt = Date.now()
+
       const client = scriptedClient(
         [
           {
@@ -691,6 +747,7 @@ describe('createWorktreeWithNameRetry', () => {
         connection,
         startedAt + 180_000
       )
+
       const pending = createWorktreeWithNameRetry({
         client,
         baseName: 'kelp',
@@ -698,6 +755,7 @@ describe('createWorktreeWithNameRetry', () => {
         worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
         mintMutationId: () => 'key-long'
       })
+
       await vi.advanceTimersByTimeAsync(250_000)
       // Anchoring at the send would refuse this — the create outran the TTL long before it
       // went ambiguous — but the record only starts ticking when the host RESOLVES, and the
@@ -715,6 +773,7 @@ describe('createWorktreeWithNameRetry', () => {
 
   it('does not extend the replay window when the replacement session reports fresher inbound activity', async () => {
     vi.useFakeTimers()
+
     try {
       const attempts: Attempt[] = []
       const connection = connectionController()
@@ -725,6 +784,7 @@ describe('createWorktreeWithNameRetry', () => {
       setTimeout(() => {
         lastInboundAt = startedAt + 45_000
       }, 45_000)
+
       const client = scriptedClient(
         [
           {
@@ -753,6 +813,7 @@ describe('createWorktreeWithNameRetry', () => {
         worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT,
         mintMutationId: () => 'key-anchored'
       })
+
       const settled = expect(pending).rejects.toThrow('Connection lost')
       await vi.advanceTimersByTimeAsync(120_000)
       await settled
@@ -769,6 +830,7 @@ describe('createWorktreeWithNameRetry', () => {
   it('does not replay a dropped transport error that was never marked delivery-unknown', async () => {
     const attempts: Attempt[] = []
     const connection = connectionController()
+
     const client = scriptedClient(
       // Unmarked: the frame is known NOT to have reached the wire, so the host never saw
       // it and a replay would be a second create, not a reconciliation. The transport
@@ -777,6 +839,7 @@ describe('createWorktreeWithNameRetry', () => {
       attempts,
       connection
     )
+
     await expect(
       createWorktreeWithNameRetry({
         client,
@@ -798,6 +861,7 @@ describe('createWorktreeWithNameRetry', () => {
     const connection = connectionController()
     const marked = markRpcDeliveryUnknown(new Error('Connection lost'))
     const client = scriptedClient([{ throws: marked }], attempts, connection)
+
     // Idempotency off, so the resilient sender rethrows on the first ambiguity instead of replaying
     // and the object under test is the one the transport produced, not a later attempt's.
     const caught = await createWorktreeWithNameRetry({
@@ -809,6 +873,7 @@ describe('createWorktreeWithNameRetry', () => {
       () => null,
       (error: unknown) => error
     )
+
     expect(caught).toBe(marked)
     expect(isRpcDeliveryUnknown(caught)).toBe(true)
   })
@@ -819,6 +884,7 @@ describe('createWorktreeWithNameRetry', () => {
     const attempts: Attempt[] = []
     const unmarked = new Error('Socket closed before send')
     const client = scriptedClient([{ throws: unmarked }], attempts, connectionController())
+
     const caught = await createWorktreeWithNameRetry({
       client,
       baseName: 'kestrel',
@@ -828,6 +894,7 @@ describe('createWorktreeWithNameRetry', () => {
       () => null,
       (error: unknown) => error
     )
+
     expect(caught).toBe(unmarked)
     expect(isRpcDeliveryUnknown(caught)).toBe(false)
   })

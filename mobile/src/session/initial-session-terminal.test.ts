@@ -37,9 +37,11 @@ class SessionRouteState {
   applySessionTabs(tabIds: string[], activeHandle: string | null = tabIds[0] ? 'pty-1' : null) {
     this.tabIds = tabIds
     this.activeHandle = activeHandle
+
     if (tabIds.length > 0) {
       this.sawSessionTabs = true
     }
+
     this.tabsLoaded = true
   }
 

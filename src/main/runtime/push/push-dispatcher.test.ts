@@ -38,6 +38,7 @@ describe('PushDispatcher', () => {
       deviceId: `device-${index}`,
       pushRegistration: registration({ registrationId: `reg-${index}` })
     }))
+
     const harness = createHarness({ devices })
 
     harness.dispatcher.enqueue(notification())
@@ -59,6 +60,7 @@ describe('PushDispatcher', () => {
       deviceId: `device-${index}`,
       pushRegistration: registration({ registrationId: `reg-${index}` })
     }))
+
     const harness = createHarness({
       devices,
       results: [{ registrationId: 'reg-24', status: 'dead' }]
@@ -123,14 +125,18 @@ describe('PushDispatcher', () => {
 
   it('retries once when the gateway is unreachable', async () => {
     const sends: SendCall[] = []
+
     const client = {
       send: vi.fn(async (input: SendCall) => {
         sends.push(input)
+
         return { ok: false as const, reason: 'unreachable' as const }
       })
     } as unknown as PushGatewayClient
+
     const scheduled: (() => void)[] = []
     const devices = [{ deviceId: 'a', pushRegistration: registration() }]
+
     const dispatcher = new PushDispatcher({
       client,
       registry: {
@@ -162,6 +168,7 @@ describe('PushDispatcher', () => {
         throw new Error('boom')
       }
     })
+
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     expect(() => harness.dispatcher.enqueue(notification())).not.toThrow()
@@ -180,6 +187,7 @@ describe('PushDispatcher', () => {
         setPushRegistration: () => true
       }
     })
+
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     expect(() => dispatcher.enqueue(notification())).not.toThrow()

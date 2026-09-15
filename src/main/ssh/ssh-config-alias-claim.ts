@@ -21,14 +21,17 @@ export function sshConfigMayClaimAlias(
   claims: SshConfigAliasClaims | null
 ): boolean {
   const normalizedAlias = normalizeSshConfigAlias(alias)
+
   if (!normalizedAlias || claims === null) {
     return true
   }
+
   // A Match block's criteria (exec, originalhost, user, …) are not modelled here, and one that
   // routes this alias is indistinguishable from one that does not.
   if (claims.hasMatchBlock) {
     return true
   }
+
   return claims.hostPatternGroups.some((patterns) =>
     // A negation makes the whole group uncertain: `Host * !prod` still routes every other alias,
     // so skipping both the catch-all and the `!` would answer "unclaimed" for one that is claimed.
@@ -48,6 +51,7 @@ function isCatchAllHostPattern(pattern: string): boolean {
 
 function matchesHostPattern(pattern: string, normalizedAlias: string): boolean {
   let expression = ''
+
   for (const character of normalizeSshConfigAlias(pattern)) {
     if (character === '*') {
       expression += '.*'
@@ -57,6 +61,7 @@ function matchesHostPattern(pattern: string, normalizedAlias: string): boolean {
       expression += character.replace(/[.+^${}()|[\]\\]/, '\\$&')
     }
   }
+
   return new RegExp(`^${expression}$`).test(normalizedAlias)
 }
 
@@ -78,19 +83,24 @@ export function invalidateSshConfigAliasClaimCache(): void {
  */
 export function loadUserSshConfigAliasClaims(): SshConfigAliasClaims | null {
   const configPath = join(homedir(), '.ssh', 'config')
+
   try {
     if (!existsSync(configPath)) {
       return null
     }
+
     // Why key on the root file only: an edited Include can go unnoticed, so the cache also expires.
     const stats = statSync(configPath)
     const key = `${stats.mtimeMs}:${stats.size}`
     const now = Date.now()
+
     if (cachedClaims?.key === key && now - cachedClaims.readAt < CLAIM_CACHE_TTL_MS) {
       return cachedClaims.claims
     }
+
     const claims = parseSshConfigAliasClaims(expandSshConfigIncludes(configPath))
     cachedClaims = { key, readAt: now, claims }
+
     return claims
   } catch {
     return null

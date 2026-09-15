@@ -14,6 +14,7 @@ export function throwIfSkillDownloadUnavailable(input: {
       code: 'skill-download-cancelled'
     })
   }
+
   if (input.now() >= input.expiresAt) {
     throw new Error('skill-download-grant-expired')
   }
@@ -33,16 +34,20 @@ export function createSkillDownloadAvailabilitySignal(input: {
 } {
   const controller = new AbortController()
   const abortFromCaller = (): void => controller.abort(input.signal?.reason)
+
   if (input.signal?.aborted) {
     abortFromCaller()
   } else {
     input.signal?.addEventListener('abort', abortFromCaller, { once: true })
   }
+
   const timeout = setTimeout(
     () => controller.abort(new Error('skill-download-grant-expired')),
     Math.min(MAX_TIMEOUT_DELAY_MS, Math.max(0, input.expiresAt - input.now()))
   )
+
   timeout.unref()
+
   return {
     signal: controller.signal,
     cleanup: () => {

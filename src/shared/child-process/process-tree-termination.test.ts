@@ -14,14 +14,17 @@ function mockProcess(pid: number): ChildProcess {
     pid: number
     kill: ReturnType<typeof vi.fn>
   }
+
   child.pid = pid
   child.kill = vi.fn((_signal?: NodeJS.Signals | number) => true)
+
   return child as unknown as ChildProcess
 }
 
 async function withWindows(run: () => Promise<void>): Promise<void> {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
   try {
     await run()
   } finally {
@@ -87,6 +90,7 @@ describe('forceTerminateProcessTree', () => {
           stdout.emit('data', Buffer.from('1234 D\n'))
           probe.emit('close', 0)
         })
+
         return probe
       })
 
@@ -105,6 +109,7 @@ describe('process-tree-kill breadcrumb seam', () => {
     observed.length = 0
     setProcessTreeKillGate((kill) => {
       observed.push(kill)
+
       return true
     })
   })

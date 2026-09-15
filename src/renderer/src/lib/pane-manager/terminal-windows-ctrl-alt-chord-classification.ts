@@ -57,20 +57,27 @@ export function installWindowsCtrlAltChordRepair(
   if (!shouldRepairWindowsCtrlAltChords(userAgent)) {
     return false
   }
+
   const core = (terminal as unknown as TerminalWithThirdLevelShift)._core
   const stockClassification = core?._isThirdLevelShift
+
   if (!core || typeof stockClassification !== 'function') {
     console.warn(
       'xterm no longer exposes _core._isThirdLevelShift; Windows Ctrl+Alt chords will be dropped'
     )
+
     return false
   }
+
   core._isThirdLevelShift = function (browser, event) {
     const thirdLevel = stockClassification.call(this, browser, event)
+
     if (!thirdLevel || browser?.isWindows !== true) {
       return thirdLevel
     }
+
     return !isGenuineWindowsCtrlAltChord(event)
   }
+
   return true
 }

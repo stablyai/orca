@@ -19,6 +19,7 @@ async function startUpstream(
   const server = http.createServer(handler)
   upstreamServers.push(server)
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+
   return (server.address() as AddressInfo).port
 }
 
@@ -26,6 +27,7 @@ function fetchThroughProxy(
   labeledUrl: string
 ): Promise<{ status: number; body: string; headers: http.IncomingHttpHeaders }> {
   const url = new URL(labeledUrl)
+
   return new Promise((resolve, reject) => {
     // Why: *.orca.localhost is not resolvable DNS; connect to the proxy on
     // loopback and carry the label through the Host header instead.
@@ -48,6 +50,7 @@ function fetchThroughProxy(
         )
       }
     )
+
     request.on('error', reject)
     request.end()
   })
@@ -74,7 +77,9 @@ describe('localhost worktree label proxy', () => {
       })
       response.end('<html><head></head><body>hello</body></html>')
     })
+
     const proxy = new LocalhostWorktreeLabelProxy()
+
     const { url } = await proxy.registerRoute({
       targetUrl: `http://localhost:${port}/`,
       projectName: 'Snap Studio',
@@ -95,7 +100,9 @@ describe('localhost worktree label proxy', () => {
       response.writeHead(200, { 'content-type': 'text/plain' })
       response.end('ok')
     })
+
     const proxy = new LocalhostWorktreeLabelProxy()
+
     const { url } = await proxy.registerRoute({
       targetUrl: `http://0.0.0.0:${port}/`,
       projectName: 'Snap Studio',
@@ -112,12 +119,15 @@ describe('localhost worktree label proxy', () => {
     const port = await startUpstream((_request, response) => {
       response.end('ok')
     })
+
     const proxy = new LocalhostWorktreeLabelProxy()
+
     const { url } = await proxy.registerRoute({
       targetUrl: `http://localhost:${port}/`,
       projectName: 'Snap Studio',
       worktreeName: 'main'
     })
+
     const proxyPort = new URL(url).port
 
     const result = await fetchThroughProxy(`http://unknown-label.orca.localhost:${proxyPort}/`)
@@ -130,13 +140,16 @@ describe('localhost worktree label proxy', () => {
       response.writeHead(200, { 'content-type': 'text/plain' })
       response.end('ok')
     })
+
     const proxy = new LocalhostWorktreeLabelProxy()
+
     const a = await proxy.registerRoute({
       targetUrl: `http://localhost:${port}/`,
       projectName: 'Snap Studio',
       worktreeName: 'feature-a',
       worktreeId: 'wt-a'
     })
+
     const b = await proxy.registerRoute({
       targetUrl: `http://localhost:${port}/`,
       projectName: 'Snap Studio',

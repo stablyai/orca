@@ -31,6 +31,7 @@ function createTestDir(): string {
 
 function createMockSubprocess(): SubprocessHandle {
   let onExitCb: ((code: number) => void) | null = null
+
   return {
     pid: 88888,
     getForegroundProcess: vi.fn(() => null),
@@ -60,9 +61,11 @@ describe('DaemonSpawner', () => {
 
   afterEach(async () => {
     await spawner?.shutdown()
+
     for (const d of activeDaemons) {
       await d.shutdown().catch(() => {})
     }
+
     rmSync(dir, { recursive: true, force: true })
   })
 
@@ -75,10 +78,13 @@ describe('DaemonSpawner', () => {
           tokenPath,
           spawnSubprocess: () => createMockSubprocess()
         })
+
         activeDaemons.push(handle)
+
         return { shutdown: () => handle.shutdown() }
       }
     })
+
     return spawner
   }
 
@@ -107,6 +113,7 @@ describe('DaemonSpawner', () => {
       } else {
         expect(socketPath).toBe(join(dir, `daemon-v${PROTOCOL_VERSION}.sock`))
       }
+
       expect(tokenPath).toBe(join(dir, `daemon-v${PROTOCOL_VERSION}.token`))
       expect(pidPath).toBe(join(dir, `daemon-v${PROTOCOL_VERSION}.pid`))
     })
@@ -120,6 +127,7 @@ describe('DaemonSpawner', () => {
       } else {
         expect(info.socketPath).toContain(dir)
       }
+
       expect(info.tokenPath).toContain(dir)
     })
 
@@ -140,6 +148,7 @@ describe('DaemonSpawner', () => {
         socketPath: info.socketPath,
         tokenPath: info.tokenPath
       })
+
       await client.ensureConnected()
       expect(client.isConnected()).toBe(true)
       client.disconnect()
@@ -153,6 +162,7 @@ describe('DaemonSpawner', () => {
         socketPath: info.socketPath,
         tokenPath: info.tokenPath
       })
+
       await client.ensureConnected()
 
       const result = await client.request<{ isNew: boolean }>('createOrAttach', {
@@ -160,6 +170,7 @@ describe('DaemonSpawner', () => {
         cols: 80,
         rows: 24
       })
+
       expect(result.isNew).toBe(true)
       client.disconnect()
     })
@@ -175,6 +186,7 @@ describe('DaemonSpawner', () => {
         socketPath: info.socketPath,
         tokenPath: info.tokenPath
       })
+
       await expect(client.ensureConnected()).rejects.toThrow()
     })
 
@@ -189,10 +201,12 @@ describe('DaemonSpawner', () => {
       await s.shutdown()
 
       const info = await s.ensureRunning()
+
       const client = new DaemonClient({
         socketPath: info.socketPath,
         tokenPath: info.tokenPath
       })
+
       await client.ensureConnected()
       expect(client.isConnected()).toBe(true)
       client.disconnect()
@@ -215,6 +229,7 @@ describe('restoreClaimedDaemonArtifact', () => {
   it('retains the unique claim when a failed copy leaves a partial canonical file', () => {
     const restoreDir = createTestDir()
     const canonicalPath = join(restoreDir, 'partial-canonical')
+
     try {
       expect(
         restoreClaimedDaemonArtifact('/claimed', canonicalPath, {
@@ -252,6 +267,7 @@ describe('daemon PID publication', () => {
   it('publishes ownership exclusively', () => {
     const dir = createTestDir()
     const pidPath = join(dir, 'daemon.pid')
+
     try {
       publishDaemonPidFile(pidPath, {
         pid: 101,
@@ -274,11 +290,13 @@ describe('daemon PID publication', () => {
   it('atomically replaces stale ownership with the authenticated endpoint identity', () => {
     const dir = createTestDir()
     const pidPath = join(dir, 'daemon.pid')
+
     const endpointIdentity = {
       pid: 202,
       startedAtMs: 2_000,
       launchNonce: 'launch-b'
     }
+
     try {
       writeFileSync(pidPath, '{"pid":101,"launchNonce":"launch-a"}')
 
@@ -295,10 +313,12 @@ describe('daemon PID publication', () => {
     if (process.platform === 'win32' || process.getuid?.() === 0) {
       return
     }
+
     const dir = createTestDir()
     const pidPath = join(dir, 'daemon.pid')
     const existingRecord = '{"pid":101,"launchNonce":"launch-a"}'
     writeFileSync(pidPath, existingRecord)
+
     try {
       chmodSync(dir, 0o500)
 
@@ -327,8 +347,10 @@ function closeSocketServer(server: Server): Promise<void> {
   return new Promise((resolve) => {
     if (!server.listening) {
       resolve()
+
       return
     }
+
     server.close(() => resolve())
   })
 }
@@ -336,10 +358,12 @@ function closeSocketServer(server: Server): Promise<void> {
 function connectsToSocketPath(socketPath: string): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = connect({ path: socketPath })
+
     const timer = setTimeout(() => {
       socket.destroy()
       resolve(false)
     }, 500)
+
     socket.on('connect', () => {
       clearTimeout(timer)
       socket.destroy()
@@ -368,6 +392,7 @@ describe('daemon socket publication', () => {
         basename(getDaemonPidSwapClaimPath('/tmp/orca-daemon/daemon-v32.pid')),
         basename(getDaemonArtifactHoldClaimPath('/tmp/orca-daemon/daemon-v32.token'))
       ]
+
       for (const name of names) {
         expect(name).not.toMatch(RELEASED_SWEEPER_PATTERN)
       }
@@ -388,14 +413,17 @@ describe('daemon socket publication', () => {
       const canonicalPath = getDaemonSocketPath(dir)
       const incumbent = createServer((socket) => socket.end())
       const newcomer = createServer((socket) => socket.end())
+
       try {
         const incumbentBind = getDaemonSocketBindPath(canonicalPath)
         await listenOnSocketPath(incumbent, incumbentBind)
+
         const incumbentOutcome = await publishDaemonEndpoint(
           incumbentBind,
           canonicalPath,
           probeSocketConnect
         )
+
         expect(incumbentOutcome.status).toBe('published')
         const incumbentIdentity = readDaemonSocketIdentity(canonicalPath)
 
@@ -421,6 +449,7 @@ describe('daemon socket publication', () => {
       const dir = createTestDir()
       const canonicalPath = getDaemonSocketPath(dir)
       const newcomer = createServer((socket) => socket.end())
+
       try {
         writeFileSync(canonicalPath, 'incumbent')
         const newcomerBind = getDaemonSocketBindPath(canonicalPath)
@@ -444,6 +473,7 @@ describe('daemon socket publication', () => {
       const canonicalPath = getDaemonSocketPath(dir)
       const incumbent = createServer((socket) => socket.end())
       const replacement = createServer((socket) => socket.end())
+
       try {
         const incumbentBind = getDaemonSocketBindPath(canonicalPath)
         await listenOnSocketPath(incumbent, incumbentBind)
@@ -453,6 +483,7 @@ describe('daemon socket publication', () => {
 
         const replacementBind = getDaemonSocketBindPath(canonicalPath)
         await listenOnSocketPath(replacement, replacementBind)
+
         const outcome = await publishDaemonEndpoint(
           replacementBind,
           canonicalPath,

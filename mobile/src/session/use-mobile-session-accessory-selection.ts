@@ -44,6 +44,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     handleAccessoryKey,
     clearSessionTabActionSheetKeyboardListener
   } = scope
+
   const trimsGutterRef = useTerminalCopyTrimsGutter(client, connState)
   // Why: hold-to-repeat matches iOS cadence (400ms then 45ms); non-repeatable keys fire once (holding is destructive).
   const repeatTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -52,16 +53,19 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
   const handleAccessoryKeyRef = useRef(handleAccessoryKey)
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render
   handleAccessoryKeyRef.current = handleAccessoryKey
+
   const stopAccessoryRepeat = useCallback(() => {
     if (repeatTimeoutRef.current) {
       clearTimeout(repeatTimeoutRef.current)
       repeatTimeoutRef.current = null
     }
+
     if (repeatIntervalRef.current) {
       clearInterval(repeatIntervalRef.current)
       repeatIntervalRef.current = null
     }
   }, [])
+
   const startAccessoryRepeat = useCallback(
     (input: ReturnType<typeof createTerminalLiveAccessoryInput>) => {
       stopAccessoryRepeat()
@@ -73,11 +77,13 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     },
     [stopAccessoryRepeat]
   )
+
   const setMobileSessionRootRef = useCallback(
     (node: View | null): void => {
       if (node !== null) {
         return
       }
+
       // Why: clear only on real route detach; client churn during mount would wipe xterm state mid-subscribe.
       toastSeqRef.current += 1
       clearTerminalCache()
@@ -103,7 +109,9 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     if (handle !== activeHandleRef.current) {
       return
     }
+
     setSelectModeActive(active)
+
     if (active) {
       Keyboard.dismiss()
     }
@@ -114,19 +122,24 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
       if (handle !== activeHandleRef.current) {
         return
       }
+
       if (!text || text.length === 0) {
         terminalRefs.current.get(handle)?.cancelSelect()
+
         return
       }
+
       try {
         await Clipboard.setStringAsync(
           trimsGutterRef.current ? stripTerminalSelectionGutter(text) : text
         )
         triggerSuccess()
+
         // Why: Android 13+ shows its own system copy toast; iOS shows none, so only iOS needs our in-app toast.
         if (Platform.OS === 'ios') {
           showToast('Copied')
         }
+
         terminalRefs.current.get(handle)?.cancelSelect()
       } catch (e) {
         triggerError()
@@ -147,6 +160,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
       if (handle !== activeHandleRef.current) {
         return
       }
+
       // eslint-disable-next-line no-console
       console.warn('[mobile-clip] selection evicted')
       showToast('Selection cleared (scrolled out of buffer)', 1500)
@@ -164,6 +178,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     (handle: string, metrics: TerminalKeyboardAvoidanceMetrics) => {
       setTerminalKeyboardMetrics((prev) => {
         const current = prev.get(handle)
+
         if (
           current &&
           current.cursorY === metrics.cursorY &&
@@ -173,6 +188,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
         ) {
           return prev
         }
+
         return new Map(prev).set(handle, metrics)
       })
     },
@@ -196,13 +212,17 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
     if (!client || isFloatingWorkspaceRoute) {
       return null
     }
+
     const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
     const repoResponse = await client.sendRequest('repo.list')
+
     if (!repoResponse.ok) {
       throw new Error((repoResponse as RpcFailure).error.message)
     }
+
     const repos =
       ((repoResponse as RpcSuccess).result as { repos?: RuntimeRepoSummary[] }).repos ?? []
+
     return repos.find((repo) => repo.id === repoId)?.connectionId?.trim() || null
   }, [client, isFloatingWorkspaceRoute, worktreeId])
 
@@ -214,6 +234,7 @@ export function useMobileSessionAccessorySelection(scope: MobileSessionTerminalI
       setCanPaste(hasString || hasImage)
     })
   }, [])
+
   return {
     repeatTimeoutRef,
     repeatIntervalRef,

@@ -5,6 +5,7 @@ import type { GitLabJobTraceResult } from './gitlab-types'
 // GitLab wraps collapsible sections in `section_start:<unix>:<name>\r<CSI>0K<visible header>`;
 // strip only through the CR so the human-readable header on the same line survives.
 const SECTION_MARKER_PREFIX_PATTERN = /^section_(?:start|end):\d+:[^\r\n]*?\r/gm
+
 // Sections without a visible header leave a marker-only line; drop it whole.
 const SECTION_MARKER_LINE_PATTERN = /^section_(?:start|end):\d+:[^\r\n]*\n?/gm
 
@@ -17,9 +18,11 @@ function rawTraceTail(trace: string): string {
   if (trace.length <= MAX_RAW_TRACE_CHARS) {
     return trace
   }
+
   const tail = trace.slice(trace.length - MAX_RAW_TRACE_CHARS)
   // Drop the partial first line so a marker or escape cut in half cannot survive stripping.
   const firstLineBreak = tail.indexOf('\n')
+
   return firstLineBreak === -1 ? tail : tail.slice(firstLineBreak + 1)
 }
 
@@ -34,6 +37,7 @@ export function gitLabJobTraceToLogExcerpt(trace: string): string {
   if (!trace) {
     return ''
   }
+
   // Order matters: ANSI first so the erase-to-EOL sequence between the marker's CR
   // and its header text is gone, CR normalisation last so the marker patterns can
   // still see the CR that separates a marker from its visible header.
@@ -43,6 +47,7 @@ export function gitLabJobTraceToLogExcerpt(trace: string): string {
     // Why: progress output redraws with bare CR, which would otherwise make the
     // whole job log a single line and defeat the line-based tail.
     .replace(/\r\n?/g, '\n')
+
   return sliceCheckLogTail(readable).trim()
 }
 

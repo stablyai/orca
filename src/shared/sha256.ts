@@ -17,6 +17,7 @@ export function sha256(message: Uint8Array): Uint8Array {
   const hash = new Uint32Array([
     0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
   ])
+
   const bitLength = message.length * 8
   const paddedLength = ((message.length + 8) >> 6) * 64 + 64
   const bytes = new Uint8Array(paddedLength)
@@ -27,19 +28,23 @@ export function sha256(message: Uint8Array): Uint8Array {
   view.setUint32(paddedLength - 8, Math.floor(bitLength / 0x100000000), false)
 
   const words = new Uint32Array(64)
+
   for (let offset = 0; offset < paddedLength; offset += 64) {
     for (let index = 0; index < 16; index += 1) {
       words[index] = view.getUint32(offset + index * 4, false)
     }
+
     for (let index = 16; index < 64; index += 1) {
       const s0 =
         rotateRight(words[index - 15], 7) ^
         rotateRight(words[index - 15], 18) ^
         (words[index - 15] >>> 3)
+
       const s1 =
         rotateRight(words[index - 2], 17) ^
         rotateRight(words[index - 2], 19) ^
         (words[index - 2] >>> 10)
+
       words[index] = (words[index - 16] + s0 + words[index - 7] + s1) | 0
     }
 
@@ -51,6 +56,7 @@ export function sha256(message: Uint8Array): Uint8Array {
     let f = hash[5]
     let g = hash[6]
     let h = hash[7]
+
     for (let index = 0; index < 64; index += 1) {
       const sigma1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25)
       const choice = (e & f) ^ (~e & g)
@@ -80,8 +86,10 @@ export function sha256(message: Uint8Array): Uint8Array {
 
   const digest = new Uint8Array(32)
   const digestView = new DataView(digest.buffer)
+
   for (let index = 0; index < 8; index += 1) {
     digestView.setUint32(index * 4, hash[index], false)
   }
+
   return digest
 }

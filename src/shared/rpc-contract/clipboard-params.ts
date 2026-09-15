@@ -18,16 +18,22 @@ export function clipboardImageBase64Payload(maxChars: number, tooLargeMessage: s
   return z.unknown().transform((value, ctx): string => {
     if (typeof value !== 'string') {
       ctx.addIssue({ code: 'custom', message: 'Missing image content' })
+
       return z.NEVER
     }
+
     if (value.length > maxChars) {
       ctx.addIssue({ code: 'custom', message: tooLargeMessage })
+
       return z.NEVER
     }
+
     if (!isValidBase64(value)) {
       ctx.addIssue({ code: 'custom', message: 'Clipboard image content must be base64' })
+
       return z.NEVER
     }
+
     return value
   })
 }

@@ -10,6 +10,7 @@ import type { TaskSourceContext } from '../../../shared/task-source-context'
 
 vi.mock('@/runtime/runtime-rpc-client', async () => {
   const actual = await vi.importActual<typeof RuntimeRpcClient>('@/runtime/runtime-rpc-client')
+
   return {
     ...actual,
     callRuntimeRpc: vi.fn()
@@ -85,6 +86,7 @@ describe('GitLab source lookup routing', () => {
       totalCount: 1,
       totalPages: 1
     }
+
     vi.mocked(callRuntimeRpc).mockResolvedValue(result)
 
     await expect(
@@ -116,6 +118,7 @@ describe('GitLab source lookup routing', () => {
       hostId: 'local',
       repoId: 'local-repo'
     }
+
     vi.mocked(window.api.gl.listMRs).mockResolvedValue({
       items: [gitlabItem({ repoId: 'local-returned' })],
       page: 1,

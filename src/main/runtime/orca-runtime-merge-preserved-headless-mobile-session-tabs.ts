@@ -22,24 +22,33 @@ export class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends Orca
     if (!existing) {
       return snapshot
     }
+
     const preservedTabs = this.collectPreservedHeadlessMobileSessionTabs(existing, snapshot)
+
     if (preservedTabs.length === 0) {
       return snapshot
     }
+
     const preservedActiveTab = preservedTabs.find(
       (tab) => tab.id === existing.activeTabId && tab.isActive
     )
+
     const hasIncomingActiveTab = snapshot.tabs.some((tab) => tab.isActive)
+
     const normalizedPreservedTabs = preservedTabs.map((tab) =>
       hasIncomingActiveTab && !preservedActiveTab ? { ...tab, isActive: false } : tab
     )
+
     const normalizedIncomingTabs = preservedActiveTab
       ? snapshot.tabs.map((tab) => (tab.isActive ? { ...tab, isActive: false } : tab))
       : snapshot.tabs
+
     const tabs = mergeMobileSessionSnapshotTabs(normalizedIncomingTabs, normalizedPreservedTabs)
+
     if (tabs.length === snapshot.tabs.length) {
       return snapshot
     }
+
     const activeTab =
       preservedActiveTab ??
       normalizedIncomingTabs.find((tab) => tab.id === snapshot.activeTabId) ??
@@ -47,15 +56,18 @@ export class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends Orca
       tabs.find((tab) => tab.isActive) ??
       tabs[0] ??
       null
+
     const terminalTabs = tabs.filter(
       (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
     )
+
     const tabGroups = mergeMobileSessionTabGroups(
       snapshot.worktree,
       snapshot.tabGroups ?? existing.tabGroups ?? [],
       terminalTabs,
       activeTab?.type === 'terminal' ? activeTab : null
     )
+
     return {
       ...snapshot,
       publicationEpoch: this.getMergedMobileSessionPublicationEpoch(
@@ -83,20 +95,26 @@ export class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends Orca
     activeTabId: string | null
   ): RuntimeMobileSessionTabGroup[] {
     const structuredTabs = preservedTabs.filter((tab) => tab.type === 'agent-session')
+
     if (structuredTabs.length === 0) {
       return [...groups]
     }
+
     const next = groups.map((group) => ({ ...group, tabOrder: [...group.tabOrder] }))
+
     for (const tab of structuredTabs) {
       const priorGroupId = existingGroups.find((group) => group.tabOrder.includes(tab.id))?.id
       const target = next.find((group) => group.id === priorGroupId) ?? next[0]
+
       if (target && !target.tabOrder.includes(tab.id)) {
         target.tabOrder.push(tab.id)
       }
+
       if (target && tab.id === activeTabId) {
         target.activeTabId = tab.id
       }
     }
+
     return next
   }
 
@@ -107,15 +125,20 @@ export class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends Orca
     if (!existing || this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)) {
       return
     }
+
     const session = this.getWorkspaceSessionForWorktree(existing.worktree)
     const persistedTabs = session?.tabsByWorktree?.[existing.worktree]
+
     if (!session || !persistedTabs) {
       return
     }
+
     const persistedTabsById = new Map(persistedTabs.map((tab) => [tab.id, tab]))
+
     const incomingIds = new Set(
       incoming.tabs.flatMap((tab) => getMobileSessionSnapshotTabIdentityKeys(tab))
     )
+
     for (const tab of existing.tabs) {
       if (
         tab.type !== 'terminal' ||
@@ -124,23 +147,30 @@ export class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends Orca
       ) {
         continue
       }
+
       if (!this.hasLiveRuntimeSessionOwnedPtyBinding(existing.worktree, tab)) {
         continue
       }
+
       const persistedParent = persistedTabsById.get(tab.parentTabId)
+
       if (!persistedParent) {
         this.clearRuntimeSessionOwnershipForMobileTab(existing.worktree, existing, tab.parentTabId)
         continue
       }
+
       const layout = session.terminalLayoutsByTabId?.[tab.parentTabId]
+
       const boundPtyIds = [tab.ptyId, tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId]].filter(
         (id): id is string => typeof id === 'string'
       )
+
       const persistedIds = new Set(
         [persistedParent.ptyId, ...Object.values(layout?.ptyIdsByLeafId ?? {})].filter(
           (id): id is string => typeof id === 'string'
         )
       )
+
       if (
         layout &&
         !layout.ptyIdsByLeafId?.[tab.leafId] &&
@@ -149,6 +179,7 @@ export class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends Orca
       ) {
         for (const ptyId of boundPtyIds) {
           const pty = this.ptysById.get(ptyId)
+
           if (pty?.worktreeId === existing.worktree && pty.tabId === tab.parentTabId) {
             pty.runtimeSessionOwned = false
             this.setPairedRendererSessionOwnership(ptyId, false)
@@ -162,17 +193,21 @@ export class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs extends Orca
     existing: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsSnapshot | null {
     const tabs = this.collectPreservedHeadlessMobileSessionTabs(existing)
+
     if (tabs.length === 0) {
       return null
     }
+
     const activeTab =
       tabs.find((tab) => tab.id === existing.activeTabId) ??
       tabs.find((tab) => tab.isActive) ??
       tabs[0] ??
       null
+
     const terminalTabs = tabs.filter(
       (tab): tab is RuntimeMobileSessionTerminalTab => tab.type === 'terminal'
     )
+
     return {
       ...existing,
       publicationEpoch: this.getMergedMobileSessionPublicationEpoch(existing, tabs),

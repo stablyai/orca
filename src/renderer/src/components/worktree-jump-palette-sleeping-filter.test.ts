@@ -4,6 +4,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { readWorktreeJumpPaletteSource } from './worktree-jump-palette-source.test-support'
 
 const worktreeSource = readWorktreeJumpPaletteSource('use-worktree-jump-palette-worktrees.ts')
+
 const storeSource = readWorktreeJumpPaletteSource('use-worktree-jump-palette-store-state.ts')
 
 function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {

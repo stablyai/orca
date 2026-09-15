@@ -41,6 +41,7 @@ export function PRFilesCombinedDiffViewer(
   props: PRFilesCombinedDiffViewerProps
 ): React.JSX.Element {
   const { files, repoId, prNumber, prRepo, headSha, baseSha } = props
+
   const signature = useMemo(
     () =>
       getPRFilesCombinedDiffSignature({
@@ -53,9 +54,11 @@ export function PRFilesCombinedDiffViewer(
       }),
     [baseSha, files, headSha, prNumber, prRepo, repoId]
   )
+
   // Why: view preferences outlive a diff-set swap, so they live above the keyed subtree.
   const [sideBySide, setSideBySide] = useState(false)
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(false)
+
   // Why: remounting on the signature retires the previous diff set's sections, loaded
   // indices, and in-flight results in one step, so nothing can leak across the swap.
   return (
@@ -92,14 +95,17 @@ function PRFilesCombinedDiffSections({
   setFileTreeCollapsed
 }: PRFilesCombinedDiffSectionsProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+
   // Why: this subtree is keyed by the diff signature, so its file set is fixed for the
   // mount. Freezing it in state keeps a stable identity without caching through a ref.
   const [entries] = useState<GitBranchChangeEntry[]>(() =>
     getCombinedDiffBranchEntriesInTreeOrder('commit', files.map(gitHubPRFileToBranchEntry))
   )
+
   const [sections, setSections] = useState<DiffSection[]>(() =>
     entries.map((entry) => ({
       key: getPRFileSectionKey(entry.path),
@@ -118,13 +124,16 @@ function PRFilesCombinedDiffSections({
       largeDiffRenderLimit: null
     }))
   )
+
   const fileByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files])
+
   // Why: an inline arrow here re-keys every mounted row's comment decorator on every render.
   const getCommentableLineNumbers = useCallback(
     (section: DiffSection): readonly number[] | undefined =>
       fileByPath.get(section.path)?.reviewCommentLineNumbers,
     [fileByPath]
   )
+
   const inlineReviewComments = useMemo<DecoratedDiffComment[]>(
     () =>
       comments.flatMap((comment): DecoratedDiffComment[] => {
@@ -132,7 +141,9 @@ function PRFilesCombinedDiffSections({
         if (comment.isOutdated || !comment.path || typeof comment.line !== 'number') {
           return []
         }
+
         const createdAtMs = new Date(comment.createdAt).getTime()
+
         return [
           {
             id: `github-pr-comment:${comment.id}`,
@@ -155,6 +166,7 @@ function PRFilesCombinedDiffSections({
       }),
     [comments, prNumber, repoId]
   )
+
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
   const [activeTreeSectionKey, setActiveTreeSectionKey] = useState<string | null>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -232,6 +244,7 @@ function PRFilesCombinedDiffSections({
 
   const allSectionsCollapsed = sections.length > 0 && sections.every((section) => section.collapsed)
   const sectionIndexByKey = useCombinedDiffSectionIndexMap({ entrySignature: signature, sections })
+
   const viewedSectionKeys = useMemo(
     () => new Set(files.filter(isPRFileViewed).map((file) => getPRFileSectionKey(file.path))),
     [files]
@@ -242,14 +255,17 @@ function PRFilesCombinedDiffSections({
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: (index) => {
       const section = sections[index]
+
       if (!section) {
         return 88
       }
+
       return getDiffSectionRowEstimatedHeight(section, sectionHeights[index])
     },
     overscan: PR_DIFF_OVERSCAN,
     getItemKey: (index) => {
       const section = sections[index]
+
       return section ? `${section.key}:${section.collapsed ? 'collapsed' : 'expanded'}` : `${index}`
     }
   })
@@ -268,6 +284,7 @@ function PRFilesCombinedDiffSections({
         toggleSection,
         scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'start' })
       })
+
       if (navigatedIndex !== null) {
         setActiveTreeSectionKey(sectionsRef.current[navigatedIndex]?.key ?? null)
       }
@@ -311,11 +328,14 @@ function PRFilesCombinedDiffSections({
   const renderViewedCheckbox = useCallback(
     (section: DiffSection) => {
       const file = fileByPath.get(section.path)
+
       if (!file) {
         return null
       }
+
       const viewed = isPRFileViewed(file)
       const pending = pendingViewedPaths.has(file.path)
+
       return (
         <PRViewedCheckbox
           checked={viewed}

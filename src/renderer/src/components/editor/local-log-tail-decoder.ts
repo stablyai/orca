@@ -10,9 +10,11 @@ export type LocalLogTailDecodeResult =
 function decodeBase64(contentBase64: string): Uint8Array {
   const binary = atob(contentBase64)
   const bytes = new Uint8Array(binary.length)
+
   for (let index = 0; index < binary.length; index++) {
     bytes[index] = binary.charCodeAt(index)
   }
+
   return bytes
 }
 
@@ -44,6 +46,7 @@ export class LocalLogTailDecoder {
     if (result.reset) {
       return { kind: 'reset' }
     }
+
     if (result.nextByteOffset > LOCAL_LOG_TAIL_MAX_BYTES) {
       return { kind: 'limit' }
     }
@@ -52,11 +55,14 @@ export class LocalLogTailDecoder {
     this.fileIdentity = result.fileIdentity
     this.lineCarry += this.decoder.decode(decodeBase64(result.contentBase64), { stream: true })
     const lastCompleteLineEnd = this.lineCarry.lastIndexOf('\n') + 1
+
     if (lastCompleteLineEnd === 0) {
       return { kind: 'append', content: '', hasMore: result.hasMore }
     }
+
     const content = this.lineCarry.slice(0, lastCompleteLineEnd)
     this.lineCarry = this.lineCarry.slice(lastCompleteLineEnd)
+
     return { kind: 'append', content, hasMore: result.hasMore }
   }
 }

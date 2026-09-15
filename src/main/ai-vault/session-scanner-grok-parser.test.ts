@@ -15,9 +15,11 @@ afterEach(async () => {
 describe('AI Vault Grok session parser', () => {
   it('extracts bounded user_query text without trimming the full body', () => {
     const trimSpy = vi.spyOn(String.prototype, 'trim')
+
     const result = extractGrokContentText(
       `<USER_INFO>context</USER_INFO><USER_QUERY>\n${'Grok prompt '.repeat(400)}</USER_QUERY>`
     )
+
     const trimCalls = trimSpy.mock.calls.length
     trimSpy.mockRestore()
 

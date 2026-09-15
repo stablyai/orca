@@ -18,6 +18,7 @@ export function installPreviewTerminalLinks(terminal: Terminal): void {
       if (!isTerminalHttpLinkActivation(event)) {
         return
       }
+
       event.preventDefault()
       void window.api.shell.openUrl(uri).catch(() => undefined)
       terminal.clearSelection()

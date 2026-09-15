@@ -10,6 +10,7 @@ import {
 } from './agent-status-freshness-scheduler'
 
 const NOW = new Date('2026-04-09T12:00:00.000Z').getTime()
+
 const MINUTE = 60_000
 
 type StatusMap = Record<string, AgentStatusEntry>
@@ -40,6 +41,7 @@ type Step = {
 function buildScript(): Step[] {
   const working = (paneKey: string, updatedAt: number): AgentStatusEntry =>
     entry(paneKey, { state: 'working', updatedAt, stateStartedAt: updatedAt })
+
   return [
     // Distinct hook expiries: A at +10m, B at +20m, C at +30m.
     { advanceMs: 0, nextEntry: working('tab:a', NOW - 20 * MINUTE) },
@@ -93,15 +95,18 @@ function runPass(mode: 'cached' | 'rescan', script: Step[]): PassResult {
   const armedAt: number[] = []
   const bumpedAt: number[] = []
   const nativeSetTimeout = globalThis.setTimeout
+
   const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
     handler: TimerHandler,
     timeout?: number
   ) => {
     armedAt.push(Date.now() + (timeout ?? 0))
+
     return nativeSetTimeout(handler as () => void, timeout)
   }) as unknown as typeof globalThis.setTimeout)
 
   let current: StatusMap = {}
+
   const scheduler = createFreshnessScheduler({
     // The rescan reference hands back a fresh object every read, so the cache can never validate.
     getStatusEntries: () => (mode === 'cached' ? current : { ...current }),
@@ -114,21 +119,28 @@ function runPass(mode: 'cached' | 'rescan', script: Step[]): PassResult {
     if (step.advanceMs > 0) {
       vi.advanceTimersByTime(step.advanceMs)
     }
+
     if (step.nextEntry) {
       const previousEntries = current
+
       const nextEntries: StatusMap = {
         ...previousEntries,
         [step.nextEntry.paneKey]: step.nextEntry
       }
+
       const evictedEntries: AgentStatusEntry[] = []
+
       for (const paneKey of step.evictedPaneKeys ?? []) {
         const evicted = previousEntries[paneKey]
+
         if (evicted) {
           evictedEntries.push(evicted)
           delete nextEntries[paneKey]
         }
       }
+
       current = nextEntries
+
       if (mode === 'cached') {
         scheduler.noteLiveEntryDelta({
           previousEntries,
@@ -139,12 +151,14 @@ function runPass(mode: 'cached' | 'rescan', script: Step[]): PassResult {
         })
       }
     }
+
     scheduler.schedule()
   }
 
   scheduler.dispose()
   setTimeoutSpy.mockRestore()
   vi.useRealTimers()
+
   return { armedAt, bumpedAt }
 }
 
@@ -182,10 +196,12 @@ describe('freshness scheduler cached minimum', () => {
     vi.setSystemTime(NOW)
     let current: StatusMap = { 'tab:a': entry('tab:a', { state: 'working' }) }
     const bumps: number[] = []
+
     const scheduler = createFreshnessScheduler({
       getStatusEntries: () => current,
       bumpEpochs: () => bumps.push(Date.now())
     })
+
     scheduler.schedule()
     resetAgentStatusFreshnessScanCounters()
 
@@ -210,6 +226,7 @@ describe('freshness scheduler stale-boundary equivalence', () => {
       vi.setSystemTime(NOW)
       const bumps: number[] = []
       let current: StatusMap = { 'tab:a': entry('tab:a', { state: 'working' }) }
+
       const scheduler = createFreshnessScheduler({
         getStatusEntries: () => (mode === 'cached' ? current : { ...current }),
         bumpEpochs: () => bumps.push(Date.now())

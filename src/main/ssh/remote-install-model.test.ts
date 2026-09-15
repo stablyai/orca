@@ -12,6 +12,7 @@ import {
 } from './remote-install-model'
 
 const RELAY_DIRS = ['relay-0.1.0+abcdef123456', 'relay-v0.1.0', 'relay-1.2.3']
+
 const ORCAD_DIRS = ['orcad-0.1.0+abcdef123456', 'orcad-v0.1.0', 'orcad-1.2.3']
 
 describe('remote install namespace', () => {

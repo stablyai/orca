@@ -26,6 +26,7 @@ const RUNTIME_AUTHORITY: AutomationAuthorityRef = {
   environmentId: 'env-1',
   pairingRevision: 4
 }
+
 const OTHER_AUTHORITY: AutomationAuthorityRef = {
   kind: 'runtime',
   environmentId: 'env-2',
@@ -56,6 +57,7 @@ function target(
   } = {}
 ): AutomationHostFetchTarget {
   const authority = options.authority ?? RUNTIME_AUTHORITY
+
   return {
     ref,
     authority,
@@ -96,9 +98,11 @@ function scopedResult(ids: readonly string[]): ScopedAutomationList {
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((res) => {
     resolve = res
   })
+
   return { promise, resolve }
 }
 
@@ -118,6 +122,7 @@ describe('automation host scheduler concurrency', () => {
     const gates = Array.from({ length: 8 }, () => deferred<ScopedAutomationList>())
     let started = 0
     const listScoped = vi.fn(() => gates[started++].promise)
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
@@ -128,6 +133,7 @@ describe('automation host scheduler concurrency', () => {
     const targets = Array.from({ length: 8 }, (_, index) =>
       target(sshRef(RUNTIME_AUTHORITY, `target-${index}`))
     )
+
     const done = scheduler.refresh(targets)
     await Promise.resolve()
     expect(scheduler.inFlight()).toBe(4)
@@ -137,6 +143,7 @@ describe('automation host scheduler concurrency', () => {
       gate.resolve(scopedResult([]))
       await Promise.resolve()
     }
+
     await done
     expect(listScoped).toHaveBeenCalledTimes(8)
   })
@@ -144,10 +151,13 @@ describe('automation host scheduler concurrency', () => {
   it('runs the selected host before the rest of the queue', async () => {
     const cache = createCache()
     const order: string[] = []
+
     const listScoped = vi.fn((_authority, selector: AutomationListScopeSelector) => {
       order.push(selector.kind === 'ssh' ? selector.targetId : selector.kind)
+
       return Promise.resolve(scopedResult([]))
     })
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
@@ -155,6 +165,7 @@ describe('automation host scheduler concurrency', () => {
       concurrency: 1,
       transport: { listScoped }
     })
+
     await scheduler.refresh([
       target(sshRef(RUNTIME_AUTHORITY, 'a')),
       target(sshRef(RUNTIME_AUTHORITY, 'b')),
@@ -168,12 +179,14 @@ describe('automation host scheduler concurrency', () => {
     const cache = createCache()
     const gate = deferred<ScopedAutomationList>()
     const listScoped = vi.fn(() => gate.promise)
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
       isVisible: () => true,
       transport: { listScoped }
     })
+
     const first = scheduler.refresh([target(selfRef(RUNTIME_AUTHORITY))])
     await Promise.resolve()
     const second = scheduler.refresh([target(selfRef(RUNTIME_AUTHORITY))])
@@ -189,15 +202,20 @@ describe('automation host scheduler concurrency', () => {
     const gates: { resolve: (value: ScopedAutomationList) => void }[] = []
     const queried: string[] = []
     let blocking = true
+
     const listScoped = vi.fn((_authority: AutomationAuthorityRef, selector) => {
       queried.push(selector.kind === 'ssh' ? selector.targetId : selector.kind)
+
       if (!blocking) {
         return Promise.resolve(scopedResult([]))
       }
+
       const gate = deferred<ScopedAutomationList>()
       gates.push(gate)
+
       return gate.promise
     })
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
@@ -209,14 +227,17 @@ describe('automation host scheduler concurrency', () => {
     const targets = Array.from({ length: 5 }, (_, index) =>
       target(sshRef(RUNTIME_AUTHORITY, `target-${index}`))
     )
+
     const first = scheduler.refresh(targets)
     await Promise.resolve()
     expect(queried).toEqual(['target-0', 'target-1'])
 
     scheduler.cancelQueued()
+
     for (const gate of gates) {
       gate.resolve(scopedResult([]))
     }
+
     await first
 
     blocking = false
@@ -227,6 +248,7 @@ describe('automation host scheduler concurrency', () => {
   it('clears the request marker of a queued job the pool dropped', async () => {
     const cache = createCache()
     const gate = deferred<ScopedAutomationList>()
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
@@ -234,6 +256,7 @@ describe('automation host scheduler concurrency', () => {
       concurrency: 1,
       transport: { listScoped: () => gate.promise }
     })
+
     const queued = target(sshRef(RUNTIME_AUTHORITY, 'queued'))
     const done = scheduler.refresh([target(selfRef(RUNTIME_AUTHORITY)), queued])
     await Promise.resolve()
@@ -249,6 +272,7 @@ describe('automation host scheduler concurrency', () => {
   it('clears every marker of a cancelled legacy authority job', async () => {
     const cache = createCache()
     const gate = deferred<ScopedAutomationList>()
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
@@ -256,11 +280,14 @@ describe('automation host scheduler concurrency', () => {
       concurrency: 1,
       transport: { listScoped: () => gate.promise, listLegacy: () => Promise.resolve([]) }
     })
+
     const legacy = { querySupport: 'legacy-unscoped' as const, authority: OTHER_AUTHORITY }
+
     const group = [
       target(selfRef(OTHER_AUTHORITY), legacy),
       target(sshRef(OTHER_AUTHORITY, 'target-1'), legacy)
     ]
+
     const done = scheduler.refresh([target(selfRef(RUNTIME_AUTHORITY)), ...group])
     await Promise.resolve()
 
@@ -273,12 +300,14 @@ describe('automation host scheduler concurrency', () => {
   it('clears the marker of a target it has no way to address', async () => {
     const cache = createCache()
     const listScoped = vi.fn()
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
       isVisible: () => true,
       transport: { listScoped }
     })
+
     // A ghost SSH entry: no registration generation, so no selector can be fenced.
     const ghost = { ...target(sshRef(RUNTIME_AUTHORITY, 'ghost')), owner: null }
     await scheduler.refresh([ghost])
@@ -291,6 +320,7 @@ describe('automation host scheduler concurrency', () => {
     const cache = createCache()
     const gate = deferred<ScopedAutomationList>()
     const listScoped = vi.fn(() => gate.promise)
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
@@ -298,6 +328,7 @@ describe('automation host scheduler concurrency', () => {
       concurrency: 1,
       transport: { listScoped }
     })
+
     const queued = target(sshRef(RUNTIME_AUTHORITY, 'queued'))
     const done = scheduler.refresh([target(selfRef(RUNTIME_AUTHORITY)), queued])
     await Promise.resolve()
@@ -313,6 +344,7 @@ describe('automation host scheduler legacy path', () => {
     const cache = createCache()
     const listRuns = vi.fn()
     vi.stubGlobal('window', { api: { automations: { listRuns } } })
+
     const listLegacy = vi.fn((authority: AutomationAuthorityRef) =>
       Promise.resolve(
         authority.kind === 'runtime' && authority.environmentId === 'env-1'
@@ -327,6 +359,7 @@ describe('automation host scheduler legacy path', () => {
           : [automation('other-self')]
       )
     )
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
@@ -351,9 +384,11 @@ describe('automation host scheduler legacy path', () => {
     expect(
       cache.get(sshRef(RUNTIME_AUTHORITY, 'target-1'))?.data.map((row) => row.automation.id)
     ).toEqual(['ssh-1'])
+
     const orphanEntry = cache.getByKey(
       hostStableKey({ authority: stableAuthority(RUNTIME_AUTHORITY), selector: { kind: 'orphan' } })
     )
+
     expect(orphanEntry?.data.map((row) => row.automation.id)).toEqual(['broken'])
     expect(orphanEntry?.orphanCount).toBe(1)
     vi.unstubAllGlobals()
@@ -362,12 +397,14 @@ describe('automation host scheduler legacy path', () => {
 
   it('leaves legacy rows unfenced and their usage unavailable', async () => {
     const cache = createCache()
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
       isVisible: () => true,
       transport: { listLegacy: () => Promise.resolve([automation('a')]) }
     })
+
     await scheduler.refresh([
       target(selfRef(RUNTIME_AUTHORITY), { querySupport: 'legacy-unscoped' })
     ])
@@ -380,12 +417,14 @@ describe('automation host scheduler legacy path', () => {
   it('records an incompatible host without sending anything', async () => {
     const cache = createCache()
     const listScoped = vi.fn()
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
       isVisible: () => true,
       transport: { listScoped }
     })
+
     await scheduler.refresh([target(selfRef(RUNTIME_AUTHORITY), { querySupport: 'incompatible' })])
     expect(listScoped).not.toHaveBeenCalled()
     expect(cache.get(selfRef(RUNTIME_AUTHORITY))?.error).toMatchObject({
@@ -400,6 +439,7 @@ describe('automation host scheduler revalidation', () => {
     let clock = 1_000
     const cache = createCache(() => clock)
     const listScoped = vi.fn(() => Promise.resolve(scopedResult([])))
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
@@ -407,6 +447,7 @@ describe('automation host scheduler revalidation', () => {
       now: () => clock,
       transport: { listScoped }
     })
+
     const only = [target(selfRef(RUNTIME_AUTHORITY))]
     await scheduler.refresh(only)
     await scheduler.refresh(only)
@@ -423,6 +464,7 @@ describe('automation host scheduler revalidation', () => {
     const cache = createCache(() => clock)
     const delays: number[] = []
     const listScoped = vi.fn(() => Promise.reject(new Error('runtime_unavailable')))
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
@@ -433,9 +475,11 @@ describe('automation host scheduler revalidation', () => {
       scheduleRetry: (run, delayMs) => {
         delays.push(delayMs)
         void Promise.resolve().then(run)
+
         return () => {}
       }
     })
+
     await scheduler.refresh([target(selfRef(RUNTIME_AUTHORITY))])
     await new Promise((resolve) => setTimeout(resolve, 0))
     // Full jitter with a 1s base: 1s then 2s, and no third retry once the cap is reached.
@@ -450,6 +494,7 @@ describe('automation host scheduler revalidation', () => {
   it('does not schedule automatic retries while the page is hidden', async () => {
     const cache = createCache()
     const scheduleRetry = vi.fn(() => () => {})
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
@@ -457,6 +502,7 @@ describe('automation host scheduler revalidation', () => {
       transport: { listScoped: () => Promise.reject(new Error('runtime_unavailable')) },
       scheduleRetry
     })
+
     await scheduler.refresh([target(selfRef(RUNTIME_AUTHORITY))])
     expect(scheduleRetry).not.toHaveBeenCalled()
   })
@@ -465,12 +511,15 @@ describe('automation host scheduler revalidation', () => {
     let clock = 0
     const cache = createCache(() => clock)
     let calls = 0
+
     const listScoped = vi.fn(() => {
       calls += 1
+
       return calls === 1
         ? Promise.reject(new Error('runtime_unavailable'))
         : Promise.resolve(scopedResult(['a']))
     })
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
@@ -480,6 +529,7 @@ describe('automation host scheduler revalidation', () => {
       transport: { listScoped },
       scheduleRetry: () => () => {}
     })
+
     const only = target(selfRef(RUNTIME_AUTHORITY))
     await scheduler.refresh([only])
     // Still inside the backoff window, so an ordinary refresh is a no-op.
@@ -494,15 +544,19 @@ describe('automation host scheduler revalidation', () => {
   // requests already known to fail; that host keeps its own Retry instead.
   it('leaves a permanently failed host out of a manual all-hosts refresh', async () => {
     const cache = createCache()
+
     let outcome: () => Promise<ScopedAutomationList> = () =>
       Promise.reject(new Error('permission_denied'))
+
     const listScoped = vi.fn(() => outcome())
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
       isVisible: () => true,
       transport: { listScoped }
     })
+
     const only = target(selfRef(RUNTIME_AUTHORITY))
     await scheduler.refresh([only])
     expect(cache.get(only.ref)?.error).toMatchObject({
@@ -522,12 +576,14 @@ describe('automation host scheduler revalidation', () => {
     const cache = createCache()
     const gates = [deferred<ScopedAutomationList>(), deferred<ScopedAutomationList>()]
     let started = 0
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
       isVisible: () => true,
       transport: { listScoped: () => gates[started++].promise }
     })
+
     const only = target(selfRef(RUNTIME_AUTHORITY))
     const first = scheduler.refresh([only])
     await Promise.resolve()
@@ -544,12 +600,14 @@ describe('automation host scheduler revalidation', () => {
   it('discards a response whose entry was invalidated while in flight', async () => {
     const cache = createCache()
     const gate = deferred<ScopedAutomationList>()
+
     const scheduler = createAutomationHostScheduler({
       cache,
       legacyPartitionContext: () => LOCAL_REPO,
       isVisible: () => true,
       transport: { listScoped: () => gate.promise }
     })
+
     const only = target(selfRef(RUNTIME_AUTHORITY))
     const done = scheduler.refresh([only])
     await Promise.resolve()

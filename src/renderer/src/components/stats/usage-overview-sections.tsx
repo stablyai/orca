@@ -21,14 +21,17 @@ function translateActivityLabel(label: UsageProviderOverview['activityLabel']): 
   if (label === 'turns') {
     return translate('auto.components.stats.usage.overview.sections.c8f3a2d1e0b4', 'turns')
   }
+
   return translate('auto.components.stats.usage.overview.sections.d9a4b3e2f1c5', 'events')
 }
 
 function formatDayLabel(day: string): string {
   const parsed = new Date(`${day}T12:00:00`)
+
   if (Number.isNaN(parsed.getTime())) {
     return day
   }
+
   return parsed.toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric'
@@ -56,6 +59,7 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
       className: 'bg-border'
     }
   ]
+
   // Why: Codex cached input is a subset of input. The overview model normalizes
   // that into new/cache buckets so the visual mix does not double-count it.
   const mixTotal = segments.reduce((sum, segment) => sum + segment.value, 0)
@@ -206,11 +210,13 @@ export function ProviderUsageRow({
   onEnable: () => void
 }): React.JSX.Element {
   const share = totalTokens > 0 ? provider.totalTokens / totalTokens : 0
+
   const status = provider.enabled
     ? provider.isScanning
       ? translate('auto.components.stats.usage.overview.sections.statusScanning', 'Scanning')
       : translate('auto.components.stats.usage.overview.sections.statusEnabled', 'Enabled')
     : translate('auto.components.stats.usage.overview.sections.statusOff', 'Off')
+
   const statusVariant = provider.enabled ? 'secondary' : 'outline'
 
   return (

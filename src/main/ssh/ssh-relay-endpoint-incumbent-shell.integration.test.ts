@@ -47,16 +47,21 @@ function sh(script: string): Promise<string> {
     execFile('/bin/sh', ['-c', script], { timeout: 20_000 }, (error, stdout) => {
       if (error) {
         reject(error)
+
         return
       }
+
       resolve(stdout)
     })
   })
 }
 
 let workDir: string
+
 let pgreplessBinDir: string
+
 let hasLsof = false
+
 const running: ChildProcess[] = []
 
 function startFakeRelay(
@@ -64,14 +69,18 @@ function startFakeRelay(
   options: { withChild?: boolean; serviceChildren?: readonly string[] } = {}
 ): Promise<ChildProcess> {
   const args = [join(workDir, 'relay.js'), '--sock-path', sockPath]
+
   if (options.withChild) {
     args.push('--with-child')
   }
+
   for (const name of options.serviceChildren ?? []) {
     args.push(`--service-child=${name}`)
   }
+
   const child = spawn(process.execPath, args, { stdio: ['ignore', 'pipe', 'ignore'] })
   running.push(child)
+
   return new Promise((resolve, reject) => {
     child.stdout.on('data', (chunk: Buffer) => {
       if (chunk.toString().includes('READY')) {
@@ -84,6 +93,7 @@ function startFakeRelay(
 
 async function probe(sockPath: string): Promise<RelayEndpointIncumbent> {
   const output = await sh(relayEndpointIncumbentProbeCommand(process.execPath, sockPath))
+
   return parseRelayEndpointIncumbentProbe(sockPath, output)
 }
 
@@ -93,25 +103,31 @@ async function waitForChildCount(
   expected: number
 ): Promise<RelayEndpointIncumbent> {
   let incumbent = await probe(sockPath)
+
   for (let attempt = 0; attempt < 50 && incumbent.holders[0]?.childCount !== expected; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 100))
     incumbent = await probe(sockPath)
   }
+
   return incumbent
 }
 
 beforeAll(async () => {
   workDir = mkdtempSync(join(tmpdir(), 'orca-relay-incumbent-'))
   writeFileSync(join(workDir, 'relay.js'), FAKE_RELAY_SOURCE)
+
   for (const filename of RELAY_DAEMON_SERVICE_ENTRY_FILENAMES) {
     writeFileSync(join(workDir, filename), IDLE_SERVICE_SOURCE)
   }
+
   writeFileSync(join(workDir, 'looks-like-relay-watcher.js'), IDLE_SERVICE_SOURCE)
   pgreplessBinDir = join(workDir, 'pgrepless-bin')
   mkdirSync(pgreplessBinDir)
+
   for (const tool of ['ps', 'tr']) {
     symlinkSync((await sh(`command -v ${tool}`)).trim(), join(pgreplessBinDir, tool))
   }
+
   hasLsof = await sh('command -v lsof >/dev/null 2>&1 && echo yes || echo no').then(
     (out) => out.trim() === 'yes'
   )
@@ -142,9 +158,11 @@ posixOnly('relay endpoint probe against a real socket', () => {
     expect(incumbent.verdict).toBe('live')
     expect(incumbent.evidence).toBe('accepted-connection')
     expect(incumbent.socketPresent).toBe(true)
+
     if (!hasLsof) {
       return
     }
+
     expect(incumbent.holders.map((holder) => holder.pid)).toEqual([relay.pid])
     expect(incumbent.holders[0]).toMatchObject({
       matchesRelayArgv: true,
@@ -170,6 +188,7 @@ posixOnly('relay endpoint probe against a real socket', () => {
       withChild: true,
       serviceChildren: RELAY_DAEMON_SERVICE_ENTRY_FILENAMES
     })
+
     const incumbent = await waitForChildCount(
       sockPath,
       RELAY_DAEMON_SERVICE_ENTRY_FILENAMES.length + 1
@@ -194,9 +213,11 @@ posixOnly('relay endpoint probe against a real socket', () => {
     const incumbent = await probe(sockPath)
 
     expect(incumbent.verdict).toBe('live')
+
     if (!hasLsof) {
       return
     }
+
     expect(incumbent.holders[0].childCount).toBeGreaterThan(0)
     expect(isReapableRelayHusk(incumbent)).toBe(false)
   })
@@ -241,9 +262,11 @@ posixOnly('empty relay husk reap against a real process', () => {
 
   it('terminates a relay whose only children are its own service processes (#13614)', async () => {
     const sockPath = join(workDir, 'service-husk.sock')
+
     const relay = await startFakeRelay(sockPath, {
       serviceChildren: RELAY_DAEMON_SERVICE_ENTRY_FILENAMES
     })
+
     await waitForChildCount(sockPath, RELAY_DAEMON_SERVICE_ENTRY_FILENAMES.length)
     const output = await sh(reapEmptyRelayHuskCommand(relay.pid!, sockPath))
     expect(output.trim()).toBe('GONE')
@@ -252,11 +275,13 @@ posixOnly('empty relay husk reap against a real process', () => {
   it('refuses to signal when the host cannot enumerate children at all', async () => {
     const sockPath = join(workDir, 'no-pgrep.sock')
     const relay = await startFakeRelay(sockPath)
+
     // A PATH carrying every tool the script needs except `pgrep`: the census answers
     // `unknown`, which must reach BUSY rather than the zero a missing tool would imply.
     const output = await sh(
       `PATH=${pgreplessBinDir}\n${reapEmptyRelayHuskCommand(relay.pid!, sockPath)}`
     )
+
     expect(output.trim()).toBe('BUSY')
     expect(relay.killed).toBe(false)
   })
@@ -264,9 +289,11 @@ posixOnly('empty relay husk reap against a real process', () => {
   it('refuses to signal a pid whose argv is not this relay at this socket', async () => {
     const sockPath = join(workDir, 'mismatch.sock')
     await startFakeRelay(sockPath)
+
     const bystander = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
       stdio: 'ignore'
     })
+
     running.push(bystander)
     const output = await sh(reapEmptyRelayHuskCommand(bystander.pid!, sockPath))
     expect(output.trim()).toBe('MISMATCH')

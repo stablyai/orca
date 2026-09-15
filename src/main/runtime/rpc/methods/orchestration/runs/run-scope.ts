@@ -26,7 +26,9 @@ export function assertCallerHandleMatchesEvidence(
   if (!callerEvidence) {
     return
   }
+
   const attested = runtime.verifyOrchestrationCompatibilityCaller(callerEvidence)
+
   if (attested && attested.terminalHandle !== callerTerminalHandle) {
     throw new OrchestrationError(
       'consumer_fenced',
@@ -66,16 +68,19 @@ export function resolveOrchestrationCaller(
   if (!params.evidenceAssertedByCaller) {
     assertCallerHandleMatchesEvidence(runtime, params.callerTerminalHandle, params.callerEvidence)
   }
+
   const paneKey =
     params.callerAuthority?.terminalHandle === params.callerTerminalHandle
       ? params.callerAuthority.paneKey
       : runtime.getTerminalPaneKey(params.callerTerminalHandle)
+
   if (!paneKey && params.requireStablePane) {
     throw new OrchestrationError(
       'stable_pane_required',
       'The coordinator terminal has no stable pane identity. Run this command inside a live Orca terminal.'
     )
   }
+
   return paneKey ?? null
 }
 
@@ -83,6 +88,7 @@ export function resolveOrchestrationCaller(
 export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopeParams): RunRow {
   const db = runtime.getOrchestrationDb()
   const explicit = params.runId ? db.getRun(params.runId) : undefined
+
   if (params.runId && (!explicit || explicit.legacy === 1)) {
     throw new OrchestrationError('run_not_found', `Run ${params.runId} was not found.`)
   }
@@ -90,6 +96,7 @@ export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopePar
   if (!params.requireCurrentConsumer && explicit) {
     return explicit
   }
+
   if (!params.callerTerminalHandle) {
     throw new OrchestrationError(
       'run_required',
@@ -97,18 +104,24 @@ export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopePar
       orchestrationSkillRecoveryData()
     )
   }
+
   assertCallerHandleMatchesEvidence(runtime, params.callerTerminalHandle, params.callerEvidence)
+
   if (explicit && params.legacyCoordinatorRunId === explicit.id) {
     return explicit
   }
+
   const paneKey = params.callerPaneKey ?? runtime.getTerminalPaneKey(params.callerTerminalHandle)
+
   if (!paneKey) {
     throw new OrchestrationError(
       'stable_pane_required',
       'The coordinator terminal has no stable pane identity.'
     )
   }
+
   const current = db.getCurrentRunForPane(paneKey)
+
   if (!current) {
     if (explicit) {
       throw new OrchestrationError(
@@ -116,17 +129,20 @@ export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopePar
         `This coordinator terminal is no longer bound to Run ${explicit.id}.`
       )
     }
+
     throw new OrchestrationError(
       'run_required',
       'No Run is bound. Use orchestration run-create or run-use first. No effects were applied.',
       orchestrationSkillRecoveryData()
     )
   }
+
   if (explicit && current.id !== explicit.id) {
     throw new OrchestrationError(
       'consumer_fenced',
       `This coordinator terminal is bound to ${current.id}, not ${explicit.id}.`
     )
   }
+
   return current
 }

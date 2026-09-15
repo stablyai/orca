@@ -158,6 +158,7 @@ describe('buildJiraCreateFieldValue', () => {
       schema: { type: 'array' },
       allowedValues: [{ id: 'id-1', name: 'Name 1' }]
     })
+
     expect(buildJiraCreateFieldValue(arrayField, 'Name 1, other')).toEqual([
       { id: 'id-1' },
       'other'

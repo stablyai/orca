@@ -12,20 +12,24 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
   const [userSelectedStep, setUserSelectedStep] = useState(false)
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
+
   const progress = useSettingsSetupGuideFullProgress(
     true,
     orchestrationSkillInstalled,
     browserUseSkillInstalled
   )
+
   const [activeStepId, setActiveStepId] = useState<FeatureWallSetupStepId>(() =>
     getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)
   )
+
   const activeStep = setupSteps.find((step) => step.id === activeStepId) ?? setupSteps[0] ?? null
 
   useEffect(() => {
     if (userSelectedStep) {
       return
     }
+
     setActiveStepId(getFirstIncompleteFeatureWallSetupStepId(progress.stepDone))
   }, [progress.stepDone, userSelectedStep])
 
@@ -33,7 +37,9 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
     if (!activeStep || userSelectedStep || !progress.stepDone[activeStep.id]) {
       return
     }
+
     const nextUnfinishedStepId = getFirstIncompleteFeatureWallSetupStepId(progress.stepDone)
+
     if (nextUnfinishedStepId !== activeStep.id) {
       setActiveStepId(nextUnfinishedStepId)
     }

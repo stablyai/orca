@@ -31,6 +31,7 @@ export function buildCapabilitySettingsSections({
   isLinearConnected
 }: SettingsNavigationBuildOptions): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
+
   return [
     {
       id: 'agents',
@@ -125,6 +126,7 @@ export function buildSetupSettingsSections({
   isWebClient
 }: SettingsNavigationBuildOptions): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
+
   return [
     ...(showDesktopOnlySettings
       ? [

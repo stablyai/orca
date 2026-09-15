@@ -17,6 +17,7 @@ export function getVisibleWorkspaceHostIdSet(
   const hostIds =
     state.visibleWorkspaceHostIds ??
     (state.workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE ? null : [state.workspaceHostScope])
+
   return hostIds ? new Set(hostIds) : null
 }
 
@@ -29,7 +30,9 @@ export function worktreeMatchesVisibleHost(
   if (!visibleHostIds) {
     return true
   }
+
   const repo = repoMap.get(worktree.repoId)
+
   return repo
     ? visibleHostIds.has(getWorktreeExecutionHostId(worktree, repo, defaultHostId))
     : false

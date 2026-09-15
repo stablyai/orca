@@ -52,9 +52,11 @@ const CASES = trace.cases as RecordedCase[]
 
 function caseNamed(name: string): RecordedCase {
   const found = CASES.find((entry) => entry.name === name)
+
   if (!found) {
     throw new Error(`fixture case '${name}' missing`)
   }
+
   return found
 }
 
@@ -64,12 +66,15 @@ function buildEvent(recorded: RecordedEvent): Event {
       isComposing: recorded.isComposing,
       bubbles: true
     })
+
     // happy-dom drops these from InputEventInit; Chromium supplies them.
     Object.defineProperty(input, 'inputType', { value: recorded.inputType ?? '' })
     Object.defineProperty(input, 'data', { value: recorded.data ?? null })
     Object.defineProperty(input, 'composed', { value: true })
+
     return input
   }
+
   const keyboard = new KeyboardEvent(recorded.type, {
     key: recorded.key,
     code: recorded.code,
@@ -77,8 +82,10 @@ function buildEvent(recorded: RecordedEvent): Event {
     bubbles: true,
     cancelable: true
   })
+
   Object.defineProperty(keyboard, 'keyCode', { value: recorded.keyCode ?? 0 })
   Object.defineProperty(keyboard, 'charCode', { value: recorded.charCode ?? 0 })
+
   return keyboard
 }
 
@@ -89,15 +96,18 @@ function open() {
   document.body.appendChild(container)
   const terminal = new Terminal()
   terminal.open(container)
+
   const forwarder = installTerminalImeNativeTextForwarder({
     terminalElement: terminal.element,
     isComposing: () => false,
     sendInput: (data) => terminal.input(data)
   })
+
   terminal.attachCustomKeyEventHandler((event) => {
     if (forwarder.claimKeyEvent(event)) {
       return false
     }
+
     return !shouldBypassXtermKeyboardEvent(event, {
       isMac: true,
       hasSelection: false,
@@ -106,6 +116,7 @@ function open() {
   })
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
+
   return { emitted, terminal, forwarder }
 }
 
@@ -113,23 +124,29 @@ function open() {
 function replay(names: string[]): string {
   const { emitted, terminal, forwarder } = open()
   const textarea = terminal.textarea!
+
   for (const name of names) {
     for (const recorded of caseNamed(name).dom) {
       const event = buildEvent(recorded)
+
       // Why: the recorded keydown is what a real browser only emits the rest of the sequence
       // after, so a claim that preventDefaults must truncate the replay exactly as Chromium would.
       if (recorded.type !== 'keydown' && recorded.type !== 'keyup') {
         textarea.value = recorded.value ?? ''
         textarea.setSelectionRange(textarea.value.length, textarea.value.length)
       }
+
       textarea.dispatchEvent(event)
+
       if (recorded.type === 'keydown' && event.defaultPrevented) {
         break
       }
     }
   }
+
   forwarder.dispose()
   terminal.dispose()
+
   return emitted.join('')
 }
 
@@ -174,6 +191,7 @@ describe('#11170 — a DefaultKeyBinding.dict remap reaches the PTY', () => {
   it('does not claim the Option chord the dict also binds', () => {
     const { emitted, terminal, forwarder } = open()
     const textarea = terminal.textarea!
+
     const chord = new KeyboardEvent('keydown', {
       key: '₩',
       code: 'Backquote',
@@ -181,6 +199,7 @@ describe('#11170 — a DefaultKeyBinding.dict remap reaches the PTY', () => {
       bubbles: true,
       cancelable: true
     })
+
     Object.defineProperty(chord, 'keyCode', { value: 192 })
     textarea.dispatchEvent(chord)
     forwarder.dispose()

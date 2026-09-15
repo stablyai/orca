@@ -9,7 +9,9 @@
 import { isIP } from 'node:net'
 
 export const ORCAD_LOOPBACK_BIND_HOST = '127.0.0.1'
+
 const ALL_INTERFACES_V4 = '0.0.0.0'
+
 const ALL_INTERFACES_V6 = '::'
 
 export class OrcadBindAddressError extends Error {
@@ -28,13 +30,17 @@ export function resolveOrcadBindHost(raw?: string): string {
   if (raw === undefined) {
     return ORCAD_LOOPBACK_BIND_HOST
   }
+
   const value = raw.trim()
+
   if (value === '') {
     throw new OrcadBindAddressError('--bind expects an address')
   }
+
   if (value === 'localhost') {
     return ORCAD_LOOPBACK_BIND_HOST
   }
+
   if (isIP(value) === 0) {
     throw new OrcadBindAddressError(
       `--bind expects a literal IP address (got '${value}'). Hostnames are refused because ` +
@@ -42,6 +48,7 @@ export function resolveOrcadBindHost(raw?: string): string {
         '0.0.0.0 to expose every interface.'
     )
   }
+
   return value
 }
 
@@ -50,9 +57,11 @@ export function bindHostIsNetworkExposed(host: string): boolean {
   if (host === ALL_INTERFACES_V4 || host === ALL_INTERFACES_V6) {
     return true
   }
+
   if (isIP(host) === 4) {
     return !host.startsWith('127.')
   }
+
   return host !== '::1'
 }
 

@@ -5,7 +5,9 @@ describe('raceSftpFileTransferWithAbort', () => {
   it('joins confirmed SFTP close and transfer teardown before rejecting an abort', async () => {
     const controller = new AbortController()
     let confirmClose: () => void = () => {}
+
     let settleTransfer: () => void = () => {}
+
     const promise = raceSftpFileTransferWithAbort(
       new Promise<void>((resolve) => {
         settleTransfer = resolve
@@ -17,6 +19,7 @@ describe('raceSftpFileTransferWithAbort', () => {
     )
 
     controller.abort()
+
     const pending = await Promise.race([
       promise.then(
         () => 'settled',
@@ -24,9 +27,11 @@ describe('raceSftpFileTransferWithAbort', () => {
       ),
       Promise.resolve('pending')
     ])
+
     expect(pending).toBe('pending')
 
     confirmClose()
+
     const stillPending = await Promise.race([
       promise.then(
         () => 'settled',
@@ -34,6 +39,7 @@ describe('raceSftpFileTransferWithAbort', () => {
       ),
       Promise.resolve('pending')
     ])
+
     expect(stillPending).toBe('pending')
 
     settleTransfer()
@@ -46,13 +52,16 @@ describe('raceSftpFileTransferWithAbort', () => {
 
   it('marks teardown unconfirmed when SFTP never closes', async () => {
     vi.useFakeTimers()
+
     try {
       const controller = new AbortController()
+
       const promise = raceSftpFileTransferWithAbort(
         new Promise<void>(() => {}),
         controller.signal,
         () => {}
       )
+
       const outcome = promise.catch((error: Error) => error)
 
       controller.abort()
@@ -70,13 +79,16 @@ describe('raceSftpFileTransferWithAbort', () => {
 
   it('marks transfer teardown unconfirmed when close wins but the transfer never settles', async () => {
     vi.useFakeTimers()
+
     try {
       const controller = new AbortController()
+
       const promise = raceSftpFileTransferWithAbort(
         new Promise<void>(() => {}),
         controller.signal,
         (onClose) => onClose()
       )
+
       const outcome = promise.catch((error: Error) => error)
 
       controller.abort()
@@ -94,9 +106,11 @@ describe('raceSftpFileTransferWithAbort', () => {
 
   it('removes the close waiter when the teardown deadline expires', async () => {
     vi.useFakeTimers()
+
     try {
       const controller = new AbortController()
       const removeCloseListener = vi.fn()
+
       const outcome = raceSftpFileTransferWithAbort(
         new Promise<void>(() => {}),
         controller.signal,

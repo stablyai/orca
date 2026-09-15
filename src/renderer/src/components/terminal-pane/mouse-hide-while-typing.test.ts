@@ -4,9 +4,11 @@ import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 describe('installMouseHideWhileTyping', () => {
   function createMockTerminal() {
     const callbacks: (() => void)[] = []
+
     return {
       onData: vi.fn((cb: () => void) => {
         callbacks.push(cb)
+
         return { dispose: vi.fn() }
       }),
       callbacks
@@ -16,6 +18,7 @@ describe('installMouseHideWhileTyping', () => {
   function createMockContainer() {
     const listeners = new Map<string, Set<EventListenerOrEventListenerObject>>()
     const style = { cursor: '' as string }
+
     return {
       style,
       addEventListener: vi.fn((type: string, handler: EventListenerOrEventListenerObject) => {
@@ -34,6 +37,7 @@ describe('installMouseHideWhileTyping', () => {
             handler.handleEvent(event)
           }
         })
+
         return true
       }),
       listeners

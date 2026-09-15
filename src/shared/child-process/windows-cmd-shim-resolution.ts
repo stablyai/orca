@@ -33,14 +33,19 @@ const MAX_SHIM_BYTES = 64 * 1024
 /** Both spellings of the shim's own directory. Each already ends in `\`, so the
  * separator the shim writes after it is optional and inert. */
 const DP0 = String.raw`(?:%~dp0|%dp0%)\\?`
+
 const DP0_NODE_EXE = `"${DP0}node\\.exe"`
+
 const dp0Path = (group: string): string => `"${DP0}(?<${group}>[^"\\r\\n]+)"`
 
 const ECHO_OFF = String.raw`@echo off\n`
+
 /** npm's `cmd-shim` captures its own directory through a subroutine. */
 const FIND_DP0 = String.raw`GOTO start\n:find_dp0\nSET dp0=%~dp0\nEXIT /b\n:start\nSETLOCAL\nCALL :find_dp0\n`
+
 /** pnpm prepends its virtual-store directories so the script can resolve deps. */
 const NODE_PATH_BLOCK = String.raw`(?:@IF NOT DEFINED NODE_PATH \(\n@SET "NODE_PATH=(?<nodePath>[^"\r\n]*)"\n\) ELSE \(\n@SET "NODE_PATH=(?<nodePathElse>[^"\r\n]*)"\n\)\n)?`
+
 const PATHEXT_STRIP = String.raw`SET PATHEXT=%PATHEXT:;\.JS;=;%`
 
 /**
@@ -120,35 +125,43 @@ export function parseWindowsCmdShim(contents: string): ParsedWindowsCmdShim | nu
   const canonical = canonicalize(contents)
 
   const prog = NPM_PROG_NODE_SHIM.exec(canonical)?.groups
+
   if (prog?.script) {
     return isPlainRelativePath(prog.script) ? { kind: 'node', script: prog.script } : null
   }
 
   const branched = BRANCHED_NODE_SHIM.exec(canonical)?.groups
+
   if (branched?.script) {
     // Both branches must name the same script; if they differ we matched a file
     // that only looks like a shim.
     if (branched.script !== branched.scriptElse || !isPlainRelativePath(branched.script)) {
       return null
     }
+
     const nodePath = branched.nodePath
+
     if (nodePath === undefined) {
       return { kind: 'node', script: branched.script }
     }
+
     // The else branch must be exactly "prefix, then whatever was there", or the
     // prepend we would reproduce is not the one the shim performs.
     if (nodePath.includes('%') || branched.nodePathElse !== `${nodePath};%NODE_PATH%`) {
       return null
     }
+
     return { kind: 'node', script: branched.script, nodePathPrefix: nodePath }
   }
 
   for (const pattern of [NPM_DIRECT_SHIM, PNPM_DIRECT_SHIM]) {
     const target = pattern.exec(canonical)?.groups?.target
+
     if (target) {
       return isPlainRelativePath(target) ? { kind: 'direct', target } : null
     }
   }
+
   return null
 }
 
@@ -161,6 +174,7 @@ type ParseCacheEntry = {
 /** Shim bodies do not change between spawns, but an upgrade rewrites them —
  * hence the mtime/size half of the key. */
 const parseCache = new Map<string, ParseCacheEntry>()
+
 const PARSE_CACHE_LIMIT = 256
 
 /**
@@ -192,11 +206,13 @@ const PARSE_CACHE_LIMIT = 256
  * who benefits rather than a leak.
  */
 const nodeCache = new Map<string, string | null>()
+
 const NODE_CACHE_LIMIT = 256
 
 function statFile(path: string): Stats | null {
   try {
     const stats = statSync(path)
+
     return stats.isFile() ? stats : null
   } catch {
     return null
@@ -211,20 +227,27 @@ function readParsedShim(program: string): ParsedWindowsCmdShim | null {
   // only such cost paid when nothing resolves — the interpreter lookup runs
   // only for a shim that already parsed, and is itself cached.
   const stats = statFile(program)
+
   if (!stats || stats.size > MAX_SHIM_BYTES) {
     return null
   }
+
   const cached = parseCache.get(program)
+
   if (cached && cached.mtimeMs === stats.mtimeMs && cached.size === stats.size) {
     return cached.parsed
   }
+
   let contents: string
+
   try {
     contents = readFileSync(program, 'utf8')
   } catch {
     return null
   }
+
   const parsed = parseWindowsCmdShim(contents)
+
   // Clearing wholesale drops hot entries with cold ones, where an LRU would
   // not. Left as is because the cap is per-process and one entry per distinct
   // `.cmd` path Orca ever spawns; reaching it means a re-read, not a wrong
@@ -232,13 +255,16 @@ function readParsedShim(program: string): ParsedWindowsCmdShim | null {
   if (parseCache.size >= PARSE_CACHE_LIMIT) {
     parseCache.clear()
   }
+
   parseCache.set(program, { mtimeMs: stats.mtimeMs, size: stats.size, parsed })
+
   return parsed
 }
 
 /** Win32 resolves environment names case-insensitively; a JS object does not. */
 function firstEnvKey(env: NodeJS.ProcessEnv, name: string): string | undefined {
   const lower = name.toLowerCase()
+
   return Object.keys(env).find((key) => key.toLowerCase() === lower && env[key] !== undefined)
 }
 
@@ -280,6 +306,7 @@ function resolveShimNode(directory: string, env: NodeJS.ProcessEnv): string | nu
   // because Windows allows one in none of the three.
   const key = `${directory}\n${pathValue}\n${pathExtValue}`
   const cached = nodeCache.get(key)
+
   // A hit is confirmed still on disk before it is used, because the two stale
   // directions are not symmetric. A stale `null` is safe and stays uncorrected:
   // it keeps the cmd.exe fallback, which works. A stale path is not — handing
@@ -290,32 +317,41 @@ function resolveShimNode(directory: string, env: NodeJS.ProcessEnv): string | nu
   if (cached !== undefined && (cached === null || statFile(cached))) {
     return cached
   }
+
   const resolved = probeShimNode(directory, pathValue, pathExtValue)
+
   // Same wholesale eviction as the parse cache, for the same reason: the cap is
   // per-process and one entry per distinct shim directory Orca ever spawns from.
   if (nodeCache.size >= NODE_CACHE_LIMIT) {
     nodeCache.clear()
   }
+
   nodeCache.set(key, resolved)
+
   return resolved
 }
 
 function probeShimNode(directory: string, pathValue: string, pathExtValue: string): string | null {
   const sibling = win32.join(directory, 'node.exe')
+
   if (statFile(sibling)) {
     return sibling
   }
+
   const extensions = pathExtValue
     .split(';')
     .map((extension) => extension.trim().toLowerCase())
     .filter((extension) => extension.startsWith('.'))
+
   for (const entry of pathValue.split(';')) {
     const trimmed = entry.trim().replace(/^"(.*)"$/, '$1')
+
     // A relative PATH entry resolves against the child's working directory, so
     // we cannot answer it here.
     if (!trimmed || !win32.isAbsolute(trimmed)) {
       continue
     }
+
     // Why every spelling and not just `.exe`: cmd stops at the first directory
     // holding any of them, so passing over a `node.com` here and matching a
     // `node.exe` further down PATH would run a binary the shim never would.
@@ -324,18 +360,22 @@ function probeShimNode(directory: string, pathValue: string, pathExtValue: strin
     // replaced paid its own stats on every single spawn.
     for (const extension of extensions) {
       const candidate = win32.join(trimmed, `node${extension}`)
+
       if (!statFile(candidate)) {
         continue
       }
+
       return extension === '.exe' ? candidate : null
     }
   }
+
   return null
 }
 
 function withNodePath(env: NodeJS.ProcessEnv, prefix: string): NodeJS.ProcessEnv {
   const key = firstEnvKey(env, 'NODE_PATH') ?? 'NODE_PATH'
   const existing = env[key]
+
   // `IF NOT DEFINED` is false for an empty value too — cmd has no empty variables.
   return { ...env, [key]: existing ? `${prefix};${existing}` : prefix }
 }
@@ -361,38 +401,49 @@ export function resolveWindowsCmdShim(
   env: NodeJS.ProcessEnv
 ): WindowsCmdShimResolution | null {
   const disableKey = firstEnvKey(env, DISABLE_FLAG)
+
   if (disableKey && env[disableKey]) {
     return null
   }
+
   // A relative program is resolved against the child's working directory, which
   // is the caller's to decide, not ours to guess.
   if (!win32.isAbsolute(program)) {
     return null
   }
+
   const parsed = readParsedShim(program)
+
   if (!parsed) {
     return null
   }
+
   const directory = win32.dirname(program)
 
   // `resolve` collapses the `..` hops and the doubled separator `%dp0%\` leaves.
   if (parsed.kind === 'direct') {
     const target = win32.resolve(directory, parsed.target)
     const lower = target.toLowerCase()
+
     if (!DIRECT_TARGET_EXTENSIONS.some((extension) => lower.endsWith(extension))) {
       return null
     }
+
     return statFile(target) ? { program: target, prefixArgs: [] } : null
   }
 
   const script = win32.resolve(directory, parsed.script)
+
   if (!statFile(script)) {
     return null
   }
+
   const node = resolveShimNode(directory, env)
+
   if (!node) {
     return null
   }
+
   return {
     program: node,
     prefixArgs: [script],

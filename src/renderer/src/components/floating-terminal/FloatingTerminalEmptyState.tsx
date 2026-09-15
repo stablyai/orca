@@ -133,6 +133,7 @@ function FloatingEmptyStateShortcut({
   if (shortcut.keys.length === 0) {
     return <span aria-hidden />
   }
+
   return (
     <ShortcutKeyCombo
       keys={shortcut.keys}

@@ -14,6 +14,7 @@ type StructuredAgentSessionTab = Tab & {
 }
 
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
+
 const EMPTY_GROUPS: readonly TabGroup[] = []
 
 const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOverlaySlot({
@@ -68,19 +69,24 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
         activeGroupId: state.activeGroupIdByWorktree[worktreeId]
       }))
     )
+
     const focusGroup = useAppStore((state) => state.focusGroup)
+
     const target = useMemo(
       () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId }),
       [runtimeEnvironmentId]
     )
+
     const focusOwningGroup = useCallback(
       (groupId: string) => focusGroup(worktreeId, groupId),
       [focusGroup, worktreeId]
     )
+
     const groupActiveTabById = useMemo(
       () => new Map(groups.map((group) => [group.id, group.activeTabId] as const)),
       [groups]
     )
+
     const structuredTabs = useMemo(
       () =>
         unifiedTabs.filter(

@@ -49,6 +49,7 @@ function createCommandHost(
   overrides: Partial<RuntimeBrowserCommandHost>
 ): RuntimeBrowserCommandHost {
   const runtimeBrowserPages = new RuntimeBrowserPageRegistry()
+
   return {
     resolveWorktreeSelector: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
@@ -74,6 +75,7 @@ function createPublicationHost(registeredTabs: readonly [string, number][] = [['
   const setActiveTab = vi.fn()
   const markHeadlessBrowserSessionTabActive = vi.fn()
   const notifyHeadlessBrowserSessionTabsChanged = vi.fn()
+
   return {
     host: {
       getAgentBrowserBridge: () =>
@@ -139,8 +141,10 @@ describe('publishCreatedBrowserSessionTab', () => {
     // announcement would satisfy the coupling by emptying it. Name the placement that must declare
     // it — a client-placed page reaches the host renderer through no other route.
     expect(BROWSER_TAB_CREATE_PUBLICATION_RULES.client.hostRowSource).toBe('session-notify')
+
     for (const placementKind of BROWSER_TAB_CREATE_PLACEMENT_KINDS) {
       const rules = BROWSER_TAB_CREATE_PUBLICATION_RULES[placementKind]
+
       if (rules.hostRowSource === 'session-notify') {
         expect(
           rules.notifiesSessionTabsChanged,
@@ -244,6 +248,7 @@ describe('publishCreatedBrowserSessionTab', () => {
 
   it('announces the created tab before it takes focus', () => {
     const order: string[] = []
+
     const host: BrowserTabCreatePublicationHost = {
       getAgentBrowserBridge: () => null,
       markHeadlessBrowserSessionTabActive: () => order.push('mark'),
@@ -377,6 +382,7 @@ describe('browser tab-create focus resolution', () => {
 describe('browser tab-create placement census', () => {
   it('routes every placement branch through the shared publication exactly once', () => {
     const source = browserCommandsSource()
+
     for (const placementKind of BROWSER_TAB_CREATE_PLACEMENT_KINDS) {
       const routed = source.match(
         new RegExp(
@@ -384,11 +390,13 @@ describe('browser tab-create placement census', () => {
           'g'
         )
       )
+
       expect(
         routed,
         `${placementKind} placement must publish through the shared seam`
       ).toHaveLength(1)
     }
+
     expect(source.match(/publishCreatedBrowserSessionTab\(/g)).toHaveLength(
       BROWSER_TAB_CREATE_PLACEMENT_KINDS.length
     )
@@ -410,6 +418,7 @@ describe('browser tab-create placement census', () => {
     it('moves a user-created offscreen tab into the clicked split group', async () => {
       const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
       const markHeadlessBrowserSessionTabActive = vi.fn()
+
       const commands = new RuntimeBrowserCommands(
         createCommandHost({
           getOffscreenBrowserBackend: vi.fn(
@@ -453,12 +462,14 @@ describe('browser tab-create placement census', () => {
         )?.[1] as
           | ((event: unknown, reply: { requestId: string; browserPageId?: string }) => void)
           | undefined
+
         handler?.({ sender: webContents } as never, {
           requestId: data.requestId,
           browserPageId: 'page-created'
         })
       })
       const markHeadlessBrowserSessionTabActive = vi.fn()
+
       const commands = new RuntimeBrowserCommands(
         createCommandHost({
           getAvailableAuthoritativeWindow: vi.fn(() => ({}) as never),
@@ -490,11 +501,13 @@ describe('browser tab-create placement census', () => {
         )?.[1] as
           | ((event: unknown, reply: { requestId: string; browserPageId?: string }) => void)
           | undefined
+
         handler?.({ sender: webContents } as never, {
           requestId: data.requestId,
           browserPageId: 'page-created'
         })
       })
+
       const commands = new RuntimeBrowserCommands(
         createCommandHost({
           getAvailableAuthoritativeWindow: vi.fn(() => ({}) as never),
@@ -517,6 +530,7 @@ describe('browser tab-create placement census', () => {
     it('still places a caller-addressed client page in the clicked split group', async () => {
       const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
       const markHeadlessBrowserSessionTabActive = vi.fn()
+
       const commands = new RuntimeBrowserCommands(
         createCommandHost({
           getOffscreenBrowserBackend: vi.fn(
@@ -553,11 +567,13 @@ describe('browser tab-create placement census', () => {
   it('names every placement kind the command adapter can select', () => {
     const source = browserCommandsSource()
     const selected = new Set<BrowserTabCreatePlacementKind>()
+
     for (const [, placementKind] of source.matchAll(
       /publishCreatedBrowserSessionTab\(this\.host, \{\s*placementKind: '([a-z]+)'/g
     )) {
       selected.add(placementKind as BrowserTabCreatePlacementKind)
     }
+
     expect([...selected].sort()).toEqual([...BROWSER_TAB_CREATE_PLACEMENT_KINDS].sort())
   })
 })
@@ -669,6 +685,7 @@ describe('browser tab-switch focus rule', () => {
 describe('browser tab-switch placement census', () => {
   it('routes every switch branch through the shared publication exactly once', () => {
     const source = browserCommandsSource()
+
     for (const placementKind of BROWSER_TAB_SWITCH_PLACEMENT_KINDS) {
       const routed = source.match(
         new RegExp(
@@ -676,8 +693,10 @@ describe('browser tab-switch placement census', () => {
           'g'
         )
       )
+
       expect(routed, `${placementKind} switch must publish through the shared seam`).toHaveLength(1)
     }
+
     expect(source.match(/publishSwitchedBrowserSessionTab\(/g)).toHaveLength(
       BROWSER_TAB_SWITCH_PLACEMENT_KINDS.length
     )
@@ -686,11 +705,13 @@ describe('browser tab-switch placement census', () => {
   it('names every switch placement kind the command adapter can select', () => {
     const source = browserCommandsSource()
     const selected = new Set<BrowserTabSwitchPlacementKind>()
+
     for (const [, placementKind] of source.matchAll(
       /publishSwitchedBrowserSessionTab\(this\.host, \{\s*placementKind: '([a-z]+)'/g
     )) {
       selected.add(placementKind as BrowserTabSwitchPlacementKind)
     }
+
     expect([...selected].sort()).toEqual([...BROWSER_TAB_SWITCH_PLACEMENT_KINDS].sort())
   })
 
@@ -702,6 +723,7 @@ describe('browser tab-switch placement census', () => {
       registry: RuntimeBrowserPageRegistry
     } {
       const registry = new RuntimeBrowserPageRegistry()
+
       for (const [browserPageId, active] of [
         ['page-a', true],
         ['page-b', false]
@@ -722,6 +744,7 @@ describe('browser tab-switch placement census', () => {
           active
         })
       }
+
       return {
         host: createCommandHost({
           getAgentBrowserBridge: () => null,
@@ -736,10 +759,12 @@ describe('browser tab-switch placement census', () => {
       const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
       const markHeadlessBrowserSessionTabActive = vi.fn()
       const notifyHeadlessBrowserSessionTabsChanged = vi.fn()
+
       const { host, registry } = createClientSwitchHost({
         markHeadlessBrowserSessionTabActive,
         notifyHeadlessBrowserSessionTabsChanged
       })
+
       const commands = new RuntimeBrowserCommands(host)
 
       await expect(
@@ -763,6 +788,7 @@ describe('browser tab-switch placement census', () => {
     it('marks a focused bridge switch active and leaves an unfocused one alone', async () => {
       const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
       const markHeadlessBrowserSessionTabActive = vi.fn()
+
       const bridge = {
         getRegisteredTabs: vi.fn(() => new Map([['page-server', 100]])),
         tabList: vi.fn(() => ({
@@ -778,6 +804,7 @@ describe('browser tab-switch placement census', () => {
         })),
         tabSwitch: vi.fn(async () => ({ switched: 0, browserPageId: 'page-server' }))
       } as unknown as AgentBrowserBridge
+
       const commands = new RuntimeBrowserCommands(
         createCommandHost({
           getAgentBrowserBridge: () => bridge,

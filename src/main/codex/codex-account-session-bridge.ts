@@ -33,20 +33,24 @@ export function startCodexAccountSessionBridgeInBackground(args: {
 }): Promise<void> {
   const key = normalizeRuntimePathForComparison(args.targetCodexHomePath)
   const inFlight = backgroundBridgeTasksByTargetHome.get(key)
+
   if (inFlight) {
     return inFlight
   }
+
   const task = bridgeCodexSessionsIntoAccountHome(args)
     .catch((error: unknown) => {
       console.warn('[codex-account-session-bridge] Background session bridge failed:', error)
     })
     .then(() => undefined)
+
   backgroundBridgeTasksByTargetHome.set(key, task)
   void task.finally(() => {
     if (backgroundBridgeTasksByTargetHome.get(key) === task) {
       backgroundBridgeTasksByTargetHome.delete(key)
     }
   })
+
   return task
 }
 
@@ -60,24 +64,29 @@ export async function bridgeCodexSessionsIntoAccountHome(args: {
 }): Promise<CodexAccountSessionBridgeSummary> {
   const summary: CodexAccountSessionBridgeSummary = { scannedFiles: 0, linkedFiles: 0 }
   const targetSessionsRoot = join(args.targetCodexHomePath, 'sessions')
+
   for (const sourceHomePath of dedupeSourceHomes(
     args.sourceCodexHomePaths,
     args.targetCodexHomePath
   )) {
     const sourceSessionsRoot = join(sourceHomePath, 'sessions')
+
     if (!existsSync(sourceSessionsRoot)) {
       continue
     }
+
     for await (const sourceFilePath of listCodexSessionRolloutFilesIncrementally(
       sourceSessionsRoot,
       args.options ?? {}
     )) {
       summary.scannedFiles += 1
+
       if (bridgeRolloutIntoAccountHome(sourceSessionsRoot, targetSessionsRoot, sourceFilePath)) {
         summary.linkedFiles += 1
       }
     }
   }
+
   return summary
 }
 
@@ -90,17 +99,21 @@ function bridgeRolloutIntoAccountHome(
   sourceFilePath: string
 ): boolean {
   const targetFilePath = join(targetSessionsRoot, relative(sourceSessionsRoot, sourceFilePath))
+
   // Why: rollout names carry the session UUID, so an existing target path is the
   // same conversation already bridged (often the same inode) — never a conflict.
   if (existsSync(targetFilePath)) {
     return false
   }
+
   try {
     mkdirSync(dirname(targetFilePath), { recursive: true })
   } catch (error) {
     console.warn('[codex-account-session-bridge] Failed to create session directory:', error)
+
     return false
   }
+
   return linkCodexSessionFile(sourceFilePath, targetFilePath)
 }
 
@@ -113,14 +126,18 @@ function dedupeSourceHomes(
 ): string[] {
   const seen = new Set([normalizeRuntimePathForComparison(targetCodexHomePath)])
   const sources: string[] = []
+
   for (const sourceHomePath of sourceCodexHomePaths) {
     const key = normalizeRuntimePathForComparison(sourceHomePath)
+
     if (seen.has(key)) {
       continue
     }
+
     seen.add(key)
     sources.push(sourceHomePath)
   }
+
   return sources
 }
 

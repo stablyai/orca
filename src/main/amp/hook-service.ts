@@ -24,6 +24,7 @@ import {
 function writeTextFileAtomic(filePath: string, content: string): void {
   const dir = dirname(filePath)
   mkdirSync(dir, { recursive: true })
+
   if (existsSync(filePath)) {
     try {
       if (readFileSync(filePath, 'utf-8') === content) {
@@ -35,6 +36,7 @@ function writeTextFileAtomic(filePath: string, content: string): void {
   }
 
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
+
   try {
     writeFileSync(tmpPath, content, 'utf-8')
     renameSync(tmpPath, filePath)
@@ -52,27 +54,35 @@ function writeTextFileAtomic(filePath: string, content: string): void {
 export class AmpHookService {
   getStatus(): AgentHookInstallStatus {
     const pluginPath = getPluginPath()
+
     return statusFromState(pluginPath, readLocalPluginState(pluginPath))
   }
 
   install(): AgentHookInstallStatus {
     const pluginPath = getPluginPath()
     const state = readLocalPluginState(pluginPath)
+
     if (state.kind === 'unmanaged' || state.kind === 'error') {
       return statusFromState(pluginPath, state)
     }
+
     writeTextFileAtomic(pluginPath, getAmpPluginSource())
+
     return this.getStatus()
   }
 
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remotePluginPath = getRemotePluginPath(remoteHome)
+
     try {
       const existing = await readTextFileRemote(sftp, remotePluginPath)
+
       if (existing !== null && !isManagedPlugin(existing)) {
         return statusFromState(remotePluginPath, { kind: 'unmanaged' })
       }
+
       await writeTextFileRemoteAtomic(sftp, remotePluginPath, getAmpPluginSource())
+
       return {
         agent: 'amp',
         state: 'installed',
@@ -94,10 +104,13 @@ export class AmpHookService {
   remove(): AgentHookInstallStatus {
     const pluginPath = getPluginPath()
     const state = readLocalPluginState(pluginPath)
+
     if (state.kind === 'managed') {
       unlinkSync(pluginPath)
+
       return this.getStatus()
     }
+
     return statusFromState(pluginPath, state)
   }
 }

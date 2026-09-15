@@ -11,14 +11,19 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return
   }
+
   if (Array.isArray(node)) {
     node.forEach((entry) => visit(entry, cb))
+
     return
   }
+
   const element = node as ReactElementLike
+
   if (!element.props) {
     return
   }
+
   cb(element)
   visit(element.props.children, cb)
 }
@@ -32,13 +37,16 @@ export function findByTypeName(node: unknown, typeName: string): ReactElementLik
           (entry.type as { displayName?: string; name?: string }).name ??
           '')
         : entry.type
+
     if (candidate === typeName) {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error(`${typeName} not found`)
   }
+
   return found
 }
 
@@ -51,10 +59,12 @@ export function findAllByTypeName(node: unknown, typeName: string): ReactElement
           (entry.type as { displayName?: string; name?: string }).name ??
           '')
         : entry.type
+
     if (candidate === typeName) {
       found.push(entry)
     }
   })
+
   return found
 }
 
@@ -65,9 +75,11 @@ export function findByProp(node: unknown, propName: string): ReactElementLike {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error(`${propName} not found`)
   }
+
   return found
 }
 
@@ -75,19 +87,24 @@ export function collectPropValues(node: unknown, propName: string): unknown[] {
   const values: unknown[] = []
   visit(node, (entry) => {
     const value = entry.props[propName]
+
     if (value !== undefined) {
       values.push(value)
     }
   })
+
   return values
 }
 
 export function runEffects(): void {
   const layoutEffects = hookRuntime.layoutEffects.splice(0)
+
   for (const effect of layoutEffects) {
     effect()
   }
+
   const effects = hookRuntime.effects.splice(0)
+
   for (const effect of effects) {
     effect()
   }
@@ -96,8 +113,10 @@ export function runEffects(): void {
 export function attachRef(ref: unknown, value: unknown): void {
   if (typeof ref === 'function') {
     ref(value)
+
     return
   }
+
   ;(ref as { current: unknown }).current = value
 }
 
@@ -117,12 +136,14 @@ export async function renderPanel(
 ): Promise<unknown> {
   hookRuntime.index = 0
   const { FloatingTerminalPanel } = await import('./FloatingTerminalPanel')
+
   return FloatingTerminalPanel({ open, onOpenChange, tourInteractionSnapshot })
 }
 
 export function getPanelStyleBounds(element: unknown): FloatingTerminalPanelBounds {
   const panel = findByProp(element, 'data-floating-terminal-panel')
   const style = panel.props.style as Record<string, number>
+
   return {
     left: style.left,
     top: style.top,
@@ -133,6 +154,7 @@ export function getPanelStyleBounds(element: unknown): FloatingTerminalPanelBoun
 
 export function getPanelClassName(element: unknown): string {
   const panel = findByProp(element, 'data-floating-terminal-panel')
+
   return panel.props.className as string
 }
 
@@ -174,6 +196,7 @@ export function makeMacShortcutKeyEvent({
     shiftKey,
     target: target as EventTarget
   }
+
   return {
     ...nativeEvent,
     defaultPrevented: false,
@@ -192,11 +215,13 @@ export function bindFocusedFloatingPanelKeydown(element: unknown): {
   }
 } {
   const panel = findByProp(element, 'data-floating-terminal-panel')
+
   const panelElement = {
     contains: vi.fn().mockReturnValue(true),
     focus: vi.fn(),
     closest: vi.fn()
   }
+
   panelElement.closest.mockImplementation((selector: string) =>
     selector === '[data-floating-terminal-panel]' ? panelElement : null
   )
@@ -208,12 +233,15 @@ export function bindFocusedFloatingPanelKeydown(element: unknown): {
     removeEventListener: vi.fn()
   })
   runEffects()
+
   const keydownListener = vi.mocked(window.addEventListener).mock.calls.find(([type]) => {
     return type === 'keydown'
   })?.[1] as ((event: unknown) => void) | undefined
+
   if (!keydownListener) {
     throw new Error('keydown listener not registered')
   }
+
   return { keydownListener, panelElement }
 }
 

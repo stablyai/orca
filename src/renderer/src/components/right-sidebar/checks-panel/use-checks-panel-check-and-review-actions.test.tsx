@@ -10,6 +10,7 @@ type Input = ChecksPanelCheckAndReviewActionsInput
 afterEach(cleanup)
 
 const mocks = vi.hoisted(() => ({ toastError: vi.fn() }))
+
 vi.mock('sonner', () => ({
   toast: { error: mocks.toastError, message: vi.fn(), success: vi.fn() }
 }))
@@ -17,6 +18,7 @@ vi.mock('sonner', () => ({
 function renderActions(overrides: Partial<ChecksPanelCheckAndReviewActionsInput> = {}) {
   const updateWorktreeMeta = vi.fn().mockResolvedValue({ ok: true })
   const openModal = vi.fn()
+
   const model = {
     activeReview: {
       provider: 'github',
@@ -89,6 +91,7 @@ describe('useChecksPanelCheckAndReviewActions', () => {
       ok: false,
       error: 'Update the remote runtime to unlink GitHub pull requests'
     })
+
     const { result } = renderActions({ updateWorktreeMeta: updateWorktreeMeta as never })
 
     await act(() => result.current.handleUnlinkReview())
@@ -126,6 +129,7 @@ function makeInput(overrides: Partial<Input> = {}): Input {
     suppressedGitHubPR: null,
     comment: ''
   }
+
   return {
     activeReview: {
       provider: 'gitlab',
@@ -208,8 +212,10 @@ describe('useChecksPanelCheckAndReviewActions GitLab links', () => {
       mergeable: 'UNKNOWN',
       headSha: 'abc123'
     })
+
     const openModal = vi.fn()
     const input = makeInput({ fetchHostedReviewForBranch, openModal })
+
     const hook = renderHook(({ model }) => useChecksPanelCheckAndReviewActions(model), {
       initialProps: { model: input }
     })

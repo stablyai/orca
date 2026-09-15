@@ -9,6 +9,7 @@ export async function sendStructuredAgentSessionForClient(
 ) {
   const host = requireStructuredHost(context)
   const result = await host.send(structuredCallerFor(context), params)
+
   if (
     !result.ok ||
     result.value.submission.dispatchState !== 'pending' ||
@@ -17,10 +18,12 @@ export async function sendStructuredAgentSessionForClient(
   ) {
     return result
   }
+
   const settled = await host.waitForSendSettlement(
     params.envelope.sessionId,
     result.value.clientMessageId,
     context.signal
   )
+
   return settled ? { ...result, ...settled } : result
 }

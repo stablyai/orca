@@ -13,22 +13,28 @@ import {
 } from './worktree-sidebar-drag-autoscroll'
 
 const GROUP_IDS = ['a', 'b', 'c', 'd', 'e']
+
 const CARD_HEIGHT = 116
+
 const ROW_GAP = 6
+
 // Why: a card with several agent rows expanded runs ~3.5x a collapsed one.
 const EXPANDED_CARD_HEIGHT = 404
 
 function layout(heightByWorktreeId: Readonly<Record<string, number>>): WorktreeSidebarDragRect[] {
   let top = 0
+
   return GROUP_IDS.map((worktreeId, groupIndex) => {
     const height = heightByWorktreeId[worktreeId] ?? CARD_HEIGHT
     const rect = { worktreeId, groupIndex, top, bottom: top + height }
     top += height + ROW_GAP
+
     return rect
   })
 }
 
 const COLLAPSED = layout({})
+
 const GRAB = { offsetY: CARD_HEIGHT / 2, height: CARD_HEIGHT }
 
 function previewAt(args: {
@@ -62,6 +68,7 @@ function replayStillPointer(args: {
   let anchor: WorktreeSidebarDropAnchor | null = null
   const dropIndexes: number[] = []
   const indicatorYs: number[] = []
+
   for (const rects of args.frames) {
     const held = shouldReevaluateWorktreeSidebarDropAnchor({
       anchor,
@@ -70,11 +77,13 @@ function replayStillPointer(args: {
     })
       ? null
       : anchor
+
     const preview = previewAt({ pointerY: args.pointerY, rects, anchor: held })!
     anchor = { beforeWorktreeId: preview.dropAnchorId, pointerY: args.pointerY, scrollTop: 0 }
     dropIndexes.push(preview.dropIndex)
     indicatorYs.push(preview.dropIndicatorY)
   }
+
   return { dropIndexes, indicatorYs }
 }
 
@@ -101,6 +110,7 @@ describe('worktree sidebar drag geometry under mid-drag card growth', () => {
       const { dropIndexes } = replayStillPointer({ pointerY, frames })
 
       expect(new Set(dropIndexes).size).toBe(1)
+
       // The scenario has to be one that actually moves without the hold.
       if (pointerY !== 150) {
         expect(new Set(unheld).size).toBeGreaterThan(1)
@@ -112,6 +122,7 @@ describe('worktree sidebar drag geometry under mid-drag card growth', () => {
     const frames = Array.from({ length: 12 }, (_, frame) =>
       layout({ b: CARD_HEIGHT + ((EXPANDED_CARD_HEIGHT - CARD_HEIGHT) * frame) / 11 })
     )
+
     const { dropIndexes, indicatorYs } = replayStillPointer({ pointerY: 350, frames })
 
     expect(new Set(dropIndexes).size).toBe(1)
@@ -177,6 +188,7 @@ describe('worktree sidebar drag geometry under mid-drag card growth', () => {
 
   it('keeps one live coordinate space across a session refresh', () => {
     const grown = layout({ b: EXPANDED_CARD_HEIGHT })
+
     const refreshed = refreshWorktreeSidebarDragSession({
       session: {
         draggingWorktreeId: 'a',
@@ -237,6 +249,7 @@ describe('grab-relative hit testing', () => {
 
     const dropIndexes = [0.05, 0.25, 0.5, 0.75, 0.95].map((fraction) => {
       const offsetY = height * fraction
+
       return previewAt({
         pointerY: slotTop + offsetY,
         rects,

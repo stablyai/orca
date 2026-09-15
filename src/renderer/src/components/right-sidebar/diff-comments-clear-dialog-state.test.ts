@@ -7,6 +7,7 @@ import {
 } from './source-control/notes/diff-comments-clear-dialog-state'
 
 const allPending: PendingDiffCommentsClear = { kind: 'all', worktreeId: 'wt-1' }
+
 const filePending: PendingDiffCommentsClear = {
   kind: 'file',
   worktreeId: 'wt-1',

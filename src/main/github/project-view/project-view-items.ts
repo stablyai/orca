@@ -15,6 +15,7 @@ import { fetchItemsPageWithRaw } from './project-view-item-page'
 import { normalizeItem, type RawItem } from './project-view-item-normalization'
 
 const ITEM_PAGE_SIZE = 100
+
 const MAX_ITEMS = 500
 
 export async function fetchAllItems(args: {
@@ -31,19 +32,24 @@ export async function fetchAllItems(args: {
   const scopeKey = ownerScopeKey(args.owner, args.ownerType, args.host)
   // Why: await the same-scope probe, then re-read state because it may have changed.
   const inFlight = parentFieldProbeInFlight.get(scopeKey)
+
   if (inFlight) {
     await inFlight.catch(() => {})
   }
+
   let includeParent = !hasParentFieldRetried(scopeKey)
   let parentFieldDropped = !includeParent
   // Single-flight the with-parent probe per owner; assign the in-flight promise synchronously (no await between get() and set()) so callers share one probe.
   let first: Awaited<ReturnType<typeof fetchItemsPageWithRaw>>
   let probePromise: Promise<Awaited<ReturnType<typeof fetchItemsPageWithRaw>>> | null = null
+
   if (includeParent && !parentFieldProbeInFlight.has(scopeKey)) {
     let resolveProbe: () => void = () => {}
+
     const probe = new Promise<void>((resolve) => {
       resolveProbe = resolve
     })
+
     parentFieldProbeInFlight.set(scopeKey, probe)
     probePromise = (async () => {
       try {
@@ -57,10 +63,12 @@ export async function fetchAllItems(args: {
           includeParent: true,
           host: args.host
         })
+
         // Why: set the retried flag BEFORE resolving/clearing the probe so siblings awoken on inFlight.catch() see it and don't fire duplicate with-parent probes.
         if (!result.ok && errorsIndicateParentField(result.rawErrors, result.stderr)) {
           markParentFieldRetried(scopeKey)
         }
+
         return result
       } finally {
         resolveProbe()
@@ -80,17 +88,20 @@ export async function fetchAllItems(args: {
       host: args.host
     })
   }
+
   if (!first.ok && includeParent && errorsIndicateParentField(first.rawErrors, first.stderr)) {
     // Retry the whole table without parent; mark this owner retried so later fetches skip the probe (other owners unaffected).
     markParentFieldRetried(scopeKey)
     includeParent = false
     parentFieldDropped = true
+
     if (!hasParentFieldWarningLogged(scopeKey)) {
       console.warn(
         `[project-view] Issue.parent is not available for ${args.owner} on this token — retrying without the parent selection.`
       )
       markParentFieldWarningLogged(scopeKey)
     }
+
     first = await fetchItemsPageWithRaw({
       owner: args.owner,
       ownerType: args.ownerType,
@@ -102,6 +113,7 @@ export async function fetchAllItems(args: {
       host: args.host
     })
   }
+
   if (!first.ok) {
     return { ok: false, error: first.error }
   }
@@ -110,10 +122,13 @@ export async function fetchAllItems(args: {
   if (first.page.totalCount === undefined || first.page.totalCount === null) {
     return { ok: false, error: driftError('items.totalCount missing') }
   }
+
   const totalCount = first.page.totalCount
+
   if (first.page.pageInfo?.hasNextPage === undefined) {
     return { ok: false, error: driftError('items.pageInfo.hasNextPage missing'), totalCount }
   }
+
   if (!Array.isArray(first.page.nodes)) {
     return { ok: false, error: driftError('items.nodes missing'), totalCount }
   }
@@ -129,21 +144,28 @@ export async function fetchAllItems(args: {
 
   const rows: GitHubProjectRow[] = []
   let position = 0
+
   const appendNodes = (nodes: (RawItem | null)[]): GitHubProjectViewError | null => {
     for (const n of nodes) {
       if (!n) {
         continue
       }
+
       const norm = normalizeItem(n, position)
+
       if (!norm.ok) {
         return norm.drift
       }
+
       rows.push(norm.row)
       position++
     }
+
     return null
   }
+
   const e1 = appendNodes(first.page.nodes)
+
   if (e1) {
     return { ok: false, error: e1, totalCount }
   }
@@ -151,6 +173,7 @@ export async function fetchAllItems(args: {
   // Paginate
   let hasNext = first.page.pageInfo.hasNextPage === true
   let cursor: string | null | undefined = first.page.pageInfo.endCursor
+
   if (hasNext && typeof cursor !== 'string') {
     return {
       ok: false,
@@ -158,6 +181,7 @@ export async function fetchAllItems(args: {
       totalCount
     }
   }
+
   while (hasNext) {
     const next = await fetchItemsPageWithRaw({
       owner: args.owner,
@@ -169,12 +193,15 @@ export async function fetchAllItems(args: {
       includeParent,
       host: args.host
     })
+
     if (!next.ok) {
       return { ok: false, error: next.error, totalCount }
     }
+
     if (!Array.isArray(next.page.nodes)) {
       return { ok: false, error: driftError('items.nodes missing on follow page'), totalCount }
     }
+
     if (next.page.pageInfo?.hasNextPage === undefined) {
       return {
         ok: false,
@@ -182,12 +209,16 @@ export async function fetchAllItems(args: {
         totalCount
       }
     }
+
     const e2 = appendNodes(next.page.nodes)
+
     if (e2) {
       return { ok: false, error: e2, totalCount }
     }
+
     hasNext = next.page.pageInfo.hasNextPage === true
     cursor = next.page.pageInfo.endCursor
+
     if (hasNext && typeof cursor !== 'string') {
       return {
         ok: false,
@@ -196,6 +227,7 @@ export async function fetchAllItems(args: {
       }
     }
   }
+
   return { ok: true, rows, totalCount, parentFieldDropped }
 }
 
@@ -209,6 +241,7 @@ export async function fetchItemsCountOnly(args: {
   host?: string
 }): Promise<number | null> {
   const root = ownerQueryRoot(args.ownerType)
+
   const query = `
     query($owner:String!, $num:Int!, $q:String!) {
       ${root}(login:$owner) {
@@ -218,6 +251,7 @@ export async function fetchItemsCountOnly(args: {
       }
     }
   `
+
   const res = await runGraphql<
     Record<string, { projectV2?: { items?: { totalCount?: number } | null } | null } | null>
   >(
@@ -225,9 +259,12 @@ export async function fetchItemsCountOnly(args: {
     { owner: args.owner, num: args.projectNumber, q: args.query },
     projectGhExecOptions(args.host)
   )
+
   if (!res.ok) {
     return null
   }
+
   const count = res.data[root]?.projectV2?.items?.totalCount
+
   return typeof count === 'number' ? count : null
 }

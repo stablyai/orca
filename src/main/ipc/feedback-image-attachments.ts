@@ -10,8 +10,11 @@ const FEEDBACK_IMAGE_EXTENSIONS: Record<string, string> = {
 }
 
 export const MAX_FEEDBACK_IMAGE_COUNT = 4
+
 export const MAX_FEEDBACK_IMAGE_BYTES = 8 * 1024 * 1024
+
 export const MAX_FEEDBACK_IMAGE_RESPONSE_BYTES = 64 * 1024
+
 export const FEEDBACK_IMAGE_FORM_FIELD = 'feedbackImage'
 
 export type FeedbackImageAttachment = {
@@ -34,29 +37,37 @@ export function validateFeedbackImages(images: unknown): string | null {
   if (!Array.isArray(images)) {
     return 'Image attachments must be a list.'
   }
+
   if (images.length > MAX_FEEDBACK_IMAGE_COUNT) {
     return `Attach ${MAX_FEEDBACK_IMAGE_COUNT} images or fewer.`
   }
+
   for (const image of images) {
     if (!image || typeof image !== 'object') {
       return 'Invalid image attachment.'
     }
+
     if (typeof image.contentType !== 'string') {
       return 'Invalid image attachment content type.'
     }
+
     if (!isSupportedFeedbackImageContentType(image.contentType)) {
       return 'Unsupported image type.'
     }
+
     if (!(image.data instanceof Uint8Array)) {
       return 'Invalid image attachment bytes.'
     }
+
     if (image.data.byteLength === 0) {
       return 'Image attachment is empty.'
     }
+
     if (image.data.byteLength > MAX_FEEDBACK_IMAGE_BYTES) {
       return `Each image must be ${MAX_FEEDBACK_IMAGE_BYTES} bytes or fewer.`
     }
   }
+
   return null
 }
 
@@ -80,13 +91,17 @@ export async function readFeedbackImagesDelivered(response: Response): Promise<b
       response,
       MAX_FEEDBACK_IMAGE_RESPONSE_BYTES
     )
+
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
       return false
     }
+
     if ('imagesDelivered' in parsed) {
       return (parsed as { imagesDelivered?: unknown }).imagesDelivered === true
     }
+
     return (parsed as { ok?: unknown }).ok === true
   } catch {}
+
   return false
 }

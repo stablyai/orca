@@ -23,24 +23,31 @@ export const MAX_HISTORY_META_BYTES = 32 * 1024
  *  and nix-store paths like `/nix/store/.../bin/zsh`. */
 export function resolveShellKind(shellPath: string): ShellKind {
   const name = basename(shellPath).toLowerCase()
+
   if (name.startsWith('zsh')) {
     return 'zsh'
   }
+
   if (name.startsWith('bash')) {
     return 'bash'
   }
+
   if (name.startsWith('fish')) {
     return 'fish'
   }
+
   if (name === 'pwsh' || name === 'pwsh.exe') {
     return 'pwsh'
   }
+
   if (name === 'powershell' || name === 'powershell.exe') {
     return 'powershell'
   }
+
   if (name === 'cmd' || name === 'cmd.exe') {
     return 'cmd'
   }
+
   return 'unknown'
 }
 
@@ -72,11 +79,13 @@ export function ensureHistoryDir(worktreeHash: string, wslDistro?: string): stri
     const root = wslDistro ? getHistoryRootWsl(wslDistro) : getHistoryRoot()
     const dir = join(root, worktreeHash)
     mkdirSync(dir, { recursive: true, mode: 0o700 })
+
     return dir
   } catch (err) {
     console.warn(
       `[pty:history] Failed to create history directory: ${err instanceof Error ? err.message : String(err)}`
     )
+
     return null
   }
 }
@@ -94,6 +103,7 @@ function writeMetaFile(
   try {
     const metaPath = join(dir, 'meta.json')
     const existing = existsSync(metaPath) ? readHistoryMeta(dir) : null
+
     if (
       existing &&
       (!fish ||
@@ -101,6 +111,7 @@ function writeMetaFile(
     ) {
       return
     }
+
     writeFileSync(
       metaPath,
       JSON.stringify({
@@ -129,9 +140,11 @@ export type HistoryDirMeta = {
 export function readHistoryMeta(dir: string): HistoryDirMeta | null {
   try {
     const metaPath = join(dir, 'meta.json')
+
     if (statSync(metaPath).size > MAX_HISTORY_META_BYTES) {
       return null
     }
+
     return parseHistoryMeta(dir, readFileSync(metaPath, 'utf-8'))
   } catch {
     return null
@@ -142,10 +155,12 @@ export function readHistoryMeta(dir: string): HistoryDirMeta | null {
 export async function readHistoryMetaAsync(dir: string): Promise<HistoryDirMeta | null> {
   try {
     const metaPath = join(dir, 'meta.json')
+
     // Why stat before read: the cap must reject an oversized meta.json without loading it.
     if ((await stat(metaPath)).size > MAX_HISTORY_META_BYTES) {
       return null
     }
+
     return parseHistoryMeta(dir, await readFile(metaPath, 'utf-8'))
   } catch {
     return null
@@ -155,21 +170,26 @@ export async function readHistoryMetaAsync(dir: string): Promise<HistoryDirMeta 
 function parseHistoryMeta(dir: string, contents: string): HistoryDirMeta | null {
   try {
     const raw: unknown = JSON.parse(contents)
+
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
       return null
     }
+
     const record = raw as Record<string, unknown>
     // Why re-derive: the session name is a pure function of this directory's own
     // hash, so a meta.json naming someone else's session cannot steer deletion.
     const expectedFishSession = fishHistorySessionName(basename(dir).split('.')[0])
+
     const fishSession =
       isSafeFishHistorySession(record.fishSession) && record.fishSession === expectedFishSession
         ? record.fishSession
         : undefined
+
     const fishHistoryDir =
       fishSession && typeof record.fishHistoryDir === 'string' && record.fishHistoryDir
         ? record.fishHistoryDir
         : undefined
+
     return {
       ...(typeof record.worktreeId === 'string' ? { worktreeId: record.worktreeId } : {}),
       ...(typeof record.createdAt === 'string' ? { createdAt: record.createdAt } : {}),
@@ -224,6 +244,7 @@ export function injectHistoryEnv(
   dropInheritedOrcaHistFile(spawnEnv)
 
   const shell = resolveShellKind(shellPath)
+
   const result: HistoryInjectionResult = {
     shell,
     histFile: null,
@@ -232,6 +253,7 @@ export function injectHistoryEnv(
   }
 
   const filename = historyFilename(shell)
+
   if (!filename && shell !== 'fish') {
     // Unknown shell or Phase 2 shell (pwsh, cmd) — leave unchanged.
     return result
@@ -250,6 +272,7 @@ export function injectHistoryEnv(
   const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
   const wslDistro = wslInfo?.distro ?? options.wslDistro?.trim()
   const histDir = ensureHistoryDir(worktreeHash, wslDistro)
+
   if (!histDir) {
     // Directory creation failed — degrade gracefully to shared history.
     return result
@@ -266,6 +289,7 @@ export function injectHistoryEnv(
     spawnEnv.fish_history = session
     result.fishSession = session
     result.historyDir = histDir
+
     return result
   }
 
@@ -283,6 +307,7 @@ export function injectHistoryEnv(
 
   result.histFile = spawnEnv.HISTFILE
   result.historyDir = spawnEnv.HISTFILE.replace(/[/\\][^/\\]+$/, '')
+
   return result
 }
 
@@ -297,14 +322,18 @@ export function injectWslFishHistoryEnv(
   // `injectHistoryEnv` on this same env first — kept so the contract holds per call,
   // since nothing but ordering enforces it.
   dropInheritedOrcaFishHistory(spawnEnv)
+
   if (spawnEnv.fish_history) {
     return null
   }
+
   const worktreeHash = hashWorktreeId(worktreeId)
   const historyDir = ensureHistoryDir(worktreeHash, wslDistro)
+
   if (!historyDir) {
     return null
   }
+
   const session = fishHistorySessionName(worktreeHash)
   // Why no historyDir: this session's file lives inside the WSL distro, so a
   // path resolved from THIS process's Windows environment names an unrelated
@@ -312,6 +341,7 @@ export function injectWslFishHistoryEnv(
   // through `deleteWslFishHistoryFile`, which resolves the path in the distro.
   writeMetaFile(historyDir, worktreeId, { session })
   spawnEnv.fish_history = session
+
   return session
 }
 
@@ -327,17 +357,21 @@ export function updateHistoryEnvForFallback(
   if (injected.fishSession && spawnEnv.fish_history === injected.fishSession) {
     delete spawnEnv.fish_history
   }
+
   if (!injected.historyDir) {
     return
   }
 
   const newFilename = historyFilename(resolveShellKind(fallbackShellPath))
+
   if (!newFilename) {
     // Fallback to an unknown shell — drop the override so it uses its own default.
     delete spawnEnv.HISTFILE
     delete spawnEnv.ORCA_HISTFILE
+
     return
   }
+
   spawnEnv.HISTFILE = `${injected.historyDir}/${newFilename}`
   spawnEnv.ORCA_HISTFILE = spawnEnv.HISTFILE
 }

@@ -134,11 +134,14 @@ export function indexPaletteField(
   sourceOrder = 0
 ): PaletteIndexedField | null {
   const trimmed = source.text.trim()
+
   if (!trimmed) {
     return null
   }
+
   const text = normalizePaletteText(trimmed)
   const segments = segmentPaletteText(text)
+
   return {
     id: source.id,
     sourceOrder,
@@ -158,15 +161,19 @@ export function indexPaletteFields(
 ): PaletteIndexedField[] {
   const fields: PaletteIndexedField[] = []
   const seenIds = new Set<string>()
+
   for (const source of sources) {
     if (!source) {
       continue
     }
+
     const field = indexPaletteField(source, fields.length)
+
     if (field && !seenIds.has(field.id)) {
       seenIds.add(field.id)
       fields.push(field)
     }
   }
+
   return fields
 }

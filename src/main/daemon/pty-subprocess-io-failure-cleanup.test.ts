@@ -13,9 +13,11 @@ vi.mock('./pty-subprocess/foreground-process-tracker', () => ({
     getForegroundProcess: () => null
   })
 }))
+
 vi.mock('../pty/posix-pty-process-groups', () => ({
   forceKillPosixPtyProcessGroups: (_pid: number, fallback: () => void) => fallback()
 }))
+
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: async (_pid: number, killRoot: () => void) => killRoot()
 }))
@@ -28,6 +30,7 @@ function createFixture() {
     resume: vi.fn(),
     clear: vi.fn()
   }
+
   const handle = createDaemonPtySubprocessHandle({
     process: proc as unknown as pty.IPty,
     shellPath: 'bash',
@@ -38,6 +41,7 @@ function createFixture() {
     sessionId: 'io-failure',
     startupAgentRecognition: null
   })
+
   return { proc, handle }
 }
 
@@ -45,6 +49,7 @@ function failIo(fixture: ReturnType<typeof createFixture>, operation: 'write' | 
   fixture.proc[operation].mockImplementation(() => {
     throw new Error('transient native I/O failure')
   })
+
   if (operation === 'write') {
     fixture.handle.write('input')
   } else {
@@ -75,11 +80,13 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
       fixture.handle.resize(120, 40)
       fixture.handle.clear?.()
       expect(fixture.proc[operation]).toHaveBeenCalledOnce()
+
       for (const suppressed of ['write', 'resize', 'clear'] as const) {
         if (suppressed !== operation) {
           expect(fixture.proc[suppressed]).not.toHaveBeenCalled()
         }
       }
+
       fixture.proc._simulateData('still running')
       expect(onData).toHaveBeenCalledWith('still running')
       expect(onExit).not.toHaveBeenCalled()
@@ -168,6 +175,7 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
       const signal = vi.spyOn(process, 'kill').mockReturnValue(true)
       let fixture = createFixture()
       const host = new TerminalHost({ spawnSubprocess: () => fixture.handle })
+
       try {
         for (let index = 0; index < 32; index++) {
           fixture = createFixture()
@@ -182,12 +190,15 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
           failIo(fixture, operation)
           signal.mockClear()
           const closing = host.kill(sessionId, { immediate: true })
+
           // Capture rejection before assertions so a red run cannot leak an unhandled waiter.
           const settled = closing.then(
             () => null,
             (error: unknown) => error ?? new Error('kill rejected')
           )
+
           let killFailure: unknown = null
+
           try {
             expect(host.listSessions()).toHaveLength(1)
             expect(fixture.proc.destroy).not.toHaveBeenCalled()
@@ -197,6 +208,7 @@ describe.each(['darwin', 'linux', 'win32'] as const)('%s native-handle contract'
             fixture.proc._simulateExit(137)
             killFailure = await settled
           }
+
           expect(killFailure).toBeNull()
           expect(host.listSessions()).toHaveLength(0)
           expect(onExit).toHaveBeenCalledOnce()

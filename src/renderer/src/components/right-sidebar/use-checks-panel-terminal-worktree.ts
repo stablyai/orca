@@ -48,6 +48,7 @@ export function useChecksPanelTerminalWorktree(args: {
   const { defaultActiveWorktree, isPanelVisible } = args
   const allWorktrees = useAllWorktrees()
   const repoMap = useRepoMap()
+
   const localWorktrees = useMemo(
     () =>
       allWorktrees.filter((worktree) => {
@@ -56,6 +57,7 @@ export function useChecksPanelTerminalWorktree(args: {
         // resolution in worktree-parent-candidates.ts.
         const repo = repoMap.get(worktree.repoId)
         const hostId = worktree.hostId ?? (repo ? getRepoExecutionHostId(repo) : null)
+
         return hostId === LOCAL_EXECUTION_HOST_ID
       }),
     [allWorktrees, repoMap]
@@ -77,6 +79,7 @@ export function useChecksPanelTerminalWorktree(args: {
     activeTerminalPtyId !== null &&
     !isRemoteRuntimePtyId(activeTerminalPtyId) &&
     parseAppSshPtyId(activeTerminalPtyId) === null
+
   const shouldPollCwd = isPanelVisible && isLocalTerminalPty
 
   const [polledCwd, setPolledCwd] = useState<{ ptyId: string; cwd: string | null } | null>(null)
@@ -84,14 +87,17 @@ export function useChecksPanelTerminalWorktree(args: {
   useEffect(() => {
     if (!shouldPollCwd || activeTerminalPtyId === null) {
       setPolledCwd(null)
+
       return
     }
 
     let disposed = false
+
     const commit = (cwd: string | null): void => {
       if (disposed) {
         return
       }
+
       // Keep the prior state object when nothing changed so an unchanged cwd
       // doesn't re-render the (large) Checks panel every poll tick.
       setPolledCwd((prev) =>
@@ -100,21 +106,25 @@ export function useChecksPanelTerminalWorktree(args: {
           : { ptyId: activeTerminalPtyId, cwd }
       )
     }
+
     // Retain the last good cwd through transient empty/error polls; clearing
     // here re-keys the Checks panel and wipes mid-edit state.
     const retainResolvedOrClear = (): void => {
       if (disposed) {
         return
       }
+
       setPolledCwd((prev) =>
         prev?.ptyId === activeTerminalPtyId && prev.cwd !== null
           ? prev
           : { ptyId: activeTerminalPtyId, cwd: null }
       )
     }
+
     const refresh = async (): Promise<void> => {
       try {
         const cwd = (await window.api.pty.getCwd(activeTerminalPtyId)).trim()
+
         if (cwd) {
           commit(cwd)
         } else {
@@ -134,6 +144,7 @@ export function useChecksPanelTerminalWorktree(args: {
       run: () => void refresh(),
       intervalMs: TERMINAL_CWD_POLL_MS
     })
+
     return () => {
       disposed = true
       stopInterval()

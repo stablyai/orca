@@ -13,7 +13,9 @@ import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 
 const SESSION = 'session-alpha'
+
 const OPERATION = '1800000000000-00000000000000000000000000000001'
+
 const WORKTREE = 'id:workspace-1'
 
 const STRUCTURED_CLIENT = {
@@ -49,6 +51,7 @@ function hostStub(): StructuredAgentSessionHost {
     cursor: { epoch: 'epoch-a', sequence: 0 },
     value: { sessionId: SESSION, fence: 1, page: {}, unconfirmedClientMessageIds: [] }
   }))
+
   return { attach } as unknown as StructuredAgentSessionHost
 }
 
@@ -85,6 +88,7 @@ async function create(
     publishStructuredAgentSessionTab: vi.fn(async () => undefined),
     ...runtimeOverrides
   }
+
   const replies: RpcResponse[] = []
   await new RpcDispatcher({
     runtime: runtime as unknown as OrcaRuntimeService,
@@ -95,9 +99,11 @@ async function create(
     STRUCTURED_CLIENT
   )
   const first = replies[0]
+
   if (!first) {
     throw new Error('no reply for agentSession.create')
   }
+
   return first
 }
 
@@ -106,7 +112,9 @@ function refusalOf(response: RpcResponse): { code: string; message: string } | n
   if (!response.ok) {
     return null
   }
+
   const result = response.result as { ok: boolean; refusal?: { code: string; message: string } }
+
   return result.ok ? null : (result.refusal ?? null)
 }
 

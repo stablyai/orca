@@ -9,9 +9,11 @@ import {
 } from '../../../shared/linear/links'
 import { reconcileLinearTeamSelection } from '@/components/task-page-linear-team-selection'
 import { useTaskPageLinearFilterSelection } from './use-task-page-linear-filter-selection'
+
 export type TaskPageLinearListSelectionPreludeModel = ReturnType<
   typeof useTaskPageLinearListSelectionPrelude
 >
+
 export function useTaskPageLinearListSelectionPrelude(model: TaskPageGitLabLoadingModel) {
   const {
     settings,
@@ -42,25 +44,31 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageGitLabLoadi
     linearCustomViewContentsError,
     availableTeams
   } = model
+
   const defaultLinearTeamSelection = settings?.defaultLinearTeamSelection
+
   const [linearTeamSelection, setLinearTeamSelection] = useState<ReadonlySet<string>>(() => {
     if (!defaultLinearTeamSelection) {
       return new Set<string>()
     }
+
     return new Set(defaultLinearTeamSelection)
   })
+
   const activeLinearIssues =
     selectedLinearProject && linearProjectTab === 'issues'
       ? linearProjectIssuesResult.items
       : selectedLinearCustomView?.model === 'issue'
         ? linearCustomViewIssuesResult.items
         : linearIssues
+
   const activeLinearIssueLoading =
     selectedLinearProject && linearProjectTab === 'issues'
       ? linearProjectIssuesLoading
       : selectedLinearCustomView?.model === 'issue'
         ? linearCustomViewContentsLoading
         : linearLoading
+
   const activeLinearIssueError =
     linearStatus.credentialError ??
     (selectedLinearProject && linearProjectTab === 'issues'
@@ -68,58 +76,70 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageGitLabLoadi
       : selectedLinearCustomView?.model === 'issue'
         ? linearCustomViewContentsError
         : linearError)
+
   const activeLinearIssueCollectionErrors =
     selectedLinearProject && linearProjectTab === 'issues'
       ? linearProjectIssuesResult.errors
       : selectedLinearCustomView?.model === 'issue'
         ? linearCustomViewIssuesResult.errors
         : undefined
+
   const activeLinearIssueHasCollectionError = (activeLinearIssueCollectionErrors?.length ?? 0) > 0
+
   const activeLinearIssueContextLabel = selectedLinearProject
     ? `Project: ${selectedLinearProject.name}`
     : selectedLinearCustomView?.model === 'issue'
       ? `View: ${selectedLinearCustomView.name}`
       : null
+
   const canLoadMorePlainLinearIssues =
     !activeLinearIssueContextLabel &&
     appliedLinearSearch.trim().length === 0 &&
     linearIssuesHasMore &&
     linearIssueLimit < LINEAR_ISSUE_LIST_MAX
+
   const canLoadMoreLinearProjectIssues =
     selectedLinearProject !== null &&
     linearProjectTab === 'issues' &&
     Boolean(linearProjectIssuesResult.hasMore) &&
     linearProjectIssueLimit < LINEAR_ISSUE_LIST_MAX
+
   const canLoadMoreLinearCustomViewIssues =
     selectedLinearCustomView?.model === 'issue' &&
     Boolean(linearCustomViewIssuesResult.hasMore) &&
     linearCustomViewIssueLimit < LINEAR_ISSUE_LIST_MAX
+
   const activeLinearIssuePage =
     selectedLinearProject && linearProjectTab === 'issues'
       ? linearProjectIssuePage
       : selectedLinearCustomView?.model === 'issue'
         ? linearCustomViewIssuePage
         : linearIssuePage
+
   const activeLinearIssueLoadingTargetPage =
     selectedLinearProject && linearProjectTab === 'issues'
       ? linearProjectIssueLoadingTargetPage
       : selectedLinearCustomView?.model === 'issue'
         ? linearCustomViewIssueLoadingTargetPage
         : linearIssueLoadingTargetPage
+
   const activeLinearIssueCanLoadMore =
     selectedLinearProject && linearProjectTab === 'issues'
       ? canLoadMoreLinearProjectIssues
       : selectedLinearCustomView?.model === 'issue'
         ? canLoadMoreLinearCustomViewIssues
         : canLoadMorePlainLinearIssues
+
   const activeLinearIssueCanRequestMore =
     activeLinearIssueCanLoadMore && !activeLinearIssueHasCollectionError
+
   const activeLinearIssueLimit =
     selectedLinearProject && linearProjectTab === 'issues'
       ? linearProjectIssueLimit
       : selectedLinearCustomView?.model === 'issue'
         ? linearCustomViewIssueLimit
         : linearIssueLimit
+
   const displayedLinearIssues = useMemo(
     () =>
       activeLinearIssues.map(
@@ -138,13 +158,16 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageGitLabLoadi
       linearCacheSnapshot.searchCache
     ]
   )
+
   const linearIssueTeams = useMemo(() => {
     const seen = new Set<string>()
     const teams: LinearTeam[] = []
+
     for (const issue of displayedLinearIssues) {
       if (!issue.team.id || seen.has(issue.team.id)) {
         continue
       }
+
       seen.add(issue.team.id)
       teams.push({
         id: issue.team.id,
@@ -159,6 +182,7 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageGitLabLoadi
           }) ?? undefined
       })
     }
+
     return teams.sort((a, b) => a.name.localeCompare(b.name))
   }, [displayedLinearIssues])
 
@@ -167,11 +191,14 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageGitLabLoadi
     if (availableTeams.length === 0) {
       return linearIssueTeams
     }
+
     const issueTeamById = new Map(linearIssueTeams.map((team) => [team.id, team]))
+
     return availableTeams.map((team) => {
       if (team.url) {
         return team
       }
+
       return {
         ...team,
         url: issueTeamById.get(team.id)?.url
@@ -184,10 +211,12 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageGitLabLoadi
     if (linearTeamOptions.length === 0) {
       return
     }
+
     setLinearTeamSelection(
       reconcileLinearTeamSelection(linearTeamOptions, defaultLinearTeamSelection)
     )
   }, [linearTeamOptions, defaultLinearTeamSelection])
+
   const nextModel = model as typeof model & {
     defaultLinearTeamSelection: typeof defaultLinearTeamSelection
     linearTeamSelection: typeof linearTeamSelection
@@ -210,6 +239,7 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageGitLabLoadi
     linearIssueTeams: typeof linearIssueTeams
     linearTeamOptions: typeof linearTeamOptions
   }
+
   nextModel.defaultLinearTeamSelection = defaultLinearTeamSelection
   nextModel.linearTeamSelection = linearTeamSelection
   nextModel.setLinearTeamSelection = setLinearTeamSelection
@@ -230,10 +260,14 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageGitLabLoadi
   nextModel.displayedLinearIssues = displayedLinearIssues
   nextModel.linearIssueTeams = linearIssueTeams
   nextModel.linearTeamOptions = linearTeamOptions
+
   return nextModel
 }
+
 export function useTaskPageLinearListSelection(model: TaskPageGitLabLoadingModel) {
   const preludeModel = useTaskPageLinearListSelectionPrelude(model)
+
   return useTaskPageLinearFilterSelection(preludeModel)
 }
+
 export type TaskPageLinearListSelectionModel = ReturnType<typeof useTaskPageLinearListSelection>

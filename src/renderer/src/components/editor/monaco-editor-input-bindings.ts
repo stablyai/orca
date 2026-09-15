@@ -53,34 +53,43 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
   } = params
 
   const editorDomNode = editorInstance.getContainerDomNode()
+
   const cleanupSaveShortcut = installEditorSaveShortcut(editorDomNode, () => {
     const value = editorInstance.getValue()
     propsRef.current.onSave(value)
   })
+
   const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+
   // Opens the same composer as the selection "+" button.
   const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
     // Why: keep an open draft instead of remounting, to avoid same-tick chord races before the composer guard runs.
     if (commentPopoverRef.current) {
       return true
     }
+
     if (!shouldShowMarkdownAnnotationsRef.current) {
       return false
     }
+
     // Why: the rendered target ref lags selection by a render, so read Monaco's live selection to avoid opening on a stale one.
     const target = getMonacoMarkdownSelectionAnnotationTarget(
       editorInstance,
       editorInstance.getSelection(),
       getDiffCommentPopoverLeft(editorInstance, editorContainerRef.current) ?? undefined
     )
+
     if (!target) {
       return false
     }
+
     commentPopoverRef.current = target
     setCommentPopover(target)
     setSelectionAnnotationTarget(null)
+
     return true
   })
+
   const searchInFilesAction = editorInstance.addAction({
     id: 'orca.searchInFiles',
     label: translate('auto.components.editor.MonacoEditor.fd68ae03b3', 'Search in Files'),
@@ -90,18 +99,22 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
       if (!worktreeId) {
         return
       }
+
       const query = getMonacoCodebaseSearchQuery(
         editorInstance.getModel(),
         editorInstance.getSelection(),
         editorInstance.getPosition()
       )
+
       if (!query) {
         return
       }
+
       const state = useAppStore.getState()
       state.showRightSidebarSearch({ query })
     }
   })
+
   const onLargeTextPaste = (event: ClipboardEvent): void => {
     handleMonacoLargeTextPaste(editorInstance, event, {
       readOnly: readOnlyRef.current,
@@ -110,11 +123,13 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
       },
       onPasteResult: (result) => {
         isApplyingLargePasteRef.current = false
+
         if (result.status === 'pasted' || result.status === 'cancelled') {
           const value = editorInstance.getValue()
           lastSyncedContentRef.current = value
           propsRef.current.onContentChange(value)
         }
+
         if (result.status === 'rejected' && result.reason === 'too-large') {
           toast.error(
             translate(
@@ -126,6 +141,7 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
       }
     })
   }
+
   editorDomNode.addEventListener('paste', onLargeTextPaste, { capture: true })
 
   return {

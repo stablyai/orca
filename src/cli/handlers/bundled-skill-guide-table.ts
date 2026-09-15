@@ -26,6 +26,7 @@ function canonicalGuides(guides: readonly BundledSkillGuide[]): BundledSkillGuid
  */
 export async function loadCanonicalGuides(): Promise<BundledSkillGuide[]> {
   const { BUNDLED_SKILL_GUIDES } = await import('../bundled-skill-guides.js')
+
   return canonicalGuides(BUNDLED_SKILL_GUIDES)
 }
 
@@ -35,23 +36,28 @@ export function requireTopic(
 ): BundledSkillGuide {
   const availableTopics = guides.map((guide) => guide.name).join(', ')
   const topic = flags.get('topic')
+
   if (typeof topic !== 'string' || topic.length === 0) {
     throw new RuntimeClientError(
       'invalid_argument',
       `Missing skill topic. Available topics: ${availableTopics}`
     )
   }
+
   // Why: installed stubs may retain an old topic forever, so aliases and canonical
   // names share one lookup table instead of being treated as transient CLI aliases.
   const guideByTopic = new Map<string, BundledSkillGuide>(
     guides.flatMap((guide) => [guide.name, ...guide.aliases].map((name) => [name, guide]))
   )
+
   const guide = guideByTopic.get(topic)
+
   if (!guide) {
     throw new RuntimeClientError(
       'invalid_argument',
       `Unknown skill topic "${topic}". Available topics: ${availableTopics}`
     )
   }
+
   return guide
 }

@@ -16,6 +16,7 @@ test.describe('Workspace Space git status checks', () => {
     const worktreeParent = realpathSync(
       mkdtempSync(path.join(os.tmpdir(), 'orca-space-git-status-'))
     )
+
     const worktreePaths = Array.from({ length: 60 }, (_, index) =>
       path.join(worktreeParent, `worktree-${index}`)
     )
@@ -27,19 +28,24 @@ test.describe('Workspace Space git status checks', () => {
           stdio: 'pipe'
         })
       }
+
       const registeredWorktreePaths = worktreePaths.map((worktreePath) =>
         realpathSync(worktreePath)
       )
 
       const repoId = await orcaPage.evaluate((testRepoPath) => {
         const store = window.__store
+
         if (!store) {
           throw new Error('Expected e2e store to be exposed')
         }
+
         const repo = store.getState().repos.find((item) => item.path === testRepoPath)
+
         if (!repo) {
           throw new Error('Expected test repo to be loaded')
         }
+
         return repo.id
       }, testRepoPath)
 
@@ -50,22 +56,27 @@ test.describe('Workspace Space git status checks', () => {
       const rowDisplayNames = await orcaPage.evaluate(
         async ({ testRepoPath, worktreePaths }) => {
           const store = window.__store
+
           if (!store) {
             throw new Error('Expected e2e store to be exposed')
           }
 
           const initialState = store.getState()
           const repo = initialState.repos.find((item) => item.path === testRepoPath)
+
           if (!repo) {
             throw new Error('Expected test repo to be loaded')
           }
+
           await window.api.git.status({ worktreePath: worktreePaths[0] })
 
           const state = store.getState()
           const expectedPaths = new Set(worktreePaths)
+
           const worktrees = (state.worktreesByRepo[repo.id] ?? []).filter((worktree) =>
             expectedPaths.has(worktree.path)
           )
+
           if (worktrees.length !== worktreePaths.length) {
             throw new Error(
               `Expected ${worktreePaths.length} registered worktrees, got ${
@@ -78,6 +89,7 @@ test.describe('Workspace Space git status checks', () => {
                 .join(', ')}`
             )
           }
+
           const rows = worktrees.map((worktree, index) => ({
             worktreeId: worktree.id,
             repoId: repo.id,
@@ -129,6 +141,7 @@ test.describe('Workspace Space git status checks', () => {
             }
           })
           store.getState().openSpacePage()
+
           return rows.map((row) => row.displayName)
         },
         { testRepoPath, worktreePaths: registeredWorktreePaths }
@@ -144,6 +157,7 @@ test.describe('Workspace Space git status checks', () => {
             .join('|')})$`
         )
       })
+
       await expect(rowCheckboxes).toHaveCount(rowDisplayNames.length, { timeout: 30_000 })
 
       await expect(orcaPage.getByText('Keep: git not checked')).toHaveCount(0, { timeout: 30_000 })
@@ -158,6 +172,7 @@ test.describe('Workspace Space git status checks', () => {
           // Best effort cleanup; the fixture removes the source repo after the test.
         }
       }
+
       rmSync(worktreeParent, { recursive: true, force: true })
     }
   })

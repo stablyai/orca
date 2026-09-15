@@ -22,6 +22,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const requestGeneration = useRef(0)
+
   const canLoad =
     args.enabled &&
     Boolean(args.repoId) &&
@@ -33,20 +34,24 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
   const load = useCallback(
     (resetSelection: boolean): void => {
       const generation = ++requestGeneration.current
+
       if (resetSelection) {
         setRecipes([])
         setSelectedRecipeId(null)
         setError(null)
       }
+
       if (!canLoad || !args.repoId) {
         return
       }
+
       void window.api.ephemeralVm
         .listRecipes({ repoId: args.repoId })
         .then((result) => {
           if (generation !== requestGeneration.current) {
             return
           }
+
           const nextRecipes = result.recipes ?? []
           setRecipes(nextRecipes)
           setSelectedRecipeId((current) => {
@@ -56,13 +61,17 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
                 ? args.initialRecipeId
                 : null
             }
+
             return current && nextRecipes.some((recipe) => recipe.id === current) ? current : null
           })
+
           const diagnosticMessages = (result.diagnostics ?? []).map((diagnostic) => {
             const recipeLabel = `environmentRecipes[${diagnostic.index}]`
             const fieldLabel = diagnostic.field ? `.${diagnostic.field}` : ''
+
             return `${recipeLabel}${fieldLabel}: ${diagnostic.message}`
           })
+
           setError(
             [result.status === 'error' ? result.message : null, ...diagnosticMessages]
               .filter((message): message is string => Boolean(message))
@@ -73,6 +82,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
           if (generation !== requestGeneration.current) {
             return
           }
+
           setRecipes([])
           setSelectedRecipeId(null)
           setError(cause instanceof Error ? cause.message : String(cause))
@@ -83,6 +93,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
 
   useEffect(() => {
     load(true)
+
     return () => {
       requestGeneration.current += 1
     }
@@ -92,6 +103,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
     if (!window.api.plugins?.onChanged) {
       return
     }
+
     return window.api.plugins.onChanged((event) => {
       if (event?.contentPacksChanged ?? true) {
         load(false)

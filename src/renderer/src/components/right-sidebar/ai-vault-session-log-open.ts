@@ -19,6 +19,7 @@ function worktreeStillExists(state: AppState, worktreeId: string): boolean {
   if (findWorktreeById(state.worktreesByRepo ?? {}, worktreeId)) {
     return true
   }
+
   // Why: the AI Vault panel can be active inside a folder workspace, whose id is
   // keyed differently from repo worktrees.
   return (state.folderWorkspaces ?? []).some(
@@ -33,6 +34,7 @@ function focusEditorContent(): void {
   if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
     return
   }
+
   window.requestAnimationFrame(() => {
     window.requestAnimationFrame(() => {
       const textarea = document.querySelector<HTMLTextAreaElement>('.monaco-editor textarea')
@@ -49,20 +51,25 @@ function focusEditorContent(): void {
  */
 export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): Promise<void> {
   const filePath = session.filePath?.trim()
+
   // Defensive: UI availability should already withhold blank/remote/synthetic
   // paths. Bail silently rather than toast — there is no user-actionable error.
   if (!filePath || !canOpenAiVaultSessionLogInOrca(session)) {
     return
   }
+
   if (inFlightOpenPaths.has(filePath)) {
     return
   }
+
   inFlightOpenPaths.add(filePath)
+
   try {
     const state = useAppStore.getState()
     // Snapshot the invoking workspace/group before the authorization await so a
     // delayed grant can't retarget the tab into a workspace the user moved to.
     const worktreeId = state.activeWorktreeId
+
     if (!worktreeId) {
       toast.error(
         translate(
@@ -70,9 +77,12 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
           "Couldn't open log — workspace is no longer available."
         )
       )
+
       return
     }
+
     const targetGroupId = state.activeGroupIdByWorktree?.[worktreeId] ?? undefined
+
     // Why: an already-open *writable* tab must keep its edit authority — View Log
     // only activates it and notifies. Local ownership only (runtimeEnvironmentId
     // null) matches the tab this action would create/activate.
@@ -96,10 +106,12 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
           "Couldn't open log — path not authorized."
         )
       )
+
       return
     }
 
     const stateAfterAuth = useAppStore.getState()
+
     if (!worktreeStillExists(stateAfterAuth, worktreeId)) {
       toast.error(
         translate(
@@ -107,6 +119,7 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
           "Couldn't open log — workspace is no longer available."
         )
       )
+
       return
     }
 

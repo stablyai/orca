@@ -9,16 +9,20 @@ export function useGitLabItemDialogState(itemId: string | null) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshNonce, setRefreshNonce] = useState(0)
+
   const [commentDraftState, setCommentDraftState] = useState<{
     itemId: string | null
     value: string
   }>(() => ({ itemId, value: '' }))
+
   const commentDraft = commentDraftState.itemId === itemId ? commentDraftState.value : ''
+
   if (commentDraftState.itemId !== itemId) {
     // Why: comment drafts are tied to one GitLab item, so switching the sheet
     // target must not leave a draft that could post to the wrong MR/issue.
     setCommentDraftState({ itemId, value: '' })
   }
+
   const [commentSubmitting, setCommentSubmitting] = useState(false)
   const [resolvingThreadId, setResolvingThreadId] = useState<string | null>(null)
   const [editingDetails, setEditingDetails] = useState(false)
@@ -41,6 +45,7 @@ export function useGitLabItemDialogState(itemId: string | null) {
   const [retryingJobId, setRetryingJobId] = useState<number | null>(null)
   const [actionInFlight, setActionInFlight] = useState<'close' | 'reopen' | 'merge' | null>(null)
   const mountedRef = useMountedRef()
+
   const updateCommentDraft = useCallback(
     (value: string): void => {
       setCommentDraftState({ itemId, value })

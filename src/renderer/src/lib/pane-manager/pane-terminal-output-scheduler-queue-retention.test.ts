@@ -34,11 +34,14 @@ describe('pane terminal output scheduler', () => {
 
     function collect(): number {
       const gc = (globalThis as { gc?: () => void }).gc
+
       if (!gc) {
         throw new Error('global.gc unavailable - config/vitest.config.ts must pass --expose-gc')
       }
+
       gc()
       gc()
+
       return process.memoryUsage().heapUsed
     }
 
@@ -53,6 +56,7 @@ describe('pane terminal output scheduler', () => {
       const SINKS = 4
 
       let writtenChars = 0
+
       const terminals = Array.from({ length: SINKS }, () => ({
         write: (data: string, callback?: () => void) => {
           writtenChars += data.length
@@ -79,12 +83,14 @@ describe('pane terminal output scheduler', () => {
           __terminalOutputSchedulerDebug?: { snapshot: () => { queuedChars: number } }
         }
       ).__terminalOutputSchedulerDebug
+
       if (!debug) {
         throw new Error('scheduler debug API unavailable')
       }
 
       const TAIL_CHARS = 64 * 1024
       let ticks = 0
+
       while (debug.snapshot().queuedChars > TAIL_CHARS && ticks < 40000) {
         vi.advanceTimersByTime(4)
         ticks += 1
@@ -110,6 +116,7 @@ describe('pane terminal output scheduler', () => {
       // strings cut from a much larger buffer. The queue must own its copy rather than
       // trusting every producer to flatten first (STA-3567 review round 2).
       const KEEP_CHARS = 64 * 1024
+
       const sinks = Array.from({ length: TERMINALS }, () => ({
         write: (_data: string, callback?: () => void) => callback?.()
       }))
@@ -137,12 +144,14 @@ describe('pane terminal output scheduler', () => {
       // Why a hand-rolled write: vi.fn() retains every argument in mock.calls, which would
       // dominate the measurement with the very bytes the queue is supposed to have released.
       let writtenChars = 0
+
       const makeSink = (): { write: (data: string, callback?: () => void) => void } => ({
         write: (data: string, callback?: () => void) => {
           writtenChars += data.length
           callback?.()
         }
       })
+
       const terminals = Array.from({ length: TERMINALS }, makeSink)
 
       // Why baseline BEFORE enqueueing: the queue owns a copy of every chunk, so a baseline
@@ -164,6 +173,7 @@ describe('pane terminal output scheduler', () => {
           __terminalOutputSchedulerDebug?: { snapshot: () => { queuedChars: number } }
         }
       ).__terminalOutputSchedulerDebug
+
       if (!debug) {
         throw new Error('scheduler debug API unavailable')
       }
@@ -172,6 +182,7 @@ describe('pane terminal output scheduler', () => {
       // frees the chunks either way, so a full drain cannot observe the defect.
       const TAIL_CHARS = 64 * 1024
       let ticks = 0
+
       while (debug.snapshot().queuedChars > TAIL_CHARS && ticks < 20000) {
         vi.advanceTimersByTime(4)
         ticks += 1

@@ -26,11 +26,13 @@ const { forkMock, existsSyncMock, mkdtempSyncMock, parcelSubscribeMock, rmSyncMo
 )
 
 vi.mock('node:child_process', () => ({ fork: forkMock }))
+
 vi.mock('node:fs', () => ({
   existsSync: existsSyncMock,
   mkdtempSync: mkdtempSyncMock,
   rmSync: rmSyncMock
 }))
+
 vi.mock('@parcel/watcher', () => ({ subscribe: parcelSubscribeMock }))
 
 import {
@@ -64,6 +66,7 @@ describe('subscribeViaWatcherProcess', () => {
 
   it('accepts close without exit as physical child termination', async () => {
     vi.useFakeTimers()
+
     try {
       const child = new FakeChild()
 
@@ -151,6 +154,7 @@ describe('subscribeViaWatcherProcess', () => {
         delivery: { includeDirectoryMetadata: true, maxEventsPerBatch: 200 }
       }
     )
+
     const child = currentChild()
 
     expect(child.sent[0]).toMatchObject({
@@ -284,6 +288,7 @@ describe('subscribeViaWatcherProcess', () => {
   it('shares healthy runtime roots and recovers the shard after a crash', async () => {
     const firstInterruption = vi.fn()
     const secondInterruption = vi.fn()
+
     const firstPromise = subscribeViaRuntimeWatcherProcess(
       '/repo-a',
       vi.fn(),
@@ -292,6 +297,7 @@ describe('subscribeViaWatcherProcess', () => {
         onInterruption: firstInterruption
       }
     )
+
     const firstChild = currentChild()
     ackSubscribe(firstChild)
     await firstPromise
@@ -304,6 +310,7 @@ describe('subscribeViaWatcherProcess', () => {
         onInterruption: secondInterruption
       }
     )
+
     const secondChild = currentChild()
     expect(secondChild).toBe(firstChild)
     ackSubscribe(secondChild)
@@ -339,6 +346,7 @@ describe('subscribeViaWatcherProcess', () => {
 
   it('cancels a queued crawl without restarting healthy roots', async () => {
     const healthyInterruption = vi.fn()
+
     const healthyPromise = subscribeViaWatcherProcess(
       '/healthy',
       vi.fn(),
@@ -347,11 +355,13 @@ describe('subscribeViaWatcherProcess', () => {
         onInterruption: healthyInterruption
       }
     )
+
     const child = currentChild()
     ackSubscribe(child)
     await healthyPromise
 
     const controller = new AbortController()
+
     const pending = subscribeViaWatcherProcess(
       '/queued',
       vi.fn(),
@@ -360,6 +370,7 @@ describe('subscribeViaWatcherProcess', () => {
         signal: controller.signal
       }
     )
+
     const queuedId = child.sent.at(-1)?.id
     controller.abort()
 
@@ -374,19 +385,23 @@ describe('subscribeViaWatcherProcess', () => {
 
   it('kills a shard when resolved-child cancellation teardown never acknowledges', async () => {
     vi.useFakeTimers()
+
     try {
       const healthyInterruption = vi.fn()
+
       const healthyPromise = subscribeViaWatcherProcess(
         '/healthy',
         vi.fn(),
         {},
         { onInterruption: healthyInterruption }
       )
+
       const first = currentChild()
       ackSubscribe(first)
       await healthyPromise
 
       const controller = new AbortController()
+
       const pending = subscribeViaWatcherProcess(
         '/resolved-but-unacked',
         vi.fn(),
@@ -395,6 +410,7 @@ describe('subscribeViaWatcherProcess', () => {
           signal: controller.signal
         }
       )
+
       const pendingId = first.sent.at(-1)?.id
       controller.abort()
 
@@ -422,6 +438,7 @@ describe('subscribeViaWatcherProcess', () => {
 
   it('cancels an active crawl and restores healthy roots when its owner aborts', async () => {
     const healthyInterruption = vi.fn()
+
     const healthyPromise = subscribeViaWatcherProcess(
       '/healthy',
       vi.fn(),
@@ -430,6 +447,7 @@ describe('subscribeViaWatcherProcess', () => {
         onInterruption: healthyInterruption
       }
     )
+
     const first = currentChild()
     ackSubscribe(first)
     await healthyPromise
@@ -459,6 +477,7 @@ describe('subscribeViaWatcherProcess', () => {
 
   it('keeps process count bounded when a killed child never exits', async () => {
     vi.useFakeTimers()
+
     try {
       const healthyPromise = subscribeViaWatcherProcess('/healthy', vi.fn(), {})
       const child = currentChild()
@@ -466,6 +485,7 @@ describe('subscribeViaWatcherProcess', () => {
       await healthyPromise
 
       const controller = new AbortController()
+
       const pending = subscribeViaWatcherProcess(
         '/slow',
         vi.fn(),
@@ -474,12 +494,15 @@ describe('subscribeViaWatcherProcess', () => {
           signal: controller.signal
         }
       )
+
       const pendingId = child.sent.at(-1)?.id
       child.emit('message', { op: 'subscribe-started', id: pendingId })
       controller.abort()
+
       const rejected = expect(pending).rejects.toThrow(
         'file watcher process did not exit after termination deadline'
       )
+
       child.emit('message', { op: 'cancel-requires-restart', id: pendingId })
 
       await vi.advanceTimersByTimeAsync(WATCHER_PROCESS_HARD_KILL_DELAY_MS)
@@ -506,6 +529,7 @@ describe('subscribeViaWatcherProcess', () => {
     const healthy = await healthyPromise
 
     const controller = new AbortController()
+
     const cancelled = subscribeViaWatcherProcess(
       '/slow',
       vi.fn(),
@@ -514,6 +538,7 @@ describe('subscribeViaWatcherProcess', () => {
         signal: controller.signal
       }
     )
+
     const cancelledId = first.sent.at(-1)?.id
     first.emit('message', { op: 'subscribe-started', id: cancelledId })
     controller.abort()
@@ -521,16 +546,21 @@ describe('subscribeViaWatcherProcess', () => {
     first.emit('message', { op: 'cancel-requires-restart', id: cancelledId })
 
     let unsubscribeSettled = false
+
     const unsubscribe = healthy.unsubscribe().then(() => {
       unsubscribeSettled = true
     })
+
     let queuedSettled = false
+
     const queued = subscribeViaWatcherProcess('/queued-during-termination', vi.fn(), {}).then(
       (subscription) => {
         queuedSettled = true
+
         return subscription
       }
     )
+
     await Promise.resolve()
     expect(unsubscribeSettled).toBe(false)
     expect(queuedSettled).toBe(false)
@@ -547,8 +577,10 @@ describe('subscribeViaWatcherProcess', () => {
 
   it('bounds a pending crawl and restores healthy roots after setup timeout', async () => {
     vi.useFakeTimers()
+
     try {
       const healthyInterruption = vi.fn()
+
       const healthyPromise = subscribeViaWatcherProcess(
         '/healthy',
         vi.fn(),
@@ -557,6 +589,7 @@ describe('subscribeViaWatcherProcess', () => {
           onInterruption: healthyInterruption
         }
       )
+
       const first = currentChild()
       ackSubscribe(first)
       await healthyPromise
@@ -582,6 +615,7 @@ describe('subscribeViaWatcherProcess', () => {
 
   it('starts the setup timeout only when the child begins that crawl', async () => {
     vi.useFakeTimers()
+
     try {
       const pending = subscribeViaWatcherProcess(
         '/queued',
@@ -591,6 +625,7 @@ describe('subscribeViaWatcherProcess', () => {
           subscribeTimeoutMs: 100
         }
       )
+
       const child = currentChild()
       let settled = false
       void pending.then(
@@ -643,6 +678,7 @@ describe('subscribeViaWatcherProcess', () => {
       child.emit('exit', 3221226505, null)
       ackSubscribe(currentChild())
     }
+
     expect(forkMock).toHaveBeenCalledTimes(3)
 
     const last = currentChild()
@@ -658,6 +694,7 @@ describe('subscribeViaWatcherProcess', () => {
 
   it('does not respawn for later subscriptions after the crash fuse opens', async () => {
     vi.useFakeTimers()
+
     try {
       vi.setSystemTime(0)
       const promise = subscribeViaWatcherProcess('/repo', vi.fn(), {})
@@ -671,6 +708,7 @@ describe('subscribeViaWatcherProcess', () => {
         child.emit('exit', 3221226505, null)
         ackSubscribe(currentChild())
       }
+
       vi.setSystemTime(80_000)
       const last = currentChild()
       last.connected = false
@@ -796,6 +834,7 @@ describe('subscribeViaWatcherProcess', () => {
     const subscription = await subscribeViaRuntimeWatcherProcess('/repo', callback, {
       ignore: ['**/.git']
     })
+
     expect(forkMock).not.toHaveBeenCalled()
     expect(parcelSubscribeMock).toHaveBeenCalledWith('/repo', expect.any(Function), {
       ignore: ['**/.git']
@@ -895,12 +934,14 @@ describe('subscribeViaWatcherProcess', () => {
     await secondPromise
 
     let faultingChild = firstChild
+
     for (let crash = 0; crash < 2; crash++) {
       faultingChild.connected = false
       faultingChild.emit('exit', null, 'SIGSEGV')
       faultingChild = currentChild()
       ackSubscribe(faultingChild)
     }
+
     faultingChild.connected = false
     faultingChild.emit('exit', null, 'SIGSEGV')
 

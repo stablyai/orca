@@ -13,6 +13,7 @@ function dispatchPairing(
       runtime: new OrcaRuntimeService(),
       methods: PAIRING_METHODS
     })
+
     void dispatcher.dispatchStreaming(
       { id: 'request-1', authToken: '', method, params },
       (response) => resolve(JSON.parse(response) as Record<string, unknown>),
@@ -30,6 +31,7 @@ describe('pairing RPC methods', () => {
       currentVersion: 1,
       resumeExpiresAt: Date.now() + 60_000
     })
+
     const pairing = { getEndpoints: vi.fn(), provisionRelay }
 
     await expect(
@@ -62,6 +64,7 @@ describe('pairing RPC methods', () => {
         )
       ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     }
+
     await expect(
       dispatchPairing(
         'pairing.getEndpoints',

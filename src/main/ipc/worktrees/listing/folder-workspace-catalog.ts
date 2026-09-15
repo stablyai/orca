@@ -22,9 +22,11 @@ import {
 export function listFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
   const rootId = getFolderWorkspaceRootId(repo)
   const allMeta = store.getAllWorktreeMeta()
+
   const ids = Object.keys(allMeta).filter((worktreeId) =>
     isFolderWorkspaceIdForRepo(repo, worktreeId)
   )
+
   if (!ids.includes(rootId)) {
     ids.unshift(rootId)
   }
@@ -33,6 +35,7 @@ export function listFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
     .map((worktreeId) => {
       const existing = allMeta[worktreeId]
       const ownershipUpdates = getProjectHostSetupMetaUpdates(store, repo, existing)
+
       const meta =
         existing?.instanceId && Object.keys(ownershipUpdates).length === 0
           ? existing
@@ -42,15 +45,18 @@ export function listFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
               ...ownershipUpdates,
               ...(existing ? {} : { displayName: repo.displayName, lastActivityAt: Date.now() })
             })
+
       return mergeFolderWorkspace(repo, worktreeId, meta)
     })
     .sort((a, b) => {
       if (a.id === rootId) {
         return -1
       }
+
       if (b.id === rootId) {
         return 1
       }
+
       return (b.createdAt ?? b.lastActivityAt) - (a.createdAt ?? a.lastActivityAt)
     })
 }
@@ -58,11 +64,13 @@ export function listFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
 export function buildFolderDetectedWorktrees(store: Store, repo: Repo): DetectedWorktree[] {
   const settings = store.getSettings()
   const worktrees = listFolderWorkspaces(store, repo)
+
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
     [repo.path, ...worktrees.map((worktree) => worktree.path)],
     resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults),
     resolveConfiguredWorktreeBasePaths(repo)
   )
+
   return worktrees.map((worktree) =>
     toDetectedWorktree({
       repo,
@@ -82,10 +90,12 @@ export function listVisibleFolderWorkspaces(store: Store, repo: Repo): Worktree[
     .map((worktree) => {
       const meta = store.getWorktreeMeta(worktree.id)
       const ownershipUpdates = getProjectHostSetupMetaUpdates(store, repo, meta)
+
       const repairedMeta =
         meta && Object.keys(ownershipUpdates).length === 0
           ? meta
           : store.setWorktreeMeta(worktree.id, ownershipUpdates)
+
       return mergeFolderWorkspace(repo, worktree.id, repairedMeta)
     })
 }
@@ -96,13 +106,16 @@ export function buildDisconnectedDetectedWorktrees(
   worktrees: Worktree[]
 ): DetectedWorktree[] {
   const settings = store.getSettings()
+
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
     [repo.path, ...worktrees.map((worktree) => worktree.path)],
     resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults),
     resolveConfiguredWorktreeBasePaths(repo)
   )
+
   const detected = worktrees.map((worktree) => {
     const meta = store.getWorktreeMeta(worktree.id)
+
     const detected = toDetectedWorktree({
       repo,
       worktree,
@@ -112,7 +125,9 @@ export function buildDisconnectedDetectedWorktrees(
       isLegacyRepoForVisibility: true,
       worktreeVisibilitySourceMatcher
     })
+
     return applyMetadataFallbackVisibility(detected)
   })
+
   return projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
 }

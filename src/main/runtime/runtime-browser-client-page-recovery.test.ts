@@ -9,6 +9,7 @@ const oldPlacement = Object.freeze({
   browserHostGeneration: 4,
   pageHostGeneration: 7
 })
+
 const newPlacement = Object.freeze({ ...oldPlacement, pageHostGeneration: 8 })
 
 describe('runtime browser client page recovery', () => {
@@ -97,6 +98,7 @@ describe('runtime browser client page recovery', () => {
       pageIds: ['page-a', 'page-b'],
       navigateFailures: ['page-a']
     })
+
     const releaseUnrecoverablePage = vi.fn()
 
     await expect(
@@ -125,6 +127,7 @@ describe('runtime browser client page recovery', () => {
       pageIds: ['page-a', 'page-b'],
       creationFailures: ['page-a']
     })
+
     const releaseUnrecoverablePage = vi.fn()
 
     await recoverUnavailableRuntimeBrowserClientPages({
@@ -144,6 +147,7 @@ describe('runtime browser client page recovery', () => {
 
   it('stops recovering pages once the attach is aborted', async () => {
     const abort = new AbortController()
+
     const { authority, pages } = harness({
       pageIds: ['page-a', 'page-b', 'page-c', 'page-d', 'page-e'],
       onCommand: () => abort.abort()
@@ -250,6 +254,7 @@ describe('runtime browser client page recovery', () => {
     const { authority, commands, notifyWorkspace, pages, placements } = harness({
       url: 'https://retained.internal/'
     })
+
     // The fence released the placement but kept the record naming the generation that placed it.
     placements.set('page-a', undefined)
 
@@ -323,6 +328,7 @@ describe('runtime browser client page recovery', () => {
 
   it('abandons a close whose placement changed identity while the command ran', async () => {
     let replacePlacement = (): void => {}
+
     const { authority, pages, placements } = harness({ onCommand: () => replacePlacement() })
     replacePlacement = () => {
       placements.set('page-a', Object.freeze({ ...oldPlacement, pageHostGeneration: 11 }))
@@ -392,6 +398,7 @@ function harness(
     })
   })
   const commands: { browserPageId: string; type: string; pageHostGeneration: number }[] = []
+
   const authority = {
     authorityRuntimeId: 'runtime-a',
     authorityEpoch: 'epoch-a',
@@ -400,19 +407,23 @@ function harness(
       if (expected !== placements.get(browserPageId)) {
         throw new Error('browser_page_placement_stale')
       }
+
       return { browserPageId, placement: expected }
     }),
     completePageRetirement: vi.fn((retirement: { browserPageId: string }) => {
       placements.set(retirement.browserPageId, undefined)
+
       return true
     }),
     createClientPage: vi.fn(async (input: { browserPageId: string }) => {
       if (options.creationFailures?.includes(input.browserPageId)) {
         throw new Error('browser_host_page_creation_timeout')
       }
+
       const index = pageIds.indexOf(input.browserPageId)
       const placement = Object.freeze({ ...newPlacement, pageHostGeneration: 8 + index * 2 })
       placements.set(input.browserPageId, placement)
+
       return placement
     }),
     issueClientPageCommand: vi.fn(
@@ -423,10 +434,12 @@ function harness(
           pageHostGeneration: input.pageHostGeneration
         })
         options.onCommand?.()
+
         const failed =
           (command.type === 'navigate' &&
             options.navigateFailures?.includes(input.browserPageId)) ||
           (command.type === 'closePage' && options.closeFailures?.includes(input.browserPageId))
+
         return {
           event: {},
           result: Promise.resolve(
@@ -438,6 +451,7 @@ function harness(
       }
     )
   }
+
   return { authority, commands, notifyWorkspace: vi.fn(), pages, placements }
 }
 

@@ -5,6 +5,7 @@ import type { RuntimeTerminalRead, RuntimeTerminalState } from './runtime-types'
 import type { PtyLivenessVerdict } from './pty-liveness-verdict'
 
 export const ORCHESTRATION_WORKER_READ_SOURCES = ['auto', 'transcript', 'terminal'] as const
+
 export type OrchestrationWorkerReadSource = (typeof ORCHESTRATION_WORKER_READ_SOURCES)[number]
 
 export const ORCHESTRATION_WORKER_READ_FALLBACK_REASONS = [
@@ -16,6 +17,7 @@ export const ORCHESTRATION_WORKER_READ_FALLBACK_REASONS = [
   'transcript_parse_failed',
   'remote_capability_unavailable'
 ] as const
+
 export type OrchestrationWorkerReadFallbackReason =
   (typeof ORCHESTRATION_WORKER_READ_FALLBACK_REASONS)[number]
 

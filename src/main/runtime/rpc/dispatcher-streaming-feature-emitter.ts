@@ -11,6 +11,7 @@ export function createDispatcherStreamingFeatureEmitter(
   reply: (response: string) => void
 ) {
   const recordedFeatureInteractions = new Set<FeatureInteractionId>()
+
   const emit = (result: unknown): void => {
     recordRuntimeFeatureInteraction(
       runtime,
@@ -23,5 +24,6 @@ export function createDispatcherStreamingFeatureEmitter(
     response.streaming = true
     reply(JSON.stringify(response))
   }
+
   return { emit, recordedFeatureInteractions }
 }

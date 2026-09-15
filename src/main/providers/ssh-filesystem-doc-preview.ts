@@ -18,6 +18,7 @@ export async function readSshDocPreviewFile(
     if (isMethodNotFoundError(error)) {
       throw new Error(REMOTE_DOC_PREVIEW_UPDATE_REQUIRED)
     }
+
     throw error
   }
 }

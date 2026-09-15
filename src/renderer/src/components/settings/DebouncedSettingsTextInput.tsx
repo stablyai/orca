@@ -25,6 +25,7 @@ export function DebouncedSettingsTextInput({
   ...inputProps
 }: DebouncedSettingsTextInputProps): React.JSX.Element {
   const draft = useDebouncedSettingsTextDraft({ value, commit })
+
   return (
     <Input
       {...inputProps}

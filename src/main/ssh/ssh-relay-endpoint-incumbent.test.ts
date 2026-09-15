@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RELAY_LSOF_PROBE_JS } from '../../shared/child-process/posix-lsof-probe'
 
 const execCommand = vi.fn()
+
 vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: (...args: unknown[]) => execCommand(...args),
   isUnconfirmedSshCommandTermination: (error: unknown) =>
@@ -25,7 +26,9 @@ import { getRemoteHostPlatform } from './ssh-remote-platform'
 const connection = {} as SshConnection
 
 const SOCK = '/home/u/.orca-remote/relay-0.1.0+aaaa/relay-deadbeef.sock'
+
 const POSIX_HOST = getRemoteHostPlatform('linux-x64')
+
 const WINDOWS_HOST = getRemoteHostPlatform('win32-x64')
 
 function probeOutput(lines: string[]): string {
@@ -43,6 +46,7 @@ describe('parseRelayEndpointIncumbentProbe', () => {
         'HOLDER=4242 yes 13 11'
       ])
     )
+
     expect(incumbent.verdict).toBe('live')
     expect(incumbent.evidence).toBe('accepted-connection')
     expect(incumbent.holders).toEqual([
@@ -55,6 +59,7 @@ describe('parseRelayEndpointIncumbentProbe', () => {
       SOCK,
       probeOutput(['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=lsof', 'HOLDER=91 yes 2 2'])
     )
+
     expect(incumbent.verdict).toBe('live')
     expect(incumbent.evidence).toBe('holder-process')
   })
@@ -64,6 +69,7 @@ describe('parseRelayEndpointIncumbentProbe', () => {
       SOCK,
       probeOutput(['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=lsof'])
     )
+
     expect(incumbent.verdict).toBe('exited')
     expect(incumbent.evidence).toBe('no-holder')
     expect(incumbent.socketPresent).toBe(true)
@@ -74,6 +80,7 @@ describe('parseRelayEndpointIncumbentProbe', () => {
       SOCK,
       probeOutput(['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=unavailable'])
     )
+
     expect(incumbent.verdict).toBe('unverifiable')
     expect(incumbent.holdersEnumerable).toBe(false)
   })
@@ -83,6 +90,7 @@ describe('parseRelayEndpointIncumbentProbe', () => {
       SOCK,
       probeOutput(['PRESENT=yes', 'LISTEN=unknown', 'HOLDERS_SOURCE=lsof'])
     )
+
     expect(incumbent.verdict).toBe('unverifiable')
   })
 
@@ -103,6 +111,7 @@ describe('parseRelayEndpointIncumbentProbe', () => {
         'HOLDER=- no unknown unknown'
       ])
     )
+
     expect(incumbent.holders).toEqual([])
     expect(incumbent.verdict).toBe('exited')
   })
@@ -117,6 +126,7 @@ describe('parseRelayEndpointIncumbentProbe', () => {
         'HOLDER=7 yes unknown unknown'
       ])
     ).holders
+
     expect(holder.childCount).toBeNull()
     expect(holder.unrecognizedChildCount).toBeNull()
   })
@@ -126,6 +136,7 @@ describe('parseRelayEndpointIncumbentProbe', () => {
       SOCK,
       probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=7 yes 0'])
     )
+
     expect(incumbent.holders[0].unrecognizedChildCount).toBeNull()
     expect(isReapableRelayHusk(incumbent)).toBe(false)
   })
@@ -149,12 +160,14 @@ describe('probeRelayEndpointIncumbent', () => {
     execCommand.mockRejectedValueOnce(
       Object.assign(new Error('lsof timed out after 5s'), { sshChannelCloseConfirmed: true })
     )
+
     const incumbent = await probeRelayEndpointIncumbent(
       connection,
       POSIX_HOST,
       '/usr/bin/node',
       SOCK
     )
+
     expect(incumbent.verdict).toBe('unverifiable')
     expect(incumbent.holdersEnumerable).toBe(false)
     expect(incumbent.holders).toEqual([])
@@ -164,6 +177,7 @@ describe('probeRelayEndpointIncumbent', () => {
     const unconfirmed = Object.assign(new Error('remote channel close was not confirmed'), {
       sshChannelCloseConfirmed: false
     })
+
     execCommand.mockRejectedValueOnce(unconfirmed)
 
     await expect(
@@ -204,6 +218,7 @@ describe('withHandshakeRefusalEvidence', () => {
       SOCK,
       probeOutput(['PRESENT=yes', 'LISTEN=unknown', 'HOLDERS_SOURCE=unavailable'])
     )
+
     const incumbent = withHandshakeRefusalEvidence(probed)
     expect(incumbent.verdict).toBe('live')
     expect(incumbent.evidence).toBe('handshake-refusal')
@@ -215,6 +230,7 @@ describe('withHandshakeRefusalEvidence', () => {
       SOCK,
       probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof'])
     )
+
     expect(withHandshakeRefusalEvidence(probed).evidence).toBe('accepted-connection')
   })
 })
@@ -242,6 +258,7 @@ describe('isReapableRelayHusk', () => {
       SOCK,
       probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=500 yes 2 0'])
     )
+
     expect(withServices.holders[0].childCount).toBe(2)
     expect(isReapableRelayHusk(withServices)).toBe(true)
   })
@@ -297,10 +314,12 @@ describe('describeRelayEndpointIncumbent', () => {
       SOCK,
       probeOutput(['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=lsof'])
     )
+
     const unknown = parseRelayEndpointIncumbentProbe(
       SOCK,
       probeOutput(['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=unavailable'])
     )
+
     expect(describeRelayEndpointIncumbent(none)).toContain('holders=none')
     expect(describeRelayEndpointIncumbent(unknown)).toContain('holders=unenumerable')
   })

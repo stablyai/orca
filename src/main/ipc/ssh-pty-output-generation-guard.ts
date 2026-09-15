@@ -35,7 +35,9 @@ export class SshPtyOutputGenerationGuard {
     ) {
       throw outputIntakeError('ssh_output_invalid_event')
     }
+
     this.validate(event)
+
     if (this.sealedPtys.has(sshPtyGenerationKey(event.id, event.providerGeneration))) {
       throw outputIntakeError('ssh_output_after_exit')
     }
@@ -44,9 +46,11 @@ export class SshPtyOutputGenerationGuard {
   sealExit(event: SshPtyOutputExitEvent): void {
     this.validate(event)
     const key = sshPtyGenerationKey(event.id, event.providerGeneration)
+
     if (this.sealedPtys.has(key)) {
       throw outputIntakeError('ssh_output_duplicate_exit')
     }
+
     this.sealedPtys.add(key)
   }
 
@@ -54,14 +58,19 @@ export class SshPtyOutputGenerationGuard {
     if (this.isDisposed()) {
       throw outputIntakeError('ssh_output_intake_disposed')
     }
+
     if (this.closedGenerations.has(event.providerGeneration)) {
       throw outputIntakeError('ssh_output_stale_generation')
     }
+
     const generation = this.latestGenerationByPty.get(event.id)
+
     if (generation !== undefined && event.providerGeneration < generation) {
       throw outputIntakeError('ssh_output_stale_generation')
     }
+
     const incarnation = this.incarnationByPty.get(event.id)
+
     if (
       generation === event.providerGeneration &&
       incarnation !== undefined &&
@@ -69,6 +78,7 @@ export class SshPtyOutputGenerationGuard {
     ) {
       throw outputIntakeError('ssh_output_stale_incarnation')
     }
+
     if (generation === undefined || event.providerGeneration > generation) {
       this.latestGenerationByPty.set(event.id, event.providerGeneration)
       this.incarnationByPty.set(event.id, event.ptyIncarnation)
@@ -77,6 +87,7 @@ export class SshPtyOutputGenerationGuard {
 
   closeGeneration(providerGeneration: number): void {
     this.closedGenerations.add(providerGeneration)
+
     for (const [ptyId, generation] of this.latestGenerationByPty) {
       if (generation === providerGeneration) {
         this.latestGenerationByPty.delete(ptyId)
@@ -84,7 +95,9 @@ export class SshPtyOutputGenerationGuard {
         this.sealedPtys.delete(sshPtyGenerationKey(ptyId, generation))
       }
     }
+
     const prefix = `${providerGeneration}\0`
+
     for (const key of this.sealedPtys) {
       if (key.startsWith(prefix)) {
         this.sealedPtys.delete(key)

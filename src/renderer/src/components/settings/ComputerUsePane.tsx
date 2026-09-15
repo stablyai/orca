@@ -11,6 +11,7 @@ import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { ComputerUseSkillSetupPanel } from './ComputerUseSkillSetupPanel'
 import { translate } from '@/i18n/i18n'
+
 export { getComputerUsePaneSearchEntries } from './computer-use-search'
 
 type PermissionDefinition = {
@@ -57,6 +58,7 @@ function statusClass(status: ComputerUsePermissionStatus | undefined): string {
   if (status === 'granted') {
     return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
   }
+
   return 'border-border bg-muted text-muted-foreground'
 }
 
@@ -76,14 +78,18 @@ export function ComputerUsePane(): React.JSX.Element {
     () => new Map(states.map((state) => [state.id, state.status] as const)),
     [states]
   )
+
   const grantedCount = PERMISSIONS.filter(
     (permission) => stateById.get(permission.id) === 'granted'
   ).length
+
   const allGranted = grantedCount === PERMISSIONS.length
   const checking = loading && states.length === 0
   const setupUnavailable = helperUnavailableReason !== null
+
   const resetAccessDisabled =
     resetting || loading || states.length === 0 || pendingId !== null || setupUnavailable
+
   const summaryTitle = checking
     ? translate(
         'auto.components.settings.computerUseSummary.checkingTitle',
@@ -103,7 +109,9 @@ export function ComputerUsePane(): React.JSX.Element {
             'auto.components.settings.computerUseSummary.permissionsTitle',
             'Finish setup to use local apps.'
           )
+
   const missingCount = PERMISSIONS.length - grantedCount
+
   const summaryDescription = checking
     ? translate(
         'auto.components.settings.computerUseSummary.checkingDescription',
@@ -133,6 +141,7 @@ export function ComputerUsePane(): React.JSX.Element {
 
   useEffect(() => {
     mountedRef.current = true
+
     return () => {
       mountedRef.current = false
       permissionOperationSequence.current += 1
@@ -146,14 +155,18 @@ export function ComputerUsePane(): React.JSX.Element {
 
     const operationId = ++permissionOperationSequence.current
     setLoading(true)
+
     try {
       const result = await window.api.computerUsePermissions.getStatus()
+
       if (operationId !== permissionOperationSequence.current) {
         return
       }
+
       if (!mountedRef.current) {
         return
       }
+
       setPlatform(result.platform)
       setStates(result.permissions)
       setHelperUnavailableReason(result.helperUnavailableReason)
@@ -161,6 +174,7 @@ export function ComputerUsePane(): React.JSX.Element {
       if (operationId !== permissionOperationSequence.current || !mountedRef.current) {
         return
       }
+
       toast.error(
         error instanceof Error
           ? error.message
@@ -186,18 +200,23 @@ export function ComputerUsePane(): React.JSX.Element {
     const onFocus = (): void => {
       void refresh()
     }
+
     window.addEventListener('focus', onFocus)
+
     return () => window.removeEventListener('focus', onFocus)
   }, [refresh])
 
   const openPermission = async (id: ComputerUsePermissionId): Promise<void> => {
     useAppStore.getState().recordFeatureInteraction('computer-use-setup')
     setPendingId(id)
+
     try {
       const result = await window.api.computerUsePermissions.openSetup({ id })
+
       if (!mountedRef.current) {
         return
       }
+
       if (result.launchedHelper) {
         toast.message(
           translate(
@@ -244,14 +263,18 @@ export function ComputerUsePane(): React.JSX.Element {
     resettingRef.current = true
     const operationId = ++permissionOperationSequence.current
     setResetting(true)
+
     try {
       const result = await window.api.computerUsePermissions.reset()
+
       if (operationId !== permissionOperationSequence.current) {
         return
       }
+
       if (!mountedRef.current) {
         return
       }
+
       setPlatform(result.platform)
       setStates(result.permissions)
       setHelperUnavailableReason(result.helperUnavailableReason)
@@ -265,6 +288,7 @@ export function ComputerUsePane(): React.JSX.Element {
       if (operationId !== permissionOperationSequence.current || !mountedRef.current) {
         return
       }
+
       toast.error(
         error instanceof Error
           ? error.message

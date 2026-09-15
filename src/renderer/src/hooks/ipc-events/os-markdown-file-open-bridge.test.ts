@@ -19,17 +19,23 @@ let storeState: {
 }
 
 vi.mock('../../store', () => ({ useAppStore: { getState: () => storeState } }))
+
 vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
   isFloatingWorkspacePanelVisible: mocks.isFloatingWorkspacePanelVisible
 }))
+
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
 
 type MarkdownFileOpenListener = (documents: MarkdownDocument[]) => void
 
 let frames: FrameRequestCallback[] = []
+
 let dispatchEvent = vi.fn()
+
 let unhandledRejections: unknown[] = []
+
 const recordUnhandledRejection = (reason: unknown): void => void unhandledRejections.push(reason)
 
 function markdownDocument(overrides: Partial<MarkdownDocument> = {}): MarkdownDocument {
@@ -51,6 +57,7 @@ function stubPreload(ui: Record<string, unknown>): void {
 function runFrames(): void {
   const pending = frames
   frames = []
+
   for (const frame of pending) {
     frame(0)
   }
@@ -115,6 +122,7 @@ describe('registerOsMarkdownFileOpenBridge', () => {
     stubPreload({
       onOpenMarkdownFiles: (next: MarkdownFileOpenListener) => {
         listeners.push(next)
+
         return unsubscribe
       },
       consumePendingMarkdownFileOpens: () => Promise.resolve([])
@@ -230,6 +238,7 @@ describe('registerOsMarkdownFileOpenBridge', () => {
     stubPreload({
       onOpenMarkdownFiles: (next: MarkdownFileOpenListener) => {
         listeners.push(next)
+
         return () => {}
       },
       consumePendingMarkdownFileOpens: () => Promise.resolve([])

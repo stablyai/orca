@@ -7,6 +7,7 @@ import { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
 import type { BrowserHostRuntimePageIntent } from './browser-host-page-reconciliation-plan'
 
 const authorityRuntimeId = 'runtime-new'
+
 const authorityEpoch = 'epoch-new'
 
 // Adoption is the only caller of the orchestrator, and it never rethrows: a run that refuses or
@@ -81,6 +82,7 @@ describe('browser host page reconciliation orchestration', () => {
 
     releaseDelivery()
     host.disconnect()
+
     const replacement = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-b',
@@ -92,6 +94,7 @@ describe('browser host page reconciliation orchestration', () => {
       pageReconciliationProtocolVersion: 1,
       leaseReconnectProtocolVersion: 1
     })
+
     const replacementIdentity = leaseIdentity(replacement.lease)
     leases.attachCommandDelivery(replacementIdentity, (event) => events.push(event))
     const retry = leases.adoptClientPages(replacementIdentity, [reclaimIntent('page-a', 9)])
@@ -132,6 +135,7 @@ describe('browser host page reconciliation orchestration', () => {
 
     releaseDelivery()
     host.disconnect()
+
     const replacement = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-b',
@@ -143,6 +147,7 @@ describe('browser host page reconciliation orchestration', () => {
       pageReconciliationProtocolVersion: 1,
       leaseReconnectProtocolVersion: 1
     })
+
     const replacementIdentity = leaseIdentity(replacement.lease)
     leases.attachCommandDelivery(replacementIdentity, (event) => events.push(event))
     const retry = leases.adoptClientPages(replacementIdentity, [replacementIntent('page-a', 9)])
@@ -195,9 +200,11 @@ describe('browser host page reconciliation orchestration', () => {
     const { leases, identity, events, host, releaseDelivery } = setup(pageInventory)
     leases.grantExecutionHost(identity, 'native:runtime-new:1')
     const controller = new AbortController()
+
     const first = leases.adoptClientPages(identity, [reclaimIntent('page-a', 8)], {
       signal: controller.signal
     })
+
     await vi.waitFor(() => expect(events).toHaveLength(1))
     const unknown = events[0]!
     controller.abort(new Error('lost result'))
@@ -205,6 +212,7 @@ describe('browser host page reconciliation orchestration', () => {
 
     releaseDelivery()
     host.disconnect()
+
     const secondHost = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-b',
@@ -216,10 +224,13 @@ describe('browser host page reconciliation orchestration', () => {
       pageReconciliationProtocolVersion: 1,
       leaseReconnectProtocolVersion: 1
     })
+
     const secondIdentity = leaseIdentity(secondHost.lease)
+
     const releaseSecondDelivery = leases.attachCommandDelivery(secondIdentity, (event) =>
       events.push(event)
     )
+
     expect(events[1]).toEqual(unknown)
     settle(leases, secondIdentity, events[1]!, { status: 'completed' }, 'connection-b')
     await expect(
@@ -230,6 +241,7 @@ describe('browser host page reconciliation orchestration', () => {
 
     releaseSecondDelivery()
     secondHost.disconnect()
+
     const thirdHost = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-c',
@@ -241,6 +253,7 @@ describe('browser host page reconciliation orchestration', () => {
       pageReconciliationProtocolVersion: 1,
       leaseReconnectProtocolVersion: 1
     })
+
     const thirdIdentity = leaseIdentity(thirdHost.lease)
     leases.attachCommandDelivery(thirdIdentity, (event) => events.push(event))
     const recovered = leases.adoptClientPages(thirdIdentity, [reclaimIntent('page-a', 9)])
@@ -257,6 +270,7 @@ describe('browser host page reconciliation orchestration', () => {
     leases.grantExecutionHost(identity, 'native:runtime-new:1')
     const controller = new AbortController()
     let settled = false
+
     const adopting = leases
       .adoptClientPages(identity, [reclaimIntent('page-a', 8), reclaimIntent('page-b', 9)], {
         maxConcurrency: 1,
@@ -265,6 +279,7 @@ describe('browser host page reconciliation orchestration', () => {
       .then(() => {
         settled = true
       })
+
     await vi.waitFor(() => expect(events).toHaveLength(1))
 
     host.disconnect()
@@ -276,6 +291,7 @@ describe('browser host page reconciliation orchestration', () => {
     await adopting
 
     releaseDelivery()
+
     const replacement = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'connection-b',
@@ -287,6 +303,7 @@ describe('browser host page reconciliation orchestration', () => {
       pageReconciliationProtocolVersion: 1,
       leaseReconnectProtocolVersion: 1
     })
+
     const replacementIdentity = leaseIdentity(replacement.lease)
     leases.attachCommandDelivery(replacementIdentity, (event) => events.push(event))
     expect(events[1]).toEqual(events[0])
@@ -319,9 +336,11 @@ describe('browser host page reconciliation orchestration', () => {
   it('is single-flight and emits nothing for a legacy lease', async () => {
     const negotiated = setup([oldPage('page-a')])
     negotiated.leases.grantExecutionHost(negotiated.identity, 'native:runtime-new:1')
+
     const first = negotiated.leases.adoptClientPages(negotiated.identity, [
       reclaimIntent('page-a', 8)
     ])
+
     await vi.waitFor(() => expect(negotiated.events).toHaveLength(1))
     await expect(
       negotiated.leases.adoptClientPages(negotiated.identity, [reclaimIntent('page-a', 9)])
@@ -333,6 +352,7 @@ describe('browser host page reconciliation orchestration', () => {
     await expect(first).resolves.toEqual(['page-a'])
 
     const leases = registry()
+
     const host = leases.attach({
       browserHostClientId: 'host-a',
       connectionId: 'legacy-connection',
@@ -340,6 +360,7 @@ describe('browser host page reconciliation orchestration', () => {
       hostCapabilities: ['webview'],
       pageCommandProtocolVersion: 1
     })
+
     const identity = leaseIdentity(host.lease)
     const delivery = vi.fn()
     leases.attachCommandDelivery(identity, delivery)
@@ -356,6 +377,7 @@ function registry(): BrowserHostLeaseRegistry {
 
 function setup(pageInventory: BrowserClientHostedPageInventory[]) {
   const leases = registry()
+
   const host = leases.attach({
     browserHostClientId: 'host-a',
     connectionId: 'connection-a',
@@ -367,9 +389,11 @@ function setup(pageInventory: BrowserClientHostedPageInventory[]) {
     pageReconciliationProtocolVersion: 1,
     leaseReconnectProtocolVersion: 1
   })
+
   const identity = leaseIdentity(host.lease)
   const events: BrowserClientHostCommandEvent[] = []
   const releaseDelivery = leases.attachCommandDelivery(identity, (event) => events.push(event))
+
   return { leases, host, identity, events, releaseDelivery }
 }
 

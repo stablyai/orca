@@ -8,10 +8,12 @@ import {
   verifyWindowsTreeKillTarget,
   WINDOWS_ROOT_IDENTITY_TIMEOUT_MS
 } from './windows-pty-root-identity'
+
 // A real snapshot always contains the process doing the querying; the reader
 // rejects a table without it, because that is what a blocked
 // CreateToolhelp32Snapshot looks like (an empty list, not an error).
 const SELF_PROCESS_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
+
 const withSelf = <T>(rows: readonly T[]): (T | typeof SELF_PROCESS_ROW)[] => [
   SELF_PROCESS_ROW,
   ...rows
@@ -72,6 +74,7 @@ describe('classifyWindowsTreeKillTarget', () => {
       link(13, 12),
       link(4242, 13)
     ]
+
     expect(classifyWindowsTreeKillTarget(4242, rows, ORCA_PID)).toBe('foreign')
   })
 
@@ -129,6 +132,7 @@ describe('verifyWindowsTreeKillTarget', () => {
     const readRows = vi.fn(() => {
       throw new Error('spawn EPERM')
     })
+
     await expect(
       verifyWindowsTreeKillTarget(4242, { readRows, ownerPid: ORCA_PID, platform: 'win32' })
     ).resolves.toBe('unknown')
@@ -136,13 +140,16 @@ describe('verifyWindowsTreeKillTarget', () => {
 
   it('does not let a wedged process query block teardown past the deadline', async () => {
     vi.useFakeTimers()
+
     try {
       const readRows = vi.fn(() => new Promise<never>(() => {}))
+
       const pending = verifyWindowsTreeKillTarget(4242, {
         readRows,
         ownerPid: ORCA_PID,
         platform: 'win32'
       })
+
       await vi.advanceTimersByTimeAsync(WINDOWS_ROOT_IDENTITY_TIMEOUT_MS)
       await expect(pending).resolves.toBe('unknown')
     } finally {

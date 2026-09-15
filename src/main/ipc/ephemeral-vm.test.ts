@@ -7,6 +7,7 @@ import { listEnvironments } from '../../shared/runtime-environment-store'
 import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
 
 const handlers = new Map<string, (_event: unknown, args: never) => unknown>()
+
 const {
   handleMock,
   removeHandlerMock,
@@ -58,6 +59,7 @@ afterEach(() => {
 function makeDir(prefix: string): string {
   const dir = mkdtempSync(join(tmpdir(), prefix))
   tempDirs.push(dir)
+
   return dir
 }
 
@@ -78,7 +80,9 @@ function makeStore(repoPath: string) {
     badgeColor: '#000',
     addedAt: 0
   }
+
   let activeRuntimeEnvironmentId: string | null = null
+
   return {
     getRepo: vi.fn((repoId: string) => (repoId === 'repo-1' ? repo : null)),
     getRepos: vi.fn(() => [repo]),
@@ -153,6 +157,7 @@ describe('registerEphemeralVmHandlers', () => {
 
     const store = makeStore(repoPath)
     registerEphemeralVmHandlers(store as never)
+
     const result = await handlers.get('ephemeralVm:listRecipes')?.(null, {
       repoId: 'repo-1'
     } as never)
@@ -219,6 +224,7 @@ describe('registerEphemeralVmHandlers', () => {
         '    create: repo-create'
       ].join('\n')
     )
+
     const pluginService = pluginServiceWithRecipes([
       {
         pluginKey: 'orca-samples.recipes',
@@ -231,6 +237,7 @@ describe('registerEphemeralVmHandlers', () => {
     ])
 
     registerEphemeralVmHandlers(makeStore(repoPath) as never, pluginService as never)
+
     const result = (await handlers.get('ephemeralVm:listRecipes')?.(null, {
       repoId: 'repo-1'
     } as never)) as { recipes: { id: string; name: string }[] }
@@ -259,6 +266,7 @@ describe('registerEphemeralVmHandlers', () => {
       )})`
     )
     writeFileSync(destroyPath, "require('fs').writeFileSync('plugin-cleaned.txt', 'yes')")
+
     const registrations = [
       {
         pluginKey: 'orca-samples.recipes',
@@ -270,6 +278,7 @@ describe('registerEphemeralVmHandlers', () => {
         }
       }
     ]
+
     const pluginService = pluginServiceWithRecipes(registrations)
     registerEphemeralVmHandlers(makeStore(repoPath) as never, pluginService as never)
 
@@ -277,7 +286,9 @@ describe('registerEphemeralVmHandlers', () => {
       repoId: 'repo-1',
       recipeId: 'plugin-cloud'
     } as never)) as { ok: true; runtime: { id: string; recipe?: { id: string } } }
+
     registrations.splice(0)
+
     const cleaned = await handlers.get('ephemeralVm:cleanup')?.(null, {
       runtimeId: provisioned.runtime.id
     } as never)
@@ -310,6 +321,7 @@ describe('registerEphemeralVmHandlers', () => {
         projectRoot: '/workspace/repo'
       }
     })
+
     const pluginService = pluginServiceWithRecipes([
       {
         pluginKey: 'orca-samples.recipes',
@@ -321,6 +333,7 @@ describe('registerEphemeralVmHandlers', () => {
         }
       }
     ])
+
     registerEphemeralVmHandlers(makeStore(repoPath) as never, pluginService as never)
 
     const cleaned = await handlers.get('ephemeralVm:cleanup')?.(null, {
@@ -364,6 +377,7 @@ describe('registerEphemeralVmHandlers', () => {
 
     const store = makeStore(repoPath)
     registerEphemeralVmHandlers(store as never)
+
     const result = (await handlers.get('ephemeralVm:provision')?.(null, {
       repoId: 'repo-1',
       recipeId: 'cloud-sandbox',
@@ -398,6 +412,7 @@ describe('registerEphemeralVmHandlers', () => {
       runtimeId: result.runtime?.id,
       workspaceId: 'repo-1::/workspace/repo/worktree'
     } as never)
+
     expect(attached).toEqual(
       expect.objectContaining({
         id: result.runtime?.id,
@@ -406,9 +421,11 @@ describe('registerEphemeralVmHandlers', () => {
     )
 
     store.updateSettings({ activeRuntimeEnvironmentId: result.environment!.id })
+
     const cleaned = await handlers.get('ephemeralVm:cleanup')?.(null, {
       runtimeId: result.runtime?.id
     } as never)
+
     expect(cleaned).toEqual(expect.objectContaining({ status: 'cleaned' }))
     expect(listEnvironments(userDataPath)).toEqual([])
     expect(store.getSettings().activeRuntimeEnvironmentId).toBe(result.environment!.id)
@@ -452,6 +469,7 @@ describe('registerEphemeralVmHandlers', () => {
     )
 
     registerEphemeralVmHandlers(makeStore(repoPath) as never)
+
     const result = (await handlers.get('ephemeralVm:provision')?.(null, {
       repoId: 'repo-1',
       recipeId: 'cloud-sandbox',
@@ -536,6 +554,7 @@ describe('registerEphemeralVmHandlers', () => {
     )
 
     registerEphemeralVmHandlers(makeStore(repoPath) as never)
+
     const provisioned = (await handlers.get('ephemeralVm:provision')?.(null, {
       repoId: 'repo-1',
       recipeId: 'cloud-sandbox'
@@ -586,6 +605,7 @@ describe('registerEphemeralVmHandlers', () => {
     const failed = await handlers.get('ephemeralVm:cleanup')?.(null, {
       runtimeId: 'runtime-cleanup-retry'
     } as never)
+
     expect(failed).toMatchObject({
       status: 'cleanup_failed',
       cleanupStatus: 'succeeded',
@@ -593,9 +613,11 @@ describe('registerEphemeralVmHandlers', () => {
     })
 
     removeRuntimeOwnedSshTargetMock.mockResolvedValue(undefined)
+
     const cleaned = await handlers.get('ephemeralVm:cleanup')?.(null, {
       runtimeId: 'runtime-cleanup-retry'
     } as never)
+
     expect(cleaned).toMatchObject({
       status: 'cleaned',
       cleanupStatus: 'succeeded',
@@ -612,12 +634,14 @@ describe('registerEphemeralVmHandlers', () => {
     const startPath = join(repoPath, 'scripts', 'start.js')
     const suspendPath = join(repoPath, 'scripts', 'suspend.js')
     const resumePath = join(repoPath, 'scripts', 'resume.js')
+
     const resumedPairingCode = encodePairingOffer({
       v: PAIRING_OFFER_VERSION,
       endpoint: 'wss://resumed.example.com',
       deviceToken: 'resumed-token',
       publicKeyB64: 'resumed-public-key'
     })
+
     writeFileSync(
       startPath,
       [
@@ -664,10 +688,12 @@ describe('registerEphemeralVmHandlers', () => {
     )
 
     registerEphemeralVmHandlers(makeStore(repoPath) as never)
+
     const provisioned = (await handlers.get('ephemeralVm:provision')?.(null, {
       repoId: 'repo-1',
       recipeId: 'cloud-sandbox'
     } as never)) as { ok: true; runtime: { id: string }; environment: { id: string } }
+
     await handlers.get('ephemeralVm:attachWorkspace')?.(null, {
       runtimeId: provisioned.runtime.id,
       workspaceId: 'workspace-1'
@@ -676,12 +702,14 @@ describe('registerEphemeralVmHandlers', () => {
     const runningResume = await handlers.get('ephemeralVm:resumeWorkspace')?.(null, {
       workspaceId: 'workspace-1'
     } as never)
+
     expect(runningResume).toEqual(expect.objectContaining({ status: 'running' }))
     expect(existsSync(join(repoPath, 'resume-mode.txt'))).toBe(false)
 
     const suspended = await handlers.get('ephemeralVm:suspendWorkspace')?.(null, {
       workspaceId: 'workspace-1'
     } as never)
+
     expect(suspended).toEqual(expect.objectContaining({ status: 'suspended' }))
     expect(readFileSync(join(repoPath, 'suspend-mode.txt'), 'utf8')).toBe('suspend')
 
@@ -689,9 +717,11 @@ describe('registerEphemeralVmHandlers', () => {
       const environment = listEnvironments(userDataPath).find((entry) => entry.id === environmentId)
       expect(environment?.endpoints[0]?.endpoint).toBe('wss://resumed.example.com')
     })
+
     const resumed = await handlers.get('ephemeralVm:resumeWorkspace')?.(null, {
       workspaceId: 'workspace-1'
     } as never)
+
     expect(resumed).toEqual(
       expect.objectContaining({
         status: 'running',
@@ -699,9 +729,11 @@ describe('registerEphemeralVmHandlers', () => {
       })
     )
     expect(readFileSync(join(repoPath, 'resume-mode.txt'), 'utf8')).toBe('resume')
+
     const environment = listEnvironments(userDataPath).find(
       (entry) => entry.id === provisioned.environment.id
     )
+
     expect(environment?.endpoints[0]?.endpoint).toBe('wss://resumed.example.com')
     expect(invalidateRuntimeEnvironmentTransportMock).toHaveBeenCalledWith(
       provisioned.environment.id
@@ -738,11 +770,13 @@ describe('registerEphemeralVmHandlers', () => {
     )
 
     registerEphemeralVmHandlers(makeStore(repoPath) as never)
+
     const provisioned = (await handlers.get('ephemeralVm:provision')?.(null, {
       repoId: 'repo-1',
       recipeId: 'cloud-sandbox',
       workspaceName: 'Fix Login Race'
     } as never)) as { ok: true; runtime: { id: string } }
+
     const result = await handlers.get('ephemeralVm:getCleanupCommand')?.(null, {
       runtimeId: provisioned.runtime.id
     } as never)
@@ -787,6 +821,7 @@ describe('registerEphemeralVmHandlers', () => {
 
     registerEphemeralVmHandlers(makeStore(repoPath) as never)
     const sender = { send: vi.fn() }
+
     const provision = handlers.get('ephemeralVm:provision')?.({ sender }, {
       repoId: 'repo-1',
       recipeId: 'cloud-sandbox',
@@ -801,9 +836,11 @@ describe('registerEphemeralVmHandlers', () => {
         chunk: 'creating sandbox\n'
       })
     )
+
     const cancelled = await handlers.get('ephemeralVm:cancelProvision')?.(null, {
       provisionId: 'provision-1'
     } as never)
+
     const result = await provision
 
     expect(cancelled).toEqual({ cancelled: true })
@@ -837,6 +874,7 @@ describe('registerEphemeralVmHandlers', () => {
     )
 
     registerEphemeralVmHandlers(makeStore(repoPath) as never)
+
     const result = (await handlers.get('ephemeralVm:provision')?.(null, {
       repoId: 'repo-1',
       recipeId: 'cloud-sandbox'

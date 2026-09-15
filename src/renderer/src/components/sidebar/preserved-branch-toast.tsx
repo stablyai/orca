@@ -35,6 +35,7 @@ function getPreservedBranchDescription(
       { value0: branch }
     )
   }
+
   return isWorkspace
     ? translate(
         'auto.store.slices.worktrees.3b57982bf6',
@@ -85,6 +86,7 @@ export function showPreservedBranchToast(
 ): void {
   const preservedBranch = result?.preservedBranch
   const branch = preservedBranch?.branchName
+
   if (!branch) {
     return
   }
@@ -93,10 +95,13 @@ export function showPreservedBranchToast(
   const targetName = worktree?.displayName?.trim()
   const expectedHead = preservedBranch.head
   const toastId = preservedBranchToastId(branch, expectedHead)
+
   const forceDeleteLabel = expectedHead
     ? translate('auto.store.slices.worktrees.e50495aae6', 'Force Delete Branch')
     : undefined
+
   const description = getPreservedBranchDescription(branch, targetName, isWorkspace)
+
   const forceDelete = expectedHead
     ? (): void => {
         onForceDelete(branch, expectedHead)

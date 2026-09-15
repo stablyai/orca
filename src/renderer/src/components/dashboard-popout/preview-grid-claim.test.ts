@@ -27,6 +27,7 @@ describe('createPreviewGridClaim', () => {
     dimension(box, 'clientHeight', 480)
     dimension(screen, 'offsetWidth', 0)
     dimension(screen, 'offsetHeight', 0)
+
     const claim = createPreviewGridClaim({
       ptyId: 'pty-1',
       container,
@@ -60,6 +61,7 @@ describe('createPreviewGridClaim', () => {
     dimension(box, 'clientHeight', 480)
     dimension(screen, 'offsetWidth', 800)
     dimension(screen, 'offsetHeight', 384)
+
     const claim = createPreviewGridClaim({
       ptyId: 'pty-1',
       container,
@@ -67,6 +69,7 @@ describe('createPreviewGridClaim', () => {
     })
 
     claim.schedule()
+
     for (let step = 1; step <= 10; step += 1) {
       await vi.advanceTimersByTimeAsync(100)
       dimension(box, 'clientWidth', 800 + step * 20)

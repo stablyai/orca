@@ -45,9 +45,11 @@ export function createWorktreeChangeRefreshQueue(
 
   const drain = async (repoId: string, state: RepoRefreshState): Promise<void> => {
     state.running = true
+
     try {
       while (!disposed && state.queue.length > 0) {
         const next = state.queue.shift()
+
         try {
           await handler(repoId, next?.renamed, {
             forceLocalOwner: next?.forceLocalOwner,
@@ -59,6 +61,7 @@ export function createWorktreeChangeRefreshQueue(
       }
     } finally {
       state.running = false
+
       if (disposed || state.queue.length === 0) {
         states.delete(repoId)
       } else {
@@ -77,7 +80,9 @@ export function createWorktreeChangeRefreshQueue(
       if (disposed) {
         return
       }
+
       let state = states.get(event.repoId)
+
       if (!state) {
         state = { running: false, queue: [] }
         states.set(event.repoId, state)
@@ -91,6 +96,7 @@ export function createWorktreeChangeRefreshQueue(
         })
       } else {
         const lastQueued = state.queue.at(-1)
+
         // Why: Windows/OneDrive can emit a burst for one checkout change. Keep a
         // trailing refresh, but do not fan out adjacent identical repo scans.
         // A differing forceLocalOwner is not identical — keep it as its own scan

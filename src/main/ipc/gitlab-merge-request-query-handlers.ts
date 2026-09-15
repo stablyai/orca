@@ -23,6 +23,7 @@ export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
       args: GitLabRepoSelectorArgs & { branch: string; linkedMRIid?: number | null }
     ) => {
       const repo = assertRegisteredRepo(args, store)
+
       return getMergeRequestForBranch(
         repo.path,
         args.branch,
@@ -35,6 +36,7 @@ export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
 
   ipcMain.handle('gitlab:mr', async (_event, args: GitLabRepoSelectorArgs & { iid: number }) => {
     const repo = assertRegisteredRepo(args, store)
+
     return getMergeRequest(
       repo.path,
       args.iid,
@@ -61,6 +63,7 @@ export function registerGitLabMergeRequestQueryHandlers(store: Store): void {
       const state = normalizeGitLabMRListState(args.state)
       const page = normalizeGitLabPositiveInteger(args.page, 1, 10_000)
       const perPage = normalizeGitLabPositiveInteger(args.perPage, 20, 100)
+
       return listMergeRequests(
         repo.path,
         state,

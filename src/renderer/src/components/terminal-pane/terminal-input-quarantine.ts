@@ -14,6 +14,7 @@
 /** Absolute cap from arming. A safety valve only — input must never wedge,
  *  even if the terminator never arrives and the pane keeps receiving data. */
 const QUARANTINE_MAX_MS = 5_000
+
 /** A gap this long proves the interrupted burst ended. Re-attach takes ~1.1s,
  *  so the tail arrives back-to-back (<100ms apart) while a human reacting to a
  *  recovered pane takes far longer — that gap is what separates the two. */
@@ -47,6 +48,7 @@ export function armTerminalInputQuarantine(tabId: string, now: number = Date.now
       quarantineByTabId.delete(otherTabId)
     }
   }
+
   quarantineByTabId.set(tabId, { armedAt: now, lastInputAt: null })
 }
 
@@ -65,21 +67,29 @@ export function shouldDropQuarantinedTerminalInput(
   now: number = Date.now()
 ): boolean {
   const entry = quarantineByTabId.get(tabId)
+
   if (!entry) {
     return false
   }
+
   if (now - entry.armedAt >= QUARANTINE_MAX_MS) {
     quarantineByTabId.delete(tabId)
+
     return false
   }
+
   if (entry.lastInputAt !== null && now - entry.lastInputAt >= QUARANTINE_IDLE_MS) {
     quarantineByTabId.delete(tabId)
+
     return false
   }
+
   entry.lastInputAt = now
+
   if (containsLineTerminator(data)) {
     quarantineByTabId.delete(tabId)
   }
+
   return true
 }
 

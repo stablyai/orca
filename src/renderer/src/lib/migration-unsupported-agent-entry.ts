@@ -12,6 +12,7 @@ export function migrationUnsupportedToAgentStatusEntry(
   entry: MigrationUnsupportedPtyEntry
 ): AgentStatusEntry | null {
   const cached = cachedMigrationUnsupportedEntries.get(entry)
+
   if (cached !== undefined) {
     return cached
   }
@@ -35,5 +36,6 @@ export function migrationUnsupportedToAgentStatusEntry(
       }
 
   cachedMigrationUnsupportedEntries.set(entry, converted)
+
   return converted
 }

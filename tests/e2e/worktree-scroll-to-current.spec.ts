@@ -7,6 +7,7 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 async function prepareSidebarForScrollTest(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
@@ -46,6 +47,7 @@ test.describe('Reveal active workspace button', () => {
   }, testInfo) => {
     const filterRepoPath = testInfo.outputPath('filter-repo')
     mkdirSync(filterRepoPath, { recursive: true })
+
     for (const args of [
       ['init', filterRepoPath],
       [
@@ -64,17 +66,22 @@ test.describe('Reveal active workspace button', () => {
       const result = await runProcess({ program: 'git', args })
       expect(result.code, result.stderr).toBe(0)
     }
+
     const filterRepoId = await orcaPage.evaluate(async (repoPath) => {
       const result = await window.api.repos.add({ path: repoPath })
+
       if ('error' in result) {
         throw new Error(result.error)
       }
+
       return result.repo.id
     }, filterRepoPath)
+
     await expect
       .poll(() =>
         orcaPage.evaluate(async (id) => {
           await window.__store!.getState().fetchRepos()
+
           return window.__store!.getState().repos.some((repo) => repo.id === id)
         }, filterRepoId)
       )
@@ -85,12 +92,14 @@ test.describe('Reveal active workspace button', () => {
     const targetId = await orcaPage.evaluate((repoPath) => {
       const state = window.__store!.getState()
       const repo = state.repos.find((candidate) => candidate.path === repoPath)
+
       return repo
         ? state.worktreesByRepo[repo.id]?.find(
             (worktree) => worktree.branch === 'refs/heads/e2e-secondary'
           )?.id
         : undefined
     }, testRepoPath)
+
     if (!targetId) {
       throw new Error('Seeded secondary worktree is missing')
     }
@@ -98,22 +107,28 @@ test.describe('Reveal active workspace button', () => {
     const targetRows = orcaPage.locator(
       `[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(targetId)}]`
     )
+
     const targetRow = targetRows.first()
     await expect(targetRows.and(orcaPage.getByRole('option'))).toHaveCount(1)
     const revealButton = orcaPage.getByRole('button', { name: 'Reveal active workspace' })
 
     await orcaPage.evaluate((targetId) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       const state = store.getState()
+
       const target = Object.values(state.worktreesByRepo)
         .flat()
         .find((worktree) => worktree.id === targetId)
+
       if (!target) {
         throw new Error(`Target workspace ${targetId} not found`)
       }
+
       store.setState({
         activeRepoId: target.repoId,
         activeWorktreeId: target.id,
@@ -142,9 +157,11 @@ test.describe('Reveal active workspace button', () => {
         () =>
           orcaPage.evaluate(() => {
             const store = window.__store
+
             if (!store) {
               throw new Error('window.__store is not available')
             }
+
             return store.getState().filterRepoIds
           }),
         {
@@ -162,20 +179,24 @@ test.describe('Reveal active workspace button', () => {
 
     const targetId = await orcaPage.evaluate(() => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
 
       const state = store.getState()
       const repo = state.repos[0]
+
       if (!repo) {
         throw new Error('Expected a seeded e2e repo')
       }
 
       const now = Date.now()
       const seededWorktrees = state.worktreesByRepo[repo.id] ?? []
+
       const syntheticWorktrees = Array.from({ length: 60 }, (_, index) => {
         const suffix = String(index).padStart(2, '0')
+
         return {
           id: `${repo.id}::/virtual-reveal-${suffix}`,
           instanceId: `virtual-reveal-${suffix}`,
@@ -197,7 +218,9 @@ test.describe('Reveal active workspace button', () => {
           isMainWorktree: false
         }
       })
+
       const target = syntheticWorktrees.at(-1)
+
       if (!target) {
         throw new Error('Expected a synthetic target worktree')
       }
@@ -213,6 +236,7 @@ test.describe('Reveal active workspace button', () => {
           [repo.id]: [...seededWorktrees, ...syntheticWorktrees]
         }
       })
+
       return target.id
     })
 
@@ -222,6 +246,7 @@ test.describe('Reveal active workspace button', () => {
         () =>
           orcaPage.evaluate(() => {
             const scroller = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
+
             return scroller?.scrollTop ?? null
           }),
         { timeout: 10_000, message: 'sidebar scroller did not mount' }
@@ -237,14 +262,18 @@ test.describe('Reveal active workspace button', () => {
         () =>
           orcaPage.evaluate((targetId) => {
             const scroller = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
+
             const target = [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
               (candidate) => candidate.dataset.worktreeId === targetId
             )
+
             if (!scroller || !target) {
               return false
             }
+
             const scrollerBounds = scroller.getBoundingClientRect()
             const targetBounds = target.getBoundingClientRect()
+
             return (
               targetBounds.top >= scrollerBounds.top - 1 &&
               targetBounds.bottom <= scrollerBounds.bottom + 1
@@ -259,9 +288,11 @@ test.describe('Reveal active workspace button', () => {
     await expect(revealButton).toBeEnabled()
 
     await revealButton.click()
+
     const targetRow = orcaPage
       .locator(`[data-worktree-sidebar] [data-worktree-id=${JSON.stringify(targetId)}]`)
       .first()
+
     await expect(targetRow).toBeVisible()
     await expect(targetRow).toHaveAttribute('data-scroll-reveal-highlight', 'true')
   })
@@ -273,13 +304,16 @@ test.describe('Reveal active workspace button', () => {
 
     const folderWorktreeId = await orcaPage.evaluate(() => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
 
       const now = Date.now()
+
       const folderWorkspaces = Array.from({ length: 36 }, (_, index) => {
         const suffix = String(index).padStart(2, '0')
+
         return {
           id: `reveal-folder-workspace-${suffix}`,
           projectGroupId: 'reveal-folder-group',
@@ -296,10 +330,13 @@ test.describe('Reveal active workspace button', () => {
           updatedAt: now
         }
       })
+
       const targetFolder = folderWorkspaces.at(-1)
+
       if (!targetFolder) {
         throw new Error('Expected a target folder workspace')
       }
+
       const folderWorktreeId = `folder:${targetFolder.id}`
       store.setState({
         activeRepoId: null,
@@ -322,6 +359,7 @@ test.describe('Reveal active workspace button', () => {
         folderWorkspaces
       })
       store.getState().setGroupBy('repo')
+
       return folderWorktreeId
     })
 
@@ -335,14 +373,18 @@ test.describe('Reveal active workspace button', () => {
         () =>
           orcaPage.evaluate((targetId) => {
             const scroller = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
+
             const target = [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
               (candidate) => candidate.dataset.worktreeId === targetId
             )
+
             if (!scroller || !target) {
               return false
             }
+
             const scrollerBounds = scroller.getBoundingClientRect()
             const targetBounds = target.getBoundingClientRect()
+
             return (
               targetBounds.top >= scrollerBounds.top - 1 &&
               targetBounds.bottom <= scrollerBounds.bottom + 1
@@ -362,14 +404,18 @@ test.describe('Reveal active workspace button', () => {
         () =>
           orcaPage.evaluate((targetId) => {
             const scroller = document.querySelector<HTMLElement>('[data-worktree-sidebar]')
+
             const target = [...document.querySelectorAll<HTMLElement>('[data-worktree-id]')].find(
               (candidate) => candidate.dataset.worktreeId === targetId
             )
+
             if (!scroller || !target) {
               return false
             }
+
             const scrollerBounds = scroller.getBoundingClientRect()
             const targetBounds = target.getBoundingClientRect()
+
             return (
               targetBounds.top >= scrollerBounds.top - 1 &&
               targetBounds.bottom <= scrollerBounds.bottom + 1

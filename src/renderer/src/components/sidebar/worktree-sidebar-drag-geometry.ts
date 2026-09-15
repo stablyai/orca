@@ -33,12 +33,14 @@ export function getWorktreeSidebarDragReferenceY(args: {
   if (!args.grab) {
     return args.localY
   }
+
   const height =
     args.grab.height > 0
       ? args.grab.height
       : args.activeRect
         ? args.activeRect.bottom - args.activeRect.top
         : 0
+
   return args.localY - args.grab.offsetY + height / 2
 }
 
@@ -62,6 +64,7 @@ export function shouldReevaluateWorktreeSidebarDropAnchor(args: {
   if (!args.anchor) {
     return true
   }
+
   return (
     Math.abs(args.anchor.pointerY - args.pointerY) > ANCHOR_REEVALUATE_EPSILON_PX ||
     Math.abs(args.anchor.scrollTop - args.scrollTop) > ANCHOR_REEVALUATE_EPSILON_PX
@@ -80,7 +83,9 @@ export function resolveWorktreeSidebarDropAnchorIndex(args: {
   if (args.anchor.beforeWorktreeId === null) {
     return args.groupIds.length
   }
+
   const targetIndex = args.groupIds.indexOf(args.anchor.beforeWorktreeId)
+
   return targetIndex !== -1 ? targetIndex : null
 }
 
@@ -105,6 +110,7 @@ export function getWorktreeSidebarDragGrab(args: {
   if (!Number.isFinite(args.offsetY) || !Number.isFinite(args.height) || args.height <= 0) {
     return null
   }
+
   return {
     offsetY: Math.min(Math.max(args.offsetY, 0), args.height),
     height: args.height

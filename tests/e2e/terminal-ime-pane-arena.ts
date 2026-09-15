@@ -39,6 +39,7 @@ export async function openTerminalImePaneArena(page: Page): Promise<TerminalImeP
   const session = await page.context().newCDPSession(page)
   await focusActiveTerminalInput(page)
   await installTerminalImeBoundaryProbe(page)
+
   return { page, session, ptyId }
 }
 
@@ -55,6 +56,7 @@ export async function closeTerminalImePaneArena(
   await attachTerminalImeBoundaryEvidence(arena.page, testInfo, evidenceName).catch(() => undefined)
   await disposeTerminalImeBoundaryProbe(arena.page).catch(() => undefined)
   await arena.session.detach().catch(() => undefined)
+
   if (interrupt) {
     await sendToTerminal(arena.page, arena.ptyId, '\x03').catch(() => undefined)
   }

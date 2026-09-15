@@ -41,6 +41,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(prompt).not.toBeNull()
     expect(prompt!.payload).toMatchObject({
       state: 'working',
@@ -62,6 +63,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(tool).not.toBeNull()
     expect(tool!.payload).toMatchObject({
       state: 'working',
@@ -86,6 +88,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const edit = normalizeHookPayload(
       state,
       'grok',
@@ -99,6 +102,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(shell?.payload).toMatchObject({
       agentType: 'grok',
       state: 'working',
@@ -120,6 +124,7 @@ describe('shared agent-hook-listener', () => {
         options: [{ label: 'us-east', description: 'US East' }]
       }
     ]
+
     const waiting = normalizeHookPayload(
       state,
       'grok',
@@ -133,6 +138,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const answered = normalizeHookPayload(
       state,
       'grok',
@@ -147,6 +153,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(waiting?.payload).toMatchObject({
       agentType: 'grok',
       state: 'waiting',
@@ -195,6 +202,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const failed = normalizeHookPayload(
       state,
       'grok',
@@ -209,6 +217,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     // Why: keeping toolName set would let the compact sidebar show the tool
     // instead of the failure text, hiding the error from the user.
     expect(failed?.payload).toMatchObject({
@@ -229,6 +238,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     const done = normalizeHookPayload(
       state,
       'grok',
@@ -238,6 +248,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(done?.payload).toMatchObject({
       agentType: 'grok',
       state: 'done',
@@ -258,6 +269,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(prompt?.payload.prompt).toBe('Find recent PR')
 
     const tool = normalizeHookPayload(
@@ -273,6 +285,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(tool?.payload.prompt).toBe('Find recent PR')
   })
 
@@ -286,12 +299,14 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
+
     expect(event?.payload.prompt).toBe('Find recent PR')
   })
 
   it('strips newline-heavy Grok user_query wrappers without regex matching', () => {
     const matchSpy = vi.spyOn(String.prototype, 'match')
     const promptText = 'Find recent PR\n'.repeat(300)
+
     const event = normalizeHookPayload(
       state,
       'grok',
@@ -308,12 +323,14 @@ describe('shared agent-hook-listener', () => {
     expect(event?.payload.prompt).toContain('Find recent PR')
     expect(event?.payload.prompt).not.toContain('<user_query>')
     expect(event?.payload.prompt).not.toContain('</user_query>')
+
     const usedGrokWrapperMatch = matchSpy.mock.calls.some(
       ([pattern]) =>
         pattern instanceof RegExp &&
         pattern.source.startsWith('^<user_query>') &&
         pattern.source.includes('[\\s\\S]')
     )
+
     expect(usedGrokWrapperMatch).toBe(false)
   })
 
@@ -387,6 +404,7 @@ describe('shared agent-hook-listener', () => {
     const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf528'
     const cwd = join(tmpDir, 'workspace')
     const sessionDir = join(tmpDir, '.grok', 'sessions', encodeURIComponent(cwd), sessionId)
+
     try {
       vi.stubEnv('HOME', tmpDir)
       vi.stubEnv('USERPROFILE', tmpDir)
@@ -410,6 +428,7 @@ describe('shared agent-hook-listener', () => {
         paneKey: PANE_KEY,
         payload: { hookEventName: 'Stop', sessionId, cwd, message: 'Session completed' }
       }
+
       expect(hasPendingAgentResultText('grok', body)).toBe(true)
       const done = normalizeHookPayload(state, 'grok', body, 'production')
 
@@ -427,6 +446,7 @@ describe('shared agent-hook-listener', () => {
     const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf529'
     const cwd = join(tmpDir, 'workspace')
     const sessionDir = join(hookGrokHome, 'sessions', encodeURIComponent(cwd), sessionId)
+
     try {
       vi.stubEnv('GROK_HOME', serviceGrokHome)
       mkdirSync(sessionDir, { recursive: true })
@@ -462,6 +482,7 @@ describe('shared agent-hook-listener', () => {
     const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf530'
     const cwd = join(tmpDir, 'workspace')
     const sessionDir = join(serviceGrokHome, 'sessions', encodeURIComponent(cwd), sessionId)
+
     try {
       vi.stubEnv('GROK_HOME', serviceGrokHome)
       mkdirSync(sessionDir, { recursive: true })
@@ -491,6 +512,7 @@ describe('shared agent-hook-listener', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-session-escape-'))
     const cwd = join(tmpDir, 'workspace')
     const escapedDir = join(tmpDir, '.grok', 'sessions', 'escaped')
+
     try {
       vi.stubEnv('HOME', tmpDir)
       vi.stubEnv('USERPROFILE', tmpDir)
@@ -535,6 +557,7 @@ describe('shared agent-hook-listener', () => {
     const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf531'
     const cwd = `/${'long-workspace/'.repeat(30)}`
     const sessionDir = join(hookGrokHome, 'sessions', 'workspace-slug', sessionId)
+
     try {
       mkdirSync(sessionDir, { recursive: true })
       writeFileSync(
@@ -547,6 +570,7 @@ describe('shared agent-hook-listener', () => {
         grokHome: hookGrokHome,
         payload: { hookEventName: 'SessionEnd', sessionId, cwd }
       }
+
       const discovery = preparePendingGrokResultDiscovery('grok', body)
       expect(discovery).not.toBeNull()
       await discovery

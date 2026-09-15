@@ -15,12 +15,14 @@ vi.mock('sonner', () => ({
 const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
   notifyHostOfMirroredEditorCloseMock: vi.fn()
 }))
+
 vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
 }))
 
 const loadGitLabJobLogDetailsMock = vi.hoisted(() => vi.fn())
+
 vi.mock('@/runtime/gitlab-job-trace-client', () => ({
   loadGitLabJobLogDetails: loadGitLabJobLogDetailsMock
 }))
@@ -41,6 +43,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       annotations: [],
       jobs: []
     })
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const store = createStore<any>()((...args: any[]) => ({
       activeWorktreeId: 'wt-1',
@@ -49,6 +52,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       fetchPRCheckDetails,
       ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
     })) as unknown as StoreApi<AppState>
+
     const check = {
       name: 'verify',
       status: 'completed' as const,
@@ -56,6 +60,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       url: null,
       checkRunId: 42
     }
+
     const githubRepository = { owner: 'upstream', repo: 'project' }
 
     store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
@@ -89,6 +94,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   it('stops loading when an open check-details tab loses its repository', async () => {
     const fetchPRCheckDetails = vi.fn()
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const store = createStore<any>()((...args: any[]) => ({
       activeWorktreeId: 'wt-1',
@@ -97,6 +103,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       fetchPRCheckDetails,
       ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
     })) as unknown as StoreApi<AppState>
+
     const check = {
       name: 'verify',
       status: 'completed' as const,
@@ -155,6 +162,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       ]
     })
     const fetchPRCheckDetails = vi.fn().mockResolvedValue(null)
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const store = createStore<any>()((...args: any[]) => ({
       activeWorktreeId: 'wt-1',
@@ -164,6 +172,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       fetchPRCheckDetails,
       ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
     })) as unknown as StoreApi<AppState>
+
     const check = {
       name: 'test: unit',
       status: 'completed' as const,
@@ -203,6 +212,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
   it('reloads a fork MR job tab with the stored GitLab project ref', async () => {
     loadGitLabJobLogDetailsMock.mockReset()
     loadGitLabJobLogDetailsMock.mockResolvedValue(null)
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const store = createStore<any>()((...args: any[]) => ({
       activeWorktreeId: 'wt-1',
@@ -212,6 +222,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       fetchPRCheckDetails: vi.fn().mockResolvedValue(null),
       ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
     })) as unknown as StoreApi<AppState>
+
     const check = {
       name: 'test: unit',
       status: 'completed' as const,
@@ -219,6 +230,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       url: null,
       gitlabJobId: 77
     }
+
     const projectRef = { host: 'gitlab.com', path: 'contributor/fork' }
 
     store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
@@ -241,6 +253,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       activeWorktreeId: 'wt-1',
       ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
     })) as unknown as StoreApi<AppState>
+
     const check = {
       name: 'test: unit',
       status: 'completed' as const,
@@ -248,6 +261,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       url: null,
       gitlabJobId: 77
     }
+
     const projectRef = { host: 'gitlab.com', path: 'contributor/fork' }
 
     store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
@@ -271,6 +285,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   it('patches an open check-details tab without changing the active file', () => {
     const store = createEditorTabsStore()
+
     const check = {
       name: 'verify',
       status: 'completed' as const,
@@ -325,6 +340,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   it('ignores a stale check-details request after the tab context changes', () => {
     const store = createEditorTabsStore()
+
     const check = {
       name: 'verify',
       status: 'completed' as const,
@@ -359,6 +375,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   it('ignores an older check-details request in the same context', () => {
     const store = createEditorTabsStore()
+
     const check = {
       name: 'verify',
       status: 'completed' as const,
@@ -394,6 +411,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   it('does not reopen a check-details tab with an older sidebar snapshot', () => {
     const store = createEditorTabsStore()
+
     const check = {
       name: 'verify',
       status: 'completed' as const,
@@ -431,6 +449,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   it('opens check full details as a center-pane editor tab', () => {
     const store = createEditorTabsStore()
+
     const check = {
       name: 'verify',
       status: 'completed' as const,

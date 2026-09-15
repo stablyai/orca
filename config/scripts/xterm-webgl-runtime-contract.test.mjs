@@ -4,9 +4,13 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const require = createRequire(import.meta.url)
+
 const readProject = (file) => readFileSync(join(projectDir, file), 'utf8')
+
 const xtermManifest = JSON.parse(readProject('config/patches/xterm-upstream.json'))
+
 const readInstalled = (name, file) =>
   readFileSync(join(resolve(require.resolve(`${name}/package.json`), '..'), file), 'utf8')
 

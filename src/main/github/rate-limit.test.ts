@@ -290,6 +290,7 @@ describe('scope-aware breaker reset probe', () => {
         clearGhRateLimitBlock(bucket, scope)
       }
     }
+
     vi.useRealTimers()
   })
 

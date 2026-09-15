@@ -29,6 +29,7 @@ import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 function readDenied(filePath: string): boolean {
   try {
     readFileSync(filePath, 'utf8')
+
     return false
   } catch (error) {
     return /^(?:EPERM|EACCES)$/.test((error as NodeJS.ErrnoException).code ?? '')
@@ -46,12 +47,15 @@ function canDenyReads(): boolean {
   if (process.platform !== 'win32') {
     return false
   }
+
   const probeRoot = mkdtempSync(join(tmpdir(), 'orca-deny-probe-'))
   const probe = join(probeRoot, 'probe.json')
+
   try {
     writeFileSync(probe, '{}')
     icacls(probe, '/inheritance:r', '/q')
     icacls(probe, '/grant:r', `*${FOREIGN_SID}:(F)`, '/q')
+
     return readDenied(probe)
   } finally {
     icacls(probe, '/reset', '/q')
@@ -108,11 +112,13 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
     const dir = join(root, 'e2ee')
     mkdirSync(dir, { recursive: true })
     const filePath = join(dir, E2EE_KEYPAIR_FILENAME)
+
     const original = JSON.stringify({
       v: 1,
       publicKeyB64: Buffer.alloc(32, 7).toString('base64'),
       secretKeyB64: Buffer.alloc(32, 9).toString('base64')
     })
+
     writeFileSync(filePath, original)
     makeUnreadable(filePath)
 
@@ -129,6 +135,7 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
     const dir = join(root, 'devices')
     mkdirSync(dir, { recursive: true })
     const filePath = join(dir, DEVICE_REGISTRY_FILENAME)
+
     const original = JSON.stringify([
       {
         deviceId: 'device-1',
@@ -139,6 +146,7 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
         lastSeenAt: 2
       }
     ])
+
     writeFileSync(filePath, original)
     makeUnreadable(filePath)
 
@@ -167,11 +175,13 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
     // Reach the path the store computes rather than restating its layout here.
     const filePath = (store as unknown as { filePath: string }).filePath
     mkdirSync(join(filePath, '..'), { recursive: true })
+
     const original = JSON.stringify({
       version: 1,
       format: 'electron-safe-storage-v1',
       ciphertexts: { existing: Buffer.from('enc:keep-me').toString('base64') }
     })
+
     writeFileSync(filePath, original)
     makeUnreadable(filePath)
 
@@ -205,6 +215,7 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
     const dir = join(root, 'relay')
     mkdirSync(dir, { recursive: true })
     const filePath = join(dir, 'mobile-relay-revoke-outbox.json')
+
     const original = JSON.stringify([
       {
         relayHostId: 'host-1',
@@ -214,6 +225,7 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
         createdAt: 1
       }
     ])
+
     writeFileSync(filePath, original)
     makeUnreadable(filePath)
 
@@ -242,8 +254,10 @@ describeOnWindows('a secure store that exists but cannot be read', () => {
         decryptString: (buffer: Buffer) => buffer.toString()
       }
     }))
+
     const { readOrcaCloudSession, getOrcaCloudSessionPath } =
       await import('./../orca-profiles/profile-cloud-session-store')
+
     const dir = join(root, 'profiles')
     mkdirSync(dir, { recursive: true })
     const filePath = getOrcaCloudSessionPath('profile-1', dir)

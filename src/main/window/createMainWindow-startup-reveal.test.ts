@@ -3,13 +3,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
+
 vi.mock('@electron-toolkit/utils', async () =>
   (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
 )
+
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
+
 vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
@@ -28,6 +32,7 @@ beforeEach(() => {
   vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
   vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
 })
+
 afterEach(() => vi.unstubAllEnvs())
 
 describe('createMainWindow', () => {
@@ -39,6 +44,7 @@ describe('createMainWindow', () => {
 
   function createStartupRevealWindowFixture() {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -52,6 +58,7 @@ describe('createMainWindow', () => {
       setWindowOpenHandler: vi.fn(),
       send: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn((event, handler) => {
@@ -68,6 +75,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -94,12 +102,15 @@ describe('createMainWindow', () => {
       const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
       const showInactive = vi.fn()
       Object.assign(browserWindowInstance, { showInactive })
+
       try {
         withPlatform(platform, () => {
           createMainWindow(createStartupRevealStore(true) as never, { revealOnDidFinishLoad: true })
+
           const revealAfterLoad = browserWindowInstance.webContents.on.mock.calls.find(
             ([event]) => event === 'did-finish-load'
           )?.[1]
+
           expect(revealAfterLoad).toBeTypeOf('function')
           revealAfterLoad?.()
           windowHandlers['ready-to-show']()
@@ -137,9 +148,11 @@ describe('createMainWindow', () => {
     const { browserWindowInstance, windowHandlers } = createStartupRevealWindowFixture()
 
     createMainWindow(null, { revealOnDidFinishLoad: true })
+
     const revealAfterLoad = browserWindowInstance.webContents.on.mock.calls.find(
       ([event]) => event === 'did-finish-load'
     )?.[1]
+
     expect(revealAfterLoad).toBeTypeOf('function')
     revealAfterLoad?.()
 

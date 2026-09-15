@@ -11,6 +11,7 @@ function addTerminal(id: string): HTMLTextAreaElement {
   textarea.className = 'xterm-helper-textarea'
   textarea.dataset.terminal = id
   document.body.appendChild(textarea)
+
   return textarea
 }
 

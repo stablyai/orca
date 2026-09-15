@@ -29,6 +29,7 @@ import {
 } from './workspace-cleanup-removal'
 
 export type { WorkspaceCleanupFailure, WorkspaceCleanupRemoveOptions, WorkspaceCleanupRemoveResult }
+
 export { enrichWorkspaceCleanupCandidates, WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY }
 
 type WorkspaceCleanupViewedCandidate = {
@@ -96,6 +97,7 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
   },
   dismissWorkspaceCleanupCandidates: async (candidates) => {
     const now = Date.now()
+
     const dismissals = candidates.map((candidate) => ({
       worktreeId: candidate.worktreeId,
       executionHostId: getWorkspaceCleanupCandidateHostId(candidate),
@@ -103,8 +105,10 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       fingerprint: candidate.fingerprint,
       classifierVersion: WORKSPACE_CLEANUP_CLASSIFIER_VERSION
     }))
+
     set((state) => {
       const nextDismissals = { ...state.workspaceCleanupDismissals }
+
       for (const dismissal of dismissals) {
         nextDismissals[
           getWorkspaceCleanupCandidateIdentity({
@@ -113,6 +117,7 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
           })
         ] = dismissal
       }
+
       return {
         workspaceCleanupDismissals: nextDismissals,
         workspaceCleanupScan: state.workspaceCleanupScan
@@ -147,11 +152,14 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
   beginUnverifiedRemovalConsent: (identity) => {
     const existing = unverifiedRemovalConsentByStore.get(get) ?? new Map<string, string>()
     unverifiedRemovalConsentByStore.set(get, existing)
+
     if (existing.has(identity)) {
       return null
     }
+
     const attemptId = crypto.randomUUID()
     existing.set(identity, attemptId)
+
     return attemptId
   },
   removeWorkspaceCleanupCandidates: (worktreeIds, options) =>
@@ -162,6 +170,7 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       const consent = options?.unverifiedRemovalConsent as
         | WorkspaceCleanupUnverifiedRemovalConsent
         | undefined
+
       if (
         consent &&
         unverifiedRemovalConsentByStore.get(get)?.get(consent.identity) === consent.attemptId

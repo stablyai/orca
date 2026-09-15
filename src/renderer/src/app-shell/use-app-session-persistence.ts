@@ -56,6 +56,7 @@ function captureRemoteWorkspaceUploadAuthorities(
     const syncStatus = state.remoteWorkspaceSyncStatusByTargetId[targetId]
     const revision = syncStatus?.revision
     const hostObservationToken = syncStatus?.hostObservationToken
+
     if (
       syncStatus?.phase === 'conflict' ||
       typeof revision !== 'number' ||
@@ -66,6 +67,7 @@ function captureRemoteWorkspaceUploadAuthorities(
     ) {
       return []
     }
+
     return [
       {
         targetId,
@@ -82,6 +84,7 @@ function remoteWorkspaceUploadAuthorityIsCurrent(
   authority: RemoteWorkspaceUploadAuthority
 ): boolean {
   const status = state.remoteWorkspaceSyncStatusByTargetId[authority.targetId]
+
   return (
     state.remoteWorkspaceHydratedTargetIds.has(authority.targetId) &&
     status?.phase !== 'conflict' &&
@@ -108,50 +111,64 @@ export function useAppSessionPersistence(): void {
         const localWrite = patchWorkspaceSessionByHost(window.api.session, patch, state)
         void localWrite
         const uploadAuthorities = captureRemoteWorkspaceUploadAuthorities(state)
+
         if (uploadAuthorities.length > 0) {
           void (async () => {
             try {
               await localWrite
               const currentState = useAppStore.getState()
+
               const currentAuthorities = uploadAuthorities.filter((authority) =>
                 remoteWorkspaceUploadAuthorityIsCurrent(currentState, authority)
               )
+
               if (currentAuthorities.length === 0) {
                 return
               }
+
               const hydratedTargetIds = currentAuthorities.map(({ targetId }) => targetId)
+
               const expectedRevisionsByTargetId = Object.fromEntries(
                 currentAuthorities.map(({ targetId, revision }) => [targetId, revision])
               )
+
               const expectedHostObservationTokensByTargetId = Object.fromEntries(
                 currentAuthorities.map(({ targetId, hostObservationToken }) => [
                   targetId,
                   hostObservationToken
                 ])
               )
+
               const results = await window.api.remoteWorkspace?.setForConnectedTargets({
                 hydratedTargetIds,
                 expectedRevisionsByTargetId,
                 expectedHostObservationTokensByTargetId
               })
+
               const resultState = useAppStore.getState()
+
               const currentAuthorityByTargetId = new Map(
                 currentAuthorities.map((authority) => [authority.targetId, authority])
               )
+
               for (const { targetId, result } of results ?? []) {
                 const authority = currentAuthorityByTargetId.get(targetId)
+
                 if (authority && remoteWorkspaceUploadAuthorityIsCurrent(resultState, authority)) {
                   applyRemoteWorkspacePushStatus(resultState, targetId, result, authority)
                 }
               }
             } catch (err) {
               const errorState = useAppStore.getState()
+
               for (const authority of uploadAuthorities) {
                 if (!remoteWorkspaceUploadAuthorityIsCurrent(errorState, authority)) {
                   continue
                 }
+
                 const currentStatus =
                   errorState.remoteWorkspaceSyncStatusByTargetId[authority.targetId]
+
                 errorState.setRemoteWorkspaceSyncStatus(authority.targetId, {
                   phase: 'error',
                   direction: 'push',
@@ -200,6 +217,7 @@ export function useAppSessionPersistence(): void {
       // only for the gating flags and would miss those updates.
       buildSessionSnapshots: () => {
         const freshState = useAppStore.getState()
+
         return buildWorkspaceSessionHostSnapshots(
           buildWorkspaceSessionPayload(freshState),
           freshState
@@ -213,10 +231,12 @@ export function useAppSessionPersistence(): void {
         isIntentionalAppRestartInProgress() || isWindowCloseCheckpointInProgress(),
       stageBeforeUnloadSync: (args) => window.api.app.stageBeforeUnloadSync(args)
     })
+
     const shutdownCheckpoint = createShutdownCheckpointGuard(
       shutdownCheckpointPersist.run,
       shutdownCheckpointPersist.abandonAttempt
     )
+
     const persistBeforeUnload = createShutdownCheckpointBeforeUnloadHandler(shutdownCheckpoint)
     window.addEventListener('beforeunload', persistBeforeUnload)
     window.addEventListener(
@@ -229,6 +249,7 @@ export function useAppSessionPersistence(): void {
       shutdownCheckpoint.abandonAttempt
     )
     window.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.abandonAttempt)
+
     return () => {
       window.removeEventListener('beforeunload', persistBeforeUnload)
       window.removeEventListener(
@@ -253,8 +274,10 @@ export function useAppSessionPersistence(): void {
       if (!shouldPersistWorkspaceSession(useAppStore.getState())) {
         return
       }
+
       useAppStore.getState().captureAllSleepingAgentSessions('periodic')
     }, SLEEPING_AGENT_RESUME_CAPTURE_INTERVAL_MS)
+
     return () => window.clearInterval(timer)
   }, [])
 

@@ -42,11 +42,14 @@ const projectedRows = new WeakMap<readonly NativeWindowsProcessRow[], WindowsPro
 
 function projectProcessRows(native: readonly NativeWindowsProcessRow[]): WindowsProcessRow[] {
   const cached = projectedRows.get(native)
+
   if (cached) {
     return cached
   }
+
   const rows = native.map(toProcessRow)
   projectedRows.set(native, rows)
+
   return rows
 }
 
@@ -96,24 +99,29 @@ export async function queryWindowsPaneProcessInventory(
   options: { fresh?: boolean; anchorPid?: number } = {}
 ): Promise<WindowsPaneProcessInventory | null> {
   let rows: WindowsProcessRow[]
+
   try {
     const native =
       options.fresh === true
         ? await readWindowsProcessTableFresh()
         : await readWindowsProcessTable()
+
     rows = projectProcessRows(native)
   } catch {
     return null
   }
+
   // One index per snapshot, shared by every pane inspecting inside the TTL
   // window: `byPid` answers both lookups that used to be linear scans, and
   // `childrenByPpid` replaces a per-call Map rebuild over the whole table.
   const index = getProcessTableIndex(rows)
+
   // Why: a snapshot that omitted the PTY root may be stale or permission-
   // filtered; only an observed root can authoritatively have no descendants.
   if (!index.byPid.has(rootPid)) {
     return null
   }
+
   return {
     candidates: collectDescendantsFromIndex(index, rootPid).sort((a, b) => b.depth - a.depth),
     anchorRow: options.anchorPid !== undefined ? (index.byPid.get(options.anchorPid) ?? null) : null
@@ -134,9 +142,11 @@ export function windowsDescendantsFromRows<Row extends { pid: number; ppid: numb
   rootPid: number
 ): (Row & { depth: number })[] | null {
   const index = getProcessTableIndex(rows)
+
   if (!index.byPid.has(rootPid)) {
     return null
   }
+
   return collectDescendantsFromIndex(index, rootPid).sort((a, b) => b.depth - a.depth)
 }
 

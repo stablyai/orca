@@ -33,7 +33,9 @@ import type { ProjectPickerChoice, ResolvedProjectSelection } from './project-pi
 import { useProjectPickerBrowse } from './useProjectPickerBrowse'
 
 export type { ResolvedProjectSelection } from './project-picker-selection'
+
 export { getProjectPickerBrowseHost } from './project-picker-runtime'
+
 export { parseProjectInput } from './project-picker-input'
 
 type Props = {
@@ -58,10 +60,12 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   const settings = useAppStore((state) => state.settings)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const mountedRef = useMountedRef()
+
   const projectSettings = useMemo(
     () => settings?.githubProjects ?? EMPTY_PROJECT_SETTINGS,
     [settings?.githubProjects]
   )
+
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [pasteInput, setPasteInput] = useState('')
@@ -95,6 +99,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
         number: selection.projectNumber,
         host: selection.host
       })
+
       await updateProjectSettings((previous) => {
         const recent = [
           {
@@ -106,6 +111,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
           },
           ...previous.recent.filter((entry) => githubProjectIdentityKey(entry) !== key)
         ].slice(0, 10)
+
         return {
           ...previous,
           recent,
@@ -120,9 +126,11 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
           }
         }
       })
+
       if (!mountedRef.current) {
         return
       }
+
       onSelect(selection)
       setOpen(false)
       setQuery('')
@@ -135,13 +143,17 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     async (choice: ProjectPickerChoice) => {
       const key = githubProjectIdentityKey(choice)
       const lastView = projectSettings.lastViewByProject[key]?.viewId
+
       if (lastView && choice.viewNumber === undefined) {
         await commitSelection(toSelection(choice, lastView))
+
         return
       }
+
       const selection = toSelection(choice)
       setViewPickFor(selection)
       setViewLoading(true)
+
       try {
         const result = await listProjectViewsForRuntime(settings, {
           owner: choice.owner,
@@ -149,16 +161,21 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
           projectNumber: choice.number,
           host: githubProjectHost(choice.host)
         })
+
         if (!mountedRef.current) {
           return
         }
+
         if (!result.ok) {
           setViewList([])
           toast.error(result.error.message)
+
           return
         }
+
         setViewList(result.views)
         const requestedView = result.views.find((view) => view.number === choice.viewNumber)
+
         if (requestedView) {
           await commitSelection({ ...selection, viewId: requestedView.id })
         }
@@ -185,25 +202,35 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   const handlePaste = useCallback(async () => {
     if (isGitHubProjectRefInputTooLarge(pasteInput)) {
       setPasteError(GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR)
+
       return
     }
+
     const input = pasteInput.trim()
     const parsed = parseProjectInput(input)
+
     if (!parsed) {
       setPasteError('Expected a project URL or owner/number')
+
       return
     }
+
     setPasteError(null)
     setPasteBusy(true)
+
     try {
       const result = await resolveProjectRefForRuntime(settings, input, parsed.host)
+
       if (!mountedRef.current) {
         return
       }
+
       if (!result.ok) {
         setPasteError(result.error.message)
+
         return
       }
+
       setPasteInput('')
       await handleChooseProject({
         owner: result.owner,
@@ -230,6 +257,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
       }),
     [browse.browseProjects, projectSettings.pinned, projectSettings.recent, query]
   )
+
   const buttonLabel = activeProject
     ? `${activeProject.owner} / ${activeProject.title ?? `#${activeProject.number}`}`
     : 'Choose a project'

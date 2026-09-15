@@ -35,21 +35,27 @@ export function reduceAgentStatusLiveUpdate(
     retentionRelevantChange,
     sortRelevantChange
   } = build
+
   const paneKey = entry.paneKey
   let nextRetentionSuppressedPaneKeys = state.retentionSuppressedPaneKeys
+
   if (paneKey in nextRetentionSuppressedPaneKeys) {
     nextRetentionSuppressedPaneKeys = { ...nextRetentionSuppressedPaneKeys }
     delete nextRetentionSuppressedPaneKeys[paneKey]
   }
+
   const nextRetainedAgents =
     paneKey in state.retainedAgentsByPaneKey
       ? { ...state.retainedAgentsByPaneKey }
       : state.retainedAgentsByPaneKey
+
   if (nextRetainedAgents !== state.retainedAgentsByPaneKey) {
     delete nextRetainedAgents[paneKey]
   }
+
   let nextSleepingAgentSessions = state.sleepingAgentSessionsByPaneKey
   let nextLaunchConfigs = state.agentLaunchConfigByPaneKey
+
   if (
     registryMatched &&
     registryEntry &&
@@ -65,6 +71,7 @@ export function reduceAgentStatusLiveUpdate(
       [paneKey]: { ...registryEntry, identity: { ...registryEntry.identity, providerSession } }
     }
   }
+
   // Launch tokens authorize only the session they started; a completed turn or changed provider id consumes them.
   if (
     (providerSessionChanged || (entry.state === 'done' && entry.sessionBoundary !== true)) &&
@@ -73,6 +80,7 @@ export function reduceAgentStatusLiveUpdate(
     nextLaunchConfigs = { ...state.agentLaunchConfigByPaneKey }
     delete nextLaunchConfigs[paneKey]
   }
+
   if (liveRecoveryRecord) {
     if (!recoveryRecordMatches(existingSleepingRecord, liveRecoveryRecord)) {
       nextSleepingAgentSessions = {
@@ -84,9 +92,11 @@ export function reduceAgentStatusLiveUpdate(
     nextSleepingAgentSessions = { ...state.sleepingAgentSessionsByPaneKey }
     delete nextSleepingAgentSessions[paneKey]
   }
+
   const previousLive = state.agentStatusByPaneKey
   const nextLive = { ...previousLive, [paneKey]: entry }
   const nextLiveCount = countLiveAgentStatuses(previousLive) + (paneKey in previousLive ? 0 : 1)
+
   const evictedPaneKeys = capLiveAgentStatusesInPlace(
     nextLive,
     paneKey,
@@ -95,20 +105,26 @@ export function reduceAgentStatusLiveUpdate(
     undefined,
     nextLiveCount
   )
+
   noteLiveAgentStatusCount(nextLive, nextLiveCount - evictedPaneKeys.length)
   const evictedOrphans = evictedPaneKeys.length > 0
   const evictedEntries: AgentStatusEntry[] = []
+
   if (evictedOrphans) {
     const evicted = new Set(evictedPaneKeys)
+
     for (const evictedPaneKey of evictedPaneKeys) {
       const evictedEntry = previousLive[evictedPaneKey]
+
       if (evictedEntry) {
         evictedEntries.push(evictedEntry)
       }
     }
+
     nextSleepingAgentSessions = removePaneKeys(nextSleepingAgentSessions, evicted)
     nextLaunchConfigs = removePaneKeys(nextLaunchConfigs, evicted)
   }
+
   const patch: Partial<AppState> = {
     agentStatusByPaneKey: nextLive,
     retainedAgentsByPaneKey: nextRetainedAgents,
@@ -125,5 +141,6 @@ export function reduceAgentStatusLiveUpdate(
         ? state.sortEpoch + 1
         : state.sortEpoch
   }
+
   return { patch, evictedEntries }
 }

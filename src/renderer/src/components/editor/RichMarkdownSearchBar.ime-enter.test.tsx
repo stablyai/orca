@@ -14,9 +14,11 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
 }))
 
 const QUERY = '배포'
+
 const REPLACEMENT = '릴리스'
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -72,9 +74,11 @@ function renderBar(spies: BarSpies): {
   // silently pointing the assertions at the wrong field.
   const findInput = inputs.find((candidate) => candidate.value === QUERY)
   const replaceInput = inputs.find((candidate) => candidate.value === REPLACEMENT)
+
   if (!findInput || !replaceInput) {
     throw new Error('search bar fields not rendered')
   }
+
   return { findInput, replaceInput }
 }
 
@@ -89,9 +93,11 @@ function pressKey(
     cancelable: true,
     ...init
   })
+
   if (init?.keyCode !== undefined) {
     Object.defineProperty(event, 'keyCode', { value: init.keyCode })
   }
+
   act(() => {
     input.dispatchEvent(event)
   })

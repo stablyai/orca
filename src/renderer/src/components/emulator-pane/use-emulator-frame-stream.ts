@@ -27,22 +27,27 @@ export function useEmulatorFrameStream(
   enabled: boolean
 ): Omit<EmulatorFrameStreamState, 'streamIdentity'> {
   const streamIdentity = getFrameStreamIdentity(streamUrl, streamKey, enabled)
+
   const [state, setState] = useState<EmulatorFrameStreamState>({
     error: null,
     frameUrl: null,
     streamIdentity: null
   })
+
   const currentFrameUrlRef = useRef<string | null>(null)
 
   useEffect(() => {
     const emulatorApi = window.api?.emulator
+
     if (!enabled || !streamUrl || !emulatorApi?.startFrameStream) {
       setState({ error: null, frameUrl: null, streamIdentity: null })
+
       return
     }
 
     let disposed = false
     let activeStreamId: string | null = null
+
     let firstFrameTimer: number | null = window.setTimeout(() => {
       setState((current) =>
         current.streamIdentity !== streamIdentity || current.frameUrl
@@ -75,11 +80,13 @@ export function useEmulatorFrameStream(
       if (disposed || streamId !== activeStreamId) {
         return
       }
+
       clearFirstFrameTimer()
       const nextFrameUrl = createFrameUrl(bytes)
       const previousFrameUrl = currentFrameUrlRef.current
       currentFrameUrlRef.current = nextFrameUrl
       setState({ error: null, frameUrl: nextFrameUrl, streamIdentity })
+
       if (previousFrameUrl) {
         URL.revokeObjectURL(previousFrameUrl)
       }
@@ -103,14 +110,17 @@ export function useEmulatorFrameStream(
       .then(({ streamId }) => {
         if (disposed) {
           void emulatorApi.stopFrameStream?.({ streamId })
+
           return
         }
+
         activeStreamId = streamId
       })
       .catch((error) => {
         if (disposed) {
           return
         }
+
         clearFirstFrameTimer()
         setState({
           error: error instanceof Error ? error.message : 'Stream disconnected',
@@ -124,9 +134,11 @@ export function useEmulatorFrameStream(
       clearFirstFrameTimer()
       unsubscribeFrame?.()
       unsubscribeError?.()
+
       if (activeStreamId) {
         void emulatorApi.stopFrameStream?.({ streamId: activeStreamId })
       }
+
       revokeCurrentFrameUrl()
     }
   }, [enabled, streamIdentity, streamKey, streamUrl])
@@ -134,5 +146,6 @@ export function useEmulatorFrameStream(
   if (state.streamIdentity !== streamIdentity) {
     return { error: null, frameUrl: null }
   }
+
   return { error: state.error, frameUrl: state.frameUrl }
 }

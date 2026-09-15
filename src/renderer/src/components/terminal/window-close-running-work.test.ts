@@ -19,8 +19,11 @@ import {
 } from './window-close-running-work'
 
 const LOCAL_PTY = 'pty-local'
+
 const SSH_PTY = 'ssh:openclaw@@pty-7'
+
 const RUNTIME_PTY = 'remote:env-1@@handle-1'
+
 /** A runtime pty minted without an owner id. Still someone else's machine. */
 const OWNERLESS_RUNTIME_PTY = 'remote:handle-2'
 
@@ -29,7 +32,9 @@ const BUSY = {
   hasChildProcesses: true,
   foregroundProcessEvidence: {}
 }
+
 const IDLE = { foregroundProcess: 'bash', hasChildProcesses: false, foregroundProcessEvidence: {} }
+
 const UNVERIFIABLE = {
   foregroundProcess: null,
   hasChildProcesses: false,

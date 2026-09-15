@@ -10,6 +10,7 @@ async function dismissMatchingPresentedPushes(
   await Promise.all(
     presented.map(async (notification) => {
       const payload = readOrcaPushPayload(readNativeNotificationData(notification.request))
+
       if (payload && (await matches(payload))) {
         await Notifications.dismissNotificationAsync(notification.request.identifier)
       }
@@ -25,6 +26,7 @@ export function dismissRememberedPushNotifications(
     if (payload.hostFingerprint !== hostFingerprint) {
       return false
     }
+
     return (
       confirmed.some(
         (fence) =>
@@ -47,10 +49,12 @@ export async function dismissPresentedPushNotification(
   if (fence) {
     await rememberPushDismissal({ hostFingerprint, notificationId, ...fence })
   }
+
   await dismissMatchingPresentedPushes((payload) => {
     if (payload.hostFingerprint !== hostFingerprint) {
       return false
     }
+
     return (
       payload.notificationId === notificationId &&
       (fence?.notificationEpoch && fence.notificationSeq !== undefined

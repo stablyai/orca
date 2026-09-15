@@ -60,24 +60,31 @@ export function useMobilePairingGeneration(params: {
       connectionModeOverride?: MobilePairingConnectionMode
     ) => {
       const preferredMode = connectionModeOverride ?? connectionMode
+
       if (!canMintMobilePairingOffer({ connectionMode: preferredMode, signedIn })) {
         return
       }
+
       const requestId = ++pairingRequestIdRef.current
       hasGeneratedRef.current = true
+
       if (mountedRef.current) {
         setPairLoading(true)
       }
+
       try {
         const address = addressOverride ?? selectedAddress
+
         const result = await window.api.mobile.getPairingQR({
           ...(address ? { address } : {}),
           connectionMode: preferredMode,
           ...(rotate ? { rotate: true } : {})
         })
+
         if (requestId !== pairingRequestIdRef.current) {
           return
         }
+
         if (result.available) {
           if (mountedRef.current) {
             setPairQrDataUrl(result.qrDataUrl)
@@ -93,6 +100,7 @@ export function useMobilePairingGeneration(params: {
             setPairQrSize(null)
             setPairingUrl(null)
             setPairingQrError(false)
+
             if (result.reason === 'relay_mint_failed' && result.relayFailure) {
               setRelayMintFailure(result.relayFailure)
               refreshAuthStatus()

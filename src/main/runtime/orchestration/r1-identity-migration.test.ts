@@ -18,6 +18,7 @@ describe('R1 identity migration', () => {
 
   afterEach(() => {
     db?.close()
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
     }
@@ -28,6 +29,7 @@ describe('R1 identity migration', () => {
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'legacy supervised worker' })
+
     const started = db.createStartingWorkerDispatch({
       taskId: task.id,
       startOptions: { worktree: 'folder:/workspace' },
@@ -35,6 +37,7 @@ describe('R1 identity migration', () => {
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER
     })
+
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_old',
@@ -54,9 +57,11 @@ describe('R1 identity migration', () => {
     v30.exec(
       'DROP INDEX IF EXISTS idx_dispatch_retry_of; DROP INDEX IF EXISTS idx_dispatch_resource;'
     )
+
     for (const column of DISPATCH_IDENTITY_COLUMNS) {
       v30.exec(`ALTER TABLE dispatch_contexts DROP COLUMN ${column}`)
     }
+
     v30.exec('ALTER TABLE worker_terminal_resources DROP COLUMN endpoint_id')
     v30.exec('ALTER TABLE worker_terminal_resources DROP COLUMN endpoint_incarnation')
     v30.pragma('user_version = 30')
@@ -102,20 +107,25 @@ describe('R1 identity migration', () => {
     db = undefined
 
     const v34 = new Database(dbPath)
+
     for (const column of ['creator_role', 'endpoint_id'] as const) {
       v34.exec(`ALTER TABLE dispatch_contexts ADD COLUMN ${column} TEXT`)
     }
+
     for (const column of ['endpoint_incarnation', 'attachment_kind', 'resource_id'] as const) {
       v34.exec(`ALTER TABLE dispatch_contexts ADD COLUMN ${column} TEXT`)
     }
+
     v34.exec('CREATE INDEX idx_dispatch_resource ON dispatch_contexts(resource_id)')
     v34.pragma('user_version = 34')
     v34.close()
 
     db = new OrchestrationDb(dbPath)
+
     const columns = (db.db.pragma('table_info(dispatch_contexts)') as { name: string }[]).map(
       ({ name }) => name
     )
+
     expect(columns).toEqual(
       expect.arrayContaining(['retry_of_dispatch_id', 'creator_dispatch_id', 'host_scope', 'depth'])
     )

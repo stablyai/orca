@@ -5,7 +5,9 @@ import type {
 } from './parcel-watcher-process-protocol'
 
 export type WatcherProcessCallback = (err: Error | null, events: WatcherProcessEvent[]) => void
+
 export type WatcherProcessSubscription = { unsubscribe(): Promise<void> }
+
 export type WatcherProcessHooks = {
   delivery?: WatcherProcessDeliveryOptions
   onInterruption?: () => void

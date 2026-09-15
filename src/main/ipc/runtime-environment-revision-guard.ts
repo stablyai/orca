@@ -10,11 +10,14 @@ export function runtimeEnvironmentRevisionFailure(
   const pairingChanged =
     expectedPairingRevision !== undefined &&
     (environment.pairingRevision ?? environment.createdAt) !== expectedPairingRevision
+
   const runtimeChanged =
     expectedRuntimeId !== undefined && environment.runtimeId !== expectedRuntimeId
+
   if (!pairingChanged && !runtimeChanged) {
     return null
   }
+
   return {
     id: method,
     ok: false,

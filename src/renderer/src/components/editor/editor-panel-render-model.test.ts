@@ -36,6 +36,7 @@ function renderModel(args: {
   gitStatusByWorktree?: Record<string, GitStatusEntry[]>
 }) {
   const activeFile = args.activeFile ?? markdownFile()
+
   return getEditorPanelRenderModel({
     activeFile,
     fileContents: args.fileContents ?? { '/repo/README.md': textContent() },
@@ -71,6 +72,7 @@ describe('getEditorPanelRenderModel HTML preview affordance', () => {
 
   it('disables preview when the workspace browser provider is unavailable', () => {
     const activeFile = htmlFile()
+
     const model = getEditorPanelRenderModel({
       activeFile,
       fileContents: {},

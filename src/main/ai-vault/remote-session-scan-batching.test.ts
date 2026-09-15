@@ -11,6 +11,7 @@ describe('mapRemoteScanBatches', () => {
         2,
         async (item) => {
           controller.abort()
+
           return item
         },
         controller.signal

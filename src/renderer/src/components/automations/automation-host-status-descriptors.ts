@@ -208,13 +208,16 @@ function authorityRecoveryAction(
   if (entry.authorityHealth === 'incompatible' || entry.querySupport === 'incompatible') {
     return 'update-server'
   }
+
   if (entry.authorityHealth === 'unavailable') {
     // The transport to the authority is down, so retrying the query alone cannot help.
     return 'reconnect'
   }
+
   if (entry.querySupport !== 'scoped') {
     return scopeGapRecoveryAction(entry.scopeGap)
   }
+
   return entry.authorityHealth === 'stale-error' ? 'retry' : null
 }
 

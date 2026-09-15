@@ -12,6 +12,7 @@ export type RendererRecoveryCircuitBreakerOptions = {
 // F0BDPCL93UM). 3 reloads in 60s is well above any single transient crash but
 // far below a runaway loop.
 export const DEFAULT_RENDERER_RECOVERY_WINDOW_MS = 60_000
+
 export const DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES = 3
 
 /**
@@ -37,6 +38,7 @@ export class RendererRecoveryCircuitBreaker {
   /** Number of recovery attempts still inside the rolling window at `now`. */
   recentRecoveryCount(now: number): number {
     this.pruneExpired(now)
+
     return this.attempts.length
   }
 
@@ -47,10 +49,13 @@ export class RendererRecoveryCircuitBreaker {
    */
   registerRecoveryAttempt(now: number): { allowed: boolean; recentRecoveryCount: number } {
     this.pruneExpired(now)
+
     if (this.attempts.length >= this.maxRecoveries) {
       return { allowed: false, recentRecoveryCount: this.attempts.length }
     }
+
     this.attempts.push(now)
+
     return { allowed: true, recentRecoveryCount: this.attempts.length }
   }
 

@@ -38,7 +38,9 @@ import {
   validatePrecomputedTerminalCloseState,
   type PrecomputedTerminalCloseState
 } from './terminal-close-target'
+
 export type { PrecomputedTerminalCloseState } from './terminal-close-target'
+
 export { closeOtherTerminalTabs, closeTerminalTabsToRight } from './terminal-tab-bulk-actions'
 
 export function closeTerminalTab(
@@ -67,14 +69,18 @@ export function closeTerminalTab(
   }
 ): void {
   const state = useAppStore.getState()
+
   const precomputedCloseState = validatePrecomputedTerminalCloseState(
     tabId,
     options?.precomputedRetirementPlan,
     options?.precomputedCloseState
   )
+
   const target = resolveTerminalCloseTarget(state, tabId, precomputedCloseState)
+
   if (!target) {
     const closeReason = options?.reason ?? options?.hostCloseReason ?? 'user'
+
     if (closeReason !== 'pty-exit') {
       // Why: late explicit cleanup must still revoke tab-scoped resume authority after PTY exit removed the row.
       state.closeTab(tabId, {
@@ -87,13 +93,18 @@ export function closeTerminalTab(
           : {})
       })
     }
+
     options?.onClosed?.()
+
     return
   }
+
   const { worktreeId: owningWorktreeId, terminalTabId } = target
   const worktreeRoute = resolveTerminalWorktreeRoute(state, owningWorktreeId)
+
   if (!worktreeRoute) {
     options?.onCancel?.()
+
     return
   }
 
@@ -108,8 +119,10 @@ export function closeTerminalTab(
     // owner may be unattended; reject pinned tabs without bypassing the guard.
     if (options?.rejectPinned) {
       options.onCancel?.()
+
       return
     }
+
     // Why: the pin prompt supersedes the running-process one only when it actually
     // appears. With `confirmClosePinnedTab` off it says nothing, so fall through and let
     // a busy pinned tab still get asked — Cmd+W did exactly that before #10142.
@@ -120,6 +133,7 @@ export function closeTerminalTab(
         onClose: () => closeTerminalTab(tabId, { ...options, force: true }),
         ...(options?.onCancel ? { onCancel: options.onCancel } : {})
       })
+
       return
     }
   }
@@ -136,14 +150,17 @@ export function closeTerminalTab(
       onClose: () => closeTerminalTab(tabId, { ...options, skipRunningProcessConfirm: true }),
       ...(options?.onCancel ? { onCancel: options.onCancel } : {})
     })
+
     return
   }
 
   const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
+
   const structuredSessionId = structuredTerminalSessionId(
     state.unifiedTabsByWorktree?.[owningWorktreeId],
     terminalTabId
   )
+
   if (
     structuredSessionId &&
     options?.reason !== 'pty-exit' &&
@@ -152,6 +169,7 @@ export function closeTerminalTab(
     const target = runtimeEnvironmentId
       ? ({ kind: 'environment', environmentId: runtimeEnvironmentId } as const)
       : ({ kind: 'local' } as const)
+
     void closeStructuredTerminalSessionWithRetry(target, structuredSessionId).then((closed) => {
       if (!closed) {
         toast.error(
@@ -167,8 +185,10 @@ export function closeTerminalTab(
           }
         )
         options?.onCancel?.()
+
         return
       }
+
       closeTerminalTab(tabId, {
         ...options,
         force: true,
@@ -176,16 +196,21 @@ export function closeTerminalTab(
         structuredSessionCloseConfirmed: true
       })
     })
+
     return
   }
+
   const retireStructuredSession = (): void => {
     const closeReason = options?.reason ?? options?.hostCloseReason ?? 'user'
+
     const target = runtimeEnvironmentId
       ? ({ kind: 'environment', environmentId: runtimeEnvironmentId } as const)
       : ({ kind: 'local' } as const)
+
     if (options?.structuredSessionCloseConfirmed === true) {
       return
     }
+
     disposeStructuredTerminalSession({
       unifiedTabs: state.unifiedTabsByWorktree?.[owningWorktreeId],
       terminalTabId,
@@ -193,11 +218,13 @@ export function closeTerminalTab(
       reason: closeReason
     })
   }
+
   if (runtimeEnvironmentId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     if (options?.reason === 'pty-exit') {
       // Why: stream exit is not host-tab closure; the HUB snapshot decides whether reconnect restores or removes this tab.
       return
     }
+
     // Why: a remote-owned worktree's tabs are host-authoritative, so the close
     // MUST reach the host or its next snapshot re-adds the tab (the "close then
     // snaps back" bug). When the local→host map has no entry, decode the id
@@ -213,15 +240,19 @@ export function closeTerminalTab(
         worktreeId: owningWorktreeId,
         tabId: terminalTabId
       }) ?? toHostSessionTabId(terminalTabId)
+
     const wireReason = options?.reason ?? options?.hostCloseReason ?? 'user'
+
     const lifecycleTerminalHandle =
       wireReason === 'user'
         ? null
         : getTerminalIncarnationHandle(options?.lifecyclePtyId ?? '', runtimeEnvironmentId)
+
     const publicationEpoch =
       wireReason === 'user'
         ? null
         : getLatestWebSessionTabsPublicationEpoch(runtimeEnvironmentId, owningWorktreeId)
+
     // Why: prune local mirrors immediately so close feels responsive while the
     // host session snapshot catches up.
     closeLocalTerminalTabState(terminalTabId, {
@@ -253,14 +284,17 @@ export function closeTerminalTab(
     })
     retireStructuredSession()
     options?.onClosed?.()
+
     return
   }
 
   const currentTerminalTabIds = precomputedCloseState
     ? null
     : getWorktreeTerminalTabIds(state, owningWorktreeId)
+
   const terminalCountBeforeClose =
     precomputedCloseState?.terminalCountBeforeClose ?? currentTerminalTabIds!.length
+
   // Why: a terminal with a unified row must leave successor choice to closeUnifiedTab's
   // MRU/neighbor repair — a terminal-only pre-pick skips agent-session/simulator neighbors
   // and re-stamps the group active before the canonical repair can run.
@@ -268,6 +302,7 @@ export function closeTerminalTab(
     (tab) =>
       tab.contentType === 'terminal' && (tab.entityId === terminalTabId || tab.id === terminalTabId)
   )
+
   if (
     !hasUnifiedRow &&
     terminalCountBeforeClose > 1 &&
@@ -275,9 +310,11 @@ export function closeTerminalTab(
     terminalTabId === state.activeTabId
   ) {
     const currentIndex = currentTerminalTabIds?.indexOf(terminalTabId) ?? -1
+
     const nextTabId = precomputedCloseState
       ? precomputedCloseState.nextTerminalTabId
       : (currentTerminalTabIds![currentIndex + 1] ?? currentTerminalTabIds![currentIndex - 1])
+
     if (nextTabId) {
       state.setActiveTab(nextTabId)
     }
@@ -293,22 +330,27 @@ export function closeTerminalTab(
       ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
       : {})
   })
+
   if (terminalCountBeforeClose <= 1 && state.activeWorktreeId === owningWorktreeId) {
     // Why: re-read after the close — closeUnifiedTab may have already deactivated or
     // repaired the surface, and the pre-close snapshot must not clobber that outcome.
     const current = useAppStore.getState()
+
     if (current.activeWorktreeId === owningWorktreeId) {
       // Why: agent-session and simulator tabs render without a terminal/editor/browser
       // entity, so only the unified renderable count can prove the worktree is empty
       // (mirrors leaveWorktreeIfEmpty in useTabGroupTabCloseCommands).
       const { renderableTabCount } = current.reconcileWorktreeTabModel(owningWorktreeId)
+
       if (renderableTabCount === 0) {
         const worktreeFile = current.openFiles.find((f) => f.worktreeId === owningWorktreeId)
+
         if (worktreeFile) {
           current.setActiveFile(worktreeFile.id)
           current.setActiveTabType('editor')
         } else {
           const browserTab = (current.browserTabsByWorktree?.[owningWorktreeId] ?? [])[0]
+
           if (browserTab) {
             current.setActiveBrowserTab(browserTab.id)
             current.setActiveTabType('browser')
@@ -319,6 +361,7 @@ export function closeTerminalTab(
       }
     }
   }
+
   retireStructuredSession()
   options?.onClosed?.()
 }

@@ -9,6 +9,7 @@ afterEach(() => {
 describe('refreshRuntimeEnvironmentStatus diagnostics', () => {
   it('publishes shared-control diagnostics from failed status probes', async () => {
     const remoteControl = diagnostics('ready')
+
     const getStatus = vi.fn().mockResolvedValue({
       id: 'status.get',
       ok: false,
@@ -19,6 +20,7 @@ describe('refreshRuntimeEnvironmentStatus diagnostics', () => {
       },
       _meta: { runtimeId: null }
     })
+
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { getStatus } }
     })

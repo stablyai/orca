@@ -65,6 +65,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
         })
       )
     }
+
     this.unsubscribers.push(...this.ownerRecovery.subscribeIdentityChanges())
   }
 
@@ -92,14 +93,17 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   hasPty(id: string): boolean {
     const mapped = this.sessionProviders.get(id)
+
     return mapped ? (mapped.hasPty?.(id) ?? true) : this.findProviderForExistingSession(id) !== null
   }
 
   async probePtyLiveness(id: string): Promise<boolean | null> {
     const mapped = this.sessionProviders.get(id)
+
     if (mapped && (mapped.hasPty?.(id) ?? true)) {
       return true
     }
+
     return await this.ownerRecovery.probe(id)
   }
 
@@ -138,6 +142,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     opts: { immediate?: boolean; keepHistory?: boolean; deadlineMs?: number }
   ): Promise<void> {
     await this.providerFor(id).shutdown(id, opts)
+
     if (!opts.keepHistory) {
       this.sessionProviders.delete(id)
     }
@@ -208,6 +213,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
     const results = await Promise.all(
       this.allProviders().map((provider) => provider.listProcesses(opts))
     )
+
     return results.flat()
   }
 
@@ -221,8 +227,10 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   onData(callback: (payload: PtyDataEvent) => void): () => void {
     this.dataListeners.push(callback)
+
     return () => {
       const idx = this.dataListeners.indexOf(callback)
+
       if (idx !== -1) {
         this.dataListeners.splice(idx, 1)
       }
@@ -247,25 +255,33 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void {
     const unsubscribes = this.allProviders().map((provider) => provider.onReplay(callback))
     let active = true
+
     const trackedUnsubscribe = (): void => {
       if (!active) {
         return
       }
+
       active = false
       const idx = this.unsubscribers.indexOf(trackedUnsubscribe)
+
       if (idx !== -1) {
         this.unsubscribers.splice(idx, 1)
       }
+
       combineUnsubscribes(unsubscribes)()
     }
+
     this.unsubscribers.push(trackedUnsubscribe)
+
     return trackedUnsubscribe
   }
 
   onExit(callback: (payload: { id: string; code: number }) => void): () => void {
     this.exitListeners.push(callback)
+
     return () => {
       const idx = this.exitListeners.indexOf(callback)
+
       if (idx !== -1) {
         this.exitListeners.splice(idx, 1)
       }
@@ -293,6 +309,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
 
   dispose(): void {
     this.disposeProviderOnly()
+
     for (const adapter of this.allDaemonAdapters()) {
       adapter.dispose()
     }
@@ -313,6 +330,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   fanoutCurrentDaemonSyntheticExits(code: number): void {
     for (const id of this.getCurrentDaemonSessionIds()) {
       this.sessionProviders.delete(id)
+
       // Why: restart kills listed sessions even when the adapter did not track them active.
       // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
       for (const listener of [...this.exitListeners]) {

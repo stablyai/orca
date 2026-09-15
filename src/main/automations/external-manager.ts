@@ -63,6 +63,7 @@ export function createScopedExternalAutomations(
 ): ScopedExternalAutomations {
   const resolve = (request: ScopedExternalAutomationRequest): ResolvedExternalAutomationScope =>
     resolveExternalAutomationScope(request, deps.registry)
+
   const mutationInput = (
     scope: ResolvedExternalAutomationScope,
     fields: ScopedExternalManagerMutationFields
@@ -80,6 +81,7 @@ export function createScopedExternalAutomations(
     async listManager(request) {
       const scope = resolve(request)
       const key = { ownerKey: scope.ownerKey, provider: scope.provider }
+
       return await deps.cache.resolve(
         key,
         () =>
@@ -96,6 +98,7 @@ export function createScopedExternalAutomations(
     },
     async listRuns(request) {
       const scope = resolve(request)
+
       return await listExternalAutomationRuns({
         managerId: scope.managerId,
         provider: scope.provider,

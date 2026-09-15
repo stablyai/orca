@@ -36,15 +36,20 @@ export function installMultiplexSlotFrames(
     if (state.closed || streams.get(stream.streamId) !== stream) {
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.Unsubscribe) {
       state.cancelPendingPtyWaits(stream.streamId)
       state.detachStream(stream.streamId, null)
+
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.Ack) {
       const payload = decodeTerminalStreamJson<unknown>(frame.payload) ?? {}
+
       if (stream.ackOutputSourceRanges) {
         const parsed = TerminalMultiplexSourceRangeAckFrame.safeParse(payload)
+
         if (parsed.success) {
           state.acknowledgeSourceRanges(
             stream,
@@ -54,65 +59,86 @@ export function installMultiplexSlotFrames(
         }
       } else {
         const parsed = TerminalMultiplexLegacyAckFrame.safeParse(payload)
+
         if (parsed.success) {
           state.acknowledgeOutput(stream, parsed.data.bytes)
         }
       }
+
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.Input) {
       const text = decodeTerminalStreamText(frame.payload)
+
       if (!text) {
         return
       }
+
       if (isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
         return
       }
+
       // Mobile already has the higher-priority floor, so a rejected desktop claim must not suppress later phone input.
       const inputClaimTail = stream.isMobile ? Promise.resolve(true) : stream.desktopClaimTail
       void inputClaimTail.then(async (claimed) => {
         if (!claimed || isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
           return
         }
+
         const outcome = await sendTerminalStreamInput(runtime, {
           terminal: stream.terminal,
           text,
           client: stream.client,
           isMobile: stream.isMobile
         })
+
         state.notifyStreamWriteUnavailable(stream, outcome)
       })
+
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.SetOutputPaused && stream.supportsOutputPause) {
       const payload = decodeTerminalStreamJson<{ paused?: unknown }>(frame.payload)
+
       if (typeof payload?.paused !== 'boolean' || stream.outputPaused === payload.paused) {
         return
       }
+
       stream.outputPaused = payload.paused
+
       if (stream.outputPaused) {
         stream.outputBatcher.flush()
         stream.ackPendingOutput = []
         stream.ackPendingOutputBytes = 0
         stream.ackPendingOutputOverflowed = false
       }
+
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.Resize && stream.client) {
       const viewport = decodeTerminalStreamJson<{ cols?: unknown; rows?: unknown }>(frame.payload)
+
       if (!viewport || typeof viewport.cols !== 'number' || typeof viewport.rows !== 'number') {
         return
       }
+
       const cols = viewport.cols
       const rows = viewport.rows
+
       // Why: resize registers stream-scoped geometry so detach can release it; older clients lack explicit claims.
       if (!stream.isMobile && stream.client?.id) {
         stream.registeredRemoteDesktopDriver = true
+
         if (stream.buffering) {
           stream.pendingRemoteDesktopViewport = { cols: viewport.cols, rows: viewport.rows }
+
           return
         }
       }
+
       stream.desktopClaimTail = stream.desktopClaimTail
         .then(async (priorClaimed) => {
           const result = await updateViewportForClient(
@@ -125,18 +151,23 @@ export function installMultiplexSlotFrames(
             'register',
             !stream.supportsDesktopViewportClaims
           )
+
           return stream.supportsDesktopViewportClaims
             ? priorClaimed && result.applied
             : result.applied
         })
         .catch(() => false)
+
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.ClaimViewport && stream.client && !stream.isMobile) {
       const viewport = decodeTerminalStreamJson<{ cols?: unknown; rows?: unknown }>(frame.payload)
+
       if (!viewport || typeof viewport.cols !== 'number' || typeof viewport.rows !== 'number') {
         return
       }
+
       const cols = viewport.cols
       const rows = viewport.rows
       stream.registeredRemoteDesktopDriver = true
@@ -162,15 +193,19 @@ export function installMultiplexSlotFrames(
             )
         )
         .catch(() => false)
+
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.SnapshotRequest) {
       const payload = TerminalMultiplexSnapshotRequestFrame.safeParse(
         decodeTerminalStreamJson<unknown>(frame.payload) ?? {}
       )
+
       void state.sendRequestedSnapshot(stream, payload.success ? payload.data : {})
     }
   }
+
   state.sendRequestedSnapshot = async (
     stream: TerminalMultiplexStream,
     request: MultiplexSnapshotRequest
@@ -178,34 +213,43 @@ export function installMultiplexSlotFrames(
     if (state.closed || streams.get(stream.streamId) !== stream) {
       return
     }
+
     stream.outputBatcher.flush()
     stream.pendingOutputOverflowed = false
     stream.buffering = true
     const requestId = request.requestId
     let sentSnapshotOutputSeq: number | undefined
+
     try {
       const scrollbackRows = normalizeMultiplexSnapshotScrollbackRows(request.scrollbackRows)
+
       let serialized = await serializeBudgetedRequestedSnapshot(
         runtime,
         stream.ptyId,
         scrollbackRows
       )
+
       if (state.closed || streams.get(stream.streamId) !== stream) {
         return
       }
+
       let size = runtime.getTerminalSize(stream.ptyId)
       let displayMode = runtime.getMobileDisplayMode(stream.ptyId)
+
       if (stream.pendingOutputOverflowed) {
         // Why: the overflowed tail is newer than the first snapshot, so retry for a current image instead of null.
         stream.pendingOutput.splice(0)
         stream.pendingOutputBytes = 0
         stream.pendingOutputOverflowed = false
         serialized = await serializeBudgetedRequestedSnapshot(runtime, stream.ptyId, scrollbackRows)
+
         if (state.closed || streams.get(stream.streamId) !== stream) {
           return
         }
+
         size = runtime.getTerminalSize(stream.ptyId)
         displayMode = runtime.getMobileDisplayMode(stream.ptyId)
+
         if (stream.pendingOutputOverflowed) {
           sendSnapshotFrames(
             (opcode, payload) => state.sendFrame(stream.streamId, opcode, payload),
@@ -221,9 +265,11 @@ export function installMultiplexSlotFrames(
               data: ''
             }
           )
+
           return
         }
       }
+
       sentSnapshotOutputSeq = serialized?.seq
       sendSnapshotFrames((opcode, payload) => state.sendFrame(stream.streamId, opcode, payload), {
         kind: 'scrollback',
@@ -255,6 +301,7 @@ export function installMultiplexSlotFrames(
         const shouldFlushPendingOutput = !stream.pendingOutputOverflowed
         stream.buffering = false
         const pendingOutput = stream.pendingOutput.splice(0)
+
         if (shouldFlushPendingOutput) {
           for (const chunk of pendingOutput) {
             // Why: an untagged reply resets the client to the snapshot's
@@ -265,14 +312,17 @@ export function installMultiplexSlotFrames(
               typeof requestId === 'number'
                 ? chunk
                 : getOutputAfterSnapshotSeq(chunk, sentSnapshotOutputSeq)
+
             if (uncovered) {
               stream.outputBatcher.push(uncovered.data, uncovered.meta)
             }
           }
         }
+
         stream.pendingOutputBytes = 0
         stream.pendingOutputOverflowed = false
         stream.outputBatcher.flush()
+
         // Why: a resize parked during snapshot buffering must be applied now, or it is dropped until the viewer's next resize.
         if (
           !stream.isMobile &&

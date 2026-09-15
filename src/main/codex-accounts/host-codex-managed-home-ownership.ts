@@ -44,6 +44,7 @@ export class ManagedCodexHomeTemporarilyUnavailableError extends Error {
 function pathsEqual(left: string, right: string): boolean {
   const resolvedLeft = resolve(left)
   const resolvedRight = resolve(right)
+
   return process.platform === 'win32'
     ? resolvedLeft.toLowerCase() === resolvedRight.toLowerCase()
     : resolvedLeft === resolvedRight
@@ -51,6 +52,7 @@ function pathsEqual(left: string, right: string): boolean {
 
 function pathIsInsideOrEqual(rootPath: string, candidatePath: string): boolean {
   const relativePath = relative(rootPath, candidatePath)
+
   return (
     relativePath === '' ||
     (!isAbsolute(relativePath) && relativePath !== '..' && !relativePath.startsWith(`..${sep}`))
@@ -65,12 +67,14 @@ function pathIsInsideOrEqual(rootPath: string, candidatePath: string): boolean {
  */
 function canonicalizeIfPresent(candidatePath: string): string {
   const resolvedPath = resolve(candidatePath)
+
   try {
     return realpathSync(resolvedPath)
   } catch (error) {
     if (isDefinitiveAbsence(error)) {
       return resolvedPath
     }
+
     throw error
   }
 }
@@ -88,6 +92,7 @@ function evaluate({
   // definitive one. `existsSync` used to fold EPERM into "does not exist", which
   // is what made an antivirus lock look like a deleted account.
   let canonicalCandidate: string
+
   try {
     statSync(resolvedCandidate)
     canonicalCandidate = realpathSync(resolvedCandidate)
@@ -95,11 +100,13 @@ function evaluate({
     if (isDefinitiveAbsence(error)) {
       return { kind: 'untrusted', reason: MISSING_MANAGED_HOME_MESSAGE }
     }
+
     return { kind: 'indeterminate', error }
   }
 
   let canonicalRoot: string
   let canonicalSystemHome: string
+
   try {
     canonicalRoot = realpathSync(resolvedRoot)
     canonicalSystemHome = canonicalizeIfPresent(systemCodexHomePath)
@@ -111,12 +118,15 @@ function evaluate({
     const candidateUsesManagedRootSpelling =
       pathIsInsideOrEqual(resolvedRoot, resolvedCandidate) ||
       pathIsInsideOrEqual(canonicalRoot, resolvedCandidate)
+
     let canonicalExpectedHome: string
+
     try {
       canonicalExpectedHome = canonicalizeIfPresent(join(canonicalRoot, expectedAccountId, 'home'))
     } catch (error) {
       return { kind: 'indeterminate', error }
     }
+
     if (
       !candidateUsesManagedRootSpelling ||
       !pathsEqual(canonicalCandidate, canonicalExpectedHome)
@@ -136,6 +146,7 @@ function evaluate({
       reason: 'Managed Codex home resolves inside the system Codex home.'
     }
   }
+
   if (
     !pathIsInsideOrEqual(canonicalRoot, canonicalCandidate) ||
     canonicalRoot === canonicalCandidate
@@ -149,6 +160,7 @@ function evaluate({
   const markerPath = join(canonicalCandidate, '.orca-managed-home')
   let markerIsRegularFile: boolean
   let markerContents: string
+
   try {
     markerIsRegularFile = lstatSync(markerPath).isFile()
     markerContents = markerIsRegularFile ? readFileSync(markerPath, 'utf-8') : ''
@@ -158,14 +170,17 @@ function evaluate({
     if (isDefinitiveAbsence(error)) {
       return { kind: 'untrusted', reason: 'Managed Codex home is missing Orca ownership marker.' }
     }
+
     return { kind: 'indeterminate', error }
   }
+
   if (!markerIsRegularFile) {
     return {
       kind: 'untrusted',
       reason: 'Managed Codex home ownership marker is not a regular file.'
     }
   }
+
   if (expectedAccountId !== undefined && markerContents.trim() !== expectedAccountId) {
     return {
       kind: 'untrusted',
@@ -194,11 +209,14 @@ export function assertOwnedHostCodexManagedHomePath(
   options: HostCodexManagedHomeOwnershipOptions
 ): string {
   const verdict = evaluate(options)
+
   if (verdict.kind === 'owned') {
     return verdict.homePath
   }
+
   if (verdict.kind === 'untrusted') {
     throw new UntrustedManagedCodexHomeError(verdict.reason)
   }
+
   throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: verdict.error })
 }

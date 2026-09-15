@@ -28,6 +28,7 @@ const UI_ONLY_SELECTORS = [
 function basenameWithoutExt(filePath: string): string {
   const base = filePath.split(/[\\/]/).pop() ?? filePath
   const dot = base.lastIndexOf('.')
+
   return dot > 0 ? base.slice(0, dot) : base
 }
 
@@ -50,38 +51,47 @@ export async function getActiveMarkdownExportPayload({
   if (!root) {
     return null
   }
+
   const state = useAppStore.getState()
   const activeFile = state.openFiles.find((f) => f.id === fileId)
+
   if (!activeFile || (activeFile.mode !== 'edit' && activeFile.mode !== 'markdown-preview')) {
     return null
   }
+
   const language = detectLanguage(activeFile.filePath)
+
   if (language !== 'markdown') {
     return null
   }
 
   const subtree = findDocumentSubtree(root)
+
   if (!subtree) {
     return null
   }
 
   const clone = subtree.cloneNode(true) as Element
+
   for (const selector of UI_ONLY_SELECTORS) {
     for (const node of clone.querySelectorAll(selector)) {
       node.remove()
     }
   }
+
   // Why: local-image previews use renderer-scoped blob URLs; the hidden PDF
   // window cannot dereference them, so embed the bytes before export.
   await inlineBlobImageSources(clone)
 
   const renderedHtml = clone.innerHTML.trim()
+
   if (!renderedHtml) {
     return null
   }
 
   const title = basenameWithoutExt(activeFile.relativePath || activeFile.filePath)
   const html = buildMarkdownExportHtml({ title, renderedHtml })
+
   return { title, html }
 }
 
@@ -90,9 +100,11 @@ async function inlineBlobImageSources(root: Element): Promise<void> {
   await Promise.all(
     images.map(async (image) => {
       const src = image.getAttribute('src')
+
       if (!src) {
         return
       }
+
       image.setAttribute('src', await readBlobImageAsDataUrl(src))
     })
   )
@@ -101,11 +113,14 @@ async function inlineBlobImageSources(root: Element): Promise<void> {
 async function readBlobImageAsDataUrl(src: string): Promise<string> {
   try {
     const response = await fetch(src)
+
     if (!response.ok) {
       throw new Error('Unable to fetch blob image')
     }
+
     const blob = await response.blob()
     const bytes = new Uint8Array(await blob.arrayBuffer())
+
     return `data:${blob.type || 'application/octet-stream'};base64,${bytesToBase64(bytes)}`
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -116,8 +131,10 @@ async function readBlobImageAsDataUrl(src: string): Promise<string> {
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = ''
   const chunkSize = 0x8000
+
   for (let index = 0; index < bytes.length; index += chunkSize) {
     binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize))
   }
+
   return btoa(binary)
 }

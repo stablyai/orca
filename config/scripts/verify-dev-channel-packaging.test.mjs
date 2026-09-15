@@ -4,19 +4,24 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { collectDevChannelPackagingProblems } from './verify-dev-channel-packaging.mjs'
 
 const require = createRequire(import.meta.url)
+
 const CONFIG_PATH = resolve(import.meta.dirname, '../electron-builder.config.cjs')
 
 /** The config reads process.env at require time, so each identity needs a fresh load. */
 function loadConfigWithEnv(env) {
   const saved = { ...process.env }
+
   for (const key of Object.keys(process.env)) {
     if (key.startsWith('ORCA_')) {
       delete process.env[key]
     }
   }
+
   Object.assign(process.env, env)
+
   try {
     delete require.cache[require.resolve(CONFIG_PATH)]
+
     return require(CONFIG_PATH)
   } finally {
     process.env = saved
@@ -62,6 +67,7 @@ describe('electron-builder dev-channel identity', () => {
       const config = loadConfigWithEnv(env)
       expect(typeof config.win.signtoolOptions.sign).toBe('function')
     }
+
     expect(loadConfigWithEnv({}).win.signtoolOptions.publisherName).toBe('SignPath Foundation')
     expect(loadConfigWithEnv(WIN_ADHOC_ENV).win.signtoolOptions.publisherName).toBeUndefined()
   })
@@ -105,6 +111,7 @@ describe('collectDevChannelPackagingProblems', () => {
     extraMetadata: { version: '1.4.178-adhoc.20260819010203' },
     win: { verifyUpdateCodeSignature: false }
   }
+
   const env = { ORCA_ADHOC_BUILD_VERSION: '1.4.178-adhoc.20260819010203' }
 
   it('accepts a correctly configured Windows dev build', () => {

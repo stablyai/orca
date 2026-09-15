@@ -34,6 +34,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({ isCommitting: true, stagedCount: 1, hasMessage: true })
     )
+
     expect(result).toEqual({
       kind: 'commit',
       label: 'Commit',
@@ -49,6 +50,7 @@ describe('resolvePrimaryAction', () => {
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 }
       })
     )
+
     expect(result).toEqual({
       kind: 'pull',
       label: 'Pull',
@@ -71,6 +73,7 @@ describe('resolvePrimaryAction', () => {
         inFlightRemoteOpKind: 'sync'
       })
     )
+
     expect(result).toEqual({
       kind: 'sync',
       label: 'Sync',
@@ -87,6 +90,7 @@ describe('resolvePrimaryAction', () => {
         inFlightRemoteOpKind: 'pull'
       })
     )
+
     expect(result.kind).toBe('pull')
     expect(result.label).toBe('Pull')
     expect(result.title).toBe('Pull in progress…')
@@ -104,6 +108,7 @@ describe('resolvePrimaryAction', () => {
         inFlightRemoteOpKind: 'publish'
       })
     )
+
     expect(result.kind).toBe('publish')
     expect(result.label).toBe('Publish Branch')
     expect(result.title).toBe('Remote operation in progress…')
@@ -122,6 +127,7 @@ describe('resolvePrimaryAction', () => {
         inFlightRemoteOpKind: 'fetch'
       })
     )
+
     expect(result).toEqual({
       kind: 'push',
       label: 'Push',
@@ -138,6 +144,7 @@ describe('resolvePrimaryAction', () => {
         inFlightRemoteOpKind: 'force_push'
       })
     )
+
     expect(result).toEqual({
       kind: 'push',
       label: 'Force Push',
@@ -150,6 +157,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({ hasUnresolvedConflicts: true, stagedCount: 2, hasMessage: true })
     )
+
     expect(result).toEqual({
       kind: 'commit',
       label: 'Commit',
@@ -172,10 +180,12 @@ describe('resolvePrimaryAction', () => {
       { hasUpstream: true as const, ahead: 2, behind: 1 },
       { hasUpstream: true as const, ahead: 0, behind: 4 }
     ]
+
     for (const upstreamStatus of upstreams) {
       const result = resolvePrimaryAction(
         inputs({ stagedCount: 1, hasMessage: true, upstreamStatus })
       )
+
       expect(result.kind).toBe('commit')
       expect(result.label).toBe('Commit')
       expect(result.disabled).toBe(false)
@@ -196,6 +206,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }, branchCommitsAhead: 1 })
     )
+
     expect(result).toEqual({
       kind: 'publish',
       label: 'Publish Branch',
@@ -213,6 +224,7 @@ describe('resolvePrimaryAction', () => {
         canPushLinkedReviewWithoutUpstream: true
       })
     )
+
     expect(result).toEqual({
       kind: 'push',
       label: 'Push',
@@ -229,6 +241,7 @@ describe('resolvePrimaryAction', () => {
         prState: 'open'
       })
     )
+
     expect(result).toEqual({
       kind: 'commit',
       label: 'Commit',
@@ -245,6 +258,7 @@ describe('resolvePrimaryAction', () => {
         hasCurrentBranch: false
       })
     )
+
     expect(result).toEqual({
       kind: 'commit',
       label: 'Commit',
@@ -257,6 +271,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }, branchCommitsAhead: 0 })
     )
+
     expect(result).toEqual({
       kind: 'publish',
       label: 'Publish Branch',
@@ -272,6 +287,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({ upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }, ...overrides })
     )
+
     expect(result).toEqual({ kind: 'commit', label: 'Commit', title, disabled: true })
   })
 
@@ -279,6 +295,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({ upstreamStatus: { hasUpstream: true, ahead: 2, behind: 3 } })
     )
+
     expect(result).toEqual({
       kind: 'sync',
       label: 'Sync',
@@ -300,6 +317,7 @@ describe('resolvePrimaryAction', () => {
         }
       })
     )
+
     expect(result).toEqual({
       kind: 'push',
       label: 'Force Push',
@@ -313,6 +331,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({ upstreamStatus: { hasUpstream: true, ahead: 0, behind: 4 } })
     )
+
     expect(result.kind).toBe('pull')
     expect(result.label).toBe('Pull')
     expect(result.title).toBe('Pull 4 commits')
@@ -322,6 +341,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({ upstreamStatus: { hasUpstream: true, ahead: 0, behind: 1 } })
     )
+
     expect(result.title).toBe('Pull 1 commit')
   })
 
@@ -329,6 +349,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({ upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 } })
     )
+
     expect(result).toEqual({
       kind: 'push',
       label: 'Push',
@@ -360,6 +381,7 @@ describe('resolvePrimaryAction', () => {
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 3 }
       })
     )
+
     expect(result).toEqual({
       kind: 'stage',
       label: 'Stage All',
@@ -376,6 +398,7 @@ describe('resolvePrimaryAction', () => {
         upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 }
       })
     )
+
     expect(result.kind).toBe('stage')
     expect(result.label).toBe('Stage All')
     expect(result.disabled).toBe(false)
@@ -389,6 +412,7 @@ describe('resolvePrimaryAction', () => {
         upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
       })
     )
+
     expect(result.kind).toBe('stage')
   })
 
@@ -396,6 +420,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({ hasUnstagedChanges: true, hasStageableChanges: true, upstreamStatus: undefined })
     )
+
     expect(result.kind).toBe('stage')
     expect(result.disabled).toBe(false)
   })
@@ -411,6 +436,7 @@ describe('resolvePrimaryAction', () => {
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       })
     )
+
     expect(result.kind).toBe('commit')
     expect(result.label).toBe('Commit')
     expect(result.disabled).toBe(false)
@@ -480,6 +506,7 @@ describe('resolvePrimaryAction', () => {
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       })
     )
+
     expect(result.kind).toBe('commit')
     expect(result.disabled).toBe(false)
   })
@@ -492,6 +519,7 @@ describe('resolvePrimaryAction', () => {
         upstreamStatus: upstreamInSync
       })
     )
+
     expect(result).toEqual({
       kind: 'commit',
       label: 'Commit',
@@ -504,6 +532,7 @@ describe('resolvePrimaryAction', () => {
     const result = resolvePrimaryAction(
       inputs({ stagedCount: 1, hasUnstagedChanges: true, hasMessage: false })
     )
+
     expect(result.kind).toBe('commit')
     expect(result.disabled).toBe(true)
     expect(result.title).toBe('Enter a commit message to commit')
@@ -517,6 +546,7 @@ describe('resolvePrimaryAction', () => {
         upstreamStatus: upstreamInSync
       })
     )
+
     expect(result).toEqual({
       kind: 'stage',
       label: 'Stage All',
@@ -549,6 +579,7 @@ describe('resolvePrimaryAction', () => {
         }
       })
     )
+
     expect(result).toEqual({
       kind: 'create_pr',
       label: 'Create PR',
@@ -571,6 +602,7 @@ describe('resolvePrimaryAction', () => {
         }
       })
     )
+
     expect(result).toEqual({
       kind: 'create_pr',
       label: 'Create MR',
@@ -595,6 +627,7 @@ describe('resolvePrimaryAction', () => {
           }
         })
       )
+
       expect(result).toEqual({
         kind: 'create_pr',
         label: 'Create PR',

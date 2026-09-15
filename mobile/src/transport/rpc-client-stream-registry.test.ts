@@ -13,15 +13,18 @@ function createRegistry(initialState: ConnectionState = 'connected') {
   const sent: SentRequest[] = []
   let state = initialState
   let id = 0
+
   const registry = new RpcClientStreamRegistry({
     nextId: () => `rpc-${++id}`,
     deviceToken: 'device-token',
     getState: () => state,
     sendEncrypted: (request) => {
       sent.push(request as SentRequest)
+
       return true
     }
   })
+
   return {
     registry,
     sent,

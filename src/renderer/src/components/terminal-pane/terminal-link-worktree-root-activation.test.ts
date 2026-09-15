@@ -16,6 +16,7 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
+
 const { storeState, deps, authorizeExternalPathMock, statMock, openFileMock, openFilePathMock } =
   doubles
 
@@ -165,6 +166,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     const links = await new Promise<ILink[]>((resolve) => {
       provider.provideLinks(1, (provided) => resolve(provided ?? []))
     })
+
     expect(links[0]).toBeDefined()
     links[0]!.hover?.({} as MouseEvent, links[0]!.text)
 
@@ -178,6 +180,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     storeState.worktreesByRepo = {
       repo: [{ id: 'wt-1', path: '/repo' }]
     }
+
     const { provider, linkTooltip } = createProviderSetup(
       [makeBufferLine('/repo')],
       new Map([['active\0/repo', false]])
@@ -186,6 +189,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     const links = await new Promise<ILink[]>((resolve) => {
       provider.provideLinks(1, (provided) => resolve(provided ?? []))
     })
+
     expect(links.map((link) => link.text)).toEqual(['/repo'])
     links[0]!.hover?.({} as MouseEvent, links[0]!.text)
 
@@ -205,6 +209,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     const links = await new Promise<ILink[]>((resolve) => {
       provider.provideLinks(1, (provided) => resolve(provided ?? []))
     })
+
     expect(links.map((link) => link.text)).toContain('/repo/')
     links[0]!.hover?.({} as MouseEvent, links[0]!.text)
 
@@ -224,6 +229,7 @@ describe('createFilePathLinkProvider range bounds', () => {
     const links = await new Promise<ILink[]>((resolve) => {
       provider.provideLinks(1, (provided) => resolve(provided ?? []))
     })
+
     expect(links[0]).toBeDefined()
     links[0]!.hover?.({} as MouseEvent, links[0]!.text)
 
@@ -250,6 +256,7 @@ describe('createFilePathLinkProvider range bounds', () => {
         pathExistsCache: new Map([['active\0/tmp/other-worktree', false]])
       }
     )
+
     await flushAsyncWork()
 
     expect(opened).toBe(true)

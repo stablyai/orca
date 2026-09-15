@@ -18,6 +18,7 @@ export function getVisibleSidebarHostIdSet(
   const visibleHostIds =
     visibleWorkspaceHostIds ??
     (workspaceHostScope === ALL_EXECUTION_HOSTS_SCOPE ? null : [workspaceHostScope])
+
   return visibleHostIds ? new Set<ExecutionHostId>(visibleHostIds) : null
 }
 
@@ -31,6 +32,7 @@ export function filterProjectGroupsForVisibleHosts(
   if (!visibleHostIdSet) {
     return projectGroups
   }
+
   return projectGroups.filter((group) =>
     visibleHostIdSet.has(getProjectGroupExecutionHostIdForRows(group, defaultHostId))
   )
@@ -45,7 +47,9 @@ export function filterFolderWorkspacesForVisibleHosts(
   if (!visibleHostIdSet) {
     return folderWorkspaces
   }
+
   const projectGroupById = new Map(projectGroups.map((group) => [group.id, group]))
+
   return folderWorkspaces.filter((folderWorkspace) =>
     visibleHostIdSet.has(
       getFolderWorkspaceExecutionHostIdForRows({
@@ -62,9 +66,11 @@ export function getProjectGroupExecutionHostIdForRows(
   defaultHostId: ExecutionHostId
 ): ExecutionHostId {
   const executionHostId = normalizeExecutionHostId(group.executionHostId)
+
   if (executionHostId) {
     return executionHostId
   }
+
   return group.connectionId ? toSshExecutionHostId(group.connectionId) : defaultHostId
 }
 
@@ -78,19 +84,25 @@ export function getFolderWorkspaceExecutionHostIdForRows({
   defaultHostId: ExecutionHostId
 }): ExecutionHostId {
   const explicitFolderHostId = normalizeExecutionHostId(folderWorkspace.executionHostId)
+
   if (explicitFolderHostId) {
     return explicitFolderHostId
   }
+
   if (projectGroup) {
     const explicitProjectGroupHostId = normalizeExecutionHostId(projectGroup.executionHostId)
+
     if (explicitProjectGroupHostId) {
       return explicitProjectGroupHostId
     }
+
     const projectGroupHostId = getProjectGroupExecutionHostIdForRows(projectGroup, defaultHostId)
+
     if (projectGroupHostId !== defaultHostId || !folderWorkspace.connectionId) {
       return projectGroupHostId
     }
   }
+
   return folderWorkspace.connectionId
     ? toSshExecutionHostId(folderWorkspace.connectionId)
     : defaultHostId
@@ -100,6 +112,7 @@ export function getRuntimeEnvironmentIdForFolderPathStatusHost(
   hostId: ExecutionHostId
 ): string | null {
   const parsed = parseExecutionHostId(hostId)
+
   return parsed?.kind === 'runtime' ? parsed.environmentId : null
 }
 
@@ -107,9 +120,11 @@ function getProjectGroupExecutionHostIdForFolderPathStatus(
   group: Pick<ProjectGroup, 'connectionId' | 'executionHostId'>
 ): ExecutionHostId {
   const executionHostId = normalizeExecutionHostId(group.executionHostId)
+
   if (executionHostId) {
     return executionHostId
   }
+
   return group.connectionId ? toSshExecutionHostId(group.connectionId) : 'local'
 }
 
@@ -126,13 +141,16 @@ export function getFolderPathStatusRouteOptionsForRows({
     request.scope === 'folder-workspace'
       ? folderWorkspacesById.get(request.folderWorkspaceId)
       : undefined
+
   const group =
     request.scope === 'project-group'
       ? projectGroupsById.get(request.projectGroupId)
       : projectGroupsById.get(folderWorkspace?.projectGroupId ?? '')
+
   if (!group) {
     return undefined
   }
+
   const hostId =
     request.scope === 'project-group'
       ? getProjectGroupExecutionHostIdForFolderPathStatus(group)
@@ -141,6 +159,8 @@ export function getFolderPathStatusRouteOptionsForRows({
           projectGroup: group,
           defaultHostId: getProjectGroupExecutionHostIdForFolderPathStatus(group)
         })
+
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderPathStatusHost(hostId)
+
   return { runtimeEnvironmentId }
 }

@@ -32,7 +32,9 @@ describe('WSL transcript filesystem process operations', () => {
         operation: 'open',
         path: transcriptPath
       })) as number
+
       await rename(replacementPath, transcriptPath)
+
       const body = await operations.execute({
         id: 2,
         operation: 'read',
@@ -40,6 +42,7 @@ describe('WSL transcript filesystem process operations', () => {
         position: 0,
         length: 64
       })
+
       await operations.execute({ id: 3, operation: 'close', handleId })
 
       expect(Buffer.from(body as Buffer).toString('utf8')).toBe('original transcript')

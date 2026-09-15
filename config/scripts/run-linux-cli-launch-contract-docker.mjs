@@ -5,22 +5,37 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const commandArgs = process.argv.slice(2)
+
 const appImageArg = valueAfter('--appimage')
+
 const appImage = appImageArg ? resolve(appImageArg) : null
+
 const platform = valueAfter('--platform')
+
 const dockerPlatformArgs = platform ? ['--platform', platform] : []
 
 const suffix = `${process.pid}-${Date.now()}`
+
 const artifactVolume = `orca-cli-contract-artifact-${suffix}`
+
 const tagArchitecture = platform?.split('/')[1] ?? process.arch
+
 const tag = `orca-cli-launch-contract:ubuntu-24.04-${tagArchitecture}-${suffix}`
+
 const base = 'ubuntu@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90'
+
 const containers = new Set()
+
 let artifactVolumeCreated = false
+
 const CASE_TIMEOUT_MS = 90_000
+
 const BUILD_TIMEOUT_MS = 10 * 60_000
+
 const STAGING_TIMEOUT_MS = 5 * 60_000
+
 const DOCKER_TIMEOUT_MS = 2 * 60_000
+
 const CLEANUP_TIMEOUT_MS = 30_000
 
 // Exact statuses reject silent no-op launches as well as crashes.
@@ -84,15 +99,19 @@ try {
       'Usage: run-linux-cli-launch-contract-docker.mjs --appimage /path/to/orca-linux.AppImage [--platform linux/amd64|linux/arm64]'
     )
   }
+
   if (commandArgs.includes('--platform') && !platform) {
     fail('Missing value for --platform')
   }
+
   if (platform !== null && platform !== 'linux/amd64' && platform !== 'linux/arm64') {
     fail(`Unsupported --platform: ${platform}`)
   }
+
   if (!existsSync(appImage)) {
     fail(`AppImage not found: ${appImage}`)
   }
+
   docker(['volume', 'create', artifactVolume], { timeoutMs: DOCKER_TIMEOUT_MS })
   artifactVolumeCreated = true
   buildImage()
@@ -106,36 +125,44 @@ try {
   for (const container of containers) {
     docker(['rm', '-f', container], { allowFailure: true, timeoutMs: CLEANUP_TIMEOUT_MS })
   }
+
   if (artifactVolumeCreated) {
     docker(['volume', 'rm', artifactVolume], {
       allowFailure: true,
       timeoutMs: CLEANUP_TIMEOUT_MS
     })
   }
+
   docker(['image', 'rm', tag], { allowFailure: true, timeoutMs: CLEANUP_TIMEOUT_MS })
 }
 
 function runContract() {
   const failures = []
+
   for (const testCase of CASES) {
     const output = runCase(testCase.name)
     const statusMatch = /^RESULT status=(\d+)/m.exec(output)
+
     if (!statusMatch) {
       failures.push(`${testCase.name}: ${firstLine(output)}\n    ${testCase.why}`)
       console.log(`  FAIL ${testCase.name} — ${firstLine(output)}`)
       continue
     }
+
     const status = Number(statusMatch[1])
+
     // Why: the harness echoes `RESULT status=N case=<name>`, so a case whose name contains the
     // expected substring would assert against the harness's own line instead of the CLI's output.
     const commandOutput = output
       .split('\n')
       .filter((line) => !/^(?:RESULT|CRASHED|PRECONDITION_FAILED) /.test(line))
       .join('\n')
+
     const matchesOutput =
       typeof testCase.expectOutput === 'string'
         ? commandOutput.includes(testCase.expectOutput)
         : testCase.expectOutput.test(commandOutput)
+
     if (status !== testCase.expectStatus || !matchesOutput) {
       failures.push(
         `${testCase.name}: expected status ${testCase.expectStatus} and ${testCase.expectOutput}, ` +
@@ -144,8 +171,10 @@ function runContract() {
       console.log(`  FAIL ${testCase.name} — status ${status}`)
       continue
     }
+
     console.log(`  ok   ${testCase.name} (status ${status})`)
   }
+
   if (failures.length > 0) {
     fail(`Linux CLI launch contract failed:\n  - ${failures.join('\n  - ')}`)
   }
@@ -154,6 +183,7 @@ function runContract() {
 function runCase(caseName) {
   const container = `orca-cli-contract-${caseName}-${suffix}`
   containers.add(container)
+
   // FUSE and extra capabilities would invalidate the test conditions.
   return docker(
     [
@@ -173,6 +203,7 @@ function runCase(caseName) {
 
 function buildImage() {
   console.log(`Building ${tag}…`)
+
   const buildArgs = [
     'build',
     ...dockerPlatformArgs,
@@ -184,6 +215,7 @@ function buildImage() {
     tag,
     'config/docker/cli-launch-contract'
   ]
+
   // Why: apt fetches from archive.ubuntu.com stall or fail mid-sync; a second build usually lands on a healthy index.
   try {
     docker(buildArgs, { timeoutMs: BUILD_TIMEOUT_MS })
@@ -237,21 +269,27 @@ function docker(args, options = {}) {
       timeout: options.timeoutMs ?? DOCKER_TIMEOUT_MS,
       killSignal: 'SIGTERM'
     })
+
     return output ?? ''
   } catch (error) {
     const timedOut = error instanceof Error && 'code' in error && error.code === 'ETIMEDOUT'
+
     if (timedOut) {
       const message = `docker ${args.join(' ')} timed out after ${options.timeoutMs ?? DOCKER_TIMEOUT_MS}ms`
+
       if (!options.allowFailure) {
         fail(message)
       }
+
       return message
     }
+
     if (!options.allowFailure) {
       fail(
         `docker ${args.join(' ')} failed: ${error instanceof Error ? error.message : String(error)}`
       )
     }
+
     return `${error?.stdout ?? ''}${error?.stderr ?? ''}`
   }
 }
@@ -262,6 +300,7 @@ function firstLine(value) {
 
 function valueAfter(flag) {
   const index = commandArgs.indexOf(flag)
+
   return index === -1 ? null : (commandArgs[index + 1] ?? null)
 }
 

@@ -25,10 +25,12 @@ export function AgentAwakeSetting({
 }: AgentAwakeSettingProps): React.JSX.Element {
   const title = getAgentAwakeTitle()
   const description = getAgentAwakeDescription()
+
   const mode = normalizeComputerAwakeMode(
     settings.computerAwakeMode,
     settings.keepComputerAwakeWhileAgentsRun
   )
+
   const setMode = (nextMode: ComputerAwakeMode): void => {
     updateSettings(computerAwakeSettingsForMode(nextMode))
   }

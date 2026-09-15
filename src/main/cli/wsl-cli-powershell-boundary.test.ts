@@ -61,6 +61,7 @@ describe('WSL CLI PowerShell boundary', () => {
           'process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), cwd: process.env.ORCA_CLI_CWD ?? null }))\n',
           'utf8'
         )
+
         const invocations = [
           {
             bridgeArgs: [process.execPath, '-WslCwd', wslCwd, targetPath, ...FORWARDED_ARGS],
@@ -75,6 +76,7 @@ describe('WSL CLI PowerShell boundary', () => {
             expected: { argv: FORWARDED_ARGS, cwd: null }
           }
         ]
+
         for (const { bridgeArgs, expected } of invocations) {
           const result = spawnSync(
             'powershell.exe',
@@ -111,6 +113,7 @@ describe('WSL CLI PowerShell boundary', () => {
           ],
           { encoding: 'utf8' }
         )
+
         expect(exitResult.error).toBeUndefined()
         expect(exitResult.status).toBe(23)
       } finally {

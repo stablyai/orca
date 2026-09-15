@@ -16,12 +16,15 @@ export function resolveSameIdSurvivingHostId(
   if (requiredExecutionHostId === null) {
     return null
   }
+
   const catalogHostId = getWorktreeOperationOwnerHostIds(state, worktreeId).find(
     (ownerHostId) => ownerHostId !== requiredExecutionHostId
   )
+
   if (catalogHostId) {
     return catalogHostId
   }
+
   if (
     state.activeWorktreeId === worktreeId &&
     state.activeWorkspaceExecutionHostId !== null &&
@@ -29,9 +32,11 @@ export function resolveSameIdSurvivingHostId(
   ) {
     return state.activeWorkspaceExecutionHostId
   }
+
   if (ignoreWorkspaceCleanupScanSurvivors) {
     return null
   }
+
   return (
     state.workspaceCleanupScan?.candidates
       .map((candidate) => ({ candidate, hostId: resolveWorkspaceCleanupRemovalHostId(candidate) }))
@@ -65,6 +70,7 @@ export function dropConfirmedHostRow(
     const removedActiveHost =
       state.activeWorktreeId === worktreeId &&
       state.activeWorkspaceExecutionHostId === requiredExecutionHostId
+
     const scanSurvivingHostId = ignoreWorkspaceCleanupScanSurvivors
       ? undefined
       : state.workspaceCleanupScan?.candidates
@@ -74,6 +80,7 @@ export function dropConfirmedHostRow(
             (ownerHostId): ownerHostId is ExecutionHostId =>
               ownerHostId !== null && ownerHostId !== requiredExecutionHostId
           )
+
     const survivingHostId = removedActiveHost
       ? (getWorktreeOperationOwnerHostIds(state, worktreeId).find(
           (ownerHostId) => ownerHostId !== requiredExecutionHostId
@@ -81,7 +88,9 @@ export function dropConfirmedHostRow(
         scanSurvivingHostId ??
         fallbackSurvivingHostId)
       : null
+
     const nextWorktreesByRepo = { ...state.worktreesByRepo }
+
     for (const [candidateRepoId, worktrees] of Object.entries(nextWorktreesByRepo)) {
       const matchOptions = worktreeHostMatchOptions(state, candidateRepoId, requiredExecutionHostId)
       nextWorktreesByRepo[candidateRepoId] = worktrees.filter(
@@ -90,22 +99,29 @@ export function dropConfirmedHostRow(
           !worktreeMatchesHost(worktree, requiredExecutionHostId, matchOptions)
       )
     }
+
     let nextDetectedWorktreesByRepo = state.detectedWorktreesByRepo
+
     for (const [candidateRepoId, result] of Object.entries(state.detectedWorktreesByRepo)) {
       const matchOptions = worktreeHostMatchOptions(state, candidateRepoId, requiredExecutionHostId)
+
       const worktrees = result.worktrees.filter(
         (worktree) =>
           worktree.id !== worktreeId ||
           !worktreeMatchesHost(worktree, requiredExecutionHostId, matchOptions)
       )
+
       if (worktrees.length === result.worktrees.length) {
         continue
       }
+
       if (nextDetectedWorktreesByRepo === state.detectedWorktreesByRepo) {
         nextDetectedWorktreesByRepo = { ...state.detectedWorktreesByRepo }
       }
+
       nextDetectedWorktreesByRepo[candidateRepoId] = { ...result, worktrees }
     }
+
     sameIdSurvives =
       resolveSameIdSurvivingHostId(
         {
@@ -119,6 +135,7 @@ export function dropConfirmedHostRow(
       ) !== null || fallbackSurvivingHostId !== null
     const nextDeleteState = { ...state.deleteStateByWorktreeId }
     delete nextDeleteState[composeWorktreeHostIdentity(requiredExecutionHostId, worktreeId)]
+
     return {
       worktreesByRepo: nextWorktreesByRepo,
       ...(nextDetectedWorktreesByRepo !== state.detectedWorktreesByRepo
@@ -134,9 +151,11 @@ export function dropConfirmedHostRow(
       sortEpoch: state.sortEpoch + 1
     }
   })
+
   if (parseExecutionHostId(requiredExecutionHostId)?.kind === 'ssh') {
     rememberAuthoritativelyRemovedWorktrees(requiredExecutionHostId, [worktreeId])
   }
+
   return sameIdSurvives
 }
 

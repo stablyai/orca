@@ -46,16 +46,21 @@ export function settleFailedAgentSessionAcquisition(
   args: AgentSessionFailedAcquisitionSettlement
 ): AgentSessionRecord {
   const operation = state.operations.get(agentSessionOperationKey(args.callerKey, args.operationId))
+
   if (!operation || operation.outcome.status !== 'pending') {
     throw new Error('agent_session_operation_conflict')
   }
+
   const record = state.records.get(args.sessionId)
+
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
+
   const next = settleFailedLease(record, args)
   state.records.set(args.sessionId, next)
   state.operations = settleAgentSessionOperation(state.operations, args)
+
   return next
 }
 
@@ -65,14 +70,19 @@ export function settleFailedAgentSessionPostAcquisitionAttachment(
   args: AgentSessionFailedPostAcquisitionAttachmentSettlement
 ): AgentSessionRecord {
   const operation = state.operations.get(agentSessionOperationKey(args.callerKey, args.operationId))
+
   if (!operation || operation.outcome.status !== 'pending') {
     throw new Error('agent_session_operation_conflict')
   }
+
   const record = state.records.get(args.sessionId)
+
   if (!record) {
     throw new Error('agent_session_identity_required')
   }
+
   assertFence(record.lease, args.fence)
+
   if (
     record.lease.runtimeKind !== 'native' ||
     record.lease.claimStatus !== 'live' ||
@@ -83,6 +93,7 @@ export function settleFailedAgentSessionPostAcquisitionAttachment(
   ) {
     throw new Error('agent_session_ownership_unknown')
   }
+
   const next =
     args.exitProof === 'unproven'
       ? withLease(record, {
@@ -114,8 +125,10 @@ export function settleFailedAgentSessionPostAcquisitionAttachment(
                   observedAt: args.now
                 }
         })
+
   state.records.set(args.sessionId, next)
   state.operations = settleAgentSessionOperation(state.operations, args)
+
   return next
 }
 
@@ -124,6 +137,7 @@ function settleFailedLease(
   args: AgentSessionFailedAcquisitionSettlement
 ): AgentSessionRecord {
   assertFence(record.lease, args.fence)
+
   if (
     record.lease.claimStatus !== 'reserved' ||
     record.lease.handoffStage !== 'new-owner-proving' ||
@@ -132,6 +146,7 @@ function settleFailedLease(
   ) {
     throw new Error('agent_session_ownership_unknown')
   }
+
   if (args.exitProof === 'unproven') {
     return withLease(record, {
       ...record.lease,
@@ -142,6 +157,7 @@ function settleFailedLease(
       lastRenewedAt: args.now
     })
   }
+
   return withLease(record, {
     ...record.lease,
     runtimeFence: nextAgentSessionFence(record.lease),
@@ -164,6 +180,7 @@ function acquisitionDeathEvidence(
   if (exitProof === 'processless') {
     return { kind: 'pid-absent', detail: 'reservation failed before spawn', observedAt }
   }
+
   if (exitProof === 'root-exit-observed') {
     return {
       kind: 'exit-observed',
@@ -171,6 +188,7 @@ function acquisitionDeathEvidence(
       observedAt
     }
   }
+
   // Cleanup proved no child of this attempt remains; it may never have spawned.
   return {
     kind: 'exit-observed',

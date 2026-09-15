@@ -28,11 +28,13 @@ function traceDurableBreadcrumb(
       'breadcrumb.data': data
     }
   })
+
   if (failureCause) {
     span.fail(sanitizeCrashReportString(failureCause, 1_000))
   } else {
     span.end()
   }
+
   // Why: these breadcrumbs explain a missing crash record; losing one to the
   // normal trace batching window would recreate the diagnostic blind spot.
   flushActiveSink()
@@ -68,6 +70,7 @@ export function recordCoalescedDurableCrashBreadcrumb({
 }): void {
   const sanitizedName = sanitizeCrashReportString(name)
   const lifecycleData = buildLifecycleData(data)
+
   const coalesced = recordCoalescedCrashBreadcrumb({
     name: sanitizedName,
     data: lifecycleData,
@@ -75,9 +78,11 @@ export function recordCoalescedDurableCrashBreadcrumb({
     minIntervalMs,
     ...(origin ? { origin } : {})
   })
+
   if (!coalesced) {
     return
   }
+
   traceDurableBreadcrumb(
     sanitizedName,
     coalesced.suppressedSinceLast > 0

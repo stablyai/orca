@@ -19,6 +19,7 @@ font-size = 14
 
 background = #1a1a1a
 `
+
     expect(parseGhosttyConfig(input)).toEqual({
       'font-size': '14',
       background: '#1a1a1a'
@@ -43,6 +44,7 @@ font-family = JetBrains Mono
 font-size = 13
 cursor-style = bar
 `
+
     expect(parseGhosttyConfig(input)).toEqual({
       'font-family': 'JetBrains Mono',
       'font-size': '13',
@@ -56,6 +58,7 @@ palette = 0=#000000
 palette = 1=#ff0000
 palette = 2=#00ff00
 `
+
     const result = parseGhosttyConfig(input)
     expect(result.palette).toEqual(['0=#000000', '1=#ff0000', '2=#00ff00'])
   })
@@ -65,6 +68,7 @@ palette = 2=#00ff00
 font-family = JetBrains Mono
 palette = 0=#000000
 `
+
     const result = parseGhosttyConfig(input)
     expect(result['font-family']).toBe('JetBrains Mono')
     expect(result.palette).toBe('0=#000000')
@@ -75,6 +79,7 @@ palette = 0=#000000
 font-size = 14 # this is the size
 background = #1a1a1a # dark theme
 `
+
     const result = parseGhosttyConfig(input)
     expect(result['font-size']).toBe('14')
     expect(result.background).toBe('#1a1a1a')
@@ -84,6 +89,7 @@ background = #1a1a1a # dark theme
     const input = `
 palette = 0="#000000" # black
 `
+
     const result = parseGhosttyConfig(input)
     expect(result.palette).toBe('0="#000000"')
   })
@@ -92,6 +98,7 @@ palette = 0="#000000" # black
     const input = `
 palette = 0='#000000' # black
 `
+
     const result = parseGhosttyConfig(input)
     expect(result.palette).toBe("0='#000000'")
   })

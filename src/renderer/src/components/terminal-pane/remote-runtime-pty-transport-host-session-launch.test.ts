@@ -7,20 +7,24 @@ import {
   encodeTerminalStreamJson,
   encodeTerminalStreamText
 } from '../../../../shared/terminal-stream-protocol'
+
 describe('createRemoteRuntimePtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   const runtimeCall = vi.fn()
   const runtimeSubscribe = vi.fn()
+
   let subscriptionCallbacks: {
     onResponse: (response: unknown) => void
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
     onError?: (error: { code: string; message: string }) => void
     onClose?: () => void
   } | null = null
+
   let unsubscribe: {
     unsubscribe: () => void
     sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => void
   } | null = null
+
   let unsubscribeFn: ReturnType<typeof vi.fn<() => void>> | null = null
 
   beforeEach(() => {
@@ -70,6 +74,7 @@ describe('createRemoteRuntimePtyTransport', () => {
             _meta: { runtimeId: 'runtime-remote' }
           })
         })
+
         return unsubscribe
       }
     )
@@ -99,18 +104,24 @@ describe('createRemoteRuntimePtyTransport', () => {
     const send = unsubscribe?.sendBinary as unknown as
       | { mock: { calls: [Uint8Array<ArrayBufferLike>][] } }
       | undefined
+
     const frames =
       send?.mock.calls
         .map((call) => decodeTerminalStreamFrame(call[0]))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe) ?? []
+
     const frame = frames.at(-1)
+
     if (!frame) {
       throw new Error('missing remote terminal subscribe frame')
     }
+
     const payload = decodeTerminalStreamJson<{ streamId: number }>(frame.payload)
+
     if (!payload) {
       throw new Error('invalid remote terminal subscribe frame')
     }
+
     return payload
   }
 
@@ -119,6 +130,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onReplayData = vi.fn()
     const onData = vi.fn()
     const onConnect = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'repo1::/remote/wt',
       command: 'claude',
@@ -214,6 +226,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onPtySpawn = vi.fn()
     const onReattachDetermined = vi.fn()
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'repo1::/remote/wt',
       tabId: 'tab-1',
@@ -244,6 +257,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         })
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'repo1::/remote/wt',
       tabId: 'tab-1',
@@ -277,13 +291,16 @@ describe('createRemoteRuntimePtyTransport', () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const { applyHostWorktreeTerminalSleepState } = await import('./pty-shutdown-exit-deferral')
     const onData = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'repo1::/remote/wt',
       tabId: 'tab-1',
       leafId: '11111111-1111-4111-8111-111111111111'
     })
+
     await transport.connect({ url: '', callbacks: { onData } })
     const { streamId } = latestRemoteSubscribePayload()
+
     const started = {
       type: 'worktreeTerminalSleepState' as const,
       worktreeId: 'repo1::/remote/wt',
@@ -310,6 +327,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('routes provider resumes through the host authority without sending the client command', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'repo1::/remote/wt',
       command: "claude '--resume' 'provider-session'",
@@ -350,6 +368,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('degrades a Kimi resume to a legacy launch when the host predates the resume capability', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'repo1::/remote/wt',
       command: "kimi '--session' 'session_431324d7'",
@@ -403,6 +422,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'repo1::/remote/wt',
       command: "kimi '--session' 'session_431324d7'",
@@ -453,9 +473,11 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'repo1::/remote/wt'
     })
+
     const onError = vi.fn()
 
     await expect(transport.connect({ url: '', callbacks: { onError } })).resolves.toBeUndefined()
@@ -464,6 +486,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('routes fresh agents through an idempotent host-built launch', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'repo1::/remote/wt',
       command: "codex 'fix the race'",
@@ -506,8 +529,10 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('forwards input over the stream and disconnects without closing shared remote sessions', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'repo1::/remote/wt',
         tabId: 'tab-1',
@@ -517,10 +542,12 @@ describe('createRemoteRuntimePtyTransport', () => {
       await transport.connect({ url: '', callbacks: {} })
       const { streamId } = latestRemoteSubscribePayload()
       runtimeCall.mockClear()
+
       const send = unsubscribe?.sendBinary as unknown as {
         mockClear: () => void
         mock: { calls: [Uint8Array<ArrayBufferLike>][] }
       }
+
       send.mockClear()
 
       expect(transport.sendInput('ls\r')).toBe(true)

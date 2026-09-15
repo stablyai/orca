@@ -17,6 +17,7 @@ const { appMock, browserWindowMock, nativeUpdaterMock, autoUpdaterMock, isMock, 
       const handlers = appEventHandlers.get(event) ?? []
       handlers.push(handler)
       appEventHandlers.set(event, handlers)
+
       return appMock
     })
 
@@ -24,6 +25,7 @@ const { appMock, browserWindowMock, nativeUpdaterMock, autoUpdaterMock, isMock, 
       const handlers = eventHandlers.get(event) ?? []
       handlers.push(handler)
       eventHandlers.set(event, handlers)
+
       return autoUpdaterMock
     })
 
@@ -105,10 +107,14 @@ vi.mock('./updater-nudge', () => ({
 }))
 
 const ONE_HOUR_MS = 60 * 60 * 1000
+
 const THIRTY_SECONDS_MS = 30 * 1000
+
 const FRIENDLY_MESSAGE = "Couldn't reach the update server. Try again in a few minutes."
+
 const RELEASE_NOT_READY_MESSAGE =
   "A newer release isn't available for this device yet. Check again later."
+
 const NOT_READY_DIAGNOSTIC = 'Latest release artifacts are not ready'
 
 type NotReadyProbe = {
@@ -128,10 +134,12 @@ function respondWithNotReadyRelease({
         `<entry><link rel="alternate" type="text/html" href="https://github.com/stablyai/orca/releases/tag/${tag}"/><title>${tag}</title></entry>`
     )
     .join('')}</feed>`
+
   netFetchMock.mockImplementation((url: string, init?: { method?: string }) => {
     if (url === 'https://github.com/stablyai/orca/releases.atom') {
       return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(atom) })
     }
+
     if (init?.method === 'HEAD' && assetStatus !== undefined) {
       return Promise.resolve({
         ok: assetStatus >= 200 && assetStatus < 300,
@@ -139,6 +147,7 @@ function respondWithNotReadyRelease({
         text: () => Promise.resolve('')
       })
     }
+
     return Promise.resolve({
       ok: manifestStatus >= 200 && manifestStatus < 300,
       status: manifestStatus,
@@ -154,6 +163,7 @@ function makeBenignCheckFailure(message: string): void {
     queueMicrotask(() => {
       autoUpdaterMock.emit('error', error)
     })
+
     return Promise.reject(error)
   })
 }
@@ -233,6 +243,7 @@ describe('updater check failure handling', () => {
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual(
         expect.objectContaining({
           state: 'error',
@@ -336,6 +347,7 @@ describe('updater check failure handling', () => {
     const statuses = sendMock.mock.calls
       .filter(([channel]) => channel === 'updater:status')
       .map(([, status]) => status)
+
     expect(getUpdateStatus()).toEqual({ state: 'idle' })
     expect(statuses).not.toContainEqual(expect.objectContaining({ state: 'error' }))
 
@@ -380,6 +392,7 @@ describe('updater check failure handling', () => {
       queueMicrotask(() => {
         autoUpdaterMock.emit('update-not-available', { version: '1.0.51' })
       })
+
       return Promise.resolve(null)
     })
     checkForUpdates()

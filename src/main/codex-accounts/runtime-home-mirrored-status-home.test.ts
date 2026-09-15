@@ -7,11 +7,14 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
 
 const testState = { userData: '', home: '' }
+
 const previousEnv: Record<string, string | undefined> = {}
 
 vi.mock('electron', () => ({ app: { getPath: () => testState.userData } }))
+
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
+
   return { ...actual, homedir: () => testState.home }
 })
 
@@ -19,12 +22,14 @@ beforeEach(() => {
   vi.resetModules()
   testState.userData = mkdtempSync(join(tmpdir(), 'orca-codex-status-home-ud-'))
   testState.home = mkdtempSync(join(tmpdir(), 'orca-codex-status-home-'))
+
   // Why: the real-home check consults CODEX_HOME and the shell rc, so a
   // developer who exports one would otherwise fail this suite locally.
   for (const key of ['ORCA_USER_DATA_PATH', 'CODEX_HOME', 'ORCA_CODEX_HOME']) {
     previousEnv[key] = process.env[key]
     delete process.env[key]
   }
+
   process.env.ORCA_USER_DATA_PATH = testState.userData
   mkdirSync(join(testState.home, '.codex'), { recursive: true })
 })
@@ -32,6 +37,7 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(testState.userData, { recursive: true, force: true })
   rmSync(testState.home, { recursive: true, force: true })
+
   for (const [key, value] of Object.entries(previousEnv)) {
     if (value === undefined) {
       delete process.env[key]
@@ -47,6 +53,7 @@ function createStore(accounts: CodexManagedAccount[], activeId: string | null) {
     activeCodexManagedAccountId: activeId,
     activeCodexManagedAccountIdsByRuntime: { host: activeId, wsl: {} }
   } as GlobalSettings
+
   return {
     getSettings: () => settings,
     updateSettings: (updates: Partial<GlobalSettings>) => Object.assign(settings, updates)
@@ -58,6 +65,7 @@ function createManagedAccount(id: string): CodexManagedAccount {
   mkdirSync(home, { recursive: true })
   writeFileSync(join(home, '.orca-managed-home'), `${id}\n`, 'utf-8')
   writeFileSync(join(home, 'auth.json'), '{}', 'utf-8')
+
   return {
     id,
     providerAccountId: id,

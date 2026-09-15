@@ -8,6 +8,7 @@ import { rankProjectOptions } from './project-combobox-matching'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -50,6 +51,7 @@ describe('MatchedText', () => {
       badgeColor: '#111111',
       detail: '~/dev/orca'
     }
+
     const [match] = rankProjectOptions([option], 'orca', [])
     expect(match).toBeDefined()
 

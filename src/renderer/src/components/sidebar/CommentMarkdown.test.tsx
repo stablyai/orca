@@ -134,6 +134,7 @@ describe('CommentMarkdown', () => {
 
   it('autolinks very large generated GitHub reference comments', () => {
     const referenceCount = 130_000
+
     const tree = {
       type: 'root',
       children: [

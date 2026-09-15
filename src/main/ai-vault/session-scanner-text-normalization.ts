@@ -3,13 +3,19 @@ import { sliceAtCodeUnitLimit } from '../../shared/surrogate-safe-text-slice'
 export { sliceAtCodeUnitLimit }
 
 const SESSION_TITLE_TEXT_LIMIT = 96
+
 const SESSION_PREVIEW_TEXT_LIMIT = 220
+
 const ELLIPSIS = '...'
+
 const HIDDEN_BLOCK_CLOSE_SCAN_LIMIT = 256 * 1024
+
 const HIDDEN_BLOCK_OPEN_TAG_SCAN_LIMIT = 512
+
 const FIELD_BLANK_SCAN_LIMIT = 1024
 
 const AGENTS_INSTRUCTIONS_PREFIX = '# AGENTS.md instructions'
+
 const XML_INSTRUCTIONS_PREFIX = '<INSTRUCTIONS>'
 
 const HIDDEN_TEXT_BLOCKS = [
@@ -27,6 +33,7 @@ type TextBuilder = {
 
 export function extractMessageText(value: unknown): string | null {
   const message = objectRecord(value)
+
   return message ? extractContentText(message.content) : null
 }
 
@@ -50,18 +57,23 @@ function normalizeContentText(value: unknown, limit: number): string | null {
   if (typeof value === 'string') {
     return finalizeNormalizedText(normalizeStringText(value, limit))
   }
+
   if (!Array.isArray(value)) {
     return null
   }
 
   const builder = createTextBuilder(limit)
+
   for (const item of value) {
     const text = contentItemText(item)
+
     if (text === null) {
       continue
     }
+
     appendInterPartSpace(builder)
     appendNormalizedString(builder, text)
+
     if (builder.truncated) {
       break
     }
@@ -73,6 +85,7 @@ function normalizeContentText(value: unknown, limit: number): string | null {
 function normalizeStringText(value: string, limit: number): TextBuilder {
   const builder = createTextBuilder(limit)
   appendNormalizedString(builder, value)
+
   return builder
 }
 
@@ -86,6 +99,7 @@ function contentItemText(item: unknown): string | null {
   }
 
   const record = objectRecord(item)
+
   if (!record) {
     return null
   }
@@ -97,16 +111,19 @@ function nonBlankString(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
   }
+
   return hasNonWhitespace(value, FIELD_BLANK_SCAN_LIMIT) ? value : null
 }
 
 function hasNonWhitespace(value: string, maxScanLength: number): boolean {
   const scanLimit = Math.min(value.length, maxScanLength)
+
   for (let index = 0; index < scanLimit; index += 1) {
     if (!isWhitespaceCode(value.charCodeAt(index))) {
       return true
     }
   }
+
   return value.length > scanLimit
 }
 
@@ -119,12 +136,15 @@ function appendInterPartSpace(builder: TextBuilder): void {
 function appendNormalizedString(builder: TextBuilder, value: string, maxScanLength?: number): void {
   const scanEnd = maxScanLength == null ? value.length : Math.min(value.length, maxScanLength)
   let index = 0
+
   while (index < scanEnd && !builder.truncated) {
     const hiddenBlockEnd = hiddenTextBlockEnd(value, index)
+
     if (hiddenBlockEnd !== null) {
       if (builder.text.length > 0) {
         builder.pendingSpace = true
       }
+
       // Why: hidden blocks may jump past the scan budget; clamp so multi-MB
       // suppressed context cannot keep the first-prompt path busy.
       index = Math.min(hiddenBlockEnd, scanEnd)
@@ -132,10 +152,12 @@ function appendNormalizedString(builder: TextBuilder, value: string, maxScanLeng
     }
 
     const code = value.charCodeAt(index)
+
     if (isWhitespaceCode(code)) {
       if (builder.text.length > 0) {
         builder.pendingSpace = true
       }
+
       index += 1
       continue
     }
@@ -143,20 +165,24 @@ function appendNormalizedString(builder: TextBuilder, value: string, maxScanLeng
     if (builder.pendingSpace) {
       appendVisibleText(builder, ' ')
       builder.pendingSpace = false
+
       if (builder.truncated) {
         break
       }
     }
 
     const charLength = codePointLength(value, index)
+
     // Why: do not read past scanEnd mid code-point when the budget lands inside
     // a surrogate pair — drop the incomplete char instead.
     if (index + charLength > scanEnd) {
       break
     }
+
     appendVisibleText(builder, value.slice(index, index + charLength))
     index += charLength
   }
+
   if (!builder.truncated && scanEnd < value.length && builder.text.length > 0) {
     builder.truncated = true
   }
@@ -174,16 +200,19 @@ function hiddenTextBlockEnd(value: string, index: number): number | null {
 
   for (const block of HIDDEN_TEXT_BLOCKS) {
     const nameStart = index + 1
+
     if (!startsWithIgnoreCase(value, block.name, nameStart)) {
       continue
     }
 
     const afterName = nameStart + block.name.length
+
     if (!isTagBoundary(value.charCodeAt(afterName))) {
       continue
     }
 
     const openEnd = tagEndIndex(value, afterName)
+
     if (openEnd === null) {
       // Why: malformed hidden context should not leak into AI Vault titles/previews.
       return value.length
@@ -195,6 +224,7 @@ function hiddenTextBlockEnd(value: string, index: number): number | null {
       openEnd + 1,
       openEnd + 1 + HIDDEN_BLOCK_CLOSE_SCAN_LIMIT
     )
+
     return closeStart === -1 ? value.length : closeStart + block.closeTag.length
   }
 
@@ -203,11 +233,13 @@ function hiddenTextBlockEnd(value: string, index: number): number | null {
 
 function tagEndIndex(value: string, fromIndex: number): number | null {
   const scanEnd = Math.min(value.length, fromIndex + HIDDEN_BLOCK_OPEN_TAG_SCAN_LIMIT)
+
   for (let index = fromIndex; index < scanEnd; index += 1) {
     if (value.charCodeAt(index) === 62) {
       return index
     }
   }
+
   return null
 }
 
@@ -218,11 +250,13 @@ function indexOfIgnoreCase(
   endIndex: number
 ): number {
   const lastStart = Math.min(value.length, endIndex, value.length - search.length + 1)
+
   for (let index = fromIndex; index < lastStart; index += 1) {
     if (startsWithIgnoreCase(value, search, index)) {
       return index
     }
   }
+
   return -1
 }
 
@@ -230,9 +264,11 @@ function finalizeNormalizedText(builder: TextBuilder): string | null {
   if (!builder.text) {
     return null
   }
+
   if (isSuppressedContextPrefix(builder.text)) {
     return null
   }
+
   return builder.truncated ? truncateWithEllipsis(builder.text, builder.limit) : builder.text
 }
 
@@ -258,6 +294,7 @@ function startsWithIgnoreCase(value: string, search: string, fromIndex: number):
   if (fromIndex + search.length > value.length) {
     return false
   }
+
   for (let index = 0; index < search.length; index += 1) {
     if (
       toLowerAscii(value.charCodeAt(fromIndex + index)) !== toLowerAscii(search.charCodeAt(index))
@@ -265,6 +302,7 @@ function startsWithIgnoreCase(value: string, search: string, fromIndex: number):
       return false
     }
   }
+
   return true
 }
 
@@ -307,6 +345,7 @@ function isWhitespaceCode(code: number): boolean {
 
 function codePointLength(value: string, index: number): number {
   const code = value.charCodeAt(index)
+
   return isHighSurrogate(code) && isLowSurrogate(value.charCodeAt(index + 1)) ? 2 : 1
 }
 

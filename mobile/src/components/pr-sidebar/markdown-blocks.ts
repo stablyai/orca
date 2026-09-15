@@ -29,15 +29,23 @@ export type MarkdownBlock =
   | { kind: 'table'; headers: string[]; rows: string[][]; align: CellAlign[] }
 
 const HEADING = /^(#{1,6})\s+(.*)$/
+
 const FENCE = /^```/
+
 // Captures the fence info string (language) on the opening fence, e.g. ```mermaid.
 const FENCE_OPEN = /^```\s*([^\s`]*)/
+
 const QUOTE = /^>\s?(.*)$/
+
 const HR = /^(?:---+|\*\*\*+|___+)\s*$/
+
 const UNORDERED = /^\s*[-*+]\s+(.*)$/
+
 const ORDERED = /^\s*\d+[.)]\s+(.*)$/
+
 // A top-level <details>…</details> or <blockquote>…</blockquote> region.
 const HTML_BLOCK = /<(details|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/i
+
 const SUMMARY = /<summary\b[^>]*>([\s\S]*?)<\/summary>/i
 
 // Removes residual HTML tags from rendered text so stray <b>/<kbd>/<sub> etc. don't
@@ -45,9 +53,11 @@ const SUMMARY = /<summary\b[^>]*>([\s\S]*?)<\/summary>/i
 // "a < b" in prose is left alone.
 export function stripHtmlTags(text: string): string {
   const end = text.lastIndexOf('>') + 1
+
   if (end === 0) {
     return text
   }
+
   // No tag can close in this suffix; keep it literal without retrying every opener.
   return (
     text.slice(0, end).replace(/<\/?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^>]*)?\/?>/g, '') + text.slice(end)
@@ -57,6 +67,7 @@ export function stripHtmlTags(text: string): string {
 export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
   // Drop HTML comments and normalize <br> before block parsing.
   const cleaned = content.replace(/<!--[\s\S]*?-->/g, '').replace(/<br\s*\/?>/gi, '\n')
+
   return parseSegment(cleaned)
 }
 
@@ -67,11 +78,14 @@ function parseSegment(text: string): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = []
   let rest = text
   let m = HTML_BLOCK.exec(rest)
+
   while (m) {
     const before = rest.slice(0, m.index)
+
     if (before.trim().length > 0) {
       blocks.push(...parseLines(before))
     }
+
     if (m[1].toLowerCase() === 'details') {
       const sm = SUMMARY.exec(m[2])
       const summary = sm ? stripHtmlTags(sm[1]).trim() : 'Details'
@@ -80,12 +94,15 @@ function parseSegment(text: string): MarkdownBlock[] {
     } else {
       blocks.push({ kind: 'quote', text: stripHtmlTags(m[2]).trim() })
     }
+
     rest = rest.slice(m.index + m[0].length)
     m = HTML_BLOCK.exec(rest)
   }
+
   if (rest.trim().length > 0) {
     blocks.push(...parseLines(rest))
   }
+
   return blocks
 }
 
@@ -110,10 +127,12 @@ function parseLines(content: string): MarkdownBlock[] {
       const lang = (FENCE_OPEN.exec(line)?.[1] ?? '').toLowerCase()
       const code: string[] = []
       i += 1
+
       while (i < lines.length && !FENCE.test(lines[i])) {
         code.push(lines[i])
         i += 1
       }
+
       i += 1 // consume closing fence (or EOF)
       blocks.push({ kind: 'code', text: code.join('\n'), lang })
       continue
@@ -127,10 +146,12 @@ function parseLines(content: string): MarkdownBlock[] {
       const align = parseAlignRow(lines[i + 1])
       i += 2
       const rows: string[][] = []
+
       while (i < lines.length && lines[i].includes('|') && lines[i].trim() !== '') {
         rows.push(splitTableRow(lines[i]))
         i += 1
       }
+
       blocks.push({ kind: 'table', headers, rows, align })
       continue
     }
@@ -142,6 +163,7 @@ function parseLines(content: string): MarkdownBlock[] {
     }
 
     const heading = HEADING.exec(line)
+
     if (heading) {
       flushParagraph()
       blocks.push({ kind: 'heading', level: heading[1].length, text: heading[2].trim() })
@@ -157,32 +179,40 @@ function parseLines(content: string): MarkdownBlock[] {
     }
 
     const quote = QUOTE.exec(line)
+
     if (quote) {
       flushParagraph()
       const quoted: string[] = []
       let q: RegExpExecArray | null = quote
+
       while (q) {
         quoted.push(q[1])
         i += 1
         q = i < lines.length ? QUOTE.exec(lines[i]) : null
       }
+
       blocks.push({ kind: 'quote', text: quoted.join('\n').trim() })
       continue
     }
 
     const ordered = ORDERED.test(line)
+
     if (ordered || UNORDERED.test(line)) {
       flushParagraph()
       const items: string[] = []
       let match = ordered ? ORDERED.exec(line) : UNORDERED.exec(line)
+
       while (match) {
         items.push(match[1].trim())
         i += 1
+
         if (i >= lines.length) {
           break
         }
+
         match = ordered ? ORDERED.exec(lines[i]) : UNORDERED.exec(lines[i])
       }
+
       blocks.push({ kind: 'list', ordered, items })
       continue
     }
@@ -190,7 +220,9 @@ function parseLines(content: string): MarkdownBlock[] {
     paragraph.push(line)
     i += 1
   }
+
   flushParagraph()
+
   return blocks
 }
 
@@ -200,27 +232,35 @@ function splitTableRow(line: string): string[] {
   const cells: string[] = []
   let cell = ''
   let trimmed = line.trim()
+
   if (trimmed.startsWith('|')) {
     trimmed = trimmed.slice(1)
   }
+
   if (trimmed.endsWith('|')) {
     trimmed = trimmed.slice(0, -1)
   }
+
   for (let j = 0; j < trimmed.length; j += 1) {
     const ch = trimmed[j]
+
     if (ch === '\\' && trimmed[j + 1] === '|') {
       cell += '|'
       j += 1
       continue
     }
+
     if (ch === '|') {
       cells.push(cell.trim())
       cell = ''
       continue
     }
+
     cell += ch
   }
+
   cells.push(cell.trim())
+
   return cells
 }
 
@@ -233,12 +273,15 @@ function parseAlignRow(line: string): CellAlign[] {
   return splitTableRow(line).map((spec) => {
     const left = spec.startsWith(':')
     const right = spec.endsWith(':')
+
     if (left && right) {
       return 'center'
     }
+
     if (right) {
       return 'right'
     }
+
     return 'left'
   })
 }
@@ -255,17 +298,22 @@ export function parseInline(text: string): InlineToken[] {
   const matcher = createMarkdownInlineMatcher(plain, INLINE)
   let cursor = 0
   let guard = 0
+
   while (cursor < plain.length && guard < 5000) {
     guard += 1
     const m = matcher.exec()
+
     if (!m || m.index === undefined) {
       tokens.push({ kind: 'text', text: plain.slice(cursor) })
       break
     }
+
     if (m.index > cursor) {
       tokens.push({ kind: 'text', text: plain.slice(cursor, m.index) })
     }
+
     const token = m[0]
+
     if (token.startsWith('`')) {
       tokens.push({ kind: 'code', text: token.slice(1, -1) })
     } else if (token.startsWith('**') || token.startsWith('__')) {
@@ -280,7 +328,9 @@ export function parseInline(text: string): InlineToken[] {
     } else {
       tokens.push({ kind: 'italic', text: token.slice(1, -1) })
     }
+
     cursor = matcher.lastIndex
   }
+
   return tokens
 }

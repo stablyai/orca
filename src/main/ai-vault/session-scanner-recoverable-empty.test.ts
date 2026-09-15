@@ -135,6 +135,7 @@ describe('recoverable-but-empty Claude sessions', () => {
 
   it('counts queued messages net of remove and dequeue operations', async () => {
     const sessionId = 'net-queue-session'
+
     const content = [
       { type: 'mode', mode: 'default', sessionId },
       ...[1, 2, 3].map((n) => ({
@@ -154,6 +155,7 @@ describe('recoverable-but-empty Claude sessions', () => {
     ]
       .map((line) => JSON.stringify(line))
       .join('\n')
+
     const file = {
       path: `/tmp/${sessionId}.jsonl`,
       mtimeMs: 0,
@@ -163,6 +165,7 @@ describe('recoverable-but-empty Claude sessions', () => {
     const session = await parseClaudeSessionContent(file, content, 'darwin', {
       executionHostId: 'ssh:host'
     })
+
     expect(session?.queuedMessageCount).toBe(1)
   })
 
@@ -206,9 +209,11 @@ describe('recoverable-but-empty Claude sessions', () => {
     // A local sibling dir exists, but the transcript content came from an SSH
     // host — its real subagents live on that host, not on this disk.
     await writeJsonlFile(join(root, sessionId, 'subagents', 'agent-x.jsonl'), [{ type: 'user' }])
+
     const content = metadataOnlyTranscript(sessionId)
       .map((line) => JSON.stringify(line))
       .join('\n')
+
     const file = {
       path: transcriptPath,
       mtimeMs: 0,
@@ -218,6 +223,7 @@ describe('recoverable-but-empty Claude sessions', () => {
     const remote = await parseClaudeSessionContent(file, content, 'linux', {
       executionHostId: 'ssh:host'
     })
+
     expect(remote?.subagentTranscriptCount).toBe(0)
     expect(remote?.queuedMessageCount).toBe(4)
 

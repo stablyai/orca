@@ -23,11 +23,14 @@ export function useSourceControlBranchLineTotalGate({
     isBranchVisible && !isFolder && branchSummary?.status === 'ready'
       ? branchSummary.mergeBase
       : null
+
   useEffect(() => {
     if (!activeWorktreeId) {
       return
     }
+
     setBranchLineTotalMergeBase(activeWorktreeId, requestedBranchLineTotalMergeBase)
+
     return () => {
       setBranchLineTotalMergeBase(activeWorktreeId, null)
     }

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 const TimestampSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+
 const AccountIdSchema = z.string().min(1)
 
 const RateLimitWindowSchema = z
@@ -85,6 +86,7 @@ export const RateLimitRuntimeTargetSchema = z
         path: ['wslDistro']
       })
     }
+
     if (
       target.runtime === 'wsl' &&
       target.wslDistro !== null &&
@@ -134,6 +136,7 @@ const CodexAccountSummarySchema = z
   .passthrough()
   .superRefine((account, context) => {
     const runtime = account.managedHomeRuntime ?? 'host'
+
     if (runtime === 'host' && account.wslDistro != null) {
       context.addIssue({
         code: 'custom',
@@ -141,6 +144,7 @@ const CodexAccountSummarySchema = z
         path: ['wslDistro']
       })
     }
+
     if (
       runtime === 'wsl' &&
       account.wslDistro != null &&
@@ -192,6 +196,7 @@ export const AccountsSnapshotSchema = z
         path: ['rateLimits', 'claude', 'provider']
       })
     }
+
     if (snapshot.rateLimits.codex && snapshot.rateLimits.codex.provider !== 'codex') {
       context.addIssue({
         code: 'custom',
@@ -199,6 +204,7 @@ export const AccountsSnapshotSchema = z
         path: ['rateLimits', 'codex', 'provider']
       })
     }
+
     for (const [index, entry] of snapshot.rateLimits.inactiveClaudeAccounts.entries()) {
       if (entry.rateLimits && entry.rateLimits.provider !== 'claude') {
         context.addIssue({
@@ -208,6 +214,7 @@ export const AccountsSnapshotSchema = z
         })
       }
     }
+
     for (const [index, entry] of snapshot.rateLimits.inactiveCodexAccounts.entries()) {
       if (entry.rateLimits && entry.rateLimits.provider !== 'codex') {
         context.addIssue({
@@ -220,17 +227,25 @@ export const AccountsSnapshotSchema = z
   })
 
 export type RateLimitWindow = z.infer<typeof RateLimitWindowSchema>
+
 export type ProviderRateLimits = z.infer<typeof ProviderRateLimitsSchema>
+
 export type InactiveAccountUsage = z.infer<typeof InactiveAccountUsageSchema>
+
 export type RateLimitRuntimeTarget = z.infer<typeof RateLimitRuntimeTargetSchema>
+
 export type ClaudeAccountSummary = z.infer<typeof ClaudeAccountSummarySchema>
+
 export type CodexAccountSummary = z.infer<typeof CodexAccountSummarySchema>
+
 export type AccountsSnapshot = z.infer<typeof AccountsSnapshotSchema>
 
 export function decodeAccountsSnapshot(value: unknown): AccountsSnapshot {
   const result = AccountsSnapshotSchema.safeParse(value)
+
   if (!result.success) {
     throw new Error('Invalid accounts snapshot from host')
   }
+
   return result.data
 }

@@ -9,6 +9,7 @@ describe('pty dispatcher delivery resync', () => {
   let dataCallback:
     | ((payload: { id: string; data: string; rawLength?: number; background?: boolean }) => void)
     | null = null
+
   let exitCallback: ((payload: { id: string; code: number }) => void) | null = null
   let resyncRequestCallback: ((payload: { requestId: number }) => void) | null = null
   const ackDataMock = vi.fn()
@@ -38,16 +39,19 @@ describe('pty dispatcher delivery resync', () => {
               }) => void
             ) => {
               dataCallback ??= cb
+
               return () => {}
             }
           ),
           onReplay: vi.fn(() => () => {}),
           onExit: vi.fn((cb: (payload: { id: string; code: number }) => void) => {
             exitCallback ??= cb
+
             return () => {}
           }),
           onDeliveryResyncRequest: vi.fn((cb: (payload: { requestId: number }) => void) => {
             resyncRequestCallback ??= cb
+
             return () => {}
           }),
           respondDeliveryResync: respondDeliveryResyncMock

@@ -14,45 +14,61 @@ import {
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -68,6 +84,7 @@ describe('registerPtyHandlers', () => {
     const runtime = { setPtyController: vi.fn() }
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
+
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       confirmForegroundProcess: (ptyId: string) => Promise<string | null>
     }
@@ -84,6 +101,7 @@ describe('registerPtyHandlers', () => {
     const runtime = { setPtyController: vi.fn() }
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
+
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       hasPty: (ptyId: string) => boolean | null
     }
@@ -97,19 +115,25 @@ describe('registerPtyHandlers', () => {
     const localList = vi
       .spyOn(getLocalPtyProvider(), 'listProcesses')
       .mockResolvedValue([{ id: 'local-pty', title: 'Local', cwd: '/local' }])
+
     const sshAList = vi.fn(async () => [{ id: 'ssh-a-pty' }])
+
     const sshBList = vi.fn(async () => {
       throw new Error('ssh-b unavailable')
     })
+
     registerSshPtyProvider('ssh-a', { listProcesses: sshAList } as never)
     registerSshPtyProvider('ssh-b', { listProcesses: sshBList } as never)
     setPtyOwnership('ssh-b-pty', 'ssh-b')
+
     const runtime = {
       setPtyController: vi.fn(),
       markPtyLivenessUnverifiable: vi.fn()
     }
+
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
+
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       listProcesses(connectionId?: string | null): Promise<{ id: string }[]>
       listProcessesWithHostScope(): Promise<{ processes: { id: string }[]; hostIds: string[] }>
@@ -153,6 +177,7 @@ describe('registerPtyHandlers', () => {
     const runtime = { setPtyController: vi.fn() }
     handlers.clear()
     registerPtyHandlers(mainWindow as never, runtime as never)
+
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       confirmForegroundProcess: (ptyId: string) => Promise<string | null>
     }
@@ -204,10 +229,12 @@ describe('registerPtyHandlers', () => {
   })
   it('synthesizes runtime exit after ordinary daemon-backed pty kill', async () => {
     const shutdown = vi.fn(async () => undefined)
+
     const runtime = {
       setPtyController: vi.fn(),
       onPtyExit: vi.fn()
     }
+
     setLocalPtyProvider({
       spawn: vi.fn(),
       write: vi.fn(),
@@ -247,15 +274,18 @@ describe('registerPtyHandlers', () => {
   })
   it('does not synthesize a duplicate renderer exit when kill emits provider exit', async () => {
     const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
+
     const shutdown = vi.fn(async (id: string) => {
       for (const listener of exitListeners) {
         listener({ id, code: 0 })
       }
     })
+
     const runtime = {
       setPtyController: vi.fn(),
       onPtyExit: vi.fn()
     }
+
     setLocalPtyProvider({
       spawn: vi.fn(),
       write: vi.fn(),
@@ -274,6 +304,7 @@ describe('registerPtyHandlers', () => {
       onReplay: vi.fn(() => () => {}),
       onExit: vi.fn((listener: (payload: { id: string; code: number }) => void) => {
         exitListeners.add(listener)
+
         return () => exitListeners.delete(listener)
       }),
       listProcesses: vi.fn(async () => []),
@@ -296,10 +327,12 @@ describe('registerPtyHandlers', () => {
   })
   it('ignores a late provider exit after synthesizing kill exit', async () => {
     const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
+
     const runtime = {
       setPtyController: vi.fn(),
       onPtyExit: vi.fn()
     }
+
     setLocalPtyProvider({
       spawn: vi.fn(),
       write: vi.fn(),
@@ -318,6 +351,7 @@ describe('registerPtyHandlers', () => {
       onReplay: vi.fn(() => () => {}),
       onExit: vi.fn((listener: (payload: { id: string; code: number }) => void) => {
         exitListeners.add(listener)
+
         return () => exitListeners.delete(listener)
       }),
       listProcesses: vi.fn(async () => []),
@@ -329,6 +363,7 @@ describe('registerPtyHandlers', () => {
     registerPtyHandlers(mainWindow as never, runtime as never)
 
     await handlers.get('pty:kill')!(null, { id: 'local-pty' })
+
     for (const listener of exitListeners) {
       listener({ id: 'local-pty', code: 0 })
     }
@@ -422,6 +457,7 @@ describe('registerPtyHandlers', () => {
         awaitLocalPtyProviderStartup
       }
     )
+
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       kill: (ptyId: string) => boolean
     }
@@ -455,6 +491,7 @@ describe('registerPtyHandlers', () => {
         awaitLocalPtyProviderStartup
       }
     )
+
     const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
       stopAndWait: (ptyId: string) => Promise<boolean>
     }
@@ -477,6 +514,7 @@ describe('registerPtyHandlers', () => {
   it('rebinds local data and exit listeners after a late daemon provider install', async () => {
     vi.useFakeTimers()
     const barrier = makeDeferred()
+
     const runtime = {
       setPtyController: vi.fn(),
       registerPty: vi.fn(),
@@ -506,6 +544,7 @@ describe('registerPtyHandlers', () => {
         rows: 24,
         sessionId: 'daemon-session'
       }) as Promise<{ id: string }>
+
       await Promise.resolve()
 
       const daemon = installObservableDaemonTestProvider()

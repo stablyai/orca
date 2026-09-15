@@ -108,6 +108,7 @@ describe('github-project-picker-filter', () => {
     const oversizedQuery = 'secret-project-picker-search'.repeat(
       GITHUB_PROJECT_PICKER_QUERY_MAX_BYTES
     )
+
     const candidate = {
       get owner(): string {
         throw new Error('oversized project searches must not scan owners')

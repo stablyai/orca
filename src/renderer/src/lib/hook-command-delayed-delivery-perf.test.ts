@@ -19,6 +19,7 @@ describe('delayed hook-command subscription', () => {
       tabsByWorktree: {},
       getKnownWorktreeById: ((worktreeId: string) => {
         reads.value += 1
+
         return { id: worktreeId }
       }) as never
     } as never)
@@ -31,6 +32,7 @@ describe('delayed hook-command subscription', () => {
     }
 
     reads.value = 0
+
     for (let update = 0; update < 100; update += 1) {
       useAppStore.setState({ activeView: update % 2 === 0 ? 'terminal' : 'settings' } as never)
     }

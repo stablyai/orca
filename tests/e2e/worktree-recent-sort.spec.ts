@@ -24,17 +24,21 @@ import { waitForSessionReady, waitForActiveWorktree } from './helpers/store'
 async function addFolderRepo(page: Page, folderPath: string): Promise<string> {
   return page.evaluate(async (p) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is unavailable')
     }
+
     // Why: go through the public addNonGitFolder path (not window.api.repos.add
     // directly) so the test exercises the same flow the "Add Folder" dialog
     // uses. That path fetches worktrees internally, which is what triggers the
     // discovery stamp we're asserting about.
     const repo = await store.getState().addNonGitFolder(p)
+
     if (!repo) {
       throw new Error('addNonGitFolder returned null')
     }
+
     return repo.id
   }, folderPath)
 }
@@ -42,13 +46,17 @@ async function addFolderRepo(page: Page, folderPath: string): Promise<string> {
 async function readFolderWorktreeLastActivity(page: Page, repoId: string): Promise<number> {
   return page.evaluate((id) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is unavailable')
     }
+
     const worktree = store.getState().worktreesByRepo[id]?.[0]
+
     if (!worktree) {
       throw new Error(`No worktree found for repo ${id}`)
     }
+
     return worktree.lastActivityAt
   }, repoId)
 }
@@ -64,6 +72,7 @@ test.describe('Worktree Recent Sort', () => {
     createdFolderFixtures.push(dir)
     mkdirSync(path.join(dir, 'src'), { recursive: true })
     writeFileSync(path.join(dir, 'README.md'), '# folder fixture\n')
+
     return dir
   }
 
@@ -78,6 +87,7 @@ test.describe('Worktree Recent Sort', () => {
     // and helpers/orca-restart.ts.
     while (createdFolderFixtures.length) {
       const dir = createdFolderFixtures.pop()
+
       if (dir) {
         rmSync(dir, { recursive: true, force: true })
       }

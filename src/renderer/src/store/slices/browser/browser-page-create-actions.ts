@@ -25,9 +25,11 @@ export function createBrowserPageCreateActions(
   return {
     createBrowserPage: (workspaceId, url, options) => {
       const workspace = findWorkspace(get().browserTabsByWorktree, workspaceId)
+
       if (!workspace) {
         return null
       }
+
       const page = buildBrowserPage(
         workspaceId,
         workspace.worktreeId,
@@ -37,6 +39,7 @@ export function createBrowserPageCreateActions(
         undefined,
         options?.docLocation
       )
+
       if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
         admitBrowserPageMount(page.id)
       }
@@ -45,6 +48,7 @@ export function createBrowserPageCreateActions(
         const pages = s.browserPagesByWorkspace[workspaceId] ?? []
         const shouldActivate = options?.activate ?? true
         const nextPages = [...pages, page]
+
         const nextWorkspace = mirrorWorkspaceFromActivePage(
           {
             ...workspace,
@@ -53,10 +57,12 @@ export function createBrowserPageCreateActions(
           },
           nextPages
         )
+
         const shouldUpdateGlobalActiveSurface =
           shouldActivate &&
           s.activeWorktreeId === workspace.worktreeId &&
           s.activeBrowserTabIdByWorktree[workspace.worktreeId] === workspaceId
+
         const shouldFocusAddressBar =
           shouldUpdateGlobalActiveSurface &&
           !page.docLocation &&
@@ -89,14 +95,17 @@ export function createBrowserPageCreateActions(
       })
 
       const nextWorkspace = findWorkspace(get().browserTabsByWorktree, workspaceId)
+
       if (nextWorkspace?.activePageId === page.id) {
         const item = Object.values(get().unifiedTabsByWorktree)
           .flat()
           .find((entry) => entry.contentType === 'browser' && entry.entityId === workspaceId)
+
         if (item) {
           get().setTabLabel(item.id, page.title)
         }
       }
+
       return page
     },
 
@@ -107,22 +116,28 @@ export function createBrowserPageCreateActions(
       const remotePagesToClose: { worktreeId: string; handle: RemoteBrowserPageHandle }[] = []
       set((s) => {
         const page = findPage(s.browserPagesByWorkspace, pageId)
+
         if (!page) {
           return s
         }
+
         const workspace = findWorkspace(s.browserTabsByWorktree, page.workspaceId)
+
         if (!workspace) {
           return s
         }
+
         closedWorkspaceIdForLabel = page.workspaceId
         docPageIdToRelease = page.docLocation ? page.id : null
         const currentPages = s.browserPagesByWorkspace[workspace.id] ?? []
         const nextPages = currentPages.filter((entry) => entry.id !== pageId)
         const closedIdx = currentPages.findIndex((entry) => entry.id === pageId)
+
         const nextActivePageId =
           workspace.activePageId === pageId
             ? ((nextPages[closedIdx] ?? nextPages[closedIdx - 1] ?? null)?.id ?? null)
             : workspace.activePageId
+
         const nextWorkspace = mirrorWorkspaceFromActivePage(
           {
             ...workspace,
@@ -131,19 +146,25 @@ export function createBrowserPageCreateActions(
           },
           nextPages
         )
+
         const remoteHandle = s.remoteBrowserPageHandlesByPageId[pageId]
+
         if (remoteHandle) {
           remotePagesToClose.push({ worktreeId: page.worktreeId, handle: remoteHandle })
         }
+
         const nextRemoteBrowserPageHandlesByPageId = {
           ...s.remoteBrowserPageHandlesByPageId
         }
+
         delete nextRemoteBrowserPageHandlesByPageId[pageId]
         const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
         delete nextBrowserAnnotationsByPageId[pageId]
+
         const nextBrowserCertificateFailuresByPageId = {
           ...s.browserCertificateFailuresByPageId
         }
+
         delete nextBrowserCertificateFailuresByPageId[pageId]
 
         return {
@@ -195,13 +216,17 @@ export function createBrowserPageCreateActions(
       }
 
       const closedWorkspaceId = closedWorkspaceIdForLabel
+
       if (!closedWorkspaceId) {
         return
       }
+
       const workspace = findWorkspace(get().browserTabsByWorktree, closedWorkspaceId)
+
       const item = Object.values(get().unifiedTabsByWorktree)
         .flat()
         .find((entry) => entry.contentType === 'browser' && entry.entityId === closedWorkspaceId)
+
       if (item && workspace) {
         get().setTabLabel(item.id, workspace.title)
       }

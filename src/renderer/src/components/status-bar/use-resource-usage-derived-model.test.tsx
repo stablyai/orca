@@ -14,6 +14,7 @@ const local = {
   displayName: 'Local notes',
   hostId: 'local'
 } as Worktree
+
 const sampled: WorktreeMemory = {
   worktreeId: local.id,
   worktreeName: 'Published local notes',
@@ -24,6 +25,7 @@ const sampled: WorktreeMemory = {
   history: [1024, 2048],
   sessions: [{ sessionId: 'sampled', paneKey: null, pid: 123, cpu: 2, memory: 2048 }]
 }
+
 const group = { id: 'group', name: 'Local project', executionHostId: 'local' } as ProjectGroup
 
 function derive(
@@ -40,6 +42,7 @@ function derive(
     totalCpu: 2,
     processMemoryMetric: 'rss'
   } as MemorySnapshot
+
   return renderHook(() =>
     useResourceUsageDerivedModel({
       open: true,
@@ -72,6 +75,7 @@ describe('Resource Manager folder ownership', () => {
     'keeps local samples when a sibling folder belongs to %s',
     (hostId) => {
       const sibling = { ...local, id: 'folder:remote', displayName: 'Remote notes', hostId }
+
       const groups = derive(
         [local, sibling],
         [
@@ -99,6 +103,7 @@ describe('Resource Manager folder ownership', () => {
         memory: 2048,
         sessions: [{ sessionId: 'sampled', memory: 2048 }]
       })
+
       if (hostId === 'ssh:box') {
         expect(groups[0].worktrees[1]).toMatchObject({
           worktreeId: sibling.id,
@@ -121,6 +126,7 @@ describe('Resource Manager folder ownership', () => {
         displayName: 'Foreign notes',
         hostId: 'runtime:paired'
       } as Worktree
+
       const groups = derive(reverse ? [remote, local] : [local, remote])
 
       expect(groups).toHaveLength(1)
@@ -160,6 +166,7 @@ describe('Resource Manager folder ownership', () => {
 
   it('keeps git snapshot identity when the catalog contains a different host', () => {
     const row = { ...sampled, worktreeId: 'repo::/notes', repoId: 'repo' }
+
     const foreign = {
       ...local,
       id: row.worktreeId,
@@ -167,6 +174,7 @@ describe('Resource Manager folder ownership', () => {
       displayName: 'Foreign notes',
       hostId: 'runtime:paired'
     } as Worktree
+
     const groups = derive([foreign], [], row)
 
     expect(groups[0]).toMatchObject({ repoId: row.repoId, repoName: row.repoName, memory: 2048 })
@@ -175,6 +183,7 @@ describe('Resource Manager folder ownership', () => {
 
   it('keeps git daemon identity when the catalog contains a different host', () => {
     const worktreeId = 'repo::/notes'
+
     const foreign = {
       ...local,
       id: worktreeId,
@@ -182,6 +191,7 @@ describe('Resource Manager folder ownership', () => {
       displayName: 'Foreign notes',
       hostId: 'runtime:paired'
     } as Worktree
+
     const groups = derive(
       [foreign],
       [{ id: 'git-session', worktreeId, cwd: '/notes', title: '', agentOwnership: 'absent' }]

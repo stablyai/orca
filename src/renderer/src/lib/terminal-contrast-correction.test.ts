@@ -13,17 +13,23 @@ import { TERMINAL_THEME_CATALOG } from './terminal-themes'
 function contrastRatio(a: string, b: string): number {
   const lum = (hex: string): number => {
     const n = Number.parseInt(hex.replace('#', ''), 16)
+
     const toLinear = (channel: number): number => {
       const c = channel / 255
+
       return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
     }
+
     const r = toLinear((n >> 16) & 0xff)
     const g = toLinear((n >> 8) & 0xff)
     const bl = toLinear(n & 0xff)
+
     return 0.2126 * r + 0.7152 * g + 0.0722 * bl
   }
+
   const la = lum(a)
   const lb = lum(b)
+
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
 }
 
@@ -135,8 +141,10 @@ describe('DARK_BG_MIN_CONTRAST vs the builtin theme catalog', () => {
 
   it('leaves every dark-theme chromatic ANSI color at/above the floor, except the pinned exceptions', () => {
     const belowFloor: string[] = []
+
     for (const [name, theme] of Object.entries(TERMINAL_THEME_CATALOG)) {
       const background = theme.background
+
       // Only dark-slot themes get the dark floor; the resolver picks it exactly for those.
       if (
         !background ||
@@ -144,13 +152,16 @@ describe('DARK_BG_MIN_CONTRAST vs the builtin theme catalog', () => {
       ) {
         continue
       }
+
       for (const channel of CHROMATIC_ANSI) {
         const color = theme[channel]
+
         if (color && contrastRatio(background, color) < DARK_BG_MIN_CONTRAST) {
           belowFloor.push(`${name}:${channel}`)
         }
       }
     }
+
     expect(belowFloor.sort()).toEqual(ACCEPTED_BELOW_FLOOR)
   })
 })

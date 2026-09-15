@@ -21,6 +21,7 @@ export class DesktopScriptSnapshotStore {
 
   remember(query: string, snapshot: BridgeSnapshot, params: Record<string, unknown>): void {
     const keys = snapshotCacheKeys(query, snapshot, params)
+
     if (keys.length === 0) {
       return
     }
@@ -30,9 +31,11 @@ export class DesktopScriptSnapshotStore {
     const cachedSnapshot = snapshotWithoutScreenshot(snapshot)
     const entry = { snapshot: cachedSnapshot, keys, createdAtMs: Date.now() }
     this.snapshotEntries.push(entry)
+
     for (const key of keys) {
       this.snapshots.set(key, cachedSnapshot)
     }
+
     this.prune()
   }
 
@@ -45,6 +48,7 @@ export class DesktopScriptSnapshotStore {
     const windowIndex = optionalNumberParam(params, 'windowIndex')
     const keys = lookupCachedSnapshotKey(app, params, windowId, windowIndex)
     const hasExplicitWindowTarget = windowId !== undefined || windowIndex !== undefined
+
     for (const key of keys) {
       if (
         hasExplicitWindowTarget &&
@@ -54,11 +58,14 @@ export class DesktopScriptSnapshotStore {
       ) {
         continue
       }
+
       const cached = this.snapshots.get(key)
+
       if (cached) {
         return cached
       }
     }
+
     return null
   }
 
@@ -68,6 +75,7 @@ export class DesktopScriptSnapshotStore {
     snapshot: BridgeSnapshot | null
   ): void {
     const keys = staleWindowTargetKeys(query, params, snapshot)
+
     for (const key of keys) {
       this.snapshots.delete(key)
     }
@@ -80,9 +88,11 @@ export class DesktopScriptSnapshotStore {
         this.isExpired(this.snapshotEntries[0]))
     ) {
       const expired = this.snapshotEntries.shift()
+
       if (!expired) {
         return
       }
+
       for (const key of expired.keys) {
         // Why: newer snapshots can reuse the same alias; only remove aliases
         // that still point at the large snapshot payload being evicted.

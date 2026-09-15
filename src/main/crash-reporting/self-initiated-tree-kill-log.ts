@@ -68,6 +68,7 @@ const MAX_TRACKED_SELF_KILLS = 32
 // while the forward edge mirrors SIBLING_DEATH_LOOKAHEAD_MS — a kill issued just
 // after the renderer died is at least as likely to be teardown reacting to it.
 export const SELF_TREE_KILL_LOOKBACK_MS = 5_000
+
 export const SELF_TREE_KILL_LOOKAHEAD_MS = 250
 
 // Why a longer window for group/job kills: those are routine teardown (three
@@ -105,9 +106,11 @@ function isPidAddressedTreeKill(scope: SelfInitiatedTreeKillScope): boolean {
  */
 function evictOneSelfInitiatedTreeKill(): void {
   const lastCandidate = selfInitiatedKills.length - 1
+
   const oldestGroupKill = selfInitiatedKills.findIndex(
     (kill, index) => index < lastCandidate && !isPidAddressedTreeKill(kill.scope)
   )
+
   selfInitiatedKills.splice(Math.max(oldestGroupKill, 0), 1)
 }
 
@@ -125,10 +128,13 @@ export function recordSelfInitiatedTreeKill({
   if (!Number.isInteger(pid) || pid <= 0) {
     return
   }
+
   selfInitiatedKills.push({ pid, site, scope, at })
+
   while (selfInitiatedKills.length > MAX_TRACKED_SELF_KILLS) {
     evictOneSelfInitiatedTreeKill()
   }
+
   // Durable so it survives into the diagnostic bundle even when the kill takes
   // the reporting renderer with it; coalesced because the crash detail above is
   // the primary record and a teardown burst must not cost 30 ring slots plus a
@@ -168,6 +174,7 @@ export function recordRefusedOwnChromiumTreeKill(target: {
 export function findSelfInitiatedTreeKills(at: number): SelfInitiatedTreeKill[] {
   return selfInitiatedKills.filter((kill) => {
     const offsetMs = kill.at - at
+
     return offsetMs >= -SELF_TREE_KILL_LOOKBACK_MS && offsetMs <= SELF_TREE_KILL_LOOKAHEAD_MS
   })
 }
@@ -176,6 +183,7 @@ export function findSelfInitiatedTreeKills(at: number): SelfInitiatedTreeKill[] 
 // credential URL and redacts the whole token. Mirror describeChildDeath instead.
 function describeSelfInitiatedTreeKill(kill: SelfInitiatedTreeKill, goneAt: number): string {
   const offsetMs = kill.at - goneAt
+
   return `${kill.scope}/${kill.site}/pid${kill.pid} ${offsetMs >= 0 ? '+' : ''}${offsetMs}ms`
 }
 
@@ -189,27 +197,36 @@ export function selfInitiatedTreeKillDetails(
   goneAt: number
 ): Record<string, CrashReportDetailValue> {
   const kills = findSelfInitiatedTreeKills(goneAt)
+
   if (kills.length === 0) {
     return {}
   }
+
   const treeKillCount = kills.filter((kill) => isPidAddressedTreeKill(kill.scope)).length
+
   const described = [...kills]
     // Pid-addressed kills first: truncation must never drop the ones that could
     // have caused the death in favour of routine teardown noise.
     .sort((a, b) => {
       const reach =
         Number(isPidAddressedTreeKill(b.scope)) - Number(isPidAddressedTreeKill(a.scope))
+
       return reach !== 0 ? reach : Math.abs(a.at - goneAt) - Math.abs(b.at - goneAt)
     })
     .map((kill) => describeSelfInitiatedTreeKill(kill, goneAt))
+
   const kept: string[] = []
+
   for (const entry of described) {
     if (kept.length > 0 && [...kept, entry].join(', ').length > MAX_SELF_TREE_KILLS_DETAIL_LENGTH) {
       break
     }
+
     kept.push(entry.slice(0, MAX_SELF_TREE_KILLS_DETAIL_LENGTH))
   }
+
   const dropped = described.length - kept.length
+
   return {
     ...(treeKillCount > 0 ? { selfInitiatedTreeKillCount: treeKillCount } : {}),
     ...(kills.length - treeKillCount > 0

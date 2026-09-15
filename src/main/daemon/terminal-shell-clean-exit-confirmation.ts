@@ -34,6 +34,7 @@ export class TerminalShellCleanExitConfirmation {
   drainWaiters(): void {
     const waiters = this.waiters
     this.waiters = []
+
     for (const waiter of waiters) {
       waiter()
     }
@@ -41,9 +42,11 @@ export class TerminalShellCleanExitConfirmation {
 
   start(generation: number): void {
     this.latestCandidateGeneration = generation
+
     if (this.inFlightState || this.opts.isDisposed()) {
       return
     }
+
     this.inFlightState = true
     const requested = generation
     const attempt = ++this.attempt
@@ -54,11 +57,13 @@ export class TerminalShellCleanExitConfirmation {
     // Why the guard: the callback is injected; a synchronous throw must not
     // strand the in-flight flag.
     let proof: Promise<boolean>
+
     try {
       proof = this.opts.confirmShellForeground()
     } catch {
       proof = Promise.resolve(false)
     }
+
     void proof
       .then((confirmed) => {
         // A retired attempt's late verdict is inert: an unsettled proof already
@@ -83,9 +88,11 @@ export class TerminalShellCleanExitConfirmation {
     if (attempt !== this.attempt) {
       return
     }
+
     this.attempt += 1
     this.inFlightState = false
     const latest = this.latestCandidateGeneration
+
     if (
       latest !== undefined &&
       latest !== requested &&
@@ -95,6 +102,7 @@ export class TerminalShellCleanExitConfirmation {
       // One superseding candidate can still be current; stale ones are not retried.
       this.start(latest)
     }
+
     this.drainWaiters()
   }
 }

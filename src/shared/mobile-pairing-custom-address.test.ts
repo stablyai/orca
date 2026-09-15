@@ -37,6 +37,7 @@ describe('mobile pairing custom address collection', () => {
       { length: MAX_MOBILE_PAIRING_CUSTOM_ADDRESSES + 5 },
       (_, index) => `host-${index}.example:6768`
     )
+
     expect(normalizeMobilePairingCustomAddresses(addresses)).toHaveLength(
       MAX_MOBILE_PAIRING_CUSTOM_ADDRESSES
     )

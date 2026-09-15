@@ -4,6 +4,7 @@ const { callRuntimeRpc } = vi.hoisted(() => ({ callRuntimeRpc: vi.fn() }))
 
 vi.mock('./runtime-rpc-client', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return { ...actual, callRuntimeRpc }
 })
 
@@ -77,6 +78,7 @@ describe('replaying client-hosted browser closes on reconnect', () => {
 
   it('does not run a second replay for an environment while one is in flight', async () => {
     let release = (): void => {}
+
     callRuntimeRpc.mockImplementation(
       () =>
         new Promise((resolve) => {

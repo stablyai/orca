@@ -84,9 +84,11 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
       if (linkedWorkItem) {
         const startPointSelection = smartGitHubPrStartPointSelectionRef.current
         const linkedWorkItemIdentity = getGitHubLinkedWorkItemIdentity(linkedWorkItem)
+
         const startPointIdentity = startPointSelection
           ? resolveGitHubWorkItemIdentity(startPointSelection.item)
           : null
+
         if (
           !isProjectGroupTarget &&
           linkedWorkItemIdentity?.type === 'pr' &&
@@ -116,8 +118,10 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
                 ? { isCrossRepository: startPointSelection.item.isCrossRepository }
                 : {})
             }))
+
           startPointSelection.resolved = selectedPrStartPoint
           const smartGitHubMetadata = getSmartGitHubSubmitResolution(startPointSelection.item)
+
           const resolution: Exclude<PendingSmartGitHubSubmitResolution, { kind: 'none' }> = {
             ...smartGitHubMetadata,
             kind: 'pr-start-point',
@@ -132,9 +136,11 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
               ? { branchNameOverride: selectedPrStartPoint.branchNameOverride }
               : {})
           }
+
           setBaseBranch(selectedPrStartPoint.baseBranch)
           setCompareBaseRef(selectedPrStartPoint.compareBaseRef)
           setPushTarget(selectedPrStartPoint.pushTarget)
+
           if (selectedPrStartPoint.branchNameOverride) {
             setBranchNameOverride(selectedPrStartPoint.branchNameOverride)
             setBranchNameOverridePreservesNameEdits(true)
@@ -142,13 +148,17 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
             setBranchNameOverride(undefined)
             setBranchNameOverridePreservesNameEdits(false)
           }
+
           setForkPushWarning(getForkPushWarning(selectedPrStartPoint))
+
           return resolution
         }
+
         return { kind: 'none' }
       }
 
       const intent = getSmartGitHubSubmitIntent(name)
+
       if (!intent) {
         return { kind: 'none' }
       }
@@ -184,11 +194,13 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
               workItemByOwnerRepo: lookupGitHubWorkItemByOwnerRepoForSource
             })
           : null
+
       if (!item) {
         throw new Error('Could not resolve the GitHub item before creating the workspace.')
       }
 
       const itemIdentity = resolveGitHubWorkItemIdentity(item)
+
       const prStartPoint =
         !isProjectGroupTarget && itemIdentity.type === 'pr' && selectedRepo && selectedRepoIsGit
           ? await resolveGitHubPrStartPointForRepo({
@@ -205,7 +217,9 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
                 : {})
             })
           : null
+
       const smartGitHubMetadata = getSmartGitHubSubmitResolution(item)
+
       const resolution: Exclude<PendingSmartGitHubSubmitResolution, { kind: 'none' }> = prStartPoint
         ? {
             ...smartGitHubMetadata,
@@ -221,6 +235,7 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
             ...smartGitHubMetadata,
             kind: 'metadata-only'
           }
+
       // Why: Create can fire before the debounced smart field commits; commit the resolved item here so the form shows the title, not the raw URL.
       setLinkedIssue(
         resolution.linkedIssueNumber !== null ? String(resolution.linkedIssueNumber) : ''
@@ -232,10 +247,12 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
       setLinkedTaskSourceContext(selectedRepoGitHubSourceContext)
       setName(resolution.workspaceName)
       lastAutoNameRef.current = resolution.workspaceName
+
       if (prStartPoint) {
         setBaseBranch(prStartPoint.baseBranch)
         setCompareBaseRef(prStartPoint.compareBaseRef)
         setPushTarget(prStartPoint.pushTarget)
+
         if (prStartPoint.branchNameOverride) {
           setBranchNameOverride(prStartPoint.branchNameOverride)
           setBranchNameOverridePreservesNameEdits(true)
@@ -243,13 +260,16 @@ export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {
           setBranchNameOverride(undefined)
           setBranchNameOverridePreservesNameEdits(false)
         }
+
         setForkPushWarning(getForkPushWarning(prStartPoint))
       } else {
         setBranchNameOverride(undefined)
         setBranchNameOverridePreservesNameEdits(false)
       }
+
       branchAutoNameRef.current = ''
       setStartFromResetHint(null)
+
       return resolution
     }, [
       folderSourceRepos,

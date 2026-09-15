@@ -55,6 +55,7 @@ describe('ShortcutFilterRail search helpers', () => {
 
   it('narrows rows when the global settings query matches specific rows', () => {
     const settingsRow = createShortcutRow()
+
     const worktreeRow: ShortcutRowModel = {
       ...createShortcutRow(),
       item: {
@@ -89,6 +90,7 @@ describe('ShortcutFilterRail search helpers', () => {
 
   it('rejects oversized pasted shortcut searches before reading row metadata', () => {
     const oversizedQuery = 'secret-shortcut-search'.repeat(SHORTCUT_LOCAL_SEARCH_QUERY_MAX_BYTES)
+
     const row = {
       get item(): ShortcutRowModel['item'] {
         throw new Error('oversized shortcut searches must not scan shortcut metadata')

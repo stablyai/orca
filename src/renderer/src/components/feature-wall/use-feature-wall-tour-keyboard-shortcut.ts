@@ -14,14 +14,18 @@ export function useFeatureWallTourKeyboardShortcut({
     if (!isOpen || !enabled) {
       return
     }
+
     const onKeyDown = (event: globalThis.KeyboardEvent): void => {
       if (!isScreenSubmitShortcut(event)) {
         return
       }
+
       event.preventDefault()
       onContinue()
     }
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
+
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [enabled, isOpen, onContinue])
 }

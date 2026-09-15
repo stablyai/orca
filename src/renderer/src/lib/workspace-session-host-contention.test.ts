@@ -24,6 +24,7 @@ import {
 } from './workspace-session-host-persistence'
 
 const SHARED_ID = 'repo-shared::/work/orca'
+
 const SSH_HOST: ExecutionHostId = 'ssh:build-box'
 
 function tab(id: string, worktreeId = SHARED_ID): TerminalTab {
@@ -146,6 +147,7 @@ describe('mergeWorkspaceSessionsWithHostShadow', () => {
 type SessionWriteMock = Mock<
   (session: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
 >
+
 type SessionPatchMock = Mock<
   (patch: Partial<WorkspaceSessionState>, hostId?: ExecutionHostId) => Promise<void>
 >
@@ -153,6 +155,7 @@ type SessionPatchMock = Mock<
 describe('writing a contested workspace id back', () => {
   const RUNTIME_HOST: ExecutionHostId = 'runtime:env-1'
   const RUNTIME_ONLY_ID = 'repo-runtime::/srv/app'
+
   const shadow = {
     [RUNTIME_HOST]: sessionWithTabs({ [SHARED_ID]: [tab('runtime-tab')] })
   }
@@ -196,6 +199,7 @@ describe('writing a contested workspace id back', () => {
       livePayload(),
       state
     )
+
     return set
   }
 
@@ -284,6 +288,7 @@ describe('writing a contested workspace id back', () => {
 
   it('keeps a parked row whose workspace the catalog cannot speak for yet', async () => {
     const folderKey = folderWorkspaceKey('folder-1')
+
     const set = await persist(
       runtimeCoClaimantState({
         contestedHostWorkspaceSessions: {

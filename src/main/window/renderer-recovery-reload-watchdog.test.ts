@@ -15,6 +15,7 @@ function createHarness() {
   const loads: MainWindowLoadObserver[] = []
   const onRecoveryReloadOutcome = vi.fn()
   const onRendererRecoveryExhausted = vi.fn()
+
   const watchdog = createRendererRecoveryReloadWatchdog({
     mainWindow,
     rendererWebContentsId: webContents.id,
@@ -23,8 +24,10 @@ function createHarness() {
     reloadMainWindow: (observer) => loads.push(observer),
     opts: { onRecoveryReloadOutcome, onRendererRecoveryExhausted }
   })
+
   const abortLatestLoad = () => loads.at(-1)?.onError?.(new Error('ERR_ABORTED (-3)'))
   watchdog.issue({ reason: 'crashed', exitCode: 5 }, 1)
+
   return {
     watchdog,
     webContents,
@@ -61,6 +64,7 @@ describe('superseding recovery navigations', () => {
       onRecoveryReloadOutcome,
       onRendererRecoveryExhausted
     } = createHarness()
+
     abortLatestLoad()
     webContents.emit('did-navigate')
     webContents.emit('did-fail-load', {}, -6, 'ERR_FILE_NOT_FOUND', 'file:///missing', true)
@@ -97,6 +101,7 @@ describe('superseding recovery navigations', () => {
       onRecoveryReloadOutcome,
       onRendererRecoveryExhausted
     } = createHarness()
+
     abortLatestLoad()
     webContents.emit('did-navigate')
     vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
@@ -120,6 +125,7 @@ describe('superseding recovery navigations', () => {
       onRecoveryReloadOutcome,
       onRendererRecoveryExhausted
     } = createHarness()
+
     vi.advanceTimersByTime(RENDERER_RECOVERY_LOAD_TIMEOUT_MS * 2)
     expect(onRendererRecoveryExhausted).toHaveBeenCalledOnce()
     abortLatestLoad()

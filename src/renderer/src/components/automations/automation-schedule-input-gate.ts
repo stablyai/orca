@@ -12,8 +12,10 @@ export function acceptsAutomationDraftSchedule(input: {
   validate: (schedule: string) => boolean
 }): boolean {
   const schedule = input.customSchedule.trim()
+
   if (input.savedRrule !== null && input.savedRrule.trim() === schedule) {
     return true
   }
+
   return input.validate(schedule)
 }

@@ -12,6 +12,7 @@ function fakeTarget(): {
   releasePointerCapture: (id: number) => void
 } {
   const captured = new Set<number>()
+
   return {
     setPointerCapture: (id) => void captured.add(id),
     hasPointerCapture: (id) => captured.has(id),
@@ -97,6 +98,7 @@ describe('usePetPointerInteraction', () => {
     // stale prior direction.
     const { result } = renderHook(() => usePetPointerInteraction({ x: 0, y: 0 }, vi.fn()))
     const target = fakeTarget()
+
     const ev = (clientX: number, clientY: number) =>
       ({
         button: 0,

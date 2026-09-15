@@ -19,83 +19,107 @@ import { makeWorktreeMeta } from './worktrees-test-fixtures'
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
+
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )
+
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
 vi.mock('../git/git-username', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
     .resolveLocalGitUsernameMock
 }))
+
 vi.mock('../github/client', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
+
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
+
 vi.mock('../providers/ssh-git-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
 )
+
 vi.mock('../providers/ssh-filesystem-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
+
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
+
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+
 vi.mock('../ssh/ssh-target-registry', async () =>
   (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
+
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
+
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../worktree-runner-script', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../effective-hook-config', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../setup-hook-env-vars', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('./worktree-logic', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
+
 vi.mock('../ports/advertised-url-watcher', async () =>
   (await import('./worktrees-test-module-mocks')).advertisedUrlWatcherModuleMock()
 )
+
 vi.mock('../workspace-cleanup-scan-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupScanSnapshotModuleMock()
 )
+
 vi.mock('../workspace-space-analysis-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceSpaceAnalysisSnapshotModuleMock()
 )
+
 vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
+
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
+
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
 describe('registerWorktreeHandlers', () => {
@@ -105,6 +129,7 @@ describe('registerWorktreeHandlers', () => {
 
   it('selects the exact SSH repo owner when repo IDs collide across hosts', async () => {
     const sshHostId = toSshExecutionHostId('target-a')
+
     const localRepo = {
       id: 'shared-repo',
       path: '/local/repo',
@@ -112,12 +137,14 @@ describe('registerWorktreeHandlers', () => {
       badgeColor: '#000',
       addedAt: 0
     }
+
     const sshRepo = {
       ...localRepo,
       path: '/remote/repo',
       displayName: 'remote repo',
       connectionId: 'target-a'
     }
+
     const provider = { listWorktrees: vi.fn().mockResolvedValue([]) }
     store.getRepos.mockImplementation(() => [{ ...localRepo }, { ...sshRepo }])
     getSshGitProviderMock.mockImplementation((targetId) =>
@@ -156,12 +183,14 @@ describe('registerWorktreeHandlers', () => {
   it('rejects malformed and contradictory repo host provenance', async () => {
     const provider = { listWorktrees: vi.fn().mockResolvedValue([]) }
     getSshGitProviderMock.mockReturnValue(provider)
+
     const request = {
       providerRequestId: 'request-1' as ProviderRequestId,
       repoId: 'repo-1',
       executionHostId: toSshExecutionHostId('target-a'),
       expectedAuthority: getSshProviderAuthority('target-a')
     }
+
     const baseRepo = {
       id: 'repo-1',
       path: '/remote/repo',
@@ -227,6 +256,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'target-a'
     }
+
     store.getRepos.mockReturnValue([sshRepo])
     getSshGitProviderMock.mockReturnValue(undefined)
     const expectedAuthority = getSshProviderAuthority('target-a')
@@ -258,6 +288,7 @@ describe('registerWorktreeHandlers', () => {
 
   it('lists every persisted SSH worktree without accessing the live provider', async () => {
     const sshHostId = toSshExecutionHostId('target-a')
+
     const sshRepo = {
       id: 'repo-1',
       path: '/remote/repo',
@@ -266,6 +297,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'target-a'
     }
+
     const metaById = {
       'repo-1::/remote/repo': makeWorktreeMeta({
         displayName: 'main',
@@ -280,6 +312,7 @@ describe('registerWorktreeHandlers', () => {
         hostId: toSshExecutionHostId('target-b')
       })
     }
+
     store.getRepos.mockReturnValue([sshRepo])
     store.getProjectHostSetups.mockReturnValue([])
     store.getAllWorktreeMeta.mockReturnValue(metaById)
@@ -310,6 +343,7 @@ describe('registerWorktreeHandlers', () => {
 
   it('lists SSH folder workspaces at the folder path, not the instance-suffixed id', async () => {
     const sshHostId = toSshExecutionHostId('target-a')
+
     const folderRepo = {
       id: 'repo-1',
       path: '/remote/folder',
@@ -319,8 +353,10 @@ describe('registerWorktreeHandlers', () => {
       connectionId: 'target-a',
       kind: 'folder' as const
     }
+
     const rootId = `${folderRepo.id}::${folderRepo.path}`
     const instanceId = `${rootId}::workspace:11111111-2222-3333-4444-555555555555`
+
     const metaById = {
       [rootId]: makeWorktreeMeta({ displayName: 'root', hostId: sshHostId }),
       [instanceId]: makeWorktreeMeta({
@@ -329,6 +365,7 @@ describe('registerWorktreeHandlers', () => {
         instanceId: '11111111-2222-3333-4444-555555555555'
       })
     }
+
     store.getRepos.mockReturnValue([folderRepo])
     store.getProjectHostSetups.mockReturnValue([])
     store.getAllWorktreeMeta.mockReturnValue(metaById)
@@ -351,6 +388,7 @@ describe('registerWorktreeHandlers', () => {
 
   it('stops listing SSH worktrees once an authoritative scan retires their metadata', async () => {
     const sshHostId = toSshExecutionHostId('target-a')
+
     const sshRepo = {
       id: 'repo-1',
       path: '/remote/repo',
@@ -359,6 +397,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'target-a'
     }
+
     const metaById: Record<string, Record<string, unknown>> = {
       'repo-1::/remote/repo': makeWorktreeMeta({ displayName: 'main', hostId: sshHostId }),
       'repo-1::/remote/deleted': makeWorktreeMeta({ displayName: 'deleted', hostId: sshHostId }),
@@ -372,6 +411,7 @@ describe('registerWorktreeHandlers', () => {
       }),
       'repo-2::/remote/other-repo': makeWorktreeMeta({ displayName: 'other repo' })
     }
+
     store.getRepos.mockReturnValue([sshRepo])
     store.getProjectHostSetups.mockReturnValue([])
     store.getAllWorktreeMeta.mockReturnValue(metaById)
@@ -398,10 +438,12 @@ describe('registerWorktreeHandlers', () => {
     })
     expect(store.removeWorktreeMeta).toHaveBeenCalledTimes(2)
     expect(store.removeWorktreeMeta).toHaveBeenCalledWith('repo-1::/remote/deleted', sshHostId)
+
     const pruneTargets = [
       { worktreeId: 'repo-1::/remote/deleted', executionHostId: sshHostId },
       { worktreeId: 'repo-1::/remote/deleted-too', executionHostId: sshHostId }
     ]
+
     expect(pruneCleanupScanSnapshotsMock).toHaveBeenCalledExactlyOnceWith(
       '/profile-a',
       pruneTargets
@@ -422,6 +464,7 @@ describe('registerWorktreeHandlers', () => {
 
   it('never retires folder workspace metadata, which is the workspace record itself', async () => {
     const sshHostId = toSshExecutionHostId('target-a')
+
     const folderRepo = {
       id: 'repo-1',
       path: '/remote/folder',
@@ -431,6 +474,7 @@ describe('registerWorktreeHandlers', () => {
       connectionId: 'target-a',
       kind: 'folder' as const
     }
+
     const instanceId = `${folderRepo.id}::${folderRepo.path}::workspace:11111111-2222-3333-4444-555555555555`
     store.getRepos.mockReturnValue([folderRepo])
     store.getAllWorktreeMeta.mockReturnValue({
@@ -451,6 +495,7 @@ describe('registerWorktreeHandlers', () => {
   // client needs this path to ever drop them (#17776).
   it('retires runtime-host metadata an authoritative scan proved gone', async () => {
     const runtimeHostId = toRuntimeExecutionHostId('env-1')
+
     const runtimeRepo = {
       id: 'repo-1',
       path: '/home/orca/repo',
@@ -459,12 +504,14 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       executionHostId: runtimeHostId
     }
+
     const metaById: Record<string, ReturnType<typeof makeWorktreeMeta>> = {
       'repo-1::/home/orca/deleted': makeWorktreeMeta({ hostId: runtimeHostId }),
       'repo-1::/home/orca/other-host': makeWorktreeMeta({
         hostId: toSshExecutionHostId('target-a')
       })
     }
+
     store.getRepos.mockReturnValue([runtimeRepo])
     store.getProjectHostSetups.mockReturnValue([])
     store.getAllWorktreeMeta.mockReturnValue(metaById)
@@ -525,6 +572,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'target-a'
     }
+
     store.getRepos.mockReturnValue([sshRepo, { ...sshRepo, path: '/remote/repo-b' }])
     store.getAllWorktreeMeta.mockReturnValue({
       'repo-1::/remote/deleted': makeWorktreeMeta({})
@@ -564,6 +612,7 @@ describe('registerWorktreeHandlers', () => {
 
   it('rejects ambiguous metadata-only SSH owners', async () => {
     const sshHostId = toSshExecutionHostId('target-a')
+
     const sshRepo = {
       id: 'repo-1',
       path: '/remote/repo-a',
@@ -572,6 +621,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'target-a'
     }
+
     store.getRepos.mockReturnValue([sshRepo, { ...sshRepo, path: '/remote/repo-b' }])
 
     const result = await handlers['worktrees:listKnownForExecutionHost'](null, {
@@ -597,6 +647,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'target-a'
     }
+
     const duplicateSshRepo = { ...sshRepo, path: '/remote/repo-b' }
     const localRepo = { ...sshRepo, path: '/local/repo', connectionId: undefined }
     store.getRepos.mockReturnValue([sshRepo, duplicateSshRepo, localRepo])
@@ -608,6 +659,7 @@ describe('registerWorktreeHandlers', () => {
       executionHostId: toSshExecutionHostId('target-a'),
       expectedAuthority
     })
+
     const legacy = await handlers['worktrees:listDetected'](null, { repoId: 'shared-repo' })
 
     expect(qualified).toMatchObject({
@@ -634,12 +686,14 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'target-a'
     }
+
     const sshBRepo = {
       ...sshARepo,
       path: '/remote/repo-b',
       displayName: 'remote repo B',
       connectionId: 'target-b'
     }
+
     const childId = 'shared-repo::/remote/repo-b/feature'
     store.getRepos.mockReturnValue([sshARepo, sshBRepo])
     store.getWorktreeMeta.mockImplementation((worktreeId: string) =>
@@ -682,6 +736,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'target-a'
     }
+
     const sshBRepo = { ...sshARepo, path: '/remote/repo-b', connectionId: 'target-b' }
     const worktreePath = '/remote/shared-feature'
     store.getRepos.mockReturnValue([sshARepo, sshBRepo])
@@ -726,23 +781,27 @@ describe('registerWorktreeHandlers', () => {
       repoId: 'repo-1',
       executionHostId: 'runtime:runtime-a'
     })
+
     const wrongTargetResult = await handlers['worktrees:listDetected'](ipcEvent, {
       providerRequestId: requestId,
       repoId: 'repo-1',
       executionHostId: toSshExecutionHostId('target-b'),
       expectedAuthority
     })
+
     const missingAuthorityResult = await handlers['worktrees:listDetected'](ipcEvent, {
       providerRequestId: requestId,
       repoId: 'repo-1',
       executionHostId: toSshExecutionHostId('target-a')
     })
+
     const zeroOwnerResult = await handlers['worktrees:listDetected'](ipcEvent, {
       providerRequestId: requestId,
       repoId: 'repo-1',
       executionHostId: toSshExecutionHostId('target-a'),
       expectedAuthority
     })
+
     store.getRepos.mockReturnValue([
       {
         id: 'repo-1',
@@ -754,6 +813,7 @@ describe('registerWorktreeHandlers', () => {
         executionHostId: toSshExecutionHostId('target-a')
       }
     ])
+
     const wrongProviderOwnerResult = await handlers['worktrees:listDetected'](ipcEvent, {
       providerRequestId: requestId,
       repoId: 'repo-1',
@@ -772,6 +832,7 @@ describe('registerWorktreeHandlers', () => {
 
   it('rejects a provider replacement during the SSH await without durable mutations', async () => {
     let resolveList: (worktrees: GitWorktreeInfo[]) => void = () => {}
+
     const firstProvider = {
       listWorktrees: vi.fn(
         () =>
@@ -780,8 +841,10 @@ describe('registerWorktreeHandlers', () => {
           })
       )
     }
+
     const replacementProvider = { listWorktrees: vi.fn().mockResolvedValue([]) }
     let currentProvider = firstProvider
+
     const sshRepo = {
       id: 'repo-1',
       path: '/remote/repo',
@@ -790,6 +853,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'target-a'
     }
+
     store.getRepos.mockReturnValue([sshRepo])
     getSshGitProviderMock.mockImplementation(() => currentProvider)
     const expectedAuthority = getSshProviderAuthority('target-a')
@@ -800,6 +864,7 @@ describe('registerWorktreeHandlers', () => {
       executionHostId: toSshExecutionHostId('target-a'),
       expectedAuthority
     })
+
     await Promise.resolve()
     currentProvider = replacementProvider
     resolveList([

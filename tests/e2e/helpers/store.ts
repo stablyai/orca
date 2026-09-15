@@ -14,11 +14,13 @@ import type { BrowserTabSummary, ExplorerFileSummary, TerminalTabSummary } from 
 export async function getStoreState<T>(page: Page, selector: string): Promise<T> {
   return page.evaluate((selector) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available — is the app in dev mode?')
     }
 
     const state = store.getState()
+
     // Support dot-notation selectors like 'activeWorktreeId' or 'tabsByWorktree'
     return selector.split('.').reduce<unknown>((value, key) => {
       if (value && typeof value === 'object') {
@@ -52,11 +54,13 @@ export async function getWorktreeTabs(
 ): Promise<{ id: string; title?: string }[]> {
   return page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       return []
     }
 
     const state = store.getState()
+
     return (state.tabsByWorktree[worktreeId] ?? []).map((tab): TerminalTabSummary => ({
       id: tab.id,
       title: tab.customTitle || tab.title
@@ -76,6 +80,7 @@ export async function getWorktreeTabs(
 export async function getTabBarOrder(page: Page, worktreeId: string): Promise<string[]> {
   return page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       return []
     }
@@ -83,21 +88,27 @@ export async function getTabBarOrder(page: Page, worktreeId: string): Promise<st
     const state = store.getState()
     const groups = state.groupsByWorktree?.[worktreeId] ?? []
     const activeGroupId = state.activeGroupIdByWorktree?.[worktreeId]
+
     const activeGroup = activeGroupId
       ? groups.find((g: { id: string }) => g.id === activeGroupId)
       : groups[0]
+
     if (activeGroup?.tabOrder?.length > 0) {
       const unifiedTabs = state.unifiedTabsByWorktree?.[worktreeId] ?? []
+
       return activeGroup.tabOrder.map((itemId: string) => {
         const tab = unifiedTabs.find((t: { id: string }) => t.id === itemId)
+
         if (!tab) {
           return itemId
         }
+
         return tab.contentType === 'terminal' || tab.contentType === 'browser'
           ? tab.entityId
           : tab.id
       })
     }
+
     return state.tabBarOrderByWorktree[worktreeId] ?? []
   }, worktreeId)
 }
@@ -109,11 +120,13 @@ export async function getBrowserTabs(
 ): Promise<{ id: string; url?: string; title?: string }[]> {
   return page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       return []
     }
 
     const state = store.getState()
+
     return (state.browserTabsByWorktree[worktreeId] ?? []).map((tab): BrowserTabSummary => ({
       id: tab.id,
       url: tab.url,
@@ -129,11 +142,13 @@ export async function getOpenFiles(
 ): Promise<{ id: string; filePath: string; relativePath: string }[]> {
   return page.evaluate((worktreeId) => {
     const store = window.__store
+
     if (!store) {
       return []
     }
 
     const state = store.getState()
+
     return state.openFiles
       .filter((file) => file.worktreeId === worktreeId)
       .map((file): ExplorerFileSummary => ({
@@ -178,16 +193,19 @@ export async function waitForActiveWorktree(page: Page, timeoutMs = 30_000): Pro
       async () => {
         activeWorktreeId = await page.evaluate(() => {
           const store = window.__store
+
           if (!store) {
             return null
           }
 
           let state = store.getState()
+
           if (state.activeWorktreeId) {
             return state.activeWorktreeId
           }
 
           const firstWorktree = Object.values(state.worktreesByRepo).flat()[0]
+
           if (!firstWorktree) {
             return null
           }
@@ -197,8 +215,10 @@ export async function waitForActiveWorktree(page: Page, timeoutMs = 30_000): Pro
           // instead of relying on sidebar option click hit targets.
           state.setActiveWorktree(firstWorktree.id)
           state = store.getState()
+
           return state.activeWorktreeId
         })
+
         return activeWorktreeId
       },
       {
@@ -215,12 +235,14 @@ export async function waitForActiveWorktree(page: Page, timeoutMs = 30_000): Pro
 export async function getAllWorktreeIds(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       return []
     }
 
     const state = store.getState()
     const allWorktrees = Object.values(state.worktreesByRepo).flat()
+
     return allWorktrees.map((worktree) => worktree.id)
   })
 }
@@ -232,6 +254,7 @@ export async function switchToOtherWorktree(
 ): Promise<string | null> {
   return page.evaluate((currentId) => {
     const store = window.__store
+
     if (!store) {
       return null
     }
@@ -239,11 +262,13 @@ export async function switchToOtherWorktree(
     const state = store.getState()
     const allWorktrees = Object.values(state.worktreesByRepo).flat()
     const other = allWorktrees.find((worktree) => worktree.id !== currentId)
+
     if (!other) {
       return null
     }
 
     state.setActiveWorktree(other.id)
+
     return other.id
   }, currentWorktreeId)
 }
@@ -252,6 +277,7 @@ export async function switchToOtherWorktree(
 export async function switchToWorktree(page: Page, worktreeId: string): Promise<void> {
   await page.evaluate((id) => {
     const store = window.__store
+
     if (!store) {
       return
     }
@@ -273,16 +299,21 @@ export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Pro
       async () =>
         page.evaluate(() => {
           const store = window.__store
+
           if (!store) {
             return false
           }
+
           let state = store.getState()
           let worktreeId = state.activeWorktreeId
+
           if (!worktreeId) {
             const firstWorktree = Object.values(state.worktreesByRepo).flat()[0]
+
             if (!firstWorktree) {
               return false
             }
+
             // Why: reload-based specs can briefly clear the active worktree
             // after session readiness while worktrees are already loaded.
             state.setActiveWorktree(firstWorktree.id)
@@ -291,6 +322,7 @@ export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Pro
           }
 
           const tabs = state.tabsByWorktree[worktreeId] ?? []
+
           const activeTab =
             tabs.find((tab) => tab.id === state.activeTabIdByWorktree[worktreeId]) ??
             tabs.find((tab) => tab.id === state.activeTabId) ??
@@ -299,15 +331,19 @@ export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Pro
             // auto-create effect yet. Use the same store action to create the first
             // terminal tab so terminal-focused specs start from a stable baseline.
             state.createTab(worktreeId)
+
           state.setActiveTab(activeTab.id)
+
           if (state.activeTabType !== 'terminal') {
             state.setActiveTabType('terminal')
           }
 
           state = store.getState()
+
           if (state.activeTabType !== 'terminal' || state.activeWorktreeId !== worktreeId) {
             return false
           }
+
           return (state.tabsByWorktree[worktreeId] ?? []).some(
             (tab) => tab.id === state.activeTabId
           )
@@ -321,12 +357,14 @@ export async function ensureTerminalVisible(page: Page, timeoutMs = 10_000): Pro
 export async function worktreeExists(page: Page, name: string): Promise<boolean> {
   return page.evaluate((name) => {
     const store = window.__store
+
     if (!store) {
       return false
     }
 
     const state = store.getState()
     const allWorktrees = Object.values(state.worktreesByRepo).flat()
+
     return allWorktrees.some(
       (worktree) => worktree.displayName === name || worktree.path.endsWith(`/${name}`)
     )

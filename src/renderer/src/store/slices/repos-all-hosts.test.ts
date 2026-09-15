@@ -108,13 +108,21 @@ const remoteFolderWorkspace: FolderWorkspace = {
 }
 
 const reposList = vi.fn()
+
 const projectsList = vi.fn()
+
 const listHostSetups = vi.fn()
+
 const projectGroupsList = vi.fn()
+
 const folderWorkspacesList = vi.fn()
+
 const runtimeEnvironmentsList = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
+
 const dispatchEventMock = vi.fn()
 
 beforeEach(() => {
@@ -144,6 +152,7 @@ beforeEach(() => {
         _meta: { runtimeId: 'runtime-remote' }
       }
     }
+
     if (args.method === 'projectGroup.list') {
       return {
         id: 'rpc-project-group-list',
@@ -152,6 +161,7 @@ beforeEach(() => {
         _meta: { runtimeId: 'runtime-remote' }
       }
     }
+
     if (args.method === 'folderWorkspace.list') {
       return {
         id: 'rpc-folder-workspace-list',
@@ -160,6 +170,7 @@ beforeEach(() => {
         _meta: { runtimeId: 'runtime-remote' }
       }
     }
+
     return {
       id: 'rpc-other',
       ok: true,
@@ -196,6 +207,7 @@ function configureSharedProjectCompatibilityMocks(
   sharedRemoteProject: Project
 } {
   const sharedProjectId = 'github:stablyai/orca'
+
   const localRepoForSharedProject: Repo =
     options.localRepoHasProviderIdentity === false
       ? localRepo
@@ -203,10 +215,12 @@ function configureSharedProjectCompatibilityMocks(
           ...localRepo,
           upstream: { owner: 'stablyai', repo: 'orca' }
         }
+
   const remoteRepoWithIdentity: Repo = {
     ...remoteRepo,
     upstream: { owner: 'stablyai', repo: 'orca' }
   }
+
   const sharedLocalProject: Project = {
     id: sharedProjectId,
     displayName: 'Orca',
@@ -216,6 +230,7 @@ function configureSharedProjectCompatibilityMocks(
     createdAt: 1,
     updatedAt: 1
   }
+
   const sharedRemoteProject: Project = {
     id: sharedProjectId,
     displayName: 'Orca',
@@ -227,10 +242,12 @@ function configureSharedProjectCompatibilityMocks(
     createdAt: 2,
     updatedAt: 2
   }
+
   const sharedLocalSetup: ProjectHostSetup = {
     ...localProjectHostSetup,
     projectId: sharedProjectId
   }
+
   const sharedRemoteSetup: ProjectHostSetup = {
     ...localProjectHostSetup,
     id: 'remote-setup',
@@ -239,6 +256,7 @@ function configureSharedProjectCompatibilityMocks(
     path: '/srv/repo',
     displayName: 'Remote setup'
   }
+
   reposList.mockResolvedValue([localRepoForSharedProject])
   projectsList.mockResolvedValue([sharedLocalProject])
   listHostSetups.mockResolvedValue([sharedLocalSetup])
@@ -251,6 +269,7 @@ function configureSharedProjectCompatibilityMocks(
         _meta: { runtimeId: 'runtime-remote' }
       }
     }
+
     if (args.method === 'project.list') {
       return {
         id: 'rpc-project-list',
@@ -259,6 +278,7 @@ function configureSharedProjectCompatibilityMocks(
         _meta: { runtimeId: 'runtime-remote' }
       }
     }
+
     if (args.method === 'projectHostSetup.list') {
       return {
         id: 'rpc-project-host-setup-list',
@@ -267,6 +287,7 @@ function configureSharedProjectCompatibilityMocks(
         _meta: { runtimeId: 'runtime-remote' }
       }
     }
+
     return {
       id: 'rpc-other',
       ok: true,
@@ -274,6 +295,7 @@ function configureSharedProjectCompatibilityMocks(
       _meta: { runtimeId: 'runtime-remote' }
     }
   })
+
   return { sharedProjectId, sharedRemoteProject }
 }
 
@@ -335,6 +357,7 @@ describe('fetchReposForAllHosts', () => {
       if (args.method === 'repo.list') {
         return repoListResponse
       }
+
       return {
         id: 'rpc-other',
         ok: true,
@@ -377,6 +400,7 @@ describe('fetchReposForAllHosts', () => {
       .getState()
       .repos.map((repo) => repo.id)
       .sort()
+
     expect(ids).toEqual(['local-repo', 'remote-repo'])
     expect(store.getState().projects).toContainEqual(localProject)
     expect(store.getState().projectHostSetups).toContainEqual(localProjectHostSetup)
@@ -391,6 +415,7 @@ describe('fetchReposForAllHosts', () => {
       createdAt: 3,
       updatedAt: 4
     }
+
     const runtimeSetup: ProjectHostSetup = {
       ...localProjectHostSetup,
       id: 'runtime-setup',
@@ -402,6 +427,7 @@ describe('fetchReposForAllHosts', () => {
       createdAt: 3,
       updatedAt: 4
     }
+
     runtimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       if (args.method === 'repo.list') {
         return {
@@ -411,6 +437,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (args.method === 'project.list') {
         return {
           id: 'rpc-project-list',
@@ -419,6 +446,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (args.method === 'projectHostSetup.list') {
         return {
           id: 'rpc-project-host-setup-list',
@@ -427,6 +455,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       return {
         id: 'rpc-other',
         ok: true,
@@ -498,6 +527,7 @@ describe('fetchReposForAllHosts', () => {
     const { sharedProjectId } = configureSharedProjectCompatibilityMocks({
       remoteProjectRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
     })
+
     const store = createTestStore()
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
 
@@ -535,6 +565,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (args.method === 'project.list') {
         return {
           id: 'rpc-project-list-empty',
@@ -543,6 +574,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (args.method === 'projectHostSetup.list') {
         return {
           id: 'rpc-project-host-setup-list-empty',
@@ -551,6 +583,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       return {
         id: 'rpc-other',
         ok: true,
@@ -564,6 +597,7 @@ describe('fetchReposForAllHosts', () => {
     const sharedProject = store
       .getState()
       .projects.find((project) => project.id === sharedProjectId)
+
     expect(sharedProject?.sourceRepoIds).toEqual(['local-repo'])
     expect(sharedProject?.localWindowsRuntimePreference).toEqual({ kind: 'windows-host' })
     expect(store.getState().projectHostSetups).toEqual([
@@ -579,6 +613,7 @@ describe('fetchReposForAllHosts', () => {
     const { sharedProjectId } = configureSharedProjectCompatibilityMocks({
       localRepoHasProviderIdentity: false
     })
+
     const store = createTestStore()
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
 
@@ -593,6 +628,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (args.method === 'project.list') {
         return {
           id: 'rpc-project-list-empty',
@@ -601,6 +637,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (args.method === 'projectHostSetup.list') {
         return {
           id: 'rpc-project-host-setup-list-empty',
@@ -609,6 +646,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       return {
         id: 'rpc-other',
         ok: true,
@@ -647,6 +685,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (args.method === 'project.list') {
         return {
           id: 'rpc-project-list-empty',
@@ -655,6 +694,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (args.method === 'projectHostSetup.list') {
         return {
           id: 'rpc-project-host-setup-list-empty',
@@ -663,6 +703,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       return {
         id: 'rpc-other',
         ok: true,
@@ -713,6 +754,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (args.method === 'project.list') {
         return {
           id: 'rpc-project-list-stale',
@@ -721,6 +763,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       if (args.method === 'projectHostSetup.list') {
         return {
           id: 'rpc-project-host-setup-list-empty',
@@ -729,6 +772,7 @@ describe('fetchReposForAllHosts', () => {
           _meta: { runtimeId: 'runtime-remote' }
         }
       }
+
       return {
         id: 'rpc-other',
         ok: true,
@@ -749,6 +793,7 @@ describe('fetchReposForAllHosts', () => {
       if (args.method === 'repo.list') {
         throw new Error('runtime_unreachable')
       }
+
       return {
         id: 'rpc-other',
         ok: true,
@@ -826,16 +871,19 @@ describe('fetchReposForAllHosts', () => {
     ])
     const firstStatusResolvers = new Map<string, (value: unknown) => void>()
     let resolveBothStatusProbes = (): void => {}
+
     const bothStatusProbesStarted = new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(
         () => reject(new Error('Timed out waiting for both runtime probes')),
         1_000
       )
+
       resolveBothStatusProbes = () => {
         clearTimeout(timeout)
         resolve()
       }
     })
+
     runtimeEnvironmentTransportCall.mockImplementation(
       (args: RuntimeEnvironmentCallRequest & { selector?: string }) => {
         if (
@@ -845,11 +893,13 @@ describe('fetchReposForAllHosts', () => {
         ) {
           return new Promise((resolve) => {
             firstStatusResolvers.set(args.selector!, resolve)
+
             if (firstStatusResolvers.size === 2) {
               resolveBothStatusProbes()
             }
           })
         }
+
         return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
       }
     )
@@ -859,9 +909,11 @@ describe('fetchReposForAllHosts', () => {
     await bothStatusProbesStarted
 
     expect([...firstStatusResolvers.keys()].sort()).toEqual(['env-1', 'env-2'])
+
     for (const resolve of firstStatusResolvers.values()) {
       resolve(createCompatibleRuntimeStatusResponseIfNeeded({ method: 'status.get' }))
     }
+
     await load
 
     expect(

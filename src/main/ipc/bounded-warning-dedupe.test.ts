@@ -20,6 +20,7 @@ describe('shouldEmitBoundedWarning', () => {
 
   it('limits repeat emissions for a stable default-cap-plus-one scan', () => {
     const warningKeys = new Set<string>()
+
     const keys = Array.from(
       { length: DEFAULT_WARNING_DEDUPE_MAX_KEYS + 1 },
       (_, index) => `warning-${index}`

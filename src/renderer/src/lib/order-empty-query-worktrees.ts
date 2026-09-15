@@ -40,11 +40,13 @@ export function orderEmptyQueryWorktrees(inputs: OrderEmptyQueryInputs): OrderEm
     activeWorkspaceExecutionHostId,
     lastVisitedAtByWorktreeId
   } = inputs
+
   // Why the host too (STA-4343): `repoId::path` repeats across hosts, so filtering on the
   // bare id drops BOTH same-id rows as "current" and the other host becomes unreachable.
   const switchable = visibleWorktrees.filter(
     (w) => !isPaletteCurrentWorktree(w, activeWorktreeId, activeWorkspaceExecutionHostId)
   )
+
   // Why: a visited worktree must always outrank a never-visited one,
   // even when the never-visited worktree has a newer lastActivityAt.
   // Mixing the two signals into a single numeric score would let
@@ -54,6 +56,7 @@ export function orderEmptyQueryWorktrees(inputs: OrderEmptyQueryInputs): OrderEm
   const sorted = [...switchable].sort((a, b) => {
     const aVisited = getWorktreeVisitTimestamp(lastVisitedAtByWorktreeId, a)
     const bVisited = getWorktreeVisitTimestamp(lastVisitedAtByWorktreeId, b)
+
     if (aVisited != null && bVisited != null) {
       if (bVisited !== aVisited) {
         return bVisited - aVisited
@@ -65,8 +68,10 @@ export function orderEmptyQueryWorktrees(inputs: OrderEmptyQueryInputs): OrderEm
     } else if (b.lastActivityAt !== a.lastActivityAt) {
       return b.lastActivityAt - a.lastActivityAt
     }
+
     return compareWorktreeDisplayName(a, b)
   })
+
   return {
     visibleWorktreesForState: visibleWorktrees,
     switchableWorktreesForRows: sorted

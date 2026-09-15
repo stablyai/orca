@@ -30,6 +30,7 @@ describe('extractPendingAsk', () => {
     const ask = extractPendingAsk([
       msg([{ type: 'tool-call', name: 'AskUserQuestion', input: askInput }])
     ])
+
     expect(ask?.questions[0]).toMatchObject({
       question: 'Pick one',
       header: 'Choice',
@@ -43,6 +44,7 @@ describe('extractPendingAsk', () => {
       msg([{ type: 'tool-call', name: 'AskUserQuestion', input: askInput }], 'a'),
       msg([{ type: 'tool-result', output: 'answered' }], 'r')
     ])
+
     expect(ask).toBeNull()
   })
 
@@ -60,6 +62,7 @@ describe('extractPendingAsk', () => {
       msg([{ type: 'tool-call', name: 'AskUserQuestion', input: askInput }], 'a1'),
       msg([{ type: 'tool-result', output: 'ls output' }], 'r1')
     ])
+
     expect(ask?.questions[0]!.question).toBe('Pick one')
   })
 
@@ -70,6 +73,7 @@ describe('extractPendingAsk', () => {
       msg([{ type: 'tool-result', output: 'ls output' }], 'r1'),
       msg([{ type: 'tool-result', output: 'answered' }], 'r2')
     ])
+
     expect(ask).toBeNull()
   })
 
@@ -87,6 +91,7 @@ describe('extractPendingAsk', () => {
         }
       ])
     ])
+
     expect(ask?.questions[0]!.question).toBe('Second')
   })
 })
@@ -113,6 +118,7 @@ describe('formatAskAnswer', () => {
         { question: 'q2', multiSelect: false, options: [{ label: 'C' }] }
       ]
     }
+
     expect(formatAskAnswer(prompt, [{ indices: [0, 1] }, { indices: [0] }])).toBe('A, B\nC')
   })
 
@@ -124,6 +130,7 @@ describe('formatAskAnswer', () => {
         { question: 'q3', multiSelect: false, options: [{ label: 'C' }] }
       ]
     }
+
     const answer = formatAskAnswer(prompt, [{ indices: [0] }, { indices: [] }, { indices: [0] }])
     expect(answer).toBe('A\n\nC')
     expect(answer.split('\n')).toHaveLength(3)
@@ -137,6 +144,7 @@ describe('buildAskAnswerKeys', () => {
         { question: 'q', multiSelect: false, options: [{ label: 'Tabs' }, { label: 'Spaces' }] }
       ]
     }
+
     expect(buildAskAnswerKeys(prompt, [{ indices: [1] }])).toEqual([{ raw: '2' }])
   })
 
@@ -150,6 +158,7 @@ describe('buildAskAnswerKeys', () => {
         }
       ]
     }
+
     expect(buildAskAnswerKeys(prompt, [{ indices: [0, 2] }])).toEqual([
       { raw: '1' },
       { raw: '3' },

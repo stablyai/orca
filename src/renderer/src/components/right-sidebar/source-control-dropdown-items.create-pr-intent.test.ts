@@ -34,9 +34,11 @@ describe('resolveDropdownItems Create PR intent', () => {
         }
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.create_pr.disabled).toBe(false)
     expect(byKind.create_pr.hint).toBe('Push first')
     expect(byKind.push_create_pr.label).toBe('Push before PR')
@@ -81,6 +83,7 @@ describe('resolveDropdownItems Create PR intent', () => {
           }
         })
       )
+
       const pushCreate = items.find((item): item is DropdownItem => item.kind === 'push_create_pr')
 
       expect(pushCreate?.disabled).toBe(false)
@@ -103,9 +106,11 @@ describe('resolveDropdownItems Create PR intent', () => {
         }
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.create_pr.label).toBe('Create MR')
     expect(byKind.create_pr.hint).toBe('Push first')
     expect(byKind.create_pr.disabled).toBe(false)
@@ -130,9 +135,11 @@ describe('resolveDropdownItems Create PR intent', () => {
           }
         })
       )
+
       const byKind = Object.fromEntries(
         items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
       )
+
       expect(byKind.create_pr.label).toBe('Create PR')
       expect(byKind.create_pr.hint).toBe('Push first')
       expect(byKind.create_pr.disabled).toBe(false)
@@ -159,9 +166,11 @@ describe('resolveDropdownItems Create PR intent', () => {
         }
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.create_pr.hint).toBe(hint)
   })
 
@@ -179,9 +188,11 @@ describe('resolveDropdownItems Create PR intent', () => {
         }
       })
     )
+
     const byKind = Object.fromEntries(
       items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
     )
+
     expect(byKind.create_pr.hint).toBe('Run glab auth login in this environment')
   })
 })

@@ -40,6 +40,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
       method: 'DOM.focus',
       params: { backendNodeId: 99 }
     })
+
     const insertResponse = await sendAndReceive(client, {
       id: 15,
       method: 'Input.insertText',
@@ -68,6 +69,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
       params: { backendNodeId: 123 },
       sessionId: 'oopif-session-123'
     })
+
     const insertResponse = await sendAndReceive(client, {
       id: 17,
       method: 'Input.insertText',
@@ -99,6 +101,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
       method: 'Runtime.callFunctionOn',
       params: { functionDeclaration: '() => document.activeElement?.id' }
     })
+
     const insertResponse = await sendAndReceive(client, {
       id: 20,
       method: 'Input.insertText',
@@ -121,12 +124,15 @@ describe('CdpWsProxy DOM.focus replay', () => {
     let domFocusAttempt = 0
     mock.webContents.debugger.sendCommand.mockImplementation(async (...args: unknown[]) => {
       const [method] = args as [string]
+
       if (method === 'DOM.focus') {
         domFocusAttempt += 1
+
         if (domFocusAttempt === 1) {
           throw new Error('Node not found')
         }
       }
+
       return {}
     })
 
@@ -137,6 +143,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
       method: 'DOM.focus',
       params: { backendNodeId: 55 }
     })
+
     const insertResponse = await sendAndReceive(client, {
       id: 22,
       method: 'Input.insertText',
@@ -162,12 +169,15 @@ describe('CdpWsProxy DOM.focus replay', () => {
     let domFocusAttempt = 0
     mock.webContents.debugger.sendCommand.mockImplementation(async (...args: unknown[]) => {
       const [method] = args as [string]
+
       if (method === 'DOM.focus') {
         domFocusAttempt += 1
+
         if (domFocusAttempt === 2) {
           throw new Error('Focus target went stale')
         }
       }
+
       return {}
     })
 
@@ -178,6 +188,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
       method: 'DOM.focus',
       params: { backendNodeId: 77 }
     })
+
     const insertResponse = await sendAndReceive(client, {
       id: 24,
       method: 'Input.insertText',
@@ -201,14 +212,18 @@ describe('CdpWsProxy DOM.focus replay', () => {
 
   it('still replays DOM.focus when Input.insertText is dispatched while DOM.focus is still in flight', async () => {
     let resolveFocus: (v: Record<string, unknown>) => void
+
     const focusPromise = new Promise<Record<string, unknown>>((r) => {
       resolveFocus = r
     })
+
     mock.webContents.debugger.sendCommand.mockImplementation(async (...args: unknown[]) => {
       const [method] = args as [string]
+
       if (method === 'DOM.focus') {
         return focusPromise
       }
+
       return {}
     })
 
@@ -253,6 +268,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
       params: { backendNodeId: 88 }
     })
     await sendAndReceive(client, { id: 28, method: 'Page.bringToFront', params: {} })
+
     const insertResponse = await sendAndReceive(client, {
       id: 29,
       method: 'Input.insertText',
@@ -277,6 +293,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
       params: { backendNodeId: 91 }
     })
     await sendAndReceive(client, { id: 31, method: 'Page.captureScreenshot', params: {} })
+
     const insertResponse = await sendAndReceive(client, {
       id: 32,
       method: 'Input.insertText',
@@ -302,6 +319,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
     // Why: a new client connection replaces the previous one; the stale focus
     // stored by the departed client must not leak into the new client's insert.
     const second = await connect(endpoint)
+
     const insertResponse = await sendAndReceive(second, {
       id: 34,
       method: 'Input.insertText',
@@ -316,13 +334,16 @@ describe('CdpWsProxy DOM.focus replay', () => {
 
   it('does not replay or insert once the client disconnects mid-DOM.focus', async () => {
     let resolveFocus: (v: Record<string, unknown>) => void = () => {}
+
     mock.webContents.debugger.sendCommand.mockImplementation(async (...args: unknown[]) => {
       const [method] = args as [string]
+
       if (method === 'DOM.focus') {
         return new Promise<Record<string, unknown>>((resolve) => {
           resolveFocus = resolve
         })
       }
+
       return {}
     })
 
@@ -348,10 +369,13 @@ describe('CdpWsProxy DOM.focus replay', () => {
   it('does not insert once the client disconnects during the DOM.focus replay', async () => {
     let domFocusCalls = 0
     let resolveReplay: (v: Record<string, unknown>) => void = () => {}
+
     mock.webContents.debugger.sendCommand.mockImplementation(async (...args: unknown[]) => {
       const [method] = args as [string]
+
       if (method === 'DOM.focus') {
         domFocusCalls += 1
+
         // Why: let the first DOM.focus resolve so a replay is queued, then hang the
         // replay so the client can disconnect while it is in flight.
         if (domFocusCalls === 2) {
@@ -360,6 +384,7 @@ describe('CdpWsProxy DOM.focus replay', () => {
           })
         }
       }
+
       return {}
     })
 

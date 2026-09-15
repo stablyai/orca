@@ -35,19 +35,23 @@ function quoteWindows(value: string, escapePercent: boolean): string {
   if (!(escapePercent ? /[\\"%]/ : /[\\"]/).test(value)) {
     return `"${value}"`
   }
+
   let quoted = '"'
   let backslashes = 0
+
   for (const char of value) {
     if (char === '\\') {
       backslashes += 1
       continue
     }
+
     if (char === '"') {
       // The backslash run is literal, so double it; the quote itself becomes `""`.
       quoted += `${'\\'.repeat(backslashes * 2)}""`
       backslashes = 0
       continue
     }
+
     if (escapePercent && char === '%') {
       // `%VAR%` expands even inside a quoted token, so the pair has to be
       // broken: close the quote, escape the percent, reopen. The backslash run
@@ -58,9 +62,11 @@ function quoteWindows(value: string, escapePercent: boolean): string {
       backslashes = 0
       continue
     }
+
     quoted += `${'\\'.repeat(backslashes)}${char}`
     backslashes = 0
   }
+
   // Trailing backslashes precede the closing quote, so they need doubling too —
   // otherwise `C:\dir\` ends the argument with an escaped quote and swallows it.
   return `${quoted}${'\\'.repeat(backslashes * 2)}"`
@@ -112,9 +118,11 @@ export function buildWindowsCmdShimCommandLine(program: string, args: readonly s
       throw new Error('cmd.exe cannot receive an argument containing a line break')
     }
   }
+
   // The program path needs the same treatment as the arguments: it is just as
   // likely to contain `%USERNAME%`, and cmd expands it just the same.
   const inner = [program, ...args].map(quoteWindowsCmdArgument).join(' ')
+
   return `/d /v:off /s /c "${inner}"`
 }
 
@@ -123,5 +131,6 @@ const CMD_INTERPRETED_EXTENSIONS = ['.cmd', '.bat']
 /** Whether `program` is a target Windows can only start through `cmd.exe`. */
 export function isCmdInterpretedProgram(program: string): boolean {
   const lower = program.toLowerCase()
+
   return CMD_INTERPRETED_EXTENSIONS.some((extension) => lower.endsWith(extension))
 }

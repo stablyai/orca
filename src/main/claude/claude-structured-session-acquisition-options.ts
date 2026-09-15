@@ -23,9 +23,11 @@ export function prepareClaudeStructuredSessionAcquisitionOptions(args: {
   const fastModePerSessionOptIn = readClaudeSettingsFastModePerSessionOptIn(args.settings)
   const fastModeFacts = readClaudeFastModeFacts(args.initialization)
   const options = restoredClaudeStructuredSessionOptions(args.inputOptions)
+
   if (!args.resumed && fastModePerSessionOptIn === true && options.get('fastMode') === 'true') {
     options.delete('fastMode')
   }
+
   return { fastMode, fastModePerSessionOptIn, fastModeFacts, options }
 }
 

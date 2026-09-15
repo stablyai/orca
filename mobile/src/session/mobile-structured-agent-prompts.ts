@@ -67,10 +67,12 @@ function decodePromptToken(value: string): PromptTokenPayload | null {
   if (!value.startsWith(STRUCTURED_PROMPT_TOKEN_PREFIX)) {
     return null
   }
+
   try {
     const decoded = JSON.parse(
       decodeURIComponent(value.slice(STRUCTURED_PROMPT_TOKEN_PREFIX.length))
     ) as Record<string, unknown>
+
     if (
       typeof decoded.itemId !== 'string' ||
       typeof decoded.revision !== 'number' ||
@@ -78,6 +80,7 @@ function decodePromptToken(value: string): PromptTokenPayload | null {
     ) {
       return null
     }
+
     if (decoded.kind === 'approval' && typeof decoded.optionId === 'string') {
       return {
         kind: decoded.kind,
@@ -86,6 +89,7 @@ function decodePromptToken(value: string): PromptTokenPayload | null {
         optionId: decoded.optionId
       }
     }
+
     if (decoded.kind === 'question-option' && typeof decoded.optionId === 'string') {
       return {
         kind: decoded.kind,
@@ -94,6 +98,7 @@ function decodePromptToken(value: string): PromptTokenPayload | null {
         optionId: decoded.optionId
       }
     }
+
     if (decoded.kind === 'question-free-text' && typeof decoded.questionId === 'string') {
       return {
         kind: decoded.kind,
@@ -105,6 +110,7 @@ function decodePromptToken(value: string): PromptTokenPayload | null {
   } catch {
     return null
   }
+
   return null
 }
 
@@ -115,14 +121,19 @@ function decodeQuestionFreeTextAnswer(value: string): {
   if (!value.startsWith(STRUCTURED_PROMPT_TOKEN_PREFIX)) {
     return null
   }
+
   const separator = value.indexOf(':', STRUCTURED_PROMPT_TOKEN_PREFIX.length)
+
   if (separator === -1) {
     return null
   }
+
   const payload = decodePromptToken(value.slice(0, separator))
+
   if (payload?.kind !== 'question-free-text') {
     return null
   }
+
   return { payload, answer: decodeURIComponent(value.slice(separator + 1)) }
 }
 
@@ -132,6 +143,7 @@ export function projectStructuredPermission(
   if (prompt?.body.kind !== 'approval') {
     return null
   }
+
   return {
     title: prompt.body.title,
     prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision },
@@ -155,6 +167,7 @@ export function projectStructuredQuestion(
   if (prompt?.body.kind !== 'question') {
     return null
   }
+
   if (prompt.body.questions) {
     return projectGroupedQuestion(
       prompt.body.questions,
@@ -163,7 +176,9 @@ export function projectStructuredQuestion(
       { itemId: prompt.itemId, expectedRevision: prompt.revision }
     )
   }
+
   const optionDescriptions = prompt.body.options.map((option) => option.description)
+
   return {
     question: prompt.body.question,
     prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision },
@@ -197,6 +212,7 @@ export function structuredApprovalResponseTarget(
   currentPrompt: StructuredApprovalItem | null
 ): StructuredPromptResponseTarget | null {
   const token = decodePromptToken(response)
+
   if (token?.kind === 'approval') {
     return {
       itemId: token.itemId,
@@ -204,12 +220,15 @@ export function structuredApprovalResponseTarget(
       optionId: token.optionId
     }
   }
+
   if (token) {
     return null
   }
+
   const option = currentPrompt?.body.options.find(
     (candidate) => candidate.id === response || candidate.label === response
   )
+
   return currentPrompt && option
     ? {
         itemId: currentPrompt.itemId,
@@ -224,6 +243,7 @@ export function structuredQuestionResponseTarget(
   currentPrompt: StructuredQuestionItem | null
 ): StructuredPromptResponseTarget | null {
   const token = decodePromptToken(response)
+
   if (token?.kind === 'question-option') {
     return {
       itemId: token.itemId,
@@ -231,12 +251,16 @@ export function structuredQuestionResponseTarget(
       optionId: token.optionId
     }
   }
+
   if (token) {
     return null
   }
+
   const freeText = decodeQuestionFreeTextAnswer(response)
+
   if (freeText) {
     const answer = freeText.answer.trim()
+
     return answer.length > 0
       ? {
           itemId: freeText.payload.itemId,
@@ -245,13 +269,17 @@ export function structuredQuestionResponseTarget(
         }
       : null
   }
+
   if (!currentPrompt) {
     return null
   }
+
   const trimmed = response.trim()
+
   const option = currentPrompt.body.options.find(
     (candidate) => candidate.id === response || candidate.label === trimmed
   )
+
   if (option) {
     return {
       itemId: currentPrompt.itemId,
@@ -259,6 +287,7 @@ export function structuredQuestionResponseTarget(
       optionId: option.id
     }
   }
+
   return currentPrompt.body.freeTextQuestionId && trimmed
     ? {
         itemId: currentPrompt.itemId,

@@ -38,6 +38,7 @@ export function ProjectGroupDeleteDialog({
   const mountedRef = useRef(true)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
   const removeProjectsId = useId()
+
   const removeContainedProjectCopy =
     projectCount === 1
       ? translate(
@@ -60,6 +61,7 @@ export function ProjectGroupDeleteDialog({
   // destructive button renders; an Effect would leave one disabled frame.
   if (open !== wasOpen) {
     setWasOpen(open)
+
     if (open && deleting) {
       setDeleting(false)
     }
@@ -69,15 +71,19 @@ export function ProjectGroupDeleteDialog({
     if (deleting) {
       return
     }
+
     setDeleting(true)
+
     try {
       await onConfirm()
+
       if (mountedRef.current) {
         setDeleting(false)
         onOpenChange(false)
       }
     } catch (error) {
       console.error('Failed to delete project group:', error)
+
       if (mountedRef.current) {
         setDeleting(false)
       }
@@ -91,9 +97,11 @@ export function ProjectGroupDeleteDialog({
         if (!nextOpen && deleting) {
           return
         }
+
         if (!nextOpen) {
           setDeleting(false)
         }
+
         onOpenChange(nextOpen)
       }}
     >

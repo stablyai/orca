@@ -14,6 +14,7 @@ import {
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 
 const CACHE_TTL = 60_000
+
 const MAX_CACHE_ENTRIES = 500
 
 export type InflightJiraReadRequest<T> = {
@@ -35,11 +36,15 @@ export type JiraReadScope = {
 }
 
 export const inflightIssueRequests = new Map<string, InflightJiraReadRequest<JiraIssue | null>>()
+
 export const inflightIssueSummaryRequests = new Map<string, SharedJiraSummaryRequest>()
+
 export const inflightSearchRequests = new Map<string, InflightJiraReadRequest<JiraIssue[]>>()
+
 export const inflightListRequests = new Map<string, InflightJiraReadRequest<JiraIssue[]>>()
 
 let jiraStatusReadGeneration = 0
+
 let jiraMutationGeneration = 0
 
 export const EMPTY_JIRA_READ_CACHES = {
@@ -57,19 +62,24 @@ export function evictStaleJiraCacheEntries<T>(
   maxEntries = MAX_CACHE_ENTRIES
 ): Record<string, CacheEntry<T>> {
   const keys = Object.keys(cache)
+
   if (keys.length <= maxEntries) {
     return cache
   }
+
   const sorted = keys.sort((a, b) => (cache[a]?.fetchedAt ?? 0) - (cache[b]?.fetchedAt ?? 0))
   const pruned: Record<string, CacheEntry<T>> = {}
+
   for (const key of sorted.slice(sorted.length - maxEntries)) {
     pruned[key] = cache[key]
   }
+
   return pruned
 }
 
 export function looksLikeJiraAuthError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
+
   // Jira 403 commonly means endpoint/project access is denied while the token remains valid.
   return /authenticat|unauthorized|401/i.test(message)
 }
@@ -77,6 +87,7 @@ export function looksLikeJiraAuthError(error: unknown): boolean {
 export function createJiraAbortError(what: string): Error {
   const error = new Error(`Jira ${what} aborted`)
   error.name = 'AbortError'
+
   return error
 }
 
@@ -86,20 +97,27 @@ export function subscribeToJiraSummaryRequest(
 ): Promise<JiraIssue | null> {
   if (!signal) {
     entry.subscribers += 1
+
     return entry.promise
   }
+
   if (signal.aborted) {
     return Promise.reject(createJiraAbortError('issue summary lookup'))
   }
+
   entry.subscribers += 1
+
   return new Promise<JiraIssue | null>((resolve, reject) => {
     const abandon = (): void => {
       entry.subscribers -= 1
+
       if (entry.subscribers <= 0) {
         entry.controller.abort()
       }
+
       reject(createJiraAbortError('issue summary lookup'))
     }
+
     signal.addEventListener('abort', abandon, { once: true })
     const settle = (): void => signal.removeEventListener('abort', abandon)
     entry.promise.then(
@@ -127,6 +145,7 @@ export function shouldRefreshJiraStatusAfterRead(
   if (status.credentialError !== undefined) {
     return true
   }
+
   // All-site reads can hide per-site failures; typeahead must not recheck on every keystroke.
   return siteId === 'all' && options?.abortable !== true
 }
@@ -135,6 +154,7 @@ export function clearJiraInflightRequests(): void {
   for (const entry of inflightIssueSummaryRequests.values()) {
     entry.controller.abort()
   }
+
   inflightIssueRequests.clear()
   inflightIssueSummaryRequests.clear()
   inflightSearchRequests.clear()
@@ -143,6 +163,7 @@ export function clearJiraInflightRequests(): void {
 
 export function beginJiraMutation(): number {
   jiraMutationGeneration += 1
+
   return jiraMutationGeneration
 }
 
@@ -152,6 +173,7 @@ export function currentJiraMutationGeneration(): number {
 
 export function nextJiraStatusReadGeneration(): number {
   jiraStatusReadGeneration += 1
+
   return jiraStatusReadGeneration
 }
 
@@ -194,7 +216,9 @@ export function getJiraReadScope(
       explicitSource: false
     }
   }
+
   const runtimeSettings = getTaskSourceRuntimeSettings(sourceContext)
+
   return {
     settings: sourceContext,
     contextKey: `${getProviderRuntimeContextKey(runtimeSettings)}::${getTaskSourceCacheScope(sourceContext)}`,

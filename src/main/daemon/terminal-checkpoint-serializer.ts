@@ -49,14 +49,18 @@ class BoundedJsonWriter {
       this.exceeded = true
       this.output = ''
       this.chunk = ''
+
       return false
     }
+
     this.bytes += bytes
     this.chunk += value
+
     if (this.chunk.length >= 16 * 1024) {
       this.output += this.chunk
       this.chunk = ''
     }
+
     return true
   }
 
@@ -90,13 +94,17 @@ function appendJsonString(writer: BoundedJsonWriter, value: string): boolean {
   if (!writer.append('"', 1)) {
     return false
   }
+
   let spanStart = 0
   let spanBytes = 0
+
   for (let index = 0; index < value.length; index += 1) {
     const codeUnit = value.charCodeAt(index)
     let escaped = escapedCodeUnit(codeUnit)
+
     if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
       const next = value.charCodeAt(index + 1)
+
       if (next >= 0xdc00 && next <= 0xdfff) {
         spanBytes += 4
         index += 1
@@ -116,19 +124,23 @@ function appendJsonString(writer: BoundedJsonWriter, value: string): boolean {
       ) {
         return false
       }
+
       spanStart = index + 1
       spanBytes = 0
     } else if (index + 1 - spanStart >= 16 * 1024) {
       if (!writer.append(value.slice(spanStart, index + 1), spanBytes)) {
         return false
       }
+
       spanStart = index + 1
       spanBytes = 0
     }
   }
+
   if (spanStart < value.length && !writer.append(value.slice(spanStart), spanBytes)) {
     return false
   }
+
   return writer.append('"', 1)
 }
 
@@ -144,6 +156,7 @@ function appendJsonValue(
   if (value === null) {
     return writer.append('null', 4)
   }
+
   switch (typeof value) {
     case 'string':
       return appendJsonString(writer, value)
@@ -151,8 +164,10 @@ function appendJsonValue(
       return writer.append(value ? 'true' : 'false', value ? 4 : 5)
     case 'number': {
       const json = Number.isFinite(value) ? JSON.stringify(value) : 'null'
+
       return writer.append(json, json.length)
     }
+
     case 'bigint':
       throw new TypeError('Do not know how to serialize a BigInt')
     case 'undefined':
@@ -166,17 +181,22 @@ function appendJsonValue(
   if (activeObjects.has(value)) {
     throw new TypeError('Converting circular structure to JSON')
   }
+
   activeObjects.add(value)
+
   try {
     if (Array.isArray(value)) {
       if (!writer.append('[', 1)) {
         return false
       }
+
       for (let index = 0; index < value.length; index += 1) {
         if (index > 0 && !writer.append(',', 1)) {
           return false
         }
+
         const entry = value[index]
+
         if (omittedByJson(entry)) {
           if (!writer.append('null', 4)) {
             return false
@@ -185,18 +205,23 @@ function appendJsonValue(
           return false
         }
       }
+
       return writer.append(']', 1)
     }
 
     if (!writer.append('{', 1)) {
       return false
     }
+
     let entries = 0
+
     for (const key of Object.keys(value)) {
       const entry = (value as Record<string, unknown>)[key]
+
       if (omittedByJson(entry)) {
         continue
       }
+
       if (
         (entries > 0 && !writer.append(',', 1)) ||
         !appendJsonString(writer, key) ||
@@ -205,8 +230,10 @@ function appendJsonValue(
       ) {
         return false
       }
+
       entries += 1
     }
+
     return writer.append('}', 1)
   } finally {
     activeObjects.delete(value)
@@ -216,6 +243,7 @@ function appendJsonValue(
 function stringifyWithinLimit(checkpoint: TerminalCheckpointFile, maxBytes: number): string | null {
   const writer = new BoundedJsonWriter(maxBytes)
   appendJsonValue(writer, checkpoint, new Set())
+
   return writer.result()
 }
 
@@ -225,7 +253,9 @@ async function replaySnapshot(snapshot: TerminalSnapshot): Promise<HeadlessEmula
     rows: snapshot.rows,
     scrollback: Math.max(0, Math.min(50_000, snapshot.scrollbackLines))
   })
+
   const replay = new ColdRestoreReplayWriter(emulator)
+
   try {
     for (const segment of [
       snapshot.scrollbackAnsi,
@@ -237,11 +267,15 @@ async function replaySnapshot(snapshot: TerminalSnapshot): Promise<HeadlessEmula
         throw new Error('Terminal checkpoint replay is unavailable')
       }
     }
+
     emulator.setCwd(snapshot.cwd)
+
     if (snapshot.lastTitle) {
       emulator.setLastTitle(snapshot.lastTitle)
     }
+
     emulator.setRestoredOscLinks(snapshot.oscLinks)
+
     return emulator
   } catch (error) {
     emulator.dispose()
@@ -255,27 +289,32 @@ export async function serializeTerminalCheckpointWithinLimit(
   maxBytes: number
 ): Promise<string> {
   const direct = stringifyWithinLimit(checkpointFile(snapshot, metadata), maxBytes)
+
   if (direct !== null) {
     return direct
   }
 
   const emulator = await replaySnapshot(snapshot)
+
   try {
     // Why carried, not re-derived: trimming rows cannot change who owned the
     // terminal at this checkpoint's boundary.
     const ownership = snapshot.terminalOwner ? { terminalOwner: snapshot.terminalOwner } : {}
     const visibleOnly = { ...emulator.getSnapshot({ scrollbackRows: 0 }), ...ownership }
     let bestJson = stringifyWithinLimit(checkpointFile(visibleOnly, metadata), maxBytes)
+
     if (bestJson === null) {
       throw new Error('Terminal checkpoint metadata exceeds byte limit')
     }
 
     let low = 1
     let high = visibleOnly.scrollbackLines
+
     while (low <= high) {
       const rows = low + Math.floor((high - low) / 2)
       const candidate = { ...emulator.getSnapshot({ scrollbackRows: rows }), ...ownership }
       const candidateJson = stringifyWithinLimit(checkpointFile(candidate, metadata), maxBytes)
+
       if (candidateJson === null) {
         high = rows - 1
       } else {
@@ -283,6 +322,7 @@ export async function serializeTerminalCheckpointWithinLimit(
         low = rows + 1
       }
     }
+
     return bestJson
   } finally {
     emulator.dispose()

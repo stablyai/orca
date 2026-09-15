@@ -29,6 +29,7 @@ import {
 const CALLER = { callerKey: 'client-1' }
 
 const hosts: StructuredAgentSessionHost[] = []
+
 let root = ''
 
 function adapter(): StructuredAgentSessionAdapter {
@@ -66,7 +67,9 @@ function createHost(store: AgentSessionRecordStore): StructuredAgentSessionHost 
     }),
     now: () => NOW
   })
+
   hosts.push(host)
+
   return host
 }
 
@@ -97,6 +100,7 @@ async function restartWithPersistedTurn(): Promise<StructuredAgentSessionHost> {
   const body = hostTestMessage('persisted conversation')
   await host.send(CALLER, { envelope: sendEnvelope(store, { body }), body })
   await host.flushAllStreamedEvents()
+
   return createHost(await AgentSessionRecordStore.open({ directory, hostId: 'local' }))
 }
 

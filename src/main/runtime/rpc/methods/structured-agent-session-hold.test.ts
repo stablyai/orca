@@ -26,7 +26,9 @@ import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 
 const CONNECTION = 'connection-1'
+
 const GRACE_MS = 5
+
 const CLIENT = {
   clientId: 'device-1',
   clientKind: 'runtime' as const,
@@ -35,12 +37,19 @@ const CLIENT = {
 }
 
 let root: string
+
 let store: AgentSessionRecordStore
+
 let host: StructuredAgentSessionHost
+
 let runtime: OrcaRuntimeService
+
 let dispatcher: RpcDispatcher
+
 let closeSession: Mock<NonNullable<StructuredAgentSessionAdapter['closeSession']>>
+
 let requests = 0
+
 let structuredNativeChatEnabled = true
 
 async function call(method: string, params: unknown): Promise<RpcResponse> {
@@ -51,6 +60,7 @@ async function call(method: string, params: unknown): Promise<RpcResponse> {
     (raw) => replies.push(JSON.parse(raw) as RpcResponse),
     CLIENT
   )
+
   return replies[0] as RpcResponse
 }
 

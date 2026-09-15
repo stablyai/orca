@@ -31,6 +31,7 @@ export default function MobileOnboardingScreen() {
     hostId?: string | string[]
     steps?: string | string[]
   }>()
+
   const hostId = firstParam(params.hostId)
   const rawSteps = firstParam(params.steps)
 
@@ -65,6 +66,7 @@ function MobileOnboardingFlow({
   useFocusEffect(
     useCallback(() => {
       const subscription = BackHandler.addEventListener('hardwareBackPress', () => true)
+
       return () => subscription.remove()
     }, [])
   )
@@ -75,10 +77,13 @@ function MobileOnboardingFlow({
 
   const advanceOrContinue = useCallback(() => {
     const nextIndex = activeIndex + 1
+
     if (nextIndex >= steps.length) {
       continueToApp()
+
       return
     }
+
     setActiveIndex(nextIndex)
     setError(null)
     Animated.timing(slideProgress, {
@@ -102,9 +107,11 @@ function MobileOnboardingFlow({
       if (choiceInFlightRef.current) {
         return
       }
+
       choiceInFlightRef.current = true
       setBusyChoice(view)
       setError(null)
+
       try {
         await saveDefaultSessionView(view)
         advanceOrContinue()
@@ -122,9 +129,11 @@ function MobileOnboardingFlow({
       if (choiceInFlightRef.current) {
         return
       }
+
       choiceInFlightRef.current = true
       setBusyChoice(choice)
       setError(null)
+
       try {
         const enabled = choice === 'enable' ? await ensureNotificationPermissions() : false
         await setRemotePushEnabled(enabled)
@@ -205,6 +214,7 @@ function useReducedMotionEnabled(): boolean {
       })
       .catch(() => undefined)
     const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setEnabled)
+
     return () => {
       mounted = false
       subscription.remove()

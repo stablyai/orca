@@ -10,14 +10,17 @@ describe('workspace port-scan surface actions', () => {
   // unconditional `set` is invisible in the resulting state yet re-runs every selector.
   const countNotifications = (run: () => void): number => {
     let notifications = 0
+
     const unsubscribe = useAppStore.subscribe(() => {
       notifications += 1
     })
+
     try {
       run()
     } finally {
       unsubscribe()
     }
+
     return notifications
   }
 

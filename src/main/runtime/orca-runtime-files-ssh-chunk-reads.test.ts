@@ -17,31 +17,39 @@ import { BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES } from '../../shared/browse
 import type { RuntimeFileCommands } from './orca-runtime-files'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
+
 vi.mock('fs/promises', async () =>
   (await import('./orca-runtime-files-mock-registry')).fsPromisesModuleMock()
 )
+
 vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
+
 vi.mock('../ipc/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
+
 vi.mock(
   '../ipc/rg-availability',
   async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
 )
+
 vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
 )
+
 vi.mock(
   '../ipc/filesystem-search-git',
   async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
 )
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
@@ -55,10 +63,12 @@ vi.mock(
 function remoteFileBytes(size: number): Buffer {
   const bytes = Buffer.alloc(size)
   let state = 0x2f6e2b1
+
   for (let index = 0; index < size; index += 1) {
     state = (state * 1664525 + 1013904223) >>> 0
     bytes[index] = state >>> 24
   }
+
   return bytes
 }
 
@@ -78,16 +88,21 @@ function installSshFile(
 ): { readFileRange: ReturnType<typeof vi.fn>; stat: ReturnType<typeof vi.fn> } {
   const readFileRange = vi.fn(async (_filePath: string, position: number, length: number) => {
     const bytes = contents.subarray(position, position + length)
+
     return { bytes, bytesRead: bytes.byteLength }
   })
+
   const stat = vi.fn(async () => ({ size: contents.byteLength, type: 'file' as const, mtime: 0 }))
+
   const provider = {
     stat: overrides?.stat ?? stat,
     ...(overrides && 'readFileRange' in overrides
       ? { readFileRange: overrides.readFileRange }
       : { readFileRange })
   }
+
   vi.mocked(getSshFilesystemProvider).mockReturnValue(provider as never)
+
   return { readFileRange, stat }
 }
 
@@ -98,22 +113,27 @@ async function drainUploadChunks(
 ): Promise<Buffer> {
   const parts: Buffer[] = []
   let offset = 0
+
   for (let iterations = 0; ; iterations += 1) {
     expect(iterations).toBeLessThan(64)
+
     const chunk = await commands.readFileExplorerChunk(
       'id:wt-1',
       relativePath,
       offset,
       BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES
     )
+
     const payload = Buffer.from(chunk.contentBase64, 'base64')
     // The real loop rejects a chunk whose count disagrees with its payload before staging it.
     expect(payload.byteLength).toBe(chunk.bytesRead)
     parts.push(payload)
     offset += chunk.bytesRead
+
     if (chunk.eof) {
       return Buffer.concat(parts)
     }
+
     expect(chunk.bytesRead).toBeGreaterThan(0)
   }
 }
@@ -124,12 +144,14 @@ function expectSameBytes(actual: Buffer, expected: Buffer): void {
     byteLength: bytes.byteLength,
     sha256: createHash('sha256').update(bytes).digest('hex')
   })
+
   expect(digest(actual)).toEqual(digest(expected))
 }
 
 /** The clamp and the cap together promise every request lands inside the statted file. */
 function expectRequestsWithinFile(readFileRange: ReturnType<typeof vi.fn>, fileSize: number): void {
   expect(readFileRange.mock.calls.length).toBeGreaterThan(0)
+
   for (const [, position, length] of readFileRange.mock.calls) {
     expect(length).toBeLessThanOrEqual(MAX_FILE_RANGE_READ_BYTES)
     expect(position + length).toBeLessThanOrEqual(fileSize)
@@ -139,6 +161,7 @@ function expectRequestsWithinFile(readFileRange: ReturnType<typeof vi.fn>, fileS
 // A size that is not a multiple of either the chunk or the window, so a page served from the wrong
 // offset cannot land on an identical-looking boundary.
 const REMOTE_FILE_BYTES = BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES * 3 + 4321
+
 // files.readChunk window the renderer's remote download loop uses (REMOTE_DOWNLOAD_CHUNK_BYTES).
 const REMOTE_DOWNLOAD_WINDOW_BYTES = 384 * 1024
 
@@ -169,6 +192,7 @@ describe('RuntimeFileCommands.readFileExplorerChunk over SSH', () => {
       0,
       BROWSER_CLIENT_FILE_CHANNEL_CHUNK_MAX_BYTES
     )
+
     const second = await commands.readFileExplorerChunk(
       'id:wt-1',
       'archive.zip',
@@ -327,6 +351,7 @@ describe('RuntimeFileCommands.readFileExplorerChunk over SSH', () => {
       read: vi.fn(
         async (buffer: Buffer, bufferOffset: number, length: number, position: number) => {
           const bytesRead = contents.copy(buffer, bufferOffset, position, position + length)
+
           return { bytesRead }
         }
       ),

@@ -20,12 +20,15 @@ export function getPrSignalToneStyle(tone: 'neutral' | 'success' | 'warning' | '
   if (tone === 'success') {
     return styles.prSignalSuccess
   }
+
   if (tone === 'warning') {
     return styles.prSignalWarning
   }
+
   if (tone === 'danger') {
     return styles.prSignalDanger
   }
+
   return null
 }
 

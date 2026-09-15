@@ -19,11 +19,13 @@ export function setWithLRU<K, V>(
   // Re-insert to refresh insertion order (move to end).
   map.delete(key)
   map.set(key, value)
+
   if (map.size > maxEntries) {
     // Why: Use the iterator's `.done` property rather than checking
     // `value !== undefined`, because K could legitimately be `undefined`
     // in a generic Map — the undefined check would skip valid evictions.
     const first = map.keys().next()
+
     if (!first.done) {
       map.delete(first.value)
     }
@@ -44,6 +46,7 @@ export const editorSelectionCache = new Map<string, readonly ISelection[]>()
 // layout is rebuilt at a scale that depends on container width, so a pixel
 // offset restores to the wrong place at a different zoom or pane width.
 export type PdfViewPosition = { pageNumber: number; top: number; left: number }
+
 export const pdfViewPositionCache = new Map<string, PdfViewPosition>()
 
 // Why: Diff editors need more than a numeric scroll offset to restore the same

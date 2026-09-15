@@ -78,16 +78,20 @@ export type NativeChatComposerImageAttachment = {
 function imeComposedSegment(base: string, settled: string): string {
   const limit = Math.min(base.length, settled.length)
   let prefix = 0
+
   while (prefix < limit && base[prefix] === settled[prefix]) {
     prefix += 1
   }
+
   let suffix = 0
+
   while (
     suffix < limit - prefix &&
     base[base.length - 1 - suffix] === settled[settled.length - 1 - suffix]
   ) {
     suffix += 1
   }
+
   return settled.slice(prefix, settled.length - suffix)
 }
 
@@ -136,20 +140,26 @@ export function NativeChatComposerField({
   // Browser owns the provisional value; React synchronizes drafts only between IME sessions.
   useLayoutEffect(() => {
     const textarea = textareaRef.current
+
     if (!textarea) {
       return
     }
+
     if (imeEnterGesture.isComposing()) {
       // Why: a clear (an async structured send confirming) would otherwise be lost outright and
       // the sent text would ride along into the next message. Only clears are carved out of
       // browser ownership; every other programmatic draft still loses to the live composition.
       droppedDraftClearRef.current ||= draft === '' && textarea.value !== ''
+
       return
     }
+
     droppedDraftClearRef.current = false
+
     if (textarea.value === draft) {
       return
     }
+
     textarea.value = draft
   }, [draft, imeEnterGesture, textareaRef])
 
@@ -158,6 +168,7 @@ export function NativeChatComposerField({
       droppedDraftClearRef.current = false
       element.value = imeComposedSegment(compositionBaseRef.current, element.value)
     }
+
     onImeSettled(element)
   }
 
@@ -230,6 +241,7 @@ export function NativeChatComposerField({
               onBlur={() => {
                 const compositionWasActive = imeEnterGesture.isComposing()
                 imeEnterGesture.reset()
+
                 if (compositionWasActive) {
                   settleImeValue(textareaRef.current!)
                 }
@@ -241,6 +253,7 @@ export function NativeChatComposerField({
               onCompositionEnd={() => {
                 const compositionWasActive = imeEnterGesture.isComposing()
                 imeEnterGesture.setComposing(false)
+
                 if (compositionWasActive) {
                   settleImeValue(textareaRef.current!)
                 }

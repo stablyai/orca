@@ -24,11 +24,13 @@ export function useMacosTccPromptNotice(): void {
   const pluginLanguagePacksLoaded = usePluginLanguagePackStore((s) => s.loaded)
   const { i18n } = useTranslation()
   const selectedPluginLanguage = pluginLanguagePacks.find((pack) => pack.id === uiLanguage)
+
   const targetLocale =
     uiLanguage === null || (isPluginUiLanguage(uiLanguage) && !pluginLanguagePacksLoaded)
       ? null
       : (selectedPluginLanguage?.resourceLanguage ??
         (isPluginUiLanguage(uiLanguage) ? 'en' : resolveUiLocale(uiLanguage)))
+
   const localeReady =
     targetLocale !== null &&
     i18n.language === targetLocale &&
@@ -38,6 +40,7 @@ export function useMacosTccPromptNotice(): void {
     if (!localeReady) {
       return
     }
+
     return subscribeToMacosTccPromptNotice(window.api?.macosTccPrompts, (_, acknowledge) => {
       toast.warning(
         translate(

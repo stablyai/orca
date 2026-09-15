@@ -36,9 +36,11 @@ function trackedItem(id: string, parentIds: string[], reads: { count: number }):
     enumerable: true,
     get: () => {
       reads.count += 1
+
       return id
     }
   })
+
   return result
 }
 
@@ -63,6 +65,7 @@ function remote(name: string, revision: string): GitHistoryItemRef {
 describe('git history graph model', () => {
   it('preserves the current branch lane through linear history', () => {
     const currentRef = branch('main', 'A')
+
     const viewModels = buildGitHistoryViewModels(
       [item('A', ['B'], [currentRef]), item('B', ['C']), item('C', [])],
       buildDefaultGitHistoryColorMap({ currentRef }),
@@ -79,6 +82,7 @@ describe('git history graph model', () => {
 
   it('allocates a side lane for a merge parent', () => {
     const currentRef = branch('feature', 'M')
+
     const viewModels = buildGitHistoryViewModels(
       [item('M', ['A', 'B'], [currentRef]), item('A', ['C']), item('B', ['C']), item('C', [])],
       buildDefaultGitHistoryColorMap({ currentRef }),
@@ -97,11 +101,13 @@ describe('git history graph model', () => {
     const headRef = branch('head', 'merge')
     const firstParentRef = branch('first', 'duplicate')
     const laterParentRef = remote('later', 'duplicate')
+
     const colorMap = buildDefaultGitHistoryColorMap({
       currentRef: headRef,
       remoteRef: firstParentRef,
       baseRef: laterParentRef
     })
+
     const viewModels = buildGitHistoryViewModels(
       [
         item('merge', ['base', 'duplicate'], [headRef]),
@@ -119,6 +125,7 @@ describe('git history graph model', () => {
   it('avoids building a parent index for linear history', () => {
     const count = 64
     const reads = { count: 0 }
+
     const historyItems = Array.from({ length: count }, (_, index) =>
       trackedItem(`commit-${index}`, index + 1 < count ? [`commit-${index + 1}`] : [], reads)
     )
@@ -134,11 +141,13 @@ describe('git history graph model', () => {
     const targetId = `target-${mergeCount}`
     const reads = { count: 0 }
     const historyItems: GitHistoryItem[] = []
+
     for (let index = 0; index < mergeCount; index += 1) {
       historyItems.push(trackedItem(`merge-${index}`, [`missing-${index}`, targetId], reads))
       // Reset swimlanes between merges so this measures parent lookup, not lane growth.
       historyItems.push(trackedItem(`leaf-${index}`, [], reads))
     }
+
     historyItems.push(trackedItem(targetId, [], reads))
 
     buildGitHistoryViewModels(historyItems)
@@ -150,6 +159,7 @@ describe('git history graph model', () => {
   it('inserts incoming and outgoing boundary rows at the merge base', () => {
     const currentRef = branch('feature', 'A')
     const remoteRef = remote('origin/feature', 'R')
+
     const viewModels = buildGitHistoryViewModels(
       [
         item('A', ['B'], [currentRef]),
@@ -185,6 +195,7 @@ describe('git history graph model', () => {
   it('inserts an incoming boundary when HEAD-only history is behind upstream', () => {
     const currentRef = branch('feature', 'B')
     const remoteRef = remote('origin/feature', 'R')
+
     const viewModels = buildGitHistoryViewModels(
       [item('B', ['C'], [currentRef]), item('C', [])],
       buildDefaultGitHistoryColorMap({ currentRef, remoteRef }),
@@ -213,9 +224,11 @@ describe('git history graph model', () => {
       id: 'B',
       color: GIT_HISTORY_REMOTE_REF_COLOR
     })
+
     const incomingLaneIndex = viewModels[0]!.inputSwimlanes.findIndex(
       (node) => node.id === GIT_HISTORY_INCOMING_CHANGES_ID
     )
+
     expect(viewModels[0]!.outputSwimlanes[incomingLaneIndex]?.color).toBe(
       GIT_HISTORY_REMOTE_REF_COLOR
     )
@@ -224,6 +237,7 @@ describe('git history graph model', () => {
   it('colors incoming boundary lanes as remote when upstream commits are omitted', () => {
     const currentRef = branch('feature', 'A')
     const remoteRef = remote('origin/feature', 'R')
+
     const viewModels = buildGitHistoryViewModels(
       [item('A', ['B'], [currentRef]), item('B', ['C']), item('C', [])],
       buildDefaultGitHistoryColorMap({ currentRef, remoteRef }),
@@ -254,9 +268,11 @@ describe('git history graph model', () => {
       id: 'B',
       color: GIT_HISTORY_REMOTE_REF_COLOR
     })
+
     const incomingLaneIndex = viewModels[2]!.inputSwimlanes.findIndex(
       (node) => node.id === GIT_HISTORY_INCOMING_CHANGES_ID
     )
+
     expect(viewModels[2]!.outputSwimlanes[incomingLaneIndex]?.color).toBe(
       GIT_HISTORY_REMOTE_REF_COLOR
     )

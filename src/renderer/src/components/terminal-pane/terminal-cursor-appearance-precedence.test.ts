@@ -31,9 +31,11 @@ function decPrivateCursorStyle(terminal: Terminal): string | undefined {
 
 function cursorClasses(container: HTMLElement): string[] {
   const cursor = container.querySelector('.xterm-rows .xterm-cursor')
+
   if (!cursor) {
     throw new Error('no cursor cell was rendered')
   }
+
   return [...cursor.classList]
 }
 
@@ -53,12 +55,14 @@ async function actAndAwaitRender(
 ): Promise<void> {
   await act()
   await new Promise<void>((resolve) => window.setTimeout(resolve, 0))
+
   const rendered = new Promise<void>((resolve) => {
     const listener = terminal.onRender(() => {
       listener.dispose()
       resolve()
     })
   })
+
   terminal.refresh(0, terminal.rows - 1)
   await rendered
 }
@@ -70,6 +74,7 @@ describe('#12729 — cursor style and opacity survive the settings path', () => 
       { terminalCursorStyle: 'bar' },
       { preserveExplicitValue: true }
     )
+
     expect(written).toEqual({
       terminalCursorStyle: 'bar',
       terminalCursorStyleDefaultedToBlock: true
@@ -103,6 +108,7 @@ describe('#12729 — DECSCUSR from the program outranks the preference', () => {
     while (openTerminals.length > 0) {
       openTerminals.pop()?.dispose()
     }
+
     vi.restoreAllMocks()
     document.body.replaceChildren()
   })

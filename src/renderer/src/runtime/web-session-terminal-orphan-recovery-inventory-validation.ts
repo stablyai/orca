@@ -20,6 +20,7 @@ export function isTerminalListResult(value: unknown): value is RuntimeTerminalLi
   ) {
     return false
   }
+
   if (
     value.terminals.some(
       (terminal) => !isRecord(terminal) || typeof terminal.handle !== 'string' || !terminal.handle
@@ -27,7 +28,9 @@ export function isTerminalListResult(value: unknown): value is RuntimeTerminalLi
   ) {
     return false
   }
+
   const hostScope = value.hostScope
+
   if (
     hostScope !== undefined &&
     (!isRecord(hostScope) ||
@@ -36,7 +39,9 @@ export function isTerminalListResult(value: unknown): value is RuntimeTerminalLi
   ) {
     return false
   }
+
   const topologyRevisions = value.topologyRevisions
+
   return (
     topologyRevisions === undefined ||
     (isRecord(topologyRevisions) &&

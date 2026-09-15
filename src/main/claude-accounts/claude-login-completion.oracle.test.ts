@@ -65,11 +65,13 @@ function createChild(): FakeChild {
   child.stderr = new PassThrough()
   child.kill = vi.fn()
   child.pid = 11407
+
   return child
 }
 
 async function createRunner(): Promise<CommandRunner> {
   const { ClaudeAccountService } = await import('./service')
+
   return new ClaudeAccountService({} as never, {} as never, {} as never) as unknown as CommandRunner
 }
 
@@ -86,6 +88,7 @@ describe('native Windows Claude login completion oracle', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
@@ -102,6 +105,7 @@ describe('native Windows Claude login completion oracle', () => {
     processMocks.spawn.mockReturnValue(child)
     const runner = await createRunner()
     let completions = 0
+
     const command = runner
       .runClaudeCommand(
         ['auth', 'login', '--claudeai'],
@@ -172,6 +176,7 @@ describe('native Windows Claude login completion oracle', () => {
     processMocks.spawn.mockReturnValue(child)
     const runner = await createRunner()
     let completions = 0
+
     const command = runner.runClaudeCommand(args, config, 1000).then(() => {
       completions += 1
     })

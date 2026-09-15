@@ -22,7 +22,9 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onOpenFileTab,
     onPinFile
   } = props
+
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
+
   const createMenu = useTabBarCreateMenuController({
     worktreeId,
     resolvedGroupId: runtime.resolvedGroupId,
@@ -44,6 +46,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onNewFileTab,
     onOpenFileTab
   })
+
   const itemProjection = useTabBarItemProjection({
     props,
     resolvedGroupId: runtime.resolvedGroupId,
@@ -52,28 +55,36 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     generatedTabTitlesEnabled: runtime.generatedTabTitlesEnabled,
     statusByRelativePath: runtime.statusByRelativePath
   })
+
   const togglePinned = (item: TabBarItem): void => {
     // pinTab/unpinTab mirror the change to the host for remote-server tabs.
     if (item.isPinned) {
       runtime.unpinTab(item.unifiedTabId)
+
       return
     }
+
     if (item.type === 'editor' && onPinFile) {
       onPinFile(item.data.id, item.unifiedTabId)
+
       return
     }
+
     runtime.pinTab(item.unifiedTabId)
   }
+
   const tabStripNavigation = useTabStripOverflowNavigation({
     activeVisibleTabId: itemProjection.activeVisibleTabId,
     layoutKey: itemProjection.tabStripLayoutKey,
     tabCount: itemProjection.orderedItems.length,
     worktreeId
   })
+
   const tabStripDragScroll = useTabStripDragScrollHandlers(tabStripNavigation.scrollTabStrip, {
     start: tabStripNavigation.tabStripOverflowState.canScrollStart,
     end: tabStripNavigation.tabStripOverflowState.canScrollEnd
   })
+
   // Read here, not just where the rows render: the real tabs have to know when a row took over.
   const activeClientHostedBrowserRowId = useActiveClientHostedBrowserRowId({
     worktreeId,

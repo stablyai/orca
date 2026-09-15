@@ -24,6 +24,7 @@ vi.mock('@/store', () => ({
     subscribe: vi.fn(
       (listener: (state: { pendingWorktreeCreations: Record<string, unknown> }) => void) => {
         mocks.listener = listener
+
         return mocks.unsubscribe
       }
     )
@@ -427,6 +428,7 @@ describe('launchStructuredWorktreeSession', () => {
         launchResult.catch(() => {
           // The user dismisses the creation between the loop's own check and the fallback body.
           mocks.state = { ...mocks.state, pendingWorktreeCreations: {} }
+
           return Promise.resolve()
             .then(fallback)
             .then(() => true)
@@ -457,6 +459,7 @@ describe('launchStructuredWorktreeSession', () => {
       // The user dismisses the creation only once the fallback's terminal is already up.
       mocks.state = { ...mocks.state, pendingWorktreeCreations: {} }
       mocks.listener?.(mocks.state)
+
       return { primaryTabId: 'terminal-tab' }
     })
 
@@ -509,9 +512,11 @@ describe('launchStructuredWorktreeSession', () => {
 
   it('cancels and retires a session when its pending creation is dismissed', async () => {
     let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void
+
     const launchResult = new Promise<{ sessionId: string; fence: number }>((resolve) => {
       resolveLaunch = resolve
     })
+
     mocks.startStructuredAgentLaunch.mockReturnValue({
       sessionId: 'session-1',
       launchResult,

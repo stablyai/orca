@@ -47,6 +47,7 @@ function lookup(catalog: unknown, key: string): string | undefined {
         node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined,
       catalog
     )
+
   return typeof value === 'string' ? value : undefined
 }
 
@@ -89,6 +90,7 @@ describe('locale catalogs reverted by a stale branch base (#10770)', () => {
     '%s retains the merged workspace cleanup browse translations',
     (code, translations) => {
       const catalog = code === 'zh' ? zh : ko
+
       for (const [key, expected] of Object.entries(translations)) {
         expect(lookup(catalog, `components.workspace.cleanup.browse.${key}`)).toBe(expected)
       }

@@ -20,8 +20,10 @@ describe('prepareWatcherProcessEvents', () => {
       maxActiveStats = Math.max(maxActiveStats, activeStats)
       await setImmediate()
       activeStats--
+
       return { isDirectory: () => false }
     })
+
     const batches = Array.from({ length: 8 }, (_, rootIndex) =>
       Array.from({ length: 16 }, (_, eventIndex) => ({
         type: 'update' as const,

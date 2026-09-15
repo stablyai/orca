@@ -15,19 +15,25 @@ export function usePluginPanelThemeRevision(): number {
   const snapshotRef = useRef<string | null>(null)
   useEffect(() => {
     snapshotRef.current ??= readPanelThemeSnapshot()
+
     const observer = new MutationObserver(() => {
       const snapshot = readPanelThemeSnapshot()
+
       if (snapshot === snapshotRef.current) {
         return
       }
+
       snapshotRef.current = snapshot
       setRevision((current) => current + 1)
     })
+
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['class', 'style']
     })
+
     return () => observer.disconnect()
   }, [])
+
   return revision
 }

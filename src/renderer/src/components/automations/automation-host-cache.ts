@@ -125,18 +125,24 @@ export function createAutomationHostCache(
   const ensure = (ref: StableAutomationCatalogRef): CacheRecord => {
     const key = hostStableKey(ref)
     const existing = records.get(key)
+
     if (existing) {
       return existing
     }
+
     // A retired entry keeps its generations, so a host coming back cannot commit stale work.
     const revived = retired.get(key)
+
     if (revived) {
       retired.delete(key)
       records.set(key, revived)
+
       return revived
     }
+
     const created = emptyRecord(ref, catalogGenerationOf(ref.authority))
     records.set(key, created)
+
     return created
   }
 
@@ -152,18 +158,22 @@ export function createAutomationHostCache(
     apply: (record: CacheRecord) => void
   ): boolean => {
     const record = records.get(fence.stableKey)
+
     if (!record || !matchesFence(record, fence)) {
       return false
     }
+
     record.request = null
     apply(record)
     notify()
+
     return true
   }
 
   const bump = (record: CacheRecord, keepAttempts = false): void => {
     record.requestGeneration += 1
     record.request = null
+
     if (!keepAttempts) {
       record.attempt = 0
     }
@@ -174,14 +184,17 @@ export function createAutomationHostCache(
     getByKey: (stableKey) => records.get(stableKey) ?? null,
     freshness: (ref) => {
       const record = records.get(hostStableKey(ref))
+
       if (!record || record.fetchedAt === null) {
         return 'missing'
       }
+
       return now() - record.fetchedAt < ttlMs ? 'fresh' : 'stale'
     },
     beginRequest: (ref) => {
       const record = ensure(ref)
       record.catalogGeneration = catalogGenerationOf(ref.authority)
+
       return {
         stableKey: hostStableKey(ref),
         authorityKey: record.authorityKey,
@@ -192,6 +205,7 @@ export function createAutomationHostCache(
     },
     trackRequest: (fence, request) => {
       const record = records.get(fence.stableKey)
+
       if (record && record.requestGeneration === fence.requestGeneration) {
         record.request = request
       }
@@ -199,9 +213,11 @@ export function createAutomationHostCache(
     pendingRequest: (ref) => records.get(hostStableKey(ref))?.request ?? null,
     abandonRequest: (fence) => {
       const record = records.get(fence.stableKey)
+
       if (!record || record.requestGeneration !== fence.requestGeneration) {
         return
       }
+
       // Why bump rather than only clear the marker: the marker may not be published
       // yet when the job is abandoned, and only a stale generation refuses it later.
       // A left-behind marker reads as in flight and skips the host on every plan.
@@ -214,6 +230,7 @@ export function createAutomationHostCache(
         record.fetchedAt = now()
         record.attempt = 0
         record.error = null
+
         if (input.orphanCount !== undefined && input.orphanCount !== null) {
           record.orphanCount = input.orphanCount
         }
@@ -234,6 +251,7 @@ export function createAutomationHostCache(
     },
     invalidateKey: (stableKey) => {
       const record = records.get(stableKey)
+
       if (record) {
         bump(record)
         notify()
@@ -241,9 +259,11 @@ export function createAutomationHostCache(
     },
     discardIncarnation: (stableKey) => {
       const record = records.get(stableKey)
+
       if (!record) {
         return
       }
+
       // Bumped as well as emptied: work captured under the old incarnation is
       // still in flight, and its marker would otherwise skip the host forever.
       bump(record)
@@ -256,26 +276,32 @@ export function createAutomationHostCache(
     invalidateAuthority: (authority) => {
       const authorityKey = automationAuthorityCatalogKey(authority)
       const invalidated: string[] = []
+
       for (const [key, record] of records) {
         if (record.authorityKey === authorityKey) {
           bump(record)
           invalidated.push(key)
         }
       }
+
       if (invalidated.length > 0) {
         notify()
       }
+
       return invalidated
     },
     keysForAuthority: (authority) => {
       const authorityKey = automationAuthorityCatalogKey(authority)
+
       return [...records].filter(([, r]) => r.authorityKey === authorityKey).map(([key]) => key)
     },
     evict: (stableKey) => {
       const record = records.get(stableKey)
+
       if (!record) {
         return
       }
+
       bump(record)
       // Retirement exists to fence, not to display: the generations stay, the
       // payload goes, or the retired pool holds up to 256 stale row arrays. A
@@ -286,19 +312,24 @@ export function createAutomationHostCache(
       record.orphanCount = null
       records.delete(stableKey)
       retired.set(stableKey, record)
+
       // Insertion order is LRU order here: reviving re-inserts at the end.
       while (retired.size > retiredLimit) {
         const oldest = retired.keys().next()
+
         if (oldest.done) {
           break
         }
+
         retired.delete(oldest.value)
       }
+
       notify()
     },
     keys: () => [...records.keys()],
     subscribe: (listener) => {
       listeners.add(listener)
+
       return () => listeners.delete(listener)
     },
     reset: () => {

@@ -20,7 +20,9 @@ import {
 } from './git-handler-test-setup'
 
 const PATHSPEC_SELECTED_FILE = '[k]eep.log'
+
 const PATHSPEC_MATCHING_FILE = 'keep.log'
+
 const PATHSPEC_MUTATION_CASES = [
   {
     mode: 'single-file',
@@ -75,10 +77,12 @@ describe('GitHandler — commit & staging', () => {
       })) as { success: boolean; error?: string }
 
       expect(result).toEqual({ success: true })
+
       const latestMessage = execFileSync('git', ['log', '-1', '--format=%s'], {
         cwd: tmpDir,
         encoding: 'utf-8'
       }).trim()
+
       expect(latestMessage).toBe('feat: relay commit')
     })
 
@@ -115,6 +119,7 @@ describe('GitHandler — commit & staging', () => {
           cwd: tmpDir,
           encoding: 'utf-8'
         })
+
         expect(output.trim()).toBe(PATHSPEC_SELECTED_FILE)
       }
     )
@@ -131,6 +136,7 @@ describe('GitHandler — commit & staging', () => {
           cwd: tmpDir,
           encoding: 'utf-8'
         })
+
         expect(output.trim()).toBe(PATHSPEC_MATCHING_FILE)
       }
     )
@@ -153,6 +159,7 @@ describe('GitHandler — commit & staging', () => {
         cwd: tmpDir,
         encoding: 'utf-8'
       })
+
       expect(output).toContain('a.txt')
       expect(output).toContain('b.txt')
     })
@@ -176,6 +183,7 @@ describe('GitHandler — commit & staging', () => {
         cwd: tmpDir,
         encoding: 'utf-8'
       })
+
       expect(output.trim()).toBe('')
     })
   })

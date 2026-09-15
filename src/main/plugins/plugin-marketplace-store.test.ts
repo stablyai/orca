@@ -10,6 +10,7 @@ const roots: string[] = []
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-marketplace-store-'))
   roots.push(root)
+
   return root
 }
 
@@ -40,6 +41,7 @@ describe('PluginMarketplaceStore', () => {
     const root = await tempRoot()
     const store = new PluginMarketplaceStore(root)
     const registered = await store.addSource(source(), 123)
+
     const snapshot = await store.writeSnapshot({
       source: registered,
       marketplaceCommit: 'a'.repeat(40),

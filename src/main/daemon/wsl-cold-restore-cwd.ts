@@ -17,6 +17,7 @@ export function normalizeWslColdRestoreCwd(args: {
   }
 
   const wslPath = parseWslUncPath(args.recoveredCwd)
+
   if (wslPath) {
     return wslPath.distro.toLowerCase() === args.wslDistro.toLowerCase()
       ? args.recoveredCwd
@@ -28,8 +29,10 @@ export function normalizeWslColdRestoreCwd(args: {
   }
 
   const uncMatch = args.recoveredCwd.match(/^[\\/]{2}([^\\/]+)[\\/]([^\\/]+)([\\/].*)?$/)
+
   if (uncMatch?.[1].toLowerCase() === (args.hostname ?? getHostname()).toLowerCase()) {
     const linuxPath = `/${uncMatch[2]}${(uncMatch[3] ?? '').replace(/\\/g, '/')}`
+
     return toWindowsWslPath(linuxPath, args.wslDistro)
   }
 

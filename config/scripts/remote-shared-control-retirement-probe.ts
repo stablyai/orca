@@ -10,9 +10,11 @@ import type { RuntimeStatus } from '../../src/shared/runtime-types'
 
 async function main(): Promise<void> {
   const environmentName = process.env.ORCA_PROBE_ENVIRONMENT_NAME
+
   if (!environmentName) {
     throw new Error('ORCA_PROBE_ENVIRONMENT_NAME is required')
   }
+
   const userDataPath = getDefaultUserDataPath()
   const environment = resolveEnvironment(userDataPath, environmentName)
   const pairing = resolveEnvironmentPairingOffer(userDataPath, environment.id)
@@ -30,10 +32,13 @@ async function main(): Promise<void> {
     ) {
       const responseId = String((details as { responseId?: unknown }).responseId ?? 'unknown')
       unknownResponses.set(responseId, (unknownResponses.get(responseId) ?? 0) + 1)
+
       return
     }
+
     originalWarn(message, details)
   }
+
   try {
     const startedAt = Date.now()
     const before = await requestMemorySnapshot(pairing, environment.id)
@@ -41,6 +46,7 @@ async function main(): Promise<void> {
     let subscriptionResponses = 0
     let runtimeStatus: RuntimeStatus | null = null
     const cleanupDurationsMs: number[] = []
+
     for (let cycle = 0; cycle < cycles; cycle += 1) {
       const result = await runCycle({
         pairing,
@@ -49,11 +55,13 @@ async function main(): Promise<void> {
         settleMs,
         cleanupTimeoutMs
       })
+
       ok += result.ok
       subscriptionResponses += result.subscriptionResponses
       runtimeStatus ??= result.runtimeStatus
       cleanupDurationsMs.push(result.cleanupDurationMs)
     }
+
     await wait(settleMs)
     const after = await requestMemorySnapshot(pairing, environment.id)
     console.log(
@@ -111,14 +119,17 @@ async function runCycle(args: {
   const connection = new RemoteRuntimeSharedControlConnection(args.pairing, {
     environmentId: args.environmentId
   })
+
   try {
     const responses = await Promise.all(
       Array.from({ length: args.concurrency }, () =>
         connection.request<RuntimeStatus>('status.get', undefined, 10_000)
       )
     )
+
     const runtimeStatus = responses.find((response) => response.ok)
     let subscriptionResponses = 0
+
     const subscriptions = await Promise.all([
       connection.subscribe('runtime.clientEvents.subscribe', undefined, 10_000, {
         onResponse: () => {
@@ -133,13 +144,17 @@ async function runCycle(args: {
         onError: () => {}
       })
     ])
+
     await wait(args.settleMs)
+
     for (const subscription of subscriptions) {
       subscription.close()
     }
+
     const cleanupDurationMs = await waitForConnectionIdle(connection, args.cleanupTimeoutMs)
     // Let cleanup replies reach the retirement cache before closing the socket.
     await wait(args.settleMs)
+
     return {
       ok: responses.filter((response) => response.ok).length,
       subscriptionResponses,
@@ -156,13 +171,17 @@ async function waitForConnectionIdle(
   timeoutMs: number
 ): Promise<number> {
   const startedAt = Date.now()
+
   while (Date.now() - startedAt < timeoutMs) {
     const diagnostics = connection.getDiagnostics()
+
     if (diagnostics.pendingRequestCount === 0 && diagnostics.subscriptionCount === 0) {
       return Date.now() - startedAt
     }
+
     await wait(25)
   }
+
   throw new Error(`Cycle did not settle: ${JSON.stringify(connection.getDiagnostics())}`)
 }
 
@@ -171,15 +190,18 @@ async function requestMemorySnapshot(
   environmentId: string
 ): Promise<MemorySnapshot> {
   const connection = new RemoteRuntimeSharedControlConnection(pairing, { environmentId })
+
   try {
     const response = await connection.request<MemorySnapshot>(
       'diagnostics.memory',
       undefined,
       20_000
     )
+
     if (!response.ok) {
       throw new Error(`Memory snapshot failed: ${response.error.message}`)
     }
+
     return response.result
   } finally {
     connection.close()
@@ -243,13 +265,17 @@ function summarizeMemory(snapshot: MemorySnapshot): {
 
 function readProbeInteger(name: string, fallback: number, maximum: number): number {
   const value = process.env[name]
+
   if (value === undefined) {
     return fallback
   }
+
   const parsed = Number(value)
+
   if (!Number.isSafeInteger(parsed) || parsed < 1 || parsed > maximum) {
     throw new Error(`${name} must be an integer from 1 through ${maximum}`)
   }
+
   return parsed
 }
 

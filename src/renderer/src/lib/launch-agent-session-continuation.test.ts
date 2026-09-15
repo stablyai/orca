@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const launchAgentInNewTab = vi.hoisted(() => vi.fn())
+
 const connectionId = vi.hoisted(() => ({ value: null as string | null }))
+
 const runtimeEnvironmentId = vi.hoisted(() => ({ value: null as string | null }))
+
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
+
 const store = vi.hoisted(() => ({
   settings: { disabledTuiAgents: [] as string[] },
   ensureDetectedAgents: vi.fn(async () => ['claude', 'codex']),
@@ -12,17 +16,23 @@ const store = vi.hoisted(() => ({
 }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
+
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab }))
+
 vi.mock('@/lib/agent-catalog', () => ({
   getAgentLabel: (agent: string) => (agent === 'codex' ? 'Codex' : 'Claude')
 }))
+
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdFromState: () => connectionId.value
 }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: () => runtimeEnvironmentId.value
 }))
+
 vi.mock('sonner', () => ({ toast }))
+
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     Object.entries(values ?? {}).reduce(
@@ -79,6 +89,7 @@ describe('launchAgentSessionContinuation', () => {
 
   it('detects the target Agent on the SSH host that owns the workspace', async () => {
     connectionId.value = 'ssh-1'
+
     const { detectAgentSessionContinuationAgents } =
       await import('./launch-agent-session-continuation')
 

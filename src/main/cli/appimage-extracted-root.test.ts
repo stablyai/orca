@@ -33,6 +33,7 @@ async function makeFixture(): Promise<{
   created.push(root)
   const appImagePath = join(root, 'Orca.AppImage')
   await writeFile(appImagePath, '#!/usr/bin/env bash\n', { encoding: 'utf8', mode: 0o755 })
+
   return { root, appImagePath, cacheRootPath: join(root, 'cache') }
 }
 
@@ -47,6 +48,7 @@ describe('appimage extracted root', () => {
   it('derives the cache root from XDG_CACHE_HOME when set', () => {
     const previous = process.env.XDG_CACHE_HOME
     process.env.XDG_CACHE_HOME = '/xdg-cache'
+
     try {
       expect(getAppImageCacheRootPath('/home/u')).toBe(join('/xdg-cache', 'orca', 'appimage'))
     } finally {
@@ -61,6 +63,7 @@ describe('appimage extracted root', () => {
   it('ignores a relative XDG_CACHE_HOME', () => {
     const previous = process.env.XDG_CACHE_HOME
     process.env.XDG_CACHE_HOME = 'relative-cache'
+
     try {
       expect(getAppImageCacheRootPath('/home/u')).toBe(
         join('/home/u', '.cache', 'orca', 'appimage')
@@ -77,6 +80,7 @@ describe('appimage extracted root', () => {
   it('extracts once and reuses the payload on the next call', async () => {
     const { appImagePath, cacheRootPath } = await makeFixture()
     let extractCount = 0
+
     const runExtract = async (_path: string, cwd: string): Promise<void> => {
       extractCount += 1
       await writePayload(cwd)
@@ -163,6 +167,7 @@ describe('appimage extracted root', () => {
       extractionCount += 1
       await writePayload(cwd)
     }
+
     const options = { appImagePath, cacheRootPath, runExtract: extract }
 
     await expect(ensureAppImageExtractedRoot(options)).resolves.toBeNull()
@@ -183,6 +188,7 @@ describe('appimage extracted root', () => {
         cacheRootPath,
         runExtract: async (_path, cwd) => {
           const launcherPath = join(cwd, 'squashfs-root', 'resources', 'bin', 'orca-ide')
+
           if (entryKind === 'directory') {
             await mkdir(launcherPath, { recursive: true })
           } else {
@@ -242,15 +248,19 @@ describe('appimage extracted root', () => {
     await writeFile(join(root.rootPath, 'partial'), 'interrupted')
     let readyCount = 0
     let release!: () => void
+
     const bothReady = new Promise<void>((resolve) => {
       release = resolve
     })
+
     const runExtract = async (_path: string, cwd: string): Promise<void> => {
       readyCount += 1
       await writePayload(cwd, `winner-${readyCount}`)
+
       if (readyCount === 2) {
         release()
       }
+
       await bothReady
     }
 
@@ -274,6 +284,7 @@ describe('appimage extracted root', () => {
       runExtract: async (_path, cwd) => {
         extractCount += 1
         await writePayload(cwd, `generation-${extractCount}`)
+
         if (extractCount === 1) {
           await writeFile(appImagePath, '#!/usr/bin/env bash\n# replaced during extraction\n', {
             encoding: 'utf8',
@@ -320,6 +331,7 @@ describe('appimage extracted root', () => {
   it('recognizes managed launchers across AppImage path namespaces', async () => {
     const { root, appImagePath, cacheRootPath } = await makeFixture()
     const current = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
+
     const previousGeneration = join(
       dirname(current.rootPath),
       'a'.repeat(24),
@@ -327,8 +339,10 @@ describe('appimage extracted root', () => {
       'bin',
       'orca-ide'
     )
+
     const otherAppImagePath = join(root, 'Other.AppImage')
     await writeFile(otherAppImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 })
+
     const other = resolveAppImageExtractedRoot({
       appImagePath: otherAppImagePath,
       cacheRootPath
@@ -356,6 +370,7 @@ describe('appimage extracted root', () => {
 
   it('requires a sibling installed endpoint to target an executable payload', async () => {
     const { appImagePath, cacheRootPath } = await makeFixture()
+
     const siblingLauncher = join(
       cacheRootPath,
       'a'.repeat(24),
@@ -364,6 +379,7 @@ describe('appimage extracted root', () => {
       'bin',
       'orca-ide'
     )
+
     publishAppImageLauncherEndpoint(cacheRootPath, 'installed', siblingLauncher)
     const options = { appImagePath, cacheRootPath }
 

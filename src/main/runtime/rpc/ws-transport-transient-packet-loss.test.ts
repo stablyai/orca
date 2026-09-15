@@ -11,6 +11,7 @@ const PROBE_INTERVAL_MS = 150
 // assertion in this file depends on wall time.
 function createStepClock(stepMs: number): () => number {
   let calls = 0
+
   return () => 1_000_000 + calls++ * stepMs
 }
 
@@ -23,6 +24,7 @@ describe('WebSocketTransport under transient packet loss', () => {
       socket.removeAllListeners()
       socket.terminate()
     }
+
     sockets.length = 0
     await Promise.all(transports.map((t) => t.stop().catch(() => {})))
     transports.length = 0
@@ -37,8 +39,10 @@ describe('WebSocketTransport under transient packet loss', () => {
       // Why: this test is about liveness, not the auth handshake; keep the pre-auth reaper out of it.
       preAuthTimeoutMs: 600_000
     })
+
     transports.push(transport)
     await transport.start()
+
     return transport
   }
 
@@ -55,9 +59,11 @@ describe('WebSocketTransport under transient packet loss', () => {
     let closed = false
     client.on('ping', () => {
       probesReceived += 1
+
       if (probesReceived === swallowedProbe) {
         return
       }
+
       pongedProbes.push(probesReceived)
       client.pong()
     })
@@ -71,6 +77,7 @@ describe('WebSocketTransport under transient packet loss', () => {
     // Heartbeats intentionally begin after authentication; stamp this synthetic peer as authenticated
     // so the liveness oracle exercises the production heartbeat path rather than pre-auth expiry.
     const wss = (transport as unknown as { wss: { clients: Set<WebSocket> } }).wss
+
     for (const serverSocket of wss.clients) {
       transport.setClientId(serverSocket, 'test-client')
     }

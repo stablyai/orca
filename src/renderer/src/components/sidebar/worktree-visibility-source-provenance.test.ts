@@ -58,6 +58,7 @@ describe('listInheritedWorktreeVisibilitySources', () => {
       repo({ worktreeVisibilitySourcePreferences: { builtIn: { claude: 'hide' } } }),
       shownClaude
     )
+
     expect(overridden[0]).toEqual({
       source: { kind: 'built-in', id: 'claude' },
       globalVisibility: 'show'
@@ -73,6 +74,7 @@ describe('listInheritedWorktreeVisibilitySources', () => {
         sourcePreferences: { custom: { team: 'show' } }
       }
     )
+
     expect(listed.map(({ source }) => source)).toContainEqual({
       kind: 'custom',
       source: { id: 'team', rootPath: '/srv/team' }
@@ -89,6 +91,7 @@ describe('getWorktreeVisibilityOverrideNotice', () => {
       repo({ worktreeVisibilitySourcePreferences: { builtIn: { claude: 'hide' } } }),
       shownClaude
     )
+
     expect(getWorktreeVisibilityOverrideNotice(provenance, 'hide')).toBe(
       'Overriding global setting: Show'
     )
@@ -120,6 +123,7 @@ describe('getWorktreeVisibilitySourceNote', () => {
       { external: 'hide' },
       new Set(['local'])
     )
+
     expect(getWorktreeVisibilitySourceNote(provenance)).toBe('Added in this project only.')
   })
 

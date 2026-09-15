@@ -63,9 +63,11 @@ describe('message batch atomicity', () => {
     db = new OrchestrationDb(':memory:')
     const sqlite = (db as unknown as { db: Database.Database }).db
     seedMessages(sqlite)
+
     if (setup) {
       sqlite.exec(setup)
     }
+
     rejectLastMessageUpdate(sqlite)
 
     expect(() => db?.[method](messageIds)).toThrow('blocked')
@@ -89,6 +91,7 @@ describe('message batch atomicity', () => {
       subject: string
       read: number
     }
+
     expect(first).toEqual({ subject: 'outer change', read: 0 })
   })
 

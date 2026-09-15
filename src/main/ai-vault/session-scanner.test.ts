@@ -726,6 +726,7 @@ describe('scanAiVaultSessions', () => {
     const commandByAgent = new Map(
       result.sessions.map((session) => [session.agent, session.resumeCommand])
     )
+
     expect(commandByAgent.get('claude')).toBe(
       "cd '/tmp/claude' && claude --resume 'claude-session'"
     )
@@ -841,12 +842,14 @@ describe('scanAiVaultSessions', () => {
     expect(result.issues).toEqual([])
     expect(result.sessions[0]?.title).toContain('Grok large title')
     expect(result.sessions[0]?.title).not.toContain('USER_QUERY')
+
     const usedGrokWrapperMatch = matchSpy.mock.calls.some(
       ([pattern]) =>
         pattern instanceof RegExp &&
         pattern.source.includes('<user_query>') &&
         pattern.source.includes('[\\s\\S]')
     )
+
     expect(usedGrokWrapperMatch).toBe(false)
   })
 })

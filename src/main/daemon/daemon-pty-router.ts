@@ -42,18 +42,22 @@ export class DaemonPtyRouter implements IPtyProvider {
     if (opts.attachOnly && opts.sessionId) {
       return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
     }
+
     const adapter = opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined
     const target = adapter ?? this.current
     const result = await target.spawn(opts)
+
     // Why: the adapter filters intentional recovery exits and canonical-ID races before publishing proof.
     if (!result.exitedBeforeSpawnReply) {
       this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
     }
+
     return result
   }
 
   supportsGitCredentialGuardHost(sessionId?: string): boolean {
     const adapter = sessionId ? this.adapterFor(sessionId) : this.current
+
     return adapter.supportsGitCredentialGuardHost()
   }
 
@@ -64,6 +68,7 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   providesAgentSessionOwnerListings(ptyId: string): boolean {
     const adapter = this.sessionAdapters.get(ptyId)
+
     // Why: an unmapped id may belong to any preserved daemon generation;
     // only an established route can make an omitted owner authoritative.
     return adapter?.providesAgentSessionOwnerListings(ptyId) === true
@@ -80,9 +85,11 @@ export class DaemonPtyRouter implements IPtyProvider {
 
   hasPty(id: string): boolean {
     const routed = this.sessionAdapters.get(id)
+
     if (routed) {
       return routed.hasPty(id)
     }
+
     return this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
   }
 
@@ -121,10 +128,12 @@ export class DaemonPtyRouter implements IPtyProvider {
     const adapter = this.adapterFor(id)
     const migrateHistory = shouldHandoffDaemonHistory(opts.keepHistory, adapter, this.current)
     await adapter.shutdown(id, opts)
+
     if (!opts.keepHistory || migrateHistory) {
       if (migrateHistory) {
         adapter.ackColdRestore(id)
       }
+
       if (this.sessionAdapters.get(id) === adapter) {
         this.ownerResolver.forgetRoute(id, adapter)
       }
@@ -207,6 +216,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     const results = await Promise.all(
       this.allAdapters().map((adapter) => adapter.listProcesses(opts))
     )
+
     return results.flat()
   }
 
@@ -253,35 +263,43 @@ export class DaemonPtyRouter implements IPtyProvider {
     const alive: string[] = []
     const killed: string[] = []
     const aliveProviders = new Map<string, Set<DaemonPtyAdapter>>()
+
     for (const adapter of this.allAdapters()) {
       const result = await adapter.reconcileOnStartup(validWorktreeIds)
+
       // Why: daemon startup can reconcile many restored sessions; spreading
       // those arrays into push can exceed JavaScript's argument limit.
       for (const id of result.alive) {
         alive.push(id)
       }
+
       for (const id of result.killed) {
         killed.push(id)
       }
+
       for (const id of result.alive) {
         const providers = aliveProviders.get(id) ?? new Set<DaemonPtyAdapter>()
         providers.add(adapter)
         aliveProviders.set(id, providers)
       }
     }
+
     for (const id of new Set([...alive, ...killed])) {
       const providers = aliveProviders.get(id)
+
       if (providers?.size === 1) {
         this.ownerResolver.recordRoute(id, providers.values().next().value!)
       } else {
         this.ownerResolver.forgetRoute(id)
       }
     }
+
     return { alive, killed }
   }
 
   dispose(): void {
     this.subscriptions.dispose()
+
     for (const adapter of this.allAdapters()) {
       adapter.dispose()
     }
@@ -329,10 +347,13 @@ export class DaemonPtyRouter implements IPtyProvider {
     const adapter =
       this.sessionAdapters.get(sessionId) ??
       this.allAdapters().find((candidate) => candidate.hasPty(sessionId))
+
     if (!adapter) {
       throw new Error('terminal_gone')
     }
+
     this.sessionAdapters.set(sessionId, adapter)
+
     return adapter
   }
 

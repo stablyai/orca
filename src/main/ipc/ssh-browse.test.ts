@@ -29,9 +29,11 @@ function createMockChannel(): EventEmitter & { stderr: EventEmitter } {
 // command so tests can assert on the actual (UTF-16LE) payload sent to the host.
 function decodeEncodedCommand(command: string): string {
   const match = /-EncodedCommand (\S+)/.exec(command)
+
   if (!match) {
     throw new Error(`no -EncodedCommand in: ${command}`)
   }
+
   return Buffer.from(match[1], 'base64').toString('utf16le')
 }
 
@@ -49,9 +51,11 @@ describe('registerSshBrowseHandler', () => {
   it('bypasses remote ls aliases when listing a directory', async () => {
     const channel = createMockChannel()
     const exec = vi.fn().mockResolvedValue(channel)
+
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
+
     registerSshBrowseHandler(getConnectionManager as never)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
@@ -81,9 +85,11 @@ describe('registerSshBrowseHandler', () => {
   it('escapes remote browse paths before invoking command ls', async () => {
     const channel = createMockChannel()
     const exec = vi.fn().mockResolvedValue(channel)
+
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
+
     registerSshBrowseHandler(getConnectionManager as never)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: "/tmp/it's here" })
@@ -104,9 +110,11 @@ describe('registerSshBrowseHandler', () => {
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
     const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
+
     registerSshBrowseHandler(getConnectionManager as never)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: 'C:/Users/alice' })
@@ -157,9 +165,11 @@ describe('registerSshBrowseHandler', () => {
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
     const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
+
     registerSshBrowseHandler(getConnectionManager as never)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/' })
@@ -195,9 +205,11 @@ describe('registerSshBrowseHandler', () => {
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
     const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
+
     registerSshBrowseHandler(getConnectionManager as never)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: 'C:/Users' })
@@ -229,9 +241,11 @@ describe('registerSshBrowseHandler', () => {
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
     const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
+
     registerSshBrowseHandler(getConnectionManager as never)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: "C:/O'Brien" })
@@ -263,9 +277,11 @@ describe('registerSshBrowseHandler', () => {
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
     const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
+
     registerSshBrowseHandler(getConnectionManager as never)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '~' })
@@ -305,9 +321,11 @@ describe('registerSshBrowseHandler', () => {
       const posixChannel = createMockChannel()
       const windowsChannel = createMockChannel()
       const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+
       const getConnectionManager = () => ({
         getConnection: () => ({ exec })
       })
+
       registerSshBrowseHandler(getConnectionManager as never)
 
       const resultPromise = handler(null, { targetId: 'ssh-1', dirPath })
@@ -336,9 +354,11 @@ describe('registerSshBrowseHandler', () => {
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
     const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
+
     registerSshBrowseHandler(getConnectionManager as never)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/root/secret' })
@@ -365,9 +385,11 @@ describe('registerSshBrowseHandler', () => {
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
     const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
+
     registerSshBrowseHandler(getConnectionManager as never)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: 'C:/missing' })
@@ -391,9 +413,11 @@ describe('registerSshBrowseHandler', () => {
     const posixChannel = createMockChannel()
     const windowsChannel = createMockChannel()
     const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
+
     registerSshBrowseHandler(getConnectionManager as never)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/opt/exec' })
@@ -417,9 +441,11 @@ describe('registerSshBrowseHandler', () => {
   it('rejects and detaches listeners when the browse channel errors', async () => {
     const channel = createMockChannel()
     const exec = vi.fn().mockResolvedValue(channel)
+
     const getConnectionManager = () => ({
       getConnection: () => ({ exec })
     })
+
     registerSshBrowseHandler(getConnectionManager as never)
 
     const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/tmp' })
@@ -440,12 +466,15 @@ describe('registerSshBrowseHandler', () => {
 
   it('times out browse channels that never close', async () => {
     vi.useFakeTimers()
+
     try {
       const channel = createMockChannel()
       const exec = vi.fn().mockResolvedValue(channel)
+
       const getConnectionManager = () => ({
         getConnection: () => ({ exec })
       })
+
       registerSshBrowseHandler(getConnectionManager as never)
 
       const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/mnt/stalled' })

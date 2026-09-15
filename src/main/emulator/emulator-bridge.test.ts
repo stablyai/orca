@@ -55,6 +55,7 @@ vi.mock('./android/android-sdk-host-discovery', () => ({
 // These tests exercise the iOS backend, which is gated to macOS.
 vi.mock('os', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return { ...actual, platform: () => 'darwin' }
 })
 
@@ -275,6 +276,7 @@ describe('EmulatorBridge helper ownership', () => {
     let finishStart:
       | ((info: Awaited<ReturnType<typeof execServeSimCommandMock>>) => void)
       | undefined
+
     execServeSimCommandMock.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -455,6 +457,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     netFetchMock.mockResolvedValue(new Response(JSON.stringify(tree), { status: 200 }))
     const bridge = new EmulatorBridge()
     bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
@@ -489,6 +492,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     ])
     const bridge = new EmulatorBridge()
     bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
@@ -524,6 +528,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     // The session lives under another worktree; the CLI still resolves the
     // caller's cwd worktree, which has nothing attached.
     bridge.registerActiveEmulator('wt-other', session('device-1'), { managed: true })
+
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
@@ -555,6 +560,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     ])
     const bridge = new EmulatorBridge()
     bridge.registerActiveEmulator('wt-1', session('device-active'), { managed: true })
+
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
@@ -590,6 +596,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
       },
       { managed: true }
     )
+
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
@@ -622,6 +629,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
       },
       { managed: true }
     )
+
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
@@ -644,6 +652,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
     const waitForEndpointReady = vi.fn(async () => true)
     const bridge = new EmulatorBridge({ waitForEndpointReady })
     bridge.registerActiveEmulator('wt-1', session('device-1'), { managed: true })
+
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
@@ -669,6 +678,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
 
   it('rejects attach when mobile emulator is disabled', async () => {
     const bridge = new EmulatorBridge()
+
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
@@ -694,6 +704,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
       wsUrl: 'ws://127.0.0.1:3102'
     })
     const bridge = new EmulatorBridge({ waitForEndpointReady })
+
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),
@@ -737,6 +748,7 @@ describe('RuntimeEmulatorCommands attach lifecycle', () => {
       wsUrl: 'ws://127.0.0.1:3102'
     })
     const bridge = new EmulatorBridge({ waitForEndpointReady })
+
     const commands = new RuntimeEmulatorCommands({
       getEmulatorBridge: () => bridge,
       resolveEmulatorWorkspaceId: vi.fn(async () => 'wt-1'),

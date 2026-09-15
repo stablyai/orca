@@ -8,6 +8,7 @@ import {
 type AppState = ReturnType<typeof useAppStore.getState>
 
 const initialTabsByWorktree = useAppStore.getState().tabsByWorktree
+
 const initialGetKnownWorktreeById = useAppStore.getState().getKnownWorktreeById
 
 function setStorePartial(partial: Record<string, unknown>): void {

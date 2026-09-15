@@ -30,12 +30,16 @@ export function groupDefinitions(
   const hiddenAgentActionIds = new Set<KeybindingActionId>(
     disabledAgentTabActionIds(disabledTuiAgents)
   )
+
   const groups = new Map<string, KeybindingDefinition[]>()
+
   for (const definition of [...KEYBINDING_DEFINITIONS, ...additionalDefinitions]) {
     if (hiddenAgentActionIds.has(definition.id)) {
       continue
     }
+
     groups.set(definition.group, [...(groups.get(definition.group) ?? []), definition])
   }
+
   return Array.from(groups.entries()).map(([title, items]) => ({ title, items }))
 }

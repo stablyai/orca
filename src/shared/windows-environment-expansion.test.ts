@@ -8,11 +8,14 @@ import {
 function referenceExpand(value: string, env: Readonly<Record<string, string | undefined>>): string {
   return value.replace(/%([^%]+)%/g, (match, name: string) => {
     const exactValue = env[name]
+
     if (typeof exactValue === 'string') {
       return exactValue
     }
+
     const key = Object.keys(env).find((candidate) => candidate.toLowerCase() === name.toLowerCase())
     const fallback = key ? env[key] : undefined
+
     return typeof fallback === 'string' ? fallback : match
   })
 }
@@ -22,12 +25,15 @@ function countingEnv(source: Record<string, string | undefined>): {
   enumerations: () => number
 } {
   let enumerations = 0
+
   const env = new Proxy(source, {
     ownKeys(target) {
       enumerations += 1
+
       return Reflect.ownKeys(target)
     }
   })
+
   return { env, enumerations: () => enumerations }
 }
 
@@ -86,15 +92,19 @@ describe('expandWindowsEnvironmentVariables', () => {
     const values = ['a', '', 'C:\\x', undefined]
     let seed = 0x9e3779b9
     const next = (): number => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff
+
     for (let index = 0; index < 4000; index += 1) {
       const env: Record<string, string | undefined> = {}
+
       for (let entry = 0; entry < Math.floor(next() * 5); entry += 1) {
         env[names[Math.floor(next() * names.length)]!] = values[Math.floor(next() * values.length)]
       }
+
       const value = Array.from(
         { length: Math.floor(next() * 6) },
         () => `%${names[Math.floor(next() * names.length)]}%`
       ).join(';')
+
       expect(expandWindowsEnvironmentVariables(value, env)).toBe(referenceExpand(value, env))
     }
   })

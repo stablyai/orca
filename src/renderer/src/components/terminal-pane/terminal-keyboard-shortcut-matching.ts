@@ -53,12 +53,15 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false
   }
+
   if (target.classList.contains('xterm-helper-textarea')) {
     return false
   }
+
   if (target.isContentEditable) {
     return true
   }
+
   return (
     target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]') !==
     null
@@ -66,6 +69,7 @@ export function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 export type SearchState = { query: string; caseSensitive: boolean; regex: boolean }
+
 export type SearchNavigationDirection = 'next' | 'previous'
 
 export function matchSearchNavigate(
@@ -77,13 +81,17 @@ export function matchSearchNavigate(
   if (e.altKey) {
     return null
   }
+
   const mod = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
+
   if (!mod || e.key.toLowerCase() !== 'g' || !searchOpen || !searchState.query) {
     return null
   }
+
   if (isFindQueryTooLarge(searchState.query)) {
     return null
   }
+
   return e.shiftKey ? 'previous' : 'next'
 }
 
@@ -93,6 +101,7 @@ export function runTerminalSearchNavigation(
   searchState: SearchState
 ): boolean {
   const options = { caseSensitive: searchState.caseSensitive, regex: searchState.regex }
+
   return direction === 'next'
     ? safeFind(
         (term, findOptions) => pane.searchAddon.findNext(term, findOptions),
@@ -115,6 +124,7 @@ export function matchFileSearchShortcut(
   if (e.repeat) {
     return false
   }
+
   return keybindingMatchesAction('sidebar.search.toggle', e, platform, keybindings, {
     context: 'terminal',
     terminalShortcutPolicy

@@ -181,6 +181,7 @@ function makeDisconnectedHostOption(targetId: string, label: string): ProjectHos
 }
 
 const disconnectedDevboxNeedsSetupHostOption = makeDisconnectedHostOption('devbox', 'Devbox')
+
 const disconnectedBastionNeedsSetupHostOption = makeDisconnectedHostOption('bastion', 'Bastion')
 
 const pnpmInstallSetupConfig = {
@@ -205,6 +206,7 @@ const vmRecipeHostOptions: ProjectHostSetupOption[] = [
 
 function findConnectButton(label: string): HTMLButtonElement | undefined {
   const item = findRunTargetItem(label)
+
   return [...(item?.querySelectorAll('button') ?? [])].find((button) =>
     button.textContent?.includes('Connect')
   )
@@ -280,6 +282,7 @@ function renderCard(
       />
     )
   })
+
   return { container, root }
 }
 
@@ -287,10 +290,13 @@ function findInputByLabel(container: HTMLElement, labelText: string): HTMLInputE
   const label = [...container.querySelectorAll('label')].find(
     (candidate) => candidate.textContent?.trim() === labelText
   )
+
   const labelledId = label?.getAttribute('for')
+
   if (labelledId) {
     return document.getElementById(labelledId) as HTMLInputElement | null
   }
+
   return label?.parentElement?.querySelector<HTMLInputElement>('input') ?? null
 }
 
@@ -307,6 +313,7 @@ function openRunTargetPicker(container: HTMLElement): void {
   const runTargetShell = container.querySelector<HTMLElement>(
     'div[data-run-target-combobox-root="true"]'
   )
+
   expect(runTargetShell).toBeTruthy()
   act(() => runTargetShell?.click())
 }
@@ -391,9 +398,11 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     const projectSection = current.container.querySelector(
       '[data-contextual-tour-target="workspace-creation-project"]'
     )
+
     const nameSection = current.container.querySelector(
       '[data-contextual-tour-target="workspace-creation-name"]'
     )
+
     expect(projectSection?.textContent).not.toContain('Task Source')
     expect(nameSection?.textContent).toContain("Name or 'Create From'")
     const nameInput = current.container.querySelector('[aria-label="workspace name"]')
@@ -409,6 +418,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     const projectTourTarget = current.container.querySelector(
       '[data-contextual-tour-target="workspace-creation-project"]'
     )
+
     expect(projectTourTarget).toBeTruthy()
     expect(projectTourTarget?.querySelector('[data-project-combobox-root="true"]')).toBeTruthy()
     expect(projectTourTarget?.querySelector('[data-run-target-combobox-root="true"]')).toBeNull()
@@ -420,6 +430,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     const runTargetPicker = current.container.querySelector(
       'div[data-run-target-combobox-root="true"]'
     )
+
     expect(runTargetPicker).toBeTruthy()
   })
 
@@ -427,17 +438,21 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     // Why: the row stays mounted (for the smooth height transition) but is
     // collapsed + aria-hidden when reuse isn't possible.
     current = renderCard({ canReuseSelectedBranch: false })
+
     const collapsedReuse = [...current.container.querySelectorAll('[aria-hidden="true"]')].find(
       (el) => el.textContent?.includes('Reuse branch')
     )
+
     expect(collapsedReuse).toBeTruthy()
 
     unmountCurrent()
 
     current = renderCard({ canReuseSelectedBranch: true, reuseSelectedBranch: true })
+
     const reuseLabel = [...current.container.querySelectorAll('label')].find((label) =>
       label.textContent?.includes('Reuse branch')
     )
+
     expect(reuseLabel).toBeTruthy()
     // Visible: not inside an aria-hidden (collapsed) wrapper.
     expect(reuseLabel?.closest('[aria-hidden="true"]')).toBeNull()
@@ -451,6 +466,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
       const reuseLabel = [...(current?.container.querySelectorAll('label') ?? [])].find((label) =>
         label.textContent?.includes('Reuse branch')
       )
+
       const checkbox = reuseLabel?.querySelector<HTMLInputElement>('input[type="checkbox"]')
       expect(checkbox).toBeTruthy()
       act(() => checkbox?.click())
@@ -606,6 +622,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     const nextField = findInputByLabel(current.container, 'Branch name')?.closest(
       'div.space-y-1'
     )?.nextElementSibling
+
     expect(nextField?.textContent).toMatch(/Parent worktree(?!.*Note)/)
     expect(nextField?.nextElementSibling?.textContent).toContain('Note')
   })
@@ -622,6 +639,7 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     const createButton = [...current.container.querySelectorAll('button')].find((button) =>
       button.textContent?.includes('Create workspace')
     )
+
     expect(createButton).toBeTruthy()
     expect(createButton?.hasAttribute('disabled')).toBe(false)
     expect(
@@ -687,9 +705,11 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     openRunTargetPicker(current.container)
     const devboxItem = findRunTargetItem('Devbox')
     expect(devboxItem).toBeTruthy()
+
     const connectButton = [...(devboxItem?.querySelectorAll('button') ?? [])].find((button) =>
       button.textContent?.includes('Connect')
     )
+
     expect(connectButton).toBeTruthy()
 
     await act(async () => {
@@ -835,15 +855,18 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     openRunTargetPicker(current.container)
 
     expect(document.body.textContent).toContain('Per-Workspace Environment')
+
     const ephemeralVmItem = [
       ...document.body.querySelectorAll<HTMLElement>('[role="option"]')
     ].find((item) => item.textContent?.includes('Per-Workspace Environment'))
+
     expect(ephemeralVmItem).toBeTruthy()
     act(() => ephemeralVmItem?.click())
 
     const recipeItem = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (item) => item.textContent?.includes('Vercel Sandbox')
     )
+
     expect(recipeItem).toBeTruthy()
     act(() => recipeItem?.click())
 
@@ -873,12 +896,14 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     const runTargetShell = current.container.querySelector<HTMLElement>(
       'div[data-run-target-combobox-root="true"]'
     )
+
     expect(runTargetShell?.textContent).toContain('Per-Workspace Environment')
     openRunTargetPicker(current.container)
 
     const builderItem = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (item) => item.textContent?.includes('Builder')
     )
+
     expect(builderItem).toBeTruthy()
     act(() => builderItem?.click())
 
@@ -899,8 +924,10 @@ describe('NewWorkspaceComposerCard note sizing', () => {
     const label = [...container.querySelectorAll('label')].find(
       (candidate) => candidate.textContent?.trim() === 'Note'
     )
+
     const textarea = label?.parentElement?.querySelector('textarea')
     expect(textarea).toBeTruthy()
+
     return textarea as HTMLTextAreaElement
   }
 

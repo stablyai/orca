@@ -25,7 +25,9 @@ describe('observed skill git tree identity', () => {
     const manifest = JSON.parse(
       await readFile(join(REPO_ROOT, 'resources', 'skills', 'current-manifest.json'), 'utf8')
     ) as SkillBundleManifest
+
     expect(manifest.skills.length).toBeGreaterThan(0)
+
     for (const skill of manifest.skills) {
       const observed = await observeSkillPackage(join(REPO_ROOT, 'skills', skill.name))
       expect(observed.observedGitTreeSha, skill.name).toBe(skill.gitTreeSha)
@@ -53,17 +55,20 @@ describe('observed skill git tree identity', () => {
     const globalConfig = join(base, 'global.gitconfig')
     const systemConfig = join(base, 'system.gitconfig')
     await Promise.all([writeFile(globalConfig, ''), writeFile(systemConfig, '')])
+
     const env = {
       ...process.env,
       GIT_CONFIG_GLOBAL: globalConfig,
       GIT_CONFIG_SYSTEM: systemConfig
     }
+
     execFileSync('git', ['init', '--quiet', repoShell], { env })
     const gitDirArgs = ['--git-dir', join(repoShell, '.git'), '--work-tree', work]
     execFileSync('git', [...gitDirArgs, '-c', 'core.autocrlf=false', 'add', '-A'], {
       env,
       cwd: work
     })
+
     const expected = execFileSync('git', [...gitDirArgs, 'write-tree'], {
       env,
       cwd: work,

@@ -41,9 +41,11 @@ export function rightSidebarShowsPullRequestData(
   const activeWorktree = state.activeWorktreeId
     ? getIndexedWorktreeMap(state.worktreesByRepo).get(state.activeWorktreeId)
     : undefined
+
   const activeRepo = activeWorktree
     ? getIndexedRepoMap(state.repos).get(activeWorktree.repoId)
     : null
+
   if (!activeRepo || isFolderRepo(activeRepo)) {
     return false
   }

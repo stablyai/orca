@@ -16,6 +16,7 @@ export function createRelayRecoveryLog(
 ): RelayRecoveryLog {
   let sequence = 0
   const instanceId = `${Date.now().toString(36)}-${(++relayLoggerInstanceSequence).toString(36)}`
+
   return (message, detail, evidence) => {
     console.log(`[relay] ${message}`, detail ?? '')
     onLog?.({

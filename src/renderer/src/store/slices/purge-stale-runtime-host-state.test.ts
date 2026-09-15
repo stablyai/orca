@@ -28,6 +28,7 @@ globalThis.window = { api: {} }
 import { createTestStore, seedStore, makeWorktree, makeTab, TEST_REPO } from './store-test-helpers'
 
 const RUNTIME_A = toRuntimeExecutionHostId('env-a')
+
 const RUNTIME_NEVER_SAVED = toRuntimeExecutionHostId('env-serving-client')
 
 function setup(overrides: Partial<ProjectHostSetup> & { id: string }): ProjectHostSetup {

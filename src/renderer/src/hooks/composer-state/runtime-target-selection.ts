@@ -131,6 +131,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     if (!selectedRepo) {
       return CLIENT_PLATFORM
     }
+
     const projectRuntime = selectedRepo.connectionId
       ? undefined
       : getLocalRepoProjectExecutionRuntimeContext(
@@ -145,6 +146,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
           selectedRepo.id,
           CLIENT_PLATFORM
         )
+
     return getAgentLaunchPlatformForRepo(selectedRepo, projectRuntime)
   }, [activeRepoId, projects, repos, selectedRepo, settings, worktreesByRepo])
 
@@ -196,6 +198,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     if (!settings) {
       return settings
     }
+
     // Why: probes and attachment uploads inspect the selected repo, even though creation defaults still follow host scope.
     return getSettingsForRepoRuntimeOwner(
       { repos: selectedRepo ? [selectedRepo] : [], settings },

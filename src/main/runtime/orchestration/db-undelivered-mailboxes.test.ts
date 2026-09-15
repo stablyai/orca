@@ -8,18 +8,21 @@ describe('undelivered orchestration mailboxes', () => {
 
   it('lists only mailboxes with undelivered unread messages', () => {
     db = new OrchestrationDb(':memory:')
+
     const delivered = db.insertMessage({
       runId: 'run_legacy_local',
       from: 'a',
       to: 'delivered',
       subject: 'done'
     })
+
     const read = db.insertMessage({
       runId: 'run_legacy_local',
       from: 'a',
       to: 'read',
       subject: 'seen'
     })
+
     db.insertMessage({ runId: 'run_legacy_local', from: 'a', to: 'pending', subject: 'first' })
     db.insertMessage({ runId: 'run_legacy_local', from: 'a', to: 'pending', subject: 'second' })
     db.markAsDelivered([delivered.id])
@@ -30,6 +33,7 @@ describe('undelivered orchestration mailboxes', () => {
 
   it('persists and settles a pending pointer Enter independently of delivery', () => {
     db = new OrchestrationDb(':memory:')
+
     const message = db.insertMessage({
       runId: 'run_legacy_local',
       from: 'a',

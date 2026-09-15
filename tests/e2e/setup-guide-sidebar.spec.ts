@@ -84,22 +84,28 @@ async function installBlockedCompletedCapabilityFakes(
       blocked: boolean
       resolvers: (() => void)[]
     }
+
     const globalWithState = globalThis as typeof globalThis & {
       __setupGuideSkillDiscovery?: SetupGuideSkillDiscoveryState
     }
+
     globalWithState.__setupGuideSkillDiscovery = {
       blocked: true,
       resolvers: []
     }
+
     const waitForSkillDiscoveryRelease = async (): Promise<void> => {
       const state = globalWithState.__setupGuideSkillDiscovery
+
       if (!state?.blocked) {
         return
       }
+
       await new Promise<void>((resolve) => {
         state.resolvers.push(resolve)
       })
     }
+
     const makeSkill = (name: string, id: string): SkillDiscoveryResult['skills'][number] => ({
       id,
       name,
@@ -117,6 +123,7 @@ async function installBlockedCompletedCapabilityFakes(
     ipcMain.removeHandler('skills:discover')
     ipcMain.handle('skills:discover', async (): Promise<SkillDiscoveryResult> => {
       await waitForSkillDiscoveryRelease()
+
       return {
         skills: [
           makeSkill('orca-cli', 'e2e-orca-cli'),
@@ -154,11 +161,15 @@ async function releaseBlockedSkillDiscovery(electronApp: ElectronApplication): P
         resolvers: (() => void)[]
       }
     }
+
     const state = globalWithState.__setupGuideSkillDiscovery
+
     if (!state) {
       return
     }
+
     state.blocked = false
+
     for (const resolve of state.resolvers.splice(0)) {
       resolve()
     }
@@ -170,27 +181,34 @@ async function evaluateInElectronMainWithNavigationRetry<T>(
   callback: Parameters<ElectronApplication['evaluate']>[0]
 ): Promise<T> {
   let lastError: unknown = null
+
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
       return (await electronApp.evaluate(callback)) as T
     } catch (error) {
       lastError = error
+
       if (!(error instanceof Error) || !error.message.includes('Execution context was destroyed')) {
         throw error
       }
+
       await new Promise((resolve) => setTimeout(resolve, 250))
     }
   }
+
   throw lastError
 }
 
 async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const state = store.getState()
+
     const existingRepo = state.repos[0] ?? {
       id: 'setup-guide-repo-a',
       path: '/tmp/setup-guide-repo-a',
@@ -199,6 +217,7 @@ async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<
       addedAt: Date.now(),
       kind: 'git'
     }
+
     const primaryRepo = {
       ...existingRepo,
       kind: 'git',
@@ -208,12 +227,14 @@ async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<
         scripts: { setup: 'echo setup', archive: '' }
       }
     }
+
     const secondaryRepo = {
       ...primaryRepo,
       id: 'setup-guide-repo-b',
       path: `${primaryRepo.path}-b`,
       displayName: 'setup-guide-repo-b'
     }
+
     const makeWorktree = (args: {
       id: string
       repoId: string
@@ -239,6 +260,7 @@ async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<
       isBare: false,
       isMainWorktree: args.isMainWorktree
     })
+
     const mainWorktree = makeWorktree({
       id: 'setup-guide-main-worktree',
       repoId: primaryRepo.id,
@@ -246,6 +268,7 @@ async function seedCompletedSetupExceptCapabilityReadiness(page: Page): Promise<
       displayName: 'main',
       isMainWorktree: true
     })
+
     const secondaryWorktree = makeWorktree({
       id: 'setup-guide-secondary-worktree',
       repoId: primaryRepo.id,
@@ -328,19 +351,24 @@ async function startSetupGuideFlashMonitor(page: Page): Promise<void> {
     const monitoredWindow = window as Window & {
       __setupGuideFlashMonitor?: SetupGuideFlashMonitor
     }
+
     monitoredWindow.__setupGuideFlashMonitor?.stop()
 
     const samples: number[] = []
     let rafId = 0
+
     const isChecklistVisible = (): boolean =>
       Array.from(document.querySelectorAll('button,[role="button"],a,div,span')).some((element) => {
         if (!element.textContent?.includes(text)) {
           return false
         }
+
         if (element.getClientRects().length === 0) {
           return false
         }
+
         const style = window.getComputedStyle(element)
+
         return style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0'
       })
 
@@ -349,6 +377,7 @@ async function startSetupGuideFlashMonitor(page: Page): Promise<void> {
         samples.push(Math.round(performance.now()))
       }
     }
+
     const observer = new MutationObserver(record)
     observer.observe(document.body, {
       attributes: true,
@@ -356,10 +385,12 @@ async function startSetupGuideFlashMonitor(page: Page): Promise<void> {
       childList: true,
       subtree: true
     })
+
     const sampleFrame = (): void => {
       record()
       rafId = requestAnimationFrame(sampleFrame)
     }
+
     sampleFrame()
 
     monitoredWindow.__setupGuideFlashMonitor = {
@@ -368,6 +399,7 @@ async function startSetupGuideFlashMonitor(page: Page): Promise<void> {
         cancelAnimationFrame(rafId)
         observer.disconnect()
         record()
+
         return samples
       }
     }

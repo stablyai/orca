@@ -5,7 +5,9 @@ import {
 } from './posix-pane-foreground-fingerprint'
 
 const SHELL = 4242
+
 const AGENT = 4300
+
 const OTHER_PANE = 9000
 
 type Row = PaneFingerprintRow
@@ -19,6 +21,7 @@ const shell = (over: Partial<Row> = {}): Row => ({
   startTime: 'Thu Sep 3 16:02:01 2026',
   ...over
 })
+
 const agent = (over: Partial<Row> = {}): Row => ({
   pid: AGENT,
   ppid: SHELL,
@@ -28,6 +31,7 @@ const agent = (over: Partial<Row> = {}): Row => ({
   startTime: 'Thu Sep 3 16:02:05 2026',
   ...over
 })
+
 const child = (pid: number, ppid: number, over: Partial<Row> = {}): Row => ({
   pid,
   ppid,
@@ -37,6 +41,7 @@ const child = (pid: number, ppid: number, over: Partial<Row> = {}): Row => ({
   startTime: `Thu Sep 3 16:03:${String(pid % 60).padStart(2, '0')} 2026`,
   ...over
 })
+
 const foreign = (): Row => ({
   pid: OTHER_PANE,
   ppid: 1,
@@ -122,23 +127,30 @@ describe('buildPaneProcessFingerprint', () => {
   describe('Linux', () => {
     it('reads /proc start times for the pane subtree only and ignores ps start markers', async () => {
       const asked: number[] = []
+
       const read = async (pid: number): Promise<string | null> => {
         asked.push(pid)
+
         return pid === SHELL ? '1000' : pid === AGENT ? '2000' : null
       }
+
       const rows = [foreign(), shell({ startTime: undefined }), agent({ startTime: undefined })]
+
       const a = await buildPaneProcessFingerprint(rows, SHELL, {
         platform: 'linux',
         readLinuxStartTime: read
       })
+
       expect(a).toContain(`${SHELL}@1000`)
       expect(a).toContain(`${AGENT}@2000`)
       expect(asked.sort()).toEqual([SHELL, AGENT].sort())
+
       // An exit-and-replace changes only the /proc start ticks.
       const replaced = await buildPaneProcessFingerprint(rows, SHELL, {
         platform: 'linux',
         readLinuxStartTime: async (pid) => (pid === AGENT ? '2500' : read(pid))
       })
+
       expect(replaced).not.toBe(a)
     })
 
@@ -170,10 +182,12 @@ describe('buildPaneProcessFingerprint', () => {
       // process in between. Equal fingerprints here would mask the agent's exit.
       const readNoDescendant = async (pid: number): Promise<string | null> =>
         pid === SHELL ? '2400' : null
+
       const before = await buildPaneProcessFingerprint([shell(), agent()], SHELL, {
         platform: 'linux',
         readLinuxStartTime: readNoDescendant
       })
+
       const after = await buildPaneProcessFingerprint(
         [shell(), agent({ stat: 'S+', pgid: AGENT })],
         SHELL,

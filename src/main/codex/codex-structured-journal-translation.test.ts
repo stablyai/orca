@@ -20,7 +20,9 @@ import {
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 
 const SESSION_ID = 'session-1'
+
 const THREAD_ID = 'thread-abc'
+
 const TURN_ID = 'turn-1'
 
 type Row = { key: string; body: AgentJournalItemBody }
@@ -30,6 +32,7 @@ function recorder() {
   const tombstones: string[] = []
   const bound: [string, string, string][] = []
   let publishes = 0
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity: AgentJournalItemIdentity, body) =>
       rows.push({ key: agentJournalItemKey(identity), body }),
@@ -38,6 +41,7 @@ function recorder() {
       publishes += 1
     }
   }
+
   return {
     sink,
     rows,
@@ -52,20 +56,25 @@ function recorder() {
 /** Latest body per identity, in first-seen order: what the journal reducer keeps. */
 function reduced(rows: readonly Row[]): Row[] {
   const latest = new Map<string, Row>()
+
   for (const row of rows) {
     latest.set(row.key, row)
   }
+
   return [...latest.values()]
 }
 
 /** Fires the coalescing window on demand instead of on wall time. */
 function manualWindow() {
   const pending: (() => void)[] = []
+
   return {
     schedule: (run: () => void) => {
       pending.push(run)
+
       return () => {
         const index = pending.indexOf(run)
+
         if (index !== -1) {
           pending.splice(index, 1)
         }
@@ -73,6 +82,7 @@ function manualWindow() {
     },
     fire: () => {
       const due = pending.splice(0)
+
       for (const run of due) {
         run()
       }
@@ -93,6 +103,7 @@ function translatorWith(tap = recorder(), window = manualWindow()) {
     bindPromptItemId: tap.bindPromptItemId,
     schedule: window.schedule
   })
+
   return { translator, tap, window }
 }
 
@@ -105,6 +116,7 @@ function deferredTarget(
     journal: {
       appendItem: vi.fn(async (_identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
         log.push(body)
+
         return { cursor: { epoch: 'e', sequence: log.length } }
       }),
       appendTombstone: vi.fn(async () => ({ epoch: 'e', sequence: log.length })),
@@ -115,6 +127,7 @@ function deferredTarget(
               log.push(mutation.body)
             }
           }
+
           return { epoch: 'e', sequence: log.length }
         }
       )
@@ -141,6 +154,7 @@ function hardWatermarkDeferred() {
 describe('codex journal translation', () => {
   it('refuses an active-turn overflow before publishing an un-settleable lifecycle row', () => {
     const tap = recorder()
+
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
       primaryThreadId: () => THREAD_ID
@@ -151,6 +165,7 @@ describe('codex journal translation', () => {
         translator.handle(notification('turn/started', { turn: { id: `turn-${index}` } }))
       ).toEqual({ accepted: true })
     }
+
     expect(
       translator.handle(notification('turn/started', { turn: { id: 'turn-overflow' } }))
     ).toEqual({ accepted: false, reason: 'backpressure' })
@@ -199,6 +214,7 @@ describe('codex journal translation', () => {
 
   it('refuses an old-provider restore above the operation bound before partial import', () => {
     const { translator, tap } = translatorWith()
+
     const result = translator.restoreThread(THREAD_ID, {
       turns: [
         {
@@ -219,6 +235,7 @@ describe('codex journal translation', () => {
 
   it('durably opens and closes the primary turn cancellation lifecycle', () => {
     const tap = recorder()
+
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
       primaryThreadId: () => THREAD_ID
@@ -255,6 +272,7 @@ describe('codex journal translation', () => {
 
   it('closes every active turn when the provider session ends after a later turn starts', () => {
     const tap = recorder()
+
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
       primaryThreadId: () => THREAD_ID
@@ -289,6 +307,7 @@ describe('codex journal translation', () => {
 
   it('matches out-of-order completions to each turn identity', () => {
     const tap = recorder()
+
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
       primaryThreadId: () => THREAD_ID
@@ -343,6 +362,7 @@ describe('codex journal translation', () => {
   it('suppresses both echo lifecycle frames, including skill and unknown parts', () => {
     const { translator, tap } = translatorWith()
     translator.handle(TURN_STARTED)
+
     const item = {
       type: 'userMessage',
       id: 'echo',
@@ -352,6 +372,7 @@ describe('codex journal translation', () => {
         { type: 'future_context', text: 'More context' }
       ]
     }
+
     translator.handle(notification('item/started', { item }))
     translator.handle(notification('item/completed', { item }))
     expect(tap.rows).toEqual([])
@@ -451,11 +472,13 @@ describe('codex journal translation', () => {
     tap.sink.appendLifecycleBatch = (settlementId, mutations) => {
       batches.push({ settlementId, mutations: [...mutations] })
     }
+
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
       bindPromptItemId: tap.bindPromptItemId,
       primaryThreadId: () => THREAD_ID
     })
+
     translator.handle(TURN_STARTED)
     translator.handle(
       notification('item/started', {
@@ -509,6 +532,7 @@ describe('codex journal translation', () => {
     const bodies: AgentJournalItemBody[] = []
     const publishes: string[] = []
     const readingControl = { pauseReading: vi.fn(), resumeReading: vi.fn() }
+
     const deferred = createDeferredStructuredAgentSessionEventSink({
       watermarks: {
         pauseQueuedBytes: 1,
@@ -520,6 +544,7 @@ describe('codex journal translation', () => {
       },
       readingControl
     })
+
     const translator = createCodexJournalTranslator({ sink: deferred.sink })
 
     translator.handle(
@@ -574,6 +599,7 @@ describe('codex journal translation', () => {
     const publishes: string[] = []
     const bound: [string, string, string][] = []
     const deferred = hardWatermarkDeferred()
+
     const translator = createCodexJournalTranslator({
       sink: deferred.sink,
       bindPromptItemId: (journalItemId, threadId, promptKey) =>
@@ -617,6 +643,7 @@ describe('codex journal translation', () => {
     const publishes: string[] = []
     const bound: [string, string, string][] = []
     const deferred = hardWatermarkDeferred()
+
     const translator = createCodexJournalTranslator({
       sink: deferred.sink,
       bindPromptItemId: (journalItemId, threadId, promptKey) =>
@@ -657,6 +684,7 @@ describe('codex journal translation', () => {
 
   it('refuses an untranslated user-input prompt without binding live state', () => {
     const tap = recorder()
+
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
       bindPromptItemId: tap.bindPromptItemId
@@ -682,6 +710,7 @@ describe('codex journal translation', () => {
     const bodies: AgentJournalItemBody[] = []
     const publishes: string[] = []
     const deferred = hardWatermarkDeferred()
+
     const translator = createCodexJournalTranslator({
       sink: deferred.sink,
       primaryThreadId: () => THREAD_ID

@@ -33,6 +33,7 @@ export async function getProjectSlug(
 ): Promise<ProjectRef | null> {
   const localGitArgs = hostedReviewLocalGitOptionArgs(options)
   const knownHosts = await getGlabKnownHosts(connectionId, localGitArgs[0])
+
   return getProjectRef(repoPath, knownHosts, connectionId, ...localGitArgs)
 }
 
@@ -51,6 +52,7 @@ export async function getMergeRequest(
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const projectRef = await getProjectRef(repoPath, knownHosts, connectionId, ...localGitArgs)
   await acquire()
+
   try {
     const args = projectRef
       ? [
@@ -59,16 +61,20 @@ export async function getMergeRequest(
           `projects/${encodedProject(projectRef.path)}/merge_requests/${iid}`
         ]
       : ['mr', 'view', String(iid), '--output', 'json']
+
     const { stdout } = await glabExecFileAsync(
       args,
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
+
     const data = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
       head_pipeline?: { status?: string } | null
       pipeline?: { status?: string } | null
     }
+
     // Why: older GitLab instances expose `pipeline` instead of `head_pipeline`; try both.
     const pipelineStatus = derivePipelineStatus(data.head_pipeline ?? data.pipeline ?? null)
+
     return mapMRInfo(data, pipelineStatus)
   } catch {
     return null
@@ -91,17 +97,22 @@ export async function getMergeRequestForBranch(
   throwOnFailure = false
 ): Promise<MRInfo | null> {
   const branchName = branch.replace(/^refs\/heads\//, '')
+
   if (!branchName && linkedMRIid == null) {
     return null
   }
+
   const localGitArgs = hostedReviewLocalGitOptionArgs(options)
   const localGitOptions = localGitArgs[0] ?? {}
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const projectRef = await getProjectRef(repoPath, knownHosts, connectionId, ...localGitArgs)
+
   if (!projectRef) {
     return null
   }
+
   await acquire()
+
   try {
     if (typeof linkedMRIid === 'number') {
       const { stdout } = await glabExecFileAsync(
@@ -112,13 +123,17 @@ export async function getMergeRequestForBranch(
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
+
       const raw = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
         head_pipeline?: { status?: string } | null
         pipeline?: { status?: string } | null
       }
+
       const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
+
       return mapMRInfo(raw, pipelineStatus)
     }
+
     if (branchName) {
       const { stdout } = await glabExecFileAsync(
         [
@@ -132,15 +147,18 @@ export async function getMergeRequestForBranch(
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
+
       const data = JSON.parse(stdout) as (Parameters<typeof mapMRInfo>[0] & {
         head_pipeline?: { status?: string } | null
         pipeline?: { status?: string } | null
       })[]
+
       if (Array.isArray(data) && data.length > 0) {
         const raw = data[0]
         // Why: older GitLab list payloads expose `pipeline` instead of `head_pipeline`.
         const pipelineStatus = derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null)
         const info = mapMRInfo(raw, pipelineStatus)
+
         // Why (#9171): discard a non-open implicit branch match on the repo default branch.
         const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
           state: info.state,
@@ -150,16 +168,19 @@ export async function getMergeRequestForBranch(
           connectionId,
           localGitOptions
         })
+
         if (!hideOnDefaultBranch) {
           return info
         }
       }
     }
+
     return null
   } catch (error) {
     if (throwOnFailure) {
       throw error
     }
+
     return null
   } finally {
     release()

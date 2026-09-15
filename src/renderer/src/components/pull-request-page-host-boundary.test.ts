@@ -17,6 +17,7 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endPattern, start + startPattern.length)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 
@@ -134,11 +135,13 @@ describe('PullRequestPage host boundaries', () => {
 
   it('uses source-aware initial details routing and cache identity', () => {
     const propsSection = componentSource('pull-request-page/page-types.ts')
+
     const cacheKeySection = sourceBetween(
       componentSource('pull-request-page/cache/work-item-details.ts'),
       'export function getWorkItemDetailsCacheKey',
       'export function touchWorkItemDetailsCache'
     )
+
     const matchInvalidationSection = sourceBetween(
       componentSource('pull-request-page/cache/work-item-details.ts'),
       'export function invalidateWorkItemDetailsCacheByMatch',
@@ -161,6 +164,7 @@ describe('PullRequestPage host boundaries', () => {
       'const loading = !!cachedEntry?.pending && !cachedEntry?.details',
       '// Why: if a cross-window mutation invalidates'
     )
+
     const resultSection = sourceBetween(
       componentSource('pull-request-page/page/use-details.ts'),
       'inflight',
@@ -176,6 +180,7 @@ describe('PullRequestPage host boundaries', () => {
 
   it('routes file viewed mutations through the PR source context', () => {
     const helperSection = componentSource('github/github-work-item-comment-mutations.ts')
+
     const changeSection = sourceBetween(
       componentSource('pull-request-page/page/viewed-sync.ts'),
       'export async function syncPullRequestFileViewed',
@@ -214,21 +219,25 @@ describe('PullRequestPage host boundaries', () => {
 
   it('routes PR file contents and runtime viewed invalidations through the PR source context', () => {
     const commentMutations = componentSource('github/github-work-item-comment-mutations.ts')
+
     const fileContentsSection = sourceBetween(
       componentSource('pull-request-page/cache/file-content.ts'),
       'export function loadPRFileContents',
       'touchPRFileContentCache(cacheKey, request)'
     )
+
     const fileContentsCacheKeySection = sourceBetween(
       componentSource('pull-request-page/cache/file-content.ts'),
       'export function getPRFileContentCacheKey',
       'export function loadPRFileContents'
     )
+
     const listenerSection = sourceBetween(
       componentSource('pull-request-page/cache/work-item-details.ts'),
       'let workItemMutatedUnsub',
       'if (import.meta !== undefined && import.meta.hot)'
     )
+
     const commentContextSection = sourceBetween(
       componentSource('github/CommentCodeContext.tsx'),
       'function CommentCodeContext',

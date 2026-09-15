@@ -13,6 +13,7 @@ vi.mock('os', () => ({
 }))
 
 const LARGE_HOST_ALIAS_COUNT = 150_000
+
 const TEST_HOME = '/home/testuser'
 
 function testHomePath(...parts: string[]): string {
@@ -21,9 +22,11 @@ function testHomePath(...parts: string[]): string {
 
 function buildHostAliases(count: number): string {
   const aliases: string[] = []
+
   for (let index = 0; index < count; index += 1) {
     aliases.push(`generated-${index}`)
   }
+
   return aliases.join(' ')
 }
 
@@ -35,6 +38,7 @@ Host myserver
   User deploy
   Port 2222
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts).toHaveLength(1)
     expect(hosts[0]).toEqual({
@@ -56,6 +60,7 @@ Host production
   User deploy
   Port 2222
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts).toHaveLength(2)
     expect(hosts[0].host).toBe('staging')
@@ -71,6 +76,7 @@ Host *
 Host myserver
   HostName 10.0.0.1
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts).toHaveLength(1)
     expect(hosts[0].host).toBe('myserver')
@@ -84,6 +90,7 @@ Host *.example.com
 Host dev
   HostName dev.example.com
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts).toHaveLength(1)
     expect(hosts[0].host).toBe('dev')
@@ -95,6 +102,7 @@ Host myserver
   HostName example.com
   IdentityFile ~/.ssh/id_ed25519
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts[0].identityFile).toBe(testHomePath('.ssh', 'id_ed25519'))
   })
@@ -105,6 +113,7 @@ Host myserver
   HostName example.com
   IdentityFile ~\\.ssh\\id_ed25519
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts[0].identityFile).toBe(testHomePath('.ssh', 'id_ed25519'))
   })
@@ -120,6 +129,7 @@ Host quoted
   IdentitiesOnly "yes" # limit keys
   ProxyJump "bastion" # jump host
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts[0]).toEqual({
       host: 'quoted',
@@ -140,6 +150,7 @@ Host eq
   User=deploy
   Port=2202
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts[0]).toEqual({
       host: 'eq',
@@ -155,6 +166,7 @@ Host myserver
   HostName example.com
   IdentityAgent ~/.1password/agent.sock
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts[0].identityAgent).toBe(testHomePath('.1password', 'agent.sock'))
   })
@@ -165,6 +177,7 @@ Host myserver
   HostName example.com
   IdentitiesOnly yes
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts[0].identitiesOnly).toBe(true)
   })
@@ -182,6 +195,7 @@ Host plain-host
 Host silent-host
   HostName silent.example.com
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts[0].gssapiAuthentication).toBe(true)
     expect(hosts[1].gssapiAuthentication).toBe(false)
@@ -256,6 +270,7 @@ Host internal
   ProxyUseFdpass yes
   ProxyJump bastion.example.com
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts[0].proxyCommand).toBe('ssh -W %h:%p bastion')
     expect(hosts[0].proxyUseFdpass).toBe(true)
@@ -267,6 +282,7 @@ Host internal
 Host internal
   ProxyCommand sh -c "nc %h %p" # shell comment
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts[0].proxyCommand).toBe('sh -c "nc %h %p" # shell comment')
   })
@@ -280,6 +296,7 @@ Host myserver
 
   User admin
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts).toHaveLength(1)
     expect(hosts[0].user).toBe('admin')
@@ -292,6 +309,7 @@ Host myserver
   user Admin
   port 3022
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts[0].hostname).toBe('EXAMPLE.COM')
     expect(hosts[0].user).toBe('Admin')
@@ -309,6 +327,7 @@ Match host *.internal
 Host other
   HostName other.com
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts).toHaveLength(2)
     expect(hosts[0].host).toBe('myserver')
@@ -324,6 +343,7 @@ Host other
 Host staging stage *.example.com
   HostName staging.example.com
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts).toEqual([
       { host: 'staging', hostname: 'staging.example.com' },
@@ -362,6 +382,7 @@ Host staging stage
   IdentityAgent ~/.1password/agent.sock
   IdentitiesOnly yes
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts).toEqual([
       {
@@ -382,6 +403,7 @@ Host staging stage
 Host myserver
   Port notanumber
 `
+
     const hosts = parseSshConfig(config)
     expect(hosts[0].port).toBe(22)
   })
@@ -412,6 +434,7 @@ describe('sshConfigHostsToTargets', () => {
       { host: 'existing', hostname: '10.0.0.1' },
       { host: 'new-host', hostname: '10.0.0.2' }
     ]
+
     const targets = sshConfigHostsToTargets(hosts, new Set(['existing']))
     expect(targets).toHaveLength(1)
     expect(targets[0].label).toBe('new-host')
@@ -436,6 +459,7 @@ describe('sshConfigHostsToTargets', () => {
         proxyJump: 'bastion.example.com'
       }
     ]
+
     const targets = sshConfigHostsToTargets(hosts, new Set())
     expect(targets[0].identityFile).toBe('/home/user/.ssh/id_rsa')
     expect(targets[0].identityAgent).toBe('/home/user/.1password/agent.sock')
@@ -455,6 +479,7 @@ describe('sshConfigHostsToTargets', () => {
       { host: 'dup', hostname: 'first.example.com', user: 'first' },
       { host: 'dup', hostname: 'second.example.com', user: 'second' }
     ]
+
     const targets = sshConfigHostsToTargets(hosts, new Set())
 
     expect(targets).toHaveLength(1)
@@ -478,9 +503,11 @@ describe('sshConfigHostsToSummaries', () => {
       },
       { host: 'prod', hostname: 'prod.example', user: 'ops', port: 2222, proxyJump: 'bastion' }
     ]
+
     const summaries = sshConfigHostsToSummaries(hosts, [
       { label: 'staging', configHost: 'staging' }
     ])
+
     expect(summaries).toEqual([
       {
         alias: 'staging',
@@ -507,6 +534,7 @@ describe('sshConfigHostsToSummaries', () => {
       { host: 'box', hostname: 'second.example' },
       { host: 'other', user: 'me' }
     ]
+
     const summaries = sshConfigHostsToSummaries(hosts, [])
     expect(summaries).toHaveLength(2)
     expect(summaries[0]).toEqual({
@@ -670,6 +698,7 @@ describe('parseSshGOutput', () => {
       'controlpersist 10m',
       'port 22'
     ].join('\n')
+
     const result = parseSshGOutput(output)
     expect(result.controlMaster).toBe('auto')
     expect(result.controlPath).toBe(testHomePath('.ssh', 'cm', '%r@%h:%p'))
@@ -678,6 +707,7 @@ describe('parseSshGOutput', () => {
     const noneResult = parseSshGOutput(
       'hostname example.com\ncontrolmaster no\ncontrolpath none\ncontrolpersist no\nport 22'
     )
+
     expect(noneResult.controlMaster).toBe('no')
     expect(noneResult.controlPath).toBeUndefined()
     expect(noneResult.controlPersist).toBe('no')

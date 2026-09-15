@@ -42,6 +42,7 @@ export function MobileDiffReviewBody({
   if (screenState.kind === 'loading') {
     return <CenteredState text="Loading review..." busy />
   }
+
   if (screenState.kind === 'error' || screenState.kind === 'unavailable') {
     return (
       <CenteredState
@@ -51,15 +52,19 @@ export function MobileDiffReviewBody({
       />
     )
   }
+
   if (filteredCount === 0) {
     return <CenteredState title="No Reviewable Changes" text="Try a different review filter." />
   }
+
   if (diffState.kind === 'loading') {
     return <CenteredState text="Loading diff..." busy muted />
   }
+
   if (diffState.kind !== 'ready') {
     return <DiffUnavailableState diffState={diffState} onRetry={onRetry} />
   }
+
   return (
     <FlatList
       ref={listRef}
@@ -67,10 +72,12 @@ export function MobileDiffReviewBody({
       keyExtractor={(_, index) => `${currentItem?.key ?? 'diff'}:${index}`}
       renderItem={({ item, index }) => {
         const lineNumber = item.newLineNumber ?? -1
+
         const active =
           activeHunkIndex !== null &&
           index >= (diffState.hunks[activeHunkIndex]?.startIndex ?? -1) &&
           index <= (diffState.hunks[activeHunkIndex]?.endIndex ?? -1)
+
         return (
           <MobileDiffReviewLine
             line={item}
@@ -113,6 +120,7 @@ function DiffUnavailableState({
         : diffState.kind === 'deleted'
           ? 'Deleted File'
           : 'Diff Unavailable'
+
   const text =
     diffState.kind === 'binary'
       ? 'This file cannot be rendered as text on mobile.'
@@ -123,6 +131,7 @@ function DiffUnavailableState({
           : diffState.kind === 'error'
             ? diffState.message
             : 'Select a file to review.'
+
   return <CenteredState title={title} text={text} onRetry={onRetry} />
 }
 

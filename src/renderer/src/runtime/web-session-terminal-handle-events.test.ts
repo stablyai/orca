@@ -24,6 +24,7 @@ function snapshot(
 describe('accepted web-session terminal handle events', () => {
   it('notifies only the matching runtime/worktree/pane and releases the listener', async () => {
     const listener = vi.fn()
+
     const unsubscribe = subscribeAcceptedWebSessionTerminalHandle(
       { environmentId: 'env-1', worktreeId: 'wt-1', hostTabId: 'tab-1', leafId: 'leaf-1' },
       listener
@@ -60,6 +61,7 @@ describe('accepted web-session terminal handle events', () => {
 
   it('distinguishes a pending handle from an explicitly removed surface', async () => {
     const listener = vi.fn()
+
     const unsubscribe = subscribeAcceptedWebSessionTerminalHandle(
       { environmentId: 'env-1', worktreeId: 'wt-1', hostTabId: 'tab-1', leafId: 'leaf-1' },
       listener
@@ -93,10 +95,12 @@ describe('accepted web-session terminal handle events', () => {
 
   it('coalesces same-tick snapshots so only the newest accepted state is delivered', async () => {
     const listener = vi.fn()
+
     const unsubscribe = subscribeAcceptedWebSessionTerminalHandle(
       { environmentId: 'env-1', worktreeId: 'wt-1', hostTabId: 'tab-1', leafId: 'leaf-1' },
       listener
     )
+
     const terminal = (handle: string): RuntimeMobileSessionTabsResult['tabs'][number] => ({
       type: 'terminal',
       id: 'tab-1::leaf-1',

@@ -11,7 +11,9 @@ import {
 } from './managed-codex-auth-readiness'
 
 const roots: string[] = []
+
 const testIdToken = 'e30.eyJlbWFpbCI6InVzZXJAZXhhbXBsZS5jb20ifQ.sig'
+
 const testChatGptAuth = {
   auth_mode: 'chatgpt',
   tokens: {
@@ -25,6 +27,7 @@ const testChatGptAuth = {
 
 afterEach(() => {
   vi.useRealTimers()
+
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -216,6 +219,7 @@ describe('waitForManagedCodexAuthReady', () => {
     if (process.platform === 'win32' || process.getuid?.() === 0) {
       return
     }
+
     writeAuth(fixture.home, testChatGptAuth)
     chmodSync(join(fixture.home, 'auth.json'), 0o000)
     expect(readStoredCodexCredentialState(join(fixture.home, 'auth.json'))).toBe('unreadable')
@@ -247,11 +251,13 @@ function createFixture(): {
   roots.push(root)
   const home = join(root, 'account', 'home')
   mkdirSync(home, { recursive: true })
+
   const account = {
     id: 'account-1',
     managedHomePath: home,
     managedHomeRuntime: 'host'
   } as CodexManagedAccount
+
   return {
     root,
     home,

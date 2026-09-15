@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const USER_DATA = '/user-data'
+
 const META_PATH = `${USER_DATA}/browser-session-meta.json`
+
 const RAW_ELECTRON_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Orca/1.4.198 Chrome/150.0.7871.224 Electron/43.4.1 Safari/537.36'
+
 const CLEAN_USER_AGENT =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.7871.224 Safari/537.36'
 
@@ -50,6 +53,7 @@ function installModuleMocks(
     clearStorageData: vi.fn().mockResolvedValue(undefined),
     clearCache: vi.fn().mockResolvedValue(undefined)
   }))
+
   const cleanElectronUserAgentMock = vi.fn(() => CLEAN_USER_AGENT)
   const setupGoogleAuthUserAgentOverrideMock = vi.fn()
   const browserManagerHandleGuestWillDownloadMock = vi.fn()
@@ -69,11 +73,14 @@ function installModuleMocks(
     copyFileSync: vi.fn((src: string, dst: string) => {
       const sourceKey = fsKey(src)
       const destinationKey = fsKey(dst)
+
       if (copyFailures.has(sourceKey)) {
         throw new Error(`copy fail for ${src}`)
       }
+
       fsState.present.add(destinationKey)
       const value = fsState.files.get(sourceKey)
+
       if (value !== undefined) {
         fsState.files.set(destinationKey, value)
       }
@@ -82,18 +89,22 @@ function installModuleMocks(
     mkdirSync: vi.fn(),
     readFileSync: vi.fn((p: string) => {
       const v = fsState.files.get(fsKey(p))
+
       if (v === undefined) {
         throw new Error('ENOENT')
       }
+
       return v
     }),
     renameSync: vi.fn((from: string, to: string) => {
       const sourceKey = fsKey(from)
       const destinationKey = fsKey(to)
       const v = fsState.files.get(sourceKey)
+
       if (v === undefined) {
         throw new Error('ENOENT')
       }
+
       fsState.files.set(destinationKey, v)
       fsState.present.add(destinationKey)
       fsState.files.delete(sourceKey)
@@ -140,13 +151,16 @@ function installModuleMocks(
     renameFileWithWindowsRetry: vi.fn((source: string, target: string) => {
       const sourceKey = fsKey(source)
       const targetKey = fsKey(target)
+
       if (!fsState.present.has(sourceKey)) {
         throw new Error('ENOENT')
       }
+
       const value = fsState.files.get(sourceKey)
       fsState.present.delete(sourceKey)
       fsState.files.delete(sourceKey)
       fsState.present.add(targetKey)
+
       if (value !== undefined) {
         fsState.files.set(targetKey, value)
       }
@@ -226,6 +240,7 @@ describe('BrowserSessionRegistry persistence', () => {
       orcaProfileId: 'local-work',
       profileDirectory: '/user-data/profiles/local-work'
     })
+
     const profile = await browserSessionRegistry.createProfile('isolated', 'Work Browser', {
       userAgentMode: 'native'
     })
@@ -243,11 +258,13 @@ describe('BrowserSessionRegistry persistence', () => {
 
   it('keeps UA cleaning as the fallback for profiles without an override', async () => {
     const fsState = createFsState()
+
     const {
       sessionFromPartitionMock,
       cleanElectronUserAgentMock,
       setupGoogleAuthUserAgentOverrideMock
     } = installModuleMocks(fsState)
+
     const { browserSessionRegistry } = await import('./browser-session-registry')
 
     await browserSessionRegistry.createProfile('isolated', 'Default identity')
@@ -260,11 +277,13 @@ describe('BrowserSessionRegistry persistence', () => {
 
   it('leaves UA and client hints untouched for native-mode profiles', async () => {
     const fsState = createFsState()
+
     const {
       sessionFromPartitionMock,
       cleanElectronUserAgentMock,
       setupGoogleAuthUserAgentOverrideMock
     } = installModuleMocks(fsState)
+
     const { browserSessionRegistry } = await import('./browser-session-registry')
 
     await browserSessionRegistry.createProfile('isolated', 'Google', { userAgentMode: 'native' })
@@ -322,6 +341,7 @@ describe('BrowserSessionRegistry persistence', () => {
       },
       profiles: []
     })
+
     for (const suffix of ['', '-wal', '-shm']) {
       fsState.files.set(`/staged/other${suffix}`, 'db')
       fsState.present.add(`/staged/other${suffix}`)
@@ -338,6 +358,7 @@ describe('BrowserSessionRegistry persistence', () => {
     expect(written.pendingCookieImports).toEqual({ 'persist:orca-browser': '/staged/default' })
     // Why: the default partition still has a staged replay, so the legacy pointer must survive.
     expect(written.pendingCookieDbPath).toBe('/staged/default')
+
     for (const suffix of ['', '-wal', '-shm']) {
       expect(fsState.present.has(`/staged/other${suffix}`)).toBe(false)
       expect(fsState.present.has(`/staged/default${suffix}`)).toBe(true)
@@ -398,8 +419,10 @@ describe('BrowserSessionRegistry persistence', () => {
   // Neither may ever be applied again — the engine-derived UA is the only one.
   it('ignores legacy persisted UAs, valid or broken, and applies the engine UA', async () => {
     const importedPartition = 'persist:orca-browser-session-11111111-1111-4111-8111-111111111111'
+
     const brokenUa =
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/1.158.1 Safari/537.36'
+
     const validUa = 'Mozilla/5.0 Chrome/120.0.0.0 Safari/537.36'
     const fsState = createFsState()
     seedMeta(fsState, {
@@ -427,6 +450,7 @@ describe('BrowserSessionRegistry persistence', () => {
       cleanElectronUserAgentMock,
       setupGoogleAuthUserAgentOverrideMock
     } = installModuleMocks(fsState)
+
     const { browserSessionRegistry } = await import('./browser-session-registry')
 
     browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
@@ -434,6 +458,7 @@ describe('BrowserSessionRegistry persistence', () => {
     const appliedUas = sessionFromPartitionMock.mock.results.flatMap((r) =>
       r.value.setUserAgent.mock.calls.map((c: unknown[]) => c[0])
     )
+
     expect(appliedUas).not.toContain(brokenUa)
     expect(appliedUas).not.toContain(validUa)
     // Why: every non-native profile falls to Orca's own cleaned engine UA.
@@ -476,6 +501,7 @@ describe('BrowserSessionRegistry persistence', () => {
     const importedSessions = sessionFromPartitionMock.mock.results
       .filter((_, idx) => sessionFromPartitionMock.mock.calls[idx]?.[0] === importedPartition)
       .map((r) => r.value)
+
     expect(importedSessions.length).toBeGreaterThan(0)
     // Why: native mode means the engine UA stands untouched — no setUserAgent at all.
     expect(importedSessions.every((s) => s.setUserAgent.mock.calls.length === 0)).toBe(true)
@@ -510,6 +536,7 @@ describe('BrowserSessionRegistry persistence', () => {
 
     const { sessionFromPartitionMock, setupGoogleAuthUserAgentOverrideMock } =
       installModuleMocks(fsState)
+
     const { browserSessionRegistry } = await import('./browser-session-registry')
 
     browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
@@ -517,6 +544,7 @@ describe('BrowserSessionRegistry persistence', () => {
     const importedSessions = sessionFromPartitionMock.mock.results
       .filter((_, index) => sessionFromPartitionMock.mock.calls[index]?.[0] === importedPartition)
       .map((result) => result.value)
+
     expect(importedSessions.length).toBeGreaterThan(0)
     expect(importedSessions.every((sess) => sess.setUserAgent.mock.calls.length === 0)).toBe(true)
     expect(
@@ -548,6 +576,7 @@ describe('BrowserSessionRegistry persistence', () => {
       browserManagerHandleGuestWillDownloadMock,
       browserManagerNotifyPermissionDeniedMock
     } = installModuleMocks(fsState)
+
     const { browserSessionRegistry } = await import('./browser-session-registry')
 
     browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
@@ -555,6 +584,7 @@ describe('BrowserSessionRegistry persistence', () => {
     const defaultSessions = sessionFromPartitionMock.mock.results
       .filter((_, idx) => sessionFromPartitionMock.mock.calls[idx]?.[0] === 'persist:orca-browser')
       .map((r) => r.value)
+
     expect(defaultSessions.length).toBeGreaterThan(0)
     const defaultSession = defaultSessions[0]
     const requestHandler = defaultSession.setPermissionRequestHandler.mock.calls[0][0]
@@ -694,6 +724,7 @@ describe('BrowserSessionRegistry persistence', () => {
       },
       callback: (deviceId?: string) => void
     ) => void
+
     const hidCallback = vi.fn()
     selectHidHandler(
       { preventDefault: vi.fn() },
@@ -715,6 +746,7 @@ describe('BrowserSessionRegistry persistence', () => {
       details: { accounts: { credentialId: string }[] },
       callback: (credentialId?: string | null) => void
     ) => void
+
     const webAuthnCallback = vi.fn()
     selectWebAuthnHandler(
       { preventDefault: vi.fn() },
@@ -730,6 +762,7 @@ describe('BrowserSessionRegistry persistence', () => {
       item: { getFilename: () => string },
       webContents: { id: number }
     ) => void
+
     expect(willDownloadHandler).toBeTypeOf('function')
     const item = { getFilename: vi.fn(() => 'report.pdf') }
     willDownloadHandler({}, item, { id: 402 })
@@ -759,9 +792,11 @@ describe('BrowserSessionRegistry persistence', () => {
     const defaultSessions = sessionFromPartitionMock.mock.results
       .filter((_, idx) => sessionFromPartitionMock.mock.calls[idx]?.[0] === 'persist:orca-browser')
       .map((r) => r.value)
+
     const policySessions = defaultSessions.filter(
       (s) => s.setPermissionRequestHandler.mock.calls.length > 0
     )
+
     expect(policySessions).toHaveLength(1)
     expect(
       policySessions[0].on.mock.calls.filter(
@@ -796,6 +831,7 @@ describe('BrowserSessionRegistry persistence', () => {
       browserManagerNotifyPermissionDeniedMock,
       requestSystemMediaAccessMock
     } = installModuleMocks(fsState)
+
     requestSystemMediaAccessMock.mockResolvedValue(false)
     const { browserSessionRegistry } = await import('./browser-session-registry')
 
@@ -804,6 +840,7 @@ describe('BrowserSessionRegistry persistence', () => {
     const defaultSession = sessionFromPartitionMock.mock.results.find(
       (_, idx) => sessionFromPartitionMock.mock.calls[idx]?.[0] === 'persist:orca-browser'
     )?.value
+
     const requestHandler = defaultSession.setPermissionRequestHandler.mock.calls[0][0]
     const guestWc = { id: 403, getURL: vi.fn(() => 'https://example.com/camera') }
     const callback = vi.fn()

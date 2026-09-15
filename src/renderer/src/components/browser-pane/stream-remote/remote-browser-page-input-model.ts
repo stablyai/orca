@@ -13,9 +13,11 @@ export function decodeRemoteBrowserFrameUrl(url: string): Promise<void> {
   const image = new window.Image()
   image.decoding = 'async'
   image.src = url
+
   if (typeof image.decode === 'function') {
     return image.decode()
   }
+
   return new Promise((resolve, reject) => {
     image.onload = () => resolve()
     image.onerror = () => reject(new Error('Remote browser frame failed to decode.'))
@@ -55,6 +57,7 @@ export type PendingRemoteBrowserWheel = {
 }
 
 export const WHEEL_DELTA_LINE = 1
+
 export const WHEEL_DELTA_PAGE = 2
 
 // The pane-owned effects the stream lifecycle calls back into: frame paint, viewport measurement,
@@ -81,12 +84,15 @@ export function getRemoteBrowserMouseButton(button: number): 'left' | 'middle' |
   if (button === 0) {
     return 'left'
   }
+
   if (button === 1) {
     return 'middle'
   }
+
   if (button === 2) {
     return 'right'
   }
+
   return null
 }
 
@@ -112,16 +118,20 @@ export function readRemoteContextMenuResult(
   if (!result || typeof result !== 'object') {
     return null
   }
+
   const raw = (result as { result?: unknown }).result
+
   if (typeof raw !== 'string') {
     return null
   }
+
   try {
     const parsed = JSON.parse(raw) as {
       linkUrl?: unknown
       pageUrl?: unknown
       selectionText?: unknown
     }
+
     return {
       linkUrl: typeof parsed.linkUrl === 'string' && parsed.linkUrl ? parsed.linkUrl : null,
       pageUrl:
@@ -137,14 +147,18 @@ export function readRemoteCssViewportSize(result: unknown): RemoteBrowserViewpor
   if (!result || typeof result !== 'object') {
     return null
   }
+
   const raw = (result as { result?: unknown }).result
+
   if (typeof raw !== 'string') {
     return null
   }
+
   try {
     const parsed = JSON.parse(raw) as { width?: unknown; height?: unknown }
     const width = getPositiveFiniteNumber(parsed.width)
     const height = getPositiveFiniteNumber(parsed.height)
+
     return width && height ? { width, height } : null
   } catch {
     return null
@@ -166,15 +180,18 @@ export function resolveRemoteBrowserCssViewport(input: {
   const deviceHeight = getPositiveFiniteNumber(input.frameMetadata?.deviceHeight)
   const requestedWidth = getPositiveFiniteNumber(input.requestedViewportSize?.width)
   const requestedHeight = getPositiveFiniteNumber(input.requestedViewportSize?.height)
+
   const framesMatchRequest =
     (deviceWidth === null || requestedWidth === null || deviceWidth === requestedWidth) &&
     (deviceHeight === null || requestedHeight === null || deviceHeight === requestedHeight)
+
   if (!framesMatchRequest) {
     return {
       width: deviceWidth ?? input.naturalSize.width,
       height: deviceHeight ?? input.naturalSize.height
     }
   }
+
   return {
     width:
       getPositiveFiniteNumber(input.cssViewportSize?.width) ??
@@ -197,6 +214,8 @@ export function getRemoteBrowserDeviceScaleFactor(): number {
   if (typeof window === 'undefined') {
     return 1
   }
+
   const scale = Number.isFinite(window.devicePixelRatio) ? window.devicePixelRatio : 1
+
   return Math.min(2, Math.max(1, Number(scale.toFixed(2))))
 }

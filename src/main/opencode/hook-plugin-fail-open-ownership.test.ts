@@ -19,9 +19,13 @@ vi.mock('electron', () => ({
 import { _internals } from './hook-service'
 
 type SessionFixture = { id: string; parentID?: string }
+
 type PluginEvent = { type: string; properties?: Record<string, unknown> }
+
 type PluginEventHandler = (input: { event: PluginEvent }) => Promise<void>
+
 type PluginHooks = { event: PluginEventHandler; dispose?: () => Promise<void> }
+
 type RecordedPost = {
   hook_event_name: string
   sessionID?: string
@@ -44,9 +48,11 @@ describe('OpenCode plugin fail-open ownership', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-opencode-fail-open-plugin-'))
     posts = []
     savedEnv = {}
+
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
+
     process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
     process.env.ORCA_AGENT_HOOK_PORT = '45678'
     process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
@@ -54,6 +60,7 @@ describe('OpenCode plugin fail-open ownership', () => {
     savedFetch = globalThis.fetch
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       posts.push(readPayload(init))
+
       return new Response(null, { status: 204 })
     }) as typeof globalThis.fetch
   })
@@ -61,6 +68,7 @@ describe('OpenCode plugin fail-open ownership', () => {
   afterEach(() => {
     vi.useRealTimers()
     globalThis.fetch = savedFetch
+
     for (const key of ENV_KEYS) {
       if (savedEnv[key] === undefined) {
         delete process.env[key]
@@ -68,6 +76,7 @@ describe('OpenCode plugin fail-open ownership', () => {
         process.env[key] = savedEnv[key]
       }
     }
+
     rmSync(tempDir, { recursive: true, force: true })
   })
 
@@ -90,9 +99,11 @@ describe('OpenCode plugin fail-open ownership', () => {
   async function loadHooksWithContext(context: unknown): Promise<PluginHooks> {
     const pluginPath = join(tempDir, 'orca-opencode-status.mjs')
     writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
+
     const module = (await import(pathToFileURL(pluginPath).href)) as {
       OrcaOpenCodeStatusPlugin: (ctx: unknown) => Promise<PluginHooks>
     }
+
     return module.OrcaOpenCodeStatusPlugin(context)
   }
 
@@ -111,6 +122,7 @@ describe('OpenCode plugin fail-open ownership', () => {
     if (!signal) {
       return Promise.reject(new Error('missing abort signal'))
     }
+
     return new Promise((_resolve, reject) => {
       signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
     })
@@ -157,9 +169,11 @@ describe('OpenCode plugin fail-open ownership', () => {
     for (let index = 0; index < 129; index += 1) {
       await hooks.event({ event: status('busy', `unknown-${index}`) })
     }
+
     for (let index = 1; index < 129; index += 1) {
       await hooks.event({ event: status('idle', `unknown-${index}`) })
     }
+
     expect(names().at(-1)).toBe('SessionBusy')
     expect(posts.at(-1)?.sessionID).toBe('unknown-0')
 
@@ -170,27 +184,37 @@ describe('OpenCode plugin fail-open ownership', () => {
   it('drains an older preview before unknown Idle retires its exact known root', async () => {
     const sessions = Array.from({ length: 129 }, (_, index) => ({ id: `root-${index}` }))
     let lookupFails = false
+
     const list = vi.fn(async () => {
       if (lookupFails) {
         throw new Error('lookup unavailable')
       }
+
       return { data: sessions }
     })
+
     let releasePart: (() => void) | undefined
+
     const delayedPart = new Promise<void>((resolve) => {
       releasePart = resolve
     })
+
     let notifyPartStarted: (() => void) | undefined
+
     const partStarted = new Promise<void>((resolve) => {
       notifyPartStarted = resolve
     })
+
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const payload = readPayload(init)
+
       if (payload.hook_event_name === 'MessagePart') {
         notifyPartStarted?.()
         await delayedPart
       }
+
       posts.push(payload)
+
       return new Response(null, { status: 204 })
     }) as typeof globalThis.fetch
     const hooks = await loadHooks(list)
@@ -205,6 +229,7 @@ describe('OpenCode plugin fail-open ownership', () => {
         }
       }
     })
+
     const preview = hooks.event({
       event: {
         type: 'message.part.updated',
@@ -218,6 +243,7 @@ describe('OpenCode plugin fail-open ownership', () => {
         }
       }
     })
+
     await partStarted
 
     // Why: evict only root-0's ancestry cache entry while its preview is in flight.
@@ -232,6 +258,7 @@ describe('OpenCode plugin fail-open ownership', () => {
         }
       })
     }
+
     lookupFails = true
     const callsBeforeIdle = list.mock.calls.length
     const idle = hooks.event({ event: status('idle', 'root-0') })
@@ -251,21 +278,28 @@ describe('OpenCode plugin fail-open ownership', () => {
   it('drops a delayed text handler after its Waiting blocker resolves to Idle', async () => {
     let lookupBlocks = false
     let releaseLookup: (() => void) | undefined
+
     const delayedLookup = new Promise<void>((resolve) => {
       releaseLookup = resolve
     })
+
     let notifyLookupStarted: (() => void) | undefined
+
     const lookupStarted = new Promise<void>((resolve) => {
       notifyLookupStarted = resolve
     })
+
     const list = vi.fn(async () => {
       if (!lookupBlocks) {
         throw new Error('lookup unavailable')
       }
+
       notifyLookupStarted?.()
       await delayedLookup
+
       return { data: [{ id: 'root' }] }
     })
+
     const hooks = await loadHooks(list)
     await hooks.event({
       event: {
@@ -283,6 +317,7 @@ describe('OpenCode plugin fail-open ownership', () => {
       }
     })
     lookupBlocks = true
+
     const preview = hooks.event({
       event: {
         type: 'message.part.updated',
@@ -296,6 +331,7 @@ describe('OpenCode plugin fail-open ownership', () => {
         }
       }
     })
+
     await lookupStarted
 
     await hooks.event({
@@ -391,12 +427,15 @@ describe('OpenCode plugin fail-open ownership', () => {
 
   it('promotes provisional Busy when later lookup confirms the root', async () => {
     let lookupFails = true
+
     const list = vi.fn(async () => {
       if (lookupFails) {
         throw new Error('lookup unavailable')
       }
+
       return { data: [{ id: 'root' }] }
     })
+
     const hooks = await loadHooksWithSession({ list })
 
     await hooks.event({ event: status('busy') })
@@ -420,12 +459,15 @@ describe('OpenCode plugin fail-open ownership', () => {
 
   it('keeps a confirmed child provisionally Busy until its matching Idle', async () => {
     let lookupFails = true
+
     const list = vi.fn(async () => {
       if (lookupFails) {
         throw new Error('lookup unavailable')
       }
+
       return { data: [{ id: 'root' }, { id: 'child', parentID: 'root' }] }
     })
+
     const hooks = await loadHooksWithSession({ list })
 
     await hooks.event({ event: status('busy', 'child') })

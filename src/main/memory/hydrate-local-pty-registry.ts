@@ -32,23 +32,28 @@ type LocalRepoCatalog = {
 
 // Why: matches existing local Git/read startup budgets while allowing for Defender-heavy repos.
 export const LOCAL_PTY_REGISTRY_BOOT_HYDRATION_DEADLINE_MS = 5_000
+
 export const LOCAL_PTY_REGISTRY_GIT_ENUMERATION_CONCURRENCY = 4
 
 let hasHydrated = false
+
 let hydrationInFlight: Promise<void> | null = null
 
 export function hydrateLocalPtyRegistryAtBoot(store: HydrationStore): Promise<void> {
   if (hasHydrated) {
     return Promise.resolve()
   }
+
   if (hydrationInFlight) {
     return hydrationInFlight
   }
 
   const controller = new AbortController()
+
   const deadline = setTimeout(() => {
     controller.abort(new Error('Boot-time pty-registry hydration deadline expired'))
   }, LOCAL_PTY_REGISTRY_BOOT_HYDRATION_DEADLINE_MS)
+
   let attempt!: Promise<void>
   attempt = waitForPromiseWithSignal(
     hydrateLocalPtyRegistry(store, controller.signal),
@@ -67,11 +72,13 @@ export function hydrateLocalPtyRegistryAtBoot(store: HydrationStore): Promise<vo
     })
     .finally(() => {
       clearTimeout(deadline)
+
       if (hydrationInFlight === attempt) {
         hydrationInFlight = null
       }
     })
   hydrationInFlight = attempt
+
   return attempt
 }
 
@@ -81,6 +88,7 @@ async function hydrateLocalPtyRegistry(
 ): Promise<boolean> {
   throwIfSignalAborted(signal)
   const provider = getDaemonProvider()
+
   if (!provider) {
     return false
   }
@@ -96,24 +104,32 @@ async function hydrateLocalPtyRegistry(
 
   for (;;) {
     const referencedRepos = new Map<string, Repo>()
+
     for (const info of inventory.sessions) {
       if (alreadyRegistered.has(info.sessionId)) {
         continue
       }
+
       const parsed = splitWorktreeId(parsePtySessionId(info.sessionId).worktreeId ?? '')
+
       if (!parsed || resolvedRepoIds.has(parsed.repoId)) {
         continue
       }
+
       const repo = reposById.get(parsed.repoId)
+
       if (!repo || isFolderRepo(repo)) {
         resolvedRepoIds.add(parsed.repoId)
         continue
       }
+
       referencedRepos.set(repo.id, repo)
     }
+
     if (referencedRepos.size === 0) {
       break
     }
+
     for (const repo of referencedRepos.values()) {
       resolvedRepoIds.add(repo.id)
     }
@@ -123,6 +139,7 @@ async function hydrateLocalPtyRegistry(
       LOCAL_PTY_REGISTRY_GIT_ENUMERATION_CONCURRENCY,
       async (repo) => {
         throwIfSignalAborted(signal)
+
         const worktrees = await waitForPromiseWithSignal(
           listLocalRepoWorktreesStrict(repo, {
             ...getLocalProjectWorktreeGitOptions(store, repo),
@@ -130,10 +147,13 @@ async function hydrateLocalPtyRegistry(
           }),
           signal
         )
+
         throwIfSignalAborted(signal)
+
         return { repo, worktrees }
       }
     )
+
     throwIfSignalAborted(signal)
 
     for (const result of worktreeResults) {
@@ -145,10 +165,13 @@ async function hydrateLocalPtyRegistry(
         )
         continue
       }
+
       const { repo, worktrees } = result.value
+
       for (const worktree of worktrees) {
         const worktreeId = `${repo.id}::${worktree.path}`
         const key = worktreeIdComparisonKey(worktreeId)
+
         if (key) {
           const existing = liveGitWorktreeIdsByKey.get(key)
           liveGitWorktreeIdsByKey.set(
@@ -165,15 +188,20 @@ async function hydrateLocalPtyRegistry(
   }
 
   throwIfSignalAborted(signal)
+
   for (const info of inventory.sessions) {
     throwIfSignalAborted(signal)
+
     if (alreadyRegistered.has(info.sessionId)) {
       continue
     }
+
     const { worktreeId } = parsePtySessionId(info.sessionId)
+
     if (!worktreeId || !isVerifiedLocalWorktree(worktreeId)) {
       continue
     }
+
     registerPty({
       ptyId: info.sessionId,
       worktreeId,
@@ -183,13 +211,16 @@ async function hydrateLocalPtyRegistry(
         typeof info.pid === 'number' && Number.isFinite(info.pid) && info.pid > 0 ? info.pid : null
     })
   }
+
   return complete
 
   function isVerifiedLocalWorktree(worktreeId: string): boolean {
     if (verifiedFolderWorktreeIds.has(worktreeId)) {
       return true
     }
+
     const key = worktreeIdComparisonKey(worktreeId)
+
     return key !== null && typeof liveGitWorktreeIdsByKey.get(key) === 'string'
   }
 }
@@ -198,20 +229,25 @@ function getLocalRepoCatalog(repos: Repo[]): LocalRepoCatalog {
   const byId = new Map<string, Repo>()
   const ownerCountById = new Map<string, number>()
   const ambiguousIds = new Set<string>()
+
   for (const repo of repos) {
     ownerCountById.set(repo.id, (ownerCountById.get(repo.id) ?? 0) + 1)
+
     if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
       continue
     }
+
     if (byId.has(repo.id)) {
       ambiguousIds.add(repo.id)
     } else {
       byId.set(repo.id, repo)
     }
   }
+
   for (const repoId of ambiguousIds) {
     byId.delete(repoId)
   }
+
   return { byId, ownerCountById }
 }
 
@@ -222,22 +258,29 @@ function getVerifiedFolderWorktreeIds(
   const verified = new Set<string>()
   const folders = store.getFolderWorkspaces()
   const counts = new Map<string, number>()
+
   for (const folder of folders) {
     counts.set(folder.id, (counts.get(folder.id) ?? 0) + 1)
   }
+
   for (const folder of folders) {
     const worktree = folderWorkspaceToWorktree(folder)
+
     if (counts.get(folder.id) === 1 && worktree.hostId === LOCAL_EXECUTION_HOST_ID) {
       verified.add(worktree.id)
     }
   }
+
   const metadata = readAllWorktreeMetaForHost(store, LOCAL_EXECUTION_HOST_ID)
+
   for (const [worktreeId, meta] of Object.entries(metadata)) {
     const parsed = splitWorktreeId(worktreeId)
     const repo = parsed ? repoCatalog.byId.get(parsed.repoId) : undefined
+
     const hasLocalAuthority =
       meta.hostId === LOCAL_EXECUTION_HOST_ID ||
       (meta.hostId === undefined && repoCatalog.ownerCountById.get(parsed?.repoId ?? '') === 1)
+
     if (
       repo &&
       isFolderRepo(repo) &&
@@ -247,6 +290,7 @@ function getVerifiedFolderWorktreeIds(
       verified.add(worktreeId)
     }
   }
+
   return verified
 }
 
@@ -258,15 +302,19 @@ async function collectSessionInfos(
     'getAllAdapters' in provider && typeof provider.getAllAdapters === 'function'
       ? provider.getAllAdapters()
       : [provider]
+
   const results = await Promise.all(
     adapters.map(async (adapter) => {
       try {
         throwIfSignalAborted(signal)
+
         const sessions = await waitForPromiseWithSignal<SessionInfo[]>(
           adapter.listSessions(),
           signal
         )
+
         throwIfSignalAborted(signal)
+
         return { complete: true, sessions }
       } catch (error) {
         throwIfSignalAborted(signal)
@@ -274,16 +322,20 @@ async function collectSessionInfos(
           '[memory] listSessions failed for one adapter during hydration:',
           error instanceof Error ? error.message : String(error)
         )
+
         return { complete: false, sessions: [] }
       }
     })
   )
+
   const sessions: SessionInfo[] = []
+
   for (const result of results) {
     for (const session of result.sessions) {
       sessions.push(session)
     }
   }
+
   return {
     complete: results.length > 0 && results.every((result) => result.complete),
     sessions

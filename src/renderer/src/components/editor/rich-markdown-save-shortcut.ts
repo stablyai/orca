@@ -13,10 +13,12 @@ export function handleRichMarkdownSaveShortcut(
   if (!editorShortcutMatches('editor.save', event)) {
     return false
   }
+
   event.preventDefault()
   // Why: flush pending debounced serialization so the save captures the very
   // latest editor content, not a stale snapshot.
   ctx.flushPendingSerialization()
+
   // Why: the flush already reconciled + updated refs, so this re-serialize is
   // idempotent (edited === baseCanonical → returns the reconciled bytes). On a
   // torn-down editor it falls back to the last committed bytes without patching.
@@ -25,7 +27,9 @@ export function handleRichMarkdownSaveShortcut(
     ctx,
     ctx.reconcileRoundTripRef.current
   )
+
   ctx.onContentChangeRef.current(markdown)
   ctx.onSaveRef.current(markdown)
+
   return true
 }

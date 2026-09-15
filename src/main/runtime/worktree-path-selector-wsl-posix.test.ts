@@ -11,6 +11,7 @@ const electronMocks = vi.hoisted(() => {
     removeListener: vi.fn(() => ipcMain),
     emit: vi.fn(() => true)
   }
+
   return {
     BrowserWindow: { fromId: vi.fn((): unknown => null) },
     webContents: { fromId: vi.fn((): unknown => null) },
@@ -18,9 +19,11 @@ const electronMocks = vi.hoisted(() => {
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
   }
 })
+
 vi.mock('electron', () => electronMocks)
 
 const getSshGitProviderMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
   getSshGitProviderGeneration: vi.fn(() => 0),
@@ -29,6 +32,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../git/worktree', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWorktreesStrict: listWorktreesStrictMock
@@ -39,8 +43,11 @@ import { parseWslUncPath } from '../../shared/wsl-paths'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const UBUNTU = 'Ubuntu-24.04'
+
 const DEBIAN = 'Debian'
+
 const LINUX_REPO_PATH = '/home/neil/repo'
+
 const LINUX_WORKTREE_PATH = '/home/neil/qa-repo'
 
 /** The cwd the WSL launcher hands the CLI: the caller's directory, already in UNC form. */
@@ -67,6 +74,7 @@ function makeStore(registrations: readonly Registration[]) {
     badgeColor: 'blue',
     addedAt: 1
   }))
+
   const store = {
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
     getRepos: () => repos,
@@ -88,6 +96,7 @@ function makeStore(registrations: readonly Registration[]) {
     }),
     getProjects: () => []
   }
+
   return store
 }
 
@@ -95,9 +104,11 @@ function makeStore(registrations: readonly Registration[]) {
 function scanReports(registrations: readonly Registration[]): void {
   listWorktreesStrictMock.mockImplementation(async (repoPath: string) => {
     const entry = registrations.find((candidate) => candidate.repoPath === repoPath)
+
     if (!entry) {
       return []
     }
+
     return [
       { path: entry.repoPath, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
       {
@@ -113,6 +124,7 @@ function scanReports(registrations: readonly Registration[]): void {
 
 function makeRuntime(registrations: readonly Registration[]): OrcaRuntimeService {
   scanReports(registrations)
+
   return new OrcaRuntimeService(makeStore(registrations) as never)
 }
 
@@ -127,13 +139,17 @@ async function selectorTheCliWouldSend(
   typedPath: string
 ): Promise<string> {
   const callerDistro = parseWslUncPath(callerCwd)?.distro
+
   if (!callerDistro) {
     return `path:${typedPath}`
   }
+
   const listed = await runtime.listManagedWorktrees()
+
   const match = listed.worktrees.find((worktree) =>
     isWslUncPathForCallerLinuxPath(worktree.path, typedPath, callerDistro)
   )
+
   return match ? `path:${match.path}` : `path:${typedPath}`
 }
 
@@ -184,6 +200,7 @@ describe('a WSL caller typing the Linux path of a UNC-stored worktree (#16628)',
 
   it('refuses a Linux path another distro spells, instead of resolving that distro', async () => {
     const runtime = makeRuntime([registration(UBUNTU, (linuxPath) => uncPath(UBUNTU, linuxPath))])
+
     const selector = await selectorTheCliWouldSend(
       runtime,
       uncPath(DEBIAN, '/home/neil'),

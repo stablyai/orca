@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspacePort, WorkspacePortScanResult } from '../../shared/workspace-ports'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
+
 const { handleMock, removeHandlerMock, scanWorkspacePortsMock, processKillMock } = vi.hoisted(
   () => ({
     handleMock: vi.fn(),
@@ -119,6 +120,7 @@ describe('registerWorkspacePortHandlers', () => {
   it('deduplicates concurrent scans for the same store-derived probe set', async () => {
     const store = makeStore()
     let resolveScan: (result: WorkspacePortScanResult) => void = () => {}
+
     scanWorkspacePortsMock.mockReturnValue(
       new Promise<WorkspacePortScanResult>((resolve) => {
         resolveScan = resolve
@@ -245,7 +247,9 @@ describe('registerWorkspacePortHandlers', () => {
 
   it('notifies renderers when a local worktree advertised URL changes', () => {
     const store = makeStore()
+
     type AdvertisedUrlListener = (event: { worktreeId: string; port: number }) => void
+
     let advertisedUrlListener: AdvertisedUrlListener | undefined
     const send = vi.fn()
 
@@ -253,6 +257,7 @@ describe('registerWorkspacePortHandlers', () => {
       advertisedUrlEvents: {
         onDidChange: (listener) => {
           advertisedUrlListener = listener
+
           return () => {}
         }
       },
@@ -284,6 +289,7 @@ describe('registerWorkspacePortHandlers', () => {
     const store = makeStore()
     const firstUnsubscribe = vi.fn()
     const secondUnsubscribe = vi.fn()
+
     const onDidChange = vi
       .fn()
       .mockReturnValueOnce(firstUnsubscribe)

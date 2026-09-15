@@ -8,16 +8,20 @@ function normalizeConnectedClients(
   currentClientId: string
 ): RemoteWorkspaceConnectedClient[] {
   const clients = (raw as { clients?: unknown } | null)?.clients
+
   if (!Array.isArray(clients)) {
     return []
   }
+
   return clients
     .map((entry): RemoteWorkspaceConnectedClient | null => {
       const item = entry as Partial<RemoteWorkspaceConnectedClient> | null
       const clientId = typeof item?.clientId === 'string' ? item.clientId.trim() : ''
+
       if (!clientId || clientId.length > 200) {
         return null
       }
+
       return {
         clientId,
         name:
@@ -38,6 +42,7 @@ export async function listRemoteWorkspaceConnectedClients(args?: {
   targetIds?: string[]
 }): Promise<{ targetId: string; clients: RemoteWorkspaceConnectedClient[] }[]> {
   const requestedTargetIds = Array.isArray(args?.targetIds) ? new Set(args.targetIds) : null
+
   const targets =
     getSshConnectionStore()
       ?.listTargets()
@@ -46,19 +51,25 @@ export async function listRemoteWorkspaceConnectedClients(args?: {
           getActiveMultiplexer(target.id) &&
           (!requestedTargetIds || requestedTargetIds.has(target.id))
       ) ?? []
+
   const results: { targetId: string; clients: RemoteWorkspaceConnectedClient[] }[] = []
+
   for (const target of targets) {
     const mux = getActiveMultiplexer(target.id)
+
     if (!mux) {
       continue
     }
+
     const namespace = getRemoteWorkspaceNamespace(target)
+
     try {
       const raw = await mux.request('workspace.presence', {
         namespace,
         clientId: CLIENT_ID,
         clientName: CLIENT_NAME
       })
+
       results.push({
         targetId: target.id,
         clients: normalizeConnectedClients(raw, CLIENT_ID)
@@ -67,5 +78,6 @@ export async function listRemoteWorkspaceConnectedClients(args?: {
       results.push({ targetId: target.id, clients: [] })
     }
   }
+
   return results
 }

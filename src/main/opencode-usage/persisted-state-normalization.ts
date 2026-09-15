@@ -25,6 +25,7 @@ export function normalizePersistedState(
   if (state.schemaVersion !== SCHEMA_VERSION) {
     return getDefaultState()
   }
+
   return {
     ...state,
     processedDatabases: (state.processedDatabases ?? []).map((database) => ({

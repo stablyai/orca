@@ -38,22 +38,29 @@ function buildEvent(recorded: RecordedEvent): Event {
       bubbles: true,
       cancelable: true
     })
+
     Object.defineProperty(keyboard, 'keyCode', { value: recorded.keyCode })
+
     return keyboard
   }
+
   if (recorded.type === 'input' || recorded.type === 'beforeinput') {
     const input = new InputEvent(recorded.type, {
       isComposing: recorded.isComposing,
       bubbles: true
     })
+
     // happy-dom drops these from InputEventInit; Chromium supplies them.
     Object.defineProperty(input, 'inputType', { value: recorded.inputType ?? '' })
     Object.defineProperty(input, 'data', { value: recorded.data ?? null })
     Object.defineProperty(input, 'composed', { value: true })
+
     return input
   }
+
   const composition = new CompositionEvent(recorded.type, { bubbles: true })
   Object.defineProperty(composition, 'data', { value: recorded.data ?? '' })
+
   return composition
 }
 
@@ -75,6 +82,7 @@ describe('Windows/WSL Korean — recorded composition updates keep the preedit v
     const terminal = new Terminal()
     terminal.open(container)
     const textarea = terminal.textarea
+
     if (!textarea) {
       throw new Error('xterm helper textarea was not created')
     }
@@ -88,12 +96,15 @@ describe('Windows/WSL Korean — recorded composition updates keep the preedit v
       if (recorded.type === 'keydown' || recorded.type === 'keyup') {
         await nextEventLoop()
       }
+
       if (recorded.value !== undefined) {
         textarea.value = recorded.value
       }
+
       if (recorded.selectionStart !== undefined && recorded.selectionEnd !== undefined) {
         textarea.setSelectionRange(recorded.selectionStart, recorded.selectionEnd)
       }
+
       textarea.dispatchEvent(buildEvent(recorded))
 
       if (recorded.type === 'compositionstart') {
@@ -104,11 +115,13 @@ describe('Windows/WSL Korean — recorded composition updates keep the preedit v
         const view = terminal.element?.querySelector('.composition-view')
         const active = view?.classList.contains('active') === true
         shown.push({ data: recorded.data, visible: active })
+
         if (!compositionOpen) {
           resumed.push({ data: recorded.data, shown: active })
         }
       }
     }
+
     terminal.dispose()
 
     // Guards against a fixture that silently stops covering anything.

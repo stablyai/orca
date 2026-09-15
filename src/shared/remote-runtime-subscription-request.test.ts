@@ -25,6 +25,7 @@ afterEach(async () => {
           for (const client of server.clients) {
             client.close()
           }
+
           server.close(() => resolve())
         })
     )
@@ -36,6 +37,7 @@ describe('remote runtime subscription JSON requests', () => {
     const server = await createServer()
     const onResponse = vi.fn<(response: unknown) => void>()
     const subscription = await subscribe(server.pairing, { onResponse })
+
     const response = requireSender(subscription)(
       'browser.clientHost.commandResult',
       { commandId: 'command-a' },
@@ -74,6 +76,7 @@ describe('remote runtime subscription JSON requests', () => {
       const onError = vi.fn<(error: unknown) => void>()
       const onClose = vi.fn<() => void>()
       const subscription = await subscribe(server.pairing, { onError, onClose })
+
       const response = requireSender(subscription)(
         'browser.clientHost.commandResult',
         { commandId: 'command-a' },
@@ -95,9 +98,11 @@ describe('remote runtime subscription JSON requests', () => {
     const server = await createServer({ holdResponses: true })
     const subscription = await subscribe(server.pairing)
     const sendRequest = requireSender(subscription)
+
     const pending = Array.from({ length: 32 }, (_, index) =>
       sendRequest('browser.clientHost.commandResult', { index }, 1000)
     )
+
     const rejections = pending.map((request) =>
       expect(request).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
     )
@@ -119,12 +124,15 @@ describe('remote runtime subscription JSON requests', () => {
     await expect(
       sendRequest('browser.clientHost.commandResult', circular, 1000)
     ).rejects.toMatchObject({ code: 'invalid_argument' })
+
     const pending = Array.from({ length: 32 }, (_, index) =>
       sendRequest('browser.clientHost.commandResult', { index }, 1000)
     )
+
     const rejections = pending.map((request) =>
       expect(request).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
     )
+
     subscription.close()
     await Promise.all(rejections)
   })
@@ -136,6 +144,7 @@ describe('remote runtime subscription JSON requests', () => {
     const subscription = await subscribe(server.pairing, { onError, onClose })
     const sendRequest = requireSender(subscription)
     const rejections = [vi.fn(), vi.fn(), vi.fn()]
+
     const pending = [
       sendRequest('browser.clientHost.commandResult', { index: 1 }, 25),
       sendRequest('browser.clientHost.commandResult', { index: 2 }, 1000),
@@ -143,10 +152,12 @@ describe('remote runtime subscription JSON requests', () => {
     ].map((request, index) => request.catch(rejections[index]!))
 
     await Promise.all(pending)
+
     for (const rejection of rejections) {
       expect(rejection).toHaveBeenCalledOnce()
       expect(rejection).toHaveBeenCalledWith(expect.objectContaining({ code: 'runtime_timeout' }))
     }
+
     expect(onError).toHaveBeenCalledOnce()
     await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce())
     expect(subscription.sendBinary(new Uint8Array([9]))).toBe(false)
@@ -156,20 +167,25 @@ describe('remote runtime subscription JSON requests', () => {
     const server = await createServer({ holdResponses: true })
     const releaseQueued = vi.fn()
     const releaseSocket = vi.fn()
+
     const outboundMemoryBudget = {
       claimQueuedBytes: vi.fn(() => releaseQueued),
       registerBufferedAmount: vi.fn(() => ({ canSend: () => false, release: releaseSocket }))
     }
+
     const onClose = vi.fn<() => void>()
+
     const subscription = await subscribe(server.pairing, {
       onClose,
       options: { outboundMemoryBudget }
     })
+
     const request = requireSender(subscription)(
       'browser.clientHost.commandResult',
       { commandId: 'command-a' },
       1000
     )
+
     const rejected = expect(request).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
 
     expect(outboundMemoryBudget.registerBufferedAmount).toHaveBeenCalledOnce()
@@ -190,6 +206,7 @@ describe('remote runtime subscription JSON requests', () => {
       const onError = vi.fn<(error: unknown) => void>()
       const onClose = vi.fn<() => void>()
       const releaseSocket = vi.fn()
+
       const subscription = await subscribe(server.pairing, {
         onError,
         onClose,
@@ -220,6 +237,7 @@ function requireSender(subscription: RemoteRuntimeSubscription) {
   if (!subscription.sendRequest) {
     throw new Error('subscription JSON request sender unavailable')
   }
+
   return subscription.sendRequest
 }
 
@@ -259,9 +277,11 @@ async function createServer(options: ServerOptions = {}): Promise<{
 }> {
   const keyPair = generateKeyPair()
   let resolveRequest: (request: unknown) => void = () => {}
+
   const nextRequest = new Promise<unknown>((resolve) => {
     resolveRequest = resolve
   })
+
   // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
   const wss = new WebSocketServer({ host: '127.0.0.1', port: 0 })
   servers.push(wss)
@@ -271,26 +291,34 @@ async function createServer(options: ServerOptions = {}): Promise<{
     const responses: { id: string; index?: number }[] = []
     ws.on('message', (data) => {
       const frame = Buffer.from(data as Buffer).toString('utf8')
+
       if (!sharedKey) {
         const hello = JSON.parse(frame) as { publicKeyB64: string }
         sharedKey = deriveSharedKey(keyPair.secretKey, publicKeyFromBase64(hello.publicKeyB64))
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))
+
         return
       }
+
       const plaintext = decrypt(frame, sharedKey)
+
       if (!plaintext) {
         return
       }
+
       if (!authenticated) {
         authenticated = true
         sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
+
         return
       }
+
       const request = JSON.parse(plaintext) as {
         id: string
         method: string
         params?: { index?: number }
       }
+
       if (request.method !== 'browser.clientHost.commandResult') {
         sendEncrypted(ws, sharedKey, {
           id: request.id,
@@ -299,26 +327,37 @@ async function createServer(options: ServerOptions = {}): Promise<{
           result: { type: 'subscribed' },
           _meta: { runtimeId: 'runtime-test' }
         })
+
         return
       }
+
       resolveRequest(request)
+
       if (options.holdResponses) {
         return
       }
+
       const response = { id: request.id, index: request.params?.index }
+
       if (options.unknownResponse) {
         sendResponse(ws, sharedKey, { ...response, id: `${request.id}-unknown` })
+
         return
       }
+
       if (options.reverseResponses) {
         responses.push(response)
+
         if (responses.length === 2) {
           sendResponse(ws, sharedKey, responses[1]!)
           sendResponse(ws, sharedKey, responses[0]!)
         }
+
         return
       }
+
       sendResponse(ws, sharedKey, response)
+
       if (options.duplicateResponse) {
         sendResponse(ws, sharedKey, response)
       }
@@ -327,6 +366,7 @@ async function createServer(options: ServerOptions = {}): Promise<{
 
   await new Promise<void>((resolve) => wss.once('listening', resolve))
   const address = wss.address() as AddressInfo
+
   const pairing = parsePairingCode(
     encodePairingOffer({
       v: 2,
@@ -335,9 +375,11 @@ async function createServer(options: ServerOptions = {}): Promise<{
       publicKeyB64: publicKeyToBase64(keyPair.publicKey)
     })
   )
+
   if (!pairing) {
     throw new Error('Failed to create test pairing')
   }
+
   return { pairing, nextRequest }
 }
 

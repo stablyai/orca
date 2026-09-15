@@ -27,11 +27,13 @@ function arrayItemsEqual<T>(a: readonly T[], b: readonly T[]): boolean {
   if (a.length !== b.length) {
     return false
   }
+
   for (let i = 0; i < a.length; i += 1) {
     if (a[i] !== b[i]) {
       return false
     }
   }
+
   return true
 }
 
@@ -60,6 +62,7 @@ function reuseThreadIfEqual(
   ) {
     return previous
   }
+
   return next
 }
 
@@ -73,9 +76,11 @@ export function buildAgentPaneThreads(
 ): AgentPaneThread[] {
   const generatedTitlesEnabled = args.generatedTitlesEnabled === true
   const byPaneKey = new Map<string, AgentPaneThread>()
+
   for (const event of args.events) {
     const paneKey = event.entry.paneKey
     const existing = byPaneKey.get(paneKey)
+
     if (!existing) {
       byPaneKey.set(paneKey, {
         paneKey,
@@ -95,10 +100,12 @@ export function buildAgentPaneThreads(
       })
       continue
     }
+
     existing.events.push(event)
     existing.unread = existing.unread || event.unread
     existing.migrationUnsupportedPtyId =
       existing.migrationUnsupportedPtyId ?? event.migrationUnsupportedPtyId
+
     if (!existing.latestEvent || event.timestamp > existing.latestEvent.timestamp) {
       existing.latestEvent = event
       existing.paneTitle = paneTitleForEvent(event, generatedTitlesEnabled)
@@ -115,6 +122,7 @@ export function buildAgentPaneThreads(
 
   for (const [paneKey, liveAgent] of Object.entries(args.liveAgentByPaneKey)) {
     const existing = byPaneKey.get(paneKey)
+
     if (!existing) {
       byPaneKey.set(paneKey, {
         paneKey,
@@ -133,6 +141,7 @@ export function buildAgentPaneThreads(
       })
       continue
     }
+
     // Why: row title/time/target must follow the active turn (not historical events) so a running agent never shows the previous prompt as primary.
     existing.paneTitle = paneTitleForEntry(liveAgent.entry, liveAgent.tab, generatedTitlesEnabled)
     existing.worktree = liveAgent.worktree
@@ -155,6 +164,7 @@ export function buildAgentPaneThreads(
         ...thread,
         events: [...thread.events].sort((a, b) => b.timestamp - a.timestamp)
       }
+
       return reuseThreadIfEqual(reuseCache?.previousByPaneKey.get(thread.paneKey), next)
     })
     .sort((a, b) => b.latestTimestamp - a.latestTimestamp)
@@ -162,9 +172,11 @@ export function buildAgentPaneThreads(
   if (!reuseCache) {
     return built
   }
+
   // Why: keep the list's array identity too, so downstream memos keyed on the list bail out.
   const result = arrayItemsEqual(reuseCache.previousList, built) ? reuseCache.previousList : built
   reuseCache.previousList = result
   reuseCache.previousByPaneKey = new Map(result.map((thread) => [thread.paneKey, thread]))
+
   return result
 }

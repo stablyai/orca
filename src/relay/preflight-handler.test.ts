@@ -22,15 +22,19 @@ vi.mock('child_process', () => {
   const execFileWithPromisify = Object.assign(vi.fn(), {
     [Symbol.for('nodejs.util.promisify.custom')]: execFileAsyncMock
   })
+
   return { execFile: execFileWithPromisify }
 })
 
 vi.mock('../main/pwsh', () => ({ isPwshAvailableAsync: isPwshAvailableAsyncMock }))
+
 vi.mock('../main/wsl', () => ({
   isWslAvailableAsync: isWslAvailableAsyncMock,
   listWslDistrosAsync: listWslDistrosAsyncMock
 }))
+
 vi.mock('../main/git-bash', () => ({ isGitBashAvailable: isGitBashAvailableMock }))
+
 vi.mock('../shared/child-process/run-process', () => ({ runProcess: runProcessMock }))
 
 import {
@@ -252,6 +256,7 @@ describe('PreflightHandler', () => {
       timedOut: false
     })
     const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+
     const dispatcher = {
       onRequest: vi.fn(
         (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
@@ -259,6 +264,7 @@ describe('PreflightHandler', () => {
         }
       )
     }
+
     new PreflightHandler(dispatcher as never)
 
     await expect(
@@ -280,12 +286,15 @@ describe('PreflightHandler', () => {
   it('honors required commands when reporting detected agents', async () => {
     execFileAsyncMock.mockImplementation(async (_file, args) => {
       const script = String(args[1])
+
       if (script.includes("'orca'")) {
         return { stdout: '__ORCA_AGENT_PATH__/relay/path/orca\n' }
       }
+
       throw new Error('not found')
     })
     const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+
     const dispatcher = {
       onRequest: vi.fn(
         (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
@@ -318,12 +327,15 @@ describe('PreflightHandler', () => {
       if (String(args[0]) === 'claude') {
         return { stdout: 'C:\\Users\\test\\AppData\\Roaming\\npm\\claude.cmd\r\n' }
       }
+
       if (String(args[0]) === 'orca') {
         return { stdout: 'C:\\Program Files\\Orca\\orca.cmd\r\n' }
       }
+
       throw new Error('not found')
     })
     const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+
     const dispatcher = {
       onRequest: vi.fn(
         (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
@@ -369,6 +381,7 @@ describe('PreflightHandler', () => {
     isGitBashAvailableMock.mockReturnValue(true)
 
     const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+
     const dispatcher = {
       onRequest: vi.fn(
         (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {

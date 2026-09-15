@@ -22,12 +22,15 @@ function message(id: string, role: NativeChatMessage['role']): NativeChatMessage
 /** A fresh slot array each call, the way the list rebuilds it every render. */
 function slotsOf(messages: NativeChatMessage[]) {
   let turn: string | undefined
+
   const turnKeys = messages.map((entry) => {
     if (entry.role === 'user') {
       turn = entry.id
     }
+
     return turn
   })
+
   return buildNativeChatTranscriptSlots({
     messages,
     turnKeys,
@@ -55,23 +58,29 @@ describe('message rail hook', () => {
     const conversation = Array.from({ length: 2000 }, (_, index) =>
       message(`history-${index}`, index % 2 === 0 ? 'user' : 'assistant')
     )
+
     const scrollRef = { current: document.createElement('div') }
+
     const { result, rerender, unmount } = renderHook(
       ({ slots }) => useNativeChatMessageRail({ scrollRef, slots, virtualItems: [] }),
       { initialProps: { slots: slotsOf(conversation) } }
     )
+
     const initial = result.current
     const derive = vi.spyOn(rowContent, 'deriveNativeChatRowContent')
+
     for (let revision = 0; revision < 20; revision += 1) {
       const slots = slotsOf([
         ...conversation.slice(0, -1),
         message(`tail-${revision}`, 'assistant')
       ])
+
       derive.mockClear()
       rerender({ slots })
       expect(derive.mock.calls.length).toBe(0)
       expect(result.current).toBe(initial)
     }
+
     unmount()
     derive.mockRestore()
   })
@@ -80,6 +89,7 @@ describe('message rail hook', () => {
     vi.useFakeTimers()
     const element = document.createElement('div')
     const remove = vi.spyOn(element, 'removeEventListener')
+
     const { unmount } = renderHook(() =>
       useNativeChatMessageRail({
         scrollRef: { current: element },
@@ -87,6 +97,7 @@ describe('message rail hook', () => {
         virtualItems: []
       })
     )
+
     act(() => element.dispatchEvent(new Event('scroll')))
     expect(vi.getTimerCount()).toBe(1)
     unmount()
@@ -107,6 +118,7 @@ describe('message rail hook', () => {
       ({ slots }) => useNativeChatMessageRail({ scrollRef, slots, virtualItems: [] }),
       { initialProps: { slots: slotsOf(CONVERSATION) } }
     )
+
     // Same prompts, new array identity — exactly what a re-render produces.
     rerender({ slots: slotsOf(CONVERSATION) })
     rerender({ slots: slotsOf(CONVERSATION) })
@@ -122,6 +134,7 @@ describe('message rail hook', () => {
     const { result } = renderHook(() =>
       useNativeChatMessageRail({ scrollRef, slots: slotsOf(CONVERSATION), virtualItems: [] })
     )
+
     expect(result.current.items.map((item) => item.id)).toEqual(['u1', 'u2', 'u3'])
     expect(result.current.visible).toBe(true)
 
@@ -132,6 +145,7 @@ describe('message rail hook', () => {
         virtualItems: []
       })
     )
+
     expect(short.current.visible).toBe(false)
   })
 })

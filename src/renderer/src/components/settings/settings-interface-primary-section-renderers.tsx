@@ -9,6 +9,7 @@ import type { SettingsRenderContext } from './settings-render-context'
 
 export function renderTerminalSettingsSection(context: SettingsRenderContext): React.JSX.Element {
   const { model, navigation, terminal, view } = context
+
   return (
     <SettingsSection
       id="terminal"
@@ -41,6 +42,7 @@ export function renderQuickCommandsSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element {
   const { model, navigation, view } = context
+
   return (
     <SettingsSection
       id="quick-commands"
@@ -65,6 +67,7 @@ export function renderBrowserSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element | null {
   const { model, actions, navigation, view } = context
+
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="browser"
@@ -90,6 +93,7 @@ export function renderMobileEmulatorSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
+
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="mobile-emulator"
@@ -114,6 +118,7 @@ export function renderFloatingWorkspaceSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element {
   const { model, navigation, view } = context
+
   return (
     <SettingsSection
       id="floating-workspace"

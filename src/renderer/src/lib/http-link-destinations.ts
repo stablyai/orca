@@ -37,6 +37,7 @@ export function httpLinkActionDestinationsFor(
   if (!canSourceOwnerOpenInOrca(sourceOwner, canOpenOwnedBrowser)) {
     return { primary: 'system' }
   }
+
   return settings?.openLinksInApp === true
     ? { primary: 'orca', alternate: 'system' }
     : { primary: 'system', alternate: 'orca' }
@@ -60,6 +61,7 @@ export function buildHttpLinkActions(
   open: (destination: HttpLinkDestination | undefined) => void | Promise<void>
 ): { primary: HttpLinkAction; alternate?: HttpLinkAction } {
   const primaryDestination = destinations?.primary
+
   const primary: HttpLinkAction = {
     external: primaryDestination === 'system',
     label: primaryDestination
@@ -67,10 +69,13 @@ export function buildHttpLinkActions(
       : translate('auto.components.terminal.pane.TerminalLinkActionPopover.openLink', 'Open link'),
     run: () => open(primaryDestination)
   }
+
   const alternateDestination = destinations?.alternate
+
   if (!alternateDestination) {
     return { primary }
   }
+
   return {
     primary,
     alternate: {
@@ -96,6 +101,7 @@ export type RoutedHttpLinkOptions = {
 export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): void {
   // Why: the clicked link's owner beats the global active runtime for both local and remote routes.
   const sourceOwner = deps.sourceOwner ?? { kind: 'local' }
+
   if (deps.forceDestination) {
     openHttpLink(url, {
       allowRemoteInApp: true,
@@ -104,8 +110,10 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
       forceSystemBrowser: deps.forceDestination === 'system',
       sourceOwner
     })
+
     return
   }
+
   if (deps.modifierHeld) {
     // Why: the modifier states a destination outright, so it also skips the
     // one-time routing prompt; openHttpLink resolves which destination it means.
@@ -115,14 +123,17 @@ export function openRoutedHttpLink(url: string, deps: RoutedHttpLinkOptions): vo
       modifierHeld: true,
       sourceOwner
     })
+
     return
   }
 
   // Why: remote sources use the persisted routing preference and never prompt the viewing client.
   const preferenceDecision =
     sourceOwner.kind === 'local' ? deps.requestOpenLinksInAppPreference?.(url) : null
+
   if (preferenceDecision === null || preferenceDecision === undefined) {
     openHttpLink(url, { allowRemoteInApp: true, worktreeId: deps.worktreeId, sourceOwner })
+
     return
   }
 

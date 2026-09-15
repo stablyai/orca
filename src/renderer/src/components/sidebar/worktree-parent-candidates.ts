@@ -19,6 +19,7 @@ function getWorktreeOwnerHostId(
   repoMap: Map<string, Pick<Repo, 'connectionId' | 'executionHostId'>>
 ): string | null {
   const repo = repoMap.get(worktree.repoId)
+
   return repo ? getWorktreeExecutionHostId(worktree, repo) : (worktree.hostId ?? null)
 }
 
@@ -31,8 +32,10 @@ export function getEligibleWorktreeParents({
   cyclicLineageIds: precomputedCyclicLineageIds
 }: ParentCandidateArgs): Worktree[] {
   const childHostId = getWorktreeOwnerHostId(child, repoMap)
+
   const cyclicLineageIds =
     precomputedCyclicLineageIds ?? getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
+
   return worktrees.filter((candidate) =>
     isEligibleWorktreeParent({
       child,

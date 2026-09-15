@@ -13,8 +13,10 @@ export function summarizeManagedSkillRemoval(
   const values = operations.flatMap((operation) =>
     operation.status === 'ok' ? [operation.value] : []
   )
+
   const removed = values.filter((value) => value.status === 'removed').length
   const preserved = values.filter((value) => value.status === 'conflict').length
+
   return {
     lastResult: values.at(-1) ?? null,
     notice:

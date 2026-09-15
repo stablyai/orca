@@ -13,6 +13,7 @@ function createLoadingDirPathsRecorder(): {
   isLoading: (dirPath: string) => boolean
 } {
   let loadingDirPaths: ReadonlySet<string> = new Set<string>()
+
   return {
     updateLoadingDirPaths: (update) => {
       loadingDirPaths = update(loadingDirPaths)
@@ -36,22 +37,29 @@ describe('refreshFileExplorerExpandedDirs', () => {
       '/repo/src': { children: [] },
       '/repo/docs': { children: [] }
     }
+
     // Why identities, not calls: React skips the re-render (and the row-projection rebuild) when a
     // setState produces the same value, so only a new identity costs a full tree walk.
     const committedCaches: Record<string, DirCache>[] = []
+
     const setDirCache = vi.fn((update: CacheUpdate) => {
       const next = typeof update === 'function' ? update(cache) : update
+
       if (next !== cache) {
         committedCaches.push(next)
       }
+
       cache = next
     })
+
     const { updateLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
+
     const readDirectory = vi.fn(async (dirPath: string) => {
       const entriesByPath: Record<string, DirEntry[]> = {
         '/repo/src': [entry('index.ts')],
         '/repo/docs': [entry('guide.md')]
       }
+
       return { entries: entriesByPath[dirPath] ?? [], operationOwner: { kind: 'local' as const } }
     })
 
@@ -103,14 +111,18 @@ describe('refreshFileExplorerExpandedDirs', () => {
 
   it('drops a superseded directory result so a newer concurrent load is not clobbered', async () => {
     const tracker = createFileExplorerDirLoadTracker()
+
     let cache: Record<string, DirCache> = {
       '/repo/src': { children: [] },
       '/repo/docs': { children: [] }
     }
+
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
+
     const { updateLoadingDirPaths } = createLoadingDirPathsRecorder()
+
     const newerSrcCache: DirCache = {
       children: [
         {
@@ -122,6 +134,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
         }
       ]
     }
+
     const readDirectory = vi.fn(async (dirPath: string) => {
       if (dirPath === '/repo/src') {
         // Simulate a concurrent newer load (e.g. a watcher-driven refreshDir)
@@ -132,8 +145,10 @@ describe('refreshFileExplorerExpandedDirs', () => {
           ...prev,
           '/repo/src': newerSrcCache
         }))
+
         return { entries: [entry('stale.ts')], operationOwner: { kind: 'local' as const } }
       }
+
       return { entries: [entry('guide.md')], operationOwner: { kind: 'local' as const } }
     })
 
@@ -161,23 +176,30 @@ describe('refreshFileExplorerExpandedDirs', () => {
 
   it('drops a result superseded after its read resolved but before the batch commit', async () => {
     const tracker = createFileExplorerDirLoadTracker()
+
     let cache: Record<string, DirCache> = {
       '/repo/src': { children: [] },
       '/repo/docs': { children: [] }
     }
+
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
+
     const { updateLoadingDirPaths } = createLoadingDirPathsRecorder()
     let releaseDocs!: () => void
+
     const docsGate = new Promise<void>((resolve) => {
       releaseDocs = resolve
     })
+
     const readDirectory = vi.fn(async (dirPath: string) => {
       if (dirPath === '/repo/src') {
         return { entries: [entry('stale.ts')], operationOwner: { kind: 'local' as const } }
       }
+
       await docsGate
+
       return { entries: [entry('guide.md')], operationOwner: { kind: 'local' as const } }
     })
 
@@ -201,6 +223,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
     // A newer load (e.g. a watcher-driven refreshDir) supersedes /repo/src in
     // the window between its resolved read and the final batched commit.
     tracker.begin('/repo/src')
+
     const newerSrcCache: DirCache = {
       children: [
         {
@@ -212,6 +235,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
         }
       ]
     }
+
     setDirCache((prev) => ({ ...prev, '/repo/src': newerSrcCache }))
 
     releaseDocs()
@@ -228,18 +252,23 @@ describe('refreshFileExplorerExpandedDirs', () => {
       dirPath: `/repo/d${index}`,
       depth: 0
     }))
+
     let cache: Record<string, DirCache> = {}
+
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
+
     const { updateLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
     let inFlight = 0
     let peakInFlight = 0
+
     const readDirectory = vi.fn(async (dirPath: string) => {
       inFlight++
       peakInFlight = Math.max(peakInFlight, inFlight)
       await new Promise((resolve) => setTimeout(resolve, 0))
       inFlight--
+
       return {
         entries: [entry(`${dirPath.slice('/repo/'.length)}.ts`)],
         operationOwner: { kind: 'local' as const }
@@ -261,6 +290,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
     expect(readDirectory).toHaveBeenCalledTimes(20)
     // One up-front loading write plus one result write per completed group of four.
     expect(setDirCache).toHaveBeenCalledTimes(6)
+
     for (const { dirPath } of dirs) {
       expect(cache[dirPath]).toMatchObject({ children: [{ name: expect.any(String) }] })
       expect(isLoading(dirPath)).toBe(false)
@@ -272,19 +302,25 @@ describe('refreshFileExplorerExpandedDirs', () => {
       dirPath: `/repo/d${index}`,
       depth: 0
     }))
+
     let cache: Record<string, DirCache> = {}
+
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
+
     const { updateLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
     let releaseInitialReads!: () => void
+
     const initialReadsGate = new Promise<void>((resolve) => {
       releaseInitialReads = resolve
     })
+
     const readDirectory = vi.fn(async (dirPath: string) => {
       if (['/repo/d0', '/repo/d1', '/repo/d2'].includes(dirPath)) {
         await initialReadsGate
       }
+
       return { entries: [], operationOwner: { kind: 'local' as const } }
     })
 
@@ -297,6 +333,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
       readDirectory,
       maxConcurrentReads: 3
     })
+
     await Promise.resolve()
 
     expect(isLoading('/repo/d0')).toBe(true)
@@ -317,19 +354,25 @@ describe('refreshFileExplorerExpandedDirs', () => {
       dirPath: `/repo/d${index}`,
       depth: 0
     }))
+
     let cache: Record<string, DirCache> = {}
+
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
+
     const { updateLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
     let releaseSlowRead!: () => void
+
     const slowRead = new Promise<void>((resolve) => {
       releaseSlowRead = resolve
     })
+
     const readDirectory = vi.fn(async (dirPath: string) => {
       if (dirPath === '/repo/d0') {
         await slowRead
       }
+
       return { entries: [entry('x.ts')], operationOwner: { kind: 'local' as const } }
     })
 
@@ -342,6 +385,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
       readDirectory,
       maxConcurrentReads: 2
     })
+
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(readDirectory.mock.calls.map(([dirPath]) => dirPath)).toEqual([
@@ -361,9 +405,11 @@ describe('refreshFileExplorerExpandedDirs', () => {
 
   it('does not turn a commit callback failure into an empty directory result', async () => {
     let cache: Record<string, DirCache> = {}
+
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
+
     const { updateLoadingDirPaths } = createLoadingDirPathsRecorder()
     const commitError = new Error('commit failed')
 
@@ -391,11 +437,14 @@ describe('refreshFileExplorerExpandedDirs', () => {
 
   it('still notifies the rest of a commit batch after one commit callback throws', async () => {
     let cache: Record<string, DirCache> = {}
+
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
+
     const { updateLoadingDirPaths } = createLoadingDirPathsRecorder()
     const commitError = new Error('commit failed')
+
     const onDirCommitted = vi.fn((dirPath: string) => {
       if (dirPath === '/repo/a') {
         throw commitError
@@ -431,11 +480,14 @@ describe('refreshFileExplorerExpandedDirs', () => {
 
   it('stops later batches after a commit callback throws', async () => {
     let cache: Record<string, DirCache> = {}
+
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
+
     const { updateLoadingDirPaths, isLoading } = createLoadingDirPathsRecorder()
     const commitError = new Error('commit failed')
+
     const onDirCommitted = vi.fn((dirPath: string) => {
       if (dirPath === '/repo/a') {
         throw commitError
@@ -475,18 +527,23 @@ describe('refreshFileExplorerExpandedDirs', () => {
   it('drops a queued directory superseded while an earlier read is blocked', async () => {
     const tracker = createFileExplorerDirLoadTracker()
     let cache: Record<string, DirCache> = {}
+
     const setDirCache = vi.fn((update: CacheUpdate) => {
       cache = typeof update === 'function' ? update(cache) : update
     })
+
     const { updateLoadingDirPaths } = createLoadingDirPathsRecorder()
     let releaseFirst!: () => void
+
     const firstGate = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
+
     const readDirectory = vi.fn(async (dirPath: string) => {
       if (dirPath === '/repo/a') {
         await firstGate
       }
+
       return { entries: [entry('x.ts')], operationOwner: { kind: 'local' as const } }
     })
 
@@ -502,6 +559,7 @@ describe('refreshFileExplorerExpandedDirs', () => {
       readDirectory,
       maxConcurrentReads: 1
     })
+
     await Promise.resolve()
 
     // A watcher-driven refreshDir supersedes the queued dir before it starts reading.

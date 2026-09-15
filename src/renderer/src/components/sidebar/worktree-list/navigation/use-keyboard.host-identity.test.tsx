@@ -42,9 +42,11 @@ function localRow(id: string): HostSectionRow & { type: 'item' } {
 }
 
 const rows: HostSectionRow[] = [localRow('a'), localRow('b'), localRow('c')]
+
 const renderRows = rows as unknown as RenderRow[]
 
 let container: HTMLDivElement
+
 let root: Root
 
 function press(direction: 'up' | 'down'): void {
@@ -76,8 +78,10 @@ function renderProbe(activeWorktreeId: string, activeHostId: 'local' | null): vo
       activeModal: 'none',
       markDirectScrollInput: () => {}
     })
+
     return null
   }
+
   act(() => root.render(<Probe />))
 }
 

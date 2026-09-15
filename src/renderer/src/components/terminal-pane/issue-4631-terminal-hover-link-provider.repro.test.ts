@@ -38,10 +38,13 @@ async function writeTerminal(terminal: Terminal, data: string): Promise<void> {
 
 function configuredRowCount(): number {
   const raw = process.env.ORCA_4631_WRAP_ROWS
+
   if (!raw) {
     return 50_000
   }
+
   const parsed = Number.parseInt(raw, 10)
+
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 50_000
 }
 
@@ -49,6 +52,7 @@ function logStage(stage: string, details: Record<string, unknown>): void {
   if (process.env.ORCA_LOG_4631_REPRO !== '1') {
     return
   }
+
   process.stderr.write(`${JSON.stringify({ issue: 4631, stage, ...details })}\n`)
 }
 
@@ -64,12 +68,14 @@ describe('issue 4631 terminal hover link-provider repro', () => {
     })
 
     const rowCount = configuredRowCount()
+
     const terminal = new Terminal({
       allowProposedApi: true,
       cols: 80,
       rows: 24,
       scrollback: rowCount + 100
     })
+
     const payload = `${'a'.repeat(79)}\r\n${'b'.repeat(80 * rowCount)}`
     const writeStart = performance.now()
     await writeTerminal(terminal, payload)
@@ -100,9 +106,11 @@ describe('issue 4631 terminal hover link-provider repro', () => {
     })
 
     const pane = { id: 1, terminal }
+
     const managerRef = {
       current: { getPanes: () => [pane] } as unknown as PaneManager
     }
+
     const provider = createFilePathLinkProvider(
       1,
       {

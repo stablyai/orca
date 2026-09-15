@@ -30,6 +30,7 @@ function appendTextarea(): HTMLTextAreaElement {
   const textarea = document.createElement('textarea')
   document.body.appendChild(textarea)
   textarea.focus()
+
   return textarea
 }
 
@@ -39,6 +40,7 @@ function appendContentEditable(): HTMLElement {
   element.tabIndex = 0
   document.body.appendChild(element)
   element.focus()
+
   return element
 }
 
@@ -50,6 +52,7 @@ function installExecCommandMock(
     configurable: true,
     value: execCommand
   })
+
   return execCommand
 }
 
@@ -123,10 +126,13 @@ describe('dictation insertion target', () => {
   it('cancels chunked contenteditable dictation when the target disconnects', async () => {
     vi.useFakeTimers()
     const editor = appendContentEditable()
+
     const execCommand = installExecCommandMock(() => {
       editor.remove()
+
       return true
     })
+
     const text = 'x'.repeat(TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES + 1)
 
     insertText(text, { kind: 'contentEditable', element: editor })

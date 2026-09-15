@@ -16,6 +16,7 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
     switch (fact.kind) {
       case 'bell':
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
+
         return
       case 'command-finished':
         this.retirePtyAgentLaunchAuthority(ptyId)
@@ -23,12 +24,15 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
           kind: 'command-finished',
           exitCode: fact.exitCode
         })
+
         return
       case 'pr-link':
         this.recordTerminalSideEffectFact(ptyId, { kind: 'pr-link', link: fact.link })
+
         return
       case '2031-subscribe':
         this.recordTerminalSideEffectFact(ptyId, { kind: '2031-subscribe' })
+
         return
       case '2031-unsubscribe':
         this.recordTerminalSideEffectFact(ptyId, { kind: '2031-unsubscribe' })
@@ -48,13 +52,17 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
       const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + droppedChars
       this.ptyOutputSequenceById.set(ptyId, outputSequence)
     }
+
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
+
     if (pty) {
       pty.tailPendingAnsi = ''
     }
+
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.tailPendingAnsi = ''
     }
+
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
@@ -67,11 +75,15 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
     if (!this.terminalSideEffectConsumerAvailable) {
       return
     }
+
     const entry = this.ptyTitleTrackersByPtyId.get(ptyId)
+
     if (entry?.applyingChunk) {
       entry.pendingFacts.push(fact)
+
       return
     }
+
     this.emitTerminalSideEffectBatch(ptyId, [fact])
   }
 
@@ -83,6 +95,7 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
     if (!this.terminalSideEffectConsumerAvailable || facts.length === 0) {
       return
     }
+
     const batch: TerminalSideEffectBatch = {
       ptyId,
       seq: this.ptyOutputSequenceById.get(ptyId) ?? 0,
@@ -90,6 +103,7 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
       ...(options.replay ? { replay: true } : {}),
       ...this.resolveTerminalSideEffectAttribution(ptyId)
     }
+
     if (this.terminalSideEffectLocalConsumerAvailable) {
       try {
         this.onTerminalSideEffects?.(batch)
@@ -97,6 +111,7 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
         console.error('[runtime] terminal side-effect listener threw', { ptyId, err })
       }
     }
+
     if (this.countTerminalSideEffectConsumingClientEventListeners() > 0) {
       this.emitClientEvent({ type: 'terminalSideEffects', batch })
     }
@@ -112,6 +127,7 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
   } {
     const pty = this.ptysById.get(ptyId)
     const connectionId = pty?.connectionId ?? null
+
     for (const leaf of this.getLeavesForPty(ptyId)) {
       return {
         worktreeId: leaf.worktreeId,
@@ -120,6 +136,7 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
         connectionId
       }
     }
+
     if (pty?.paneKey) {
       return {
         worktreeId: pty.worktreeId,
@@ -128,6 +145,7 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
         connectionId
       }
     }
+
     return {}
   }
 
@@ -137,6 +155,7 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
     const tracker = this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker
     const recordTitle = this.ptysById.get(ptyId)?.lastOscTitle
     const normalizedTitle = tracker?.getLastNormalizedTitle() ?? null
+
     // Why: a record-fallback snapshot must not replay the bare cursor-agent literal over a
     // tracker title Orca synthesized from hooks — but with no tracker title it is the pane's
     // only Cursor identity, so restored/mobile tabs keep it (#10258).
@@ -144,9 +163,11 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
       recordTitle && (normalizedTitle === null || !isCursorNativeAgentTitle(recordTitle))
         ? recordTitle
         : null
+
     if (normalizedTitle === null && !rawTitle) {
       return null
     }
+
     return {
       ptyId,
       seq: this.ptyOutputSequenceById.get(ptyId) ?? 0,
@@ -166,14 +187,17 @@ export class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithSc
    *  the tracker (live bytes + synthetic frames) keeps current. */
   protected getTrackedRawTitleForPty(ptyId: string): string | null {
     const recordTitle = this.ptysById.get(ptyId)?.lastOscTitle
+
     if (recordTitle) {
       return recordTitle
     }
+
     for (const leaf of this.getLeavesForPty(ptyId)) {
       if (leaf.lastOscTitle) {
         return leaf.lastOscTitle
       }
     }
+
     return null
   }
 

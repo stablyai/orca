@@ -32,6 +32,7 @@ export function registerMainProcessIpcHandlers(): void {
       localPtyProviderStartupReady: state.localPtyProviderStartupReady,
       reconcile: async () => {
         await state.runtime?.refreshRestoredOrchestrationAuthority()
+
         return state.runtime?.reconcileLegacyWorkerTerminals({ materializeRenderer: true })
       },
       onDeferredRecoveryError: (error) => {
@@ -50,6 +51,7 @@ export function registerMainProcessIpcHandlers(): void {
   ipcMain.handle('ui:consumePendingMarkdownFileOpens', async () => {
     state.markdownFileOpenListenerReady = true
     const filePaths = state.osOpenedMarkdownFiles.consume()
+
     try {
       return await resolveOpenedMarkdownDocuments(filePaths)
     } catch (error) {
@@ -64,6 +66,7 @@ export function registerMainProcessIpcHandlers(): void {
       if (!state.startupDiagnosticsEnabled || !event.startsWith('renderer-')) {
         return
       }
+
       logStartupMilestone(event, details && typeof details === 'object' ? details : {})
     }
   )

@@ -10,13 +10,17 @@ import type * as NodeChildProcess from 'node:child_process'
 // first case silently flips to the fallback path.
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeChildProcess>()
+
   return { ...actual, execFile: vi.fn() }
 })
 
 const { execFile } = await import('node:child_process')
+
 const execFileMock = vi.mocked(execFile)
+
 const { execFile: actualExecFile } =
   await vi.importActual<typeof NodeChildProcess>('node:child_process')
+
 const { installManagedHooks, resolveRelayGrokHome } = await import('./managed-hook-runtime')
 
 type ExecFileCallback = (error: Error | null, result?: { stdout: string; stderr: string }) => void
@@ -24,6 +28,7 @@ type ExecFileCallback = (error: Error | null, result?: { stdout: string; stderr:
 function stubProbeOutput(stdout: string): void {
   execFileMock.mockImplementation(((...args: unknown[]) => {
     ;(args.at(-1) as ExecFileCallback)(null, { stdout, stderr: '' })
+
     return undefined
   }) as unknown as typeof execFile)
 }
@@ -31,6 +36,7 @@ function stubProbeOutput(stdout: string): void {
 function stubProbeFailure(error: Error): void {
   execFileMock.mockImplementation(((...args: unknown[]) => {
     ;(args.at(-1) as ExecFileCallback)(error)
+
     return undefined
   }) as unknown as typeof execFile)
 }
@@ -43,6 +49,7 @@ beforeEach(() => {
   // that `promisify(execFile)` resolves in production.
   execFileMock.mockImplementation(((...args: unknown[]) => {
     const callback = args.at(-1) as ExecFileCallback
+
     return (actualExecFile as (...callArgs: unknown[]) => unknown)(
       ...args.slice(0, -1),
       (error: Error | null, stdout: string, stderr: string) => callback(error, { stdout, stderr })
@@ -51,13 +58,17 @@ beforeEach(() => {
 })
 
 const tempHomes: string[] = []
+
 const tempRoot = process.platform === 'win32' ? tmpdir() : '/tmp'
+
 const SHELL_NAME = 'login-shell'
+
 const SHELL_RUNS_NAME = 'login-shell-runs'
 
 async function createTempHome(): Promise<string> {
   const home = await mkdtemp(join(tempRoot, 'orca-managed-hook-runtime-'))
   tempHomes.push(home)
+
   return home
 }
 

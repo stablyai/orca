@@ -21,6 +21,7 @@ function resultGroupLabel(status: (typeof RESULT_GROUPS)[number]): string {
       'Kept local'
     )
   }
+
   return labels[status]
 }
 
@@ -31,6 +32,7 @@ export function SkillBundleInstallOutcome({
 }): React.JSX.Element {
   const incomplete = result.status !== 'complete'
   const retrySkills = result.skills.filter(skillBundleSkillNeedsRetry)
+
   return (
     <div className="space-y-3">
       <div
@@ -84,6 +86,7 @@ export function SkillBundleInstallOutcome({
           const skills = result.skills.filter(
             (skill) => skill.status === status && !skillBundleSkillNeedsRetry(skill)
           )
+
           return skills.length ? (
             <section key={status} className="space-y-1">
               <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">

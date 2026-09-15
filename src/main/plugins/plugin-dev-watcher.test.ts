@@ -10,10 +10,13 @@ describe('PluginDevWatcher', () => {
     vi.useFakeTimers()
     let onEvent!: (error: Error | null) => void
     const unsubscribe = vi.fn().mockResolvedValue(undefined)
+
     const subscribePath = vi.fn(async (_path, callback: typeof onEvent) => {
       onEvent = callback
+
       return { unsubscribe }
     })
+
     const devWatcher = new PluginDevWatcher(subscribePath)
     const refresh = vi.fn()
     const onWatcherError = vi.fn()
@@ -32,12 +35,14 @@ describe('PluginDevWatcher', () => {
   it('unsubscribes a subscription that resolves after disposal', async () => {
     let resolveSubscription!: (value: { unsubscribe: () => Promise<void> }) => void
     const unsubscribe = vi.fn().mockResolvedValue(undefined)
+
     const subscribePath = vi.fn(
       () =>
         new Promise<{ unsubscribe: () => Promise<void> }>((resolve) => {
           resolveSubscription = resolve
         })
     )
+
     const devWatcher = new PluginDevWatcher(subscribePath)
 
     devWatcher.start(['/plugins/demo'], vi.fn())
@@ -51,6 +56,7 @@ describe('PluginDevWatcher', () => {
     const unsubscribe = vi
       .fn()
       .mockRejectedValue(new Error('Unable to remove watcher: Invalid argument'))
+
     const subscribePath = vi.fn(async () => ({ unsubscribe }))
     const devWatcher = new PluginDevWatcher(subscribePath)
     devWatcher.start(['/plugins/demo'], vi.fn())

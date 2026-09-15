@@ -37,6 +37,7 @@ function isMissingFileError(error: unknown): boolean {
 function readFileState(path: string): FileState | null {
   try {
     const stats = statSync(path, { bigint: true })
+
     return {
       device: stats.dev,
       inode: stats.ino,
@@ -48,6 +49,7 @@ function readFileState(path: string): FileState | null {
     if (isMissingFileError(error)) {
       return null
     }
+
     throw error
   }
 }
@@ -56,6 +58,7 @@ function sameFileState(left: FileState | null, right: FileState | null): boolean
   if (!left || !right) {
     return left === right
   }
+
   return (
     left.device === right.device &&
     left.inode === right.inode &&
@@ -79,6 +82,7 @@ function copyStableAttempt(sourcePath: string, databasePath: string): boolean {
   const sourceWalPath = `${sourcePath}-wal`
   const databaseBefore = readFileState(sourcePath)
   const walBefore = readFileState(sourceWalPath)
+
   if (!databaseBefore) {
     throw new Error('Chromium cookies database does not exist')
   }
@@ -97,6 +101,7 @@ function copyStableAttempt(sourcePath: string, databasePath: string): boolean {
       if (isMissingFileError(error)) {
         return false
       }
+
       throw error
     }
   }
@@ -105,12 +110,14 @@ function copyStableAttempt(sourcePath: string, databasePath: string): boolean {
 
   const databaseAfter = readFileState(sourcePath)
   const walAfter = readFileState(sourceWalPath)
+
   if (!sameFileState(databaseBefore, databaseAfter) || !sameFileState(walBefore, walAfter)) {
     return false
   }
 
   const copiedDatabase = readFileState(databasePath)
   const copiedWal = readFileState(`${databasePath}-wal`)
+
   return (
     copiedDatabase?.size === databaseBefore.size &&
     (walBefore ? copiedWal?.size === walBefore.size : copiedWal === null)
@@ -129,12 +136,14 @@ export function createChromiumCookieSnapshot(
     for (let attempt = 0; attempt < SNAPSHOT_ATTEMPTS; attempt += 1) {
       if (copyStableAttempt(sourcePath, databasePath)) {
         keepSnapshot = true
+
         return {
           databasePath,
           cleanup: () => removeSnapshotDirectory(snapshotDir)
         }
       }
     }
+
     throw new Error('Chromium cookies database changed while creating a snapshot')
   } finally {
     if (!keepSnapshot) {

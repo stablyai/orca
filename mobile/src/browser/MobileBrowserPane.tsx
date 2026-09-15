@@ -76,19 +76,24 @@ export function MobileBrowserPane({
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
     getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url)
   )
+
   const cacheKey = makeBrowserFrameCacheKey(worktreeId, tab.browserPageId, browserViewMode)
   const cachedInitialFrame = peekCachedBrowserFrame(cacheKey)
   const [addressValue, setAddressValue] = useState(displayBrowserUrl(tab.url))
   const [addressFocused, setAddressFocused] = useState(false)
+
   const [addressSyncState, setAddressSyncState] = useState({
     focused: false,
     url: tab.url
   })
+
   const [keyboardValue, setKeyboardValue] = useState('')
   const [frameUri, setFrameUri] = useState<string | null>(cachedInitialFrame?.uri ?? null)
+
   const [frameMetadata, setFrameMetadata] = useState<BrowserScreencastFrameMetadata | null>(
     cachedInitialFrame?.metadata ?? null
   )
+
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<BrowserDialogState | null>(null)
@@ -98,9 +103,11 @@ export function MobileBrowserPane({
   const [appActive, setAppActive] = useState(AppState.currentState === 'active')
   const streamGenerationRef = useRef(0)
   const layoutRef = useRef<BrowserTouchLayout | null>(null)
+
   const frameMetadataRef = useRef<BrowserScreencastFrameMetadata | null>(
     cachedInitialFrame?.metadata ?? null
   )
+
   const frameUriRef = useRef<string | null>(cachedInitialFrame?.uri ?? null)
   const frameMountedRef = useRef(cachedInitialFrame !== null)
   const browserImageRefs = useRef<[Image | null, Image | null]>([null, null])
@@ -109,10 +116,12 @@ export function MobileBrowserPane({
   const visibleFrameLayerRef = useRef<FrameLayer>(0)
   const busyRef = useRef(false)
   const lastAppliedFrameAtRef = useRef(0)
+
   const pendingThrottledFrameRef = useRef<{
     frame: BrowserScreencastFrame
     cacheKey: string
   } | null>(null)
+
   const frameThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dialogRef = useRef<BrowserDialogState | null>(null)
   const lastStreamCacheKeyRef = useRef<string | null>(cacheKey)
@@ -155,11 +164,14 @@ export function MobileBrowserPane({
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       const active = nextState === 'active'
+
       if (!active) {
         clearCachedBrowserFramesForWorktree(worktreeId)
       }
+
       setAppActive(active)
     })
+
     return () => {
       subscription.remove()
     }
@@ -169,8 +181,10 @@ export function MobileBrowserPane({
     focused: addressFocused,
     url: tab.url
   })
+
   if (addressSync.nextState !== addressSyncState) {
     setAddressSyncState(addressSync.nextState)
+
     if (addressSync.shouldSyncValue) {
       // Why: keep browser stream/goto address updates intact, but avoid a
       // stale post-blur paint when the tab URL is the source of truth.
@@ -233,15 +247,19 @@ export function MobileBrowserPane({
 
   const navigateToAddress = useCallback(async () => {
     const url = normalizeBrowserUrl(addressValue)
+
     if (!url) {
       setError('Enter a valid URL.')
+
       return
     }
+
     const result = (await sendBrowserRequest(
       'browser.goto',
       { url },
       { showBusy: true, timeoutMs: 30_000 }
     )) as { url?: string } | null
+
     if (typeof result?.url === 'string') {
       setAddressValue(displayBrowserUrl(result.url))
       lastZoomResetUrlRef.current = result.url
@@ -290,22 +308,28 @@ export function MobileBrowserPane({
   })
 
   const controlsDisabled = !client || !tab.browserPageId || screencastSupported !== true
+
   const goBack = useCallback(() => {
     if (controlsDisabled || !tab.canGoBack) {
       return
     }
+
     void sendBrowserRequest('browser.back', {}, { suppressError: true })
   }, [controlsDisabled, sendBrowserRequest, tab.canGoBack])
+
   const goForward = useCallback(() => {
     if (controlsDisabled || !tab.canGoForward) {
       return
     }
+
     void sendBrowserRequest('browser.forward', {}, { suppressError: true })
   }, [controlsDisabled, sendBrowserRequest, tab.canGoForward])
+
   const reloadPage = useCallback(() => {
     if (controlsDisabled) {
       return
     }
+
     void sendBrowserRequest('browser.reload', {}, { suppressError: true })
   }, [controlsDisabled, sendBrowserRequest])
 
@@ -314,6 +338,7 @@ export function MobileBrowserPane({
       if (browserViewMode === mode) {
         return
       }
+
       // Why: preserve explicit page-scoped choices across normal browser pane remounts.
       saveMobileBrowserViewMode(worktreeId, tab.browserPageId, mode)
       setBrowserViewMode(mode)

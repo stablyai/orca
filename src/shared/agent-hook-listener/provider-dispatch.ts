@@ -43,6 +43,7 @@ export function normalizeProviderEvent(input: {
 }): ProviderDispatchResult {
   const { state, source, eventName, promptText, paneKey, hookPayload, envelope, extractedPrompt } =
     input
+
   let resolvedPromptText = promptText
   let promptInteractionKey: string | undefined
   let hasTranscriptPromptEvidence = false
@@ -67,6 +68,7 @@ export function normalizeProviderEvent(input: {
           ) ||
           ''
       }
+
       payload = normalizeAntigravityEvent(state, eventName, promptText, paneKey, hookPayload)
       break
     case 'amp':
@@ -79,6 +81,7 @@ export function normalizeProviderEvent(input: {
         const prefix = source === 'mimo-code' ? 'mimo-code-message' : 'opencode-message'
         promptInteractionKey = messageId ? `${prefix}-${messageId}` : undefined
       }
+
       payload = normalizeOpenCodeFamilyEvent(
         source,
         state,
@@ -89,6 +92,7 @@ export function normalizeProviderEvent(input: {
       )
       break
     }
+
     case 'cursor':
       payload = normalizeCursorEvent(state, eventName, promptText, paneKey, hookPayload)
       break
@@ -111,12 +115,15 @@ export function normalizeProviderEvent(input: {
       const transcriptPrompt = readLastCommandCodeUserPromptEntryFromTranscript(
         hookPayload.transcript_path ?? hookPayload.transcriptPath
       )
+
       hasTranscriptPromptEvidence = transcriptPrompt !== undefined
       promptInteractionKey = transcriptPrompt?.interactionKey
       resolvedPromptText = transcriptPrompt?.text ?? ''
+
       if (promptText && extractedPrompt.source !== 'message') {
         resolvedPromptText = promptText
       }
+
       payload = normalizeCommandCodeEvent(
         state,
         eventName,
@@ -126,6 +133,7 @@ export function normalizeProviderEvent(input: {
       )
       break
     }
+
     case 'grok':
       payload = normalizeGrokEvent(
         state,

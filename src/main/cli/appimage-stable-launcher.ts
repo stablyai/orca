@@ -19,10 +19,15 @@ import { LINUX_CLI_COMMAND_NAME } from './bundled-cli-launcher-path'
 import { quoteShell } from './cli-install-path-format'
 
 const LAUNCHER_DIRECTORY_NAME = 'launcher'
+
 const LIVE_ENDPOINT_NAME = 'live'
+
 const INSTALLED_ENDPOINT_NAME = 'installed'
+
 const LAUNCHER_MARKER = '# orca-appimage-stable-launcher'
+
 const LAUNCHER_WAIT_SECONDS = 5
+
 const LAUNCHER_MAX_BYTES = 16 * 1024
 
 export type AppImageLauncherEndpoint = 'live' | 'installed'
@@ -43,6 +48,7 @@ export function resolveAppImageLauncherEndpointPath(
 
 export function isAppImageStableLauncherReady(cacheRootPath: string): boolean {
   const launcherPath = resolveAppImageStableLauncherPath(cacheRootPath)
+
   return isExactExecutableLauncher(launcherPath, buildStableLauncherScript(cacheRootPath))
 }
 
@@ -54,6 +60,7 @@ export function ensureAppImageStableLauncher(cacheRootPath: string): string | nu
 /** Removes the legacy live endpoint only when it is a symlink. */
 export function removeAppImageLegacyLiveEndpoint(cacheRootPath: string): void {
   const endpointPath = resolveAppImageLauncherEndpointPath(cacheRootPath, 'live')
+
   try {
     if (lstatSync(endpointPath).isSymbolicLink()) {
       unlinkSync(endpointPath)
@@ -67,15 +74,18 @@ export function publishAppImageLauncherEndpoint(
   targetPath: string
 ): string | null {
   const launcherPath = ensureAppImageStableLauncherFile(cacheRootPath)
+
   if (!launcherPath) {
     return null
   }
 
   const endpointPath = resolveAppImageLauncherEndpointPath(cacheRootPath, endpoint)
   const temporaryPath = join(dirname(endpointPath), `.${endpoint}-${process.pid}-${randomUUID()}`)
+
   try {
     symlinkSync(targetPath, temporaryPath)
     renameSync(temporaryPath, endpointPath)
+
     return launcherPath
   } catch {
     return null
@@ -89,11 +99,14 @@ export function publishAppImageLauncherEndpoint(
 function ensureAppImageStableLauncherFile(cacheRootPath: string): string | null {
   const launcherPath = resolveAppImageStableLauncherPath(cacheRootPath)
   const content = buildStableLauncherScript(cacheRootPath)
+
   try {
     mkdirSync(dirname(launcherPath), { recursive: true })
+
     if (!installLauncher(launcherPath, content)) {
       return null
     }
+
     return launcherPath
   } catch {
     return null
@@ -104,18 +117,23 @@ function installLauncher(launcherPath: string, content: string): boolean {
   if (isExactExecutableLauncher(launcherPath, content)) {
     return true
   }
+
   const temporaryPath = join(
     dirname(launcherPath),
     `.${LINUX_CLI_COMMAND_NAME}-${process.pid}-${randomUUID()}`
   )
+
   try {
     writeFileSync(temporaryPath, content, { encoding: 'utf8', flag: 'wx', mode: 0o755 })
+
     if (publishLauncherIfVacant(temporaryPath, launcherPath)) {
       return true
     }
+
     if (!isOwnedLauncher(launcherPath)) {
       return false
     }
+
     return replaceOwnedLauncher(launcherPath, temporaryPath, content)
   } finally {
     unlinkIfPresent(temporaryPath)
@@ -131,6 +149,7 @@ function replaceOwnedLauncher(
     dirname(launcherPath),
     `.orca-preserved-launcher-${process.pid}-${randomUUID()}`
   )
+
   try {
     renameSync(launcherPath, displacedPath)
   } catch {
@@ -139,6 +158,7 @@ function replaceOwnedLauncher(
 
   if (!isOwnedLauncher(displacedPath)) {
     restoreForeignLauncher(displacedPath, launcherPath)
+
     return false
   }
 
@@ -147,12 +167,14 @@ function replaceOwnedLauncher(
     isExactExecutableLauncher(launcherPath, replacementContent)
   ) {
     unlinkIfPresent(displacedPath)
+
     return true
   }
 
   if (publishLauncherIfVacant(displacedPath, launcherPath)) {
     unlinkIfPresent(displacedPath)
   }
+
   return isExactExecutableLauncher(launcherPath, replacementContent)
 }
 
@@ -165,10 +187,13 @@ function restoreForeignLauncher(displacedPath: string, launcherPath: string): vo
 function publishLauncherIfVacant(sourcePath: string, destinationPath: string): boolean {
   try {
     linkSync(sourcePath, destinationPath)
+
     return true
   } catch {}
+
   try {
     copyFileSync(sourcePath, destinationPath, constants.COPYFILE_EXCL)
+
     return true
   } catch {
     return false
@@ -177,6 +202,7 @@ function publishLauncherIfVacant(sourcePath: string, destinationPath: string): b
 
 function isExactExecutableLauncher(launcherPath: string, content: string): boolean {
   const launcher = readLauncherFile(launcherPath)
+
   return launcher?.executable === true && launcher.content === content
 }
 
@@ -186,25 +212,34 @@ function isOwnedLauncher(launcherPath: string): boolean {
 
 function readLauncherFile(launcherPath: string): { content: string; executable: boolean } | null {
   let fd: number | undefined
+
   try {
     fd = openSync(launcherPath, constants.O_RDONLY | constants.O_NONBLOCK | constants.O_NOFOLLOW)
     const before = fstatSync(fd)
+
     if (!before.isFile() || before.size > LAUNCHER_MAX_BYTES) {
       return null
     }
+
     const bytes = Buffer.alloc(before.size)
     let offset = 0
+
     while (offset < bytes.length) {
       const count = readSync(fd, bytes, offset, bytes.length - offset, offset)
+
       if (count === 0) {
         return null
       }
+
       offset += count
     }
+
     const after = fstatSync(fd)
+
     if (after.size !== before.size || after.mtimeMs !== before.mtimeMs) {
       return null
     }
+
     return { content: bytes.toString('utf8'), executable: (before.mode & 0o111) !== 0 }
   } catch {
     return null
@@ -223,6 +258,7 @@ function unlinkIfPresent(candidatePath: string): void {
 
 function buildStableLauncherScript(cacheRootPath: string): string {
   const launcherDirectory = dirname(resolveAppImageStableLauncherPath(cacheRootPath))
+
   return `#!/usr/bin/env bash
 ${LAUNCHER_MARKER}
 shopt -s execfail

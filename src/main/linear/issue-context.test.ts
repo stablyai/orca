@@ -3,8 +3,11 @@ import type { LinearClientForWorkspace } from './client'
 import type { LinearWorkspace } from '../../shared/linear/workspace-types'
 
 const getClients = vi.fn()
+
 const getStatus = vi.fn()
+
 const isAuthError = vi.fn()
+
 const clearToken = vi.fn()
 
 vi.mock('./linear-request-concurrency', () => ({

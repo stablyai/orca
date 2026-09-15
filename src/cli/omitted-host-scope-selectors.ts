@@ -49,13 +49,16 @@ export async function resolveOmittedHostScopeSelectors(
     hostId,
     host: parseExecutionHostId(hostId)
   }))
+
   const environments = parsed.some((entry) => entry.host?.kind === 'runtime')
     ? await listPairedEnvironments()
     : []
+
   // Why: SSH targets need a round trip, so only pay for it when an ssh host was actually omitted.
   const sshTargets = parsed.some((entry) => entry.host?.kind === 'ssh')
     ? await listSshTargets(client)
     : []
+
   return parsed.map(({ hostId, host }) => ({
     hostId,
     selector: resolveSelector(host, environments, sshTargets)
@@ -67,6 +70,7 @@ async function listPairedEnvironments(): Promise<{ id: string; name: string }[]>
     import('./runtime/environments.js'),
     import('./runtime-client.js')
   ])
+
   return listEnvironments(getDefaultUserDataPath()).map((environment) => ({
     id: environment.id,
     name: environment.name
@@ -81,13 +85,17 @@ function resolveSelector(
   if (host?.kind === 'local') {
     return '--host local'
   }
+
   if (host?.kind === 'ssh') {
     return findSshTargetByName(sshTargets, host.targetId) ? `--host ssh:${host.targetId}` : null
   }
+
   if (host?.kind === 'runtime') {
     const environment = findEnvironmentByName(environments, host.environmentId)
+
     return environment ? `--environment ${environment.name}` : null
   }
+
   return null
 }
 
@@ -96,20 +104,27 @@ export function formatListingHostScope(scope: ListingHostScopeWithSelectors | un
   if (!scope) {
     return 'scope: unverifiable — this host does not report which hosts it lists'
   }
+
   const covered = scope.hostIds.length > 0 ? scope.hostIds.join(', ') : 'none'
+
   if (scope.omittedHostIds.length === 0) {
     return `scope: ${covered}`
   }
+
   const selectorByHostId = new Map(
     (scope.omittedHostSelectors ?? []).map((entry) => [entry.hostId, entry.selector])
   )
+
   const omitted = scope.omittedHostIds.map((hostId) => {
     if (!selectorByHostId.has(hostId)) {
       return hostId
     }
+
     const selector = selectorByHostId.get(hostId)
+
     return selector ? `${hostId} (${selector})` : `${hostId} (not selectable from this machine)`
   })
+
   return `scope: ${covered} — not covered: ${omitted.join(', ')}`
 }
 
@@ -119,8 +134,10 @@ export async function annotateOmittedHostScope(
   result: { hostScope?: ListingHostScopeWithSelectors }
 ): Promise<void> {
   const scope = result.hostScope
+
   if (!scope || scope.omittedHostIds.length === 0) {
     return
   }
+
   scope.omittedHostSelectors = await resolveOmittedHostScopeSelectors(client, scope.omittedHostIds)
 }

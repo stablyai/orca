@@ -5,11 +5,13 @@ import { asRecord, extractString, normalizeTitleText } from './session-scanner-v
 
 export function isCodexWorkerSession(payload: Record<string, unknown>): boolean {
   const threadSource = extractString(payload.thread_source) ?? extractString(payload.threadSource)
+
   if (threadSource) {
     return threadSource.toLowerCase() !== 'user'
   }
 
   const source = asRecord(payload.source)
+
   return Boolean(asRecord(source?.subagent))
 }
 

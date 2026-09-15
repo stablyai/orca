@@ -12,6 +12,7 @@ type RankedCommand = {
 }
 
 const NO_MATCH = Number.POSITIVE_INFINITY
+
 export const TERMINAL_QUICK_COMMAND_SEARCH_QUERY_MAX_BYTES = 2 * 1024
 
 export function isTerminalQuickCommandSearchQueryTooLarge(
@@ -30,6 +31,7 @@ export function searchTerminalQuickCommands(
   }
 
   const query = normalizeSearchText(rawQuery)
+
   if (!query) {
     return [...commands]
   }
@@ -37,12 +39,14 @@ export function searchTerminalQuickCommands(
   const matches: RankedCommand[] = []
   commands.forEach((command, index) => {
     const score = scoreQuickCommand(command, query)
+
     if (score !== NO_MATCH) {
       matches.push({ command, score, index })
     }
   })
 
   matches.sort((a, b) => a.score - b.score || a.index - b.index)
+
   return matches.map((match) => match.command)
 }
 
@@ -60,6 +64,7 @@ export function getTerminalQuickCommandPickerValue({
   }
 
   const query = normalizeSearchText(rawQuery)
+
   if (!query) {
     if (
       preferredCommandId &&
@@ -67,60 +72,78 @@ export function getTerminalQuickCommandPickerValue({
     ) {
       return preferredCommandId
     }
+
     return filteredCommands[0]?.id ?? ''
   }
+
   return filteredCommands[0]?.id ?? ''
 }
 
 function scoreQuickCommand(command: TerminalQuickCommand, query: string): number {
   let score = scoreCandidate(query, command.label, 0)
+
   // A field cannot improve a score already at or below its base score.
   if (score > 200 && isTerminalAgentQuickCommand(command)) {
     score = Math.min(score, scoreCandidate(query, command.agent, 200))
   }
+
   if (score > 400) {
     score = Math.min(score, scoreCandidate(query, getTerminalQuickCommandBody(command), 400))
   }
+
   return score
 }
 
 function scoreCandidate(query: string, rawCandidate: string, baseScore: number): number {
   const candidate = normalizeSearchText(rawCandidate)
+
   if (!candidate) {
     return NO_MATCH
   }
+
   if (candidate === query) {
     return baseScore
   }
+
   if (candidate.startsWith(query)) {
     return baseScore + 50
   }
+
   const wordIndex = candidate.indexOf(` ${query}`)
+
   if (wordIndex !== -1) {
     return baseScore + 100 + wordIndex
   }
+
   const index = candidate.indexOf(query)
+
   if (index !== -1) {
     return baseScore + 200 + index
   }
+
   return NO_MATCH
 }
 
 function normalizeSearchText(value: string): string {
   let normalized = ''
   let pendingWhitespace = false
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (isTerminalQuickCommandSearchWhitespace(code)) {
       pendingWhitespace = normalized.length > 0
       continue
     }
+
     if (pendingWhitespace) {
       normalized += ' '
       pendingWhitespace = false
     }
+
     normalized += value.charAt(index).toLowerCase()
   }
+
   return normalized
 }
 

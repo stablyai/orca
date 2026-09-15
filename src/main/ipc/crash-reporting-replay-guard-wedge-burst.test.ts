@@ -8,7 +8,9 @@ import {
 import { recordRendererBreadcrumbFromRenderer } from './crash-reporting-renderer-breadcrumbs'
 
 type SpanOptions = { attributes: Record<string, unknown> }
+
 const startSpanMock = vi.fn((_name: string, _options: SpanOptions) => ({ end: () => {} }))
+
 vi.mock('../observability/tracer', () => ({
   startSpan: (name: string, options: SpanOptions) => startSpanMock(name, options)
 }))

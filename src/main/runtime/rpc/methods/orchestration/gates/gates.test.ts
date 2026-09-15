@@ -112,6 +112,7 @@ describe('orchestration RPC methods', () => {
       const result = (await call('orchestration.gateList', {
         status: 'resolved'
       })) as { count: number }
+
       expect(result.count).toBe(1)
     })
 

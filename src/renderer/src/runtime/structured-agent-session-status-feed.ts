@@ -51,23 +51,29 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       listener()
     }
   }
+
   const setSnapshot = (next: StructuredAgentSessionStatusSnapshot): void => {
     snapshot = next
     emit()
   }
+
   const applyEvent = (event: AgentSessionStatusEvent): void => {
     if (event.type === 'snapshot') {
       reconnectAttempt = 0
       // Merged, not replaced: a restarted host restores its readable sessions asynchronously, so
       // the first snapshot can be empty and dropping those rows flickers every one to no-status.
       const next = new Map(snapshot)
+
       for (const session of event.sessions) {
         confirmedSessions.add(session.sessionId)
         next.set(session.sessionId, session)
       }
+
       setSnapshot(next)
+
       return
     }
+
     if (event.type === 'status') {
       confirmedSessions.add(event.session.sessionId)
       const next = new Map(snapshot)
@@ -75,54 +81,68 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       setSnapshot(next)
     }
   }
+
   const active = (candidate: number): boolean => activations.size > 0 && candidate === generation
+
   const clearReconnect = (): void => {
     if (reconnectTimer) {
       clearTimeout(reconnectTimer)
       reconnectTimer = null
     }
   }
+
   const dropHandle = (): void => {
     handle?.unsubscribe()
     handle = null
   }
+
   const revokeSnapshotOwnership = (): void => {
     let next: Map<string, AgentSessionStatusSummary> | null = null
+
     for (const [sessionId, summary] of snapshot) {
       if (!summary.hostExecutionOwned) {
         continue
       }
+
       if (!next) {
         next = new Map(snapshot)
       }
+
       const { hostExecutionOwned: _owned, ...retained } = summary
       next.set(sessionId, retained)
     }
+
     if (next) {
       snapshot = next
       emit()
     }
   }
+
   let open = (): void => {}
+
   const scheduleReconnect = (candidate: number): void => {
     if (!active(candidate) || reconnectTimer) {
       return
     }
+
     const delay = Math.min(250 * 2 ** reconnectAttempt, RECONNECT_MAX_DELAY_MS)
     reconnectAttempt += 1
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null
+
       if (active(candidate)) {
         open()
       }
     }, delay)
   }
+
   // Losing contact is never exit: the sessions go unverifiable and this client stops
   // claiming host-owned execution, but nothing here settles them.
   const loseConnection = (candidate: number): void => {
     if (candidate !== generation) {
       return
     }
+
     generation += 1
     confirmedSessions.clear()
     revokeSnapshotOwnership()
@@ -130,6 +150,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     dropHandle()
     scheduleReconnect(generation)
   }
+
   const subscribeToHost = (candidate: number): void => {
     void subscribeStructuredAgentSessionStatus(
       target,
@@ -137,10 +158,13 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
         if (!active(candidate)) {
           return
         }
+
         if (event.type === 'end') {
           loseConnection(candidate)
+
           return
         }
+
         applyEvent(event)
       },
       () => {
@@ -163,14 +187,18 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       })
       .catch(() => loseConnection(candidate))
   }
+
   open = (): void => {
     const candidate = ++generation
     dropHandle()
+
     if (target.kind !== 'environment') {
       // A local host is this build; only a remote one can predate the method.
       subscribeToHost(candidate)
+
       return
     }
+
     const environmentId = target.environmentId
     void runtimeEnvironmentSupportsCapability(
       environmentId,
@@ -180,16 +208,20 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
         if (!active(candidate)) {
           return
         }
+
         // A host without the method is terminal, not a fault: retrying would relay-probe
         // forever. A failed probe is not an answer, so that path still reconnects.
         if (supported) {
           subscribeToHost(candidate)
+
           return
         }
+
         console.warn('[structured-session-status] host too old for the status feed', environmentId)
       })
       .catch(() => loseConnection(candidate))
   }
+
   const stop = (): void => {
     generation += 1
     clearReconnect()
@@ -205,11 +237,14 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     activate: () => {
       const token = Symbol('status-feed')
       activations.add(token)
+
       if (activations.size === 1) {
         open()
       }
+
       return () => {
         activations.delete(token)
+
         if (activations.size === 0) {
           stop()
         }
@@ -220,6 +255,7 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
       confirmedSessions.has(sessionId) ? 'live' : 'unverifiable',
     subscribe: (listener) => {
       listeners.add(listener)
+
       return () => listeners.delete(listener)
     },
     stop
@@ -231,10 +267,12 @@ export function getStructuredAgentSessionStatusFeed(
 ): StructuredAgentSessionStatusFeedOwner {
   const key = structuredAgentSessionStatusFeedKey(target)
   let owner = owners.get(key)
+
   if (!owner) {
     owner = createOwner(target)
     owners.set(key, owner)
   }
+
   return owner
 }
 
@@ -244,5 +282,6 @@ export function resetStructuredAgentSessionStatusFeedsForTests(): void {
   for (const owner of owners.values()) {
     owner.stop()
   }
+
   owners.clear()
 }

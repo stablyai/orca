@@ -29,6 +29,7 @@ const {
 
 vi.mock('./daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
+
   return {
     ...actual,
     getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock
@@ -37,6 +38,7 @@ vi.mock('./daemon-health', async (importOriginal) => {
 
 vi.mock('./daemon-tcc-attribution', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonTccAttributionModule>()
+
   return {
     ...actual,
     getMacDaemonTccAttributionHealth: getMacDaemonTccAttributionHealthMock
@@ -45,6 +47,7 @@ vi.mock('./daemon-tcc-attribution', async (importOriginal) => {
 
 vi.mock('./daemon-bundle-staleness', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonBundleStalenessModule>()
+
   return {
     ...actual,
     isDaemonStaleForCurrentBundle: isDaemonStaleForCurrentBundleMock
@@ -58,6 +61,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   let server: DaemonServer
   let adapter: DaemonPtyAdapter
   let lastSubprocess: ReturnType<typeof createMockSubprocess>
+
   let lastSpawnOpts: {
     sessionId: string
     cols: number
@@ -66,14 +70,17 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     env?: Record<string, string>
     command?: string
   } | null
+
   let daemonLogEvents: string[]
 
   beforeEach(async () => {
     const harness = await startDaemonAdapterHarness((opts) => {
       lastSpawnOpts = opts
       lastSubprocess = createMockSubprocess()
+
       return lastSubprocess
     })
+
     dir = harness.dir
     socketPath = harness.socketPath
     tokenPath = harness.tokenPath
@@ -116,6 +123,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('carries classified startup spans from the daemon source to the adapter', async () => {
       const onData = vi.fn()
       adapter.onData(onData)
+
       const { id } = await adapter.spawn({
         cols: 80,
         rows: 24,
@@ -124,6 +132,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           deadlineMs: 5_000
         }
       })
+
       const query = '\x1b]10;?\x07'
       lastSubprocess._simulateData(query)
       lastSubprocess._simulateData('prompt')
@@ -148,13 +157,16 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
+
       const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
         isNew: true,
         pid: null,
         shellState: 'unsupported',
         snapshot: null
       } as never)
+
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 23 })
+
       try {
         await legacy.spawn({
           sessionId: 'legacy-session',
@@ -180,19 +192,23 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const sessionId = 'exit-before-create-reply'
       const exits: { id: string; incarnationId?: string }[] = []
       adapter.onExit((payload) => exits.push(payload))
+
       const client = (
         adapter as unknown as {
           client: { request: (type: string, payload?: unknown) => Promise<unknown> }
         }
       ).client
+
       const originalRequest = client.request.bind(client)
       vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
         const response = await originalRequest(type, payload)
+
         if (type === 'createOrAttach') {
           const exitCount = exits.length
           lastSubprocess._simulateExit(0)
           await waitFor(() => exits.length === exitCount + 1)
         }
+
         return response
       })
 
@@ -203,11 +219,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(exits[0]?.incarnationId).toBeDefined()
       expect(exits[1]?.incarnationId).toBeDefined()
       expect(exits[1]?.incarnationId).not.toBe(exits[0]?.incarnationId)
+
       const internals = adapter as unknown as {
         activeSessionIds: Set<string>
         sessionIncarnations: Map<string, string>
         pendingSpawnOperationsBySessionId: Map<string, unknown>
       }
+
       expect(internals.activeSessionIds.has(sessionId)).toBe(false)
       expect(internals.sessionIncarnations.has(sessionId)).toBe(false)
       expect(internals.pendingSpawnOperationsBySessionId.has(sessionId)).toBe(false)
@@ -221,36 +239,44 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
         agent: 'codex' as const
       }
+
       const surface = {
         worktreeId: 'worktree',
         tabId: 'tab',
         leafId: '11111111-1111-4111-8111-111111111111',
         terminalHandle: 'term_claimed'
       }
+
       const canonicalId = 'canonical-claimed-session'
+
       const first = await adapter.spawn({
         cols: 80,
         rows: 24,
         sessionId: canonicalId,
         agentSessionEnsure: { claim, surface }
       })
+
       expect(first.agentSessionEnsure?.disposition).toBe('created')
 
       const exits: { id: string; incarnationId?: string }[] = []
       adapter.onExit((payload) => exits.push(payload))
+
       const client = (
         adapter as unknown as {
           client: { request: (type: string, payload?: unknown) => Promise<unknown> }
         }
       ).client
+
       const originalRequest = client.request.bind(client)
       vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
         const response = await originalRequest(type, payload)
+
         if (type === 'createOrAttach') {
           const exitCount = exits.length
           lastSubprocess._simulateExit(0)
           await waitFor(() => exits.length === exitCount + 1)
         }
+
         return response
       })
 
@@ -267,12 +293,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(adopted.id).toBe(canonicalId)
       expect(adopted.agentSessionEnsure?.disposition).toBe('adopted')
       expect(adapter.didExitBeforeSpawnReply(adopted)).toBe(true)
+
       const internals = adapter as unknown as {
         activeSessionIds: Set<string>
         sessionIncarnations: Map<string, string>
         pendingSpawnOperationsBySessionId: Map<string, unknown>
         pendingClaimSpawnOperations: Set<unknown>
       }
+
       expect(internals.activeSessionIds.has(canonicalId)).toBe(false)
       expect(internals.sessionIncarnations.has(canonicalId)).toBe(false)
       expect(internals.pendingSpawnOperationsBySessionId.has('different-requested-session')).toBe(
@@ -283,16 +311,20 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('does not dispatch createOrAttach when cancellation wins during preflight', async () => {
       let finishPreflight: (() => void) | undefined
+
       const preflight = new Promise<void>((resolve) => {
         finishPreflight = resolve
       })
+
       const internals = adapter as unknown as {
         ensureConnected(): Promise<void>
         client: { request: (...args: unknown[]) => Promise<unknown> }
       }
+
       const ensureConnected = vi
         .spyOn(internals, 'ensureConnected')
         .mockImplementation(() => preflight)
+
       const request = vi.spyOn(internals.client, 'request')
       const abort = new AbortController()
 
@@ -313,8 +345,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('keeps a reattached native UNC session native despite a conflicting WSL preference', async () => {
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
       try {
         const sessionId = 'native-conflicting-wsl-attach'
+
         const created = await adapter.spawn({
           cols: 80,
           rows: 24,
@@ -322,6 +356,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           cwd: '\\\\server\\share\\repo',
           shellOverride: 'powershell.exe'
         })
+
         const attached = await adapter.spawn({
           cols: 80,
           rows: 24,
@@ -377,6 +412,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('sends pause/resume as fire-and-forget notifications on the current protocol', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+
       try {
         adapter.pauseProducer(id)
         adapter.resumeProducer(id)
@@ -390,6 +426,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('never sends pause/resume notifications on a legacy protocol version', () => {
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 18 })
+
       try {
         legacy.pauseProducer('legacy-session')
         legacy.resumeProducer('legacy-session')
@@ -415,12 +452,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         spawnSubprocess: (opts) => {
           lastSpawnOpts = opts
           lastSubprocess = createMockSubprocess()
+
           return lastSubprocess
         }
       })
       await server.start()
 
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+
       try {
         // Any reconnecting operation must flush the owed resume first.
         await adapter.listProcesses()
@@ -532,15 +571,19 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       lastSubprocess._simulateData('plain output\r\n')
       const realRequest = DaemonClient.prototype.request
+
       const legacyClient = vi
         .spyOn(DaemonClient.prototype, 'request')
         .mockImplementation(async function (this: DaemonClient, type, payload, timeoutMs) {
           const result = await realRequest.call(this, type, payload, timeoutMs)
+
           if (type !== 'getSnapshot') {
             return result
           }
+
           const { snapshot } = result as { snapshot: { modes: Record<string, unknown> } }
           const { kittyKeyboardFlags: _omitted, ...modes } = snapshot.modes
+
           return { snapshot: { ...snapshot, modes } }
         })
 
@@ -583,11 +626,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
 
       const freshAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+
       try {
         await freshAdapter.shutdown(id, { immediate: true })
       } finally {
         freshAdapter.dispose()
       }
+
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
       await expect(adapter.listProcesses()).resolves.not.toContainEqual(
         expect.objectContaining({ id })
@@ -600,6 +645,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           adapter.spawn({ cols: 80, rows: 24, sessionId }).then((result) => result.id)
         )
       )
+
       const freshAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
       daemonLogEvents.length = 0
 
@@ -716,11 +762,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       // when a fire-and-forget write targets a session it no longer owns.
       await adapter.spawn({ cols: 80, rows: 24 })
       const sessionId = 'replacement-known-before-untagged-exit'
+
       const internals = adapter as unknown as {
         activeSessionIds: Set<string>
         sessionIncarnations: Map<string, string>
         client: { onEvent: (listener: (event: unknown) => void) => () => void }
       }
+
       internals.activeSessionIds.add(sessionId)
       internals.sessionIncarnations.set(sessionId, 'incarnation-new')
 
@@ -728,6 +776,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       adapter.onExit((payload) => exits.push(payload))
       const rawEvents: unknown[] = []
       const removeRawListener = internals.client.onEvent((event) => rawEvents.push(event))
+
       try {
         expect(adapter.write(sessionId, 'stale-input')).toBe(true)
         await waitFor(() =>
@@ -749,11 +798,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('requires incarnation proof when matching an exit received before a spawn reply', () => {
       const sessionId = 'spawn-reply-incarnation-proof'
+
       const internals = adapter as unknown as {
         activeSessionIds: Set<string>
         sessionIncarnations: Map<string, string>
         resultForExitBeforeSpawnReply: (...args: unknown[]) => unknown
       }
+
       internals.activeSessionIds.add(sessionId)
       internals.sessionIncarnations.set(sessionId, 'incarnation-new')
 
@@ -762,6 +813,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         ignoredExitIncarnationIds: new Set<string>(),
         ignoreNextExit: false
       }
+
       const result = {
         isNew: true,
         snapshot: null,
@@ -777,11 +829,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('does not treat an untagged exit as replacement proof when a generation is known', () => {
       const sessionId = 'spawn-reply-untagged-replacement'
+
       const internals = adapter as unknown as {
         activeSessionIds: Set<string>
         sessionIncarnations: Map<string, string>
         resultForExitBeforeSpawnReply: (...args: unknown[]) => unknown
       }
+
       internals.activeSessionIds.add(sessionId)
       internals.sessionIncarnations.set(sessionId, 'incarnation-before-retry')
 
@@ -790,6 +844,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         ignoredExitIncarnationIds: new Set<string>(),
         ignoreNextExit: false
       }
+
       const result = {
         isNew: true,
         snapshot: null,
@@ -856,6 +911,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       const ids = ['sess-a', 'sess-b', 'sess-c']
       const internals = adapter as unknown as { activeSessionIds: Set<string> }
+
       for (const id of ids) {
         internals.activeSessionIds.add(id)
       }
@@ -864,6 +920,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       expect(exits).toHaveLength(3)
       expect(exits.map((e) => e.id).sort()).toEqual([...ids].sort())
+
       for (const { code } of exits) {
         expect(code).toBe(-1)
       }

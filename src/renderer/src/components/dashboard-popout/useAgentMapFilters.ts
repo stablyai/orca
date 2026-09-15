@@ -31,14 +31,17 @@ type AgentMapFacetState = Omit<AgentMapFilterState, 'agentTypes'>
 
 function toggle<T>(current: ReadonlySet<T>, value: T): Set<T> {
   const next = new Set(current)
+
   if (!next.delete(value)) {
     next.add(value)
   }
+
   return next
 }
 
 function mapFacets(state: AgentMapFilterState): AgentMapFacetState {
   const { agentTypes: _agentTypes, ...facets } = state
+
   return facets
 }
 
@@ -48,7 +51,9 @@ export function useAgentMapFilters(agentTypes: readonly string[]): AgentMapFilte
   const [filters, setFilters] = useState<AgentMapFacetState>(() =>
     mapFacets(emptyAgentMapFilterState(agentTypes))
   )
+
   const [mutedAgentTypes, setMutedAgentTypes] = useState<ReadonlySet<string>>(() => new Set())
+
   const enabledAgentTypes = useMemo(
     () => new Set(agentTypes.filter((agentType) => !mutedAgentTypes.has(agentType))),
     [agentTypes, mutedAgentTypes]

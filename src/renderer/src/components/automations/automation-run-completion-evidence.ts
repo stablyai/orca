@@ -26,6 +26,7 @@ export function hasAutomationRunCompletionEvidence({
       return true
     }
   }
+
   for (const [paneKey, retained] of Object.entries(retainedAgentsByPaneKey)) {
     if (
       automationRunMatchesPaneKey(run, paneKey) &&
@@ -34,5 +35,6 @@ export function hasAutomationRunCompletionEvidence({
       return true
     }
   }
+
   return false
 }

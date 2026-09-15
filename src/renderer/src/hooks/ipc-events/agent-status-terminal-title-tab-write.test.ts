@@ -15,8 +15,11 @@ vi.mock('../agent-hook-completion-notifications', () => ({
 }))
 
 const TAB_ID = 'tab-1'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const WORKTREE_ID = 'repo-1::/wt-1'
+
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 
 /**
@@ -38,6 +41,7 @@ function storeWithDivergedTitleSlots(args: {
     sortOrder: 0,
     createdAt: 0
   }
+
   return {
     tabsByWorktree: { [WORKTREE_ID]: [tab] },
     unifiedTabsByWorktree: {},
@@ -76,7 +80,9 @@ describe('hook-driven tab title writes', () => {
       tabTitle: 'Codex - action required',
       paneSlotTitle: 'Codex ready'
     })
+
     const resolved = resolvePaneKey(store, PANE_KEY)
+
     const nextTitle = resolveAgentStatusTerminalTitle(
       { agentType: 'codex', state: 'done' },
       resolved.title
@@ -98,6 +104,7 @@ describe('hook-driven tab title writes', () => {
       tabTitle: 'Codex ready',
       paneSlotTitle: 'Codex ready'
     })
+
     const resolved = resolvePaneKey(store, PANE_KEY)
 
     expect(
@@ -140,6 +147,7 @@ describe('hook-driven tab title IPC integration', () => {
       const store = createTestStore()
       const seeded = storeWithDivergedTitleSlots({ tabTitle: title, paneSlotTitle: 'Codex ready' })
       const otherLeaf = '22222222-2222-4222-8222-222222222222'
+
       if (mode === 'inactive-pane') {
         seeded.terminalLayoutsByTabId[TAB_ID] = {
           root: {
@@ -153,7 +161,9 @@ describe('hook-driven tab title IPC integration', () => {
           titlesByLeafId: { [LEAF_ID]: 'Codex ready', [otherLeaf]: title }
         }
       }
+
       store.setState({ ...seeded, workspaceSessionReady: true, activeWorktreeId: null })
+
       const events = states.map((state, index): AgentStatusIpcPayload & AgentStatusSetData => ({
         paneKey: PANE_KEY,
         worktreeId: WORKTREE_ID,
@@ -164,9 +174,11 @@ describe('hook-driven tab title IPC integration', () => {
         receivedAt: Date.now() + index,
         stateStartedAt: Date.now() + index
       }))
+
       let onSet: (payload: AgentStatusSetData) => void = () => {
         throw new Error('listener missing')
       }
+
       vi.doMock('../../store', () => ({ useAppStore: store }))
       vi.stubGlobal(
         'window',
@@ -174,6 +186,7 @@ describe('hook-driven tab title IPC integration', () => {
           getSnapshot: async () => (mode === 'snapshot' ? events : []),
           onSet: (callback) => {
             onSet = callback
+
             return () => {}
           }
         })
@@ -183,10 +196,12 @@ describe('hook-driven tab title IPC integration', () => {
       const updateTitles = vi.spyOn(store.getState(), 'updateTabTitles')
       const unsubs: (() => void)[] = []
       const bridge = registerAgentStatusIpcBridge(unsubs)
+
       try {
         if (mode !== 'snapshot') {
           onSet(events[0])
         }
+
         await vi.waitFor(() => {
           expect(store.getState().agentStatusByPaneKey[PANE_KEY]?.state).toBe(states.at(-1))
         })

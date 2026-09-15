@@ -48,6 +48,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
   const runtimeSubscribe = vi.fn()
   const refreshSessionTabsSnapshot = vi.fn(async () => {})
   const subscriptionSendBinary = vi.fn()
+
   let subscriptionCallbacks: {
     onResponse: (response: unknown) => void
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
@@ -63,14 +64,19 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
     const frames = subscriptionSendBinary.mock.calls
       .map((call) => decodeTerminalStreamFrame(call[0]))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe)
+
     const frame = frames.at(-1)
+
     if (!frame) {
       throw new Error('missing terminal subscribe frame')
     }
+
     const payload = decodeTerminalStreamJson<{ streamId: number; terminal: string }>(frame.payload)
+
     if (!payload) {
       throw new Error('invalid terminal subscribe payload')
     }
+
     return payload
   }
 
@@ -81,7 +87,9 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
         if (frame?.opcode !== TerminalStreamOpcode.Subscribe) {
           return []
         }
+
         const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
+
         return payload ? [payload.terminal] : []
       })
   }
@@ -118,6 +126,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
       if (request.method === 'session.tabs.activate') {
         const params = request.params as { tabId: string; leafId?: string }
         const resolvedLeafId = params.leafId ?? 'pane:1'
+
         return {
           ok: true,
           result: {
@@ -142,9 +151,11 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
           }
         }
       }
+
       if (request.method === 'terminal.resolvePane') {
         const params = request.params as { paneKey: string; worktreeId: string }
         const separator = params.paneKey.indexOf(':')
+
         return {
           ok: true,
           result: {
@@ -157,6 +168,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
           }
         }
       }
+
       return { ok: true, result: { terminal: { handle: 'terminal-1' } } }
     })
   }
@@ -175,6 +187,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
         queueMicrotask(emitMultiplexReady)
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
@@ -191,18 +204,22 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
   it('sanity: the exact reported timeout+funnel toast text classifies as recoverable, so flood text must come from unclassified surfaces', async () => {
     const { isRecoverableRemoteRuntimeConnectionError, toRemoteRuntimeClientErrorLike } =
       await import('../../../../shared/remote-runtime-client-error-classification')
+
     const rendererSide = toRemoteRuntimeClientErrorLike(
       electronIpcShapedRejection('RemoteRuntimeClientError', TIMEOUT_WITH_TAILSCALE_HINT)
     )
+
     // Electron IPC stripped the code; the fragment list still catches this one.
     expect(rendererSide.code).toBeUndefined()
     expect(isRecoverableRemoteRuntimeConnectionError(rendererSide)).toBe(true)
+
     // …but the queue-overload rejection produced by the same outage (main's
     // per-selector RPC queue saturated by 15s-timeout calls) is classified
     // fatal even though its own code says "retry later".
     const overload = toRemoteRuntimeClientErrorLike(
       electronIpcShapedRejection('RuntimeRpcCallQueueOverloadError', QUEUE_OVERLOAD_RAW)
     )
+
     expect(overload.code).toBeUndefined()
     // DESIRED: transient capacity pressure during an outage is recoverable,
     // not a fatal red-toast error. RED on main: not in codes or fragments.
@@ -222,17 +239,20 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
         sendRejections += 1
         throw electronIpcShapedRejection('RuntimeRpcCallQueueOverloadError', QUEUE_OVERLOAD_RAW)
       }
+
       return healthyImpl(request)
     })
 
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
     const recoveryPhases: string[] = []
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId: 'pane:1'
     })
+
     transport.attach({
       existingPtyId: 'remote:env-1@@terminal-1',
       cols: 80,
@@ -261,17 +281,22 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
 
   it('STUCK (cancel dead-end): a fatal resubscribe error leaves no recovery path after connectivity returns', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const { retryAllRemoteRuntimePtyRecoveriesNow } =
       await import('./remote-runtime-pty-recovery-state')
+
     const { updateTerminalRemoteRuntimeRecoveryUiState } =
       await import('./terminal-remote-runtime-recovery-ui-state')
+
     const onError = vi.fn()
     let bannerUiState: Parameters<typeof updateTerminalRemoteRuntimeRecoveryUiState>[0] = {}
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId: 'pane:1'
     })
+
     transport.attach({
       existingPtyId: 'remote:env-1@@terminal-1',
       cols: 80,
@@ -294,6 +319,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
       if (request.method === 'terminal.resolvePane') {
         throw Object.assign(new Error(fatalMessage), { code: 'unauthorized' })
       }
+
       throw electronIpcShapedRejection('RemoteRuntimeClientError', TIMEOUT_WITH_TAILSCALE_HINT)
     })
     subscriptionCallbacks?.onClose?.()
@@ -338,15 +364,19 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
   // PR #11542 owns reconnect activation for STA-3002; it has landed, so this must stay green.
   it('STUCK (STA-3002 shape): reconnect never re-materializes a host surface demoted to pending-handle, even via online trigger and Reconnect', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const { retryAllRemoteRuntimePtyRecoveriesNow } =
         await import('./remote-runtime-pty-recovery-state')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-host-tab-1',
         leafId: 'leaf-1'
       })
+
       transport.attach({
         existingPtyId: 'remote:env-1@@terminal-1',
         cols: 80,
@@ -364,6 +394,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
       let activateCallsAfterOutage = 0
       let listCallsAfterOutage = 0
       const activateIntentsAfterOutage: unknown[] = []
+
       const hostSnapshot = () => ({
         ok: true,
         result: {
@@ -388,18 +419,23 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
           ]
         }
       })
+
       runtimeCall.mockImplementation(
         async (request: { method: string; params?: { intent?: unknown } }) => {
           if (request.method === 'session.tabs.list') {
             listCallsAfterOutage += 1
+
             return hostSnapshot()
           }
+
           if (request.method === 'session.tabs.activate') {
             activateCallsAfterOutage += 1
             activateIntentsAfterOutage.push(request.params?.intent)
             hostActivated = true
+
             return hostSnapshot()
           }
+
           return { ok: true, result: {} }
         }
       )

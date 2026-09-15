@@ -10,8 +10,10 @@ export async function callRuntimeSessionSearch(
   params: Record<string, unknown>
 ): Promise<unknown> {
   const response = await callRuntimeEnvironment(userDataPath, environmentId, method, params)
+
   if (response.ok === true) {
     return response.result
   }
+
   throw Object.assign(new Error(response.error.message), { code: response.error.code })
 }

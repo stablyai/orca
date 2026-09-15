@@ -11,6 +11,7 @@ import { writePluginFileAtomically } from './plugin-atomic-file-write'
 import { recoverPluginLockfile } from './plugin-install-provenance'
 
 export const PLUGIN_LOCKFILE_MAX_BYTES = 5 * 1024 * 1024
+
 const lockfileAccessChains = new Map<string, Promise<void>>()
 
 export function pluginLockfilePath(pluginsDir: string): string {
@@ -23,11 +24,14 @@ async function serializeLockfileAccess<T>(
 ): Promise<T> {
   const previous = lockfileAccessChains.get(pluginsDir) ?? Promise.resolve()
   const run = previous.catch(() => undefined).then(operation)
+
   const settled = run.then(
     () => undefined,
     () => undefined
   )
+
   lockfileAccessChains.set(pluginsDir, settled)
+
   try {
     return await run
   } finally {
@@ -45,25 +49,33 @@ export async function readPluginLockfile(pluginsDir: string): Promise<PluginLock
 
 async function readPluginLockfileUnserialized(pluginsDir: string): Promise<PluginLockfile> {
   let lock = emptyPluginLockfile()
+
   try {
     const chunks: Buffer[] = []
     let totalBytes = 0
+
     for await (const chunk of createReadStream(pluginLockfilePath(pluginsDir))) {
       const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
       totalBytes += bytes.byteLength
+
       if (totalBytes > PLUGIN_LOCKFILE_MAX_BYTES) {
         throw new Error('plugin lockfile exceeds its size limit')
       }
+
       chunks.push(bytes)
     }
+
     lock = parsePluginLockfile(JSON.parse(Buffer.concat(chunks, totalBytes).toString('utf8')))
   } catch {
     // Missing/corrupt global indexes can be reconstructed from current-version provenance.
   }
+
   const recovered = await recoverPluginLockfile(pluginsDir, lock)
+
   if (recovered.changed) {
     await writePluginLockfileUnserialized(pluginsDir, recovered.lock).catch(() => undefined)
   }
+
   return recovered.lock
 }
 

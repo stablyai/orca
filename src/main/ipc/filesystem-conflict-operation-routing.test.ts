@@ -11,36 +11,46 @@ import {
 const getLocalGitOptionsForRegisteredWorktreeMock = vi.hoisted(() => vi.fn())
 
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
+
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
+
 vi.mock(
   '../wsl-unc-delete',
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
+
 vi.mock(
   '../crash-reporting/crash-breadcrumb-store',
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
+
 vi.mock(
   '../local-downloaded-folder-promotion',
   async () => (await import('./filesystem-test-harness')).folderPromotionMock
 )
+
 vi.mock(
   '../git/status',
   async () => (await import('./filesystem-test-harness')).gitStatusModuleMock
 )
+
 vi.mock(
   '../git/check-ignored-paths',
   async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
 )
+
 vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness')).gitWorktreeMock)
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
 )
+
 vi.mock(
   '../providers/ssh-git-dispatch',
   async () => (await import('./filesystem-test-harness')).sshGitDispatchMock
 )
+
 vi.mock('./local-worktree-runtime-options', () => ({
   getLocalGitOptionsForRegisteredWorktree: getLocalGitOptionsForRegisteredWorktreeMock,
   getLocalGitOptionsForRepo: vi.fn(() => ({})),

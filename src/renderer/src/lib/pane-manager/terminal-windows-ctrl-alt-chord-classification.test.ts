@@ -11,8 +11,10 @@ import {
 const WINDOWS_ELECTRON_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
   'orca/1.0.0 Chrome/126.0.0.0 Electron/31.0.0 Safari/537.36'
+
 const WINDOWS_FIREFOX_UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:127.0) Gecko/20100101 Firefox/127.0'
+
 const MAC_ELECTRON_UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) ' +
   'orca/1.0.0 Chrome/126.0.0.0 Electron/31.0.0 Safari/537.36'
@@ -57,9 +59,11 @@ function getCore(terminal: Terminal): XtermCoreInternals {
 function getThirdLevelShift(terminal: Terminal): CoreThirdLevelShift {
   const core = getCore(terminal)
   const classify = core._isThirdLevelShift
+
   if (typeof classify !== 'function') {
     throw new Error('xterm no longer exposes _core._isThirdLevelShift')
   }
+
   return classify.bind(core)
 }
 
@@ -96,6 +100,7 @@ describe('installWindowsCtrlAltChordRepair', () => {
     // Upgrade tripwire: if a future xterm rename removes the seam, this fails
     // loudly instead of silently reverting to dropped Ctrl+Alt chords.
     const terminal = new Terminal()
+
     try {
       expect(getThirdLevelShift(terminal)({ isWindows: true }, chord())).toBe(true)
       expect(installWindowsCtrlAltChordRepair(terminal, WINDOWS_ELECTRON_UA)).toBe(true)
@@ -106,6 +111,7 @@ describe('installWindowsCtrlAltChordRepair', () => {
 
   it('reclassifies only genuine Windows Ctrl+Alt chords', () => {
     const terminal = new Terminal()
+
     try {
       installWindowsCtrlAltChordRepair(terminal, WINDOWS_ELECTRON_UA)
       const classify = getThirdLevelShift(terminal)
@@ -125,6 +131,7 @@ describe('installWindowsCtrlAltChordRepair', () => {
 
   it('declines on clients without trustworthy AltGraph state', () => {
     const terminal = new Terminal()
+
     try {
       expect(installWindowsCtrlAltChordRepair(terminal, WINDOWS_FIREFOX_UA)).toBe(false)
       expect(getThirdLevelShift(terminal)({ isWindows: true }, chord())).toBe(true)
@@ -146,14 +153,17 @@ describe('rescued chords are encoded by xterm, not Orca', () => {
     terminal: Terminal
   ): (event: unknown) => { key?: string } | undefined {
     const service = getCore(terminal)._keyboardService
+
     if (typeof service?.evaluateKeyDown !== 'function') {
       throw new Error('xterm no longer exposes _core._keyboardService.evaluateKeyDown')
     }
+
     return service.evaluateKeyDown.bind(service)
   }
 
   it('legacy encoder emits Alt-prefixed bytes matching the Windows E2E', () => {
     const terminal = new Terminal()
+
     try {
       installWindowsCtrlAltChordRepair(terminal, WINDOWS_ELECTRON_UA)
       const evaluate = getEvaluateKeyDown(terminal)
@@ -169,6 +179,7 @@ describe('rescued chords are encoded by xterm, not Orca', () => {
 
   it('kitty encoder takes over once the app negotiates progressive flags', () => {
     const terminal = new Terminal({ vtExtensions: { kittyKeyboard: true } })
+
     try {
       installWindowsCtrlAltChordRepair(terminal, WINDOWS_ELECTRON_UA)
       const kitty = getCore(terminal).coreService?.kittyKeyboard

@@ -4,6 +4,7 @@ import type * as NodeFsPromisesModule from 'node:fs/promises'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 
 const WSL_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
+
 const WSL_DATA_DIR = `${WSL_HOME}/.local/share/opencode`
 
 const mocks = vi.hoisted(() => ({ readdir: vi.fn(), stat: vi.fn() }))
@@ -62,6 +63,7 @@ describe('OpenCode source discovery with a stalled WSL data directory', () => {
       dir === WSL_DATA_DIR ? stalls() : Promise.resolve([] as Dirent[])
     )
     const issues: AiVaultScanIssue[] = []
+
     const discoveries = Promise.all(
       opencodeDiscoveries(
         { opencodeStorageDir: '/home/ada/.local/share/opencode/storage' },
@@ -70,6 +72,7 @@ describe('OpenCode source discovery with a stalled WSL data directory', () => {
         issues
       )
     )
+
     // Two deadlines: the data-dir probe, then the storage scan that queued
     // behind it before the route was flagged stuck.
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS * 2 + 2)
@@ -88,6 +91,7 @@ describe('OpenCode source discovery with a stalled WSL data directory', () => {
     const previousDb = process.env.OPENCODE_DB
     process.env.XDG_DATA_HOME = WSL_HOME
     delete process.env.OPENCODE_DB
+
     try {
       mocks.readdir.mockImplementation(stalls)
       const issues: AiVaultScanIssue[] = []

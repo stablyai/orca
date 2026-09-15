@@ -55,10 +55,13 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
     if (inFlightSubmissions.has(args.reportId)) {
       return store.getById(args.reportId)
     }
+
     if (submittedReportIds.has(args.reportId)) {
       const report = await store.getById(args.reportId)
+
       return report ? { ...report, status: 'sent' as const } : null
     }
+
     return store.dismiss(args.reportId)
   })
 
@@ -79,9 +82,11 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
     'crashReports:copyLatestDiagnostics',
     async (_event, args?: CrashReportCopyDiagnosticsArgs) => {
       const report = await getRequestedCrashReport(store, args)
+
       const baseText = report
         ? formatCrashReportText(report, args?.notes)
         : buildUncapturedCrashReportText(args?.notes)
+
       try {
         clipboard.writeText(
           assertClipboardTextWriteWithinLimit(
@@ -92,8 +97,10 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
         if (isClipboardTextWriteTooLargeError(error)) {
           return { ok: false as const, error: 'Crash diagnostics are too large to copy safely.' }
         }
+
         throw error
       }
+
       return { ok: true as const }
     }
   )
@@ -104,6 +111,7 @@ export function registerCrashReportingHandlers(store: CrashReportStore): void {
       return await recordRendererErrorReport(store, args, event?.sender?.id)
     } catch (error) {
       console.error('[crash-reporting] Failed to record renderer error report:', error)
+
       return { ok: false, error: 'Failed to record renderer error report.' }
     }
   })

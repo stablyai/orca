@@ -40,12 +40,15 @@ export function RemoteStep({
   onStopNestedScan
 }: RemoteStepProps): React.JSX.Element {
   const [browsing, setBrowsing] = useState(false)
+
   const selectedTarget = selectedTargetId
     ? sshTargets.find((target) => target.id === selectedTargetId)
     : null
+
   const selectedTargetLabel =
     selectedTarget?.label ||
     (selectedTarget ? `${selectedTarget.username}@${selectedTarget.host}` : selectedTargetId)
+
   const selectedTargetStatus = selectedTarget?.state?.status ?? 'disconnected'
   const selectedTargetConnected = selectedTargetStatus === 'connected'
 
@@ -174,6 +177,7 @@ export function RemoteStep({
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
                   event.preventDefault()
+
                   if (selectedTargetId && remotePath.trim() && !isAddingRemote) {
                     onAdd()
                   }

@@ -25,11 +25,14 @@ export function reportWindowsCommandLineRecoveryHealth(rows: CommandLineRow[]): 
   if (warned) {
     return
   }
+
   const self = rows.find((row) => row.pid === process.pid)
+
   // No self row is a different failure, and the caller's own guard rejects it.
   if (!self || (self.commandLine ?? '') !== '') {
     return
   }
+
   warned = true
   const recovered = rows.filter((row) => (row.commandLine ?? '') !== '').length
   console.warn(

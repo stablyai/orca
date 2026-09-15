@@ -96,6 +96,7 @@ describe('tab title resolution', () => {
       sessionId: 'claude-session',
       title: 'Claude conversation'
     }
+
     expect(
       resolveTerminalTabTitle(
         {
@@ -126,6 +127,7 @@ describe('tab title resolution', () => {
       sessionId: 'codex-session',
       title: 'Codex conversation'
     }
+
     expect(
       resolveTerminalTabTitle(
         {

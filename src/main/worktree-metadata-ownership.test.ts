@@ -4,6 +4,7 @@ import type { Repo } from '../shared/repo-types'
 import type { WorktreeMeta } from '../shared/worktree/meta-types'
 
 const worktreeId = 'repo-1::/workspace/feature'
+
 const localRepo: Repo = {
   id: 'repo-1',
   path: '/workspace/repo',
@@ -12,12 +13,14 @@ const localRepo: Repo = {
   addedAt: 1,
   executionHostId: 'local'
 }
+
 const sshRepo: Repo = {
   ...localRepo,
   path: '/workspace/repo',
   connectionId: 'build-box',
   executionHostId: 'ssh:build-box'
 }
+
 const localMeta = { hostId: 'local', displayName: 'local metadata' } as WorktreeMeta
 
 function resolve(repo: Repo, ownerCount: number): WorktreeMeta | undefined {

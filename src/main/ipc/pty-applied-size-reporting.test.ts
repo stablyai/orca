@@ -4,45 +4,61 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers, setLocalPtyProvider } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -72,6 +88,7 @@ describe('registerPtyHandlers', () => {
         listProcesses: vi.fn(async () => []),
         getForegroundProcess: vi.fn(async () => null)
       } as never)
+
       return write
     }
 
@@ -81,10 +98,13 @@ describe('registerPtyHandlers', () => {
           if (earlyExit) {
             return { id: opts.sessionId ?? 'daemon-pty', exitedBeforeSpawnReply: true as const }
           }
+
           throw new Error('transport unavailable')
         }
+
         return { id: opts.sessionId ?? 'daemon-pty' }
       })
+
       setLocalPtyProvider({
         spawn,
         write: vi.fn(),
@@ -96,14 +116,17 @@ describe('registerPtyHandlers', () => {
         listProcesses: vi.fn(async () => []),
         getForegroundProcess: vi.fn(async () => null)
       } as never)
+
       return spawn
     }
 
     const resizeListener = (): ((event: unknown, args: unknown) => void) => {
       const call = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:resize')
+
       if (!call) {
         throw new Error('missing pty:resize listener')
       }
+
       return call[1] as (event: unknown, args: unknown) => void
     }
 
@@ -192,12 +215,14 @@ describe('registerPtyHandlers', () => {
     })
     it('preserves cached geometry after a transient runtime attach failure', async () => {
       setupProviderWithTransientAttachFailure()
+
       let controller:
         | {
             spawn: (args: Record<string, unknown>) => Promise<unknown>
             getSize: (id: string) => { cols: number; rows: number } | null
           }
         | undefined
+
       const runtime = {
         setPtyController: vi.fn((next) => {
           controller = next
@@ -205,6 +230,7 @@ describe('registerPtyHandlers', () => {
         registerPreAllocatedHandleForPty: vi.fn(),
         registerPty: vi.fn()
       }
+
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
       const request = { sessionId: 'runtime-existing-size' }
@@ -234,6 +260,7 @@ describe('registerPtyHandlers', () => {
     it('fans out accepted desktop resizes to the runtime after provider resize', async () => {
       const resize = vi.fn()
       setupProviderWithAppliedSize({ applied: { cols: 120, rows: 30 }, resize })
+
       const runtime = {
         setPtyController: vi.fn(),
         createPreAllocatedTerminalHandle: vi.fn(() => null),
@@ -245,6 +272,7 @@ describe('registerPtyHandlers', () => {
         onPtyData: vi.fn(),
         onExternalPtyResize: vi.fn()
       }
+
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
       const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
@@ -265,6 +293,7 @@ describe('registerPtyHandlers', () => {
           throw new Error('resize rejected')
         }
       })
+
       const runtime = {
         setPtyController: vi.fn(),
         createPreAllocatedTerminalHandle: vi.fn(() => null),
@@ -276,6 +305,7 @@ describe('registerPtyHandlers', () => {
         onPtyData: vi.fn(),
         onExternalPtyResize: vi.fn()
       }
+
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
       const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
@@ -288,6 +318,7 @@ describe('registerPtyHandlers', () => {
     it('suppresses the host fit cascade while a remote viewer drives the width', async () => {
       const resizeSpy = vi.fn()
       setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 }, resize: resizeSpy })
+
       const runtime = {
         setPtyController: vi.fn(),
         createPreAllocatedTerminalHandle: vi.fn(() => null),
@@ -302,6 +333,7 @@ describe('registerPtyHandlers', () => {
         recordRemoteDesktopHostReclaimTarget: vi.fn(),
         onExternalPtyResize: vi.fn()
       }
+
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
       const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
@@ -318,16 +350,20 @@ describe('registerPtyHandlers', () => {
     })
     it('lets trusted host activity reclaim remote viewport ownership', () => {
       const claimRemoteDesktopHost = vi.fn().mockResolvedValue(true)
+
       const runtime = {
         setPtyController: vi.fn(),
         claimRemoteDesktopHost
       }
+
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
       const call = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:claimViewport')
+
       const claimListener = call?.[1] as
         | ((event: unknown, args: { id: string; cols: number; rows: number }) => void)
         | undefined
+
       expect(claimListener).toBeTypeOf('function')
 
       claimListener?.(mainWindowIpcEvent, { id: 'pty-1', cols: 125, rows: 48 })
@@ -336,6 +372,7 @@ describe('registerPtyHandlers', () => {
     })
     it('does not forward host input when viewport reclaim fails', async () => {
       const write = setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 } })
+
       const runtime = {
         setPtyController: vi.fn(),
         createPreAllocatedTerminalHandle: vi.fn(() => null),
@@ -346,6 +383,7 @@ describe('registerPtyHandlers', () => {
         onPtyExit: vi.fn(),
         onPtyData: vi.fn()
       }
+
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
       const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
@@ -362,6 +400,7 @@ describe('registerPtyHandlers', () => {
     it('does not populate the remote reclaim cache when only a phone drives', async () => {
       const resizeSpy = vi.fn()
       setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 }, resize: resizeSpy })
+
       const runtime = {
         setPtyController: vi.fn(),
         createPreAllocatedTerminalHandle: vi.fn(() => null),
@@ -375,6 +414,7 @@ describe('registerPtyHandlers', () => {
         recordRemoteDesktopHostReclaimTarget: vi.fn(),
         onExternalPtyResize: vi.fn()
       }
+
       handlers.clear()
       registerPtyHandlers(mainWindow as never, runtime as never)
       const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })

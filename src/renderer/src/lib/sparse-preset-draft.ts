@@ -15,13 +15,17 @@ export function parseSparsePresetDirectories(value: string): SparsePresetDirecto
   let hasAbsoluteEntry = false
   forEachSparseDirectoryInputLine(value, (rawEntry) => {
     const entry = rawEntry.trim()
+
     if (entry.length === 0) {
       return
     }
+
     if (isAbsoluteSparseDirectoryPath(entry)) {
       hasAbsoluteEntry = true
+
       return false
     }
+
     return undefined
   })
 

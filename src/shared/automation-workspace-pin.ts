@@ -24,10 +24,13 @@ export function resolveAutomationWorkspaceHost(
   workspaceId: Automation['workspaceId']
 ): AutomationWorkspaceHost {
   const scope = parseWorkspaceKey(workspaceId ?? '')
+
   if (scope?.type !== 'folder') {
     return { kind: 'unpinned' }
   }
+
   const host = resolveFolderWorkspaceHost(state, scope.folderWorkspaceId)
+
   // A workspace that is gone proves nothing about the host, so the repo still decides.
   return host.kind === 'missing' ? { kind: 'unpinned' } : host
 }
@@ -38,5 +41,6 @@ export function resolveAutomationWorkspaceSshTargetId(
   workspaceId: Automation['workspaceId']
 ): string | undefined {
   const host = resolveAutomationWorkspaceHost(state, workspaceId)
+
   return host.kind === 'ssh' ? host.targetId : undefined
 }

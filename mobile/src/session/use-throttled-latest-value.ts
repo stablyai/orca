@@ -18,19 +18,26 @@ export function useThrottledLatestValue<T>(value: T, intervalMs: number): T {
         clearTimeout(timerRef.current)
         timerRef.current = null
       }
+
       lastEmitRef.current = 0
       setThrottled(value)
+
       return
     }
+
     const elapsed = Date.now() - lastEmitRef.current
+
     if (elapsed >= intervalMs) {
       lastEmitRef.current = Date.now()
       setThrottled(value)
+
       return
     }
+
     if (timerRef.current) {
       return
     }
+
     timerRef.current = setTimeout(() => {
       timerRef.current = null
       lastEmitRef.current = Date.now()

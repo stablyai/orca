@@ -29,8 +29,10 @@ export const DEVIN_EVENTS = [
 export function getDevinConfigPath(): string {
   if (process.platform === 'win32') {
     const appData = process.env.APPDATA ?? join(homedir(), 'AppData', 'Roaming')
+
     return join(appData, 'devin', 'config.json')
   }
+
   return join(homedir(), '.config', 'devin', 'config.json')
 }
 
@@ -57,6 +59,7 @@ export function getDevinManagedCommand(scriptPath: string): string {
     // drains stdin for a stale missing-script entry.
     return wrapWindowsCmdHookCommand(scriptPath)
   }
+
   return wrapPosixHookCommand(scriptPath)
 }
 
@@ -75,10 +78,12 @@ export function applyDevinManagedHooks(
   for (const event of DEVIN_EVENTS) {
     const current = Array.isArray(nextHooks[event.eventName]) ? nextHooks[event.eventName] : []
     const cleaned = removeManagedCommands(current, isManagedCommand)
+
     const definition: HookDefinition = {
       ...event.definition,
       hooks: [buildManagedCommandHook(command)]
     }
+
     nextHooks[event.eventName] = [...cleaned, definition]
   }
 
@@ -100,10 +105,13 @@ export function removeDevinManagedHooks(
     if (!Array.isArray(definitions)) {
       continue
     }
+
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
     if (JSON.stringify(cleaned) !== JSON.stringify(definitions)) {
       changed = true
     }
+
     if (cleaned.length === 0) {
       delete nextHooks[eventName]
     } else {

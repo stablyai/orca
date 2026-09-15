@@ -45,6 +45,7 @@ export function useSourceControlDiscardConfirmation({
   const [pendingDiscard, setPendingDiscard] = useState<PendingDiscardConfirmation | null>(null)
   // Why: reset during render so a worktree switch never paints the previous confirmation.
   const [pendingDiscardWorktreeId, setPendingDiscardWorktreeId] = useState(activeWorktreeId)
+
   if (pendingDiscardWorktreeId !== activeWorktreeId) {
     setPendingDiscardWorktreeId(activeWorktreeId)
     setPendingDiscard(null)
@@ -67,8 +68,10 @@ export function useSourceControlDiscardConfirmation({
           worktreeId: activeWorktreeId,
           worktreeName: worktreePath ? basename(worktreePath) : null
         })
+
         return
       }
+
       dismissSourceControlEntryFailureToast(activeWorktreeId)
       await refreshActiveGitStatusAfterMutation()
     },
@@ -82,15 +85,20 @@ export function useSourceControlDiscardConfirmation({
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
+
       const paths = confirmedPaths ? [...confirmedPaths] : getDiscardAllPaths(grouped[area], area)
+
       if (paths.length === 0) {
         return
       }
+
       setIsExecutingBulk(true)
+
       try {
         const connectionId = getConnectionId(activeWorktreeId) ?? undefined
         // Why: onError fires per failure; aggregate into one toast so a partial failure across N files doesn't spam N toasts.
         const errors: unknown[] = []
+
         const result = await runDiscardAllForArea(area, paths, {
           bulkUnstage: (filePaths) =>
             bulkUnstageRuntimeGitPaths(
@@ -110,6 +118,7 @@ export function useSourceControlDiscardConfirmation({
             console.error('[SourceControl] discard-all failure', error)
           }
         })
+
         if (result.aborted) {
           toast.error(
             translate(
@@ -140,6 +149,7 @@ export function useSourceControlDiscardConfirmation({
             }
           )
         }
+
         if (!result.aborted) {
           await refreshActiveGitStatusAfterMutation()
           clearSelection()
@@ -167,44 +177,58 @@ export function useSourceControlDiscardConfirmation({
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
+
       const paths = confirmedPaths ? [...confirmedPaths] : getDiscardAllPaths(grouped[area], area)
+
       if (paths.length === 0) {
         return
       }
+
       setPendingDiscard({ kind: 'area', area, paths })
     },
     [activeWorktreeId, grouped, isExecutingBulk, worktreePath]
   )
+
   const requestDiscardEntry = useCallback(
     (entry: GitStatusEntry): void => {
       if (!worktreePath || !activeWorktreeId || isExecutingBulk) {
         return
       }
+
       setPendingDiscard({ kind: 'entry', entry })
     },
     [activeWorktreeId, isExecutingBulk, worktreePath]
   )
+
   const requestDiscardPaths = useCallback(
     (area: DiscardAllArea, paths: readonly string[]): void => {
       // Why: same gate as the other request handlers — handleRevertAllInArea rejects these states silently, so the dialog would confirm into a no-op.
       if (!worktreePath || !activeWorktreeId || isExecutingBulk || paths.length === 0) {
         return
       }
+
       setPendingDiscard({ kind: 'area', area, paths: [...paths] })
     },
     [activeWorktreeId, isExecutingBulk, worktreePath]
   )
+
   const cancelPendingDiscard = useCallback(() => setPendingDiscard(null), [])
+
   const confirmPendingDiscard = useCallback((): void => {
     const pending = pendingDiscard
+
     if (!pending) {
       return
     }
+
     setPendingDiscard(null)
+
     if (pending.kind === 'entry') {
       void handleDiscard(pending.entry)
+
       return
     }
+
     void handleRevertAllInArea(pending.area, pending.paths)
   }, [handleDiscard, handleRevertAllInArea, pendingDiscard])
 

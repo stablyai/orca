@@ -12,17 +12,29 @@ const {
 } = await vi.hoisted(async () => (await import('./updater-test-harness')).createUpdaterMocks())
 
 vi.mock('electron', () => moduleFactories.electron())
+
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
+
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
+
 vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
+
 vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
+
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
+
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
+
 vi.mock('./updater-nudge', () => moduleFactories.updaterNudge())
+
 vi.mock('./update-install-exit-watchdog', () => moduleFactories.updateInstallExitWatchdog())
+
 vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed())
+
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
+
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
 warmUpdaterModule()
@@ -179,6 +191,7 @@ describe('updater', () => {
       queueMicrotask(() => {
         autoUpdaterMock.emit('update-not-available')
       })
+
       return Promise.resolve(undefined)
     })
 
@@ -195,6 +208,7 @@ describe('updater', () => {
       const statuses = sendMock.mock.calls
         .filter(([channel]) => channel === 'updater:status')
         .map(([, status]) => status)
+
       expect(statuses).toContainEqual({ state: 'checking', userInitiated: true })
       expect(statuses).toContainEqual({ state: 'not-available', userInitiated: true })
     })
@@ -231,6 +245,7 @@ describe('updater', () => {
       queueMicrotask(() => {
         autoUpdaterMock.emit('update-available', { version: '1.4.26' })
       })
+
       return Promise.resolve(undefined)
     })
 
@@ -270,6 +285,7 @@ describe('updater', () => {
       .mockResolvedValueOnce(['v1.4.27'])
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       return new Promise(() => {})
     })
     const setLastUpdateCheckAt = vi.fn()
@@ -325,6 +341,7 @@ describe('updater', () => {
       .mockResolvedValueOnce(['v1.4.27'])
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       return Promise.resolve(undefined)
     })
     const setLastUpdateCheckAt = vi.fn()
@@ -437,12 +454,15 @@ describe('updater', () => {
         .mockResolvedValueOnce({ tags: ['v1.4.27'], state: 'ready' })
       autoUpdaterMock.checkForUpdates.mockImplementation(() => {
         autoUpdaterMock.emit('checking-for-update')
+
         return Promise.resolve(undefined)
       })
       let pendingNudgeId: string | null = null
+
       const setPendingUpdateNudgeId = vi.fn((id: string | null) => {
         pendingNudgeId = id
       })
+
       const setDismissedUpdateNudgeId = vi.fn()
       const sendMock = vi.fn()
       const mainWindow = { webContents: { send: sendMock } }
@@ -501,17 +521,21 @@ describe('updater', () => {
       .mockResolvedValueOnce(['v1.4.27'])
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       if (autoUpdaterMock.checkForUpdates.mock.calls.length === 1) {
         queueMicrotask(() => {
           autoUpdaterMock.emit('update-not-available')
         })
       }
+
       return Promise.resolve(undefined)
     })
     let pendingNudgeId: string | null = null
+
     const setPendingUpdateNudgeId = vi.fn((id: string | null) => {
       pendingNudgeId = id
     })
+
     const setDismissedUpdateNudgeId = vi.fn()
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
@@ -568,17 +592,21 @@ describe('updater', () => {
       .mockResolvedValueOnce(['v1.4.27'])
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
+
       if (autoUpdaterMock.checkForUpdates.mock.calls.length === 1) {
         queueMicrotask(() => {
           autoUpdaterMock.emit('update-available', { version: '1.4.26' })
         })
       }
+
       return Promise.resolve(undefined)
     })
     let pendingNudgeId: string | null = null
+
     const setPendingUpdateNudgeId = vi.fn((id: string | null) => {
       pendingNudgeId = id
     })
+
     const setDismissedUpdateNudgeId = vi.fn()
     const sendMock = vi.fn()
     const mainWindow = { webContents: { send: sendMock } }
@@ -600,12 +628,15 @@ describe('updater', () => {
         changelog: null
       })
     })
+
     const statuses = sendMock.mock.calls
       .filter(([channel]) => channel === 'updater:status')
       .map(([, status]) => status)
+
     const lastGoodStatus = statuses.find(
       (status) => status.state === 'available' && status.version === '1.4.26'
     )
+
     if (lastGoodStatus && 'activeNudgeId' in lastGoodStatus) {
       dismissNudge()
     }

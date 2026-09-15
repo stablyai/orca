@@ -36,6 +36,7 @@ export class CodexManagedHomeLifecycle {
     target?: CodexAccountAddTarget
   ): Promise<ManagedCodexHomeLocation> {
     const wslHome = await this.tryCreateWslHome(accountId, target)
+
     if (wslHome) {
       return wslHome
     }
@@ -44,6 +45,7 @@ export class CodexManagedHomeLifecycle {
     mkdirSync(managedHomePath, { recursive: true })
     // Why: marker lets future cleanup prove the path belongs to Orca before deleting anything.
     writeFileSync(join(managedHomePath, '.orca-managed-home'), `${accountId}\n`, 'utf-8')
+
     return {
       managedHomePath: this.paths.assert(managedHomePath, accountId),
       managedHomeRuntime: 'host',
@@ -57,11 +59,14 @@ export class CodexManagedHomeLifecycle {
   // step of doAddAccount without spawning an interactive browser flow.
   importAuthFromHome(sourceHome: string, managedHomePath: string, accountId: string): void {
     const trimmed = sourceHome.trim()
+
     if (!trimmed) {
       throw new Error('A Codex home directory path is required.')
     }
+
     const resolvedSourceHome = resolve(trimmed)
     let sourceAuthContents: string
+
     try {
       sourceAuthContents = readFileSync(join(resolvedSourceHome, 'auth.json'), 'utf-8')
     } catch (error) {
@@ -71,10 +76,12 @@ export class CodexManagedHomeLifecycle {
       if (!isDefinitiveAbsence(error)) {
         throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: error })
       }
+
       throw new Error(
         `No Codex credentials found in ${resolvedSourceHome}. Run \`codex login\` into this directory first.`
       )
     }
+
     const trustedHome = this.paths.assert(managedHomePath, accountId)
     writeFileAtomically(join(trustedHome, 'auth.json'), sourceAuthContents, { mode: 0o600 })
   }
@@ -88,15 +95,18 @@ export class CodexManagedHomeLifecycle {
     if (error instanceof ManagedCodexHomeTemporarilyUnavailableError) {
       return
     }
+
     this.safeRemove(managedHomePath, accountId)
   }
 
   safeRemove(candidatePath: string, expectedAccountId: string): void {
     let managedHomePath: string
+
     try {
       managedHomePath = this.paths.assert(candidatePath, expectedAccountId)
     } catch (error) {
       console.warn('[codex-accounts] Refusing to remove untrusted managed home:', error)
+
       return
     }
 
@@ -106,6 +116,7 @@ export class CodexManagedHomeLifecycle {
       // Why: this runs from error-cleanup paths; a still-held Windows handle
       // must not mask the original failure with an ENOTEMPTY from rmSync.
       console.warn('[codex-accounts] Failed to remove managed home:', error)
+
       return
     }
 
@@ -115,6 +126,7 @@ export class CodexManagedHomeLifecycle {
       } catch {
         // Best-effort cleanup
       }
+
       return
     }
 
@@ -123,6 +135,7 @@ export class CodexManagedHomeLifecycle {
       const parentDir = resolve(managedHomePath, '..')
       // Why: canonicalize the root too so the prefix check works on macOS where userData resolves through /private/var.
       const root = realpathSync(this.paths.getRoot())
+
       if (parentDir.startsWith(root + sep) && parentDir !== root) {
         removeManagedHomeTreeSync(parentDir)
       }
@@ -138,7 +151,9 @@ export class CodexManagedHomeLifecycle {
     if (process.platform !== 'win32' || target?.runtime !== 'wsl') {
       return null
     }
+
     const requestedDistro = target.wslDistro?.trim() || undefined
+
     const info = await runWslProcess({
       distro: requestedDistro,
       loginPath: 'none',
@@ -146,21 +161,26 @@ export class CodexManagedHomeLifecycle {
       shell: 'bash',
       timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
     })
+
     if (info.code !== 0 || info.timedOut) {
       throw new Error('Could not resolve the active WSL home directory for Codex login.')
     }
+
     const [rawDistro, rawHome] = info.stdout
       .replaceAll(String.fromCharCode(0), '')
       .split(/\r?\n/)
       .map((line) => line.trim())
+
     const distro = requestedDistro || rawDistro
     const home = rawHome
+
     if (!distro || !home?.startsWith('/')) {
       throw new Error('Could not resolve the active WSL home directory for Codex login.')
     }
 
     const linuxPath = `${home.replace(/\/$/, '')}/.local/share/orca/codex-accounts/${accountId}/home`
     const markerPath = `${linuxPath}/.orca-managed-home`
+
     const created = await runWslProcess({
       distro,
       loginPath: 'none',
@@ -168,11 +188,13 @@ export class CodexManagedHomeLifecycle {
       shell: 'bash',
       timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
     })
+
     if (created.code !== 0 || created.timedOut) {
       throw new Error('Could not create the managed Codex home inside WSL.')
     }
 
     const managedHomePath = toWindowsWslPath(linuxPath, distro)
+
     try {
       return {
         managedHomePath: this.paths.assert(managedHomePath, accountId),
@@ -215,6 +237,7 @@ export class CodexManagedHomeLifecycle {
         shell: 'bash',
         timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
       })
+
       if (result.code !== 0 || result.timedOut) {
         throw new Error(`WSL cleanup exited with ${result.timedOut ? 'a timeout' : result.code}`)
       }

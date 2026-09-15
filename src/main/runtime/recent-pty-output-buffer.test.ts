@@ -7,22 +7,27 @@ function referenceAppend(previous: string | undefined, data: string): string {
   if (data.length >= RECENT_PTY_OUTPUT_LIMIT) {
     return data.slice(-RECENT_PTY_OUTPUT_LIMIT)
   }
+
   return `${previous ?? ''}${data}`.slice(-RECENT_PTY_OUTPUT_LIMIT)
 }
 
 function referenceTail(chunks: string[]): string {
   let tail: string | undefined
+
   for (const chunk of chunks) {
     tail = referenceAppend(tail, chunk)
   }
+
   return tail ?? ''
 }
 
 function bufferTail(chunks: string[]): string {
   const buffer = new RecentPtyOutputBuffer()
+
   for (const chunk of chunks) {
     buffer.append(chunk)
   }
+
   return buffer.read()
 }
 
@@ -32,10 +37,12 @@ function expectEquivalent(chunks: string[]): void {
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0
+
   return () => {
     a = (a + 0x6d2b79f5) | 0
     let t = Math.imul(a ^ (a >>> 15), 1 | a)
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
@@ -86,10 +93,13 @@ describe('RecentPtyOutputBuffer', () => {
 
   it('stays byte-identical across many small chunks that trim repeatedly', () => {
     const rng = mulberry32(0x5eed)
+
     const chunks = Array.from({ length: 5000 }, (_, i) => {
       const len = 1 + Math.floor(rng() * 120)
+
       return `${i}:${String.fromCharCode(97 + (i % 26)).repeat(len)}\n`
     })
+
     expectEquivalent(chunks)
   })
 
@@ -126,10 +136,13 @@ describe('RecentPtyOutputBuffer', () => {
     expect(buffer.read()).toBe(fill)
 
     const appendCount = 1000
+
     const smallChunks = Array.from({ length: appendCount }, (_, i) =>
       String.fromCharCode(33 + (i % 90))
     )
+
     let reference = fill
+
     for (const chunk of smallChunks) {
       reference = referenceAppend(reference, chunk)
     }
@@ -137,10 +150,12 @@ describe('RecentPtyOutputBuffer', () => {
     // Every append now trims one code unit off the full head; none of them
     // may allocate a head substring — the trim must be a deferred offset.
     const sliceSpy = vi.spyOn(String.prototype, 'slice')
+
     try {
       for (const chunk of smallChunks) {
         buffer.append(chunk)
       }
+
       expect(sliceSpy).not.toHaveBeenCalled()
     } finally {
       sliceSpy.mockRestore()
@@ -154,14 +169,17 @@ describe('RecentPtyOutputBuffer', () => {
     const buffer = new RecentPtyOutputBuffer()
     let reference: string | undefined
     const rng = mulberry32(0xdeadbeef)
+
     for (let i = 0; i < 400; i++) {
       const chunk = String.fromCharCode(97 + (i % 26)).repeat(1 + Math.floor(rng() * 300))
       buffer.append(chunk)
       reference = referenceAppend(reference, chunk)
+
       if (i % 7 === 0) {
         expect(buffer.read()).toBe(reference ?? '')
       }
     }
+
     expect(buffer.read()).toBe(reference ?? '')
   })
 
@@ -210,11 +228,13 @@ describe('RecentPtyOutputBuffer', () => {
   it('compact collapses to a single chunk and restores read-time defragmentation', () => {
     const buffer = new RecentPtyOutputBuffer()
     let reference: string | undefined
+
     for (let i = 0; i < 200; i++) {
       const chunk = `${i}:${'p'.repeat(700)}\n`
       buffer.append(chunk)
       reference = referenceAppend(reference, chunk)
     }
+
     buffer.compact()
     expect(buffer.retainedChunks().chunks).toEqual([reference])
     expect(buffer.read()).toBe(reference)
@@ -228,33 +248,43 @@ describe('RecentPtyOutputBuffer', () => {
   it('retainedChunks window-trimmed join always equals read()', () => {
     const rng = mulberry32(0xfeed)
     const buffer = new RecentPtyOutputBuffer()
+
     const joinRetained = (): string => {
       const { chunks } = buffer.retainedChunks()
       const joined = chunks.join('')
+
       return joined.slice(Math.max(0, joined.length - RECENT_PTY_OUTPUT_LIMIT))
     }
+
     for (let i = 0; i < 300; i++) {
       buffer.append(String.fromCharCode(33 + (i % 90)).repeat(Math.floor(rng() * 1500)))
+
       if (i % 11 === 0) {
         expect(joinRetained()).toBe(buffer.read())
       }
     }
+
     expect(joinRetained()).toBe(buffer.read())
   })
 
   it('stays equivalent under randomized chunk sizes straddling the cap', () => {
     const rng = mulberry32(0xc0ffee)
+
     for (let round = 0; round < 5; round++) {
       const chunks: string[] = []
       const count = 20 + Math.floor(rng() * 60)
+
       for (let i = 0; i < count; i++) {
         const roll = rng()
+
         const len =
           roll < 0.1
             ? RECENT_PTY_OUTPUT_LIMIT + Math.floor(rng() * 200) - 100
             : Math.floor(rng() * 9000)
+
         chunks.push(String.fromCharCode(33 + (i % 90)).repeat(Math.max(0, len)))
       }
+
       expectEquivalent(chunks)
     }
   })
@@ -267,11 +297,13 @@ describe('configurable limit', () => {
     const limit = 1000
     const buffer = new RecentPtyOutputBuffer({ preserveChunkBoundaries: false, limit })
     let reference = ''
+
     for (let index = 0; index < 60; index += 1) {
       const chunk = `c${index}-`.repeat(9)
       buffer.append(chunk)
       reference = (reference + chunk).slice(-limit)
     }
+
     expect(buffer.read().length).toBe(limit)
     expect(buffer.read()).toBe(reference)
   })

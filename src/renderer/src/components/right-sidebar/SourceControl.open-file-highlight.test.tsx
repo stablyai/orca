@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     badgeColor: '#000',
     addedAt: 0
   }
+
   const activeWorktree = {
     id: 'wt-1',
     repoId: 'repo-1',
@@ -36,6 +37,7 @@ const mocks = vi.hoisted(() => {
     sortOrder: 0,
     lastActivityAt: 0
   }
+
   return {
     activeRepo,
     activeWorktree,
@@ -51,6 +53,7 @@ vi.mock('@/store', () => {
       getState: () => mocks.state
     }
   )
+
   return { useAppStore }
 })
 
@@ -175,6 +178,7 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -210,6 +214,7 @@ function isHighlighted(element: HTMLElement | null): boolean {
   if (!element) {
     return false
   }
+
   return (
     element.getAttribute('data-current') === 'true' &&
     element.classList.contains('bg-accent') &&
@@ -376,6 +381,7 @@ describe('SourceControl open-file highlight', () => {
     const changesHeader = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('Changes')
     )
+
     expect(changesHeader).toBeTruthy()
     act(() => {
       changesHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }))

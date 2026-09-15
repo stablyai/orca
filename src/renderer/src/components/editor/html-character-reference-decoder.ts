@@ -5,6 +5,7 @@ export function decodeHtmlTextCharacterReferences(value: string): string {
   // reading textContent safely decodes character references without XSS risk.
   const template = document.createElement('template')
   template.innerHTML = value
+
   return template.content.textContent ?? ''
 }
 
@@ -18,5 +19,6 @@ export function decodeHtmlAttributeCharacterReferences(
   const delimiter = quote ?? ''
   template.innerHTML = `<span data-orca-value=${delimiter}${value}${delimiter}></span>`
   const element = template.content.firstElementChild
+
   return element?.getAttribute('data-orca-value') ?? ''
 }

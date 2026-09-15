@@ -55,6 +55,7 @@ export class BrowserNetworkTunnelClient {
     this.outboundMemory = options.outboundMemory
     this.onClosed = options.onClosed
     this.maxStreamIds = options.maxStreamIds ?? BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS
+
     if (
       !Number.isSafeInteger(this.maxStreamIds) ||
       this.maxStreamIds < 1 ||
@@ -62,6 +63,7 @@ export class BrowserNetworkTunnelClient {
     ) {
       throw new Error('Browser tunnel stream id budget is invalid')
     }
+
     this.frameSender = new BrowserNetworkTunnelFrameSender(
       options.tunnelGeneration,
       options.sendBinary,
@@ -82,19 +84,25 @@ export class BrowserNetworkTunnelClient {
     if (this.closed) {
       return Promise.reject(new Error('Browser tunnel is closed'))
     }
+
     if (this.streams.size >= 32) {
       return Promise.reject(new Error('Browser tunnel stream limit exceeded'))
     }
+
     if (this.streamIdsExhausted) {
       return Promise.reject(new Error('Browser tunnel stream id limit exceeded'))
     }
+
     let openPayload: Uint8Array<ArrayBufferLike>
+
     try {
       openPayload = encodeBrowserNetworkTunnelOpen(target)
     } catch (error) {
       return Promise.reject(error)
     }
+
     const id = this.nextStreamId++
+
     const { stream, opening } = createBrowserNetworkTunnelClientStream(id, {
       writeBytes: (bytes, callback) => this.writeStream(id, bytes, callback),
       requestRead: () => this.readStream(id),
@@ -104,10 +112,13 @@ export class BrowserNetworkTunnelClient {
       onConnectTimeout: (timedOutStream) =>
         this.failStream(timedOutStream, new Error('Browser tunnel destination connect timed out'))
     })
+
     this.streams.set(id, stream)
+
     if (!this.frameSender.send(BrowserNetworkTunnelOpcode.Open, id, openPayload)) {
       this.close(new Error('Browser tunnel transport rejected an open frame'))
     }
+
     return opening
   }
 
@@ -115,25 +126,35 @@ export class BrowserNetworkTunnelClient {
     if (this.closed) {
       return
     }
+
     const frame = decodeBrowserNetworkTunnelFrame(bytes)
+
     if (!frame) {
       this.close(new Error('Browser tunnel received an invalid frame'))
+
       return
     }
+
     if (frame.tunnelGeneration !== this.tunnelGeneration) {
       return
     }
+
     if (handleBrowserNetworkTunnelHeartbeat(frame, this.frameSender)) {
       return
     }
+
     const stream = this.streams.get(frame.streamId)
+
     if (!stream) {
       if (frame.streamId < this.nextStreamId) {
         return
       }
+
       this.close(new Error('Browser tunnel received a frame for an unknown stream'))
+
       return
     }
+
     this.handleStreamFrame(stream, frame)
   }
 
@@ -141,10 +162,13 @@ export class BrowserNetworkTunnelClient {
     if (this.closed) {
       return
     }
+
     this.closed = true
+
     for (const stream of Array.from(this.streams.values())) {
       this.retireStream(stream, error)
     }
+
     this.streams.clear()
     this.onClosed?.(error)
   }
@@ -168,10 +192,13 @@ export class BrowserNetworkTunnelClient {
     callback: (error?: Error | null) => void
   ): void {
     const stream = this.streams.get(streamId)
+
     if (!stream || !stream.opened || stream.localEnded) {
       callback(new Error('Browser tunnel stream is not writable'))
+
       return
     }
+
     if (
       !queueBrowserNetworkSourceWrite(stream, bytes, callback, (pendingBytes) =>
         this.claimApplicationBytes(pendingBytes)
@@ -180,8 +207,10 @@ export class BrowserNetworkTunnelClient {
       const error = new Error('Browser tunnel source buffer overflow')
       callback(error)
       this.failStream(stream, error)
+
       return
     }
+
     this.flushStreamWrites(stream)
   }
 
@@ -192,10 +221,13 @@ export class BrowserNetworkTunnelClient {
         this.isCurrent(stream) &&
         this.frameSender.send(BrowserNetworkTunnelOpcode.Data, stream.id, payload)
     )
+
     if (!flushed) {
       this.close(new Error('Browser tunnel transport rejected data'))
+
       return
     }
+
     if (
       this.isCurrent(stream) &&
       stream.localEnded &&
@@ -203,6 +235,7 @@ export class BrowserNetworkTunnelClient {
       stream.pendingWrites.length === 0
     ) {
       stream.localHalfCloseSent = true
+
       if (!this.frameSender.send(BrowserNetworkTunnelOpcode.HalfClose, stream.id)) {
         this.close(new Error('Browser tunnel transport rejected a half-close'))
       }
@@ -211,14 +244,17 @@ export class BrowserNetworkTunnelClient {
 
   private readStream(streamId: number): void {
     const stream = this.streams.get(streamId)
+
     if (!stream) {
       return
     }
+
     beginBrowserNetworkSourceRead(stream)
   }
 
   private consumeStreamBytes(streamId: number, bytes: number): void {
     const stream = this.streams.get(streamId)
+
     if (stream && settleBrowserNetworkSourceData(stream, bytes)) {
       this.replenishStreamCredit(stream, bytes)
     } else if (stream) {
@@ -230,6 +266,7 @@ export class BrowserNetworkTunnelClient {
     if (!this.isCurrent(stream) || stream.remoteClosed || bytes === 0) {
       return
     }
+
     if (
       !grantBrowserNetworkSourceReceiveCredit(
         stream,
@@ -238,8 +275,10 @@ export class BrowserNetworkTunnelClient {
       )
     ) {
       this.close(new Error('Browser tunnel receive credit overflow'))
+
       return
     }
+
     if (
       !this.frameSender.send(
         BrowserNetworkTunnelOpcode.WindowUpdate,
@@ -253,10 +292,13 @@ export class BrowserNetworkTunnelClient {
 
   private endStream(streamId: number, callback: (error?: Error | null) => void): void {
     const stream = this.streams.get(streamId)
+
     if (!stream || stream.localEnded) {
       callback()
+
       return
     }
+
     stream.localEnded = true
     this.flushStreamWrites(stream)
     callback()
@@ -268,10 +310,12 @@ export class BrowserNetworkTunnelClient {
     callback: (error?: Error | null) => void
   ): void {
     const stream = this.streams.get(streamId)
+
     if (stream && this.isCurrent(stream)) {
       this.frameSender.send(BrowserNetworkTunnelOpcode.Close, stream.id)
       this.retireStream(stream, error ?? undefined, false)
     }
+
     callback(error)
   }
 
@@ -279,6 +323,7 @@ export class BrowserNetworkTunnelClient {
     if (!this.isCurrent(stream)) {
       return
     }
+
     this.frameSender.send(
       BrowserNetworkTunnelOpcode.Error,
       stream.id,
@@ -307,6 +352,7 @@ export class BrowserNetworkTunnelClient {
     if (!this.outboundMemory) {
       return () => undefined
     }
+
     return this.outboundMemory.claimApplicationBytes(bytes)
   }
 }

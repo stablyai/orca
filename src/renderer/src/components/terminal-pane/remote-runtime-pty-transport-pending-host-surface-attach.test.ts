@@ -6,6 +6,7 @@ import {
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const { runtimeCall, resetRemoteRuntimeTransport, subscribedTerminalHandles } =
@@ -52,6 +53,7 @@ function respondWithPendingHostSurface(args: { method: string }): Promise<unknow
   if (args.method === 'session.tabs.activate' || args.method === 'session.tabs.list') {
     return Promise.resolve({ ok: true, result: hostSessionSnapshot('pending-handle') })
   }
+
   return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
 }
 
@@ -80,6 +82,7 @@ describe('initial host-mirror attach against a surface published as pending-hand
   it('keeps re-activating a surface the host never materializes', async () => {
     runtimeCall.mockImplementation(respondWithPendingHostSurface)
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -96,9 +99,12 @@ describe('initial host-mirror attach against a surface published as pending-hand
   it('ends the bounded wait in a revivable recovery epoch, never stranded in connecting', async () => {
     runtimeCall.mockImplementation(respondWithPendingHostSurface)
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } =
       await import('./remote-runtime-pty-recovery-state')
+
     const recoveryStates: PtyTransportRecoveryState[] = []
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -113,6 +119,7 @@ describe('initial host-mirror attach against a surface published as pending-hand
         }
       }
     })
+
     await vi.advanceTimersByTimeAsync(HOST_SURFACE_ATTACH_WINDOW_MS)
     await expect(connect).resolves.toBeUndefined()
 
@@ -128,8 +135,10 @@ describe('initial host-mirror attach against a surface published as pending-hand
   it('leaves a reattached pane recoverable when the relaunched host never materializes it', async () => {
     runtimeCall.mockImplementation(respondWithPendingHostSurface)
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } =
       await import('./remote-runtime-pty-recovery-state')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -159,11 +168,14 @@ describe('initial host-mirror attach against a surface published as pending-hand
           result: hostSessionSnapshot(hostMaterialized ? 'ready' : 'pending-handle')
         })
       }
+
       return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS, retryAllRemoteRuntimePtyRecoveriesNow } =
       await import('./remote-runtime-pty-recovery-state')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -190,13 +202,16 @@ describe('initial host-mirror attach against a surface published as pending-hand
       if (args.method === 'session.tabs.activate') {
         return Promise.resolve({ ok: true, result: hostSessionSnapshot('absent') })
       }
+
       if (args.method === 'session.tabs.list') {
         return Promise.resolve({ ok: true, result: hostSessionSnapshot('pending-handle') })
       }
+
       return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -221,10 +236,12 @@ describe('initial host-mirror attach against a surface published as pending-hand
           result: hostSessionSnapshot(hostRepublished ? 'ready' : 'absent')
         })
       }
+
       return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -251,12 +268,16 @@ describe('initial host-mirror attach against a surface published as pending-hand
       if (args.method === 'session.tabs.activate' || args.method === 'session.tabs.list') {
         return Promise.resolve({ ok: true, result: hostSessionSnapshot('absent') })
       }
+
       return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } =
       await import('./remote-runtime-pty-recovery-state')
+
     const onError = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -279,6 +300,7 @@ describe('initial host-mirror attach against a surface published as pending-hand
     runtimeCall.mockImplementation((args: { method: string }) => {
       if (args.method === 'session.tabs.activate') {
         activations += 1
+
         return Promise.resolve(
           activations > 1
             ? {
@@ -291,12 +313,15 @@ describe('initial host-mirror attach against a surface published as pending-hand
             : { ok: true, result: hostSessionSnapshot('pending-handle') }
         )
       }
+
       if (args.method === 'session.tabs.list') {
         return Promise.resolve({ ok: true, result: hostSessionSnapshot('pending-handle') })
       }
+
       return Promise.resolve({ ok: true, result: { terminal: { handle: 'duplicate-terminal' } } })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -315,6 +340,7 @@ describe('initial host-mirror attach against a surface published as pending-hand
   it('bounds every in-loop request by the remaining attach budget', async () => {
     runtimeCall.mockImplementation(respondWithPendingHostSurface)
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',
@@ -336,23 +362,27 @@ describe('initial host-mirror attach against a surface published as pending-hand
     runtimeCall.mockImplementation((args: { method: string }) => {
       if (args.method === 'session.tabs.activate') {
         activations += 1
+
         return Promise.resolve({
           ok: true,
           result: hostSessionSnapshot(activations > 1 ? 'ready' : 'pending-handle')
         })
       }
+
       if (args.method === 'session.tabs.list') {
         return Promise.resolve({
           ok: true,
           result: hostSessionSnapshot('pending-handle')
         })
       }
+
       return Promise.resolve({
         ok: true,
         result: { terminal: { handle: 'duplicate-terminal' } }
       })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'web-terminal-host-tab-1',

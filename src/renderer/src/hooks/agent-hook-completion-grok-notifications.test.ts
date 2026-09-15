@@ -10,10 +10,15 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import { normalizeAgentStatusEvent } from './ipc-events/normalize-agent-status-event'
 
 const dispatchTerminalNotification = vi.fn()
+
 const dispatchAgentHookTerminalLifecycle = vi.fn()
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
+
 const WORKTREE_ID = 'wt-1'
+
 const capturedHooks = readFileSync(
   new URL('../../../shared/__fixtures__/grok-background-completion-hooks.jsonl', import.meta.url),
   'utf8'
@@ -25,9 +30,11 @@ const capturedHooks = readFileSync(
 function parseCapturedHook(line: string): Record<string, unknown> {
   // JSON.parse returns any; the runtime guard below is what actually proves the shape.
   const parsed: Record<string, unknown> = JSON.parse(line)
+
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     throw new Error('Captured Grok hook must be an object')
   }
+
   return parsed
 }
 
@@ -49,9 +56,11 @@ type MockStoreState = {
 let mockStoreState: MockStoreState
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mockStoreState } }))
+
 vi.mock('@/components/terminal-pane/use-notification-dispatch', () => ({
   dispatchTerminalNotification
 }))
+
 vi.mock('@/components/terminal-pane/agent-hook-terminal-lifecycle', () => ({
   dispatchAgentHookTerminalLifecycle
 }))
@@ -90,6 +99,7 @@ describe('Grok hook completion notifications', () => {
   async function play(hooks: readonly Record<string, unknown>[]): Promise<PlayedNotification[]> {
     const { observeAgentHookCompletionForNotification } =
       await import('./agent-hook-completion-notifications')
+
     const listener = createHookListenerState()
     const notifications: PlayedNotification[] = []
     let previousState: ParsedAgentStatusPayload['state'] | undefined
@@ -102,19 +112,24 @@ describe('Grok hook completion notifications', () => {
     for (const hook of hooks) {
       const at = Date.parse(String(hook.timestamp))
       vi.setSystemTime(at)
+
       const event = normalizeHookPayload(
         listener,
         'grok',
         { paneKey: PANE_KEY, payload: hook },
         'production'
       )
+
       if (!event) {
         continue
       }
+
       if (event.payload.state !== previousState) {
         stateStartedAt = at
       }
+
       previousState = event.payload.state
+
       const ipcPayload: AgentStatusIpcPayload = {
         ...event.payload,
         paneKey: PANE_KEY,
@@ -122,10 +137,13 @@ describe('Grok hook completion notifications', () => {
         receivedAt: at,
         stateStartedAt
       }
+
       const rendererPayload = normalizeAgentStatusEvent(ipcPayload)
+
       if (!rendererPayload) {
         throw new Error('Expected renderer status payload')
       }
+
       observeAgentHookCompletionForNotification({
         paneKey: PANE_KEY,
         worktreeId: WORKTREE_ID,
@@ -198,6 +216,7 @@ describe('Grok hook completion notifications', () => {
         ...scenario.payload
       }
     ])
+
     vi.advanceTimersByTime(1_500)
 
     expect(notifications).toHaveLength(1)
@@ -239,6 +258,7 @@ describe('Grok hook completion notifications', () => {
         sessionCrons: scenario.sessionCrons
       }
     ])
+
     vi.advanceTimersByTime(1_500)
 
     expect(notifications).toHaveLength(1)
@@ -268,6 +288,7 @@ describe('Grok hook completion notifications', () => {
         reason: 'user_interrupt'
       }
     ])
+
     vi.advanceTimersByTime(1_500)
 
     expect(notifications).toHaveLength(0)

@@ -3,6 +3,7 @@ import type { PRCheckDetail } from '../../../shared/github/check-types'
 import { loadGitLabJobLogDetails } from './gitlab-job-trace-client'
 
 const callRuntimeRpc = vi.hoisted(() => vi.fn())
+
 vi.mock('./runtime-rpc-client', () => ({ callRuntimeRpc }))
 
 const jobTrace = vi.fn()
@@ -102,6 +103,7 @@ describe('loadGitLabJobLogDetails', () => {
   // fetched; main answers with an empty trace and the row must show that, not an error.
   it('explains an empty trace for a job canceled before it produced output', async () => {
     jobTrace.mockResolvedValue({ ok: true, trace: '' })
+
     const canceledCheck: PRCheckDetail = {
       name: 'unit',
       status: 'completed',
@@ -154,6 +156,7 @@ describe('loadGitLabJobLogDetails', () => {
 
   it('gives up on a local IPC call that never settles, matching the remote timeout', async () => {
     vi.useFakeTimers()
+
     try {
       jobTrace.mockReturnValue(new Promise(() => {}))
 
@@ -162,6 +165,7 @@ describe('loadGitLabJobLogDetails', () => {
         settings: { activeRuntimeEnvironmentId: null },
         check: gitLabCheck
       })
+
       const assertion = expect(pending).rejects.toThrow('Timed out loading the GitLab job log.')
       await vi.advanceTimersByTimeAsync(65_000)
       await assertion

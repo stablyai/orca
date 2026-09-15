@@ -30,6 +30,7 @@ describe('skillDeletePlacementSummary', () => {
         }
       ])
     )
+
     expect(summary).toContain('1')
     expect(summary).toContain('Agent skills home')
     expect(summary).toContain('Claude home')
@@ -48,6 +49,7 @@ describe('skillDeletePlacementSummary', () => {
         }
       ])
     )
+
     expect(summary).not.toContain('0')
     expect(summary).toContain('link')
     expect(summary).not.toContain('folder')
@@ -86,6 +88,7 @@ describe('skillDeleteRetainedSourceLines', () => {
         }
       ])
     )
+
     expect(lines).toHaveLength(1)
     expect(lines[0]).toContain('/home/.local/share/devex/skills/demo')
   })
@@ -121,6 +124,7 @@ describe('skillDeleteBlockedLines', () => {
         { id: 'c', name: 'c', canonicalPath: '/p', placements: [], blocked: 'plugin' }
       ])
     )
+
     expect(lines).toHaveLength(2)
     expect(lines.some((line) => line.includes('2') && line.includes('Bundled'))).toBe(true)
   })
@@ -134,6 +138,7 @@ describe('skillDeleteResultLines', () => {
       { id: 'c', name: 'c', status: 'skipped', blocked: 'unowned', removedPaths: [] },
       { id: 'd', name: 'd', status: 'busy', removedPaths: [] }
     ])
+
     expect(lines.map((line) => line.key)).toEqual(['skipped:unowned', 'busy'])
     expect(lines[0].label).toContain('2')
   })
@@ -147,15 +152,20 @@ describe('skillDeleteResultLines', () => {
 
 it('sorts deletion roots once with unchanged case, accent, and number ordering', () => {
   const labels = ['éclair', 'Eclair', 'item2', 'item10', 'Ångström', 'zebra', 'İstanbul']
+
   const expected = [...labels].sort((a, b) =>
     // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
     a.localeCompare(b, undefined, { sensitivity: 'base' })
   )
+
   const NativeCollator = Intl.Collator
+
   const construct = vi.spyOn(Intl, 'Collator').mockImplementation(function (locales, options) {
     return new NativeCollator(locales, options)
   })
+
   const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
+
   try {
     const summary = skillDeletePlacementSummary(
       plan([
@@ -171,13 +181,16 @@ it('sorts deletion roots once with unchanged case, accent, and number ordering',
         }
       ])
     )
+
     expect(summary).toContain(expected.join(', '))
     // The shared renderer collator is memoised process-wide, so it is built at
     // most once here and never per comparison.
     expect(construct.mock.calls.length).toBeLessThanOrEqual(1)
+
     for (const call of construct.mock.calls) {
       expect(call).toEqual([undefined, { sensitivity: 'base' }])
     }
+
     expect(localeCompare).not.toHaveBeenCalled()
   } finally {
     vi.restoreAllMocks()

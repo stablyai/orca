@@ -26,6 +26,7 @@ function createFocusTarget(initiallyFocused = false): TerminalLiveInputFocusTarg
   readonly focus: ReturnType<typeof vi.fn>
 } {
   let focused = initiallyFocused
+
   return {
     blur: vi.fn(() => {
       focused = false
@@ -54,12 +55,14 @@ function createHarness(initialProps: HarnessProps): {
       ...props,
       keyboardHeight: props.keyboardHeight ?? 0
     })
+
     return null
   }
 
   act(() => {
     renderer = create(createElement(Harness, initialProps))
   })
+
   if (!handlers || !renderer) {
     throw new Error('terminal live input focus harness did not render')
   }
@@ -69,6 +72,7 @@ function createHarness(initialProps: HarnessProps): {
       if (!handlers) {
         throw new Error('terminal live input focus harness is not mounted')
       }
+
       return handlers
     },
     render: (props) => {
@@ -134,6 +138,7 @@ describe('terminal live input focus hook', () => {
     vi.useFakeTimers()
     const input = createFocusTarget(true)
     const inputRef = { current: input }
+
     const harness = createHarness({
       ...connectedProps(inputRef),
       reopenFocusedInputWhenKeyboardHidden: false

@@ -24,6 +24,7 @@ describe('web session terminal orphan recovery topology fence', () => {
       const leaves = [{ leafId: 'leaf-1', handle: 'term-live' }]
       const stateBeforeBindingChange = makeState(worktree, leaves)
       const localTab = stateBeforeBindingChange.tabsByWorktree[worktree]![0]!
+
       const stateAfterBindingChange = {
         ...stateBeforeBindingChange,
         tabsByWorktree: {
@@ -33,17 +34,22 @@ describe('web session terminal orphan recovery topology fence', () => {
           ]
         }
       }
+
       let currentState = stateBeforeBindingChange
+
       const snapshot: RuntimeMobileSessionTabsResult = {
         ...makeSnapshot(worktree, 'tab-binding-change', leaves),
         tabs: [pendingSurface('host-tab', 'leaf-1', 'pty-live')]
       }
+
       const adoptedSnapshot: RuntimeMobileSessionTabsResult = {
         ...snapshot,
         publicationEpoch: 'adopted-after-binding-change',
         tabs: [pendingSurface('host-tab', 'leaf-1', 'pty-live', 'term-live')]
       }
+
       const adoption = deferred<unknown>()
+
       const call = vi.fn(async ({ method }: { method: string }) => {
         if (method === 'terminal.list') {
           return {
@@ -58,9 +64,11 @@ describe('web session terminal orphan recovery topology fence', () => {
             ])
           }
         }
+
         if (method === blockedMethod) {
           return adoption.promise
         }
+
         return {
           ok: true,
           result: { adopted: true, topologyRevision: 8, snapshot: adoptedSnapshot }
@@ -73,6 +81,7 @@ describe('web session terminal orphan recovery topology fence', () => {
         ENVIRONMENT_ID,
         { call: call as never, getCurrentState: () => currentState }
       )
+
       await vi.waitFor(() =>
         expect(call).toHaveBeenCalledWith(expect.objectContaining({ method: blockedMethod }))
       )
@@ -94,14 +103,17 @@ describe('web session terminal orphan recovery topology fence', () => {
     const leaves = [{ leafId: 'leaf-1', handle: 'term-live' }]
     const state = makeState(worktree, leaves)
     const snapshot = makeSnapshot(worktree, 'renderer:host:client-navigation', leaves)
+
     const adopted: RuntimeMobileSessionTabsResult = {
       ...snapshot,
       publicationEpoch: 'renderer:host',
       snapshotVersion: 2,
       tabs: [pendingSurface('host-tab', 'leaf-1', 'pty-live', 'term-live')]
     }
+
     const ready = { ...adopted, publicationEpoch: snapshot.publicationEpoch, snapshotVersion: 3 }
     const listed = deferred<unknown>()
+
     const call = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'terminal.list') {
         return {
@@ -116,14 +128,18 @@ describe('web session terminal orphan recovery topology fence', () => {
           ])
         }
       }
+
       if (method === 'terminal.adoptOrphans') {
         return { ok: true, result: { adopted: true, topologyRevision: 8, snapshot: adopted } }
       }
+
       return listed.promise
     })
+
     const recovery = recoverWebSessionTerminalOrphansBeforeApply(state, snapshot, ENVIRONMENT_ID, {
       call: call as never
     })
+
     await vi.waitFor(() =>
       expect(call).toHaveBeenCalledWith(expect.objectContaining({ method: 'session.tabs.list' }))
     )

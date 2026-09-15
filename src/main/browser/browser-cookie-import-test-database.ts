@@ -23,9 +23,11 @@ export function createChromiumCookieTestDatabase(
 ): DatabaseSync {
   mkdirSync(join(databasePath, '..'), { recursive: true })
   const database = new DatabaseSync(databasePath)
+
   if (options.journalMode === 'wal') {
     database.exec('PRAGMA journal_mode = WAL; PRAGMA wal_autocheckpoint = 0')
   }
+
   database.exec(`
     CREATE TABLE cookies (
       creation_utc INTEGER NOT NULL,
@@ -46,6 +48,7 @@ export function createChromiumCookieTestDatabase(
       UNIQUE(host_key, top_frame_site_key, name, path, source_scheme, source_port)
     )
   `)
+
   const insert = database.prepare(`
     INSERT INTO cookies (
       creation_utc,
@@ -65,6 +68,7 @@ export function createChromiumCookieTestDatabase(
       has_cross_site_ancestor
     ) VALUES (?, ?, ?, ?, ?, ?, '/', 0, ?, ?, ?, 0, -1, ?, ?)
   `)
+
   rows.forEach((row, index) => {
     insert.run(
       133_000_000_000_000 + index,
@@ -80,12 +84,14 @@ export function createChromiumCookieTestDatabase(
       row.hasCrossSiteAncestor ?? 0
     )
   })
+
   return database
 }
 
 export function encryptMacChromiumCookie(value: string, password: string): Buffer {
   const key = pbkdf2Sync(password, 'saltysalt', 1003, 16, 'sha1')
   const cipher = createCipheriv('aes-128-cbc', key, Buffer.alloc(16, ' '))
+
   return Buffer.concat([
     Buffer.from('v10'),
     cipher.update(Buffer.from(value, 'latin1')),

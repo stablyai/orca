@@ -16,6 +16,7 @@ import {
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from './rate-limit'
 
 const STACK_CACHE_TTL_MS = 30_000
+
 const STACK_CACHE_MAX_ENTRIES = 256
 
 type CachedStackDetails = {
@@ -57,6 +58,7 @@ type GraphQLStackResponse = {
 }
 
 const stackDetailsCache = new Map<string, CachedStackDetails>()
+
 const stackDetailsInFlight = new Map<string, Promise<Omit<GitHubPRStack, 'position'> | null>>()
 
 export function _resetGitHubPRStackCacheForTests(): void {
@@ -78,11 +80,14 @@ function pruneStackCache(now = Date.now()): void {
       stackDetailsCache.delete(key)
     }
   }
+
   while (stackDetailsCache.size > STACK_CACHE_MAX_ENTRIES) {
     const oldestKey = stackDetailsCache.keys().next().value
+
     if (oldestKey === undefined) {
       return
     }
+
     stackDetailsCache.delete(oldestKey)
   }
 }
@@ -91,9 +96,11 @@ function mapStackPRState(value: unknown, isDraft: unknown): PRState {
   if (value === 'MERGED') {
     return 'merged'
   }
+
   if (value === 'CLOSED') {
     return 'closed'
   }
+
   return isDraft === true ? 'draft' : 'open'
 }
 
@@ -101,12 +108,15 @@ function mapStackCheckStatus(value: unknown): CheckStatus {
   if (value === 'SUCCESS') {
     return 'success'
   }
+
   if (value === 'FAILURE' || value === 'ERROR') {
     return 'failure'
   }
+
   if (value === 'PENDING' || value === 'EXPECTED') {
     return 'pending'
   }
+
   return 'neutral'
 }
 
@@ -118,14 +128,17 @@ function mapReviewDecision(value: unknown): PRReviewDecision | null | undefined 
   if (value === null) {
     return null
   }
+
   if (value === 'APPROVED' || value === 'CHANGES_REQUESTED' || value === 'REVIEW_REQUIRED') {
     return value
   }
+
   return undefined
 }
 
 function mapStackEntry(entry: GraphQLStackEntry): GitHubPRStackEntry | null {
   const pr = entry.pullRequest
+
   if (
     typeof entry.position !== 'number' ||
     typeof pr?.number !== 'number' ||
@@ -134,7 +147,9 @@ function mapStackEntry(entry: GraphQLStackEntry): GitHubPRStackEntry | null {
   ) {
     return null
   }
+
   const reviewDecision = mapReviewDecision(pr.reviewDecision)
+
   return {
     position: entry.position,
     number: pr.number,
@@ -158,13 +173,16 @@ function parseStackDetails(
   fallbackSize: number
 ): Omit<GitHubPRStack, 'position'> | null {
   const stack = response.data?.repository?.pullRequest?.stack
+
   if (!stack || stack.number !== expectedStackNumber) {
     return null
   }
+
   const entries = (stack.entries?.nodes ?? [])
     .flatMap((entry) => (entry ? [mapStackEntry(entry)] : []))
     .filter((entry): entry is GitHubPRStackEntry => entry !== null)
     .sort((a, b) => a.position - b.position)
+
   return {
     number: expectedStackNumber,
     size: typeof stack.size === 'number' ? stack.size : fallbackSize,
@@ -214,7 +232,9 @@ async function fetchStackDetails(
   if (repositoryRateLimitGuard(repository, 'graphql', ghOptions).blocked) {
     return null
   }
+
   noteRepositoryRateLimitSpend(repository, 'graphql', 1, ghOptions)
+
   const { stdout } = await ghExecFileAsync(
     [
       'api',
@@ -230,6 +250,7 @@ async function fetchStackDetails(
     ],
     { ...ghOptions, ...githubHostExecOptions(repository) }
   )
+
   return parseStackDetails(
     JSON.parse(stdout) as GraphQLStackResponse,
     summary.number,
@@ -250,27 +271,36 @@ export async function hydrateGitHubPRStack(
   const now = Date.now()
   pruneStackCache(now)
   const cached = stackDetailsCache.get(key)
+
   const cachedPRUpdatedAt = cached?.value?.entries?.find(
     (entry) => entry.number === prNumber
   )?.updatedAt
+
   const cachedMatchesPR = !prUpdatedAt || !cachedPRUpdatedAt || cachedPRUpdatedAt === prUpdatedAt
+
   if (cached && cached.expiresAt > now && cachedMatchesPR) {
     return cached.value
       ? { ...cached.value, position: summary.position, baseSha: summary.baseSha }
       : summary
   }
+
   const existing = stackDetailsInFlight.get(key)
+
   if (existing) {
     const value = await existing
+
     return value ? { ...value, position: summary.position, baseSha: summary.baseSha } : summary
   }
+
   const request = fetchStackDetails(repository, prNumber, summary, ghOptions).catch(() => null)
   stackDetailsInFlight.set(key, request)
+
   try {
     const value = await request
     stackDetailsCache.delete(key)
     stackDetailsCache.set(key, { value, expiresAt: Date.now() + STACK_CACHE_TTL_MS })
     pruneStackCache()
+
     return value ? { ...value, position: summary.position, baseSha: summary.baseSha } : summary
   } finally {
     if (stackDetailsInFlight.get(key) === request) {

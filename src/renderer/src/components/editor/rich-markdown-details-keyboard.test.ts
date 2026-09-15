@@ -22,8 +22,10 @@ function firstDetailsBodyCursorPosition(editor: Editor): number {
   editor.state.doc.descendants((node, pos) => {
     if (node.type.name === 'paragraph' && node.content.size === 0) {
       const parent = editor.state.doc.resolve(pos).parent
+
       if (parent.type.name === 'detailsContent') {
         position = pos + 1
+
         return false
       }
     }
@@ -43,6 +45,7 @@ function firstTextEndPosition(editor: Editor, text: string): number {
   editor.state.doc.descendants((node, pos) => {
     if (node.isText && node.text === text) {
       position = pos + text.length
+
       return false
     }
 
@@ -58,6 +61,7 @@ function firstTextEndPosition(editor: Editor, text: string): number {
 
 function selectionHasAncestor(editor: Editor, typeName: string): boolean {
   const { $from } = editor.state.selection
+
   for (let depth = $from.depth; depth >= 0; depth -= 1) {
     if ($from.node(depth).type.name === typeName) {
       return true
@@ -72,6 +76,7 @@ function firstDetailsContent(editor: Editor): ProseMirrorNode {
   editor.state.doc.descendants((node) => {
     if (node.type.name === 'detailsContent') {
       content = node
+
       return false
     }
 

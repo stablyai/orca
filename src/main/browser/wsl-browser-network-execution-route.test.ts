@@ -27,14 +27,17 @@ class FakeDestination extends EventEmitter implements BrowserNetworkTunnelSocket
   write(bytes: Uint8Array, callback?: () => void): boolean {
     this.writes.push(bytes.slice())
     callback?.()
+
     return true
   }
   end(): this {
     this.ended = true
+
     return this
   }
   destroy(): this {
     this.destroyed = true
+
     return this
   }
 }
@@ -44,16 +47,19 @@ function createRelayProcess(connect: (target: { host: string; port: number }) =>
   const stdout = new PassThrough()
   const stderr = new PassThrough()
   let session: BrowserNetworkTunnelSession
+
   const input = new BrowserNetworkTunnelStreamFrameDecoder(
     (frame) => session.handleBinary(frame),
     () => session.close()
   )
+
   const stdin = new Writable({
     write(chunk: Buffer, _encoding, callback) {
       input.feed(chunk)
       callback()
     }
   })
+
   session = new BrowserNetworkTunnelSession({
     tunnelGeneration: 1,
     connect,
@@ -71,9 +77,11 @@ function createRelayProcess(connect: (target: { host: string; port: number }) =>
       stdout.destroy()
       stderr.destroy()
       child.emit('close', 0, null)
+
       return true
     })
   })
+
   return child
 }
 
@@ -90,6 +98,7 @@ describe('WSL browser network execution route', () => {
     const connect = vi.fn(() => destination)
     const child = createRelayProcess(connect)
     const launchRelay = vi.fn(async () => child)
+
     const route = await resolveWslBrowserNetworkExecutionRoute(
       { executionHost, runtimeId: 'runtime-a', runtimeRevision: 7 },
       { launchRelay }
@@ -129,6 +138,7 @@ describe('WSL browser network execution route', () => {
 
   it('invalidates the route when the exact distro process exits', async () => {
     const child = createRelayProcess(() => new FakeDestination())
+
     const route = await resolveWslBrowserNetworkExecutionRoute(
       { executionHost, runtimeId: 'runtime-a', runtimeRevision: 7 },
       { launchRelay: async () => child }

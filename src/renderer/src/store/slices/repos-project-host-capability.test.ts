@@ -14,10 +14,15 @@ const remoteRepo: Repo = {
 }
 
 const reposList = vi.fn()
+
 const reposClone = vi.fn()
+
 const reposCloneRemote = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
+
 let runtimeCapabilities: string[] = []
 
 function runtimeStatusWithoutProjectHostSetup() {
@@ -51,6 +56,7 @@ beforeEach(() => {
     if (args.method === 'status.get') {
       return runtimeStatusWithoutProjectHostSetup()
     }
+
     return runtimeEnvironmentCall(args)
   })
   vi.stubGlobal('window', {

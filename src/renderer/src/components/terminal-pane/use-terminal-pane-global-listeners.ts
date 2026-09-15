@@ -113,42 +113,55 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
     ) {
       return
     }
+
     const cleanupCallbacks: (() => void)[] = []
+
     const fitAndForward = (): void => {
       const manager = managerRef.current
+
       if (!manager) {
         return
       }
+
       for (const pane of manager.getPanes()) {
         safeFitAndThen(pane, 'web-client-pty-resize', () => {
           const transport = paneTransportsRef.current.get(pane.id)
+
           if (!transport?.isConnected()) {
             return
           }
+
           const ptyId = transport.getPtyId()
+
           if (!ptyId || getFitOverrideForPty(ptyId) || isPtyLocked(ptyId)) {
             return
           }
+
           if (pane.terminal.cols < 8 || pane.terminal.rows < 4) {
             return
           }
+
           transport.resize(pane.terminal.cols, pane.terminal.rows)
         })
       }
     }
+
     const scheduleFrame = (): void => {
       const frameId = requestAnimationFrame(fitAndForward)
       cleanupCallbacks.push(() => cancelAnimationFrame(frameId))
     }
+
     const scheduleTimer = (delayMs: number): void => {
       const timerId = window.setTimeout(fitAndForward, delayMs)
       cleanupCallbacks.push(() => window.clearTimeout(timerId))
     }
+
     scheduleFrame()
     scheduleTimer(50)
     scheduleTimer(150)
     scheduleTimer(400)
     scheduleTimer(900)
+
     return () => {
       for (const cleanup of cleanupCallbacks) {
         cleanup()
@@ -159,27 +172,36 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
 
   useEffect(() => {
     const container = containerRef.current
+
     if (!container) {
       return
     }
+
     let ownsRegularTerminalFocus = false
     let releasedHelperOnWindowBlur: HTMLElement | null = null
     let refreshingImeInputContext = false
+
     const syncFocused = (focused: boolean): void => {
       ownsRegularTerminalFocus = focused
+
       if (focused) {
         releasedHelperOnWindowBlur = null
       }
+
       setRegularTerminalInputFocusAttribute(focused)
       window.api.ui.setTerminalInputFocused?.(focused)
     }
+
     const onFocusIn = (event: FocusEvent): void => {
       if (!isXtermHelperTextarea(event.target)) {
         return
       }
+
       syncFocused(true)
+
       if (isXtermHelperTextarea(event.relatedTarget) && event.relatedTarget !== event.target) {
         refreshingImeInputContext = true
+
         try {
           refreshTerminalImeInputContext(event.target, {})
         } finally {
@@ -187,15 +209,19 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
         }
       }
     }
+
     const onFocusOut = (event: FocusEvent): void => {
       if (!isXtermHelperTextarea(event.target)) {
         return
       }
+
       if (isXtermHelperTextarea(event.relatedTarget) || refreshingImeInputContext) {
         return
       }
+
       syncFocused(false)
     }
+
     const onPointerDown = (event: PointerEvent): void => {
       releaseTerminalFocusForOutsidePointerDown({
         container,
@@ -204,6 +230,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
         syncFocused
       })
     }
+
     const onWindowBlur = (): void => {
       releasedHelperOnWindowBlur = releaseTerminalFocusForWindowBlur({
         container,
@@ -211,6 +238,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
         syncFocused
       })
     }
+
     const onWindowFocus = (): void => {
       if (
         resyncTerminalFocusForWindowFocus({
@@ -223,23 +251,27 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneCloseCont
         releasedHelperOnWindowBlur = null
       }
     }
+
     if (
       isXtermHelperTextarea(document.activeElement) &&
       container.contains(document.activeElement)
     ) {
       syncFocused(true)
     }
+
     container.addEventListener('focusin', onFocusIn)
     container.addEventListener('focusout', onFocusOut)
     document.addEventListener('pointerdown', onPointerDown, true)
     window.addEventListener('blur', onWindowBlur)
     window.addEventListener('focus', onWindowFocus)
+
     return () => {
       container.removeEventListener('focusin', onFocusIn)
       container.removeEventListener('focusout', onFocusOut)
       document.removeEventListener('pointerdown', onPointerDown, true)
       window.removeEventListener('blur', onWindowBlur)
       window.removeEventListener('focus', onWindowFocus)
+
       if (ownsRegularTerminalFocus) {
         syncFocused(false)
       }

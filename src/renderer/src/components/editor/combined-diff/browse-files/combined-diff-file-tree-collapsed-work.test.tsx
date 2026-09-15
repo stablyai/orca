@@ -19,6 +19,7 @@ class NoopResizeObserver implements ResizeObserver {
 }
 
 let host: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -45,6 +46,7 @@ function countingEntries(count: number): {
   reads: () => number
 } {
   let reads = 0
+
   const entries = Array.from({ length: count }, (_, index) => {
     const path = `src/dir${index % 5}/file-${index}.ts`
     const entry = { status: 'modified' } as GitBranchChangeEntry
@@ -53,11 +55,14 @@ function countingEntries(count: number): {
       enumerable: true,
       get: () => {
         reads += 1
+
         return path
       }
     })
+
     return entry
   })
+
   return { entries, reads: () => reads }
 }
 

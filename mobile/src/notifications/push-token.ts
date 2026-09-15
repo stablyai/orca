@@ -22,9 +22,11 @@ function toMobilePushToken(raw: { type: string; data: unknown }): MobilePushToke
   if (typeof raw.data !== 'string' || raw.data.length === 0) {
     return null
   }
+
   if (raw.type === 'ios') {
     return { platform: 'ios', token: raw.data, apnsEnvironment: apnsEnvironment() }
   }
+
   // Web tokens carry an object payload and no Orca gateway path; only native counts.
   return raw.type === 'android' ? { platform: 'android', token: raw.data } : null
 }
@@ -45,10 +47,12 @@ export function addPushTokenListener(listener: (token: MobilePushToken) => void)
   try {
     const subscription = Notifications.addPushTokenListener((raw) => {
       const token = toMobilePushToken(raw)
+
       if (token) {
         listener(token)
       }
     })
+
     return () => subscription.remove()
   } catch {
     // A shell with no push capability cannot subscribe; the caller is a root-level

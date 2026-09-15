@@ -7,6 +7,7 @@ describe('mobile E2EE outbound memory budget', () => {
       maxQueuedBytes: 5,
       maxQueuedFrames: 2
     })
+
     const first = budget.claimQueuedBytes(3)
     const second = budget.claimQueuedBytes(2)
 
@@ -23,10 +24,12 @@ describe('mobile E2EE outbound memory budget', () => {
   it('bounds prospective native buffering across registered sockets', () => {
     let firstBuffered = 3
     let secondBuffered = 2
+
     const budget = createMobileE2EEOutboundMemoryBudget({
       maxBufferedBytes: 8,
       maxSocketSources: 2
     })
+
     const first = budget.registerBufferedAmount(() => firstBuffered)!
     const second = budget.registerBufferedAmount(() => secondBuffered)!
 

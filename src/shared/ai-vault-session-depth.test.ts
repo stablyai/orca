@@ -10,6 +10,7 @@ import {
 
 function session(id: string, cwd: string, index: number): AiVaultSession {
   const timestamp = new Date(Date.UTC(2026, 7, 2, 0, 0, index)).toISOString()
+
   return {
     id,
     executionHostId: 'local',
@@ -90,15 +91,18 @@ describe('Agent Session History scope truncation', () => {
     const loaded = result(
       Array.from({ length: 1000 }, (_, i) => session(`id-${i}`, `/other/${i}`, i))
     )
+
     const scopes = Array.from({ length: 100 }, (_, i) => `/repo/${i}`)
     const normalize = vi.spyOn(String.prototype, 'normalize')
     let selected: AiVaultListResult
+
     try {
       selected = truncateAiVaultListResult(loaded, 10, scopes)
       expect(normalize.mock.calls.length).toBeLessThanOrEqual(1100)
     } finally {
       normalize.mockRestore()
     }
+
     expect(selected.sessions).toEqual(loaded.sessions.slice(0, 10))
   })
 
@@ -113,6 +117,7 @@ describe('Agent Session History scope truncation', () => {
       ['/Users/ada/repo', '/Users/ada/repository'],
       ['/', '/anywhere']
     ]
+
     for (const [scope, cwd] of cases) {
       const loaded = result([session('scoped', cwd!, 0)])
       const selected = truncateAiVaultListResult(loaded, 0, [scope!])

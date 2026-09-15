@@ -42,6 +42,7 @@ export function renderCommentGroup(
 
   const root = getPRCommentGroupRoot(group)
   const count = getPRCommentGroupCount(group)
+
   return (
     <Accordion key={getPRCommentGroupId(group)} type="single" collapsible>
       <AccordionItem
@@ -104,6 +105,7 @@ export function ConversationTabCommentGroup({
 
   const root = getPRCommentGroupRoot(group)
   const count = getPRCommentGroupCount(group)
+
   return (
     <Accordion type="single" collapsible>
       <AccordionItem

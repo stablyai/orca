@@ -30,9 +30,12 @@ export function deliverNativeNotification(
     // Why: macOS treats an unset sound as silent, so request Electron's default when using the OS sound.
     notificationOptions.sound = 'default'
   }
+
   const notification = new Notification(notificationOptions)
+
   if (args.notificationId) {
     const previous = activeNotificationsById.get(args.notificationId)
+
     if (previous) {
       previous.notification.close()
       previous.release()
@@ -42,22 +45,27 @@ export function deliverNativeNotification(
   // Why: prevent GC from collecting the notification and its click handler while it's still visible.
   let clickHandler: (() => void) | null = null
   let failedHandler: ((_event: unknown, error?: string) => void) | null = null
+
   const entryForId: { notification: Notification; release: () => void } | null = args.notificationId
     ? { notification, release: () => {} }
     : null
+
   const release = retainNotificationUntilRelease(notification, () => {
     if (clickHandler) {
       notification.removeListener('click', clickHandler)
       clickHandler = null
     }
+
     if (failedHandler) {
       notification.removeListener('failed', failedHandler)
       failedHandler = null
     }
+
     if (args.notificationId && activeNotificationsById.get(args.notificationId) === entryForId) {
       activeNotificationsById.delete(args.notificationId)
     }
   })
+
   if (entryForId && args.notificationId) {
     entryForId.release = release
     activeNotificationsById.set(args.notificationId, entryForId)
@@ -70,6 +78,7 @@ export function deliverNativeNotification(
     recordNotificationDeliveryOutcome('failed')
     release()
   }
+
   notification.on('failed', failedHandler)
 
   // Why: worktreeId is formatted "repoId::worktreePath"; without the separator we can't extract a repoId, so skip the click-to-navigate binding.
@@ -78,12 +87,15 @@ export function deliverNativeNotification(
     clickHandler = () => {
       release()
       const win = getTrustedUIRendererWindow()
+
       if (!win || win.isDestroyed()) {
         return
       }
+
       if (process.platform === 'darwin' && !isBackgroundLaunch()) {
         app.focus({ steal: true })
       }
+
       safelyRevealWindow(win)
       win.webContents.send('ui:activateWorktree', {
         repoId,
@@ -91,6 +103,7 @@ export function deliverNativeNotification(
       })
       // Why: focusTerminal targets the pane by stable leafId so split-pane notifications land on the exact pane.
       const paneTarget = args.paneKey ? parsePaneKey(args.paneKey) : null
+
       if (paneTarget) {
         win.webContents.send('ui:focusTerminal', {
           tabId: paneTarget.tabId,
@@ -102,21 +115,26 @@ export function deliverNativeNotification(
         })
       }
     }
+
     notification.on('click', clickHandler)
   }
 
   const displayConfirmation = args.requireDisplayConfirmation
     ? waitForNotificationDisplay(notification)
     : null
+
   notification.show()
 
   if (displayConfirmation) {
     return displayConfirmation.then((displayed) => {
       if (!displayed) {
         release()
+
         return { delivered: false, reason: 'not-displayed' }
       }
+
       recordNotificationDeliveryOutcome('delivered')
+
       return { delivered: true }
     })
   }

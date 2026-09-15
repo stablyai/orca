@@ -10,11 +10,13 @@ function sameSources(previous: readonly unknown[], next: readonly unknown[]): bo
   if (previous.length !== next.length) {
     return false
   }
+
   for (let index = 0; index < next.length; index += 1) {
     if (previous[index] !== next[index]) {
       return false
     }
   }
+
   return true
 }
 
@@ -36,8 +38,10 @@ export function createWorktreeRecordSelector<TState, TValue extends object>(opti
   empty: TValue
 }): (state: TState, worktreeId: string) => TValue {
   let generation: WorktreeRecordGeneration<TValue> | null = null
+
   return (state, worktreeId) => {
     const sources = options.readSources(state)
+
     if (!generation || !sameSources(generation.sources, sources)) {
       generation = {
         sources,
@@ -45,19 +49,25 @@ export function createWorktreeRecordSelector<TState, TValue extends object>(opti
         byWorktreeId: new Map()
       }
     }
+
     const cached = generation.byWorktreeId.get(worktreeId)
+
     if (cached !== undefined) {
       return cached
     }
+
     const built = options.build(state, worktreeId)
     const carried = generation.carried?.get(worktreeId)
     let value = built
+
     if (Object.keys(built).length === 0) {
       value = options.empty
     } else if (carried && shallow(carried, built)) {
       value = carried
     }
+
     generation.byWorktreeId.set(worktreeId, value)
+
     return value
   }
 }

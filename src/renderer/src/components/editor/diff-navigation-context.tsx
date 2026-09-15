@@ -70,6 +70,7 @@ export function DiffNavigationProvider({
     if (editorRef.current !== diffEditor) {
       return
     }
+
     updateSubRef.current?.dispose()
     updateSubRef.current = null
     shortcutCleanupRef.current?.()
@@ -99,6 +100,7 @@ export function DiffNavigationProvider({
     () => ({ registerDiffEditor, unregisterDiffEditor }),
     [registerDiffEditor, unregisterDiffEditor]
   )
+
   const navigationValue = useMemo(
     () => ({
       goToPreviousDiff,

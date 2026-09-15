@@ -6,9 +6,11 @@ export type DragReorderPositions = Record<string, number>
 export function dragReorderPositionsFromKeys(keys: string[]): DragReorderPositions {
   'worklet'
   const positions: DragReorderPositions = {}
+
   for (let i = 0; i < keys.length; i++) {
     positions[keys[i]!] = i
   }
+
   return positions
 }
 
@@ -16,14 +18,17 @@ export function orderedKeysFromDragReorderPositions(positions: DragReorderPositi
   'worklet'
   const keys = Object.keys(positions)
   keys.sort((a, b) => positions[a]! - positions[b]!)
+
   return keys
 }
 
 export function clampDragReorderIndex(index: number, count: number): number {
   'worklet'
+
   if (count <= 0) {
     return 0
   }
+
   return Math.min(Math.max(index, 0), count - 1)
 }
 
@@ -34,12 +39,16 @@ export function moveDragReorderKey(
 ): DragReorderPositions {
   'worklet'
   const fromIndex = positions[key]
+
   if (fromIndex === undefined || fromIndex === toIndex) {
     return positions
   }
+
   const next: DragReorderPositions = {}
+
   for (const currentKey of Object.keys(positions)) {
     const position = positions[currentKey]!
+
     if (currentKey === key) {
       next[currentKey] = toIndex
     } else if (fromIndex < toIndex && position > fromIndex && position <= toIndex) {
@@ -50,5 +59,6 @@ export function moveDragReorderKey(
       next[currentKey] = position
     }
   }
+
   return next
 }

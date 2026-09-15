@@ -29,11 +29,13 @@ export function shouldDismissKeyboardAfterTerminalSend(
   if (!accepted || !tab || tab.type !== 'terminal') {
     return false
   }
+
   if (
     tab.agentStatus?.state === 'done' &&
     (isShellProcess(tab.title) || isClaudeManagementTitle(tab.title))
   ) {
     return false
   }
+
   return resolveMobileTerminalTabOwnedAgentId(tab) !== null
 }

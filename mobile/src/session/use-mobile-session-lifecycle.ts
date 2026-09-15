@@ -25,21 +25,26 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     unsubscribeTerminal,
     subscribeToTerminal
   } = scope
+
   // Why: the shared client owns authenticated identity; this host read only supplies connection-hint metadata.
   useEffect(() => {
     if (!hostId) {
       return
     }
+
     let stale = false
     void loadHosts().then((hosts) => {
       if (stale) {
         return
       }
+
       const host = hosts.find((h) => h.id === hostId)
+
       if (host) {
         setHostEndpoint(host.endpoint)
       }
     })
+
     return () => {
       stale = true
     }
@@ -57,6 +62,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
           setVisibleBuiltInIds(layout.visibleBuiltInIds)
         }
       })
+
       return () => {
         stale = true
       }
@@ -65,6 +71,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
 
   useEffect(() => {
     let mounted = true
+
     const refresh = () => {
       void loadTerminalAccessoryLayout().then((layout) => {
         if (mounted) {
@@ -72,11 +79,13 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
         }
       })
     }
+
     const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
       if (s === 'active') {
         refresh()
       }
     })
+
     return () => {
       mounted = false
       sub.remove()
@@ -86,19 +95,24 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
   const pendingForegroundRecoveryRef = useRef(false)
   useEffect(() => {
     let previousAppState: AppStateStatus | null = AppState.currentState
+
     const sub = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
       const shouldRecover = shouldRecoverTerminalOnAppStateChange(
         previousAppState,
         nextAppState,
         Platform.OS
       )
+
       previousAppState = nextAppState
+
       if (!shouldRecover) {
         return
       }
+
       for (const terminalRef of terminalRefs.current.values()) {
         terminalRef.prepareForForegroundRecovery()
       }
+
       // Why: iOS can resume a WKWebView with a blank xterm store and no web-ready; invalidate the latch so init waits for the pong.
       const outcome = recoverActiveTerminalAfterForeground({
         activeHandleRef,
@@ -109,8 +123,10 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
         subscribeToTerminal,
         schedule: scheduleDelayedAction
       })
+
       pendingForegroundRecoveryRef.current = outcome === 'deferred'
     })
+
     return () => {
       sub.remove()
     }
@@ -121,10 +137,13 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     if (connState !== 'connected' || !pendingForegroundRecoveryRef.current) {
       return
     }
+
     pendingForegroundRecoveryRef.current = false
+
     if (AppState.currentState !== 'active') {
       return
     }
+
     recoverActiveTerminalAfterForeground({
       activeHandleRef,
       terminalRefs,
@@ -135,6 +154,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
       schedule: scheduleDelayedAction
     })
   }, [connState, scheduleDelayedAction, subscribeToTerminal, unsubscribeTerminal])
+
   return {
     pendingForegroundRecoveryRef
   }

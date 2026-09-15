@@ -29,9 +29,12 @@ export function isWorkspaceSshPinRepinned(input: {
 }): boolean {
   const captured = sanitizeSshTargetGeneration(input.capturedGeneration)
   const pin = input.pin
+
   if (captured === undefined || pin?.generation === undefined || captured === pin.generation) {
     return false
   }
+
   const capturedTargetId = input.sshTargetIdForGeneration?.(captured)
+
   return capturedTargetId !== undefined && capturedTargetId !== pin.targetId
 }

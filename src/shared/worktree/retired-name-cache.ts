@@ -35,7 +35,9 @@ export function readRetiredNameRegistryForRepo(
       }
     | null
     | undefined
+
   const names = row?.retiredNamesByRepo?.[repoId]
+
   return {
     exhaustedTiers: clampExhaustedTiers(row?.retiredNameTiersByRepo?.[repoId]),
     names: Array.isArray(names)

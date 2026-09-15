@@ -64,32 +64,42 @@ export async function resolveTerminalOrphanInventory(args: {
     expectedEnvironmentPairingRevision,
     isCurrent
   } = args
+
   const retiredSurfaces = candidates.filter((surface) =>
     hasExactTerminalRetirementProof(snapshot, surface)
   )
+
   const provenRemoved = new Set(retiredSurfaces.map((surface) => surface.surfaceKey))
+
   const recoverableCandidates = candidates.filter(
     (surface) => !hasExactTerminalRetirementProof(snapshot, surface)
   )
+
   const surfacesByHandle = new Map<string, RecoverySurface[]>()
+
   for (const surface of recoverableCandidates) {
     const grouped = surfacesByHandle.get(surface.handle) ?? []
     grouped.push(surface)
     surfacesByHandle.set(surface.handle, grouped)
   }
+
   const duplicateHandles = new Set(
     [...surfacesByHandle.entries()]
       .filter(([, surfaces]) => surfaces.length > 1)
       .map(([handle]) => handle)
   )
+
   const duplicateSurfaces = recoverableCandidates.filter((surface) =>
     duplicateHandles.has(surface.handle)
   )
+
   const listableSurfaces = recoverableCandidates.filter(
     (surface) => !duplicateHandles.has(surface.handle)
   )
+
   const stableRetained: RecoverySurface[] = []
   const inventorySurfaces: RecoverySurface[] = []
+
   for (const surface of listableSurfaces) {
     const target = readStableSurfaceRecoveryFailure({
       environmentId,
@@ -99,9 +109,12 @@ export async function resolveTerminalOrphanInventory(args: {
     })
       ? stableRetained
       : inventorySurfaces
+
     target.push(surface)
   }
+
   const retainedBeforeListing = [...duplicateSurfaces, ...stableRetained]
+
   if (inventorySurfaces.length > 64) {
     return {
       retained: [...retainedBeforeListing, ...inventorySurfaces],
@@ -110,6 +123,7 @@ export async function resolveTerminalOrphanInventory(args: {
       topologyRevision: 0
     }
   }
+
   if (inventorySurfaces.length === 0) {
     return {
       retained: retainedBeforeListing,
@@ -118,11 +132,14 @@ export async function resolveTerminalOrphanInventory(args: {
       topologyRevision: 0
     }
   }
+
   if (!isCurrent()) {
     return null
   }
+
   const inventoryHandles = [...new Set(inventorySurfaces.map((surface) => surface.handle))]
   let listedResponse: RuntimeRpcResponse<unknown> | null
+
   try {
     listedResponse = await runInTerminalRecoveryRpcLane(isCurrent, () =>
       call({
@@ -141,37 +158,46 @@ export async function resolveTerminalOrphanInventory(args: {
   } catch {
     listedResponse = null
   }
+
   if (listedResponse === null) {
     return isCurrent() ? fallback(retainedBeforeListing, inventorySurfaces, provenRemoved) : null
   }
+
   if (!isCurrent()) {
     return null
   }
+
   if (!listedResponse.ok || !isTerminalListResult(listedResponse.result)) {
     return fallback(retainedBeforeListing, inventorySurfaces, provenRemoved)
   }
+
   const listed = listedResponse.result
   const inventoryHandleSet = new Set(inventoryHandles)
   const listedByHandle = new Map<string, RuntimeTerminalListResult['terminals'][number]>()
   const duplicateListedHandles = new Set<string>()
+
   for (const terminal of listed.terminals) {
     if (!inventoryHandleSet.has(terminal.handle)) {
       continue
     }
+
     if (listedByHandle.has(terminal.handle)) {
       duplicateListedHandles.add(terminal.handle)
     } else {
       listedByHandle.set(terminal.handle, terminal)
     }
   }
+
   // Older hosts omit hostScope entirely; an unscoped absence cannot prove a PTY exited. A peer
   // runtime named in `omittedHostIds` is disclosure rather than a gap this host owed (#18595).
   const hostScopeUnverifiable = !hostScopeCensusIsComplete(listed.hostScope)
   const dispositions = new Map<string, RecoveryDisposition>()
   const claims: RuntimeTerminalOrphanAdoptionClaim[] = []
+
   for (const surface of inventorySurfaces) {
     const terminal = listedByHandle.get(surface.handle)
     let disposition: RecoveryDisposition = 'retain'
+
     if (terminal || surface.pending) {
       clearSurfaceInventoryAbsence({
         environmentId,
@@ -180,6 +206,7 @@ export async function resolveTerminalOrphanInventory(args: {
         expectedEnvironmentPairingRevision
       })
     }
+
     if (duplicateListedHandles.has(surface.handle)) {
       disposition = 'retain'
     } else if (!terminal) {
@@ -217,6 +244,7 @@ export async function resolveTerminalOrphanInventory(args: {
     } else {
       const ptyId = terminal.ptyId
       const incarnationId = terminal.incarnationId
+
       if (
         typeof ptyId !== 'string' ||
         ptyId.length === 0 ||
@@ -227,6 +255,7 @@ export async function resolveTerminalOrphanInventory(args: {
         dispositions.set(surface.surfaceKey, disposition)
         continue
       }
+
       disposition = 'claim'
       claims.push({
         terminal: terminal.handle,
@@ -236,17 +265,21 @@ export async function resolveTerminalOrphanInventory(args: {
         leafId: surface.leafId
       })
     }
+
     dispositions.set(surface.surfaceKey, disposition)
   }
+
   const retainedAfterListing = inventorySurfaces.filter(
     (surface) => dispositions.get(surface.surfaceKey) === 'retain'
   )
+
   const removed = new Set(
     [
       ...retiredSurfaces,
       ...inventorySurfaces.filter((surface) => dispositions.get(surface.surfaceKey) === 'remove')
     ].map((surface) => surface.surfaceKey)
   )
+
   return {
     retained: [...retainedBeforeListing, ...retainedAfterListing],
     removed,

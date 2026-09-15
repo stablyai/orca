@@ -46,6 +46,7 @@ export async function createReservedBrowserClientPage(
   if (event.command.type !== 'createPage') {
     throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
   }
+
   assertBrowserClientPageCommandNotAborted(signal)
   let route: RetainedNetworkRoute | null = null
   let routeSession: BrowserRouteSessionHandle | null = null
@@ -54,11 +55,14 @@ export async function createReservedBrowserClientPage(
   let lifecycleClaim: BrowserRouteGuestLifecycleClaim | null = null
   let mountAttempted = false
   let guestBound = false
+
   try {
     route = await dependencies.retainNetworkRoute(event.command.executionHostKey, signal)
+
     if (route.key !== event.command.executionHostKey) {
       throw new BrowserClientPageCommandError('browser_client_page_execution_host_stale')
     }
+
     // The started route proves this generation is current, so any page still holding an older key
     // for the same host owns a fenced tunnel and the partition's previous proxy endpoint.
     await dependencies.retireSupersededExecutionHostPages(route)
@@ -97,18 +101,23 @@ export async function createReservedBrowserClientPage(
       webContentsId: mounted.webContentsId
     }
     lifecycleClaim = dependencies.routeWebContents.claimGuestLifecycle(registration)
+
     if (!lifecycleClaim) {
       throw new BrowserClientPageCommandError('browser_client_page_guest_observation_failed')
     }
+
     assertBrowserClientPageCommandNotAborted(signal)
     assertAvailable()
     assertCurrentBrowserClientPageRenderer(renderer)
+
     if (!dependencies.routeWebContents.registerGuest(registration)) {
       throw new BrowserClientPageCommandError('browser_client_page_guest_registration_failed')
     }
+
     if (!dependencies.routeWebContents.grantNavigation(registration)) {
       throw new BrowserClientPageCommandError('browser_client_page_navigation_grant_failed')
     }
+
     // Before the first navigation: a download can start on it, and an unbound page cannot own one.
     dependencies.guestBinding.bind({
       registration,
@@ -116,6 +125,7 @@ export async function createReservedBrowserClientPage(
     })
     guestBound = true
     assertAvailable()
+
     const retainedPage = {
       generation: event.pageHostGeneration,
       inventory: createBrowserClientPageInventory(event, 'active'),
@@ -127,12 +137,15 @@ export async function createReservedBrowserClientPage(
       retiring: null,
       reconciling: false
     }
+
     commit(retainedPage)
+
     return retainedPage
   } catch (error) {
     if (guestBound && registration) {
       dependencies.guestBinding.release(registration)
     }
+
     try {
       await cleanupBrowserClientPage(dependencies.routeWebContents, {
         guestMayExist: mountAttempted,
@@ -149,6 +162,7 @@ export async function createReservedBrowserClientPage(
         cause: new AggregateError([error, cleanupError], 'Browser client page creation failed')
       })
     }
+
     throw error
   }
 }

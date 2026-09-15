@@ -53,9 +53,11 @@ function canonicalRoot(input: {
   workspaceDirectory?: string
 }): string {
   const scopeRoot = input.scope === 'global' ? input.homeDirectory : input.workspaceDirectory
+
   if (!scopeRoot) {
     throw new Error('skill-install-workspace-required')
   }
+
   return join(scopeRoot, '.agents', 'skills')
 }
 
@@ -99,9 +101,11 @@ export async function installSharedSkill(
 ): Promise<SkillInstallResult> {
   const request = skillInstallLocalInput(input)
   await previewLocalSkillPackage(request)
+
   const result = await installLocalSkillPackage(request, {
     placementTransaction: placementTransaction(input, request)
   })
+
   return completeSharedSkillInstall(input, result)
 }
 
@@ -110,9 +114,11 @@ export async function installSharedExtractedSkill(
   extracted: LocalExtractedSkillPackage
 ): Promise<SkillInstallResult> {
   const request = skillInstallLocalInput(input)
+
   const result = await installLocalExtractedSkillPackage(request, extracted, {
     placementTransaction: placementTransaction(input, request)
   })
+
   return completeSharedSkillInstall(input, result)
 }
 
@@ -128,9 +134,11 @@ async function completeSharedSkillInstall(
   ) {
     return result
   }
+
   const incomplete = result.placements.some(
     (placement) => placement.status === 'failed' || placement.status === 'skipped'
   )
+
   return verifySkillInstallDiscovery({
     result: { ...result, status: incomplete ? 'partial' : result.status },
     scope: input.scope,
@@ -148,6 +156,7 @@ export async function removeSharedSkill(
   if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(input.skillName)) {
     throw new Error('skill-install-name-invalid')
   }
+
   const providerDestinations = resolveSkillProviderDestinations({
     scope: input.scope,
     homeDirectory: input.homeDirectory,
@@ -155,6 +164,7 @@ export async function removeSharedSkill(
     detectedProviders: SKILL_INSTALL_PROVIDERS.map((provider) => provider.id),
     providerRootOverrides: input.providerRootOverrides
   })
+
   return removeLocalSharedSkill({
     operationId: input.operationId,
     canonicalPath: join(canonicalRoot(input), input.skillName),

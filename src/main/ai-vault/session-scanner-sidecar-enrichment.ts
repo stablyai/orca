@@ -34,10 +34,13 @@ export async function enrichSessionFromSidecar(
   if (candidate.agent !== 'cursor' || !foldSession) {
     return { session: foldSession, refused: false }
   }
+
   const meta = await readCursorChatMeta(candidate.file.path)
+
   if (!meta) {
     return { session: foldSession, refused: wasCursorChatMetaRefused(candidate.file.path) }
   }
+
   return { session: mergeCursorChatMeta(foldSession, meta, platform), refused: false }
 }
 
@@ -55,6 +58,7 @@ export function mergeCursorChatMeta(
   // A generated title means the fold found none, so the sibling's may stand in.
   const named = session.title !== generatedSessionTitle(session.agent, session.sessionId)
   const cwd = session.cwd ?? meta.cwd
+
   const merged: AiVaultSession = {
     ...session,
     title: named ? session.title : (meta.title ?? session.title),
@@ -62,9 +66,11 @@ export function mergeCursorChatMeta(
     createdAt: session.createdAt ?? meta.createdAt,
     updatedAt: session.updatedAt ?? meta.updatedAt
   }
+
   if (cwd === session.cwd) {
     return merged
   }
+
   // The resume command embeds the cwd, so it has to be rebuilt with it.
   return {
     ...merged,

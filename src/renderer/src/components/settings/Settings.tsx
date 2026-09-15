@@ -22,6 +22,7 @@ function Settings(): React.JSX.Element {
   }
 
   const view = buildSettingsViewModel(model, navigation)
+
   const context: SettingsRenderContext = {
     model: model as LoadedSettingsStoreModel,
     interactions,
@@ -30,6 +31,7 @@ function Settings(): React.JSX.Element {
     actions,
     view
   }
+
   return renderSettingsPage(context)
 }
 

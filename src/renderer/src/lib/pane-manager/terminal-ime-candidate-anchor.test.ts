@@ -5,8 +5,11 @@ import type { IBuffer, IBufferCell, IBufferLine, Terminal } from '@xterm/xterm'
 import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
 
 const COLS = 80
+
 const ROWS = 24
+
 const CELL_WIDTH = 8
+
 const CELL_HEIGHT = 17
 
 type AnchorHarness = {
@@ -21,21 +24,26 @@ type AnchorHarness = {
 
 function makeLine(text: string): IBufferLine {
   const chars = Array.from(text)
+
   while (chars.length < COLS) {
     chars.push(' ')
   }
+
   const cellAt = (column: number): IBufferCell | undefined => {
     const char = chars[column]
+
     return char === undefined
       ? undefined
       : ({ getWidth: () => 1, getChars: () => (char === ' ' ? '' : char) } as IBufferCell)
   }
+
   return {
     isWrapped: false,
     length: chars.length,
     getCell: cellAt,
     translateToString: (trimRight = false, start = 0, end = chars.length) => {
       const result = chars.slice(start, end).join('')
+
       return trimRight ? result.replace(/\s+$/, '') : result
     }
   } as IBufferLine
@@ -54,24 +62,28 @@ function createHarness(): AnchorHarness {
 
   screen.getBoundingClientRect = (): DOMRect => {
     counts.rectReads++
+
     return { width: COLS * CELL_WIDTH, height: ROWS * CELL_HEIGHT } as DOMRect
   }
 
   // `width` is xterm's, not ours: it sizes the textarea to the preedit just before this
   // listener runs, and the clamp reads it back to keep that box inside the screen.
   const style = { top: '', left: '', width: '' }
+
   const textarea = {
     isConnected: true,
     style: new Proxy(style, {
       set(target, key: string, value: string) {
         counts.styleWrites++
         target[key as 'top' | 'left' | 'width'] = value
+
         return true
       }
     })
   } as unknown as HTMLTextAreaElement
 
   let lines = ['']
+
   const buffer = {
     baseY: 0,
     cursorX: 0,
@@ -116,6 +128,7 @@ function typeHangulSyllable(
 ): void {
   harness.setCursor(cursorX, cursorY)
   fire(harness.element, 'compositionstart')
+
   for (let update = 0; update < updates; update++) {
     fire(harness.element, 'compositionupdate')
   }

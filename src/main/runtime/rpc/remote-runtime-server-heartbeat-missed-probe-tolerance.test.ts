@@ -58,6 +58,7 @@ describe('RemoteRuntimeServerHeartbeat missed-probe tolerance', () => {
     heartbeat.noteAlive(socket)
 
     const missesBeforeReap: number[] = []
+
     for (let probe = 0; probe < 6; probe += 1) {
       now += INTERVAL_MS
       await vi.advanceTimersByTimeAsync(INTERVAL_MS)
@@ -111,6 +112,7 @@ describe('RemoteRuntimeServerHeartbeat missed-probe tolerance', () => {
       now += INTERVAL_MS
       await vi.advanceTimersByTimeAsync(INTERVAL_MS)
     }
+
     const reaped = (candidate: WebSocket): boolean =>
       (candidate.terminate as unknown as ReturnType<typeof vi.fn>).mock.calls.length > 0
 
@@ -118,11 +120,13 @@ describe('RemoteRuntimeServerHeartbeat missed-probe tolerance', () => {
     // every sweep after it is an unanswered probe.
     await sweep()
     let toleratedMisses = 0
+
     // Bounded so a heartbeat that never reaps fails here instead of hanging out to the test timeout.
     while (!reaped(socket) && toleratedMisses < 20) {
       await sweep()
       toleratedMisses += 1
     }
+
     expect(reaped(socket)).toBe(true)
     expect(toleratedMisses).toBeGreaterThan(1)
     heartbeat.stop()
@@ -136,9 +140,11 @@ describe('RemoteRuntimeServerHeartbeat missed-probe tolerance', () => {
     resumed.start(() => [resumedSocket])
     resumed.noteAlive(resumedSocket)
     await sweep()
+
     for (let miss = 0; miss < toleratedMisses - 1; miss += 1) {
       await sweep()
     }
+
     expect(reaped(resumedSocket)).toBe(false)
 
     now += 3_600_000

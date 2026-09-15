@@ -47,6 +47,7 @@ describe('resolveWorktreeRemovalRepoOwner', () => {
       'repo1',
       'ssh:ssh-1'
     )
+
     expect(owner).toEqual({ kind: 'resolved', repo: sshRepo })
   })
 
@@ -69,6 +70,7 @@ describe('resolveWorktreeRemovalRepoOwner', () => {
 
   it('does not borrow destructive metadata from a colliding host', () => {
     const localMeta = { hostId: 'local', preserveBranchOnDelete: true }
+
     const metadataStore = {
       getRepos: () => [localRepo, sshRepo],
       getWorktreeMeta: () => localMeta

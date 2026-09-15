@@ -29,16 +29,19 @@ function createTerminalHarness() {
   let registeredJoiner: ((text: string) => [number, number][]) | null = null
   const refresh = vi.fn()
   const deregisterCharacterJoiner = vi.fn()
+
   const terminal = {
     element: { style: {} },
     options: { fontFamily: 'Fira Code' },
     refresh,
     registerCharacterJoiner(joiner: (text: string) => [number, number][]): number {
       registeredJoiner = joiner
+
       return 17
     },
     deregisterCharacterJoiner
   } as unknown as Terminal
+
   return {
     terminal,
     refresh,
@@ -109,6 +112,7 @@ describe('TerminalLigaturesAddon', () => {
     for (let index = 0; index <= 2_048; index++) {
       joiner(`s${index}`)
     }
+
     joiner('s0')
 
     expect(addonMock.joiner).toHaveBeenCalledTimes(2_050)
@@ -122,6 +126,7 @@ describe('TerminalLigaturesAddon', () => {
     for (let index = 0; index < 2_048; index++) {
       joiner(`s${index}`)
     }
+
     joiner('s0')
     joiner('new segment')
     joiner('s1')

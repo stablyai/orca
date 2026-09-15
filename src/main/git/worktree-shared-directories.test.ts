@@ -28,7 +28,9 @@ import { getStatus } from './status'
 // host's real config, so a developer with core.excludesFile set saw a fixture that is
 // not gitignored come back as ignored.
 let gitConfigRoot: string
+
 let previousGitConfigGlobal: string | undefined
+
 let previousGitConfigNosystem: string | undefined
 
 beforeAll(() => {
@@ -53,8 +55,10 @@ function restoreGitEnv(
 ): void {
   if (value === undefined) {
     delete process.env[name]
+
     return
   }
+
   process.env[name] = value
 }
 
@@ -216,6 +220,7 @@ describe('getConfiguredWorktreeSharedDirectories', () => {
 
   it('caches repeated status polls but refreshes changed configuration', () => {
     vi.useFakeTimers()
+
     try {
       writeFileSync(
         join(repo, 'orca.yaml'),
@@ -334,9 +339,11 @@ describe('shared directories and worktree removal', () => {
   // naive whitespace split would break.
   it('tolerates shared directories whose names have a space or non-ASCII characters', async () => {
     const names = ['my shared dir', 'ライブラリ']
+
     for (const name of names) {
       mkdirSync(join(primary, name))
     }
+
     writeFileSync(join(primary, '.gitignore'), `node_modules/\n${names.join('\n')}\n`)
     writeFileSync(
       join(primary, 'orca.yaml'),

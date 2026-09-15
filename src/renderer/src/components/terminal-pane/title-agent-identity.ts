@@ -17,6 +17,7 @@ export function titleHasExplicitAgentIdentity(title: string): boolean {
   if (!title) {
     return false
   }
+
   if (
     title.startsWith('. ') ||
     title.startsWith('* ') ||
@@ -26,6 +27,7 @@ export function titleHasExplicitAgentIdentity(title: string): boolean {
   ) {
     return true
   }
+
   return (
     titleHasAnyLegacyAgentName(title) ||
     AGY_AGENT_NAME_RE.test(title) ||

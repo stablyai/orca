@@ -124,8 +124,10 @@ export const CandidateRow = React.memo(function CandidateRow({
   const contextCount = getContextCount(candidate)
   const candidateAccessibleName = getWorkspaceCleanupCandidateAccessibleName(candidate)
   const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate)
+
   const sizeValue =
     sizeLabel ?? translate('components.workspace.cleanup.browse.notMeasured', 'Not measured')
+
   const hasExpandableDetails =
     blockers.length > 0 ||
     candidate.path.length > 0 ||

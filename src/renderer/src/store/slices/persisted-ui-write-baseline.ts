@@ -71,9 +71,11 @@ export function capturePersistedUIWriteBaseline(
   mirror: PersistedUIWriteBaseline
 ): PersistedUIWriteBaseline {
   const captured = {} as Record<string, unknown>
+
   for (const field of PERSISTED_UI_WRITE_BASELINE_FIELDS) {
     captured[field] = mirror[field]
   }
+
   return captured as PersistedUIWriteBaseline
 }
 
@@ -84,10 +86,13 @@ function shallowRecordEqual(
   if (a === b) {
     return true
   }
+
   if (!a || !b) {
     return false
   }
+
   const aKeys = Object.keys(a)
+
   return aKeys.length === Object.keys(b).length && aKeys.every((key) => Object.is(a[key], b[key]))
 }
 
@@ -99,6 +104,7 @@ function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: u
   if (field === 'filterRepoIds') {
     return stringArrayEqual(a as readonly string[], b as readonly string[])
   }
+
   if (
     field === 'showDotfilesByWorktree' ||
     field === 'acknowledgedAgentsByPaneKey' ||
@@ -110,6 +116,7 @@ function writeFieldEqual(field: keyof PersistedUIWriteBaseline, a: unknown, b: u
       b as Record<string, unknown> | undefined
     )
   }
+
   return Object.is(a, b)
 }
 
@@ -119,11 +126,13 @@ export function diffPersistedUIWriteFields(
   baseline: PersistedUIWriteBaseline
 ): Partial<PersistedUIWriteBaseline> {
   const changed = {} as Record<string, unknown>
+
   for (const field of PERSISTED_UI_WRITE_BASELINE_FIELDS) {
     if (!writeFieldEqual(field, current[field], baseline[field])) {
       changed[field] = current[field]
     }
   }
+
   return changed as Partial<PersistedUIWriteBaseline>
 }
 
@@ -137,10 +146,12 @@ export function persistedUIWriteFieldsToWireUpdate(
   fields: Partial<PersistedUIWriteBaseline>
 ): Partial<PersistedUIState> {
   const update: Partial<PersistedUIState> = {}
+
   for (const field of PERSISTED_UI_WRITE_BASELINE_FIELDS) {
     if (!(field in fields)) {
       continue
     }
+
     if (field === 'showSleepingWorkspaces') {
       // The mirror keeps the positive form; the durable file keeps the hide form.
       update.hideSleepingWorkspaces = fields.showSleepingWorkspaces !== true
@@ -156,6 +167,7 @@ export function persistedUIWriteFieldsToWireUpdate(
       )
     }
   }
+
   return update
 }
 
@@ -170,7 +182,9 @@ type SameNameWriteField = Exclude<
 type MisassignableWireField = {
   [K in SameNameWriteField]: PersistedUIWriteBaseline[K] extends PersistedUIState[K] ? never : K
 }[SameNameWriteField]
+
 const assertSameNameFieldsAssignable: MisassignableWireField extends never ? true : never = true
+
 void assertSameNameFieldsAssignable
 
 function assignSameNameWireField<K extends SameNameWriteField>(

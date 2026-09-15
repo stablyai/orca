@@ -105,6 +105,7 @@ export function upsertHookTrustEntries(
 ): void {
   const existing = readTomlForMutation(configPath)
   const updated = upsertHookTrustEntriesInContent(existing, entries)
+
   if (updated !== existing) {
     writeConfigAtomically(configPath, updated)
   }
@@ -124,6 +125,7 @@ export function upsertProjectTrustLevel(
 ): void {
   const existing = readTomlForMutation(configPath)
   const updated = upsertProjectTrustLevelInContent(existing, projectPath, trustLevel)
+
   if (updated !== existing) {
     writeConfigAtomically(configPath, updated)
   }
@@ -158,8 +160,10 @@ export function removeHookTrustEntries(configPath: string, keys: readonly string
   if (!existsSync(configPath)) {
     return
   }
+
   const existing = readTomlFile(configPath)
   const updated = removeHookTrustEntriesFromContent(existing, keys)
+
   if (updated !== existing) {
     writeConfigAtomically(configPath, updated)
   }
@@ -185,13 +189,16 @@ export function readHookTrustEntriesFromContent(content: string): Map<string, Co
 function readTomlForMutation(configPath: string): string {
   // Why: only definitive absence may seed empty; an indeterminate read must preserve the existing file.
   const observation = observe(() => readTomlFile(configPath))
+
   if (observation.kind === 'indeterminate') {
     throw observation.error
   }
+
   return observation.kind === 'present' ? observation.value : ''
 }
 
 function readTomlFile(configPath: string): string {
   const raw = readFileSync(configPath, 'utf-8')
+
   return raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw
 }

@@ -30,15 +30,19 @@ export function useMarkdownPreviewSourceFoundation({
   const rootRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
   const setSearchInputElement = useCallback((input: HTMLInputElement | null) => {
     inputRef.current = input
+
     if (!input) {
       return
     }
+
     // Why: select the query once on open; match-count updates must not re-select it.
     input.focus()
     input.select()
   }, [])
+
   const matchesRef = useRef<Range[]>([])
   const searchInstanceRef = useRef<object>({})
   const lastAppliedInitialAnchorRef = useRef<string | null>(null)
@@ -61,6 +65,7 @@ export function useMarkdownPreviewSourceFoundation({
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
   const keybindings = useAppStore((s) => s.keybindings)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+
   const sourceOpenFile = useAppStore((s) =>
     findMarkdownPreviewSourceOpenFile(s.openFiles, {
       sourceFileId,
@@ -69,19 +74,24 @@ export function useMarkdownPreviewSourceFoundation({
       sourceRuntimeEnvironmentId
     })
   )
+
   const resolvedSourceWorktreeId = sourceWorktreeId ?? sourceOpenFile?.worktreeId ?? null
+
   const resolvedSourceRuntimeEnvironmentId =
     sourceRuntimeEnvironmentId !== undefined
       ? sourceRuntimeEnvironmentId
       : sourceOpenFile?.runtimeEnvironmentId
+
   const sourceWorktree = resolveMarkdownPreviewSourceWorktree(
     worktreesByRepo,
     resolvedSourceWorktreeId,
     filePath
   )
+
   const allDiffComments = sourceWorktree?.diffComments
   const sourceRoutingWorktreeId = sourceWorktree?.id ?? resolvedSourceWorktreeId
   const runtimeOwnerId = resolvedSourceRuntimeEnvironmentId?.trim()
+
   const sourceConnectionIdSelector = useMemo(
     () =>
       createConnectionIdForFileSelector(sourceRoutingWorktreeId, filePath, {
@@ -89,7 +99,9 @@ export function useMarkdownPreviewSourceFoundation({
       }),
     [filePath, runtimeOwnerId, sourceRoutingWorktreeId]
   )
+
   const sourceConnectionId = useAppStore(sourceConnectionIdSelector)
+
   const sourceOwner = useMemo<HttpLinkSourceOwner>(
     () =>
       runtimeOwnerId
@@ -101,17 +113,21 @@ export function useMarkdownPreviewSourceFoundation({
             : { kind: 'ssh', connectionId: sourceConnectionId },
     [runtimeOwnerId, sourceConnectionId]
   )
+
   const worktreeRoot =
     sourceWorktree?.path ??
     (sourceRoutingWorktreeId
       ? deriveMarkdownPreviewSourceRoot(filePath, sourceOpenFile?.relativePath)
       : null)
+
   const sourceRelativePath = useMemo(() => {
     if (!sourceWorktree) {
       return null
     }
+
     return getMarkdownPreviewSourceRelativePath(filePath, sourceWorktree.path)
   }, [filePath, sourceWorktree])
+
   const markdownComments = useMemo(
     () =>
       (allDiffComments ?? []).filter(
@@ -119,7 +135,9 @@ export function useMarkdownPreviewSourceFoundation({
       ),
     [allDiffComments, sourceRelativePath]
   )
+
   const settings = useAppStore((s) => s.settings)
+
   const imageRuntimeContext = useMemo(
     () =>
       sourceRoutingWorktreeId && worktreeRoot
@@ -140,8 +158,10 @@ export function useMarkdownPreviewSourceFoundation({
       worktreeRoot
     ]
   )
+
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const editorFontSize = computeEditorFontSize(14, editorFontZoomLevel)
+
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -152,6 +172,7 @@ export function useMarkdownPreviewSourceFoundation({
     const prewarm = prewarmMarkdownPreviewLocalImages(renderedContent, filePath, {
       runtimeContext: imageRuntimeContext
     })
+
     return prewarm.cancel
   }, [renderedContent, filePath, imageRuntimeContext])
 

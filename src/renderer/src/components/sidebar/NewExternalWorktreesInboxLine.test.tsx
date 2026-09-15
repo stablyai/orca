@@ -139,6 +139,7 @@ describe('NewExternalWorktreesInboxLine', () => {
     const suppressButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Hide external worktrees permanently for orca"]'
     )
+
     expect(suppressButton).not.toBeNull()
     expect(suppressButton?.className).toContain('can-hover:group-hover:opacity-100')
     expect(container.textContent).toContain("Don't show again")

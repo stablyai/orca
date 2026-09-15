@@ -265,6 +265,7 @@ describe('HistoryManager', () => {
         applicationCursor: true,
         alternateScreen: false
       }
+
       await mgr.checkpoint('sess-1', makeSnapshot({ modes }))
 
       const data = JSON.parse(readFileSync(sessionPath(dir, 'sess-1', 'checkpoint.json'), 'utf-8'))
@@ -496,6 +497,7 @@ describe('HistoryManager', () => {
       const sessionId = 'bulky'
       await mgr.openSession(sessionId, { cwd: '/tmp', cols: 80, rows: 24 })
       const sessionDir = join(dir, getHistorySessionDirName(sessionId))
+
       // Enough entries that a recursive walk would dominate removeSession's duration.
       for (let i = 0; i < 3_000; i++) {
         writeFileSync(join(sessionDir, `chunk-${i}.log`), `payload-${i}`)

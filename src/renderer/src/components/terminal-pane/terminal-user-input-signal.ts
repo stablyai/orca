@@ -27,17 +27,21 @@ export function subscribeToTerminalUserInput(
   listener: () => void
 ): { dispose: () => void } | null {
   const coreService = (terminal as unknown as TerminalWithCoreUserInput)._core?.coreService
+
   if (!coreService || typeof coreService.onUserInput !== 'function') {
     return null
   }
+
   try {
     const subscription = coreService.onUserInput(listener)
+
     // Why: a reshaped internal that subscribes but returns no disposable must
     // not be treated as live — callers disable their onData fallback on a
     // non-null return, and activity tracking would silently disappear.
     if (subscription && typeof subscription.dispose === 'function') {
       return subscription as { dispose: () => void }
     }
+
     return null
   } catch {
     return null
@@ -50,14 +54,17 @@ export function subscribeToTerminalInputData(
   listener: (data: string, wasUserInput: boolean) => void
 ): { dispose: () => void } {
   let pendingUserInput = false
+
   const userInput = subscribeToTerminalUserInput(terminal, () => {
     pendingUserInput = true
   })
+
   const dataInput = terminal.onData((data) => {
     const wasUserInput = pendingUserInput
     pendingUserInput = false
     listener(data, wasUserInput)
   })
+
   return {
     dispose: () => {
       dataInput.dispose()

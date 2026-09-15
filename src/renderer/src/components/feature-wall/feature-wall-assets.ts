@@ -4,6 +4,7 @@ export function toFeatureWallAssetUrl(baseUrl: string | null, assetPath: string)
   if (!baseUrl) {
     return null
   }
+
   try {
     return new URL(assetPath, baseUrl).toString()
   } catch {
@@ -32,6 +33,7 @@ export function useFeatureWallAssetBaseUrl(load: boolean): string | null {
           setAssetBaseUrl('')
         }
       })
+
     return () => {
       cancelled = true
     }

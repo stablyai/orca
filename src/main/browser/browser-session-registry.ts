@@ -108,12 +108,15 @@ class BrowserSessionRegistry {
   // Why re-read defaultSource: the constructor may run before app.isReady() (userData path unavailable), so loadPersistedSource() returned null.
   initializeBrowserSessionsFromPersistedState(): void {
     const meta = this.loadPersistedMeta()
+
     if (meta.defaultSource) {
       const current = this.profiles.get('default')
+
       if (current && current.source === null) {
         this.profiles.set('default', { ...current, source: meta.defaultSource })
       }
     }
+
     if (meta.profiles.length > 0) {
       this.hydrateFromPersisted(meta.profiles)
     }
@@ -170,6 +173,7 @@ class BrowserSessionRegistry {
     if (partition === this.defaultPartition) {
       return true
     }
+
     return [...this.profiles.values()].some((p) => p.partition === partition)
   }
 
@@ -177,6 +181,7 @@ class BrowserSessionRegistry {
     if (!profileId) {
       return this.defaultPartition
     }
+
     return this.profiles.get(profileId)?.partition ?? this.defaultPartition
   }
 
@@ -185,14 +190,17 @@ class BrowserSessionRegistry {
       // Why: use the active Orca profile's default partition, not the legacy constant, or profiles resolve local-default's cookie jar.
       return this.defaultPartition
     }
+
     return this.profiles.get(profileId)?.partition ?? null
   }
 
   setupRoutePartitionPolicies(partition: string, browserProfileId: string): void {
     const profile = this.profiles.get(browserProfileId)
+
     if (!profile) {
       throw new Error('browser_route_partition_profile_unavailable')
     }
+
     installBrowserRoutePartitionPolicies(profile, partition)
   }
 
@@ -220,9 +228,11 @@ class BrowserSessionRegistry {
     ) {
       return null
     }
+
     const id = randomUUID()
     // Why: deterministic partition-from-id lets main rebuild the allowlist on restart without a separate partition→profile map.
     const partition = getOrcaProfileBrowserSessionPartition(this.activeOrcaProfileId, id)
+
     const profile: BrowserSessionProfile = {
       id,
       scope,
@@ -231,14 +241,17 @@ class BrowserSessionRegistry {
       source: null,
       ...(options.userAgentMode ? { userAgentMode: options.userAgentMode } : {})
     }
+
     try {
       await installBrowserSessionPartitionPolicies(profile)
     } catch (error) {
       await retireFailedBrowserSessionProfile(partition, session.fromPartition(partition))
       throw error
     }
+
     this.profiles.set(id, profile)
     this.persistProfiles()
+
     return profile
   }
 
@@ -247,24 +260,30 @@ class BrowserSessionRegistry {
     source: BrowserSessionProfile['source']
   ): BrowserSessionProfile | null {
     const profile = this.profiles.get(profileId)
+
     if (!profile) {
       return null
     }
+
     const updated = { ...profile, source }
     this.profiles.set(profileId, updated)
+
     if (profileId === 'default') {
       this.persistSource(source)
     } else {
       this.persistProfiles()
     }
+
     return updated
   }
 
   async deleteProfile(profileId: string): Promise<boolean> {
     const profile = this.profiles.get(profileId)
+
     if (!profile || profile.scope === 'default') {
       return false
     }
+
     this.profiles.delete(profileId)
     this.persistProfiles()
     const meta = this.loadPersistedMeta()
@@ -285,16 +304,19 @@ class BrowserSessionRegistry {
       const release = retireProxySessionApplication(sess)
       // Why: persistent partitions can retain service workers after every WebContents dies, so a retired session's deny policies must remain permanent.
       cancelBrowserWebAuthnAccountRequestsForSession(sess)
+
       try {
         await release
       } catch {
         console.warn('[proxy] Failed to release proxy from browser partition', profile.partition)
       }
+
       await sess.clearStorageData()
       await sess.clearCache()
     } catch {
       // Why: cleanup is best-effort — the profile is already out of the registry, so will-attach-webview blocks it regardless.
     }
+
     return true
   }
 
@@ -303,9 +325,11 @@ class BrowserSessionRegistry {
     try {
       // Why: persist metadata before clearing storage so a mid-clear quit doesn't leave a stale "imported from X" badge.
       const defaultProfile = this.profiles.get('default')
+
       if (defaultProfile) {
         this.profiles.set('default', { ...defaultProfile, source: null })
       }
+
       const meta = this.loadPersistedMeta()
       const pendingCookieImports = { ...meta.pendingCookieImports }
       delete pendingCookieImports[this.defaultPartition]
@@ -317,6 +341,7 @@ class BrowserSessionRegistry {
 
       const sess = session.fromPartition(this.defaultPartition)
       await sess.clearStorageData({ storages: ['cookies'] })
+
       return true
     } catch {
       return false
@@ -328,7 +353,9 @@ class BrowserSessionRegistry {
       if (!isValidPersistedBrowserSessionProfile(profile, this.activeOrcaProfileId)) {
         continue
       }
+
       this.profiles.set(profile.id, profile)
+
       if (profile.partition !== this.defaultPartition) {
         void installBrowserSessionPartitionPolicies(profile).catch(() => {
           console.warn('[proxy] Failed to apply proxy to browser partition', profile.partition)

@@ -120,6 +120,7 @@ export function RepositorySetupPolicySetting({
   onStartupPolicyChange: (policy: SetupAgentStartupPolicy) => void
 }): React.JSX.Element {
   const options = getSetupRunPolicyOptions()
+
   return (
     <div className="space-y-4 rounded-2xl border border-border/50 bg-background/80 p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -176,9 +177,11 @@ function getCommandSourceLabel(policy: HookCommandSourcePolicy): string {
   if (policy === 'shared-only') {
     return translate('auto.components.settings.RepositoryHooksSection.d88b6ff88f', 'orca.yaml only')
   }
+
   if (policy === 'local-only') {
     return translate('auto.components.settings.RepositoryHooksSection.83dc78202a', 'Local only')
   }
+
   return translate('auto.components.settings.RepositoryHooksSection.8d6c56bff8', 'Run both')
 }
 
@@ -221,7 +224,9 @@ export function RepositoryHookCommandSourceSetting({
         translate('auto.components.settings.RepositoryHooksSection.fac13f8c1e', 'authoritative')
       ]
     })
+
   const options = getCommandSourcePolicyOptions()
+
   return (
     <details
       className="group rounded-2xl border border-border/50 bg-background/80 shadow-sm"

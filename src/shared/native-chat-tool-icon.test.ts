@@ -169,6 +169,7 @@ describe('native chat tool icons', () => {
       expect(
         isShellActivityToolCall({ name: 'AskUserQuestion', input: { question: 'which?' } })
       ).toBe(false)
+
       for (const name of ['Edit', 'Diff', 'Task', 'WebFetch', 'TodoWrite', '']) {
         expect(isShellActivityToolCall({ name, input: { file_path: 'a.ts' } })).toBe(false)
       }
@@ -186,6 +187,7 @@ describe('native chat tool icons', () => {
       ]) {
         expect(isShellActivityToolCall({ name: 'read', input })).toBe(false)
       }
+
       // A present-but-blank command is not a command that ran.
       expect(isShellActivityToolCall({ name: 'read', input: { command: '   ' } })).toBe(false)
       expect(isShellActivityToolCall({ name: 'read', input: { command: null } })).toBe(false)
@@ -269,6 +271,7 @@ describe('qualified tool identity icons', () => {
       name: 'linear/list_issues',
       mcpIdentity: { server: 'linear', tool: 'list_issues' }
     }
+
     expect(nativeChatToolIconName(call.name, call.mcpIdentity)).toBe('plug')
     expect(nativeChatToolRunIconName([call])).toBe('plug')
   })

@@ -15,6 +15,7 @@ describe('buildHostHeaderMenuModel', () => {
       health: 'disconnected',
       sshConnected: false
     })
+
     expect(model.actions).toEqual(['rename', 'ssh-reconnect', 'manage', 'remove'])
   })
 
@@ -24,6 +25,7 @@ describe('buildHostHeaderMenuModel', () => {
       health: 'available',
       sshConnected: true
     })
+
     expect(model.actions).toEqual(['rename', 'ssh-disconnect', 'manage', 'remove'])
   })
 
@@ -62,6 +64,7 @@ describe('buildHostHeaderMenuModel', () => {
         requiredServerProtocolVersion: 4
       }
     })
+
     expect(model.blocked).toEqual({ reason: 'server-too-old' })
     expect(model.actions).toContain('runtime-check-connection')
   })
@@ -78,6 +81,7 @@ describe('buildHostHeaderMenuModel', () => {
         requiredClientProtocolVersion: 4
       }
     })
+
     expect(model.blocked).toEqual({ reason: 'client-too-old' })
   })
 
@@ -87,6 +91,7 @@ describe('buildHostHeaderMenuModel', () => {
       health: 'available',
       compatibility: { kind: 'ok', clientProtocolVersion: 5, serverProtocolVersion: 5 }
     })
+
     expect(model.blocked).toBeNull()
   })
 })

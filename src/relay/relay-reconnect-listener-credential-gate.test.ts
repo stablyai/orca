@@ -22,14 +22,17 @@ const noopCallbacks = {
 
 function dispatcherStub(): { dispatcher: RelayDispatcher; attached: () => number } {
   let attached = 0
+
   const dispatcher = {
     attachClient: () => {
       attached += 1
+
       return attached
     },
     detachClient: () => {},
     feedClient: () => {}
   } as unknown as RelayDispatcher
+
   return { dispatcher, attached: () => attached }
 }
 
@@ -39,6 +42,7 @@ async function handshake(sockPath: string, credential: string): Promise<'ok' | '
     sock.once('connect', resolve)
     sock.once('error', reject)
   })
+
   return new Promise((resolve) => {
     const decoder = new FrameDecoder(
       (frame) => {
@@ -48,6 +52,7 @@ async function handshake(sockPath: string, credential: string): Promise<'ok' | '
       },
       () => resolve('closed')
     )
+
     sock.on('data', (chunk: Buffer) => decoder.feed(chunk))
     sock.once('close', () => resolve('closed'))
     sock.write(
@@ -75,6 +80,7 @@ describe.skipIf(process.platform === 'win32')('reconnect listener credential gat
     const sockPath = path.join(dir, 'relay.sock')
     ownership = new RelaySocketOwnership(sockPath)
     const { dispatcher, attached } = dispatcherStub()
+
     const listener = new RelayReconnectListener(
       dispatcher,
       ownership,
@@ -82,6 +88,7 @@ describe.skipIf(process.platform === 'win32')('reconnect listener credential gat
       `${sockPath}.credential`,
       noopCallbacks
     )
+
     await listener.start()
 
     // The window the daemon closes synchronously after start(); it must never admit anyone.
@@ -102,6 +109,7 @@ describe.skipIf(process.platform === 'win32')('reconnect listener credential gat
     const sockPath = path.join(dir, 'relay.sock')
     ownership = new RelaySocketOwnership(sockPath)
     const { dispatcher, attached } = dispatcherStub()
+
     const listener = new RelayReconnectListener(
       dispatcher,
       ownership,
@@ -109,6 +117,7 @@ describe.skipIf(process.platform === 'win32')('reconnect listener credential gat
       undefined,
       noopCallbacks
     )
+
     await listener.start()
     expect(await handshake(sockPath, 'ignored'.padEnd(32, 'z'))).toBe('ok')
     expect(attached()).toBe(1)

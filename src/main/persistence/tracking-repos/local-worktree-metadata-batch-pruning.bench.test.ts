@@ -16,7 +16,9 @@ import {
 } from './missing-local-worktree-metadata-pruning'
 
 const describeBench = process.env.ORCA_LOCAL_METADATA_PRUNE_BENCH ? describe : describe.skip
+
 const ROW_COUNT = 2_709
+
 const REPO: Repo = {
   id: 'repo-1',
   path: '/workspace/repo',
@@ -47,10 +49,12 @@ function makeState(): { state: PersistedState; staleIds: string[] } {
   state.repos = [REPO]
   state.worktreeMetaByIdentity = {}
   state.worktreeIdentityAliases = {}
+
   const staleIds = Array.from(
     { length: ROW_COUNT },
     (_, index) => `${REPO.id}::/workspace/stale-${index}`
   )
+
   for (const [index, worktreeId] of staleIds.entries()) {
     const meta = makeMeta(index)
     const identityKey = `identity-${index}`
@@ -58,6 +62,7 @@ function makeState(): { state: PersistedState; staleIds: string[] } {
     state.worktreeMetaByIdentity[identityKey] = meta
     state.worktreeIdentityAliases[`local|${worktreeId}`] = [identityKey]
   }
+
   return { state, staleIds }
 }
 
@@ -67,6 +72,7 @@ describeBench('authoritative local metadata batch pruning', () => {
     const batch = makeState()
     const cloneSpy = vi.spyOn(globalThis, 'structuredClone')
     const legacyStartedAt = performance.now()
+
     for (const worktreeId of legacy.staleIds) {
       removeWorktreeMetadataForHost(legacy.state, worktreeId, undefined)
       delete legacy.state.worktreeMeta[worktreeId]
@@ -75,6 +81,7 @@ describeBench('authoritative local metadata batch pruning', () => {
         worktreeId
       )!
     }
+
     pruneUnreferencedWorktreeIdentityMeta(legacy.state)
     const legacyMs = performance.now() - legacyStartedAt
     const legacySessionClones = cloneSpy.mock.calls.length
@@ -82,11 +89,13 @@ describeBench('authoritative local metadata batch pruning', () => {
 
     const batchStartedAt = performance.now()
     const scan = captureNativeLocalWorktreeMetadataScanExpectation(batch.state, REPO)
+
     const removed = pruneSessionlessMissingLocalWorktreeMetadataForRepo(
       batch.state,
       scan,
       scan.metadata
     )
+
     const batchMs = performance.now() - batchStartedAt
     const batchSessionClones = cloneSpy.mock.calls.length
     cloneSpy.mockRestore()

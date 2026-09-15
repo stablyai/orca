@@ -20,6 +20,7 @@ describe('Linear new-issue dialog popovers', () => {
     const classNames = popoverContentClassNames(newLinearIssueDialog())
 
     expect(classNames.length).toBeGreaterThanOrEqual(6)
+
     for (const className of classNames) {
       expect(className).toContain('popover-scroll-content')
       expect(className).toContain('scrollbar-sleek')
@@ -35,8 +36,10 @@ describe('Linear new-issue dialog popovers', () => {
 
     for (const className of wrapperClassNames) {
       const tokens = new Set(className.split(/\s+/))
+
       const isFixedScroller =
         tokens.has('max-h-60') && tokens.has('overflow-y-auto') && tokens.has('scrollbar-sleek')
+
       expect(isFixedScroller, `fixed-height inner scroller: ${className}`).toBe(false)
     }
   })

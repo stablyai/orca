@@ -18,18 +18,22 @@ import {
 // 1050 processes is the host measured in windows-process-enumeration.md; 11
 // panes is the fan-out the shared snapshot exists to serve.
 const TABLE_SIZE = 1050
+
 const PANE_COUNT = 11
 
 const SELF_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
 
 const shellPid = (pane: number): number => 10_000 + pane * 10
+
 const agentPid = (pane: number): number => shellPid(pane) + 1
+
 /** A row every pane can look up, so distinct results == distinct projections. */
 const PROBE_PID = 900_000 + TABLE_SIZE - 1
 
 /** One shell + one agent child per pane, padded out to a real table size. */
 function buildNativeTable(): { pid: number; ppid: number; name: string; commandLine: string }[] {
   const rows = [SELF_ROW]
+
   for (let pane = 0; pane < PANE_COUNT; pane += 1) {
     rows.push({ pid: shellPid(pane), ppid: 4, name: 'cmd.exe', commandLine: 'cmd.exe' })
     rows.push({
@@ -39,9 +43,11 @@ function buildNativeTable(): { pid: number; ppid: number; name: string; commandL
       commandLine: 'node C:/Users/dev/AppData/codex/bin/codex.js'
     })
   }
+
   for (let filler = rows.length; filler < TABLE_SIZE; filler += 1) {
     rows.push({ pid: 900_000 + filler, ppid: 4, name: 'svchost.exe', commandLine: 'svchost.exe' })
   }
+
   return rows
 }
 
@@ -57,13 +63,16 @@ async function countMapInsertions(run: () => Promise<void>): Promise<number> {
   let insertions = 0
   Map.prototype.set = function patched(this: Map<unknown, unknown>, key: unknown, value: unknown) {
     insertions += 1
+
     return original.call(this, key, value)
   } as typeof Map.prototype.set
+
   try {
     await run()
   } finally {
     Map.prototype.set = original
   }
+
   return insertions
 }
 
@@ -93,6 +102,7 @@ describe('windows foreground inspection cost per pane', () => {
   afterEach(() => {
     vi.useRealTimers()
     __setWindowsProcessTreeLoaderForTests()
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
@@ -100,13 +110,16 @@ describe('windows foreground inspection cost per pane', () => {
 
   async function sweepPanes(): Promise<(number | undefined)[]> {
     const resolved: (number | undefined)[] = []
+
     for (let pane = 0; pane < PANE_COUNT; pane += 1) {
       const inventory = await queryWindowsPaneProcessInventory(shellPid(pane), {
         anchorPid: agentPid(pane)
       })
+
       expect(inventory?.candidates).toHaveLength(1)
       resolved.push(inventory?.candidates[0]?.pid)
     }
+
     return resolved
   }
 
@@ -122,12 +135,15 @@ describe('windows foreground inspection cost per pane', () => {
 
   it('projects the shared snapshot once for the whole pane fan-out', async () => {
     const probeRows: unknown[] = []
+
     for (let pane = 0; pane < PANE_COUNT; pane += 1) {
       const inventory = await queryWindowsPaneProcessInventory(shellPid(pane), {
         anchorPid: PROBE_PID
       })
+
       probeRows.push(inventory?.anchorRow)
     }
+
     expect(probeRows.filter(Boolean)).toHaveLength(PANE_COUNT)
     // One projection produced every pane's row object. Pre-fix each pane ran
     // its own `native.map(toProcessRow)` over all 1050 rows, so this set held

@@ -49,12 +49,14 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
       if (!this.notifier?.openFile) {
         throw new Error('renderer_unavailable')
       }
+
       this.notifier.openFile(worktreeId, filePath, relativePath, runtimeEnvironmentId)
     },
     openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId) => {
       if (!this.notifier?.openDiff) {
         throw new Error('renderer_unavailable')
       }
+
       this.notifier.openDiff(worktreeId, filePath, relativePath, staged, runtimeEnvironmentId)
     }
   })
@@ -77,19 +79,24 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
     // generation; meta is keyed by the same id the resolver returns.
     getWorktreeLinkedIssue: (worktreeId) => {
       const store = this.store
+
       // Why: an unreadable store is "unknown", not "unlinked" — undefined keeps
       // the resolver's cached linkedIssue instead of suppressing {linkedIssue}.
       if (!store?.getWorktreeMeta) {
         return undefined
       }
+
       return store.getWorktreeMeta(worktreeId)?.linkedIssue ?? null
     },
     getWorktreeLinkedIssueMeta: (worktreeId) => {
       const store = this.store
+
       if (!store?.getWorktreeMeta) {
         return undefined
       }
+
       const meta = store.getWorktreeMeta(worktreeId)
+
       return meta
         ? {
             linkedIssue: meta.linkedIssue,
@@ -103,9 +110,11 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
     // `pushTarget.remoteCreated` flag that #17842's orphan sweep relies on.
     persistMaterializedPushTarget: (worktreeId, pushTarget) => {
       const store = this.store
+
       if (!store?.setWorktreeMeta) {
         return
       }
+
       store.setWorktreeMeta(worktreeId, { pushTarget })
     }
   })
@@ -140,6 +149,7 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
       if (!this.stats || this.stats.hasCountedPR(url)) {
         return
       }
+
       this.stats.record({
         type: 'pr_created',
         at: Date.now(),
@@ -161,6 +171,7 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
       if (!this.store?.updateSettings) {
         return
       }
+
       const store = this.store
       recordGitLabProjectRecent(
         {
@@ -216,6 +227,7 @@ export class OrcaRuntimeWithFileCommands extends OrcaRuntimeWithPreservedBranchC
     getEmitter: () => {
       const notifier = this.notifier
       const send = notifier?.clientHostedBrowserRowsChanged
+
       return send ? (event) => send.call(notifier, event) : null
     }
   })

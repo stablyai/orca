@@ -23,6 +23,7 @@ export function RemoteFileBrowserBreadcrumbs({
   // Preserve the separator shape when rebuilding drive breadcrumbs.
   const browseParts = splitBrowsePath(resolvedPath, pathFlavor)
   const pathSegments = browseParts.segments
+
   const breadcrumbPathTo = useCallback(
     (segmentIndex: number): string =>
       browseParts.kind === 'drive'

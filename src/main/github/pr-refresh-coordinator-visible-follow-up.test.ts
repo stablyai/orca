@@ -2,15 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./pr-refresh-coordinator-test-mocks')
+
   return { coordinatorMocks: moduleMocks.createPRRefreshCoordinatorMocks(), moduleMocks }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(coordinatorMocks))
+
 vi.mock('./client', () => moduleMocks.clientModuleMock(coordinatorMocks))
+
 vi.mock('./github-api-repository', () =>
   moduleMocks.githubApiRepositoryModuleMock(coordinatorMocks)
 )
+
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(coordinatorMocks))
+
 vi.mock('../ipc/ui', () => moduleMocks.ipcUiModuleMock(coordinatorMocks))
 
 import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
@@ -32,6 +37,7 @@ describe('pr-refresh-coordinator', () => {
       clearVisiblePRRefreshWindow,
       reportVisiblePRRefreshCandidates
     } = await import('./pr-refresh-coordinator')
+
     getPRForBranchOutcomeMock.mockResolvedValue({
       kind: 'found',
       pr: makePR({ checksStatus: 'pending', mergeable: 'MERGEABLE' }),
@@ -57,6 +63,7 @@ describe('pr-refresh-coordinator', () => {
       refreshPRNow,
       reportVisiblePRRefreshCandidates
     } = await import('./pr-refresh-coordinator')
+
     getPRForBranchOutcomeMock
       .mockResolvedValueOnce({
         kind: 'upstream-error',
@@ -109,7 +116,9 @@ describe('pr-refresh-coordinator', () => {
   it('does a prompt visible follow-up after a manual refresh returns unknown mergeability', async () => {
     const { refreshPRNow, reportVisiblePRRefreshCandidates } =
       await import('./pr-refresh-coordinator')
+
     const visibleCandidate = makeCandidate()
+
     const candidate = makeCandidate({
       cachedFetchedAt: Date.now(),
       cachedHasPR: true,
@@ -118,6 +127,7 @@ describe('pr-refresh-coordinator', () => {
       cachedMergeable: 'MERGEABLE',
       cachedMergeStateStatus: 'CLEAN'
     })
+
     getPRForBranchOutcomeMock
       .mockResolvedValueOnce({
         kind: 'found',

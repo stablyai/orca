@@ -13,6 +13,7 @@ export function createTerminalSnapshot(
   runtime: LocalAgentRuntime | undefined
 ): SkillTerminalSnapshot {
   const pinnedRuntime = runtime ? { ...runtime } : undefined
+
   return {
     copiedCommand,
     prepareCommandForShell: (command, effectiveShell) =>

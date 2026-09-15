@@ -24,14 +24,18 @@ export async function listAllRuntimeWorktrees(): Promise<Worktree[]> {
   ) {
     return webRuntimeState.cachedWorktrees.worktrees
   }
+
   const owned = await callRuntimeResultWithOwner<{ worktrees: Worktree[] }>('worktree.list', {
     limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
   })
+
   const worktrees = owned.result.worktrees.map((worktree) =>
     withRuntimeWorktreeOwner(worktree, owned.hostId)
   )
+
   assertActiveEnvironment(owned.environmentId)
   webRuntimeState.cachedWorktrees = { loadedAt: Date.now(), worktrees }
+
   return worktrees
 }
 
@@ -51,16 +55,20 @@ export async function listAllRuntimeDetectedWorktrees(
 
   assertActiveEnvironment(expectedEnvironmentId)
   const repos = (await callResult<{ repos: Repo[] }>('repo.list')).repos
+
   const detectedLists = await Promise.all(
     repos.map((repo) =>
       callRuntimeDetectedWorktrees(repo.id, expectedEnvironmentId, callResult, callEnvelope)
     )
   )
+
   const worktrees = detectedLists.flatMap((result) => result.worktrees)
   assertActiveEnvironment(expectedEnvironmentId)
+
   if (useCache) {
     webRuntimeState.cachedDetectedWorktrees = { loadedAt: Date.now(), worktrees }
   }
+
   return worktrees
 }
 
@@ -72,11 +80,13 @@ export async function callRuntimeDetectedWorktrees(
 ): Promise<DetectedWorktreeListResult> {
   assertActiveEnvironment(expectedEnvironmentId)
   const hostId = toRuntimeExecutionHostId(expectedEnvironmentId)
+
   const response = await callEnvelope<DetectedWorktreeListResult>(
     'worktree.detectedList',
     { repo: repoId },
     15_000
   )
+
   if (response.ok) {
     return {
       ...response.result,
@@ -85,16 +95,19 @@ export async function callRuntimeDetectedWorktrees(
       )
     }
   }
+
   if (response.error.code !== 'method_not_found') {
     throw new Error(response.error.message)
   }
 
   assertActiveEnvironment(expectedEnvironmentId)
+
   const legacy = await callResult<{ worktrees: Worktree[] }>(
     'worktree.list',
     { repo: repoId, limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT },
     15_000
   )
+
   return toLegacyDetectedWorktreeResult(
     repoId,
     legacy.worktrees.map((worktree) => withRuntimeWorktreeOwner(worktree, hostId))
@@ -122,6 +135,7 @@ export function isMissingPathError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }
+
   return /\bENOENT\b|not found|no such file/i.test(error.message)
 }
 
@@ -139,6 +153,7 @@ export async function resolveRuntimeWorktreeByPath(
     useDetectedWorktreeCache,
     expectedEnvironmentId
   )
+
   const match = worktrees
     .map((worktree) => ({
       worktree,
@@ -146,9 +161,11 @@ export async function resolveRuntimeWorktreeByPath(
     }))
     .filter((entry) => entry.relativePath !== null)
     .sort((a, b) => b.worktree.path.length - a.worktree.path.length)[0]
+
   if (!match) {
     throw new Error(`No runtime worktree owns ${worktreePath}`)
   }
+
   return match.worktree
 }
 
@@ -175,9 +192,12 @@ export async function resolveRuntimeFilePath(
         useDetectedWorktreeCache,
         expectedEnvironmentId
       )
+
   const relativePath = relativePathInsideRoot(worktree.path, filePath)
+
   if (relativePath === null) {
     throw new Error(`File is outside runtime worktree: ${filePath}`)
   }
+
   return { worktree, relativePath }
 }

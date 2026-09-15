@@ -31,11 +31,13 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 vi.mock('@/runtime/runtime-terminal-stream', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeTerminalStreamModule>()
+
   return { ...actual, parseRemoteRuntimePtyId: vi.fn(actual.parseRemoteRuntimePtyId) }
 })
 
@@ -53,14 +55,23 @@ import type { SshProviderEpoch } from '../../../../shared/ssh-types'
 import type { DirectSshPaneRetryAttemptId } from './direct-ssh-terminal-recovery'
 
 const WT1 = 'repo1::/path/wt1'
+
 const WT2 = 'repo1::/path/wt2'
+
 const TAB1 = 'tab-wt1'
+
 const TAB2 = 'tab-wt2'
+
 const PTY1 = 'pty-wt1'
+
 const PTY1_SPLIT = 'pty-wt1-split'
+
 const REMOTE_PTY1 = 'remote:env-1@@terminal-wt1'
+
 const REMOTE_HANDLE1 = 'terminal-wt1'
+
 const REMOTE_PTY2_SAME_HANDLE = 'remote:env-2@@terminal-wt1'
+
 const PTY2 = 'pty-wt2'
 
 function seedMaps(store: ReturnType<typeof createTestStore>): void {
@@ -69,6 +80,7 @@ function seedMaps(store: ReturnType<typeof createTestStore>): void {
     providerEpoch: 'epoch-a' as SshProviderEpoch,
     connectionGeneration: 1
   }
+
   seedStore(store, {
     worktreesByRepo: {
       repo1: [

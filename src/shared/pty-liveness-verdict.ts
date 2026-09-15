@@ -12,8 +12,11 @@ export type PtyLivenessVerdict =
   | { status: 'unverifiable'; reason: string }
 
 export const SSH_PROVIDER_UNREGISTERED_REASON = 'its SSH provider is no longer registered'
+
 export const NO_OBSERVING_PROVIDER_REASON = 'no registered provider can observe its host'
+
 export const SSH_EXIT_UNCONFIRMED_REASON = 'the owning SSH host did not confirm the PTY exit'
+
 export const PTY_LIVE_NOTE = 'The PTY is live.'
 
 // Why: reasons reach these sentences from verdicts, receipts and relayed errors, and
@@ -36,5 +39,6 @@ export function describeUnconfirmedAgentStop(close: {
     close.ptyStopVerdict === 'live'
       ? 'it is live'
       : (close.ptyStopReason ?? 'the stop outcome could not be verified')
+
   return `The agent terminal was closed but its process could not be confirmed stopped: ${endSentence(detail)}`
 }

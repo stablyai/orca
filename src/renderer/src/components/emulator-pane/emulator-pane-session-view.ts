@@ -17,11 +17,14 @@ export function buildEmulatorPaneSessionView({
 }: BuildEmulatorPaneSessionViewArgs) {
   const selectedDevice = devices.find((device) => device.udid === selectedUdid) ?? null
   const sessionDisplayName = session?.info?.displayName
+
   const hasSpecificSessionDisplayName =
     sessionDisplayName &&
     sessionDisplayName !== 'Simulator' &&
     sessionDisplayName !== 'Mobile Emulator'
+
   const previewUrl = simulatorPreviewStreamUrl(session?.info)
+
   return {
     displayName: hasSpecificSessionDisplayName
       ? sessionDisplayName

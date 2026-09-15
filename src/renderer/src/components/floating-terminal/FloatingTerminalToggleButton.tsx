@@ -33,6 +33,7 @@ type FloatingTerminalTriggerPositionState = {
 function readInitialTriggerPosition(): FloatingTerminalTriggerPositionState {
   const defaultCommittedPosition = getDefaultFloatingTerminalTriggerCommittedPosition()
   const defaultPosition = getDefaultFloatingTerminalTriggerPosition()
+
   if (typeof window === 'undefined') {
     return {
       committedPosition: defaultCommittedPosition,
@@ -40,7 +41,9 @@ function readInitialTriggerPosition(): FloatingTerminalTriggerPositionState {
       source: 'default'
     }
   }
+
   const persistedPosition = readPersistedFloatingTerminalTriggerPosition()
+
   return persistedPosition
     ? {
         committedPosition: persistedPosition,
@@ -71,16 +74,21 @@ export function FloatingTerminalToggleButton({
   const hasFloatingUnread = useAppStore(selectFloatingWorkspaceHasUnread)
   const showAttentionDot = !open && hasFloatingUnread
   const initialPositionState = useRef<FloatingTerminalTriggerPositionState | null>(null)
+
   if (initialPositionState.current === null) {
     initialPositionState.current = readInitialTriggerPosition()
   }
+
   const positionSourceRef = useRef<FloatingTerminalTriggerPositionSource>(
     initialPositionState.current.source
   )
+
   const committedPositionRef = useRef<FloatingTerminalTriggerCommittedPosition>(
     initialPositionState.current.committedPosition
   )
+
   const [position, setPosition] = useState(initialPositionState.current.position)
+
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -89,6 +97,7 @@ export function FloatingTerminalToggleButton({
     top: number
     moved: boolean
   } | null>(null)
+
   const stagedPositionRef = useRef<FloatingTerminalTriggerPosition | null>(null)
   const suppressClickRef = useRef(false)
 
@@ -103,9 +112,11 @@ export function FloatingTerminalToggleButton({
     const clamped = clampFloatingTerminalTriggerPosition(nextPosition)
     setPosition(clamped)
     const anchoredPosition = anchorFloatingTerminalTriggerPosition(clamped)
+
     if (!anchoredPosition) {
       return
     }
+
     committedPositionRef.current = anchoredPosition
     positionSourceRef.current = 'user'
     persistFloatingTerminalTriggerPosition(anchoredPosition)
@@ -118,10 +129,12 @@ export function FloatingTerminalToggleButton({
         // drag position with the safety clamp before the renderer finishes sizing.
         return current
       }
+
       const next = resolveFloatingTerminalTriggerPosition(
         committedPositionRef.current,
         positionSourceRef.current
       )
+
       return next
     })
   }, [])
@@ -135,6 +148,7 @@ export function FloatingTerminalToggleButton({
   useEffect(() => {
     const handleResize = (): void => reconcilePosition()
     window.addEventListener('resize', handleResize)
+
     return () => window.removeEventListener('resize', handleResize)
   }, [reconcilePosition])
 
@@ -142,6 +156,7 @@ export function FloatingTerminalToggleButton({
     if (event.button !== 0) {
       return
     }
+
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -155,14 +170,18 @@ export function FloatingTerminalToggleButton({
 
   const handlePointerMove = (event: React.PointerEvent<HTMLButtonElement>): void => {
     const drag = dragRef.current
+
     if (!drag || drag.pointerId !== event.pointerId) {
       return
     }
+
     const dx = event.clientX - drag.startX
     const dy = event.clientY - drag.startY
+
     if (!drag.moved && Math.hypot(dx, dy) < FLOATING_TERMINAL_TRIGGER_DRAG_THRESHOLD) {
       return
     }
+
     drag.moved = true
     previewPosition({
       left: drag.left + dx,
@@ -172,13 +191,17 @@ export function FloatingTerminalToggleButton({
 
   const handlePointerEnd = (event: React.PointerEvent<HTMLButtonElement>): void => {
     const drag = dragRef.current
+
     if (!drag || drag.pointerId !== event.pointerId) {
       return
     }
+
     suppressClickRef.current = drag.moved
+
     if (drag.moved && stagedPositionRef.current) {
       commitPosition(stagedPositionRef.current)
     }
+
     dragRef.current = null
   }
 
@@ -187,8 +210,10 @@ export function FloatingTerminalToggleButton({
       suppressClickRef.current = false
       event.preventDefault()
       event.stopPropagation()
+
       return
     }
+
     onToggle()
   }
 

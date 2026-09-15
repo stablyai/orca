@@ -11,7 +11,9 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 // Mirrors the real report: one project name ("orca") set up on the local Mac and on a
 // remote Orca server, where only the local repo row carries the user's chosen color.
 const SHARED_PROJECT_ID = 'github:stablyai/orca'
+
 const LOCAL_GREEN = '#22c55e'
+
 const REMOTE_NEUTRAL = '#737373'
 
 const localRepo: Repo = {
@@ -66,23 +68,32 @@ function setup(projectId: string, repoId: string, path: string): ProjectHostSetu
 }
 
 const reposList = vi.fn()
+
 const reposUpdate = vi.fn()
+
 const projectsList = vi.fn()
+
 const listHostSetups = vi.fn()
+
 const runtimeEnvironmentsList = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 function runtimeResult(method: string): unknown {
   if (method === 'repo.list') {
     return { repos: [remoteRepo] }
   }
+
   if (method === 'project.list') {
     return { projects: [remoteProject] }
   }
+
   if (method === 'projectHostSetup.list') {
     return { setups: [setup(SHARED_PROJECT_ID, 'remote-repo', '/srv/orca')] }
   }
+
   return {}
 }
 

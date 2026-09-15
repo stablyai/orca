@@ -18,6 +18,7 @@ export function renewAgentSessionLeases(
 ): AgentSessionRecord[] {
   return renewals.map((args) => {
     const record = state.records.get(args.sessionId)
+
     if (!record) {
       throw new Error(
         state.unreadableRecords.has(args.sessionId)
@@ -25,6 +26,7 @@ export function renewAgentSessionLeases(
           : 'agent_session_identity_required'
       )
     }
+
     const renewed = renewAgentSessionLease({
       record,
       fence: args.fence,
@@ -32,7 +34,9 @@ export function renewAgentSessionLeases(
       now: args.now,
       leaseTtlMs: args.leaseTtlMs ?? defaultLeaseTtlMs
     })
+
     state.records.set(args.sessionId, renewed)
+
     return renewed
   })
 }

@@ -191,6 +191,7 @@ describe('provider check classification parity', () => {
       )
       expect(derivePRCheckStatus(checks)).toBe(expected.state)
       expect(derivePRCheckStatusFromRollup(checks.map(toGraphQLRollup))).toBe(expected.state)
+
       if (gitLabJobStatuses) {
         // Why: the job-array rollup has no production caller today (client.ts only ever passes
         // pipeline objects) — it is pinned so a future caller cannot inherit a drifted copy.
@@ -198,6 +199,7 @@ describe('provider check classification parity', () => {
           expected.state
         )
       }
+
       if (gitLabPipelineStatus) {
         // Why: this *is* the production GitLab entry point — the MR card and the hosted-review
         // queue read it, so where it is pinned it must not disagree with the Checks tab for the
@@ -205,6 +207,7 @@ describe('provider check classification parity', () => {
         expect(derivePipelineStatus(gitLabPipelineStatus)).toBe(expected.state)
         expect(derivePipelineStatus({ status: gitLabPipelineStatus })).toBe(expected.state)
       }
+
       // Why: the pill's label, tone and icon all read this one summary, so a green pill must never say "unresolved".
       expect(getProviderChecksLabel(summary).includes('Unresolved')).toBe(
         expected.state === 'neutral'

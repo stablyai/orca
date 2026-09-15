@@ -46,16 +46,21 @@ export function evaluatePtyBindingFastLane(
 ): PtyBindingFastLaneVerdict {
   const misses: PtyBindingFastLaneMiss[] = []
   const paneKey = `${args.tabId}:${args.leafId}`
+
   if (args.expectedSourceBinding !== undefined) {
     misses.push('split')
   }
+
   if (!isTerminalLeafId(args.leafId)) {
     misses.push('legacy_leaf')
   }
+
   const tab = session.tabsByWorktree?.[bindingWorktreeId]?.find(
     (candidate) => candidate.id === args.tabId
   )
+
   const layout = session.terminalLayoutsByTabId?.[args.tabId]
+
   if (!tab) {
     misses.push('tab_missing')
   } else if (
@@ -63,25 +68,31 @@ export function evaluatePtyBindingFastLane(
   ) {
     misses.push('tab_pty')
   }
+
   if (!layout || !layout.root) {
     misses.push('layout_missing')
   } else {
     if (!layoutContainsLeafId(layout.root, args.leafId)) {
       misses.push('leaf_absent')
     }
+
     if (layout.ptyIdsByLeafId?.[args.leafId] !== args.ptyId) {
       misses.push('leaf_pty')
     }
   }
+
   // Strict: undefined on both sides matches, undefined on one side does not.
   if (session.terminalPtyIncarnationsByPaneKey?.[paneKey] !== args.incarnationId) {
     misses.push('incarnation')
   }
+
   if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
     misses.push('tombstone')
   }
+
   if (!durable) {
     misses.push('not_durable')
   }
+
   return { eligible: misses.length === 0, misses }
 }

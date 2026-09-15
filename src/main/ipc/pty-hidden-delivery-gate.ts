@@ -17,10 +17,12 @@ export type HiddenPtyDeliveryGateSettings = Pick<
 >
 
 const hiddenRendererPtys = new Set<string>()
+
 // Why: sidecar consumers (paste-draft pacing, background agent launches,
 // automation observers) need live bytes even while no visible view exists. Any
 // registered interest suppresses the gate for that PTY.
 const deliveryInterestRendererPtys = new Set<string>()
+
 // Why: reveal must restore from the model only when bytes were actually
 // dropped. Doubles as the one-shot marker latch: the first gated drop emits a
 // restore marker, and the latch is consumed only by unmark (which re-emits)
@@ -29,6 +31,7 @@ const deliveryInterestRendererPtys = new Set<string>()
 const droppedSinceHiddenPtys = new Set<string>()
 
 let droppedHiddenDeliveryChars = 0
+
 let droppedHiddenDeliveryChunks = 0
 
 /** Gate kill switches, both read main-side: the gate only operates under main
@@ -55,6 +58,7 @@ export function markHiddenRendererPty(id: string): void {
 export function unmarkHiddenRendererPty(id: string): { droppedWhileHidden: boolean } {
   hiddenRendererPtys.delete(id)
   const droppedWhileHidden = droppedSinceHiddenPtys.delete(id)
+
   return { droppedWhileHidden }
 }
 
@@ -96,10 +100,13 @@ export function recordHiddenRendererPtyDataDrop(
 ): { shouldEmitRestoreMarker: boolean } {
   droppedHiddenDeliveryChars += chars
   droppedHiddenDeliveryChunks += 1
+
   if (droppedSinceHiddenPtys.has(id)) {
     return { shouldEmitRestoreMarker: false }
   }
+
   droppedSinceHiddenPtys.add(id)
+
   return { shouldEmitRestoreMarker: true }
 }
 

@@ -30,9 +30,11 @@ export function resolveDropZone(
   if (localX < splitWidthThreshold) {
     return 'left'
   }
+
   if (localX > splitWidthThreshold * 2) {
     return 'right'
   }
+
   return localY < rect.height / 2 ? 'up' : 'down'
 }
 
@@ -51,12 +53,14 @@ export function resolvePaneColumnEdgeZone(
   if (localX < horizontalEdge) {
     return 'left'
   }
+
   if (localX > panelRect.width - horizontalEdge) {
     return 'right'
   }
 
   const tabStripHeight = options?.tabStripHeightPx ?? TAB_GROUP_TAB_STRIP_HEIGHT_PX
   const tabStripBottom = panelRect.top + tabStripHeight
+
   // Why: the tab strip is for reorder/insertion targets. Vertical pane splits
   // belong on the terminal/editor body edges only.
   if (point.y < tabStripBottom) {
@@ -82,9 +86,11 @@ export function resolvePaneColumnEdgeZone(
   if (bodyLocalY < verticalEdge) {
     return 'up'
   }
+
   if (bodyLocalY > bodyRect.height - verticalEdge) {
     return 'down'
   }
+
   return null
 }
 

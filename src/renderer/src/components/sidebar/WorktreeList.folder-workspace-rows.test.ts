@@ -30,14 +30,23 @@ import {
 } from './worktree-list-card-markup-queries'
 
 vi.mock('@/store', () => createAppStoreModuleMock())
+
 vi.mock('@tanstack/react-virtual', () => createReactVirtualModuleMock())
+
 vi.mock('@/hooks/useVirtualizedScrollAnchor', () => createVirtualizedScrollAnchorModuleMock())
+
 vi.mock('./project-header-drag', () => createProjectHeaderDragModuleMock())
+
 vi.mock('./WorktreeCard', () => createWorktreeCardModuleMock())
+
 vi.mock('./WorktreeCardAgents', () => createWorktreeCardAgentsModuleMock())
+
 vi.mock('./WorktreeTitleInlineRename', () => createWorktreeTitleInlineRenameModuleMock())
+
 vi.mock('./WorktreeContextMenu', () => createWorktreeContextMenuModuleMock())
+
 vi.mock('@/components/ui/tooltip', () => createTooltipModuleMock())
+
 vi.mock('@/components/ui/dropdown-menu', () => createDropdownMenuModuleMock())
 
 function makeFolderWorkspace(
@@ -83,6 +92,7 @@ function setFolderWorkspaceFixtureState(
         updatedAt: 1
       }
     : null
+
   const group: ProjectGroup = {
     id: 'folder-group-1',
     name: 'Folder Group',
@@ -95,6 +105,7 @@ function setFolderWorkspaceFixtureState(
     createdAt: 1,
     updatedAt: 1
   }
+
   const folderWorkspace = makeFolderWorkspace(group.id)
 
   mockStore.state = {

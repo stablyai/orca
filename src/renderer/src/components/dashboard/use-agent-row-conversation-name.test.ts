@@ -59,6 +59,7 @@ describe('useAgentRowConversationName', () => {
         }
       }
     )
+
     storeState.current = { settings: {}, tabsByWorktree }
     expect(useAgentRowConversationName(makeAgent({ rowSource: 'subagent' }))).toBeNull()
   })
@@ -72,6 +73,7 @@ describe('useAgentRowConversationName', () => {
         }
       }
     )
+
     storeState.current = { settings: {}, tabsByWorktree }
     expect(
       useAgentRowConversationName(
@@ -98,11 +100,13 @@ describe('useAgentRowConversationName', () => {
       },
       lineage: { depth: 1, isFirstSibling: true, isLastSibling: true, childCount: 0 }
     } as Partial<DashboardAgentRow>)
+
     expect(useAgentRowConversationName(agent)).toBe('Patient sync spike')
   })
 
   it('indexes one immutable tab array once across rows', () => {
     let tabReads = 0
+
     const tabs = new Proxy(
       [
         { id: 'tab-1', worktreeId: 'wt-1', customTitle: 'First name', title: '' },
@@ -113,10 +117,12 @@ describe('useAgentRowConversationName', () => {
           if (typeof property === 'string' && /^\d+$/.test(property)) {
             tabReads += 1
           }
+
           return Reflect.get(target, property, receiver)
         }
       }
     )
+
     storeState.current = {
       settings: {},
       tabsByWorktree: { 'wt-1': tabs }
@@ -153,6 +159,7 @@ describe('useAgentRowConversationName', () => {
   describe('split panes', () => {
     const LEAF_A = '11111111-1111-4111-8111-111111111111'
     const LEAF_B = '22222222-2222-4222-8222-222222222222'
+
     const SPLIT_LAYOUT = {
       root: {
         type: 'split',
@@ -274,6 +281,7 @@ describe('useAgentRowConversationName', () => {
     const agent = makeAgent({
       tab: { customTitle: null, title: '', generatedTitle: 'Fix intake flow' }
     } as Partial<DashboardAgentRow>)
+
     storeState.current = { settings: {}, tabsByWorktree: {} }
     expect(useAgentRowConversationName(agent)).toBeNull()
     storeState.current = {

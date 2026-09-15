@@ -53,6 +53,7 @@ describe('plugin command keybindings', () => {
 
   it('matches effective overrides and honors explicit disablement', () => {
     const actionId = pluginCommandKeybindingActionId(command)
+
     const input = {
       key: 't',
       code: 'KeyT',
@@ -96,6 +97,7 @@ describe('plugin command keybindings', () => {
 
   it('does not match worktree commands without an active worktree', () => {
     const worktreeCommand = { ...command, context: 'worktree' as const }
+
     const input = {
       key: 't',
       code: 'KeyT',

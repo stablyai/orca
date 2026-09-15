@@ -14,13 +14,16 @@ import { describe, expect, it, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 
 const reportStructuredSessionUserInput = vi.hoisted(() => vi.fn())
+
 const dispatchStructuredComposerText = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/worker-terminal-takeover-report', () => ({
   reportStructuredSessionUserInput,
   reportWorkerTerminalUserInput: vi.fn()
 }))
+
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
+
 vi.mock('./native-chat-structured-composer-dispatch', () => ({
   dispatchNativeChatStructuredComposerText: dispatchStructuredComposerText
 }))
@@ -59,6 +62,7 @@ function send(structuredTransport: NativeChatStructuredComposerTransport): (text
       setCaret: vi.fn()
     })
   )
+
   return result.current
 }
 

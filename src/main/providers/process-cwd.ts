@@ -19,11 +19,15 @@ import { readlink } from 'node:fs/promises'
  * after its own timeout.
  */
 const CACHE_TTL_MS = 1500
+
 const CACHE_MAX_ENTRIES = 256
+
 const LSOF_TIMEOUT_MS = 1500
 
 type CacheEntry = { value: string; at: number }
+
 const resultCache = new Map<number, CacheEntry>()
+
 const inflight = new Map<number, Promise<string>>()
 
 export async function resolveProcessCwd(pid: number): Promise<string> {
@@ -34,22 +38,29 @@ export async function resolveProcessCwd(pid: number): Promise<string> {
   const now = Date.now()
   sweepExpiredResultCache(now)
   const cached = resultCache.get(pid)
+
   if (cached && now - cached.at < CACHE_TTL_MS) {
     return cached.value
   }
+
   const existing = inflight.get(pid)
+
   if (existing) {
     return existing
   }
+
   // Populate the cache inside the shared promise chain so every awaiter
   // (including any second caller that joined via `inflight`) observes the
   // result through the same write, rather than racing on a post-await set.
   const promise = doResolve(pid).then((value) => {
     rememberResult(pid, value, Date.now())
     inflight.delete(pid)
+
     return value
   })
+
   inflight.set(pid, promise)
+
   return promise
 }
 
@@ -63,13 +74,16 @@ function sweepExpiredResultCache(now: number): void {
 
 function rememberResult(pid: number, value: string, now: number): void {
   resultCache.set(pid, { value, at: now })
+
   // Why: terminals can churn through many OS PIDs in one app session. A short
   // TTL only helps if the old PID is queried again, so also bound unique keys.
   while (resultCache.size > CACHE_MAX_ENTRIES) {
     const oldest = resultCache.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     resultCache.delete(oldest)
   }
 }
@@ -90,6 +104,7 @@ async function doResolve(pid: number): Promise<string> {
     // scan below picks up the first unrelated process (often pid ~391 with
     // cwd `/`) and returns `/` regardless of the target pid's real cwd.
     const stdout = await readCwdWithLsof(pid)
+
     for (const line of stdout.split('\n')) {
       if (line.startsWith('n') && line.includes('/')) {
         // Why: lsof -d cwd is authoritative — don't second-guess it with
@@ -110,10 +125,12 @@ function readCwdWithLsof(pid: number): Promise<string> {
   return new Promise((resolve, reject) => {
     let settled = false
     let child: ReturnType<typeof execFileCb> | undefined
+
     const timer = setTimeout(() => {
       if (settled) {
         return
       }
+
       settled = true
       child?.kill()
       reject(new Error(`lsof timed out after ${LSOF_TIMEOUT_MS}ms`))
@@ -123,6 +140,7 @@ function readCwdWithLsof(pid: number): Promise<string> {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
       callback()
@@ -141,8 +159,10 @@ function readCwdWithLsof(pid: number): Promise<string> {
         (error, stdout) => {
           if (error) {
             settle(() => reject(error))
+
             return
           }
+
           settle(() => resolve(String(stdout)))
         }
       )

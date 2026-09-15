@@ -28,6 +28,7 @@ export function warmUpdaterModule(): void {
 export async function loadUpdaterModule(): Promise<typeof UpdaterModule> {
   const owner = TestRunner.getCurrentTest()
   const module = await import('./updater')
+
   if (owner !== undefined && TestRunner.getCurrentTest() !== owner) {
     // Why: vitest has already settled the timed-out test's promise, so this throw is swallowed —
     // warn separately or the reason the continuation was stranded reaches nobody.
@@ -37,5 +38,6 @@ export async function loadUpdaterModule(): Promise<typeof UpdaterModule> {
     )
     throw new Error(`updater import for "${owner.name}" resolved after that test ended`)
   }
+
   return module
 }

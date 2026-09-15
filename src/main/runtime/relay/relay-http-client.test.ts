@@ -27,6 +27,7 @@ function assignSuccessResponse(): Response {
 function fakeAssignClock(onSleep?: () => void) {
   let now = 1_000_000
   const sleeps: number[] = []
+
   return {
     sleeps,
     advance: (ms: number): void => {
@@ -49,14 +50,17 @@ describe('relay HTTP client', () => {
   beforeEach(() => {
     gate = new RelayAssignRateGate()
   })
+
   const assign = (input: Omit<AssignInput, 'assignRateGate'>) =>
     requestRelayAssignment({ ...input, assignRateGate: gate })
 
   it('exchanges only the ordinary bearer for a host-bound relay token', async () => {
     const keypair = nacl.box.keyPair()
+
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
       Response.json({ relayToken: 'scoped-relay-token', expiresAt: Date.now() + 300_000 })
     )
+
     await expect(
       exchangeRelayAuthorization({
         endpoint: 'https://auth.example/v1/desktop/auth/relay-token',
@@ -89,6 +93,7 @@ describe('relay HTTP client', () => {
         lease: 'signed-assignment'
       })
     )
+
     await expect(
       assign({
         directorUrl: 'https://relay.example',
@@ -113,6 +118,7 @@ describe('relay HTTP client', () => {
         lease: 'lease-jwt'
       })
     )
+
     await expect(
       assign({
         directorUrl: 'https://relay.example',
@@ -177,6 +183,7 @@ describe('relay HTTP client', () => {
           lease: 'lease-jwt'
         })
       )
+
     await expect(
       assign({
         directorUrl: 'https://relay.example',
@@ -214,6 +221,7 @@ describe('relay HTTP client', () => {
 
   it('aborts a blackholed token exchange so recovery can retry', async () => {
     const keypair = nacl.box.keyPair()
+
     const fetch = vi.fn<typeof globalThis.fetch>(
       async (_url, init) =>
         await new Promise<Response>((_resolve, reject) => {
@@ -244,6 +252,7 @@ describe('relay HTTP client', () => {
         lease: 'signed-assignment'
       })
     )
+
     await expect(
       assign({
         directorUrl: 'https://relay.example',
@@ -257,6 +266,7 @@ describe('relay HTTP client', () => {
   it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {
     const keypair = nacl.box.keyPair()
     let cancelledBodies = 0
+
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
       cancelTrackingResponse(503, () => {
         cancelledBodies += 1
@@ -374,6 +384,7 @@ describe('relay assignment rate gate', () => {
   it('keeps a Retry-After hint past the retry timer the coordinator cancels', async () => {
     const clock = fakeAssignClock()
     const assignRateGate = new RelayAssignRateGate(clock.options)
+
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(new Response(null, { status: 429, headers: { 'retry-after': '30' } }))
@@ -400,12 +411,14 @@ describe('relay assignment rate gate', () => {
   it('honors a deadline raise that lands mid-wait', async () => {
     const key = 'https://relay.example AbCdEf0123_-xyZ9'
     let raised = false
+
     const clock = fakeAssignClock(() => {
       if (!raised) {
         raised = true
         assignRateGate.noteRetryAfter(key, 10_000)
       }
     })
+
     const assignRateGate = new RelayAssignRateGate(clock.options)
 
     await assignRateGate.reserve(key)
@@ -438,6 +451,7 @@ describe('relay assignment rate gate', () => {
   it('does not re-wait for the field-fallback retries of one attempt', async () => {
     const clock = fakeAssignClock()
     const assignRateGate = new RelayAssignRateGate(clock.options)
+
     const fetch = vi
       .fn<typeof globalThis.fetch>()
       .mockResolvedValueOnce(Response.json({ error: 'invalid_request' }, { status: 400 }))
@@ -468,8 +482,10 @@ describe('relay assignment rate gate', () => {
     const clock = fakeAssignClock()
     const assignRateGate = new RelayAssignRateGate(clock.options)
     let current = true
+
     const fetch = vi.fn<typeof globalThis.fetch>(async () => {
       current = false
+
       return Response.json({ error: 'invalid_request' }, { status: 400 })
     })
 
@@ -488,9 +504,11 @@ describe('relay assignment rate gate', () => {
 
   it('aborts without assigning when the caller is superseded during the wait', async () => {
     let current = true
+
     const clock = fakeAssignClock(() => {
       current = false
     })
+
     const assignRateGate = new RelayAssignRateGate(clock.options)
     const fetch = vi.fn<typeof globalThis.fetch>(async () => assignSuccessResponse())
 

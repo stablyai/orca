@@ -12,6 +12,7 @@ export function foldOmpTranscriptTitle(
   record: Record<string, unknown>
 ): OmpTranscriptTitle | null {
   const legacy = record.type === 'session_info'
+
   if (
     !legacy &&
     record.type !== 'session' &&
@@ -20,23 +21,32 @@ export function foldOmpTranscriptTitle(
   ) {
     return current
   }
+
   if (record.type === 'title' && record.v !== 1) {
     return current
   }
+
   const title = normalizeTitleText(extractString(legacy ? record.name : record.title) ?? '')
+
   if (!title) {
     return current
   }
+
   const rawSource = legacy ? 'user' : (record.source ?? record.titleSource)
+
   if (rawSource !== undefined && rawSource !== 'user' && rawSource !== 'auto') {
     return current
   }
+
   const source = rawSource === 'user' ? 'user' : 'auto'
+
   if (current?.source === 'user' && source !== 'user') {
     return current
   }
+
   const timestamp = timestampMs(record.type === 'title' ? record.updatedAt : record.timestamp)
   const updatedAt = Number.isFinite(timestamp) ? timestamp : null
+
   if (
     current?.source === source &&
     current.updatedAt !== null &&
@@ -45,5 +55,6 @@ export function foldOmpTranscriptTitle(
   ) {
     return current
   }
+
   return { title, source, updatedAt }
 }

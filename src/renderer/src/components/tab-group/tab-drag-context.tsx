@@ -25,6 +25,7 @@ export function TabDragProvider({
     () => ({ isTabDragActive, isTabDragActiveRef }),
     [isTabDragActive, isTabDragActiveRef]
   )
+
   return <TabDragContext.Provider value={value}>{children}</TabDragContext.Provider>
 }
 

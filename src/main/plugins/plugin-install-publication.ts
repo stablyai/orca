@@ -26,31 +26,40 @@ export async function publishPluginInstall(input: {
 }): Promise<void> {
   const previousContentHash = await readPluginCurrentPointer(input.pluginDir)
   const currentLock = await readPluginLockfile(input.pluginsDir)
+
   const provenanceCandidate =
     previousContentHash === input.entry.contentHash
       ? await readPluginInstallProvenance(input.pluginDir, input.entry.contentHash)
       : null
+
   const matchesCurrentIdentity = (entry: PluginLockEntry | undefined | null): boolean =>
     entry?.pluginKey === input.entry.pluginKey && entry.contentHash === input.entry.contentHash
+
   const existingProvenance = matchesCurrentIdentity(provenanceCandidate)
     ? provenanceCandidate
     : null
+
   const legacyLockEntry = currentLock.plugins[input.entry.pluginKey]
+
   const legacyCurrentEntry =
     previousContentHash === input.entry.contentHash && matchesCurrentIdentity(legacyLockEntry)
       ? legacyLockEntry
       : null
+
   // Provenance is immutable per executable identity. A same-byte reinstall
   // is a no-op so a failed or interrupted source change cannot be recovered
   // later as though it had successfully published.
   const publishedEntry = existingProvenance ?? legacyCurrentEntry ?? input.entry
   const nextLock = upsertPluginLock(currentLock, publishedEntry)
+
   // Why: after a crash between pointer and global-index publication, startup
   // can reconstruct exact source/commit identity from this immutable record.
   if (!existingProvenance) {
     await writePluginInstallProvenance(input.pluginDir, publishedEntry)
   }
+
   await writePluginCurrentPointer(input.pluginDir, input.entry.contentHash)
+
   try {
     await writePluginLockfile(input.pluginsDir, nextLock)
   } catch (publicationError) {
@@ -62,8 +71,10 @@ export async function publishPluginInstall(input: {
         'plugin install publication and pointer rollback both failed'
       )
     }
+
     throw publicationError
   }
+
   // Reinstalling B must not collapse an existing A rollback into {B}.
   if (previousContentHash !== input.entry.contentHash) {
     await pruneHistoricalVersions(

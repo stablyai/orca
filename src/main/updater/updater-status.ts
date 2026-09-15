@@ -9,6 +9,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
     if (!this.autoUpdater) {
       this.autoUpdater = loadElectronAutoUpdater()
     }
+
     return this.autoUpdater
   }
 
@@ -20,6 +21,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
   protected closeLocalBuildFeed(): void {
     const feed = this.activeLocalBuildFeed
     this.activeLocalBuildFeed = null
+
     if (feed) {
       void feed.close()
     }
@@ -29,6 +31,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
     this.closeLocalBuildFeed()
     this.activeUpdateSource = 'release'
     this.isPinnedBuildActive = false
+
     if (this.autoUpdater) {
       this.autoUpdater.allowDowngrade = false
       this.autoUpdater.disableDifferentialDownload = false
@@ -40,6 +43,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
 
   protected sendLocalBuildErrorAndRestore(message: string, userInitiated?: boolean): void {
     this.clearAvailableUpdateContext()
+
     if (
       this.currentStatus.state !== 'error' ||
       this.currentStatus.message !== message ||
@@ -48,6 +52,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
     ) {
       this.sendStatus({ state: 'error', message, userInitiated, source: 'local' })
     }
+
     this.restoreReleaseUpdateSource()
   }
 
@@ -83,6 +88,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
     if (!this.activeUpdateNudgeId) {
       return status
     }
+
     if (
       status.state === 'idle' ||
       status.state === 'checking' ||
@@ -90,24 +96,28 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
     ) {
       return status
     }
+
     return { ...status, activeNudgeId: this.activeUpdateNudgeId }
   }
 
   /** `force` re-delivers a status the renderer must not miss even when it repeats the current one. */
   protected sendStatus(status: UpdateStatus, options?: { force?: boolean }): void {
     const pendingUserInitiatedCheckVariant = this.pendingUserInitiatedCheckAfterInFlight
+
     const shouldLaunchPendingUserInitiatedCheck =
       pendingUserInitiatedCheckVariant !== null &&
       (status.state === 'idle' ||
         status.state === 'not-available' ||
         status.state === 'available' ||
         status.state === 'error')
+
     const shouldPreserveNudgeForPublishingWindow =
       this.publishingWindowLastGoodCheck !== null &&
       (status.state === 'idle' ||
         status.state === 'not-available' ||
         status.state === 'available' ||
         status.state === 'error')
+
     if (this.awaitingNudgeCheckOutcome) {
       if (status.state === 'available') {
         if (shouldPreserveNudgeForPublishingWindow) {
@@ -129,6 +139,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
           if (this.activeUpdateNudgeId) {
             this._setDismissedUpdateNudgeId?.(this.activeUpdateNudgeId)
           }
+
           this.clearPendingUpdateNudge()
         }
       }
@@ -138,6 +149,7 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
       this.activeUpdateSource === 'release'
         ? status
         : { ...status, source: this.activeUpdateSource }
+
     const decoratedStatus = this.decorateStatusWithActiveNudge(sourcedStatus)
 
     if (this.isUpdateCheckResultState(status.state)) {
@@ -161,18 +173,23 @@ export abstract class UpdaterStatus extends BaseUpdaterState {
     ) {
       this.downloadInFlight = false
     }
+
     if (shouldLaunchPendingUserInitiatedCheck) {
       // Why: a forced status must still land before the queued check restarts the cycle.
       if (options?.force) {
         this.currentStatus = decoratedStatus
         this.mainWindowRef?.webContents.send('updater:status', decoratedStatus)
       }
+
       this.launchPendingUserInitiatedCheckAfterInFlight(pendingUserInitiatedCheckVariant)
+
       return
     }
+
     if (!options?.force && statusesEqual(this.currentStatus, decoratedStatus)) {
       return
     }
+
     this.currentStatus = decoratedStatus
     this.mainWindowRef?.webContents.send('updater:status', decoratedStatus)
   }

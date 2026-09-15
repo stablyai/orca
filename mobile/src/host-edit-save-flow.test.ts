@@ -62,9 +62,11 @@ async function renderEditHostRoute(): Promise<ReactTestRenderer> {
     renderer = create(createElement(EditHostScreen))
     await Promise.resolve()
   })
+
   if (!renderer) {
     throw new Error('Edit host route did not render')
   }
+
   return renderer
 }
 
@@ -76,9 +78,11 @@ function setFieldValue(
   const input = renderer.root
     .findAllByType('TextInput')
     .find((node) => node.props.accessibilityLabel === accessibilityLabel)
+
   if (!input) {
     throw new Error(`${accessibilityLabel} input not found`)
   }
+
   act(() => {
     input.props.onChangeText(value)
   })
@@ -88,9 +92,11 @@ function findSaveButton(renderer: ReactTestRenderer) {
   const button = renderer.root
     .findAllByType('Pressable')
     .find((node) => node.props.accessibilityLabel === 'Save host')
+
   if (!button) {
     throw new Error('Save button not found')
   }
+
   return button
 }
 
@@ -106,12 +112,15 @@ async function pressSave(renderer: ReactTestRenderer): Promise<void> {
 function findText(renderer: ReactTestRenderer, match: string): boolean {
   return renderer.root.findAllByType('Text').some((node) => {
     const children = node.props.children
+
     if (typeof children === 'string') {
       return children.includes(match)
     }
+
     if (Array.isArray(children)) {
       return children.join('').includes(match)
     }
+
     return false
   })
 }
@@ -237,6 +246,7 @@ describe('edit host handleSave', () => {
 
   it('ignores a second Save trigger while a save is already in flight', async () => {
     let resolveSave: () => void = () => {}
+
     dependencies.updateHostNameAndEndpoint.mockImplementationOnce(
       () =>
         new Promise<void>((resolve) => {

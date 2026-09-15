@@ -32,8 +32,10 @@ export async function createFloatingWorkspaceTerminalTab(
   const tab = store.createTab(FLOATING_TERMINAL_WORKTREE_ID, targetGroupId, shellOverride, {
     activate: false
   })
+
   store.activateTab(tab.id)
   focusTerminalTabSurface(tab.id)
+
   return tab
 }
 
@@ -63,20 +65,25 @@ export async function createFloatingWorkspaceMarkdownTab(
   markdownDirectory?: string | null
 ): Promise<void> {
   const targetGroupId = store.activeGroupIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+
   const floatingMarkdownDirectory =
     markdownDirectory ?? (await window.api.app.getFloatingMarkdownDirectory())
+
   if (!floatingMarkdownDirectory) {
     return
   }
+
   const fileInfo = await createUntitledMarkdownFileWithTemplateSelection(
     floatingMarkdownDirectory,
     FLOATING_TERMINAL_WORKTREE_ID,
     getConnectionId(FLOATING_TERMINAL_WORKTREE_ID) ?? undefined,
     { activeRuntimeEnvironmentId: null }
   )
+
   if (!fileInfo) {
     return
   }
+
   store.openFile(
     {
       ...fileInfo,

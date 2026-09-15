@@ -32,6 +32,7 @@ describe('checkIgnoredPathsOp', () => {
       code: 1,
       stdout: ''
     })
+
     const git = vi.fn<GitExec>().mockRejectedValue(noMatches)
 
     await expect(

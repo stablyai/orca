@@ -31,6 +31,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -45,9 +46,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -81,6 +84,7 @@ describe('Store', () => {
 
   it('clone-reads and synchronously persists the main-owned Codex reset ledger', async () => {
     const store = await createStore()
+
     const ledger = {
       version: 1 as const,
       attempts: [
@@ -154,6 +158,7 @@ describe('Store', () => {
     store.addRepo(makeRepo({ id: 'repo-1', path: '/repo-1' }))
     const worktreeId = 'repo-1::/tmp/worktree-1'
     const tabId = 'terminal-1'
+
     const session: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),
       activeWorktreeId: worktreeId,
@@ -183,6 +188,7 @@ describe('Store', () => {
       activeTabIdByWorktree: { [worktreeId]: tabId },
       defaultTerminalTabsAppliedByWorktreeId: { [worktreeId]: true }
     }
+
     store.setWorkspaceSession(session)
     store.flushOrThrow()
 
@@ -191,6 +197,7 @@ describe('Store', () => {
       worktreeId,
       tabId
     )
+
     store.setWorkspaceSession(closed.session)
     store.flushOrThrow()
 
@@ -281,6 +288,7 @@ describe('Store', () => {
       id: 'cloud-project',
       displayName: 'Cloud Project'
     })
+
     const independentSetup = makeProjectHostSetup({
       id: 'cloud-project::gpu-vm',
       projectId: independentProject.id,
@@ -289,6 +297,7 @@ describe('Store', () => {
       path: '/srv/cloud-project',
       displayName: 'GPU VM'
     })
+
     writeDataFile({
       ...getDefaultPersistedState(testState.dir),
       repos: [makeRepo({ id: 'r1', path: '/repo', displayName: 'Repo' })],
@@ -314,6 +323,7 @@ describe('Store', () => {
       sourceRepoIds: ['r1'],
       localWindowsRuntimePreference: { kind: 'inherit-global' }
     })
+
     writeDataFile({
       ...getDefaultPersistedState(testState.dir),
       repos: [makeRepo({ id: 'r1' })],
@@ -405,6 +415,7 @@ describe('Store', () => {
       remoteName: 'origin',
       remoteUrl: 'git@git.example.com:acme/shared.git'
     }
+
     writeDataFile({
       ...getDefaultPersistedState(testState.dir),
       repos: [

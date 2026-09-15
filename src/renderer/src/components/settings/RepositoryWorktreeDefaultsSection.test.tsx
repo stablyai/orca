@@ -47,6 +47,7 @@ const BASE_REPO: Repo = {
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -85,9 +86,11 @@ function render(
 
 function getWorktreePathInput(): HTMLInputElement {
   const input = container.querySelector<HTMLInputElement>('input')
+
   if (!input) {
     throw new Error('worktree path input not found')
   }
+
   return input
 }
 

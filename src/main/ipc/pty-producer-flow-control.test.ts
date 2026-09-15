@@ -7,6 +7,7 @@ import {
 } from './pty-producer-flow-control'
 
 const HIGH = PRODUCER_FLOW_HIGH_WATERMARK_CHARS
+
 const LOW = PRODUCER_FLOW_LOW_WATERMARK_CHARS
 
 describe('PtyProducerFlowController', () => {

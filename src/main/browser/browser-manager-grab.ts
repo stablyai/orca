@@ -28,23 +28,32 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     senderWebContentsId: number
   ): Electron.WebContents | null {
     const docGuest = getWorkspaceDocPageGuest(browserTabId, senderWebContentsId)
+
     if (docGuest) {
       return docGuest
     }
+
     const registeredRenderer = this.rendererWebContentsIdByTabId.get(browserTabId)
+
     if (registeredRenderer == null || registeredRenderer !== senderWebContentsId) {
       return null
     }
+
     const guestId = this.webContentsIdByTabId.get(browserTabId)
+
     if (guestId == null) {
       return null
     }
+
     const guest = webContents.fromId(guestId)
+
     if (!guest || guest.isDestroyed()) {
       // Why: a stale guest must clear every per-tab registry entry, not just the WebContents maps.
       this.unregisterGuest(browserTabId)
+
       return null
     }
+
     return guest
   }
 
@@ -62,19 +71,24 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
     if (!enabled) {
       const hadActiveGrabOp = this.hasActiveGrabOp(browserTabId)
       this.cancelGrabOp(browserTabId, 'user')
+
       if (hadActiveGrabOp) {
         return true
       }
+
       try {
         await guest.executeJavaScript(buildGuestOverlayScript('teardown'))
+
         return true
       } catch {
         return false
       }
     }
+
     // Why: inject the overlay runtime eagerly on arm so the hover UI appears instantly; re-injection is idempotent/safe.
     try {
       await guest.executeJavaScript(buildGuestOverlayScript('arm'))
+
       return true
     } catch {
       return false
@@ -115,9 +129,11 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
   ): Promise<BrowserGrabPayload | null> {
     try {
       const rawPayload = await guest.executeJavaScript(buildGuestOverlayScript('extractHover'))
+
       if (!rawPayload || typeof rawPayload !== 'object') {
         return null
       }
+
       return clampGrabPayload(rawPayload)
     } catch {
       return null

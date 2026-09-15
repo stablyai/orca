@@ -36,6 +36,7 @@ describe('removeAppImageRuntimeEnv', () => {
 
   it('leaves non-AppImage environments untouched', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+
     const env = {
       PATH: ['/opt/tools', '/usr/bin'].join(delimiter),
       LD_LIBRARY_PATH: '/opt/audio/lib'
@@ -51,6 +52,7 @@ describe('removeAppImageRuntimeEnv', () => {
 
   it('removes AppImage ARGV0 even without a mounted APPDIR', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+
     const env = {
       ARGV0: '/data/apps/orca.appimage',
       PATH: ['/usr/local/bin', '/usr/bin'].join(delimiter)
@@ -65,6 +67,7 @@ describe('removeAppImageRuntimeEnv', () => {
 
   it('leaves AppImage-looking env untouched outside Linux', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+
     const env = {
       APPIMAGE: '/data/apps/orca.appimage',
       APPDIR: '/tmp/.mount_orca123',

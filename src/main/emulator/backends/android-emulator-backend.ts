@@ -60,6 +60,7 @@ export type AndroidEmulatorBackendOptions = {
 }
 
 const DEFAULT_BOOT_TIMEOUT_MS = 180_000
+
 const DEFAULT_POLL_INTERVAL_MS = 2_000
 
 // The Android backend. Device discovery + lifecycle + input run through `adb`
@@ -111,6 +112,7 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
 
   async checkAvailability(): Promise<BackendAvailability> {
     const sdk = this.sdkState.resolve()
+
     if (!sdk) {
       return {
         available: false,
@@ -118,14 +120,18 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
         message: 'Android SDK not found. Install Android Studio and set ANDROID_HOME.'
       }
     }
+
     const sdkPath = sdk.sdkRoot
     let devices: EmulatorDevice[] = []
+
     try {
       devices = await this.listDevices()
     } catch (error) {
       const message = error instanceof Error ? error.message : 'adb is unavailable.'
+
       return { available: false, devices: [], message, sdkPath }
     }
+
     if (devices.length === 0) {
       return {
         available: false,
@@ -134,11 +140,13 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
         sdkPath
       }
     }
+
     return { available: true, devices, message: 'Ready', sdkPath }
   }
 
   async listDevices(): Promise<EmulatorDevice[]> {
     const sdk = this.sdkState.resolve()
+
     return sdk ? listAndroidDevices(this.runner, sdk) : []
   }
 
@@ -146,20 +154,26 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     if (!this.sdkState.resolve()) {
       return false
     }
+
     const devices = await this.listDevices()
+
     return devices.some((device) => device.id === id || device.name === id)
   }
 
   async resolveDeviceId(deviceOrName: string): Promise<string> {
     const sdk = this.requireSdk()
     const running = await listRunningAdbDevices(this.runner, sdk)
+
     if (running.some((device) => device.serial === deviceOrName)) {
       return deviceOrName
     }
+
     const serial = await findRunningAvdSerial(this.runner, sdk, deviceOrName, running)
+
     if (serial) {
       return serial
     }
+
     throw new EmulatorError(
       'emulator_device_not_found',
       `Android device "${deviceOrName}" is not running. Boot it first.`
@@ -175,18 +189,23 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
     options: { helperPid?: number; includeOrphaned?: boolean } = {}
   ): Promise<void> {
     this.streams.stop(deviceId)
+
     // Reap a port-forward leaked by an unclean exit: the in-memory handle is gone
     // after a crash, so streams.stop can't remove it. Best-effort, serial-scoped,
     // and must never throw on this teardown path.
     if (options.includeOrphaned) {
       const sdk = this.sdkState.resolve()
+
       if (!sdk) {
         return
       }
+
       const serial = await this.resolveDeviceId(deviceId).catch(() => null)
+
       if (!serial) {
         return
       }
+
       // `-s <serial>` scopes --remove-all to this device's adb forwards only.
       await this.runner(sdk.adb, ['-s', serial, 'forward', '--remove-all']).catch(() => {})
     }
@@ -313,16 +332,21 @@ export class AndroidEmulatorBackend implements EmulatorBackend {
 
   private async getScreenSize(serial: string): Promise<DeviceScreenSize> {
     const cached = this.screenSizes.get(serial)
+
     if (cached) {
       return cached
     }
+
     const sdk = this.requireSdk()
     const result = await this.runner(sdk.adb, wmSizeArgs(serial))
     const size = parseWmSize(result.stdout)
+
     if (!size) {
       throw new EmulatorError('emulator_error', `Could not read screen size for ${serial}.`)
     }
+
     this.screenSizes.set(serial, size)
+
     return size
   }
 

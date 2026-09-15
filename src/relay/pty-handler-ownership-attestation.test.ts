@@ -20,9 +20,11 @@ const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = v
 }))
 
 vi.mock('node-pty', () => ({ spawn: mockPtySpawn }))
+
 vi.mock('../main/pty/posix-pty-process-groups', () => ({
   forceKillPosixPtyProcessGroups: vi.fn((_pid: number, fallback: () => void) => fallback())
 }))
+
 vi.mock('../main/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: mockCreateShellPromptReadinessProbe
 }))
@@ -56,6 +58,7 @@ describe('PtyHandler publishes host-attested PTY ownership', () => {
     params: Record<string, unknown> = {}
   ): Promise<{ id: string }> {
     mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
+
     return (await dispatcher.callRequest('pty.spawn', params, {
       clientId,
       isStale: () => false
@@ -151,6 +154,7 @@ describe('PtyHandler publishes host-attested PTY ownership', () => {
     // pinned separately, against a controllable clock, by process-table-snapshot.test.ts; what
     // belongs here is that the handler publishes what it was given instead of restamping.
     const capturedAgeMs = 6_140
+
     const snapshot = vi
       .spyOn(processTableSnapshotReader, 'getStrictProcessTableSnapshotWithAge')
       .mockResolvedValue({ rows: [], capturedAgeMs })
@@ -190,6 +194,7 @@ describe('PtyHandler authorizes a fenced stop against its own attestation', () =
 
   async function spawnFrom(clientId: number): Promise<{ id: string }> {
     mockPtySpawn.mockReturnValue({ ...mockPtyInstance, onData: vi.fn(), onExit: vi.fn() })
+
     return (await dispatcher.callRequest('pty.spawn', { env: { ORCA_PANE_KEY: PANE_KEY } }, {
       clientId,
       isStale: () => false
@@ -198,6 +203,7 @@ describe('PtyHandler authorizes a fenced stop against its own attestation', () =
 
   async function isStillHeld(id: string): Promise<boolean> {
     const entries = (await dispatcher.callRequest('pty.listProcesses', {})) as Summary[]
+
     return entries.some((entry) => entry.id === id)
   }
 

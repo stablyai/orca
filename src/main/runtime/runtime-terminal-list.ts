@@ -63,38 +63,48 @@ export class RuntimeTerminalList {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
+
     const graphEpoch = this.deps.getGraphEpoch()
     const explicitId = worktreeSelector ? this.deps.getExplicitWorktreeId(worktreeSelector) : null
     const initialCache = this.deps.getResolvedCache()
+
     const cachedWorktrees =
       initialCache?.expiresAt && initialCache.expiresAt > Date.now() ? initialCache.worktrees : null
+
     const cachedTarget =
       explicitId && cachedWorktrees
         ? (cachedWorktrees.find((worktree) => worktree.id === explicitId) ?? null)
         : null
+
     const parsedTarget =
       explicitId && !cachedTarget ? this.deps.buildWorktreeFromId(explicitId) : null
+
     const target =
       worktreeSelector && !explicitId
         ? await this.deps.resolveWorktree(worktreeSelector)
         : (cachedTarget ?? parsedTarget)
+
     const targetId = explicitId ?? target?.id ?? null
     const classificationCache = this.deps.getResolvedCache()
+
     const classificationWorktrees =
       targetId && classificationCache && classificationCache.expiresAt > Date.now()
         ? includeTargetResolvedWorktree(classificationCache.worktrees, target)
         : targetId && explicitId
           ? this.deps.listKnownWorktrees(targetId, target)
           : null
+
     const worktreesById =
       targetId && target
         ? new Map([[target.id, target]])
         : targetId
           ? new Map<string, ResolvedWorktree>()
           : await this.deps.getWorktreeMap()
+
     if (graphEpoch !== null) {
       this.deps.assertGraphEpoch(graphEpoch)
     }
+
     const resolvedWorktrees =
       targetId && classificationWorktrees
         ? classificationWorktrees
@@ -103,53 +113,71 @@ export class RuntimeTerminalList {
           : targetId
             ? []
             : [...worktreesById.values()]
+
     const inventory = await this.deps.refreshPtys(resolvedWorktrees, targetId)
     const refreshedPtyIds = inventory ? new Set(inventory.livePtyIds) : null
+
     if (opts.requireFreshPtyLiveness && !refreshedPtyIds) {
       throw new Error('terminal_liveness_unavailable')
     }
+
     const provenLivePtyIds = inventory?.allLivePtyIds ?? null
     const ptys = [...this.deps.getPtys()]
+
     const liveWorktreeIds = new Set(
       ptys.filter((pty) => pty.connected).map((pty) => pty.worktreeId)
     )
+
     const terminals: RuntimeTerminalSummary[] = []
     const leafPtyIds = new Set<string>()
+
     if (graphEpoch !== null) {
       for (const leaf of this.deps.getLeaves()) {
         if (targetId && leaf.worktreeId !== targetId) {
           continue
         }
+
         if (opts.requireFreshPtyLiveness && (!leaf.ptyId || !refreshedPtyIds?.has(leaf.ptyId))) {
           continue
         }
+
         if (!leaf.ptyId && liveWorktreeIds.has(leaf.worktreeId)) {
           continue
         }
+
         if (leaf.ptyId) {
           leafPtyIds.add(leaf.ptyId)
         }
+
         terminals.push(this.deps.buildLeafSummary(leaf, worktreesById, provenLivePtyIds))
       }
     }
+
     for (const pty of ptys) {
       if (!pty.connected || leafPtyIds.has(pty.ptyId)) {
         continue
       }
+
       if (opts.requireFreshPtyLiveness && !refreshedPtyIds?.has(pty.ptyId)) {
         continue
       }
+
       if (targetId && pty.worktreeId !== targetId) {
         continue
       }
+
       terminals.push(this.deps.buildPtySummary(pty, worktreesById))
     }
+
     const requestedHandles = opts.handles ? new Set(opts.handles) : null
+
     const matching = requestedHandles
       ? terminals.filter((terminal) => requestedHandles.has(terminal.handle))
       : terminals
+
     const listed = matching.slice(0, limit)
     const snapshots = this.deps.getSnapshots()
+
     const visualLayouts =
       opts.includeVisualLayouts === false
         ? []
@@ -163,6 +191,7 @@ export class RuntimeTerminalList {
               : snapshots.values(),
             getTabTitle: (tabId) => this.deps.getTabTitle(tabId)
           })
+
     return {
       terminals: listed,
       hostScope: this.deps.buildHostScope(

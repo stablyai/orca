@@ -24,9 +24,11 @@ type TailBuffer = {
 
 function appendTail(buffer: TailBuffer, chunk: string): TailBuffer {
   const content = `${buffer.content}${chunk}`
+
   if (content.length <= MAX_AUTOMATION_PRECHECK_OUTPUT_CHARS) {
     return { ...buffer, content }
   }
+
   return {
     content: content.slice(-MAX_AUTOMATION_PRECHECK_OUTPUT_CHARS),
     truncated: true
@@ -43,6 +45,7 @@ function createPrecheckResult(args: {
   error: string | null
 }): AutomationPrecheckResult {
   const completedAt = Date.now()
+
   return {
     command: args.precheck.command,
     exitCode: args.exitCode,
@@ -79,8 +82,10 @@ export function killLocalPrecheckProcessTree(
   child: ChildProcess
 ): ReturnType<typeof setTimeout> | null {
   const pid = child.pid
+
   if (!pid) {
     child.kill()
+
     return null
   }
 
@@ -95,8 +100,10 @@ export function killLocalPrecheckProcessTree(
       // Refusal blocks the tree walk, not the termination: killing the root by
       // handle cannot reach a recycled pid, and a timed-out precheck must stop.
       child.kill()
+
       return null
     }
+
     try {
       // Why: shell prechecks can launch child processes; taskkill walks the
       // Windows process tree so timeout means the command is actually stopped.
@@ -104,11 +111,13 @@ export function killLocalPrecheckProcessTree(
         stdio: 'ignore',
         windowsHide: true
       })
+
       killer.on('error', () => child.kill())
       killer.unref()
     } catch {
       child.kill()
     }
+
     return null
   }
 
@@ -125,7 +134,9 @@ export function killLocalPrecheckProcessTree(
       /* process group already exited */
     }
   }, 2000)
+
   forceKillTimer.unref?.()
+
   return forceKillTimer
 }
 
@@ -135,6 +146,7 @@ function runLocalPrecheck(
 ): Promise<AutomationPrecheckResult> {
   const startedAt = Date.now()
   const timeoutMs = precheck.timeoutSeconds * 1000
+
   return new Promise((resolve) => {
     let stdout: TailBuffer = { content: '', truncated: false }
     let stderr: TailBuffer = { content: '', truncated: false }
@@ -155,15 +167,19 @@ function runLocalPrecheck(
       if (settled) {
         return
       }
+
       settled = true
+
       if (timeout) {
         clearTimeout(timeout)
         timeout = null
       }
+
       if (forceKillTimer) {
         clearTimeout(forceKillTimer)
         forceKillTimer = null
       }
+
       resolve(
         createPrecheckResult({ precheck, startedAt, stdout, stderr, exitCode, timedOut, error })
       )
@@ -201,6 +217,7 @@ function runSshChannelPrecheck(args: {
 }): Promise<AutomationPrecheckResult> {
   const { precheck, channel, startedAt } = args
   const timeoutMs = precheck.timeoutSeconds * 1000
+
   return new Promise((resolve) => {
     let stdout: TailBuffer = { content: '', truncated: false }
     let stderr: TailBuffer = { content: '', truncated: false }
@@ -213,11 +230,14 @@ function runSshChannelPrecheck(args: {
       if (settled) {
         return
       }
+
       settled = true
+
       if (timeout) {
         clearTimeout(timeout)
         timeout = null
       }
+
       resolve(
         createPrecheckResult({ precheck, startedAt, stdout, stderr, exitCode, timedOut, error })
       )
@@ -231,6 +251,7 @@ function runSshChannelPrecheck(args: {
     const fail = (error: Error): void => {
       settle(null, error.message)
     }
+
     channel.on('error', fail)
     channel.stderr.on('error', fail)
     channel.on('data', (data: Buffer | string) => {
@@ -246,6 +267,7 @@ function runSshChannelPrecheck(args: {
       if (typeof code === 'number') {
         exitCode = code
       }
+
       settle(exitCode, timedOut ? `Precheck timed out after ${precheck.timeoutSeconds}s.` : null)
     })
   })
@@ -258,12 +280,15 @@ async function runSshPrecheck(
   const startedAt = Date.now()
   const manager = getSshConnectionManager()
   const connection = manager?.getConnection(target.connectionId)
+
   if (!connection || connection.getState().status !== 'connected') {
     return failedPrecheckResult(precheck, startedAt, 'SSH target is not connected.')
   }
+
   try {
     const remoteCommand = `cd ${shellEscape(target.cwd)} && ${precheck.command}`
     const channel = await connection.exec(remoteCommand)
+
     return await runSshChannelPrecheck({ precheck, channel, startedAt })
   } catch (error) {
     return failedPrecheckResult(
@@ -281,5 +306,6 @@ export async function runAutomationPrecheck(args: {
   if (args.target.type === 'ssh') {
     return await runSshPrecheck(args.precheck, args.target)
   }
+
   return await runLocalPrecheck(args.precheck, args.target)
 }

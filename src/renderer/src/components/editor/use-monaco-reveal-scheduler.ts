@@ -26,6 +26,7 @@ export function useMonacoRevealScheduler(): MonacoRevealScheduler {
       clearTimeout(revealHighlightTimerRef.current)
       revealHighlightTimerRef.current = null
     }
+
     revealDecorationRef.current?.clear()
     revealDecorationRef.current = null
   }, [])
@@ -35,6 +36,7 @@ export function useMonacoRevealScheduler(): MonacoRevealScheduler {
       cancelAnimationFrame(revealRafRef.current)
       revealRafRef.current = null
     }
+
     if (revealInnerRafRef.current !== null) {
       cancelAnimationFrame(revealInnerRafRef.current)
       revealInnerRafRef.current = null
@@ -59,10 +61,12 @@ export function useMonacoRevealScheduler(): MonacoRevealScheduler {
             revealRafRef.current = null
             revealInnerRafRef.current = null
             const modelLineCount = editorInstance.getModel()?.getLineCount() ?? 0
+
             if (line > 1 && modelLineCount < line && waitFrames < MAX_REVEAL_CONTENT_WAIT_FRAMES) {
               // Why: fresh opens can mount an empty 1-line model before the async read; waiting stops the target line clamping to 1.
               waitFrames += 2
               schedule()
+
               return
             }
 

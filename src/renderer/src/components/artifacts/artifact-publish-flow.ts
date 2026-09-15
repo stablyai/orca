@@ -35,12 +35,14 @@ export function validateArtifactPublishRequest(
   if (!request.content) {
     throw new ArtifactPublishPreparationError('empty')
   }
+
   if (
     artifactContentByteLength(request.content) > ARTIFACT_MAX_CONTENT_BYTES ||
     artifactWriteRequestByteLength(request) > ARTIFACT_MAX_REQUEST_BYTES
   ) {
     throw new ArtifactPublishPreparationError('too-large')
   }
+
   return request
 }
 
@@ -51,17 +53,22 @@ export async function publishArtifactFromSurface(
     if (!(await ensureArtifactAccountConnected())) {
       return null
     }
+
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const request = validateArtifactPublishRequest(await createRequest())
+
       const result = await callRuntimeRpc<ArtifactCloudOperation<ArtifactPublishResult>>(
         LOCAL_RUNTIME,
         'artifacts.publish',
         request
       )
+
       if (result.status === 'ok') {
         showArtifactPublishedToast(result.value)
+
         return result.value
       }
+
       if (result.status === 'unconfigured') {
         toast.error(
           translate(
@@ -70,17 +77,21 @@ export async function publishArtifactFromSurface(
           ),
           { description: result.message }
         )
+
         return null
       }
+
       if (attempt === 0 && (await reconnectArtifactAccount())) {
         continue
       }
+
       toast.error(
         translate(
           'auto.components.artifacts.artifact-publish-flow.bba20daa6d',
           'Sign in to Orca and try again.'
         )
       )
+
       return null
     }
   } catch (error) {
@@ -95,14 +106,17 @@ export async function publishArtifactFromSurface(
         : undefined
     )
   }
+
   return null
 }
 
 async function ensureArtifactAccountConnected(): Promise<boolean> {
   const state = useAppStore.getState()
+
   if (state.orcaProfileAuthStatus?.state === 'connected') {
     return true
   }
+
   return (await state.connectCurrentOrcaProfile())?.status === 'connected'
 }
 

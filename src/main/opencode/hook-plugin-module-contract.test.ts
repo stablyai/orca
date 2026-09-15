@@ -29,6 +29,7 @@ describe('OpenCode status plugin module contract', () => {
     event: (input: { event: unknown }) => Promise<void>
     dispose?: () => Promise<void>
   }
+
   type PluginModule = {
     default?: { id?: unknown; server?: (ctx: unknown) => Promise<PluginHooks> }
     OrcaOpenCodeStatusPlugin?: (ctx: unknown) => Promise<PluginHooks>
@@ -52,9 +53,11 @@ describe('OpenCode status plugin module contract', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-opencode-plugin-contract-'))
     savedFetch = globalThis.fetch
     savedEnv = {}
+
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
+
     delete process.env.ORCA_AGENT_HOOK_ENDPOINT
     process.env.ORCA_AGENT_HOOK_PORT = '59999'
     process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
@@ -62,6 +65,7 @@ describe('OpenCode status plugin module contract', () => {
 
   afterEach(() => {
     globalThis.fetch = savedFetch
+
     for (const key of ENV_KEYS) {
       if (savedEnv[key] === undefined) {
         delete process.env[key]
@@ -69,6 +73,7 @@ describe('OpenCode status plugin module contract', () => {
         process.env[key] = savedEnv[key]
       }
     }
+
     rmSync(tempDir, { recursive: true, force: true })
   })
 
@@ -78,7 +83,9 @@ describe('OpenCode status plugin module contract', () => {
       tempDir,
       `orca-opencode-status-${Math.random().toString(36).slice(2)}.mjs`
     )
+
     writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
+
     return (await import(pathToFileURL(pluginPath).href)) as PluginModule
   }
 
@@ -121,10 +128,12 @@ describe('OpenCode status plugin module contract', () => {
     const posts: { url: string; body: unknown }[] = []
     globalThis.fetch = vi.fn(async (input: unknown, init?: { body?: unknown }) => {
       posts.push({ url: String(input), body: JSON.parse(String(init?.body ?? '{}')) })
+
       return { ok: true } as Response
     }) as unknown as typeof globalThis.fetch
 
     const module = await loadPluginModule()
+
     const hooks = await module.default?.server?.({
       client: {
         session: {

@@ -78,6 +78,7 @@ describe('selectWorkspaceCleanupGitEvidenceTargets', () => {
       deferredCandidate('a'),
       makeFacetCandidate({ worktreeId: 'b' })
     ])
+
     expect(targets).toEqual(['a'])
     expect(hasWorkspaceCleanupGitEvidence(makeFacetCandidate({ worktreeId: 'b' }))).toBe(true)
   })
@@ -99,14 +100,17 @@ describe('selectWorkspaceCleanupGitEvidenceTargets', () => {
 describe('applyWorkspaceCleanupGitEvidence', () => {
   it('replaces the deferred row with the focused re-scan result', () => {
     const deferred = deferredCandidate('a')
+
     const refreshed = makeFacetCandidate({
       worktreeId: 'a',
       git: { clean: false, upstreamAhead: 2, upstreamBehind: 0, checkedAt: 5 }
     })
+
     const [row] = applyWorkspaceCleanupGitEvidence(
       [deferred],
       new Map([[getWorkspaceCleanupCandidateIdentity(refreshed), refreshed]])
     )
+
     expect(row.git.clean).toBe(false)
     expect(row.git.checkedAt).toBe(5)
   })
@@ -115,6 +119,7 @@ describe('applyWorkspaceCleanupGitEvidence', () => {
     // STA-4343: a dirty remote row must not mark the local same-id row dirty
     // (or vice versa) — the evidence index is keyed by host, not by id.
     const localRow = { ...deferredCandidate('a'), executionHostId: 'local' as const }
+
     const remoteEvidence = {
       ...makeFacetCandidate({
         worktreeId: 'a',
@@ -124,10 +129,12 @@ describe('applyWorkspaceCleanupGitEvidence', () => {
       connectionId: 'ssh-1',
       executionHostId: 'ssh:ssh-1' as const
     }
+
     const [row] = applyWorkspaceCleanupGitEvidence(
       [localRow],
       new Map([[getWorkspaceCleanupCandidateIdentity(remoteEvidence), remoteEvidence]])
     )
+
     expect(row.git).toEqual(localRow.git)
     expect(row.blockers).not.toContain('dirty-files')
   })
@@ -142,6 +149,7 @@ describe('applyWorkspaceCleanupGitEvidence', () => {
     current.displayName = 'current name'
     current.blockers = ['dismissed']
     current.fingerprint = 'current-fingerprint'
+
     const refreshed = makeFacetCandidate({
       worktreeId: 'a',
       displayName: 'stale name',
@@ -166,6 +174,7 @@ describe('applyWorkspaceCleanupGitEvidence', () => {
       worktreeId: 'a',
       git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: 10 }
     })
+
     const older = makeFacetCandidate({
       worktreeId: 'a',
       git: { clean: false, upstreamAhead: 2, upstreamBehind: 0, checkedAt: 5 }

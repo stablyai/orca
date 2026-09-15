@@ -102,10 +102,13 @@ async function dispatch<TValue>(
     capturedAutomationOwner(context.capturedOwners, row.rowKey),
     action
   )
+
   const outcome = await fenced(availability)
+
   if (outcome.status !== 'uncaptured') {
     return toDispatchResult(outcome)
   }
+
   try {
     return { ok: true, value: await legacy() }
   } catch (error) {

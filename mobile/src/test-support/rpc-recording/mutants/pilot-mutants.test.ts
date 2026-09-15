@@ -11,11 +11,14 @@ import type { Recording } from '../recording-scenario'
 import type { RecordedValue } from '../recording-values'
 
 const root = resolve(import.meta.dirname, '../../../../..')
+
 const input = readScenarios(
   process.env.RPC_FOUNDATION_SCENARIOS ??
     resolve(root, 'mobile/rpc-foundation/pilot-scenarios.json')
 )
+
 const goldens = process.env.RPC_FOUNDATION_GOLDENS ?? resolve(root, 'mobile/rpc-foundation/goldens')
+
 // One mutant per adapter family, so every family's state projection is shown to be load-bearing.
 const mutants: Record<string, Mutation> = {
   b1: 'race',
@@ -30,6 +33,7 @@ const mutants: Record<string, Mutation> = {
   'settings-workspace-submit-fulfilled': 'workspace-submit-envelope',
   'settings-task-workspace-fulfilled': 'task-workspace-envelope'
 }
+
 /**
  * The archived tree's visible state, pinned per seed: b1 serves the poisoned empty inventory, b2
  * accepts the null envelope and applies the label anyway, and b3 reports the issue error instead of
@@ -61,12 +65,16 @@ function visibleState(recording: Recording): RecordedValue {
 
 // Pair pilots with their pinned mutant/reference up front so each loop below defines exactly one test.
 const pilots = pilotGoldens(input.scenarios)
+
 const mutantPilots = pilots.flatMap((pilot) => {
   const mutation = mutants[pilot.id]
+
   return mutation ? [{ ...pilot, mutation }] : []
 })
+
 const referencePilots = pilots.flatMap((pilot) => {
   const reference = referenceStates[pilot.id]
+
   return reference ? [{ ...pilot, reference }] : []
 })
 
@@ -76,6 +84,7 @@ describe('RPC main recording mutants', () => {
       const { adapters, assertMutationApplied } = pilotMountAdapters(root, {
         mutation: operationMutation(mutation)
       })
+
       const result = await runRecordingMutant(
         scenario,
         adapters[scenario.operation],
@@ -83,20 +92,24 @@ describe('RPC main recording mutants', () => {
         readGolden(goldens, id).recording,
         visibleState
       )
+
       assertMutationApplied()
       expect(result.verdict).toBe('killed')
     })
   }
+
   for (const { id, scenario, reference } of referencePilots) {
     it.skipIf(!process.env.RPC_FOUNDATION_REFERENCE_ROOT)(`${id}: rejects bcba08b3e4`, async () => {
       const { adapters } = pilotMountAdapters(process.env.RPC_FOUNDATION_REFERENCE_ROOT!, {
         reference: true
       })
+
       const result = await runRecording(
         scenario,
         adapters[scenario.operation],
         vitestRecordingScheduler()
       )
+
       expect(visibleState(result)).toEqual(reference)
       expect(reference).not.toEqual(visibleState(readGolden(goldens, id).recording))
     })

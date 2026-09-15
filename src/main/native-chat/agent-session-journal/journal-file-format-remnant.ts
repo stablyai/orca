@@ -25,10 +25,12 @@ import type { AgentType } from '../../../shared/agent-status-types'
 export function findJournalFileFormatRemnant(journalDir: string): string | null {
   for (const name of ['log.jsonl', 'snapshot.json']) {
     const path = join(journalDir, name)
+
     if (existsSync(path)) {
       return path
     }
   }
+
   return null
 }
 

@@ -8,11 +8,14 @@ export function isFullGitObjectId(value: string): boolean {
 
 export async function hasCommitObjectViaGitExec(gitExec: GitExec, ref: string): Promise<boolean> {
   const candidate = ref.trim()
+
   if (!isFullGitObjectId(candidate)) {
     return false
   }
+
   try {
     await gitExec(['rev-parse', '--verify', '--quiet', `${candidate}^{commit}`])
+
     return true
   } catch {
     return false

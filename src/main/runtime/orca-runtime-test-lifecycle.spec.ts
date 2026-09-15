@@ -1,34 +1,60 @@
 import * as mocks from './orca-runtime-test-mocks.spec'
 
 const { MOCK_GIT_WORKTREES, RuntimeBrowserCommands, _resetTerminalViewAttributesForTest } = mocks
+
 const { addGitHubIssueCommentMock, addGitHubPRReviewCommentMock } = mocks
+
 const { addGitHubPRReviewCommentReplyMock, addGitLabIssueCommentMock, addGitLabMRCommentMock } =
   mocks
+
 const { addGitLabMRInlineCommentMock, addSparseWorktree, addWorktree, advertisedUrlWatcher } = mocks
+
 const { afterEach, applyAgentStatusHooksEnabledMock, assertWorktreeCleanForRemoval, beforeEach } =
   mocks
+
 const { clearConfiguredWorktreeSharedDirectoriesCacheForTests, closeGitLabMRMock } = mocks
+
 const { closeLocalWatcherForWorktreePathMock, closeRemoteWatcherForWorktreePathMock } = mocks
+
 const { computeWorktreePathMock, countGitHubWorkItemsMock, createGitHubIssueMock } = mocks
+
 const { createGitLabIssueMock, createHostedReviewMock, createSetupRunnerScript } = mocks
+
 const { createStackedHostedReviewMock, detectInstalledAgentsWithShellPathHydrationMock } = mocks
+
 const { detectRemoteAgentsMock, electronMocks, ensurePathWithinWorkspaceMock } = mocks
+
 const { findExistingWorktreeSymlinkPathsMock, forceDeleteLocalBranchMock } = mocks
+
 const { forgetLocalWatcherRemovalSnapshotMock, forgetRemoteWatcherRemovalSnapshotMock } = mocks
+
 const { describeCreatedWorktree } = mocks
+
 const { getActiveMultiplexerMock, getDefaultTabsLaunch, getEffectiveHooks } = mocks
+
 const { getEffectiveHooksFromConfig, getGitHubPRCheckDetailsMock, getGitHubPRChecksMock } = mocks
+
 const { getGitHubPRCommentsMock, getGitHubPRFileContentsMock, getGitHubWorkItemByOwnerRepoMock } =
   mocks
+
 const { getGitHubWorkItemDetailsMock, getGitHubWorkItemMock, getGitLabJobTraceMock } = mocks
+
 const { getGitLabProjectRefForRemoteMock, getGitLabWorkItemByProjectRefMock } = mocks
+
 const { getGitLabWorkItemDetailsMock, getGlabKnownHostsMock } = mocks
+
 const { getHostedReviewCreationEligibilityMock, getHostedReviewForBranchMock, getIssueMock } = mocks
+
 const { getPRForBranchMock, getPRForBranchOutcomeMock, getPullRequestPushTargetMock } = mocks
+
 const { getRepoSlugMock, getRepoUpstreamMock, getSshGitProviderMock, hasHooksFile } = mocks
+
 const { installFakeAppEnvironment, invalidateAuthorizedRootsCacheMock } = mocks
+
 const { listGitHubAssignableUsersMock, listGitHubIssuesMock, listGitHubLabelsMock } = mocks
+
 const { listGitHubWorkItemsMock, listGitLabIssuesMock, listGitLabLabelsMock } = mocks
+
 const {
   listGitLabMergeRequestsMock,
   listGitLabTodosMock,
@@ -36,24 +62,39 @@ const {
   listWorktrees,
   listWorktreesSharedStrict
 } = mocks
+
 const { listWorktreesStrict, loadHooks, markCodexProjectTrustedMock } = mocks
+
 const { markCopilotFolderTrustedMock, markCursorWorkspaceTrustedMock, mergeGitHubPRMock } = mocks
+
 const { mergeGitLabMRMock, muxRequestMock, parseOrcaYaml, prepareLocalWorktreeRootForRepoMock } =
   mocks
+
 const { registerSshGitProviderMock, removeGitHubPRReviewersMock, removeWorktree } = mocks
+
 const { removeWorktreeLinkedPathsMock, reopenGitLabMRMock, requestGitHubPRReviewersMock } = mocks
+
 const { rerunGitHubPRChecksMock, resetPlatform, resolveGitHubReviewThreadMock } = mocks
+
 const { resolveGitLabMRDiscussionMock, resolveLocalGitUsernameMock, resolveSetupRunnerShell } =
   mocks
+
 const { restoreLocalWatcherAfterFailedRemovalMock, restoreRemoteWatcherAfterFailedRemovalMock } =
   mocks
+
 const { retryGitLabJobMock, runHook, scanLocalRepoWorktreesForResolutionMock } = mocks
+
 const { setGitHubPRAutoMergeMock, setGitHubPRFileViewedMock, setRuntimeBrowserCommandsFactory } =
   mocks
+
 const { setRuntimeBrowserUnavailableCause, setRuntimeDesktopSurface } = mocks
+
 const { setRuntimeTerminalUnavailableCause, shouldRunSetupForCreate, sshGitProviders } = mocks
+
 const { sshProviderGenerations, unregisterSshGitProviderMock, updateGitHubIssueMock } = mocks
+
 const { updateGitHubPRDetailsMock, updateGitHubPRStateMock, updateGitHubPRTitleMock } = mocks
+
 const { updateGitLabIssueMock, updateGitLabMRMock, updateGitLabMRReviewersMock, vi } = mocks
 
 function resetRuntimeTestMocks(): void {
@@ -113,6 +154,7 @@ function resetRuntimeTestMocks(): void {
         const worktrees = options.wslDistro
           ? await listWorktrees(repoPath, options)
           : await listWorktrees(repoPath)
+
         return { ok: true, worktrees }
       } catch {
         return { ok: false, worktrees: [] }
@@ -325,6 +367,7 @@ function resetRuntimeTestMocks(): void {
 }
 
 beforeEach(resetRuntimeTestMocks)
+
 afterEach(resetRuntimeTestMocks)
 
 export { resetRuntimeTestMocks }

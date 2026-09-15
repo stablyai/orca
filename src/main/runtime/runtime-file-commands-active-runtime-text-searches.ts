@@ -20,6 +20,7 @@ export class RuntimeFileCommandsWithActiveRuntimeTextSearches {
   // The mux drops ErrnoException.code, so match not-found by message shape (vs transport/permission/provider errors).
   protected static isRemoteNotFoundErrorMessage(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error)
+
     return /\bENOENT\b|no such file|not found|does not exist/i.test(message)
   }
 }

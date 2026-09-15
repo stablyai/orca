@@ -215,10 +215,12 @@ describe('setup script prompt inspection', () => {
   it('reuses the input array when every dismissal is already a valid host-identity key', () => {
     const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
     const remoteIdentity = getRepoHostIdentityForParts('repo-2', 'ssh:host-a')
+
     const input = [
       getSetupScriptPromptDismissalKey(localIdentity),
       getSetupScriptPromptDismissalKey(remoteIdentity)
     ]
+
     expect(
       filterSetupScriptPromptDismissalsToValidRepos(input, new Set([localIdentity, remoteIdentity]))
     ).toBe(input)
@@ -234,10 +236,12 @@ describe('setup script prompt inspection', () => {
 
   it('allocates when a stale dismissal is dropped', () => {
     const localIdentity = getRepoHostIdentityForParts('repo-1', 'local')
+
     const input = [
       getSetupScriptPromptDismissalKey(localIdentity),
       getSetupScriptPromptDismissalKey(getRepoHostIdentityForParts('gone', 'local'))
     ]
+
     const result = filterSetupScriptPromptDismissalsToValidRepos(input, new Set([localIdentity]))
     expect(result).not.toBe(input)
     expect(result).toEqual([getSetupScriptPromptDismissalKey(localIdentity)])

@@ -7,18 +7,25 @@ import { RelayRegionPreferenceResolver } from './relay-region-preference'
 import { probeRelayOrigin } from './relay-region-probe'
 
 const DIRECTOR = 'https://relay.example.test'
+
 const US = 'https://us-c1.relay.example.test'
+
 const US_SECONDARY = 'https://us-c2.relay.example.test'
+
 const ASIA = 'https://asia-c1.relay.example.test'
+
 const CELL = 'https://cell-7.relay.example.test'
+
 const BOTH_REGIONS = [
   { region: 'us-central1', probeOrigins: [US] },
   { region: 'asia-east2', probeOrigins: [ASIA] }
 ]
+
 const tempPaths: string[] = []
 
 afterEach(() => {
   vi.unstubAllEnvs()
+
   for (const path of tempPaths.splice(0)) {
     rmSync(path, { recursive: true, force: true })
   }
@@ -27,6 +34,7 @@ afterEach(() => {
 function userDataPath(): string {
   const path = mkdtempSync(join(tmpdir(), 'orca-relay-region-'))
   tempPaths.push(path)
+
   return path
 }
 
@@ -37,10 +45,13 @@ function catalogFetch(regions: unknown) {
 // Each list starts with the discarded warm-up probe, then the three kept samples.
 function sampledProbe(samples: Record<string, number[]>) {
   const calls: string[] = []
+
   const probe = async (origin: string): Promise<number | null> => {
     calls.push(origin)
+
     return samples[origin]?.shift() ?? null
   }
+
   return { calls, probe }
 }
 
@@ -65,15 +76,18 @@ function writeCache(path: string, region: string, expiresAt = 999): void {
 describe('Relay region preference', () => {
   it('measures a warm-up plus three rounds across one- and two-origin catalogs', async () => {
     const path = userDataPath()
+
     const fetch = catalogFetch([
       { region: 'us-central1', probeOrigins: [US, US_SECONDARY] },
       { region: 'asia-east2', probeOrigins: [ASIA] }
     ])
+
     const { calls, probe } = sampledProbe({
       [US]: [400, 160, 170, 150],
       [US_SECONDARY]: [390, 155, 165, 145],
       [ASIA]: [90, 35, 40, 30]
     })
+
     const resolver = new RelayRegionPreferenceResolver({
       directorUrl: DIRECTOR,
       userDataPath: path,
@@ -96,6 +110,7 @@ describe('Relay region preference', () => {
     const offlineFetch = vi.fn<typeof globalThis.fetch>(async () => {
       throw new Error('offline')
     })
+
     await expect(
       new RelayRegionPreferenceResolver({
         directorUrl: DIRECTOR,
@@ -109,6 +124,7 @@ describe('Relay region preference', () => {
 
   it('discards the warm-up probe instead of counting it as the region latency', async () => {
     const path = userDataPath()
+
     const { calls, probe } = sampledProbe({
       [US]: [5, 40, 42, 44],
       [ASIA]: [7, 300, 302, 304]
@@ -207,6 +223,7 @@ describe('Relay region preference', () => {
 
   it('drops an origin that failed its warm-up without losing the region', async () => {
     const path = userDataPath()
+
     const { calls, probe } = sampledProbe({
       [US]: [300, 36, 38, 40],
       [ASIA]: [400, 218, 220, 222]
@@ -277,6 +294,7 @@ describe('Relay region preference', () => {
   it('falls back without a hint for corrupt cache, old catalogs, and unstable probes', async () => {
     const path = userDataPath()
     writeFileSync(cachePath(path), '{not-json')
+
     const invalidCatalogs = [
       [{ region: 'unknown', probeOrigins: [US] }],
       [
@@ -286,6 +304,7 @@ describe('Relay region preference', () => {
       [{ region: 'us-central1', probeOrigins: ['http://us.relay.example.test'] }],
       [{ region: 'us-central1', probeOrigins: ['https://external.example.test'] }]
     ]
+
     for (const regions of invalidCatalogs) {
       await expect(
         new RelayRegionPreferenceResolver({
@@ -327,11 +346,13 @@ describe('Relay region preference', () => {
 
     rmSync(cachePath(path), { force: true })
     let cancelled = 0
+
     const oldDirector = vi.fn<typeof globalThis.fetch>(async () =>
       cancelTrackingResponse(404, () => {
         cancelled += 1
       })
     )
+
     await expect(
       new RelayRegionPreferenceResolver({
         directorUrl: DIRECTOR,
@@ -385,6 +406,7 @@ describe('Relay region preference', () => {
   it('uses a valid diagnostic override without network or cache mutation', async () => {
     const path = userDataPath()
     const fetch = vi.fn<typeof globalThis.fetch>()
+
     const resolver = new RelayRegionPreferenceResolver({
       directorUrl: DIRECTOR,
       userDataPath: path,
@@ -401,6 +423,7 @@ describe('Relay region preference', () => {
     writeCache(path, 'us-central1', 50_000_000)
     vi.stubEnv('ORCA_RELAY_REGION_OVERRIDE', 'asia-east2')
     const fetch = vi.fn<typeof globalThis.fetch>()
+
     const resolver = new RelayRegionPreferenceResolver({
       directorUrl: DIRECTOR,
       userDataPath: path,
@@ -438,11 +461,13 @@ describe('Relay region preference', () => {
 
   it('probes only the canonical health path and cancels its body', async () => {
     let cancelled = 0
+
     const fetch = vi.fn<typeof globalThis.fetch>(async () =>
       cancelTrackingResponse(200, () => {
         cancelled += 1
       })
     )
+
     const times = [10, 42]
 
     await expect(probeRelayOrigin(ASIA, fetch, () => times.shift()!)).resolves.toBe(32)
@@ -462,7 +487,9 @@ describe('Relay region cache self-heal', () => {
       [ASIA]: [400, 218, 220, 222],
       [CELL]: cellMs
     })
+
     const fetch = catalogFetch(BOTH_REGIONS)
+
     return {
       calls,
       fetch,
@@ -532,6 +559,7 @@ describe('Relay region cache self-heal', () => {
     const path = userDataPath()
     writeCache(path, 'asia-east2', LIVE_EXPIRY)
     const events: unknown[] = []
+
     const resolver = new RelayRegionPreferenceResolver({
       directorUrl: DIRECTOR,
       userDataPath: path,

@@ -19,16 +19,21 @@ const lineageAncestorIndexCache = new WeakMap<WorktreesByRepo, Map<string, Workt
 
 export function getLineageAncestorIndex(worktreesByRepo: WorktreesByRepo): Map<string, Worktree> {
   const cached = lineageAncestorIndexCache.get(worktreesByRepo)
+
   if (cached) {
     return cached
   }
+
   const index = new Map<string, Worktree>()
+
   for (const worktree of getIndexedAllWorktrees(worktreesByRepo)) {
     if (!worktree.isArchived) {
       index.set(worktree.id, worktree)
     }
   }
+
   lineageAncestorIndexCache.set(worktreesByRepo, index)
+
   return index
 }
 
@@ -40,10 +45,13 @@ const sortedWorktreeRankIndexCache = new WeakMap<readonly string[], Map<string, 
 
 export function getSortedWorktreeRankIndex(sortedIds: readonly string[]): Map<string, number> {
   const cached = sortedWorktreeRankIndexCache.get(sortedIds)
+
   if (cached) {
     return cached
   }
+
   const index = new Map(sortedIds.map((id, rank) => [id, rank]))
   sortedWorktreeRankIndexCache.set(sortedIds, index)
+
   return index
 }

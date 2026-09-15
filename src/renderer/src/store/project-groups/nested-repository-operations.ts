@@ -33,6 +33,7 @@ export function createNestedRepositoryActions(
         const target = getActiveRuntimeTarget(
           settingsForRuntimeOwner(get().settings, controls?.runtimeEnvironmentId)
         )
+
         if (target.kind === 'local') {
           const unsubscribe =
             controls?.scanId && controls.onProgress
@@ -42,6 +43,7 @@ export function createNestedRepositoryActions(
                   }
                 })
               : undefined
+
           try {
             return normalizeNestedRepoScanResult(
               await window.api.projectGroups.scanNested({
@@ -54,6 +56,7 @@ export function createNestedRepositoryActions(
             unsubscribe?.()
           }
         }
+
         return normalizeNestedRepoScanResult(
           await callRuntimeRpc<NestedRepoScanResult>(
             target,
@@ -65,6 +68,7 @@ export function createNestedRepositoryActions(
         )
       } catch (err) {
         console.error('Failed to scan nested repos:', err)
+
         return null
       }
     },
@@ -74,12 +78,15 @@ export function createNestedRepositoryActions(
         const target = getActiveRuntimeTarget(
           settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
         )
+
         if (target.kind !== 'local') {
           return false
         }
+
         return await window.api.projectGroups.cancelNestedScan({ scanId })
       } catch (err) {
         console.error('Failed to cancel nested repo scan:', err)
+
         return false
       }
     },
@@ -89,6 +96,7 @@ export function createNestedRepositoryActions(
         const target = getActiveRuntimeTarget(
           settingsForRuntimeOwner(get().settings, args.runtimeEnvironmentId)
         )
+
         const result =
           target.kind === 'local'
             ? await window.api.projectGroups.importNested(args)
@@ -104,16 +112,19 @@ export function createNestedRepositoryActions(
                 },
                 { timeoutMs: 60_000 }
               )
+
         const catalogOptions =
           'runtimeEnvironmentId' in args
             ? { runtimeEnvironmentId: args.runtimeEnvironmentId }
             : undefined
+
         await get().fetchProjectGroups(catalogOptions)
         await get().fetchFolderWorkspaces(catalogOptions)
         await (args.runtimeEnvironmentId
           ? get().fetchRuntimeEnvironmentRepos(args.runtimeEnvironmentId)
           : get().fetchRepos(catalogOptions))
         set({ folderWorkspacePathStatuses: {} })
+
         return result
       } catch (err) {
         console.error('Failed to import nested repos:', err)
@@ -123,6 +134,7 @@ export function createNestedRepositoryActions(
             description: err instanceof Error ? err.message : String(err)
           }
         )
+
         return null
       }
     }

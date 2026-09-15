@@ -30,6 +30,7 @@ function isStrictDescendantPath(parentPath: string, childPath: string): boolean 
 
 function clearWorktreeDeleteTargetState(target: Pick<Worktree, 'id' | 'hostId'>): void {
   const state = useAppStore.getState()
+
   if (target.hostId) {
     state.clearWorktreeDeleteState(target.id, target.hostId)
   } else {
@@ -48,66 +49,84 @@ export async function runWorktreeDeletesInParallel(
   const uniqueTargets = Array.from(
     new Map(targets.map((target) => [getWorktreeHostIdentity(target), target])).values()
   )
+
   // Batch focus is committed once after every target settles.
   const activeWorktreeIdBefore = useAppStore.getState().activeWorktreeId
+
   const commitBatchFocus = activeWorktreeIdBefore
     ? prepareActiveWorktreeFocusAfterDelete(activeWorktreeIdBefore)
     : null
+
   // Mark all targets up front so the sidebar shows immediate progress.
   useAppStore
     .getState()
     .markWorktreesDeleting(uniqueTargets.map((target) => (target.hostId ? target : target.id)))
   // Git worktree removal shares repo locks only within one execution host.
   const groups = new Map<string, (typeof uniqueTargets)[number][]>()
+
   for (const target of uniqueTargets) {
     const groupIdentity = composeWorktreeHostIdentity(target.hostId, target.repoId)
     const group = groups.get(groupIdentity)
+
     if (group) {
       group.push(target)
     } else {
       groups.set(groupIdentity, [target])
     }
   }
+
   for (const group of groups.values()) {
     // Children must leave first or Git rejects their registered ancestor.
     group.sort((a, b) => b.path.length - a.path.length)
   }
+
   const preservedBranches: PreservedBranchCleanup[] = []
   const aggregatePreservedBranches = uniqueTargets.length > 1
   let listChanged = false
+
   const pendingSnapshotPruneBatch =
     uniqueTargets.length > 1 ? beginWorktreeSnapshotPruneBatch() : null
+
   const snapshotPruneBatch = pendingSnapshotPruneBatch ? await pendingSnapshotPruneBatch : null
   const deletionTailByWorktreeId = new Map<string, Promise<void>>()
+
   const runInWorktreeDeleteTurn = async <T>(
     worktreeId: string,
     operation: () => Promise<T>
   ): Promise<T> => {
     const previous = deletionTailByWorktreeId.get(worktreeId)
     let releaseTurn: () => void = () => {}
+
     const turn = new Promise<void>((resolve) => {
       releaseTurn = resolve
     })
+
     const tail = previous ? previous.then(() => turn) : turn
     deletionTailByWorktreeId.set(worktreeId, tail)
+
     if (previous) {
       await previous
     }
+
     try {
       return await operation()
     } finally {
       releaseTurn()
+
       if (deletionTailByWorktreeId.get(worktreeId) === tail) {
         deletionTailByWorktreeId.delete(worktreeId)
       }
     }
   }
+
   let groupResults: WorktreeRemovalTarget[][]
+
   try {
     groupResults = await Promise.all(
       Array.from(groups.values()).map(async (group) => {
         const deletedInGroup: WorktreeRemovalTarget[] = []
         const failedInGroup: (typeof group)[number][] = []
+
         for (const target of group) {
           await runInWorktreeDeleteTurn(target.id, async () => {
             // A queued target may be recreated while an earlier repo sibling is deleting.
@@ -119,15 +138,20 @@ export async function runWorktreeDeletesInParallel(
               target.id,
               target.hostId
             )
+
             if (!currentTarget || currentTarget.instanceId !== target.instanceId) {
               clearWorktreeDeleteTargetState(target)
               listChanged = true
+
               return
             }
+
             if (failedInGroup.some((failed) => isStrictDescendantPath(target.path, failed.path))) {
               clearWorktreeDeleteTargetState(target)
+
               return
             }
+
             const deleted = await runWorktreeDeleteWithToast(
               toWorktreeRemovalTarget(target),
               target.displayName,
@@ -142,6 +166,7 @@ export async function runWorktreeDeletesInParallel(
                 }
               }
             )
+
             if (deleted) {
               deletedInGroup.push(toWorktreeRemovalTarget(target))
             } else {
@@ -150,6 +175,7 @@ export async function runWorktreeDeletesInParallel(
             }
           })
         }
+
         return deletedInGroup
       })
     )
@@ -162,30 +188,37 @@ export async function runWorktreeDeletesInParallel(
       }
     }
   }
+
   if (listChanged) {
     showWorkspaceListChangedToast()
   }
+
   const deletedIdentities = new Set(
     groupResults
       .flat()
       .map((target) => composeWorktreeHostIdentity(target.executionHostId ?? undefined, target.id))
   )
+
   // Intermediate focus can spawn a terminal in another target that is still queued.
   if (activeWorktreeIdBefore) {
     const state = useAppStore.getState()
+
     const activeRow = getWorktreeOnHostFromState(
       state,
       activeWorktreeIdBefore,
       state.activeWorkspaceExecutionHostId ?? undefined
     )
+
     if (!activeRow) {
       commitBatchFocus?.()
     }
   }
+
   if (aggregatePreservedBranches && preservedBranches.length > 0) {
     const targetOrder = new Map(
       uniqueTargets.map((target, index) => [getWorktreeHostIdentity(target), index])
     )
+
     preservedBranches.sort(
       (left, right) =>
         (targetOrder.get(composeWorktreeHostIdentity(left.hostId, left.worktreeId)) ??
@@ -195,6 +228,7 @@ export async function runWorktreeDeletesInParallel(
     )
     showPreservedBranchBatchToast(deletedIdentities.size, preservedBranches)
   }
+
   return uniqueTargets
     .filter((target) => deletedIdentities.has(getWorktreeHostIdentity(target)))
     .map(toWorktreeRemovalTarget)

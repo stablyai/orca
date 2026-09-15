@@ -69,8 +69,11 @@ vi.mock('../pty-descendant-termination', () => ({
 // Store App Execution Alias stub — is covered in
 // windows-powershell-executable.test.ts.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('./windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -94,9 +97,11 @@ vi.mock('./windows-pty-job-membership', () => ({
 vi.mock('../wsl', () => ({
   parseWslPath: (path: string) => {
     const match = path.match(/^\\\\wsl\.localhost\\([^\\]+)(.*)$/)
+
     if (!match) {
       return null
     }
+
     return {
       distro: match[1],
       linuxPath: (match[2] || '').replace(/\\/g, '/') || '/'
@@ -182,8 +187,10 @@ describe('LocalPtyProvider', () => {
     it('invokes buildSpawnEnv callback to customize environment', async () => {
       const buildSpawnEnv = vi.fn((_id: string, env: Record<string, string>) => {
         env.CUSTOM_VAR = 'custom-value'
+
         return env
       })
+
       provider.configure({ buildSpawnEnv })
       await provider.spawn({ cols: 80, rows: 24 })
 
@@ -197,6 +204,7 @@ describe('LocalPtyProvider', () => {
       provider.configure({
         get buildSpawnEnv() {
           provider.configure({ buildSpawnEnv: configuredBuildSpawnEnv })
+
           return initialBuildSpawnEnv
         }
       })
@@ -215,6 +223,7 @@ describe('LocalPtyProvider', () => {
     ])('history isolation off: %s', async (_kind, inherited, expected) => {
       const previous = process.env.fish_history
       process.env.fish_history = inherited
+
       try {
         // No worktreeId: the history-disabled branch of spawn.
         await provider.spawn({ cols: 80, rows: 24 })
@@ -241,6 +250,7 @@ describe('LocalPtyProvider', () => {
     ])('history isolation off: %s HISTFILE', async (_kind, inherited, expected) => {
       const previous = process.env.HISTFILE
       process.env.HISTFILE = inherited
+
       try {
         // No worktreeId: the history-disabled branch of spawn.
         await provider.spawn({ cols: 80, rows: 24 })
@@ -260,6 +270,7 @@ describe('LocalPtyProvider', () => {
       // `development` in dev runs); leaking it breaks `next build` and Vitest.
       const previous = process.env.NODE_ENV
       process.env.NODE_ENV = 'development'
+
       try {
         await provider.spawn({ cols: 80, rows: 24 })
       } finally {
@@ -281,6 +292,7 @@ describe('LocalPtyProvider', () => {
       // Why: only the ambient value is stripped; a caller-supplied NODE_ENV still wins.
       const previous = process.env.NODE_ENV
       process.env.NODE_ENV = 'development'
+
       try {
         await provider.spawn({ cols: 80, rows: 24, env: { NODE_ENV: 'production' } })
       } finally {
@@ -330,6 +342,7 @@ describe('LocalPtyProvider', () => {
           env.TERM_PROGRAM = 'Orca'
           env.ORCA_STALE_TEST_ENV = '/tmp/orca-stale'
           env.PATH = `/tmp/orca-stale:${env.PATH ?? ''}`
+
           return env
         }
       })
@@ -374,6 +387,7 @@ describe('LocalPtyProvider', () => {
         'GIT_CONFIG_KEY_1',
         'GIT_CONFIG_VALUE_1'
       ] as const
+
       const saved = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
       process.env.GIT_CONFIG_COUNT = '2'
       process.env.GIT_CONFIG_KEY_0 = 'base.zero'
@@ -418,6 +432,7 @@ describe('LocalPtyProvider', () => {
         PATH: process.env.PATH,
         LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH
       }
+
       process.env.APPIMAGE = '/data/apps/orca.appimage'
       process.env.APPDIR = '/tmp/.mount_orca123'
       process.env.ARGV0 = '/data/apps/orca.appimage'
@@ -462,6 +477,7 @@ describe('LocalPtyProvider', () => {
         CONDA_PROMPT_MODIFIER: process.env.CONDA_PROMPT_MODIFIER,
         CONDA_EXE: process.env.CONDA_EXE
       }
+
       delete process.env.CONDA_PREFIX
       process.env.CONDA_SHLVL = '1'
       process.env.CONDA_DEFAULT_ENV = 'base'
@@ -495,6 +511,7 @@ describe('LocalPtyProvider', () => {
         CONDA_PREFIX: process.env.CONDA_PREFIX,
         CONDA_DEFAULT_ENV: process.env.CONDA_DEFAULT_ENV
       }
+
       process.env.CONDA_SHLVL = '1'
       process.env.CONDA_PREFIX = '/opt/miniconda3'
       process.env.CONDA_DEFAULT_ENV = 'base'
@@ -522,6 +539,7 @@ describe('LocalPtyProvider', () => {
         buildSpawnEnv: (_id, env) => {
           env.MIMOCODE_HOME = '/tmp/orca-mimocode-overlay'
           env.ORCA_MIMOCODE_HOME = '/tmp/orca-mimocode-overlay'
+
           return env
         }
       })
@@ -541,6 +559,7 @@ describe('LocalPtyProvider', () => {
           // Why: host env collapses Windows PATH onto `Path` and prepends its own shim dir.
           delete env.PATH
           env.Path = `/tmp/orca-stale:${env.Path ?? ''}`
+
           return env
         }
       })
@@ -565,6 +584,7 @@ describe('LocalPtyProvider', () => {
         ORCA_TAB_ID: process.env.ORCA_TAB_ID,
         ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
       }
+
       process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
       process.env.ORCA_TAB_ID = 'parent-tab'
       process.env.ORCA_WORKTREE_ID = 'parent-worktree'
@@ -593,6 +613,7 @@ describe('LocalPtyProvider', () => {
         ORCA_TAB_ID: process.env.ORCA_TAB_ID,
         ORCA_WORKTREE_ID: process.env.ORCA_WORKTREE_ID
       }
+
       process.env.ORCA_PANE_KEY = 'parent-tab:parent-leaf'
       process.env.ORCA_TAB_ID = 'parent-tab'
       process.env.ORCA_WORKTREE_ID = 'parent-worktree'

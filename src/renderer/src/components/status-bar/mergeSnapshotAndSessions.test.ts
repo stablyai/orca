@@ -72,6 +72,7 @@ describe('mergeSnapshotAndSessions', () => {
       repoId: 'orca',
       displayName: 'browser-only'
     } as Worktree
+
     const browser = {
       id: 'browser-1',
       worktreeId: worktree.id,
@@ -84,6 +85,7 @@ describe('mergeSnapshotAndSessions', () => {
       loadError: null,
       createdAt: 1
     } as BrowserWorkspace
+
     const out = mergeSnapshotAndSessions(
       null,
       [],
@@ -119,6 +121,7 @@ describe('mergeSnapshotAndSessions', () => {
       history: [1, 2, 3],
       sessions: [{ sessionId: 'pty-1', paneKey: null, pid: 1234, cpu: 1.5, memory: 100_000_000 }]
     }
+
     const out = mergeSnapshotAndSessions(makeSnapshot([wt]), [], baseCtx())
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({
@@ -153,9 +156,11 @@ describe('mergeSnapshotAndSessions', () => {
       history: [],
       sessions: [{ sessionId: 'pty-1', paneKey: null, pid: 999, cpu: 0.1, memory: 50_000_000 }]
     }
+
     const ds: DaemonSession[] = [
       { id: 'pty-1', cwd: '/Users/me/Triton', title: 'shell', agentOwnership: 'absent' as const }
     ]
+
     const out = mergeSnapshotAndSessions(makeSnapshot([wt]), ds, baseCtx())
     expect(out[0].worktrees[0].sessions).toHaveLength(1)
     expect(out[0].worktrees[0].sessions[0]).toMatchObject({
@@ -179,6 +184,7 @@ describe('mergeSnapshotAndSessions', () => {
       history: [],
       sessions: [{ sessionId: 'pty-agent', paneKey: null, pid: 999, cpu: 0.1, memory: 50_000_000 }]
     }
+
     const ds: DaemonSession[] = [
       {
         id: 'pty-agent',
@@ -200,6 +206,7 @@ describe('mergeSnapshotAndSessions', () => {
     // Why: the bulk selector already excluded these, but the rendered row took its own path.
     // An unbound row with no agent skips the dialog entirely — the same #8459 defect, one click over.
     const sessionId = 'orca::/remote/Stingray@@deferred1'
+
     const out = mergeSnapshotAndSessions(
       null,
       [{ id: sessionId, cwd: '', title: 'orca/Stingray', agentOwnership: 'absent' as const }],
@@ -242,9 +249,11 @@ describe('mergeSnapshotAndSessions', () => {
         agentOwnership: 'absent' as const
       }
     ]
+
     const ctx = baseCtx({
       repoConnectionIdById: new Map([['orca', 'ssh-conn-1']])
     })
+
     const out = mergeSnapshotAndSessions(null, ds, ctx)
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({
@@ -283,9 +292,11 @@ describe('mergeSnapshotAndSessions', () => {
         agentOwnership: 'absent' as const
       }
     ]
+
     const ctx = baseCtx({
       repoConnectionIdById: new Map([['orca', null]])
     })
+
     const out = mergeSnapshotAndSessions(null, ds, ctx)
     expect(out[0]).toMatchObject({
       repoId: 'orca',
@@ -299,6 +310,7 @@ describe('mergeSnapshotAndSessions', () => {
 
   it('tab walk wins over @@ parse when they disagree', () => {
     const tabId = 'tab-xyz'
+
     const ds: DaemonSession[] = [
       {
         id: 'orca::/wrong/path@@feedface',
@@ -307,12 +319,14 @@ describe('mergeSnapshotAndSessions', () => {
         agentOwnership: 'absent' as const
       }
     ]
+
     const ctx = baseCtx({
       tabsByWorktree: {
         'orca::/correct/path': [makeTab(tabId, 'My Tab')]
       },
       ptyIdsByTabId: { [tabId]: ['orca::/wrong/path@@feedface'] }
     })
+
     const out = mergeSnapshotAndSessions(null, ds, ctx)
     expect(out[0].worktrees[0].worktreeId).toBe('orca::/correct/path')
     expect(out[0].worktrees[0].sessions[0].tabId).toBe(tabId)
@@ -322,6 +336,7 @@ describe('mergeSnapshotAndSessions', () => {
   it('treats startup deferred reattach tab ptyId wake hints as bound sessions', () => {
     const tabId = 'tab-restored'
     const sessionId = 'orca::/Users/me/Triton@@deferred'
+
     const ds: DaemonSession[] = [
       {
         id: sessionId,
@@ -330,7 +345,9 @@ describe('mergeSnapshotAndSessions', () => {
         agentOwnership: 'absent' as const
       }
     ]
+
     const restoredTab = { ...makeTab(tabId, 'Restored'), ptyId: sessionId }
+
     const ctx = baseCtx({
       tabsByWorktree: {
         'orca::/Users/me/Triton': [restoredTab]
@@ -364,6 +381,7 @@ describe('mergeSnapshotAndSessions', () => {
       history: [],
       sessions: []
     }
+
     const remoteDs: DaemonSession[] = [
       {
         id: 'remote-repo::/remote/Stingray@@1234',
@@ -372,12 +390,14 @@ describe('mergeSnapshotAndSessions', () => {
         agentOwnership: 'absent' as const
       }
     ]
+
     const ctx = baseCtx({
       repoConnectionIdById: new Map<string, string | null>([
         ['local-repo', null],
         ['remote-repo', 'ssh-conn-1']
       ])
     })
+
     const out = mergeSnapshotAndSessions(makeSnapshot([localWt]), remoteDs, ctx)
     expect(out).toHaveLength(2)
     const local = out.find((r) => r.repoId === 'local-repo')!
@@ -407,6 +427,7 @@ describe('mergeSnapshotAndSessions', () => {
       history: [],
       sessions: [{ sessionId: 'runtime-pty', paneKey: null, pid: 2, cpu: 5, memory: 500_000_000 }]
     }
+
     const sessions: DaemonSession[] = [
       {
         id: 'runtime-repo::/runtime/Wt@@future-runtime',
@@ -427,6 +448,7 @@ describe('mergeSnapshotAndSessions', () => {
         agentOwnership: 'absent' as const
       }
     ]
+
     const ctx = baseCtx({
       repoConnectionIdById: new Map<string, string | null>([
         ['runtime-repo', null],
@@ -471,6 +493,7 @@ describe('mergeSnapshotAndSessions', () => {
     const ds: DaemonSession[] = [
       { id: 'opaque-id-without-prefix', cwd: '', title: 'shell', agentOwnership: 'absent' as const }
     ]
+
     const out = mergeSnapshotAndSessions(null, ds, baseCtx())
     expect(out).toHaveLength(1)
     expect(out[0].repoId).toBe(UNATTRIBUTED_REPO_ID)
@@ -480,6 +503,7 @@ describe('mergeSnapshotAndSessions', () => {
 
   it('local-bound interaction state: numeric metrics + bound=true + tabId set', () => {
     const tabId = 'tab-1'
+
     const wt: WorktreeMemory = {
       worktreeId: 'orca::/Users/me/Triton',
       worktreeName: 'Triton',
@@ -490,10 +514,12 @@ describe('mergeSnapshotAndSessions', () => {
       history: [],
       sessions: [{ sessionId: 'pty-bound', paneKey: null, pid: 1, cpu: 0.1, memory: 1_000 }]
     }
+
     const ctx = baseCtx({
       tabsByWorktree: { 'orca::/Users/me/Triton': [makeTab(tabId)] },
       ptyIdsByTabId: { [tabId]: ['pty-bound'] }
     })
+
     const out = mergeSnapshotAndSessions(makeSnapshot([wt]), [], ctx)
     const session = out[0].worktrees[0].sessions[0]
     expect(session).toMatchObject({
@@ -514,6 +540,7 @@ describe('mergeSnapshotAndSessions', () => {
       history: [],
       sessions: [{ sessionId: 'pty-orph', paneKey: null, pid: 0, cpu: 0, memory: 0 }]
     }
+
     const out = mergeSnapshotAndSessions(makeSnapshot([wt]), [], baseCtx())
     const session = out[0].worktrees[0].sessions[0]
     expect(session.bound).toBe(false)
@@ -530,6 +557,7 @@ describe('mergeSnapshotAndSessions', () => {
         agentOwnership: 'absent' as const
       }
     ]
+
     const out = mergeSnapshotAndSessions(null, ds, baseCtx())
     const session = out[0].worktrees[0].sessions[0]
     expect(session).toMatchObject({
@@ -545,15 +573,18 @@ describe('mergeSnapshotAndSessions', () => {
     const ds: DaemonSession[] = [
       { id: 'stably-ai/orca::/remote/Wt@@1', cwd: '', title: '', agentOwnership: 'absent' as const }
     ]
+
     const ctx = baseCtx({
       repoDisplayNameById: new Map([['stably-ai/orca', 'ORCA']])
     })
+
     const out = mergeSnapshotAndSessions(null, ds, ctx)
     expect(out[0].repoName).toBe('ORCA')
   })
 
   it('workspaceSessionReady=false suppresses bound flags so nothing looks bound prematurely', () => {
     const tabId = 'tab-1'
+
     const wt: WorktreeMemory = {
       worktreeId: 'orca::/Users/me/Triton',
       worktreeName: 'Triton',
@@ -564,11 +595,13 @@ describe('mergeSnapshotAndSessions', () => {
       history: [],
       sessions: [{ sessionId: 'pty-1', paneKey: null, pid: 1, cpu: 0, memory: 0 }]
     }
+
     const ctx = baseCtx({
       workspaceSessionReady: false,
       tabsByWorktree: { 'orca::/Users/me/Triton': [makeTab(tabId)] },
       ptyIdsByTabId: { [tabId]: ['pty-1'] }
     })
+
     const out = mergeSnapshotAndSessions(makeSnapshot([wt]), [], ctx)
     expect(out[0].worktrees[0].sessions[0].bound).toBe(false)
   })
@@ -576,25 +609,30 @@ describe('mergeSnapshotAndSessions', () => {
 
 it('indexes tab labels when merging a large resource inventory', () => {
   let reads = 0
+
   const tabs = Array.from({ length: 1000 }, (_, i) => ({
     ...makeTab(`tab-${i}`, `Terminal ${i}`),
     get id() {
       reads++
+
       return `tab-${i}`
     },
     ptyId: `pty-${i}`
   }))
+
   const sessions: DaemonSession[] = tabs.map((_, i) => ({
     id: `pty-${i}`,
     cwd: '/repo',
     title: '',
     agentOwnership: 'unknown'
   }))
+
   const result = mergeSnapshotAndSessions(
     null,
     sessions,
     baseCtx({ tabsByWorktree: { 'repo::/repo': tabs } })
   )
+
   expect(reads).toBeLessThan(5000)
   expect(result[0].worktrees[0].sessions.map((session) => session.label)).toEqual(
     Array.from({ length: 1000 }, (_, i) => `Terminal ${i}`)
@@ -608,21 +646,27 @@ it('does not scan accumulated worktree rows for unrelated daemon sessions', () =
     title: '',
     agentOwnership: 'unknown'
   }))
+
   const find = Array.prototype.find
   let scanned = 0
   Array.prototype.find = function (this: unknown[], ...args: Parameters<typeof find>) {
     const first = this[0] as { sessions?: unknown; hasLocalSamples?: unknown } | undefined
+
     if (first?.sessions && first.hasLocalSamples !== undefined) {
       scanned += this.length
     }
+
     return find.apply(this, args)
   }
+
   let merged: ReturnType<typeof mergeSnapshotAndSessions>
+
   try {
     merged = mergeSnapshotAndSessions(null, sessions, baseCtx())
   } finally {
     Array.prototype.find = find
   }
+
   expect(scanned).toBe(0)
   expect(merged[0].worktrees).toHaveLength(1000)
   expect(merged[0].worktrees.every((row) => row.sessions[0].agentOwnership === 'unknown')).toBe(
@@ -637,6 +681,7 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 it('resolves a duplicated tab id to the first tab, as the replaced scan did', () => {
   const first = makeTab('dup', 'First tab')
   const second = makeTab('dup', 'Second tab')
+
   const wt: WorktreeMemory = {
     worktreeId: 'orca::/Users/me/Triton',
     worktreeName: 'Triton',
@@ -647,11 +692,13 @@ it('resolves a duplicated tab id to the first tab, as the replaced scan did', ()
     history: [],
     sessions: [{ sessionId: 'pty-1', paneKey: `dup:${LEAF}`, pid: 5, cpu: 0, memory: 0 }]
   }
+
   const out = mergeSnapshotAndSessions(
     makeSnapshot([wt]),
     [],
     baseCtx({ tabsByWorktree: { 'orca::/Users/me/Triton': [first, second] } })
   )
+
   expect(out[0].worktrees[0].sessions[0].label).toBe('First tab')
 })
 
@@ -667,11 +714,13 @@ it('keeps tab labels scoped to their own worktree', () => {
     history: [],
     sessions: [{ sessionId: 'pty-1', paneKey: `shared:${LEAF}`, pid: 5, cpu: 0, memory: 0 }]
   }
+
   const out = mergeSnapshotAndSessions(
     makeSnapshot([wt]),
     [],
     baseCtx({ tabsByWorktree: { 'orca::/Users/me/Other': [makeTab('shared', 'Elsewhere')] } })
   )
+
   expect(out[0].worktrees[0].sessions[0].label).toBe('pid 5')
 })
 
@@ -688,11 +737,13 @@ it('attaches later daemon sessions to the first row of a duplicated worktree', (
     history: [],
     sessions: []
   })
+
   const out = mergeSnapshotAndSessions(
     makeSnapshot([wt('first'), wt('second')]),
     [{ id: 'orca::/Users/me/Triton@@late', cwd: '', title: '', agentOwnership: 'unknown' }],
     baseCtx()
   )
+
   expect(out[0].worktrees).toHaveLength(2)
   expect(out[0].worktrees[0].worktreeName).toBe('first')
   expect(out[0].worktrees[0].sessions.map((s) => s.sessionId)).toEqual([

@@ -6,6 +6,7 @@ import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts>
+
 type TestRenderer = {
   unmount(): void
   update(element: ReturnType<typeof createElement>): void
@@ -46,6 +47,7 @@ function renderedPendingTexts(
     streaming: null,
     pending: state?.pending ?? []
   })
+
   return data
     .filter((message) => !messages.some((existing) => existing.id === message.id))
     .map((message) => message.blocks.find((block) => block.type === 'text')?.text)
@@ -79,6 +81,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
       transcriptLoading,
       transcriptSettled
     })
+
     return null
   }
 
@@ -104,6 +107,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
 
   function send(text: string): void {
     const origin = state?.captureSendOrigin(text)
+
     if (origin) {
       state?.acceptSend(origin, text)
     }
@@ -139,6 +143,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
       assistantTurn('m2', 'done', 2000),
       assistantTurn('m3', 'anything else?', 3000)
     ]
+
     await mount(history)
     rapidSend('run the tests', 'again')
 
@@ -168,6 +173,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
       userTurn('m2', 'run the tests', 5000),
       userTurn('m3', 'again', 5100)
     ]
+
     await update(separate)
     expect(state?.pending).toEqual([])
   })
@@ -233,6 +239,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
         userTurn('m2', 'hold this', 5000),
         userTurn('m3', 'fix the bug', 5100)
       ]
+
       await update(landed)
       expect(state?.pending).toEqual([])
     })
@@ -266,6 +273,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
         userTurn('m1', 'run the tests', 5000),
         assistantTurn('m2', 'ok', 5100)
       ]
+
       await update(afterReconnect)
       expect(state?.pending).toEqual([])
 
@@ -300,6 +308,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
       await mount([], true)
       act(() => {
         const origin = state?.captureSendOrigin('')
+
         if (origin) {
           state?.acceptSend(origin, '', ['file:///new.png'])
         }
@@ -339,6 +348,7 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
         userTurn('m1', 'fix the bug', 1000),
         assistantTurn('m2', 'fixed', 1100)
       ]
+
       await update(olderIdentical)
       expect(pendingTexts()).toEqual(['fix the', 'bug'])
       expect(renderedPendingTexts(olderIdentical, state)).toEqual(['fix the', 'bug'])
@@ -347,10 +357,12 @@ describe('useMobileNativeChatDrafts glued pending sends', () => {
     it('still retires them once their own glued row lands', async () => {
       await mount([], false, false)
       rapidSend('fix the', 'bug')
+
       const olderIdentical = [
         userTurn('m1', 'fix the bug', 1000),
         assistantTurn('m2', 'fixed', 1100)
       ]
+
       await update(olderIdentical)
 
       await update([...olderIdentical, userTurn('m3', 'fix the bug', 5000)])

@@ -26,6 +26,7 @@ const PR_FILE_DIFF_LOAD_TIMEOUT_MS = 45_000
 
 function rejectAfterLoadTimeout<T>(promise: Promise<T>, onTimeout: () => void): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | null = null
+
   return new Promise<T>((resolve, reject) => {
     timeout = setTimeout(() => {
       onTimeout()
@@ -83,19 +84,25 @@ export function usePRFileSectionLoader(args: {
     setSections,
     setSectionHeights
   } = args
+
   const loadSection = useCallback(
     (index: number) => {
       const section = sectionsRef.current[index]
+
       if (!section || section.collapsed) {
         return
       }
+
       if (loadedIndicesRef.current.has(index) || loadingIndicesRef.current.has(index)) {
         return
       }
+
       const file = fileByPath.get(section.path)
+
       if (!file) {
         return
       }
+
       const generation = generationRef.current
       loadingIndicesRef.current.add(index)
 
@@ -115,6 +122,7 @@ export function usePRFileSectionLoader(args: {
             }
           }
         }
+
         if (!headSha || !baseSha) {
           return {
             result: {
@@ -130,6 +138,7 @@ export function usePRFileSectionLoader(args: {
             )
           }
         }
+
         const requestArgs = {
           repoPath,
           repoId,
@@ -140,10 +149,13 @@ export function usePRFileSectionLoader(args: {
           headSha,
           baseSha
         }
+
         const contentsRequest = loadPRFileContents(requestArgs)
+
         const contents = await rejectAfterLoadTimeout(contentsRequest, () =>
           evictPRFileContentRequest(requestArgs, contentsRequest)
         )
+
         return { result: getPRFileDiffResult(contents), resultContents: contents }
       }
 
@@ -167,11 +179,14 @@ export function usePRFileSectionLoader(args: {
           if (generationRef.current !== generation) {
             return
           }
+
           loadingIndicesRef.current.delete(index)
+
           const largeDiffRenderLimit =
             !error && result.kind === 'text' && resultContents
               ? getPRFileContentsRenderLimit(resultContents)
               : null
+
           const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
           const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
           loadedIndicesRef.current.add(index)
@@ -242,6 +257,7 @@ export function usePRFileSectionLoader(args: {
           sectionIndex === index ? { ...section, collapsed: !section.collapsed } : section
         )
       )
+
       if (shouldLoadAfterExpand) {
         window.requestAnimationFrame(() => loadSection(index))
       }
@@ -252,6 +268,7 @@ export function usePRFileSectionLoader(args: {
   const setAllSectionsCollapsed = useCallback(
     (collapsed: boolean) => {
       setSections((prev) => prev.map((section) => ({ ...section, collapsed })))
+
       if (!collapsed) {
         window.requestAnimationFrame(() => {
           sectionsRef.current.forEach((_, index) => loadSection(index))

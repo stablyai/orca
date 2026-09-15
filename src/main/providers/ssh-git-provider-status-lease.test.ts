@@ -13,10 +13,12 @@ function deferredPromise<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((innerResolve, innerReject) => {
     resolve = innerResolve
     reject = innerReject
   })
+
   return { promise, resolve, reject }
 }
 
@@ -34,12 +36,14 @@ describe('SshGitProvider status read leases', () => {
       entries: never[]
       conflictOperation: 'unknown'
     }>()
+
     mux.request.mockReturnValue(pending.promise)
     const controllers = Array.from({ length: 10 }, () => new AbortController())
 
     const reads = controllers.map((controller) =>
       provider.getStatus('/home/user/repo', { signal: controller.signal })
     )
+
     await waitForRequestCount(mux.request, 1)
 
     expect(mux.request).toHaveBeenCalledTimes(1)
@@ -52,6 +56,7 @@ describe('SshGitProvider status read leases', () => {
       entries: never[]
       conflictOperation: 'unknown'
     }>()
+
     mux.request.mockReturnValue(pending.promise)
     const firstController = new AbortController()
     const secondController = new AbortController()
@@ -80,6 +85,7 @@ describe('SshGitProvider status read leases', () => {
       entries: never[]
       conflictOperation: 'unknown'
     }>()
+
     mux.request.mockReturnValueOnce(firstPending.promise)
     const firstController = new AbortController()
     const secondController = new AbortController()
@@ -119,6 +125,7 @@ describe('SshGitProvider status read leases', () => {
       entries: never[]
       conflictOperation: 'unknown'
     }>()
+
     mux.request.mockReturnValueOnce(pending.promise)
     const active = provider.getStatus('/home/user/repo')
     await waitForRequestCount(mux.request, 1)
@@ -149,6 +156,7 @@ describe('SshGitProvider status read leases', () => {
     const pendingRequests = Array.from({ length: 8 }, () =>
       deferredPromise<{ entries: never[]; conflictOperation: 'unknown' }>()
     )
+
     mux.request.mockImplementation(
       () => pendingRequests[mux.request.mock.calls.length - 1]?.promise
     )
@@ -165,6 +173,7 @@ describe('SshGitProvider status read leases', () => {
       provider.getStatus('/home/user/repo', { admissionTier: 'background' }),
       provider.getStatus('/home/user/repo', { admissionTier: 'interactive' })
     ]
+
     await waitForRequestCount(mux.request, 8)
 
     expect(mux.request.mock.calls.map(([, payload]) => payload)).toEqual([
@@ -190,6 +199,7 @@ describe('SshGitProvider status read leases', () => {
     const pendingRequests = Array.from({ length: 3 }, () =>
       deferredPromise<{ entries: never[]; conflictOperation: 'unknown' }>()
     )
+
     mux.request.mockImplementation(
       () => pendingRequests[mux.request.mock.calls.length - 1]?.promise
     )
@@ -201,6 +211,7 @@ describe('SshGitProvider status read leases', () => {
       provider.getStatus('/home/user/repo', { branchLineTotalMergeBase: 'abc123' }),
       provider.getStatus('/home/user/repo', { branchLineTotalMergeBase: 'def456' })
     ]
+
     await waitForRequestCount(mux.request, 3)
 
     expect(mux.request.mock.calls.map(([, payload]) => payload)).toEqual([
@@ -218,6 +229,7 @@ describe('SshGitProvider status read leases', () => {
     const pendingRequests = Array.from({ length: 3 }, () =>
       deferredPromise<{ entries: never[]; conflictOperation: 'unknown' }>()
     )
+
     mux.request.mockImplementation(
       () => pendingRequests[mux.request.mock.calls.length - 1]?.promise
     )
@@ -229,6 +241,7 @@ describe('SshGitProvider status read leases', () => {
       replacement.getStatus('/home/user/repo'),
       otherConnection.getStatus('/home/user/repo')
     ]
+
     await waitForRequestCount(mux.request, 3)
 
     expect(mux.request).toHaveBeenCalledTimes(3)
@@ -242,15 +255,18 @@ describe('SshGitProvider status read leases', () => {
     const statusRequests = Array.from({ length: 3 }, () =>
       deferredPromise<{ entries: never[]; conflictOperation: 'unknown' }>()
     )
+
     const mutation = deferredPromise<void>()
     let statusRequestIndex = 0
     mux.request.mockImplementation((method) => {
       if (method === 'git.status') {
         return statusRequests[statusRequestIndex++]?.promise
       }
+
       if (method === 'git.stage') {
         return mutation.promise
       }
+
       return Promise.resolve(undefined)
     })
 

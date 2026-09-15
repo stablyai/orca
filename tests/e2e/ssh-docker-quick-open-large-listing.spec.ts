@@ -26,13 +26,17 @@ import { waitForSessionReady } from './helpers/store'
 import { shouldIncludeQuickOpenPath } from '../../src/shared/quick-open-filter'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const REMOTE_REPO_PATH = '/tmp/orca-quick-open-large-listing-repo'
+
 const REMOTE_PATH_LIST = '/tmp/orca-quick-open-large-listing-paths.txt'
+
 /** What the desktop client asks for; a full page is what it reads as "there is more". */
 const CLIENT_PAGE_SIZE = 20_001
 
 function thisRepositoryTrackedPaths(): string[] {
   const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim()
+
   // Why -z: `git ls-files` C-quotes any path with a special character, which would seed a tree that
   // does not match the one being measured.
   return execFileSync('git', ['ls-files', '-z'], {
@@ -46,6 +50,7 @@ function thisRepositoryTrackedPaths(): string[] {
 
 function seedRemoteTree(target: DockerSshRelayTarget, paths: string[]): void {
   const stagingDir = mkdtempSync(path.join(tmpdir(), 'orca-quick-open-large-listing-'))
+
   try {
     const localList = path.join(stagingDir, 'paths.txt')
     writeFileSync(localList, `${paths.join('\n')}\n`)
@@ -53,6 +58,7 @@ function seedRemoteTree(target: DockerSshRelayTarget, paths: string[]): void {
   } finally {
     rmSync(stagingDir, { recursive: true, force: true })
   }
+
   const seedScript = [
     "const fs = require('fs'), path = require('path')",
     `const list = fs.readFileSync(${JSON.stringify(REMOTE_PATH_LIST)}, 'utf8').split('\\n').filter(Boolean)`,
@@ -63,6 +69,7 @@ function seedRemoteTree(target: DockerSshRelayTarget, paths: string[]): void {
     "  fs.writeFileSync(entry, '')",
     '}'
   ].join(';')
+
   const encoded = Buffer.from(seedScript, 'utf8').toString('base64')
   execDockerSshRelayTargetCommand(
     target,
@@ -87,6 +94,7 @@ test('lists a monorepo-sized remote workspace, with and without a client page si
 }, testInfo) => {
   test.setTimeout(420_000)
   let target: DockerSshRelayTarget | null = null
+
   try {
     const trackedPaths = thisRepositoryTrackedPaths()
     expect(trackedPaths.length).toBeGreaterThan(CLIENT_PAGE_SIZE)
@@ -105,6 +113,7 @@ test('lists a monorepo-sized remote workspace, with and without a client page si
     seedRemoteTree(target, trackedPaths)
 
     await waitForSessionReady(orcaPage)
+
     const connected = await connectDockerSshRelayTarget(orcaPage, target, {
       remotePath: REMOTE_REPO_PATH
     })

@@ -38,27 +38,33 @@ export function useFloatingTerminalPanelController({
   const editorCloseQueue = useFloatingTerminalEditorCloseQueue({ ...storeState, ...localState })
   const geometry = useFloatingTerminalPanelGeometry({ ...storeState, ...localState })
   useFloatingTerminalInitialFocusEffects({ ...items, ...localState, open })
+
   const orchestrationVisibility = useFloatingTerminalOrchestrationVisibility({
     ...localState,
     open
   })
+
   const createActions = useFloatingTerminalCreateActions({
     ...storeState,
     ...localState,
     ...items
   })
+
   const closeActions = useFloatingTerminalCloseActions({
     ...storeState,
     ...localState,
     ...items,
     ...editorCloseQueue
   })
+
   const focusReclaim = useFloatingTerminalPanelFocusReclaim({
     ...storeState,
     ...localState,
     ...items
   })
+
   const maximize = useFloatingTerminalPanelMaximize({ ...storeState, ...localState, open })
+
   const shortcuts = useFloatingTerminalPanelShortcuts({
     ...localState,
     ...items,
@@ -68,15 +74,18 @@ export function useFloatingTerminalPanelController({
     open,
     onOpenChange
   })
+
   useFloatingTerminalGlobalShortcutListeners({ ...localState, ...shortcuts, open })
   useFloatingTerminalGuestBridge({ ...shortcuts, open })
   useFloatingTerminalFocusLifecycle({ ...localState, ...items, open })
+
   const dragActions = createFloatingTerminalPanelDragActions({
     ...localState,
     ...geometry,
     ...focusReclaim,
     ...maximize
   })
+
   const orchestrationDismissal = useFloatingTerminalOrchestrationDismissal(localState)
 
   return {

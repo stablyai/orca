@@ -47,11 +47,13 @@ function countIds<Row extends { worktreeId: string }>(
   include: (row: Row) => boolean = () => true
 ): Map<string, number> {
   const counts = new Map<string, number>()
+
   for (const row of rows) {
     if (include(row)) {
       counts.set(row.worktreeId, (counts.get(row.worktreeId) ?? 0) + 1)
     }
   }
+
   return counts
 }
 
@@ -74,13 +76,16 @@ export function buildWorkspaceCleanupSizeIndex(
 ): Map<string, number> {
   const index = new Map<string, number>()
   const candidateCounts = candidates ? countWorkspaceCleanupCandidateIds(candidates) : null
+
   const legacyCounts = countIds(
     worktrees ?? [],
     (entry) => !normalizeExecutionHostId(entry.executionHostId)
   )
+
   for (const entry of worktrees ?? []) {
     if (entry.status === 'ok' && Number.isFinite(entry.sizeBytes)) {
       const hostId = normalizeExecutionHostId(entry.executionHostId)
+
       if (hostId) {
         index.set(getWorkspaceCleanupHostIdentity(hostId, entry.worktreeId), entry.sizeBytes)
       } else if (
@@ -91,6 +96,7 @@ export function buildWorkspaceCleanupSizeIndex(
       }
     }
   }
+
   return index
 }
 
@@ -100,12 +106,15 @@ export function buildWorkspaceCleanupWorktreeIndex(
 ): Map<string, WorkspaceCleanupWorktreeFacts> {
   const index = new Map<string, WorkspaceCleanupWorktreeFacts>()
   const repoHostsById = new Map<string, Set<ExecutionHostId>>()
+
   for (const repo of repos) {
     const hosts = repoHostsById.get(repo.id) ?? new Set<ExecutionHostId>()
     hosts.add(getRepoExecutionHostId(repo))
     repoHostsById.set(repo.id, hosts)
   }
+
   const legacyCounts = new Map<string, number>()
+
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const worktree of worktrees) {
       if (!normalizeExecutionHostId(worktree.hostId)) {
@@ -113,17 +122,21 @@ export function buildWorkspaceCleanupWorktreeIndex(
       }
     }
   }
+
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const worktree of worktrees) {
       const explicitHostId = normalizeExecutionHostId(worktree.hostId)
       const repoHosts = worktree.repoId ? repoHostsById.get(worktree.repoId) : undefined
       const derivedHostId = repoHosts?.size === 1 ? [...repoHosts][0] : null
+
       const hostId =
         explicitHostId ?? (legacyCounts.get(worktree.id) === 1 ? derivedHostId : undefined)
+
       if (hostId) {
         index.set(getWorkspaceCleanupHostIdentity(hostId, worktree.id), worktree)
       }
     }
   }
+
   return index
 }

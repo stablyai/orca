@@ -21,6 +21,7 @@ export type StartAndroidStream = (
 function toArrayBuffer(buffer: Buffer): ArrayBuffer {
   const arrayBuffer = new ArrayBuffer(buffer.byteLength)
   new Uint8Array(arrayBuffer).set(buffer)
+
   return arrayBuffer
 }
 
@@ -38,6 +39,7 @@ export const startAndroidStreamSession: StartAndroidStream = async ({
   // ScrcpyStreamSession.start waits for video meta, and that same startup path
   // may emit config/keyframes. Register first so those events seed replay cache.
   scrcpyVideoRegistry.register(serial, () => session?.close())
+
   try {
     session = await ScrcpyStreamSession.start(
       { runner, sdk, serial, localJarPath: jarPath, maxSize },
@@ -60,6 +62,7 @@ export const startAndroidStreamSession: StartAndroidStream = async ({
   }
 
   let closed = false
+
   return {
     info: androidStreamSessionInfo(serial),
     handle: {
@@ -67,6 +70,7 @@ export const startAndroidStreamSession: StartAndroidStream = async ({
         if (closed) {
           return
         }
+
         closed = true
         session?.close()
         scrcpyVideoRegistry.stop(serial)

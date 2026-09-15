@@ -61,18 +61,23 @@ export function buildPaletteDocument(input: PaletteDocumentInput): PaletteDocume
     const fields = entry.fields.filter((field): field is PaletteEvidenceFieldSource =>
       Boolean(field?.text.trim())
     )
+
     if (!fields.length) {
       continue
     }
+
     // Why first-wins, matching indexPaletteFields: it keeps the first entry's fields, so
     // overwriting the unit here would pair one record's rendered text with another's
     // match offsets — highlights landing outside the string the row actually shows.
     if (evidenceUnits.has(entry.unit.id)) {
       continue
     }
+
     evidenceUnits.set(entry.unit.id, entry.unit)
+
     for (const field of fields) {
       evidenceSources.push(field)
+
       if (!renderOffsetByFieldId.has(field.id)) {
         renderOffsetByFieldId.set(field.id, field.renderOffset)
       }
@@ -82,14 +87,17 @@ export function buildPaletteDocument(input: PaletteDocumentInput): PaletteDocume
   const fields = indexPaletteFields([...input.visibleFields, ...evidenceSources])
   const visibleFields: PaletteIndexedField[] = []
   const fieldById = new Map<string, PaletteIndexedField>()
+
   for (const field of fields) {
     fieldById.set(field.id, field)
+
     if (!field.evidenceId) {
       visibleFields.push(field)
     }
   }
 
   const fieldIds = new Set(fields.map((field) => field.id))
+
   return {
     id: input.id,
     fields,
@@ -169,10 +177,12 @@ function compareRankKeys(
 ): number {
   for (const key of keys) {
     const difference = a[key] - b[key]
+
     if (difference !== 0) {
       return difference
     }
   }
+
   return 0
 }
 

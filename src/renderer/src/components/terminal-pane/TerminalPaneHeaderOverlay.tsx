@@ -126,6 +126,7 @@ export default function TerminalPaneHeaderOverlay({
         const isActivePane = activePaneId === pane.id
         const isChromeless = showAlwaysOnHeaders && !title && !isEditing
         const showHeader = overlayRect && (showAlwaysOnHeaders || Boolean(title) || isEditing)
+
         if (!showHeader || !overlayRect) {
           return null
         }
@@ -145,6 +146,7 @@ export default function TerminalPaneHeaderOverlay({
             }
             onDragOver={(event) => {
               onActivatePaneTitleInteraction(pane.id)
+
               if (
                 event.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME) ||
                 event.dataTransfer.types.includes(WORKSPACE_FILE_PATHS_MIME)
@@ -160,13 +162,16 @@ export default function TerminalPaneHeaderOverlay({
               ) {
                 return
               }
+
               event.preventDefault()
               event.stopPropagation()
               onActivatePaneTitleInteraction(pane.id)
               const manager = managerRef.current
+
               if (!manager) {
                 return
               }
+
               void handleInternalTerminalFileDrop({
                 manager,
                 paneTransports: paneTransportsRef.current,
@@ -204,6 +209,7 @@ export default function TerminalPaneHeaderOverlay({
                   if (isImeCompositionKeyDown(event)) {
                     return
                   }
+
                   if (event.key === 'Enter') {
                     onRenameSubmit()
                   } else if (event.key === 'Tab') {

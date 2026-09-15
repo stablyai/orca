@@ -23,31 +23,38 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
     if (!this.ptyController?.listProcesses && !this.ptyController?.hasPty) {
       return null
     }
+
     // Why: floating PTY identity is explicit, so polling must not resolve every Git/SSH worktree.
     const isFloatingWorkspace = targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID
+
     const resolvedWorktrees = isFloatingWorkspace
       ? []
       : targetWorktreeId
         ? this.listResolvedWorktreesForExplicitTarget(targetWorktreeId)
         : await this.listResolvedWorktrees()
+
     // An explicit mobile worktree belongs to one execution host. Query only
     // that provider; aggregate inventory would wait on unrelated SSH hosts.
     const targetExecutionHost = targetWorktreeId
       ? (resolvedWorktrees.find((worktree) => worktree.id === targetWorktreeId)?.hostId ??
         this.tryGetWorkspaceSessionHostIdForWorktree(targetWorktreeId))
       : null
+
     const parsedTargetHost = targetExecutionHost ? parseExecutionHostId(targetExecutionHost) : null
+
     // Paired/runtime-owned workspaces have a separate controller; this runtime
     // cannot inspect them and must not silently query its local PTY provider.
     if (parsedTargetHost?.kind === 'runtime') {
       return null
     }
+
     const targetConnectionId =
       parsedTargetHost?.kind === 'ssh'
         ? parsedTargetHost.targetId
         : targetWorktreeId
           ? null
           : undefined
+
     if (
       targetConnectionId !== null &&
       this.ptyController.supportsForegroundProcessEvidence &&
@@ -57,6 +64,7 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
       // expensive process-table inventory on every mobile cadence tick.
       return null
     }
+
     return await this.refreshPtyWorktreeRecordsWithControllerInventory(
       resolvedWorktrees,
       targetWorktreeId,
@@ -71,21 +79,27 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
   protected listResolvedWorktreesForExplicitTarget(targetWorktreeId: string): ResolvedWorktree[] {
     const snapshot = this.resolvedWorktrees.peek()
     const cached = snapshot && snapshot.expiresAt > Date.now() ? snapshot.worktrees : null
+
     const targetWorktree =
       cached?.find((worktree) => worktree.id === targetWorktreeId) ??
       (() => {
         const scope = parseWorkspaceKey(targetWorktreeId)
+
         if (scope?.type === 'folder') {
           const folder = this.store
             ?.getFolderWorkspaces?.()
             .find((workspace) => workspace.id === scope.folderWorkspaceId)
+
           return folder ? this.folderWorkspaceToResolvedWorktree(folder) : null
         }
+
         return this.buildResolvedWorktreeFromId(targetWorktreeId)
       })()
+
     if (!targetWorktree) {
       return []
     }
+
     return cached
       ? includeTargetResolvedWorktree(cached, targetWorktree)
       : this.listKnownResolvedWorktreesForExplicitTarget(targetWorktreeId, targetWorktree)
@@ -105,12 +119,15 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
     const navigation = opts.navigation ?? (opts.notifyClients === false ? 'caller' : 'all')
     const targetsHost = navigationTargetsHost(navigation)
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
+
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
+
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     await this.refreshMobileSessionPtyRecords(worktreeId)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const directTab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
+
     const tab = leafId
       ? ((directTab?.type === 'terminal' && directTab.leafId === leafId ? directTab : undefined) ??
         snapshot?.tabs.find(
@@ -126,6 +143,7 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
         snapshot?.tabs.find(
           (candidate) => candidate.type === 'browser' && candidate.browserWorkspaceId === tabId
         ))
+
     if (!tab) {
       throw new Error('tab_not_found')
     }
@@ -134,6 +152,7 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
       const publicTab = this.toMobileSessionTabsResult(snapshot!).tabs.find(
         (candidate) => candidate.type === 'terminal' && candidate.id === tab.id
       )
+
       // Why: serve-created tabs can be visible before any renderer has adopted
       // their tab id, so focusing the renderer would silently no-op.
       // Phone-local activation also needs this path for inactive restored tabs:
@@ -148,11 +167,14 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
         (!targetsHost ||
           !this.notifier?.focusTerminal ||
           this.shouldMaterializeHeadlessMobileSessionTab(snapshot!, tab))
+
       if (shouldMaterializePendingTerminal) {
         const sessionId = tab.ptyId ?? tab.parentLayout?.ptyIdsByLeafId?.[tab.leafId] ?? undefined
+
         const targetGroupId = snapshot?.tabGroups?.find((group) =>
           group.tabOrder.includes(tab.parentTabId)
         )?.id
+
         // Why: a pending agent tab may exist without its startup command ever
         // having been delivered (the create's renderer stalled, #7587), so a
         // bare materialize would put a plain shell under the agent icon.
@@ -161,6 +183,7 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
         let agentStartup: Awaited<
           ReturnType<OrcaRuntimeService['resolveMobileSessionTerminalCommand']>
         > = {}
+
         if (tab.launchAgent) {
           try {
             const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${worktreeId}`)
@@ -172,6 +195,7 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
             // untappable; fall back to the plain-shell materialize.
           }
         }
+
         try {
           await this.createRuntimeOwnedMobileSessionTerminal(worktreeId, targetsHost, undefined, {
             identity: {
@@ -193,8 +217,10 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
             // but this in-memory headless snapshot can still carry the old id.
             this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, { force: true })
           }
+
           throw err
         }
+
         return this.applyMobileSessionTabNavigation(
           this.getMobileSessionTabsForWorktree(worktreeId),
           tab.id,
@@ -202,10 +228,12 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
           opts.clientNavigationId
         )
       }
+
       const callerSnapshot = this.getMobileSessionTabsForWorktree(
         worktreeId,
         opts.clientNavigationId
       )
+
       const activeSibling =
         tab.id === tabId || leafId
           ? null
@@ -215,7 +243,9 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
                 candidate.parentTabId === tab.parentTabId &&
                 candidate.isActive
             ) as RuntimeMobileSessionTerminalTab | undefined)
+
       const targetTab = activeSibling ?? tab
+
       if (targetsHost && !this.notifier?.focusTerminal) {
         if (
           !targetTab.isActive &&
@@ -226,6 +256,7 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
       } else if (targetsHost) {
         this.notifier?.focusTerminal?.(targetTab.parentTabId, worktreeId, targetTab.leafId)
       }
+
       return this.applyMobileSessionTabNavigation(
         this.getMobileSessionTabsForWorktree(worktreeId),
         targetTab.id,
@@ -243,6 +274,7 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
         this.notifier?.focusEditorTab?.(tab.id, worktreeId)
       }
     }
+
     return this.applyMobileSessionTabNavigation(
       this.getMobileSessionTabsForWorktree(worktreeId),
       tab.id,

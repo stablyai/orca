@@ -23,12 +23,14 @@ describe('agent sleep coordinator runtime-liveness races', () => {
   it('requires host evidence when a workspace becomes runtime-owned during an inventory request', async () => {
     const delayed = deferred<ReturnType<typeof runtimeListResult>>()
     const lateTab = { ...tab(), id: 'tab-late', worktreeId: 'wt-late' }
+
     const lateEntry = {
       ...entry(),
       tabId: 'tab-late',
       worktreeId: 'wt-late',
       paneKey: `tab-late:${LEAF}`
     }
+
     const lateList = {
       ...runtimeListResult(['pty-late']),
       terminals: runtimeListResult(['pty-late']).terminals.map((terminal) => ({
@@ -36,30 +38,38 @@ describe('agent sleep coordinator runtime-liveness races', () => {
         worktreeId: 'wt-late'
       }))
     }
+
     let firstListPending = true
     mockRuntimeEnvironmentCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
       const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
       if (compatible) {
         return Promise.resolve(compatible)
       }
+
       if (args.method !== 'terminal.list') {
         return Promise.resolve({ id: 'default', ok: true, result: {} })
       }
+
       const isLate = args.params?.worktree === 'id:wt-late'
+
       if (!isLate && firstListPending) {
         firstListPending = false
+
         return delayed.promise.then((result) => ({
           id: 'delayed',
           ok: true,
           result
         }))
       }
+
       return Promise.resolve({
         id: 'terminal-list',
         ok: true,
         result: isLate ? lateList : runtimeListResult(['pty-1'])
       })
     })
+
     // Why: `wt-late` starts local-owned, so the pre-await target sample never lists it.
     const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
       worktreesByRepo: {

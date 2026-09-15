@@ -35,49 +35,62 @@ export function useMobileSessionController() {
   const foundation = useMobileSessionFoundation()
   const screenState = Object.assign(foundation, useMobileSessionScreenState(foundation))
   const terminalRuntime = Object.assign(screenState, useMobileSessionTerminalRuntime(screenState))
+
   const feedbackCapabilities = Object.assign(
     terminalRuntime,
     useMobileSessionFeedbackCapabilities(terminalRuntime)
   )
+
   const sendLiveTerminalInput = (handle: string, bytes: string) =>
     feedbackCapabilities.sendLiveTerminalInputRef.current(handle, bytes)
+
   const nativeChatDictation = Object.assign(
     feedbackCapabilities,
     useMobileSessionNativeChatDictation(feedbackCapabilities, sendLiveTerminalInput)
   )
+
   const subscriptionFoundation = Object.assign(
     nativeChatDictation,
     useMobileSessionTerminalSubscriptionFoundation(nativeChatDictation)
   )
+
   const terminalSubscription = Object.assign(
     subscriptionFoundation,
     useMobileSessionTerminalSubscription(subscriptionFoundation)
   )
+
   const terminalStreamDisplay = Object.assign(
     terminalSubscription,
     useMobileSessionTerminalStreamDisplay(terminalSubscription)
   )
+
   const terminalList = Object.assign(
     terminalStreamDisplay,
     useMobileSessionTerminalList(terminalStreamDisplay)
   )
+
   const tabApplication = Object.assign(terminalList, useMobileSessionTabApplication(terminalList))
+
   const documentReaders = Object.assign(
     tabApplication,
     useMobileSessionDocumentReaders(tabApplication)
   )
+
   const diffCommentsModel = Object.assign(
     documentReaders,
     useMobileSessionDiffComments(documentReaders)
   )
+
   const markdownActions = Object.assign(
     diffCommentsModel,
     useMobileSessionMarkdownActions(diffCommentsModel)
   )
+
   const tabReconciliation = Object.assign(
     markdownActions,
     useMobileSessionTabReconciliation(markdownActions)
   )
+
   const lifecycle = Object.assign(tabReconciliation, useMobileSessionLifecycle(tabReconciliation))
   const keyboardState = Object.assign(lifecycle, useMobileSessionKeyboardState(lifecycle))
   useMobileSessionStartup(keyboardState)
@@ -85,41 +98,52 @@ export function useMobileSessionController() {
   const tabSwitching = Object.assign(keyboardState, useMobileSessionTabSwitching(keyboardState))
   useNotificationPaneNavigation(tabSwitching)
   const terminalWebview = Object.assign(tabSwitching, useMobileSessionTerminalWebview(tabSwitching))
+
   const terminalSendActions = Object.assign(
     terminalWebview,
     useMobileSessionTerminalSendActions(terminalWebview)
   )
+
   const fileActions = Object.assign(
     terminalSendActions,
     useMobileSessionFileActions(terminalSendActions)
   )
+
   const terminalInput = Object.assign(fileActions, useMobileSessionTerminalInput(fileActions))
+
   const accessorySelection = Object.assign(
     terminalInput,
     useMobileSessionAccessorySelection(terminalInput)
   )
+
   const attachments = Object.assign(
     accessorySelection,
     useMobileSessionAttachments(accessorySelection)
   )
+
   const terminalCreateActions = Object.assign(
     attachments,
     useMobileSessionTerminalCreateActions(attachments)
   )
+
   const contentCreateActions = Object.assign(
     terminalCreateActions,
     useMobileSessionContentCreateActions(terminalCreateActions)
   )
+
   const closeActions = Object.assign(
     contentCreateActions,
     useMobileSessionCloseActions(contentCreateActions)
   )
+
   const bulkClose = Object.assign(closeActions, useMobileSessionBulkClose(closeActions))
   const presentation = Object.assign(bulkClose, useMobileSessionPresentation(bulkClose))
+
   const panelRouteActions = Object.assign(
     presentation,
     useMobileSessionPanelRouteActions(presentation)
   )
+
   return panelRouteActions
 }
 

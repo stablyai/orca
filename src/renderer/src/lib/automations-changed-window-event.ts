@@ -20,5 +20,6 @@ export function emitAutomationsChangedWindowEvent(
 /** Missing or malformed detail degrades to an unscoped desktop event, never a dropped one. */
 export function automationsChangedWindowDetail(event: Event): AutomationsChangedWindowDetail {
   const detail = (event as CustomEvent<unknown>).detail
+
   return detail && typeof detail === 'object' ? (detail as AutomationsChangedWindowDetail) : {}
 }

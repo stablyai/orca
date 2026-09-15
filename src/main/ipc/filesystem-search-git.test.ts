@@ -14,6 +14,7 @@ import type { ChildProcess } from 'node:child_process'
 
 function createMockProcess(): ChildProcess {
   const p = new EventEmitter() as unknown as ChildProcess
+
   ;(p as unknown as Record<string, unknown>).stdout = new EventEmitter()
   ;(
     (p as unknown as Record<string, unknown>).stdout as EventEmitter & {
@@ -22,6 +23,7 @@ function createMockProcess(): ChildProcess {
   ).setEncoding = vi.fn()
   ;(p as unknown as Record<string, unknown>).stderr = new EventEmitter()
   ;(p as unknown as Record<string, unknown>).kill = vi.fn()
+
   return p
 }
 

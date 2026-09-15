@@ -54,6 +54,7 @@ vi.mock('./web-session-tabs-sync', () => ({
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     // The production caller invokes the returned settle receipt.
     return () => {}
   },
@@ -84,6 +85,7 @@ afterEach(() => {
 })
 
 const SPLIT_WORKTREE_ID = 'repo::/worktree'
+
 const SPLIT_SOURCE = {
   worktreeId: SPLIT_WORKTREE_ID,
   tabId: toWebTerminalSurfaceTabId('tab-1'),
@@ -97,6 +99,7 @@ function makeSplitSourceState(
 ): Record<string, unknown> {
   const tabId = toWebTerminalSurfaceTabId(hostTabId)
   const activeTabId = toWebTerminalSurfaceTabId(activeHostTabId)
+
   const tabs = [
     {
       id: tabId,
@@ -108,6 +111,7 @@ function makeSplitSourceState(
       ? []
       : [{ id: activeTabId, worktreeId: SPLIT_WORKTREE_ID, contentType: 'terminal' }])
   ]
+
   return {
     activeWorktreeId: SPLIT_WORKTREE_ID,
     activeWorkspaceExecutionHostId: 'runtime:web-env-1',
@@ -161,6 +165,7 @@ describe('splitWebRuntimeTerminal', () => {
         }
       }
     })
+
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -200,11 +205,13 @@ describe('splitWebRuntimeTerminal', () => {
 
   it('does not track rejected host split RPCs', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const runtimeCall = vi.fn().mockResolvedValue({
       id: 'split',
       ok: false,
       error: { code: 'terminal_exited', message: 'Terminal exited' }
     })
+
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -239,6 +246,7 @@ describe('splitWebRuntimeTerminal', () => {
         }
       }
     })
+
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -266,6 +274,7 @@ describe('splitWebRuntimeTerminal', () => {
   it('records the exact host-created leaf before replaying the mirrored layout', async () => {
     stubSplitSourceTab('tab-1')
     replaceRuntimeEnvironmentRevisions([{ id: 'web-env-1', createdAt: 7 }])
+
     const runtimeCall = vi.fn((request: { method: string }) =>
       Promise.resolve(
         request.method === 'terminal.split'
@@ -296,6 +305,7 @@ describe('splitWebRuntimeTerminal', () => {
             }
       )
     )
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     expect(
@@ -333,6 +343,7 @@ describe('splitWebRuntimeTerminal', () => {
   it('uses the gesture pane when a stale layout also records the source PTY', async () => {
     const staleTabId = toWebTerminalSurfaceTabId('tab-stale')
     const sourceTabId = toWebTerminalSurfaceTabId('tab-source')
+
     const tabs = [
       {
         id: staleTabId,
@@ -347,6 +358,7 @@ describe('splitWebRuntimeTerminal', () => {
         ptyId: 'remote:web-env-1@@terminal-1'
       }
     ]
+
     mocks.getState.mockReturnValue({
       ...makeSplitSourceState('tab-source', 'leaf-source'),
       tabsByWorktree: { [SPLIT_WORKTREE_ID]: tabs },
@@ -363,6 +375,7 @@ describe('splitWebRuntimeTerminal', () => {
         }
       }
     })
+
     const runtimeCall = vi.fn((request: { method: string }) =>
       Promise.resolve(
         request.method === 'terminal.split'
@@ -393,6 +406,7 @@ describe('splitWebRuntimeTerminal', () => {
             }
       )
     )
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     expect(
@@ -412,15 +426,19 @@ describe('splitWebRuntimeTerminal', () => {
     stubSplitSourceTab('tab-1')
     const splitResolvers: ((response: unknown) => void)[] = []
     let resolveList!: (response: unknown) => void
+
     const runtimeCall = vi.fn((request: { method: string }) => {
       if (request.method === 'terminal.split') {
         return new Promise((resolve) => splitResolvers.push(resolve))
       }
+
       return new Promise((resolve) => {
         resolveList = resolve
       })
     })
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
     const source = {
       worktreeId: SPLIT_WORKTREE_ID,
       tabId: toWebTerminalSurfaceTabId('tab-1'),
@@ -445,6 +463,7 @@ describe('splitWebRuntimeTerminal', () => {
     splitResolvers[0]?.(makeSplitResult('leaf-a'))
     await Promise.resolve()
     await Promise.resolve()
+
     const intentAfterOlderCompletion = peekWebSessionFocusIntent(
       { environmentId: 'web-env-1' },
       SPLIT_WORKTREE_ID
@@ -481,15 +500,19 @@ describe('splitWebRuntimeTerminal', () => {
     const splitResolvers: ((response: unknown) => void)[] = []
     const runtimeCall = vi.fn(() => new Promise((resolve) => splitResolvers.push(resolve)))
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
     const split = (): boolean =>
       splitWebRuntimeTerminal('remote:web-env-1@@terminal-1', 'vertical', 'keyboard', SPLIT_SOURCE)
+
     expect(split()).toBe(true)
     await vi.waitFor(() => expect(splitResolvers).toHaveLength(1))
+
     const staleSource = {
       worktreeId: SPLIT_WORKTREE_ID,
       tabId: toWebTerminalSurfaceTabId('tab-missing'),
       leafId: 'leaf-missing'
     }
+
     expect(
       splitWebRuntimeTerminal(
         'remote:web-env-1@@terminal-missing',
@@ -513,14 +536,17 @@ describe('splitWebRuntimeTerminal', () => {
     stubSplitSourceTab('tab-1')
     const splitResolvers: ((response: unknown) => void)[] = []
     let resolveList!: (response: unknown) => void
+
     const runtimeCall = vi.fn((request: { method: string }) => {
       if (request.method === 'terminal.split') {
         return new Promise((resolve) => splitResolvers.push(resolve))
       }
+
       return new Promise((resolve) => {
         resolveList = resolve
       })
     })
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     expect(
@@ -584,6 +610,7 @@ describe('splitWebRuntimeTerminal', () => {
 
   it('does not claim focus from an old host that omits the leaf identity', async () => {
     stubSplitSourceTab('tab-1')
+
     const runtimeCall = vi.fn().mockResolvedValue({
       id: 'split',
       ok: true,
@@ -591,6 +618,7 @@ describe('splitWebRuntimeTerminal', () => {
         split: { handle: 'terminal-2', tabId: 'tab-1', paneRuntimeId: -1 }
       }
     })
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     expect(
@@ -604,6 +632,7 @@ describe('splitWebRuntimeTerminal', () => {
 
   it('focuses a split invoked from a non-focused group tab when the viewer stays put', async () => {
     mocks.getState.mockReturnValue(makeSplitSourceState('tab-1', 'leaf-1', 'tab-2'))
+
     const runtimeCall = vi.fn((request: { method: string }) =>
       Promise.resolve(
         request.method === 'terminal.split'
@@ -634,6 +663,7 @@ describe('splitWebRuntimeTerminal', () => {
             }
       )
     )
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     expect(
@@ -663,12 +693,14 @@ describe('splitWebRuntimeTerminal', () => {
   it('does not steal focus after the viewer switches tabs while the host splits', async () => {
     stubSplitSourceTab('tab-1')
     let resolveSplit!: (response: unknown) => void
+
     const runtimeCall = vi.fn(
       () =>
         new Promise((resolve) => {
           resolveSplit = resolve
         })
     )
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     expect(
@@ -699,12 +731,14 @@ describe('splitWebRuntimeTerminal', () => {
     stubSplitSourceTab('tab-1')
     replaceRuntimeEnvironmentRevisions([{ id: 'web-env-1', createdAt: 7 }])
     let resolveSplit!: (response: unknown) => void
+
     const runtimeCall = vi.fn(
       () =>
         new Promise((resolve) => {
           resolveSplit = resolve
         })
     )
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     expect(
@@ -739,6 +773,7 @@ describe('splitWebRuntimeTerminal', () => {
     stubSplitSourceTab('tab-1')
     replaceRuntimeEnvironmentRevisions([{ id: 'web-env-1', createdAt: 7 }])
     let resolveList!: (response: unknown) => void
+
     const runtimeCall = vi.fn((request: { method: string }) =>
       request.method === 'terminal.split'
         ? Promise.resolve({
@@ -757,6 +792,7 @@ describe('splitWebRuntimeTerminal', () => {
             resolveList = resolve
           })
     )
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     expect(
@@ -812,6 +848,7 @@ describe('closeWebRuntimeTerminal', () => {
         }
       }
     })
+
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -845,6 +882,7 @@ describe('closeWebRuntimeTerminal', () => {
         }
       }
     })
+
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {

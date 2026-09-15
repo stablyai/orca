@@ -2,6 +2,7 @@ import type { IDisposable, Terminal } from '@xterm/xterm'
 import { isTerminalOwnedLinkGesture } from './terminal-link-activation'
 
 const DRAG_THRESHOLD_PX = 4
+
 const CAPTURE_LISTENER_OPTIONS = { capture: true } as const
 
 export type TerminalLinkPointerGesture = IDisposable & {
@@ -24,11 +25,14 @@ export function installTerminalLinkPointerGesture(terminal: Terminal): TerminalL
   const clear = (): void => {
     pending = null
   }
+
   const handleMouseDown = (event: MouseEvent): void => {
     if (!isTerminalOwnedLinkGesture(event)) {
       clear()
+
       return
     }
+
     pending = {
       clientX: event.clientX,
       clientY: event.clientY,
@@ -36,6 +40,7 @@ export function installTerminalLinkPointerGesture(terminal: Terminal): TerminalL
       moved: false
     }
   }
+
   const handleMouseMove = (event: MouseEvent): void => {
     if (
       pending &&
@@ -45,6 +50,7 @@ export function installTerminalLinkPointerGesture(terminal: Terminal): TerminalL
       pending.moved = true
     }
   }
+
   const handleMouseUp = (): void => {
     queueMicrotask(clear)
   }

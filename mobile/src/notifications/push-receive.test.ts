@@ -1,7 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { AppState } from 'react-native'
 import { setNotificationViewingWorkspace } from './notification-viewing-policy'
+
 vi.mock('./push-tray-dismissal', () => ({ dismissPresentedPushNotification: vi.fn() }))
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sha256 } from '@noble/hashes/sha256'
 import { loadHostCatalog } from '../transport/host-store'
@@ -21,8 +23,11 @@ async function shouldSuppressForegroundPush(data: unknown): Promise<boolean> {
 }
 
 vi.mock('react-native', () => ({ AppState: { currentState: 'background' } }))
+
 vi.mock('../transport/host-store', () => ({ loadHostCatalog: vi.fn() }))
+
 const storage = vi.hoisted(() => new Map<string, string>())
+
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: vi.fn(async (key: string) => storage.get(key) ?? null),
@@ -31,11 +36,15 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 }))
 
 const publicKeyB64 = Buffer.alloc(32, 1).toString('base64')
+
 const hostFingerprint = Buffer.from(sha256(Buffer.alloc(32, 1)))
   .toString('base64url')
   .slice(0, 16)
+
 const hosts = [{ id: 'host-1', publicKeyB64 }] as unknown as HostCatalogEntry[]
+
 const otherPublicKeyB64 = Buffer.alloc(32, 2).toString('base64')
+
 const otherHostFingerprint = Buffer.from(sha256(Buffer.alloc(32, 2)))
   .toString('base64url')
   .slice(0, 16)
@@ -43,6 +52,7 @@ const otherHostFingerprint = Buffer.from(sha256(Buffer.alloc(32, 2)))
 function apnsData(orca: Record<string, unknown>): unknown {
   return { aps: { alert: { title: 'Orca', body: 'Agent needs input' } }, orca }
 }
+
 function fcmData(orca: Record<string, unknown>): unknown {
   return Object.fromEntries(Object.entries(orca).map(([key, value]) => [key, String(value)]))
 }
@@ -96,6 +106,7 @@ describe('shouldSuppressForegroundPush', () => {
         notificationEpoch: 'epoch-1',
         ...overrides
       })
+
     await expect(shouldSuppressForegroundPush(bell())).resolves.toBe(false)
     await expect(shouldSuppressForegroundPush(bell())).resolves.toBe(true)
     await expect(shouldSuppressForegroundPush(bell({ notificationSeq: 5 }))).resolves.toBe(false)
@@ -114,6 +125,7 @@ describe('shouldSuppressForegroundPush', () => {
       notificationSeq: 1.5,
       notificationEpoch: 'epoch-1'
     })
+
     await expect(shouldSuppressForegroundPush(invalid)).resolves.toBe(false)
     await expect(shouldSuppressForegroundPush(invalid)).resolves.toBe(false)
   })
@@ -127,21 +139,25 @@ describe('shouldSuppressForegroundPush', () => {
 
   it('suppresses a push after a matching persisted dismissal', async () => {
     const { rememberPushDismissal } = await import('./push-dismissal-watermarks')
+
     const payload = {
       hostFingerprint,
       notificationId: 'dismissed',
       notificationSeq: 2,
       notificationEpoch: 'epoch-1'
     }
+
     await rememberPushDismissal(payload)
     await expect(shouldSuppressForegroundPush(apnsData(payload))).resolves.toBe(true)
   })
 
   it('fails closed for recognized pushes when suppression checks throw', async () => {
     const dismissals = await import('./push-dismissal-watermarks')
+
     const dismissalSpy = vi
       .spyOn(dismissals, 'wasPushDismissed')
       .mockRejectedValueOnce(new Error('dismissal read failed'))
+
     await expect(
       foregroundNotificationBehavior({ request: { content: { data: push() } } })
     ).resolves.toMatchObject({ shouldShowBanner: false, shouldShowList: false })
@@ -150,9 +166,11 @@ describe('shouldSuppressForegroundPush', () => {
 
   it('keeps unrelated notifications visible when suppression checks throw', async () => {
     const dismissals = await import('./push-dismissal-watermarks')
+
     const dismissalSpy = vi
       .spyOn(dismissals, 'wasPushDismissed')
       .mockRejectedValue(new Error('dismissal read failed'))
+
     await expect(
       foregroundNotificationBehavior({
         request: { content: { data: { title: 'Other app notification' } } }
@@ -168,6 +186,7 @@ describe('pushNotificationRouteData', () => {
       apnsData({ hostFingerprint, worktreeId: 'repo::/feature', source: 'agent-task-complete' }),
       hosts
     )
+
     expect(getNotificationNavigationTarget(data, { knownHostIds: new Set(['host-1']) })).toEqual({
       hostId: 'host-1',
       sessionTarget: {
@@ -182,6 +201,7 @@ describe('pushNotificationRouteData', () => {
       fcmData({ hostFingerprint, source: 'terminal-bell' }),
       hosts
     )
+
     expect(getNotificationNavigationTarget(data)).toEqual({ hostId: 'host-1', sessionTarget: null })
   })
 
@@ -221,8 +241,10 @@ it('uses one delivery snapshot for sound and viewing even when settings change d
         suppressWhileViewing: true
       })
     )
+
     return hosts
   })
+
   const behavior = await foregroundNotificationBehavior({
     request: {
       content: {
@@ -235,6 +257,7 @@ it('uses one delivery snapshot for sound and viewing even when settings change d
       }
     }
   })
+
   expect(behavior).toMatchObject({ shouldShowBanner: true, shouldPlaySound: false })
   expect(
     vi
@@ -265,6 +288,7 @@ it('preflight does not consume the final presentation claim and observes later d
     notificationEpoch: 'epoch',
     notificationSeq: 4
   }
+
   await expect(canPresentForegroundPush(payload)).resolves.toBe(true)
   await expect(shouldSuppressForegroundPush(apnsData(payload))).resolves.toBe(false)
   const { rememberPushDismissal } = await import('./push-dismissal-watermarks')
@@ -281,6 +305,7 @@ it('allows the viewed workspace after backgrounding during eligibility reads', a
     notificationEpoch: 'epoch',
     notificationSeq: 1
   }
+
   setNotificationViewingWorkspace({ hostId: 'host-1', worktreeId: 'workspace' })
   AppState.currentState = 'active'
   await expect(canPresentForegroundPush(payload)).resolves.toBe(false)

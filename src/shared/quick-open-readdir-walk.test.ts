@@ -10,6 +10,7 @@ vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof NodeFsPromises>('fs/promises')
   lstatMock.mockImplementation(actual.lstat)
   opendirMock.mockImplementation(actual.opendir)
+
   return {
     ...actual,
     lstat: lstatMock,
@@ -32,7 +33,9 @@ import {
 import { isFileListingCancellation } from './file-listing-cancellation'
 
 const tempDirs: string[] = []
+
 const SHA1 = '0123456789abcdef0123456789abcdef01234567'
+
 const SHA256 = `${SHA1}89abcdef0123456789abcdef`
 
 function staged(mode: string, path: string, sha = SHA1): string {
@@ -42,6 +45,7 @@ function staged(mode: string, path: string, sha = SHA1): string {
 async function makeTempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-quick-open-readdir-'))
   tempDirs.push(root)
+
   return root
 }
 
@@ -197,6 +201,7 @@ describe('quick-open readdir walk', () => {
     const root = await makeTempRoot()
     await makeNestedRepo(root, 'packages/app')
     await writeRel(root, 'packages/app/keep.ts')
+
     // A large excluded subtree inside the nested repo: if it were walked before
     // being filtered, it would exhaust the tiny budget and reject.
     for (let i = 0; i < 20; i += 1) {
@@ -261,6 +266,7 @@ describe('quick-open readdir walk', () => {
       activeReads++
       maxActiveReads = Math.max(maxActiveReads, activeReads)
       await new Promise((resolve) => setTimeout(resolve, 5))
+
       try {
         return await actual.opendir(...args)
       } finally {
@@ -274,6 +280,7 @@ describe('quick-open readdir walk', () => {
         gitPaths: [],
         directoryPaths
       })
+
       expect(files).toHaveLength(directoryPaths.length)
       expect(maxActiveReads).toBeGreaterThan(1)
       expect(maxActiveReads).toBeLessThanOrEqual(32)
@@ -294,6 +301,7 @@ describe('quick-open readdir walk', () => {
       if ((err as NodeJS.ErrnoException).code === 'EPERM') {
         return
       }
+
       throw err
     }
 
@@ -317,6 +325,7 @@ describe('quick-open readdir walk', () => {
       if ((err as NodeJS.ErrnoException).code === 'EPERM') {
         return
       }
+
       throw err
     }
 
@@ -343,6 +352,7 @@ describe('quick-open readdir walk', () => {
         await rename(distPath, join(root, 'old-dist'))
         await symlink(outsideRoot, distPath, 'dir')
       }
+
       return actual.opendir(...args)
     })
 
@@ -463,6 +473,7 @@ describe('quick-open readdir walk', () => {
       if ((err as NodeJS.ErrnoException).code === 'EPERM') {
         return
       }
+
       throw err
     }
 
@@ -484,6 +495,7 @@ describe('quick-open readdir walk', () => {
       if ((err as NodeJS.ErrnoException).code === 'EPERM') {
         return
       }
+
       throw err
     }
 
@@ -547,7 +559,9 @@ describe('quick-open readdir walk', () => {
         closeCalls += 1
         await close()
       }
+
       controller.abort()
+
       return directory
     })
 

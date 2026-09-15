@@ -33,12 +33,15 @@ export async function connectDockerRemote(
   const remote = await page.evaluate(
     async ({ target, remotePath }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Store unavailable')
       }
+
       const credentialUnsub = window.api.ssh.onCredentialRequest((request) => {
         void window.api.ssh.submitCredential({ requestId: request.requestId, value: null })
       })
+
       try {
         const { target: createdTarget, repoReadoptions } = await window.api.ssh.addTarget({
           target: {
@@ -51,11 +54,14 @@ export async function connectDockerRemote(
             relayGracePeriodSeconds: 1
           }
         })
+
         store.getState().recordSshRepoReadoptions(repoReadoptions)
         const state = await window.api.ssh.connect({ targetId: createdTarget.id })
+
         if (!state || state.status !== 'connected') {
           throw new Error(`SSH target did not connect: ${JSON.stringify(state)}`)
         }
+
         store.getState().setSshConnectionState(createdTarget.id, state)
         const labels = new Map(store.getState().sshTargetLabels)
         labels.set(createdTarget.id, createdTarget.label)
@@ -66,11 +72,14 @@ export async function connectDockerRemote(
           remotePath,
           displayName: 'Docker SSH Codex Artifact Repro'
         })
+
         if ('error' in result) {
           throw new Error(result.error)
         }
+
         await store.getState().fetchRepos()
         await store.getState().fetchWorktrees(result.repo.id)
+
         return { targetId: createdTarget.id, repoId: result.repo.id, repoPath: result.repo.path }
       } finally {
         credentialUnsub()
@@ -84,10 +93,13 @@ export async function connectDockerRemote(
       () =>
         page.evaluate(async (repoId) => {
           const store = window.__store
+
           if (!store) {
             return 0
           }
+
           await store.getState().fetchWorktrees(repoId)
+
           return store.getState().worktreesByRepo[repoId]?.length ?? 0
         }, remote.repoId),
       { timeout: 30_000, message: `No remote worktree found for ${remote.repoPath}` }
@@ -97,14 +109,19 @@ export async function connectDockerRemote(
   const worktreeId = await page.evaluate((repoId) => {
     const store = window.__store
     const worktree = store?.getState().worktreesByRepo[repoId]?.[0]
+
     if (!store || !worktree) {
       throw new Error(`Remote worktree disappeared for repo ${repoId}`)
     }
+
     store.getState().setActiveWorktree(worktree.id)
+
     if ((store.getState().tabsByWorktree[worktree.id] ?? []).length === 0) {
       store.getState().createTab(worktree.id)
     }
+
     store.getState().setActiveTabType('terminal')
+
     return worktree.id
   }, remote.repoId)
 
@@ -117,22 +134,30 @@ export async function switchToNonRemoteWorktree(
 ): Promise<string> {
   const otherWorktreeId = await page.evaluate((remoteWorktreeId) => {
     const store = window.__store
+
     if (!store) {
       return null
     }
+
     const state = store.getState()
+
     const other = Object.values(state.worktreesByRepo)
       .flat()
       .find((worktree) => worktree.id !== remoteWorktreeId)
+
     if (!other) {
       return null
     }
+
     state.setActiveWorktree(other.id)
+
     return other.id
   }, remoteWorktreeId)
+
   if (!otherWorktreeId) {
     throw new Error('No non-remote worktree available to hide the SSH terminal')
   }
+
   return otherWorktreeId
 }
 
@@ -144,27 +169,33 @@ export async function installPtyReplayProbe(
   await installSshReplayReplyProbe(app, ptyId)
   await page.evaluate((expectedPtyId) => {
     const api = window.api?.pty
+
     if (!api || typeof api.onReplay !== 'function') {
       throw new Error('PTY replay API unavailable')
     }
+
     const holder = window as unknown as {
       __orcaSshCodexReplayProbe?: {
         payloads: { id: string; length: number; preview: string }[]
         dispose: () => void
       }
     }
+
     holder.__orcaSshCodexReplayProbe?.dispose()
     const payloads: { id: string; length: number; preview: string }[] = []
+
     const dispose = api.onReplay(({ id, data }) => {
       if (id !== expectedPtyId) {
         return
       }
+
       payloads.push({
         id,
         length: data.length,
         preview: data.slice(-400)
       })
     })
+
     holder.__orcaSshCodexReplayProbe = { payloads, dispose }
   }, ptyId)
 }
@@ -176,11 +207,14 @@ export async function waitForDockerRemoteReconnected(page: Page, targetId: strin
       async () => {
         const status = await page.evaluate((targetId) => {
           const state = window.__store?.getState().sshConnectionStates.get(targetId)
+
           return state?.status ?? null
         }, targetId)
+
         if (status !== 'connected') {
           observedNonConnected = true
         }
+
         return observedNonConnected && status === 'connected'
       },
       {
@@ -196,6 +230,7 @@ export async function readReplayProbeSnapshot(
   app: ElectronApplication
 ): Promise<Record<string, unknown>> {
   const replies = await readSshReplayReplies(app)
+
   return page.evaluate((replies) => {
     const probe = (
       window as unknown as {
@@ -204,6 +239,7 @@ export async function readReplayProbeSnapshot(
         }
       }
     ).__orcaSshCodexReplayProbe
+
     return {
       replayCount: (probe?.payloads.length ?? 0) + replies.length,
       replayPayloads: [...(probe?.payloads ?? []), ...replies].slice(-8)
@@ -215,27 +251,34 @@ export async function readDuplicateStatusRows(page: Page): Promise<string[]> {
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const text = pane?.serializeAddon?.serialize?.() ?? ''
     const counts = new Map<string, number>()
+
     const escapeSequencePattern = new RegExp(
       `${String.fromCharCode(27)}\\[[0-9;?]*[ -/]*[@-~]`,
       'g'
     )
+
     for (const line of text.split(/\r?\n/)) {
       const normalized = line.replace(escapeSequencePattern, '').trim()
+
       if (!/gpt-5\.5|background terminal|\/ps to view|\/stop to close/i.test(normalized)) {
         continue
       }
+
       counts.set(normalized, (counts.get(normalized) ?? 0) + 1)
     }
+
     return Array.from(counts)
       .filter(([, count]) => count > 1)
       .map(([line, count]) => `${count}x ${line}`)
@@ -246,9 +289,11 @@ export async function readDuplicateStatusRows(page: Page): Promise<string[]> {
 export async function enableRiskyTerminalRendererPath(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store unavailable')
     }
+
     const state = store.getState()
     store.setState({
       settings: {
@@ -258,12 +303,14 @@ export async function enableRiskyTerminalRendererPath(page: Page): Promise<void>
       }
     })
     const worktreeId = state.activeWorktreeId
+
     const tabId =
       state.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     manager?.setTerminalGpuAcceleration('on')
   })

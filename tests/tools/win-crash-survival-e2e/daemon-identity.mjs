@@ -14,6 +14,7 @@ export function selectScopedDaemon(pidFiles, scannedProcesses) {
   const processRecord = scannedProcesses[0]
   const numericPidFiles = pidFiles.filter((record) => Number.isInteger(record.pid))
   const matchingPidFile = numericPidFiles.find((record) => record.pid === processRecord.pid)
+
   if (numericPidFiles.length > 0 && !matchingPidFile) {
     throw new Error(
       `daemon PID file does not match scoped live daemon ${processRecord.pid} ` +

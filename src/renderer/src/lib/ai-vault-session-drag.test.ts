@@ -18,6 +18,7 @@ class FakeDataTransfer {
     if (!this.types.includes(type)) {
       this.types.push(type)
     }
+
     this.data.set(type, value)
   }
 
@@ -43,6 +44,7 @@ describe('Session History session drag data', () => {
 
   it('writes and reads the private session history payload', () => {
     const transfer = createTransfer()
+
     const payload: AiVaultSessionDragPayload = {
       agent: 'claude',
       sessionId: 'session-1',
@@ -73,6 +75,7 @@ describe('Session History session drag data', () => {
 
   it('preserves an explicit null sessionCwd across the serialized round-trip', () => {
     const transfer = createTransfer()
+
     const payload: AiVaultSessionDragPayload = {
       agent: 'codex',
       sessionId: 'session-3',
@@ -230,12 +233,14 @@ describe('Session History session drag data', () => {
 
   it('falls back to the active renderer drag payload when Chromium hides custom data', () => {
     const source = createTransfer()
+
     const payload: AiVaultSessionDragPayload = {
       agent: 'codex',
       sessionId: 'session-2',
       title: 'Resume a hidden payload',
       command: "cd '/repo' && codex resume session-2"
     }
+
     writeAiVaultSessionDragData(source, payload)
 
     const dropTransfer = new TypeOnlyDataTransfer() as unknown as DataTransfer

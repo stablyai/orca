@@ -9,6 +9,7 @@ const css = readFileSync(
 
 const PROJECT_SCALE =
   /:where\(\s*\.agent-map-project-node:hover,\s*\.agent-map-project-node:focus-within,\s*\.agent-map-project-node\.is-held\s*\)\s*\.agent-map-project-ring\s*\{([^}]*)\}/
+
 const WORKTREE_SCALE =
   /:where\(\s*\.agent-map-worktree-group:hover,\s*\.agent-map-worktree-group:focus-within,\s*\.agent-map-worktree-group\.is-held\s*\)\s*\.agent-map-worktree-ring\s*\{([^}]*)\}/
 
@@ -28,6 +29,7 @@ describe('Agent Map hover containment', () => {
     const hoverAt = css.search(WORKTREE_SCALE)
 
     expect(hoverAt).toBeGreaterThan(css.indexOf('.agent-map-worktree-ring {'))
+
     for (const state of ['.is-open', '.is-selected', '.is-working', '.is-blocked']) {
       expect(css.indexOf(`.agent-map-worktree-ring${state}`)).toBeGreaterThan(hoverAt)
     }

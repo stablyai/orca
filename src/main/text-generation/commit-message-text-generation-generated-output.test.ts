@@ -9,6 +9,7 @@ import {
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof ChildProcess>()
+
   return {
     ...actual,
     spawn: vi.fn(actual.spawn)
@@ -56,6 +57,7 @@ describe('generateCommitMessageFromContext', () => {
 
   it('reports empty remote commit-message output as an empty message', async () => {
     let operation = ''
+
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',
@@ -73,6 +75,7 @@ describe('generateCommitMessageFromContext', () => {
         missingBinaryLocation: 'remote PATH',
         execute: async (_plan, _cwd, _timeoutMs, requestedOperation) => {
           operation = requestedOperation
+
           return {
             stdout: '   \n',
             stderr: '',
@@ -92,6 +95,7 @@ describe('generateCommitMessageFromContext', () => {
 
   it('reports empty remote pull-request field output as empty details', async () => {
     let operation = ''
+
     const result = await generatePullRequestFieldsFromContext(
       {
         branch: 'feature/pr-fields',
@@ -115,6 +119,7 @@ describe('generateCommitMessageFromContext', () => {
         missingBinaryLocation: 'remote PATH',
         execute: async (_plan, _cwd, _timeoutMs, requestedOperation) => {
           operation = requestedOperation
+
           return {
             stdout: '   \n',
             stderr: '',

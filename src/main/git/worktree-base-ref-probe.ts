@@ -27,7 +27,9 @@ export async function resolveWorktreeBaseCommitOid(
         ...options
       }
     )
+
     const oid = stdout.trim()
+
     return oid.length > 0 ? oid : null
   } catch {
     return null
@@ -72,13 +74,17 @@ export async function hasLocalWorktreeBaseRef(
 ): Promise<boolean> {
   const refExists = (qualifiedRef: string) =>
     hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
+
   const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, refExists)
+
   if (resolvedBaseRef !== baseRef) {
     return true
   }
+
   if (baseRef.startsWith('refs/')) {
     return refExists(baseRef)
   }
+
   return hasCommitObjectViaGitExec(
     (gitArgs) => gitExecFileAsync(gitArgs, { cwd: repoPath, ...options }),
     baseRef
@@ -104,8 +110,10 @@ export async function probeWorktreeBaseRefPresence(
   if (!isSafeGitRefName(qualifiedRef)) {
     return 'unknown'
   }
+
   try {
     await runGit(['show-ref', '--verify', '--quiet', '--', qualifiedRef])
+
     return 'present'
   } catch (error) {
     return isShowRefNoMatchError(error) ? 'absent' : 'unknown'

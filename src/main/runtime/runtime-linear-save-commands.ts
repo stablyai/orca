@@ -17,6 +17,7 @@ export class RuntimeLinearSaveCommands extends RuntimeLinearCommentCommands {
     if ((params.description?.length ?? 0) > LINEAR_WRITE_BODY_CAP) {
       throw linearError('linear_body_too_large', 'Linear issue body is too large.')
     }
+
     if (!params.input && !params.current) {
       if (!params.title || !params.team) {
         throw linearError(
@@ -24,6 +25,7 @@ export class RuntimeLinearSaveCommands extends RuntimeLinearCommentCommands {
           'Creating with save-issue requires both team and title.'
         )
       }
+
       const created = await this.linearIssueCreate({
         title: params.title,
         body: params.description,
@@ -40,18 +42,24 @@ export class RuntimeLinearSaveCommands extends RuntimeLinearCommentCommands {
         writeId: params.writeId,
         context: params.context
       })
+
       return { ...created, meta: { ...created.meta, created: true } }
     }
+
     if (params.team !== undefined) {
       throw linearError('linear_write_failed', 'Team can only be set when creating an issue.')
     }
+
     const target = await this.resolveLinearAgentWriteTarget(params)
     const current = await this.readLinearAgentIssueWriteRecord(target.issue.id, target.workspaceId)
     const fields = await this.buildLinearSaveUpdate(params, current, target.workspaceId)
+
     if (Object.keys(fields).length === 0) {
       throw linearError('linear_write_failed', 'No issue fields were provided to save.')
     }
+
     const alreadySet = this.linearSavedIssueMatchesIntent(current, fields)
+
     const updated = alreadySet
       ? current
       : await this.runLinearAgentWrite(
@@ -62,12 +70,14 @@ export class RuntimeLinearSaveCommands extends RuntimeLinearCommentCommands {
               target.workspaceId,
               { signal }
             )
+
             if (!this.linearSavedIssueMatchesIntent(saved, fields)) {
               throw new LinearWriteFailure(
                 'unconfirmed',
                 'Linear issue save could not be confirmed.'
               )
             }
+
             return saved
           },
           (cause) =>
@@ -82,7 +92,9 @@ export class RuntimeLinearSaveCommands extends RuntimeLinearCommentCommands {
               }
             )
         )
+
     await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+
     return {
       issue: updated,
       meta: {
@@ -98,10 +110,13 @@ export class RuntimeLinearSaveCommands extends RuntimeLinearCommentCommands {
     const target = await this.resolveLinearAgentWriteTarget(params)
     const current = await this.readLinearAgentIssueWriteRecord(target.issue.id, target.workspaceId)
     const update = await this.buildLinearTaskUpdate(params, current, target.workspaceId)
+
     if (!update) {
       throw linearError('linear_write_failed', 'No Linear task field update was requested.')
     }
+
     const alreadySet = this.linearTaskFieldAlreadySet(params.operation, current, update)
+
     if (!alreadySet) {
       await this.runLinearAgentWrite(
         async (signal) => {
@@ -111,12 +126,14 @@ export class RuntimeLinearSaveCommands extends RuntimeLinearCommentCommands {
             target.workspaceId,
             { signal }
           )
+
           if (!this.linearTaskFieldAlreadySet(params.operation, updated, update)) {
             throw new LinearWriteFailure(
               'unconfirmed',
               'Linear task field update could not be confirmed.'
             )
           }
+
           return updated
         },
         (cause) =>
@@ -132,10 +149,13 @@ export class RuntimeLinearSaveCommands extends RuntimeLinearCommentCommands {
           )
       )
     }
+
     await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+
     const finalRecord = alreadySet
       ? current
       : await this.readLinearAgentIssueWriteRecord(target.issue.id, target.workspaceId)
+
     return this.linearTaskUpdateResult(
       params.operation,
       target.issue,

@@ -43,20 +43,25 @@ export class DaemonServerLifecycle {
     return new Promise((resolve, reject) => {
       this.server = createServer(handleConnection)
       let startupSettled = false
+
       const onServerError = (error: Error): void => {
         if (startupSettled) {
           this.options.log.log('server-error', { message: error.message })
           console.warn(`[daemon] Socket server error: ${error.message}`)
+
           return
         }
+
         startupSettled = true
         this.startupFailure = error
         reject(error)
       }
+
       this.server.on('error', onServerError)
       const bindPath = this.options.endpoint.bindPath()
       this.server.listen(bindPath, () => {
         this.options.endpoint.secureBindPath(bindPath)
+
         const abandonStartup = (error: unknown): void => {
           startupSettled = true
           const server = this.server
@@ -65,16 +70,20 @@ export class DaemonServerLifecycle {
           server?.close()
           this.options.endpoint.abandonBindPath(bindPath)
         }
+
         void this.options.endpoint.publish(bindPath).then(() => {
           if (this.startupFailure) {
             this.options.endpoint.retireUnstarted()
             this.cancelInitialAdoptionTimer()
             abandonStartup(this.startupFailure)
+
             return
           }
+
           if (this.options.protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION) {
             this.armInitialAdoptionTimeout()
           }
+
           this.options.endpoint.startOwnershipWatch()
           startupSettled = true
           resolve()
@@ -88,6 +97,7 @@ export class DaemonServerLifecycle {
       const serverClose = this.beginOrdinaryShutdownFence()
       this.shutdownPromise = this.finishOrdinaryShutdown(serverClose)
     }
+
     return this.shutdownPromise
   }
 
@@ -98,6 +108,7 @@ export class DaemonServerLifecycle {
   onAuthenticatedPair(): void {
     this.initialAdoptionDeadlineMs = null
     this.cancelInitialAdoptionTimer()
+
     if (!this.options.endpoint.lost) {
       this.retirementRequested = false
     }
@@ -118,27 +129,37 @@ export class DaemonServerLifecycle {
     if (this.state !== 'running') {
       return
     }
+
     if (this.retirementRequested) {
       this.cancelInitialAdoptionTimer()
+
       if (this.options.isIdle()) {
         this.beginIdleShutdown()
       }
+
       return
     }
+
     if (!this.options.isIdle() || this.initialAdoptionDeadlineMs === null) {
       this.cancelInitialAdoptionTimer()
+
       return
     }
+
     if (this.initialAdoptionTimer !== null) {
       return
     }
+
     const remainingMs = Math.max(0, this.initialAdoptionDeadlineMs - this.options.clock.now())
+
     if (remainingMs === 0) {
       this.initialAdoptionDeadlineMs = null
       this.retirementRequested = true
       this.beginIdleShutdown()
+
       return
     }
+
     this.initialAdoptionTimer = this.options.clock.setTimeout(() => {
       this.initialAdoptionTimer = null
       this.initialAdoptionDeadlineMs = null
@@ -151,6 +172,7 @@ export class DaemonServerLifecycle {
     this.state = 'shutting-down'
     this.cancelInitialAdoptionTimer()
     this.ordinaryShutdownServerClose ??= this.beginServerClose()
+
     return this.ordinaryShutdownServerClose
   }
 
@@ -193,21 +215,27 @@ export class DaemonServerLifecycle {
     if (this.initialAdoptionTimer === null) {
       return
     }
+
     this.options.clock.clearTimeout(this.initialAdoptionTimer)
     this.initialAdoptionTimer = null
   }
 
   private beginIdleShutdown(): void {
     this.initialAdoptionTimer = null
+
     if (this.state !== 'running') {
       return
     }
+
     this.state = 'idle-shutdown-pending'
+
     if (!this.options.isIdle()) {
       this.state = 'running'
       this.reevaluateIdleShutdown()
+
       return
     }
+
     this.state = 'shutting-down'
     const serverClose = this.beginServerClose()
     this.shutdownPromise = this.finishIdleShutdown(serverClose)
@@ -239,9 +267,11 @@ export class DaemonServerLifecycle {
   private beginServerClose(): Promise<void> {
     const server = this.server
     this.server = null
+
     if (!server) {
       return Promise.resolve()
     }
+
     return new Promise<void>((resolve) => server.close(() => resolve()))
   }
 
@@ -254,10 +284,12 @@ export class DaemonServerLifecycle {
     const key = this.shutdownReplyKey(clientId, requestId)
     let started = false
     let timer: ReturnType<typeof setTimeout>
+
     const start = (): void => {
       if (started) {
         return
       }
+
       started = true
       clearTimeout(timer)
       socket.off('close', start)
@@ -265,6 +297,7 @@ export class DaemonServerLifecycle {
       this.pendingShutdownReplies.delete(key)
       this.shutdownPromise ??= finish()
     }
+
     timer = setTimeout(start, DaemonServerLifecycle.SHUTDOWN_REPLY_FLUSH_TIMEOUT_MS)
     timer.unref()
     socket.once('close', start)

@@ -42,6 +42,7 @@ import {
 } from './browser-manager-viewport-test-fixtures'
 
 const { webContentsFromIdMock } = browserMocks
+
 const makeGuest = createViewportGuestFactory(browserMocks)
 
 const BRIDGE_OPTIONS: BrowserAnnotationViewportBridgeOptions = {
@@ -105,11 +106,13 @@ describe('browserManager.setAnnotationViewportBridge', () => {
   it('injects into the guest the page has when a queued op finally runs, not the one it was asked with', async () => {
     const { guest: firstGuest } = makeGuest(5101)
     let releaseFirstInjection = (): void => {}
+
     // One shared gate for every call, so a wrongly-routed second injection still settles and the
     // test fails on where it landed rather than on a timeout.
     const firstInjectionGate = new Promise<void>((resolve) => {
       releaseFirstInjection = () => resolve()
     })
+
     firstGuest.executeJavaScriptInIsolatedWorld = vi.fn(() => firstInjectionGate)
     registerPage('tab-swap', firstGuest)
 
@@ -118,6 +121,7 @@ describe('browserManager.setAnnotationViewportBridge', () => {
       BRIDGE_OPTIONS,
       resolveFromRegistry('tab-swap')
     )
+
     await flushViewportOps()
 
     // A second request arrives while the first still holds the chain — at this moment the page is
@@ -127,6 +131,7 @@ describe('browserManager.setAnnotationViewportBridge', () => {
       BRIDGE_OPTIONS,
       resolveFromRegistry('tab-swap')
     )
+
     await flushViewportOps()
 
     // Only now does the page swap renderer processes, while the second op is still queued.

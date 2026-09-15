@@ -6,6 +6,7 @@ const { getDefaultRemoteMock, getGitHubApiRepositoryForRemoteMock } = vi.hoisted
 }))
 
 vi.mock('../git/repo', () => ({ getDefaultRemote: getDefaultRemoteMock }))
+
 vi.mock('./github-api-repository', () => ({
   getGitHubApiRepositoryForRemote: getGitHubApiRepositoryForRemoteMock
 }))
@@ -17,6 +18,7 @@ function gitExecWithRemotes(remotes: string[]) {
     if (args[0] === 'remote') {
       return { stdout: `${remotes.join('\n')}\n`, stderr: '' }
     }
+
     throw new Error(`unexpected git call: ${args.join(' ')}`)
   })
 }

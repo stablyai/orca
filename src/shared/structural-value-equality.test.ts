@@ -17,6 +17,7 @@ describe.each(comparators)('%s', (_name, valuesEqual) => {
     expect(valuesEqual(null, {})).toBe(false)
     expect(valuesEqual(undefined, null)).toBe(false)
     const fn = (): void => {}
+
     expect(valuesEqual(fn, fn)).toBe(true)
     expect(valuesEqual(fn, (): void => {})).toBe(false)
   })
@@ -50,9 +51,11 @@ describe.each(comparators)('%s', (_name, valuesEqual) => {
     expect(valuesEqual(date, new Date(0))).toBe(false)
     expect(valuesEqual(new Map([['a', 1]]), new Map([['a', 1]]))).toBe(false)
     expect(valuesEqual(new Set([1]), new Set([1]))).toBe(false)
+
     class Row {
       x = 1
     }
+
     expect(valuesEqual(new Row(), new Row())).toBe(false)
     expect(valuesEqual(new Row(), { x: 1 })).toBe(false)
   })

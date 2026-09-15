@@ -16,19 +16,25 @@ import {
 import type { MobileBrowserViewMode } from './browser-screencast-request'
 
 export type FrameLayer = 0 | 1
+
 export type PinchGesture = {
   distance: number
   scale: number
   anchorX: number
   anchorY: number
 }
+
 export type BrowserFrameCacheEntry = {
   uri: string
   metadata: BrowserScreencastFrameMetadata
 }
+
 export const MIN_ZOOM = 1
+
 export const MAX_ZOOM = 3.5
+
 const BROWSER_FRAME_CACHE_LIMIT = 4
+
 const browserFrameCache = new Map<string, BrowserFrameCacheEntry>()
 
 export function buttonColor(enabled: boolean): string {
@@ -49,6 +55,7 @@ export function makeBrowserFrameCacheKey(
 
 export function clearCachedBrowserFramesForWorktree(worktreeId: string): void {
   const prefix = `${worktreeId}:`
+
   for (const key of browserFrameCache.keys()) {
     if (key.startsWith(prefix)) {
       browserFrameCache.delete(key)
@@ -60,12 +67,16 @@ export function getCachedBrowserFrame(cacheKey: string | null): BrowserFrameCach
   if (!cacheKey) {
     return null
   }
+
   const cached = browserFrameCache.get(cacheKey)
+
   if (!cached) {
     return null
   }
+
   browserFrameCache.delete(cacheKey)
   browserFrameCache.set(cacheKey, cached)
+
   return cached
 }
 
@@ -77,13 +88,17 @@ export function cacheBrowserFrame(cacheKey: string | null, entry: BrowserFrameCa
   if (!cacheKey) {
     return
   }
+
   browserFrameCache.delete(cacheKey)
   browserFrameCache.set(cacheKey, entry)
+
   while (browserFrameCache.size > BROWSER_FRAME_CACHE_LIMIT) {
     const oldestKey = browserFrameCache.keys().next().value
+
     if (typeof oldestKey !== 'string') {
       break
     }
+
     browserFrameCache.delete(oldestKey)
   }
 }
@@ -130,6 +145,7 @@ export function browserErrorMessage(error: unknown, fallback: string): string {
 
 export function shouldSurfaceBrowserError(message: string): boolean {
   const normalized = message.toLowerCase()
+
   // Why: selector_not_found can be emitted by in-flight page automation while
   // the browser is still usable; replacing the frame with it feels like a crash.
   return !normalized.includes('selector_not_found') && !normalized.includes('selector not found')
@@ -137,11 +153,14 @@ export function shouldSurfaceBrowserError(message: string): boolean {
 
 function touchPair(event: GestureResponderEvent): { a: BrowserPoint; b: BrowserPoint } | null {
   const touches = event.nativeEvent.touches
+
   if (!touches || touches.length < 2) {
     return null
   }
+
   const a = readLocalTouchPoint(touches[0])
   const b = readLocalTouchPoint(touches[1])
+
   return a && b ? { a, b } : null
 }
 
@@ -157,18 +176,24 @@ export function createPinchGesture(
   if (!geometry) {
     return null
   }
+
   const pair = touchPair(event)
+
   if (!pair) {
     return null
   }
+
   const distance = pointDistance(pair.a, pair.b)
+
   if (distance < 8) {
     return null
   }
+
   const centerX = (pair.a.x + pair.b.x) / 2
   const centerY = (pair.a.y + pair.b.y) / 2
   const frameCenterX = geometry.offsetX + geometry.renderedWidth / 2 + zoom.offsetX
   const frameCenterY = geometry.offsetY + geometry.renderedHeight / 2 + zoom.offsetY
+
   return {
     distance,
     scale: zoom.scale,
@@ -185,18 +210,23 @@ export function updatePinchZoom(
   if (!geometry) {
     return null
   }
+
   const pair = touchPair(event)
+
   if (!pair) {
     return null
   }
+
   const nextScale = Math.min(
     MAX_ZOOM,
     Math.max(MIN_ZOOM, (pinch.scale * pointDistance(pair.a, pair.b)) / pinch.distance)
   )
+
   const centerX = (pair.a.x + pair.b.x) / 2
   const centerY = (pair.a.y + pair.b.y) / 2
   const baseCenterX = geometry.offsetX + geometry.renderedWidth / 2
   const baseCenterY = geometry.offsetY + geometry.renderedHeight / 2
+
   return clampBrowserZoomState(
     {
       scale: nextScale,

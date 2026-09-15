@@ -14,7 +14,9 @@ function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
     return fallback
   }
+
   const match = err.message.match(/Error invoking remote method '[^']*': (?:Error: )?(.+)/)
+
   return match ? match[1] : err.message
 }
 
@@ -34,6 +36,7 @@ export function useFileDuplicate({
       if (node.isDirectory || !worktreePath) {
         return
       }
+
       const dir = dirname(node.path)
       const name = basename(node.path)
       const dotIndex = name.lastIndexOf('.')
@@ -42,12 +45,15 @@ export function useFileDuplicate({
 
       const run = async (): Promise<void> => {
         let operationGuard
+
         try {
           operationGuard = captureFileExplorerOperationGuard(activeWorktreeId, node.operationOwner)
         } catch (err) {
           toast.error(extractIpcErrorMessage(err, `Failed to duplicate '${name}'.`))
+
           return
         }
+
         const context = {
           settings: operationGuard.route.settings,
           worktreeId: activeWorktreeId,
@@ -57,11 +63,13 @@ export function useFileDuplicate({
           expectedSshTargetId: operationGuard.route.expectedSshTargetId,
           expectedSshConnectionGeneration: operationGuard.route.expectedSshConnectionGeneration
         }
+
         // Why: generate a unique "stem copy.ext", "stem copy 2.ext", … name
         // so we never collide with an existing file. pathExists checks are
         // sequential to avoid TOCTOU races with COPYFILE_EXCL on the backend.
         let candidate = joinPath(dir, `${stem} copy${ext}`)
         let n = 2
+
         while (await runtimePathExists(context, candidate)) {
           candidate = joinPath(dir, `${stem} copy ${n}${ext}`)
           n += 1
@@ -75,6 +83,7 @@ export function useFileDuplicate({
         // in degenerate scenarios.
         const MAX_RETRIES = 10
         let retries = 0
+
         // eslint-disable-next-line no-constant-condition
         while (true) {
           try {
@@ -85,6 +94,7 @@ export function useFileDuplicate({
             const isEexist =
               err instanceof Error &&
               (err.message.includes('EEXIST') || err.message.includes('already exists'))
+
             if (isEexist && retries < MAX_RETRIES) {
               // The candidate was taken between our check and the copy attempt;
               // advance to the next name and retry.
@@ -93,7 +103,9 @@ export function useFileDuplicate({
               retries += 1
               continue
             }
+
             toast.error(extractIpcErrorMessage(err, `Failed to duplicate '${name}'.`))
+
             return
           }
         }
@@ -106,6 +118,7 @@ export function useFileDuplicate({
           // noop – the copy succeeded; stale tree is a minor inconvenience.
         }
       }
+
       void run()
     },
     [activeWorktreeId, worktreePath, refreshDir]

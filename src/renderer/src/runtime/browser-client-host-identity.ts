@@ -18,12 +18,15 @@ export function readBrowserClientHostId(): string | null {
   if (cachedBrowserClientHostId !== null) {
     return cachedBrowserClientHostId
   }
+
   const api = (globalThis as { api?: BrowserClientHostIdentityApi }).api
+
   try {
     cachedBrowserClientHostId = api?.browser?.readClientHostId?.() ?? null
   } catch {
     cachedBrowserClientHostId = null
   }
+
   return cachedBrowserClientHostId
 }
 

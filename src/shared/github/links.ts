@@ -19,9 +19,11 @@ export function buildGitHubRepoUrl(slug: RepoSlug | null | undefined): string | 
   if (!slug?.owner || !slug.repo) {
     return null
   }
+
   // Why: hosted identities carry the GHES host; links must point at that
   // server, not github.com.
   const host = slug.host ?? 'github.com'
+
   return `https://${host}/${encodeURIComponent(slug.owner)}/${encodeURIComponent(slug.repo)}`
 }
 
@@ -31,6 +33,7 @@ function matchGitHubItemPath(url: URL): RegExpExecArray | null {
 
 function parseGitHubItemNumber(value: string): number | null {
   const parsed = Number.parseInt(value, 10)
+
   return parsed > 0 ? parsed : null
 }
 
@@ -40,16 +43,19 @@ function parseGitHubItemNumber(value: string): number | null {
  */
 export function parseGitHubIssueOrPRNumber(input: string): number | null {
   const trimmed = input.trim()
+
   if (!trimmed) {
     return null
   }
 
   const numeric = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed
+
   if (/^\d+$/.test(numeric)) {
     return parseGitHubItemNumber(numeric)
   }
 
   let url: URL
+
   try {
     url = new URL(trimmed)
   } catch {
@@ -61,6 +67,7 @@ export function parseGitHubIssueOrPRNumber(input: string): number | null {
   }
 
   const match = matchGitHubItemPath(url)
+
   if (!match) {
     return null
   }
@@ -74,11 +81,13 @@ export function parseGitHubIssueOrPRNumber(input: string): number | null {
  */
 export function parseGitHubIssueOrPRLink(input: string): GitHubIssueOrPRLink | null {
   const trimmed = input.trim()
+
   if (!trimmed) {
     return null
   }
 
   let url: URL
+
   try {
     url = new URL(trimmed)
   } catch {
@@ -90,10 +99,13 @@ export function parseGitHubIssueOrPRLink(input: string): GitHubIssueOrPRLink | n
   }
 
   const match = matchGitHubItemPath(url)
+
   if (!match) {
     return null
   }
+
   const number = parseGitHubItemNumber(match[4])
+
   if (number === null) {
     return null
   }

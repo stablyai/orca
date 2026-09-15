@@ -111,6 +111,7 @@ describe('getWorktreeParentPickerItemValue', () => {
 
 describe('filterWorktreeParentCandidates', () => {
   const alpha = makeWorktree({ id: 'alpha', displayName: 'alpha', path: '/workspaces/alpha' })
+
   const beta = makeWorktree({
     id: 'beta',
     displayName: 'beta',
@@ -184,6 +185,7 @@ describe('getWorktreeParentPickerFocusRestoreTarget', () => {
     const row = document.createElement('div')
     row.setAttribute('role', 'option')
     listbox.appendChild(row)
+
     return { listbox, row }
   }
 

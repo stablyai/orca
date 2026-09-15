@@ -147,6 +147,7 @@ describe('locale-translation-policy ja relocalization', () => {
     ]) {
       expect(shouldPreserveEnglishValue(value)).toBe(true)
     }
+
     // Why: two ordinary sentences carry two periods, which must not read as selector joins.
     for (const value of [
       'Open Settings > Git and try again.',

@@ -17,21 +17,28 @@ function parseCommandLineToArgv(line: string): string[] {
   let quoted = false
   let started = false
   let index = 0
+
   while (index < line.length) {
     const char = line[index]!
+
     if (!started && /\s/.test(char)) {
       index += 1
       continue
     }
+
     started = true
+
     if (char === '\\') {
       let backslashes = 0
+
       while (line[index] === '\\') {
         backslashes += 1
         index += 1
       }
+
       if (line[index] === '"') {
         current += '\\'.repeat(Math.floor(backslashes / 2))
+
         if (backslashes % 2 === 1) {
           current += '"'
           index += 1
@@ -39,18 +46,22 @@ function parseCommandLineToArgv(line: string): string[] {
       } else {
         current += '\\'.repeat(backslashes)
       }
+
       continue
     }
+
     if (char === '"') {
       if (quoted && line[index + 1] === '"') {
         current += '"'
         index += 2
         continue
       }
+
       quoted = !quoted
       index += 1
       continue
     }
+
     if (!quoted && /\s/.test(char)) {
       argv.push(current)
       current = ''
@@ -58,12 +69,15 @@ function parseCommandLineToArgv(line: string): string[] {
       index += 1
       continue
     }
+
     current += char
     index += 1
   }
+
   if (started) {
     argv.push(current)
   }
+
   return argv
 }
 

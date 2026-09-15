@@ -16,6 +16,7 @@ function waitFor(condition: () => boolean, timeoutMs = 3_000): Promise<void> {
 describe('WslRelayRecovery', () => {
   it('re-ensures the distro when the restart timer fires and the distro is running', async () => {
     const restart = vi.fn()
+
     const recovery = new WslRelayRecovery({
       isDistroRunning: async () => true,
       warn: vi.fn(),
@@ -24,6 +25,7 @@ describe('WslRelayRecovery', () => {
       restart,
       dropState: vi.fn()
     })
+
     const state = makeState()
     recovery.scheduleRestart(state)
     await waitFor(() => restart.mock.calls.length === 1)
@@ -34,6 +36,7 @@ describe('WslRelayRecovery', () => {
     const restart = vi.fn()
     const dropState = vi.fn()
     const warn = vi.fn()
+
     const recovery = new WslRelayRecovery({
       isDistroRunning: async () => false,
       warn,
@@ -42,6 +45,7 @@ describe('WslRelayRecovery', () => {
       restart,
       dropState
     })
+
     const state = makeState()
     recovery.scheduleRestart(state)
     await waitFor(() => dropState.mock.calls.length === 1)
@@ -52,6 +56,7 @@ describe('WslRelayRecovery', () => {
   it('does nothing when the state was replaced or the manager is disposed', async () => {
     const restart = vi.fn()
     const probe = vi.fn(async () => true)
+
     const recovery = new WslRelayRecovery({
       isDistroRunning: probe,
       warn: vi.fn(),
@@ -60,6 +65,7 @@ describe('WslRelayRecovery', () => {
       restart,
       dropState: vi.fn()
     })
+
     const state = makeState()
     recovery.scheduleRestart(state)
     await new Promise((resolve) => setTimeout(resolve, 500))
@@ -73,6 +79,7 @@ describe('WslRelayRecovery', () => {
     const probe = vi.fn(() => new Promise<boolean>((resolve) => (resolveProbe = resolve)))
     const restart = vi.fn()
     const dropState = vi.fn()
+
     const recovery = new WslRelayRecovery({
       isDistroRunning: probe,
       warn: vi.fn(),
@@ -81,6 +88,7 @@ describe('WslRelayRecovery', () => {
       restart,
       dropState
     })
+
     const state = makeState()
     recovery.scheduleRestart(state)
     await waitFor(() => probe.mock.calls.length === 1)
@@ -97,6 +105,7 @@ describe('WslRelayRecovery', () => {
     let resolveProbe: ((running: boolean) => void) | undefined
     const probe = vi.fn(() => new Promise<boolean>((resolve) => (resolveProbe = resolve)))
     const restart = vi.fn()
+
     const recovery = new WslRelayRecovery({
       isDistroRunning: probe,
       warn: vi.fn(),
@@ -105,6 +114,7 @@ describe('WslRelayRecovery', () => {
       restart,
       dropState: vi.fn()
     })
+
     const state = makeState()
     recovery.scheduleRestart(state)
     await waitFor(() => probe.mock.calls.length === 1)
@@ -116,6 +126,7 @@ describe('WslRelayRecovery', () => {
 
   it('scheduleOneShotReinstall is a no-op once disposed', async () => {
     const run = vi.fn()
+
     const recovery = new WslRelayRecovery({
       isDistroRunning: async () => true,
       warn: vi.fn(),
@@ -124,6 +135,7 @@ describe('WslRelayRecovery', () => {
       restart: vi.fn(),
       dropState: vi.fn()
     })
+
     const state = makeState()
     recovery.scheduleOneShotReinstall(state, 10, run)
     await new Promise((resolve) => setTimeout(resolve, 100))
@@ -133,6 +145,7 @@ describe('WslRelayRecovery', () => {
 
   it('clearTimers cancels both pending timers', async () => {
     const restart = vi.fn()
+
     const recovery = new WslRelayRecovery({
       isDistroRunning: async () => true,
       warn: vi.fn(),
@@ -141,6 +154,7 @@ describe('WslRelayRecovery', () => {
       restart,
       dropState: vi.fn()
     })
+
     const state = makeState()
     const reinstall = vi.fn()
     recovery.scheduleRestart(state)

@@ -41,6 +41,7 @@ describe('getFolderSourceRepos', () => {
     const localSamePath = repo('local-same-path', { connectionId: null })
     const otherSshSamePath = repo('ssh-b-same-path', { connectionId: 'ssh-b' })
     const matchingSshByPath = repo('ssh-a-by-path', { connectionId: 'ssh-a' })
+
     const matchingSshByGroup = repo('ssh-a-by-group', {
       path: '/other/path',
       connectionId: 'ssh-a',
@@ -59,10 +60,12 @@ describe('getFolderSourceRepos', () => {
   it('returns runtime source repos for runtime-owned folder groups', () => {
     const projectGroup = group({ connectionId: null, executionHostId: 'runtime:env-1' })
     const localSamePath = repo('local-same-path', { connectionId: null, executionHostId: 'local' })
+
     const runtimeByPath = repo('runtime-by-path', {
       connectionId: null,
       executionHostId: 'runtime:env-1'
     })
+
     const runtimeByGroup = repo('runtime-by-group', {
       path: '/other/path',
       connectionId: null,

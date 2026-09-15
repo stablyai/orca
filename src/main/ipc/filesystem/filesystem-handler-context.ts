@@ -42,15 +42,19 @@ export function createFilesystemHandlerContext(
     cleanupTemp: boolean
   ): Promise<DownloadSession | null> => {
     const session = downloadSessions.get(transferId)
+
     if (!session) {
       return null
     }
+
     downloadSessions.delete(transferId)
     clearTimeout(session.cleanupTimer)
     await session.handle.close().catch(() => {})
+
     if (cleanupTemp) {
       await cleanupLocalTransferPath(session.tempPath)
     }
+
     return session
   }
 

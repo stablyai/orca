@@ -39,6 +39,7 @@ describe('file explorer selection', () => {
 
   it('selects a contiguous visible range from the anchor with Shift', () => {
     const current = createSingleFileExplorerSelection('/repo/a.ts')
+
     const next = updateFileExplorerSelection(
       current,
       ['/repo/a.ts', '/repo/b.ts', '/repo/c.ts'],
@@ -58,6 +59,7 @@ describe('file explorer selection', () => {
       '/repo/c.ts',
       'range'
     )
+
     const next = updateFileExplorerSelection(
       current,
       ['/repo/a.ts', '/repo/b.ts', '/repo/c.ts'],
@@ -89,6 +91,7 @@ describe('file explorer selection', () => {
       '/repo/c.ts',
       'range'
     )
+
     const next = updateFileExplorerSelectionPaths(current, (path) =>
       path === '/repo/b.ts' ? null : path
     )

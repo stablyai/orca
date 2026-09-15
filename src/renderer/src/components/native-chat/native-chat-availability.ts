@@ -43,19 +43,24 @@ export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean
   if (input.experimentalNativeChatEnabled !== true) {
     return false
   }
+
   if (input.contentType !== 'terminal') {
     return false
   }
+
   if (input.isChatViewMode === true) {
     return true
   }
+
   const agent = input.detectedAgent ?? input.launchAgent ?? input.resolvedAgent
+
   if (
     nativeChatRequiresLocalTranscript(agent) &&
     input.nativeChatTranscriptIsLocalReadable !== true
   ) {
     return false
   }
+
   return isNativeChatSupportedAgent(agent)
 }
 
@@ -69,5 +74,6 @@ export function canSwitchNativeChatView(
   if (input.structuredSessionId) {
     return false
   }
+
   return canToggleNativeChat(input)
 }

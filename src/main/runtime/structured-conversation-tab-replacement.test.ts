@@ -25,12 +25,14 @@ describe('conversation pane replacement', () => {
       { id: 'right', tabOrder: ['old-tab'], activeTabId: 'old-tab', recentTabIds: ['old-tab'] }
     ]
   }
+
   const replacement = {
     workspaceId: 'folder',
     sourceSessionId: 'old-session',
     sessionId: 'new-session',
     agent: 'claude' as const
   }
+
   it('preserves group, position, selection and pinning while resetting identity/title', () => {
     const result = replaceConversationInSnapshot(snapshot, replacement)
     expect(result).toMatchObject({

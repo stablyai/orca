@@ -41,12 +41,16 @@ export {
   pruneParkedTerminalWatchers,
   terminalWatcherLiveWorkspaceIds
 } from './terminal-parked-watcher-registry'
+
 export type { ParkedTerminalPaneCapture } from './terminal-parked-watcher-registry'
+
 export {
   fallbackParkedPaneCandidates,
   resolveParkedTerminalPaneCandidates
 } from './terminal-parked-watcher-reconciliation'
+
 export type { ParkableTerminalTabModel } from './terminal-parked-watcher-reconciliation'
+
 export type ParkedTerminalPtyEligibility = (ptyId: string) => boolean
 
 const allowOrdinaryParkRestore = (ptyId: string): boolean =>
@@ -85,6 +89,7 @@ export function canWatcherCoverParkedTerminalTab(
   const state = useAppStore.getState()
   const panes = resolveParkedTerminalPaneCandidates(tab, state)
   const restorePolicy = parkRestorePolicyFromState(state)
+
   return (
     panes.length > 0 &&
     panes.every(
@@ -108,8 +113,10 @@ function startParkedTabWatchers(
     paneIdByPtyId: new Map(),
     disposersByPtyId: new Map()
   }
+
   parkedWatchersByTabId.set(tab.id, entry)
   const restorePolicy = parkRestorePolicyFromState(useAppStore.getState())
+
   for (const pane of resolveParkedTerminalPaneCandidates(tab, useAppStore.getState())) {
     startParkedPtyWatcher({
       worktreeId,
@@ -131,42 +138,56 @@ function reconcileParkedTabWatchers(
   const state = useAppStore.getState()
   const expectedPanes = watchablePanes(worktreeId, tab)
   const expectedPtyIds = new Set(expectedPanes.keys())
+
   const reconciliation = reconcileParkedWatcherPtyIds({
     currentTabPtyId: tab.ptyId,
     entryTabPtyId: entry.tabPtyId,
     paneIdByPtyId: entry.paneIdByPtyId,
     expectedPtyIds
   })
+
   if (reconciliation.restartAll) {
     const retainedTitles = reconciliation.retainedPtyIds.flatMap((ptyId) => {
       const paneId = entry.paneIdByPtyId.get(ptyId)
+
       const title =
         paneId === undefined ? undefined : state.runtimePaneTitlesByTabId[tab.id]?.[paneId]
+
       return paneId !== undefined && title !== undefined ? [{ paneId, title }] : []
     })
+
     for (const paneId of reconciliation.retiredPaneIds) {
       state.clearRuntimePaneTitle(tab.id, paneId)
     }
+
     disposeParkedTabWatchers(tab.id)
+
     for (const { paneId, title } of retainedTitles) {
       useAppStore.getState().setRuntimePaneTitle(tab.id, paneId, title)
     }
+
     startParkedTabWatchers(worktreeId, tab, restoreTitleOnRegister)
+
     return
   }
+
   for (const [ptyId, paneId] of Array.from(entry.paneIdByPtyId)) {
     if (expectedPtyIds.has(ptyId)) {
       continue
     }
+
     entry.paneIdByPtyId.delete(ptyId)
     const dispose = entry.disposersByPtyId.get(ptyId)
     entry.disposersByPtyId.delete(ptyId)
     dispose?.()
     state.clearRuntimePaneTitle(tab.id, paneId)
   }
+
   const restorePolicy = parkRestorePolicyFromState(useAppStore.getState())
+
   for (const ptyId of reconciliation.addedPtyIds) {
     const pane = expectedPanes.get(ptyId)
+
     if (pane) {
       startParkedPtyWatcher({
         worktreeId,
@@ -186,6 +207,7 @@ function watchablePanes(
 ): Map<string, ParkedTerminalPaneCapture> {
   const state = useAppStore.getState()
   const restorePolicy = parkRestorePolicyFromState(state)
+
   return new Map(
     resolveParkedTerminalPaneCandidates(tab, state).flatMap((pane) =>
       pane.ptyId &&
@@ -206,27 +228,37 @@ function watchablePanes(
  */
 export function shouldDeferParkedPtyExitTabClose(tabId: string, ptyId: string): boolean {
   const entry = parkedWatchersByTabId.get(tabId)
+
   if (!entry) {
     return false
   }
+
   const paneId = entry.paneIdByPtyId.get(ptyId)
+
   if (paneId !== undefined) {
     useAppStore.getState().clearRuntimePaneTitle(tabId, paneId)
   }
+
   const remaining = entry.disposersByPtyId.size
+
   if (remaining === 0) {
     if (paneId !== undefined) {
       // Why: empty entry is the pinned-close tombstone; the reveal-mounted pane owns the exit, so suppress once and drop it.
       parkedWatchersByTabId.delete(tabId)
+
       return true
     }
+
     return false
   }
+
   // Why: runs before the sidecar removes the dead watcher, so >1 (or an unwatched PTY) means live siblings remain.
   const defer = remaining > 1 || !entry.disposersByPtyId.has(ptyId)
+
   if (defer) {
     collapseParkedExitedLeaf(tabId, ptyId)
   }
+
   return defer
 }
 
@@ -238,9 +270,11 @@ function disposeClosedParkedTabWatchers(
   for (const ptyId of entry.paneIdByPtyId.keys()) {
     discardPreHandlerPtyState(ptyId)
   }
+
   for (const paneId of entry.paneIdByPtyId.values()) {
     useAppStore.getState().clearRuntimePaneTitle(tabId, paneId)
   }
+
   disposeParkedTabWatchers(tabId)
 }
 
@@ -260,8 +294,10 @@ function startOrReconcileParkedTabWatchers(
     if (!entry.parkedTabIds.has(tab.id)) {
       continue
     }
+
     const watcherEntry = parkedWatchersByTabId.get(tab.id)
     const restoreTitleOnRegister = entry.restoreTitleOnStartTabIds?.has(tab.id) === true
+
     if (watcherEntry) {
       reconcileParkedTabWatchers(worktreeId, tab, watcherEntry, restoreTitleOnRegister)
     } else {
@@ -289,43 +325,58 @@ export function syncParkedTerminalTabWatchersForWorkspaces(
   if (entriesByWorktreeId.size === 0) {
     return
   }
+
   // Why lazy: only worktrees that actually own a registry row need the id set,
   // so an idle profile allocates none of them.
   const liveTabIdsByWorktreeId = new Map<string, ReadonlySet<string>>()
+
   const liveTabIdsFor = (worktreeId: string): ReadonlySet<string> | null => {
     const cached = liveTabIdsByWorktreeId.get(worktreeId)
+
     if (cached) {
       return cached
     }
+
     const entry = entriesByWorktreeId.get(worktreeId)
+
     if (!entry) {
       return null
     }
+
     const liveTabIds = new Set(entry.tabs.map((tab) => tab.id))
     liveTabIdsByWorktreeId.set(worktreeId, liveTabIds)
+
     return liveTabIds
   }
+
   for (const [tabId, watcherEntry] of parkedWatchersByTabId) {
     const entry = entriesByWorktreeId.get(watcherEntry.worktreeId)
+
     if (!entry) {
       continue
     }
+
     const liveTabIds = liveTabIdsFor(watcherEntry.worktreeId)
+
     if (!liveTabIds?.has(tabId)) {
       disposeClosedParkedTabWatchers(tabId, watcherEntry)
       continue
     }
+
     if (!entry.parkedTabIds.has(tabId) && watcherEntry.disposersByPtyId.size > 0) {
       disposeParkedTabWatchers(tabId)
     }
   }
+
   // Why: closed tabs never park/reveal again; drop captures to keep the registry bounded.
   for (const [tabId, capture] of capturedPanesByTabId) {
     const liveTabIds = liveTabIdsFor(capture.worktreeId)
+
     if (liveTabIds && !liveTabIds.has(tabId)) {
       capturedPanesByTabId.delete(tabId)
     }
   }
+
   for (const [worktreeId, entry] of entriesByWorktreeId) {
     startOrReconcileParkedTabWatchers(worktreeId, entry)
   }

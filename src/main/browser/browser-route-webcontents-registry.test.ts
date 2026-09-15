@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { BrowserRouteWebContentsRegistry } from './browser-route-webcontents-registry'
 
 const partition = `persist:orca-browser-v1-${'a'.repeat(64)}`
+
 const page = {
   partition,
   browserPageId: 'page-a',
@@ -17,6 +18,7 @@ function createHarness(options: { maxGuests?: number } = {}) {
   let pageAuthority = Symbol('page-authority')
   let pageHostGeneration = page.pageHostGeneration
   const retirePreparedPagesOwnedByRenderer = vi.fn(() => 0)
+
   const rekeyPreparedPage = vi.fn((previous, next) => {
     if (
       !prepared ||
@@ -28,12 +30,15 @@ function createHarness(options: { maxGuests?: number } = {}) {
     ) {
       return null
     }
+
     pageHostGeneration = next.pageHostGeneration
+
     return {
       page: { ...next, pageAuthority },
       routeSession: { partition, release: vi.fn() }
     }
   })
+
   let registry: BrowserRouteWebContentsRegistry
   registry = new BrowserRouteWebContentsRegistry({
     getPartitionForSession: (session) => (session === routeSession ? partition : null),
@@ -49,14 +54,17 @@ function createHarness(options: { maxGuests?: number } = {}) {
       if (input.pageAuthority !== pageAuthority) {
         return false
       }
+
       prepared = false
       registry.retirePageAuthority({ ...input, onRetired: vi.fn() })
+
       return true
     },
     rekeyPreparedPage,
     retirePreparedPagesOwnedByRenderer,
     maxGuests: options.maxGuests
   })
+
   return {
     getPageAuthority: () => pageAuthority,
     registry,
@@ -88,6 +96,7 @@ function createGuest(options: {
   let destroyed = options.destroyed ?? false
   let currentUrl = options.url ?? 'about:blank'
   let windowOpenHandler: (() => { action: 'deny' }) | null = null
+
   const guest = {
     id: options.id ?? page.webContentsId,
     session: options.session,
@@ -99,6 +108,7 @@ function createGuest(options: {
       if (options.closeError) {
         throw options.closeError
       }
+
       if (options.closeDestroys !== false) {
         destroyed = true
       }
@@ -123,6 +133,7 @@ function createGuest(options: {
       windowOpenHandler = handler
     })
   }
+
   return {
     guest: guest as unknown as WebContents,
     emit: (event: string, ...args: unknown[]) => {
@@ -136,6 +147,7 @@ function createGuest(options: {
     openWindow: () => windowOpenHandler?.(),
     destroy: () => {
       destroyed = true
+
       for (const listener of listeners.get('destroyed') ?? []) {
         listener()
       }
@@ -150,6 +162,7 @@ function navigationEvent(): { preventDefault: ReturnType<typeof vi.fn> } {
 function requireLifecycleClaim(registry: BrowserRouteWebContentsRegistry, registration = page) {
   const claim = registry.claimGuestLifecycle(registration)
   expect(claim).not.toBeNull()
+
   return claim!
 }
 
@@ -315,6 +328,7 @@ describe('BrowserRouteWebContentsRegistry', () => {
 
   it('fails closed when WebRTC route policy cannot be applied', () => {
     const { registry, routeSession } = createHarness()
+
     const guest = createGuest({
       session: routeSession,
       webRtcPolicyError: new Error('policy unavailable')
@@ -327,6 +341,7 @@ describe('BrowserRouteWebContentsRegistry', () => {
 
   it('keeps policy-rejected guests quarantined through delayed or failed close', () => {
     const { registry, routeSession } = createHarness()
+
     for (const rejected of [
       createGuest({
         session: routeSession,
@@ -365,9 +380,11 @@ describe('BrowserRouteWebContentsRegistry', () => {
 
   it('destroys invalid route guests but ignores unrelated browser sessions', () => {
     const { registry, routeSession } = createHarness()
+
     const unrelated = createGuest({
       session: { marker: 'profile-session' } as unknown as Session
     })
+
     expect(registry.attachGuest(unrelated.guest)).toBe(false)
     expect(unrelated.guest.close).not.toHaveBeenCalled()
 
@@ -379,6 +396,7 @@ describe('BrowserRouteWebContentsRegistry', () => {
       expect(registry.attachGuest(invalid.guest)).toBe(false)
       expect(invalid.guest.close).toHaveBeenCalledOnce()
     }
+
     const alreadyDestroyed = createGuest({ session: routeSession, destroyed: true })
     expect(registry.attachGuest(alreadyDestroyed.guest)).toBe(false)
     expect(alreadyDestroyed.guest.close).not.toHaveBeenCalled()
@@ -397,6 +415,7 @@ describe('BrowserRouteWebContentsRegistry', () => {
   it('keeps delayed or failed admission closure navigation- and popup-denied', () => {
     const { registry, routeSession } = createHarness({ maxGuests: 1 })
     registry.attachGuest(createGuest({ session: routeSession }).guest)
+
     for (const rejected of [
       createGuest({ id: 42, session: routeSession, closeDestroys: false }),
       createGuest({ id: 43, session: routeSession, closeError: new Error('close failed') })

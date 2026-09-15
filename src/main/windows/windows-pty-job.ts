@@ -34,20 +34,25 @@ type ConptyNative = {
 }
 
 let cachedNative: ConptyNative | null | undefined
+
 let nativeLoader: () => ConptyNative | null = loadConptyNative
 
 function loadConptyNative(): ConptyNative | null {
   if (cachedNative !== undefined) {
     return cachedNative
   }
+
   if (process.platform !== 'win32') {
     cachedNative = null
+
     return cachedNative
   }
+
   try {
     const { loadNativeModule } = requireFromMain('node-pty/lib/utils') as {
       loadNativeModule: (name: string) => { module: unknown }
     }
+
     const native = loadNativeModule('conpty').module as Partial<ConptyNative>
     // Why feature-detect: a node-pty rebuilt from unpatched sources exports
     // neither symbol, and calling through would throw on every teardown.
@@ -58,6 +63,7 @@ function loadConptyNative(): ConptyNative | null {
   } catch {
     cachedNative = null
   }
+
   return cachedNative
 }
 
@@ -72,9 +78,11 @@ function loadConptyNative(): ConptyNative | null {
 function ptyJobTarget(proc: IPty): { id: number; shellPid: number } | null {
   const id = (proc as unknown as { _pty?: unknown })._pty
   const shellPid = proc.pid
+
   if (!Number.isInteger(id) || !Number.isInteger(shellPid) || (shellPid as number) <= 0) {
     return null
   }
+
   return { id: id as number, shellPid: shellPid as number }
 }
 
@@ -91,18 +99,23 @@ export type JobTerminationOutcome = 'terminated' | 'unavailable'
 export function terminatePtyJob(proc: IPty): JobTerminationOutcome {
   const target = ptyJobTarget(proc)
   const native = nativeLoader()
+
   if (!target || !native) {
     return 'unavailable'
   }
+
   let terminated: boolean
+
   try {
     terminated = native.terminateJob(target.id, target.shellPid)
   } catch {
     return 'unavailable'
   }
+
   if (!terminated) {
     return 'unavailable'
   }
+
   // Outside the try: that catch is the native-refusal contract, and a throw from
   // the breadcrumb path would downgrade a real termination to `unavailable`,
   // escalating callers to the pid-addressed taskkill this instrumentation exists
@@ -112,6 +125,7 @@ export function terminatePtyJob(proc: IPty): JobTerminationOutcome {
     site: 'windows-pty-job-teardown',
     scope: 'win-pty-job'
   })
+
   return 'terminated'
 }
 
@@ -134,9 +148,11 @@ export function terminatePtyJob(proc: IPty): JobTerminationOutcome {
 export function listPtyJobProcessIds(proc: IPty): readonly number[] | null {
   const target = ptyJobTarget(proc)
   const native = nativeLoader()
+
   if (!target || !native) {
     return null
   }
+
   try {
     return native.listJobProcessIds(target.id, target.shellPid)
   } catch {
@@ -175,15 +191,19 @@ export function assignHostProcessToKillOnCloseJob(): boolean {
   if (hostJobAssigned !== null) {
     return hostJobAssigned
   }
+
   hostJobAssigned = assignHostProcessOnce()
+
   return hostJobAssigned
 }
 
 function assignHostProcessOnce(): boolean {
   const native = nativeLoader()
+
   if (!native) {
     return false
   }
+
   try {
     return native.assignCurrentProcessToJob()
   } catch {

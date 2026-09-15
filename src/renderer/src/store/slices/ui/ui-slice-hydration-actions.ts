@@ -67,15 +67,22 @@ import {
 import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydration-values'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
+
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
+
 const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'
+
 const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
+
 const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
+
 const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
+
 const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
 
 function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
   let items = migrateStatusBarItems(ui.statusBarItems)
+
   const defaults = [
     ['_portsStatusBarDefaultAdded', DEFAULT_ON_PORTS_STATUS_BAR_ITEM],
     ['_kimiStatusBarDefaultAdded', DEFAULT_ON_KIMI_STATUS_BAR_ITEM],
@@ -83,16 +90,19 @@ function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
     ['_antigravityStatusBarDefaultAdded', DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM],
     ['_grokStatusBarDefaultAdded', DEFAULT_ON_GROK_STATUS_BAR_ITEM]
   ] as const
+
   for (const [flag, item] of defaults) {
     if (!ui[flag] && !items.includes(item)) {
       items = [...items, item]
     }
   }
+
   if (typeof window !== 'undefined' && defaults.some(([flag]) => !ui[flag])) {
     window.api.ui
       .set({ statusBarItems: items, ...Object.fromEntries(defaults.map(([flag]) => [flag, true])) })
       .catch(console.error)
   }
+
   return items
 }
 
@@ -106,20 +116,24 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
         const persistedFilterRepoIds = sanitizePersistedRepoIds(ui.filterRepoIds)
         const persistedAgentsFilterRepoIds = sanitizePersistedRepoIds(ui.agentsFilterRepoIds)
+
         // Why: pre-rename builds used sidekick* keys; read as fallback only so new pet* writes win after upgrade.
         const customPets = Array.isArray(ui.customPets)
           ? ui.customPets
           : Array.isArray(ui.customSidekicks)
             ? ui.customSidekicks
             : []
+
         const petId = ui.petId ?? ui.sidekickId
         // Migration: one-shot old-'recent'→'smart' runs in main (_sortBySmartMigrated), not here, so a deliberate 'recent' choice survives restart.
         const sortBy = ui.sortBy
         const statusBarItemsWithGrok = hydrateStatusBarItems(ui)
+
         const rightSidebarRoute = normalizeRightSidebarRoute(
           ui.rightSidebarTab,
           ui.rightSidebarExplorerView
         )
+
         const hydrated = {
           // Why: persisted widths may be stale/corrupt/hand-edited; clamp during hydration so invalid values can't break layout.
           sidebarWidth: sanitizePersistedSidebarWidth(
@@ -215,15 +229,19 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           // Why: fall back to default when the persisted id is unknown (e.g. custom pet removed elsewhere) so the overlay renders.
           petId: ((): string => {
             const id = petId
+
             if (typeof id !== 'string') {
               return DEFAULT_PET_ID
             }
+
             if (isBundledPetId(id)) {
               return id
             }
+
             if (customPets.some((m) => m.id === id)) {
               return id
             }
+
             return DEFAULT_PET_ID
           })(),
           dismissedUpdateVersion: ui.dismissedUpdateVersion ?? null,
@@ -287,6 +305,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             source === 'startup' ? sanitizeHydratedActiveView(ui.activeView) : s.activeView,
           persistedUIReady: true
         }
+
         // The incoming payload is authoritative for the writer-owned fields, so it becomes the
         // writer's new diff baseline — but fields with an unflushed local edit (mirror diverged
         // from the previous baseline) keep the local value so a broadcast arriving inside the
@@ -299,12 +318,15 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         // out-of-range width until the next drag re-writes it.
         const nextWriteBaseline = capturePersistedUIWriteBaseline(hydrated)
         const previousBaseline = s.persistedUIWriteBaseline
+
         if (previousBaseline) {
           const pendingLocalEdits = diffPersistedUIWriteFields(
             capturePersistedUIWriteBaseline(s),
             previousBaseline
           )
+
           Object.assign(hydrated, pendingLocalEdits)
+
           // In-flight fields too: a flip-back to the baseline value diffs empty,
           // yet the in-flight write's echo must not revert it (PR#17057 review).
           for (const field of Object.keys(
@@ -313,6 +335,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
             ;(hydrated as Record<string, unknown>)[field] = s[field]
           }
         }
+
         // Why: return the same ref on identical hydration so App's debounced writer doesn't echo it back to main.
         // The baseline must still advance when it moved (a remote same-field write during an in-flight
         // ack pins the only visibly differing field, and our own echo precedes every ack) — but only
@@ -324,18 +347,22 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
         const writeBaselineMoved =
           !previousBaseline ||
           Object.keys(diffPersistedUIWriteFields(nextWriteBaseline, previousBaseline)).length > 0
+
         const nextWriteBaselineGeneration = writeBaselineMoved
           ? s.persistedUIWriteBaselineGeneration + 1
           : s.persistedUIWriteBaselineGeneration
+
         if (hydratedUIPartialMatchesState(s, hydrated as Partial<UISlice>)) {
           if (!writeBaselineMoved) {
             return s
           }
+
           return {
             persistedUIWriteBaseline: nextWriteBaseline,
             persistedUIWriteBaselineGeneration: nextWriteBaselineGeneration
           }
         }
+
         return {
           ...hydrated,
           persistedUIWriteBaseline: nextWriteBaseline,

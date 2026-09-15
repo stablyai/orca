@@ -5,6 +5,7 @@ export const LINUX_LID_SLEEP_ASSERTION_RETRY_MS = 30_000
 type Logger = Pick<Console, 'debug' | 'warn'>
 
 type SystemdInhibitErrorListener = (error: Error & { code?: string }) => void
+
 type SystemdInhibitExitListener = (code: number | null, signal: NodeJS.Signals | null) => void
 
 type SystemdInhibitProcess = {
@@ -58,12 +59,15 @@ export class LinuxLidSleepAssertion {
     if (this.platform !== 'linux' || this.child || this.systemdInhibitUnavailable) {
       return
     }
+
     if (this.retryNotBefore !== null && this.now() < this.retryNotBefore) {
       this.scheduleRetry()
+
       return
     }
 
     let child: SystemdInhibitProcess
+
     try {
       // logind's lid switch handling ignores ordinary sleep inhibitors on many systems,
       // so Linux needs both a sleep lock and a handle-lid-switch lock.
@@ -84,10 +88,12 @@ export class LinuxLidSleepAssertion {
       )
     } catch (error) {
       this.handleFailure('spawn-error', reason, error, 'spawn-error')
+
       return
     }
 
     this.child = child
+
     const onError: SystemdInhibitErrorListener = (error) => {
       this.handleChildFailure(
         child,
@@ -97,12 +103,14 @@ export class LinuxLidSleepAssertion {
         error
       )
     }
+
     const onExit: SystemdInhibitExitListener = (code, signal) => {
       this.handleChildFailure(child, `exit:${String(code)}:${String(signal)}`, 'exit', reason, {
         code,
         signal
       })
     }
+
     this.childCleanups.set(child, () => {
       child.off('error', onError)
       child.off('exit', onExit)
@@ -116,13 +124,16 @@ export class LinuxLidSleepAssertion {
   stop(_reason: string): void {
     this.resetRetrySuppression()
     this.resetFailureStreak()
+
     if (!this.child) {
       return
     }
+
     const child = this.child
     this.child = null
     this.intentionalStops.add(child)
     this.detachChildListeners(child)
+
     try {
       child.kill()
     } catch (error) {
@@ -144,25 +155,33 @@ export class LinuxLidSleepAssertion {
     details: unknown
   ): void {
     this.detachChildListeners(child)
+
     if (this.intentionalStops.has(child)) {
       this.intentionalStops.delete(child)
+
       return
     }
+
     if (this.reportedFailures.has(child)) {
       return
     }
+
     this.reportedFailures.add(child)
+
     if (this.child === child) {
       this.child = null
     }
+
     this.handleFailure(failureKey, startReason, details, failureType)
   }
 
   private detachChildListeners(child: SystemdInhibitProcess): void {
     const cleanup = this.childCleanups.get(child)
+
     if (!cleanup) {
       return
     }
+
     cleanup()
     this.childCleanups.delete(child)
   }
@@ -177,8 +196,10 @@ export class LinuxLidSleepAssertion {
       this.systemdInhibitUnavailable = true
       this.resetRetrySuppression()
       this.logFailure('systemd-inhibit-missing', reason, details, failureType)
+
       return
     }
+
     this.logFailure(failureKey, reason, details, failureType)
     this.retryNotBefore = this.now() + LINUX_LID_SLEEP_ASSERTION_RETRY_MS
     this.scheduleRetry()
@@ -196,10 +217,13 @@ export class LinuxLidSleepAssertion {
       failureType,
       details
     }
+
     if (this.lastFailureKey === failureKey && this.warnedForLastFailure) {
       this.logger.debug('[agent-awake] Linux lid sleep assertion failed repeatedly', payload)
+
       return
     }
+
     this.lastFailureKey = failureKey
     this.warnedForLastFailure = true
     this.logger.warn('[agent-awake] Linux lid sleep assertion failed', payload)
@@ -214,11 +238,13 @@ export class LinuxLidSleepAssertion {
     if (this.retryNotBefore === null || this.retryTimer) {
       return
     }
+
     const retryDelay = Math.max(0, this.retryNotBefore - this.now())
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null
       this.onUnexpectedFailure('linux-lid-assertion-retry')
     }, retryDelay)
+
     if (typeof this.retryTimer.unref === 'function') {
       this.retryTimer.unref()
     }
@@ -226,9 +252,11 @@ export class LinuxLidSleepAssertion {
 
   private resetRetrySuppression(): void {
     this.retryNotBefore = null
+
     if (!this.retryTimer) {
       return
     }
+
     clearTimeout(this.retryTimer)
     this.retryTimer = null
   }

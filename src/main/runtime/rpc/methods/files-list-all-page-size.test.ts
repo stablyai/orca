@@ -22,6 +22,7 @@ describe('files.listAll page size', () => {
       getRuntimeId: () => 'test-runtime',
       listRuntimeFiles: vi.fn().mockResolvedValue(['src/index.ts'])
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -42,6 +43,7 @@ describe('files.listAll page size', () => {
       getRuntimeId: () => 'test-runtime',
       listRuntimeFiles: vi.fn().mockResolvedValue(['src/index.ts'])
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(

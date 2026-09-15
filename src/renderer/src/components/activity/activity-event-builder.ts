@@ -69,6 +69,7 @@ export function buildActivityEvents(
       if (seenEventIds.has(event.id)) {
         continue
       }
+
       seenEventIds.add(event.id)
       events.push(event)
     }
@@ -76,13 +77,17 @@ export function buildActivityEvents(
 
   for (const [paneKey, entry] of Object.entries(args.agentStatusByPaneKey)) {
     const parsed = parsePaneKey(paneKey)
+
     if (!parsed) {
       continue
     }
+
     const context = tabContext.get(parsed.tabId) ?? attributedActivityTabContext(entry)
+
     if (!context) {
       continue
     }
+
     const owner = resolveActivityEventOwner(
       args,
       context,
@@ -91,10 +96,12 @@ export function buildActivityEvents(
       tabHostIndex,
       ownerCache
     )
+
     const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
     // Only fresh live turns contribute working activity; history cannot establish liveness.
     // The freshness check runs on the raw entry (orchestration merges never change state/timing fields).
     const liveState = freshActivityLiveAgentState(entry, args.now)
+
     const { events: paneEvents, live } = resolvePaneBuild(
       {
         cacheKey: `live:${paneKey}`,
@@ -113,9 +120,11 @@ export function buildActivityEvents(
       cache,
       seenCacheKeys
     )
+
     if (live) {
       liveAgentByPaneKey[paneKey] = live
     }
+
     pushPaneEvents(paneEvents)
   }
 
@@ -138,5 +147,6 @@ export function buildActivityEvents(
       }
     }
   }
+
   return { events: capActivityEvents(events), liveAgentByPaneKey }
 }

@@ -51,10 +51,12 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   // socket. Without this, agents inside the dev Electron app would call the
   // production CLI and talk to the wrong Orca instance (Section 6.4).
   const cli = params.devMode ? 'orca-dev' : (params.cliCommand ?? 'orca')
+
   const postDoneInstructions = buildPostWorkerDoneInstructions({
     cli,
     workerKind: params.workerKind ?? 'prompt-returning-agent'
   })
+
   const capabilityFlag = params.dispatchCapability
     ? ` --dispatch-capability ${params.dispatchCapability}`
     : ''
@@ -211,6 +213,7 @@ able to dispatch further.
 
 function buildDriftSection(drift: NonNullable<PreambleParams['baseDrift']>): string {
   const subjects = drift.recentSubjects.map((s) => `  - ${s}`).join('\n')
+
   return `
 
 --- BASE DRIFT ---

@@ -8,9 +8,11 @@ import {
 
 function deferred() {
   let resolve: () => void = () => {}
+
   const promise = new Promise<void>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
 
@@ -22,10 +24,13 @@ describe('terminal accessory repeat', () => {
     const first = deferred()
     const second = deferred()
     const sent: string[] = []
+
     const send = vi.fn((input: string) => {
       sent.push(input)
+
       return (sent.length === 1 ? first.promise : second.promise).then(() => true)
     })
+
     const repeat = createTerminalAccessoryRepeatController<string>()
 
     repeat.start('down', send)
@@ -64,10 +69,13 @@ describe('terminal accessory repeat', () => {
     vi.useFakeTimers()
     const pending = Array.from({ length: 5 }, () => deferred())
     const sent: string[] = []
+
     const send = vi.fn((input: string) => {
       sent.push(input)
+
       return pending[sent.length - 1]!.promise.then(() => true)
     })
+
     const repeat = createTerminalAccessoryRepeatController<string>()
 
     for (let index = 0; index < pending.length; index += 1) {
@@ -86,10 +94,13 @@ describe('terminal accessory repeat', () => {
     vi.useFakeTimers()
     const first = deferred()
     const sent: string[] = []
+
     const send = vi.fn((input: string) => {
       sent.push(input)
+
       return input === 'down' ? first.promise.then(() => true) : Promise.resolve(true)
     })
+
     const repeat = createTerminalAccessoryRepeatController<string>()
 
     repeat.start('down', send)
@@ -129,6 +140,7 @@ describe('terminal accessory repeat', () => {
   it('stops sending when the terminal active at press time is no longer active', async () => {
     let activeTerminal = 'terminal-a'
     const sendToTerminal = vi.fn(async () => true)
+
     const send = createTerminalAccessoryRepeatSender(
       activeTerminal,
       (targetHandle) => activeTerminal === targetHandle,
@@ -146,11 +158,13 @@ describe('terminal accessory repeat', () => {
   it('provides a live target guard for async send preflight', async () => {
     let targetCurrent = true
     const preflight = deferred()
+
     const send = createTerminalAccessoryRepeatSender(
       'terminal-a',
       () => targetCurrent,
       async (_input, _targetHandle, isDeliveryTargetCurrent) => {
         await preflight.promise
+
         return isDeliveryTargetCurrent()
       }
     )
@@ -167,18 +181,23 @@ describe('terminal accessory repeat', () => {
     let connectionGeneration = 1
     const first = deferred()
     const sent: string[] = []
+
     const sendToTerminal = vi.fn((input: string) => {
       sent.push(input)
+
       return input === 'down' ? first.promise.then(() => true) : Promise.resolve(true)
     })
+
     const createSender = () => {
       const pressedConnectionGeneration = connectionGeneration
+
       return createTerminalAccessoryRepeatSender(
         'terminal-a',
         () => connectionGeneration === pressedConnectionGeneration,
         sendToTerminal
       )
     }
+
     const repeat = createTerminalAccessoryRepeatController<string>()
 
     repeat.start('down', createSender())

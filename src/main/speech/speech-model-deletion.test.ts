@@ -6,16 +6,20 @@ import { SPEECH_MODEL_CATALOG } from './model-catalog'
 import { deleteLocalSpeechModel } from './speech-model-deletion'
 
 const localModel = SPEECH_MODEL_CATALOG.find((model) => model.provider === 'local')
+
 const cloudModel = SPEECH_MODEL_CATALOG.find((model) => model.provider === 'openai')
 
 function makeStore(initialVoice: VoiceSettings) {
   let voice = initialVoice
+
   const updateSettings = vi.fn((updates: Partial<GlobalSettings>) => {
     if (updates.voice) {
       voice = updates.voice
     }
+
     return { voice } as GlobalSettings
   })
+
   return {
     getSettings: vi.fn(() => ({ voice }) as GlobalSettings),
     updateSettings
@@ -28,11 +32,13 @@ describe('deleteLocalSpeechModel', () => {
     const calls: string[] = []
     const voice = { ...getDefaultVoiceSettings(), enabled: true, sttModel: localModel!.id }
     const store = makeStore(voice)
+
     const modelManager = {
       deleteModel: vi.fn(async () => {
         calls.push('delete')
       })
     }
+
     const sttService = {
       prepareModelForDeletion: vi.fn(async () => {
         calls.push('prepare')
@@ -62,11 +68,13 @@ describe('deleteLocalSpeechModel', () => {
     expect(localModel).toBeDefined()
     const voice = { ...getDefaultVoiceSettings(), enabled: true, sttModel: localModel!.id }
     const store = makeStore(voice)
+
     const modelManager = {
       deleteModel: vi.fn(async () => {
         store.updateSettings({ voice: { ...voice, sttModel: 'newer-model' } })
       })
     }
+
     const sttService = { prepareModelForDeletion: vi.fn(async () => {}) }
 
     await deleteLocalSpeechModel({
@@ -85,11 +93,13 @@ describe('deleteLocalSpeechModel', () => {
   it('leaves settings untouched when deletion fails', async () => {
     expect(localModel).toBeDefined()
     const store = makeStore({ ...getDefaultVoiceSettings(), sttModel: localModel!.id })
+
     const modelManager = {
       deleteModel: vi.fn(async () => {
         throw new Error('permission denied')
       })
     }
+
     const sttService = { prepareModelForDeletion: vi.fn(async () => {}) }
 
     await expect(

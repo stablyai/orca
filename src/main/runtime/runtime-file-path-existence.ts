@@ -15,10 +15,13 @@ export async function readRuntimeFilePathExistence(
   if (targets.length === 0) {
     return []
   }
+
   const provider = requireRuntimeFileProvider(targets[0])
+
   if (provider?.pathsExist) {
     return provider.pathsExist(targets.map((target) => target.path))
   }
+
   return Promise.all(
     targets.map((target) =>
       capturePathExistence(async () => {
@@ -26,11 +29,13 @@ export async function readRuntimeFilePathExistence(
           await (provider
             ? provider.stat(target.path)
             : stat(await resolveAuthorizedPath(target.path, requireStore())))
+
           return true
         } catch (error) {
           if (isENOENT(error)) {
             return false
           }
+
           throw error
         }
       })

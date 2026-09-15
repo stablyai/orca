@@ -2,45 +2,59 @@ import type { LinearMcpIssueListRequest } from '../../shared/linear/agent-access
 
 export function buildIssueFilter(request: LinearMcpIssueListRequest): Record<string, unknown> {
   const filter: Record<string, unknown> = {}
+
   if (request.team) {
     filter.team = namedFilter(request.team, true)
   }
+
   if (request.cycle) {
     filter.cycle = nullableNamedFilter(request.cycle)
   }
+
   if (request.label) {
     filter.labels = { some: namedFilter(request.label) }
   }
+
   if (request.query) {
     filter.searchableContent = { contains: request.query }
   }
+
   if (request.state) {
     filter.state = workflowStateFilter(request.state)
   }
+
   if (request.project) {
     filter.project = nullableProjectFilter(request.project)
   }
+
   if (request.release) {
     filter.releases = { some: namedFilter(request.release, false, true) }
   }
+
   if (request.assignee) {
     filter.assignee = nullableUserFilter(request.assignee)
   }
+
   if (request.delegate) {
     filter.delegate = nullableUserFilter(request.delegate)
   }
+
   if (request.parentId) {
     filter.parent = nullableIdFilter(request.parentId)
   }
+
   if (request.priority !== undefined) {
     filter.priority = { eq: request.priority }
   }
+
   if (request.createdAt) {
     filter.createdAt = { gte: request.createdAt }
   }
+
   if (request.updatedAt) {
     filter.updatedAt = { gte: request.updatedAt }
   }
+
   return filter
 }
 
@@ -62,6 +76,7 @@ function nullableNamedFilter(value: string): object {
 function workflowStateFilter(value: string): object {
   const filter = namedFilter(value) as { or: object[] }
   filter.or.push({ type: { eqIgnoreCase: value } })
+
   return filter
 }
 
@@ -69,8 +84,10 @@ function nullableProjectFilter(value: string): object {
   if (value === 'null') {
     return { null: true }
   }
+
   const filter = namedFilter(value) as { or: object[] }
   filter.or.push({ slugId: { eqIgnoreCase: value } })
+
   return filter
 }
 
@@ -82,9 +99,11 @@ function nullableUserFilter(value: string): object {
   if (value === 'null') {
     return { null: true }
   }
+
   if (value.toLocaleLowerCase() === 'me') {
     return { isMe: { eq: true } }
   }
+
   return {
     or: [
       ...(isLinearId(value) ? [{ id: { eq: value } }] : []),

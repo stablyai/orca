@@ -38,9 +38,11 @@ function incrementalPrefixes(
   const assembler = createIncrementalAssembler()
   const out: NativeChatMessage[][] = []
   out.push(reset(assembler, base))
+
   for (const batch of batches) {
     out.push(applyAppends(assembler, batch))
   }
+
   return out
 }
 
@@ -98,6 +100,7 @@ describe('incremental assembler — oracle differential', () => {
     let cumulative = [...base]
     // Prefix 0 = base only.
     expect(inc[0]).toEqual(fullRebuild(cumulative))
+
     for (let i = 0; i < batches.length; i += 1) {
       cumulative = [...cumulative, ...batches[i]!]
       expect(inc[i + 1]).toEqual(fullRebuild(cumulative))
@@ -125,12 +128,14 @@ describe('incremental assembler — oracle differential', () => {
 
   it('keeps equal-timestamp image companions ahead of prompts for normalization', () => {
     const assembler = createIncrementalAssembler()
+
     const prompt = msg({
       id: 'a-prompt',
       role: 'user',
       timestamp: 100,
       blocks: [{ type: 'text', text: '[Image #1] inspect this' }]
     })
+
     const companion = msg({
       id: 'z-companion',
       role: 'user',
@@ -153,24 +158,28 @@ describe('incremental assembler — oracle differential', () => {
 
   it('does not cross-fold distinct equal-timestamp image turns', () => {
     const assembler = createIncrementalAssembler()
+
     const firstPrompt = msg({
       id: 'a-first-prompt',
       role: 'user',
       timestamp: 100,
       blocks: [{ type: 'text', text: '[Image #1] inspect the first' }]
     })
+
     const firstCompanion = msg({
       id: 'z-first-companion',
       role: 'user',
       timestamp: 100,
       blocks: [{ type: 'text', text: '[Image: source: /tmp/first.png]' }]
     })
+
     const secondPrompt = msg({
       id: 'b-second-prompt',
       role: 'user',
       timestamp: 100,
       blocks: [{ type: 'text', text: '[Image #1] inspect the second' }]
     })
+
     const secondCompanion = msg({
       id: 'y-second-companion',
       role: 'user',

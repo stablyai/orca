@@ -254,7 +254,9 @@ export type BrowserSlice = {
 }
 
 type BrowserStateCreator = StateCreator<AppState, [], [], BrowserSlice>
+
 export type BrowserSliceSet = Parameters<BrowserStateCreator>[0]
+
 export type BrowserSliceGet = Parameters<BrowserStateCreator>[1]
 
 // Keep the public slice surface's domain types available to existing consumers while the

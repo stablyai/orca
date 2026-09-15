@@ -7,10 +7,12 @@ import { dispatchRemoteLinearRelationWrite } from './ssh-remote-linear-relation-
 describe('SSH remote Linear relation writes', () => {
   it('maps blocked-by from the current issue perspective', async () => {
     const linearIssueRelationWrite = vi.fn().mockResolvedValue({ ok: true })
+
     const runtime = {
       getRuntimeId: () => 'runtime-test',
       linearIssueRelationWrite
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_AGENT_ACCESS_METHODS })
 
     const response = await dispatchRemoteLinearRelationWrite(
@@ -41,10 +43,12 @@ describe('SSH remote Linear relation writes', () => {
 
   it('accepts the policy-compliant rm alias', async () => {
     const linearIssueRelationWrite = vi.fn().mockResolvedValue({ ok: true })
+
     const runtime = {
       getRuntimeId: () => 'runtime-test',
       linearIssueRelationWrite
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_AGENT_ACCESS_METHODS })
 
     const response = await dispatchRemoteLinearRelationWrite(

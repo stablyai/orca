@@ -44,6 +44,7 @@ export function ChangesModeView({
       </div>
     )
   }
+
   if (dc.kind === 'binary') {
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
@@ -61,6 +62,7 @@ export function ChangesModeView({
       </div>
     )
   }
+
   // Why: Monaco renders an empty diff when the two sides match, which reads as
   // a broken view. Surface an inline banner so the user knows Changes mode is
   // active but there is simply nothing to diff right now.
@@ -73,6 +75,7 @@ export function ChangesModeView({
   // without throwing away the modified-side undo history.
   const headContentSignature = getDiffContentSignature(dc.originalContent)
   const originalModelKey = `${diffViewStateKey}:original:${headContentSignature}`
+
   return (
     <div className="flex flex-1 min-h-0 flex-col">
       {activeFile.conflict && <ConflictBanner file={activeFile} entry={activeConflictEntry} />}

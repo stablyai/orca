@@ -32,9 +32,11 @@ export function registerWorkspacePortHandlers(
   unsubscribeAdvertisedUrlChanges?.()
   unsubscribeAdvertisedUrlChanges = advertisedUrlEvents.onDidChange((event) => {
     const localWorktrees = getStoreWorkspacePortProbes(store)
+
     if (!localWorktrees.some((worktree) => worktree.id === event.worktreeId)) {
       return
     }
+
     broadcastWorkspacePortAdvertisedUrlChanged(getWindows, event)
   })
 
@@ -45,12 +47,15 @@ export function registerWorkspacePortHandlers(
     (_event, rawArgs?: unknown): Promise<WorkspacePortScanResult> => {
       const args = parseScanRequest(rawArgs)
       const worktrees = getStoreWorkspacePortProbes(store, args?.repoId)
+
       const key = JSON.stringify(
         worktrees
           .map((worktree) => [worktree.id, worktree.repoId, worktree.displayName, worktree.path])
           .sort(([a], [b]) => String(a).localeCompare(String(b)))
       )
+
       const existing = inFlightScans.get(key)
+
       if (existing) {
         return existing
       }
@@ -60,7 +65,9 @@ export function registerWorkspacePortHandlers(
           inFlightScans.delete(key)
         }
       })
+
       inFlightScans.set(key, promise)
+
       return promise
     }
   )
@@ -69,10 +76,13 @@ export function registerWorkspacePortHandlers(
     'workspacePorts:kill',
     async (_event, rawArgs?: unknown): Promise<WorkspacePortKillResult> => {
       const args = parseKillRequest(rawArgs)
+
       if (!args) {
         return { ok: false, reason: 'Invalid process or port.' }
       }
+
       const worktrees = getStoreWorkspacePortProbes(store, args.repoId)
+
       return killWorkspacePort(worktrees, args)
     }
   )
@@ -86,10 +96,13 @@ function broadcastWorkspacePortAdvertisedUrlChanged(
     if (window.isDestroyed()) {
       continue
     }
+
     const webContents = window.webContents
+
     if (webContents.isDestroyed()) {
       continue
     }
+
     webContents.send('workspacePorts:advertised-url-changed', event)
   }
 }
@@ -98,7 +111,9 @@ function parseScanRequest(value: unknown): WorkspacePortScanRequest | undefined 
   if (!value || typeof value !== 'object') {
     return undefined
   }
+
   const repoId = (value as { repoId?: unknown }).repoId
+
   return typeof repoId === 'string' && repoId.length > 0 ? { repoId } : undefined
 }
 
@@ -106,12 +121,16 @@ function parseKillRequest(value: unknown): WorkspacePortKillRequest | null {
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const args = value as { repoId?: unknown; pid?: unknown; port?: unknown }
+
   if (!Number.isSafeInteger(args.pid) || !Number.isSafeInteger(args.port)) {
     return null
   }
+
   const pid = args.pid as number
   const port = args.port as number
+
   return {
     ...(typeof args.repoId === 'string' && args.repoId.length > 0 ? { repoId: args.repoId } : {}),
     pid,

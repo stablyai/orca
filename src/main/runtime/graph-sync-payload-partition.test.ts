@@ -13,6 +13,7 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 import { OrcaRuntimeService } from './orca-runtime'
 
 const WT_A = 'repo-1::/tmp/worktree-a'
+
 const WT_B = 'repo-1::/tmp/worktree-b'
 
 const storeBase = {
@@ -73,6 +74,7 @@ type RuntimeInternals = {
 
 function createRuntime() {
   let session = makeSession()
+
   const runtime = new OrcaRuntimeService({
     ...storeBase,
     getWorkspaceSession: () => session,
@@ -80,11 +82,14 @@ function createRuntime() {
       session = next
     }
   })
+
   const events: RuntimeMobileSessionTabsResult[] = []
   runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+
   const setSession = (next: WorkspaceSessionState): void => {
     session = next
   }
+
   const sync = (
     mobileSessionTabs: RuntimeMobileSessionTabsSnapshot[],
     unchangedMobileSessionWorktrees?: string[]
@@ -95,6 +100,7 @@ function createRuntime() {
       mobileSessionTabs,
       ...(unchangedMobileSessionWorktrees ? { unchangedMobileSessionWorktrees } : {})
     })
+
   return { runtime, events, sync, setSession, internals: runtime as unknown as RuntimeInternals }
 }
 

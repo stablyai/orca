@@ -62,6 +62,7 @@ function withWindowsRenderer(run: () => void): void {
     value: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
     configurable: true
   })
+
   try {
     run()
   } finally {
@@ -247,6 +248,7 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
       tab: HOST_TAB,
       ptyId: 'remote:term-1'
     })
+
     // Why assert disjointness rather than the literal key: colliding with `host`
     // is the whole failure mode — a local switch would mute a working remote pane.
     expect(laneKey).not.toBe(getCodexSelectionLaneKey({ runtime: 'host' }))
@@ -259,6 +261,7 @@ describe('resolveCodexPaneSelectionLaneKey', () => {
       tab: HOST_TAB,
       ptyId: 'ssh:my-box@@pty-7'
     })
+
     expect(laneKey).toBe('ssh-connection')
     // Why: managed Codex accounts are only ever 'host' or 'wsl:<distro>', so no
     // switch can produce this key — the pane is unreachable by any selection.
@@ -277,6 +280,7 @@ describe('resolveCodexPaneSelectionLane', () => {
       ptyId: 'pty-1',
       recordedLaneKey: 'wsl:Ubuntu'
     })
+
     expect(lane).toEqual({
       laneKey: 'wsl:Ubuntu',
       source: 'recorded',
@@ -286,6 +290,7 @@ describe('resolveCodexPaneSelectionLane', () => {
 
   it('reports the disagreement so a re-derivation bug stays diagnosable', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       resolveCodexPaneSelectionLane({
         state: laneState(),
@@ -304,6 +309,7 @@ describe('resolveCodexPaneSelectionLane', () => {
 
   it('stays quiet when the record and the derivation agree', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const lane = resolveCodexPaneSelectionLane({
         state: laneState(),
@@ -311,6 +317,7 @@ describe('resolveCodexPaneSelectionLane', () => {
         ptyId: 'pty-1',
         recordedLaneKey: 'host'
       })
+
       expect(lane.source).toBe('recorded')
       expect(warn).not.toHaveBeenCalled()
     } finally {
@@ -367,9 +374,11 @@ describe('resolveCodexPaneSelectionLane', () => {
         if (property === 'worktreesByRepo') {
           throw new Error('state read blew up')
         }
+
         return Reflect.get(target, property)
       }
     }) as LaneState
+
     // Why: this call sits outside the scan's per-pane failure guard, so a throw
     // would lose the notice for every pane in the batch, not just this one.
     expect(
@@ -389,6 +398,7 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
       settings: null,
       target: { runtime: 'host' }
     })
+
     expect(hostSwitch('host')).toBe(true)
     expect(hostSwitch('wsl:Ubuntu')).toBe(false)
 
@@ -396,6 +406,7 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
       settings: null,
       target: { runtime: 'wsl', wslDistro: 'Ubuntu' }
     })
+
     expect(ubuntuSwitch('wsl:Ubuntu')).toBe(true)
     expect(ubuntuSwitch('wsl:Debian')).toBe(false)
     expect(ubuntuSwitch('host')).toBe(false)
@@ -409,6 +420,7 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
       target: { runtime: 'wsl', wslDistro: null },
       clearsEveryWslDistro: true
     })
+
     expect(wslDefaultSwitch('wsl:__default__')).toBe(true)
     expect(wslDefaultSwitch('wsl:Ubuntu')).toBe(true)
     expect(wslDefaultSwitch('wsl:Debian')).toBe(true)
@@ -427,6 +439,7 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
       settings: null,
       target: { runtime: 'wsl', wslDistro: null }
     })
+
     expect(wslDefaultSelect('wsl:__default__')).toBe(true)
     expect(wslDefaultSelect('wsl:Ubuntu')).toBe(false)
     expect(wslDefaultSelect('host')).toBe(false)
@@ -441,6 +454,7 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
       target: { runtime: 'wsl', wslDistro: 'Ubuntu' },
       clearsEveryWslDistro: true
     })
+
     expect(ubuntuClear('wsl:Ubuntu')).toBe(true)
     expect(ubuntuClear('wsl:Debian')).toBe(false)
     expect(ubuntuClear('wsl:__default__')).toBe(false)
@@ -451,6 +465,7 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       target: { runtime: 'host' }
     })
+
     expect(environmentSwitch('env:env-1')).toBe(true)
     expect(environmentSwitch('host')).toBe(false)
     expect(environmentSwitch('env:env-2')).toBe(false)
@@ -461,7 +476,9 @@ describe('getCodexAccountSwitchLaneMatcher', () => {
       settings: null,
       target: { runtime: 'host' }
     })
+
     const state = laneState()
+
     for (const ptyId of ['remote:env-owner@@term-1', 'remote:term-1', 'ssh:my-box@@pty-7']) {
       expect(hostSwitch(resolveCodexPaneSelectionLaneKey({ state, tab: HOST_TAB, ptyId }))).toBe(
         false
@@ -480,6 +497,7 @@ describe('isForeignMachineCodexPtyId', () => {
 
   it('agrees with the lane keys, so the sweep and the scan skip the same panes', () => {
     const state = laneState({ activeRuntimeEnvironmentId: 'env-1' })
+
     for (const ptyId of ['remote:env-1@@term-1', 'remote:term-1', 'ssh:my-box@@pty-7', 'pty-1']) {
       expect(
         isLocalCodexSelectionLaneKey(

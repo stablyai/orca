@@ -136,6 +136,7 @@ describe('keybindings', () => {
       'worktree.quickOpen': ['DoubleTap+Shift'],
       'view.tasks': ['DoubleTap+Shift']
     })
+
     expect(conflicts).toContainEqual({
       binding: 'DoubleTap+Shift',
       actionIds: expect.arrayContaining(['worktree.quickOpen', 'view.tasks'])

@@ -14,6 +14,7 @@ afterEach(() => {
 describe('runCodexAppServerSession environment', () => {
   it('removes inherited variables requested by a default-home invocation', async () => {
     process.env.CODEX_HOME = '/tmp/inherited-managed-home'
+
     const server = String.raw`
       const readline = require('node:readline')
       readline.createInterface({ input: process.stdin }).on('line', (line) => {
@@ -63,6 +64,7 @@ describe('runCodexAppServerSession environment', () => {
       async ({ request }) => {
         const large = (await request('test/large')) as { data: string }
         const followup = await request('test/followup')
+
         return { largeBytes: Buffer.byteLength(large.data, 'utf8'), followup }
       }
     )

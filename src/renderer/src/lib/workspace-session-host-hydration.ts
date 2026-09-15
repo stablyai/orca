@@ -51,30 +51,37 @@ function addWorkspaceSessionKeyForOwnerMap(ids: Set<string>, value: unknown): vo
 
 function collectWorkspaceSessionKeysFromHostSession(session: WorkspaceSessionState): string[] {
   const ids = new Set<string>()
+
   for (const field of WORKSPACE_SESSION_KEYED_FIELDS) {
     const value = session[field]
+
     if (isPlainRecord(value)) {
       for (const id of Object.keys(value)) {
         addWorkspaceSessionKeyForOwnerMap(ids, id)
       }
     }
   }
+
   for (const id of session.activeWorktreeIdsOnShutdown ?? []) {
     addWorkspaceSessionKeyForOwnerMap(ids, id)
   }
+
   for (const pages of Object.values(session.browserPagesByWorkspace ?? {})) {
     if (!Array.isArray(pages)) {
       continue
     }
+
     for (const page of pages) {
       addWorkspaceSessionKeyForOwnerMap(ids, page.worktreeId)
     }
   }
+
   for (const record of Object.values(session.sleepingAgentSessionsByPaneKey ?? {})) {
     // Why: a hibernated agent can be the only restored session evidence for a
     // runtime worktree before its remote catalog answers.
     addWorkspaceSessionKeyForOwnerMap(ids, record.worktreeId)
   }
+
   return [...ids]
 }
 
@@ -83,6 +90,7 @@ function buildRuntimeHostIdByWorkspaceSessionKey(
 ): Record<string, ExecutionHostId> {
   const owners: Record<string, ExecutionHostId> = {}
   const ambiguous = new Set<string>()
+
   for (const [hostId, slice] of nonLocalHostSessionEntries(slices)) {
     for (const worktreeId of collectWorkspaceSessionKeysFromHostSession(slice)) {
       if (owners[worktreeId] && owners[worktreeId] !== hostId) {
@@ -93,6 +101,7 @@ function buildRuntimeHostIdByWorkspaceSessionKey(
       }
     }
   }
+
   return owners
 }
 
@@ -101,12 +110,15 @@ export function listKnownRuntimeHostIds(
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[]
 ): ExecutionHostId[] {
   const hostIds = new Set<ExecutionHostId>()
+
   for (const repo of repos) {
     const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
+
     if (parsed?.kind === 'runtime') {
       hostIds.add(parsed.id)
     }
   }
+
   return [...hostIds]
 }
 
@@ -134,12 +146,14 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
   const slices: HostSessionSlices = {
     [LOCAL_EXECUTION_HOST_ID]: await api.get()
   }
+
   // Why: startup can know saved runtime session hosts before their repo
   // catalogs hydrate, so include those partitions in the first read.
   const runtimeHostIds = new Set<ExecutionHostId>([
     ...listKnownRuntimeHostIds(repos),
     ...additionalRuntimeHostIds
   ])
+
   await Promise.all(
     [...runtimeHostIds].map(async (hostId) => {
       try {
@@ -150,6 +164,7 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
     })
   )
   const merged = mergeWorkspaceSessionsWithHostShadow(slices)
+
   return {
     session: merged.session,
     // Why the merged slices and not the raw ones: a row parked out of the renderer session must not

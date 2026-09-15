@@ -20,9 +20,11 @@ export type ClaudeAgentTeamsLaunchPlan = {
 export async function ensureClaudeAgentTeamsShimDir(root = defaultShimRoot()): Promise<string> {
   await mkdir(root, { recursive: true })
   await writeIfChanged(join(root, 'tmux'), unixShimScript())
+
   if (process.platform === 'win32') {
     await writeIfChanged(join(root, 'tmux.cmd'), windowsClaudeAgentTeamsShimScript())
   }
+
   return root
 }
 
@@ -33,16 +35,20 @@ export async function buildClaudeAgentTeamsLaunchPlan(args: {
   createTeamEnv: (shimDir: string, shimBin: string) => Record<string, string>
 }): Promise<ClaudeAgentTeamsLaunchPlan | null> {
   const mode = args.mode ?? 'off'
+
   if (!args.command || mode === 'off' || !isDirectClaudeCommand(args.command)) {
     return null
   }
+
   if (mode === 'in-process' || process.platform === 'win32') {
     return {
       command: addClaudeTeammateModeInProcess(args.command),
       env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
     }
   }
+
   const shimBin = resolveClaudeAgentTeamsShimBin(args.baseEnv)
+
   if (!shimBin) {
     // Why: without an absolute CLI path the shim would resolve a bare `orca` against the pane cwd, so degrade instead.
     return {
@@ -50,8 +56,10 @@ export async function buildClaudeAgentTeamsLaunchPlan(args: {
       env: { CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1' }
     }
   }
+
   const shimDir = await ensureClaudeAgentTeamsShimDir()
   const env = args.createTeamEnv(shimDir, shimBin)
+
   return {
     command: addClaudeTeammateModeAuto(args.command),
     env,
@@ -66,17 +74,22 @@ export function resolveClaudeAgentTeamsShimBin(
   // Why: Windows callers pass an env spelt `Path`; reading only `PATH` there would find no CLI at all.
   const pathValue = env[resolvePathEnvKey(env, process.platform)]
   const override = env.ORCA_AGENT_TEAMS_SHIM_BIN
+
   if (override) {
     // Why: a bare override name would be resolved by the shim's shell against its cwd, so qualify it or ignore it.
     const qualified = isAbsolute(override) ? override : findExecutableOnPath(override, pathValue)
+
     if (qualified) {
       return qualified
     }
   }
+
   const bundled = bundledLauncherPath()
+
   if (bundled && isExecutableFile(bundled)) {
     return bundled
   }
+
   return (
     findExecutableOnPath(process.platform === 'win32' ? 'orca-dev.cmd' : 'orca-dev', pathValue) ??
     findExecutableOnPath(getOrcaCliCommandNameForPlatform(process.platform), pathValue)
@@ -91,15 +104,19 @@ function bundledLauncherPath(): string | null {
   if (!process.resourcesPath) {
     return null
   }
+
   if (process.platform === 'darwin') {
     return join(process.resourcesPath, 'bin', 'orca')
   }
+
   if (process.platform === 'linux') {
     return join(process.resourcesPath, 'bin', 'orca-ide')
   }
+
   if (process.platform === 'win32') {
     return join(process.resourcesPath, 'bin', 'orca.exe')
   }
+
   return null
 }
 
@@ -109,11 +126,14 @@ function findExecutableOnPath(command: string, pathValue: string | undefined): s
     if (!directory || !isAbsolute(directory)) {
       continue
     }
+
     const candidate = join(directory, command)
+
     if (isExecutableFile(candidate)) {
       return candidate
     }
   }
+
   return null
 }
 
@@ -122,7 +142,9 @@ function isExecutableFile(candidate: string): boolean {
     if (!existsSync(candidate)) {
       return false
     }
+
     accessSync(candidate, process.platform === 'win32' ? constants.F_OK : constants.X_OK)
+
     return true
   } catch {
     return false
@@ -177,14 +199,18 @@ async function writeIfChanged(path: string, content: string): Promise<void> {
   } catch {
     // rewrite below
   }
+
   await mkdir(dirname(path), { recursive: true })
   const tmp = `${path}.${process.pid}.${Date.now()}.tmp`
   let renamed = false
+
   try {
     await writeFile(tmp, content, 'utf8')
+
     if (process.platform !== 'win32') {
       await chmod(tmp, 0o755)
     }
+
     await rename(tmp, path)
     renamed = true
   } finally {

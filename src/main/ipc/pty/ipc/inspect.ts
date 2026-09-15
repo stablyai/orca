@@ -52,11 +52,13 @@ export function installPtyInspectIpcHandlers(deps: {
         ) {
           throw new Error('invalid_pty_session_list_scope')
         }
+
         // Select the daemon only after startup has handed off ownership.
         if (scope.connectionId === null) {
           await getLocalPtyProviderStartupPromise()
         }
       }
+
       const deduped = new Map<string, PtyListedSession>()
       const admission = new PtyProcessListAdmission()
       await visitPtyProcessListingsInBatches(
@@ -90,6 +92,7 @@ export function installPtyInspectIpcHandlers(deps: {
           }
         }
       )
+
       return Array.from(deduped.values())
     }
   )
@@ -98,6 +101,7 @@ export function installPtyInspectIpcHandlers(deps: {
     'pty:getAuthoritativeBufferSnapshotCapabilities',
     async (_event, args: { ids?: unknown }) => {
       const ids = Array.isArray(args?.ids) ? args.ids.slice(0, 512) : []
+
       const hasLocalPtyId = ids.some((value) => {
         if (
           typeof value !== 'string' ||
@@ -108,14 +112,19 @@ export function installPtyInspectIpcHandlers(deps: {
         ) {
           return false
         }
+
         const ownedConnectionId = ptyOwnership.get(value)
+
         return ownedConnectionId === undefined || ownedConnectionId === null
       })
+
       if (hasLocalPtyId) {
         await getLocalPtyProviderStartupPromise()
       }
+
       const capabilities: { id: string; authoritative: boolean | null }[] = []
       const seen = new Set<string>()
+
       for (const value of ids) {
         if (
           typeof value !== 'string' ||
@@ -125,6 +134,7 @@ export function installPtyInspectIpcHandlers(deps: {
         ) {
           continue
         }
+
         seen.add(value)
         const provider = tryGetProviderForPty(value)
         // Resolved providers without the optional method are definitively non-authoritative; null remains retryable.
@@ -138,6 +148,7 @@ export function installPtyInspectIpcHandlers(deps: {
                 : false
         })
       }
+
       return capabilities
     }
   )
@@ -150,18 +161,22 @@ export function installPtyInspectIpcHandlers(deps: {
       // authoritative dead. That is a fabricated answer about another host's PTY.
       return null
     }
+
     // Why: the pre-swap LocalPtyProvider does not own restored daemon ids, and
     // its "no PTY" is exactly the false the renderer reconciler is allowed to
     // close panes on.
     await awaitSwapWindow(args.id)
     const ownedConnectionId = ptyOwnership.get(args.id)
     const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(args.id) : null
+
     const provider = parsedSshId
       ? sshProviders.get(parsedSshId.connectionId)
       : tryGetProviderForPty(args.id)
+
     if (!provider?.hasPty) {
       return null
     }
+
     try {
       return provider.hasPty(args.id)
     } catch {
@@ -176,6 +191,7 @@ export function installPtyInspectIpcHandlers(deps: {
       if (typeof args?.id !== 'string' || !hasPtyProviderForInspection(args.id)) {
         return false
       }
+
       return getProviderForPty(args.id).hasChildProcesses(args.id)
     }
   )
@@ -186,6 +202,7 @@ export function installPtyInspectIpcHandlers(deps: {
       if (typeof args?.id !== 'string' || !hasPtyProviderForInspection(args.id)) {
         return null
       }
+
       return getProviderForPty(args.id).getForegroundProcess(args.id)
     }
   )
@@ -205,13 +222,16 @@ export function installPtyInspectIpcHandlers(deps: {
       if (typeof args?.id !== 'string' || !args.id || args.id.startsWith('remote:')) {
         return clientOnlyUnverifiableInspection('terminal_gone')
       }
+
       // Why: the pre-swap LocalPtyProvider does not own restored daemon ids, so
       // nothing it reports about one is an observation; the post-swap owner must
       // answer completion-sensitive inspection.
       await awaitSwapWindow(args.id)
+
       if (!hasPtyProviderForInspection(args.id)) {
         return clientOnlyUnverifiableInspection('terminal_gone')
       }
+
       const options = {
         ...(args.expectedIncarnationId
           ? { expectedIncarnationId: args.expectedIncarnationId }
@@ -219,6 +239,7 @@ export function installPtyInspectIpcHandlers(deps: {
         ...(args.scanChildProcesses === true ? { scanChildProcesses: true } : {}),
         ...(args.steadyState === true ? { steadyState: true } : {})
       }
+
       return Object.keys(options).length > 0
         ? inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id, options)
         : inspectPtyProviderProcessForRenderer(getProviderForPty(args.id), args.id)
@@ -231,7 +252,9 @@ export function installPtyInspectIpcHandlers(deps: {
       if (typeof args?.id !== 'string' || !hasPtyProviderForInspection(args.id)) {
         return null
       }
+
       const provider = getProviderForPty(args.id)
+
       // Why: the cached foreground API would turn stale process identity into shell/agent authority at a command boundary.
       return provider.confirmForegroundProcess?.(args.id) ?? null
     }
@@ -251,6 +274,7 @@ export function installPtyInspectIpcHandlers(deps: {
     'pty:getSize',
     async (_event, args: { id: string }): Promise<{ cols: number; rows: number } | null> => {
       const provider = tryGetProviderForPty(args?.id)
+
       try {
         if (provider?.getAppliedSize) {
           // Why: a provider-owned null means it could not verify the applied
@@ -261,6 +285,7 @@ export function installPtyInspectIpcHandlers(deps: {
       } catch {
         // Fall through to the requested-size cache so a dead daemon/relay can't throw across the IPC boundary.
       }
+
       return ptySizes.get(args?.id) ?? null
     }
   )
@@ -272,6 +297,7 @@ export function installPtyInspectIpcHandlers(deps: {
       if (!isValidPaneKey(args?.paneKey)) {
         throw new Error('Invalid paneKey')
       }
+
       return declarePendingPaneSerializer(args.paneKey, event?.sender)
     }
   )
@@ -282,10 +308,12 @@ export function installPtyInspectIpcHandlers(deps: {
       if (!isValidPaneKey(args?.paneKey) || typeof args.gen !== 'number') {
         return
       }
+
       const ptyId = pendingPtyIdBySerializerGeneration.get(args.gen)
       const settledCurrentGeneration = settlePendingPaneSerializer(args.paneKey, args.gen)
       // Why: the generation-to-PTY binding survives late teardown of a reused id; paneKey reverse maps may already be gone.
       pendingPtyIdBySerializerGeneration.delete(args.gen)
+
       if (settledCurrentGeneration && ptyId) {
         rendererSerializerReadiness.markReady(ptyId)
       }
@@ -298,6 +326,7 @@ export function installPtyInspectIpcHandlers(deps: {
       if (!isValidPaneKey(args?.paneKey) || typeof args.gen !== 'number') {
         return
       }
+
       settlePendingPaneSerializer(args.paneKey, args.gen)
       pendingPtyIdBySerializerGeneration.delete(args.gen)
     }
@@ -313,6 +342,7 @@ export function installPtyInspectIpcHandlers(deps: {
       ) {
         return
       }
+
       // Why: remote-runtime panes skip the local spawn cooperation gate, so their exact PTY id is the only readiness key.
       rendererSerializerReadiness.markReady(args.ptyId)
     }

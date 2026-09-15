@@ -16,7 +16,9 @@ import { appendFileSync, existsSync, mkdirSync, renameSync, statSync, unlinkSync
 import { dirname } from 'node:path'
 
 const DEFAULT_MAX_BYTES = 5 * 1024 * 1024 // 5 MB
+
 const DEFAULT_MAX_ROTATED_FILES = 2 // daemon.log + daemon.log.1 + daemon.log.2
+
 const PRIVATE_FILE_MODE = 0o600
 
 /** Total files in the rotated daemon-log family (active + rotated). The bundle
@@ -76,18 +78,23 @@ export function createDaemonFileLog(
     if (maxRotatedFiles < 1) {
       return
     }
+
     try {
       for (let i = maxRotatedFiles; i >= 1; i--) {
         const src = i === 1 ? filePath : `${filePath}.${i - 1}`
         const dst = `${filePath}.${i}`
+
         if (!existsSync(src)) {
           continue
         }
+
         if (existsSync(dst)) {
           unlinkSync(dst)
         }
+
         renameSync(src, dst)
       }
+
       currentBytes = 0
     } catch {
       disable()
@@ -98,7 +105,9 @@ export function createDaemonFileLog(
     if (disabled) {
       return
     }
+
     let line: string
+
     try {
       line = `${JSON.stringify({
         src: 'daemon',
@@ -111,13 +120,17 @@ export function createDaemonFileLog(
       // Non-serializable detail (circular ref) — drop the line, never crash.
       return
     }
+
     const lineBytes = Buffer.byteLength(line, 'utf8')
+
     if (currentBytes > 0 && currentBytes + lineBytes > maxBytes) {
       rotate()
+
       if (disabled) {
         return
       }
     }
+
     try {
       appendFileSync(filePath, line, { mode: PRIVATE_FILE_MODE })
       currentBytes += lineBytes

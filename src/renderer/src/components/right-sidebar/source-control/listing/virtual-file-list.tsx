@@ -6,11 +6,13 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 // changesets keep exact scrollbar and flicker-free behavior. `STA-351` /
 // `STA-1280` jank only appears with hundreds of rows.
 export const SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS = 50
+
 // Why: rows are one py-1 text-xs line, except conflict/submodule rows which
 // add a second label line — so estimate the common height and let
 // measureElement correct the tall variants. Identical entries measure
 // identically, so a git-status refresh cannot move the scroll position.
 export const SOURCE_CONTROL_FILE_ROW_HEIGHT_PX = 24
+
 export const SOURCE_CONTROL_FILE_ROW_OVERSCAN = 10
 
 /**
@@ -46,6 +48,7 @@ export function observeSourceControlScrollMargin(
 
   const observeScrollerChildren = (): void => {
     const currentChildren = new Set(scrollElement.children)
+
     // Why: child-list churn can detach previously observed sections; pruning
     // targets prevents the long-lived virtual list from retaining stale DOM.
     for (const child of observedChildren) {
@@ -53,11 +56,14 @@ export function observeSourceControlScrollMargin(
         resizeObserver.unobserve(child)
       }
     }
+
     for (const child of currentChildren) {
       resizeObserver.observe(child)
     }
+
     observedChildren = currentChildren
   }
+
   observeScrollerChildren()
 
   // Why: sections mount/unmount as direct scroller children; re-observe so a
@@ -66,6 +72,7 @@ export function observeSourceControlScrollMargin(
     observeScrollerChildren()
     onLayout()
   })
+
   mutationObserver.observe(scrollElement, { childList: true })
 
   return () => {
@@ -110,7 +117,9 @@ export function SourceControlVirtualFileList<TRow>({
     if (!virtualize) {
       return
     }
+
     const container = containerRef.current
+
     if (!container || !scrollElement) {
       return
     }
@@ -121,6 +130,7 @@ export function SourceControlVirtualFileList<TRow>({
     }
 
     updateMargin()
+
     return observeSourceControlScrollMargin(container, scrollElement, updateMargin)
   }, [scrollElement, virtualize])
 
@@ -135,6 +145,7 @@ export function SourceControlVirtualFileList<TRow>({
     // status refreshes instead of remounting the window each poll.
     getItemKey: (index) => {
       const row = rows[index]
+
       return row === undefined ? index : getRowKey(row)
     }
   })
@@ -152,9 +163,11 @@ export function SourceControlVirtualFileList<TRow>({
     >
       {virtualizer.getVirtualItems().map((item) => {
         const row = rows[item.index]
+
         if (row === undefined) {
           return null
         }
+
         return (
           <div
             key={item.key}

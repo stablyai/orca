@@ -4,12 +4,15 @@ import { normalizeTerminalLayoutSnapshot } from './terminal-layout-leaf-ids'
 import { normalizeTerminalLayoutPtyOwnership } from './terminal-layout-pty-ownership'
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
+
 const LEAF_3 = '33333333-3333-4333-8333-333333333333'
 
 function collectRootLeafIds(layout: TerminalLayoutSnapshot): string[] {
   const visit = (node: NonNullable<TerminalLayoutSnapshot['root']>): string[] =>
     node.type === 'leaf' ? [node.leafId] : [...visit(node.first), ...visit(node.second)]
+
   return layout.root ? visit(layout.root) : []
 }
 
@@ -440,6 +443,7 @@ describe('terminal layout PTY ownership normalization', () => {
 
   it('is idempotent and preserves one owner across PTY and focus permutations', () => {
     const ptyOptions = [undefined, 'pty-a', 'remote:env-1@@term_b'] as const
+
     for (const firstPtyId of ptyOptions) {
       for (const secondPtyId of ptyOptions) {
         for (const thirdPtyId of ptyOptions) {
@@ -451,6 +455,7 @@ describe('terminal layout PTY ownership normalization', () => {
                 [LEAF_3, thirdPtyId]
               ].filter((entry): entry is [string, string] => entry[1] !== undefined)
             )
+
             const layout = duplicatePtyLayout()
             layout.activeLeafId = activeLeafId
             layout.expandedLeafId = activeLeafId

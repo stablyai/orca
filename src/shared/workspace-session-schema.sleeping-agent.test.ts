@@ -30,7 +30,9 @@ describe('parseWorkspaceSession sleeping agents', () => {
         }
       }
     })
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.agent).toBe('codex')
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('live')
@@ -56,6 +58,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
         updatedAt: 10,
         origin: 'worktree-sleep'
       }
+
       const result = parseWorkspaceSession({
         activeRepoId: null,
         activeWorktreeId: null,
@@ -66,7 +69,9 @@ describe('parseWorkspaceSession sleeping agents', () => {
           [record.paneKey]: { ...record, automaticResumeBlockedBy }
         }
       })
+
       expect(result.ok).toBe(true)
+
       if (result.ok) {
         expect(result.value.sleepingAgentSessionsByPaneKey?.[record.paneKey]).toEqual(record)
       }
@@ -99,7 +104,9 @@ describe('parseWorkspaceSession sleeping agents', () => {
         }
       }
     })
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       // Why: the record must survive the resumable-agent refine, or restore silently drops it.
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']).toMatchObject({
@@ -137,6 +144,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.providerSession).toEqual(
         {
@@ -177,6 +185,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(
         result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.launchConfig
@@ -209,6 +218,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey).toBeUndefined()
     }
@@ -241,6 +251,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       const record = result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']
       expect(record?.agent).toBe('codex')
@@ -276,6 +287,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
         }
       }
     }`)
+
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: null,
@@ -286,6 +298,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(Object.hasOwn(result.value.sleepingAgentSessionsByPaneKey ?? {}, '__proto__')).toBe(
         false
@@ -324,6 +337,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(
         result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.launchConfig?.agentEnv
@@ -358,6 +372,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       const record = result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']
       expect(record?.agent).toBe('codex')
@@ -389,6 +404,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('quit')
     }
@@ -419,6 +435,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       // Why: dropping it on restart resurrects the mobile-wake fan-out this flag exists to stop.
       expect(
@@ -452,6 +469,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.interrupted).toBe(true)
     }
@@ -481,6 +499,7 @@ describe('parseWorkspaceSession sleeping agents', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('live')
     }
@@ -506,7 +525,9 @@ describe('parseWorkspaceSession sleeping agents', () => {
         }
       }
     })
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey).toBeUndefined()
     }
@@ -543,7 +564,9 @@ describe('parseWorkspaceSession sleeping agents', () => {
         }
       }
     })
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.agent).toBe('codex')
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab2:pane-1']).toBeUndefined()
@@ -582,7 +605,9 @@ describe('parseWorkspaceSession sleeping agents', () => {
         }
       }
     })
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.providerSession.id).toBe(
         'codex-session'
@@ -623,7 +648,9 @@ describe('parseWorkspaceSession sleeping agents', () => {
         }
       }
     })
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.providerSession.id).toBe(
         'codex-session'

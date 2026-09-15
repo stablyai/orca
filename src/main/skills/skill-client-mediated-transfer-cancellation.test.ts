@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
+
 vi.mock('./skill-package-download', () => ({
   downloadSkillPackageGrant: mocks.downloadSkillPackageGrant
 }))
@@ -37,12 +38,15 @@ describe('transferSkillPackageToRuntime cancellation', () => {
     const downloadCleanup = vi.fn(async () => undefined)
     const controller = new AbortController()
     let commitStarted: () => void = () => {}
+
     const commitPending = new Promise<void>((resolve) => {
       commitStarted = resolve
     })
+
     mocks.downloadSkillPackageGrant.mockResolvedValue({ archivePath, cleanup: downloadCleanup })
     mocks.callRuntimeEnvironment.mockImplementation((...args: unknown[]) => {
       const method = args[2]
+
       if (method === 'skills.beginUpload') {
         return Promise.resolve({
           id: 'rpc-begin',
@@ -51,6 +55,7 @@ describe('transferSkillPackageToRuntime cancellation', () => {
           _meta: { runtimeId: 'runtime-1' }
         })
       }
+
       if (method === 'skills.uploadChunk') {
         return Promise.resolve({
           id: 'rpc-chunk',
@@ -59,8 +64,10 @@ describe('transferSkillPackageToRuntime cancellation', () => {
           _meta: { runtimeId: 'runtime-1' }
         })
       }
+
       if (method === 'skills.commitUpload') {
         const options = args[7] as { signal?: AbortSignal }
+
         return new Promise((_resolve, reject) => {
           options.signal?.addEventListener('abort', () => reject(options.signal?.reason), {
             once: true
@@ -68,6 +75,7 @@ describe('transferSkillPackageToRuntime cancellation', () => {
           commitStarted()
         })
       }
+
       return Promise.resolve({
         id: 'rpc-cancel',
         ok: true,
@@ -94,6 +102,7 @@ describe('transferSkillPackageToRuntime cancellation', () => {
       requireHttps: true,
       signal: controller.signal
     })
+
     await commitPending
 
     controller.abort()

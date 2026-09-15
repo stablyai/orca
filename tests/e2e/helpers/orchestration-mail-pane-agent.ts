@@ -27,7 +27,9 @@ import path from 'node:path'
 
 /** `detectAgentStatusFromTitle` reads these as agent-name + strong keyword. */
 export const CODEX_IDLE_TITLE = 'Codex done'
+
 export const CODEX_WORKING_TITLE = 'Codex working'
+
 /** Also satisfies `isCursorAgentTitle`, which suppresses the synthesized Enter. */
 export const CURSOR_IDLE_TITLE = 'Cursor Ready'
 
@@ -123,6 +125,7 @@ type MailPaneAgentOptions = {
 // spec files, and a temp dir removed while another spec still polls its ledger
 // surfaces as an agent that mysteriously stopped reporting.
 const agentDirs: string[] = []
+
 process.once('exit', () => {
   for (const dir of agentDirs) {
     rmSync(dir, { recursive: true, force: true })
@@ -147,6 +150,7 @@ export function createMailPaneAgent(options: MailPaneAgentOptions = {}): MailPan
     if (!existsSync(ledgerPath)) {
       return []
     }
+
     return readFileSync(ledgerPath, 'utf8')
       .split(/\r?\n/)
       .filter(Boolean)

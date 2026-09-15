@@ -17,27 +17,33 @@ function makeNvmHome(options: {
   cliIn?: string
 }): string {
   const home = mkdtempSync(join(tmpdir(), 'orca-nvm-'))
+
   for (const version of options.versions) {
     const bin = join(home, '.nvm', 'versions', 'node', version, 'bin')
     mkdirSync(bin, { recursive: true })
+
     for (const name of ['node', 'node.exe']) {
       writeFileSync(join(bin, name), '')
       chmodSync(join(bin, name), 0o755)
     }
+
     if (options.cliIn === version) {
       writeFileSync(join(bin, 'codex'), '')
       chmodSync(join(bin, 'codex'), 0o755)
     }
   }
+
   if (options.defaultAlias !== undefined) {
     mkdirSync(join(home, '.nvm', 'alias'), { recursive: true })
     writeFileSync(join(home, '.nvm', 'alias', 'default'), `${options.defaultAlias}\n`)
   }
+
   for (const [name, value] of Object.entries(options.aliases ?? {})) {
     const file = join(home, '.nvm', 'alias', name)
     mkdirSync(join(file, '..'), { recursive: true })
     writeFileSync(file, `${value}\n`)
   }
+
   return home
 }
 
@@ -56,6 +62,7 @@ describe('nvm default alias decides the seeded runtime', () => {
       defaultAlias: '24',
       cliIn: 'v24.18.0'
     })
+
     expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v24.18.0', 'bin'))
   })
 
@@ -65,6 +72,7 @@ describe('nvm default alias decides the seeded runtime', () => {
       defaultAlias: '24',
       cliIn: 'v24.18.0'
     })
+
     expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v24.18.0', 'bin'))
   })
 
@@ -81,6 +89,7 @@ describe('nvm default alias decides the seeded runtime', () => {
         aliases: { 'lts/*': 'lts/krypton', 'lts/krypton': 'v22.9.0' },
         cliIn: 'v22.9.0'
       })
+
       expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v22.9.0', 'bin'))
     }
   )
@@ -101,6 +110,7 @@ describe('nvm default alias decides the seeded runtime', () => {
       defaultAlias: 'a',
       aliases: { a: 'b', b: 'a' }
     })
+
     expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v26.7.0', 'bin'))
   })
 
@@ -133,6 +143,7 @@ describe('nvm default alias decides the seeded runtime', () => {
       versions: ['v0.12.7', 'v24.18.0', 'v26.7.0'],
       defaultAlias: token
     })
+
     expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v26.7.0', 'bin'))
   })
 
@@ -151,6 +162,7 @@ describe('nvm default alias decides the seeded runtime', () => {
       defaultAlias: '24',
       cliIn: 'v26.7.0'
     })
+
     expect(resolveCliCommand('codex', { platform: 'darwin', pathEnv: '', homePath: home })).toBe(
       join(home, '.nvm', 'versions', 'node', 'v26.7.0', 'bin', 'codex')
     )

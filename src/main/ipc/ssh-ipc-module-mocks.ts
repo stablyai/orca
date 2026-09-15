@@ -85,6 +85,7 @@ export function createSshIpcMocks(): SshIpcMocks {
     mockNextConnectionManagers: [] as unknown[],
     mockNextPortForwardManagers: [] as unknown[]
   }
+
   const {
     handleMock,
     powerMonitorOffMock,
@@ -107,6 +108,7 @@ export function createSshIpcMocks(): SshIpcMocks {
     mockNextConnectionManagers,
     mockNextPortForwardManagers
   } = state
+
   const modules: SshIpcMockModules = {
     sshConfigHostPicker: {
       listUserSshConfigHostSummaries: mockListConfigHosts,
@@ -130,6 +132,7 @@ export function createSshIpcMocks(): SshIpcMocks {
       acceptSshPtyOutputExit: mockAcceptSshPtyOutputExit,
       allocateSshPtyProviderGeneration: (() => {
         let generation = 0
+
         return () => ++generation
       })(),
       beginSshPtyOutputGenerationMigration: vi.fn(() => ({
@@ -155,10 +158,12 @@ export function createSshIpcMocks(): SshIpcMocks {
         constructor(callbacks: unknown) {
           const manager = (mockNextConnectionManagers.shift() ??
             mockConnectionManager) as typeof mockConnectionManager
+
           manager.callbacksRef.current = callbacks
           manager.setCallbacks.mockImplementation((nextCallbacks: unknown) => {
             manager.callbacksRef.current = nextCallbacks
           })
+
           return manager
         }
       }
@@ -182,6 +187,7 @@ export function createSshIpcMocks(): SshIpcMocks {
       SshPtyProvider: class MockSshPtyProvider {
         constructor(_targetId: unknown, _mux: unknown, _env: unknown, providerGeneration: number) {
           mockPtyProvider.providerGeneration = providerGeneration
+
           return mockPtyProvider
         }
       }
@@ -226,9 +232,11 @@ export function createSshIpcMocks(): SshIpcMocks {
         constructor() {
           const manager = (mockNextPortForwardManagers.shift() ??
             mockPortForwardManager) as typeof mockPortForwardManager
+
           manager.setCallbacks.mockImplementation((callbacks: unknown) => {
             manager.callbacksRef.current = callbacks
           })
+
           return manager
         }
       }
@@ -247,5 +255,6 @@ export function createSshIpcMocks(): SshIpcMocks {
       }
     }
   }
+
   return { ...state, ...modules }
 }

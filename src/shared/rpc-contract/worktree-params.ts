@@ -18,10 +18,13 @@ export const OptionalExecutionHostId = z
   .string()
   .transform((value, ctx) => {
     const hostId = normalizeExecutionHostId(value)
+
     if (!hostId) {
       ctx.addIssue({ code: 'custom', message: 'Invalid host id' })
+
       return z.NEVER
     }
+
     return hostId
   })
   .optional()
@@ -156,6 +159,7 @@ export const WorktreeSet = WorktreeSelector.extend({
   noParent: OptionalBoolean
 }).superRefine((params, ctx) => {
   assertLinkedWorkItemSourceContextMatch(params, ctx)
+
   if (params.parentWorktree && params.noParent === true) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,

@@ -12,10 +12,13 @@ import {
 } from './session-search-indexer-test-fixture'
 
 const RECENT_SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+
 const ANCIENT_SESSION_ID = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
 
 let harness: SessionSearchIndexerHarness
+
 let instance: SessionSearchInstance | null
+
 let errors: unknown[]
 
 beforeEach(async () => {
@@ -40,6 +43,7 @@ function newInstance(): SessionSearchInstance {
     roots: harness.roots,
     onError: (error) => errors.push(error)
   })
+
   return instance
 }
 
@@ -49,9 +53,11 @@ function transcriptPath(sessionId: string): string {
 
 async function searchFor(query: string): Promise<string[]> {
   const response = await instance!.search({ query })
+
   if (response.kind !== 'results') {
     throw new Error(`expected results, got ${response.kind}`)
   }
+
   return response.hits.map((hit) => hit.sessionId).sort()
 }
 
@@ -171,23 +177,29 @@ it('keeps pagination stable when the clock crosses retention before a purge', as
   for (const id of [RECENT_SESSION_ID, ANCIENT_SESSION_ID]) {
     await writeClaudeTranscript(transcriptPath(id), [`distinctive conversation ${id}`], id)
   }
+
   const subject = newInstance()
   subject.apply({ enabled: true, historyDays: 30 })
   await subject.settled()
   const first = await subject.search({ query: 'distinctive', limit: 1 })
+
   if (first.kind !== 'results') {
     throw new Error('expected results')
   }
+
   expect(first.page.cursor).toBeTruthy()
   vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 31 * 86_400_000)
+
   const second = await subject.search({
     query: 'distinctive',
     limit: 1,
     cursor: first.page.cursor!
   })
+
   if (second.kind !== 'results') {
     throw new Error('expected results')
   }
+
   expect(second.generation).toBe(first.generation)
   expect(second.hits).toHaveLength(1)
   expect(second.hits[0].sessionId).not.toBe(first.hits[0].sessionId)

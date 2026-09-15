@@ -10,6 +10,7 @@ describe('web session terminal orphan recovery', () => {
 
   it('keeps a missing mirror pending until exact live orphan adoption returns', async () => {
     let resolveAdoption: ((value: never) => void) | null = null
+
     const adoptedSnapshot = {
       worktree: 'repo::C:\\worktree',
       publicationEpoch: 'adopted',
@@ -30,6 +31,7 @@ describe('web session terminal orphan recovery', () => {
         }
       ]
     }
+
     const call = vi.fn(async ({ method }) => {
       if (method === 'terminal.list') {
         return {
@@ -50,13 +52,16 @@ describe('web session terminal orphan recovery', () => {
           }
         }
       }
+
       if (method === 'session.tabs.list') {
         return { ok: true as const, result: adoptedSnapshot }
       }
+
       return await new Promise((resolve) => {
         resolveAdoption = resolve as (value: never) => void
       })
     })
+
     const state = {
       tabsByWorktree: {
         [adoptedSnapshot.worktree]: [
@@ -87,8 +92,10 @@ describe('web session terminal orphan recovery', () => {
         [adoptedSnapshot.worktree]: { type: 'leaf' as const, groupId: 'group-1' }
       }
     }
+
     const missingSnapshot = { ...adoptedSnapshot, publicationEpoch: 'missing', tabs: [] }
     let settled = false
+
     const recovery = recoverWebSessionTerminalOrphansBeforeApply(
       state,
       missingSnapshot,
@@ -96,8 +103,10 @@ describe('web session terminal orphan recovery', () => {
       { call: call as never }
     ).then((result) => {
       settled = true
+
       return result
     })
+
     await vi.waitFor(() => expect(resolveAdoption).not.toBeNull())
     expect(settled).toBe(false)
     expect(call).toHaveBeenNthCalledWith(
@@ -148,6 +157,7 @@ describe('web session terminal orphan recovery', () => {
 
   it('keeps an exact recoverable orphan visible when adoption is unavailable', async () => {
     const worktree = 'repo::/worktree'
+
     const call = vi.fn(async ({ method }) =>
       method === 'terminal.list'
         ? {
@@ -168,6 +178,7 @@ describe('web session terminal orphan recovery', () => {
           }
         : { ok: false as const, error: { code: 'conflict', message: 'retry' } }
     )
+
     const state = {
       tabsByWorktree: {
         [worktree]: [{ id: 'web-terminal-host-tab', worktreeId: worktree } as never]
@@ -185,6 +196,7 @@ describe('web session terminal orphan recovery', () => {
       activeTabIdByWorktree: {},
       activeGroupIdByWorktree: {}
     }
+
     const missing = {
       worktree,
       publicationEpoch: 'missing',
@@ -206,6 +218,7 @@ describe('web session terminal orphan recovery', () => {
 
   it('proposes pruned pane and group topology using host tab identities', async () => {
     const worktree = 'repo::/worktree'
+
     const adoptedSnapshot = {
       worktree,
       publicationEpoch: 'adopted',
@@ -215,6 +228,7 @@ describe('web session terminal orphan recovery', () => {
       activeTabType: 'terminal' as const,
       tabs: []
     }
+
     const call = vi.fn(async ({ method }) =>
       method === 'terminal.list'
         ? {
@@ -253,6 +267,7 @@ describe('web session terminal orphan recovery', () => {
                 : { adopted: true, topologyRevision: 9, snapshot: adoptedSnapshot }
           }
     )
+
     const state = {
       tabsByWorktree: {
         [worktree]: [
@@ -405,6 +420,7 @@ describe('web session terminal orphan recovery', () => {
 
   it('recovers a missing split leaf when another leaf in the same tab is already host-owned', async () => {
     const worktree = 'repo::/worktree'
+
     const hostSnapshot = {
       worktree,
       publicationEpoch: 'partial',
@@ -425,11 +441,13 @@ describe('web session terminal orphan recovery', () => {
         }
       ]
     }
+
     const adoptedSnapshot = {
       ...hostSnapshot,
       publicationEpoch: 'adopted',
       snapshotVersion: 3
     }
+
     const call = vi.fn(async ({ method }) =>
       method === 'terminal.list'
         ? {
@@ -456,6 +474,7 @@ describe('web session terminal orphan recovery', () => {
                 : { adopted: true, topologyRevision: 3, snapshot: adoptedSnapshot }
           }
     )
+
     const state = {
       tabsByWorktree: {
         [worktree]: [{ id: 'web-terminal-host-tab', worktreeId: worktree } as never]
@@ -536,6 +555,7 @@ describe('web session terminal orphan recovery', () => {
   it('serializes a newer convergence snapshot after an in-flight adoption conflict', async () => {
     const worktree = 'repo::/worktree'
     let rejectFirstAdoption: (() => void) | null = null
+
     const call = vi.fn(async ({ method }) => {
       if (method === 'terminal.list') {
         return {
@@ -555,11 +575,13 @@ describe('web session terminal orphan recovery', () => {
           }
         }
       }
+
       return await new Promise((resolve) => {
         rejectFirstAdoption = () =>
           resolve({ ok: false as const, error: { code: 'conflict', message: 'closed' } })
       })
     })
+
     const state = {
       tabsByWorktree: {
         [worktree]: [{ id: 'web-terminal-host-tab', worktreeId: worktree } as never]
@@ -577,6 +599,7 @@ describe('web session terminal orphan recovery', () => {
       activeTabIdByWorktree: {},
       activeGroupIdByWorktree: {}
     }
+
     const missing = {
       worktree,
       publicationEpoch: 'missing',
@@ -586,6 +609,7 @@ describe('web session terminal orphan recovery', () => {
       activeTabType: null,
       tabs: []
     }
+
     const converged = {
       ...missing,
       publicationEpoch: 'closed',
@@ -607,10 +631,13 @@ describe('web session terminal orphan recovery', () => {
     const first = recoverWebSessionTerminalOrphansBeforeApply(state, missing, 'windows-2', {
       call: call as never
     })
+
     await vi.waitFor(() => expect(rejectFirstAdoption).not.toBeNull())
+
     const second = recoverWebSessionTerminalOrphansBeforeApply(state, converged, 'windows-2', {
       call: call as never
     })
+
     rejectFirstAdoption!()
 
     await expect(first).resolves.toBeNull()

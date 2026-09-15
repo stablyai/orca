@@ -18,9 +18,11 @@ export function getHostListActionSheetActions(args: {
   onRemove: (host: HostProfile) => void
 }): ActionSheetAction[] {
   const { host } = args
+
   if (!host) {
     return []
   }
+
   const isLive =
     args.state === 'connected' ||
     args.state === 'connecting' ||

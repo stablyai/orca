@@ -8,6 +8,7 @@ import {
 } from './worktree-create-execution-host-route'
 
 const HOST_A = 'target-a'
+
 const HOST_B = 'target-b'
 
 function repoRow(fields: Partial<Repo>): Repo {

@@ -12,6 +12,7 @@ import {
 } from './notification-viewing-policy'
 
 const storage = new Map<string, string>()
+
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: vi.fn(async (key: string) => storage.get(key) ?? null),
@@ -20,7 +21,9 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     })
   }
 }))
+
 vi.mock('react-native', () => ({ AppState: { currentState: 'background' } }))
+
 beforeEach(() => {
   storage.clear()
   setNotificationViewingWorkspace(null)
@@ -29,11 +32,13 @@ beforeEach(() => {
 
 it('persists only phone-specific delivery preferences', async () => {
   expect(await loadNotificationDeliveryPreferences()).toEqual(DEFAULT_NOTIFICATION_DELIVERY)
+
   const value = {
     ...DEFAULT_NOTIFICATION_DELIVERY,
     onlyWhenDesktopAway: false,
     sound: false
   }
+
   await saveNotificationDeliveryPreferences(value)
   expect(await loadNotificationDeliveryPreferences()).toEqual(value)
   expect(notificationPreferencesFilter(value)).toEqual({

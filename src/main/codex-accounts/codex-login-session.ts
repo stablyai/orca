@@ -14,8 +14,11 @@ import {
 } from './wsl-codex-command'
 
 const LOGIN_TIMEOUT_MS = 120_000
+
 const MAX_LOGIN_OUTPUT_CHARS = 4_000
+
 const WINDOWS_LOGIN_AUTH_POLL_INTERVAL_MS = 500
+
 const WINDOWS_LOGIN_POST_AUTH_EXIT_GRACE_MS = 5_000
 
 type LoginOutputStream = {
@@ -57,9 +60,11 @@ function readLoginAuthSnapshot(authJsonPath: string): string | null | undefined 
     return readFileSync(authJsonPath, 'utf-8')
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
+
     if (code === 'ENOENT' || code === 'ENOTDIR') {
       return null
     }
+
     // Why: codex can atomically replace auth.json while the poll runs; a later
     // poll will observe the stable credential. An unreadable initial file must
     // disable the shortcut rather than look like a fresh login.
@@ -81,9 +86,11 @@ export async function runCodexLoginSession(
   dependencies: CodexLoginSessionDependencies
 ): Promise<void> {
   const wslInfo = parseWslUncPath(managedHomePath)
+
   if (wslInfo) {
     await assertWslCodexCliAvailable(wslInfo)
   }
+
   // Why: reauthentication starts with an existing auth.json. Only new auth
   // bytes prove this login completed; existence alone would kill the
   // Windows OAuth flow five seconds after it opened.
@@ -101,6 +108,7 @@ export async function runCodexLoginSession(
           interactiveLogin: null
         }
       : createHostLoginSpawn(managedHomePath)
+
     const child = dependencies.spawn({
       command: spawnConfig.command,
       args: spawnConfig.args,
@@ -112,8 +120,10 @@ export async function runCodexLoginSession(
 
     let settled = false
     let output = ''
+
     const appendOutput = (chunk: Buffer): void => {
       output = `${output}${chunk.toString()}`
+
       if (output.length > MAX_LOGIN_OUTPUT_CHARS) {
         output = output.slice(-MAX_LOGIN_OUTPUT_CHARS)
       }
@@ -124,19 +134,23 @@ export async function runCodexLoginSession(
     let postAuthExitTimeout: ReturnType<typeof setTimeout> | null = null
     let loginTreeKilledAfterAuth = false
     const authJsonPath = join(managedHomePath, 'auth.json')
+
     const cleanupListeners = (): void => {
       if (timeout) {
         clearTimeout(timeout)
         timeout = null
       }
+
       if (authWatchInterval) {
         clearInterval(authWatchInterval)
         authWatchInterval = null
       }
+
       if (postAuthExitTimeout) {
         clearTimeout(postAuthExitTimeout)
         postAuthExitTimeout = null
       }
+
       child.stdout?.off('data', appendOutput)
       child.stderr?.off('data', appendOutput)
       child.off('error', onError)
@@ -148,6 +162,7 @@ export async function runCodexLoginSession(
       if (settled) {
         return
       }
+
       settled = true
       cleanupListeners()
       callback()
@@ -168,10 +183,12 @@ export async function runCodexLoginSession(
         if (!loginAuthChanged(initialAuthSnapshot, readLoginAuthSnapshot(authJsonPath))) {
           return
         }
+
         if (authWatchInterval) {
           clearInterval(authWatchInterval)
           authWatchInterval = null
         }
+
         postAuthExitTimeout = setTimeout(() => {
           loginTreeKilledAfterAuth = true
           dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
@@ -184,11 +201,13 @@ export async function runCodexLoginSession(
         const isEnoent = (error as NodeJS.ErrnoException).code === 'ENOENT'
         // Why: ENOENT is ambiguous — missing codex binary or missing node in PATH; a resolved full path implies node is missing.
         const isBareCommand = spawnConfig.codexCommand === 'codex'
+
         const message = isEnoent
           ? isBareCommand
             ? 'Codex CLI not found.'
             : 'Codex CLI found but could not run — Node.js may not be in your PATH.'
           : error.message
+
         rejectPromise(new Error(message))
       })
     }
@@ -207,8 +226,10 @@ export async function runCodexLoginSession(
           (loginTreeKilledAfterAuth && readLoginAuthSnapshot(authJsonPath) !== null)
         ) {
           resolvePromise()
+
           return
         }
+
         const trimmedOutput = output.trim()
         rejectPromise(
           new Error(
@@ -235,15 +256,18 @@ function createHostLoginSpawn(managedHomePath: string): {
   interactiveLogin: WindowsHostInteractiveLoginSpawn | null
 } {
   const codexCommand = resolveCodexCommand()
+
   // Why: Windows host login needs a real console; otherwise inherit/hide
   // leaves the child unable to read a paste-code / device-auth prompt.
   const interactiveLogin =
     process.platform === 'win32'
       ? buildWindowsHostInteractiveLoginSpawn(codexCommand, ['login'])
       : null
+
   const { spawnCmd, spawnArgs } = interactiveLogin
     ? { spawnCmd: interactiveLogin.command, spawnArgs: interactiveLogin.args }
     : getSpawnArgsForWindows(codexCommand, ['login'])
+
   return {
     command: spawnCmd,
     args: spawnArgs,
@@ -267,11 +291,13 @@ async function assertWslCodexCliAvailable(wslInfo: {
     shell: 'sh',
     timeoutMs: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
   })
+
   if (result.code !== 0 && !result.environmentResolved) {
     // A miss without the login PATH is "we could not check", not "not
     // installed" -- claiming absence here is #9725.
     throw new Error('Could not check the Codex CLI in WSL. Try again.')
   }
+
   if (result.code !== 0 || result.timedOut) {
     throw new Error(
       `Codex CLI is not available in WSL ${wslInfo.distro}. Install Codex in that distro or switch Account location to Windows.`,

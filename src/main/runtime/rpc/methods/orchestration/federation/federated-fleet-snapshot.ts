@@ -14,7 +14,9 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolvePinnedFederatedServer } from '../worker/worker-observation'
 
 const FLEET_HOST_CONCURRENCY = 4
+
 const FLEET_HOST_TIMEOUT_MS = 3_000
+
 const FLEET_TOTAL_TIMEOUT_MS = 5_000
 
 export type FederatedFleetObservation = {
@@ -41,42 +43,55 @@ export async function readFederatedFleetSnapshots(args: {
 }> {
   const groups = groupFederatedDispatches(args)
   const deadline = Date.now() + FLEET_TOTAL_TIMEOUT_MS
+
   const results = await mapWithConcurrency(groups, FLEET_HOST_CONCURRENCY, async (group) => {
     const dispatchIds = group.dispatches.map((dispatch) => dispatch.dispatch_id)
     const observationFences = args.db.captureFederatedDispatchObservationFences(dispatchIds)
+
     const error = (code: FederatedFleetHostError['code']): FederatedFleetHostError => ({
       environmentId: group.environmentId,
       name: group.name,
       code,
       dispatchIds
     })
+
     const remaining = deadline - Date.now()
+
     if (remaining <= 0) {
       return { observations: [], error: error('home_budget_exhausted') }
     }
+
     const timeoutMs = Math.min(FLEET_HOST_TIMEOUT_MS, remaining)
     const first = group.dispatches[0]
     const cache = getOrchestrationPeerCapabilityCache(args.runtime)
     let observedCapabilityEpoch: string | null = null
+
     try {
       const server = resolvePinnedFederatedServer(args.runtime, first)
+
       // Shipped hosts serve this method without advertising it.
       const known = cache.knownSupport(
         first.peer_fingerprint,
         first.remote_runtime_epoch,
         ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY
       )
+
       observedCapabilityEpoch = known?.runtimeEpoch ?? first.remote_runtime_epoch
+
       if (known?.supported === false) {
         if (observedCapabilityEpoch) {
           projectFleetRuntimeEpochs(args.db, observationFences, observedCapabilityEpoch)
         }
+
         return { observations: [], error: error('capability_unsupported') }
       }
+
       const snapshotRemainingMs = deadline - Date.now()
+
       if (snapshotRemainingMs <= 0) {
         return { observations: [], error: error('home_budget_exhausted') }
       }
+
       const snapshot = (await args.runtime.callOrchestrationWorkerServer(
         server.environmentId,
         'orchestration.federationFleetSnapshot',
@@ -88,6 +103,7 @@ export async function readFederatedFleetSnapshots(args: {
         runtimeEpoch: string
         items: { dispatchId: string; observation: FederatedFleetObservation }[]
       }
+
       cache.remember(
         first.peer_fingerprint,
         snapshot.runtimeEpoch,
@@ -95,12 +111,15 @@ export async function readFederatedFleetSnapshots(args: {
         true,
         observedCapabilityEpoch
       )
+
       const projectedDispatches = projectFleetRuntimeEpochs(
         args.db,
         observationFences,
         snapshot.runtimeEpoch
       )
+
       const expected = new Set(dispatchIds)
+
       return {
         observations: snapshot.items
           .filter(
@@ -124,11 +143,14 @@ export async function readFederatedFleetSnapshots(args: {
           ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY,
           false
         )
+
         if (observedCapabilityEpoch) {
           projectFleetRuntimeEpochs(args.db, observationFences, observedCapabilityEpoch)
         }
+
         return { observations: [], error: error('capability_unsupported') }
       }
+
       return {
         observations: [],
         error: error(
@@ -139,22 +161,27 @@ export async function readFederatedFleetSnapshots(args: {
       }
     }
   })
+
   const observations = new Map<string, FederatedFleetObservation>()
   const errors: FederatedFleetHostError[] = []
   const hosts = new Map<string, string>()
+
   for (const group of groups) {
     for (const dispatch of group.dispatches) {
       hosts.set(dispatch.dispatch_id, group.environmentId)
     }
   }
+
   for (const result of results) {
     for (const item of result.observations) {
       observations.set(item.dispatchId, item.observation)
     }
+
     if (result.error) {
       errors.push(result.error)
     }
   }
+
   return { observations, errors, hosts }
 }
 
@@ -167,6 +194,7 @@ function projectFleetRuntimeEpochs(
   runtimeEpoch: string
 ): Set<string> {
   const projectedDispatches = new Set<string>()
+
   for (const [dispatchId, fence] of fences) {
     if (
       db.projectFederatedDispatchObservation(fence, () => {
@@ -176,6 +204,7 @@ function projectFleetRuntimeEpochs(
       projectedDispatches.add(dispatchId)
     }
   }
+
   return projectedDispatches
 }
 
@@ -192,28 +221,37 @@ export function applyFederatedFleetObservations(
       )
     )
   )
+
   for (const worker of fleet.workers) {
     const hostId = federated.hosts.get(worker.dispatchId)
+
     if (hostId) {
       worker.host = { kind: 'remote', id: hostId }
     }
+
     const observation = federated.observations.get(worker.dispatchId)
+
     if (!observation) {
       const unavailableReason = unavailableDispatches.get(worker.dispatchId)
+
       if (unavailableReason) {
         if (worker.liveness.verdict === 'exited') {
           continue
         }
+
         worker.liveness = { verdict: 'unverifiable', reason: unavailableReason }
         worker.evidence.liveStatus = 'unavailable'
         worker.evidence.lastObservedAt = null
         refreshFleetWorkerVerdict(worker, durable)
       }
+
       continue
     }
+
     if (worker.liveness.verdict === 'exited' && observation.status !== 'exited') {
       continue
     }
+
     worker.liveness =
       observation.status === 'live'
         ? { verdict: 'live', observedAt, source: 'execution_host' }
@@ -233,6 +271,7 @@ function refreshFleetWorkerVerdict(
 ): void {
   refreshOrchestrationFleetLivenessAttention(worker)
   const row = durable.get(worker.dispatchId)
+
   if (row) {
     worker.nextAction = projectFleetNextAction(row, worker.liveness)
   }

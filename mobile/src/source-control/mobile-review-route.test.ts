@@ -4,6 +4,7 @@ import { buildMobileReviewFileRoute, type MobileReviewRouteArea } from './mobile
 
 function queryParams(route: string): URLSearchParams {
   const query = route.split('?')[1] ?? ''
+
   return new URLSearchParams(query)
 }
 
@@ -18,6 +19,7 @@ describe('buildMobileReviewFileRoute', () => {
         filePath,
         area: 'unstaged'
       })
+
       const params = queryParams(route)
 
       expect(route).toContain('/h/host%2Fid/review/repo%3A%3Awork%20tree?')

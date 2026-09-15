@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 
 const getSshGitProviderMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock
 }))
@@ -44,6 +45,7 @@ describe('addRemoteRepoFromPath', () => {
 
   it('stamps the unified execution-host spelling alongside the legacy connection id', async () => {
     const repos: Repo[] = []
+
     const result = await addRemoteRepoFromPath(makeStore(repos) as never, {
       connectionId: 'm4air',
       remotePath: '/srv/app'
@@ -64,6 +66,7 @@ describe('addRemoteRepoFromPath', () => {
       addedAt: 0,
       executionHostId: 'ssh:m4air'
     } as Repo
+
     const repos: Repo[] = [existing]
 
     const result = await addRemoteRepoFromPath(makeStore(repos) as never, {

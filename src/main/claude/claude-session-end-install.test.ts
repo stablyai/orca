@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { applyManagedHooks } from './hook-settings'
 
 const SCRIPT_FILE_NAME = 'claude-hook.sh'
+
 const MANAGED_COMMAND = '/home/dev/.orca/agent-hooks/claude-hook.sh'
+
 const managedHook = { type: 'command' as const, command: MANAGED_COMMAND }
 
 describe('Claude SessionEnd managed hook capability', () => {
@@ -38,6 +40,7 @@ describe('Claude SessionEnd managed hook capability', () => {
       SCRIPT_FILE_NAME,
       { claudeVersion: '2.1.261' }
     )
+
     const downgraded = applyManagedHooks(capable, managedHook, SCRIPT_FILE_NAME, {
       claudeVersion: '2.1.260'
     })

@@ -14,6 +14,7 @@ import {
 } from './plugin-install-lockfile'
 
 const workspaceRead: PluginCapability = { kind: 'workspace:read' }
+
 const storage: PluginCapability = { kind: 'storage' }
 
 describe('fingerprintPluginConsent', () => {
@@ -34,6 +35,7 @@ describe('fingerprintPluginConsent', () => {
       main: undefined,
       capabilities: [workspaceRead, storage, workspaceRead]
     })
+
     const second = fingerprintPluginConsent({
       main: undefined,
       capabilities: [storage, workspaceRead]
@@ -47,16 +49,19 @@ describe('fingerprintPluginConsent', () => {
     const withWorker = fingerprintPluginConsent({ main: 'worker.js', capabilities: [] })
 
     expect(withWorker).not.toBe(panelOnly)
+
     const lists = {
       pluginConsents: { 'orca-samples.demo': panelOnly },
       disabledPlugins: []
     }
+
     expect(getPluginActivationState('orca-samples.demo', withWorker, lists)).toBe('pending')
     expect(needsReconsent('orca-samples.demo', withWorker, lists)).toBe(true)
   })
 
   it('preserves capability-only fingerprints for existing panel plugins', () => {
     const capabilities = [workspaceRead, storage]
+
     const legacy = `sha256-${createHash('sha256')
       .update(canonicalizeCapabilitySet(capabilities))
       .digest('base64')}`
@@ -74,6 +79,7 @@ describe('fingerprintPluginConsent', () => {
         agents: []
       }
     }
+
     const first = fingerprintPluginConsent(subject, 'a'.repeat(64))
     const second = fingerprintPluginConsent(subject, 'b'.repeat(64))
 

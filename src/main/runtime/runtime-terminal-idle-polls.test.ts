@@ -65,6 +65,7 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
 
   it('allocates one interval for 20 concurrent waiters and still resolves them on the first tick', () => {
     const resolved: { handle: string; result: RuntimeTerminalWait }[] = []
+
     const polls = new RuntimeTerminalIdlePolls({
       intervalMs: INTERVAL_MS,
       quiescenceMs: 1500,
@@ -82,6 +83,7 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       // Already idle: an independent interval would have resolved this on its own
       // first tick at exactly intervalMs, and so must the shared sweep.
       polls.startPty(waiter, makePty(`pty-${index}`, { lastAgentStatus: 'idle' }))
+
       return waiter
     })
 
@@ -116,6 +118,7 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       polls.startPty(makeWaiter(`pty-handle-${index}`), makePty(`pty-${index}`))
       polls.startLeaf(makeWaiter(`leaf-handle-${index}`), makeLeaf(`tab-${index}`))
     }
+
     expect(setIntervalSpy).toHaveBeenCalledTimes(1)
 
     vi.advanceTimersByTime(INTERVAL_MS * 5)
@@ -136,6 +139,7 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getLiveLeaf: (leaf) => leaf,
       resolve: () => {}
     })
+
     const first = makeWaiter('a')
     const second = makeWaiter('b')
     polls.startPty(first, makePty('pty-a'))
@@ -152,6 +156,7 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
   it('runs the foreground read per waiter without one waiter blocking another', async () => {
     const resolved: string[] = []
     const gates: ((value: string | null) => void)[] = []
+
     const polls = new RuntimeTerminalIdlePolls({
       intervalMs: INTERVAL_MS,
       quiescenceMs: 1500,

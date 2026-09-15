@@ -11,6 +11,7 @@ function terminalLinkActionHintPrefix(showActions: boolean): string {
 
 export function getTerminalFileOpenHint(showActions = true): string {
   const prefix = terminalLinkActionHintPrefix(showActions)
+
   return isMacPlatform()
     ? `${prefix}⌘+click to open, or ⇧⌘+click for default app`
     : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for default app`
@@ -18,6 +19,7 @@ export function getTerminalFileOpenHint(showActions = true): string {
 
 export function getTerminalOrcaFileOpenHint(showActions = true): string {
   const prefix = showActions ? 'Click for actions or ' : ''
+
   return isMacPlatform()
     ? `${prefix}⌘+click to open in Orca`
     : `${prefix}Ctrl+click to open in Orca`
@@ -26,6 +28,7 @@ export function getTerminalOrcaFileOpenHint(showActions = true): string {
 // Why: local HTML paths keep Shift+modifier as the system-browser shortcut.
 export function getTerminalHtmlFileOpenHint(showActions = true): string {
   const prefix = terminalLinkActionHintPrefix(showActions)
+
   return isMacPlatform()
     ? `${prefix}⌘+click to open, or ⇧⌘+click for default browser`
     : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for default browser`
@@ -53,6 +56,7 @@ export function terminalUrlOpenHintOptionsFor(
   const sourceCanOpenInOrca = sourceOwner
     ? canSourceOwnerOpenInOrca(sourceOwner, canOpenOwnedBrowser)
     : !settings?.activeRuntimeEnvironmentId?.trim()
+
   return {
     openLinksInApp: settings?.openLinksInApp === true,
     modifierInverts: settings?.openLinksInAppModifierInverts === true && sourceCanOpenInOrca
@@ -64,11 +68,13 @@ export function terminalUrlOpenHintOptionsFor(
 export function getTerminalUrlOpenHint(options: TerminalUrlOpenHintOptions = {}): string {
   const invertsToOrca = options.modifierInverts === true && options.openLinksInApp !== true
   const prefix = terminalLinkActionHintPrefix(options.showActions !== false)
+
   if (invertsToOrca) {
     return isMacPlatform()
       ? `${prefix}⌘+click to open, or ⇧⌘+click to open in Orca`
       : `${prefix}Ctrl+click to open, or Shift+Ctrl+click to open in Orca`
   }
+
   return isMacPlatform()
     ? `${prefix}⌘+click to open, or ⇧⌘+click for system browser`
     : `${prefix}Ctrl+click to open, or Shift+Ctrl+click for system browser`
@@ -89,8 +95,10 @@ export function getTerminalWorktreePathOpenHint(
   showActions = true
 ): string {
   const prefix = terminalLinkActionHintPrefix(showActions)
+
   if (!canOpenWithSystemDefault) {
     const directPrefix = showActions ? 'Click for actions or ' : ''
+
     return isMacPlatform()
       ? `${directPrefix}⌘+click to switch workspace`
       : `${directPrefix}Ctrl+click to switch workspace`

@@ -20,6 +20,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -36,6 +37,7 @@ describe('CodexAccountService config sync', () => {
       '',
       '{"account":"managed"}\n'
     )
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -52,12 +54,14 @@ describe('CodexAccountService config sync', () => {
       ],
       activeCodexManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
     const onHostSystemDefaultSelected = vi.fn()
 
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
@@ -76,18 +80,21 @@ describe('CodexAccountService config sync', () => {
   it('selectAccount switches managed accounts without routing auth through the shared mirror', async () => {
     const firstAuth = createCodexAuthJson('one@example.com', 'acct-one', 'one')
     const secondAuth = createCodexAuthJson('two@example.com', 'acct-two', 'two')
+
     const firstManagedHomePath = createManagedHome(
       testState.userDataDir,
       'account-1',
       '',
       firstAuth
     )
+
     const secondManagedHomePath = createManagedHome(
       testState.userDataDir,
       'account-2',
       '',
       secondAuth
     )
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -115,6 +122,7 @@ describe('CodexAccountService config sync', () => {
       ],
       activeCodexManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
 
@@ -124,6 +132,7 @@ describe('CodexAccountService config sync', () => {
     expect(existsSync(runtimeAuthPath)).toBe(false)
 
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
@@ -148,8 +157,10 @@ describe('CodexAccountService config sync', () => {
       '',
       '{"account":"host"}\n'
     )
+
     const wslManagedHomePath =
       '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.local\\share\\orca\\codex-accounts\\wsl-account\\home'
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -187,11 +198,13 @@ describe('CodexAccountService config sync', () => {
         wsl: {}
       }
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
 
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
@@ -222,6 +235,7 @@ describe('CodexAccountService config sync', () => {
       '',
       '{"account":"managed"}\n'
     )
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -238,11 +252,13 @@ describe('CodexAccountService config sync', () => {
       ],
       activeCodexManagedAccountId: 'account-1'
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
 
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
@@ -264,6 +280,7 @@ describe('CodexAccountService config sync', () => {
       '',
       '{"account":"other"}\n'
     )
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -279,8 +296,10 @@ describe('CodexAccountService config sync', () => {
         }
       ]
     })
+
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       createStore(settings) as never,
       createRateLimits() as never,
@@ -304,6 +323,7 @@ describe('CodexAccountService config sync', () => {
       '',
       '{"account":"managed"}\n'
     )
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -320,11 +340,13 @@ describe('CodexAccountService config sync', () => {
       ],
       activeCodexManagedAccountId: 'nonexistent-id'
     })
+
     const store = createStore(settings)
     const rateLimits = createRateLimits()
     const runtimeHome = createRuntimeHome()
 
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
@@ -344,6 +366,7 @@ describe('CodexAccountService config sync', () => {
     const runtimeHome = createRuntimeHome()
 
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,
@@ -360,6 +383,7 @@ describe('CodexAccountService config sync', () => {
       '',
       '{"account":"managed"}\n'
     )
+
     const settings = createSettings({
       codexManagedAccounts: [
         {
@@ -375,17 +399,21 @@ describe('CodexAccountService config sync', () => {
         }
       ]
     })
+
     const store = createStore(settings)
     const callOrder: string[] = []
+
     const rateLimits = {
       refreshForCodexAccountChange: vi.fn(async () => {
         callOrder.push('refresh')
       }),
       evictInactiveCodexCache: vi.fn()
     }
+
     const runtimeHome = createRuntimeHome()
 
     const { CodexAccountService } = await import('./service')
+
     const service = new CodexAccountService(
       store as never,
       rateLimits as never,

@@ -10,11 +10,13 @@ const { resumeSpy, clearSleepingAgentSessionsByPaneKey } = vi.hoisted(() => ({
   resumeSpy: vi.fn(() => 0),
   clearSleepingAgentSessionsByPaneKey: vi.fn()
 }))
+
 vi.mock('./resume-sleeping-agent-session', () => ({
   resumeSleepingAgentSessionsForWorktree: resumeSpy
 }))
 
 let sleepingRecords: Record<string, Record<string, unknown>> = {}
+
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
@@ -49,9 +51,11 @@ describe('background wake of a finished live checkpoint', () => {
       }
     }
     const mounted: BackgroundMountTerminalWorktreeDetail[] = []
+
     const onMount = (event: Event): void => {
       mounted.push((event as CustomEvent<BackgroundMountTerminalWorktreeDetail>).detail)
     }
+
     window.addEventListener(BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT, onMount)
 
     try {

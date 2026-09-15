@@ -12,6 +12,7 @@ describe('terminal history seed chunks', () => {
       `${'a'.repeat(TERMINAL_HISTORY_SEED_CHUNK_CODE_UNITS - 1)}\ud83d`,
       '\ude00tail'
     ]
+
     const chunks = [...iterateTerminalHistorySeedChunks(segments)]
 
     expect(chunks.join('')).toBe(segments.join(''))
@@ -24,6 +25,7 @@ describe('terminal history seed chunks', () => {
   it('measures the exact chunk count, code units, and UTF-16 digest', () => {
     const segments = ['alpha', '😀', '\x1b[31mred']
     const metrics = measureTerminalHistorySeed(segments)
+
     const expectedDigest = createHash('sha256')
       .update(Buffer.from(segments.join(''), 'utf16le'))
       .digest('hex')

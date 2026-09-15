@@ -20,6 +20,7 @@ export function resolveTabStripScrollOffset({
   margin = 12
 }: TabStripScrollInput): number {
   const maxOffset = Math.max(0, contentWidth - viewportWidth)
+
   if (viewportWidth <= 0) {
     return currentOffset
   }
@@ -30,6 +31,7 @@ export function resolveTabStripScrollOffset({
   const tabEnd = tabX + tabWidth
 
   let nextOffset = currentOffset
+
   if (tabStart < visibleStart + margin) {
     nextOffset = tabStart - margin
   } else if (tabEnd > visibleEnd - margin) {

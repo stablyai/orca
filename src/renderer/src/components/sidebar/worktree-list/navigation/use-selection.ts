@@ -21,11 +21,13 @@ export function useSidebarWorktreeSelection(args: {
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 }) {
   const { sectionRows, pinnedDisplayPolicy } = args
+
   // Why: derive order from the built rows, not the flat worktrees array, so Cmd+1–9 match visual positions when grouping reorders cards.
   const renderedWorktrees = useMemo(
     () => getRenderedWorktreesInSidebarOrder(sectionRows, pinnedDisplayPolicy),
     [pinnedDisplayPolicy, sectionRows]
   )
+
   // Why: order-preserving sectionRows rebuilds must not give this array a new
   // identity — updateSelectionForGesture depends on it, and a fresh identity
   // there defeats React.memo bail-out for every WorktreeCard on epoch bumps.
@@ -35,12 +37,14 @@ export function useSidebarWorktreeSelection(args: {
       [renderedWorktrees]
     )
   )
+
   const renderedWorktreeIds = useReusedArrayIdentity(
     useMemo(
       () => Array.from(new Set(renderedWorktrees.map((worktree) => worktree.id))),
       [renderedWorktrees]
     )
   )
+
   const [selectedWorktreeIds, setSelectedWorktreeIds] = useState<Set<string>>(new Set())
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
 
@@ -49,10 +53,12 @@ export function useSidebarWorktreeSelection(args: {
     selectionAnchorId,
     renderedWorktreeIdentities
   )
+
   // Why: filters/grouping can hide selected cards; prune during render so nothing sees stale ids for unrendered worktrees.
   if (!areWorktreeSelectionsEqual(selectedWorktreeIds, prunedSelection.selectedIds)) {
     setSelectedWorktreeIds(prunedSelection.selectedIds)
   }
+
   if (selectionAnchorId !== prunedSelection.anchorId) {
     setSelectionAnchorId(prunedSelection.anchorId)
   }
@@ -65,13 +71,17 @@ export function useSidebarWorktreeSelection(args: {
       if (selectedWorktreeIds.size === 0) {
         return []
       }
+
       const selected = new Map<string, Worktree>()
+
       for (const worktree of renderedWorktrees) {
         const identity = getWorktreeHostIdentity(worktree)
+
         if (selectedWorktreeIds.has(identity) && !selected.has(identity)) {
           selected.set(identity, worktree)
         }
       }
+
       return Array.from(selected.values())
     }, [renderedWorktrees, selectedWorktreeIds])
   )
@@ -84,14 +94,17 @@ export function useSidebarWorktreeSelection(args: {
     const clearSelectionOutsideSidebar = (event: PointerEvent): void => {
       const target = event.target
       const sidebarContainer = document.querySelector('[data-worktree-sidebar-container]')
+
       if (target instanceof Node && sidebarContainer?.contains(target)) {
         return
       }
+
       setSelectedWorktreeIds(new Set())
       setSelectionAnchorId(null)
     }
 
     document.addEventListener('pointerdown', clearSelectionOutsideSidebar, { capture: true })
+
     return () => {
       document.removeEventListener('pointerdown', clearSelectionOutsideSidebar, { capture: true })
     }
@@ -101,6 +114,7 @@ export function useSidebarWorktreeSelection(args: {
     (event: React.MouseEvent<HTMLElement>, worktree: Worktree): boolean => {
       const worktreeIdentity = getWorktreeHostIdentity(worktree)
       const intent = getWorktreeSelectionIntent(event, navigator.userAgent.includes('Mac'))
+
       const result = updateWorktreeSelection({
         visibleIds: renderedWorktreeIdentities,
         previousSelectedIds: selectedWorktreeIds,
@@ -108,8 +122,10 @@ export function useSidebarWorktreeSelection(args: {
         targetId: worktreeIdentity,
         intent
       })
+
       setSelectedWorktreeIds(result.selectedIds)
       setSelectionAnchorId(result.anchorId)
+
       // Plain click navigates; modifier gestures are selection-only so a batch can build without switching away.
       return intent !== 'replace'
     },
@@ -119,11 +135,14 @@ export function useSidebarWorktreeSelection(args: {
   const selectForContextMenu = useCallback(
     (_event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
       const worktreeIdentity = getWorktreeHostIdentity(worktree)
+
       if (selectedWorktreeIds.has(worktreeIdentity) && selectedWorktreeIds.size > 1) {
         return selectedWorktrees
       }
+
       setSelectedWorktreeIds(new Set([worktreeIdentity]))
       setSelectionAnchorId(worktreeIdentity)
+
       return [worktree]
     },
     [selectedWorktreeIds, selectedWorktrees]
@@ -138,6 +157,7 @@ export function useSidebarWorktreeSelection(args: {
         ...(worktree.hostId ? { executionHostId: worktree.hostId } : {})
       }))
     )
+
     // Why null, not []: [] is a real rendered order (all collapsed/filtered); null tells shortcuts the list is unmounted.
     return () => {
       setVisibleWorktreeIds(null)

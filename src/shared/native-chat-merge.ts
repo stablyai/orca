@@ -21,10 +21,12 @@ export function mergeNativeChatMessagesWith(
   if (incoming.length === 0) {
     return existing as NativeChatMessage[]
   }
+
   const merged = [...existing]
   const indexById = new Map<string, number>()
   merged.forEach((message, index) => indexById.set(message.id, index))
   applyIncoming(merged, indexById, incoming, priority)
+
   return merged
 }
 
@@ -46,6 +48,7 @@ export function boundNativeChatWindow(
   if (limit <= 0 || messages.length <= limit) {
     return messages as NativeChatMessage[]
   }
+
   return messages.slice(messages.length - limit)
 }
 
@@ -85,15 +88,20 @@ export function applyAppend(
   if (incoming.length === 0) {
     return merger.list
   }
+
   const next = [...merger.list]
   applyIncoming(next, merger.indexById, incoming, merger.priority)
   const bounded = limit === undefined ? next : boundNativeChatWindow(next, limit)
+
   if (bounded !== next) {
     // Why: trimming shifts every cached index, so rebuild at the window boundary.
     replaceList(merger, bounded)
+
     return merger.list
   }
+
   merger.list = next
+
   return next
 }
 
@@ -107,12 +115,15 @@ function applyIncoming(
 ): void {
   for (const message of incoming) {
     const at = indexById.get(message.id)
+
     if (at === undefined) {
       indexById.set(message.id, list.length)
       list.push(message)
       continue
     }
+
     const current = list[at]!
+
     if (priority[message.source] >= priority[current.source]) {
       list[at] = message
     }

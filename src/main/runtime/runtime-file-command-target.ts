@@ -50,6 +50,7 @@ export function runtimeFileRouteForTarget(target: {
   executionHostId: ExecutionHostId
 }): RuntimeFileRoute {
   const route = resolveFilesystemRouteForHost(target.executionHostId)
+
   switch (route.kind) {
     case 'local':
       return { kind: 'local' }
@@ -68,12 +69,15 @@ export function requireRuntimeFileProvider(target: {
   executionHostId: ExecutionHostId
 }): IFilesystemProvider | null {
   const route = runtimeFileRouteForTarget(target)
+
   if (route.kind === 'local') {
     return null
   }
+
   if (!route.provider) {
     throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
   }
+
   return route.provider
 }
 
@@ -86,5 +90,6 @@ export function runtimeFileSshTargetId(target: {
   executionHostId: ExecutionHostId
 }): string | undefined {
   const route = runtimeFileRouteForTarget(target)
+
   return route.kind === 'ssh' ? route.connectionId : undefined
 }

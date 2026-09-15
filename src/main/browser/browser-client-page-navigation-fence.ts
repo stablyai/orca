@@ -23,6 +23,7 @@ export class BrowserClientPageNavigationFence {
     if (this.fenced) {
       return
     }
+
     this.fenced = true
     this.revoke(pages, revoke)
   }
@@ -32,6 +33,7 @@ export class BrowserClientPageNavigationFence {
     revoke: (claim: BrowserRouteGuestLifecycleClaim) => void
   ): void {
     const failures: unknown[] = []
+
     for (const page of pages) {
       try {
         revoke(page.lifecycleClaim)
@@ -39,6 +41,7 @@ export class BrowserClientPageNavigationFence {
         failures.push(error)
       }
     }
+
     if (failures.length > 0) {
       throw new AggregateError(failures, 'Browser client page navigation fencing failed')
     }
@@ -51,16 +54,20 @@ export class BrowserClientPageNavigationFence {
   ): Promise<void> {
     let fencingFailed = false
     let fencingError: unknown
+
     try {
       this.fence(pages, revoke)
     } catch (error) {
       fencingFailed = true
       fencingError = error
     }
+
     const cleanupPromise = cleanup()
+
     if (!fencingFailed) {
       return cleanupPromise
     }
+
     return cleanupPromise.then(
       () => {
         throw fencingError

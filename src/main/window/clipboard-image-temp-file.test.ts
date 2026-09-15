@@ -10,16 +10,20 @@ const { authorizeExternalPathMock, writeFileMock, getPathMock, writeFileBase64Mo
 )
 
 vi.mock('node:fs/promises', () => ({ default: { writeFile: writeFileMock } }))
+
 vi.mock('node:crypto', () => ({ randomUUID: () => 'uuid-1' }))
+
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: getPathMock })
 }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   requireSshFilesystemProvider: () => ({
     getTempDir: async () => '/remote/tmp',
     writeFileBase64: writeFileBase64Mock
   })
 }))
+
 vi.mock('../ipc/filesystem-auth', () => ({ authorizeExternalPath: authorizeExternalPathMock }))
 
 import { saveClipboardImageBufferAsTempFile } from './clipboard-image-temp-file'

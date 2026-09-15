@@ -1,6 +1,7 @@
 export type RemoteRuntimeClientErrorLike = { code?: string; message: string }
 
 export const RUNTIME_RPC_QUEUE_OVERLOAD_CODE = 'runtime_rpc_queue_overloaded'
+
 export const RUNTIME_RPC_QUEUE_OVERLOAD_MESSAGE_FRAGMENT = 'remote runtime call queue is full'
 
 // Exported so the transport-error corpus guard can name the offending entry when a
@@ -30,6 +31,7 @@ export function isRuntimeRpcQueueOverloadError(error: RemoteRuntimeClientErrorLi
   if (error.code) {
     return error.code === RUNTIME_RPC_QUEUE_OVERLOAD_CODE
   }
+
   return error.message.toLowerCase().includes(RUNTIME_RPC_QUEUE_OVERLOAD_MESSAGE_FRAGMENT)
 }
 
@@ -39,13 +41,16 @@ export function isRecoverableRemoteRuntimeConnectionError(
   if (error.code) {
     return RECOVERABLE_CODES.has(error.code)
   }
+
   const message = error.message.toLowerCase()
+
   return RECOVERABLE_MESSAGE_FRAGMENTS.some((fragment) => message.includes(fragment))
 }
 
 export function toRemoteRuntimeClientErrorLike(error: unknown): RemoteRuntimeClientErrorLike {
   if (error && typeof error === 'object') {
     const candidate = error as { code?: unknown; message?: unknown }
+
     if (typeof candidate.message === 'string') {
       return {
         ...(typeof candidate.code === 'string' ? { code: candidate.code } : {}),
@@ -53,5 +58,6 @@ export function toRemoteRuntimeClientErrorLike(error: unknown): RemoteRuntimeCli
       }
     }
   }
+
   return { message: String(error) }
 }

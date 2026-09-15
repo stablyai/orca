@@ -26,11 +26,14 @@ export async function retireBrowserRoutePartitionStorageForEnvironment(
 ): Promise<string[]> {
   await options.whenClientHostClosed.catch((error) => options.onError?.(error))
   const first = await options.clearStorage(options.environmentId)
+
   if (first.livePartitions.length === 0) {
     return first.clearedPartitions
   }
+
   await delay(options.retryDelayMs ?? DEFAULT_LIVE_PARTITION_RETRY_MS)
   const retried = await options.clearStorage(options.environmentId)
+
   if (retried.livePartitions.length > 0) {
     options.onError?.(
       new Error(
@@ -38,6 +41,7 @@ export async function retireBrowserRoutePartitionStorageForEnvironment(
       )
     )
   }
+
   return [...first.clearedPartitions, ...retried.clearedPartitions]
 }
 

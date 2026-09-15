@@ -18,14 +18,17 @@ import type { AppState } from '@/store/types'
 // Why: the real entry-action module pulls in runtime IPC + the app store; the
 // keyboard behavior under test only needs a controllable option list.
 const entryOptionsMock = vi.hoisted(() => ({ options: [] as TabEntryOption[] }))
+
 const structuredLaunchMock = vi.hoisted(() => ({
   status: 'idle' as 'idle' | 'pending' | 'unknown'
 }))
+
 vi.mock('./tab-create-entry-action', () => ({
   getTabEntryOptions: () => entryOptionsMock.options,
   createTabEntryAllowAbsolutePathsSelector: () => () => true,
   isTabEntryAbsolutePathLike: () => false
 }))
+
 vi.mock('../quick-open-file-list', () => ({
   useRuntimeFileListForWorktree: () => ({
     files: [],
@@ -34,10 +37,12 @@ vi.mock('../quick-open-file-list', () => ({
     truncated: false
   })
 }))
+
 vi.mock('@/lib/agent-catalog', () => ({
   getAgentCatalog: () => [],
   AgentIcon: () => null
 }))
+
 vi.mock('@/lib/structured-agent-session-launch', () => ({
   useStructuredAgentLaunchStatus: () => structuredLaunchMock.status
 }))
@@ -74,6 +79,7 @@ function seedOpenTabs(): void {
     sortOrder: 0,
     lastActivityAt: 0
   } satisfies Worktree
+
   const unifiedTab = (id: string, entityId: string): Tab => ({
     id,
     entityId,
@@ -86,6 +92,7 @@ function seedOpenTabs(): void {
     sortOrder: 0,
     createdAt: 0
   })
+
   const terminalTab = (id: string, title: string): TerminalTab => ({
     id,
     ptyId: null,
@@ -97,6 +104,7 @@ function seedOpenTabs(): void {
     sortOrder: 0,
     createdAt: 0
   })
+
   const group: TabGroup = {
     id: 'group-1',
     worktreeId: 'wt-1',
@@ -121,6 +129,7 @@ function seedOpenTabs(): void {
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 function mount(node: React.JSX.Element): void {
@@ -135,20 +144,24 @@ function pressKey(target: Element, key: string): KeyboardEvent {
   act(() => {
     target.dispatchEvent(event)
   })
+
   return event
 }
 
 function setQuery(value: string): void {
   const input = container.querySelector('input')
+
   if (!input) {
     throw new Error('input not found')
   }
+
   // Why: React patches the input value setter to track changes; bypass it with
   // the native setter so the synthetic onChange actually fires.
   const nativeSetter = Object.getOwnPropertyDescriptor(
     window.HTMLInputElement.prototype,
     'value'
   )?.set
+
   act(() => {
     nativeSetter?.call(input, value)
     input.dispatchEvent(new window.Event('input', { bubbles: true }))
@@ -157,9 +170,11 @@ function setQuery(value: string): void {
 
 function submitForm(): void {
   const form = container.querySelector('form')
+
   if (!form) {
     throw new Error('form not found')
   }
+
   act(() => {
     form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }))
   })
@@ -247,6 +262,7 @@ describe('TabBarCreateEntry keyboard navigation', () => {
     const agentOptions: TabAgentLaunchOption[] = [
       { agent: 'gemini', aliases: ['gemini'], label: 'Gemini' }
     ]
+
     const onLaunchAgent = vi.fn()
     mount(
       <TabBarCreateEntry
@@ -269,9 +285,11 @@ describe('TabBarCreateEntry keyboard navigation', () => {
 
   it('does not relaunch Codex when a structured launch is already pending', () => {
     structuredLaunchMock.status = 'pending'
+
     const agentOptions: TabAgentLaunchOption[] = [
       { agent: 'codex', aliases: ['codex'], label: 'Codex' }
     ]
+
     const onLaunchAgent = vi.fn()
     mount(
       <TabBarCreateEntry
@@ -348,6 +366,7 @@ describe('TabBarCreateEntry keyboard navigation', () => {
       loading: false,
       loadError: null
     })
+
     expect(emptyOption.classification).toMatchObject({ kind: 'empty' })
     expect(
       emptyOption.classification.kind === 'empty' ? emptyOption.classification.message : null

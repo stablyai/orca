@@ -12,6 +12,7 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const {
@@ -44,6 +45,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onTitleChange = vi.fn()
     const onBell = vi.fn()
     const onAgentStatus = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       onTitleChange,
@@ -74,6 +76,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onBell = vi.fn()
     const onAgentStatus = vi.fn()
     const onConnect = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       onTitleChange,
@@ -99,10 +102,12 @@ describe('createRemoteRuntimePtyTransport', () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const terminal = new Terminal({ cols: 80, rows: 24 })
     let xtermWrites = 0
+
     const write = (data: string): void => {
       xtermWrites += 1
       terminal.write(data)
     }
+
     const onReplayData = vi.fn(write)
     const onData = vi.fn(write)
     const onConnect = vi.fn()
@@ -149,6 +154,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onReplayData = vi.fn()
     const onData = vi.fn()
     const onConnect = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1'
     })
@@ -165,11 +171,13 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(latestFrameForOpcode(TerminalStreamOpcode.SnapshotRequest)).toBeDefined()
     )
     const snapshotRequestFrame = latestFrameForOpcode(TerminalStreamOpcode.SnapshotRequest)
+
     const snapshotRequestPayload = snapshotRequestFrame
       ? decodeTerminalStreamJson<{ requestId?: number; scrollbackRows?: number }>(
           snapshotRequestFrame.payload
         )
       : null
+
     expect(snapshotRequestFrame?.streamId).toBe(streamId)
     expect(snapshotRequestPayload).toMatchObject({ requestId: 1, scrollbackRows: 5000 })
 
@@ -217,9 +225,11 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(latestFrameForOpcode(TerminalStreamOpcode.SnapshotRequest)).toBeDefined()
     )
     const requestFrame = latestFrameForOpcode(TerminalStreamOpcode.SnapshotRequest)
+
     const request = requestFrame
       ? decodeTerminalStreamJson<{ requestId?: number }>(requestFrame.payload)
       : null
+
     emitSnapshotFrame(
       streamId,
       TerminalStreamOpcode.SnapshotStart,
@@ -242,6 +252,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onReplayData = vi.fn()
     const onConnect = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1'
     })
@@ -261,9 +272,11 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(latestFrameForOpcode(TerminalStreamOpcode.SnapshotRequest)).toBeDefined()
     )
     const snapshotRequestFrame = latestFrameForOpcode(TerminalStreamOpcode.SnapshotRequest)
+
     const snapshotRequestPayload = snapshotRequestFrame
       ? decodeTerminalStreamJson<{ requestId?: number }>(snapshotRequestFrame.payload)
       : null
+
     expect(snapshotRequestPayload?.requestId).toBe(1)
 
     emitSnapshotFrame(
@@ -299,6 +312,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const onData = vi.fn()
     const onError = vi.fn()
     const onConnect = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1'
     })

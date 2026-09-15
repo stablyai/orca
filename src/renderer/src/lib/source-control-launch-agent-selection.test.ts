@@ -10,6 +10,7 @@ import {
 
 function settingsWithGlobalResolveAgent(agentId: TuiAgent): GlobalSettings {
   const base = getDefaultSettings('/tmp')
+
   return {
     ...base,
     defaultTuiAgent: agentId,
@@ -41,6 +42,7 @@ describe('resolveSourceControlLaunchAgentScope', () => {
       repo: repoWithResolveAgent('codex'),
       actionId: 'resolveConflicts'
     })
+
     expect(scope).toEqual({
       effectiveAgentId: 'codex',
       globalAgentId: 'claude',
@@ -54,6 +56,7 @@ describe('resolveSourceControlLaunchAgentScope', () => {
       repo: repoWithResolveAgent('claude'),
       actionId: 'resolveConflicts'
     })
+
     expect(scope.overridesGlobalAgent).toBe(false)
   })
 
@@ -63,6 +66,7 @@ describe('resolveSourceControlLaunchAgentScope', () => {
       repo: null,
       actionId: 'resolveConflicts'
     })
+
     expect(scope).toEqual({
       effectiveAgentId: 'claude',
       globalAgentId: 'claude',
@@ -72,16 +76,19 @@ describe('resolveSourceControlLaunchAgentScope', () => {
 
   it('falls back to the default agent when no global recipe agent is set', () => {
     const base = getDefaultSettings('/tmp')
+
     const settings: GlobalSettings = {
       ...base,
       defaultTuiAgent: 'claude',
       sourceControlAi: { ...base.sourceControlAi!, enabled: true }
     }
+
     const scope = resolveSourceControlLaunchAgentScope({
       settings,
       repo: repoWithResolveAgent('codex'),
       actionId: 'resolveConflicts'
     })
+
     expect(scope.globalAgentId).toBe('claude')
     expect(scope.overridesGlobalAgent).toBe(true)
   })

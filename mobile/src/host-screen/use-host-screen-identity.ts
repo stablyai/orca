@@ -12,6 +12,7 @@ export function useHostScreenIdentity(args: {
   state: HostScreenState
 }): void {
   const { client, hostId, state } = args
+
   const {
     clientRef,
     repoMetadataFetchedAtRef,
@@ -34,14 +35,18 @@ export function useHostScreenIdentity(args: {
     if (!hostId) {
       return
     }
+
     let stale = false
     void (async () => {
       const pins = await loadPinnedIds(hostId)
+
       if (stale) {
         return
       }
+
       setPinnedIds(pins)
     })()
+
     return () => {
       stale = true
     }
@@ -64,6 +69,7 @@ export function useHostScreenIdentity(args: {
     // Why: useState initializer runs only on first mount, so re-seed the cache when Expo Router reuses this screen for a new hostId.
     const freshCache = hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
     setCatalogError(null)
+
     if (freshCache) {
       setWorktrees(freshCache)
       setLastKnownWorktrees(freshCache)
@@ -73,22 +79,29 @@ export function useHostScreenIdentity(args: {
       setWorktrees([])
       setLastKnownWorktrees([])
     }
+
     if (!hostId) {
       return
     }
+
     let stale = false
     void loadHosts().then((hosts) => {
       if (stale) {
         return
       }
+
       const host = hosts.find((h) => h.id === hostId)
+
       if (!host) {
         setError('Host not found')
+
         return
       }
+
       setHostName(host.name)
       void updateLastConnected(host.id)
     })
+
     return () => {
       stale = true
     }

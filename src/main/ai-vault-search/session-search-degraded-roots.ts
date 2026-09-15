@@ -33,12 +33,14 @@ export function scanIssueDegradedRoots(
   issues: readonly AiVaultScanIssue[]
 ): SessionSearchDegradedRoot[] {
   const degraded = new Map<string, string>()
+
   for (const issue of issues) {
     // 'notice' rows are scanner commentary; a per-file failure is not a root's.
     if (issue.kind !== 'notice' && roots.includes(issue.path)) {
       degraded.set(issue.path, issue.message)
     }
   }
+
   return [...degraded].map(([root, reason]) => ({ root, reason }))
 }
 
@@ -47,6 +49,7 @@ export function mergeDegradedRoots(
   ...groups: readonly (readonly SessionSearchDegradedRoot[])[]
 ): SessionSearchDegradedRoot[] {
   const merged = new Map<string, string>()
+
   for (const group of groups) {
     for (const degraded of group) {
       if (!merged.has(degraded.root)) {
@@ -54,6 +57,7 @@ export function mergeDegradedRoots(
       }
     }
   }
+
   return [...merged].map(([root, reason]) => ({ root, reason }))
 }
 
@@ -75,14 +79,18 @@ export async function unreadableRoots(
   signal?: AbortSignal
 ): Promise<SessionSearchDegradedRoot[]> {
   const degraded: SessionSearchDegradedRoot[] = []
+
   for (const root of roots) {
     if (signal?.aborted) {
       break
     }
+
     const listing = await listings.namesIn(root, signal)
+
     if (!listing.listed && !(listing.code !== null && MISSING_ROOT.has(listing.code))) {
       degraded.push({ root, reason: listing.message })
     }
   }
+
   return degraded
 }

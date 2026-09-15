@@ -34,6 +34,7 @@ describe('httpLinkActionDestinationsFor', () => {
 describe('buildHttpLinkActions', () => {
   it('labels each offered destination and routes the run to it', () => {
     const opened: (string | undefined)[] = []
+
     const actions = buildHttpLinkActions(
       { primary: 'orca', alternate: 'system' },
       (destination) => {

@@ -22,6 +22,7 @@ function mountComposerEditor(markdown: string): Editor {
     content: markdown,
     contentType: 'markdown'
   })
+
   return editor
 }
 

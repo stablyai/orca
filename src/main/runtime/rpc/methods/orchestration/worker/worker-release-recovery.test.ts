@@ -7,9 +7,11 @@ import { ORCHESTRATION_METHODS } from '../../orchestration'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((promiseResolve) => {
     resolve = promiseResolve
   })
+
   return { promise, resolve }
 }
 
@@ -97,6 +99,7 @@ describe('orchestration worker release recovery', () => {
       dbOpen = false
       db.close()
     }
+
     vi.restoreAllMocks()
   })
 
@@ -104,21 +107,27 @@ describe('orchestration worker release recovery', () => {
     const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
       (candidate) => candidate.name === name
     )
+
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }
+
     const parsed = method.params ? method.params.parse(params) : undefined
+
     return method.handler(parsed, ctx)
   }
 
   async function startWorker(): Promise<{ taskId: string; dispatchId: string }> {
     const task = db.createTask({ spec: 'release recovery fixture task', runId: activeRunId })
+
     const result = (await call('orchestration.workerStart', {
       task: task.id,
       from: 'term_coord',
       agent: 'codex'
     })) as { dispatchId: string; state: string }
+
     expect(result.state).toBe('ready')
+
     return { taskId: task.id, dispatchId: result.dispatchId }
   }
 
@@ -134,6 +143,7 @@ describe('orchestration worker release recovery', () => {
         result: `worker ${outcome}`
       }).action
     ).toBe('settled')
+
     return worker
   }
 
@@ -141,9 +151,11 @@ describe('orchestration worker release recovery', () => {
     setup()
     const { dispatchId } = await startSettledWorker()
     vi.mocked(runtime.closeTerminal).mockRejectedValueOnce(new Error('Multiplexer disposed'))
+
     const interrupted = (await call('orchestration.workerRelease', { dispatch: dispatchId })) as {
       state: string
     }
+
     expect(interrupted.state).toBe('release_pending')
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('releasing')
 
@@ -280,11 +292,13 @@ describe('orchestration worker release recovery', () => {
     await expect(
       call('orchestration.workerRelease', { dispatch: dispatchId })
     ).resolves.toMatchObject({ state: 'release_unknown' })
+
     const read = (await call('orchestration.workerRead', { dispatch: dispatchId })) as {
       archived?: boolean
       status: { terminal: string }
       terminal: { tail: string[] }
     }
+
     expect(read).toMatchObject({
       archived: true,
       status: { terminal: 'unknown', liveness: 'unverifiable' },
@@ -353,20 +367,26 @@ describe('orchestration worker release recovery', () => {
 
   it('keeps live terminals bounded across 50 settled workers while controls survive', async () => {
     setup()
+
     for (let wave = 0; wave < 50; wave += 1) {
       const worker = await startSettledWorker(wave % 2 === 0 ? 'succeeded' : 'failed')
+
       const receipt = (await call('orchestration.workerRelease', {
         dispatch: worker.dispatchId
       })) as { state: string }
+
       expect(receipt.state).toBe('released')
     }
+
     expect(runtime.closeTerminal).toHaveBeenCalledTimes(50)
 
     const control = await startWorker()
+
     const listed = (await call('orchestration.workerList', { run: activeRunId })) as {
       workers: { dispatchId: string; terminalState: string | null }[]
       counts: Record<string, number>
     }
+
     expect(listed.counts).toMatchObject({ released: 50, active: 1 })
     expect(
       listed.workers.find((worker) => worker.dispatchId === control.dispatchId)?.terminalState
@@ -376,11 +396,14 @@ describe('orchestration worker release recovery', () => {
 
   it('backfills legacy terminal resources as retained external evidence', () => {
     setup()
+
     const insertLegacy = (dispatchId: string, handle: string, paneKey: string | null): void => {
       const task = db.createTask({ spec: `legacy ${dispatchId}`, runId: activeRunId })
+
       const raw = (
         db as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } }
       ).db
+
       raw
         .prepare(
           `INSERT INTO dispatch_contexts (id, run_id, task_id, contract_version, assignee_pane_key, process_incarnation, status)
@@ -398,6 +421,7 @@ describe('orchestration worker release recovery', () => {
           JSON.stringify([{ kind: 'terminal', role: 'agent', action: 'created', id: handle }])
         )
     }
+
     insertLegacy('ctx_unique', 'term_unique', 'tab_u:leaf_u')
     insertLegacy('ctx_shared_a', 'term_shared', 'tab_s:leaf_s')
     insertLegacy('ctx_shared_b', 'term_shared', 'tab_s:leaf_s')
@@ -417,11 +441,14 @@ describe('orchestration worker release recovery', () => {
 
   it('backfills a legacy creator plus explicit reuser as ambiguous', () => {
     setup()
+
     const insertLegacy = (dispatchId: string, action: 'created' | 'reused'): void => {
       const task = db.createTask({ spec: dispatchId, runId: activeRunId })
+
       const raw = (
         db as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } }
       ).db
+
       raw
         .prepare(
           `INSERT INTO dispatch_contexts (id, run_id, task_id, contract_version, assignee_pane_key, process_incarnation, status)
@@ -446,6 +473,7 @@ describe('orchestration worker release recovery', () => {
           JSON.stringify([{ kind: 'terminal', role: 'agent', action, id: 'term_worker' }])
         )
     }
+
     insertLegacy('ctx_creator', 'created')
     insertLegacy('ctx_reuser', 'reused')
     ;(

@@ -34,8 +34,10 @@ export function TerminalAgentSessionForkDialog({
     if (!fork || busyRef.current) {
       return
     }
+
     busyRef.current = true
     setBusy(true)
+
     try {
       if (await copyAgentSessionForkContext(fork)) {
         onOpenChange(false)
@@ -50,8 +52,10 @@ export function TerminalAgentSessionForkDialog({
     if (!fork || busyRef.current) {
       return
     }
+
     busyRef.current = true
     setBusy(true)
+
     try {
       if (await startAgentSessionFork(fork)) {
         onOpenChange(false)
@@ -66,6 +70,7 @@ export function TerminalAgentSessionForkDialog({
     if (busyRef.current && !nextOpen) {
       return
     }
+
     onOpenChange(nextOpen)
   }
 

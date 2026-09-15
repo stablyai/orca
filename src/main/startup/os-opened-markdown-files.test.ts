@@ -13,11 +13,13 @@ import {
 vi.mock('../ipc/filesystem-auth', () => ({
   authorizeExternalPath: vi.fn()
 }))
+
 vi.mock('../ipc/floating-workspace-directory', () => ({
   ensureDefaultFloatingWorkspacePath: vi.fn()
 }))
 
 const { authorizeExternalPath } = await import('../ipc/filesystem-auth')
+
 const { ensureDefaultFloatingWorkspacePath } = await import('../ipc/floating-workspace-directory')
 
 describe('markdownPathsFromArguments', () => {
@@ -52,10 +54,12 @@ describe('markdownPathsFromArguments', () => {
       '/Users/dev/orca/out/main/index.js',
       '/Applications/Orca.app/Contents/Resources/app.asar'
     ]
+
     // The module documents that the extension check alone excludes these; hold it to that.
     for (const entry of nonDocumentEntries) {
       expect(isMarkdownDocumentName(entry), entry).toBe(false)
     }
+
     expect(
       markdownPathsFromArguments([...nonDocumentEntries, '/Users/dev/notes/a.md'], 'darwin')
     ).toEqual(['/Users/dev/notes/a.md'])
@@ -231,6 +235,7 @@ describe('OsOpenedMarkdownFileState', () => {
   it('caps the buffer when a restore overflows it', () => {
     const state = new OsOpenedMarkdownFileState()
     state.captureFilePaths([hostPath('pending.md')])
+
     const restored = Array.from({ length: MAX_PENDING_OS_OPENED_MARKDOWN_FILES }, (_, index) =>
       hostPath(`restored-${index}.md`)
     )
@@ -311,6 +316,7 @@ describe('OsOpenedMarkdownFileState delivery cap', () => {
     const includes = vi.spyOn(Array.prototype, 'includes')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     let probes: number
+
     try {
       state.captureFilePaths(
         Array.from({ length: 10000 }, (_, index) => resolve(`/notes/${index}.md`))
@@ -320,6 +326,7 @@ describe('OsOpenedMarkdownFileState delivery cap', () => {
       includes.mockRestore()
       warn.mockRestore()
     }
+
     expect(probes).toBeLessThan(100)
     expect(state.consume()).toEqual(
       Array.from({ length: MAX_PENDING_OS_OPENED_MARKDOWN_FILES }, (_, index) =>
@@ -334,9 +341,11 @@ describe('OsOpenedMarkdownFileState delivery cap', () => {
     const state = new OsOpenedMarkdownFileState()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const total = MAX_PENDING_OS_OPENED_MARKDOWN_FILES + 8
+
     const paths = Array.from({ length: total }, (_, index) =>
       resolve(`/notes/${String(index).padStart(3, '0')}.md`)
     )
+
     try {
       expect(state.captureFilePaths(paths)).toBe(true)
       expect(warn).toHaveBeenCalledWith(
@@ -345,12 +354,14 @@ describe('OsOpenedMarkdownFileState delivery cap', () => {
     } finally {
       warn.mockRestore()
     }
+
     expect(state.consume()).toEqual(paths.slice(0, MAX_PENDING_OS_OPENED_MARKDOWN_FILES))
   })
 
   it('stays silent for a batch that fits under the cap', () => {
     const state = new OsOpenedMarkdownFileState()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       state.captureFilePaths(
         Array.from({ length: MAX_PENDING_OS_OPENED_MARKDOWN_FILES }, (_, index) =>
@@ -366,6 +377,7 @@ describe('OsOpenedMarkdownFileState delivery cap', () => {
   it('reports a drop when an already-full queue rejects a later batch', () => {
     const state = new OsOpenedMarkdownFileState()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       state.captureFilePaths(
         Array.from({ length: MAX_PENDING_OS_OPENED_MARKDOWN_FILES }, (_, index) =>
@@ -378,6 +390,7 @@ describe('OsOpenedMarkdownFileState delivery cap', () => {
     } finally {
       warn.mockRestore()
     }
+
     expect(state.consume()).toEqual(
       Array.from({ length: MAX_PENDING_OS_OPENED_MARKDOWN_FILES }, (_, index) =>
         resolve(`/first/${index}.md`)

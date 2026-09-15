@@ -6,7 +6,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from './sync-database'
 
 const temporaryDirectories: string[] = []
+
 const openDatabases: SyncDatabase.Database[] = []
+
 const lockHolders: Worker[] = []
 
 async function createDatabase(): Promise<SyncDatabase.Database> {
@@ -18,11 +20,13 @@ async function createDatabase(): Promise<SyncDatabase.Database> {
     'CREATE TABLE items (id TEXT PRIMARY KEY, label TEXT); ' +
       "INSERT INTO items (id, label) VALUES ('a', 'alpha'), ('b', 'beta')"
   )
+
   return db
 }
 
 afterEach(async () => {
   await Promise.all(lockHolders.splice(0).map((worker) => worker.terminate()))
+
   for (const db of openDatabases.splice(0)) {
     try {
       db.close()
@@ -30,6 +34,7 @@ afterEach(async () => {
       // already closed by the test
     }
   }
+
   await Promise.all(
     temporaryDirectories.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))
   )
@@ -58,6 +63,7 @@ describe('SyncDatabase statement cache', () => {
     const db = await createDatabase()
     const first = 'SELECT 0 AS n'
     const firstStatement = db.prepare(first)
+
     for (let index = 1; index <= 256; index += 1) {
       db.prepare(`SELECT ${index} AS n`)
     }
@@ -197,6 +203,7 @@ describe('SyncDatabase read-only opens under contention', () => {
       worker.once('message', () => resolve())
       worker.once('error', reject)
     })
+
     return { path }
   }
 
@@ -207,6 +214,7 @@ describe('SyncDatabase read-only opens under contention', () => {
     const reader = new SyncDatabase(contended.path, { readonly: true })
     openDatabases.push(reader)
     let thrown: unknown
+
     try {
       reader.prepare('SELECT id FROM items').all()
     } catch (error) {

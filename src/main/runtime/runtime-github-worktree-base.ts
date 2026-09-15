@@ -30,25 +30,33 @@ export async function resolveRuntimeGitHubWorktreeBase(
   if (!deps.store) {
     throw new Error('runtime_unavailable')
   }
+
   let repo: Repo
+
   try {
     repo = await deps.resolveRepo(args.repoSelector)
   } catch {
     return { error: 'Repo not found' }
   }
+
   if (isFolderRepo(repo)) {
     return { error: 'Folder mode does not support creating worktrees.' }
   }
+
   const sshGitProvider = repo.connectionId ? requireSshGitProvider(repo.connectionId) : null
+
   const localGitExecOptions = sshGitProvider
     ? undefined
     : getLocalProjectGitExecOptions(deps.store, repo)
+
   const localWorktreeGitOptions = sshGitProvider
     ? {}
     : getLocalProjectWorktreeGitOptions(deps.store, repo)
+
   const gitExec = sshGitProvider
     ? (gitArgs: string[]) => sshGitProvider.exec(gitArgs, repo.path)
     : (gitArgs: string[]) => gitExecFileAsync(gitArgs, localGitExecOptions ?? { cwd: repo.path })
+
   const resolveRemote = (): Promise<string> =>
     resolveGitHubReviewHeadRemote({
       repoPath: repo.path,
@@ -57,6 +65,7 @@ export async function resolveRuntimeGitHubWorktreeBase(
       localGitOptions: localWorktreeGitOptions,
       gitExec
     })
+
   const fetchRemoteTrackingRef = (remote: string, branch: string): Promise<void> =>
     fetchPrHeadTrackingRef(
       repo,
@@ -65,6 +74,7 @@ export async function resolveRuntimeGitHubWorktreeBase(
       branch,
       localGitExecOptions ? { localGitExecOptions } : {}
     )
+
   const fetchPullRequestHeadRef = (remote: string, prNumber: number): Promise<string> =>
     fetchGitHubPullRequestHeadRef(
       repo,
@@ -73,6 +83,7 @@ export async function resolveRuntimeGitHubWorktreeBase(
       prNumber,
       localGitExecOptions ? { localGitExecOptions } : {}
     )
+
   return resolveGitHubPrStartPoint({
     repoPath: repo.path,
     prNumber: args.prNumber,

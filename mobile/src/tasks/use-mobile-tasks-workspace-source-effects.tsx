@@ -24,6 +24,7 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
     workspaceCreateTargetRepo,
     workspaceSparseReloadKey
   } = model
+
   useEffect(() => {
     if (!tasksSupported || !client || !workspaceCreateDraft || !workspaceCreateTargetRepo) {
       setWorkspaceSparsePresets([])
@@ -32,8 +33,10 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
       setWorkspaceSparsePresetsError('')
       setWorkspaceSparsePresetId(null)
       setWorkspaceSparseDraft(null)
+
       return
     }
+
     if (workspaceCreateTargetRepo.connectionId) {
       setWorkspaceSparsePresets([])
       setWorkspaceSparsePresetsLoading(false)
@@ -41,6 +44,7 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
       setWorkspaceSparsePresetsError('')
       setWorkspaceSparsePresetId(null)
       setWorkspaceSparseDraft(null)
+
       return
     }
 
@@ -54,9 +58,11 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
         if (stale) {
           return
         }
+
         const presets =
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
           (repoSparsePresetListRead.interpret(reply) as SparsePreset[] | undefined) ?? []
+
         setWorkspaceSparsePresets(presets)
         setWorkspaceSparsePresetsLoaded(true)
         setWorkspaceSparsePresetId((current) =>
@@ -101,13 +107,17 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
       setWorkspaceBaseBranchResults([])
       setWorkspaceBaseBranchLoading(false)
       setWorkspaceBaseBranchError('')
+
       return
     }
+
     const query = workspaceBaseBranchQuery.trim()
+
     if (!query) {
       setWorkspaceBaseBranchResults([])
       setWorkspaceBaseBranchLoading(false)
       setWorkspaceBaseBranchError('')
+
       return
     }
 
@@ -124,11 +134,13 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
         if (stale) {
           return
         }
+
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
         const result = repoBaseRefSearchRead.interpret(reply) as {
           refDetails?: BaseRefSearchResult[]
           refs?: string[]
         }
+
         setWorkspaceBaseBranchResults(
           result.refDetails ??
             (result.refs ?? []).map((refName) => ({ refName, localBranchName: refName }))
@@ -159,6 +171,7 @@ export function useMobileTasksWorkspaceSourceEffects(model: WorkspaceCreateProje
     workspaceCreateDraft,
     workspaceCreateTargetRepo
   ])
+
   return model
 }
 

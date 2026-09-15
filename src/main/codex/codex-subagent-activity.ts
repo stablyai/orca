@@ -14,6 +14,7 @@
 import type { CodexThreadItem } from './codex-structured-item-translation'
 
 export const CODEX_SUBAGENT_ITEM_TYPE = 'subAgentActivity'
+
 export const CODEX_TOKEN_USAGE_METHOD = 'thread/tokenUsage/updated'
 
 export type CodexSubagentActivity = {
@@ -36,10 +37,13 @@ export function readCodexSubagentActivity(item: CodexThreadItem): CodexSubagentA
   if (item.type !== CODEX_SUBAGENT_ITEM_TYPE) {
     return null
   }
+
   const agentThreadId = nonEmptyString(item.agentThreadId)
+
   if (!agentThreadId) {
     return null
   }
+
   return {
     kind: nonEmptyString(item.kind) ?? '',
     agentThreadId,
@@ -72,6 +76,7 @@ const CODEX_ROOT_AGENT_SEGMENT = 'root'
  */
 export function isCodexRootAgentActivity(activity: CodexSubagentActivity): boolean {
   const segments = codexSubagentPathSegments(activity.agentPath)
+
   return segments.length === 1 && segments[0] === CODEX_ROOT_AGENT_SEGMENT
 }
 
@@ -82,6 +87,7 @@ export function isCodexRootAgentActivity(activity: CodexSubagentActivity): boole
  *  `read` render identically and must therefore collide. */
 export function codexSubagentLabel(activity: CodexSubagentActivity): string | null {
   const trailing = codexSubagentPathSegments(activity.agentPath).at(-1)?.trim()
+
   return trailing !== undefined && trailing.length > 0 ? trailing : null
 }
 
@@ -91,15 +97,20 @@ export type CodexThreadTokenTotal = { threadId: string; totalTokens: number }
  *  on the envelope, so both shapes are accepted. */
 export function readCodexThreadTokenTotal(params: unknown): CodexThreadTokenTotal | null {
   const root = record(params)
+
   if (!root) {
     return null
   }
+
   const threadId = nonEmptyString(root.threadId) ?? nonEmptyString(record(root.thread)?.id)
+
   if (!threadId) {
     return null
   }
+
   const usage = record(root.tokenUsage)
   const total = record(usage?.total)?.totalTokens ?? usage?.totalTokens ?? root.totalTokens
+
   return typeof total === 'number' && Number.isFinite(total) && total >= 0
     ? { threadId, totalTokens: total }
     : null
@@ -117,5 +128,6 @@ export function readCodexNotificationThreadItem(
 ): CodexThreadItem | null {
   const record =
     typeof params === 'object' && params !== null ? (params as Record<string, unknown>) : {}
+
   return read(record.item)
 }

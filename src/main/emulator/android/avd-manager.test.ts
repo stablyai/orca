@@ -6,6 +6,7 @@ describe('parseAvdList', () => {
     const stdout = ['Pixel_7', '', 'INFO | Storing crashdata in: /tmp/avd', 'Pixel_Tablet'].join(
       '\n'
     )
+
     expect(parseAvdList(stdout)).toEqual(['Pixel_7', 'Pixel_Tablet'])
   })
 
@@ -24,6 +25,7 @@ describe('parseAvdList', () => {
       'ERROR | bad config',
       'No AVD found in /home/user/.android/avd'
     ].join('\n')
+
     expect(parseAvdList(stdout)).toEqual(['Pixel_7'])
   })
 })

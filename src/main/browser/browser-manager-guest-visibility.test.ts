@@ -80,6 +80,7 @@ describe('browserManager', () => {
         targetBrowserPageId: 'page-1'
       })
       .mockResolvedValueOnce(undefined)
+
     const guest = {
       id: 707,
       isDestroyed: vi.fn(() => false),
@@ -90,19 +91,23 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const renderer = {
       id: rendererWebContentsId,
       isDestroyed: vi.fn(() => false),
       executeJavaScript: rendererExecuteJavaScriptMock
     }
+
     browserWindowFromWebContentsMock.mockReturnValue({ isFocused: vi.fn(() => true) })
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return renderer
       }
+
       return null
     })
 
@@ -134,6 +139,7 @@ describe('browserManager', () => {
       .fn()
       .mockResolvedValueOnce('lease-1')
       .mockResolvedValueOnce(true)
+
     const guest = {
       id: 1707,
       isDestroyed: vi.fn(() => false),
@@ -144,18 +150,22 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const renderer = {
       id: rendererWebContentsId,
       isDestroyed: vi.fn(() => false),
       executeJavaScript: rendererExecuteJavaScriptMock
     }
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return renderer
       }
+
       return null
     })
 
@@ -185,6 +195,7 @@ describe('browserManager', () => {
     vi.useFakeTimers()
 
     const rendererExecuteJavaScriptMock = vi.fn().mockReturnValueOnce(new Promise(() => {}))
+
     const guest = {
       id: 1708,
       isDestroyed: vi.fn(() => false),
@@ -195,18 +206,22 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const renderer = {
       id: rendererWebContentsId,
       isDestroyed: vi.fn(() => false),
       executeJavaScript: rendererExecuteJavaScriptMock
     }
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return renderer
       }
+
       return null
     })
 
@@ -232,13 +247,16 @@ describe('browserManager', () => {
     vi.useFakeTimers()
 
     let resolveAcquire: (token: string) => void = () => {}
+
     const acquirePromise = new Promise<string>((resolve) => {
       resolveAcquire = resolve
     })
+
     const rendererExecuteJavaScriptMock = vi
       .fn()
       .mockReturnValueOnce(acquirePromise)
       .mockResolvedValueOnce(true)
+
     const guest = {
       id: 1709,
       isDestroyed: vi.fn(() => false),
@@ -249,18 +267,22 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const renderer = {
       id: rendererWebContentsId,
       isDestroyed: vi.fn(() => false),
       executeJavaScript: rendererExecuteJavaScriptMock
     }
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return renderer
       }
+
       return null
     })
 
@@ -303,6 +325,7 @@ describe('browserManager', () => {
         targetBrowserPageId: 'page-target'
       })
       .mockResolvedValueOnce(undefined)
+
     const guest = {
       id: 708,
       isDestroyed: vi.fn(() => false),
@@ -313,19 +336,23 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const renderer = {
       id: rendererWebContentsId,
       isDestroyed: vi.fn(() => false),
       executeJavaScript: rendererExecuteJavaScriptMock
     }
+
     browserWindowFromWebContentsMock.mockReturnValue({ isFocused: vi.fn(() => true) })
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return renderer
       }
+
       return null
     })
 
@@ -360,6 +387,7 @@ describe('browserManager', () => {
         targetBrowserPageId: 'page-target'
       })
       .mockResolvedValueOnce(undefined)
+
     const guest = {
       id: 709,
       isDestroyed: vi.fn(() => false),
@@ -370,19 +398,23 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const renderer = {
       id: rendererWebContentsId,
       isDestroyed: vi.fn(() => false),
       executeJavaScript: rendererExecuteJavaScriptMock
     }
+
     browserWindowFromWebContentsMock.mockReturnValue({ isFocused: vi.fn(() => true) })
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return renderer
       }
+
       return null
     })
 
@@ -418,6 +450,7 @@ describe('browserManager', () => {
         targetBrowserPageId: 'page-target'
       })
       .mockResolvedValueOnce(undefined)
+
     const guest = {
       id: 7091,
       isDestroyed: vi.fn(() => false),
@@ -428,19 +461,23 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const renderer = {
       id: rendererWebContentsId,
       isDestroyed: vi.fn(() => false),
       executeJavaScript: rendererExecuteJavaScriptMock
     }
+
     browserWindowFromWebContentsMock.mockReturnValue({ isFocused: vi.fn(() => true) })
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return renderer
       }
+
       return null
     })
 
@@ -476,6 +513,7 @@ describe('browserManager', () => {
       targetBrowserWorkspaceId: 'workspace-1',
       targetBrowserPageId: 'page-1'
     })
+
     const guest = {
       id: 710,
       isDestroyed: vi.fn(() => false),
@@ -486,18 +524,22 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const renderer = {
       id: rendererWebContentsId,
       isDestroyed: vi.fn(() => false),
       executeJavaScript: rendererExecuteJavaScriptMock
     }
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return renderer
       }
+
       return null
     })
 

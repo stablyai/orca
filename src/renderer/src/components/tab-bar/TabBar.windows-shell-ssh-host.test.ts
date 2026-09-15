@@ -23,20 +23,35 @@ import {
 } from './tab-bar-windows-shell-launch-test-harness'
 
 vi.mock('react', async () => await stubHeadlessReact())
+
 vi.mock('zustand/react/shallow', () => stubShallowSelector())
+
 vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
+
 vi.mock('@dnd-kit/sortable', () => stubSortableContext())
+
 vi.mock('./tab-strip-drag-scroll', () => stubTabStripDragScroll())
+
 vi.mock('../../store', () => ({ useAppStore: useAppStoreExport }))
+
 vi.mock('../right-sidebar/status-display', () => stubStatusDisplay())
+
 vi.mock('../tab-group/tab-insertion', () => stubTabInsertion())
+
 vi.mock('@/components/editor/editor-labels', () => stubEditorLabels())
+
 vi.mock('./SortableTab', () => stubSortableTab())
+
 vi.mock('./EditorFileTab', () => stubEditorFileTab())
+
 vi.mock('./BrowserTab', () => stubBrowserTab())
+
 vi.mock('./QuickLaunchButton', () => stubQuickLaunchButton())
+
 vi.mock('./shell-icons', () => stubShellIcons())
+
 vi.mock('@/lib/focus-terminal-tab-surface', () => stubFocusTerminalTabSurface())
+
 vi.mock('@/components/ui/dropdown-menu', () => stubDropdownMenu())
 
 describe('TabBar PowerShell launch wiring', () => {
@@ -57,6 +72,7 @@ describe('TabBar PowerShell launch wiring', () => {
     appStoreSnapshot.worktreesByRepo = {
       'repo-1': [{ id: 'wt-ssh', repoId: 'repo-1' }]
     }
+
     const detectRemoteWindowsTerminalCapabilities = vi.fn().mockResolvedValue({
       wslAvailable: true,
       wslDistros: ['Ubuntu'],
@@ -64,6 +80,7 @@ describe('TabBar PowerShell launch wiring', () => {
       gitBashAvailable: true,
       hostPlatform: 'win32'
     })
+
     vi.stubGlobal('window', {
       api: {
         preflight: {
@@ -79,15 +96,18 @@ describe('TabBar PowerShell launch wiring', () => {
 
     const tabBarModule = await import('./TabBar')
     const candidate = tabBarModule.default ?? tabBarModule
+
     const TabBar =
       typeof candidate === 'function'
         ? candidate
         : typeof (candidate as { type?: unknown }).type === 'function'
           ? (candidate as { type: (props: Record<string, unknown>) => unknown }).type
           : null
+
     expect(TabBar).not.toBeNull()
 
     const onNewTerminalWithShell = vi.fn()
+
     const element = TabBar!({
       tabs: [],
       activeTabId: null,
@@ -110,6 +130,7 @@ describe('TabBar PowerShell launch wiring', () => {
       expandNode(element),
       'New Terminal: PowerShell'
     )
+
     expect(powerShellItem).not.toBeNull()
     expect(
       findDropdownMenuItemByText(expandNode(element), 'New Terminal: CMD Prompt')
@@ -128,6 +149,7 @@ describe('TabBar PowerShell launch wiring', () => {
     appStoreSnapshot.worktreesByRepo = {
       'repo-1': [{ id: 'wt-ssh', repoId: 'repo-1' }]
     }
+
     const detectRemoteWindowsTerminalCapabilities = vi.fn().mockResolvedValue({
       wslAvailable: false,
       wslDistros: [],
@@ -135,6 +157,7 @@ describe('TabBar PowerShell launch wiring', () => {
       gitBashAvailable: false,
       hostPlatform: 'linux'
     })
+
     vi.stubGlobal('window', {
       api: {
         preflight: {
@@ -150,12 +173,14 @@ describe('TabBar PowerShell launch wiring', () => {
 
     const tabBarModule = await import('./TabBar')
     const candidate = tabBarModule.default ?? tabBarModule
+
     const TabBar =
       typeof candidate === 'function'
         ? candidate
         : typeof (candidate as { type?: unknown }).type === 'function'
           ? (candidate as { type: (props: Record<string, unknown>) => unknown }).type
           : null
+
     expect(TabBar).not.toBeNull()
 
     const element = TabBar!({

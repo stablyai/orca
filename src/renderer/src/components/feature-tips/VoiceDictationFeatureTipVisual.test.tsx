@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { VoiceDictationFeatureTipVisual } from './VoiceDictationFeatureTipVisual'
 
 const prefersReducedMotionMock = vi.hoisted(() => vi.fn(() => false))
+
 const shortcutMock = vi.hoisted(() => vi.fn(() => ({ keys: ['⌘', 'E'], doubleTap: false })))
 
 vi.mock('@/components/feature-wall/feature-wall-modal-helpers', () => ({
@@ -22,6 +23,7 @@ async function renderVisual(): Promise<{ container: HTMLDivElement; root: Root }
   document.body.appendChild(container)
   const root = createRoot(container)
   await act(async () => root.render(<VoiceDictationFeatureTipVisual />))
+
   return { container, root }
 }
 

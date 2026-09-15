@@ -9,7 +9,9 @@ import {
 } from './worktree-remote'
 
 const CHILD_ID = 'repo-1::/repos/child'
+
 const PARENT_ID = 'repo-1::/repos/parent'
+
 const CREATED_AT = 1_700_000_000_000
 
 function createdWorktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -63,6 +65,7 @@ function createStore(options: {
 }) {
   const metaById = options.metaById ?? {}
   const folderWorkspaceIds = new Set(options.folderWorkspaceIds ?? [])
+
   return {
     getWorktreeMeta: vi.fn((id: string) => metaById[id]),
     getFolderWorkspace: vi.fn((id: string) =>

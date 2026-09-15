@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshGitProvider } from '../providers/ssh-git-provider'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
+
 vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 
 import {
@@ -12,6 +13,7 @@ import {
 import { fetchGitLabMergeRequestHeadRef } from './mr-head-tracking-ref'
 
 const ORIGIN_URL = 'https://gitlab.com/acme/widgets.git'
+
 const ORIGIN_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_URL)
 
 describe('fetchGitLabMergeRequestHeadRef', () => {
@@ -21,6 +23,7 @@ describe('fetchGitLabMergeRequestHeadRef', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${ORIGIN_URL}\n`, stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
   })
@@ -52,6 +55,7 @@ describe('fetchGitLabMergeRequestHeadRef', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         throw new Error("fatal: No such remote 'origin'")
       }
+
       return { stdout: '', stderr: '' }
     })
 

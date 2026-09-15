@@ -18,6 +18,7 @@ describe('usage provider IPC handlers', () => {
       getBreakdown: vi.fn(),
       getRecentSessions: vi.fn()
     })
+
     const claudeUsage = createUsage()
     const codexUsage = createUsage()
     const openCodeUsage = createUsage()
@@ -37,8 +38,10 @@ describe('usage provider IPC handlers', () => {
       const handler = handle.mock.calls.find(
         ([channel]) => channel === `${prefix}:${suffix}`
       )?.[1] as ((event: unknown, args?: unknown) => unknown) | undefined
+
       return handler?.({}, args)
     }
+
     call('claudeUsage', 'getScanState')
     call('codexUsage', 'getScanState')
     call('openCodeUsage', 'getScanState')

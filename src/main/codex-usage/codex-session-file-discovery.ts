@@ -11,6 +11,7 @@ const YIELD_EVERY_DISCOVERY_ENTRIES = 100
 export async function canonicalizePath(pathValue: string): Promise<string> {
   try {
     const resolved = await realpath(pathValue)
+
     return normalizeFsPath(resolved)
   } catch {
     return normalizeFsPath(pathValue)
@@ -30,14 +31,18 @@ async function walkJsonlFiles(
 
   for (const entry of entries) {
     progress.entriesVisited += 1
+
     if (progress.entriesVisited % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
       await yieldToEventLoop()
     }
+
     const fullPath = join(dirPath, entry.name)
+
     if (entry.isDirectory()) {
       appendDiscoveredFiles(files, await walkJsonlFiles(fullPath, progress))
       continue
     }
+
     if (entry.isFile() && entry.name.endsWith('.jsonl')) {
       files.push(fullPath)
     }
@@ -78,6 +83,7 @@ function hasLegacyCopiedSessionBridgeMarkers(): boolean {
 
 export async function listCodexSessionFiles(): Promise<string[]> {
   const files: string[] = []
+
   for (const dirPath of getCodexSessionDirectories()) {
     try {
       appendDiscoveredFiles(files, await walkJsonlFiles(dirPath))
@@ -85,6 +91,7 @@ export async function listCodexSessionFiles(): Promise<string[]> {
       // Missing or unreadable history in one home should not hide the other.
     }
   }
+
   return dedupeCodexSessionFileAliases(files, hasLegacyCopiedSessionBridgeMarkers())
 }
 
@@ -93,18 +100,23 @@ async function dedupeCodexSessionFileAliases(
   hasLegacyBridgeMarkers: boolean
 ): Promise<string[]> {
   const excludedAliases = new Set<string>()
+
   if (hasLegacyBridgeMarkers) {
     for (const [index, filePath] of files.entries()) {
       const legacyCopyBridge = getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
+
       if ((index + 1) % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
         await yieldToEventLoop()
       }
+
       if (!legacyCopyBridge) {
         continue
       }
+
       if (legacyCopyBridge.sourceSkipBytes !== null) {
         continue
       }
+
       excludedAliases.add(
         await getPhysicalFileAliasKey(
           legacyCopyBridge.preferManagedCopy ? legacyCopyBridge.sourcePath : filePath
@@ -115,20 +127,26 @@ async function dedupeCodexSessionFileAliases(
 
   const seenAliases = new Set<string>()
   const uniqueFiles: string[] = []
+
   for (const [index, filePath] of [...new Set(files)].sort().entries()) {
     const aliasKey = await getCodexSessionFileAliasKey(filePath)
+
     if (excludedAliases.has(aliasKey)) {
       continue
     }
+
     if (seenAliases.has(aliasKey)) {
       continue
     }
+
     seenAliases.add(aliasKey)
     uniqueFiles.push(filePath)
+
     if ((index + 1) % YIELD_EVERY_DISCOVERY_ENTRIES === 0) {
       await yieldToEventLoop()
     }
   }
+
   return uniqueFiles
 }
 
@@ -139,10 +157,12 @@ async function getCodexSessionFileAliasKey(filePath: string): Promise<string> {
 async function getPhysicalFileAliasKey(filePath: string): Promise<string> {
   try {
     const fileStat = await stat(filePath)
+
     if (fileStat.ino !== 0) {
       return `${fileStat.dev}:${fileStat.ino}`
     }
   } catch {}
+
   return `path:${await canonicalizePath(filePath)}`
 }
 
@@ -151,19 +171,24 @@ export function getLegacySourceSkipBytesByPath(
   hasLegacyBridgeMarkers = hasLegacyCopiedSessionBridgeMarkers()
 ): Map<string, number> {
   const sourceSkipBytesByPath = new Map<string, number>()
+
   if (!hasLegacyBridgeMarkers) {
     return sourceSkipBytesByPath
   }
+
   for (const filePath of files) {
     const legacyCopyBridge = getLegacyCopiedCodexSessionBridgeScanPreference(filePath)
+
     if (!legacyCopyBridge || legacyCopyBridge.sourceSkipBytes === null) {
       continue
     }
+
     const existing = sourceSkipBytesByPath.get(legacyCopyBridge.sourcePath) ?? 0
     sourceSkipBytesByPath.set(
       legacyCopyBridge.sourcePath,
       Math.max(existing, legacyCopyBridge.sourceSkipBytes)
     )
   }
+
   return sourceSkipBytesByPath
 }

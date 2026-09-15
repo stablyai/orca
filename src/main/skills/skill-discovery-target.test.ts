@@ -13,6 +13,7 @@ vi.mock('./discovery', () => ({
   clearSkillRootScanCache: vi.fn(),
   discoverSkills: vi.fn(async (args: unknown) => {
     nativeScans.push(args)
+
     return emptyResult()
   })
 }))
@@ -20,12 +21,14 @@ vi.mock('./discovery', () => ({
 vi.mock('./skill-discovery-wsl', () => ({
   discoverSkillObservationInWsl: vi.fn(async (args: unknown) => {
     wslScans.push(args)
+
     return { rows: [], sources: [], scannedAt: 1 }
   })
 }))
 
 const { clearSkillDiscoveryCaches, discoverSkillsOnTarget } =
   await import('./skill-discovery-target')
+
 const { clearSkillRootScanCache, discoverSkills } = await import('./discovery')
 
 function makeRepo(path: string): Repo {

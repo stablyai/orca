@@ -69,6 +69,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
     activeBrowserTab,
     keyboardLift
   } = controller
+
   return (
     !activeMarkdownTab &&
     !activeFileTab &&
@@ -196,6 +197,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                   if (!key.repeatable) {
                     return
                   }
+
                   const input = createTerminalLiveAccessoryInput(key)
                   void handleAccessoryKey(input)
                   startAccessoryRepeat(input)
@@ -209,6 +211,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                   if (key.repeatable) {
                     return
                   }
+
                   void handleAccessoryKey(createTerminalLiveAccessoryInput(key))
                 }}
                 accessibilityLabel={key.accessibilityLabel ?? `Send ${key.label}`}
@@ -300,11 +303,13 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               onKeyPress={handleLiveInputKeyPress}
               onSubmitEditing={() => {
                 const submit = handleLiveInputSubmit()
+
                 const sendOrigin = {
                   tab: activeSessionTab,
                   generation: getSendCompletionGeneration(),
                   interaction: getLiveInteractionGeneration()
                 }
+
                 void submit.then((accepted) =>
                   dismissKeyboardAfterAgentSend(
                     sendOrigin,

@@ -97,6 +97,7 @@ describe('AgentMapScene project labels', () => {
         }
       ]
     }
+
     const { container } = render(
       <TooltipProvider>
         <svg>

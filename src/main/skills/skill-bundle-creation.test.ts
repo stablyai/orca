@@ -15,6 +15,7 @@ const temporaryDirectories: string[] = []
 async function temporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'orca-skill-bundle-test-'))
   temporaryDirectories.push(directory)
+
   return directory
 }
 
@@ -26,6 +27,7 @@ async function createSkill(root: string, name: string, description: string): Pro
     `---\nname: ${name}\ndescription: ${description}\n---\n\n# ${name}\n`
   )
   await writeFile(join(directory, 'notes.txt'), `${name} notes\n`)
+
   return directory
 }
 
@@ -42,6 +44,7 @@ describe('skill bundle creation and extraction', () => {
     const script = join(source, 'run.sh')
     await writeFile(script, '#!/bin/sh\necho ok\n')
     await chmod(script, 0o700)
+
     const created = await createSkillBundleArchive({
       sources: [{ sourceDirectory: source }],
       archivePath: join(root, 'bundle.tar.gz'),
@@ -49,6 +52,7 @@ describe('skill bundle creation and extraction', () => {
       versionId: 'version_windows',
       bundleName: 'windows-bundle'
     })
+
     expect(created.manifest.skills[0].files).toContainEqual(
       expect.objectContaining({ path: 'run.sh', executable: true })
     )
@@ -66,6 +70,7 @@ describe('skill bundle creation and extraction', () => {
     const root = await temporaryDirectory()
     const alpha = await createSkill(root, 'alpha-skill', 'Alpha')
     const beta = await createSkill(root, 'beta-skill', 'Beta')
+
     const created = await createSkillBundleArchive({
       sources: [{ sourceDirectory: beta }, { sourceDirectory: alpha }],
       archivePath: join(root, 'bundle.tar.gz'),
@@ -101,17 +106,20 @@ describe('skill bundle creation and extraction', () => {
     const root = await temporaryDirectory()
     const alpha = await createSkill(root, 'alpha-skill', 'Alpha')
     const beta = await createSkill(root, 'beta-skill', 'Beta')
+
     const publication = {
       packageId: 'package_1',
       versionId: 'version_1',
       bundleName: 'team-skills',
       createdAt: '2026-08-11T12:00:00.000Z'
     }
+
     const first = await createSkillBundleArchive({
       ...publication,
       sources: [{ sourceDirectory: alpha }, { sourceDirectory: beta }],
       archivePath: join(root, 'first.tar.gz')
     })
+
     const second = await createSkillBundleArchive({
       ...publication,
       sources: [{ sourceDirectory: beta }, { sourceDirectory: alpha }],
@@ -124,15 +132,18 @@ describe('skill bundle creation and extraction', () => {
 
   it('packages and extracts thirty selected skills within the shared limits', async () => {
     const root = await temporaryDirectory()
+
     const names = Array.from(
       { length: 30 },
       (_, index) => `skill-${String(index).padStart(2, '0')}`
     )
+
     const sources = await Promise.all(
       names.map(async (name) => ({
         sourceDirectory: await createSkill(root, name, `Description for ${name}`)
       }))
     )
+
     const created = await createSkillBundleArchive({
       sources: sources.toReversed(),
       archivePath: join(root, 'thirty-skills.tar.gz'),
@@ -157,6 +168,7 @@ describe('skill bundle creation and extraction', () => {
   it('rejects conflicting staging roots without changing their imported namespace', async () => {
     const root = await temporaryDirectory()
     const source = await createSkill(root, 'alpha-skill', 'Alpha')
+
     const created = await createSkillBundleArchive({
       sources: [{ sourceDirectory: source }],
       archivePath: join(root, 'bundle.tar.gz'),
@@ -164,6 +176,7 @@ describe('skill bundle creation and extraction', () => {
       versionId: 'version_1',
       bundleName: 'team-skills'
     })
+
     const destination = join(root, 'conflicting-staging')
     const importedManifest = join(destination, 'dev.orca.skill-sharing', 'manifest.json')
     await mkdir(join(destination, 'dev.orca.skill-sharing'), { recursive: true })
@@ -180,9 +193,11 @@ describe('skill bundle creation and extraction', () => {
 
   it('rejects unknown top-level extension namespaces and removes fresh staging', async () => {
     const root = await temporaryDirectory()
+
     const plugin = Buffer.from(
       JSON.stringify({ $schema: AGENT_PLUGIN_SCHEMA_V1, name: 'team-skills' })
     )
+
     const unknown = Buffer.from('{}')
     const archivePath = join(root, 'unknown-extension.tar.gz')
     await writeSkillTarGzip(archivePath, [

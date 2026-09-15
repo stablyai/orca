@@ -38,6 +38,7 @@ function stubStructuredHostInstall(runtime: OrcaRuntimeService): {
     writeGateAttached: false,
     reaperStarted: false
   }
+
   // `supportsCreate` answers as the real Codex adapter would, so a probe that reinstalls the host
   // still returns the right answer and fails on the install effects alone.
   const host = {
@@ -45,6 +46,7 @@ function stubStructuredHostInstall(runtime: OrcaRuntimeService): {
     supportsCreate: (location: { executionHostId: string; wslDistro: string | null }) =>
       location.executionHostId === 'local' && location.wslDistro === null
   }
+
   const ensure = vi.fn(async () => {
     effects.storeOpened = true
     effects.reaperStarted = true
@@ -52,7 +54,9 @@ function stubStructuredHostInstall(runtime: OrcaRuntimeService): {
     effects.writeGateAttached = true
     setStructuredAgentSessionHost(host as never)
   })
+
   vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockImplementation(ensure)
+
   return { effects, ensure }
 }
 
@@ -69,15 +73,18 @@ type SupportResult = {
 
 function createRuntime(location: TestLocation): OrcaRuntimeService {
   const runtime = new OrcaRuntimeService({ getSettings: () => ({}) } as never)
+
   const internal = runtime as unknown as {
     resolveStructuredAgentSessionLocation: () => Promise<unknown>
   }
+
   internal.resolveStructuredAgentSessionLocation = vi.fn(async () => ({
     executionHostId: location.executionHostId,
     wslDistro: location.wslDistro,
     workspaceId: 'workspace-1',
     workspaceKind: location.workspaceKind ?? 'git-worktree'
   }))
+
   return runtime
 }
 
@@ -91,6 +98,7 @@ async function expectSupportWithoutInstall(input: {
   const { effects, ensure } = stubStructuredHostInstall(runtime)
 
   const answers: SupportResult[] = []
+
   for (let index = 0; index < (input.repetitions ?? 1); index += 1) {
     answers.push(
       await runtime.getStructuredAgentSessionCreateSupport('id:workspace-1', input.agent)
@@ -190,10 +198,12 @@ describe('structured agent-session create-support probe', () => {
   it('still installs and reconciles on startup when a store is already persisted', async () => {
     const runtime = createRuntime({ executionHostId: 'local', wslDistro: null })
     const { effects, ensure } = stubStructuredHostInstall(runtime)
+
     const internal = runtime as unknown as {
       hasPersistedStructuredAgentSessionStore: () => boolean
       refreshMobileSessionPtyRecords: () => Promise<void>
     }
+
     internal.hasPersistedStructuredAgentSessionStore = () => true
     internal.refreshMobileSessionPtyRecords = vi.fn(async () => {})
 

@@ -21,6 +21,7 @@ describe('resolveOxcCliInvocation', () => {
 
   it('spawns oxfmt without a shell', () => {
     const { command, prefixArgs } = resolveOxcCliInvocation('oxfmt', 'oxfmt', repoRoot)
+
     const result = spawnSync(command, [...prefixArgs, '--help'], {
       cwd: repoRoot,
       encoding: 'utf8',

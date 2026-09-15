@@ -52,6 +52,7 @@ class FakeElement extends FakeNode {
 
   appendChild(element: FakeElement): FakeElement {
     this.append(element)
+
     return element
   }
 
@@ -59,11 +60,14 @@ class FakeElement extends FakeNode {
     if (!this.parentElement) {
       return
     }
+
     const siblings = this.parentElement.children
     const index = siblings.indexOf(this)
+
     if (index !== -1) {
       siblings.splice(index, 1)
     }
+
     this.parentElement = null
   }
 
@@ -91,6 +95,7 @@ class FakeElement extends FakeNode {
     if (this.matches(selector)) {
       return this
     }
+
     return this.parentElement?.closest(selector) ?? null
   }
 
@@ -100,12 +105,15 @@ class FakeElement extends FakeNode {
 
   querySelectorAll(selector: string): FakeElement[] {
     const results: FakeElement[] = []
+
     for (const child of this.children) {
       if (child.matches(selector)) {
         results.push(child)
       }
+
       results.push(...child.querySelectorAll(selector))
     }
+
     return results
   }
 
@@ -125,7 +133,9 @@ class FakeElement extends FakeNode {
         if (!part.startsWith('[') || !part.endsWith(']')) {
           return false
         }
+
         const attribute = part.slice(1, -1)
+
         return this.attributes.has(attribute)
       })
   }
@@ -143,12 +153,14 @@ class FakeDocument {
     if (this.body.matches(selector)) {
       return this.body
     }
+
     return this.body.querySelector(selector)
   }
 
   querySelectorAll(selector: string): FakeElement[] {
     const results = this.body.matches(selector) ? [this.body] : []
     results.push(...this.body.querySelectorAll(selector))
+
     return results
   }
 
@@ -162,6 +174,7 @@ class FakeDocument {
 }
 
 let fakeDocument: FakeDocument
+
 let unregisterSidebarDropGroups: (() => void) | null = null
 
 function setRect(
@@ -207,11 +220,14 @@ function appendBoard(): { board: HTMLElement; lane: HTMLElement; firstCard: HTML
   lane.append(firstCard, secondCard)
   board.append(lane)
   document.body.append(board)
+
   return { board, lane, firstCard }
 }
 
 const VIRTUAL_CARD_PITCH = 44
+
 const VIRTUAL_CARD_HEIGHT = 36
+
 // Scrolled past the head of the lane, so the mounted window starts mid-list.
 const VIRTUAL_SPACER_TOP = -350
 
@@ -231,6 +247,7 @@ function appendVirtualBoard(args: {
   lane.setAttribute('data-workspace-status-drop-target', '')
   lane.dataset.workspaceStatus = 'doing'
   setRect(lane, { left: 0, top: 0, right: 200, bottom: 220, width: 200, height: 220 })
+
   if (args.publishFullIds) {
     lane.dataset.workspaceLaneFullIds = serializeWorkspaceLaneFullIds([...args.fullLaneIds]) ?? ''
   }
@@ -286,12 +303,14 @@ function appendVirtualBoard(args: {
         end: index * VIRTUAL_CARD_PITCH + VIRTUAL_CARD_HEIGHT
       }))
   })
+
   return { lane, unregister }
 }
 
 // 40-member lane under a search that matches every other card.
 function searchedVirtualLaneIds(): { fullLaneIds: string[]; viewIds: string[] } {
   const fullLaneIds = Array.from({ length: 40 }, (_, index) => `doing-${index}`)
+
   return { fullLaneIds, viewIds: fullLaneIds.filter((_, index) => index % 2 === 0) }
 }
 
@@ -381,6 +400,7 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
     laneScroll.append(spacer)
     lane.append(laneScroll)
     setElementFromPoint(lane)
+
     const unregister = registerWorkspaceKanbanVirtualLaneLayout({
       scrollElement: laneScroll,
       spacerElement: spacer,
@@ -443,6 +463,7 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
 
   it('lands a virtualized searched lane drop where the indicator pointed', () => {
     const { fullLaneIds, viewIds } = searchedVirtualLaneIds()
+
     const { unregister } = appendVirtualBoard({
       fullLaneIds,
       viewIds,
@@ -461,6 +482,7 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
 
   it('translates virtualized searched lane drops above and below the mounted window', () => {
     const { fullLaneIds, viewIds } = searchedVirtualLaneIds()
+
     const { unregister } = appendVirtualBoard({
       fullLaneIds,
       viewIds,
@@ -478,6 +500,7 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
 
   it('passes a virtualized unfiltered lane drop index through untranslated', () => {
     const { fullLaneIds } = searchedVirtualLaneIds()
+
     const { unregister } = appendVirtualBoard({
       fullLaneIds,
       viewIds: fullLaneIds,
@@ -645,6 +668,7 @@ describe('workspace kanban sidebar drop updates', () => {
         })
       ]
     ])
+
     const rankByWorktreeId = new Map([
       ['todo-a', 4000],
       ['filtered', 3000],

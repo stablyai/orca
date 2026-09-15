@@ -40,6 +40,7 @@ async function waitForWorktree(page: Page, id: string): Promise<void> {
           'worktree.list',
           {}
         )
+
         return listed.worktrees.some((candidate) => candidate.id === id)
       },
       { timeout: 30_000 }
@@ -90,14 +91,18 @@ test('recovers startup exec through a headed paired desktop owner @headful', asy
   const releasePath = path.join(homePath, `.sta4067-${runId}.release`)
   const removeProfile = installZshExecProfile(homePath, runId, { releasePath, startedPath })
   const worktreeId = await orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId)
+
   if (!worktreeId) {
     throw new Error('Headed owner has no active worktree')
   }
+
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const client = await launchPairedWebClient(electronApp, offer)
   let terminal: string | null = null
+
   try {
     await waitForWorktree(client.page, worktreeId)
+
     const created = await createStartupExecTerminal(
       client.page,
       worktreeId,
@@ -107,6 +112,7 @@ test('recovers startup exec through a headed paired desktop owner @headful', asy
       '/bin/zsh',
       { ORCA_ORIG_ZDOTDIR: homePath, ORCA_ZSHENV_SOURCE_DIR: homePath }
     )
+
     terminal = created.terminal
     await releaseExecBarrier(startedPath, releasePath, ledgerPath)
     await expectStartupExecRecovery(client.page, created, runId)
@@ -130,6 +136,7 @@ test('recovers the same startup exec through an isolated headless orca serve', a
   let client: Awaited<ReturnType<typeof launchPairedWebClient>> | undefined
   let startedPath = ''
   let releasePath = ''
+
   try {
     const homePath = await host.app.evaluate(({ app }) => app.getPath('home'))
     const ledgerPath = path.join(homePath, `.sta4067-${runId}.ledger`)
@@ -148,12 +155,15 @@ test('recovers the same startup exec through an isolated headless orca serve', a
         { timeout: 30_000 }
       )
       .not.toBeNull()
+
     const worktreeId = await client.page.evaluate(
       () => window.__store?.getState().allWorktrees()[0]?.id ?? null
     )
+
     if (!worktreeId) {
       throw new Error('Headless owner did not publish its worktree')
     }
+
     const created = await createStartupExecTerminal(
       client.page,
       worktreeId,
@@ -163,6 +173,7 @@ test('recovers the same startup exec through an isolated headless orca serve', a
       '/bin/zsh',
       { ORCA_ORIG_ZDOTDIR: homePath, ORCA_ZSHENV_SOURCE_DIR: homePath }
     )
+
     terminal = created.terminal
     await releaseExecBarrier(startedPath, releasePath, ledgerPath)
     await expectStartupExecRecovery(client.page, created, runId)
@@ -173,7 +184,9 @@ test('recovers the same startup exec through an isolated headless orca serve', a
         await closeStartupExecTerminal(client.page, terminal)
         await client.dispose()
       }
+
       removeProfile?.()
+
       if (startedPath) {
         cleanupExecBarrier(startedPath, releasePath)
       }

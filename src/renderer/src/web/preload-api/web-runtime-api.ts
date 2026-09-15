@@ -15,13 +15,16 @@ export function createWebRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime'
     call: ({ method, params }) => callRuntimeEnvelope(method, params),
     subscribe: async ({ method, params }, callback) => {
       const environment = requireActiveEnvironment()
+
       const subscription = await getClientForEnvironment(environment).subscribe(method, params, {
         onResponse: callback
       })
+
       if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
         subscription.unsubscribe()
         throw new Error('runtime_manually_disconnected')
       }
+
       return subscription
     },
     getTerminalFitOverrides: () => Promise.resolve([]),

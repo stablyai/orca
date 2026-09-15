@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 const settings: { current: Partial<GlobalSettings> } = { current: {} }
+
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ settings: settings.current }) }
 }))
@@ -10,11 +11,13 @@ vi.mock('@/store', () => ({
 const { installTerminalNativeCopyGutterTrim } = await import('./terminal-native-copy-gutter')
 
 const GUTTERED = ['  Retry limit is now 5.', '  Backoff starts at 2s.'].join('\n')
+
 const UNGUTTERED = ['Retry limit is now 5.', 'Backoff starts at 2s.'].join('\n')
 
 function makeTerminal(selection: string) {
   const element = document.createElement('div')
   document.body.appendChild(element)
+
   return {
     element,
     getSelection: () => selection,
@@ -29,6 +32,7 @@ function dispatchCopy(element: HTMLElement) {
     value: { setData: (type: string, data: string) => written.set(type, data) }
   })
   element.dispatchEvent(event)
+
   return { written, defaultPrevented: event.defaultPrevented }
 }
 

@@ -17,12 +17,15 @@ export function issueBrowserHostClientPageCommand(
 } {
   const state = leasesByClientId.get(authority.browserHostClientId)
   const ledger = state?.commandLedger
+
   if (!state || state.lease.browserHostGeneration !== authority.browserHostGeneration || !ledger) {
     throw new Error('browser_host_command_protocol_required')
   }
+
   assertBrowserHostPageCommandAdmission(state.lease, command, (executionHostKey) =>
     state.executionHostGrants.require(executionHostKey)
   )
+
   return ledger.issue({
     browserPageId: authority.browserPageId,
     pageHostGeneration: authority.pageHostGeneration,

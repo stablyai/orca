@@ -48,20 +48,25 @@ function wedgedDaemonError(requestError: Error, cancelError: unknown): Error | n
   ) {
     return null
   }
+
   const wedged = new DaemonRequestTimeoutError(DAEMON_UNAVAILABLE_RECONNECT_MESSAGE)
   wedged.cause = requestError
+
   return wedged
 }
 
 export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
   // A stalled event loop can deliver a daemon cancellation before its overdue timer runs.
   const { payload, type } = opts
+
   const createTimeoutError = (): DaemonRequestTimeoutError =>
     new DaemonRequestTimeoutError(`Request ${type} timed out after ${opts.timeoutMs}ms`)
+
   const createSessionId =
     type === 'createOrAttach' && payload !== null && typeof payload === 'object'
       ? Reflect.get(payload, 'sessionId')
       : null
+
   const requestPayload =
     type === 'createOrAttach' && payload !== null && typeof payload === 'object'
       ? {
@@ -69,11 +74,13 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
           cancelAfterMs: Math.max(1, opts.timeoutMs + opts.unmatchedCancelGraceMs)
         }
       : payload
+
   const encoded = encodeNdjson({
     id: opts.id,
     type,
     ...(requestPayload !== undefined ? { payload: requestPayload } : {})
   })
+
   const clientDeadlineMs = performance.now() + opts.timeoutMs
 
   return new Promise<T>((resolve, reject) => {
@@ -87,23 +94,28 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
     // Scoped to the daemon's cancellation reply: a real disconnect still wins.
     let cancellationError: Error | null = null
     const removeAbortListener = (): void => opts.signal?.removeEventListener('abort', onAbort)
+
     const clearTimers = (): void => {
       clearTimeout(timer)
+
       if (unmatchedCancelTimer) {
         clearTimeout(unmatchedCancelTimer)
         unmatchedCancelTimer = null
       }
     }
+
     const rejectAndDrop = (error: Error): void => {
       if (settled) {
         return
       }
+
       settled = true
       opts.pendingRequests.drop(opts.id)
       removeAbortListener()
       clearTimers()
       reject(error)
     }
+
     // Unmatched or unconfirmed cancel: a create that already published a result will
     // still answer, so keep waiting — but only for a bounded window, or an
     // attach-only request queued behind a hung create never settles at all.
@@ -111,33 +123,42 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
       if (settled || unmatchedCancelTimer) {
         return
       }
+
       unmatchedCancelTimer = setTimeout(() => rejectAndDrop(error), opts.unmatchedCancelGraceMs)
       unmatchedCancelTimer.unref?.()
     }
+
     const cancelCreate = (error: Error): void => {
       if (cancellationStarted) {
         return
       }
+
       cancellationStarted = true
       cancellationError = error
       clearTimeout(timer)
+
       if (!sent || typeof createSessionId !== 'string') {
         rejectAndDrop(error)
+
         return
       }
+
       void opts
         .settleCreateCancellation(createSessionId, opts.id)
         .then((result) => {
           if (result.canceled) {
             rejectAndDrop(error)
+
             return
           }
+
           awaitLateResponseThenReject(error)
         })
         .catch((cancelError: unknown) => {
           if (settled) {
             return
           }
+
           // Why: a cancel the daemon refused (v1-v10 answer 'Unknown request type')
           // or that blew its own 5s timeout (busy event loop, e.g. an unreachable UNC
           // share) proves nothing about the other sessions on this connection, so it
@@ -147,19 +168,24 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
           // on this request only — via wedgedDaemonError.
           if (cancelError instanceof DaemonConnectionLostError) {
             opts.onCreateCancellationFailure()
+
             return
           }
+
           awaitLateResponseThenReject(wedgedDaemonError(error, cancelError) ?? error)
         })
     }
+
     const timer = setTimeout(() => {
       const error = createTimeoutError()
+
       if (typeof createSessionId === 'string') {
         cancelCreate(error)
       } else {
         rejectAndDrop(error)
       }
     }, opts.timeoutMs)
+
     const onAbort = (): void => {
       removeAbortListener()
       cancelCreate(new Error('client_disconnected'))
@@ -189,10 +215,13 @@ export function requestDaemonRpc<T>(opts: DaemonRpcRequestOptions): Promise<T> {
     })
 
     opts.signal?.addEventListener('abort', onAbort, { once: true })
+
     if (opts.signal?.aborted) {
       onAbort()
+
       return
     }
+
     try {
       opts.socket.write(encoded)
       sent = true

@@ -20,9 +20,11 @@ import type { CodexStructuredSessionEvent } from './codex-structured-session-sta
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = (): void => {}
+
   const promise = new Promise<void>((finish) => {
     resolve = finish
   })
+
   return { promise, resolve }
 }
 
@@ -89,9 +91,11 @@ function lifecycleRecorder(
   const bodies = new Map<string, AgentJournalItemBody>()
   const order: string[] = []
   const settlements = new Set<string>()
+
   const append = (identity: AgentJournalItemIdentity, body: AgentJournalItemBody): void => {
     bodies.set(agentJournalItemKey(identity), body)
   }
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: append,
     appendTombstone: (identity) => bodies.delete(agentJournalItemKey(identity)),
@@ -105,9 +109,12 @@ function lifecycleRecorder(
         if (!acceptPromptCancellation) {
           return { accepted: false, reason: 'backpressure' }
         }
+
         order.push('prompt-lifecycle')
       }
+
       append(identity, body)
+
       return { accepted: true }
     },
     tryAppendLifecycleBatch: (settlementId, mutations) => {
@@ -117,16 +124,21 @@ function lifecycleRecorder(
           (mutation.body.kind === 'approval' || mutation.body.kind === 'question') &&
           mutation.body.resolution.state === 'cancelled'
       )
+
       if (cancelsPrompt && !acceptPromptCancellation) {
         return { accepted: false, reason: 'backpressure' }
       }
+
       if (settlementId.startsWith('turn-completed:') && !acceptTurnCompletion) {
         return { accepted: false, reason: 'backpressure' }
       }
+
       if (settlements.has(settlementId)) {
         return { accepted: true }
       }
+
       settlements.add(settlementId)
+
       for (const mutation of mutations) {
         if (mutation.kind === 'item') {
           append(mutation.identity, mutation.body)
@@ -134,16 +146,20 @@ function lifecycleRecorder(
           bodies.delete(agentJournalItemKey(mutation.identity))
         }
       }
+
       if (cancelsPrompt) {
         order.push('prompt-lifecycle')
       }
+
       if (settlementId.startsWith('turn-completed:')) {
         order.push('turn-lifecycle')
       }
+
       return { accepted: true }
     },
     tryPublish: () => ({ accepted: true })
   }
+
   return { sink, bodies, order }
 }
 
@@ -167,6 +183,7 @@ describe('Codex live prompt ownership', () => {
         await commitGate.promise
       }
     })
+
     await vi.waitFor(() => expect(commitStarted).toHaveBeenCalledOnce())
 
     await expect(
@@ -186,12 +203,14 @@ describe('Codex live prompt ownership', () => {
 
   it('lets prompt cancellation win and retains its claim until terminal cleanup', async () => {
     const interruptGate = deferred()
+
     const codex = fakeCodex({
       'turn/interrupt': async () => {
         await interruptGate.promise
         completeTurn(codex, THREAD_ID)
       }
     })
+
     const adapter = await acquired(codex)
     registerPrompt(adapter, codex)
 
@@ -201,6 +220,7 @@ describe('Codex live prompt ownership', () => {
       fence: 7,
       prompt: { itemId: 'journal-prompt' }
     })
+
     await vi.waitFor(() =>
       expect(codex.connections[0]?.calls.at(-1)?.method).toBe('turn/interrupt')
     )
@@ -251,6 +271,7 @@ describe('Codex live prompt ownership', () => {
         throw new CodexAppServerRequestError('turn/interrupt', -32602, 'no such turn')
       }
     })
+
     const adapter = await acquired(codex)
     registerPrompt(adapter, codex)
 
@@ -277,6 +298,7 @@ describe('Codex live prompt ownership', () => {
     const codex = fakeCodex({
       'turn/interrupt': () => completeTurn(codex, 'thread-child', 'child-turn')
     })
+
     const terminateTurnProcesses = vi.fn(async () => true)
     const adapter = adapterFor(codex, {}, [], { terminateTurnProcesses })
     await adapter.acquire({
@@ -306,9 +328,11 @@ describe('Codex live prompt ownership', () => {
     const promptTurnId = '界'.repeat(171)
     expect(promptTurnId.length).toBeLessThanOrEqual(AGENT_SESSION_ID_MAX_LENGTH)
     expect(Buffer.byteLength(promptTurnId, 'utf8')).toBeGreaterThan(AGENT_SESSION_ID_MAX_LENGTH)
+
     const codex = fakeCodex({
       'turn/interrupt': () => completeTurn(codex, 'thread-child', promptTurnId)
     })
+
     const adapter = await acquired(codex)
     registerPrompt(adapter, codex, 'child-prompt', 'thread-child', promptTurnId)
 
@@ -335,6 +359,7 @@ describe('Codex live prompt ownership', () => {
         })
       }
     })
+
     const recorded = lifecycleRecorder()
     const adapter = adapterFor(codex)
     await adapter.acquire({
@@ -348,12 +373,15 @@ describe('Codex live prompt ownership', () => {
       turn: { id: 'turn-1' }
     })
     registerGroupedQuestionPrompt(codex)
+
     const questionItemIds = [...recorded.bodies]
       .filter(([, body]) => body.kind === 'question')
       .map(([itemId]) => itemId)
+
     expect(questionItemIds).toHaveLength(2)
     const selectedItemId = questionItemIds[0]
     const siblingItemId = questionItemIds[1]
+
     if (!selectedItemId || !siblingItemId) {
       throw new Error('expected two durable Codex questions')
     }
@@ -369,6 +397,7 @@ describe('Codex live prompt ownership', () => {
     expect(
       questionItemIds.map((itemId) => {
         const body = recorded.bodies.get(itemId)
+
         return body?.kind === 'question' ? body.resolution.state : null
       })
     ).toEqual(['cancelled', 'cancelled'])
@@ -398,6 +427,7 @@ describe('Codex live prompt ownership', () => {
         })
       }
     })
+
     const recorded = lifecycleRecorder()
     const adapter = adapterFor(codex)
     await adapter.acquire({
@@ -408,6 +438,7 @@ describe('Codex live prompt ownership', () => {
     })
     registerPrompt(adapter, codex)
     const promptItemId = [...recorded.bodies].find(([, body]) => body.kind === 'approval')?.[0]
+
     if (!promptItemId) {
       throw new Error('expected durable Codex prompt')
     }
@@ -421,6 +452,7 @@ describe('Codex live prompt ownership', () => {
       })
       .then((result) => {
         recorded.order.push('resolved')
+
         return result
       })
 
@@ -462,6 +494,7 @@ describe('Codex live prompt ownership', () => {
     })
     registerPrompt(adapter, codex)
     const promptItemId = [...recorded.bodies].find(([, body]) => body.kind === 'approval')?.[0]
+
     if (!promptItemId) {
       throw new Error('expected durable Codex prompt')
     }
@@ -527,6 +560,7 @@ describe('Codex live prompt ownership', () => {
     })
     registerPrompt(adapter, codex)
     const promptItemId = [...recorded.bodies].find(([, body]) => body.kind === 'approval')?.[0]
+
     if (!promptItemId) {
       throw new Error('expected durable Codex prompt')
     }
@@ -555,11 +589,13 @@ describe('Codex live prompt ownership', () => {
 
   it('does not report success when a deferred provider completion is backpressured', async () => {
     const recorded = lifecycleRecorder(true, false)
+
     const codex = fakeCodex({
       'turn/interrupt': () => {
         completeTurn(codex, THREAD_ID)
       }
     })
+
     const adapter = adapterFor(codex)
     await adapter.acquire({
       identity: identityFor('session-1'),
@@ -569,6 +605,7 @@ describe('Codex live prompt ownership', () => {
     })
     registerPrompt(adapter, codex)
     const promptItemId = [...recorded.bodies].find(([, body]) => body.kind === 'approval')?.[0]
+
     if (!promptItemId) {
       throw new Error('expected durable Codex prompt')
     }
@@ -600,13 +637,16 @@ describe('Codex live prompt ownership', () => {
   it('defers only the matching thread and emits its terminal event before cancel resolves', async () => {
     const interruptGate = deferred()
     const events: CodexStructuredSessionEvent[] = []
+
     const codex = fakeCodex({
       'turn/interrupt': () => {
         completeTurn(codex, THREAD_ID)
         completeTurn(codex, 'thread-child')
+
         return interruptGate.promise
       }
     })
+
     const adapter = await acquired(codex, {}, events)
     registerPrompt(adapter, codex, 'child-prompt', 'thread-child')
 
@@ -619,8 +659,10 @@ describe('Codex live prompt ownership', () => {
       })
       .then((result) => {
         expect(completionThreads(events)).toEqual([THREAD_ID, 'thread-child'])
+
         return result
       })
+
     await vi.waitFor(() => expect(completionThreads(events)).toEqual([THREAD_ID]))
 
     interruptGate.resolve()
@@ -645,6 +687,7 @@ describe('Codex live prompt ownership', () => {
         })
       ).resolves.toEqual({ cancelled: false })
     }
+
     expect(codex.connections[0]?.calls.some((call) => call.method === 'turn/interrupt')).toBe(false)
 
     await adapter.acquire({ identity: identityFor('session-1'), fence: 8, spawnToken: 'spawn-10' })
@@ -668,6 +711,7 @@ describe('Codex live prompt ownership', () => {
     })
     prompts.bindJournalItemId('journal-prompt', THREAD_ID, 'codex-item-1', 'turn-1')
     const claim = prompts.claimBound('journal-prompt')
+
     if (!claim) {
       throw new Error('expected prompt claim')
     }

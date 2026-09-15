@@ -35,7 +35,9 @@ type StopAudioCaptureOptions = {
 }
 
 const MAX_BUFFERED_AUDIO_SECONDS = 30
+
 const MAX_BUFFERED_AUDIO_BYTES = 8 * 1024 * 1024
+
 const METER_PUBLISH_INTERVAL_MS = 1000 / 15
 
 type DictationMeterPublisher = (meter: DictationMeterState) => void
@@ -72,6 +74,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
     if (contextRef.current?.state !== 'closed') {
       void contextRef.current?.close()
     }
+
     contextRef.current = null
 
     streamRef.current?.getTracks().forEach((track) => track.stop())
@@ -94,9 +97,11 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
 
   const removeOldestBufferedAudioChunk = useCallback(() => {
     const chunk = bufferedAudioRef.current.shift()
+
     if (!chunk) {
       return
     }
+
     bufferedAudioBytesRef.current -= chunk.samples.byteLength
     bufferedAudioSecondsRef.current -= chunk.samples.length / chunk.sampleRate
   }, [])
@@ -127,6 +132,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
       if (isCapturingRef.current) {
         return
       }
+
       const startRequest = startRequestRef.current + 1
       startRequestRef.current = startRequest
       cleanupCaptureResources()
@@ -144,15 +150,19 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
           ? () => navigator.mediaDevices.enumerateDevices()
           : undefined
       })
+
       if (startRequestRef.current !== startRequest) {
         stream.getTracks().forEach((track) => track.stop())
+
         return
       }
+
       streamRef.current = stream
 
       let context: AudioContext | null = null
       let source: MediaStreamAudioSourceNode | null = null
       let processor: ScriptProcessorNode | null = null
+
       try {
         // Why: requesting a specific sampleRate (e.g. 16kHz) in the AudioContext
         // can produce silence on macOS because the hardware mic runs at 44.1/48kHz.
@@ -165,17 +175,22 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
         if (context.state === 'suspended') {
           await context.resume()
         }
+
         if (startRequestRef.current !== startRequest || streamRef.current !== stream) {
           if (contextRef.current === context) {
             contextRef.current = null
           }
+
           if (context.state !== 'closed') {
             void context.close()
           }
+
           if (streamRef.current === stream) {
             streamRef.current = null
           }
+
           stream.getTracks().forEach((track) => track.stop())
+
           return
         }
 
@@ -197,6 +212,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
           ) {
             return
           }
+
           const samples = new Float32Array(e.inputBuffer.getChannelData(0))
           const now = performance.now()
           meterAnalyzerRef.current = analyzeDictationAudioChunk(
@@ -204,26 +220,32 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
             now,
             meterAnalyzerRef.current
           )
+
           if (
             !document.hidden &&
             now - lastMeterPublishedAtRef.current >= METER_PUBLISH_INTERVAL_MS
           ) {
             lastMeterPublishedAtRef.current = now
             const meter = toPublicDictationMeterState(meterAnalyzerRef.current)
+
             if (!dictationMeterStatesEqual(publishedMeterRef.current, meter)) {
               publishedMeterRef.current = meter
               publishMeter?.(meter)
             }
           }
+
           capturedChunkCountRef.current += 1
+
           if (bufferAudioRef.current) {
             appendBufferedAudioChunk({
               samples,
               sampleRate: actualRate,
               sessionId: sessionIdRef.current
             })
+
             return
           }
+
           void window.api.speech
             .feedAudio(samples, actualRate, sessionIdRef.current)
             .catch(() => undefined)
@@ -240,45 +262,58 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
         // processor keeps feeding zeros, so dictation looks live while capturing nothing.
         const onCaptureLost = options.onCaptureLost
         const audioTrack = stream.getAudioTracks()[0]
+
         if (onCaptureLost && audioTrack) {
           const handleTrackEnded = (): void => {
             if (startRequestRef.current !== startRequest || !isCapturingRef.current) {
               return
             }
+
             onCaptureLost()
           }
+
           audioTrack.addEventListener('ended', handleTrackEnded)
           trackLostCleanupRef.current = () => {
             audioTrack.removeEventListener('ended', handleTrackEnded)
           }
         }
+
         return { fellBackToDefaultMicrophone }
       } catch (err) {
         processor?.disconnect()
         source?.disconnect()
+
         if (processorRef.current === processor) {
           processorRef.current = null
         }
+
         if (sourceRef.current === source) {
           sourceRef.current = null
         }
+
         if (contextRef.current === context) {
           contextRef.current = null
         }
+
         if (context && context.state !== 'closed') {
           void context.close()
         }
+
         stream.getTracks().forEach((track) => track.stop())
+
         if (streamRef.current === stream) {
           streamRef.current = null
         }
+
         if (startRequestRef.current === startRequest) {
           bufferAudioRef.current = false
           resetBufferedAudio()
         }
+
         if (startRequestRef.current !== startRequest) {
           return
         }
+
         throw err
       }
     },
@@ -293,6 +328,7 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
 
   const flushBufferedAudio = useCallback(async () => {
     const flushGeneration = bufferedAudioGenerationRef.current
+
     try {
       // Why: keep buffering enabled while draining so live audio appends behind
       // startup audio instead of overtaking it through direct IPC sends.
@@ -301,9 +337,11 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
         bufferedAudioRef.current.length > 0
       ) {
         const chunk = bufferedAudioRef.current[0]
+
         if (!chunk) {
           break
         }
+
         removeOldestBufferedAudioChunk()
         await window.api.speech.feedAudio(chunk.samples, chunk.sampleRate, chunk.sessionId)
       }
@@ -327,9 +365,11 @@ export function useAudioCapture(publishMeter?: DictationMeterPublisher) {
       startRequestRef.current += 1
       isCapturingRef.current = false
       bufferAudioRef.current = false
+
       if (!options.preserveBufferedAudio) {
         resetBufferedAudio()
       }
+
       cleanupCaptureResources()
       resetMeter()
     },

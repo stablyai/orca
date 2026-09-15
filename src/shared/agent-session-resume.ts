@@ -71,15 +71,18 @@ export type SleepingAgentSessionRecord = {
 }
 
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)
+
 const PROVIDER_SESSION_ID_MAX_LENGTH = 512
 
 export function hasUnsafeProviderSessionIdChars(value: string): boolean {
   for (let i = 0; i < value.length; i += 1) {
     const code = value.charCodeAt(i)
+
     if (code <= 0x1f || code === 0x7f) {
       return true
     }
   }
+
   return false
 }
 
@@ -87,7 +90,9 @@ function normalizeSessionId(value: unknown): string | null {
   if (typeof value !== 'string') {
     return null
   }
+
   const trimmed = value.trim()
+
   if (
     trimmed.length === 0 ||
     trimmed.length > PROVIDER_SESSION_ID_MAX_LENGTH ||
@@ -96,16 +101,19 @@ function normalizeSessionId(value: unknown): string | null {
   ) {
     return null
   }
+
   return trimmed
 }
 
 function readSessionId(record: Record<string, unknown>, keys: readonly string[]): string | null {
   for (const key of keys) {
     const normalized = normalizeSessionId(record[key])
+
     if (normalized) {
       return normalized
     }
   }
+
   return null
 }
 
@@ -118,14 +126,18 @@ function readTranscriptPathFromKeys(
 ): string | undefined {
   for (const key of keys) {
     const raw = record[key]
+
     if (typeof raw !== 'string') {
       continue
     }
+
     const trimmed = raw.trim()
+
     if (trimmed && !hasUnsafeProviderSessionIdChars(trimmed)) {
       return trimmed
     }
   }
+
   return undefined
 }
 
@@ -135,6 +147,7 @@ function withTranscriptPath(
   keys: readonly string[] = ['transcript_path', 'transcriptPath']
 ): AgentProviderSessionMetadata {
   const transcriptPath = readTranscriptPathFromKeys(payload, keys)
+
   return transcriptPath ? { ...metadata, transcriptPath } : metadata
 }
 
@@ -146,18 +159,24 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
   if (typeof raw !== 'object' || raw === null) {
     return null
   }
+
   const record = raw as Record<string, unknown>
   const key = record.key
+
   if (key !== 'session_id' && key !== 'conversation_id') {
     return null
   }
+
   const id = normalizeSessionId(record.id)
+
   if (!id) {
     return null
   }
+
   // Why: persisted/relay metadata crosses a trust boundary too; apply the same
   // control-character rejection used for hook-reported transcript paths.
   const transcriptPath = readTranscriptPathFromKeys(record, ['transcriptPath'])
+
   return transcriptPath ? { key, id, transcriptPath } : { key, id }
 }
 
@@ -171,6 +190,7 @@ export function agentProviderSessionsEqual(
   if (left === undefined || right === undefined) {
     return left === right
   }
+
   return (
     left.key === right.key &&
     left.id === right.id &&
@@ -189,52 +209,71 @@ export function extractAgentProviderSession(
     case 'claude':
     case 'codex': {
       const id = readSessionId(payload, ['session_id'])
+
       return id ? withTranscriptPath({ key: 'session_id', id }, payload) : null
     }
+
     case 'gemini':
     case 'droid':
     // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>).
     // falls through
     case 'kimi': {
       const id = readSessionId(payload, ['session_id'])
+
       return id ? { key: 'session_id', id } : null
     }
+
     case 'antigravity': {
       const id = readSessionId(payload, ['conversationId'])
+
       return id ? { key: 'conversation_id', id } : null
     }
+
     case 'opencode':
     case 'mimo-code': {
       const id = readSessionId(payload, ['sessionID'])
+
       return id ? { key: 'session_id', id } : null
     }
+
     case 'pi':
     case 'prime-agent': {
       const id = readSessionId(payload, ['session_id'])
+
       const providerSession = id
         ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file'])
         : null
+
       return providerSession?.transcriptPath ? providerSession : null
     }
+
     case 'grok': {
       const id = readSessionId(payload, ['sessionId', 'session_id'])
+
       return id ? { key: 'session_id', id } : null
     }
+
     case 'devin': {
       const id = readSessionId(payload, ['session_id', 'sessionId'])
+
       return id ? { key: 'session_id', id } : null
     }
+
     // Why: OMP's managed extension reports the authoritative CLI resume id.
     case 'omp': {
       const id = readSessionId(payload, ['session_id'])
+
       return id ? { key: 'session_id', id } : null
     }
+
     // Why: Copilot's hook `session_id` is also its `~/.copilot/session-state/<id>/`
     // directory name, so the same id is the CLI's resume locator.
     case 'copilot': {
       const id = readSessionId(payload, ['session_id', 'sessionId'])
+
       return id ? { key: 'session_id', id } : null
     }
+
     case 'amp':
     case 'cursor':
     case 'command-code':
@@ -249,6 +288,7 @@ export function getAgentResumeArgv(
   ompResumeFilePath?: string | null
 ): string[] | null {
   const id = providerSession.id
+
   switch (agent) {
     case 'claude':
       return providerSession.key === 'session_id' ? ['claude', '--resume', id] : null

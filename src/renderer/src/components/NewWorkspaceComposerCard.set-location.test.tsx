@@ -120,9 +120,11 @@ describe('NewWorkspaceComposerCard set location', () => {
     act(() => {
       container?.querySelector<HTMLElement>('div[data-run-target-combobox-root="true"]')?.click()
     })
+
     const setLocation = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
       (button) => button.textContent?.includes('Set project location')
     )
+
     expect(setLocation).toBeTruthy()
     act(() => setLocation?.click())
     await act(async () => {})
@@ -149,14 +151,18 @@ describe('NewWorkspaceComposerCard set location', () => {
     act(() => {
       container?.querySelector<HTMLElement>('div[data-run-target-combobox-root="true"]')?.click()
     })
+
     const setLocation = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
       (button) => button.textContent?.includes('Set project location')
     )
+
     act(() => setLocation?.click())
     await act(async () => {})
+
     const complete = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
       (button) => button.textContent === 'Complete location'
     )
+
     act(() => complete?.click())
 
     expect(nestedOpenChanges).toEqual([true, false])

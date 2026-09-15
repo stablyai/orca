@@ -31,9 +31,11 @@ function validateRegisteredRepo(
   const repoPath = typeof args === 'string' ? args : args.repoPath
   const repoId = typeof args === 'string' ? undefined : args.repoId
   const resolvedRepoPath = resolve(repoPath)
+
   const repo = repos.find((candidate) =>
     repoId ? candidate.id === repoId : resolve(candidate.path) === resolvedRepoPath
   )
+
   if (!repo) {
     return {
       kind: 'denied',
@@ -41,6 +43,7 @@ function validateRegisteredRepo(
       message: 'Access denied: unknown repository path'
     }
   }
+
   if (repoId && resolve(repo.path) !== resolvedRepoPath) {
     return {
       kind: 'denied',
@@ -48,6 +51,7 @@ function validateRegisteredRepo(
       message: 'Access denied: repository path does not match repo id'
     }
   }
+
   if (
     typeof args !== 'string' &&
     args.sourceContext?.provider === 'github' &&
@@ -59,6 +63,7 @@ function validateRegisteredRepo(
       message: 'Access denied: GitHub source host does not match repository host'
     }
   }
+
   return { kind: 'ok', repo }
 }
 
@@ -67,9 +72,11 @@ export function assertRegisteredGitHubRepo(
   store: Store
 ): Repo {
   const result = validateRegisteredRepo(args, store)
+
   if (result.kind === 'denied') {
     throw new Error(result.message)
   }
+
   return result.repo
 }
 
@@ -82,6 +89,7 @@ export function getGitHubLocalGitOptionArgs(
   repo: Repo
 ): [] | [{ wslDistro?: string }] {
   const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+
   return Object.keys(localGitOptions).length > 0 ? [localGitOptions] : []
 }
 
@@ -96,6 +104,7 @@ export function applyRegisteredRepoToPRRefreshCandidate(
   delete appliedCandidate.connectionId
   delete appliedCandidate.executionHostId
   delete appliedCandidate.connectionState
+
   return {
     ...appliedCandidate,
     repoPath: repo.path,
@@ -115,14 +124,17 @@ export function validateAutomaticPRRefreshCandidate(
   | { kind: 'ok'; candidate: GitHubPRRefreshCandidate }
   | { kind: 'skipped'; result: Extract<GitHubPRRefreshEnqueueResult, { kind: 'skipped' }> } {
   const result = validateRegisteredRepo(candidate, store, repos)
+
   if (result.kind === 'denied') {
     const skippedReason = notePRRefreshValidationDenial({
       repoId: candidate.repoId,
       repoPath: candidate.repoPath,
       reason: result.reason
     })
+
     return { kind: 'skipped', result: { kind: 'skipped', skippedReason } }
   }
+
   return {
     kind: 'ok',
     candidate: applyRegisteredRepoToPRRefreshCandidate(store, result.repo, candidate)

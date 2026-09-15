@@ -16,20 +16,24 @@ export function buildTerminalTabColdParkCandidates(args: {
 }): TerminalTabColdParkCandidate[] {
   args.activationOrder.recordActiveTabId(args.isWorktreeActive ? args.activeTerminalTabId : null)
   const visibleTabIds = new Set<string>()
+
   for (const terminalTab of args.terminalTabs) {
     if (args.isWorktreeActive && args.assignments.get(terminalTab.id)?.isActiveInGroup === true) {
       visibleTabIds.add(terminalTab.id)
     }
   }
+
   return args.terminalTabs.map((terminalTab) => {
     const isVisible = visibleTabIds.has(terminalTab.id)
     const hasActivityTerminalPortal = args.portalTabIds.has(terminalTab.id)
+
     // Why: measure probes need mounted panes without restarting the park clock.
     if (isVisible || hasActivityTerminalPortal) {
       args.hiddenSinceByTabId.delete(terminalTab.id)
     } else if (!args.shouldMeasureHiddenWorktree && !args.hiddenSinceByTabId.has(terminalTab.id)) {
       args.hiddenSinceByTabId.set(terminalTab.id, args.nowMs)
     }
+
     return {
       id: terminalTab.id,
       ptyId: terminalTab.ptyId,

@@ -19,14 +19,18 @@ export type TerminalInputActivityCommit = {
 }
 
 const pendingByPaneKey = new Map<string, number>()
+
 const lastWrittenByPaneKey = new Map<string, number>()
+
 let flushTimer: ReturnType<typeof setTimeout> | null = null
+
 let pendingCommit: TerminalInputActivityCommit | null = null
 
 function pruneGate(now: number): void {
   if (lastWrittenByPaneKey.size <= GATE_PRUNE_SIZE) {
     return
   }
+
   for (const [paneKey, writtenAt] of lastWrittenByPaneKey) {
     // Why: entries past the window already pass the gate, so dropping them changes nothing.
     if (
@@ -47,6 +51,7 @@ export function recordTerminalInputActivity(args: {
 }): void {
   const { paneKey, timestamp, commit } = args
   const lastWrittenAt = lastWrittenByPaneKey.get(paneKey)
+
   if (
     args.forceWrite === true ||
     lastWrittenAt === undefined ||
@@ -56,10 +61,13 @@ export function recordTerminalInputActivity(args: {
     lastWrittenByPaneKey.set(paneKey, timestamp)
     pruneGate(timestamp)
     commit.insert(paneKey, timestamp)
+
     return
   }
+
   pendingByPaneKey.set(paneKey, timestamp)
   pendingCommit = commit
+
   if (flushTimer === null) {
     flushTimer = setTimeout(() => {
       flushTimer = null
@@ -76,17 +84,23 @@ export function flushTerminalInputActivity(): void {
     clearTimeout(flushTimer)
     flushTimer = null
   }
+
   const commit = pendingCommit
   pendingCommit = null
+
   if (pendingByPaneKey.size === 0 || !commit) {
     pendingByPaneKey.clear()
+
     return
   }
+
   const entries = [...pendingByPaneKey]
   pendingByPaneKey.clear()
+
   for (const [paneKey, timestamp] of entries) {
     lastWrittenByPaneKey.set(paneKey, timestamp)
   }
+
   commit.refreshExisting(entries)
 }
 
@@ -96,11 +110,14 @@ export function readLastTerminalInputAt(
   paneKey: string
 ): number | undefined {
   const storedAt = stored[paneKey]
+
   // Why: a pane key teardown removed must stay removed — never revive it from pending.
   if (storedAt === undefined) {
     return undefined
   }
+
   const pendingAt = pendingByPaneKey.get(paneKey)
+
   return pendingAt !== undefined && pendingAt > storedAt ? pendingAt : storedAt
 }
 
@@ -111,15 +128,20 @@ export function mergePendingTerminalInputActivity<T extends Record<string, numbe
   if (pendingByPaneKey.size === 0) {
     return stored
   }
+
   let next: Record<string, number | undefined> | null = null
+
   for (const [paneKey, pendingAt] of pendingByPaneKey) {
     const storedAt = stored[paneKey]
+
     if (storedAt === undefined || storedAt >= pendingAt) {
       continue
     }
+
     next ??= { ...stored }
     next[paneKey] = pendingAt
   }
+
   return (next as T | null) ?? stored
 }
 
@@ -128,6 +150,7 @@ export function resetTerminalInputActivityCoalescingForTests(): void {
     clearTimeout(flushTimer)
     flushTimer = null
   }
+
   pendingByPaneKey.clear()
   lastWrittenByPaneKey.clear()
   pendingCommit = null

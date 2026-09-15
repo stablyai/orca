@@ -11,6 +11,7 @@ import {
 
 function comment(overrides: Partial<DiffComment> & Pick<DiffComment, 'id'>): DiffComment {
   const { id, ...rest } = overrides
+
   return {
     id,
     worktreeId: 'wt-1',
@@ -84,6 +85,7 @@ describe('mobile diff comments', () => {
 
   it('rejects blank comment bodies', () => {
     const existing = [comment({ id: 'a' })]
+
     const result = addMobileDiffComment(existing, {
       id: 'mobile-1',
       worktreeId: 'wt-1',

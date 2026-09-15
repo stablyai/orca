@@ -37,17 +37,21 @@ export function registerFilesystemWatcherHandlers(): void {
         // Why: record intent before the install so a provider registering mid-flight (or long after
         // this attempt gives up) can still re-arm this listener.
         rememberDesiredRemoteWatcher(args.connectionId, args.worktreePath, event.sender)
+
         const result = await installRemoteWatcher(
           event.sender,
           args.connectionId,
           args.worktreePath
         )
+
         if (result === 'capacity') {
           // Why straight to the dormant backoff: the cap is full until some other root is released,
           // which a 1 Hz reinstall cannot bring about — it only adds relay load per refused root.
           scheduleDormantRemoteWatcherRearm(args.connectionId, args.worktreePath)
+
           return
         }
+
         if (result === 'unavailable') {
           if (!watcherLifecycleState.loggedUnavailableRemoteWatchers.has(key)) {
             watcherLifecycleState.loggedUnavailableRemoteWatchers.add(key)
@@ -55,11 +59,15 @@ export function registerFilesystemWatcherHandlers(): void {
               `[filesystem-watcher] SSH filesystem provider unavailable; retrying watch for ${args.worktreePath} on connection ${args.connectionId}`
             )
           }
+
           scheduleRemoteWatcherRetry(event.sender, args.connectionId, args.worktreePath)
+
           return
         }
+
         return
       }
+
       // Why: reopen the local subsystem for tests and post-shutdown reattachment; stale callers keep the prior generation.
       watcherLifecycleState.localWatchersClosed = false
       await subscribeLocalWatcher(args.worktreePath, event.sender)
@@ -76,27 +84,35 @@ export function registerFilesystemWatcherHandlers(): void {
         forgetDesiredRemoteWatcher(key, _event.sender.id)
         const suspended = watcherLifecycleState.suspendedRemoteWatcherListeners.get(key)
         suspended?.listeners.delete(_event.sender.id)
+
         if (suspended?.listeners.size === 0) {
           watcherLifecycleState.suspendedRemoteWatcherListeners.delete(key)
         }
+
         const retry = watcherLifecycleState.pendingRemoteWatcherRetryListeners.get(key)
         retry?.listeners.delete(_event.sender.id)
         const retryTimer = watcherLifecycleState.pendingRemoteWatcherRetries.get(key)
+
         if (retryTimer && retry?.listeners.size === 0) {
           clearTimeout(retryTimer)
           watcherLifecycleState.pendingRemoteWatcherRetries.delete(key)
           watcherLifecycleState.pendingRemoteWatcherRetryListeners.delete(key)
         }
+
         // Why: a retry-tick provider.watch() may still be in flight; mark cancelled so its resolved unwatch handle is discarded.
         const inFlight = watcherLifecycleState.inFlightRemoteInstalls.get(key)
+
         if (inFlight) {
           inFlight.listeners.delete(_event.sender.id)
           cancelInFlightRemoteInstallIfUnowned(inFlight)
         }
+
         watcherLifecycleState.loggedUnavailableRemoteWatchers.delete(key)
         releaseRemoteWatchListener(key, _event?.sender?.id ?? 0)
+
         return
       }
+
       const senderId = _event.sender.id
       unsubscribeLocalWatcher(args.worktreePath, senderId)
     }

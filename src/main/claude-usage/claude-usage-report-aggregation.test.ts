@@ -46,6 +46,7 @@ describe('buildSummary Claude Sonnet 5 pricing over time', () => {
       'all',
       'all'
     )
+
     const afterWindow = buildSummary(
       stateWithDaily([dailyRow('2026-09-15', 'claude-sonnet-5')]),
       'all',

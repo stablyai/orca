@@ -3,10 +3,12 @@
 // remounting on every editable keystroke.
 export function getDiffContentSignature(content: string): string {
   let hash = 2166136261
+
   for (let i = 0; i < content.length; i += 1) {
     hash ^= content.charCodeAt(i)
     hash = Math.imul(hash, 16777619)
   }
+
   return (hash >>> 0).toString(16)
 }
 
@@ -17,11 +19,13 @@ export function getDiffContentSignature(content: string): string {
 export function getDiskBaselineSignature(content: string): string {
   let hashA = 2166136261
   let hashB = 84696351
+
   for (let i = 0; i < content.length; i += 1) {
     const code = content.charCodeAt(i)
     hashA ^= code
     hashA = Math.imul(hashA, 16777619)
     hashB = Math.imul(hashB ^ code, 1099511627)
   }
+
   return `${(hashA >>> 0).toString(16)}-${(hashB >>> 0).toString(16)}-${content.length.toString(16)}`
 }

@@ -66,9 +66,11 @@ export function WorkspaceCleanupConfirmRemove({
   const count = candidates.length
   const riskCount = candidates.filter(shouldForceWorkspaceCleanupRemoval).length
   const deleting = progress !== null
+
   const progressValue = progress
     ? Math.min(100, Math.max(0, (progress.processedCount / progress.totalCount) * 100))
     : 0
+
   return (
     <>
       <DialogHeader className="border-b border-border px-5 py-4">
@@ -228,6 +230,7 @@ function ConfirmRemoveRow({
   const showGitMetadataChip = shouldShowGitMetadataChip(candidate)
   const factStatuses = getCandidateFactStatuses(candidate)
   const hostLabel = getWorkspaceCleanupCandidateHostLabel(candidate)
+
   return (
     <div
       role="group"
@@ -290,9 +293,11 @@ function formatWorkspaceCleanupRemovalProgress(progress: WorkspaceCleanupRemoval
     '{{value0}}/{{value1}} deleted',
     { value0: progress.removedCount, value1: progress.totalCount }
   )
+
   if (progress.failedCount === 0) {
     return deletedText
   }
+
   return translate(
     'auto.components.workspace.cleanup.WorkspaceCleanupDialog.86ba852118',
     '{{value0}}, {{value1}} failed',

@@ -6,6 +6,7 @@ export function searchHostedTerminalQuickCommands(
   query: string
 ): HostedTerminalQuickCommand[] {
   const entryByCommand = new Map(entries.map((entry) => [entry.command, entry]))
+
   return searchTerminalQuickCommands(
     entries.map((entry) => entry.command),
     query

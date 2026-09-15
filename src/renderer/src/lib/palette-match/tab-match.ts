@@ -44,12 +44,15 @@ function indexedMatches(
   prefix: string
 ): PaletteTabIndexedMatch[] {
   const matches: PaletteTabIndexedMatch[] = []
+
   for (const [fieldId, ranges] of rangesByField) {
     const index = parsePaletteTabIndexedFieldId(fieldId, prefix)
+
     if (index !== null) {
       matches.push({ index, ranges })
     }
   }
+
   return matches.sort((a, b) => a.index - b.index)
 }
 
@@ -65,12 +68,15 @@ export function matchPaletteTabDocument(
     tokenCountBeforeDeduplication: query.tokenCountBeforeDeduplication,
     isFieldAllowed: options.isFieldAllowed
   })
+
   if (!match) {
     return null
   }
+
   const ranges = match.rangesByField
   const secondaryMatches = indexedMatches(ranges, PALETTE_TAB_SECONDARY_FIELD_PREFIX)
   const typeAliasMatches = indexedMatches(ranges, PALETTE_TAB_ALIAS_FIELD_PREFIX)
+
   return {
     qualityClass: match.qualityClass,
     rank: match.rank,
@@ -94,6 +100,7 @@ export function preparePaletteTabQuery(
   query: string
 ): Extract<PreparedPaletteQuery, { state: 'ready' }> | null {
   const prepared = preparePaletteQuery(query)
+
   return prepared.state === 'ready' ? prepared : null
 }
 

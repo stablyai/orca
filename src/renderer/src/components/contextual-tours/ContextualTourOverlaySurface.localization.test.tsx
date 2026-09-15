@@ -16,6 +16,7 @@ afterEach(async () => {
 
 function renderSurface(isLastStep: boolean): ReactElement {
   const panelRef: RefObject<HTMLElement | null> = { current: null }
+
   const renderState: ActiveTourRenderState = {
     rect: new DOMRect(0, 0, 20, 20),
     targetElement: document.createElement('button'),
@@ -26,6 +27,7 @@ function renderSurface(isLastStep: boolean): ReactElement {
     isFirstStep: !isLastStep,
     panelHost: null
   }
+
   return (
     <ContextualTourOverlaySurface
       activeTourId="automations"

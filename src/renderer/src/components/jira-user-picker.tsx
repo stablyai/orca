@@ -69,8 +69,10 @@ export function JiraUserPicker({
     if (!open) {
       return
     }
+
     let cancelled = false
     setLoading(true)
+
     const timer = setTimeout(() => {
       void jiraSearchUsers(providerSettings, query, siteId)
         .then((found) => {
@@ -89,6 +91,7 @@ export function JiraUserPicker({
           }
         })
     }, USER_SEARCH_DEBOUNCE_MS)
+
     return () => {
       cancelled = true
       clearTimeout(timer)
@@ -99,6 +102,7 @@ export function JiraUserPicker({
     if (selectedUser?.displayName) {
       return selectedUser.displayName
     }
+
     return (
       value ||
       translate('components.jiraUserPicker.select', 'Select {{value0}}', {

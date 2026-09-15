@@ -11,6 +11,7 @@ export async function prepareAiVaultSessionForResume(
   if (!session.structuredSession && !aiVaultSessionNeedsResumePreparation(session)) {
     return session
   }
+
   const result = await window.api.aiVault.prepareSessionResume({
     agent: session.agent,
     sessionId: session.sessionId,
@@ -18,12 +19,15 @@ export async function prepareAiVaultSessionForResume(
     codexHome: session.codexHome,
     executionHostId: session.executionHostId
   })
+
   if (result.useRealCodexHome) {
     return { ...session, codexHome: null }
   }
+
   if (result.substituteCodexHome) {
     return { ...session, codexHome: result.substituteCodexHome }
   }
+
   return session
 }
 
@@ -33,9 +37,11 @@ export function aiVaultSessionNeedsResumePreparation(
   if (session.agent !== 'codex') {
     return false
   }
+
   if (isLegacySharedCodexHome(session.codexHome)) {
     return true
   }
+
   // Why: per-account repinning reads the LOCAL account selection, so only
   // local sessions ask; remote sessions keep their recorded home untouched.
   return (

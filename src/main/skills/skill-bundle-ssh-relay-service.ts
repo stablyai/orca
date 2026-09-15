@@ -46,6 +46,7 @@ const NON_RETRYABLE_BUNDLE_TRANSFER_ERRORS = new Set([
   'skill-bundle-ssh-update-required',
   'skill-bundle-ssh-download-unavailable'
 ])
+
 const LEGACY_BUNDLE_PREVIEW_CONCURRENCY = 8
 
 async function previewBundleWithLegacyRpc(
@@ -56,6 +57,7 @@ async function previewBundleWithLegacyRpc(
   }
 ): Promise<SkillBundleInstallPreview> {
   const previews: SkillInstallPreview[] = []
+
   for (
     let offset = 0;
     offset < input.request.selectedSkills.length;
@@ -65,8 +67,10 @@ async function previewBundleWithLegacyRpc(
       offset,
       offset + LEGACY_BUNDLE_PREVIEW_CONCURRENCY
     )
+
     const batchAbort = new AbortController()
     const failures: { reason: unknown }[] = []
+
     const results = await Promise.allSettled(
       batch.map(async (skill) => {
         try {
@@ -92,24 +96,31 @@ async function previewBundleWithLegacyRpc(
           )
         } catch (error) {
           failures.push({ reason: error })
+
           if (failures.length === 1) {
             batchAbort.abort()
           }
+
           throw error
         }
       })
     )
+
     const [firstFailure] = failures
+
     if (firstFailure) {
       throw firstFailure.reason
     }
+
     for (const result of results) {
       if (result.status !== 'fulfilled') {
         continue
       }
+
       previews.push(result.value)
     }
   }
+
   return SkillBundleInstallPreviewSchema.parse({
     packageId: input.request.package.packageId,
     versionId: input.request.package.versionId,
@@ -134,9 +145,11 @@ export async function installSkillBundleOnSshHost(input: {
 }): Promise<SkillBundleInstallResult> {
   const request = input.request
   let stopProgress = (): void => undefined
+
   function restartProgress(client: SkillSshRelayClient, supported: string[]): void {
     stopProgress()
     stopProgress = (): void => undefined
+
     if (input.onProgress && supported.includes(SKILL_INSTALL_PROGRESS_CAPABILITY)) {
       stopProgress = startSkillInstallProgressPolling({
         read: async () => {
@@ -145,16 +158,20 @@ export async function installSkillBundleOnSshHost(input: {
             { operationId: request.operationId },
             { timeoutMs: 2_000, signal: input.signal }
           )
+
           if (value === null) {
             return null
           }
+
           const parsed = SkillBundleInstallProgressSchema.safeParse(value)
+
           return parsed.success ? parsed.data : null
         },
         onProgress: input.onProgress
       })
     }
   }
+
   try {
     try {
       return SkillBundleInstallResultSchema.parse(
@@ -166,12 +183,14 @@ export async function installSkillBundleOnSshHost(input: {
           call: async () => {
             const client = requireSkillSshRelayClient(input.provider)
             const supported = await skillSshRelayCapabilities(client)
+
             if (
               request.providers !== undefined &&
               !supported.includes(SKILL_INSTALL_PROVIDERS_CAPABILITY)
             ) {
               throw new Error('skill-bundle-ssh-update-required')
             }
+
             if (!supported.includes(SKILL_BUNDLE_INSTALL_CAPABILITY)) {
               recordSkillCapabilityAbsence({
                 capability: SKILL_BUNDLE_INSTALL_CAPABILITY,
@@ -179,7 +198,9 @@ export async function installSkillBundleOnSshHost(input: {
               })
               throw new Error('skill-bundle-ssh-update-required')
             }
+
             restartProgress(client, supported)
+
             return client(
               SKILL_SSH_RELAY_INSTALL_BUNDLE_METHOD,
               { request, workspace: input.workspace },
@@ -196,6 +217,7 @@ export async function installSkillBundleOnSshHost(input: {
         throw error
       }
     }
+
     return await retrySkillTransferRpc({
       signal: input.signal,
       retryable: (error) =>
@@ -204,6 +226,7 @@ export async function installSkillBundleOnSshHost(input: {
       call: async () => {
         const client = requireSkillSshRelayClient(input.provider)
         const supported = await skillSshRelayCapabilities(client)
+
         if (
           !supported.includes(SKILL_BUNDLE_INSTALL_CAPABILITY) ||
           (request.providers !== undefined &&
@@ -211,6 +234,7 @@ export async function installSkillBundleOnSshHost(input: {
         ) {
           throw new Error('skill-bundle-ssh-update-required')
         }
+
         if (!supported.includes(SKILL_UPLOAD_CAPABILITY)) {
           recordSkillCapabilityAbsence({
             capability: SKILL_UPLOAD_CAPABILITY,
@@ -218,8 +242,10 @@ export async function installSkillBundleOnSshHost(input: {
           })
           throw new Error('skill-bundle-ssh-download-unavailable')
         }
+
         restartProgress(client, supported)
         const uploadId = await transferSkillPackageToSshHost(client, input)
+
         try {
           return SkillBundleInstallResultSchema.parse(
             await client(
@@ -258,6 +284,7 @@ export async function previewSkillBundleInstallOnSshHost(input: {
       call: async () => {
         const client = requireSkillSshRelayClient(input.provider)
         const supported = await skillSshRelayCapabilities(client)
+
         if (supported.includes(SKILL_BUNDLE_PREVIEW_CAPABILITY)) {
           return client(
             SKILL_SSH_RELAY_PREVIEW_BUNDLE_METHOD,
@@ -265,13 +292,16 @@ export async function previewSkillBundleInstallOnSshHost(input: {
             { timeoutMs: 30_000 }
           )
         }
+
         recordSkillCapabilityAbsence({
           capability: SKILL_BUNDLE_PREVIEW_CAPABILITY,
           destination: 'global-ssh'
         })
+
         if (!supported.includes(SKILL_MANAGEMENT_CAPABILITY)) {
           throw new Error('skill-bundle-ssh-update-required')
         }
+
         return previewBundleWithLegacyRpc(client, input)
       }
     })

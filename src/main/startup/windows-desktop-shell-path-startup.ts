@@ -16,5 +16,6 @@ export function startWindowsDesktopBeforeShellPathReady<TWindow>(
 ): { window: TWindow; services: Promise<WindowsDesktopStartupServices> } {
   const services = options.shellPathReady.then(options.startServices)
   options.bindServices(services)
+
   return { window: options.openWindow(), services }
 }

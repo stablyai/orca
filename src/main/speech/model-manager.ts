@@ -50,6 +50,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
   setProgressCallback(cb: ProgressCallback): () => void {
     // Why: return an unsubscribe so concurrent settings windows don't replace each other's callback.
     this.progressCallbacks.add(cb)
+
     return () => {
       this.progressCallbacks.delete(cb)
     }
@@ -61,12 +62,15 @@ export class ModelManager extends SpeechModelDownloadTransport {
 
   private prepareModelsDir(requestedModelsDir: string): SpeechModelCacheDir {
     let lastError: unknown = null
+
     for (const candidate of getSpeechModelCacheDirCandidates(requestedModelsDir)) {
       try {
         mkdirSync(candidate.modelsDir, { recursive: true })
+
         return candidate
       } catch (error) {
         lastError = error
+
         if (candidate.migrationSourceDir) {
           console.warn('[speech] Failed to prepare ASCII speech model cache:', error)
         }
@@ -78,21 +82,25 @@ export class ModelManager extends SpeechModelDownloadTransport {
 
   async getModelStates(): Promise<SpeechModelState[]> {
     const states: SpeechModelState[] = []
+
     for (const manifest of SPEECH_MODEL_CATALOG) {
       const state = await this.getModelState(manifest.id)
       states.push(state)
     }
+
     return states
   }
 
   async getModelState(modelId: string): Promise<SpeechModelState> {
     await this.migrationReady
     const cached = this.modelStates.get(modelId)
+
     if (cached && (cached.status === 'downloading' || cached.status === 'extracting')) {
       return cached
     }
 
     const manifest = getCatalogModel(modelId)
+
     if (!manifest) {
       return { id: modelId, status: 'error', error: 'Unknown model' }
     }
@@ -105,9 +113,11 @@ export class ModelManager extends SpeechModelDownloadTransport {
     }
 
     const modelDir = this.getModelDir(modelId)
+
     if (existsSync(modelDir) && this.validateModelFiles(manifest, modelDir)) {
       const state: SpeechModelState = { id: modelId, status: 'ready' }
       this.modelStates.set(modelId, state)
+
       return state
     }
 
@@ -120,15 +130,19 @@ export class ModelManager extends SpeechModelDownloadTransport {
 
   private getSafeModelDir(modelId: string, root: string = this.modelsDir): string {
     const manifest = getCatalogModel(modelId)
+
     if (!manifest) {
       throw new Error(`Unknown model: ${modelId}`)
     }
+
     const modelsRoot = resolve(root)
     const modelDir = resolve(modelsRoot, modelId)
     const rel = relative(modelsRoot, modelDir)
+
     if (rel.startsWith('..') || rel === '' || rel.includes('..') || resolve(rel) === rel) {
       throw new Error(`Invalid model id: ${modelId}`)
     }
+
     return modelDir
   }
 
@@ -136,6 +150,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
     if (!manifest.downloadFiles) {
       return false
     }
+
     return manifest.downloadFiles.every(({ name, sizeBytes }) => {
       try {
         return statSync(join(modelDir, name)).size === sizeBytes
@@ -152,19 +167,24 @@ export class ModelManager extends SpeechModelDownloadTransport {
     }
 
     const manifest = getCatalogModel(modelId)
+
     if (!manifest) {
       throw new Error(`Unknown model: ${modelId}`)
     }
+
     if (!isLocalSpeechModel(manifest)) {
       throw new Error(`Model does not support downloads: ${modelId}`)
     }
+
     if (!manifest.downloadFiles?.length || !manifest.sizeBytes) {
       throw new Error(`Model download metadata missing: ${modelId}`)
     }
 
     const modelDir = this.getModelDir(modelId)
+
     if (existsSync(modelDir) && this.validateModelFiles(manifest, modelDir)) {
       this.updateState(modelId, 'ready')
+
       return
     }
 
@@ -174,11 +194,13 @@ export class ModelManager extends SpeechModelDownloadTransport {
     const legacyArchivePath = join(this.modelsDir, `${modelId}.tar.bz2`)
     // Why: resuming an unverified file left by a crashed process could preserve corrupt bytes.
     rmSync(stagingDir, { recursive: true, force: true })
+
     try {
       rmSync(legacyArchivePath, { force: true })
     } catch {
       // best-effort legacy cleanup
     }
+
     mkdirSync(stagingDir, { recursive: true })
     let aborted = false
     const abortController = new AbortController()
@@ -190,6 +212,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
         abortController.abort()
       }
     }
+
     this.activeDownloads.set(modelId, handle)
 
     try {
@@ -213,7 +236,9 @@ export class ModelManager extends SpeechModelDownloadTransport {
         console.error('[speech] Model download failed:', modelId, err)
         this.updateState(modelId, 'error', undefined, String(err))
       }
+
       removeModelDownloadFiles(modelDir, stagingDir, legacyArchivePath)
+
       if (!aborted) {
         // Why: the settings UI awaits this to surface failures; stay quiet on cancellation, rethrow real errors.
         throw err
@@ -226,6 +251,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
 
   cancelDownload(modelId: string): void {
     const handle = this.activeDownloads.get(modelId)
+
     if (handle) {
       handle.abort()
       this.updateState(modelId, 'not-downloaded')
@@ -234,27 +260,36 @@ export class ModelManager extends SpeechModelDownloadTransport {
 
   async deleteModel(modelId: string): Promise<void> {
     await this.migrationReady
+
     if (!getCatalogModel(modelId)) {
       throw new Error(`Unknown model: ${modelId}`)
     }
+
     const manifest = getCatalogModel(modelId)
+
     if (!manifest || !isLocalSpeechModel(manifest)) {
       throw new Error(`Model does not support deletion: ${modelId}`)
     }
+
     this.cancelDownload(modelId)
     const modelDir = this.getModelDir(modelId)
+
     if (existsSync(modelDir)) {
       await rm(modelDir, { recursive: true, force: true })
     }
+
     await rm(`${modelDir}.partial`, { recursive: true, force: true })
     await rm(join(this.modelsDir, `${modelId}.tar.bz2`), { force: true })
+
     // Why: also delete the pre-migration copy, or the next launch re-migrates it and resurrects the model.
     if (this.migrationSourceDir) {
       const sourceModelDir = this.getSafeModelDir(modelId, this.migrationSourceDir)
+
       if (existsSync(sourceModelDir)) {
         await rm(sourceModelDir, { recursive: true, force: true })
       }
     }
+
     this.modelStates.delete(modelId)
   }
 
@@ -265,11 +300,13 @@ export class ModelManager extends SpeechModelDownloadTransport {
     error?: string
   ): void {
     const previous = this.modelStates.get(modelId)
+
     // Whole-percent state matches the UI and prevents chunk-level IPC/poll churn.
     const reportedProgress =
       status === 'downloading' && progress !== undefined
         ? Math.round(progress * 100) / 100
         : progress
+
     if (
       status === 'downloading' &&
       previous?.status === 'downloading' &&
@@ -278,10 +315,12 @@ export class ModelManager extends SpeechModelDownloadTransport {
     ) {
       return
     }
+
     const state: SpeechModelState = { id: modelId, status, progress: reportedProgress, error }
     this.modelStates.set(modelId, state)
     // Repeated non-download states can be the requesting window's only resync signal.
     const progressValue = reportedProgress ?? (status === 'extracting' ? 0.95 : -1)
+
     for (const callback of this.progressCallbacks) {
       callback(modelId, progressValue)
     }
@@ -299,6 +338,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
     }
 
     let completedBytes = 0
+
     for (const file of manifest.downloadFiles) {
       if (
         !file.name ||
@@ -309,6 +349,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
       ) {
         throw new Error(`Invalid model download filename: ${file.name}`)
       }
+
       const filePath = join(stagingDir, file.name)
       await this.downloadFileWithRetry(
         file.url,
@@ -320,9 +361,11 @@ export class ModelManager extends SpeechModelDownloadTransport {
         completedBytes,
         manifest.sizeBytes
       )
+
       if (isAborted()) {
         return
       }
+
       await this.verifyFileSha256(filePath, file.sha256)
       completedBytes += file.sizeBytes
     }

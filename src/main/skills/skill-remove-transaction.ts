@@ -53,6 +53,7 @@ function conflictResult(
   kind: 'modified' | 'unowned' | 'external-link' | 'name-collision'
 ): SkillInstallResult {
   const code = `skill-removal-conflict-${kind}`
+
   return {
     operationId: input.operationId,
     status: 'conflict',
@@ -71,21 +72,27 @@ async function inspectCanonicalRemoval(
   receipt: SkillInstallReceiptV1 | null
 ): Promise<'missing' | 'owned' | 'modified' | 'unowned' | 'external-link' | 'name-collision'> {
   const stat = await lstat(input.canonicalPath).catch(() => null)
+
   if (!stat) {
     return receipt ? 'missing' : 'unowned'
   }
+
   if (!receipt) {
     return 'unowned'
   }
+
   if (stat.isSymbolicLink()) {
     return 'external-link'
   }
+
   if (!stat.isDirectory()) {
     return 'name-collision'
   }
+
   const observed = await (input.filesystem ?? nativeSkillInstallFilesystem)
     .observeSkill(input.canonicalPath, receipt.fileModes)
     .catch(() => null)
+
   return observed?.observedDigest === receipt.packageDigest ? 'owned' : 'modified'
 }
 
@@ -104,26 +111,32 @@ export async function removeLocalSharedSkill(
   dependencies: SkillRemovalTransactionDependencies = {}
 ): Promise<SkillInstallResult> {
   const filesystem = input.filesystem ?? nativeSkillInstallFilesystem
+
   const releaseLock = await acquireSkillInstallLock({
     path: skillInstallLockPath(input.stateDirectory, input.canonicalPath)
   })
+
   try {
     const historicalReceipt = await readSkillInstallReceipt(
       input.stateDirectory,
       input.canonicalPath
     )
+
     filesystem.authorizeRoots?.(historicalSuccessfulProviderRoots(historicalReceipt))
     await recoverSkillRemovalTransaction(input.stateDirectory, input.canonicalPath, filesystem)
     await recoverSkillInstallTransaction(input.stateDirectory, input.canonicalPath, filesystem)
     await recoverSkillPlacementTransaction(input.stateDirectory, input.canonicalPath, filesystem)
     const receipt = await readSkillInstallReceipt(input.stateDirectory, input.canonicalPath)
     const state = await inspectCanonicalRemoval(input, receipt)
+
     if (!receipt) {
       return conflictResult(input, null, 'unowned')
     }
+
     if (state === 'unowned' || state === 'external-link' || state === 'name-collision') {
       return conflictResult(input, receipt, state)
     }
+
     if (state === 'modified' && input.conflictResolution !== 'replace-and-discard-local') {
       return conflictResult(input, receipt, 'modified')
     }
@@ -136,10 +149,12 @@ export async function removeLocalSharedSkill(
     const removedPlacements: SkillPlacementResult[] = []
     const skippedPlacements: SkillPlacementResult[] = []
     const moves: RemovalMove[] = []
+
     for (const placement of receipt.placements) {
       if (placement.topology === 'canonical-copy') {
         continue
       }
+
       if (
         await isRemovableSkillPlacement({
           placement,
@@ -172,14 +187,17 @@ export async function removeLocalSharedSkill(
         })
       }
     }
+
     if (state !== 'missing') {
       const canonicalDigest = await filesystem
         .observeSkill(input.canonicalPath, receipt.fileModes)
         .then((observed) => observed.observedDigest)
         .catch(() => null)
+
       if (!canonicalDigest) {
         return conflictResult(input, receipt, 'modified')
       }
+
       moves.push({
         sourcePath: input.canonicalPath,
         backupPath: join(
@@ -195,6 +213,7 @@ export async function removeLocalSharedSkill(
         expectedDigest: canonicalDigest
       })
     }
+
     const journal: SkillRemovalJournalV1 = {
       schemaVersion: 1,
       operation: 'remove',
@@ -205,8 +224,10 @@ export async function removeLocalSharedSkill(
       receipt,
       allowedProviderRoots: [...new Set(allowedProviderRoots)]
     }
+
     const statePath = skillRemovalJournalPath(input.stateDirectory, input.canonicalPath)
     await persistRemovalJournal(statePath, journal, dependencies)
+
     for (const move of moves) {
       journal.movedCount += 1
       journal.phase = 'moving'
@@ -214,10 +235,12 @@ export async function removeLocalSharedSkill(
       await filesystem.rename(move.sourcePath, move.backupPath)
       removedPlacements.push({ ...move.placement, status: 'removed' })
     }
+
     await removeSkillInstallReceipt(input.stateDirectory, input.canonicalPath)
     journal.phase = 'receipt-removed'
     await persistRemovalJournal(statePath, journal, dependencies)
     await recoverSkillRemovalTransaction(input.stateDirectory, input.canonicalPath, filesystem)
+
     return {
       operationId: input.operationId,
       status: skippedPlacements.length > 0 ? 'partial' : 'removed',

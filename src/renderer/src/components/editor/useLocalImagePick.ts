@@ -14,17 +14,21 @@ export function useLocalImagePick(
     if (!editor) {
       return
     }
+
     // Why: the native file picker steals focus from the editor, which can cause
     // ProseMirror to lose track of its selection. We snapshot the cursor position
     // before the async dialog so we can insert the image exactly where the user
     // intended, not at whatever position focus() falls back to afterward.
     const insertPos = editor.state.selection.from
     const targetDom = editor.view.dom
+
     try {
       const srcPath = await window.api.shell.pickImage()
+
       if (!srcPath) {
         return
       }
+
       await insertRichMarkdownImageFromPath({
         editor,
         filePath,

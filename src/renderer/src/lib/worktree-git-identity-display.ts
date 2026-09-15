@@ -24,11 +24,13 @@ export function getWorktreeGitIdentityDisplay(input: {
   head?: string | null
 }): WorktreeGitIdentityDisplay | null {
   const branchName = (input.branch ?? '').replace(/^refs\/heads\//, '').trim()
+
   if (branchName) {
     return { kind: 'branch', branchName }
   }
 
   const shortHead = shortGitHead(input.head)
+
   if (!shortHead) {
     return null
   }

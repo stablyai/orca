@@ -19,8 +19,10 @@ export function markFileChangedOnDisk(
   if (!file.isDirty || !canAutoSaveOpenFile(file)) {
     return
   }
+
   if (file.externalMutation !== 'changed') {
     trackExternalChangeConflictShown(file, options)
   }
+
   state.setExternalMutation(file.id, 'changed')
 }

@@ -16,16 +16,21 @@ function findRepoOwner(
   repoId: string
 ): Pick<Repo, 'id' | 'connectionId' | 'executionHostId'> | null {
   const matchingRepos = state.repos?.filter((entry) => entry.id === repoId) ?? []
+
   if (matchingRepos.length === 0) {
     return null
   }
+
   if (matchingRepos.length === 1) {
     return matchingRepos[0]
   }
+
   const focusedHostId = getSettingsFocusedExecutionHostId(state.settings)
+
   const focusedMatches = matchingRepos.filter(
     (entry) => getRepoExecutionHostId(entry) === focusedHostId
   )
+
   // Why: duplicate bare repo ids are only safe to route when focus selects one
   // owner unambiguously; otherwise callers must avoid guessing a host.
   return focusedMatches.length === 1 ? focusedMatches[0] : null
@@ -38,12 +43,16 @@ export function getRuntimeEnvironmentIdForRepo(
   if (!repoId) {
     return null
   }
+
   const repo = findRepoOwner(state, repoId)
   const hasExplicitOwner = Boolean(repo?.executionHostId?.trim() || repo?.connectionId?.trim())
+
   if (repo && hasExplicitOwner) {
     const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
+
     return parsed?.kind === 'runtime' ? parsed.environmentId : null
   }
+
   return state.settings?.activeRuntimeEnvironmentId?.trim() || null
 }
 
@@ -57,12 +66,16 @@ export function getExplicitRuntimeOwnerEnvironmentId(
   if (!repoId) {
     return null
   }
+
   const repo = findRepoOwner(state, repoId)
   const hasExplicitOwner = Boolean(repo?.executionHostId?.trim() || repo?.connectionId?.trim())
+
   if (!repo || !hasExplicitOwner) {
     return null
   }
+
   const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
+
   return parsed?.kind === 'runtime' ? parsed.environmentId : null
 }
 
@@ -76,6 +89,7 @@ type OwnerRoutedSettingsCacheEntry = {
 // Why keyed by repo id: every PR/task row calls this with its own repo while
 // sharing one settings object, so a single-entry cache would thrash.
 const ownerRoutedSettingsCache = new Map<string, OwnerRoutedSettingsCacheEntry>()
+
 // Why bounded: repo ids come from remote listings, so the key space is not closed.
 const MAX_OWNER_ROUTED_SETTINGS_CACHE_KEYS = 256
 
@@ -94,6 +108,7 @@ export function getSettingsForRepoRuntimeOwner(
   // derives from changed lets useShallow settle on the Object.is fast path.
   const cacheKey = repoId ?? ''
   const cached = ownerRoutedSettingsCache.get(cacheKey)
+
   if (
     cached &&
     cached.settingsSource === state.settings &&
@@ -102,22 +117,27 @@ export function getSettingsForRepoRuntimeOwner(
   ) {
     return cached.value
   }
+
   const value = {
     ...state.settings,
     activeRuntimeEnvironmentId: environmentId
   }
+
   ownerRoutedSettingsCache.set(cacheKey, {
     settingsSource: state.settings,
     reposSource: state.repos,
     environmentId,
     value
   })
+
   if (ownerRoutedSettingsCache.size > MAX_OWNER_ROUTED_SETTINGS_CACHE_KEYS) {
     const oldest = ownerRoutedSettingsCache.keys().next()
+
     if (!oldest.done) {
       ownerRoutedSettingsCache.delete(oldest.value)
     }
   }
+
   return value
 }
 
@@ -131,9 +151,11 @@ export function getRepoOwnerRoutedSettings<T extends GlobalSettings | null>(
   if (!settings) {
     return settings
   }
+
   const activeRuntimeEnvironmentId = getRuntimeEnvironmentIdForRepo(
     { repos: repo ? [repo] : [], settings },
     repo?.id ?? null
   )
+
   return { ...settings, activeRuntimeEnvironmentId }
 }

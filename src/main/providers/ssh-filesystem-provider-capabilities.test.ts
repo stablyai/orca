@@ -25,6 +25,7 @@ describe('SSH Quick Open capability probe', () => {
           Object.assign(new Error('method not found'), { code: JsonRpcErrorCode.MethodNotFound })
         )
     }
+
     await expect(probeSshQuickOpenSearchCapability(mux as never)).resolves.toBe(false)
     await expect(probeSshQuickOpenSearchCapability(mux as never)).resolves.toBe(false)
     expect(mux.request).toHaveBeenCalledTimes(1)
@@ -45,6 +46,7 @@ describe('SSH filesystem capability document', () => {
     const mux = {
       request: vi.fn().mockResolvedValue({ quickOpenSearchVersion: 1, rangedReadVersion: 1 })
     }
+
     await expect(probeSshQuickOpenSearchCapability(mux as never)).resolves.toBe(true)
     await expect(probeSshRangedReadCapability(mux as never)).resolves.toBe(true)
     expect(mux.request).toHaveBeenCalledTimes(1)
@@ -65,6 +67,7 @@ describe('SSH filesystem capability document', () => {
         .mockRejectedValueOnce(new Error('connection closed'))
         .mockResolvedValue({ rangedReadVersion: 1 })
     }
+
     await expect(probeSshRangedReadCapability(mux as never)).rejects.toThrow('connection closed')
     await expect(probeSshRangedReadCapability(mux as never)).resolves.toBe(true)
     expect(mux.request).toHaveBeenCalledTimes(2)
@@ -76,6 +79,7 @@ describe('SSH filesystem capability document', () => {
   // trip, and a caller that keeps aborting re-fetches forever.
   it('keeps the in-flight document when one caller aborts its own probe', async () => {
     let settle: (value: Record<string, unknown>) => void = () => {}
+
     const mux = {
       request: vi
         .fn()
@@ -87,6 +91,7 @@ describe('SSH filesystem capability document', () => {
         )
         .mockResolvedValue({ rangedReadVersion: 1 })
     }
+
     const controller = new AbortController()
     const abandoned = probeSshQuickOpenSearchCapability(mux as never, controller.signal)
     const patient = probeSshRangedReadCapability(mux as never)
@@ -101,6 +106,7 @@ describe('SSH filesystem capability document', () => {
 
   it('retries when the fetch fails after its only waiter aborts', async () => {
     let rejectFetch: (error: Error) => void = () => {}
+
     const mux = {
       request: vi
         .fn()
@@ -112,6 +118,7 @@ describe('SSH filesystem capability document', () => {
         )
         .mockResolvedValue({ rangedReadVersion: 1 })
     }
+
     const controller = new AbortController()
     const abandoned = probeSshRangedReadCapability(mux as never, controller.signal)
     controller.abort()

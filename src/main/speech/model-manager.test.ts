@@ -58,11 +58,13 @@ describe('ModelManager', () => {
       if (manifest.provider !== 'local') {
         continue
       }
+
       expect(manifest.downloadFiles?.length).toBeGreaterThan(0)
       expect(manifest.files).toEqual(manifest.downloadFiles?.map(({ name }) => name))
       expect(manifest.sizeBytes).toBe(
         manifest.downloadFiles?.reduce((total, { sizeBytes }) => total + sizeBytes, 0)
       )
+
       for (const file of manifest.downloadFiles ?? []) {
         expect(file.url).toMatch(
           /^https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/[a-f0-9]{40}\//
@@ -75,6 +77,7 @@ describe('ModelManager', () => {
 
   it('verifies downloaded model file hashes before installation', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+
     try {
       const filePath = join(dir, 'model.onnx')
       writeFileSync(filePath, 'known model bytes')
@@ -92,6 +95,7 @@ describe('ModelManager', () => {
 
   it('rejects non-HTTPS model downloads', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+
     try {
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
 
@@ -111,18 +115,22 @@ describe('ModelManager', () => {
 
   it('installs individually verified model files through a staging directory', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+
     try {
       const manifest = SPEECH_MODEL_CATALOG.find(
         (model) => model.id === 'zipformer-streaming-zh-14m'
       )!
+
       const manager = new ModelManager(dir)
       const internals = manager as unknown as ModelManagerInternals
+
       const downloadMock = vi
         .spyOn(internals, 'downloadFileWithRetry')
         .mockImplementation(async (_url, filePath, expectedSize) => {
           writeFileSync(filePath, '')
           truncateSync(filePath, expectedSize)
         })
+
       const verifyMock = vi.spyOn(internals, 'verifyFileSha256').mockResolvedValue()
 
       await manager.downloadModel(manifest.id)
@@ -131,6 +139,7 @@ describe('ModelManager', () => {
       expect(downloadMock).toHaveBeenCalledTimes(manifest.downloadFiles?.length ?? 0)
       expect(verifyMock).toHaveBeenCalledTimes(manifest.downloadFiles?.length ?? 0)
       let expectedOffset = 0
+
       for (const [index, file] of (manifest.downloadFiles ?? []).entries()) {
         expect(downloadMock.mock.calls[index]?.slice(6)).toEqual([
           expectedOffset,
@@ -139,6 +148,7 @@ describe('ModelManager', () => {
         expectedOffset += file.sizeBytes
         expect(existsSync(join(modelDir, file.name))).toBe(true)
       }
+
       expect(existsSync(`${modelDir}.partial`)).toBe(false)
       await expect(manager.getModelState(manifest.id)).resolves.toEqual({
         id: manifest.id,
@@ -151,6 +161,7 @@ describe('ModelManager', () => {
 
   it('marks OpenAI transcription models ready only when an API key is configured', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+
     try {
       const manager = new ModelManager(dir)
 
@@ -172,13 +183,16 @@ describe('ModelManager', () => {
 
   it('deletes a ready local model and reports it as not downloaded', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+
     try {
       const manifest = SPEECH_MODEL_CATALOG.find(
         (model) => model.id === 'zipformer-streaming-zh-14m'
       )
+
       expect(manifest?.files).toBeDefined()
       const manager = new ModelManager(dir)
       const modelDir = manager.getModelDir(manifest!.id)
+
       for (const file of manifest!.downloadFiles ?? []) {
         const path = join(modelDir, file.name)
         mkdirSync(dirname(path), { recursive: true })
@@ -204,15 +218,18 @@ describe('ModelManager', () => {
 
   it('aborts an in-flight model download request when cancelled', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+
     try {
       const manifest = SPEECH_MODEL_CATALOG[0]
       const errorHandlers: ((err: Error) => void)[] = []
       const responseHandlers: ((response: unknown) => void)[] = []
+
       const redirectHandlers: ((
         statusCode: number,
         method: string,
         redirectUrl: string
       ) => void)[] = []
+
       const request = {
         abort: vi.fn(() => {
           queueMicrotask(() => {
@@ -220,6 +237,7 @@ describe('ModelManager', () => {
               handler(new Error('Aborted'))
             }
           })
+
           return request
         }),
         on: vi.fn((event: string, cb: (err: Error) => void) => {
@@ -232,33 +250,41 @@ describe('ModelManager', () => {
               cb as unknown as (statusCode: number, method: string, redirectUrl: string) => void
             )
           }
+
           return request
         }),
         off: vi.fn((event: string, cb: ((err: Error) => void) | (() => void)) => {
           if (event === 'error') {
             const index = errorHandlers.indexOf(cb as (err: Error) => void)
+
             if (index !== -1) {
               errorHandlers.splice(index, 1)
             }
           }
+
           if (event === 'response') {
             const index = responseHandlers.indexOf(cb as (response: unknown) => void)
+
             if (index !== -1) {
               responseHandlers.splice(index, 1)
             }
           }
+
           if (event === 'redirect') {
             const index = redirectHandlers.indexOf(
               cb as (statusCode: number, method: string, redirectUrl: string) => void
             )
+
             if (index !== -1) {
               redirectHandlers.splice(index, 1)
             }
           }
+
           return request
         }),
         end: vi.fn(() => request)
       }
+
       netRequestMock.mockReturnValue(request)
       const manager = new ModelManager(dir)
 
@@ -287,14 +313,17 @@ describe('ModelManager', () => {
   it('settles immediately when the abort signal fires before a response', async () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+
     try {
       const errorHandlers: ((err: Error) => void)[] = []
       const responseHandlers: ((response: unknown) => void)[] = []
+
       const redirectHandlers: ((
         statusCode: number,
         method: string,
         redirectUrl: string
       ) => void)[] = []
+
       const request = {
         abort: vi.fn(() => request),
         on: vi.fn((event: string, cb: (err: Error) => void) => {
@@ -307,33 +336,41 @@ describe('ModelManager', () => {
               cb as unknown as (statusCode: number, method: string, redirectUrl: string) => void
             )
           }
+
           return request
         }),
         off: vi.fn((event: string, cb: ((err: Error) => void) | (() => void)) => {
           if (event === 'error') {
             const index = errorHandlers.indexOf(cb as (err: Error) => void)
+
             if (index !== -1) {
               errorHandlers.splice(index, 1)
             }
           }
+
           if (event === 'response') {
             const index = responseHandlers.indexOf(cb as (response: unknown) => void)
+
             if (index !== -1) {
               responseHandlers.splice(index, 1)
             }
           }
+
           if (event === 'redirect') {
             const index = redirectHandlers.indexOf(
               cb as (statusCode: number, method: string, redirectUrl: string) => void
             )
+
             if (index !== -1) {
               redirectHandlers.splice(index, 1)
             }
           }
+
           return request
         }),
         end: vi.fn(() => request)
       }
+
       netRequestMock.mockReturnValue(request)
       const controller = new AbortController()
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
@@ -346,10 +383,12 @@ describe('ModelManager', () => {
         () => true,
         controller.signal
       )
+
       const outcomePromise = download.then(
         () => 'resolved',
         (error) => (error instanceof Error ? error.message : String(error))
       )
+
       controller.abort()
       await vi.advanceTimersByTimeAsync(0)
 
@@ -370,14 +409,17 @@ describe('ModelManager', () => {
   it('times out a model download request that never responds', async () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-manager-'))
+
     try {
       const errorHandlers: ((err: Error) => void)[] = []
       const responseHandlers: ((response: unknown) => void)[] = []
+
       const redirectHandlers: ((
         statusCode: number,
         method: string,
         redirectUrl: string
       ) => void)[] = []
+
       const request = {
         abort: vi.fn(() => request),
         on: vi.fn((event: string, cb: (err: Error) => void) => {
@@ -390,33 +432,41 @@ describe('ModelManager', () => {
               cb as unknown as (statusCode: number, method: string, redirectUrl: string) => void
             )
           }
+
           return request
         }),
         off: vi.fn((event: string, cb: ((err: Error) => void) | (() => void)) => {
           if (event === 'error') {
             const index = errorHandlers.indexOf(cb as (err: Error) => void)
+
             if (index !== -1) {
               errorHandlers.splice(index, 1)
             }
           }
+
           if (event === 'response') {
             const index = responseHandlers.indexOf(cb as (response: unknown) => void)
+
             if (index !== -1) {
               responseHandlers.splice(index, 1)
             }
           }
+
           if (event === 'redirect') {
             const index = redirectHandlers.indexOf(
               cb as (statusCode: number, method: string, redirectUrl: string) => void
             )
+
             if (index !== -1) {
               redirectHandlers.splice(index, 1)
             }
           }
+
           return request
         }),
         end: vi.fn(() => request)
       }
+
       netRequestMock.mockReturnValue(request)
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
 
@@ -427,6 +477,7 @@ describe('ModelManager', () => {
         'm',
         () => false
       )
+
       const outcomePromise = download.then(
         () => 'resolved',
         (error) => (error instanceof Error ? error.message : String(error))

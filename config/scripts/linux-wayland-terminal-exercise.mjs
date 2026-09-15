@@ -3,9 +3,13 @@ import path from 'node:path'
 import { runWithTimeout } from './linux-wayland-validation-watchdog.mjs'
 
 const terminalWaitTimeoutMs = 45_000
+
 const pollTimeoutMs = 2_500
+
 const rendererActionTimeoutMs = 10_000
+
 const rendererSetupTimeoutMs = 30_000
+
 const typingSamples = 'abcdefghijklmnop'
 
 function delay(ms) {
@@ -36,47 +40,59 @@ process.stdin.on('data', (chunk) => {
 async function pollWithTimeout(label, read) {
   const readPromise = Promise.resolve().then(read)
   readPromise.catch(() => undefined)
+
   // Why: the unfixed Wayland GPU stall can freeze renderer protocol calls, so
   // each poll needs its own deadline instead of relying only on waitFor's loop.
   const result = await Promise.race([
     readPromise.then((value) => ({ timedOut: false, value })),
     delay(pollTimeoutMs).then(() => ({ timedOut: true, value: null }))
   ])
+
   if (result.timedOut) {
     throw new Error(`Timed out polling ${label} after ${pollTimeoutMs}ms.`)
   }
+
   return result.value
 }
 
 async function waitFor(label, read, timeout = terminalWaitTimeoutMs) {
   const startedAt = Date.now()
   let lastValue
+
   while (Date.now() - startedAt < timeout) {
     lastValue = await pollWithTimeout(label, read)
+
     if (lastValue) {
       return lastValue
     }
+
     await delay(50)
   }
+
   throw new Error(`Timed out waiting for ${label}; last value: ${JSON.stringify(lastValue)}`)
 }
 
 async function getTerminalContent(page, charLimit = 12_000) {
   return page.evaluate((limit) => {
     const store = window.__store
+
     if (!store || !window.__paneManagers) {
       return ''
     }
+
     const state = store.getState()
     const worktreeId = state.activeWorktreeId
+
     const tabId =
       state.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     return (pane?.serializeAddon?.serialize?.() ?? '').slice(-limit)
   }, charLimit)
 }
@@ -103,17 +119,21 @@ async function focusActiveTerminal(page) {
         const store = window.__store
         const state = store?.getState()
         const worktreeId = state?.activeWorktreeId
+
         const tabId =
           state?.activeTabType === 'terminal'
             ? state.activeTabId
             : worktreeId
               ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
               : null
+
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
         if (!pane) {
           throw new Error('No active terminal pane to focus.')
         }
+
         pane.terminal.focus()
         pane.container.querySelector('.xterm-helper-textarea')?.focus()
       }),
@@ -128,24 +148,31 @@ export async function setupTerminal(page, repoPath, logPhase) {
   await waitFor('workspace session hydration', () =>
     page.evaluate(() => {
       const state = window.__store?.getState?.()
+
       return Boolean(state?.workspaceSessionReady && state?.hydrationSucceeded)
     })
   )
   logPhase('setup.add-repo')
+
   const repoId = await runWithTimeout(
     'repo registration',
     () =>
       page.evaluate(async (pathToAdd) => {
         const result = await window.api.repos.add({ path: pathToAdd, kind: 'git' })
+
         if ('error' in result) {
           throw new Error(result.error)
         }
+
         const store = window.__store
+
         if (!store) {
           throw new Error('window.__store is not available.')
         }
+
         await store.getState().fetchRepos()
         await store.getState().fetchWorktrees(result.repo.id, { requireAuthoritative: true })
+
         return result.repo.id
       }, repoPath),
     rendererSetupTimeoutMs
@@ -157,27 +184,34 @@ export async function setupTerminal(page, repoPath, logPhase) {
   await waitFor('active terminal workspace setup', () =>
     page.evaluate((id) => {
       const store = window.__store
+
       if (!store) {
         return false
       }
+
       let state = store.getState()
       const worktree = state.worktreesByRepo[id]?.[0]
+
       if (!worktree) {
         return false
       }
+
       state.setActiveWorktree(worktree.id)
       state = store.getState()
       const tabs = state.tabsByWorktree[worktree.id] ?? []
+
       const tab =
         tabs[0] ??
         state.createTab(worktree.id, undefined, undefined, {
           activate: true,
           pendingActivationSpawn: true
         })
+
       state = store.getState()
       state.setActiveTab(tab.id)
       state.setActiveTabType('terminal')
       state = store.getState()
+
       if (
         state.activeWorktreeId !== worktree.id ||
         state.activeTabType !== 'terminal' ||
@@ -185,11 +219,13 @@ export async function setupTerminal(page, repoPath, logPhase) {
       ) {
         return false
       }
+
       return true
     }, repoId)
   )
 
   logPhase('setup.wait-pty')
+
   const ptyId = await waitFor('active terminal PTY binding', () =>
     page.evaluate(() => {
       const store = window.__store
@@ -197,10 +233,13 @@ export async function setupTerminal(page, repoPath, logPhase) {
       const tabId = state?.activeTabId
       const manager = tabId ? window.__paneManagers?.get(tabId) : null
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
       return pane?.container?.dataset?.ptyId ?? null
     })
   )
+
   logPhase('setup.pty-bound', `ptyId=${String(ptyId)}`)
+
   return ptyId
 }
 
@@ -218,43 +257,56 @@ export async function assertScrollbackBufferWorks(page, ptyId, runId, logPhase) 
   logPhase('scroll.marker-seen')
   await focusActiveTerminal(page)
   logPhase('scroll.focused')
+
   const before = await waitFor('scrollable terminal buffer', () =>
     page.evaluate(() => {
       const store = window.__store
       const state = store?.getState()
       const worktreeId = state?.activeWorktreeId
+
       const tabId =
         state?.activeTabType === 'terminal'
           ? state.activeTabId
           : worktreeId
             ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
             : null
+
       const manager = tabId ? window.__paneManagers?.get(tabId) : null
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
       if (!pane) {
         return null
       }
+
       const buffer = pane.terminal.buffer.active
+
       if (buffer.baseY < 40) {
         return null
       }
+
       pane.terminal.scrollToBottom()
+
       if (buffer.viewportY < buffer.baseY - 1) {
         return null
       }
+
       const target =
         pane.container.querySelector('.xterm-screen') ??
         pane.container.querySelector('.xterm-viewport') ??
         pane.terminal.element ??
         pane.container
+
       if (!(target instanceof HTMLElement)) {
         return null
       }
+
       const viewport = pane.container.querySelector('.xterm-viewport')
       const rect = target.getBoundingClientRect()
+
       if (rect.width <= 0 || rect.height <= 0) {
         return null
       }
+
       return {
         viewportY: buffer.viewportY,
         baseY: buffer.baseY,
@@ -264,6 +316,7 @@ export async function assertScrollbackBufferWorks(page, ptyId, runId, logPhase) 
       }
     })
   )
+
   logPhase('scroll.buffer-ready', `baseY=${before.baseY} viewportY=${before.viewportY}`)
   // Why: headless Wayland does not provide a reliable native wheel path in CI,
   // so verify xterm's scrollback buffer can move without bypassing the renderer.
@@ -274,40 +327,50 @@ export async function assertScrollbackBufferWorks(page, ptyId, runId, logPhase) 
         const store = window.__store
         const state = store?.getState()
         const worktreeId = state?.activeWorktreeId
+
         const tabId =
           state?.activeTabType === 'terminal'
             ? state.activeTabId
             : worktreeId
               ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
               : null
+
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
         if (!pane) {
           throw new Error('No active terminal pane for scrollback API scroll.')
         }
+
         pane.terminal.scrollLines(-10)
       }),
     rendererActionTimeoutMs
   )
   logPhase('scroll.api-scroll-sent')
+
   const after = await waitFor('terminal scrollback API response', () =>
     page.evaluate((previousViewportY) => {
       const store = window.__store
       const state = store?.getState()
       const worktreeId = state?.activeWorktreeId
+
       const tabId =
         state?.activeTabType === 'terminal'
           ? state.activeTabId
           : worktreeId
             ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
             : null
+
       const manager = tabId ? window.__paneManagers?.get(tabId) : null
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
       if (!pane) {
         return null
       }
+
       const buffer = pane.terminal.buffer.active
       const viewport = pane.container.querySelector('.xterm-viewport')
+
       return buffer.viewportY < previousViewportY
         ? {
             viewportY: buffer.viewportY,
@@ -318,7 +381,9 @@ export async function assertScrollbackBufferWorks(page, ptyId, runId, logPhase) 
         : null
     }, before.viewportY)
   )
+
   logPhase('scroll.response', `viewportY=${after.viewportY} previous=${after.previousViewportY}`)
+
   return {
     beforeScrollTop: before.scrollTop,
     afterScrollTop: after.scrollTop,
@@ -340,6 +405,7 @@ export async function assertKeyboardInputWorks(page, ptyId, repoPath, runId, log
   )
   logPhase('typing.ready')
   await focusActiveTerminal(page)
+
   for (const [index, char] of [...typingSamples].entries()) {
     logPhase('typing.char', `index=${index + 1}`)
     await runWithTimeout(
@@ -351,7 +417,9 @@ export async function assertKeyboardInputWorks(page, ptyId, repoPath, runId, log
       (await getTerminalContent(page)).includes(`WAYLAND_TYPED_${runId}_${index + 1}:${char}`)
     )
   }
+
   logPhase('typing.complete')
   await sendToTerminal(page, ptyId, '\x03').catch(() => undefined)
+
   return typingSamples.length
 }

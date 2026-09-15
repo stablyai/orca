@@ -1,6 +1,7 @@
 import { execFileSync } from 'node:child_process'
 
 const TAILSCALE_MAGIC_DNS = '100.100.100.100'
+
 const CACHE_TTL_MS = 5 * 60 * 1000
 
 type DnsDiagnostic = {
@@ -19,11 +20,13 @@ const NETWORK_LOOKUP_FAILURE_RE =
 
 function globalDnsSection(scutilOutput: string): string {
   const scopedStart = scutilOutput.indexOf('\nDNS configuration (for scoped queries)')
+
   return scopedStart !== -1 ? scutilOutput.slice(0, scopedStart) : scutilOutput
 }
 
 export function parseMacTailscaleDnsDiagnostic(scutilOutput: string): DnsDiagnostic | null {
   const globalSection = globalDnsSection(scutilOutput)
+
   const nameservers = [
     ...new Set(
       Array.from(globalSection.matchAll(/nameserver\[\d+\]\s*:\s*([^\s]+)/g), (match) =>
@@ -35,6 +38,7 @@ export function parseMacTailscaleDnsDiagnostic(scutilOutput: string): DnsDiagnos
   if (nameservers.length === 0) {
     return null
   }
+
   if (!nameservers.every((nameserver) => nameserver === TAILSCALE_MAGIC_DNS)) {
     return null
   }
@@ -46,23 +50,27 @@ function readMacTailscaleDnsDiagnostic(now = Date.now()): DnsDiagnostic | null {
   if (process.platform !== 'darwin') {
     return null
   }
+
   if (cache && cache.expiresAt > now) {
     return cache.diagnostic
   }
 
   let diagnostic: DnsDiagnostic | null = null
+
   try {
     const output = execFileSync('/usr/sbin/scutil', ['--dns'], {
       encoding: 'utf8',
       timeout: 1500,
       stdio: ['ignore', 'pipe', 'ignore']
     })
+
     diagnostic = parseMacTailscaleDnsDiagnostic(output)
   } catch {
     diagnostic = null
   }
 
   cache = { diagnostic, expiresAt: now + CACHE_TTL_MS }
+
   return diagnostic
 }
 
@@ -72,9 +80,11 @@ export function withMacTailscaleDnsHintForDiagnostic(
   diagnostic: DnsDiagnostic | null
 ): string {
   const probeText = `${message}\n${detail ?? ''}`
+
   if (!NETWORK_LOOKUP_FAILURE_RE.test(probeText)) {
     return message
   }
+
   if (!diagnostic) {
     return message
   }

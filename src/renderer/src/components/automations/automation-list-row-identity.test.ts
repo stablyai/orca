@@ -101,6 +101,7 @@ function hostRow(entry: AutomationHostCatalogEntry, name: string): AutomationHos
 /** The desktop and a runtime SSH host each holding a record called `a-1`. */
 function collidedListRows(): ReturnType<typeof resolveAutomationHostListRows> {
   const entries = [DESKTOP_SELF, RUNTIME_SSH]
+
   const catalog: AutomationHostCatalog = {
     entries,
     byStableKey: new Map(entries.map((entry) => [entry.stableKey, entry])),
@@ -113,6 +114,7 @@ function collidedListRows(): ReturnType<typeof resolveAutomationHostListRows> {
       unavailableAuthorityKeys: new Set()
     }
   }
+
   return resolveAutomationHostListRows({
     catalog,
     resolution: ALL_HOSTS,
@@ -128,10 +130,13 @@ function collidedListRows(): ReturnType<typeof resolveAutomationHostListRows> {
 describe('automation list row identity across hosts', () => {
   it('lets each host’s row be found by its own host label', () => {
     const listRows = collidedListRows()
+
     const searchRows = buildAutomationListSearchRows(
       buildAutomationSearchRowSources(listRows.rows, { repoMap })
     )
+
     const nameByKey = new Map(listRows.rows.map((row) => [row.key, row.automation.name]))
+
     const namesMatching = (query: string): (string | undefined)[] =>
       matchAutomationListSearchRowKeys(searchRows, query).map((key) => nameByKey.get(key))
 
@@ -141,6 +146,7 @@ describe('automation list row identity across hosts', () => {
 
   it('resolves colliding projects and worktrees inside each row authority', () => {
     const rows = collidedListRows().rows
+
     const repos = [
       { ...repoMap.get(REPO_ID)!, displayName: 'Desktop repo', executionHostId: 'local' as const },
       {
@@ -149,6 +155,7 @@ describe('automation list row identity across hosts', () => {
         executionHostId: 'runtime:gpu' as const
       }
     ]
+
     const worktrees = [
       { id: 'ws-1', repoId: REPO_ID, hostId: 'local', displayName: 'Desktop workspace' },
       {
@@ -158,6 +165,7 @@ describe('automation list row identity across hosts', () => {
         displayName: 'Runtime workspace'
       }
     ] as Worktree[]
+
     const fallbackRepos = new Map([[REPO_ID, repos[1]]])
     const fallbackWorktrees = new Map([['ws-1', worktrees[1]]])
 
@@ -167,6 +175,7 @@ describe('automation list row identity across hosts', () => {
     expect(
       rows.map((row) => {
         const repo = automationRepoForRow(row, repos, fallbackRepos)
+
         return automationWorktreeForRow(
           row,
           { [REPO_ID]: worktrees },

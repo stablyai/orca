@@ -72,24 +72,30 @@ export async function getPRMetadata(
   if (!repository) {
     return { body: '' }
   }
+
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(repository)
   }
+
   if (repositoryRateLimitGuard(repository, 'core', ghOptions).blocked) {
     return { body: '' }
   }
+
   try {
     noteRepositoryRateLimitSpend(repository, 'core', 1, ghOptions)
+
     const { stdout } = await ghExecFileAsync(
       ['api', '--cache', '60s', `repos/${repository.owner}/${repository.repo}/pulls/${prNumber}`],
       ghOptions
     )
+
     const data = JSON.parse(stdout) as {
       body?: string | null
       head?: { sha?: string }
       base?: { sha?: string }
     }
+
     return {
       body: data.body ?? '',
       ...(data.head?.sha ? { headSha: data.head.sha } : {}),
@@ -111,18 +117,23 @@ export async function getPRFiles(
   if (!repository) {
     return null
   }
+
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(repository)
   }
+
   try {
     const data: RESTPRFile[] = []
+
     for (let page = 1; data.length < MAX_PR_FILES; page += 1) {
       if (repositoryRateLimitGuard(repository, 'core', ghOptions).blocked) {
         return null
       }
+
       const pageSuffix = page === 1 ? '' : `&page=${page}`
       noteRepositoryRateLimitSpend(repository, 'core', 1, ghOptions)
+
       const { stdout } = await ghExecFileAsync(
         [
           'api',
@@ -132,12 +143,15 @@ export async function getPRFiles(
         ],
         ghOptions
       )
+
       const pageData = JSON.parse(stdout) as RESTPRFile[]
       data.push(...pageData.slice(0, MAX_PR_FILES - data.length))
+
       if (pageData.length < 100) {
         break
       }
     }
+
     return data.map((file) => ({
       path: file.filename,
       oldPath: file.previous_filename,
@@ -162,13 +176,16 @@ export async function getPRFileViewedStates(
   if (!repository) {
     return null
   }
+
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(repository)
   }
+
   if (repositoryRateLimitGuard(repository, 'graphql', ghOptions).blocked) {
     return null
   }
+
   const viewedStates = new Map<string, GitHubPRFileViewedState>()
   let pullRequestId: string | null = null
   let after: string | null = null
@@ -187,11 +204,14 @@ export async function getPRFileViewedStates(
         '-F',
         `number=${prNumber}`
       ]
+
       if (after) {
         args.push('-f', `after=${after}`)
       }
+
       noteRepositoryRateLimitSpend(repository, 'graphql', 1, ghOptions)
       const { stdout } = await ghExecFileAsync(args, ghOptions)
+
       const parsed = JSON.parse(stdout) as {
         data?: {
           repository?: {
@@ -209,27 +229,35 @@ export async function getPRFileViewedStates(
         }
         errors?: { message?: string }[]
       }
+
       if (parsed.errors && parsed.errors.length > 0) {
         return null
       }
+
       const pullRequest = parsed.data?.repository?.pullRequest
+
       if (!pullRequest?.id) {
         return null
       }
+
       pullRequestId = pullRequest.id
+
       for (const file of pullRequest.files?.nodes ?? []) {
         if (file.path && file.viewerViewedState) {
           viewedStates.set(file.path, file.viewerViewedState)
         }
       }
+
       if (!pullRequest.files?.pageInfo?.hasNextPage || !pullRequest.files.pageInfo.endCursor) {
         break
       }
+
       after = pullRequest.files.pageInfo.endCursor
     }
   } catch {
     return null
   }
+
   return pullRequestId ? { pullRequestId, viewedStates } : null
 }
 
@@ -240,6 +268,7 @@ export function mergePRFileViewedStates(
   if (!viewedStates) {
     return files
   }
+
   return files.map((file) => ({
     ...file,
     viewerViewedState: viewedStates.viewedStates.get(file.path) ?? 'UNVIEWED'

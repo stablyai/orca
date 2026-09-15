@@ -38,10 +38,13 @@ export function matchesWorkspaceCleanupActivity(
   if (filter.neverVisited && facets.lastVisitedAt !== null) {
     return false
   }
+
   if (filter.idleMinDays === null) {
     return true
   }
+
   const signalAt = getIdleSignalAt(facets, filter)
+
   // Why: a missing signal means Orca has no evidence of recent use, so it
   // reads as maximally idle rather than being filtered out.
   return signalAt === null || now - signalAt >= filter.idleMinDays * WORKSPACE_CLEANUP_DAY_MS
@@ -54,9 +57,11 @@ export function matchesWorkspaceCleanupSize(
   if (facets.sizeBytes === null) {
     return filter.includeUnsized
   }
+
   if (filter.minBytes !== null && facets.sizeBytes < filter.minBytes) {
     return false
   }
+
   return filter.maxBytes === null || facets.sizeBytes <= filter.maxBytes
 }
 
@@ -67,6 +72,7 @@ export function matchesWorkspaceCleanupStatus(
   if (!matchesWorkspaceStatusList(facets, filter)) {
     return false
   }
+
   return (
     matchesWorkspaceCleanupTriState(filter.archived, facets.isArchived) &&
     matchesWorkspaceCleanupTriState(filter.pinned, facets.isPinned) &&
@@ -82,6 +88,7 @@ export function matchesWorkspaceCleanupAgent(
   if (filter.states.length > 0 && !filter.states.includes(facets.agentState)) {
     return false
   }
+
   return matchesWorkspaceCleanupTriState(
     filter.retainedDoneAgents,
     facets.retainedDoneAgentCount > 0
@@ -95,16 +102,21 @@ export function matchesWorkspaceCleanupGit(
   if (filter.states.length > 0 && !filter.states.includes(facets.gitState)) {
     return false
   }
+
   if (filter.minAhead !== null && (facets.upstreamAhead ?? 0) < filter.minAhead) {
     return false
   }
+
   if (filter.minBehind !== null && (facets.upstreamBehind ?? 0) < filter.minBehind) {
     return false
   }
+
   const branchQuery = filter.branchQuery.trim().toLowerCase()
+
   if (branchQuery && !facets.branch.toLowerCase().includes(branchQuery)) {
     return false
   }
+
   return (
     matchesWorkspaceCleanupTriState(filter.prunable, facets.isPrunable) &&
     matchesWorkspaceCleanupTriState(filter.locked, facets.isLocked)
@@ -118,14 +130,17 @@ export function matchesWorkspaceCleanupReview(
   if (!matchesWorkspaceCleanupPresence(filter.presence, facets.review.hasReview)) {
     return false
   }
+
   if (filter.states.length > 0) {
     if (facets.reviewState === null || !filter.states.includes(facets.reviewState)) {
       return false
     }
   }
+
   if (filter.providers.length === 0) {
     return true
   }
+
   return facets.review.provider !== null && filter.providers.includes(facets.review.provider)
 }
 
@@ -136,6 +151,7 @@ export function matchesWorkspaceCleanupTicket(
   if (!matchesWorkspaceCleanupPresence(filter.presence, facets.ticketSources.length > 0)) {
     return false
   }
+
   return (
     filter.sources.length === 0 ||
     filter.sources.some((source) => facets.ticketSources.includes(source))
@@ -149,6 +165,7 @@ export function matchesWorkspaceCleanupContext(
   if (!matchesWorkspaceCleanupPresence(filter.presence, facets.hasLocalContext)) {
     return false
   }
+
   return !filter.completelyEmpty || facets.isCompletelyEmpty
 }
 
@@ -159,10 +176,13 @@ export function matchesWorkspaceCleanupLocation(
   if (filter.hostIds.length > 0 && !filter.hostIds.includes(facets.hostId)) {
     return false
   }
+
   if (filter.repoIds.length > 0 && !filter.repoIds.includes(facets.repoId)) {
     return false
   }
+
   const prefix = filter.pathPrefix.trim()
+
   return prefix.length === 0 || facets.path.startsWith(prefix)
 }
 
@@ -173,10 +193,13 @@ export function matchesWorkspaceCleanupSafety(
   if (!matchesWorkspaceCleanupTriState(filter.dismissed, facets.isDismissed)) {
     return false
   }
+
   if (filter.blockers.length === 0) {
     return true
   }
+
   const hit = filter.blockers.some((blocker) => facets.blockers.includes(blocker))
+
   return filter.blockerMode === 'any-of' ? hit : !hit
 }
 
@@ -187,6 +210,7 @@ function matchesWorkspaceStatusList(
   if (facets.workspaceStatus === null) {
     return filter.matchStatusless
   }
+
   return (
     filter.workspaceStatuses.length === 0 ||
     filter.workspaceStatuses.includes(facets.workspaceStatus)

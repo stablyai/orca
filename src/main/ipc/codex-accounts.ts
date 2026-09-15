@@ -11,9 +11,11 @@ export function registerCodexAccountHandlers(
 ): void {
   ipcMain.handle('codexAccounts:listStalePanes', (_event, args: { ptyIds?: unknown }) => {
     const settings = getSettings?.()
+
     if (!settings || !Array.isArray(args?.ptyIds)) {
       return []
     }
+
     return listStaleCodexPanes({
       ptyIds: args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string'),
       settings,
@@ -24,6 +26,7 @@ export function registerCodexAccountHandlers(
     if (!Array.isArray(args?.ptyIds)) {
       return {}
     }
+
     return listRecordedCodexPaneLanes(
       args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string')
     )
@@ -32,6 +35,7 @@ export function registerCodexAccountHandlers(
     if (!Array.isArray(args?.ptyIds)) {
       return
     }
+
     forgetStaleCodexPanes(args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string'))
   })
   ipcMain.handle('codexAccounts:list', () => codexAccounts.listAccounts())
@@ -57,6 +61,7 @@ export function registerCodexAccountHandlers(
         // runtime as Windows/host and rejecting valid WSL accounts.
         return codexAccounts.selectAccount(args.accountId)
       }
+
       return codexAccounts.selectAccountForTarget(args.accountId, args)
     }
   )

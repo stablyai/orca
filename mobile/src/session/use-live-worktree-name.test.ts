@@ -6,6 +6,7 @@ import { useLiveWorktreeName } from './use-live-worktree-name'
 
 vi.mock('expo-router', async () => {
   const React = await import('react')
+
   return {
     useFocusEffect(effect: () => void | (() => void)): void {
       React.useEffect(effect, [effect])
@@ -17,18 +18,22 @@ describe('useLiveWorktreeName request volume', () => {
   let renderer: ReactTestRenderer | null = null
   let eventListener: ((payload: unknown) => void) | null = null
   const unsubscribeStream = vi.fn()
+
   const sendRequest = vi.fn().mockResolvedValue({
     id: 'worktree-show',
     ok: true,
     result: { worktree: { id: 'repo-1::/worktree', displayName: 'Live name' } },
     _meta: { runtimeId: 'runtime-1' }
   })
+
   const subscribe = vi.fn(
     (_method: string, _params: unknown, listener: (payload: unknown) => void) => {
       eventListener = listener
+
       return unsubscribeStream
     }
   )
+
   const client = { sendRequest, subscribe } as unknown as RpcClient
 
   async function mountHarness(): Promise<void> {
@@ -39,6 +44,7 @@ describe('useLiveWorktreeName request volume', () => {
         routeName: 'Route name',
         worktreeId: 'repo-1::/worktree'
       })
+
       return null
     }
 
@@ -151,6 +157,7 @@ describe('useLiveWorktreeName request volume', () => {
 
   it('never calls worktree.show for the floating workspace sentinel', async () => {
     let name = ''
+
     function FloatingHarness(): null {
       name = useLiveWorktreeName({
         client,
@@ -158,6 +165,7 @@ describe('useLiveWorktreeName request volume', () => {
         routeName: undefined,
         worktreeId: 'global-floating-terminal'
       }).name
+
       return null
     }
 
@@ -185,9 +193,11 @@ describe('useLiveWorktreeName request volume', () => {
         routeName: props.routeName,
         worktreeId: props.worktreeId
       })
+
       if (!firstNameByWorktree.has(props.worktreeId)) {
         firstNameByWorktree.set(props.worktreeId, name)
       }
+
       return null
     }
 
@@ -228,6 +238,7 @@ describe('useLiveWorktreeName request volume', () => {
   // RPC, so the failure branch has to publish a verdict instead of returning early.
   it('reports the host-proven verdict from the same poll', async () => {
     let resolution = ''
+
     function VerdictHarness(): null {
       resolution = useLiveWorktreeName({
         client,
@@ -235,8 +246,10 @@ describe('useLiveWorktreeName request volume', () => {
         routeName: 'Route name',
         worktreeId: 'repo-1::/worktree'
       }).resolution
+
       return null
     }
+
     const mount = async (): Promise<void> => {
       await act(async () => {
         renderer = create(createElement(VerdictHarness))

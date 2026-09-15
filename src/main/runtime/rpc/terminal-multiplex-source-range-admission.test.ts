@@ -31,9 +31,11 @@ describe('terminal multiplex RPC', () => {
         },
         requiredSeq: 4
       }
+
       const reserve = vi.fn(() => reservation)
       const commit = vi.fn(() => true)
       const rollback = vi.fn(() => true)
+
       const harness = startDesktopMultiplexSubscribe({
         attachRemoteTerminalSourceRangeConsumer: vi.fn(() => true),
         reserveRemoteTerminalSourceRangeReplacement: reserve,
@@ -44,6 +46,7 @@ describe('terminal multiplex RPC', () => {
           .fn()
           .mockResolvedValue({ data: 'snapshot', cols: 120, rows: 40, source, seq: 4 })
       })
+
       await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
       harness.handlers.get(0)?.(
         decodeTerminalStreamFrame(
@@ -65,9 +68,11 @@ describe('terminal multiplex RPC', () => {
       expect(reserve).toHaveBeenCalledWith(expect.any(Object), 4, 'initial-snapshot')
       expect(commit).toHaveBeenCalledWith(reservation, { source, seq: 4 })
       expect(rollback).not.toHaveBeenCalled()
+
       const snapshotEndIndex = harness.binaryFrames.findIndex(
         (bytes) => decodeTerminalStreamFrame(bytes)?.opcode === TerminalStreamOpcode.SnapshotEnd
       )
+
       expect(snapshotEndIndex).toBeGreaterThanOrEqual(0)
       harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')
       await harness.dispatchPromise
@@ -82,6 +87,7 @@ describe('terminal multiplex RPC', () => {
     async ({ source }) => {
       let dataListener: ((data: string, meta?: RuntimeTerminalDataMeta) => void) | undefined
       let modelSequence = 0
+
       let resolveSnapshot: (
         value: Readonly<{
           data: string
@@ -91,10 +97,12 @@ describe('terminal multiplex RPC', () => {
           seq: number
         }>
       ) => void = () => {}
+
       const publishedSourceEnds: number[] = []
       const prepareExit = vi.fn()
       const finalizeExit = vi.fn()
       const closeProvider = vi.fn()
+
       const intake = new SshPtyOutputIntake({
         getModelSequence: () => modelSequence,
         acceptModel: (event, projection) => {
@@ -104,6 +112,7 @@ describe('terminal multiplex RPC', () => {
             rawLength: event.rawLength,
             sourceRanges: projection.desktopSpan ? [projection.desktopSpan] : undefined
           })
+
           return { sequence: modelSequence, completion: Promise.resolve() }
         },
         project: vi.fn(),
@@ -117,8 +126,10 @@ describe('terminal multiplex RPC', () => {
           onSettled({ ok: true })
         }
       })
+
       const hooks = intake.getRemoteSourceRangeConsumerHooks()
       const reserveReplacement = vi.fn(hooks.reserveReplacement)
+
       const harness = startDesktopMultiplexSubscribe({
         attachRemoteTerminalSourceRangeConsumer: hooks.attach,
         settleRemoteTerminalSourceRanges: hooks.settle,
@@ -128,6 +139,7 @@ describe('terminal multiplex RPC', () => {
         cancelRemoteTerminalSourceRanges: hooks.cancel,
         subscribeToTerminalData: vi.fn((_ptyId, listener) => {
           dataListener = listener
+
           return vi.fn()
         }),
         serializeTerminalBuffer: vi.fn(
@@ -143,6 +155,7 @@ describe('terminal multiplex RPC', () => {
             })
         )
       })
+
       const sourceEvent = (
         spanId: string,
         data: string,
@@ -163,6 +176,7 @@ describe('terminal multiplex RPC', () => {
           sourceEndSu: sourceStartSu + data.length
         }
       })
+
       const settleDesktop = async (event: SshPtyOutputDataEvent): Promise<void> => {
         const receipt = await intake.acceptData(event)
         const projectionId = receipt.projection.identity.projectionSemanticsId
@@ -199,14 +213,17 @@ describe('terminal multiplex RPC', () => {
       const subscribed = harness.messages
         .map((message) => JSON.parse(message).result)
         .find((event) => event?.type === 'subscribed')
+
       const liveOutput = harness.binaryFrames
         .map(decodeTerminalStreamFrame)
         .find((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+
       const snapshotOutput = harness.binaryFrames
         .map(decodeTerminalStreamFrame)
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => decodeTerminalStreamText(frame!.payload))
         .join('')
+
       expect(snapshotOutput).toBe('snap')
       expect(liveOutput && decodeTerminalStreamText(liveOutput.payload)).toBe('live')
       harness.handlers.get(7)?.(
@@ -253,8 +270,10 @@ describe('terminal multiplex RPC', () => {
       },
       requiredSeq: 4
     }
+
     const commit = vi.fn(() => true)
     const rollback = vi.fn(() => true)
+
     const harness = startDesktopMultiplexSubscribe(
       {
         attachRemoteTerminalSourceRangeConsumer: vi.fn(() => true),
@@ -273,6 +292,7 @@ describe('terminal multiplex RPC', () => {
       undefined,
       (bytes) => decodeTerminalStreamFrame(bytes)?.opcode !== TerminalStreamOpcode.SnapshotEnd
     )
+
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
     harness.handlers.get(0)?.(
       decodeTerminalStreamFrame(
@@ -298,10 +318,12 @@ describe('terminal multiplex RPC', () => {
   it('keeps legacy multiplex clients outside source replacement admission', async () => {
     const attach = vi.fn(() => true)
     const reserve = vi.fn()
+
     const harness = startDesktopMultiplexSubscribe({
       attachRemoteTerminalSourceRangeConsumer: attach,
       reserveRemoteTerminalSourceRangeReplacement: reserve
     })
+
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
     sendDesktopMultiplexSubscribe(harness.handlers)
     await vi.waitFor(() =>
@@ -320,6 +342,7 @@ describe('terminal multiplex RPC', () => {
     let dataListener: ((data: string, meta?: RuntimeTerminalDataMeta) => void) | null = null
     const settle = vi.fn()
     const cancel = vi.fn()
+
     const harness = startDesktopMultiplexSubscribe({
       attachRemoteTerminalSourceRangeConsumer: vi.fn(() => true),
       settleRemoteTerminalSourceRanges: settle,
@@ -329,9 +352,11 @@ describe('terminal multiplex RPC', () => {
       cancelRemoteTerminalSourceRanges: cancel,
       subscribeToTerminalData: vi.fn((_ptyId, listener) => {
         dataListener = listener
+
         return vi.fn()
       })
     })
+
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
     harness.handlers.get(0)?.(
       decodeTerminalStreamFrame(
@@ -356,9 +381,11 @@ describe('terminal multiplex RPC', () => {
           .find((event) => event?.type === 'subscribed')
       ).toBeDefined()
     )
+
     const subscribed = harness.messages
       .map((message) => JSON.parse(message).result)
       .find((event) => event?.type === 'subscribed')
+
     expect(subscribed).toMatchObject({
       capabilities: { ackOutputSourceRanges: 1 },
       streamGeneration: expect.any(String)
@@ -368,6 +395,7 @@ describe('terminal multiplex RPC', () => {
       data: string,
       meta?: RuntimeTerminalDataMeta
     ) => void
+
     emitData('ab', {
       seq: 2,
       rawLength: 2,
@@ -396,9 +424,11 @@ describe('terminal multiplex RPC', () => {
         )
       ).toBe(true)
     )
+
     const output = harness.binaryFrames
       .map(decodeTerminalStreamFrame)
       .find((frame) => frame?.opcode === TerminalStreamOpcode.Output)!
+
     const acknowledge = (payload: unknown): void => {
       harness.handlers.get(7)?.(
         decodeTerminalStreamFrame(
@@ -438,9 +468,11 @@ describe('terminal multiplex RPC', () => {
         )
       ]
     })
+
     const outputFramesBeforeStaleAck = harness.binaryFrames.filter(
       (bytes) => decodeTerminalStreamFrame(bytes)?.opcode === TerminalStreamOpcode.Output
     ).length
+
     acknowledge({ streamGeneration: 'stale', ackedEndByte: output.payload.byteLength })
     expect(settle).not.toHaveBeenCalled()
     expect(
@@ -478,6 +510,7 @@ describe('terminal multiplex RPC', () => {
     let dataListener: ((data: string, meta?: RuntimeTerminalDataMeta) => void) | null = null
     const settle = vi.fn()
     const cancel = vi.fn()
+
     const harness = startDesktopMultiplexSubscribe({
       attachRemoteTerminalSourceRangeConsumer: vi.fn(() => true),
       settleRemoteTerminalSourceRanges: settle,
@@ -487,9 +520,11 @@ describe('terminal multiplex RPC', () => {
       cancelRemoteTerminalSourceRanges: cancel,
       subscribeToTerminalData: vi.fn((_ptyId, listener) => {
         dataListener = listener
+
         return vi.fn()
       })
     })
+
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
     sendDesktopSourceRangeSubscribe(harness.handlers)
     await vi.waitFor(() => expect(dataListener).not.toBeNull())
@@ -498,13 +533,16 @@ describe('terminal multiplex RPC', () => {
         harness.messages.some((message) => JSON.parse(message).result?.type === 'subscribed')
       ).toBe(true)
     )
+
     const subscribed = harness.messages
       .map((message) => JSON.parse(message).result)
       .find((event) => event?.type === 'subscribed')
+
     const emitData = dataListener as unknown as (
       data: string,
       meta?: RuntimeTerminalDataMeta
     ) => void
+
     const acknowledge = (ackedEndByte: number): void => {
       harness.handlers.get(7)?.(
         decodeTerminalStreamFrame(
@@ -520,6 +558,7 @@ describe('terminal multiplex RPC', () => {
         )!
       )
     }
+
     harness.binaryFrames.splice(0)
 
     emitData('a'.repeat(100), {
@@ -578,24 +617,30 @@ describe('terminal multiplex RPC', () => {
       let dataListener:
         | ((data: string, meta?: { seq?: number; rawLength?: number }) => void)
         | null = null
+
       let rejectOutput = false
       const unsubscribeData = vi.fn()
+
       const harness = startDesktopMultiplexSubscribe(
         {
           subscribeToTerminalData: vi.fn((_ptyId, listener) => {
             dataListener = listener
+
             return unsubscribeData
           })
         },
         undefined,
         (bytes) => {
           const frame = decodeTerminalStreamFrame(bytes)
+
           if (!rejectOutput || frame?.opcode !== TerminalStreamOpcode.Output) {
             return true
           }
+
           if (failureMode === 'throws') {
             throw new Error('socket closed')
           }
+
           return false
         }
       )
@@ -614,10 +659,12 @@ describe('terminal multiplex RPC', () => {
       rejectOutput = true
 
       const output = 'x'.repeat(64 * 1024)
+
       const deliverData = dataListener as unknown as (
         data: string,
         meta?: { seq?: number; rawLength?: number }
       ) => void
+
       deliverData(output, { seq: output.length, rawLength: output.length })
 
       await vi.waitFor(() => expect(unsubscribeData).toHaveBeenCalledOnce())

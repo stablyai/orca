@@ -39,6 +39,7 @@ async function collidingHosts(): Promise<void> {
 function selectDesktopRow(): string {
   const row = listedRows().find((candidate) => candidate.automation.name === 'Desktop nightly')
   expect(row).toBeDefined()
+
   return row?.key ?? ''
 }
 

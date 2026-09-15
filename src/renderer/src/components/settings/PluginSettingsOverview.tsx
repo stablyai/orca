@@ -32,6 +32,7 @@ type PluginSettingsOverviewProps = {
 
 function matchesInstalledPlugin(plugin: PluginHostListEntry, search: string): boolean {
   const query = search.trim().toLocaleLowerCase()
+
   return (
     !query ||
     [plugin.name, plugin.pluginKey, plugin.publisher, plugin.description ?? ''].some((value) =>
@@ -108,6 +109,7 @@ export function PluginSettingsOverview({
               const filteredPlugins = plugins.filter((plugin) =>
                 matchesInstalledPlugin(plugin, search)
               )
+
               if (error) {
                 return (
                   <div className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -115,6 +117,7 @@ export function PluginSettingsOverview({
                   </div>
                 )
               }
+
               if (filteredPlugins.length === 0) {
                 return search ? (
                   <PluginCatalogEmptyState
@@ -142,6 +145,7 @@ export function PluginSettingsOverview({
                   />
                 )
               }
+
               return (
                 <div className="grid gap-3 lg:grid-cols-2">
                   {filteredPlugins.map((plugin) => (

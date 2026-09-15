@@ -4,7 +4,9 @@ import { quotePosixShell } from '../../shared/wsl-login-shell-command'
 import { runWslProcess } from '../wsl/wsl-runner'
 
 const GUEST_TERMINATION_ATTEMPTS = 40
+
 const GUEST_TERMINATION_INTERVAL_SECONDS = '0.025'
+
 const GUEST_TERMINATION_COMMAND_TIMEOUT_MS = 5_000
 
 export type WslProcessGroupTermination = ProcessTerminationBarrier & {
@@ -22,6 +24,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
     const match = combined.match(new RegExp(`${marker}(\\d+)\\r?\\n`))
     stderrTail = combined.slice(-512)
     const parsed = match ? Number(match[1]) : 0
+
     if (Number.isSafeInteger(parsed) && parsed > 1) {
       processGroupId = parsed
     }
@@ -31,6 +34,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
     if (processGroupId === null) {
       return false
     }
+
     const script = [
       '_orca_group=$1',
       `kill -${signal} "-$_orca_group" 2>/dev/null || :`,
@@ -41,6 +45,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
       `  sleep ${GUEST_TERMINATION_INTERVAL_SECONDS}`,
       'done'
     ].join('\n')
+
     // loginPath 'none': the payload is builtins and coreutils on the default
     // PATH, so a login probe would only add latency to a kill.
     const result = await runWslProcess({
@@ -51,6 +56,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
       timeoutMs: GUEST_TERMINATION_COMMAND_TIMEOUT_MS,
       maxOutputBytes: 1_024
     })
+
     return result.code === 0 && !result.timedOut
   }
 
@@ -63,6 +69,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
         `printf '%s%s\\n' ${quotePosixShell(marker)} "$$" >&2`,
         'exec "$@"'
       ].join('\n')
+
       // Why probe rather than assume: BusyBox `setsid` has no `--wait`, so there
       // the wrapper would fail the Git command outright. Without a new session the
       // reported group is not ours to kill, so the fallback reports no identity
@@ -73,6 +80,7 @@ export function createWslProcessGroupTermination(distro: string): WslProcessGrou
         'fi',
         'exec "$@"'
       ].join('\n')
+
       return ['sh', '-c', script, 'orca-wsl-process-group', ...args]
     },
     stripControlOutput: (stderr) => stderr.replace(new RegExp(`${marker}\\d+\\r?\\n?`, 'g'), '')

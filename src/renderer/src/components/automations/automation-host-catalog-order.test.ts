@@ -22,6 +22,7 @@ function mirror(
 function describeEntry(entry: AutomationHostCatalogEntry): string {
   const authority = entry.stableRef.authority
   const prefix = authority.kind === 'desktop' ? 'desktop' : authority.environmentId
+
   return `${prefix}/${entry.kind}:${entry.label}`
 }
 
@@ -60,6 +61,7 @@ describe('orderAutomationHostCatalogEntries', () => {
       ],
       runtimeCatalogSettled: true
     })
+
     expect(catalog.entries.map(describeEntry)).toEqual([
       'desktop/self:Local Mac',
       'desktop/ssh:alpha',
@@ -93,6 +95,7 @@ describe('orderAutomationHostCatalogEntries', () => {
       })),
       runtimeCatalogSettled: true
     })
+
     expect(catalog.entries.map(describeEntry)).toEqual([
       'desktop/self:Local Mac',
       'desktop/ssh:same',
@@ -120,6 +123,7 @@ describe('orderAutomationHostCatalogEntries', () => {
       runtimes: [],
       runtimeCatalogSettled: true
     })
+
     expect(
       catalog.entries.filter((entry) => entry.kind === 'ssh').map((entry) => entry.label)
     ).toEqual(['Ähnlich', 'box-2', 'box-10'])
@@ -139,6 +143,7 @@ describe('orderAutomationHostCatalogEntries', () => {
       runtimes: [],
       runtimeCatalogSettled: true
     })
+
     const createCollator = vi.fn(() => new Intl.Collator(undefined, { numeric: true }))
     orderAutomationHostCatalogEntries(catalog.entries, { createCollator })
     expect(createCollator).toHaveBeenCalledTimes(1)
@@ -150,6 +155,7 @@ describe('orderAutomationHostCatalogEntries', () => {
       runtimes: [],
       runtimeCatalogSettled: true
     })
+
     const input = catalog.entries.toReversed()
     const ordered = orderAutomationHostCatalogEntries(input)
     expect(input).toEqual(catalog.entries.toReversed())

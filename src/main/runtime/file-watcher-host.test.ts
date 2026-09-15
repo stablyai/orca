@@ -53,20 +53,24 @@ function installSuccessfulWatch(): InstalledWatch {
     ): Promise<WatcherProcessSubscription> => {
       callback = nextCallback
       hooks = nextHooks
+
       return { unsubscribe }
     }
   )
+
   return {
     get callback() {
       if (!callback) {
         throw new Error('watch callback not installed')
       }
+
       return callback
     },
     get hooks() {
       if (!hooks) {
         throw new Error('watch hooks not installed')
       }
+
       return hooks
     },
     unsubscribe
@@ -112,20 +116,24 @@ describe('watchFileExplorerInWatcherProcess', () => {
 
   it('joins root-scoped cleanup to an in-progress subscriber teardown', async () => {
     let resolveUnsubscribe: () => void = () => undefined
+
     const unsubscribe = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveUnsubscribe = resolve
         })
     )
+
     subscribeViaRuntimeWatcherProcessMock.mockResolvedValue({ unsubscribe })
     const dispose = await watchFileExplorerInWatcherProcess('/repo', vi.fn())
 
     let rootCloseSettled = false
     const subscriberClose = dispose()
+
     const rootClose = closeFileExplorerWatcherInWatcherProcess('/repo').then(() => {
       rootCloseSettled = true
     })
+
     await Promise.resolve()
     expect(rootCloseSettled).toBe(false)
     expect(unsubscribe).toHaveBeenCalledTimes(1)
@@ -226,9 +234,11 @@ describe('watchFileExplorerInWatcherProcess', () => {
     await vi.waitFor(() => expect(rejectRecovery).toBeDefined())
 
     let released = false
+
     const release = dispose().then(() => {
       released = true
     })
+
     await Promise.resolve()
     expect(released).toBe(false)
     expect(abortObserved).toBe(true)
@@ -259,6 +269,7 @@ describe('watchFileExplorerInWatcherProcess', () => {
     )
     await vi.waitFor(() => expect(rejectRecovery).toBeDefined())
     const release = dispose()
+
     const teardownError = new WatcherProcessFailure(
       'file watcher process did not exit after termination deadline',
       'supervisor',
@@ -279,15 +290,18 @@ describe('watchFileExplorerInWatcherProcess', () => {
         })
     )
     let resolvePhysicalExit: () => void = () => {}
+
     const physicalExit = new Promise<void>((resolve) => {
       resolvePhysicalExit = resolve
     })
+
     const teardownError = new WatcherProcessFailure(
       'file watcher process did not exit after termination deadline',
       'supervisor',
       'process_unavailable',
       physicalExit
     )
+
     const dispose = await watchFileExplorerInWatcherProcess('/repo', vi.fn())
     watch.hooks.onTerminalError?.(
       new WatcherProcessFailure('crashed repeatedly', 'supervisor', 'supervisor_crash_fuse')
@@ -359,15 +373,18 @@ describe('watchFileExplorerInWatcherProcess', () => {
     subscribeViaRuntimeWatcherProcessMock.mockImplementationOnce(
       (_rootPath, _callback, _options, hooks: WatcherProcessHooks) => {
         physicalSignal = hooks.signal
+
         return new Promise<WatcherProcessSubscription>((_resolve, reject) => {
           rejectPhysical = reject
         })
       }
     )
     const controllers = [new AbortController(), new AbortController()]
+
     const pending = controllers.map((controller) =>
       watchFileExplorerInWatcherProcess('/repo', vi.fn(), vi.fn(), controller.signal)
     )
+
     const settled = [false, false]
     pending.forEach((promise, index) => {
       void promise.then(
@@ -415,6 +432,7 @@ describe('watchFileExplorerInWatcherProcess', () => {
     subscribeViaRuntimeWatcherProcessMock.mockImplementation(
       (_rootPath, _callback, _options, hooks: WatcherProcessHooks) => {
         physicalSignal = hooks.signal
+
         return new Promise<WatcherProcessSubscription>((resolve) => {
           resolvePhysical = resolve
         })
@@ -443,13 +461,16 @@ describe('watchFileExplorerInWatcherProcess', () => {
         })
     )
     const anchorController = new AbortController()
+
     const anchor = watchFileExplorerInWatcherProcess(
       '/repo',
       vi.fn(),
       vi.fn(),
       anchorController.signal
     )
+
     const controllers = Array.from({ length: 10_000 }, () => new AbortController())
+
     const cancelled = controllers.map((controller) =>
       watchFileExplorerInWatcherProcess('/repo', vi.fn(), vi.fn(), controller.signal).catch(
         (error) => error
@@ -459,6 +480,7 @@ describe('watchFileExplorerInWatcherProcess', () => {
     for (const controller of controllers) {
       controller.abort()
     }
+
     await Promise.all(cancelled)
 
     expect(getRuntimeRootWatchWaiterCountForTest('/repo')).toBe(1)
@@ -527,15 +549,18 @@ describe('watchFileExplorerInWatcherProcess', () => {
 
   it('retains failed initial root ownership until the exact child physically exits', async () => {
     let resolvePhysicalExit: () => void = () => {}
+
     const physicalExit = new Promise<void>((resolve) => {
       resolvePhysicalExit = resolve
     })
+
     const teardownError = new WatcherProcessFailure(
       'initial watcher child did not exit',
       'subscription',
       'subscribe_failed',
       physicalExit
     )
+
     subscribeViaRuntimeWatcherProcessMock.mockRejectedValueOnce(teardownError)
 
     await expect(watchFileExplorerInWatcherProcess('/repo', vi.fn())).rejects.toBe(teardownError)

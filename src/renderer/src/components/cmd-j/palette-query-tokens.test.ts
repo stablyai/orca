@@ -27,6 +27,7 @@ describe('Cmd+J palette query normalization', () => {
 
     expect(normalizeCmdJPaletteQuery(query)).toBe('café 系统 école test')
     expect(tokenizeCmdJPaletteQuery(query)).toEqual(['café', '系统', 'école', 'test'])
+
     for (const token of normalizeCmdJPaletteQuery(query).split(' ')) {
       expect(normalizePaletteText(token).normalized).toBe(token)
     }
@@ -54,9 +55,11 @@ describe('Cmd+J palette token scoring', () => {
 
   it('scores a repeated query token once', () => {
     const once = cmdJPaletteTokenScore(uniqueCmdJPaletteQueryTokens('terminal'), ['terminal'])
+
     const twice = cmdJPaletteTokenScore(uniqueCmdJPaletteQueryTokens('terminal terminal'), [
       'terminal'
     ])
+
     expect(twice).toBe(once)
   })
 
@@ -66,6 +69,7 @@ describe('Cmd+J palette token scoring', () => {
       { length: PALETTE_QUERY_MAX_TOKENS + 1 },
       (_, i) => `t${i}`
     ).join('.')
+
     expect(isCmdJPaletteQueryOverTokenLimit(punctuationHeavy)).toBe(true)
   })
 })

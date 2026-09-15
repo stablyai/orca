@@ -17,7 +17,9 @@ export function extractIpcErrorMessage(err: unknown, fallback: string): string {
   if (!(err instanceof Error)) {
     return fallback
   }
+
   const match = err.message.match(/Error invoking remote method '[^']*': (?:Error: )?(.+)/)
+
   return match ? match[1] : err.message
 }
 
@@ -45,20 +47,27 @@ type RenameFileArgs = {
 export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
   const { oldPath, newName, worktreeId, worktreePath, refreshDir } = args
   const trimmed = newName.trim()
+
   if (!trimmed) {
     return
   }
+
   const existingName = basename(oldPath)
+
   if (trimmed === existingName) {
     return
   }
+
   const parentDir = dirname(oldPath)
   const newPath = joinPath(parentDir, trimmed)
+
   const operationGuard = captureFileExplorerOperationGuard(
     worktreeId,
     args.operationOwner ?? getFileExplorerOperationOwner(worktreeId)
   )
+
   const operationRoute = operationGuard.route
+
   const fileContext = {
     settings: operationRoute.settings,
     worktreeId,
@@ -88,6 +97,7 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
           worktreeId,
           worktreePath
         })
+
         if (refreshDir) {
           await refreshDir(parentDir)
         }
@@ -101,6 +111,7 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
           worktreeId,
           worktreePath
         })
+
         if (refreshDir) {
           await refreshDir(parentDir)
         }
@@ -109,6 +120,7 @@ export async function renameFileOnDisk(args: RenameFileArgs): Promise<void> {
   } catch (err) {
     toast.error(extractIpcErrorMessage(err, `Failed to rename '${existingName}'.`))
   }
+
   if (refreshDir) {
     await refreshDir(parentDir)
   }

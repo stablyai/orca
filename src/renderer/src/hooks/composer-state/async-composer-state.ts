@@ -55,6 +55,7 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
     selectedRepoSettings,
     setName
   } = input
+
   const { getInitialAutoManagedWorkspaceName, getInitialGitHubPrStartPointSelection } = decisions
 
   const [yamlHooks, setYamlHooks] = useState<OrcaHooks | null>(null)
@@ -162,6 +163,7 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
         repoId: selectedRepo?.id ?? initialRepoId
       })
     )
+
   const smartGitHubPrStartPointSelectionRef = useRef<SmartGitHubPrStartPointSelection | null>(
     initialSmartGitHubPrStartPointSelection
   )
@@ -176,6 +178,7 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
     }
 
     window.addEventListener(CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT, clearAutoManagedName)
+
     return () => {
       window.removeEventListener(
         CONTEXTUAL_TOUR_ENABLE_AUTO_WORKSPACE_NAME_EVENT,

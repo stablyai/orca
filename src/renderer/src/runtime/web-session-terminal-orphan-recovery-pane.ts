@@ -42,7 +42,9 @@ function readResolvedPane(value: unknown): ResolvedPaneResponse {
   if (!isRecord(value) || !isRecord(value.terminal)) {
     return { kind: 'invalid' }
   }
+
   const terminal = value.terminal
+
   if (
     typeof terminal.handle !== 'string' ||
     terminal.handle.length === 0 ||
@@ -55,9 +57,11 @@ function readResolvedPane(value: unknown): ResolvedPaneResponse {
   ) {
     return { kind: 'invalid' }
   }
+
   if (!terminal.connected) {
     return { kind: 'disconnected' }
   }
+
   return {
     kind: 'connected',
     terminal: {
@@ -101,9 +105,11 @@ async function resolveOne(args: {
 }): Promise<RecoverySurface | null> {
   const { surface, snapshot, environmentId, call, expectedEnvironmentPairingRevision, isCurrent } =
     args
+
   if (!isCurrent()) {
     return null
   }
+
   const cacheFailure = (): void => {
     if (isCurrent()) {
       cacheStablePaneResolutionFailure({
@@ -114,6 +120,7 @@ async function resolveOne(args: {
       })
     }
   }
+
   if (
     readStablePaneResolutionFailure({
       environmentId,
@@ -124,14 +131,18 @@ async function resolveOne(args: {
   ) {
     return null
   }
+
   let paneKey: string
+
   try {
     paneKey = makePaneKey(surface.tabId, surface.leafId)
   } catch {
     // Legacy/corrupt layouts cannot be safely addressed; keep the surface pending.
     cacheFailure()
+
     return null
   }
+
   try {
     const response = await runInTerminalRecoveryRpcLane(isCurrent, () =>
       call({
@@ -145,24 +156,33 @@ async function resolveOne(args: {
         expectedEnvironmentPairingRevision
       })
     )
+
     if (!response?.ok) {
       if (response?.error.code === 'method_not_found') {
         cacheFailure()
       }
+
       return null
     }
+
     const resolution = readResolvedPane(response.result)
+
     if (resolution.kind === 'invalid') {
       cacheFailure()
+
       return null
     }
+
     if (resolution.kind === 'disconnected') {
       return null
     }
+
     const { terminal } = resolution
+
     if (!matchesSurface(terminal, surface, snapshot.worktree)) {
       return null
     }
+
     return resolvedSurface(surface, terminal)
   } catch {
     return null
@@ -178,21 +198,26 @@ export async function resolvePersistedTerminalSurfaces(args: {
   isCurrent: () => boolean
 }): Promise<PaneResolution | null> {
   const { surfaces, isCurrent } = args
+
   if (surfaces.length === 0) {
     return { resolved: [], unresolved: [] }
   }
+
   if (surfaces.length > MAX_PANE_RESOLVES) {
     return { resolved: [], unresolved: [...surfaces] }
   }
+
   const outcomes = await Promise.all(
     surfaces.map(async (surface) => ({
       surface,
       resolved: await resolveOne({ ...args, surface })
     }))
   )
+
   if (!isCurrent()) {
     return null
   }
+
   return {
     resolved: outcomes.flatMap(({ resolved }) => (resolved ? [resolved] : [])),
     unresolved: outcomes.flatMap(({ surface, resolved }) => (resolved ? [] : [surface]))

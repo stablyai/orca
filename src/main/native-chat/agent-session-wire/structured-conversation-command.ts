@@ -24,6 +24,7 @@ export type ConversationCommandParams = {
   envelope: AgentSessionMutationEnvelope
   command: AgentSessionConversationCommand
 }
+
 export type ConversationReplacement = {
   sourceSessionId: string
   sessionId: string
@@ -40,12 +41,15 @@ export function runStructuredConversationCommand(
   const { envelope, command } = params
   const { sessionId, clientOperationId } = envelope
   const store = context.deps.store
+
   const matching = () => {
     const record = store.getRecord(sessionId)?.conversationCommand
+
     return record?.operationId === clientOperationId && record.callerKey === caller.callerKey
       ? record
       : null
   }
+
   return context.serialize(sessionId, () =>
     admitAndRunAgentSessionMutation({
       store,
@@ -65,10 +69,13 @@ export function runStructuredConversationCommand(
           if (outcome.status === 'succeeded' && outcome.conversationCommand) {
             return outcome.conversationCommand
           }
+
           const prior = matching()
+
           if (prior?.phase === 'committed') {
             return prior
           }
+
           if (command === 'compact' && prior && outcome.status !== 'unknown') {
             return {
               command,
@@ -76,6 +83,7 @@ export function runStructuredConversationCommand(
               error: 'Compaction completion is unconfirmed; it was not run again.'
             }
           }
+
           return outcome.status === 'succeeded' && command === 'compact'
             ? { command, state: 'completed' }
             : null
@@ -85,16 +93,19 @@ export function runStructuredConversationCommand(
           await host.flushStreamedEvents(sessionId)
           const record = store.getRecord(sessionId)!
           const prior = matching()
+
           const blocked =
             prior?.phase === 'prepared' && command === 'clear'
               ? null
               : conversationCommandBlocked(ctx, record)
+
           if (blocked) {
             return {
               ok: false,
               refusal: { code: 'agent_session_operation_invalid', message: blocked }
             }
           }
+
           const replacementSessionId =
             command === 'clear'
               ? (prior?.replacementSessionId ??
@@ -103,6 +114,7 @@ export function runStructuredConversationCommand(
                   .digest('hex')
                   .slice(0, 40)}`)
               : undefined
+
           const prepared = {
             command,
             runtimeFence: ctx.fence,
@@ -112,7 +124,9 @@ export function runStructuredConversationCommand(
             state: 'unknown' as const,
             ...(replacementSessionId ? { replacementSessionId } : {})
           }
+
           let effectiveOptions = record.options
+
           if (command === 'clear' && !prior) {
             try {
               const options = await ctx.adapter.readOptions?.({ sessionId, fence: ctx.fence })
@@ -136,11 +150,14 @@ export function runStructuredConversationCommand(
               }
             }
           }
+
           if (effectiveOptions && command === 'clear') {
             await ctx.persistOptions(effectiveOptions)
           }
+
           await store.setConversationCommand(sessionId, ctx.fence, prepared)
           let error: string | undefined
+
           if (command === 'clear' && replacementSessionId) {
             const attach: AgentSessionAttachParams = {
               envelope: {
@@ -162,12 +179,14 @@ export function runStructuredConversationCommand(
               launchArgs: record.launchArgs,
               options: effectiveOptions
             }
+
             attach.envelope.payloadFingerprint = computeAgentSessionPayloadFingerprint({
               method: 'agentSession.attach',
               sessionId: replacementSessionId,
               fields: attachFingerprintFields(attach)
             })
             const acquired = await host.attach(caller, attach)
+
             if (!acquired.ok) {
               if (
                 !isDefinitiveAgentSessionCreateRefusal(acquired.refusal.code) &&
@@ -175,6 +194,7 @@ export function runStructuredConversationCommand(
               ) {
                 throw new Error(acquired.refusal.message)
               }
+
               const failed = {
                 ...prepared,
                 replacementSessionId: undefined,
@@ -182,17 +202,21 @@ export function runStructuredConversationCommand(
                 state: 'completed' as const,
                 error: acquired.refusal.message.slice(0, 4096)
               }
+
               await store.setConversationCommand(sessionId, ctx.fence, failed)
+
               return { ok: true, value: failed }
             }
           } else {
             if (!ctx.adapter.compact) {
               throw new Error('Compaction is unavailable for this provider.')
             }
+
             const identity = {
               provider: 'orca' as const,
               clientMessageId: `compact:${clientOperationId}`
             }
+
             await ctx.journal.appendItem(
               identity,
               {
@@ -203,6 +227,7 @@ export function runStructuredConversationCommand(
               { fence: ctx.fence }
             )
             ctx.publish()
+
             try {
               error = (
                 await ctx.adapter.compact({
@@ -217,6 +242,7 @@ export function runStructuredConversationCommand(
                       ) {
                         return
                       }
+
                       await host.flushStreamedEvents(sessionId)
                       await ctx.journal.appendItem(
                         identity,
@@ -252,6 +278,7 @@ export function runStructuredConversationCommand(
               ctx.publish()
               throw cause
             }
+
             await ctx.journal.appendItem(
               identity,
               { kind: 'status', text: error ?? 'Conversation compacted.' },
@@ -259,13 +286,16 @@ export function runStructuredConversationCommand(
             )
             ctx.publish()
           }
+
           const completed = {
             ...prepared,
             phase: 'committed' as const,
             state: 'completed' as const,
             ...(error ? { error: error.slice(0, 4096) } : {})
           }
+
           await store.setConversationCommand(sessionId, ctx.fence, completed)
+
           return { ok: true, value: completed }
         }
       }

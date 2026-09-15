@@ -36,10 +36,12 @@ const ALL_GENERATION_PROTOCOLS = [
     PROTOCOL_VERSION
   ])
 ]
+
 const configuredReconnectBursts = Number.parseInt(
   process.env.ORCA_DAEMON_GENERATION_RECONNECT_BURSTS ?? '3',
   10
 )
+
 const RECONNECT_BURSTS =
   Number.isInteger(configuredReconnectBursts) && configuredReconnectBursts > 0
     ? configuredReconnectBursts
@@ -81,7 +83,9 @@ async function collectLiveness(
     ...generations.map((generation) => generation.identity),
     ...canaries.flatMap((canary) => [canary.rootIdentity, canary.descendantIdentity])
   ]
+
   const live = await processIdentityLiveness(identities)
+
   return {
     daemons: Object.fromEntries(
       generations.map((generation) => [
@@ -131,6 +135,7 @@ function launchReconnectClient(options: {
     })}\n`
   )
   let output = ''
+
   const child = fork(runtime.reconnectClientEntryPath, ['--config', configPath], {
     cwd: runtime.userDataDir,
     execPath: runtime.electronPath,
@@ -143,37 +148,45 @@ function launchReconnectClient(options: {
     },
     stdio: ['ignore', 'ignore', 'pipe', 'ipc']
   })
+
   child.stderr?.on('data', (chunk: Buffer) => {
     output = `${output}${chunk.toString('utf8')}`.slice(-32_768)
   })
+
   const ready = new Promise<CloseBurstReport>((resolve, reject) => {
     const timer = setTimeout(
       () => reject(new Error(`Reconnect client timed out: ${output}`)),
       60_000
     )
+
     const settle = (callback: () => void): void => {
       clearTimeout(timer)
       child.off('message', onMessage)
       child.off('exit', onExit)
       callback()
     }
+
     const onExit = (code: number | null): void =>
       settle(() => reject(new Error(`Reconnect client exited with ${code}: ${output}`)))
+
     const onMessage = (message: unknown): void => {
       const payload = message as {
         type?: unknown
         message?: unknown
         closeAttempts?: Record<string, number>
       }
+
       if (payload.type === 'error') {
         settle(() => reject(new Error(String(payload.message))))
       } else if (payload.type === 'close-bursts-complete') {
         settle(() => resolve({ closeAttempts: payload.closeAttempts ?? {} }))
       }
     }
+
     child.on('message', onMessage)
     child.once('exit', onExit)
   })
+
   return {
     child,
     ready,
@@ -181,6 +194,7 @@ function launchReconnectClient(options: {
       if (!child.connected) {
         return
       }
+
       try {
         child.send?.({ type: 'finish' }, () => {})
       } catch {
@@ -197,8 +211,10 @@ async function finishReconnectClient(
   if (!client.child.pid || client.child.exitCode !== null) {
     return
   }
+
   const identity = await recordProcessIdentity(client.child.pid)
   client.finish()
+
   try {
     await waitForCondition('reconnect client exit', () => client.child.exitCode !== null, 2_000)
   } catch {
@@ -226,6 +242,7 @@ function writeEventReconstruction(options: {
     closeBurst,
     clientPid
   } = options
+
   writeFileSync(
     testInfo.outputPath('daemon-generation-reconnect-events.json'),
     `${JSON.stringify(
@@ -263,15 +280,18 @@ async function cleanupGenerationTestFixtures(options: {
   retainDiagnostics: boolean
 }): Promise<void> {
   const { runtime, generations, canaries, retainDiagnostics } = options
+
   if (retainDiagnostics) {
     runtime.retainDiagnostics(generations)
   }
+
   try {
     await cleanupDaemonGenerationFixtures({ generations, canaries })
   } catch (error) {
     runtime.retainDiagnostics(generations)
     throw error
   }
+
   runtime.remove()
 }
 
@@ -294,11 +314,14 @@ test('native Windows reconnect cannot turn stale mirror exits into cross-generat
         label: generationLabel(protocolVersion),
         protocolVersion
       })
+
       generations.push(generation)
+
       for (const role of ['live', 'stale-mirror'] as const) {
         canaries.push(await spawnGenerationCanary({ runtime: fixtureRuntime, generation, role }))
       }
     }
+
     expect(new Set(generations.map((generation) => generation.socketPath)).size).toBe(
       ALL_GENERATION_PROTOCOLS.length
     )
@@ -315,10 +338,12 @@ test('native Windows reconnect cannot turn stale mirror exits into cross-generat
     const helloBaselines = new Map(
       generations.map((generation) => [generation.protocolVersion, helloCount(generation)])
     )
+
     for (const canary of canaries) {
       await canary.adapter.disconnectOnly()
       canary.adapter.dispose()
     }
+
     const beforeClose = await collectLiveness(generations, canaries)
     expect(Object.values(beforeClose.daemons).every(Boolean)).toBe(true)
     expect(Object.values(beforeClose.roots).every(Boolean)).toBe(true)
@@ -327,6 +352,7 @@ test('native Windows reconnect cannot turn stale mirror exits into cross-generat
     client = launchReconnectClient({ runtime: fixtureRuntime, generations, canaries })
     const closeBurst = await client.ready
     expect(client.child.exitCode).toBeNull()
+
     for (const generation of generations) {
       expect(
         helloCount(generation) - helloBaselines.get(generation.protocolVersion)!
@@ -346,6 +372,7 @@ test('native Windows reconnect cannot turn stale mirror exits into cross-generat
     client = launchReconnectClient({ runtime: fixtureRuntime, generations, canaries })
     const relaunchCloseBurst = await client.ready
     expect(client.child.exitCode).toBeNull()
+
     const combinedCloseBurst: CloseBurstReport = {
       closeAttempts: Object.fromEntries(
         Object.entries(closeBurst.closeAttempts).map(([tabId, attempts]) => [
@@ -354,6 +381,7 @@ test('native Windows reconnect cannot turn stale mirror exits into cross-generat
         ])
       )
     }
+
     expect(
       Object.values(combinedCloseBurst.closeAttempts).every((attempts) => attempts === 6)
     ).toBe(true)
@@ -383,6 +411,7 @@ test('native Windows reconnect cannot turn stale mirror exits into cross-generat
     if (client) {
       await finishReconnectClient(client)
     }
+
     await cleanupGenerationTestFixtures({
       runtime: fixtureRuntime,
       generations,
@@ -408,18 +437,23 @@ test('shutdown disposal failure drops authority within a bounded window', async 
       protocolVersion: 23,
       refuseDispose: true
     })
+
     generations.push(generation)
+
     const canary = await spawnGenerationCanary({
       runtime: fixtureRuntime,
       generation,
       role: 'live'
     })
+
     canaries.push(canary)
+
     const shutdownClient = new DaemonClient({
       socketPath: generation.socketPath,
       tokenPath: generation.tokenPath,
       protocolVersion: generation.protocolVersion
     })
+
     await shutdownClient.ensureConnected()
 
     const startedAt = Date.now()
@@ -429,11 +463,13 @@ test('shutdown disposal failure drops authority within a bounded window', async 
     await waitForCondition('shutdown-dispose-failed log', () =>
       generation.logEvents().some((event) => event.event === 'shutdown-dispose-failed')
     )
+
     const lateClient = new DaemonClient({
       socketPath: generation.socketPath,
       tokenPath: generation.tokenPath,
       protocolVersion: generation.protocolVersion
     })
+
     await expect(lateClient.ensureConnected()).rejects.toThrow()
     lateClient.disconnect()
     const fencedLiveness = await collectLiveness(generations, canaries)

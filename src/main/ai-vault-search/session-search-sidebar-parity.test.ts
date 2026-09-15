@@ -77,6 +77,7 @@ const QUERIES = [
 
 function asSession(fixture: Fixture): AiVaultSession {
   const at = '2026-09-01T00:00:00.000Z'
+
   return {
     id: String(fixture.id),
     executionHostId: 'local',
@@ -121,6 +122,7 @@ function sidebarIds(query: string): string[] {
 
 it.each(QUERIES)('answers %s the way the sessions panel does', async (query) => {
   harness = await openSessionSearchHarness('ss-sidebar-parity')
+
   for (const fixture of SESSIONS) {
     addSyntheticSession(harness.db, {
       id: fixture.id,
@@ -130,10 +132,12 @@ it.each(QUERIES)('answers %s the way the sessions panel does', async (query) => 
       sessionFilePath: fixture.filePath
     })
   }
+
   const engineIds = harness.engine
     .search({ query, limit: 100 })
     .hits.map((hit) => hit.sessionId)
     .sort()
+
   expect(engineIds).toEqual(sidebarIds(query))
 })
 

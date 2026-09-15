@@ -98,44 +98,54 @@ export async function runSessionSearchPass(
   args: SessionSearchPassArgs
 ): Promise<SessionSearchPassResult> {
   const { store, signal } = args
+
   if (args.full) {
     // Every sweep opens with the purge, so a window narrower than the last
     // instance held is applied by the first sweep of this one.
     await store.purgeOlderThan(store.retentionCutoff, signal)
   }
+
   await ensureSessionParseCacheLoaded()
+
   return withCursorChatMetaScan(async () => {
     const swept = await discoverSessionSearchCandidates(args.roots, {
       limitPerAgent: args.full ? Number.POSITIVE_INFINITY : args.recentPerAgent,
       signal
     })
+
     const issues: AiVaultScanIssue[] = [...swept.issues]
 
     let completed = true
     let outOfTime = false
     const rows = new Map(store.files().map((row) => [row.path, row]))
+
     try {
       const read = await runSessionSearchIndexPass(store, swept.candidates, {
         signal,
         rows,
         overdue: args.overdue
       })
+
       outOfTime = read.outOfTime
     } catch (error) {
       if (!signal?.aborted) {
         throw error
       }
+
       completed = false
     }
 
     const listings = sessionSearchRootListings(args.roots, swept.discoveries)
     const roots = listings.map((listing) => listing.root)
+
     const rootsWithFiles = new Set(
       listings.filter((listing) => listing.files > 0).map((listing) => listing.root)
     )
+
     // Undefined, not empty, before any pass has recorded one: an empty set is a
     // real observation and this is the absence of one.
     const previousRootsWithFiles = args.previousRootsWithFiles
+
     // A pass cut short saw part of the machine, so its silence about a path is
     // not evidence; it retires nothing and publishes no verdicts.
     const retirement = completed
@@ -165,6 +175,7 @@ export async function runSessionSearchPass(
         message: refusal.message
       })
     }
+
     // Roots that listed no transcripts and cannot be listed either: the walker
     // swallows a readdir failure, so this is the only place it surfaces.
     const unlistable = completed
@@ -205,9 +216,11 @@ function retirementCandidates(
 ): string[] {
   const discovered = new Set(swept.candidates.map((candidate) => candidate.file.path))
   const undiscovered = [...rows.values()].filter((row) => !discovered.has(row.path))
+
   if (full) {
     return undiscovered.map((row) => row.path)
   }
+
   return undiscovered
     .filter((row) => roots.some((root) => isUnderScanRoot(row.path, root)))
     .sort((left, right) => right.mtimeMs - left.mtimeMs)

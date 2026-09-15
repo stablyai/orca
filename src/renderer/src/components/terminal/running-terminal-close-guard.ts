@@ -30,11 +30,14 @@ export function shouldConfirmRunningTerminalClose(
   if (options?.force === true || options?.rejectPinned === true) {
     return false
   }
+
   if (options?.skipRunningProcessConfirm === true || options?.lifecyclePtyId !== undefined) {
     return false
   }
+
   const isUserReason = (reason: TerminalTabCloseReason | undefined): boolean =>
     reason === undefined || reason === 'user'
+
   return isUserReason(options?.reason) && isUserReason(options?.hostCloseReason)
 }
 
@@ -48,17 +51,21 @@ export function collectTabPtyIds(
   terminalTabId: string
 ): string[] {
   const ptyIds = new Set<string>()
+
   for (const ptyId of state.ptyIdsByTabId?.[terminalTabId] ?? []) {
     if (ptyId) {
       ptyIds.add(ptyId)
     }
   }
+
   const ptyIdsByLeafId = state.terminalLayoutsByTabId?.[terminalTabId]?.ptyIdsByLeafId ?? {}
+
   for (const ptyId of Object.values(ptyIdsByLeafId)) {
     if (typeof ptyId === 'string' && ptyId) {
       ptyIds.add(ptyId)
     }
   }
+
   return [...ptyIds]
 }
 
@@ -76,28 +83,34 @@ export function guardRunningTerminalClose(params: {
   const state = useAppStore.getState()
   const settings = state.settings
   const ptyIds = collectTabPtyIds(state, terminalTabId)
+
   // Why: no PTY at all means there is nothing to probe (parked/hibernated tab, or a
   // teardown that already cleared both maps), and the opt-out setting means the answer is
   // already known. Both keep the close fully synchronous.
   if (ptyIds.length === 0 || settings?.skipCloseTerminalWithRunningProcessConfirm === true) {
     onClose()
+
     return
   }
 
   // Why: the timeout, the probe result and the error path race to decide this close, so the
   // first one to land owns it instead of trusting those races to stay mutually exclusive.
   let decided = false
+
   const closeNow = (): void => {
     if (decided) {
       return
     }
+
     decided = true
     onClose()
   }
+
   const confirmClose = (busyPtyIds: readonly string[]): void => {
     if (decided) {
       return
     }
+
     const copyKind = resolveBusyPtyCloseCopyKind(terminalTabId, busyPtyIds)
     useRunningTerminalCloseConfirmStore.getState().requestRunningTerminalCloseConfirm({
       terminalTabId,
@@ -116,22 +129,28 @@ export function guardRunningTerminalClose(params: {
       if (decided) {
         return
       }
+
       // Why: a probe that has not answered yet is unknown, not idle. Ask, treating every pty
       // as a candidate, so a degraded relay costs a click instead of a killed remote command.
       if (probes.some((probe) => probe.timedOut)) {
         confirmClose(ptyIds)
+
         return
       }
+
       // Why: fail open on an *answered* probe, matching the Cmd+W pane path — a rejection
       // (wedged relay, legacy provider) or a stale remote handle is not evidence of a live
       // child, and a close button that silently does nothing is worse than closing a busy tab.
       const busyPtyIds = probes
         .filter((probe) => probe.verdict === 'live')
         .map((probe) => probe.ptyId)
+
       if (busyPtyIds.length === 0) {
         closeNow()
+
         return
       }
+
       confirmClose(busyPtyIds)
     })
     // Why: the probe never rejects, so this only fires when the decision above throws (a

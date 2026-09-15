@@ -4,9 +4,13 @@ import { createRequire } from 'node:module'
 import * as esbuild from 'esbuild'
 
 const require = createRequire(import.meta.url)
+
 const scriptDir = import.meta.dirname
+
 const mobileRoot = path.resolve(scriptDir, '..')
+
 const outputPath = path.join(mobileRoot, 'src', 'terminal', 'terminal-webview-engine.generated.ts')
+
 const target = 'chrome74'
 
 const packages = ['@xterm/xterm', '@xterm/addon-unicode11', '@xterm/addon-webgl']
@@ -16,6 +20,7 @@ async function readPackageVersion(packageName) {
   // Windows, yielding an unresolvable bare specifier that fails postinstall there.
   const packageJsonPath = require.resolve(`${packageName}/package.json`)
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
+
   return `${packageName}@${packageJson.version}`
 }
 
@@ -85,6 +90,7 @@ async function main() {
     readFile(require.resolve('@xterm/xterm/css/xterm.css'), 'utf8'),
     ...packages.map(readPackageVersion)
   ])
+
   // Why: the no-external-URL regression gate bans http(s):// anywhere in the
   // terminal document. These xmlns URIs live inside data: URLs (never fetched);
   // percent-encoding the scheme colon satisfies the gate and URI-decodes back

@@ -17,6 +17,7 @@ import {
 } from './claude-structured-launch-resolution'
 
 const SESSION_ID = 'orca-session-1'
+
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
   ReturnType<typeof createClaudeStructuredLaunchResolver>
 >[0]['identity']
@@ -47,6 +48,7 @@ function identityAt(leafUuid: string | null): typeof IDENTITY {
 function makeExecutable(path: string): void {
   mkdirSync(join(path, '..'), { recursive: true })
   writeFileSync(path, '')
+
   if (process.platform !== 'win32') {
     chmodSync(path, 0o755)
   }
@@ -251,10 +253,12 @@ describe('claude structured launch resolution', () => {
       CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
       ORCA_LAUNCH_RESOLUTION_MARKER: process.env.ORCA_LAUNCH_RESOLUTION_MARKER
     }
+
     process.env.ANTHROPIC_API_KEY = 'sk-ant-SHELL-LEAK'
     process.env.ANTHROPIC_AUTH_TOKEN = 'tok-SHELL-LEAK'
     process.env.CLAUDE_CODE_OAUTH_TOKEN = 'oauth-SHELL-LEAK'
     process.env.ORCA_LAUNCH_RESOLUTION_MARKER = 'inherited'
+
     try {
       const launch = await resolverFor(record(), undefined, true)({ identity: IDENTITY })
 
@@ -278,6 +282,7 @@ describe('claude structured launch resolution', () => {
   it('lets an explicit Claude env overlay override ambient auth under system auth', async () => {
     const restore = process.env.ANTHROPIC_API_KEY
     process.env.ANTHROPIC_API_KEY = 'sk-ant-SHELL-LEAK'
+
     try {
       const launch = await resolverFor(record(), () => ({
         ANTHROPIC_API_KEY: 'sk-ant-CONFIGURED'
@@ -351,9 +356,11 @@ describe('claude structured launch resolution', () => {
         // hardcoded value could assert a pairing production cannot produce.
         resolveAuthPolicy: () => {
           const settings = read()
+
           if (!settings) {
             throw new Error('the gate refuses before the auth policy is computed')
           }
+
           return claudeStructuredAuthPolicyForSettings(settings)
         },
         readManagedAccountGate: read

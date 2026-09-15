@@ -24,6 +24,7 @@ describe('linearWorkspaceScopeSignature', () => {
         }
       ]
     }
+
     const second: LinearConnectionStatus = {
       ...first,
       viewer: { ...first.viewer!, organizationName: 'Renamed' },
@@ -42,6 +43,7 @@ describe('linearWorkspaceScopeSignature', () => {
       viewer: null,
       selectedWorkspaceId: 'workspace-1'
     }
+
     const second = { ...first, selectedWorkspaceId: 'workspace-2' }
 
     expect(linearWorkspaceScopeSignature(second)).not.toBe(linearWorkspaceScopeSignature(first))
@@ -54,6 +56,7 @@ describe('linearWorkspaceScopeSignature', () => {
       selectedWorkspaceId: 'all',
       activeWorkspaceId: 'workspace-1'
     }
+
     const second = { ...first, activeWorkspaceId: 'workspace-2' }
 
     expect(linearWorkspaceScopeSignature(second)).not.toBe(linearWorkspaceScopeSignature(first))
@@ -74,6 +77,7 @@ describe('linearWorkspaceScopeSignature', () => {
         }
       ]
     }
+
     const second: LinearConnectionStatus = {
       ...first,
       workspaces: [{ ...first.workspaces![0], credentialRevision: 2 }]
@@ -102,10 +106,12 @@ describe('linearWorkspaceScopeSignature', () => {
         }
       ]
     }
+
     const renamedWorkspaceKey: LinearConnectionStatus = {
       ...first,
       workspaces: [{ ...first.workspaces![0], organizationUrlKey: 'alpha-renamed' }]
     }
+
     const renamedViewerKey: LinearConnectionStatus = {
       ...first,
       viewer: { ...first.viewer!, organizationUrlKey: 'alpha-renamed' }

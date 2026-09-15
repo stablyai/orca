@@ -57,21 +57,27 @@ export function buildWorkspaceSessionPatch(
   if (changed.has('activeRepoId')) {
     patch.activeRepoId = snapshot.activeRepoId
   }
+
   if (changed.has('activeWorktreeId')) {
     patch.activeWorktreeId = snapshot.activeWorktreeId
   }
+
   if (changed.has('activeTabId')) {
     patch.activeTabId = snapshot.activeTabId
   }
+
   if (changed.has('tabsByWorktree')) {
     patch.tabsByWorktree = buildSanitizedTabsByWorktree(snapshot.tabsByWorktree)
   }
+
   if (hasAnyChangedField(changed, ['terminalLayoutsByTabId', 'tabsByWorktree', 'repos'] as const)) {
     patch.terminalLayoutsByTabId = buildPrunedTerminalLayoutsByTabId(snapshot)
   }
+
   if (changed.has('activeTabIdByWorktree')) {
     patch.activeTabIdByWorktree = snapshot.activeTabIdByWorktree
   }
+
   if (
     hasAnyChangedField(changed, [
       'tabsByWorktree',
@@ -99,6 +105,7 @@ export function buildWorkspaceSessionPatch(
       buildTerminalSessionData(snapshot).remoteSessionIdsByTabId ?? null
     )
   }
+
   if (
     hasAnyChangedField(changed, [
       'openFiles',
@@ -119,33 +126,41 @@ export function buildWorkspaceSessionPatch(
       )
     )
   }
+
   // Why: withoutStagedBrowserTabs hides rows based on the handle map, so clearing a staged flag
   // changes which browser and tab rows persist even when the rows themselves are untouched.
   const stagedVisibilityChanged = changed.has('remoteBrowserPageHandlesByPageId')
+
   if (stagedVisibilityChanged || changed.has('browserTabsByWorktree')) {
     patch.browserTabsByWorktree = buildPersistedBrowserTabsByWorktree(
       snapshot.browserTabsByWorktree
     )
   }
+
   if (stagedVisibilityChanged || changed.has('browserPagesByWorkspace')) {
     patch.browserPagesByWorkspace = buildPersistedBrowserPagesByWorkspace(
       snapshot.browserPagesByWorkspace,
       snapshot.remoteBrowserPageHandlesByPageId
     )
   }
+
   if (stagedVisibilityChanged || changed.has('activeBrowserTabIdByWorktree')) {
     patch.activeBrowserTabIdByWorktree = snapshot.activeBrowserTabIdByWorktree
   }
+
   if (changed.has('browserUrlHistory')) {
     patch.browserUrlHistory = normalizeBrowserHistoryEntries(snapshot.browserUrlHistory)
   }
+
   if (changed.has('workspaceDocHistory')) {
     patch.workspaceDocHistory = normalizeWorkspaceDocHistoryEntries(snapshot.workspaceDocHistory)
   }
+
   if (changed.has('clientHostedBrowserCloseIntentsByEnvironment')) {
     patch.clientHostedBrowserCloseIntentsByEnvironment =
       snapshot.clientHostedBrowserCloseIntentsByEnvironment
   }
+
   if (
     stagedVisibilityChanged ||
     hasAnyChangedField(changed, [
@@ -157,9 +172,11 @@ export function buildWorkspaceSessionPatch(
   ) {
     Object.assign(patch, buildPersistedUnifiedTabSessionData(snapshot))
   }
+
   if (changed.has('lastVisitedAtByWorktreeId')) {
     patch.lastVisitedAtByWorktreeId = buildLastVisitedAtByWorktreeId(snapshot)
   }
+
   if (changed.has('defaultTerminalTabsAppliedByWorktreeId')) {
     patch.defaultTerminalTabsAppliedByWorktreeId =
       snapshot.defaultTerminalTabsAppliedByWorktreeId &&
@@ -167,11 +184,13 @@ export function buildWorkspaceSessionPatch(
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
         : undefined
   }
+
   if (changed.has('closedTerminalTabTombstonesByTabId')) {
     patch.closedTerminalTabTombstonesByTabId = buildPersistedClosedTerminalTabTombstones(
       snapshot.closedTerminalTabTombstonesByTabId
     )
   }
+
   if (changed.has('sleepingAgentSessionsByPaneKey')) {
     patch.sleepingAgentSessionsByPaneKey =
       buildSleepingAgentSessionData(snapshot).sleepingAgentSessionsByPaneKey

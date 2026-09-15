@@ -33,14 +33,18 @@ export function advanceSyntheticTitleSpinnerEntries<TProfile>(args: {
   }
 
   const ticks: SyntheticTitleSpinnerTick<TProfile>[] = []
+
   for (const [paneKey, entry] of args.entries) {
     const ptyId = args.getPtyIdForPaneKey(paneKey)
+
     if (!ptyId) {
       args.entries.delete(paneKey)
       continue
     }
+
     entry.frame = (entry.frame + 1) % args.frameCount
     ticks.push({ paneKey, ptyId, frame: entry.frame, profile: entry.profile })
   }
+
   return ticks
 }

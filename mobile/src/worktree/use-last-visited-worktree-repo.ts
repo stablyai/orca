@@ -16,8 +16,10 @@ export function useLastVisitedWorktreeRepoId(
     if (!enabled || !hostId) {
       setLastVisitedRepoId(null)
       setLoaded(enabled)
+
       return
     }
+
     let stale = false
     setLoaded(false)
     void AsyncStorage.getItem(LAST_VISITED_WORKTREE_STORAGE_KEY)
@@ -25,6 +27,7 @@ export function useLastVisitedWorktreeRepoId(
         if (stale) {
           return
         }
+
         setLastVisitedRepoId(readLastVisitedWorktreeRepoId(raw, hostId))
         setLoaded(true)
       })

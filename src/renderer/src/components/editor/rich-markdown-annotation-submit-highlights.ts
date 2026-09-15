@@ -20,14 +20,17 @@ export function updateRichMarkdownAnnotationHighlightsAfterSubmit({
   if (!editor) {
     return
   }
+
   const noteRanges = getRichMarkdownAnnotationHighlightRanges(
     editor,
     comments,
     markdownSourceLineOffset
   )
+
   const hasSubmittedRange = noteRanges.some(
     (range) => range.from <= annotationPopover.from && annotationPopover.to <= range.to
   )
+
   editor.view.dispatch(
     editor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
       activeRange: null,

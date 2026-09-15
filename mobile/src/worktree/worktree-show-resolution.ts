@@ -15,10 +15,13 @@ const CODE_TOKEN_BOUNDARY = /(?:: |\n)[ \t]*$/
 
 function endsWithNotFoundToken(message: string): boolean {
   const trimmed = message.trimEnd()
+
   if (!trimmed.endsWith(NOT_FOUND_CODE)) {
     return false
   }
+
   const prefix = trimmed.slice(0, -NOT_FOUND_CODE.length)
+
   return prefix.trim() === '' || CODE_TOKEN_BOUNDARY.test(prefix)
 }
 
@@ -26,13 +29,16 @@ export function classifyWorktreeShowResponse(response: RpcResponse): WorktreeSho
   if (response.ok) {
     return 'present'
   }
+
   if (response.error.code === NOT_FOUND_CODE) {
     return 'missing'
   }
+
   // Why: the wrapped-token form only ever ships as runtime_error; any other code
   // whose message trails off in the token proves nothing about the worktree.
   if (response.error.code !== 'runtime_error') {
     return 'unknown'
   }
+
   return endsWithNotFoundToken(response.error.message) ? 'missing' : 'unknown'
 }

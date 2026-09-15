@@ -45,6 +45,7 @@ afterEach(() => {
 async function lookup(slug: string): Promise<Repo[]> {
   const { result } = renderHook(() => useRepoSlugIndex())
   await waitFor(() => expect(result.current.ready).toBe(true))
+
   return [...result.current.lookupSlug(slug)]
 }
 

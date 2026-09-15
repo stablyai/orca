@@ -23,10 +23,13 @@ export function createSettingsSearchState(
     settingsSearchQuery: '',
     setSettingsSearchQuery: (q) => {
       clearSettingsSearchDebounce()
+
       if (q.trim() === '') {
         set({ settingsSearchInputQuery: q, settingsSearchQuery: q })
+
         return
       }
+
       set({ settingsSearchInputQuery: q })
       // Why: applying settings search mounts and filters many heavy sections,
       // so keep typing responsive while waiting for the query to settle.

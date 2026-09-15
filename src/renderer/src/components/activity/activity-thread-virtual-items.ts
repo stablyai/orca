@@ -6,7 +6,9 @@ export type ActivityVirtualItemDescriptor =
   | { type: 'thread'; thread: AgentPaneThread; groupKey: string }
 
 export const ACTIVITY_HEADER_ROW_ESTIMATE = 32
+
 export const ACTIVITY_THREAD_ROW_COMPACT_ESTIMATE = 96
+
 export const ACTIVITY_THREAD_ROW_FULL_ESTIMATE = 116
 
 /**
@@ -19,17 +21,21 @@ export function buildActivityVirtualItems(args: {
   collapsedGroupKeys: ReadonlySet<string>
 }): ActivityVirtualItemDescriptor[] {
   const items: ActivityVirtualItemDescriptor[] = []
+
   for (const group of args.groups) {
     if (args.groupBy !== 'none') {
       items.push({ type: 'header', group })
+
       if (args.collapsedGroupKeys.has(group.key)) {
         continue
       }
     }
+
     for (const thread of group.threads) {
       items.push({ type: 'thread', thread, groupKey: group.key })
     }
   }
+
   return items
 }
 
@@ -45,6 +51,7 @@ export function estimateActivityVirtualItemSize(
   if (!item || item.type === 'header') {
     return ACTIVITY_HEADER_ROW_ESTIMATE
   }
+
   return compactMode ? ACTIVITY_THREAD_ROW_COMPACT_ESTIMATE : ACTIVITY_THREAD_ROW_FULL_ESTIMATE
 }
 
@@ -56,7 +63,9 @@ export function findActivityThreadItemIndex(
   if (paneKey === null) {
     return null
   }
+
   const index = items.findIndex((item) => item.type === 'thread' && item.thread.paneKey === paneKey)
+
   return index === -1 ? null : index
 }
 
@@ -70,5 +79,6 @@ export function getActivityHeaderItemIndexes(
       indexes.push(index)
     }
   })
+
   return indexes
 }

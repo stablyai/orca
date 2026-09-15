@@ -83,14 +83,18 @@ export function SmartWorkspaceSourceDrawer({
     if (!visible) {
       return
     }
+
     let timeout: ReturnType<typeof setTimeout> | undefined
+
     const task = InteractionManager.runAfterInteractions(() => {
       timeout = setTimeout(() => {
         inputRef.current?.focus()
       }, SOURCE_INPUT_FOCUS_DELAY_MS)
     })
+
     return () => {
       task.cancel()
+
       if (timeout) {
         clearTimeout(timeout)
       }
@@ -147,6 +151,7 @@ export function SmartWorkspaceSourceDrawer({
         composer.handleSmartLinearIssueSelect(row.issue)
         break
     }
+
     onClose()
   }
 
@@ -154,7 +159,9 @@ export function SmartWorkspaceSourceDrawer({
     if (!client || !crossRepoPrompt) {
       return
     }
+
     const { link, matchingRepo } = crossRepoPrompt
+
     try {
       const item = await lookupGitHubItemByOwnerRepo(
         client,
@@ -163,6 +170,7 @@ export function SmartWorkspaceSourceDrawer({
         link.number,
         link.type
       )
+
       if (item) {
         onRepoChange(matchingRepo.id)
         composer.handleSmartGitHubItemSelect(item)
@@ -265,6 +273,7 @@ export function SmartWorkspaceSourceDrawer({
             <View style={styles.chipRow}>
               {MR_STATE_FILTER_OPTIONS.map((option) => {
                 const selected = option.id === mrStateFilter
+
                 return (
                   <Pressable
                     key={option.id}
@@ -284,6 +293,7 @@ export function SmartWorkspaceSourceDrawer({
             {modeTabs.map((option) => {
               const selected = option.id === effectiveMode
               const tint = selected ? colors.textPrimary : colors.textSecondary
+
               return (
                 <Pressable
                   key={option.id}

@@ -20,19 +20,24 @@ import {
 } from './react-commit-cascade-store-write-samples'
 
 const recordBreadcrumb = vi.fn()
+
 vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: (name: string, data?: unknown) => recordBreadcrumb(name, data)
 }))
 
 const ROOT = { pendingLanes: 2 }
+
 const OTHER_ROOT = { pendingLanes: 2 }
+
 /** SyncLane; what react-dom leaves pending on a cascading commit. */
 const SYNC_LANE = 2
+
 /** Any lane outside React's nested-update mask ends the cascade. */
 const IDLE_LANE = 1_073_741_824
 
 function cascadePayload(callIndex = 0): Record<string, unknown> {
   const call = recordBreadcrumb.mock.calls[callIndex]
+
   return (call?.[1] ?? {}) as Record<string, unknown>
 }
 
@@ -45,6 +50,7 @@ function driveCommits(args: {
   onCommit?: () => void
 }): void {
   const readNowMs = (): number => args.nowMs ?? 1_000
+
   for (let index = 0; index < args.count; index += 1) {
     recordReactCommit({
       state: args.state,
@@ -144,6 +150,7 @@ describe('recordReactCommit', () => {
 
   it('honours explicit limit overrides', () => {
     const state = createReactCommitCascadeState()
+
     for (let index = 0; index < 4; index += 1) {
       recordReactCommit({
         state,
@@ -162,6 +169,7 @@ describe('recordReactCommit', () => {
   it('reads the clock only at arm and at report', () => {
     const state = createReactCommitCascadeState()
     const readNowMs = vi.fn(() => 1_000)
+
     for (let index = 0; index < REACT_COMMIT_CASCADE_NOTICE_LIMIT; index += 1) {
       recordReactCommit({ state, root: ROOT, pendingLanes: SYNC_LANE, readNowMs })
     }
@@ -194,9 +202,11 @@ describe('driver attribution', () => {
 
   it('names the driving write with a path-free frame', () => {
     const state = createReactCommitCascadeState()
+
     function drivingWrite(): void {
       noteReactCommitCascadeStoreWrite(drivingWrite, { tabs: [] })
     }
+
     driveCommits({
       state,
       count: REACT_COMMIT_CASCADE_NOTICE_LIMIT,
@@ -216,6 +226,7 @@ describe('driver attribution', () => {
     // Why: the path redaction is keyed on the detail NAME, so a path inside the
     // value would ship a developer's home directory.
     expect(String(payload.driverStack)).not.toContain('/')
+
     // Why sanitize instead of matching the key name: the 4000-char budget is
     // decided by a camel-split rule in crash-report-redaction, so a hand-copied
     // regex here can pass while the real rule drops the frames to 240.
@@ -224,6 +235,7 @@ describe('driver attribution', () => {
     const stackKey = Object.keys(payload).find(
       (key) => key !== 'driverFrame' && String(payload[key]).includes(String(payload.driverFrame))
     )
+
     expect(stackKey).toBeDefined()
     const longFrames = 'a'.repeat(600)
     const sanitized = sanitizeCrashReportDetails({ ...payload, [stackKey as string]: longFrames })
@@ -232,9 +244,11 @@ describe('driver attribution', () => {
 
   it('clears samples when a cascade ends', () => {
     const state = createReactCommitCascadeState()
+
     function drivingWrite(): void {
       noteReactCommitCascadeStoreWrite(drivingWrite, { tabs: [] })
     }
+
     driveCommits({
       state,
       count: REACT_COMMIT_CASCADE_NOTICE_LIMIT,
@@ -261,6 +275,7 @@ describe('driver attribution', () => {
 describe('report throttle', () => {
   it('suppresses cascades inside the interval and carries the count forward', () => {
     const state = createReactCommitCascadeState()
+
     for (let cascade = 0; cascade < 3; cascade += 1) {
       driveCommits({ state, count: 1, lanes: 0 })
       driveCommits({ state, count: REACT_COMMIT_CASCADE_NOTICE_LIMIT })
@@ -314,15 +329,18 @@ describe('repeated arm and end cycles', () => {
     // --expose-gc is pinned in config/vitest.config.ts execArgv.
     expect(typeof collectGarbage).toBe('function')
     const state = createReactCommitCascadeState()
+
     for (let warmup = 0; warmup < 20; warmup += 1) {
       runCascadeCycle(state)
     }
+
     collectGarbage?.()
     const before = process.memoryUsage().heapUsed
 
     for (let cycle = 0; cycle < CYCLES; cycle += 1) {
       runCascadeCycle(state)
     }
+
     collectGarbage?.()
 
     expect(process.memoryUsage().heapUsed - before).toBeLessThan(MAX_HEAP_GROWTH_BYTES)

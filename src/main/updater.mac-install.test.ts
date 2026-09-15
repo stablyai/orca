@@ -17,6 +17,7 @@ const {
     const handlers = appEventHandlers.get(event) ?? []
     handlers.push(handler)
     appEventHandlers.set(event, handlers)
+
     return appMock
   })
 
@@ -30,6 +31,7 @@ const {
     const handlers = eventHandlers.get(event) ?? []
     handlers.push(handler)
     eventHandlers.set(event, handlers)
+
     return autoUpdaterMock
   })
 
@@ -169,6 +171,7 @@ describe('updater mac install handoff', () => {
       const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
         ([eventName]) => eventName === 'update-downloaded'
       )?.[1] as (() => void) | undefined
+
       expect(nativeDownloadedHandler).toBeTypeOf('function')
 
       nativeDownloadedHandler?.()
@@ -190,12 +193,14 @@ describe('updater mac install handoff', () => {
       vi.useFakeTimers()
 
       let finishCleanup!: () => void
+
       const onBeforeQuit = vi.fn(
         () =>
           new Promise<void>((resolve) => {
             finishCleanup = resolve
           })
       )
+
       const mainWindow = { webContents: { send: vi.fn() } }
 
       autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
@@ -218,6 +223,7 @@ describe('updater mac install handoff', () => {
       const nativeDownloadedHandler = nativeUpdaterMock.on.mock.calls.find(
         ([eventName]) => eventName === 'update-downloaded'
       )?.[1] as (() => void) | undefined
+
       expect(nativeDownloadedHandler).toBeTypeOf('function')
 
       nativeDownloadedHandler?.()
@@ -241,6 +247,7 @@ describe('updater mac install handoff', () => {
     async () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const reportDownloaded = vi.fn()
+
       const { deferMacQuitUntilInstallerReady, handleMacInstallerReady } =
         await import('./updater-mac-install')
 

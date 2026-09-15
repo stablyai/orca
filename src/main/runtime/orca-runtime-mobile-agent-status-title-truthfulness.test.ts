@@ -16,11 +16,17 @@ vi.mock('electron', () => ({
 }))
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const TAB_ID = 'remote-tab'
+
 const WORKTREE_ID = 'wt-1'
+
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
+
 const PTY_ID = 'pty-remote'
+
 const T0 = 1_700_000_000_000
+
 const PROVIDER_SESSION = {
   key: 'session_id' as const,
   id: 'ac1f6b90-2f77-4f0e-9c5e-1d2f6a4b8c31',
@@ -31,9 +37,11 @@ async function createRuntime(rows: AgentStatusIpcPayload[] = []): Promise<OrcaRu
   const runtime = new OrcaRuntimeService(null, undefined, {
     getAgentStatusSnapshot: () => rows
   })
+
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
   }
+
   vi.spyOn(internals, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
     id: WORKTREE_ID,
     path: '/repo/app',
@@ -53,6 +61,7 @@ async function createRuntime(rows: AgentStatusIpcPayload[] = []): Promise<OrcaRu
     launchAgent: 'claude',
     title: 'Terminal'
   })
+
   return runtime
 }
 
@@ -164,6 +173,7 @@ async function projectAgentStatus(
 ): Promise<Record<string, unknown> | undefined> {
   const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
   const tab = result.tabs[0]
+
   return tab?.type === 'terminal'
     ? (tab.agentStatus as unknown as Record<string, unknown> | undefined)
     : undefined
@@ -238,6 +248,7 @@ describe('mobile session tabs: identity-only fallback freshness', () => {
       providerSession: PROVIDER_SESSION,
       providerSessionOnly: true
     }
+
     const runtime = await createRuntime([resumeRow])
     // Title evidence lands once...
     runtime.onPtyData(PTY_ID, '\x1b]0;Terminal\x07', T0)

@@ -32,13 +32,16 @@ export function projectWorktreeTabModelReconciliation(
   const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const groups = state.groupsByWorktree[worktreeId] ?? []
   const runtimeTerminalTabs = state.tabsByWorktree[worktreeId] ?? []
+
   const unifiedTerminalEntityIds = new Set(
     unifiedTabs.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
   )
+
   const legacyRuntimeTerminalTabs = runtimeTerminalTabs.filter((tab) => {
     if (unifiedTerminalEntityIds.has(tab.id)) {
       return false
     }
+
     // Why: reconnectable legacy tabs must re-enter the unified model instead of being orphaned.
     // A session-scoped unverified-loss marker is also liveness evidence: the
     // host may have disappeared before it could publish a PTY, so keep the row
@@ -48,7 +51,9 @@ export function projectWorktreeTabModelReconciliation(
       state.unverifiedPtyLossTabIds[tab.id] === true
     )
   })
+
   const orphanTerminalIds = getOrphanTerminalIds(state, worktreeId)
+
   const ensuredGroupState =
     legacyRuntimeTerminalTabs.length > 0
       ? ensureGroup(
@@ -58,7 +63,9 @@ export function projectWorktreeTabModelReconciliation(
           state.activeGroupIdByWorktree[worktreeId]
         )
       : null
+
   const reconciliationGroup = ensuredGroupState?.group ?? groups[0] ?? null
+
   const restoredLegacyTabs =
     reconciliationGroup == null
       ? []
@@ -81,14 +88,18 @@ export function projectWorktreeTabModelReconciliation(
             sortOrder: tab.sortOrder,
             createdAt: tab.createdAt
           }))
+
   const reconciledUnifiedTabs =
     restoredLegacyTabs.length > 0 ? [...unifiedTabs, ...restoredLegacyTabs] : unifiedTabs
+
   const rememberedLegacyActiveTabId = state.activeTabIdByWorktree[worktreeId]
   const restoredLegacyTabIds = new Set(restoredLegacyTabs.map((tab) => tab.id))
+
   const legacyFallbackActiveTabId =
     rememberedLegacyActiveTabId && restoredLegacyTabIds.has(rememberedLegacyActiveTabId)
       ? rememberedLegacyActiveTabId
       : (restoredLegacyTabs[0]?.id ?? null)
+
   const reconciledGroups =
     restoredLegacyTabs.length > 0 && reconciliationGroup
       ? updateGroup(ensuredGroupState!.groupsByWorktree[worktreeId] ?? [], {
@@ -101,9 +112,11 @@ export function projectWorktreeTabModelReconciliation(
           ])
         })
       : groups
+
   const liveTerminalIds = new Set(
     runtimeTerminalTabs.filter((tab) => !orphanTerminalIds.has(tab.id)).map((tab) => tab.id)
   )
+
   // Why batched: the unbatched scan is O(openFiles) per workspace, so a
   // whole-session reconcile is O(workspaces x openFiles).
   const liveEditorIds: ReadonlySet<string> = batch
@@ -111,6 +124,7 @@ export function projectWorktreeTabModelReconciliation(
     : new Set(
         state.openFiles.filter((file) => file.worktreeId === worktreeId).map((file) => file.id)
       )
+
   const liveBrowserIds = new Set(
     (state.browserTabsByWorktree[worktreeId] ?? []).map((browserTab) => browserTab.id)
   )
@@ -119,68 +133,91 @@ export function projectWorktreeTabModelReconciliation(
     if (tab.contentType === 'terminal') {
       return liveTerminalIds.has(tab.entityId)
     }
+
     if (tab.contentType === 'browser') {
       return liveBrowserIds.has(tab.entityId)
     }
+
     if (tab.contentType === 'simulator' || tab.contentType === 'agent-session') {
       return true
     }
+
     return liveEditorIds.has(tab.entityId)
   }
 
   const renderableTabs = reconciledUnifiedTabs.filter(isRenderableTab)
+
   // Why: hand the stored array back when nothing was filtered, so an unrelated
   // change (orphans, layout) does not give `unifiedTabsByWorktree` a new identity.
   const validTabs =
     renderableTabs.length === reconciledUnifiedTabs.length ? reconciledUnifiedTabs : renderableTabs
+
   const validTabIds = new Set(validTabs.map((tab) => tab.id))
+
   const nextGroupsWithEmpty = reconciledGroups.map((group) => {
     const tabOrder = group.tabOrder.filter((tabId) => validTabIds.has(tabId))
+
     const activeTabId =
       group.activeTabId && validTabIds.has(group.activeTabId)
         ? group.activeTabId
         : (tabOrder[0] ?? null)
+
     const tabOrderUnchanged =
       tabOrder.length === group.tabOrder.length &&
       tabOrder.every((tabId, index) => tabId === group.tabOrder[index])
+
     const recentTabIds = sanitizeRecentTabIds(group.recentTabIds, tabOrder)
+
     const recentUnchanged =
       recentTabIds.length === (group.recentTabIds ?? []).length &&
       recentTabIds.every((id, index) => id === (group.recentTabIds ?? [])[index])
+
     return tabOrderUnchanged && activeTabId === group.activeTabId && recentUnchanged
       ? group
       : { ...group, tabOrder, activeTabId, recentTabIds }
   })
+
   const prunedGroups =
     validTabs.length > 0
       ? nextGroupsWithEmpty.filter((group) => group.tabOrder.length > 0)
       : nextGroupsWithEmpty
+
   const groupsChanged =
     prunedGroups.length !== groups.length ||
     prunedGroups.some((group, index) => group !== groups[index])
+
   const nextGroups = groupsChanged ? prunedGroups : groups
+
   const currentActiveGroupId =
     state.activeGroupIdByWorktree[worktreeId] ??
     ensuredGroupState?.activeGroupIdByWorktree[worktreeId]
+
   const activeGroupStillExists = nextGroups.some((group) => group.id === currentActiveGroupId)
+
   const nextActiveGroupId = activeGroupStillExists
     ? currentActiveGroupId
     : (nextGroups.find((group) => group.activeTabId !== null)?.id ??
       nextGroups[0]?.id ??
       currentActiveGroupId)
+
   const tabsChanged = validTabs !== unifiedTabs
   const activeGroupChanged = nextActiveGroupId !== currentActiveGroupId
+
   const baseNextLayout =
     restoredLegacyTabs.length > 0 && reconciliationGroup
       ? (state.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: reconciliationGroup.id })
       : state.layoutByWorktree[worktreeId]
+
   const validGroupIds = new Set(nextGroups.map((group) => group.id))
+
   const prunedNextLayout =
     baseNextLayout && validGroupIds.size > 0
       ? pruneTabGroupLayoutForGroups(baseNextLayout, validGroupIds)
       : baseNextLayout
+
   const nextLayout =
     prunedNextLayout ?? (nextGroups[0] ? { type: 'leaf', groupId: nextGroups[0].id } : undefined)
+
   const currentLayout = state.layoutByWorktree[worktreeId]
   const layoutChanged = nextLayout !== currentLayout
   let patch: Partial<AppState> = {}
@@ -195,24 +232,29 @@ export function projectWorktreeTabModelReconciliation(
     const droppedTerminalEntityIds = unifiedTabs.flatMap((tab) =>
       tab.contentType === 'terminal' && !validTabIds.has(tab.id) ? [tab.entityId] : []
     )
+
     let nextUnreadTerminalTabs = state.unreadTerminalTabs
+
     if (droppedTerminalEntityIds.length > 0) {
       // A batch that already owns this map published it in an earlier patch, so
       // draining further entries in place needs no second patch entry.
       const owned = batch?.ownedStateKeys.has('unreadTerminalTabs') === true
       const copy = owned ? state.unreadTerminalTabs : { ...state.unreadTerminalTabs }
       let changed = false
+
       for (const entityId of droppedTerminalEntityIds) {
         if (copy[entityId]) {
           delete copy[entityId]
           changed = true
         }
       }
+
       if (changed) {
         nextUnreadTerminalTabs = copy
         batch?.ownedStateKeys.add('unreadTerminalTabs')
       }
     }
+
     patch = {
       unifiedTabsByWorktree: writeBatchedWorkspaceRecordEntry(
         state.unifiedTabsByWorktree,

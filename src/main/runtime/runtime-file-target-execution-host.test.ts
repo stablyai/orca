@@ -29,6 +29,7 @@ import {
 import { OrcaRuntimeService } from './orca-runtime'
 
 const REMOTE_PATH = '/srv/app-feature'
+
 const WORKTREE_ID = 'repo-shared::/srv/app-feature'
 
 type RuntimeInternals = {
@@ -47,6 +48,7 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
     getRepos: () => repos,
     getRepo: (id: string) => repos.find((repo) => repo.id === id)
   }
+
   const runtime = new OrcaRuntimeService(store as never)
   vi.spyOn(runtime as unknown as RuntimeInternals, 'resolveWorktreeSelector').mockResolvedValue({
     id: WORKTREE_ID,
@@ -60,6 +62,7 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
     },
     ...(hostId ? { hostId } : {})
   })
+
   return runtime
 }
 
@@ -74,6 +77,7 @@ describe('runtime file target execution host', () => {
     const provider = stubProvider()
     registerSshFilesystemProvider(connectionId, provider as never)
     registered.push(connectionId)
+
     return provider
   }
 
@@ -93,6 +97,7 @@ describe('runtime file target execution host', () => {
   it('lists an ssh workspace from the host it names, not from a rival row on another ssh host', async () => {
     const openclaw = register('openclaw')
     const m4air = register('m4air')
+
     const runtime = makeRuntime(
       [
         { id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' },
@@ -111,6 +116,7 @@ describe('runtime file target execution host', () => {
   it("routes to the workspace's host even when the only repo row names a different ssh host", async () => {
     const openclaw = register('openclaw')
     const m4air = register('m4air')
+
     const runtime = makeRuntime(
       [{ id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' }],
       'ssh:m4air'
@@ -126,6 +132,7 @@ describe('runtime file target execution host', () => {
   // itself. The old shape handed it out and read a local workspace off a remote host.
   it('ignores a stale connection on a row that declares itself local', async () => {
     const m4air = register('m4air')
+
     const runtime = makeRuntime(
       [
         {
@@ -149,6 +156,7 @@ describe('runtime file target execution host', () => {
   // silent-local one it replaced.
   it('refuses a runtime host whose nested ssh target is also registered on this client', async () => {
     const impostor = register('nested-1')
+
     const runtime = makeRuntime(
       [
         {
@@ -188,6 +196,7 @@ describe('runtime file target execution host', () => {
 
   it('refuses rather than guessing when rival rows disagree and the workspace names no host', async () => {
     register('m4air')
+
     const runtime = makeRuntime([
       { id: 'repo-shared', path: '/srv/app', connectionId: 'm4air' },
       { id: 'repo-shared', path: '/home/me/app' }
@@ -227,6 +236,7 @@ describe('runtime file target execution host', () => {
   it('rejects a mutation whose expected host is the row rather than the resolved one', async () => {
     register('m4air')
     register('openclaw')
+
     const runtime = makeRuntime(
       [{ id: 'repo-shared', path: '/home/me/app', connectionId: 'openclaw' }],
       'ssh:m4air'

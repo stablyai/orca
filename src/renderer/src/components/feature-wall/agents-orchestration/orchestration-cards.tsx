@@ -14,6 +14,7 @@ export function WorkspaceCard(props: {
   amberDot?: boolean
 }): JSX.Element {
   const { variant, name, dataCard, rows, childPadding, dimName, amberDot } = props
+
   return (
     <div
       data-feature-wall-card={dataCard}
@@ -62,6 +63,7 @@ export function AgentRow(props: {
   registerRef: (node: HTMLDivElement | null) => void
 }): JSX.Element {
   const { icon, state, message, flashKey, pending, spawnRow, registerRef } = props
+
   return (
     <div
       ref={registerRef}

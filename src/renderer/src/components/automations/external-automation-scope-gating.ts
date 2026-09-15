@@ -45,12 +45,15 @@ export function resolveExternalAutomationScopeGate(
   if (!entry) {
     return UNKNOWN_GATE
   }
+
   if (entry.stableRef.authority.kind !== 'desktop') {
     return notListed(EXTERNAL_AUTOMATION_SCOPE_CODES.authorityNotSupported)
   }
+
   if (entry.kind === 'orphan') {
     return notListed(null)
   }
+
   // Fail closed: an uncaptured owner cannot be probed, so nothing is listed for it.
   return entry.owner ? { status: 'listed', probeOwner: entry.owner, code: null } : notListed(null)
 }
@@ -66,6 +69,7 @@ export function externalAutomationScopeEntries(
   if (resolution.effective.kind === 'all') {
     return entries
   }
+
   return resolution.entry ? [resolution.entry] : []
 }
 
@@ -74,12 +78,15 @@ export function externalAutomationProbeOwners(
   entries: readonly AutomationHostCatalogEntry[]
 ): AutomationOwnerRef[] {
   const owners: AutomationOwnerRef[] = []
+
   for (const entry of entries) {
     const gate = resolveExternalAutomationScopeGate(entry)
+
     if (gate.probeOwner) {
       owners.push(gate.probeOwner)
     }
   }
+
   return owners
 }
 
@@ -91,6 +98,7 @@ export function externalAutomationScopeGateFromError(
   error: unknown
 ): ExternalAutomationScopeGate | null {
   const code = parseExternalAutomationScopeCode(error)
+
   return code ? notListed(code) : null
 }
 
@@ -98,10 +106,12 @@ export function parseExternalAutomationScopeCode(
   error: unknown
 ): ExternalAutomationScopeCode | null {
   const message = (error instanceof Error ? error.message : String(error ?? '')).trimEnd()
+
   for (const code of Object.values(EXTERNAL_AUTOMATION_SCOPE_CODES)) {
     if (message.endsWith(`: ${code}`)) {
       return code
     }
   }
+
   return null
 }

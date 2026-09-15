@@ -77,9 +77,11 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
   const dirPath = parentDir === '.' ? '' : parentDir
   const isUnresolvedConflict = entry.conflictStatus === 'unresolved'
   const isSubmoduleWorktreeOnly = isSubmoduleWorktreeOnlyChange(entry)
+
   const conflictLabel = entry.conflictKind
     ? getLocalizedConflictKindLabel(entry.conflictKind)
     : null
+
   // Why: Stage is suppressed for unresolved conflicts because `git add` erases the `u` record (the only live conflict signal) before review.
   // Why: Discard is hidden for unresolved (too easy to misfire) and resolved_locally (can silently re-create the conflict or lose the resolution) rows in v1.
   const canDiscard = canDiscardStatusEntry(entry)
@@ -119,8 +121,10 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         onDragStart={(e) => {
           if (isUnresolvedConflict && entry.status === 'deleted') {
             e.preventDefault()
+
             return
           }
+
           const absolutePath = joinPath(worktreePath, entry.path)
           e.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, absolutePath)
           writeWorkspaceFileDragSourceForWorkspace(e.dataTransfer, currentWorktreeId)
@@ -132,9 +136,12 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
             if (e.detail > 1) {
               return
             }
+
             submoduleExpansion.onToggle()
+
             return
           }
+
           if (onSelect) {
             onSelect(e, entryKey, entry)
           } else {
@@ -145,6 +152,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           if (submoduleExpansion) {
             return
           }
+
           onOpen(entry, toPermanentSourceControlRowOpenEvent(e))
         }}
       >

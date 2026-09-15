@@ -6,11 +6,13 @@ export type ResolvedWorktreeSnapshot = {
 }
 
 type ResolvedCache = ResolvedWorktreeSnapshot & { expiresAt: number; inventoryRevision: number }
+
 type ResolvedInFlight = {
   generation: number
   inventoryRevision: number
   promise: Promise<ResolvedWorktreeSnapshot>
 }
+
 export class RuntimeResolvedWorktreeCache {
   private resolved: ResolvedCache | null = null
   private resolvedInFlight: ResolvedInFlight | null = null
@@ -42,22 +44,28 @@ export class RuntimeResolvedWorktreeCache {
     if (this.resolved && this.isFresh(inventoryRevision)) {
       return this.resolved
     }
+
     const generation = this.resolvedGeneration
+
     if (
       this.resolvedInFlight?.generation === generation &&
       this.resolvedInFlight.inventoryRevision === inventoryRevision
     ) {
       return this.resolvedInFlight.promise
     }
+
     const promise = compute()
     this.resolvedInFlight = { generation, inventoryRevision, promise }
+
     try {
       const result = await promise
+
       if (generation === this.resolvedGeneration) {
         // Why stamped on completion, not entry: a compute that spent longer than the TTL would
         // otherwise publish an already-expired entry, so the next poll recomputes the same slow path.
         this.resolved = { ...result, inventoryRevision, expiresAt: Date.now() + ttlMs }
       }
+
       return result
     } finally {
       if (this.resolvedInFlight?.promise === promise) {

@@ -56,6 +56,7 @@ async function render(options: {
   searchActive?: boolean
 }): Promise<HTMLDivElement> {
   const rows = options.rows ?? []
+
   const groups = filterAutomationHostGroups(
     [
       {
@@ -66,6 +67,7 @@ async function render(options: {
     ],
     options.visibleRowKeys ?? new Set(rows.map((row) => row.key))
   )
+
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -95,11 +97,13 @@ async function render(options: {
       />
     )
   })
+
   return container
 }
 
 function emptyState(container: HTMLDivElement): { kind: string | null; text: string } {
   const node = container.querySelector('[data-empty-state]')
+
   return { kind: node?.getAttribute('data-empty-state') ?? null, text: node?.textContent ?? '' }
 }
 

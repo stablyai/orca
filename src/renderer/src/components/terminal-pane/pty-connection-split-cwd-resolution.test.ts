@@ -30,8 +30,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync }))
@@ -41,6 +44,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -50,6 +54,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -61,6 +66,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSwe
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -71,9 +77,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -102,6 +110,7 @@ describe('connectPanePty split cwd resolution', () => {
       createManager(1) as never,
       buildPaneConnectionDeps(() => mockStoreState, { cwdPromise: cwd.promise }) as never
     )
+
     await flushAsyncTicks(20)
 
     expect(createdTransportOptions[0]?.bufferInputUntilConnect).toBe(true)
@@ -125,6 +134,7 @@ describe('connectPanePty split cwd resolution', () => {
       createManager(1) as never,
       buildPaneConnectionDeps(() => mockStoreState, { cwdPromise: cwd.promise }) as never
     )
+
     await flushAsyncTicks(20)
     binding.dispose()
 
@@ -179,9 +189,11 @@ describe('connectPanePty split cwd resolution', () => {
       settleDirectSshPaneRetry: vi.fn()
     }
     const onDeferredCwdSpawnFailed = vi.fn()
+
     const paneTransportsRef = {
       current: new Map([[1, createMockTransport(livePtyId)]])
     }
+
     const binding = connectPanePty(
       createPane(2) as never,
       createManager(2) as never,
@@ -191,6 +203,7 @@ describe('connectPanePty split cwd resolution', () => {
         paneTransportsRef
       }) as never
     )
+
     await flushAsyncTicks(20)
 
     expect(transport.connect).not.toHaveBeenCalled()
@@ -209,9 +222,11 @@ describe('connectPanePty split cwd resolution', () => {
         }
       ]
     ])
+
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
       | ((ptyId: string) => void)
       | undefined
+
     expect(onPtySpawn).toBeTypeOf('function')
     transportPtyId = stalePtyId
     onPtySpawn?.(stalePtyId)

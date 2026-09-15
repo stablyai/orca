@@ -65,6 +65,7 @@ export function makeLineage(overrides: Partial<WorktreeLineage> = {}): WorktreeL
     ...overrides
   }
 }
+
 export function makeWorkspaceLineage(overrides: Partial<WorkspaceLineage> = {}): WorkspaceLineage {
   return {
     childWorkspaceKey: 'worktree:repo1::/path/child',

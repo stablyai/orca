@@ -7,20 +7,33 @@ const { autoUpdaterMock, fetchNewerReleaseTagsMock, moduleFactories, resetUpdate
   await vi.hoisted(async () => (await import('./updater-test-harness')).createUpdaterMocks())
 
 vi.mock('electron', () => moduleFactories.electron())
+
 vi.mock('electron-updater', () => moduleFactories.electronUpdater())
+
 vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
+
 vi.mock('@electron-toolkit/utils', () => moduleFactories.electronToolkitUtils())
+
 vi.mock('./ipc/pty', () => moduleFactories.ipcPty())
+
 vi.mock('./linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
+
 vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
+
 vi.mock('./updater-changelog', () => moduleFactories.updaterChangelog())
+
 vi.mock('./updater-nudge', () => moduleFactories.updaterNudge())
+
 vi.mock('./update-install-exit-watchdog', () => moduleFactories.updateInstallExitWatchdog())
+
 vi.mock('./updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed())
+
 vi.mock('./local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
+
 vi.mock('./local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
 
 const SILENT_SETTLE_DELAY_MS = 1_000
+
 const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 warmUpdaterModule()
@@ -73,9 +86,11 @@ describe('abandoned updater instance', () => {
 
   it('leaves a silent-settle timer armed when its module instance is abandoned', async () => {
     let resolveCheck: (value: unknown) => void = () => {}
+
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       // Why: the checking status is what makes the silent settle publish 'not-available' later.
       autoUpdaterMock.emit('checking-for-update')
+
       return new Promise((resolve) => {
         resolveCheck = resolve
       })

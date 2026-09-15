@@ -4,6 +4,7 @@
 // signal per runtime session, without firing on a single stray probe.
 
 const DEFAULT_FAILURE_THRESHOLD = 3
+
 const DEFAULT_WINDOW_MS = 60_000
 
 export type UnpairedDeviceAuthThrottleOptions = {
@@ -33,11 +34,14 @@ export class UnpairedDeviceAuthThrottle {
     if (this.triggered) {
       return
     }
+
     const now = this.now()
     this.failureTimestamps.push(now)
+
     while (this.failureTimestamps.length > 0 && now - this.failureTimestamps[0]! > this.windowMs) {
       this.failureTimestamps.shift()
     }
+
     if (this.failureTimestamps.length >= this.failureThreshold) {
       this.triggered = true
       this.failureTimestamps.length = 0

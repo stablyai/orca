@@ -16,6 +16,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import { restoreStructuredAgentSessionRead } from './structured-agent-session-read-restore'
 
 const SESSION_ID = 'codex_read_restore_fixture'
+
 const WORKSPACE_ID = 'repo-1::/tmp/workspace'
 
 const RECORD = {
@@ -48,6 +49,7 @@ const store = {
 } as unknown as AgentSessionRecordStore
 
 let journalRoot: string
+
 const opened: AgentSessionJournal[] = []
 
 async function writeRemnant(name: string): Promise<string> {
@@ -55,8 +57,10 @@ async function writeRemnant(name: string): Promise<string> {
     workspaceId: WORKSPACE_ID,
     sessionId: SESSION_ID
   })
+
   await mkdir(dir, { recursive: true })
   await writeFile(join(dir, name), '{"kind":"epoch","v":1,"seq":1}\n', 'utf8')
+
   return join(dir, name)
 }
 
@@ -77,9 +81,11 @@ describe('a session whose journal is still the pre-SQLite format', () => {
 
     expect(restored).not.toBeNull()
     opened.push(restored!.journal)
+
     const disclosed = restored!.journal
       .snapshot()
       .items.map((entry) => (entry.body.kind === 'status' ? entry.body.text : ''))
+
     expect(disclosed.join('')).toContain(transcript)
     // Publishing it costs no agent process; acquisition still waits for the user.
     expect(restored!.hasProviderChild).toBe(false)

@@ -29,7 +29,9 @@ import {
 } from './stacked-pr-creation'
 
 const repository = { owner: 'acme', repo: 'orca', host: 'github.com' }
+
 const parentReview = { number: 41, url: 'https://github.com/acme/orca/pull/41' }
+
 const currentReview = { number: 42, url: 'https://github.com/acme/orca/pull/42' }
 
 function pullRequest(number: number, head: string, base: string) {
@@ -131,6 +133,7 @@ describe('prepareGitHubStackedPullRequest', () => {
     )
 
     expect(result).toMatchObject({ ok: false, code: 'validation' })
+
     if (!result.ok) {
       expect(result.error).toContain('does not have an open pull request')
     }
@@ -154,6 +157,7 @@ describe('prepareGitHubStackedPullRequest', () => {
     )
 
     expect(result).toMatchObject({ ok: false, code: 'validation' })
+
     if (!result.ok) {
       expect(result.error).toContain('top pull request')
     }

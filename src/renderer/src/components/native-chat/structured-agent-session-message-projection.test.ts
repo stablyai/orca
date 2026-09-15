@@ -41,6 +41,7 @@ describe('structured agent session message projection', () => {
         queuedAt: index
       })
     )
+
     const messages = projectStructuredAgentSessionMessages(
       Array.from({ length: sendCount }, (_, index) => item(index)),
       outbox,
@@ -63,6 +64,7 @@ describe('structured agent session message projection', () => {
         queuedAt: 1
       })
     ]
+
     // The host's WAL row is on screen while the provider round trip is in flight.
     const walItem: AgentJournalRenderItem = {
       itemId: agentJournalSubmissionKey('client-pending'),
@@ -71,6 +73,7 @@ describe('structured agent session message projection', () => {
       observedAt: 1,
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Ok thanks' }] }
     }
+
     const pending: AgentJournalSubmission = {
       ...submission(0),
       clientMessageId: 'client-pending',

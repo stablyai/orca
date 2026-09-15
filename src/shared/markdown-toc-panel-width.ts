@@ -1,6 +1,9 @@
 export const MARKDOWN_TOC_PANEL_MIN_WIDTH = 200
+
 export const MARKDOWN_TOC_PANEL_DEFAULT_WIDTH = 240
+
 export const MARKDOWN_TOC_PANEL_MIN_EDITOR_WIDTH = 320
+
 export const MARKDOWN_TOC_PANEL_MAX_WIDTH = 600
 
 export function computeMaxMarkdownTocPanelWidth(containerWidth: number): number {

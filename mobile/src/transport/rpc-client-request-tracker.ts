@@ -31,10 +31,13 @@ export class RpcClientRequestTracker {
     const budget = openRpcRequestBudget(requestOptions)
     const waitStart = budget.startedAt
     const wasConnected = this.options.getState() === 'connected'
+
     if (requestOptions?.failWhenDisconnected && !wasConnected) {
       throw new Error(`Not connected: ${method}`)
     }
+
     await this.options.waitForConnected(requestOptions?.timeoutMs)
+
     if (!wasConnected) {
       console.log('[net] sendRequest waited for connect', {
         method,
@@ -64,6 +67,7 @@ export class RpcClientRequestTracker {
   ): Promise<RpcResponse> {
     return new Promise((resolve, reject) => {
       const id = this.options.nextId()
+
       const timeout = setTimeout(() => {
         this.pending.delete(id)
         console.log('[net] sendRequest TIMEOUT', {
@@ -73,6 +77,7 @@ export class RpcClientRequestTracker {
         })
         reject(markRpcDeliveryUnknown(new Error(`Request timed out: ${method}`)))
       }, timeoutMs)
+
       this.pending.set(id, {
         resolve: (response) => {
           clearTimeout(timeout)
@@ -83,6 +88,7 @@ export class RpcClientRequestTracker {
           reject(error)
         }
       })
+
       if (
         !this.options.sendEncrypted({
           id,
@@ -100,11 +106,14 @@ export class RpcClientRequestTracker {
 
   resolve(response: RpcResponse): boolean {
     const request = this.pending.get(response.id)
+
     if (!request) {
       return false
     }
+
     this.pending.delete(response.id)
     request.resolve(response)
+
     return true
   }
 
@@ -112,6 +121,7 @@ export class RpcClientRequestTracker {
     const error = options?.deliveryUnknown
       ? markRpcDeliveryUnknown(new Error(reason))
       : new Error(reason)
+
     for (const [id, request] of this.pending) {
       this.pending.delete(id)
       queueMicrotask(() => request.reject(error))

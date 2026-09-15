@@ -9,6 +9,7 @@ const MAX_PARTIAL_SUCCESS_STAGES = 4
 
 function authMethodName(attempt: AuthenticationType | AnyAuthMethod): AuthenticationType {
   const type = typeof attempt === 'string' ? attempt : attempt.type
+
   // Agent identities are signed as publickey; a server's method list never names 'agent'.
   return type === 'agent' ? 'publickey' : type
 }
@@ -19,9 +20,11 @@ function buildAuthQueue(
 ): (AuthenticationType | AnyAuthMethod)[] {
   const username = config.username ?? ''
   const queue: (AuthenticationType | AnyAuthMethod)[] = [{ type: 'none', username }]
+
   if (config.password != null) {
     queue.push({ type: 'password', username, password: config.password })
   }
+
   for (const key of keys) {
     queue.push({
       type: 'publickey',
@@ -30,12 +33,15 @@ function buildAuthQueue(
       passphrase: config.passphrase
     })
   }
+
   if (config.agent) {
     queue.push({ type: 'agent', username, agent: config.agent })
   }
+
   if (config.tryKeyboard) {
     queue.push('keyboard-interactive')
   }
+
   return queue
 }
 
@@ -45,8 +51,10 @@ export function configurePrivateKeyAuthentication(
   passphraseKeyPath?: string
 ): void {
   const firstKey = keys[0]
+
   if (firstKey) {
     config.privateKey = firstKey.contents
+
     if (passphraseKeyPath) {
       passphraseKeyPaths.set(config, passphraseKeyPath)
     }
@@ -71,9 +79,11 @@ export function configurePrivateKeyAuthentication(
       const offered = Array.isArray(authsLeft) ? authsLeft : []
       queue = buildAuthQueue(config, keys).filter((attempt) => {
         const method = authMethodName(attempt)
+
         return method !== 'none' && offered.includes(method)
       })
     }
+
     const attempt = queue.shift()
     next((attempt ?? false) as Parameters<NextAuthHandler>[0])
   }

@@ -34,6 +34,7 @@ describe('gitlab RPC methods', () => {
       getGitLabRepoWorkItemDetails: vi.fn().mockResolvedValue({ body: 'Details' }),
       getGitLabRepoWorkItemByPath: vi.fn().mockResolvedValue({ id: 'gitlab-issue-7' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
     const projectRef = { host: 'gitlab.example.com', path: 'group/project' }
 
@@ -101,6 +102,7 @@ describe('gitlab RPC methods', () => {
         projectRef
       })
     )
+
     const inlineInput = {
       body: 'please fix',
       path: 'src/app.ts',
@@ -109,6 +111,7 @@ describe('gitlab RPC methods', () => {
       startSha: 'start',
       headSha: 'head'
     }
+
     await dispatcher.dispatch(
       makeRequest('gitlab.addMRInlineComment', {
         repo: 'id:repo-1',
@@ -286,6 +289,7 @@ describe('gitlab RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       updateGitLabRepoMR: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -310,6 +314,7 @@ describe('gitlab RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       listGitLabRepoIssues: vi.fn().mockResolvedValue({ items: [] })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
 
     await dispatcher.dispatch(
@@ -355,15 +360,18 @@ describe('gitlab RPC methods', () => {
       ...Array.from({ length: 400 }, (_, index) => `line ${index}`),
       'ERROR: Job failed: exit code 1'
     ].join('\n')
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getGitLabRepoJobTrace: vi.fn().mockResolvedValue({ ok: true, trace: noisyTrace })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: GITLAB_METHODS })
 
     const raw = await dispatcher.dispatch(
       makeRequest('gitlab.jobTrace', { repo: 'id:repo-1', jobId: 99 })
     )
+
     const excerpt = await dispatcher.dispatch(
       makeRequest('gitlab.jobTrace', { repo: 'id:repo-1', jobId: 99, logExcerpt: true })
     )

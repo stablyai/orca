@@ -18,6 +18,7 @@ describe('parseMarkdownBlocks', () => {
       '1. first',
       '2. second'
     ].join('\n')
+
     const blocks = parseMarkdownBlocks(md)
     expect(blocks[0]).toEqual({ kind: 'heading', level: 1, text: 'Title' })
     expect(blocks[1]).toEqual({ kind: 'paragraph', text: 'A paragraph line.' })
@@ -38,6 +39,7 @@ describe('parseMarkdownBlocks', () => {
       '-->',
       'More.'
     ].join('\n')
+
     const blocks = parseMarkdownBlocks(md)
     expect(blocks).toEqual([
       { kind: 'paragraph', text: 'Real text.' },

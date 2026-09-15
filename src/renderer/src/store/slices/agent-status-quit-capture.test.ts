@@ -120,11 +120,13 @@ describe('captureAllSleepingAgentSessions', () => {
       }
     } as Partial<AppState>)
     const launchToken = 'launch-token-1'
+
     const launchConfig = {
       agentCommand: "codex '--model' 'gpt-5'",
       agentArgs: '--model gpt-5',
       agentEnv: { CODEX_PROFILE: 'captured' }
     }
+
     const providerSession = { key: 'session_id' as const, id: 'codex-session-1' }
 
     store.getState().registerAgentLaunchConfig('tab-1:leaf-1', launchConfig, {
@@ -180,11 +182,13 @@ describe('captureAllSleepingAgentSessions', () => {
       }
     } as Partial<AppState>)
     const launchToken = 'launch-token-1'
+
     const launchConfig = {
       agentCommand: "codex '--model' 'gpt-5'",
       agentArgs: '--model gpt-5',
       agentEnv: { CODEX_PROFILE: 'captured' }
     }
+
     const providerSession = { key: 'session_id' as const, id: 'codex-session-1' }
 
     store.getState().registerAgentLaunchConfig('tab-1:leaf-1', launchConfig, {
@@ -310,11 +314,13 @@ describe('captureAllSleepingAgentSessions', () => {
       }
     } as Partial<AppState>)
     const providerSession = { key: 'session_id' as const, id: 'codex-session-1' }
+
     const launchConfig = {
       agentCommand: "codex '--model' 'gpt-5'",
       agentArgs: '--model gpt-5',
       agentEnv: { CODEX_PROFILE: 'captured' }
     }
+
     store.setState({
       sleepingAgentSessionsByPaneKey: {
         'tab-1:leaf-1': {
@@ -552,11 +558,13 @@ describe('captureAllSleepingAgentSessions', () => {
 
   it('clears multiple sleeping records and launch configs in one update', () => {
     const store = createTestStore()
+
     const sleeping = {
       'tab-1:leaf-1': { paneKey: 'tab-1:leaf-1' },
       'tab-2:leaf-2': { paneKey: 'tab-2:leaf-2' },
       'tab-3:leaf-3': { paneKey: 'tab-3:leaf-3' }
     } as unknown as AppState['sleepingAgentSessionsByPaneKey']
+
     const launchConfigs = {
       'tab-1:leaf-1': {
         launchConfig: { agentArgs: '', agentEnv: {} },
@@ -574,11 +582,13 @@ describe('captureAllSleepingAgentSessions', () => {
         identity: {}
       }
     } as AppState['agentLaunchConfigByPaneKey']
+
     store.setState({
       sleepingAgentSessionsByPaneKey: sleeping,
       agentLaunchConfigByPaneKey: launchConfigs
     })
     let changedUpdates = 0
+
     const unsubscribe = store.subscribe((next, previous) => {
       if (
         next.sleepingAgentSessionsByPaneKey !== previous.sleepingAgentSessionsByPaneKey ||
@@ -825,11 +835,13 @@ describe('captureAllSleepingAgentSessions', () => {
 
   it('skips done agents — there is no turn left to resume', () => {
     const store = createTestStore()
+
     const entry = makeAgentEntry({
       paneKey: 'tab-1:leaf-1',
       worktreeId: 'wt-1',
       sessionId: 'sess-1'
     })
+
     entry.state = 'done'
     store.setState({
       tabsByWorktree: {
@@ -861,11 +873,13 @@ describe('captureAllSleepingAgentSessions', () => {
 
   it('captures entries attributed only via tab prefix when the entry has no worktreeId', () => {
     const store = createTestStore()
+
     const entry = makeAgentEntry({
       paneKey: 'tab-1:leaf-1',
       worktreeId: 'wt-1',
       sessionId: 'sess-1'
     })
+
     delete entry.worktreeId
     store.setState({
       tabsByWorktree: {

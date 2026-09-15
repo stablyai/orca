@@ -22,9 +22,11 @@ describe('alternate-screen buffer state at write-callback time', () => {
   it('fires onBufferChange for each switch when one chunk enters and exits', async () => {
     const term = new Terminal({ cols: 120, rows: 34, allowProposedApi: true })
     let switches = 0
+
     const disposable = term.buffer.onBufferChange(() => {
       switches += 1
     })
+
     await writeChunk(term, '\x1b[?1049h\x1b[2J\x1b[Hpager frame\x1b[K\x1b[?1049l')
     expect(term.buffer.active.type).toBe('normal')
     expect(switches).toBe(2)

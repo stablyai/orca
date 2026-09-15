@@ -14,6 +14,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import { createTestStore } from './store-test-helpers'
 
 const repoId = 're-adopted-repo'
+
 const projectId = `repo:${repoId}`
 
 function directSshRepo(targetId: string): Repo {
@@ -96,6 +97,7 @@ function qualifiedWorktreeResult(
   if (!('expectedAuthority' in request)) {
     throw new Error('Expected a direct SSH provider request')
   }
+
   return {
     status: 'complete',
     providerRequestId: request.providerRequestId,
@@ -126,8 +128,11 @@ const project: Project = {
 }
 
 const reposList = vi.fn()
+
 const projectsList = vi.fn()
+
 const setupsList = vi.fn()
+
 const worktreesListDetected = vi.fn()
 
 beforeEach(() => {
@@ -180,12 +185,14 @@ describe('SSH repo host reconciliation', () => {
 
   it('keeps evidence pending until repos:changed delivers the new-host row', async () => {
     const liveRepo = directSshRepo('ssh-new')
+
     const runtimeSetup: ProjectHostSetup = {
       ...directSshSetup('ssh-runtime'),
       id: 'runtime-setup',
       hostId: 'runtime:env-1',
       executionHostId: 'runtime:env-1'
     }
+
     reposList.mockResolvedValue([liveRepo])
     projectsList.mockResolvedValue([project])
     setupsList.mockResolvedValue([directSshSetup('ssh-new')])
@@ -214,17 +221,21 @@ describe('SSH repo host reconciliation', () => {
     const liveRepo = directSshRepo('ssh-new')
     let resolveOldSetups!: (setups: ProjectHostSetup[]) => void
     let markOldSetupStarted!: () => void
+
     const oldSetups = new Promise<ProjectHostSetup[]>((resolve) => {
       resolveOldSetups = resolve
     })
+
     const oldSetupStarted = new Promise<void>((resolve) => {
       markOldSetupStarted = resolve
     })
+
     reposList.mockResolvedValueOnce([staleRepo]).mockResolvedValueOnce([liveRepo])
     projectsList.mockResolvedValue([project])
     setupsList
       .mockImplementationOnce(() => {
         markOldSetupStarted()
+
         return oldSetups
       })
       .mockResolvedValueOnce([directSshSetup('ssh-new')])
@@ -248,11 +259,14 @@ describe('SSH repo host reconciliation', () => {
     const oldAuthority = directSshAuthority('ssh-old')
     let providerRequest!: ListDetectedWorktreesArgs
     let resolveOldWorktrees!: (value: HostQualifiedDetectedWorktreeResult) => void
+
     const oldWorktrees = new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
       resolveOldWorktrees = resolve
     })
+
     worktreesListDetected.mockImplementationOnce((request: ListDetectedWorktreesArgs) => {
       providerRequest = request
+
       return oldWorktrees
     })
     reposList.mockResolvedValue([directSshRepo('ssh-new')])
@@ -310,11 +324,14 @@ describe('SSH repo host reconciliation', () => {
     const oldAuthority = directSshAuthority('ssh-old')
     let providerRequest!: ListDetectedWorktreesArgs
     let resolveOldWorktrees!: (value: HostQualifiedDetectedWorktreeResult) => void
+
     const oldWorktrees = new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
       resolveOldWorktrees = resolve
     })
+
     worktreesListDetected.mockImplementationOnce((request: ListDetectedWorktreesArgs) => {
       providerRequest = request
+
       return oldWorktrees
     })
     const store = createTestStore()
@@ -352,11 +369,14 @@ describe('SSH repo host reconciliation', () => {
     const oldAuthority = directSshAuthority('ssh-old')
     let providerRequest!: ListDetectedWorktreesArgs
     let resolveOldWorktrees!: (value: HostQualifiedDetectedWorktreeResult) => void
+
     const oldWorktrees = new Promise<HostQualifiedDetectedWorktreeResult>((resolve) => {
       resolveOldWorktrees = resolve
     })
+
     worktreesListDetected.mockImplementationOnce((request: ListDetectedWorktreesArgs) => {
       providerRequest = request
+
       return oldWorktrees
     })
     const store = createTestStore()
@@ -382,6 +402,7 @@ describe('SSH repo host reconciliation', () => {
       connectionId: undefined,
       executionHostId: undefined
     }
+
     const oldRepo = directSshRepo('ssh-old')
     reposList.mockResolvedValue([localRepo, oldRepo])
     projectsList.mockResolvedValue([project])

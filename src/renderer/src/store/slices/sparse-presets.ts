@@ -44,37 +44,50 @@ export function omitSparsePresetsForRepos(
   removedRepoIds: Iterable<string>
 ): Partial<AppState> {
   const removed = removedRepoIds instanceof Set ? removedRepoIds : new Set(removedRepoIds)
+
   if (removed.size === 0) {
     return {}
   }
+
   const omit = <T>(obj: Record<string, T>): Record<string, T> => {
     let changed = false
     const out = { ...obj }
+
     for (const id of removed) {
       if (id in out) {
         delete out[id]
         changed = true
       }
     }
+
     return changed ? out : obj
   }
+
   const result: Partial<AppState> = {}
   const byRepo = omit(s.sparsePresetsByRepo)
+
   if (byRepo !== s.sparsePresetsByRepo) {
     result.sparsePresetsByRepo = byRepo
   }
+
   const loading = omit(s.sparsePresetsLoadingByRepo)
+
   if (loading !== s.sparsePresetsLoadingByRepo) {
     result.sparsePresetsLoadingByRepo = loading
   }
+
   const status = omit(s.sparsePresetsLoadStatusByRepo)
+
   if (status !== s.sparsePresetsLoadStatusByRepo) {
     result.sparsePresetsLoadStatusByRepo = status
   }
+
   const error = omit(s.sparsePresetsErrorByRepo)
+
   if (error !== s.sparsePresetsErrorByRepo) {
     result.sparsePresetsErrorByRepo = error
   }
+
   return result
 }
 
@@ -89,17 +102,20 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
 
   fetchSparsePresets: async (repoId) => {
     const state = get()
+
     if (
       state.sparsePresetsByRepo[repoId] !== undefined ||
       state.sparsePresetsLoadingByRepo[repoId]
     ) {
       return
     }
+
     set((s) => ({
       sparsePresetsLoadingByRepo: { ...s.sparsePresetsLoadingByRepo, [repoId]: true },
       sparsePresetsLoadStatusByRepo: { ...s.sparsePresetsLoadStatusByRepo, [repoId]: 'loading' },
       sparsePresetsErrorByRepo: { ...s.sparsePresetsErrorByRepo, [repoId]: undefined }
     }))
+
     try {
       const presets = await window.api.sparsePresets.list({ repoId })
       set((s) => ({
@@ -125,6 +141,7 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
         // Why: a saved preset alone is not an authoritative repo bucket; load
         // existing presets first so we do not hide them behind a one-item cache.
         await get().fetchSparsePresets(args.repoId)
+
         if (get().sparsePresetsByRepo[args.repoId] === undefined) {
           toast.error(
             args.id
@@ -138,16 +155,21 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
               duration: ERROR_TOAST_DURATION
             }
           )
+
           return null
         }
       }
+
       const saved = await window.api.sparsePresets.save(args)
       set((s) => {
         const existing = s.sparsePresetsByRepo[args.repoId]
+
         if (existing === undefined) {
           return s
         }
+
         const without = existing.filter((preset) => preset.id !== saved.id)
+
         return {
           sparsePresetsByRepo: {
             ...s.sparsePresetsByRepo,
@@ -163,6 +185,7 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
           : translate('auto.store.slices.sparse.presets.0696d13e56', 'Preset saved'),
         { description: saved.name }
       )
+
       return saved
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -175,6 +198,7 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
           duration: ERROR_TOAST_DURATION
         }
       )
+
       return null
     }
   },
@@ -189,6 +213,7 @@ export const createSparsePresetsSlice: StateCreator<AppState, [], [], SparsePres
         [repoId]: previous.filter((preset) => preset.id !== presetId)
       }
     }))
+
     try {
       await window.api.sparsePresets.remove({ repoId, presetId })
       toast.success(translate('auto.store.slices.sparse.presets.ee434d7941', 'Preset removed'))

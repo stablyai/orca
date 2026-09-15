@@ -12,8 +12,11 @@ import {
 } from './mobile-hosted-review-service'
 
 export type MobilePrEligibilityInput = MobileHostedReviewEligibilityInput
+
 export type MobilePrPrefill = MobileHostedReviewPrefill
+
 export type MobilePrCreateInput = MobileHostedReviewCreateInput
+
 export type MobilePrCreateOutcome = MobileHostedReviewCreateOutcome
 
 export {
@@ -29,19 +32,23 @@ export function getMobilePrCreateSuccessWarning(
   provider: MobilePrPrefill['provider']
 ): string | undefined {
   const copy = hostedReviewCopy(provider)
+
   if (outcome.existing) {
     return outcome.number
       ? `${copy.titleLabel} #${outcome.number} is already open.`
       : `${copy.titleLabel} is already open.`
   }
+
   if (outcome.linkError) {
     return `${copy.titleLabel} created, but Orca could not refresh it yet.`
   }
+
   return undefined
 }
 
 export function getMobilePrCreateBlockMessage(prefill: MobilePrPrefill): string | null {
   const copy = hostedReviewCopy(prefill.provider)
+
   if (prefill.canCreate !== false || shouldPushBeforeMobileHostedReviewCreate(prefill)) {
     // Fail closed: only an accepted no-review lookup (`not_found`) may open
     // Create / Push & Create. `unavailable`, `found`, or a missing outcome (an
@@ -51,8 +58,10 @@ export function getMobilePrCreateBlockMessage(prefill: MobilePrPrefill): string 
     if (prefill.reviewLookupOutcome !== 'not_found') {
       return `Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Try again in a moment.`
     }
+
     return null
   }
+
   switch (prefill.blockedReason) {
     case 'dirty':
       return `Commit changes before creating a ${copy.reviewLabel}.`

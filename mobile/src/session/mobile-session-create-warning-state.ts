@@ -16,6 +16,7 @@ export function reconcileMobileSessionCreateWarningState(
   if (current.source === source) {
     return current
   }
+
   return createMobileSessionCreateWarningState(source)
 }
 
@@ -25,5 +26,6 @@ export function dismissMobileSessionCreateWarningState(
   if (!current.visible) {
     return current
   }
+
   return { ...current, visible: '' }
 }

@@ -132,6 +132,7 @@ describe('automation host client', () => {
       workspaceMode: 'existing',
       workspaceId: 'repo-1::/srv/orca'
     })
+
     const input: AutomationCreateInput = {
       name: automation.name,
       prompt: automation.prompt,
@@ -168,6 +169,7 @@ describe('automation host client', () => {
         path: '/srv/orca'
       }
     })
+
     const sourceTarget = { kind: 'environment' as const, environmentId: 'gpu' }
     vi.mocked(callRuntimeRpc)
       .mockResolvedValueOnce({ automation: { ...automation, name: 'Updated' } })

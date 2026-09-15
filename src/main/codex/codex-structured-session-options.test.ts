@@ -183,8 +183,10 @@ describe('structured Codex session options', () => {
 
   it('maps canonical Fast on and off to the exact advertised tier and Standard', async () => {
     const requests: { method: string; params?: Record<string, unknown> }[] = []
+
     const request = vi.fn(async (method: string, params?: Record<string, unknown>) => {
       requests.push({ method, params })
+
       return method === 'model/list'
         ? {
             data: [
@@ -200,6 +202,7 @@ describe('structured Codex session options', () => {
           }
         : { turn: { id: `turn-${requests.length}` } }
     })
+
     const session = optionSession(request)
 
     await expect(
@@ -245,12 +248,14 @@ describe('structured Codex session options', () => {
         reportedServiceTierKnown: true
       })
     ).resolves.toMatchObject({ current: { fastMode: true, confirmed: ['fastMode'] } })
+
     const unknown = await readCodexStructuredSessionOptions({
       connection,
       current: { model: 'gpt-live' },
       reportedServiceTier: 'unrecognized-tier',
       reportedServiceTierKnown: true
     })
+
     expect(unknown.current).toEqual({ model: 'gpt-live' })
   })
 
@@ -284,9 +289,11 @@ describe('structured Codex session options', () => {
 
   it('reconciles restored Fast on to explicit Standard when the selected model lost support', async () => {
     const requests: { method: string; params?: Record<string, unknown> }[] = []
+
     const session = optionSession(
       vi.fn(async (method: string, params?: Record<string, unknown>) => {
         requests.push({ method, params })
+
         return method === 'model/list'
           ? {
               data: [
@@ -301,6 +308,7 @@ describe('structured Codex session options', () => {
           : { turn: { id: 'turn-standard' } }
       })
     )
+
     session.options.set('fastMode', 'true')
 
     await expect(readLiveCodexSessionOptions(session, undefined)).resolves.toMatchObject({
@@ -320,11 +328,14 @@ describe('structured Codex session options', () => {
   it('uses Standard until a missing Fast catalog recovers without losing restored intent', async () => {
     const requests: { method: string; params?: Record<string, unknown> }[] = []
     let catalogRecovered = false
+
     const request = vi.fn(async (method: string, params?: Record<string, unknown>) => {
       requests.push({ method, params })
+
       if (method === 'turn/start') {
         return { turn: { id: `turn-${requests.length}` } }
       }
+
       return {
         data: [
           {
@@ -338,6 +349,7 @@ describe('structured Codex session options', () => {
         nextCursor: null
       }
     })
+
     const session = optionSession(request)
     session.options.set('fastMode', 'true')
 
@@ -374,9 +386,11 @@ describe('structured Codex session options', () => {
 
   it('allows explicit Fast off without positive model support', async () => {
     const requests: { method: string; params?: Record<string, unknown> }[] = []
+
     const session = optionSession(
       vi.fn(async (method: string, params?: Record<string, unknown>) => {
         requests.push({ method, params })
+
         return method === 'model/list'
           ? {
               data: [{ model: 'gpt-live', supportedReasoningEfforts: [] }],
@@ -414,6 +428,7 @@ describe('structured Codex session options', () => {
       },
       current: { model: 'gpt-live' }
     })
+
     expect(result.models[0]).toMatchObject({ supportsFastMode: true })
     expect(result.fastModeSupport).toEqual({ supported: true })
   })
@@ -429,6 +444,7 @@ describe('structured Codex session options', () => {
       ],
       nextCursor: null
     }))
+
     const migrated = optionSession(request)
     migrated.options.set('serviceTier', 'priority-migrated')
 
@@ -458,6 +474,7 @@ describe('structured Codex session options', () => {
         nextCursor: null
       }))
     )
+
     session.options.set('fastMode', 'true')
 
     await expect(

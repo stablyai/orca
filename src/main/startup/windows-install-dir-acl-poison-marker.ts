@@ -14,6 +14,7 @@ import { join } from 'node:path'
  */
 
 export const WINDOWS_INSTALL_DIR_ACL_POISON_MARKER_FILE = 'windows-install-dir-acl-poison.json'
+
 export const WINDOWS_INSTALL_DIR_ACL_POISON_SCHEME_VERSION = 1
 
 type PoisonMarker = {
@@ -37,6 +38,7 @@ export function hasInstallDirAclPoisonMarker(
     const parsed = JSON.parse(readFileSync(markerPath(userDataPath), 'utf-8')) as
       | Partial<PoisonMarker>
       | undefined
+
     return (
       parsed?.schemeVersion === WINDOWS_INSTALL_DIR_ACL_POISON_SCHEME_VERSION &&
       parsed.installDir === installDir &&
@@ -58,10 +60,12 @@ export function writeInstallDirAclPoisonMarker(
     appVersion,
     detectedAt: Date.now()
   }
+
   try {
     if (!existsSync(userDataPath)) {
       mkdirSync(userDataPath, { recursive: true })
     }
+
     writeFileSync(markerPath(userDataPath), JSON.stringify(marker))
   } catch {
     // Best effort: without it the next launch just falls back to today's late repair.

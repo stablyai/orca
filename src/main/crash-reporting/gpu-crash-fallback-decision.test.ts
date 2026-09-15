@@ -77,21 +77,25 @@ describe('GpuCrashFallbackTracker', () => {
 
   it('leaves the closest real-world non-burst alone', () => {
     const tracker = new GpuCrashFallbackTracker({ windowMs: 30_000, threshold: 3 })
+
     // Field telemetry's tightest 4-crash launch that is *not* a broken driver.
     // Consecutive gaps (29.5s, 25.6s) each fit the window, so pruning has to
     // retire the old entry every time or this session gets relaunched for free.
     for (const at of [0, 29_531, 55_136, 74_178]) {
       expect(tracker.recordGpuCrash(at).shouldEngageFallback).toBe(false)
     }
+
     expect(tracker.hasEngaged()).toBe(false)
   })
 
   it('ignores a slow drip that never fills the window', () => {
     const tracker = new GpuCrashFallbackTracker({ windowMs: 30_000, threshold: 3 })
+
     // One crash every 20s forever: always 2 in the window, never a burst.
     for (const at of [0, 20_000, 40_000, 60_000, 80_000, 100_000]) {
       expect(tracker.recordGpuCrash(at).shouldEngageFallback).toBe(false)
     }
+
     expect(tracker.hasEngaged()).toBe(false)
   })
 

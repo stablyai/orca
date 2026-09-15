@@ -26,6 +26,7 @@ vi.mock('node:fs/promises', () => ({
   writeFile: vi.fn().mockResolvedValue(undefined),
   rename: vi.fn().mockResolvedValue(undefined)
 }))
+
 vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
@@ -41,9 +42,11 @@ describe('fetchGeminiRateLimits', () => {
       if (url.includes('loadCodeAssist')) {
         return Promise.resolve(makeResponse({ cloudaicompanionProject: 'proj-123' }))
       }
+
       if (url.includes('token')) {
         return Promise.resolve(makeResponse({ access_token: 'new-token', expires_in: 3600 }))
       }
+
       return Promise.resolve(makeResponse({ error: `Unhandled fetch to ${url}` }, 500))
     })
     // Default: no CLI installed, refresh path cannot find client credentials.
@@ -56,14 +59,17 @@ describe('fetchGeminiRateLimits', () => {
       if (p.includes('auth.json')) {
         return JSON.stringify(authJsonGoogle)
       }
+
       throw { code: 'ENOENT' }
     })
   }
+
   const setupAuthJsonExpired = () => {
     readFileMock.mockImplementation(async (p: string) => {
       if (p.includes('auth.json')) {
         return JSON.stringify(authJsonGoogleExpired)
       }
+
       throw { code: 'ENOENT' }
     })
   }
@@ -79,9 +85,11 @@ describe('fetchGeminiRateLimits', () => {
       if (url.includes('retrieveUserQuota')) {
         return Promise.resolve(makeResponse(quotaResponse))
       }
+
       if (url.includes('loadCodeAssist')) {
         return Promise.resolve(makeResponse({ cloudaicompanionProject: 'proj-123' }))
       }
+
       return Promise.resolve(makeResponse({}, 404))
     })
     const result = await fetchGeminiRateLimits(true)
@@ -108,9 +116,11 @@ describe('fetchGeminiRateLimits', () => {
           ])
         )
       }
+
       if (url.includes('loadCodeAssist')) {
         return Promise.resolve(makeResponse({ cloudaicompanionProject: 'proj-123' }))
       }
+
       return Promise.resolve(makeResponse({}, 404))
     })
     const result = await fetchGeminiRateLimits(true)
@@ -125,9 +135,11 @@ describe('fetchGeminiRateLimits', () => {
       if (url.includes('retrieveUserQuota')) {
         return Promise.resolve(makeResponse([]))
       }
+
       if (url.includes('loadCodeAssist')) {
         return Promise.resolve(makeResponse({ cloudaicompanionProject: 'proj-123' }))
       }
+
       return Promise.resolve(makeResponse({}, 404))
     })
     const result = await fetchGeminiRateLimits(true)
@@ -150,9 +162,11 @@ describe('fetchGeminiRateLimits', () => {
       if (url.includes('retrieveUserQuota')) {
         return Promise.resolve(makeResponse({ buckets: quotaResponse }))
       }
+
       if (url.includes('loadCodeAssist')) {
         return Promise.resolve(makeResponse({ cloudaicompanionProject: 'proj-123' }))
       }
+
       return Promise.resolve(makeResponse({}, 404))
     })
     const result = await fetchGeminiRateLimits(true)
@@ -179,9 +193,11 @@ describe('fetchGeminiRateLimits', () => {
           ])
         )
       }
+
       if (url.includes('loadCodeAssist')) {
         return Promise.resolve(makeResponse({ cloudaicompanionProject: 'proj-123' }))
       }
+
       return Promise.resolve(makeResponse({}, 404))
     })
     const result = await fetchGeminiRateLimits(true)
@@ -196,17 +212,22 @@ describe('fetchGeminiRateLimits', () => {
     netFetchMock.mockImplementation((url: string) => {
       if (url.includes('retrieveUserQuota')) {
         quotaCallCount += 1
+
         if (quotaCallCount === 1) {
           return Promise.resolve(makeResponse({ error: 'Unauthenticated' }, 401))
         }
+
         return Promise.resolve(makeResponse(quotaResponse))
       }
+
       if (url.includes('token')) {
         return Promise.resolve(makeResponse({ access_token: 'retried-token', expires_in: 3600 }))
       }
+
       if (url.includes('loadCodeAssist')) {
         return Promise.resolve(makeResponse({ cloudaicompanionProject: 'proj-123' }))
       }
+
       return Promise.resolve(makeResponse({}, 404))
     })
     const result = await fetchGeminiRateLimits(true)

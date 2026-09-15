@@ -82,6 +82,7 @@ describe('decideInitialAgentTabViewMode', () => {
         agent: 'omp',
         nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
       })
+
     expect(forConnection('ssh-target-1')).toBeUndefined()
     expect(forConnection(null)).toBe('chat')
   })

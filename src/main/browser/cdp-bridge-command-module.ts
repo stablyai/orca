@@ -10,6 +10,7 @@ import type { CdpRefResolution } from './cdp-ref-resolution'
 export type CdpScrollDirection = BrowserScrollResult extends { scrolled: infer Direction }
   ? Direction
   : never
+
 export type CdpScreenshotFormat = BrowserScreenshotResult extends { format: infer Format }
   ? Format
   : never

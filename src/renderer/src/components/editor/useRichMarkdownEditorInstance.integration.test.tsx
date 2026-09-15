@@ -37,6 +37,7 @@ describe('useRichMarkdownEditorInstance with Tiptap', () => {
 
   it('preserves the document, selection, and undo history across ordinary rerenders', async () => {
     const initialParams = createParams('initial')
+
     const { rerender, result, unmount } = renderHook(
       ({ params }) => useRichMarkdownEditorInstance(params),
       { initialProps: { params: initialParams } }
@@ -51,6 +52,7 @@ describe('useRichMarkdownEditorInstance with Tiptap', () => {
       from: editor.state.selection.from,
       to: editor.state.selection.to
     }
+
     const documentBeforeRerender = editor.getHTML()
     expect(editor.can().undo()).toBe(true)
 

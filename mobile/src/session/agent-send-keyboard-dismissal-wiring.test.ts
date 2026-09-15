@@ -2,19 +2,27 @@ import { describe, expect, it } from 'vitest'
 import { readMobileSessionRouteSource } from './mobile-session-route-source-family.test-support'
 
 const runtimeSource = readMobileSessionRouteSource('./use-mobile-session-terminal-runtime.ts')
+
 const nativeChatSource = readMobileSessionRouteSource(
   './use-mobile-session-native-chat-dictation.ts'
 )
+
 const sendActionsSource = readMobileSessionRouteSource(
   './use-mobile-session-terminal-send-actions.ts'
 )
+
 const commandDockSource = readMobileSessionRouteSource('./MobileSessionCommandDock.tsx')
+
 const tabApplicationSource = readMobileSessionRouteSource('./use-mobile-session-tab-application.ts')
+
 const terminalListSource = readMobileSessionRouteSource('./use-mobile-session-terminal-list.ts')
+
 const startupSource = readMobileSessionRouteSource('./use-mobile-session-startup.ts')
+
 const bufferedDraftHookSource = readMobileSessionRouteSource(
   '../terminal/use-buffered-terminal-drafts.ts'
 )
+
 const keyboardDismissalHookSource = readMobileSessionRouteSource(
   './use-agent-send-keyboard-dismissal.ts'
 )
@@ -26,6 +34,7 @@ function sourceSlice(source: string, anchorStart: string, anchorEnd: string): st
   expect(source.indexOf(anchorStart, start + 1)).toBe(-1)
   const end = source.indexOf(anchorEnd, start)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end + anchorEnd.length)
 }
 
@@ -36,6 +45,7 @@ describe('terminal send keyboard dismissal wiring', () => {
       'const dismissKeyboardAfterAgentSend = useAgentSendKeyboardDismissal(',
       'getSendCompletionGeneration\n  )'
     )
+
     expect(slice).toContain('dismissSoftwareKeyboard')
     expect(keyboardDismissalHookSource).toContain(
       'shouldDismissKeyboardAfterTerminalSend(origin.tab, accepted)'
@@ -56,6 +66,7 @@ describe('terminal send keyboard dismissal wiring', () => {
       'const getSendCompletionGeneration = useMobileSendCompletionGeneration({',
       '})'
     )
+
     expect(nativeChatSource).toContain(
       'const routeKey = nativeChatScopeKey ?? `${hostId}\\0${worktreeId}`'
     )
@@ -84,6 +95,7 @@ describe('terminal send keyboard dismissal wiring', () => {
       'async function handleSend() {',
       'async function handleAccessoryKey('
     )
+
     const acceptedAt = slice.indexOf('const accepted = isTerminalSendRpcAccepted(response)')
     const restoreAt = slice.indexOf('restoreRejectedDraft()', acceptedAt)
     const dismissAt = slice.indexOf('dismissKeyboardAfterAgentSend(')
@@ -111,6 +123,7 @@ describe('terminal send keyboard dismissal wiring', () => {
       'ref={commandInputRef}',
       'onSubmitEditing={() => void handleSend()}'
     )
+
     expect(slice).toContain('blurOnSubmit={false}')
   })
 
@@ -120,13 +133,16 @@ describe('terminal send keyboard dismissal wiring', () => {
       'async function handleSend() {',
       'async function handleAccessoryKey('
     )
+
     const originAt = sendSlice.indexOf('handle: activeHandle')
     const requestAt = sendSlice.indexOf('await client.sendRequest(')
+
     const restoreSlice = sourceSlice(
       sendActionsSource,
       'const bufferedDraftSend = bufferedTerminalDraftState.beginBufferedTerminalDraftSend(',
       'bufferedTerminalDraftState.restoreRejectedDraft(bufferedDraftSend)'
     )
+
     expect(originAt).toBeGreaterThan(0)
     expect(originAt).toBeLessThan(requestAt)
     expect(restoreSlice).toContain('activeHandle,\n      draft')
@@ -151,11 +167,13 @@ describe('terminal send keyboard dismissal wiring', () => {
     expect(tabApplicationSource).toContain(
       'reconcileBufferedDraftsRef.current(currentSessionTabs, nextTabs, {'
     )
+
     const routeResetSlice = sourceSlice(
       startupSource,
       '// Why: Expo reuses this screen across worktrees;',
       'clearDelayedActionTimers()\n    }'
     )
+
     expect(routeResetSlice).toContain('bufferedTerminalDraftState.resetDrafts()')
     expect(routeResetSlice).toContain('bufferedTerminalDraftState.clearPendingRestorations()')
   })
@@ -168,6 +186,7 @@ describe('terminal send keyboard dismissal wiring', () => {
       'const liveHandles = new Set(result.terminals.map((terminal) => terminal.handle))',
       'setTerminalKeyboardMetrics((prev) => pruneTerminalKeyboardMetrics(prev, shouldPrune))'
     )
+
     expect(slice).toContain('const retainedHandles = resolveRetainedTerminalHandles(pruneContext)')
     expect(slice).toContain('bufferedTerminalDraftState.pruneDrafts(retainedHandles)')
     // Not the raw list: terminal.list omits a chat-covered handle while the desktop
@@ -190,6 +209,7 @@ describe('terminal send keyboard dismissal wiring', () => {
       'async function handleAccessoryKey(',
       'const sendLiveTerminalInput = useCallback('
     )
+
     expect(slice).not.toContain('dismissKeyboardAfterAgentSend')
   })
 })

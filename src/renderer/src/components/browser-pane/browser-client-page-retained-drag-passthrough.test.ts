@@ -18,6 +18,7 @@ const openReleases: (() => void)[] = []
 function startDrag(): () => void {
   const release = acquireWebviewsDragPassthrough()
   openReleases.push(release)
+
   return release
 }
 
@@ -25,6 +26,7 @@ afterEach(() => {
   for (const release of openReleases.splice(0)) {
     release()
   }
+
   disposeRetainedHostFixtures()
   document.body.innerHTML = ''
 })

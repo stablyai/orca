@@ -26,6 +26,7 @@ export function ProjectSingleSelectCell({
   const value = row.fieldValuesByFieldId[field.id]
   const [open, setOpen] = useState(false)
   const options = field.kind === 'single-select' ? field.options : []
+
   const label =
     value?.kind === 'single-select' ? (
       <span
@@ -38,9 +39,11 @@ export function ProjectSingleSelectCell({
         {value.name}
       </span>
     ) : null
+
   if (!editable) {
     return <div>{label}</div>
   }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -94,19 +97,23 @@ export function ProjectIterationCell({
   const value = row.fieldValuesByFieldId[field.id]
   const [open, setOpen] = useState(false)
   const iterations = field.kind === 'iteration' ? field.iterations : []
+
   const label =
     value?.kind === 'iteration' ? (
       <span className="inline-flex items-center gap-1 rounded-md border border-border/50 bg-muted/40 px-1.5 py-0.5 text-xs">
         {value.title}
       </span>
     ) : null
+
   if (!editable) {
     return <div>{label}</div>
   }
+
   const pick = (id: string): void => {
     onEditField?.(field.id, { kind: 'iteration', iterationId: id })
     setOpen(false)
   }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -159,6 +166,7 @@ function IterationGroup({
   if (iterations.length === 0) {
     return null
   }
+
   return (
     <>
       <div className="px-2 pt-1 text-[10px] uppercase tracking-wide text-muted-foreground">

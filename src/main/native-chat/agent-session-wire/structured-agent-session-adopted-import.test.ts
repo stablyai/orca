@@ -17,16 +17,22 @@ import { agentSessionJournalCloseRetries } from '../agent-session-journal/journa
 import * as legacyImport from '../agent-session-journal/journal-legacy-import'
 
 const NOW = 1_800_000_000_000
+
 const SESSION = 'codex_adopting_session'
+
 const THREAD = 'adopted-thread'
+
 const OPERATION = `${NOW}-${'1'.padStart(32, '0')}`
+
 let root: string | null = null
+
 let store: AgentSessionRecordStore | null = null
 
 afterEach(async () => {
   if (root) {
     await rm(root, { recursive: true, force: true })
   }
+
   root = null
   store = null
   vi.restoreAllMocks()
@@ -49,6 +55,7 @@ async function writeCodexRollout(path: string, text: string): Promise<void> {
       }
     })
   ]
+
   await writeFile(path, `${lines.join('\n')}\n`, 'utf8')
 }
 
@@ -75,6 +82,7 @@ function attachParams(transcriptPath?: string): AgentSessionAttachParams {
       ...(transcriptPath ? { transcriptPath } : {})
     }
   }
+
   return {
     ...params,
     envelope: {
@@ -117,6 +125,7 @@ async function attach(
   onAttached: AttachFlowInput['onAttached'] = () => {}
 ) {
   store ??= await AgentSessionRecordStore.open({ directory: join(root!, 'store'), hostId: 'local' })
+
   return performAttach({
     store,
     adapter: sessionAdapter,
@@ -155,6 +164,7 @@ describe('adopting a provider conversation on create', () => {
     const transcriptPath = join(root, 'rollout.jsonl')
     await writeCodexRollout(transcriptPath, 'original turn')
     const sessionAdapter = adapter()
+
     const first = await attach(transcriptPath, sessionAdapter, async ({ journal }) => {
       await journal.appendItem(
         { provider: 'legacy', agent: 'codex', sessionId: THREAD, recordId: 'journal-only' },
@@ -163,15 +173,20 @@ describe('adopting a provider conversation on create', () => {
       )
       await journal.close()
     })
+
     expect(first.ok).toBe(true)
     await rm(transcriptPath)
+
     const replay = await attach(transcriptPath, sessionAdapter, async ({ journal }) =>
       journal.close()
     )
+
     expect(replay).toMatchObject({ ok: true, replayed: true })
+
     if (!first.ok || !replay.ok) {
       throw new Error('attach failed')
     }
+
     expect(replay.cursor.epoch).toBe(first.cursor.epoch)
     expect(JSON.stringify(replay.value.page.items)).toContain('not yet in rollout')
     expect(sessionAdapter.acquire).toHaveBeenCalledTimes(1)
@@ -182,19 +197,23 @@ describe('adopting a provider conversation on create', () => {
     async (kind) => {
       root = await mkdtemp(join(tmpdir(), 'orca-adopt-preflight-'))
       const transcriptPath = join(root, 'rollout.jsonl')
+
       if (kind === 'oversized') {
         await writeCodexRollout(transcriptPath, 'original turn')
         await truncate(transcriptPath, 16 * 1024 * 1024 + 1)
       } else if (kind === 'empty' || kind === 'invalid') {
         await writeFile(transcriptPath, kind === 'empty' ? '' : 'not json\n')
       }
+
       const sessionAdapter = adapter()
       const onAttached = vi.fn()
+
       const result = await attach(
         kind === 'source-less' ? undefined : transcriptPath,
         sessionAdapter,
         onAttached
       )
+
       expect(result).toMatchObject({
         ok: false,
         refusal: { code: 'agent_session_identity_required' }
@@ -204,6 +223,7 @@ describe('adopting a provider conversation on create', () => {
       expect(onAttached).not.toHaveBeenCalled()
       expect(store?.getRecord(SESSION)).toBeNull()
       expect(store?.listOperationRows()).toEqual([])
+
       if (kind === 'oversized') {
         expect(JSON.stringify(result)).toContain('import bound')
       }
@@ -235,15 +255,20 @@ describe('adopting a provider conversation on create', () => {
     sessionAdapter.acquire = vi.fn(async (input) => {
       expect(prepare).toHaveBeenCalledTimes(1)
       await rm(transcriptPath)
+
       return acquire(input)
     })
+
     const result = await attach(transcriptPath, sessionAdapter, async ({ journal }) =>
       journal.close()
     )
+
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       throw new Error('attach failed')
     }
+
     expect(JSON.stringify(result.value.page.items)).toContain('prepared before acquiring')
     expect(prepare).toHaveBeenCalledTimes(1)
   })

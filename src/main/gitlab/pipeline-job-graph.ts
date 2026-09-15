@@ -15,8 +15,10 @@ import {
 // Checks looked empty next to gitlab.com's full graph.
 
 const PIPELINE_JOB_PAGE_SIZE = 100
+
 /** Cap expanded child-pipeline fan-out so one MR details load stays bounded. */
 const MAX_CHILD_PIPELINES_TO_EXPAND = 20
+
 // Why: every fetch spawns a `glab` binary (a remote exec over SSH), and this runs on
 // the Checks poll timer. Match gl-utils' MAX_CONCURRENT so a bridge-heavy MR trickles
 // its children instead of bursting 20 processes at once.
@@ -60,6 +62,7 @@ function mapPipelineJob(raw: GitLabRawJob, pipelineId: number): GitLabPipelineJo
 
 function mapBridgeAsJob(raw: GitLabRawBridge, pipelineId: number): GitLabPipelineJob {
   const childStatus = raw.downstream_pipeline?.status
+
   return {
     // Why: bridges are not real jobs — omit a positive id so Checks won't try
     // job-trace/retry APIs on them. Rows still render via name + webUrl.
@@ -90,10 +93,13 @@ async function fetchPipelineJobPage(
     ],
     glabRepoExecOptions(repoPath, connectionId, localGitOptions)
   )
+
   const data = JSON.parse(stdout) as GitLabRawJob[]
+
   if (!Array.isArray(data)) {
     return []
   }
+
   return data.map((job) => mapPipelineJob(job, pipelineId))
 }
 
@@ -112,7 +118,9 @@ async function fetchPipelineBridges(
     ],
     glabRepoExecOptions(repoPath, connectionId, localGitOptions)
   )
+
   const data = JSON.parse(stdout) as GitLabRawBridge[]
+
   return Array.isArray(data) ? data : []
 }
 
@@ -121,20 +129,25 @@ function childPipelineTarget(
   parentProjectRef: ProjectRef
 ): { projectRef: ProjectRef; pipelineId: number } | null {
   const childId = bridge.downstream_pipeline?.id
+
   if (typeof childId !== 'number') {
     return null
   }
+
   // Why: prefer path from web_url so same- and cross-project children both work
   // without a project-id lookup. If the URL is missing/unparseable, fall back to
   // the parent project (same-project triggers); wrong-project calls fail soft.
   const webUrl = bridge.downstream_pipeline?.web_url
+
   if (webUrl) {
     try {
       const url = new URL(webUrl)
       // web_url shape: https://host/group/project/-/pipelines/123
       const marker = url.pathname.indexOf('/-/pipelines/')
+
       if (marker > 0) {
         const path = url.pathname.slice(1, marker).replace(/\/$/, '')
+
         if (path) {
           return {
             projectRef: { host: url.host || parentProjectRef.host, path },
@@ -146,6 +159,7 @@ function childPipelineTarget(
       // fall through to parent project
     }
   }
+
   return { projectRef: parentProjectRef, pipelineId: childId }
 }
 
@@ -166,6 +180,7 @@ async function mapWithConcurrencyLimit<T, R>(
       }
     })
   )
+
   return out
 }
 
@@ -186,13 +201,17 @@ export async function fetchPipelineJobs(
   const bridgeRows = bridges.map((bridge) => mapBridgeAsJob(bridge, pipelineId))
   const childTargets: { projectRef: ProjectRef; pipelineId: number }[] = []
   const seenChildIds = new Set<number>()
+
   for (const bridge of bridges) {
     const target = childPipelineTarget(bridge, projectRef)
+
     if (!target || seenChildIds.has(target.pipelineId)) {
       continue
     }
+
     seenChildIds.add(target.pipelineId)
     childTargets.push(target)
+
     if (childTargets.length >= MAX_CHILD_PIPELINES_TO_EXPAND) {
       break
     }
@@ -216,26 +235,34 @@ export async function fetchPipelineJobs(
   const seenJobIds = new Set<number>()
   const seenNames = new Set<string>()
   const out: GitLabPipelineJob[] = []
+
   for (const job of [...parentJobs, ...childJobBatches.flat()]) {
     if (job.id) {
       if (seenJobIds.has(job.id)) {
         continue
       }
+
       seenJobIds.add(job.id)
     }
+
     out.push(job)
+
     if (job.name) {
       seenNames.add(job.name)
     }
   }
+
   for (const bridge of bridgeRows) {
     if (bridge.name && seenNames.has(bridge.name)) {
       continue
     }
+
     out.push(bridge)
+
     if (bridge.name) {
       seenNames.add(bridge.name)
     }
   }
+
   return out
 }

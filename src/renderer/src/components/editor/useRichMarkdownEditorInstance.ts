@@ -17,6 +17,7 @@ export function useRichMarkdownEditorInstance(params: EditorConfigParams): Edito
       }),
     [params.codec, params.htmlSuperscriptLinkContext]
   )
+
   const editor = useEditor(
     useMemo(
       () => ({
@@ -32,6 +33,8 @@ export function useRichMarkdownEditorInstance(params: EditorConfigParams): Edito
     // history instead of reparsing the initial content.
     []
   )
+
   params.editorRef.current = editor ?? null
+
   return editor
 }

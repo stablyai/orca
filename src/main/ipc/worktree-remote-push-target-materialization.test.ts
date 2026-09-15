@@ -4,6 +4,7 @@ import type { GitPushTarget } from '../../shared/worktree/types'
 import type { WorktreePushTargetStore } from './worktree-push-target-cleanup'
 
 const { gitExecFileAsyncMock } = vi.hoisted(() => ({ gitExecFileAsyncMock: vi.fn() }))
+
 vi.mock('../git/runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 
 import {
@@ -12,7 +13,9 @@ import {
 } from './worktree-remote'
 
 const REPO_PATH = '/repo-root'
+
 const FORK_URL = 'git@github.com:contributor/orca.git'
+
 const FORK_REMOTE = 'pr-contributor-orca'
 
 function forkTarget(overrides: Partial<GitPushTarget> = {}): GitPushTarget {
@@ -55,12 +58,15 @@ describe('materializeWorktreePushTargetRemote', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
+
       if (args[0] === 'config' && args[1] === '--get-all') {
         throw new Error('no such section')
       }
+
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'contributor/fix\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
     const target = forkTarget()
@@ -91,6 +97,7 @@ describe('materializeWorktreePushTargetRemote', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         throw new Error('No such remote')
       }
+
       return { stdout: '', stderr: '' }
     })
     const target = forkTarget()
@@ -127,15 +134,19 @@ describe('materializeWorktreePushTargetRemote', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
+
       if (args[0] === 'config' && args[1] === '--get-all') {
         throw new Error('no such section')
       }
+
       if (args[0] === 'rev-parse') {
         throw new Error('unknown revision')
       }
+
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'contributor/fix\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
     const target = forkTarget()
@@ -143,9 +154,11 @@ describe('materializeWorktreePushTargetRemote', () => {
     const result = await materializeWorktreePushTargetRemote(REPO_PATH, target)
 
     expect(result).toBe(target)
+
     const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(
       (call) => (call[0] as string[])[0] === 'fetch'
     )
+
     expect(fetchCalls).toEqual([
       [
         [
@@ -176,12 +189,15 @@ describe('materializeWorktreePushTargetRemote', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
+
       if (args[0] === 'config' && args[1] === '--get-all') {
         throw new Error('no such section')
       }
+
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'contributor/fix\n', stderr: '' }
       }
+
       // rev-parse succeeds by default (ref already exists) -- no fetch should follow.
       return { stdout: '', stderr: '' }
     })
@@ -192,6 +208,7 @@ describe('materializeWorktreePushTargetRemote', () => {
     const fetchCalls = gitExecFileAsyncMock.mock.calls.filter(
       (call) => (call[0] as string[])[0] === 'fetch'
     )
+
     expect(fetchCalls).toEqual([])
   })
 
@@ -202,36 +219,46 @@ describe('materializeWorktreePushTargetRemote', () => {
     // skipped all three, leaving its own branch with no upstream.
     let remoteExists = false
     let releaseAdd!: () => void
+
     const addGate = new Promise<void>((resolve) => {
       releaseAdd = resolve
     })
+
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         if (!remoteExists) {
           throw new Error('No such remote')
         }
+
         return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
+
       if (args[0] === 'remote' && args[1] === 'add') {
         await addGate
         remoteExists = true
+
         return { stdout: '', stderr: '' }
       }
+
       if (args[0] === 'config' && args[1] === '--get-all') {
         throw new Error('no such section')
       }
+
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'joiner/branch\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
     const minter = materializeWorktreePushTargetRemote(REPO_PATH, forkTarget())
     await Promise.resolve()
+
     const joiner = materializeWorktreePushTargetRemote(
       REPO_PATH,
       forkTarget({ branchName: 'joiner/branch' })
     )
+
     releaseAdd()
     const [, joined] = await Promise.all([minter, joiner])
 
@@ -256,14 +283,17 @@ describe('materializeWorktreePushTargetRemote', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         throw new Error('No such remote')
       }
+
       if (args[0] === 'remote' && args[1] === 'add') {
         throw new Error('mint failed')
       }
+
       return { stdout: '', stderr: '' }
     })
 
     const minter = materializeWorktreePushTargetRemote(REPO_PATH, forkTarget())
     await Promise.resolve()
+
     const joiner = materializeWorktreePushTargetRemote(
       REPO_PATH,
       forkTarget({ branchName: 'joiner/branch' })
@@ -286,10 +316,12 @@ describe('materializeWorktreePushTargetRemote', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         throw new Error('No such remote')
       }
+
       return { stdout: '', stderr: '' }
     })
     const target = forkTarget()
     const setWorktreeMeta = vi.fn()
+
     const store: WorktreePushTargetStore = {
       getAllWorktreeMeta: () => ({}),
       setWorktreeMeta
@@ -315,10 +347,12 @@ describe('materializeWorktreePushTargetRemote', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         throw new Error('No such remote')
       }
+
       return { stdout: '', stderr: '' }
     })
     const target = forkTarget()
     const setWorktreeMeta = vi.fn()
+
     const store: WorktreePushTargetStore = {
       getAllWorktreeMeta: () => ({}),
       setWorktreeMeta
@@ -353,11 +387,14 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
+
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'contributor/fix\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
+
     const fetchRemoteTrackingRef = vi.fn()
     const target = forkTarget()
 
@@ -391,14 +428,18 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: `${FORK_URL}\n`, stderr: '' }
       }
+
       if (args[0] === 'rev-parse') {
         throw new Error('unknown revision')
       }
+
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'contributor/fix\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
+
     const fetchRemoteTrackingRef = vi.fn(async () => {})
     const target = forkTarget()
 
@@ -433,8 +474,10 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         throw new Error('No such remote')
       }
+
       return { stdout: '', stderr: '' }
     })
+
     const fetchRemoteTrackingRef = vi.fn(async () => {})
     const markRemoteOrcaCreated = vi.fn(async () => {})
     const target = forkTarget()
@@ -464,12 +507,15 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         throw new Error('No such remote')
       }
+
       return { stdout: '', stderr: '' }
     })
+
     const fetchRemoteTrackingRef = vi.fn(async () => {})
     const markRemoteOrcaCreated = vi.fn(async () => {})
     const target = forkTarget()
     const setWorktreeMeta = vi.fn()
+
     const store: WorktreePushTargetStore = {
       getAllWorktreeMeta: () => ({}),
       setWorktreeMeta
@@ -498,11 +544,14 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         throw new Error('No such remote')
       }
+
       if (args[0] === 'remote' && args[1] === 'add') {
         throw new Error('Destructive git remote operations are not allowed via exec')
       }
+
       return { stdout: '', stderr: '' }
     })
+
     const fetchRemoteTrackingRef = vi.fn()
     const target = forkTarget()
 
@@ -521,11 +570,14 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         throw new Error('No such remote')
       }
+
       return { stdout: '', stderr: '' }
     })
+
     const fetchRemoteTrackingRef = vi.fn(async () => {
       throw new Error('network unreachable')
     })
+
     const markRemoteOrcaCreated = vi.fn(async () => {})
     const target = forkTarget()
 
@@ -546,13 +598,16 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
   // own by-URL reuse scan, which finds the sibling's differently-named remote.
   it('keeps a reused fork remote a sibling worktree owns when the SSH head fetch fails', async () => {
     const SIBLING_REMOTE = 'pr-contributor-orca-existing'
+
     const exec = vi.fn(async (args: string[]) => {
       if (args[0] === 'remote' && args[1] === 'get-url') {
         if (args[2] === SIBLING_REMOTE) {
           return { stdout: `${FORK_URL}\n`, stderr: '' }
         }
+
         throw new Error('No such remote')
       }
+
       if (args[0] === 'remote' && args[1] === '-v') {
         return {
           stdout: [
@@ -564,15 +619,20 @@ describe('materializeWorktreePushTargetRemoteSsh', () => {
           stderr: ''
         }
       }
+
       if (args[0] === 'remote' && args.length === 1) {
         return { stdout: `origin\n${SIBLING_REMOTE}\n`, stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
+
     const fetchRemoteTrackingRef = vi.fn(async () => {
       throw new Error('network unreachable')
     })
+
     const target = forkTarget()
+
     const store: WorktreePushTargetStore = {
       getAllWorktreeMeta: () => ({
         'repo::/repo-root-sibling': {

@@ -49,6 +49,7 @@ export function openDocPreviewSource(document: DocPreviewDocument): void {
 export function openDocPreviewExternally(document: DocPreviewDocument): void {
   const state = useAppStore.getState()
   const worktreeRoot = state.getKnownWorktreeById(document.worktreeId)?.path ?? null
+
   // Why the per-file resolver: this is the same document the grant authorized, and that grant was
   // minted against the file's own owner. A folder workspace spanning hosts answers `undefined`
   // workspace-wide, which downstream reads as local — the OS would then be handed a remote
@@ -58,27 +59,33 @@ export function openDocPreviewExternally(document: DocPreviewDocument): void {
     document.worktreeId,
     document.filePath
   )
+
   // Why re-resolve the runtime owner rather than trust the tab's field: the grant this preview
   // renders through was minted against the worktree's owner at render time, and a tab opened or
   // restored before that owner was known still carries null — which reads as local.
   const runtimeEnvironmentId =
     getRuntimeEnvironmentIdForWorktree(state, document.worktreeId) ?? document.runtimeEnvironmentId
+
   const fileContext = buildWorkspaceFileContextForFile(
     document.worktreeId,
     worktreeRoot ?? '',
     document.filePath,
     runtimeEnvironmentId
   )
+
   // Why these conditions rather than the shared predicate alone: it reads an unresolved owner, an
   // unknown workspace root, and a runtime-owned path that sits outside that root as "local", and a
   // preview really reaches all three. Only a document proven to live on this machine goes to the
   // OS; a resolved remote owner downloads first, and no owner at all is refused below.
   const ownedByThisMachine =
     connectionId === null && runtimeEnvironmentId === null && worktreeRoot !== null
+
   if (ownedByThisMachine && canClientOsOpenWorkspaceFile(fileContext, document.filePath)) {
     void window.api.shell.openFilePath(document.filePath)
+
     return
   }
+
   // Why refuse instead of downloading: with neither owner resolved the download route reads the
   // absolute path on THIS machine, so a client that happens to hold a file of the same name would
   // get its contents back under the remote document's name. Reachable once an owner un-resolves
@@ -91,7 +98,9 @@ export function openDocPreviewExternally(document: DocPreviewDocument): void {
         { value0: document.relativePath }
       )
     )
+
     return
   }
+
   void downloadAndOpenRemoteTerminalFile(fileContext, document.filePath)
 }

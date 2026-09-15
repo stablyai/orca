@@ -11,6 +11,7 @@ import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
 import type { useWorktreeCardReviewDetails } from './use-worktree-card-review-details'
 
 type Foundation = ReturnType<typeof useWorktreeCardFoundation>
+
 type ReviewDetails = ReturnType<typeof useWorktreeCardReviewDetails>
 
 export function useWorktreeCardLifecycleEffects({
@@ -61,6 +62,7 @@ export function useWorktreeCardLifecycleEffects({
     if (isWebClient()) {
       return
     }
+
     if (
       !repo ||
       isFolder ||
@@ -71,6 +73,7 @@ export function useWorktreeCardLifecycleEffects({
     ) {
       return
     }
+
     const refreshHostedReview = (): void => {
       // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR number from explicit metadata when we have one.
       void fetchHostedReviewForBranch(repo.path, branch, {
@@ -87,6 +90,7 @@ export function useWorktreeCardLifecycleEffects({
         staleWhileRevalidate: true
       })
     }
+
     // Why: PRs created outside Orca (e.g. `gh pr create`) emit no renderer event; poll visible cards to discover them.
     return installWindowVisibilityInterval({
       run: refreshHostedReview,
@@ -124,6 +128,7 @@ export function useWorktreeCardLifecycleEffects({
     ) {
       return
     }
+
     // Why: hidden card metadata is revealed on whole-card hover, so fetch lazily instead of always-on polling.
     void fetchHostedReviewForBranch(repo.path, branch, {
       repoId: repo.id,
@@ -193,6 +198,7 @@ export function useWorktreeCardLifecycleEffects({
     ) {
       return
     }
+
     void fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
   }, [
     newCardStyle,
@@ -209,16 +215,21 @@ export function useWorktreeCardLifecycleEffects({
     if (!worktree.linkedLinearIssue || !showLinearIssue) {
       return
     }
+
     const linearIssueId = worktree.linkedLinearIssue
+
     const refreshLinearIssueIfVisible = (): void => {
       if (!isWindowVisible()) {
         return
       }
+
       void fetchLinearIssue(linearIssueId, 'all')
     }
+
     refreshLinearIssueIfVisible()
     window.addEventListener('focus', refreshLinearIssueIfVisible)
     document.addEventListener('visibilitychange', refreshLinearIssueIfVisible)
+
     return () => {
       window.removeEventListener('focus', refreshLinearIssueIfVisible)
       document.removeEventListener('visibilitychange', refreshLinearIssueIfVisible)
@@ -229,6 +240,7 @@ export function useWorktreeCardLifecycleEffects({
     if (!newCardStyle || !hoverDetailsOpen || showLinearIssue || !worktree.linkedLinearIssue) {
       return
     }
+
     void fetchLinearIssue(worktree.linkedLinearIssue, 'all')
   }, [
     newCardStyle,

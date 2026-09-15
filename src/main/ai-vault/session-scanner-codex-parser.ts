@@ -127,44 +127,57 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
   if (state.rejectedWorkerSession) {
     return
   }
+
   const record = parseJsonObject(line)
+
   if (!record) {
     return
   }
+
   const { accumulator } = state
 
   updateTimeline(accumulator, extractString(record.timestamp))
 
   const payload = asRecord(record.payload)
+
   if (record.type === 'session_meta' && payload) {
     if (isCodexWorkerSession(payload)) {
       // Why: Codex writes internal worker/sub-agent transcripts into the same
       // history tree; AI Vault should show user-started sessions only.
       state.rejectedWorkerSession = true
+
       return
     }
+
     state.sawSessionMeta = true
     state.historyMode = extractString(payload.history_mode)
     const sessionId = extractString(payload.id)
+
     if (sessionId) {
       accumulator.sessionId = sessionId
     }
+
     const metadataTitle = extractCodexSessionMetadataTitle(payload)
+
     if (metadataTitle) {
       accumulator.title = metadataTitle
       state.titleSource = 'meta'
     }
+
     accumulator.cwd = extractString(payload.cwd) ?? accumulator.cwd
     accumulator.branch = extractGitBranch(payload.git) ?? accumulator.branch
+
     return
   }
 
   if (record.type === 'turn_context' && payload) {
     accumulator.cwd = extractString(payload.cwd) ?? accumulator.cwd
     const model = extractModel(payload)
+
     if (model) {
       accumulator.model = model
     }
+
     return
   }
 
@@ -176,9 +189,11 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
     if (state.historyMode === 'paginated') {
       return
     }
+
     if (consumeCodexResponseMessage(accumulator, payload, record.timestamp)) {
       state.titleSource = 'user'
     }
+
     return
   }
 
@@ -190,6 +205,7 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
     if (consumeCodexCompletedMessage(accumulator, payload, record.timestamp)) {
       state.titleSource = 'user'
     }
+
     return
   }
 
@@ -197,6 +213,7 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
     if (consumeCodexLegacyEventMessage(accumulator, payload, record.timestamp)) {
       state.titleSource = 'user'
     }
+
     return
   }
 
@@ -205,12 +222,15 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
   }
 
   const info = asRecord(payload.info)
+
   if (!info) {
     return
   }
+
   const totalUsage = normalizeCodexUsage(info.total_token_usage)
   const lastUsage = normalizeCodexUsage(info.last_token_usage)
   let delta: CodexUsageSnapshot | null = null
+
   if (totalUsage) {
     delta = subtractCodexUsage(totalUsage, state.previousTotals)
     state.previousTotals = totalUsage
@@ -220,10 +240,13 @@ function consumeCodexRecordLine(state: CodexSessionParseState, line: string): vo
       ? addCodexUsage(state.previousTotals, lastUsage)
       : lastUsage
   }
+
   if (delta) {
     accumulator.totalTokens += delta.totalTokens
   }
+
   const model = extractModel(payload)
+
   if (model) {
     accumulator.model = model
   }
@@ -242,17 +265,21 @@ async function finalizeCodexParseState(
   if (state.rejectedWorkerSession) {
     return null
   }
+
   // Finalize a snapshot: the live state keeps accumulating appended lines.
   const snapshot = cloneCodexParseState(state)
+
   // Why: Codex names threads lazily in session_index.jsonl, so the lookup runs
   // per finalize (the index read is signature-cached) — a title that appears
   // after the transcript was first parsed must still replace the raw prompt.
   if (snapshot.sawSessionMeta && snapshot.titleSource !== 'meta') {
     const indexedTitle = await args.titleReader?.(snapshot.accumulator.sessionId)
+
     if (indexedTitle) {
       snapshot.accumulator.title = indexedTitle
     }
   }
+
   return finalizeSession(snapshot.accumulator, platform, {
     codexHome: args.codexHome,
     executionHostId: args.executionHostId,
@@ -284,6 +311,7 @@ function codexResumeStateFromParseState(
         line,
         state.accumulator.messages.active && state.historyMode !== 'paginated'
       )
+
       if (timelineOnlyRecord) {
         updateTimeline(state.accumulator, timelineOnlyRecord.timestamp)
       } else {
@@ -313,13 +341,16 @@ async function parseCodexSessionLines(args: {
   messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
   const state = createCodexParseState(args.file, args.messages)
+
   for await (const line of args.lines) {
     consumeCodexRecordLine(state, line)
+
     if (state.rejectedWorkerSession) {
       // Worker transcripts are excluded outright; stop reading early.
       return null
     }
   }
+
   return finalizeCodexParseState(state, args.platform, {
     codexHome: args.codexHome,
     titleReader: args.titleReader,

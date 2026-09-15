@@ -61,12 +61,14 @@ function stageArgs(db: OrchestrationDb, state: OrchestrationMailboxPointerState)
 describe('mailbox pointer staging watermark', () => {
   it('leaves no watermark when the reservation claim is lost', () => {
     const db = new OrchestrationDb(':memory:')
+
     const message = db.insertMessage({
       runId: 'run_legacy_local',
       from: 'a',
       to: 'run:run-1',
       subject: 's'
     })
+
     // A concurrent flight already owns the reservation, so this claim cannot succeed.
     expect(
       db.stageMailboxPointerEnter([message.id], { ptyId: 'other-pty', processIncarnation: 'inc-x' })
@@ -86,12 +88,14 @@ describe('mailbox pointer staging watermark', () => {
 
   it('leaves no watermark when the reservation write throws', () => {
     const db = new OrchestrationDb(':memory:')
+
     const message = db.insertMessage({
       runId: 'run_legacy_local',
       from: 'a',
       to: 'run:run-1',
       subject: 's'
     })
+
     const throwing = new Proxy(db, {
       get(target, prop, receiver) {
         if (prop === 'markMailboxPointerWriteAttempted') {
@@ -99,7 +103,9 @@ describe('mailbox pointer staging watermark', () => {
             throw new Error('SQLITE_BUSY')
           }
         }
+
         const value = Reflect.get(target, prop, receiver)
+
         return typeof value === 'function' ? value.bind(target) : value
       }
     }) as OrchestrationDb
@@ -119,12 +125,14 @@ describe('mailbox pointer staging watermark', () => {
 
   it('keeps the watermark for the flight that owns the reservation', () => {
     const db = new OrchestrationDb(':memory:')
+
     const message = db.insertMessage({
       runId: 'run_legacy_local',
       from: 'a',
       to: 'run:run-1',
       subject: 's'
     })
+
     const state = new OrchestrationMailboxPointerState()
     const args = stageArgs(db, state)
     stageOrchestrationMailboxPointer({
@@ -139,12 +147,14 @@ describe('mailbox pointer staging watermark', () => {
 
   it('drains a delivery parked behind the watermark when the write is refused', () => {
     const db = new OrchestrationDb(':memory:')
+
     const message = db.insertMessage({
       runId: 'run_legacy_local',
       from: 'a',
       to: 'run:run-1',
       subject: 's'
     })
+
     const state = new OrchestrationMailboxPointerState()
     const args = stageArgs(db, state)
     const redrive = vi.fn()
@@ -156,6 +166,7 @@ describe('mailbox pointer staging watermark', () => {
         writePty: () => {
           // A concurrent delivery arrives while this flight owns the watermark.
           state.parkRedelivery('run:run-1')
+
           return writeRefused('provider_refused_write')
         }
       },
@@ -172,18 +183,23 @@ describe('mailbox pointer staging watermark', () => {
     const db = new OrchestrationDb(':memory:')
     db.insertMessage({ runId: 'run_legacy_local', from: 'a', to: 'run:run-1', subject: 'first' })
     let stealNextClaim = true
+
     const contended = new Proxy(db, {
       get(target, prop, receiver) {
         if (prop === 'stageMailboxPointerEnter' && stealNextClaim) {
           stealNextClaim = false
+
           return () => false
         }
+
         const value = Reflect.get(target, prop, receiver)
+
         return typeof value === 'function' ? value.bind(target) : value
       }
     }) as OrchestrationDb
 
     const writePty = vi.fn(() => WRITE_ACCEPTED)
+
     const delivery = new OrchestrationMailboxPointerDelivery<never>({
       ...pointerDeps(contended, writePty),
       redriveMailbox: (handle: string) => delivery.deliver(LEAF, { mailboxHandle: handle })
@@ -210,12 +226,14 @@ describe('retiring a pty mid-delivery', () => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')
     const settlements: ((settlement: WriteSettlement) => void)[] = []
+
     const writePty = vi.fn(
       () =>
         new Promise<WriteSettlement>((resolve) => {
           settlements.push(resolve)
         }) as unknown as WriteSettlement
     )
+
     try {
       const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'mail' })
       const delivery = new OrchestrationMailboxPointerDelivery(pointerDeps(db, writePty) as never)
@@ -245,12 +263,14 @@ describe('retiring a pty mid-delivery', () => {
     vi.useFakeTimers()
     const db = new OrchestrationDb(':memory:')
     const settlements: ((settlement: WriteSettlement) => void)[] = []
+
     const writePty = vi.fn(
       () =>
         new Promise<WriteSettlement>((resolve) => {
           settlements.push(resolve)
         }) as unknown as WriteSettlement
     )
+
     try {
       const message = db.insertMessage({ from: 'a', to: 'run:run-1', subject: 'mail' })
       const delivery = new OrchestrationMailboxPointerDelivery(pointerDeps(db, writePty) as never)

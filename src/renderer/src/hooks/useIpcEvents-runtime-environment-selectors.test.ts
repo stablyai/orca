@@ -73,6 +73,7 @@ describe('getRuntimeProjectRefreshEnvironmentIds', () => {
 })
 
 type RuntimeEnvironmentStoreSubscriber = RuntimeEnvironmentStoreSyncSubscriber
+
 type RuntimeEnvironmentStoreState = RuntimeEnvironmentStoreSyncState
 
 function makeRuntimeEnvironmentStoreState(args: {
@@ -99,29 +100,35 @@ describe('createRuntimeEnvironmentStoreSyncSubscriber', () => {
       id: `runtime-${index}`,
       createdAt: index + 1
     }))
+
     const statuses = new Map(
       environments.map((environment) => [
         environment.id,
         { status: { runtimeId: `peer-${environment.id}` }, checkedAt: 1 }
       ])
     )
+
     let currentState = makeRuntimeEnvironmentStoreState({ environments, statuses })
     let hostEnumerations = 0
     let keyBuilds = 0
     let syncs = 0
+
     const subscriber = createRuntimeEnvironmentStoreSyncSubscriber({
       initialDesiredEnvironmentIds: getRuntimeClientEventEnvironmentIds(currentState),
       initialReachableEnvironmentIds: getReachableRuntimeEnvironmentIds(currentState),
       getDesiredEnvironmentIds: (state) => {
         hostEnumerations += 1
+
         return getRuntimeClientEventEnvironmentIds(state)
       },
       getReachableEnvironmentIds: (state) => {
         hostEnumerations += 1
+
         return getReachableRuntimeEnvironmentIds(state)
       },
       buildEnvironmentKey: (environmentIds) => {
         keyBuilds += 1
+
         return [...environmentIds].sort().join('\0')
       },
       requestProjectRefresh: vi.fn(),
@@ -130,6 +137,7 @@ describe('createRuntimeEnvironmentStoreSyncSubscriber', () => {
         syncs += 1
       }
     })
+
     keyBuilds = 0
 
     for (let write = 0; write < 1_000; write += 1) {
@@ -160,39 +168,48 @@ describe('createRuntimeEnvironmentStoreSyncSubscriber', () => {
       { id: 'runtime-a', createdAt: 1, pairingRevision: 1 },
       { id: 'runtime-b', createdAt: 2, pairingRevision: 1 }
     ]
+
     let statuses = new Map([
       ['runtime-a', { status: { runtimeId: 'peer-a' }, checkedAt: 1 }],
       ['runtime-b', { status: null, checkedAt: 1 }]
     ])
+
     let sshStateByEnvironment: ReadonlyMap<string, unknown> = new Map([
       ['runtime-a', { targetsHydrated: true }]
     ])
+
     let currentState = makeRuntimeEnvironmentStoreState({
       environments,
       statuses,
       sshStateByEnvironment,
       activeEnvironmentId: 'runtime-a'
     })
+
     const runtimeGenerations = new Map([
       ['runtime-a', 1],
       ['runtime-b', 0]
     ])
+
     const sshGenerations = new Map([
       ['runtime-a', 0],
       ['runtime-b', 0]
     ])
+
     const pairingRevisions = new Map([
       ['runtime-a', 1],
       ['runtime-b', 1]
     ])
+
     const refreshes: string[] = []
     let syncs = 0
     let subscriber: RuntimeEnvironmentStoreSubscriber
+
     const publish = (nextState: RuntimeEnvironmentStoreState): void => {
       const previousState = currentState
       currentState = nextState
       subscriber(nextState, previousState)
     }
+
     const buildEnvironmentKey = (environmentIds: string[]): string =>
       [...new Set(environmentIds)]
         .sort()
@@ -307,6 +324,7 @@ describe('invalidateRuntimeClientEventReplay', () => {
     const requestProjectRefresh = vi.fn()
     const markEnvironmentSshStateStale = vi.fn()
     const sync = vi.fn()
+
     const hydrateEnvironmentSshState = vi
       .fn<() => Promise<unknown>>()
       .mockRejectedValue(new Error('runtime stayed unreachable'))

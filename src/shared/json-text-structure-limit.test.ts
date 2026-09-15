@@ -40,11 +40,13 @@ describe('JSON text structure admission', () => {
 
   it.each([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])('handles a quote preceded by %i backslashes', (count) => {
     const content = `"${'\\'.repeat(count)}"[[]]`
+
     const check = () =>
       assertJsonTextStructureWithinLimits(content, {
         structuralTokens: 3,
         nestingDepth: 2
       })
+
     if (count % 2 === 0) {
       expect(check).toThrowError(new JsonTextStructureCapacityError('structuralTokens', 3))
     } else {

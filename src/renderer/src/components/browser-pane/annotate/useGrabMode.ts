@@ -30,6 +30,7 @@ export type GrabModeHook = {
 }
 
 let opIdCounter = 0
+
 function nextOpId(): string {
   return `grab-${++opIdCounter}-${Date.now()}`
 }
@@ -85,6 +86,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
   useEffect(() => {
     return () => {
       const grabTabId = grabTabIdRef.current
+
       if (grabTabId) {
         armGenerationRef.current += 1
         void window.api.browser.setGrabMode({ browserPageId: grabTabId, enabled: false })
@@ -106,6 +108,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       browserPageId: tabId,
       enabled: true
     })
+
     if (
       !mountedRef.current ||
       armGenerationRef.current !== armGeneration ||
@@ -114,19 +117,24 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     ) {
       const supersededBySameTab =
         armGenerationRef.current !== armGeneration && grabTabIdRef.current === tabId
+
       if (!supersededBySameTab) {
         void window.api.browser.setGrabMode({ browserPageId: tabId, enabled: false })
         void window.api.browser.cancelGrab({ browserPageId: tabId })
+
         if (grabTabIdRef.current === tabId) {
           grabTabIdRef.current = null
         }
       }
+
       return
     }
+
     if (!setResult.ok) {
       grabTabIdRef.current = null
       setState('error')
       setError(getGrabEnableError(setResult.reason))
+
       return
     }
 
@@ -135,6 +143,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     activeOpIdRef.current = opId
 
     setState('awaiting')
+
     const result = await window.api.browser.awaitGrabSelection({
       browserPageId: tabId,
       opId
@@ -150,17 +159,20 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
     if (result.kind === 'selected' || result.kind === 'context-selected') {
       // Capture screenshot for the selected element
       let screenshot: BrowserGrabScreenshot | null = null
+
       try {
         const ssResult = await window.api.browser.captureSelectionScreenshot({
           browserPageId: tabId,
           rect: result.payload.target.rectViewport
         })
+
         if (ssResult.ok) {
           screenshot = ssResult.screenshot as BrowserGrabScreenshot
         }
       } catch {
         // Screenshot failure is non-fatal
       }
+
       if (
         !mountedRef.current ||
         armGenerationRef.current !== armGeneration ||
@@ -190,12 +202,14 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
       browserPageId: targetTabId,
       enabled: false
     })
+
     if (activeOpIdRef.current) {
       void window.api.browser.cancelGrab({
         browserPageId: targetTabId
       })
       activeOpIdRef.current = null
     }
+
     grabTabIdRef.current = null
     setState('idle')
     setPayload(null)
@@ -253,6 +267,7 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
           e.target && typeof e.target === 'object' && 'closest' in e.target
             ? (e.target as { closest: (selector: string) => unknown })
             : null
+
         if (
           isEditableKeyboardTarget(e.target) ||
           element?.closest(
@@ -261,12 +276,15 @@ export function useGrabMode(browserPageId: string): GrabModeHook {
         ) {
           return
         }
+
         e.preventDefault()
         e.stopPropagation()
         cancel()
       }
     }
+
     window.addEventListener('keydown', handleKeyDown, true)
+
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [state, cancel])
 

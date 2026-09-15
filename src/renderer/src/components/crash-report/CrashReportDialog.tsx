@@ -28,11 +28,14 @@ export function CrashReportDialog(): React.JSX.Element | null {
   const loadCrashReport = useCallback(
     async (promptIfPresent: boolean): Promise<void> => {
       setLoading(true)
+
       try {
         const nextReport = promptIfPresent
           ? await window.api.crashReports.getLatestPending()
           : await window.api.crashReports.getLatestReport()
+
         let displayedReport = nextReport
+
         if (nextReport?.status === 'pending' && promptIfPresent) {
           try {
             // Why: startup crash prompts are one-shot. The lazy dialog keeps the
@@ -44,10 +47,13 @@ export function CrashReportDialog(): React.JSX.Element | null {
             console.error('Failed to dismiss crash report after startup prompt:', error)
           }
         }
+
         if (!mountedRef.current) {
           return
         }
+
         setReport(displayedReport)
+
         if (nextReport && promptIfPresent) {
           setOpen(true)
         }
@@ -66,6 +72,7 @@ export function CrashReportDialog(): React.JSX.Element | null {
     if (promptedThisLaunch.current) {
       return
     }
+
     promptedThisLaunch.current = true
     void loadCrashReport(true)
   }, [loadCrashReport])
@@ -80,18 +87,21 @@ export function CrashReportDialog(): React.JSX.Element | null {
 
   useEffect(() => {
     const pendingReport = takePendingReactErrorBoundaryReport()
+
     if (pendingReport) {
       openCrashReport(pendingReport)
     }
 
     const onReactErrorBoundaryReport = (): void => {
       const nextReport = takePendingReactErrorBoundaryReport()
+
       if (nextReport) {
         openCrashReport(nextReport)
       }
     }
 
     window.addEventListener(REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT, onReactErrorBoundaryReport)
+
     return () => {
       window.removeEventListener(
         REACT_ERROR_BOUNDARY_REPORT_AVAILABLE_EVENT,

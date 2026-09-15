@@ -12,6 +12,7 @@ describe('agent completion coordinator stamped turn replay', () => {
     'releases stamped fallback dedupe when the next turn arrives %s',
     (workingOrder) => {
       const dispatchCompletion = vi.fn()
+
       const localCoordinator = createAgentCompletionCoordinator({
         paneKey: 'tab-1:leaf-1',
         statusLane: 'pty',
@@ -21,6 +22,7 @@ describe('agent completion coordinator stamped turn replay', () => {
         dispatchCompletion,
         isLive: () => true
       })
+
       const hostCoordinator = createAgentCompletionCoordinator({
         paneKey: 'tab-1:leaf-1',
         statusLane: 'hook',
@@ -30,6 +32,7 @@ describe('agent completion coordinator stamped turn replay', () => {
         dispatchCompletion,
         isLive: () => true
       })
+
       const observeHostNextTurn = () =>
         hostCoordinator.observeHookStatus({
           state: 'working',
@@ -66,6 +69,7 @@ describe('agent completion coordinator stamped turn replay', () => {
         observeHostNextTurn()
         localCoordinator.observeTitleWorking()
       }
+
       localCoordinator.observeClassifiedTitleCompletion('Claude done')
 
       expect(dispatchCompletion).toHaveBeenCalledTimes(2)
@@ -76,6 +80,7 @@ describe('agent completion coordinator stamped turn replay', () => {
     'keeps sibling tail replay suppression when the pane remounts %s its all-clear',
     (remountOrder) => {
       const dispatchCompletion = vi.fn()
+
       const createLocalCoordinator = () =>
         createAgentCompletionCoordinator({
           paneKey: 'tab-1:leaf-1',
@@ -86,7 +91,9 @@ describe('agent completion coordinator stamped turn replay', () => {
           dispatchCompletion,
           isLive: () => true
         })
+
       const localCoordinator = createLocalCoordinator()
+
       const hostCoordinator = createAgentCompletionCoordinator({
         paneKey: 'tab-1:leaf-1',
         statusLane: 'hook',
@@ -96,6 +103,7 @@ describe('agent completion coordinator stamped turn replay', () => {
         dispatchCompletion,
         isLive: () => true
       })
+
       const localAllClear = {
         state: 'done' as const,
         prompt: 'first turn',
@@ -127,6 +135,7 @@ describe('agent completion coordinator stamped turn replay', () => {
       if (remountOrder === 'after') {
         localCoordinator.observeHookStatus(localAllClear)
       }
+
       localCoordinator.dispose()
       const remounted = createLocalCoordinator()
       remounted.observeHookStatus(localAllClear)
@@ -139,6 +148,7 @@ describe('agent completion coordinator stamped turn replay', () => {
   it('does not replay a stamped turn or its all-clear after a working title blip', () => {
     const dispatchCompletion = vi.fn()
     const dispatchHookLifecycle = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -193,6 +203,7 @@ describe('agent completion coordinator stamped turn replay', () => {
 
   it('does not double-fire after a live remount between the gated Stop and the all-clear', () => {
     const dispatchCompletion = vi.fn()
+
     const firstCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -226,6 +237,7 @@ describe('agent completion coordinator stamped turn replay', () => {
       dispatchCompletion,
       isLive: () => true
     })
+
     remounted.observeHookStatus({
       state: 'done',
       prompt: 'review the PR',
@@ -240,6 +252,7 @@ describe('agent completion coordinator stamped turn replay', () => {
 
   it('keeps stamped replay suppression through a working title and live remount', () => {
     const dispatchCompletion = vi.fn()
+
     const firstCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -276,6 +289,7 @@ describe('agent completion coordinator stamped turn replay', () => {
       dispatchCompletion,
       isLive: () => true
     })
+
     remounted.observeHookStatus({
       state: 'done',
       prompt: 'review the PR',
@@ -290,6 +304,7 @@ describe('agent completion coordinator stamped turn replay', () => {
 
   it('does not let a pane title duplicate another coordinator stamped completion', () => {
     const dispatchCompletion = vi.fn()
+
     const hookCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -298,6 +313,7 @@ describe('agent completion coordinator stamped turn replay', () => {
       dispatchCompletion,
       isLive: () => true
     })
+
     const paneCoordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -347,6 +363,7 @@ describe('agent completion coordinator stamped turn replay', () => {
 
   it('does not let a vetoed gated Stop swallow the later all-clear', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',

@@ -31,9 +31,11 @@ function eligibility(
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -72,6 +74,7 @@ describe('mobile hosted review eligibility loader core', () => {
       behind: 0,
       hasUncommittedChanges: false
     })
+
     const second = buildMobileHostedReviewEligibilityLoadKey({
       hostId: 'host-1',
       worktreeId: 'wt-1',
@@ -95,6 +98,7 @@ describe('mobile hosted review eligibility loader core', () => {
       behind: 0,
       hasUncommittedChanges: false
     }
+
     const local = buildMobileHostedReviewEligibilityLoadKey({ ...input, hostId: 'local' })
     const ssh = buildMobileHostedReviewEligibilityLoadKey({ ...input, hostId: 'ssh-builder' })
 
@@ -111,10 +115,12 @@ describe('mobile hosted review eligibility loader core', () => {
       ahead: 0,
       behind: 0
     }
+
     const older = buildMobileHostedReviewEligibilityLoadKey({
       ...input,
       hasUncommittedChanges: false
     })
+
     const newest = buildMobileHostedReviewEligibilityLoadKey({
       ...input,
       hasUncommittedChanges: true
@@ -148,6 +154,7 @@ describe('rendered eligibility state', () => {
       behind: 0,
       hasUncommittedChanges: false
     })
+
     expect(
       renderedMobileHostedReviewEligibilityState({
         snapshot: loadSnapshot(key, { kind: 'idle' }),
@@ -167,6 +174,7 @@ describe('rendered eligibility state', () => {
       behind: 0,
       hasUncommittedChanges: false
     })
+
     const ready = { kind: 'ready', eligibility: eligibility() } as const
     const refetch = { kind: 'loading', eligibility: eligibility() } as const
     const error = { kind: 'error' } as const
@@ -192,6 +200,7 @@ describe('rendered eligibility state', () => {
       behind: 0,
       hasUncommittedChanges: false
     })
+
     expect(
       renderedMobileHostedReviewEligibilityState({
         snapshot: loadSnapshot(key, { kind: 'ready', eligibility: eligibility() }),
@@ -213,14 +222,18 @@ describe('eligibility request ordering', () => {
 
   it('does not let an older response overwrite the newest state', async () => {
     type Response = { ok: true; result: HostedReviewCreationEligibility }
+
     const requests: ReturnType<typeof deferred<Response>>[] = []
+
     const client = {
       sendRequest: vi.fn(() => {
         const request = deferred<Response>()
         requests.push(request)
+
         return request.promise
       })
     }
+
     const newest = eligibility({ canCreate: false, blockedReason: 'existing_review' })
     const older = eligibility()
 
@@ -236,6 +249,7 @@ describe('eligibility request ordering', () => {
         behind: 0,
         hasUncommittedChanges: dirty
       })
+
       return null
     }
 
@@ -263,14 +277,18 @@ describe('eligibility request ordering', () => {
 
   it('disables a ready snapshot in the render that changes its fetch key', async () => {
     type Response = { ok: true; result: HostedReviewCreationEligibility }
+
     const requests: ReturnType<typeof deferred<Response>>[] = []
+
     const client = {
       sendRequest: vi.fn(() => {
         const request = deferred<Response>()
         requests.push(request)
+
         return request.promise
       })
     }
+
     const ready = eligibility()
 
     function Harness({ dirty }: { dirty: boolean }): null {
@@ -285,6 +303,7 @@ describe('eligibility request ordering', () => {
         behind: 0,
         hasUncommittedChanges: dirty
       })
+
       return null
     }
 
@@ -307,14 +326,18 @@ describe('eligibility request ordering', () => {
 
   it('invalidates a request when its hook instance unmounts', async () => {
     type Response = { ok: true; result: HostedReviewCreationEligibility }
+
     const requests: ReturnType<typeof deferred<Response>>[] = []
+
     const client = {
       sendRequest: vi.fn(() => {
         const request = deferred<Response>()
         requests.push(request)
+
         return request.promise
       })
     }
+
     const newest = eligibility({ canCreate: false, blockedReason: 'existing_review' })
 
     function Harness(): null {
@@ -329,6 +352,7 @@ describe('eligibility request ordering', () => {
         behind: 0,
         hasUncommittedChanges: false
       })
+
       return null
     }
 

@@ -20,32 +20,42 @@ export function applyRemoveWorktreeSuccessState(
     const omitByWorktree = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, worktreeIds)
     const omitByTabId = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, tabIds)
     const nextWorktreesByRepo = { ...s.worktreesByRepo }
+
     for (const repoId of Object.keys(nextWorktreesByRepo)) {
       nextWorktreesByRepo[repoId] = nextWorktreesByRepo[repoId].filter((w) => w.id !== worktreeId)
     }
+
     // Why: clean up per-file editor state for the removed worktree so stale drafts/view modes don't accumulate.
     const removedFileIds = new Set<string>()
+
     for (const file of s.openFiles) {
       if (file.worktreeId !== worktreeId) {
         continue
       }
+
       removedFileIds.add(file.id)
+
       if (file.markdownPreviewSourceFileId) {
         removedFileIds.add(file.markdownPreviewSourceFileId)
       }
     }
+
     const omitByFileId = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, removedFileIds)
+
     // Why guarded: a removed worktree usually has no open file, and an unconditional
     // filter would hand openFiles a new identity anyway — the sibling purge path
     // already does this.
     const nextOpenFiles = s.openFiles.some((f) => f.worktreeId === worktreeId)
       ? s.openFiles.filter((f) => f.worktreeId !== worktreeId)
       : s.openFiles
+
     // If the active file belonged to the removed worktree, clear it
     const activeFileCleared = s.activeFileId
       ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
       : false
+
     const removedActiveWorktree = s.activeWorktreeId === worktreeId
+
     return {
       worktreesByRepo: nextWorktreesByRepo,
       worktreeLineageById: omitByWorktree(s.worktreeLineageById),

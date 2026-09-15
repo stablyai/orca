@@ -12,6 +12,7 @@ import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
 /** Paths in the generated tree, kept separate so existence checks do not rebuild wrapper bytes. */
 export function getLocalShellReadyWrapperPaths(root: string): readonly string[] {
   const zshDir = `${root}/zsh`
+
   return [`${zshDir}/.zshenv`, `${zshDir}/${ZSH_WRAPPER_DIR_MARKER_FILE}`, `${root}/bash/rcfile`]
 }
 
@@ -42,6 +43,7 @@ export function getLocalZshWrapperSpec(): ZshStartupHookSpec {
 // writes is read after this file.
 export function buildLocalShellReadyWrapperFiles(root: string): readonly ShellWrapperFile[] {
   const [zshEnvPath, zshMarkerPath, bashRcfilePath] = getLocalShellReadyWrapperPaths(root)
+
   return [
     [zshEnvPath, buildZshStartupHook(getLocalZshWrapperSpec())],
     [zshMarkerPath, ZSH_WRAPPER_DIR_MARKER_CONTENT],

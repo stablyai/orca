@@ -11,9 +11,11 @@ export type PaneChannel<T> = {
 
 export function paneChannel<T>(): PaneChannel<T> {
   let listeners: Listener<T>[] = []
+
   return {
     subscribe: (callback) => {
       listeners.push(callback)
+
       return () => {
         listeners = listeners.filter((entry) => entry !== callback)
       }
@@ -40,6 +42,7 @@ export function installClientHostedPaneApi(overrides?: {
   runtimeEnvironments?: Record<string, unknown>
 }): void {
   const inert = (): (() => void) => () => {}
+
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {

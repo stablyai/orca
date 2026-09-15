@@ -46,10 +46,12 @@ function jsonLines(records: unknown[]): string {
 
 async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
   const start = Date.now()
+
   while (!predicate()) {
     if (Date.now() - start > timeoutMs) {
       throw new Error('timed out waiting for condition')
     }
+
     await new Promise((resolve) => setTimeout(resolve, 10))
   }
 }
@@ -62,9 +64,11 @@ async function invokeReadSession(args: {
 }): Promise<unknown> {
   registerNativeChatHandlers()
   const handler = handlers.get('nativeChat:readSession')
+
   if (!handler) {
     throw new Error('handler not registered')
   }
+
   return handler({}, args)
 }
 
@@ -108,11 +112,13 @@ describe('nativeChat:readSession handler', () => {
     // (which reads homedir() internally) finds the transcript.
     const previousHome = process.env.HOME
     process.env.HOME = root
+
     try {
       const result = (await invokeReadSession({ agent: 'claude', sessionId: 'sess-ipc' })) as {
         messages?: unknown[]
         error?: string
       }
+
       expect(result.error).toBeUndefined()
       expect(result.messages).toHaveLength(2)
     } finally {
@@ -129,6 +135,7 @@ describe('nativeChat:readSession handler', () => {
     tempRoots.push(root)
     const projectDir = join(root, '.claude', 'projects', '-repo')
     await mkdir(projectDir, { recursive: true })
+
     // Five user turns; reading with limit 2 returns only the last two, and a
     // larger limit pages in older ones (chronological order preserved).
     const records = [1, 2, 3, 4, 5].map((n) => ({
@@ -137,16 +144,19 @@ describe('nativeChat:readSession handler', () => {
       timestamp: `2026-06-01T10:00:0${n}.000Z`,
       message: { role: 'user', content: `m${n}` }
     }))
+
     await writeFile(join(projectDir, 'sess-limit.jsonl'), jsonLines(records))
 
     const previousHome = process.env.HOME
     process.env.HOME = root
+
     try {
       const windowed = (await invokeReadSession({
         agent: 'claude',
         sessionId: 'sess-limit',
         limit: 2
       })) as { messages: { id: string }[] }
+
       expect(windowed.messages.map((m) => m.id)).toEqual(['u-4', 'u-5'])
 
       const wider = (await invokeReadSession({
@@ -154,6 +164,7 @@ describe('nativeChat:readSession handler', () => {
         sessionId: 'sess-limit',
         limit: 4
       })) as { messages: { id: string }[] }
+
       expect(wider.messages.map((m) => m.id)).toEqual(['u-2', 'u-3', 'u-4', 'u-5'])
     } finally {
       if (previousHome === undefined) {
@@ -189,6 +200,7 @@ describe('nativeChat:readSession handler', () => {
 
     const sent: { channel: string; payload: unknown }[] = []
     let destroyedCb: (() => void) | undefined
+
     const sender = {
       id: 1,
       isDestroyed: () => false,
@@ -202,6 +214,7 @@ describe('nativeChat:readSession handler', () => {
 
     const previousHome = process.env.HOME
     process.env.HOME = root
+
     try {
       subscribe!(
         { sender },
@@ -234,6 +247,7 @@ describe('nativeChat:readSession handler', () => {
           .flatMap((s) =>
             (s.payload as { frame: { messages: { id: string }[] } }).frame.messages.map((m) => m.id)
           )
+
       await waitFor(() => appendedIds().includes('a-1'))
       const appendedEvent = sent.find((s) => s.channel === 'nativeChat:appended')!
       const payload = appendedEvent.payload as { subscriptionId: string }
@@ -265,6 +279,7 @@ describe('nativeChat:readSession handler', () => {
 
     const sent: { channel: string; payload: unknown }[] = []
     let destroyedCb: (() => void) | undefined
+
     const sender = {
       id: 7,
       isDestroyed: () => false,
@@ -278,6 +293,7 @@ describe('nativeChat:readSession handler', () => {
 
     const previousHome = process.env.HOME
     process.env.HOME = root
+
     try {
       subscribe!({ sender }, { subscriptionId: 'sub-pending', agent: 'claude', sessionId: 'ghost' })
 
@@ -323,6 +339,7 @@ describe('nativeChat:readSession handler', () => {
 
     let destroyed = false
     let destroyedCb: (() => void) | undefined
+
     const sender = {
       id: 41,
       isDestroyed: () => destroyed,
@@ -336,6 +353,7 @@ describe('nativeChat:readSession handler', () => {
 
     const previousHome = process.env.HOME
     process.env.HOME = root
+
     try {
       subscribe!(
         { sender },
@@ -366,10 +384,12 @@ describe('nativeChat:readSession handler', () => {
     tempRoots.push(root)
     const previousHome = process.env.HOME
     process.env.HOME = root
+
     try {
       const result = (await invokeReadSession({ agent: 'claude', sessionId: 'nope' })) as {
         error?: string
       }
+
       expect(result.error).toBeTruthy()
     } finally {
       if (previousHome === undefined) {

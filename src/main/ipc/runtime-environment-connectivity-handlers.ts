@@ -76,6 +76,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     ): { environment: PublicKnownRuntimeEnvironment } => {
       const environment = addEnvironmentFromPairingCode(getUserDataPath(), args)
       clearRuntimeEnvironmentManualDisconnect(environment.id)
+
       return { environment: redactRuntimeEnvironment(environment) }
     }
   )
@@ -83,6 +84,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     'runtimeEnvironments:verifyAndAddFromPairingCode',
     async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
       const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
+
       if (result.ok) {
         clearRuntimeEnvironmentManualDisconnect(result.environment.id)
         getRuntimeEnvironmentStatusOwner(getUserDataPath(), result.environment.id).acceptVerified({
@@ -92,6 +94,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
           _meta: { runtimeId: result.runtimeStatus.runtimeId }
         })
       }
+
       return result
     }
   )
@@ -102,9 +105,11 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     'runtimeEnvironments:remove',
     (_event, args: { selector: string }): { removed: PublicKnownRuntimeEnvironment } => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
+
       if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
         throw new Error('Choose another Active Server in Advanced before removing this server.')
       }
+
       const removed = removeEnvironment(getUserDataPath(), args.selector)
       clearRuntimeEnvironmentCapabilityEvidence(removed.id)
       clearRuntimeEnvironmentManualDisconnect(removed.id)
@@ -122,6 +127,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       }).catch((error) => {
         console.warn('[runtime-environments] browser partition storage clear failed:', error)
       })
+
       return { removed: redactRuntimeEnvironment(removed) }
     }
   )
@@ -134,6 +140,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       closeLegacySelectorTransport(args.selector, environment.id)
       // Retain disconnected evidence for renderers that missed the teardown event.
       getRuntimeEnvironmentStatusOwner(getUserDataPath(), environment.id)
+
       return { disconnected: redactRuntimeEnvironment(environment) }
     }
   )
@@ -145,6 +152,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     ): Promise<RuntimeRpcResponse<RuntimeStatus>> => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
       clearRuntimeEnvironmentManualDisconnect(environment.id)
+
       return getRuntimeEnvironmentStatus(getUserDataPath(), environment.id, args.timeoutMs, {
         reconnect: true
       })
@@ -154,6 +162,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     'runtimeEnvironments:retryControlConnection',
     (_event, args: { selector: string }): void => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
+
       if (!isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         retryRemoteRuntimeSharedControlConnectionNow(environment.id)
       }
@@ -170,6 +179,7 @@ function closeLegacySelectorTransport(selector: string, environmentId: string): 
   if (selector === environmentId) {
     return
   }
+
   closeRemoteRuntimeRequestConnection(selector)
 }
 
@@ -181,15 +191,18 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
       args: { selector: string; timeoutMs?: number; observeOnly?: true }
     ): Promise<RuntimeRpcResponse<RuntimeStatus>> => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
+
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)
       }
+
       const response = await getRuntimeEnvironmentStatus(
         getUserDataPath(),
         environment.id,
         args.timeoutMs,
         args.observeOnly ? { observeOnly: true } : undefined
       )
+
       return isRuntimeEnvironmentManuallyDisconnected(environment.id)
         ? manuallyDisconnectedResponse(environment)
         : response
@@ -208,6 +221,7 @@ function runtimeEnvironmentCallFailure(
   ) {
     return null
   }
+
   return {
     id: method,
     ok: false,
@@ -231,10 +245,13 @@ function registerPassiveCallHandler(getUserDataPath: () => string): void {
       }
     ): Promise<RuntimeRpcResponse<unknown>> => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
+
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)
       }
+
       let response: RuntimeRpcResponse<unknown>
+
       try {
         response = await callRuntimeEnvironment(
           getUserDataPath(),
@@ -248,11 +265,14 @@ function registerPassiveCallHandler(getUserDataPath: () => string): void {
         )
       } catch (error) {
         const failure = runtimeEnvironmentCallFailure(environment, args.method, error)
+
         if (failure) {
           return failure
         }
+
         throw error
       }
+
       return isRuntimeEnvironmentManuallyDisconnected(environment.id)
         ? manuallyDisconnectedResponse(environment)
         : response

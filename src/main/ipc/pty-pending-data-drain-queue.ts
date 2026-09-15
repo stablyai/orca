@@ -3,6 +3,7 @@ import type * as Contract from './pty-pending-data-drain-contract'
 export type * from './pty-pending-data-drain-contract'
 
 type LinkedLaneName = Contract.PtyPendingDataDrainDisposition
+
 type NodeLaneName = LinkedLaneName | 'none' | 'selected'
 
 type PendingNode = {
@@ -70,6 +71,7 @@ export class PtyPendingDataDrainQueue {
 
   set(id: string, pending: Contract.PendingPtyData): void {
     const existing = this.nodes.get(id)
+
     if (!existing) {
       const node: PendingNode = {
         id,
@@ -81,19 +83,23 @@ export class PtyPendingDataDrainQueue {
         lanePosition: 0,
         eligibleRound: this.roundSerial + 1
       }
+
       this.nodes.set(id, node)
       this.pendingChars += pending.data.length
       this.createdNodeCount += 1
       this.peakNodeCount = Math.max(this.peakNodeCount, this.nodes.size)
       this.appendToLane(node, this.classify(id))
+
       return
     }
 
     if (existing === this.selectedNode) {
       throw new Error('Selected PTY pending data must commit before update')
     }
+
     this.pendingChars += pending.data.length - existing.pending.data.length
     existing.pending = pending
+
     if (this.openRound) {
       // Why: renderer notification can synchronously append; defer the whole ID past this round's frontier.
       this.unlink(existing)
@@ -105,15 +111,19 @@ export class PtyPendingDataDrainQueue {
 
   delete(id: string): Contract.PendingPtyData | undefined {
     const node = this.nodes.get(id)
+
     if (!node) {
       return undefined
     }
+
     this.nodes.delete(id)
     this.pendingChars -= node.pending.data.length
     this.unlink(node)
+
     if (this.selectedNode === node) {
       this.selectedNode = null
     }
+
     return node.pending
   }
 
@@ -121,6 +131,7 @@ export class PtyPendingDataDrainQueue {
     if (this.openRound) {
       this.openRound.aborted = true
     }
+
     this.nodes.clear()
     this.pendingChars = 0
     this.resetLane(this.active)
@@ -148,15 +159,19 @@ export class PtyPendingDataDrainQueue {
     if (this.openRound) {
       throw new Error('PTY pending-data drain round already open')
     }
+
     this.roundSerial += 1
     const policyToken = this.readPolicyToken?.()
+
     if (!Object.is(policyToken, this.lastPolicyToken)) {
       this.lastPolicyToken = policyToken
       this.requestRelink(this.nodes.size > 0)
     }
+
     if (this.relinkPending) {
       this.rebuildLanes()
     }
+
     const round: Contract.PtyPendingDataDrainRound = {
       round: this.roundSerial,
       activeFrontier: this.active.tail?.lanePosition ?? 0,
@@ -164,7 +179,9 @@ export class PtyPendingDataDrainQueue {
       phase: 'active',
       aborted: false
     }
+
     this.openRound = round
+
     return round
   }
 
@@ -172,6 +189,7 @@ export class PtyPendingDataDrainQueue {
     if (this.openRound !== round || round.aborted || round.phase === 'done') {
       return null
     }
+
     if (this.selectedNode) {
       throw new Error('PTY pending-data selection must be committed before advancing')
     }
@@ -180,16 +198,20 @@ export class PtyPendingDataDrainQueue {
       const lane = round.phase === 'active' ? this.active : this.background
       const frontier = round.phase === 'active' ? round.activeFrontier : round.backgroundFrontier
       const node = lane.head
+
       if (!node || node.lanePosition > frontier || node.eligibleRound > round.round) {
         round.phase = round.phase === 'active' ? 'background' : 'done'
         continue
       }
+
       this.unlink(node)
       node.lane = 'selected'
       this.selectedNode = node
       this.selectionVisitCount += 1
+
       return node
     }
+
     return null
   }
 
@@ -225,6 +247,7 @@ export class PtyPendingDataDrainQueue {
     if (this.openRound !== round) {
       return
     }
+
     if (this.selectedNode) {
       const selected = this.selectedNode
       this.selectedNode = null
@@ -232,6 +255,7 @@ export class PtyPendingDataDrainQueue {
       this.appendToLane(selected, this.classify(selected.id))
       this.relinkPending = true
     }
+
     this.openRound = null
   }
 
@@ -263,14 +287,17 @@ export class PtyPendingDataDrainQueue {
 
   private requireSelectedNode(selection: Contract.PtyPendingDataDrainSelection): PendingNode {
     const node = selection as PendingNode
+
     if (this.selectedNode !== node || this.nodes.get(node.id) !== node) {
       throw new Error('Stale PTY pending-data drain selection')
     }
+
     return node
   }
 
   private requestRelink(needed: boolean): boolean {
     this.relinkPending ||= needed
+
     return needed
   }
 
@@ -279,11 +306,13 @@ export class PtyPendingDataDrainQueue {
     this.resetLane(this.active)
     this.resetLane(this.background)
     this.resetLane(this.blocked)
+
     for (const node of this.nodes.values()) {
       Object.assign(node, { previous: null, next: null, lane: 'none' as const })
       node.eligibleRound = this.roundSerial
       this.appendToLane(node, this.classify(node.id))
     }
+
     this.relinkPending = false
   }
 
@@ -296,15 +325,18 @@ export class PtyPendingDataDrainQueue {
     node.previous = lane.tail
     node.next = null
     node.lane = name
+
     if (name !== 'blocked') {
       this.lanePositionSerial += 1
       node.lanePosition = this.lanePositionSerial
     }
+
     if (lane.tail) {
       lane.tail.next = node
     } else {
       lane.head = node
     }
+
     lane.tail = node
     lane.size += 1
   }
@@ -312,19 +344,24 @@ export class PtyPendingDataDrainQueue {
   private unlink(node: PendingNode): void {
     if (node.lane === 'none' || node.lane === 'selected') {
       Object.assign(node, { previous: null, next: null, lane: 'none' as const })
+
       return
     }
+
     const lane = this.laneFor(node.lane)
+
     if (node.previous) {
       node.previous.next = node.next
     } else {
       lane.head = node.next
     }
+
     if (node.next) {
       node.next.previous = node.previous
     } else {
       lane.tail = node.previous
     }
+
     lane.size -= 1
     Object.assign(node, { previous: null, next: null, lane: 'none' as const })
   }

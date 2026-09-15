@@ -29,6 +29,7 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
     (method, params) => callRuntimeResult(method, params),
     'relay'
   )
+
   return {
     // A browser searches only its selected paired runtime.
     searchSessions: (request, executionHostScope) =>
@@ -42,12 +43,15 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
     listSessions: (args?: AiVaultListArgs) => {
       const environment = requireActiveEnvironment()
       const executionHostId = toRuntimeExecutionHostId(environment.id)
+
       const requestedScope = normalizeExecutionHostScope(
         args?.executionHostScope ?? executionHostId
       )
+
       if (requestedScope !== 'all' && requestedScope !== executionHostId) {
         return Promise.resolve(webAiVaultUnavailableResult(requestedScope))
       }
+
       // Why: no local filesystem in the browser, so every history scan runs on and is stamped as the paired runtime host.
       return callRuntimeResult<AiVaultListResult>('aiVault.listSessions', {
         limit: args?.limit,
@@ -59,12 +63,14 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
     resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => {
       const environment = requireActiveEnvironment()
       const executionHostId = toRuntimeExecutionHostId(environment.id)
+
       if (
         args.executionHostScope &&
         normalizeExecutionHostScope(args.executionHostScope) !== executionHostId
       ) {
         return Promise.resolve({ titles: [] })
       }
+
       return callRuntimeResult<AiVaultSessionTitlesResult>('aiVault.resolveSessionTitles', {
         requests: args.requests
       }).catch(() => ({ titles: [] }))
@@ -95,6 +101,7 @@ export function createWebAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault'
 // An unparseable id must not normalize into the everything-scope and answer anyway.
 function addressesOwnRuntime(executionHostScope: ExecutionHostId | undefined): boolean {
   const ownRuntimeId = toRuntimeExecutionHostId(requireActiveEnvironment().id)
+
   return (
     executionHostScope === undefined ||
     normalizeExecutionHostId(executionHostScope) === ownRuntimeId

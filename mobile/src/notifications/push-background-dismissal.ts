@@ -12,7 +12,9 @@ TaskManager.defineTask<Notifications.NotificationTaskPayload>(
     if (error || !data || 'actionIdentifier' in data) {
       return
     }
+
     let raw: unknown = data.data
+
     if (typeof data.data.dataString === 'string') {
       try {
         raw = JSON.parse(data.data.dataString)
@@ -20,7 +22,9 @@ TaskManager.defineTask<Notifications.NotificationTaskPayload>(
         return
       }
     }
+
     const payload = readOrcaPushPayload(raw)
+
     if (
       payload?.notificationId &&
       (payload.kind === 'dismiss' || (await wasPushDismissed(payload)))

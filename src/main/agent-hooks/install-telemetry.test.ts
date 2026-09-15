@@ -20,10 +20,12 @@ describe('recordManagedHookInstallFailure', () => {
     recordManagedHookInstallFailure('codex', new Error('x'.repeat(500)))
 
     expect(trackMock).toHaveBeenCalledTimes(1)
+
     const [eventName, props] = trackMock.mock.calls[0] as [
       string,
       { agent: string; error_message: string }
     ]
+
     expect(eventName).toBe('agent_hook_install_failed')
     expect(props.agent).toBe('codex')
     expect(props.error_message).toHaveLength(200)

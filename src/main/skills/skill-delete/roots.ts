@@ -35,6 +35,7 @@ export async function buildSkillDeleteRootSet(input: {
   if (input.target.kind === 'wsl') {
     const { distro, homeDir } = input.target
     const cwd = input.target.cwd ?? homeDir
+
     return {
       roots: [
         ...buildSkillDiscoverySources({
@@ -56,6 +57,7 @@ export async function buildSkillDeleteRootSet(input: {
 
   const home = input.homeDir ?? homedir()
   const cwd = input.target.cwd
+
   return {
     roots: [
       // Mirrors `discoverSkillsOnTarget`: a cwd-scoped scan drops the repo list,

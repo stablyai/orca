@@ -7,7 +7,9 @@ import { parseDaemonReadyIdentity } from './daemon-ready-identity'
 import { unlinkOwnedDaemonPidFile } from './daemon-spawner'
 
 const DAEMON_CHILD_TERMINATION_GRACE_MS = 5_000
+
 const DAEMON_CHILD_FORCE_EXIT_WAIT_MS = 1_000
+
 const STARTUP_STDERR_MAX_BYTES = 8192
 
 export class DaemonEndpointUnavailableError extends Error {
@@ -50,6 +52,7 @@ export async function launchDaemonChild(
     launchNonce,
     macosLoginSessionWatch
   } = options
+
   const child = fork(
     forkEntryPath,
     [
@@ -91,16 +94,21 @@ export async function launchDaemonChild(
   // Why: keep only the startup-window stderr tail so a crash cause is visible without unbounded memory.
   let startupStderr = ''
   let collectingStderr = true
+
   const onStartupStderr = (chunk: Buffer): void => {
     if (!collectingStderr) {
       return
     }
+
     startupStderr += chunk.toString('utf8')
+
     if (startupStderr.length > STARTUP_STDERR_MAX_BYTES) {
       startupStderr = startupStderr.slice(-STARTUP_STDERR_MAX_BYTES)
     }
   }
+
   child.stderr?.on('data', onStartupStderr)
+
   // Why: release the detached daemon's stderr once up/failed — a live piped stream refs the parent loop and blocks Electron exit.
   const releaseStderr = (): void => {
     collectingStderr = false
@@ -111,32 +119,41 @@ export async function launchDaemonChild(
   // Wait for the daemon to signal readiness via IPC
   let launchedIdentity: DaemonEndpointIdentity | null = null
   let endpointUnavailableReason: string | null = null
+
   const startupSignal = new Promise<void>((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined
     let settled = false
+
     function cleanupStartupListeners(): void {
       if (timer) {
         clearTimeout(timer)
       }
+
       child.off('message', onReadyMessage)
       child.off('error', onStartupError)
       child.off('exit', onStartupExit)
     }
+
     async function fail(error: Error): Promise<void> {
       if (settled) {
         return
       }
+
       settled = true
       cleanupStartupListeners()
       // Why: attach the captured stderr tail to the thrown error and log it so a startup crash isn't just "exited with code 1".
       const stderrTail = startupStderr.trim()
+
       if (stderrTail) {
         console.warn(`[daemon] startup failed; captured stderr tail:\n${stderrTail}`)
       }
+
       releaseStderr()
+
       const startupError = stderrTail
         ? new Error(`${error.message}\nDaemon stderr (tail):\n${stderrTail}`)
         : error
+
       try {
         await terminateLaunchedDaemonChild(child)
       } catch (cleanupError) {
@@ -146,13 +163,17 @@ export async function launchDaemonChild(
             'Daemon startup and child cleanup both failed'
           )
         )
+
         return
       }
+
       if (Number.isSafeInteger(child.pid) && (child.pid as number) > 0) {
         unlinkOwnedDaemonPidFile(pidPath, child.pid as number, launchNonce)
       }
+
       reject(startupError)
     }
+
     function onReadyMessage(msg: unknown): void {
       if (
         msg &&
@@ -163,17 +184,23 @@ export async function launchDaemonChild(
         // launcher can adopt the winner instead of reporting a generic startup failure.
         endpointUnavailableReason = (msg as { reason?: string }).reason ?? 'occupied'
         void fail(new Error(`Daemon could not take the endpoint: ${endpointUnavailableReason}`))
+
         return
       }
+
       if (msg && typeof msg === 'object' && (msg as { type?: string }).type === 'ready') {
         if (settled) {
           return
         }
+
         const readyIdentity = parseDaemonReadyIdentity(msg)
+
         if (!Number.isSafeInteger(child.pid) || (child.pid as number) <= 0 || !readyIdentity) {
           void fail(new Error('Daemon readiness identity is incomplete'))
+
           return
         }
+
         launchedIdentity = {
           pid: child.pid as number,
           ...readyIdentity,
@@ -200,6 +227,7 @@ export async function launchDaemonChild(
         // on, so keying off it cannot lose to a notification still in the channel.
         endpointUnavailableReason = 'occupied'
       }
+
       void fail(new Error(`Daemon exited during startup with code ${code}`))
     }
 
@@ -218,11 +246,14 @@ export async function launchDaemonChild(
     if (endpointUnavailableReason === 'occupied') {
       throw new DaemonEndpointUnavailableError('occupied', { cause: error })
     }
+
     throw error
   }
+
   if (!launchedIdentity) {
     throw new Error('Daemon readiness identity is incomplete')
   }
+
   return { child, identity: launchedIdentity }
 }
 
@@ -234,26 +265,33 @@ export async function terminateLaunchedDaemonChild(child: ChildProcess): Promise
     ) {
       return
     }
+
     await new Promise<void>((resolve, reject) => {
       let gracefulTimer: ReturnType<typeof setTimeout>
       let forcedTimer: ReturnType<typeof setTimeout> | undefined
       let settled = false
+
       const finish = (error?: unknown): void => {
         if (settled) {
           return
         }
+
         settled = true
         clearTimeout(gracefulTimer)
+
         if (forcedTimer) {
           clearTimeout(forcedTimer)
         }
+
         child.off('exit', onExit)
+
         if (error) {
           reject(error)
         } else {
           resolve()
         }
       }
+
       const onExit = (): void => finish()
       child.on('exit', onExit)
       gracefulTimer = setTimeout(() => {
@@ -262,9 +300,11 @@ export async function terminateLaunchedDaemonChild(child: ChildProcess): Promise
             process.kill(child.pid, 'SIGKILL')
           } catch (error) {
             finish(isNoSuchProcessError(error) ? undefined : error)
+
             return
           }
         }
+
         if (!settled) {
           forcedTimer = setTimeout(
             () => finish(new Error('Daemon did not exit after SIGKILL')),
@@ -272,6 +312,7 @@ export async function terminateLaunchedDaemonChild(child: ChildProcess): Promise
           )
         }
       }, DAEMON_CHILD_TERMINATION_GRACE_MS)
+
       if (child.pid) {
         try {
           process.kill(child.pid, 'SIGTERM')
@@ -286,6 +327,7 @@ export async function terminateLaunchedDaemonChild(child: ChildProcess): Promise
     if (child.connected) {
       child.disconnect()
     }
+
     child.unref()
   }
 }

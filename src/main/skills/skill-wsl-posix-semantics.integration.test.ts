@@ -18,7 +18,9 @@ import { detectSkillProvidersInWsl } from './skill-wsl-provider-detection'
 import { createWslSkillInstallFilesystem } from './skill-wsl-install-filesystem'
 
 const execFileAsync = promisify(execFile)
+
 const DISTRO = process.env.ORCA_REAL_WSL_SKILL_DISTRO ?? 'Ubuntu-24.04'
+
 const RUN_REAL_WSL = process.platform === 'win32' && process.env.ORCA_REAL_WSL_SKILL_TEST === '1'
 
 async function runWsl(...args: string[]): Promise<string> {
@@ -27,6 +29,7 @@ async function runWsl(...args: string[]): Promise<string> {
     timeout: 30_000,
     windowsHide: true
   })
+
   return stdout.trim()
 }
 
@@ -36,6 +39,7 @@ function uncPath(guestPath: string): string {
 
 function packageFile(path: string, bytes: Buffer, executable: boolean): SkillPackageFile {
   const sha256 = createHash('sha256').update(bytes).digest('hex')
+
   return {
     path,
     size: bytes.length,
@@ -53,14 +57,17 @@ describe.runIf(RUN_REAL_WSL)('real WSL POSIX skill semantics', () => {
   beforeAll(async () => {
     localRoot = await mkdtemp(join(tmpdir(), 'orca-wsl-posix-semantics-'))
     guestRoot = await runWsl('mktemp', '-d', '/tmp/orca-skill-posix.XXXXXX')
+
     if (!guestRoot.startsWith('/tmp/orca-skill-posix.')) {
       throw new Error('unexpected-wsl-posix-root')
     }
+
     await runWsl('mkdir', '-p', `${guestRoot}/home`)
   })
 
   afterAll(async () => {
     await rm(localRoot, { recursive: true, force: true })
+
     if (guestRoot.startsWith('/tmp/orca-skill-posix.')) {
       await runWsl('rm', '-rf', '--', guestRoot)
     }
@@ -74,11 +81,14 @@ describe.runIf(RUN_REAL_WSL)('real WSL POSIX skill semantics', () => {
     const markdown = Buffer.from(
       '---\nname: wsl-mode-skill\ndescription: WSL modes\n---\n\n# WSL\n'
     )
+
     const script = Buffer.from('#!/bin/sh\nprintf ok\n')
+
     const files = [
       packageFile('SKILL.md', markdown, false),
       packageFile('scripts/run.sh', script, true)
     ]
+
     const manifest = parseSkillPackageManifest({
       schemaVersion: 1,
       packageId: 'package-wsl-mode',
@@ -89,8 +99,10 @@ describe.runIf(RUN_REAL_WSL)('real WSL POSIX skill semantics', () => {
       files,
       packageDigest: computeSkillPackageDigest(files)
     })
+
     const manifestBytes = Buffer.from(JSON.stringify(manifest))
     const archivePath = join(localRoot, 'package.tar.gz')
+
     const archive = await writeSkillTarGzip(archivePath, [
       {
         path: 'manifest.json',
@@ -101,6 +113,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL POSIX skill semantics', () => {
       { path: 'skill/SKILL.md', size: markdown.length, executable: false, bytes: markdown },
       { path: 'skill/scripts/run.sh', size: script.length, executable: true, bytes: script }
     ])
+
     const homeDirectory = uncPath(`${guestRoot}/home`)
     const filesystem = createWslSkillInstallFilesystem({ distro: DISTRO, homeDirectory })
 
@@ -118,6 +131,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL POSIX skill semantics', () => {
       filesystem,
       wslDistro: DISTRO
     })
+
     expect(result.status, JSON.stringify(result)).toBe('installed')
 
     const skill = `${guestRoot}/home/.agents/skills/wsl-mode-skill`
@@ -140,6 +154,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL POSIX skill semantics', () => {
       join(beta, 'SKILL.md'),
       '---\nname: wsl-beta\ndescription: WSL beta\n---\n\n# Beta\n'
     )
+
     const bundle = await createSkillBundleArchive({
       sources: [{ sourceDirectory: alpha }, { sourceDirectory: beta }],
       archivePath: join(localRoot, 'wsl-bundle.tar.gz'),
@@ -147,6 +162,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL POSIX skill semantics', () => {
       versionId: 'version-wsl-bundle',
       bundleName: 'wsl-bundle'
     })
+
     const homeDirectory = uncPath(`${guestRoot}/home`)
     const filesystem = createWslSkillInstallFilesystem({ distro: DISTRO, homeDirectory })
 

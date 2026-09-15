@@ -62,6 +62,7 @@ describe('remote skill failure category parity', () => {
       error: { code: 'skill_install_failure', message: failure.code, data: failure },
       _meta: { runtimeId: 'runtime-1' }
     })
+
     const paired = await capturedFailure(
       installSkillOnRemoteRuntime({
         userDataPath: '/state',
@@ -76,8 +77,10 @@ describe('remote skill failure category parity', () => {
       if (method === 'relay.status') {
         return { capabilities: ['skills.install.v1'] }
       }
+
       throw Object.assign(new Error(failure.code), { code: -32000, data: failure })
     })
+
     const ssh = await capturedFailure(
       installSkillOnSshHost({
         provider: { requestHostRpc } as unknown as IPtyProvider,

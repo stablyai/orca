@@ -24,6 +24,7 @@ describe('normalizeImageTranscriptMessages', () => {
       userText('a', '[Image: source: /tmp/orca-paste-1-2.png]'),
       userText('b', '[Image #1] describe this')
     ])
+
     expect(out).toHaveLength(1)
     expect(out[0]!.blocks).toEqual([
       { type: 'image-ref', path: '/tmp/orca-paste-1-2.png' },
@@ -53,6 +54,7 @@ describe('normalizeImageTranscriptMessages', () => {
         { type: 'text', text: '[Image #1] this' }
       ]
     }
+
     const out = normalizeImageTranscriptMessages([
       userText('source', '[Image: source: /tmp/a.png]'),
       prompt
@@ -120,6 +122,7 @@ describe('normalizeImageTranscriptMessages', () => {
     const out = normalizeImageTranscriptMessages([
       userText('a', '[Image: source: /Users/me/Pictures/hero-image-2.png]')
     ])
+
     expect(out).toHaveLength(1)
     expect(out[0]!.blocks).toEqual([
       { type: 'image-ref', path: '/Users/me/Pictures/hero-image-2.png' }
@@ -208,6 +211,7 @@ describe('normalizeImageTranscriptMessages', () => {
         source: 'transcript' as const
       }
     ]
+
     const out = normalizeImageTranscriptMessages(messages)
 
     expect(out[0]!.blocks.some((block) => block.type === 'image-ref')).toBe(false)
@@ -249,6 +253,7 @@ describe('normalizeImageTranscriptMessages', () => {
       timestamp: 1,
       source: 'transcript'
     }
+
     expect(normalizeImageTranscriptMessages([assistant])).toEqual([assistant])
   })
 })

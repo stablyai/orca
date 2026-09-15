@@ -100,6 +100,7 @@ describe('repository GitHub avatar resolution', () => {
         label: 'stablyai/orca'
       }
     })
+
     apiMocks.repoUpstream.mockResolvedValueOnce(null)
     apiMocks.repoSlug.mockResolvedValueOnce({ owner: 'parkerrex', repo: 'orca' })
 
@@ -174,6 +175,7 @@ describe('repository GitHub avatar resolution', () => {
         label: 'stablyai/orca'
       }
     })
+
     apiMocks.repoUpstream.mockResolvedValueOnce(null)
     // The fork's own origin owner — same repo name, so it must NOT replace the parent.
     apiMocks.repoSlug.mockResolvedValueOnce({ owner: 'parkerrex', repo: 'orca' })
@@ -203,6 +205,7 @@ describe('repository GitHub avatar resolution', () => {
       upstream: { owner: 'upstream-org', repo: 'rocket' },
       repoIcon: githubAvatarIcon({ owner: 'acme', repo: 'rocket-pro' })
     })
+
     apiMocks.repoUpstream.mockResolvedValueOnce({ owner: 'upstream-org', repo: 'rocket' })
     apiMocks.repoSlug.mockRejectedValueOnce(new Error('runtime rpc timeout'))
 
@@ -215,6 +218,7 @@ describe('repository GitHub avatar resolution', () => {
     const repo = makeRepo({
       upstream: { owner: 'acme', repo: 'widgets', host: 'github.com' }
     })
+
     const enterprise = { owner: 'acme', repo: 'widgets', host: 'github.acme.test' }
 
     expect(

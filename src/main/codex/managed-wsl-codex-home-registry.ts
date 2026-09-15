@@ -18,6 +18,7 @@ function distroKey(distro: string): string {
 
 export function isAbsolutePosixPathWithoutDotSegments(value: string): boolean {
   const segments = value.split('/').slice(1)
+
   return (
     value.startsWith('/') &&
     !value.startsWith('//') &&
@@ -28,14 +29,18 @@ export function isAbsolutePosixPathWithoutDotSegments(value: string): boolean {
 
 function isOrcaManagedWslCodexHome(linuxHomePath: string): boolean {
   const segments = linuxHomePath.split('/').filter(Boolean)
+
   const orcaIndex = segments.findIndex(
     (segment, index) =>
       segment === 'orca' && segments[index - 1] === 'share' && segments[index - 2] === '.local'
   )
+
   if (orcaIndex === -1) {
     return false
   }
+
   const tail = segments.slice(orcaIndex + 1)
+
   return (
     (tail.length === 2 && tail[0] === 'codex-runtime-home' && tail[1] === 'home') ||
     (tail.length === 3 && tail[0] === 'codex-accounts' && Boolean(tail[1]) && tail[2] === 'home')
@@ -44,16 +49,20 @@ function isOrcaManagedWslCodexHome(linuxHomePath: string): boolean {
 
 function linuxHomeForRuntimePath(runtimeHomePath: string, distro: string): string | null {
   const wsl = parseWslUncPath(runtimeHomePath)
+
   if (wsl) {
     return wsl.distro.toLowerCase() === distroKey(distro) ? wsl.linuxPath : null
   }
+
   const drive = runtimeHomePath.match(/^([A-Za-z]):[/\\](.*)$/)
+
   return drive ? `/mnt/${drive[1].toLowerCase()}/${drive[2].replace(/\\/g, '/')}` : null
 }
 
 export function recordManagedWslCodexHome(distro: string, runtimeHomePath: string): void {
   const normalizedDistro = distro.trim()
   const linuxHomePath = linuxHomeForRuntimePath(runtimeHomePath, normalizedDistro)
+
   if (
     !normalizedDistro ||
     /[\\/\r\n]/.test(normalizedDistro) ||
@@ -63,6 +72,7 @@ export function recordManagedWslCodexHome(distro: string, runtimeHomePath: strin
   ) {
     return
   }
+
   const homes = managedHomesByDistro.get(distroKey(normalizedDistro)) ?? new Map()
   homes.set(linuxHomePath, { runtimeHomePath, linuxHomePath })
   managedHomesByDistro.set(distroKey(normalizedDistro), homes)
@@ -79,6 +89,7 @@ export function resolveRecordedManagedWslCodexHome(
   ) {
     return null
   }
+
   return managedHomesByDistro.get(distroKey(distro))?.get(linuxHomePath)?.runtimeHomePath ?? null
 }
 
@@ -91,6 +102,7 @@ export function resolveManagedWslCodexHome(distro: string, linuxHomePath: string
   ) {
     return null
   }
+
   return (
     resolveRecordedManagedWslCodexHome(distro, linuxHomePath) ??
     toWindowsWslPath(linuxHomePath, distro)
@@ -101,11 +113,14 @@ export function wslRuntimeHomePathsEqual(left: string | undefined, right: string
   if (!left) {
     return false
   }
+
   const leftWsl = foldWslUncPathCaseInsensitiveParts(left)
   const rightWsl = foldWslUncPathCaseInsensitiveParts(right)
+
   if (leftWsl || rightWsl) {
     return leftWsl !== null && leftWsl === rightWsl
   }
+
   return pathWin32.normalize(left).toLowerCase() === pathWin32.normalize(right).toLowerCase()
 }
 

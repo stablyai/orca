@@ -23,8 +23,10 @@ describe('browser RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       browserTabCreate: vi.fn().mockResolvedValue({ browserPageId: 'page-1' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
     const replies: string[] = []
+
     const params = {
       worktree: 'id:wt-1',
       placement: { kind: 'client', browserHostClientId: 'host-a' }
@@ -53,6 +55,7 @@ describe('browser RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       browserOpenUrlOnClient: vi.fn().mockResolvedValue({ browserPageId: 'page-local' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
 
     await dispatcher.dispatch(
@@ -90,6 +93,7 @@ describe('browser RPC methods', () => {
       browserTabCreate: vi.fn().mockResolvedValue({ browserPageId: 'page-1' }),
       browserTabSwitch: vi.fn().mockResolvedValue({ browserPageId: 'page-1' })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
 
     await dispatcher.dispatch(makeRequest('browser.snapshot', { worktree: 'id:wt-1' }))
@@ -154,6 +158,7 @@ describe('browser RPC methods', () => {
 
   it('routes browser screencast over the streaming dispatcher', async () => {
     const sendBinary = vi.fn()
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       browserScreencast: vi.fn(
@@ -162,6 +167,7 @@ describe('browser RPC methods', () => {
         }
       )
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_SCREENCAST_METHODS })
     const replies: string[] = []
 
@@ -208,6 +214,7 @@ describe('browser RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       cleanupSubscription: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_SCREENCAST_METHODS })
     setRuntimeBrowserCommandsFactory(() => ({}) as never)
 
@@ -230,10 +237,12 @@ describe('browser RPC methods', () => {
 
   it('rejects browser screencast unsubscribe when no provider resolved', async () => {
     setRuntimeBrowserCommandsFactory(null)
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       cleanupSubscription: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_SCREENCAST_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -257,6 +266,7 @@ describe('browser RPC methods', () => {
       browserMouseWheel: vi.fn().mockResolvedValue({ ok: true }),
       browserStorageLocalSet: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_EXTRA_METHODS })
 
     await dispatcher.dispatch(
@@ -319,6 +329,7 @@ describe('browser RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       browserCheck: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -338,10 +349,12 @@ describe('browser RPC methods', () => {
 
   it('rejects oversized browser clipboard writes before runtime dispatch', async () => {
     const secret = 'browser-secret-token'
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       browserClipboardWrite: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_EXTRA_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -373,12 +386,15 @@ describe('browser RPC methods', () => {
 
   it('yields while validating large accepted browser text insertion before dispatch', async () => {
     vi.useFakeTimers()
+
     try {
       const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+
       const runtime = {
         getRuntimeId: () => 'test-runtime',
         browserType: vi.fn().mockResolvedValue({ typed: true })
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
 
       const responsePromise = dispatcher.dispatch(makeRequest('browser.type', { input: text }))
@@ -401,19 +417,23 @@ describe('browser RPC methods', () => {
 
   it('rejects oversized browser text insertion before runtime dispatch', async () => {
     const secret = 'browser-insert-secret'
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       browserFill: vi.fn().mockResolvedValue({ filled: '@e1' }),
       browserType: vi.fn().mockResolvedValue({ typed: true }),
       browserKeyboardInsertText: vi.fn().mockResolvedValue({ inserted: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
     const text = [secret, 'x'.repeat(CLIPBOARD_TEXT_WRITE_MAX_BYTES + 1)].join('')
 
     const fillResponse = await dispatcher.dispatch(
       makeRequest('browser.fill', { element: '@e1', value: text })
     )
+
     const typeResponse = await dispatcher.dispatch(makeRequest('browser.type', { input: text }))
+
     const keyboardInsertResponse = await dispatcher.dispatch(
       makeRequest('browser.keyboardInsertText', { text })
     )

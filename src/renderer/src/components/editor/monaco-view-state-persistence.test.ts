@@ -27,6 +27,7 @@ beforeEach(() => {
   scrollTopCache.clear()
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     callback(0)
+
     return 1
   })
 })
@@ -41,16 +42,19 @@ describe('Monaco view state persistence', () => {
       getScrollTop: () => 320,
       getSelections: () => selections
     } as unknown as editor.IStandaloneCodeEditor
+
     snapshotMonacoViewState({ current: sourceEditor }, 'file.ts::tab-1')
 
     const setSelections = vi.fn()
     const setScrollTop = vi.fn()
     const focus = vi.fn()
+
     const remountedEditor = {
       setSelections,
       setScrollTop,
       focus
     } as unknown as editor.IStandaloneCodeEditor
+
     restoreMonacoViewState(remountedEditor, 'file.ts::tab-1')
 
     expect(setSelections).toHaveBeenCalledWith(selections)
@@ -62,16 +66,19 @@ describe('Monaco view state persistence', () => {
     let emitCursorPosition:
       | ((event: { position: { lineNumber: number; column: number } }) => void)
       | undefined
+
     const editorInstance = {
       getPosition: () => ({ lineNumber: 1, column: 1 }),
       onDidChangeCursorPosition: (
         listener: (event: { position: { lineNumber: number; column: number } }) => void
       ) => {
         emitCursorPosition = listener
+
         return { dispose: vi.fn() }
       },
       onDidScrollChange: () => ({ dispose: vi.fn() })
     } as unknown as editor.IStandaloneCodeEditor
+
     const setEditorCursorLine = vi.fn()
 
     installMonacoViewStateTracking({

@@ -26,6 +26,7 @@ describe('packaged skills CLI PR gates', () => {
     const aggregateStep = workflow.jobs.verify.steps.find(
       (step) => step.name === 'Require successful checks'
     )
+
     expect(aggregateStep.env.PACKAGE_WINDOWS).toBe('${{ needs.package_windows.result }}')
     expect(aggregateStep.run).toContain('"$PACKAGE_WINDOWS"')
   })

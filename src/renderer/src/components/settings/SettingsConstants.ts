@@ -2,8 +2,11 @@ import { DEFAULT_APP_FONT_FAMILY, getDefaultRepoHookSettings } from '../../../..
 import { DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS } from '../../../../shared/terminal-scrollback-policy'
 
 export const DEFAULT_REPO_HOOK_SETTINGS = getDefaultRepoHookSettings()
+
 export const MAX_THEME_RESULTS = 80
+
 export const SCROLLBACK_PRESETS_ROWS = DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS
+
 export {
   UI_ZOOM_STEP as ZOOM_STEP,
   UI_ZOOM_MIN as ZOOM_MIN,
@@ -28,6 +31,7 @@ export function getFallbackTerminalFonts(): string[] {
     typeof navigator !== 'undefined'
       ? (navigator as Navigator & { userAgentData?: { platform?: string } })
       : null
+
   const platform = nav ? (nav.userAgentData?.platform ?? nav.platform ?? '') : ''
   const normalizedPlatform = platform.toLowerCase()
 

@@ -9,8 +9,11 @@ import {
 } from './missing-local-worktree-metadata-pruning'
 
 const REPO_ID = 'repo-1'
+
 const WORKTREE_ID = `${REPO_ID}::/workspace/stale`
+
 const LOCAL_ALIAS = `local|${WORKTREE_ID}`
+
 const IDENTITY_KEY = 'local-identity'
 
 function makeRepo(id = REPO_ID): Repo {
@@ -43,6 +46,7 @@ function makeMeta(worktreeId = WORKTREE_ID): WorktreeMeta {
 function makeState(): PersistedState {
   const state = getDefaultPersistedState('/home/test')
   state.repos = [makeRepo()]
+
   return state
 }
 
@@ -54,11 +58,13 @@ function makeCanonicalOnlyState(): {
   const meta = makeMeta()
   state.worktreeMetaByIdentity = { [IDENTITY_KEY]: meta }
   state.worktreeIdentityAliases = { [LOCAL_ALIAS]: [IDENTITY_KEY] }
+
   return { state, meta }
 }
 
 function pruneCaptured(state: PersistedState): string[] {
   const scan = captureNativeLocalWorktreeMetadataScanExpectation(state, state.repos[0]!)
+
   return pruneSessionlessMissingLocalWorktreeMetadataForRepo(state, scan, scan.metadata)
 }
 

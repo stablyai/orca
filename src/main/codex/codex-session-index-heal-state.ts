@@ -19,6 +19,7 @@ export const CODEX_SESSION_INDEX_HEAL_VERSION = 3
 // Why: an unsupported CLI stays unsupported until upgraded; re-probing once a
 // day is enough to notice an upgrade without a per-startup spawn.
 const HEAL_UNSUPPORTED_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
+
 const HEAL_FAILED_THREAD_RETRY_INTERVAL_MS = 24 * 60 * 60 * 1000
 
 const CODEX_ROLLOUT_THREAD_ID_PATTERN =
@@ -56,26 +57,33 @@ export async function collectPendingHealThreads(
 ): Promise<PendingHealThread[]> {
   const processed = await readProcessedHealThreads(paths)
   const pendingByThreadId = new Map<string, PendingHealThread>()
+
   for await (const line of streamCodexSessionLedgerRecords(paths.auditLogPath, {
     throwOnReadFailure: true
   })) {
     if (line.action !== 'hardlink' && line.action !== 'copy' && line.action !== 'existing') {
       continue
     }
+
     if (typeof line.target !== 'string') {
       continue
     }
+
     // Why: the append-only audit can contain runs for several custom Codex
     // homes; only thread/read ids whose rollout lives in this invocation's DB.
     if (!isPathInsideOrEqual(paths.systemSessionsRoot, line.target)) {
       continue
     }
+
     const match = CODEX_ROLLOUT_THREAD_ID_PATTERN.exec(lastPathSegment(line.target))
+
     if (!match) {
       continue
     }
+
     const threadId = match[2].toLowerCase()
     const auditRecordId = typeof line.recordId === 'string' ? line.recordId : null
+
     if (
       auditRecordId
         ? processed.healedAuditRecords.has(`${threadId}\0${auditRecordId}`) ||
@@ -88,8 +96,10 @@ export async function collectPendingHealThreads(
       pendingByThreadId.delete(threadId)
       continue
     }
+
     pendingByThreadId.set(threadId, { threadId, rolloutStamp: match[1], auditRecordId })
   }
+
   return [...pendingByThreadId.values()].sort((left, right) =>
     left.rolloutStamp < right.rolloutStamp ? 1 : left.rolloutStamp > right.rolloutStamp ? -1 : 0
   )
@@ -110,6 +120,7 @@ async function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): Prom
   const missingAuditRecords = new Set<string>()
   const legacyMissingThreadIds = new Set<string>()
   const expectedRoot = normalizeRuntimePathForComparison(paths.systemSessionsRoot)
+
   for await (const line of streamCodexSessionLedgerRecords(paths.healLedgerPath)) {
     if (
       line.v === CODEX_SESSION_INDEX_HEAL_VERSION &&
@@ -119,6 +130,7 @@ async function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): Prom
       normalizeRuntimePathForComparison(line.systemSessionsRoot) === expectedRoot
     ) {
       const threadId = line.threadId.toLowerCase()
+
       if (line.outcome === 'healed') {
         if (typeof line.auditRecordId === 'string') {
           healedAuditRecords.add(`${threadId}\0${line.auditRecordId}`)
@@ -132,6 +144,7 @@ async function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): Prom
       }
     }
   }
+
   return {
     healedAuditRecords,
     legacyHealedThreadIds,
@@ -161,11 +174,13 @@ export function appendHealLedgerRecord(
         at: new Date().toISOString()
       })}\n`
     )
+
     return true
   } catch (error) {
     // Why: the completion marker may only cover durably recorded outcomes;
     // otherwise its audit-size fast path permanently suppresses the retry.
     console.warn('[codex-session-index-heal] Failed to append heal ledger record:', error)
+
     return false
   }
 }
@@ -177,6 +192,7 @@ export function readAuditLogSize(auditLogPath: string): number {
     if (!isNotFoundError(error)) {
       throw error
     }
+
     return 0
   }
 }
@@ -191,9 +207,11 @@ export function isHealMarkerCurrent(
 ): boolean {
   try {
     const parsed: unknown = JSON.parse(readFileSync(paths.healMarkerPath, 'utf-8'))
+
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return false
     }
+
     const marker = parsed as {
       version?: unknown
       systemSessionsRoot?: unknown
@@ -201,6 +219,7 @@ export function isHealMarkerCurrent(
       unsupportedAt?: unknown
       retryableFailureAt?: unknown
     }
+
     // Why: one Windows directory has several spellings (drive case, separators),
     // so a raw compare re-drives the whole heal for what is the same target.
     if (
@@ -211,9 +230,11 @@ export function isHealMarkerCurrent(
     ) {
       return false
     }
+
     if (typeof marker.unsupportedAt === 'number') {
       return Date.now() - marker.unsupportedAt < HEAL_UNSUPPORTED_RETRY_INTERVAL_MS
     }
+
     if (typeof marker.retryableFailureAt === 'number') {
       // Why: malformed or still-growing rollouts must be retried eventually,
       // but a permanently bad file must not spawn an app-server every launch.
@@ -222,6 +243,7 @@ export function isHealMarkerCurrent(
         Date.now() - marker.retryableFailureAt < HEAL_FAILED_THREAD_RETRY_INTERVAL_MS
       )
     }
+
     // Why: the audit ledger is append-only, so an unchanged byte size means no
     // new backfilled sessions since this marker was written.
     return marker.auditBytes === auditBytes

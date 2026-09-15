@@ -59,6 +59,7 @@ describe('statusesEqual', () => {
     reason: 'authentication-agent-unavailable',
     version: '1.0.61'
   } as const
+
   const withRecovery: UpdateStatus = { state: 'error', message: 'install failed', recovery }
   const withoutRecovery: UpdateStatus = { state: 'error', message: 'install failed' }
 

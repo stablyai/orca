@@ -4,6 +4,7 @@ import { searchTerminalQuickCommands } from './terminal-quick-command-search'
 
 it.each(['Review', 'codex'])('does not scan prompts that cannot improve the %s match', (query) => {
   let promptReads = 0
+
   const commands: TerminalQuickCommand[] = Array.from({ length: 40 }, (_, index) => ({
     id: String(index),
     label: `Review changes ${index}`,
@@ -11,9 +12,11 @@ it.each(['Review', 'codex'])('does not scan prompts that cannot improve the %s m
     agent: 'codex',
     get prompt() {
       promptReads++
+
       return 'Inspect all source code. '.repeat(240)
     }
   }))
+
   expect(searchTerminalQuickCommands(commands, query)).toEqual(commands)
   expect(promptReads).toBe(0)
 })
@@ -24,6 +27,7 @@ it('keeps body matches that beat an agent substring match', () => {
     { id: 'body-exact', label: 'Other', action: 'agent-prompt', agent: 'codex', prompt: 'dex' },
     { id: 'label', label: 'dex', command: 'nothing', appendEnter: true }
   ]
+
   expect(searchTerminalQuickCommands(commands, 'dex').map((command) => command.id)).toEqual([
     'label',
     'body-exact',
@@ -38,6 +42,7 @@ it('keeps equal scores in input order and still searches bodies without a metada
     { id: 'body', label: 'Other', command: 'run the task', appendEnter: true },
     { id: 'none', label: 'Other', command: 'nothing', appendEnter: true }
   ]
+
   expect(searchTerminalQuickCommands(commands, 'codex').map((command) => command.id)).toEqual([
     'first',
     'second'

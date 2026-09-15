@@ -44,6 +44,7 @@ import { iterateProcessOutputLines } from '../../shared/process-output-field-sca
 import type { GitRemoteExec, WorktreePushTargetStore } from './worktree-push-target-cleanup'
 
 const NEVER_MIGRATE_REMOTE_NAMES = new Set(['origin', 'upstream'])
+
 // Fork remotes are always minted as `pr-${slug}` (see pull-request-push-target.ts). Used
 // only as a secondary discovery signal below for remotes with zero metadata trace --
 // primary gating stays the wide-refspec check, not this prefix alone.
@@ -52,6 +53,7 @@ const PR_REMOTE_NAME_PREFIX = 'pr-'
 async function listRemoteNames(execGit: GitRemoteExec, repoPath: string): Promise<string[]> {
   try {
     const { stdout } = await execGit(['remote'], repoPath)
+
     return [...iterateProcessOutputLines(stdout)].map((line) => line.trim()).filter(Boolean)
   } catch {
     return []
@@ -65,23 +67,29 @@ function collectProvenBranchesByRemote(
 ): Map<string, Set<string>> {
   const branchesByRemote = new Map<string, Set<string>>()
   const provenRemotes = new Set<string>()
+
   for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
     if (getRepoIdFromWorktreeId(worktreeId) !== repoId || !meta.pushTarget) {
       continue
     }
+
     const { remoteName, branchName, remoteCreated } = meta.pushTarget
+
     if (remoteCreated === true) {
       provenRemotes.add(remoteName)
     }
+
     const branches = branchesByRemote.get(remoteName) ?? new Set<string>()
     branches.add(branchName)
     branchesByRemote.set(remoteName, branches)
   }
+
   for (const remoteName of branchesByRemote.keys()) {
     if (!provenRemotes.has(remoteName)) {
       branchesByRemote.delete(remoteName)
     }
   }
+
   return branchesByRemote
 }
 
@@ -93,6 +101,7 @@ async function collectBranchesFromLocalConfig(
   remoteName: string
 ): Promise<string[]> {
   let stdout: string
+
   try {
     ;({ stdout } = await execGit(
       ['config', '--get-regexp', '^branch\\..*\\.(remote|pushRemote)$'],
@@ -101,13 +110,17 @@ async function collectBranchesFromLocalConfig(
   } catch {
     return []
   }
+
   const branches: string[] = []
+
   for (const line of iterateProcessOutputLines(stdout)) {
     const match = /^branch\.(.+)\.(?:remote|pushRemote) (.+)$/.exec(line.trim())
+
     if (match && match[2] === remoteName) {
       branches.push(match[1]!)
     }
   }
+
   return branches
 }
 
@@ -128,25 +141,33 @@ export async function migrateForkRemoteRefspecsWithExec(
   // 15 of 31 fork remotes with zero branch pinning at all, still stuck wide. Widen
   // discovery to every `pr-*` remote on disk so those aren't silently skipped forever.
   const candidateNames = new Set(branchesByRemote.keys())
+
   for (const remoteName of await listRemoteNames(execGit, repoPath)) {
     if (remoteName.startsWith(PR_REMOTE_NAME_PREFIX)) {
       candidateNames.add(remoteName)
     }
   }
+
   const migrated: string[] = []
+
   for (const remoteName of candidateNames) {
     if (NEVER_MIGRATE_REMOTE_NAMES.has(remoteName)) {
       continue
     }
+
     const branches = new Set(branchesByRemote.get(remoteName) ?? [])
+
     for (const branch of await collectBranchesFromLocalConfig(execGit, repoPath, remoteName)) {
       branches.add(branch)
     }
+
     if (!(await remoteHasUrl(execGit, repoPath, remoteName))) {
       continue // config references a remote that no longer exists
     }
+
     const before = await getRemoteFetchRefspecs(execGit, repoPath, remoteName)
     const wasWide = before.includes(wildcardForkFetchRefspec(remoteName))
+
     if (branches.size === 0) {
       // No metadata and no branch config pins this remote to anything -- there's nothing
       // to narrow *to*. Only act if it's still the untouched stock wide default: that's
@@ -156,12 +177,14 @@ export async function migrateForkRemoteRefspecsWithExec(
       if (!wasWide) {
         continue
       }
+
       await clearForkRemoteFetchRefspec(execGit, repoPath, remoteName)
     } else {
       for (const branch of branches) {
         await ensureRemoteTracksBranchNarrowly(execGit, repoPath, remoteName, branch)
       }
     }
+
     // #17842's reconciliation sweep can concurrently `remote remove` this same
     // remote (both sweeps derive their candidate list from the same, possibly-stale,
     // worktree metadata). `remote remove` deletes the whole `remote.<name>.*` section,
@@ -176,24 +199,29 @@ export async function migrateForkRemoteRefspecsWithExec(
       )
       continue
     }
+
     if (!wasWide) {
       continue // already narrow (minted post-fix, or a prior sweep already ran); nothing to prune
     }
+
     // Best-effort: the refspec is narrowed regardless of whether this local ref cleanup
     // succeeds. Purely local (no network), so failures here should be rare/unexpected.
     await pruneUntrackedForkRemoteRefs(execGit, repoPath, remoteName, branches).catch(() => [])
     migrated.push(remoteName)
   }
+
   return migrated
 }
 
 // Why: the sweep costs a handful of git subprocesses per candidate remote; bound to once
 // per repo per cooldown so bursts of worktree creates don't repeat it.
 const MIGRATE_COOLDOWN_MS = 60 * 60 * 1000
+
 const lastMigratedAtByRepoId = new Map<string, number>()
 
 function shouldMigrateNow(repoId: string): boolean {
   const last = lastMigratedAtByRepoId.get(repoId)
+
   return last === undefined || Date.now() - last >= MIGRATE_COOLDOWN_MS
 }
 
@@ -211,11 +239,14 @@ export async function migrateForkRemoteRefspecs(
   if (!shouldMigrateNow(repoId)) {
     return
   }
+
   lastMigratedAtByRepoId.set(repoId, Date.now())
+
   try {
     const migrated = await migrateForkRemoteRefspecsWithExec(repoPath, repoId, store, (args, cwd) =>
       gitExecFileAsync(args, { cwd, ...gitOptions })
     )
+
     if (migrated.length > 0) {
       console.log(
         `[worktrees] Narrowed fetch refspec for ${migrated.length} fork remote(s) in ${repoPath}: ${migrated.join(', ')}`

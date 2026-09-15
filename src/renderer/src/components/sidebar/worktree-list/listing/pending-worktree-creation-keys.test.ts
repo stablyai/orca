@@ -40,6 +40,7 @@ describe('selectPendingWorktreeCreationKeys', () => {
     const before: PendingCreations = {
       'creation-1': makePending('creation-1', 'repo-1')
     }
+
     const after: PendingCreations = {
       ...before,
       'creation-2': makePending('creation-2', 'repo-2')

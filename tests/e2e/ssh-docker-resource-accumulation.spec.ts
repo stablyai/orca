@@ -36,7 +36,9 @@ import {
 } from './helpers/terminal'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const TERMINAL_COUNT = 6
+
 const RECONNECT_CYCLES = 5
 
 type RemoteResourceSample = {
@@ -73,6 +75,7 @@ const DESCRIBE_MASTER_FD_HOLDERS = [
 
 function sampleRemoteResources(target: DockerSshRelayTarget): RemoteResourceSample {
   const groups = readDockerSshRelayProcessSnapshots(target)
+
   // Why: fd growth is only meaningful against the relay that owns the PTYs, so read
   // the table of every relay group and sum, rather than assuming a single relay.
   const relayFdCount = groups.reduce((total, group) => {
@@ -80,17 +83,22 @@ function sampleRemoteResources(target: DockerSshRelayTarget): RemoteResourceSamp
       target,
       `ls /proc/${group.relayPid}/fd 2>/dev/null | wc -l`
     )
+
     return total + Number(raw.trim() || '0')
   }, 0)
+
   const ptsCount = Number(
     execDockerSshRelayTargetCommand(target, 'ls /dev/pts | grep -c "^[0-9]" || true').trim() || '0'
   )
+
   const nodeProcessCount = Number(
     execDockerSshRelayTargetCommand(target, 'pgrep -c node || true').trim() || '0'
   )
+
   const leakedMasterFdCount = Number(
     execDockerSshRelayTargetCommand(target, COUNT_LEAKED_MASTER_FDS).trim() || '0'
   )
+
   return {
     ptsCount,
     relayFdCount,
@@ -110,6 +118,7 @@ test.describe('Docker SSH relay resource accumulation', () => {
   }, testInfo) => {
     test.setTimeout(420_000)
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       const captured = target
@@ -180,10 +189,12 @@ test.describe('Docker SSH relay resource accumulation', () => {
 
       // Repeated reconnects must not accumulate anything on the host.
       const reconnectSamples: RemoteResourceSample[] = []
+
       for (let cycle = 0; cycle < RECONNECT_CYCLES; cycle += 1) {
         await reconnectDockerSshRelayTarget(orcaPage, remote.targetId)
         reconnectSamples.push(sampleRemoteResources(target))
       }
+
       console.log(`[resource-accumulation] reconnects ${JSON.stringify(reconnectSamples)}`)
 
       const first = reconnectSamples[0]

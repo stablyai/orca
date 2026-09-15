@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 let updateStatus = { state: 'idle' } as const
+
 const roots: Root[] = []
 
 vi.mock('@/store', () => ({
@@ -129,6 +130,7 @@ vi.mock('sonner', () => ({
 
 vi.mock('./SidebarFeedbackDialog', () => {
   mocks.feedbackChunkLoads += 1
+
   return { SidebarFeedbackDialog: () => <div data-testid="feedback-dialog" /> }
 })
 
@@ -165,7 +167,9 @@ function findMenuItem(container: HTMLElement, label: string): HTMLButtonElement 
   const button = Array.from(
     container.querySelectorAll<HTMLButtonElement>('[data-testid="menu-item"]')
   ).find((element) => element.textContent?.includes(label))
+
   expect(button).toBeDefined()
+
   return button as HTMLButtonElement
 }
 
@@ -294,6 +298,7 @@ describe('SidebarSettingsHelpMenu', () => {
   it('passes update-check modifier options through the updater bridge', async () => {
     const container = await renderMenu()
     const checkButton = findMenuItem(container, 'Check for Updates')
+
     const primaryModifier = navigator.userAgent.includes('Mac')
       ? { metaKey: true }
       : { ctrlKey: true }

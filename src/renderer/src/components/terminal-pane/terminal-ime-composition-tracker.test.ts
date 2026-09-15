@@ -23,6 +23,7 @@ function installTracker(): TrackerHarness {
   let now = 0
   const element = document.createElement('div')
   const tracker = installTerminalImeCompositionTracker(element, { now: () => now })
+
   return {
     tracker,
     element,

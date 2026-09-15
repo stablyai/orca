@@ -94,9 +94,11 @@ function sshSelector(
   context: AutomationProjectionContext
 ): AutomationListItemSelector {
   const targetId = automation.executionTargetId?.trim()
+
   if (!targetId) {
     return orphan(AUTOMATION_ORPHAN_ISSUES.malformed)
   }
+
   return sshTargetSelector(targetId, automation.executionTargetGeneration, context)
 }
 
@@ -106,13 +108,17 @@ function sshTargetSelector(
   context: AutomationProjectionContext
 ): AutomationListItemSelector {
   const current = context.sshTargetGeneration(targetId)
+
   if (current === undefined) {
     return orphan(AUTOMATION_ORPHAN_ISSUES.targetMissing)
   }
+
   const captured = sanitizeSshTargetGeneration(capturedGeneration)
+
   if (captured !== undefined && captured !== current) {
     return orphan(AUTOMATION_ORPHAN_ISSUES.targetReplaced)
   }
+
   return { kind: 'ssh', targetId, targetGeneration: captured ?? current }
 }
 
@@ -132,6 +138,7 @@ function workspacePinSelector(
     pin: { targetId, generation: context.sshTargetGeneration(targetId) },
     sshTargetIdForGeneration: context.sshTargetIdForGeneration
   })
+
   return sshTargetSelector(
     targetId,
     repinned ? undefined : automation.executionTargetGeneration,
@@ -154,24 +161,32 @@ export function projectAutomationSelector(
   ) {
     return orphan(AUTOMATION_ORPHAN_ISSUES.scheduledElsewhere)
   }
+
   if (automation.executionTargetType === 'ssh') {
     return sshSelector(automation, context)
   }
+
   if (automation.executionTargetType !== 'local') {
     return orphan(AUTOMATION_ORPHAN_ISSUES.malformed)
   }
+
   const workspaceHost = context.workspaceHost?.(automation) ?? { kind: 'unpinned' }
+
   if (workspaceHost.kind === 'ambiguous') {
     return orphan(AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous)
   }
+
   // A pinned workspace is where the run actually goes, so the row belongs to that host, not Self.
   if (workspaceHost.kind === 'ssh') {
     return workspacePinSelector(automation, workspaceHost.targetId, context)
   }
+
   const connectionId = context.repoConnectionId(getAutomationRunRepoId(automation))
+
   if (connectionId === undefined) {
     return orphan(AUTOMATION_ORPHAN_ISSUES.projectMissing)
   }
+
   // A local record whose project points at an SSH connection contradicts itself.
   return connectionId ? orphan(AUTOMATION_ORPHAN_ISSUES.malformed) : { kind: 'self' }
 }
@@ -212,9 +227,11 @@ export function automationCapturedHostIssue(
   context: AutomationProjectionContext
 ): AutomationCapturedHostIssue | null {
   const selector = projectAutomationSelector(automation, context)
+
   if (selector.kind !== 'orphan') {
     return null
   }
+
   return isCapturedHostIssue(selector.issue) ? selector.issue : null
 }
 
@@ -229,6 +246,7 @@ export function automationSelectorMatchesScope(
       selector.targetGeneration === scope.expectedTargetGeneration
     )
   }
+
   return selector.kind === scope.kind
 }
 
@@ -241,26 +259,32 @@ export function projectAutomationList(
   const scopedAutomations: Automation[] = []
   const items: AutomationListItem[] = []
   let orphanCount = 0
+
   for (const automation of automations) {
     const selector = projectAutomationSelector(automation, context)
+
     if (selector.kind === 'orphan') {
       orphanCount += 1
     }
+
     if (scope && !automationSelectorMatchesScope(selector, scope)) {
       continue
     }
+
     scopedAutomations.push(automation)
     items.push({
       automationId: automation.id,
       selector
     })
   }
+
   // Keep usage lookups after projection, matching the previous staged pipeline's ordering.
   if (context.usageSummary) {
     for (const item of items) {
       item.usageSummary = context.usageSummary(item.automationId)
     }
   }
+
   return {
     automations: scopedAutomations,
     items,
@@ -295,8 +319,10 @@ export function automationChangePublications(
   if (!before || !after) {
     return [undefined]
   }
+
   const sameHost =
     before.kind === after.kind &&
     (before.kind !== 'ssh' || after.kind !== 'ssh' || before.targetId === after.targetId)
+
   return sameHost ? [after] : [before, after]
 }

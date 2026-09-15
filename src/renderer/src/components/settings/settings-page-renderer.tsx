@@ -70,6 +70,7 @@ export function renderSettingsLoading(
 
 export function renderSettingsPage(context: SettingsRenderContext): React.JSX.Element {
   const { model, interactions, navigation, actions, view } = context
+
   return (
     <div
       ref={interactions.setSettingsRootNode}

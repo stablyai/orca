@@ -16,11 +16,15 @@ vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
+
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 
 const REPO = 'repo-1'
+
 const OTHER_REPO = 'repo-2'
+
 const POOL = MARINE_CREATURES.map((name) => name.toLowerCase())
 
 const REMOTE_REPO = {
@@ -50,6 +54,7 @@ async function reloadStore() {
   // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
+
   return new Store()
 }
 
@@ -60,6 +65,7 @@ async function createStore(persisted: Record<string, unknown> = {}) {
     JSON.stringify({ ...getDefaultPersistedState(testState.dir), ...persisted }),
     'utf-8'
   )
+
   return reloadStore()
 }
 
@@ -133,6 +139,7 @@ describe('worktree name retirement registry', () => {
     const store = await createStore({
       retiredWorktreeNamesByRepo: { [REPO]: ['nautilus', 'seahorse'] }
     })
+
     expect([...store.getRetiredWorktreeNameRegistry(REPO).names].sort()).toEqual([
       'nautilus',
       'seahorse'
@@ -149,6 +156,7 @@ describe('worktree name retirement registry', () => {
     const store = await createStore({
       retiredWorktreeNamesByRepo: { [REPO]: ['nautilus', 42, null, 'Seahorse'] }
     })
+
     expect([...store.getRetiredWorktreeNameRegistry(REPO).names].sort()).toEqual([
       'nautilus',
       'seahorse'
@@ -176,10 +184,13 @@ describe('worktree name retirement registry', () => {
       addedAt: 0,
       connectionId: 'ssh-1'
     }
+
     let store = await createStore()
     store.addRepo(oldRepo)
+
     const { getRetiredNameRegistryForRepo, retireGeneratedWorktreeName } =
       await import('./worktree-name-retirement')
+
     await retireGeneratedWorktreeName(store, oldRepo, store.getSettings(), 'nautilus')
     store.removeProject(REPO)
     store.flush()
@@ -195,6 +206,7 @@ describe('worktree name retirement registry', () => {
 
   it('preserves a Codex-only local retirement across remove and re-add', async () => {
     const workspaceDir = join(testState.dir, 'workspaces')
+
     const oldRepo = {
       id: REPO,
       path: join(testState.dir, 'repos', 'a'),
@@ -202,11 +214,14 @@ describe('worktree name retirement registry', () => {
       badgeColor: '',
       addedAt: 0
     }
+
     const store = await createStore()
     store.updateSettings({ workspaceDir, nestWorkspaces: false })
     store.addRepo(oldRepo)
+
     const { getRetiredNameRegistryForRepo, retireGeneratedWorktreeName } =
       await import('./worktree-name-retirement')
+
     await retireGeneratedWorktreeName(store, oldRepo, store.getSettings(), 'nautilus')
 
     // The deleted workspace has no Claude bucket; Codex rollout files are not backfilled.
@@ -224,8 +239,10 @@ describe('worktree name retirement registry', () => {
     store.addSshTarget(sshTarget('ssh-old'))
     const oldRepo = { ...REMOTE_REPO, connectionId: 'ssh-old' }
     store.addRepo(oldRepo)
+
     const { getRetiredNameRegistryForRepo, retireGeneratedWorktreeName } =
       await import('./worktree-name-retirement')
+
     await retireGeneratedWorktreeName(store, oldRepo, store.getSettings(), 'nautilus')
 
     // Removing and re-adding the host mints a fresh row id for the same machine and account.
@@ -246,8 +263,10 @@ describe('worktree name retirement registry', () => {
     store.addSshTarget(sshTarget('ssh-other', { host: 'other.example.com' }))
     const oldRepo = { ...REMOTE_REPO, connectionId: 'ssh-old' }
     store.addRepo(oldRepo)
+
     const { getRetiredNameRegistryForRepo, retireGeneratedWorktreeName } =
       await import('./worktree-name-retirement')
+
     await retireGeneratedWorktreeName(store, oldRepo, store.getSettings(), 'nautilus')
 
     store.removeProject(REPO)
@@ -270,6 +289,7 @@ describe('worktree name retirement registry', () => {
         }
       }
     })
+
     store.addSshTarget(sshTarget('ssh-new'))
     const repo = { ...REMOTE_REPO, connectionId: 'ssh-old' }
     store.addRepo(repo)
@@ -288,8 +308,10 @@ describe('worktree name retirement registry', () => {
     store.addSshTarget(sshTarget('ssh-old', { configHost: 'builder', host: 'old.example.com' }))
     const repo = { ...REMOTE_REPO, connectionId: 'ssh-old' }
     store.addRepo(repo)
+
     const { getRetiredNameRegistryForRepo, retireGeneratedWorktreeName } =
       await import('./worktree-name-retirement')
+
     await retireGeneratedWorktreeName(store, repo, store.getSettings(), 'nautilus')
 
     // Drop the repo row, so the namespace copy is the only thing left holding the tombstone.
@@ -322,8 +344,10 @@ describe('worktree name retirement registry', () => {
     store.addSshTarget(sshTarget('ssh-1', { configHost: 'builder', host: 'old.example.com' }))
     const repo = { ...REMOTE_REPO, connectionId: 'ssh-1' }
     store.addRepo(repo)
+
     const { getRetiredNameRegistryForRepo, retireGeneratedWorktreeName } =
       await import('./worktree-name-retirement')
+
     await retireGeneratedWorktreeName(store, repo, store.getSettings(), 'nautilus')
 
     // The user edits ~/.ssh/config; the next import refreshes the row in place, same id.
@@ -349,15 +373,19 @@ describe('worktree name retirement registry', () => {
     })
     const repo = { ...REMOTE_REPO, connectionId: runtimeId }
     store.addRepo(repo)
+
     const { retireGeneratedWorktreeName, getRemoteRetirementNamespaceKey } =
       await import('./worktree-name-retirement')
+
     await retireGeneratedWorktreeName(store, repo, store.getSettings(), 'nautilus')
 
     // The repo-id row still records it for the live session; the shared namespace map does not.
     expect(store.getRetiredWorktreeNameRegistry(REPO).names).toEqual(['nautilus'])
+
     const namespaceKey = getRemoteRetirementNamespaceKey(repo, store.getSettings(), (id) =>
       store.getSshTarget(id)
     )!
+
     expect(store.getRetiredWorktreeNameRegistryForNamespace(namespaceKey).names).toEqual([])
   })
 
@@ -372,8 +400,10 @@ describe('worktree name retirement registry', () => {
     })
     const repo = { ...REMOTE_REPO, connectionId: runtimeId }
     store.addRepo(repo)
+
     const { getRetiredNameRegistryForRepo, retireGeneratedWorktreeName } =
       await import('./worktree-name-retirement')
+
     await retireGeneratedWorktreeName(store, repo, store.getSettings(), 'nautilus')
 
     store.updateSshTarget(runtimeId, { host: 'vm-new.example.com' })
@@ -394,8 +424,10 @@ describe('worktree name retirement registry', () => {
     store.addSshTarget(sshTarget('ssh-y', { host: 'old.example.com' }))
     const sibling = { ...REMOTE_REPO, connectionId: 'ssh-y' }
     store.addRepo(sibling)
+
     const { getRetiredNameRegistryForRepo, retireGeneratedWorktreeName } =
       await import('./worktree-name-retirement')
+
     await retireGeneratedWorktreeName(store, sibling, store.getSettings(), 'nautilus')
 
     // `ssh-x` is removed and re-imported with a moved HostName; its alias still matches, so
@@ -429,8 +461,10 @@ describe('worktree name retirement registry', () => {
     const store = await createStore()
     const oldRepo = { ...REMOTE_REPO, connectionId: 'ssh-old' }
     store.addRepo(oldRepo)
+
     const { getRetiredNameRegistryForRepo, retireGeneratedWorktreeName } =
       await import('./worktree-name-retirement')
+
     await retireGeneratedWorktreeName(store, oldRepo, store.getSettings(), 'nautilus')
 
     store.removeProject(REPO)
@@ -446,6 +480,7 @@ describe('worktree name retirement registry', () => {
     // Nothing prunes this map per repo — surviving a project removal is the point — so the store
     // write is the only place the cap can be applied.
     const store = await createStore()
+
     for (let index = 0; index <= MAX_RETIREMENT_NAMESPACES; index += 1) {
       store.mergeRetiredWorktreeNamesForNamespace(`local:posix:/w/${index}`, ['nautilus'])
     }
@@ -528,6 +563,7 @@ describe('worktree name retirement registry', () => {
 
   it('stays bounded by one pool no matter how many tiers are spent', async () => {
     const store = await createStore()
+
     for (let tier = 1; tier <= 6; tier += 1) {
       store.mergeRetiredWorktreeNames(
         REPO,
@@ -589,6 +625,7 @@ describe('worktree name retirement registry', () => {
     const store = await createStore({
       retiredWorktreeNamesByRepo: { [REPO]: ['fix-login', 'Nautilus'] }
     })
+
     expect(store.getRetiredWorktreeNameRegistry(REPO).names).toEqual(['nautilus'])
   })
 })

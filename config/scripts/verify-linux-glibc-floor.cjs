@@ -1,5 +1,7 @@
 const { readdirSync, openSync, readSync, closeSync } = require('node:fs')
+
 const { spawnSync } = require('node:child_process')
+
 const { join, relative } = require('node:path')
 
 // Why: v1.4.150 shipped a Linux build whose node-pty pty.node required
@@ -21,6 +23,7 @@ const VERSION_FLOORS = Object.freeze([
   Object.freeze({ prefix: 'GLIBCXX_', floor: Object.freeze([3, 4, 28]) }),
   Object.freeze({ prefix: 'CXXABI_', floor: Object.freeze([1, 3, 12]) })
 ])
+
 const FLOOR_LABEL = 'Ubuntu 20.04 (glibc 2.31 / libstdc++ GLIBCXX_3.4.28)'
 
 // Why: the sherpa-onnx speech prebuilt is a third-party manylinux binary that
@@ -44,12 +47,15 @@ function parseGlibcVersion(versionStr) {
 /** Compare two numeric version tuples; missing trailing parts are 0. */
 function compareGlibcVersions(a, b) {
   const length = Math.max(a.length, b.length)
+
   for (let i = 0; i < length; i += 1) {
     const diff = (a[i] ?? 0) - (b[i] ?? 0)
+
     if (diff !== 0) {
       return diff < 0 ? -1 : 1
     }
   }
+
   return 0
 }
 
@@ -65,30 +71,38 @@ function parseVersionNeeds(objdumpOutput) {
   const needs = []
   let library = null
   let inSection = false
+
   for (const line of objdumpOutput.split('\n')) {
     if (line.startsWith('Version References:')) {
       inSection = true
       continue
     }
+
     if (!inSection) {
       continue
     }
+
     // Any new non-indented line ends the Version References block.
     if (!/^\s/.test(line)) {
       inSection = false
       continue
     }
+
     const libraryMatch = line.match(/^\s+required from (\S+):/)
+
     if (libraryMatch) {
       library = libraryMatch[1]
       continue
     }
+
     const entryMatch = line.match(/^\s+0x[0-9a-fA-F]+\s+0x([0-9a-fA-F]+)\s+\d+\s+(\S+)/)
+
     if (entryMatch) {
       const flags = Number.parseInt(entryMatch[1], 16)
       needs.push({ library, name: entryMatch[2], weak: (flags & VER_FLG_WEAK) !== 0 })
     }
   }
+
   return needs
 }
 
@@ -107,13 +121,17 @@ function isVersionNodeAboveFloor(name) {
     if (!name.startsWith(prefix)) {
       continue
     }
+
     const rest = name.slice(prefix.length)
+
     if (/^[0-9]+(?:\.[0-9]+)*$/.test(rest)) {
       return compareGlibcVersions(parseGlibcVersion(rest), floor) > 0
     }
+
     // Non-numeric suffix: reject every glibc node (ABI markers and PRIVATE).
     return prefix === 'GLIBC_'
   }
+
   return false
 }
 
@@ -128,6 +146,7 @@ function isLibstdcxxNode(name) {
  */
 function findFloorViolations(needs, filePath = '') {
   const exemptLibstdcxx = LIBSTDCXX_FLOOR_EXEMPT.test(filePath)
+
   return needs.filter(
     (need) =>
       !need.weak &&
@@ -156,16 +175,19 @@ const RELOCATED_SYMBOL_PROVIDERS = Object.freeze({
  */
 function findMissingProviderDeps(importedSymbols, neededLibraries) {
   const missing = []
+
   for (const [symbol, library] of Object.entries(RELOCATED_SYMBOL_PROVIDERS)) {
     if (importedSymbols.has(symbol) && !neededLibraries.has(library)) {
       missing.push({ symbol, library })
     }
   }
+
   return missing
 }
 
 // ELF e_machine values for the Linux slices we package. Names match electron-builder's Arch enum.
 const ELF_MACHINE_BY_ARCH = Object.freeze({ x64: 0x3e, arm64: 0xb7 })
+
 const ARCH_BY_ELF_MACHINE = Object.freeze({ 0x3e: 'x64', 0xb7: 'arm64' })
 
 /**
@@ -179,16 +201,20 @@ const ARCH_BY_ELF_MACHINE = Object.freeze({ 0x3e: 'x64', 0xb7: 'arm64' })
  */
 function readElfMachine(filePath) {
   let fd
+
   try {
     fd = openSync(filePath, 'r')
     const header = Buffer.alloc(20)
+
     if (readSync(fd, header, 0, 20, 0) !== 20) {
       return null
     }
+
     // EI_DATA (offset 5) must be ELFDATA2LSB for a little-endian e_machine read.
     if (header[5] !== 1) {
       return null
     }
+
     return header.readUInt16LE(18)
   } catch {
     return null
@@ -201,6 +227,7 @@ function readElfMachine(filePath) {
 
 // Arch tokens that appear in vendored per-architecture package/directory names.
 const ARCH_TOKEN_PATTERN = /(?:^|[^a-z0-9])(arm64|aarch64|x64|x86_64)(?:[^a-z0-9]|$)/i
+
 const ARCH_BY_TOKEN = Object.freeze({ arm64: 'arm64', aarch64: 'arm64', x64: 'x64', x86_64: 'x64' })
 
 /**
@@ -212,6 +239,7 @@ const ARCH_BY_TOKEN = Object.freeze({ arm64: 'arm64', aarch64: 'arm64', x64: 'x6
  */
 function declaredArchFromPath(filePath) {
   const match = ARCH_TOKEN_PATTERN.exec(filePath)
+
   return match ? ARCH_BY_TOKEN[match[1].toLowerCase()] : null
 }
 
@@ -221,13 +249,17 @@ function findArchViolation(filePath, targetArch) {
   const declared = declaredArchFromPath(filePath)
   const expectedArch = declared ?? targetArch
   const expected = ELF_MACHINE_BY_ARCH[expectedArch]
+
   if (expected === undefined) {
     return null
   }
+
   const machine = readElfMachine(filePath)
+
   if (machine === null || machine === expected) {
     return null
   }
+
   return {
     machine,
     actual: ARCH_BY_ELF_MACHINE[machine] ?? `0x${machine.toString(16)}`,
@@ -238,10 +270,12 @@ function findArchViolation(filePath, targetArch) {
 
 function isElfFile(filePath) {
   let fd
+
   try {
     fd = openSync(filePath, 'r')
     const header = Buffer.alloc(4)
     const bytesRead = readSync(fd, header, 0, 4, 0)
+
     return bytesRead === 4 && header[0] === 0x7f && header.toString('latin1', 1, 4) === 'ELF'
   } catch {
     return false
@@ -255,29 +289,37 @@ function isElfFile(filePath) {
 /** Recursively collect ELF native binaries (`.node`, `.so[.N]`, executables). */
 function collectNativeBinaries(rootDir) {
   const binaries = []
+
   const walk = (dir) => {
     let entries
+
     try {
       entries = readdirSync(dir, { withFileTypes: true })
     } catch {
       return
     }
+
     for (const entry of entries) {
       const fullPath = join(dir, entry.name)
+
       if (entry.isSymbolicLink()) {
         continue
       }
+
       if (entry.isDirectory()) {
         walk(fullPath)
         continue
       }
+
       if (!entry.isFile()) {
         continue
       }
+
       // Why: .node/.so are always native; extensionless files (the Electron
       // executable, chrome-sandbox) are checked via the ELF magic so we cover
       // every launch-critical binary without objdump-ing app.asar or assets.
       const looksNative = entry.name.endsWith('.node') || /\.so(\.\d+)*$/.test(entry.name)
+
       if (looksNative || !entry.name.includes('.')) {
         if (isElfFile(fullPath)) {
           binaries.push(fullPath)
@@ -285,18 +327,23 @@ function collectNativeBinaries(rootDir) {
       }
     }
   }
+
   walk(rootDir)
+
   return binaries.sort()
 }
 
 function resolveObjdump(explicitPath) {
   const candidates = [explicitPath, 'objdump', 'llvm-objdump'].filter(Boolean)
+
   for (const candidate of candidates) {
     const probe = spawnSync(candidate, ['--version'], { encoding: 'utf8', env: cLocaleEnv() })
+
     if (!probe.error && probe.status === 0) {
       return candidate
     }
   }
+
   return null
 }
 
@@ -320,51 +367,62 @@ function runObjdump(objdumpPath, flag, filePath) {
     maxBuffer: 64 * 1024 * 1024,
     env: cLocaleEnv()
   })
+
   if (result.error) {
     throw new Error(
       `[verify-linux-glibc-floor] could not run objdump on ${filePath}: ${result.error.message}`
     )
   }
+
   if (result.signal || result.status !== 0) {
     throw new Error(
       `[verify-linux-glibc-floor] objdump ${flag} failed for ${filePath} ` +
         `(status ${result.status}, signal ${result.signal ?? 'none'}): ${(result.stderr || '').trim()}`
     )
   }
+
   return result.stdout || ''
 }
 
 /** DT_NEEDED shared-library names from `objdump -p` (`  NEEDED  <lib>`). */
 function parseNeededLibraries(objdumpOutput) {
   const needed = new Set()
+
   for (const line of objdumpOutput.split('\n')) {
     const match = line.match(/^\s+NEEDED\s+(\S+)/)
+
     if (match) {
       needed.add(match[1])
     }
   }
+
   return needed
 }
 
 /** Undefined (imported) dynamic symbol base names from `objdump -T` (`*UND*`). */
 function parseImportedSymbols(objdumpOutput) {
   const imported = new Set()
+
   for (const line of objdumpOutput.split('\n')) {
     if (!line.includes('*UND*')) {
       continue
     }
+
     // The symbol name is the final token; strip any @VERSION suffix.
     const token = line.trim().split(/\s+/).pop()
+
     if (token) {
       imported.add(token.split('@')[0])
     }
   }
+
   return imported
 }
 
 /** Version needs + DT_NEEDED from a single `objdump -p` (fail-closed). */
 function readDynamicInfo(filePath, objdumpPath) {
   const output = runObjdump(objdumpPath, '-p', filePath)
+
   return {
     versionNeeds: parseVersionNeeds(output),
     neededLibraries: parseNeededLibraries(output)
@@ -385,14 +443,17 @@ function readImportedSymbols(filePath, objdumpPath) {
 function verifyLinuxGlibcFloor(rootDir, options = {}) {
   const binaries = collectNativeBinaries(rootDir)
   const targetArch = options.targetArch
+
   if (binaries.length === 0) {
     console.log(`[verify-linux-glibc-floor] OK — no bundled native binaries under ${rootDir}`)
+
     return
   }
 
   // Why: resolve objdump only once there is something to inspect, so a fixture
   // with no ELF binaries does not fail on a host that lacks binutils.
   const objdumpPath = resolveObjdump(options.objdumpPath)
+
   if (!objdumpPath) {
     throw new Error(
       '[verify-linux-glibc-floor] objdump not found. Install binutils on the Linux ' +
@@ -405,6 +466,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
   const archOffenders = binaries
     .map((filePath) => ({ filePath, violation: findArchViolation(filePath, targetArch) }))
     .filter(({ violation }) => violation !== null)
+
   if (archOffenders.length > 0) {
     const detail = archOffenders
       .map(
@@ -413,6 +475,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
           `${violation.expectedArch}${violation.declared ? ' (from its own path)' : ''}`
       )
       .join('\n')
+
     throw new Error(
       `[verify-linux-glibc-floor] ${archOffenders.length} bundled native binar` +
         `${archOffenders.length === 1 ? 'y is' : 'ies are'} built for the wrong architecture ` +
@@ -423,9 +486,11 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
   }
 
   const offenders = []
+
   for (const filePath of binaries) {
     const { versionNeeds, neededLibraries } = readDynamicInfo(filePath, objdumpPath)
     const floorViolations = findFloorViolations(versionNeeds, filePath)
+
     // Only pay for `objdump -T` when a relocated-symbol provider is not already
     // in DT_NEEDED (the common, healthy case short-circuits without it).
     const providerViolations = Object.values(RELOCATED_SYMBOL_PROVIDERS).some(
@@ -433,6 +498,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
     )
       ? findMissingProviderDeps(readImportedSymbols(filePath, objdumpPath), neededLibraries)
       : []
+
     if (floorViolations.length > 0 || providerViolations.length > 0) {
       offenders.push({ filePath, floorViolations, providerViolations })
     }
@@ -442,6 +508,7 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
     const detail = offenders
       .map(({ filePath, floorViolations, providerViolations }) => {
         const reasons = []
+
         if (floorViolations.length > 0) {
           const nodes = [...new Set(floorViolations.map((v) => v.name))].sort()
           const libraries = [...new Set(floorViolations.map((v) => v.library).filter(Boolean))]
@@ -449,12 +516,15 @@ function verifyLinuxGlibcFloor(rootDir, options = {}) {
             `needs ${nodes.join(', ')}${libraries.length > 0 ? ` (from ${libraries.join(', ')})` : ''}`
           )
         }
+
         for (const { symbol, library } of providerViolations) {
           reasons.push(`imports ${symbol} but ${library} is not in DT_NEEDED`)
         }
+
         return `  ${relative(rootDir, filePath) || filePath} ${reasons.join('; ')}`
       })
       .join('\n')
+
     throw new Error(
       `[verify-linux-glibc-floor] ${offenders.length} bundled native binar${offenders.length === 1 ? 'y' : 'ies'} ` +
         `will not load on ${FLOOR_LABEL}, so the app will crash on startup there:\n${detail}\n` +

@@ -27,10 +27,12 @@ describe('agent prompt receipt correlation', () => {
 
   it('assigns historical lifecycle edges to queued receipts in FIFO order', async () => {
     vi.useFakeTimers()
+
     const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
       () => undefined,
       'codex'
     )
+
     runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
 
     const firstPromise = runtime.sendTerminalAgentPrompt(handle, 'first prompt', {
@@ -38,13 +40,16 @@ describe('agent prompt receipt correlation', () => {
       requestId: 'historical-first',
       observationTimeoutMs: 0
     })
+
     await vi.runAllTimersAsync()
     const first = await firstPromise
+
     const secondPromise = runtime.sendTerminalAgentPrompt(handle, 'second prompt', {
       acceptQueued: true,
       requestId: 'historical-second',
       observationTimeoutMs: 0
     })
+
     await vi.runAllTimersAsync()
     const second = await secondPromise
 

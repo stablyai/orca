@@ -13,9 +13,11 @@ export function buildWorktreeCreationStartupOpt(
   backendSpawned: boolean
 ): WorktreeStartupPayload | undefined {
   const plan = request.startupPlan
+
   if (!plan || backendSpawned) {
     return undefined
   }
+
   return {
     command: plan.launchCommand,
     ...(plan.env ? { env: plan.env } : {}),
@@ -40,6 +42,7 @@ export function getWorktreeCreationIndeterminate(request: WorktreeCreationReques
   if (request.worktreeCreateProgressMode) {
     return request.worktreeCreateProgressMode === 'indeterminate'
   }
+
   return getActiveRuntimeTarget(useAppStore.getState().settings).kind !== 'local'
 }
 

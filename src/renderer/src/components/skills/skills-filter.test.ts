@@ -43,6 +43,7 @@ describe('skills filtering', () => {
       ['/home/dev/.codex/skills', 'codex'],
       ['/repo/.claude/skills', 'claude']
     ])
+
     expect(
       filterSkills(skills, { query: 'docs', agent: 'claude', sourceKind: 'repo' }, agentByRootPath)
     ).toEqual([])
@@ -57,6 +58,7 @@ describe('skills filtering', () => {
 
   it('rejects oversized pasted queries before reading skill metadata', () => {
     const oversizedQuery = 'secret-skill-filter'.repeat(SKILLS_FILTER_QUERY_MAX_BYTES)
+
     const throwingSkills = [
       {
         get sourceKind(): DiscoveredSkill['sourceKind'] {

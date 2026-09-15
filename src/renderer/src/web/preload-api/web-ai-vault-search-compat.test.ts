@@ -3,10 +3,13 @@ import { searchResults } from '../../../../shared/ai-vault-search-test-fixture'
 import { unavailableSessionSearchStatus } from '../../../../shared/ai-vault-search-client'
 
 const callRuntimeResult = vi.hoisted(() => vi.fn())
+
 vi.mock('./web-runtime-calls', () => ({ callRuntimeResult }))
+
 vi.mock('./web-runtime-session', () => ({
   requireActiveEnvironment: () => ({ id: 'owning-host' })
 }))
+
 import { createWebAiVaultApi } from './web-ai-vault-api'
 
 beforeEach(() => {
@@ -54,13 +57,16 @@ describe('web session search preload compatibility', () => {
   it('answers for its own runtime and reports any other host unavailable', async () => {
     const api = createWebAiVaultApi()
     callRuntimeResult.mockResolvedValue(searchResults())
+
     for (const scope of ['runtime:owning-host'] as const) {
       expect(await api.searchSessions({ query: 'needle' }, scope)).toMatchObject({
         kind: 'results'
       })
     }
+
     expect(callRuntimeResult).toHaveBeenCalledTimes(1)
     callRuntimeResult.mockClear()
+
     for (const scope of ['runtime:other-host', 'ssh:box', 'local'] as const) {
       expect(await api.searchSessions({ query: 'needle' }, scope)).toEqual({
         kind: 'unavailable',
@@ -68,6 +74,7 @@ describe('web session search preload compatibility', () => {
       })
       expect(await api.searchStatus(scope)).toEqual(unavailableSessionSearchStatus())
     }
+
     // @ts-expect-error All-host search is deliberately outside the public API.
     expect(await api.searchSessions({ query: 'needle' }, 'all')).toEqual({
       kind: 'unavailable',

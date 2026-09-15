@@ -15,6 +15,7 @@ describe('orchestration worker-list Run scope (runtime)', () => {
 
   function createDispatchInRun(runId: string, handle: string): string {
     const task = h.db.createTask({ spec: `task for ${handle}`, runId })
+
     return createRootDispatch(h.db, task.id, handle).id
   }
 
@@ -33,12 +34,14 @@ describe('orchestration worker-list Run scope (runtime)', () => {
     const current = (await h.call('orchestration.runCurrent', { from: 'term_coord' })) as {
       run: { id: string } | null
     }
+
     expect(current.run?.id).toBe(h.activeRunId)
 
     const listed = (await h.call('orchestration.workerList', {
       paginate: true,
       run: current.run!.id
     })) as WorkerListReceipt
+
     expect(listed.workers.map((worker) => worker.dispatchId)).toEqual([boundDispatch])
     expect(listed.workers.map((worker) => worker.dispatchId)).not.toContain(otherDispatch)
   })
@@ -55,6 +58,7 @@ describe('orchestration worker-list Run scope (runtime)', () => {
     const listed = (await h.call('orchestration.workerList', {
       paginate: true
     })) as WorkerListReceipt
+
     expect(listed.workers.map((worker) => worker.dispatchId).sort()).toEqual(
       [boundDispatch, otherDispatch].sort()
     )

@@ -35,9 +35,11 @@ export function NativeChatCopyButton({
     try {
       await window.api.ui.writeClipboardText(text)
       setCopied(true)
+
       if (resetTimerRef.current !== null) {
         window.clearTimeout(resetTimerRef.current)
       }
+
       resetTimerRef.current = window.setTimeout(() => {
         resetTimerRef.current = null
         setCopied(false)

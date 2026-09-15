@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
 
 const handlers = new Map<string, (_event: unknown, args: { runtimeId: string }) => unknown>()
+
 const { getPathMock, handleMock, removeRuntimeOwnedSshTargetMock, removeHandlerMock } = vi.hoisted(
   () => ({
     getPathMock: vi.fn(),
@@ -136,7 +137,9 @@ it('stops in-flight cleanup and retains the runtime for retry', async () => {
   const cleanup = handlers.get('ephemeralVm:cleanup')?.(null, {
     runtimeId: 'runtime-stop'
   }) as Promise<{ status: string }>
+
   await vi.waitFor(() => expect(existsSync(destroyStartedPath)).toBe(true))
+
   const stopped = await handlers.get('ephemeralVm:stopCleanup')?.(null, {
     runtimeId: 'runtime-stop'
   })

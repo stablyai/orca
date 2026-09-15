@@ -22,16 +22,20 @@ export function createUpdatePendingWorktreeCreation(
   return (creationId, patch) => {
     set((s) => {
       const entry = s.pendingWorktreeCreations[creationId]
+
       if (!entry) {
         return s
       }
+
       // Why: the main process re-emits the same phase; skip no-op writes so the strip and panel don't re-render.
       const hasChange = (Object.keys(patch) as (keyof typeof patch)[]).some(
         (key) => patch[key] !== entry[key]
       )
+
       if (!hasChange) {
         return s
       }
+
       return {
         pendingWorktreeCreations: {
           ...s.pendingWorktreeCreations,
@@ -50,28 +54,35 @@ export function createRemovePendingWorktreeCreation(
     let removedEntry: AppState['pendingWorktreeCreations'][string] | undefined
     set((s) => {
       const entry = s.pendingWorktreeCreations[creationId]
+
       if (!entry) {
         return s
       }
+
       removedEntry = entry
       const { [creationId]: _removed, ...rest } = s.pendingWorktreeCreations
+
       return {
         pendingWorktreeCreations: rest,
         // Why: only clear the active surface if it pointed here, so dismissing a background creation doesn't yank the user away.
         ...(s.activePendingCreationId === creationId ? { activePendingCreationId: null } : {})
       }
     })
+
     if (!removedEntry || options?.cleanupVm === false || typeof window === 'undefined') {
       return
     }
+
     if (removedEntry.phase === 'provisioning-vm' && window.api?.ephemeralVm?.cancelProvision) {
       void window.api.ephemeralVm
         .cancelProvision({ provisionId: creationId })
         .catch(() => undefined)
     }
+
     if (!removedEntry.request.ephemeralVmRuntimeId || !window.api?.ephemeralVm?.cleanup) {
       return
     }
+
     void cleanupFailedEphemeralVmWorkspace(removedEntry.request, {
       deleteProjectHostSetup: (setupId) => get().deleteProjectHostSetup({ setupId }),
       cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
@@ -92,6 +103,7 @@ export function createSetActivePendingWorktreeCreation(
       if (creationId !== null && !s.pendingWorktreeCreations[creationId]) {
         return s
       }
+
       return { activePendingCreationId: creationId }
     })
   }

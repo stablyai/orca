@@ -97,10 +97,12 @@ describe('handleInternalTerminalFileDrop', () => {
   it('pastes every selected internal file path with shell spacing', async () => {
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
+
     const manager = {
       getActivePane: () => ({ id: 1, leafId: 'leaf-1', terminal: { focus } }),
       getPanes: () => []
     }
+
     const paths = ['/repo/a.ts', '/repo/my file.ts']
 
     const result = await handleInternalTerminalFileDrop({
@@ -126,16 +128,21 @@ describe('handleInternalTerminalFileDrop', () => {
     const replacementSendInput = vi.fn(() => true)
     const paneTransports = new Map<number, ReturnType<typeof createTerminalTransport>>()
     const replacementTransport = createTerminalTransport(replacementSendInput, 'pty-2')
+
     const sendInputAccepted = vi.fn(async () => {
       paneTransports.set(1, replacementTransport)
+
       return true
     })
+
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
     }
+
     const originalTransport = createTerminalTransport(sendInput, 'pty-1', sendInputAccepted)
     paneTransports.set(1, originalTransport)
 
@@ -167,6 +174,7 @@ describe('handleInternalTerminalFileDrop', () => {
     const sendInput = vi.fn(() => true)
     const sendInputAccepted = vi.fn(async () => true)
     const focus = vi.fn()
+
     const manager = {
       getActivePane: () => ({ id: 1, leafId: 'leaf-1', terminal: { focus } }),
       getPanes: () => []
@@ -198,6 +206,7 @@ describe('handleInternalTerminalFileDrop', () => {
     mocks.storeState.repos = []
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
+
     const manager = {
       getActivePane: () => ({ id: 1, leafId: 'leaf-1', terminal: { focus } }),
       getPanes: () => []
@@ -236,6 +245,7 @@ describe('handleInternalTerminalFileDrop', () => {
     }
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
+
     const manager = {
       getActivePane: () => ({ id: 1, leafId: 'leaf-1', terminal: { focus } }),
       getPanes: () => []
@@ -273,6 +283,7 @@ describe('handleInternalTerminalFileDrop', () => {
     mocks.storeState.sshConnectionStates = new Map([['ssh-win', { remotePlatform: 'win32' }]])
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
+
     const manager = {
       getActivePane: () => ({ id: 1, leafId: 'leaf-1', terminal: { focus } }),
       getPanes: () => []
@@ -314,6 +325,7 @@ describe('handleInternalTerminalFileDrop', () => {
     mocks.storeState.sshConnectionStates = new Map([['ssh-linux', { remotePlatform: 'linux' }]])
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
+
     const manager = {
       getActivePane: () => ({ id: 1, leafId: 'leaf-1', terminal: { focus } }),
       getPanes: () => []
@@ -344,23 +356,27 @@ describe('handleInternalTerminalFileDrop', () => {
     const targetSendInput = vi.fn(() => true)
     const activeFocus = vi.fn()
     const targetFocus = vi.fn()
+
     const dropTarget: EventTarget = {
       addEventListener: vi.fn(),
       dispatchEvent: vi.fn(() => true),
       removeEventListener: vi.fn()
     }
+
     const activePane = {
       id: 1,
       leafId: 'leaf-active',
       terminal: { focus: activeFocus },
       container: { contains: vi.fn(() => false) }
     }
+
     const targetPane = {
       id: 2,
       leafId: 'leaf-target',
       terminal: { focus: targetFocus },
       container: { contains: vi.fn((target) => target === dropTarget) }
     }
+
     const manager = {
       getActivePane: () => activePane,
       getPanes: () => [activePane, targetPane]
@@ -395,10 +411,12 @@ describe('handleInternalTerminalFileDrop', () => {
   it('rejects too many internal paths before writing terminal input', async () => {
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
+
     const manager = {
       getActivePane: () => ({ id: 1, leafId: 'leaf-1', terminal: { focus } }),
       getPanes: () => []
     }
+
     const paths = Array.from({ length: 257 }, (_value, index) =>
       ['/repo/secret-', String(index), '.txt'].join('')
     )

@@ -26,8 +26,10 @@ export async function rerunPullRequestChecks(args: {
   if (!args.canUseChecksRepoContext || args.rerunning) {
     return
   }
+
   const rerunContextOwner = args.committedChecksContextOwnerRef.current
   args.setRerunningOwner(rerunContextOwner)
+
   try {
     const result = args.runtimeHost
       ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.rerunPRChecks>>>(
@@ -51,16 +53,20 @@ export async function rerunPullRequestChecks(args: {
           failedOnly: args.failedOnly,
           prRepo: args.prRepo
         })
+
     if (
       !args.mountedRef.current ||
       args.committedChecksContextOwnerRef.current !== rerunContextOwner
     ) {
       return
     }
+
     if (!result.ok) {
       toast.error(result.error)
+
       return
     }
+
     toast.success(
       result.count === 1
         ? translate('auto.components.PullRequestPage.5963a6a852', 'Check rerun requested')

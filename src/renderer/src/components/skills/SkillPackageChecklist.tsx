@@ -14,6 +14,7 @@ import { isSkillBinaryFile, isSkillRunnableFile } from './skill-package-install-
 function FileRow({ file }: { file: SkillChecklistFile }): React.JSX.Element {
   const binary = isSkillBinaryFile(file)
   const runnable = isSkillRunnableFile(file)
+
   const tags = [
     binary ? translate('auto.components.skills.install.fileBinary', 'binary') : null,
     runnable
@@ -22,6 +23,7 @@ function FileRow({ file }: { file: SkillChecklistFile }): React.JSX.Element {
         : translate('auto.components.skills.install.fileRunnable', 'runnable')
       : null
   ].filter(Boolean)
+
   return (
     <li className="flex items-baseline gap-2 text-[11px]">
       <span className="min-w-0 flex-1 break-all font-mono" title={file.path}>
@@ -49,9 +51,11 @@ function ChecklistRow({
   onSelectedChange?: (selected: boolean) => void
 }): React.JSX.Element {
   const summary = checklistItemSummary(item.files)
+
   const description =
     item.description ||
     translate('auto.components.skills.SkillsPage.9963dff6d3', 'No description found.')
+
   return (
     <li>
       {/* Why: the description stays on the row and simply unclamps when the row

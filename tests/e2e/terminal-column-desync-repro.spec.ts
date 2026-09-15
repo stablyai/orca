@@ -56,14 +56,17 @@ async function readRenderedTerminalCols(page: Page): Promise<number> {
     const store = window.__store
     const state = store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     return pane?.terminal?.cols ?? 0
   })
 }
@@ -83,6 +86,7 @@ async function readRenderedColsForPty(page: Page, ptyId: string): Promise<number
         }
       }
     }
+
     return 0
   }, ptyId)
 }
@@ -93,6 +97,7 @@ async function readRenderedColsForPty(page: Page, ptyId: string): Promise<number
 async function readReportedPtyCols(page: Page, ptyId: string): Promise<number> {
   return page.evaluate(async (ptyId) => {
     const size = await window.api?.pty?.getSize?.(ptyId)
+
     return size?.cols ?? 0
   }, ptyId)
 }
@@ -102,16 +107,20 @@ type ColumnSnapshot = { xtermCols: number; ptyCols: number }
 async function readColumnSnapshot(page: Page, ptyId: string): Promise<ColumnSnapshot> {
   const xtermCols = await readRenderedTerminalCols(page)
   const ptyCols = await readPtyCols(page, ptyId)
+
   return { xtermCols, ptyCols }
 }
 
 async function closeRightSidebarAndFeatureTips(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       return
     }
+
     store.getState().markFeatureTipsSeen(['orca-cli', 'cmd-j-palette', 'voice-dictation'])
+
     if (store.getState().rightSidebarOpen) {
       store.getState().setRightSidebarOpen(false)
     }
@@ -122,6 +131,7 @@ async function settleTerminal(page: Page): Promise<string> {
   await waitForActiveTerminalManager(page, 30_000)
   const ptyId = await waitForActivePanePtyId(page)
   await waitForPtyShellEcho(page, ptyId, 15_000)
+
   return ptyId
 }
 
@@ -143,6 +153,7 @@ test.describe('Terminal column desync repro', () => {
         .poll(
           async () => {
             const snap = await readColumnSnapshot(orcaPage, ptyId)
+
             return snap.ptyCols === snap.xtermCols
               ? 'synced'
               : `pty=${snap.ptyCols} xterm=${snap.xtermCols}`
@@ -189,6 +200,7 @@ test.describe('Terminal column desync repro', () => {
         async () => {
           const ptyCols = await readPtyCols(orcaPage, ptyId)
           const reportedCols = await readReportedPtyCols(orcaPage, ptyId)
+
           return reportedCols === ptyCols ? 'match' : `reported=${reportedCols} pty=${ptyCols}`
         },
         {
@@ -207,6 +219,7 @@ test.describe('Terminal column desync repro', () => {
     const homeWorktreeId = await waitForActiveWorktree(orcaPage)
     const otherWorktreeId = (await getAllWorktreeIds(orcaPage)).find((id) => id !== homeWorktreeId)
     test.skip(!otherWorktreeId, 'hidden-resize repro needs the seeded secondary worktree')
+
     if (!otherWorktreeId) {
       return
     }
@@ -249,6 +262,7 @@ test.describe('Terminal column desync repro', () => {
       !otherWorktreeId,
       'repeated background-resize repro needs the seeded secondary worktree'
     )
+
     if (!otherWorktreeId) {
       return
     }
@@ -261,6 +275,7 @@ test.describe('Terminal column desync repro', () => {
     // need repetition: each cycle is a fresh chance for the resume-time
     // correction to miss and leave the PTY pinned at a stale column count.
     const widths = [700, 1320, 640, 1180, 600]
+
     for (const [index, width] of widths.entries()) {
       await switchToWorktree(orcaPage, otherWorktreeId)
       await waitForActiveTerminalManager(orcaPage, 30_000)
@@ -303,6 +318,7 @@ test.describe('Terminal column desync repro', () => {
       .poll(
         async () => {
           const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
+
           return snapshot.panes
             .map((pane) => pane.ptyId)
             .filter((ptyId): ptyId is string => Boolean(ptyId))
@@ -315,9 +331,11 @@ test.describe('Terminal column desync repro', () => {
     for (const pane of snapshot.panes) {
       const ptyId = pane.ptyId
       expect(ptyId, 'split pane should be bound to a PTY').toBeTruthy()
+
       if (!ptyId) {
         continue
       }
+
       const ptyCols = await readPtyCols(orcaPage, ptyId)
       const xtermCols = await readRenderedColsForPty(orcaPage, ptyId)
       expect(
@@ -382,11 +400,14 @@ test.describe('Terminal column desync repro', () => {
       for (const pane of snapshot.panes) {
         const ptyId = pane.ptyId
         expect(ptyId, 'restored split pane should be bound to a PTY').toBeTruthy()
+
         if (!ptyId) {
           continue
         }
+
         const ptyCols = await readPtyCols(orcaPage, ptyId)
         const xtermCols = await readRenderedColsForPty(orcaPage, ptyId)
+
         if (ptyCols !== xtermCols) {
           desyncs.push({ attempt, ptyId, ptyCols, xtermCols })
         }
@@ -424,6 +445,7 @@ test.describe('Terminal column desync repro', () => {
     // the attempts desynced, so a single stale PTY fails the test.
     const MOUNT_ATTEMPTS = 8
     const desyncs: { attempt: number; ptyCols: number; xtermCols: number }[] = []
+
     for (let attempt = 0; attempt < MOUNT_ATTEMPTS; attempt += 1) {
       if (attempt > 0) {
         // Re-run the first-mount path: a wide window, then reload so the
@@ -432,6 +454,7 @@ test.describe('Terminal column desync repro', () => {
         await orcaPage.reload()
         await orcaPage.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
       }
+
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
       await closeRightSidebarAndFeatureTips(orcaPage)
@@ -445,6 +468,7 @@ test.describe('Terminal column desync repro', () => {
       await orcaPage.waitForTimeout(700)
 
       const snapshot = await readColumnSnapshot(orcaPage, ptyId)
+
       if (snapshot.ptyCols !== snapshot.xtermCols) {
         desyncs.push({ attempt, ptyCols: snapshot.ptyCols, xtermCols: snapshot.xtermCols })
       }

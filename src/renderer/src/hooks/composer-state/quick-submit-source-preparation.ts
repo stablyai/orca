@@ -39,6 +39,7 @@ export function useQuickSubmitSourcePreparation(input: QuickSubmitSourcePreparat
     parsedLinkedIssueNumber,
     pushTarget
   } = input
+
   const { isExplicitWorkspaceNameInput, resolveSmartGitHubCreateNames } = decisions
 
   const prepareQuickSubmitSource = useCallback(

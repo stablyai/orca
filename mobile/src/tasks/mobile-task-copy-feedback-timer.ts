@@ -8,6 +8,7 @@ export function clearMobileTaskCopyFeedbackTimer(timerRef: MobileTaskCopyFeedbac
   if (timerRef.current === null) {
     return
   }
+
   clearTimeout(timerRef.current)
   timerRef.current = null
 }

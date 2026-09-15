@@ -28,6 +28,7 @@ export class MobileRelayBackgroundGraceTimer {
       if (generation !== this.generation || this.deadlineAt === null) {
         return
       }
+
       this.timer = null
       this.deadlineAt = null
       this.onExpired()
@@ -37,12 +38,14 @@ export class MobileRelayBackgroundGraceTimer {
   consumeExpired(): boolean {
     const expired = this.deadlineAt !== null && this.dependencies.now() >= this.deadlineAt
     this.clear()
+
     return expired
   }
 
   clear(): void {
     this.generation += 1
     this.deadlineAt = null
+
     if (this.timer !== null) {
       this.dependencies.clearTimer(this.timer)
       this.timer = null
@@ -51,7 +54,9 @@ export class MobileRelayBackgroundGraceTimer {
 }
 
 type Clearable = { clear(): void }
+
 type DirectProbe = Clearable & { schedule(delayMs?: number): void }
+
 type DirectGrace = Clearable & { arm(): void }
 
 export class MobileRelayBackgroundGrace {
@@ -77,6 +82,7 @@ export class MobileRelayBackgroundGrace {
   setForeground(foreground: boolean): void {
     const wasForeground = this.foregroundState
     this.foregroundState = foreground
+
     if (foreground) {
       this.foreground()
       this.relayReconnect.handleForeground(this.logical, wasForeground)
@@ -98,6 +104,7 @@ export class MobileRelayBackgroundGrace {
 
   handleStateFailure(): void {
     this.timer.clear()
+
     if (this.logical.getActivePath() === 'relay') {
       this.suspendRelay()
     }
@@ -105,17 +112,23 @@ export class MobileRelayBackgroundGrace {
 
   private background(): void {
     this.retainedRelaySuspended = false
+
     const retainsRelay =
       this.logical.getActivePath() === 'relay' && this.logical.getState() === 'connected'
+
     this.directProbe.clear()
     this.directGrace.clear()
     this.logical.setRecoveryPath(null)
+
     if (retainsRelay) {
       this.timer.arm()
+
       return
     }
+
     this.relayReconnect.clear()
     this.leaseRotation.clear()
+
     if (this.logical.getActivePath() === 'relay') {
       this.suspendRelay()
     }
@@ -131,6 +144,7 @@ export class MobileRelayBackgroundGrace {
     if (this.retainedRelaySuspended || this.logical.getActivePath() !== 'relay') {
       return
     }
+
     this.retainedRelaySuspended = true
     this.timer.clear()
     this.leaseRotation.clear()

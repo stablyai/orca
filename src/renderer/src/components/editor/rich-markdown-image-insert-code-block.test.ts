@@ -38,6 +38,7 @@ vi.mock('sonner', () => ({
 }))
 
 const CODE_BLOCK_SOURCE = '```ts\nconst a = 1\n```\n'
+
 // The image splits the fence; both halves keep their ``` fencing and `ts` language.
 const SPLIT_CODE_BLOCK = '```ts\nconst\n```\n\n![](shot.png)\n\n```ts\n a = 1\n```'
 
@@ -51,6 +52,7 @@ let editor: Editor
 function mountRichMarkdownEditor(markdown: string): Editor {
   const host = document.createElement('div')
   document.body.appendChild(host)
+
   return new Editor({
     element: host,
     extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
@@ -66,9 +68,11 @@ function positionInsideCodeBlock(target: Editor): number {
       pos = nodePos + 'const'.length
     }
   })
+
   if (pos === -1) {
     throw new Error('Missing code block text')
   }
+
   return pos
 }
 
@@ -129,6 +133,7 @@ describe('inserting an image while the cursor is inside a fenced code block', ()
       filePath: '/repo/note.md',
       worktreeId: 'wt-1'
     })
+
     await flushPromises()
 
     expect(handled).toBe(true)

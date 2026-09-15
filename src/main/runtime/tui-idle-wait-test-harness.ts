@@ -116,6 +116,7 @@ export function makeTuiIdleRuntime(options: TuiIdleRuntimeOptions): OrcaRuntimeS
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial store double; the wait path reads only the members defined above.
     makeStore(options.repoPath) as never
   )
+
   runtime.setPtyController(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: partial controller double; the wait path calls only the members listed here.
     {
@@ -127,6 +128,7 @@ export function makeTuiIdleRuntime(options: TuiIdleRuntimeOptions): OrcaRuntimeS
       hasPty: () => true
     } as never
   )
+
   return runtime
 }
 

@@ -13,6 +13,7 @@ export async function readGrokHookConfigSnapshot(
   targetPath: string
 ): Promise<AsyncGrokHookConfigSnapshot> {
   const raw = await readFileOrNull(targetPath)
+
   return raw === null ? { raw: null, config: {} } : { raw, config: parseHooksJsonText(raw) }
 }
 
@@ -59,44 +60,56 @@ async function mutateGrokHookConfigIfUnchanged(
   if (options?.beforeHold && !(await options.beforeHold())) {
     return false
   }
+
   // Why resolve first: moving the link path would detach a config kept in the user's dotfiles.
   const writePath = await resolveWriteTarget(targetPath)
   const heldPath = `${writePath}.${process.pid}.${randomUUID()}.held`
+
   try {
     await rename(writePath, heldPath)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return false
     }
+
     throw error
   }
 
   let restoreOnFailure = true
+
   try {
     if ((await readFileOrNull(heldPath)) !== expectedContents) {
       restoreOnFailure = false
       await restoreHeldFile(heldPath, writePath)
+
       return false
     }
+
     if (options?.shouldCommit && !(await options.shouldCommit())) {
       restoreOnFailure = false
       await restoreHeldFile(heldPath, writePath)
+
       return false
     }
+
     if ((await readFileOrNull(writePath)) !== null) {
       // A concurrent writer published a newer generation while the old one was held.
       restoreOnFailure = false
       await rm(heldPath, { force: true })
+
       return false
     }
+
     if (contents === null) {
       restoreOnFailure = false
       await rm(heldPath, { force: true })
+
       return true
     }
 
     const mode = (await stat(heldPath)).mode
     let handle
+
     try {
       handle = await open(writePath, 'wx', mode)
       await handle.writeFile(contents, 'utf8')
@@ -104,21 +117,27 @@ async function mutateGrokHookConfigIfUnchanged(
       await handle.sync()
     } catch (error) {
       await handle?.close().catch(() => {})
+
       if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
         await rm(heldPath, { force: true })
+
         return false
       }
+
       await rm(writePath, { force: true })
       throw error
     }
+
     await handle.close()
     restoreOnFailure = false
     await rm(heldPath, { force: true })
+
     return true
   } catch (error) {
     if (restoreOnFailure) {
       await restoreHeldFile(heldPath, writePath)
     }
+
     throw error
   }
 }
@@ -134,6 +153,7 @@ async function restoreHeldFile(heldPath: string, targetPath: string): Promise<vo
       throw error
     }
   }
+
   await rm(heldPath, { force: true })
 }
 
@@ -151,6 +171,7 @@ async function readFileOrNull(targetPath: string): Promise<string | null> {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return null
     }
+
     throw error
   }
 }

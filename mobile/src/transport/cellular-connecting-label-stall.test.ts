@@ -40,6 +40,7 @@ type CarrierBehavior =
   | { kind: 'wedged-open-then-silent' }
 
 let carrier: CarrierBehavior = { kind: 'blackhole' }
+
 const sockets: CarrierWebSocket[] = []
 
 class CarrierWebSocket {
@@ -57,10 +58,13 @@ class CarrierWebSocket {
 
   constructor(readonly endpoint: string) {
     sockets.push(this)
+
     if (carrier.kind === 'refused') {
       setTimeout(() => this.fail(), 1)
+
       return
     }
+
     if (
       carrier.kind === 'open-then-silent' ||
       carrier.kind === 'slow-handshake' ||
@@ -77,6 +81,7 @@ class CarrierWebSocket {
     if (carrier.kind !== 'slow-handshake') {
       return
     }
+
     if (payload.includes('e2ee_hello')) {
       const delay = carrier.readyAfterMs
       setTimeout(() => {
@@ -84,8 +89,10 @@ class CarrierWebSocket {
           this.onmessage?.({ data: JSON.stringify({ type: 'e2ee_ready' }) })
         }
       }, delay)
+
       return
     }
+
     if (payload.includes('e2ee_auth')) {
       setTimeout(() => {
         if (this.readyState === 1) {
@@ -99,10 +106,13 @@ class CarrierWebSocket {
     if (this.readyState === 3) {
       return
     }
+
     if (carrier.kind === 'wedged-open-then-silent') {
       this.readyState = 3
+
       return
     }
+
     this.fail()
   }
 
@@ -123,6 +133,7 @@ function observe(endpoint: string, durationMs: number): Sample[] {
   const client = connect(endpoint, 'device-token', 'server-public-key')
   const samples: Sample[] = []
   const stepMs = 250
+
   for (let atMs = 0; atMs <= durationMs; atMs += stepMs) {
     const state = client.getState()
     const attempts = client.getReconnectAttempt()
@@ -142,7 +153,9 @@ function observe(endpoint: string, durationMs: number): Sample[] {
     })
     vi.advanceTimersByTime(stepMs)
   }
+
   client.close()
+
   return samples
 }
 
@@ -153,6 +166,7 @@ function isEscalated(label: string): boolean {
 function labelsAfterFirstEscalation(samples: Sample[]): Sample[] {
   const first = samples.findIndex((s) => isEscalated(s.label))
   expect(first).toBeGreaterThan(0)
+
   return samples.slice(first)
 }
 

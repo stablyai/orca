@@ -37,6 +37,7 @@ export function getPersistedUI(
   activeView: PersistedState['ui']['activeView']
 ): PersistedState['ui'] {
   const uiState = stripMainOwnedTelemetryMarkerFromUI(state.ui)
+
   return {
     ...getDefaultUIState(),
     ...uiState,

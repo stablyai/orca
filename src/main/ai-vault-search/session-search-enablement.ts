@@ -12,6 +12,7 @@ import {
   sessionSearchServiceInit
 } from './session-search-service-init'
 import { sessionSearchSqliteAvailable } from './session-search-sqlite-support'
+
 let installed = false
 
 /**
@@ -29,11 +30,13 @@ export function installChildSessionSearchService(args: {
   if (!sessionSearchSqliteAvailable()) {
     return null
   }
+
   installed = true
   installSessionSearchDataRoot(args.dataRoot)
   installSessionSearchPolicySource(args.getSettings)
   setSessionSearchService(createChildSessionSearchService())
   pushSessionSearchPolicy()
+
   return {
     dispose: () => {
       installed = false
@@ -57,6 +60,7 @@ export function applySessionSearchSettingsChange(
   ) {
     return
   }
+
   if (installed) {
     pushSessionSearchPolicy()
   }
@@ -64,6 +68,7 @@ export function applySessionSearchSettingsChange(
 
 function pushSessionSearchPolicy(): void {
   const init = sessionSearchServiceInit()
+
   if (init) {
     updateSessionSearchInService(init)
   }

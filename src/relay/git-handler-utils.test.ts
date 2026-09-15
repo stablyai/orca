@@ -8,6 +8,7 @@ describe('isUnsupportedWorktreeListZError', () => {
     const error = Object.assign(new Error('worktree list -z'), {
       stderr: "error: unknown switch `z'\nusage: git worktree list [<options>]\n"
     })
+
     expect(isUnsupportedWorktreeListZError(error)).toBe(true)
   })
 
@@ -18,6 +19,7 @@ describe('isUnsupportedWorktreeListZError', () => {
       code: 129,
       stderr: 'Fehler: Unbekannter Schalter »z«\nAufruf: git worktree list [<Optionen>]\n'
     })
+
     expect(isUnsupportedWorktreeListZError(error)).toBe(true)
   })
 
@@ -26,6 +28,7 @@ describe('isUnsupportedWorktreeListZError', () => {
       code: 128,
       stderr: 'fatal: unable to read tree\n'
     })
+
     expect(isUnsupportedWorktreeListZError(error)).toBe(false)
   })
 })

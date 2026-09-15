@@ -28,11 +28,13 @@ export function getWorkspaceTokenPath(workspaceId: string): string {
   if (workspaceId === LEGACY_WORKSPACE_ID) {
     return getLegacyTokenPath()
   }
+
   return join(getWorkspaceTokenDir(), `${Buffer.from(workspaceId).toString('base64url')}.enc`)
 }
 
 export function ensureOrcaDir(): void {
   const dir = getOrcaDir()
+
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }
@@ -40,6 +42,7 @@ export function ensureOrcaDir(): void {
 
 export function ensureWorkspaceTokenDir(): void {
   const dir = getWorkspaceTokenDir()
+
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true })
   }

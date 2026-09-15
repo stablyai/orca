@@ -8,12 +8,15 @@ function hostedReviewStateClass(review: HostedReviewInfo): string {
   if (review.state === 'merged') {
     return 'text-purple-500/80'
   }
+
   if (review.state === 'open') {
     return 'text-emerald-500/80'
   }
+
   if (review.state === 'closed') {
     return 'text-muted-foreground/60'
   }
+
   return 'text-muted-foreground/50'
 }
 
@@ -25,12 +28,15 @@ function hostedReviewStateIcon(
   if (review.state === 'merged') {
     return GitMerge
   }
+
   if (review.state === 'closed') {
     return GitPullRequestClosed
   }
+
   if (review.state === 'draft') {
     return GitPullRequestDraft
   }
+
   return null
 }
 
@@ -43,6 +49,7 @@ export function HostedReviewIcon({
 }): React.JSX.Element {
   const providerIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const Icon = hostedReviewStateIcon(review) ?? providerIcon
+
   return React.createElement(Icon, { className: cn(className, hostedReviewStateClass(review)) })
 }
 
@@ -58,6 +65,7 @@ export function HostedReviewHeaderLink({
   onOpenHostedReviewInChecks: () => void
 }): React.JSX.Element {
   const label = hostedReviewLabel(review)
+
   const className =
     'shrink-0 border-0 bg-transparent p-0 text-left font-medium leading-none text-foreground underline decoration-border underline-offset-2 opacity-80 hover:text-foreground hover:decoration-foreground'
 

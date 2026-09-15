@@ -19,6 +19,7 @@ export function ShortcutHintList({
       </span>
     )
   }
+
   const primaryCombo = combos[0]
 
   return (

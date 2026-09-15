@@ -10,7 +10,9 @@ import {
 type ExecMock = Mock<GitRemoteExec>
 
 const REPO_PATH = '/repo-root'
+
 const REPO_ID = 'repo-1'
+
 const FORK_REMOTE = 'pr-contributor-orca'
 
 function worktreeId(suffix: string): string {
@@ -33,9 +35,11 @@ function metaWith(pushTarget: GitPushTarget | undefined): WorktreeMeta {
 
 function storeOf(entries: Record<string, GitPushTarget | undefined>): WorktreePushTargetStore {
   const meta: Record<string, WorktreeMeta> = {}
+
   for (const [id, pushTarget] of Object.entries(entries)) {
     meta[id] = metaWith(pushTarget)
   }
+
   return { getAllWorktreeMeta: () => meta }
 }
 
@@ -61,71 +65,96 @@ function makeExec(script: ExecScript = {}): ExecMock {
     removeUrlAfterFirstCheck = new Set<string>(),
     remoteNames = []
   } = script
+
   const urlCheckCountByRemote: Record<string, number> = {}
+
   return vi.fn<GitRemoteExec>(async (args: string[]) => {
     if (args[0] === 'remote' && args.length === 1) {
       return { stdout: remoteNames.length ? `${remoteNames.join('\n')}\n` : '', stderr: '' }
     }
+
     if (args[0] === 'config' && args[1] === '--get' && args[2]!.endsWith('.url')) {
       const remoteName = args[2]!.slice('remote.'.length, -'.url'.length)
       urlCheckCountByRemote[remoteName] = (urlCheckCountByRemote[remoteName] ?? 0) + 1
+
       const concurrentlyRemoved =
         removeUrlAfterFirstCheck.has(remoteName) && urlCheckCountByRemote[remoteName]! > 1
+
       const url = concurrentlyRemoved ? undefined : urlByRemote[remoteName]
+
       if (!url) {
         throw new Error(`no such remote ${remoteName}`)
       }
+
       return { stdout: url, stderr: '' }
     }
+
     if (args[0] === 'config' && args[1] === '--remove-section' && args[2]!.startsWith('remote.')) {
       const remoteName = args[2]!.slice('remote.'.length)
       delete fetchByRemote[remoteName]
       delete urlByRemote[remoteName]
+
       return { stdout: '', stderr: '' }
     }
+
     if (args[0] === 'config' && args[1] === '--get-regexp') {
       return { stdout: branchConfig, stderr: '' }
     }
+
     if (args[0] === 'config' && args[1] === '--get-all' && args[2]!.endsWith('.fetch')) {
       const remoteName = args[2]!.slice('remote.'.length, -'.fetch'.length)
       const values = fetchByRemote[remoteName] ?? []
+
       if (values.length === 0) {
         throw new Error('key not found')
       }
+
       return { stdout: `${values.join('\n')}\n`, stderr: '' }
     }
+
     if (args[0] === 'config' && args[1] === '--unset-all' && args[2]!.endsWith('.fetch')) {
       const remoteName = args[2]!.slice('remote.'.length, -'.fetch'.length)
       fetchByRemote[remoteName] = []
+
       return { stdout: '', stderr: '' }
     }
+
     if (args[0] === 'config' && args[1] === '--add' && args[2]!.endsWith('.fetch')) {
       const remoteName = args[2]!.slice('remote.'.length, -'.fetch'.length)
       fetchByRemote[remoteName] = [...(fetchByRemote[remoteName] ?? []), args[3]!]
+
       return { stdout: '', stderr: '' }
     }
+
     if (args[0] === 'config' && args[1]?.endsWith('.tagOpt')) {
       return { stdout: '', stderr: '' }
     }
+
     if (args[0] === 'for-each-ref') {
       const prefix = args[2]!
       const remoteName = prefix.replace('refs/remotes/', '').replace(/\/$/, '')
       const refs = trackingRefsByRemote[remoteName] ?? []
+
       return {
         stdout: refs.length ? `${refs.map((r) => `${prefix}${r}`).join('\n')}\n` : '',
         stderr: ''
       }
     }
+
     if (args[0] === 'update-ref' && args[1] === '-d') {
       const refname = args[2]!
+
       for (const [remoteName, refs] of Object.entries(trackingRefsByRemote)) {
         const prefix = `refs/remotes/${remoteName}/`
+
         if (refname.startsWith(prefix)) {
           trackingRefsByRemote[remoteName] = refs.filter((r) => `${prefix}${r}` !== refname)
         }
       }
+
       return { stdout: '', stderr: '' }
     }
+
     return { stdout: '', stderr: '' }
   })
 }
@@ -135,6 +164,7 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
     const trackingRefsByRemote = {
       [FORK_REMOTE]: ['contributor/fix', 'contributor/unrelated-1', 'master']
     }
+
     const exec = makeExec({
       urlByRemote: { [FORK_REMOTE]: 'git@github.com:contributor/orca.git\n' },
       fetchByRemote: { [FORK_REMOTE]: ['+refs/heads/*:refs/remotes/pr-contributor-orca/*'] },
@@ -185,6 +215,7 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
     const addedRefspecs = exec.mock.calls
       .filter(([args]) => args[0] === 'config' && args[1] === '--add')
       .map(([args]) => args[3])
+
     expect(addedRefspecs).toEqual(
       expect.arrayContaining([
         '+refs/heads/branch-a*:refs/remotes/pr-contributor-orca/branch-a*',
@@ -291,6 +322,7 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
   it('clears the fetch refspec of a wide pr-* remote with zero worktree-metadata trace at all', async () => {
     const ORPHAN_REMOTE = 'pr-ghost-orca'
     const trackingRefsByRemote = { [ORPHAN_REMOTE]: ['some-branch', 'another-branch'] }
+
     const exec = makeExec({
       remoteNames: [ORPHAN_REMOTE],
       urlByRemote: { [ORPHAN_REMOTE]: 'git@github.com:ghost/orca.git\n' },
@@ -317,6 +349,7 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
 
   it('leaves a zero-provenance pr-* remote alone if its refspec is not the stock wide default', async () => {
     const CUSTOM_REMOTE = 'pr-custom-orca'
+
     const exec = makeExec({
       remoteNames: [CUSTOM_REMOTE],
       urlByRemote: { [CUSTOM_REMOTE]: 'git@github.com:custom/orca.git\n' },
@@ -360,9 +393,11 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
     )
 
     expect(migrated).toEqual([FORK_REMOTE])
+
     const addedRefspecs = exec.mock.calls
       .filter(([args]) => args[0] === 'config' && args[1] === '--add')
       .map(([args]) => args[3])
+
     expect(addedRefspecs).toEqual(
       expect.arrayContaining([
         '+refs/heads/contributor/preserved*:refs/remotes/pr-contributor-orca/contributor/preserved*'

@@ -4,7 +4,9 @@ import path from 'node:path'
 import process from 'node:process'
 
 const GRACEFUL_CLOSE_TIMEOUT_MS = 10_000
+
 const PROCESS_EXIT_TIMEOUT_MS = 5_000
+
 const FORCE_KILL_WAIT_MS = 2_000
 
 function delay(ms) {
@@ -24,16 +26,19 @@ function waitForExit(childProcess, timeoutMs) {
 
   return new Promise((resolve) => {
     let settled = false
+
     const finish = (exited) => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timeout)
       childProcess.off('exit', onExit)
       childProcess.off('close', onExit)
       resolve(exited)
     }
+
     const onExit = () => finish(true)
     const timeout = setTimeout(() => finish(false), timeoutMs)
     childProcess.once('exit', onExit)
@@ -43,6 +48,7 @@ function waitForExit(childProcess, timeoutMs) {
 
 async function withTimeout(promise, timeoutMs, message) {
   let timeout = null
+
   try {
     return await Promise.race([
       promise,
@@ -61,13 +67,16 @@ function readPosixDescendantPids(rootPid) {
   try {
     const output = execFileSync('ps', ['-eo', 'pid=,ppid='], { encoding: 'utf8' })
     const childrenByParent = new Map()
+
     for (const line of output.split('\n')) {
       const [pidText, ppidText] = line.trim().split(/\s+/)
       const pid = Number(pidText)
       const ppid = Number(ppidText)
+
       if (!Number.isInteger(pid) || !Number.isInteger(ppid)) {
         continue
       }
+
       const children = childrenByParent.get(ppid) ?? []
       children.push(pid)
       childrenByParent.set(ppid, children)
@@ -75,14 +84,18 @@ function readPosixDescendantPids(rootPid) {
 
     const descendants = []
     const stack = [...(childrenByParent.get(rootPid) ?? [])]
+
     while (stack.length > 0) {
       const pid = stack.pop()
+
       if (!pid) {
         continue
       }
+
       descendants.push(pid)
       stack.push(...(childrenByParent.get(pid) ?? []))
     }
+
     return descendants
   } catch {
     return []
@@ -108,16 +121,20 @@ async function forceKillPidTree(pid) {
     } catch {
       /* already dead or taskkill unavailable */
     }
+
     return
   }
 
   // Why: a detached validation daemon can outlive Electron and retain access
   // to the disposable credential root unless the whole tree is captured first.
   const pids = [...readPosixDescendantPids(pid), pid]
+
   for (const targetPid of [...pids].toReversed()) {
     killPid(targetPid, 'SIGTERM')
   }
+
   await delay(FORCE_KILL_WAIT_MS)
+
   for (const targetPid of [...pids].toReversed()) {
     killPid(targetPid, 'SIGKILL')
   }
@@ -129,14 +146,17 @@ export async function closeValidationElectronApp(app) {
   }
 
   const childProcess = app.process()
+
   try {
     await withTimeout(
       app.close(),
       GRACEFUL_CLOSE_TIMEOUT_MS,
       'Timed out closing validation Electron app'
     )
+
     if (childProcess) {
       const exited = await waitForExit(childProcess, PROCESS_EXIT_TIMEOUT_MS)
+
       if (!exited) {
         await forceKillPidTree(childProcess.pid)
         await waitForExit(childProcess, PROCESS_EXIT_TIMEOUT_MS)
@@ -152,28 +172,34 @@ export async function closeValidationElectronApp(app) {
 
 function readValidationDaemonPids(userDataDir) {
   const daemonDir = path.join(userDataDir, 'daemon')
+
   if (!existsSync(daemonDir)) {
     return []
   }
 
   const pids = []
+
   for (const entry of readdirSync(daemonDir)) {
     if (!entry.endsWith('.pid')) {
       continue
     }
+
     try {
       const raw = readFileSync(path.join(daemonDir, entry), 'utf8').trim()
       const parsed = JSON.parse(raw)
+
       if (typeof parsed.pid === 'number' && Number.isInteger(parsed.pid)) {
         pids.push(parsed.pid)
       }
     } catch {
       const pid = Number(readFileSync(path.join(daemonDir, entry), 'utf8').trim())
+
       if (Number.isInteger(pid)) {
         pids.push(pid)
       }
     }
   }
+
   return pids
 }
 

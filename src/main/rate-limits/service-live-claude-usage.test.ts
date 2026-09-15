@@ -59,6 +59,7 @@ describe('RateLimitService', () => {
 
   it('ingests statusline usage, clears errors, and skips OAuth polls while the live feed is fresh', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits).mockImplementation(async () => ({
         ...errorProvider('claude', 'Claude usage is rate limited right now.'),
@@ -110,6 +111,7 @@ describe('RateLimitService', () => {
 
   it('drops statusline posts before attribution is known or from a mismatched config dir', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
       mockFreshBackgroundProviderFetches()
@@ -148,6 +150,7 @@ describe('RateLimitService', () => {
 
   it('keeps the other window when a statusline post carries only one', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
       mockFreshBackgroundProviderFetches()
@@ -179,6 +182,7 @@ describe('RateLimitService', () => {
 
   it('dedupes identical statusline posts within the throttle window', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(okProvider('claude', 18))
       mockFreshBackgroundProviderFetches()
@@ -191,6 +195,7 @@ describe('RateLimitService', () => {
         fiveHour: { used_percentage: 20, resets_at: 1738425600 },
         sevenDay: null
       }
+
       service.ingestLiveClaudeRateLimits(event)
       const firstUpdatedAt = service.getState().claude?.updatedAt
 
@@ -211,6 +216,7 @@ describe('RateLimitService', () => {
 
   it('does not roll back a live-session snapshot that arrived while a claude fetch was in flight', async () => {
     vi.useFakeTimers()
+
     try {
       const parkedClaudeFetch = deferred<ProviderRateLimits>()
       vi.mocked(fetchClaudeRateLimits)
@@ -254,6 +260,7 @@ describe('RateLimitService', () => {
 
   it('keeps a populated weekly bar when a live post carries only the five-hour window', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue({
         ...okProvider('claude', 18),
@@ -282,6 +289,7 @@ describe('RateLimitService', () => {
 
   it('does not restore the outgoing account auth snapshot when the account switches mid-resolve', async () => {
     vi.useFakeTimers()
+
     try {
       const staleClaudeFetch = deferred<ProviderRateLimits>()
       vi.mocked(fetchClaudeRateLimits)
@@ -295,9 +303,11 @@ describe('RateLimitService', () => {
       service.setClaudeAuthPreparationResolver(async () => {
         resolverCalls += 1
         const outgoing = resolverCalls === 1
+
         if (outgoing) {
           await authGate.promise
         }
+
         return {
           configDir: outgoing ? '/outgoing/.claude' : '/incoming/.claude',
           runtime: 'host',

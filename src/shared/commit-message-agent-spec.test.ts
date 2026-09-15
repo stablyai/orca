@@ -53,11 +53,13 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     const spec = COMMIT_MESSAGE_AGENT_SPECS.kimi
     expect(spec).toBeDefined()
     expect(spec!.promptDelivery).toBe('argv')
+
     const args = spec!.buildArgs({
       prompt: 'Name a branch for adding login',
       model: 'kimi-code/kimi-for-coding',
       thinkingLevel: 'on'
     })
+
     expect(args).toContain('--prompt')
     expect(args).not.toContain('--print')
     // Why: with argv delivery the prompt is the value of --prompt.
@@ -132,6 +134,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       if (!spec) {
         continue
       }
+
       for (const model of spec.models) {
         if (model.thinkingLevels) {
           expect(model.defaultThinkingLevel).toBeDefined()
@@ -217,6 +220,7 @@ describe('buildArgs (Claude)', () => {
       model: 'sonnet',
       thinkingLevel: 'high'
     })
+
     expect(args).toEqual([
       '-p',
       '--output-format',
@@ -264,6 +268,7 @@ describe('model discovery parsers', () => {
         }
       }
     })}\n`
+
     expect(parseClaudeModels(stdout)).toEqual([
       {
         id: 'opus[1m]',
@@ -303,10 +308,12 @@ describe('model discovery parsers', () => {
       'stream-json',
       '--verbose'
     ])
+
     const payload = JSON.parse(discovery?.stdinPayload ?? '') as {
       type?: string
       request?: { subtype?: string }
     }
+
     expect(payload.type).toBe('control_request')
     expect(payload.request?.subtype).toBe('list_models')
     expect(discovery?.stdinPayload?.endsWith('\n')).toBe(true)
@@ -342,6 +349,7 @@ describe('model discovery parsers', () => {
   it('rejects excessive Codex model nesting before JSON.parse', () => {
     const parseSpy = vi.spyOn(JSON, 'parse')
     const depth = COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+
     try {
       expect(parseCodexModels(`${'['.repeat(depth)}0${']'.repeat(depth)}`)).toEqual([])
       expect(parseSpy).not.toHaveBeenCalled()
@@ -469,9 +477,11 @@ describe('model discovery parsers', () => {
         (typeof separator === 'string' && separator === '\n') ||
         (separator instanceof RegExp && separator.source === '\\r?\\n')
     )
+
     const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
       ([separator]) => separator instanceof RegExp && separator.source === '\\s+'
     )
+
     expect(usedFullLineSplit).toBe(false)
     expect(usedWhitespaceFieldSplit).toBe(false)
   })
@@ -485,6 +495,7 @@ describe('buildArgs (Codex)', () => {
       prompt: 'PROMPT',
       model: 'gpt-5.4-mini'
     })
+
     expect(args[0]).toBe('exec')
     expect(args).toEqual([
       'exec',
@@ -506,6 +517,7 @@ describe('buildArgs (Codex)', () => {
       model: 'gpt-5.4',
       thinkingLevel: 'medium'
     })
+
     expect(args).toContain('-c')
     expect(args).toContain('model_reasoning_effort=medium')
   })
@@ -521,6 +533,7 @@ describe('buildArgs (OpenCode)', () => {
 
   it('runs `opencode run` without passing the prompt via argv', () => {
     const prompt = `PROMPT ${'x'.repeat(1024)}`
+
     const args = spec.buildArgs({
       prompt,
       model: 'opencode/deepseek-v4-flash-free'
@@ -578,6 +591,7 @@ describe('buildArgs (Antigravity)', () => {
       prompt: 'real commit prompt',
       model: 'Gemini 3.5 Flash (Medium)'
     })
+
     expect(args).toEqual([
       '--print=real commit prompt',
       '--sandbox',

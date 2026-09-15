@@ -16,7 +16,9 @@ import { describe, expect, it } from 'vitest'
 import { shouldReuseCompiledWindowsCliLauncher } from './build-windows-cli-launcher.mjs'
 
 const itCrossHost = process.platform === 'win32' ? it.skip : it
+
 const projectRoot = resolve(import.meta.dirname, '../..')
+
 const WINDOWS_LOCK_CODES = ['EBUSY', 'ENOTEMPTY', 'EPERM']
 
 // Why: Windows releases the image handle on a just-executed exe (and finishes the
@@ -32,6 +34,7 @@ function removeFixtureTree(path) {
     }
   }
 }
+
 // Why: cold csc.exe startup exceeds Vitest's 5s unit budget on hosted Windows;
 // keep the larger allowance scoped to the real compiler integration test.
 function itWindows(name, test) {
@@ -42,6 +45,7 @@ function itWindows(name, test) {
 describe('Windows CLI launcher', () => {
   it('reuses a compiled launcher that is at least as new as the C# source', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-cli-launcher-reuse-'))
+
     try {
       const sourcePath = join(root, 'OrcaCliLauncher.cs')
       const outputPath = join(root, '.build', 'orca.exe')
@@ -69,6 +73,7 @@ describe('Windows CLI launcher', () => {
 
   itCrossHost('fails closed when the Windows launcher cannot be compiled on this host', () => {
     const outputRoot = mkdtempSync(join(tmpdir(), 'orca cross-host launcher '))
+
     try {
       const result = spawnSync(
         process.execPath,
@@ -91,6 +96,7 @@ describe('Windows CLI launcher', () => {
       join(projectRoot, 'native', 'windows-cli-launcher', 'OrcaCliLauncher.cs'),
       'utf8'
     )
+
     const code = source.replace(/^\s*\/\/.*$/gm, '')
 
     expect(code).not.toContain('EnvironmentVariables')
@@ -100,6 +106,7 @@ describe('Windows CLI launcher', () => {
 
   itWindows('preserves a multiline argument from PowerShell through the native launcher', () => {
     const appRoot = mkdtempSync(join(tmpdir(), 'orca cli launcher '))
+
     try {
       const resourcesPath = join(appRoot, 'resources')
       const launcherPath = join(resourcesPath, 'bin', 'orca.exe')
@@ -123,9 +130,11 @@ describe('Windows CLI launcher', () => {
         ['config/scripts/build-windows-cli-launcher.mjs', '--output', launcherPath],
         { cwd: projectRoot, encoding: 'utf8' }
       )
+
       expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
 
       const body = 'paragraph one line one\nparagraph one line two\n\nparagraph two'
+
       const powershell = spawnSync(
         'powershell.exe',
         [
@@ -159,11 +168,13 @@ describe('Windows CLI launcher', () => {
 
   itWindows('survives an inherited environment block containing PATH and Path', () => {
     const appRoot = mkdtempSync(join(tmpdir(), 'orca duplicate path launcher '))
+
     try {
       const resourcesPath = join(appRoot, 'resources')
       const launcherPath = join(resourcesPath, 'bin', 'orca.exe')
       const cliPath = join(resourcesPath, 'app.asar.unpacked', 'out', 'cli', 'index.js')
       const outputPath = join(appRoot, 'child-result.json')
+
       const harnessSourcePath = join(
         projectRoot,
         'config',
@@ -171,6 +182,7 @@ describe('Windows CLI launcher', () => {
         'fixtures',
         'DuplicatePathProcessLauncher.cs'
       )
+
       const harnessPath = join(appRoot, 'DuplicatePathLauncher.exe')
       mkdirSync(dirname(launcherPath), { recursive: true })
       mkdirSync(dirname(cliPath), { recursive: true })
@@ -183,20 +195,24 @@ describe('Windows CLI launcher', () => {
 }))\n`,
         'utf8'
       )
+
       const build = spawnSync(
         process.execPath,
         ['config/scripts/build-windows-cli-launcher.mjs', '--output', launcherPath],
         { cwd: projectRoot, encoding: 'utf8' }
       )
+
       expect(build.status, `${build.stdout}\n${build.stderr}`).toBe(0)
 
       const compiler = findFrameworkCompiler()
       expect(compiler).not.toBeNull()
+
       const compileHarness = spawnSync(
         compiler,
         ['/nologo', '/target:exe', `/out:${harnessPath}`, harnessSourcePath],
         { encoding: 'utf8' }
       )
+
       expect(compileHarness.status, `${compileHarness.stdout}\n${compileHarness.stderr}`).toBe(0)
 
       const launch = spawnSync(harnessPath, [launcherPath, outputPath], { encoding: 'utf8' })
@@ -213,9 +229,11 @@ describe('Windows CLI launcher', () => {
 
 function findFrameworkCompiler() {
   const windowsDirectory = process.env.WINDIR ?? process.env.SystemRoot
+
   if (!windowsDirectory) {
     return null
   }
+
   return (
     [
       join(windowsDirectory, 'Microsoft.NET', 'Framework64', 'v4.0.30319', 'csc.exe'),

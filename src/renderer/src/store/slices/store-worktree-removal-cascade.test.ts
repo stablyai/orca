@@ -20,6 +20,7 @@ import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
+
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
 // Mock sonner (imported by repos.ts)
@@ -35,6 +36,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -380,6 +382,7 @@ describe('removeWorktree cascade', () => {
   it('offers force delete for Electron-wrapped local dirty preflight errors', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/workspace/feature-wt'
+
     const error =
       "Error invoking remote method 'worktrees:remove': Error: Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt"
 
@@ -408,6 +411,7 @@ describe('removeWorktree cascade', () => {
   it('offers force delete for SSH raw Git dirty removal errors', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/workspace/feature-wt'
+
     const error =
       "fatal: '/workspace/feature-wt' contains modified or untracked files, use --force to delete it"
 
@@ -436,6 +440,7 @@ describe('removeWorktree cascade', () => {
   it('does not offer force delete for locked worktree removal errors', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/workspace/feature-wt'
+
     const error =
       "fatal: cannot remove a locked working tree, lock reason: claude session\nuse 'remove -f -f' to override or unlock first"
 
@@ -465,6 +470,7 @@ describe('removeWorktree cascade', () => {
   it('offers force delete when Git already removed an unregistered worktree', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/workspace/deleted-wt'
+
     const error =
       "Error invoking remote method 'worktrees:remove': Error: Worktree is no longer registered with Git and its directory is already gone."
 
@@ -508,6 +514,7 @@ describe('removeWorktree cascade', () => {
     const result = await store
       .getState()
       .removeWorktree({ id: worktreeId, executionHostId: null }, true)
+
     const s = store.getState()
 
     expect(result).toEqual({ ok: false, error: 'fatal error' })
@@ -582,6 +589,7 @@ describe('removeWorktree cascade', () => {
   it('does not offer force delete when Electron wraps SSH filesystem provider failures', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
+
     const error =
       "Error invoking remote method 'worktrees:remove': Error: SSH filesystem provider unavailable"
 
@@ -620,9 +628,11 @@ describe('removeWorktree cascade', () => {
 
       mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
         const compatibility = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
         if (compatibility) {
           return Promise.resolve(compatibility)
         }
+
         if (args.method === 'repo.hooksCheck') {
           return Promise.resolve({
             id: 'rpc-hooks',
@@ -631,6 +641,7 @@ describe('removeWorktree cascade', () => {
             _meta: { runtimeId: 'remote-runtime' }
           })
         }
+
         return Promise.reject(new Error(error))
       })
 

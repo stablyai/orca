@@ -46,11 +46,13 @@ export function WorktreeCardReviewDetailSection({
 
   const reviewLabel = getReviewLabel(review)
   const reviewProvider = getProviderName(review)
+
   const moreActionsLabel = translate(
     'auto.components.sidebar.WorktreeCardMeta.dbe2d18972',
     'More {{value0}} actions',
     { value0: reviewLabel }
   )
+
   const moreActionsTrigger = (
     <DropdownMenuTrigger asChild>
       <Button
@@ -65,6 +67,7 @@ export function WorktreeCardReviewDetailSection({
       </Button>
     </DropdownMenuTrigger>
   )
+
   const dismissAndOpenReview = (event: React.MouseEvent): void => {
     closeHover()
     onOpenReviewInOrca?.(event)

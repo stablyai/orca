@@ -49,9 +49,11 @@ export type MainProcessRuntimeLaunchOptions = {
 
 function settleDesktopActivation(): void {
   const gate = state.desktopActivationGate
+
   if (!gate) {
     return
   }
+
   settleServeDesktopActivation(gate, {
     hasPersistentPtyProvider: !(getLocalPtyProvider() instanceof LocalPtyProvider)
   })
@@ -67,11 +69,14 @@ function installRuntimeRpc(
   const isE2E = Boolean(process.env.ORCA_E2E_USER_DATA_DIR)
   const requestedE2EWsPort = process.env.ORCA_E2E_RUNTIME_WS_PORT
   const e2eWsPort = requestedE2EWsPort === undefined ? 0 : Number(requestedE2EWsPort)
+
   if (isE2E && (!Number.isInteger(e2eWsPort) || e2eWsPort < 0 || e2eWsPort > 65_535)) {
     throw new Error(`Invalid ORCA_E2E_RUNTIME_WS_PORT value: ${requestedE2EWsPort}`)
   }
+
   // Why: pin dev to 6769 so `pnpm dev` doesn't race packaged Orca on 6768 and fall back to a random port, breaking deterministic mobile pairing/repro (STA-1511).
   const devWsPort = is.dev && !isE2E ? 6769 : undefined
+
   const runtimeRpc = new OrcaRuntimeRpcServer({
     runtime,
     // Why: mobile pairing needs the stable pre-setName() path (getCanonicalUserDataPath), not a late app.getPath('userData') that drops paired devices across restarts.
@@ -91,6 +96,7 @@ function installRuntimeRpc(
       : {}),
     webClientRoot: getBundledWebClientRoot()
   })
+
   state.runtimeRpc = runtimeRpc
   registerMobileHandlers(runtimeRpc, {
     getRelayStatus: getDesktopRelayStatus,
@@ -103,7 +109,9 @@ function installRuntimeRpc(
       ) {
         return false
       }
+
       state.pendingUnpairedDeviceAuthFailure = false
+
       return true
     }
   })
@@ -111,10 +119,12 @@ function installRuntimeRpc(
   runtimeRpc.setOnUnpairedDeviceAuthFailure(() => {
     // Why: runtime startup races renderer mount; retain the one-shot until the listener consumes it.
     state.pendingUnpairedDeviceAuthFailure = true
+
     if (state.mainWindow && !state.mainWindow.isDestroyed()) {
       state.mainWindow.webContents.send('mobile:unpairedDeviceAuthFailure')
     }
   })
+
   return runtimeRpc
 }
 
@@ -146,6 +156,7 @@ async function launchServeMode(
   )
   await runtime.refreshRestoredOrchestrationAuthority()
   await runtime.reconcileLegacyWorkerTerminals()
+
   // Why: headless servers can't mount <webview> panes; use offscreen WebContents, gated on a real display so browser.headless.v1 stays honest.
   if (state.headlessBrowserDisplayAvailable) {
     runtime.setOffscreenBrowserBackend(
@@ -154,6 +165,7 @@ async function launchServeMode(
       })
     )
   }
+
   // Why: headless servers have no renderer graph publisher; publish an explicit empty graph so status clients see a ready server.
   runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
   await runtimeRpc.start().catch((error) => {
@@ -166,6 +178,7 @@ async function launchServeMode(
   settleDesktopActivation()
   // Why: every attempt must reach app.quit(); a page beforeunload can veto an earlier signal.
   registerServeSignalHandlers(process, () => app.quit())
+
   // Why: headless serve has no renderer to run the normal cli:install flow; do it here for macOS/Linux only (Windows-excluded: install() only mutates registry PATH, not child terminals).
   if (process.platform === 'darwin' || process.platform === 'linux') {
     try {
@@ -175,6 +188,7 @@ async function launchServeMode(
           throw new Error('serve CLI auto-install must not request administrator privileges')
         }
       }).install()
+
       console.log(
         `[serve] orca CLI install: ${cliStatus.state}${cliStatus.commandPath ? ` (${cliStatus.commandPath})` : ''}`
       )
@@ -185,12 +199,14 @@ async function launchServeMode(
       )
     }
   }
+
   // Why: Linux CLI installs as `orca-ide`, but the Claude Team launcher invokes bare `orca`; drop a ~/.local/bin dispatcher (ahead of /usr/bin) so it resolves. Best-effort.
   if (process.platform === 'linux' && app.isPackaged && process.resourcesPath) {
     try {
       const dispatcher = await installLinuxBareOrcaDispatcher({
         resourcesPath: process.resourcesPath
       })
+
       console.log(
         `[serve] bare orca dispatcher ${dispatcher.state}: ${dispatcher.dispatcherPath}` +
           `${dispatcher.target ? ` -> ${dispatcher.target}` : ''}`
@@ -202,6 +218,7 @@ async function launchServeMode(
       )
     }
   }
+
   // Why: headless serve never opens a renderer, so arm scheduled automation dispatch here.
   state.automations?.start()
   // Why: serve deletes worktrees too, and the history GC that normally drains delete tombstones is
@@ -221,6 +238,7 @@ async function launchDesktopMode(
   if (!runtimeRpc) {
     throw new Error('runtime_rpc_unavailable')
   }
+
   // Why: window and RPC startup run in parallel; registerPtyHandlers gates PTY spawns so RPC binds without racing the daemon provider swap.
   const [win, runtimeRpcStartResult] = await Promise.all([
     Promise.resolve(desktopWindow ?? openMainWindow()),
@@ -230,10 +248,12 @@ async function launchDesktopMode(
         () => ({ ok: true as const }),
         (error: unknown) => {
           recordRuntimeRpcStartFailure(error)
+
           return { ok: false as const, error }
         }
       )
   ])
+
   if (!runtimeRpcStartResult.ok) {
     // Why gated: this dialog is the only launch-phase text read through translateMain, and i18n
     // now settles alongside this phase — without the wait a non-English user could get the
@@ -242,6 +262,7 @@ async function launchDesktopMode(
       showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)
     )
   }
+
   // Why after the window and not before it: the default-session request guard already holds every
   // fetcher until the persisted proxy lands, so this only has to keep the launch phase itself
   // ordered ahead of the relay — it must not gate the renderer.
@@ -250,6 +271,7 @@ async function launchDesktopMode(
   // issue its first request ahead of the persisted proxy.
   startDesktopPushService(runtimeRpc)
   const cloudAuth = getOrcaCloudAuthConfig()
+
   if (cloudAuth.configured) {
     try {
       const relayService = new DesktopRelayService({
@@ -259,6 +281,7 @@ async function launchDesktopMode(
         runtimeRpc,
         onStatus: publishDesktopRelayStatus
       })
+
       state.desktopRelayService = relayService
       runtimeRpc.setMobileRelayPairingProvider({
         createPairingRelay: (relayDeviceId) => relayService.createPairingRelay(relayDeviceId),
@@ -278,10 +301,12 @@ async function launchDesktopMode(
       )
     }
   }
+
   // Why: macOS notification permission dialog must fire after the window is shown, else it's hidden behind the maximized window.
   win.once('show', () => {
     // Why: store can be null if init failed earlier; bail rather than throw inside an Electron event listener.
     const store = state.store
+
     if (store && store.getOnboarding().closedAt !== null) {
       triggerStartupNotificationRegistration(store)
     }
@@ -293,23 +318,29 @@ export async function initializeMainProcessRuntimeLaunch(
 ): Promise<void> {
   const runtime = state.runtime
   const shellPathHydration = state.windowsShellPathHydration
+
   if (!runtime || !shellPathHydration) {
     throw new Error('Runtime and shell-path services must be initialized before launch')
   }
+
   let serveOptions: ReturnType<typeof getServeOptions> | null = null
+
   try {
     serveOptions = state.isServeMode ? getServeOptions(process.argv) : null
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
     app.exit(1)
+
     return
   }
+
   state.serveOptions = serveOptions
   const runtimeRpc = installRuntimeRpc(runtime, serveOptions)
   const shellPathReady = shellPathHydration.whenReady()
   // Why published: the renderer's git-environment barrier must fence on the same
   // generation the terminal startup services wait for, not a later re-read.
   state.shellPathReady = shellPathReady
+
   // Why before any window: the poisoned install DACL kills the renderer at init, and
   // the probe that detects it cannot finish before createMainWindow. Bounded, and a
   // no-op (one absent-file read) unless a previous launch already recorded the verdict.
@@ -318,10 +349,13 @@ export async function initializeMainProcessRuntimeLaunch(
     userDataPath: app.getPath('userData'),
     appVersion: app.getVersion()
   })
+
   if (aclGate !== 'not-marked' && aclGate !== 'skipped') {
     logStartupMilestone('install-dir-acl-repair-blocking-done', { mode: aclGate })
   }
+
   let desktopWindow: BrowserWindow | null = null
+
   if (process.platform === 'win32' && app.isPackaged && !serveOptions) {
     const desktopStartup = startWindowsDesktopBeforeShellPathReady({
       bindServices: bindTerminalRuntimeStartupServices,
@@ -329,15 +363,20 @@ export async function initializeMainProcessRuntimeLaunch(
       shellPathReady,
       startServices: startTerminalRuntimeStartupServices
     })
+
     desktopWindow = desktopStartup.window
   } else {
     await shellPathReady
     bindTerminalRuntimeStartupServices(Promise.resolve(startTerminalRuntimeStartupServices()))
   }
+
   app.on('activate', options.handleMacAppActivation)
+
   if (serveOptions) {
     await launchServeMode(runtime, runtimeRpc, serveOptions)
+
     return
   }
+
   await launchDesktopMode(runtimeRpc, shellPathReady, desktopWindow, options.openMainWindow)
 }

@@ -117,15 +117,18 @@ export class SessionSearchIndexWriter {
                 byte_offset, mtime_ms, size_bytes, session_row_id FROM files WHERE path = ?`
       )
       .get(path) as FileRow | undefined
+
     if (!row) {
       return null
     }
+
     // Older indexes can carry half-pairs; only a complete identity can prove replacement.
     if (identity && row.dev !== null && row.ino !== null) {
       if (row.dev !== identity.dev || row.ino !== identity.ino) {
         return null
       }
     }
+
     return {
       byteOffset: row.byte_offset === PARTIAL_FILE_CURSOR ? null : row.byte_offset,
       mtimeMs: row.mtime_ms,
@@ -146,16 +149,19 @@ export class SessionSearchIndexWriter {
   ): SessionSearchFileWrite | null {
     const path = candidate.file.path
     const cursor = this.cursor(path)
+
     if (mode === 'append') {
       // The partial sentinel is not a byte offset, so nothing continues it —
       // including a caller that reads it back off the row and passes it in.
       if (cursor === undefined || cursor.byte_offset === PARTIAL_FILE_CURSOR) {
         return null
       }
+
       if (cursor.byte_offset !== previousByteOffset) {
         return null
       }
     }
+
     // A file the index read through and decoded no session from still has a
     // cursor worth continuing: it has no session row to hang new rows off, so
     // this read makes one. Declining instead would force a whole re-read of
@@ -173,6 +179,7 @@ export class SessionSearchIndexWriter {
     this.removals.set(path, (this.removals.get(path) ?? 0) + 1)
     const cursor = this.cursor(path)
     this.db.exec('BEGIN IMMEDIATE')
+
     try {
       this.dropSession(cursor?.session_row_id ?? null)
       this.db.prepare('DELETE FROM files WHERE path = ?').run(path)
@@ -239,7 +246,9 @@ export class SessionSearchIndexWriter {
       if ((this.removals.get(path) ?? 0) !== removalsAtStart) {
         return false
       }
+
       const row = this.cursor(path)
+
       return (
         row?.session_row_id === expected?.session_row_id &&
         row?.byte_offset === expected?.byte_offset
@@ -256,11 +265,14 @@ export class SessionSearchIndexWriter {
     ): boolean => {
       const decoded = outcome?.session ?? null
       db.exec('BEGIN IMMEDIATE')
+
       try {
         if (!current()) {
           db.exec('ROLLBACK')
+
           return false
         }
+
         if (outcome && !decoded) {
           // Read through, but nothing to search: the cursor advances so the file
           // is not re-read whole on every pass, and whatever generation was here
@@ -274,15 +286,19 @@ export class SessionSearchIndexWriter {
           } else {
             const previous = session
             session = this.records.createSessionRow(candidate)
+
             if (previous !== null) {
               db.prepare('DELETE FROM sessions WHERE id = ?').run(previous)
               orphaned = true
             }
+
             replaced = true
           }
+
           for (const row of buffer) {
             insertSearchMessage(db, session, row)
           }
+
           if (decoded) {
             this.records.updateSession(decoded, session, hash)
           } else if (named) {
@@ -292,29 +308,34 @@ export class SessionSearchIndexWriter {
             // `add` refuses to chunk without this, so it is never absent here.
             this.records.updateProvisionalSession(session, named)
           }
+
           this.records.upsertFile(
             candidate,
             outcome ? outcome.byteOffset : PARTIAL_FILE_CURSOR,
             session
           )
         }
+
         db.exec('COMMIT')
       } catch (error) {
         db.exec('ROLLBACK')
         throw error
       }
+
       // After the transaction that cut them loose is durable, never before: a
       // rollback leaves the old session row standing and nothing to reclaim.
       if (orphaned) {
         orphaned = false
         this.onOrphanedRows()
       }
+
       expected = {
         session_row_id: session,
         byte_offset: outcome ? outcome.byteOffset : PARTIAL_FILE_CURSOR
       }
       buffer.length = 0
       bufferedChars = 0
+
       return true
     }
 
@@ -323,7 +344,9 @@ export class SessionSearchIndexWriter {
         if (fenced) {
           return
         }
+
         hash = foldContentHash(hash, [message])
+
         // The ceiling is checked per row, not per message: one message is a whole
         // conversation turn and may be megabytes, so checking it after the whole
         // message had been buffered let a single one carry a transaction as far
@@ -331,18 +354,22 @@ export class SessionSearchIndexWriter {
         for (const row of searchMessageRows([message])) {
           buffer.push(row)
           bufferedChars += row.text.length
+
           if (bufferedChars < this.commitChars) {
             continue
           }
+
           // Publishing a chunk under a session nothing can identify is worse
           // than holding the buffer: the rows answer searches at once, and an
           // interrupted read leaves that prefix for good. A read with nothing
           // to name it keeps buffering and commits whole at `finish`.
           const named = identity?.() ?? null
+
           if (named && !write(null, named)) {
             fenced = true
             buffer.length = 0
             bufferedChars = 0
+
             return
           }
         }
@@ -356,6 +383,7 @@ export class SessionSearchIndexWriter {
     if (sessionRowId === null) {
       return
     }
+
     deleteSearchMessages(this.db, sessionRowId)
     this.db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionRowId)
   }

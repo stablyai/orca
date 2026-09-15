@@ -43,6 +43,7 @@ function createMockChildProcess(pid: number): MockChildProcess {
   child.stderr = new EventEmitter()
   child.pid = pid
   child.kill = vi.fn()
+
   return child
 }
 
@@ -55,8 +56,10 @@ function mockWedgedCliSpawn(child: MockChildProcess): void {
     if (program !== 'ps') {
       return child
     }
+
     const probe = createMockChildProcess(9100)
     queueMicrotask(() => probe.emit('close', 0, null))
+
     return probe
   })
 }
@@ -67,6 +70,7 @@ function mockProcessGroupSignals(): ReturnType<typeof vi.spyOn> {
     if (signal === 0) {
       throw Object.assign(new Error('ESRCH'), { code: 'ESRCH' })
     }
+
     return true
   }) as typeof process.kill)
 }
@@ -74,12 +78,14 @@ function mockProcessGroupSignals(): ReturnType<typeof vi.spyOn> {
 function createMockTaskkillProcess(): MockChildProcess {
   const child = createMockChildProcess(9000)
   child.unref = vi.fn()
+
   return child
 }
 
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return await fn()
   } finally {
@@ -99,6 +105,7 @@ describe('commandExecFileAsync Windows command shims', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+
     if (originalComSpec === undefined) {
       delete process.env.ComSpec
     } else {
@@ -113,10 +120,12 @@ describe('commandExecFileAsync Windows command shims', () => {
       spawnMock.mockImplementation((cmd: string) => (cmd === 'taskkill' ? taskkill : command))
 
       const controller = new AbortController()
+
       const promise = commandExecFileAsync('C:\\tools\\pnpm.cmd', ['--version'], {
         cwd: 'C:\\repo',
         signal: controller.signal
       })
+
       const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
       controller.abort()
 
@@ -141,6 +150,7 @@ describe('commandExecFileAsync Windows command shims', () => {
         cwd: 'C:\\repo',
         timeout: 1000
       })
+
       const rejection = expect(promise).rejects.toThrow('C:\\tools\\pnpm.cmd timed out.')
       await vi.advanceTimersByTimeAsync(1000)
 
@@ -168,9 +178,11 @@ describe('commandExecFileAsync Windows command shims', () => {
         cwd: 'C:\\repo',
         maxBuffer: 2
       })
+
       const rejection = expect(promise).rejects.toThrow(
         'C:\\tools\\pnpm.cmd stdout exceeded maxBuffer.'
       )
+
       command.stdout.emit('data', Buffer.from('too much output'))
 
       await rejection
@@ -195,6 +207,7 @@ describe('commandExecFileAsync Windows command shims', () => {
       const promise = commandExecFileAsync('C:\\tools\\pnpm.cmd', ['--version'], {
         cwd: 'C:\\repo'
       })
+
       command.stdout.emit('data', Buffer.from('9.1.0\n'))
       command.stderr.emit('data', Buffer.from('notice\n'))
       command.emit('close', 0)
@@ -228,6 +241,7 @@ describe('runner execFile timeout handling', () => {
       cwd: '/repo',
       timeout: 1000
     })
+
     const rejection = expect(promise).rejects.toThrow(/git(?:\.exe)? timed out\./i)
     await vi.advanceTimersByTimeAsync(1000)
 
@@ -243,6 +257,7 @@ describe('runner execFile timeout handling', () => {
       cwd: '/repo',
       timeout: 1000
     })
+
     const rejection = expect(promise).rejects.toThrow('git timed out.')
     await vi.waitFor(() => expect(execFileMock).toHaveBeenCalledOnce())
     await vi.advanceTimersByTimeAsync(1000)
@@ -259,18 +274,22 @@ describe('runner execFile timeout handling', () => {
         if (command !== 'ps') {
           return child
         }
+
         const probe = createMockChildProcess(4321)
         queueMicrotask(() => probe.emit('close', 0, null))
+
         return probe
       })
       const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true)
       const controller = new AbortController()
+
       try {
         const pending = gitExecFileAsync(['status'], {
           cwd: '/repo',
           signal: controller.signal,
           terminationBarrier: true
         })
+
         let settled = false
         void pending.then(
           () => {
@@ -303,10 +322,12 @@ describe('runner execFile timeout handling', () => {
     const child = createMockChildProcess(1234)
     mockWedgedCliSpawn(child)
     const processKill = mockProcessGroupSignals()
+
     try {
       const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
         cwd: '/repo'
       })
+
       const rejection = expect(promise).rejects.toThrow('gh timed out.')
       await vi.advanceTimersByTimeAsync(30_000)
       expect(spawnMock.mock.calls[0][2].detached).toBe(true)
@@ -323,10 +344,12 @@ describe('runner execFile timeout handling', () => {
     const child = createMockChildProcess(1234)
     mockWedgedCliSpawn(child)
     const processKill = mockProcessGroupSignals()
+
     try {
       const promise = glabExecFileAsync(['api', 'projects/stablyai%2Forca/issues'], {
         cwd: '/repo'
       })
+
       const rejection = expect(promise).rejects.toThrow('glab timed out.')
       await vi.advanceTimersByTimeAsync(30_000)
       await vi.advanceTimersByTimeAsync(2_000)
@@ -340,9 +363,11 @@ describe('runner execFile timeout handling', () => {
 
   it('aborts glab retry backoff instead of starting another attempt', async () => {
     const controller = new AbortController()
+
     const transient = Object.assign(new Error('glab failed'), {
       stderr: 'HTTP 503 Service Unavailable'
     })
+
     spawnMock.mockImplementationOnce(() => {
       const child = createMockChildProcess(1234)
       queueMicrotask(() => {
@@ -350,6 +375,7 @@ describe('runner execFile timeout handling', () => {
         child.emit('exit', 1, null)
         child.emit('close', 1, null)
       })
+
       return child
     })
 
@@ -357,6 +383,7 @@ describe('runner execFile timeout handling', () => {
       cwd: '/repo',
       signal: controller.signal
     })
+
     const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1))
     controller.abort()
@@ -369,12 +396,15 @@ describe('runner execFile timeout handling', () => {
     const child = createMockChildProcess(1234)
     mockWedgedCliSpawn(child)
     const processKill = mockProcessGroupSignals()
+
     try {
       const controller = new AbortController()
+
       const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
         cwd: '/repo',
         signal: controller.signal
       })
+
       const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
 
       await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
@@ -392,11 +422,13 @@ describe('runner execFile timeout handling', () => {
     const child = createMockChildProcess(1234)
     mockWedgedCliSpawn(child)
     const processKill = mockProcessGroupSignals()
+
     try {
       const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
         cwd: '/repo',
         timeout: 1234
       })
+
       const rejection = expect(promise).rejects.toThrow('gh timed out.')
       await vi.advanceTimersByTimeAsync(1233)
       expect(processKill).not.toHaveBeenCalled()
@@ -420,6 +452,7 @@ describe('runner execFile timeout handling', () => {
         child.emit('exit', 0, null)
         child.emit('close', 0, null)
       })
+
       return child
     })
 
@@ -442,6 +475,7 @@ describe('runner execFile timeout handling', () => {
     execFileMock.mockImplementation((_cmd, _args, opts, cb) => {
       capturedEnv = opts.env
       cb(null, '', '')
+
       return child
     })
 
@@ -462,6 +496,7 @@ describe('runner execFile timeout handling', () => {
     execFileMock.mockImplementation((_cmd, args, opts, cb) => {
       calls.push({ args, env: opts.env })
       cb(null, args[0] === 'config' ? 'ssh -F ~/.ssh/github-work -i ~/.ssh/work_key\n' : '', '')
+
       return child
     })
 
@@ -490,6 +525,7 @@ describe('runner execFile timeout handling', () => {
       calls.push(args)
       cb(null, '', '')
       queueMicrotask(() => child.emit('close', 0, null))
+
       return child
     })
 
@@ -498,6 +534,7 @@ describe('runner execFile timeout handling', () => {
       env: {},
       useConfiguredSshCommandForNetwork: true
     })
+
     await Promise.resolve()
     expect(execFileMock).not.toHaveBeenCalled()
 
@@ -520,6 +557,7 @@ describe('runner execFile timeout handling', () => {
         capturedEnv = opts.env
         cb(null, '', '')
       }
+
       return child
     })
 
@@ -542,6 +580,7 @@ describe('runner execFile timeout handling', () => {
         capturedEnv = opts.env
         cb(null, '', '')
       }
+
       return child
     })
 
@@ -566,6 +605,7 @@ describe('runner execFile timeout handling', () => {
         capturedEnv = opts.env
         cb(null, '', '')
       }
+
       return child
     })
 
@@ -590,6 +630,7 @@ describe('runner execFile timeout handling', () => {
         capturedEnv = opts.env
         cb(null, '', '')
       }
+
       return child
     })
 
@@ -615,6 +656,7 @@ describe('runner execFile timeout handling', () => {
         capturedEnv = opts.env
         cb(null, '', '')
       }
+
       return child
     })
 
@@ -638,6 +680,7 @@ describe('runner execFile timeout handling', () => {
         capturedEnv = opts.env
         cb(null, '', '')
       }
+
       return child
     })
 
@@ -656,6 +699,7 @@ describe('runner execFile timeout handling', () => {
     execFileMock.mockImplementation((_cmd, _args, opts, cb) => {
       capturedEnv = opts.env
       cb(null, '', '')
+
       return child
     })
 
@@ -675,6 +719,7 @@ describe('runner execFile timeout handling', () => {
       const child = createMockChildProcess(1234)
       execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
         cb(null, 'ok', '')
+
         return child
       })
 
@@ -711,6 +756,7 @@ describe('runner execFile timeout handling', () => {
       const child = createMockChildProcess(1234)
       execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
         cb(null, 'hostname github.com\n', '')
+
         return child
       })
 
@@ -742,12 +788,14 @@ describe('runner execFile timeout handling', () => {
       let capturedEnv: NodeJS.ProcessEnv | undefined
       execFileMock.mockImplementation((_cmd, args, opts, cb) => {
         const shellCommand = args[5] as string
+
         if (shellCommand.includes("'config'")) {
           cb(Object.assign(new Error('missing'), { code: 1 }), '', '')
         } else {
           capturedEnv = opts.env
           cb(null, '', '')
         }
+
         return child
       })
 
@@ -769,12 +817,14 @@ describe('runner execFile timeout handling', () => {
       let capturedEnv: NodeJS.ProcessEnv | undefined
       execFileMock.mockImplementation((_cmd, args, opts, cb) => {
         const shellCommand = args[5] as string
+
         if (shellCommand.includes("'config'")) {
           cb(Object.assign(new Error('missing'), { code: 1 }), '', '')
         } else {
           capturedEnv = opts.env
           cb(null, '', '')
         }
+
         return child
       })
 
@@ -817,12 +867,14 @@ describe('gitStreamStdout', () => {
     spawnMock.mockReturnValue(child)
 
     const chunks: string[] = []
+
     const promise = gitStreamStdout(['status', '--porcelain=v2'], {
       cwd: '/repo',
       onStdout: (chunk) => {
         chunks.push(chunk)
       }
     })
+
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
     child.stdout.emit('data', Buffer.from('? a.txt\n'))
     child.stdout.emit('data', Buffer.from('? b.txt\n'))
@@ -838,14 +890,17 @@ describe('gitStreamStdout', () => {
     spawnMock.mockReturnValue(child)
 
     let calls = 0
+
     const promise = gitStreamStdout(['status'], {
       cwd: '/repo',
       // Stop after the first chunk — mirrors a parser hitting its entry limit.
       onStdout: () => {
         calls += 1
+
         return true
       }
     })
+
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
     child.stdout.emit('data', Buffer.from('? a.txt\n'))
 
@@ -864,6 +919,7 @@ describe('gitStreamStdout', () => {
       maxBuffer: 4,
       onStdout: () => {}
     })
+
     const rejection = expect(promise).rejects.toThrow('git stdout exceeded maxBuffer.')
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
     child.stdout.emit('data', Buffer.from('way too much'))
@@ -896,6 +952,7 @@ describe('gitStreamStdout', () => {
         throw new Error('parser blew up')
       }
     })
+
     const rejection = expect(promise).rejects.toThrow('parser blew up')
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
     child.stdout.emit('data', Buffer.from('? a.txt\n'))
@@ -915,6 +972,7 @@ describe('gitStreamStdout', () => {
       signal: controller.signal,
       onStdout: () => {}
     })
+
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
     controller.abort()
 

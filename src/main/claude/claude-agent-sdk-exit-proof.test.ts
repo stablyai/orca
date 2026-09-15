@@ -21,12 +21,14 @@ function childWithDescendantScript(input: {
   descendantTrapsSigterm: boolean
 }): string {
   const descendantScript = `${input.descendantTrapsSigterm ? 'process.on("SIGTERM", () => {}); ' : ''}setInterval(() => {}, 1000000)`
+
   const rootBehaviour = input.rootTrapsSigterm
     ? `process.on('SIGTERM', () => {})
 process.on('SIGINT', () => {})
 setInterval(() => {}, 1000000)`
     : `process.stdin.on('end', () => process.exit(0))
 process.stdin.resume()`
+
   return `
 const descendant = require('node:child_process').spawn(
   process.execPath,
@@ -52,6 +54,7 @@ process.stdout.write('ready\\n')
  */
 function descendantState(pid: number): 'running' | 'exited' {
   let state: string
+
   try {
     state = execFileSync('ps', ['-o', 'state=', '-p', String(pid)], {
       encoding: 'utf8',
@@ -62,8 +65,10 @@ function descendantState(pid: number): 'running' | 'exited' {
     if ((error as { status?: number }).status !== 1) {
       throw error
     }
+
     return 'exited'
   }
+
   return state.startsWith('Z') ? 'exited' : 'running'
 }
 
@@ -94,6 +99,7 @@ async function proveExitWithRetries(
       return true
     }
   }
+
   return proveClaudeChildExit(input)
 }
 
@@ -113,12 +119,14 @@ function firstStdoutLine(child: ReturnType<typeof spawnProcess>): Promise<string
 
 function observeExit(child: EventEmitter): { exitPromise: Promise<void>; exited: () => boolean } {
   let exited = false
+
   const exitPromise = new Promise<void>((resolve) => {
     child.once('exit', () => {
       exited = true
       resolve()
     })
   })
+
   return { exitPromise, exited: () => exited }
 }
 
@@ -128,6 +136,7 @@ function mockChild(
 ): EventEmitter &
   Pick<SpawnedProcess, 'pid' | 'kill' | 'stdin'> & { kill: ReturnType<typeof vi.fn> } {
   const child = new EventEmitter()
+
   return Object.assign(child, {
     pid: pid ?? undefined,
     stdin: new PassThrough(),
@@ -141,10 +150,12 @@ function mockTree(verdicts: DescendantTreeVerdict[]): ClaudeChildTreeReaper & {
   reap: ReturnType<typeof vi.fn>
 } {
   let treeVerdict: DescendantTreeVerdict = 'unverifiable'
+
   return {
     capture: vi.fn(async () => {}),
     reap: vi.fn(async () => {
       treeVerdict = verdicts.shift() ?? treeVerdict
+
       return treeVerdict
     }),
     get treeVerdict() {
@@ -192,9 +203,11 @@ describe('claude child exit proof', () => {
       const child = spawnScript(
         childWithDescendantScript({ rootTrapsSigterm: true, descendantTrapsSigterm: true })
       )
+
       const { descendantPid } = JSON.parse(await firstStdoutLine(child)) as {
         descendantPid: number
       }
+
       expect(descendantState(descendantPid)).toBe('running')
       await ageDescendantPastTheCaptureSecond()
 
@@ -229,9 +242,11 @@ describe('claude child exit proof', () => {
       const child = spawnScript(
         childWithDescendantScript({ rootTrapsSigterm: false, descendantTrapsSigterm: true })
       )
+
       const { descendantPid } = JSON.parse(await firstStdoutLine(child)) as {
         descendantPid: number
       }
+
       expect(descendantState(descendantPid)).toBe('running')
       await ageDescendantPastTheCaptureSecond()
 
@@ -258,9 +273,11 @@ describe('claude child exit proof', () => {
       const child = spawnScript(
         childWithDescendantScript({ rootTrapsSigterm: true, descendantTrapsSigterm: false })
       )
+
       const { descendantPid } = JSON.parse(await firstStdoutLine(child)) as {
         descendantPid: number
       }
+
       try {
         const proven = await proveExitWithRetries({ child, ...observeExit(child) })
         expect({ proven, descendant: descendantState(descendantPid) }).toEqual({
@@ -324,6 +341,7 @@ describe('claude child exit proof', () => {
     const tree = mockTree(['live'])
     tree.reap.mockImplementation(async () => {
       child.emit('exit', null, 'SIGKILL')
+
       return 'live'
     })
 
@@ -347,6 +365,7 @@ describe('claude child exit proof', () => {
     const child = mockChild()
     const captureDescendants = vi.fn(async () => snapshotOf(4243))
     const terminateDescendants = vi.fn()
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'darwin',
       exited: () => true,
@@ -371,6 +390,7 @@ describe('claude child tree reaper', () => {
     const release = Promise.withResolvers<DescendantTreeVerdict>()
     const terminateDescendants = vi.fn(() => release.promise)
     const captureDescendants = vi.fn(async () => snapshotOf(4243))
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'darwin',
       captureDescendants,
@@ -393,10 +413,12 @@ describe('claude child tree reaper', () => {
   it('re-verifies the retained snapshot on a later reap rather than re-walking a dead root', async () => {
     const child = mockChild()
     const captureDescendants = vi.fn(async () => snapshotOf(4243))
+
     const terminateDescendants = vi
       .fn()
       .mockResolvedValueOnce('live')
       .mockResolvedValueOnce('exited')
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants,
@@ -413,10 +435,12 @@ describe('claude child tree reaper', () => {
 
   it('keeps an observed exit when a later re-read cannot see the table', async () => {
     const child = mockChild()
+
     const terminateDescendants = vi
       .fn()
       .mockResolvedValueOnce('exited')
       .mockResolvedValueOnce('unverifiable')
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants: vi.fn(async () => snapshotOf(4243)),
@@ -430,6 +454,7 @@ describe('claude child tree reaper', () => {
 
   it('keeps an observed live descendant when a later re-read cannot see the table', async () => {
     const child = mockChild()
+
     // Reap #1 completed and saw a descendant alive at its deadline; the root then
     // left on its own and the re-verification on a loaded host could not read the
     // table. "Could not look" must not erase "was seen alive": the lease release
@@ -438,6 +463,7 @@ describe('claude child tree reaper', () => {
       .fn()
       .mockResolvedValueOnce('live')
       .mockResolvedValueOnce('unverifiable')
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants: vi.fn(async () => snapshotOf(4243)),
@@ -451,13 +477,16 @@ describe('claude child tree reaper', () => {
 
   it('treats an unreadable process table as unproven and re-walks the live root', async () => {
     const child = mockChild()
+
     // A loaded host can miss the table's deadline; while the root still lives
     // that is a retryable read, not evidence that it has no descendants.
     const captureDescendants = vi
       .fn()
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(snapshotOf(4243))
+
     const terminateDescendants = vi.fn(async () => 'exited' as const)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants,
@@ -472,11 +501,14 @@ describe('claude child tree reaper', () => {
 
   it('does not latch a missing root while it is still live', async () => {
     const child = mockChild()
+
     const captureDescendants = vi
       .fn()
       .mockResolvedValueOnce({ rootPgid: null, descendants: [], capturedAtMs: 1 })
       .mockResolvedValueOnce(snapshotOf(4243))
+
     const terminateDescendants = vi.fn(async () => 'exited' as const)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants,
@@ -492,12 +524,15 @@ describe('claude child tree reaper', () => {
   it('refreshes the live snapshot at close time so late descendants are included', async () => {
     const child = mockChild()
     const first = snapshotOf(4243)
+
     const second = {
       ...first,
       descendants: [...first.descendants, { ...first.descendants[0], pid: 4244 }]
     }
+
     const captureDescendants = vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(second)
     const terminateDescendants = vi.fn(async () => 'exited' as const)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants,
@@ -515,10 +550,12 @@ describe('claude child tree reaper', () => {
 
   it('keeps the original capture boundary for retained POSIX rows', async () => {
     const child = mockChild()
+
     const first = {
       ...snapshotOf(4243),
       capturedAtMs: 1_700_000_000_900
     }
+
     const refreshed = {
       ...first,
       capturedAtMs: 1_700_000_002_100,
@@ -532,8 +569,10 @@ describe('claude child tree reaper', () => {
         }
       ]
     }
+
     const captureDescendants = vi.fn().mockResolvedValueOnce(first).mockResolvedValueOnce(refreshed)
     const terminateDescendants = vi.fn(async () => 'exited' as const)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants,
@@ -558,6 +597,7 @@ describe('claude child tree reaper', () => {
   it('fails closed when a POSIX refresh reuses a PID with a new identity', async () => {
     const child = mockChild()
     const first = snapshotOf(4243)
+
     const replacement = {
       ...first,
       descendants: [
@@ -568,11 +608,14 @@ describe('claude child tree reaper', () => {
         }
       ]
     }
+
     const captureDescendants = vi
       .fn()
       .mockResolvedValueOnce(first)
       .mockResolvedValueOnce(replacement)
+
     const terminateDescendants = vi.fn(async () => 'exited' as const)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants,
@@ -591,16 +634,20 @@ describe('claude child tree reaper', () => {
   it('fails closed when a Windows refresh reuses a PID with a new creation time', async () => {
     const child = mockChild()
     const first = windowsSnapshotOf(4243)
+
     const replacement = {
       ...first,
       descendants: [{ pid: 4243, creationTimeMs: first.descendants[0].creationTimeMs + 1 }]
     }
+
     const captureWindowsDescendants = vi
       .fn()
       .mockResolvedValueOnce(first)
       .mockResolvedValueOnce(replacement)
+
     const terminateWindowsTree = vi.fn(async () => {})
     const terminateWindowsDescendants = vi.fn(async () => 'exited' as const)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'win32',
       captureWindowsDescendants,
@@ -621,18 +668,23 @@ describe('claude child tree reaper', () => {
     const child = mockChild()
     const firstDone = Promise.withResolvers<void>()
     const first = snapshotOf(4243)
+
     const second = {
       ...first,
       descendants: [...first.descendants, { ...first.descendants[0], pid: 4244 }]
     }
+
     const captureDescendants = vi
       .fn()
       .mockImplementationOnce(async () => {
         await firstDone.promise
+
         return first
       })
       .mockResolvedValueOnce(second)
+
     const terminateDescendants = vi.fn(async () => 'exited' as const)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants,
@@ -658,13 +710,16 @@ describe('claude child tree reaper', () => {
     const child = mockChild()
     const first = snapshotOf(4243)
     const replacement = snapshotOf(4244)
+
     const captureDescendants = vi
       .fn()
       .mockResolvedValueOnce(first)
       .mockResolvedValueOnce(replacement)
+
     const terminateDescendants = vi.fn(async (snapshot: DescendantSnapshot) =>
       snapshot.descendants.some((row) => row.pid === 4244) ? ('live' as const) : ('exited' as const)
     )
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants,
@@ -684,18 +739,23 @@ describe('claude child tree reaper', () => {
   it('retains a Windows replacement descendant while preserving unidentified rows', async () => {
     const child = mockChild()
     const first = windowsSnapshotOf(4243)
+
     const replacement = {
       ...windowsSnapshotOf(4244),
       unidentifiedCount: 0
     }
+
     const captureWindowsDescendants = vi
       .fn()
       .mockResolvedValueOnce({ ...first, unidentifiedCount: 1 })
       .mockResolvedValueOnce(replacement)
+
     const terminateWindowsTree = vi.fn(async () => {})
+
     const terminateWindowsDescendants = vi.fn(async (snapshot: WindowsDescendantSnapshot) =>
       snapshot.descendants.some((row) => row.pid === 4244) ? ('live' as const) : ('exited' as const)
     )
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'win32',
       captureWindowsDescendants,
@@ -716,6 +776,7 @@ describe('claude child tree reaper', () => {
 
   it('retains the prior identity-safe snapshot when a refresh is partial', async () => {
     const child = mockChild()
+
     const first = {
       ...snapshotOf(4243),
       descendants: [
@@ -723,6 +784,7 @@ describe('claude child tree reaper', () => {
         { ...snapshotOf(4243).descendants[0], pid: 4244 }
       ]
     }
+
     const captureDescendants = vi
       .fn()
       .mockResolvedValueOnce(first)
@@ -730,7 +792,9 @@ describe('claude child tree reaper', () => {
         ...first,
         descendants: first.descendants.slice(0, 1)
       })
+
     const terminateDescendants = vi.fn(async () => 'exited' as const)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants,
@@ -748,6 +812,7 @@ describe('claude child tree reaper', () => {
     const child = mockChild()
     let exited = false
     const captureDescendants = vi.fn(async () => null)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       exited: () => exited,
@@ -768,11 +833,13 @@ describe('claude child tree reaper', () => {
 
   it('discards a walk that found no root instead of proving an empty tree', async () => {
     const child = mockChild()
+
     const captureDescendants = vi.fn(async () => ({
       rootPgid: null,
       descendants: [],
       capturedAtMs: 1
     }))
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants,
@@ -789,10 +856,13 @@ describe('claude child tree reaper', () => {
   it('discards a walk that raced the root exit instead of proving an empty tree', async () => {
     const child = mockChild()
     let exited = false
+
     const captureDescendants = vi.fn(async () => {
       exited = true
+
       return { rootPgid: 1, descendants: [], capturedAtMs: 1 }
     })
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       exited: () => exited,
@@ -807,6 +877,7 @@ describe('claude child tree reaper', () => {
   it('proves a childless snapshot without signalling anything', async () => {
     const child = mockChild()
     const terminateDescendants = vi.fn()
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'linux',
       captureDescendants: vi.fn(async () => ({
@@ -829,6 +900,7 @@ describe('claude child tree reaper', () => {
     const terminateWindowsTree = vi.fn(() => release.promise)
     const captureDescendants = vi.fn()
     const terminateWindowsDescendants = vi.fn(async () => 'exited' as const)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'win32',
       captureDescendants,
@@ -855,6 +927,7 @@ describe('claude child tree reaper', () => {
 
   it('stays unproven on Windows when taskkill fails and a descendant is still observed', async () => {
     const child = mockChild()
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'win32',
       captureWindowsDescendants: vi.fn(async () => windowsSnapshotOf(4243)),
@@ -873,6 +946,7 @@ describe('claude child tree reaper', () => {
   it('stays unproven on Windows when taskkill resolves but a descendant survives it', async () => {
     const child = mockChild()
     const terminateWindowsTree = vi.fn(async () => {})
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'win32',
       captureWindowsDescendants: vi.fn(async () => windowsSnapshotOf(4243)),
@@ -890,6 +964,7 @@ describe('claude child tree reaper', () => {
     let exited = false
     const terminateWindowsTree = vi.fn(async () => {})
     const terminateWindowsDescendants = vi.fn(async () => 'exited' as const)
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'win32',
       exited: () => exited,
@@ -910,6 +985,7 @@ describe('claude child tree reaper', () => {
   it('treats an unreadable Windows table as unproven', async () => {
     const child = mockChild()
     const terminateWindowsDescendants = vi.fn()
+
     const tree = createClaudeChildTreeReaper(child, {
       platform: 'win32',
       captureWindowsDescendants: vi.fn(async () => null),

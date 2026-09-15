@@ -31,6 +31,7 @@ describe('confirmation dialog Fast Refresh boundary', () => {
   it('resolves the hook against the context the provider publishes', () => {
     const wrapper = ({ children }: { children: ReactNode }) =>
       createElement(ConfirmationDialogProvider, null, children)
+
     const { result } = renderHook(() => useConfirmationDialog(), { wrapper })
 
     expect(typeof result.current).toBe('function')

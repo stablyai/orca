@@ -86,6 +86,7 @@ describe('getStickyHeaderIndexes', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const groupedRepo: Repo = {
       ...repo,
       id: 'repo-autogenie',
@@ -93,19 +94,23 @@ describe('getStickyHeaderIndexes', () => {
       projectGroupId: projectGroup.id,
       projectGroupOrder: 0
     }
+
     const ungroupedRepo: Repo = { ...repo, id: 'repo-orca', displayName: 'orca' }
+
     const groupedWorktree: Worktree = {
       ...makeWorktree('main'),
       id: 'wt-autogenie-main',
       repoId: groupedRepo.id,
       isMainWorktree: true
     }
+
     const ungroupedWorktree: Worktree = {
       ...makeWorktree('main'),
       id: 'wt-orca-main',
       repoId: ungroupedRepo.id,
       isMainWorktree: true
     }
+
     const rows = buildRows(
       'repo',
       [groupedWorktree, ungroupedWorktree],

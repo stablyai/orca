@@ -140,7 +140,9 @@ export function resolveBrowserTabCreateFocus(request: {
     navigation: request.navigation,
     clientKind: request.clientKind
   })
+
   const selects = browserTabCreateTakesFocus(request.activate)
+
   return {
     navigation,
     selects,
@@ -205,9 +207,11 @@ export function publishSwitchedBrowserSessionTab(
   publication: BrowserTabSwitchPublication
 ): void {
   const rules = BROWSER_TAB_SWITCH_PUBLICATION_RULES[publication.placementKind]
+
   if (rules.notifiesSessionTabsChanged && publication.worktreeId !== undefined) {
     host.notifyHeadlessBrowserSessionTabsChanged?.(publication.worktreeId)
   }
+
   if (rules.marksSessionTabFocus && browserTabSwitchTakesFocus(publication.focus)) {
     // Why unconditionally host-facing: an explicit switch carries no navigation target yet, so it
     // keeps steering every screen exactly as it did before create learned to stay local.
@@ -222,18 +226,23 @@ export function publishCreatedBrowserSessionTab(
   publication: BrowserTabCreatePublication
 ): void {
   const rules = BROWSER_TAB_CREATE_PUBLICATION_RULES[publication.placementKind]
+
   if (rules.notifiesSessionTabsChanged && publication.worktreeId !== undefined) {
     host.notifyHeadlessBrowserSessionTabsChanged?.(publication.worktreeId)
   }
+
   if (rules.activatesBridgeTab) {
     const bridge = host.getAgentBrowserBridge()
+
     const webContentsId = bridge
       ?.getRegisteredTabs(publication.worktreeId)
       .get(publication.browserPageId)
+
     if (bridge && webContentsId != null) {
       bridge.setActiveTab(webContentsId, publication.worktreeId)
     }
   }
+
   // Why `selects` and not `focusesHost`: a caller-local create still has to land the tab in the
   // group whose "+" was clicked, and this is the only call that moves it there.
   if (rules.marksSessionTabFocus && publication.focus.selects) {

@@ -30,5 +30,6 @@ export function describeTerminalWaitBlockedReason(
   reason: RuntimeTerminalWaitBlockedReason
 ): string {
   const neutral = agentNeutralTerminalWaitBlockedReason(reason)
+
   return neutral ? `${reason} (${neutral})` : reason
 }

@@ -11,10 +11,12 @@ import {
 } from './runtime-environment-transport-routing'
 
 const { request, publish } = vi.hoisted(() => ({ request: vi.fn(), publish: vi.fn() }))
+
 vi.mock('../../shared/remote-runtime-client', () => ({
   sendRemoteRuntimeRequest: request,
   subscribeRemoteRuntimeRequest: vi.fn()
 }))
+
 vi.mock('electron', () => ({
   BrowserWindow: {
     getAllWindows: () => [
@@ -27,12 +29,14 @@ vi.mock('electron', () => ({
 }))
 
 let profile: string
+
 beforeEach(() => {
   vi.useFakeTimers()
   request.mockReset()
   publish.mockReset()
   profile = mkdtempSync(join(tmpdir(), 'orca-status-recovery-'))
 })
+
 afterEach(() => {
   resetSharedControlSupport()
   vi.useRealTimers()
@@ -44,6 +48,7 @@ it('recovers a saved host after its first status check fails, without another UI
     name: 'offline-at-startup',
     pairingCode: pairingCode()
   })
+
   request
     .mockRejectedValueOnce(
       Object.assign(new Error('host offline'), { code: 'runtime_unavailable' })
@@ -74,6 +79,7 @@ it('a passive capability check does not strand later active bootstrap recovery',
     name: 'passive-first',
     pairingCode: pairingCode()
   })
+
   request
     .mockResolvedValueOnce({
       id: 'status',

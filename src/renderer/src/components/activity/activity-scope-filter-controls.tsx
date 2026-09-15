@@ -20,6 +20,7 @@ export function useActivityScopeFilterMenuItemsVisible(): boolean {
   const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
   const agentsFilterRepoIds = useAppStore((s) => s.agentsFilterRepoIds)
   const { hostOptions } = useSidebarHostScopeOptions()
+
   return (
     agentsVisibleHostIds !== null ||
     agentsFilterRepoIds.length > 0 ||

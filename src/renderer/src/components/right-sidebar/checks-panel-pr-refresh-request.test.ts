@@ -51,10 +51,12 @@ describe('getChecksPanelForegroundReviewEvidenceKey', () => {
 
   it('keeps optimistic and confirmed GitHub evidence on one request key', () => {
     const optimisticKey = getChecksPanelForegroundReviewEvidenceKey(input)
+
     const confirmedKey = getChecksPanelForegroundReviewEvidenceKey({
       ...input,
       reviewEvidenceProvider: 'github'
     })
+
     expect(optimisticKey).toBe('worktree::cache::branch::github::42')
     expect(confirmedKey).toBe(optimisticKey)
   })

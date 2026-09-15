@@ -35,8 +35,10 @@ export function WslCliRegistration({
 
   const refreshStatus = useCallback(async (): Promise<void> => {
     setLoading(true)
+
     try {
       const next = await window.api.cli.getWslInstallStatus()
+
       if (mountedRef.current) {
         setStatus(next)
       }
@@ -74,11 +76,14 @@ export function WslCliRegistration({
 
   const handleInstall = async (): Promise<void> => {
     setBusyAction('install')
+
     try {
       const next = await window.api.cli.installWsl()
+
       if (!mountedRef.current) {
         return
       }
+
       setStatus(next)
       setDialogOpen(false)
       toast.success(
@@ -109,11 +114,14 @@ export function WslCliRegistration({
 
   const handleRemove = async (): Promise<void> => {
     setBusyAction('remove')
+
     try {
       const next = await window.api.cli.removeWsl()
+
       if (!mountedRef.current) {
         return
       }
+
       setStatus(next)
       setDialogOpen(false)
       toast.success(

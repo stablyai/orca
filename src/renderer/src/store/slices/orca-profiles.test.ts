@@ -198,6 +198,7 @@ describe('orca profile slice', () => {
       targetRepoId: 'repo-2',
       targetProjectId: 'repo:repo-2'
     }
+
     orcaProfilesApi.transferProject.mockResolvedValue(transferResult)
     const store = createTestStore()
 
@@ -228,6 +229,7 @@ describe('orca profile slice', () => {
       targetProjectId: 'repo:repo-1',
       willRelaunch: true
     }
+
     orcaProfilesApi.transferProject.mockResolvedValue(transferResult)
     const store = createTestStore()
 
@@ -249,6 +251,7 @@ describe('orca profile slice', () => {
       sourceRepoId: 'repo-1',
       duplicateRepoId: 'repo-existing'
     }
+
     orcaProfilesApi.transferProject.mockResolvedValue(transferResult)
     const store = createTestStore()
 

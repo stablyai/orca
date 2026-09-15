@@ -52,6 +52,7 @@ export function CompareAgainstUpstreamSetting({
 }): React.JSX.Element {
   const title = getCompareAgainstUpstreamTitle()
   const description = getCompareAgainstUpstreamDescription()
+
   const value: SourceControlCompareBasePolicy = settings.sourceControlCompareAgainstUpstream
     ? 'branch-upstream'
     : 'repository-default'

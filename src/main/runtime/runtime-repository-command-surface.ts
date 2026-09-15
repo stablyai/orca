@@ -20,6 +20,7 @@ type HostedReviewCommandName =
   | 'getHostedReviewCreationEligibility'
   | 'createHostedReview'
   | 'createStackedHostedReview'
+
 type GitHubRepositoryQueryCommandName =
   | 'listRepoWorkItems'
   | 'listRepoIssues'

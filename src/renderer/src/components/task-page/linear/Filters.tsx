@@ -8,6 +8,7 @@ import { Plus, LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import LinearIssueAttributeFilterDropdowns from '@/components/linear-issue-attribute-filter-dropdowns'
 import { Input } from '@/components/ui/input'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+
 export function TaskPageLinearFilters({
   model
 }: {
@@ -58,6 +59,7 @@ export function TaskPageLinearFilters({
     setNewLinearIssueTeamId,
     setNewLinearIssueProjectId
   } = model
+
   return (
     <div
       className="min-w-0 rounded-md rounded-b-none border border-border/50 bg-muted/50 px-3 pt-2 pb-0 shadow-sm"
@@ -71,12 +73,14 @@ export function TaskPageLinearFilters({
         >
           {linearModeOptions.map((mode) => {
             const active = linearMode === mode.id
+
             const buttonClassName = cn(
               'rounded-md border px-2 py-1 text-xs transition',
               active
                 ? 'border-border/50 bg-foreground/90 text-background'
                 : 'border-border/50 bg-transparent text-foreground hover:bg-muted/50'
             )
+
             if (mode.id === 'in-orca') {
               return (
                 <Tooltip key={mode.id}>
@@ -99,6 +103,7 @@ export function TaskPageLinearFilters({
                 </Tooltip>
               )
             }
+
             return (
               <button
                 key={mode.id}
@@ -136,17 +141,21 @@ export function TaskPageLinearFilters({
                     setNewLinearProjectStartDate('')
                     setNewLinearProjectTargetDate('')
                     setNewLinearProjectOpen(true)
+
                     return
                   }
+
                   // Why: restore dismissed typed text (accidental dismissal recoverable); pickers keep their fresh open-time defaults.
                   const issueDraft = useAppStore.getState().newLinearIssueDraft
                   setNewLinearIssueTitle(issueDraft?.title ?? '')
                   setNewLinearIssueBody(issueDraft?.body ?? '')
+
                   const projectTeamId =
                     selectedLinearProject?.teams?.[0]?.id ??
                     availableTeams.find(
                       (team) => team.workspaceId === selectedLinearProject?.workspaceId
                     )?.id
+
                   setNewLinearIssueTeamId(projectTeamId ?? availableTeams[0]?.id ?? null)
                   setNewLinearIssueProjectId(selectedLinearProject?.id ?? null)
                   setNewLinearIssueOpen(true)
@@ -236,6 +245,7 @@ export function TaskPageLinearFilters({
                   ) {
                     return
                   }
+
                   e.preventDefault()
                   const trimmed = linearSearchInput.trim()
                   setLinearSearchInput(trimmed)
@@ -244,6 +254,7 @@ export function TaskPageLinearFilters({
                     linearQuery: trimmed,
                     linearMode: linearMode === 'in-orca' ? 'in-orca' : 'issues'
                   })
+
                   if (linearMode !== 'in-orca') {
                     setLinearRefreshNonce((n) => n + 1)
                   }
@@ -270,6 +281,7 @@ export function TaskPageLinearFilters({
                     linearQuery: '',
                     linearMode: linearMode === 'in-orca' ? 'in-orca' : 'issues'
                   })
+
                   if (linearMode !== 'in-orca') {
                     setLinearRefreshNonce((n) => n + 1)
                   }

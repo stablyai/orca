@@ -11,15 +11,18 @@ import {
 import { __resetShellStartupEnvCache } from '../pty/shell-startup-env'
 
 const temporaryHomes: string[] = []
+
 const savedConfigHome = process.env.XDG_CONFIG_HOME
 
 afterEach(() => {
   __resetShellStartupEnvCache()
+
   if (savedConfigHome === undefined) {
     delete process.env.XDG_CONFIG_HOME
   } else {
     process.env.XDG_CONFIG_HOME = savedConfigHome
   }
+
   for (const path of temporaryHomes.splice(0)) {
     rmSync(path, { recursive: true, force: true })
   }
@@ -66,10 +69,12 @@ describe('hasCustomCodexHomeOverride', () => {
       // that sets one would otherwise change the recorded shape.
       delete process.env.XDG_CONFIG_HOME
       expect(hasCustomCodexHomeOverrideForLaunch({ HOME: paneHome, SHELL: '/bin/zsh' })).toBe(true)
+
       const override = getCustomCodexHomeOverrideForLaunch({
         HOME: paneHome,
         SHELL: '/bin/zsh'
       })
+
       expect(override).toEqual({
         source: 'shell-startup',
         context: {
@@ -112,6 +117,7 @@ describe('hasCustomCodexHomeOverride', () => {
         SHELL: '/opt/homebrew/bin/fish',
         XDG_CONFIG_HOME: configHome
       }
+
       const override = getCustomCodexHomeOverrideForLaunch(launchEnv)
 
       expect(override).toEqual({

@@ -24,6 +24,7 @@ describe('orderProjectIdsByRecency', () => {
       worktree({ projectId: 'beta', createdAt: 30 }),
       worktree({ projectId: 'gamma', createdAt: 20 })
     ])
+
     expect(ids.filter((id) => !id.includes(':'))).toEqual(['beta', 'gamma', 'alpha'])
   })
 
@@ -33,6 +34,7 @@ describe('orderProjectIdsByRecency', () => {
       worktree({ projectId: 'alpha', createdAt: 99 }),
       worktree({ projectId: 'beta', createdAt: 50 })
     ])
+
     expect(ids[0]).toBe('alpha')
   })
 
@@ -41,6 +43,7 @@ describe('orderProjectIdsByRecency', () => {
       worktree({ projectId: undefined, createdAt: 99 }),
       worktree({ projectId: 'beta', createdAt: 1 })
     ])
+
     expect(ids).toContain('beta')
     expect(ids).not.toContain(undefined)
   })
@@ -55,6 +58,7 @@ describe('orderProjectIdsByRecency', () => {
       worktree({ projectId: 'alpha' }),
       worktree({ projectId: 'beta', createdAt: 5 })
     ])
+
     expect(ids[0]).toBe('beta')
   })
 })

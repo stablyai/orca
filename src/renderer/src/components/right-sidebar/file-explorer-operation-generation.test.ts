@@ -9,6 +9,7 @@ import {
 } from './file-explorer-operation-owner'
 
 const initialState = useAppStore.getInitialState()
+
 const worktreeId = 'repo-1::/srv/project'
 
 function worktree(hostId: Worktree['hostId'], runtimeOwnerEnvironmentId?: string): Worktree {

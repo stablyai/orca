@@ -22,9 +22,11 @@ export {
   FRAME_DECODER_MAX_TURN_MS,
   FRAME_DECODER_MAX_RETAINED_BYTES
 }
+
 export type { DecodedFrame, FrameDecoderOptions } from './relay-frame-decoder'
 
 export const RELAY_VERSION = '0.1.0'
+
 export const RELAY_SENTINEL = `ORCA-RELAY v${RELAY_VERSION} READY\n`
 
 export const MessageType = {
@@ -47,12 +49,14 @@ export type HandshakeMessage =
 
 export function encodeHandshakeFrame(msg: HandshakeMessage): Buffer {
   const payload = Buffer.from(JSON.stringify(msg), 'utf-8')
+
   return encodeFrame(MessageType.Handshake, 0, 0, payload)
 }
 
 export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
   const msg = JSON.parse(payload.toString('utf-8')) as HandshakeMessage
   const t = (msg as { type?: string }).type
+
   if (
     t !== 'orca-relay-handshake' &&
     t !== 'orca-relay-handshake-ok' &&
@@ -61,15 +65,18 @@ export function parseHandshakeMessage(payload: Buffer): HandshakeMessage {
   ) {
     throw new Error(`Unknown handshake type: ${t}`)
   }
+
   return msg
 }
 
 export const KEEPALIVE_SEND_MS = 5_000
+
 export const TIMEOUT_MS = 20_000
 
 // ── Streaming constants (see docs/relay-file-stream-design.md) ─────
 
 export const STREAM_CHUNK_SIZE = 256 * 1024
+
 export const MAX_CONCURRENT_STREAMS = 16
 
 /** Max unacked fs.streamChunk frames in flight per stream when the client
@@ -152,6 +159,7 @@ export function encodeFrame(
   header.writeUInt32BE(id, 1)
   header.writeUInt32BE(ack, 5)
   header.writeUInt32BE(payload.length, 9)
+
   return Buffer.concat([header, payload])
 }
 
@@ -161,9 +169,11 @@ export function encodeJsonRpcFrame(msg: JsonRpcMessage, id: number, ack: number)
 
 export function prepareJsonRpcPayload(msg: JsonRpcMessage): PreparedJsonRpcPayload {
   const payload = Buffer.from(JSON.stringify(msg), 'utf-8')
+
   if (payload.length > MAX_MESSAGE_SIZE) {
     throw new Error(`Message too large: ${payload.length} bytes`)
   }
+
   return Object.freeze({ byteLength: payload.length, [JSON_RPC_PAYLOAD_BYTES]: payload })
 }
 
@@ -182,8 +192,10 @@ export function encodeKeepAliveFrame(id: number, ack: number): Buffer {
 export function parseJsonRpcMessage(payload: Buffer): JsonRpcMessage {
   const text = payload.toString('utf-8')
   const msg = JSON.parse(text) as JsonRpcMessage
+
   if (msg.jsonrpc !== '2.0') {
     throw new Error(`Invalid JSON-RPC version: ${String((msg as Record<string, unknown>).jsonrpc)}`)
   }
+
   return msg
 }

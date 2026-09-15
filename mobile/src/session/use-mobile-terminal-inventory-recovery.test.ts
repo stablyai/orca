@@ -20,18 +20,23 @@ vi.mock('react-native', () => ({
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason?: unknown) => void
+
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, reject, resolve }
 }
 
 const client = {
   getState: () => 'connected'
 } as unknown as RpcClient
+
 const fetchTerminals = vi.fn(async () => true)
+
 type RecoveryActions = ReturnType<typeof useMobileTerminalInventoryRecovery>
+
 let actions: RecoveryActions | null = null
 
 function Harness({ scopeKey }: { scopeKey: string }): null {
@@ -41,14 +46,17 @@ function Harness({ scopeKey }: { scopeKey: string }): null {
     fetchTerminals,
     scopeKey
   })
+
   useEffect(() => {
     actions = recovery
+
     return () => {
       if (actions === recovery) {
         actions = null
       }
     }
   }, [recovery])
+
   return null
 }
 
@@ -64,6 +72,7 @@ function BridgeHarness({
   const bridge = useMobileTerminalInventoryRecoveryBridge(scopeKey)
   useEffect(() => {
     bridgeSignal = bridge.signalTerminalInventoryRecovery
+
     if (!connect) {
       return () => {
         if (bridgeSignal === bridge.signalTerminalInventoryRecovery) {
@@ -71,8 +80,10 @@ function BridgeHarness({
         }
       }
     }
+
     return bridge.registerTerminalInventoryRecoveryAction(request)
   }, [bridge, connect, request])
+
   return null
 }
 
@@ -208,6 +219,7 @@ describe('useMobileTerminalInventoryRecovery', () => {
         } else {
           firstPass.reject(new Error('transport lost'))
         }
+
         await flush()
       })
 
@@ -296,6 +308,7 @@ describe('useMobileTerminalInventoryRecovery', () => {
     let reportPhysicalStart: ((startedAt: number) => void) | undefined
     fetchTerminals.mockImplementationOnce(async (options) => {
       reportPhysicalStart = options?.onPhysicalRequestStarted
+
       return oldPass.promise
     })
     await mount('scope-a')

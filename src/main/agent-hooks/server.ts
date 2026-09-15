@@ -16,13 +16,16 @@ export type {
   AgentHookStatusFreshnessObservation,
   EnrichedAgentHookEventPayload
 } from './server/server-types'
+
 export type { AgentHookSource }
+
 export {
   CLOSED_AGENT_STATUS_TAB_IDS_MAX,
   CLOSED_AGENT_STATUS_PANE_KEYS_MAX,
   PANE_KEY_ALIASES_MAX,
   RETIRED_PANE_FENCES_MAX
 } from './server/server-constants'
+
 export { isValidPaneKey }
 
 /** Public composition seam for the loopback hook listener and relay status adapter. */

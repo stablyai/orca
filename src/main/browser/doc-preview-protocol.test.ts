@@ -19,7 +19,9 @@ function createFakeSession(): {
 // session instead of the preview session is otherwise invisible — every read would come back
 // from the same object.
 const previewSession = createFakeSession()
+
 const defaultSession = createFakeSession()
+
 vi.mock('electron', () => ({
   protocol: { registerSchemesAsPrivileged: vi.fn() },
   session: {
@@ -30,11 +32,14 @@ vi.mock('electron', () => ({
       if (partition !== 'orca-doc-preview') {
         throw new Error(`unexpected partition ${partition}`)
       }
+
       return previewSession
     }
   }
 }))
+
 vi.mock('./doc-preview-file-reader', () => ({ readDocPreviewFile: mocks.readDocPreviewFile }))
+
 vi.mock('./browser-session-partition-policies', () => ({
   installBrowserSessionPartitionPolicies: mocks.installBrowserSessionPartitionPolicies
 }))
@@ -249,11 +254,13 @@ describe('installDocPreviewProtocolHandler', () => {
       details: { url: string },
       callback: (response: { cancel: boolean }) => void
     ) => void
+
     const cancelled = (url: string): boolean => {
       let response: { cancel: boolean } | null = null
       filter({ url }, (value) => {
         response = value
       })
+
       return (response as { cancel: boolean } | null)?.cancel === true
     }
 

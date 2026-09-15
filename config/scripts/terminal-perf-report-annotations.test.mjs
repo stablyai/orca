@@ -15,6 +15,7 @@ function makeReportPath(content) {
   tempDirs.push(dir)
   const reportPath = join(dir, 'report.json')
   writeFileSync(reportPath, content)
+
   return reportPath
 }
 

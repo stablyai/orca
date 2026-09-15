@@ -56,12 +56,14 @@ export async function startGitCommonWatch(
         onWatchError
       )
     ])
+
     return {
       unsubscribe: async () => {
         await Promise.all([narrowWatch.unsubscribe(), primaryWatch.unsubscribe()])
       }
     }
   }
+
   // Why: Electron only ships darwin/linux/win32, all covered by NARROW_WATCH_PLATFORMS
   // above, so this branch is defensive dead code in production, not a reachable fallback.
   return startGitCommonPolling(

@@ -12,14 +12,17 @@ function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendReq
   calls: { method: string; params: Record<string, unknown> }[]
 } {
   const calls: { method: string; params: Record<string, unknown> }[] = []
+
   return {
     calls,
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
       calls.push({ method, params: params as Record<string, unknown> })
       const response = responses.shift()
+
       if (!response) {
         throw new Error(`unexpected request: ${method}`)
       }
+
       return response
     })
   }
@@ -80,14 +83,17 @@ describe('pasteMobileNativeChatImagePaths', () => {
 
   it('aborts rather than scheduling a write past the shared paste deadline', async () => {
     vi.useFakeTimers()
+
     try {
       const responses = [sendResult(true), sendResult(true), sendResult(true)]
       const calls: { timeoutMs: unknown }[] = []
+
       // Each write burns 10s, so the 15s sequence budget is spent by the third.
       const client = {
         sendRequest: vi.fn(async (_method: string, _params?: unknown, options?: unknown) => {
           calls.push({ timeoutMs: (options as { timeoutMs: number }).timeoutMs })
           vi.advanceTimersByTime(10_000)
+
           return responses.shift()!
         })
       }

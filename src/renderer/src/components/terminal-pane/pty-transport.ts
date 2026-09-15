@@ -14,13 +14,18 @@ export {
   subscribeToPtyExit,
   unregisterPtyDataHandlers
 } from './pty-dispatcher'
+
 export type { EagerPtyHandle } from './pty-dispatcher'
+
 export { extractLastOscTitle } from '../../../../shared/agent-detection'
+
 export { createPtyOutputProcessor } from './pty-output-processor'
+
 export {
   MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY,
   MAX_PENDING_PTY_SIDE_EFFECTS
 } from './pty-output-side-effect-queue'
+
 export type {
   IpcPtyTransportOptions,
   LocalPtySessionMetadata,
@@ -42,6 +47,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     onAgentExited,
     onAgentStatus
   } = opts
+
   let connected = false
   let destroyed = false
   let ptyId: string | null = null
@@ -49,6 +55,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let lastExitGeneration: number | null = null
   let suppressAttentionEvents = false
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
+
   const preconnectInputBuffer =
     opts.bufferInputUntilConnect || opts.preconnectInput?.length
       ? createPtyPreconnectInputBuffer(opts.preconnectInput)
@@ -64,12 +71,15 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
     }
   })
+
   const advancePtyLifecycle = (): number => {
     lifecycleGeneration += 1
     lastExitGeneration = null
     inputWriteQueue.clear()
+
     return lifecycleGeneration
   }
+
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -82,6 +92,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     onAgentExited,
     onAgentStatus
   })
+
   const handlers = createIpcPtySessionHandlers({
     outputProcessor,
     getPtyId: () => ptyId,
@@ -96,22 +107,29 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
     onPtyExit
   })
+
   const bind = (id: string): void => {
     ptyId = id
     connected = true
   }
+
   const setCallbacks = (callbacks: typeof storedCallbacks): void => {
     storedCallbacks = callbacks
   }
+
   const flushPreconnectInput = async (): Promise<void> => {
     if (!preconnectInputBuffer?.isBuffering()) {
       return
     }
+
     const id = ptyId
+
     if (destroyed || !connected || !id) {
       preconnectInputBuffer.clear()
+
       return
     }
+
     await preconnectInputBuffer.flush({
       isCurrent: () => !destroyed && connected && ptyId === id,
       sendInput: (data) => inputWriteQueue.enqueue(id, data),
@@ -127,6 +145,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   return {
     connect: async (options) => {
       const connectGeneration = advancePtyLifecycle()
+
       try {
         return await connectIpcPty(options, {
           transportOptions: opts,
@@ -151,6 +170,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
     attach: (options) => {
       const attachGeneration = advancePtyLifecycle()
+
       try {
         attachIpcPty(options, {
           handlers,
@@ -167,6 +187,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         preconnectInputBuffer?.clear()
         throw error
       }
+
       if (lifecycleGeneration === attachGeneration) {
         void flushPreconnectInput()
       }
@@ -183,6 +204,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       connected = false
       ptyId = null
       handlers.clearAccumulatedState()
+
       if (id) {
         try {
           window.api.pty.kill(id)
@@ -198,6 +220,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       outputProcessor.disposePendingSideEffectGauge()
       handlers.clearAccumulatedState()
       preconnectInputBuffer?.clear()
+
       if (ptyId) {
         if (options?.preserveExitObserver === false) {
           handlers.unregisterAll(ptyId)
@@ -205,6 +228,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           handlers.unregisterData(ptyId)
         }
       }
+
       connected = false
       ptyId = null
       storedCallbacks = {}
@@ -214,6 +238,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
         return preconnectInputBuffer.enqueue(data, 'ordinary', opts.onPreconnectInput)
       }
+
       return !destroyed && connected && ptyId ? inputWriteQueue.enqueue(ptyId, data) : false
     },
 
@@ -221,6 +246,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
         return preconnectInputBuffer.enqueue(data, 'immediate', opts.onPreconnectInput)
       }
+
       return !destroyed && connected && ptyId
         ? inputWriteQueue.enqueueQueryReply(ptyId, data)
         : false
@@ -233,9 +259,11 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             if (!destroyed && preconnectInputBuffer?.isBuffering()) {
               return preconnectInputBuffer.enqueueAccepted(data, opts.onPreconnectInput)
             }
+
             if (destroyed || !connected || !ptyId) {
               return false
             }
+
             return inputWriteQueue.enqueueAccepted(ptyId, data)
           }
         }),
@@ -244,7 +272,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (!connected || !ptyId) {
         return false
       }
+
       window.api.pty.claimViewport(ptyId, cols, rows)
+
       return true
     },
 
@@ -252,10 +282,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (!connected || !ptyId) {
         return false
       }
+
       window.api.pty.resize(ptyId, cols, rows)
+
       if (meta?.claim) {
         window.api.pty.claimViewport(ptyId, cols, rows)
       }
+
       return true
     },
 
@@ -270,6 +303,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
     destroy() {
       destroyed = true
+
       try {
         this.disconnect()
       } finally {

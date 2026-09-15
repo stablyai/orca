@@ -212,6 +212,7 @@ describe('windows mobile firewall', () => {
     const execFileMock = vi.mocked(execFile)
     execFileMock.mockImplementation(((_file, _args, _options, callback) => {
       callback(null, '{"privateFirewallEnabled":true,"networkCategory":"Private"}', '')
+
       return {}
     }) as unknown as typeof execFile)
 

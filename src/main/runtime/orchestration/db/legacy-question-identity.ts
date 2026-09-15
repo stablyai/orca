@@ -8,6 +8,7 @@ export function normalizeLegacyQuestionOptions(options: unknown): string {
   if (!Array.isArray(options) || !options.every((option) => typeof option === 'string')) {
     return '[]'
   }
+
   return JSON.stringify(options.map((option) => option.trim()))
 }
 
@@ -23,8 +24,10 @@ export function legacyMessageMatchesQuestion(
   ) {
     return false
   }
+
   try {
     const payload = JSON.parse(message.payload ?? '{}') as { options?: unknown }
+
     return (
       normalizeLegacyQuestionOptions(payload.options) === normalizeLegacyQuestionOptions(options)
     )

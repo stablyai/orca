@@ -18,12 +18,14 @@ export const testState = { dir: '' }
 export function createStore(): Store {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
+
   return new Store({ dataFile: dataFile() })
 }
 
 export async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const originalPlatform = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return await fn()
   } finally {
@@ -49,6 +51,7 @@ export function writeDataFile(data: unknown): void {
 export function readDataFile(): unknown {
   const parsed = JSON.parse(readFileSync(dataFile(), 'utf-8')) as PersistedState
   hydrateWorktreeMetaAliasProjection(parsed)
+
   return parsed
 }
 
@@ -60,14 +63,19 @@ export function collectPropertyPaths(value: unknown, property: string, prefix = 
   if (!value || typeof value !== 'object') {
     return []
   }
+
   const paths: string[] = []
+
   for (const [key, child] of Object.entries(value)) {
     const path = prefix ? `${prefix}.${key}` : key
+
     if (key === property) {
       paths.push(path)
     }
+
     paths.push(...collectPropertyPaths(child, property, path))
   }
+
   return paths
 }
 

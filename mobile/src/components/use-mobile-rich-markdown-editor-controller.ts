@@ -9,23 +9,30 @@ import type {
 
 export function normalizeExternalEditorUrl(value: string): string | null {
   const url = value.trim()
+
   if (!url) {
     return null
   }
+
   for (let index = 0; index < url.length; index += 1) {
     const code = url.charCodeAt(index)
+
     if (code <= 32 || code === 127) {
       return null
     }
   }
+
   if (/^mailto:/i.test(url)) {
     return url
   }
+
   if (!/^https?:\/\//i.test(url)) {
     return null
   }
+
   try {
     const parsed = new URL(url)
+
     return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : null
   } catch {
     return null
@@ -77,8 +84,10 @@ export function useMobileRichMarkdownEditorController({
         readyRef.current = true
         applyContent(content)
         transport.setEditable(editable)
+
         return
       }
+
       if (
         message.type === 'change' &&
         typeof message.markdown === 'string' &&
@@ -86,17 +95,23 @@ export function useMobileRichMarkdownEditorController({
       ) {
         currentEditorContentRef.current = message.markdown
         onChange(message.markdown)
+
         return
       }
+
       if (message.type === 'openLink' && typeof message.url === 'string') {
         const url = normalizeExternalEditorUrl(message.url)
+
         if (url) {
           onOpenLink(url)
         }
+
         return
       }
+
       if (message.type === 'keyboardInset' && typeof message.bottom === 'number') {
         const bottom = normalizeMobileRichMarkdownKeyboardInset(message.bottom)
+
         if (bottom !== null) {
           onKeyboardInsetChange?.(bottom)
         }

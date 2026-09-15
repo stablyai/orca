@@ -56,6 +56,7 @@ describe('WebGL diagnostics → freeze breadcrumb ring', () => {
 
   it('bounds atlas mismatch storm IPC while retaining the local occurrence count', () => {
     vi.useFakeTimers()
+
     try {
       for (let mismatch = 0; mismatch < 10_000; mismatch++) {
         recordTerminalWebglDiagnostic('atlas-font-probe-mismatch', {

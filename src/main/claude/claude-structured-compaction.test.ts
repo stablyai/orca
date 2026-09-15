@@ -11,6 +11,7 @@ afterEach(() => {
 describe('Claude compaction transcript content', () => {
   it('keeps generated summaries and command echoes out of the transcript only during explicit compaction', async () => {
     const tracker = new StructuredSessionCompaction()
+
     const event = {
       type: 'message' as const,
       sessionId: 'orca-session',
@@ -21,6 +22,7 @@ describe('Claude compaction transcript content', () => {
         message: { role: 'user', content: 'generated compaction summary' }
       }
     }
+
     expect(isClaudeCompactionContent(tracker, event)).toBe(false)
     const completion = tracker.run('orca-session', 'provider', async () => ({}))
     expect(isClaudeCompactionContent(tracker, event)).toBe(true)
@@ -35,9 +37,11 @@ describe('Claude compaction transcript content', () => {
 
   it('fails a provably unwritten command without waiting for the completion deadline', async () => {
     vi.useFakeTimers()
+
     const session = sessionFor(
       vi.fn().mockRejectedValue(claudeUnwrittenUserMessageError(new Error('input closed')))
     )
+
     const pending = compactClaudeSession(session, new StructuredSessionCompaction(60_000), {
       sessionId: 'orca-session',
       fence: 1,
@@ -52,11 +56,13 @@ describe('Claude compaction transcript content', () => {
   it('keeps waiting when the command write outcome is ambiguous', async () => {
     vi.useFakeTimers()
     const session = sessionFor(vi.fn().mockRejectedValue(new Error('input pump stopped')))
+
     const pending = compactClaudeSession(session, new StructuredSessionCompaction(10), {
       sessionId: 'orca-session',
       fence: 1,
       turnId: 'compact-1'
     })
+
     const rejection = expect(pending).rejects.toThrow('Compaction completion is unconfirmed.')
 
     await vi.advanceTimersByTimeAsync(10)

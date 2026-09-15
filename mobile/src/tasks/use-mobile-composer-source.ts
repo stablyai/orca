@@ -28,6 +28,7 @@ import type {
   MobileLinkedWorkItem,
   SmartNameSelection
 } from './mobile-composer-source-types'
+
 const EMPTY_BASE: ComposerBaseState = {}
 
 export type UseMobileComposerSourceArgs = {
@@ -87,6 +88,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
           if (resolveTokenRef.current !== token) {
             return
           }
+
           setBase({
             baseBranch: result.baseBranch,
             compareBaseRef: result.compareBaseRef,
@@ -99,6 +101,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
           if (resolveTokenRef.current !== token) {
             return
           }
+
           setBase(EMPTY_BASE)
           onError?.(error instanceof Error ? error.message : 'Failed to resolve base branch.')
         })
@@ -132,9 +135,11 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
         name
       )
       clearBaseAndBranch()
+
       if (identity.type !== 'pr' || !client || !repoId) {
         return
       }
+
       runBaseResolve(
         token,
         resolveComposerPrBase({
@@ -176,9 +181,11 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
         name
       )
       clearBaseAndBranch()
+
       if (item.type !== 'mr' || !client || !repoId) {
         return
       }
+
       runBaseResolve(
         token,
         resolveComposerMrBase({
@@ -202,6 +209,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
       setLinkedWorkItem(buildLinearLinkedWorkItem(issue))
       const suggested = resolveLinearAutoName(issue)
       const identifierTyped = name.trim().toLowerCase() === issue.identifier.toLowerCase()
+
       if (
         suggested &&
         (identifierTyped ||
@@ -210,6 +218,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
         setNameState(suggested)
         lastAutoNameRef.current = suggested
       }
+
       clearBaseAndBranch()
     },
     [clearBaseAndBranch, name]
@@ -222,6 +231,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
       setForkPushWarning(null)
       setBranchCreateIntent(false)
       setResolvingBase(false)
+
       const pick = resolveComposerBranchPick({
         refName,
         localBranchName,
@@ -229,10 +239,12 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
         lastAutoName: lastAutoNameRef.current,
         worktreeBranches
       })
+
       setReuseEligibleBranch(pick.reuseEligibleBranch)
       setReuseSelectedBranch(pick.reuseSelectedBranch)
       setBase(pick.base)
       branchSelectionRef.current = { refName, localBranchName }
+
       if (pick.name !== undefined) {
         setNameState(pick.name)
         lastAutoNameRef.current = pick.lastAutoName ?? ''
@@ -260,6 +272,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
     setLinkedWorkItem(null)
     clearBaseAndBranch()
     setResolvingBase(false)
+
     if (name === lastAutoNameRef.current) {
       setNameState('')
       lastAutoNameRef.current = ''
@@ -273,6 +286,7 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
         pushTarget: base.pushTarget,
         forkPushWarning
       })
+
       setBase({
         ...base,
         branchNameOverride: next.branchNameOverride,

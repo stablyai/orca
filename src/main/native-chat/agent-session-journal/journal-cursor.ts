@@ -44,14 +44,17 @@ export function resolveJournalResume(
   if (cursor.epoch !== range.epoch) {
     return { ok: false, reset: 'epoch_changed' }
   }
+
   if (cursor.sequence > range.lastSequence) {
     return { ok: false, reset: 'cursor_ahead' }
   }
+
   // `oldestSequence - 1` is the compaction boundary: a client sitting exactly on
   // it has seen everything folded into the snapshot and can take the tail.
   if (cursor.sequence < range.oldestSequence - 1) {
     return { ok: false, reset: 'cursor_compacted' }
   }
+
   return { ok: true, afterSequence: cursor.sequence }
 }
 
@@ -63,12 +66,15 @@ export function findSequenceGap(
   expectedFirst: number
 ): { gapAt: number } | null {
   let expected = expectedFirst
+
   for (const sequence of sequences) {
     if (sequence !== expected) {
       return { gapAt: expected }
     }
+
     expected += 1
   }
+
   return null
 }
 
@@ -86,10 +92,13 @@ export function readJournalSince(
   if (source.readOnly) {
     return { ok: false, reset: 'schema_unreadable' }
   }
+
   const resume = resolveJournalResume(source.state, cursor)
+
   if (!resume.ok) {
     return { ok: false, reset: resume.reset }
   }
+
   return {
     ok: true,
     rows: source.rowsAfter(resume.afterSequence),

@@ -34,20 +34,26 @@ export async function readVerifiedTerminalArtifact(params: Record<string, unknow
   const filePath = stringParam(params.filePath)
   const options = verifiedTerminalArtifactOptions(params)
   const handle = await openVerifiedTerminalArtifact(filePath, options, constants.O_RDONLY)
+
   try {
     await verifiedHandleStat(handle, options)
     const mimeType = terminalArtifactImageMimeType(filePath)
+
     const sizeLimit = Math.min(
       options.maxBytes ?? (mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE),
       mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
     )
+
     const buffer = await readBoundedFileFromHandle(handle, sizeLimit)
+
     if (mimeType) {
       return { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType }
     }
+
     if (isBinaryBuffer(buffer)) {
       return { content: '', isBinary: true }
     }
+
     return { content: buffer.toString('utf-8'), isBinary: false }
   } finally {
     await handle.close()
@@ -62,33 +68,44 @@ export async function writeVerifiedTerminalArtifact(
   const options = verifiedTerminalArtifactOptions(params)
   // Why: maxBytes is client-supplied; clamp before it sizes buffer allocations.
   const writeLimit = Math.min(options.maxBytes ?? MAX_TEXT_FILE_SIZE, MAX_TEXT_FILE_SIZE)
+
   if (Buffer.byteLength(content, 'utf8') > writeLimit) {
     throw new Error('file_too_large')
   }
+
   const handle = await openVerifiedTerminalArtifact(filePath, options, constants.O_RDONLY)
   let originalMode: number | null = null
+
   try {
     originalMode = (await verifiedHandleStat(handle, options)).mode ?? null
     const existing = await readBoundedFileFromHandle(handle, writeLimit)
+
     if (isBinaryBuffer(existing)) {
       throw new Error('binary_file')
     }
   } finally {
     await handle.close()
   }
+
   const tempPath = join(dirname(filePath), `.${basename(filePath)}.${randomUUID()}.tmp`)
+
   try {
     await writeFile(tempPath, content, { encoding: 'utf8', flag: 'wx' })
+
     if (typeof originalMode === 'number') {
       await chmod(tempPath, originalMode & 0o7777)
     }
+
     const freshHandle = await openVerifiedTerminalArtifact(filePath, options, constants.O_RDONLY)
+
     try {
       await verifiedHandleStat(freshHandle, options)
     } finally {
       await freshHandle.close()
     }
+
     await rename(tempPath, filePath)
+
     return { ok: true, stat: fileStatFromHandleStats(await openStatClose(filePath)) }
   } finally {
     await rm(tempPath, { force: true }).catch(() => {})
@@ -97,6 +114,7 @@ export async function writeVerifiedTerminalArtifact(
 
 async function openStatClose(filePath: string): Promise<Stats> {
   const handle = await open(filePath, constants.O_RDONLY)
+
   try {
     return await handle.stat()
   } finally {
@@ -106,6 +124,7 @@ async function openStatClose(filePath: string): Promise<Stats> {
 
 function terminalArtifactImageMimeType(filePath: string): string | undefined {
   const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
+
   // Why: mobile renders SVG terminal artifacts as source text; returning image
   // data from the relay would make SSH disagree with local artifact previews.
   return mimeType === 'image/svg+xml' ? undefined : mimeType
@@ -115,9 +134,11 @@ async function readBoundedFileFromHandle(handle: FileHandle, maxBytes: number): 
   const safeLimit = Math.max(0, Math.floor(maxBytes))
   const buffer = Buffer.alloc(safeLimit + 1)
   const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+
   if (bytesRead > safeLimit) {
     throw new Error('file_too_large')
   }
+
   return buffer.subarray(0, bytesRead)
 }
 
@@ -127,12 +148,14 @@ async function openVerifiedTerminalArtifact(
   flags: number
 ): Promise<FileHandle> {
   await assertRealPathStillGranted(filePath, options.expectedRealPath)
+
   try {
     return await open(filePath, flags | OPEN_NOFOLLOW)
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ELOOP') {
       throw new Error('terminal_file_grant_stale')
     }
+
     throw error
   }
 }
@@ -142,13 +165,16 @@ async function verifiedHandleStat(
   options: VerifiedTerminalArtifactOptions
 ): Promise<TerminalArtifactStat> {
   const stats = fileStatFromHandleStats(await handle.stat())
+
   if (stats.type !== 'file') {
     throw new Error(
       stats.type === 'directory' ? 'Cannot write to a directory' : 'terminal_file_grant_stale'
     )
   }
+
   assertTerminalArtifactNotHardLinked(stats)
   assertTerminalArtifactStatIdentity(options.expectedStatIdentity ?? null, stats)
+
   return stats
 }
 
@@ -165,11 +191,13 @@ async function assertRealPathStillGranted(
 
 function fileStatFromHandleStats(stats: Stats): TerminalArtifactStat {
   let type: TerminalArtifactStat['type'] = 'file'
+
   if (stats.isDirectory()) {
     type = 'directory'
   } else if (stats.isSymbolicLink()) {
     type = 'symlink'
   }
+
   return {
     size: stats.size,
     type,
@@ -194,18 +222,22 @@ function terminalArtifactStatIdentity(stats: {
   const ino = typeof stats.ino === 'number' ? stats.ino : null
   const nlink = typeof stats.nlink === 'number' ? stats.nlink : null
   const size = typeof stats.size === 'number' ? stats.size : null
+
   const mtimeMs =
     typeof stats.mtimeMs === 'number'
       ? stats.mtimeMs
       : typeof stats.mtime === 'number'
         ? stats.mtime
         : null
+
   if (dev !== null && ino !== null && size !== null && mtimeMs !== null) {
     return `${dev}:${ino}:${nlink ?? 'unknown'}:${size}:${mtimeMs}`
   }
+
   if (size !== null && mtimeMs !== null) {
     return `${size}:${mtimeMs}`
   }
+
   return null
 }
 
@@ -220,6 +252,7 @@ function assertTerminalArtifactStatIdentity(
   stats: TerminalArtifactStat
 ): void {
   const nextIdentity = terminalArtifactStatIdentity(stats)
+
   if (
     expectedStatIdentity !== null &&
     nextIdentity !== null &&
@@ -247,5 +280,6 @@ function stringParam(value: unknown): string {
   if (typeof value !== 'string') {
     throw new Error('invalid_terminal_artifact_request')
   }
+
   return value
 }

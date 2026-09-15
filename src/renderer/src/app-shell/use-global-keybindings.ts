@@ -72,6 +72,7 @@ export function useGlobalKeybindings(args: {
     terminalShortcutPolicy,
     workspaceChromeActive: layout.workspaceChromeActive
   }
+
   const shortcutStateRef = useRef(shortcutState)
   // Why useLayoutEffect: the mirror must be current before any key event can read it, and a
   // render-phase write would also publish state from a render React discards. Key events are
@@ -89,6 +90,7 @@ export function useGlobalKeybindings(args: {
 
     const dispatchShortcutInput = (input: ShortcutDispatchInput): void => {
       const state = shortcutStateRef.current
+
       const {
         activeView,
         activeWorktreeId,
@@ -108,6 +110,7 @@ export function useGlobalKeybindings(args: {
       if (input.defaultPrevented) {
         return
       }
+
       // The Settings shortcut recorder captures existing shortcuts, so global handlers must not fire while its button has focus.
       if (
         input.target instanceof Element &&
@@ -115,6 +118,7 @@ export function useGlobalKeybindings(args: {
       ) {
         return
       }
+
       const context = getKeybindingContext(input.target)
 
       // Note: some shortcuts are also intercepted in createMainWindow.ts before-input-event (for browser-guest focus); the renderer keeps handlers for local focus.
@@ -124,10 +128,12 @@ export function useGlobalKeybindings(args: {
           context,
           terminalShortcutPolicy
         })
+
       const notifyTerminalCapture = (actionId: KeybindingActionId): void => {
         if (context !== 'terminal' || (terminalShortcutPolicy ?? 'orca-first') !== 'orca-first') {
           return
         }
+
         showTerminalShortcutCaptureNotification({
           actionId,
           platform: shortcutPlatform,
@@ -143,20 +149,24 @@ export function useGlobalKeybindings(args: {
           document.activeElement instanceof Element
             ? selectedExplorerFolderRelativePath(document.activeElement)
             : null
+
         if (selectedFolderRelativePath !== null && activeWorktreeId) {
           input.preventDefault()
           notifyTerminalCapture('sidebar.search.toggle')
           actions.showRightSidebarSearch({
             includePattern: folderRelativePathToIncludeGlob(selectedFolderRelativePath)
           })
+
           return
         }
 
         const selectedText = getSelectedTextForFileSearch()
+
         if (selectedText) {
           input.preventDefault()
           notifyTerminalCapture('sidebar.search.toggle')
           actions.showRightSidebarSearch({ query: selectedText })
+
           return
         }
       }
@@ -173,6 +183,7 @@ export function useGlobalKeybindings(args: {
       ) {
         input.preventDefault()
         setFloatingTerminalOpen(false)
+
         return
       }
 
@@ -184,6 +195,7 @@ export function useGlobalKeybindings(args: {
       ) {
         input.preventDefault()
         openFloatingWorkspaceMaximized()
+
         return
       }
 
@@ -200,6 +212,7 @@ export function useGlobalKeybindings(args: {
       // Only short-circuit chords the floating panel itself claims; suppressing others here would silently no-op them when focus is in the panel.
       if (isFloatingWorkspacePanelFocused()) {
         const floatingMatchOptions: KeybindingMatchOptions = { context, terminalShortcutPolicy }
+
         if (
           matchFloatingWorkspacePanelChord(
             input,
@@ -224,6 +237,7 @@ export function useGlobalKeybindings(args: {
           keybindings,
           Boolean(activeWorktreeId)
         )
+
         if (pluginCommand) {
           input.preventDefault()
           void executePluginCommand(pluginCommand, 'plugin-keybinding').catch(() => {
@@ -231,14 +245,17 @@ export function useGlobalKeybindings(args: {
               translate('auto.App.pluginCommandFailed', 'Could not run the plugin command.')
             )
           })
+
           return
         }
       }
 
       const handlers = createAppCommandHandlers(state, input, context)
+
       if (matchShortcut('workspace.delete') && handlers.get('workspace.delete')?.()) {
         return
       }
+
       for (const actionId of PLUGIN_COMMAND_ALIAS_ACTION_IDS) {
         if (matchShortcut(actionId) && handlers.get(actionId)?.()) {
           return
@@ -268,9 +285,11 @@ export function useGlobalKeybindings(args: {
         }),
         Date.now()
       )
+
       if (e.repeat) {
         return
       }
+
       if (detected) {
         // Synthetic input: no key/modifier flags, so only DoubleTap bindings match.
         dispatchShortcutInput({
@@ -279,8 +298,10 @@ export function useGlobalKeybindings(args: {
           defaultPrevented: e.defaultPrevented,
           preventDefault: () => e.preventDefault()
         })
+
         return
       }
+
       dispatchShortcutInput({
         key: e.key,
         code: e.code,
@@ -315,6 +336,7 @@ export function useGlobalKeybindings(args: {
     window.addEventListener('keydown', onKeyDown, { capture: true })
     window.addEventListener('keyup', onKeyUp, { capture: true })
     window.addEventListener('blur', onBlur)
+
     return () => {
       unregisterAppCommandDispatcher()
       window.removeEventListener('keydown', onKeyDown, { capture: true })

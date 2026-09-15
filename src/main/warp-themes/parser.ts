@@ -64,12 +64,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function readColorValue(value: unknown): string | null {
   const scalar = normalizeTerminalHexColor(value)
+
   if (scalar) {
     return scalar
   }
+
   if (!isRecord(value)) {
     return null
   }
+
   return (
     normalizeTerminalHexColor(value.top) ??
     normalizeTerminalHexColor(value.bottom) ??
@@ -90,8 +93,10 @@ function addWarpPalette(
   if (!isRecord(palette)) {
     return
   }
+
   for (const name of WARP_COLOR_NAMES) {
     const color = normalizeTerminalHexColor(palette[name])
+
     if (color) {
       terminal[keys[name]] = color
     }
@@ -103,6 +108,7 @@ function luminance(hexColor: string): number {
   const red = Number.parseInt(hex.slice(0, 2), 16) / 255
   const green = Number.parseInt(hex.slice(2, 4), 16) / 255
   const blue = Number.parseInt(hex.slice(4, 6), 16) / 255
+
   return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 }
 
@@ -110,29 +116,37 @@ function inferMode(background: string | undefined, details: unknown): TerminalCu
   if (background) {
     return luminance(background) >= 0.55 ? 'light' : 'dark'
   }
+
   if (details === 'lighter') {
     return 'light'
   }
+
   if (details === 'darker') {
     return 'dark'
   }
+
   return 'unknown'
 }
 
 function detectUnsupportedFeatures(input: Record<string, unknown>): string[] | undefined {
   const unsupported = new Set<string>()
+
   if ('background_image' in input) {
     unsupported.add('background image not supported')
   }
+
   if (isRecord(input.background)) {
     unsupported.add('background gradient not supported')
   }
+
   if (isRecord(input.accent)) {
     unsupported.add('accent gradient not supported')
   }
+
   if ('background_gradient' in input || 'gradient' in input || 'gradients' in input) {
     unsupported.add('gradient not supported')
   }
+
   return unsupported.size > 0 ? [...unsupported] : undefined
 }
 
@@ -144,6 +158,7 @@ export function parseWarpThemeYaml(
   let value: unknown
   const parseStartedAt = Date.now()
   const parseTimedOut = (): boolean => Date.now() - parseStartedAt > MAX_PARSE_MS
+
   try {
     const document = parseDocument(content, {
       keepSourceTokens: false,
@@ -151,14 +166,18 @@ export function parseWarpThemeYaml(
       prettyErrors: false,
       uniqueKeys: true
     })
+
     if (parseTimedOut()) {
       return { ok: false, reason: 'Theme file took too long to parse.' }
     }
+
     if (document.errors.length > 0) {
       return { ok: false, reason: document.errors[0]?.message ?? 'Invalid YAML' }
     }
+
     // Why: cap alias expansion so a malicious YAML alias bomb can't blow up memory.
     value = document.toJS({ maxAliasCount: 20 })
+
     if (parseTimedOut()) {
       return { ok: false, reason: 'Theme file took too long to parse.' }
     }
@@ -183,9 +202,11 @@ export function parseWarpThemeYaml(
   if (background) {
     terminal.background = background
   }
+
   if (foreground) {
     terminal.foreground = foreground
   }
+
   if (cursor) {
     terminal.cursor = cursor
   }
@@ -202,11 +223,14 @@ export function parseWarpThemeYaml(
   }
 
   const safeDiscriminator = normalizeTerminalThemeId(options.idDiscriminator, '')
+
   const idBase = normalizeTerminalThemeId(
     safeDiscriminator ? `warp:${name}:${safeDiscriminator}` : `warp:${name}`
   )
+
   const id = options.idSuffix ? `${idBase}-${options.idSuffix}` : idBase
   const unsupportedFeatures = detectUnsupportedFeatures(value)
+
   const theme: TerminalCustomTheme = {
     id,
     name,

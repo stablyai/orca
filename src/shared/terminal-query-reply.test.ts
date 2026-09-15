@@ -50,6 +50,7 @@ describe('isTerminalQueryReply', () => {
     const terminal = new Terminal()
     const replies: string[] = []
     const disposable = terminal.onData((data) => replies.push(data))
+
     try {
       await new Promise<void>((resolve) => terminal.write('\x1b[>q', resolve))
       expect(replies).toHaveLength(1)
@@ -158,11 +159,13 @@ describe('query reply ordering (termenv OSC-then-CPR)', () => {
   it('delivers the color reply before the CPR the querying program stops at', async () => {
     vi.useFakeTimers()
     const pty: string[] = []
+
     const ingress = new PtyStartupIngress({
       ownerBackend: 'posix-pty',
       write: (data) => pty.push(data),
       onEmission: () => {}
     })
+
     const write = hostWrites(ingress, pty)
 
     write(OSC_11_REPLY)
@@ -179,11 +182,13 @@ describe('query reply ordering (termenv OSC-then-CPR)', () => {
   it('preserves reverse query order when CPR arrives before the color query', async () => {
     vi.useFakeTimers()
     const pty: string[] = []
+
     const ingress = new PtyStartupIngress({
       ownerBackend: 'posix-pty',
       write: (data) => pty.push(data),
       onEmission: () => {}
     })
+
     const write = hostWrites(ingress, pty)
 
     write(CPR_REPLY)
@@ -198,6 +203,7 @@ describe('query reply ordering (termenv OSC-then-CPR)', () => {
   it('keeps a CPR immediate when no color reply is deferred', () => {
     vi.useFakeTimers()
     const pty: string[] = []
+
     const ingress = new PtyStartupIngress({
       ownerBackend: 'posix-pty',
       write: (data) => pty.push(data),
@@ -212,6 +218,7 @@ describe('query reply ordering (termenv OSC-then-CPR)', () => {
 
   it('never takes ordinary typed input', () => {
     const pty: string[] = []
+
     const ingress = new PtyStartupIngress({
       ownerBackend: 'posix-pty',
       write: (data) => pty.push(data),
@@ -221,6 +228,7 @@ describe('query reply ordering (termenv OSC-then-CPR)', () => {
     for (const keystroke of ['y', 'gh auth login\r', '\x1b[A', '\x1b', '\x03']) {
       expect(ingress.answerLiveQueryReply(keystroke)).toBe(false)
     }
+
     ingress.drainAndClose()
   })
 })
@@ -243,6 +251,7 @@ describe('writes that still bypass the ordered queue', () => {
       write: () => {},
       onEmission: () => {}
     })
+
     // Deferral is open, so an ordered write WOULD be queued here.
     expect(ingress.answerLiveQueryReply('\x1b]11;rgb:00/00/00\x07')).toBe(true)
     expect(ingress.answerLiveQueryReply(data)).toBe(false)

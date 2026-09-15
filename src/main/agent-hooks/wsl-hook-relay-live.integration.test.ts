@@ -17,18 +17,23 @@ import { createManagedHookLocalFilesystem } from './managed-hook-local-filesyste
 import { codexHookService } from '../codex/hook-service'
 
 const BUNDLE_DIR = join(process.cwd(), 'out', 'relay', 'wsl')
+
 const BUNDLE_JS = join(BUNDLE_DIR, 'wsl-agent-hook-relay.js')
+
 const LEAF = '11111111-1111-4111-8111-111111111111'
 
 async function pickFreePort(): Promise<number> {
   const probe = createServer()
+
   const port = await new Promise<number>((resolve) => {
     probe.listen(0, '127.0.0.1', () => {
       const address = probe.address()
       resolve(typeof address === 'object' && address ? address.port : 0)
     })
   })
+
   await new Promise<void>((resolve) => probe.close(() => resolve()))
+
   return port
 }
 
@@ -94,6 +99,7 @@ describe.skipIf(process.platform === 'win32')(
             env: { ...env, HOME: fakeHome },
             stdio: ['pipe', 'pipe', 'pipe']
           }) as ChildProcessWithoutNullStreams
+
           return child
         },
         runInstall: async () => {
@@ -130,10 +136,12 @@ describe.skipIf(process.platform === 'win32')(
         () => expect(existsSync(join(fakeHome, '.claude', 'settings.json'))).toBe(true),
         { timeout: 15_000 }
       )
+
       const claudeScript = readFileSync(
         join(fakeHome, '.orca', 'agent-hooks', 'claude-hook.sh'),
         'utf8'
       )
+
       expect(claudeScript).toContain('/hook/claude')
 
       // Trust TOML is deferred so the launch-path seed is never pre-empted.
@@ -149,6 +157,7 @@ describe.skipIf(process.platform === 'win32')(
         'instance-liveinstance',
         'endpoint.env'
       )
+
       expect(existsSync(endpointFile)).toBe(true)
       const endpointText = readFileSync(endpointFile, 'utf8')
       const port = Number(/ORCA_AGENT_HOOK_PORT=['"]?(\d+)/.exec(endpointText)?.[1])
@@ -157,6 +166,7 @@ describe.skipIf(process.platform === 'win32')(
       expect(token).toBe('live-token')
 
       const paneKey = `tab-live:${LEAF}`
+
       const postClaude = async (payload: Record<string, unknown>): Promise<Response> =>
         fetch(`http://127.0.0.1:${port}/hook/claude`, {
           method: 'POST',
@@ -178,6 +188,7 @@ describe.skipIf(process.platform === 'win32')(
         hook_event_name: 'UserPromptSubmit',
         prompt: 'live roundtrip'
       })
+
       expect(promptRes.status).toBe(204)
       await vi.waitFor(() => expect(events.length).toBeGreaterThan(0), { timeout: 10_000 })
       expect(events[0].paneKey).toBe(paneKey)

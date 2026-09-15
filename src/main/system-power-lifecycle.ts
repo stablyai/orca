@@ -6,6 +6,7 @@ export type SystemPowerLifecycleListener = {
 type SystemPowerState = 'awake' | 'suspended'
 
 const listeners = new Set<SystemPowerLifecycleListener>()
+
 let state: SystemPowerState = 'awake'
 
 function notifyListener(listener: SystemPowerLifecycleListener, nextState: SystemPowerState): void {
@@ -23,11 +24,13 @@ function notifyListener(listener: SystemPowerLifecycleListener, nextState: Syste
 export function subscribeSystemPowerLifecycle(listener: SystemPowerLifecycleListener): () => void {
   listeners.add(listener)
   notifyListener(listener, state)
+
   return () => listeners.delete(listener)
 }
 
 export function publishSystemSuspend(): void {
   state = 'suspended'
+
   for (const listener of Array.from(listeners)) {
     if (listeners.has(listener)) {
       notifyListener(listener, state)
@@ -37,6 +40,7 @@ export function publishSystemSuspend(): void {
 
 export function publishSystemResume(): void {
   state = 'awake'
+
   for (const listener of Array.from(listeners)) {
     if (listeners.has(listener)) {
       notifyListener(listener, state)

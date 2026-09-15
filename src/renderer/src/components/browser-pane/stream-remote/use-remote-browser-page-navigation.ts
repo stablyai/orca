@@ -87,10 +87,12 @@ export function useRemoteBrowserPageNavigation({
       // Only on a change, though: settled scrolls, clicks and keystrokes all re-read tab info,
       // and filing each one rewrites the store — re-rendering every address bar in the app.
       const filing = `${normalizeBrowserHistoryUrl(safeUrl)}\n${title}`
+
       if (filing !== lastFiledHistoryRef.current) {
         lastFiledHistoryRef.current = filing
         addBrowserHistoryEntry(safeUrl, title)
       }
+
       setAddressBarValueFromPage(toDisplayUrl(safeUrl))
     },
     [addBrowserHistoryEntry, browserTab.id, onSetUrl, onUpdatePageState, setAddressBarValueFromPage]
@@ -109,9 +111,11 @@ export function useRemoteBrowserPageNavigation({
       url?: string
     ) => {
       const target = runtimeTarget()
+
       if (!target) {
         return
       }
+
       if (stagedPage) {
         // Why: the runtime has no page under this id yet, so ensureRemotePage's browser.tabShow
         // answers browser_tab_not_found — which reads as "the page is gone" and closes the tab the
@@ -121,31 +125,42 @@ export function useRemoteBrowserPageNavigation({
           deferBrowserPageNavigation(browserTab.id, url)
           onUpdatePageState(browserTab.id, { loading: true, loadError: null })
         }
+
         return
       }
+
       const operationToken = createRemoteOperationToken()
+
       if (!operationToken) {
         return
       }
+
       const pageId = await lifecycle.session.ensureRemotePage(operationToken)
+
       if (!pageId) {
         return
       }
+
       const pageToken = { ...operationToken, remotePageId: pageId }
+
       if (!isCurrentRemoteOperationToken(pageToken)) {
         return
       }
+
       setPaneBusy(true)
       setPaneNotice(null)
       onUpdatePageState(browserTab.id, { loading: true, loadError: null })
+
       try {
         const params =
           method === 'browser.goto'
             ? { worktree: runtimeWorktree, page: pageId, url: url ?? 'about:blank' }
             : { worktree: runtimeWorktree, page: pageId }
+
         const result = await callRuntimeRpc<
           BrowserGotoResult | BrowserBackResult | BrowserReloadResult
         >(target, method, params, { timeoutMs: 30_000, suppressFeatureInteraction: true })
+
         if (isCurrentRemoteOperationToken(pageToken)) {
           applyRemoteTabInfo(result)
         }
@@ -153,10 +168,13 @@ export function useRemoteBrowserPageNavigation({
         if (!isCurrentRemoteOperationToken(pageToken)) {
           return
         }
+
         if (isRemoteBrowserPageMissingError(error)) {
           closeMissingRemotePage(pageId)
+
           return
         }
+
         const message = error instanceof Error ? error.message : 'Remote browser command failed.'
         setPaneNotice({ kind: 'consequence', text: message })
         onUpdatePageState(browserTab.id, {
@@ -204,21 +222,27 @@ export function useRemoteBrowserPageNavigation({
     if (!isActive) {
       return
     }
+
     const shortcutPlatform = getShortcutPlatform()
+
     const handleKeyDown = (e: KeyboardEvent): void => {
       const method = keybindingMatchesAction('browser.back', e, shortcutPlatform, keybindings)
         ? 'browser.back'
         : keybindingMatchesAction('browser.forward', e, shortcutPlatform, keybindings)
           ? 'browser.forward'
           : null
+
       if (method === null) {
         return
       }
+
       e.preventDefault()
       e.stopPropagation()
       void runRemoteNavigation(method)
     }
+
     window.addEventListener('keydown', handleKeyDown, true)
+
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [isActive, keybindings, runRemoteNavigation])
 
@@ -234,17 +258,22 @@ export function useRemoteBrowserPageNavigation({
         onUpdatePageState(browserTab.id, { loadError })
       }
     })
+
     if (consumedAsWorkspaceDoc) {
       return
     }
+
     const submission = resolveBrowserAddressBarSubmission(addressBarValue, { allowFileUrls: false })
+
     if (submission.status === 'invalid') {
       // 'direct': the only response to what the user just typed. With an empty address bar no
       // load-error overlay renders either, so outranking this would make Enter do nothing visible.
       setPaneNotice({ kind: 'direct', text: submission.loadError.description })
       onUpdatePageState(browserTab.id, { loadError: submission.loadError })
+
       return
     }
+
     navigateToUrl(submission.url)
   }
 

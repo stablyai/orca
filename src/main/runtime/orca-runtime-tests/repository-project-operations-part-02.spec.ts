@@ -34,6 +34,7 @@ describe('OrcaRuntimeService', () => {
     const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
     const repos: Record<string, unknown>[] = []
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
@@ -43,16 +44,20 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
       updateRepo: (id: string, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
+
         if (index === -1) {
           return null
         }
+
         repos[index] = { ...repos[index], ...updates }
+
         return repos[index] as never
       },
       getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
       getProjectHostSetups: () =>
         projectHostSetupProjectionFromRepos(repos as never).setups as never
     }
+
     spawnSpy.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
@@ -61,6 +66,7 @@ describe('OrcaRuntimeService', () => {
         execFileSync('git', ['init'], { cwd: clonePath, stdio: 'ignore' })
         proc.emit('close', 0, null)
       })
+
       return proc as never
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -102,6 +108,7 @@ describe('OrcaRuntimeService', () => {
     const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-project-clone-'))
     const clonePath = join(destination, 'orca')
     const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
+
     const repos: Record<string, unknown>[] = [
       {
         id: 'repo-host-a',
@@ -113,7 +120,9 @@ describe('OrcaRuntimeService', () => {
         executionHostId: 'runtime:env-1'
       }
     ]
+
     getRepoUpstreamMock.mockResolvedValue({ owner: 'stablyai', repo: 'orca' })
+
     const runtimeStore = {
       ...store,
       getRepos: () => [...repos] as never,
@@ -123,16 +132,20 @@ describe('OrcaRuntimeService', () => {
       getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
       updateRepo: (id: string, updates: Record<string, unknown>) => {
         const index = repos.findIndex((repo) => repo.id === id)
+
         if (index === -1) {
           return null
         }
+
         repos[index] = { ...repos[index], ...updates }
+
         return repos[index] as never
       },
       getProjects: () => projectHostSetupProjectionFromRepos(repos as never).projects as never,
       getProjectHostSetups: () =>
         projectHostSetupProjectionFromRepos(repos as never).setups as never
     }
+
     spawnSpy.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
@@ -141,6 +154,7 @@ describe('OrcaRuntimeService', () => {
         execFileSync('git', ['init'], { cwd: clonePath, stdio: 'ignore' })
         proc.emit('close', 0, null)
       })
+
       return proc as never
     })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -176,6 +190,7 @@ describe('OrcaRuntimeService', () => {
 
   it('defaults runtime createRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
     const added: Record<string, unknown>[] = []
+
     const colorStore = {
       ...store,
       getRepos: () => [...added] as never,
@@ -184,10 +199,13 @@ describe('OrcaRuntimeService', () => {
       },
       getRepo: (id: string) => added.find((repo) => repo.id === id) as never
     }
+
     const runtime = new OrcaRuntimeService(colorStore as never)
     const parentDir = await mkdtemp('/tmp/orca-runtime-create-')
+
     try {
       const result = await runtime.createRepo(parentDir, 'runtime-create-default', 'folder')
+
       if ('error' in result) {
         throw new Error(result.error)
       }
@@ -201,6 +219,7 @@ describe('OrcaRuntimeService', () => {
 
   it('creates a missing runtime parent before creating the project directory', async () => {
     const added: Record<string, unknown>[] = []
+
     const createStore = {
       ...store,
       getRepos: () => [...added] as never,
@@ -209,11 +228,14 @@ describe('OrcaRuntimeService', () => {
       },
       getRepo: (id: string) => added.find((repo) => repo.id === id) as never
     }
+
     const runtime = new OrcaRuntimeService(createStore as never)
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-create-parent-'))
     const parentDir = join(tempRoot, 'orca', 'projects')
+
     try {
       const result = await runtime.createRepo(parentDir, 'first-project', 'folder')
+
       if ('error' in result) {
         throw new Error(result.error)
       }
@@ -228,6 +250,7 @@ describe('OrcaRuntimeService', () => {
 
   it('prepares the runtime worktree root when creating a repo', async () => {
     const added: Record<string, unknown>[] = []
+
     const runtimeStore = {
       ...store,
       getRepos: () => [...added] as never,
@@ -236,10 +259,13 @@ describe('OrcaRuntimeService', () => {
       },
       getRepo: (id: string) => added.find((repo) => repo.id === id) as never
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-create-root-prep-'))
+
     try {
       const result = await runtime.createRepo(parentDir, 'runtime-create-root-prep', 'folder')
+
       if ('error' in result) {
         throw new Error(result.error)
       }
@@ -252,6 +278,7 @@ describe('OrcaRuntimeService', () => {
 
   it('preserves existing badgeColor on runtime createRepo dedupe', async () => {
     const repoName = 'runtime-existing-create'
+
     const existing = {
       id: repoName,
       path: join(tmpdir(), repoName),
@@ -260,10 +287,12 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       kind: 'folder' as const
     }
+
     const colorStore = {
       ...store,
       getRepos: () => [existing]
     }
+
     const runtime = new OrcaRuntimeService(colorStore as never)
 
     const result = await runtime.createRepo(tmpdir(), repoName, 'folder')
@@ -275,6 +304,7 @@ describe('OrcaRuntimeService', () => {
   it('defaults runtime cloneRepo badgeColor to DEFAULT_REPO_BADGE_COLOR', async () => {
     const spawnSpy = vi.spyOn(gitRunner, 'gitSpawnAfterWindowsEnvironmentReady')
     const added: Record<string, unknown>[] = []
+
     const colorStore = {
       ...store,
       getRepos: () => [...added] as never,
@@ -283,10 +313,12 @@ describe('OrcaRuntimeService', () => {
       },
       getRepo: (id: string) => added.find((repo) => repo.id === id) as never
     }
+
     spawnSpy.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
       setImmediate(() => proc.emit('close', 0, null))
+
       return proc as never
     })
     const runtime = new OrcaRuntimeService(colorStore as never)
@@ -316,12 +348,14 @@ describe('OrcaRuntimeService', () => {
     const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-reclone-'))
     const clonePath = join(destination, 'reclone')
     const added: Record<string, unknown>[] = []
+
     const cloneStore = {
       ...store,
       getRepos: () => [...added] as never,
       addRepo: (repo: Record<string, unknown>) => added.push(repo),
       getRepo: (id: string) => added.find((repo) => repo.id === id) as never
     }
+
     spawnSpy.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
@@ -332,6 +366,7 @@ describe('OrcaRuntimeService', () => {
           )
           .then(() => proc.emit('close', 0, null))
       })
+
       return proc as never
     })
     const runtime = new OrcaRuntimeService(cloneStore as never)
@@ -354,8 +389,10 @@ describe('OrcaRuntimeService', () => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
       setImmediate(() => proc.emit('close', 0, null))
+
       return proc as never
     })
+
     const existing = {
       id: 'runtime-folder-upgrade',
       path: '/tmp/repo-badge-color',
@@ -364,16 +401,20 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       kind: 'folder' as const
     }
+
     const updates: { id: string; updates: Record<string, unknown> }[] = []
     const upgraded = { ...existing, kind: 'git' as const }
+
     const colorStore = {
       ...store,
       getRepos: () => [existing],
       updateRepo: (id: string, repoUpdates: Record<string, unknown>) => {
         updates.push({ id, updates: repoUpdates })
+
         return upgraded as never
       }
     }
+
     const runtime = new OrcaRuntimeService(colorStore as never)
 
     try {
@@ -397,13 +438,16 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       kind: 'git' as const
     }
+
     const updated = { ...repo, worktreeBasePath: '../worktrees' }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [repo],
       getRepo: (id: string) => (id === repo.id ? repo : undefined) as never,
       updateRepo: vi.fn(() => updated as never)
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     await expect(runtime.updateRepo(repo.id, { worktreeBasePath: '../worktrees' })).resolves.toBe(
@@ -424,15 +468,18 @@ describe('OrcaRuntimeService', () => {
       kind: 'git' as const,
       worktreeBasePath: '../worktrees'
     }
+
     const result = {
       project: { id: 'project-1', displayName: 'Repo' },
       setup: { id: 'setup-1', projectId: 'project-1', repoId: repo.id, hostId: 'local' },
       repo
     }
+
     const runtimeStore = {
       ...store,
       updateProjectHostSetup: vi.fn(() => result as never)
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     expect(
@@ -494,6 +541,7 @@ describe('OrcaRuntimeService', () => {
         'https://example.com/repo-badge-color.git',
         destination
       )
+
       await vi.waitFor(() => expect(spawnSpy).toHaveBeenCalledTimes(1))
       await writeFile(join(clonePath, 'partial.txt'), 'git wrote this before failing')
       proc.stderr.emit('data', Buffer.from('fatal: repository not found\n'))
@@ -519,10 +567,12 @@ describe('OrcaRuntimeService', () => {
     try {
       await mkdir(clonePath)
       await writeFile(join(clonePath, 'user-file.txt'), 'keep me')
+
       const clonePromise = runtime.cloneRepo(
         'https://example.com/repo-badge-color.git',
         destination
       )
+
       await vi.waitFor(() => expect(spawnSpy).toHaveBeenCalledTimes(1))
       proc.emit('close', 128, null)
 
@@ -549,6 +599,7 @@ describe('OrcaRuntimeService', () => {
         'https://example.com/repo-badge-color.git',
         destination
       )
+
       await vi.waitFor(() => expect(spawnSpy).toHaveBeenCalledTimes(1))
       await rm(clonePath, { recursive: true, force: true })
       await mkdir(clonePath)
@@ -569,6 +620,7 @@ describe('OrcaRuntimeService', () => {
     firstProc.stderr = new EventEmitter()
     spawnSpy.mockResolvedValueOnce(firstProc as never)
     const added: Record<string, unknown>[] = []
+
     const colorStore = {
       ...store,
       getRepos: () => [...added] as never,
@@ -577,6 +629,7 @@ describe('OrcaRuntimeService', () => {
       },
       getRepo: (id: string) => added.find((repo) => repo.id === id) as never
     }
+
     const runtime = new OrcaRuntimeService(colorStore as never)
     const destination = await mkdtemp(join(tmpdir(), 'orca-runtime-clone-'))
 
@@ -585,10 +638,12 @@ describe('OrcaRuntimeService', () => {
         'https://example.com/repo-badge-color.git',
         destination
       )
+
       const secondClonePromise = runtime.cloneRepo(
         'https://example.com/repo-badge-color.git',
         destination
       )
+
       await vi.waitFor(() => expect(spawnSpy).toHaveBeenCalledTimes(1))
       await new Promise((resolve) => setImmediate(resolve))
       expect(spawnSpy).toHaveBeenCalledTimes(1)

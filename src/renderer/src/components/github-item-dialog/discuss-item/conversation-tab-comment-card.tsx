@@ -204,8 +204,10 @@ export function ConversationTabCommentCard({
     setReplyingTo: (next) => {
       if (typeof next === 'function') {
         onToggleReply(comment.id)
+
         return
       }
+
       if (next === null) {
         onCancelReply()
       }

@@ -122,6 +122,7 @@ export function appendWorktreeRows(
     hostContextLabelByWorktreeIdentity,
     cyclicLineageIds
   } = options
+
   if (!nestLineage) {
     for (const worktree of worktrees) {
       result.push(
@@ -140,32 +141,41 @@ export function appendWorktreeRows(
         })
       )
     }
+
     return
   }
 
   const visibleByIdentity = new Map(
     worktrees.map((worktree) => [getWorktreeHostIdentity(worktree), worktree])
   )
+
   const childrenByParentIdentity = new Map<string, Worktree[]>()
   const childIdentities = new Set<string>()
+
   for (const worktree of worktrees) {
     const projectedLineage = getProjectedWorktreeLineage(worktree, lineageById)
     const inlineLineage = (worktree as Worktree & { lineage?: WorktreeLineage | null }).lineage
+
     const lineage =
       projectedLineage?.worktreeInstanceId === worktree.instanceId
         ? projectedLineage
         : inlineLineage
+
     if (!lineage || cyclicLineageIds.has(worktree.id)) {
       continue
     }
+
     const parentIdentity = getWorktreeHostIdentity({
       id: lineage.parentWorktreeId,
       hostId: worktree.hostId
     })
+
     const parent = visibleByIdentity.get(parentIdentity)
+
     if (!parent || !isValidResolvedWorktreeLineageEdge(worktree, parent, lineage)) {
       continue
     }
+
     const childIdentity = getWorktreeHostIdentity(worktree)
     childIdentities.add(childIdentity)
     const children = childrenByParentIdentity.get(parentIdentity) ?? []
@@ -174,20 +184,24 @@ export function appendWorktreeRows(
   }
 
   const emitted = new Set<string>()
+
   const pending: {
     worktree: Worktree
     depth: number
     lineageTrail: boolean[]
     isLastChild: boolean
   }[] = []
+
   const emitPending = (): void => {
     while (pending.length > 0) {
       const next = pending.pop()
+
       // Why (STA-4343): membership and keys are host-qualified. Keyed by bare id,
       // the second host's row for a colliding id is silently never emitted.
       if (!next || emitted.has(getWorktreeHostIdentity(next.worktree))) {
         continue
       }
+
       const { worktree, depth, lineageTrail, isLastChild } = next
       const worktreeIdentity = getWorktreeHostIdentity(worktree)
       const children = childrenByParentIdentity.get(worktreeIdentity) ?? []
@@ -209,9 +223,11 @@ export function appendWorktreeRows(
             hostContextLabelByRepoId?.get(worktree.repoId)
         })
       )
+
       if (lineageCollapsed) {
         continue
       }
+
       for (let index = children.length - 1; index >= 0; index -= 1) {
         pending.push({
           worktree: children[index],
@@ -222,6 +238,7 @@ export function appendWorktreeRows(
       }
     }
   }
+
   const emit = (
     worktree: Worktree,
     depth: number,
@@ -231,6 +248,7 @@ export function appendWorktreeRows(
     if (emitted.has(getWorktreeHostIdentity(worktree))) {
       return
     }
+
     pending.push({ worktree, depth, lineageTrail, isLastChild })
     emitPending()
   }
@@ -238,9 +256,11 @@ export function appendWorktreeRows(
   const roots = worktrees.filter(
     (worktree) => !childIdentities.has(getWorktreeHostIdentity(worktree))
   )
+
   for (const [index, worktree] of roots.entries()) {
     emit(worktree, 0, [], index === roots.length - 1)
   }
+
   if (roots.length === 0) {
     for (const worktree of worktrees) {
       if (!emitted.has(getWorktreeHostIdentity(worktree))) {

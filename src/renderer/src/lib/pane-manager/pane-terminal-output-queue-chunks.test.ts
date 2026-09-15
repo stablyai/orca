@@ -26,6 +26,7 @@ describe('pane terminal output queue chunks', () => {
   it('assembles many queued chunks in order and preserves a partial residual', () => {
     const entry = createEntry()
     const chunks = Array.from({ length: 128 }, (_, index) => `${index}:`)
+
     for (const chunk of chunks) {
       enqueueChunk(entry, chunk, { foreground: false })
     }

@@ -22,17 +22,20 @@ export function getRuntimeFileSearchRejectedField(
   if (!isRuntimeFileSearchTextWithinLimit(options.query)) {
     return 'query'
   }
+
   if (
     options.includePattern !== undefined &&
     !isRuntimeFileSearchTextWithinLimit(options.includePattern)
   ) {
     return 'includePattern'
   }
+
   if (
     options.excludePattern !== undefined &&
     !isRuntimeFileSearchTextWithinLimit(options.excludePattern)
   ) {
     return 'excludePattern'
   }
+
   return null
 }

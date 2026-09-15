@@ -28,6 +28,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
     this.recordAgentPromptLifecycleState(ptyId, agentStatus)
     let ptyRecordChanged = false
     const pty = this.ptysById.get(ptyId)
+
     if (pty) {
       const prevStatus = pty.lastAgentStatus
       const prevTitle = pty.lastOscTitle
@@ -38,12 +39,15 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       pty.lastOscTitleEpochMs = observedAtEpochMs
       pty.lastAgentStatus = agentStatus
       pty.lastAgentStatusObservedLive = true
+
       if (prevStatus === 'working' && agentStatus === null) {
         this.confirmPtyAgentExit(ptyId, true)
       }
+
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
       }
+
       if (
         identityOnlyTitle ||
         terminalTitleBlocksExplicitAgentStatus(recordedTitle) ||
@@ -51,13 +55,16 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       ) {
         pty.lastAgentStatusRichInvalidatedAtEpochMs = observedAtEpochMs ?? Date.now()
       }
+
       if (identityOnlyTitle) {
         pty.managementTitle = null
         pty.managementTitleAt = null
       } else {
         this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt)
       }
+
       ptyRecordChanged = prevTitle !== recordedTitle || prevStatus !== agentStatus
+
       // Why `!== 'permission'` rather than `!== 'idle'`: a name-only idle leaves the waiter
       // parked on its poll, so the later explicit idle is an idle→idle step that still has
       // to be offered. The resolve helper re-ranks and returns early when it is not yet
@@ -69,10 +76,13 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       if (agentStatus === 'idle' && prevStatus !== 'permission' && ptyRecordChanged) {
         this.resolvePtyTuiIdleWaiters(pty, ptyId)
       }
+
       const shouldDelayMobileSnapshot =
         ptyRecordChanged &&
         this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, normalizedTitle)
+
       let foregroundRefresh: Promise<boolean> | undefined
+
       // Why: gate on an actual status transition — braille spinner frames
       // mutate the title every tick, so probing per-title-change would stream
       // a foreground query per frame during active work.
@@ -83,6 +93,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
         // foreground owner probe settles; publishing them would flicker.
         foregroundRefresh = this.getPendingForegroundAgentRefreshForTitle(ptyId, observedAt)
       }
+
       if (foregroundRefresh && shouldDelayMobileSnapshot) {
         // Why: report "unchanged" so the per-chunk batch skips the mobile
         // snapshot fan-out; the delayed publish fires when the probe settles.
@@ -90,11 +101,13 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
         this.delayPtyBackedMobileSnapshotForForegroundAgent(ptyId, observedAt, foregroundRefresh)
       }
     }
+
     if (agentStatus === 'working' || agentStatus === 'permission') {
       this.orchestrationMailboxPointerDelivery.observeAgentWorking(ptyId)
     } else if (agentStatus === 'idle') {
       this.orchestrationMailboxPointerDelivery.observeAgentIdle(ptyId)
     }
+
     for (const leaf of this.getLeavesForPty(ptyId)) {
       // Why: keep the latest OSC title on the leaf so worktree.ps can
       // recompute status from the live title each call. Without this,
@@ -115,6 +128,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       // back to title-based detection / polling.
       leaf.lastAgentStatus = agentStatus
       leaf.lastAgentStatusObservedLive = true
+
       // Why: resolve tui-idle on any transition TO idle (not just working→idle).
       // Claude Code may skip "working" entirely on fast tasks, going null→idle,
       // and the coordinator's tui-idle waiter would hang forever waiting for a
@@ -132,6 +146,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       ) {
         this.resolveTuiIdleWaiters(leaf)
       }
+
       // Why the second condition: push delivery is gated on LIVE idle, so its
       // authorizing edge is liveness as well as status. A restore seed or a
       // status kept across a same-id respawn leaves a stale 'idle' behind, and
@@ -151,6 +166,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
         this.deliverPendingMessagesForLeaf(leaf)
       }
     }
+
     return ptyRecordChanged
   }
 
@@ -176,6 +192,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
     this.clearAgentPromptCorrelationForPty(ptyId)
     this.clearWaitBlockedCheckState(ptyId)
     const pty = this.ptysById.get(ptyId)
+
     if (pty) {
       pty.lastOscTitle = null
       pty.lastOscTitleAt = null
@@ -194,6 +211,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       pty.waitBlockedAt = null
       pty.tailWaitState = undefined
     }
+
     for (const leaf of this.getLeavesForPty(ptyId)) {
       leaf.lastOscTitle = null
       leaf.lastOscTitleAt = null
@@ -202,6 +220,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       leaf.waitBlockedAt = null
       leaf.tailWaitState = undefined
     }
+
     this.reconcileAgentStatusForEndedProcessFn?.(this.collectAgentStatusPaneKeysForPty(ptyId))
     this.primeWaitBlockedBaselineFromSeededTail(ptyId)
   }
@@ -215,10 +234,13 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
     const nextAvailable =
       this.terminalSideEffectLocalConsumerAvailable ||
       this.countTerminalSideEffectConsumingClientEventListeners() > 0
+
     if (nextAvailable === this.terminalSideEffectConsumerAvailable) {
       return
     }
+
     this.terminalSideEffectConsumerAvailable = nextAvailable
+
     for (const [ptyId, entry] of this.ptyTitleTrackersByPtyId) {
       entry.tracker.setTransientSideEffectScanningEnabled(nextAvailable)
       entry.commandCodeDetector = nextAvailable

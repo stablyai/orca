@@ -19,22 +19,28 @@ export const reactCommitCascadeWriteProbe = { armed: false }
 
 /** Frame 0 is the store action; the rest reach up into whatever loops over it. */
 const CAPTURE_STACK_FRAME_LIMIT = 8
+
 /**
  * Frame 0 alone names a slice action, which every cascade shares. Two frames of
  * caller is what distinguishes the effect driving the loop from its neighbours.
  */
 const REPORTED_FRAMES_PER_SITE = 3
+
 /** Whole frames only, inside the 4000-char budget a `stack`-suffixed detail gets. */
 const MAX_DRIVER_STACK_CHARS = 3_800
+
 /** A loop repeats; six samples name every distinct participant worth naming. */
 export const MAX_SAMPLED_WRITES = 6
+
 /** Keeps `changedKeys` inside the 240-char detail cap without truncating mid-key. */
 export const MAX_REPORTED_CHANGED_KEYS = 12
 
 type SampledWrite = { stack?: string }
 
 let storeWrites = 0
+
 let samples: SampledWrite[] = []
+
 let changedKeys: Set<string> | null = null
 
 export type ReactCommitCascadeWriteSummary = {
@@ -63,28 +69,35 @@ export function resetReactCommitCascadeWriteSamples(): void {
  */
 export function noteReactCommitCascadeStoreWrite(boundary: object, partial: unknown): void {
   storeWrites += 1
+
   // Why the write count and not samples.length: samples only grows where
   // Error.captureStackTrace exists, so that cap would never engage without it and
   // key collection would run for the whole cascade.
   if (storeWrites > MAX_SAMPLED_WRITES) {
     return
   }
+
   // Why object-only: a functional updater's keys are unknowable without running it.
   if (partial && typeof partial === 'object') {
     changedKeys ??= new Set<string>()
+
     for (const key of Object.keys(partial)) {
       changedKeys.add(key)
     }
   }
+
   const capture = Error as ErrorConstructor & {
     captureStackTrace?: (target: object, constructorOpt?: unknown) => void
     stackTraceLimit?: number
   }
+
   if (typeof capture.captureStackTrace !== 'function') {
     return
   }
+
   const previousLimit = capture.stackTraceLimit
   const sample: SampledWrite = {}
+
   try {
     capture.stackTraceLimit = CAPTURE_STACK_FRAME_LIMIT
     capture.captureStackTrace(sample, boundary)
@@ -99,13 +112,16 @@ export function noteReactCommitCascadeStoreWrite(boundary: object, partial: unkn
 /** `at fn (/Users/me/app/src/x.ts:1:2)` becomes `x.ts:1:2 fn`. */
 function reduceFrame(frame: string): string | undefined {
   const match = /^\s*at\s+(?:(.+?)\s+\()?(.+?):(\d+):(\d+)\)?\s*$/.exec(frame)
+
   if (!match) {
     return undefined
   }
+
   const [, fn, location, line, column] = match
   // Why basename only: the redaction that strips paths is keyed on the detail
   // NAME, so a full path inside this value would ship a developer's home dir.
   const basename = location?.split(/[/\\]/).pop() ?? ''
+
   return fn ? `${basename}:${line}:${column} ${fn}` : `${basename}:${line}:${column}`
 }
 
@@ -113,18 +129,23 @@ function reduceFrame(frame: string): string | undefined {
 function sampledSiteFrames(): string[][] {
   const sites: string[][] = []
   const seen = new Set<string>()
+
   for (const sample of samples) {
     const frames = (sample.stack?.split('\n') ?? [])
       .map(reduceFrame)
       .filter((frame): frame is string => frame !== undefined)
       .slice(0, REPORTED_FRAMES_PER_SITE)
+
     const site = frames[0]
+
     if (site === undefined || seen.has(site)) {
       continue
     }
+
     seen.add(site)
     sites.push(frames)
   }
+
   return sites
 }
 
@@ -132,13 +153,16 @@ function sampledSiteFrames(): string[][] {
 function joinWithinBudget(frames: string[]): string | undefined {
   const kept: string[] = []
   let remaining = MAX_DRIVER_STACK_CHARS
+
   for (const frame of frames) {
     if (frame.length + 1 > remaining) {
       break
     }
+
     kept.push(frame)
     remaining -= frame.length + 1
   }
+
   return kept.length > 0 ? kept.join('\n') : undefined
 }
 
@@ -146,6 +170,7 @@ function joinWithinBudget(frames: string[]): string | undefined {
 export function readReactCommitCascadeWriteSummary(): ReactCommitCascadeWriteSummary {
   const sites = sampledSiteFrames()
   const keys = changedKeys ? Array.from(changedKeys).slice(0, MAX_REPORTED_CHANGED_KEYS) : []
+
   return {
     storeWrites,
     storeWriteSites: sites.length,

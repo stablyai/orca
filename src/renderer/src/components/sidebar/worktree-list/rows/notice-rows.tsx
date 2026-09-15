@@ -54,6 +54,7 @@ export function renderImportedWorktreesVirtualRow(args: {
   onKeepHidden: (projectId: string) => void
 }): React.JSX.Element {
   const { row, actionState } = args
+
   return (
     <NoticeRowFrame
       key={args.vItem.key}
@@ -88,6 +89,7 @@ export function renderNewExternalWorktreesInboxVirtualRow(args: {
   onSuppress: (projectId: string) => void
 }): React.JSX.Element {
   const { row, actionState } = args
+
   return (
     <NoticeRowFrame
       key={args.vItem.key}

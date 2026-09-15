@@ -21,6 +21,7 @@ import { worktreeRow } from './worktree-row-locators'
 
 // The literal Cursor emits on every redraw — the pane's ONLY identity signal.
 const CURSOR_NATIVE_OSC_TITLE = 'Cursor Agent'
+
 // An OpenCode task title that merely MENTIONS claude (see #8940).
 const OPENCODE_TASK_OSC_TITLE = '⠋ use Claude Sonnet'
 
@@ -42,13 +43,16 @@ function oscTitleHolderScript(escapedTitle: string): string {
 async function useFullAgentActivityRows(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const state = store.getState()
     // Why: 'full' renders every agent row with its label inline, so the proof
     // reads off the rendered sidebar instead of a collapsed summary pill.
     state.setAgentActivityDisplayMode('full')
+
     if (!state.worktreeCardProperties.includes('inline-agents')) {
       state.toggleWorktreeCardProperty('inline-agents')
     }
@@ -58,6 +62,7 @@ async function useFullAgentActivityRows(page: Page): Promise<void> {
 function paneTitles(page: Page, tabId: string): Promise<string[]> {
   return page.evaluate((tabId) => {
     const byPane = window.__store?.getState().runtimePaneTitlesByTabId?.[tabId] ?? {}
+
     return Object.values(byPane).filter((title): title is string => typeof title === 'string')
   }, tabId)
 }
@@ -75,19 +80,25 @@ async function openAgentTab(
   const tabId = await page.evaluate(
     ({ worktreeId, launchAgent }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       const state = store.getState()
+
       const tab = state.createTab(worktreeId, undefined, undefined, {
         launchAgent
       })
+
       state.setActiveTab(tab.id)
       state.setActiveTabType('terminal')
+
       return tab.id
     },
     { worktreeId, launchAgent }
   )
+
   await waitForActiveTerminalManager(page)
   // Why the raised budget: the first tab of a cold app can bind its PTY well past
   // the helper's 15s default on a loaded machine.
@@ -96,6 +107,7 @@ async function openAgentTab(
     await waitForRestoredTerminalInputReady(page, ptyId, 20_000),
     `the shell in the ${launchAgent} tab never echoed a probe command`
   ).toBe(true)
+
   return { tabId, ptyId }
 }
 
@@ -107,6 +119,7 @@ async function openAgentTab(
 function sidebarAgentRowIdentities(page: Page, agentListSelector: string): Promise<string[]> {
   return page.evaluate((selector) => {
     const list = document.querySelector(selector)
+
     return list
       ? [...list.children]
           .map((row) => row.querySelector('span[title]')?.getAttribute('title') ?? '')
@@ -135,6 +148,7 @@ async function settledSidebarAgentRowIdentities(
         const key = JSON.stringify(settled)
         stableReads = key === previousKey && settled.length > 0 ? stableReads + 1 : 0
         previousKey = key
+
         return stableReads >= requiredStableReads
       },
       {
@@ -144,6 +158,7 @@ async function settledSidebarAgentRowIdentities(
       }
     )
     .toBe(true)
+
   return settled
 }
 
@@ -156,12 +171,14 @@ test('sidebar keeps a Cursor pane visible and an OpenCode pane out of Claude Cod
   await useFullAgentActivityRows(orcaPage)
 
   const openCode = await openAgentTab(orcaPage, worktreeId, 'opencode')
+
   const openCodeScript = await runNodeScriptInTerminal(
     orcaPage,
     openCode.ptyId,
     // ⠋ is the braille spinner frame OpenCode paints ahead of its task text.
     oscTitleHolderScript('\\u280b use Claude Sonnet')
   )
+
   await waitForTerminalOutput(orcaPage, PANE_HOLD_MARKER, 15_000)
   // Precondition, not the claim under test: this title is filtered on neither
   // branch, so a failure here means the PTY never emitted it.
@@ -173,11 +190,13 @@ test('sidebar keeps a Cursor pane visible and an OpenCode pane out of Claude Cod
     .toContain(OPENCODE_TASK_OSC_TITLE)
 
   const cursor = await openAgentTab(orcaPage, worktreeId, 'cursor')
+
   const cursorScript = await runNodeScriptInTerminal(
     orcaPage,
     cursor.ptyId,
     oscTitleHolderScript(CURSOR_NATIVE_OSC_TITLE)
   )
+
   // Settle gate: the emitter has run, so the literal has been offered to the title
   // pipeline — kept as Cursor identity on the fix, dropped on main.
   await waitForTerminalOutput(orcaPage, PANE_HOLD_MARKER, 15_000)

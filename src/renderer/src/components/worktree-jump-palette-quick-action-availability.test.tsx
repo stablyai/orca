@@ -11,12 +11,15 @@ import { useWorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-
 const mocks = vi.hoisted(() => ({ state: {} as Record<string, unknown> }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: () => RUNTIME_ID
 }))
+
 vi.mock('@/components/sidebar/delete-worktree-flow', () => ({ runWorktreeDelete: vi.fn() }))
 
 const RUNTIME_ID = 'runtime-1'
+
 const WORKTREE_ID = 'repo-1::/repo/wt'
 
 function runtimeStatuses(capabilities: string[]): Map<string, unknown> {
@@ -52,11 +55,13 @@ function buildStableProps() {
 function renderQuickActions(initialStatuses: Map<string, unknown>) {
   const stable = buildStableProps()
   mocks.state.runtimeStatusByEnvironmentId = initialStatuses
+
   const harness = renderHook(
     (runtimeStatusByEnvironmentId: Map<string, unknown>) =>
       useWorktreeJumpPaletteQuickActions({ ...stable, runtimeStatusByEnvironmentId } as never),
     { initialProps: initialStatuses }
   )
+
   return {
     offersBrowserAction: (): boolean =>
       harness.result.current.middleItems.some((item) => item.id === 'quick-action:new-browser-tab'),

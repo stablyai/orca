@@ -14,6 +14,7 @@ const TABLE = `| A | B |
 `
 
 let nextFrameId = 0
+
 let frameCallbacks = new Map<number, FrameRequestCallback>()
 
 function flushFrames(): void {
@@ -33,6 +34,7 @@ function TargetHarness({
   const scrollContainerRef = useRef(scrollContainer)
   renders.current += 1
   const target = useRichMarkdownTableControlTarget(editor, scrollContainerRef)
+
   return (
     <div
       data-active={String(target.active !== null)}
@@ -49,6 +51,7 @@ beforeEach(() => {
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     nextFrameId += 1
     frameCallbacks.set(nextFrameId, callback)
+
     return nextFrameId
   })
   vi.stubGlobal('cancelAnimationFrame', (frameId: number) => {
@@ -67,23 +70,28 @@ describe('rich markdown table control target', () => {
     const editorElement = document.createElement('div')
     scrollContainer.append(editorElement)
     document.body.append(scrollContainer)
+
     const editor = new Editor({
       element: editorElement,
       extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
       content: TABLE,
       contentType: 'markdown'
     })
+
     const cell = editorElement.querySelector('td')!
     const table = editorElement.querySelector('table')!
     let bodyTextPosition = 0
     editor.state.doc.descendants((node, position) => {
       if (node.isText && node.text === 'a1') {
         bodyTextPosition = position
+
         return false
       }
+
       return true
     })
     editor.commands.setTextSelection(bodyTextPosition)
+
     const cellRect = vi.spyOn(cell, 'getBoundingClientRect').mockReturnValue({
       bottom: 50,
       height: 50,
@@ -95,6 +103,7 @@ describe('rich markdown table control target', () => {
       y: 0,
       toJSON: () => ({})
     })
+
     const tableRect = vi.spyOn(table, 'getBoundingClientRect').mockReturnValue({
       bottom: 100,
       height: 100,
@@ -106,6 +115,7 @@ describe('rich markdown table control target', () => {
       y: 0,
       toJSON: () => ({})
     })
+
     const observerDisconnect = vi.fn()
     const observerConstruct = vi.fn()
     vi.stubGlobal(
@@ -119,6 +129,7 @@ describe('rich markdown table control target', () => {
       }
     )
     const view = render(<TargetHarness editor={editor} scrollContainer={scrollContainer} />)
+
     try {
       await waitFor(() =>
         expect(view.container.firstElementChild?.getAttribute('data-active')).toBe('true')
@@ -157,12 +168,14 @@ describe('rich markdown table control target', () => {
     const editorElement = document.createElement('div')
     scrollContainer.append(editorElement)
     document.body.append(scrollContainer)
+
     const editor = new Editor({
       element: editorElement,
       extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
       content: TABLE,
       contentType: 'markdown'
     })
+
     vi.stubGlobal(
       'ResizeObserver',
       class {
@@ -171,6 +184,7 @@ describe('rich markdown table control target', () => {
       }
     )
     const view = render(<TargetHarness editor={editor} scrollContainer={scrollContainer} />)
+
     try {
       await waitFor(() =>
         expect(view.container.firstElementChild?.getAttribute('data-active')).toBe('true')

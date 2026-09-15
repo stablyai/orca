@@ -20,6 +20,7 @@ import { resetWindowsCommandLineRecoveryHealthForTests } from './windows-command
 
 /** None | CreationTime, and CommandLine on top of it. Memory (1) is never asked for. */
 const IDENTITY_FLAGS = 4
+
 const DETAILED_FLAGS = 6
 
 const getAllProcesses = vi.fn()
@@ -43,6 +44,7 @@ const SELF: NativeRow = {
   name: 'vitest.exe',
   commandLine: 'vitest.exe --run'
 }
+
 const NATIVE: NativeRow[] = [
   SELF,
   {
@@ -62,6 +64,7 @@ const NATIVE: NativeRow[] = [
  * synchronous mock cannot express it, because nothing ever overlaps.
  */
 let coalescingCalls: { flags: number }[] = []
+
 let maxConcurrentNativeCalls = 0
 
 function coalescingModule(): {
@@ -70,13 +73,16 @@ function coalescingModule(): {
 } {
   let requestInProgress = false
   const queue: ((rows: NativeRow[]) => void)[] = []
+
   return {
     ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
     getAllProcesses: (cb, flags) => {
       queue.push(cb)
+
       if (requestInProgress) {
         return
       }
+
       requestInProgress = true
       coalescingCalls.push({ flags: flags ?? 0 })
       // The rows the addon would produce for exactly these flags. Each field is
@@ -85,6 +91,7 @@ function coalescingModule(): {
       // no case could then tell a served-someone-else's-rows bug from a
       // correctly-shaped cheap read.
       const requested = flags ?? 0
+
       const rows: NativeRow[] = NATIVE.map((row) => ({
         pid: row.pid,
         ppid: row.ppid,
@@ -94,10 +101,12 @@ function coalescingModule(): {
           ? { creationTimeMs: row.creationTimeMs }
           : {})
       }))
+
       setTimeout(() => {
         while (queue.length) {
           queue.splice(0).forEach((callback) => callback(rows))
         }
+
         requestInProgress = false
       }, 0)
     }
@@ -122,6 +131,7 @@ function installCoalescingModule(): void {
  */
 function installBareAddonModule(): void {
   let inFlight = 0
+
   const native = {
     ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
     getAllProcesses: (cb: (rows: NativeRow[] | undefined) => void, flags?: number) => {
@@ -134,6 +144,7 @@ function installBareAddonModule(): void {
       }, 0)
     }
   }
+
   __setWindowsProcessTreeLoaderForTests(() => native)
 }
 
@@ -156,6 +167,7 @@ describe('windows process table', () => {
 
   afterEach(() => {
     __setWindowsProcessTreeLoaderForTests()
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
@@ -198,10 +210,12 @@ describe('windows process table', () => {
 
   it('collapses a 32-wide burst into one scan per flag set', async () => {
     installCoalescingModule()
+
     const [identity, detailed] = await Promise.all([
       Promise.all(Array.from({ length: 16 }, () => readWindowsProcessIdentityTable())),
       Promise.all(Array.from({ length: 16 }, () => readWindowsProcessTable()))
     ])
+
     expect(coalescingCalls.map((call) => call.flags).sort()).toEqual([
       IDENTITY_FLAGS,
       DETAILED_FLAGS
@@ -409,6 +423,7 @@ describe('windows process table', () => {
 describe('PowerShell fallback when the native binding is absent', () => {
   let platform: PropertyDescriptor | undefined
   const cimScan = vi.fn()
+
   const CIM_ROWS = [
     { pid: process.pid, ppid: 0, name: 'node.exe', command: 'node relay.js' },
     { pid: 200, ppid: process.pid, name: 'claude.exe', command: 'claude --resume' }
@@ -425,6 +440,7 @@ describe('PowerShell fallback when the native binding is absent', () => {
   afterEach(() => {
     __setWindowsProcessTableCimScanForTests()
     __setWindowsProcessTreeLoaderForTests()
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
@@ -506,6 +522,7 @@ describe('sticky wedge', () => {
   afterEach(() => {
     vi.useRealTimers()
     __setWindowsProcessTreeLoaderForTests()
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
@@ -556,11 +573,13 @@ describe('sticky wedge', () => {
     // pins is the call count, and it must fail on that alone.
     for (let window = 0; window < 4; window += 1) {
       await vi.advanceTimersByTimeAsync(30_000)
+
       const attempts = [
         readWindowsProcessTableFresh().catch(() => 'rejected'),
         readWindowsProcessTableFresh().catch(() => 'rejected'),
         readWindowsProcessTableFresh().catch(() => 'rejected')
       ]
+
       // Long enough for a probe's own deadline, had one been let through.
       await vi.advanceTimersByTimeAsync(3_000)
       expect(await Promise.all(attempts)).toEqual(['rejected', 'rejected', 'rejected'])
@@ -576,13 +595,17 @@ describe('sticky wedge', () => {
     // afterwards would strand a reader that is already answering.
     vi.useFakeTimers()
     let stuck: ((rows: typeof NATIVE | undefined) => void) | undefined
+
     const getAllProcesses = vi.fn((cb: (rows: typeof NATIVE | undefined) => void) => {
       if (stuck) {
         cb(NATIVE)
+
         return
       }
+
       stuck = cb
     })
+
     __setWindowsProcessTreeLoaderForTests(() => ({
       ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
       getAllProcesses
@@ -623,9 +646,11 @@ describe('sticky wedge', () => {
   it('clears the deadline when the reader throws synchronously', async () => {
     // An orphaned timer would fire later and wedge a reader that had recovered.
     vi.useFakeTimers()
+
     const getAllProcesses = vi.fn(() => {
       throw new Error('addon exploded')
     })
+
     __setWindowsProcessTreeLoaderForTests(() => ({
       ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2, CreationTime: 4 },
       getAllProcesses
@@ -660,9 +685,11 @@ describe('resolving the native reader', () => {
   afterEach(() => {
     __setWindowsProcessTreeRequireForTests()
     __setWindowsProcessTableCimScanForTests()
+
     for (const dir of stagedAddonDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
@@ -688,8 +715,10 @@ describe('resolving the native reader', () => {
       if (specifier === PACKAGE_SPECIFIER) {
         return { ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 }, getAllProcesses }
       }
+
       throw new Error('should not reach the addon')
     })
+
     __setWindowsProcessTreeRequireForTests(resolve)
     await expect(readWindowsProcessTableFresh()).resolves.toHaveLength(2)
     expect(resolve).toHaveBeenCalledWith(PACKAGE_SPECIFIER)
@@ -702,6 +731,7 @@ describe('resolving the native reader', () => {
       if (specifier === ADDON_SPECIFIER) {
         return addon
       }
+
       throw new Error('MODULE_NOT_FOUND')
     })
     const rows = await readWindowsProcessTableFresh()
@@ -724,6 +754,7 @@ describe('resolving the native reader', () => {
       if (specifier === ADDON_SPECIFIER) {
         return addon
       }
+
       throw new Error('MODULE_NOT_FOUND')
     })
     await readWindowsProcessTableFresh()
@@ -741,6 +772,7 @@ describe('resolving the native reader', () => {
       if (specifier === ADDON_SPECIFIER) {
         return addon
       }
+
       throw new Error('MODULE_NOT_FOUND')
     })
     await readWindowsProcessIdentityTableFresh()
@@ -758,6 +790,7 @@ describe('resolving the native reader', () => {
       if (specifier === ADDON_SPECIFIER) {
         return addon
       }
+
       throw new Error('MODULE_NOT_FOUND')
     })
     await expect(readWindowsProcessTableFresh()).resolves.toHaveLength(2)
@@ -771,6 +804,7 @@ describe('resolving the native reader', () => {
       .mockResolvedValue([
         { pid: process.pid, ppid: 0, name: 'node.exe', command: 'node relay.js' }
       ])
+
     __setWindowsProcessTableCimScanForTests(cimScan)
     __setWindowsProcessTreeRequireForTests(() => {
       throw new Error('MODULE_NOT_FOUND')
@@ -788,11 +822,13 @@ describe('resolving the native reader', () => {
       .mockResolvedValue([
         { pid: process.pid, ppid: 0, name: 'node.exe', command: 'node relay.js' }
       ])
+
     __setWindowsProcessTableCimScanForTests(cimScan)
     __setWindowsProcessTreeRequireForTests((specifier: string) => {
       if (specifier === ADDON_SPECIFIER) {
         return { notTheApi: true }
       }
+
       throw new Error('MODULE_NOT_FOUND')
     })
     await expect(readWindowsProcessTableFresh()).resolves.toHaveLength(1)
@@ -811,28 +847,35 @@ describe('resolving the native reader', () => {
     const addonPath = join(dir, 'windows-process-tree.node')
     writeFileSync(addonPath, bytes)
     stagedAddonDirs.push(dir)
+
     const resolve = (specifier: string): unknown => {
       if (specifier === ADDON_SPECIFIER) {
         return addon
       }
+
       throw new Error('MODULE_NOT_FOUND')
     }
+
     resolve.resolve = (specifier: string): string => {
       if (specifier === ADDON_SPECIFIER) {
         return addonPath
       }
+
       throw new Error('MODULE_NOT_FOUND')
     }
+
     return resolve
   }
 
   it('refuses a staged relay addon still built from unpatched source', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const cimScan = vi
       .fn()
       .mockResolvedValue([
         { pid: process.pid, ppid: 0, name: 'node.exe', command: 'node relay.js' }
       ])
+
     __setWindowsProcessTableCimScanForTests(cimScan)
     const addon = addonReturning(NATIVE)
     __setWindowsProcessTreeRequireForTests(
@@ -883,6 +926,7 @@ describe('warning when command-line recovery is refused host-wide', () => {
   afterEach(() => {
     __setWindowsProcessTreeLoaderForTests()
     warn.mockRestore()
+
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }

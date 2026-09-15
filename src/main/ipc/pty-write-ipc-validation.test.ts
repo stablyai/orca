@@ -12,45 +12,61 @@ import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers, deletePtyOwnership, setLocalPtyProvider } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -70,6 +86,7 @@ describe('registerPtyHandlers', () => {
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
     registerPtyHandlers(mainWindow as never)
+
     const result = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24
@@ -94,12 +111,15 @@ describe('registerPtyHandlers', () => {
     const write = vi.fn(() => {
       throw new PtyWriteUnavailableError('daemon generation lost')
     })
+
     installDaemonTestProvider({ write })
     registerPtyHandlers(mainWindow as never)
+
     const result = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24
     })) as { id: string }
+
     mainWindow.webContents.send.mockClear()
 
     getPtyWriteListener()(mainWindowIpcEvent, { id: result.id, data: 'x' })
@@ -113,11 +133,14 @@ describe('registerPtyHandlers', () => {
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
     registerPtyHandlers(mainWindow as never)
+
     const result = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24
     })) as { id: string }
+
     const write = getPtyWriteListener() as (event: unknown, args: unknown) => void
+
     const writeAccepted = handlers.get('pty:writeAccepted')! as (
       event: unknown,
       args: unknown
@@ -138,10 +161,12 @@ describe('registerPtyHandlers', () => {
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
     registerPtyHandlers(mainWindow as never)
+
     const result = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24
     })) as { id: string }
+
     const write = getPtyWriteListener()
 
     write(mainWindowIpcEvent, { id: result.id, data: 'alive' })
@@ -161,10 +186,12 @@ describe('registerPtyHandlers', () => {
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
     registerPtyHandlers(mainWindow as never)
+
     const result = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24
     })) as { id: string }
+
     const text = ['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES), 'tail'].join('')
 
     await expect(
@@ -181,13 +208,16 @@ describe('registerPtyHandlers', () => {
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
     registerPtyHandlers(mainWindow as never)
+
     const result = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24
     })) as { id: string }
+
     const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
 
     vi.useFakeTimers()
+
     const writeResult = handlers.get('pty:writeAccepted')!(mainWindowIpcEvent, {
       id: result.id,
       data: text
@@ -204,6 +234,7 @@ describe('registerPtyHandlers', () => {
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
     registerPtyHandlers(mainWindow as never)
+
     const result = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24
@@ -233,6 +264,7 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(async () => []),
       getForegroundProcess: vi.fn(async () => null)
     } as never)
+
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
@@ -244,6 +276,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => null),
       preAllocateHandleForPty: vi.fn()
     }
+
     registerPtyHandlers(mainWindow as never, runtime as never)
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
@@ -271,6 +304,7 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(async () => []),
       getForegroundProcess: vi.fn(async () => null)
     } as never)
+
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
@@ -282,6 +316,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => null),
       preAllocateHandleForPty: vi.fn()
     }
+
     registerPtyHandlers(mainWindow as never, runtime as never)
 
     const reply = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as {
@@ -309,6 +344,7 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(async () => []),
       getForegroundProcess: vi.fn(async () => null)
     } as never)
+
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
@@ -321,6 +357,7 @@ describe('registerPtyHandlers', () => {
       createPreAllocatedTerminalHandle: vi.fn(() => null),
       preAllocateHandleForPty: vi.fn()
     }
+
     registerPtyHandlers(mainWindow as never, runtime as never)
 
     const reply = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as {
@@ -338,6 +375,7 @@ describe('registerPtyHandlers', () => {
       .fn()
       .mockResolvedValueOnce({ id: 'pty-fresh' })
       .mockResolvedValueOnce({ id: 'pty-reattached', isReattach: true })
+
     setLocalPtyProvider({
       spawn,
       write: vi.fn(),
@@ -374,6 +412,7 @@ describe('registerPtyHandlers', () => {
     const ensureForDistro = vi
       .spyOn(wslHookRelayManager, 'ensureForDistro')
       .mockImplementation(() => {})
+
     setLocalPtyProvider({
       spawn: vi.fn(async () => ({ id: 'pty-wsl', isReattach: true, wslDistro: 'Ubuntu-24.04' })),
       write: vi.fn(),

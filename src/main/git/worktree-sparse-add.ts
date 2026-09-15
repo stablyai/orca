@@ -20,6 +20,7 @@ export async function addSparseWorktree(
 ): Promise<AddWorktreeResult> {
   let created = false
   let addResult: AddWorktreeResult = {}
+
   try {
     addResult = await addWorktree(
       repoPath,
@@ -46,10 +47,12 @@ export async function addSparseWorktree(
       [...longPathArgs, 'checkout', branch],
       gitExecOptions(worktreePath, options)
     )
+
     return addResult
   } catch (error) {
     const wrapped: SparseWorktreeCreateError =
       error instanceof Error ? (error as SparseWorktreeCreateError) : new Error(String(error))
+
     if (created) {
       if (!options.checkoutExistingBranch) {
         try {
@@ -61,6 +64,7 @@ export async function addSparseWorktree(
           )
         }
       }
+
       try {
         await removeWorktree(repoPath, worktreePath, true, {
           deleteBranch: !options.checkoutExistingBranch,
@@ -74,6 +78,7 @@ export async function addSparseWorktree(
         wrapped.message = `${wrapped.message} (cleanup also failed — the partially created worktree at "${worktreePath}" may need manual removal)`
       }
     }
+
     throw wrapped
   }
 }

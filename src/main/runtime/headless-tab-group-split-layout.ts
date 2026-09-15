@@ -20,6 +20,7 @@ function buildSplitNode(
 ): TabGroupLayoutNode {
   const existingLeaf: TabGroupLayoutNode = { type: 'leaf', groupId: existingGroupId }
   const newLeaf: TabGroupLayoutNode = { type: 'leaf', groupId: newGroupId }
+
   return {
     type: 'split',
     direction,
@@ -37,6 +38,7 @@ function replaceLeaf(
   if (root.type === 'leaf') {
     return root.groupId === targetGroupId ? replacement : root
   }
+
   return {
     ...root,
     first: replaceLeaf(root.first, targetGroupId, replacement),
@@ -52,12 +54,16 @@ export function collectTabGroupLayoutGroupIds(
   if (!node) {
     return groupIds
   }
+
   if (node.type === 'leaf') {
     groupIds.add(node.groupId)
+
     return groupIds
   }
+
   collectTabGroupLayoutGroupIds(node.first, groupIds)
   collectTabGroupLayoutGroupIds(node.second, groupIds)
+
   return groupIds
 }
 
@@ -69,17 +75,22 @@ export function removeTabGroupLayoutLeaf(
   if (!root) {
     return null
   }
+
   if (root.type === 'leaf') {
     return root.groupId === groupId ? null : root
   }
+
   const first = removeTabGroupLayoutLeaf(root.first, groupId)
   const second = removeTabGroupLayoutLeaf(root.second, groupId)
+
   if (!first) {
     return second
   }
+
   if (!second) {
     return first
   }
+
   return { ...root, first, second }
 }
 
@@ -104,9 +115,11 @@ export function buildHeadlessTabGroupMove(args: {
 }): HeadlessTabGroupMoveResult | null {
   const sourceGroup = args.groups.find((group) => group.tabOrder.includes(args.tabId))
   const targetGroup = args.groups.find((group) => group.id === args.targetGroupId)
+
   if (!sourceGroup || !targetGroup) {
     return null
   }
+
   if (sourceGroup.id === args.targetGroupId) {
     return null
   }
@@ -114,29 +127,35 @@ export function buildHeadlessTabGroupMove(args: {
   let groups: RuntimeMobileSessionTabGroup[] = args.groups.map((group) => {
     if (group.id === sourceGroup.id) {
       const tabOrder = group.tabOrder.filter((id) => id !== args.tabId)
+
       return {
         ...group,
         tabOrder,
         activeTabId: group.activeTabId === args.tabId ? (tabOrder[0] ?? null) : group.activeTabId
       }
     }
+
     if (group.id === args.targetGroupId) {
       const tabOrder = group.tabOrder.filter((id) => id !== args.tabId)
       const at = Math.max(0, Math.min(args.index ?? tabOrder.length, tabOrder.length))
       tabOrder.splice(at, 0, args.tabId)
+
       return { ...group, tabOrder, activeTabId: args.tabId }
     }
+
     return group
   })
 
   groups = groups.filter((group) => group.tabOrder.length > 0)
   const liveGroupIds = new Set(groups.map((group) => group.id))
   let layout: TabGroupLayoutNode | null = args.layout ?? null
+
   for (const groupId of collectTabGroupLayoutGroupIds(args.layout)) {
     if (!liveGroupIds.has(groupId)) {
       layout = removeTabGroupLayoutLeaf(layout, groupId)
     }
   }
+
   return { groups, layout }
 }
 
@@ -163,9 +182,11 @@ export function buildHeadlessTabGroupSplit(args: {
   newGroupId: string
 }): HeadlessTabGroupSplitResult | null {
   const sourceGroup = args.groups.find((group) => group.tabOrder.includes(args.tabId))
+
   if (!sourceGroup) {
     return null
   }
+
   // Splitting the last tab off its own group would create a sibling only to
   // immediately collapse the empty source — a no-op the renderer skips too.
   if (sourceGroup.id === args.targetGroupId && sourceGroup.tabOrder.length <= 1) {
@@ -174,6 +195,7 @@ export function buildHeadlessTabGroupSplit(args: {
 
   const direction =
     args.splitDirection === 'left' || args.splitDirection === 'right' ? 'horizontal' : 'vertical'
+
   const position =
     args.splitDirection === 'left' || args.splitDirection === 'up' ? 'first' : 'second'
 
@@ -181,6 +203,7 @@ export function buildHeadlessTabGroupSplit(args: {
     type: 'leaf',
     groupId: args.targetGroupId
   }
+
   const layout = replaceLeaf(
     baseLayout,
     args.targetGroupId,
@@ -188,6 +211,7 @@ export function buildHeadlessTabGroupSplit(args: {
   )
 
   const sourceOrder = sourceGroup.tabOrder.filter((id) => id !== args.tabId)
+
   let groups: RuntimeMobileSessionTabGroup[] = args.groups.map((group) => {
     if (group.id === sourceGroup.id) {
       return {
@@ -196,13 +220,16 @@ export function buildHeadlessTabGroupSplit(args: {
         activeTabId: group.activeTabId === args.tabId ? (sourceOrder[0] ?? null) : group.activeTabId
       }
     }
+
     return group
   })
+
   groups.push({ id: args.newGroupId, activeTabId: args.tabId, tabOrder: [args.tabId] })
   // Drop any group emptied by the move and collapse it out of the layout.
   groups = groups.filter((group) => group.tabOrder.length > 0)
   const liveGroupIds = new Set(groups.map((group) => group.id))
   let prunedLayout: TabGroupLayoutNode | null = layout
+
   for (const groupId of collectTabGroupLayoutGroupIds(layout)) {
     if (!liveGroupIds.has(groupId)) {
       prunedLayout = removeTabGroupLayoutLeaf(prunedLayout, groupId)

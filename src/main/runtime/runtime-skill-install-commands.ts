@@ -37,9 +37,11 @@ export class RuntimeSkillInstallCommands {
     if (this.skillUploadSessionsDisposed) {
       throw new Error('skill-upload-service-disposed')
     }
+
     this.skillUploadSessions ??= new SkillUploadSessionService(
       join(this.userDataPath(), 'skill-installs', SKILL_UPLOAD_STAGING_ROOT_NAME)
     )
+
     return this.skillUploadSessions
   }
   async disposeSkillUploadSessions(): Promise<void> {
@@ -50,9 +52,11 @@ export class RuntimeSkillInstallCommands {
   }
   protected requireSsh(connectionId: string): IPtyProvider {
     const provider = this.host.getSshProvider(connectionId)
+
     if (!provider?.requestHostRpc) {
       throw new Error('skill-install-ssh-relay-unavailable')
     }
+
     return provider
   }
   protected sshTarget(destination: SkillInstallRequest['destination']) {
@@ -72,6 +76,7 @@ export class RuntimeSkillInstallCommands {
     signal: AbortSignal
   ): Promise<SkillInstallResult> {
     const target = await this.sshTarget(request.destination)
+
     if (target) {
       return installSkillOnSshHost({
         provider: target.provider,
@@ -85,8 +90,10 @@ export class RuntimeSkillInstallCommands {
         signal
       })
     }
+
     await this.host.skillTransactionRecovery
     const origins = ['https://storage.googleapis.com']
+
     if (!this.host.isPackaged() && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
       origins.push(
         ...process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
@@ -94,6 +101,7 @@ export class RuntimeSkillInstallCommands {
           .filter(Boolean)
       )
     }
+
     return executeSkillInstallRequest(request, {
       authority: this.authority(),
       stateDirectory: this.userDataPath(),
@@ -112,18 +120,23 @@ export class RuntimeSkillInstallCommands {
     if (this.operations.has(request.operationId)) {
       throw new Error('skill-install-operation-in-progress')
     }
+
     const controller = new AbortController()
     const abort = () => controller.abort()
+
     if (signal?.aborted) {
       abort()
     } else {
       signal?.addEventListener('abort', abort, { once: true })
     }
+
     this.operations.set(request.operationId, controller)
+
     try {
       return await this.executeInstall(request, controller.signal)
     } finally {
       signal?.removeEventListener('abort', abort)
+
       if (this.operations.get(request.operationId) === controller) {
         this.operations.delete(request.operationId)
       }
@@ -137,22 +150,29 @@ export class RuntimeSkillInstallCommands {
     if (this.operations.has(request.operationId)) {
       throw new Error('skill-install-operation-in-progress')
     }
+
     const controller = new AbortController()
     const abort = () => controller.abort()
+
     if (signal?.aborted) {
       abort()
     } else {
       signal?.addEventListener('abort', abort, { once: true })
     }
+
     this.operations.set(request.operationId, controller)
+
     const report = (value: SkillBundleInstallProgress) => {
       this.progress.set(request.operationId, value)
+
       try {
         onProgress?.(value)
       } catch {}
     }
+
     try {
       const target = await this.sshTarget(request.destination)
+
       if (target) {
         return await installSkillBundleOnSshHost({
           provider: target.provider,
@@ -167,8 +187,10 @@ export class RuntimeSkillInstallCommands {
           onProgress: report
         })
       }
+
       await this.host.skillTransactionRecovery
       const origins = ['https://storage.googleapis.com']
+
       if (!this.host.isPackaged() && process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS) {
         origins.push(
           ...process.env.ORCA_SKILL_PACKAGE_DOWNLOAD_ORIGINS.split(',')
@@ -176,6 +198,7 @@ export class RuntimeSkillInstallCommands {
             .filter(Boolean)
         )
       }
+
       return await executeSkillBundleInstallRequest(request, {
         authority: this.authority(),
         stateDirectory: this.userDataPath(),
@@ -189,9 +212,11 @@ export class RuntimeSkillInstallCommands {
       })
     } finally {
       signal?.removeEventListener('abort', abort)
+
       if (this.operations.get(request.operationId) === controller) {
         this.operations.delete(request.operationId)
       }
+
       this.progress.delete(request.operationId)
     }
   }
@@ -201,6 +226,7 @@ export class RuntimeSkillInstallCommands {
   cancelSharedSkillInstall(operationId: string): boolean {
     const operation = this.operations.get(operationId)
     operation?.abort()
+
     return Boolean(operation)
   }
 }

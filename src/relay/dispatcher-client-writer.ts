@@ -19,11 +19,13 @@ export {
   DISPATCHER_CONTROL_QUEUE_MAX_BYTES,
   relayWriterControlReserve
 } from './dispatcher-writer-admission'
+
 export type {
   RelayClientSinkOptions,
   RelayClientWrite,
   SinkWriteSettlement
 } from './dispatcher-writer-sink'
+
 export type { DispatcherWriterLane } from './dispatcher-writer-admission'
 
 export class DispatcherClientWriter {
@@ -74,6 +76,7 @@ export class DispatcherClientWriter {
 
   onCapacity(listener: () => void): () => void {
     this.capacityListeners.add(listener)
+
     return () => this.capacityListeners.delete(listener)
   }
 
@@ -81,6 +84,7 @@ export class DispatcherClientWriter {
     if (this.isIdle()) {
       return Promise.resolve()
     }
+
     return new Promise((resolve) => this.idleWaiters.add(resolve))
   }
 
@@ -94,8 +98,10 @@ export class DispatcherClientWriter {
   ): boolean {
     if (this.closed) {
       onSettled({ ok: false, error: new Error('Relay writer is closed') })
+
       return false
     }
+
     const entry: DispatcherWriterEntry = {
       lane,
       encode,
@@ -105,7 +111,9 @@ export class DispatcherClientWriter {
       settled: false,
       overflowIsNonFatal
     }
+
     const admission = this.admission.admit(entry, this.sink.frameCapacity(lane, this.saturated))
+
     if (!admission.accepted) {
       if (admission.error) {
         entry.onSettled({ ok: false, error: admission.error })
@@ -113,13 +121,17 @@ export class DispatcherClientWriter {
       } else if (lane === 'liveness') {
         entry.onSettled({ ok: true })
       }
+
       return false
     }
+
     if (admission.replaced) {
       admission.replaced.settled = true
       admission.replaced.onSettled({ ok: true })
     }
+
     this.pump()
+
     return true
   }
 
@@ -127,23 +139,29 @@ export class DispatcherClientWriter {
     if (this.closed) {
       return
     }
+
     this.closed = true
     this.saturated = false
     this.drain.disarm()
+
     for (const entry of this.admission.takeQueued()) {
       this.releaseEntry(entry, { ok: false, error })
     }
+
     for (const entry of Array.from(this.inFlight)) {
       this.releaseEntry(entry, { ok: false, error })
     }
+
     this.settleOnDrain.clear()
     this.capacityListeners.clear()
     this.notifyIdle()
+
     try {
       this.sink.close()
     } catch {
       // The writer state is already closed.
     }
+
     if (!this.closeNotified) {
       this.closeNotified = true
       this.onClosed(error)
@@ -154,14 +172,19 @@ export class DispatcherClientWriter {
     if (this.pumping || this.closed) {
       return
     }
+
     this.pumping = true
+
     try {
       while (!this.closed) {
         const entry = this.selectNext()
+
         if (!entry) {
           break
         }
+
         this.writeEntry(entry)
+
         if (this.saturated && entry.lane !== 'liveness') {
           break
         }
@@ -169,6 +192,7 @@ export class DispatcherClientWriter {
     } finally {
       this.pumping = false
     }
+
     // Why deferred: retiring a deep queue drops every entry in one pass, and notifying per drop
     // fans out to each listener O(queue) times for capacity that only changed once.
     if (this.retiredCapacity && !this.closed) {
@@ -182,12 +206,16 @@ export class DispatcherClientWriter {
       if (this.livenessBypassOutstanding) {
         return undefined
       }
+
       const bypass = this.admission.shift('liveness')
+
       if (bypass) {
         this.livenessBypassOutstanding = true
       }
+
       return bypass
     }
+
     return this.laneScheduler.select(
       this.admission,
       (entry) => this.canWrite(entry, this.sink.highWaterMark),
@@ -200,7 +228,9 @@ export class DispatcherClientWriter {
     if (!Number.isFinite(this.sink.highWaterMark)) {
       return true
     }
+
     const writableLength = this.sink.writableLength
+
     return writableLength + entry.estimatedBytes <= capacity || writableLength === 0
   }
 
@@ -208,31 +238,41 @@ export class DispatcherClientWriter {
     if (entry.isStillAdmitted && !entry.isStillAdmitted()) {
       this.releaseEntry(entry, { ok: false, error: new Error('PTY publication retired') })
       this.retiredCapacity = true
+
       return
     }
+
     this.laneScheduler.recordWrite(entry.lane)
     this.inFlight.add(entry)
     let callbackResult: SinkWriteSettlement | undefined
     let writeReturned = false
+
     const onWriteSettled = (result: SinkWriteSettlement): void => {
       if (!writeReturned) {
         callbackResult = result
+
         return
       }
+
       this.handleWriteSettlement(entry, result)
     }
+
     try {
       const accepted = this.sink.write(entry.encode(), onWriteSettled)
       writeReturned = true
+
       if (accepted === false) {
         this.saturated = true
+
         if (!this.sink.supportsWriteCallback) {
           this.settleOnDrain.add(entry)
         }
+
         this.armDrain()
       } else if (!this.sink.supportsWriteCallback) {
         this.handleWriteSettlement(entry, { ok: true })
       }
+
       if (callbackResult) {
         this.handleWriteSettlement(entry, callbackResult)
       }
@@ -249,12 +289,16 @@ export class DispatcherClientWriter {
     if (!result.ok) {
       this.releaseEntry(entry, result)
       this.close(result.error)
+
       return
     }
+
     this.releaseEntry(entry, result)
+
     if (entry.lane === 'liveness') {
       this.livenessBypassOutstanding = false
     }
+
     this.notifyCapacity()
     this.pump()
   }
@@ -274,13 +318,16 @@ export class DispatcherClientWriter {
     if (this.closed || !this.drain.isArmed) {
       return
     }
+
     this.drain.disarm()
     this.saturated = false
     this.livenessBypassOutstanding = false
+
     for (const entry of Array.from(this.settleOnDrain)) {
       this.settleOnDrain.delete(entry)
       this.releaseEntry(entry, { ok: true })
     }
+
     this.notifyCapacity()
     this.pump()
   }
@@ -289,6 +336,7 @@ export class DispatcherClientWriter {
     if (entry.settled) {
       return
     }
+
     entry.settled = true
     this.inFlight.delete(entry)
     this.settleOnDrain.delete(entry)
@@ -309,6 +357,7 @@ export class DispatcherClientWriter {
     if (!this.isIdle()) {
       return
     }
+
     for (const resolve of Array.from(this.idleWaiters)) {
       this.idleWaiters.delete(resolve)
       resolve()

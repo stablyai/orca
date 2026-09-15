@@ -26,6 +26,7 @@ export function getFolderWorkspacePathStatusTitle(
   if (!status || status.exists) {
     return null
   }
+
   // Why: without this the switch matches nothing, returns undefined, and FolderPathStatusIndicator's
   // `!title` check drops the whole marker — a broken folder workspace then renders as healthy.
   if (!isHandledPathStatusReason(status.reason)) {
@@ -34,6 +35,7 @@ export function getFolderWorkspacePathStatusTitle(
       'Folder is not usable'
     )
   }
+
   switch (status.reason) {
     case 'missing':
       return translate('auto.lib.folderWorkspacePathStatus.title.missing', 'Folder not found')
@@ -62,6 +64,7 @@ export function getFolderWorkspacePathStatusDescription(
   if (!status || status.exists) {
     return null
   }
+
   if (!isHandledPathStatusReason(status.reason)) {
     return translate(
       'auto.lib.folderWorkspacePathStatus.description.unrecognized',
@@ -69,6 +72,7 @@ export function getFolderWorkspacePathStatusDescription(
       { path: status.path }
     )
   }
+
   switch (status.reason) {
     case 'missing':
       return translate(
@@ -102,6 +106,7 @@ export function formatFolderWorkspaceCreateError(error: unknown): {
 } {
   const message = error instanceof Error ? error.message : String(error)
   const path = message.includes(':') ? message.slice(message.indexOf(':') + 1) : ''
+
   if (message.startsWith('folder_workspace_path_missing:')) {
     return {
       title: translate(
@@ -115,6 +120,7 @@ export function formatFolderWorkspaceCreateError(error: unknown): {
       )
     }
   }
+
   if (message.startsWith('folder_workspace_path_not_directory:')) {
     return {
       title: translate(
@@ -128,6 +134,7 @@ export function formatFolderWorkspaceCreateError(error: unknown): {
       )
     }
   }
+
   if (message.startsWith('folder_workspace_connection_ambiguous:')) {
     return {
       title: translate(
@@ -140,6 +147,7 @@ export function formatFolderWorkspaceCreateError(error: unknown): {
       )
     }
   }
+
   if (message.startsWith('folder_workspace_path_unavailable:')) {
     return {
       title: translate(
@@ -152,6 +160,7 @@ export function formatFolderWorkspaceCreateError(error: unknown): {
       )
     }
   }
+
   return {
     title: translate(
       'auto.lib.folderWorkspacePathStatus.createError.title.generic',

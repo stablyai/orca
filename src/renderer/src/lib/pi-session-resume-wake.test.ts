@@ -7,6 +7,7 @@ import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 
 const initialAppStoreState = useAppStore.getState()
+
 const PI_TRANSCRIPT_PATH = join(tmpdir(), 'pi-session-1.jsonl')
 
 afterEach(() => {
@@ -20,6 +21,7 @@ describe('Pi session wake', () => {
       id: 'pi-session-1',
       transcriptPath: PI_TRANSCRIPT_PATH
     }
+
     const record: SleepingAgentSessionRecord = {
       paneKey: 'tab-1:leaf-1',
       tabId: 'tab-1',
@@ -32,6 +34,7 @@ describe('Pi session wake', () => {
       updatedAt: 1,
       origin: 'worktree-sleep'
     }
+
     const tab: TerminalTab = {
       id: 'tab-1',
       ptyId: null,
@@ -42,6 +45,7 @@ describe('Pi session wake', () => {
       sortOrder: 0,
       createdAt: 1
     }
+
     useAppStore.setState({
       tabsByWorktree: { 'wt-1': [tab] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }

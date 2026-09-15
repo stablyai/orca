@@ -13,6 +13,7 @@ export function onSshFilesystemProviderRegistered(
   listener: (connectionId: string) => void
 ): () => void {
   registrationListeners.add(listener)
+
   return () => {
     registrationListeners.delete(listener)
   }
@@ -23,6 +24,7 @@ export function registerSshFilesystemProvider(
   provider: IFilesystemProvider
 ): void {
   sshProviders.set(connectionId, provider)
+
   for (const listener of registrationListeners) {
     try {
       listener(connectionId)
@@ -43,8 +45,10 @@ export function getSshFilesystemProvider(connectionId: string): IFilesystemProvi
 
 export function requireSshFilesystemProvider(connectionId: string): IFilesystemProvider {
   const provider = getSshFilesystemProvider(connectionId)
+
   if (!provider) {
     throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
   }
+
   return provider
 }

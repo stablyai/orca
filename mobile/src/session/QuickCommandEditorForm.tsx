@@ -38,6 +38,7 @@ function ActionToggle({
     <View style={styles.toggleGroup}>
       {(['terminal-command', 'agent-prompt'] as const).map((action) => {
         const selected = value === action
+
         return (
           <Pressable
             key={action}
@@ -179,6 +180,7 @@ export function QuickCommandEditorForm({
                 {(['global', 'repo'] as const).map((scopeType) => {
                   const selected = draft.scope.type === scopeType
                   const disabled = scopeType === 'repo' && !hasRepoScope
+
                   return (
                     <Pressable
                       key={scopeType}

@@ -14,13 +14,20 @@ import { ORCHESTRATION_METHODS } from './methods/orchestration'
 import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 const WORKER_HANDLE = 'term_legacy_worker'
+
 const WORKER_PANE = 'tab_worker:33333333-3333-4333-8333-333333333333'
+
 const COORDINATOR_HANDLE = 'term_legacy_coord'
+
 const COORDINATOR_PANE = 'tab_coord:44444444-4444-4444-8444-444444444444'
+
 const CURRENT_COORDINATOR_HANDLE = 'term_current_coord'
+
 const CURRENT_COORDINATOR_PANE = 'tab_current:55555555-5555-4555-8555-555555555555'
+
 // The replacement coordinator after a retain/restart: same handle, new pane identity.
 const RESTARTED_COORDINATOR_PANE = 'tab_current:99999999-9999-4999-8999-999999999999'
+
 // A coordinator terminal that restarted inside the legacy coordinator's own pane.
 const REBOUND_COORDINATOR_HANDLE = 'term_rebound_coord'
 
@@ -34,12 +41,14 @@ type Harness = {
 }
 
 const tempDirs: string[] = []
+
 const databases: OrchestrationDb[] = []
 
 afterEach(() => {
   for (const database of databases.splice(0)) {
     database.close()
   }
+
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -50,11 +59,13 @@ function createHarness(): Harness {
   tempDirs.push(dir)
   const dbPath = join(dir, 'orchestration.db')
   const before = new OrchestrationDb(dbPath)
+
   const task = before.createTask({
     runId: 'run_legacy_local',
     spec: 'legacy assignment',
     createdByTerminalHandle: COORDINATOR_HANDLE
   })
+
   const dispatch = createRootDispatch(before, task.id, WORKER_HANDLE, WORKER_PANE)
   before.close()
 
@@ -92,9 +103,11 @@ function createHarness(): Harness {
       (proof?.terminalHandle === COORDINATOR_HANDLE && proof.paneKey === COORDINATOR_PANE) ||
       (proof?.terminalHandle === CURRENT_COORDINATOR_HANDLE &&
         proof.paneKey === CURRENT_COORDINATOR_PANE)
+
     if (!valid || !proof?.launchToken) {
       return null
     }
+
     return {
       hostScope: { kind: 'local', hostId: 'local' },
       terminalHandle: proof.terminalHandle as string,
@@ -104,6 +117,7 @@ function createHarness(): Harness {
     }
   })
   vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+
   return {
     db,
     dispatcher: new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS }),
@@ -122,7 +136,9 @@ function evidence(
     coordinator: { handle: COORDINATOR_HANDLE, pane: COORDINATOR_PANE },
     'current-coordinator': { handle: CURRENT_COORDINATOR_HANDLE, pane: CURRENT_COORDINATOR_PANE }
   }
+
   const entry = map[role]
+
   return {
     terminalHandle: entry.handle,
     paneKey: entry.pane,
@@ -158,19 +174,23 @@ function commitLegacyCoordinatorPrincipal(harness: Harness): { id: string } {
     launchTokenHash: 'coord-hash',
     processIncarnation: 'process-1'
   })
+
   expect(principal.status).toBe('committed')
+
   return principal
 }
 
 // Why: assert the takeover landed here, so a broken bind fails at cause instead of two tests later.
 function takeOverWithCommittedPrincipal(harness: Harness): void {
   commitLegacyCoordinatorPrincipal(harness)
+
   const bound = harness.db.bindRun({
     runId: harness.adoptedRunId,
     coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
     coordinatorPaneKey: CURRENT_COORDINATOR_PANE,
     takeoverLegacy: true
   })
+
   expect(bound).toMatchObject({
     id: harness.adoptedRunId,
     coordinator_handle: CURRENT_COORDINATOR_HANDLE,
@@ -289,6 +309,7 @@ describe('legacy coordinator delivery targets after takeover', () => {
         'reply-from-new-coordinator'
       )
     )
+
     expect(replied).toMatchObject({ ok: true })
 
     const resumed = await harness.dispatcher.dispatch(
@@ -299,6 +320,7 @@ describe('legacy coordinator delivery targets after takeover', () => {
         'ask-resume-after-reply'
       )
     )
+
     expect(resumed).toMatchObject({ ok: true, result: { answer: 'Yes, ship it.' } })
   })
 })
@@ -334,6 +356,7 @@ describe('legacy coordinator delivery targets without a takeover', () => {
       })
     ).toMatchObject({ coordinator_handle: REBOUND_COORDINATOR_HANDLE })
     expect(harness.db.getLegacyCoordinatorPrincipal(harness.adoptedRunId)?.status).toBe('committed')
+
     return { principalId: principal.id }
   }
 

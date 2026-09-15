@@ -40,13 +40,16 @@ vi.mock('../linear/linear-issue-lookups', () => ({
   getIssue: vi.fn(),
   searchIssues: vi.fn()
 }))
+
 vi.mock('../linear/linear-issue-listing', () => ({
   listIssues: listIssuesMock
 }))
+
 vi.mock('../linear/linear-issue-mutations', () => ({
   createIssue: vi.fn(),
   updateIssue: vi.fn()
 }))
+
 vi.mock('../linear/linear-issue-comments', () => ({
   addIssueComment: vi.fn(),
   getIssueComments: vi.fn()
@@ -85,9 +88,11 @@ describe('registerLinearHandlers', () => {
     listIssuesMock.mockReset()
     listProjectIssuesMock.mockReset()
     listCustomViewIssuesMock.mockReset()
+
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
+
     handleMock.mockImplementation((channel, handler) => {
       handlers[channel] = handler
     })

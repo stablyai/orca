@@ -14,6 +14,7 @@ export function getReviewStateSrText(reviewInfo: WorkspaceCleanupReviewInfo): st
   if (!reviewInfo.state) {
     return ''
   }
+
   return [getWorkspaceCleanupReviewStateLabel(reviewInfo.state), reviewInfo.title]
     .filter(Boolean)
     .join(' · ')

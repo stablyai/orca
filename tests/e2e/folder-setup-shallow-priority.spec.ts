@@ -9,6 +9,7 @@ import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
 const tempRoots: string[] = []
+
 const IMPORT_AS_GROUP_BUTTON_NAME = 'Yes, import as group'
 
 function initializeGitRepo(repoPath: string): void {
@@ -35,6 +36,7 @@ async function createShallowPriorityTruncationFixture(): Promise<{
   const parentPath = realpathSync(
     await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-shallow-priority-'))
   )
+
   tempRoots.push(parentPath)
   const archivePath = path.join(parentPath, 'archive')
   const webClientPath = path.join(parentPath, 'z-web-client')
@@ -45,6 +47,7 @@ async function createShallowPriorityTruncationFixture(): Promise<{
     // throwaway repos makes this regression much slower without adding signal.
     mkdirSync(path.join(archivePath, repoName, '.git'), { recursive: true })
   }
+
   initializeGitRepo(webClientPath)
 
   return {
@@ -66,6 +69,7 @@ async function createCancellableScanFixture(): Promise<{
   const parentPath = realpathSync(
     await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-cancellable-scan-'))
   )
+
   tempRoots.push(parentPath)
   const apiPath = path.join(parentPath, 'api')
   const webPath = path.join(parentPath, 'web')
@@ -116,6 +120,7 @@ async function installCancellableNestedScanMock(
     ipcMain.handle('projectGroups:scanNested', async (event, rawArgs: unknown) => {
       const args = rawArgs as { scanId?: string }
       const scanId = args.scanId ?? 'missing-scan-id'
+
       return await new Promise((resolve) => {
         pendingScans.set(scanId, () =>
           resolve({
@@ -134,11 +139,14 @@ async function installCancellableNestedScanMock(
       const args = rawArgs as { scanId?: string }
       const scanId = args.scanId ?? ''
       const resolveScan = pendingScans.get(scanId)
+
       if (!resolveScan) {
         return false
       }
+
       pendingScans.delete(scanId)
       resolveScan()
+
       return true
     })
   }, scan)
@@ -175,6 +183,7 @@ test('prioritizes shallow sibling repositories in a bounded nested scan', async 
   const importDialog = orcaPage.getByRole('dialog', {
     name: /Import repositories from folder/i
   })
+
   await expect(importDialog.getByText(/Found 100 repositories in/)).toBeVisible()
   await expect(importDialog.getByText('Showing partial scan results.')).toBeVisible()
   await expect(importDialog.getByText('z-web-client', { exact: true }).first()).toBeVisible()
@@ -193,11 +202,14 @@ test('prioritizes shallow sibling repositories in a bounded nested scan', async 
         orcaPage.evaluate(
           (args) => {
             const state = window.__store?.getState()
+
             if (!state) {
               return null
             }
+
             const group = state.projectGroups.find((entry) => entry.parentPath === args.parentPath)
             const importedRepo = state.repos.find((repo) => repo.path === args.webClientPath)
+
             return {
               groupName: group?.name ?? null,
               groupParentPath: group?.parentPath ?? null,
@@ -261,6 +273,7 @@ test('can stop a nested repo scan and import repositories found so far', async (
   const importDialog = orcaPage.getByRole('dialog', {
     name: /Import repositories from folder/i
   })
+
   await expect(importDialog.getByText(/Scanning\.\.\.\s*Found 1 repository in/)).toBeVisible()
   await expect(getImportAsGroupButton(importDialog)).toBeDisabled()
   await importDialog.getByRole('button', { name: /Stop scan/i }).click()
@@ -275,12 +288,15 @@ test('can stop a nested repo scan and import repositories found so far', async (
       () =>
         orcaPage.evaluate((args) => {
           const state = window.__store?.getState()
+
           if (!state) {
             return null
           }
+
           const group = state.projectGroups.find((entry) => entry.parentPath === args.parentPath)
           const apiRepo = state.repos.find((repo) => repo.path === args.apiPath)
           const webRepo = state.repos.find((repo) => repo.path === args.webPath)
+
           return {
             groupName: group?.name ?? null,
             importedApiPath: apiRepo?.path ?? null,

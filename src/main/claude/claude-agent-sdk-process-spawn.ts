@@ -18,11 +18,13 @@ export type ClaudeCodeProcessSpawn = {
 
 function definedEnv(env: Record<string, string | undefined>): Record<string, string> {
   const next: Record<string, string> = {}
+
   for (const [key, value] of Object.entries(env)) {
     if (value !== undefined) {
       next[key] = value
     }
   }
+
   return next
 }
 
@@ -37,6 +39,7 @@ export function createClaudeCodeProcessSpawn(
 ): ClaudeCodeProcessSpawn {
   let child: ClaudeCodeChild | null = null
   let stderrTail = ''
+
   return {
     spawn: (options) => {
       // Why `options.signal` is dropped: it would let the SDK kill the child outside
@@ -48,12 +51,14 @@ export function createClaudeCodeProcessSpawn(
         env: definedEnv(options.env),
         stdio: ['pipe', 'pipe', 'pipe']
       })
+
       child = spawned
       // The SDK drains stderr only for its own local spawn, so a custom spawner must:
       // otherwise the child blocks on a full pipe and exit errors lose their tail.
       spawned.stderr.setEncoding('utf8').on('data', (chunk: string) => {
         stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX_BYTES)
       })
+
       return spawned
     },
     get child() {

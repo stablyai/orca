@@ -48,6 +48,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     restoreRejectedDraft,
     sendStructured
   } = args
+
   const sendWithOutcome = useCallback(
     async (
       text: string,
@@ -56,12 +57,16 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       attachments?: readonly StructuredNativeChatAttachment[]
     ): Promise<MobileNativeChatSendOutcome> => {
       const origin = captureSendOrigin(text.trimEnd())
+
       if (!origin) {
         onSendError('Message not sent (disconnected)')
+
         return 'rejected'
       }
+
       const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent)
       clearDraftForSend(origin, text)
+
       const outcome =
         attachments !== undefined
           ? await sendStructured(text, images, deadline, attachments)
@@ -70,23 +75,31 @@ export function useMobileStructuredNativeChatSendBridge(args: {
             : images !== undefined
               ? await sendStructured(text, images)
               : await sendStructured(text)
+
       if (outcome === 'accepted') {
         if (!isHostCommand) {
           acceptSend(origin, text.trimEnd(), images)
         }
+
         return 'accepted'
       }
+
       if (outcome === 'unknown') {
         if (isHostCommand) {
           restoreRejectedDraft(origin, text)
+
           return 'unknown'
         }
+
         holdUnconfirmedSend(origin, text.trimEnd(), () =>
           onSendError('Delivery unconfirmed — check chat before retrying')
         )
+
         return 'unknown'
       }
+
       restoreRejectedDraft(origin, text)
+
       return 'rejected'
     },
     [
@@ -100,6 +113,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       sendStructured
     ]
   )
+
   const send = useCallback(
     async (
       text: string,
@@ -109,5 +123,6 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     ) => (await sendWithOutcome(text, images, deadline, attachments)) !== 'rejected',
     [sendWithOutcome]
   )
+
   return { send, sendWithOutcome }
 }

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const operationsGuide = readFileSync('docs/reference/orcad-operations.md', 'utf8')
+
 const operationsProse = operationsGuide.replace(/\s+/g, ' ')
 
 describe('orcad operations restart safety', () => {

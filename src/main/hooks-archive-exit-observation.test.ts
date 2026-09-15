@@ -3,7 +3,9 @@ import { EventEmitter } from 'node:events'
 import type { Repo } from '../shared/repo-types'
 
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
+
 vi.mock('child_process', () => ({ spawn: spawnMock, execFileSync: vi.fn() }))
+
 vi.mock('./effective-hook-config', () => ({
   getEffectiveHooksFromConfig: () => ({ scripts: { archive: 'do-the-archive' } })
 }))
@@ -21,11 +23,13 @@ class FakeStream extends EventEmitter {
   setEncoding(): void {}
   override on(event: string, fn: (chunk: string) => void): this {
     super.on(event, fn)
+
     if (event === 'data') {
       for (const chunk of this.chunks) {
         fn(chunk)
       }
     }
+
     return this
   }
 }
@@ -42,16 +46,20 @@ function fakeChild(
     if (stdoutError) {
       stdout.emit('error', stdoutError)
     }
+
     if (outcome instanceof Error) {
       for (const fn of listeners.error ?? []) {
         fn(outcome)
       }
+
       return
     }
+
     for (const fn of listeners.close ?? []) {
       fn(outcome.code ?? null, outcome.signal ?? null)
     }
   })
+
   return {
     pid: 4242,
     stdout,
@@ -61,6 +69,7 @@ function fakeChild(
     kill: () => true,
     on(event: string, fn: (...args: unknown[]) => void) {
       ;(listeners[event] ??= []).push(fn)
+
       return this
     }
   }
@@ -76,6 +85,7 @@ async function runArchiveWith(
   const result = await runHook('archive', '/repo/wt', REPO)
   // Guard against a vacuous pass: if the mock stops intercepting, a real shell would run.
   expect(spawnMock).toHaveBeenCalled()
+
   return result
 }
 
@@ -102,10 +112,12 @@ describe('archive hook exit observation', () => {
     // `exec`'s 1 MiB maxBuffer is gone with `spawn`; without a cap a flooding hook grows the main
     // process's heap for the whole 120 s deadline.
     const megabyte = 'x'.repeat(1024 * 1024)
+
     const result = await runArchiveWith(
       { code: 0 },
       Array.from({ length: 12 }, () => megabyte)
     )
+
     expect(result.output.length).toBeLessThan(11 * 1024 * 1024)
     expect(result.output).toContain('output truncated at 10485760 bytes')
   })

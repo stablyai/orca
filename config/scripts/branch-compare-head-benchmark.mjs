@@ -20,8 +20,11 @@ import { fileURLToPath } from 'node:url'
 import { readBranchCompareHead } from '../../src/shared/git-branch-compare-head.ts'
 
 const REPO_ROOT = fileURLToPath(new URL('../..', import.meta.url))
+
 const ITERATIONS = Number(process.env.ORCA_BRANCH_COMPARE_BENCH_ITERATIONS ?? '8')
+
 const WARMUP = Number(process.env.ORCA_BRANCH_COMPARE_BENCH_WARMUP ?? '2')
+
 const ROUNDS = 6
 
 for (const [name, value] of [
@@ -44,6 +47,7 @@ function git(args) {
 async function probeOid(qualifiedRef) {
   try {
     const out = await git(['rev-parse', '--verify', '--quiet', `${qualifiedRef}^{commit}`])
+
     return out.length > 0 ? out : null
   } catch {
     return null
@@ -54,10 +58,12 @@ async function probeOid(qualifiedRef) {
 async function readSerial(baseRef) {
   const compareRef = (await git(['branch', '--show-current']).catch(() => '')) || 'HEAD'
   let resolvedBaseRef = baseRef
+
   if (!baseRef.startsWith('refs/')) {
     const candidates = baseRef.includes('/')
       ? [`refs/remotes/${baseRef}`, `refs/heads/${baseRef}`]
       : [`refs/heads/${baseRef}`]
+
     for (const candidate of candidates) {
       if ((await probeOid(candidate)) !== null) {
         resolvedBaseRef = candidate
@@ -65,32 +71,41 @@ async function readSerial(baseRef) {
       }
     }
   }
+
   const headOid = await git(['rev-parse', '--verify', '--end-of-options', 'HEAD'])
   const baseOid = await git(['rev-parse', '--verify', '--end-of-options', resolvedBaseRef])
+
   return { compareRef, resolvedBaseRef, headOid, baseOid }
 }
 
 // Production head reader: overlaps independent reads and reuses only safe probe oids.
 async function readConcurrent(baseRef) {
   const reusableProbedOidByRef = new Map()
+
   const resolveBaseRef = async () => {
     if (baseRef.startsWith('refs/')) {
       return baseRef
     }
+
     const candidates = baseRef.includes('/')
       ? [`refs/remotes/${baseRef}`, `refs/heads/${baseRef}`]
       : [`refs/heads/${baseRef}`]
+
     for (const candidate of candidates) {
       const oid = await probeOid(candidate)
+
       if (oid !== null) {
         if (candidate.startsWith('refs/heads/')) {
           reusableProbedOidByRef.set(candidate, oid)
         }
+
         return candidate
       }
     }
+
     return baseRef
   }
+
   const result = await readBranchCompareHead({
     readCompareRef: () =>
       git(['branch', '--show-current'])
@@ -100,17 +115,21 @@ async function readConcurrent(baseRef) {
     readHeadOid: () => git(['rev-parse', '--verify', '--end-of-options', 'HEAD']),
     readBaseOid: (resolvedBaseRef) => {
       const reusableOid = reusableProbedOidByRef.get(resolvedBaseRef)
+
       return reusableOid === undefined
         ? git(['rev-parse', '--verify', '--end-of-options', resolvedBaseRef])
         : Promise.resolve(reusableOid)
     }
   })
+
   if (!result.headOidResult.ok) {
     throw result.headOidResult.error
   }
+
   if (!result.baseOidResult.ok) {
     throw result.baseOidResult.error
   }
+
   return {
     compareRef: result.compareRef,
     resolvedBaseRef: result.resolvedBaseRef,
@@ -122,14 +141,17 @@ async function readConcurrent(baseRef) {
 function median(samples) {
   const sorted = [...samples].sort((a, b) => a - b)
   const mid = sorted.length / 2
+
   return (sorted[mid - 1] + sorted[mid]) / 2
 }
 
 async function timeArm(read, baseRef) {
   const start = performance.now()
+
   for (let index = 0; index < ITERATIONS; index += 1) {
     await read(baseRef)
   }
+
   return (performance.now() - start) / ITERATIONS
 }
 
@@ -139,8 +161,10 @@ async function measure(baseRef) {
     await readSerial(baseRef)
     await readConcurrent(baseRef)
   }
+
   const serialSamples = []
   const concurrentSamples = []
+
   for (let round = 0; round < ROUNDS; round += 1) {
     if (round % 2 === 0) {
       serialSamples.push(await timeArm(readSerial, baseRef))
@@ -150,12 +174,16 @@ async function measure(baseRef) {
       serialSamples.push(await timeArm(readSerial, baseRef))
     }
   }
+
   return { serialMs: median(serialSamples), concurrentMs: median(concurrentSamples) }
 }
 
 const pad = (value, width) => String(value).padStart(width)
+
 console.log('getBranchCompare head-of-chain reads, per call. Lower is better.')
+
 console.log(`iterations=${ITERATIONS} warmup=${WARMUP} rounds=${ROUNDS} (per-arm medians)`)
+
 console.log(
   `${pad('base ref', 30)} ${pad('serial', 11)} ${pad('concurrent', 11)} ${pad('speedup', 9)}`
 )
@@ -163,7 +191,9 @@ console.log(
 // A short remote label is the common case (Orca's base picker emits `origin/main`); the
 // already-qualified ref skips the probe entirely, so only the concurrency half applies.
 const upstream = await git(['rev-parse', '--abbrev-ref', 'HEAD@{upstream}']).catch(() => null)
+
 const baseRefs = ['origin/main', 'refs/remotes/origin/main', 'main']
+
 if (upstream && !baseRefs.includes(upstream)) {
   baseRefs.push(upstream)
 }
@@ -171,14 +201,17 @@ if (upstream && !baseRefs.includes(upstream)) {
 for (const baseRef of baseRefs) {
   const serial = await readSerial(baseRef)
   const concurrent = await readConcurrent(baseRef)
+
   if (JSON.stringify(serial) !== JSON.stringify(concurrent)) {
     throw new Error(
       `resolved values differ for ${baseRef}:\n  serial     ${JSON.stringify(serial)}\n  concurrent ${JSON.stringify(concurrent)}`
     )
   }
+
   if (!serial.headOid) {
     throw new Error(`fixture resolved no HEAD oid for ${baseRef}`)
   }
+
   const { serialMs, concurrentMs } = await measure(baseRef)
   console.log(
     `${pad(baseRef, 30)} ${pad(`${serialMs.toFixed(1)} ms`, 11)} ${pad(`${concurrentMs.toFixed(1)} ms`, 11)} ${pad(`${(serialMs / concurrentMs).toFixed(2)}x`, 9)}`

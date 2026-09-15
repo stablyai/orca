@@ -128,6 +128,7 @@ export class FsHandler {
 
   private async readFile(params: Record<string, unknown>) {
     const filePath = expandTilde(params.filePath as string)
+
     return readRelayFileContent(filePath)
   }
 
@@ -137,6 +138,7 @@ export class FsHandler {
     if (typeof params.filePath !== 'string' || params.filePath.length === 0) {
       throw new FileRangeReadRequestError('fs.readFileRange requires a filePath')
     }
+
     return readRelayFileRange(expandTilde(params.filePath), params.position, params.length)
   }
 
@@ -150,6 +152,7 @@ export class FsHandler {
   private async readFileStream(params: Record<string, unknown>, context?: RequestContext) {
     const filePath = expandTilde(params.filePath as string)
     const ctx = context ?? { clientId: 0, isStale: () => false }
+
     return readRelayFileStreamMetadata(filePath, this.dispatcher, this.streamRegistry, ctx, {
       // Why: only target the requesting client when the dispatcher actually
       // routed this request (context present) — direct-call tests and legacy
@@ -165,6 +168,7 @@ export class FsHandler {
 
   private cancelStream(params: Record<string, unknown>): void {
     const streamId = params.streamId as number | undefined
+
     if (typeof streamId === 'number') {
       this.streamRegistry.abort(streamId)
     }
@@ -173,6 +177,7 @@ export class FsHandler {
   private streamAck(params: Record<string, unknown>): void {
     const streamId = params.streamId as number | undefined
     const seq = params.seq as number | undefined
+
     if (typeof streamId === 'number' && typeof seq === 'number') {
       this.streamRegistry.recordAck(streamId, seq)
     }
@@ -193,6 +198,7 @@ export class FsHandler {
     const useRegex = params.useRegex as boolean | undefined
     const includePattern = params.includePattern as string | undefined
     const excludePattern = params.excludePattern as string | undefined
+
     const maxResults = Math.min(
       (params.maxResults as number) || DEFAULT_MAX_RESULTS,
       DEFAULT_MAX_RESULTS
@@ -206,12 +212,14 @@ export class FsHandler {
       excludePattern,
       maxResults
     }
+
     try {
       return await searchWithRg(rootPath, query, options)
     } catch (error) {
       if (!(error instanceof RipgrepUnavailableError)) {
         throw error
       }
+
       return searchWithGitGrep(rootPath, query, options)
     }
   }
@@ -221,6 +229,7 @@ export class FsHandler {
     context?: RequestContext
   ): Promise<unknown> {
     const rootPath = expandTilde(params.rootPath as string)
+
     // Why no host-side default: #17954 made an oversized reply streamable, so a caller that names no
     // limit gets its whole listing instead of an unannounced prefix it would report as complete.
     // A requested limit is still clamped to the shared ceiling the scan's retention budget assumes.
@@ -230,15 +239,18 @@ export class FsHandler {
       params.maxResults > 0
         ? resolveQuickOpenResultLimit(params.maxResults)
         : undefined
+
     const searchQuery =
       typeof params.searchQuery === 'string' && params.searchQuery.trim().length > 0
         ? params.searchQuery
         : undefined
+
     // Why: the main-to-relay RPC adds excludePaths so nested linked worktrees
     // don't get double-scanned. The shared helper validates the shape and
     // normalizes into root-relative prefixes; malformed input yields [] so
     // the request still succeeds (older apps omit the field entirely).
     const excludePathPrefixes = buildExcludePathPrefixes(rootPath, params.excludePaths)
+
     // Why #7721: full-tree scans are the relay's most expensive request; the
     // coordinator caps them at one per client, coalescing duplicates and
     // aborting a stale scan when the workspace changes or the host cancels.
@@ -249,6 +261,7 @@ export class FsHandler {
       start: (signal) =>
         runListFilesScan(rootPath, excludePathPrefixes, signal, maxResults, searchQuery)
     })
+
     // Why: a full listing of a real monorepo serializes past the 1 MiB control lane — Orca's own
     // checkout is 22.6k paths averaging 58 characters, so a 20,001-row page is ~1.2MB — and the
     // legacy-response lane it demotes to is refused under unrelated producer load. Streaming makes
@@ -261,6 +274,7 @@ export class FsHandler {
 
   private async workspaceSpaceScan(params: Record<string, unknown>, context: RequestContext) {
     const rootPath = expandTilde(params.rootPath as string)
+
     return scanWorkspaceSpaceDirectory(rootPath, context)
   }
 

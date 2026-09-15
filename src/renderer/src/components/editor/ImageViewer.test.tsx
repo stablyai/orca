@@ -7,6 +7,7 @@ const reactHookRuntime = vi.hoisted(() => ({
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useMemo<T>(factory: () => T) {
@@ -23,16 +24,19 @@ vi.mock('react', async () => {
     },
     useState<T>(initial: T | (() => T)) {
       const stateIndex = reactHookRuntime.index++
+
       if (!(stateIndex in reactHookRuntime.states)) {
         reactHookRuntime.states[stateIndex] =
           typeof initial === 'function' ? (initial as () => T)() : initial
       }
+
       const setState = (next: T | ((previous: T) => T)): void => {
         reactHookRuntime.states[stateIndex] =
           typeof next === 'function'
             ? (next as (previous: T) => T)(reactHookRuntime.states[stateIndex] as T)
             : next
       }
+
       return [reactHookRuntime.states[stateIndex] as T, setState] as const
     }
   }
@@ -86,13 +90,17 @@ function expandNode(node: unknown): unknown {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return node
   }
+
   if (Array.isArray(node)) {
     return node.map(expandNode)
   }
+
   const el = node as ReactElementLike
+
   if (typeof el.type === 'function') {
     return expandNode(el.type(el.props))
   }
+
   return {
     ...el,
     props: {
@@ -104,37 +112,48 @@ function expandNode(node: unknown): unknown {
 
 function findElementsByType(node: unknown, typeName: string): ReactElementLike[] {
   const results: ReactElementLike[] = []
+
   const visit = (current: unknown): void => {
     if (current == null || typeof current === 'string' || typeof current === 'number') {
       return
     }
+
     if (Array.isArray(current)) {
       for (const child of current) {
         visit(child)
       }
+
       return
     }
+
     const el = current as ReactElementLike
+
     if (el.type === typeName) {
       results.push(el)
     }
+
     visit(el.props?.children)
   }
+
   visit(node)
+
   return results
 }
 
 function findPreviewImage(node: unknown): ReactElementLike {
   const image = findElementsByType(node, 'img').find((element) => element.props.onError)
+
   if (!image) {
     throw new Error('preview image not found')
   }
+
   return image
 }
 
 async function renderExpandedImageViewer(content: string): Promise<unknown> {
   reactHookRuntime.index = 0
   const module = await import('./ImageViewer')
+
   return expandNode(
     module.default({
       content,
@@ -151,6 +170,7 @@ function pngBase64(width: number): string {
   bytes.write('IHDR', 12, 'ascii')
   bytes.writeUInt32BE(width, 16)
   bytes.writeUInt32BE(1, 20)
+
   return bytes.toString('base64')
 }
 
@@ -159,6 +179,7 @@ async function renderPdfViewerProps(
 ): Promise<Record<string, unknown>> {
   reactHookRuntime.index = 0
   const module = await import('./ImageViewer')
+
   const rendered = expandNode(
     module.default({
       content: 'JVBERi0xLjQK',
@@ -167,10 +188,13 @@ async function renderPdfViewerProps(
       ...(scrollCacheKey === undefined ? {} : { scrollCacheKey })
     })
   )
+
   const [pdf] = findElementsByType(rendered, 'PdfViewer')
+
   if (!pdf) {
     throw new Error('PdfViewer not rendered')
   }
+
   return pdf.props
 }
 
@@ -220,7 +244,9 @@ describe('ImageViewer preview source retry', () => {
     expect(findElementsByType(failedRender, 'img')).toHaveLength(0)
 
     const loadedRender = await renderExpandedImageViewer(loadedContent)
+
     const loadedImage = findPreviewImage(loadedRender)
+
     ;(
       loadedImage.props.onLoad as (event: {
         currentTarget: { naturalWidth: number; naturalHeight: number }
@@ -253,6 +279,7 @@ describe('ImageViewer pre-load layout box', () => {
     const images = findElementsByType(await renderExpandedImageViewer(pngBase64(1)), 'img')
 
     expect(images).toHaveLength(2)
+
     for (const image of images) {
       const className = String(image.props.className)
       expect(className).toContain('max-h-[100vh]')

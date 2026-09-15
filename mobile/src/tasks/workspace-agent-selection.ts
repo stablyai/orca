@@ -34,6 +34,7 @@ export function normalizeWorkspaceAgent(value: unknown): WorkspaceAgentChoice | 
   if (value === 'blank' || value === '__blank__') {
     return 'blank'
   }
+
   return isMobileTuiAgent(value) ? value : null
 }
 
@@ -42,20 +43,26 @@ export function pickWorkspaceAgent(
   detectedAgentIds: Set<string> | null
 ): WorkspaceAgentChoice {
   const preferred = normalizeWorkspaceAgent(settings.defaultTuiAgent)
+
   if (preferred === 'blank') {
     return preferred
   }
+
   const disabled = settings.disabledTuiAgents
+
   const enabledAutoPickOrder = filterEnabledMobileTuiAgents(
     MOBILE_TUI_AGENT_AUTO_PICK_ORDER,
     disabled
   )
+
   if (detectedAgentIds === null) {
     return preferred && isMobileTuiAgentEnabled(preferred, disabled)
       ? preferred
       : (enabledAutoPickOrder[0] ?? 'blank')
   }
+
   const detectedAgents = enabledAutoPickOrder.filter((agent) => detectedAgentIds.has(agent))
+
   return pickMobileTuiAgent(preferred, detectedAgents, disabled) ?? 'blank'
 }
 
@@ -75,11 +82,13 @@ export function resolveWorkspaceAgentSelection({
   overridden
 }: ResolveWorkspaceAgentSelectionArgs): WorkspaceAgentSelectionState {
   const current = { agent, overridden }
+
   if (!selectionActive) {
     return current
   }
 
   const pickedAgent = pickWorkspaceAgent(settings, detectedAgentIds)
+
   if (!overridden) {
     return agent === pickedAgent ? current : { agent: pickedAgent, overridden: false }
   }

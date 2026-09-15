@@ -4,6 +4,7 @@ import { gitCredentialPromptGuardEnv } from '../shared/git-credential-prompt-env
 import { UNTRANSLATED_GIT_OUTPUT_ENV } from '../shared/git-output-locale'
 
 const POSIX_RELAY_PATH_FALLBACKS = ['/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin']
+
 const WINDOWS_RELAY_PATH_FALLBACKS = [
   'C:\\Program Files\\Git\\cmd',
   'C:\\Program Files\\Git\\bin',
@@ -22,39 +23,49 @@ function getPosixUserInstallBinFallbacks(
 ): string[] {
   const home = baseEnv.HOME || homedir()
   const bins: string[] = []
+
   if (baseEnv.PNPM_HOME) {
     bins.push(baseEnv.PNPM_HOME)
   }
+
   if (home) {
     bins.push(posix.join(home, '.local', 'bin'), posix.join(home, '.npm-global', 'bin'))
+
     if (platform === 'darwin') {
       bins.push(posix.join(home, 'Library', 'pnpm'))
     }
   }
+
   const cargoBin = baseEnv.CARGO_HOME
     ? posix.join(baseEnv.CARGO_HOME, 'bin')
     : home
       ? posix.join(home, '.cargo', 'bin')
       : null
+
   if (cargoBin) {
     bins.push(cargoBin)
   }
+
   const bunBin = baseEnv.BUN_INSTALL
     ? posix.join(baseEnv.BUN_INSTALL, 'bin')
     : home
       ? posix.join(home, '.bun', 'bin')
       : null
+
   if (bunBin) {
     bins.push(bunBin)
   }
+
   const denoBin = baseEnv.DENO_INSTALL
     ? posix.join(baseEnv.DENO_INSTALL, 'bin')
     : home
       ? posix.join(home, '.deno', 'bin')
       : null
+
   if (denoBin) {
     bins.push(denoBin)
   }
+
   // GOBIN is the bin dir itself; otherwise go installs into $GOPATH/bin (default ~/go/bin).
   const goBin = baseEnv.GOBIN
     ? baseEnv.GOBIN
@@ -63,9 +74,11 @@ function getPosixUserInstallBinFallbacks(
       : home
         ? posix.join(home, 'go', 'bin')
         : null
+
   if (goBin) {
     bins.push(goBin)
   }
+
   // pnpm/PNPM_HOME point at the global-bin dir directly; the default lives under
   // XDG_DATA_HOME (default ~/.local/share).
   const pnpmHome = baseEnv.PNPM_HOME
@@ -75,52 +88,67 @@ function getPosixUserInstallBinFallbacks(
       : home
         ? posix.join(home, '.local', 'share', 'pnpm')
         : null
+
   if (pnpmHome) {
     bins.push(pnpmHome)
   }
+
   const npmPrefix = baseEnv.npm_config_prefix
+
   if (npmPrefix) {
     bins.push(posix.join(npmPrefix, 'bin'))
   }
+
   return bins
 }
 
 function getWindowsUserInstallBinFallbacks(baseEnv: NodeJS.ProcessEnv): string[] {
   const bins = baseEnv.PNPM_HOME ? [baseEnv.PNPM_HOME] : []
+
   if (baseEnv.APPDATA) {
     bins.push(win32.join(baseEnv.APPDATA, 'npm'))
   }
+
   if (baseEnv.LOCALAPPDATA) {
     bins.push(win32.join(baseEnv.LOCALAPPDATA, 'pnpm'))
   }
+
   if (baseEnv.CARGO_HOME) {
     bins.push(win32.join(baseEnv.CARGO_HOME, 'bin'))
   }
+
   if (baseEnv.BUN_INSTALL) {
     bins.push(win32.join(baseEnv.BUN_INSTALL, 'bin'))
   }
+
   if (baseEnv.DENO_INSTALL) {
     bins.push(win32.join(baseEnv.DENO_INSTALL, 'bin'))
   }
+
   if (baseEnv.GOBIN) {
     bins.push(baseEnv.GOBIN)
   } else if (baseEnv.GOPATH) {
     bins.push(win32.join(baseEnv.GOPATH, 'bin'))
   }
+
   if (baseEnv.USERPROFILE) {
     if (!baseEnv.CARGO_HOME) {
       bins.push(win32.join(baseEnv.USERPROFILE, '.cargo', 'bin'))
     }
+
     if (!baseEnv.BUN_INSTALL) {
       bins.push(win32.join(baseEnv.USERPROFILE, '.bun', 'bin'))
     }
+
     if (!baseEnv.GOBIN && !baseEnv.GOPATH) {
       bins.push(win32.join(baseEnv.USERPROFILE, 'go', 'bin'))
     }
+
     if (!baseEnv.DENO_INSTALL) {
       bins.push(win32.join(baseEnv.USERPROFILE, '.deno', 'bin'))
     }
   }
+
   return bins
 }
 
@@ -136,6 +164,7 @@ function getFallbackSegments(platform: NodeJS.Platform, baseEnv: NodeJS.ProcessE
   if (platform === 'win32') {
     return [...WINDOWS_RELAY_PATH_FALLBACKS, ...getWindowsUserInstallBinFallbacks(baseEnv)]
   }
+
   return [...POSIX_RELAY_PATH_FALLBACKS, ...getPosixUserInstallBinFallbacks(baseEnv, platform)]
 }
 
@@ -179,5 +208,6 @@ export function buildRelayUnattendedGitEnv(
   // stdin is ignored, leaving the relay request hung with no way to answer it.
   const env = gitCredentialPromptGuardEnv(buildRelayGitEnv(baseEnv, platform), platform)
   env.GIT_SSH_COMMAND ??= 'ssh -o BatchMode=yes'
+
   return env
 }

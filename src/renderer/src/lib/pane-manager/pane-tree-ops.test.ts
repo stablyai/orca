@@ -60,6 +60,7 @@ function createPane({
   const leafId = '11111111-1111-4111-8111-111111111111' as never
   const fit = vi.fn()
   const proposeDimensions = vi.fn(() => ({ cols: proposedCols, rows: proposedRows }))
+
   const terminal = {
     cols: terminalCols,
     rows: terminalRows,
@@ -152,6 +153,7 @@ describe('safeFit', () => {
       terminalCols: 120,
       terminalRows: 32
     })
+
     const activeBuffer = pane.terminal.buffer.active as { viewportY: number; baseY: number }
     activeBuffer.viewportY = 42
     activeBuffer.baseY = 100
@@ -202,6 +204,7 @@ describe('safeFit', () => {
       terminalCols: 120,
       terminalRows: 32
     })
+
     const activeBuffer = pane.terminal.buffer.active as { viewportY: number; baseY: number }
     activeBuffer.viewportY = 80
     activeBuffer.baseY = 100
@@ -234,6 +237,7 @@ describe('safeFit', () => {
       terminalCols: 120,
       terminalRows: 32
     })
+
     beginTerminalScrollIntentBufferRebuild(pane.terminal)
     safeFit(pane)
     cancelTerminalScrollIntentBufferRebuildCompletions(pane.terminal)
@@ -250,6 +254,7 @@ describe('safeFit', () => {
       terminalCols: 120,
       terminalRows: 32
     })
+
     const activeBuffer = pane.terminal.buffer.active as { viewportY: number; baseY: number }
     activeBuffer.viewportY = 42
     activeBuffer.baseY = 100
@@ -271,15 +276,19 @@ describe('safeFit', () => {
       terminalCols: 120,
       terminalRows: 32
     })
+
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number
       baseY: number
       cursorY?: number
     }
+
     activeBuffer.viewportY = 42
     activeBuffer.baseY = 100
     activeBuffer.cursorY = 0
+
     const marker = { line: 42, isDisposed: false, dispose: vi.fn() }
+
     ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
       // Reflow at narrower cols rewraps lines; the tracked content now lives
@@ -303,15 +312,19 @@ describe('safeFit', () => {
       terminalCols: 80,
       terminalRows: 32
     })
+
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number
       baseY: number
       cursorY?: number
     }
+
     activeBuffer.viewportY = 42
     activeBuffer.baseY = 100
     activeBuffer.cursorY = 0
+
     const marker = { line: 42, isDisposed: false, dispose: vi.fn() }
+
     ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
     markTerminalPinnedViewport(pane.terminal)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
@@ -335,11 +348,13 @@ describe('safeFit', () => {
       terminalCols: 80,
       terminalRows: 24
     })
+
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number
       baseY: number
       cursorY?: number
     }
+
     activeBuffer.viewportY = 42
     activeBuffer.baseY = 100
     activeBuffer.cursorY = 0
@@ -363,6 +378,7 @@ describe('safeFit', () => {
       terminalCols: 120,
       terminalRows: 32
     })
+
     const activeBuffer = pane.terminal.buffer.active as { viewportY: number; baseY: number }
     activeBuffer.viewportY = 100
     activeBuffer.baseY = 100
@@ -380,23 +396,29 @@ describe('safeFit', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
+
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
       terminalCols: 120,
       terminalRows: 32
     })
+
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number
       baseY: number
       cursorY?: number
     }
+
     activeBuffer.viewportY = 42
     activeBuffer.baseY = 100
     activeBuffer.cursorY = 0
+
     const marker = { line: 42, isDisposed: false, dispose: vi.fn() }
+
     ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
     markTerminalPinnedViewport(pane.terminal)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
@@ -431,23 +453,29 @@ describe('safeFit', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
+
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
       terminalCols: 120,
       terminalRows: 32
     })
+
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number
       baseY: number
       cursorY?: number
     }
+
     activeBuffer.viewportY = 42
     activeBuffer.baseY = 100
     activeBuffer.cursorY = 0
+
     const marker = { line: 30, isDisposed: false, dispose: vi.fn() }
+
     ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
     markTerminalPinnedViewport(pane.terminal)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
@@ -471,25 +499,31 @@ describe('safeFit', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
       terminalCols: 120,
       terminalRows: 32
     })
+
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number
       baseY: number
       cursorY?: number
     }
+
     activeBuffer.viewportY = 42
     activeBuffer.baseY = 100
     activeBuffer.cursorY = 0
     const originalMarker = { line: 30, isDisposed: false, dispose: vi.fn() }
+
     const replacementMarker = { line: 5, isDisposed: false, dispose: vi.fn() }
+
     ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi
       .fn()
       .mockReturnValueOnce(originalMarker)
@@ -520,23 +554,29 @@ describe('safeFit', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
+
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
       terminalCols: 120,
       terminalRows: 32
     })
+
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number
       baseY: number
       cursorY?: number
     }
+
     activeBuffer.viewportY = 42
     activeBuffer.baseY = 100
     activeBuffer.cursorY = 0
+
     const marker = { line: 30, isDisposed: false, dispose: vi.fn() }
+
     ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi.fn(() => marker)
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
       activeBuffer.baseY = 70
@@ -565,25 +605,31 @@ describe('safeFit', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
     const pane = createPane({
       proposedCols: 100,
       proposedRows: 32,
       terminalCols: 120,
       terminalRows: 32
     })
+
     const activeBuffer = pane.terminal.buffer.active as {
       viewportY: number
       baseY: number
       cursorY?: number
     }
+
     activeBuffer.viewportY = 42
     activeBuffer.baseY = 100
     activeBuffer.cursorY = 0
     const originalMarker = { line: 30, isDisposed: false, dispose: vi.fn() }
+
     const replacementMarker = { line: 5, isDisposed: false, dispose: vi.fn() }
+
     ;(pane.terminal as unknown as { registerMarker: unknown }).registerMarker = vi
       .fn()
       .mockReturnValueOnce(originalMarker)
@@ -615,6 +661,7 @@ describe('safeFit', () => {
       terminalCols: 120,
       terminalRows: 32
     })
+
     pane.pendingSplitScrollState = {
       bufferType: 'normal',
       wasAtBottom: true,
@@ -634,6 +681,7 @@ describe('safeFit', () => {
       terminalCols: 120,
       terminalRows: 40
     })
+
     pane.container.dataset.ptyId = 'pty-phone'
     setFitOverride('pty-phone', 'mobile-fit', 49, 20)
 
@@ -650,6 +698,7 @@ describe('safeFit', () => {
       terminalCols: 120,
       terminalRows: 40
     })
+
     pane.container.dataset.ptyId = 'pty-remote'
     setFitOverride('pty-remote', 'remote-desktop-fit', 96, 32)
 
@@ -666,6 +715,7 @@ describe('safeFit', () => {
       terminalCols: 49,
       terminalRows: 20
     })
+
     pane.container.dataset.ptyId = 'pty-phone'
     setFitOverride('pty-phone', 'mobile-fit', 49, 20)
 
@@ -682,6 +732,7 @@ describe('safeFit', () => {
       terminalCols: 120,
       terminalRows: 32
     })
+
     setFitOverride('pty-phone', 'mobile-fit', 49, 20)
 
     safeFit(pane)
@@ -697,6 +748,7 @@ describe('safeFit', () => {
       terminalCols: 49,
       terminalRows: 20
     })
+
     pane.container.dataset.ptyId = 'pty-phone'
     setFitOverride('pty-phone', 'mobile-fit', 49, 20)
     setFitOverride('pty-phone', 'desktop-fit', 120, 40)
@@ -714,6 +766,7 @@ describe('safeFit', () => {
       terminalRows: 40,
       paneId: 1
     })
+
     paneA.container.dataset.ptyId = 'pty-A'
 
     const paneB = createPane({
@@ -723,6 +776,7 @@ describe('safeFit', () => {
       terminalRows: 40,
       paneId: 2
     })
+
     paneB.container.dataset.ptyId = 'pty-B'
 
     setFitOverride('pty-A', 'mobile-fit', 49, 20)
@@ -743,6 +797,7 @@ describe('safeFit', () => {
       terminalCols: 80,
       terminalRows: 24
     })
+
     vi.mocked(pane.fitAddon.fit).mockImplementation(() => {
       pane.terminal.resize(100, 32)
     })
@@ -769,6 +824,7 @@ describe('safeFit', () => {
       terminalCols: 80,
       terminalRows: 24
     })
+
     vi.mocked(pane.fitAddon.proposeDimensions).mockReturnValue(undefined)
     const continuation = vi.fn()
 
@@ -789,6 +845,7 @@ describe('safeFit', () => {
       terminalCols: 80,
       terminalRows: 24
     })
+
     const continuation = vi.fn()
     beginTerminalScrollIntentBufferRebuild(pane.terminal)
     const pending = safeFitAndThen(pane, 'pty-resize', continuation)
@@ -806,6 +863,7 @@ describe('safeFit', () => {
 
 describe('equalizePaneSplitSizes', () => {
   const pane = (flex = '1 1 0%'): MockHTMLElement => new MockHTMLElement(['pane'], [], flex)
+
   const split = (
     direction: 'vertical' | 'horizontal',
     children: MockHTMLElement[],

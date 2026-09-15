@@ -31,14 +31,17 @@ export async function openAbsoluteTabEntryFile(args: {
   await args.operations.authorizeExternalPath({ targetPath: filePath })
   args.operations.assertAbsolutePathAllowed()
   let stat: Awaited<ReturnType<typeof statRuntimePath>>
+
   try {
     stat = await args.operations.statRuntimePath(args.context, filePath)
   } catch {
     throw new Error(`File not found: ${filePath}`)
   }
+
   if (stat.isDirectory) {
     throw new Error(`Cannot open a directory: ${filePath}`)
   }
+
   args.operations.assertAbsolutePathAllowed()
 
   args.operations.openFile(

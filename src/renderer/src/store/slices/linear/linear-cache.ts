@@ -11,7 +11,9 @@ import type { LinearIssueAttributeFilter } from '../../../../../shared/linear/is
 import { linearIssueAttributeFilterSignature } from '../../../../../shared/linear/issue-attribute-filter'
 
 export const CACHE_TTL = 60_000 // 60s — same as GitHub work-items revalidation TTL
+
 export const TEAM_CACHE_TTL = 10 * 60_000 // Teams change rarely and block visible Linear rows.
+
 export const MAX_CACHE_ENTRIES = 500
 
 export function isFresh<T>(
@@ -26,40 +28,50 @@ export function evictStaleEntries<T>(
   maxEntries = MAX_CACHE_ENTRIES
 ): Record<string, CacheEntry<T>> {
   const keys = Object.keys(cache)
+
   if (keys.length <= maxEntries) {
     return cache
   }
+
   const sorted = keys.sort((a, b) => (cache[a]?.fetchedAt ?? 0) - (cache[b]?.fetchedAt ?? 0))
   const pruned: Record<string, CacheEntry<T>> = {}
+
   for (const key of sorted.slice(sorted.length - maxEntries)) {
     pruned[key] = cache[key]
   }
+
   return pruned
 }
 
 export function looksLikeAuthError(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error)
+
   return /authenticat|unauthorized|401/i.test(msg)
 }
 
 export function workspaceErrorType(error: unknown): LinearWorkspaceError['type'] {
   const record = error as { name?: string; message?: string; status?: number; response?: unknown }
   const message = record.message ?? String(error)
+
   const status =
     typeof record.status === 'number'
       ? record.status
       : typeof (record.response as { status?: unknown } | undefined)?.status === 'number'
         ? ((record.response as { status: number }).status as number)
         : undefined
+
   if (looksLikeAuthError(error)) {
     return 'auth'
   }
+
   if (status === 429 || /rate/i.test(record.name ?? '')) {
     return 'rate_limited'
   }
+
   if ((typeof status === 'number' && status >= 500) || /network/i.test(record.name ?? message)) {
     return 'network'
   }
+
   return 'unknown'
 }
 
@@ -88,10 +100,12 @@ export function linearListCacheKey(
   attributeFilter?: LinearIssueAttributeFilter | null
 ): string {
   const attributeSignature = linearIssueAttributeFilterSignature(attributeFilter)
+
   return `${workspaceId ?? 'default'}::list::${filter}::${limit}::${attributeSignature}`
 }
 
 export const LINEAR_LIST_INVALIDATION_VERSION_CAP = 10_000
+
 export let linearListInvalidationToken: { scope: string; version: number } = {
   scope: '',
   version: 0
@@ -166,6 +180,7 @@ export function collectionWithWorkspaceError<T>(
   error: unknown
 ): LinearCollectionResult<T> {
   const existingErrors = (fallback.errors ?? []).filter((item) => item.workspaceId !== workspaceId)
+
   return {
     ...fallback,
     errors: [
@@ -188,18 +203,23 @@ export function largestCachedCollectionBelowLimit<T>(
 ): LinearCollectionResult<T> | null {
   const keyPrefix = `${linearCollectionCacheKey(workspaceId, mode, scopeId)}::`
   let best: { limit: number; data: LinearCollectionResult<T> } | null = null
+
   for (const [key, entry] of Object.entries(cache)) {
     if (!entry?.data || !key.startsWith(keyPrefix)) {
       continue
     }
+
     const cachedLimit = Number(key.slice(keyPrefix.length))
+
     if (!Number.isFinite(cachedLimit) || cachedLimit >= limit) {
       continue
     }
+
     if (!best || cachedLimit > best.limit) {
       best = { limit: cachedLimit, data: entry.data }
     }
   }
+
   return best?.data ?? null
 }
 
@@ -214,14 +234,18 @@ export function patchLinearIssueCollectionCache(
 } {
   let changed = false
   const nextCache = { ...cache }
+
   for (const [key, entry] of Object.entries(nextCache)) {
     if (!canPatchCacheKey(key) || !entry?.data) {
       continue
     }
+
     const idx = entry.data.items.findIndex((item) => item.id === issueId)
+
     if (idx === -1) {
       continue
     }
+
     const updatedItems = [...entry.data.items]
     updatedItems[idx] = { ...updatedItems[idx], ...patch }
     nextCache[key] = {
@@ -230,5 +254,6 @@ export function patchLinearIssueCollectionCache(
     }
     changed = true
   }
+
   return { cache: nextCache, changed }
 }

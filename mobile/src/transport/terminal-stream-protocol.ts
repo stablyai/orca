@@ -1,5 +1,7 @@
 const TERMINAL_STREAM_KIND = 0x74
+
 const TERMINAL_STREAM_VERSION = 1
+
 const HEADER_BYTES = 16
 
 export enum TerminalStreamOpcode {
@@ -31,6 +33,7 @@ export function encodeTerminalStreamFrame(frame: TerminalStreamFrame): Uint8Arra
   view.setUint32(8, Math.floor(seq / 0x100000000), true)
   view.setUint32(12, seq >>> 0, true)
   out.set(frame.payload, HEADER_BYTES)
+
   return out
 }
 
@@ -38,16 +41,22 @@ export function decodeTerminalStreamFrame(bytes: Uint8Array): TerminalStreamFram
   if (bytes.length < HEADER_BYTES) {
     return null
   }
+
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+
   if (view.getUint8(0) !== TERMINAL_STREAM_KIND || view.getUint8(1) !== TERMINAL_STREAM_VERSION) {
     return null
   }
+
   const opcode = view.getUint8(2)
+
   if (!isTerminalStreamOpcode(opcode)) {
     return null
   }
+
   const high = view.getUint32(8, true)
   const low = view.getUint32(12, true)
+
   return {
     opcode,
     streamId: view.getUint32(4, true),

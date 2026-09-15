@@ -63,7 +63,9 @@ export function publishCodexTurnLifecycle(input: {
   if (input.primaryThreadId !== input.threadId) {
     return ADMITTED
   }
+
   const identity = codexTurnLifecycleIdentity(input.sessionId, input.turnId)
+
   const body = codexTurnLifecycleBody({
     turnId: input.turnId,
     state: input.state,
@@ -72,6 +74,7 @@ export function publishCodexTurnLifecycle(input: {
     ...(input.completedAt !== undefined ? { completedAt: input.completedAt } : {}),
     ...(input.durationMs !== undefined ? { durationMs: input.durationMs } : {})
   })
+
   // The running row's `ts` is the host's turn-start receipt so clients can anchor a live counter.
   const appendOptions = {
     lifecycle: true,
@@ -79,14 +82,17 @@ export function publishCodexTurnLifecycle(input: {
       ? { observedAt: input.startedAt }
       : {})
   }
+
   if (input.sink.tryAppendItem) {
     const admission = input.sink.tryAppendItem(identity, body, appendOptions)
+
     if (!admission.accepted) {
       return admission
     }
   } else {
     input.sink.appendItem(identity, body, appendOptions)
   }
+
   // Preserve first-work evidence when completion arrives before the journal drains.
   const publishOptions = {
     lifecycle: true,
@@ -94,9 +100,12 @@ export function publishCodexTurnLifecycle(input: {
       ? { coalescingKey: `turn-start:${input.sessionId}:${input.turnId}` }
       : {})
   }
+
   if (input.sink.tryPublish) {
     return input.sink.tryPublish(publishOptions)
   }
+
   input.sink.publish(publishOptions)
+
   return ADMITTED
 }

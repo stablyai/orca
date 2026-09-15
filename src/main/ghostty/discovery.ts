@@ -7,6 +7,7 @@ function xdgConfigDirs(home: string): string[] {
   if (process.env.XDG_CONFIG_HOME) {
     return [path.posix.join(process.env.XDG_CONFIG_HOME, 'ghostty')]
   }
+
   return [path.posix.join(home, '.config', 'ghostty')]
 }
 
@@ -28,17 +29,22 @@ export function getGhosttyConfigPaths(): string[] {
       const dirs = xdgConfigDirs(home)
       // Why: Native macOS path is the final fallback after XDG candidates.
       dirs.push(path.posix.join(home, 'Library', 'Application Support', 'com.mitchellh.ghostty'))
+
       return withFilenames(dirs)
     }
+
     case 'linux': {
       return withFilenames(xdgConfigDirs(home))
     }
+
     case 'win32': {
       const appData = process.env.APPDATA || home
       const base = path.win32.join(appData, 'ghostty')
+
       // Why: path.win32.join preserves backslashes even when tests run on macOS/Linux.
       return [path.win32.join(base, 'config.ghostty'), path.win32.join(base, 'config')]
     }
+
     case 'aix':
     case 'android':
     case 'cygwin':
@@ -53,9 +59,11 @@ export function getGhosttyConfigPaths(): string[] {
 
 export async function findGhosttyConfigPaths(): Promise<string[]> {
   const found: string[] = []
+
   for (const p of getGhosttyConfigPaths()) {
     try {
       const s = await stat(p)
+
       if (s.isFile()) {
         found.push(p)
       }
@@ -63,10 +71,12 @@ export async function findGhosttyConfigPaths(): Promise<string[]> {
       // ENOENT or permission error — continue probing other paths.
     }
   }
+
   return found
 }
 
 export async function findGhosttyConfigPath(): Promise<string | null> {
   const paths = await findGhosttyConfigPaths()
+
   return paths[0] ?? null
 }

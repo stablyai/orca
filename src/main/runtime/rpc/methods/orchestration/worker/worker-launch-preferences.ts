@@ -30,6 +30,7 @@ export function createWorkerLaunchReceipt(args: {
     model: args.model ?? null,
     effort: args.effort ?? null
   }
+
   return { requested: selection, effective: { ...selection } }
 }
 
@@ -59,6 +60,7 @@ export function resolveWorkerLaunchPreferences(args: {
   if (args.effort && !args.model) {
     throw new OrchestrationError('invalid_argument', '--effort requires --model.')
   }
+
   if (!args.model) {
     return {
       preferences: undefined,
@@ -67,6 +69,7 @@ export function resolveWorkerLaunchPreferences(args: {
   }
 
   const catalog = getAgentSessionOptionCatalog(args.agent)
+
   if (!catalog?.supportsWorkerLaunchPreferences || !catalog.modelApply.launchArgs) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -76,11 +79,13 @@ export function resolveWorkerLaunchPreferences(args: {
 
   if (args.effort) {
     const model = findCatalogModel(catalog, args.model)
+
     const option =
       findCatalogOption(model, 'effort') ??
       (!model
         ? catalog.unknownModelOptions?.find((candidate) => candidate.id === 'effort')
         : undefined)
+
     if (
       option?.kind.type !== 'select' ||
       !option.kind.choices.some((choice) => choice.value === args.effort)
@@ -96,7 +101,9 @@ export function resolveWorkerLaunchPreferences(args: {
     model: args.model,
     ...(args.effort ? { effort: args.effort } : {})
   }
+
   const resolved = resolveAgentSessionOptionLaunch(args.agent, requested, [], false)
+
   if (
     resolved.appliedValues.model !== args.model ||
     resolved.appliedValues.effort !== args.effort
@@ -108,6 +115,7 @@ export function resolveWorkerLaunchPreferences(args: {
   }
 
   const preferences: AgentLaunchPreferences = requested
+
   return {
     preferences,
     receipt: createWorkerLaunchReceipt({ agent: args.agent, ...preferences })
@@ -152,6 +160,7 @@ export function resolveFederatedWorkerLaunchReceipt(
   if (remote) {
     return remote
   }
+
   return remoteReady
     ? { requested: requested.requested, effective: { ...requested.requested } }
     : requested

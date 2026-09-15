@@ -18,16 +18,19 @@ export default function MobileDiffReviewScreen() {
     file?: string | string[]
     area?: string | string[]
   }>()
+
   const hostId = firstReviewParam(params.hostId)
   const worktreeId = firstReviewParam(params.worktreeId)
   const name = firstReviewParam(params.name)
   const initialFilter = normalizeReviewFilterParam(firstReviewParam(params.scope))
   const initialFile = firstReviewParam(params.file)
   const initialArea = normalizeReviewAreaParam(firstReviewParam(params.area))
+
   const initialTarget = useMemo(
     () => (initialFile && initialArea ? { filePath: initialFile, area: initialArea } : null),
     [initialArea, initialFile]
   )
+
   const router = useRouter()
   const { client, state: connState } = useHostClient(hostId)
   const forceReconnect = useForceReconnect()

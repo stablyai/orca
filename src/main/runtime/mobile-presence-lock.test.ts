@@ -9,20 +9,27 @@ vi.mock('../git/worktree', () => ({
   listWorktrees: vi.fn().mockResolvedValue([]),
   listWorktreesStrict: vi.fn().mockResolvedValue([])
 }))
+
 vi.mock('../hooks', () => ({
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' })
 }))
+
 vi.mock('../worktree-runner-script', () => ({ createSetupRunnerScript: vi.fn() }))
+
 vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return { ...actual, computeWorktreePath: vi.fn(), ensurePathWithinWorkspace: vi.fn() }
 })
+
 vi.mock('../ipc/registered-worktree-roots-cache', () => ({
   invalidateAuthorizedRootsCache: vi.fn()
 }))
+
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
@@ -32,6 +39,7 @@ vi.mock('../git/repo', async (importOriginal) => {
 
 vi.mock('../git/git-username', async () => {
   const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
+
   return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
 })
 
@@ -71,10 +79,13 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
     ...store,
     getSettings: () => ({ ...store.getSettings(), mobileAutoRestoreFitMs })
   }
+
   const runtime = new OrcaRuntimeService(effectiveStore)
+
   const ptySizes = new Map<string, { cols: number; rows: number }>([
     ['pty-1', { cols: 150, rows: 40 }]
   ])
+
   const resizes: { ptyId: string; cols: number; rows: number }[] = []
   const writes: string[] = []
   const driverEvents: { ptyId: string; driver: { kind: string; clientId?: string } }[] = []
@@ -84,6 +95,7 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
   runtime.setPtyController({
     write: (_ptyId, data) => {
       writes.push(data)
+
       return true
     },
     kill: () => true,
@@ -92,8 +104,10 @@ function createRuntime(mobileAutoRestoreFitMs: number | null = 5_000) {
       if (!resizeSucceeds) {
         return false
       }
+
       ptySizes.set(ptyId, { cols, rows })
       resizes.push({ ptyId, cols, rows })
+
       return true
     },
     getSize: (ptyId) => ptySizes.get(ptyId) ?? null
@@ -143,6 +157,7 @@ describe('mobile presence lock — driver state machine', () => {
     let driverChecks = 0
     vi.spyOn(runtime, 'getDriver').mockImplementation(() => {
       driverChecks++
+
       return driverChecks >= 3 ? { kind: 'mobile', clientId: 'phone-A' } : { kind: 'idle' }
     })
 
@@ -789,6 +804,7 @@ describe('mobile presence lock — issue #7588 held-modal restore convergence', 
         }
       >
     }
+
     internal.terminalFitOverrides.set('pty-1', {
       mode: 'mobile-fit',
       cols: 45,

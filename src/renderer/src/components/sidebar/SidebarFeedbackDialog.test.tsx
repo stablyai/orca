@@ -23,6 +23,7 @@ vi.mock('sonner', () => ({
 vi.mock('@/components/ui/dialog', async () => {
   const ReactModule = await import('react')
   const Section = ({ children }: { children?: ReactNode }) => <div>{children}</div>
+
   return {
     Dialog: ({ children }: { children?: ReactNode }) => <>{children}</>,
     DialogContent: ReactModule.forwardRef<
@@ -47,6 +48,7 @@ vi.mock('@/components/ui/dialog', async () => {
 
 vi.mock('@/lib/feedback-image-attachments', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     readFeedbackImageFiles: mocks.readFeedbackImageFiles

@@ -19,12 +19,14 @@ export function filterRichMarkdownSlashCommands(
   }
 
   const query = rawQuery.trim().toLowerCase()
+
   if (!query) {
     return [...commands]
   }
 
   return commands.filter((command) => {
     const haystack = [command.label, ...command.aliases].join(' ').toLowerCase()
+
     return haystack.includes(query)
   })
 }

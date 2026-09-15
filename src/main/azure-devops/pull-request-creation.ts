@@ -31,6 +31,7 @@ type AzureDevOpsCreateAuthConfig = {
 
 function envValue(name: string): string | null {
   const value = process.env[name]?.trim() ?? ''
+
   return value.length > 0 ? value : null
 }
 
@@ -44,6 +45,7 @@ function getAuthConfig(): AzureDevOpsCreateAuthConfig {
 
 export function isAzureDevOpsReviewCreationAuthenticated(): boolean {
   const config = getAuthConfig()
+
   return Boolean(config.pat || config.accessToken)
 }
 
@@ -51,10 +53,13 @@ function authHeaders(config: AzureDevOpsCreateAuthConfig): Record<string, string
   if (config.accessToken) {
     return { Authorization: `Bearer ${config.accessToken}` }
   }
+
   if (config.pat) {
     const encoded = Buffer.from(`${config.username ?? ''}:${config.pat}`).toString('base64')
+
     return { Authorization: `Basic ${encoded}` }
   }
+
   return {}
 }
 
@@ -62,6 +67,7 @@ function apiUrl(repo: AzureDevOpsRepoRef, path: string): URL {
   const baseUrl = resolveAzureDevOpsGitApiBaseUrl(repo)
   const url = new URL(`${baseUrl.replace(/\/+$/, '')}${path}`)
   url.searchParams.set('api-version', azureDevOpsApiVersionForOrigin(url.origin))
+
   return url
 }
 
@@ -73,6 +79,7 @@ async function requestCreatePullRequest(
   init: Omit<RequestInit, 'signal'>
 ): Promise<RawAzureDevOpsPullRequest> {
   const url = apiUrl(repo, path)
+
   try {
     return await requestHostedReviewJson<RawAzureDevOpsPullRequest>(
       url,
@@ -87,7 +94,9 @@ async function requestCreatePullRequest(
     ) {
       throw error
     }
+
     markAzureDevOpsPreviewApiVersionOrigin(url.origin)
+
     return requestHostedReviewJson<RawAzureDevOpsPullRequest>(
       apiUrl(repo, path),
       init,
@@ -110,11 +119,14 @@ function apiErrorMessage(error: unknown): string {
 
 function classifyCreateError(error: unknown): CreateHostedReviewResult {
   const message = apiErrorMessage(error)
+
   if (message) {
     console.warn('createAzureDevOpsPullRequest failed:', message)
   }
+
   const lower = message.toLowerCase()
   const status = error instanceof HostedReviewApiRequestError ? error.status : null
+
   if (
     status === 401 ||
     status === 403 ||
@@ -129,6 +141,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
         'Create PR failed: Azure DevOps is not authenticated. Next step: set ORCA_AZURE_DEVOPS_TOKEN in this environment.'
     }
   }
+
   if (status === 409 || lower.includes('already exists') || lower.includes('active pull request')) {
     return {
       ok: false,
@@ -136,6 +149,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       error: 'A pull request already exists for this branch.'
     }
   }
+
   if (error instanceof HostedReviewApiRequestError && error.timedOut) {
     return {
       ok: false,
@@ -143,6 +157,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       error: 'PR creation may have completed. Refreshing branch review state...'
     }
   }
+
   if (status === 400 || status === 422 || lower.includes('validation')) {
     return {
       ok: false,
@@ -151,6 +166,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
         'Create PR failed: Azure DevOps rejected the pull request. Check the base branch and branch state, then try again.'
     }
   }
+
   return {
     ok: false,
     code: 'unknown',
@@ -165,6 +181,7 @@ async function findExistingPullRequest(
   connectionId?: string | null
 ): Promise<{ number: number; url: string } | null> {
   const existing = await getAzureDevOpsPullRequestForBranch(repoPath, head, null, connectionId)
+
   return existing ? { number: existing.number, url: existing.url } : null
 }
 
@@ -185,6 +202,7 @@ export async function createAzureDevOpsPullRequest(
   const connectionId = hostedReviewSshConnectionId(executionHostId)
 
   const repo = await getAzureDevOpsRepoRef(repoPath, connectionId)
+
   if (!repo) {
     return {
       ok: false,
@@ -196,6 +214,7 @@ export async function createAzureDevOpsPullRequest(
   const base = normalizeHostedReviewBaseRef(input.base)
   const head = input.head ? normalizeHostedReviewHeadRef(input.head) : ''
   const title = input.title.trim()
+
   if (!base || !head || !title) {
     return {
       ok: false,
@@ -203,6 +222,7 @@ export async function createAzureDevOpsPullRequest(
       error: 'Create PR failed: base branch, head branch, and title are required.'
     }
   }
+
   if (head.toLowerCase() === base.toLowerCase()) {
     return {
       ok: false,
@@ -215,6 +235,7 @@ export async function createAzureDevOpsPullRequest(
     input.useTemplate && !input.body?.trim()
       ? await readHostedPullRequestTemplate(repoPath, connectionId)
       : (input.body ?? '')
+
   const requestBody = {
     sourceRefName: azureBranchRef(head),
     targetRefName: azureBranchRef(base),
@@ -237,11 +258,15 @@ export async function createAzureDevOpsPullRequest(
         body: JSON.stringify(requestBody)
       }
     )
+
     const created = mapAzureDevOpsPullRequest(raw, 'neutral', repo.webBaseUrl)
+
     if (created) {
       return { ok: true, number: created.number, url: created.url }
     }
+
     const found = await findExistingPullRequest(repoPath, head, connectionId).catch(() => null)
+
     return found
       ? { ok: true, ...found }
       : {
@@ -251,11 +276,13 @@ export async function createAzureDevOpsPullRequest(
         }
   } catch (error) {
     const classified = classifyCreateError(error)
+
     if (
       !classified.ok &&
       (classified.code === 'already_exists' || classified.code === 'unknown_completion')
     ) {
       const existing = await findExistingPullRequest(repoPath, head, connectionId).catch(() => null)
+
       if (existing) {
         return {
           ok: false,
@@ -265,6 +292,7 @@ export async function createAzureDevOpsPullRequest(
         }
       }
     }
+
     return classified
   }
 }

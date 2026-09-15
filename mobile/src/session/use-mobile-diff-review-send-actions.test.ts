@@ -14,6 +14,7 @@ import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-ac
 type SendActions = ReturnType<typeof useMobileDiffReviewSendActions>
 
 vi.mock('../platform/haptics', () => ({ triggerSuccess: vi.fn() }))
+
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn().mockResolvedValue(undefined) }))
 
 function sendResponse(accepted: boolean) {
@@ -75,6 +76,7 @@ describe('useMobileDiffReviewSendActions', () => {
       setSendSheet,
       saveCommentsAndReviewState
     })
+
     return null
   }
 
@@ -181,6 +183,7 @@ describe('useMobileDiffReviewSendActions', () => {
       .fn()
       .mockResolvedValueOnce(sendResponse(true))
       .mockResolvedValueOnce(sendResponse(false))
+
     await mount({ sendRequest } as unknown as RpcClient)
     markMobileNativeChatInputStale('terminal-1')
 
@@ -197,6 +200,7 @@ describe('useMobileDiffReviewSendActions', () => {
     const sendRequest = vi
       .fn()
       .mockResolvedValue({ id: 'send', ok: false, error: { message: 'pane gone' } })
+
     await mount({ sendRequest } as unknown as RpcClient)
 
     let error: unknown

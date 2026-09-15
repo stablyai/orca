@@ -153,9 +153,12 @@ export function findPendingLinkedWorkItemCreationId(
   if (request.linkedIssue == null && request.linkedPR == null) {
     return null
   }
+
   const hostId = request.workspaceRunContext?.hostId ?? null
+
   const match = Object.values(pendingCreations).find((entry) => {
     const pending = entry.request
+
     return (
       pending.repoId === request.repoId &&
       pending.linkedIssue === request.linkedIssue &&
@@ -163,6 +166,7 @@ export function findPendingLinkedWorkItemCreationId(
       (pending.workspaceRunContext?.hostId ?? null) === hostId
     )
   })
+
   return match?.creationId ?? null
 }
 
@@ -175,11 +179,14 @@ export function getCreationProgressLabel(
   if (entry.phase === 'provisioning-vm') {
     return 'Provisioning VM…'
   }
+
   if (entry.indeterminate) {
     return 'Setting up your workspace…'
   }
+
   if (entry.phase === 'preparing') {
     return 'Preparing workspace…'
   }
+
   return entry.phase === 'creating' ? 'Creating worktree…' : 'Fetching base branch…'
 }

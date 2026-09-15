@@ -15,12 +15,15 @@ describe('task creation dependency readiness', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+
     for (const database of databases) {
       database.close()
     }
+
     for (const directory of directories) {
       rmSync(directory, { recursive: true, force: true })
     }
+
     databases.length = 0
     directories.length = 0
   })
@@ -28,6 +31,7 @@ describe('task creation dependency readiness', () => {
   function createDb(path: string = ':memory:'): OrchestrationDb {
     const database = new OrchestrationDb(path)
     databases.push(database)
+
     return database
   }
 
@@ -62,6 +66,7 @@ describe('task creation dependency readiness', () => {
         injected = true
         concurrent.updateTaskStatus(dependency.id, 'completed')
       }
+
       return prepare(sql)
     })
 
@@ -76,6 +81,7 @@ describe('task creation dependency readiness', () => {
     const first = db.createTask({ runId: 'run_legacy_local', spec: 'first' })
     const second = db.createTask({ runId: 'run_legacy_local', spec: 'second' })
     db.updateTaskStatus(first.id, 'completed')
+
     const child = db.createTask({
       runId: 'run_legacy_local',
       spec: 'child',
@@ -135,16 +141,19 @@ describe('task creation dependency readiness', () => {
     const completed = before.createTask({ runId: 'run_legacy_local', spec: 'completed' })
     const open = before.createTask({ runId: 'run_legacy_local', spec: 'open' })
     before.updateTaskStatus(completed.id, 'completed')
+
     const ready = before.createTask({
       runId: 'run_legacy_local',
       spec: 'ready',
       deps: [completed.id]
     })
+
     const pending = before.createTask({
       runId: 'run_legacy_local',
       spec: 'pending',
       deps: [completed.id, open.id]
     })
+
     before.close()
     databases.splice(databases.indexOf(before), 1)
 

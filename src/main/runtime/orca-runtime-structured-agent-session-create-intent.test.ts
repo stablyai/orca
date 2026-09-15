@@ -4,6 +4,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 describe('structured agent-session create intent', () => {
   it('pins the selected Codex launch home after normal launch preparation', async () => {
     const prepareCodexStructuredLaunch = vi.fn(() => '/accounts/selected/home')
+
     const runtime = new OrcaRuntimeService(
       {
         getSettings: () => ({
@@ -21,9 +22,11 @@ describe('structured agent-session create intent', () => {
       undefined,
       { prepareCodexStructuredLaunch }
     )
+
     vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
       supported: true
     })
+
     const internal = runtime as unknown as {
       resolveStructuredAgentSessionLocation: (selector: string) => Promise<{
         executionHostId: string
@@ -35,6 +38,7 @@ describe('structured agent-session create intent', () => {
         worktree: { path: string }
       }>
     }
+
     internal.resolveStructuredAgentSessionLocation = vi.fn(async () => ({
       executionHostId: 'local',
       wslDistro: null,
@@ -64,6 +68,7 @@ describe('structured agent-session create intent', () => {
 
   it('pins the configured Claude launch home without Codex launch preparation', async () => {
     const prepareCodexStructuredLaunch = vi.fn()
+
     const runtime = new OrcaRuntimeService(
       {
         getSettings: () => ({
@@ -81,9 +86,11 @@ describe('structured agent-session create intent', () => {
       undefined,
       { prepareCodexStructuredLaunch }
     )
+
     vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
       supported: true
     })
+
     const internal = runtime as unknown as {
       resolveStructuredAgentSessionLocation: (selector: string) => Promise<{
         executionHostId: string
@@ -95,6 +102,7 @@ describe('structured agent-session create intent', () => {
         worktree: { path: string }
       }>
     }
+
     internal.resolveStructuredAgentSessionLocation = vi.fn(async () => ({
       executionHostId: 'local',
       wslDistro: null,
@@ -122,6 +130,7 @@ describe('structured agent-session create intent', () => {
   it('uses the managed Claude launch home before falling back to ~/.claude', async () => {
     const prepareCodexStructuredLaunch = vi.fn()
     const getRuntimeConfigDir = vi.fn(() => '/accounts/managed/claude-home')
+
     const runtime = new OrcaRuntimeService(
       {
         getSettings: () => ({
@@ -131,6 +140,7 @@ describe('structured agent-session create intent', () => {
       undefined,
       { prepareCodexStructuredLaunch }
     )
+
     runtime.setAccountServices({
       claudeAccounts: { getRuntimeConfigDir } as never,
       codexAccounts: {} as never,
@@ -139,6 +149,7 @@ describe('structured agent-session create intent', () => {
     vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
       supported: true
     })
+
     const internal = runtime as unknown as {
       resolveStructuredAgentSessionLocation: (selector: string) => Promise<{
         executionHostId: string
@@ -150,6 +161,7 @@ describe('structured agent-session create intent', () => {
         worktree: { path: string }
       }>
     }
+
     internal.resolveStructuredAgentSessionLocation = vi.fn(async () => ({
       executionHostId: 'local',
       wslDistro: null,

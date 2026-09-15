@@ -35,6 +35,7 @@ import { STREAM_CHUNK_SIZE } from './protocol'
 
 // One framed fs.streamChunk: 256KB raw → base64 (4/3) + JSON envelope + header.
 const FRAMED_CHUNK_BYTES = Math.ceil((STREAM_CHUNK_SIZE * 4) / 3) + 512
+
 // Node pipe/socket sinks report saturation via write() === false past the HWM.
 const SINK_HIGH_WATER_MARK = 64 * 1024
 
@@ -44,10 +45,12 @@ async function waitUntil(
   timeoutMs = 10_000
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs
+
   while (!predicate()) {
     if (Date.now() > deadline) {
       throw new Error(`waitUntil timed out: ${what}`)
     }
+
     await new Promise((r) => setImmediate(r))
   }
 }
@@ -56,9 +59,11 @@ async function waitUntil(
 async function waitUntilSettled(read: () => number, stableTurns = 25): Promise<void> {
   let last = read()
   let stable = 0
+
   while (stable < stableTurns) {
     await new Promise((r) => setImmediate(r))
     const current = read()
+
     if (current === last) {
       stable += 1
     } else {
@@ -100,12 +105,15 @@ function createHarness(opts: { congested: boolean }): Harness {
     data: Buffer
     settle: (result: SinkWriteSettlement) => void
   }[] = []
+
   let queuedBytes = 0
   const drainWaiters = new Set<() => void>()
+
   const fireDrainIfIdle = (): void => {
     if (queuedBytes > 0) {
       return
     }
+
     for (const cb of Array.from(drainWaiters)) {
       drainWaiters.delete(cb)
       cb()
@@ -116,9 +124,11 @@ function createHarness(opts: { congested: boolean }): Harness {
     (data: Buffer, settle) => {
       outQueue.push({ data, settle })
       queuedBytes += data.length
+
       if (!opts.congested) {
         return true
       }
+
       return queuedBytes < SINK_HIGH_WATER_MARK
     },
     {
@@ -131,25 +141,31 @@ function createHarness(opts: { congested: boolean }): Harness {
       }
     }
   )
+
   relayFeed = (data: Buffer) => dispatcher.feed(data)
 
   const deliverAll = (): void => {
     while (outQueue.length > 0) {
       const { data, settle } = outQueue.shift()!
       queuedBytes -= data.length
+
       for (const cb of clientDataCallbacks) {
         cb(data)
       }
+
       settle({ ok: true })
     }
+
     fireDrainIfIdle()
   }
 
   let autoDeliverTimer: ReturnType<typeof setInterval> | null = null
+
   const startAutoDeliver = (): void => {
     if (autoDeliverTimer) {
       return
     }
+
     autoDeliverTimer = setInterval(deliverAll, 1)
   }
 
@@ -168,6 +184,7 @@ function createHarness(opts: { congested: boolean }): Harness {
       if (autoDeliverTimer) {
         clearInterval(autoDeliverTimer)
       }
+
       mux.dispose()
       dispatcher.dispose()
       fsHandler.dispose()
@@ -188,6 +205,7 @@ describe('fs.readFileStream vs pty.data echo head-of-line blocking', () => {
 
   it('bounds bulk bytes queued ahead of a pty echo when the channel is congested', async () => {
     const harness = createHarness({ congested: true })
+
     try {
       const filePath = path.join(tmpDir, 'big.png')
       const original = randomBytes(3 * 1024 * 1024) // 12 chunks
@@ -228,6 +246,7 @@ describe('fs.readFileStream vs pty.data echo head-of-line blocking', () => {
 
   it('caps in-flight chunks via the fs.streamAck credit window when the client stalls', async () => {
     const harness = createHarness({ congested: false })
+
     try {
       const filePath = path.join(tmpDir, 'big.png')
       writeFileSync(filePath, randomBytes(3 * 1024 * 1024)) // 12 chunks
@@ -242,6 +261,7 @@ describe('fs.readFileStream vs pty.data echo head-of-line blocking', () => {
       })
 
       harness.startAutoDeliver()
+
       // Raw ack-capable request without sending any acks: models a client
       // whose main thread is too busy to process chunks.
       const metadata = (await harness.mux.request('fs.readFileStream', {
@@ -259,9 +279,11 @@ describe('fs.readFileStream vs pty.data echo head-of-line blocking', () => {
 
       // Acking releases the window and the stream completes.
       const totalChunks = 12
+
       for (let seq = 0; seq < totalChunks; seq += 1) {
         harness.mux.notify('fs.streamAck', { streamId: metadata.streamId, seq })
       }
+
       await waitUntil(() => streamEnded, 'stream completed after acks')
       expect(receivedSeqs).toEqual(Array.from({ length: totalChunks }, (_, i) => i))
     } finally {
@@ -271,6 +293,7 @@ describe('fs.readFileStream vs pty.data echo head-of-line blocking', () => {
 
   it('still delivers the full stream to legacy clients that never ack', async () => {
     const harness = createHarness({ congested: false })
+
     try {
       const filePath = path.join(tmpDir, 'legacy.png')
       const original = randomBytes(1024 * 1024 + 12345)
@@ -295,6 +318,7 @@ describe('fs.readFileStream vs pty.data echo head-of-line blocking', () => {
           .sort(([a], [b]) => a - b)
           .map(([, buf]) => buf)
       )
+
       expect(reassembled.equals(original)).toBe(true)
     } finally {
       harness.dispose()

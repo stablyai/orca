@@ -10,9 +10,11 @@ export function settleSerializeRequest(
   result: SerializeResult
 ): void {
   const pending = session.pendingSerializeRequests.get(requestId)
+
   if (!pending) {
     return
   }
+
   clearTimeout(pending.timeout)
   session.pendingSerializeRequests.delete(requestId)
   pending.resolve(result)
@@ -44,7 +46,9 @@ export function installPtySerializeBufferIpc(session: PtyIpcSession): void {
       ) {
         return
       }
+
       const snapshot = args.snapshot
+
       if (
         snapshot &&
         typeof snapshot.data === 'string' &&
@@ -63,18 +67,23 @@ export function installPtySerializeBufferIpc(session: PtyIpcSession): void {
           cols: snapshot.cols,
           rows: snapshot.rows
         }
+
         if (typeof snapshot.seq === 'number' && Number.isFinite(snapshot.seq)) {
           result.seq = snapshot.seq
         }
+
         if (typeof snapshot.lastTitle === 'string' && snapshot.lastTitle.length > 0) {
           result.lastTitle = snapshot.lastTitle
         }
+
         // Why gated on seq: without a boundary the flags cannot be reconciled
         // against live bytes, so they prove nothing.
         const kittyKeyboardFlags = parseTerminalKittyKeyboardFlags(snapshot.kittyKeyboardFlags)
+
         if (result.seq !== undefined && kittyKeyboardFlags !== undefined) {
           result.kittyKeyboardFlags = kittyKeyboardFlags
         }
+
         settleSerializeRequest(session, args.requestId, result)
       } else {
         settleSerializeRequest(session, args.requestId, null)
@@ -93,19 +102,24 @@ export function requestSerializedBuffer(
   }
 
   const requestId = randomUUID()
+
   return new Promise<SerializeResult>((resolve) => {
     const timeout = setTimeout(() => {
       settleSerializeRequest(session, requestId, null)
     }, 750)
+
     session.pendingSerializeRequests.set(requestId, { resolve, timeout })
+
     const payload: {
       requestId: string
       ptyId: string
       opts?: { scrollbackRows?: number }
     } = { requestId, ptyId }
+
     if (opts) {
       payload.opts = opts
     }
+
     session.mainWindow.webContents.send('pty:serializeBuffer:request', payload)
   })
 }

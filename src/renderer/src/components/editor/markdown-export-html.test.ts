@@ -7,6 +7,7 @@ describe('buildMarkdownExportHtml', () => {
       title: 'Hello',
       renderedHtml: '<h1>Hello</h1><p>world</p>'
     })
+
     expect(html.startsWith('<!DOCTYPE html>')).toBe(true)
     expect(html).toContain('<meta charset="utf-8"')
     expect(html).toContain('<title>Hello</title>')
@@ -20,6 +21,7 @@ describe('buildMarkdownExportHtml', () => {
       title: '<script>alert(1)</script>',
       renderedHtml: '<p>x</p>'
     })
+
     expect(html).toContain('<title>&lt;script&gt;alert(1)&lt;/script&gt;</title>')
     expect(html).not.toContain('<title><script>')
   })

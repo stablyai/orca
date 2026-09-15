@@ -36,21 +36,29 @@ vi.mock('lucide-react-native', () => ({
 }))
 
 vi.mock('../platform/haptics', () => ({ triggerMediumImpact: vi.fn() }))
+
 vi.mock('./AgentSpinner', () => ({
   AgentSpinner: (props: unknown) => {
     agentSpinnerRender(props)
+
     return null
   }
 }))
+
 vi.mock('./AgentStateDot', () => ({
   AgentStateDot: (props: unknown) => {
     agentStateDotRender(props)
+
     return null
   }
 }))
+
 vi.mock('./MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
+
 vi.mock('./MobileRepoIcon', () => ({ MobileRepoIcon: () => null }))
+
 vi.mock('./WorktreeAgentList', () => ({ WorktreeAgentList: () => null }))
+
 vi.mock('./WorktreeMetaGlyphs', () => ({
   prStateColor: () => '#000000',
   WorktreeMetaGlyphs: () => null
@@ -62,6 +70,7 @@ type TestItem = WorktreeListRowItem & {
 }
 
 const stableRepoIcon = { type: 'emoji', emoji: 'o' } as const
+
 let updateSibling: Dispatch<SetStateAction<number>> = () => undefined
 
 function ListRowHarness({ item, now }: { item: TestItem; now: number }) {
@@ -148,6 +157,7 @@ describe('memoized worktree rows', () => {
     expect(agentSpinnerRender).toHaveBeenCalledTimes(1)
 
     let expectedRenders = 1
+
     const liveUpdates: TestItem[] = [
       { ...baseItem, preview: 'Running tests' },
       { ...baseItem, unread: true },
@@ -155,6 +165,7 @@ describe('memoized worktree rows', () => {
       { ...baseItem, agents: [agent({ state: 'waiting', updatedAt: 2_000 })] },
       { ...baseItem, status: 'working' }
     ]
+
     for (const liveUpdate of liveUpdates) {
       await act(async () =>
         renderer!.update(createElement(ListRowHarness, { item: liveUpdate, now: 2_000 }))

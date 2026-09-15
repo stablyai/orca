@@ -20,6 +20,7 @@ const HANGUL_PREEDIT_PATTERN = /[ᄀ-ᇿ㄰-㆏ꥠ-꥿가-힣]/
 // event, so a stale tracker (missed compositionend) has no natural unstick
 // path. Expire the guard so Space/digits cannot stay dead indefinitely.
 export const TERMINAL_IME_CANDIDATE_GUARD_STALE_COMPOSITION_EXPIRY_MS = 10_000
+
 // Why: Sogou/fcitx can deliver the committing Space/digit as plain keydown and
 // keyup after compositionend; a narrow window absorbs those trailing events
 // without making the keys globally unavailable after IME use.
@@ -54,9 +55,11 @@ export function installTerminalImeCompositionTracker(
 
   const isCandidateKeyGuardActive = (): boolean => {
     const at = now()
+
     if (isActiveAt(at)) {
       return true
     }
+
     return (
       compositionEndedAt !== null &&
       at - compositionEndedAt <= TERMINAL_IME_CANDIDATE_GUARD_POST_COMPOSITION_MS
@@ -80,21 +83,27 @@ export function installTerminalImeCompositionTracker(
     // Why safe: the following compositionupdate re-reads the preedit script.
     hangulPreedit = false
   }
+
   const updateComposition = (event: Event): void => {
     lastCompositionEventAt = now()
+
     // Why: Sogou/fcitx can emit empty compositionupdate data while its
     // candidate popup is still open — empty data must not deactivate.
     // compositionend, non-composition input, and blur own deactivation.
     if (!(event instanceof CompositionEvent)) {
       return
     }
+
     if (event.data === '') {
       sawEmptyCompositionUpdate = true
+
       return
     }
+
     hangulPreedit = HANGUL_PREEDIT_PATTERN.test(event.data)
     active = true
   }
+
   const handleCompositionEnd = (): void => {
     active = false
     // Why: only Sogou/fcitx-style empty updates prove a trailing plain
@@ -102,16 +111,19 @@ export function installTerminalImeCompositionTracker(
     compositionEndedAt = sawEmptyCompositionUpdate ? now() : null
     sawEmptyCompositionUpdate = false
   }
+
   const handleInput = (event: Event): void => {
     if (event instanceof InputEvent && event.inputType === 'insertCompositionText') {
       return
     }
+
     active = false
     // Why: real non-composition input means ordinary typing resumed; keeping
     // the post-end window would swallow a legitimate Space/digit.
     compositionEndedAt = null
     sawEmptyCompositionUpdate = false
   }
+
   const markInactive = (): void => {
     active = false
     lastCompositionEventAt = null

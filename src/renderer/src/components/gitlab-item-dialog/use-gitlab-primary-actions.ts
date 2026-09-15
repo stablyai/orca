@@ -22,13 +22,17 @@ export function useGitLabPrimaryActions(
     setCommentDraftState,
     setCommentSubmitting
   } = state
+
   const handleClose = useCallback(async (): Promise<void> => {
     if (!item || !repoSelector || item.type !== 'mr') {
       return
     }
+
     setActionInFlight('close')
+
     try {
       const res = await window.api.gl.closeMR({ ...repoSelector, iid: item.number })
+
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -59,9 +63,12 @@ export function useGitLabPrimaryActions(
     if (!item || !repoSelector || item.type !== 'mr') {
       return
     }
+
     setActionInFlight('reopen')
+
     try {
       const res = await window.api.gl.reopenMR({ ...repoSelector, iid: item.number })
+
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -92,9 +99,12 @@ export function useGitLabPrimaryActions(
     if (!item || !repoSelector || item.type !== 'mr') {
       return
     }
+
     setActionInFlight('merge')
+
     try {
       const res = await window.api.gl.mergeMR({ ...repoSelector, iid: item.number })
+
       if (res.ok) {
         if (mountedRef.current) {
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -123,9 +133,11 @@ export function useGitLabPrimaryActions(
 
   const handleSubmitComment = useCallback(async (): Promise<void> => {
     const bodyState = getCommentBodySubmitState(commentDraft)
+
     if (bodyState.status === 'empty' || !item || !repoSelector) {
       return
     }
+
     if (bodyState.status === 'too-large-leading-whitespace') {
       toast.error(
         translate(
@@ -133,9 +145,12 @@ export function useGitLabPrimaryActions(
           'Comment is too large to submit safely.'
         )
       )
+
       return
     }
+
     setCommentSubmitting(true)
+
     try {
       // Why: the IPC for issue comments takes `number`, MR takes `iid`.
       // Branch on the item type to hit the right channel.
@@ -151,6 +166,7 @@ export function useGitLabPrimaryActions(
               number: item.number,
               body: bodyState.body
             })
+
       if (res.ok) {
         if (mountedRef.current) {
           setCommentDraftState((current) =>

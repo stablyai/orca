@@ -55,6 +55,7 @@ vi.mock('../../shared/remote-runtime-client', () => ({
 
 vi.mock('./runtime-environment-request-connections', async () => {
   const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+
   return withRuntimeStatusOwners({
     sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
     sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
@@ -79,6 +80,7 @@ const handler = channelHandlerLookup(handleMock)
 describe('registerRuntimeEnvironmentHandlers', () => {
   let userDataPath: string
   let activeRuntimeEnvironmentId: string | null
+
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
@@ -119,12 +121,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   it('dedupes concurrent shared-control capability probes per environment', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     let resolveStatus: (value: unknown) => void = () => {}
+
     sendRemoteRuntimeRequestMock.mockImplementation((_pairing, method) => {
       if (method === 'status.get') {
         return new Promise((resolve) => {
           resolveStatus = resolve
         })
       }
+
       throw new Error(`unexpected legacy call: ${method}`)
     })
     sendRemoteRuntimeSharedControlRequestMock.mockResolvedValue({
@@ -138,12 +142,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const call = handler<
       { selector: string; method: string; params?: unknown; timeoutMs?: number },
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
+
     const first = call(null, { selector: 'desk', method: 'repo.list' })
     const second = call(null, { selector: 'desk', method: 'worktree.ps' })
     await vi.waitFor(() => expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledTimes(1))
@@ -184,12 +190,14 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const call = handler<
       { selector: string; method: string; params?: unknown; timeoutMs?: number },
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
+
     await expect(call(null, { selector: 'desk', method: 'repo.list' })).resolves.toMatchObject({
       ok: false,
       error: { code: 'runtime_unavailable', message: 'probe failed' }
@@ -228,18 +236,21 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const call = handler<
       { selector: string; method: string; params?: unknown; timeoutMs?: number },
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
+
     await call(null, { selector: 'desk', method: 'repo.list' })
 
     const disconnect = handler<
       { selector: string },
       { disconnected: { id: string; name: string } }
     >('runtimeEnvironments:disconnect')
+
     await disconnect(null, { selector: 'desk' })
     const connect = handler<{ selector: string }, { ok: boolean }>('runtimeEnvironments:connect')
     await connect(null, { selector: 'desk' })
@@ -274,17 +285,20 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     const first = await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const call = handler<
       { selector: string; method: string; params?: unknown; timeoutMs?: number },
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
+
     await call(null, { selector: first.environment.id, method: 'repo.list' })
 
     const remove = handler<{ selector: string }, { removed: { id: string; name: string } }>(
       'runtimeEnvironments:remove'
     )
+
     remove(null, { selector: first.environment.id })
     await add(null, { name: 'desk', pairingCode: pairingCode() })
     await call(null, { selector: 'desk', method: 'repo.list' })

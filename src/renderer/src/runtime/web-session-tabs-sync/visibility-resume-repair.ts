@@ -14,7 +14,9 @@ export function applyVisibilityResumeRepairs(
   if (operations.length === 0) {
     return
   }
+
   const decided = decideWebSessionTabsSnapshotOperations(operations)
+
   const settle = applyWebSessionTabsStorePatch(
     (state) => applyWebSessionTabsSnapshotOperations(state, decided),
     {
@@ -32,5 +34,6 @@ export function applyVisibilityResumeRepairs(
     },
     operations.map(({ snapshot }) => snapshot)
   )
+
   settle()
 }

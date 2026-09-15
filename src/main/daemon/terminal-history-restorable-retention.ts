@@ -15,17 +15,23 @@ function compareRecency(
 
 function siftDownOldest(heap: RestorableTerminalHistorySession[], startIndex: number): void {
   let index = startIndex
+
   while (true) {
     const left = index * 2 + 1
+
     if (left >= heap.length) {
       return
     }
+
     const right = left + 1
+
     const oldestChild =
       right < heap.length && compareRecency(heap[right], heap[left]) < 0 ? right : left
+
     if (compareRecency(heap[index], heap[oldestChild]) <= 0) {
       return
     }
+
     const current = heap[index]
     heap[index] = heap[oldestChild]
     heap[oldestChild] = current
@@ -51,13 +57,16 @@ export function retainNewestRestorableTerminalHistorySessions(
       retained.push(session)
       continue
     }
+
     if (!overflowed) {
       heapifyOldestFirst(retained)
       overflowed = true
     }
+
     if (compareRecency(session, retained[0]) <= 0) {
       continue
     }
+
     retained[0] = session
     siftDownOldest(retained, 0)
   }
@@ -65,5 +74,6 @@ export function retainNewestRestorableTerminalHistorySessions(
   if (overflowed) {
     retained.sort((left, right) => left.order - right.order)
   }
+
   return retained.map((session) => session.sessionId)
 }

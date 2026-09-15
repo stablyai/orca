@@ -13,6 +13,7 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endPattern, start + startPattern.length)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 
@@ -47,8 +48,10 @@ describe('Cmd+J activation focus routing (#9939)', () => {
 
   it('falls back when scoped focus declines for an already-open issue match', () => {
     const handler = paletteSource('worktree-jump-palette-create-worktree.ts')
+
     const activationCalls =
       handler.match(/const activation = activateAndRevealWorktree\(/g)?.length ?? 0
+
     // Typed #N jumps to an existing match; pasted URLs stay in the composer
     // so cross-project detection can choose the correct project.
     expect(activationCalls).toBe(1)

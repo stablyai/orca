@@ -21,9 +21,12 @@ export function applyClaudeEnvPatch(
     for (const key of CLAUDE_AUTH_ENV_VARS) {
       delete baseEnv[key]
     }
+
     const platform = options.platform ?? process.platform
+
     for (const key of Object.keys(baseEnv)) {
       const normalized = platform === 'win32' ? key.toUpperCase() : key
+
       if (
         (platform === 'win32' && CLAUDE_AUTH_ENV_VARS.some((authKey) => authKey === normalized)) ||
         (normalized === 'ANTHROPIC_CUSTOM_HEADERS' && isAuthLikeCustomHeaders(baseEnv[key]))
@@ -36,6 +39,7 @@ export function applyClaudeEnvPatch(
   if (patch.CLAUDE_CONFIG_DIR) {
     baseEnv.CLAUDE_CONFIG_DIR = patch.CLAUDE_CONFIG_DIR
   }
+
   if (patch.ANTHROPIC_CUSTOM_HEADERS !== undefined) {
     baseEnv.ANTHROPIC_CUSTOM_HEADERS = patch.ANTHROPIC_CUSTOM_HEADERS
   }
@@ -65,6 +69,7 @@ export function shouldStripClaudeAuthEnvForAccount(
   if (!activeAccountId) {
     return false
   }
+
   return (
     (accounts ?? []).find((account) => account.id === activeAccountId)?.managedAuthRuntime !== 'wsl'
   )
@@ -97,11 +102,14 @@ export function claudeAuthEnvCarriedForward(
   platform: NodeJS.Platform = process.platform
 ): Record<string, string> {
   const carried: Record<string, string> = {}
+
   for (const [key, value] of Object.entries(inherited)) {
     if (value === undefined) {
       continue
     }
+
     const normalized = platform === 'win32' ? key.toUpperCase() : key
+
     if (
       CLAUDE_AUTH_ENV_VARS.some((authKey) => authKey === normalized) ||
       (normalized === 'ANTHROPIC_CUSTOM_HEADERS' && isAuthLikeCustomHeaders(value))
@@ -109,6 +117,7 @@ export function claudeAuthEnvCarriedForward(
       carried[key] = value
     }
   }
+
   return carried
 }
 
@@ -119,15 +128,19 @@ export function hasClaudeAuthEnvConflict(
   if (!env) {
     return false
   }
+
   for (const [key, value] of Object.entries(env)) {
     const normalized = platform === 'win32' ? key.toUpperCase() : key
+
     if (value && CLAUDE_AUTH_ENV_VARS.some((authKey) => authKey === normalized)) {
       return true
     }
+
     if (normalized === 'ANTHROPIC_CUSTOM_HEADERS' && isAuthLikeCustomHeaders(value)) {
       return true
     }
   }
+
   return false
 }
 
@@ -135,5 +148,6 @@ function isAuthLikeCustomHeaders(value: string | undefined): boolean {
   if (!value) {
     return false
   }
+
   return /authorization|x-api-key|api-key|bearer/i.test(value)
 }

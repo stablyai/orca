@@ -10,6 +10,7 @@ const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, s
   }))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
+
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock,
@@ -17,15 +18,19 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
+
 vi.mock('os', () => ({ platform: () => 'darwin', arch: () => 'arm64' }))
+
 vi.mock('electron', () => {
   return {
     app: { getPath: vi.fn(() => '/app'), getAppPath: vi.fn(() => '/project'), isPackaged: false },
     webContents: { fromId: webContentsFromIdMock }
   }
 })
+
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
     this._wc = _wc
@@ -34,12 +39,14 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
     this.getPort = vi.fn(() => 9222)
     instances.push(this)
   })
+
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
 
 vi.mock('./cdp-ws-proxy', () => ({
   CdpWsProxy: CdpWsProxyMock
 }))
+
 vi.mock('./cdp-bridge', () => ({
   BrowserError: class BrowserError extends Error {
     code: string
@@ -80,7 +87,9 @@ function succeedForContentEditable(data: unknown = { ok: true }): void {
         args.includes('get') && args.includes('attr') && args.includes('contenteditable')
           ? { value: 'true' }
           : data
+
       cb(null, JSON.stringify({ success: true, data: result }), '')
+
       return {
         stdin: { on: vi.fn(), end: (text: string) => stdinWrites.push(text) }
       }
@@ -110,16 +119,21 @@ type FillEvalNode = {
 function matchesFillEvalSelector(node: FillEvalNode, selector: string): boolean {
   return selector.split(',').some((candidate) => {
     const trimmed = candidate.trim()
+
     if (trimmed === 'textarea') {
       return node.tagName === 'TEXTAREA'
     }
+
     if (!trimmed.startsWith('input') || node.tagName !== 'INPUT') {
       return false
     }
+
     const excludedTypes = [...trimmed.matchAll(/:not\(\[type='([^']+)'\]\)/g)].map((match) =>
       match[1].toLowerCase()
     )
+
     const inputType = node.getAttribute('type')?.toLowerCase() ?? ''
+
     return !excludedTypes.includes(inputType)
   })
 }
@@ -134,6 +148,7 @@ function createFillEvalNode(options: {
 }) {
   const events: TestEvent[] = []
   let value = ''
+
   const proto = {
     get value() {
       return value
@@ -142,6 +157,7 @@ function createFillEvalNode(options: {
       value = next
     }
   }
+
   const node = Object.create(proto) as FillEvalNode
 
   node.tagName = options.tagName
@@ -149,14 +165,18 @@ function createFillEvalNode(options: {
     if (name === 'role') {
       return options.role ?? null
     }
+
     if (name === 'aria-controls') {
       return options.ariaControls ?? null
     }
+
     if (name === 'type') {
       return options.type ?? null
     }
+
     return null
   }
+
   node.matches = vi.fn((selector: string) => matchesFillEvalSelector(node, selector))
   const descendants = options.descendants ?? (options.descendant ? [options.descendant] : [])
   node.querySelector = vi.fn(
@@ -164,6 +184,7 @@ function createFillEvalNode(options: {
   )
   node.dispatchEvent = vi.fn((event: TestEvent) => {
     events.push(event)
+
     return true
   })
 
@@ -199,12 +220,15 @@ function createContentEditableEvalEnvironment(initialText: string) {
     getAttribute: vi.fn((name: string) => (name === 'contenteditable' ? 'true' : null)),
     dispatchEvent: vi.fn()
   }
+
   let selected = false
+
   const selection = {
     selectAllChildren: vi.fn(() => {
       selected = true
     })
   }
+
   const execCommand = vi.fn((command: string, _showUi: boolean, value: string) => {
     // Chromium treats an empty insertText as a successful no-op; deletion is
     // required to clear a selected contenteditable through the input pipeline.
@@ -212,13 +236,17 @@ function createContentEditableEvalEnvironment(initialText: string) {
       if (!selected) {
         return false
       }
+
       editor.textContent = ''
     } else if (value.length > 0) {
       editor.textContent = selected ? value : editor.textContent + value
     }
+
     selected = false
+
     return true
   })
+
   return {
     editor,
     execCommand,
@@ -276,6 +304,7 @@ describe('AgentBrowserBridge', () => {
     const evalCall = execFileMock.mock.calls.find((call: unknown[]) =>
       (call[1] as string[]).includes('eval')
     )
+
     expect(evalCall).toBeDefined()
     const args = evalCall![1] as string[]
     expect(args[args.indexOf('eval') + 1]).toBe('--stdin')
@@ -334,6 +363,7 @@ describe('AgentBrowserBridge', () => {
     const evalCalls = execFileMock.mock.calls.filter((call: unknown[]) =>
       (call[1] as string[]).includes('eval')
     )
+
     runFillEvalExpressions(stdinWrites, environment.document, environment.windowObject)
 
     expect(evalCalls).toHaveLength(1)
@@ -363,6 +393,7 @@ describe('AgentBrowserBridge', () => {
     const expressions = stdinWrites
 
     const input = createFillEvalNode({ tagName: 'INPUT' })
+
     const wrapper = createFillEvalNode({
       tagName: 'DIV',
       role: 'spinbutton',
@@ -388,6 +419,7 @@ describe('AgentBrowserBridge', () => {
     const expressions = stdinWrites
 
     const input = createFillEvalNode({ tagName: 'INPUT' })
+
     const wrapper = createFillEvalNode({
       tagName: 'DIV',
       role: 'spinbutton',
@@ -414,6 +446,7 @@ describe('AgentBrowserBridge', () => {
 
     const input = createFillEvalNode({ tagName: 'INPUT' })
     const controlled = createFillEvalNode({ tagName: 'DIV', descendant: input.node })
+
     const wrapper = createFillEvalNode({
       tagName: 'DIV',
       role: 'spinbutton',
@@ -442,6 +475,7 @@ describe('AgentBrowserBridge', () => {
 
     const hiddenInput = createFillEvalNode({ tagName: 'INPUT', type: 'hidden' })
     const numberInput = createFillEvalNode({ tagName: 'INPUT', type: 'number' })
+
     const wrapper = createFillEvalNode({
       tagName: 'DIV',
       role: 'spinbutton',
@@ -488,6 +522,7 @@ describe('AgentBrowserBridge', () => {
     const evalCalls = execFileMock.mock.calls.filter((call: unknown[]) =>
       (call[1] as string[]).includes('eval')
     )
+
     expect(evalCalls).toHaveLength(1)
     expect(evalCalls[0][1]).toContain('--stdin')
     expect(stdinWrites).toHaveLength(1)
@@ -507,6 +542,7 @@ describe('AgentBrowserBridge', () => {
     ['keyboard insert', (b: AgentBrowserBridge, text: string) => b.keyboardInsertText(text)]
   ])('yields before spawning agent-browser for accepted large %s text', async (_name, run) => {
     vi.useFakeTimers()
+
     try {
       const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
       succeedWith({ ok: true })
@@ -533,10 +569,13 @@ describe('AgentBrowserBridge', () => {
 
     const typeCalls = execFileMock.mock.calls.filter((call: unknown[]) => {
       const args = call[1] as string[]
+
       return args.includes('keyboard') && args.includes('type')
     })
+
     const chunks = typeCalls.map((call: unknown[]) => {
       const args = call[1] as string[]
+
       return args[args.indexOf('type') + 1]
     })
 
@@ -551,10 +590,13 @@ describe('AgentBrowserBridge', () => {
 
     const insertTextCalls = execFileMock.mock.calls.filter((call: unknown[]) => {
       const args = call[1] as string[]
+
       return args.includes('keyboard') && args.includes('inserttext')
     })
+
     const chunks = insertTextCalls.map((call: unknown[]) => {
       const args = call[1] as string[]
+
       return args[args.indexOf('inserttext') + 1]
     })
 
@@ -569,13 +611,16 @@ describe('AgentBrowserBridge', () => {
         ['tab-a', 1],
         ['tab-b', 2]
       ])
+
       const worktrees = new Map([
         ['tab-a', 'wt-1'],
         ['tab-b', 'wt-2']
       ])
+
       const wc1 = mockWebContents(1, 'https://a.com', 'A')
       const wc2 = mockWebContents(2, 'https://b.com', 'B')
       webContentsFromIdMock.mockImplementation((id: number) => (id === 1 ? wc1 : wc2))
+
       return new AgentBrowserBridge(mockBrowserManager(tabs, worktrees))
     }
 
@@ -584,6 +629,7 @@ describe('AgentBrowserBridge', () => {
         .filter((call: unknown[]) => (call[1] as string[]).includes('--session'))
         .map((call: unknown[]) => {
           const args = call[1] as string[]
+
           return args[args.indexOf('--session') + 1]
         })
     }

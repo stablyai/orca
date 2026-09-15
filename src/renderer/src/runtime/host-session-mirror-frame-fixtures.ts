@@ -20,27 +20,38 @@ export const frameOrderingMocks: Record<
 }
 
 export const ENV = 'env-abfee683'
+
 export const REPO_ID = 'repo-1'
+
 export const WT = `${REPO_ID}::/workspace/feature`
+
 export const BG_WT = `${REPO_ID}::/workspace/background`
+
 export const REVISION = 101
+
 export const MIRROR_KEY = `${ENV}\u0001runtime-a\u00011\u0001${REVISION}`
 
 export const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 export const HOST_PARENT_TAB_ID = 'host-tab-1'
+
 export const HOST_SURFACE_ID = `${HOST_PARENT_TAB_ID}::${LEAF_ID}`
+
 // The mirror names its local tab after the host PARENT tab, not the surface id.
 export const MIRROR_TAB_ID = toWebTerminalSurfaceTabId(HOST_PARENT_TAB_ID)
+
 export const HOST_PTY_ID = `remote:${ENV}@@terminal-1`
 
 export const BG_MIRROR_TAB_ID = toWebTerminalSurfaceTabId('host-tab-2')
 
 export const FLOATING_HOST_PARENT_TAB_ID = 'host-tab-floating'
+
 export const FLOATING_HOST_SURFACE_ID = `${FLOATING_HOST_PARENT_TAB_ID}::${LEAF_ID}`
 
 // A host tab that is NOT the parked mirror: publishing it retracts MIRROR_TAB_ID,
 // which is the host answering "that pane is gone" rather than staying silent.
 export const OTHER_HOST_PARENT_TAB_ID = 'host-tab-9'
+
 export const OTHER_HOST_SURFACE_ID = `${OTHER_HOST_PARENT_TAB_ID}::${LEAF_ID}`
 
 export function makeWorktree(
@@ -125,8 +136,10 @@ export function makePtylessHostSnapshot(
     snapshotVersion: number
     tabs: Record<string, unknown>[]
   }
+
   snapshot.snapshotVersion = snapshotVersion
   Object.assign(snapshot.tabs[0]!, { status: 'pending-handle', terminal: null })
+
   return snapshot as never
 }
 

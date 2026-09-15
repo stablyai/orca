@@ -65,21 +65,28 @@ export async function requestPRReviewers({
   if (submitting) {
     return
   }
+
   const logins = normalizeGitHubReviewerLogins(
     requestedLogins ?? parseGitHubReviewerInputLogins(reviewerInput),
     selectedReviewerLogins
   )
+
   if (logins.length === 0) {
     toast.error(translate('auto.components.GitHubItemDialog.94ab23a9f9', 'Enter a reviewer'))
+
     return
   }
+
   if (localReviewRequests.length + logins.length > 15) {
     toast.error(
       translate('auto.components.GitHubItemDialog.12e761610e', 'You can request up to 15 reviewers')
     )
+
     return
   }
+
   const target = getActiveRuntimeTarget(sourceSettings)
+
   if (target.kind !== 'environment' && !repoPath) {
     toast.error(
       translate(
@@ -87,11 +94,15 @@ export async function requestPRReviewers({
         'No repo context available for this pull request.'
       )
     )
+
     return
   }
+
   setSubmitting(true)
+
   try {
     const runtimeRepo = getGitHubRuntimeRepoId(sourceContext, item.repoId)
+
     const result =
       target.kind === 'environment'
         ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
@@ -113,26 +124,32 @@ export async function requestPRReviewers({
             reviewers: logins,
             prRepo: reviewRepo
           })
+
     if (!reviewerPanelMountedRef.current) {
       return
     }
+
     if (!result.ok) {
       toast.error(
         result.error ??
           translate('auto.components.GitHubItemDialog.c42d942b75', 'Failed to request reviewer')
       )
+
       return
     }
+
     const nextReviewRequests = buildRequestedReviewUsers(
       logins,
       reviewerCandidates,
       localReviewRequests
     )
+
     setLocalReviewRequests(nextReviewRequests)
     patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
       sourceContext
     })
     onReviewersRequested(nextReviewRequests)
+
     if (target.kind === 'environment') {
       notifyWorkItemDetailsMutation(
         {
@@ -145,6 +162,7 @@ export async function requestPRReviewers({
         { local: false }
       )
     }
+
     setReviewerInput('')
     useAppStore.getState().recordFeatureInteraction('github-tasks')
     toast.success(
@@ -186,14 +204,19 @@ export async function removePRReviewers({
   if (submitting) {
     return
   }
+
   const selected = new Set(localReviewRequests.map((reviewer) => reviewer.login.toLowerCase()))
+
   const logins = reviewersToRemove
     .map((reviewer) => reviewer.trim().replace(/^@/, ''))
     .filter((reviewer) => reviewer.length > 0 && selected.has(reviewer.toLowerCase()))
+
   if (logins.length === 0) {
     return
   }
+
   const target = getActiveRuntimeTarget(sourceSettings)
+
   if (target.kind !== 'environment' && !repoPath) {
     toast.error(
       translate(
@@ -201,11 +224,15 @@ export async function removePRReviewers({
         'No repo context available for this pull request.'
       )
     )
+
     return
   }
+
   setSubmitting(true)
+
   try {
     const runtimeRepo = getGitHubRuntimeRepoId(sourceContext, item.repoId)
+
     const result =
       target.kind === 'environment'
         ? await callRuntimeRpc<{ ok: boolean; error?: string }>(
@@ -227,25 +254,32 @@ export async function removePRReviewers({
             reviewers: logins,
             prRepo: reviewRepo
           })
+
     if (!reviewerPanelMountedRef.current) {
       return
     }
+
     if (!result.ok) {
       toast.error(
         result.error ??
           translate('auto.components.GitHubItemDialog.73487fb975', 'Failed to remove reviewer')
       )
+
       return
     }
+
     const removed = new Set(logins.map((login) => login.toLowerCase()))
+
     const nextReviewRequests = localReviewRequests.filter(
       (reviewer) => !removed.has(reviewer.login.toLowerCase())
     )
+
     setLocalReviewRequests(nextReviewRequests)
     patchWorkItem(item.id, { reviewRequests: nextReviewRequests }, item.repoId, {
       sourceContext
     })
     onReviewersRequested(nextReviewRequests)
+
     if (target.kind === 'environment') {
       notifyWorkItemDetailsMutation(
         {
@@ -258,6 +292,7 @@ export async function removePRReviewers({
         { local: false }
       )
     }
+
     setReviewerInput('')
     useAppStore.getState().recordFeatureInteraction('github-tasks')
     toast.success(

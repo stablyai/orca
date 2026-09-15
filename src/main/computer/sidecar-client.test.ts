@@ -34,16 +34,19 @@ class FakeChildProcess extends EventEmitter {
   send: ((message: SentRequest, callback?: (error: Error | null) => void) => boolean) | undefined =
     (message, callback) => {
       this.sent.push(message)
+
       if (callback && this.deferSendCallback) {
         this.sendCallbacks.push(callback)
       } else {
         callback?.(null)
       }
+
       return true
     }
 
   kill(): boolean {
     this.killed = true
+
     return true
   }
 
@@ -65,6 +68,7 @@ describe('computer sidecar client', () => {
       child.deferSendCallback = deferNextSendCallback
       deferNextSendCallback = false
       children.push(child)
+
       return child
     })
   })
@@ -77,9 +81,11 @@ describe('computer sidecar client', () => {
 
   it('ignores stale child exit and error after a replacement sidecar starts', async () => {
     const firstCall = callComputerSidecarCapabilities()
+
     const firstRejection = expect(firstCall).rejects.toThrow(
       'computer sidecar capabilities timed out'
     )
+
     const firstChild = children[0]!
 
     await vi.advanceTimersByTimeAsync(60_000)
@@ -282,12 +288,15 @@ describe('computer sidecar client', () => {
   it('rejects queued requests after the active request times out', async () => {
     const firstCall = callComputerSidecarCapabilities()
     const secondCall = callComputerSidecarCapabilities()
+
     const firstRejection = expect(firstCall).rejects.toThrow(
       'computer sidecar capabilities timed out'
     )
+
     const secondRejection = expect(secondCall).rejects.toThrow(
       'computer sidecar queue was invalidated'
     )
+
     const child = children[0]!
 
     expect(child.sent).toHaveLength(1)
@@ -303,9 +312,11 @@ describe('computer sidecar client', () => {
     const firstCall = callComputerSidecarCapabilities()
     const secondCall = callComputerSidecarCapabilities()
     const firstRejection = expect(firstCall).rejects.toThrow('active sidecar failed')
+
     const secondRejection = expect(secondCall).rejects.toThrow(
       'computer sidecar queue was invalidated'
     )
+
     const child = children[0]!
 
     child.emit('error', new Error('active sidecar failed'))
@@ -321,6 +332,7 @@ describe('computer sidecar client', () => {
     const secondCall = callComputerSidecarCapabilities()
     const firstChild = children[0]!
     const firstRejection = expect(firstCall).rejects.toThrow('ipc channel closed')
+
     const secondRejection = expect(secondCall).rejects.toThrow(
       'computer sidecar queue was invalidated'
     )
@@ -351,6 +363,7 @@ describe('computer sidecar client', () => {
       const child = new FakeChildProcess()
       child.send = undefined
       children.push(child)
+
       return child
     })
 

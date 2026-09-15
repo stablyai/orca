@@ -109,6 +109,7 @@ describe('relay pty fd-leak patch on the install path', () => {
 
   function feed(execResponses: ExecResponse[]): void {
     const mockExec = vi.mocked(execCommand)
+
     for (const response of execResponses) {
       if (typeof response === 'string') {
         mockExec.mockResolvedValueOnce(response)
@@ -122,6 +123,7 @@ describe('relay pty fd-leak patch on the install path', () => {
     const prefix = makeStagedFirstInstallExecPrefix()
     // The prefix's last slot is the shared native-deps cache probe.
     prefix[prefix.length - 1] = cacheAnswer
+
     return [...prefix, ...tail]
   }
 
@@ -194,6 +196,7 @@ describe('relay pty fd-leak patch on the install path', () => {
     // the leak this PR closes: the key hashes the patch's bytes, so every later host on the
     // machine links the entry, probes it loadable, and skips patching. Stay private instead.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const conn = makeMockConnection(sftpCapture)
       feed(firstInstallReporting('failed:npm rebuild node-pty failed: gyp ERR! not found: make'))
@@ -215,6 +218,7 @@ describe('relay pty fd-leak patch on the install path', () => {
     // patch was declined and the leaky build is still on disk, which is indistinguishable from
     // `failed:` as far as what would get published.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const conn = makeMockConnection(sftpCapture)
       feed(firstInstallReporting('skipped:earlier-attempt-failed'))
@@ -301,6 +305,7 @@ describe('relay pty fd-leak patch on the install path', () => {
     // precisely why the status, not the exit code, has to decide publishability: a rolled-back
     // macOS tree probes loadable and still leaks.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       vi.mocked(parseUnameToRelayPlatform).mockReturnValue('darwin-arm64')
       const conn = makeMockConnection(sftpCapture)
@@ -318,9 +323,11 @@ describe('relay pty fd-leak patch on the install path', () => {
   it('connects anyway when the patch command fails outright', async () => {
     const conn = makeMockConnection(sftpCapture)
     const responses = makeExecResponses({ npmInstall: 'ok', probe: 'ok' })
+
     const patchSlot = responses.findIndex(
       (response) => typeof response === 'string' && response.includes('ORCA-NPTY-CLOEXEC:')
     )
+
     expect(patchSlot).toBeGreaterThan(-1)
     responses[patchSlot] = { reject: 'no such file or directory' }
     feed(responses)

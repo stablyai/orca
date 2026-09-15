@@ -72,14 +72,17 @@ describe('submodule path cache', () => {
       for (let i = 0; i < MAX_SUBMODULE_PATHS_CACHE_ENTRIES; i += 1) {
         await listSubmodulePaths(`/wave-${wave}-repo-${i}`)
       }
+
       expect(getSubmodulePathsCacheCountForTests()).toBe(MAX_SUBMODULE_PATHS_CACHE_ENTRIES)
       vi.advanceTimersByTime(5_001)
     }
 
     await expect(listSubmodulePaths('/retained-repo')).resolves.toEqual(['retained-repo-lib'])
+
     for (let i = 0; i < MAX_SUBMODULE_PATHS_CACHE_ENTRIES - 1; i += 1) {
       await listSubmodulePaths(`/final-repo-${i}`)
     }
+
     await expect(listSubmodulePaths('/retained-repo')).resolves.toEqual(['retained-repo-lib'])
     await listSubmodulePaths(`/final-repo-${MAX_SUBMODULE_PATHS_CACHE_ENTRIES - 1}`)
     await listSubmodulePaths('/overflow-repo')
@@ -119,8 +122,10 @@ describe('submodule path cache', () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args[0] === 'checkout') {
         modulePath = 'feature-lib'
+
         return Promise.resolve({ stdout: '' })
       }
+
       return Promise.resolve({ stdout: `submodule.lib.path ${modulePath}\n` })
     })
     const runtime = { wslDistro: 'Ubuntu' }
@@ -132,6 +137,7 @@ describe('submodule path cache', () => {
     const configReads = gitExecFileAsyncMock.mock.calls.filter(
       ([args]) => args[0] === 'config' && args.includes('.gitmodules')
     )
+
     expect(configReads).toHaveLength(2)
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['checkout', 'feature', '--'], {
       cwd: '/repo',
@@ -148,13 +154,17 @@ describe('submodule path cache', () => {
       if (args[0] === 'remote') {
         return Promise.resolve({ stdout: 'origin\n' })
       }
+
       if (args[0] === 'pull' || args[0] === 'fetch') {
         modulePath = 'fresh-lib'
+
         return Promise.resolve({ stdout: '' })
       }
+
       if (args[0] === 'config' && args.includes('.gitmodules')) {
         return Promise.resolve({ stdout: `submodule.lib.path ${modulePath}\n` })
       }
+
       return Promise.resolve({ stdout: '' })
     })
 
@@ -165,6 +175,7 @@ describe('submodule path cache', () => {
     const configReads = gitExecFileAsyncMock.mock.calls.filter(
       ([args]) => args[0] === 'config' && args.includes('.gitmodules')
     )
+
     expect(configReads).toHaveLength(2)
   })
 
@@ -176,8 +187,10 @@ describe('submodule path cache', () => {
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args[1] === '--abort') {
         modulePath = 'restored-lib'
+
         return Promise.resolve({ stdout: '' })
       }
+
       return Promise.resolve({
         stdout: modulePath ? `submodule.lib.path ${modulePath}\n` : ''
       })
@@ -192,6 +205,7 @@ describe('submodule path cache', () => {
     const configReads = gitExecFileAsyncMock.mock.calls.filter(
       ([args]) => args[0] === 'config' && args.includes('.gitmodules')
     )
+
     expect(configReads).toHaveLength(2)
   })
 
@@ -201,11 +215,13 @@ describe('submodule path cache', () => {
       if (args[0] === 'worktree' && args[1] === 'add') {
         recreated = true
       }
+
       if (args[0] === 'config' && args.includes('.gitmodules')) {
         return Promise.resolve({
           stdout: recreated ? 'submodule.lib.path recreated-lib\n' : ''
         })
       }
+
       return Promise.resolve({ stdout: '' })
     })
     const runtime = { wslDistro: 'Ubuntu' }
@@ -224,6 +240,7 @@ describe('submodule path cache', () => {
     const configReads = gitExecFileAsyncMock.mock.calls.filter(
       ([args]) => args[0] === 'config' && args.includes('.gitmodules')
     )
+
     expect(configReads).toHaveLength(2)
   })
 })

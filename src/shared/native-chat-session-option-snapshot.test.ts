@@ -33,6 +33,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     (liveTransport) => {
       const record = claudeRecord()
       record.model = { value: 'sonnet', source: 'dispatched' }
+
       const snapshot = buildNativeChatSessionOptionSnapshot({
         catalog: CLAUDE_SESSION_OPTION_CATALOG,
         models: CLAUDE_SESSION_OPTION_CATALOG.models,
@@ -41,6 +42,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
         modelLabel: 'Model',
         liveTransport
       })
+
       expect(snapshot.length).toBeGreaterThan(1)
       expect(snapshot.every((descriptor) => descriptor.transport === liveTransport)).toBe(true)
       const dispatched = snapshot.filter((descriptor) => descriptor.valueSource === 'dispatched')
@@ -58,12 +60,15 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       modelLabel: 'Model',
       liveTransport: 'catalog'
     })
+
     expect(snapshot).toHaveLength(1)
     const model = snapshot[0]!
     expect(model).toMatchObject({ id: 'model', category: 'model', valueSource: 'unknown' })
+
     if (model.kind.type !== 'select') {
       throw new Error('model descriptor must be a select')
     }
+
     expect(model.kind.currentValue).toBeUndefined()
     expect(model.kind.choices.map((choice) => choice.value)).toEqual(
       CLAUDE_SESSION_OPTION_CATALOG.models.map((catalogModel) => catalogModel.id)
@@ -73,6 +78,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
   it('adds the tracked model’s options once the model is known', () => {
     const record = claudeRecord()
     record.model = { value: 'sonnet', source: 'dispatched' }
+
     const snapshot = buildNativeChatSessionOptionSnapshot({
       catalog: CLAUDE_SESSION_OPTION_CATALOG,
       models: CLAUDE_SESSION_OPTION_CATALOG.models,
@@ -81,6 +87,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       modelLabel: 'Model',
       liveTransport: 'catalog'
     })
+
     expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model', 'effort'])
     expect(snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
   })
@@ -90,6 +97,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     // the caller's job (withTrackedNativeChatModel), so every row is a real choice.
     const record = claudeRecord()
     record.model = { value: 'experimental-model', source: 'reported' }
+
     const snapshot = buildNativeChatSessionOptionSnapshot({
       catalog: CLAUDE_SESSION_OPTION_CATALOG,
       models: CLAUDE_SESSION_OPTION_CATALOG.models,
@@ -98,10 +106,13 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       modelLabel: 'Model',
       liveTransport: 'catalog'
     })
+
     const model = snapshot[0]!
+
     if (model.kind.type !== 'select') {
       throw new Error('model descriptor must be a select')
     }
+
     expect(model.kind.choices.map((choice) => choice.value)).toEqual(
       CLAUDE_SESSION_OPTION_CATALOG.models.map((catalogModel) => catalogModel.id)
     )
@@ -131,6 +142,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
           valueSource: 'unknown',
           settable: true
         }) as SessionOptionDescriptor
+
       const sorted = sortNativeChatSessionOptions([
         descriptor('model', 'model'),
         descriptor('uncategorized'),
@@ -138,6 +150,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
         descriptor('fastMode', 'model_config'),
         descriptor('effort', 'thought_level')
       ])
+
       expect(sorted.map((entry) => entry.id)).toEqual([
         'effort',
         'fastMode',
@@ -153,15 +166,18 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       record.model = { value: 'opus', source: 'reported' }
       // A discovered list that dropped the `opus` alias this host no longer lists.
       const discovered = CLAUDE_SESSION_OPTION_CATALOG.models.filter((model) => model.id !== 'opus')
+
       const reconciled = withTrackedNativeChatModel(
         CLAUDE_SESSION_OPTION_CATALOG,
         discovered,
         record
       )
+
       const restored = reconciled.find((model) => model.id === 'opus')
       expect(restored).toBeDefined()
       // The seed row carries the model's own options, so they don't vanish.
       expect(restored!.options.length).toBeGreaterThan(0)
+
       const snapshot = buildNativeChatSessionOptionSnapshot({
         catalog: CLAUDE_SESSION_OPTION_CATALOG,
         models: reconciled,
@@ -170,10 +186,13 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
         modelLabel: 'Model',
         liveTransport: 'catalog'
       })
+
       const model = snapshot[0]!
+
       if (model.kind.type !== 'select') {
         throw new Error('model descriptor must be a select')
       }
+
       expect(model.kind.currentValue).toBe('opus')
       expect(model.kind.choices.some((choice) => choice.value === 'opus')).toBe(true)
       expect(snapshot.length).toBeGreaterThan(1)
@@ -182,11 +201,13 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     it('labels a wholly unknown tracked model by its id rather than dropping it', () => {
       const record = claudeRecord()
       record.model = { value: 'experimental-model', source: 'reported' }
+
       const reconciled = withTrackedNativeChatModel(
         CLAUDE_SESSION_OPTION_CATALOG,
         CLAUDE_SESSION_OPTION_CATALOG.models,
         record
       )
+
       expect(reconciled.at(-1)).toEqual({
         id: 'experimental-model',
         label: 'experimental-model',
@@ -212,9 +233,11 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       // while this shared layer keeps a pre-discovery persisted pick labelled.
       const record = createNativeChatSessionOptionRecord('grok')
       record.model = { value: 'grok-4.5', source: 'dispatched' }
+
       const discovered = mergeDiscoveredAuthoritativeModels(GROK_SESSION_OPTION_CATALOG.models, [
         { id: 'grok-build', label: 'Grok Build', options: [] }
       ])
+
       expect(discovered.map(({ id }) => id)).toEqual(['grok-build'])
 
       const reconciled = withTrackedNativeChatModel(GROK_SESSION_OPTION_CATALOG, discovered, record)
@@ -232,6 +255,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
         modelLabel: 'Model',
         liveTransport: 'catalog'
       })
+
       expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model', 'effort'])
       expect(resolveAgentSessionOptionLaunch('grok', { model: 'grok-4.5' }).args).toEqual([
         '-m',
@@ -251,6 +275,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       modelLabel: 'Model',
       liveTransport: 'catalog'
     })
+
     expect(snapshot[0]).toMatchObject({ settable: true })
     expect(snapshot[0]?.action).toEqual({ type: 'agent-picker' })
     expect(snapshot[0]?.kind).toMatchObject({
@@ -262,6 +287,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
   it('marks flip-only toggles without a baseline as toggle actions', () => {
     const record = claudeRecord()
     record.model = { value: 'opus', source: 'reported' }
+
     const snapshot = buildNativeChatSessionOptionSnapshot({
       catalog: CLAUDE_SESSION_OPTION_CATALOG,
       models: CLAUDE_SESSION_OPTION_CATALOG.models,
@@ -270,6 +296,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       modelLabel: 'Model',
       liveTransport: 'catalog'
     })
+
     const fastMode = snapshot.find((descriptor) => descriptor.id === 'fastMode')
     expect(fastMode).toMatchObject({ action: { type: 'toggle-command' } })
   })
@@ -319,6 +346,7 @@ describe('defaults on load', () => {
     const retired = mergeDiscoveredAuthoritativeModels(GROK_SESSION_OPTION_CATALOG.models, [
       { id: 'grok-build', label: 'Grok Build', options: [] }
     ])
+
     const snapshot = grokDraft(retired)
     expect(snapshot).toHaveLength(1)
     expect(snapshot[0]).toMatchObject({ valueSource: 'unknown' })
@@ -327,6 +355,7 @@ describe('defaults on load', () => {
   it('leaves a tracked pick as the authority over the default', () => {
     const record = createNativeChatSessionOptionRecord('grok')
     record.model = { value: 'grok-build', source: 'dispatched' }
+
     const snapshot = buildNativeChatSessionOptionSnapshot({
       catalog: GROK_SESSION_OPTION_CATALOG,
       models: [
@@ -338,6 +367,7 @@ describe('defaults on load', () => {
       modelLabel: 'Model',
       liveTransport: 'catalog'
     })
+
     expect(snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
     expect(snapshot[0]!.kind.type === 'select' ? snapshot[0]!.kind.currentValue : null).toBe(
       'grok-build'
@@ -355,6 +385,7 @@ describe('defaults on load', () => {
       modelLabel: 'Model',
       liveTransport: 'catalog'
     })
+
     expect(CLAUDE_SESSION_OPTION_CATALOG.models.some((model) => model.isDefault)).toBe(true)
     expect(CLAUDE_SESSION_OPTION_CATALOG.defaultModelIsCliDefault).toBeUndefined()
     expect(snapshot).toHaveLength(1)
@@ -365,6 +396,7 @@ describe('defaults on load', () => {
     // Not a guess: launch reads `values[id] ?? defaultValue`, so this is the flag it emits.
     const record = claudeRecord()
     record.model = { value: 'sonnet', source: 'applied' }
+
     const snapshot = buildNativeChatSessionOptionSnapshot({
       catalog: CLAUDE_SESSION_OPTION_CATALOG,
       models: CLAUDE_SESSION_OPTION_CATALOG.models,
@@ -373,6 +405,7 @@ describe('defaults on load', () => {
       modelLabel: 'Model',
       liveTransport: 'catalog'
     })
+
     const effort = snapshot.find((descriptor) => descriptor.id === 'effort')
     expect(effort).toMatchObject({ valueSource: 'default' })
     expect(effort?.kind.type === 'select' ? effort.kind.currentValue : null).toBeDefined()
@@ -393,6 +426,7 @@ describe('a boolean option always carries a value to render', () => {
   function cursorSnapshot(mode: 'draft' | 'live'): SessionOptionDescriptor[] {
     const record = createNativeChatSessionOptionRecord('cursor')
     record.model = { value: 'claude-opus-4-8', source: 'reported' }
+
     return buildNativeChatSessionOptionSnapshot({
       catalog: CURSOR_SESSION_OPTION_CATALOG,
       models: CURSOR_SESSION_OPTION_CATALOG.models,
@@ -402,6 +436,7 @@ describe('a boolean option always carries a value to render', () => {
       liveTransport: mode === 'live' ? 'agent-session' : 'catalog'
     })
   }
+
   const thinkingOf = (mode: 'draft' | 'live'): SessionOptionDescriptor | undefined =>
     cursorSnapshot(mode).find((descriptor) => descriptor.id === 'thinking')
 
@@ -424,6 +459,7 @@ describe('a boolean option always carries a value to render', () => {
     const record = createNativeChatSessionOptionRecord('cursor')
     record.model = { value: 'claude-opus-4-8', source: 'reported' }
     record.valuesByModel['claude-opus-4-8'] = { thinking: { value: false, source: 'reported' } }
+
     const snapshot = buildNativeChatSessionOptionSnapshot({
       catalog: CURSOR_SESSION_OPTION_CATALOG,
       models: CURSOR_SESSION_OPTION_CATALOG.models,
@@ -432,6 +468,7 @@ describe('a boolean option always carries a value to render', () => {
       modelLabel: 'Model',
       liveTransport: 'agent-session'
     })
+
     const thinking = snapshot.find((descriptor) => descriptor.id === 'thinking')
     expect(thinking?.kind.type === 'boolean' ? thinking.kind.currentValue : null).toBe(false)
     expect(thinking).toMatchObject({ valueSource: 'reported' })

@@ -125,9 +125,11 @@ export function NeedsSetupHostIcon({
   if (connecting) {
     return <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
   }
+
   if (attention) {
     return <AlertTriangle className="size-3.5 shrink-0 text-muted-foreground" />
   }
+
   return <HostRowIcon hostId={hostId} />
 }
 
@@ -184,6 +186,7 @@ export function SetLocationButton({
     'auto.components.NewWorkspaceComposerCard.setLocation',
     'Set project location'
   )
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>

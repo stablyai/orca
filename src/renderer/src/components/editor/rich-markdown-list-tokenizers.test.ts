@@ -64,6 +64,7 @@ describe('rich markdown list tokenizers', () => {
   it('does not advertise mid-paragraph numbers as list starts', () => {
     const start = getTokenizer(RichMarkdownOrderedList).start
     expect(typeof start).toBe('function')
+
     if (typeof start === 'function') {
       expect(start('(216) 555-1234')).toBe(-1)
     }

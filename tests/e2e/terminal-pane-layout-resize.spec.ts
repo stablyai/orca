@@ -22,6 +22,7 @@ import { registerTerminalPaneMountReadiness } from './helpers/terminal-pane-moun
 // Why: keep the suite serial so the headful pane tests never ask Playwright to
 // open multiple visible Electron windows at once.
 test.describe.configure({ mode: 'serial' })
+
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
 
@@ -32,6 +33,7 @@ test.describe('Terminal Panes', () => {
 
     const hoverStyle = await splitButton.evaluate((element) => {
       const style = getComputedStyle(element)
+
       return {
         backgroundColor: style.backgroundColor,
         opacity: style.opacity
@@ -80,10 +82,12 @@ test.describe('Terminal Panes', () => {
     // Get the pane widths before resize
     const paneWidthsBefore = await orcaPage.evaluate(() => {
       const xterms = document.querySelectorAll('.xterm')
+
       return Array.from(xterms)
         .filter((x) => (x as HTMLElement).offsetParent !== null)
         .map((x) => (x as HTMLElement).getBoundingClientRect().width)
     })
+
     expect(paneWidthsBefore.length).toBeGreaterThanOrEqual(2)
 
     // Find the vertical pane divider and drag it
@@ -106,10 +110,12 @@ test.describe('Terminal Panes', () => {
         async () => {
           const widthsAfter = await orcaPage.evaluate(() => {
             const xterms = document.querySelectorAll('.xterm')
+
             return Array.from(xterms)
               .filter((x) => (x as HTMLElement).offsetParent !== null)
               .map((x) => (x as HTMLElement).getBoundingClientRect().width)
           })
+
           if (widthsAfter.length < 2) {
             return false
           }
@@ -124,6 +130,7 @@ test.describe('Terminal Panes', () => {
   test('@headful resizing split panes forwards only the settled PTY size', async ({ orcaPage }) => {
     await splitActiveTerminalPane(orcaPage, 'vertical')
     const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
+
     const ptyIds = snapshot.panes
       .map((pane) => pane.ptyId)
       .filter((ptyId): ptyId is string => Boolean(ptyId))
@@ -161,6 +168,7 @@ test.describe('Terminal Panes', () => {
     await orcaPage.waitForTimeout(500)
 
     const paneContents = await readVisiblePaneContents(orcaPage)
+
     for (const content of paneContents) {
       const promptRedraws = content.match(/ISSUE2910_PROMPT/g)?.length ?? 0
       const winchNotifications = content.match(/ISSUE2910_WINCH/g)?.length ?? 0
@@ -189,11 +197,14 @@ test.describe('Terminal Panes', () => {
     // The remaining pane should fill the available space
     const paneWidth = await orcaPage.evaluate(() => {
       const xterms = document.querySelectorAll('.xterm')
+
       const visible = Array.from(xterms).find(
         (x) => (x as HTMLElement).offsetParent !== null
       ) as HTMLElement | null
+
       return visible?.getBoundingClientRect().width ?? 0
     })
+
     // Why: threshold is kept low to account for headless mode where the
     // window is 1200px wide (not maximized) and the sidebar takes space.
     expect(paneWidth).toBeGreaterThan(200)

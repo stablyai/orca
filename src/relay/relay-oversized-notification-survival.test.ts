@@ -19,6 +19,7 @@ import {
 
 // The relay runs on the REMOTE host, so the stream default is that host's Node major.
 const NODE22_HWM = 64 * 1024 // Node >= 22 default
+
 const NODE21_HWM = 16 * 1024 // Node <= 21 default
 
 const WATCHER_ROOT = '/home/dev/project'
@@ -47,7 +48,9 @@ function buildMaximalHookEnvelope(): Record<string, unknown> {
       toolInput: 'i'.repeat(160)
     }))
   })
+
   expect(payload, 'normalizer must accept this payload').not.toBeNull()
+
   return {
     paneKey: 'worktree-abc:0f2c1d84-3b9a-4c77-9d21-5e6f7a8b9c0d',
     connectionId: 'ssh-target-1',
@@ -82,6 +85,7 @@ function frameBytes(method: string, params: Record<string, unknown>): number {
 function frameParams(frame: Buffer): Record<string, unknown> {
   const payloadLength = frame.readUInt32BE(9)
   const message = parseJsonRpcMessage(frame.subarray(HEADER_LENGTH, HEADER_LENGTH + payloadLength))
+
   return 'method' in message ? ((message.params ?? {}) as Record<string, unknown>) : {}
 }
 
@@ -89,6 +93,7 @@ function createDispatcher(hwm: number, onClose: () => void, sink: Buffer[]): Rel
   return new RelayDispatcher(
     (data: Buffer) => {
       sink.push(data)
+
       return true
     },
     {
@@ -123,14 +128,17 @@ describe('relay oversized notification survival', () => {
     const trip = (cap: number): number => {
       let lo = 1
       let hi = MAX_BATCHED_WATCHER_EVENTS
+
       while (lo < hi) {
         const mid = Math.ceil((lo + hi) / 2)
+
         if (frameBytes('fs.changed', buildWatcherBatch(mid)) <= cap) {
           lo = mid
         } else {
           hi = mid - 1
         }
       }
+
       return lo
     }
 
@@ -225,6 +233,7 @@ describe('relay oversized notification survival', () => {
     let killCloses = 0
     let retiredSinkCloses = 0
     let replacingSink = false
+
     // setWrite deliberately closes the sink it retires; only a close on the LIVE sink is a kill.
     const onClose = (): void => {
       if (replacingSink) {
@@ -233,6 +242,7 @@ describe('relay oversized notification survival', () => {
         killCloses += 1
       }
     }
+
     const dispatcher = createDispatcher(NODE21_HWM, onClose, sink)
     const envelope = buildMaximalHookEnvelope() as unknown as AgentHookRelayEnvelope
 
@@ -247,6 +257,7 @@ describe('relay oversized notification survival', () => {
         dispatcher.setWrite(
           (data: Buffer) => {
             sink.push(data)
+
             return true
           },
           {

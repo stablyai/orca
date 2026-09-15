@@ -22,6 +22,7 @@ function presentUnknownMergeState(
   checksStatus: GitLabMRMergeStateReview['status']
 ): MergePresentation {
   const status = (mergeStateStatus ?? '').toLowerCase()
+
   switch (status) {
     case 'not_approved':
       return blockedPresentation(
@@ -135,6 +136,7 @@ function presentUnknownMergeState(
           )
         )
       }
+
       return blockedPresentation(
         translate('auto.components.right.sidebar.gitlab.mr.merge.state.195917574e', 'Checking'),
         translate(
@@ -156,6 +158,7 @@ export function presentGitLabMRMergeState(review: GitLabMRMergeStateReview): Mer
       directMergeAvailable: false
     }
   }
+
   if (review.state === 'closed') {
     return {
       label: translate('auto.components.right.sidebar.gitlab.mr.merge.state.88d044c42f', 'Closed'),
@@ -166,6 +169,7 @@ export function presentGitLabMRMergeState(review: GitLabMRMergeStateReview): Mer
       directMergeAvailable: false
     }
   }
+
   if (review.state === 'draft') {
     return {
       label: translate('auto.components.right.sidebar.gitlab.mr.merge.state.b2715092c6', 'Draft'),
@@ -176,6 +180,7 @@ export function presentGitLabMRMergeState(review: GitLabMRMergeStateReview): Mer
       directMergeAvailable: false
     }
   }
+
   if (review.mergeable === 'CONFLICTING') {
     return {
       label: translate(
@@ -189,11 +194,13 @@ export function presentGitLabMRMergeState(review: GitLabMRMergeStateReview): Mer
       directMergeAvailable: false
     }
   }
+
   // Why: only GitLab's explicit `mergeable` projects to MERGEABLE. UNKNOWN used to fall through
   // to "Able to merge", so not_approved / discussions_not_resolved / ci_must_pass looked ready.
   if (review.mergeable !== 'MERGEABLE') {
     return presentUnknownMergeState(review.mergeStateStatus, review.status)
   }
+
   if (review.status === 'failure') {
     return {
       label: translate(
@@ -207,6 +214,7 @@ export function presentGitLabMRMergeState(review: GitLabMRMergeStateReview): Mer
       directMergeAvailable: true
     }
   }
+
   if (review.status === 'pending') {
     return {
       label: translate(
@@ -220,6 +228,7 @@ export function presentGitLabMRMergeState(review: GitLabMRMergeStateReview): Mer
       directMergeAvailable: true
     }
   }
+
   return {
     label: translate(
       'auto.components.right.sidebar.gitlab.mr.merge.state.04a3015a12',

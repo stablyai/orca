@@ -25,17 +25,23 @@ export class WslTranscriptFsProcessLanePool {
 
   acquire(signal: AbortSignal, prioritize = false): ProcessSlot | Promise<ProcessSlot> {
     signal.throwIfAborted()
+
     if (this.disposed) {
       return Promise.reject(this.disposeError)
     }
+
     const slot = this.available.pop()
+
     if (slot) {
       clearTimeout(slot.idleTimer)
+
       return slot
     }
+
     if (this.slots.size === 0) {
       return this.addSlot()
     }
+
     return new Promise<ProcessSlot>((resolve, reject) => {
       const waiter: SlotWaiter = {
         resolve,
@@ -43,13 +49,17 @@ export class WslTranscriptFsProcessLanePool {
         signal,
         onAbort: () => {
           const index = this.waiters.indexOf(waiter)
+
           if (index !== -1) {
             this.waiters.splice(index, 1)
           }
+
           reject(signal.reason ?? new Error('WSL filesystem process acquisition aborted'))
         }
       }
+
       signal.addEventListener('abort', waiter.onAbort, { once: true })
+
       if (prioritize) {
         this.waiters.unshift(waiter)
       } else {
@@ -62,16 +72,22 @@ export class WslTranscriptFsProcessLanePool {
     if (!this.slots.has(slot)) {
       return
     }
+
     const waiter = this.waiters.shift()
+
     if (waiter) {
       waiter.signal.removeEventListener('abort', waiter.onAbort)
       waiter.resolve(slot)
+
       return
     }
+
     if (this.available.includes(slot)) {
       return
     }
+
     this.available.push(slot)
+
     if (slot.handles.size === 0) {
       slot.idleTimer = setTimeout(
         () => this.retireIdleSlot(slot),
@@ -91,14 +107,17 @@ export class WslTranscriptFsProcessLanePool {
         ? this.disposeError
         : wslTranscriptFsProcessFailureError('the process exited before the queued request started')
     }
+
     if (signal.aborted) {
       if (release) {
         release()
       } else {
         this.park(slot)
       }
+
       signal.throwIfAborted()
     }
+
     return slot
   }
 
@@ -109,6 +128,7 @@ export class WslTranscriptFsProcessLanePool {
   beginDispose(error: unknown): void {
     this.disposed = true
     this.disposeError = error
+
     for (const waiter of this.waiters.splice(0)) {
       waiter.signal.removeEventListener('abort', waiter.onAbort)
       waiter.reject(error)
@@ -119,18 +139,23 @@ export class WslTranscriptFsProcessLanePool {
     if (!this.slots.delete(slot)) {
       return false
     }
+
     clearTimeout(slot.idleTimer)
     const availableIndex = this.available.indexOf(slot)
+
     if (availableIndex !== -1) {
       this.available.splice(availableIndex, 1)
     }
+
     this.replaceForWaiter()
+
     return true
   }
 
   private addSlot(): ProcessSlot {
     const slot = this.createSlot()
     this.slots.add(slot)
+
     return slot
   }
 
@@ -138,15 +163,19 @@ export class WslTranscriptFsProcessLanePool {
     if (this.disposed || this.slots.size > 0) {
       return
     }
+
     while (this.waiters.length > 0) {
       const waiter = this.waiters.shift()!
       waiter.signal.removeEventListener('abort', waiter.onAbort)
+
       if (waiter.signal.aborted) {
         waiter.reject(waiter.signal.reason)
         continue
       }
+
       try {
         waiter.resolve(this.addSlot())
+
         return
       } catch (error) {
         waiter.reject(error)

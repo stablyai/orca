@@ -6,6 +6,7 @@ import {
 } from './agent-startup-delayed-delivery'
 
 const originalState = useAppStore.getState()
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 function seedPendingState(agentLaunchConfigByPaneKey: Record<string, unknown> = {}): void {
@@ -62,11 +63,13 @@ function countedLaunchConfigs(count: number): {
 } {
   const reads = { value: 0 }
   const record: Record<string, unknown> = {}
+
   for (let index = 0; index < count; index += 1) {
     Object.defineProperty(record, `other-pane-${index}`, {
       enumerable: true,
       get: () => {
         reads.value += 1
+
         return {
           identity: {
             tabId: `other-tab-${index}`,
@@ -76,6 +79,7 @@ function countedLaunchConfigs(count: number): {
       }
     })
   }
+
   return { reads, record }
 }
 
@@ -99,6 +103,7 @@ describe('delayed agent startup subscription', () => {
     expect(launchConfigs.reads.value).toBe(500)
 
     launchConfigs.reads.value = 0
+
     for (let update = 0; update < 100; update += 1) {
       useAppStore.setState({ activeView: update % 2 === 0 ? 'terminal' : 'settings' } as never)
     }

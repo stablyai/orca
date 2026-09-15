@@ -12,6 +12,7 @@ import { resolveWslSessionContext } from './wsl-session-context'
 
 function createSubprocess(): SubprocessHandle {
   let onExit: ((code: number) => void) | undefined
+
   return {
     pid: 123,
     getForegroundProcess: () => null,
@@ -41,6 +42,7 @@ describe('TerminalHost WSL context', () => {
     host = new TerminalHost({ spawnSubprocess })
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       const created = await host.createOrAttach({
         sessionId: 'session-wsl',
@@ -50,6 +52,7 @@ describe('TerminalHost WSL context', () => {
         terminalWindowsWslDistro: 'Debian',
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
+
       const attached = await host.createOrAttach({
         sessionId: 'session-wsl',
         cols: 80,
@@ -73,6 +76,7 @@ describe('TerminalHost WSL context', () => {
     host = new TerminalHost({ spawnSubprocess })
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       const created = await host.createOrAttach({
         sessionId: 'session-default-wsl',
@@ -83,6 +87,7 @@ describe('TerminalHost WSL context', () => {
         terminalWindowsWslDistro: null,
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
+
       const attached = await host.createOrAttach({
         sessionId: 'session-default-wsl',
         cols: 80,
@@ -107,6 +112,7 @@ describe('TerminalHost WSL context', () => {
     host = new TerminalHost({ spawnSubprocess })
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       const created = await host.createOrAttach({
         sessionId: 'session-native',
@@ -116,6 +122,7 @@ describe('TerminalHost WSL context', () => {
         shellOverride: 'powershell.exe',
         streamClient: { onData: vi.fn(), onExit: vi.fn() }
       })
+
       const attached = await host.createOrAttach({
         sessionId: 'session-native',
         cols: 80,
@@ -138,6 +145,7 @@ describe('TerminalHost WSL context', () => {
   it('uses a remembered distro only when the selected shell is WSL', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     try {
       expect(
         resolveWslSessionContext({

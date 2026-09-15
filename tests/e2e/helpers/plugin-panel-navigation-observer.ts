@@ -21,15 +21,19 @@ export async function startPanelNavigationObserver(
       BrowserWindow.getAllWindows().find(
         (candidate) => candidate.webContents.getURL() === expectedUrl
       ) ?? BrowserWindow.getAllWindows()[0]
+
     if (!browserWindow) {
       throw new Error('main window unavailable for panel navigation observer')
     }
+
     const contents = browserWindow.webContents
+
     const observation: PanelNavigationObservation = {
       willFrameNavigations: [],
       didFrameNavigations: [],
       externalUrls: []
     }
+
     const onWillFrameNavigate = (
       event: ElectronEvent<WebContentsWillFrameNavigateEventParams>
     ): void => {
@@ -39,6 +43,7 @@ export async function startPanelNavigationObserver(
         url: event.url
       })
     }
+
     const onDidFrameNavigate = (
       _event: ElectronEvent,
       url: string,
@@ -48,14 +53,18 @@ export async function startPanelNavigationObserver(
     ): void => {
       observation.didFrameNavigations.push({ isMainFrame, url })
     }
+
     const probeGlobal = globalThis as typeof globalThis & {
       __orcaPanelNavigationProbe?: MainPanelNavigationProbe
     }
+
     probeGlobal.__orcaPanelNavigationProbe?.dispose()
     const originalOpenExternal = shell.openExternal
+
     const recordOpenExternal = async (url: string): Promise<void> => {
       observation.externalUrls.push(url)
     }
+
     contents.on('will-frame-navigate', onWillFrameNavigate)
     contents.on('did-frame-navigate', onDidFrameNavigate)
     shell.openExternal = recordOpenExternal
@@ -65,6 +74,7 @@ export async function startPanelNavigationObserver(
       dispose: () => {
         contents.off('will-frame-navigate', onWillFrameNavigate)
         contents.off('did-frame-navigate', onDidFrameNavigate)
+
         if (shell.openExternal === recordOpenExternal) {
           shell.openExternal = originalOpenExternal
         }
@@ -82,9 +92,11 @@ export async function readPanelNavigationObserver(
         __orcaPanelNavigationProbe?: MainPanelNavigationProbe
       }
     ).__orcaPanelNavigationProbe
+
     if (!probe) {
       throw new Error('panel navigation observer is not active')
     }
+
     return structuredClone(probe.observation)
   })
 }
@@ -96,13 +108,17 @@ export async function stopPanelNavigationObserver(
     const probeGlobal = globalThis as typeof globalThis & {
       __orcaPanelNavigationProbe?: MainPanelNavigationProbe
     }
+
     const probe = probeGlobal.__orcaPanelNavigationProbe
+
     if (!probe) {
       throw new Error('panel navigation observer is not active')
     }
+
     const observation = structuredClone(probe.observation)
     probe.dispose()
     delete probeGlobal.__orcaPanelNavigationProbe
+
     return observation
   })
 }

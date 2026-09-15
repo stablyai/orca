@@ -8,9 +8,11 @@ import { isAgentSessionPtyWriteRefusedError } from '../../shared/agent-session-p
 import type { AgentSessionLease, AgentSessionRecord } from '../../shared/agent-session-record'
 
 const PTY_ID = 'pty-1'
+
 const SESSION_ID = 'session-alpha-1'
 
 let gate: AgentSessionPtyWriteGate
+
 let records: Map<string, AgentSessionRecord>
 
 function publish(lease: AgentSessionLease): void {
@@ -139,6 +141,7 @@ describe('admission through the store', () => {
       publish(agentSessionLeaseFixture({ runtimeKind: 'tui', handoffStage }))
       const admission = gate.admit(PTY_ID)
       expect(admission.admitted).toBe(false)
+
       if (!admission.admitted) {
         expect(admission.refusal).toMatchObject({
           code: 'agent_session_conflict',
@@ -229,15 +232,19 @@ describe('admission through the store', () => {
   it('throws the typed refusal from assertAdmitted', () => {
     publish(agentSessionLeaseFixture({ runtimeKind: 'native' }))
     let thrown: unknown = null
+
     try {
       gate.assertAdmitted(PTY_ID)
     } catch (error) {
       thrown = error
     }
+
     expect(isAgentSessionPtyWriteRefusedError(thrown)).toBe(true)
+
     if (!isAgentSessionPtyWriteRefusedError(thrown)) {
       return
     }
+
     expect(thrown.refusal.code).toBe('agent_session_conflict')
     expect(thrown.refusal.ownerRuntimeKind).toBe('native')
   })

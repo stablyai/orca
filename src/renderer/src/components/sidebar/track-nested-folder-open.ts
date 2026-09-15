@@ -16,6 +16,7 @@ export function trackNestedFolderOpen(args: {
   if (!args.attemptId) {
     return
   }
+
   track(
     'add_repo_nested_import_action',
     buildNestedRepoImportActionTelemetry({

@@ -6,10 +6,13 @@ export function normalizeWorkspaceCreatorProvenance(
   if (!value || typeof value !== 'object') {
     return undefined
   }
+
   const candidate = value as { kind?: unknown; deviceId?: unknown }
+
   if (candidate.kind === 'host') {
     return { kind: 'host' }
   }
+
   if (
     candidate.kind === 'paired-device' &&
     typeof candidate.deviceId === 'string' &&
@@ -17,5 +20,6 @@ export function normalizeWorkspaceCreatorProvenance(
   ) {
     return { kind: 'paired-device', deviceId: candidate.deviceId }
   }
+
   return undefined
 }

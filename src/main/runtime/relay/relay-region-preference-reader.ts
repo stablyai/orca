@@ -14,6 +14,7 @@ export function createRelayRegionPreferenceReader(input: {
     directorUrl: input.authConfig.relayDirectorUrl,
     userDataPath: input.userDataPath
   })
+
   return {
     resolvePreferredRegion: () => resolver.resolve(),
     measureRegionDecision: (window) => resolver.measureDecision(window),

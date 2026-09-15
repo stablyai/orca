@@ -40,6 +40,7 @@ async function execCommandRejection(promise: Promise<string>): Promise<Error> {
 describe('waitForSentinel', () => {
   it('closes and rejects with AbortError while clearing startup resources on abort', async () => {
     vi.useFakeTimers()
+
     try {
       const channel = createMockChannel()
       const controller = new AbortController()
@@ -60,6 +61,7 @@ describe('waitForSentinel', () => {
 
   it('removes the abort listener and timers when startup fails before the sentinel', async () => {
     vi.useFakeTimers()
+
     try {
       const channel = createMockChannel()
       const controller = new AbortController()
@@ -199,6 +201,7 @@ describe('waitForSentinel', () => {
       ),
       new Promise<string>((resolve) => setTimeout(() => resolve('pending'), 0))
     ])
+
     if (outcome === 'pending') {
       channel.emit('close')
       await transportPromise.catch(() => {})
@@ -234,16 +237,20 @@ describe('waitForSentinel', () => {
     'forwards write(false), callback settlement, and drain for a %s',
     async (shape) => {
       const channel = createMockChannel()
+
       if (shape.startsWith('system')) {
         Object.assign(channel, { _process: new EventEmitter() })
       }
+
       const callback = vi.fn()
       const drain = vi.fn()
       channel.stdin.write.mockImplementation((...args: unknown[]) => {
         const onWritten = args.find((arg) => typeof arg === 'function') as (
           error?: Error | null
         ) => void
+
         onWritten(null)
+
         return false
       })
       const transportPromise = waitForSentinel(channel)
@@ -266,6 +273,7 @@ describe('execCommand', () => {
 
   it('waits for channel close before rejecting a timed-out remote command', async () => {
     vi.useFakeTimers()
+
     try {
       const channel = createMockChannel()
       const conn = { exec: vi.fn().mockResolvedValue(channel) }
@@ -292,9 +300,11 @@ describe('execCommand', () => {
 
   it('rejects on command channel errors instead of emitting uncaught errors', async () => {
     const channel = createMockChannel()
+
     const conn = {
       exec: vi.fn().mockResolvedValue(channel)
     }
+
     const commandPromise = execCommand(conn as never, 'uname -sm')
 
     await Promise.resolve()
@@ -311,9 +321,11 @@ describe('execCommand', () => {
 
   it('includes stdout in nonzero-exit errors when stderr is empty', async () => {
     const channel = createMockChannel()
+
     const conn = {
       exec: vi.fn().mockResolvedValue(channel)
     }
+
     const commandPromise = execCommand(conn as never, 'npm install node-pty 2>&1')
 
     await Promise.resolve()
@@ -330,9 +342,11 @@ describe('execCommand', () => {
 
   it('redacts install-owner marker tokens from command failures', async () => {
     const channel = createMockChannel()
+
     const conn = {
       exec: vi.fn().mockResolvedValue(channel)
     }
+
     const commandPromise = execCommand(conn as never, `touch '${installMarkerPath}'`)
 
     await Promise.resolve()
@@ -346,9 +360,11 @@ describe('execCommand', () => {
 
   it('redacts install-owner marker tokens from timeout errors', async () => {
     vi.useFakeTimers()
+
     try {
       const channel = createMockChannel()
       const conn = { exec: vi.fn().mockResolvedValue(channel) }
+
       const commandPromise = execCommand(conn as never, `touch '${installMarkerPath}'`, {
         timeoutMs: 1_000
       })
@@ -366,9 +382,11 @@ describe('execCommand', () => {
 
   it('surfaces stdout alongside stderr on nonzero exit instead of masking it', async () => {
     const channel = createMockChannel()
+
     const conn = {
       exec: vi.fn().mockResolvedValue(channel)
     }
+
     const commandPromise = execCommand(conn as never, 'npm install 2>&1')
 
     await Promise.resolve()
@@ -402,9 +420,11 @@ describe('execCommand', () => {
 
   it('keeps the merged error message greppable by the build-toolchain probe', async () => {
     const channel = createMockChannel()
+
     const conn = {
       exec: vi.fn().mockResolvedValue(channel)
     }
+
     const commandPromise = execCommand(conn as never, 'npm install 2>&1')
 
     await Promise.resolve()
@@ -426,11 +446,14 @@ describe('execCommand', () => {
 
   it('cleans command channel listeners when a command times out', async () => {
     vi.useFakeTimers()
+
     try {
       const channel = createMockChannel()
+
       const conn = {
         exec: vi.fn().mockResolvedValue(channel)
       }
+
       const commandPromise = execCommand(conn as never, 'sleep 60')
 
       await Promise.resolve()
@@ -464,9 +487,11 @@ describe('execCommand', () => {
   it('closes and rejects with AbortError when a command is aborted', async () => {
     const channel = createMockChannel()
     const controller = new AbortController()
+
     const conn = {
       exec: vi.fn().mockResolvedValue(channel)
     }
+
     const commandPromise = execCommand(conn as never, 'sleep 60', {
       signal: controller.signal
     })
@@ -479,6 +504,7 @@ describe('execCommand', () => {
     // settling immediately lets the sequential fallback race the closing
     // channel and get refused.
     expect(channel.close).toHaveBeenCalledOnce()
+
     const settledEarly = await Promise.race([
       commandPromise.then(
         () => 'settled',
@@ -486,6 +512,7 @@ describe('execCommand', () => {
       ),
       Promise.resolve('pending')
     ])
+
     expect(settledEarly).toBe('pending')
     channel.emit('close', 0)
 
@@ -500,10 +527,12 @@ describe('execCommand', () => {
   it('keeps system-SSH command termination unconfirmed after the local child closes', async () => {
     const channel = createMockChannel()
     const controller = new AbortController()
+
     const conn = {
       exec: vi.fn().mockResolvedValue(channel),
       usesSystemSshTransport: vi.fn().mockReturnValueOnce(true).mockReturnValue(false)
     }
+
     const commandPromise = execCommand(conn as never, 'npm install', {
       signal: controller.signal
     })
@@ -523,10 +552,12 @@ describe('execCommand', () => {
     channel.close = vi.fn(() => {
       channel._closeRequested = true
     })
+
     const conn = {
       exec: vi.fn().mockResolvedValue(channel),
       usesSystemSshTransport: vi.fn().mockReturnValue(true)
     }
+
     const commandPromise = execCommand(conn as never, 'npm install')
 
     await Promise.resolve()
@@ -543,6 +574,7 @@ describe('execCommand', () => {
     const channel = createMockChannel()
     const controller = new AbortController()
     let resolveExec: (channel: ClientChannel) => void = () => {}
+
     const conn = {
       exec: vi.fn().mockReturnValue(
         new Promise<ClientChannel>((resolve) => {
@@ -554,6 +586,7 @@ describe('execCommand', () => {
     const commandPromise = execCommand(conn as never, 'sleep 60', {
       signal: controller.signal
     })
+
     controller.abort()
     resolveExec(channel)
 
@@ -577,6 +610,7 @@ describe('execCommand', () => {
     const channel = createMockChannel()
     const conn = { exec: vi.fn().mockResolvedValue(channel) }
     const captured: string[] = []
+
     const commandPromise = execCommand(conn as never, "(node -e 'x' || echo MISSING)", {
       onStderr: (stderr) => captured.push(stderr)
     })
@@ -594,11 +628,14 @@ describe('execCommand', () => {
 
   it('uses custom command timeouts without forwarding them to SSH exec', async () => {
     vi.useFakeTimers()
+
     try {
       const channel = createMockChannel()
+
       const conn = {
         exec: vi.fn().mockResolvedValue(channel)
       }
+
       const commandPromise = execCommand(conn as never, 'npm install', {
         wrapCommand: false,
         timeoutMs: 240_000

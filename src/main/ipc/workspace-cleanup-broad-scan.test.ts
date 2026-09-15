@@ -33,6 +33,7 @@ vi.mock('node:fs/promises', () => ({
 
 vi.mock('../repo-worktrees', async () => {
   const actual = await vi.importActual<typeof RepoWorktreesModule>('../repo-worktrees')
+
   return {
     listRepoWorktrees: listRepoWorktreesMock,
     createFolderWorktree: actual.createFolderWorktree
@@ -58,7 +59,9 @@ vi.mock('../project-runtime-git-options', () => ({
 import { scanWorkspaceCleanup } from './workspace-cleanup-scan'
 
 const NOW = 1_700_000_000_000
+
 const DAY_MS = 24 * 60 * 60 * 1000
+
 const REPO: Repo = {
   id: 'repo-1',
   path: '/repo',
@@ -67,6 +70,7 @@ const REPO: Repo = {
   addedAt: NOW,
   symlinkPaths: ['node_modules']
 }
+
 const FOLDER_REPO: Repo = {
   ...REPO,
   id: 'repo-folder',
@@ -175,6 +179,7 @@ describe('workspace cleanup broad scan opt-in', () => {
       lastActivityAt: NOW - 40 * DAY_MS,
       hostId: 'runtime:env-1'
     })
+
     const store = {
       ...makeStore(),
       getWorktreeMeta: (worktreeId: string) =>
@@ -196,6 +201,7 @@ describe('workspace cleanup broad scan opt-in', () => {
     const worktreeId = `${REPO.id}::${sharedPath}`
     const localRepo = { ...REPO, path: '/local/repo' }
     const sshRepo = { ...REPO, path: '/remote/repo', connectionId: 'ssh-1' }
+
     const sharedWorktree: GitWorktreeInfo = {
       path: sharedPath,
       head: 'shared123',
@@ -203,12 +209,14 @@ describe('workspace cleanup broad scan opt-in', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const localMeta = makeWorktreeMeta({
       displayName: 'Local metadata only',
       hostId: 'local',
       isPinned: true,
       lastActivityAt: NOW - 40 * DAY_MS
     })
+
     listRepoWorktreesMock.mockResolvedValue([sharedWorktree])
     getSshGitProviderMock.mockReturnValue({
       listWorktrees: vi.fn().mockResolvedValue([sharedWorktree])
@@ -240,10 +248,12 @@ describe('workspace cleanup broad scan opt-in', () => {
 
   it('reads git for a pinned target during focused preflight scans', async () => {
     const worktreeId = 'repo-1::/repo-old'
+
     const pinnedMeta = makeWorktreeMeta({
       isPinned: true,
       lastActivityAt: NOW - 40 * DAY_MS
     })
+
     const store = {
       ...makeStore(),
       getWorktreeMeta: (id: string) => (id === worktreeId ? pinnedMeta : META_BY_WORKTREE_ID[id])
@@ -260,14 +270,17 @@ describe('workspace cleanup broad scan opt-in', () => {
 
   it('continues to skip pinned git reads during broad scans', async () => {
     const worktreeId = 'repo-1::/repo-old'
+
     const pinnedMeta = makeWorktreeMeta({
       isPinned: true,
       lastActivityAt: NOW - 40 * DAY_MS
     })
+
     const store = {
       ...makeStore(),
       getWorktreeMeta: (id: string) => (id === worktreeId ? pinnedMeta : META_BY_WORKTREE_ID[id])
     } as Store
+
     listRepoWorktreesMock.mockResolvedValue([GIT_WORKTREES[1]])
 
     await scanWorkspaceCleanup(store, { includeAllWorkspaces: true })
@@ -304,6 +317,7 @@ describe('workspace cleanup broad scan opt-in', () => {
     const recent = result.candidates.find(
       (candidate) => candidate.worktreeId === 'repo-1::/repo-recent'
     )
+
     expect(recent).toMatchObject({
       reasons: [],
       tier: 'review',
@@ -327,10 +341,12 @@ describe('workspace cleanup broad scan opt-in', () => {
 
   it('reports folder workspaces with a folder-repo blocker', async () => {
     const instanceId = `${FOLDER_REPO.id}::${FOLDER_REPO.path}::workspace:11111111-2222-4333-8444-555555555555`
+
     const instanceMeta = makeWorktreeMeta({
       displayName: 'Folder session',
       lastActivityAt: NOW - 2 * DAY_MS
     })
+
     const result = await scanWorkspaceCleanup(
       makeStore([FOLDER_REPO], { [instanceId]: instanceMeta }),
       { includeAllWorkspaces: true }
@@ -427,8 +443,10 @@ describe('workspace cleanup broad scan opt-in', () => {
         isMainWorktree: false
       })
     )
+
     listRepoWorktreesMock.mockResolvedValue(recentWorktrees)
     const recentMeta = makeWorktreeMeta({ lastActivityAt: NOW - 2 * DAY_MS })
+
     const store = {
       ...makeStore(),
       getWorktreeMeta: () => recentMeta
@@ -455,6 +473,7 @@ describe('workspace cleanup broad scan opt-in', () => {
         isMainWorktree: false
       }))
     ]
+
     listRepoWorktreesMock.mockResolvedValue(worktrees)
     const onProgress = vi.fn()
 
@@ -524,6 +543,7 @@ describe('workspace cleanup broad scan opt-in', () => {
         isMainWorktree: false
       })
     )
+
     listRepoWorktreesMock.mockResolvedValue(worktrees)
 
     const result = await scanWorkspaceCleanup(makeStore(), {
@@ -538,6 +558,7 @@ describe('workspace cleanup broad scan opt-in', () => {
 
   it('lists disconnected SSH workspaces only on an opt-in scan', async () => {
     const sshRepo: Repo = { ...REPO, id: 'repo-ssh', connectionId: 'ssh-1' }
+
     const allMeta: Record<string, WorktreeMeta> = {
       'repo-ssh::/remote/recent': makeWorktreeMeta({
         lastActivityAt: NOW - 2 * DAY_MS
@@ -545,6 +566,7 @@ describe('workspace cleanup broad scan opt-in', () => {
     }
 
     const legacy = await scanWorkspaceCleanup(makeStore([sshRepo], allMeta))
+
     const optIn = await scanWorkspaceCleanup(makeStore([sshRepo], allMeta), {
       includeAllWorkspaces: true
     })
@@ -562,14 +584,17 @@ describe('workspace cleanup broad scan opt-in', () => {
     const worktreeId = 'repo-1::/shared/workspace'
     const localRepo = { ...REPO, path: '/local/repo' }
     const sshRepo = { ...REPO, path: '/remote/repo', connectionId: 'ssh-1' }
+
     const localMeta = makeWorktreeMeta({
       displayName: 'Local workspace',
       hostId: 'local'
     })
+
     const remoteMeta = makeWorktreeMeta({
       displayName: 'Canonical remote workspace',
       hostId: 'ssh:ssh-1'
     })
+
     const store = {
       ...makeStore([localRepo, sshRepo], { [worktreeId]: localMeta }),
       getAllWorktreeMetaForHost: (hostId: string) =>
@@ -593,6 +618,7 @@ describe('workspace cleanup broad scan opt-in', () => {
     const worktreeId = `${REPO.id}::${sharedPath}`
     const localRepo = { ...REPO, path: '/local/repo' }
     const sshRepo = { ...REPO, path: '/remote/repo', connectionId: 'ssh-1' }
+
     const sharedWorktree: GitWorktreeInfo = {
       path: sharedPath,
       head: 'shared123',
@@ -600,6 +626,7 @@ describe('workspace cleanup broad scan opt-in', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     listRepoWorktreesMock.mockResolvedValue([sharedWorktree])
 
     const result = await scanWorkspaceCleanup(
@@ -619,6 +646,7 @@ describe('workspace cleanup broad scan opt-in', () => {
   it('uses the backing path for disconnected SSH folder instances', async () => {
     const sshFolderRepo: Repo = { ...FOLDER_REPO, connectionId: 'ssh-1' }
     const instanceId = `${sshFolderRepo.id}::${sshFolderRepo.path}::workspace:11111111-2222-4333-8444-555555555555`
+
     const allMeta = {
       [instanceId]: makeWorktreeMeta({ displayName: 'Remote folder session' })
     }

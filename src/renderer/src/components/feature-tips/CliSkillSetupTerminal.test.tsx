@@ -29,6 +29,7 @@ vi.mock('@/components/onboarding/OnboardingInlineCommandTerminal', () => ({
     shellOverride?: string
   }) => {
     mocks.terminalCommand = prepareCommandForShell?.(command, shellOverride) ?? command
+
     return null
   }
 }))

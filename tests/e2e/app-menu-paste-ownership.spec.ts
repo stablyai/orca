@@ -46,10 +46,12 @@ process.stdin.on('data', (chunk) => {
 function countOccurrences(value: string, needle: string): number {
   let count = 0
   let index = value.indexOf(needle)
+
   while (index !== -1) {
     count += 1
     index = value.indexOf(needle, index + needle.length)
   }
+
   return count
 }
 
@@ -58,11 +60,14 @@ async function dispatchAppMenuPasteFromMain(app: ElectronApplication): Promise<v
     // Headless Electron can have DOM focus without BrowserWindow focus; the
     // production menu sends this same IPC event to the focused app window.
     const windows = BrowserWindow.getAllWindows().filter((window) => !window.isDestroyed())
+
     for (const window of windows) {
       window.webContents.send('ui:appMenuPaste')
     }
+
     return windows.length
   })
+
   expect(sentCount).toBeGreaterThan(0)
 }
 
@@ -72,11 +77,13 @@ async function getActiveTabTitle(page: Page, worktreeId: string): Promise<string
   const tabs = await getWorktreeTabs(page, worktreeId)
   const tab = tabs.find((entry) => entry.id === activeId)
   expect(tab).toBeDefined()
+
   return tab!.customTitle ?? tab!.title ?? ''
 }
 
 function tabLocatorByTitle(page: Page, title: string): ReturnType<Page['locator']> {
   const escaped = title.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+
   return page.locator(`[data-testid="sortable-tab"][data-tab-title="${escaped}"]`).first()
 }
 
@@ -120,6 +127,7 @@ test.describe('app menu paste ownership', () => {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })
@@ -136,6 +144,7 @@ test.describe('app menu paste ownership', () => {
       name: `Rename tab ${originalTitle}`,
       exact: true
     })
+
     await expect(renameInput).toBeVisible()
     await renameInput.fill('')
 

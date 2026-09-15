@@ -109,6 +109,7 @@ describe('BrowserClientPageCommandExecutor', () => {
   it('executes one automation envelope against the exact retained page', async () => {
     const { dependencies, executor } = createHarness()
     await executor.handle(createCommand('createPage'), new AbortController().signal)
+
     const command = createCommand('navigate', {
       commandId: 'automation-a',
       command: {
@@ -174,6 +175,7 @@ describe('BrowserClientPageCommandExecutor', () => {
   it('snapshots in-flight and unresolved pages as outcome unknown', async () => {
     const { dependencies, executor, route } = createHarness()
     let resolveRoute = (_route: typeof route): void => {}
+
     dependencies.retainNetworkRoute.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -205,6 +207,7 @@ describe('BrowserClientPageCommandExecutor', () => {
       queueMicrotask(() => {
         transitionSnapshot = executor.snapshotPageInventory()
       })
+
       return true
     })
 
@@ -235,9 +238,11 @@ describe('BrowserClientPageCommandExecutor', () => {
       status: 'failed',
       errorCode: 'browser_client_page_generation_stale'
     })
+
     const localFile = createCommand('navigate', {
       command: { type: 'navigate', url: 'file:///etc/passwd' }
     })
+
     await expect(executor.handle(localFile, new AbortController().signal)).resolves.toEqual({
       status: 'failed',
       errorCode: 'browser_client_page_navigation_invalid'
@@ -249,6 +254,7 @@ describe('BrowserClientPageCommandExecutor', () => {
     const { dependencies, executor, order } = createHarness()
     dependencies.routeWebContents.registerGuest.mockImplementationOnce(() => {
       order.push('register-guest')
+
       return false
     })
 
@@ -277,10 +283,12 @@ describe('BrowserClientPageCommandExecutor', () => {
     const { dependencies, executor, order, route, routeSession } = createHarness()
     dependencies.routeWebContents.registerGuest.mockImplementationOnce(() => {
       order.push('register-guest')
+
       return false
     })
     dependencies.routeWebContents.claimGuestLifecycle.mockImplementationOnce((registration) => {
       order.push('claim-guest')
+
       return createLifecycleClaim(
         registration,
         Promise.reject(new Error('guest destruction unavailable'))
@@ -345,6 +353,7 @@ describe('BrowserClientPageCommandExecutor', () => {
     const { dependencies, executor, renderer, setRendererCurrent } = createHarness()
     renderer.mountPage.mockImplementationOnce(async () => {
       setRendererCurrent(false)
+
       return { webContentsId: 41 }
     })
 
@@ -365,6 +374,7 @@ describe('BrowserClientPageCommandExecutor', () => {
     const controller = new AbortController()
     renderer.mountPage.mockImplementationOnce(async () => {
       controller.abort()
+
       return { webContentsId: 41 }
     })
 
@@ -409,15 +419,19 @@ describe('BrowserClientPageCommandExecutor', () => {
   it('holds Session and route release for the exact destroyed acknowledgement', async () => {
     const { dependencies, executor, order } = createHarness()
     let acknowledgeDestroyed = (): void => {}
+
     const destroyed = new Promise<void>((resolve) => {
       acknowledgeDestroyed = resolve
     })
+
     dependencies.routeWebContents.claimGuestLifecycle.mockImplementationOnce((registration) => {
       order.push('claim-guest')
+
       return createLifecycleClaim(registration, destroyed)
     })
     dependencies.routeWebContents.beginGuestRetirement.mockImplementationOnce(() => {
       order.push('retire-guest')
+
       return destroyed
     })
     await executor.handle(createCommand('createPage'), new AbortController().signal)
@@ -534,15 +548,19 @@ describe('BrowserClientPageCommandExecutor', () => {
   it('waits for guest destruction when renderer retirement fails', async () => {
     const { dependencies, executor, order, renderer } = createHarness()
     let acknowledgeDestroyed = (): void => {}
+
     const destroyed = new Promise<void>((resolve) => {
       acknowledgeDestroyed = resolve
     })
+
     dependencies.routeWebContents.claimGuestLifecycle.mockImplementationOnce((registration) => {
       order.push('claim-guest')
+
       return createLifecycleClaim(registration, destroyed)
     })
     dependencies.routeWebContents.beginGuestRetirement.mockImplementationOnce(() => {
       order.push('retire-guest')
+
       return destroyed
     })
     renderer.retirePage.mockImplementationOnce(async () => {
@@ -583,6 +601,7 @@ describe('BrowserClientPageCommandExecutor', () => {
   it('bounds retained and concurrently creating page generations', async () => {
     const { dependencies, executor, route } = createHarness({ maxPages: 1 })
     let resolveRoute = (_route: typeof route): void => {}
+
     dependencies.retainNetworkRoute.mockImplementationOnce(
       () =>
         new Promise((resolve) => {

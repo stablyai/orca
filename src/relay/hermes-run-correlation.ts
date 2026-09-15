@@ -1,6 +1,9 @@
 import { HermesSessionRunIndex } from '../shared/hermes-session-run-index'
+
 const HERMES_RUN_KEY_PATTERN = /^(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})$/
+
 const MAX_SESSION_OUTPUT_GAP_MS = 24 * 60 * 60 * 1000
+
 const FULL_SESSION_LOG_HEADING = '## Full session log'
 
 export type HermesOutputRunRef = {
@@ -53,11 +56,15 @@ function sortableTimeFromRunKey(runKey: string | null): number {
   if (!runKey) {
     return Number.NaN
   }
+
   const match = HERMES_RUN_KEY_PATTERN.exec(runKey)
+
   if (!match) {
     return Number.NaN
   }
+
   const [, year, month, day, hour, minute, second] = match
+
   return Date.UTC(
     Number(year),
     Number(month) - 1,
@@ -75,12 +82,15 @@ function mergeOutputAndSessionContent(
   if (!sessionContent) {
     return outputContent
   }
+
   if (!outputContent) {
     return `${FULL_SESSION_LOG_HEADING}\n\n${sessionContent}`
   }
+
   if (outputContent.includes(FULL_SESSION_LOG_HEADING)) {
     return outputContent
   }
+
   return `${outputContent}\n\n---\n\n${FULL_SESSION_LOG_HEADING}\n\n${sessionContent}`
 }
 
@@ -93,20 +103,28 @@ export function mergeHermesOutputAndSessionRuns(
     sortableTimeFromRunKey,
     MAX_SESSION_OUTPUT_GAP_MS
   )
+
   const usedSessionRunIndexes = sessionIndex.used
+
   const mergedOutputRuns = outputRuns.map((outputRun) => {
     if (!isRecord(outputRun)) {
       return outputRun
     }
+
     const sessionRunIndex = sessionIndex.find(getRunKey(outputRun))
+
     if (sessionRunIndex === null) {
       return outputRun
     }
+
     const sessionRun = sessionRuns[sessionRunIndex]
+
     if (!isRecord(sessionRun)) {
       return outputRun
     }
+
     sessionIndex.use(sessionRunIndex)
+
     return {
       ...outputRun,
       output_preview: getRunOutputPreview(outputRun) ?? getRunOutputPreview(sessionRun),
@@ -116,6 +134,7 @@ export function mergeHermesOutputAndSessionRuns(
       )
     }
   })
+
   return [
     ...mergedOutputRuns,
     ...sessionRuns.filter((_, index) => !usedSessionRunIndexes.has(index))
@@ -131,13 +150,17 @@ export function mergeHermesOutputAndSessionRunRefs(
     sortableTimeFromRunKey,
     MAX_SESSION_OUTPUT_GAP_MS
   )
+
   const usedSessionRunIndexes = sessionIndex.used
+
   const mergedOutputRefs = outputRefs.map((outputRef) => {
     const sessionRunIndex = sessionIndex.find(getRunKey(outputRef))
     const sessionRef = sessionRunIndex === null ? null : sessionRefs[sessionRunIndex]
+
     if (sessionRunIndex !== null) {
       sessionIndex.use(sessionRunIndex)
     }
+
     return {
       id: outputRef.id,
       job_id: outputRef.job_id,
@@ -147,6 +170,7 @@ export function mergeHermesOutputAndSessionRunRefs(
       session: sessionRef
     }
   })
+
   return [
     ...mergedOutputRefs,
     ...sessionRefs

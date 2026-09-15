@@ -66,6 +66,7 @@ describe('resolveSmartWorkspaceCommandValue', () => {
 
   it('does not resurrect a provider arm when the stale query settles', () => {
     const rows = [row('use-name', 'use-name'), row('github', 'github-12')]
+
     const typedTextArm = resolveSmartWorkspaceCommandValue({
       currentValue: 'github-12',
       rows,

@@ -7,13 +7,20 @@ import {
 } from './workspace-port-scan-timeout-backoff'
 
 const SLOW_SPAWN_SKIP_METADATA_MS = 2_000
+
 /** Re-probe a remembered listener every Nth scan (~5 min at 30s) so a cwd change cannot go stale forever. */
 const METADATA_REPROBE_INTERVAL_SCANS = 10
+
 const commandTimeoutBackoff = new WorkspacePortScanTimeoutBackoff()
+
 let loggedWorkerUnavailable = false
+
 let skippedMetadataOnLastScan = false
+
 let lastListenerMetadata = new Map<string, RememberedListenerMetadata>()
+
 let metadataScanSequence = 0
+
 let reusedListenerKeys = new Set<string>()
 
 export type WorkspacePortScanOptions = {
@@ -80,8 +87,10 @@ export function shouldSkipMetadataCommands(
   if (options.requireMetadata) {
     return false
   }
+
   const skip = spawnMs > SLOW_SPAWN_SKIP_METADATA_MS && !skippedMetadataOnLastScan
   skippedMetadataOnLastScan = skip
+
   return skip
 }
 
@@ -94,12 +103,15 @@ function listenerMetadataKey(port: RawListeningPort): string {
 export function rememberListenerMetadata(ports: readonly RawListeningPort[]): void {
   const previous = lastListenerMetadata
   lastListenerMetadata = new Map()
+
   for (const port of ports) {
     const key = listenerMetadataKey(port)
+
     // Why: a reused entry keeps its original probe time so the staleness ceiling still expires it.
     const probedAtScan = reusedListenerKeys.has(key)
       ? (previous.get(key)?.probedAtScan ?? metadataScanSequence)
       : metadataScanSequence
+
     lastListenerMetadata.set(key, {
       processName: port.processName,
       socketId: port.socketId,
@@ -108,6 +120,7 @@ export function rememberListenerMetadata(ports: readonly RawListeningPort[]): vo
       probedAtScan
     })
   }
+
   reusedListenerKeys = new Set()
 }
 
@@ -129,6 +142,7 @@ export function partitionListenersNeedingMetadata(
 ): { hydrated: RawListeningPort[]; pidsNeedingMetadata: Set<number> } {
   metadataScanSequence += 1
   reusedListenerKeys = new Set()
+
   // Why requireMetadata opts out: that caller is the SIGTERM authorization re-scan, so it must
   // attribute the owner from this cycle's probe and never from a remembered cwd.
   if (options.requireMetadata) {
@@ -137,11 +151,14 @@ export function partitionListenersNeedingMetadata(
       pidsNeedingMetadata: new Set(ports.flatMap((port) => (port.pid ? [port.pid] : [])))
     }
   }
+
   const hydrated: RawListeningPort[] = []
   const pidsNeedingMetadata = new Set<number>()
   const reusableByPort = new Map<RawListeningPort, ProcessMetadata>()
+
   for (const port of ports) {
     const remembered = lastListenerMetadata.get(listenerMetadataKey(port))
+
     // Why require commandLine: a probe that returned nothing must not be cached as an answer.
     if (
       remembered?.commandLine !== undefined &&
@@ -153,10 +170,12 @@ export function partitionListenersNeedingMetadata(
       reusableByPort.set(port, remembered)
       continue
     }
+
     if (port.pid !== undefined) {
       pidsNeedingMetadata.add(port.pid)
     }
   }
+
   // Why the second pass: if any of a pid's sockets needs a probe, none of its sockets may be
   // served from cache — otherwise one process reports a fresh cwd on one row and a remembered
   // cwd on another, i.e. two different workspace attributions.
@@ -165,6 +184,7 @@ export function partitionListenersNeedingMetadata(
       port.pid !== undefined && !pidsNeedingMetadata.has(port.pid)
         ? reusableByPort.get(port)
         : undefined
+
     if (remembered) {
       reusedListenerKeys.add(listenerMetadataKey(port))
       hydrated.push({
@@ -174,16 +194,20 @@ export function partitionListenersNeedingMetadata(
       })
       continue
     }
+
     hydrated.push(port)
   }
+
   return { hydrated, pidsNeedingMetadata }
 }
 
 export function recallListenerMetadata(port: RawListeningPort): RawListeningPort {
   const remembered = lastListenerMetadata.get(listenerMetadataKey(port))
+
   if (!remembered) {
     return port
   }
+
   return {
     ...port,
     processName: port.processName ?? remembered.processName,
@@ -197,8 +221,10 @@ export function warnWorkspacePortScanFailure(error: unknown): void {
     if (loggedWorkerUnavailable) {
       return
     }
+
     loggedWorkerUnavailable = true
   }
+
   console.warn('[workspace-ports] scan failed', error)
 }
 

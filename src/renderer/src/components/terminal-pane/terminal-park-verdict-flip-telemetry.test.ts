@@ -12,11 +12,13 @@ import {
 } from './terminal-park-verdict-flip-telemetry'
 
 const recordBreadcrumb = vi.fn()
+
 vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: (name: string, data?: unknown) => recordBreadcrumb(name, data)
 }))
 
 const TAB = 'tab-1'
+
 /** Slower than the burst window, so only the notice limit can fire. */
 const SLOW_CHURN_STEP_MS = TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS * 4
 
@@ -51,6 +53,7 @@ describe('burst damping threshold', () => {
 describe('recordParkVerdictFlips', () => {
   it('stays silent for a stable verdict', () => {
     const records = new Map<string, ParkVerdictFlipRecord>()
+
     for (let i = 0; i < 100; i += 1) {
       observe({ records, parked: true, nowMs: 1_000 + i * 1_000 })
     }
@@ -61,6 +64,7 @@ describe('recordParkVerdictFlips', () => {
 
   it('emits one burst breadcrumb once the verdict churns at render cadence', () => {
     const records = new Map<string, ParkVerdictFlipRecord>()
+
     for (let i = 0; i < 40; i += 1) {
       observe({ records, parked: i % 2 === 0, nowMs: 1_000 + i * 10 })
     }
@@ -81,9 +85,11 @@ describe('recordParkVerdictFlips', () => {
   // engaged before React could bail, 'window' means churn too slow to loop.
   it('separates a damped burst from slow churn', () => {
     const tightRecords = new Map<string, ParkVerdictFlipRecord>()
+
     for (let i = 0; i < 40; i += 1) {
       observe({ records: tightRecords, parked: i % 2 === 0, nowMs: 1_000 + i })
     }
+
     expect(recordBreadcrumb).toHaveBeenCalledWith(
       'terminal_park_verdict_churn',
       expect.objectContaining({
@@ -97,9 +103,11 @@ describe('recordParkVerdictFlips', () => {
     recordBreadcrumb.mockClear()
 
     const slowRecords = new Map<string, ParkVerdictFlipRecord>()
+
     for (let i = 0; i < TERMINAL_TAB_PARK_FLIP_NOTICE_LIMIT + 1; i += 1) {
       observe({ records: slowRecords, parked: i % 2 === 0, nowMs: 1_000 + i * SLOW_CHURN_STEP_MS })
     }
+
     expect(recordBreadcrumb).toHaveBeenCalledTimes(1)
     expect(recordBreadcrumb).toHaveBeenCalledWith(
       'terminal_park_verdict_churn',
@@ -116,6 +124,7 @@ describe('recordParkVerdictFlips', () => {
   // a mounted pane's memory for a verdict that was never near React's bail.
   it('does not pin churn spread past the burst window', () => {
     const records = new Map<string, ParkVerdictFlipRecord>()
+
     for (let i = 0; i < TERMINAL_TAB_PARK_FLIP_NOTICE_LIMIT + 1; i += 1) {
       observe({ records, parked: i % 2 === 0, nowMs: 1_000 + i * SLOW_CHURN_STEP_MS })
     }
@@ -125,12 +134,15 @@ describe('recordParkVerdictFlips', () => {
 
   it('re-arms after the window elapses', () => {
     const records = new Map<string, ParkVerdictFlipRecord>()
+
     for (let i = 0; i < 40; i += 1) {
       observe({ records, parked: i % 2 === 0, nowMs: 1_000 + i * 10 })
     }
+
     expect(recordBreadcrumb).toHaveBeenCalledTimes(1)
 
     const laterMs = 1_000 + TERMINAL_TAB_PARK_FLIP_WINDOW_MS * 2
+
     for (let i = 0; i < 40; i += 1) {
       observe({ records, parked: i % 2 === 0, nowMs: laterMs + i * 10 })
     }
@@ -162,6 +174,7 @@ describe('recordParkVerdictFlips', () => {
 
   it('honours the window, notice, burst-window and burst-limit overrides', () => {
     const records = new Map<string, ParkVerdictFlipRecord>()
+
     for (let i = 0; i < 10; i += 1) {
       recordParkVerdictFlips({
         records,
@@ -187,6 +200,7 @@ describe('recordParkVerdictFlips', () => {
   it('keeps per-tab windows and notices independent', () => {
     const records = new Map<string, ParkVerdictFlipRecord>()
     const other = 'tab-2'
+
     for (let i = 0; i < 40; i += 1) {
       recordParkVerdictFlips({
         records,
@@ -225,6 +239,7 @@ describe('getParkVerdictUnparkPinUntilMs', () => {
     for (let i = 0; i < 40; i += 1) {
       observe({ records, parked: i % 2 === 0, nowMs: startMs + i * 10 })
     }
+
     // The first observation only seeds the record, so flip N lands one step later.
     return startMs + TERMINAL_TAB_PARK_FLIP_BURST_LIMIT * 10
   }
@@ -295,9 +310,11 @@ describe('getParkVerdictUnparkPinUntilMs', () => {
 describe('expired pins stop gating breadcrumbs', () => {
   it('re-arms damping and notices without a getParkVerdictUnparkPinUntilMs call', () => {
     const records = new Map<string, ParkVerdictFlipRecord>()
+
     for (let i = 0; i < 40; i += 1) {
       observe({ records, parked: i % 2 === 0, nowMs: 1_000 + i * 10 })
     }
+
     expect(recordBreadcrumb).toHaveBeenCalledTimes(1)
     expect(recordBreadcrumb).toHaveBeenLastCalledWith(
       'terminal_park_verdict_churn',
@@ -306,6 +323,7 @@ describe('expired pins stop gating breadcrumbs', () => {
 
     // Churn resumes past the pin deadline; the pin was never read back.
     const afterPinMs = 1_000 + TERMINAL_TAB_PARK_FLIP_WINDOW_MS * 2
+
     for (let i = 0; i < 40; i += 1) {
       observe({ records, parked: i % 2 === 0, nowMs: afterPinMs + i * 10 })
     }
@@ -320,14 +338,17 @@ describe('expired pins stop gating breadcrumbs', () => {
 
   it('still reports slow churn after a pin lapses', () => {
     const records = new Map<string, ParkVerdictFlipRecord>()
+
     for (let i = 0; i < 40; i += 1) {
       observe({ records, parked: i % 2 === 0, nowMs: 1_000 + i * 10 })
     }
+
     recordBreadcrumb.mockClear()
 
     // Slow churn only: each step outruns the burst window, so the notice limit
     // is the only trigger left. It must not stay gated by the lapsed pin.
     const afterPinMs = 1_000 + TERMINAL_TAB_PARK_FLIP_WINDOW_MS * 2
+
     for (let i = 0; i <= TERMINAL_TAB_PARK_FLIP_NOTICE_LIMIT; i += 1) {
       observe({ records, parked: i % 2 === 0, nowMs: afterPinMs + i * SLOW_CHURN_STEP_MS })
     }
@@ -343,6 +364,7 @@ describe('expired pins stop gating breadcrumbs', () => {
   // (issue #15136: the driver was the worktree-level park prop).
   it('selects and expires pins for tabs the cold-park selector never proposed', () => {
     const records = new Map<string, ParkVerdictFlipRecord>()
+
     for (let i = 0; i < 40; i += 1) {
       observe({ records, parked: i % 2 === 0, nowMs: 1_000 + i * 10 })
     }
@@ -357,6 +379,7 @@ describe('expired pins stop gating breadcrumbs', () => {
       tabIds: [TAB],
       nowMs: 1_000 + TERMINAL_TAB_PARK_FLIP_WINDOW_MS * 3
     })
+
     expect(lapsed.pinnedTabIds.size).toBe(0)
     expect(lapsed.earliestPinExpiryMs).toBeNull()
     expect(records.get(TAB)?.pinnedUntilMs).toBeNull()

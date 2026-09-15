@@ -2,8 +2,11 @@ import { runProcess } from '../shared/child-process/run-process'
 import { windowsPowerShellPath } from '../shared/child-process/windows-system-binary'
 
 let cachedFonts: string[] | null = null
+
 let fontsPromise: Promise<string[]> | null = null
+
 const SYSTEM_FONT_LIST_TIMEOUT_MS = 15_000
+
 // Why: large macOS font catalogs can make system_profiler exceed 15s even
 // when it is healthy; keep the longer wait scoped to that slow command.
 const MAC_SYSTEM_FONT_LIST_TIMEOUT_MS = 45_000
@@ -12,6 +15,7 @@ export async function listSystemFontFamilies(): Promise<string[]> {
   if (cachedFonts) {
     return cachedFonts
   }
+
   if (fontsPromise) {
     return fontsPromise
   }
@@ -19,10 +23,12 @@ export async function listSystemFontFamilies(): Promise<string[]> {
   fontsPromise = loadSystemFontFamilies()
     .then((fonts) => {
       cachedFonts = fonts.length > 0 ? fonts : fallbackFonts()
+
       return cachedFonts
     })
     .catch(() => {
       cachedFonts = fallbackFonts()
+
       return cachedFonts
     })
     .finally(() => {
@@ -36,9 +42,11 @@ function loadSystemFontFamilies(): Promise<string[]> {
   if (process.platform === 'darwin') {
     return listMacFonts()
   }
+
   if (process.platform === 'win32') {
     return listWindowsFonts()
   }
+
   return listLinuxFonts()
 }
 
@@ -116,12 +124,15 @@ async function execFileText(
     timeoutMs,
     maxOutputBytes: maxBuffer
   })
+
   if (result.timedOut) {
     throw new Error(`Timed out listing system fonts with ${command}`)
   }
+
   if (result.code !== 0) {
     throw new Error(`Failed to list system fonts with ${command}`)
   }
+
   return result.stdout
 }
 
@@ -139,9 +150,11 @@ function fallbackFonts(): string[] {
   if (process.platform === 'darwin') {
     return ['SF Mono', 'Menlo', 'Monaco', 'JetBrains Mono', 'Fira Code']
   }
+
   if (process.platform === 'win32') {
     return ['Cascadia Mono', 'Consolas', 'Lucida Console', 'JetBrains Mono', 'Fira Code']
   }
+
   return [
     'JetBrains Mono',
     'Fira Code',

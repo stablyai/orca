@@ -142,20 +142,24 @@ function mockAttempts(): {
     close: ReturnType<typeof vi.fn>
     sendRequest: ReturnType<typeof vi.fn>
   }[] = []
+
   subscribeRemoteRuntimeRequestMock.mockImplementation(
     async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
       const close = vi.fn()
+
       const sendRequest = vi.fn().mockResolvedValue({
         id: 'file-channel',
         ok: true,
         result: { released: true },
         _meta: { runtimeId: 'runtime-a' }
       })
+
       attempts.push({
         callbacks: args[4] as RemoteRuntimeSubscriptionCallbacks,
         close,
         sendRequest
       })
+
       return {
         requestId: `browser-host-${attempts.length}`,
         close,
@@ -164,6 +168,7 @@ function mockAttempts(): {
       }
     }
   )
+
   return attempts
 }
 

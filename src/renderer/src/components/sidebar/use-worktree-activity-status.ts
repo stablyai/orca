@@ -13,15 +13,19 @@ import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-su
 export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
   const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS)
+
   const runtimePaneTitlesForWorktree = useAppStore(
     useShallow((s) => selectRuntimePaneTitlesForWorktree(s, worktreeId))
   )
+
   const ptyIdsForWorktree = useAppStore(
     useShallow((s) => selectLivePtyIdsForWorktree(s, worktreeId))
   )
+
   const terminalLayoutRootsByTabId = useAppStore(
     useShallow((s) => selectTerminalLayoutRootsForWorktree(s, worktreeId))
   )
+
   const {
     hasPermission,
     hasLiveWorking,

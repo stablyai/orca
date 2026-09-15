@@ -13,10 +13,13 @@ export class PluginEventBus {
 
   subscribe(pluginKey: string, events: PluginEventName[]): PluginEventName[] {
     const existing = this.dynamicSubscriptions.get(pluginKey) ?? new Set<PluginEventName>()
+
     for (const event of events) {
       existing.add(event)
     }
+
     this.dynamicSubscriptions.set(pluginKey, existing)
+
     return [...existing]
   }
 
@@ -35,6 +38,7 @@ export class PluginEventBus {
     payload: unknown
   ): { ok: true; payload: unknown } | { ok: false; error: string } {
     const parsed = PLUGIN_EVENT_PAYLOAD_SCHEMAS[event].safeParse(payload)
+
     return parsed.success
       ? { ok: true, payload: parsed.data }
       : { ok: false, error: `malformed ${event} payload` }

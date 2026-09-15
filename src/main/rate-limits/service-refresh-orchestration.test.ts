@@ -98,6 +98,7 @@ describe('RateLimitService', () => {
         oidcClientId: null
       }
     }
+
     vi.mocked(readGrokAuthSession).mockReturnValue(authReadResult)
     vi.mocked(fetchGrokRateLimits).mockResolvedValueOnce(okProvider('grok', 42))
     const service = new RateLimitService()
@@ -243,9 +244,11 @@ describe('RateLimitService', () => {
     await Promise.resolve()
 
     let refreshResolved = false
+
     const manualRefresh = service.refresh().then(() => {
       refreshResolved = true
     })
+
     await Promise.resolve()
 
     firstClaude.resolve(okProvider('claude', 10, Date.now()))
@@ -282,6 +285,7 @@ describe('RateLimitService', () => {
     const refresh = service.refresh().then(() => {
       refreshResolved = true
     })
+
     await flushMicrotasks()
 
     const pendingGrokState = service.getState()
@@ -367,10 +371,12 @@ describe('RateLimitService', () => {
       sessionCookie: 'session=abc123',
       workspaceIdOverride: ''
     }))
+
     const networkProxySettings = {
       httpProxyUrl: 'http://proxy.example:8080',
       httpProxyBypassRules: 'localhost'
     }
+
     service.setNetworkProxySettingsResolver(() => networkProxySettings)
     service.setGeminiCliOAuthEnabledResolver(() => true)
 
@@ -419,11 +425,13 @@ describe('RateLimitService', () => {
 
   it('passes the resolved Kimi home into each fetch cycle', async () => {
     const service = new RateLimitService()
+
     const home = {
       runtime: 'wsl' as const,
       wslDistro: 'Ubuntu',
       path: '\\\\wsl.localhost\\Ubuntu\\home\\neil\\.kimi-code'
     }
+
     const resolver = vi.fn(async () => home)
     service.setKimiHomeResolver(resolver)
     mockFreshBackgroundProviderFetches()

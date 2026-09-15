@@ -42,6 +42,7 @@ export async function getRemoteFetchRefspecs(
       ['config', '--get-all', `remote.${remoteName}.fetch`],
       repoPath
     )
+
     return stdout
       .split(/\r?\n/)
       .map((line) => line.trim())
@@ -73,6 +74,7 @@ export async function forkRemoteTrackingRefExists(
       ['rev-parse', '--verify', '--quiet', `refs/remotes/${remoteName}/${branchName}`],
       repoPath
     )
+
     return true
   } catch {
     return false
@@ -94,6 +96,7 @@ export async function remoteHasUrl(
 ): Promise<boolean> {
   try {
     await execGit(['config', '--get', `remote.${remoteName}.url`], repoPath)
+
     return true
   } catch {
     return false
@@ -115,23 +118,29 @@ export async function ensureRemoteTracksBranchNarrowly(
 ): Promise<void> {
   const desired = buildNarrowForkFetchRefspec(remoteName, branchName)
   const existing = await getRemoteFetchRefspecs(execGit, repoPath, remoteName)
+
   if (!existing.includes(desired)) {
     // Strip the wide default outright, and any stray literal (non-suffixed) entry for
     // this exact branch -- e.g. a hand-edited config -- since it would shadow the same
     // source prefix and defeats the point of the trailing `*`.
     const literalForBranch = `refs/heads/${branchName}`
+
     const toDrop = existing.includes(wildcardForkFetchRefspec(remoteName))
       ? existing
       : existing.filter((refspec) => refspecSource(refspec) === literalForBranch)
+
     if (toDrop.length > 0) {
       const surviving = existing.filter((refspec) => !toDrop.includes(refspec))
       await execGit(['config', '--unset-all', `remote.${remoteName}.fetch`], repoPath)
+
       for (const refspec of surviving) {
         await execGit(['config', '--add', `remote.${remoteName}.fetch`, refspec], repoPath)
       }
     }
+
     await execGit(['config', '--add', `remote.${remoteName}.fetch`, desired], repoPath)
   }
+
   await execGit(['config', `remote.${remoteName}.tagOpt`, '--no-tags'], repoPath)
 }
 
@@ -168,22 +177,28 @@ export async function pruneUntrackedForkRemoteRefs(
   keepBranches: ReadonlySet<string>
 ): Promise<string[]> {
   const prefix = `refs/remotes/${remoteName}/`
+
   const { stdout } = await execGit(['for-each-ref', '--format=%(refname)', prefix], repoPath).catch(
     () => ({ stdout: '' })
   )
+
   const deleted: string[] = []
+
   for (const refname of stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)) {
     const branch = refname.slice(prefix.length)
     const kept = branch === 'HEAD' || [...keepBranches].some((keep) => branch.startsWith(keep))
+
     if (kept) {
       continue
     }
+
     await execGit(['update-ref', '-d', refname], repoPath)
     deleted.push(refname)
   }
+
   return deleted
 }
 
@@ -197,12 +212,16 @@ export async function removeStaleForkFetchRefspec(
   const existing = await getRemoteFetchRefspecs(execGit, repoPath, remoteName)
   const staleSource = `refs/heads/${staleBranchName}`
   const surviving = existing.filter((refspec) => refspecSource(refspec) !== staleSource)
+
   if (surviving.length === existing.length) {
     return false
   }
+
   await execGit(['config', '--unset-all', `remote.${remoteName}.fetch`], repoPath)
+
   for (const refspec of surviving) {
     await execGit(['config', '--add', `remote.${remoteName}.fetch`, refspec], repoPath)
   }
+
   return true
 }

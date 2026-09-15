@@ -14,6 +14,7 @@ import {
 } from './mobile-browser-frame-state'
 
 type PendingFrame = { frame: BrowserScreencastFrame; cacheKey: string }
+
 type BrowserFrameApplyArgs = {
   browserImageRefs: { current: [Image | null, Image | null] }
   busyRef: { current: boolean }
@@ -29,6 +30,7 @@ type BrowserFrameApplyArgs = {
   setFrameUri: Dispatch<SetStateAction<string | null>>
   visibleFrameLayerRef: { current: FrameLayer }
 }
+
 export function useMobileBrowserFrameApply(args: BrowserFrameApplyArgs) {
   const {
     browserImageRefs,
@@ -45,13 +47,16 @@ export function useMobileBrowserFrameApply(args: BrowserFrameApplyArgs) {
     setFrameUri,
     visibleFrameLayerRef
   } = args
+
   const applyFrame = useCallback((frame: BrowserScreencastFrame, frameCacheKey: string): void => {
     if (!browserFrameMetadataEqual(frameMetadataRef.current, frame.metadata)) {
       frameMetadataRef.current = frame.metadata
       setFrameMetadata(frame.metadata)
     }
+
     const nextFrameUri = createBrowserFrameDataUri(frame)
     cacheBrowserFrame(frameCacheKey, { uri: nextFrameUri, metadata: frame.metadata })
+
     if (!frameMountedRef.current) {
       frameUriRef.current = nextFrameUri
       frameMountedRef.current = true
@@ -71,6 +76,7 @@ export function useMobileBrowserFrameApply(args: BrowserFrameApplyArgs) {
       frameUriRef.current = nextFrameUri
       updateBrowserImageSource(browserImageRefs.current[pendingFrameLayerRef.current], nextFrameUri)
     }
+
     if (busyRef.current) {
       busyRef.current = false
       setBusy(false)
@@ -79,6 +85,7 @@ export function useMobileBrowserFrameApply(args: BrowserFrameApplyArgs) {
 
   const clearFrameThrottle = useCallback(() => {
     pendingThrottledFrameRef.current = null
+
     if (frameThrottleTimerRef.current) {
       clearTimeout(frameThrottleTimerRef.current)
       frameThrottleTimerRef.current = null
@@ -89,27 +96,33 @@ export function useMobileBrowserFrameApply(args: BrowserFrameApplyArgs) {
     (frame: BrowserScreencastFrame, frameCacheKey: string): void => {
       const now = Date.now()
       const elapsed = now - lastAppliedFrameAtRef.current
+
       if (lastAppliedFrameAtRef.current === 0 || elapsed >= MOBILE_BROWSER_FRAME_MIN_INTERVAL_MS) {
         clearFrameThrottle()
         lastAppliedFrameAtRef.current = now
         applyFrame(frame, frameCacheKey)
+
         return
       }
 
       // Why: static UI changes can be the last frame Chromium emits. Coalesce
       // throttled frames so the final visible state is applied after the delay.
       pendingThrottledFrameRef.current = { frame, cacheKey: frameCacheKey }
+
       if (frameThrottleTimerRef.current) {
         return
       }
+
       frameThrottleTimerRef.current = setTimeout(
         () => {
           frameThrottleTimerRef.current = null
           const pending = pendingThrottledFrameRef.current
           pendingThrottledFrameRef.current = null
+
           if (!pending) {
             return
           }
+
           lastAppliedFrameAtRef.current = Date.now()
           applyFrame(pending.frame, pending.cacheKey)
         },
@@ -118,5 +131,6 @@ export function useMobileBrowserFrameApply(args: BrowserFrameApplyArgs) {
     },
     [applyFrame, clearFrameThrottle]
   )
+
   return { applyFrameThrottled, clearFrameThrottle }
 }

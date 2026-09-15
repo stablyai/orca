@@ -23,13 +23,16 @@ function anchorRunningTurn(
   hostClock: HostClock | null | undefined
 ): TurnAnchor {
   const timing = selectStructuredAgentRunningTurnTiming(items, turnId)
+
   if (!timing) {
     return { turnId, startedAt: null }
   }
+
   const now = Date.now()
   // Advance the published host clock by the client time since receipt; both
   // terms stay single-clock, so a mid-turn attach counts from the real start.
   const hostNow = hostClock ? hostClock.hostNow + (now - hostClock.receivedAt) : undefined
+
   return { turnId, startedAt: structuredAgentTurnLocalStartedAt(timing, now, hostNow) }
 }
 
@@ -52,19 +55,25 @@ export function useMobileStructuredAgentTurnTiming(
     () => selectStructuredAgentSettledTurns(items, submissions),
     [items, submissions]
   )
+
   const [anchor, setAnchor] = useState<TurnAnchor | null>(null)
+
   // Stamp during render (React's derive-from-props pattern) so the first paint of
   // a new turn already counts from the right instant.
   if (turnId === null) {
     if (anchor !== null) {
       setAnchor(null)
     }
+
     return { settledTurns, workingStartedAt: null }
   }
+
   if (anchor?.turnId !== turnId) {
     const next = anchorRunningTurn(items, turnId, hostClock)
     setAnchor(next)
+
     return { settledTurns, workingStartedAt: next.startedAt }
   }
+
   return { settledTurns, workingStartedAt: anchor.startedAt }
 }

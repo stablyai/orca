@@ -26,6 +26,7 @@ export function groupWorkspaceKanbanWorktrees(params: {
   sortBy: SortBy
 }): Map<WorkspaceStatus, Worktree[]> {
   const { worktrees, visibleWorktreeIds, workspaceStatuses, sortBy } = params
+
   const grouped = new Map<WorkspaceStatus, Worktree[]>(
     workspaceStatuses.map((status) => [status.id, []])
   )
@@ -34,6 +35,7 @@ export function groupWorkspaceKanbanWorktrees(params: {
     if (!visibleWorktreeIds.has(getWorktreeHostIdentity(worktree))) {
       continue
     }
+
     grouped.get(getWorkspaceStatus(worktree, workspaceStatuses))!.push(worktree)
   }
 
@@ -44,5 +46,6 @@ export function groupWorkspaceKanbanWorktrees(params: {
         : (a, b) => Number(b.isPinned) - Number(a.isPinned) || sortBoardWorktrees(a, b)
     )
   }
+
   return grouped
 }

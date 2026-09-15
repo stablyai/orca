@@ -29,10 +29,12 @@ export function mobileRelayMintFailureFromUnknown(args: {
       : args.error instanceof Error
         ? args.error.message
         : null
+
   const code =
     candidateCode != null && /^relay_[a-z0-9_]{1,74}$/.test(candidateCode)
       ? candidateCode
       : args.fallbackCode
+
   return {
     code,
     stage: args.stage,

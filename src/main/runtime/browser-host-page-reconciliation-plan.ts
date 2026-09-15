@@ -1,8 +1,11 @@
 import type { BrowserClientHostedPageInventory } from '../../shared/browser-client-host-protocol'
 
 const DEFAULT_MAX_PAGES = 256
+
 const MAX_GENERATION = 0xffff_ffff
+
 const MAX_IDENTITY_LENGTH = 256
+
 const MAX_URL_LENGTH = 8192
 
 export type BrowserHostPageAuthority = Readonly<{
@@ -58,21 +61,27 @@ export function planBrowserHostPageReconciliation(
 
   for (const intent of intents) {
     const page = pagesById.get(intent.browserPageId)
+
     if (!page) {
       restore.push(intent)
       continue
     }
+
     consumedPageIds.add(page.browserPageId)
+
     if (page.state === 'active' && sameCurrentPage(intent, page)) {
       retain.push(Object.freeze({ intent, page }))
       continue
     }
+
     if (page.state === 'active' && canReclaimPage(intent, page, options.inventoryPairedDeviceId)) {
       reclaim.push(Object.freeze({ intent, page }))
       continue
     }
+
     closeThenRestore.push(Object.freeze({ intent, page }))
   }
+
   for (const page of pages) {
     if (!consumedPageIds.has(page.browserPageId)) {
       close.push(page)
@@ -131,22 +140,28 @@ function freezeUniqueRecords<T extends { browserPageId: string }>(
   freeze: (record: T) => T
 ): readonly T[] {
   const seen = new Set<string>()
+
   return records.map((record) => {
     assertIdentity(record.browserPageId)
+
     if (seen.has(record.browserPageId)) {
       throw new Error('browser_host_page_reconciliation_duplicate')
     }
+
     seen.add(record.browserPageId)
+
     return freeze(record)
   })
 }
 
 function freezeIntent(intent: BrowserHostRuntimePageIntent): BrowserHostRuntimePageIntent {
   assertPageRecord(intent)
+
   if (intent.reclaimFrom) {
     assertAuthority(intent.reclaimFrom)
     assertIdentity(intent.reclaimFrom.pairedDeviceId)
   }
+
   return Object.freeze({
     ...intent,
     ...(intent.reclaimFrom ? { reclaimFrom: Object.freeze({ ...intent.reclaimFrom }) } : {})
@@ -155,15 +170,18 @@ function freezeIntent(intent: BrowserHostRuntimePageIntent): BrowserHostRuntimeP
 
 function freezePage(page: BrowserClientHostedPageInventory): BrowserClientHostedPageInventory {
   assertPageRecord(page)
+
   if (page.state !== 'active' && page.state !== 'outcomeUnknown') {
     throw new Error('browser_host_page_reconciliation_state_invalid')
   }
+
   if (
     page.currentUrl !== undefined &&
     (typeof page.currentUrl !== 'string' || page.currentUrl.length > MAX_URL_LENGTH)
   ) {
     throw new Error('browser_host_page_reconciliation_url_invalid')
   }
+
   return Object.freeze({ ...page })
 }
 
@@ -208,6 +226,7 @@ function assertCapacity(maxPages: number, intentCount: number, pageCount: number
   if (!Number.isInteger(maxPages) || maxPages < 1 || maxPages > DEFAULT_MAX_PAGES) {
     throw new Error('browser_host_page_reconciliation_limit_invalid')
   }
+
   if (intentCount > maxPages || pageCount > maxPages) {
     throw new Error('browser_host_page_reconciliation_capacity')
   }

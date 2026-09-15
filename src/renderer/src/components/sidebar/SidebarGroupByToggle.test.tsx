@@ -40,6 +40,7 @@ describe('SidebarGroupByToggle', () => {
   it('commits the pointer-selected grouping mode', async () => {
     const setGroupBy = vi.fn()
     const container = await renderGroupByToggle({ groupBy: 'repo', setGroupBy })
+
     const noneButton = [...container.querySelectorAll('button')].find(
       (button) => button.textContent === 'None'
     )

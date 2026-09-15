@@ -51,6 +51,7 @@ export function wslGatedAccess(
 ): Promise<boolean> {
   return runReusableFsOperation({ operation: 'access', path }, priority, signal, async () => {
     await access(path)
+
     return true
   })
 }
@@ -101,6 +102,7 @@ export function wslGatedOpen(
   if (!isWslUncPath(path)) {
     return open(path, 'r')
   }
+
   return runWslTranscriptFsTask<TranscriptFileHandle>(
     {
       operation: 'open',
@@ -136,6 +138,7 @@ export function wslGatedRead(
   if (!isWslUncPath(path) && !isWslTranscriptFsProcessHandle(handle)) {
     return (handle as FileHandle).read(buffer, offset, length, position)
   }
+
   return runWslTranscriptFsTask(
     { operation: 'read', path, priority, signal, dedupe: false },
     async (taskSignal) => {
@@ -143,8 +146,10 @@ export function wslGatedRead(
         // The vitest fallback: a FileHandle read fills the caller's buffer itself.
         return (handle as FileHandle).read(buffer, offset, length, position)
       }
+
       const body = await readWslTranscriptFsProcess(handle, position, length, taskSignal)
       buffer.set(body, offset)
+
       return { bytesRead: body.byteLength, buffer }
     }
   )
@@ -154,14 +159,18 @@ export function wslGatedRead(
 export function closeTranscriptHandle(handle: TranscriptFileHandle, path: string): Promise<void> {
   if (isWslTranscriptFsProcessHandle(handle)) {
     void closeWslTranscriptFsProcess(handle).catch(() => {})
+
     return Promise.resolve()
   }
+
   if (!isWslUncPath(path)) {
     return handle.close()
   }
+
   // Only the vitest fallback pairs a FileHandle with a UNC path; mirror the
   // process-handle contract there: fire-and-forget, close failures swallowed.
   void handle.close().catch(() => {})
+
   return Promise.resolve()
 }
 
@@ -178,8 +187,10 @@ export async function readTranscriptSlice(
   signal?: AbortSignal
 ): Promise<Buffer> {
   const handle = await wslGatedOpen(path, priority, signal)
+
   try {
     const buffer = Buffer.allocUnsafe(length)
+
     const { bytesRead } = await wslGatedRead(
       handle,
       path,
@@ -190,6 +201,7 @@ export async function readTranscriptSlice(
       priority,
       signal
     )
+
     return buffer.subarray(0, bytesRead)
   } finally {
     await closeTranscriptHandle(handle, path)
@@ -216,17 +228,22 @@ async function* gatedChunks(
   // Why: chunk boundaries fall mid-codepoint, so decoding each slice
   // independently would emit U+FFFD on both sides of any straddling character.
   const decoder = options.encoding ? new StringDecoder(options.encoding) : null
+
   try {
     let position = options.start ?? 0
+
     for (;;) {
       const length =
         options.end === undefined
           ? WSL_TRANSCRIPT_READ_CHUNK_BYTES
           : Math.min(WSL_TRANSCRIPT_READ_CHUNK_BYTES, options.end - position + 1)
+
       if (length <= 0) {
         break
       }
+
       const buffer = Buffer.allocUnsafe(length)
+
       const { bytesRead } = await wslGatedRead(
         handle,
         path,
@@ -237,22 +254,29 @@ async function* gatedChunks(
         priority,
         signal
       )
+
       if (bytesRead <= 0) {
         break
       }
+
       position += bytesRead
       const chunk = buffer.subarray(0, bytesRead)
+
       if (!decoder) {
         yield chunk
         continue
       }
+
       const decoded = decoder.write(chunk)
+
       if (decoded) {
         yield decoded
       }
     }
+
     // Trailing bytes of an incomplete sequence at EOF, replacement-char'd once.
     const trailing = decoder?.end()
+
     if (trailing) {
       yield trailing
     }
@@ -280,5 +304,6 @@ export function openTranscriptReadStream(
     // gated branch surfaces cancellation to the same consumers.
     return createReadStream(path, { ...options, signal })
   }
+
   return Readable.from(gatedChunks(path, options, priority, signal))
 }

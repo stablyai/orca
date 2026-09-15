@@ -77,6 +77,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     updateCommitDrafts,
     worktreePath
   })
+
   const commitMessageGeneration = useSourceControlCommitMessageGeneration({
     activeRepo,
     activeRepoSettings,
@@ -97,6 +98,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     updateCommitMessageGenerationRecord,
     worktreePath
   })
+
   const createPrIntentCommitMessage = useSourceControlCreatePrIntentCommitMessage({
     activeRepo,
     generateInFlightRef,
@@ -106,6 +108,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     setGenerateInFlightByWorktree,
     settings
   })
+
   const remoteActionRunner = useSourceControlRemoteActionRunner({
     activeRepoSettings,
     activeWorktree,
@@ -129,6 +132,7 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     syncBranch,
     worktreePath
   })
+
   const conflictAbort = useSourceControlConflictAbort({
     activeRepoSettings,
     activeWorktreeId,

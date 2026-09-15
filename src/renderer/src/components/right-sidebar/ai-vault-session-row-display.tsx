@@ -41,6 +41,7 @@ export function SessionMetadata({
   vaultScope: AiVaultScope
 }) {
   const modelLabel = sessionModelLabel(session)
+
   return (
     <div
       data-testid="ai-vault-session-metadata"
@@ -119,6 +120,7 @@ function SessionWorktreeLine({
   const repoId = worktreeInfo.worktreeId
     ? (splitWorktreeIdForFilesystem(worktreeInfo.worktreeId)?.repoId ?? null)
     : null
+
   const repo = useRepoById(repoId)
 
   return (
@@ -154,14 +156,18 @@ export function conversationRoleLabel(
   if (role === 'user') {
     return translate('auto.components.right.sidebar.AiVaultSessionRow.userRole', 'You')
   }
+
   if (role === 'assistant') {
     return translate('auto.components.right.sidebar.AiVaultSessionRow.agentRole', 'Agent')
   }
+
   if (role === 'tool') {
     return translate('auto.components.right.sidebar.AiVaultSessionRow.toolRole', 'Tool')
   }
+
   if (role === 'system') {
     return translate('auto.components.right.sidebar.AiVaultSessionRow.systemRole', 'System')
   }
+
   return translate('auto.components.right.sidebar.AiVaultSessionRow.sessionRole', 'Session')
 }

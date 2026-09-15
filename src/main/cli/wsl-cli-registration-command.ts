@@ -13,7 +13,9 @@ import {
 } from './wsl-cli-scripts'
 
 const MANAGED_MARKER = getWslLauncherMarker()
+
 const BRIDGE_MANAGED_MARKER = getWslBridgeMarker()
+
 const LEGACY_WSL_COMMAND_NAME = 'orca'
 
 export function buildWslCliInstallCommand(
@@ -21,6 +23,7 @@ export function buildWslCliInstallCommand(
 ): string {
   const bridgePath = getBridgePathFromCommandPath(status.commandPath)
   const legacyCommandPath = `${getPosixDirname(status.commandPath)}/${LEGACY_WSL_COMMAND_NAME}`
+
   return [
     // Why -eu not -euo pipefail: transported via runWslProcess's `sh -s`,
     // and no pipe here needs pipefail -- dash on Ubuntu 20.04 lacks the option.

@@ -101,6 +101,7 @@ vi.mock('./checks-panel/checks-list', () => ({
 import FolderWorkspacePrChecksPanel from './FolderWorkspacePrChecksPanel'
 
 let container: HTMLDivElement
+
 let root: Root
 
 function makeFolder(): FolderWorkspace {
@@ -277,6 +278,7 @@ describe('FolderWorkspacePrChecksPanel', () => {
   it('summarizes failing and pending rows before the worktree count', () => {
     const repo = mockState.store.repos[0]
     const passingWorktree = mockState.store.worktreesByRepo[repo.id][0]
+
     const failingWorktree = {
       ...makeWorktree(),
       id: 'repo-1::/failing-child',
@@ -287,6 +289,7 @@ describe('FolderWorkspacePrChecksPanel', () => {
       linkedPR: 13,
       lastActivityAt: 2
     }
+
     const pendingWorktree = {
       ...makeWorktree(),
       id: 'repo-1::/pending-child',
@@ -297,6 +300,7 @@ describe('FolderWorkspacePrChecksPanel', () => {
       linkedPR: 14,
       lastActivityAt: 1
     }
+
     const reviewsByBranch = {
       feature: makeReview(),
       'failing-child': makeReview({
@@ -312,6 +316,7 @@ describe('FolderWorkspacePrChecksPanel', () => {
         headSha: 'fed'
       })
     }
+
     const worktrees = [passingWorktree, failingWorktree, pendingWorktree]
     mockState.store.worktreesByRepo = { [repo.id]: worktrees }
     mockState.store.workspaceLineageByChildKey = Object.fromEntries(
@@ -386,9 +391,11 @@ describe('FolderWorkspacePrChecksPanel', () => {
 
   it('does not let external-link keyboard events activate the row', () => {
     renderPanel()
+
     const linkButton = container.querySelector<HTMLButtonElement>(
       '[aria-label="Open PR externally"]'
     )
+
     expect(linkButton).not.toBeNull()
     const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })
 

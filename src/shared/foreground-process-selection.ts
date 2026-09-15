@@ -26,28 +26,36 @@ export function selectForegroundProcessCandidate(
 ): SelectedForegroundProcess | null {
   const recognized = candidates.flatMap((candidate) => {
     const agent = recognizeAgentProcessFromCommandLine(candidate.command)
+
     return agent ? [{ candidate, recognized: agent }] : []
   })
+
   if (recognized.length === 0) {
     return null
   }
 
   const agentNames = new Set(recognized.map(({ recognized: agent }) => agent.agent))
+
   if (agentNames.size > 1) {
     const candidatesByPid = new Map(
       ancestryCandidates.map((candidate) => [candidate.pid, candidate])
     )
+
     const outer = [...recognized].sort(
       (left, right) => left.candidate.depth - right.candidate.depth
     )[0]
+
     if (!outer) {
       return null
     }
+
     const descendsFromOuter = makeAncestorReachabilityTest(outer.candidate, candidatesByPid)
+
     if (!recognized.every((entry) => descendsFromOuter(entry.candidate))) {
       // Distinct sibling agents do not provide a trustworthy identity.
       return null
     }
+
     return outer
   }
 
@@ -73,33 +81,42 @@ function makeAncestorReachabilityTest(
   candidatesByPid: ReadonlyMap<number, ForegroundProcessCandidate>
 ): (descendant: ForegroundProcessCandidate) => boolean {
   const reaches = new Map<number, boolean>()
+
   return (descendant) => {
     let currentPid = descendant.pid
     // Every pid on the walk shares the walk's verdict, and `visited` also stops a
     // ppid cycle (a reparented or wrapped table can report one) from spinning forever.
     const visited = new Set<number>()
     let matches = true
+
     while (currentPid !== ancestor.pid) {
       const cached = reaches.get(currentPid)
+
       if (cached !== undefined) {
         matches = cached
         break
       }
+
       if (visited.has(currentPid)) {
         matches = false
         break
       }
+
       visited.add(currentPid)
       const current = candidatesByPid.get(currentPid)
+
       if (!current) {
         matches = false
         break
       }
+
       currentPid = current.ppid
     }
+
     for (const pid of visited) {
       reaches.set(pid, matches)
     }
+
     return matches
   }
 }

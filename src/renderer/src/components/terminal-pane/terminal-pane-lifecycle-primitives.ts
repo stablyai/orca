@@ -46,6 +46,7 @@ export function applyTerminalScrollbackRowsToMountedPanes(
 
 export function extractUncHost(value: string | undefined): string | null {
   const match = /^(?:\\\\|\/\/)([^\\/]+)/.exec(value ?? '')
+
   return match?.[1] || null
 }
 
@@ -55,9 +56,11 @@ export function reportActiveRendererPtyForPane(
 ): void {
   for (const [paneId, transport] of paneTransports) {
     const ptyId = transport.getPtyId()
+
     if (!ptyId || ptyId.startsWith('remote:')) {
       continue
     }
+
     window.api.pty.setActiveRendererPty?.(ptyId, activePaneId === paneId)
   }
 }
@@ -68,11 +71,14 @@ export async function formatTerminalUrlTooltip(
   sourceOwner: HttpLinkSourceOwner
 ): Promise<string | null> {
   const labeledUrl = await resolveLocalhostHttpLinkDisplayUrl(url, sourceOwner)
+
   if (!labeledUrl) {
     return null
   }
+
   try {
     const originalHost = new URL(url).host
+
     return `${labeledUrl} (${originalHost}; ${openLinkHint})`
   } catch {
     return `${labeledUrl} (${openLinkHint})`
@@ -81,16 +87,20 @@ export async function formatTerminalUrlTooltip(
 
 export function terminalSelectionExceedsPrimaryLimit(terminal: Terminal): boolean {
   const range = terminal.getSelectionPosition()
+
   if (!range) {
     return false
   }
+
   const startY = Math.min(range.start.y, range.end.y)
   const endY = Math.max(range.start.y, range.end.y)
   const rowSpan = endY - startY
+
   const cellEstimate =
     rowSpan === 0
       ? Math.abs(range.end.x - range.start.x)
       : rowSpan * terminal.cols + Math.abs(range.end.x - range.start.x)
+
   return cellEstimate > PRIMARY_SELECTION_MAX_LENGTH
 }
 
@@ -99,18 +109,22 @@ export function hydrateTerminalScrollbackRefs(layout: TerminalLayoutSnapshot): {
   hydrated: boolean
 } {
   const refs = layout.scrollbackRefsByLeafId
+
   if (!refs || Object.keys(refs).length === 0) {
     return { layout, hydrated: false }
   }
 
   const buffers = { ...layout.buffersByLeafId }
   let hydrated = false
+
   for (const [leafId, ref] of Object.entries(refs)) {
     if (buffers[leafId] !== undefined) {
       continue
     }
+
     try {
       const buffer = window.api.session.readTerminalScrollback({ ref })
+
       if (buffer) {
         buffers[leafId] = buffer
         hydrated = true
@@ -132,6 +146,7 @@ export function resolveQueuedInitialCwd(
 ): { queuedInitialCwd: string | null; startupCwd: string } {
   const nextQueuedInitialCwd =
     queuedInitialCwd === undefined ? consumeTabInitialCwd() : queuedInitialCwd
+
   return {
     queuedInitialCwd: nextQueuedInitialCwd,
     startupCwd: nextQueuedInitialCwd ?? defaultTabCwd
@@ -146,6 +161,7 @@ export function clearQueuedInitialCwdAfterFirstPane(
   if (!queuedInitialCwd) {
     return { queuedInitialCwd, ptyCwd: currentPtyCwd }
   }
+
   return { queuedInitialCwd: null, ptyCwd: defaultTabCwd }
 }
 
@@ -167,15 +183,20 @@ export function resolveTerminalHomePathFromEnv(
   env: Record<string, string> | undefined
 ): string | null {
   const home = env?.HOME?.trim()
+
   if (home) {
     return home
   }
+
   const userProfile = env?.USERPROFILE?.trim()
+
   if (userProfile) {
     return userProfile
   }
+
   const homeDrive = env?.HOMEDRIVE?.trim()
   const homePath = env?.HOMEPATH?.trim()
+
   return homeDrive && homePath ? `${homeDrive}${homePath}` : null
 }
 
@@ -195,15 +216,20 @@ export function createQueuedStartupConsumer(
   if (!paneOwnsQueuedStartup(paneStartup, queuedStartup)) {
     return undefined
   }
+
   let spent = false
+
   return () => {
     if (spent) {
       return
     }
+
     spent = true
+
     if (!isStillQueued()) {
       return
     }
+
     consume()
   }
 }
@@ -214,6 +240,7 @@ export function splitPaneWithOneShotStartup<TPane>(
   splitPane: () => TPane
 ): TPane {
   deps.startup = startup
+
   try {
     return splitPane()
   } finally {
@@ -262,6 +289,7 @@ export function getPreviousVisibleForTerminalPane(args: {
   if (args.previous?.tabId !== args.tabId || args.previous.cwd !== args.cwd) {
     return null
   }
+
   return args.previous.isVisible
 }
 
@@ -272,12 +300,16 @@ export function mapRestoredPaneTitlesByPaneId(
   if (!savedTitles) {
     return {}
   }
+
   const restored: Record<number, string> = {}
+
   for (const [oldLeafId, title] of Object.entries(savedTitles)) {
     const newPaneId = restoredPaneByLeafId.get(oldLeafId)
+
     if (newPaneId != null && title) {
       restored[newPaneId] = title
     }
   }
+
   return restored
 }

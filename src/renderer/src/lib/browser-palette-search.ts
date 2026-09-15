@@ -98,8 +98,10 @@ export function formatBrowserPaletteUrl(url: string): string {
   if (isBlankBrowserUrl(url)) {
     return 'New Tab'
   }
+
   try {
     const parsed = new URL(url)
+
     return `${parsed.host}${parsed.pathname === '/' ? '' : parsed.pathname}${parsed.search}${parsed.hash}`
   } catch {
     return url
@@ -136,16 +138,21 @@ function compareEmptyQueryResults(
   if (a.isCurrentPage !== b.isCurrentPage) {
     return a.isCurrentPage ? -1 : 1
   }
+
   if (a.isCurrentWorktree !== b.isCurrentWorktree) {
     return a.isCurrentWorktree ? -1 : 1
   }
+
   if (a.score !== b.score) {
     return a.score - b.score
   }
+
   const secondaryCmp = compareText(a.secondaryText, b.secondaryText)
+
   if (secondaryCmp !== 0) {
     return secondaryCmp
   }
+
   return compareText(a.title, b.title)
 }
 
@@ -155,6 +162,7 @@ function positionScore(entry: SearchableBrowserPage): number {
   if (entry.isCurrentPage) {
     return entry.worktreeSortIndex * 100 - 4000
   }
+
   return entry.worktreeSortIndex * 100 - (entry.isCurrentWorktree ? 1000 : 0)
 }
 
@@ -165,6 +173,7 @@ function baseResult(
   const formattedUrl = formatBrowserPaletteUrl(entry.page.url)
   const executionHostId = entry.executionHostId ?? entry.worktree.hostId
   const activity = preparePaletteActivity(entry.lastActiveAt, context)
+
   return {
     ...(executionHostId ? { executionHostId } : {}),
     paletteIdentity: encodePaletteIdentity([
@@ -209,10 +218,13 @@ export function searchBrowserPages(
   options: { context?: PaletteSearchContext; fieldMode?: 'all' | 'omnibox' } = {}
 ): BrowserPaletteSearchResult[] {
   const context = options.context ?? createPaletteSearchContext(Date.now())
+
   if (isBrowserPaletteQueryTooLarge(query)) {
     return []
   }
+
   const prepared = preparePaletteTabQuery(query)
+
   if (!prepared) {
     // Why not [] on an over-token query: the empty branch also serves the no-query
     // listing, so the invalid case is filtered out by the token guard below.
@@ -222,13 +234,16 @@ export function searchBrowserPages(
   }
 
   const results: BrowserPaletteSearchResult[] = []
+
   for (const entry of entries) {
     const match = matchPaletteTabDocument(entry.document, prepared, {
       isFieldAllowed: options.fieldMode === 'omnibox' ? isOmniboxPaletteTabFieldAllowed : undefined
     })
+
     if (!match) {
       continue
     }
+
     const base = baseResult(entry, context)
     const secondaryTexts = browserPaletteSecondaryTexts(entry.page)
     results.push({

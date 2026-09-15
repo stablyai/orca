@@ -16,6 +16,7 @@ function makeRuntimeHostedStore(extraRepoFields: Record<string, unknown> = {}) {
     executionHostId: 'runtime:env-1',
     ...extraRepoFields
   }
+
   return {
     ...store,
     getRepos: () => [repo],
@@ -43,6 +44,7 @@ describe('OrcaRuntimeService worktree create execution host', () => {
     // machine, so creating through it would put the checkout on the wrong host.
     const provider = { exec: vi.fn(), addWorktree: vi.fn(), listWorktrees: vi.fn() }
     registerSshGitProvider('target-a', provider as never)
+
     const runtime = new OrcaRuntimeService(
       makeRuntimeHostedStore({ connectionId: 'target-a' }) as never
     )

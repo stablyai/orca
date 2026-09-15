@@ -18,6 +18,7 @@ export function MobileSourceControlSegments({ active, onSelect }: Props) {
     <View style={hubStyles.segments} accessibilityRole="tablist">
       {SOURCE_CONTROL_HUB_TABS.map((tab) => {
         const isActive = tab === active
+
         return (
           <Pressable
             key={tab}

@@ -50,6 +50,7 @@ async function validateCurrentBranchCanCreateReview(
   const requestedHead = input.head ? stripRefPrefix(input.head).trim() : ''
   const currentBranch = await getCurrentBranch(repoPath, executionHostId, options)
   const copy = reviewCopy(input.provider)
+
   if (requestedHead && requestedHead !== currentBranch) {
     return {
       ok: false,
@@ -63,7 +64,9 @@ async function validateCurrentBranchCanCreateReview(
       hasUncommittedChanges(repoPath, executionHostId, options),
       getHostedReviewUpstreamStatus(repoPath, executionHostId, options)
     ])
+
     const submittedBase = normalizeHostedReviewBaseRef(input.base)
+
     const eligibility = await getHostedReviewCreationEligibility({
       repoPath,
       branch: requestedHead || currentBranch,
@@ -77,6 +80,7 @@ async function validateCurrentBranchCanCreateReview(
       enforceBaseOnRemote: true,
       ...options
     })
+
     // Why: an unavailable lookup might hide a real PR — refuse rather than risk a duplicate (design invariant 8).
     if (eligibility.reviewLookupOutcome === 'unavailable') {
       return {
@@ -85,10 +89,12 @@ async function validateCurrentBranchCanCreateReview(
         error: `Create ${copy.shortLabel} failed: Orca could not confirm whether this branch already has a ${copy.reviewLabel}. Retry once the ${copy.providerName} lookup succeeds.`
       }
     }
+
     // Why: renderer eligibility can be stale by submit time; main process is the last gate before an out-of-date create.
     return blockedEligibilityToCreateResult(eligibility, submittedBase)
   } catch (error) {
     console.warn('Hosted review creation preflight failed:', error)
+
     return {
       ok: false,
       code: 'validation',
@@ -101,27 +107,34 @@ export async function getHostedReviewCreationEligibility(
   args: HostedReviewCreationEligibilityInput
 ): Promise<HostedReviewCreationEligibility> {
   const branch = stripRefPrefix(args.branch).trim()
+
   const provider = await detectHostedReviewProvider({
     repoPath: args.repoPath,
     executionHostId: args.executionHostId,
     ...hostedReviewExecutionContext(args)
   })
+
   // Why: the base is only a candidate; fall back to repo default so a local-only parent targets a remote-resolvable ref.
   const candidateBase = args.base?.trim() || null
+
   const candidateBaseOnRemote =
     candidateBase != null &&
     (await baseRefExistsOnRemote(candidateBase, args.repoPath, args.executionHostId, args))
+
   let defaultBaseRef: string | null
+
   if (candidateBase && candidateBaseOnRemote) {
     defaultBaseRef = candidateBase
   } else {
     const repoDefaultBaseRef = await getDefaultBaseRef(args.repoPath, args.executionHostId, args)
     defaultBaseRef = repoDefaultBaseRef ?? candidateBase
   }
+
   const baseBranch = defaultBaseRef ? normalizeHostedReviewBaseRef(defaultBaseRef) : null
   let review: Awaited<ReturnType<typeof getHostedReviewForBranch>> = null
   // Why: track lookup failure so a swallowed error isn't mistaken for authoritative no-review evidence.
   let lookupFailed = false
+
   try {
     review = await getHostedReviewForBranch({
       repoPath: args.repoPath,
@@ -150,6 +163,7 @@ export async function getHostedReviewCreationEligibility(
     : lookupFailed
       ? 'unavailable'
       : 'not_found'
+
   const githubRepository =
     provider === 'github'
       ? await getRepoSlug(
@@ -158,6 +172,7 @@ export async function getHostedReviewCreationEligibility(
           args
         ).catch(() => null)
       : null
+
   const baseResult = {
     provider,
     review: review ? { number: review.number, url: review.url } : null,
@@ -172,6 +187,7 @@ export async function getHostedReviewCreationEligibility(
   if (!branch || branch === 'HEAD') {
     return { ...baseResult, canCreate: false, blockedReason: 'detached_head', nextAction: null }
   }
+
   if (review) {
     return {
       ...baseResult,
@@ -180,6 +196,7 @@ export async function getHostedReviewCreationEligibility(
       nextAction: 'open_existing_review'
     }
   }
+
   if (!supportsHostedReviewCreation(provider)) {
     return {
       ...baseResult,
@@ -188,27 +205,34 @@ export async function getHostedReviewCreationEligibility(
       nextAction: null
     }
   }
+
   if (baseBranch && branch.toLowerCase() === baseBranch.toLowerCase()) {
     return { ...baseResult, canCreate: false, blockedReason: 'default_branch', nextAction: null }
   }
+
   if (args.hasUncommittedChanges) {
     return { ...baseResult, canCreate: false, blockedReason: 'dirty', nextAction: 'commit' }
   }
+
   if (args.hasUpstream === false) {
     return { ...baseResult, canCreate: false, blockedReason: 'no_upstream', nextAction: 'publish' }
   }
+
   if (args.hasUpstream !== true) {
     return { ...baseResult, canCreate: false, blockedReason: null, nextAction: null }
   }
+
   if ((args.behind ?? 0) > 0) {
     return { ...baseResult, canCreate: false, blockedReason: 'needs_sync', nextAction: 'sync' }
   }
+
   const authenticated = await isProviderAuthenticated(
     provider,
     args.repoPath,
     args.executionHostId,
     args
   )
+
   if (!authenticated) {
     return {
       ...baseResult,
@@ -217,9 +241,11 @@ export async function getHostedReviewCreationEligibility(
       nextAction: 'authenticate'
     }
   }
+
   if ((args.ahead ?? 0) > 0) {
     return { ...baseResult, canCreate: false, blockedReason: 'needs_push', nextAction: 'push' }
   }
+
   // Why: providers target the submitted base verbatim; block a local-only base here with actionable copy.
   if (args.enforceBaseOnRemote && candidateBase && !candidateBaseOnRemote) {
     return {
@@ -229,6 +255,7 @@ export async function getHostedReviewCreationEligibility(
       nextAction: null
     }
   }
+
   // Why: a failed lookup leaves review existence unproven, so the happy path must not claim canCreate.
   return {
     ...baseResult,
@@ -251,37 +278,46 @@ export async function createHostedReview(
       error: 'Creating reviews for this provider is not supported yet.'
     }
   }
+
   const provider = await getForgeProviderForRepository({
     repoPath,
     executionHostId,
     ...hostedReviewExecutionContext(options)
   })
+
   if (provider?.id !== input.provider || !provider.createReview) {
     const copy = reviewCopy(input.provider)
+
     return {
       ok: false,
       code: 'unsupported_provider',
       error: `Creating ${copy.reviewLabel}s requires a ${copy.providerName} remote.`
     }
   }
+
   const blocked = await validateCurrentBranchCanCreateReview(
     repoPath,
     executionHostId,
     input,
     options
   )
+
   if (blocked) {
     return blocked
   }
+
   const localGitOptions = getHostedReviewLocalGitOptions(options)
+
   const result =
     Object.keys(localGitOptions).length > 0
       ? await provider.createReview(repoPath, input, executionHostId, options)
       : await provider.createReview(repoPath, input, executionHostId)
+
   if (result.ok) {
     // Why (#11532): the branch cache holds a "no review" answer for far longer
     // than a poll interval, so Orca's own creation must retire it at once.
     invalidateHostedReviewBranchCache(repoPath, executionHostId)
   }
+
   return result
 }

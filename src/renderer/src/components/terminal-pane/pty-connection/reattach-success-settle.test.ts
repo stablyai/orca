@@ -21,7 +21,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => mocks.state }
 }))
+
 vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
+
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
 
 type SettleSpy = ReturnType<typeof vi.fn>
@@ -31,11 +33,13 @@ function buildSession(overrides: Record<string, unknown> = {}): {
   settlePaneAttachAttempt: SettleSpy
 } {
   const settlePaneAttachAttempt = vi.fn()
+
   const transport = {
     getPtyId: () => 'pty-1',
     disconnect: vi.fn(),
     serializeBuffer: vi.fn()
   }
+
   const session = {
     settlePaneAttachAttempt,
     transport,
@@ -66,7 +70,9 @@ function buildSession(overrides: Record<string, unknown> = {}): {
     syncHiddenRendererPtyDelivery: vi.fn(),
     ...overrides
   } as unknown as ConnectPanePtySession
+
   bindHandleReattachResult(session)
+
   return { session, settlePaneAttachAttempt }
 }
 
@@ -119,6 +125,7 @@ describe('handleReattachResult recovery settle', () => {
         serializeBuffer: vi.fn()
       }
     })
+
     setPaneTransports(session, new Map([['pane-1', session.transport]]))
 
     await driveReattach(session, undefined, null)

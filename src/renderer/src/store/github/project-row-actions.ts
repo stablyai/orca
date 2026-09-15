@@ -20,6 +20,7 @@ export const createProjectRowActions = (
     const state = get()
     const entry = state.projectViewCache[cacheKey]
     const table = entry?.data
+
     if (!table) {
       return {
         ok: false,
@@ -29,7 +30,9 @@ export const createProjectRowActions = (
         }
       }
     }
+
     const rowIndex = table.rows.findIndex((r) => r.id === rowId)
+
     if (rowIndex === -1) {
       return {
         ok: false,
@@ -39,8 +42,10 @@ export const createProjectRowActions = (
         }
       }
     }
+
     const previousRow = table.rows[rowIndex]
     const { owner, repo, number } = parseSlugAndNumber(previousRow) ?? {}
+
     if (!owner || !repo || !number) {
       return {
         ok: false,
@@ -53,43 +58,56 @@ export const createProjectRowActions = (
         }
       }
     }
+
     // Optimistic content patch.
     const nextContent = { ...previousRow.content }
+
     if (updates.title !== undefined) {
       nextContent.title = updates.title
     }
+
     if (updates.body !== undefined) {
       nextContent.body = updates.body
     }
+
     if (updates.addLabels || updates.removeLabels) {
       const next = new Map(nextContent.labels.map((l) => [l.name, l]))
+
       for (const name of updates.addLabels ?? []) {
         if (!next.has(name)) {
           next.set(name, { name, color: '808080' })
         }
       }
+
       for (const name of updates.removeLabels ?? []) {
         next.delete(name)
       }
+
       nextContent.labels = Array.from(next.values())
     }
+
     if (updates.addAssignees || updates.removeAssignees) {
       const next = new Map(nextContent.assignees.map((u) => [u.login, u]))
+
       for (const login of updates.addAssignees ?? []) {
         if (!next.has(login)) {
           next.set(login, { login, name: null, avatarUrl: null })
         }
       }
+
       for (const login of updates.removeAssignees ?? []) {
         next.delete(login)
       }
+
       nextContent.assignees = Array.from(next.values())
     }
+
     const optimisticRow: GitHubProjectRow = { ...previousRow, content: nextContent }
     applyRowPatch(set, cacheKey, rowId, optimisticRow)
 
     // Why: labels/assignees go through the issue endpoint for both (GitHub PRs are issues for those); title/body split PR→updatePullRequestBySlug vs issue→updateIssueBySlug.
     let envelope: GitHubProjectMutationResult = { ok: true }
+
     // Why: slug-only Project rows have no registered Orca repo, so fall back to the view source in the cache key, not the focused host.
     const target = getActiveRuntimeTarget(
       settingsForProjectRowOwner(
@@ -100,6 +118,7 @@ export const createProjectRowActions = (
         settingsForProjectViewCacheKey(get().settings, cacheKey)
       )
     )
+
     if (
       previousRow.itemType === 'PULL_REQUEST' &&
       (updates.title !== undefined || updates.body !== undefined)
@@ -114,6 +133,7 @@ export const createProjectRowActions = (
           ...(updates.body !== undefined ? { body: updates.body } : {})
         }
       }
+
       const prRes =
         target.kind === 'environment'
           ? await callRuntimeRpc<GitHubProjectMutationResult>(
@@ -123,10 +143,12 @@ export const createProjectRowActions = (
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.updatePullRequestBySlug(args)
+
       if (!prRes.ok) {
         envelope = prRes
       }
     }
+
     if (
       envelope.ok &&
       (updates.addLabels?.length ||
@@ -150,6 +172,7 @@ export const createProjectRowActions = (
           ...(updates.removeAssignees ? { removeAssignees: updates.removeAssignees } : {})
         }
       }
+
       const issueRes =
         target.kind === 'environment'
           ? await callRuntimeRpc<GitHubProjectMutationResult>(
@@ -159,13 +182,16 @@ export const createProjectRowActions = (
               { timeoutMs: 30_000 }
             )
           : await window.api.gh.updateIssueBySlug(args)
+
       if (!issueRes.ok) {
         envelope = issueRes
       }
     }
+
     if (!envelope.ok) {
       rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
     }
+
     return envelope
   },
 
@@ -173,6 +199,7 @@ export const createProjectRowActions = (
     const state = get()
     const entry = state.projectViewCache[cacheKey]
     const table = entry?.data
+
     if (!table) {
       return {
         ok: false,
@@ -182,7 +209,9 @@ export const createProjectRowActions = (
         }
       }
     }
+
     const row = table.rows.find((r) => r.id === rowId)
+
     if (!row) {
       return {
         ok: false,
@@ -192,6 +221,7 @@ export const createProjectRowActions = (
         }
       }
     }
+
     if (row.itemType !== 'ISSUE') {
       return {
         ok: false,
@@ -204,7 +234,9 @@ export const createProjectRowActions = (
         }
       }
     }
+
     const { owner, repo, number } = parseSlugAndNumber(row) ?? {}
+
     if (!owner || !repo || !number) {
       return {
         ok: false,
@@ -214,12 +246,16 @@ export const createProjectRowActions = (
         }
       }
     }
+
     const previousRow = row
+
     const optimistic: GitHubProjectRow = {
       ...previousRow,
       content: { ...previousRow.content, issueType }
     }
+
     applyRowPatch(set, cacheKey, rowId, optimistic)
+
     // Why: slug-only Project rows belong to the host that loaded the view, which may differ from the now-focused host.
     const target = getActiveRuntimeTarget(
       settingsForProjectRowOwner(
@@ -230,6 +266,7 @@ export const createProjectRowActions = (
         settingsForProjectViewCacheKey(get().settings, cacheKey)
       )
     )
+
     const args = {
       owner,
       repo,
@@ -237,6 +274,7 @@ export const createProjectRowActions = (
       number,
       issueTypeId: issueType?.id ?? null
     }
+
     const res =
       target.kind === 'environment'
         ? await callRuntimeRpc<GitHubProjectMutationResult>(
@@ -246,9 +284,11 @@ export const createProjectRowActions = (
             { timeoutMs: 30_000 }
           )
         : await window.api.gh.updateIssueTypeBySlug(args)
+
     if (!res.ok) {
       rollbackRowIfPresent(set, get, cacheKey, rowId, previousRow)
     }
+
     return res
   },
 
@@ -256,36 +296,46 @@ export const createProjectRowActions = (
     const state = get()
     const entry = state.projectViewCache[cacheKey]
     const table = entry?.data
+
     if (!table) {
       return
     }
+
     const previousRow = table.rows.find((r) => r.id === rowId)
+
     if (!previousRow) {
       return
     }
+
     const nextContent = { ...previousRow.content }
+
     if (patch.title !== undefined) {
       nextContent.title = patch.title
     }
+
     if (patch.body !== undefined) {
       nextContent.body = patch.body
     }
+
     if (patch.state !== undefined) {
       // Why: ProjectV2 row.state is GitHub's UPPERCASE enum ('OPEN'|'CLOSED'|'MERGED') but the dialog tracks lowercase; upper-case so the patch matches the canonical row shape.
       nextContent.state = patch.state.toUpperCase()
     }
+
     if (patch.labels !== undefined) {
       const existingByName = new Map(previousRow.content.labels.map((l) => [l.name, l]))
       nextContent.labels = patch.labels.map(
         (name) => existingByName.get(name) ?? { name, color: '808080' }
       )
     }
+
     if (patch.assignees !== undefined) {
       const existingByLogin = new Map(previousRow.content.assignees.map((u) => [u.login, u]))
       nextContent.assignees = patch.assignees.map(
         (login) => existingByLogin.get(login) ?? { login, name: null, avatarUrl: null }
       )
     }
+
     const nextRow: GitHubProjectRow = { ...previousRow, content: nextContent }
     applyRowPatch(set, cacheKey, rowId, nextRow)
   }

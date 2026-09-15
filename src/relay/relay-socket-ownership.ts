@@ -44,7 +44,9 @@ export class RelaySocketOwnership {
     if (isRelayNamedPipePath(this.sockPath)) {
       return this.ownsSocketPath
     }
+
     const currentIdentity = this.readIdentity()
+
     return (
       this.ownsSocketPath &&
       this.ownedSocketIdentity !== null &&
@@ -58,6 +60,7 @@ export class RelaySocketOwnership {
     const shouldSetUmask = !isRelayNamedPipePath(this.sockPath)
     const previousUmask = shouldSetUmask ? process.umask(0o177) : 0
     let umaskRestored = false
+
     const restoreUmask = (): void => {
       if (shouldSetUmask && !umaskRestored) {
         process.umask(previousUmask)
@@ -73,11 +76,13 @@ export class RelaySocketOwnership {
         server.off('error', onInitialError)
         server.off('error', failInitial)
       }
+
       const listenForStartupError = (onError: (error: NodeJS.ErrnoException) => void): void => {
         server.once('listening', onListening)
         server.once('error', onError)
         server.listen(this.sockPath)
       }
+
       const onListening = (): void => {
         removeStartupListeners()
         restoreUmask()
@@ -90,9 +95,11 @@ export class RelaySocketOwnership {
         relayLogLine(`[relay] Socket server listening: ${this.sockPath}`)
         resolve()
       }
+
       const failInitial = (error: NodeJS.ErrnoException): void => {
         removeStartupListeners()
         restoreUmask()
+
         if (isSocketPathOccupiedError(error)) {
           relayLogLine(
             `[relay] Socket path already in use: ${this.sockPath}; another relay is likely active. Use --connect instead of starting a new daemon.`
@@ -100,8 +107,10 @@ export class RelaySocketOwnership {
         } else {
           relayLogLine(`[relay] Socket server error before listen: ${error.message}`)
         }
+
         reject(error)
       }
+
       const onInitialError = (error: NodeJS.ErrnoException): void => {
         if (
           !isSocketPathOccupiedError(error) ||
@@ -109,8 +118,10 @@ export class RelaySocketOwnership {
           isRelayNamedPipePath(this.sockPath)
         ) {
           failInitial(error)
+
           return
         }
+
         staleRetryAttempted = true
         this.probeBlockedPath(error, failInitial, () => {
           relayLogLine(`[relay] Removed stale socket at ${this.sockPath} and retrying listen`)
@@ -118,8 +129,10 @@ export class RelaySocketOwnership {
           listenForStartupError(failInitial)
         })
       }
+
       listenForStartupError(onInitialError)
     })
+
     return server
   }
 
@@ -127,6 +140,7 @@ export class RelaySocketOwnership {
     if (this.socketServer && this.ownsCurrentPath()) {
       this.socketServer.close()
     }
+
     this.cleanup()
   }
 
@@ -134,6 +148,7 @@ export class RelaySocketOwnership {
     if (this.ownsCurrentPath()) {
       this.unlinkPath()
     }
+
     this.ownsSocketPath = false
     this.ownedSocketIdentity = null
   }
@@ -142,8 +157,10 @@ export class RelaySocketOwnership {
     if (isRelayNamedPipePath(this.sockPath)) {
       return null
     }
+
     try {
       const stat = statSync(this.sockPath, { bigint: true })
+
       return { dev: stat.dev, ino: stat.ino, ctimeNs: stat.ctimeNs }
     } catch {
       return null
@@ -159,16 +176,21 @@ export class RelaySocketOwnership {
     const probe = createConnection({ path: this.sockPath })
     let settled = false
     let timeout: NodeJS.Timeout | null = null
+
     const finish = (callback: () => void): void => {
       if (settled) {
         return
       }
+
       settled = true
+
       if (timeout) {
         clearTimeout(timeout)
       }
+
       callback()
     }
+
     probe.once('connect', () => {
       finish(() => {
         probe.destroy()
@@ -182,8 +204,10 @@ export class RelaySocketOwnership {
           !this.unlinkIfStillStale(blockedIdentity)
         ) {
           fail(listenError)
+
           return
         }
+
         retry()
       })
     })
@@ -197,14 +221,18 @@ export class RelaySocketOwnership {
 
   private unlinkIfStillStale(blockedIdentity: SocketIdentity | null): boolean {
     const currentIdentity = this.readIdentity()
+
     if (currentIdentity === null) {
       return true
     }
+
     if (blockedIdentity === null || !sameSocketIdentity(currentIdentity, blockedIdentity)) {
       return false
     }
+
     try {
       unlinkSync(this.sockPath)
+
       return true
     } catch (error) {
       return (error as NodeJS.ErrnoException).code === 'ENOENT'
@@ -215,6 +243,7 @@ export class RelaySocketOwnership {
     if (isRelayNamedPipePath(this.sockPath)) {
       return
     }
+
     try {
       if (existsSync(this.sockPath)) {
         unlinkSync(this.sockPath)

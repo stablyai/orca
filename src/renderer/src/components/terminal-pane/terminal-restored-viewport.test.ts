@@ -9,6 +9,7 @@ function writeTerminal(term: Terminal, data: string): Promise<void> {
 
 function visibleLines(term: Terminal): string[] {
   const buffer = term.buffer.active
+
   return Array.from(
     { length: term.rows },
     (_, row) => buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? ''
@@ -18,6 +19,7 @@ function visibleLines(term: Terminal): string[] {
 describe('buildFreshShellViewportBlankingSequence', () => {
   it('preserves restored rows in scrollback even after a stale TUI scroll region', async () => {
     const term = new Terminal({ cols: 20, rows: 5, allowProposedApi: true })
+
     try {
       await writeTerminal(term, 'row1\r\nrow2\r\nrow3\r\nrow4\r\nrow5\x1b[2;4r\x1b[?6h\x1b[H')
       await writeTerminal(term, buildFreshShellViewportBlankingSequence(term.rows))

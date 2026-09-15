@@ -8,18 +8,23 @@ export function requireBrowserHostLeaseState(
   if (identity.authorityEpoch !== authorityEpoch) {
     throw new Error('browser_host_lease_stale')
   }
+
   const state = leasesByClientId.get(identity.browserHostClientId)
+
   if (!state) {
     throw new Error('browser_host_lease_required')
   }
+
   if (
     state.lease.browserHostGeneration !== identity.browserHostGeneration ||
     state.lease.pairedDeviceId !== identity.pairedDeviceId
   ) {
     throw new Error('browser_host_lease_stale')
   }
+
   if (state.status !== 'active') {
     throw new Error('browser_host_lease_reconnecting')
   }
+
   return state
 }

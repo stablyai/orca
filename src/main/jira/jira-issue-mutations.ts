@@ -28,40 +28,51 @@ function toUserFieldValue(site: JiraSite, value: unknown): unknown {
   if (typeof value === 'string') {
     return userFieldRef(site, value)
   }
+
   if (Array.isArray(value)) {
     return value.map((member) => (typeof member === 'string' ? userFieldRef(site, member) : member))
   }
+
   return value
 }
 
 /** Creates an issue, shaping the customFields keys named by `userFieldKeys`. */
 export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreateIssueResult> {
   const entry = getClients(args.siteId)[0]
+
   if (!entry) {
     return { ok: false, error: 'Not connected to Jira.' }
   }
+
   const title = args.title.trim()
+
   if (!title) {
     return { ok: false, error: 'Title is required.' }
   }
 
   await acquire()
+
   try {
     const fields: JiraRecord = {
       project: { id: args.projectId },
       issuetype: { id: args.issueTypeId },
       summary: title
     }
+
     if (args.description?.trim()) {
       fields.description = toBodyText(entry.site, args.description.trim())
     }
+
     const userFieldKeys = new Set(args.userFieldKeys ?? [])
+
     for (const [fieldKey, value] of Object.entries(args.customFields ?? {})) {
       if (!fieldKey || value === undefined || value === null || value === '') {
         continue
       }
+
       fields[fieldKey] = userFieldKeys.has(fieldKey) ? toUserFieldValue(entry.site, value) : value
     }
+
     const created = await jiraRequest<{ id: string; key: string; self: string }>(
       entry,
       `${apiBasePath(entry.site)}/issue`,
@@ -70,12 +81,14 @@ export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreate
         body: JSON.stringify({ fields })
       }
     )
+
     return { ok: true, id: created.id, key: created.key, url: issueUrl(entry.site, created.key) }
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)
       throw error
     }
+
     return { ok: false, error: error instanceof Error ? error.message : 'Failed to create issue.' }
   } finally {
     release()
@@ -89,28 +102,37 @@ export async function updateIssue(
   siteId?: string | null
 ): Promise<JiraMutationResult> {
   const entry = getClients(siteId)[0]
+
   if (!entry) {
     return { ok: false, error: 'Not connected to Jira.' }
   }
+
   await acquire()
+
   try {
     const fields: JiraRecord = {}
+
     if (updates.title !== undefined) {
       fields.summary = updates.title
     }
+
     if (updates.labels !== undefined) {
       fields.labels = updates.labels
     }
+
     if (updates.priorityId !== undefined) {
       fields.priority = updates.priorityId ? { id: updates.priorityId } : null
     }
+
     const issueBase = `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}`
+
     if (Object.keys(fields).length > 0) {
       await jiraRequest(entry, issueBase, {
         method: 'PUT',
         body: JSON.stringify({ fields })
       })
     }
+
     if (updates.assigneeAccountId !== undefined) {
       const assigneeBody = userFieldRef(entry.site, updates.assigneeAccountId)
       await jiraRequest(entry, `${issueBase}/assignee`, {
@@ -118,18 +140,21 @@ export async function updateIssue(
         body: JSON.stringify(assigneeBody)
       })
     }
+
     if (updates.transitionId) {
       await jiraRequest(entry, `${issueBase}/transitions`, {
         method: 'POST',
         body: JSON.stringify({ transition: { id: updates.transitionId } })
       })
     }
+
     return { ok: true }
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)
       throw error
     }
+
     return { ok: false, error: error instanceof Error ? error.message : 'Failed to update issue.' }
   } finally {
     release()
@@ -142,10 +167,13 @@ export async function addIssueComment(
   siteId?: string | null
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const entry = getClients(siteId)[0]
+
   if (!entry) {
     return { ok: false, error: 'Not connected to Jira.' }
   }
+
   await acquire()
+
   try {
     const comment = await jiraRequest<{ id: string }>(
       entry,
@@ -155,12 +183,14 @@ export async function addIssueComment(
         body: JSON.stringify({ body: toBodyText(entry.site, body) })
       }
     )
+
     return { ok: true, id: comment.id }
   } catch (error) {
     if (isAuthError(error)) {
       clearToken(entry.site.id)
       throw error
     }
+
     return { ok: false, error: error instanceof Error ? error.message : 'Failed to add comment.' }
   } finally {
     release()

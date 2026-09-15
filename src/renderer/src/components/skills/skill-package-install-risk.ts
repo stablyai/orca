@@ -62,12 +62,16 @@ export function isSkillRunnableFile(file: SkillInstallRiskFile): boolean {
   if (file.executable) {
     return true
   }
+
   const normalizedPath = file.path.toLocaleLowerCase('en-US')
+
   if (RUNNABLE_PATH_PREFIXES.some((prefix) => normalizedPath.startsWith(prefix))) {
     return true
   }
+
   const fileName = normalizedPath.slice(normalizedPath.lastIndexOf('/') + 1)
   const extensionIndex = fileName.lastIndexOf('.')
+
   return extensionIndex !== -1 && RUNNABLE_FILE_EXTENSIONS.has(fileName.slice(extensionIndex))
 }
 
@@ -84,19 +88,23 @@ export function summarizeSkillInstallRisk(
 
   for (const item of selectedItems) {
     let itemNeedsCaution = false
+
     for (const file of item.files) {
       if (!isSkillInstructionFile(file)) {
         additionalFileCount += 1
       }
+
       const runnable = isSkillRunnableFile(file)
       const binary = isSkillBinaryFile(file)
       runnableFileCount += runnable ? 1 : 0
       binaryFileCount += binary ? 1 : 0
+
       if (runnable || binary) {
         cautionFileCount += 1
         itemNeedsCaution = true
       }
     }
+
     if (itemNeedsCaution) {
       cautionSkillNames.push(item.name)
     }

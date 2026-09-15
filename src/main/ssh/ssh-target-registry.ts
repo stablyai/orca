@@ -19,7 +19,9 @@ import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
  */
 
 let sshStore: SshConnectionStore | null = null
+
 let registeredConnectSshTarget: ((targetId: string) => Promise<SshConnectionState>) | null = null
+
 let registeredGetSshState: ((targetId: string) => SshConnectionState | undefined) | null = null
 
 export function setSshTargetRegistryStore(store: SshConnectionStore | null): void {
@@ -44,6 +46,7 @@ export async function connectRegisteredSshTarget(targetId: string): Promise<SshC
     // loudly rather than report a target as unreachable, which would read as `exited`.
     throw new Error('ssh_handlers_not_registered')
   }
+
   return registeredConnectSshTarget(targetId)
 }
 
@@ -86,6 +89,7 @@ export function getActiveMultiplexer(connectionId: string): SshChannelMultiplexe
   if (!registeredGetActiveMultiplexer) {
     throw new Error('ssh_active_multiplexer_resolver_not_installed')
   }
+
   return registeredGetActiveMultiplexer(connectionId)
 }
 

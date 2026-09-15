@@ -77,6 +77,7 @@ function formatTaskStatusSyncDescription(result: WorkspaceBoardTaskStatusSyncRes
         })
       : null
   ].filter((part): part is string => part !== null)
+
   return [
     counts.join(', '),
     result.messages[0] ? formatTaskStatusSyncMessage(result.messages[0]) : null
@@ -89,7 +90,9 @@ function reportTaskStatusSyncResult(result: WorkspaceBoardTaskStatusSyncResult):
   if (result.failed === 0 && result.messages.length === 0) {
     return
   }
+
   const description = formatTaskStatusSyncDescription(result)
+
   if (result.failed > 0) {
     toast.error(
       translate(
@@ -98,8 +101,10 @@ function reportTaskStatusSyncResult(result: WorkspaceBoardTaskStatusSyncResult):
       ),
       { description }
     )
+
     return
   }
+
   toast.warning(
     translate(
       'auto.components.sidebar.WorkspaceKanbanDrawer.e02b0d92ff',
@@ -123,9 +128,11 @@ export function useWorkspaceBoardTaskStatusSync(args: {
         worktreesById: args.worktreesById,
         workspaceStatuses: args.workspaceStatuses
       })
+
       if (!request) {
         return
       }
+
       void syncWorkspaceBoardTaskStatuses({
         worktreeIds: request.worktreeIds,
         targetStatus: request.targetStatus,
@@ -139,6 +146,7 @@ export function useWorkspaceBoardTaskStatusSync(args: {
           if (result.updated > 0 || result.failed > 0 || result.messages.length > 0) {
             console.info('Workspace board task status sync result', result)
           }
+
           reportTaskStatusSyncResult(result)
         })
         .catch((error: unknown) => {

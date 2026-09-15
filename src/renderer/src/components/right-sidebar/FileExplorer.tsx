@@ -41,18 +41,22 @@ function FileExplorerFiles(): React.JSX.Element {
   const activeFileId = useAppStore((s) => s.activeFileId)
   const openFiles = useAppStore((s) => s.openFiles)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+
   const showDotfiles = useAppStore((s) =>
     activeWorktreeId ? (s.showDotfilesByWorktree[activeWorktreeId] ?? true) : true
   )
+
   const toggleShowDotfilesForWorktree = useAppStore((s) => s.toggleShowDotfilesForWorktree)
 
   const worktreePath = activeWorktree?.path ?? null
   const isFilesViewActive = explorerView === 'files'
+
   const visibleFilesWorktreePath = getVisibleFileExplorerWorktreePath({
     explorerView,
     rightSidebarOpen,
     worktreePath
   })
+
   const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
@@ -63,6 +67,7 @@ function FileExplorerFiles(): React.JSX.Element {
   )
 
   const tree = useFileExplorerTree(worktreePath, expanded, activeWorktreeId)
+
   const {
     nameFilterQuery,
     setNameFilterQuery,
@@ -78,13 +83,16 @@ function FileExplorerFiles(): React.JSX.Element {
     (view: RightSidebarExplorerView) => {
       if (view === 'files') {
         showRightSidebarFiles()
+
         return
       }
+
       const trimmedQuery = nameFilterQuery.trim()
       showRightSidebarSearch(trimmedQuery ? { query: trimmedQuery } : undefined)
     },
     [nameFilterQuery, showRightSidebarFiles, showRightSidebarSearch]
   )
+
   const {
     rowProjection,
     ignoredByRelativePath,
@@ -101,6 +109,7 @@ function FileExplorerFiles(): React.JSX.Element {
     nameFilterSource,
     hasNameFilter ? nameFilterCollapsedPaths : null
   )
+
   const rowExpandedPaths = useMemo(
     () =>
       hasNameFilter
@@ -110,25 +119,32 @@ function FileExplorerFiles(): React.JSX.Element {
           : expanded,
     [expanded, hasNameFilter, nameFilterExpandedPaths]
   )
+
   const visibleRowCount = rowProjection.getVisibleCount()
   const manualRefresh = useFileExplorerManualRefresh(tree.refreshTree)
   const canCollapseAll = isFilesViewActive && !hasNameFilter && expanded.size > 0
+
   const handleCollapseAll = useCallback(() => {
     if (!activeWorktreeId || !isFilesViewActive || hasNameFilter) {
       return
     }
+
     collapseAllDirs(activeWorktreeId)
   }, [activeWorktreeId, collapseAllDirs, hasNameFilter, isFilesViewActive])
+
   const handleToggleDotfiles = useCallback(() => {
     if (activeWorktreeId) {
       toggleShowDotfilesForWorktree(activeWorktreeId)
     }
   }, [activeWorktreeId, toggleShowDotfilesForWorktree])
+
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
   const selection = useFileExplorerSelection(rowProjection, isMac)
+
   const selectedNode = selection.selectedPath
     ? rowProjection.getRowByPath(selection.selectedPath)
     : null
+
   const handleToggleNameFilterDir = useCallback(
     (_worktreeId: string, dirPath: string) => {
       setNameFilterCollapsedPaths((current) =>
@@ -137,6 +153,7 @@ function FileExplorerFiles(): React.JSX.Element {
     },
     [rowExpandedPaths, setNameFilterCollapsedPaths]
   )
+
   const handleExpandNameFilterDir = useCallback(
     (dirPath: string) => {
       setNameFilterCollapsedPaths((current) =>
@@ -145,6 +162,7 @@ function FileExplorerFiles(): React.JSX.Element {
     },
     [setNameFilterCollapsedPaths]
   )
+
   // Why: every explorer effect lives here, above the `!worktreePath` early
   // return, so a transient null worktree cannot unmount the tree's reset guard
   // and SSH generation refs and trigger a full cache-dropping reload on return.
@@ -166,7 +184,9 @@ function FileExplorerFiles(): React.JSX.Element {
     rowExpandedPaths,
     visibleRowCount
   })
+
   const { inlineInputState, rowScrolling } = paneState
+
   const {
     bgMenuOpen,
     setBgMenuOpen,

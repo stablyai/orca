@@ -52,9 +52,11 @@ export function useFileExplorerTree(
   activeWorktreeId?: string | null
 ): UseFileExplorerTreeResult {
   const [dirCache, setDirCache] = useState<Record<string, DirCache>>({})
+
   const [loadingDirPaths, setLoadingDirPaths] = useState<ReadonlySet<string>>(
     EMPTY_FILE_EXPLORER_LOADING_DIRS
   )
+
   const [rootError, setRootError] = useState<string | null>(null)
   const [sourceWorkspaceId, setSourceWorkspaceId] = useState<string | null>(null)
   const dirCacheRef = useRef(dirCache)
@@ -63,17 +65,21 @@ export function useFileExplorerTree(
   // (React may discard that render), and a mirror would leave loadDir's in-flight guard reading a
   // set one commit stale — long enough for a second read of the same dir to slip through.
   const loadingDirPathsRef = useRef<ReadonlySet<string>>(EMPTY_FILE_EXPLORER_LOADING_DIRS)
+
   const updateLoadingDirPaths = useCallback(
     (update: (prev: ReadonlySet<string>) => ReadonlySet<string>) => {
       const next = update(loadingDirPathsRef.current)
+
       if (next === loadingDirPathsRef.current) {
         return
       }
+
       loadingDirPathsRef.current = next
       setLoadingDirPaths(next)
     },
     []
   )
+
   const dirLoadTrackerRef = useRef<ReturnType<typeof createFileExplorerDirLoadTracker>>(undefined!)
   dirLoadTrackerRef.current ??= createFileExplorerDirLoadTracker()
   // Why: a ref, not state — the expansion effect must read the mark set by a refresh that landed
@@ -89,12 +95,14 @@ export function useFileExplorerTree(
       options?: { force?: boolean; failOnError?: boolean }
     ) => {
       const cache = dirCacheRef.current
+
       if (
         !options?.force &&
         (cache[dirPath]?.children.length > 0 || loadingDirPathsRef.current.has(dirPath))
       ) {
         return true
       }
+
       const loadToken = dirLoadTrackerRef.current.begin(dirPath)
       // Why: this read starts after the refresh that marked the dir, so its result is current.
       staleDirsRef.current.delete(dirPath)
@@ -102,17 +110,21 @@ export function useFileExplorerTree(
       // would momentarily shrink the visible projection and jump the virtualizer to the top.
       setDirCache((prev) => withPendingFileExplorerDirCacheEntries(prev, [dirPath]))
       updateLoadingDirPaths((prev) => markFileExplorerDirsLoading(prev, [dirPath]))
+
       try {
         const listing = await readFileExplorerDirectory(activeWorktreeId, worktreePath, dirPath)
+
         // Why: only the current owner may clear the flag — a superseded read clearing it would
         // drop the spinner while the load that replaced it is still in flight.
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {
           return false
         }
+
         if (depth === -1) {
           setRootError(null)
           setSourceWorkspaceId(activeWorktreeId?.trim() || null)
         }
+
         const children = fileExplorerEntriesToTreeNodes(
           listing.entries,
           dirPath,
@@ -120,16 +132,19 @@ export function useFileExplorerTree(
           worktreePath,
           listing.operationOwner
         )
+
         setDirCache((prev) => ({
           ...prev,
           [dirPath]: { children, operationOwner: listing.operationOwner }
         }))
         updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, [dirPath]))
+
         return true
       } catch (error) {
         if (!dirLoadTrackerRef.current.isCurrent(loadToken)) {
           return false
         }
+
         if (depth === -1) {
           // Why: the old implementation collapsed root read failures into an
           // empty tree, which made authorization/path bugs look like a real
@@ -139,8 +154,10 @@ export function useFileExplorerTree(
           setSourceWorkspaceId(null)
           rootReadFailedRef.current = true
         }
+
         setDirCache((prev) => ({ ...prev, [dirPath]: { children: [] } }))
         updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, [dirPath]))
+
         return !options?.failOnError
       }
     },
@@ -151,18 +168,24 @@ export function useFileExplorerTree(
     setDirCache((prev) => {
       let changed = false
       const next: Record<string, DirCache> = {}
+
       for (const [dirPath, cache] of Object.entries(prev)) {
         let cacheChanged = false
+
         const children = cache.children.map((child) => {
           if (child.path !== path || child.isDirectory) {
             return child
           }
+
           changed = true
           cacheChanged = true
+
           return { ...child, isDirectory: true }
         })
+
         next[dirPath] = cacheChanged ? { ...cache, children } : cache
       }
+
       return changed ? next : prev
     })
   }, [])
@@ -171,9 +194,11 @@ export function useFileExplorerTree(
     async (path: string) => {
       const operationOwner = getFileExplorerOperationOwner(activeWorktreeId)
       const route = getFileExplorerOperationRoute(operationOwner)
+
       if (!route) {
         throw new Error(getFileExplorerOwnerUnresolvedMessage())
       }
+
       return statRuntimePath(
         {
           settings: route.settings,
@@ -193,6 +218,7 @@ export function useFileExplorerTree(
       // their pending refreshes. Report the refresh as not-done so they keep them instead.
       return 'superseded'
     }
+
     // Why: clearing the entire dirCache here would momentarily empty the
     // visible projection and jump the virtualizer to the top. Instead we rely
     // on force-reload keeping existing children visible until fresh data lands.
@@ -209,21 +235,25 @@ export function useFileExplorerTree(
         staleDirsRef.current.delete(dirPath)
       }
     }
+
     // Why: callers use the latest refreshTree identity, so this closure has the live expanded set.
     for (const dirPath of collectStaleDirCachePaths(dirCacheRef.current, worktreePath, expanded)) {
       staleDirsRef.current.add(dirPath)
     }
+
     const refreshSession = dirLoadTrackerRef.current.getSession()
     rootReadFailedRef.current = false
     // Why: failOnError, else a dead transport reports a completed root read and we fan out one
     // doomed wave per 4 expanded dirs — 200 dirs is ~50 sequential 15s timeouts, and the watch
     // scheduler cannot start another refresh for that entire window.
     const rootLoadCompleted = await loadDir(worktreePath, -1, { force: true, failOnError: true })
+
     if (!rootLoadCompleted || !dirLoadTrackerRef.current.isSessionCurrent(refreshSession)) {
       // Why: the expanded dirs below were never re-read either way, but the two reasons want
       // opposite handling from callers — see FileExplorerTreeRefreshOutcome.
       return rootReadFailedRef.current ? 'root-unreadable' : 'superseded'
     }
+
     // Why: root (worktreePath) was just force-loaded above; exclude it here so
     // refreshFileExplorerExpandedDirs doesn't queue a duplicate read of root.
     const expandedDirs = Array.from(expanded)
@@ -232,6 +262,7 @@ export function useFileExplorerTree(
         dirPath,
         depth: splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
       }))
+
     const allDirsCommitted = await refreshFileExplorerExpandedDirs({
       dirs: expandedDirs,
       worktreePath,
@@ -245,6 +276,7 @@ export function useFileExplorerTree(
       ),
       onDirCommitted: (dirPath) => staleDirsRef.current.delete(dirPath)
     })
+
     return allDirsCommitted ? 'refreshed' : 'superseded'
   }, [activeWorktreeId, expanded, loadDir, updateLoadingDirPaths, worktreePath])
 
@@ -253,10 +285,12 @@ export function useFileExplorerTree(
       if (!worktreePath) {
         return
       }
+
       const depth =
         dirPath === worktreePath
           ? -1
           : splitPathSegments(dirPath.slice(worktreePath.length + 1)).length - 1
+
       await loadDir(dirPath, depth, { force: true })
     },
     [worktreePath, loadDir]
@@ -275,6 +309,7 @@ export function useFileExplorerTree(
     setSourceWorkspaceId(null)
     updateLoadingDirPaths(() => EMPTY_FILE_EXPLORER_LOADING_DIRS)
     setRootError(null)
+
     if (worktreePath) {
       void loadDir(worktreePath, -1, { force: true })
     }

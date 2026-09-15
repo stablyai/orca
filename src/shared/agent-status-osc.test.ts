@@ -93,6 +93,7 @@ describe('createAgentStatusOscProcessor', () => {
 
   it('uses the earliest mixed terminator and counts only parsed payload offsets', () => {
     const process = createAgentStatusOscProcessor()
+
     const result = process(
       '😀\x1b]9999;{"state":"working"}\x07A\x1b\\' +
         '\x1b]9999;{"state":"done"}\x1b\\B\x07' +
@@ -113,6 +114,7 @@ describe('createAgentStatusOscProcessor', () => {
     const stream =
       'before😀\x1b]9999;{"state":"working","prompt":"漢字"}\x07between' +
       '\x1b]9999;{"state":"done"}\x1b\\after'
+
     const expected = createAgentStatusOscProcessor()(stream)
     const other = createAgentStatusOscProcessor()
 
@@ -126,20 +128,24 @@ describe('createAgentStatusOscProcessor', () => {
 
       expect(first.cleanData + second.cleanData, `split ${split}`).toBe(expected.cleanData)
       expect([...first.payloads, ...second.payloads], `split ${split}`).toEqual(expected.payloads)
+
       const lastOffset =
         second.lastPayloadCleanOffset === null
           ? first.lastPayloadCleanOffset
           : first.cleanData.length + second.lastPayloadCleanOffset
+
       expect(lastOffset, `split ${split}`).toBe(expected.lastPayloadCleanOffset)
     }
   })
 
   it('keeps a distant ST usable after many intervening BEL frames', () => {
     const count = 200
+
     const bel = Array.from(
       { length: count },
       (_, index) => `\x1b]9999;{"state":"working","prompt":"${index}"}\x07`
     ).join('')
+
     const result = createAgentStatusOscProcessor()(
       `${bel}\x1b]9999;{"state":"done","prompt":"last"}\x1b\\tail`
     )

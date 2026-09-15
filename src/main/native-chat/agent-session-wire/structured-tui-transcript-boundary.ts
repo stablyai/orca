@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { durableWriteTempPath, writeFileDurable } from '../../durable-file-write'
 
 const BOUNDARY_FILE = 'structured-tui-transcript-boundary.json'
+
 const BOUNDARY_SCHEMA_VERSION = 1
 
 export type StructuredTuiTranscriptBoundary = {
@@ -20,15 +21,19 @@ export async function readStructuredTuiTranscriptBoundary(
   journalDirectory: string
 ): Promise<StructuredTuiTranscriptBoundary | null> {
   let parsed: unknown
+
   try {
     parsed = JSON.parse(await readFile(boundaryPath(journalDirectory), 'utf8'))
   } catch {
     return null
   }
+
   if (!parsed || typeof parsed !== 'object') {
     return null
   }
+
   const value = parsed as Record<string, unknown>
+
   if (
     value.schemaVersion !== BOUNDARY_SCHEMA_VERSION ||
     typeof value.providerSessionId !== 'string' ||
@@ -39,6 +44,7 @@ export async function readStructuredTuiTranscriptBoundary(
   ) {
     return null
   }
+
   return {
     providerSessionId: value.providerSessionId,
     runtimeFence: value.runtimeFence as number,

@@ -21,6 +21,7 @@ describe('file RPC methods', () => {
         truncated: false
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
     const controller = new AbortController()
 
@@ -45,6 +46,7 @@ describe('file RPC methods', () => {
         opened: true
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -68,6 +70,7 @@ describe('file RPC methods', () => {
         opened: true
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -93,6 +96,7 @@ describe('file RPC methods', () => {
         entries: [{ name: 'project', isDirectory: true, isSymlink: false }]
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('files.browseServerDir', { path: '~' }))
@@ -106,14 +110,18 @@ describe('file RPC methods', () => {
 
   it('streams file watch changes until the subscription is cleaned up', async () => {
     vi.useFakeTimers()
+
     try {
       type WatchCallback = (
         events: { kind: 'update'; absolutePath: string; isDirectory?: boolean }[]
       ) => void
+
       const watchFileExplorer = vi.fn(async (_worktree: string, _callback: WatchCallback) => {
         return vi.fn()
       })
+
       const cleanups = new Map<string, () => void>()
+
       const runtime = {
         getRuntimeId: () => 'test-runtime',
         watchFileExplorer,
@@ -121,6 +129,7 @@ describe('file RPC methods', () => {
           cleanups.set(id, cleanup)
         })
       } as unknown as OrcaRuntimeService
+
       const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
       const replies: unknown[] = []
 
@@ -190,14 +199,17 @@ describe('file RPC methods', () => {
     let onTerminalError: ((error: Error) => void) | undefined
     const unwatch = vi.fn()
     const cleanups = new Map<string, () => void>()
+
     let emitWatchChange:
       | ((events: { kind: 'overflow'; absolutePath: string }[]) => void)
       | undefined
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       watchFileExplorer: vi.fn(async (_worktree, callback, nextTerminalError) => {
         emitWatchChange = callback
         onTerminalError = nextTerminalError
+
         return unwatch
       }),
       registerSubscriptionCleanup: vi.fn((id, cleanup) => cleanups.set(id, cleanup)),
@@ -207,6 +219,7 @@ describe('file RPC methods', () => {
         cleanup?.()
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
     const replies: { result?: { type?: string; message?: string } }[] = []
 
@@ -214,6 +227,7 @@ describe('file RPC methods', () => {
       makeRequest('files.watch', { worktree: 'id:wt-1' }),
       (response) => replies.push(JSON.parse(response))
     )
+
     await vi.waitFor(() => expect(replies[1]?.result?.type).toBe('ready'))
 
     emitWatchChange?.([{ kind: 'overflow', absolutePath: '/repo' }])
@@ -236,8 +250,10 @@ describe('file RPC methods', () => {
     type WatchCallback = (
       events: { kind: 'update'; absolutePath: string; isDirectory?: boolean }[]
     ) => void
+
     const unwatch = vi.fn()
     let resolveWatch: (value: () => void) => void = () => {}
+
     const watchFileExplorer = vi.fn(
       (
         _worktree: string,
@@ -249,7 +265,9 @@ describe('file RPC methods', () => {
           resolveWatch = resolve
         })
     )
+
     const cleanups = new Map<string, () => void | Promise<void>>()
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       watchFileExplorer,
@@ -258,6 +276,7 @@ describe('file RPC methods', () => {
         void Promise.resolve(cleanups.get(id)?.())
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
     const abortController = new AbortController()
     const replies: unknown[] = []
@@ -267,6 +286,7 @@ describe('file RPC methods', () => {
       (response) => replies.push(JSON.parse(response)),
       { connectionId: 'conn-1', signal: abortController.signal }
     )
+
     await vi.waitFor(() => {
       expect(watchFileExplorer).toHaveBeenCalled()
     })
@@ -289,10 +309,12 @@ describe('file RPC methods', () => {
 
   it('reports files.unwatch failure instead of acknowledging incomplete teardown', async () => {
     const cleanupError = new Error('file watcher process did not exit after termination deadline')
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       cleanupSubscriptionAndWait: vi.fn().mockRejectedValue(cleanupError)
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -316,6 +338,7 @@ describe('file RPC methods', () => {
         byteLength: 10
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -340,6 +363,7 @@ describe('file RPC methods', () => {
         byteLength: 2
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -364,6 +388,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       writeTerminalArtifactFile: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     await dispatcher.dispatch(
@@ -394,6 +419,7 @@ describe('file RPC methods', () => {
         mimeType: 'image/png'
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -416,6 +442,7 @@ describe('file RPC methods', () => {
         eof: true
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -439,6 +466,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       readFileExplorerDir: vi.fn().mockResolvedValue([{ name: 'src', isDirectory: true }])
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -457,6 +485,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       writeFileExplorerFile: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -480,6 +509,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       writeFileExplorerFileBase64: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -503,6 +533,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       writeFileExplorerFileBase64Chunk: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -532,6 +563,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       writeFileExplorerFile: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('files.write', params))
@@ -545,6 +577,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       writeFileExplorerFile: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -560,6 +593,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       writeFileExplorerFileBase64: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -594,6 +628,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       writeFileExplorerFileBase64: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('files.writeBase64', params))
@@ -607,6 +642,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       writeFileExplorerFileBase64Chunk: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -668,6 +704,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       writeFileExplorerFileBase64Chunk: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(makeRequest('files.writeBase64Chunk', params))
@@ -681,6 +718,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       commitFileExplorerUpload: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -704,6 +742,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       renameFileExplorerPath: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -723,6 +762,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       copyFileExplorerPath: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -742,6 +782,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       deleteFileExplorerPath: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     await dispatcher.dispatch(
@@ -760,6 +801,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       deleteFileExplorerPath: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -793,6 +835,7 @@ describe('file RPC methods', () => {
         truncated: false
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -821,6 +864,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       listRuntimeFiles: vi.fn().mockResolvedValue(['src/index.ts'])
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -841,6 +885,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       listRuntimeFiles: vi.fn().mockResolvedValue(['src/index.ts'])
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
     const id = 'paired-quick-open-request'
     const reply = vi.fn()
@@ -869,6 +914,7 @@ describe('file RPC methods', () => {
         }
       ])
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(
@@ -884,6 +930,7 @@ describe('file RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       statRuntimeFile: vi.fn().mockResolvedValue({ size: 12, isDirectory: false, mtime: 1 })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: FILE_METHODS })
 
     const response = await dispatcher.dispatch(

@@ -41,8 +41,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -63,6 +66,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -72,6 +76,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -92,6 +97,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -102,9 +108,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -114,9 +122,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -125,6 +135,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -156,12 +167,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -170,9 +183,11 @@ describe('connectPanePty', () => {
         startup: { command: 'codex' }
       }) as never
     )
+
     await flushAsyncTicks(6)
 
     vi.useFakeTimers()
+
     try {
       const hiddenCodexRedraw = `\x1b[?2026h\x1b[2J\x1b[H${'codex redraw '.repeat(8_000)}`
       capturedDataCallback.current?.(hiddenCodexRedraw)
@@ -193,12 +208,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -207,6 +224,7 @@ describe('connectPanePty', () => {
         startup: { command: 'codex' }
       }) as never
     )
+
     await flushAsyncTicks(6)
 
     capturedDataCallback.current?.('\x1b[c')
@@ -222,12 +240,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -236,6 +256,7 @@ describe('connectPanePty', () => {
         startup: { command: 'codex' }
       }) as never
     )
+
     await flushAsyncTicks(6)
 
     const coalescedChunk = `\x1b[c\x1b[?2026h\x1b[2J\x1b[H${'codex redraw '.repeat(8_000)}`
@@ -253,12 +274,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -267,6 +290,7 @@ describe('connectPanePty', () => {
         startup: { command: 'codex' }
       }) as never
     )
+
     await flushAsyncTicks(6)
 
     const queryBurst = '\x1b[c\x1b]11;?\x1b\\\x1b[>q\x1b[14t\x1b[16t'
@@ -289,12 +313,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -303,6 +329,7 @@ describe('connectPanePty', () => {
         startup: { command: 'codex' }
       }) as never
     )
+
     await flushAsyncTicks(6)
 
     const queries = '\x1b]10;?\x1b\\\x1b]11;?\x1b\\'
@@ -325,12 +352,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -339,6 +368,7 @@ describe('connectPanePty', () => {
         startup: { command: 'codex' }
       }) as never
     )
+
     await flushAsyncTicks(6)
 
     capturedDataCallback.current?.('\x1b[')
@@ -359,12 +389,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -373,6 +405,7 @@ describe('connectPanePty', () => {
         startup: { command: 'codex' }
       }) as never
     )
+
     await flushAsyncTicks(6)
 
     capturedDataCallback.current?.('\x1b')
@@ -393,6 +426,7 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
@@ -400,6 +434,7 @@ describe('connectPanePty', () => {
     const isVisibleRef = { current: false }
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -408,6 +443,7 @@ describe('connectPanePty', () => {
         startup: { command: 'codex' }
       }) as never
     )
+
     try {
       await flushAsyncTicks(6)
 
@@ -427,12 +463,15 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     getMainBufferSnapshot.mockResolvedValue({
       data: 'snapshot-before-cpr\r\n',
       cols: 100,
@@ -442,6 +481,7 @@ describe('connectPanePty', () => {
     const isVisibleRef = { current: false }
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -450,6 +490,7 @@ describe('connectPanePty', () => {
         startup: { command: 'codex' }
       }) as never
     )
+
     try {
       await flushAsyncTicks(6)
 
@@ -474,12 +515,15 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     getMainBufferSnapshot.mockResolvedValue({
       data: 'agent-frame\x1b[?25l',
       cols: 100,
@@ -502,6 +546,7 @@ describe('connectPanePty', () => {
     const isVisibleRef = { current: false }
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -510,6 +555,7 @@ describe('connectPanePty', () => {
         startup: { command: 'codex' }
       }) as never
     )
+
     try {
       await flushAsyncTicks(6)
 
@@ -542,12 +588,15 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     getMainBufferSnapshot.mockResolvedValue({
       data: 'stale-agent-frame\x1b[?25l',
       cols: 100,
@@ -570,11 +619,13 @@ describe('connectPanePty', () => {
 
     const isVisibleRef = { current: false }
     const pane = createPane(1)
+
     const binding = connectPanePty(
       pane as never,
       createManager(1) as never,
       createDeps({ isVisibleRef, startup: { command: 'codex' } }) as never
     )
+
     try {
       await flushAsyncTicks(6)
       capturedDataCallback.current?.('\x1b[6')
@@ -601,12 +652,15 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     getMainBufferSnapshot.mockResolvedValue({
       data: 'shell-frame\x1b[?25l',
       cols: 100,
@@ -617,6 +671,7 @@ describe('connectPanePty', () => {
     const isVisibleRef = { current: false }
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -625,6 +680,7 @@ describe('connectPanePty', () => {
         startup: { command: 'codex' }
       }) as never
     )
+
     try {
       await flushAsyncTicks(6)
 
@@ -656,12 +712,15 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     getMainBufferSnapshot.mockResolvedValue({
       data: 'legacy-tui-frame',
       cols: 100,
@@ -672,6 +731,7 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     pane.terminal.buffer.active.type = 'alternate'
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -680,6 +740,7 @@ describe('connectPanePty', () => {
         startup: { command: 'codex' }
       }) as never
     )
+
     try {
       await flushAsyncTicks(6)
 
@@ -707,12 +768,15 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
+
     const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
       typeof vi.fn
     >
+
     getMainBufferSnapshot.mockResolvedValue({
       data: 'stale-tui-frame',
       cols: 100,
@@ -725,11 +789,13 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     pane.terminal.buffer.active.type = 'alternate'
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
       createDeps({ isVisibleRef, startup: { command: 'codex' } }) as never
     )
+
     try {
       await flushAsyncTicks(6)
 

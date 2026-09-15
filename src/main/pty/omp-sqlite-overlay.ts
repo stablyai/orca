@@ -24,6 +24,7 @@ function mirrorOmpSqliteFile(
   }
 
   safeRemoveTree(overlayPath)
+
   for (const sidecarSuffix of SQLITE_SIDECAR_SUFFIXES) {
     safeRemoveTree(`${overlayPath}${sidecarSuffix}`)
   }
@@ -51,6 +52,7 @@ export function mirrorOmpPersistentSqliteFiles(
   overlayDir: string
 ): string[] {
   mkdirSync(sourceAgentDir, { recursive: true })
+
   return OMP_PERSISTENT_SQLITE_FILES.flatMap((databaseName) =>
     mirrorOmpSqliteFile(
       join(sourceAgentDir, databaseName),

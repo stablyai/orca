@@ -46,15 +46,19 @@ export function requestBrowserWebAuthnAccount(
   browserSession: Electron.Session
 ): Promise<string | null> {
   const guest = details.frame ? webContents.fromFrame(details.frame) : undefined
+
   if (!guest || guest.isDestroyed()) {
     return Promise.resolve(null)
   }
+
   const context = browserManager.getRendererContextForGuest(guest.id)
+
   if (!context || context.renderer.isDestroyed()) {
     return Promise.resolve(null)
   }
 
   const requestId = randomUUID()
+
   const requestPayload: BrowserWebAuthnAccountRequest = {
     requestId,
     browserPageId: context.browserPageId,
@@ -68,18 +72,23 @@ export function requestBrowserWebAuthnAccount(
 
   return new Promise((resolve) => {
     let settled = false
+
     const settle = (credentialId: string | null = null): void => {
       if (settled) {
         return
       }
+
       settled = true
       const request = pendingAccountRequests.get(requestId)
+
       if (request) {
         cleanUpRequest(requestId, request)
         closeRendererPrompt(requestId, request)
       }
+
       resolve(credentialId)
     }
+
     const request: PendingAccountRequest = {
       browserPageId: context.browserPageId,
       browserSession,
@@ -90,11 +99,13 @@ export function requestBrowserWebAuthnAccount(
       onUnavailable: () => settle(null),
       settle
     }
+
     pendingAccountRequests.set(requestId, request)
     guest.once('destroyed', request.onUnavailable)
     guest.once('render-process-gone', request.onUnavailable)
     context.renderer.once('destroyed', request.onUnavailable)
     context.renderer.once('render-process-gone', request.onUnavailable)
+
     try {
       context.renderer.send('browser:webauthn-account-requested', requestPayload)
     } catch {
@@ -114,14 +125,19 @@ export function respondToBrowserWebAuthnAccountRequest(
   ) {
     return false
   }
+
   const request = pendingAccountRequests.get(response.requestId)
+
   if (!request || request.renderer.id !== sender.id) {
     return false
   }
+
   if (response.credentialId !== null && !request.credentialIds.has(response.credentialId)) {
     return false
   }
+
   request.settle(response.credentialId)
+
   return true
 }
 

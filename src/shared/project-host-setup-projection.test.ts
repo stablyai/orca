@@ -26,6 +26,7 @@ describe('project host setup projection', () => {
       displayName: 'orca',
       addedAt: 0
     })
+
     const first = projectHostSetupProjectionFromRepos([target], 1_000)
     const second = projectHostSetupProjectionFromRepos([target], 9_999)
 
@@ -47,6 +48,7 @@ describe('project host setup projection', () => {
     addedAt: 100,
     upstream: { owner: 'StablyAI', repo: 'Orca' }
   })
+
   const unknownSibling = repo({
     id: 'remote-repo',
     path: '/home/alice/orca',
@@ -220,6 +222,7 @@ describe('project host setup projection', () => {
       source: 'github' as const,
       label: 'acme/widgets'
     })
+
     const projection = projectHostSetupProjectionFromRepos([
       repo({
         id: 'enterprise-local',
@@ -529,6 +532,7 @@ describe('project host setup projection', () => {
       connectionId: 'openclaw 2',
       upstream: { owner: 'stablyai', repo: 'orca' }
     })
+
     const projection = projectHostSetupProjectionFromRepos([targetRepo])
 
     expect(getProjectHostSetupWorktreeMeta(projection.setups, targetRepo)).toEqual({
@@ -547,6 +551,7 @@ describe('isGitHubBackedRepo', () => {
       displayName: 'r',
       upstream: { owner: 'stablyai', repo: 'orca' }
     })
+
     expect(isGitHubBackedRepo(target)).toBe(true)
   })
 
@@ -562,6 +567,7 @@ describe('isGitHubBackedRepo', () => {
         label: 'stablyai/orca'
       }
     })
+
     expect(isGitHubBackedRepo(target)).toBe(true)
   })
 
@@ -572,6 +578,7 @@ describe('isGitHubBackedRepo', () => {
       displayName: 'r',
       repoIcon: { type: 'lucide', name: 'gitlab' }
     })
+
     expect(isGitHubBackedRepo(target)).toBe(false)
   })
 
@@ -645,6 +652,7 @@ describe('derived project identity stability', () => {
         }
       })
     ])
+
     expect(projection.projects.map((project) => project.id)).toEqual([
       'git:www.github.com/acme/app'
     ])
@@ -661,6 +669,7 @@ describe('derived project identity stability', () => {
         }
       })
     ])
+
     expect(projection.projects.map((project) => project.id)).toEqual(['github:acme/app'])
   })
 })
@@ -673,6 +682,7 @@ describe('getProjectHostSetupWorktreeMeta host selection', () => {
       displayName: 'orca',
       connectionId: 'build-box'
     })
+
     // Local first in the array: a repoId-only match would stamp the wrong host durably.
     const setups = [
       ...projectHostSetupProjectionFromRepos([
@@ -694,20 +704,25 @@ it('appends project source IDs without repeatedly copying an accumulating array'
       upstream: { owner: 'acme', repo: 'project' }
     })
   )
+
   let copied = 0
   const iterator = Array.prototype[Symbol.iterator]
   Array.prototype[Symbol.iterator] = function (this: unknown[]) {
     if (this[0] === 'source-0') {
       copied += this.length
     }
+
     return iterator.call(this)
   }
+
   let result: ReturnType<typeof projectHostSetupProjectionFromRepos>
+
   try {
     result = projectHostSetupProjectionFromRepos([...repos, repos[0]])
   } finally {
     Array.prototype[Symbol.iterator] = iterator
   }
+
   expect(copied).toBeLessThan(10_000)
   expect(result.projects).toHaveLength(1)
   expect(result.projects[0].sourceRepoIds).toEqual(repos.map((repo) => repo.id))

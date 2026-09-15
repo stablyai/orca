@@ -21,11 +21,13 @@ export function useMobileSourceControlCommitFailure({ client, connState, worktre
   const [commitFailureRecovery, recordCommitFailure] = useState<MobileCommitFailureRecovery | null>(
     null
   )
+
   const commitFailureRecoveryAction = useMobileCommitFailureRecovery({
     client,
     connState,
     worktreeId,
     failure: commitFailureRecovery
   })
+
   return { commitFailureRecovery, commitFailureRecoveryAction, recordCommitFailure }
 }

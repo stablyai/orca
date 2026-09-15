@@ -12,6 +12,7 @@ function createVersionFile(contents: string): string {
   roots.push(root)
   const filePath = join(root, '.version')
   writeFileSync(filePath, contents)
+
   return filePath
 }
 
@@ -24,6 +25,7 @@ afterEach(() => {
 describe('relay version marker', () => {
   it('accepts a trimmed marker at the exact byte boundary', () => {
     const version = '1.2.3+deadbeef'
+
     const filePath = createVersionFile(
       version + ' '.repeat(RELAY_VERSION_MARKER_MAX_BYTES - Buffer.byteLength(version))
     )

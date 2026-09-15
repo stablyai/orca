@@ -12,25 +12,32 @@ describe('useIpcEvents updater integration', () => {
     const setSshConnectionState = vi.fn()
     const setSshTargetsMetadata = vi.fn()
     const clearRemovedSshTargetState = vi.fn()
+
     const pendingListTargets: {
       resolve: (targets: { id: string; label: string }[]) => void
       reject: (err: unknown) => void
     }[] = []
+
     let listTargetsCallCount = 0
+
     const listTargets = vi.fn(() => {
       listTargetsCallCount += 1
+
       if (listTargetsCallCount === 1) {
         return Promise.resolve([{ id: 'conn-1', label: 'Remote' }])
       }
+
       return new Promise<{ id: string; label: string }[]>((resolve, reject) => {
         pendingListTargets.push({ resolve, reject })
       })
     })
+
     const sshStateListenerRef: {
       current: ((data: { targetId: string; state: unknown }) => void) | null
     } = {
       current: null
     }
+
     const storeState = {
       setUpdateStatus: vi.fn(),
       fetchRepos: vi.fn(),
@@ -78,8 +85,10 @@ describe('useIpcEvents updater integration', () => {
         openAgentTabsInChatByDefault: false
       }
     }
+
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
@@ -222,6 +231,7 @@ describe('useIpcEvents updater integration', () => {
           getState: () => Promise.resolve(null),
           onStateChanged: (listener: (data: { targetId: string; state: unknown }) => void) => {
             sshStateListenerRef.current = listener
+
             return () => {}
           },
           onCredentialRequest: () => () => {},
@@ -277,12 +287,14 @@ describe('useIpcEvents updater integration', () => {
       error: null,
       reconnectAttempt: 0
     }
+
     const errorState = {
       targetId: 'conn-new',
       status: 'error',
       error: 'Connection failed',
       reconnectAttempt: 0
     }
+
     sshStateListenerRef.current({
       targetId: 'conn-new',
       state: connectingState
@@ -317,12 +329,14 @@ describe('useIpcEvents updater integration', () => {
       error: null,
       reconnectAttempt: 0
     }
+
     const latestState = {
       targetId: 'conn-known-late',
       status: 'error',
       error: 'Connection failed',
       reconnectAttempt: 1
     }
+
     sshStateListenerRef.current({
       targetId: 'conn-known-late',
       state: staleState
@@ -342,12 +356,14 @@ describe('useIpcEvents updater integration', () => {
     expect(setSshConnectionState).toHaveBeenCalledWith('conn-known-late', latestState)
 
     setSshConnectionState.mockClear()
+
     const refreshFailureState = {
       targetId: 'conn-refresh-failure',
       status: 'connecting',
       error: null,
       reconnectAttempt: 0
     }
+
     sshStateListenerRef.current({
       targetId: 'conn-refresh-failure',
       state: refreshFailureState

@@ -22,6 +22,7 @@ const { gitExecCalls, execHooks, coalescerJoins } = vi.hoisted(() => ({
 
 vi.mock('../../shared/git-branch-line-total', async (importOriginal) => {
   const actual = await importOriginal<typeof BranchLineTotal>()
+
   return {
     ...actual,
     computeGitBranchLineTotal: (
@@ -32,6 +33,7 @@ vi.mock('../../shared/git-branch-line-total', async (importOriginal) => {
       const total = actual.computeGitBranchLineTotal(input)
       coalescerJoins.count += 1
       coalescerJoins.onJoin?.()
+
       return total
     }
   }
@@ -39,21 +41,25 @@ vi.mock('../../shared/git-branch-line-total', async (importOriginal) => {
 
 vi.mock('./runner', async (importOriginal) => {
   const actual = await importOriginal<typeof GitRunner>()
+
   return {
     ...actual,
     gitExecFileAsync: async (...args: Parameters<typeof GitRunner.gitExecFileAsync>) => {
       gitExecCalls.push(args[0])
       await execHooks.beforeExec?.(args[0])
+
       return actual.gitExecFileAsync(...args)
     },
     gitExecFileAsyncBuffer: async (
       ...args: Parameters<typeof GitRunner.gitExecFileAsyncBuffer>
     ) => {
       gitExecCalls.push(args[0])
+
       return actual.gitExecFileAsyncBuffer(...args)
     },
     gitStreamStdout: async (...args: Parameters<typeof GitRunner.gitStreamStdout>) => {
       gitExecCalls.push(args[0])
+
       return actual.gitStreamStdout(...args)
     }
   }
@@ -67,8 +73,10 @@ import {
 } from './status'
 
 const BOGUS_MERGE_BASE = 'deadbeef'.repeat(5)
+
 // No fixture path here looks like test or generated code, so it is all source.
 const NO_LINES = { added: 0, removed: 0 }
+
 const tempRoots: string[] = []
 
 function git(repo: string, args: string[]): string {
@@ -91,6 +99,7 @@ async function createFixtureRepo(): Promise<{ repo: string; mergeBase: string }>
   git(repo, ['add', '-A'])
   git(repo, ['commit', '-q', '-m', 'base'])
   await write(repo, 'f.txt', 'a\nb\nc\n')
+
   return { repo, mergeBase: git(repo, ['rev-parse', 'HEAD']) }
 }
 
@@ -114,6 +123,7 @@ function waitForCoalescerJoins(count: number): Promise<void> {
   if (coalescerJoins.count >= count) {
     return Promise.resolve()
   }
+
   return new Promise((resolve) => {
     coalescerJoins.onJoin = () => {
       if (coalescerJoins.count >= count) {
@@ -309,11 +319,13 @@ describe('branch line total exec budget', () => {
       branchLineTotalMergeBase: mergeBase,
       reuseLineStats: true
     })
+
     expect(rangedDiffCalls()).toHaveLength(1)
     expect(numstatCalls()).toHaveLength(2)
 
     gitExecCalls.length = 0
     invalidateGitBranchLineTotalInFlight()
+
     const second = await getStatus(repo, {
       branchLineTotalMergeBase: mergeBase,
       reuseLineStats: true
@@ -339,6 +351,7 @@ describe('branch line total exec budget', () => {
     await getStatus(repo, { branchLineTotalMergeBase: mergeBase, reuseLineStats: true })
     gitExecCalls.length = 0
     invalidateGitBranchLineTotalInFlight()
+
     const result = await getStatus(repo, {
       branchLineTotalMergeBase: laterMergeBase,
       reuseLineStats: true

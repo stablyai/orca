@@ -27,10 +27,12 @@ type ControlledAttempt = DirectSshWorktreeRefreshAttempt & {
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   return { promise, resolve, reject }
 }
 
@@ -97,10 +99,12 @@ function completeResult(
 function createHarness(cancelOutcome?: 'cancel-failed', now?: () => number) {
   const attempts: ControlledAttempt[] = []
   const onUnexpectedError = vi.fn()
+
   const startAttempt = vi.fn((attemptKey: DirectSshWorktreeRefreshKey) => {
     const providerDeferred = deferred<HostQualifiedDetectedWorktreeResult>()
     const waiterDeferred = deferred<HostQualifiedDetectedWorktreeResult>()
     const providerRequestId = requestId(`provider-${attempts.length + 1}`)
+
     const attempt: ControlledAttempt = {
       key: attemptKey,
       providerRequestId,
@@ -112,18 +116,23 @@ function createHarness(cancelOutcome?: 'cancel-failed', now?: () => number) {
           executionHostId: attemptKey.executionHostId,
           status: 'canceled'
         })
+
         return cancelOutcome
       })
     }
+
     void providerDeferred.promise.then(waiterDeferred.resolve, waiterDeferred.reject)
     attempts.push(attempt)
+
     return attempt
   })
+
   const scheduler = createDirectSshWorktreeRefreshScheduler({
     startAttempt,
     onUnexpectedError,
     now
   })
+
   return { scheduler, attempts, startAttempt, onUnexpectedError }
 }
 
@@ -153,6 +162,7 @@ describe('createDirectSshWorktreeRefreshScheduler', () => {
 
   it('never admits more than five locally unsettled attempts', async () => {
     const { scheduler, attempts } = createHarness()
+
     const leases = Array.from({ length: 6 }, (_, index) =>
       scheduler.request(key('target-a', `repo-${index}`))
     )
@@ -171,9 +181,11 @@ describe('createDirectSshWorktreeRefreshScheduler', () => {
 
   it('round-robins target lanes after at most one earlier lane admission', async () => {
     const { scheduler, attempts } = createHarness()
+
     const leases = Array.from({ length: 7 }, (_, index) =>
       scheduler.request(key('target-a', `repo-a-${index}`))
     )
+
     const targetB = scheduler.request(key('target-b', 'repo-b'))
 
     attempts[0].deferred.resolve(completeResult(attempts[0]))
@@ -231,9 +243,11 @@ describe('createDirectSshWorktreeRefreshScheduler', () => {
   it('requeues a timed-out retry at its target lane tail', async () => {
     const { scheduler, attempts } = createHarness()
     const retrying = scheduler.request(key('target-a', 'retrying'))
+
     const blockers = Array.from({ length: 4 }, (_, index) =>
       scheduler.request(key('target-a', `blocker-${index}`))
     )
+
     const targetB = scheduler.request(key('target-b', 'target-b'))
 
     attempts[0].deferred.resolve(terminalResult(attempts[0], 'timed-out'))
@@ -267,6 +281,7 @@ describe('createDirectSshWorktreeRefreshScheduler', () => {
 
   it('invalidates queued and current work without reporting cancellation errors', async () => {
     const { scheduler, attempts, onUnexpectedError } = createHarness()
+
     const leases = Array.from({ length: 6 }, (_, index) =>
       scheduler.request(key('target-a', `repo-${index}`))
     )
@@ -281,6 +296,7 @@ describe('createDirectSshWorktreeRefreshScheduler', () => {
     for (const attempt of attempts) {
       attempt.deferred.reject(new Error('expected provider cancellation'))
     }
+
     await flushAttempt()
     expect(onUnexpectedError).not.toHaveBeenCalled()
     expect(scheduler.getSnapshot().locallyUnsettled).toBe(0)
@@ -288,14 +304,17 @@ describe('createDirectSshWorktreeRefreshScheduler', () => {
 
   it('bounds five failed cancellations to two replacements while old calls remain pending', async () => {
     const { scheduler, attempts } = createHarness('cancel-failed')
+
     const authority: DirectSshAuthority = {
       targetId: 'target-a',
       providerEpoch: epoch('epoch-target-a'),
       connectionGeneration: 1
     }
+
     const initial = Array.from({ length: 5 }, (_, index) =>
       scheduler.request(key('target-a', `old-${index}`))
     )
+
     scheduler.invalidateAuthority(authority)
     await Promise.all(initial.map((lease) => lease.result))
     await flushAttempt()
@@ -308,6 +327,7 @@ describe('createDirectSshWorktreeRefreshScheduler', () => {
     const replacements = Array.from({ length: 3 }, (_, index) =>
       scheduler.request(key('target-a', `replacement-${index}`))
     )
+
     expect(attempts).toHaveLength(7)
     expect(scheduler.getSnapshot().locallyUnsettled).toBe(2)
     await expect(replacements[2].result).resolves.toMatchObject({
@@ -325,9 +345,11 @@ describe('createDirectSshWorktreeRefreshScheduler', () => {
     expect(scheduler.getSnapshot().locallyUnsettled).toBe(0)
 
     scheduler.disposeProvider(authority)
+
     for (const attempt of attempts.slice(0, 5)) {
       attempt.deferred.reject(new Error('late canceled provider'))
     }
+
     await flushAttempt()
     expect([...scheduler.getSnapshot().cancelDebtByAuthority.values()]).toEqual([])
 
@@ -402,9 +424,11 @@ describe('createDirectSshWorktreeRefreshScheduler', () => {
   it('reports queue wait, provider execution, retry, joins, and scoped peak metrics', async () => {
     let now = 0
     const { scheduler, attempts } = createHarness(undefined, () => now)
+
     const leases = Array.from({ length: 6 }, (_, index) =>
       scheduler.request(key('target-a', `repo-${index}`))
     )
+
     scheduler.request(key('target-a', 'repo-5'))
 
     now = 25

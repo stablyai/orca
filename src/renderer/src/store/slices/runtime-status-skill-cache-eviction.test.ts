@@ -8,9 +8,11 @@ const discoverSkillsForRuntimeTarget = vi.hoisted(() =>
 )
 
 vi.mock('@/runtime/runtime-skills-client', () => ({ discoverSkillsForRuntimeTarget }))
+
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
+
 vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
   restorePtyDataHandlersAfterFailedShutdown: vi.fn(),
   unregisterPtyDataHandlers: vi.fn()
@@ -54,9 +56,11 @@ function deferred(): {
   resolve: (value: SkillDiscoveryResult) => void
 } {
   let resolve!: (value: SkillDiscoveryResult) => void
+
   const promise = new Promise<SkillDiscoveryResult>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -71,6 +75,7 @@ describe('runtime environment skill-cache eviction', () => {
     discoverSkillsForRuntimeTarget.mockResolvedValue(result(1))
     await discoverInstalledAgentSkills(false)
     await discoverInstalledAgentSkills(false, { runtime: 'wsl', wslDistro: 'Ubuntu' })
+
     for (let index = 0; index < 512; index++) {
       const id = `temporary-${index}`
       store.getState().setRuntimeEnvironments([environment(id)])
@@ -112,10 +117,12 @@ describe('runtime environment skill-cache eviction', () => {
       const oldRequest = discoverInstalledAgentSkills(false, undefined, remote('a'))
       store.getState().setRuntimeEnvironments([environment('a', 2)])
       const newRequest = discoverInstalledAgentSkills(true, undefined, remote('a'))
+
       if (order === 'after') {
         current.resolve(result(2))
         await newRequest
       }
+
       stale.resolve(result(1))
       await oldRequest
       const joined = discoverInstalledAgentSkills(false, undefined, remote('a'))

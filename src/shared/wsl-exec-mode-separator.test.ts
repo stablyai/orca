@@ -13,14 +13,19 @@ import { describe, expect, it } from 'vitest'
 // Guest programs Orca hands to wsl.exe. An allowlist rather than "any quoted
 // token", because git's own `--` pathspec separator is followed by one too.
 const GUEST_PROGRAM = String.raw`(?:\/[\w./-]+\/)?(?:sh|bash|zsh|dash|ash|ksh|mksh|env|rm|cat|printf|node|python3?)`
+
 // `\s*` has to cross newlines: the formatter puts each argv element on its own
 // line, which is the exact shape this guard exists to catch.
 const ARGV_FORM = new RegExp(String.raw`'--',\s*'${GUEST_PROGRAM}'`)
+
 const STRING_FORM = new RegExp(String.raw`wsl(?:\.exe)?\b[^\n]*?[^-]--\s+${GUEST_PROGRAM}\b`)
 
 const SCANNED_ROOTS = ['src', 'config', 'tests']
+
 const SCANNED_EXTENSIONS = ['.ts', '.tsx', '.mjs', '.js']
+
 const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', 'out', 'build', '.git'])
+
 // Why: the cross-version e2e lane checks whole historical releases out under
 // tests/e2e/.cross-version-checkouts/. Those are shipped code we cannot edit, so
 // scanning them made this guard fail on every machine that had run that lane --
@@ -30,24 +35,30 @@ const IGNORED_DIRECTORY_PREFIX = '.'
 function collectSourceFiles(root: string): string[] {
   let found: string[] = []
   let entries: string[]
+
   try {
     entries = readdirSync(root)
   } catch {
     return found
   }
+
   for (const entry of entries) {
     if (IGNORED_DIRECTORIES.has(entry) || entry.startsWith(IGNORED_DIRECTORY_PREFIX)) {
       continue
     }
+
     const full = join(root, entry)
+
     if (statSync(full).isDirectory()) {
       found = found.concat(collectSourceFiles(full))
       continue
     }
+
     if (SCANNED_EXTENSIONS.some((extension) => full.endsWith(extension))) {
       found.push(full)
     }
   }
+
   return found
 }
 
@@ -79,6 +90,7 @@ describe('wsl.exe mode separator', () => {
   ])('never hands the guest shell to wsl.exe through `--` (%s)', (_form, pattern) => {
     const offenders = files.filter((file) => {
       const text = codeText(readFileSync(file, 'utf8'))
+
       // Why scoped to WSL files: other tools take a `--` separator followed by a
       // program too (tmux `split-window … -- cat`), and those are correct.
       return /wsl/i.test(text) && pattern.test(text)

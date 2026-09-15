@@ -67,9 +67,11 @@ export function normalizeLinkTarget(linkTarget: string): string {
 
 export function expectResourceLinkedOrCopied(targetPath: string, sourcePath: string): void {
   expect(existsSync(targetPath)).toBe(true)
+
   if (!lstatSync(targetPath).isSymbolicLink()) {
     return
   }
+
   expect(normalizeLinkTarget(readlinkSync(targetPath))).toBe(normalizeLinkTarget(sourcePath))
 }
 
@@ -85,6 +87,7 @@ export function createStore(settings: GlobalSettings) {
           ...updates.notifications
         }
       }
+
       return settings
     })
   }
@@ -95,6 +98,7 @@ export function createManagedAuth(rootDir: string, accountId: string, auth: stri
   mkdirSync(managedHomePath, { recursive: true })
   writeFileSync(join(managedHomePath, '.orca-managed-home'), `${accountId}\n`, 'utf-8')
   writeFileSync(join(managedHomePath, 'auth.json'), auth, 'utf-8')
+
   return managedHomePath
 }
 
@@ -181,6 +185,7 @@ export function setupRuntimeHomeTest(): void {
 export function teardownRuntimeHomeTest(): void {
   rmSync(testState.userDataDir, { recursive: true, force: true })
   rmSync(testState.fakeHomeDir, { recursive: true, force: true })
+
   if (testState.previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {

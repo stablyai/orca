@@ -39,25 +39,32 @@ export default function VoiceSettingsScreen({
   const [busyAction, setBusyAction] = useState<ModelBusyAction | null>(null)
   const requestEpoch = useRef(0)
   const [modelDrawerOpen, setModelDrawerOpen] = useState(false)
+
   const refresh = useCallback(async (): Promise<boolean | undefined> => {
     if (!operations) {
       return false
     }
+
     const epoch = requestEpoch.current
     // Own the spinner from the read that clears it, so a retry after a failed load shows
     // the spinner again instead of the stale error card. Reads are serialised by
     // DictationSetupPollController, so no in-flight read can clear another's flag.
     setLoading(true)
+
     try {
       const next = await operations.load()
+
       if (epoch !== requestEpoch.current) {
         return undefined
       }
+
       setSetup(next)
       setError(null)
+
       return next.models.some(isModelInFlight)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load voice settings')
+
       return undefined
     } finally {
       setLoading(false)
@@ -65,6 +72,7 @@ export default function VoiceSettingsScreen({
   }, [operations])
 
   const polling = setup?.models.some(isModelInFlight) ?? false
+
   const refreshSetup = useDictationSetupPoller({
     visible: focused && operations !== null,
     polling,
@@ -77,6 +85,7 @@ export default function VoiceSettingsScreen({
       if (!operations) {
         return
       }
+
       requestEpoch.current += 1
       setError(null)
       // Optimistic flip so the control responds instantly; reconcile below.
@@ -90,6 +99,7 @@ export default function VoiceSettingsScreen({
             }
           : prev
       )
+
       try {
         setSetup(await operations.configure(params))
       } catch (err) {
@@ -105,9 +115,11 @@ export default function VoiceSettingsScreen({
       if (!operations) {
         return
       }
+
       requestEpoch.current += 1
       setBusyAction({ modelId: model.id, type: 'select' })
       setError(null)
+
       try {
         setSetup(await operations.configure({ enabled: true, modelId: model.id }))
         setModelDrawerOpen(false)
@@ -125,9 +137,11 @@ export default function VoiceSettingsScreen({
       if (!operations) {
         return
       }
+
       requestEpoch.current += 1
       setBusyAction({ modelId: model.id, type: 'download' })
       setError(null)
+
       try {
         await operations.download(model.id)
         await refreshSetup()
@@ -145,12 +159,15 @@ export default function VoiceSettingsScreen({
       if (!operations) {
         return
       }
+
       const deletedSelectedModel = setup?.selectedModelId === model.id
       requestEpoch.current += 1
       setBusyAction({ modelId: model.id, type: 'delete' })
       setError(null)
+
       try {
         setSetup(await operations.delete(model.id))
+
         if (deletedSelectedModel) {
           setModelDrawerOpen(false)
         }
@@ -232,6 +249,7 @@ export default function VoiceSettingsScreen({
               <View style={styles.segmented}>
                 {DICTATION_MODES.map((mode) => {
                   const active = setup.dictationMode === mode.value
+
                   return (
                     <Pressable
                       key={mode.value}

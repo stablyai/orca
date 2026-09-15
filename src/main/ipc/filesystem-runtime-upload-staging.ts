@@ -20,6 +20,7 @@ export function stagedRuntimeUploadByteLength(source: StagedExternalImportSource
   if (source.status !== 'staged') {
     return 0
   }
+
   return source.entries.reduce(
     (total, entry) => (entry.kind === 'file' ? total + entry.byteLength : total),
     0
@@ -41,12 +42,14 @@ export async function stageOneSourceForRuntimeUpload(
   authorizeExternalPath(resolvedSource)
 
   let sourceStat: Awaited<ReturnType<typeof lstat>>
+
   try {
     sourceStat = await lstat(resolvedSource)
   } catch (error) {
     if (isENOENT(error)) {
       return { sourcePath, status: 'skipped', reason: 'missing' }
     }
+
     if (
       error instanceof Error &&
       'code' in error &&
@@ -55,6 +58,7 @@ export async function stageOneSourceForRuntimeUpload(
     ) {
       return { sourcePath, status: 'skipped', reason: 'permission-denied' }
     }
+
     return {
       sourcePath,
       status: 'failed',
@@ -65,13 +69,16 @@ export async function stageOneSourceForRuntimeUpload(
   if (sourceStat.isSymbolicLink()) {
     return { sourcePath, status: 'skipped', reason: 'symlink' }
   }
+
   if (!sourceStat.isFile() && !sourceStat.isDirectory()) {
     return { sourcePath, status: 'skipped', reason: 'unsupported' }
   }
+
   try {
     const entries = sourceStat.isDirectory()
       ? await stageDirectoryEntries(resolvedSource, totalBytesBefore)
       : [(await stageFileEntry(resolvedSource, '', { totalBytesBefore })).entry]
+
     return {
       sourcePath,
       status: 'staged',
@@ -83,6 +90,7 @@ export async function stageOneSourceForRuntimeUpload(
     if (error instanceof RuntimeUploadSymlinkError) {
       return { sourcePath, status: 'skipped', reason: 'symlink' }
     }
+
     return {
       sourcePath,
       status: 'failed',
@@ -101,46 +109,56 @@ async function stageDirectoryEntries(
 
   async function visit(dirPath: string): Promise<void> {
     const dirStat = await lstat(dirPath)
+
     if (dirStat.isSymbolicLink()) {
       throw new RuntimeUploadSymlinkError(
         `Symlink not allowed in '${normalizeRelativeUploadPath(relative(rootPath, dirPath))}'`
       )
     }
+
     if (!dirStat.isDirectory()) {
       throw new Error(
         `Unsupported file type in '${normalizeRelativeUploadPath(relative(rootPath, dirPath))}'`
       )
     }
+
     await assertRealPathInsideRoot(
       rootRealPath,
       dirPath,
       normalizeRelativeUploadPath(relative(rootPath, dirPath))
     )
     const dirEntries = await readdir(dirPath, { withFileTypes: true })
+
     for (const entry of dirEntries) {
       const childPath = join(dirPath, entry.name)
       const childRelativePath = normalizeRelativeUploadPath(relative(rootPath, childPath))
+
       if (entry.isSymbolicLink()) {
         throw new RuntimeUploadSymlinkError(`Symlink not allowed in '${childRelativePath}'`)
       }
+
       if (entry.isDirectory()) {
         entries.push({ relativePath: childRelativePath, kind: 'directory' })
         await visit(childPath)
         continue
       }
+
       if (!entry.isFile()) {
         throw new Error(`Unsupported file type in '${childRelativePath}'`)
       }
+
       const stagedFile = await stageFileEntry(childPath, childRelativePath, {
         rootRealPath,
         totalBytesBefore: totalBytes
       })
+
       totalBytes += stagedFile.byteLength
       entries.push(stagedFile.entry)
     }
   }
 
   await visit(rootPath)
+
   return entries
 }
 
@@ -154,22 +172,29 @@ async function stageFileEntry(
   // Why: a dropped file's relative path is '', so errors would name nothing.
   // The entry keeps '' — only the message falls back to the file's own name.
   const displayName = displayPath || basename(filePath)
+
   if (statResult.isSymbolicLink()) {
     throw new RuntimeUploadSymlinkError(`Symlink not allowed in '${displayName}'`)
   }
+
   if (!statResult.isFile()) {
     throw new Error(`Unsupported file type in '${displayName}'`)
   }
+
   if (options.rootRealPath) {
     await assertRealPathInsideRoot(options.rootRealPath, filePath, displayName)
   }
+
   assertRemoteUploadBudget(displayName, statResult.size, options.totalBytesBefore + statResult.size)
   const fileHandle = await open(filePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+
   try {
     const openedStat = await fileHandle.stat()
+
     if (!openedStat.isFile()) {
       throw new Error(`Unsupported file type in '${displayName}'`)
     }
+
     if (
       openedStat.size !== statResult.size ||
       (statResult.ino !== 0 && openedStat.ino !== 0 && openedStat.ino !== statResult.ino) ||
@@ -177,11 +202,13 @@ async function stageFileEntry(
     ) {
       throw new Error(`File changed during upload staging: '${displayName}'`)
     }
+
     assertRemoteUploadBudget(
       displayName,
       openedStat.size,
       options.totalBytesBefore + openedStat.size
     )
+
     // Why: bytes are read slice-by-slice at upload time, so staging records the
     // identity the streamer re-checks rather than the body itself. Size alone
     // would let a same-size replacement slip through between the two calls.
@@ -208,6 +235,7 @@ async function assertRealPathInsideRoot(
 ): Promise<void> {
   const candidateRealPath = await realpath(candidatePath)
   const relativeToRoot = relative(rootRealPath, candidateRealPath)
+
   // Why: `..name` is a valid child path; only `..` and `../...` escape.
   if (
     relativeToRoot !== '' &&
@@ -228,6 +256,7 @@ function assertRemoteUploadBudget(
         `${formatByteCeiling(REMOTE_IMPORT_MAX_FILE_BYTES)} per-file remote import limit`
     )
   }
+
   if (totalBytes > REMOTE_IMPORT_MAX_TOTAL_BYTES) {
     throw new Error(
       `This import is ${formatByteCeiling(totalBytes)}, over the ` +

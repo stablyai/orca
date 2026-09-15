@@ -42,12 +42,16 @@ export function createBrowserClientPageMetadataPublisher(options: {
 
   const settle = (): void => {
     inFlight = false
+
     if (disposed) {
       pending = null
+
       return
     }
+
     const next = pending
     pending = null
+
     if (next) {
       send(next)
     }
@@ -56,6 +60,7 @@ export function createBrowserClientPageMetadataPublisher(options: {
   const send = (snapshot: BrowserClientPageMetadataSnapshot): void => {
     inFlight = true
     let request: Promise<BrowserClientPageMetadataPublishOutcome>
+
     try {
       // Why the revision is minted inside the try: it is drawn from the page's live attachment and
       // throws once that page is detached. Outside, the throw escapes into a webview event handler
@@ -71,14 +76,17 @@ export function createBrowserClientPageMetadataPublisher(options: {
     } catch (error) {
       request = Promise.reject(error)
     }
+
     void request
       .then((outcome) => {
         if (outcome.status === 'published') {
           if (!outcome.accepted) {
             options.onUnpublished?.({ reason: 'rejected' })
           }
+
           return
         }
+
         options.onUnpublished?.({
           reason: 'failed',
           errorCode:
@@ -99,11 +107,15 @@ export function createBrowserClientPageMetadataPublisher(options: {
       if (disposed) {
         return
       }
+
       const fullSnapshot = { ...snapshot }
+
       if (inFlight) {
         pending = fullSnapshot
+
         return
       }
+
       send(fullSnapshot)
     },
     dispose: () => {

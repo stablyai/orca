@@ -22,6 +22,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -42,6 +43,7 @@ describe('CodexAccountService config sync', () => {
         '',
         '{"account":"managed"}\n'
       )
+
       return createSettings({
         codexManagedAccounts: [
           {
@@ -61,6 +63,7 @@ describe('CodexAccountService config sync', () => {
 
     async function expectResolvesPromptly<T>(promise: Promise<T>, label: string): Promise<T> {
       let timer: NodeJS.Timeout | undefined
+
       try {
         return await Promise.race([
           promise,
@@ -83,6 +86,7 @@ describe('CodexAccountService config sync', () => {
           stderr: PassThrough
           kill: () => void
         }
+
         child.stdout = new PassThrough()
         child.stderr = new PassThrough()
         child.kill = vi.fn()
@@ -92,19 +96,23 @@ describe('CodexAccountService config sync', () => {
           'utf-8'
         )
         queueMicrotask(() => child.emit('close', 0))
+
         return child
       })
     }
 
     it('resolves selectAccount while the quota refresh never settles', async () => {
       const store = createStore(createAccountOneSettings())
+
       const rateLimits = {
         refreshForCodexAccountChange: vi.fn(() => new Promise<never>(() => {})),
         evictInactiveCodexCache: vi.fn()
       }
+
       const runtimeHome = createRuntimeHome()
 
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,
@@ -123,13 +131,16 @@ describe('CodexAccountService config sync', () => {
     it('resolves selectAccount when the quota refresh rejects', async () => {
       const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
       const store = createStore(createAccountOneSettings())
+
       const rateLimits = {
         refreshForCodexAccountChange: vi.fn().mockRejectedValue(new Error('cold probe failed')),
         evictInactiveCodexCache: vi.fn()
       }
+
       const runtimeHome = createRuntimeHome()
 
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,
@@ -155,13 +166,16 @@ describe('CodexAccountService config sync', () => {
       vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
 
       const store = createStore(createSettings())
+
       const rateLimits = {
         refreshForCodexAccountChange: vi.fn(() => new Promise<never>(() => {})),
         evictInactiveCodexCache: vi.fn()
       }
+
       const runtimeHome = createRuntimeHome()
 
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,
@@ -188,13 +202,16 @@ describe('CodexAccountService config sync', () => {
       vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
 
       const store = createStore(createSettings())
+
       const rateLimits = {
         refreshForCodexAccountChange: vi.fn().mockRejectedValue(new Error('cold probe failed')),
         evictInactiveCodexCache: vi.fn()
       }
+
       const runtimeHome = createRuntimeHome()
 
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,

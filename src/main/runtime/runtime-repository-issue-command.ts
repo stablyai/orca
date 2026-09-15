@@ -16,6 +16,7 @@ export class RuntimeRepositoryIssueCommand {
 
   async read(repoSelector: string) {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     if (isFolderRepo(repo)) {
       return {
         localContent: null,
@@ -25,11 +26,14 @@ export class RuntimeRepositoryIssueCommand {
         source: 'none' as const
       }
     }
+
     if (!repo.connectionId) {
       return readIssueCommand(repo.path)
     }
+
     const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
     const fsProvider = getSshFilesystemProvider(repo.connectionId)
+
     if (!fsProvider) {
       return {
         localContent: null,
@@ -39,8 +43,10 @@ export class RuntimeRepositoryIssueCommand {
         source: 'none' as const
       }
     }
+
     const localContent = await readRemoteOverride(fsProvider, issueCommandPath)
     const sharedContent = await readRemoteShared(fsProvider, repo.path)
+
     return {
       localContent,
       sharedContent,
@@ -56,30 +62,40 @@ export class RuntimeRepositoryIssueCommand {
 
   async write(repoSelector: string, content: string): Promise<{ ok: true }> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     if (isFolderRepo(repo)) {
       return { ok: true }
     }
+
     if (!repo.connectionId) {
       writeIssueCommand(repo.path, content)
+
       return { ok: true }
     }
+
     const issueCommandPath = joinWorktreeRelativePath(repo.path, '.orca/issue-command')
     const fsProvider = getSshFilesystemProvider(repo.connectionId)
+
     if (!fsProvider) {
       return { ok: true }
     }
+
     const trimmed = content.trim()
+
     if (!trimmed) {
       await fsProvider.deletePath(issueCommandPath, false).catch((error: unknown) => {
         if (!isENOENT(error)) {
           throw error
         }
       })
+
       return { ok: true }
     }
+
     await fsProvider.createDir(joinWorktreeRelativePath(repo.path, '.orca'))
     await ensureRemoteOrcaDirIgnored(fsProvider, repo.path)
     await fsProvider.writeFile(issueCommandPath, `${trimmed}\n`)
+
     return { ok: true }
   }
 }
@@ -90,6 +106,7 @@ async function readRemoteOverride(
 ): Promise<string | null> {
   try {
     const result = await fsProvider.readFile(issueCommandPath)
+
     return result.isBinary ? null : result.content.trim() || null
   } catch {
     return null
@@ -102,6 +119,7 @@ async function readRemoteShared(
 ): Promise<string | null> {
   try {
     const result = await fsProvider.readFile(joinWorktreeRelativePath(repoPath, 'orca.yaml'))
+
     return result.isBinary ? null : parseOrcaYaml(result.content)?.issueCommand?.trim() || null
   } catch {
     return null
@@ -114,24 +132,31 @@ async function ensureRemoteOrcaDirIgnored(
 ): Promise<void> {
   const gitignorePath = joinWorktreeRelativePath(repoPath, '.gitignore')
   let result: Awaited<ReturnType<IFilesystemProvider['readFile']>>
+
   try {
     result = await fsProvider.readFile(gitignorePath)
   } catch (error) {
     if (!isENOENT(error)) {
       console.warn('[runtime] Could not inspect remote .gitignore for .orca', error)
+
       return
     }
+
     try {
       await fsProvider.writeFile(gitignorePath, '.orca\n')
     } catch (writeError) {
       console.warn('[runtime] Could not update remote .gitignore to exclude .orca', writeError)
     }
+
     return
   }
+
   if (result.isBinary || /^\.orca\/?$/m.test(result.content)) {
     return
   }
+
   const separator = result.content.endsWith('\n') ? '' : '\n'
+
   try {
     await fsProvider.writeFile(gitignorePath, `${result.content}${separator}.orca\n`)
   } catch (writeError) {

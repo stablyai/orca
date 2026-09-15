@@ -41,25 +41,31 @@ export function createTerminalStructuralReplayCoordinator(
         if (disposed) {
           return
         }
+
         const intent = captureTerminalStructuralScrollIntent(terminal)
         // Why: a pre-replay fit retry can otherwise run after this transaction
         // and restore a stale marker over the authoritative replay viewport.
         cancelDeferredScrollRestore(terminal)
         beginTerminalScrollIntentBufferRebuild(terminal)
         let cancelTask = (): void => {}
+
         const cancellation = new Promise<void>((resolve) => {
           cancelTask = resolve
         })
+
         activeCancellation = () => {
           cancelTask()
         }
+
         try {
           const taskCompletion = Promise.resolve(task())
           await Promise.race([taskCompletion, cancellation])
         } finally {
           endTerminalScrollIntentBufferRebuild(terminal)
+
           try {
             const shouldRestore = !disposed && options.shouldRestore?.() !== false
+
             if (shouldRestore) {
               restoreTerminalStructuralScrollIntent(terminal, intent, { restoreBy: 'bottomOffset' })
               // Why: live bytes must remain serialized behind replay until any
@@ -71,7 +77,9 @@ export function createTerminalStructuralReplayCoordinator(
           }
         }
       })
+
     tail = completion
+
     return completion
   }
 
@@ -81,6 +89,7 @@ export function createTerminalStructuralReplayCoordinator(
       if (disposed) {
         return
       }
+
       disposed = true
       // Why: a torn-down terminal may silently drop write callbacks. Release
       // the rebuild without sampling its half-parsed buffer into the keyed pin.

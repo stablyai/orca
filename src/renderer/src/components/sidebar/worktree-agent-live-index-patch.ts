@@ -12,9 +12,11 @@ export type LiveEntriesByWorktreeCache = {
 // Why: test-only observability — proves same-key entry updates (per-ping
 // setAgentStatus map churn) take the O(changed) patch path, not a full rebuild.
 let liveEntriesFullRebuildCount = 0
+
 export function getLiveEntriesFullRebuildCountForTests(): number {
   return liveEntriesFullRebuildCount
 }
+
 export function recordLiveEntriesFullRebuild(): void {
   liveEntriesFullRebuildCount += 1
 }
@@ -26,10 +28,13 @@ export function liveEntryWorktreeId(
   tabIdToWorktreeId: Map<string, string>
 ): string | undefined {
   const parsed = parsePaneKey(paneKey)
+
   if (!parsed) {
     return undefined
   }
+
   const tabWorktreeId = tabIdToWorktreeId.get(parsed.tabId)
+
   return tabWorktreeId ?? (entry.state === 'done' ? undefined : entry.worktreeId)
 }
 
@@ -59,13 +64,16 @@ export function patchLiveEntriesByWorktree(
   const previousMap = cache.agentStatusByPaneKey
   const changed: { paneKey: string; entry: AgentStatusEntry }[] = []
   let keyCount = 0
+
   for (const paneKey in agentStatusByPaneKey) {
     keyCount += 1
     const entry = agentStatusByPaneKey[paneKey]
     const previous = previousMap[paneKey]
+
     if (previous === entry) {
       continue
     }
+
     // Why: bail on added keys or bucket-determinant changes — the bucket rule
     // depends only on paneKey, the (reference-equal) tab index, worktree
     // attribution, and done-ness, so equal determinants mean the same bucket.
@@ -76,36 +84,46 @@ export function patchLiveEntriesByWorktree(
     ) {
       return null
     }
+
     changed.push({ paneKey, entry })
   }
+
   if (keyCount !== Object.keys(previousMap).length) {
     // Why: removed keys need buckets dropped; leave that to the full rebuild.
     return null
   }
+
   if (changed.length === 0) {
     return cache.entriesByWorktree
   }
 
   const entriesByWorktree = new Map(cache.entriesByWorktree)
   const clonedBuckets = new Set<string>()
+
   for (const { paneKey, entry } of changed) {
     const worktreeId = liveEntryWorktreeId(paneKey, entry, tabIdToWorktreeId)
+
     if (!worktreeId) {
       continue
     }
+
     const bucket = entriesByWorktree.get(worktreeId)
     const index = bucket?.indexOf(previousMap[paneKey]) ?? -1
+
     if (!bucket || index < 0) {
       return null
     }
+
     const nextBucket = clonedBuckets.has(worktreeId) ? bucket : bucket.slice()
     // Why: in-position replacement preserves iteration order, matching what a
     // full rebuild would produce (spread updates keep object insertion order).
     nextBucket[index] = entry
+
     if (!clonedBuckets.has(worktreeId)) {
       clonedBuckets.add(worktreeId)
       entriesByWorktree.set(worktreeId, nextBucket)
     }
   }
+
   return entriesByWorktree
 }

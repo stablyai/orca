@@ -32,7 +32,9 @@ const ALLOWED_GIT_SUBCOMMANDS = new Set([
   'check-ref-format',
   'config'
 ])
+
 const CONFIG_READ_ONLY_FLAGS = new Set(['--get', '--get-all', '--list', '--get-regexp', '-l'])
+
 // Why: checking presence of a read-only flag is insufficient — a request could
 // include both --list (passes the check) and --add (performs a write). Reject
 // known write operations explicitly.
@@ -52,6 +54,7 @@ const CONFIG_WRITE_FLAGS = new Set([
   '--global',
   '--system'
 ])
+
 const BRANCH_DESTRUCTIVE_FLAGS = new Set([
   '-d',
   '-D',
@@ -80,7 +83,9 @@ const REMOTE_WRITE_SUBCOMMANDS = new Set([
   'prune',
   'update'
 ])
+
 const SYMBOLIC_REF_WRITE_FLAGS = new Set(['-d', '--delete', '-m'])
+
 const DIFF_ALLOWED_FLAGS = new Set([
   '--cached',
   '--staged',
@@ -100,9 +105,11 @@ function isAllowedRemoteWriteShape(args: string[]): boolean {
   if (args[1] === 'add') {
     return args.length === 4 && isSafeGitRemoteName(args[2]) && isSafePushTargetRemoteUrl(args[3])
   }
+
   if (args[1] === 'remove') {
     return args.length === 3 && isSafeGitRemoteName(args[2])
   }
+
   return false
 }
 
@@ -110,10 +117,13 @@ function validateCloneArgs(args: string[]): void {
   // Why: project-host setup needs remote clone, but git.exec must not become a
   // general write surface. Permit only `git clone [--progress] -- <url> <dir>`.
   const allowed = args[1] === '--progress' ? args.slice(2) : args.slice(1)
+
   if (allowed.length !== 3 || allowed[0] !== '--') {
     throw new Error('git clone via exec is restricted to clone [--progress] -- <url> <dir>')
   }
+
   const targetDir = allowed[2]
+
   if (
     !targetDir ||
     targetDir === '.' ||
@@ -144,10 +154,13 @@ function matchesDeniedFlag(arg: string, denySet: Set<string>): boolean {
   if (denySet.has(arg)) {
     return true
   }
+
   const eqIdx = arg.indexOf('=')
+
   if (eqIdx > 0) {
     return denySet.has(arg.slice(0, eqIdx))
   }
+
   return false
 }
 
@@ -156,17 +169,21 @@ export function validateGitExecArgs(args: string[]): void {
   // config and execute arbitrary commands (e.g. core.sshCommand). Reject any
   // arguments before the subcommand that look like global git flags.
   let subcommandIdx = 0
+
   while (subcommandIdx < args.length && args[subcommandIdx].startsWith('-')) {
     subcommandIdx++
   }
+
   if (subcommandIdx > 0) {
     throw new Error('Global git flags before the subcommand are not allowed')
   }
 
   const subcommand = args[0]
+
   if (!subcommand || !ALLOWED_GIT_SUBCOMMANDS.has(subcommand)) {
     throw new Error(`git subcommand not allowed: ${subcommand ?? '(empty)'}`)
   }
+
   const restArgs = args.slice(1)
 
   if (restArgs.some((a) => matchesDeniedFlag(a, GLOBAL_DENIED_FLAGS))) {
@@ -177,23 +194,29 @@ export function validateGitExecArgs(args: string[]): void {
     if (!restArgs.some((a) => CONFIG_READ_ONLY_FLAGS.has(a))) {
       throw new Error('git config is restricted to read-only operations (--get, --list, etc.)')
     }
+
     if (restArgs.some((a) => matchesDeniedFlag(a, CONFIG_WRITE_FLAGS))) {
       throw new Error('git config write operations are not allowed via exec')
     }
   }
+
   if (subcommand === 'init') {
     validateInitArgs(args)
   }
+
   if (subcommand === 'commit') {
     validateCommitArgs(args)
   }
+
   if (subcommand === 'branch') {
     if (restArgs.some((a) => matchesDeniedFlag(a, BRANCH_DESTRUCTIVE_FLAGS))) {
       throw new Error('Destructive git branch flags are not allowed via exec')
     }
   }
+
   if (subcommand === 'remote') {
     const remoteSubcmd = restArgs.find((a) => !a.startsWith('-'))
+
     if (
       remoteSubcmd &&
       REMOTE_WRITE_SUBCOMMANDS.has(remoteSubcmd) &&
@@ -202,15 +225,19 @@ export function validateGitExecArgs(args: string[]): void {
       throw new Error('Destructive git remote operations are not allowed via exec')
     }
   }
+
   if (subcommand === 'symbolic-ref') {
     if (restArgs.some((a) => matchesDeniedFlag(a, SYMBOLIC_REF_WRITE_FLAGS))) {
       throw new Error('git symbolic-ref write operations are not allowed via exec')
     }
+
     const positionalArgs = restArgs.filter((a) => !a.startsWith('-'))
+
     if (positionalArgs.length >= 2) {
       throw new Error('git symbolic-ref write operations are not allowed via exec')
     }
   }
+
   if (subcommand === 'diff') {
     // Why: SSH commit-message generation only needs read-only staged diffs.
     // Keep this narrow so `git.exec` cannot become a general file reader via
@@ -218,11 +245,14 @@ export function validateGitExecArgs(args: string[]): void {
     if (!restArgs.some((a) => a === '--cached' || a === '--staged')) {
       throw new Error('git diff via exec is restricted to staged changes')
     }
+
     const unsupportedArg = restArgs.find((a) => !DIFF_ALLOWED_FLAGS.has(a))
+
     if (unsupportedArg) {
       throw new Error(`git diff flag not allowed via exec: ${unsupportedArg}`)
     }
   }
+
   if (subcommand === 'clone') {
     validateCloneArgs(args)
   }

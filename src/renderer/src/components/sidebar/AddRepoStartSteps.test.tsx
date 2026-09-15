@@ -98,9 +98,11 @@ function findButton(container: HTMLElement, label: string): HTMLButtonElement {
   const button = Array.from(container.querySelectorAll('button')).find((entry) =>
     entry.textContent?.includes(label)
   )
+
   if (!button) {
     throw new Error(`Button not found: ${label}`)
   }
+
   return button
 }
 
@@ -134,6 +136,7 @@ function getHostAwareActionModel(): {
     onOpenRemoteStep: vi.fn(),
     onOpenCreateStep: vi.fn()
   })
+
   const createAction = secondaryActions.find((action) => action.kind === 'create')
 
   return {
@@ -325,6 +328,7 @@ describe('AddRepoLocalStartStep', () => {
       nestedScanInProgress: true,
       nestedScanId: 'scan-1'
     })
+
     const stopScanButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Stop scan"]'
     )
@@ -345,6 +349,7 @@ describe('AddRepoLocalStartStep', () => {
   it('hides the visual ⏎ chip from assistive technology', async () => {
     const { container, root } = await renderLocalStartStepDom(false)
     const browseButton = findButton(container, 'Browse folder')
+
     const enterChip = Array.from(browseButton.querySelectorAll('[aria-hidden="true"]')).find(
       (entry) => entry.textContent?.includes('⏎')
     )

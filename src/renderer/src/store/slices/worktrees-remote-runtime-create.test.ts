@@ -40,11 +40,13 @@ describe('worktree remote runtime mutations', () => {
 
   it('creates worktrees through the active remote runtime environment', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/feature',
       repoId: 'repo1',
       path: '/path/feature'
     })
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-create',
       ok: true,
@@ -128,11 +130,13 @@ describe('worktree remote runtime mutations', () => {
 
   it('persists Jira item and source context through paired-runtime create', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/jira-link',
       repoId: 'repo1',
       path: '/path/jira-link'
     })
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-create',
       ok: true,
@@ -143,6 +147,7 @@ describe('worktree remote runtime mutations', () => {
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       worktreesByRepo: { repo1: [] }
     } as Partial<AppState>)
+
     const linkedWorkItem = {
       provider: 'jira' as const,
       type: 'issue' as const,
@@ -151,6 +156,7 @@ describe('worktree remote runtime mutations', () => {
       url: 'https://company.atlassian.net/browse/ORCA-123',
       jiraIdentifier: 'ORCA-123'
     }
+
     const linkedTaskSourceContext = {
       kind: 'task-source' as const,
       provider: 'jira' as const,
@@ -163,6 +169,7 @@ describe('worktree remote runtime mutations', () => {
         projectKey: 'ORCA'
       }
     }
+
     const createWorktree = store.getState().createWorktree
     const args: Parameters<typeof createWorktree> = ['repo1', 'jira-link']
     args[25] = { linkedWorkItem, linkedTaskSourceContext }
@@ -179,11 +186,13 @@ describe('worktree remote runtime mutations', () => {
 
   it('blocks Jira linking when the paired runtime lacks durable metadata capability', async () => {
     const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+
     if (oldRuntimeStatus.ok) {
       oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
         (capability) => capability !== 'worktree.linked-work-item-context.v1'
       )
     }
+
     runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
       args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
     )
@@ -211,11 +220,13 @@ describe('worktree remote runtime mutations', () => {
 
   it('passes startup commands through remote runtime worktree creation', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/agent-startup',
       repoId: 'repo1',
       path: '/path/agent-startup'
     })
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-create',
       ok: true,
@@ -282,11 +293,13 @@ describe('worktree remote runtime mutations', () => {
 
   it('passes task startup drafts only to the owning remote runtime', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/task-draft',
       repoId: 'repo1',
       path: '/path/task-draft'
     })
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-create',
       ok: true,
@@ -318,11 +331,13 @@ describe('worktree remote runtime mutations', () => {
 
   it('passes startup commands through local worktree creation IPC', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/local-agent-startup',
       repoId: 'repo1',
       path: '/path/local-agent-startup'
     })
+
     mockApi.worktrees.create.mockResolvedValue({
       worktree: wt,
       startupTerminal: { spawned: true, surface: 'visible' }
@@ -385,12 +400,14 @@ describe('worktree remote runtime mutations', () => {
 
   it('retries a suffixed branchNameOverride when runtime create reports a branch conflict', async () => {
     const store = createTestStore()
+
     const wt = makeWorktree({
       id: 'repo1::/path/feature-something-2',
       repoId: 'repo1',
       path: '/path/feature-something-2',
       branch: 'feature/something-2'
     })
+
     runtimeEnvironmentCall.mockRejectedValueOnce(new Error('Branch already exists on a remote'))
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-create',

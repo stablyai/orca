@@ -68,12 +68,14 @@ describe('liveness safety net lifecycle', () => {
     // Why: a tick surviving the pre-sign-out fence could catch the window
     // before the profile wipe and briefly resurrect a broker.
     vi.useFakeTimers()
+
     const coordinator = {
       reconcile: vi.fn(),
       ensureLive: vi.fn(),
       fenceAndCloseNow: vi.fn(),
       stop: vi.fn()
     }
+
     const service = Object.create(DesktopRelayService.prototype) as DesktopRelayService
     Object.assign(service, {
       coordinator,
@@ -108,6 +110,7 @@ describe('local-only mobile pairing', () => {
       getDevice: () => ({ deviceId: 'device-1', scope: 'mobile' }),
       getMobilePairingConnectionMode: () => 'local-only'
     }
+
     const service = Object.create(DesktopRelayService.prototype) as DesktopRelayService
     Object.defineProperty(service, 'runtimeRpc', {
       value: { getDeviceRegistry: () => registry }

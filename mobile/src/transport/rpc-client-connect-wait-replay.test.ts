@@ -36,6 +36,7 @@ class MockWebSocket {
     if (this.readyState === MockWebSocket.CLOSED) {
       return
     }
+
     this.readyState = MockWebSocket.CLOSED
     this.onclose?.()
   })
@@ -61,6 +62,7 @@ class MockWebSocket {
 }
 
 const mockSockets: MockWebSocket[] = []
+
 const originalWebSocket = globalThis.WebSocket
 
 function track(request: Promise<unknown>): { read: () => string } {
@@ -73,6 +75,7 @@ function track(request: Promise<unknown>): { read: () => string } {
       outcome = error.message
     }
   )
+
   return { read: () => outcome }
 }
 
@@ -103,6 +106,7 @@ describe('mobile rpc-client connect-wait replay', () => {
       { terminal: 't1', text: 'YZZY' },
       { failWhenDisconnected: true }
     )
+
     const outcome = track(request)
 
     try {

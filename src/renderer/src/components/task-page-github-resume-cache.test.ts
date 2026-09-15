@@ -8,11 +8,13 @@ import {
 describe('task page GitHub resume cache', () => {
   it('isolates entries by full list context', () => {
     const cache = createTaskPageResumePageCache<number>()
+
     const first = buildTaskPageGitHubResumeContextKey({
       selectedReposKey: 'local:repo-a',
       query: 'is:pr',
       pageSize: 30
     })
+
     const second = buildTaskPageGitHubResumeContextKey({
       selectedReposKey: 'ssh:host-a:repo-a',
       query: 'is:pr',
@@ -28,9 +30,11 @@ describe('task page GitHub resume cache', () => {
 
   it('evicts the least recently used page at the global cap', () => {
     const cache = createTaskPageResumePageCache<number>()
+
     for (let page = 0; page < TASK_PAGE_GITHUB_RESUME_CACHE_LIMIT; page += 1) {
       cache.write('scope', page, [page], page)
     }
+
     expect(cache.read('scope', 0, 10)?.items).toEqual([0])
 
     cache.write('scope', TASK_PAGE_GITHUB_RESUME_CACHE_LIMIT, [5], 11)

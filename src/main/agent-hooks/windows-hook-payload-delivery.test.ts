@@ -25,6 +25,7 @@ vi.mock('electron', () => ({
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof osModule>()
+
   return {
     ...actual,
     homedir: homedirMock.mockImplementation(actual.homedir)
@@ -37,7 +38,9 @@ import { getConfigPath, getWindowsManagedLifecycleHook } from '../claude/hook-se
 import { findGitBash } from './windows-git-bash-path.test-fixture'
 
 const PANE_KEY = 'tab-1:leaf-1'
+
 const HOOK_TOKEN = 'payload-delivery-token'
+
 // Why: exercise the sizes and bytes a real hook carries — a multi-KB body crosses the pipe
 // in several chunks, and non-ASCII catches a launcher that recodes stdin through a code page.
 const PAYLOAD = JSON.stringify({
@@ -56,6 +59,7 @@ async function startHookListener(): Promise<{
   posts: HookPost[]
 }> {
   const posts: HookPost[] = []
+
   const server = createServer((req, res) => {
     let body = ''
     req.setEncoding('utf8')
@@ -73,12 +77,14 @@ async function startHookListener(): Promise<{
       res.end('{}')
     })
   })
+
   const port = await new Promise<number>((resolve) => {
     server.listen(0, '127.0.0.1', () => {
       const address = server.address()
       resolve(typeof address === 'object' && address ? address.port : 0)
     })
   })
+
   return { server, port, posts }
 }
 
@@ -95,15 +101,18 @@ function runHookCommand(
       windowsHide: true,
       env
     })
+
     let stdout = ''
     let stderr = ''
     let timedOut = false
+
     // Why: Claude Code abandons a hook at 10s, so a launcher that strands the payload reads
     // as a timeout to the user; fail the same way instead of hanging the suite.
     const timer = setTimeout(() => {
       timedOut = true
       child.kill('SIGKILL')
     }, 15_000)
+
     child.on('error', (error) => {
       clearTimeout(timer)
       reject(error)
@@ -136,6 +145,7 @@ function hookEnvironment(extra: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const base = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith('ORCA_'))
   )
+
   return { ...base, ...extra }
 }
 
@@ -146,6 +156,7 @@ describe('Windows managed hook launcher', () => {
     const hook = getWindowsManagedLifecycleHook(
       'C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd'
     )
+
     expect(hook.command).not.toMatch(/conhost/i)
     expect(hook.args).toBeUndefined()
   })
@@ -159,6 +170,7 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
     server?.close()
     server = null
     homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
+
     if (home) {
       removeTreeSync(home)
       home = ''
@@ -174,9 +186,11 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
     const settings = JSON.parse(readFileSync(getConfigPath(), 'utf8')) as {
       hooks: Record<string, { hooks: { command: string }[] }[]>
     }
+
     // Why: assert nothing about the launcher's shape here — this test's whole value is
     // that it fails for any launcher that loses the payload, named conhost or not.
     const registeredCommand = settings.hooks.PreToolUse[0].hooks[0].command
+
     // ...with one exception: a cmd-safe profile must reach the script with no interpreter in
     // front of it, or #18875's per-event PowerShell start-up has quietly come back.
     if (WINDOWS_CMD_SAFE_PATH.test(join(home, '.orca', 'agent-hooks', 'claude-hook.cmd'))) {
@@ -185,6 +199,7 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
 
     const listener = await startHookListener()
     server = listener.server
+
     const env = hookEnvironment({
       USERPROFILE: home,
       HOME: home,
@@ -197,6 +212,7 @@ describe.skipIf(process.platform !== 'win32')('Windows managed hook payload deli
       { name: 'cmd.exe', executable: 'cmd.exe', args: ['/d', '/c', registeredCommand] },
       { name: 'Git Bash', executable: findGitBash(), args: ['-c', registeredCommand] }
     ]
+
     for (const shell of shells) {
       const before = listener.posts.length
       const result = await runHookCommand(shell.executable, shell.args, env)

@@ -12,6 +12,7 @@ import { join } from 'node:path'
  */
 
 export const HTTP1_COMPATIBILITY_MARKER_FILE = 'http1-compatibility.json'
+
 const MARKER_SCHEME_VERSION = 1
 
 type Http1CompatibilityMarker = {
@@ -29,9 +30,11 @@ export function readHttp1CompatibilityMarker(userDataPath: string): boolean | nu
     const parsed = JSON.parse(
       readFileSync(markerPath(userDataPath), 'utf-8')
     ) as Partial<Http1CompatibilityMarker>
+
     if (parsed.schemeVersion !== MARKER_SCHEME_VERSION || typeof parsed.enabled !== 'boolean') {
       return null
     }
+
     return parsed.enabled
   } catch {
     return null
@@ -42,7 +45,9 @@ export function writeHttp1CompatibilityMarker(userDataPath: string, enabled: boo
   if (readHttp1CompatibilityMarker(userDataPath) === enabled) {
     return
   }
+
   const marker: Http1CompatibilityMarker = { schemeVersion: MARKER_SCHEME_VERSION, enabled }
+
   try {
     writeFileSync(markerPath(userDataPath), JSON.stringify(marker))
   } catch {

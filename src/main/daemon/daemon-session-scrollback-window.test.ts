@@ -24,6 +24,7 @@ describe('resolveDaemonSessionScrollbackRows', () => {
       const env = { ORCA_DAEMON_SESSION_SCROLLBACK_ROWS: raw } as NodeJS.ProcessEnv
       expect(resolveDaemonSessionScrollbackRows(env)).toBe(Number(raw))
     }
+
     // Why bounded: 0 loses the visible screen's context; huge values silently reintroduce the
     // unbounded retention this window exists to prevent.
     for (const raw of ['0', '50', '99', '5001', '50000', '-1', '3.5', 'nonsense', '']) {
@@ -39,6 +40,7 @@ describe('daemon session scrollback window', () => {
 
   function createMockSubprocess(): SubprocessHandle {
     let onExitCb: ((code: number) => void) | null = null
+
     return {
       pid: 4242,
       getForegroundProcess: vi.fn(() => null),
@@ -77,9 +79,11 @@ describe('daemon session scrollback window', () => {
       streamClient: { onData: vi.fn(), onExit: vi.fn() }
     })
     const total = DAEMON_SESSION_SCROLLBACK_ROWS + 500
+
     for (let i = 1; i <= total; i += 1) {
       dataCb?.(`LINE_${String(i).padStart(5, '0')}\r\n`)
     }
+
     await vi.waitFor(() => {
       const snapshot = host.getSnapshot('windowed')
       expect(snapshot?.snapshotAnsi ?? snapshot?.scrollbackAnsi).toBeTruthy()

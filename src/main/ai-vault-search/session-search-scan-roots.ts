@@ -41,12 +41,15 @@ export async function discoverSessionSearchCandidates(
 ): Promise<SessionSearchDiscovery> {
   const issues: AiVaultScanIssue[] = []
   const options: AiVaultScanOptions = { ...roots, signal: args.signal }
+
   const discoveries = await discoverAiVaultSessionSources({
     options,
     limitPerAgent: args.limitPerAgent,
     issues
   })
+
   const candidates = await sessionCandidatesFromDiscoveries(discoveries, options)
+
   return { candidates, discoveries, issues }
 }
 
@@ -78,18 +81,23 @@ export function sessionSearchRootListings(
 ): SessionSearchRootListing[] {
   const wslHomeDirs = normalizedWslHomeDirs(roots.wslHomeDirs)
   const counts = new Map<string, number>()
+
   for (const discovery of discoveries) {
     const constituents = constituentRoots(roots, wslHomeDirs, discovery)
+
     for (const root of constituents) {
       counts.set(root, counts.get(root) ?? 0)
     }
+
     for (const file of discovery.files) {
       const owner = owningRoot(constituents, file.path)
+
       if (owner !== null) {
         counts.set(owner, (counts.get(owner) ?? 0) + 1)
       }
     }
   }
+
   return [...counts].map(([root, files]) => ({ root, files }))
 }
 
@@ -99,9 +107,11 @@ function constituentRoots(
   discovery: SessionFileDiscovery
 ): string[] {
   const declared = AI_VAULT_AGENT_SOURCES[discovery.agent]?.rootDirs(roots, wslHomeDirs) ?? []
+
   if (declared.includes(discovery.rootDir)) {
     return [discovery.rootDir]
   }
+
   // Either a merged discovery, whose rootDir is the joined string, or a source
   // that builds its own discoveries (OpenCode, Antigravity) and reports a real
   // directory that this table does not list.
@@ -110,11 +120,13 @@ function constituentRoots(
 
 function owningRoot(constituents: readonly string[], path: string): string | null {
   let owner: string | null = null
+
   for (const root of constituents) {
     if (isUnderScanRoot(path, root) && (owner === null || root.length > owner.length)) {
       owner = root
     }
   }
+
   return owner
 }
 
@@ -149,6 +161,7 @@ export function sameSessionSearchRoots(
 ): boolean {
   const left = comparableRootFields(a)
   const right = comparableRootFields(b)
+
   return left.length === right.length && left.every((field, index) => field === right[index])
 }
 

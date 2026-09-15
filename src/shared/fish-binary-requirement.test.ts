@@ -7,6 +7,7 @@ import {
 } from './fish-binary-requirement'
 
 const FOUND: FishBinaryLookup = { available: true, path: '/usr/bin/fish', majorVersion: 4 }
+
 const MISSING: FishBinaryLookup = {
   available: false,
   path: null,
@@ -36,9 +37,11 @@ describe('fishRequirementViolation', () => {
 describe('resolveFishBinary', () => {
   it('treats an installed fish below the floor as unavailable, with the version in the reason', () => {
     const lookup = resolveFishBinary(Number.MAX_SAFE_INTEGER)
+
     if (lookup.available) {
       throw new Error('no fish can satisfy an unreachable version floor')
     }
+
     // Only when a fish is actually installed does the reason describe a version.
     if (lookup.majorVersion > 0) {
       expect(lookup.reason).toContain(`fish ${Number.MAX_SAFE_INTEGER}+ required`)
@@ -49,6 +52,7 @@ describe('resolveFishBinary', () => {
     if (process.platform !== 'win32') {
       return
     }
+
     expect(resolveFishBinary().path).toBeNull()
   })
 })

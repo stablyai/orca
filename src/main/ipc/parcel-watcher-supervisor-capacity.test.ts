@@ -20,6 +20,7 @@ const { existsSyncMock, forkMock, mkdtempSyncMock, rmSyncMock } = vi.hoisted(() 
 }))
 
 vi.mock('node:child_process', () => ({ fork: forkMock }))
+
 vi.mock('node:fs', () => ({
   existsSync: existsSyncMock,
   mkdtempSync: mkdtempSyncMock,
@@ -33,6 +34,7 @@ const supervisors: WatcherProcessSupervisor[] = []
 function createSupervisor(): WatcherProcessSupervisor {
   const supervisor = createWatcherProcessSupervisor()
   supervisors.push(supervisor)
+
   return supervisor
 }
 
@@ -52,6 +54,7 @@ describe('WatcherProcessSupervisor capacity wait', () => {
     for (const supervisor of supervisors.splice(0)) {
       supervisor.dispose()
     }
+
     resetWatcherChildRegistryForTest()
     vi.unstubAllEnvs()
     vi.clearAllMocks()
@@ -62,9 +65,11 @@ describe('WatcherProcessSupervisor capacity wait', () => {
     vi.useFakeTimers()
     const pending: Promise<unknown>[] = []
     const children: FakeWatcherChild[] = []
+
     for (let index = 0; index < MAX_PHYSICAL_WATCHER_CHILDREN; index++) {
       const supervisor = createSupervisor()
       const controller = new AbortController()
+
       const subscription = supervisor.subscribe(
         `/stuck-${index}`,
         vi.fn(),
@@ -73,6 +78,7 @@ describe('WatcherProcessSupervisor capacity wait', () => {
           signal: controller.signal
         }
       )
+
       pending.push(subscription.catch((error) => error))
       const child = currentChild()
       children.push(child)
@@ -81,6 +87,7 @@ describe('WatcherProcessSupervisor capacity wait', () => {
       controller.abort()
       child.emit('message', { op: 'cancel-requires-restart', id })
     }
+
     expect(forkMock).toHaveBeenCalledTimes(MAX_PHYSICAL_WATCHER_CHILDREN)
 
     const extraSupervisor = createSupervisor()
@@ -112,6 +119,7 @@ describe('WatcherProcessSupervisor capacity wait', () => {
     const blockedSupervisor = createSupervisor()
     const firstController = new AbortController()
     const secondController = new AbortController()
+
     const firstBlocked = blockedSupervisor.subscribe(
       '/cancelled-over-cap-a',
       vi.fn(),
@@ -120,6 +128,7 @@ describe('WatcherProcessSupervisor capacity wait', () => {
         signal: firstController.signal
       }
     )
+
     const secondBlocked = blockedSupervisor.subscribe(
       '/cancelled-over-cap-b',
       vi.fn(),
@@ -128,6 +137,7 @@ describe('WatcherProcessSupervisor capacity wait', () => {
         signal: secondController.signal
       }
     )
+
     await Promise.resolve()
     expect(forkMock).toHaveBeenCalledTimes(MAX_PHYSICAL_WATCHER_CHILDREN + 1)
     firstController.abort()
@@ -155,6 +165,7 @@ describe('WatcherProcessSupervisor capacity wait', () => {
 
   it('keeps waiting when crash recovery reclaims the announced slot', async () => {
     const children: FakeWatcherChild[] = []
+
     for (let index = 0; index < MAX_PHYSICAL_WATCHER_CHILDREN; index++) {
       const supervisor = createSupervisor()
       const subscription = supervisor.subscribe(`/active-${index}`, vi.fn(), {})

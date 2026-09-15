@@ -27,6 +27,7 @@ export type RemoveWorktreeArgs = {
 export type DetectedWorktreeRequestArgs = { repoId: string } | ListDetectedWorktreesArgs
 
 export const NullableWorkspaceLinkedItemSchema = WorkspaceLinkedItemSchema.nullable()
+
 export const NullableTaskSourceContextSchema = TaskSourceContextSchema.nullable()
 
 export function normalizeLinkedWorkItemFields<
@@ -39,10 +40,12 @@ export function normalizeLinkedWorkItemFields<
     input.linkedWorkItem === undefined
       ? undefined
       : NullableWorkspaceLinkedItemSchema.parse(input.linkedWorkItem)
+
   const linkedTaskSourceContext =
     input.linkedTaskSourceContext === undefined
       ? undefined
       : NullableTaskSourceContextSchema.parse(input.linkedTaskSourceContext)
+
   if (
     linkedWorkItem &&
     linkedTaskSourceContext &&
@@ -50,6 +53,7 @@ export function normalizeLinkedWorkItemFields<
   ) {
     throw new Error('Linked work item and source context identities must match')
   }
+
   return {
     ...input,
     ...(linkedWorkItem !== undefined ? { linkedWorkItem } : {}),

@@ -24,12 +24,16 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return
   }
+
   if (Array.isArray(node)) {
     node.forEach((entry) => visit(entry, cb))
+
     return
   }
+
   const element = node as ReactElementLike
   cb(element)
+
   if (element.props?.children) {
     visit(element.props.children, cb)
   }
@@ -39,13 +43,17 @@ function collectText(node: unknown): string {
   if (node == null) {
     return ''
   }
+
   if (typeof node === 'string' || typeof node === 'number') {
     return String(node)
   }
+
   if (Array.isArray(node)) {
     return node.map(collectText).join('')
   }
+
   const element = node as ReactElementLike
+
   return collectText(element.props?.children)
 }
 
@@ -56,9 +64,11 @@ function findCompareSummaryToolbarButton(node: unknown, label: string): ReactEle
       found = entry
     }
   })
+
   if (!found) {
     throw new Error(`toolbar button not found: ${label}`)
   }
+
   return found
 }
 
@@ -69,6 +79,7 @@ function collectCompareSummaryToolbarLabels(node: unknown): string[] {
       labels.push(entry.props.label)
     }
   })
+
   return labels
 }
 
@@ -309,6 +320,7 @@ describe('SourceControl compare summary', () => {
       ahead: 0,
       behind: 0
     }
+
     expect(
       shouldClearBranchCompareForMissingBase({
         isFolder: false,
@@ -334,6 +346,7 @@ describe('SourceControl compare summary', () => {
       ahead: 0,
       behind: 0
     }
+
     expect(
       shouldClearBranchCompareForMissingBase({
         isFolder: true,
@@ -346,6 +359,7 @@ describe('SourceControl compare summary', () => {
   it('wires toolbar actions without rendering the dead view-mode toggle', () => {
     const onChangeBaseRef = vi.fn()
     const onRetry = vi.fn()
+
     const node = CompareSummary({
       summary: readySummary,
       onChangeBaseRef,
@@ -358,20 +372,25 @@ describe('SourceControl compare summary', () => {
     ])
 
     const changeBaseRef = findCompareSummaryToolbarButton(node, 'Change base ref').props.onClick
+
     if (typeof changeBaseRef === 'function') {
       changeBaseRef()
     }
+
     expect(onChangeBaseRef).toHaveBeenCalledTimes(1)
 
     const refresh = findCompareSummaryToolbarButton(node, 'Refresh branch compare').props.onClick
+
     if (typeof refresh === 'function') {
       refresh()
     }
+
     expect(onRetry).toHaveBeenCalledTimes(1)
   })
 
   it('omits the whole compare row when the branch has no commits ahead', () => {
     const cleanSummary = { ...readySummary, commitsAhead: 0 }
+
     const node = CompareSummary({
       summary: cleanSummary,
       onChangeBaseRef: vi.fn(),

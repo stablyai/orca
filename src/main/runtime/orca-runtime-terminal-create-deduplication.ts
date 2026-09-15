@@ -26,15 +26,19 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
       if (reconcileExisting) {
         throw new Error('runtime_unavailable')
       }
+
       return await run(worktreeSelector, undefined)
     }
+
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
     const canonicalWorktreeSelector = `id:${workspace.id}`
+
     const preAllocatedHandle = deriveRemoteRuntimeTerminalCreateHandle(
       clientIdentity,
       workspace.id,
       clientMutationId
     )
+
     return this.terminalCreateIdempotency.run(
       clientIdentity,
       workspace.id,
@@ -49,10 +53,12 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
             // connection and keep the aggregate listing.
             workspace.connectionId ?? null
           )
+
           if (adopted) {
             return adopted
           }
         }
+
         return await run(canonicalWorktreeSelector, preAllocatedHandle)
       }
     )
@@ -68,45 +74,59 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
     if (!this.ptyController?.listProcesses) {
       throw new Error('runtime_unavailable')
     }
+
     const listed = await withTimeoutResult(
       this.ptyController.listProcesses(connectionId),
       PTY_CONTROLLER_LIST_TIMEOUT_MS
     )
+
     if (!listed.ok) {
       // Why: unknown inventory cannot prove the first create failed, so spawning could duplicate a live shell.
       throw new Error('runtime_unavailable')
     }
+
     const matches = listed.value.filter((session) => session.terminalHandle === terminalHandle)
+
     if (matches.length > 1) {
       throw new Error('terminal_create_identity_conflict')
     }
+
     if (matches.length === 0) {
       const sameWorktreeHasUnknownIdentity = listed.value.some(
         (session) =>
           (session.worktreeId ?? inferWorktreeIdFromPtyId(session.id)) === worktreeId &&
           !session.terminalHandle
       )
+
       if (sameWorktreeHasUnknownIdentity) {
         // Why: older retained providers may list the first shell without its handle; absence is not authoritative in that shape.
         throw new Error('runtime_unavailable')
       }
+
       return null
     }
+
     const session = matches[0]
     const authoritativeWorktreeId = session.worktreeId ?? inferWorktreeIdFromPtyId(session.id)
+
     if (authoritativeWorktreeId !== worktreeId) {
       // Why: a reused address or forged provider record must never adopt a PTY from another workspace.
       throw new Error('terminal_create_identity_conflict')
     }
+
     this.adoptControllerTerminalHandle(session.id, terminalHandle)
+
     const pty = this.recordPtyWorktree(session.id, worktreeId, {
       connected: true,
       title: session.title
     })
+
     const adoptedHandle = this.issuePtyHandle(pty)
+
     if (adoptedHandle !== terminalHandle) {
       throw new Error('terminal_create_identity_conflict')
     }
+
     return {
       handle: adoptedHandle,
       ptyId: session.id,
@@ -122,18 +142,23 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
     if (!ptyId) {
       return {}
     }
+
     const pty = this.ptysById.get(ptyId)
+
     if (!pty) {
       return {}
     }
+
     if (pty.connectionId) {
       const remotePlatform = getRegisteredSshState(pty.connectionId)?.remotePlatform
+
       return {
         executionHostId: toSshExecutionHostId(pty.connectionId),
         ...(pty.incarnationId ? { incarnationId: pty.incarnationId } : {}),
         ...(remotePlatform ? { hostPlatform: remotePlatform } : {})
       }
     }
+
     return {
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       ...(pty.incarnationId ? { incarnationId: pty.incarnationId } : {}),
@@ -151,15 +176,20 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
     // path into the *client's* config — the agent on the host never sees the trust (#11163).
     // Same shape as the folder-create trust write fixed alongside this; the agent-launch half.
     const resolution = resolveWorktreeLaunchHost(this.store?.getRepos() ?? [], worktree)
+
     if (resolution.kind === 'ambiguous') {
       throw new Error('worktree_execution_host_unresolved')
     }
+
     const repo = resolution.repo ?? this.store?.getRepo(worktree.repoId)
+
     if (!repo) {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
+
     const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt)
     await this.markWorkspaceTrustedForAgent(opts.agent, resolution.connectionId, worktree.path)
+
     return await this.createTerminal(`id:${worktree.id}`, {
       command: startup.startup.command,
       env: startup.startup.env,
@@ -185,21 +215,27 @@ export class OrcaRuntimeWithTerminalCreateDeduplication extends OrcaRuntimeWithC
     if (!clientMutationId) {
       return run()
     }
+
     const key = `${repoSelector}\0${clientMutationId}`
     const inflight = this.worktreeCreateByMutationId.get(key)
+
     if (inflight) {
       return inflight as Promise<T>
     }
+
     const created = run()
     this.worktreeCreateByMutationId.set(key, created)
+
     const drop = (): void => {
       if (this.worktreeCreateByMutationId.get(key) === created) {
         this.worktreeCreateByMutationId.delete(key)
       }
     }
+
     void created.then(() => {
       setTimeout(drop, WORKTREE_CREATE_RESULT_TTL_MS).unref?.()
     }, drop)
+
     return created
   }
 }

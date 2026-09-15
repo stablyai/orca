@@ -21,6 +21,7 @@ const PROMPT_ROW = JSON.stringify({
     ]
   }
 })
+
 const COMPANION_ROW = JSON.stringify({
   type: 'user',
   uuid: 'companion-uuid',
@@ -55,11 +56,13 @@ describe('Claude pasted-image companion row', () => {
       { type: 'image-ref', path: '/tmp/orca-paste-a.png' },
       { type: 'image-ref', path: '/tmp/orca-paste-b.png' }
     ])
+
     // The caption survives with its markers stripped.
     const text = folded[0]!.blocks
       .filter((b) => b.type === 'text')
       .map((b) => b.text)
       .join('')
+
     expect(text).toContain('look at this')
     expect(text).toContain('does it repro?')
     expect(text).not.toContain('[Image #')
@@ -75,6 +78,7 @@ describe('Claude pasted-image companion row', () => {
         content: [{ type: 'text', text: 'Base directory for this skill: /x' }]
       }
     })
+
     expect(decodeClaudeTranscriptLine(injected, 'fallback')).toBeNull()
   })
 

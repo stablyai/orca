@@ -6,7 +6,9 @@ import type { HostedReviewLocalGitOptions } from './hosted-review-git-options'
 // Why: bounded like TRACKED_UPSTREAM_SNAPSHOT_CACHE in github/client.ts — PR
 // refresh ticks re-ask per repo, and worktree churn can mint unbounded keys.
 const REPO_DEFAULT_BRANCH_CACHE_TTL_MS = 30_000
+
 const REPO_DEFAULT_BRANCH_CACHE_MAX_ENTRIES = 512
+
 const REPO_DEFAULT_BRANCH_RESOLUTION_BUDGET_MS = 15_000
 
 type RepoDefaultBranchCacheEntry = {
@@ -15,6 +17,7 @@ type RepoDefaultBranchCacheEntry = {
 }
 
 const repoDefaultBranchCache = new Map<string, RepoDefaultBranchCacheEntry>()
+
 const repoDefaultBranchInFlight = new Map<string, Promise<string | null>>()
 
 function getRepoDefaultBranchCacheKey(
@@ -27,6 +30,7 @@ function getRepoDefaultBranchCacheKey(
   const runtimeKey = connectionId
     ? `ssh:${connectionId}`
     : `local:${localGitOptions.wslDistro ?? 'host'}`
+
   return [runtimeKey, repoPath].join('\0')
 }
 
@@ -36,11 +40,14 @@ function pruneRepoDefaultBranchCache(now: number): void {
       repoDefaultBranchCache.delete(key)
     }
   }
+
   while (repoDefaultBranchCache.size > REPO_DEFAULT_BRANCH_CACHE_MAX_ENTRIES) {
     const oldestKey = repoDefaultBranchCache.keys().next().value
+
     if (oldestKey === undefined) {
       break
     }
+
     repoDefaultBranchCache.delete(oldestKey)
   }
 }
@@ -58,10 +65,13 @@ export async function getRepoDefaultBranchName(
   const cacheKey = getRepoDefaultBranchCacheKey(repoPath, connectionId, localGitOptions)
   const now = Date.now()
   const cached = repoDefaultBranchCache.get(cacheKey)
+
   if (cached && cached.expiresAt > now) {
     return cached.branchName
   }
+
   const pending = repoDefaultBranchInFlight.get(cacheKey)
+
   if (pending) {
     return pending
   }
@@ -70,21 +80,27 @@ export async function getRepoDefaultBranchName(
   // Git/SSH subprocess chain instead of multiplying cold-cache probes.
   const resolution = (async (): Promise<string | null> => {
     let branchName: string | null = null
+
     try {
       const provider = connectionId ? getSshGitProvider(connectionId) : null
+
       if (connectionId && !provider) {
         // Why: a dropped SSH provider must not fall back to local git — the
         // repoPath is remote, so a local run could answer for the wrong repo.
         return null
       }
+
       const resolutionDeadline = Date.now() + REPO_DEFAULT_BRANCH_RESOLUTION_BUDGET_MS
+
       // Why: the resolver can try five refs; share one deadline so an unhealthy
       // local/WSL/SSH host cannot multiply the refresh delay per fallback probe.
       const baseRef = await resolveDefaultBaseRefViaExec((argv) => {
         const timeoutMs = resolutionDeadline - Date.now()
+
         if (timeoutMs <= 0) {
           return Promise.reject(new Error('Default branch resolution timed out.'))
         }
+
         return provider
           ? provider.exec(argv, repoPath, { timeoutMs })
           : gitExecFileAsync(argv, {
@@ -96,11 +112,13 @@ export async function getRepoDefaultBranchName(
               timeout: timeoutMs
             })
       })
+
       // Same base-ref → branch-name normalization as git/repo.ts getRemoteFileUrl.
       branchName = baseRef ? baseRef.replace(/^origin\//, '') : null
     } catch {
       branchName = null
     }
+
     const completedAt = Date.now()
     // Why: null (failure or genuinely no default) is cached too — the resolver
     // cannot tell them apart, and the short TTL bounds the fail-open window
@@ -111,9 +129,12 @@ export async function getRepoDefaultBranchName(
       expiresAt: completedAt + REPO_DEFAULT_BRANCH_CACHE_TTL_MS
     })
     pruneRepoDefaultBranchCache(completedAt)
+
     return branchName
   })()
+
   repoDefaultBranchInFlight.set(cacheKey, resolution)
+
   try {
     return await resolution
   } finally {
@@ -145,20 +166,24 @@ export async function shouldHideNonOpenReviewOnDefaultBranch(input: {
   if (input.state !== 'closed' && input.state !== 'merged' && input.state !== 'locked') {
     return false
   }
+
   if (
     typeof input.linkedReviewNumber === 'number' &&
     input.reviewNumber === input.linkedReviewNumber
   ) {
     return false
   }
+
   if (!input.branchName) {
     return false
   }
+
   const defaultBranchName = await getRepoDefaultBranchName(
     input.repoPath,
     input.connectionId,
     input.localGitOptions
   )
+
   return defaultBranchName !== null && input.branchName === defaultBranchName
 }
 

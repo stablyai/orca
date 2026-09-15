@@ -17,6 +17,7 @@ export function scanForShellReadyMarker(
 
   for (let i = 0; i < data.length; i += 1) {
     const ch = data[i] as string
+
     if (state.matchPos < SHELL_READY_MARKER.length) {
       if (ch === SHELL_READY_MARKER[state.matchPos]) {
         state.heldBytes += ch
@@ -25,6 +26,7 @@ export function scanForShellReadyMarker(
         output += state.heldBytes
         state.heldBytes = ''
         state.matchPos = 0
+
         if (ch === SHELL_READY_MARKER[0]) {
           state.heldBytes = ch
           state.matchPos = 1
@@ -36,11 +38,13 @@ export function scanForShellReadyMarker(
       const remaining = data.slice(i + 1)
       state.heldBytes = ''
       state.matchPos = 0
+
       return { output: output + remaining, matched: true }
     } else {
       output += state.heldBytes
       state.heldBytes = ''
       state.matchPos = 0
+
       if (ch === SHELL_READY_MARKER[0]) {
         state.heldBytes = ch
         state.matchPos = 1

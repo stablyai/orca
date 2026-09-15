@@ -7,6 +7,7 @@ import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import type { ConnectionLogEntry } from './types'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-crypto', () => ({
   getRandomBytes: (length: number) => new Uint8Array(length).fill(length)
 }))
@@ -66,10 +67,12 @@ describe('recovering pairing relay candidate', () => {
     const stale = client(Promise.reject(new RelayOuterError(4409)))
     const target = client(Promise.resolve(success()))
     let connects = 0
+
     const candidate = createRecoveringPairingRelayCandidate({
       journal,
       connect: (relay) => {
         events.push(`connect:${relay.assignmentEpoch}`)
+
         return connects++ === 0 ? stale : target
       },
       resolveDirector: async (relay) => ({
@@ -95,11 +98,13 @@ describe('recovering pairing relay candidate', () => {
     const target = client(Promise.resolve(success()))
     const persistMove = vi.fn()
     let connects = 0
+
     const candidate = createRecoveringPairingRelayCandidate({
       journal,
       connect: (relay) => {
         expect(relay.cellUrl).toBe(journal.metadata.relay.cellUrl)
         expect(relay.assignmentEpoch).toBe(journal.metadata.relay.assignmentEpoch)
+
         return connects++ === 0 ? stale : target
       },
       resolveDirector: async (relay) => {
@@ -126,16 +131,20 @@ describe('recovering pairing relay candidate', () => {
     const target = client(Promise.resolve(success()))
     const entries: ConnectionLogEntry[] = []
     let connects = 0
+
     const candidate = createRecoveringPairingRelayCandidate({
       journal,
       connect: () => {
         connects++
+
         if (connects === 1) {
           return stale
         }
+
         if (connects === 2) {
           throw new Error('relay constructor failed')
         }
+
         return target
       },
       resolveDirector: async (relay) => {
@@ -169,6 +178,7 @@ describe('recovering pairing relay candidate', () => {
     const target = client(Promise.resolve(success()))
     const persistMove = vi.fn()
     const sleep = vi.fn(async () => {})
+
     const resolveDirector = vi.fn(async (relay) => {
       throw new RelayDirectorMoveNotNewerError({
         cellUrl: 'https://relay-c2.onorca.dev',
@@ -177,11 +187,14 @@ describe('recovering pairing relay candidate', () => {
         currentAssignmentEpoch: relay.assignmentEpoch
       })
     })
+
     let connects = 0
+
     const candidate = createRecoveringPairingRelayCandidate({
       journal,
       connect: (relay) => {
         expect(relay.cellUrl).toBe(journal.metadata.relay.cellUrl)
+
         return connects++ === 0 ? stale : target
       },
       resolveDirector,
@@ -200,6 +213,7 @@ describe('recovering pairing relay candidate', () => {
 
   it('gives up with the dial error once same-assignment retries exhaust the budget', async () => {
     const stale = client(Promise.reject(new RelayOuterError(1006)))
+
     const resolveDirector = vi.fn(async (relay) => {
       throw new RelayDirectorMoveNotNewerError({
         cellUrl: 'https://relay-c2.onorca.dev',
@@ -208,11 +222,14 @@ describe('recovering pairing relay candidate', () => {
         currentAssignmentEpoch: relay.assignmentEpoch
       })
     })
+
     let connects = 0
+
     const candidate = createRecoveringPairingRelayCandidate({
       journal,
       connect: () => {
         connects++
+
         return stale
       },
       resolveDirector,
@@ -231,10 +248,12 @@ describe('recovering pairing relay candidate', () => {
     const limited = client(Promise.reject(new RelayOuterError(4429)))
     const resolveDirector = vi.fn()
     let connects = 0
+
     const candidate = createRecoveringPairingRelayCandidate({
       journal,
       connect: () => {
         connects++
+
         return limited
       },
       resolveDirector,
@@ -252,6 +271,7 @@ describe('recovering pairing relay candidate', () => {
   it('does not ask the director to reinterpret endpoint-scoped host-offline', async () => {
     const offline = client(Promise.reject(new RelayOuterError(4404)))
     const resolveDirector = vi.fn()
+
     const candidate = createRecoveringPairingRelayCandidate({
       journal,
       connect: () => offline,
@@ -275,12 +295,15 @@ describe('recovering pairing relay candidate', () => {
   ])('uses the configured director after %s before E2EE', async (_name, failure) => {
     const stale = client(Promise.reject(failure))
     const target = client(Promise.resolve(success()))
+
     const resolveDirector = vi.fn(async (relay) => ({
       ...relay,
       cellUrl: 'https://relay-c2.onorca.dev',
       assignmentEpoch: 8
     }))
+
     let connects = 0
+
     const candidate = createRecoveringPairingRelayCandidate({
       journal,
       connect: () => (connects++ === 0 ? stale : target),
@@ -298,6 +321,7 @@ describe('recovering pairing relay candidate', () => {
   it('bounds director recovery and applies full jitter to failures and target retries', async () => {
     const stale = client(Promise.reject(new Error('HTTP 503')))
     const target = client(Promise.resolve(success()))
+
     const resolveDirector = vi
       .fn()
       .mockRejectedValueOnce(new Error('HTTP 504'))
@@ -307,8 +331,10 @@ describe('recovering pairing relay candidate', () => {
         cellUrl: 'https://relay-c2.onorca.dev',
         assignmentEpoch: 8
       }))
+
     const sleep = vi.fn(async () => {})
     let connects = 0
+
     const candidate = createRecoveringPairingRelayCandidate({
       journal,
       connect: () => (connects++ === 0 ? stale : target),
@@ -329,6 +355,7 @@ describe('recovering pairing relay candidate', () => {
     const entries: ConnectionLogEntry[] = []
     const stale = client(Promise.reject(new Error('HTTP 503')))
     const target = client(Promise.resolve(success()))
+
     const resolveDirector = vi
       .fn()
       .mockRejectedValueOnce(new Error('HTTP 504'))
@@ -337,7 +364,9 @@ describe('recovering pairing relay candidate', () => {
         cellUrl: 'https://relay-c2.onorca.dev',
         assignmentEpoch: 8
       }))
+
     let connects = 0
+
     const candidate = createRecoveringPairingRelayCandidate({
       journal,
       connect: () => (connects++ === 0 ? stale : target),
@@ -369,6 +398,7 @@ describe('recovering pairing relay candidate', () => {
   it('reports the final give-up once the recovery budget is spent', async () => {
     const entries: ConnectionLogEntry[] = []
     const stale = client(Promise.reject(new RelayOuterError(4409)))
+
     const candidate = createRecoveringPairingRelayCandidate({
       journal,
       connect: () => stale,

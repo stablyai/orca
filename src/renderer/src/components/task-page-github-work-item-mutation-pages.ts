@@ -21,6 +21,7 @@ export function patchTaskPageGitHubWorkItemPages(
     if (!page) {
       return
     }
+
     let nextPage: GitHubWorkItem[] | undefined
     page.forEach((item, itemIndex) => {
       if (
@@ -30,14 +31,17 @@ export function patchTaskPageGitHubWorkItemPages(
       ) {
         return
       }
+
       nextPage ??= page.slice()
       nextPage[itemIndex] = { ...item, ...patch }
     })
+
     if (nextPage) {
       nextPages ??= pages.slice()
       nextPages[pageIndex] = nextPage
     }
   })
+
   return nextPages ?? (pages as (GitHubWorkItem[] | null)[])
 }
 
@@ -47,6 +51,7 @@ export function applyPendingTaskPageGitHubMutationsToItems(
 ): GitHubWorkItem[] {
   return items.map((item) => {
     const sourceScope = resolveItemSourceScope(item.repoId, item.id)
+
     return getRegistryMergedTaskPageGitHubWorkItem(item, sourceScope)
   })
 }
@@ -58,12 +63,15 @@ export function reapplyPendingTaskPageGitHubMutationsToCache(args: {
 }): void {
   for (const item of args.items) {
     const sourceScope = resolveItemSourceScope(item.repoId, item.id)
+
     const hasAuthority =
       hasPendingTaskPageGitHubOpsForItem(item.repoId, item.id) ||
       hasConfirmedAuthorityForItem(item.repoId, item.id)
+
     if (!hasAuthority) {
       continue
     }
+
     const merged = getRegistryMergedTaskPageGitHubWorkItem(item, sourceScope)
     args.patchWorkItem(
       item.id,
@@ -87,25 +95,32 @@ export function materializeTaskPageItemList(args: {
 }): GitHubWorkItem[] {
   const overlaid = applyPendingTaskPageGitHubMutationsToItems(args.networkItems)
   const byKey = new Map(overlaid.map((item) => [taskPageGitHubItemKey(item.repoId, item.id), item]))
+
   for (const item of args.previousItems) {
     const k = taskPageGitHubItemKey(item.repoId, item.id)
+
     if (byKey.has(k)) {
       continue
     }
+
     // Why: retain in-flight pending rows for rollback visibility; also retain
     // confirmed rows soft-hidden by a sticky hide scoped to THIS query while
     // search lag omits them. Requiring the query-scoped sticky avoids retaining
     // non-membership confirms (e.g. auto-merge) as stale ghosts across refetch.
     const hasPending = hasPendingTaskPageGitHubOpsForItem(item.repoId, item.id)
     const sticky = getStickyHideEntry(k)
+
     const hasConfirmedStickyHide =
       hasConfirmedAuthorityForItem(item.repoId, item.id) && sticky?.queryKey === args.queryKey
+
     if (!hasPending && !hasConfirmedStickyHide) {
       continue
     }
+
     const scope = resolveItemSourceScope(item.repoId, item.id)
     byKey.set(k, getRegistryMergedTaskPageGitHubWorkItem(item, scope))
   }
+
   return [...byKey.values()].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   )
@@ -122,29 +137,35 @@ export function reconcileTaskPagePagesAfterQuietRefresh(args: {
 }): (GitHubWorkItem[] | null)[] {
   const next = [...args.pages]
   const lastPage = args.visiblePage ?? args.authorityPage
+
   while (next.length <= lastPage) {
     next.push(null)
   }
+
   next[args.authorityPage] = materializeTaskPageItemList({
     networkItems: args.authorityItems,
     previousItems: args.pages[args.authorityPage] ?? [],
     queryKey: args.queryKey
   })
+
   if (args.visiblePage !== undefined && args.visibleItems !== undefined) {
     if (args.membershipChanged) {
       for (let page = args.authorityPage + 1; page < args.visiblePage; page++) {
         next[page] = null
       }
     }
+
     next[args.visiblePage] = materializeTaskPageItemList({
       networkItems: args.visibleItems,
       previousItems: args.pages[args.visiblePage] ?? [],
       queryKey: args.queryKey
     })
   }
+
   if (args.membershipChanged) {
     next.length = lastPage + 1
   }
+
   return next
 }
 

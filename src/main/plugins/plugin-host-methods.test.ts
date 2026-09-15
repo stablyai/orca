@@ -34,6 +34,7 @@ function createServices(storageSet: PluginHostServices['storage']['set']): Plugi
 describe('executePluginHostCall mutation auditing', () => {
   it('rejects prototype-sensitive storage keys before any host service call', async () => {
     const storageSet = vi.fn().mockReturnValue({ ok: true })
+
     const outcome = await executePluginHostCall({
       pluginId: 'orca-samples.demo',
       method: 'storage.set',
@@ -50,6 +51,7 @@ describe('executePluginHostCall mutation auditing', () => {
 
   it('rejects non-JSON storage values before any host service call', async () => {
     const storageSet = vi.fn().mockReturnValue({ ok: true })
+
     const outcome = await executePluginHostCall({
       pluginId: 'orca-samples.demo',
       method: 'storage.set',
@@ -66,6 +68,7 @@ describe('executePluginHostCall mutation auditing', () => {
 
   it('fails closed before a mutation when the audit intent cannot be recorded', async () => {
     const storageSet = vi.fn().mockReturnValue({ ok: true })
+
     const outcome = await executePluginHostCall({
       pluginId: 'orca-samples.demo',
       method: 'storage.set',
@@ -82,10 +85,13 @@ describe('executePluginHostCall mutation auditing', () => {
 
   it('records an intent before the mutation and its outcome afterward', async () => {
     const order: string[] = []
+
     const storageSet = vi.fn(() => {
       order.push('mutation')
+
       return { ok: true as const }
     })
+
     const record = vi.fn(async (entry: { outcome: string }) => {
       order.push(`audit:${entry.outcome}`)
     })
@@ -106,6 +112,7 @@ describe('executePluginHostCall mutation auditing', () => {
 
   it('refuses mutations when no audit writer is configured', async () => {
     const storageSet = vi.fn().mockReturnValue({ ok: true })
+
     const outcome = await executePluginHostCall({
       pluginId: 'orca-samples.demo',
       method: 'storage.set',
@@ -137,6 +144,7 @@ function createTerminalHarness(terminalHandles: string[]): {
     sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
     dispatchPluginNotification: vi.fn().mockResolvedValue({ delivered: true })
   }
+
   return {
     delegate,
     services: bindPluginHostServices({
@@ -210,6 +218,7 @@ describe('terminal.sendText explicit worktree routing', () => {
       { length: PLUGIN_WORKSPACE_TERMINAL_LIMIT + 10 },
       (_, index) => `terminal:local:${index}`
     )
+
     const { delegate, services } = createTerminalHarness(handles)
 
     const outcome = await executePluginHostCall({

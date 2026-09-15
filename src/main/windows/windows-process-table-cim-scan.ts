@@ -21,6 +21,7 @@ import type { WindowsProcessRow } from './windows-process-table'
  */
 
 const WINDOWS_CIM_QUERY_TIMEOUT_MS = 3_000
+
 const WINDOWS_CIM_MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 
 // Why JSON and not the `Key=Value` list form: CommandLine can itself contain
@@ -42,6 +43,7 @@ function fieldAsString(value: unknown): string {
   if (typeof value === 'string') {
     return value
   }
+
   return value === null || value === undefined ? '' : String(value)
 }
 
@@ -49,32 +51,42 @@ function fieldAsNumber(value: unknown): number {
   if (typeof value === 'number') {
     return value
   }
+
   return typeof value === 'string' ? Number.parseInt(value, 10) : Number.NaN
 }
 
 export function parseWindowsCimProcessRows(stdout: string): WindowsProcessRow[] | null {
   const trimmed = stdout.trim()
+
   if (!trimmed) {
     return []
   }
+
   let parsed: unknown
+
   try {
     parsed = JSON.parse(trimmed)
   } catch {
     return null
   }
+
   const items = Array.isArray(parsed) ? parsed : [parsed]
+
   return items.flatMap((item) => {
     if (!item || typeof item !== 'object') {
       return []
     }
+
     const row = item as CimProcessRow
     const pid = fieldAsNumber(row.ProcessId)
     const ppid = fieldAsNumber(row.ParentProcessId)
+
     if (!Number.isFinite(pid) || !Number.isFinite(ppid)) {
       return []
     }
+
     const name = fieldAsString(row.Name)
+
     // No working set: Win32_Process reports one, but nothing reads memory off
     // this table and asking widens an already costly scan.
     return [{ pid, ppid, name, command: fieldAsString(row.CommandLine) || name }]
@@ -94,14 +106,18 @@ export async function readWindowsProcessRowsWithCim(): Promise<WindowsProcessRow
     timeoutMs: WINDOWS_CIM_QUERY_TIMEOUT_MS,
     maxOutputBytes: WINDOWS_CIM_MAX_OUTPUT_BYTES
   })
+
   if (result.timedOut || result.code !== 0) {
     throw new Error(
       `windows process table CIM scan failed (code=${result.code} timedOut=${result.timedOut})`
     )
   }
+
   const rows = parseWindowsCimProcessRows(result.stdout)
+
   if (!rows || rows.length === 0) {
     throw new Error('windows process table CIM scan returned no rows')
   }
+
   return rows
 }

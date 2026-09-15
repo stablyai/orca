@@ -29,20 +29,25 @@ export async function admitStructuredHandoffRequest(input: {
   status?: AgentSessionHandoffStatus
 }): Promise<StructuredHandoffAdmission> {
   const action = input.params.action ?? 'start'
+
   const requestFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.requestHandoff',
     sessionId: input.record.sessionId,
     fields: { direction: input.params.direction, mode: input.params.mode, action }
   })
+
   const conflict = agentSessionFingerprintConflict(input.params.envelope, requestFingerprint)
+
   if (conflict) {
     return { decision: 'refused', refusal: conflict }
   }
+
   const fingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.requestHandoff.operation',
     sessionId: input.record.sessionId,
     fields: { direction: input.params.direction }
   })
+
   const operation = await input.operationGuard.check({
     callerKey: input.callerKey,
     sessionId: input.record.sessionId,
@@ -52,9 +57,11 @@ export async function admitStructuredHandoffRequest(input: {
     ...(input.status ? { status: input.status } : {}),
     now: input.deps.now()
   })
+
   if (operation.decision === 'replay') {
     return { decision: 'replay', outcome: operation.outcome }
   }
+
   if (operation.decision === 'refused') {
     return {
       decision: 'refused',
@@ -64,6 +71,7 @@ export async function admitStructuredHandoffRequest(input: {
       }
     }
   }
+
   if (input.params.envelope.expectedRuntimeFence !== input.record.lease.runtimeFence) {
     await input.deps.store.recordOperationOutcome({
       callerKey: input.callerKey,
@@ -71,6 +79,7 @@ export async function admitStructuredHandoffRequest(input: {
       outcome: { status: 'failed', code: 'agent_session_checkpoint_stale' }
     })
     input.operationGuard.finish(input.record.sessionId, input.params.envelope.clientOperationId)
+
     return {
       decision: 'refused',
       refusal: {
@@ -80,6 +89,7 @@ export async function admitStructuredHandoffRequest(input: {
       }
     }
   }
+
   return { decision: 'continue', record: input.record, fingerprint }
 }
 
@@ -94,6 +104,7 @@ export function replayedStructuredHandoffRefusal(
   ) {
     return null
   }
+
   return {
     code: outcome.code as (typeof AGENT_SESSION_WIRE_REFUSAL_CODES)[number],
     message: 'This handoff request was previously refused.'
@@ -111,6 +122,7 @@ export async function refuseAdmittedStructuredHandoff(input: {
     operationId: input.params.envelope.clientOperationId,
     outcome: { status: 'failed', code: input.refusal.code }
   })
+
   return { ok: false, refusal: input.refusal }
 }
 

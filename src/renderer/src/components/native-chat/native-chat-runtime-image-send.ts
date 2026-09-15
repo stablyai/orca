@@ -31,11 +31,14 @@ export function sendNativeChatMessageWithImageAttachments(
   if (imagePaths.length === 0) {
     return sendNativeChatMessage(settings, ptyId, text, options)
   }
+
   const trimmedText = text.trim()
+
   const durationMs =
     (trimmedText.length > 0
       ? NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS
       : NATIVE_CHAT_SUBMIT_DELAY_MS) + clearConfirmDurationMs(options)
+
   return enqueueNativeChatPtySend(
     ptyId,
     durationMs,
@@ -43,16 +46,19 @@ export function sendNativeChatMessageWithImageAttachments(
       if (isCancelled()) {
         return
       }
+
       clearThenWrite(settings, ptyId, options, delay, () => {
         if (isCancelled()) {
           return
         }
+
         for (const payload of imagePasteWritesFollowedByText(
           imagePaths.map(buildNativeChatImagePasteBytes),
           trimmedText.length > 0
         )) {
           sendRuntimePtyInput(settings, ptyId, payload)
         }
+
         if (trimmedText.length > 0) {
           delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
             sendRuntimePtyInput(settings, ptyId, buildNativeChatPasteBytes(text))
@@ -61,8 +67,10 @@ export function sendNativeChatMessageWithImageAttachments(
               markSubmitted()
             })
           })
+
           return
         }
+
         delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
           sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
           markSubmitted()

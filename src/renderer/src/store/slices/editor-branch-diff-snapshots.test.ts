@@ -18,6 +18,7 @@ vi.mock('sonner', () => ({
 const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
   notifyHostOfMirroredEditorCloseMock: vi.fn()
 }))
+
 vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
@@ -56,6 +57,7 @@ describe('createEditorSlice combined diff exclusions', () => {
 
   it('uses a supplied combined diff entry snapshot instead of the whole area', () => {
     const store = createEditorStore()
+
     const normalEntry: GitStatusEntry = {
       path: 'src/normal.ts',
       status: 'modified',
@@ -88,11 +90,13 @@ describe('createEditorSlice combined diff exclusions', () => {
 
   it('includes untracked files in the all changes snapshot', () => {
     const store = createEditorStore()
+
     const stagedEntry: GitStatusEntry = {
       path: 'src/staged.ts',
       status: 'modified',
       area: 'staged'
     }
+
     const untrackedEntry: GitStatusEntry = {
       path: 'src/new.ts',
       status: 'untracked',
@@ -115,15 +119,18 @@ describe('createEditorSlice combined diff exclusions', () => {
 
   it('opens all changes with uncommitted and committed branch snapshots', () => {
     const store = createEditorStore()
+
     const localEntry: GitStatusEntry = {
       path: 'src/local.ts',
       status: 'modified',
       area: 'unstaged'
     }
+
     const branchEntry: GitBranchChangeEntry = {
       path: 'src/committed.ts',
       status: 'modified'
     }
+
     const branchSummary: GitBranchCompareSummary = {
       baseRef: 'origin/main',
       baseOid: 'base-oid',
@@ -165,6 +172,7 @@ describe('createEditorSlice openBranchDiff', () => {
   it('derives a runtime owner for branch diffs from the worktree host', () => {
     const store = createEditorStore()
     const worktreeId = 'repo-1::/srv/repo/worktree'
+
     const branchSummary: GitBranchCompareSummary = {
       baseRef: 'main',
       baseOid: 'base-oid',
@@ -174,6 +182,7 @@ describe('createEditorSlice openBranchDiff', () => {
       changedFiles: 1,
       status: 'ready'
     }
+
     store.setState({
       repos: [{ id: 'repo-1', executionHostId: 'runtime:env-1' }] as unknown as AppState['repos'],
       worktreesByRepo: {

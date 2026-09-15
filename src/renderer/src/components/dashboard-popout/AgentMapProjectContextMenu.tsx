@@ -32,26 +32,35 @@ export function AgentMapProjectContextMenu({
   const triggerRef = useRef<HTMLSpanElement>(null)
   const repos = useAppStore((state) => state.repos)
   const projectGroups = useAppStore((state) => state.projectGroups)
+
   const target = useMemo(() => {
     if (request.projectId.startsWith(FOLDER_PROJECT_PREFIX)) {
       const groupId = request.projectId.slice(FOLDER_PROJECT_PREFIX.length)
       const groups = projectGroups.filter((group) => group.id === groupId)
+
       return groups.length === 1 ? { kind: 'folder' as const, group: groups[0] } : null
     }
+
     const owners = repos.filter((repo) => repo.id === request.projectId)
+
     return owners.length === 1 ? { kind: 'repo' as const, repo: owners[0] } : null
   }, [projectGroups, repos, request.projectId])
+
   const repo = target?.kind === 'repo' ? target.repo : null
+
   const sshStatus = useAppStore((state) =>
     repo?.connectionId ? (state.sshConnectionStates.get(repo.connectionId)?.status ?? null) : null
   )
+
   const openModal = useAppStore((state) => state.openModal)
 
   useEffect(() => {
     if (!target) {
       onOpenChange?.(false)
+
       return
     }
+
     triggerRef.current?.dispatchEvent(
       new MouseEvent('contextmenu', {
         bubbles: true,
@@ -66,7 +75,9 @@ export function AgentMapProjectContextMenu({
   if (!target) {
     return null
   }
+
   const label = target.kind === 'repo' ? target.repo.displayName : target.group.name
+
   const createState =
     target.kind === 'repo'
       ? getRepoHeaderCreateState({ repo: target.repo, label, sshStatus })

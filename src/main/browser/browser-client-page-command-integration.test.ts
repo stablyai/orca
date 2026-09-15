@@ -16,8 +16,10 @@ describe('BrowserClientPageCommandExecutor integration', () => {
       closeAllConnections: vi.fn(async () => {}),
       resolveProxy: vi.fn(async () => 'SOCKS5 127.0.0.1:43123')
     }
+
     const clearPolicies = vi.fn()
     let webContentsRegistry: BrowserRouteWebContentsRegistry | null = null
+
     const sessionRegistry = new BrowserRouteSessionRegistry({
       derivePartition: () => ({ partition, bindingFingerprint: 'binding-a' }),
       validateProfile: vi.fn(),
@@ -28,6 +30,7 @@ describe('BrowserClientPageCommandExecutor integration', () => {
         webContentsRegistry?.retirePageAuthority(retirement) ?? false,
       bindingStore: createBrowserRoutePartitionBindingStoreFake()
     })
+
     webContentsRegistry = new BrowserRouteWebContentsRegistry({
       getPartitionForSession: (session) => sessionRegistry.getPartitionForSession(session),
       getPreparedPageAuthority: (page) => sessionRegistry.getPreparedPageAuthority(page),
@@ -40,10 +43,13 @@ describe('BrowserClientPageCommandExecutor integration', () => {
     const grantReconciledNavigation = vi.spyOn(webContentsRegistry, 'grantReconciledNavigation')
     const guest = createGuest(routeSession as unknown as Session)
     const routeRelease = vi.fn()
+
     const rendererRetire = vi.fn(async () => {
       guest.destroy()
     })
+
     const rendererRekey = vi.fn(async () => {})
+
     const executor = new BrowserClientPageCommandExecutor({
       orcaProfileId: 'orca-profile-a',
       authorityConnectionIdentity: 'authority-record-a',
@@ -61,6 +67,7 @@ describe('BrowserClientPageCommandExecutor integration', () => {
         isCurrent: () => true,
         mountPage: async () => {
           expect(webContentsRegistry?.attachGuest(guest.webContents)).toBe(true)
+
           return { webContentsId: 41 }
         },
         rekeyPage: rendererRekey,
@@ -87,10 +94,12 @@ describe('BrowserClientPageCommandExecutor integration', () => {
     expect(guest.url()).toBe('https://example.internal/path')
 
     const reclaim = createCommand('reclaimPage')
+
     const dispatcher = new BrowserClientHostCommandDispatcher({
       authority: reclaim,
       handler: (event, commandSignal) => executor.handle(event, commandSignal)
     })
+
     const reclaimed = await dispatcher.dispatch(reclaim)
     expect(rekeyGuestLifecycle).toHaveReturnedWith(expect.any(Object))
     expect(grantReconciledNavigation).toHaveReturnedWith(true)
@@ -130,6 +139,7 @@ function createCommand(
     browserHostGeneration: 3,
     pageHostGeneration: 7
   }
+
   return {
     type: 'command',
     authorityRuntimeId: 'runtime-a',
@@ -164,11 +174,13 @@ function createGuest(routeSession: Session) {
   const listeners = new Map<string, Set<(...args: unknown[]) => void>>()
   let destroyed = false
   let url = 'about:blank'
+
   const emit = (event: string, ...args: unknown[]): void => {
     for (const listener of listeners.get(event) ?? []) {
       listener(...args)
     }
   }
+
   const webContents = {
     id: 41,
     session: routeSession,
@@ -183,9 +195,11 @@ function createGuest(routeSession: Session) {
     loadURL: vi.fn(async (nextUrl: string) => {
       const event = { preventDefault: vi.fn() }
       emit('will-navigate', event, nextUrl)
+
       if (event.preventDefault.mock.calls.length > 0) {
         throw new Error('navigation denied')
       }
+
       url = nextUrl
     }),
     setWebRTCIPHandlingPolicy: vi.fn(),
@@ -199,6 +213,7 @@ function createGuest(routeSession: Session) {
       listeners.get(event)?.delete(listener)
     })
   } as unknown as WebContents
+
   return {
     webContents,
     url: () => url,

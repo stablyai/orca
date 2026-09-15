@@ -5,6 +5,7 @@ import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/da
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
 
 type MockAgentOptions = {
@@ -66,11 +67,17 @@ function mockAgent({
 }
 
 let mockAgents: unknown[] = [mockAgent()]
+
 let mockFocusedAgentPaneKey: string | null = null
+
 let mockAgentActivityDisplayMode: 'compact' | 'full' | undefined
+
 let mockPromptCacheTimerEnabled = true
+
 let mockPromptCacheTtlMs = 60_000
+
 let mockCacheTimerByKey: Record<string, number | null> = {}
+
 let capturedRowActivations: {
   paneKey: string
   onActivate: (tabId: string, paneKey: string) => void
@@ -147,6 +154,7 @@ vi.mock('@/components/dashboard/DashboardAgentRow', () => ({
     onActivate: (tabId: string, paneKey: string) => void
   }) => {
     capturedRowActivations.push({ paneKey: agent.paneKey, onActivate })
+
     return (
       <div
         data-testid="agent-row"
@@ -780,6 +788,7 @@ describe('WorktreeCardAgents', () => {
 
   it('rotates the compact summary chevron when collapsed', async () => {
     const { CompactAgentSummaryButton } = await import('./worktree-card-compact-agents')
+
     const agents = [
       mockAgent({ paneKey: 'tab-1:1', agentType: 'codex', startedAt: 1000, prompt: 'One' })
     ] as DashboardAgentRowData[]
@@ -801,6 +810,7 @@ describe('WorktreeCardAgents', () => {
 
   it('uses a neutral compact summary label while expanded', async () => {
     const { CompactAgentSummaryButton } = await import('./worktree-card-compact-agents')
+
     const agents = [
       ['tab-1:1', 'codex', 'One'],
       ['tab-1:2', 'codex', 'Two'],

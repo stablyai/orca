@@ -43,6 +43,7 @@ function renderTriggerLabel(
       </span>
     )
   }
+
   if (selected.size === repos.length) {
     return (
       <span className="inline-flex min-w-0 items-center gap-1.5">
@@ -50,8 +51,10 @@ function renderTriggerLabel(
       </span>
     )
   }
+
   const selectedRepos = repos.filter((r) => selected.has(r.id))
   const [first, second, ...rest] = selectedRepos
+
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5 truncate">
       {first ? (
@@ -69,6 +72,7 @@ function renderTriggerLabel(
 
 export function getRepoMultiComboboxDetail(repo: Repo, hostLabel?: string | null): string {
   const trimmedHostLabel = hostLabel?.trim()
+
   return trimmedHostLabel ? `${trimmedHostLabel} · ${repo.path}` : repo.path
 }
 
@@ -89,6 +93,7 @@ export default function RepoMultiCombobox({
 
   const handleOpenChange = useCallback((nextOpen: boolean) => {
     setOpen(nextOpen)
+
     if (!nextOpen) {
       setQuery('')
     }
@@ -97,6 +102,7 @@ export default function RepoMultiCombobox({
   const toggle = useCallback(
     (repoId: string) => {
       const next = new Set(selected)
+
       if (next.has(repoId)) {
         // Why: the empty selection is unreachable by design — fetch effects
         // assume at least one repo is selected, so block the click instead of
@@ -104,10 +110,12 @@ export default function RepoMultiCombobox({
         if (next.size <= 1) {
           return
         }
+
         next.delete(repoId)
       } else {
         next.add(repoId)
       }
+
       onChange(next)
     },
     [onChange, selected]
@@ -120,12 +128,16 @@ export default function RepoMultiCombobox({
       // selection, so we keep the first eligible repo instead of emitting
       // an empty set.
       const first = repos[0]
+
       if (!first) {
         return
       }
+
       onChange(new Set([first.id]))
+
       return
     }
+
     onSelectAll()
   }, [allSelected, onChange, onSelectAll, repos])
 
@@ -199,6 +211,7 @@ export default function RepoMultiCombobox({
               const isSelected = selected.has(repo.id)
               const isLastSelected = isSelected && selected.size <= 1
               const detail = getRepoMultiComboboxDetail(repo, getRepoHostLabel?.(repo))
+
               return (
                 <CommandItem
                   key={repo.id}

@@ -20,10 +20,12 @@ const createdRoots: string[] = []
 function makeExistingDirectory(): string {
   const dir = mkdtempSync(join(tmpdir(), 'orca-wsl-spawn-cwd-'))
   createdRoots.push(dir)
+
   return dir
 }
 
 const ENV_KEYS = ['ORCA_USER_DATA_PATH', 'USERPROFILE', 'HOMEDRIVE', 'HOMEPATH'] as const
+
 const savedEnv = new Map<string, string | undefined>()
 
 beforeEach(() => {
@@ -31,19 +33,23 @@ beforeEach(() => {
     savedEnv.set(key, process.env[key])
     delete process.env[key]
   }
+
   resetWslInteropSpawnDirectoryCache()
 })
 
 afterEach(() => {
   for (const key of ENV_KEYS) {
     const saved = savedEnv.get(key)
+
     if (saved === undefined) {
       delete process.env[key]
     } else {
       process.env[key] = saved
     }
   }
+
   resetWslInteropSpawnDirectoryCache()
+
   while (createdRoots.length > 0) {
     rmSync(createdRoots.pop()!, { recursive: true, force: true })
   }

@@ -161,6 +161,7 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
     candidateKeyGuardActive: false,
     pendingCandidateKeyReleaseActive: false
   }
+
   const linuxIdle = {
     isMac: false,
     isLinux: true,
@@ -168,14 +169,17 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
     candidateKeyGuardActive: false,
     pendingCandidateKeyReleaseActive: false
   }
+
   const linuxComposing = { ...linuxIdle, compositionActive: true, candidateKeyGuardActive: true }
   // Post-compositionend guard: the tracker is already inactive but the
   // committing key's trailing press/release must still be absorbed.
   const linuxPostCompositionGuard = { ...linuxIdle, candidateKeyGuardActive: true }
+
   const linuxOrphanCandidateDigitGuard = {
     ...linuxIdle,
     linuxOrphanCandidateDigitGuardActive: true
   }
+
   const windowsComposing = {
     ...windowsIdle,
     compositionActive: true,

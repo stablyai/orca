@@ -14,17 +14,22 @@ async function settleBackgroundRemoval(): Promise<void> {
 
 it('holds one snapshot prune batch across the sequential cleanup removals', async () => {
   const first = makeCandidate()
+
   const second = makeCandidate({
     worktreeId: 'repo-1::/repo/beta',
     displayName: 'beta',
     branch: 'beta',
     path: '/repo/beta'
   })
+
   const events: string[] = []
+
   const removeCandidates = vi.fn(async (worktreeIds: readonly string[]) => {
     events.push(`remove:${worktreeIds[0]}`)
+
     return { removedIds: [...worktreeIds], removedIdentities: [...worktreeIds], failures: [] }
   })
+
   const onResult = vi.fn()
 
   startWorkspaceCleanupBackgroundRemoval({

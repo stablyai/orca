@@ -88,6 +88,7 @@ export function useMobileSessionImageAttachments({
     onSuccess,
     onError
   })
+
   const nativeChatImages = useMobileNativeChatImageAttachments({
     client,
     activeHandleRef,
@@ -104,5 +105,6 @@ export function useMobileSessionImageAttachments({
     onAttachSuccess: onSuccess,
     onError
   })
+
   return { attachImage, isAttaching, nativeChatImages }
 }

@@ -11,6 +11,7 @@ import { isQualifiedPluginKey } from './plugin-manifest'
 
 /** Install content hash: legacy 128-bit SHA-256 prefix or the full digest. */
 export const PLUGIN_CONTENT_HASH_PATTERN = /^(?:[0-9a-f]{32}|[0-9a-f]{64})$/
+
 /** Git object id, SHA-1 or SHA-256. */
 export const PLUGIN_COMMIT_PATTERN = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
 
@@ -65,17 +66,22 @@ export type PluginInstallSource = z.infer<typeof pluginInstallSourceSchema>
  * source cannot turn URL parsing into arbitrary command execution. */
 export function isAllowedPluginGitUrl(value: string): boolean {
   const url = value.trim()
+
   if (/^[^\s@/:]+@[A-Za-z0-9.-]+:[^\s]+$/.test(url)) {
     return true
   }
+
   try {
     const parsed = new URL(url)
+
     if (!parsed.hostname || parsed.password) {
       return false
     }
+
     if (parsed.protocol === 'https:') {
       return parsed.username.length === 0
     }
+
     return parsed.protocol === 'ssh:'
   } catch {
     return false
@@ -154,11 +160,13 @@ export function upsertPluginLock(lock: PluginLockfile, entry: PluginLockEntry): 
 export function removePluginLock(lock: PluginLockfile, pluginKey: string): PluginLockfile {
   const plugins = { ...lock.plugins }
   delete plugins[pluginKey]
+
   return { version: 1, plugins }
 }
 
 export function parsePluginLockfile(raw: unknown): PluginLockfile {
   const parsed = pluginLockfileSchema.safeParse(raw)
+
   // A corrupt lockfile must not brick installs; integrity of installed trees
   // is independently anchored by their hash-addressed directory names.
   return parsed.success ? parsed.data : emptyPluginLockfile()

@@ -7,19 +7,24 @@ describe('delivery eligibility derived from messages', () => {
 
   function setup() {
     db = new OrchestrationDb(':memory:')
+
     const run = db.createRun({
       objective: 'Derived delivery',
       coordinatorHandle: 'coord',
       coordinatorPaneKey: 'tab:11111111-1111-4111-8111-111111111111'
     })
+
     const params = { runId: run.id, consumerGeneration: run.consumer_generation }
+
     const message = db.insertMessage({
       runId: run.id,
       from: 'worker',
       to: `run:${run.id}`,
       subject: 'old'
     })
+
     const first = db.getOrCreateRunDelivery(params)!
+
     return { run, params, message, first }
   }
 
@@ -28,6 +33,7 @@ describe('delivery eligibility derived from messages', () => {
     (path) => {
       const { run, params, message, first } = setup()
       const before = db.getDeliveryRaw(first.delivery.id)
+
       if (path === 'read mutation') {
         db.markAsRead([message.id])
       } else if (path === 'lifecycle suppression') {
@@ -35,6 +41,7 @@ describe('delivery eligibility derived from messages', () => {
       } else {
         db.db.prepare('UPDATE messages SET read = 1 WHERE id = ?').run(message.id)
       }
+
       expect(db.getDeliveryRaw(first.delivery.id)).toEqual(before)
       expect(db.hasOutstandingRunDelivery(run.id)).toBe(false)
       const changes = db.db.prepare('SELECT total_changes() AS n').get()

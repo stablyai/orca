@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, params?: Record<string, string>) =>
     fallback.replace('{{value0}}', params?.value0 ?? '')
@@ -24,16 +25,20 @@ vi.mock('@/i18n/i18n', () => ({
 vi.mock('@/lib/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => mocks.connectionIdForFile
 }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: () => mocks.worktreeRuntimeOwnerId
 }))
+
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: () => mocks.connectionIdForWorkspace,
   getConnectionIdForFile: () => mocks.connectionIdForFile
 }))
+
 vi.mock('@/components/terminal-pane/terminal-remote-file-download-open', () => ({
   downloadAndOpenRemoteTerminalFile: mocks.downloadAndOpen
 }))
+
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({

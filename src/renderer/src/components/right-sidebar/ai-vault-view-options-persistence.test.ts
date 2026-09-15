@@ -89,6 +89,7 @@ describe('AI Vault view option persistence', () => {
 
   it('falls back safely when JSON or storage access is unavailable', () => {
     const malformed = { getItem: vi.fn(() => '{not-json'), setItem: vi.fn() }
+
     const unavailable = {
       getItem: vi.fn(() => {
         throw new Error('blocked')

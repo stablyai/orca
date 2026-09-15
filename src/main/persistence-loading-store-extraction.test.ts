@@ -27,22 +27,28 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
 }))
 
 vi.mock('./telemetry/client', () => ({ track: trackMock }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({ getCohortAtEmit: getCohortAtEmitMock }))
+
 vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(() => ({ hosts: [] })),
   sshConfigHostsToTargets: vi.fn(() => [])
 }))
+
 vi.mock('./startup/startup-diagnostics', async (importOriginal) => {
   const actual = await importOriginal<typeof StartupDiagnosticsModule>()
+
   return { ...actual, logStartupDiagnostic: logStartupDiagnosticMock }
 })
 
@@ -74,6 +80,7 @@ describe('loading Store extraction seams', () => {
         typeof value === 'object' &&
         (value as { activeTabId?: unknown }).activeTabId === sentinel
     )
+
     stringifySpy.mockRestore()
 
     expect(store.getWorkspaceSession().activeTabId).toBe(sentinel)
@@ -100,13 +107,16 @@ describe('loading Store extraction seams', () => {
         typeof value === 'object' &&
         (value as { activeTabId?: unknown }).activeTabId === sentinel
     )
+
     stringifySpy.mockRestore()
 
     expect(store.getWorkspaceSession().activeTabId).toBe(sentinel)
     expect(workspaceSessionStringifyCalls).toHaveLength(1)
+
     const loadDoneCall = logStartupDiagnosticMock.mock.calls.find(
       ([event]) => event === 'persistence-load-done'
     )
+
     expect(loadDoneCall).toBeDefined()
     const details = loadDoneCall?.[1] as Record<string, unknown> | undefined
     expect(details).toEqual({
@@ -127,6 +137,7 @@ describe('loading Store extraction seams', () => {
     let clock = 0
     const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => clock)
     const realStringify = JSON.stringify
+
     const stringifySpy = vi.spyOn(JSON, 'stringify').mockImplementation(((
       value: unknown,
       ...rest: unknown[]
@@ -138,6 +149,7 @@ describe('loading Store extraction seams', () => {
       ) {
         clock += 1000
       }
+
       return (realStringify as (...args: unknown[]) => string)(value, ...rest)
     }) as typeof JSON.stringify)
 
@@ -152,6 +164,7 @@ describe('loading Store extraction seams', () => {
     const loadDoneCall = logStartupDiagnosticMock.mock.calls.find(
       ([event]) => event === 'persistence-load-done'
     )
+
     const details = loadDoneCall?.[1] as Record<string, unknown> | undefined
     expect(details?.workspaceSessionBytes).toEqual(expect.any(Number))
     expect(details?.t).toBe(0)
@@ -213,8 +226,10 @@ describe('loading Store extraction seams', () => {
   it('keeps the last constructed Store as the global pane-migration listener owner', async () => {
     const first = await createStore()
     const { Store } = await import('./persistence/loading-store/store')
+
     const { setMigrationUnsupportedPty } =
       await import('./agent-hooks/migration-unsupported-pty-state')
+
     const secondDataFile = join(testState.dir, 'second-profile', 'orca-data.json')
     const second = new Store({ dataFile: secondDataFile })
 
@@ -288,6 +303,7 @@ describe('loading Store extraction seams', () => {
     ]).toEqual([1, 2, 2])
 
     const prototypeSpy = vi.spyOn(Store.prototype, 'getRepoCount')
+
     try {
       expect(store.getRepoCount()).toBe(0)
       expect(prototypeSpy).toHaveBeenCalledOnce()
@@ -300,9 +316,11 @@ describe('loading Store extraction seams', () => {
         return 47
       }
     }
+
     const overridden = new StoreWithRepoCountOverride({
       dataFile: join(testState.dir, 'override-profile', 'orca-data.json')
     })
+
     expect(overridden.getRepoCount()).toBe(47)
     expectTypeOf<PersistenceStore>().not.toHaveProperty('scheduleSave')
     expectTypeOf<PersistenceStore>().not.toHaveProperty('enqueueWrite')

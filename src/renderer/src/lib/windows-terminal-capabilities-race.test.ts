@@ -17,23 +17,28 @@ describe('Windows terminal capability probe ordering', () => {
 
   it('does not let an older forced probe overwrite a newer identity proof', async () => {
     let resolveOlderStatus!: (status: { hostPlatform: NodeJS.Platform }) => void
+
     let resolveNewerStatus!: (status: {
       hostPlatform: NodeJS.Platform
       windowsProcessStartTimeAvailable: boolean
     }) => void
+
     const olderStatus = new Promise<{ hostPlatform: NodeJS.Platform }>((resolve) => {
       resolveOlderStatus = resolve
     })
+
     const newerStatus = new Promise<{
       hostPlatform: NodeJS.Platform
       windowsProcessStartTimeAvailable: boolean
     }>((resolve) => {
       resolveNewerStatus = resolve
     })
+
     const runtimeGetStatus = vi
       .fn<() => Promise<unknown>>()
       .mockReturnValueOnce(olderStatus)
       .mockReturnValueOnce(newerStatus)
+
     vi.stubGlobal('window', {
       api: {
         wsl: {
@@ -51,6 +56,7 @@ describe('Windows terminal capability probe ordering', () => {
       force: true,
       now: 1_000
     })
+
     const newerProbe = loadWindowsTerminalCapabilities({
       ownerKey: 'local',
       force: true,

@@ -15,9 +15,11 @@ function buildLines(lineCount: number): string {
 
 function buildReproTypeScriptFile(lineCount: number): string {
   const lines: string[] = []
+
   for (let index = 0; index < lineCount; index += 1) {
     lines.push(`export const largeDiffValue${index} = ${index}`)
   }
+
   return `${lines.join('\n')}\n`
 }
 
@@ -78,15 +80,18 @@ describe('large diff render limit', () => {
 
   it('limits diffs above the per-side line limit', () => {
     const content = buildLines(MAX_RENDERED_DIFF_LINES_PER_SIDE + 1)
+
     const limit = getLargeDiffRenderLimit({
       originalContent: '',
       modifiedContent: content
     })
 
     expect(limit.limited).toBe(true)
+
     if (!limit.limited) {
       throw new Error('expected line-count limit')
     }
+
     expect(limit.reason).toBe('line-count')
     expect(limit.lineCounts?.modified).toBe(MAX_RENDERED_DIFF_LINES_PER_SIDE + 1)
     expect(limit.lineCountsAreMinimum?.modified).toBe(true)
@@ -94,15 +99,18 @@ describe('large diff render limit', () => {
 
   it('limits long-line diffs above the combined character ceiling', () => {
     const content = 'a'.repeat(MAX_RENDERED_DIFF_COMBINED_CHARACTERS + 1)
+
     const limit = getLargeDiffRenderLimit({
       originalContent: '',
       modifiedContent: content
     })
 
     expect(limit.limited).toBe(true)
+
     if (!limit.limited) {
       throw new Error('expected character-count limit')
     }
+
     expect(limit.reason).toBe('character-count')
     expect(limit.lineCounts).toBeNull()
   })
@@ -116,9 +124,11 @@ describe('large diff render limit', () => {
     })
 
     expect(limit.limited).toBe(true)
+
     if (!limit.limited) {
       throw new Error('expected line-count limit')
     }
+
     expect(limit.reason).toBe('line-count')
     expect(limit.characterCount).toBe(46)
   })

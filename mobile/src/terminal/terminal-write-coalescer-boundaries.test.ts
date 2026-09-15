@@ -16,17 +16,23 @@ function createSimulatedTerminalWebView() {
   const delivered: TerminalWebViewCommand[] = []
   const pendingMessages = createTerminalWebViewPendingMessages()
   const readiness = { webReady: true }
+
   const send = (msg: TerminalWebViewCommand) => {
     delivered.push(msg)
   }
+
   const postMessage = (msg: TerminalWebViewCommand) => {
     if (!readiness.webReady) {
       pendingMessages.queue(msg)
+
       return
     }
+
     send(msg)
   }
+
   const coalescer = createTerminalWriteCoalescer((data) => postMessage({ type: 'write', data }))
+
   return { coalescer, delivered, pendingMessages, postMessage, readiness, send }
 }
 

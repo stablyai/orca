@@ -42,6 +42,7 @@ describe('GitHandler', () => {
         head?: string
         branch?: string
       }
+
       expect(result.entries).toEqual([])
       expect(result.conflictOperation).toBe('unknown')
       expect(result.branch).toMatch(/^refs\/heads\//)
@@ -63,6 +64,7 @@ describe('GitHandler', () => {
           removed?: unknown
         }[]
       }
+
       const untracked = result.entries.find((e) => e.path === 'new.txt')
       expect(untracked).toBeDefined()
       expect(untracked!.status).toBe('untracked')
@@ -84,6 +86,7 @@ describe('GitHandler', () => {
       })) as {
         ignoredPaths?: string[]
       }
+
       const ignoredResult = (await dispatcher.callRequest('git.status', {
         worktreePath: tmpDir,
         includeIgnored: true
@@ -127,6 +130,7 @@ describe('GitHandler', () => {
           removed?: unknown
         }[]
       }
+
       const modified = result.entries.find((e) => e.path === 'file.txt')
       expect(modified).toBeDefined()
       expect(modified!.status).toBe('modified')
@@ -151,6 +155,7 @@ describe('GitHandler', () => {
           removed?: unknown
         }[]
       }
+
       const staged = result.entries.find((e) => e.area === 'staged')
       expect(staged).toBeDefined()
       expect(staged!.status).toBe('modified')
@@ -168,9 +173,11 @@ describe('GitHandler', () => {
       const result = (await dispatcher.callRequest('git.status', { worktreePath: tmpDir })) as {
         entries: Record<string, unknown>[]
       }
+
       const entry = result.entries.find((e) =>
         typeof e.path === 'string' ? e.path.endsWith('sample.md') : false
       )
+
       expect(entry).toBeDefined()
       expect(entry!.path).toBe('docs/日本語/sample.md')
     })
@@ -188,9 +195,11 @@ describe('GitHandler', () => {
       const result = (await dispatcher.callRequest('git.status', { worktreePath: tmpDir })) as {
         entries: Record<string, unknown>[]
       }
+
       const entry = result.entries.find((e) =>
         typeof e.path === 'string' ? e.path.endsWith('sample.md') : false
       )
+
       expect(entry).toBeDefined()
       expect(entry!.path).toBe('docs/日本語/sample.md')
       expect(entry!.status).toBe('modified')
@@ -211,6 +220,7 @@ describe('GitHandler', () => {
         cwd: tmpDir,
         encoding: 'utf-8'
       })
+
       expect(output.trim()).toBe('file.txt')
     })
 
@@ -227,6 +237,7 @@ describe('GitHandler', () => {
         cwd: tmpDir,
         encoding: 'utf-8'
       })
+
       expect(output.trim()).toBe('')
     })
   })
@@ -305,6 +316,7 @@ describe('GitHandler', () => {
 
     it('preserves bulk discard action selection and original path order for path edges', async () => {
       const filePaths = ['new', 'docs\\', '[ab].txt', 'docs///', 'new', 'src/file', 'docs\\']
+
       const gitMock = vi
         .spyOn(
           handler as unknown as {
@@ -337,6 +349,7 @@ describe('GitHandler', () => {
       const trackedStdout = Array.from({ length: 150_000 }, (_, index) => `docs/file-${index}.ts`)
         .join('\0')
         .concat('\0')
+
       const gitMock = vi
         .spyOn(
           handler as unknown as {

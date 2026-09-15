@@ -49,6 +49,7 @@ export function ProjectWindowsRuntimeSetting({
   const preference = normalizeProjectRuntimePreference(project.localWindowsRuntimePreference)
   const selectedPreference = pendingPreference ?? preference
   const nextWslDistro = getNextProjectWslDistro(selectedPreference, settings, wslDistros)
+
   const resolution = resolveProjectExecutionRuntime({
     appPlatform: 'win32',
     projectId: project.id,
@@ -57,52 +58,70 @@ export function ProjectWindowsRuntimeSetting({
     wslAvailable: wslCapabilitiesLoading ? undefined : wslAvailable,
     availableWslDistros: wslCapabilitiesLoading ? null : wslDistros
   })
+
   const isWslSelected = selectedPreference.kind === 'wsl'
   const distroOptions = getVisibleDistroOptions(selectedPreference, wslDistros)
   const runtimeSessionWarning = getRuntimeSessionWarning(runtimeSessionSummary)
   const hasRuntimeSessions = hasActiveRuntimeSessions(runtimeSessionSummary)
   const hasPendingPreference = pendingPreference !== null
   const defaultRuntimeLabel = getDefaultRuntimeLabel(settings)
+
   const commitRuntimePreference = (nextPreference: LocalWindowsRuntimePreference): void => {
     setPendingPreference(null)
+
     if (nextPreference.kind === 'inherit-global') {
       void updateProject(project.id, { localWindowsRuntimePreference: undefined })
+
       return
     }
+
     if (nextPreference.kind === 'windows-host') {
       void updateProject(project.id, {
         localWindowsRuntimePreference: { kind: 'windows-host' }
       })
+
       return
     }
+
     void updateProject(project.id, {
       localWindowsRuntimePreference: { kind: 'wsl', distro: nextPreference.distro }
     })
   }
+
   const requestRuntimePreference = (nextPreference: LocalWindowsRuntimePreference): void => {
     if (sameRuntimePreference(nextPreference, preference)) {
       setPendingPreference(null)
+
       return
     }
+
     if (hasRuntimeSessions) {
       setPendingPreference(nextPreference)
+
       return
     }
+
     commitRuntimePreference(nextPreference)
   }
+
   const handleRuntimeChange = (value: ProjectRuntimeSegment): void => {
     if (value === 'inherit-global') {
       requestRuntimePreference({ kind: 'inherit-global' })
+
       return
     }
+
     if (value === 'windows-host') {
       requestRuntimePreference({ kind: 'windows-host' })
+
       return
     }
+
     if (nextWslDistro) {
       requestRuntimePreference({ kind: 'wsl', distro: nextWslDistro })
     }
   }
+
   const handleDistroChange = (distro: string): void => {
     requestRuntimePreference({ kind: 'wsl', distro })
   }
@@ -230,6 +249,7 @@ function sameRuntimePreference(
   if (left.kind !== right.kind) {
     return false
   }
+
   return left.kind !== 'wsl' || left.distro === (right.kind === 'wsl' ? right.distro : null)
 }
 
@@ -237,6 +257,7 @@ function joinRuntimeSessionParts(parts: string[]): string {
   if (parts.length <= 1) {
     return parts[0] ?? ''
   }
+
   return translate(
     'auto.components.settings.ProjectWindowsRuntimeSetting.runtimeSessionJoin',
     '{{value0}} and {{value1}}',
@@ -267,6 +288,7 @@ function getActiveTaskCountLabel(count: number): string {
 function getRuntimeSessionWarning(summary?: ProjectRuntimeSessionSummary): string | null {
   const liveTerminalCount = summary?.liveTerminalCount ?? 0
   const activeTaskCount = summary?.activeTaskCount ?? 0
+
   if (liveTerminalCount === 0 && activeTaskCount === 0) {
     return null
   }
@@ -291,13 +313,16 @@ function getNextProjectWslDistro(
   if (preference.kind === 'wsl') {
     return preference.distro
   }
+
   const globalDistro =
     settings.localWindowsRuntimeDefault.kind === 'wsl'
       ? settings.localWindowsRuntimeDefault.distro
       : null
+
   if (globalDistro?.trim()) {
     return globalDistro.trim()
   }
+
   return wslDistros.find((distro) => distro.trim().length > 0) ?? null
 }
 
@@ -306,9 +331,11 @@ function getVisibleDistroOptions(
   wslDistros: readonly string[]
 ): string[] {
   const options = [...wslDistros]
+
   if (preference.kind === 'wsl' && !options.includes(preference.distro)) {
     return [preference.distro, ...options]
   }
+
   return options
 }
 
@@ -337,6 +364,7 @@ function getProjectRuntimeDescription(
         'WSL is not available. Switch this project to Windows or repair WSL.'
       )
     }
+
     if (resolution.repair.reason === 'wsl-distro-missing') {
       return translate(
         'auto.components.settings.ProjectWindowsRuntimeSetting.distroMissing',
@@ -344,6 +372,7 @@ function getProjectRuntimeDescription(
         { value0: resolution.repair.preferredRuntime.distro ?? 'WSL' }
       )
     }
+
     return translate(
       'auto.components.settings.ProjectWindowsRuntimeSetting.distroRequired',
       'Choose a WSL distro or switch this project to Windows.'

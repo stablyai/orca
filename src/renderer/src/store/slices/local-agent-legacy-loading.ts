@@ -15,9 +15,11 @@ export function getLegacyLoadingPatch(
 ): LocalAgentLegacyLoadingPatch | null {
   const detectedAgentIds = contextMatches ? state.detectedAgentIds : null
   const alreadyLoading = phase === 'detect' ? state.isDetectingAgents : state.isRefreshingAgents
+
   if (state.detectedAgentIds === detectedAgentIds && alreadyLoading) {
     return null
   }
+
   return phase === 'detect'
     ? { detectedAgentIds, isDetectingAgents: true }
     : { detectedAgentIds, isRefreshingAgents: true }

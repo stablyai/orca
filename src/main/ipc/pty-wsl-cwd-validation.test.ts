@@ -13,45 +13,61 @@ import { join } from 'node:path'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -78,6 +94,7 @@ describe('registerPtyHandlers', () => {
     const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-wsl-unc-cwd' })
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     wslUncDirectoryExistsAsyncMock.mockResolvedValueOnce(testCase.exists)
+
     if (!testCase.exists) {
       wslUncDirectoryExistsAsyncMock.mockResolvedValueOnce(true)
     }
@@ -85,6 +102,7 @@ describe('registerPtyHandlers', () => {
     try {
       installDaemonTestProvider({ spawn: providerSpawn })
       registerPtyHandlers(mainWindow as never)
+
       const result = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -114,6 +132,7 @@ describe('registerPtyHandlers', () => {
     try {
       installDaemonTestProvider({ spawn: providerSpawn })
       registerPtyHandlers(mainWindow as never)
+
       const result = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -169,12 +188,14 @@ describe('registerPtyHandlers', () => {
       if (target === missingCwd) {
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       }
+
       return { isDirectory: () => true, mode: 0o755, size: 1 }
     })
 
     try {
       installDaemonTestProvider({ spawn: providerSpawn })
       registerPtyHandlers(mainWindow as never)
+
       const result = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -202,6 +223,7 @@ describe('registerPtyHandlers', () => {
     try {
       installDaemonTestProvider({ spawn: providerSpawn })
       registerPtyHandlers(mainWindow as never)
+
       const result = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -232,6 +254,7 @@ describe('registerPtyHandlers', () => {
       if (target === '/repo/app/deleted-folder') {
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       }
+
       return { isDirectory: () => true, mode: 0o755, size: 1 }
     })
 
@@ -269,6 +292,7 @@ describe('registerPtyHandlers', () => {
       if (target === '/repo/app/deleted-folder') {
         throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
       }
+
       return { isDirectory: () => true, mode: 0o755, size: 1 }
     })
 
@@ -301,6 +325,7 @@ describe('registerPtyHandlers', () => {
       if (targetPath === '//wsl.localhost/Ubuntu/home/jin/missing') {
         return false
       }
+
       return true
     })
 
@@ -323,6 +348,7 @@ describe('registerPtyHandlers', () => {
         configurable: true,
         value: originalPlatform
       })
+
       if (originalUserProfile === undefined) {
         delete process.env.USERPROFILE
       } else {
@@ -352,6 +378,7 @@ describe('registerPtyHandlers', () => {
         cwd: '/tmp',
         command: 'printf "hello"'
       })
+
       expect(shell).toBe('/bin/zsh')
       expect(args).toEqual(['-l'])
       expect(options.env.ZDOTDIR).toBe(join(getShellReadyWrapperRoot(), 'zsh'))
@@ -364,21 +391,25 @@ describe('registerPtyHandlers', () => {
         configurable: true,
         value: originalPlatform
       })
+
       if (originalHome === undefined) {
         delete process.env.HOME
       } else {
         process.env.HOME = originalHome
       }
+
       if (originalOrcaOrigZdotdir === undefined) {
         delete process.env.ORCA_ORIG_ZDOTDIR
       } else {
         process.env.ORCA_ORIG_ZDOTDIR = originalOrcaOrigZdotdir
       }
+
       if (originalShell === undefined) {
         delete process.env.SHELL
       } else {
         process.env.SHELL = originalShell
       }
+
       if (originalZdotdir === undefined) {
         delete process.env.ZDOTDIR
       } else {

@@ -13,12 +13,16 @@ export function applyProjectGroupDeleteCascade(
 ): Pick<RepoSlice, 'projectGroups' | 'folderWorkspaces' | 'repos' | 'folderWorkspacePathStatuses'> {
   const ownsRowHost = (rowHostId: string): boolean =>
     ownerHostId ? catalogOwnsHost(ownerHostId, rowHostId) : true
+
   const ownerGroups = state.projectGroups.filter((group) =>
     ownsRowHost(getProjectGroupHostId(group))
   )
+
   const deletedGroupIds = getProjectGroupSubtreeIds(ownerGroups, groupId)
+
   const isDeletedGroup = (group: ProjectGroup): boolean =>
     deletedGroupIds.has(group.id) && ownsRowHost(getProjectGroupHostId(group))
+
   return {
     projectGroups: state.projectGroups.filter((group) => !isDeletedGroup(group)),
     folderWorkspaces: state.folderWorkspaces.filter(

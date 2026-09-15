@@ -35,8 +35,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -57,6 +60,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -66,6 +70,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -86,6 +91,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -96,9 +102,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -108,9 +116,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -119,6 +129,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -162,22 +173,29 @@ describe('connectPanePty', () => {
       stateHistory: []
     }
     const terminalTarget = createKeyboardEventTarget()
+
     const unrelatedTarget = createKeyboardEventTarget()
+
     ;(
       globalThis.window as unknown as { addEventListener?: ReturnType<typeof vi.fn> }
     ).addEventListener = vi.fn()
+
     const pane = createPane(1)
+
     ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
 
     connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     unrelatedTarget.dispatch({
       key: 'c',
       ctrlKey: true,
@@ -237,15 +255,19 @@ describe('connectPanePty', () => {
       stateHistory: []
     }
     const terminalTarget = createKeyboardEventTarget()
+
     const pane = createPane(1)
+
     ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const manager = createManager(1)
     manager.getActivePane.mockReturnValue({ id: 1 })
+
     const deps = createDeps({
       setRuntimePaneTitle: vi.fn((tabId: string, paneId: number, title: string) => {
         mockStoreState.runtimePaneTitlesByTabId = {
@@ -259,9 +281,11 @@ describe('connectPanePty', () => {
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
     ;(onDataHandler as unknown as (data: string) => void)('\x03')
     await flushAsyncTicks()
@@ -296,15 +320,19 @@ describe('connectPanePty', () => {
       }
     }
     const terminalTarget = createKeyboardEventTarget()
+
     const pane = createPane(1)
+
     ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const manager = createManager(1)
     manager.getActivePane.mockReturnValue({ id: 1 })
+
     const deps = createDeps({
       setRuntimePaneTitle: vi.fn((tabId: string, paneId: number, title: string) => {
         mockStoreState.runtimePaneTitlesByTabId = {
@@ -318,9 +346,11 @@ describe('connectPanePty', () => {
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
     ;(onDataHandler as unknown as (data: string) => void)('\x03')
     await flushAsyncTicks()
@@ -345,19 +375,24 @@ describe('connectPanePty', () => {
       }
     }
     const terminalTarget = createKeyboardEventTarget()
+
     const pane = createPane(1)
+
     ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const deps = createDeps()
 
     connectPanePty(pane as never, createManager(1) as never, deps as never)
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
     ;(onDataHandler as unknown as (data: string) => void)('\x03')
     await flushAsyncTicks()
@@ -391,13 +426,16 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
 
     connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     ;(onDataHandler as unknown as (data: string) => void)('\x03')
     await flushAsyncTicks()
     vi.advanceTimersByTime(500)
@@ -427,13 +465,16 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
 
     connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     ;(onDataHandler as unknown as (data: string) => void)('\x03')
     await flushAsyncTicks()
     pasteTerminalText(pane.terminal as never, 'a69ce28e1d092e0c8825cd1a109ac36409962bc1')
@@ -460,18 +501,23 @@ describe('connectPanePty', () => {
       stateHistory: []
     }
     const terminalTarget = createKeyboardEventTarget()
+
     const pane = createPane(1)
+
     ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
 
     connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
     ;(onDataHandler as unknown as (data: string) => void)('\x1b[99;5u')
     await flushAsyncTicks()
@@ -512,18 +558,23 @@ describe('connectPanePty', () => {
       stateHistory: []
     }
     const terminalTarget = createKeyboardEventTarget()
+
     const pane = createPane(1)
+
     ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
 
     connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
     ;(onDataHandler as unknown as (data: string) => void)('\x1b[99;5u')
     await flushAsyncTicks()
@@ -579,16 +630,21 @@ describe('connectPanePty', () => {
         paneKey,
         terminalTitle: 'Terminal 1'
       }
+
       return true
     })
     const terminalTarget = createKeyboardEventTarget()
+
     const pane = createPane(1)
+
     ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
+
     const deps = createDeps({
       setRuntimePaneTitle: vi.fn((tabId: string, paneId: number, title: string) => {
         mockStoreState.runtimePaneTitlesByTabId = {
@@ -602,9 +658,11 @@ describe('connectPanePty', () => {
     })
 
     connectPanePty(pane as never, createManager(1) as never, deps as never)
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
     ;(onDataHandler as unknown as (data: string) => void)('\x1b[99;5u')
     await flushAsyncTicks()
@@ -641,13 +699,16 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
 
     connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     ;(onDataHandler as unknown as (data: string) => void)('\x03')
     vi.advanceTimersByTime(500)
     await flushAsyncTicks()
@@ -680,25 +741,31 @@ describe('connectPanePty', () => {
       stateHistory: []
     }
     const terminalTarget = createKeyboardEventTarget()
+
     const pane = createPane(1)
+
     ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const deps = createDeps()
 
     connectPanePty(pane as never, createManager(1) as never, deps as never)
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     terminalTarget.dispatch(keyEvent({ key: 'c', ctrlKey: true }))
     ;(onDataHandler as unknown as (data: string) => void)('\x03')
     await flushAsyncTicks()
     vi.advanceTimersByTime(500)
     await flushAsyncTicks()
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+
     if (!onPtyExit) {
       throw new Error('expected onPtyExit callback to be registered')
     }
@@ -729,10 +796,13 @@ describe('connectPanePty', () => {
       stateHistory: []
     }
     const terminalTarget = createKeyboardEventTarget()
+
     const pane = createPane(1)
+
     ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
 
     connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
     for (const event of [
       {
         key: 'Escape',
@@ -761,6 +831,7 @@ describe('connectPanePty', () => {
     ]) {
       terminalTarget.dispatch(event as KeyboardEvent)
     }
+
     vi.advanceTimersByTime(500)
 
     expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
@@ -784,7 +855,9 @@ describe('connectPanePty', () => {
       stateHistory: []
     }
     const terminalTarget = createKeyboardEventTarget()
+
     const pane = createPane(1)
+
     ;(pane.terminal as { element?: unknown; hasSelection: ReturnType<typeof vi.fn> }).element =
       terminalTarget.target
     ;(pane.terminal as { hasSelection: ReturnType<typeof vi.fn> }).hasSelection.mockReturnValue(
@@ -804,7 +877,9 @@ describe('connectPanePty', () => {
     const secondTransport = createMockTransport()
     transportFactoryQueue.push(firstTransport, secondTransport)
     const terminalTarget = createKeyboardEventTarget()
+
     const pane = createPane(1)
+
     ;(pane.terminal as { element?: unknown }).element = terminalTarget.target
 
     const firstConnection = connectPanePty(
@@ -812,6 +887,7 @@ describe('connectPanePty', () => {
       createManager(1) as never,
       createDeps() as never
     )
+
     expect(terminalTarget.handlers.size).toBe(1)
 
     firstConnection.dispose()

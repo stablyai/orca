@@ -13,6 +13,7 @@ export async function confirmPtyShellForeground(args: {
   if (args.isDead() || !args.process.pid) {
     return false
   }
+
   const confirmed = await confirmShellForegroundProcess(
     args.process.pid,
     args.shellPath,
@@ -20,5 +21,6 @@ export async function confirmPtyShellForeground(args: {
       ? { readWindowsPtyJobProcessIds: () => readWindowsPtyJobProcessIds(args.process) }
       : {}
   )
+
   return !args.isDead() && confirmed
 }

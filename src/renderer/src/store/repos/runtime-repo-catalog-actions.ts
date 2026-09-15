@@ -36,23 +36,28 @@ export function createRuntimeRepoCatalogActions(
     fetchRuntimeEnvironmentRepos: async (environmentId) => {
       const requestGeneration =
         (runtimeRepoFetchGenerationByEnvironment.get(environmentId) ?? 0) + 1
+
       runtimeRepoFetchGenerationByEnvironment.set(environmentId, requestGeneration)
       const connectionGeneration = getEnvironmentSshStateGeneration(environmentId)
       const runtimeConnectionGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
       let catalogGeneration = 0
       set((s) => {
         catalogGeneration = s.reposFetchGeneration + 1
+
         return { reposFetchGeneration: catalogGeneration }
       })
       const target = { kind: 'environment' as const, environmentId }
       const targetHostId = getRuntimeTargetHostId(target)
       claimRepoCatalogGeneration(get, targetHostId, catalogGeneration)
+
       try {
         const [catalog, visibilitySnapshot] = await Promise.all([
           fetchRepoCatalogForTarget(target),
           readRuntimeWorktreeVisibilitySnapshot(environmentId)
         ])
+
         const visibilityDefaults = visibilitySnapshot.defaults
+
         if (
           runtimeRepoFetchGenerationByEnvironment.get(environmentId) !== requestGeneration ||
           !isLatestRepoCatalogGeneration(get, targetHostId, catalogGeneration) ||
@@ -61,6 +66,7 @@ export function createRuntimeRepoCatalogActions(
         ) {
           return []
         }
+
         let finalizedHostRepos: Repo[] = []
         set((s) => {
           if (
@@ -71,19 +77,23 @@ export function createRuntimeRepoCatalogActions(
           ) {
             return s
           }
+
           // Why: skip merging a runtime env removed while this Connect-flow fetch was in flight, so purged repos aren't re-added (#8881).
           if (isRemovedRuntimeHostId(catalog.hostId, s.removedRuntimeEnvironmentIds)) {
             return s
           }
+
           const result = mergeFetchedRepoCatalog(catalog, s.repos)
           const reconciliation = reconcileSupersededSshRepos(result.repos, s)
           const finalizedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
           const validRepoIds = new Set(finalizedRepos.map((repo) => repo.id))
           const validRepoHostIdentities = new Set(finalizedRepos.map(getRepoHostIdentity))
+
           const projectCompatibility = projectCompatibilityForReconciledRepos(
             finalizedRepos,
             catalog.projectHostSetupCompatibility
           )
+
           const mergedProjectCompatibility = mergeFetchedProjectCompatibilityForHost({
             previous: {
               projects: s.projects,
@@ -97,9 +107,11 @@ export function createRuntimeRepoCatalogActions(
             repos: finalizedRepos,
             hostId: result.hostId
           })
+
           finalizedHostRepos = finalizedRepos.filter(
             (repo) => getRepoExecutionHostId(repo) === result.hostId
           )
+
           return {
             repos: finalizedRepos,
             ...(visibilityDefaults === undefined
@@ -147,9 +159,11 @@ export function createRuntimeRepoCatalogActions(
           }
         })
         scheduleSafeAutoForkSync(get, finalizedHostRepos)
+
         return finalizedHostRepos
       } catch (err) {
         console.error(`Failed to fetch repos for runtime environment ${environmentId}:`, err)
+
         return []
       }
     }

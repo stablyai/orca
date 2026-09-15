@@ -11,6 +11,7 @@ function getAbortReason(signal: AbortSignal): unknown {
   } catch (error) {
     return error
   }
+
   return new DOMException('This operation was aborted', 'AbortError')
 }
 
@@ -27,6 +28,7 @@ export class GitStatusReadLeaseOwner<T> {
     }
 
     let entry = this.entries.get(key)
+
     if (!entry) {
       const controller = new AbortController()
       const promise = load(controller.signal)
@@ -40,6 +42,7 @@ export class GitStatusReadLeaseOwner<T> {
     }
 
     entry.liveLeases += 1
+
     return this.createLease(key, entry, signal)
   }
 
@@ -54,23 +57,30 @@ export class GitStatusReadLeaseOwner<T> {
   ): Promise<T> {
     return new Promise<T>((resolve, reject) => {
       let active = true
+
       const release = (abortReason?: unknown): boolean => {
         if (!active) {
           return false
         }
+
         active = false
         signal?.removeEventListener('abort', onAbort)
         entry.liveLeases -= 1
+
         if (abortReason !== undefined && entry.liveLeases === 0 && !entry.settled) {
           if (this.entries.get(key) === entry) {
             this.entries.delete(key)
           }
+
           entry.controller.abort(abortReason)
         }
+
         return true
       }
+
       const onAbort = (): void => {
         const reason = getAbortReason(signal!)
+
         if (release(reason)) {
           reject(reason)
         }
@@ -94,6 +104,7 @@ export class GitStatusReadLeaseOwner<T> {
 
   private settle(key: string, entry: StatusReadEntry<T>): void {
     entry.settled = true
+
     if (this.entries.get(key) === entry) {
       this.entries.delete(key)
     }

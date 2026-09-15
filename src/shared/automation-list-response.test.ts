@@ -65,6 +65,7 @@ describe('validateAutomationListResponse', () => {
       response({ items: [{ automationId: 'a1', selector: { kind: 'self' } }] }),
       SELF
     )
+
     expect(result.ok && result.result.automations.map((entry) => entry.id)).toEqual(['a1'])
     expect(result.ok && result.invalidRows).toBe(1)
   })
@@ -80,6 +81,7 @@ describe('validateAutomationListResponse', () => {
       }),
       SELF
     )
+
     expect(result.ok && result.result.automations.map((entry) => entry.id)).toEqual(['a2'])
     expect(result.ok && result.invalidRows).toBe(2)
   })
@@ -94,6 +96,7 @@ describe('validateAutomationListResponse', () => {
       }),
       SELF
     )
+
     expect(result.ok && result.result.automations.map((entry) => entry.id)).toEqual(['a2'])
     expect(result.ok && result.result.items[0]?.selector).toEqual({ kind: 'self' })
     expect(result.ok && result.invalidRows).toBe(1)
@@ -105,6 +108,7 @@ describe('validateAutomationListResponse', () => {
       targetId: 'ssh-1',
       expectedTargetGeneration: 4
     }
+
     const stale = validateAutomationListResponse(
       response({
         items: [
@@ -114,6 +118,7 @@ describe('validateAutomationListResponse', () => {
       }),
       scope
     )
+
     expect(stale.ok && stale.result.automations.map((entry) => entry.id)).toEqual(['a2'])
     expect(stale.ok && stale.invalidRows).toBe(1)
   })
@@ -129,6 +134,7 @@ describe('validateAutomationListResponse', () => {
       }),
       SELF
     )
+
     expect(result.ok && result.result.automations).toEqual([])
     expect(result.ok && result.invalidRows).toBe(4)
   })
@@ -141,6 +147,7 @@ describe('validateAutomationListResponse', () => {
       }),
       SELF
     )
+
     expect(result.ok && result.result.items[0]?.usageSummary).toBeNull()
     expect(result.ok && result.invalidRows).toBe(0)
   })

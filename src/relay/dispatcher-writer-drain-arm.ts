@@ -19,8 +19,10 @@ export class DispatcherWriterDrainArm {
     if (this.armed) {
       return
     }
+
     this.armed = true
     const registration = register(onDrain)
+
     if (!registration.registered) {
       this.armed = false
     } else if (this.armed) {

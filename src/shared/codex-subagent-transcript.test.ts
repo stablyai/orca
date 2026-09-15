@@ -7,12 +7,15 @@ import { join } from 'node:path'
 // Why: ESM namespaces are not configurable, so counting rollout opens needs a
 // delegating mock rather than vi.spyOn. Every other export stays real.
 const openSyncCalls = vi.hoisted(() => vi.fn())
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   return {
     ...actual,
     openSync: (...args: Parameters<typeof actual.openSync>) => {
       openSyncCalls(...args)
+
       return actual.openSync(...args)
     }
   }
@@ -48,6 +51,7 @@ function activity(kind: string, occurredAtMs = 1234): unknown {
 function dayDirectory(root: string, atMs: number): string {
   const at = new Date(atMs)
   const pad = (value: number): string => String(value).padStart(2, '0')
+
   return join(root, String(at.getFullYear()), pad(at.getMonth() + 1), pad(at.getDate()))
 }
 
@@ -58,6 +62,7 @@ describe('Codex subagent transcript reconciliation', () => {
     for (const dir of dirs) {
       rmSync(dir, { recursive: true, force: true })
     }
+
     dirs.length = 0
   })
 
@@ -130,6 +135,7 @@ describe('Codex subagent transcript reconciliation', () => {
 
   it('retires a child whose rollout never becomes readable', () => {
     vi.useFakeTimers()
+
     try {
       const dir = mkdtempSync(join(tmpdir(), 'codex-subagent-transcript-'))
       dirs.push(dir)
@@ -191,6 +197,7 @@ describe('Codex subagent transcript reconciliation', () => {
       const childPath = join(dir, `rollout-child-${CHILD_ID}.jsonl`)
       writeFileSync(parentPath, jsonl([turnContext('gpt-5.6-sol'), activity('started')]))
       writeFileSync(childPath, jsonl(childRecords))
+
       return { parentPath, childPath }
     }
 
@@ -231,6 +238,7 @@ describe('Codex subagent transcript reconciliation', () => {
         turnContext('gpt-5.6-terra'),
         turnContext('gpt-5.6-sol')
       ])
+
       const state = createCodexSubagentTranscriptState()
       const roster: CodexSubagentRoster = new Map()
 
@@ -265,6 +273,7 @@ describe('Codex subagent transcript reconciliation', () => {
         turnContext('gpt-5.6-terra'),
         { type: 'event_msg', payload: { type: 'task_complete' } }
       ])
+
       const state = createCodexSubagentTranscriptState()
       const roster: CodexSubagentRoster = new Map()
 

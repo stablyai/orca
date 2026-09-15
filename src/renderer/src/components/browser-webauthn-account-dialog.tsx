@@ -25,7 +25,9 @@ function accountLabels(
     account.displayName?.trim() ||
     account.name?.trim() ||
     `${translate('auto.components.browser.webauthn.account.fallback', 'Passkey')} ${index + 1}`
+
   const secondary = account.name?.trim()
+
   return { primary, secondary: secondary && secondary !== primary ? secondary : null }
 }
 
@@ -34,15 +36,18 @@ export function BrowserWebAuthnAccountDialog(): React.JSX.Element {
   const [respondingRequestId, setRespondingRequestId] = useState<string | null>(null)
   const requestsRef = useRef(requests)
   const firstAccountRef = useRef<HTMLButtonElement | null>(null)
+
   const setContextualToursBlockingSurfaceVisible = useAppStore(
     (state) => state.setContextualToursBlockingSurfaceVisible
   )
+
   const activeRequest = requests[0] ?? null
   const lastRequestRef = useRef(activeRequest)
   const displayedRequest = activeRequest ?? lastRequestRef.current
 
   useEffect(() => {
     requestsRef.current = requests
+
     if (activeRequest) {
       lastRequestRef.current = activeRequest
     }
@@ -57,12 +62,15 @@ export function BrowserWebAuthnAccountDialog(): React.JSX.Element {
     const stopRequests = window.api.browser.onWebAuthnAccountRequest((request) => {
       setRequests((current) => [...current, request])
     })
+
     const stopClosures = window.api.browser.onWebAuthnAccountRequestClosed(({ requestId }) => {
       removeRequest(requestId)
     })
+
     return () => {
       stopRequests()
       stopClosures()
+
       for (const request of requestsRef.current) {
         void window.api.browser
           .respondWebAuthnAccount({
@@ -76,6 +84,7 @@ export function BrowserWebAuthnAccountDialog(): React.JSX.Element {
 
   useEffect(() => {
     setContextualToursBlockingSurfaceVisible(activeRequest !== null)
+
     return () => setContextualToursBlockingSurfaceVisible(false)
   }, [activeRequest, setContextualToursBlockingSurfaceVisible])
 
@@ -83,16 +92,20 @@ export function BrowserWebAuthnAccountDialog(): React.JSX.Element {
     if (!activeRequest) {
       return
     }
+
     const focusTimer = setTimeout(() => firstAccountRef.current?.focus())
+
     return () => clearTimeout(focusTimer)
   }, [activeRequest])
 
   const respond = useCallback(
     (credentialId: string | null) => {
       const request = requestsRef.current[0]
+
       if (!request || respondingRequestId === request.requestId) {
         return
       }
+
       setRespondingRequestId(request.requestId)
       void window.api.browser
         .respondWebAuthnAccount({ requestId: request.requestId, credentialId })
@@ -133,6 +146,7 @@ export function BrowserWebAuthnAccountDialog(): React.JSX.Element {
         <div className="space-y-2">
           {displayedRequest?.accounts.map((account, index) => {
             const labels = accountLabels(account, index)
+
             return (
               <Button
                 key={account.credentialId}

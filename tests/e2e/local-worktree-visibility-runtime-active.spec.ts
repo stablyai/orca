@@ -26,6 +26,7 @@ test.describe('worktree visibility with a remote runtime active', () => {
 
     const repoId = await orcaPage.evaluate(() => {
       const repos = window.__store?.getState().repos ?? []
+
       // This case reproduces only for a local-host repo — one whose execution
       // host resolves to local (executionHostId unset or 'local') and which has
       // no connection binding. That is the repo whose list fetch an active
@@ -34,9 +35,11 @@ test.describe('worktree visibility with a remote runtime active', () => {
       const target = repos.find(
         (repo) => (repo.executionHostId ?? 'local') === 'local' && !repo.connectionId
       )
+
       if (!target) {
         throw new Error('expected a seeded local-host repo')
       }
+
       return target.id
     })
 
@@ -44,6 +47,7 @@ test.describe('worktree visibility with a remote runtime active', () => {
     // dir — exactly what `orca worktree create` does from a terminal.
     const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
     const client = new RuntimeClient(userDataDir, 30_000, null, null)
+
     const createViaCli = async (name: string): Promise<string> => {
       const response = await client.call<{ worktree: { id: string } }>('worktree.create', {
         repo: `id:${repoId}`,
@@ -51,8 +55,10 @@ test.describe('worktree visibility with a remote runtime active', () => {
         noParent: true,
         activate: false
       })
+
       return response.result.worktree.id
     }
+
     const worktreeRow = (worktreeId: string) =>
       orcaPage.locator(`[data-worktree-id=${JSON.stringify(worktreeId)}]`).first()
 

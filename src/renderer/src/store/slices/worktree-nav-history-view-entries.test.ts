@@ -114,6 +114,7 @@ describe('worktree-nav-history slice: view entries', () => {
       const viewed: WorktreeNavHistorySimpleViewEntry[] = []
       setWorktreeNavActivator((id) => {
         activated.push(id as string)
+
         return { primaryTabId: null }
       })
       setWorktreeNavViewActivator((v) => {
@@ -187,12 +188,14 @@ describe('worktree-nav-history slice: view entries', () => {
 
   it('replays task detail entries through the same back/forward stack', () => {
     const store = createHistoryStore(['a'])
+
     const detail = {
       kind: 'task-detail',
       source: 'github',
       workItem: makeGitHubWorkItem(),
       initialTab: 'checks'
     } as const
+
     const viewed: unknown[] = []
     setWorktreeNavViewActivator((v) => {
       viewed.push(v)
@@ -217,6 +220,7 @@ describe('worktree-nav-history slice: view entries', () => {
   it('keeps same GitHub item details separate when the source host differs', () => {
     const store = createHistoryStore(['a'])
     const workItem = makeGitHubWorkItem()
+
     const localSource: TaskSourceContext = {
       kind: 'task-source',
       provider: 'github',
@@ -225,6 +229,7 @@ describe('worktree-nav-history slice: view entries', () => {
       repoId: 'repo-1',
       providerIdentity: { provider: 'github', owner: 'acme', repo: 'repo' }
     }
+
     const sshSource: TaskSourceContext = {
       ...localSource,
       hostId: 'ssh:devbox',
@@ -251,6 +256,7 @@ describe('worktree-nav-history slice: view entries', () => {
   it('keeps same GitLab item details separate when the source host differs', () => {
     const store = createHistoryStore(['a'])
     const workItem = makeGitLabWorkItem()
+
     const localSource: TaskSourceContext = {
       kind: 'task-source',
       provider: 'gitlab',
@@ -259,6 +265,7 @@ describe('worktree-nav-history slice: view entries', () => {
       repoId: 'repo-1',
       providerIdentity: { provider: 'gitlab', projectId: '1234' }
     }
+
     const sshSource: TaskSourceContext = {
       ...localSource,
       hostId: 'ssh:devbox',
@@ -285,6 +292,7 @@ describe('worktree-nav-history slice: view entries', () => {
   it('keeps same Jira issue details separate when the source host differs', () => {
     const store = createHistoryStore(['a'])
     const issue = makeJiraIssue()
+
     const localSource: TaskSourceContext = {
       kind: 'task-source',
       provider: 'jira',
@@ -292,6 +300,7 @@ describe('worktree-nav-history slice: view entries', () => {
       hostId: 'local',
       providerIdentity: { provider: 'jira', siteId: 'site-1' }
     }
+
     const remoteSource: TaskSourceContext = {
       ...localSource,
       hostId: 'runtime:remote-server'

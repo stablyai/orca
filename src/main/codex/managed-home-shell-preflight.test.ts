@@ -27,12 +27,14 @@ const roots: string[] = []
 function makeRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'orca-codex-shell-preflight-'))
   roots.push(root)
+
   return root
 }
 
 afterEach(() => {
   wslRealpathMock.mockClear()
   managedWslHomeRegistryInternals.clearRecordedManagedWslCodexHomes()
+
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -57,6 +59,7 @@ describe('managed Codex shell preflight', () => {
     const home = join(userDataPath, 'codex-accounts', 'account-1', 'home')
     mkdirSync(home, { recursive: true })
     writeFileSync(join(home, '.orca-managed-home'), 'account-1\n')
+
     const install = vi.fn(() => ({
       agent: 'codex' as const,
       state: 'installed' as const,
@@ -64,6 +67,7 @@ describe('managed Codex shell preflight', () => {
       managedHooksPresent: true,
       detail: null
     }))
+
     const env = { CODEX_HOME: home, ORCA_CODEX_HOME: home }
 
     expect(
@@ -180,8 +184,10 @@ describe('managed Codex shell preflight', () => {
 
 describe('managed WSL Codex shell preflight', () => {
   const home = '/home/jin/.local/share/orca/codex-runtime-home/home'
+
   const runtimeHome =
     '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\.local\\share\\orca\\codex-runtime-home\\home'
+
   const env = {
     CODEX_HOME: home,
     ORCA_CODEX_HOME: home,
@@ -205,6 +211,7 @@ describe('managed WSL Codex shell preflight', () => {
 
   it('installs once through the WSL runtime-home lane while hooks are enabled', async () => {
     recordManagedWslCodexHome('Ubuntu-24.04', runtimeHome)
+
     const status = {
       agent: 'codex' as const,
       state: 'installed' as const,
@@ -212,6 +219,7 @@ describe('managed WSL Codex shell preflight', () => {
       managedHooksPresent: true,
       detail: null
     }
+
     const install = vi.fn(() => status)
 
     await expect(
@@ -271,8 +279,10 @@ describe('managed WSL Codex shell preflight', () => {
 
   it('preserves a recorded runtime spelling for a managed account home', () => {
     const directHome = '/home/jin/.local/share/orca/codex-accounts/account-1/home'
+
     const directRuntimeHome =
       '\\\\wsl$\\Ubuntu-24.04\\home\\jin\\.local\\share\\orca\\codex-accounts\\account-1\\home'
+
     recordManagedWslCodexHome('Ubuntu-24.04', directRuntimeHome)
 
     expect(

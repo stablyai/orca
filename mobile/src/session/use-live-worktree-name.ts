@@ -37,15 +37,18 @@ export function useLiveWorktreeName({
   // fail forever and keep the 3s fallback poll alive; its title is fixed.
   const isFloatingWorkspace = isFloatingWorkspaceWorktreeId(worktreeId)
   const routeNameHint = routeName?.trim() ?? ''
+
   const [worktreeName, setWorktreeName] = useState(() => ({
     worktreeId,
     name: routeNameHint
   }))
+
   // Why: keyed by id so a verdict about the previous route can never survive into the next one.
   const [resolved, setResolved] = useState<{
     worktreeId: string
     resolution: WorktreeShowResolution
   }>(() => ({ worktreeId, resolution: 'unknown' }))
+
   // Why: a transient desktop repo-scan rejection collapses the catalog to zero rows and
   // answers selector_not_found for a live worktree — one miss is suspicion, not proof.
   // The fallback poll guarantees a confirming read (a failed show never stops it).
@@ -70,6 +73,7 @@ export function useLiveWorktreeName({
       if (isFloatingWorkspace || !client || connState !== 'connected') {
         return
       }
+
       let stale = false
       let eventStreamReady = false
       let hasSuccessfulRefresh = false
@@ -83,17 +87,21 @@ export function useLiveWorktreeName({
           fallbackInterval = null
         }
       }
+
       const refreshWorktreeName = async (): Promise<void> => {
         // Why: an event-driven refresh can overtake a slow fallback request;
         // only the newest read may publish or stop the retry poll.
         const generation = ++refreshGeneration
+
         try {
           const response = await client.sendRequest('worktree.show', {
             worktree: `id:${worktreeId}`
           })
+
           if (stale || generation !== refreshGeneration) {
             return
           }
+
           const classified = classifyWorktreeShowResponse(response)
           const streak = missingStreakRef.current
           missingStreakRef.current = {
@@ -103,22 +111,28 @@ export function useLiveWorktreeName({
                 ? (streak.worktreeId === worktreeId ? streak.count : 0) + 1
                 : 0
           }
+
           const resolution =
             classified === 'missing' && missingStreakRef.current.count < 2 ? 'unknown' : classified
+
           setResolved((current) =>
             current.worktreeId === worktreeId && current.resolution === resolution
               ? current
               : { worktreeId, resolution }
           )
+
           if (!response.ok) {
             return
           }
+
           const result = (response as RpcSuccess).result as {
             worktree?: WorktreeDisplayNameSource
           }
+
           const liveName = result.worktree
             ? getLiveWorktreeDisplayName([result.worktree], worktreeId)
             : null
+
           if (liveName) {
             setWorktreeName((current) =>
               current.worktreeId === worktreeId && current.name === liveName
@@ -126,7 +140,9 @@ export function useLiveWorktreeName({
                 : { worktreeId, name: liveName }
             )
           }
+
           hasSuccessfulRefresh = true
+
           if (eventStreamReady) {
             stopFallbackPoll()
           }
@@ -139,11 +155,13 @@ export function useLiveWorktreeName({
         if (stale || fallbackInterval !== null) {
           return
         }
+
         fallbackInterval = setInterval(
           () => void refreshWorktreeName(),
           WORKTREE_NAME_FALLBACK_POLL_MS
         )
       }
+
       const invalidateAndRefresh = (): void => {
         hasSuccessfulRefresh = false
         startFallbackPoll()
@@ -151,6 +169,7 @@ export function useLiveWorktreeName({
       }
 
       startFallbackPoll()
+
       const unsubscribe = client.subscribe(
         'runtime.clientEvents.subscribe',
         null,
@@ -158,25 +177,33 @@ export function useLiveWorktreeName({
           if (stale || !payload || typeof payload !== 'object') {
             return
           }
+
           const event = payload as RuntimeClientEventStreamMessage | { type: 'error' }
+
           if (event.type === 'ready') {
             const replayedAfterReconnect = eventStreamReady
             eventStreamReady = true
+
             if (hasSuccessfulRefresh) {
               stopFallbackPoll()
             }
+
             if (replayedAfterReconnect) {
               // Why: client events are not queued while disconnected, so replay
               // readiness must re-read the title once to close that event gap.
               invalidateAndRefresh()
             }
+
             return
           }
+
           if (event.type === 'end' || event.type === 'error') {
             eventStreamReady = false
             startFallbackPoll()
+
             return
           }
+
           if (
             event.type === 'reposChanged' ||
             (event.type === 'worktreesChanged' && event.repoId === repoId)
@@ -185,10 +212,12 @@ export function useLiveWorktreeName({
           }
         }
       )
+
       // Why: route params are only an entry hint. The desktop/runtime owns
       // displayName. Modern runtimes push invalidations; the poll remains only
       // until that stream proves available, preserving older-runtime behavior.
       void refreshWorktreeName()
+
       return () => {
         stale = true
         stopFallbackPoll()
@@ -201,6 +230,7 @@ export function useLiveWorktreeName({
     // The sentinel has no worktree record to resolve, so nothing is ever proven about it.
     return { name: FLOATING_WORKSPACE_TITLE, resolution: 'unknown' }
   }
+
   return {
     name: worktreeName.worktreeId === worktreeId ? worktreeName.name : routeNameHint,
     resolution: resolved.worktreeId === worktreeId ? resolved.resolution : 'unknown'

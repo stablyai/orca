@@ -37,6 +37,7 @@ export class KeybindingService {
     // Why: older builds persisted custom shortcuts inside global settings.
     // Once a keybindings file exists, it is the sole source of truth.
     migrateLegacyKeybindings(this.configPath, this.platform, options.getLegacyOverrides?.())
+
     // Why: pre-existing installs keep the old tab-switch chords. Only mark the
     // one-shot done on success so a transient IO failure retries next launch
     // instead of silently dropping the pin.
@@ -64,11 +65,13 @@ export class KeybindingService {
     if (!this.snapshot) {
       this.snapshot = readKeybindingFile(this.configPath, this.platform)
     }
+
     return this.snapshot
   }
 
   reload(): KeybindingFileSnapshot {
     this.snapshot = readKeybindingFile(this.configPath, this.platform)
+
     return this.snapshot
   }
 
@@ -78,6 +81,7 @@ export class KeybindingService {
 
   ensureFile(): KeybindingFileSnapshot {
     ensureKeybindingFile(this.configPath)
+
     return this.reload()
   }
 
@@ -86,6 +90,7 @@ export class KeybindingService {
     bindings: string[] | null
   ): KeybindingFileSnapshot {
     this.snapshot = writeKeybindingOverride(this.configPath, this.platform, actionId, bindings)
+
     return this.snapshot
   }
 }

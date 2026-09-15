@@ -395,5 +395,6 @@ it('keeps an initial unknown-transport verification connecting', () => {
       ]
     ])
   })
+
   expect(hosts.find((host) => host.id === 'runtime:host')?.health).toBe('connecting')
 })

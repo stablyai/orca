@@ -45,9 +45,12 @@ vi.mock('../../store', () => {
     fetchWorktrees: vi.fn(),
     fetchWorktreeLineage: vi.fn()
   })
+
   const useAppStore = (selector: (value: Record<string, unknown>) => unknown): unknown =>
     selector(state())
+
   useAppStore.getState = state
+
   return { useAppStore }
 })
 

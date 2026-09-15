@@ -27,6 +27,7 @@ export function registerLinearCustomViewHandlers(): void {
       }
     ) => {
       const limit = Math.min(Math.max(1, args?.limit ?? 20), 50)
+
       return listCustomViews(
         normalizeCustomViewModel(args?.model),
         limit,
@@ -50,6 +51,7 @@ export function registerLinearCustomViewHandlers(): void {
       if (typeof args?.viewId !== 'string' || !args.viewId.trim()) {
         throw new Error('Custom view ID is required')
       }
+
       return getCustomView(
         args.viewId.trim(),
         normalizeCustomViewModel(args.model),
@@ -68,7 +70,9 @@ export function registerLinearCustomViewHandlers(): void {
       if (typeof args?.viewId !== 'string' || !args.viewId.trim()) {
         throw new Error('Custom view ID is required')
       }
+
       const limit = clampLinearIssueListLimit(args?.limit)
+
       return listCustomViewIssues(
         args.viewId.trim(),
         limit,
@@ -87,7 +91,9 @@ export function registerLinearCustomViewHandlers(): void {
       if (typeof args?.viewId !== 'string' || !args.viewId.trim()) {
         throw new Error('Custom view ID is required')
       }
+
       const limit = Math.min(Math.max(1, args?.limit ?? 20), 50)
+
       return listCustomViewProjects(
         args.viewId.trim(),
         limit,

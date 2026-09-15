@@ -11,6 +11,7 @@ const roots: string[] = []
 async function tempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-plugin-kill-list-'))
   roots.push(root)
+
   return root
 }
 
@@ -30,10 +31,12 @@ afterEach(async () => {
 describe('PluginKillListService', () => {
   it('loads cached revocations before any network refresh', async () => {
     const root = await tempRoot()
+
     const first = new PluginKillListService({
       pluginsDataDir: root,
       fetcher: async () => killList()
     })
+
     await first.refresh()
     const fetcher = vi.fn(async () => killList())
     const restarted = new PluginKillListService({ pluginsDataDir: root, fetcher })
@@ -49,6 +52,7 @@ describe('PluginKillListService', () => {
       pluginsDataDir: await tempRoot(),
       fetcher: async () => killList()
     })
+
     const changed = vi.fn()
     service.onChanged(changed)
 
@@ -63,7 +67,9 @@ describe('PluginKillListService', () => {
       read: vi.fn().mockRejectedValue(new Error('invalid JSON')),
       write: vi.fn().mockResolvedValue(undefined)
     } as unknown as PluginKillListStore
+
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
     const service = new PluginKillListService({
       pluginsDataDir: await tempRoot(),
       store,
@@ -82,10 +88,12 @@ describe('PluginKillListService', () => {
 
   it('keeps accepting genuine lists after a far-future snapshot is published', async () => {
     const root = await tempRoot()
+
     const fetcher = vi
       .fn<() => Promise<PluginKillList>>()
       .mockResolvedValueOnce(killList('9999-12-31T23:59:59Z'))
       .mockResolvedValueOnce(killList('2026-07-12T20:00:00Z'))
+
     const service = new PluginKillListService({ pluginsDataDir: root, fetcher })
 
     await expect(service.refresh()).rejects.toThrow()
@@ -102,15 +110,18 @@ describe('PluginKillListService', () => {
   it('keeps cached revocations live when the device clock runs far behind', async () => {
     const root = await tempRoot()
     const generatedAt = new Date().toISOString()
+
     const published = new PluginKillListService({
       pluginsDataDir: root,
       fetcher: async () => killList(generatedAt)
     })
+
     await published.refresh()
     // A dead RTC / restored VM snapshot must not re-judge an already-accepted
     // cache against the wrong clock and silently un-revoke a killed plugin.
     vi.useFakeTimers()
     vi.setSystemTime(new Date(Date.parse(generatedAt) - 30 * 24 * 60 * 60 * 1000))
+
     const restarted = new PluginKillListService({
       pluginsDataDir: root,
       fetcher: async () => killList(generatedAt)
@@ -131,6 +142,7 @@ describe('PluginKillListService', () => {
       .fn<() => Promise<PluginKillList>>()
       .mockResolvedValueOnce(killList('2026-07-12T20:00:00Z'))
       .mockResolvedValueOnce(killList('2026-07-11T20:00:00Z'))
+
     const service = new PluginKillListService({ pluginsDataDir: await tempRoot(), fetcher })
     await service.refresh()
 

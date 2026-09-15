@@ -12,13 +12,17 @@ export function getDeliveryRaw(this: OrchestrationDb, id: string): DeliveryRow |
 
 export function getDeliveryMessages(this: OrchestrationDb, delivery: DeliveryRow): MessageRow[] {
   const ids = JSON.parse(delivery.message_ids) as string[]
+
   if (ids.length === 0) {
     return []
   }
+
   const rows = this.db
     .prepare(`SELECT * FROM messages WHERE id IN (${ids.map(() => '?').join(',')})`)
     .all(...ids) as MessageRow[]
+
   const byId = new Map(rows.map((row) => [row.id, row]))
+
   return exposeMessageListTimestamps(
     ids.map((id) => byId.get(id)).filter((row): row is MessageRow => row !== undefined)
   )
@@ -39,12 +43,16 @@ export function getOrCreateMailboxDelivery(
     Math.max(params.limit ?? ORCHESTRATION_DELIVERY_BATCH_LIMIT, 1),
     ORCHESTRATION_DELIVERY_BATCH_LIMIT
   )
+
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     requireMailboxConsumer(this, params)
+
     const existing = this.db
       .prepare('SELECT * FROM outstanding_deliveries WHERE mailbox_handle = ?')
       .get(params.mailboxHandle) as DeliveryRow | undefined
+
     if (existing) {
       if (existing.consumer_generation !== params.consumerGeneration) {
         throw new OrchestrationError(
@@ -52,12 +60,16 @@ export function getOrCreateMailboxDelivery(
           'This mailbox Delivery belongs to a fenced consumer generation.'
         )
       }
+
       const messages = this.getDeliveryMessages(existing)
       this.db.exec('COMMIT')
+
       return { delivery: exposeDeliveryTimestamps(existing), messages, replayed: true }
     }
+
     if (params.wakeTypes?.length) {
       const placeholders = params.wakeTypes.map(() => '?').join(',')
+
       const matching = this.db
         .prepare(
           `SELECT 1 FROM messages
@@ -66,11 +78,14 @@ export function getOrCreateMailboxDelivery(
              AND type IN (${placeholders}) LIMIT 1`
         )
         .get(params.runId, params.mailboxHandle, ...params.wakeTypes)
+
       if (!matching) {
         this.db.exec('COMMIT')
+
         return undefined
       }
     }
+
     const messages = exposeMessageListTimestamps(
       this.db
         .prepare(
@@ -81,10 +96,13 @@ export function getOrCreateMailboxDelivery(
         )
         .all(params.runId, params.mailboxHandle, limit) as MessageRow[]
     )
+
     if (messages.length === 0) {
       this.db.exec('COMMIT')
+
       return undefined
     }
+
     const deliveryId = generateId('delivery')
     this.db
       .prepare(
@@ -101,6 +119,7 @@ export function getOrCreateMailboxDelivery(
       )
     const delivery = this.getDeliveryRaw(deliveryId) as DeliveryRow
     this.db.exec('COMMIT')
+
     return { delivery: exposeDeliveryTimestamps(delivery), messages, replayed: false }
   } catch (error) {
     this.db.exec('ROLLBACK')
@@ -119,9 +138,11 @@ export function acknowledgeMailboxDelivery(
   }
 ): { delivery: DeliveryRow; duplicate: boolean } {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     requireMailboxConsumer(this, params)
     const delivery = this.getDeliveryRaw(params.deliveryId)
+
     if (
       !delivery ||
       delivery.run_id !== params.runId ||
@@ -132,6 +153,7 @@ export function acknowledgeMailboxDelivery(
         `Delivery ${params.deliveryId} does not belong to this mailbox. --ack requires a delivery_* ID returned by orchestration check; process the entire batch before acknowledging.`
       )
     }
+
     if (
       delivery.consumer_generation !== params.consumerGeneration ||
       delivery.status === 'fenced'
@@ -141,11 +163,15 @@ export function acknowledgeMailboxDelivery(
         'This mailbox Delivery belongs to a fenced consumer generation.'
       )
     }
+
     if (delivery.status === 'acknowledged') {
       this.db.exec('COMMIT')
+
       return { delivery: exposeDeliveryTimestamps(delivery), duplicate: true }
     }
+
     const messageIds = JSON.parse(delivery.message_ids) as string[]
+
     if (messageIds.length > 0) {
       const placeholders = messageIds.map(() => '?').join(',')
       this.db
@@ -157,6 +183,7 @@ export function acknowledgeMailboxDelivery(
         )
         .run(...messageIds)
     }
+
     this.db
       .prepare(
         "UPDATE deliveries SET status = 'acknowledged', acknowledged_at = datetime('now') WHERE id = ?"
@@ -164,6 +191,7 @@ export function acknowledgeMailboxDelivery(
       .run(delivery.id)
     const acknowledged = this.getDeliveryRaw(delivery.id) as DeliveryRow
     this.db.exec('COMMIT')
+
     return { delivery: exposeDeliveryTimestamps(acknowledged), duplicate: false }
   } catch (error) {
     this.db.exec('ROLLBACK')

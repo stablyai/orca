@@ -55,9 +55,11 @@ export function useNativeChatMessageRail({
 
   const readActiveId = useCallback(() => {
     const element = scrollRef.current
+
     if (!element) {
       return
     }
+
     setActiveId((previous) =>
       findActiveNativeChatRailItem({
         slots: slotsRef.current,
@@ -72,23 +74,30 @@ export function useNativeChatMessageRail({
 
   useEffect(() => {
     const element = scrollRef.current
+
     if (!element) {
       return
     }
+
     let idleTimer: number | null = null
+
     const scheduleRead = (): void => {
       if (idleTimer !== null) {
         window.clearTimeout(idleTimer)
       }
+
       idleTimer = window.setTimeout(() => {
         idleTimer = null
         readActiveId()
       }, NATIVE_CHAT_RAIL_IDLE_MS)
     }
+
     scheduleRead()
     element.addEventListener('scroll', scheduleRead, { passive: true })
+
     return () => {
       element.removeEventListener('scroll', scheduleRead)
+
       if (idleTimer !== null) {
         window.clearTimeout(idleTimer)
       }
@@ -106,13 +115,17 @@ export function useNativeChatMessageRail({
 
   useEffect(() => {
     const element = scrollRef.current
+
     if (!element || typeof ResizeObserver === 'undefined') {
       return
     }
+
     const observer = new ResizeObserver(() => {
       setWideEnough(element.clientWidth >= NATIVE_CHAT_RAIL_MIN_WIDTH_PX)
     })
+
     observer.observe(element)
+
     return () => observer.disconnect()
   }, [scrollRef])
 

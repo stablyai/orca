@@ -46,8 +46,10 @@ function readChildProcessGoneListener(): string {
     join(__dirname, '..', 'startup', 'main-process-ready-runtime.ts'),
     'utf8'
   )
+
   const start = source.indexOf("  app.on('child-process-gone'")
   expect(start).toBeGreaterThan(0)
+
   return source.slice(start, source.indexOf('\n  })', start))
 }
 
@@ -94,12 +96,14 @@ describe('1.4.190 win32 GPU-child crash cluster', () => {
     expect(listener).toMatch(
       /isGpuFallbackCrashCandidate\([\s\S]*?state\.gpuCrashDiagnostics\?\.record\(\)[\s\S]*?handleGpuChildCrash\(/
     )
+
     // The `if (` count alone still allows `recorded && isGpuFallbackCrashCandidate(...)`, which
     // re-couples recovery to the suppression decision, so pin the guard to that check alone.
     const recoveryGuard = listener.slice(
       listener.lastIndexOf('if (', guardStart),
       listener.indexOf('handleGpuChildCrash(')
     )
+
     expect(recoveryGuard).not.toMatch(/&&|\|\|/)
   })
 
@@ -108,15 +112,18 @@ describe('1.4.190 win32 GPU-child crash cluster', () => {
       // Each launch constructs a fresh tracker (src/main/index.ts), so evidence
       // does not survive the relaunch these users performed after every crash.
       const tracker = newTracker()
+
       const engaged = session.gpuCrashesMsSinceLaunch.some(
         (at) => tracker.recordGpuCrash(at).shouldEngageFallback
       )
+
       return {
         report: session.report,
         gpuCrashes: session.gpuCrashesMsSinceLaunch.length,
         engagedSafeGraphicsPrompt: engaged
       }
     })
+
     expect(outcomes).toEqual([
       { report: 'db1f1ee2', gpuCrashes: 2, engagedSafeGraphicsPrompt: false },
       { report: '66cc54d8', gpuCrashes: 1, engagedSafeGraphicsPrompt: false },

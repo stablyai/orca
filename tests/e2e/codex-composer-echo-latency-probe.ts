@@ -48,18 +48,23 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
 
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('Codex echo probe: no active terminal pane')
     }
+
     const terminal = pane.terminal
+
     if (typeof terminal.onWriteParsed !== 'function') {
       throw new Error('Codex echo probe: xterm build has no onWriteParsed')
     }
@@ -78,32 +83,41 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
     const viewportText = (): string => {
       const buffer = terminal.buffer.active
       let text = ''
+
       for (let row = 0; row < terminal.rows; row += 1) {
         text += buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? ''
       }
+
       return text
     }
 
     const observeParse = (): void => {
       parseEvents += 1
+
       if (pending.length === 0) {
         return
       }
+
       const text = viewportText()
+
       // Why drain in order: one parse can land several queued keystrokes at
       // once, and each still gets credited against its own keydown timestamp.
       while (pending.length > 0 && text.includes(pending[0].expected)) {
         const entry = pending.shift()
+
         if (!entry) {
           break
         }
+
         entry.parsedAt = performance.now()
+
         const sample: CodexEchoLatencySample = {
           index: entry.index,
           char: entry.char,
           keyToParseMs: entry.parsedAt - entry.startedAt,
           keyToRenderMs: null
         }
+
         samples.push(sample)
         awaitingRender.push({ sample, startedAt: entry.startedAt })
       }
@@ -112,6 +126,7 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
     const observeRender = (): void => {
       renderEvents += 1
       const paintedAt = performance.now()
+
       for (const entry of awaitingRender.splice(0)) {
         entry.sample.keyToRenderMs = paintedAt - entry.startedAt
       }
@@ -124,6 +139,7 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
       if (event.key.length !== 1 || keysObserved >= target.length) {
         return
       }
+
       const index = keysObserved
       keysObserved += 1
       pending.push({
@@ -161,11 +177,14 @@ export async function installCodexEchoLatencyProbe(page: Page, target: string): 
 export async function collectCodexEchoLatencyReport(page: Page): Promise<CodexEchoProbeReport> {
   return page.evaluate(() => {
     const probe = window.__codexEchoProbe
+
     if (!probe) {
       throw new Error('Codex echo probe was never installed')
     }
+
     const report = probe.report()
     probe.dispose()
+
     return report
   })
 }
@@ -181,12 +200,15 @@ function percentile(sorted: number[], quantile: number): number {
   if (sorted.length === 0) {
     return 0
   }
+
   const rank = Math.min(sorted.length - 1, Math.ceil(quantile * sorted.length) - 1)
+
   return sorted[Math.max(0, rank)]
 }
 
 export function summarizeLatencies(values: number[]): LatencyDistribution {
   const sorted = [...values].sort((a, b) => a - b)
+
   return {
     count: sorted.length,
     p50: percentile(sorted, 0.5),

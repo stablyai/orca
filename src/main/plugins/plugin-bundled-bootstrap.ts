@@ -11,6 +11,7 @@ import { readPluginCurrentPointer } from './plugin-current-pointer'
 import { hashPluginTree } from './plugin-content-hash'
 
 export const BUNDLED_PLUGIN_INDEX_FILENAME = 'bundled-plugins.json'
+
 const BUNDLED_PLUGIN_INDEX_MAX_BYTES = 64 * 1024
 
 const bundledPluginIndexSchema = z
@@ -34,6 +35,7 @@ const bundledPluginIndexSchema = z
   .strict()
   .superRefine((index, ctx) => {
     const keys = new Set<string>()
+
     for (const [entryIndex, plugin] of index.plugins.entries()) {
       if (keys.has(plugin.pluginKey)) {
         ctx.addIssue({
@@ -42,6 +44,7 @@ const bundledPluginIndexSchema = z
           message: 'duplicate bundled plugin identity'
         })
       }
+
       keys.add(plugin.pluginKey)
     }
   })
@@ -67,9 +70,11 @@ async function readBundledPluginIndex(
 ): Promise<z.infer<typeof bundledPluginIndexSchema>> {
   const indexPath = join(root, BUNDLED_PLUGIN_INDEX_FILENAME)
   const metadata = await stat(indexPath)
+
   if (!metadata.isFile() || metadata.size > BUNDLED_PLUGIN_INDEX_MAX_BYTES) {
     throw new Error(`bundled plugin index exceeds ${BUNDLED_PLUGIN_INDEX_MAX_BYTES} bytes`)
   }
+
   return bundledPluginIndexSchema.parse(JSON.parse(await readFile(indexPath, 'utf8')))
 }
 
@@ -78,10 +83,13 @@ async function resolveBundlePath(root: string, path: string): Promise<string> {
     realpath(root),
     realpath(join(root, path))
   ])
+
   const fromRoot = relative(resolvedRoot, resolvedPath)
+
   if (!fromRoot || fromRoot === '..' || fromRoot.startsWith(`..${sep}`) || isAbsolute(fromRoot)) {
     throw new Error('bundled plugin path escapes the resource root')
   }
+
   return resolvedPath
 }
 
@@ -91,10 +99,13 @@ async function bundledInstallIsIntact(
   contentHash: string
 ): Promise<boolean> {
   const pluginDir = join(pluginsDir, pluginKey)
+
   if ((await readPluginCurrentPointer(pluginDir).catch(() => null)) !== contentHash) {
     return false
   }
+
   const hashed = await hashPluginTree(join(pluginDir, contentHash))
+
   return hashed.ok && hashed.hash === contentHash
 }
 
@@ -108,8 +119,10 @@ export async function bootstrapBundledPlugins(options: {
   const pluginsDir = getUserPluginsDir(options.userDataPath)
   const lock = await readPluginLockfile(pluginsDir)
   const result: PluginBundledBootstrapResult = { installed: [], unchanged: [], errors: [] }
+
   for (const entry of index.plugins) {
     const locked = lock.plugins[entry.pluginKey]
+
     if (
       locked?.source.kind === 'bundled' &&
       locked.source.bundleId === entry.pluginKey &&
@@ -119,19 +132,24 @@ export async function bootstrapBundledPlugins(options: {
       result.unchanged.push(entry.pluginKey)
       continue
     }
+
     try {
       const sourcePath = await resolveBundlePath(options.root, entry.path)
+
       const inspection = await inspectPluginInstallTree({
         rootDir: sourcePath,
         hostVersion: options.hostVersion,
         expectedPluginKey: entry.pluginKey
       })
+
       if (!inspection.ok) {
         throw new Error(inspection.error)
       }
+
       if (inspection.contentHash !== entry.contentHash) {
         throw new Error('bundled plugin content does not match its release index')
       }
+
       const installed = await installBundledPlugin({
         pluginsDir,
         sourcePath,
@@ -139,9 +157,11 @@ export async function bootstrapBundledPlugins(options: {
         expectedPluginKey: entry.pluginKey,
         blockedPluginReason: options.blockedPluginReason
       })
+
       if (!installed.ok) {
         throw new Error(installed.error)
       }
+
       result.installed.push(entry.pluginKey)
     } catch (error) {
       result.errors.push({
@@ -150,5 +170,6 @@ export async function bootstrapBundledPlugins(options: {
       })
     }
   }
+
   return result
 }

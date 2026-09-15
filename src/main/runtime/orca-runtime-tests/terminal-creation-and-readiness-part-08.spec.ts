@@ -21,6 +21,7 @@ import {
 describe('OrcaRuntimeService', () => {
   it('settles a foreground Codex prompt when launch metadata has not arrived', async () => {
     vi.useFakeTimers()
+
     try {
       const writes: string[] = []
       let composerReady = false
@@ -29,13 +30,16 @@ describe('OrcaRuntimeService', () => {
         spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
         write: (_ptyId, data) => {
           writes.push(data)
+
           if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
             setTimeout(() => {
               composerReady = true
               runtime.onPtyData('pty-bg', '\x1b[?25hcomposer rendered', Date.now())
             }, 1_200)
           }
+
           acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+
           return true
         },
         kill: () => true,
@@ -61,6 +65,7 @@ describe('OrcaRuntimeService', () => {
 
   it('submits a silent Claude composer once after the bounded render fallback', async () => {
     vi.useFakeTimers()
+
     try {
       const writes: string[] = []
       const runtime = new OrcaRuntimeService(store)
@@ -69,11 +74,13 @@ describe('OrcaRuntimeService', () => {
         write: (_ptyId, data) => {
           writes.push(data)
           acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+
           return true
         },
         kill: () => true,
         getForegroundProcess: async () => null
       })
+
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
         launchAgent: 'claude'
       })
@@ -92,6 +99,7 @@ describe('OrcaRuntimeService', () => {
 
   it('gives a late Codex render marker a fresh quiescence window', async () => {
     vi.useFakeTimers()
+
     try {
       const writes: string[] = []
       let composerReady = false
@@ -100,6 +108,7 @@ describe('OrcaRuntimeService', () => {
         spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
         write: (_ptyId, data) => {
           writes.push(data)
+
           if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
             setTimeout(() => runtime.onPtyData('pty-bg', '\x1b[?25h', Date.now()), 7_900)
             setTimeout(() => {
@@ -107,12 +116,15 @@ describe('OrcaRuntimeService', () => {
               runtime.onPtyData('pty-bg', 'final slow composer frame', Date.now())
             }, 8_100)
           }
+
           acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+
           return true
         },
         kill: () => true,
         getForegroundProcess: async () => null
       })
+
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
         launchAgent: 'codex'
       })
@@ -133,6 +145,7 @@ describe('OrcaRuntimeService', () => {
 
   it('bounds a Claude render that never settles to one fallback submit', async () => {
     vi.useFakeTimers()
+
     try {
       const writes: string[] = []
       const runtime = new OrcaRuntimeService(store)
@@ -140,8 +153,10 @@ describe('OrcaRuntimeService', () => {
         spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
         write: (_ptyId, data) => {
           writes.push(data)
+
           if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
             setTimeout(() => runtime.onPtyData('pty-bg', '\x1b[?25h', Date.now()), 100)
+
             for (const delay of [1_000, 2_000, 3_000, 4_000, 5_000, 6_000, 7_000]) {
               setTimeout(
                 () => runtime.onPtyData('pty-bg', `render frame ${delay}`, Date.now()),
@@ -149,12 +164,15 @@ describe('OrcaRuntimeService', () => {
               )
             }
           }
+
           acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+
           return true
         },
         kill: () => true,
         getForegroundProcess: async () => null
       })
+
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
         launchAgent: 'claude'
       })
@@ -175,6 +193,7 @@ describe('OrcaRuntimeService', () => {
 
   it('writes large agent prompt paste frames atomically before delayed submit', async () => {
     vi.useFakeTimers()
+
     try {
       const writes: string[] = []
       const runtime = new OrcaRuntimeService(store)
@@ -183,14 +202,17 @@ describe('OrcaRuntimeService', () => {
         write: (_ptyId, data) => {
           writes.push(data)
           acknowledgeAgentPromptSubmit(runtime, 'pty-bg', data)
+
           return true
         },
         kill: () => true,
         getForegroundProcess: async () => null
       })
+
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
         launchAgent: 'claude'
       })
+
       const prompt = `${'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)}\ntail`
 
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt)
@@ -213,6 +235,7 @@ describe('OrcaRuntimeService', () => {
 
   it('rejects an agent prompt when the atomic paste write fails', async () => {
     vi.useFakeTimers()
+
     try {
       const writes: string[] = []
       const runtime = new OrcaRuntimeService(store)
@@ -220,14 +243,17 @@ describe('OrcaRuntimeService', () => {
         spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
         write: (_ptyId, data) => {
           writes.push(data)
+
           return false
         },
         kill: () => true,
         getForegroundProcess: async () => null
       })
+
       const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
         launchAgent: 'claude'
       })
+
       const prompt = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES + 1)
 
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, prompt)
@@ -250,6 +276,7 @@ describe('OrcaRuntimeService', () => {
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
       write: (_ptyId, data) => {
         writes.push(data)
+
         return true
       },
       kill: () => true,
@@ -270,6 +297,7 @@ describe('OrcaRuntimeService', () => {
 
   it('yields chunked terminal input through immediates between writes', async () => {
     const immediate = vi.spyOn(globalThis, 'setImmediate')
+
     try {
       const writes: string[] = []
       const runtime = new OrcaRuntimeService(store)
@@ -277,6 +305,7 @@ describe('OrcaRuntimeService', () => {
         spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
         write: (_ptyId, data) => {
           writes.push(data)
+
           return true
         },
         kill: () => true,
@@ -302,6 +331,7 @@ describe('OrcaRuntimeService', () => {
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
       write: (_ptyId, data) => {
         writes.push(data)
+
         return true
       },
       kill: () => true,
@@ -311,6 +341,7 @@ describe('OrcaRuntimeService', () => {
     const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
 
     vi.useFakeTimers()
+
     try {
       const sendPromise = runtime.sendTerminal(handle, { text })
 
@@ -338,6 +369,7 @@ describe('OrcaRuntimeService', () => {
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
       write: (_ptyId, data) => {
         writes.push(data)
+
         return true
       },
       kill: () => true,
@@ -376,6 +408,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       title: 'worker'
     })
@@ -419,6 +452,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'codex',
       launchAgent: 'codex',
@@ -429,9 +463,11 @@ describe('OrcaRuntimeService', () => {
       },
       title: 'worker'
     })
+
     const firstReveal = revealTerminalSession.mock.calls[0]?.[1] as
       | { launchToken?: string; tabId?: string; leafId?: string }
       | undefined
+
     revealTerminalSession.mockClear()
 
     await runtime.focusTerminal(handle)
@@ -476,9 +512,11 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       title: 'Claude working'
     })
+
     runtime.onPtyData('pty-bg', '\x1b]0;claude agents\x07', 100)
 
     await runtime.focusTerminal(handle)
@@ -573,6 +611,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       title: 'worker'
     })
@@ -616,14 +655,17 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const a = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       title: 'a',
       presentation: 'background'
     })
+
     const b = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       title: 'b',
       presentation: 'background'
     })
+
     const c = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       title: 'c',
       presentation: 'background'
@@ -631,15 +673,19 @@ describe('OrcaRuntimeService', () => {
 
     let releaseFirstReveal!: (value: { tabId: string }) => void
     let firstRevealStarted = false
+
     const firstRevealGate = new Promise<{ tabId: string }>((resolve) => {
       releaseFirstReveal = resolve
     })
+
     revealTerminalSession.mockReset()
     revealTerminalSession.mockImplementation(() => {
       if (!firstRevealStarted) {
         firstRevealStarted = true
+
         return firstRevealGate
       }
+
       return Promise.resolve({ tabId: 'tab-latest' })
     })
 
@@ -670,6 +716,7 @@ describe('OrcaRuntimeService', () => {
     const revealedPtyIds = revealTerminalSession.mock.calls.map(
       (call) => (call[1] as { ptyId?: string }).ptyId
     )
+
     expect(revealedPtyIds).not.toContain('pty-b')
     expect(revealedPtyIds.at(-1)).toBe('pty-c')
   })

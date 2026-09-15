@@ -2,114 +2,223 @@
 export {}
 
 await import('./orca-runtime-test-mocks.spec')
+
 await import('./orca-runtime-test-lifecycle.spec')
+
 await import('./orca-runtime-test-fixtures.spec')
+
 await import('./orca-runtime-test-scenario-builders.spec')
 
 await import('./orca-runtime-tests/dedupe-worktree-create.spec')
+
 await import('./orca-runtime-tests/paired-settings.spec')
+
 await import('./orca-runtime-tests/runtime-availability.spec')
+
 await import('./orca-runtime-tests/browser-capabilities.spec')
+
 await import('./orca-runtime-tests/browser-capabilities-part-02.spec')
+
 await import('./orca-runtime-tests/window-authority.spec')
+
 await import('./orca-runtime-tests/terminal-handles.spec')
+
 await import('./orca-runtime-tests/terminal-handles-part-02.spec')
+
 await import('./orca-runtime-tests/terminal-listing.spec')
+
 await import('./orca-runtime-tests/worktree-selector-resolution.spec')
+
 await import('./orca-runtime-tests/local-worktree-creation.spec')
+
 await import('./orca-runtime-tests/local-worktree-creation-part-02.spec')
+
 await import('./orca-runtime-tests/worktree-create-execution-host.spec')
+
 await import('./orca-runtime-tests/ssh-worktree-lifecycle.spec')
+
 await import('./orca-runtime-tests/ssh-worktree-lifecycle-part-02.spec')
+
 await import('./orca-runtime-tests/ssh-worktree-lifecycle-part-03.spec')
+
 await import('./orca-runtime-tests/hooks-and-hosted-review.spec')
+
 await import('./orca-runtime-tests/hooks-and-hosted-review-part-02.spec')
+
 await import('./orca-runtime-tests/hooks-and-hosted-review-part-03.spec')
+
 await import('./orca-runtime-tests/repository-project-operations.spec')
+
 await import('./orca-runtime-tests/repository-project-operations-part-02.spec')
+
 await import('./orca-runtime-tests/pty-title-status.spec')
+
 await import('./orca-runtime-tests/terminal-side-effect-facts.spec')
+
 await import('./orca-runtime-tests/terminal-side-effect-facts-part-02.spec')
+
 await import('./orca-runtime-tests/terminal-side-effect-facts-part-03.spec')
+
 await import('./orca-runtime-tests/decorative-title-fact-throttle.spec')
+
 await import('./orca-runtime-tests/headless-snapshots.spec')
+
 await import('./orca-runtime-tests/headless-snapshots-part-02.spec')
+
 await import('./orca-runtime-tests/reattach-headless-grid.spec')
+
 await import('./orca-runtime-tests/agent-status-and-waits.spec')
+
 await import('./orca-runtime-tests/agent-status-and-waits-part-02.spec')
+
 await import('./orca-runtime-tests/agent-status-and-waits-part-03.spec')
+
 await import('./orca-runtime-tests/terminal-creation-and-readiness.spec')
+
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-02.spec')
+
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-03.spec')
+
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-04.spec')
+
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-05.spec')
+
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-06.spec')
+
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-07.spec')
+
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-08.spec')
+
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-09.spec')
+
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-10.spec')
+
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-11.spec')
+
 await import('./orca-runtime-tests/terminal-creation-and-readiness-part-12.spec')
+
 await import('./orca-runtime-tests/terminal-output-and-worker-recovery.spec')
+
 await import('./orca-runtime-tests/terminal-output-and-worker-recovery-part-02.spec')
+
 await import('./orca-runtime-tests/terminal-output-and-worker-recovery-part-03.spec')
+
 await import('./orca-runtime-tests/terminal-output-and-worker-recovery-part-04.spec')
+
 await import('./orca-runtime-tests/terminal-output-and-worker-recovery-part-05.spec')
+
 await import('./orca-runtime-tests/terminal-output-and-worker-recovery-part-06.spec')
+
 await import('./orca-runtime-tests/terminal-output-and-worker-recovery-part-07.spec')
+
 await import('./orca-runtime-tests/terminal-handles-and-agent-status.spec')
+
 await import('./orca-runtime-tests/terminal-handles-and-agent-status-part-02.spec')
+
 await import('./orca-runtime-tests/terminal-settled-prompt-foreground-confirmation.spec')
+
 await import('./orca-runtime-tests/terminal-handles-and-agent-status-part-03.spec')
+
 await import('./orca-runtime-tests/terminal-handles-and-agent-status-part-04.spec')
+
 await import('./orca-runtime-tests/terminal-handles-and-agent-status-part-05.spec')
+
 await import('./orca-runtime-tests/terminal-handles-and-agent-status-part-06.spec')
+
 await import('./orca-runtime-tests/mobile-session-tabs.spec')
+
 await import('./orca-runtime-tests/mobile-session-tabs-part-02.spec')
+
 await import('./orca-runtime-tests/mobile-session-tabs-part-03.spec')
+
 await import('./orca-runtime-tests/mobile-session-tabs-part-04.spec')
+
 await import('./orca-runtime-tests/mobile-session-tabs-part-05.spec')
+
 await import('./orca-runtime-tests/mobile-session-tabs-part-06.spec')
+
 await import('./orca-runtime-tests/mobile-session-tabs-part-07.spec')
+
 await import('./orca-runtime-tests/mobile-session-tabs-part-08.spec')
+
 await import('./orca-runtime-tests/mobile-session-tabs-part-09.spec')
+
 await import('./orca-runtime-tests/mobile-session-tabs-part-10.spec')
+
 await import('./orca-runtime-tests/mobile-session-tabs-part-11.spec')
+
 await import('./orca-runtime-tests/mobile-session-tabs-part-12.spec')
+
 await import('./orca-runtime-tests/mobile-session-tabs-part-13.spec')
+
 await import('./orca-runtime-tests/mobile-creation-and-orchestration.spec')
+
 await import('./orca-runtime-tests/mobile-creation-and-orchestration-part-02.spec')
+
 await import('./orca-runtime-tests/mobile-creation-and-orchestration-part-03.spec')
+
 await import('./orca-runtime-tests/mobile-creation-and-orchestration-part-04.spec')
+
 await import('./orca-runtime-tests/mobile-summaries.spec')
+
 await import('./orca-runtime-tests/mobile-summaries-part-02.spec')
+
 await import('./orca-runtime-tests/mobile-summaries-part-03.spec')
+
 await import('./orca-runtime-tests/mobile-summaries-part-04.spec')
+
 await import('./orca-runtime-tests/worktree-ps-structured-host.spec')
+
 await import('./orca-runtime-tests/worktree-ps-agent-row-dismissal.spec')
+
 await import('./orca-runtime-tests/terminal-sleep-and-teardown.spec')
+
 await import('./orca-runtime-tests/terminal-sleep-and-teardown-part-02.spec')
+
 await import('./orca-runtime-tests/terminal-sleep-and-teardown-part-03.spec')
+
 await import('./orca-runtime-tests/lineage-and-scan-cache.spec')
+
 await import('./orca-runtime-tests/lineage-and-scan-cache-part-02.spec')
+
 await import('./orca-runtime-tests/lineage-and-scan-cache-part-03.spec')
+
 await import('./orca-runtime-tests/lineage-and-scan-cache-part-04.spec')
+
 await import('./orca-runtime-tests/lineage-and-scan-cache-part-05.spec')
+
 await import('./orca-runtime-tests/orchestration-attention-batching.spec')
+
 await import('./orca-runtime-tests/lineage-and-scan-cache-part-06.spec')
+
 await import('./orca-runtime-tests/lineage-and-scan-cache-part-07.spec')
+
 await import('./orca-runtime-tests/worktree-setup-and-startup.spec')
+
 await import('./orca-runtime-tests/worktree-setup-and-startup-part-02.spec')
+
 await import('./orca-runtime-tests/worktree-setup-and-startup-part-03.spec')
+
 await import('./orca-runtime-tests/worktree-setup-and-startup-part-04.spec')
+
 await import('./orca-runtime-tests/worktree-setup-and-startup-part-05.spec')
+
 await import('./orca-runtime-tests/gitlab-and-pr-bases.spec')
+
 await import('./orca-runtime-tests/gitlab-and-pr-bases-part-02.spec')
+
 await import('./orca-runtime-tests/gitlab-and-pr-bases-part-03.spec')
+
 await import('./orca-runtime-tests/worktree-removal-and-reconciliation.spec')
+
 await import('./orca-runtime-tests/worktree-removal-and-reconciliation-part-02.spec')
+
 await import('./orca-runtime-tests/worktree-removal-and-reconciliation-part-03.spec')
+
 await import('./orca-runtime-tests/worktree-removal-and-reconciliation-part-04.spec')
+
 await import('./orca-runtime-tests/worktree-removal-execution-host.spec')
+
 await import('./orca-runtime-tests/targeting-and-resilience.spec')
+
 await import('./orca-runtime-tests/worktree-scan-cache-ttl.spec')

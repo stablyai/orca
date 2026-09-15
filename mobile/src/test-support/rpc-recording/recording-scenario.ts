@@ -2,11 +2,13 @@ import type { RpcClient } from '../../transport/rpc-client'
 import type { RecordedValue } from './recording-values'
 
 export type RpcRequestSender = Pick<RpcClient, 'sendRequest'>
+
 export type Rejection = {
   message: string
   category?: 'Error' | 'TypeError'
   deliveryUnknown?: boolean
 }
+
 /**
  * `optional` belongs to generated steps only: a matrix variant answers one request differently, so
  * the requests scripted after it may never be sent. Skipping one that was not sent records what the
@@ -18,6 +20,7 @@ export type ScenarioStep =
   | { bind: string; request: string; params: unknown; optional?: true }
   | { advance: number }
   | { checkpoint: string }
+
 export type RecordingScenario = {
   id: string
   operation: string
@@ -28,16 +31,20 @@ export type RecordingScenario = {
   namedDeltas?: string[]
   steps: ScenarioStep[]
 }
+
 export type MountedOperation = {
   action: (name: string, args: Record<string, unknown>) => unknown
   state: () => unknown
   dispose: () => void | Promise<void>
 }
+
 export type MountContext = {
   client: RpcClient
   effect: (name: string, value: unknown) => void
 }
+
 export type MountAdapter = (context: MountContext) => MountedOperation
+
 export type RecordingScheduler = {
   start: () => void
   flush: () => Promise<void>
@@ -46,6 +53,7 @@ export type RecordingScheduler = {
   elapsed: () => number
   stop: () => void
 }
+
 export type Observation = {
   sender: RecordedValue
   payloads: RecordedValue
@@ -53,6 +61,7 @@ export type Observation = {
   state: RecordedValue
   effects: RecordedValue
 }
+
 export type Recording = {
   scenario: string
   checkpoints: { id: string; observation: Observation }[]

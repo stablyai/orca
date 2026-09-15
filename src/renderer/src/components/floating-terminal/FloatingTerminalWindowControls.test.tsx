@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react')
+
   return {
     ...actual,
     useCallback: <T,>(callback: T) => callback,
@@ -116,14 +117,19 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return
   }
+
   if (Array.isArray(node)) {
     node.forEach((entry) => visit(entry, cb))
+
     return
   }
+
   const element = node as ReactElementLike
+
   if (!element.props) {
     return
   }
+
   cb(element)
   visit(element.props.children, cb)
 }
@@ -135,24 +141,29 @@ function findOnClickByAriaLabel(node: unknown, ariaLabel: string): () => void {
       found = entry.props.onClick as () => void
     }
   })
+
   if (!found) {
     throw new Error(`onClick for aria-label "${ariaLabel}" not found`)
   }
+
   return found
 }
 
 const NEW_AGENT_TAB_ID = 'floating-agent-tab'
+
 const EXISTING_TAB_ID = 'floating-existing-tab'
 
 beforeEach(() => {
   for (const mock of Object.values(mocks)) {
     mock.mockReset()
   }
+
   mocks.createTab.mockImplementation(() => {
     const tab = { id: NEW_AGENT_TAB_ID }
     const state = storeBox.state as { tabsByWorktree: Record<string, { id: string }[]> }
     const existing = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
     state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] = [...existing, tab]
+
     return tab
   })
   mocks.buildAgentStartupPlan.mockReturnValue({
@@ -192,6 +203,7 @@ describe('FloatingTerminalWindowControls default-agent launch', () => {
     ).settings.nativeChatSessionOptions = {
       claude: { model: 'opus', valuesByModel: { opus: { effort: 'high' } } }
     }
+
     const element = FloatingTerminalWindowControls({
       maximized: false,
       onToggleMaximized: vi.fn(),

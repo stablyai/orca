@@ -19,6 +19,7 @@ const POSIX_COMMAND_LINE_BUDGET = 128_000
 export function literalPathspec(filePath: string, options: GitRuntimeOptions): string {
   // Why: Git inside WSL needs POSIX paths, but host paths must stay literal, so convert backslashes only for WSL.
   const runtimePath = options.wslDistro ? filePath.replace(/\\/g, '/') : filePath
+
   return `:(literal)${runtimePath}`
 }
 
@@ -41,6 +42,7 @@ function finishedCommandLineLength(
     cwd: worktreePath,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
   })
+
   return commandLineLength([resolved.binary, ...resolved.args])
 }
 
@@ -72,20 +74,26 @@ export function bulkPathspecCommands(
   const commands: string[][] = []
   let pathspecs: string[] = []
   let length = baseLength
+
   for (const filePath of filePaths) {
     const pathspec = literalPathspec(filePath, options)
+
     const cost =
       finishedCommandLineLength([...leadingArgs, pathspec], worktreePath, options) - baseLength
+
     if (pathspecs.length > 0 && (pathspecs.length >= BULK_CHUNK_SIZE || length + cost > budget)) {
       commands.push([...leadingArgs, ...pathspecs])
       pathspecs = []
       length = baseLength
     }
+
     pathspecs.push(pathspec)
     length += cost
   }
+
   if (pathspecs.length > 0) {
     commands.push([...leadingArgs, ...pathspecs])
   }
+
   return commands
 }

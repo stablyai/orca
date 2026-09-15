@@ -153,27 +153,36 @@ export type EphemeralVmRecipeDoctorResult = {
 
 export function parseEphemeralVmRecipeResult(stdout: string): EphemeralVmRecipeResultParseResult {
   const trimmed = stdout.trim()
+
   if (!trimmed) {
     return { ok: false, error: 'Recipe produced no JSON result.' }
   }
+
   let parsed: unknown
+
   try {
     assertJsonTextStructureWithinLimits(trimmed, EPHEMERAL_VM_RECIPE_JSON_STRUCTURE_LIMITS)
     parsed = JSON.parse(trimmed)
   } catch {
     return { ok: false, error: 'Recipe stdout must be one JSON object.' }
   }
+
   const result = EphemeralVmRecipeResultSchema.safeParse(parsed)
+
   if (!result.success) {
     return { ok: false, error: result.error.issues[0]?.message ?? 'Invalid recipe result.' }
   }
+
   const connection = getEphemeralVmRecipeResultConnection(result.data)
+
   if (connection.type === 'orca-server' && !parsePairingCode(connection.pairingCode)) {
     return { ok: false, error: 'Recipe result pairingCode is not a valid Orca pairing code.' }
   }
+
   if (!isAbsoluteRuntimePath(connection.projectRoot)) {
     return { ok: false, error: 'Recipe result projectRoot must be an absolute runtime path.' }
   }
+
   return { ok: true, result: result.data }
 }
 
@@ -183,6 +192,7 @@ export function getEphemeralVmRecipeResultConnection(
   if ('connection' in result) {
     return result.connection
   }
+
   return {
     type: 'orca-server',
     pairingCode: result.pairingCode,
@@ -204,6 +214,7 @@ export function getEphemeralVmRecipeResultPairingCode(
   result: EphemeralVmRecipeResult
 ): string | null {
   const connection = getEphemeralVmRecipeResultConnection(result)
+
   return connection.type === 'orca-server' ? connection.pairingCode : null
 }
 

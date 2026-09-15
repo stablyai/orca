@@ -28,6 +28,7 @@ export function useAutomationsPageRefresh({
 }) {
   const { fetchAllWorktrees, startupWorktreeRefreshCompleted, pendingAutomationRunNavigation } =
     store
+
   const {
     setIsLoading,
     setAutomations,
@@ -39,6 +40,7 @@ export function useAutomationsPageRefresh({
     runHistoryReloadToken,
     workspaceNameCacheRef
   } = local
+
   const { scopedExternal, selectedRow } = list
   const { automationHostTargetFor } = destination
   const reloadExternalManagers = scopedExternal.reload
@@ -47,17 +49,21 @@ export function useAutomationsPageRefresh({
     async (options?: { awaitExternalManagers?: boolean }): Promise<void> => {
       setIsLoading(true)
       const pendingNavigation = useAppStore.getState().pendingAutomationRunNavigation
+
       // Until a navigation names a host, the desktop is the only authority the
       // legacy unscoped arm can address without guessing.
       const target = pendingNavigation
         ? getAutomationTargetFromHostId(pendingNavigation.hostId)
         : { kind: 'local' as const }
+
       const authorityKey = automationAuthorityCatalogKey(
         target.kind === 'environment'
           ? { kind: 'runtime', environmentId: target.environmentId }
           : { kind: 'desktop' }
       )
+
       const managersSettled = reloadExternalManagers().catch(() => undefined)
+
       try {
         const nextAutomations = await listAutomationsForTarget(target)
         setAutomations(nextAutomations)
@@ -66,8 +72,10 @@ export function useAutomationsPageRefresh({
           if (!current.has(authorityKey)) {
             return current
           }
+
           const next = new Set(current)
           next.delete(authorityKey)
+
           return next
         })
       } catch {
@@ -75,6 +83,7 @@ export function useAutomationsPageRefresh({
       } finally {
         setIsLoading(false)
       }
+
       if (options?.awaitExternalManagers) {
         await managersSettled
       }
@@ -97,10 +106,13 @@ export function useAutomationsPageRefresh({
     if (!startupWorktreeRefreshCompleted) {
       return
     }
+
     if (mountedBeforeStartupWorktreeRefreshRef.current) {
       mountedBeforeStartupWorktreeRefreshRef.current = false
+
       return
     }
+
     void fetchAllWorktrees()
   }, [fetchAllWorktrees, startupWorktreeRefreshCompleted])
   useEffect(() => {
@@ -116,9 +128,11 @@ export function useAutomationsPageRefresh({
     if (!pendingAutomationRunNavigation || isLoading) {
       return
     }
+
     const pendingTargetKey = getAutomationHostTargetKey(
       getAutomationTargetFromHostId(pendingAutomationRunNavigation.hostId)
     )
+
     if (automationHostTargetKey !== pendingTargetKey) {
       void refresh()
     }
@@ -126,6 +140,7 @@ export function useAutomationsPageRefresh({
   useEffect(() => {
     for (const [workspaceId, worktree] of store.worktreeMap) {
       const displayName = worktree.displayName.trim()
+
       if (displayName) {
         workspaceNameCacheRef.current.set(workspaceId, displayName)
       }
@@ -143,7 +158,9 @@ export function useAutomationsPageRefresh({
     const onAutomationsChanged = (): void => {
       void refresh()
     }
+
     window.addEventListener(AUTOMATIONS_CHANGED_EVENT, onAutomationsChanged)
+
     return () => window.removeEventListener(AUTOMATIONS_CHANGED_EVENT, onAutomationsChanged)
   }, [refresh])
   useEffect(() => {
@@ -152,8 +169,10 @@ export function useAutomationsPageRefresh({
         void refresh()
       }
     }
+
     window.addEventListener('focus', onVisibilityOrFocus)
     document.addEventListener('visibilitychange', onVisibilityOrFocus)
+
     return () => {
       window.removeEventListener('focus', onVisibilityOrFocus)
       document.removeEventListener('visibilitychange', onVisibilityOrFocus)

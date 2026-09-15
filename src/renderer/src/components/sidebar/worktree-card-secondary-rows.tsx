@@ -34,6 +34,7 @@ export function WorktreeCardSecondaryRows({
     lineageChildAriaLabel,
     childWorkspaceShortLabel
   } = card
+
   const { hasMetaRow } = presentation
 
   return (

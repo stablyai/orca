@@ -47,6 +47,7 @@ vi.mock('../store', () => ({
     subscribe: mocks.subscribe
   }
 }))
+
 vi.mock('./web-session-tabs-sync', () => ({
   acceptReplayedWebSessionTabsSnapshot: mocks.acceptReplayedWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot: mocks.applyWebSessionTabsSnapshot,
@@ -54,27 +55,34 @@ vi.mock('./web-session-tabs-sync', () => ({
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     // The production caller invokes the returned settle receipt.
     return () => {}
   },
   resolveHostSessionTabIdForWebSessionTab: mocks.resolveHostSessionTabIdForWebSessionTab
 }))
+
 vi.mock('@/lib/feature-education-telemetry', () => ({
   trackTerminalPaneSplit: mocks.trackTerminalPaneSplit
 }))
+
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
 }))
+
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
 }))
+
 vi.mock('./web-runtime-browser-materialization', () => ({
   hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
 }))
 
 const GROUP_ID = 'client-group-1'
+
 const STAGED_TAB_ID = 'staged-unified-tab'
+
 const OTHER_TAB_ID = 'other-unified-tab'
 
 const CLIENT_HOSTING_CAPABILITIES = [
@@ -134,8 +142,10 @@ describe('browser create focus intent across the client-host preparation await',
     let guardListener:
       | ((state: typeof stagedState, previous: typeof stagedState) => void)
       | undefined
+
     mocks.subscribe.mockImplementation((listener: typeof guardListener) => {
       guardListener = listener
+
       return vi.fn()
     })
 
@@ -145,19 +155,25 @@ describe('browser create focus intent across the client-host preparation await',
         { environmentId: ENVIRONMENT_ID },
         WORKTREE_ID
       )
+
       return { state: 'after' }
     })
 
     let releasePreparation = (): void => {}
+
     const preparationHeld = new Promise<void>((resolve) => {
       releasePreparation = resolve
     })
+
     let preparationStarted = false
+
     const preparePlacement = vi.fn().mockImplementation(async () => {
       preparationStarted = true
       await preparationHeld
+
       return { kind: 'client', browserHostClientId: 'browser-client-a' }
     })
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -166,6 +182,7 @@ describe('browser create focus intent across the client-host preparation await',
         result: { browserPageId: 'remote-browser-page-1' }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -177,11 +194,13 @@ describe('browser create focus intent across the client-host preparation await',
 
     const creation = createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })
     await vi.waitFor(() => expect(preparationStarted).toBe(true))
+
     if (options.switchTab) {
       // The user clicks another tab while the desktop host is still being prepared.
       currentState = switchedState
       guardListener?.(switchedState, stagedState)
     }
+
     releasePreparation()
     await creation
 

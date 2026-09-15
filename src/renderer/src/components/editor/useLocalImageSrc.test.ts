@@ -31,10 +31,12 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((promiseResolve, promiseReject) => {
     resolve = promiseResolve
     reject = promiseReject
   })
+
   return { promise, reject, resolve }
 }
 
@@ -63,6 +65,7 @@ function HookProbe({
   src: string
 }): null {
   onRender(useLocalImageSrc(src, filePath))
+
   return null
 }
 
@@ -99,11 +102,13 @@ describe('getLocalImageCacheKey', () => {
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     })
+
     const remoteKey = getLocalImageCacheKey('/repo/docs/logo.png', null, {
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
     })
+
     const otherRemoteKey = getLocalImageCacheKey('/repo/docs/logo.png', null, {
       settings: { activeRuntimeEnvironmentId: 'env-2' },
       worktreeId: 'wt-1',
@@ -189,6 +194,7 @@ describe('loadLocalImageSrc', () => {
       .fn()
       .mockRejectedValueOnce(new Error('denied'))
       .mockResolvedValueOnce(binaryPreview())
+
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:retry')
     setReadFile(readFile)
 
@@ -205,6 +211,7 @@ describe('loadLocalImageSrc', () => {
       content: '<svg></svg>',
       mimeType: 'image/svg+xml'
     })
+
     setReadFile(readFile)
 
     await expect(loadLocalImageSrc('diagram.svg', '/repo/docs/readme.md')).resolves.toBeNull()
@@ -224,10 +231,12 @@ describe('loadLocalImageSrc', () => {
 
   it('suppresses a stale pending completion after cache invalidation', async () => {
     const firstRead = deferred<PreviewResult>()
+
     const readFile = vi
       .fn()
       .mockReturnValueOnce(firstRead.promise)
       .mockResolvedValueOnce(binaryPreview())
+
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fresh')
     setReadFile(readFile)
 
@@ -246,10 +255,12 @@ describe('loadLocalImageSrc', () => {
   it('does not let an older invalidated read overwrite a newer successful read', async () => {
     const firstRead = deferred<PreviewResult>()
     const secondRead = deferred<PreviewResult>()
+
     const readFile = vi
       .fn()
       .mockReturnValueOnce(firstRead.promise)
       .mockReturnValueOnce(secondRead.promise)
+
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:newer')
     setReadFile(readFile)
 
@@ -286,10 +297,12 @@ describe('loadLocalImageSrc', () => {
   it('starts a fresh read when a released lease becomes visible again', async () => {
     const firstRead = deferred<PreviewResult>()
     const secondRead = deferred<PreviewResult>()
+
     const readFile = vi
       .fn()
       .mockReturnValueOnce(firstRead.promise)
       .mockReturnValueOnce(secondRead.promise)
+
     vi.spyOn(URL, 'createObjectURL')
       .mockReturnValueOnce('blob:fresh')
       .mockReturnValueOnce('blob:stale')

@@ -12,6 +12,7 @@ describe('federated mailbox legacy-adoption probe', () => {
 
   afterEach(() => {
     db?.close()
+
     if (directory) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -33,6 +34,7 @@ describe('federated mailbox legacy-adoption probe', () => {
          ) VALUES ('ctx_remote', 'task_remote', 'peer_home', ?, 'epoch', 'ready')`
       )
       .run(homeRunId)
+
     if (kind === 'message') {
       db.db
         .prepare(
@@ -49,6 +51,7 @@ describe('federated mailbox legacy-adoption probe', () => {
         )
         .run(mailRunId, handle)
     }
+
     return path
   }
 
@@ -62,6 +65,7 @@ describe('federated mailbox legacy-adoption probe', () => {
       db!.close()
       db = new OrchestrationDb(path)
       expect(db.getLegacyAdoption()).toBeUndefined()
+
       if (kind === 'message') {
         expect(db.getMessageById('msg_probe')).toMatchObject({
           run_id: LEGACY_RUN_ID,
@@ -108,6 +112,7 @@ describe('federated mailbox legacy-adoption probe', () => {
       db!.close()
       db = new OrchestrationDb(path)
       expect(db.getLegacyAdoption()).toBeDefined()
+
       if (kind === 'message') {
         expect(db.getMessageById('msg_probe')).toMatchObject({
           run_id: db.getLegacyAdoption()!.adopted_run_id,

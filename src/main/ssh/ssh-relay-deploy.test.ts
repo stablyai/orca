@@ -20,15 +20,19 @@ vi.mock('./relay-protocol', () => ({
     const normalizedOs = os.toLowerCase()
     const normalizedArch = arch.toLowerCase()
     const relayArch = normalizedArch === 'arm64' || normalizedArch === 'aarch64' ? 'arm64' : 'x64'
+
     if (normalizedOs === 'windows' || normalizedOs === 'win32') {
       return `win32-${relayArch}`
     }
+
     if (normalizedOs === 'darwin') {
       return `darwin-${relayArch}`
     }
+
     if (normalizedOs === 'linux') {
       return `linux-${relayArch}`
     }
+
     return null
   }),
   RELAY_SENTINEL: 'ORCA-RELAY v0.1.0 READY\n',
@@ -95,6 +99,7 @@ import {
 
 function decodePowerShellCommand(command: string): string | null {
   const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
+
   return match ? Buffer.from(match[1], 'base64').toString('utf16le') : null
 }
 
@@ -184,9 +189,11 @@ describe('deployAndLaunchRelay', () => {
 
   it('does not launch fresh after an unconfirmed endpoint-incumbent probe', async () => {
     const conn = makeMockConnection()
+
     const unconfirmedCleanup = Object.assign(new Error('endpoint probe still running'), {
       sshChannelCloseConfirmed: false
     })
+
     vi.mocked(waitForSentinel).mockRejectedValueOnce(new Error('stale relay reconnect failed'))
     vi.mocked(execCommand)
       .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
@@ -225,17 +232,21 @@ describe('deployAndLaunchRelay', () => {
     mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
 
     let markNodeResolutionStarted: () => void = () => {}
+
     const nodeResolutionStarted = new Promise<void>((resolve) => {
       markNodeResolutionStarted = resolve
     })
+
     vi.mocked(resolveRemoteNodePath).mockImplementationOnce(() => {
       markNodeResolutionStarted()
+
       return Promise.resolve('/usr/bin/node')
     })
 
     // Hold the first install-state step open. The optimization starts the node
     // branch before the remote-home -> install-check chain finishes.
     let releaseRemoteHome: (home: string) => void = () => {}
+
     mockExecCommand.mockReturnValueOnce(
       new Promise<string>((resolve) => {
         releaseRemoteHome = resolve
@@ -245,6 +256,7 @@ describe('deployAndLaunchRelay', () => {
     const deployPromise = deployAndLaunchRelay(conn)
     let assertionError: unknown
     let deployError: unknown
+
     try {
       await nodeResolutionStarted
 
@@ -264,9 +276,11 @@ describe('deployAndLaunchRelay', () => {
         (err: unknown) => err
       )
     }
+
     if (assertionError) {
       throw assertionError
     }
+
     if (deployError) {
       throw deployError
     }
@@ -278,10 +292,13 @@ describe('deployAndLaunchRelay', () => {
     const mockExecCommand = vi.mocked(execCommand)
     mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
     let releaseRemoteHome: (home: string) => void = () => {}
+
     let remoteHomeProbeStarted: () => void = () => {}
+
     const remoteHomeProbeStartedPromise = new Promise<void>((resolve) => {
       remoteHomeProbeStarted = resolve
     })
+
     mockExecCommand.mockReturnValueOnce(
       new Promise<string>((resolve) => {
         remoteHomeProbeStarted()
@@ -304,12 +321,15 @@ describe('deployAndLaunchRelay', () => {
   it('falls back to sequential bootstrap when concurrent SSH sessions are refused', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
+
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
+
     const { resolveRemoteNodePath: resolveRemoteNodePathActual } = await vi.importActual<
       typeof SshRemoteNodeResolution
     >('./ssh-remote-node-resolution')
+
     let fallbackInstallStateCompleted = false
     vi.mocked(resolveRemoteNodePath)
       .mockImplementationOnce(resolveRemoteNodePathActual)
@@ -317,16 +337,19 @@ describe('deployAndLaunchRelay', () => {
         if (!fallbackInstallStateCompleted) {
           throw new Error('Sequential fallback resolved node before install state finished')
         }
+
         return Promise.resolve('/usr/bin/node')
       })
     vi.mocked(isRelayAlreadyInstalled)
       .mockImplementationOnce(async (_conn, _dir, _host, options) => {
         expect(options?.rethrowSessionLimitErrors).toBe(true)
+
         return true
       })
       .mockImplementationOnce(async (_conn, _dir, _host, options) => {
         expect(options?.rethrowSessionLimitErrors).toBeUndefined()
         fallbackInstallStateCompleted = true
+
         return true
       })
     mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
@@ -349,14 +372,17 @@ describe('deployAndLaunchRelay', () => {
   it('falls back to sequential bootstrap when the install-state probe hits a session limit', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
+
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
+
     vi.mocked(isRelayAlreadyInstalled)
       .mockImplementationOnce(async (_conn, _dir, _host, options) => {
         if (!options?.rethrowSessionLimitErrors) {
           return true
         }
+
         throw sessionLimitError
       })
       .mockResolvedValueOnce(true)
@@ -428,9 +454,11 @@ describe('deployAndLaunchRelay', () => {
   it('does not retry when a session-limit failure races with a real install-state failure', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
+
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
+
     const installError = new Error('permission denied while checking relay install')
     vi.mocked(resolveRemoteNodePath).mockRejectedValueOnce(sessionLimitError)
     vi.mocked(isRelayAlreadyInstalled).mockRejectedValueOnce(installError)
@@ -445,11 +473,14 @@ describe('deployAndLaunchRelay', () => {
   it('does not retry until the surviving first-attempt probe settles', async () => {
     const conn = makeMockConnection()
     const mockExecCommand = vi.mocked(execCommand)
+
     const sessionLimitError = Object.assign(new Error('(SSH) Channel open failure: open failed'), {
       reason: 4
     })
+
     mockExecCommand.mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Linux x86_64') // tagged POSIX platform probe
     let releaseRemoteHome: (home: string) => void = () => {}
+
     let remoteHomeSettled = false
     mockExecCommand.mockReturnValueOnce(
       new Promise<string>((resolve) => {
@@ -464,6 +495,7 @@ describe('deployAndLaunchRelay', () => {
       if (!remoteHomeSettled) {
         throw new Error('Sequential fallback started before first install-state probe settled')
       }
+
       return Promise.resolve('/usr/bin/node')
     })
 
@@ -556,9 +588,11 @@ describe('deployAndLaunchRelay', () => {
     // The launch + connect commands include the versioned dir path.
     const execArgs = vi.mocked(conn.exec).mock.calls.map(([cmd]) => cmd as string)
     const allCmds = [...execArgs, ...mockExecCommand.mock.calls.map(([, cmd]) => cmd)]
+
     const sawVersionedDir = allCmds.some((cmd) =>
       cmd.includes('/.orca-remote/relay-0.1.0+abcdef012345')
     )
+
     expect(sawVersionedDir).toBe(true)
     const sawLegacyDir = allCmds.some((cmd) => cmd.includes('relay-v0.1.0'))
     expect(sawLegacyDir).toBe(false)
@@ -597,6 +631,7 @@ describe('deployAndLaunchRelay', () => {
 
   it('aborts a contended install-lock wait at the overall deploy timeout', async () => {
     vi.useFakeTimers()
+
     try {
       const conn = makeMockConnection()
       vi.mocked(isRelayAlreadyInstalled).mockReset().mockResolvedValue(false)
@@ -606,19 +641,24 @@ describe('deployAndLaunchRelay', () => {
         if (command.includes('uname')) {
           return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
         }
+
         if (command === 'echo $HOME') {
           return Promise.resolve('/home/user')
         }
+
         const marker = command.match(/\.sftp-namespace-[0-9a-f]{32}/u)?.[0]
+
         if (command.includes('__ORCA_UPLOAD_STAGE_SLOT__') && marker) {
           return Promise.resolve(`__ORCA_UPLOAD_STAGE_SLOT__${marker}:slot-0`)
         }
+
         return Promise.resolve('')
       })
       vi.mocked(isRelayAlreadyInstalled).mockResolvedValueOnce(false)
       let lockSignal: AbortSignal | undefined
       vi.mocked(acquireInstallLock).mockImplementationOnce((_conn, _dir, _host, options) => {
         lockSignal = options?.signal
+
         return new Promise<void>((_resolve, reject) => {
           lockSignal?.addEventListener('abort', () => reject(lockSignal?.reason), { once: true })
         })
@@ -641,6 +681,7 @@ describe('deployAndLaunchRelay', () => {
 
   it('aborts a launch started near the deploy deadline and closes its channel once', async () => {
     vi.useFakeTimers()
+
     try {
       const launchChannel = {
         on: vi.fn(),
@@ -649,6 +690,7 @@ describe('deployAndLaunchRelay', () => {
         stdout: { on: vi.fn() },
         close: vi.fn()
       }
+
       const conn = makeMockConnection()
       vi.mocked(isRelayAlreadyInstalled).mockReset().mockResolvedValue(true)
       vi.mocked(conn.exec).mockResolvedValue(launchChannel as never)
@@ -705,18 +747,23 @@ describe('deployAndLaunchRelay', () => {
       if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
         return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       }
+
       if (command === 'echo $HOME') {
         return Promise.resolve('/home/user')
       }
+
       if (command.includes('ORCA-NATIVE')) {
         return Promise.resolve('ORCA-NATIVE-DEPS-OK')
       }
+
       if (command.includes('process.stdout.write("READY")')) {
         return Promise.resolve('READY')
       }
+
       if (command.includes('test -S')) {
         return Promise.resolve('DEAD')
       }
+
       return Promise.resolve('')
     })
 
@@ -729,6 +776,7 @@ describe('deployAndLaunchRelay', () => {
         (command) =>
           command.includes('test -S') && command.includes('relay-') && command.includes('ALIVE')
       )
+
     expect(probeCommands).toHaveLength(2)
     expect(probeCommands[0]).toContain('relay-')
     expect(probeCommands[0]).not.toContain('relay.sock')
@@ -766,9 +814,11 @@ describe('deployAndLaunchRelay', () => {
     const execCommands = vi.mocked(conn.exec).mock.calls.map(([cmd]) => cmd as string)
     expect(execCommands).toHaveLength(1)
     expect(execCommands[0]).toContain('powershell.exe')
+
     const decodedScripts = mockExecCommand.mock.calls
       .map(([, command]) => decodePowerShellCommand(command))
       .filter((script): script is string => script !== null)
+
     const launchScript = decodedScripts.find((script) => script.includes('Invoke-CimMethod')) ?? ''
     expect(launchScript).toContain(
       '"C:/Users/me user/.orca-remote/relay-0.1.0+abcdef012345/relay.js"'
@@ -782,14 +832,17 @@ describe('deployAndLaunchRelay', () => {
     expect(launchScript).not.toContain('\\\\.\\pipe\\agent-hooks')
     const waitScript = decodedScripts.find((script) => script.includes('deadline=Date.now()')) ?? ''
     expect(waitScript).toContain('setTimeout(attempt,intervalMs)')
+
     const windowsLaunchCalls = mockExecCommand.mock.calls.filter(([, command]) => {
       const script = decodePowerShellCommand(command)
+
       return (
         script?.includes('.windows-active-pipe') ||
         script?.includes('Invoke-CimMethod') ||
         script?.includes('deadline=Date.now()')
       )
     })
+
     expect(windowsLaunchCalls.length).toBeGreaterThan(0)
     expect(
       windowsLaunchCalls.every(([, , options]) => options?.signal instanceof AbortSignal)
@@ -838,6 +891,7 @@ describe('deployAndLaunchRelay', () => {
       mockExecCommand.mock.calls
         .map(([, command]) => decodePowerShellCommand(command))
         .find((script) => script?.includes('Invoke-CimMethod')) ?? ''
+
     expect(launchScript).toContain(fallbackPipe)
     expect(launchScript).not.toContain(primaryPipe)
 
@@ -847,6 +901,7 @@ describe('deployAndLaunchRelay', () => {
         .find(
           (script) => script?.includes('Set-Content') && script.includes('.windows-active-pipe')
         ) ?? ''
+
     expect(markerWriteScript).toContain(fallbackPipe)
     expect(markerWriteScript).not.toContain(primaryPipe)
   })
@@ -876,6 +931,7 @@ describe('deployAndLaunchRelay', () => {
     const decodedExecScripts = mockExecCommand.mock.calls
       .map(([, command]) => decodePowerShellCommand(command))
       .filter((script): script is string => script !== null)
+
     expect(decodedExecScripts.some((script) => script.includes('Invoke-CimMethod'))).toBe(false)
   })
 

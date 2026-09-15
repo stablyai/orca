@@ -111,6 +111,7 @@ export function FileExplorerRow({
 }: FileExplorerRowProps): React.JSX.Element {
   const FileIcon = getFileTypeIcon(node.relativePath || node.name)
   const rowDropDir = node.isDirectory ? node.path : targetDir
+
   const { setRowDragNode, handleDragOver, handleDragEnter, handleDragLeave, handleDrop } =
     useFileExplorerRowDrag({
       rowDropDir,
@@ -130,6 +131,7 @@ export function FileExplorerRow({
         if (!open) {
           return
         }
+
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
         onContextMenuSelect()
       }}
@@ -156,10 +158,13 @@ export function FileExplorerRow({
               selectedPaths.has(node.path) && selectedPaths.size > 1
                 ? [...selectedPaths]
                 : [node.path]
+
             event.dataTransfer.setData(WORKSPACE_FILE_PATH_MIME, node.path)
+
             if (paths.length > 1) {
               event.dataTransfer.setData(WORKSPACE_FILE_PATHS_MIME, encodeWorkspaceFilePaths(paths))
             }
+
             writeWorkspaceFileDragSourceIfResolved(
               event.dataTransfer,
               sourceWorkspaceId,

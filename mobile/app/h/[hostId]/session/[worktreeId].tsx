@@ -3,5 +3,6 @@ import { useMobileSessionController } from '../../../../src/session/use-mobile-s
 
 export default function SessionScreen() {
   const controller = useMobileSessionController()
+
   return <MobileSessionSurface controller={controller} />
 }

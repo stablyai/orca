@@ -13,6 +13,7 @@ import { performSend, type AgentSessionTurnContext } from './structured-agent-se
 const journals = createTrackedJournalOpener()
 
 let root: string
+
 let journal: AgentSessionJournal
 
 beforeEach(async () => {
@@ -48,6 +49,7 @@ describe('structured send idempotency', () => {
       role: 'user',
       blocks: [{ type: 'text', text: 'retry' }]
     }
+
     const input = { clientMessageId: 'retry-id', payloadFingerprint: 'fingerprint', body }
     await journal.appendSubmission({ ...input, fence: 1 })
     await journal.markPendingSubmissionsUnknown(2, reason)
@@ -87,6 +89,7 @@ describe('structured send idempotency', () => {
       role: 'user',
       blocks: [{ type: 'text', text: 'one durable send' }]
     }
+
     const dispatch = vi.fn(async () => ({
       state: 'accepted' as const,
       providerIdentity: {
@@ -96,6 +99,7 @@ describe('structured send idempotency', () => {
         ordinal: 0
       }
     }))
+
     const context: AgentSessionTurnContext = {
       sessionId: 'session-1',
       journal,
@@ -107,6 +111,7 @@ describe('structured send idempotency', () => {
       flushStreamedEvents: async () => undefined,
       now: () => 1
     }
+
     const input = {
       clientMessageId: 'shared-send-id',
       payloadFingerprint: structuredAgentSessionPayloadFingerprint({

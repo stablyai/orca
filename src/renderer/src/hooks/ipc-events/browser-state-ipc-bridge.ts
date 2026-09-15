@@ -30,6 +30,7 @@ export function registerBrowserStateIpcBridge(
       if (isRuntimeEnvironmentActive()) {
         return
       }
+
       useAppStore.getState().updateBrowserPageState(browserPageId, {
         loading: false,
         loadError,
@@ -38,22 +39,27 @@ export function registerBrowserStateIpcBridge(
       })
     })
   )
+
   const unsubscribeCertificateFailure = window.api.browser.onCertificateFailureChanged?.(
     ({ browserPageId, failure }) => {
       if (isRuntimeEnvironmentActive() && !isClientHostedBrowserPage(browserPageId)) {
         return
       }
+
       useAppStore.getState().setBrowserPageCertificateFailure(browserPageId, failure)
     }
   )
+
   if (unsubscribeCertificateFailure) {
     unsubs.push(unsubscribeCertificateFailure)
   }
+
   unsubs.push(
     window.api.browser.onNavigationUpdate(({ browserPageId, url, title }) => {
       if (isRuntimeEnvironmentActive()) {
         return
       }
+
       const store = useAppStore.getState()
       // The redacted live registry must precede the raw persisted store update.
       rememberLiveBrowserUrl(browserPageId, redactKagiSessionToken(url))
@@ -73,8 +79,10 @@ export function registerBrowserStateIpcBridge(
       if (isRuntimeEnvironmentActive()) {
         return
       }
+
       const store = useAppStore.getState()
       const targetWorktreeId = worktreeId ?? store.activeWorktreeId
+
       if (targetWorktreeId) {
         store.focusBrowserTabInWorktree(targetWorktreeId, browserPageId)
       }
@@ -83,17 +91,21 @@ export function registerBrowserStateIpcBridge(
   unsubs.push(
     window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url, activate }) => {
       const store = useAppStore.getState()
+
       const sourcePage = Object.values(store.browserPagesByWorkspace)
         .flat()
         .find((page) => page.id === browserPageId)
+
       if (!sourcePage || getRuntimeEnvironmentIdForWorktree(store, sourcePage.worktreeId)) {
         return
       }
+
       // Why: the link inherits the opener's cookie jar. Falling back to the default profile would let
       // a page in an isolated session hand its links to the default one, silently crossing profiles.
       const sourceTab = (store.browserTabsByWorktree[sourcePage.worktreeId] ?? []).find(
         (tab) => tab.id === sourcePage.workspaceId
       )
+
       store.createBrowserTab(sourcePage.worktreeId, url, {
         title: url,
         activate: activate ?? true,

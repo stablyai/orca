@@ -15,6 +15,7 @@ import { installBrowserPageDownloadActivityTracking } from '../navigate/browser-
 // The retention budget DESTROYS a hidden worktree's guests rather than parking them, so a page a
 // paired client is streaming has to veto here too: a destroyed guest kills the screencast for good.
 const WATCHED_PAGE = 'page-watched'
+
 const WATCHED_WORKTREE = 'wt-watched'
 
 function tabsFor(pageId: string): BrowserWorkspace[] {
@@ -77,12 +78,15 @@ describe('browser guest eviction veto', () => {
       downloadId: string
       browserPageId: string
     }) => void = () => {}
+
     const noop = (): void => {}
+
     vi.stubGlobal('window', {
       api: {
         browser: {
           onDownloadRequested: (callback: typeof emitDownloadRequested) => {
             emitDownloadRequested = callback
+
             return noop
           },
           onDownloadProgress: () => noop,
@@ -91,6 +95,7 @@ describe('browser guest eviction veto', () => {
       }
     })
     const stopDownloadTracking = installBrowserPageDownloadActivityTracking()
+
     try {
       expect(browserTabsVetoGuestEviction(tabsFor(WATCHED_PAGE))).toBe(false)
       expect(evictionRun(tabsFor(WATCHED_PAGE))).toContain(WATCHED_WORKTREE)
@@ -108,6 +113,7 @@ describe('browser guest eviction veto', () => {
     const tabs = [
       { id: 'tab-1', activePageId: 'page-front', pageIds: ['page-front', WATCHED_PAGE] }
     ] as unknown as BrowserWorkspace[]
+
     hydrateBrowserRemoteViewerPages([WATCHED_PAGE])
     expect(evictionRun(tabs)).not.toContain(WATCHED_WORKTREE)
   })

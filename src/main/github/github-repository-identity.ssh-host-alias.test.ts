@@ -68,6 +68,7 @@ function mockRemoteUrl(url: string): void {
     if (args[0] === 'remote' && args[1] === 'get-url') {
       return { stdout: `${url}\n` }
     }
+
     throw new Error(`unexpected git args: ${args.join(' ')}`)
   })
 }
@@ -194,12 +195,14 @@ describe('#10284 SSH Host alias → github.com owner/repo', () => {
 
   it('preserves a one-shot SSH remote failure through candidate discovery', async () => {
     const failure = new Error('relay request failed')
+
     const provider = {
       exec: vi
         .fn()
         .mockRejectedValueOnce(failure)
         .mockResolvedValueOnce({ stdout: 'git@github.com:team/orca.git\n', stderr: '' })
     }
+
     getSshGitProviderMock.mockReturnValue(provider)
 
     await expect(

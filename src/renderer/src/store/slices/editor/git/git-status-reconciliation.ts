@@ -60,6 +60,7 @@ export function toOpenConflictMetadata(entry: GitStatusEntry): OpenConflictMetad
   }
 
   const hasWorkingTreeFile = entry.status !== 'deleted'
+
   return hasWorkingTreeFile
     ? {
         kind: 'conflict-editable',
@@ -108,6 +109,7 @@ export function areTrackedConflictMapsEqual(
 ): boolean {
   const prevKeys = Object.keys(prev)
   const nextKeys = Object.keys(next)
+
   return prevKeys.length === nextKeys.length && prevKeys.every((key) => prev[key] === next[key])
 }
 
@@ -159,10 +161,12 @@ export function reconcileOpenFilesForStatus(
 
     if (!entry || !entry.conflictKind || !entry.conflictStatus || !entry.conflictStatusSource) {
       changed = true
+
       return file.conflict.kind === 'conflict-placeholder' ? [] : [{ ...file, conflict: undefined }]
     }
 
     const nextConflict = toOpenConflictMetadata(entry)
+
     if (!nextConflict) {
       return [file]
     }
@@ -179,6 +183,7 @@ export function reconcileOpenFilesForStatus(
     }
 
     changed = true
+
     return [{ ...file, conflict: nextConflict }]
   })
 

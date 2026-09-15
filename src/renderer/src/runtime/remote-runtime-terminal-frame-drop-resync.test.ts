@@ -54,41 +54,55 @@ class FakeMultiplexServer {
   /** Client -> server frames arrive here (Subscribe / SnapshotRequest / Input). */
   receive(bytes: Uint8Array<ArrayBufferLike>): void {
     const frame = decodeTerminalStreamFrame(bytes)
+
     if (!frame) {
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.Subscribe) {
       const payload = decodeTerminalStreamJson<{ streamId: number }>(frame.payload)
       this.streamId = payload?.streamId ?? 0
       this.sendSnapshot()
+
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.SnapshotRequest) {
       const payload = decodeTerminalStreamJson<{ requestId?: number }>(frame.payload)
       this.snapshotRequests.push(payload?.requestId)
+
       if (typeof payload?.requestId === 'number' && this.holdNextManualSnapshot) {
         this.holdNextManualSnapshot = false
         this.heldManualRequestId = payload.requestId
+
         return
       }
+
       // Resync request: the server serializes the *current* buffer, so recovery
       // includes everything the client missed.
       this.snapshotData = 'RECOVERED'
+
       if (typeof payload?.requestId !== 'number' && this.holdNextRecoverySnapshot) {
         // The reply's binary frames were all dropped under backpressure.
         this.holdNextRecoverySnapshot = false
+
         return
       }
+
       if (typeof payload?.requestId !== 'number' && this.truncateNextRecoverySnapshot) {
         this.truncateNextRecoverySnapshot = false
         this.sendSnapshot(undefined, { truncated: true })
+
         return
       }
+
       if (typeof payload?.requestId !== 'number' && this.dropNextRecoverySnapshotEnd) {
         this.dropNextRecoverySnapshotEnd = false
         this.sendSnapshot(undefined, { omitEnd: true })
+
         return
       }
+
       this.sendSnapshot(payload?.requestId)
     }
   }
@@ -112,9 +126,11 @@ class FakeMultiplexServer {
       }),
       0
     )
+
     if (!options?.truncated) {
       this.send(TerminalStreamOpcode.SnapshotChunk, encodeTerminalStreamText(this.snapshotData), 0)
     }
+
     if (!options?.omitEnd) {
       this.send(TerminalStreamOpcode.SnapshotEnd, new Uint8Array(), 0)
     }
@@ -124,6 +140,7 @@ class FakeMultiplexServer {
   output(text: string): void {
     const startSeq = this.cursorUnits
     this.cursorUnits += text.length
+
     if (this.dropNextOutput) {
       // encryptedBinaryReply returned false: frame is NOT sent. The byte
       // high-water still advances (server keeps producing), so the next frame's
@@ -131,8 +148,10 @@ class FakeMultiplexServer {
       this.dropNextOutput = false
       this.droppedFrames += 1
       this.onServerSideDrop?.()
+
       return
     }
+
     void startSeq
     this.send(TerminalStreamOpcode.Output, encodeTerminalStreamText(text), this.cursorUnits)
   }
@@ -162,6 +181,7 @@ class FakeMultiplexServer {
     if (this.heldManualRequestId === null) {
       throw new Error('No manual snapshot is held')
     }
+
     const requestId = this.heldManualRequestId
     this.heldManualRequestId = null
     this.snapshotData = 'MANUAL'
@@ -184,6 +204,7 @@ describe('remote terminal frame-drop resync', () => {
       subscriptionCallbacks = callbacks
       server = new FakeMultiplexServer((bytes) => callbacks.onBinary?.(bytes))
       queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+
       return {
         unsubscribe,
         sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => server.receive(bytes)
@@ -209,6 +230,7 @@ describe('remote terminal frame-drop resync', () => {
     const metas: { seq?: number; rawLength?: number; transformed?: boolean }[] = []
     const snapshots: string[] = []
     const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
+
     const stream = await multiplexer.subscribeTerminal({
       terminal: 'terminal-1',
       client: { id: 'desktop-1', type: 'desktop' },
@@ -220,9 +242,11 @@ describe('remote terminal frame-drop resync', () => {
         onSnapshot: (chunk) => snapshots.push(chunk)
       }
     })
+
     // Let the initial snapshot round-trip settle.
     await Promise.resolve()
     await Promise.resolve()
+
     return { data, metas, snapshots, stream }
   }
 
@@ -252,6 +276,7 @@ describe('remote terminal frame-drop resync', () => {
 
   it('retries a truncated recovery on a backoff without accepting output across the gap', async () => {
     vi.useFakeTimers()
+
     try {
       const { data, snapshots } = await subscribeClient()
       server.truncateNextRecoverySnapshot = true
@@ -329,6 +354,7 @@ describe('remote terminal frame-drop resync', () => {
 
   it('times out a dropped recovery end and retries on the next sequence gap', async () => {
     vi.useFakeTimers()
+
     try {
       const { data, snapshots } = await subscribeClient()
       server.dropNextRecoverySnapshotEnd = true
@@ -417,6 +443,7 @@ describe('remote terminal frame-drop resync', () => {
     const onEnd = vi.fn()
     const onTransportClose = vi.fn()
     const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
+
     const stream = await multiplexer.subscribeTerminal({
       terminal: 'terminal-1',
       client: { id: 'desktop-1', type: 'desktop' },

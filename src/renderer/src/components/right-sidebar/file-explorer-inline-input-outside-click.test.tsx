@@ -35,6 +35,7 @@ function renderRenameRow(): {
   onSubmit: ReturnType<typeof vi.fn>
 } {
   const onSubmit = vi.fn()
+
   const view = render(
     <div>
       <InlineInputRow depth={1} inlineInput={renameInput} onSubmit={onSubmit} onCancel={vi.fn()} />
@@ -45,6 +46,7 @@ function renderRenameRow(): {
       </button>
     </div>
   )
+
   return {
     input: view.container.querySelector('input') as HTMLInputElement,
     row: view.container.querySelector('button') as HTMLButtonElement,

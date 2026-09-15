@@ -27,6 +27,7 @@ const SKIPPED_REASON_PRIORITY: SkillLocationChip[] = [
 function blockingChip(locations: readonly SkillLocationRow[]): SkillLocationChip | undefined {
   const judged = locations.filter((location) => location.participatesInGlobalFreshness)
   const present = new Set((judged.length > 0 ? judged : locations).map((location) => location.chip))
+
   return SKIPPED_REASON_PRIORITY.find((candidate) => present.has(candidate))
 }
 
@@ -43,6 +44,7 @@ function blockingChip(locations: readonly SkillLocationRow[]): SkillLocationChip
  */
 export function skippedReason(locations: readonly SkillLocationRow[], skillName?: string): string {
   const chip = blockingChip(locations)
+
   switch (chip) {
     case 'newer':
       return translate(

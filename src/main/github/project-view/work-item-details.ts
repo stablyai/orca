@@ -6,7 +6,9 @@ import type { ProjectWorkItemDetailsBySlugResult } from '../../../shared/github/
 import type { ProjectWorkItemDetailsBySlugArgs } from '../../../shared/github/project-request-types'
 
 type RawUser = { login?: string; name?: string | null; avatarUrl?: string | null }
+
 type RawLabel = { name?: string; color?: string }
+
 type RawComment = {
   databaseId?: number
   author?: { login?: string; avatarUrl?: string; __typename?: string } | null
@@ -14,6 +16,7 @@ type RawComment = {
   createdAt?: string
   url?: string
 }
+
 type RawWorkItemContent = {
   id?: string
   number?: number
@@ -37,17 +40,23 @@ export async function getWorkItemDetailsBySlug(
   args: ProjectWorkItemDetailsBySlugArgs
 ): Promise<ProjectWorkItemDetailsBySlugResult> {
   const validation = validateSlugArgs(args.owner, args.repo)
+
   if (!validation.ok) {
     return validation
   }
+
   const number = assertPositiveInt(args.number, 'number')
+
   if (!number.ok) {
     return { ok: false, error: number.error }
   }
+
   if (args.type !== 'issue' && args.type !== 'pr') {
     return { ok: false, error: { type: 'validation_error', message: 'Invalid type.' } }
   }
+
   const contentFragment = args.type === 'issue' ? ISSUE_FRAGMENT : PULL_REQUEST_FRAGMENT
+
   const result = await runGraphql<{
     repository?: {
       issue?: RawWorkItemContent | null
@@ -60,14 +69,18 @@ export async function getWorkItemDetailsBySlug(
     { owner: args.owner, repo: args.repo, num: args.number },
     projectGhExecOptions(args.host)
   )
+
   if (!result.ok) {
     return { ok: false, error: result.error }
   }
+
   const raw =
     args.type === 'issue' ? result.data.repository?.issue : result.data.repository?.pullRequest
+
   if (!raw) {
     return { ok: false, error: { type: 'not_found', message: 'Item not found.' } }
   }
+
   return { ok: true, details: mapWorkItemDetails(raw, args) }
 }
 
@@ -98,14 +111,18 @@ function mapWorkItemDetails(
   const labels = (raw.labels?.nodes ?? [])
     .map((label) => label?.name)
     .filter((name): name is string => typeof name === 'string')
+
   const assignees = (raw.assignees?.nodes ?? [])
     .map((assignee) => assignee?.login)
     .filter((login): login is string => typeof login === 'string')
+
   const comments: PRComment[] = []
+
   for (const comment of raw.comments?.nodes ?? []) {
     if (!comment || typeof comment.body !== 'string') {
       continue
     }
+
     comments.push({
       id: typeof comment.databaseId === 'number' ? comment.databaseId : Date.now(),
       author: comment.author?.login ?? '',
@@ -116,7 +133,9 @@ function mapWorkItemDetails(
       isBot: comment.author?.__typename === 'Bot'
     })
   }
+
   const participants: GitHubAssignableUser[] = []
+
   for (const participant of raw.participants?.nodes ?? []) {
     if (participant && typeof participant.login === 'string') {
       participants.push({
@@ -126,6 +145,7 @@ function mapWorkItemDetails(
       })
     }
   }
+
   const state: 'open' | 'closed' | 'merged' | 'draft' =
     args.type === 'pr'
       ? raw.isDraft
@@ -138,6 +158,7 @@ function mapWorkItemDetails(
       : raw.state === 'CLOSED'
         ? 'closed'
         : 'open'
+
   return {
     item: {
       id: typeof raw.id === 'string' ? raw.id : '',

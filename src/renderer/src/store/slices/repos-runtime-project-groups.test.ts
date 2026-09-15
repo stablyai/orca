@@ -8,6 +8,7 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 import { createTestStore } from './store-test-helpers'
 
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 beforeEach(() => {
@@ -31,6 +32,7 @@ describe('repo slice runtime project groups', () => {
       remoteName: 'origin',
       remoteUrl: 'https://github.com/stablyai/orca.git'
     }
+
     const localOrca: Repo = {
       id: 'local-orca',
       path: '/Users/alice/stably/orca',
@@ -41,6 +43,7 @@ describe('repo slice runtime project groups', () => {
       gitRemoteIdentity,
       projectGroupId: 'group-orca'
     }
+
     const runtimeOrca: Repo = {
       id: 'runtime-orca',
       path: '/vercel/sandbox/orca',
@@ -49,6 +52,7 @@ describe('repo slice runtime project groups', () => {
       addedAt: 2,
       gitRemoteIdentity
     }
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-runtime-orca',
       ok: true,

@@ -14,6 +14,7 @@ describe('buildViewportUserAgentOverride', () => {
         mobile,
         baseUserAgent: CHROME_UA
       })
+
       expect(override.userAgent).toBe(googleAuthUserAgent())
       // Real Firefox emits no client hints, so Chrome brands would contradict the stripped headers.
       expect(override.userAgentMetadata).toBeUndefined()
@@ -26,6 +27,7 @@ describe('buildViewportUserAgentOverride', () => {
       mobile: false,
       baseUserAgent: CHROME_UA
     })
+
     expect(override.userAgent).toBe(CHROME_UA)
     expect(override.userAgentMetadata).toBeUndefined()
   })
@@ -36,6 +38,7 @@ describe('buildViewportUserAgentOverride', () => {
       mobile: true,
       baseUserAgent: CHROME_UA
     })
+
     expect(override.userAgent).toContain('iPhone')
     expect(override.userAgent).toContain('CriOS/134.0.0.0')
     expect(override.userAgentMetadata?.mobile).toBe(true)
@@ -52,6 +55,7 @@ describe('buildViewportUserAgentOverride', () => {
       mobile: true,
       baseUserAgent: googleAuthUserAgent()
     })
+
     expect(override.userAgent).toContain('CriOS/134.0.0.0')
   })
 
@@ -61,6 +65,7 @@ describe('buildViewportUserAgentOverride', () => {
       mobile: false,
       baseUserAgent: CHROME_UA
     })
+
     expect(override.userAgent).toBe(CHROME_UA)
   })
 })

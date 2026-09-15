@@ -17,6 +17,7 @@ function deferred<T>(): {
   resolve: (value: T) => void
 } {
   let resolve!: (value: T) => void
+
   return {
     promise: new Promise<T>((next) => {
       resolve = next
@@ -64,14 +65,17 @@ describe('DictationSetupPollController', () => {
     const requests = [deferred<boolean>(), deferred<boolean>(), deferred<boolean>()]
     let active = 0
     let maxActive = 0
+
     const refresh = vi.fn(() => {
       const request = requests[refresh.mock.calls.length - 1]
       active += 1
       maxActive = Math.max(maxActive, active)
+
       return request.promise.finally(() => {
         active -= 1
       })
     })
+
     const poller = new DictationSetupPollController(refresh, POLL_INTERVAL_MS)
     poller.setPolling(true)
     poller.setVisible(true)
@@ -105,14 +109,17 @@ describe('DictationSetupPollController', () => {
     const requests = [deferred<boolean>(), deferred<boolean>()]
     let active = 0
     let maxActive = 0
+
     const refresh = vi.fn(() => {
       const request = requests[refresh.mock.calls.length - 1]
       active += 1
       maxActive = Math.max(maxActive, active)
+
       return request.promise.finally(() => {
         active -= 1
       })
     })
+
     const poller = new DictationSetupPollController(refresh, POLL_INTERVAL_MS)
     poller.setPolling(true)
     poller.setVisible(true)

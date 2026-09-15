@@ -30,10 +30,15 @@ import {
 } from './web-session-tabs-sync'
 
 const ENVIRONMENT_ID = 'web-env-1'
+
 const WORKTREE_ID = 'repo::/worktree'
+
 const HOST_TAB_ID = 'host-tab-1'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const NOW = 1_700_000_000_000
+
 const initialState = useAppStore.getInitialState()
 
 function makeAgentSnapshot(
@@ -130,6 +135,7 @@ describe('paired session-tab agent completion notifications', () => {
 
   it('announces one live stamped completion after a late-pair working seed', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
       getPtyId: () => 'pty-1',
@@ -138,6 +144,7 @@ describe('paired session-tab agent completion notifications', () => {
       dispatchCompletion,
       isLive: () => true
     })
+
     mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
       seedOnly ? coordinator.seedHookStatus(payload) : coordinator.observeHookStatus(payload)
     )
@@ -168,6 +175,7 @@ describe('paired session-tab agent completion notifications', () => {
       }
     })
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey,
       getPtyId: () => 'pty-1',
@@ -176,6 +184,7 @@ describe('paired session-tab agent completion notifications', () => {
       dispatchCompletion,
       isLive: () => true
     })
+
     mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
       seedOnly ? coordinator.seedHookStatus(payload) : coordinator.observeHookStatus(payload)
     )
@@ -215,6 +224,7 @@ describe('paired session-tab agent completion notifications', () => {
     const paneKey = makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)
     registerRendererOwnedAgentStatusPane(paneKey, ENVIRONMENT_ID)
     markRendererOwnedAgentStatusWrite(paneKey)
+
     const setClientTurn = (stateStartedAt: number, prompt: string): void => {
       useAppStore.setState({
         agentStatusByPaneKey: {
@@ -242,6 +252,7 @@ describe('paired session-tab agent completion notifications', () => {
 
     const delayedPayload =
       mocks.observeAgentHookCompletionForNotification.mock.calls.at(-1)?.[0]?.payload
+
     expect(delayedPayload).toMatchObject({
       localStateStartedAt: 5_000,
       turnCompletedAt
@@ -262,6 +273,7 @@ describe('paired session-tab agent completion notifications', () => {
 
   it('suppresses a stamped reconnect tail and its live all-clear', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
       getPtyId: () => 'pty-1',
@@ -270,6 +282,7 @@ describe('paired session-tab agent completion notifications', () => {
       dispatchCompletion,
       isLive: () => true
     })
+
     mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
       seedOnly ? coordinator.seedHookStatus(payload) : coordinator.observeHookStatus(payload)
     )
@@ -283,6 +296,7 @@ describe('paired session-tab agent completion notifications', () => {
 
   it('seeds an older restarted-host stamp without replaying its completion', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID),
       statusLane: 'hook',
@@ -292,6 +306,7 @@ describe('paired session-tab agent completion notifications', () => {
       dispatchCompletion,
       isLive: () => true
     })
+
     mocks.observeAgentHookCompletionForNotification.mockImplementation(({ payload, seedOnly }) =>
       seedOnly ? coordinator.seedHookStatus(payload) : coordinator.observeHookStatus(payload)
     )

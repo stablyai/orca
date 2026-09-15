@@ -43,6 +43,7 @@ export function useDocPreviewGuestTools({
   const toolTargetId = grantId === null ? '' : previewId
   const annotationViewportBridgeTokenRef = useRef<string>(undefined!)
   annotationViewportBridgeTokenRef.current ??= createBrowserUuid().replaceAll('-', '')
+
   const [browserOverlayViewport, setBrowserOverlayViewport] = useState<BrowserOverlayViewport>({
     scrollX: 0,
     scrollY: 0,
@@ -53,6 +54,7 @@ export function useDocPreviewGuestTools({
   const grab = useGrabMode(toolTargetId)
   const markup = useBrowserPageMarkupCapture(webviewRef)
   const annotationSend = useBrowserPageAnnotationSend({ browserTabId: previewId, worktreeId })
+
   const grabAnnotations = useBrowserPageGrabAnnotations({
     browserTabId: previewId,
     toolTargetId,
@@ -71,6 +73,7 @@ export function useDocPreviewGuestTools({
     if (!toolTargetId) {
       return
     }
+
     syncGuestAnnotationViewportBridge({
       toolTargetId,
       annotations: browserAnnotations,

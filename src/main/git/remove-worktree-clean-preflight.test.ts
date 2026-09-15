@@ -42,6 +42,7 @@ vi.mock('./status', () => ({
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
+
   return { ...actual, stat: statMock, readFile: readFileMock }
 })
 
@@ -132,6 +133,7 @@ describe('assertWorktreeCleanForRemoval', () => {
     const error = Object.assign(new Error('fatal: not a git repository'), {
       stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
     })
+
     gitExecFileAsyncMock.mockRejectedValueOnce(error)
 
     await expect(assertWorktreeCleanForRemoval('/repo-feature')).rejects.toBe(error)

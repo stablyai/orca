@@ -111,6 +111,7 @@ describe('ipynb parsing', () => {
       metadata: {},
       cells: [{ cell_type: 'code', metadata: {}, execution_count: null, outputs: [], source: [] }]
     })
+
     const split = vi.spyOn(String.prototype, 'split')
     const match = vi.spyOn(String.prototype, 'match')
     const source = `${'print(1)\n'.repeat(5000)}last`
@@ -141,6 +142,7 @@ describe('ipynb parsing', () => {
         { index: 1, source: 'print(x + 1)' }
       ])
     )
+
     expect(updated.metadata).toEqual({ custom: true })
     expect(updated.cells[0].source).toEqual(['x = 41'])
     expect(updated.cells[1].source).toEqual(['print(x + 1)'])
@@ -215,6 +217,7 @@ describe('ipynb parsing', () => {
         exitCode: 0
       })
     )
+
     expect(updated.cells[0].execution_count).toBe(1)
     expect(updated.cells[0].outputs).toEqual([
       { output_type: 'stream', name: 'stdout', text: ['hello\n'] }
@@ -228,6 +231,7 @@ describe('ipynb parsing', () => {
       metadata: {},
       cells: [{ cell_type: 'code', metadata: {}, execution_count: null, outputs: [], source: [] }]
     })
+
     const split = vi.spyOn(String.prototype, 'split')
     const match = vi.spyOn(String.prototype, 'match')
 

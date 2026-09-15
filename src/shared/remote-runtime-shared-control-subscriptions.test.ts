@@ -13,6 +13,7 @@ function makeSubscriptions(): {
   subscription: SharedControlLogicalSubscription<unknown>
 } {
   const subscriptions = new Map<string, SharedControlLogicalSubscription<unknown>>()
+
   const subscription = createSharedControlSubscription({
     requestId: 'req-1',
     method: 'runtime.clientEvents.subscribe',
@@ -20,7 +21,9 @@ function makeSubscriptions(): {
     retainedParamsBytes: 0,
     callbacks: { onResponse: vi.fn(), onError: vi.fn() }
   })
+
   subscriptions.set(subscription.requestId, subscription)
+
   return { subscriptions, subscription }
 }
 

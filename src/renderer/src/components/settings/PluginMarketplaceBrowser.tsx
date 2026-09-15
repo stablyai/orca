@@ -29,6 +29,7 @@ type PluginMarketplaceBrowserProps = {
 
 function marketplaceError(cause: unknown, fallback: string): string {
   console.warn('[plugins] marketplace action failed:', cause)
+
   return fallback
 }
 
@@ -57,11 +58,13 @@ export function PluginMarketplaceBrowser({
 
   const loadMarketplaceData = useCallback(async (): Promise<void> => {
     const requestId = ++requestRef.current
+
     try {
       const [nextSources, nextListings] = await Promise.all([
         window.api.plugins.listMarketplaces(),
         window.api.plugins.listMarketplacePlugins()
       ])
+
       if (mountedRef.current && requestId === requestRef.current) {
         setSources(nextSources)
         setListings(nextListings)
@@ -89,6 +92,7 @@ export function PluginMarketplaceBrowser({
   useEffect(() => {
     mountedRef.current = true
     void loadMarketplaceData()
+
     return () => {
       mountedRef.current = false
       requestRef.current += 1
@@ -100,11 +104,14 @@ export function PluginMarketplaceBrowser({
     () => new Map(installedPlugins.map((plugin) => [plugin.pluginKey, plugin])),
     [installedPlugins]
   )
+
   const visibleListings = useMemo(() => {
     const query = search.trim().toLocaleLowerCase()
+
     if (!query) {
       return listings
     }
+
     return listings.filter((listing) =>
       [
         listing.pluginKey,
@@ -119,6 +126,7 @@ export function PluginMarketplaceBrowser({
   const refresh = async (): Promise<void> => {
     setRefreshBusy(true)
     setError(null)
+
     try {
       await Promise.all([window.api.plugins.refreshMarketplaces({}), onRefreshInstalled?.()])
       await loadMarketplaceData()
@@ -149,6 +157,7 @@ export function PluginMarketplaceBrowser({
     setPreviewBusyKey(listing.pluginKey)
     setActionError(null)
     setError(null)
+
     try {
       const nextPreview = update
         ? await window.api.plugins.previewMarketplaceUpdate({ pluginKey: listing.pluginKey })
@@ -156,6 +165,7 @@ export function PluginMarketplaceBrowser({
             marketplaceSourceId: listing.marketplaceSourceId,
             pluginKey: listing.pluginKey
           })
+
       if (mountedRef.current && requestId === previewRequestRef.current) {
         setPreviewMode(update ? 'update' : 'install')
         setPreview(nextPreview)
@@ -183,8 +193,10 @@ export function PluginMarketplaceBrowser({
     if (!preview || installBusy) {
       return
     }
+
     setInstallBusy(true)
     setActionError(null)
+
     try {
       const result = await window.api.plugins.installMarketplacePlugin({
         marketplaceSourceId: preview.marketplaceSourceId,
@@ -192,9 +204,11 @@ export function PluginMarketplaceBrowser({
         pluginKey: preview.pluginKey,
         resolvedCommit: preview.resolvedCommit
       })
+
       if (!result.ok) {
         throw new Error(result.error)
       }
+
       setPreview(null)
       await onInstalled(result.pluginKey)
     } catch (cause) {

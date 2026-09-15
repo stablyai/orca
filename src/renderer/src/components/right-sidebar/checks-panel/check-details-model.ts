@@ -13,17 +13,21 @@ function getCheckIdentityKey(check: PRCheckDetail, index: number): string {
   if (check.checkRunId) {
     return `check-run:${check.checkRunId}`
   }
+
   if (check.workflowRunId) {
     return `workflow-run:${check.workflowRunId}`
   }
+
   // Why: manual/created GitLab jobs have no web_url, so they would otherwise key on
   // the list index and lose their cached log whenever the pipeline re-sorts.
   if (check.gitlabJobId) {
     return `gitlab-job:${check.gitlabJobId}`
   }
+
   if (check.url) {
     return `url:${check.url}`
   }
+
   return `fallback:${check.name}:${index}`
 }
 
@@ -54,33 +58,43 @@ export function isFailureState(state: string | null | undefined): boolean {
 
 export function getCheckStatusLabel(check: PRCheckDetail): string {
   const conclusion = getCheckConclusion(check)
+
   if (conclusion === 'success') {
     return 'Successful'
   }
+
   if (conclusion === 'failure') {
     return 'Failed'
   }
+
   if (conclusion === 'cancelled') {
     return 'Cancelled'
   }
+
   if (conclusion === 'timed_out') {
     return 'Timed out'
   }
+
   if (conclusion === 'action_required') {
     return 'Action required'
   }
+
   if (conclusion === 'neutral') {
     return 'Neutral'
   }
+
   if (conclusion === 'skipped') {
     return 'Skipped'
   }
+
   if (check.status === 'queued') {
     return 'Queued'
   }
+
   if (check.status === 'in_progress') {
     return 'In progress'
   }
+
   return 'Pending'
 }
 
@@ -88,10 +102,13 @@ export function formatCheckTimestamp(input: string | null | undefined): string |
   if (!input) {
     return null
   }
+
   const date = new Date(input)
+
   if (Number.isNaN(date.getTime())) {
     return null
   }
+
   return date.toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',

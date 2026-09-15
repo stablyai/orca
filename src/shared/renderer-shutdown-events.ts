@@ -1,6 +1,8 @@
 export const ORCA_RENDERER_UNLOAD_PREVENTED_EVENT = 'orca:renderer-unload-prevented'
+
 export const ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT =
   'orca:renderer-shutdown-checkpoint-failed'
+
 export const ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT =
   'orca:renderer-shutdown-checkpoint-aborted'
 
@@ -14,6 +16,7 @@ export const ORCA_SHUTDOWN_CHECKPOINT_FAILURE_REASON_ATTRIBUTE =
 export function formatShutdownCheckpointFailureReason(error: unknown): string {
   try {
     const reason = String(error instanceof Error ? error.message : error)
+
     return reason || 'Unknown shutdown checkpoint failure'
   } catch {
     return 'Unknown shutdown checkpoint failure'
@@ -46,9 +49,11 @@ export function consumeShutdownCheckpointFailureReason(): string | null {
   try {
     const root = globalThis.document?.documentElement
     const reason = root?.getAttribute(ORCA_SHUTDOWN_CHECKPOINT_FAILURE_REASON_ATTRIBUTE)
+
     if (reason) {
       root?.removeAttribute(ORCA_SHUTDOWN_CHECKPOINT_FAILURE_REASON_ATTRIBUTE)
     }
+
     return reason || null
   } catch {
     return null

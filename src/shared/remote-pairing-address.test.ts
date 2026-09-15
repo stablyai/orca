@@ -94,6 +94,7 @@ describe('remote pairing address', () => {
       publicKeyB64: 'key',
       scope: 'mobile'
     })
+
     expect(parseHostAccessLink(link)).toMatchObject({ ok: false, kind: 'mobile-only' })
   })
 })

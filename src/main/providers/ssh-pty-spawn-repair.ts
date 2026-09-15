@@ -33,13 +33,17 @@ export async function spawnWithTerminalRuntimeRepair<TProvider, TResult>(args: {
     return await args.attempt()
   } catch (error) {
     const cause = terminalUnavailableCauseFromError(error)
+
     if (!cause || !mayRepairFromCause(cause) || !args.recover) {
       throw error
     }
+
     const repaired = await args.recover(cause)
+
     if (!repaired) {
       throw error
     }
+
     return await args.retry(repaired)
   }
 }

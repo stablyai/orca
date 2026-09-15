@@ -35,15 +35,19 @@ export type GitHubPRMergeStatePresentation = {
 }
 
 const MUTED_TONE = 'border-border/60 bg-background/70 text-muted-foreground'
+
 const SUCCESS_TONE =
   'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
+
 const WARNING_TONE = 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200'
+
 const DANGER_TONE = 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'
 
 function checksState(item: GitHubPRMergeStateInput): CheckStatus | 'none' | undefined {
   if (item.checksSummary) {
     return item.checksSummary.state
   }
+
   return item.checksStatus
 }
 
@@ -143,6 +147,7 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
+
   if (item.state === 'closed') {
     return {
       label: translate('auto.components.github.pr.merge.state.4f976d3450', 'Closed'),
@@ -155,6 +160,7 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
+
   if (item.state === 'draft') {
     return {
       label: translate('auto.components.github.pr.merge.state.ec8e2cebaa', 'Draft'),
@@ -167,6 +173,7 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
+
   if (item.reviewDecision === 'REVIEW_REQUIRED') {
     return {
       label: translate('auto.components.github.pr.merge.state.1f8eb81c0e', 'Approval required'),
@@ -179,6 +186,7 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
+
   if (item.reviewDecision === 'CHANGES_REQUESTED') {
     return {
       label: translate('auto.components.github.pr.merge.state.c606463dc2', 'Changes requested'),
@@ -191,6 +199,7 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
+
   if (item.mergeQueueRequired === true) {
     return {
       label: item.autoMergeEnabled ? 'Auto-merge on' : 'Merge when ready',
@@ -203,12 +212,14 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
+
   if (!hasFullMergeMetadata(item)) {
     // Why: GitHub can omit merge metadata while checks are already green; let
     // users attempt merge and rely on the main-process preflight for blockers.
     if (checksPassed(item)) {
       return passedChecksMergePresentation(autoMergeAction)
     }
+
     return {
       label: translate('auto.components.github.pr.merge.state.bd4f27b50e', 'Merge'),
       tone: MUTED_TONE,
@@ -220,6 +231,7 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
+
   if (item.mergeable === 'CONFLICTING' || item.mergeStateStatus === 'DIRTY') {
     return {
       label: translate('auto.components.github.pr.merge.state.7e8bbe3cd7', 'Conflicts'),
@@ -232,6 +244,7 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
+
   if (item.mergeStateStatus === 'BEHIND') {
     return {
       label: translate('auto.components.github.pr.merge.state.039c072f94', 'Behind'),
@@ -244,6 +257,7 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
+
   if (item.mergeStateStatus === 'BLOCKED') {
     return {
       label: translate('auto.components.github.pr.merge.state.bf5e4c6c92', 'Blocked'),
@@ -256,8 +270,10 @@ export function presentGitHubPRMergeState(
       autoMergeAction
     }
   }
+
   if (item.mergeable === 'MERGEABLE' || item.mergeStateStatus === 'CLEAN') {
     const checkState = checksState(item)
+
     const checkStatus =
       checkState === 'failure'
         ? {
@@ -281,6 +297,7 @@ export function presentGitHubPRMergeState(
               )
             }
           : null
+
     return {
       label: checkStatus?.label ?? 'Able to merge',
       tone: checkStatus?.tone ?? SUCCESS_TONE,
@@ -293,11 +310,13 @@ export function presentGitHubPRMergeState(
       autoMergeAction: autoMergeActionWhenDirectMergeAvailable(autoMergeAction)
     }
   }
+
   // Why: GitHub may still report intermediate mergeability while checks are
   // green; the merge command re-checks authoritative blockers before merging.
   if (checksPassed(item)) {
     return passedChecksMergePresentation(autoMergeAction)
   }
+
   return {
     label: translate('auto.components.github.pr.merge.state.f958920f3a', 'Checking'),
     tone: MUTED_TONE,

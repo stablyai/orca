@@ -33,6 +33,7 @@ describe('ai vault session storage compatibility', () => {
   const hostSessionFile = '/Users/ada/.claude/projects/-Users-ada-repo/session-1.jsonl'
   const windowsHostSessionFile = 'C:\\Users\\ada\\.claude\\projects\\C--repo\\session-1.jsonl'
   const wslSessionFile = '\\\\wsl$\\Ubuntu\\home\\ada\\.claude\\projects\\-home-ada-repo\\s-1.jsonl'
+
   const wslLocalhostSessionFile =
     '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\-home-ada-repo\\s-1.jsonl'
 

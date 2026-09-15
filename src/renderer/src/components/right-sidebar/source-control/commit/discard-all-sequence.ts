@@ -49,6 +49,7 @@ export function isStageableStatusEntry(entry: GitStatusEntry): boolean {
 
 export function isSubmoduleWorktreeOnlyChange(entry: GitStatusEntry): boolean {
   const submodule = entry.submodule
+
   // Why: parent-repo `git add <submodule>` can stage a changed gitlink commit,
   // but it cannot stage tracked/untracked file dirtiness inside the submodule.
   return entry.area === 'unstaged' && !!submodule && !submodule.commitChanged
@@ -125,6 +126,7 @@ export async function runDiscardAllForArea(
       await deps.bulkUnstage([...paths])
     } catch (error) {
       deps.onError?.(error)
+
       return { discarded: [], failed: [], aborted: true }
     }
   }
@@ -132,6 +134,7 @@ export async function runDiscardAllForArea(
   if (deps.discardMany) {
     try {
       await deps.discardMany([...paths])
+
       return { discarded: [...paths], failed: [], aborted: false }
     } catch {
       // Why: older SSH relays may not support the bulk discard RPC yet. Fall
@@ -141,6 +144,7 @@ export async function runDiscardAllForArea(
 
   const discarded: string[] = []
   const failed: string[] = []
+
   for (const path of paths) {
     try {
       await deps.discardOne(path)
@@ -152,5 +156,6 @@ export async function runDiscardAllForArea(
       deps.onError?.(error)
     }
   }
+
   return { discarded, failed, aborted: false }
 }

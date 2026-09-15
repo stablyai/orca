@@ -9,15 +9,19 @@ export function parseFederatedWorkerReportPayload(payload: string | null): {
   reportPath: string | null
 } {
   let parsed: unknown
+
   try {
     parsed = payload ? JSON.parse(payload) : null
   } catch {
     parsed = null
   }
+
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     throw new OrchestrationError('invalid_argument', 'Federated worker report is invalid.')
   }
+
   const report = parsed as Record<string, unknown>
+
   if (
     typeof report.taskId !== 'string' ||
     typeof report.dispatchId !== 'string' ||
@@ -25,6 +29,7 @@ export function parseFederatedWorkerReportPayload(payload: string | null): {
   ) {
     throw new OrchestrationError('invalid_argument', 'Federated worker report is incomplete.')
   }
+
   return {
     taskId: report.taskId,
     dispatchId: report.dispatchId,

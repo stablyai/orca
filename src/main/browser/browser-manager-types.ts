@@ -35,9 +35,11 @@ export function resolveWithTimeout<T>(
   fallbackValue: T
 ): Promise<{ value: T; timedOut: boolean }> {
   let timeoutId: ReturnType<typeof setTimeout> | null = null
+
   const timeoutPromise = new Promise<{ value: T; timedOut: boolean }>((resolve) => {
     timeoutId = setTimeout(() => resolve({ value: fallbackValue, timedOut: true }), timeoutMs)
   })
+
   return Promise.race([
     promise.then((value) => ({ value, timedOut: false })),
     timeoutPromise
@@ -55,6 +57,7 @@ export function releaseAutomationVisibilityToken(
   if (renderer.isDestroyed()) {
     return
   }
+
   renderer
     .executeJavaScript(
       `(function() {
@@ -75,6 +78,7 @@ export function cleanupLateAutomationVisibilityToken(
       if (typeof lateToken !== 'string' || lateToken.length === 0) {
         return
       }
+
       // Why: the lease is created before paint; if main's acquire timed out, release the late token so hidden webviews don't stay paintable.
       releaseAutomationVisibilityToken(renderer, lateToken)
     })
@@ -89,6 +93,7 @@ export function createNoopRestoreForTimedOutAutomationAcquire(
   if (timedOut) {
     cleanupLateAutomationVisibilityToken(renderer, acquirePromise)
   }
+
   return () => {}
 }
 
@@ -108,8 +113,11 @@ export type BrowserGuestRegistration = {
 }
 
 export type PendingPermissionEvent = Omit<BrowserPermissionDeniedEvent, 'browserPageId'>
+
 export type PendingPopupEvent = Omit<BrowserPopupEvent, 'browserPageId'>
+
 export type BrowserDownloadDoneState = 'completed' | 'cancelled' | 'interrupted'
+
 export type PopupOwnerContext = {
   browserTabId: string
   rootGuestWebContentsId: number
@@ -192,6 +200,7 @@ export type ActiveDownload = {
 export function safeOrigin(rawUrl: string): string {
   const external = normalizeExternalBrowserUrl(rawUrl)
   const urlToParse = external ?? rawUrl
+
   try {
     return new URL(urlToParse).origin
   } catch {

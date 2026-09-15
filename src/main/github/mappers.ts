@@ -8,12 +8,15 @@ import { derivePRCheckStatusFromRollup } from '../../shared/pr-check-status'
 
 export function mapCheckRunRESTStatus(status: string): PRCheckDetail['status'] {
   const s = status?.toLowerCase()
+
   if (s === 'queued') {
     return 'queued'
   }
+
   if (s === 'in_progress') {
     return 'in_progress'
   }
+
   return 'completed'
 }
 
@@ -36,9 +39,11 @@ export function mapCheckRunRESTConclusion(
   if (status?.toLowerCase() !== 'completed') {
     return 'pending'
   }
+
   if (!conclusion) {
     return null
   }
+
   return conclusionMap[conclusion.toLowerCase()] ?? null
 }
 
@@ -47,20 +52,25 @@ export function mapCheckRunRESTConclusion(
 
 export function mapCommitStatusRESTStatus(state: string): PRCheckDetail['status'] {
   const s = state?.toLowerCase()
+
   return s === 'pending' ? 'queued' : 'completed'
 }
 
 export function mapCommitStatusRESTConclusion(state: string): PRCheckDetail['conclusion'] {
   const s = state?.toLowerCase()
+
   if (s === 'success') {
     return 'success'
   }
+
   if (s === 'failure' || s === 'error') {
     return 'failure'
   }
+
   if (s === 'pending') {
     return 'pending'
   }
+
   return null
 }
 
@@ -68,58 +78,75 @@ export function mapCommitStatusRESTConclusion(state: string): PRCheckDetail['con
 
 export function mapCheckStatus(state: string): PRCheckDetail['status'] {
   const s = state?.toUpperCase()
+
   if (s === 'PENDING' || s === 'QUEUED') {
     return 'queued'
   }
+
   if (s === 'IN_PROGRESS') {
     return 'in_progress'
   }
+
   return 'completed'
 }
 
 export function mapCheckConclusion(state: string): PRCheckDetail['conclusion'] {
   const s = state?.toUpperCase()
+
   if (s === 'SUCCESS' || s === 'PASS') {
     return 'success'
   }
+
   if (s === 'FAILURE' || s === 'FAIL') {
     return 'failure'
   }
+
   if (s === 'ACTION_REQUIRED') {
     return 'action_required'
   }
+
   if (s === 'STALE' || s === 'STARTUP_FAILURE') {
     return 'failure'
   }
+
   if (s === 'CANCELLED') {
     return 'cancelled'
   }
+
   if (s === 'TIMED_OUT') {
     return 'timed_out'
   }
+
   if (s === 'SKIPPED') {
     return 'skipped'
   }
+
   if (s === 'PENDING' || s === 'QUEUED' || s === 'IN_PROGRESS') {
     return 'pending'
   }
+
   if (s === 'NEUTRAL') {
     return 'neutral'
   }
+
   return null
 }
 
 export function mapPRState(state: string, isDraft?: boolean): PRInfo['state'] {
   const s = state?.toUpperCase()
+
   if (s === 'MERGED') {
     return 'merged'
   }
+
   if (s === 'CLOSED') {
     return 'closed'
   }
+
   if (isDraft) {
     return 'draft'
   }
+
   return 'open'
 }
 

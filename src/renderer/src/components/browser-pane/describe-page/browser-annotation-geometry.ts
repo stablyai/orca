@@ -33,6 +33,7 @@ export const BROWSER_ANNOTATION_INTENT_OPTIONS = [
 
 // Why: priority stays in the persisted annotation shape for backwards compat, though the UI no longer exposes urgency choices.
 export const DEFAULT_BROWSER_ANNOTATION_PRIORITY: BrowserAnnotationPriority = 'important'
+
 export const BROWSER_PAGE_ZOOM_FEEDBACK_MS = 1400
 
 export type BrowserOverlayViewport = {
@@ -42,6 +43,7 @@ export type BrowserOverlayViewport = {
 }
 
 export const EMPTY_BROWSER_ANNOTATIONS: BrowserPageAnnotation[] = []
+
 export const PENDING_ANNOTATION_CARD_HEIGHT = 330
 
 export function createBrowserAnnotationId(): string {
@@ -74,6 +76,7 @@ export function getBrowserOverlayAnchor(
   const containerWidth = containerRect?.width ?? 0
   const containerHeight = containerRect?.height ?? 0
   const below = elementBottom + PENDING_ANNOTATION_CARD_HEIGHT < containerHeight
+
   return {
     x: clampNumber(offsetX + rect.x + rect.width / 2, 12, Math.max(12, containerWidth - 12)),
     y: clampNumber(below ? elementBottom : elementTop, 12, Math.max(12, containerHeight - 12)),
@@ -92,8 +95,10 @@ export function getLiveBrowserAnnotationRect(
   if (payload.target.isFixed) {
     return payload.target.rectViewport
   }
+
   const scrollX = viewport.version === 0 ? payload.page.scrollX : viewport.scrollX
   const scrollY = viewport.version === 0 ? payload.page.scrollY : viewport.scrollY
+
   return {
     ...payload.target.rectViewport,
     x: payload.target.rectPage.x - scrollX,

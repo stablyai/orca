@@ -37,6 +37,7 @@ describe('compareJiraProjectsByDisplayLabel', () => {
       project({ name: 'Alpha', key: 'AA', siteName: 'Zeta' }),
       project({ name: 'Beta', key: 'BB', siteName: 'Acme' })
     ]
+
     expect(sortOf(projects, true)).toEqual(['Acme/Beta/BB', 'Zeta/Alpha/AA'])
   })
 
@@ -45,6 +46,7 @@ describe('compareJiraProjectsByDisplayLabel', () => {
       project({ name: 'Alpha', key: 'AA', siteName: 'Zeta' }),
       project({ name: 'Beta', key: 'BB', siteName: 'Acme' })
     ]
+
     expect(sortOf(projects, false)).toEqual(['Zeta/Alpha/AA', 'Acme/Beta/BB'])
   })
 
@@ -54,6 +56,7 @@ describe('compareJiraProjectsByDisplayLabel', () => {
       project({ name: 'Alpha', key: 'AA' }),
       project({ name: 'Beta', key: 'BA' })
     ]
+
     expect(sortOf(projects, false)).toEqual(['/Alpha/AA', '/Alpha/AB', '/Beta/BA'])
   })
 

@@ -34,38 +34,50 @@ export function commandActionFacts(
   item: CodexThreadItem
 ): { name: string; fields: Record<string, string> } | null {
   const actions = item.commandActions
+
   if (!Array.isArray(actions)) {
     return null
   }
+
   let matched: { class: CommandActionClass; fields: Record<string, string> } | null = null
+
   for (const action of actions) {
     const record = readRecord(action)
     const type = readString(record, 'type')
     const classified = type === null ? undefined : COMMAND_ACTION_CLASSES.get(type)
+
     if (classified === undefined) {
       continue
     }
+
     if (matched === null) {
       const fields: Record<string, string> = {}
+
       for (const [source, lifted] of Object.entries(classified.keys)) {
         const value = readString(record, source)
+
         if (value !== null) {
           fields[lifted] = value
         }
       }
+
       matched = { class: classified, fields }
       continue
     }
+
     if (matched.class.name !== classified.name) {
       return null
     }
+
     // The same class twice keeps the class, but only a target both entries name.
     for (const [source, lifted] of Object.entries(matched.class.keys)) {
       const kept = matched.fields[lifted]
+
       if (kept !== undefined && readString(record, source) !== kept) {
         delete matched.fields[lifted]
       }
     }
   }
+
   return matched === null ? null : { name: matched.class.name, fields: matched.fields }
 }

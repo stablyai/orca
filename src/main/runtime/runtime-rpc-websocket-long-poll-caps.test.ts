@@ -24,6 +24,7 @@ vi.mock('../git/worktree', () => {
       isMainWorktree: false
     }
   ]
+
   return {
     listWorktrees: vi.fn().mockResolvedValue(worktrees),
     listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
@@ -43,12 +44,14 @@ describe('OrcaRuntimeRpcServer', () => {
     runtime.setOrchestrationDb(db)
     // A consuming check now requires a live pane; these transport tests only need it to block.
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: false,
       longPollCap: 1
     })
+
     const device = server['deviceRegistry'] ?? null
     expect(device).toBeNull()
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
@@ -121,6 +124,7 @@ describe('OrcaRuntimeRpcServer', () => {
     // A consuming check now requires a live pane; these transport tests only need it to block.
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) => `tab_${handle}:leaf`)
     seedSupervisedAskWorkers(db, ['term_w0', 'term_w1', 'term_w2'])
+
     // Why: cap 4 → ask sub-cap 2, so the third ask must be shed while waits keep the other half.
     const server = new OrcaRuntimeRpcServer({
       runtime,
@@ -128,6 +132,7 @@ describe('OrcaRuntimeRpcServer', () => {
       enableWebSocket: false,
       longPollCap: 4
     })
+
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     // Why: 'runtime' scope, not 'mobile' — orchestration.ask is absent from the mobile allowlist.
     const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
@@ -136,9 +141,11 @@ describe('OrcaRuntimeRpcServer', () => {
       getConnectionId: () => 'conn-test'
     } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
     const replies: Record<string, unknown>[] = []
+
     const push = (response: string): void => {
       replies.push(JSON.parse(response) as Record<string, unknown>)
     }
+
     const dispatch = (id: string, method: string, params: unknown): Promise<void> =>
       server['handleWebSocketMessage'](
         JSON.stringify(
@@ -159,6 +166,7 @@ describe('OrcaRuntimeRpcServer', () => {
           timeoutMs: 10_000
         })
       )
+
       // Why: gate on the pre-existing total so a missing sub-cap fails on the shed below, not here.
       await waitFor(() => server['activeLongPolls'] === 2)
 
@@ -187,6 +195,7 @@ describe('OrcaRuntimeRpcServer', () => {
         wait: true,
         timeoutMs: 10_000
       })
+
       await waitFor(() => server['activeLongPolls'] === 3)
       expect(server['activeAskLongPolls']).toBe(2)
 
@@ -206,10 +215,12 @@ describe('OrcaRuntimeRpcServer', () => {
 
   it('shares one socket close listener across concurrent WebSocket dispatches', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+
     const runtime = {
       configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'test-runtime'
     } as unknown as OrcaRuntimeService
+
     const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
@@ -217,7 +228,9 @@ describe('OrcaRuntimeRpcServer', () => {
     server['mobileSocketWiring'] = {
       getConnectionId: () => 'conn-test'
     } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
+
     let activeDispatches = 0
+
     ;(
       server as unknown as {
         dispatcher: {

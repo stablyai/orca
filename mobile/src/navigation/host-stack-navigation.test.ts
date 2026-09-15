@@ -8,6 +8,7 @@ import {
 } from './host-stack-navigation'
 
 const TARGET = { name: '[hostId]/tasks', params: { hostId: 'host/one' } } as const
+
 const OTHER_TARGET = {
   name: '[hostId]/session/[worktreeId]',
   params: { hostId: 'host/one', worktreeId: 'repo::/tmp/wt' }
@@ -19,9 +20,11 @@ function navigationHarness(initialState: HostStackNavigationState | undefined) {
   const stateListeners = new Set<() => void>()
   let state = initialState
   const unsubscribe = vi.fn()
+
   const navigation = {
     addListener: vi.fn((_event: 'state', listener: () => void) => {
       stateListeners.add(listener)
+
       return () => {
         unsubscribe()
         stateListeners.delete(listener)
@@ -30,12 +33,14 @@ function navigationHarness(initialState: HostStackNavigationState | undefined) {
     dispatch: vi.fn(),
     getState: () => state
   }
+
   return {
     navigation,
     unsubscribe,
     listenerCount: () => stateListeners.size,
     setState(nextState: HostStackNavigationState | undefined) {
       state = nextState
+
       for (const listener of stateListeners) {
         listener()
       }
@@ -178,6 +183,7 @@ describe('host stack navigation', () => {
       'host/one',
       TARGET
     )
+
     expect(harness.listenerCount()).toBe(1)
     controller.cancel()
 
@@ -201,6 +207,7 @@ describe('host stack navigation', () => {
       'host/one',
       TARGET
     )
+
     const retargeted = coordinateHostStackNavigation(
       pending,
       harness.navigation,

@@ -35,9 +35,11 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     while (this.legacyPaneKeyAliases.size > PANE_KEY_ALIASES_MAX) {
       // Why: renderer-originated aliases are untrusted; insertion-order eviction bounds memory and per-message cleanup.
       const oldestKey = this.legacyPaneKeyAliases.keys().next().value
+
       if (!oldestKey) {
         break
       }
+
       this.legacyPaneKeyAliases.delete(oldestKey)
     }
   }
@@ -45,6 +47,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
   protected getPhysicalPaneKeyForAuthority(paneKey: string, ptyId?: string): string {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
     let fallbackPaneKey = paneKey
+
     for (const [physicalPaneKey, entry] of this.legacyPaneKeyAliases) {
       if (
         entry.stablePaneKey === ownerPaneKey &&
@@ -53,9 +56,11 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
         if (entry.authorityVerified) {
           return physicalPaneKey
         }
+
         fallbackPaneKey = physicalPaneKey
       }
     }
+
     return fallbackPaneKey
   }
 
@@ -67,9 +72,11 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     if (!isValidPaneKey(fromPaneKey)) {
       return false
     }
+
     const ownerPaneKey = this.resolvePaneKeyAlias(fromPaneKey)
     const physicalPaneKey = this.getPhysicalPaneKeyForAuthority(fromPaneKey, ptyId)
     const alias = this.legacyPaneKeyAliases.get(physicalPaneKey)
+
     if (ptyId) {
       return Boolean(
         (alias?.authorityVerified && alias.ptyId === ptyId) ||
@@ -77,6 +84,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
         (ownerPaneKey !== physicalPaneKey && ownsPty(ownerPaneKey, ptyId))
       )
     }
+
     // Why: hook status is renderer evidence, not PTY ownership; ID-less moves are safe only after a verified transfer minted an alias.
     return alias?.authorityVerified === true
   }
@@ -90,23 +98,31 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
   ): void {
     const fromPaneKey = legacyPaneKey.trim()
     const toPaneKey = stablePaneKey.trim()
+
     if (!canRegisterPaneKeyAlias(fromPaneKey, toPaneKey)) {
       return
     }
+
     const existing = this.legacyPaneKeyAliases.get(fromPaneKey)
+
     if (existing && options?.overwriteExisting === false) {
       return
     }
+
     // Why: remint tokens have no embedded tab id; first pane wins so a later spawn
     // cannot steal leftover $$…:L$$ posts onto a different tab:leaf.
     if (existing && existing.stablePaneKey !== toPaneKey && isOpaqueRemintedPaneKey(fromPaneKey)) {
       return
     }
+
     const normalizedPtyId =
       typeof ptyId === 'string' && ptyId.trim().length > 0 ? ptyId.trim() : existing?.ptyId
+
     const normalizedUpdatedAt =
       Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : (existing?.updatedAt ?? Date.now())
+
     const authorityVerified = options?.authorityVerified ?? false
+
     if (
       existing &&
       existing.stablePaneKey === toPaneKey &&
@@ -116,6 +132,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     ) {
       return
     }
+
     this.legacyPaneKeyAliases.set(fromPaneKey, {
       stablePaneKey: toPaneKey,
       ptyId: normalizedPtyId ?? null,
@@ -123,6 +140,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       authorityVerified
     })
     this.boundPaneKeyAliases()
+
     if (normalizedPtyId) {
       this.notifyPaneKeyAliasPersistenceListener()
     }
@@ -138,18 +156,23 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     if (!isValidPaneKey(fromPaneKey) || !isValidPaneKey(toPaneKey)) {
       return
     }
+
     const previousOwnerPaneKey = this.resolvePaneKeyAlias(fromPaneKey)
     const physicalPaneKey = this.getPhysicalPaneKeyForAuthority(fromPaneKey, ptyId)
     const existing = this.legacyPaneKeyAliases.get(physicalPaneKey)
     const normalizedPtyId = ptyId?.trim() || existing?.ptyId || null
+
     const previousStatus = this.state.lastStatusByPaneKey.get(previousOwnerPaneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+
     const hadStatus = previousStatus !== undefined
     movePaneCacheState(this.state, previousOwnerPaneKey, toPaneKey)
+
     const movedStatus = this.state.lastStatusByPaneKey.get(toPaneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+
     if (movedStatus) {
       const owner = parsePaneKey(toPaneKey)
       this.state.lastStatusByPaneKey.set(toPaneKey, {
@@ -158,15 +181,20 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
         tabId: owner?.tabId
       })
     }
+
     const transferredStatus = this.state.lastStatusByPaneKey.get(toPaneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+
     const hydratedLaunchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(previousOwnerPaneKey)
+
     if (hydratedLaunchTokenHash) {
       this.hydratedLaunchTokenHashByPaneKey.delete(previousOwnerPaneKey)
       this.hydratedLaunchTokenHashByPaneKey.set(toPaneKey, hydratedLaunchTokenHash)
     }
+
     const persistedAuthority = this.persistedAuthorityCommitmentsByPaneKey.get(previousOwnerPaneKey)
+
     if (persistedAuthority) {
       const owner = parsePaneKey(toPaneKey)
       this.persistedAuthorityCommitmentsByPaneKey.delete(previousOwnerPaneKey)
@@ -179,27 +207,37 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
         })
       )
     }
+
     if (this.runtimeObservedStatusPaneKeys.delete(previousOwnerPaneKey)) {
       this.runtimeObservedStatusPaneKeys.add(toPaneKey)
     }
+
     const restartedTokenHash =
       this.restartedStatusLaunchTokenHashByPaneKey.get(previousOwnerPaneKey)
+
     this.restartedStatusLaunchTokenHashByPaneKey.delete(previousOwnerPaneKey)
     this.restartedStatusLaunchTokenHashByPaneKey.delete(toPaneKey)
+
     if (restartedTokenHash) {
       this.restartedStatusLaunchTokenHashByPaneKey.set(toPaneKey, restartedTokenHash)
     }
+
     const activeTurnCompletedAt = this.activeHookTurnCompletedAtByPaneKey.get(previousOwnerPaneKey)
+
     if (activeTurnCompletedAt !== undefined) {
       this.activeHookTurnCompletedAtByPaneKey.delete(previousOwnerPaneKey)
       this.activeHookTurnCompletedAtByPaneKey.set(toPaneKey, activeTurnCompletedAt)
     }
+
     const evidenceObservedAt = this.evidenceObservedAtByPaneKey.get(previousOwnerPaneKey)
+
     if (evidenceObservedAt !== undefined) {
       this.evidenceObservedAtByPaneKey.delete(previousOwnerPaneKey)
       this.evidenceObservedAtByPaneKey.set(toPaneKey, evidenceObservedAt)
     }
+
     const authorityObservation = this.currentAuthorityObservations.get(previousOwnerPaneKey)
+
     if (authorityObservation) {
       const owner = parsePaneKey(toPaneKey)
       this.currentAuthorityObservations.delete(previousOwnerPaneKey)
@@ -208,11 +246,14 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
         Object.freeze({ ...authorityObservation, paneKey: toPaneKey, tabId: owner?.tabId })
       )
     }
+
     const promptDedupe = this.promptSentDedupeByPaneKey.get(previousOwnerPaneKey)
+
     if (promptDedupe !== undefined) {
       this.promptSentDedupeByPaneKey.delete(previousOwnerPaneKey)
       this.promptSentDedupeByPaneKey.set(toPaneKey, promptDedupe)
     }
+
     this.clearAssistantMessageRetry(previousOwnerPaneKey)
     this.clearCodexSubagentPoll(previousOwnerPaneKey)
     // Why: the live process keeps posting the physical source key after detach; persist a chain-safe mapping to the current owner.
@@ -230,6 +271,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       transferredStatus,
       options?.emitStatusRowMutation !== false
     )
+
     if (hadStatus || persistedAuthority) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()

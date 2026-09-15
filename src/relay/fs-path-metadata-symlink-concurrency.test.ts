@@ -8,12 +8,14 @@ const statCalls = vi.hoisted(() => ({ inFlight: 0, peak: 0, total: 0 }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromisesModule>()
+
   return {
     ...actual,
     stat: async (...args: Parameters<typeof actual.stat>) => {
       statCalls.inFlight += 1
       statCalls.total += 1
       statCalls.peak = Math.max(statCalls.peak, statCalls.inFlight)
+
       try {
         return await actual.stat(...args)
       } finally {
@@ -39,6 +41,7 @@ describe('relay readDir symlink probes', () => {
     const target = join(targetRoot, 'target')
     mkdirSync(target)
     writeFileSync(join(target, 'index.js'), '')
+
     // A pnpm-shaped node_modules: many package symlinks in one directory. Junctions on
     // Windows: plain symlinks need Developer Mode there.
     for (let index = 0; index < 60; index += 1) {

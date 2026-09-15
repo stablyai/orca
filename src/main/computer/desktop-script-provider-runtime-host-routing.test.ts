@@ -17,6 +17,7 @@ const POLICY_STDERR =
 
 function fakeRuntimeHost(request: DesktopScriptRuntimeHost['request']) {
   const dispose = vi.fn()
+
   return { host: { request, dispose } as unknown as DesktopScriptRuntimeHost, dispose }
 }
 
@@ -27,6 +28,7 @@ describe('desktop script provider runtime host routing', () => {
     const request = vi.fn(
       async () => ({ ok: true, capabilities: sampleCapabilities() }) as BridgeResponse
     )
+
     const { host } = fakeRuntimeHost(request)
 
     const client = await createDesktopScriptProviderClient('windows', 'C:\\runtime.ps1', host)
@@ -51,6 +53,7 @@ describe('desktop script provider runtime host routing', () => {
     const request = vi.fn(async () => {
       throw new RuntimeClientError('runtime_host_unavailable', 'could not start')
     })
+
     const { host, dispose } = fakeRuntimeHost(request as never)
     mockBridgeResponse({ ok: true, apps: [{ name: 'Notepad', pid: 42 }] })
     mockBridgeResponse({ ok: true, apps: [{ name: 'Notepad', pid: 42 }] })
@@ -69,12 +72,15 @@ describe('desktop script provider runtime host routing', () => {
 
   it('returns to the runtime host once it recovers', async () => {
     let healthy = false
+
     const request = vi.fn(async () => {
       if (!healthy) {
         throw new RuntimeClientError('runtime_host_unavailable', 'could not start')
       }
+
       return { ok: true, apps: [] } as BridgeResponse
     })
+
     const { host } = fakeRuntimeHost(request)
     mockBridgeResponse({ ok: true, apps: [] })
 

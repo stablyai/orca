@@ -32,6 +32,7 @@ const {
 
 vi.mock('./daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
+
   return {
     ...actual,
     getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock
@@ -40,6 +41,7 @@ vi.mock('./daemon-health', async (importOriginal) => {
 
 vi.mock('./daemon-tcc-attribution', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonTccAttributionModule>()
+
   return {
     ...actual,
     getMacDaemonTccAttributionHealth: getMacDaemonTccAttributionHealthMock
@@ -48,6 +50,7 @@ vi.mock('./daemon-tcc-attribution', async (importOriginal) => {
 
 vi.mock('./daemon-bundle-staleness', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonBundleStalenessModule>()
+
   return {
     ...actual,
     isDaemonStaleForCurrentBundle: isDaemonStaleForCurrentBundleMock
@@ -66,8 +69,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   beforeEach(async () => {
     const harness = await startDaemonAdapterHarness(() => {
       lastSubprocess = createMockSubprocess()
+
       return lastSubprocess
     })
+
     dir = harness.dir
     socketPath = harness.socketPath
     tokenPath = harness.tokenPath
@@ -96,6 +101,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         log: daemonLog,
         spawnSubprocess: () => {
           lastSubprocess = createMockSubprocess()
+
           return lastSubprocess
         }
       })
@@ -104,20 +110,25 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('rejects stale input until createOrAttach remounts the pane onto the new daemon', async () => {
       let respawnServer: DaemonServer | undefined
       let respawnSubprocess: ReturnType<typeof createMockSubprocess> | undefined
+
       const respawn = vi.fn(async () => {
         respawnServer = new DaemonServer({
           socketPath,
           tokenPath,
           spawnSubprocess: () => {
             respawnSubprocess = createMockSubprocess()
+
             return respawnSubprocess
           }
         })
         await respawnServer.start()
       })
+
       const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+
       try {
         const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+
         const internals = healingAdapter as unknown as {
           sessionsAwaitingDaemonRecovery: Set<string>
         }
@@ -150,6 +161,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('requires createOrAttach before writing to a session that survives a socket disconnect', async () => {
       const respawn = vi.fn(async () => {})
       const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+
       try {
         const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
         const client = (healingAdapter as unknown as { client: DaemonClient }).client
@@ -176,6 +188,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       // preempting the connect, the retired endpoint fails as a connect and isDaemonGoneError
       // classifies it, so recovery no longer depends on having witnessed the drop.
       let respawnServer: DaemonServer | undefined
+
       const respawn = vi.fn(async () => {
         respawnServer = new DaemonServer({
           socketPath,
@@ -184,8 +197,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         })
         await respawnServer.start()
       })
+
       const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
       try {
         const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
         const client = (healingAdapter as unknown as { client: DaemonClient }).client
@@ -210,8 +225,10 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const respawn = vi.fn(async () => {
         throw new Error('daemon unavailable')
       })
+
       const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
       try {
         const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
         const client = (healingAdapter as unknown as { client: DaemonClient }).client
@@ -220,6 +237,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
         expect(() => healingAdapter.write(id, 'a')).toThrow(PtyWriteUnavailableError)
         await waitFor(() => respawn.mock.calls.length === 1)
+
         for (let i = 0; i < 100; i += 1) {
           expect(() => healingAdapter.write(id, 'b')).toThrow(PtyWriteUnavailableError)
         }
@@ -233,6 +251,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('joins a request-path respawn instead of forking a second daemon', async () => {
       let releaseRespawn!: () => void
+
       const respawn = vi.fn(async () => {
         await new Promise<void>((resolve) => {
           releaseRespawn = resolve
@@ -240,7 +259,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         restartServerOnRespawn()
         await server.start()
       })
+
       const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+
       try {
         const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
         const client = (healingAdapter as unknown as { client: DaemonClient }).client
@@ -252,6 +273,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           cols: 80,
           rows: 24
         })
+
         await waitFor(() => releaseRespawn !== undefined)
         expect(() => healingAdapter.write(id, 'queued')).toThrow(PtyWriteUnavailableError)
         releaseRespawn()
@@ -268,7 +290,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         restartServerOnRespawn()
         await server.start()
       })
+
       const idleAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+
       try {
         const client = (idleAdapter as unknown as { client: DaemonClient }).client
         await idleAdapter.listProcesses()
@@ -290,6 +314,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
       const recovered: string[] = []
       healingAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
+
       try {
         const { id: a } = await healingAdapter.spawn({ sessionId: 'pane-a', cols: 80, rows: 24 })
         const { id: b } = await healingAdapter.spawn({ sessionId: 'pane-b', cols: 80, rows: 24 })
@@ -320,6 +345,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const legacyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
       const recovered: string[] = []
       legacyAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
+
       try {
         const { id } = await legacyAdapter.spawn({ sessionId: 'legacy-pane', cols: 80, rows: 24 })
         const client = (legacyAdapter as unknown as { client: DaemonClient }).client
@@ -339,9 +365,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         restartServerOnRespawn()
         await server.start()
       })
+
       const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
       const recovered: string[] = []
       healingAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
+
       try {
         await healingAdapter.spawn({ sessionId: 'pane-a', cols: 80, rows: 24 })
         // A backgrounded session: no pane is mounted for it, so nothing in the
@@ -382,6 +410,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   describe('respawn on daemon death', () => {
     it('respawns the daemon and retries when the socket disappears', async () => {
       let respawnServer: DaemonServer | undefined
+
       const respawnFn = vi.fn(async () => {
         respawnServer = new DaemonServer({
           socketPath,
@@ -428,6 +457,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('treats a hello handshake timeout as daemon-gone and respawns (#8689)', async () => {
       // Why: a wedged daemon accepts the socket but never answers hello; classify as daemon-gone so withDaemonRetry respawns, else every spawn fails forever.
       const realEnsureConnected = DaemonClient.prototype.ensureConnected
+
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockImplementationOnce(async () => {
@@ -437,6 +467,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         .mockImplementation(function (this: DaemonClient) {
           return realEnsureConnected.call(this)
         })
+
       const respawnFn = vi.fn(async () => {})
       const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
 
@@ -453,6 +484,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('coalesces concurrent respawns so only one daemon is forked', async () => {
       let respawnServer: DaemonServer | undefined
+
       const respawnFn = vi.fn(async () => {
         respawnServer = new DaemonServer({
           socketPath,
@@ -475,6 +507,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         respawnAdapter.spawn({ cols: 80, rows: 24 }),
         respawnAdapter.spawn({ cols: 80, rows: 24 })
       ])
+
       expect(r1.id).toBeDefined()
       expect(r2.id).toBeDefined()
       expect(respawnFn).toHaveBeenCalledTimes(1)
@@ -531,6 +564,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('replaces an unhealthy macOS resolver daemon before creating a fresh session when no sessions are active', async () => {
       let respawnServer: DaemonServer | undefined
+
       const respawnFn = vi.fn(async () => {
         await server.shutdown()
         rmSync(socketPath, { force: true })
@@ -541,6 +575,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         })
         await respawnServer.start()
       })
+
       const exits: { id: string; code: number }[] = []
       const respawnAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn: respawnFn })
       respawnAdapter.onExit((payload) => exits.push(payload))
@@ -582,6 +617,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('preserves a stale packaged daemon that still owns live sessions before a new spawn', async () => {
       const respawnFn = vi.fn()
+
       const respawnAdapter = new DaemonPtyAdapter({
         socketPath,
         tokenPath,
@@ -589,6 +625,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         packagedAppVersion: '1.4.178',
         respawn: respawnFn
       })
+
       await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
       isDaemonStaleForCurrentBundleMock.mockResolvedValueOnce(true)
 
@@ -609,6 +646,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('preserves a stale packaged daemon when its live session inventory is unavailable', async () => {
       const respawnFn = vi.fn()
+
       const respawnAdapter = new DaemonPtyAdapter({
         socketPath,
         tokenPath,
@@ -616,14 +654,17 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         packagedAppVersion: '1.4.178',
         respawn: respawnFn
       })
+
       const internals = respawnAdapter as unknown as {
         client: { request: (type: string, payload?: unknown) => Promise<unknown> }
       }
+
       const originalRequest = internals.client.request.bind(internals.client)
       vi.spyOn(internals.client, 'request').mockImplementation((type, payload) => {
         if (type === 'listSessions') {
           return Promise.reject(new Error('inventory unavailable'))
         }
+
         return originalRequest(type, payload)
       })
       isDaemonStaleForCurrentBundleMock.mockResolvedValueOnce(true)
@@ -638,6 +679,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('coalesces stale-bundle retirement before concurrent fresh sessions', async () => {
       let respawnServer: DaemonServer | undefined
+
       const respawnFn = vi.fn(async () => {
         await server.shutdown()
         rmSync(socketPath, { force: true })
@@ -648,6 +690,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         })
         await respawnServer.start()
       })
+
       const respawnAdapter = new DaemonPtyAdapter({
         socketPath,
         tokenPath,
@@ -655,6 +698,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         packagedAppVersion: '1.4.178',
         respawn: respawnFn
       })
+
       isDaemonStaleForCurrentBundleMock.mockResolvedValue(true)
 
       const replacements = await Promise.all([
@@ -672,12 +716,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('preserves a severed-TCC daemon that still owns live sessions before a new spawn', async () => {
       const respawnFn = vi.fn()
+
       const respawnAdapter = new DaemonPtyAdapter({
         socketPath,
         tokenPath,
         runtimeDir: dir,
         respawn: respawnFn
       })
+
       // One live session in this adapter — the zero-session gate must fail closed.
       await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
       getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
@@ -698,20 +744,24 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('preserves a severed-TCC daemon when its live session inventory is unavailable', async () => {
       const respawnFn = vi.fn()
+
       const respawnAdapter = new DaemonPtyAdapter({
         socketPath,
         tokenPath,
         runtimeDir: dir,
         respawn: respawnFn
       })
+
       const internals = respawnAdapter as unknown as {
         client: { request: (type: string, payload?: unknown) => Promise<unknown> }
       }
+
       const originalRequest = internals.client.request.bind(internals.client)
       vi.spyOn(internals.client, 'request').mockImplementation((type, payload) => {
         if (type === 'listSessions') {
           return Promise.reject(new Error('inventory unavailable'))
         }
+
         return originalRequest(type, payload)
       })
       getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
@@ -726,6 +776,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('replaces a severed-TCC daemon before a fresh session when no sessions are active', async () => {
       let respawnServer: DaemonServer | undefined
+
       const respawnFn = vi.fn(async () => {
         await server.shutdown()
         rmSync(socketPath, { force: true })
@@ -736,12 +787,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         })
         await respawnServer.start()
       })
+
       const respawnAdapter = new DaemonPtyAdapter({
         socketPath,
         tokenPath,
         runtimeDir: dir,
         respawn: respawnFn
       })
+
       getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
 
       const replacement = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })

@@ -10,8 +10,11 @@ import {
 afterEach(() => resetWslLinkedWorktreeGitRoutingForTests())
 
 const CWD = String.raw`C:\repo`
+
 const fileMarker = { isDirectory: () => false, isFile: () => true }
+
 const directoryMarker = { isDirectory: () => true, isFile: () => false }
+
 const hostGitdir = 'gitdir: C:/main/.git/worktrees/linked\n'
 
 function prepare(fileSystem: WslLinkedWorktreeRoutingFileSystem): Promise<boolean> {
@@ -38,15 +41,18 @@ describe('invalidateWslLinkedWorktreeGitRouting', () => {
   it('clears the retry backoff so a marker that just appeared is probed immediately', async () => {
     const currentTime = 1_000
     let markerExists = false
+
     const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
       stat: vi.fn(async () => {
         if (!markerExists) {
           throw Object.assign(new Error('device unavailable'), { code: 'EIO' })
         }
+
         return fileMarker
       }),
       readFile: vi.fn(async () => hostGitdir)
     }
+
     const probe = (): Promise<boolean> =>
       prepareWslLinkedWorktreeGitRouting(CWD, 'Ubuntu', {
         platform: 'win32',
@@ -69,10 +75,12 @@ describe('invalidateWslLinkedWorktreeGitRouting', () => {
   it('drops routes cached for paths inside the mutated worktree', async () => {
     const submodule = String.raw`C:\repo\sub`
     const sibling = String.raw`C:\repo-other`
+
     const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
       stat: vi.fn(async () => fileMarker),
       readFile: vi.fn(async () => hostGitdir)
     }
+
     const probe = (cwd: string): Promise<boolean> =>
       prepareWslLinkedWorktreeGitRouting(cwd, 'Ubuntu', { platform: 'win32', fileSystem })
 
@@ -91,9 +99,11 @@ describe('invalidateWslLinkedWorktreeGitRouting', () => {
     // callers waiting on them with no cached route, which `resolveGitCommand` reads
     // as "route through wsl.exe git" — the misroute this module exists to prevent.
     let releaseMarker: ((marker: typeof fileMarker) => void) | undefined
+
     const inFlight = new Promise<typeof fileMarker>((resolve) => {
       releaseMarker = resolve
     })
+
     const fileSystem: WslLinkedWorktreeRoutingFileSystem = {
       stat: vi.fn<WslLinkedWorktreeRoutingFileSystem['stat']>().mockReturnValueOnce(inFlight),
       readFile: vi.fn(async () => hostGitdir)

@@ -40,18 +40,23 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
     async (event, args: SearchOptions & { connectionId?: string }): Promise<SearchResult> => {
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
+
         return provider.search(args)
       }
+
       const rootPath = await resolveAuthorizedPath(args.rootPath, store)
+
       const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
         store,
         args.rootPath,
         rootPath
       )
+
       const maxResults = Math.max(
         1,
         Math.min(args.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
       )
+
       const searchKey = `${event.sender.id}:${rootPath}`
       // Why: WSL's bash exit 127 is ambiguous with a real executable returning 127.
       const wslDistroForOutput = parseWslPath(rootPath)?.distro ?? localGitOptions.wslDistro
@@ -64,6 +69,7 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
         const rgArgs = buildRgArgs(args.query, rootPath, args)
         // Why: kill the prior rg so it stops parsing thousands of matches on the main thread (the large-repo freeze) after the UI moved on.
         const previousChild = activeTextSearches.get(searchKey)
+
         if (previousChild) {
           killSpawnedRipgrepProcess(previousChild)
         }
@@ -85,10 +91,13 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
           if (resolved) {
             return
           }
+
           resolved = true
+
           if (activeTextSearches.get(searchKey) === child) {
             activeTextSearches.delete(searchKey)
           }
+
           lines.clear()
           clearTimeout(killTimeout)
           // Why: child.kill() is advisory; detach our closures so repeated searches don't retain old scans if rg ignores it.
@@ -96,19 +105,25 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
           child?.stderr?.off('data', handleStderrData)
           child?.off('error', handleError)
           child?.off('close', handleClose)
+
           if (child) {
             absorbPendingRipgrepSpawnError(child, {
               errorObserved: processErrorObserved,
               unavailableExitObserved
             })
           }
+
           resolvePromise(result)
         }
+
         const resolveOnce = (): void => finish(finalize(acc))
+
         const resolveWithoutRipgrep = (): void =>
           finish(searchWithGitGrep(rootPath, args, maxResults, localGitOptions))
+
         const processLine = (line: string): void => {
           const verdict = ingestRgJsonLine(line, rootPath, acc, maxResults, transformAbsPath)
+
           if (verdict === 'stop' && child) {
             killSpawnedRipgrepProcess(child)
           }
@@ -119,23 +134,30 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
           ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
           stdio: ['ignore', 'pipe', 'pipe']
         })
+
         child = nextChild
         activeTextSearches.set(searchKey, nextChild)
 
         const handleStdoutData = (chunk: string): void => {
           lines.push(chunk, processLine)
         }
+
         const handleStderrData = (): void => {
           // Drain stderr so rg cannot block on a full pipe.
         }
+
         const handleError = (): void => {
           processErrorObserved = true
+
           if (child && isRipgrepUnavailableExit(child, null, null)) {
             resolveWithoutRipgrep()
+
             return
           }
+
           resolveOnce()
         }
+
         const handleClose = (code: number | null, signal: NodeJS.Signals | null): void => {
           if (
             child &&
@@ -145,12 +167,16 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
           ) {
             unavailableExitObserved = true
             resolveWithoutRipgrep()
+
             return
           }
+
           const tail = lines.finish()
+
           if (tail !== null) {
             processLine(tail)
           }
+
           resolveOnce()
         }
 
@@ -163,9 +189,11 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
         // Why: timeout kills the child mid-scan; mark truncated so the UI shows incomplete results.
         killTimeout = setTimeout(() => {
           acc.truncated = true
+
           if (child) {
             killSpawnedRipgrepProcess(child)
           }
+
           resolveOnce()
         }, SEARCH_TIMEOUT_MS)
       })
@@ -187,13 +215,16 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
       }
     ): Promise<string[]> => {
       const controller = listFilesCancellations.begin(event, args.requestToken)
+
       try {
         if (args.connectionId) {
           const provider = getSshFilesystemProvider(args.connectionId)
+
           // Why: no provider (cold start / disconnected) → return [] so quick-open shows "No matching files" instead of an error.
           if (!provider) {
             return []
           }
+
           // Why: forward excludePaths or nested linked worktrees get double-scanned over SSH, causing timeout-induced partial results.
           if (
             args.searchQuery !== undefined &&
@@ -205,15 +236,19 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
               maxResults: QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT,
               signal: controller?.signal
             })
+
             const ranker = new QuickOpenPathRanker(
               args.searchQuery,
               args.maxResults ?? QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT
             )
+
             for (const file of legacyFiles) {
               ranker.consider(file)
             }
+
             return ranker.result().paths
           }
+
           return await provider.listFiles(args.rootPath, {
             excludePaths: args.excludePaths,
             ...(args.maxResults === undefined ? {} : { maxResults: args.maxResults }),
@@ -221,6 +256,7 @@ export function registerFilesystemSearchHandlers(context: FilesystemHandlerConte
             signal: controller?.signal
           })
         }
+
         return await listQuickOpenFiles(
           args.rootPath,
           store,

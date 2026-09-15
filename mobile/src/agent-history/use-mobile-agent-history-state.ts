@@ -48,6 +48,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
 
   useEffect(() => {
     mountedRef.current = true
+
     return () => {
       mountedRef.current = false
     }
@@ -57,7 +58,9 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
     () => worktrees.find((worktree) => worktree.worktreeId === worktreeId) ?? null,
     [worktrees, worktreeId]
   )
+
   const activeWorktreePath = activeWorktree?.path ?? null
+
   // Why: the host union only widens, so the screen narrows by these cwd
   // path-prefixes for the current scope (empty for 'all'). Same derivation the
   // RPC scopePaths use, reused client-side for the actual narrowing.
@@ -81,24 +84,31 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
             prev.kind === 'ready' ? prev : { kind: 'error', message: 'Waiting for host…' }
           )
         }
+
         return
       }
 
       setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
+
       try {
         // Gate on the capability so older hosts lacking the method are detected
         // and we never call a missing RPC.
         const statusResponse = await client.sendRequest('status.get')
+
         if (!isCurrent()) {
           return
         }
+
         if (!statusResponse.ok) {
           throw new Error(statusResponse.error?.message || 'Unable to reach host')
         }
+
         const status = (statusResponse as RpcSuccess).result as StatusWithCapabilities
         setHostStatusResult(status)
+
         if (!status.capabilities?.includes(MOBILE_AI_VAULT_CAPABILITY)) {
           setScreenState({ kind: 'unsupported' })
+
           return
         }
 
@@ -110,27 +120,33 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
           if (isCurrent()) {
             setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
           }
+
           return
         }
 
         const scopePaths = deriveMobileAiVaultScopePaths(options.scope, activeWorktree, worktrees)
+
         const response = await client.sendRequest('aiVault.listSessions', {
           limit: MOBILE_AI_VAULT_SESSION_LIMIT,
           force: options.force,
           scopePaths
         })
+
         if (!isCurrent()) {
           return
         }
+
         if (!response.ok) {
           throw new Error(response.error?.message || 'Unable to load agent sessions')
         }
+
         const result = (response as RpcSuccess).result as AiVaultListResult
         setScreenState({ kind: 'ready', sessions: result.sessions, issues: result.issues })
       } catch (err) {
         if (!isCurrent()) {
           return
         }
+
         const message = err instanceof Error ? err.message : 'Unable to load agent sessions'
         setHostStatusResult(null)
         setScreenState({ kind: 'error', message })
@@ -156,6 +172,7 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true)
+
     try {
       // Why: pull-to-refresh bypasses the host TTL (force:true) and joins any
       // active inflight scan; otherwise a refresh within 15s shows no change.
@@ -170,8 +187,10 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
   const retry = useCallback(() => {
     if (connState !== 'connected' && hostId) {
       void forceReconnect(hostId)
+
       return
     }
+
     void loadSessions({ scope, force: false })
   }, [connState, forceReconnect, hostId, loadSessions, scope])
 

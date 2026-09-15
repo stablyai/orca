@@ -74,6 +74,7 @@ export function computeOrcadBuildHash(entryPath = process.argv[1]): string {
   if (!entryPath) {
     return 'unknown'
   }
+
   try {
     return createHash('sha256').update(readFileSync(entryPath)).digest('hex').slice(0, 16)
   } catch {
@@ -98,16 +99,20 @@ export async function runTerminalDaemonSelfTest(
   // green verdict there covers the handshake only. Say so instead of overclaiming.
   const coverage: PtySelfTestCoverage = process.platform === 'win32' ? 'handshake' : 'pty-spawn'
   const facts = getDaemonEndpointFacts()
+
   if (!facts) {
     return { ok: false, coverage, verdict: 'no-daemon', durationMs: now() - startedAt }
   }
+
   const verdict = await checkDaemonHealth(facts.socketPath, facts.tokenPath)
+
   return { ok: verdict === 'healthy', coverage, verdict, durationMs: now() - startedAt }
 }
 
 export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealth> {
   const facts = getDaemonEndpointFacts()
   const selfTest = await runTerminalDaemonSelfTest()
+
   if (!facts) {
     return {
       state: 'absent',
@@ -119,8 +124,10 @@ export async function collectTerminalDaemonHealth(): Promise<TerminalDaemonHealt
       selfTest
     }
   }
+
   const record = readDaemonPidRecord()
   const ownsFreshSessions = daemonOwnsFreshPersistentPtys()
+
   return {
     // Why `degraded` and not `absent` on a failed self-test: a daemon that answered its
     // handshake but failed the spawn probe is still holding live sessions. Reporting it gone

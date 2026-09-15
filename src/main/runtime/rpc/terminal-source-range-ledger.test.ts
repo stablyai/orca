@@ -28,12 +28,14 @@ function range(overrides: Partial<TerminalOutputSourceRange> = {}): TerminalOutp
 describe('TerminalSourceRangeLedger', () => {
   it('advances partial byte credit without settling its covering source frame', () => {
     const release = vi.fn()
+
     const ledger = new TerminalSourceRangeLedger('generation-1', {
       canReserve: () => true,
       reserve: () => true,
       release,
       close: () => {}
     })
+
     ledger.accept(100, 100, [
       range({
         sourceEndSu: 100,
@@ -296,9 +298,11 @@ describe('TerminalSourceRangeLedger', () => {
     const ledger = registry.open('generation-1')!
     const prepared = ledger.prepareAccept(5, 4, [range()])
     expect(prepared.status).toBe('ready')
+
     if (prepared.status !== 'ready') {
       throw new Error('expected source range admission')
     }
+
     expect(registry.getDebugSnapshot().retainedBytes).toBe(5)
 
     prepared.admission.rollback()
@@ -314,9 +318,11 @@ describe('TerminalSourceRangeLedger', () => {
   it('bounds aggregate retained mapping bytes and releases them on ACK and close', () => {
     const registry = new TerminalSourceRangeRegistry()
     const ledgers = Array.from({ length: 9 }, (_, index) => registry.open(`stream-${index}`)!)
+
     for (const ledger of ledgers.slice(0, 8)) {
       expect(ledger.accept(TERMINAL_SOURCE_RANGE_STREAM_MAX_BYTES, 0, [])).not.toBeNull()
     }
+
     expect(ledgers[8]!.canAccept(1)).toBe(false)
     expect(registry.getDebugSnapshot().retainedBytes).toBe(16 * 1024 * 1024)
 
@@ -324,9 +330,11 @@ describe('TerminalSourceRangeLedger', () => {
       'accepted'
     )
     expect(ledgers[8]!.accept(1, 0, [])).not.toBeNull()
+
     for (const ledger of ledgers) {
       ledger.close()
     }
+
     expect(registry.getDebugSnapshot()).toEqual({ streams: 0, retainedBytes: 0 })
   })
 })

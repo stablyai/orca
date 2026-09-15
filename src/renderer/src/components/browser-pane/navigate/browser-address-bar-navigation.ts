@@ -20,18 +20,22 @@ export function resolveBrowserAddressBarSubmission(
   options?: { allowFileUrls?: boolean }
 ): BrowserAddressBarSubmission {
   const { browserDefaultSearchEngine, browserKagiSessionLink } = useAppStore.getState()
+
   // Why: the search-engine argument opts into search fallback; without it typed
   // queries parse as hosts ("google maps" -> https://google%20maps/).
   const url = normalizeBrowserNavigationUrl(rawValue, browserDefaultSearchEngine, {
     kagiSessionLink: browserKagiSessionLink
   })
+
   // Why: client-hosted guests refuse file: by design (a remote page must not probe
   // this machine's disk). Saying so beats the blank tab that refusal used to produce.
   const fileUrlUnsupported =
     options?.allowFileUrls === false && Boolean(url) && url!.startsWith('file:')
+
   if (url && !fileUrlUnsupported) {
     return { status: 'navigate', url }
   }
+
   return {
     status: 'invalid',
     loadError: {

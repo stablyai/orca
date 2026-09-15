@@ -25,11 +25,13 @@ type CapturingSink = TracerSink & { records: unknown[]; flushMock: ReturnType<ty
 
 /** Keeps tests off the real Crashpad directory; minidump pairing has its own suite. */
 const noMinidump = async () => null
+
 const attachDetails = async () => null
 
 function capturingSink(): CapturingSink {
   const records: unknown[] = []
   const flushMock = vi.fn()
+
   return {
     records,
     flushMock,
@@ -154,6 +156,7 @@ describe('recordProcessGoneCrash', () => {
 
   it('keeps suppressed renderer evidence scoped to its renderer', () => {
     const dedupe = new ProcessGoneDedupe()
+
     const suppressed = (webContentsId: number) =>
       event({ reason: 'killed', exitCode: 1, expectedTeardown: 'renderer-reload', webContentsId })
 
@@ -171,6 +174,7 @@ describe('recordProcessGoneCrash', () => {
   it('coalesces a recoverable-service crash loop instead of flushing every event', () => {
     const record = vi.fn()
     const dedupe = new ProcessGoneDedupe()
+
     const networkServiceCrash = event({
       source: 'child',
       processType: 'Utility',
@@ -222,6 +226,7 @@ describe('recordProcessGoneCrash', () => {
   it('reports how many repeats a coalesced suppression stands for', () => {
     vi.useFakeTimers()
     const dedupe = new ProcessGoneDedupe()
+
     const utilityCrash = event({
       source: 'child',
       processType: 'Utility',
@@ -232,6 +237,7 @@ describe('recordProcessGoneCrash', () => {
     for (let i = 0; i < 700; i++) {
       recordProcessGoneCrash({ record: vi.fn() } as never, utilityCrash, dedupe)
     }
+
     vi.advanceTimersByTime(30_000)
     recordProcessGoneCrash({ record: vi.fn() } as never, utilityCrash, dedupe)
 
@@ -256,6 +262,7 @@ describe('recordProcessGoneCrash', () => {
 
   it('keeps suppressions with different exit codes separate', () => {
     const dedupe = new ProcessGoneDedupe()
+
     const utilityCrash = (exitCode: number) =>
       event({
         source: 'child',
@@ -277,6 +284,7 @@ describe('recordProcessGoneCrash', () => {
 
   it('never lets one recoverable service suppress another service evidence', () => {
     const dedupe = new ProcessGoneDedupe()
+
     const utilityCrash = (serviceName: string) =>
       event({
         source: 'child',
@@ -325,8 +333,10 @@ describe('recordProcessGoneCrash', () => {
       new ProcessGoneDedupe()
     )
     await vi.waitFor(() => expect(utilityRecord).toHaveBeenCalledOnce())
+
     const utilityDetails = (utilityRecord.mock.calls[0][0] as { details: Record<string, unknown> })
       .details
+
     expect(utilityDetails.processMetricsUtilityCount).toBe(1)
     expect(utilityDetails.processMetricsCrashedProcessAbsent).toBeUndefined()
   })
@@ -427,6 +437,7 @@ describe('recordProcessGoneCrash', () => {
       new Error('EPERM at C:\\Users\\alice\\AppData\\Roaming\\Orca\\crash-reports.json'),
       { code: 'EPERM' }
     )
+
     const record = vi.fn().mockRejectedValue(persistError)
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
@@ -486,6 +497,7 @@ describe('recordProcessGoneCrash', () => {
       .fn()
       .mockRejectedValueOnce(new Error('disk unavailable'))
       .mockResolvedValueOnce({ id: 'report-2' })
+
     const dedupe = new ProcessGoneDedupe()
     vi.spyOn(console, 'error').mockImplementation(() => {})
 
@@ -503,6 +515,7 @@ describe('recordProcessGoneCrash', () => {
   function withStubbedPlatform(platform: NodeJS.Platform, run: () => void): void {
     const original = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
     try {
       run()
     } finally {
@@ -567,6 +580,7 @@ describe('recordProcessGoneCrash', () => {
 
     await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(2))
     expect(sink.records).toHaveLength(2)
+
     for (const span of sink.records) {
       expect(span).toEqual(
         expect.objectContaining({
@@ -691,6 +705,7 @@ describe('minidump signature attachment', () => {
   it('sanitizes dump annotations before writing the diagnostic span', async () => {
     const record = vi.fn().mockResolvedValue({ id: 'report-1' })
     const attach = vi.fn().mockResolvedValue(null)
+
     const captured = {
       ...capturedRendererCheck,
       signature: {

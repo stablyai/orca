@@ -6,6 +6,7 @@ import type { AppState } from '../store/types'
 describe('buildMobileSessionTabSnapshots', () => {
   it('does not publish state for a removed folder workspace', () => {
     const staleFolderKey = 'folder:removed-folder'
+
     const state = makeState({
       folderWorkspaces: [],
       tabsByWorktree: {
@@ -19,6 +20,7 @@ describe('buildMobileSessionTabSnapshots', () => {
   it('publishes state for a live folder workspace', () => {
     const folderWorkspaceId = 'live-folder'
     const folderKey = `folder:${folderWorkspaceId}`
+
     const state = makeState({
       folderWorkspaces: [{ id: folderWorkspaceId } as AppState['folderWorkspaces'][number]],
       tabsByWorktree: {
@@ -34,12 +36,14 @@ describe('buildMobileSessionTabSnapshots', () => {
   it('evicts a removed folder workspace from the snapshot cache', () => {
     const folderWorkspaceId = 'cache-eviction-folder'
     const folderKey = `folder:${folderWorkspaceId}`
+
     const liveState = makeState({
       folderWorkspaces: [{ id: folderWorkspaceId } as AppState['folderWorkspaces'][number]],
       tabsByWorktree: {
         [folderKey]: [{ id: 'term-1', title: 'Terminal 1' }]
       } as unknown as AppState['tabsByWorktree']
     })
+
     const removedState = makeState({
       folderWorkspaces: [],
       tabsByWorktree: liveState.tabsByWorktree
@@ -58,13 +62,16 @@ describe('buildMobileSessionTabSnapshots', () => {
       instanceId: 'old-instance',
       repoId: 'repo-1'
     }
+
     const base = makeState({
       worktreesByRepo: { 'repo-1': [worktree] } as unknown as AppState['worktreesByRepo'],
       tabsByWorktree: {
         'wt-1': [{ id: 'term-1', title: 'Terminal 1' }]
       } as unknown as AppState['tabsByWorktree']
     })
+
     const initial = buildMobileSessionTabSnapshots(base)[0]!
+
     const recreated = {
       ...base,
       worktreesByRepo: {
@@ -105,6 +112,7 @@ describe('buildMobileSessionTabSnapshots', () => {
 
   it('publishes browser and editor color + pin state from unified tabs', () => {
     const fileId = '/repo/README.md'
+
     const state = makeState({
       activeGroupIdByWorktree: { 'wt-1': 'group-1' },
       groupsByWorktree: {

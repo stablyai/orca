@@ -29,6 +29,7 @@ import {
 } from './ephemeral-vm-runtimes'
 
 const EPHEMERAL_VM_RUNTIMES_FILE = 'orca-ephemeral-vm-runtimes.json'
+
 export const MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES = 1024 * 1024
 
 export type EphemeralVmRuntimeStoreErrorCode = 'invalid_argument' | 'runtime_error'
@@ -58,6 +59,7 @@ export function upsertEphemeralVmRuntime(
   const parsed = EphemeralVmRuntimeRecordSchema.parse(record)
   const loaded = readEphemeralVmRuntimeStore(userDataPath)
   const previous = loaded.store.runtimes.find((entry) => entry.id === parsed.id)
+
   if (
     previous &&
     featureIdentity(previous) === featureIdentity(parsed) &&
@@ -68,6 +70,7 @@ export function upsertEphemeralVmRuntime(
       `Cannot change compatibility features for ephemeral VM runtime: ${parsed.id}`
     )
   }
+
   writeEphemeralVmRuntimeStore(
     userDataPath,
     {
@@ -78,6 +81,7 @@ export function upsertEphemeralVmRuntime(
     },
     loaded.features
   )
+
   return parsed
 }
 
@@ -88,6 +92,7 @@ export function upsertEphemeralVmRuntimeRollbackRecovery(
   const parsed = EphemeralVmRuntimeRecordSchema.parse(record)
   const loaded = readEphemeralVmRuntimeStore(userDataPath)
   const path = getEphemeralVmRuntimeStorePath(userDataPath)
+
   try {
     writeSecureJsonFileWithinLimit(
       path,
@@ -107,6 +112,7 @@ export function upsertEphemeralVmRuntimeRollbackRecovery(
         `Could not write Orca ephemeral VM runtimes at ${path}; the store exceeds its durable capacity.`
       )
     }
+
     throw error
   }
 }
@@ -130,12 +136,14 @@ export function updateEphemeralVmRuntimeStatus(
 ): EphemeralVmRuntimeRecord {
   const loaded = readEphemeralVmRuntimeStore(userDataPath)
   const existing = loaded.store.runtimes.find((entry) => entry.id === id)
+
   if (!existing) {
     throw new EphemeralVmRuntimeStoreError(
       'invalid_argument',
       `Unknown ephemeral VM runtime: ${id}`
     )
   }
+
   const next = EphemeralVmRuntimeRecordSchema.parse({
     ...existing,
     ...(args.status ? { status: args.status } : {}),
@@ -165,6 +173,7 @@ export function updateEphemeralVmRuntimeStatus(
     ...(args.recipeResult ? { recipeResult: args.recipeResult } : {}),
     updatedAt: args.updatedAt ?? Date.now()
   })
+
   writeEphemeralVmRuntimeStore(
     userDataPath,
     {
@@ -175,6 +184,7 @@ export function updateEphemeralVmRuntimeStatus(
     },
     loaded.features
   )
+
   return next
 }
 
@@ -184,12 +194,14 @@ export function removeEphemeralVmRuntime(
 ): EphemeralVmRuntimeRecord {
   const loaded = readEphemeralVmRuntimeStore(userDataPath)
   const existing = loaded.store.runtimes.find((entry) => entry.id === id)
+
   if (!existing) {
     throw new EphemeralVmRuntimeStoreError(
       'invalid_argument',
       `Unknown ephemeral VM runtime: ${id}`
     )
   }
+
   writeEphemeralVmRuntimeStore(
     userDataPath,
     {
@@ -198,6 +210,7 @@ export function removeEphemeralVmRuntime(
     },
     loaded.features
   )
+
   return existing
 }
 
@@ -208,27 +221,33 @@ type LoadedEphemeralVmRuntimeStore = {
 
 function readEphemeralVmRuntimeStore(userDataPath: string): LoadedEphemeralVmRuntimeStore {
   const path = getEphemeralVmRuntimeStorePath(userDataPath)
+
   if (!existsSync(path)) {
     return {
       store: { version: 1, runtimes: [] },
       features: readEphemeralVmRuntimeFeatureStore(userDataPath)
     }
   }
+
   try {
     hardenExistingSecureFile(path)
+
     const persisted = JSON.parse(
       readNodeFileSyncWithinLimit(path, MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES).buffer.toString(
         'utf8'
       )
     )
+
     const parsed = EphemeralVmRuntimeStoreSchema.parse(persisted)
     const features = readEphemeralVmRuntimeFeatureStore(userDataPath)
+
     const store: EphemeralVmRuntimeStore = {
       version: 1,
       runtimes: restoreRuntimeFeatureList(parsed.runtimes, features.features).sort(
         compareRuntimeRecords
       )
     }
+
     if (features.writable && !RollbackEphemeralVmRuntimeStoreSchema.safeParse(persisted).success) {
       try {
         writeEphemeralVmRuntimeStore(userDataPath, store, features)
@@ -236,6 +255,7 @@ function readEphemeralVmRuntimeStore(userDataPath: string): LoadedEphemeralVmRun
         // Why: a failed migration must not block cleanup through the still-readable current shape.
       }
     }
+
     return { store, features }
   } catch {
     throw new EphemeralVmRuntimeStoreError(
@@ -251,15 +271,19 @@ function writeEphemeralVmRuntimeStore(
   features: EphemeralVmRuntimeFeatureStoreSnapshot
 ): void {
   const path = getEphemeralVmRuntimeStorePath(userDataPath)
+
   try {
     const parsed = EphemeralVmRuntimeStoreSchema.parse(store)
+
     const requiredFeatures = mergeRuntimeFeatures(
       [],
       parsed.runtimes.flatMap((entry) => {
         const feature = featureEntryFromRuntime(entry)
+
         return feature ? [feature] : []
       })
     )
+
     const preparedFeatures = mergeRuntimeFeatures(features.features, requiredFeatures)
     writeSecureJsonFileWithinLimit(
       path,
@@ -270,15 +294,18 @@ function writeEphemeralVmRuntimeStore(
       MAX_EPHEMERAL_VM_RUNTIME_STORE_FILE_BYTES,
       { durable: preparedFeatures.length > 0 || features.features.length > 0 }
     )
+
     if (!features.writable && requiredFeatures.length > 0) {
       throw new EphemeralVmRuntimeStoreError(
         'runtime_error',
         'Could not preserve ephemeral VM runtime compatibility metadata.'
       )
     }
+
     if (features.writable && !runtimeFeatureListsEqual(features.features, preparedFeatures)) {
       writeEphemeralVmRuntimeFeatureStore(userDataPath, features, preparedFeatures)
     }
+
     if (features.writable && !runtimeFeatureListsEqual(preparedFeatures, requiredFeatures)) {
       try {
         writeEphemeralVmRuntimeFeatureStore(userDataPath, features, requiredFeatures)
@@ -293,6 +320,7 @@ function writeEphemeralVmRuntimeStore(
         `Could not write Orca ephemeral VM runtimes at ${path}; the store exceeds its durable capacity.`
       )
     }
+
     throw error
   }
 }

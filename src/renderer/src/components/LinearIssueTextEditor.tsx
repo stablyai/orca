@@ -44,18 +44,23 @@ export function LinearIssueTextEditor({
   const mountedRef = useMountedRef()
   const resolvedDraftState = resolveLinearIssueTextDraftState(draftState, issue)
   const issueChanged = draftState.issueId !== issue.id
+
   if (resolvedDraftState !== draftState) {
     // Why: Linear can push updated title/description while another field has
     // unsaved edits; reconcile only untouched drafts before the next paint.
     setDraftState(resolvedDraftState)
+
     if (issueChanged && savingField !== null) {
       setSavingField(null)
     }
+
     lastIssueIdRef.current = issue.id
   }
+
   const titleDraft = resolvedDraftState.title
   const descriptionDraft = resolvedDraftState.description
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
+
   const updateTitleDraft = useCallback(
     (title: string): void => {
       setDraftState((current) => ({
@@ -65,6 +70,7 @@ export function LinearIssueTextEditor({
     },
     [issue]
   )
+
   const updateDescriptionDraft = useCallback(
     (description: string): void => {
       setDraftState((current) => ({
@@ -83,13 +89,16 @@ export function LinearIssueTextEditor({
         issue: { description: issue.description, title: issue.title },
         titleDraft
       })
+
       if (savePlan.kind === 'empty-title') {
         updateTitleDraft(issue.title)
         toast.error(
           translate('auto.components.LinearIssueTextEditor.1e08a1ec80', 'Title is required')
         )
+
         return
       }
+
       if (savePlan.kind === 'unchanged') {
         return
       }
@@ -98,8 +107,10 @@ export function LinearIssueTextEditor({
       setSavingField(field)
       onIssueChange(patch)
       patchLinearIssue(issue.id, patch)
+
       try {
         const result = await linearUpdateIssue(providerSettings, issue.id, patch, issue.workspaceId)
+
         if (!result.ok) {
           throw new Error(result.error)
         }
@@ -108,11 +119,15 @@ export function LinearIssueTextEditor({
           field === 'title'
             ? ({ title: issue.title } as const)
             : ({ description: issue.description ?? '' } as const)
+
         const stillEditingIssue = mountedRef.current && lastIssueIdRef.current === issue.id
+
         if (stillEditingIssue) {
           onIssueChange(revert)
         }
+
         patchLinearIssue(issue.id, revert)
+
         if (stillEditingIssue) {
           if (field === 'title') {
             updateTitleDraft(issue.title)
@@ -120,6 +135,7 @@ export function LinearIssueTextEditor({
             updateDescriptionDraft(issue.description ?? '')
           }
         }
+
         toast.error(
           error instanceof Error
             ? error.message
@@ -156,6 +172,7 @@ export function LinearIssueTextEditor({
       if (!isScreenSubmitShortcut(event)) {
         return
       }
+
       event.preventDefault()
       event.currentTarget.blur()
     },
@@ -175,8 +192,10 @@ export function LinearIssueTextEditor({
       if (event.key === 'Enter') {
         event.preventDefault()
         event.currentTarget.blur()
+
         return
       }
+
       handleDescriptionKeyDown(event)
     },
     [handleDescriptionKeyDown]
@@ -186,6 +205,7 @@ export function LinearIssueTextEditor({
     density === 'page'
       ? 'text-[28px] font-semibold leading-tight'
       : 'text-[15px] font-semibold leading-tight'
+
   return (
     <div className="min-w-0">
       {fields !== 'description' ? (

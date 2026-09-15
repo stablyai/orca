@@ -18,6 +18,7 @@ describe('prepared relay JSON payload framing', () => {
       method: 'pty.data',
       params: { id: 'pty-1', data: 'héllo "𝄞"\\\n\uD800', seq: 42 }
     }
+
     const payload = Buffer.from(JSON.stringify(message), 'utf8')
     const relayPrepared = prepareJsonRpcPayload(message)
     const mainPrepared = mainProtocol.prepareJsonRpcPayload(message)
@@ -43,6 +44,7 @@ describe('prepared relay JSON payload framing', () => {
       method: 'x',
       params: { data: '' }
     }
+
     const overhead = Buffer.byteLength(JSON.stringify(base))
     const exact = { ...base, params: { data: 'a'.repeat(MAX_MESSAGE_SIZE - overhead) } }
     const oversized = { ...base, params: { data: 'a'.repeat(MAX_MESSAGE_SIZE - overhead + 1) } }

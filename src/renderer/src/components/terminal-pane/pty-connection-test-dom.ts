@@ -10,6 +10,7 @@ export async function withMockedDocumentActiveElement<T>(
     configurable: true,
     value: { activeElement }
   })
+
   try {
     return await run()
   } finally {
@@ -31,6 +32,7 @@ export function configureTerminalFocusMode(pane: MockPane, textarea: HTMLTextAre
 
 export function createKeyboardEventTarget() {
   const handlers = new Set<(event: KeyboardEvent) => void>()
+
   return {
     handlers,
     target: {
@@ -120,20 +122,24 @@ export function createMeasuredElement(args: {
     get: () => args.parentElement?.() ?? null
   })
   stubElementRect(element, args.rect)
+
   return element
 }
 
 export function temporarilySetNavigatorUserAgent(userAgent: string): () => void {
   const originalDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator')
+
   const platform = userAgent.includes('Windows')
     ? 'Win32'
     : userAgent.includes('Macintosh')
       ? 'MacIntel'
       : 'Linux x86_64'
+
   Object.defineProperty(globalThis, 'navigator', {
     configurable: true,
     value: { platform, userAgent }
   })
+
   return () => {
     if (originalDescriptor) {
       Object.defineProperty(globalThis, 'navigator', originalDescriptor)
@@ -147,6 +153,7 @@ export function sendTerminalInputThroughPane(pane: MockPane, data: string): void
   const onDataMock = pane.terminal.onData as unknown as {
     mock: { calls: [[(data: string) => void] | []] }
   }
+
   const terminalInputHandler = onDataMock.mock.calls[0]?.[0]
   expect(terminalInputHandler).toBeTypeOf('function')
   terminalInputHandler?.(data)

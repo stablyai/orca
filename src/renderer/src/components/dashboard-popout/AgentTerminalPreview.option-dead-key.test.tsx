@@ -9,6 +9,7 @@ type PreviewTerminal = {
 }
 
 const terminalHarness = vi.hoisted(() => ({ instances: [] as PreviewTerminal[] }))
+
 const storeState = vi.hoisted(() => ({
   settings: null as { terminalMacOptionAsAlt?: 'true' | 'false' | 'left' | 'right' } | null,
   keybindings: {} as Record<string, string[]>
@@ -47,30 +48,39 @@ vi.mock('@xterm/xterm', () => ({
     }
   }
 }))
+
 vi.mock(import('@/lib/pane-manager/pane-terminal-options'), async (importOriginal) => ({
   ...(await importOriginal()),
   buildDefaultTerminalOptions: () => ({})
 }))
+
 vi.mock('@/components/terminal-pane/terminal-user-input-signal', () => ({
   subscribeToTerminalUserInput: () => ({ dispose: vi.fn() })
 }))
+
 vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
+
 vi.mock('@/lib/shortcut-platform', () => ({ getShortcutPlatform: () => 'darwin' }))
+
 vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => ({
   installTerminalImeNativeTextForwarder: () => ({
     claimKeyEvent: () => false,
     dispose: vi.fn()
   })
 }))
+
 vi.mock('@/components/terminal-pane/terminal-ime-composition-tracker', () => ({
   installTerminalImeCompositionTracker: () => ({ isActive: () => false, dispose: vi.fn() })
 }))
+
 vi.mock('@/store', () => {
   const useAppStore = (selector: (state: typeof storeState) => unknown): unknown =>
     selector(storeState)
+
   useAppStore.getState = (): typeof storeState => storeState
+
   return { useAppStore }
 })
 
@@ -119,6 +129,7 @@ describe('AgentTerminalPreview Option dead-key ownership', () => {
     await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
     const terminal = terminalHarness.instances[0]!
     await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
     return terminal
   }
 

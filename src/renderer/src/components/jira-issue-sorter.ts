@@ -4,6 +4,7 @@ import { compareNumericLocaleText } from '@/lib/locale-text-collators'
 export type JiraIssueSortColumn = 'key' | 'title' | 'status' | 'priority' | 'assignee' | 'updated'
 
 export type JiraIssueSortDirection = 'asc' | 'desc'
+
 export type JiraPrioritiesBySite = ReadonlyMap<string, readonly JiraPriority[]>
 
 // Why: Jira instances can use synonymous names for the same standard priority tier.
@@ -29,22 +30,28 @@ export function getJiraPriorityWeight(
   if (!priorityName) {
     return 0
   }
+
   if (jiraPriorities.length > 0) {
     const idx = jiraPriorities.findIndex(
       (p) => p.id === priorityId || p.name.toLowerCase() === priorityName.toLowerCase()
     )
+
     if (idx !== -1) {
       // Why: site schemes have different tier counts, so raw indices are not cross-site comparable.
       if (jiraPriorities.length === 1) {
         return 50
       }
+
       return 1 + ((jiraPriorities.length - 1 - idx) / (jiraPriorities.length - 1)) * 98
     }
   }
+
   const nameKey = priorityName.toLowerCase()
+
   if (nameKey in JIRA_PRIORITY_ORDER) {
     return JIRA_PRIORITY_ORDER[nameKey]
   }
+
   // Why: custom priority IDs are opaque identifiers, not ordering ranks.
   return 50
 }
@@ -56,6 +63,7 @@ export function sortJiraIssues(
   jiraPrioritiesBySite: JiraPrioritiesBySite = new Map()
 ): JiraIssue[] {
   const numericKeys = new Map<JiraIssue, number>()
+
   if (issues.length > 1 && (orderBy === 'priority' || orderBy === 'updated')) {
     for (const issue of issues) {
       numericKeys.set(
@@ -70,8 +78,10 @@ export function sortJiraIssues(
       )
     }
   }
+
   return [...issues].sort((a, b) => {
     let comparison = 0
+
     if (orderBy === 'key') {
       comparison = compareNumericLocaleText(a.key, b.key)
     } else if (orderBy === 'title') {
@@ -87,6 +97,7 @@ export function sortJiraIssues(
     } else if (orderBy === 'updated') {
       comparison = numericKeys.get(a)! - numericKeys.get(b)!
     }
+
     return orderDirection === 'asc' ? comparison : -comparison
   })
 }

@@ -68,27 +68,34 @@ export function useMarkupMode({
 
   const start = useCallback(async () => {
     const context = getCaptureContext()
+
     if (!context) {
       reportError(
         'auto.components.browser-pane.markup.errorUnavailable',
         'Screenshot markup is not available on this page.'
       )
+
       return
     }
+
     const token = (captureTokenRef.current += 1)
     contextRef.current = context
     setState('capturing')
+
     try {
       const image = await captureMarkupBaseImage(context.source)
+
       if (captureTokenRef.current !== token) {
         return
       }
+
       setBaseImage(image)
       setState('drawing')
     } catch {
       if (captureTokenRef.current !== token) {
         return
       }
+
       // Why: a capture failure has no overlay to fall back to, so return to idle
       // (not a stuck 'active' state with no surface and an inert Escape).
       reportError(
@@ -106,10 +113,13 @@ export function useMarkupMode({
   const complete = useCallback(
     async ({ imageElement, shapes }: MarkupCompleteInput) => {
       const context = contextRef.current
+
       if (!context) {
         reset()
+
         return
       }
+
       // Why: invalidate this completion if the user cancels or restarts while
       // onDeliver is pending, so a stale callback can't reset/error the new session.
       const token = captureTokenRef.current
@@ -118,9 +128,11 @@ export function useMarkupMode({
       // cursor) paints before the synchronous composite raster runs — otherwise
       // Copy freezes with no visible feedback. Skip the work if cancelled meanwhile.
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
       if (captureTokenRef.current !== token) {
         return
       }
+
       try {
         const result = await composeMarkupDataUrl({
           image: imageElement,
@@ -134,21 +146,26 @@ export function useMarkupMode({
           maxBytes: CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
           maxPixels: CLIPBOARD_IMAGE_MAX_PIXELS
         })
+
         // Why: re-check before delivering — the async compose is a wide window in
         // which the user can Escape/cancel, and onDeliver writes the clipboard
         // irreversibly. Without this, a cancelled session still overwrites it.
         if (captureTokenRef.current !== token) {
           return
         }
+
         await onDeliver(result)
+
         if (captureTokenRef.current !== token) {
           return
         }
+
         reset()
       } catch {
         if (captureTokenRef.current !== token) {
           return
         }
+
         // Why: the frozen backdrop is still valid, so return to drawing (not a
         // dead-end error state) — the user can retry Copy or Cancel out.
         reportError(

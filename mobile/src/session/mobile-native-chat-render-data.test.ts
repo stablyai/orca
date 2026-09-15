@@ -85,6 +85,7 @@ describe('buildMobileNativeChatTransientData', () => {
     const data = build([], null, [
       { id: 'p1', text: 'look', images: ['file:///a.jpg', 'file:///b.jpg'] }
     ])
+
     const last = data[data.length - 1]
     expect(last.role).toBe('user')
     expect(last.blocks).toEqual([
@@ -112,6 +113,7 @@ describe('buildMobileNativeChatTransientData', () => {
       null,
       []
     )
+
     const merged = data.find((message) => message.role === 'user')
     expect(merged?.blocks).toEqual([
       { type: 'image-ref', path: '/tmp/a.png' },
@@ -143,6 +145,7 @@ describe('buildMobileNativeChatTransientData', () => {
       user('source', '[Image: source: /tmp/a.png]'),
       user('prompt', '[Image #1] look at this')
     ])
+
     const result = buildMobileNativeChatTransientData({
       messages: folded,
       folded,
@@ -284,12 +287,14 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
 
   it('keeps an unmatched echo where it was sent instead of below later turns', () => {
     const folded = [row('m1', 'user', 'earlier'), row('m2', 'assistant', 'on it')]
+
     const { data } = buildMobileNativeChatTransientData({
       messages: folded,
       folded,
       streaming: null,
       pending: [{ id: 'p1', text: 'a mid-turn send', baselineTailMessageId: 'm2' }]
     })
+
     expect(data.map((m) => m.id)).toEqual(['m1', 'm2', 'p1'])
 
     // The agent keeps working. The echo must NOT drift below the new turns.
@@ -298,12 +303,14 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
       row('m3', 'assistant', 'still working'),
       row('m4', 'assistant', 'done')
     ]
+
     const { data: after } = buildMobileNativeChatTransientData({
       messages: later,
       folded: later,
       streaming: null,
       pending: [{ id: 'p1', text: 'a mid-turn send', baselineTailMessageId: 'm2' }]
     })
+
     expect(after.map((m) => m.id)).toEqual(['m1', 'm2', 'p1', 'm3', 'm4'])
   })
 
@@ -313,6 +320,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
       row('m2', 'assistant', 'answering'),
       row('m3', 'assistant', 'newest turn')
     ]
+
     const { data } = buildMobileNativeChatTransientData({
       messages: folded,
       folded,
@@ -322,6 +330,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
         { id: 'p2', text: 'sent against m2', baselineTailMessageId: 'm2' }
       ]
     })
+
     expect(data.map((m) => m.id)).toEqual(['m1', 'p1', 'm2', 'p2', 'm3'])
   })
 
@@ -335,6 +344,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
         { id: 'p2', text: 'second', baselineTailMessageId: 'm1' }
       ]
     })
+
     expect(data.map((m) => m.id)).toEqual(['m1', 'p1', 'p2'])
   })
 
@@ -345,6 +355,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
       streaming: null,
       pending: [{ id: 'p1', text: 'no baseline yet', baselineTailMessageId: null }]
     })
+
     expect(data.map((m) => m.id)).toEqual(['m1', 'p1'])
   })
 
@@ -355,6 +366,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
       streaming: null,
       pending: [{ id: 'p1', text: 'anchored to a folded-away row', baselineTailMessageId: 'gone' }]
     })
+
     expect(data.map((m) => m.id)).toEqual(['m1', 'p1'])
   })
 
@@ -363,6 +375,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
       row('noise', 'user', '<system-reminder>hidden boundary'),
       row('a1', 'assistant', 'arrived later')
     ]
+
     const folded = foldMobileNativeChatMessages(messages)
     expect(folded.map((message) => message.id)).toEqual(['a1'])
 
@@ -374,6 +387,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
         { id: 'p1', text: 'sent after the hidden boundary', baselineTailMessageId: 'noise' }
       ]
     })
+
     expect(data.map((message) => message.id)).toEqual(['p1', 'a1'])
   })
 
@@ -384,6 +398,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
       streaming: 'thinking',
       pending: [{ id: 'p1', text: 'echo', baselineTailMessageId: 'm1' }]
     })
+
     expect(data.map((m) => m.id)).toEqual(['m1', 'p1', 'streaming'])
   })
 
@@ -399,6 +414,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
       },
       row('a2', 'assistant', 'done')
     ]
+
     const folded = foldMobileNativeChatMessages(messages)
     expect(folded.map((message) => message.id)).toEqual(['a1', 'a2'])
 
@@ -408,6 +424,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
       streaming: null,
       pending: [{ id: 'p1', text: 'sent during the tool', baselineTailMessageId: 'tool' }]
     })
+
     expect(data.map((message) => message.id)).toEqual(['a1', 'p1', 'a2'])
   })
 
@@ -418,6 +435,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
       user('prompt', '[Image #1] earlier image'),
       row('a2', 'assistant', 'done')
     ]
+
     const folded = foldMobileNativeChatMessages(messages)
     expect(folded.map((message) => message.id)).toEqual(['a1', 'prompt', 'a2'])
 
@@ -427,6 +445,7 @@ describe('buildMobileNativeChatTransientData anchoring', () => {
       streaming: null,
       pending: [{ id: 'p1', text: 'sent after the image source', baselineTailMessageId: 'source' }]
     })
+
     expect(data.map((message) => message.id)).toEqual(['a1', 'prompt', 'p1', 'a2'])
   })
 })

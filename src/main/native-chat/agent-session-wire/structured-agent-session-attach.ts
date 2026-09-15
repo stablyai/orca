@@ -127,12 +127,15 @@ export function admitAttachOrRefuse(
       }
     }
   }
+
   const fingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',
     sessionId: params.envelope.sessionId,
     fields: attachFingerprintFields(params)
   })
+
   const conflict = agentSessionFingerprintConflict(params.envelope, fingerprint)
+
   return conflict ? { ok: false, refusal: conflict } : { ok: true, fingerprint }
 }
 
@@ -141,6 +144,7 @@ export function journalIdentityFor(
   params: AgentSessionAttachParams
 ): AgentSessionJournalIdentity {
   const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
+
   const providerHandle: AgentSessionProviderHandle =
     head?.handle.provider === 'codex'
       ? { kind: 'codex', threadId: head.handle.threadId }
@@ -151,6 +155,7 @@ export function journalIdentityFor(
             leafUuid: head.handle.leafUuid
           }
         : (params.providerHandle ?? { kind: 'opaque', agent: params.agent, value: 'pending' })
+
   return {
     sessionId: record.sessionId,
     workspaceId: params.location.workspaceId,
@@ -192,9 +197,11 @@ export async function attachJournal(input: {
 }): Promise<AttachedJournal> {
   const identity = journalIdentityFor(input.record, input.params)
   const fence = input.record.lease.runtimeFence
+
   const historyFilePath = input.adapter.historyFilePath
     ? await input.adapter.historyFilePath({ identity })
     : null
+
   const opened = await openAgentSessionJournalWithRecovery({
     identity,
     journalDir: journalDirectoryFor(input.journalRoot, {
@@ -204,10 +211,12 @@ export async function attachJournal(input: {
     fence,
     historyFilePath
   })
+
   try {
     // That await is a WRITE. A failure in it leaves the journal with no caller
     // holding a reference to close it.
     const unconfirmed = await opened.journal.markPendingSubmissionsUnknown(fence)
+
     const settled = await reconcileAgainstProviderHistory({
       adapter: input.adapter,
       identity,
@@ -218,6 +227,7 @@ export async function attachJournal(input: {
         ? { history: input.providerHistoryWindow }
         : {})
     })
+
     return {
       ...opened,
       unconfirmedClientMessageIds: unconfirmed.filter((id) => !settled.includes(id))
@@ -243,10 +253,12 @@ async function reconcileAgainstProviderHistory(input: {
   history?: ProviderHistoryWindow | null
 }): Promise<string[]> {
   let history = input.history
+
   if (history === undefined) {
     if (!input.adapter.providerHistoryWindow) {
       return []
     }
+
     try {
       history = await input.adapter.providerHistoryWindow({
         identity: input.identity,
@@ -256,9 +268,11 @@ async function reconcileAgainstProviderHistory(input: {
       return []
     }
   }
+
   if (!history) {
     return []
   }
+
   return reconcileJournalSubmissionsAgainstHistory({
     journal: input.journal,
     fence: input.fence,
@@ -307,6 +321,7 @@ export function reserveRequestFor(input: {
   now: number
 }): Parameters<AgentSessionRecordStore['reserveOwner']>[0] {
   const { params, authority } = input
+
   return {
     sessionId: input.sessionId,
     location: params.location,
@@ -345,10 +360,13 @@ export function classifyStoreFailure(
   record: AgentSessionRecord | null = null
 ): AgentSessionWireRefusal {
   const rawCode = error instanceof Error ? error.message : String(error)
+
   if (!(AGENT_SESSION_WIRE_REFUSAL_CODES as readonly string[]).includes(rawCode)) {
     throw error
   }
+
   const code = rawCode as AgentSessionWireRefusalCode
+
   return {
     code,
     // Why: a latched session is exactly where a bare store code strands the user.

@@ -14,7 +14,9 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const KEY_LATENCY_SAMPLES = 'abcdefghijklmnop'
+
 const MAX_MEDIAN_KEY_LATENCY_MS = 250
+
 const MAX_WORST_KEY_LATENCY_MS = 1_000
 
 function interactivePromptScript(runId: string): string {
@@ -45,17 +47,21 @@ async function waitForMarkerLatency(
   timeoutMs: number
 ): Promise<number> {
   const start = performance.now()
+
   while (performance.now() - start < timeoutMs) {
     if ((await getTerminalContent(page, 12_000)).includes(marker)) {
       return performance.now() - start
     }
+
     await page.waitForTimeout(5)
   }
+
   throw new Error(`Timed out waiting for terminal marker ${marker}`)
 }
 
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b)
+
   return sorted[Math.floor(sorted.length / 2)] ?? 0
 }
 
@@ -74,6 +80,7 @@ test.describe('Terminal typing latency', () => {
     const scriptPath = path.join(testRepoPath, `.orca-typing-benchmark-${runId}.mjs`)
     writeFileSync(scriptPath, interactivePromptScript(runId))
     let commandSent = false
+
     try {
       await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
       commandSent = true
@@ -81,6 +88,7 @@ test.describe('Terminal typing latency', () => {
       await focusActiveTerminalInput(orcaPage)
 
       const latencies: number[] = []
+
       for (const [index, char] of [...KEY_LATENCY_SAMPLES].entries()) {
         const seq = index + 1
         const marker = `TYPING_KEY_${runId}_${seq}`
@@ -105,6 +113,7 @@ test.describe('Terminal typing latency', () => {
       if (commandSent) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })

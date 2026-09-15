@@ -31,12 +31,15 @@ describe('activity event host ownership', () => {
     const localRepo = makeRepo()
     const remoteRepo = { ...makeRepo(), connectionId: 'builder', displayName: 'Remote repo' }
     const localWorktree = makeWorktree()
+
     const remoteWorktree = {
       ...makeWorktree(),
       hostId: 'ssh:builder' as const,
       displayName: 'Remote worktree'
     }
+
     const tab = makeTab()
+
     const resolveWorktree = vi.fn((_worktreeId, executionHostId) =>
       executionHostId === 'ssh:builder' ? remoteWorktree : localWorktree
     )
@@ -60,19 +63,24 @@ describe('activity event host ownership', () => {
 
   it('uses the mirrored tab host when paired-runtime status is host-local', () => {
     const localRepo = makeRepo()
+
     const runtimeRepo = {
       ...makeRepo(),
       executionHostId: 'runtime:env-1' as const,
       displayName: 'Runtime repo'
     }
+
     const localWorktree = makeWorktree()
+
     const runtimeWorktree = {
       ...makeWorktree(),
       hostId: 'runtime:env-1' as const,
       runtimeOwnerEnvironmentId: 'env-1',
       displayName: 'Runtime worktree'
     }
+
     const tab = makeTab()
+
     const resolveWorktree = vi.fn((_worktreeId, executionHostId) =>
       executionHostId === 'runtime:env-1' ? runtimeWorktree : localWorktree
     )
@@ -119,6 +127,7 @@ describe('activity event host ownership', () => {
       hostId: 'local' as const,
       displayName: 'Docs folder'
     }
+
     const tab = { ...makeTab(), worktreeId: folderWorktree.id }
     const retained = makeRetainedDoneEntry(tab)
     retained.worktreeId = folderWorktree.id
@@ -169,6 +178,7 @@ describe('activity event host ownership', () => {
     })
 
     expect(result.events.length).toBeGreaterThan(0)
+
     for (const event of result.events) {
       expect(event.migrationUnsupportedPtyId).toBe('pty-1')
     }
@@ -176,15 +186,18 @@ describe('activity event host ownership', () => {
 
   it('uses the retained terminal handle to preserve runtime host ownership after teardown', () => {
     const localWorktree = makeWorktree()
+
     const runtimeWorktree = {
       ...makeWorktree(),
       hostId: 'runtime:env-1' as const,
       runtimeOwnerEnvironmentId: 'env-1',
       displayName: 'Runtime worktree'
     }
+
     const tab = { ...makeTab(), ptyId: null }
     const retained = makeRetainedDoneEntry(tab)
     retained.entry = { ...doneEntry(null), terminalHandle: 'remote:env-1@@pty-1' }
+
     const resolveWorktree = vi.fn((_worktreeId, executionHostId) =>
       executionHostId === 'runtime:env-1' ? runtimeWorktree : localWorktree
     )

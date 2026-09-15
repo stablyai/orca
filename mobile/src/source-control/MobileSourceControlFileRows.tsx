@@ -26,15 +26,19 @@ export function makeRenderFileRow(
 > {
   const { busyAction, openingPath, openingBranchPath, openFile, runGitAction, setDiscardTarget } =
     state
+
   return function FileRow({ item }) {
     const rowBusy =
       busyAction === item.stageActionId ||
       busyAction === item.unstageActionId ||
       busyAction === item.discardActionId ||
       openingPath === item.path
+
     const rowDisabled =
       !item.canOpen || busyAction !== null || openingPath !== null || openingBranchPath !== null
+
     const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+
     return (
       <Pressable
         style={({ pressed }) => [
@@ -161,6 +165,7 @@ export function BranchCompareFooter({ state }: { state: FooterState }) {
     openingBranchPath,
     openingPath
   } = state
+
   if (!shouldShowBranchCompareSection) {
     return null
   }
@@ -196,12 +201,15 @@ export function BranchCompareFooter({ state }: { state: FooterState }) {
       ) : (
         branchEntries.map((entry) => {
           const rowBusy = openingBranchPath === entry.path
+
           const rowDisabled =
             !entry.canOpen ||
             busyAction !== null ||
             openingPath !== null ||
             openingBranchPath !== null
+
           const meta = formatMobileBranchEntryMeta(entry)
+
           return (
             <Pressable
               key={`${entry.path}:${entry.oldPath ?? ''}`}

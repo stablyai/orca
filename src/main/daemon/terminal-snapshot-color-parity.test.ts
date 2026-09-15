@@ -19,17 +19,20 @@ type ParityTerminal = ReturnType<typeof createRendererParityTerminal>
 async function restoreSerializedTerminal(source: ParityTerminal): Promise<ParityTerminal> {
   const snapshot = buildParityMainBufferSnapshot(source, 1, { scrollbackRows: 5000 })
   const restored = createRendererParityTerminal({ cols: snapshot.cols, rows: snapshot.rows })
+
   const preamble =
     snapshot.alternateScreen && snapshot.scrollbackAnsi !== undefined
       ? `${SNAPSHOT_REPLAY_PREAMBLE_NORMAL}${snapshot.scrollbackAnsi}${SNAPSHOT_REPLAY_PREAMBLE_ALT}`
       : snapshot.alternateScreen
         ? SNAPSHOT_REPLAY_PREAMBLE_ALT
         : SNAPSHOT_REPLAY_PREAMBLE_NORMAL
+
   await writeChunksToTerminal(restored.terminal, [
     preamble,
     snapshot.data,
     POST_REPLAY_LIVE_SNAPSHOT_RESET_PARITY
   ])
+
   return restored
 }
 
@@ -44,6 +47,7 @@ describe('terminal snapshot color parity', () => {
   it('preserves Codex truecolor backgrounds, BCE rows, and default trailing cells', async () => {
     const source = createRendererParityTerminal({ cols: 24, rows: 6 })
     let restored: ParityTerminal | undefined
+
     try {
       await writeChunksToTerminal(source.terminal, [
         '\x1b[48;2;33;58;43m\x1b[2K\x1b[0m',
@@ -69,12 +73,14 @@ describe('terminal snapshot color parity', () => {
   it('preserves styled scrollback in the normal buffer', async () => {
     const source = createRendererParityTerminal({ cols: 18, rows: 3 })
     let restored: ParityTerminal | undefined
+
     try {
       const lines = Array.from(
         { length: 7 },
         (_, index) =>
           `\x1b[48;2;${33 + index};${58 + index};${43 + index}mline-${index}\x1b[0m${index < 6 ? '\r\n' : ''}`
       )
+
       await writeChunksToTerminal(source.terminal, lines)
       restored = await restoreSerializedTerminal(source)
 
@@ -95,6 +101,7 @@ describe('terminal snapshot color parity', () => {
   it('preserves inverse null backgrounds without materializing wide-wrap padding', async () => {
     const source = createRendererParityTerminal({ cols: 10, rows: 4 })
     let restored: ParityTerminal | undefined
+
     try {
       await writeChunksToTerminal(source.terminal, [`\x1b[7m${'A'.repeat(9)}你\x1b[0m`])
       const sourcePadding = source.terminal.buffer.active.getLine(0)?.getCell(9)
@@ -117,6 +124,7 @@ describe('terminal snapshot color parity', () => {
   it('materializes final-column nulls that do not match the next wrapped glyph', async () => {
     const source = createRendererParityTerminal({ cols: 10, rows: 4 })
     let restored: ParityTerminal | undefined
+
     try {
       await writeChunksToTerminal(source.terminal, ['123456789你\x1b[1;9H\x1b[7m界\x1b[1;9HX'])
       const sourceNull = source.terminal.buffer.active.getLine(0)?.getCell(9)
@@ -146,6 +154,7 @@ describe('terminal snapshot color parity', () => {
   it('suppresses null-cell decorations when materializing an inverse background', async () => {
     const source = createRendererParityTerminal({ cols: 40, rows: 4 })
     let restored: ParityTerminal | undefined
+
     try {
       await writeChunksToTerminal(source.terminal, [
         `\x1b[1;30H你\x1b[H\x1b[7;4;9;53m${'A'.repeat(30)}\x1b[0m\x1b[CZ`
@@ -175,6 +184,7 @@ describe('terminal snapshot color parity', () => {
   it('preserves the normal buffer and colored alternate-screen frame', async () => {
     const source = createRendererParityTerminal({ cols: 24, rows: 5 })
     let restored: ParityTerminal | undefined
+
     try {
       await writeChunksToTerminal(source.terminal, [
         '\x1b[48;2;74;34;29mshell history\x1b[0m\r\nsecond line',

@@ -36,6 +36,7 @@ export function isEvictionExemptTerminalTab(
   if (isEvictionExemptTerminalPty(tab.ptyId, worktreeId)) {
     return true
   }
+
   return resolveParkedTerminalPaneCandidates(tab, useAppStore.getState()).some((pane) =>
     isEvictionExemptTerminalPty(pane.ptyId, worktreeId)
   )
@@ -53,11 +54,13 @@ export function selectEvictionExemptTerminalTabIds(
   tabs: readonly ParkableTerminalTabModel[]
 ): ReadonlySet<string> {
   const exemptTabIds = new Set<string>()
+
   for (const tab of tabs) {
     if (isEvictionExemptTerminalTab(tab, worktreeId)) {
       exemptTabIds.add(tab.id)
     }
   }
+
   return exemptTabIds
 }
 
@@ -78,9 +81,11 @@ export function selectEvictionExemptTerminalTabLayoutKey(
   return tabs
     .map((tab) => {
       const ptyIdsByLeafId = state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}
+
       const leafPtys = Object.entries(ptyIdsByLeafId)
         .map(([leafId, ptyId]) => `${leafId}:${ptyId}`)
         .join(',')
+
       return `${tab.id}=${leafPtys}`
     })
     .join('|')

@@ -23,12 +23,14 @@ const START_FIELD: GitHubProjectField = {
   name: 'Start date',
   dataType: 'DATE'
 }
+
 const TARGET_FIELD: GitHubProjectField = {
   kind: 'field',
   id: 'f_end',
   name: 'Target date',
   dataType: 'DATE'
 }
+
 const TITLE_FIELD: GitHubProjectField = {
   kind: 'field',
   id: 'f_title',
@@ -38,9 +40,11 @@ const TITLE_FIELD: GitHubProjectField = {
 
 function row(id: string, title: string, values: GitHubProjectFieldValue[]): GitHubProjectRow {
   const fieldValuesByFieldId: Record<string, GitHubProjectFieldValue> = {}
+
   for (const value of values) {
     fieldValuesByFieldId[value.fieldId] = value
   }
+
   return {
     id,
     itemType: 'ISSUE',
@@ -104,6 +108,7 @@ describe('ProjectRoadmap', () => {
   it('moves the today marker across local midnight without resetting scroll and cleans up its timer', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 8, 5, 23, 59, 59))
+
     const { unmount } = render(
       <ProjectRoadmap
         table={table(
@@ -113,6 +118,7 @@ describe('ProjectRoadmap', () => {
         fallback={<div>list</div>}
       />
     )
+
     const scroller = screen.getByTestId('project-roadmap-scroller')
     const marker = scroller.querySelector<HTMLElement>('.sticky.top-0 .absolute')!
     const before = Number.parseFloat(marker.style.left)
@@ -131,15 +137,18 @@ describe('ProjectRoadmap', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date(2026, 8, 5, 12))
       const fields = hidden ? [TITLE_FIELD] : [TITLE_FIELD, START_FIELD, TARGET_FIELD]
+
       const { rerender } = render(
         <ProjectRoadmap table={table(fields, [])} fallback={<div>list</div>} />
       )
+
       const populated = table(fields, [
         row('one', 'Arrived', [
           { kind: 'date', fieldId: 'f_start', date: '2026-01-01' },
           { kind: 'date', fieldId: 'f_end', date: '2026-09-10' }
         ])
       ])
+
       rerender(<ProjectRoadmap table={populated} fallback={<div>list</div>} />)
       const scroller = screen.getByTestId('project-roadmap-scroller')
       expect(scroller.scrollLeft).toBeGreaterThan(1000)
@@ -245,6 +254,7 @@ describe('ProjectRoadmap', () => {
       ]),
       itemType: 'REDACTED'
     }
+
     render(
       <ProjectRoadmap
         table={table([TITLE_FIELD, START_FIELD, TARGET_FIELD], [redacted])}

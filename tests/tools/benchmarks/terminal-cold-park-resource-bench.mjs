@@ -40,8 +40,11 @@ import {
 } from '../../../config/scripts/windows-apphang-repro/repro-timing.mjs'
 
 const rootDir = path.resolve(fileURLToPath(new URL('../../..', import.meta.url)))
+
 const PARK_DELAY_MS = 1_500
+
 const SETTLE_AFTER_PARK_MS = 4_000
+
 // Short root so the daemon Unix socket fits under the macOS 104-char limit;
 // the default /var/folders tmp path overruns it and the daemon fails, leaving
 // terminals non-snapshot-backed and therefore unparkable.
@@ -55,6 +58,7 @@ function parseArgs() {
     reportPath: null,
     keep: false
   }
+
   for (const arg of process.argv.slice(2)) {
     if (arg === '--help' || arg === '-h') {
       console.log(
@@ -62,11 +66,14 @@ function parseArgs() {
       )
       process.exit(0)
     }
+
     if (arg === '--keep') {
       args.keep = true
       continue
     }
+
     const [name, value] = arg.split('=', 2)
+
     if (name === '--label') {
       args.label = value?.trim() || 'run'
     } else if (name === '--worktrees') {
@@ -77,6 +84,7 @@ function parseArgs() {
       args.reportPath = value
     }
   }
+
   return args
 }
 
@@ -88,6 +96,7 @@ function createShortUserDataDirectory() {
   mkdirSync(shortRoot, { recursive: true })
   const userDataDir = mkdtempSync(path.join(shortRoot, 'ud-'))
   createCompletedOnboardingProfile(userDataDir)
+
   return userDataDir
 }
 
@@ -103,11 +112,13 @@ function createLocalRepoFixture(worktreeCount) {
   git(repoPath, 'add', '.')
   git(repoPath, 'commit', '-m', 'init', '--no-gpg-sign')
   const worktreePaths = []
+
   for (let i = 0; i < worktreeCount; i++) {
     const worktreePath = path.join(baseDir, `wt-${i}`)
     git(repoPath, 'worktree', 'add', worktreePath, '-b', `wt-${i}`)
     worktreePaths.push(worktreePath)
   }
+
   return { baseDir, repoPath, worktreePaths }
 }
 
@@ -118,14 +129,18 @@ async function setupWorkspaces(page, fixture) {
       page.evaluate(
         async ({ repoPath, importedWorktreePaths }) => {
           const store = window.__store
+
           if (!store) {
             throw new Error('window.__store is unavailable.')
           }
+
           await store.getState().fetchSettings?.()
           const addResult = await window.api.repos.add({ path: repoPath, kind: 'git' })
+
           if ('error' in addResult) {
             throw new Error(addResult.error)
           }
+
           await store.getState().fetchRepos()
           const state = store.getState()
           const repo = state.repos.find((c) => c.path === repoPath) ?? addResult.repo
@@ -142,6 +157,7 @@ async function setupWorkspaces(page, fixture) {
           nextState.setSortBy('recent')
           nextState.setShowActiveOnly(false)
           nextState.setActiveView('terminal')
+
           return { repoId: repo.id }
         },
         { repoPath: fixture.repoPath, importedWorktreePaths: fixture.worktreePaths }
@@ -158,6 +174,7 @@ async function listWorktrees(page, repoId) {
       .catch(() => undefined)
     const state = window.__store?.getState?.()
     const list = state?.worktreesByRepo?.[id] ?? []
+
     return list.map((w) => ({
       id: w.id,
       path: w.path,
@@ -173,22 +190,28 @@ async function clickWorktreeCard(page, worktreeId) {
       page.evaluate((id) => {
         const rows = Array.from(document.querySelectorAll('[data-worktree-id]'))
         const row = rows.find((c) => c.getAttribute('data-worktree-id') === id)
+
         if (!row) {
           return null
         }
+
         row.scrollIntoView({ block: 'center', inline: 'nearest' })
         const surface = row.querySelector('[data-worktree-card-surface="true"]') ?? row
         const bounds = surface.getBoundingClientRect()
+
         if (bounds.width <= 0 || bounds.height <= 0) {
           return null
         }
+
         return { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }
       }, worktreeId),
     rendererActionTimeoutMs
   )
+
   if (!rect) {
     throw new Error(`Could not find rendered worktree card for ${worktreeId}`)
   }
+
   await runWithTimeout(
     `click worktree card ${worktreeId}`,
     () => page.mouse.click(rect.x, rect.y),
@@ -203,6 +226,7 @@ async function activateWorktreeTerminal(page, worktreeId) {
     () =>
       page.evaluate((id) => {
         const state = window.__store?.getState?.()
+
         return state?.activeWorktreeId === id && state.activeTabType === 'terminal'
       }, worktreeId),
     Boolean,
@@ -216,12 +240,15 @@ async function waitForBoundTerminal(page, worktreeId) {
     () =>
       page.evaluate((id) => {
         const state = window.__store?.getState?.()
+
         const tabId =
           state?.activeWorktreeId === id && state.activeTabType === 'terminal'
             ? state.activeTabId
             : (state?.activeTabIdByWorktree?.[id] ?? null)
+
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()?.[0] ?? null
+
         return pane?.container?.dataset?.ptyId ?? null
       }, worktreeId),
     Boolean,
@@ -234,32 +261,42 @@ async function primeScrollback(page, worktreeId, lineCount) {
   if (lineCount <= 0) {
     return 0
   }
+
   const ptyId = await page.evaluate((id) => {
     const state = window.__store?.getState?.()
+
     const tabId =
       state?.activeWorktreeId === id && state.activeTabType === 'terminal'
         ? state.activeTabId
         : (state?.activeTabIdByWorktree?.[id] ?? null)
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()?.[0] ?? null
+
     return pane?.container?.dataset?.ptyId ?? null
   }, worktreeId)
+
   if (!ptyId) {
     return 0
   }
+
   const cmd = `awk 'BEGIN{for(i=0;i<${lineCount};i++)printf "%04d %s\\n", i, "cold-park-resource-scrollback-priming-line-padding-to-eighty-cols"}'\n`
   await page.evaluate(({ id, c }) => window.api.pty.write(id, c), { id: ptyId, c: cmd })
+
   return await pollUntil(
     `scrollback primed ${worktreeId}`,
     () =>
       page.evaluate((id) => {
         const state = window.__store?.getState?.()
+
         const tabId =
           state?.activeWorktreeId === id && state.activeTabType === 'terminal'
             ? state.activeTabId
             : (state?.activeTabIdByWorktree?.[id] ?? null)
+
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()?.[0] ?? null
+
         return (pane?.serializeAddon?.serialize?.() ?? '').length
       }, worktreeId),
     (len) => Number.isFinite(len) && len > lineCount * 30,
@@ -290,25 +327,31 @@ async function measureResources(page, cdp) {
     await cdp.send('HeapProfiler.collectGarbage').catch(() => undefined)
     await sleep(400)
   }
+
   const metrics = await cdp.send('Performance.getMetrics').catch(() => ({ metrics: [] }))
   const metricMap = Object.fromEntries((metrics.metrics ?? []).map((m) => [m.name, m.value]))
+
   const renderer = await page.evaluate(async () => {
     const managers = window.__paneManagers
     let attachedWebgl = 0
     let paneCount = 0
+
     for (const [, manager] of managers?.entries?.() ?? []) {
       const diags = manager?.getRenderingDiagnostics?.() ?? []
       paneCount += diags.length
+
       for (const d of diags) {
         if (d.hasWebgl) {
           attachedWebgl += 1
         }
       }
     }
+
     const mem = performance?.memory ?? null
     // Whole-app process memory (main + renderer + other) from getAppMetrics —
     // the number that captures the daemon-snapshot cost the renderer heap can't.
     const snapshot = await window.api?.memory?.getSnapshot?.().catch(() => null)
+
     return {
       paneManagerCount: managers?.size ?? 0,
       terminalPaneCount: paneCount,
@@ -324,6 +367,7 @@ async function measureResources(page, cdp) {
         : null
     }
   })
+
   return {
     ...renderer,
     cdpJsHeapUsedMB: toMB(metricMap.JSHeapUsedSize),
@@ -335,6 +379,7 @@ async function measureResources(page, cdp) {
 async function main() {
   const args = parseArgs()
   const startedAt = Date.now()
+
   const report = {
     label: args.label,
     startedAt: new Date(startedAt).toISOString(),
@@ -344,11 +389,13 @@ async function main() {
     states: {},
     cleanupErrors: []
   }
+
   let fixture = null
   let userDataDir = null
   let launched = null
   let browser = null
   let page = null
+
   try {
     fixture = createLocalRepoFixture(args.worktrees)
     const cdpPort = await pickFreePort()
@@ -367,6 +414,7 @@ async function main() {
     await waitForStoreReady(page)
     await installRendererProbe(page)
     const setup = await setupWorkspaces(page, fixture)
+
     const worktrees = await pollUntil(
       'worktrees registered',
       () => listWorktrees(page, setup.repoId),
@@ -374,6 +422,7 @@ async function main() {
       45_000,
       500
     )
+
     console.log(`[cold-park-res] ${worktrees.length} worktrees registered`)
     const primary = worktrees.find((w) => w.isMainWorktree) ?? worktrees[0]
     const anotherWorktree = worktrees.find((w) => w.id !== primary.id)
@@ -381,11 +430,13 @@ async function main() {
     // Ensure parking is OFF while we mount + prime every terminal, so all N
     // stay fully mounted for the baseline measurement.
     await setParkingEnabled(page, false)
+
     for (const wt of worktrees) {
       await activateWorktreeTerminal(page, wt.id)
       await waitForBoundTerminal(page, wt.id)
       await primeScrollback(page, wt.id, args.scrollbackLines)
     }
+
     // Foreground the primary; the other N-1 are now backgrounded but — with
     // parking OFF — still fully mounted.
     await activateWorktreeTerminal(page, primary.id)
@@ -421,12 +472,15 @@ async function main() {
     report.finalDiagnostics = await collectRendererDiagnostics(page)
   } finally {
     report.elapsedMs = Date.now() - startedAt
+
     if (browser) {
       await browser.close().catch(() => undefined)
     }
+
     if (launched) {
       try {
         await stopDevApp(launched.child)
+
         // Why: stopDevApp SIGTERMs only the top-level vite child on macOS/Linux;
         // the spawned electron process tree (main, GPU, renderer, helpers)
         // survives and accumulates across runs until the machine saturates.
@@ -441,17 +495,22 @@ async function main() {
       } catch (error) {
         report.cleanupErrors.push(error instanceof Error ? error.message : String(error))
       }
+
       report.appLogsTail = launched.logs.slice(-40)
     }
+
     if (!args.keep) {
       if (fixture) {
         safeRemoveLocalDirectory(fixture.baseDir, report.cleanupErrors)
       }
+
       if (userDataDir) {
         safeRemoveLocalDirectory(userDataDir, report.cleanupErrors)
       }
     }
+
     const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-')
+
     const reportPath = path.resolve(
       args.reportPath ??
         path.join(
@@ -463,9 +522,11 @@ async function main() {
           `cold-park-res-${args.label}-${stamp}.json`
         )
     )
+
     mkdirSync(path.dirname(reportPath), { recursive: true })
     writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`)
     console.log(`[cold-park-res] report=${reportPath}`)
+
     if (report.delta) {
       const d = report.delta
       console.log(
@@ -474,6 +535,7 @@ async function main() {
       console.log(
         `[cold-park-res]   memory saved: appTotal=${d.appTotalSavedMB}MB (renderer=${d.appRendererSavedMB}MB main=${d.appMainSavedMB}MB) rendererJsHeap=${d.rendererJsHeapSavedMB}MB cdpJsHeap=${d.cdpJsHeapSavedMB}MB`
       )
+
       if (report.states.parkingOff?.appMemory && report.states.parkingOn?.appMemory) {
         console.log(
           `[cold-park-res]   appTotal off=${report.states.parkingOff.appMemory.totalMB}MB on=${report.states.parkingOn.appMemory.totalMB}MB`

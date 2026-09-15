@@ -23,9 +23,12 @@ export function resolveElectronProbeLaunch({
   if (platform !== 'linux') {
     return { executable: electronBinary, args: [...electronArgs] }
   }
+
   const linuxArgs = [...electronArgs, '--no-sandbox']
+
   if (display) {
     return { executable: electronBinary, args: linuxArgs }
   }
+
   return { executable: 'xvfb-run', args: ['--auto-servernum', electronBinary, ...linuxArgs] }
 }

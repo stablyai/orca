@@ -21,6 +21,7 @@ export async function sendWebSocketRequest<TResult>(
     if (error instanceof RemoteRuntimeClientError) {
       throw new RuntimeClientError(error.code, error.message, error.data)
     }
+
     throw error
   }
 }
@@ -46,6 +47,7 @@ export async function sendWebSocketRequestWithStatusPreflight<TResult>(
     if (error instanceof RemoteRuntimeClientError) {
       throw new RuntimeClientError(error.code, error.message, error.data)
     }
+
     throw error
   }
 }

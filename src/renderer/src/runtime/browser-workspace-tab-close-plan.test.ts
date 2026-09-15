@@ -27,6 +27,7 @@ function plan(
   options: { focusedEnvironmentId?: string | null; activeEnvironmentIds?: string[] } = {}
 ): ReturnType<typeof planBrowserWorkspaceTabClose> {
   const active = new Set(options.activeEnvironmentIds ?? [])
+
   return planBrowserWorkspaceTabClose({
     state: state(pages),
     workspaceId: 'workspace-a',
@@ -58,6 +59,7 @@ describe('planBrowserWorkspaceTabClose', () => {
     const staged = plan([{ id: 'page-1', environmentId: 'env-a', staged: true }], {
       activeEnvironmentIds: ['env-a']
     })
+
     const adopted = plan([{ id: 'page-1', environmentId: 'env-a' }], {
       activeEnvironmentIds: ['env-a']
     })

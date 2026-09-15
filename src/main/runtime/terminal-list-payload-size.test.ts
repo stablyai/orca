@@ -5,23 +5,34 @@ import { OrcaRuntimeService } from './orca-runtime'
 // visualLayouts opt-out keeps paying for itself. Sized against a live
 // 134-terminal remote runtime (137,412 B on the wire, visualLayouts 44,208 B).
 const TERMINAL_COUNT = 134
+
 const PANES_PER_TAB = 2
+
 const TAB_COUNT = TERMINAL_COUNT / PANES_PER_TAB
+
 // Leaves ~19% headroom over the measured 75,467 B while catching material bloat.
 const MAX_OPTED_OUT_PAYLOAD_BYTES = 90_000
+
 const REPO_ID = 'repo-7f3a91c2e4b85d60'
+
 const WORKTREE_PATH = '/Users/dev/orca/workspaces/orca/perf-terminal-list-diet'
+
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
 
 const uuid = (n: number): string => {
   const hex = n.toString(16).padStart(12, '0')
+
   return `11111111-1111-4111-8111-${hex}`
 }
 
 const leafIdFor = (index: number): string => uuid(index)
+
 const tabIdFor = (tab: number): string => `tab-${uuid(1_000 + tab)}`
+
 const ptyIdFor = (index: number): string => `pty-${uuid(2_000 + index)}`
+
 const groupIdFor = (tab: number): string => `group-${uuid(3_000 + (tab % 2))}`
+
 const titleFor = (index: number): string => `claude — orca/perf-terminal-list-diet #${index}`
 
 const makeStore = () => ({
@@ -104,12 +115,14 @@ function buildLoadedRuntime(): OrcaRuntimeService {
     const tabId = tabIdFor(tab)
     const first = leafIdFor(tab * PANES_PER_TAB)
     const second = leafIdFor(tab * PANES_PER_TAB + 1)
+
     const root: PaneLayout = {
       type: 'split',
       direction: 'vertical',
       first: { type: 'leaf', leafId: first },
       second: { type: 'leaf', leafId: second }
     }
+
     tabs.push({
       tabId,
       worktreeId: WORKTREE_ID,
@@ -117,6 +130,7 @@ function buildLoadedRuntime(): OrcaRuntimeService {
       activeLeafId: second,
       layout: root
     })
+
     for (let pane = 0; pane < PANES_PER_TAB; pane += 1) {
       const index = tab * PANES_PER_TAB + pane
       const leafId = leafIdFor(index)
@@ -187,6 +201,7 @@ function buildLoadedRuntime(): OrcaRuntimeService {
     runtime.onPtySpawned(ptyId, `inc-${uuid(4_000 + index)}`, { awaitsRegistration: false })
     runtime.onPtyData(ptyId, `esc to interrupt · ${index}\n`, 1)
   }
+
   return runtime
 }
 
@@ -197,9 +212,11 @@ describe('terminal.list payload size', () => {
     const withLayouts = await runtime.listTerminals(`id:${WORKTREE_ID}`, 10_000)
     const layoutBuilder = vi.fn(() => [])
     Object.defineProperty(runtime, 'buildTerminalVisualLayouts', { value: layoutBuilder })
+
     const withoutLayouts = await runtime.listTerminals(`id:${WORKTREE_ID}`, 10_000, {
       includeVisualLayouts: false
     })
+
     const { visualLayouts, ...expectedWithoutLayouts } = withLayouts
 
     expect(withLayouts.terminals).toHaveLength(TERMINAL_COUNT)

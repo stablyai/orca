@@ -24,6 +24,7 @@ export function beginPaneDragFromPointerDown(
   if ((e.button ?? 0) !== 0 || e.ctrlKey || callbacks.getPanes().size < 2) {
     return null
   }
+
   e.preventDefault()
   e.stopPropagation()
   handle.setPointerCapture(e.pointerId)
@@ -42,9 +43,11 @@ export function beginPaneDragFromPointerDown(
     window.removeEventListener('pointercancel', onPointerCancelOuter, true)
     window.removeEventListener('blur', onWindowBlur, true)
     activePointerId = null
+
     if (state.cleanupActiveDrag === cleanupDrag) {
       state.cleanupActiveDrag = null
     }
+
     if (pointerId !== null) {
       try {
         if (handle.hasPointerCapture(pointerId)) {
@@ -55,12 +58,15 @@ export function beginPaneDragFromPointerDown(
         // runs, but the terminal must never stay pointer-inert.
       }
     }
+
     if (!dragging) {
       return
     }
+
     dragging = false
     callbacks.getRoot().classList.remove('is-pane-dragging')
     callbacks.getPanes().get(paneId)?.container.classList.remove('is-drag-source')
+
     try {
       if (commitDrop && state.dragSourcePaneId !== null) {
         if (state.currentDropTarget) {
@@ -91,10 +97,13 @@ export function beginPaneDragFromPointerDown(
       if (callbacks.isDestroyed()) {
         cleanupDrag(false)
       }
+
       return
     }
+
     const dx = ev.clientX - startX
     const dy = ev.clientY - startY
+
     if (!dragging && Math.hypot(dx, dy) >= DRAG_THRESHOLD) {
       dragging = true
       state.dragSourcePaneId = paneId
@@ -103,6 +112,7 @@ export function beginPaneDragFromPointerDown(
       callbacks.getPanes().get(paneId)?.container.classList.add('is-drag-source')
       showDropOverlay(state)
     }
+
     if (dragging) {
       updateDropTarget(ev.clientX, ev.clientY, state, callbacks)
     }
@@ -113,16 +123,19 @@ export function beginPaneDragFromPointerDown(
       cleanupDrag(true)
     }
   }
+
   const onPointerCancelOuter = (ev: PointerEvent): void => {
     if (ev.pointerId === activePointerId) {
       cleanupDrag(false)
     }
   }
+
   const onLostPointerCaptureOuter = (ev: PointerEvent): void => {
     if (ev.pointerId === activePointerId) {
       cleanupDrag(false)
     }
   }
+
   const onWindowBlur = (): void => cleanupDrag(false)
 
   state.cleanupActiveDrag = cleanupDrag
@@ -147,11 +160,13 @@ export function attachPaneDrag(
   callbacks: DragReorderCallbacks
 ): () => void {
   let cleanupCurrentDrag: (() => void) | null = null
+
   const onPointerDown = (e: PointerEvent): void => {
     cleanupCurrentDrag = beginPaneDragFromPointerDown(handle, paneId, state, callbacks, e)
   }
 
   handle.addEventListener('pointerdown', onPointerDown)
+
   return () => {
     cleanupCurrentDrag?.()
     cleanupCurrentDrag = null
@@ -166,31 +181,40 @@ function updateDropTarget(
   callbacks: DragReorderCallbacks
 ): void {
   const overlay = state.dropOverlay
+
   if (!overlay) {
     return
   }
+
   const targetPane = findDropTargetPane(clientX, clientY, state, callbacks)
+
   if (!targetPane) {
     const sourcePaneId = state.dragSourcePaneId
+
     const externalTarget =
       sourcePaneId === null
         ? null
         : (callbacks.resolveExternalDropTarget?.({ sourcePaneId, clientX, clientY }) ?? null)
+
     if (!externalTarget) {
       overlay.style.display = 'none'
       state.currentDropTarget = null
       state.currentExternalDropTarget = null
+
       return
     }
+
     state.currentDropTarget = null
     state.currentExternalDropTarget = externalTarget
     positionExternalDropOverlay(overlay, externalTarget)
+
     return
   }
 
   const rect = targetPane.container.getBoundingClientRect()
   const zone = resolveDropZone(clientX, clientY, rect)
   const sourcePaneId = state.dragSourcePaneId
+
   if (
     sourcePaneId !== null &&
     isPaneDropNoOp(sourcePaneId, targetPane.id, zone, callbacks.getPanes())
@@ -198,8 +222,10 @@ function updateDropTarget(
     overlay.style.display = 'none'
     state.currentDropTarget = null
     state.currentExternalDropTarget = null
+
     return
   }
+
   state.currentDropTarget = { paneId: targetPane.id, zone }
   state.currentExternalDropTarget = null
   positionDropOverlay(overlay, rect, zone)
@@ -215,7 +241,9 @@ function findDropTargetPane(
     if (pane.id === state.dragSourcePaneId) {
       continue
     }
+
     const rect = pane.container.getBoundingClientRect()
+
     if (
       clientX >= rect.left &&
       clientX <= rect.right &&
@@ -225,18 +253,21 @@ function findDropTargetPane(
       return pane
     }
   }
+
   return null
 }
 
 function resolveDropZone(clientX: number, clientY: number, rect: DOMRect): DropZone {
   const relX = (clientX - rect.left) / rect.width
   const relY = (clientY - rect.top) / rect.height
+
   const distances = {
     top: relY,
     bottom: 1 - relY,
     left: relX,
     right: 1 - relX
   } satisfies Record<DropZone, number>
+
   return (Object.entries(distances).sort((a, b) => a[1] - b[1])[0]?.[0] ?? 'right') as DropZone
 }
 

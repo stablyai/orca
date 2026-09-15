@@ -6,10 +6,13 @@ export function pinLocalImageCacheKey(key: string): void {
 
 export function unpinLocalImageCacheKey(key: string): void {
   const count = pinnedKeys.get(key)
+
   if (!count || count <= 1) {
     pinnedKeys.delete(key)
+
     return
   }
+
   pinnedKeys.set(key, count - 1)
 }
 
@@ -28,11 +31,14 @@ export function prunePinnedLocalImageCache(
 ): void {
   while (cache.size > maxSize) {
     const oldest = Array.from(cache.keys()).find((key) => !isLocalImageCacheKeyPinned(key))
+
     if (oldest === undefined) {
       return
     }
+
     const url = cache.get(oldest)
     cache.delete(oldest)
+
     if (url) {
       revoke(url)
     }

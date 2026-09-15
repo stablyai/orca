@@ -66,9 +66,11 @@ async function callWebRuntimeSessionTabMethod(
     args.environmentId?.trim() ??
     useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
     null
+
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return 'failed'
   }
+
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
   const closeIntentTabIds = new Set<string>()
@@ -76,6 +78,7 @@ async function callWebRuntimeSessionTabMethod(
 
   const isClose = method === 'session.tabs.close'
   const isLifecycleClose = isClose && args.reason !== 'user'
+
   if (isLifecycleClose && (!args.publicationEpoch || !args.terminalHandle)) {
     // Why: missing host-generation or terminal-incarnation evidence means keep;
     // a tab id alone can be stale or reused after reconnect.
@@ -85,10 +88,12 @@ async function callWebRuntimeSessionTabMethod(
     console.warn('[web-runtime-session] suppressed lifecycle close without incarnation evidence', {
       closeReason: args.reason
     })
+
     return 'failed'
   }
 
   const immediateHostTabId = toHostSessionTabId(args.tabId)
+
   if (isClose) {
     // Why: record before async id resolution so a stale snapshot cannot flash the closed tab back.
     closeIntentTabIds.add(immediateHostTabId)
@@ -98,12 +103,14 @@ async function callWebRuntimeSessionTabMethod(
   try {
     const { resolveHostSessionTabIdForWebSessionTab } = await import('./web-session-tabs-sync')
     const state = useAppStore.getState()
+
     const hostTabId =
       resolveHostSessionTabIdForWebSessionTab(state, {
         environmentId,
         worktreeId: args.worktreeId,
         tabId: args.tabId
       }) ?? toHostSessionTabId(args.tabId)
+
     if (isClose) {
       // Why: suppress until the host confirms removal, else an in-flight pre-close snapshot flashes the tab back.
       closeIntentTabIds.add(hostTabId)
@@ -112,6 +119,7 @@ async function callWebRuntimeSessionTabMethod(
       activationHostTabId = hostTabId
       recordWebSessionFocusIntent(intentOwner, args.worktreeId, hostTabId)
     }
+
     const response = await callEnvironment({
       // Why: old hosts cannot route this additive method, so a generation
       // cutover fails closed before their destructive legacy close handler.
@@ -141,9 +149,11 @@ async function callWebRuntimeSessionTabMethod(
       },
       timeoutMs: WEB_SESSION_TAB_RPC_TIMEOUT_MS
     })
+
     const result = unwrapRuntimeRpcResult(
       response as RuntimeRpcResponse<RuntimeMobileSessionTabCloseResult | undefined>
     )
+
     if (isClose) {
       if (result?.refused === true && result.snapshotRepublished === true) {
         // Why: the host kept an authoritative live PTY. Stop hiding its mirror
@@ -153,19 +163,23 @@ async function callWebRuntimeSessionTabMethod(
         const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
         acceptReplayedWebSessionTabsSnapshot(environmentId, args.worktreeId)
       }
+
       await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
         expectedEnvironmentPairingRevision: intentOwner.pairingRevision
       })
     }
+
     return 'applied'
   } catch (error) {
     if (activationHostTabId) {
       clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, activationHostTabId)
     }
+
     // Why the split: only 'tab_not_found' is absence proof (see the outcome doc above). Restoring the
     // mirror on it hands the user back a pane the host cannot close and whose handle is already gone
     // (#9194), so keep the suppression and drop its TTL instead. Every other failure is a "not now".
     const hostHasNoSuchTab = hasRuntimeRpcErrorCode(error, 'tab_not_found')
+
     for (const hostTabId of closeIntentTabIds) {
       if (hostHasNoSuchTab) {
         makeWebSessionCloseIntentDurable(intentOwner, args.worktreeId, hostTabId)
@@ -173,6 +187,7 @@ async function callWebRuntimeSessionTabMethod(
         clearWebSessionCloseIntent(intentOwner, args.worktreeId, hostTabId)
       }
     }
+
     if (isLifecycleClose) {
       const { acceptReplayedWebSessionTabsSnapshot } = await import('./web-session-tabs-sync')
       acceptReplayedWebSessionTabsSnapshot(environmentId, args.worktreeId)
@@ -180,10 +195,12 @@ async function callWebRuntimeSessionTabMethod(
         expectedEnvironmentPairingRevision: intentOwner.pairingRevision
       })
     }
+
     console.warn(
       `[web-runtime-session] failed to ${isClose ? 'close' : 'activate'} tab:`,
       error instanceof Error ? error.message : String(error)
     )
+
     return hostHasNoSuchTab ? 'unknown-tab' : 'failed'
   }
 }

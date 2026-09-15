@@ -68,9 +68,11 @@ export function FeatureWallTourSurface({
   const prefersReducedMotion = usePrefersReducedMotion()
   const reactId = useId()
   const previewPanelId = `${reactId}-feature-wall-preview-panel`
+
   const [selectedId, setSelectedId] = useState<FeatureWallWorkflowId>(
     DEFAULT_FEATURE_WALL_WORKFLOW_ID
   )
+
   const railRefs = useRef<(HTMLButtonElement | null)[]>([])
 
   const selectedIndex = useMemo(
@@ -81,24 +83,31 @@ export function FeatureWallTourSurface({
       ),
     [selectedId]
   )
+
   const selected = FEATURE_WALL_WORKFLOWS[selectedIndex]
   const taskSourcePresentation = useFeatureWallTaskSourcePresentation(isOpen, selected)
   const selectedPresentation = taskSourcePresentation.workflow
   const agentsSteps = useMemo(() => getAgentsSteps(), [])
   const workbenchSteps = useMemo(() => getWorkbenchSteps(), [])
   const reviewSteps = useMemo(() => getReviewSteps(), [])
+
   const [agentsStepId, setAgentsStepId] = useState<AgentsStepId>(
     () => agentsSteps[0]?.id ?? 'statuses'
   )
+
   const [workbenchStepId, setWorkbenchStepId] = useState<WorkbenchStepId>(
     () => workbenchSteps[0]?.id ?? 'terminal'
   )
+
   const [reviewStepId, setReviewStepId] = useState<ReviewStepId>(
     () => reviewSteps[0]?.id ?? 'notes'
   )
+
   const [previousOpen, setPreviousOpen] = useState(isOpen)
+
   if (isOpen !== previousOpen) {
     setPreviousOpen(isOpen)
+
     if (!isOpen) {
       setSelectedId(DEFAULT_FEATURE_WALL_WORKFLOW_ID)
       setAgentsStepId(agentsSteps[0]?.id ?? 'statuses')
@@ -106,6 +115,7 @@ export function FeatureWallTourSurface({
       setReviewStepId(reviewSteps[0]?.id ?? 'notes')
     }
   }
+
   // Why: the feature-wall completion model owns skill-completion state, so read
   // installed skills here instead of asking child setup cards to notify upward
   // from passive Effects.
@@ -114,11 +124,13 @@ export function FeatureWallTourSurface({
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
   const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
     enabled: isOpen,
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
+
   const completion = useFeatureWallCompletion(
     isOpen,
     taskSourcePresentation.hasConnectedTaskSource,
@@ -127,17 +139,20 @@ export function FeatureWallTourSurface({
     browserUseSkill.installed,
     { onTourDepthSummaryChange }
   )
+
   const { markExitAction } = useFeatureWallTourTelemetry({
     isOpen,
     source,
     getDepthSummary: completion.getTourDepthSummary
   })
+
   const {
     markWorkflowVisited,
     markAgentStepVisited,
     markWorkbenchStepVisited,
     markReviewStepVisited
   } = completion
+
   const markWorkflowVisitedRef = useRef(markWorkflowVisited)
   markWorkflowVisitedRef.current = markWorkflowVisited
 
@@ -145,17 +160,21 @@ export function FeatureWallTourSurface({
     selected.id === 'agents-orchestration'
       ? (agentsSteps.find((s) => s.id === agentsStepId) ?? agentsSteps[0] ?? null)
       : null
+
   const workbenchActiveStep =
     selected.id === 'workbench'
       ? (workbenchSteps.find((s) => s.id === workbenchStepId) ?? workbenchSteps[0] ?? null)
       : null
+
   const reviewActiveStep =
     selected.id === 'review'
       ? (reviewSteps.find((s) => s.id === reviewStepId) ?? reviewSteps[0] ?? null)
       : null
+
   const primaryTile = getFeatureWallMediaTile(selected.primaryTileId)
   const posterUrl = primaryTile ? toFeatureWallAssetUrl(assetBaseUrl, primaryTile.posterPath) : null
   const gifUrl = primaryTile ? toFeatureWallAssetUrl(assetBaseUrl, primaryTile.gifPath) : null
+
   const activeStepCopy = getFeatureWallActiveStepCopy(
     agentsActiveStep,
     workbenchActiveStep,
@@ -170,6 +189,7 @@ export function FeatureWallTourSurface({
         source
       })
       const defaultTile = getFeatureWallMediaTile(FEATURE_WALL_WORKFLOWS[0].primaryTileId)
+
       if (defaultTile) {
         track('feature_wall_feature_selected', {
           group_id: DEFAULT_FEATURE_WALL_WORKFLOW_ID,
@@ -186,10 +206,13 @@ export function FeatureWallTourSurface({
   const handleSelect = useCallback(
     (workflow: FeatureWallWorkflow): void => {
       markWorkflowVisited(workflow.id)
+
       if (workflow.id === selectedId) {
         return
       }
+
       setSelectedId(workflow.id)
+
       if (workflow.id === 'agents-orchestration') {
         const nextStepId = agentsSteps[0]?.id ?? 'statuses'
         markAgentStepVisited(nextStepId)
@@ -203,8 +226,10 @@ export function FeatureWallTourSurface({
         markReviewStepVisited(nextStepId)
         setReviewStepId(nextStepId)
       }
+
       track('feature_wall_group_selected', { group_id: workflow.id, source })
       const tile = getFeatureWallMediaTile(workflow.primaryTileId)
+
       if (tile) {
         track('feature_wall_feature_selected', {
           group_id: workflow.id,
@@ -257,16 +282,20 @@ export function FeatureWallTourSurface({
   })
 
   const isLastWorkflow = selectedIndex >= FEATURE_WALL_WORKFLOWS.length - 1
+
   const agentsStepIndex =
     selected.id === 'agents-orchestration'
       ? agentsSteps.findIndex((step) => step.id === agentsStepId)
       : -1
+
   const workbenchStepIndex =
     selected.id === 'workbench'
       ? workbenchSteps.findIndex((step) => step.id === workbenchStepId)
       : -1
+
   const reviewStepIndex =
     selected.id === 'review' ? reviewSteps.findIndex((step) => step.id === reviewStepId) : -1
+
   const hasNextSubStep =
     (selected.id === 'agents-orchestration' &&
       (agentsStepIndex < 0 ? agentsSteps.length > 0 : agentsStepIndex < agentsSteps.length - 1)) ||
@@ -276,55 +305,74 @@ export function FeatureWallTourSurface({
         : workbenchStepIndex < workbenchSteps.length - 1)) ||
     (selected.id === 'review' &&
       (reviewStepIndex < 0 ? reviewSteps.length > 0 : reviewStepIndex < reviewSteps.length - 1))
+
   const continueLabel = isLastWorkflow && !hasNextSubStep ? doneLabel : 'Continue'
+
   const handleContinue = useCallback((): void => {
     markWorkflowVisited(selected.id)
+
     if (selected.id === 'agents-orchestration') {
       markAgentStepVisited(agentsStepId)
       const nextStep = agentsSteps[agentsStepIndex >= 0 ? agentsStepIndex + 1 : 0]
+
       if (nextStep) {
         markAgentStepVisited(nextStep.id)
         setAgentsStepId(nextStep.id)
+
         return
       }
     }
+
     if (selected.id === 'workbench') {
       markWorkbenchStepVisited(workbenchStepId)
       const nextStep = workbenchSteps[workbenchStepIndex >= 0 ? workbenchStepIndex + 1 : 0]
+
       if (nextStep) {
         markWorkbenchStepVisited(nextStep.id)
         setWorkbenchStepId(nextStep.id)
+
         return
       }
     }
+
     if (selected.id === 'review') {
       markReviewStepVisited(reviewStepId)
       const nextStep = reviewSteps[reviewStepIndex >= 0 ? reviewStepIndex + 1 : 0]
+
       if (nextStep) {
         markReviewStepVisited(nextStep.id)
         setReviewStepId(nextStep.id)
+
         return
       }
     }
+
     if (isLastWorkflow) {
       const exitAction = source === 'onboarding' ? 'onboarding_continue' : 'done'
       let markedSuccessfulExit = false
+
       const markSuccessfulExit = (): void => {
         if (markedSuccessfulExit) {
           return
         }
+
         markedSuccessfulExit = true
         markExitAction(exitAction)
       }
+
       const doneResult = onDone(markSuccessfulExit)
+
       if (doneResult instanceof Promise) {
         void doneResult.then((result) => result !== false && markSuccessfulExit())
       } else if (doneResult !== false) {
         markSuccessfulExit()
       }
+
       return
     }
+
     const nextWorkflow = FEATURE_WALL_WORKFLOWS[selectedIndex + 1]
+
     if (nextWorkflow) {
       handleSelect(nextWorkflow)
       railRefs.current[selectedIndex + 1]?.focus()
@@ -365,6 +413,7 @@ export function FeatureWallTourSurface({
   const showGif = !prefersReducedMotion && gifUrl !== null
   const previewTitleId = `${reactId}-feature-wall-preview-${selected.id}`
   const description = activeStepCopy?.description ?? selectedPresentation.lede
+
   const continueButton = (
     <FeatureWallContinueButton
       label={continueLabel}

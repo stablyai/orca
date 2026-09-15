@@ -34,11 +34,14 @@ function stubRelayWatcherSupervisors() {
     const unsubscribe = vi.fn(async () => undefined)
     watches.push({ dir, callback, hooks, unsubscribe })
     installed.set(this, watches)
+
     return Promise.resolve({ unsubscribe })
   })
+
   const dispose = vi
     .spyOn(WatcherProcessSupervisor.prototype, 'dispose')
     .mockImplementation(() => undefined)
+
   return { installed, dispose }
 }
 
@@ -55,6 +58,7 @@ class FakeWatcherPool {
   ): Promise<WatcherProcessSubscription> {
     const unsubscribe = vi.fn(async () => undefined)
     this.installed.push({ rootPath, callback, hooks, unsubscribe })
+
     return { unsubscribe }
   }
 }
@@ -63,11 +67,13 @@ function createDispatcher() {
   const detached = new Set<(clientId: number) => void>()
   // Batches ride the producer lane and markers the control lane, so record both in one ordered log.
   const fsChanged: Record<string, unknown>[] = []
+
   const record = (_clientId: number, method: string, params?: Record<string, unknown>): void => {
     if (method === 'fs.changed' && params) {
       fsChanged.push(params)
     }
   }
+
   return {
     fsChanged,
     notify: vi.fn(),
@@ -82,6 +88,7 @@ function createDispatcher() {
         record(clientId, method, params)
         // A healthy sink settles as the frame is written, which releases the emitter's outstanding-marker slot.
         onSettled?.({ ok: true })
+
         return true
       }
     ),
@@ -90,11 +97,13 @@ function createDispatcher() {
     publishProducerNotification: vi.fn(
       (clientId: number, method: string, params?: Record<string, unknown>) => {
         record(clientId, method, params)
+
         return true
       }
     ),
     onClientDetached: vi.fn((listener: (clientId: number) => void) => {
       detached.add(listener)
+
       return () => detached.delete(listener)
     }),
     // Detach here always retires the id, so the emitter's marker cleanup runs.
@@ -216,10 +225,12 @@ describe('RelayFilesystemWatchRegistry', () => {
     )
     const firstAbort = new AbortController()
     const secondAbort = new AbortController()
+
     const first = registry.watch('/repo', {
       ...context(1),
       signal: firstAbort.signal
     })
+
     const second = registry.watch('/repo', {
       ...context(2),
       signal: secondAbort.signal
@@ -238,6 +249,7 @@ describe('RelayFilesystemWatchRegistry', () => {
   it('propagates unexpected non-Error setup failures', async () => {
     vi.spyOn(pool, 'subscribe').mockRejectedValueOnce('native setup failed')
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
     try {
       await expect(registry.watch('/repo', context(1))).rejects.toBe('native setup failed')
     } finally {
@@ -264,6 +276,7 @@ describe('RelayFilesystemWatchRegistry', () => {
   it('notifies old clients and fences new ones while removal owns the root', async () => {
     await registry.watch('/repo', context(1), 101)
     let failRemoval: (error: Error) => void = () => undefined
+
     const removal = registry.runWithRemovalFence(
       '/repo',
       () =>
@@ -271,6 +284,7 @@ describe('RelayFilesystemWatchRegistry', () => {
           failRemoval = reject
         })
     )
+
     await vi.waitFor(() => expect(pool.installed[0].unsubscribe).toHaveBeenCalledTimes(1))
     expect(dispatcher.notifyClient).toHaveBeenCalledWith(1, 'fs.watchFailed', {
       rootPath: '/repo',
@@ -297,6 +311,7 @@ describe('RelayFilesystemWatchRegistry', () => {
     const removal = registry.runWithRemovalFence('/repo', async () => {
       order.push('remove')
     })
+
     await Promise.resolve()
     expect(order).toEqual([])
     expect(() => registry.beginWorktreePtySpawn('/repo/late')).toThrow(
@@ -344,15 +359,18 @@ describe('RelayFilesystemWatchRegistry', () => {
   it('retains pending-setup teardown failure until the child physically exits', async () => {
     let resolveSubscribe: (subscription: WatcherProcessSubscription) => void = () => undefined
     let resolvePhysicalExit: () => void = () => undefined
+
     const physicalExit = new Promise<void>((resolve) => {
       resolvePhysicalExit = resolve
     })
+
     const terminationError = new WatcherProcessFailure(
       'file watcher process did not exit after termination deadline',
       'supervisor',
       'process_unavailable',
       physicalExit
     )
+
     const unsubscribe = vi.fn().mockRejectedValue(terminationError)
     vi.spyOn(pool, 'subscribe').mockImplementation(
       () =>
@@ -388,6 +406,7 @@ describe('createRelayWatcherProcessPool', () => {
     const secondHostPool = createRelayWatcherProcessPool()
     const repoBase = join(tmpdir(), 'ssh-repo')
     const roots = [repoBase, join(repoBase, '.git'), join(repoBase, 'worktree')]
+
     try {
       for (const root of roots) {
         await firstHostPool.subscribe(root, vi.fn(), {}, {})
@@ -407,17 +426,22 @@ describe('createRelayWatcherProcessPool', () => {
     const { installed, dispose } = stubRelayWatcherSupervisors()
     const pool = createRelayWatcherProcessPool()
     const dispatcher = createDispatcher()
+
     const registry = new RelayFilesystemWatchRegistry(
       dispatcher as unknown as RelayDispatcher,
       pool
     )
+
     const repoBase = join(tmpdir(), 'ssh-repo-recovery')
     const roots = [repoBase, join(repoBase, '.git'), join(repoBase, 'worktree')]
+
     try {
       for (const root of roots) {
         await registry.watch(root, context(1))
       }
+
       const healthyWatches = Array.from(installed.values())[0]
+
       const failure = new WatcherProcessFailure(
         'file watcher process crashed repeatedly',
         'supervisor',
@@ -427,6 +451,7 @@ describe('createRelayWatcherProcessPool', () => {
       for (const watch of healthyWatches) {
         watch.hooks.onTerminalError?.(failure)
       }
+
       await Promise.resolve()
 
       const recoveredWatches = Array.from(installed.values()).slice(1)
@@ -442,6 +467,7 @@ describe('createRelayWatcherProcessPool', () => {
         const [{ callback, dir }] = watches
         callback(null, [{ type: 'update', path: join(dir, 'recovered.txt') }])
       }
+
       expect(dispatcher.fsChanged.slice(roots.length)).toEqual(
         roots.map((root) => ({
           events: [{ kind: 'update', absolutePath: join(root, 'recovered.txt') }]
@@ -455,15 +481,18 @@ describe('createRelayWatcherProcessPool', () => {
   it('fails closed instead of loading the native watcher in the relay process', async () => {
     const previousVitest = process.env.VITEST
     process.env.VITEST = 'true'
+
     const pool = createRelayWatcherProcessPool(
       join(tmpdir(), `missing-relay-watcher-${process.pid}.js`)
     )
+
     try {
       await expect(pool.subscribe('/repo', vi.fn(), {}, {})).rejects.toMatchObject({
         code: 'entry_missing'
       })
     } finally {
       pool.dispose()
+
       if (previousVitest === undefined) {
         delete process.env.VITEST
       } else {

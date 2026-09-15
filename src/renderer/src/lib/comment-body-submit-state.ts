@@ -22,6 +22,7 @@ function getCommentBodyPresence(
     const codePoint = readUtf8CodePointAt(body, index)
     const codeUnitLength = codePoint > 0xffff ? 2 : 1
     scannedBytes += getUtf8ByteLengthForCodePoint(codePoint)
+
     if (scannedBytes > maxScanBytes) {
       return 'too-large-leading-whitespace'
     }
@@ -29,6 +30,7 @@ function getCommentBodyPresence(
     if (/\S/u.test(body.slice(index, index + codeUnitLength))) {
       return 'present'
     }
+
     if (codeUnitLength === 2) {
       index += 1
     }
@@ -43,9 +45,11 @@ export function hasBoundedCommentBodyText(body: string): boolean {
 
 export function getCommentBodySubmitState(body: string): CommentBodySubmitState {
   const presence = getCommentBodyPresence(body)
+
   if (presence === 'empty') {
     return { status: 'empty' }
   }
+
   if (presence === 'too-large-leading-whitespace') {
     return { status: 'too-large-leading-whitespace' }
   }

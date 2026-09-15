@@ -78,6 +78,7 @@ export function DiffSectionBody({
   onMount
 }: DiffSectionBodyProps): React.JSX.Element {
   const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
+
   const handleEditorMount: DiffOnMount = (editor, monaco) => {
     const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(editor)
     editor.onDidDispose(cleanupShiftWheelScroll)

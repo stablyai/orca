@@ -4,12 +4,16 @@ import { isWindowVisible } from '@/lib/window-visibility-interval'
 type Listener = () => void
 
 let currentNow = Date.now()
+
 let timer: ReturnType<typeof setInterval> | null = null
+
 let stopVisibilityWatcher: (() => void) | null = null
+
 const listeners = new Set<Listener>()
 
 function publishTick(): void {
   currentNow = Date.now()
+
   for (const listener of listeners) {
     listener()
   }
@@ -19,6 +23,7 @@ function stopTimer(): void {
   if (timer === null) {
     return
   }
+
   clearInterval(timer)
   timer = null
 }
@@ -27,6 +32,7 @@ function startTimer(): void {
   if (timer !== null || !isWindowVisible()) {
     return
   }
+
   timer = setInterval(publishTick, 1000)
 }
 
@@ -43,7 +49,9 @@ function startClock(): void {
   if (stopVisibilityWatcher !== null) {
     return
   }
+
   startTimer()
+
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
     document.addEventListener('visibilitychange', reconcileVisibility)
     stopVisibilityWatcher = () => {
@@ -68,8 +76,10 @@ export function subscribePromptCacheCountdownClock(listener: Listener): () => vo
   currentNow = Date.now()
   listener()
   startClock()
+
   return () => {
     listeners.delete(listener)
+
     if (listeners.size === 0) {
       stopClock()
     }

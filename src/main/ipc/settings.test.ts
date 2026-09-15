@@ -86,6 +86,7 @@ vi.mock('../../shared/runtime-environment-store', () => ({
 import { registerSettingsHandlers } from './settings'
 
 const settingsInvokeEvent = { sender: { id: 1 } }
+
 type SettingsChangedListener = (
   updates: unknown,
   settings: unknown,
@@ -115,6 +116,7 @@ describe('registerSettingsHandlers', () => {
       if (selector !== 'windows-2' && selector !== 'Windows 2') {
         throw new Error('Runtime environment not found')
       }
+
       return { id: 'windows-2' }
     })
     rebuildAppMenuMock.mockClear()
@@ -142,6 +144,7 @@ describe('registerSettingsHandlers', () => {
     const listener = onMock.mock.calls.find(
       (call) => call[0] === 'settings:get-sync'
     )?.[1] as (event: { returnValue: unknown }) => void
+
     expect(listener).toBeTypeOf('function')
 
     const event = { returnValue: undefined as unknown }
@@ -154,12 +157,14 @@ describe('registerSettingsHandlers', () => {
       agentStatusHooksEnabled: true,
       disabledTuiAgents: ['codex', 'claude']
     }
+
     store.getSettings.mockReturnValue(before)
     store.updateSettings.mockReturnValue({
       ...before,
       disabledTuiAgents: ['claude', 'codex']
     })
     registerSettingsHandlers(store as never)
+
     const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
       event: typeof settingsInvokeEvent,
       args: { disabledTuiAgents: string[] }
@@ -175,13 +180,16 @@ describe('registerSettingsHandlers', () => {
       agentStatusHooksEnabled: true,
       disabledTuiAgents: ['codex', 'claude']
     }
+
     const updated = {
       ...before,
       disabledTuiAgents: ['claude']
     }
+
     store.getSettings.mockReturnValue(before)
     store.updateSettings.mockReturnValue(updated)
     registerSettingsHandlers(store as never)
+
     const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
       event: typeof settingsInvokeEvent,
       args: { disabledTuiAgents: string[] }
@@ -200,6 +208,7 @@ describe('registerSettingsHandlers', () => {
     store.getSettings.mockReturnValue({ activeRuntimeEnvironmentId: null })
     store.updateSettings.mockReturnValue({ activeRuntimeEnvironmentId: null })
     registerSettingsHandlers(store as never)
+
     const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
       event: typeof settingsInvokeEvent,
       args: { activeRuntimeEnvironmentId: string }
@@ -216,6 +225,7 @@ describe('registerSettingsHandlers', () => {
   it('persists Active Server only through the dedicated preference channel', () => {
     store.updateSettings.mockReturnValue({ activeRuntimeEnvironmentId: 'windows-2' })
     registerSettingsHandlers(store as never)
+
     const handler = handleMock.mock.calls.find(
       (call) => call[0] === 'settings:set-active-runtime-environment-preference'
     )?.[1] as (event: typeof settingsInvokeEvent, args: { environmentId: string | null }) => unknown
@@ -247,6 +257,7 @@ describe('registerSettingsHandlers', () => {
       .mockReturnValueOnce({ prBotAuthorOverrides: ['alice'] })
       .mockReturnValueOnce({ prBotAuthorOverrides: ['alice', 'bob'] })
     registerSettingsHandlers(store as never)
+
     const handler = handleMock.mock.calls.find(
       (call) => call[0] === 'settings:update-pr-bot-author-override'
     )?.[1] as (
@@ -305,6 +316,7 @@ describe('registerSettingsHandlers', () => {
       skippedFiles: [],
       error: 'Invalid Warp theme import source.'
     }
+
     previewWarpThemeImportMock.mockResolvedValue(expected)
     registerSettingsHandlers(store as never)
 
@@ -333,10 +345,13 @@ describe('registerSettingsHandlers', () => {
     const onSettingsChanged = store.onSettingsChanged as unknown as {
       mock: { calls: [SettingsChangedListener][] }
     }
+
     const listener = onSettingsChanged.mock.calls[0]?.[0]
+
     if (!listener) {
       throw new Error('settings change listener was not registered')
     }
+
     listener({ defaultTuiAgent: 'codex' }, { defaultTuiAgent: 'codex' })
 
     expect(send).toHaveBeenCalledWith('settings:changed', { defaultTuiAgent: 'codex' })
@@ -354,10 +369,13 @@ describe('registerSettingsHandlers', () => {
     const onSettingsChanged = store.onSettingsChanged as unknown as {
       mock: { calls: [SettingsChangedListener][] }
     }
+
     const listener = onSettingsChanged.mock.calls[0]?.[0]
+
     if (!listener) {
       throw new Error('settings change listener was not registered')
     }
+
     listener({ defaultTuiAgent: 'codex' }, { defaultTuiAgent: 'codex' }, 1)
 
     expect(originSend).not.toHaveBeenCalled()
@@ -655,6 +673,7 @@ describe('registerSettingsHandlers', () => {
       httpProxyUrl: 'http://proxy.example:8080',
       httpProxyBypassRules: 'localhost'
     }
+
     store.getSettings.mockReturnValue(settings)
     store.updateSettings.mockReturnValue(settings)
     registerSettingsHandlers(store as never)
@@ -679,7 +698,9 @@ describe('registerSettingsHandlers', () => {
         : { httpProxyUrl: 'socks5://127.0.0.1:1080', httpProxyBypassRules: 'late.example' }
     )
     let releaseFirstApply = (): void => {}
+
     let markFirstApplyStarted = (): void => {}
+
     const firstApplyStarted = new Promise<void>((resolve) => (markFirstApplyStarted = resolve))
     applyElectronProxySettingsMock.mockImplementationOnce(
       () =>
@@ -689,6 +710,7 @@ describe('registerSettingsHandlers', () => {
         })
     )
     registerSettingsHandlers(store as never)
+
     const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
       event: typeof settingsInvokeEvent,
       args: { httpProxyUrl?: string; httpProxyBypassRules?: string }
@@ -731,10 +753,13 @@ describe('registerSettingsHandlers', () => {
       disabledTuiAgents: []
     }))
     let releaseHookReconciliation = (): void => {}
+
     let markHookReconciliationStarted = (): void => {}
+
     const hookReconciliationStarted = new Promise<void>(
       (resolve) => (markHookReconciliationStarted = resolve)
     )
+
     applyAgentStatusHooksEnabledMock.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -743,6 +768,7 @@ describe('registerSettingsHandlers', () => {
         })
     )
     registerSettingsHandlers(store as never)
+
     const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
       event: typeof settingsInvokeEvent,
       args: { httpProxyUrl: string; agentStatusHooksEnabled?: boolean }
@@ -752,6 +778,7 @@ describe('registerSettingsHandlers', () => {
       httpProxyUrl: 'http://old.example:8080',
       agentStatusHooksEnabled: true
     })
+
     await hookReconciliationStarted
     await handler(settingsInvokeEvent, { httpProxyUrl: 'http://new.example:8080' })
     releaseHookReconciliation()
@@ -842,6 +869,7 @@ describe('registerSettingsHandlers', () => {
     store.getSettings.mockReturnValue(before)
     store.updateSettings.mockImplementation((args: object) => ({ ...before, ...args }))
     registerSettingsHandlers(store as never)
+
     const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
       event: typeof settingsInvokeEvent,
       args: unknown
@@ -865,6 +893,7 @@ describe('registerSettingsHandlers', () => {
     store.getSettings.mockReturnValue({ appIcon: 'default' })
     store.updateSettings.mockReturnValue({ appIcon: 'default' })
     registerSettingsHandlers(store as never)
+
     const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
       event: typeof settingsInvokeEvent,
       args: unknown

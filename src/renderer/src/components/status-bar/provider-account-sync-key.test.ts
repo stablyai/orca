@@ -31,12 +31,14 @@ describe.each([
 
   it('recomputes for a new settings identity', () => {
     const first = getSyncKey(makeSettings())
+
     const second = getSyncKey(
       makeSettings({
         claudeManagedAccounts: [{ id: 'a1', updatedAt: 6 }],
         codexManagedAccounts: [{ id: 'c1', updatedAt: 8 }]
       } as unknown as Partial<GlobalSettings>)
     )
+
     expect(second).not.toBe(first)
   })
 })

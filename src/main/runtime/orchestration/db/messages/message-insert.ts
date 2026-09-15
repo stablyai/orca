@@ -8,6 +8,7 @@ import { UNBOUND_RUN_ID } from '../contract-constants'
 // ── Messages ──
 
 const MESSAGE_INSERT_SAVEPOINT = 'message_insert_batch'
+
 const WORKER_DONE_MESSAGE_SAVEPOINT = 'worker_done_message_commit'
 
 export type MessageInsert = {
@@ -30,6 +31,7 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
   // filed under the unbound Run, never the legacy one, which the schema-skew probe reads as pre-Runs.
   // Created on first use so `run list` shows it only to a user who has such mail.
   const runId = msg.runId ?? UNBOUND_RUN_ID
+
   if (msg.runId == null) {
     this.db
       .prepare(
@@ -38,9 +40,11 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
       )
       .run(UNBOUND_RUN_ID)
   }
+
   const deliveryContract = msg.deliveryContract ?? 'current_delivery'
   this.requireRun(runId)
   const id = msg.id ?? generateId('msg')
+
   const stmt = this.db.prepare(`
     INSERT INTO messages (
       id, run_id, delivery_contract, from_handle, to_handle, subject, body,
@@ -48,6 +52,7 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `)
+
   stmt.run(
     id,
     runId,
@@ -62,6 +67,7 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
     msg.payload ?? null,
     msg.senderPaneKey ?? null
   )
+
   return exposeMessageTimestamps(
     this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow
   )
@@ -69,9 +75,11 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
 
 export function insertMessages(this: OrchestrationDb, messages: MessageInsert[]): MessageRow[] {
   this.db.exec(`SAVEPOINT ${MESSAGE_INSERT_SAVEPOINT}`)
+
   try {
     const inserted = messages.map((message) => this.insertMessage(message))
     this.db.exec(`RELEASE ${MESSAGE_INSERT_SAVEPOINT}`)
+
     return inserted
   } catch (error) {
     this.db.exec(`ROLLBACK TO ${MESSAGE_INSERT_SAVEPOINT}`)

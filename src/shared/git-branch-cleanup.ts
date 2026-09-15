@@ -19,6 +19,7 @@ async function readOptionalGitStdout(
 ): Promise<string | null> {
   try {
     const { stdout } = await runGit(argv, options)
+
     return stdout.trim() || null
   } catch {
     return null
@@ -31,6 +32,7 @@ async function readOptionalGitRawStdout(
 ): Promise<string | null> {
   try {
     const { stdout } = await runGit(argv)
+
     return stdout || null
   } catch {
     return null
@@ -39,9 +41,11 @@ async function readOptionalGitRawStdout(
 
 function addCandidateRef(candidates: string[], ref: string | null): void {
   const trimmed = ref?.trim()
+
   if (!trimmed || trimmed.startsWith('-') || candidates.includes(trimmed)) {
     return
   }
+
   candidates.push(trimmed)
 }
 
@@ -59,6 +63,7 @@ export async function getBranchCleanupTargetRefs(
     await readOptionalGitStdout(runGit, ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'])
   )
   addCandidateRef(candidates, 'HEAD')
+
   return candidates
 }
 
@@ -67,18 +72,22 @@ export async function refreshBranchCleanupTargetRefs(
   targetRefs: readonly string[]
 ): Promise<void> {
   const remotesStdout = await readOptionalGitStdout(runGit, ['remote'])
+
   const remotes = (remotesStdout ?? '')
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter((remote) => remote && !remote.startsWith('-'))
     .sort((left, right) => right.length - left.length)
+
   const fetchedRemotes = new Set<string>()
 
   for (const targetRef of targetRefs) {
     const remote = remotes.find((candidate) => targetRef.startsWith(`refs/remotes/${candidate}/`))
+
     if (!remote || fetchedRemotes.has(remote)) {
       continue
     }
+
     fetchedRemotes.add(remote)
     // Why: deleting a worktree often follows a PR merge. Refresh the saved base
     // before deciding a local branch is unpublished, but keep network failures
@@ -103,6 +112,7 @@ async function hasBranchOnlyMergeCommits(
     '--count',
     `${targetOid}...${branchRef}`
   ])
+
   return Number(stdout ?? 0) > 0
 }
 
@@ -113,6 +123,7 @@ async function branchMergesWithoutTreeChanges(
   capabilities: GitCapabilityCache
 ): Promise<boolean> {
   const args = ['merge-tree', '--write-tree', targetOid, branchRef]
+
   const readMergedTree = async (): Promise<string | null> => {
     try {
       return await capabilities.runWithFallback(
@@ -125,16 +136,20 @@ async function branchMergesWithoutTreeChanges(
       return null
     }
   }
+
   const mergedTree = await readMergedTree()
+
   if (!mergedTree) {
     return false
   }
+
   const targetTree = await readOptionalGitStdout(runGit, [
     'rev-parse',
     '--verify',
     '--quiet',
     `${targetOid}^{tree}`
   ])
+
   return Boolean(mergedTree && targetTree && mergedTree.split(/\r?\n/)[0] === targetTree)
 }
 
@@ -144,13 +159,16 @@ async function branchOnlyCommitsArePatchEquivalent(
   branchRef: string
 ): Promise<boolean> {
   const stdout = await readOptionalGitStdout(runGit, ['cherry', '-v', targetOid, branchRef])
+
   if (stdout === null) {
     return false
   }
+
   const lines = stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
+
   return lines.every((line) => line.startsWith('-'))
 }
 
@@ -159,7 +177,9 @@ function parsePatchId(stdout: string | null): string | null {
     ?.split(/\r?\n/)
     .map((candidate) => candidate.trim())
     .find(Boolean)
+
   const patchId = line?.split(/\s+/)[0]
+
   return patchId || null
 }
 
@@ -170,6 +190,7 @@ async function computeStablePatchId(
   if (!patchText) {
     return null
   }
+
   return parsePatchId(
     await readOptionalGitStdout(runGit, ['patch-id', '--stable'], { stdin: patchText })
   )
@@ -182,6 +203,7 @@ async function branchNetPatchMatchesTargetSquashCommit(
   capabilities: GitCapabilityCache
 ): Promise<boolean> {
   const mergeBase = await readOptionalGitStdout(runGit, ['merge-base', targetOid, branchRef])
+
   if (!mergeBase) {
     return false
   }
@@ -190,6 +212,7 @@ async function branchNetPatchMatchesTargetSquashCommit(
     runGit,
     await readOptionalGitRawStdout(runGit, ['diff', mergeBase, branchRef])
   )
+
   if (!branchPatchId) {
     return false
   }
@@ -205,6 +228,7 @@ async function branchNetPatchMatchesTargetSquashCommit(
     ?.split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
+
   if (!commits?.length || commits.length > SQUASH_PATCH_SCAN_LIMIT) {
     return false
   }
@@ -214,6 +238,7 @@ async function branchNetPatchMatchesTargetSquashCommit(
       runGit,
       await readOptionalGitRawStdout(runGit, ['show', '--format=', commitOid])
     )
+
     // Why: a matching patch-id identifies a possible squash commit, but the
     // tree merge proves the branch contributes no additional changes there.
     if (
@@ -223,6 +248,7 @@ async function branchNetPatchMatchesTargetSquashCommit(
       return true
     }
   }
+
   return false
 }
 
@@ -236,20 +262,25 @@ export async function branchHasNoUnmergedChangesOnAnyTarget(
 
   for (const targetRef of targetRefs) {
     const targetOid = await resolveCommitOid(runGit, targetRef)
+
     if (!targetOid) {
       continue
     }
+
     if (await branchMergesWithoutTreeChanges(runGit, targetOid, branchRef, capabilities)) {
       return true
     }
+
     if (await hasBranchOnlyMergeCommits(runGit, targetOid, branchRef)) {
       if (
         await branchNetPatchMatchesTargetSquashCommit(runGit, targetOid, branchRef, capabilities)
       ) {
         return true
       }
+
       continue
     }
+
     if (await branchOnlyCommitsArePatchEquivalent(runGit, targetOid, branchRef)) {
       return true
     }
@@ -267,12 +298,15 @@ export async function branchHasNoUnmergedChangesWithLazyTargetRefresh(
   // Why: an unrefreshed remote-tracking ref may no longer represent the remote's branch contents.
   const localTargetRefs = targetRefs.filter(isLocalTargetRef)
   const refreshDependentTargetRefs = targetRefs.filter((targetRef) => !isLocalTargetRef(targetRef))
+
   if (
     await branchHasNoUnmergedChangesOnAnyTarget(runGit, branchName, localTargetRefs, capabilities)
   ) {
     return true
   }
+
   await refreshBranchCleanupTargetRefs(runGit, targetRefs)
+
   return branchHasNoUnmergedChangesOnAnyTarget(
     runGit,
     branchName,

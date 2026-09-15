@@ -18,6 +18,7 @@ export type StartedMacOSProviderSocket = {
 
 export function isMacOS14OrNewer(): boolean {
   const darwinMajor = Number.parseInt(release().split('.')[0] ?? '', 10)
+
   return Number.isFinite(darwinMajor) && darwinMajor >= 23
 }
 
@@ -36,6 +37,7 @@ export function attachMacOSNativeProviderSocketListeners(
   socket.on('data', listeners.data)
   socket.on('close', listeners.close)
   socket.on('error', listeners.error)
+
   return () => {
     socket.off('data', listeners.data)
     socket.off('close', listeners.close)
@@ -52,9 +54,11 @@ export class NativeProviderLineBuffer {
   push(chunk: string, handleLine: (line: string) => void): void {
     this.pending += chunk
     this.hasCompleteLine ||= chunk.endsWith('\n') || chunk.includes('\n')
+
     if (!this.hasCompleteLine) {
       return
     }
+
     // Keep complete lines retryable if a callback throws.
     this.pending = consumeNativeProviderLines(this.pending, handleLine)
     this.hasCompleteLine = false
@@ -71,13 +75,17 @@ export function consumeNativeProviderLines(
   handleLine: (line: string) => void
 ): string {
   let remaining = buffer
+
   while (true) {
     const newline = remaining.indexOf('\n')
+
     if (newline === -1) {
       return remaining
     }
+
     const line = remaining.slice(0, newline)
     remaining = remaining.slice(newline + 1)
+
     if (line.trim()) {
       handleLine(line)
     }
@@ -102,13 +110,16 @@ export async function startMacOSNativeProviderSocket({
   const provider = spawnProvider(helperExecutablePath, socketPath, socketTokenPath)
   const providerFailure = waitForProviderLaunchFailure(provider)
   const connectAbort = new AbortController()
+
   try {
     const socket = await Promise.race([
       connectMacOSProviderSocket(socketPath, HELPER_CONNECT_TIMEOUT_MS, connectAbort.signal),
       providerFailure.promise
     ])
+
     providerFailure.cleanup()
     rmSync(socketTokenPath, { force: true })
+
     if (!isCurrent(socketPath)) {
       socket.destroy()
       cleanupSocketDirectory(socketDirectory)
@@ -117,6 +128,7 @@ export async function startMacOSNativeProviderSocket({
         'native macOS provider startup was superseded'
       )
     }
+
     return { socket, socketDirectory, socketPath, socketToken }
   } catch (error) {
     connectAbort.abort()
@@ -124,9 +136,11 @@ export async function startMacOSNativeProviderSocket({
     // Why: connect failures happen after spawn; terminate the detached helper
     // so repeated startup attempts do not leave orphan providers.
     provider.kill('SIGTERM')
+
     if (isCurrent(socketPath)) {
       cleanupSocketDirectory(socketDirectory)
     }
+
     throw error
   }
 }
@@ -145,7 +159,9 @@ function spawnProvider(
     ['--agent', socketPath, '--token-file', socketTokenPath],
     { detached: true, stdio: 'ignore' }
   )
+
   provider.unref()
+
   return provider
 }
 
@@ -154,6 +170,7 @@ function waitForProviderLaunchFailure(provider: ChildProcess): {
   cleanup: () => void
 } {
   let cleanup = (): void => {}
+
   const promise = new Promise<never>((_resolve, reject) => {
     const fail = (error: Error) => {
       reject(
@@ -163,6 +180,7 @@ function waitForProviderLaunchFailure(provider: ChildProcess): {
         )
       )
     }
+
     const exit = (code: number | null, signal: NodeJS.Signals | null) => {
       reject(
         new RuntimeClientError(
@@ -173,6 +191,7 @@ function waitForProviderLaunchFailure(provider: ChildProcess): {
         )
       )
     }
+
     provider.once('error', fail)
     provider.once('exit', exit)
     cleanup = () => {
@@ -180,5 +199,6 @@ function waitForProviderLaunchFailure(provider: ChildProcess): {
       provider.off('exit', exit)
     }
   })
+
   return { promise, cleanup }
 }

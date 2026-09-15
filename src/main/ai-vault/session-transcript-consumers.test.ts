@@ -23,6 +23,7 @@ vi.mock('./session-scanner-opencode-sqlite-worker-spawn', async (importOriginal)
   ...(await importOriginal<typeof OpenCodeSqliteWorkerSpawn>()),
   parseOpenCodeSqliteSessionViaWorker: () => Promise.resolve(OPENCODE_SQLITE_SESSION)
 }))
+
 import type * as OpenCodeSqliteWorkerSpawn from './session-scanner-opencode-sqlite-worker-spawn'
 import {
   registerTranscriptConsumer,
@@ -40,10 +41,12 @@ type RecordedRead = {
 
 function recordingConsumer(): { reads: RecordedRead[]; unregister: () => void } {
   const reads: RecordedRead[] = []
+
   const unregister = registerTranscriptConsumer({
     beginRead: (start) => {
       const read: RecordedRead = { start, messages: [], outcome: null }
       reads.push(read)
+
       return {
         message: (message) => read.messages.push(message),
         finish: (outcome) => {
@@ -52,6 +55,7 @@ function recordingConsumer(): { reads: RecordedRead[]; unregister: () => void } 
       }
     }
   })
+
   return { reads, unregister }
 }
 
@@ -72,6 +76,7 @@ afterEach(async () => {
 
 function claudeTurns(from: number, to: number): unknown[] {
   const records: unknown[] = []
+
   for (let index = from; index <= to; index++) {
     records.push({
       type: 'user',
@@ -93,6 +98,7 @@ function claudeTurns(from: number, to: number): unknown[] {
       }
     })
   }
+
   return records
 }
 
@@ -107,6 +113,7 @@ async function writeClaudeFixture(): Promise<{
   const transcript = join(roots.claudeProjectsDir, 'project', 'claude-session.jsonl')
   await mkdir(join(roots.claudeProjectsDir, 'project'), { recursive: true })
   await writeFile(transcript, `${jsonLines(claudeTurns(1, 4))}\n`)
+
   return { root, roots, transcript }
 }
 
@@ -143,6 +150,7 @@ it('delivers one message stream to every registered consumer', async () => {
 
 it('leaves the session list identical whether or not a consumer is registered', async () => {
   const withoutConsumer = await writeClaudeFixture()
+
   const bare = await scanAiVaultSessions({
     ...withoutConsumer.roots,
     platform: 'darwin',
@@ -151,6 +159,7 @@ it('leaves the session list identical whether or not a consumer is registered', 
 
   resetSessionParseCacheForTests()
   recordingConsumer()
+
   const observed = await scanAiVaultSessions({
     ...withoutConsumer.roots,
     platform: 'darwin',
@@ -201,6 +210,7 @@ it.each(['rewrite', 'truncate then regrow'])(
     } else {
       await writeFile(transcript, rewritten)
     }
+
     const changedAt = new Date(before.file.mtimeMs + 2000)
     await utimes(transcript, changedAt, changedAt)
     const session = await parseAgentSessionFileCached(await claudeCandidate(transcript), 'darwin')
@@ -266,12 +276,14 @@ it('skips a read a consumer declines without disturbing the others', async () =>
 
 async function claudeCandidate(transcript: string): Promise<SessionFileCandidate> {
   const stats = await stat(transcript)
+
   const file: FileWithMtime = {
     path: transcript,
     mtimeMs: stats.mtimeMs,
     modifiedAt: stats.mtime.toISOString(),
     sizeBytes: stats.size
   }
+
   return { agent: 'claude', file, codexHome: null }
 }
 

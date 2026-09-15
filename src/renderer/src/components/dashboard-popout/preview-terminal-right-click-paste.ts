@@ -25,21 +25,28 @@ export function installPreviewTerminalRightClickPaste({
 }): () => void {
   const onContextMenu = (event: MouseEvent): void => {
     const terminal = getTerminal()
+
     if (!terminal || !isRightClickToPasteEnabled() || event.ctrlKey) {
       return
     }
+
     event.preventDefault()
     event.stopPropagation()
+
     if (terminal.getSelection()) {
       void copyTerminalSelection({
         terminal,
         writeClipboardText: window.api.ui.writeTerminalClipboardText,
         clearSelectionOnSuccess: true
       }).catch(() => undefined)
+
       return
     }
+
     pasteClipboardText(document.activeElement, 'right-click')
   }
+
   container.addEventListener('contextmenu', onContextMenu)
+
   return () => container.removeEventListener('contextmenu', onContextMenu)
 }

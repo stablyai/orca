@@ -24,12 +24,15 @@ test('recovers update install from a corrupt clean session but preserves dirty d
   const dirtyResult = await orcaPage.evaluate(
     async ({ filePath, worktreeId, corruptEntry }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       const state = store.getState()
       const originalHistory = state.browserUrlHistory
       state.browserUrlHistory = [corruptEntry] as unknown as typeof state.browserUrlHistory
+
       const fileId = state.openFile({
         filePath,
         relativePath: 'checkpoint-draft.txt',
@@ -37,11 +40,13 @@ test('recovers update install from a corrupt clean session but preserves dirty d
         language: 'plaintext',
         mode: 'edit'
       })
+
       state.setEditorDraft(fileId, 'unsaved draft')
       state.markFileDirty(fileId, true)
 
       try {
         await window.api.updater.quitAndInstall()
+
         return null
       } catch (error) {
         return String((error as Error)?.message ?? error)
@@ -65,14 +70,18 @@ test('recovers update install from a corrupt clean session but preserves dirty d
 
   const cleanResult = await orcaPage.evaluate(async (corruptEntry) => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const state = store.getState()
     const originalHistory = state.browserUrlHistory
     state.browserUrlHistory = [corruptEntry] as unknown as typeof state.browserUrlHistory
+
     try {
       await window.api.updater.quitAndInstall()
+
       return 'continued'
     } catch (error) {
       return String((error as Error)?.message ?? error)

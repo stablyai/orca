@@ -24,12 +24,15 @@ export function buildWindowsRunnerScript(script: string): string {
 
   for (const rawLine of iterateLfScriptLines(script)) {
     const command = rawLine.trim()
+
     if (isFirstLine) {
       isFirstLine = false
+
       if (isShebangLine(command)) {
         return `${header}${WINDOWS_RUNNER_SHEBANG_REFUSAL}`
       }
     }
+
     if (!command) {
       runnerScript += '\r\n'
       continue
@@ -49,6 +52,7 @@ export function* iterateLfScriptLines(script: string): Generator<string> {
     if (script.charCodeAt(index) !== 10) {
       continue
     }
+
     const lineEnd = index > lineStart && script.charCodeAt(index - 1) === 13 ? index - 1 : index
     yield script.slice(lineStart, lineEnd)
     lineStart = index + 1
@@ -64,15 +68,19 @@ export function buildPosixRunnerScript(script: string): string {
   // are never seen by the interpreter — replay them through `set` or a script that asked for
   // `-euo pipefail` silently loses pipefail, and drop the now-duplicate interpreter line.
   const shebang = parseSetupScriptShebang(script)
+
   const declaredOptions = shebang?.shellOptions.length
     ? `set ${shebang.shellOptions.join(' ')}\n`
     : ''
+
   const body = shebang ? stripLeadingShebangLine(script) : script
+
   return `#!/usr/bin/env bash\nset -e\n${declaredOptions}${normalizeCrlfScriptLineEndings(body)}\n`
 }
 
 function normalizeCrlfScriptLineEndings(script: string): string {
   let crlfStart = script.indexOf('\r\n')
+
   if (crlfStart === -1) {
     return script
   }

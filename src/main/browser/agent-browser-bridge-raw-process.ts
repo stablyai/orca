@@ -40,11 +40,13 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
           if (session && session.activeProcess === child) {
             session.activeProcess = null
           }
+
           if (child && this.cancelledProcesses.has(child)) {
             this.cancelledProcesses.delete(child)
             reject(
               new BrowserError('browser_tab_closed', 'Tab was closed while command was running')
             )
+
             return
           }
 
@@ -53,16 +55,21 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
           if (error && (error as NodeJS.ErrnoException & { killed?: boolean }).killed) {
             if (execOptions?.timeoutError) {
               reject(execOptions.timeoutError)
+
               return
             }
+
             if (liveSession) {
               liveSession.consecutiveTimeouts++
+
               if (liveSession.consecutiveTimeouts >= CONSECUTIVE_TIMEOUT_LIMIT) {
                 // Why: 3 consecutive timeouts means the daemon is likely stuck — destroy and recreate
                 this.destroySession(sessionName)
               }
             }
+
             reject(new BrowserError('browser_error', 'Browser command timed out'))
+
             return
           }
 
@@ -75,29 +82,35 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeExe
             if (stdout) {
               try {
                 const parsed = JSON.parse(stdout)
+
                 if (parsed.error) {
                   const code = classifyErrorCode(parsed.error)
                   reject(
                     this.createCommandError(sessionName, parsed.error, code, session?.webContentsId)
                   )
+
                   return
                 }
               } catch {
                 // stdout not valid JSON — fall through to stderr/error.message
               }
             }
+
             const message = stderr || error.message
             const code = classifyErrorCode(message)
             reject(this.createCommandError(sessionName, message, code, session?.webContentsId))
+
             return
           }
 
           resolve(stdout)
         }
       )
+
       if (session) {
         session.activeProcess = child
       }
+
       if (execOptions?.stdinText !== undefined && child?.stdin) {
         // Why: eval --stdin keeps paste-sized scripts out of argv on every platform.
         child.stdin.on('error', () => {})

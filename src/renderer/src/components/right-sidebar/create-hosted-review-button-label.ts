@@ -17,12 +17,14 @@ export function getCreateButtonLabel({
   if (isCreating) {
     return translate('auto.components.right.sidebar.SourceControl.26511c22b4', 'Creating...')
   }
+
   if (pushBeforeCreate && stacked) {
     return translate(
       'auto.components.right.sidebar.create.hosted.review.button.label.96ae7358e0',
       'Push & Create PR in stack'
     )
   }
+
   if (pushBeforeCreate) {
     return translate(
       'auto.components.right.sidebar.CreateHostedReviewComposer.741ff8a0d2',
@@ -30,6 +32,7 @@ export function getCreateButtonLabel({
       { value0: shortLabel }
     )
   }
+
   if (stacked) {
     return draft
       ? translate(
@@ -41,6 +44,7 @@ export function getCreateButtonLabel({
           'Create PR in stack'
         )
   }
+
   if (draft) {
     return translate(
       'auto.components.right.sidebar.SourceControl.aaf1451654',
@@ -48,6 +52,7 @@ export function getCreateButtonLabel({
       { value0: shortLabel }
     )
   }
+
   return translate('auto.components.right.sidebar.SourceControl.5acbcedc1a', 'Create {{value0}}', {
     value0: shortLabel
   })

@@ -35,12 +35,15 @@ export function applyWebSessionTabsSnapshots(
   now = Date.now()
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   const nextState = { ...state }
+
   const batchContext: WebSessionTabsBatchContext = {
     agentPaneKeysByTabId: null,
     changedRecords: new Set(),
     openFilesIndex: null
   }
+
   let mergedPatch: Partial<WebSessionTabsSyncState> = {}
+
   for (const snapshot of snapshots) {
     const patch = applyWebSessionTabsSnapshotWithContext(
       nextState,
@@ -49,17 +52,22 @@ export function applyWebSessionTabsSnapshots(
       now,
       batchContext
     )
+
     if (patch === nextState) {
       continue
     }
+
     mergedPatch = { ...mergedPatch, ...patch }
     Object.assign(nextState, patch)
   }
+
   const mutableMergedPatch = mergedPatch as Record<string, unknown>
   const mutableNextState = nextState as unknown as Record<string, unknown>
+
   for (const recordKey of batchContext.changedRecords) {
     mutableMergedPatch[recordKey] = mutableNextState[recordKey]
   }
+
   return Object.keys(mergedPatch).length === 0 ? state : mergedPatch
 }
 
@@ -83,6 +91,7 @@ export function applyFreshWebSessionTabsSnapshots(
   const fresh = snapshots.filter((snapshot) =>
     shouldApplyWebSessionTabsSnapshot(snapshot, environmentId)
   )
+
   return fresh.length === 0 ? state : applyWebSessionTabsSnapshots(state, fresh, environmentId, now)
 }
 
@@ -115,16 +124,21 @@ export function applyWebSessionTabsSnapshotOperations(
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   let nextState = state
   let mergedPatch: Partial<WebSessionTabsSyncState> = {}
+
   for (const { environmentId, snapshot, decision } of operations) {
     if (!decision.apply) {
       continue
     }
+
     const patch = applyWebSessionTabsSnapshot(nextState, snapshot, environmentId)
+
     if (patch === nextState) {
       continue
     }
+
     mergedPatch = { ...mergedPatch, ...patch }
     nextState = { ...nextState, ...patch }
   }
+
   return Object.keys(mergedPatch).length === 0 ? state : mergedPatch
 }

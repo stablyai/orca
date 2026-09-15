@@ -29,8 +29,10 @@ export function initializeLegacyRecoveryCohort(
         principal.terminal_handle,
         `dispatch:${principal.dispatch_id}`
       )
+
     return
   }
+
   this.db
     .prepare(
       `INSERT OR IGNORE INTO legacy_mail_receipts (
@@ -60,21 +62,27 @@ export function getLegacyMailPage(
   recovery: boolean
 } {
   const principal = this.requireLegacyMailPrincipal(params.principalId)
+
   const limit = Math.min(
     Math.max(params.limit ?? ORCHESTRATION_DELIVERY_BATCH_LIMIT, 1),
     ORCHESTRATION_DELIVERY_BATCH_LIMIT
   )
+
   const addressSql =
     principal.role === 'worker' ? '(m.to_handle = ? OR m.to_handle = ?)' : 'm.to_handle = ?'
+
   const addressParams =
     principal.role === 'worker'
       ? [principal.terminal_handle, `dispatch:${principal.dispatch_id}`]
       : [principal.terminal_handle]
+
   const typeSql =
     params.types && params.types.length > 0
       ? `AND m.type IN (${params.types.map(() => '?').join(',')})`
       : ''
+
   const typeParams = params.types ?? []
+
   const recovery = this.db
     .prepare(
       `SELECT m.*
@@ -93,6 +101,7 @@ export function getLegacyMailPage(
       ...typeParams,
       limit
     ) as MessageRow[]
+
   if (recovery.length > 0) {
     return { messages: exposeMessageListTimestamps(recovery), recovery: true }
   }
@@ -115,6 +124,7 @@ export function getLegacyMailPage(
       ...typeParams,
       limit
     ) as MessageRow[]
+
   return { messages: exposeMessageListTimestamps(unread), recovery: false }
 }
 
@@ -127,16 +137,20 @@ export function getLegacyMailHistory(
 } {
   const principal = this.requireLegacyMailPrincipal(params.principalId)
   const limit = Math.min(Math.max(params.limit ?? 100, 1), 100)
+
   const addressSql =
     principal.role === 'worker' ? '(to_handle = ? OR to_handle = ?)' : 'to_handle = ?'
+
   const addressParams =
     principal.role === 'worker'
       ? [principal.terminal_handle, `dispatch:${principal.dispatch_id}`]
       : [principal.terminal_handle]
+
   const typeSql =
     params.types && params.types.length > 0
       ? `AND type IN (${params.types.map(() => '?').join(',')})`
       : ''
+
   const messages = this.db
     .prepare(
       `SELECT * FROM messages
@@ -145,6 +159,7 @@ export function getLegacyMailHistory(
        ORDER BY sequence ASC LIMIT ?`
     )
     .all(principal.run_id, ...addressParams, ...(params.types ?? []), limit) as MessageRow[]
+
   return { messages: exposeMessageListTimestamps(messages), recovery: false }
 }
 

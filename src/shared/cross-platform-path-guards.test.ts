@@ -12,10 +12,12 @@ import { parseWslUncPath } from './wsl-paths'
 
 function createRandom(seed: number): () => number {
   let state = seed >>> 0
+
   return () => {
     state = (state + 0x6d2b79f5) >>> 0
     let t = Math.imul(state ^ (state >>> 15), 1 | state)
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
@@ -67,28 +69,35 @@ const SEGMENTS = [
 ]
 
 const JOINERS = ['/', '/', '/', '//', '///', '\\', '\\\\']
+
 const SUFFIXES = ['', '', '', '/', '//', '\\', '/.', '/..']
 
 function generatePath(random: () => number): string {
   const pick = <T>(items: readonly T[]): T => items[Math.floor(random() * items.length)]
   let path = pick(PREFIXES)
   const segmentCount = Math.floor(random() * 5)
+
   for (let index = 0; index < segmentCount; index++) {
     path += (path === '' ? '' : pick(JOINERS)) + pick(SEGMENTS)
   }
+
   return path + pick(SUFFIXES)
 }
 
 /** Roots that actually contain the candidate, so the matching branches get exercised too. */
 function generateRoot(random: () => number, candidate: string): string {
   const roll = random()
+
   if (roll < 0.35) {
     const cut = Math.floor(random() * (candidate.length + 1))
+
     return candidate.slice(0, cut)
   }
+
   if (roll < 0.45) {
     return candidate
   }
+
   return generatePath(random)
 }
 
@@ -100,6 +109,7 @@ describe('guarded path normalization matches the pre-guard implementation', () =
   it(`agrees on every export across ${FUZZ_ITERATIONS} seeded paths`, () => {
     const random = createRandom(0x5eed)
     const mismatches: string[] = []
+
     const record = (label: string, path: string, root: string): void => {
       if (mismatches.length < 5) {
         mismatches.push(`${label}: candidate=${JSON.stringify(path)} root=${JSON.stringify(root)}`)
@@ -135,6 +145,7 @@ describe('guarded path normalization matches the pre-guard implementation', () =
         ['isRuntimePathAbsolute', guarded.isRuntimePathAbsolute, unguarded.isRuntimePathAbsolute],
         ['getRuntimePathBasename', guarded.getRuntimePathBasename, unguarded.getRuntimePathBasename]
       ]
+
       for (const [label, left, right] of singles) {
         if (left(path) !== right(path)) {
           record(label, path, root)
@@ -143,6 +154,7 @@ describe('guarded path normalization matches the pre-guard implementation', () =
 
       const identity = guarded.getLocalWindowsWslPathIdentity(path)
       const expectedIdentity = unguarded.getLocalWindowsWslPathIdentity(path)
+
       if (
         identity.normalizedPath !== expectedIdentity.normalizedPath ||
         identity.aliasComparisonPath !== expectedIdentity.aliasComparisonPath ||
@@ -150,38 +162,46 @@ describe('guarded path normalization matches the pre-guard implementation', () =
       ) {
         record('getLocalWindowsWslPathIdentity', path, root)
       }
+
       const wslUnc = parseWslUncPath(path)
       const expectedWslUnc = unguarded.parseWslUncPath(path)
+
       if (
         wslUnc?.distro !== expectedWslUnc?.distro ||
         wslUnc?.linuxPath !== expectedWslUnc?.linuxPath
       ) {
         record('parseWslUncPath', path, root)
       }
+
       if (
         guarded.areLocalWindowsWslPathAliases(root, path) !==
         unguarded.areLocalWindowsWslPathAliases(root, path)
       ) {
         record('areLocalWindowsWslPathAliases', path, root)
       }
+
       if (
         guarded.isWslUncPathForCallerLinuxPath(root, path, distro) !==
         unguarded.isWslUncPathForCallerLinuxPath(root, path, distro)
       ) {
         record('isWslUncPathForCallerLinuxPath', path, root)
       }
+
       if (
         guarded.isWslUncPathForLinuxMountedPath(root, path) !==
         unguarded.isWslUncPathForLinuxMountedPath(root, path)
       ) {
         record('isWslUncPathForLinuxMountedPath', path, root)
       }
+
       if (guarded.resolveRuntimePath(root, path) !== unguarded.resolveRuntimePath(root, path)) {
         record('resolveRuntimePath', path, root)
       }
+
       if (guarded.isPathInsideOrEqual(root, path) !== unguarded.isPathInsideOrEqual(root, path)) {
         record('isPathInsideOrEqual', path, root)
       }
+
       if (
         guarded.createNormalizedPathInsideOrEqualMatcher(root)(
           guarded.normalizeRuntimePathForComparison(path)
@@ -192,6 +212,7 @@ describe('guarded path normalization matches the pre-guard implementation', () =
       ) {
         record('createNormalizedPathInsideOrEqualMatcher', path, root)
       }
+
       if (
         guarded.relativePathInsideRoot(root, path) !== unguarded.relativePathInsideRoot(root, path)
       ) {
@@ -253,13 +274,16 @@ function countReplaceCalls(run: () => void): number {
   let calls = 0
   String.prototype.replace = function (this: string, ...args: never[]) {
     calls++
+
     return originalReplace.apply(this, args as never)
   } as typeof String.prototype.replace
+
   try {
     run()
   } finally {
     String.prototype.replace = originalReplace
   }
+
   return calls
 }
 

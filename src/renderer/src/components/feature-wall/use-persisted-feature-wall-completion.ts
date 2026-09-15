@@ -47,8 +47,10 @@ function addToSet<T>(setValue: Dispatch<SetStateAction<Set<T>>>, id: T): void {
     if (prev.has(id)) {
       return prev
     }
+
     const next = new Set(prev)
     next.add(id)
+
     return next
   })
 }
@@ -57,24 +59,31 @@ export function usePersistedFeatureWallCompletion(): PersistedFeatureWallComplet
   const [visitedWorkflows, setVisitedWorkflows] = useState<Set<FeatureWallWorkflowId>>(() =>
     readPersistedVisitedWorkflows()
   )
+
   const [visitedAgentSteps, setVisitedAgentSteps] = useState<Set<AgentsStepId>>(() =>
     readPersistedVisitedAgentSteps()
   )
+
   const [visitedWorkbenchSteps, setVisitedWorkbenchSteps] = useState<Set<WorkbenchStepId>>(() =>
     readPersistedVisitedWorkbenchSteps()
   )
+
   const [visitedReviewSteps, setVisitedReviewSteps] = useState<Set<ReviewStepId>>(() =>
     readPersistedVisitedReviewSteps()
   )
+
   const [completedWorkflows, setCompletedWorkflows] = useState<Set<FeatureWallWorkflowId>>(() =>
     readPersistedCompletedWorkflows()
   )
+
   const [completedAgentSteps, setCompletedAgentSteps] = useState<Set<AgentsStepId>>(() =>
     readPersistedCompletedAgentSteps()
   )
+
   const [completedWorkbenchSteps, setCompletedWorkbenchSteps] = useState<Set<WorkbenchStepId>>(() =>
     readPersistedCompletedWorkbenchSteps()
   )
+
   const [completedReviewSteps, setCompletedReviewSteps] = useState<Set<ReviewStepId>>(() =>
     readPersistedCompletedReviewSteps()
   )
@@ -83,30 +92,37 @@ export function usePersistedFeatureWallCompletion(): PersistedFeatureWallComplet
     persistVisitedWorkflow(id)
     addToSet(setVisitedWorkflows, id)
   }, [])
+
   const markAgentStepVisited = useCallback((id: AgentsStepId): void => {
     persistVisitedAgentStep(id)
     addToSet(setVisitedAgentSteps, id)
   }, [])
+
   const markWorkbenchStepVisited = useCallback((id: WorkbenchStepId): void => {
     persistVisitedWorkbenchStep(id)
     addToSet(setVisitedWorkbenchSteps, id)
   }, [])
+
   const markReviewStepVisited = useCallback((id: ReviewStepId): void => {
     persistVisitedReviewStep(id)
     addToSet(setVisitedReviewSteps, id)
   }, [])
+
   const markWorkflowCompleted = useCallback((id: FeatureWallWorkflowId): void => {
     persistCompletedWorkflow(id)
     addToSet(setCompletedWorkflows, id)
   }, [])
+
   const markAgentStepCompleted = useCallback((id: AgentsStepId): void => {
     persistCompletedAgentStep(id)
     addToSet(setCompletedAgentSteps, id)
   }, [])
+
   const markWorkbenchStepCompleted = useCallback((id: WorkbenchStepId): void => {
     persistCompletedWorkbenchStep(id)
     addToSet(setCompletedWorkbenchSteps, id)
   }, [])
+
   const markReviewStepCompleted = useCallback((id: ReviewStepId): void => {
     persistCompletedReviewStep(id)
     addToSet(setCompletedReviewSteps, id)

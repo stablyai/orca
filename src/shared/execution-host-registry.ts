@@ -62,6 +62,7 @@ export type ExecutionHostSource = 'configured-only' | 'include-references'
 
 function normalizeHostPart(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
+
   return trimmed ? trimmed : null
 }
 
@@ -71,6 +72,7 @@ function runtimeCompatibility(
   if (!status) {
     return null
   }
+
   return evaluateRuntimeCompat({
     clientProtocolVersion: RUNTIME_PROTOCOL_VERSION,
     minCompatibleServerProtocolVersion: MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
@@ -90,9 +92,11 @@ function runtimeHealth(
   if (!status) {
     return remoteControl?.state === 'ready' ? 'available' : 'disconnected'
   }
+
   if (!compatibility) {
     return 'available'
   }
+
   return compatibility.kind === 'blocked' ? 'blocked' : 'available'
 }
 
@@ -136,13 +140,17 @@ function setHost(
   entry: ExecutionHostRegistryEntry
 ): void {
   const existing = hosts.get(entry.id)
+
   if (!existing) {
     hosts.set(entry.id, entry)
+
     return
   }
+
   if (existing.health !== 'disconnected') {
     return
   }
+
   // Why: a later status-bearing registration may upgrade health, but the first
   // (named) registration is authoritative for the label — runtime envs are
   // seeded with a friendly name before the id-labeled status/focus/repo
@@ -164,6 +172,7 @@ function addRuntimeHost(
   const metadata = status ?? snapshot?.status
   const compatibility = runtimeCompatibility(metadata)
   const remoteControl = runtimeStatus?.remoteControl ?? status?.remoteControl
+
   const controlHealth = snapshot?.retired
     ? 'disconnected'
     : snapshot?.verification === 'blocked'
@@ -178,6 +187,7 @@ function addRuntimeHost(
             ? 'blocked'
             : 'available'
           : runtimeControlHealth(remoteControl)
+
   setHost(hosts, {
     id: hostId,
     kind: 'runtime',
@@ -219,9 +229,11 @@ export function buildExecutionHostRegistry(args: {
 
   for (const environment of args.runtimeEnvironments ?? []) {
     const environmentId = normalizeHostPart(environment.id)
+
     if (!environmentId) {
       continue
     }
+
     addRuntimeHost(
       hosts,
       environmentId,
@@ -230,6 +242,7 @@ export function buildExecutionHostRegistry(args: {
       args.runtimeStatusByEnvironmentId
     )
   }
+
   for (const environmentId of args.runtimeStatusByEnvironmentId?.keys() ?? []) {
     addRuntimeHost(
       hosts,
@@ -242,6 +255,7 @@ export function buildExecutionHostRegistry(args: {
 
   const focusedHost = getSettingsFocusedExecutionHostId(args.settings)
   const parsedFocusedHost = parseExecutionHostId(focusedHost)
+
   if (parsedFocusedHost?.kind === 'runtime' && args.hostSource !== 'configured-only') {
     addRuntimeHost(
       hosts,
@@ -253,9 +267,11 @@ export function buildExecutionHostRegistry(args: {
   }
 
   const sshTargetIds = new Set<string>()
+
   if (args.hostSource !== 'configured-only') {
     for (const repo of args.repos) {
       const parsedHost = parseExecutionHostId(repo.executionHostId)
+
       if (parsedHost?.kind === 'runtime') {
         addRuntimeHost(
           hosts,
@@ -265,6 +281,7 @@ export function buildExecutionHostRegistry(args: {
           args.runtimeStatusByEnvironmentId
         )
       }
+
       // Why: a VM-backed repo's executionHostId is `ssh:runtime-ssh-<id>`. Runtime-owned
       // targets are hidden, so they must not become visible SSH run-target hosts here.
       if (parsedHost?.kind === 'ssh' && !isRuntimeOwnedSshTargetId(parsedHost.targetId)) {
@@ -272,15 +289,19 @@ export function buildExecutionHostRegistry(args: {
       }
     }
   }
+
   for (const targetId of args.sshTargetLabels?.keys() ?? []) {
     const normalized = normalizeHostPart(targetId)
+
     if (normalized && !isRuntimeOwnedSshTargetId(normalized)) {
       sshTargetIds.add(normalized)
     }
   }
+
   if (args.hostSource !== 'configured-only') {
     for (const repo of args.repos) {
       const targetId = normalizeHostPart(repo.connectionId)
+
       if (targetId && !isRuntimeOwnedSshTargetId(targetId)) {
         sshTargetIds.add(targetId)
       }
@@ -300,11 +321,14 @@ export function buildExecutionHostRegistry(args: {
   }
 
   const overrides = args.hostLabelOverrides
+
   if (!overrides || overrides.size === 0) {
     return [...hosts.values()]
   }
+
   return [...hosts.values()].map((host) => {
     const label = overrides.get(host.id)
+
     return label ? { ...host, label } : host
   })
 }

@@ -9,14 +9,17 @@ const HOOK_ENV = { ORCA_PANE_KEY: PANE_KEY, ORCA_AGENT_HOOK_ENV: 'production' }
 function createHarness() {
   const state = createHookListenerState()
   const statuses: ReturnType<typeof normalizeHookPayload>[] = []
+
   const harness = createAgentStatusExtensionHarness({
     kind: 'pi',
     env: HOOK_ENV,
     fetchImpl: async (_url, init) => {
       statuses.push(normalizeHookPayload(state, 'pi', JSON.parse(String(init?.body)), 'production'))
+
       return { ok: true }
     }
   })
+
   return { ...harness, statuses }
 }
 
@@ -281,6 +284,7 @@ describe('Pi UI prompt status', () => {
 
   it('preserves blocked when a stalled sender coalesces away the start event', async () => {
     let finish: (() => void) | undefined
+
     const harness = createAgentStatusExtensionHarness({
       kind: 'pi',
       env: HOOK_ENV,
@@ -289,6 +293,7 @@ describe('Pi UI prompt status', () => {
           finish = resolve
         })
     })
+
     await harness.callHook('agent_start')
     await harness.callHook('ui_prompt_start')
     await harness.callHook('tool_execution_end', { toolName: 'bash' })

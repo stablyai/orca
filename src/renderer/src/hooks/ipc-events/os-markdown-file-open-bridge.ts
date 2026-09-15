@@ -17,8 +17,10 @@ async function openOsRequestedMarkdownFiles(documents: MarkdownDocument[]): Prom
   if (!Array.isArray(documents) || documents.length === 0) {
     return
   }
+
   const store = useAppStore.getState()
   let opened = 0
+
   for (const document of documents) {
     // Why isolated: selecting several files hands us one batch, and one unopenable file
     // must not cost the user the rest of the selection.
@@ -29,15 +31,18 @@ async function openOsRequestedMarkdownFiles(documents: MarkdownDocument[]): Prom
       reportOsRequestedMarkdownFailure(error)
     }
   }
+
   if (opened === 0) {
     return
   }
+
   // Why enabled here: the user asked the OS for this file, and the tabs above are already in a
   // surface a disabled floating workspace never renders. Same enable-then-reveal as the
   // Settings "Edit keybindings in Orca" action.
   if (store.settings?.floatingTerminalEnabled !== true) {
     await store.updateSettings({ floatingTerminalEnabled: true })
   }
+
   // Why deferred a frame: the panel only honors the toggle once the enabled flag has reached React.
   requestAnimationFrame(() => {
     if (!isFloatingWorkspacePanelVisible()) {
@@ -60,12 +65,14 @@ export function registerOsMarkdownFileOpenBridge(unsubs: (() => void)[]): void {
   const unsubscribe = window.api.ui.onOpenMarkdownFiles?.((documents) => {
     void openOsRequestedMarkdownFiles(documents).catch(reportOsRequestedMarkdownFailure)
   })
+
   if (unsubscribe) {
     unsubs.push(unsubscribe)
   }
 
   // Why: a cold-start "Open With" resolves before this listener attaches; drain what main queued.
   const pending = window.api.ui.consumePendingMarkdownFileOpens?.()
+
   if (pending && typeof pending.then === 'function') {
     void pending.then(openOsRequestedMarkdownFiles).catch(reportOsRequestedMarkdownFailure)
   }

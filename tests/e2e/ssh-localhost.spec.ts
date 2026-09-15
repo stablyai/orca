@@ -24,6 +24,7 @@ type LocalhostSshTarget = {
 }
 
 const RUN_LOCALHOST_SSH = process.env.ORCA_E2E_SSH_LOCALHOST === '1'
+
 const RUN_REMOTE_HOOKS =
   process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS === undefined ||
   (process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS.trim() !== '' &&
@@ -31,9 +32,11 @@ const RUN_REMOTE_HOOKS =
 
 function parsePort(value: string | undefined): number {
   const parsed = Number(value ?? '22')
+
   if (Number.isInteger(parsed) && parsed > 0 && parsed <= 65535) {
     return parsed
   }
+
   throw new Error(`Invalid ORCA_E2E_SSH_PORT: ${value}`)
 }
 
@@ -71,6 +74,7 @@ function marker(name: string): string {
 
 function emitMarkerCommand(value: string): string {
   const midpoint = Math.floor(value.length / 2)
+
   return `printf '%s%s\\n' ${shellQuote(value.slice(0, midpoint))} ${shellQuote(
     value.slice(midpoint)
   )}`
@@ -79,26 +83,34 @@ function emitMarkerCommand(value: string): string {
 async function focusTerminal(page: Page): Promise<void> {
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const state = store.getState()
     const worktreeId = state.activeWorktreeId
+
     if (!worktreeId) {
       throw new Error('No active worktree')
     }
+
     const tabId =
       state.activeTabType === 'terminal'
         ? state.activeTabId
         : (state.activeTabIdByWorktree?.[worktreeId] ?? null)
+
     if (!tabId) {
       throw new Error('No active terminal tab')
     }
+
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+
     if (!pane) {
       throw new Error('No active terminal pane')
     }
+
     pane.terminal.focus()
   })
 }
@@ -164,6 +176,7 @@ test.describe('Localhost SSH', () => {
     await waitForActiveWorktree(orcaPage)
 
     const target = readLocalhostSshTarget()
+
     const remote = await connectSshTestTarget(
       orcaPage,
       // Limit orphan relay lifetime if the test app exits before cleanup.
@@ -181,31 +194,42 @@ test.describe('Localhost SSH', () => {
     await ensureTerminalVisible(orcaPage, 30_000)
     await waitForActiveTerminalManager(orcaPage, 45_000)
     const ptyId = await waitForActivePanePtyId(orcaPage, 45_000)
+
     const paneKey = await orcaPage.evaluate(() => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Store unavailable')
       }
+
       const state = store.getState()
       const worktreeId = state.activeWorktreeId
+
       if (!worktreeId) {
         throw new Error('No active worktree')
       }
+
       const tabs = state.tabsByWorktree[worktreeId] ?? []
+
       const tabId =
         state.activeTabType === 'terminal'
           ? state.activeTabId
           : (state.activeTabIdByWorktree?.[worktreeId] ?? tabs[0]?.id)
+
       if (!tabId) {
         throw new Error('No active terminal tab')
       }
+
       const manager = window.__paneManagers?.get(tabId)
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+
       if (!pane) {
         throw new Error('No active terminal pane')
       }
+
       return `${tabId}:${pane.leafId}`
     })
+
     const paneKeyLeafId = paneKey.slice(paneKey.indexOf(':') + 1)
     expect(paneKeyLeafId).toMatch(UUID_RE)
     await orcaPage.evaluate(() => {
@@ -213,6 +237,7 @@ test.describe('Localhost SSH', () => {
         __sshAgentStatusEvents?: unknown[]
         __sshAgentStatusUnsubscribe?: () => void
       }
+
       state.__sshAgentStatusEvents = []
       state.__sshAgentStatusUnsubscribe?.()
       state.__sshAgentStatusUnsubscribe = window.api.agentStatus.onSet((event) => {
@@ -272,6 +297,7 @@ test.describe('Localhost SSH', () => {
             ({ paneKey, prompt, targetId, worktreeId }) => {
               const state = window.__store?.getState()
               const entries = Object.values(state?.agentStatusByPaneKey ?? {})
+
               return entries.some(
                 (entry) =>
                   entry.paneKey === paneKey &&
@@ -308,6 +334,7 @@ test.describe('Localhost SSH', () => {
         ({ paneKey, prompt, targetId, worktreeId }) => {
           const state = window.__store?.getState()
           const entry = state?.agentStatusByPaneKey[paneKey]
+
           const events =
             (
               window as unknown as {
@@ -318,6 +345,7 @@ test.describe('Localhost SSH', () => {
                 }[]
               }
             ).__sshAgentStatusEvents ?? []
+
           return {
             state: entry?.state,
             interrupted: entry?.interrupted,
@@ -355,6 +383,7 @@ test.describe('Localhost SSH', () => {
           orcaPage.evaluate(
             ({ paneKey }) => {
               const entry = window.__store?.getState().agentStatusByPaneKey[paneKey]
+
               return {
                 state: entry?.state,
                 interrupted: entry?.interrupted,
@@ -381,6 +410,7 @@ test.describe('Localhost SSH', () => {
       await orcaPage.evaluate(
         ({ paneKey }) => {
           const entry = window.__store?.getState().agentStatusByPaneKey[paneKey]
+
           return {
             state: entry?.state,
             interrupted: entry?.interrupted,

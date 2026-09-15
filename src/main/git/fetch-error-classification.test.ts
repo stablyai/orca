@@ -38,6 +38,7 @@ describe('isTransientReviewHeadFetchError', () => {
       'Fetching refs/pull/42/head from "origin" timed out.',
       'fatal: unable to access repo: The requested URL returned error: 502'
     ]
+
     for (const message of transient) {
       expect(isTransientReviewHeadFetchError(new Error(message)), message).toBe(true)
     }
@@ -48,6 +49,7 @@ describe('isTransientReviewHeadFetchError', () => {
       killed: true,
       signal: 'SIGTERM'
     })
+
     expect(isTransientReviewHeadFetchError(killed)).toBe(true)
   })
 
@@ -63,6 +65,7 @@ describe('isTransientReviewHeadFetchError', () => {
       'Remote "origin" is not configured.',
       'fatal: invalid refspec'
     ]
+
     for (const message of fatal) {
       expect(isTransientReviewHeadFetchError(new Error(message)), message).toBe(false)
     }

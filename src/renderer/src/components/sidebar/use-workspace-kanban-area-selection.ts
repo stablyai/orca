@@ -38,21 +38,26 @@ export function useWorkspaceKanbanAreaSelection({
 
   const cancelAreaSelectionDrag = useCallback(() => {
     const state = dragRef.current
+
     if (state?.frameId !== null && state?.frameId !== undefined) {
       window.cancelAnimationFrame(state.frameId)
     }
+
     if (state?.scrollFrameId !== null && state?.scrollFrameId !== undefined) {
       window.cancelAnimationFrame(state.scrollFrameId)
     }
+
     if (state) {
       clearPreviewSelection(state.cardRects, state.previewIds)
     }
+
     dragRef.current = null
     setOverlayRect(overlayRef.current, null)
   }, [overlayRef])
 
   const flushAreaSelectionDrag = useCallback(() => {
     const state = dragRef.current
+
     if (!state) {
       return
     }
@@ -60,6 +65,7 @@ export function useWorkspaceKanbanAreaSelection({
     state.frameId = null
     const deltaX = state.currentX - state.startX
     const deltaY = state.currentY - state.startY
+
     if (!state.started && Math.hypot(deltaX, deltaY) < AREA_SELECTION_DRAG_THRESHOLD) {
       return
     }
@@ -70,6 +76,7 @@ export function useWorkspaceKanbanAreaSelection({
     // virtual layout once lanes register without waiting for a scroll event.
     if (state.cardRects.length === 0) {
       const board = boardRef.current
+
       if (board) {
         state.boardRect = board.getBoundingClientRect()
         state.cardRects = getAreaSelectionCardRects(board)
@@ -86,6 +93,7 @@ export function useWorkspaceKanbanAreaSelection({
       state.currentX,
       state.currentY
     )
+
     const clippedLeft = Math.max(viewportRect.left, state.boardRect.left)
     const clippedTop = Math.max(viewportRect.top, state.boardRect.top)
     const clippedRight = Math.min(viewportRect.left + viewportRect.width, state.boardRect.right)
@@ -101,6 +109,7 @@ export function useWorkspaceKanbanAreaSelection({
         state.additive,
         []
       )
+
       return
     }
 
@@ -115,6 +124,7 @@ export function useWorkspaceKanbanAreaSelection({
       scrollStartContentYByElement: state.scrollStartContentYByElement,
       currentY: state.currentY
     })
+
     state.finalAreaIds = areaIds
     updatePreviewSelection(
       state.cardRects,
@@ -128,6 +138,7 @@ export function useWorkspaceKanbanAreaSelection({
   const refreshAreaSelectionMeasurements = useCallback(() => {
     const state = dragRef.current
     const board = boardRef.current
+
     if (!state || !board) {
       return
     }
@@ -139,9 +150,11 @@ export function useWorkspaceKanbanAreaSelection({
 
   const scheduleAreaSelectionDragFlush = useCallback(() => {
     const state = dragRef.current
+
     if (!state || state.frameId !== null) {
       return
     }
+
     // Why: the hot path stays imperative and frame-throttled so a Notion-like
     // marquee drag does not re-render every workspace card on pointermove.
     state.frameId = window.requestAnimationFrame(flushAreaSelectionDrag)
@@ -150,17 +163,20 @@ export function useWorkspaceKanbanAreaSelection({
   const runAreaSelectionAutoScroll = useCallback(() => {
     const state = dragRef.current
     const board = boardRef.current
+
     if (!state || !board) {
       return
     }
 
     state.scrollFrameId = null
     const scrollContainer = getAreaSelectionScrollContainer(board, state.currentX, state.currentY)
+
     if (!scrollContainer) {
       return
     }
 
     const rect = scrollContainer.getBoundingClientRect()
+
     const scrollDelta = getAreaSelectionAutoScrollDelta({
       pointerY: state.currentY,
       containerTop: rect.top,
@@ -169,6 +185,7 @@ export function useWorkspaceKanbanAreaSelection({
       scrollHeight: scrollContainer.scrollHeight,
       clientHeight: scrollContainer.clientHeight
     })
+
     if (scrollDelta === 0) {
       return
     }
@@ -181,30 +198,38 @@ export function useWorkspaceKanbanAreaSelection({
 
   const scheduleAreaSelectionAutoScroll = useCallback(() => {
     const state = dragRef.current
+
     if (!state || state.scrollFrameId !== null) {
       return
     }
+
     state.scrollFrameId = window.requestAnimationFrame(runAreaSelectionAutoScroll)
   }, [runAreaSelectionAutoScroll])
 
   const finishAreaSelectionDrag = useCallback(
     (event: PointerEvent) => {
       const state = dragRef.current
+
       if (!state) {
         return
       }
+
       state.currentX = event.clientX
       state.currentY = event.clientY
+
       if (state.frameId !== null) {
         window.cancelAnimationFrame(state.frameId)
         state.frameId = null
       }
+
       if (state.scrollFrameId !== null) {
         window.cancelAnimationFrame(state.scrollFrameId)
         state.scrollFrameId = null
       }
+
       refreshAreaSelectionMeasurements()
       flushAreaSelectionDrag()
+
       if (shouldCommitWorkspaceKanbanAreaSelection(state)) {
         updateSelectionForAreaRef.current(
           state.finalAreaIds,
@@ -213,6 +238,7 @@ export function useWorkspaceKanbanAreaSelection({
           state.baseAnchorId
         )
       }
+
       clearPreviewSelection(state.cardRects, state.previewIds)
       dragRef.current = null
       setOverlayRect(overlayRef.current, null)
@@ -232,14 +258,18 @@ export function useWorkspaceKanbanAreaSelection({
       }
 
       const board = boardRef.current
+
       if (!board) {
         return
       }
+
       cancelAreaSelectionDrag()
       const isMac = navigator.userAgent.includes('Mac')
+
       const additive =
         event.shiftKey ||
         (isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey)
+
       dragRef.current = {
         startX: event.clientX,
         startY: event.clientY,
@@ -268,14 +298,17 @@ export function useWorkspaceKanbanAreaSelection({
   useEffect(() => {
     if (!open) {
       cancelAreaSelectionDrag()
+
       return
     }
 
     const handlePointerMove = (event: PointerEvent): void => {
       const state = dragRef.current
+
       if (!state) {
         return
       }
+
       state.currentX = event.clientX
       state.currentY = event.clientY
       event.preventDefault()
@@ -287,20 +320,25 @@ export function useWorkspaceKanbanAreaSelection({
       if (!dragRef.current) {
         return
       }
+
       event.preventDefault()
       finishAreaSelectionDrag(event)
     }
 
     const handleScroll = (event: Event): void => {
       const state = dragRef.current
+
       if (!state) {
         return
       }
+
       const board = boardRef.current
       const target = event.target
+
       if (board && target instanceof Node && !board.contains(target)) {
         return
       }
+
       // Why: lane scrolling changes every card's viewport rect while the drag
       // is still active. Refresh before the next hit-test so selection follows
       // the scrolled content instead of stale pointer-down measurements.
@@ -312,6 +350,7 @@ export function useWorkspaceKanbanAreaSelection({
     document.addEventListener('pointerup', handlePointerUp, true)
     document.addEventListener('pointercancel', handlePointerUp, true)
     document.addEventListener('scroll', handleScroll, true)
+
     return () => {
       document.removeEventListener('pointermove', handlePointerMove, true)
       document.removeEventListener('pointerup', handlePointerUp, true)

@@ -19,6 +19,7 @@ import { translate } from '@/i18n/i18n'
 type AuthErrorKind = 'auth_required' | 'scope_missing'
 
 const REFRESH_CMD = 'gh auth refresh -s project -s read:org -s repo'
+
 const LOGIN_CMD = 'gh auth login'
 
 // Why: GHES credentials are per-host — a bare `gh auth login` signs into
@@ -59,6 +60,7 @@ function findEnvVarCommand(varName: string): { label: string; command: string } 
       command: `Get-ChildItem Env:${varName}`
     }
   }
+
   return {
     label: translate(
       'auto.components.github.project.GhAuthErrorHelp.ae43542893',
@@ -80,6 +82,7 @@ function unsetEnvVarCommand(varName: string): { label: string; command: string }
       command: `Remove-Item Env:${varName}; [Environment]::SetEnvironmentVariable('${varName}', $null, 'User')`
     }
   }
+
   return {
     label: translate(
       'auto.components.github.project.GhAuthErrorHelp.891a7d4616',
@@ -183,14 +186,17 @@ export function buildRemediation(
   }
 
   const active = diag.activeAccount
+
   // Most insidious failure mode: gh is using a token from the environment,
   // so `gh auth refresh` prints "GITHUB_TOKEN is being used... first clear
   // the value from the environment" and exits 0 without doing anything.
   if (active?.envToken) {
     const varName = active.envToken
+
     const fallback = diag.hasKeyringFallback
       ? ' Your keyring already has a `gh` login that will take over once the env var is gone.'
       : ' After unsetting it, run `gh auth login` to sign in normally, then retry.'
+
     return {
       summary: `\`${varName}\` is set in your environment, so \`gh\` is using that token instead of your keyring login. \`gh auth refresh\` cannot modify env-supplied tokens — that's why running it didn't help.`,
       detail: IS_WINDOWS
@@ -206,6 +212,7 @@ export function buildRemediation(
   // separate terminal, Orca's gh subprocess sees the env var and uses it.
   if (diag.envTokenInProcess && (!active || diag.missingScopes.length > 0)) {
     const varName = diag.envTokenInProcess
+
     return {
       summary: `Orca inherited \`${varName}\` from your shell, and \`gh\` is using that token. \`gh auth refresh\` doesn't apply to env-supplied tokens.`,
       detail: `Unset \`${varName}\` in the shell that launches Orca${
@@ -296,6 +303,7 @@ export function GhAuthErrorHelp({
       })
       // Diagnostic is best-effort; never block the error UI on it.
       .catch(() => {})
+
     return () => {
       cancelled = true
     }

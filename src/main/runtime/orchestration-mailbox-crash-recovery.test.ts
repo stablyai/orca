@@ -26,6 +26,7 @@ vi.mock('electron', () => ({
 describe('orchestration mailbox crash recovery', () => {
   afterEach(() => {
     vi.useRealTimers()
+
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -41,13 +42,17 @@ describe('orchestration mailbox crash recovery', () => {
     const run = createBoundRun(firstDb, 'Enter crash Run')
     const message = insertDirectRunMessage(firstDb, run.id, 'Visible before Enter crash')
     const recordWrite = first.write as unknown as (id: string, payload: string) => unknown
+
     const write = vi.fn((ptyId: string, data: string) => {
       recordWrite(ptyId, data)
+
       if (data === '\r') {
         firstDb.close()
       }
+
       return true
     })
+
     first.runtime.setPtyController({
       write,
       writeWithSettlement: settledWriteStub(write),
@@ -80,6 +85,7 @@ describe('orchestration mailbox crash recovery', () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-mailbox-restart-scan-')
     const run = createBoundRun(db, 'restart scan')
+
     const parked = db.insertMessage({
       from: 'term_worker',
       to: `run:${run.id}`,
@@ -87,6 +93,7 @@ describe('orchestration mailbox crash recovery', () => {
       runId: run.id,
       deliveryContract: 'current_delivery'
     })
+
     // The crash left the reservation durable, which hides the row from the undelivered scan.
     expect(
       db.stageMailboxPointerEnter([parked.id], { ptyId: 'pty-gone', processIncarnation: 'gone:1' })

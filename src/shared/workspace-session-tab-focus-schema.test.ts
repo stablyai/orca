@@ -33,6 +33,7 @@ describe('workspace session unified-tab focus timestamp', () => {
     const result = parseWorkspaceSession(sessionWithLastFocusedAt(1_700_000_000_123))
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.unifiedTabs?.wt[0]?.lastFocusedAt).toBe(1_700_000_000_123)
     }
@@ -44,6 +45,7 @@ describe('workspace session unified-tab focus timestamp', () => {
       const result = parseWorkspaceSession(sessionWithLastFocusedAt(lastFocusedAt))
 
       expect(result.ok).toBe(true)
+
       if (result.ok) {
         expect(result.value.unifiedTabs?.wt).toHaveLength(1)
         expect(result.value.unifiedTabs?.wt[0]?.lastFocusedAt).toBeUndefined()

@@ -68,6 +68,7 @@ describe('browserManager', () => {
 
   it('tracks offscreen load failures for the owning worktree snapshot', () => {
     const stateChanged = vi.fn()
+
     const offscreenGuest = {
       id: 605,
       isDestroyed: vi.fn(() => false),
@@ -78,6 +79,7 @@ describe('browserManager', () => {
       off: vi.fn(),
       getURL: vi.fn(() => 'https://localhost:3443/')
     }
+
     webContentsFromIdMock.mockReturnValue(offscreenGuest)
     browserManager.setBrowserGuestStateChangedListener(stateChanged)
 
@@ -86,6 +88,7 @@ describe('browserManager', () => {
       worktreeId: 'remote-worktree',
       webContentsId: offscreenGuest.id
     })
+
     const didFailLoad = offscreenGuest.on.mock.calls.find(
       ([event]) => event === 'did-fail-load'
     )?.[1] as (
@@ -95,6 +98,7 @@ describe('browserManager', () => {
       validatedUrl: string,
       isMainFrame: boolean
     ) => void
+
     didFailLoad(null, -202, 'Certificate authority invalid', 'https://localhost:3443/', true)
 
     expect(browserManager.getBrowserPageLoadError('offscreen-page')).toEqual({
@@ -107,6 +111,7 @@ describe('browserManager', () => {
 
   it('replays a queued main-frame load failure after the guest registers', () => {
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 404,
       isDestroyed: vi.fn(() => false),
@@ -124,12 +129,14 @@ describe('browserManager', () => {
       if (id === 404) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return {
           isDestroyed: vi.fn(() => false),
           send: rendererSendMock
         }
       }
+
       return null
     })
 
@@ -178,12 +185,14 @@ describe('browserManager', () => {
     )?.[1] as
       | ((event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void)
       | undefined
+
     didStartNavigationHandler?.(null, 'http://localhost:3000/retry', false, true)
     expect(browserManager.getBrowserPageLoadError('browser-1')).toBeNull()
   })
 
   it('drops a queued failure when a replacement navigation starts before registration', () => {
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 407,
       isDestroyed: vi.fn(() => false),
@@ -196,6 +205,7 @@ describe('browserManager', () => {
       getURL: vi.fn(() => 'https://example.com/'),
       ...guestUaMethods()
     }
+
     webContentsFromIdMock.mockImplementation((id: number) =>
       id === guest.id
         ? guest
@@ -205,6 +215,7 @@ describe('browserManager', () => {
     )
 
     browserManager.attachGuestPolicies(guest as never)
+
     const didFailLoad = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-fail-load'
     )?.[1] as (
@@ -214,6 +225,7 @@ describe('browserManager', () => {
       validatedUrl: string,
       isMainFrame: boolean
     ) => void
+
     const didStartNavigation = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-start-navigation'
     )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
@@ -249,12 +261,15 @@ describe('browserManager', () => {
       getURL: vi.fn(() => 'chrome-error://chromewebdata/'),
       ...guestUaMethods()
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
+
     const didStartNavigation = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-start-navigation'
     )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
     const didFailLoad = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-fail-load'
     )?.[1] as (
@@ -292,12 +307,15 @@ describe('browserManager', () => {
       getURL: vi.fn(() => 'chrome-error://chromewebdata/'),
       ...guestUaMethods()
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
+
     const didStartNavigation = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-start-navigation'
     )?.[1] as (event: unknown, url: string, isInPlace: boolean, isMainFrame: boolean) => void
+
     const didFailLoad = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-fail-load'
     )?.[1] as (

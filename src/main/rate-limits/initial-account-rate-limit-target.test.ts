@@ -154,6 +154,7 @@ describe.each(providers)('$name initial rate-limit target', ({ getTarget, select
       ...scenario.settings,
       ...(scenario.selection ? selectionSettings(scenario.selection) : {})
     }
+
     if (scenario.legacy) {
       delete (settings as Partial<GlobalSettings>).localAccountRuntime
     }

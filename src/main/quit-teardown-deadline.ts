@@ -17,6 +17,7 @@ export async function settleTeardownWithinDeadline(
   deadlineMs: number = WILL_QUIT_TEARDOWN_DEADLINE_MS
 ): Promise<string[]> {
   const pendingNames = new Set(teardowns.map(({ name }) => name))
+
   const settled = Promise.allSettled(
     teardowns.map(({ name, promise }) =>
       promise.finally(() => {
@@ -24,13 +25,17 @@ export async function settleTeardownWithinDeadline(
       })
     )
   ).then(() => 'settled' as const)
+
   let timer: ReturnType<typeof setTimeout> | undefined
+
   const deadline = new Promise<'deadline'>((resolve) => {
     timer = setTimeout(() => resolve('deadline'), deadlineMs)
     timer.unref?.()
   })
+
   const outcome = await Promise.race([settled, deadline])
   clearTimeout(timer)
+
   return outcome === 'deadline' ? [...pendingNames] : []
 }
 
@@ -50,6 +55,7 @@ export async function settleWithinMs<T>(
   timeoutMs: number
 ): Promise<SettledWithinMs<T>> {
   let timer: ReturnType<typeof setTimeout> | undefined
+
   try {
     return await Promise.race([
       promise.then(

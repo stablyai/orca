@@ -10,6 +10,7 @@ const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, s
   }))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
+
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock,
@@ -17,15 +18,19 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
+
 vi.mock('os', () => ({ platform: () => 'darwin', arch: () => 'arm64' }))
+
 vi.mock('electron', () => {
   return {
     app: { getPath: vi.fn(() => '/app'), getAppPath: vi.fn(() => '/project'), isPackaged: false },
     webContents: { fromId: webContentsFromIdMock }
   }
 })
+
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
     this._wc = _wc
@@ -34,12 +39,14 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
     this.getPort = vi.fn(() => 9222)
     instances.push(this)
   })
+
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
 
 vi.mock('./cdp-ws-proxy', () => ({
   CdpWsProxy: CdpWsProxyMock
 }))
+
 vi.mock('./cdp-bridge', () => ({
   BrowserError: class BrowserError extends Error {
     code: string
@@ -112,6 +119,7 @@ describe('AgentBrowserBridge', () => {
     const snapshotCall = execFileMock.mock.calls.find((c: unknown[]) =>
       (c[1] as string[]).includes('snapshot')
     )
+
     expect(snapshotCall![1]).toContain('--cdp')
     const cdpIdx = (snapshotCall![1] as string[]).indexOf('--cdp')
     expect((snapshotCall![1] as string[])[cdpIdx + 1]).toBe('9222')
@@ -126,6 +134,7 @@ describe('AgentBrowserBridge', () => {
       const call = execFileMock.mock.calls.find((candidate: unknown[]) =>
         (candidate[1] as string[]).includes(command)
       )
+
       expect(call).toBeDefined()
       const args = call![1] as string[]
       expect(args).toContain('--cdp')
@@ -142,6 +151,7 @@ describe('AgentBrowserBridge', () => {
     const snapshotCall = execFileMock.mock.calls.find((c: unknown[]) =>
       (c[1] as string[]).includes('snapshot')
     )
+
     expect((snapshotCall![1] as string[]).at(-1)).toBe('--json')
   })
 
@@ -175,9 +185,12 @@ describe('AgentBrowserBridge', () => {
           releaseSnapshot = () => {
             cb(null, JSON.stringify({ success: false, error: CDP_DISCOVERY_FAILURE }), '')
           }
+
           return activeChild
         }
+
         cb(null, JSON.stringify({ success: true, data: null }), '')
+
         return { kill: vi.fn() }
       }
     )
@@ -230,6 +243,7 @@ describe('AgentBrowserBridge', () => {
     const execCall = execFileMock.mock.calls.find((c: unknown[]) =>
       (c[1] as string[]).includes('dblclick')
     )
+
     const args = execCall![1] as string[]
     // The bridge's own --session and --cdp (for session init) are expected.
     // Verify the user-injected ones were stripped, including --flag=value forms.
@@ -312,9 +326,11 @@ describe('AgentBrowserBridge', () => {
       width: 375,
       height: 812
     })
+
     const viewportCall = execFileMock.mock.calls.find((call: unknown[]) =>
       (call[1] as string[]).includes('viewport')
     )
+
     expect(viewportCall).toBeUndefined()
   })
 
@@ -351,8 +367,10 @@ describe('AgentBrowserBridge', () => {
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('wait')) {
           cb(killedError, '', '')
+
           return
         }
+
         cb(null, JSON.stringify({ success: true, data: { snapshot: 'fresh' } }), '')
       }
     )
@@ -375,8 +393,10 @@ describe('AgentBrowserBridge', () => {
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('close')) {
           cb(null, JSON.stringify({ success: true, data: null }), '')
+
           return
         }
+
         cb(new Error('exit code 1'), '', 'daemon crashed: segfault')
       }
     )
@@ -388,8 +408,10 @@ describe('AgentBrowserBridge', () => {
       (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
         if (args.includes('close')) {
           cb(null, JSON.stringify({ success: true, data: null }), '')
+
           return
         }
+
         cb(new Error('Command failed'), '', '')
       }
     )

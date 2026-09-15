@@ -26,10 +26,13 @@ function providerActionCommand(
   const commands = Object.hasOwn(PROVIDER_ACTION_COMMANDS, provider)
     ? PROVIDER_ACTION_COMMANDS[provider]
     : null
+
   const command = commands && Object.hasOwn(commands, action) ? commands[action] : null
+
   if (typeof command !== 'string') {
     throw new Error('Unsupported external automation action.')
   }
+
   return command
 }
 
@@ -42,16 +45,20 @@ function normalizeHermesCronMutationInput(input: ExternalAutomationCreateInput):
   if (input.provider !== 'hermes') {
     throw new Error('Only Hermes cron creation and editing are supported.')
   }
+
   const name = input.name.trim()
   const prompt = input.prompt.trim()
   const schedule = input.schedule.trim()
   const workdir = input.workdir?.trim() || null
+
   if (!prompt) {
     throw new Error('Hermes cron requires a prompt.')
   }
+
   if (!schedule) {
     throw new Error('Hermes cron requires a schedule.')
   }
+
   return {
     name: name || prompt.slice(0, 50).trim() || 'Hermes cron',
     prompt,
@@ -68,13 +75,17 @@ function hermesCronMutationArgs(
   const args = jobId
     ? ['cron', 'edit', jobId, '--schedule', input.schedule, '--prompt', input.prompt]
     : ['cron', 'create', input.schedule, input.prompt]
+
   args.push('--name', input.name)
+
   if (!jobId) {
     args.push('--deliver', 'local')
   }
+
   if (input.workdir) {
     args.push('--workdir', input.workdir)
   }
+
   return args
 }
 
@@ -82,11 +93,14 @@ export async function createExternalAutomation(
   input: ExternalAutomationCreateInput
 ): Promise<void> {
   const normalized = normalizeHermesCronMutationInput(input)
+
   if (input.target.type === 'local') {
     await runLocalAutomationCommand('hermes', hermesCronMutationArgs(null, normalized))
     clearHermesCronOutputRunCountCache()
+
     return
   }
+
   await requireExternalAutomationMultiplexer(input.target.connectionId).request(
     'externalAutomations.create',
     {
@@ -101,11 +115,14 @@ export async function updateExternalAutomation(
 ): Promise<void> {
   assertExternalAutomationJobId(input.jobId)
   const normalized = normalizeHermesCronMutationInput(input)
+
   if (input.target.type === 'local') {
     await runLocalAutomationCommand('hermes', hermesCronMutationArgs(input.jobId, normalized))
     clearHermesCronOutputRunCountCache(input.jobId)
+
     return
   }
+
   await requireExternalAutomationMultiplexer(input.target.connectionId).request(
     'externalAutomations.update',
     {
@@ -121,13 +138,17 @@ export async function runExternalAutomationAction(
 ): Promise<void> {
   assertExternalAutomationJobId(input.jobId)
   const command = providerActionCommand(input.provider, input.action)
+
   if (input.target.type === 'local') {
     await runLocalAutomationCommand(input.provider, ['cron', command, input.jobId])
+
     if (input.provider === 'hermes') {
       clearHermesCronOutputRunCountCache(input.jobId)
     }
+
     return
   }
+
   await requireExternalAutomationMultiplexer(input.target.connectionId).request(
     'externalAutomations.act',
     {

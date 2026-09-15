@@ -15,6 +15,7 @@ type Props = {
 export function GitLabConversationTab({ item, state, reviewActions }: Props) {
   const { details, loading, resolvingThreadId } = state
   const isMR = item.type === 'mr'
+
   return (
     <TabsContent value="conversation" className="mt-0 space-y-3">
       {loading && !details ? (

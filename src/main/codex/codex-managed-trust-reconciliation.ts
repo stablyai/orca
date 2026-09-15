@@ -37,6 +37,7 @@ export function getCodexLedgerTrustedHash(
   expectedEntry: CodexTrustEntry
 ): string | null {
   const granted = ledgerHome?.entries[normalizeHookTrustKeyForLookup(key)]
+
   return granted?.trustedHash && granted.signature === getCodexHookTrustSignature(expectedEntry)
     ? granted.trustedHash
     : null
@@ -50,6 +51,7 @@ function addLedgerRecognizedHashes(
 ): void {
   for (const ledgerHome of ledgerHomes) {
     const hash = getCodexLedgerTrustedHash(ledgerHome, key, expectedEntry)
+
     if (hash) {
       hashes.add(hash)
     }
@@ -71,12 +73,16 @@ function getCodexManagedHookTrustEntryKeys(
   options: CodexManagedHookTrustOwnershipOptions
 ): string[] {
   const ledgerHome = readCodexTrustGrantLedgerHomeForReconciliation(options.runtimeHomePath)
+
   const expectedSourcePath = options.sourceUsesExplicitCodexHome
     ? getCodexExplicitHomeHookSourcePath(options.sourcePath)
     : normalizeCodexHookSourcePath(options.sourcePath)
+
   const ownedKeys: string[] = []
+
   for (const [key, state] of existingEntries) {
     const parts = parseTrustKey(key)
+
     if (
       !parts ||
       !codexHookSourcePathsEqual(parts.sourcePath, expectedSourcePath) ||
@@ -84,6 +90,7 @@ function getCodexManagedHookTrustEntryKeys(
     ) {
       continue
     }
+
     const expectedEntry: CodexTrustEntry = {
       sourcePath: expectedSourcePath,
       eventLabel: parts.eventLabel,
@@ -92,15 +99,19 @@ function getCodexManagedHookTrustEntryKeys(
       command: options.command,
       timeoutSec: options.timeoutSec
     }
+
     const recognizedHashes = new Set([
       computeTrustedHash(expectedEntry),
       computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
     ])
+
     addLedgerRecognizedHashes(recognizedHashes, [ledgerHome], key, expectedEntry)
+
     if (state.trustedHash && recognizedHashes.has(state.trustedHash)) {
       ownedKeys.push(key)
     }
   }
+
   return ownedKeys
 }
 
@@ -112,6 +123,7 @@ export function stripCodexManagedHookTrustEntriesFromConfig(
     readHookTrustEntriesFromContent(contents),
     options
   )
+
   return removeHookTrustEntriesFromContent(contents, ownedKeys)
 }
 
@@ -122,9 +134,11 @@ export function removeCodexManagedHookTrustEntries(
     readHookTrustEntries(options.tomlPath),
     options
   )
+
   if (ownedKeys.length > 0) {
     removeHookTrustEntries(options.tomlPath, ownedKeys)
   }
+
   // Why: retain the ledger until trust removal succeeds so a later retry can
   // still prove ownership of Codex-computed hashes.
   removeCodexTrustGrantLedgerHome(options.runtimeHomePath)
@@ -142,25 +156,33 @@ export function removeStaleWslCodexManagedHookTrustEntries(options: {
   const desiredKeys = new Set(
     options.desiredEntries.map((entry) => normalizeHookTrustKeyForLookup(computeTrustKey(entry)))
   )
+
   const ledgerHomes = [
     readCodexTrustGrantLedgerHomeForReconciliation(options.runtimeHomePath),
     ...(options.priorLedgerHomes ?? [])
   ]
+
   const ownedKeys: string[] = []
+
   for (const [key, state] of readHookTrustEntries(options.tomlPath)) {
     if (desiredKeys.has(normalizeHookTrustKeyForLookup(key))) {
       continue
     }
+
     const parts = parseTrustKey(key)
+
     if (!parts || !options.managedEventLabels.has(parts.eventLabel)) {
       continue
     }
+
     // Why: this cleanup owns only guest-side WSL trust. A runtime config can
     // still contain user Windows/remote hooks, which must remain untouched.
     if (!parts.sourcePath.startsWith('/') || !parts.sourcePath.endsWith('/hooks.json')) {
       continue
     }
+
     const linuxRuntimeHome = parts.sourcePath.slice(0, -'/hooks.json'.length)
+
     const expectedEntry: CodexTrustEntry = {
       sourcePath: parts.sourcePath,
       eventLabel: parts.eventLabel,
@@ -169,15 +191,19 @@ export function removeStaleWslCodexManagedHookTrustEntries(options: {
       command: options.buildManagedCommand(linuxRuntimeHome),
       timeoutSec: options.timeoutSec
     }
+
     const recognizedHashes = new Set([
       computeTrustedHash(expectedEntry),
       computeTrustedHash({ ...expectedEntry, timeoutSec: undefined })
     ])
+
     addLedgerRecognizedHashes(recognizedHashes, ledgerHomes, key, expectedEntry)
+
     if (state.trustedHash && recognizedHashes.has(state.trustedHash)) {
       ownedKeys.push(key)
     }
   }
+
   if (ownedKeys.length > 0) {
     removeHookTrustEntries(options.tomlPath, ownedKeys)
   }

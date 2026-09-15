@@ -13,12 +13,14 @@ describe('OrchestrationDb', () => {
 
   function createDb(): OrchestrationDb {
     db = new OrchestrationDb(':memory:')
+
     return db
   }
 
   describe('messages', () => {
     it('inserts and retrieves a message', () => {
       const d = createDb()
+
       const msg = d.insertMessage({
         runId,
         from: 'term_a',
@@ -26,6 +28,7 @@ describe('OrchestrationDb', () => {
         subject: 'hello',
         body: 'world'
       })
+
       expect(msg.id).toMatch(/^msg_/)
       expect(msg.from_handle).toBe('term_a')
       expect(msg.to_handle).toBe('term_b')
@@ -110,6 +113,7 @@ describe('OrchestrationDb', () => {
         subject: 's',
         type: 'status'
       })
+
       const wd = d.insertMessage({
         runId,
         from: 'a',
@@ -138,6 +142,7 @@ describe('OrchestrationDb', () => {
     it('stores typed payload and thread_id', () => {
       const d = createDb()
       const payload = JSON.stringify({ taskId: 'task_abc', filesModified: ['src/a.ts'] })
+
       const msg = d.insertMessage({
         runId,
         from: 'a',
@@ -180,12 +185,14 @@ describe('OrchestrationDb', () => {
 
     it('getMessageById returns the correct message', () => {
       const d = createDb()
+
       const msg = d.insertMessage({
         runId,
         from: 'a',
         to: 'b',
         subject: 'test'
       })
+
       const found = d.getMessageById(msg.id)
       expect(found?.subject).toBe('test')
       expect(d.getMessageById('msg_nonexistent')).toBeUndefined()

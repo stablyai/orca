@@ -9,11 +9,14 @@ export function getForkAgentLaunchPlatform(args: {
   if (args.projectRuntime?.status === 'repair-required') {
     return args.projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : undefined
   }
+
   if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
     return 'linux'
   }
+
   if (args.repo?.connectionId || (args.worktreePath && isWslUncPath(args.worktreePath))) {
     return 'linux'
   }
+
   return undefined
 }

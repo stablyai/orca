@@ -77,11 +77,13 @@ describe('OrcaRuntimeService', () => {
       connectionId: 'ssh-1',
       issueSourcePreference: 'origin' as const
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     await runtime.listGitLabRepoMRs(TEST_REPO_ID, 'closed', 2, 25, 'ambiguous selector')
@@ -93,6 +95,7 @@ describe('OrcaRuntimeService', () => {
     await runtime.updateGitLabRepoIssue(TEST_REPO_ID, 7, { state: 'closed' })
     await runtime.addGitLabRepoIssueComment(TEST_REPO_ID, 7, 'Looks good')
     await runtime.addGitLabRepoMRComment(TEST_REPO_ID, 8, 'Ship it')
+
     const inlineCommentInput = {
       body: 'please fix',
       path: 'src/app.ts',
@@ -101,6 +104,7 @@ describe('OrcaRuntimeService', () => {
       startSha: 'start',
       headSha: 'head'
     }
+
     await runtime.addGitLabRepoMRInlineComment(TEST_REPO_ID, 8, inlineCommentInput)
     await runtime.resolveGitLabRepoMRDiscussion(TEST_REPO_ID, 8, 'discussion-1', true)
     await runtime.getGitLabRepoJobTrace(TEST_REPO_ID, 99)
@@ -261,6 +265,7 @@ describe('OrcaRuntimeService', () => {
 
   it('routes runtime GitLab issue, MR, work-item, and todo actions through the selected WSL project runtime', async () => {
     setPlatform('win32')
+
     const runtimeStore = {
       ...store,
       getProjects: () => [
@@ -279,6 +284,7 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const localGitOptions = { wslDistro: 'Ubuntu' }
     listGitLabMergeRequestsMock.mockResolvedValue({ items: [] })
@@ -370,6 +376,7 @@ describe('OrcaRuntimeService', () => {
 
   it('routes runtime GitLab MR details, review-management, job, and pasted URL actions through the selected WSL project runtime', async () => {
     setPlatform('win32')
+
     const runtimeStore = {
       ...store,
       getProjects: () => [
@@ -388,8 +395,10 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const localGitOptions = { wslDistro: 'Ubuntu' }
+
     const inlineInput = {
       body: 'Inline',
       path: 'src/app.ts',
@@ -398,6 +407,7 @@ describe('OrcaRuntimeService', () => {
       startSha: 'start',
       headSha: 'head'
     }
+
     getGitLabWorkItemDetailsMock.mockResolvedValue({ body: 'Details' })
     updateGitLabMRMock.mockResolvedValue({ ok: true })
     updateGitLabMRReviewersMock.mockResolvedValue({ ok: true, reviewers: [] })

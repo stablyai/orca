@@ -24,10 +24,12 @@ describeOnWindows('windows port scan against the real host', () => {
     const ports = await scanWindowsListeningPorts()
 
     expect(ports.length).toBeGreaterThan(0)
+
     for (const port of ports) {
       expect(port.port).toBeGreaterThan(0)
       expect(port.host.length).toBeGreaterThan(0)
     }
+
     // Windows binds RPC/SMB dual-stack, so both families must be represented.
     expect(ports.some((port) => port.host.includes(':'))).toBe(true)
     expect(ports.some((port) => !port.host.includes(':'))).toBe(true)

@@ -14,17 +14,22 @@ import {
 import { rememberGlabKnownHosts } from './gitlab-known-host-probe'
 
 const GITLAB_RATE_LIMIT_CACHE_TTL_MS = 30_000
+
 const GITLAB_RATE_LIMIT_CACHE_MAX_ENTRIES = 64
+
 const gitLabRateLimitCache = new Map<string, GitLabRateLimitSnapshot>()
 
 export async function getAuthenticatedViewer(): Promise<GitLabViewer | null> {
   await acquire()
+
   try {
     const { stdout } = await glabExecFileAsync(['api', 'user'])
     const viewer = JSON.parse(stdout) as { username?: string; email?: string | null }
+
     if (!viewer.username?.trim()) {
       return null
     }
+
     return {
       username: viewer.username.trim(),
       email: viewer.email?.trim() || null
@@ -42,15 +47,18 @@ export async function diagnoseAuth(): Promise<GitLabAuthDiagnostic> {
     : process.env.GLAB_TOKEN
       ? 'GLAB_TOKEN'
       : null
+
   try {
     // Why: a host-global diagnostic must not wake an unrelated default WSL distro.
     const { stdout, stderr } = await glabExecFileAsync(['auth', 'status'], {
       allowDefaultWslFallback: false
     })
+
     const output = `${stdout}\n${stderr}`
     const hosts = parseGlabAuthStatusHosts(output)
     // Why: refreshing auth must advance the provider cache key past a stale null result.
     rememberGlabKnownHosts(hosts)
+
     return {
       glabAvailable: true,
       authenticated:
@@ -62,6 +70,7 @@ export async function diagnoseAuth(): Promise<GitLabAuthDiagnostic> {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+
     return {
       glabAvailable: !/ENOENT|not found|spawn/i.test(message),
       authenticated: false,
@@ -79,23 +88,30 @@ function parseRateLimitHeader(
 ): number | null {
   for (const key of keys) {
     const parsed = Number.parseInt(headers[key], 10)
+
     if (Number.isFinite(parsed)) {
       return parsed
     }
   }
+
   return null
 }
 
 function parseRateLimitResetAt(headers: Record<string, string>): number | null {
   const numeric = parseRateLimitHeader(headers, ['ratelimit-reset', 'x-ratelimit-reset'])
+
   if (numeric !== null) {
     return numeric
   }
+
   const resetTime = headers['ratelimit-resettime'] ?? headers['x-ratelimit-resettime']
+
   if (!resetTime) {
     return null
   }
+
   const millis = Date.parse(resetTime)
+
   return Number.isFinite(millis) ? Math.floor(millis / 1000) : null
 }
 
@@ -106,6 +122,7 @@ function parseGitLabRateLimitSnapshot(
   const limit = parseRateLimitHeader(headers, ['ratelimit-limit', 'x-ratelimit-limit'])
   const remaining = parseRateLimitHeader(headers, ['ratelimit-remaining', 'x-ratelimit-remaining'])
   const resetAt = parseRateLimitResetAt(headers)
+
   return {
     host,
     fetchedAt: Date.now(),
@@ -136,11 +153,14 @@ function pruneGitLabRateLimitCache(now = Date.now()): void {
       gitLabRateLimitCache.delete(cacheKey)
     }
   }
+
   while (gitLabRateLimitCache.size > GITLAB_RATE_LIMIT_CACHE_MAX_ENTRIES) {
     const oldestKey = gitLabRateLimitCache.keys().next().value
+
     if (oldestKey === undefined) {
       break
     }
+
     gitLabRateLimitCache.delete(oldestKey)
   }
 }
@@ -164,20 +184,24 @@ export async function getRateLimit(options?: {
   const cacheKey = host ?? 'default'
   pruneGitLabRateLimitCache()
   const cached = gitLabRateLimitCache.get(cacheKey)
+
   if (!options?.force && cached && Date.now() - cached.fetchedAt < GITLAB_RATE_LIMIT_CACHE_TTL_MS) {
     return { ok: true, snapshot: cached }
   }
 
   await acquire()
+
   try {
     // Why: GitLab exposes REST budget headers inconsistently; a null bucket means this host omitted them.
     const args = host ? ['--hostname', host, 'user'] : ['user']
     const { headers } = await glabApiWithHeaders(args)
     const snapshot = parseGitLabRateLimitSnapshot(headers, host)
     rememberGitLabRateLimitSnapshot(cacheKey, snapshot)
+
     return { ok: true, snapshot }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
+
     return { ok: false, error: message }
   } finally {
     release()

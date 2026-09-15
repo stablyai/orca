@@ -29,6 +29,7 @@ export function admitRemoteForegroundEvidence(
   if (!isRemoteForegroundEvidence(value)) {
     return null
   }
+
   if (
     admission.expectedIncarnationId === null ||
     value.ptyId !== admission.expectedPtyId ||
@@ -36,10 +37,12 @@ export function admitRemoteForegroundEvidence(
   ) {
     return null
   }
+
   const receiveDelay = Math.max(
     0,
     admission.receivedAtMonotonic - admission.requestStartedAtMonotonic
   )
+
   // The larger of the two, never their sum: `ps` runs INSIDE this round trip, so its duration is
   // already in `receiveDelay`, and `capturedAgeMs` -- stamped at capture start -- is that same
   // duration measured on the host's clock. Adding them charged the capture twice and halved the
@@ -52,17 +55,20 @@ export function admitRemoteForegroundEvidence(
   if (Math.max(value.capturedAgeMs, receiveDelay) > REMOTE_FOREGROUND_EVIDENCE_MAX_AGE_MS) {
     return null
   }
+
   if (
     admission.knownAuthorityGenerations?.has(value.authorityGeneration) &&
     admission.lastAuthorityGeneration !== value.authorityGeneration
   ) {
     return null
   }
+
   if (
     admission.lastAuthorityGeneration === value.authorityGeneration &&
     value.observationEpoch <= admission.lastObservationEpoch
   ) {
     return null
   }
+
   return value
 }

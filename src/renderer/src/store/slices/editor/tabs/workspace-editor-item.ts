@@ -14,6 +14,7 @@ export function openWorkspaceEditorItem(
   targetGroupId?: string
 ): string {
   const resolvedGroupId = resolveEditorOpenTargetGroupId(state, worktreeId, targetGroupId)
+
   if (resolvedGroupId) {
     const existing = state.findTabForEntityInGroup?.(
       worktreeId,
@@ -21,34 +22,42 @@ export function openWorkspaceEditorItem(
       fileId,
       contentType
     )
+
     if (existing) {
       // Why: sidebar preview reopens focus the tab without promoting it; explicit activation still promotes previews by default.
       state.activateTab?.(existing.id, { preservePreview: isPreview })
+
       return existing.id
     }
   }
+
   const created = state.createUnifiedTab?.(worktreeId, contentType, {
     entityId: fileId,
     label,
     isPreview,
     ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {})
   })
+
   return created?.id ?? fileId
 }
+
 export function getReplaceablePreviewFileId(
   state: Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree'>,
   worktreeId: string,
   targetGroupId: string | undefined
 ): string | null {
   const tabsForWorktree = state.unifiedTabsByWorktree?.[worktreeId] ?? []
+
   if (targetGroupId) {
     const previewTab = tabsForWorktree.find(
       (tab) =>
         tab.groupId === targetGroupId && tab.isPreview && isEditorTabContentType(tab.contentType)
     )
+
     if (!previewTab) {
       return null
     }
+
     // Why: split groups can share one OpenFile; a group-scoped preview replacement must not mutate it out from under another group's tab.
     const isSharedEntity = tabsForWorktree.some(
       (tab) =>
@@ -56,9 +65,11 @@ export function getReplaceablePreviewFileId(
         tab.entityId === previewTab.entityId &&
         isEditorTabContentType(tab.contentType)
     )
+
     if (isSharedEntity) {
       return null
     }
+
     return (
       state.openFiles.find(
         (file) =>
@@ -66,6 +77,7 @@ export function getReplaceablePreviewFileId(
       )?.id ?? null
     )
   }
+
   return (
     state.openFiles.find((file) => file.worktreeId === worktreeId && file.isPreview)?.id ?? null
   )
@@ -107,6 +119,7 @@ export function removeEditorStateForReplacedPreview(
           (file.id === key || file.markdownPreviewSourceFileId === key)
       )
   )
+
   if (replacedFile.id === nextFileId) {
     return {
       editorDrafts: state.editorDrafts,
@@ -118,6 +131,7 @@ export function removeEditorStateForReplacedPreview(
       markdownTableOfContentsVisible: state.markdownTableOfContentsVisible
     }
   }
+
   return {
     editorDrafts: Object.fromEntries(
       Object.entries(state.editorDrafts).filter(([fileId]) => fileId !== replacedFile.id)
@@ -152,12 +166,15 @@ export function removeMarkdownVisibilityKeys(
   keysToRemove: readonly string[]
 ): Record<string, boolean> {
   let next: Record<string, boolean> | null = null
+
   for (const key of keysToRemove) {
     if (!(key in visibility)) {
       continue
     }
+
     next ??= { ...visibility }
     delete next[key]
   }
+
   return next ?? visibility
 }

@@ -48,10 +48,13 @@ export type MobileSourceControlLoaders = {
 export function useMobileSourceControlLoaders(params: Params): MobileSourceControlLoaders {
   const { client, connState, statusIdentityKey, worktreeId, setActionError, onStatusLoadSuccess } =
     params
+
   const [screenState, setScreenState] = useState<ScreenState>({ kind: 'loading' })
+
   const [branchCompareState, setBranchCompareState] = useState<MobileBranchCompareState>({
     kind: 'idle'
   })
+
   const currentStatusIdentityRef = useRef('')
   const currentBranchCompareIdentityRef = useRef('')
   const loadGenerationRef = useRef(0)
@@ -63,19 +66,23 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   // data until the fresh load resolves. Reset to loading in the render phase (the
   // React "adjust state on prop change" pattern) before the new load runs.
   const lastResetIdentityRef = useRef(statusIdentityKey)
+
   if (lastResetIdentityRef.current !== statusIdentityKey) {
     lastResetIdentityRef.current = statusIdentityKey
     setScreenState({ kind: 'loading' })
     setBranchCompareState({ kind: 'idle' })
   }
+
   currentStatusIdentityRef.current = statusIdentityKey
   currentBranchCompareIdentityRef.current = statusIdentityKey
 
   const setRootRef = useCallback((node: View | null): void => {
     if (node !== null) {
       mountedRef.current = true
+
       return
     }
+
     // Why: source-control RPC loads can outlive the route; invalidate pending
     // writes when the screen detaches without a passive cleanup-only Effect.
     mountedRef.current = false
@@ -88,6 +95,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       const loadKey = statusIdentityKey
       const generation = branchCompareGenerationRef.current + 1
       branchCompareGenerationRef.current = generation
+
       const isCurrentLoad = () =>
         mountedRef.current &&
         branchCompareGenerationRef.current === generation &&
@@ -97,15 +105,19 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
         if (isCurrentLoad()) {
           setBranchCompareState({ kind: 'idle' })
         }
+
         return false
       }
 
       setBranchCompareState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
+
       try {
         const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
+
         if (!isCurrentLoad()) {
           return false
         }
+
         if (!baseRef) {
           // Why: wiping a prior ready compare to idle makes Changes say "No
           // Changes" even when commits still exist (e.g. after abort-merge refresh).
@@ -113,20 +125,25 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
             if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
               return prev
             }
+
             return {
               kind: 'error',
               message: 'Unable to resolve the base branch for comparison.'
             }
           })
+
           return false
         }
+
         const reply = await gitBranchCompareRead.request(client, {
           worktree: `id:${worktreeId}`,
           baseRef
         })
+
         if (!isCurrentLoad()) {
           return false
         }
+
         // Why the raw refusal: a host that does not offer git to mobile is a capability gap this
         // screen degrades on, and no acceptance policy carries the code and message through.
         if (isMobileGitUnavailableReply(reply)) {
@@ -134,33 +151,42 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
             if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
               return prev
             }
+
             return { kind: 'idle' }
           })
+
           return false
         }
+
         let compared: unknown
+
         try {
           compared = gitBranchCompareRead.interpret(reply)
         } catch (error) {
           throw new Error(refusedRpcMessageOrFallback(error, 'Unable to load committed changes'))
         }
+
         setBranchCompareState({
           kind: 'ready',
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
           result: compared as MobileGitBranchCompareResult
         })
+
         return true
       } catch (err) {
         if (!isCurrentLoad()) {
           return false
         }
+
         const message = err instanceof Error ? err.message : 'Unable to load committed changes'
         setBranchCompareState((prev) => {
           if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
             return prev
           }
+
           return { kind: 'error', message }
         })
+
         return false
       }
     },
@@ -171,6 +197,7 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     async (options?: LoadStatusOptions) => {
       const loadKey = statusIdentityKey
       const inFlight = statusLoadInFlightRef.current
+
       if (inFlight && !options?.force && inFlight.key === loadKey && inFlight.client === client) {
         return await inFlight.promise
       }
@@ -178,16 +205,20 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
       const loadPromise = (async () => {
         const generation = loadGenerationRef.current + 1
         loadGenerationRef.current = generation
+
         const isCurrentLoad = () =>
           mountedRef.current &&
           loadGenerationRef.current === generation &&
           currentStatusIdentityRef.current === loadKey
+
         if (!worktreeId) {
           if (isCurrentLoad()) {
             setScreenState({ kind: 'loading' })
           }
+
           return false
         }
+
         if (!client || connState !== 'connected') {
           if (isCurrentLoad()) {
             setScreenState({
@@ -196,59 +227,77 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
                 connState === 'connected' ? 'Connecting to desktop...' : 'Waiting for desktop...'
             })
           }
+
           return false
         }
+
         if (!isCurrentLoad()) {
           return false
         }
+
         setScreenState((prev) => (prev.kind === 'ready' ? prev : { kind: 'loading' }))
+
         try {
           for (let attempt = 0; attempt <= SELECTOR_RETRY_COUNT; attempt += 1) {
             const reply = await gitStatusHostPayloadRead.request(client, {
               worktree: `id:${worktreeId}`
             })
+
             if (!isCurrentLoad()) {
               return false
             }
+
             // Why the raw refusal: the retry and capability routes below are decided by the
             // refusal's code, which no acceptance policy carries through.
             const refusal = readMobileGitRefusal(reply)
+
             if (!refusal) {
               // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
               const result = gitStatusHostPayloadRead.interpret(reply) as MobileGitStatusResult
               setScreenState({ kind: 'ready', status: result })
               void loadBranchCompare({ preserveReadyOnFailure: true })
+
               if (options?.clearActionErrorOnSuccess !== false) {
                 setActionError(null)
               }
+
               // Why: recovery prompts are based on a specific failed commit
               // snapshot; a fresh status means that snapshot may be stale.
               onStatusLoadSuccess?.()
+
               return true
             }
+
             if (isMobileGitUnavailableReply(reply)) {
               setScreenState({
                 kind: 'unavailable',
                 message: 'Update Orca desktop to use Source Control on mobile.'
               })
+
               return false
             }
+
             const shouldRetry =
               refusal.code === 'selector_not_found' ||
               isMobileGitTransientRefreshError(refusal.code, refusal.message)
+
             if (shouldRetry && attempt < SELECTOR_RETRY_COUNT) {
               await wait(SELECTOR_RETRY_DELAY_MS)
+
               if (!isCurrentLoad()) {
                 return false
               }
+
               continue
             }
+
             throw new Error(refusal.message || 'Unable to load source control')
           }
         } catch (err) {
           if (!isCurrentLoad()) {
             return false
           }
+
           const message = err instanceof Error ? err.message : 'Unable to load source control'
           setScreenState((prev) => {
             // Why: git mutations can succeed while the immediate status refresh
@@ -257,14 +306,18 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
             if (options?.preserveReadyOnFailure && prev.kind === 'ready') {
               return prev
             }
+
             return { kind: 'error', message }
           })
+
           return false
         }
+
         return false
       })()
 
       statusLoadInFlightRef.current = { key: loadKey, client, promise: loadPromise }
+
       try {
         return await loadPromise
       } finally {

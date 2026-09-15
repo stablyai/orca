@@ -19,6 +19,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
       return await fn()
     } catch (err) {
       const missingRetiredEndpointToken = this.isRetiredEndpointTokenMissing()
+
       if (missingRetiredEndpointToken) {
         this.observeAuditFailure(
           'token_missing_after_authenticated_disconnect',
@@ -26,15 +27,19 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
           ['token_file']
         )
       }
+
       if (this.respawnAdoptionClosed || !this.respawnFn || !isDaemonGoneError(err)) {
         throw err
       }
+
       if (!this.respawnPromise) {
         this.respawnPromise = this.doRespawn().finally(() => {
           this.respawnPromise = null
         })
       }
+
       await this.respawnPromise
+
       try {
         return await fn()
       } finally {
@@ -53,6 +58,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     ) {
       return
     }
+
     this.writeRecoveryAttempted = true
     // Why: the dead endpoint took down every session on this daemon. Signal all
     // active panes now — while they are still in activeSessionIds, so the
@@ -60,14 +66,17 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     // remount + re-attach alongside the one that was written, instead of being
     // left frozen with silently dropped input until each is typed into.
     this.notifyActiveSessionsWriteUnavailable()
+
     const recovery = this.withDaemonRetry(() => this.ensureConnected())
       .catch((error) => console.warn('[daemon] Failed to recover after rejected PTY input:', error))
       .finally(() => {
         this.releasePendingRespawnAdoptionLease()
+
         if (this.writeRecoveryPromise === recovery) {
           this.writeRecoveryPromise = null
         }
       })
+
     this.writeRecoveryPromise = recovery
   }
 
@@ -75,6 +84,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     // Snapshot first: a listener that kills a pane would mutate activeSessionIds
     // mid-iteration and silently skip the sibling this fan-out exists to reach.
     const ids = [...this.activeSessionIds]
+
     for (const id of ids) {
       this.sessionsAwaitingDaemonRecovery.add(id)
       this.emitWriteUnavailable(id)
@@ -83,6 +93,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
 
   protected clearSessionAwaitingDaemonRecovery(sessionId: string): void {
     this.sessionsAwaitingDaemonRecovery.delete(sessionId)
+
     if (this.sessionsAwaitingDaemonRecovery.size === 0) {
       this.writeRecoveryAttempted = false
     }
@@ -95,21 +106,27 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     if (!this.historyManager) {
       return await operation()
     }
+
     const previous = this.historySpawnLocks.get(sessionId) ?? Promise.resolve()
     let release!: () => void
+
     const current = new Promise<void>((resolve) => {
       release = resolve
     })
+
     const tail = previous.then(
       () => current,
       () => current
     )
+
     this.historySpawnLocks.set(sessionId, tail)
     await previous.catch(() => {})
+
     try {
       return await operation()
     } finally {
       release()
+
       if (this.historySpawnLocks.get(sessionId) === tail) {
         this.historySpawnLocks.delete(sessionId)
       }
@@ -126,23 +143,27 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
       this.tokenPath,
       this.protocolVersion
     )
+
     if (health !== 'unhealthy') {
       return
     }
 
     const daemonLiveSessionCount = await this.getDaemonLiveSessionCount()
     const liveSessionCount = Math.max(this.activeSessionIds.size, daemonLiveSessionCount ?? 0)
+
     if (daemonLiveSessionCount === null || liveSessionCount > 0) {
       console.warn(
         daemonLiveSessionCount === null
           ? '[daemon] macOS system resolver unavailable - preserving daemon because live session state could not be verified'
           : `[daemon] macOS system resolver unavailable - preserving daemon because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
       )
+
       return
     }
 
     // Why: replacing the daemon kills its sessions without exit fanout; emit exits first so panes don't write to dead PTYs.
     this.fanoutSyntheticExits(-1)
+
     if (!this.respawnPromise) {
       this.respawnPromise = this.doRespawn(
         '[daemon] macOS system resolver unavailable - respawning daemon',
@@ -151,6 +172,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
         this.respawnPromise = null
       })
     }
+
     await this.respawnPromise
   }
 
@@ -159,6 +181,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     if (!this.respawnFn || !this.runtimeDir || !this.packagedAppVersion) {
       return
     }
+
     if (!this.staleBundleReplacementPromise) {
       this.staleBundleReplacementPromise = this.replaceStaleBundleDaemonOnce(
         this.runtimeDir,
@@ -167,6 +190,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
         this.staleBundleReplacementPromise = null
       })
     }
+
     await this.staleBundleReplacementPromise
   }
 
@@ -181,22 +205,26 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
       packagedAppVersion,
       this.protocolVersion
     )
+
     if (!stale) {
       return
     }
 
     const daemonLiveSessionCount = await this.getDaemonLiveSessionCount()
     const liveSessionCount = Math.max(this.activeSessionIds.size, daemonLiveSessionCount ?? 0)
+
     if (daemonLiveSessionCount === null || liveSessionCount > 0) {
       console.warn(
         daemonLiveSessionCount === null
           ? '[daemon] Packaged daemon is stale - preserving it because live session state could not be verified'
           : `[daemon] Packaged daemon is stale - preserving it because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}`
       )
+
       return
     }
 
     this.fanoutSyntheticExits(-1)
+
     if (!this.respawnPromise) {
       this.respawnPromise = this.doRespawn(
         '[daemon] Packaged daemon is stale - respawning from the current app bundle',
@@ -205,6 +233,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
         this.respawnPromise = null
       })
     }
+
     await this.respawnPromise
   }
 
@@ -221,22 +250,26 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
       this.tokenPath,
       this.protocolVersion
     )
+
     if (health !== 'severed') {
       return
     }
 
     const daemonLiveSessionCount = await this.getDaemonLiveSessionCount()
     const liveSessionCount = Math.max(this.activeSessionIds.size, daemonLiveSessionCount ?? 0)
+
     if (daemonLiveSessionCount === null || liveSessionCount > 0) {
       console.warn(
         daemonLiveSessionCount === null
           ? '[daemon] macOS TCC attribution severed - preserving daemon because live session state could not be verified'
           : `[daemon] macOS TCC attribution severed - preserving daemon because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}; restart from Manage Sessions when ready`
       )
+
       return
     }
 
     this.fanoutSyntheticExits(-1)
+
     if (!this.respawnPromise) {
       this.respawnPromise = this.doRespawn(
         '[daemon] macOS TCC attribution severed - respawning daemon under the current app binary',
@@ -245,6 +278,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
         this.respawnPromise = null
       })
     }
+
     await this.respawnPromise
   }
 
@@ -252,6 +286,7 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     try {
       await this.client.ensureConnected()
       const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
+
       return result.sessions.filter((session) => session.isAlive).length
     } catch {
       return null
@@ -274,11 +309,13 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     this.removeEventListener = null
     this.client.disconnect()
     const releaseAdoptionLease = await this.respawnFn!(reason)
+
     if (this.respawnAdoptionClosed) {
       // Why: app teardown may win mid-respawn; a late result must not reinstall a lease nobody owns.
       releaseAdoptionLease?.()
       throw new Error('Daemon adapter closed during respawn')
     }
+
     this.pendingRespawnAdoptionRelease = releaseAdoptionLease ?? null
   }
 

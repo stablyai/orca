@@ -26,12 +26,15 @@ export async function openSessionSearchHarness(
   options: SessionSearchEngineOptions = {}
 ): Promise<SessionSearchHarness> {
   const index: SessionSearchIndexFile = await openSessionSearchIndexFile(name)
+
   const store = new SessionSearchStore(index.path, (error) => {
     throw error
   })
+
   // Constructed before any row is planted, because constructing it is what
   // installs the generation triggers the planted rows have to move.
   const engine = new SessionSearchEngine(index.db, options)
+
   return {
     db: index.db,
     store,
@@ -79,21 +82,25 @@ export function addSyntheticSession(db: SyncDatabase, session: SyntheticSession)
     filePath = `/synthetic/${id}.jsonl`,
     sessionFilePath = `/synthetic/${id}.jsonl`
   } = session
+
   db.prepare(
     `INSERT INTO sessions(id,agent,session_id,file_path,title,cwd,cwd_key,updated_at,message_count,resume_command)
      VALUES (?,?,?,?,'fixture',?,?,?,?,'resume')`
   ).run(id, agent, String(id), sessionFilePath, cwd, cwdKey(cwd), updatedAt, messageCount)
+
   if (filePath !== null) {
     db.prepare(
       'INSERT INTO files(path,byte_offset,mtime_ms,session_row_id) VALUES (?,0,1740000000000,?)'
     ).run(filePath, id)
   }
+
   for (let row = 0; row < rows; row++) {
     const messageId = Number(
       db
         .prepare('INSERT INTO messages(session_row_id,role,ts) VALUES (?,?,?)')
         .run(id, role, updatedAt).lastInsertRowid
     )
+
     const user = role === 'user' ? text : ''
     const assistant = role === 'assistant' ? text : ''
     const tool = role === 'tool' ? `${text} ${toolText}`.trim() : toolText

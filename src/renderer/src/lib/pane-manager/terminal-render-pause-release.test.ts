@@ -21,9 +21,11 @@ function createTerminal(options: {
   synchronizedOutput?: boolean
 }): unknown {
   const { rows = 24, renderService, withoutCore, synchronizedOutput } = options
+
   if (withoutCore) {
     return { rows }
   }
+
   return {
     rows,
     _core: {
@@ -36,11 +38,13 @@ function createTerminal(options: {
 describe('forceRepaintThroughRenderPause', () => {
   it('drives a synchronous full-viewport render and clears the pause latches when paused', () => {
     const refreshRows = vi.fn()
+
     const renderService: FakeRenderService = {
       _isPaused: true,
       _needsFullRefresh: true,
       refreshRows
     }
+
     const terminal = createTerminal({ rows: 30, renderService })
 
     expect(forceRepaintThroughRenderPause(terminal)).toBe(true)
@@ -51,11 +55,13 @@ describe('forceRepaintThroughRenderPause', () => {
 
   it('leaves the terminal untouched and returns false when not paused', () => {
     const refreshRows = vi.fn()
+
     const renderService: FakeRenderService = {
       _isPaused: false,
       _needsFullRefresh: false,
       refreshRows
     }
+
     const terminal = createTerminal({ renderService })
 
     expect(forceRepaintThroughRenderPause(terminal)).toBe(false)
@@ -71,6 +77,7 @@ describe('forceRepaintThroughRenderPause', () => {
 
   it('returns false without rendering when the row count is invalid', () => {
     const refreshRows = vi.fn()
+
     const terminal = createTerminal({
       rows: 0,
       renderService: { _isPaused: true, refreshRows }
@@ -88,6 +95,7 @@ describe('forceRepaintThroughRenderPause', () => {
         throw new Error('terminal disposed')
       })
     }
+
     const terminal = createTerminal({ renderService })
 
     expect(forceRepaintThroughRenderPause(terminal)).toBe(false)
@@ -107,6 +115,7 @@ describe('forceFullViewportPresent', () => {
     // settle and shows a 1px black gutter under the TUI composer.
     const refreshRows = vi.fn()
     const renderRows = vi.fn()
+
     const terminal = createTerminal({
       rows: 24,
       renderService: {
@@ -125,12 +134,14 @@ describe('forceFullViewportPresent', () => {
   it('paints through the renderer so DEC 2026 cannot swallow the reveal present', () => {
     const refreshRows = vi.fn()
     const renderRows = vi.fn()
+
     const renderService = {
       _isPaused: false,
       _needsFullRefresh: false,
       refreshRows,
       _renderer: { value: { renderRows } }
     }
+
     const terminal = createTerminal({
       rows: 24,
       renderService,
@@ -145,12 +156,14 @@ describe('forceFullViewportPresent', () => {
   it('uses RenderService refreshRows when paused without DEC 2026, matching production splash', () => {
     const refreshRows = vi.fn()
     const renderRows = vi.fn()
+
     const renderService = {
       _isPaused: true,
       _needsFullRefresh: true,
       refreshRows,
       _renderer: { value: { renderRows } }
     }
+
     const terminal = createTerminal({ rows: 24, renderService })
 
     expect(forceFullViewportPresent(terminal)).toBe(true)
@@ -168,6 +181,7 @@ describe('forceFullViewportPresent', () => {
       }),
       _renderer: { value: { renderRows: vi.fn() } }
     }
+
     const terminal = createTerminal({ rows: 24, renderService })
 
     expect(forceFullViewportPresent(terminal)).toBe(false)
@@ -183,6 +197,7 @@ describe('requestFullViewportPresent', () => {
 
   it('leaves a normal visible terminal on the debounced refresh path', () => {
     const refreshRows = vi.fn()
+
     const terminal = createTerminal({
       renderService: { _isPaused: false, refreshRows }
     })
@@ -194,6 +209,7 @@ describe('requestFullViewportPresent', () => {
   it('routes synchronized output through RenderService instead of the renderer', () => {
     const refreshRows = vi.fn()
     const renderRows = vi.fn()
+
     const terminal = createTerminal({
       rows: 24,
       synchronizedOutput: true,
@@ -211,11 +227,13 @@ describe('requestFullViewportPresent', () => {
 
   it('releases observer pause before requesting the synchronized frame', () => {
     const refreshRows = vi.fn()
+
     const renderService = {
       _isPaused: true,
       _needsFullRefresh: true,
       refreshRows
     }
+
     const terminal = createTerminal({ rows: 30, renderService, synchronizedOutput: true })
 
     expect(requestFullViewportPresent(terminal)).toBe(true)

@@ -55,18 +55,21 @@ function getEditorTitle(args: {
       'Edit automation'
     )
   }
+
   if (args.isEditingExternal) {
     return translate(
       'auto.components.automations.AutomationEditorDialogHeader.03142e7721',
       'Edit Hermes automation'
     )
   }
+
   if (args.isHermesCreate) {
     return translate(
       'auto.components.automations.AutomationEditorDialogHeader.0a75e5e2fa',
       'Create Hermes automation'
     )
   }
+
   return translate(
     'auto.components.automations.AutomationEditorDialogHeader.4133d33862',
     'Create automation'

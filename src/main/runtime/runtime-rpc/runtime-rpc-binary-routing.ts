@@ -35,12 +35,15 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
     dispose: () => void
   } {
     const abortController = new AbortController()
+
     if (ws.readyState !== ws.OPEN) {
       abortController.abort()
+
       return { signal: abortController.signal, dispose: () => {} }
     }
 
     let state = this.wsDispatchAbortStates.get(ws)
+
     if (!state) {
       state = {
         controllers: new Set(),
@@ -51,19 +54,24 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
       ws.on('close', state.abortOnClose)
       ws.on('error', state.abortOnClose)
     }
+
     state.controllers.add(abortController)
 
     return {
       signal: abortController.signal,
       dispose: () => {
         const current = this.wsDispatchAbortStates.get(ws)
+
         if (!current) {
           return
         }
+
         current.controllers.delete(abortController)
+
         if (current.controllers.size > 0) {
           return
         }
+
         this.wsDispatchAbortStates.delete(ws)
         ws.off('close', current.abortOnClose)
         ws.off('error', current.abortOnClose)
@@ -73,24 +81,30 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
 
   protected abortWebSocketDispatches(ws: WebSocket): void {
     const state = this.wsDispatchAbortStates.get(ws)
+
     if (!state) {
       return
     }
+
     this.wsDispatchAbortStates.delete(ws)
     ws.off('close', state.abortOnClose)
     ws.off('error', state.abortOnClose)
+
     for (const controller of state.controllers) {
       controller.abort()
     }
+
     state.controllers.clear()
   }
 
   protected initializePairingIdentity(): PairingIdentityInitialization {
     let deviceRegistry: DeviceRegistry
+
     try {
       deviceRegistry = new DeviceRegistry(this.userDataPath)
     } catch (error) {
       console.error('[runtime] Failed to initialize pairing registry:', error)
+
       return {
         ok: false,
         failure: pairingUnavailable(
@@ -99,16 +113,20 @@ export class RuntimeRpcBinaryRouting extends RuntimeRpcState {
         )
       }
     }
+
     let e2eeKeypair: E2EEKeypair
+
     try {
       e2eeKeypair = loadOrCreateE2EEKeypair(this.userDataPath)
     } catch (error) {
       console.error('[runtime] Failed to initialize E2EE identity:', error)
+
       return {
         ok: false,
         failure: pairingUnavailable('e2ee_key_unavailable', E2EE_KEY_UNAVAILABLE_GUIDANCE)
       }
     }
+
     return { ok: true, deviceRegistry, e2eeKeypair }
   }
 }

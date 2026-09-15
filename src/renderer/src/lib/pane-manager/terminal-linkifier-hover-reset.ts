@@ -37,6 +37,7 @@ type TerminalCoreWithLinkifier = {
 export function resetTerminalLinkifierHoverState(terminal: Terminal): void {
   try {
     const linkifier = (terminal as unknown as TerminalCoreWithLinkifier)._core?.linkifier
+
     // Why: window blur can strand xterm's active link without another mouse
     // event, so invoke its own leave path before invalidating the cache. Its
     // own try: this runs provider leave() callbacks, and a throwing one must
@@ -46,15 +47,19 @@ export function resetTerminalLinkifierHoverState(terminal: Terminal): void {
     } catch {
       /* provider leave() threw — cache invalidation below still applies */
     }
+
     if (linkifier && '_currentLink' in linkifier) {
       linkifier._currentLink = undefined
     }
+
     if (linkifier && '_lastBufferCell' in linkifier) {
       linkifier._lastBufferCell = undefined
     }
+
     if (linkifier && '_activeLine' in linkifier) {
       linkifier._activeLine = -1
     }
+
     // Why: keep the cursor recoverable if a future xterm build omits the
     // private cleanup method or has no last mouse event for it to use.
     terminal.element
@@ -78,6 +83,7 @@ export function resetTerminalLinkifierHoverState(terminal: Terminal): void {
 export function isTerminalLinkifierHoverActive(terminal: Terminal): boolean {
   try {
     const linkifier = (terminal as unknown as TerminalCoreWithLinkifier)._core?.linkifier
+
     return Boolean(linkifier && '_currentLink' in linkifier && linkifier._currentLink)
   } catch {
     return false

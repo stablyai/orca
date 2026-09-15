@@ -59,6 +59,7 @@ describe('frame encoding', () => {
       method: 'pty.spawn',
       params: { cols: 80, rows: 24 }
     }
+
     const frame = encodeJsonRpcFrame(msg, 5, 3)
 
     expect(frame[0]).toBe(MessageType.Regular)
@@ -79,6 +80,7 @@ describe('frame encoding', () => {
       method: 'x',
       params: { data: 'a'.repeat(17 * 1024 * 1024) }
     }
+
     expect(() => encodeJsonRpcFrame(bigPayload, 1, 0)).toThrow('Message too large')
   })
 })
@@ -147,6 +149,7 @@ describe('FrameDecoder', () => {
   it('skips oversized frames and calls onError instead of throwing', () => {
     const errors: Error[] = []
     const frames: DecodedFrame[] = []
+
     const decoder = new FrameDecoder(
       (f) => frames.push(f),
       (err) => errors.push(err),
@@ -205,6 +208,7 @@ describe('FrameDecoder', () => {
   it('skips an oversized frame fed in odd-sized chunks and resynchronizes', () => {
     const errors: Error[] = []
     const frames: DecodedFrame[] = []
+
     const decoder = new FrameDecoder(
       (f) => frames.push(f),
       (err) => errors.push(err),
@@ -222,6 +226,7 @@ describe('FrameDecoder', () => {
     const combined = Buffer.concat([oversized, valid])
 
     const chunkSize = 1024 * 1024 - 7
+
     for (let i = 0; i < combined.length; i += chunkSize) {
       decoder.feed(combined.subarray(i, i + chunkSize))
     }
@@ -240,6 +245,7 @@ describe('FrameDecoder', () => {
     const frame = encodeFrame(MessageType.Regular, 1, 0, Buffer.alloc(512 * 1024, 0x61))
 
     const concatSpy = vi.spyOn(Buffer, 'concat')
+
     try {
       for (let i = 0; i < frame.length; i += 32 * 1024) {
         decoder.feed(frame.subarray(i, i + 32 * 1024))
@@ -264,6 +270,7 @@ describe('parseJsonRpcMessage', () => {
         params: { cols: 80 }
       })
     )
+
     const msg = parseJsonRpcMessage(payload)
     expect('method' in msg && msg.method).toBe('pty.spawn')
   })

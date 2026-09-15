@@ -20,6 +20,7 @@ vi.mock('../../runtime/web-runtime-session', () => ({
 }))
 
 const GROUP_ID = 'floating-group'
+
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
 function makeTab(id: string, sortOrder: number): Tab {
@@ -71,18 +72,23 @@ function makeDropEvent(
 
 function renderFloatingDragHook(): ReturnType<typeof useTabDragSplit> {
   let result: ReturnType<typeof useTabDragSplit> | null = null
+
   function Probe(): null {
     result = useTabDragSplit({ worktreeId: FLOATING_TERMINAL_WORKTREE_ID, enabled: true })
+
     return null
   }
+
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   act(() => root.render(createElement(Probe)))
   mounted.push({ container, root })
+
   if (!result) {
     throw new Error('useTabDragSplit did not render')
   }
+
   return result
 }
 
@@ -106,6 +112,7 @@ function dropTab(from: string, over: string, pointerX: number): void {
 function floatingTabOrder(): string[] {
   const groups: TabGroup[] =
     useAppStore.getState().groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
+
   return groups.find((group) => group.id === GROUP_ID)?.tabOrder ?? []
 }
 
@@ -140,6 +147,7 @@ afterEach(() => {
     act(() => root.unmount())
     container.remove()
   }
+
   document.body.replaceChildren()
   vi.clearAllMocks()
 })

@@ -15,6 +15,7 @@ import { toAgentLaunchPreferences } from '@/runtime/agent-session-create-operati
 
 function removeStaleLocalAgentTabsForWebHostLaunch(worktreeId: string): void {
   const state = useAppStore.getState()
+
   for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
     if (tab.launchAgent && !isWebTerminalSurfaceTabId(tab.id)) {
       // Why: pruning a stale local agent tab is a system close — keep it out of
@@ -62,11 +63,15 @@ export function launchAgentInWebHostTab(args: {
     viewMode,
     onPromptDelivered
   } = args
+
   const hasPrompt = prompt.length > 0
   const launchPreferences = toAgentLaunchPreferences(startupPlan.sessionOptions)
+
   const structuredPromptDelivery: AgentPromptDelivery =
     promptDelivery === 'draft' ? 'draft' : 'auto-submit'
+
   removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+
   const launch = {
     worktreeId,
     environmentId,
@@ -104,6 +109,7 @@ export function launchAgentInWebHostTab(args: {
     // Why: created means the host accepted the launch, not that a local tab
     // exists; keep pruning stale local rows until the snapshot mirrors.
     removeStaleLocalAgentTabsForWebHostLaunch(worktreeId)
+
     if (outcome.status === 'failed') {
       toast.error(
         outcome.message ||
@@ -113,12 +119,16 @@ export function launchAgentInWebHostTab(args: {
             { value0: agent }
           )
       )
+
       return { delivered: false, failureNotified: true }
     }
+
     useAppStore.getState().setActiveTabType('terminal')
+
     if (hasPrompt && promptDelivered) {
       onPromptDelivered?.()
     }
+
     return { delivered: promptDelivered, failureNotified: false }
   }
 
@@ -131,6 +141,7 @@ export function launchAgentInWebHostTab(args: {
       forcePromptPaste: promptDelivery === 'submit-after-ready'
     }).then(handleCreation)
   }
+
   if (hasPrompt && promptDelivery === 'draft') {
     // Why: the draft rode in on the launch command, so no paste runs and
     // nothing else seeds the chat-composer copy for this host class.
@@ -140,6 +151,7 @@ export function launchAgentInWebHostTab(args: {
       launchDraft: prompt
     }).then((outcome) => handleCreation({ outcome, promptDelivered: outcome.status === 'created' }))
   }
+
   return createWebRuntimeSessionTerminal(launch).then((outcome) =>
     handleCreation({ outcome, promptDelivered: outcome.status === 'created' && hasPrompt })
   )

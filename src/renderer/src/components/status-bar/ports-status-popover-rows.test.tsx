@@ -22,6 +22,7 @@ const {
     recordFeatureInteraction: vi.fn(),
     workspacePortScansByKey: {}
   }
+
   return {
     activateAndRevealWorktreeMock: vi.fn(),
     createBrowserTabMock: state.createBrowserTab,
@@ -37,6 +38,7 @@ vi.mock('@/store', () => {
     (selector: (state: typeof storeState) => unknown) => selector(storeState),
     { getState: () => storeState }
   )
+
   return { useAppStore }
 })
 
@@ -125,13 +127,17 @@ describe('status bar port row open routing', () => {
     act(() => {
       root.render(<PortRow port={externalPort} activeWorktreeId={null} external />)
     })
+
     const openButton = container.querySelector<HTMLButtonElement>(
       'button[aria-label="Open in Browser"]'
     )
+
     if (!openButton) {
       throw new Error('expected Open in Browser button')
     }
+
     expect(container.textContent).toContain('Open in Browser. Shift+Ctrl+click for system browser')
+
     return openButton
   }
 

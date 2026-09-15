@@ -60,6 +60,7 @@ describe('buildChecksPanelGitStatusContextKey', () => {
       repoConnectionId: 'ssh-1',
       pushTarget: null
     }
+
     const unlinkedContext = buildChecksPanelGitStatusContextKey({
       ...base,
       linkedGitHubPR: null,

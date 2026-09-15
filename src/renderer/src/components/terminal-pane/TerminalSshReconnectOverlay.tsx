@@ -91,6 +91,7 @@ export function TerminalSshReconnectOverlay({
   const isConnecting = connecting || isConnectingSshStatus(status)
   // Why: a removed target can never reconnect, so never offer Connect for it.
   const showConnect = !targetRemoved && canConnectSshStatus(status)
+
   const executionHostId = sshOwnerEnvironmentId
     ? toRuntimeExecutionHostId(sshOwnerEnvironmentId)
     : toSshExecutionHostId(targetId)
@@ -99,6 +100,7 @@ export function TerminalSshReconnectOverlay({
     if (isSshConnectInFlight(targetId) || isConnectingSshStatus(status)) {
       return
     }
+
     try {
       if (sshOwnerEnvironmentId) {
         // Bucket state is written inside the helper, mirroring the local path.
@@ -114,6 +116,7 @@ export function TerminalSshReconnectOverlay({
           trackSshConnect(targetId, window.api.ssh.connect({ targetId })),
           SSH_RECONNECT_UI_TIMEOUT_MS
         )
+
         if (connectState) {
           // Why: ssh.connect can resolve before the global state-change IPC lands;
           // the waiting deferred PTY reattach path keys off this renderer store.
@@ -129,6 +132,7 @@ export function TerminalSshReconnectOverlay({
               'SSH connection failed'
             )
       )
+
       // Why: a failed connect usually means the renderer's target metadata is
       // stale (target removed, or re-added under a new id). Resync it so the
       // overlay converges to the ghost/re-adopted state instead of offering

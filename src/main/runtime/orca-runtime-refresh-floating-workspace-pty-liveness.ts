@@ -8,26 +8,33 @@ import { DISCONNECTED_PTY_RECORD_MAX } from './orca-runtime-postlude'
 export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory {
   protected refreshFloatingWorkspacePtyLiveness(): Set<string> | null {
     const controller = this.ptyController
+
     if (!controller?.hasPty) {
       return null
     }
+
     const knownPtyIds = new Set<string>()
     const persistedBindingByPtyId = new Map<string, { tabId: string; paneKey: string }>()
+
     for (const pty of this.ptysById.values()) {
       if (pty.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
         knownPtyIds.add(pty.ptyId)
       }
     }
+
     for (const leaf of this.leaves.values()) {
       if (leaf.worktreeId === FLOATING_TERMINAL_WORKTREE_ID && leaf.ptyId) {
         knownPtyIds.add(leaf.ptyId)
       }
     }
+
     const snapshot = this.mobileSessionTabsByWorktree.get(FLOATING_TERMINAL_WORKTREE_ID)
+
     for (const tab of snapshot?.tabs ?? []) {
       if (tab.type !== 'terminal') {
         continue
       }
+
       if (tab.ptyId) {
         knownPtyIds.add(tab.ptyId)
         persistedBindingByPtyId.set(tab.ptyId, {
@@ -35,6 +42,7 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
           paneKey: this.getMobileTerminalPaneKey(tab)
         })
       }
+
       for (const [leafId, ptyId] of Object.entries(tab.parentLayout?.ptyIdsByLeafId ?? {})) {
         knownPtyIds.add(ptyId)
         persistedBindingByPtyId.set(ptyId, {
@@ -47,12 +55,15 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
     }
 
     const liveness = new Map<string, boolean>()
+
     try {
       for (const ptyId of knownPtyIds) {
         const live = controller.hasPty(ptyId)
+
         if (live === null) {
           return null
         }
+
         liveness.set(ptyId, live)
       }
     } catch {
@@ -60,11 +71,14 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
     }
 
     const livePtyIds = new Set<string>()
+
     for (const [ptyId, live] of liveness) {
       let pty = this.ptysById.get(ptyId)
+
       if (live) {
         livePtyIds.add(ptyId)
         const binding = persistedBindingByPtyId.get(ptyId)
+
         if (!pty && binding) {
           // Why: a live daemon PTY restored from disk needs its pane identity before mobile can issue a safe handle.
           pty = this.recordPtyWorktree(ptyId, FLOATING_TERMINAL_WORKTREE_ID, {
@@ -73,6 +87,7 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
             paneKey: binding.paneKey
           })
         }
+
         if (pty) {
           pty.connected = true
           pty.disconnectedAt = null
@@ -84,7 +99,9 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
         pty.disconnectedAt ??= Date.now()
       }
     }
+
     this.pruneDisconnectedPtyRecords()
+
     return livePtyIds
   }
 
@@ -92,6 +109,7 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
     if (pty.connected) {
       return
     }
+
     // Why: disconnected PTY records stay addressable for status/exit reads, but their transcripts must not accumulate after the process dies.
     pty.tailBuffer = []
     pty.tailTranscriptBuffer = []
@@ -110,7 +128,9 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
     const retained = [...this.ptysById.values()]
       .filter((pty) => !pty.connected && !this.leafExistsForPty(pty.ptyId))
       .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
+
     const staleCount = Math.max(0, retained.length - DISCONNECTED_PTY_RECORD_MAX)
+
     for (const stale of retained.slice(0, staleCount)) {
       // Why: exited runtime-owned PTYs stay readable, but long-lived runtimes churn through many sessions; bound the archive.
       this.dropDisconnectedPtyRecord(stale.ptyId)
@@ -120,13 +140,16 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
   protected dropDisconnectedPtyRecord(ptyId: string): void {
     // Why: pruning can remove a PTY without the normal exit callback.
     const pty = this.ptysById.get(ptyId)
+
     // Remote disconnect is unverifiable; its host-owned status survives until certified exit.
     const processDeathCertified =
       pty?.connectionId === null ||
       this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict.status === 'exited'
+
     if (processDeathCertified) {
       this.reconcileAgentStatusForEndedProcessFn?.(this.collectAgentStatusPaneKeysForPty(ptyId))
     }
+
     this.advancePtyLifecycleGeneration(ptyId)
     this.pairedRendererSessionOwnedPtyIds.delete(ptyId)
     this.ptysById.delete(ptyId)
@@ -154,12 +177,14 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
     this.terminalFileUriHostnameByPtyId.delete(ptyId)
     this.wslDistroByPtyId.delete(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
+
     if (handle) {
       // Why: pruning can remove a PTY without onPtyExit firing; release this leader's agent team so it doesn't leak.
       this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
       this.handleByPtyId.delete(ptyId)
       this.syntheticTerminalHandles.delete(handle)
       const record = this.handles.get(handle)
+
       if (record?.tabId.startsWith('pty:')) {
         this.handles.delete(handle)
       }
@@ -172,17 +197,21 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
 
   protected rebuildLeafPtyIndex(): void {
     const next = new Map<string, RuntimeLeafRecord[]>()
+
     for (const leaf of this.leaves.values()) {
       if (!leaf.ptyId) {
         continue
       }
+
       const leaves = next.get(leaf.ptyId)
+
       if (leaves) {
         leaves.push(leaf)
       } else {
         next.set(leaf.ptyId, [leaf])
       }
     }
+
     this.leavesByPtyId = next
   }
 
@@ -196,6 +225,7 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
     if (!handle.startsWith('dispatch:')) {
       this.mailPointerRepointScheduler.schedule(handle)
     }
+
     this.orchestrationMailboxNotifications.notifyMessageArrived(handle, messageType)
   }
 }

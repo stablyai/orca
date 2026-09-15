@@ -32,6 +32,7 @@ export function parseAuthStatus(text: string): GhAuthAccount[] {
   const accounts: GhAuthAccount[] = []
   let currentHost: string | null = null
   let current: GhAuthAccount | null = null
+
   for (const rawLine of text.split('\n')) {
     const line = rawLine.replace(/\r$/, '')
     // Host header: a non-indented hostname token, with an optional
@@ -40,24 +41,30 @@ export function parseAuthStatus(text: string): GhAuthAccount[] {
     // host from the `Logged in to <host>` line below if this header was
     // missed, so a parser miss never silently drops every account.
     const hostMatch = line.match(/^([a-z0-9][a-z0-9.-]*(?::\d+)?)\s*:?\s*$/i)
+
     if (hostMatch && !/^logged\b/i.test(line)) {
       currentHost = hostMatch[1]
       continue
     }
+
     const loggedIn = line.match(/Logged in to (\S+) account (\S+)(?:\s+\(([^)]+)\))?/i)
+
     if (loggedIn) {
       if (current) {
         accounts.push(current)
       }
+
       // Prefer the host from the `Logged in to <host>` line itself — it's
       // always present, whereas the section header above can be skipped
       // by the regex on unfamiliar gh output.
       const host = loggedIn[1] || currentHost || 'github.com'
       const sourceLabel = (loggedIn[3] ?? '').trim()
+
       // gh emits "(keyring)" for stored creds and "(GITHUB_TOKEN)" /
       // "(GH_TOKEN)" when an env var is shadowing the keyring.
       const envToken =
         sourceLabel === 'GITHUB_TOKEN' || sourceLabel === 'GH_TOKEN' ? sourceLabel : null
+
       current = {
         host,
         user: loggedIn[2],
@@ -68,15 +75,20 @@ export function parseAuthStatus(text: string): GhAuthAccount[] {
       }
       continue
     }
+
     if (!current) {
       continue
     }
+
     const activeMatch = line.match(/Active account:\s*(true|false)/i)
+
     if (activeMatch) {
       current.active = activeMatch[1].toLowerCase() === 'true'
       continue
     }
+
     const scopesMatch = line.match(/Token scopes:\s*(.+)$/i)
+
     if (scopesMatch) {
       current.scopes = scopesMatch[1]
         .split(',')
@@ -84,15 +96,18 @@ export function parseAuthStatus(text: string): GhAuthAccount[] {
         .filter(Boolean)
     }
   }
+
   if (current) {
     accounts.push(current)
   }
+
   return accounts
 }
 
 export async function diagnoseGhAuth(requiredHost?: string): Promise<GhAuthDiagnostic> {
   let raw = ''
   let ghAvailable = true
+
   try {
     // `gh auth status` exits non-zero when no host is logged in but still
     // prints the same diagnostic text we want, so capture both streams.
@@ -103,39 +118,50 @@ export async function diagnoseGhAuth(requiredHost?: string): Promise<GhAuthDiagn
       err && typeof err === 'object' && 'stderr' in err
         ? String((err as { stderr?: unknown }).stderr ?? '')
         : ''
+
     const stdout =
       err && typeof err === 'object' && 'stdout' in err
         ? String((err as { stdout?: unknown }).stdout ?? '')
         : ''
+
     raw = `${stdout}\n${stderr}`
+
     if (!raw.trim()) {
       const message = err instanceof Error ? err.message : String(err)
+
       // Most likely cause: gh CLI not installed or not on PATH.
       if (/ENOENT|not found|command not found/i.test(message)) {
         ghAvailable = false
       }
+
       raw = message
     }
   }
+
   const accounts = parseAuthStatus(raw)
   // Why: when the caller names a host (a GHES origin), scope the diagnosis to
   // that host's account — the github.com account's scopes are irrelevant to it.
   const normalizedRequiredHost = requiredHost?.trim().toLowerCase() || null
+
   const hostAccounts = normalizedRequiredHost
     ? accounts.filter((a) => a.host.toLowerCase() === normalizedRequiredHost)
     : accounts
+
   const active =
     hostAccounts.find((a) => a.active) ??
     hostAccounts[0] ??
     (normalizedRequiredHost ? null : (accounts.find((a) => a.active) ?? accounts[0] ?? null))
+
   const envTokenInProcess: 'GITHUB_TOKEN' | 'GH_TOKEN' | null = process.env.GH_TOKEN
     ? 'GH_TOKEN'
     : process.env.GITHUB_TOKEN
       ? 'GITHUB_TOKEN'
       : null
+
   const missingScopes = active
     ? REQUIRED_SCOPES.filter((s) => !active.scopes.includes(s))
     : [...REQUIRED_SCOPES]
+
   // Is there a non-env (keyring) account we could fall back to by unsetting
   // the env var? Only meaningful if the active account is env-shadowed, and
   // only if the keyring login is on the SAME host — otherwise unsetting the
@@ -143,6 +169,7 @@ export async function diagnoseGhAuth(requiredHost?: string): Promise<GhAuthDiagn
   const keyringFallback = active
     ? (accounts.find((a) => a.source === 'keyring' && a.host === active.host) ?? null)
     : null
+
   return {
     ghAvailable,
     activeAccount: active,

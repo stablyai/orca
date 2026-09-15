@@ -69,6 +69,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     async (requestedAgent: TuiAgent | null): Promise<void> => {
       if (isProjectGroupTarget) {
         await submitFolderTarget(requestedAgent)
+
         return
       }
 
@@ -82,6 +83,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
 
       if (!repoId || !selectedRepo) {
         showProjectRequiredError()
+
         return
       }
 
@@ -124,20 +126,24 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         liveStore.setActiveView('terminal')
         liveStore.setSidebarOpen(true)
         onCreated?.()
+
         return
       }
 
       setCreateError(null)
 
       setCreating(true)
+
       try {
         const smartGitHubSettlement = await settleComposerSubmit(
           resolvePendingSmartGitHubSubmit(),
           isSubmissionCancelled
         )
+
         if (smartGitHubSettlement.status === 'cancelled') {
           return
         }
+
         await executeQuickCreation(
           smartGitHubSettlement.value,
           requestedAgent,
@@ -150,6 +156,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         if (isSubmissionCancelled()) {
           return
         }
+
         const formattedError = formatWorkspaceCreateError(error)
         setCreateError(formattedError)
         toast.error(getWorkspaceCreateErrorToastMessage(formattedError))

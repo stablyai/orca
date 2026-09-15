@@ -14,12 +14,15 @@ export function transitionHiddenRendererPtyDeliveryState(
   const settings = session.getSettings?.()
   const wasDroppable = shouldDropHiddenRendererPtyData(id, settings)
   let droppedWhileHidden = false
+
   if (hidden) {
     markHiddenRendererPty(id)
   } else {
     droppedWhileHidden = unmarkHiddenRendererPty(id).droppedWhileHidden
   }
+
   const droppable = shouldDropHiddenRendererPtyData(id, settings)
+
   return { droppable, droppedWhileHidden, policyChanged: wasDroppable !== droppable }
 }
 
@@ -29,6 +32,7 @@ export function transitionSpawnHiddenRendererPtyDeliveryState(
   hidden: boolean
 ): void {
   const transition = transitionHiddenRendererPtyDeliveryState(session, id, hidden)
+
   if (transition.policyChanged) {
     invalidatePendingPtyDrainPolicy(id)
   }

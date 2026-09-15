@@ -54,21 +54,31 @@ type RefreshProbeSnapshot = {
 }
 
 const REDRAW_FRAME_COUNT = 270
+
 const REDRAW_PAYLOAD_CHARS = 520
+
 const REWRITE_REDRAW_FRAME_COUNT = REDRAW_FRAME_COUNT
+
 const REWRITE_REDRAW_PAYLOAD_CHARS = REDRAW_PAYLOAD_CHARS
+
 const TIMER_SAMPLE_MS = 16
+
 const MAX_RENDERER_TIMER_DRIFT_MS = 500
+
 const FOREGROUND_IMMEDIATE_BUDGET_CHARS = 128 * 1024
+
 const OPENCODE_CAPTURE_REPLAY_CHARS = FOREGROUND_IMMEDIATE_BUDGET_CHARS * 64
+
 const OPENCODE_CAPTURE_PATH = path.join(process.cwd(), '.tmp', 'opencode-tui-capture.txt')
 
 async function resetSchedulerDebug(page: Page): Promise<void> {
   await page.evaluate(() => {
     const debug = (window as SchedulerDebugWindow).__terminalOutputSchedulerDebug
+
     if (!debug) {
       throw new Error('terminal output scheduler debug API is unavailable')
     }
+
     debug.reset()
   })
 }
@@ -76,9 +86,11 @@ async function resetSchedulerDebug(page: Page): Promise<void> {
 async function readSchedulerDebug(page: Page): Promise<SchedulerDebugSnapshot> {
   return page.evaluate(() => {
     const debug = (window as SchedulerDebugWindow).__terminalOutputSchedulerDebug
+
     if (!debug) {
       throw new Error('terminal output scheduler debug API is unavailable')
     }
+
     return debug.snapshot()
   })
 }
@@ -87,6 +99,7 @@ async function measureRendererDuringBurst(page: Page, paneKey: string): Promise<
   const frames = Array.from({ length: REDRAW_FRAME_COUNT }, (_, frame) => {
     const text = `OpenTUI active redraw #${String(frame).padStart(4, '0')}`
     const payload = 'x'.repeat(REDRAW_PAYLOAD_CHARS)
+
     return (
       '\x1b[?2026h' +
       '\x1b[?25l' +
@@ -95,6 +108,7 @@ async function measureRendererDuringBurst(page: Page, paneKey: string): Promise<
       '\x1b[?2026l'
     )
   })
+
   return measureRendererDuringFrames(page, paneKey, frames)
 }
 
@@ -105,8 +119,10 @@ async function measureRendererDuringRewriteBurst(
   const frames = Array.from({ length: REWRITE_REDRAW_FRAME_COUNT }, (_, frame) => {
     const text = `• Working ${String(frame).padStart(4, '0')}`
     const payload = 'x'.repeat(REWRITE_REDRAW_PAYLOAD_CHARS)
+
     return `\r\x1b[2K${text} ${payload}`
   })
+
   return measureRendererDuringFrames(page, paneKey, frames)
 }
 
@@ -118,6 +134,7 @@ async function measureRendererDuringFrames(
   return page.evaluate(
     async ({ paneKey, sampleMs, frames }) => {
       const injector = (window as SchedulerDebugWindow).__terminalPtyDataInjection
+
       if (!injector) {
         throw new Error('terminal PTY data injection API is unavailable')
       }
@@ -126,6 +143,7 @@ async function measureRendererDuringFrames(
       let samples = 0
       let lastTick = performance.now()
       const startedAt = lastTick
+
       const timer = window.setInterval(() => {
         const now = performance.now()
         maxTimerDriftMs = Math.max(maxTimerDriftMs, now - lastTick - sampleMs)
@@ -134,15 +152,19 @@ async function measureRendererDuringFrames(
       }, sampleMs)
 
       let injectedFrames = 0
+
       for (const data of frames) {
         if (data.length > 2048) {
           throw new Error(`repro frame unexpectedly exceeded 2048 chars: ${data.length}`)
         }
+
         if (!injector.inject(paneKey, data)) {
           throw new Error(`no PTY data injector registered for pane key ${paneKey}`)
         }
+
         injectedFrames += 1
       }
+
       await new Promise((resolve) => window.setTimeout(resolve, sampleMs * 2))
       window.clearInterval(timer)
 
@@ -166,26 +188,33 @@ async function installActivePaneRefreshProbe(page: Page): Promise<void> {
     ;(window as RefreshProbeWindow).__terminalRefreshProbe?.dispose()
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!pane) {
       throw new Error('Active terminal pane is unavailable')
     }
+
     const terminal = pane.terminal as unknown as {
       _core?: { refresh?: (start: number, end: number, sync?: boolean) => void }
       refresh: (start: number, end: number) => void
     }
+
     const originalCoreRefresh = terminal._core?.refresh?.bind(terminal._core)
     const originalPublicRefresh = terminal.refresh.bind(terminal)
+
     if (!terminal._core || !originalCoreRefresh) {
       throw new Error('Active terminal core refresh hook is unavailable')
     }
+
     let synchronousWebgl = 0
     let synchronousDom = 0
     let debouncedWebgl = 0
@@ -198,16 +227,20 @@ async function installActivePaneRefreshProbe(page: Page): Promise<void> {
           synchronousDom += 1
         }
       }
+
       originalCoreRefresh(start, end, sync)
     }
+
     terminal.refresh = (start, end) => {
       if (manager.hasWebglRenderer(pane.id)) {
         debouncedWebgl += 1
       } else {
         debouncedDom += 1
       }
+
       originalPublicRefresh(start, end)
     }
+
     ;(window as RefreshProbeWindow).__terminalRefreshProbe = {
       snapshot: () => ({
         synchronousWebgl,
@@ -219,6 +252,7 @@ async function installActivePaneRefreshProbe(page: Page): Promise<void> {
         if (terminal._core) {
           terminal._core.refresh = originalCoreRefresh
         }
+
         terminal.refresh = originalPublicRefresh
         delete (window as RefreshProbeWindow).__terminalRefreshProbe
       }
@@ -229,34 +263,42 @@ async function installActivePaneRefreshProbe(page: Page): Promise<void> {
 async function forceActivePaneWebglRenderer(page: Page): Promise<boolean> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
+
     if (!state?.settings) {
       throw new Error('Store unavailable')
     }
+
     window.__store?.setState({
       settings: { ...state.settings, terminalGpuAcceleration: 'on' }
     })
     const worktreeId = state.activeWorktreeId
+
     const tabId =
       state.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     window.__paneManagers?.get(tabId ?? '')?.setTerminalGpuAcceleration?.('on')
   })
+
   return page
     .waitForFunction(
       () => {
         const state = window.__store?.getState()
         const worktreeId = state?.activeWorktreeId
+
         const tabId =
           state?.activeTabType === 'terminal'
             ? state.activeTabId
             : worktreeId
               ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
               : null
+
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
         return pane ? manager?.hasWebglRenderer(pane.id) === true : false
       },
       null,
@@ -300,7 +342,9 @@ function loadCapturedOpenCodeSmallRedrawFrames(): string[] {
   if (!existsSync(OPENCODE_CAPTURE_PATH)) {
     return []
   }
+
   const capture = readFileSync(OPENCODE_CAPTURE_PATH, 'utf8')
+
   const smallFrames = capture
     .split('\x1b[?2026h')
     .slice(1)
@@ -309,15 +353,18 @@ function loadCapturedOpenCodeSmallRedrawFrames(): string[] {
 
   const frames: string[] = []
   let totalChars = 0
+
   while (smallFrames.length > 0 && totalChars <= OPENCODE_CAPTURE_REPLAY_CHARS) {
     for (const frame of smallFrames) {
       frames.push(frame)
       totalChars += frame.length
+
       if (totalChars > OPENCODE_CAPTURE_REPLAY_CHARS) {
         break
       }
     }
   }
+
   return frames
 }
 
@@ -353,10 +400,13 @@ test.describe('Terminal foreground redraw freeze repro', () => {
     // Why: Linux headless CI intentionally disables GPU. Declare that
     // environment unsupported instead of weakening the WebGL-only oracle.
     test.skip(!webglAttached, 'WebGL is unavailable for the refresh-policy probe')
+
     if (!webglAttached) {
       return
     }
+
     await installActivePaneRefreshProbe(orcaPage)
+
     try {
       const refreshBaseline = await readRefreshProbe(orcaPage)
       await resetSchedulerDebug(orcaPage)
@@ -371,6 +421,7 @@ test.describe('Terminal foreground redraw freeze repro', () => {
           async () => {
             const refresh = await readRefreshProbe(orcaPage)
             const delta = subtractRefreshProbe(refresh, refreshBaseline)
+
             return Object.values(delta).reduce((total, count) => total + count, 0)
           },
           {

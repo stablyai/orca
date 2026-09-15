@@ -7,6 +7,7 @@ import { repairTranslatedValue } from './locale-translation-policy.mjs'
 describe('locale-count-fragment-separator', () => {
   it('keeps a slash between shown and total theme counts in CJK locales', () => {
     const brokenByLocale = { ko: '{{value0}} 중', ja: '{{value0}}の', zh: '{{value0}} 的' }
+
     for (const [locale, localeValue] of Object.entries(brokenByLocale)) {
       expect(
         repairTranslatedValue({
@@ -25,6 +26,7 @@ describe('locale-count-fragment-separator', () => {
       ['ja', '「{{value0}}」に一致', ' 「{{value0}}」に一致'],
       ['zh', '匹配“{{value0}}”', ' 匹配“{{value0}}”']
     ]
+
     for (const [locale, localeValue, repaired] of cases) {
       expect(
         repairTranslatedValue({

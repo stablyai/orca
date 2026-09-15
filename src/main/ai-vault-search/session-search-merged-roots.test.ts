@@ -22,10 +22,13 @@ import {
 // legally contain the delimiter.
 
 const CAN_DENY_READ = process.platform !== 'win32' && process.getuid?.() !== 0
+
 const INTERVAL_MS = 20_000
 
 let harness: SessionSearchIndexerHarness
+
 let clock: FakeSessionSearchClock
+
 let indexer: SessionSearchIndexer
 
 beforeEach(async () => {
@@ -82,6 +85,7 @@ it.skipIf(!CAN_DENY_READ)('fences one merged root without taking its partner dow
 
   // One of the two roots goes away; the other is untouched.
   await chmod(join(current, 'agents'), 0o000)
+
   try {
     await indexer.reconcile({ full: true })
 

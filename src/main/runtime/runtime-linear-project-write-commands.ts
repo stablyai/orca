@@ -17,39 +17,53 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
     team: { id: string; workspaceId: string }
   ): Promise<LinearProjectSummary> {
     const trimmed = input.trim()
+
     if (!trimmed) {
       throw linearError('linear_invalid_project', 'Pass a non-empty Linear project id or name.')
     }
+
     const byId = isLinearUuid(trimmed)
       ? await this.readLinearProjectByIdForCreate(trimmed, team.workspaceId)
       : null
+
     if (byId) {
       await this.assertLinearProjectIncludesTeam(byId, team.id, team.workspaceId, trimmed)
+
       return byId
     }
+
     const searchCandidates = await this.readLinearProjectsForCreate(trimmed, team.workspaceId)
     const normalized = trimmed.toLowerCase()
     const idMatch = searchCandidates.find((project) => project.id.toLowerCase() === normalized)
+
     if (idMatch) {
       await this.assertLinearProjectIncludesTeam(idMatch, team.id, team.workspaceId, trimmed)
+
       return idMatch
     }
+
     const slugMatch = searchCandidates.find(
       (project) => project.slugId?.toLowerCase() === normalized
     )
+
     if (slugMatch) {
       await this.assertLinearProjectIncludesTeam(slugMatch, team.id, team.workspaceId, trimmed)
+
       return slugMatch
     }
+
     const nameMatches = await this.readLinearProjectsByExactNameForCreate(trimmed, team.workspaceId)
+
     const compatibleNameMatches = await this.filterLinearProjectsForTeam(
       nameMatches,
       team.id,
       team.workspaceId
     )
+
     if (compatibleNameMatches.length === 1) {
       return compatibleNameMatches[0]
     }
+
     if (compatibleNameMatches.length > 1) {
       throw linearError(
         'linear_invalid_project',
@@ -64,9 +78,11 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
         }
       )
     }
+
     if (nameMatches.length > 0) {
       await this.assertLinearProjectIncludesTeam(nameMatches[0], team.id, team.workspaceId, trimmed)
     }
+
     throw linearError('linear_invalid_project', `No Linear project exactly matched "${trimmed}".`, {
       projects: searchCandidates.map((project) => ({
         id: project.id,
@@ -119,16 +135,20 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
     if (this.linearProjectIncludesTeam(project, teamId)) {
       return
     }
+
     let teams: NonNullable<LinearProjectSummary['teams']> = []
+
     try {
       // Why: summary reads cap project teams, so large cross-team projects need a paged membership check before rejecting a valid create.
       teams = await listLinearProjectTeams(project.id, workspaceId, true)
     } catch (error) {
       throw this.mapLinearReadFailure(error)
     }
+
     if (teams.some((team) => team.id === teamId)) {
       return
     }
+
     throw linearError(
       'linear_invalid_project',
       `Linear project "${input}" is not available to the target team.`,
@@ -145,13 +165,16 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
     workspaceId: string
   ): Promise<LinearProjectSummary[]> {
     const compatible: LinearProjectSummary[] = []
+
     for (const project of projects) {
       if (this.linearProjectIncludesTeam(project, teamId)) {
         compatible.push(project)
         continue
       }
+
       try {
         const teams = await listLinearProjectTeams(project.id, workspaceId, true)
+
         if (teams.some((team) => team.id === teamId)) {
           compatible.push({ ...project, teams })
         }
@@ -159,6 +182,7 @@ export class RuntimeLinearProjectWriteCommands extends RuntimeLinearTeamWriteCom
         throw this.mapLinearReadFailure(error)
       }
     }
+
     return compatible
   }
 

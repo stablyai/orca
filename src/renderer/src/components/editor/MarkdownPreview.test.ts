@@ -105,6 +105,7 @@ describe('MarkdownPreview source link routing', () => {
       worktreeId: 'wt-1',
       mode: 'edit'
     }
+
     const preview = {
       id: 'markdown-preview::/tmp/orca/docs/note.md',
       filePath: '/tmp/orca/docs/note.md',
@@ -137,6 +138,7 @@ describe('MarkdownPreview source link routing', () => {
       runtimeEnvironmentId: null,
       mode: 'edit'
     }
+
     const activeRuntimeEdit = {
       id: 'editor:wt-1:env-active:guide',
       filePath: '/repo/docs/guide.md',
@@ -165,6 +167,7 @@ describe('MarkdownPreview source link routing', () => {
       scrollTop: 125,
       getBoundingClientRect: () => ({ top: 50 }) as DOMRect
     }
+
     const target = {
       getBoundingClientRect: () => ({ top: 430 }) as DOMRect
     }

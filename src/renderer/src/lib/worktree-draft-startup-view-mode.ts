@@ -10,9 +10,11 @@ export function resolveBackendDraftStartup(
   if (!request.startup || !request.agent || !request.launchDraftPrompt) {
     return request.startup
   }
+
   const state = useAppStore.getState()
   const repo = state.repos.find((entry) => entry.id === request.repoId)
   const connectionId = repo ? (repo.connectionId ?? null) : undefined
+
   const viewMode =
     decideInitialAgentTabViewMode({
       experimentalNativeChat: state.settings?.experimentalNativeChat,
@@ -26,5 +28,6 @@ export function resolveBackendDraftStartup(
           }
         : {})
     }) ?? 'terminal'
+
   return { ...request.startup, viewMode }
 }

@@ -17,6 +17,7 @@ describe('branch conflict real Git contract', () => {
   it('decides remote conflicts from one batched probe across many remotes', async () => {
     const repoPath = mkdtempSync(join(tmpdir(), 'orca-branch-conflict-'))
     tempPaths.push(repoPath)
+
     const git = (...args: string[]): string =>
       execFileSync('git', args, { cwd: repoPath, encoding: 'utf8' })
 
@@ -34,6 +35,7 @@ describe('branch conflict real Git contract', () => {
     for (let index = 0; index < 12; index += 1) {
       git('remote', 'add', `remote${index}`, 'https://example.test/repo.git')
     }
+
     git('update-ref', 'refs/remotes/remote7/taken', head)
 
     await expect(getBranchConflictKind(repoPath, 'taken')).resolves.toBe('remote')

@@ -16,6 +16,7 @@ export function BrowserLocalhostWorktreeLabelsSetting({
     'auto.components.settings.BrowserLocalhostWorktreeLabelsSetting.8ac8c3ad19',
     'Localhost Worktree Labels'
   )
+
   const description = translate(
     'auto.components.settings.BrowserLocalhostWorktreeLabelsSetting.1db3c8b983',
     'Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart.'

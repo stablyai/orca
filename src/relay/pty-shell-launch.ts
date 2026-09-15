@@ -8,7 +8,9 @@ import {
 } from '../main/shell-startup-features'
 import { inheritedZdotdirEnv, resolveInheritedZdotdir } from '../main/zsh-wrapper-dir-ownership'
 import { ensureOverlayRestoreWrappers } from './pty-shell-overlay-wrappers'
+
 const RELAY_SHELL_READY_DIR = '.orca-relay/shell-ready'
+
 const POSIX_LOGIN_ARGS = ['-l']
 
 export type RelayShellLaunchConfig = {
@@ -30,7 +32,9 @@ export function isRelayWslShell(
   if (platform !== 'win32') {
     return false
   }
+
   const name = shellBasename(shellPath)
+
   return name === 'wsl.exe' || name === 'wsl'
 }
 
@@ -41,16 +45,21 @@ function windowsShellArgs(
   if (shellName === 'powershell.exe' || shellName === 'powershell') {
     return ['-NoLogo']
   }
+
   if (shellName === 'pwsh.exe' || shellName === 'pwsh') {
     return ['-NoLogo']
   }
+
   if (shellName === 'cmd.exe' || shellName === 'cmd') {
     return []
   }
+
   if (shellName === 'wsl.exe' || shellName === 'wsl') {
     const distro = options.terminalWindowsWslDistro?.trim()
+
     return distro ? ['-d', distro] : []
   }
+
   return null
 }
 
@@ -69,11 +78,13 @@ export function getRelayShellLaunchConfig(
   } = {}
 ): RelayShellLaunchConfig {
   const shellName = shellBasename(shellPath)
+
   const unwrapped: RelayShellLaunchConfig = {
     args: POSIX_LOGIN_ARGS,
     env: {},
     supportsReadyMarker: false
   }
+
   if (platform === 'win32') {
     // Why: pwsh also exists on POSIX remotes; Windows-specific shell args must
     // only apply when the relay itself is running on native Windows.
@@ -95,6 +106,7 @@ export function getRelayShellLaunchConfig(
   // when that command's delivery asked for the readiness handshake.
   const startupCommandRequested =
     options.emitReadyMarker === true || options.emitStartupIdentity === true
+
   const features = selectShellStartupFeatures({
     shellPath: shellName,
     env,
@@ -102,6 +114,7 @@ export function getRelayShellLaunchConfig(
     waitsForShellReady: options.emitReadyMarker === true,
     emitsStartupIdentity: options.emitStartupIdentity === true
   })
+
   // Why bash is always wrapped: its rcfile carries the OSC 133 command-lifecycle
   // hooks unconditionally today, and dropping them would strand agent rows on
   // "working". zsh keeps the plain startup fast path when nothing needs it —
@@ -112,6 +125,7 @@ export function getRelayShellLaunchConfig(
 
   const root = getWrapperRoot(env)
   let wrappersReady = false
+
   try {
     wrappersReady = ensureOverlayRestoreWrappers(root)
   } catch {
@@ -119,6 +133,7 @@ export function getRelayShellLaunchConfig(
     // that must not stop the pane from opening at all.
     wrappersReady = false
   }
+
   if (!wrappersReady) {
     // Why plain login shell: ZDOTDIR pointed at an incomplete wrapper dir makes
     // zsh skip the user's whole config. Losing Orca's features is recoverable.
@@ -128,6 +143,7 @@ export function getRelayShellLaunchConfig(
   const featureEnv = {
     [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(features)
   }
+
   const supportsReadyMarker = features.includes('ready')
 
   if (shellName === 'zsh') {

@@ -13,7 +13,9 @@ import type { WorkspaceCleanupSortState } from '../../../../shared/workspace-cle
 type Row = { worktreeId: string }
 
 const row = (worktreeId: string): Row => ({ worktreeId })
+
 const ids = (rows: readonly Row[]): string[] => rows.map((entry) => entry.worktreeId)
+
 const ascending: WorkspaceCleanupSortState = { field: 'name', direction: 'asc' }
 
 describe('workspace cleanup streaming row order', () => {
@@ -39,6 +41,7 @@ describe('workspace cleanup streaming row order', () => {
       [row('c'), row('d'), row('b'), row('a')],
       extendedOrder
     )
+
     expect(ids(secondTick)).toEqual(['a', 'b', 'd', 'c'])
     expect(order.positions.has('d')).toBe(false)
   })

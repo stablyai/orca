@@ -22,9 +22,11 @@ export async function resolveDispatchCallerWorktreeId(
 ): Promise<string> {
   if (isStructuredWorkerHandle(callerHandle)) {
     const worktreeId = runtime.getOrchestrationDispatchAuthority?.(callerHandle)?.worktreeId ?? null
+
     if (worktreeId) {
       return worktreeId
     }
   }
+
   return (await runtime.showTerminal(callerHandle)).worktreeId
 }

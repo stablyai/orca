@@ -45,6 +45,7 @@ export async function resolveGitHubPrStartPoint(
     if (pushTarget) {
       return
     }
+
     try {
       const resolved = await getPullRequestPushTarget(
         args.repoPath,
@@ -53,6 +54,7 @@ export async function resolveGitHubPrStartPoint(
         args.localGitOptions ?? {},
         args.issueSourcePreference
       )
+
       pushTarget = resolved?.pushTarget
       maintainerCanModify = resolved?.maintainerCanModify
     } catch {
@@ -71,14 +73,18 @@ export async function resolveGitHubPrStartPoint(
       args.localGitOptions ?? {},
       args.issueSourcePreference
     )
+
     if (!item || item.type !== 'pr') {
       return { error: `PR #${args.prNumber} not found.` }
     }
+
     headRefName = (item.branchName ?? '').trim()
     baseRefName = (item.baseRefName ?? '').trim()
+
     if (!headRefName) {
       return { error: `PR #${args.prNumber} has no head branch.` }
     }
+
     if (item.isCrossRepository === true) {
       isCrossRepository = true
     }
@@ -89,6 +95,7 @@ export async function resolveGitHubPrStartPoint(
   }
 
   let remote: string
+
   try {
     remote = await args.resolveRemote()
   } catch (error) {
@@ -111,14 +118,17 @@ export async function resolveGitHubPrStartPoint(
     // Why: soft-keep needs identity when the fetch throws before returning a path.
     // Success uses the path returned by the fetch itself (writer-authoritative).
     let softKeepLocalRefPromise: Promise<string | null> | undefined
+
     const resolveSoftKeepLocalRef = (): Promise<string | null> => {
       softKeepLocalRefPromise ??= (async () => {
         try {
           const { stdout } = await args.gitExec(['remote', 'get-url', remote])
           const remoteUrl = stdout.trim()
+
           if (!remoteUrl) {
             return null
           }
+
           return githubPullRequestHeadLocalRef(
             reviewHeadRemoteRefComponent(remote, remoteUrl),
             args.prNumber
@@ -127,28 +137,36 @@ export async function resolveGitHubPrStartPoint(
           return null
         }
       })()
+
       return softKeepLocalRefPromise
     }
+
     const resolveDurableHeadSha = async (localRef: string | null): Promise<string | null> => {
       if (!localRef) {
         return null
       }
+
       try {
         const { stdout } = await args.gitExec(['rev-parse', '--verify', `${localRef}^{commit}`])
+
         return stdout.trim() || null
       } catch {
         return null
       }
     }
+
     try {
       const localRef = await args.fetchPullRequestHeadRef(remote, args.prNumber)
       const sha = await resolveDurableHeadSha(localRef)
+
       if (!sha) {
         return { error: `Could not resolve fork PR #${args.prNumber} head after fetch.` }
       }
+
       return { baseBranch: sha }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+
       // Why: mirror compare-base — a transient transport failure must not fail
       // the resolve when a prior fetch already pinned the durable head ref. A
       // missing remote ref (deleted PR/fork), auth failure, or stale-relay
@@ -156,6 +174,7 @@ export async function resolveGitHubPrStartPoint(
       // dead or unauthorized tip and mask the actionable error.
       if (isTransientReviewHeadFetchError(error)) {
         const localSha = await resolveDurableHeadSha(await resolveSoftKeepLocalRef())
+
         if (localSha) {
           console.warn(
             '[github:resolvePrStartPoint] PR head fetch failed; using durable local ref',
@@ -165,9 +184,11 @@ export async function resolveGitHubPrStartPoint(
               error: message.split('\n')[0]
             }
           )
+
           return { baseBranch: localSha }
         }
       }
+
       return {
         error: `Failed to fetch ${pullRef}: ${message.split('\n')[0]}`
       }
@@ -179,10 +200,13 @@ export async function resolveGitHubPrStartPoint(
   // PR head (fork or same-repo) as refs/pull/<N>/head on the upstream repo.
   if (isCrossRepository) {
     const result = await fetchPullRequestHeadSha()
+
     if ('error' in result) {
       return result
     }
+
     const compareBaseFetched = await fetchCompareBaseRef()
+
     // Why: adopt the contributor's branch name locally (mirroring the same-repo
     // return below) so fork-PR worktrees aren't renamed with the maintainer's
     // branch prefix (e.g. `me/866`). The push refspec still targets the fork.
@@ -200,13 +224,16 @@ export async function resolveGitHubPrStartPoint(
     await args.fetchRemoteTrackingRef(remote, headRefName)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+
     // Why: missing fork metadata can make a fork PR look like a same-repo
     // branch. Only that missing-ref case should fall back to refs/pull.
     if (isMissingRemoteRefGitError(error)) {
       const result = await fetchPullRequestHeadSha()
+
       if (!('error' in result)) {
         await resolvePushTarget()
         const compareBaseFetched = await fetchCompareBaseRef()
+
         return {
           ...result,
           ...(compareBaseFetched && compareBaseRef ? { compareBaseRef } : {}),
@@ -216,10 +243,12 @@ export async function resolveGitHubPrStartPoint(
           ...(maintainerCanModify !== undefined ? { maintainerCanModify } : {})
         }
       }
+
       // Why: the branch fetch missed and the pull-head fallback is what actually
       // failed, so surface its (more actionable) error rather than the branch miss.
       return result
     }
+
     return {
       error: `Failed to fetch ${remote}/${headRefName}: ${message.split('\n')[0]}`
     }
@@ -227,15 +256,18 @@ export async function resolveGitHubPrStartPoint(
 
   const remoteRef = `${remote}/${headRefName}`
   let headSha: string
+
   try {
     const { stdout } = await args.gitExec(['rev-parse', '--verify', remoteRef])
     headSha = stdout.trim()
   } catch {
     return { error: `Remote ref ${remoteRef} does not exist after fetch.` }
   }
+
   if (!headSha) {
     return { error: `Empty SHA resolving PR #${args.prNumber} head.` }
   }
+
   const compareBaseFetched = await fetchCompareBaseRef()
 
   return {

@@ -37,6 +37,7 @@ export function SkillUpdateStatusSegment({
         )
       }
     }
+
     if (run.state === 'running') {
       return {
         icon: <Loader2 className="size-3 animate-spin text-muted-foreground" />,
@@ -62,6 +63,7 @@ export function SkillUpdateStatusSegment({
         )
       }
     }
+
     if (run.state === 'success') {
       return {
         icon: <CheckCircle2 className="size-3 text-emerald-500" />,
@@ -87,6 +89,7 @@ export function SkillUpdateStatusSegment({
         )
       }
     }
+
     return {
       icon: <AlertCircle className="size-3 text-yellow-500" />,
       label: translate(

@@ -35,15 +35,20 @@ export function useOwnedSkillShares(): OwnedSkillShares {
     const current = ++generation.current
     setLoading(true)
     setError(null)
+
     try {
       const operation = await window.api.skills.listOwnedShares()
+
       if (generation.current !== current) {
         return
       }
+
       if (operation.status !== 'ok') {
         setError(inventoryError(operation.status))
+
         return
       }
+
       setShares(operation.value)
     } catch {
       if (generation.current === current) {
@@ -58,6 +63,7 @@ export function useOwnedSkillShares(): OwnedSkillShares {
 
   useEffect(() => {
     void load()
+
     return () => {
       generation.current += 1
     }
@@ -66,12 +72,16 @@ export function useOwnedSkillShares(): OwnedSkillShares {
   const revoke = useCallback(async (share: SkillCloudOwnedShare): Promise<void> => {
     setBusyShareId(share.id)
     setError(null)
+
     try {
       const operation = await window.api.skills.revokeShare(share.id)
+
       if (operation.status !== 'ok') {
         setError(inventoryError(operation.status))
+
         return
       }
+
       setShares((current) => current.filter((candidate) => candidate.id !== share.id))
       toast.success(translate('auto.components.settings.shareSkills.linkRevoked', 'Link revoked'))
     } catch {

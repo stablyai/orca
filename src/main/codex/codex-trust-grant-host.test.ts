@@ -19,6 +19,7 @@ beforeEach(() => {
   // command's own fence. The identity script execs, so no closing fence is written.
   runProcessMock.mockImplementation((spec: { args: string[] }) => {
     const nonce = /__ORCA_WSL_CAPTURE_BEGIN_([^_]+)__/.exec(String(spec.args.at(-1)))?.[1] ?? ''
+
     return Promise.resolve({
       code: 0,
       signal: null,
@@ -36,6 +37,7 @@ beforeEach(() => {
 describe('resolveCodexTrustGrantHost', () => {
   it('resolves the native command once for both the binary stamp and request', async () => {
     const host = await resolveCodexTrustGrantHost({ kind: 'native' })
+
     const input = {
       runtimeHomePath: '/tmp/codex-home',
       managedCommand: '/bin/sh codex-hook.sh',
@@ -57,6 +59,7 @@ describe('resolveCodexTrustGrantHost', () => {
       distro: 'Ubuntu',
       linuxRuntimeHome: '/home/alice/.codex-runtime'
     })
+
     const request = host.buildRequest({
       runtimeHomePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex-runtime',
       managedCommand: '/bin/sh codex-hook.sh',

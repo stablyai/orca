@@ -32,9 +32,11 @@ export function canReuseLoadedJiraStatus(
   force: boolean
 ): connection is JiraSourceConnection & { status: JiraConnectionStatus } {
   const status = connection?.loaded ? connection.status : null
+
   if (!status || force) {
     return false
   }
+
   return !status.connected || (status.sites?.length ?? 0) > 0
 }
 
@@ -58,17 +60,21 @@ export function useJiraSourceConnection(args: {
   sourceContext: TaskSourceContext | null
 }): JiraSourceConnection {
   const readJiraStatus = useAppStore((state) => state.readJiraStatus)
+
   const contextKey = useMemo(
     () => (args.sourceContext ? getTaskSourceCacheScope(args.sourceContext) : null),
     [args.sourceContext]
   )
+
   const revisionKey = useMemo(
     () => getJiraSourceConnectionRevisionKey(args.sourceContext),
     [args.sourceContext]
   )
+
   const connectionRevision = useAppStore((state) =>
     revisionKey ? (state.jiraConnectionRevisions[revisionKey] ?? 0) : 0
   )
+
   const loadKey = contextKey ? `${contextKey}::${connectionRevision}` : null
   const sourceContextRef = useRef(args.sourceContext)
   // Layout effects run before the read effect below, so the ref is current without
@@ -77,6 +83,7 @@ export function useJiraSourceConnection(args: {
     sourceContextRef.current = args.sourceContext
   })
   const requestedLoadKeyRef = useRef<string | null>(null)
+
   const [state, setState] = useState<JiraSourceConnectionState>({
     loadKey: null,
     status: null
@@ -84,9 +91,11 @@ export function useJiraSourceConnection(args: {
 
   useEffect(() => {
     const sourceContext = sourceContextRef.current
+
     if (!args.enabled || !sourceContext || !loadKey || requestedLoadKeyRef.current === loadKey) {
       return
     }
+
     requestedLoadKeyRef.current = loadKey
 
     void readJiraStatus(sourceContext)

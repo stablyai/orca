@@ -14,6 +14,7 @@ export function mergeCapturedLeafState(opts: {
   currentLeafIds: ReadonlySet<string>
 }): LeafStringMap {
   const merged: LeafStringMap = {}
+
   if (opts.prior) {
     for (const [leafId, value] of Object.entries(opts.prior)) {
       if (opts.currentLeafIds.has(leafId)) {
@@ -21,10 +22,12 @@ export function mergeCapturedLeafState(opts: {
       }
     }
   }
+
   for (const [leafId, value] of Object.entries(opts.fresh)) {
     if (opts.currentLeafIds.has(leafId)) {
       merged[leafId] = value
     }
   }
+
   return merged
 }

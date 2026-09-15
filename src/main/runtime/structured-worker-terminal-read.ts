@@ -55,9 +55,11 @@ export function readStructuredWorkerTerminal(args: {
   limit?: number
 }): RuntimeTerminalRead | null {
   const identity = resolveStructuredWorkerAuthority(args.handle, args.db)?.identity
+
   if (!identity) {
     return null
   }
+
   if (args.cursor !== undefined) {
     // No index can be re-anchored here, so this refusal names no paging alternative — there is
     // none. `terminal.read`'s cursor indexes an append-only completed-line buffer with a monotone
@@ -76,17 +78,22 @@ export function readStructuredWorkerTerminal(args: {
         'A structured session has no durable line anchor to page from — nothing else does either.'
     )
   }
+
   const page = readStructuredJournalPage(identity.sessionId)
+
   if (!page) {
     // Honest refusal, and the same one the send lane reports: an empty tail would read as "this
     // worker has produced no output", which is a different and false claim.
     throw new Error(AGENT_SESSION_NOT_ATTACHED.code)
   }
+
   // Redacts dispatch capabilities and clips oversized blocks under the archive path's byte bound.
   const bounded = boundStructuredJournalTail(page.items)
+
   const lines = bounded.messages.flatMap((message) =>
     formatWorkerTranscriptMessage(message).split('\n')
   )
+
   const read = readTerminalTail({
     handle: args.handle,
     status: structuredWorkerTerminalState(observeStructuredWorker(identity).status),
@@ -102,9 +109,11 @@ export function readStructuredWorkerTerminal(args: {
     bufferTruncated: page.hasOlder || bounded.limited,
     ...(args.limit === undefined ? {} : { limit: args.limit })
   })
+
   // No cursor space is claimed, because none exists here. `nextCursor: null` is the contract's own
   // "nothing to continue from"; emitting 0/length would advertise an index the next read cannot
   // honour.
   const { oldestCursor: _oldest, latestCursor: _latest, ...withoutCursorSpace } = read
+
   return { ...withoutCursorSpace, nextCursor: null }
 }

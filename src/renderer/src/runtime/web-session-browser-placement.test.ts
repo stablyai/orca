@@ -15,6 +15,7 @@ import {
 } from './web-session-browser-placement'
 
 const ENVIRONMENT_ID = 'environment-1'
+
 const WORKTREE_ID = 'worktree-1'
 
 afterEach(resetWebSessionBrowserPlacementsForTests)
@@ -77,6 +78,7 @@ describe('web session browser placement', () => {
       groupId: 'preview-group',
       callerCreatedGroup: true
     })
+
     expect(
       claimWebSessionBrowserPlacementGroupCleanup({
         worktreeId: WORKTREE_ID,
@@ -84,6 +86,7 @@ describe('web session browser placement', () => {
         ownsGroupCleanup: creatorOwnsCleanup
       })
     ).toBe(false)
+
     const followerOwnsCleanup = releaseWebSessionBrowserPlacementGroup({
       environmentId: 'environment-2',
       worktreeId: WORKTREE_ID,
@@ -91,6 +94,7 @@ describe('web session browser placement', () => {
       groupId: 'preview-group',
       callerCreatedGroup: false
     })
+
     expect(
       claimWebSessionBrowserPlacementGroupCleanup({
         worktreeId: WORKTREE_ID,
@@ -114,6 +118,7 @@ describe('web session browser placement', () => {
         callerCreatedGroup
       })
     }
+
     const ownsCleanup = releaseWebSessionBrowserPlacementGroup({
       environmentId: ENVIRONMENT_ID,
       worktreeId: WORKTREE_ID,
@@ -121,6 +126,7 @@ describe('web session browser placement', () => {
       groupId: 'preview-group',
       callerCreatedGroup: true
     })
+
     expect(
       claimWebSessionBrowserPlacementGroupCleanup({
         worktreeId: WORKTREE_ID,
@@ -130,6 +136,7 @@ describe('web session browser placement', () => {
     ).toBe(false)
 
     clearWebSessionBrowserPlacementsForEnvironment('environment-2')
+
     const remainingOwnsCleanup = releaseWebSessionBrowserPlacementGroup({
       environmentId: 'environment-3',
       worktreeId: WORKTREE_ID,
@@ -137,6 +144,7 @@ describe('web session browser placement', () => {
       groupId: 'preview-group',
       callerCreatedGroup: false
     })
+
     expect(remainingOwnsCleanup).toBe(true)
     expect(
       claimWebSessionBrowserPlacementGroupCleanup({
@@ -145,6 +153,7 @@ describe('web session browser placement', () => {
         ownsGroupCleanup: remainingOwnsCleanup
       })
     ).toBe(false)
+
     const clearedEnvironmentOwnsCleanup = releaseWebSessionBrowserPlacementGroup({
       environmentId: 'environment-2',
       worktreeId: WORKTREE_ID,
@@ -152,6 +161,7 @@ describe('web session browser placement', () => {
       groupId: 'preview-group',
       callerCreatedGroup: false
     })
+
     expect(
       claimWebSessionBrowserPlacementGroupCleanup({
         worktreeId: WORKTREE_ID,
@@ -175,6 +185,7 @@ describe('web session browser placement', () => {
       remotePageId: 'page-2',
       groupId: 'preview-group'
     })
+
     const ownsCleanup = releaseWebSessionBrowserPlacementGroup({
       environmentId: ENVIRONMENT_ID,
       worktreeId: WORKTREE_ID,
@@ -182,6 +193,7 @@ describe('web session browser placement', () => {
       groupId: 'preview-group',
       callerCreatedGroup: true
     })
+
     expect(
       claimWebSessionBrowserPlacementGroupCleanup({
         worktreeId: WORKTREE_ID,
@@ -224,6 +236,7 @@ describe('web session browser placement', () => {
         remotePageId: 'page-2',
         groupId: 'preview-group'
       })
+
       const ownsCleanup = releaseWebSessionBrowserPlacementGroup({
         environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
@@ -231,6 +244,7 @@ describe('web session browser placement', () => {
         groupId: 'preview-group',
         callerCreatedGroup: true
       })
+
       claimWebSessionBrowserPlacementGroupCleanup({
         worktreeId: WORKTREE_ID,
         groupId: 'preview-group',

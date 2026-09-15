@@ -9,6 +9,7 @@ const { copyFileMock, handleMock, lstatMock, realpathMock, renameMock } = vi.hoi
   realpathMock: vi.fn(),
   renameMock: vi.fn()
 }))
+
 const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown>>()
 
 vi.mock('electron', () => ({
@@ -17,6 +18,7 @@ vi.mock('electron', () => ({
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
+
   return {
     ...actual,
     copyFile: copyFileMock,
@@ -31,6 +33,7 @@ import { registerFilesystemMutationHandlers } from './ipc/filesystem-mutations'
 import { RuntimeFileCommands } from './runtime/orca-runtime-files'
 
 const REPO_PATH = path.resolve('/workspace/repo')
+
 const store = {
   getRepos: () => [
     { id: 'repo-1', path: REPO_PATH, displayName: 'repo', badgeColor: '#000', addedAt: 0 }
@@ -58,9 +61,11 @@ function createRuntimeCommands(): RuntimeFileCommands {
 
 function createGate(): { promise: Promise<void>; release: () => void } {
   let release!: () => void
+
   const promise = new Promise<void>((resolve) => {
     release = resolve
   })
+
   return { promise, release }
 }
 
@@ -99,18 +104,22 @@ describe('renameLocalPathSerializedByDestination', () => {
       ) {
         return mockStats(1, 30)
       }
+
       if (filePath === ipcSource) {
         return mockStats(1, 10)
       }
+
       if (filePath === runtimeSource) {
         return mockStats(1, 20)
       }
+
       throw enoent()
     })
     renameMock.mockImplementation(async () => {
       if (renameMock.mock.calls.length === 1) {
         await firstRenameGate.promise
       }
+
       destinationExists = true
     })
 
@@ -118,7 +127,9 @@ describe('renameLocalPathSerializedByDestination', () => {
       oldPath: ipcSource,
       newPath: sharpSDestination
     })
+
     await vi.waitFor(() => expect(renameMock).toHaveBeenCalledTimes(1))
+
     const runtimeRename = createRuntimeCommands().renameFileExplorerPath(
       'id:wt-1',
       'runtime-source.md',
@@ -127,6 +138,7 @@ describe('renameLocalPathSerializedByDestination', () => {
       undefined,
       'local'
     )
+
     await reachNextMacrotask()
     const callsWhileFirstBlocked = renameMock.mock.calls.length
     firstRenameGate.release()
@@ -151,11 +163,14 @@ describe('renameLocalPathSerializedByDestination', () => {
       path.join(REPO_PATH, 'first.md'),
       destination
     )
+
     await vi.waitFor(() => expect(renameMock).toHaveBeenCalledTimes(1))
+
     const secondRename = renameLocalPathSerializedByDestination(
       path.join(REPO_PATH, 'second.md'),
       destination
     )
+
     await reachNextMacrotask()
     expect(renameMock).toHaveBeenCalledTimes(1)
 
@@ -177,11 +192,14 @@ describe('renameLocalPathSerializedByDestination', () => {
       path.join(REPO_PATH, 'first', 'source.md'),
       path.join(REPO_PATH, 'first', 'alpha.md')
     )
+
     await vi.waitFor(() => expect(renameMock).toHaveBeenCalledTimes(1))
+
     const secondRename = renameLocalPathSerializedByDestination(
       path.join(REPO_PATH, 'second', 'source.md'),
       path.join(REPO_PATH, 'second', 'beta.md')
     )
+
     await vi.waitFor(() => expect(renameMock).toHaveBeenCalledTimes(2))
 
     firstRenameGate.release()
@@ -202,6 +220,7 @@ describe('renameLocalPathSerializedByDestination', () => {
       if (filePath === firstParent || filePath === secondParent) {
         return canonicalParent
       }
+
       return filePath
     })
 
@@ -209,11 +228,14 @@ describe('renameLocalPathSerializedByDestination', () => {
       path.join(firstParent, 'source.md'),
       path.join(firstParent, 'alpha.md')
     )
+
     await vi.waitFor(() => expect(renameMock).toHaveBeenCalledTimes(1))
+
     const secondRename = renameLocalPathSerializedByDestination(
       path.join(secondParent, 'source.md'),
       path.join(secondParent, 'beta.md')
     )
+
     await reachNextMacrotask()
     expect(renameMock).toHaveBeenCalledTimes(1)
 
@@ -234,11 +256,14 @@ describe('renameLocalPathSerializedByDestination', () => {
       path.join(REPO_PATH, 'first.md'),
       path.join(REPO_PATH, 'dotless-ı.md')
     )
+
     await vi.waitFor(() => expect(renameMock).toHaveBeenCalledTimes(1))
+
     const secondRename = renameLocalPathSerializedByDestination(
       path.join(REPO_PATH, 'second.md'),
       path.join(REPO_PATH, 'dotless-I.md')
     )
+
     await reachNextMacrotask()
     expect(renameMock).toHaveBeenCalledTimes(1)
 

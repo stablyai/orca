@@ -3,8 +3,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ESC = '\x1b'
+
 const BEL = '\x07'
+
 const workingFrame = (frame: string): string => `${ESC}]0;${frame} π - cwd${BEL}`
+
 const idleTitle = (): string => `${ESC}]0;π - cwd${BEL}`
 
 function flushPtySideEffects(): Promise<void> {
@@ -18,6 +21,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
   let dispatcherCallback:
     | ((payload: { id: string; data: string; rawLength?: number; background?: boolean }) => void)
     | null = null
+
   let exitDispatcherCallback: ((payload: { id: string; code: number }) => void) | null = null
 
   beforeEach(() => {
@@ -49,6 +53,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
               if (!dispatcherCallback) {
                 dispatcherCallback = cb
               }
+
               return () => {}
             }
           ),
@@ -57,6 +62,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
             if (!exitDispatcherCallback) {
               exitDispatcherCallback = cb
             }
+
             return () => {}
           })
         }
@@ -245,6 +251,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
   it('replays PTY data that arrives before connect() registers the pane handler', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onData = vi.fn()
+
     let resolveSpawn: (value: { id: string }) => void = () => {}
 
     ;(window.api.pty.spawn as ReturnType<typeof vi.fn>).mockReturnValueOnce(
@@ -296,6 +303,7 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
   it('replays pre-handler PTY data before a pre-handler exit', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const events: string[] = []
+
     let resolveSpawn: (value: { id: string }) => void = () => {}
 
     ;(window.api.pty.spawn as ReturnType<typeof vi.fn>).mockReturnValueOnce(
@@ -305,11 +313,13 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
     )
 
     const cleanupError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const transport = createIpcPtyTransport({
       onPtyExit: () => {
         throw new Error('pre-attach cleanup failed')
       }
     })
+
     const connectPromise = transport.connect({
       url: '',
       callbacks: {
@@ -337,12 +347,15 @@ describe('dispatcher → transport → onTitleChange for Pi spinner', () => {
   it('finalizes a throwing primary exit and still delivers every sidecar', async () => {
     const { ensurePtyDispatcher, ptyExitHandlers, subscribeToPtyExit } =
       await import('./pty-dispatcher')
+
     const primary = vi.fn(() => {
       throw new Error('primary exit failed')
     })
+
     const firstSidecar = vi.fn(() => {
       throw new Error('sidecar exit failed')
     })
+
     const secondSidecar = vi.fn()
 
     ensurePtyDispatcher()

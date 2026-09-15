@@ -18,6 +18,7 @@ export function killCodexAppServerProcessTree(
 ): void {
   const platform = options.platform ?? process.platform
   const spawnImpl = options.spawnImpl ?? spawnCodexAppServerProcess
+
   if (platform === 'win32' && child.pid) {
     if (
       !admitProcessTreeKill({
@@ -29,8 +30,10 @@ export function killCodexAppServerProcessTree(
       // Refusal blocks the tree walk, not the termination: the root kill is
       // handle-addressed, so it cannot reach the recycled pid we refused.
       child.kill('SIGKILL')
+
       return
     }
+
     try {
       // Why: npm-installed Codex runs behind cmd.exe; killing only that wrapper
       // leaves the app-server child alive after a timeout or failed shutdown.
@@ -38,13 +41,16 @@ export function killCodexAppServerProcessTree(
         stdio: 'ignore',
         windowsHide: true
       })
+
       let fellBack = false
+
       const killDirectChild = (): void => {
         if (!fellBack) {
           fellBack = true
           child.kill('SIGKILL')
         }
       }
+
       killer.on('error', killDirectChild)
       killer.on('exit', (code) => {
         if (code !== 0) {
@@ -52,11 +58,13 @@ export function killCodexAppServerProcessTree(
         }
       })
       killer.unref()
+
       return
     } catch {
       // Fall through to the direct-child best effort when taskkill cannot start.
     }
   }
+
   if (child.pid) {
     try {
       // npm/package-manager launchers insert a shim child on POSIX. Reap its
@@ -64,6 +72,7 @@ export function killCodexAppServerProcessTree(
       const descendants = spawnImpl('pkill', ['-KILL', '-P', String(child.pid)], {
         stdio: 'ignore'
       })
+
       // A missing pkill surfaces as an async 'error' event, and an unhandled one
       // takes down the main process.
       descendants.on('error', () => undefined)
@@ -72,5 +81,6 @@ export function killCodexAppServerProcessTree(
       // The direct kill below remains the fallback when pkill is unavailable.
     }
   }
+
   child.kill('SIGKILL')
 }

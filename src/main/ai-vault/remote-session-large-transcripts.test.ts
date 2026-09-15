@@ -13,20 +13,26 @@ const platform = getRemoteHostPlatform(
       ? 'darwin-arm64'
       : 'linux-x64'
 )
+
 const jsonl = (rows: unknown[]) => `${rows.map((row) => JSON.stringify(row)).join('\n')}\n`
+
 const filler = jsonl([{ type: 'irrelevant_event', payload: 'x'.repeat(1024) }]).repeat(11000)
 
 describe('large remote history through real relay filesystem', () => {
   it('reports an oversized record without losing healthy sessions or publishing a partial session', async () => {
     const home = await mkdtemp(join(tmpdir(), 'orca-history-record-limit-'))
+
     try {
       const directory = join(home, '.codex', 'sessions')
       await mkdir(directory, { recursive: true })
+
       const metadata = (id: string) =>
         jsonl([{ type: 'session_meta', payload: { id, cwd: '/repo' } }])
+
       const badPath = join(directory, 'bad.jsonl')
       await writeFile(badPath, metadata('bad') + 'x'.repeat(11 * 1024 * 1024))
       await writeFile(join(directory, 'good.jsonl'), metadata('good'))
+
       const result = await scanRemoteAiVaultSessions({
         provider: createRelayAiVaultFilesystemProvider(),
         executionHostId: 'ssh:record-limit',
@@ -34,6 +40,7 @@ describe('large remote history through real relay filesystem', () => {
         hostPlatform: platform,
         unlimited: true
       })
+
       expect(result.sessions.map((session) => session.sessionId)).toEqual(['good'])
       expect(result.issues).toEqual([
         expect.objectContaining({
@@ -48,6 +55,7 @@ describe('large remote history through real relay filesystem', () => {
 
   it('lists a large Codex rollout with middle messages and usage intact', async () => {
     const home = await mkdtemp(join(tmpdir(), 'orca-history-17744-'))
+
     try {
       const path = join(home, '.codex', 'sessions', 'large.jsonl')
       await mkdir(dirname(path), { recursive: true })
@@ -93,6 +101,7 @@ describe('large remote history through real relay filesystem', () => {
           ]) +
           filler.slice(filler.length / 2)
       )
+
       const result = await scanRemoteAiVaultSessions({
         provider: createRelayAiVaultFilesystemProvider(),
         executionHostId: 'ssh:synthetic-17744',
@@ -100,6 +109,7 @@ describe('large remote history through real relay filesystem', () => {
         hostPlatform: platform,
         unlimited: true
       })
+
       expect(result.issues).toEqual([])
       expect(result.sessions).toHaveLength(1)
       expect(result.sessions[0]).toMatchObject({
@@ -117,13 +127,16 @@ describe('large remote history through real relay filesystem', () => {
     'lists large %s documents with every message counted',
     async (agent) => {
       const home = await mkdtemp(join(tmpdir(), 'orca-history-17744-document-'))
+
       try {
         const messages = Array.from({ length: 11000 }, () => ({
           role: 'assistant',
           content: 'x'.repeat(1024)
         }))
+
         messages.splice(5000, 0, { role: 'user', content: 'A middle user turn' })
         let path: string, record: unknown
+
         if (agent === 'hermes') {
           path = join(home, '.hermes', 'sessions', 'large.json')
           record = { session_id: 'large', cwd: '/repo', model: 'test-model', messages }
@@ -155,8 +168,10 @@ describe('large remote history through real relay filesystem', () => {
           await mkdir(dirname(path), { recursive: true })
           await writeFile(path.replace('.json', '.messages.json'), JSON.stringify({ messages }))
         }
+
         await mkdir(dirname(path), { recursive: true })
         await writeFile(path, JSON.stringify(record))
+
         const result = await scanRemoteAiVaultSessions({
           provider: createRelayAiVaultFilesystemProvider(),
           executionHostId: `ssh:large-${agent}`,
@@ -164,9 +179,11 @@ describe('large remote history through real relay filesystem', () => {
           hostPlatform: platform,
           unlimited: true
         })
+
         expect(result.issues).toEqual([])
         expect(result.sessions).toHaveLength(1)
         expect(result.sessions[0]).toMatchObject({ agent, sessionId: 'large', messageCount: 11001 })
+
         if (agent === 'devin') {
           expect(result.sessions[0].totalTokens).toBe(33003)
         }
@@ -177,6 +194,7 @@ describe('large remote history through real relay filesystem', () => {
   )
   it('keeps normal-size reads on their existing path and supports providers without streaming', async () => {
     const home = await mkdtemp(join(tmpdir(), 'orca-history-legacy-'))
+
     try {
       const directory = join(home, '.codex', 'sessions')
       await mkdir(directory, { recursive: true })
@@ -186,6 +204,7 @@ describe('large remote history through real relay filesystem', () => {
       provider.readTranscriptBytes = () => {
         throw new Error('Small file must keep its existing read path')
       }
+
       const small = await scanRemoteAiVaultSessions({
         provider,
         executionHostId: 'ssh:small-original',
@@ -193,10 +212,12 @@ describe('large remote history through real relay filesystem', () => {
         hostPlatform: platform,
         unlimited: true
       })
+
       expect(small.issues).toEqual([])
       expect(small.sessions.map((session) => session.sessionId)).toEqual(['small'])
       await writeFile(join(directory, 'large.jsonl'), content + filler)
       const legacy = { readDir: provider.readDir, readFile: provider.readFile, stat: provider.stat }
+
       const fallback = await scanRemoteAiVaultSessions({
         provider: legacy,
         executionHostId: 'ssh:legacy-original',
@@ -204,6 +225,7 @@ describe('large remote history through real relay filesystem', () => {
         hostPlatform: platform,
         unlimited: true
       })
+
       expect(fallback.sessions.map((session) => session.sessionId)).toEqual(['small'])
       expect(
         fallback.issues.some(

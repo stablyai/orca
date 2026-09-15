@@ -37,26 +37,47 @@ export const sshRepo: Repo = {
 }
 
 export const reposList: Mock = vi.fn()
+
 export const reposAdd: Mock = vi.fn()
+
 export const reposPickFolder: Mock = vi.fn()
+
 export const reposClone: Mock = vi.fn()
+
 export const reposCloneRemote: Mock = vi.fn()
+
 export const reposRemove: Mock = vi.fn()
+
 export const reposUpdate: Mock = vi.fn()
+
 export const reposReorder: Mock = vi.fn()
+
 export const reposReorderForHost: Mock = vi.fn()
+
 export const projectsCreateHostSetup: Mock = vi.fn()
+
 export const projectsSetupExistingFolder: Mock = vi.fn()
+
 export const projectsUpdateHostSetup: Mock = vi.fn()
+
 export const projectsDeleteHostSetup: Mock = vi.fn()
+
 export const projectsUpdate: Mock = vi.fn()
+
 export const projectGroupsMoveProject: Mock = vi.fn()
+
 export const ptyKill: Mock = vi.fn()
+
 export const runtimeEnvironmentCall: Mock = vi.fn()
+
 export const runtimeEnvironmentTransportCall: Mock = vi.fn()
+
 export const orcaProfileFindProjectProfiles: Mock = vi.fn()
+
 export const uiSet: Mock = vi.fn()
+
 export const ephemeralVmListRuntimes: Mock = vi.fn()
+
 export const ephemeralVmCleanup: Mock = vi.fn()
 
 // Registers the per-test reset + window stub. Call once inside the suite's module scope.

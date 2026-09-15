@@ -24,16 +24,20 @@ export function parseFileUriPathParts(
 ): ParsedFileUriPath | null {
   try {
     const url = new URL(uri)
+
     if (url.protocol !== 'file:') {
       return null
     }
 
     const decodedPath = decodeURIComponent(url.pathname)
     const hostname = url.hostname.toLowerCase()
+
     if (options.wslDistro) {
       return { path: toWindowsWslPath(decodedPath, options.wslDistro), hostname }
     }
+
     const pathFlavor = options.pathFlavor ?? (process.platform === 'win32' ? 'win32' : 'posix')
+
     if (pathFlavor !== 'win32') {
       return { path: decodedPath, hostname }
     }
@@ -41,11 +45,13 @@ export function parseFileUriPathParts(
     if (/^\/[A-Za-z]:/.test(decodedPath)) {
       return { path: decodedPath.slice(1), hostname }
     }
+
     // Why: localhost/empty-host OSC-7 URIs are POSIX paths even when parsed by
     // a Windows app; only non-local hosts describe Windows UNC shares.
     if (hostname && hostname !== 'localhost' && !options.remotePosixAuthority) {
       return { path: `\\\\${url.hostname}${decodedPath.replace(/\//g, '\\')}`, hostname }
     }
+
     return { path: decodedPath, hostname }
   } catch {
     return null

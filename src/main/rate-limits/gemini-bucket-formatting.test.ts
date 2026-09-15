@@ -35,6 +35,7 @@ describe('deriveSessionSummary', () => {
         resetDescription: null
       }
     ]
+
     const summary = deriveSessionSummary(buckets)
     expect(summary).not.toBeNull()
     expect(summary!.usedPercent).toBe(80)
@@ -58,6 +59,7 @@ describe('deriveSessionSummary', () => {
         resetDescription: '3:00 PM'
       }
     ]
+
     const summary = deriveSessionSummary(buckets)
     expect(summary!.resetsAt).toBe(2000)
     expect(summary!.resetDescription).toBe('3:00 PM')

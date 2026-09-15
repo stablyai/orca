@@ -23,33 +23,44 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../store', () => ({ useAppStore: { getState: () => mocks.state } }))
+
 vi.mock('sonner', () => ({
   toast: { error: (...args: unknown[]) => mocks.toastError(...args), message: vi.fn() }
 }))
+
 vi.mock('@/lib/client-creation-action-policy', () => ({
   getClientCreationActionPolicy: () => ({
     'managed-browser': mocks.browserAvailability,
     'mobile-emulator': mocks.simulatorAvailability
   })
 }))
+
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionBrowserTab: vi.fn(),
   createWebRuntimeSessionTerminal: vi.fn(),
   isWebRuntimeSessionActive: () => false
 }))
+
 vi.mock('@/lib/open-mobile-emulator-tab', () => ({
   openMobileEmulatorTab: (...args: unknown[]) => mocks.openMobileEmulatorTab(...args)
 }))
+
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab: vi.fn() }))
+
 vi.mock('@/lib/duplicate-browser-tab-options', () => ({
   buildDuplicatedBrowserTabOptions: () => ({})
 }))
+
 vi.mock('@/runtime/remote-browser-tab-ownership', () => ({
   browserWorkspaceHasRemoteOwner: () => false
 }))
+
 vi.mock('./tab-bar/tab-create-entry-action', () => ({ openTabBarEntry: vi.fn() }))
+
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+
 vi.mock('./terminal-workspace-model', () => ({
   getActiveWorktreeRuntimeEnvironmentId: () => null
 }))

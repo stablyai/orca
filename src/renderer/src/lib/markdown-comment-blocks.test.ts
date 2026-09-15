@@ -22,6 +22,7 @@ describe('mapMarkdownCommentsToBlocks', () => {
       { key: 'p:2-3', startLine: 2, endLine: 3 },
       { key: 'p:4-6', startLine: 4, endLine: 6 }
     ]
+
     const mapped = mapMarkdownCommentsToBlocks([makeComment({ id: 'a', lineNumber: 5 })], blocks)
 
     expect(mapped.byBlockKey.get('p:4-6')?.map((comment) => comment.id)).toEqual(['a'])
@@ -30,6 +31,7 @@ describe('mapMarkdownCommentsToBlocks', () => {
 
   it('keeps comments without a rendered block unresolved for shelf fallback', () => {
     const blocks: MarkdownCommentBlock[] = [{ key: 'p:2-3', startLine: 2, endLine: 3 }]
+
     const mapped = mapMarkdownCommentsToBlocks(
       [makeComment({ id: 'stale', lineNumber: 20 })],
       blocks

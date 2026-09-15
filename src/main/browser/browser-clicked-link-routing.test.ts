@@ -10,6 +10,7 @@ import {
 } from './browser-clicked-link-routing'
 
 const FOREGROUND_FRAME_NAME = '__orca_clicked_link_foreground_test'
+
 const BACKGROUND_FRAME_NAME = '__orca_clicked_link_background_test'
 
 type RoutingGlobal = typeof globalThis & {
@@ -23,10 +24,12 @@ let cleanupIframeRouting: (() => void) | null = null
 function resetRouting(): void {
   const routingGlobal = globalThis as RoutingGlobal
   const state = routingGlobal.__orcaBrowserClickedLinkRouting
+
   if (state) {
     window.removeEventListener('click', state.listener)
     window.removeEventListener('auxclick', state.listener)
   }
+
   delete routingGlobal.__orcaBrowserClickedLinkRouting
   cleanupIframeRouting?.()
   cleanupIframeRouting = null
@@ -43,13 +46,16 @@ function clickLink(
   const open = vi.fn()
   vi.spyOn(window, 'open').mockImplementation(open)
   const { type = 'click', ...eventInit } = init
+
   const event = new MouseEvent(type, {
     bubbles: true,
     cancelable: true,
     button: type === 'auxclick' ? 1 : 0,
     ...eventInit
   })
+
   link.dispatchEvent(event)
+
   return { event, open }
 }
 

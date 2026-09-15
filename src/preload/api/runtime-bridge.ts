@@ -23,15 +23,19 @@ export const runtimeApi = {
   ): Promise<RuntimeEnvironmentSubscriptionHandle> => {
     const subscriptionId = `desktop-${crypto.randomUUID()}`
     const channel = `runtime:subscription:${subscriptionId}`
+
     const listener = (_event: Electron.IpcRendererEvent, response: RuntimeRpcResponse<unknown>) =>
       callback(response)
+
     ipcRenderer.on(channel, listener)
+
     try {
       await ipcRenderer.invoke('runtime:subscribe', { subscriptionId, ...args })
     } catch (error) {
       ipcRenderer.removeListener(channel, listener)
       throw error
     }
+
     return {
       unsubscribe: () => {
         ipcRenderer.removeListener(channel, listener)
@@ -82,7 +86,9 @@ export const runtimeApi = {
         rows: number
       }
     ) => callback(data)
+
     ipcRenderer.on('runtime:terminalFitOverrideChanged', listener)
+
     return () => ipcRenderer.removeListener('runtime:terminalFitOverrideChanged', listener)
   },
   onTerminalDriverChanged: (
@@ -95,7 +101,9 @@ export const runtimeApi = {
         driver: RuntimeTerminalDriverState
       }
     ) => callback(data)
+
     ipcRenderer.on('runtime:terminalDriverChanged', listener)
+
     return () => ipcRenderer.removeListener('runtime:terminalDriverChanged', listener)
   },
   onNativeChatLaunchDraftResolved: (
@@ -105,7 +113,9 @@ export const runtimeApi = {
       _event: Electron.IpcRendererEvent,
       data: { tabId: string; text: string; createdAt: number }
     ) => callback(data)
+
     ipcRenderer.on('runtime:nativeChatLaunchDraftResolved', listener)
+
     return () => ipcRenderer.removeListener('runtime:nativeChatLaunchDraftResolved', listener)
   },
   onBrowserDriverChanged: (
@@ -118,7 +128,9 @@ export const runtimeApi = {
         driver: RuntimeBrowserDriverState
       }
     ) => callback(data)
+
     ipcRenderer.on('runtime:browserDriverChanged', listener)
+
     return () => ipcRenderer.removeListener('runtime:browserDriverChanged', listener)
   },
   onBrowserRemoteViewersChanged: (
@@ -131,7 +143,9 @@ export const runtimeApi = {
         hasRemoteViewers: boolean
       }
     ) => callback(data)
+
     ipcRenderer.on('runtime:browserRemoteViewersChanged', listener)
+
     return () => ipcRenderer.removeListener('runtime:browserRemoteViewersChanged', listener)
   },
   onClientHostedBrowserRowsChanged: (
@@ -139,7 +153,9 @@ export const runtimeApi = {
   ): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: ClientHostedBrowserRowsEvent) =>
       callback(data)
+
     ipcRenderer.on('runtime:clientHostedBrowserRowsChanged', listener)
+
     return () => ipcRenderer.removeListener('runtime:clientHostedBrowserRowsChanged', listener)
   }
 } satisfies PreloadApi['runtime']

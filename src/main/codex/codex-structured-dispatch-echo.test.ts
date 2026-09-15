@@ -63,6 +63,7 @@ describe('codex dispatch echoes', () => {
 
   it('refuses new correlations at capacity without dropping an older send', () => {
     const echoes = createCodexDispatchEchoes()
+
     for (let index = 0; index < MAX_CODEX_PENDING_DISPATCH_ECHOES; index += 1) {
       expect(echoes.arm(`client-${index}`)).toBe(true)
     }

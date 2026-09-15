@@ -34,13 +34,16 @@ function migrateRetirementNamespaces(
   newTargetId: string
 ): boolean {
   const newTarget = state.sshTargets.find((target) => target.id === newTargetId)
+
   if (!newTarget) {
     return false
   }
+
   // The removal tombstone is the only record of what endpoint the old id reached.
   const tombstone = state.removedSshTargetTombstones?.find(
     (entry) => entry.oldTargetId === oldTargetId
   )
+
   return migrateRetirementNamespaceHostIdentity(state.retiredWorktreeNamesByNamespace, {
     // The row id died with the target, so nothing else can still resolve to it.
     moveFrom: [toSshExecutionHostId(oldTargetId)],
@@ -63,67 +66,85 @@ export function reassignSshTargetId(
   if (oldTargetId === newTargetId) {
     return []
   }
+
   const oldHostId = toSshExecutionHostId(oldTargetId)
   const newHostId = toSshExecutionHostId(newTargetId)
   const repoIds = new Set<string>()
+
   for (const repo of operations.state.repos) {
     const matchesConnection = repo.connectionId === oldTargetId
     const matchesHost = repo.executionHostId === oldHostId
+
     if (!matchesConnection && !matchesHost) {
       continue
     }
+
     if (matchesConnection) {
       repo.connectionId = newTargetId
     }
+
     // Why: don't stamp executionHostId where it was unset — addRemoteRepoFromPath repos derive the host from connectionId.
     if (matchesHost) {
       repo.executionHostId = newHostId
     }
+
     repoIds.add(repo.id)
   }
+
   // Legacy locator rows cannot recover canonical-only metadata after target readoption.
   const identityResult = reassignCanonicalWorktreeMetadataHost(
     operations.state,
     oldHostId,
     newHostId
   )
+
   // Re-point legacy rows unless a conflicting destination kept their canonical source in place.
   let metaChanged = false
+
   for (const [worktreeId, meta] of Object.entries(operations.state.worktreeMeta)) {
     if (meta.hostId === oldHostId && !identityResult.preservedWorktreeIds.has(worktreeId)) {
       meta.hostId = newHostId
       metaChanged = true
     }
   }
+
   // Why: any carrier still holding the old id later throws `SSH target not found` (STA-1468); migrate them all.
   let carrierChanged = migrateWorkspaceSessionSshTargetId(
     operations.state.workspaceSession,
     oldTargetId,
     newTargetId
   )
+
   for (const session of Object.values(operations.state.workspaceSessionsByHostId ?? {})) {
     if (session && migrateWorkspaceSessionSshTargetId(session, oldTargetId, newTargetId)) {
       carrierChanged = true
     }
   }
+
   // Why: partitions are read by host id; re-key from the removed id to the new one (keep new if it already exists).
   const partitions = operations.state.workspaceSessionsByHostId
   const oldPartition = partitions?.[oldHostId]
+
   if (partitions && oldPartition) {
     delete partitions[oldHostId]
     partitions[newHostId] ??= oldPartition
     carrierChanged = true
   }
+
   if (migrateUiHostScopeSshTargetId(operations.state.ui, oldTargetId, newTargetId)) {
     carrierChanged = true
   }
+
   if (migrateRetirementNamespaces(operations.state, oldTargetId, newTargetId)) {
     carrierChanged = true
   }
+
   const workspacePinnedAutomationIds = automationIdsPinnedToSshTarget(operations.state, oldTargetId)
+
   if (migrateFolderWorkspaceHostSshTargetId(operations.state, oldTargetId, newTargetId)) {
     carrierChanged = true
   }
+
   if (
     migrateAutomationsForSshReadoption({
       automations: operations.state.automations ?? [],
@@ -138,50 +159,62 @@ export function reassignSshTargetId(
   ) {
     carrierChanged = true
   }
+
   if (migrateAutomationHostFilterSshTargetId(operations.state.ui, oldTargetId, newTargetId)) {
     carrierChanged = true
   }
+
   for (const lease of operations.state.sshRemotePtyLeases ?? []) {
     if (lease.targetId === oldTargetId) {
       lease.targetId = newTargetId
       carrierChanged = true
     }
   }
+
   const recoveries = operations.state.sshPtyConsumerRecoveries ?? []
   const retainedRecoveries = recoveries.filter((record) => record.targetId !== oldTargetId)
+
   if (retainedRecoveries.length !== recoveries.length) {
     operations.state.sshPtyConsumerRecoveries = retainedRecoveries
     operations.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(oldTargetId))
     carrierChanged = true
   }
+
   let setupsChanged = false
   const keptSetups: ProjectHostSetup[] = []
+
   for (const setup of operations.state.projectHostSetups) {
     if (setup.hostId !== oldHostId) {
       keptSetups.push(setup)
       continue
     }
+
     const duplicate = operations.state.projectHostSetups.some(
       (entry) =>
         entry !== setup && entry.projectId === setup.projectId && entry.hostId === newHostId
     )
+
     // Why: drop the old ghost row that would violate (projectId, hostId) uniqueness with the re-added host's setup.
     if (duplicate) {
       setupsChanged = true
       continue
     }
+
     setup.hostId = newHostId
     setup.updatedAt = Date.now()
     keptSetups.push(setup)
     setupsChanged = true
   }
+
   if (setupsChanged) {
     operations.state.projectHostSetups = keptSetups
   }
+
   // Why: repo-row and host-setup rewrites affect host-setup compatibility; meta-only rewrites don't, so gate the sync here.
   if (repoIds.size > 0 || setupsChanged) {
     operations.syncProjectHostSetupCompatibilityState()
   }
+
   if (
     repoIds.size > 0 ||
     metaChanged ||
@@ -196,5 +229,6 @@ export function reassignSshTargetId(
     operations.state.automationRuns = [...(operations.state.automationRuns ?? [])]
     operations.scheduleSave()
   }
+
   return [...repoIds]
 }

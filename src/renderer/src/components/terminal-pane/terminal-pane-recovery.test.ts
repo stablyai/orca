@@ -17,11 +17,13 @@ import { isTerminalInputQuarantined } from './terminal-input-quarantine'
 
 vi.mock('@/store', async () => {
   const store = await import('./terminal-recovery-ledger-test-store')
+
   return { useAppStore: { getState: () => store.recoveryLedgerStoreState() } }
 })
 
 vi.mock('@/lib/crash-breadcrumb-recorder', async () => {
   const store = await import('./terminal-recovery-ledger-test-store')
+
   return { recordRendererCrashBreadcrumb: store.recoveryLedgerMocks.recordRendererCrashBreadcrumb }
 })
 
@@ -156,6 +158,7 @@ describe('requestTerminalPaneRecovery', () => {
         })
       ).toBe(false)
     }
+
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
 
     // The user pressing Retry is the new trigger the refusal waits for.
@@ -210,9 +213,11 @@ describe('requestTerminalPaneRecovery', () => {
       { tabId: 'tab-ssh', ptyId: 'ssh:target@@pty-1', reason: 'reattach-unverifiable' },
       'failed'
     )
+
     const rebuilt = terminalTabs().map((tab) =>
       tab.id === 'tab-ssh' ? { id: tab.id, recovery: tab.recovery } : tab
     )
+
     setTerminalTabs(rebuilt)
 
     vi.setSystemTime(60_000)
@@ -227,6 +232,7 @@ describe('requestTerminalPaneRecovery', () => {
 
   it('caps recoveries per window to prevent remount storms', async () => {
     vi.useFakeTimers()
+
     for (let attempt = 0; attempt < 5; attempt += 1) {
       vi.setSystemTime(attempt * 20_000)
       await requestAndSettle({
@@ -235,6 +241,7 @@ describe('requestTerminalPaneRecovery', () => {
         reason: 'write-stalled'
       })
     }
+
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
     expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
       'terminal_pane_recovery_window_cap',
@@ -245,6 +252,7 @@ describe('requestTerminalPaneRecovery', () => {
   it('drops the budget with the row the tab closure removes', async () => {
     vi.useFakeTimers()
     const instance = registerTerminalPaneRecoveryInstance('tab-1')
+
     for (let attempt = 0; attempt < 4; attempt += 1) {
       vi.setSystemTime(attempt * 20_000)
       await requestAndSettle({
@@ -253,6 +261,7 @@ describe('requestTerminalPaneRecovery', () => {
         reason: 'write-stalled'
       })
     }
+
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
     expect(vi.getTimerCount()).toBe(1)
 
@@ -283,6 +292,7 @@ describe('requestTerminalPaneRecovery', () => {
   it('a window-cap decline schedules a retry that heals when the window reopens', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(0)
+
     for (let attempt = 0; attempt < 3; attempt += 1) {
       vi.setSystemTime(attempt * 20_000)
       await requestAndSettle({
@@ -291,6 +301,7 @@ describe('requestTerminalPaneRecovery', () => {
         reason: 'write-stalled'
       })
     }
+
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
 
     // Cap-declined: without a retry this pane is a permanent zombie — its
@@ -314,6 +325,7 @@ describe('requestTerminalPaneRecovery', () => {
 
   it('does not restart an unverifiable SSH reattach chain after its incident cap', async () => {
     vi.useFakeTimers()
+
     for (let attempt = 0; attempt < 4; attempt += 1) {
       vi.setSystemTime(attempt * 20_000)
       // Each remounted pane attaches, then wedges again minutes later: the
@@ -325,6 +337,7 @@ describe('requestTerminalPaneRecovery', () => {
         terminalRecoveryGeneration: captureTerminalPaneRecoveryGeneration('tab-ssh')
       })
     }
+
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
 
     await vi.advanceTimersByTimeAsync(600_000)
@@ -465,6 +478,7 @@ describe('requestTerminalPaneRecovery', () => {
     const recoveryGeneration = captureTerminalPaneRecoveryGeneration('tab-1')
     const firstSplit = registerTerminalPaneRecoveryInstance('tab-1')
     const secondSplit = registerTerminalPaneRecoveryInstance('tab-1')
+
     for (const instance of [firstSplit, secondSplit]) {
       await requestTerminalPaneRecovery({
         tabId: 'tab-1',

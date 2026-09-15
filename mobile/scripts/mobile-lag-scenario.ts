@@ -12,15 +12,20 @@ export type MockRepo = {
 }
 
 const REPO_COLORS = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
+
 const REPO_NAMES = ['orca', 'dashboard', 'mobile', 'runtime', 'docs', 'api', 'desktop', 'site']
+
 const WORKTREE_NAMES = ['manta', 'narwhal', 'otter', 'squid', 'turtle', 'beluga', 'marlin', 'orca']
 
 export function readScenarioNumber(name: string, fallback: number): number {
   const raw = process.env[name]
+
   if (!raw) {
     return fallback
   }
+
   const parsed = Number(raw)
+
   return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback
 }
 
@@ -29,6 +34,7 @@ export function createMockRepos(count: number): MockRepo[] {
     const repoName = REPO_NAMES[index % REPO_NAMES.length]!
     const suffix = index < REPO_NAMES.length ? '' : `-${Math.floor(index / REPO_NAMES.length) + 1}`
     const displayName = `${repoName}${suffix}`
+
     return {
       id: `repo-${index + 1}`,
       displayName,
@@ -53,6 +59,7 @@ export function createMockWorktrees(
     const name = `${WORKTREE_NAMES[index % WORKTREE_NAMES.length]}-${index + 1}`
     const status = index % 17 === 0 ? 'working' : index % 11 === 0 ? 'done' : 'active'
     const agents = index % 4 === 0 ? [createMockAgent(index, now)] : []
+
     const linkedPR =
       index % 9 === 0 ? { number: 1000 + index, state: index % 18 === 0 ? 'draft' : 'open' } : null
 

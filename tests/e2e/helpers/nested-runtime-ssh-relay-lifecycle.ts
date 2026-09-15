@@ -28,14 +28,17 @@ async function stopRelayProcesses(
     processes.length,
     `${route.label} destination has no detached relay`
   ).toBeGreaterThanOrEqual(1)
+
   for (const process of processes) {
     terminateDockerSshRelay(route.target, process)
   }
+
   await expect
     .poll(() =>
       processes.every((process) => !isDockerSshRelayPidRunning(route.target, process.relayPid))
     )
     .toBe(true)
+
   return processes
 }
 
@@ -48,6 +51,7 @@ async function assertRelayProcessesReplaced(
       const currentPids = new Set(
         readDockerSshRelayProcessSnapshots(route.target).map((process) => process.relayPid)
       )
+
       return (
         currentPids.size >= 1 && previous.every((process) => !currentPids.has(process.relayPid))
       )
@@ -67,12 +71,14 @@ export async function restartProxyJumpDetachedRelay(
 
   // Why: detached relay replacement is an explicit HUB lifecycle operation, separate from nested owner routing.
   await resetDockerSshRelayTarget(hubPage, proxyJump.targetId)
+
   for (const client of clients) {
     await assertRuntimeSshStatus(client, direct.targetId, 'connected')
     await assertRuntimeSshStatus(client, proxyJump.targetId, 'disconnected')
   }
 
   await reconnectDisconnectedDockerSshRelayTarget(hubPage, proxyJump.targetId)
+
   for (const client of clients) {
     await assertRuntimeSshStatus(client, direct.targetId, 'connected')
     await assertRuntimeSshStatus(client, proxyJump.targetId, 'connected')

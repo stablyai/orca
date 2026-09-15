@@ -12,15 +12,18 @@ function findFileExplorerRow(node: unknown): ReactElementLike {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('file explorer row not found')
   }
+
   return found
 }
 
 describe('FileExplorerRow collapse folder action', () => {
   it('passes the row node to the collapse folder handler', () => {
     const onCollapseFolderSubtree = vi.fn()
+
     const element = FileExplorerVirtualRows({
       virtualizer: {
         getTotalSize: () => 26,
@@ -67,6 +70,7 @@ describe('FileExplorerRow collapse folder action', () => {
     })
 
     const row = findFileExplorerRow(element)
+
     ;(row.props.onCollapseFolderSubtree as () => void)()
 
     expect(onCollapseFolderSubtree).toHaveBeenCalledWith(directoryNode)
@@ -74,6 +78,7 @@ describe('FileExplorerRow collapse folder action', () => {
 
   it('passes the row node to the find in folder handler', () => {
     const onFindInFolder = vi.fn()
+
     const element = FileExplorerVirtualRows({
       virtualizer: {
         getTotalSize: () => 26,
@@ -120,6 +125,7 @@ describe('FileExplorerRow collapse folder action', () => {
     })
 
     const row = findFileExplorerRow(element)
+
     ;(row.props.onFindInFolder as () => void)()
 
     expect(onFindInFolder).toHaveBeenCalledWith(directoryNode)
@@ -179,6 +185,7 @@ describe('FileExplorerRow collapse folder action', () => {
 
   it('passes the row node to the open in terminal handler', () => {
     const onOpenInTerminal = vi.fn()
+
     const element = FileExplorerVirtualRows({
       virtualizer: {
         getTotalSize: () => 26,
@@ -225,6 +232,7 @@ describe('FileExplorerRow collapse folder action', () => {
     })
 
     const row = findFileExplorerRow(element)
+
     ;(row.props.onOpenInTerminal as () => void)()
 
     expect(onOpenInTerminal).toHaveBeenCalledWith(directoryNode)
@@ -232,6 +240,7 @@ describe('FileExplorerRow collapse folder action', () => {
 
   it('passes the row node to the view file handler', () => {
     const onViewFile = vi.fn()
+
     const element = FileExplorerVirtualRows({
       virtualizer: {
         getTotalSize: () => 26,
@@ -278,6 +287,7 @@ describe('FileExplorerRow collapse folder action', () => {
     })
 
     const row = findFileExplorerRow(element)
+
     ;(row.props.onViewFile as () => void)()
 
     expect(onViewFile).toHaveBeenCalledWith(fileNode)

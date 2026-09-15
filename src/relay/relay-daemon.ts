@@ -24,6 +24,7 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
   let fatalPtyHandler: RelayRuntimeServices['ptyHandler'] | null = null
   process.on('uncaughtException', (error) => {
     relayLogLine(`[relay] Uncaught exception: ${error.message}\n${error.stack}`)
+
     try {
       fatalPtyHandler?.forceKillAllPtyProcesses()
     } catch (reapError) {
@@ -33,6 +34,7 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
         `[relay] Fatal PTY reap failed: ${reapError instanceof Error ? reapError.message : String(reapError)}`
       )
     }
+
     socketOwnership.cleanup()
     process.exit(1)
   })
@@ -42,19 +44,23 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
 
   const primaryChannel = new RelayPrimaryChannel()
   const launchVersion = readLaunchVersion()
+
   const runtime = new RelayRuntimeServices(
     primaryChannel.dispatcher,
     options.graceTimeMs,
     launchVersion
   )
+
   fatalPtyHandler = runtime.ptyHandler
   let reconnectListener: RelayReconnectListener | null = null
+
   const agentHooks = new RelayAgentHookRuntime(
     primaryChannel.dispatcher,
     runtime.ptyHandler,
     options.sockPath,
     options.endpointDir
   )
+
   const lifecycle = new RelayGraceLifecycle({
     dispatcher: primaryChannel.dispatcher,
     ptyHandler: runtime.ptyHandler,
@@ -112,13 +118,16 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
       `[relay] Startup failed: ${error instanceof Error ? error.message : String(error)}`
     )
     process.exit(1)
+
     return
   }
+
   if (options.credentialFile) {
     void restrictWindowsRelayEndpointCredential(options.credentialFile)
   }
 
   primaryChannel.startOutputFailureHandling()
+
   if (options.detached) {
     lifecycle.start('detached startup')
   } else {
@@ -131,8 +140,10 @@ export async function runRelayDaemon(options: RelayLaunchOptions): Promise<void>
       }
     })
   }
+
   lifecycle.installProcessLifecycle()
   primaryChannel.writeSentinel()
+
   if (options.detached) {
     primaryChannel.detachPrimaryClient()
   }

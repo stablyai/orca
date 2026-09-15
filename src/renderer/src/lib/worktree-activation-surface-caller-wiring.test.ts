@@ -31,12 +31,15 @@ const SEAM_FILES = [
 function listSourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const fullPath = join(dir, entry.name)
+
     if (entry.isDirectory()) {
       return listSourceFiles(fullPath)
     }
+
     if (!/\.(ts|tsx)$/.test(entry.name) || /\.test\.(ts|tsx)$/.test(entry.name)) {
       return []
     }
+
     return [fullPath]
   })
 }
@@ -59,10 +62,12 @@ describe('providesInitialSurface caller wiring', () => {
 
   it('the census matches every mention under src/', () => {
     const root = join(process.cwd(), 'src')
+
     const mentions = listSourceFiles(root)
       .filter((filePath) => readFileSync(filePath, 'utf8').includes('providesInitialSurface'))
       .map((filePath) => relative(process.cwd(), filePath).split(sep).join('/'))
       .sort()
+
     expect(mentions).toEqual([...SURFACE_PROVIDING_CALLERS, ...SEAM_FILES].sort())
   })
 })

@@ -51,14 +51,18 @@ type SplitManagedPaneArgs = {
 
 export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null {
   const existing = args.panes.get(args.paneId)
+
   if (!existing) {
     return null
   }
+
   const existingContainer = args.sourceContainer ?? existing.container
   const parent = existingContainer.parentElement
+
   if (!parent) {
     return null
   }
+
   const newPane = args.createPaneInternal(args.opts?.leafId)
   const isVertical = args.direction === 'vertical'
   const divider = args.createDivider(isVertical)
@@ -88,6 +92,7 @@ function prepareMovedPanesForSplit(
   panes: Map<number, ManagedPaneInternal>
 ): MovedPaneSplitState[] {
   const movedPanes = findManagedPanesInContainer(sourceContainer, panes)
+
   if (movedPanes.length === 0) {
     movedPanes.push(fallbackPane)
   }
@@ -104,6 +109,7 @@ function prepareMovedPanesForSplit(
     // firing contextlost, so dispose before the move and reattach after settle.
     const hadWebgl = !!pane.webglAddon
     disposeWebgl(pane)
+
     return { pane, scrollState, hadWebgl }
   })
 }
@@ -113,15 +119,20 @@ function findManagedPanesInContainer(
   panes: Map<number, ManagedPaneInternal>
 ): ManagedPaneInternal[] {
   const movedPanes: ManagedPaneInternal[] = []
+
   const appendPaneById = (paneIdValue: string | undefined): void => {
     if (!paneIdValue) {
       return
     }
+
     const paneId = Number(paneIdValue)
+
     if (!Number.isFinite(paneId)) {
       return
     }
+
     const pane = panes.get(paneId)
+
     if (pane && !movedPanes.includes(pane)) {
       movedPanes.push(pane)
     }
@@ -130,9 +141,11 @@ function findManagedPanesInContainer(
   if (sourceContainer.classList.contains('pane')) {
     appendPaneById(sourceContainer.dataset.paneId)
   }
+
   for (const paneElement of sourceContainer.querySelectorAll<HTMLElement>('.pane[data-pane-id]')) {
     appendPaneById(paneElement.dataset.paneId)
   }
+
   return movedPanes
 }
 
@@ -146,6 +159,7 @@ function openSplitPane(
   applyDividerStyles(args.root, args.styleOptions)
   newPane.terminal.focus()
   updateMultiPaneState(args.getDragCallbacks())
+
   // Why: forward one-shot spawn/adoption hints so the new pane inherits the
   // source cwd for local splits or attaches a runtime-spawned PTY for web splits.
   const spawnHints = {
@@ -153,6 +167,7 @@ function openSplitPane(
     ...(args.opts?.cwdPromise ? { cwdPromise: args.opts.cwdPromise } : {}),
     ...(args.opts?.ptyId ? { ptyId: args.opts.ptyId } : {})
   }
+
   args.publishPaneCreated(newPane, Object.keys(spawnHints).length > 0 ? spawnHints : undefined)
   args.managerOptions.onLayoutChanged?.()
 }
@@ -174,23 +189,29 @@ function teardownManagedPane(
   reason: 'close' | 'detach' | 'retire'
 ): void {
   const pane = args.panes.get(args.paneId)
+
   if (!pane) {
     return
   }
+
   const closedLeafId = pane.leafId
   args.releasePaneIdentity(args.paneId)
   removePaneContainer(args, pane)
+
   if (reason === 'close') {
     // Leaf ids are minted UUIDs and never reused, so a closed leaf's scroll
     // intent is unreachable. Detach/retire hand the leaf to a new host, which
     // must still be able to restore it.
     releaseTerminalScrollIntentKey(closedLeafId)
   }
+
   const nextActivePaneId = activateReplacementPane(args)
   applyPaneOpacity(args.panes.values(), nextActivePaneId, args.styleOptions)
+
   for (const p of args.panes.values()) {
     safeFit(p)
   }
+
   updateMultiPaneState(args.getDragCallbacks())
   args.managerOptions.onPaneClosed?.(args.paneId, {
     paneId: args.paneId,
@@ -209,10 +230,12 @@ export function detachManagedPaneForExternalMove(args: CloseManagedPaneArgs): bo
   if (!args.panes.has(args.paneId) || args.panes.size <= 1) {
     return false
   }
+
   // Why: pane-to-tab detach tears down only this renderer pane; the PTY is
   // adopted by the new tab, so the 'detach' reason tells TerminalPane to skip
   // process-close cleanup.
   teardownManagedPane(args, 'detach')
+
   return true
 }
 
@@ -220,7 +243,9 @@ export function retireManagedPanePreservingPty(args: CloseManagedPaneArgs): bool
   if (!args.panes.has(args.paneId) || args.panes.size <= 1) {
     return false
   }
+
   teardownManagedPane(args, 'retire')
+
   return true
 }
 
@@ -228,9 +253,11 @@ function removePaneContainer(args: CloseManagedPaneArgs, pane: ManagedPaneIntern
   const paneContainer = pane.container
   const parent = paneContainer.parentElement
   disposePane(pane, args.panes)
+
   if (!parent) {
     return
   }
+
   if (parent.classList.contains('pane-split')) {
     const siblings = findPaneChildren(parent)
     const sibling = siblings.find((c) => c !== paneContainer) ?? null
@@ -246,9 +273,11 @@ function activateReplacementPane(args: CloseManagedPaneArgs): number | null {
   if (args.activePaneId !== args.paneId) {
     return args.activePaneId
   }
+
   const next = args.panes.values().next().value as ManagedPaneInternal | undefined
   const nextActivePaneId = next?.id ?? null
   args.setActivePaneId(nextActivePaneId)
   next?.terminal.focus()
+
   return nextActivePaneId
 }

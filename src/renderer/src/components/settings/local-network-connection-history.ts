@@ -11,7 +11,9 @@ function isSavedSuccess(value: unknown): value is LocalNetworkConnectionSuccess 
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const candidate = value as Partial<LocalNetworkConnectionSuccess>
+
   return (
     typeof candidate.host === 'string' &&
     candidate.host.length > 0 &&
@@ -26,10 +28,13 @@ function isSavedSuccess(value: unknown): value is LocalNetworkConnectionSuccess 
 export function loadLocalNetworkConnectionSuccess(): LocalNetworkConnectionSuccess | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
+
     if (!raw) {
       return null
     }
+
     const parsed: unknown = JSON.parse(raw)
+
     return isSavedSuccess(parsed) ? parsed : null
   } catch {
     return null

@@ -17,7 +17,9 @@ import { getCrashBreadcrumbSnapshot } from '../crash-reporting/crash-breadcrumb-
 export const recentRendererErrorReportKeys = new Map<string, number>()
 
 const RENDERER_ERROR_DEDUPE_MS = 10 * 60 * 1000
+
 const MAX_RENDERER_ERROR_KEY_AGE_MS = RENDERER_ERROR_DEDUPE_MS * 2
+
 const MAX_RECENT_RENDERER_ERROR_REPORT_KEYS = 256
 
 const REACT_ERROR_BOUNDARY_SURFACES = new Set<ReactErrorBoundaryReportArgs['surface']>([
@@ -38,10 +40,13 @@ function stringField(value: unknown, maxLength: number): string | undefined {
   if (typeof value !== 'string') {
     return undefined
   }
+
   const trimmed = value.trim()
+
   if (!trimmed) {
     return undefined
   }
+
   return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed
 }
 
@@ -49,6 +54,7 @@ function nullableStringField(value: unknown, maxLength: number): string | null |
   if (value === null) {
     return null
   }
+
   return stringField(value, maxLength)
 }
 
@@ -61,12 +67,14 @@ function normalizeRendererErrorReportArgs(args: unknown): ReactErrorBoundaryRepo
   if (!args || typeof args !== 'object') {
     return null
   }
+
   const record = args as Record<string, unknown>
   const attribution = attributionField(record.attribution)
   const boundaryId = stringField(record.boundaryId, 120)
   const surface = stringField(record.surface, 80)
   const errorName = stringField(record.errorName, 120) ?? 'Error'
   const errorMessage = stringField(record.errorMessage, 1_000) ?? 'Unknown render error'
+
   if (
     !boundaryId ||
     !surface ||
@@ -111,11 +119,14 @@ function pruneRendererErrorReportKeys(now: number): void {
       recentRendererErrorReportKeys.delete(key)
     }
   }
+
   while (recentRendererErrorReportKeys.size > MAX_RECENT_RENDERER_ERROR_REPORT_KEYS) {
     const oldestKey = recentRendererErrorReportKeys.keys().next().value
+
     if (oldestKey === undefined) {
       break
     }
+
     recentRendererErrorReportKeys.delete(oldestKey)
   }
 }
@@ -140,6 +151,7 @@ export async function recordRendererErrorReport(
   webContentsId?: number
 ): Promise<ReactErrorBoundaryReportResult> {
   const normalized = normalizeRendererErrorReportArgs(args)
+
   if (!normalized) {
     return { ok: false, error: 'Invalid renderer error report.' }
   }
@@ -147,9 +159,11 @@ export async function recordRendererErrorReport(
   const now = Date.now()
   pruneRendererErrorReportKeys(now)
   const key = getRendererErrorReportKey(normalized, webContentsId)
+
   if (now - (recentRendererErrorReportKeys.get(key) ?? 0) < RENDERER_ERROR_DEDUPE_MS) {
     return { ok: true, report: null, deduped: true }
   }
+
   recentRendererErrorReportKeys.set(key, now)
   // Why: renderer error reports are IPC input. A broken renderer can vary the
   // component stack/message inside the age window, so bound the main-side

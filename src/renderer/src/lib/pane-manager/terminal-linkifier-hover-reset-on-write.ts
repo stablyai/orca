@@ -32,7 +32,9 @@ export function installTerminalLinkifierHoverResetOnWrite(terminal: Terminal): I
   if (typeof terminal.onWriteParsed !== 'function') {
     return { dispose: () => undefined }
   }
+
   let timer: ReturnType<typeof setTimeout> | null = null
+
   const flush = (): void => {
     // Why: never invalidate the cache while the user is hovering a link — it
     // would clear+re-query the active link (async for file paths), flickering
@@ -43,24 +45,31 @@ export function installTerminalLinkifierHoverResetOnWrite(terminal: Terminal): I
     // during the retry so a concurrent write does not stack a second timer.)
     if (isTerminalLinkifierHoverActive(terminal)) {
       timer = setTimeout(flush, HOVER_RESET_THROTTLE_MS)
+
       return
     }
+
     timer = null
     resetTerminalLinkifierHoverState(terminal)
   }
+
   const scheduleReset = (): void => {
     if (timer !== null) {
       return
     }
+
     timer = setTimeout(flush, HOVER_RESET_THROTTLE_MS)
   }
+
   const writeParsedDisposable = terminal.onWriteParsed(scheduleReset)
+
   return {
     dispose: () => {
       if (timer !== null) {
         clearTimeout(timer)
         timer = null
       }
+
       writeParsedDisposable.dispose()
     }
   }

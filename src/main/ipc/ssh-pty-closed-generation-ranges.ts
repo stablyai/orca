@@ -9,13 +9,17 @@ export class SshPtyClosedGenerationRanges {
   add(generation: number): void {
     const index = this.firstRangeReachableFrom(generation)
     const current = this.ranges[index]
+
     if (!current || generation + 1 < current.start) {
       this.ranges.splice(index, 0, { start: generation, end: generation })
+
       return
     }
+
     current.start = Math.min(current.start, generation)
     current.end = Math.max(current.end, generation)
     const next = this.ranges[index + 1]
+
     if (next && current.end + 1 >= next.start) {
       current.end = Math.max(current.end, next.end)
       this.ranges.splice(index + 1, 1)
@@ -24,6 +28,7 @@ export class SshPtyClosedGenerationRanges {
 
   has(generation: number): boolean {
     const range = this.ranges[this.firstRangeReachableFrom(generation)]
+
     return range !== undefined && generation >= range.start && generation <= range.end
   }
 
@@ -35,14 +40,17 @@ export class SshPtyClosedGenerationRanges {
   private firstRangeReachableFrom(generation: number): number {
     let low = 0
     let high = this.ranges.length
+
     while (low < high) {
       const mid = (low + high) >> 1
+
       if (this.ranges[mid]!.end + 1 < generation) {
         low = mid + 1
       } else {
         high = mid
       }
     }
+
     return low
   }
 
@@ -53,9 +61,11 @@ export class SshPtyClosedGenerationRanges {
   get activeGaps(): number {
     const highWater = this.ranges.at(-1)?.end ?? 0
     let closedGenerations = 0
+
     for (const range of this.ranges) {
       closedGenerations += range.end - range.start + 1
     }
+
     // Why: provider generations allocate from 1, so unclosed IDs below high-water remain active.
     return highWater - closedGenerations
   }

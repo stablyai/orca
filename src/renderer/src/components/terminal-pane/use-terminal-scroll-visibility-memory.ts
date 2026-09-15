@@ -63,22 +63,28 @@ export function useTerminalScrollVisibilityMemory({
   const captureViewportPositions = useCallback(
     (useRememberedSnapshots: boolean): Map<number, ScrollState> => {
       const manager = managerRef.current
+
       if (!manager) {
         return new Map()
       }
+
       return new Map(
         manager.getPanes().map((pane) => {
           const remembered = visibleScrollSnapshotsRef.current.get(pane.id)
+
           if (useRememberedSnapshots && remembered) {
             return [pane.id, remembered.scrollState] as const
           }
+
           const state = captureScrollState(pane.terminal)
+
           if (!useRememberedSnapshots || !remembered) {
             visibleScrollSnapshotsRef.current.set(pane.id, {
               scrollState: state,
               outputEpoch: getTerminalOutputEpoch(pane.terminal)
             })
           }
+
           return [pane.id, state] as const
         })
       )
@@ -88,6 +94,7 @@ export function useTerminalScrollVisibilityMemory({
 
   const withSuppressedScrollTracking = useCallback((callback: () => void): void => {
     suppressScrollTrackingRef.current = true
+
     try {
       callback()
     } finally {
@@ -97,21 +104,28 @@ export function useTerminalScrollVisibilityMemory({
 
   const applyPendingFollowOutputRequests = useCallback((): boolean => {
     const pending = pendingFollowOutputPaneIdsRef.current
+
     if (pending.size === 0) {
       return false
     }
+
     if (!isVisibleRef.current || !visibleResumeCompleteRef.current) {
       return false
     }
+
     const manager = managerRef.current
+
     if (!manager) {
       return false
     }
+
     let didScroll = false
+
     for (const pane of manager.getPanes()) {
       if (!pending.has(pane.id)) {
         continue
       }
+
       const previous = visibleScrollSnapshotsRef.current.get(pane.id)
       // Why: focus/follow can run immediately after a hidden pane becomes
       // visible. A bounded flush is enough to observe new output without
@@ -119,6 +133,7 @@ export function useTerminalScrollVisibilityMemory({
       flushTerminalOutput(pane.terminal, { maxChars: FOLLOW_OUTPUT_FLUSH_CHARS })
       const currentEpoch = getTerminalOutputEpoch(pane.terminal)
       const hasNewOutput = previous ? currentEpoch > previous.outputEpoch : currentEpoch > 0
+
       if (hasNewOutput) {
         if (getTerminalScrollIntentKind(pane.terminal) === 'followOutput') {
           cancelDeferredScrollRestore(pane.terminal)
@@ -126,10 +141,13 @@ export function useTerminalScrollVisibilityMemory({
           pane.terminal.scrollToBottom()
           didScroll = true
         }
+
         rememberVisibleScrollSnapshot(pane.id, pane.terminal)
       }
+
       pending.delete(pane.id)
     }
+
     return didScroll
   }, [isVisibleRef, managerRef, rememberVisibleScrollSnapshot, visibleResumeCompleteRef])
 
@@ -137,27 +155,33 @@ export function useTerminalScrollVisibilityMemory({
     for (const frameId of followOutputFrameIdsRef.current) {
       cancelAnimationFrame(frameId)
     }
+
     followOutputFrameIdsRef.current = []
   }, [])
 
   const scheduleFollowOutputIfNeeded = useCallback(
     (paneId: number): void => {
       pendingFollowOutputPaneIdsRef.current.add(paneId)
+
       if (followOutputFrameIdsRef.current.length > 0) {
         return
       }
+
       const firstFrameId = requestAnimationFrame(() => {
         followOutputFrameIdsRef.current = followOutputFrameIdsRef.current.filter(
           (frameId) => frameId !== firstFrameId
         )
+
         const secondFrameId = requestAnimationFrame(() => {
           followOutputFrameIdsRef.current = followOutputFrameIdsRef.current.filter(
             (frameId) => frameId !== secondFrameId
           )
           applyPendingFollowOutputRequests()
         })
+
         followOutputFrameIdsRef.current.push(secondFrameId)
       })
+
       followOutputFrameIdsRef.current.push(firstFrameId)
     },
     [applyPendingFollowOutputRequests]
@@ -167,11 +191,14 @@ export function useTerminalScrollVisibilityMemory({
 
   useEffect(() => {
     const manager = managerRef.current
+
     if (!manager) {
       return
     }
+
     const panes = manager.getPanes()
     const livePaneIds = new Set(panes.map((pane) => pane.id))
+
     for (const paneId of visibleScrollSnapshotsRef.current.keys()) {
       if (!livePaneIds.has(paneId)) {
         visibleScrollSnapshotsRef.current.delete(paneId)

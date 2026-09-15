@@ -37,6 +37,7 @@ function rejectedWith(reason: string | null): AgentSessionMutationResult<AgentSe
     submittedAt: 10,
     resolvedAt: 10
   }
+
   return {
     ok: true,
     replayed: false,
@@ -59,6 +60,7 @@ function notice(reason: string | null): string | null {
 describe('what a rejection shows the user', () => {
   it('removes a queued message the provider confirms Stop cancelled', () => {
     const result = rejectedWith(DISPATCH_REJECTED_CANCELLED)
+
     if (!result.ok) {
       throw new Error('expected rejected submission fixture')
     }
@@ -124,9 +126,11 @@ describe('ambiguous operation refusals', () => {
 
   it('parks a recovered missing submission without polling forever', () => {
     const result = rejectedWith(null)
+
     if (!result.ok) {
       throw new Error('expected a send result')
     }
+
     result.value.submission = {
       ...result.value.submission,
       dispatchState: 'unknown',

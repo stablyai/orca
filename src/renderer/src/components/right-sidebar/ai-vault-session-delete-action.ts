@@ -34,9 +34,11 @@ export function useAiVaultSessionDeleteAction({
         ),
         confirmVariant: 'destructive'
       })
+
       if (!confirmed) {
         return
       }
+
       try {
         const result = await window.api.aiVault.deleteSession({
           agent: session.agent,
@@ -44,11 +46,13 @@ export function useAiVaultSessionDeleteAction({
           filePath: session.filePath,
           executionHostId: session.executionHostId
         })
+
         if (result.outcome !== 'deleted') {
           // 'rejected' and 'failed' share one message: the specific reason is a
           // main-side detail, not something to surface raw.
           throw new Error(result.outcome)
         }
+
         toast.success(
           translate('auto.components.right.sidebar.AiVaultPanel.sessionDeleted', 'Session deleted')
         )

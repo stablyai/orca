@@ -21,7 +21,9 @@ vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
+
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 
 function automation(overrides: Partial<Automation>): Automation {
@@ -106,6 +108,7 @@ async function createStore() {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
+
   return new Store()
 }
 
@@ -141,9 +144,11 @@ describe('scoped automation list', () => {
 
   it('answers an SSH scope only for the requested registration', async () => {
     const store = await createStore()
+
     const result = store.listAutomationsForScope({
       selector: { kind: 'ssh', targetId: 'ssh-1', expectedTargetGeneration: 7 }
     })
+
     expect(result.automations.map((entry) => entry.id)).toEqual(['ssh-1-a'])
     expect(() =>
       store.listAutomationsForScope({
@@ -168,20 +173,24 @@ describe('scoped automation list', () => {
 describe('owner-fenced mutations', () => {
   it('passes when the captured owner still matches', async () => {
     const store = await createStore()
+
     const updated = store.updateAutomation(
       'ssh-1-a',
       { enabled: false },
       { expectedOwner: OWNED_SSH }
     )
+
     expect(updated.enabled).toBe(false)
   })
 
   it('refuses an update, delete, and dispatch fenced on a stale generation', async () => {
     const store = await createStore()
     const stale = { selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 6 } } as const
+
     const conflict = expect.objectContaining({
       code: AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged
     })
+
     expect(() =>
       store.updateAutomation('ssh-1-a', { enabled: false }, { expectedOwner: stale })
     ).toThrowError(conflict)
@@ -200,9 +209,11 @@ describe('owner-fenced mutations', () => {
   // mutate a record fenced to an SSH registration.
   it('refuses an ownerless mutation of a generation-bearing SSH record', async () => {
     const store = await createStore()
+
     const required = expect.objectContaining({
       code: AUTOMATION_OWNER_CONFLICT_CODES.fencingRequired
     })
+
     expect(() => store.updateAutomation('ssh-1-a', { enabled: false })).toThrowError(required)
     expect(() => store.deleteAutomation('ssh-1-a')).toThrowError(required)
     expect(() =>
@@ -230,6 +241,7 @@ describe('owner-fenced mutations', () => {
 
   it('rejects a create whose destination is not a current registration', async () => {
     const store = await createStore()
+
     const input = {
       name: 'New',
       prompt: 'go',
@@ -240,6 +252,7 @@ describe('owner-fenced mutations', () => {
       rrule: 'FREQ=DAILY',
       dtstart: 0
     }
+
     expect(() =>
       store.createAutomation(input, {
         destination: { selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 6 } }
@@ -252,9 +265,11 @@ describe('owner-fenced mutations', () => {
     ).toThrowError(
       expect.objectContaining({ code: AUTOMATION_OWNER_CONFLICT_CODES.invalidDestination })
     )
+
     const created = store.createAutomation(input, {
       destination: { selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 } }
     })
+
     expect(created.executionTargetGeneration).toBe(7)
   })
 })

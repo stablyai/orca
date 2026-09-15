@@ -28,25 +28,31 @@ export async function requestClaudeInitialization(
   try {
     const result = await connection.initializationResult({ timeoutMs })
     const authError = claudeInitializationAuthError(result)
+
     if (authError) {
       throw authError
     }
+
     return result
   } catch (error) {
     if (error instanceof Error && error.message === 'claude initialize request timed out') {
       throw claudeInitTimeoutError(sessionId, timeoutMs)
     }
+
     throw error
   }
 }
 
 export function createClaudeInitDeadline(sessionId: string, timeoutMs: number): ClaudeInitDeadline {
   let resolve = (_init: ClaudeInitObservation): void => {}
+
   let reject = (_error: Error): void => {}
+
   const promise = new Promise<ClaudeInitObservation>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise
     reject = rejectPromise
   })
+
   void promise.catch(() => {})
   let timer: ReturnType<typeof setTimeout> | null = null
 

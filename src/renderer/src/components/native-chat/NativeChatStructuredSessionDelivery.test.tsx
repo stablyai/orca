@@ -43,6 +43,7 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 
 vi.mock('./use-structured-agent-session', async () => {
   const { useStructuredAgentSessionOutbox } = await import('./use-structured-agent-session-outbox')
+
   return {
     useStructuredAgentSession: (props: {
       sessionId: string
@@ -54,6 +55,7 @@ vi.mock('./use-structured-agent-session', async () => {
         fence: 1,
         submissions: mocks.submissions as never
       })
+
       return {
         messages:
           mocks.mode === 'outbox'
@@ -131,6 +133,7 @@ vi.mock('./use-native-chat-file-link-click', () => ({
 vi.mock('./NativeChatMessageList', () => ({
   NativeChatMessageList: (props: typeof mocks.messageListProps) => {
     mocks.messageListProps = props
+
     return <div data-testid="message-list" />
   }
 }))
@@ -143,20 +146,26 @@ vi.mock('./NativeChatComposer', () => ({
       // Match the real composer so focus ownership is observable in this split suite.
       focus: () => {
         fieldRef.current?.focus()
+
         return true
       },
       insertTypedText: () => true,
       handlePasteEvent: mocks.handlePasteEvent,
       pasteFromClipboard: mocks.pasteFromClipboard
     }))
+
     return <textarea ref={fieldRef} data-testid="structured-composer" />
   })
 }))
+
 vi.mock('./NativeChatEmptyState', () => ({ NativeChatEmptyState: () => null }))
+
 vi.mock('./NativeChatApprovalCard', () => ({ NativeChatApprovalCard: () => null }))
+
 vi.mock('./NativeChatQuestionCard', () => ({
   NativeChatQuestionCard: (props: NativeChatQuestionCardProps) => {
     mocks.questionCardProps = props
+
     return null
   }
 }))
@@ -236,6 +245,7 @@ describe('NativeChatStructuredSession delivery', () => {
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('hello', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
@@ -329,6 +339,7 @@ describe('NativeChatStructuredSession delivery', () => {
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
@@ -361,6 +372,7 @@ describe('NativeChatStructuredSession delivery', () => {
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2), { timeout: 10000 })
 
@@ -394,6 +406,7 @@ describe('NativeChatStructuredSession delivery', () => {
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
 
@@ -440,11 +453,13 @@ describe('NativeChatStructuredSession delivery', () => {
         agent="codex"
       />
     )
+
     const { rerender } = render(makeView())
 
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
 
@@ -494,10 +509,13 @@ describe('NativeChatStructuredSession delivery', () => {
         agent="codex"
       />
     )
+
     const { rerender } = render(makeView({ kind: 'local' }))
+
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
@@ -533,6 +551,7 @@ describe('NativeChatStructuredSession delivery', () => {
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
@@ -572,6 +591,7 @@ describe('NativeChatStructuredSession delivery', () => {
     const send = mocks.composerProps?.structuredTransport?.send as
       | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
       | undefined
+
     expect(send?.('first', [])).toBe(true)
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
 
@@ -587,6 +607,7 @@ describe('NativeChatStructuredSession delivery', () => {
     mocks.mode = 'outbox'
     mocks.call.mockRejectedValue(new Error('socket closed'))
     vi.useFakeTimers({ shouldAdvanceTime: true })
+
     try {
       render(
         <NativeChatStructuredSession
@@ -602,6 +623,7 @@ describe('NativeChatStructuredSession delivery', () => {
       const send = mocks.composerProps?.structuredTransport?.send as
         | ((text: string, attachments: readonly { id: string; path: string }[]) => boolean)
         | undefined
+
       expect(send?.('first', [])).toBe(true)
 
       // Backoff is 1+2+4+8+16 = 31s for five probes, which was the old hard budget.
@@ -611,6 +633,7 @@ describe('NativeChatStructuredSession delivery', () => {
           await vi.advanceTimersByTimeAsync(8_000)
         })
       }
+
       expect(mocks.call.mock.calls.length).toBeGreaterThanOrEqual(7)
     } finally {
       vi.useRealTimers()

@@ -20,8 +20,10 @@ describe('terminal WebGL atlas recovery', () => {
       refreshAllPanes: vi.fn<() => void>(),
       scheduleRevealPresent: vi.fn<() => void>()
     }
+
     registerLivePaneManager(manager)
     registeredManagers.push(manager)
+
     return manager
   }
 
@@ -29,6 +31,7 @@ describe('terminal WebGL atlas recovery', () => {
     for (const manager of registeredManagers.splice(0)) {
       unregisterLivePaneManager(manager)
     }
+
     vi.clearAllTimers()
     vi.useRealTimers()
     vi.unstubAllGlobals()
@@ -45,6 +48,7 @@ describe('terminal WebGL atlas recovery', () => {
       'requestAnimationFrame',
       vi.fn((callback: FrameRequestCallback) => {
         rafCallbacks.push(callback)
+
         return rafCallbacks.length
       })
     )
@@ -77,17 +81,21 @@ describe('terminal WebGL atlas recovery', () => {
       'requestAnimationFrame',
       vi.fn((callback: FrameRequestCallback) => {
         callback(0)
+
         return 1
       })
     )
+
     const manager = {
       resetWebglTextureAtlases: vi.fn(() => order.push('first-reset')),
       refreshAllPanes: vi.fn(() => order.push('first-refresh'))
     }
+
     const otherManager = {
       resetWebglTextureAtlases: vi.fn(() => order.push('second-reset')),
       refreshAllPanes: vi.fn(() => order.push('second-refresh'))
     }
+
     registerLivePaneManager(manager)
     registeredManagers.push(manager)
     registerLivePaneManager(otherManager)
@@ -131,15 +139,18 @@ describe('terminal WebGL atlas recovery', () => {
       'requestAnimationFrame',
       vi.fn((callback: FrameRequestCallback) => {
         callback(0)
+
         return 1
       })
     )
+
     const manager = {
       resetWebglTextureAtlases: vi.fn(() => {
         throw new Error('pane disposed')
       }),
       refreshAllPanes: vi.fn()
     }
+
     registerLivePaneManager(manager)
     registeredManagers.push(manager)
     const healthyManager = registerManager()

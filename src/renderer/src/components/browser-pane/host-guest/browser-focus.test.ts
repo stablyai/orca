@@ -23,9 +23,11 @@ describe('browser-focus', () => {
   it('requestBrowserFocus queues and dispatches the focus event', () => {
     const detail = { pageId: 'page-req', target: 'address-bar' as const }
     const events: CustomEvent[] = []
+
     const onFocusRequest = (event: Event): void => {
       events.push(event as CustomEvent)
     }
+
     window.addEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, onFocusRequest)
     requestBrowserFocus(detail)
     window.removeEventListener(ORCA_BROWSER_FOCUS_REQUEST_EVENT, onFocusRequest)

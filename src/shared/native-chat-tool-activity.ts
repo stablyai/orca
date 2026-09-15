@@ -50,6 +50,7 @@ export function describeActiveToolCall(
 ): NativeChatActiveToolDescriptor {
   const preview = createToolInputDisplay(call.input).label
   const isCommand = isCommandToolName(call.name)
+
   const key = isCommand
     ? preview
       ? 'runningPreview'
@@ -57,6 +58,7 @@ export function describeActiveToolCall(
     : preview
       ? 'runningNamedPreview'
       : 'runningNamed'
+
   return { key, toolName: call.name, preview, isCommand }
 }
 
@@ -77,9 +79,12 @@ export function selectActiveToolCall(
   if (activeTurnIsWorking === false) {
     return null
   }
+
   const calls = blocks.filter(isToolCallBlock)
+
   for (let index = calls.length - 1; index >= 0; index--) {
     const call = calls[index]
+
     if (
       call &&
       (call.state === 'running' || (call.state == null && activeTurnIsWorking === true))
@@ -87,6 +92,7 @@ export function selectActiveToolCall(
       return call
     }
   }
+
   return null
 }
 

@@ -23,7 +23,9 @@ import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resol
 // These drive the real SDK against the scripted fake CLI, so every assertion is
 // about the environment, argv and frames a real child actually saw.
 const FAKE_CLI = join(__dirname, '__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
+
 const SESSION_ID = '5348c19f-6a54-4c2e-9c68-9c2b1a3d4e5f'
+
 const HOLD_OPEN = { delayMs: 10_000 }
 
 type ScriptedCliReport = {
@@ -35,15 +37,18 @@ type ScriptedCliReport = {
 }
 
 const scratchDirs: string[] = []
+
 const openConnections: ClaudeStreamJsonConnection[] = []
 
 afterEach(async () => {
   for (const connection of openConnections.splice(0)) {
     await connection.close()
   }
+
   for (const dir of scratchDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
+
   spawned.splice(0)
   spawnedChildren.splice(0)
   vi.unstubAllEnvs()
@@ -58,6 +63,7 @@ function scriptScenario(
   const scenarioPath = join(dir, 'scenario.json')
   const reportPath = join(dir, 'report.json')
   writeFileSync(scenarioPath, JSON.stringify({ steps, controlResponses }))
+
   return {
     cwd: dir,
     env: {
@@ -83,6 +89,7 @@ function launchFor(
 
 /** The derived child environment, captured where Orca actually hands it to the OS. */
 const spawned: ProcessSpec[] = []
+
 /** The retained child, so a test can end it the way a crashing CLI would. */
 const spawnedChildren: SpawnedProcess[] = []
 
@@ -98,11 +105,14 @@ async function open(
       spawned.push(spec)
       const child = spawnProcess(spec)
       spawnedChildren.push(child)
+
       return child
     },
     queryImpl
   )
+
   openConnections.push(connection)
+
   return connection
 }
 
@@ -113,11 +123,14 @@ function childEnv(): Record<string, string | undefined> {
 async function until<T>(read: () => T | null | undefined, label: string): Promise<T> {
   for (let attempt = 0; attempt < 400; attempt++) {
     const value = read()
+
     if (value !== null && value !== undefined) {
       return value
     }
+
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
+
   throw new Error(`timed out waiting for ${label}`)
 }
 
@@ -135,11 +148,13 @@ function processState(pid: number): 'running' | 'exited' {
       encoding: 'utf8',
       env: { ...process.env, LANG: 'C', LC_ALL: 'C' }
     }).trim()
+
     return state.startsWith('Z') ? 'exited' : 'running'
   } catch (error) {
     if ((error as { status?: number }).status === 1) {
       return 'exited'
     }
+
     throw error
   }
 }
@@ -150,6 +165,7 @@ describe('Claude stream-json connection', () => {
     let captured: Options | undefined
     await open(launchFor(scenario), {}, (params) => {
       captured = params.options
+
       return query(params)
     })
 
@@ -164,6 +180,7 @@ describe('Claude stream-json connection', () => {
     vi.stubEnv('CLAUDE_CODE_ENTRYPOINT', undefined)
     vi.stubEnv('ORCA_CONNECTION_MARKER', 'inherited')
     const scenario = scriptScenario([HOLD_OPEN])
+
     const connection = await open(
       launchFor(scenario, {
         CLAUDE_CONFIG_DIR: '/accounts/managed/home',
@@ -218,8 +235,10 @@ describe('Claude stream-json connection', () => {
       session_id: SESSION_ID,
       uuid: 'uuid-replay-1'
     }
+
     const scenario = scriptScenario([{ awaitUserMessage: true }, { emit: replay }, HOLD_OPEN])
     const messages: Record<string, unknown>[] = []
+
     const connection = await open(launchFor(scenario), {
       onMessage: (message) => messages.push(message)
     })
@@ -230,6 +249,7 @@ describe('Claude stream-json connection', () => {
       parent_tool_use_id: null,
       session_id: SESSION_ID
     })
+
     // The report exists from the child's first line of work, so poll for the frame
     // itself: `send` settles on the SDK's completed write, and the child still has
     // to read that line before it can record it.
@@ -237,6 +257,7 @@ describe('Claude stream-json connection', () => {
       () => (readReportSafely(scenario)?.userMessages.length ? readReportSafely(scenario) : null),
       'the user frame recorded by the child'
     )
+
     expect(report.userMessages).toHaveLength(1)
 
     await until(() => messages.find((message) => message.uuid === 'uuid-replay-1'), 'the replay')
@@ -253,6 +274,7 @@ describe('Claude stream-json connection', () => {
     // reaches the SDK's input pump: its `transport.write` is what fails, which is
     // the window a child crashing mid-send actually opens.
     child?.kill('SIGKILL')
+
     const sent = connection.send({
       type: 'user',
       message: { role: 'user', content: [{ type: 'text', text: 'hello' }] },
@@ -271,6 +293,7 @@ describe('Claude stream-json connection', () => {
       uuid: 'uuid-unknown-1',
       payload: { nested: { flags: ['a', 'b'] } }
     }
+
     const scenario = scriptScenario([{ emit: unknown }, HOLD_OPEN])
     const messages: Record<string, unknown>[] = []
     await open(launchFor(scenario), { onMessage: (message) => messages.push(message) })
@@ -290,6 +313,7 @@ describe('Claude stream-json connection', () => {
       parent_tool_use_id: null,
       event
     })
+
     const frames = [
       stream('uuid-message-start', {
         type: 'message_start',
@@ -338,7 +362,9 @@ describe('Claude stream-json connection', () => {
         uuid: 'uuid-result'
       }
     ]
+
     const scenario = scriptScenario([...frames.map((frame) => ({ emit: frame })), HOLD_OPEN])
+
     const journal = await openAgentSessionJournal({
       identity: {
         sessionId: 'session-1',
@@ -351,6 +377,7 @@ describe('Claude stream-json connection', () => {
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })
+
     const deferred = createDeferredStructuredAgentSessionEventSink()
     deferred.bind({ journal, fence: 1, publish: vi.fn() })
     const translator = createClaudeJournalTranslator({ sink: deferred.sink })
@@ -365,9 +392,11 @@ describe('Claude stream-json connection', () => {
     await until(() => (settled ? true : null), 'the result frame')
     await deferred.drained()
     const items = journal.snapshot().items
+
     const assistant = items.filter(
       (item) => item.body.kind === 'message' && item.body.role === 'assistant'
     )
+
     expect(assistant.map((item) => item.body)).toEqual([
       {
         kind: 'message',
@@ -404,8 +433,10 @@ describe('Claude stream-json connection', () => {
       { awaitControlResponse: 'perm-421' },
       HOLD_OPEN
     ])
+
     const seen: { toolName: string; requestId: string; toolUseID: string; suggestions: unknown }[] =
       []
+
     const canUseTool: CanUseTool = (toolName, _input, options) => {
       seen.push({
         toolName,
@@ -413,8 +444,10 @@ describe('Claude stream-json connection', () => {
         toolUseID: options.toolUseID,
         suggestions: options.suggestions
       })
+
       return Promise.resolve({ behavior: 'deny', message: 'No', toolUseID: options.toolUseID })
     }
+
     await open(launchFor(scenario), { canUseTool })
 
     await until(() => (seen.length > 0 ? seen : null), 'the inbound permission request')
@@ -426,6 +459,7 @@ describe('Claude stream-json connection', () => {
         suggestions: [{ type: 'addRules' }]
       }
     ])
+
     const written = await until(
       () =>
         readReportSafely(scenario)?.controlResponses.find(
@@ -433,6 +467,7 @@ describe('Claude stream-json connection', () => {
         ),
       'the permission answer'
     )
+
     expect(written.response.response).toMatchObject({ behavior: 'deny', message: 'No' })
   })
 
@@ -441,6 +476,7 @@ describe('Claude stream-json connection', () => {
       initialize: { models: [{ value: 'sonnet' }], account: { tokenSource: 'oauth' } },
       get_settings: { env: { ANTHROPIC_BASE_URL: 'https://settings.example.test' } }
     })
+
     const connection = await open(launchFor(scenario))
 
     await expect(connection.initializationResult()).resolves.toMatchObject({
@@ -450,6 +486,7 @@ describe('Claude stream-json connection', () => {
       env: { ANTHROPIC_BASE_URL: 'https://settings.example.test' }
     })
     await expect(connection.setModel('opus')).resolves.toBeUndefined()
+
     const requests = await until(
       () =>
         readReportSafely(scenario)?.controlRequests.find(
@@ -457,6 +494,7 @@ describe('Claude stream-json connection', () => {
         ),
       'the set_model control request'
     )
+
     expect(requests.request.subtype).toBe('set_model')
   })
 
@@ -476,6 +514,7 @@ describe('Claude stream-json connection', () => {
         ]
       }
     })
+
     const connection = await open(launchFor(scenario))
 
     await expect(connection.supportedModels()).resolves.toMatchObject([
@@ -500,7 +539,9 @@ describe('Claude stream-json connection', () => {
         ]
       }
     })
+
     const connection = await open(launchFor(scenario))
+
     const session = {
       connection,
       options: new Map<string, string>(),
@@ -528,6 +569,7 @@ describe('Claude stream-json connection', () => {
     for (const key of ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY']) {
       vi.stubEnv(key, undefined)
     }
+
     const scenario = scriptScenario([HOLD_OPEN], {
       get_settings: {
         env: {
@@ -536,6 +578,7 @@ describe('Claude stream-json connection', () => {
         }
       }
     })
+
     const connection = await open(launchFor(scenario))
     const init = { providerSessionId: SESSION_ID, uuid: null, model: null, message: {} }
 
@@ -556,6 +599,7 @@ describe('Claude stream-json connection', () => {
   it('reports an unauthenticated start through the init deadline instead of hanging', async () => {
     // The scripted CLI never answers, which is the shape of a silently unauthenticated CLI.
     const scenario = scriptScenario([HOLD_OPEN])
+
     const connection = await open({
       ...launchFor(scenario),
       env: { ...launchFor(scenario).env, ORCA_SDK_CONTRACT_IGNORE_CONTROL_REQUESTS: '1' }
@@ -569,6 +613,7 @@ describe('Claude stream-json connection', () => {
   it('reports a self-exit with its status, stderr, and observed tree verdict', async () => {
     const scenario = scriptScenario([{ stderr: 'claude: not signed in\n' }, { exit: 1 }])
     let exit: Error | null = null
+
     const connection = await open(launchFor(scenario), {
       onExit: (error) => {
         exit = error
@@ -594,7 +639,9 @@ describe('Claude stream-json connection', () => {
         { delayMs: 500 },
         { exit: 1 }
       ])
+
       let exit: Error | null = null
+
       const connection = await open(
         {
           ...launchFor(scenario),
@@ -602,11 +649,15 @@ describe('Claude stream-json connection', () => {
         },
         { onExit: (error) => (exit = error) }
       )
+
       const report = await until(() => {
         const current = readReportSafely(scenario)
+
         return current?.descendantPid ? current : null
       }, 'the descendant report')
+
       await until(() => exit, 'the natural exit error')
+
       try {
         await expect(connection.close()).resolves.toBe(true)
         expect(connection.exitVerdict).toEqual({ root: 'exited', tree: 'exited' })
@@ -627,6 +678,7 @@ describe('Claude stream-json connection', () => {
     const missingCli = join(scenario.cwd, 'claude-that-does-not-exist')
     let fault: Error | null = null
     let exit: Error | null = null
+
     const connection = await open(
       { ...launchFor(scenario), pathToClaudeCodeExecutable: missingCli },
       {
@@ -657,11 +709,13 @@ describe('Claude stream-json connection', () => {
   it('does not treat a child error event as first-hand root exit proof', async () => {
     const scenario = scriptScenario([HOLD_OPEN])
     let exit: Error | null = null
+
     const connection = await open(launchFor(scenario), {
       onExit: (error) => {
         exit = error
       }
     })
+
     const child = spawnedChildren.at(-1)
     expect(child).toBeDefined()
 
@@ -675,6 +729,7 @@ describe('Claude stream-json connection', () => {
 
   it('proves the exit of a child that ignores a graceful shutdown', async () => {
     const scenario = scriptScenario([HOLD_OPEN])
+
     const connection = await open({
       ...launchFor(scenario),
       env: { ...launchFor(scenario).env, ORCA_SDK_CONTRACT_IGNORE_SIGTERM: '1' }
@@ -695,10 +750,12 @@ describe('the managed-auth live gate', () => {
     // The gate is a process-wide singleton and a sibling test's release lands on its
     // child's 'close' event, which can settle after that test's close() resolved.
     await until(() => (hasLiveClaudePtys() ? null : true), 'a drained auth gate')
+
     const scenario = scriptScenario([
       { emit: { type: 'system', subtype: 'init', session_id: SESSION_ID, uuid: 'init-1' } },
       { wait: HOLD_OPEN }
     ])
+
     const connection = await open(launchFor(scenario))
 
     expect(hasLiveClaudePtys()).toBe(true)
@@ -711,10 +768,12 @@ describe('the managed-auth live gate', () => {
 
   it('releases when the child dies on its own rather than through close()', async () => {
     await until(() => (hasLiveClaudePtys() ? null : true), 'a drained auth gate')
+
     const scenario = scriptScenario([
       { emit: { type: 'system', subtype: 'init', session_id: SESSION_ID, uuid: 'init-1' } },
       { wait: HOLD_OPEN }
     ])
+
     await open(launchFor(scenario))
     expect(hasLiveClaudePtys()).toBe(true)
 
@@ -730,10 +789,12 @@ describe('the managed-auth live gate', () => {
   // that unreachable regardless of what the setup in between does.
   it('leaks no gate entry when setup throws between spawn and handler attachment', async () => {
     await until(() => (hasLiveClaudePtys() ? null : true), 'a drained auth gate')
+
     const scenario = scriptScenario([
       { emit: { type: 'system', subtype: 'init', session_id: SESSION_ID, uuid: 'init-1' } },
       { wait: HOLD_OPEN }
     ])
+
     let started: SpawnedProcess | null = null
 
     try {
@@ -751,12 +812,15 @@ describe('the managed-auth live gate', () => {
           child.stderr.on = ((event: string, listener: (...args: unknown[]) => void) => {
             if (event === 'data') {
               dataAttaches += 1
+
               if (dataAttaches === 2) {
                 throw new Error('stderr listener attach failed')
               }
             }
+
             return attach(event, listener)
           }) as typeof child.stderr.on
+
           return child
         })
       ).rejects.toThrow('stderr listener attach failed')

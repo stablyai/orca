@@ -22,6 +22,7 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
     setTerminalErrorsByPaneId,
     sshReconnectOwnsTerminalErrorsRef
   } = controller
+
   const [paneTitles, setPaneTitles] = useState<Record<number, string>>({})
   const paneTitlesRef = useRef<Record<number, string>>({})
   // Rename handlers read this ref synchronously during the render that changes it.
@@ -31,9 +32,11 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
   const clearedScrollbackLeafIdsRef = useRef<Set<string>>(new Set())
   const remotePaneLayoutPusherRef = useRef<RemotePaneLayoutPusher | null>(null)
   remotePaneLayoutPusherRef.current ??= createRemotePaneLayoutPusher()
+
   const [paneTitleOverlayRects, setPaneTitleOverlayRects] = useState<
     Record<number, PaneTitleOverlayRect>
   >({})
+
   const [renamingPaneId, setRenamingPaneId] = useState<number | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
@@ -44,8 +47,10 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
   const renameFocusFrameRef = useRef<number | null>(null)
   const renameEnableBlurFrameRef = useRef<number | null>(null)
   const renameRefocusFrameRef = useRef<number | null>(null)
+
   const cancelPendingRenameFrames = useCallback(() => {
     const frameRefs = [renameFocusFrameRef, renameEnableBlurFrameRef, renameRefocusFrameRef]
+
     for (const frameRef of frameRefs) {
       if (frameRef.current !== null) {
         cancelAnimationFrame(frameRef.current)
@@ -64,9 +69,11 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
   const setContainerRef = useCallback(
     (node: HTMLDivElement | null): void => {
       containerRef.current = node
+
       if (node !== null) {
         return
       }
+
       closeRenameSession()
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
@@ -85,34 +92,42 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
     },
     [cancelPendingRenameFrames]
   )
+
   const onPtyErrorRef = useRef((paneId: number, message: string) => {
     if (isTerminalSessionStateSaveFailure(message)) {
       setTerminalError(null)
       setTerminalErrorsByPaneId({})
       setSessionStateSaveFailureOpen(true)
+
       return
     }
+
     const visibleMessage = sshReconnectOwnsTerminalErrorsRef.current
       ? stripSshReconnectOwnedErrorLines(message)
       : message
+
     if (visibleMessage !== null) {
       setTerminalErrorsByPaneId((current) =>
         appendPaneTerminalError(current, paneId, visibleMessage)
       )
     }
   })
+
   const onPtyErrorClearedRef = useRef((paneId: number, message?: string) => {
     setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId, message))
   })
+
   const dismissTerminalError = useCallback(() => {
     const paneId = managerRef.current?.getActivePane()?.id ?? null
     setTerminalError(null)
+
     if (paneId !== null) {
       setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
       paneTransportsRef.current.get(paneId)?.notifyErrorSurfaceDismissed?.()
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [])
+
   const onPtyRecoveryStateRef = useRef(
     (paneId: number, state: PtyTransportRecoveryState | null) => {
       setPtyRecoveryStatesByPaneId((previous) =>

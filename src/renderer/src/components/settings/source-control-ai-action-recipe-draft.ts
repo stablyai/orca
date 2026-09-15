@@ -21,6 +21,7 @@ function readActionRecipeInputValue(
 ): ActionRecipeDraftValue {
   const recipe = config.actions?.[actionId]
   const value = recipe?.commandInputTemplate
+
   // Why: execution trims templates, but the controlled textarea must preserve
   // an in-progress trailing space so users can keep typing the next word.
   return {

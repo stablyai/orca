@@ -11,6 +11,7 @@ describe('CodexSubagentPollScheduler', () => {
   it('arms one timer and preserves registration order for simultaneous panes', () => {
     vi.useFakeTimers()
     const seen: string[] = []
+
     const scheduler = new CodexSubagentPollScheduler(1_000, (key) => {
       seen.push(key)
     })
@@ -32,6 +33,7 @@ describe('CodexSubagentPollScheduler', () => {
   it('keeps staggered deadlines and cancellation independent', () => {
     vi.useFakeTimers()
     const seen: string[] = []
+
     const scheduler = new CodexSubagentPollScheduler(1_000, (key) => {
       seen.push(key)
     })
@@ -53,6 +55,7 @@ describe('CodexSubagentPollScheduler', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-30T12:00:00.000Z'))
     const seen: string[] = []
+
     const scheduler = new CodexSubagentPollScheduler(1_000, (key) => {
       seen.push(key)
     })
@@ -71,6 +74,7 @@ describe('CodexSubagentPollScheduler', () => {
     vi.useFakeTimers()
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
     const seen: string[] = []
+
     const scheduler = new CodexSubagentPollScheduler<string>(1_000, (key, value) => {
       seen.push(`${key}:${value}`)
     })
@@ -98,6 +102,7 @@ describe('CodexSubagentPollScheduler', () => {
     vi.useFakeTimers()
     const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
     const seen: string[] = []
+
     const scheduler = new CodexSubagentPollScheduler(1_000, (key) => {
       seen.push(key)
     })
@@ -118,6 +123,7 @@ describe('CodexSubagentPollScheduler', () => {
     let scheduler!: CodexSubagentPollScheduler<undefined>
     scheduler = new CodexSubagentPollScheduler(1_000, (key) => {
       seen.push(key)
+
       if (key === 'pane-a') {
         scheduler.clear('pane-b')
       }

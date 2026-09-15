@@ -5,6 +5,7 @@ import { writeRefused, type WriteSettlement } from '../../shared/pty-write-settl
 export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
   write(id: string, data: string): boolean {
     const recoverable = this.prepareWrite(id)
+
     return this.finishWrite(id, this.client.notify('write', { sessionId: id, data }), recoverable)
   }
 
@@ -15,6 +16,7 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
    */
   async writeWithSettlement(id: string, data: string): Promise<WriteSettlement> {
     let recoverable: boolean
+
     try {
       recoverable = this.prepareWrite(id)
     } catch (error) {
@@ -22,23 +24,29 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
         // prepareWrite already armed recovery and wrote nothing, so this is proven refusal.
         return writeRefused('endpoint_awaiting_recovery')
       }
+
       throw error
     }
+
     const settlement = await this.client.notifyWithSettlement('write', { sessionId: id, data })
+
     if (settlement.outcome !== 'accepted' && recoverable) {
       this.armWriteRecovery(id)
     }
+
     return settlement
   }
 
   protected prepareWrite(id: string): boolean {
     this.markSessionDirty(id)
+
     // Why recoverable and not just active: rejecting a write asks the pane to remount,
     // which only helps if this endpoint can come back. A legacy adapter has no respawn,
     // so its reattach fails and the pane rebuilds empty — losing scrollback the user
     // could still read. Keep the pre-existing silent drop for those.
     const recoverable =
       this.activeSessionIds.has(id) && !this.respawnAdoptionClosed && Boolean(this.respawnFn)
+
     if (
       recoverable &&
       (this.sessionsAwaitingDaemonRecovery.has(id) || !this.client.isConnected())
@@ -47,6 +55,7 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
       this.reconnectAfterWriteFailure()
       throw new PtyWriteUnavailableError(`Daemon PTY "${id}" is awaiting recovery`)
     }
+
     return recoverable
   }
 
@@ -55,6 +64,7 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
       this.armWriteRecovery(id)
       throw new PtyWriteUnavailableError(`Daemon PTY "${id}" is awaiting recovery`)
     }
+
     return delivered
   }
 
@@ -72,15 +82,18 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
     if (!this.supportsProducerFlowControl) {
       return
     }
+
     this.pausedProducerSessionIds.add(id)
     this.client.notify('pausePty', { sessionId: id })
   }
 
   resumeProducer(id: string): void {
     this.producerResumesOwedOnReconnect.delete(id)
+
     if (!this.supportsProducerFlowControl) {
       return
     }
+
     this.pausedProducerSessionIds.delete(id)
     this.client.notify('resumePty', { sessionId: id })
   }
@@ -90,6 +103,7 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
     if (!this.supportsProducerFlowControl) {
       return
     }
+
     // Why: preserved daemons without a sequence-safe, faithful serializer cannot heal a thinned stream.
     // Why also gate on 2031 (#9993): backgrounding is what hands transient-fact scan
     // authority to the daemon. A pre-v29 daemon can announce a 2031 subscribe but never
@@ -97,11 +111,13 @@ export abstract class DaemonPtySessionInput extends DaemonPtySessionSpawn {
     // next theme flip would inject CSI 997 into its replacement shell. Declining to
     // background keeps main's scanner — which emits both facts — authoritative.
     const safeBackground = this.canDelegateBackgroundToDaemon && background
+
     if (safeBackground) {
       this.backgroundedSessionIds.add(id)
     } else {
       this.backgroundedSessionIds.delete(id)
     }
+
     this.client.notify('setSessionBackground', { sessionId: id, background: safeBackground })
   }
 }

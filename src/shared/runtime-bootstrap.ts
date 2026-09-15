@@ -31,14 +31,18 @@ export function findTransport(
   ...kinds: RuntimeTransportMetadata['kind'][]
 ): RuntimeTransportMetadata | null {
   const transports = metadata.transports
+
   if (transports && Array.isArray(transports)) {
     return transports.find((t) => kinds.includes(t.kind)) ?? null
   }
+
   // Why: backward compatibility with pre-transports-array metadata files.
   const legacy = (metadata as Record<string, unknown>).transport as RuntimeTransportMetadata | null
+
   if (legacy && kinds.includes(legacy.kind)) {
     return legacy
   }
+
   return null
 }
 

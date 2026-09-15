@@ -30,9 +30,11 @@ export function resolveDragPreviewTabId({
     if (lastHoveredTabPreview?.groupId === overData.groupId && lastHoveredTabPreview.tabId) {
       return lastHoveredTabPreview
     }
+
     if (overData.groupId === sourceGroupId) {
       return { groupId: sourceGroupId, tabId: sourcePreDragTabId }
     }
+
     return {
       groupId: overData.groupId,
       tabId: preDragActiveTabIdByGroup[overData.groupId] ?? null
@@ -52,5 +54,6 @@ export function resolveSourceGroupRestoreOnDrop(
   if (restoreSnapshot || activeData.groupId === targetGroupId) {
     return undefined
   }
+
   return activeData
 }

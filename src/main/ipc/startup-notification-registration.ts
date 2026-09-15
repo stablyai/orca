@@ -13,11 +13,14 @@ export function triggerStartupNotificationRegistration(store: Store): void {
   if (process.platform !== 'darwin' || !Notification.isSupported()) {
     return
   }
+
   // Why: fire once per install, not on every launch where status stays not-determined (e.g. user dismisses the dialog).
   const ui = store.getUI()
+
   if (ui.notificationPermissionRequested) {
     return
   }
+
   store.updateUI({ notificationPermissionRequested: true })
 
   const notification = new Notification({
@@ -37,6 +40,7 @@ export function triggerStartupNotificationRegistration(store: Store): void {
       clearTimeout(closeTimer)
       closeTimer = null
     }
+
     if (fallbackTimer) {
       clearTimeout(fallbackTimer)
       fallbackTimer = null
@@ -47,6 +51,7 @@ export function triggerStartupNotificationRegistration(store: Store): void {
     if (handled) {
       return
     }
+
     handled = true
     clearStartupTimers()
     activeNotifications.delete(notification)
@@ -65,6 +70,7 @@ export function triggerStartupNotificationRegistration(store: Store): void {
   function onShow(): void {
     // Why: close after a delay so the banner doesn't linger; the macOS permission sheet is separate and unaffected.
     closeTimer = setTimeout(cleanup, 8000)
+
     if (typeof closeTimer.unref === 'function') {
       closeTimer.unref()
     }
@@ -83,6 +89,7 @@ export function triggerStartupNotificationRegistration(store: Store): void {
 
   // Fallback in case macOS doesn't fire the 'show' event (e.g. user denies).
   fallbackTimer = setTimeout(cleanup, 10_000)
+
   if (typeof fallbackTimer.unref === 'function') {
     fallbackTimer.unref()
   }

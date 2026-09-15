@@ -10,11 +10,13 @@ export const JIRA_ISSUE_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_]*-\d+$/
 
 export function parseJiraIssueUrl(value: string): ParsedJiraIssueUrl | null {
   let url: URL
+
   try {
     url = new URL(value.trim())
   } catch {
     return null
   }
+
   if (
     (url.protocol !== 'http:' && url.protocol !== 'https:') ||
     url.username.length > 0 ||
@@ -22,10 +24,13 @@ export function parseJiraIssueUrl(value: string): ParsedJiraIssueUrl | null {
   ) {
     return null
   }
+
   const match = url.pathname.match(/^(.*)\/browse\/([^/]+)$/)
+
   if (!match || !JIRA_ISSUE_KEY_PATTERN.test(match[2])) {
     return null
   }
+
   return {
     issueKey: match[2].toUpperCase(),
     origin: url.origin.toLowerCase(),
@@ -39,6 +44,7 @@ export function getMatchingJiraSites(
 ): JiraSite[] {
   return sites.filter((site) => {
     const identity = getJiraSiteIdentity(site.siteUrl)
+
     return (
       identity !== null &&
       identity.origin === parsed.origin &&
@@ -53,6 +59,7 @@ export function isResolvedJiraIssueMatch(
   issue: JiraIssue
 ): boolean {
   const canonical = parseJiraIssueUrl(issue.url)
+
   return (
     issue.key.toUpperCase() === parsed.issueKey &&
     issue.siteId === site.id &&
@@ -66,11 +73,13 @@ function getJiraSiteIdentity(
   value: string
 ): Pick<ParsedJiraIssueUrl, 'origin' | 'sitePath'> | null {
   let url: URL
+
   try {
     url = new URL(value.trim())
   } catch {
     return null
   }
+
   if (
     (url.protocol !== 'http:' && url.protocol !== 'https:') ||
     url.username.length > 0 ||
@@ -80,6 +89,7 @@ function getJiraSiteIdentity(
   ) {
     return null
   }
+
   return {
     origin: url.origin.toLowerCase(),
     sitePath: normalizeSitePath(url.pathname)
@@ -88,5 +98,6 @@ function getJiraSiteIdentity(
 
 function normalizeSitePath(pathname: string): string {
   const trimmed = pathname.replace(/\/+$/g, '')
+
   return trimmed === '/' ? '' : trimmed
 }

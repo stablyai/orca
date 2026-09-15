@@ -25,9 +25,11 @@ export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentati
     projectRowDetail,
     projectRowItem
   } = model
+
   if (!projectRowItem) {
     return null
   }
+
   return SHOW_MOBILE_PROJECT_METADATA_EDITORS && projectRowType(projectRowItem) ? (
     <View style={styles.detailSection}>
       <View style={styles.detailSectionHeader}>
@@ -63,6 +65,7 @@ export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentati
                 ? projectRowDetail.labels
                 : projectRowItem.content.labels.map((entry) => entry.name)
             ).includes(label)
+
             return (
               <Pressable
                 key={label}
@@ -98,9 +101,11 @@ export function renderMobileTasksProjectAssigneesEditor(model: ConnectionPresent
     projectRowDetail,
     projectRowItem
   } = model
+
   if (!projectRowItem) {
     return null
   }
+
   return SHOW_MOBILE_PROJECT_METADATA_EDITORS && projectRowType(projectRowItem) ? (
     <View style={styles.detailSection}>
       <View style={styles.detailSectionHeader}>
@@ -143,6 +148,7 @@ export function renderMobileTasksProjectAssigneesEditor(model: ConnectionPresent
                 ? projectRowDetail.assignees
                 : projectRowItem.content.assignees.map((assignee) => assignee.login)
             ).includes(user.login)
+
             return (
               <Pressable
                 key={user.login}
@@ -179,9 +185,11 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
     setProjectBodyDraft,
     setProjectTitleDraft
   } = model
+
   if (!projectRowItem) {
     return null
   }
+
   return SHOW_MOBILE_PROJECT_METADATA_EDITORS && projectRowType(projectRowItem) ? (
     <>
       <View style={styles.detailSection}>

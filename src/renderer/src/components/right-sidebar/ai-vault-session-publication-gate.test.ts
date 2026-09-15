@@ -13,6 +13,7 @@ const FIRST: AiVaultListResult = {
   issues: [],
   scannedAt: '2026-08-09T00:00:00.000Z'
 }
+
 const SECOND: AiVaultListResult = {
   ...FIRST,
   scannedAt: '2026-08-09T00:00:01.000Z'
@@ -59,6 +60,7 @@ describe('AiVaultSessionPublicationGate', () => {
       vi.advanceTimersByTime(90)
       markInputQuietSchedulerInput()
     }
+
     vi.advanceTimersByTime(10)
 
     expect(apply).toHaveBeenCalledWith(FIRST)

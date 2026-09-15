@@ -60,6 +60,7 @@ export function activePredecessor(previous?: SourceDeliveryState): SourceDeliver
   while (previous?.lease.phase === 'retired') {
     previous = previous.previous
   }
+
   return previous
 }
 
@@ -118,6 +119,7 @@ export async function settleExactSourceDeliveryCancellation(
       ownerGeneration: activation.ownerGeneration,
       deliveryToken: activation.deliveryToken
     })) as Record<string, unknown>
+
     return (
       result.canceled === true &&
       nonNegativeSafeInteger(result.sentEndSu) &&

@@ -161,6 +161,7 @@ describe('sendMobileNativeChatMessage', () => {
       result: { send: { accepted: true } },
       _meta: { runtimeId: 'runtime' }
     })
+
     await expect(
       sendMobileNativeChatMessageWithOutcome({ client: accepted, terminal: 'term', text: 'hi' })
     ).resolves.toBe('accepted')
@@ -171,6 +172,7 @@ describe('sendMobileNativeChatMessage', () => {
       error: { message: 'no pane' },
       _meta: { runtimeId: 'runtime' }
     })
+
     await expect(
       sendMobileNativeChatMessageWithOutcome({ client: rejected, terminal: 'term', text: 'hi' })
     ).resolves.toBe('rejected')
@@ -294,17 +296,20 @@ describe('sendMobileNativeChatMessage', () => {
 describe('typeMobileNativeChatCommandWithOutcome', () => {
   it('writes the Codex picker command as keys instead of one pasted text write', async () => {
     vi.useFakeTimers()
+
     const client = clientWithResponse({
       id: 'request',
       ok: true,
       result: { send: { accepted: true } },
       _meta: { runtimeId: 'runtime' }
     })
+
     const result = typeMobileNativeChatCommandWithOutcome({
       client,
       terminal: 'term',
       command: '/model'
     })
+
     await vi.runAllTimersAsync()
 
     await expect(result).resolves.toBe('accepted')
@@ -314,6 +319,7 @@ describe('typeMobileNativeChatCommandWithOutcome', () => {
         .mock.calls.filter(([method]) => method === 'terminal.send')
         .map((call) => {
           const params = call[1] as { text: string; enter: boolean }
+
           return { text: params.text, enter: params.enter }
         })
     ).toEqual(
@@ -326,18 +332,21 @@ describe('typeMobileNativeChatCommandWithOutcome', () => {
 
   it('retires a parked launch draft only with the final typed Enter', async () => {
     vi.useFakeTimers()
+
     const client = clientWithResponse({
       id: 'request',
       ok: true,
       result: { send: { accepted: true } },
       _meta: { runtimeId: 'runtime' }
     })
+
     const result = typeMobileNativeChatCommandWithOutcome({
       client,
       terminal: 'term',
       command: '/model',
       resolvedLaunchDraft: { text: 'seed', createdAt: 7 }
     })
+
     await vi.runAllTimersAsync()
     await result
 
@@ -350,6 +359,7 @@ describe('typeMobileNativeChatCommandWithOutcome', () => {
       text: string
       resolvedLaunchDraft?: { text: string; createdAt: number }
     }>
+
     expect(params.slice(0, -1).every((entry) => entry.resolvedLaunchDraft === undefined)).toBe(true)
     expect(params.at(-1)).toMatchObject({
       text: '\r',
@@ -365,6 +375,7 @@ describe('clearMobileNativeChatInput', () => {
     result: { send: { accepted: true } },
     _meta: { runtimeId: 'runtime' }
   }
+
   const params = (client: RpcClient) =>
     vi.mocked(client.sendRequest).mock.calls[0]![1] as { text: string; enter: boolean }
 
@@ -386,6 +397,7 @@ describe('clearMobileNativeChatInput', () => {
       result: { send: { accepted: false } },
       _meta: { runtimeId: 'runtime' }
     })
+
     await expect(
       clearMobileNativeChatInput({ client, terminal: 'term', clearInput: '\x15' })
     ).resolves.toBe(false)

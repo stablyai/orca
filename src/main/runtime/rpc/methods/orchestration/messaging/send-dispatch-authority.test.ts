@@ -30,6 +30,7 @@ describe('orchestration.send Dispatch authority', () => {
     async (legacyAuthority) => {
       setup()
       const attackerTask = db.createTask({ spec: 'attacker assignment' })
+
       const attacker = createRootDispatch(
         db,
         attackerTask.id,
@@ -38,11 +39,13 @@ describe('orchestration.send Dispatch authority', () => {
         undefined,
         legacyAuthority ? undefined : 'runtime_test:term_attacker:1'
       )
+
       const victimTask = db.createTask({ spec: 'victim assignment' })
       const victim = createRootDispatch(db, victimTask.id, 'term_victim')
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
         handle === 'term_attacker' ? 'tab_attacker:leaf_attacker' : harness.coordinatorPaneKey
       )
+
       if (!legacyAuthority) {
         ctx = {
           runtime,

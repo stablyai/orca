@@ -20,6 +20,7 @@ export function antigravityDiscoveries(
     options.antigravityBrainDir ?? ANTIGRAVITY_BRAIN_DIR,
     ...wslHomeDirs.map((homeDir) => join(homeDir, '.gemini', 'antigravity-cli', 'brain'))
   ]
+
   return rootDirs.map((rootDir) =>
     discoverFiles({
       rootDir,

@@ -60,28 +60,35 @@ export function hydrateWorkspaceTerminalRows(
   const invalidTabIds: string[] = []
   const canonicalTabIdBySubsumedTabId = new Map<string, string>()
   const retained: TerminalTab[] = []
+
   for (const row of rows) {
     // Why: old web-client mirrors could persist host surface ids with "::"; makePaneKey reserves ":" as its separator.
     if (!isValidTerminalTabId(row.id)) {
       invalidTabIds.push(row.id)
       continue
     }
+
     const claim = options.rowsFromRemoteSnapshot
       ? RETAINED_UNCLAIMED
       : resolveCanonicalPtyClaim(session, row, canonical)
+
     if (claim.kind === 'subsumed') {
       subsumedTabIds.push(row.id)
       canonicalTabIdBySubsumedTabId.set(row.id, claim.canonicalTabId)
       continue
     }
+
     if (claim.releasedPtyIds.size > 0) {
       releasedPtyIdsByTabId.set(row.id, claim.releasedPtyIds)
     }
+
     if (claim.reconnectPtyId) {
       reconnectPtyIdByRetainedTabId.set(row.id, claim.reconnectPtyId)
     }
+
     retained.push(row)
   }
+
   return {
     rows: retained
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
@@ -100,13 +107,17 @@ export function releaseTerminalLayoutPtyIds(
   releasedPtyIds: ReadonlySet<string>
 ): TerminalLayoutSnapshot {
   const ptyIdsByLeafId = layout.ptyIdsByLeafId
+
   if (!ptyIdsByLeafId) {
     return layout
   }
+
   const kept = Object.entries(ptyIdsByLeafId).filter(([, ptyId]) => !releasedPtyIds.has(ptyId))
+
   if (kept.length === Object.keys(ptyIdsByLeafId).length) {
     return layout
   }
+
   return { ...layout, ptyIdsByLeafId: Object.fromEntries(kept) }
 }
 
@@ -128,7 +139,9 @@ function readCanonicalTerminals(
   const canonicalTabs = (session.unifiedTabs?.[worktreeId] ?? []).filter(
     (tab) => tab.contentType === 'terminal'
   )
+
   const tabIds = new Set(canonicalTabs.map((tab) => tab.entityId))
+
   // Why: only rows that survive the id check can claim PTY ownership; a dropped invalid-id mirror must not evict the valid row sharing its PTY.
   const tabIdByPtyId = new Map(
     rows
@@ -137,6 +150,7 @@ function readCanonicalTerminals(
         readPersistedTerminalPtyIds(session, row).claimable.map((ptyId) => [ptyId, row.id] as const)
       )
   )
+
   return {
     tabIds,
     tabIdByPtyId,
@@ -166,14 +180,17 @@ function resolveCanonicalPtyClaim(
   if (canonical.tabIds.has(row.id)) {
     return RETAINED_UNCLAIMED
   }
+
   const { owned, orphaned, mountedByPrimacy } = readPersistedTerminalPtyIds(session, row)
   const claimed = owned.filter((ptyId) => canonical.tabIdByPtyId.has(ptyId))
   // Why: an unclaimed row has no canonical twin, which also keeps a PTY-less row — it duplicates
   // nothing — out of the fully-claimed branch.
   const canonicalTabId = claimed.length > 0 ? canonical.tabIdByPtyId.get(claimed[0]) : undefined
+
   if (canonicalTabId && claimed.length === owned.length) {
     return { kind: 'subsumed', canonicalTabId }
   }
+
   // Why: a split row with an independent pane owns a PTY nothing else can reattach to, but keeping the
   // shared PTY too would leave two recorded owners and make ownership resolution ambiguous (#10486).
   // Stale unmounted bindings go too, else reconnect republishes the canonical PTY under this row.
@@ -181,6 +198,7 @@ function resolveCanonicalPtyClaim(
     ...claimed,
     ...orphaned.filter((ptyId) => canonical.tabIdByPtyId.has(ptyId))
   ])
+
   return {
     kind: 'retained',
     releasedPtyIds,
@@ -202,7 +220,9 @@ function restoreCanonicalMetadata(
 ): TerminalTab {
   const quickCommandLabel =
     row.quickCommandLabel?.trim() || canonical.quickCommandLabelByTabId.get(row.id)
+
   const aiVaultTitle = row.aiVaultTitle ?? canonical.aiVaultTitleByTabId.get(row.id)
+
   return {
     ...clearTransientTerminalState(row, index),
     ...(quickCommandLabel ? { quickCommandLabel } : {}),
@@ -233,31 +253,40 @@ function readPersistedTerminalPtyIds(
   // normalizeTerminalLayoutSnapshot runs, so unmounted leaves still carry dead bindings here.
   // Rootless layouts bind their sole pane off-tree, so `owned` treats every entry as mounted.
   const mountedLeafIds = layout?.root ? new Set(collectLeafIdsInOrder(layout.root)) : null
+
   const bindings = Object.entries(layout?.ptyIdsByLeafId ?? {}).filter(([, ptyId]) =>
     Boolean(ptyId)
   )
+
   const mounted: string[] = []
   const unmounted: string[] = []
+
   for (const [leafId, ptyId] of bindings) {
     ;(!mountedLeafIds || mountedLeafIds.has(leafId) ? mounted : unmounted).push(ptyId)
   }
+
   const tabLevel = [tab.ptyId, session.remoteSessionIdsByTabId?.[tab.id]].filter(
     (ptyId): ptyId is string => Boolean(ptyId)
   )
+
   const owned = new Set([...tabLevel, ...mounted])
   // Why: "sole pane off-tree" is the only rootless shape that proves ownership. A never-pruned map can
   // hold more, and claiming those would evict the live row that really owns them (#13098).
   const provenLeafId = bindings.length === 1 ? bindings[0]![0] : layout?.activeLeafId
+
   const claimableLeafPtyIds = mountedLeafIds
     ? mounted
     : bindings.filter(([leafId]) => leafId === provenLeafId).map(([, ptyId]) => ptyId)
+
   const activeLeafPtyId = layout?.activeLeafId
     ? layout.ptyIdsByLeafId?.[layout.activeLeafId]
     : undefined
+
   const mountedByPrimacy =
     activeLeafPtyId && mounted.includes(activeLeafPtyId)
       ? [activeLeafPtyId, ...mounted.filter((ptyId) => ptyId !== activeLeafPtyId)]
       : mounted
+
   return {
     owned: [...owned],
     claimable: [...new Set([...tabLevel, ...claimableLeafPtyIds])],

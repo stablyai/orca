@@ -37,12 +37,15 @@ const lazyLocaleBackend: BackendModule = {
   init: () => {},
   read: (language: string, _namespace: string, callback: ReadCallback) => {
     const loader = NON_DEFAULT_LOCALE_LOADERS[language as Exclude<SupportedUiLocale, 'en'>]
+
     if (!loader) {
       // English (and unknown locales) are served from bundled resources; signal
       // "nothing to load" so i18next falls back to the in-memory catalog.
       callback(null, false)
+
       return
     }
+
     loader().then(
       (mod) => callback(null, mod.default),
       (error) => callback(error instanceof Error ? error : new Error(String(error)), false)
@@ -84,16 +87,19 @@ void i18n
 
 export function translate(key: string, fallback: string, options?: TOptions): string {
   const value = i18n.t(key, { defaultValue: fallback, ...options })
+
   return isPseudoLocalizationLocale(i18n.language) ? pseudoLocalizeString(value) : value
 }
 
 export async function setRendererUiLanguage(language: UiLanguage): Promise<void> {
   const resolved = resolveUiLocale(language)
   const resourceLanguage = resolveRendererResourceLanguage(resolved)
+
   const locale =
     isPluginUiLanguage(language) && resourceLanguage === resolved
       ? DEFAULT_LOCALE
       : resourceLanguage
+
   if (i18n.language !== locale) {
     // changeLanguage triggers the lazy backend load for non-English locales and
     // resolves once the catalog is in memory.
@@ -102,6 +108,7 @@ export async function setRendererUiLanguage(language: UiLanguage): Promise<void>
 }
 
 const registeredPluginLanguages = new Set<string>()
+
 let pluginLanguagePacks: readonly PluginLanguagePackRegistration[] = []
 
 /**
@@ -113,6 +120,7 @@ export function getIntlLocale(): string {
   const active = i18n.language
   const pack = pluginLanguagePacks.find((entry) => entry.resourceLanguage === active)
   const candidate = pack?.locale ?? active
+
   try {
     // Why: an empty result means Intl has no data for the tag, so fall through
     // to the default locale instead of letting Intl pick the runtime one.
@@ -132,8 +140,10 @@ export function setRendererPluginLanguagePacks(
   for (const language of registeredPluginLanguages) {
     i18n.removeResourceBundle(language, 'translation')
   }
+
   registeredPluginLanguages.clear()
   pluginLanguagePacks = packs
+
   for (const pack of packs) {
     i18n.addResourceBundle(pack.resourceLanguage, 'translation', pack.catalog, true, true)
     registeredPluginLanguages.add(pack.resourceLanguage)

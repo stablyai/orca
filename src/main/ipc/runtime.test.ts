@@ -26,6 +26,7 @@ import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-rest
 
 function runtimeCallEvent() {
   const mainFrame = {}
+
   return {
     sender: {
       id: 1,
@@ -58,6 +59,7 @@ describe('registerRuntimeHandlers', () => {
     const syncRegistration = handleMock.mock.calls.find(
       ([channel]) => channel === 'runtime:syncWindowGraph'
     )
+
     expect(syncRegistration).toBeTruthy()
 
     fromWebContentsMock.mockReturnValue({ id: 17 })
@@ -78,10 +80,13 @@ describe('registerRuntimeHandlers', () => {
       getStatus: vi.fn(),
       getRuntimeId: vi.fn()
     }
+
     registerRuntimeHandlers(runtime as never)
+
     const handler = handleMock.mock.calls.find(
       ([channel]) => channel === 'runtime:syncWindowGraph'
     )![1]
+
     const sender = { mainFrame: { generation: 2 } }
     fromWebContentsMock.mockReturnValue({ id: 17 })
 
@@ -94,9 +99,11 @@ describe('registerRuntimeHandlers', () => {
   it('rejects graph publications without a renderer generation', () => {
     const runtime = { syncWindowGraph: vi.fn() }
     registerRuntimeHandlers(runtime as never)
+
     const handler = handleMock.mock.calls.find(
       ([channel]) => channel === 'runtime:syncWindowGraph'
     )![1]
+
     const currentMainFrame = {}
     const sender = { mainFrame: currentMainFrame }
     fromWebContentsMock.mockReturnValue({ id: 17 })
@@ -145,6 +152,7 @@ describe('registerRuntimeHandlers', () => {
       agent: 'claude',
       isActive: true
     }
+
     const runtime = {
       getRuntimeId: vi.fn().mockReturnValue('runtime-1'),
       getClientSettings: vi.fn(() => ({ experimentalStructuredNativeChat: true })),
@@ -163,6 +171,7 @@ describe('registerRuntimeHandlers', () => {
 
     registerRuntimeHandlers(runtime as never)
     const callRegistration = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')
+
     const result = await callRegistration![1](runtimeCallEvent(), {
       method: 'session.tabs.list',
       params: { worktree: 'id:workspace-1' }
@@ -204,21 +213,26 @@ describe('registerRuntimeHandlers', () => {
 
   it('deduplicates retries while a terminal fit restore is still pending', async () => {
     const finishRestoreByPtyId = new Map<string, (restored: boolean) => void>()
+
     const reclaimTerminalForDesktop = vi.fn(
       (ptyId: string) =>
         new Promise<boolean>((resolve) => {
           finishRestoreByPtyId.set(ptyId, resolve)
         })
     )
+
     const runtime = {
       syncWindowGraph: vi.fn(),
       getStatus: vi.fn(),
       reclaimTerminalForDesktop
     }
+
     registerRuntimeHandlers(runtime as never)
+
     const restoreRegistration = handleMock.mock.calls.find(
       ([channel]) => channel === 'runtime:restoreTerminalFit'
     )
+
     expect(restoreRegistration).toBeTruthy()
     const handler = restoreRegistration![1]
 
@@ -244,19 +258,23 @@ describe('registerRuntimeHandlers', () => {
 
   it('bounds retries without accumulating reclaim waiters for one PTY', async () => {
     vi.useFakeTimers()
+
     try {
       let finishRestore!: (restored: boolean) => void
+
       const reclaimTerminalForDesktop = vi.fn(
         () =>
           new Promise<boolean>((resolve) => {
             finishRestore = resolve
           })
       )
+
       registerRuntimeHandlers({
         syncWindowGraph: vi.fn(),
         getStatus: vi.fn(),
         reclaimTerminalForDesktop
       } as never)
+
       const handler = handleMock.mock.calls.find(
         ([channel]) => channel === 'runtime:restoreTerminalFit'
       )![1]

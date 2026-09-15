@@ -14,6 +14,7 @@ export function MobileSettingsFrame({
 }) {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
       <View style={styles.topRow}>

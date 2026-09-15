@@ -21,6 +21,7 @@ import {
 describe('OrcaRuntimeService', () => {
   it('tui-idle times out when PTY data has no agent OSC title transitions', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
 
@@ -48,10 +49,12 @@ describe('OrcaRuntimeService', () => {
       runtime.onPtyData('pty-1', 'running migration step 4/9\n', 123)
 
       const [terminal] = (await runtime.listTerminals()).terminals
+
       const waitPromise = runtime.waitForTerminal(terminal.handle, {
         condition: 'tui-idle',
         timeoutMs: 1_000
       })
+
       const timeoutAssertion = expect(waitPromise).rejects.toThrow('timeout')
 
       await vi.advanceTimersByTimeAsync(12_000)
@@ -91,6 +94,7 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyData('pty-1', '\x1b]0;\u280b Working on task\x07output\n', 100)
 
     const [terminal] = (await runtime.listTerminals()).terminals
+
     const waitPromise = runtime.waitForTerminal(terminal.handle, {
       condition: 'tui-idle',
       timeoutMs: 5_000
@@ -189,6 +193,7 @@ describe('OrcaRuntimeService', () => {
         issue: {}
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const { worktrees } = await runtime.getWorktreePs()
@@ -203,11 +208,13 @@ describe('OrcaRuntimeService', () => {
         hostId: 'runtime:owner-runtime' as const
       }
     }
+
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId]
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const { worktrees } = await runtime.getWorktreePs()
@@ -228,6 +235,7 @@ describe('OrcaRuntimeService', () => {
     const validChildId = `${TEST_REPO_ID}::${validChildPath}`
     const staleChildId = `${TEST_REPO_ID}::${staleChildPath}`
     const crossHostChildId = `${TEST_REPO_ID}::${crossHostChildPath}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [parentId]: makeWorktreeMeta({
         instanceId: 'parent-instance',
@@ -247,6 +255,7 @@ describe('OrcaRuntimeService', () => {
         projectId: 'project-a'
       })
     }
+
     const makeLineage = (childId: string, worktreeInstanceId: string): WorktreeLineage => ({
       worktreeId: childId,
       worktreeInstanceId,
@@ -256,22 +265,26 @@ describe('OrcaRuntimeService', () => {
       capture: { source: 'manual-action', confidence: 'explicit' },
       createdAt: 1
     })
+
     const lineageById: Record<string, WorktreeLineage> = {
       [validChildId]: makeLineage(validChildId, 'child-instance'),
       [staleChildId]: makeLineage(staleChildId, 'old-child-instance'),
       [crossHostChildId]: makeLineage(crossHostChildId, 'cross-host-child-instance')
     }
+
     const runtimeStore = {
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       },
       getAllWorktreeLineage: () => lineageById,
       getWorktreeLineage: (worktreeId: string) => lineageById[worktreeId]
     }
+
     vi.mocked(listWorktrees).mockResolvedValue(
       [parentPath, validChildPath, staleChildPath, crossHostChildPath].map((path) => ({
         path,
@@ -313,6 +326,7 @@ describe('OrcaRuntimeService', () => {
   it('resolves WSL platforms only for repos represented in mobile summaries', async () => {
     await withPlatform('win32', async () => {
       const primaryRepo = store.getRepos()[0]!
+
       let repos = [
         primaryRepo,
         ...Array.from({ length: 100 }, (_, index) => ({
@@ -322,6 +336,7 @@ describe('OrcaRuntimeService', () => {
           displayName: `repo-represented-${index}`
         }))
       ]
+
       const getProjects = vi.fn(() =>
         repos.slice(0, 101).map((repo, index) => ({
           id: `project-${index}`,
@@ -336,10 +351,12 @@ describe('OrcaRuntimeService', () => {
           updatedAt: 0
         }))
       )
+
       const getSettings = vi.fn(() => ({
         ...store.getSettings(),
         localWindowsRuntimeDefault: { kind: 'windows-host' as const }
       }))
+
       const runtime = new OrcaRuntimeService({
         ...store,
         getRepos: () => repos,
@@ -381,6 +398,7 @@ describe('OrcaRuntimeService', () => {
         kind: 'wsl',
         distro: 'Ubuntu'
       }
+
       const runtimeStore = {
         ...store,
         getProjects: () => [
@@ -399,6 +417,7 @@ describe('OrcaRuntimeService', () => {
           localWindowsRuntimeDefault: { kind: 'windows-host' as const }
         })
       }
+
       const staleScan = deferred<typeof MOCK_GIT_WORKTREES>()
       vi.mocked(listWorktrees)
         .mockImplementationOnce(() => staleScan.promise)
@@ -424,11 +443,13 @@ describe('OrcaRuntimeService', () => {
       externalWorktreeVisibility: 'hide' as const,
       externalWorktreeVisibilityLegacy: false
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [hiddenExternalRepo],
       getRepo: () => hiddenExternalRepo
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     await expect(runtime.getWorktreePs()).resolves.toMatchObject({
@@ -464,6 +485,7 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
     ])
+
     const makeRuntime = (externalWorktreeVisibility: 'hide' | 'show', claude: 'hide' | 'show') => {
       const repo = {
         ...store.getRepos()[0],
@@ -471,6 +493,7 @@ describe('OrcaRuntimeService', () => {
         externalWorktreeVisibilityLegacy: false,
         worktreeVisibilitySourcePreferences: { builtIn: { claude, gsd: 'hide' as const } }
       }
+
       return new OrcaRuntimeService({
         ...store,
         getRepos: () => [repo],

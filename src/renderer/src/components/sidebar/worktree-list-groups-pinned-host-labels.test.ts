@@ -112,6 +112,7 @@ describe('pinned rows on a multi-host sidebar', () => {
     const rows = itemRows(buildPinnedRows([pinnedLocal, localOnly]))
 
     expect(rows).toHaveLength(2)
+
     for (const row of rows) {
       expect(row.hostContextLabel).toBeUndefined()
     }

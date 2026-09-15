@@ -47,6 +47,7 @@ export function MobileMarkdownReader({
       </View>
     )
   }
+
   if (doc.status === 'error') {
     return (
       <View style={styles.markdownState}>
@@ -66,9 +67,11 @@ export function MobileMarkdownReader({
       : doc.stale
         ? 'Changed on desktop'
         : null
+
   const showRefresh = Boolean((doc.stale && !doc.isDirty) || !doc.editable)
   const showCopy = Boolean(doc.saveError || !doc.editable)
   const showSave = Boolean(doc.isDirty || doc.saving)
+
   const showFloatingActions = shouldShowMarkdownFloatingActions({
     keyboardLift: effectiveKeyboardLift,
     hasStatus: statusText != null,

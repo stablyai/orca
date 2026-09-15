@@ -16,6 +16,7 @@ const createdPaths: string[] = []
 async function remoteFolder(): Promise<string> {
   const path = await mkdtemp(join(tmpdir(), 'orca-remote-artifact-'))
   createdPaths.push(path)
+
   return path
 }
 
@@ -86,9 +87,11 @@ describe('remote artifact CLI forwarding admission', () => {
   ])('uses the complete control frame for the %s escape boundary', (_label, character) => {
     const emptyBytes = remoteArtifactCliForwardingFrameBytes(forwardingParams(''))
     const escapedCharacterBytes = Buffer.byteLength(JSON.stringify(character), 'utf8') - 2
+
     const fittingCharacters = Math.floor(
       (DISPATCHER_CONTROL_QUEUE_MAX_BYTES - emptyBytes) / escapedCharacterBytes
     )
+
     const fitting = forwardingParams(character.repeat(fittingCharacters))
     const oversized = forwardingParams(character.repeat(fittingCharacters + 1))
 

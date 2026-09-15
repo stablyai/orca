@@ -36,12 +36,14 @@ export function MobileDriverOverlay({
   const [collapseState, setCollapseState] = useState(() =>
     createMobileDriverOverlayCollapseState(driverClientId)
   )
+
   const [actionPending, setActionPending] = useState(false)
   const [allActionPending, setAllActionPending] = useState(false)
   const mountedRef = useRef(false)
 
   const setOverlayRootRef = useCallback((node: HTMLDivElement | null): void => {
     mountedRef.current = node !== null
+
     if (node) {
       // Why: take-back/restore can resolve after the overlay renders null; a
       // later mobile session must not inherit stale disabled state.
@@ -51,10 +53,12 @@ export function MobileDriverOverlay({
   }, [])
 
   const currentCollapseState = getMobileDriverOverlayCollapseState(collapseState, driverClientId)
+
   // Why: a new mobile actor must be loud even if the prior driver was collapsed.
   if (currentCollapseState !== collapseState) {
     setCollapseState(currentCollapseState)
   }
+
   const collapsed = currentCollapseState.collapsed
 
   if (!isMobileDriving && !isHeldAtPhoneFit) {
@@ -65,7 +69,9 @@ export function MobileDriverOverlay({
     if (actionPending || allActionPending) {
       return
     }
+
     setActionPending(true)
+
     try {
       await onAction()
     } finally {
@@ -79,7 +85,9 @@ export function MobileDriverOverlay({
     if (!onAllAction || actionPending || allActionPending) {
       return
     }
+
     setAllActionPending(true)
+
     try {
       await onAllAction()
     } finally {
@@ -204,6 +212,7 @@ function LoudOverlay({
   const bodyId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
   const actionRef = useRef<HTMLButtonElement>(null)
+
   const setRootRef = useCallback(
     (node: HTMLDivElement | null): void => {
       rootRef.current = node
@@ -211,6 +220,7 @@ function LoudOverlay({
     },
     [outerRootRef]
   )
+
   // Why: focus the recovery action on mount only when the user isn't already
   // typing into another input (composer, command palette, settings field).
   // Unconditional autoFocus yanks focus on every overlay mount, so a phone
@@ -218,10 +228,12 @@ function LoudOverlay({
   // the next Space/Enter into Take back / Restore. See PR #1899 follow-up.
   useEffect(() => {
     const paneScope = rootRef.current?.parentElement
+
     if (shouldFocusMobileDriverAction(document.activeElement, document.body, paneScope)) {
       actionRef.current?.focus()
     }
   }, [])
+
   // Why: terminal output is still useful status while mobile owns input, so the
   // lock UI must not add a pane-wide scrim or blur over the live stream.
   return (

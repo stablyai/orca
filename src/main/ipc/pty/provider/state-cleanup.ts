@@ -46,6 +46,7 @@ export function clearProviderPtyState(
     // id must never inherit a dead pane's Codex account.
     forgetCodexPaneAccount(id)
   }
+
   // Why: OpenCode and Pi both allocate PTY-scoped runtime state outside the
   // node-pty process table. Centralizing provider cleanup avoids drift where a
   // new teardown path forgets to remove one provider's overlay/hook state.
@@ -65,12 +66,15 @@ export function clearProviderPtyState(
   // Why: every teardown path funnels through here — hidden/interest gate bits must not outlive the PTY or a reused map entry could silently gate a new one.
   const deliveryPolicyChanged = isHiddenRendererPty(id)
   clearHiddenRendererPtyDeliveryState(id)
+
   if (activeChanged) {
     invalidatePendingPtyDrainPriority(id, false)
   }
+
   if (deliveryPolicyChanged) {
     invalidatePendingPtyDrainPolicy(id, false)
   }
+
   clearBackgroundedDeliverySyncForPty(id)
   providerSnapshotRequiredPtys.delete(id)
   // Why: the Phase-5 ConPTY DA1 spawn record must not leak onto a reused id.
@@ -86,19 +90,24 @@ export function clearProviderPtyState(
     shouldClearStablePaneKey: (stablePaneKey) => {
       // Why: when this PTY never rebuilt ptyPaneKey after restart, alias ownership is our only proof — don't erase a newer PTY that now owns the same stable paneKey.
       const stablePaneOwner = paneKeyPtyId.get(stablePaneKey)
+
       if (stablePaneOwner && stablePaneOwner !== id) {
         return false
       }
+
       return !paneKey || (stillOwnsPaneKey && stablePaneKey === paneKey)
     }
   })
+
   // Why: clear the hook server's per-paneKey caches (via the spawn-time paneKey mapping, its only ptyId→paneKey correlation) so dead panes don't accumulate over process lifetime.
   if (paneKey) {
     if (stillOwnsPaneKey) {
       agentHookServer.clearPaneState(paneKey)
       paneKeyPtyId.delete(paneKey)
     }
+
     ptyPaneKey.delete(id)
+
     if (stillOwnsPaneKey) {
       // Why: notify AFTER dropping the paneKey↔ptyId entries so a listener re-reading the map sees post-teardown state; wrap each so one throw can't block the rest.
       for (const listener of paneKeyTeardownListeners) {

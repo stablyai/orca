@@ -35,6 +35,7 @@ describe('grantDirAclAsync', () => {
     execFileMock.mockImplementation(
       (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
         complete = callback
+
         return {} as never
       }
     )
@@ -60,12 +61,14 @@ describe('grantDirAclAsync', () => {
       .mockImplementationOnce(
         (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
           callback(null, '"DOMAIN\\alice","S-1-5-21-123"\r\n', '')
+
           return {} as never
         }
       )
       .mockImplementationOnce(
         (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
           callback(null, '', '')
+
           return {} as never
         }
       )
@@ -93,12 +96,14 @@ describe('grantDirAclAsync', () => {
       .mockImplementationOnce(
         (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
           completeWhoami = callback
+
           return {} as never
         }
       )
       .mockImplementationOnce(
         (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
           callback(null, '', '')
+
           return {} as never
         }
       )
@@ -124,18 +129,21 @@ describe('grantDirAclAsync', () => {
       .mockImplementationOnce(
         (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
           callback(new Error('whoami timed out'), '', '')
+
           return {} as never
         }
       )
       .mockImplementationOnce(
         (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
           callback(null, '"DOMAIN\\alice","S-1-5-21-123"\r\n', '')
+
           return {} as never
         }
       )
       .mockImplementationOnce(
         (_command: string, _args: string[], _options: unknown, callback: ExecCallback) => {
           callback(null, '', '')
+
           return {} as never
         }
       )

@@ -11,6 +11,7 @@ import type { AppState } from '../types'
 
 // Use the production payload limits so the regression represents the leaked byte weight.
 const BIG_ASSISTANT_MESSAGE = 'a'.repeat(8 * 1024)
+
 const BIG_INTERACTIVE_PROMPT = 'q'.repeat(16 * 1024)
 
 function seedWorktree(store: ReturnType<typeof createTestStore>): void {
@@ -242,6 +243,7 @@ describe('agentStatusByPaneKey stays bounded (leak regression #9872)', () => {
     seedWorktree(store)
 
     setAgentAt(store, 'gone-stale:leaf', workingPayload(0), late - AGENT_STATUS_STALE_AFTER_MS - 1)
+
     for (let i = 0; i < MAX_LIVE_AGENT_STATUSES; i++) {
       setAgentAt(store, `gone-fresh-${i}:leaf`, workingPayload(i), late)
     }

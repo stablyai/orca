@@ -16,5 +16,6 @@ export function resolveEmulatorAttachTarget({
   if (deviceTarget || selectedUdid || configuredDefaultUdid) {
     return deviceTarget || selectedUdid || configuredDefaultUdid || undefined
   }
+
   return devices.length > 0 ? pickDefaultDevice(devices)?.udid : undefined
 }

@@ -41,6 +41,7 @@ describe('browser host page placement authority', () => {
     const placement = leases.placeClientPage('page-a', 'host-a')
 
     expect(leases.requireClientPage(pageAuthority(1))).toBe(placement)
+
     for (const mismatch of [
       { authorityRuntimeId: 'runtime-b' },
       { authorityEpoch: 'epoch-b' },
@@ -52,6 +53,7 @@ describe('browser host page placement authority', () => {
         'browser_page_placement_stale'
       )
     }
+
     expect(() =>
       leases.requireClientPage({ ...pageAuthority(1), browserPageId: 'page-b' })
     ).toThrow('browser_client_page_placement_required')
@@ -121,6 +123,7 @@ describe('browser host page placement authority', () => {
   it('enforces the default 256-placement limit and restores admission after retirement', () => {
     const pages = placements()
     const host = { browserHostClientId: 'host-a', browserHostGeneration: 1 }
+
     const admitted = Array.from({ length: 256 }, (_, index) =>
       pages.placeClientPage(`page-${index}`, host)
     )
@@ -129,9 +132,11 @@ describe('browser host page placement authority', () => {
       'browser_page_placement_capacity'
     )
     const firstPlacement = admitted[0]
+
     if (!firstPlacement) {
       throw new Error('browser_page_test_placement_required')
     }
+
     const firstRetirement = pages.beginPageRetirement('page-0', firstPlacement)
     expect(pages.completePageRetirement(firstRetirement)).toBe(true)
     expect(pages.placeClientPage('page-overflow', host)).toMatchObject({
@@ -213,6 +218,7 @@ describe('browser host page placement authority', () => {
       )
       expect(() => pages.placeServerPage(browserPageId)).toThrow('browser_page_identity_invalid')
     }
+
     const maximumIdPlacement = pages.placeServerPage('x'.repeat(256))
     const maximumIdRetirement = pages.beginPageRetirement('x'.repeat(256), maximumIdPlacement)
     expect(pages.completePageRetirement(maximumIdRetirement)).toBe(true)
@@ -223,6 +229,7 @@ describe('browser host page placement authority', () => {
 
   it('rejects invalid host identities before allocating a page generation', () => {
     const pages = placements()
+
     for (const host of [
       { browserHostClientId: '', browserHostGeneration: 1 },
       { browserHostClientId: 'x'.repeat(257), browserHostGeneration: 1 },
@@ -232,6 +239,7 @@ describe('browser host page placement authority', () => {
     ]) {
       expect(() => pages.placeClientPage('page-a', host)).toThrow('browser_host_identity_invalid')
     }
+
     expect(
       pages.placeClientPage('page-a', {
         browserHostClientId: 'x'.repeat(256),

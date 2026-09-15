@@ -17,10 +17,13 @@ function normalizeConnectInput(value: unknown): BitbucketConnectArgs | null {
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const raw = value as Record<string, unknown>
+
   if (raw.authMode !== 'token' && raw.authMode !== 'basic') {
     return null
   }
+
   return {
     authMode: raw.authMode,
     accessToken: optionalString(raw.accessToken),
@@ -35,15 +38,19 @@ export function registerBitbucketHandlers(): void {
     'bitbucket:connect',
     async (_event, args: unknown): Promise<BitbucketConnectResult> => {
       const input = normalizeConnectInput(args)
+
       if (!input) {
         return { ok: false, error: 'Invalid Bitbucket credentials' }
       }
+
       const result = await connectBitbucket(input)
+
       if (result.ok) {
         // Preflight caches source-control status per session; reset so the card
         // reflects the new connection without a relaunch.
         _resetPreflightCache()
       }
+
       return result
     }
   )

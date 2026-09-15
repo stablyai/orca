@@ -21,8 +21,11 @@ const readIdentities = async (
   (await readGitCommonHeadIdentities(...args)).identities
 
 const OID_A = 'a'.repeat(40)
+
 const OID_B = 'b'.repeat(40)
+
 const OID_C = 'c'.repeat(40)
+
 const OID_D = 'd'.repeat(40)
 
 describe('readGitCommonHeadIdentities (incremental)', () => {
@@ -45,6 +48,7 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     await mkdir(commonDir, { recursive: true })
     await writeFile(join(commonDir, 'HEAD'), 'ref: refs/heads/main\n')
     await writeLooseRef(commonDir, 'refs/heads/main', OID_A)
+
     return commonDir
   }
 
@@ -55,6 +59,7 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     const worktreePath = join(dirname(dirname(commonDir)), name)
     await mkdir(worktreePath, { recursive: true })
     await writeFile(join(entry, 'gitdir'), `${join(worktreePath, '.git')}\n`)
+
     return worktreePath
   }
 
@@ -82,6 +87,7 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     expect(identities).toHaveLength(3)
     expect(headOf(identities, pathA)).toBe(OID_B)
     expect(headOf(identities, pathB)).toBe(OID_C)
+
     return { commonDir, cache, pathA, pathB }
   }
 
@@ -326,11 +332,13 @@ describe('readGitCommonHeadIdentities (incremental)', () => {
     await rm(join(commonDir, 'worktrees', 'wt-a', 'HEAD'), { recursive: true })
     await writeFile(join(commonDir, 'worktrees', 'wt-a', 'HEAD'), 'ref: refs/heads/feature-a\n')
     await writeLooseRef(commonDir, 'refs/heads/feature-a', OID_D)
+
     const recovered = await readGitCommonHeadIdentities(
       commonDir,
       cache,
       PRIMARY_HEAD_IDENTITY_SCOPE
     )
+
     expect(headOf(recovered.identities, pathA)).toBe(OID_D)
     expect(recovered.complete).toBe(true)
     expect(cache.unverified.size).toBe(0)

@@ -7,6 +7,7 @@ import {
 import { withAgentSessionStoreTransactionLock } from './agent-session-store-transaction-lock'
 
 const OWNER_DIRECTORY_MODE = 0o700
+
 const OWNER_FILE_MODE = 0o600
 
 async function chmodIfPresent(path: string, mode: number): Promise<void> {
@@ -35,6 +36,7 @@ export async function loadProtectedAgentSessionStore(
 ): Promise<LoadedAgentSessionStore> {
   return withAgentSessionStoreTransactionLock(filePath, async () => {
     await hardenAgentSessionStorePermissions(filePath)
+
     return loadAgentSessionStore(filePath, hostId)
   })
 }

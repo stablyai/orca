@@ -27,6 +27,7 @@ vi.mock('../../../store', () => ({
     if (!mocks.state) {
       throw new Error('mock app state not initialized')
     }
+
     return selector(mocks.state)
   }
 }))
@@ -129,6 +130,7 @@ describe('BrowserPaneOverlayLayer', () => {
     const view = render(
       <RetainedBrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive mountEligible />
     )
+
     expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(2)
 
     // Worktree removal (or Terminal teardown) unmounts the layer with its surface.
@@ -142,6 +144,7 @@ describe('BrowserPaneOverlayLayer', () => {
         mountEligible={false}
       />
     )
+
     expect(revisit.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(0)
 
     revisit.rerender(
@@ -152,12 +155,15 @@ describe('BrowserPaneOverlayLayer', () => {
 
   it('does not retain browser slots from an eligible render that never commits', () => {
     const pending = new Promise<never>(() => {})
+
     const BlockCommit = ({ blocked }: { blocked: boolean }): null => {
       if (blocked) {
         throw pending
       }
+
       return null
     }
+
     const renderBoundary = (mountEligible: boolean, blocked: boolean) => (
       <Suspense fallback={<span data-suspended />}>
         <RetainedBrowserPaneOverlayLayer
@@ -168,6 +174,7 @@ describe('BrowserPaneOverlayLayer', () => {
         <BlockCommit blocked={blocked} />
       </Suspense>
     )
+
     const view = render(renderBoundary(false, false))
 
     view.rerender(renderBoundary(true, true))
@@ -199,9 +206,11 @@ describe('BrowserPaneOverlayLayer', () => {
     const browsers = Array.from({ length: 200 }, (_, index) =>
       createBrowserTab(`browser-${index}`, [`page-${index}`])
     )
+
     const tabs = browsers.map((browser, index) =>
       createUnifiedBrowserTab(`tab-${index}`, browser.id, index)
     )
+
     mocks.state!.browserTabsByWorktree['wt-1'] = browsers
     mocks.state!.unifiedTabsByWorktree['wt-1'] = tabs
     const group = mocks.state!.groupsByWorktree['wt-1'][0]
@@ -233,16 +242,19 @@ describe('BrowserPaneOverlayLayer', () => {
 
   it('retains zero unclaimed hidden panes after visiting 50 worktrees with 20 tabs each', () => {
     const worktreeIds = Array.from({ length: 50 }, (_, index) => `wt-scale-${index}`)
+
     for (const worktreeId of worktreeIds) {
       const browsers = Array.from({ length: 20 }, (_, index) => ({
         ...createBrowserTab(`${worktreeId}-browser-${index}`, [`${worktreeId}-page-${index}`]),
         worktreeId
       }))
+
       const tabs = browsers.map((browser, index) => ({
         ...createUnifiedBrowserTab(`${worktreeId}-tab-${index}`, browser.id, index),
         worktreeId,
         groupId: `${worktreeId}-group-${index}`
       }))
+
       mocks.state!.browserTabsByWorktree[worktreeId] = browsers
       mocks.state!.unifiedTabsByWorktree[worktreeId] = tabs
       mocks.state!.groupsByWorktree[worktreeId] = tabs.map((tab) => ({
@@ -252,6 +264,7 @@ describe('BrowserPaneOverlayLayer', () => {
         tabOrder: [tab.id]
       }))
     }
+
     const surfaces = (activeId: string | null) =>
       worktreeIds.map((worktreeId) => (
         <RetainedBrowserPaneOverlayLayer
@@ -261,13 +274,16 @@ describe('BrowserPaneOverlayLayer', () => {
           mountEligible={worktreeId === activeId}
         />
       ))
+
     const view = render(surfaces(null))
+
     for (const worktreeId of worktreeIds) {
       view.rerender(surfaces(worktreeId))
       expect(view.container.querySelectorAll('[data-browser-pane-id]')).toHaveLength(20)
       view.rerender(surfaces(null))
       expect(view.container.querySelectorAll('[data-browser-pane-id]')).toHaveLength(0)
     }
+
     expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(1000)
   })
 
@@ -427,6 +443,7 @@ describe('BrowserPaneOverlayLayer', () => {
         node.getAttribute('data-browser-overlay-tab-id') ??
         `host-row:${node.getAttribute('data-client-hosted-browser-host-row-pane')}`
     )
+
     expect(ordered).toEqual(['browser-a', 'browser-b', 'host-row:page-hosted'])
   })
 })
@@ -439,12 +456,15 @@ function renderOverlay({ isWorktreeActive }: { isWorktreeActive: boolean }): str
 
 function slotDisplay(browserTabId: string): string {
   const view = render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={true} />)
+
   const slot = view.container.querySelector<HTMLElement>(
     `[data-browser-overlay-tab-id="${browserTabId}"]`
   )
+
   if (!slot) {
     throw new Error(`no overlay slot rendered for ${browserTabId}`)
   }
+
   return slot.style.display
 }
 

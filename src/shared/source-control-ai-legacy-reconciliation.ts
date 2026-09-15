@@ -44,18 +44,23 @@ function mergeLegacyModelSelectionDelta<T>(
   const merged: Record<string, T> = { ...existing }
   let changed = false
   const keys = new Set([...Object.keys(legacy ?? {}), ...Object.keys(projected ?? {})])
+
   for (const key of keys) {
     const legacyValue = legacy?.[key]
+
     if (JSON.stringify(projected?.[key]) === JSON.stringify(legacyValue)) {
       continue
     }
+
     changed = true
+
     if (Object.hasOwn(legacy ?? {}, key) && legacyValue !== undefined) {
       merged[key] = legacyValue
     } else {
       delete merged[key]
     }
   }
+
   return changed ? merged : (existing ?? undefined)
 }
 
@@ -67,21 +72,25 @@ function mergeLegacyHostModelSelectionDelta(
   const merged = copyRecord(existing) ?? {}
   let changed = false
   const hostKeys = new Set([...Object.keys(legacy ?? {}), ...Object.keys(projected ?? {})])
+
   for (const hostKey of hostKeys) {
     const nextHostModels = mergeLegacyModelSelectionDelta(
       merged[hostKey],
       legacy?.[hostKey],
       projected?.[hostKey]
     )
+
     if (nextHostModels !== merged[hostKey]) {
       changed = true
     }
+
     if (nextHostModels && Object.keys(nextHostModels).length > 0) {
       merged[hostKey] = nextHostModels
     } else {
       delete merged[hostKey]
     }
   }
+
   return changed ? merged : (existing ?? undefined)
 }
 
@@ -91,9 +100,11 @@ export function mergeLegacyCommitMessageAiIntoSourceControlAi(
   options: { pullRequestInstructionsFromLegacy?: boolean } = {}
 ): SourceControlAiSettings {
   const base = normalizeSourceControlAiSettings(sourceControlAi, legacy)
+
   if (!legacy) {
     return base
   }
+
   if (!sourceControlAi) {
     return normalizeSourceControlAiSettings(
       {
@@ -121,37 +132,47 @@ export function mergeLegacyCommitMessageAiIntoSourceControlAi(
 
   const existingChoice = base.modelOverridesByOperation?.commitMessage
   const projected = projectSourceControlAiToLegacyCommitMessageAi(base)
+
   const selectedModelByAgent = mergeLegacyModelSelectionDelta(
     existingChoice?.selectedModelByAgent,
     legacy.selectedModelByAgent,
     projected.selectedModelByAgent
   )
+
   const selectedModelByAgentByHost = mergeLegacyHostModelSelectionDelta(
     existingChoice?.selectedModelByAgentByHost,
     legacy.selectedModelByAgentByHost,
     projected.selectedModelByAgentByHost
   )
+
   const selectedThinkingByModel = mergeLegacyModelSelectionDelta(
     existingChoice?.selectedThinkingByModel,
     legacy.selectedThinkingByModel,
     projected.selectedThinkingByModel
   )
+
   const shouldMergeModels =
     selectedModelByAgent !== existingChoice?.selectedModelByAgent ||
     selectedModelByAgentByHost !== existingChoice?.selectedModelByAgentByHost ||
     selectedThinkingByModel !== existingChoice?.selectedThinkingByModel
+
   const modelOverridesByOperation = { ...base.modelOverridesByOperation }
+
   if (shouldMergeModels) {
     const nextChoice: SourceControlAiModelChoice = {}
+
     if (hasEntries(selectedModelByAgent)) {
       nextChoice.selectedModelByAgent = selectedModelByAgent
     }
+
     if (hasEntries(selectedModelByAgentByHost)) {
       nextChoice.selectedModelByAgentByHost = selectedModelByAgentByHost
     }
+
     if (hasEntries(selectedThinkingByModel)) {
       nextChoice.selectedThinkingByModel = selectedThinkingByModel
     }
+
     if (Object.keys(nextChoice).length > 0) {
       modelOverridesByOperation.commitMessage = nextChoice
     } else {
@@ -162,9 +183,12 @@ export function mergeLegacyCommitMessageAiIntoSourceControlAi(
   const legacyActionRecipe = actionRecipeFromLegacyCommitMessageAi(legacy)
   const changes = legacyCoreChanges(legacy, projected)
   const shouldMergeCore = Object.values(changes).some(Boolean)
+
   const shouldMergeBranchPrompt =
     changes.customPrompt && shouldImportLegacyBranchPrompt(base, projected)
+
   const shouldMergeBranchAgent = changes.agentId && shouldImportLegacyBranchAgent(base, projected)
+
   return normalizeSourceControlAiSettings(
     {
       ...base,

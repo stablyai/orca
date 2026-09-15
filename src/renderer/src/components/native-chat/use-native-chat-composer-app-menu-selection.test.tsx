@@ -10,15 +10,18 @@ import { useAppMenuSelectionActions } from '@/hooks/useAppMenuSelectionActions'
 import { useNativeChatComposerAppMenuSelection } from './use-native-chat-composer-app-menu-selection'
 
 let appMenuListener: ((action: AppMenuSelectionAction) => void) | null = null
+
 const performNativeSelectionAction = vi.fn()
 
 function AppMenuBoundary(): null {
   useAppMenuSelectionActions()
+
   return null
 }
 
 function ComposerHarness(): React.JSX.Element {
   const { textareaRef, isComposingRef } = useNativeChatComposerAppMenuSelection()
+
   return (
     <div>
       <textarea
@@ -44,6 +47,7 @@ function emitAppMenuAction(action: AppMenuSelectionAction): void {
     if (!appMenuListener) {
       throw new Error('app menu listener is not registered')
     }
+
     appMenuListener(action)
   })
 }
@@ -51,6 +55,7 @@ function emitAppMenuAction(action: AppMenuSelectionAction): void {
 function renderBoundaryAndComposer() {
   const boundary = render(<AppMenuBoundary />)
   const composer = render(<ComposerHarness />)
+
   return { boundary, composer }
 }
 
@@ -63,6 +68,7 @@ beforeEach(() => {
       ui: {
         onAppMenuSelectionAction: vi.fn((listener: typeof appMenuListener) => {
           appMenuListener = listener
+
           return () => {
             appMenuListener = null
           }
@@ -135,6 +141,7 @@ describe('native chat app-menu selection ownership', () => {
     const addEventListener = vi.spyOn(window, 'addEventListener')
     const removeEventListener = vi.spyOn(window, 'removeEventListener')
     const { composer } = renderBoundaryAndComposer()
+
     const listener = addEventListener.mock.calls.find(
       ([eventName]) => eventName === APP_MENU_SELECTION_ACTION_EVENT
     )?.[1]

@@ -36,11 +36,13 @@ export class CodexAccountSelection {
 
   list(): CodexRateLimitAccountsState {
     this.normalizeActiveSelection()
+
     return this.snapshot()
   }
 
   snapshot(): CodexRateLimitAccountsState {
     const settings = this.dependencies.store.getSettings()
+
     return {
       accounts: settings.codexManagedAccounts
         .map(toCodexManagedAccountSummary)
@@ -55,9 +57,11 @@ export class CodexAccountSelection {
     const account = this.dependencies.store
       .getSettings()
       .codexManagedAccounts.find((entry) => entry.id === accountId)
+
     if (!account) {
       throw new Error('That Codex rate limit account no longer exists.')
     }
+
     return account
   }
 
@@ -65,10 +69,12 @@ export class CodexAccountSelection {
     const account = this.requireAccount(accountId)
     const settings = this.dependencies.store.getSettings()
     const nextAccounts = settings.codexManagedAccounts.filter((entry) => entry.id !== accountId)
+
     const nextSelection = removeCodexAccountIdFromSelection(
       normalizeCodexRuntimeSelection(settings),
       accountId
     )
+
     const nextActiveId =
       settings.activeCodexManagedAccountId === accountId ? null : nextSelection.host
 
@@ -78,6 +84,7 @@ export class CodexAccountSelection {
       activeCodexManagedAccountIdsByRuntime: nextSelection
     })
     this.dependencies.runtimeHome.syncForCurrentSelection()
+
     if (account.managedHomeRuntime === 'host' && nextSelection.host === null) {
       this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
     }
@@ -94,6 +101,7 @@ export class CodexAccountSelection {
         : undefined,
       accountTarget
     )
+
     return this.snapshot()
   }
 
@@ -102,10 +110,12 @@ export class CodexAccountSelection {
     target?: CodexAccountSelectionTarget
   ): Promise<CodexRateLimitAccountsState> {
     let effectiveTarget = target
+
     if (accountId !== null) {
       const accountTarget = getCodexSelectionTargetForAccount(this.requireAccount(accountId))
       const requestedTarget = normalizeCodexAccountSelectionTarget(target ?? accountTarget)
       const normalizedAccountTarget = normalizeCodexAccountSelectionTarget(accountTarget)
+
       if (
         requestedTarget.runtime !== normalizedAccountTarget.runtime ||
         (requestedTarget.wslDistro !== null &&
@@ -113,16 +123,19 @@ export class CodexAccountSelection {
       ) {
         throw new Error('That Codex account belongs to a different runtime.')
       }
+
       effectiveTarget = accountTarget
     }
 
     const previousSettings = this.dependencies.store.getSettings()
     const outgoingAccountId = getSelectedCodexAccountIdForTarget(previousSettings, effectiveTarget)
+
     const nextSelection = setSelectedCodexAccountIdForTarget(
       normalizeCodexRuntimeSelection(previousSettings),
       accountId,
       effectiveTarget
     )
+
     this.dependencies.store.updateSettings({
       activeCodexManagedAccountId:
         effectiveTarget?.runtime === 'wsl' ? nextSelection.host : accountId,
@@ -130,6 +143,7 @@ export class CodexAccountSelection {
     })
     this.dependencies.configMirror.safeSyncToManagedHomes()
     this.dependencies.runtimeHome.syncForCurrentSelection(effectiveTarget)
+
     if (
       accountId === null &&
       normalizeCodexAccountSelectionTarget(effectiveTarget).runtime === 'host'
@@ -138,26 +152,32 @@ export class CodexAccountSelection {
     }
 
     this.startQuotaRefresh(outgoingAccountId, effectiveTarget)
+
     return this.snapshot()
   }
 
   private normalizeActiveSelection(): void {
     const settings = this.dependencies.store.getSettings()
     const selection = normalizeCodexRuntimeSelection(settings)
+
     const nextSelection = pruneInvalidCodexRuntimeSelection(
       selection,
       settings.codexManagedAccounts
     )
+
     const changed =
       nextSelection.host !== selection.host ||
       JSON.stringify(nextSelection.wsl) !== JSON.stringify(selection.wsl)
+
     if (!changed) {
       return
     }
+
     this.dependencies.store.updateSettings({
       activeCodexManagedAccountId: nextSelection.host,
       activeCodexManagedAccountIdsByRuntime: nextSelection
     })
+
     if (selection.host !== null && nextSelection.host === null) {
       this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
     }

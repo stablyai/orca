@@ -11,10 +11,13 @@ export function formatExternalDate(value: string | null, now: number): string {
   if (!value) {
     return 'Never'
   }
+
   const parsed = Date.parse(value)
+
   if (!Number.isFinite(parsed)) {
     return value
   }
+
   return formatAutomationDateTimeWithRelative(parsed, now)
 }
 
@@ -56,6 +59,7 @@ export function getExternalRunContent(run: ExternalAutomationRun): string {
 
 export function isMissingExternalRunsApiError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
+
   // The relay path now reports a code, which is exact. The patterns stay for the
   // hosts that answer with no code at all: an unrouted IPC channel, and relays
   // predating the code. Neither can be tightened without losing those hosts.

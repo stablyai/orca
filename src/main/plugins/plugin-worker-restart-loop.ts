@@ -10,12 +10,16 @@ function waitForBackoff(delayMs: number, signal: AbortSignal): Promise<void> {
       signal.removeEventListener('abort', onAbort)
       resolve()
     }, delayMs)
+
     timer.unref?.()
+
     function onAbort(): void {
       clearTimeout(timer)
       reject(cancellationError())
     }
+
     signal.addEventListener('abort', onAbort, { once: true })
+
     if (signal.aborted) {
       onAbort()
     }
@@ -31,19 +35,24 @@ export async function runPluginWorkerRestartLoop<T>(options: {
   erroredError: (error: unknown) => Error
 }): Promise<T> {
   let restart = options.firstRestart
+
   for (;;) {
     if (restart) {
       await waitForBackoff(restart.delayMs, options.signal)
     }
+
     options.assertActive()
+
     try {
       return await options.start()
     } catch (error) {
       options.assertActive()
       const decision = options.recordFailure(error)
+
       if (!decision.restart) {
         throw options.erroredError(error)
       }
+
       restart = decision
     }
   }

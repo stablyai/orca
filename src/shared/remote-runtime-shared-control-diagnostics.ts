@@ -49,9 +49,11 @@ export class SharedControlDiagnosticsTracker {
   publish(args: Parameters<SharedControlDiagnosticsTracker['get']>[0]): void {
     const diagnostics = this.get(args)
     const previous = this.lastPublished
+
     const closeUnchanged =
       previous?.lastClose?.code === diagnostics.lastClose?.code &&
       previous?.lastClose?.reason === diagnostics.lastClose?.reason
+
     if (
       previous &&
       previous.state === diagnostics.state &&
@@ -64,7 +66,9 @@ export class SharedControlDiagnosticsTracker {
     ) {
       return
     }
+
     this.lastPublished = diagnostics
+
     try {
       this.options.onDiagnosticsChanged?.(diagnostics)
     } catch (error) {

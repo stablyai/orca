@@ -14,14 +14,18 @@ export function useWindowStreamVisible(parkDelayMs = WINDOW_STREAM_PARK_DELAY_MS
     getWindowParkVisible,
     getWindowParkVisible
   )
+
   const [effectiveVisible, setEffectiveVisible] = useState(rawVisible)
 
   useEffect(() => {
     if (rawVisible) {
       setEffectiveVisible(true)
+
       return
     }
+
     const timer = window.setTimeout(() => setEffectiveVisible(false), parkDelayMs)
+
     return () => window.clearTimeout(timer)
   }, [parkDelayMs, rawVisible])
 

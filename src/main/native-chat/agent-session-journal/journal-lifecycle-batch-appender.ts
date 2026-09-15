@@ -19,17 +19,20 @@ export class JournalLifecycleBatchAppender {
     if (this.wasApplied(input.settlementId)) {
       return Promise.resolve(this.deps.cursor())
     }
+
     const build = journalLifecycleBatchRowBuilder(
       this.deps.state,
       input.settlementId,
       input.mutations,
       input
     )
+
     return this.deps
       .enqueue((seq, ts) => {
         if (this.wasApplied(input.settlementId)) {
           throw SETTLEMENT_ALREADY_APPLIED
         }
+
         return build(seq, ts)
       })
       .then((row) => ({ epoch: row.epoch, sequence: row.seq }))
@@ -37,6 +40,7 @@ export class JournalLifecycleBatchAppender {
         if (error === SETTLEMENT_ALREADY_APPLIED) {
           return this.deps.cursor()
         }
+
         throw error
       })
   }

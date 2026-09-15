@@ -111,6 +111,7 @@ export function buildMirroredEditorTabs(
     const existingUnifiedTab = existingTabIndex.getEditorUnifiedTab(fileId, tab.id)
     const sourceFileId = editorSourceFileId(tab)
     const groupId = hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId
+
     const file: OpenFile = {
       ...existingFile,
       id: fileId,
@@ -125,6 +126,7 @@ export function buildMirroredEditorTabs(
       // Why: marks this tab host-owned so a later snapshot that omits it can cull it; locally opened tabs lack this flag and survive.
       mirroredFromRuntimeSession: true
     }
+
     return {
       file,
       hostTabId: tab.id,

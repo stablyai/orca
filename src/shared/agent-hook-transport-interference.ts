@@ -32,10 +32,13 @@ export function classifyTruncatedHookRequest(
   bytesRead: number
 ): HookRequestTruncatedError | null {
   const raw = Array.isArray(contentLengthHeader) ? contentLengthHeader[0] : contentLengthHeader
+
   if (!raw || !/^\d+$/.test(raw.trim())) {
     return null
   }
+
   const contentLength = Number(raw.trim())
+
   return bytesRead < contentLength ? new HookRequestTruncatedError(bytesRead, contentLength) : null
 }
 
@@ -67,12 +70,15 @@ export function createHookTransportInterferenceTracker(
 ): HookTransportInterferenceTracker {
   let count = 0
   let reported = false
+
   return {
     record: ({ source, error }) => {
       count += 1
+
       if (reported || count < threshold) {
         return
       }
+
       reported = true
       onThresholdReached({
         count,

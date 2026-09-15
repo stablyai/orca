@@ -17,6 +17,7 @@ function readString(value: unknown): string | undefined {
 
 function readSeq(value: unknown): number | undefined {
   const raw = typeof value === 'number' ? value : Number(readString(value))
+
   return Number.isFinite(raw) ? raw : undefined
 }
 
@@ -24,13 +25,16 @@ export function readOrcaPushPayload(data: unknown): OrcaPushPayload | null {
   if (!data || typeof data !== 'object') {
     return null
   }
+
   const nested = (data as { orca?: unknown }).orca
   const record = (nested && typeof nested === 'object' ? nested : data) as Record<string, unknown>
   // The fingerprint is what makes this a gateway push; locally scheduled data never has one.
   const hostFingerprint = readString(record.hostFingerprint)
+
   if (!hostFingerprint) {
     return null
   }
+
   return {
     hostFingerprint,
     ...(record.kind === 'dismiss' || record.kind === 'alert' ? { kind: record.kind } : {}),

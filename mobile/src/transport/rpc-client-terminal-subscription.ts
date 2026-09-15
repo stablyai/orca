@@ -22,10 +22,13 @@ export function updateTerminalSubscriptionViewport(
     ) {
       continue
     }
+
     const params = stream.params as TerminalStreamParams
+
     if (params.terminal !== terminal) {
       continue
     }
+
     stream.params = {
       ...stream.params,
       viewport
@@ -44,8 +47,10 @@ export function buildStreamUnsubscribe(
   if (!params || typeof params !== 'object') {
     return null
   }
+
   if (method === 'session.tabs.subscribe') {
     const worktree = (params as { worktree?: unknown }).worktree
+
     return typeof worktree === 'string'
       ? {
           method: 'session.tabs.unsubscribe',
@@ -53,18 +58,23 @@ export function buildStreamUnsubscribe(
         }
       : null
   }
+
   if (method === 'nativeChat.subscribe') {
     const subscriptionId = (params as { subscriptionId?: unknown }).subscriptionId
+
     if (typeof subscriptionId === 'string') {
       return { method: 'nativeChat.unsubscribe', params: { subscriptionId } }
     }
+
     // Backward compatibility for callers that predate explicit cleanup tokens.
     const agent = (params as { agent?: unknown }).agent
     const sessionId = (params as { sessionId?: unknown }).sessionId
+
     return typeof agent === 'string' && typeof sessionId === 'string'
       ? buildNativeChatUnsubscribe(agent, sessionId)
       : null
   }
+
   return null
 }
 
@@ -74,15 +84,19 @@ export function buildTerminalUnsubscribeParams(
   if (!params || typeof params !== 'object') {
     return null
   }
+
   const subscribeParams = params as {
     terminal?: unknown
     client?: { id?: unknown }
   }
+
   if (typeof subscribeParams.terminal !== 'string') {
     return null
   }
+
   const clientId =
     typeof subscribeParams.client?.id === 'string' ? subscribeParams.client.id : undefined
+
   return {
     subscriptionId: clientId ? `${subscribeParams.terminal}:${clientId}` : subscribeParams.terminal,
     ...(clientId ? { client: { id: clientId } } : {})

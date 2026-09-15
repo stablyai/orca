@@ -10,9 +10,11 @@ export async function runSkillCandidateTasks<T>(
     for (;;) {
       const index = nextIndex
       nextIndex += 1
+
       if (index >= tasks.length) {
         return
       }
+
       results[index] = await tasks[index]()
     }
   }
@@ -20,5 +22,6 @@ export async function runSkillCandidateTasks<T>(
   await Promise.all(
     Array.from({ length: Math.min(MAX_CONCURRENT_SKILL_CANDIDATES, tasks.length) }, () => worker())
   )
+
   return results
 }

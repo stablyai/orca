@@ -8,9 +8,13 @@ import {
 } from './macos-computer-use-permissions'
 
 const resolveHelperAppPathMock = vi.hoisted(() => vi.fn())
+
 const resolveHelperExecutablePathMock = vi.hoisted(() => vi.fn())
+
 const permissionStatusTempDir = '/tmp/orca-computer-use-permissions-test'
+
 const helperAppPath = '/Applications/Orca Computer Use.app'
+
 const helperInfoPlistPath = join(helperAppPath, 'Contents', 'Info.plist')
 
 vi.mock('child_process', () => ({
@@ -23,11 +27,13 @@ vi.mock('child_process', () => ({
         if (event === 'close') {
           queueMicrotask(() => callback(0))
         }
+
         return child
       }),
       off: vi.fn(() => child),
       unref: vi.fn()
     }
+
     return child
   }),
   spawnSync: vi.fn()

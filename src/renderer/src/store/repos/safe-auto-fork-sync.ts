@@ -21,15 +21,18 @@ export function scheduleSafeAutoForkSync(get: () => AppState, repos: readonly Re
     if (repo.kind === 'folder' || repo.forkSyncMode !== 'safe-auto' || !repo.upstream) {
       continue
     }
+
     const key = getSafeAutoForkSyncKey(repo)
     const existingAttempt = safeAutoForkSyncAttempts.get(key)
     const now = Date.now()
+
     if (
       existingAttempt?.promise ||
       (existingAttempt && now - existingAttempt.attemptedAt < SAFE_AUTO_FORK_SYNC_COOLDOWN_MS)
     ) {
       continue
     }
+
     const promise = syncRuntimeGitForkDefaultBranch(
       {
         settings: settingsForRepoOwner(get(), repo.id),
@@ -46,10 +49,12 @@ export function scheduleSafeAutoForkSync(get: () => AppState, repos: readonly Re
       })
       .finally(() => {
         const current = safeAutoForkSyncAttempts.get(key)
+
         if (current?.promise === promise) {
           safeAutoForkSyncAttempts.set(key, { attemptedAt: now })
         }
       })
+
     safeAutoForkSyncAttempts.set(key, { attemptedAt: now, promise })
   }
 }

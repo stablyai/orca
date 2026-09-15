@@ -22,6 +22,7 @@ export class DaemonPtyAdapterSubscriptionFanout {
         }),
         adapter.onExit((payload) => {
           onAdapterExit(payload.id)
+
           for (const listener of this.exitListeners) {
             listener(payload)
           }
@@ -35,8 +36,10 @@ export class DaemonPtyAdapterSubscriptionFanout {
 
   onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
     this.dataListeners.push(callback)
+
     return () => {
       const index = this.dataListeners.indexOf(callback)
+
       if (index !== -1) {
         this.dataListeners.splice(index, 1)
       }
@@ -61,8 +64,10 @@ export class DaemonPtyAdapterSubscriptionFanout {
 
   onExit(callback: (payload: DaemonPtyRouterExitEvent) => void): () => void {
     this.exitListeners.push(callback)
+
     return () => {
       const index = this.exitListeners.indexOf(callback)
+
       if (index !== -1) {
         this.exitListeners.splice(index, 1)
       }

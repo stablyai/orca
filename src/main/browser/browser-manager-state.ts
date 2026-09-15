@@ -199,11 +199,13 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     const onDetach = (): void => {
       this.authUserAgentOverrideStateByGuestId.delete(guest.id)
     }
+
     try {
       guest.debugger.on('detach', onDetach)
     } catch {
       /* debugger may be unavailable */
     }
+
     return () => {
       try {
         guest.debugger.off('detach', onDetach)
@@ -219,36 +221,46 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
 
   protected resolvePopupOwnerContext(guestWebContentsId: number): PopupOwnerContext | null {
     const browserTabId = this.tabIdByWebContentsId.get(guestWebContentsId)
+
     if (browserTabId) {
       return { browserTabId, rootGuestWebContentsId: guestWebContentsId }
     }
+
     // Route popups live in an Orca-built window, so they never pass through did-create-window and
     // have no inherited context; their owning page comes from the route popup registry instead.
     const routeOpenerWebContentsId = resolveBrowserRouteGuestPopupOpener(guestWebContentsId)
+
     if (routeOpenerWebContentsId !== null) {
       const openerTabId = this.tabIdByWebContentsId.get(routeOpenerWebContentsId)
+
       return openerTabId
         ? { browserTabId: openerTabId, rootGuestWebContentsId: routeOpenerWebContentsId }
         : null
     }
+
     const inherited = this.popupOwnerContextByGuestId.get(guestWebContentsId)
+
     if (
       inherited &&
       this.webContentsIdByTabId.get(inherited.browserTabId) === inherited.rootGuestWebContentsId
     ) {
       return inherited
     }
+
     this.popupOwnerContextByGuestId.delete(guestWebContentsId)
+
     return null
   }
 
   /** Shared across the whole opener tree, so a chain of popups draws from one budget. */
   protected tryConsumePageInitiatedTab(rootGuestWebContentsId: number): boolean {
     let budget = this.pageInitiatedTabBudgetByRootGuestId.get(rootGuestWebContentsId)
+
     if (!budget) {
       budget = createPageInitiatedTabBudget()
       this.pageInitiatedTabBudgetByRootGuestId.set(rootGuestWebContentsId, budget)
     }
+
     return budget.tryConsume(Date.now())
   }
 }

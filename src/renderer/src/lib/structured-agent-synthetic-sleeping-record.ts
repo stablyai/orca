@@ -7,6 +7,7 @@ export function isStructuredAgentSyntheticSleepingRecord(
   record: SleepingAgentSessionRecord
 ): boolean {
   const pane = parsePaneKey(record.paneKey)
+
   return (
     pane !== null &&
     record.providerSession.key === 'session_id' &&

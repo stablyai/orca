@@ -26,6 +26,7 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
       // Why: a respawn launcher holds a temporary pair until this adapter's permanent reconnect, preventing both gaps and leaks.
       this.releasePendingRespawnAdoptionLease()
     }
+
     this.recordAuthenticatedIdentity()
     // Why sampled before setupEventRouting: "no listener yet" identifies a fresh connect — the only time the
     // daemon-side backgrounded set (process state lost with the old daemon) needs a resync.
@@ -33,6 +34,7 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
     this.setupEventRouting()
     this.scheduleCheckpointTimer()
     this.flushOwedProducerResumes()
+
     if (isFreshConnection) {
       this.resyncBackgroundedSessions()
     }
@@ -40,23 +42,30 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
 
   protected recordAuthenticatedIdentity(): void {
     const current = this.client.getDaemonIdentity()
+
     if (!current) {
       return
     }
+
     const previous = this.lastAuthenticatedIdentity
+
     if (previous && sameEndpointIdentity(previous, current)) {
       return
     }
+
     if (previous) {
       // Capability probes belong to one daemon incarnation; a replacement may
       // support getSize even when the preserved owner did not.
       this.getSizeUnsupported = false
     }
+
     this.lastAuthenticatedIdentity = { ...current }
     this.exactDaemonIncarnation = exactDaemonIncarnationForPidRecord(current, this.pidRecord)
+
     if (!previous) {
       return
     }
+
     const event = { previous: { ...previous }, current: { ...current } }
     notifyDaemonAuditListeners(this.identityChangeListeners, event)
   }
@@ -71,15 +80,19 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
     ) {
       return exactIncarnation
     }
+
     const cachedIncarnation = exactDaemonIncarnationForPidRecord(
       exactIncarnation.identity,
       this.pidRecord
     )
+
     if (cachedIncarnation.linuxStartTicks && cachedIncarnation.bootId) {
       return cachedIncarnation
     }
+
     const pidRecord = await this.readMatchingPidRecord(exactIncarnation.identity)
     this.pidRecord = pidRecord ?? this.pidRecord
+
     return pidRecord?.linuxStartTicks && pidRecord.bootId
       ? {
           identity: { ...exactIncarnation.identity },
@@ -105,8 +118,10 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
     if (!this.pidPath) {
       return null
     }
+
     try {
       const parsed = parseDaemonPidFile(await readFile(this.pidPath, 'utf8'))
+
       return parsed?.pid === identity.pid &&
         parsed.startedAtMs === identity.startedAtMs &&
         parsed.launchNonce === identity.launchNonce
@@ -126,6 +141,7 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
     void this.resolveExactDaemonIncarnation(exactIncarnation)
       .then((resolvedIncarnation) => {
         this.cacheExactDaemonIncarnation(resolvedIncarnation)
+
         return classifyDaemonAuditFailure(this.auditContext, trigger, resolvedIncarnation, {
           additionalEvidenceSources,
           endpointGoneProof
@@ -152,10 +168,12 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
     if (this.producerResumesOwedOnReconnect.size === 0) {
       return
     }
+
     for (const id of this.producerResumesOwedOnReconnect) {
       // Why: resuming an unknown session is a harmless no-op; leaving a survivor paused would waste 5s of failsafe latency.
       this.client.notify('resumePty', { sessionId: id })
     }
+
     this.producerResumesOwedOnReconnect.clear()
   }
 }

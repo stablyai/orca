@@ -17,6 +17,7 @@ function dispatchScrollToCurrentWorkspaceReveal(
   if (typeof window === 'undefined') {
     return
   }
+
   window.dispatchEvent(
     new CustomEvent(SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT, { detail })
   )

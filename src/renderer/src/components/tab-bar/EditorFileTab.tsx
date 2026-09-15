@@ -74,6 +74,7 @@ export default function EditorFileTab({
   const worktree = useWorktreeById(file.worktreeId)
   const repo = useRepoById(worktree?.repoId ?? null)
   const FileIcon = getFileTypeIcon(file.filePath)
+
   // Why: no transform/transition/isDragging styling — the drag design is
   // that tabs stay visually anchored; only the blue insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
@@ -88,22 +89,26 @@ export default function EditorFileTab({
   const isConflictReview = file.mode === 'conflict-review'
   const isCheckDetails = file.mode === 'check-details'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
+
   // Why: only deleted/renamed mean the file is gone from its path, which is
   // what strikethrough conveys. 'changed' keeps a normal label — its surface
   // is the changed-on-disk banner inside the editor.
   const isMissingFileMutation =
     file.externalMutation === 'deleted' || file.externalMutation === 'renamed'
+
   const resolvedLanguage =
     file.mode === 'diff'
       ? detectLanguage(file.relativePath)
       : isConflictReview
         ? 'plaintext'
         : file.language
+
   const canShowMarkdownPreview = canOpenMarkdownPreview({
     language: resolvedLanguage,
     mode: file.mode,
     diffSource: file.diffSource
   })
+
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const [menuOpen, setMenuOpen] = useState(false)
   const [menuPoint, setMenuPoint] = useState({ x: 0, y: 0 })
@@ -126,6 +131,7 @@ export default function EditorFileTab({
     if (!canRename) {
       return
     }
+
     renameCancelledRef.current = false
     setIsRenaming(true)
   }
@@ -133,25 +139,34 @@ export default function EditorFileTab({
   const commitRename = (): void => {
     if (renameCancelledRef.current) {
       setIsRenaming(false)
+
       return
     }
+
     const input = renameInputRef.current
+
     if (!input) {
       setIsRenaming(false)
+
       return
     }
+
     const newName = input.value.trim()
     // onBlur follows Enter when the input unmounts; consume that trailing event
     // so one user action cannot start a second rename against the old path.
     renameCancelledRef.current = true
     setIsRenaming(false)
+
     if (!newName) {
       return
     }
+
     const oldName = basename(file.filePath)
+
     if (newName === oldName) {
       return
     }
+
     const worktreePath = getUntitledFileRoot(file, worktree?.path ?? null)
     void renameFileOnDisk({
       oldPath: file.filePath,
@@ -167,20 +182,26 @@ export default function EditorFileTab({
         cancelAnimationFrame(renameFocusFrameRef.current)
         renameFocusFrameRef.current = null
       }
+
       renameInputRef.current = input
+
       if (!input) {
         return
       }
+
       // Why: the tab re-lays out around the input; focus on the next frame so
       // that swap has settled before selecting text.
       renameFocusFrameRef.current = requestAnimationFrame(() => {
         renameFocusFrameRef.current = null
+
         if (renameInputRef.current !== input) {
           return
         }
+
         input.focus()
         const name = basename(file.filePath)
         const dotIndex = name.lastIndexOf('.')
+
         if (dotIndex > 0) {
           input.setSelectionRange(0, dotIndex)
         } else {
@@ -195,12 +216,14 @@ export default function EditorFileTab({
     file.relativePath === 'All Changes'
       ? null
       : (statusByRelativePath.get(normalizeRelativePath(file.relativePath)) ?? null)
+
   const tabStatusColor = tabStatus ? STATUS_COLORS[tabStatus] : undefined
   const tabLabel = getEditorDisplayLabel(file)
 
   useEffect(() => {
     const closeMenu = (): void => setMenuOpen(false)
     window.addEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
+
     return () => window.removeEventListener(CLOSE_ALL_CONTEXT_MENUS_EVENT, closeMenu)
   }, [])
 
@@ -213,12 +236,15 @@ export default function EditorFileTab({
     if (!menuOpen) {
       return
     }
+
     const dismiss = (): void => setMenuOpen(false)
     window.addEventListener('blur', dismiss)
+
     return () => window.removeEventListener('blur', dismiss)
   }, [menuOpen])
 
   const dragListeners = isRenaming ? undefined : listeners
+
   // Why: defer activation to pointer-up so dragging the tab (reorder / move into
   // another pane / split) does not switch the active tab mid-gesture.
   const { onPointerDown: onTabPointerDown } = useTabStripPointerActivation({
@@ -256,9 +282,11 @@ export default function EditorFileTab({
         if (e.button === 1) {
           e.preventDefault()
           e.stopPropagation()
+
           if (isPinned) {
             return
           }
+
           onClose()
         }
       }}
@@ -311,6 +339,7 @@ export default function EditorFileTab({
               if (isImeCompositionKeyDown(e)) {
                 return
               }
+
               if (e.key === 'Enter') {
                 e.preventDefault()
                 e.stopPropagation()
@@ -332,14 +361,17 @@ export default function EditorFileTab({
               if (file.isPreview && onMakePermanent) {
                 e.stopPropagation()
                 onMakePermanent()
+
                 return
               }
+
               // Why: preview tabs use double-click to become permanent. Scope
               // rename to non-preview filename text so preview promotion wins on
               // the tab label as well as the surrounding tab chrome.
               if (!canRename) {
                 return
               }
+
               e.stopPropagation()
               openRenameInput()
             }}

@@ -3,6 +3,7 @@ import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
 const workflow = parse(readFileSync('.github/workflows/release-cut.yml', 'utf8'))
+
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'))
 
 function stepNamed(job, name) {
@@ -49,10 +50,12 @@ describe('skill-sharing release workflow', () => {
   it('runs the focused contract and transaction suite with real Windows coverage', () => {
     const platform = workflow.jobs['skill-sharing-release-gate']
     const linux = workflow.jobs['skill-sharing-linux-floor-release-gate']
+
     const platformTest = stepNamed(
       platform,
       'Run skill package, transaction, and compatibility suites'
     )
+
     const linuxTest = stepNamed(linux, 'Run skill package, transaction, and compatibility suites')
     const command = packageJson.scripts['test:skill-sharing:release']
 
@@ -76,10 +79,12 @@ describe('skill-sharing release workflow', () => {
   it('trusts only the checked-out workspace before container git operations', () => {
     const linux = workflow.jobs['skill-sharing-linux-floor-release-gate']
     const trustWorkspace = stepNamed(linux, 'Trust the checked-out workspace in the job container')
+
     const restoreHarness = stepNamed(
       linux,
       'Restore skill-sharing test harness from the workflow ref'
     )
+
     const safeDirectoryCommands = linux.steps
       .filter((step) => typeof step.run === 'string' && step.run.includes('safe.directory'))
       .map((step) => step.run)
@@ -128,6 +133,7 @@ describe('skill-sharing release workflow', () => {
   it('loads each exact Linux package on the glibc 2.31 floor', () => {
     const build = workflow.jobs.build
     const smoke = stepNamed(build, 'Load packaged node-pty on the Linux floor')
+
     const linuxEntries = build.strategy.matrix.include.filter(({ platform }) =>
       platform.startsWith('linux-')
     )

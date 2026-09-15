@@ -13,31 +13,39 @@ import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/remote-rpc-content-bu
 import { FileReadCapExceededError, StreamProtocolError } from '../ssh/ssh-filesystem-stream-reader'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
+
 vi.mock('fs/promises', async () =>
   (await import('./orca-runtime-files-mock-registry')).fsPromisesModuleMock()
 )
+
 vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
+
 vi.mock('../ipc/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
+
 vi.mock(
   '../ipc/rg-availability',
   async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
 )
+
 vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
 )
+
 vi.mock(
   '../ipc/filesystem-search-git',
   async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
 )
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
@@ -60,6 +68,7 @@ describe('RuntimeFileCommands', () => {
       const dir = await mkdtemp(join(tmpdir(), 'orca-preview-budget-'))
       previewTempDirs.push(dir)
       await writeFile(join(dir, 'logo.png'), Buffer.alloc(size, 0x61))
+
       return dir
     }
 
@@ -149,11 +158,13 @@ describe('RuntimeFileCommands', () => {
     it('rejects an SSH binary result that grew past its request-scoped budget', async () => {
       const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+
       const readFile = vi.fn().mockResolvedValue({
         content: 'a'.repeat(13),
         isBinary: true,
         isImage: true
       })
+
       vi.mocked(getSshFilesystemProvider).mockReturnValue({
         stat: vi.fn().mockResolvedValue({ type: 'file', size: 0 }),
         readFile

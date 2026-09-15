@@ -10,6 +10,7 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
 
 function formatDate(value: string): string | null {
   const parsed = new Date(value)
+
   return Number.isNaN(parsed.getTime()) ? null : dateFormatter.format(parsed)
 }
 
@@ -17,9 +18,11 @@ function formatDate(value: string): string | null {
  *  what it actually put on disk. */
 export function managedInstallTitle(group: SkillManagedInstallGroup): string {
   const [first, ...rest] = group.installs
+
   if (!first) {
     return group.packageId
   }
+
   return rest.length === 0
     ? first.name
     : translate('auto.components.skills.managedInstall.titleMore', '{{name}} +{{count}}', {
@@ -37,6 +40,7 @@ export function managedInstallScopeLabel(group: SkillManagedInstallGroup): strin
 export function managedInstalledOnLabel(group: SkillManagedInstallGroup): string | null {
   const installedAt = group.installs[0]?.installedAt
   const date = installedAt ? formatDate(installedAt) : null
+
   return date
     ? translate('auto.components.skills.managedInstall.installedOn', 'Installed {{date}}', { date })
     : null
@@ -48,9 +52,11 @@ export function managedInstalledOnLabel(group: SkillManagedInstallGroup): string
  */
 export function managedInstallStateNote(group: SkillManagedInstallGroup): string | null {
   const state = groupInstallState(group)
+
   if (state === 'modified') {
     return translate('auto.components.skills.managedInstall.stateEdited', 'Edited after installing')
   }
+
   return state === 'missing'
     ? translate('auto.components.skills.managedInstall.stateMissing', 'Files are missing')
     : null
@@ -60,6 +66,7 @@ export function managedSkillStateNote(state: string): string | null {
   if (state === 'modified') {
     return translate('auto.components.skills.managedInstall.skillEdited', 'Edited')
   }
+
   return state === 'missing'
     ? translate('auto.components.skills.managedInstall.skillMissing', 'Missing')
     : null
@@ -74,6 +81,7 @@ export function managedVersionLabel(
   const date =
     formatDate(version.createdAt) ??
     translate('auto.components.skills.SkillRow.updatedUnknown', 'No date')
+
   return version.versionId === installedVersionId
     ? translate('auto.components.skills.managedInstall.versionCurrent', '{{date}} (installed)', {
         date

@@ -8,6 +8,7 @@ import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-s
 import type { Repo } from '../../shared/repo-types'
 
 const TARGET_ID = 'target-1'
+
 const REMOTE_PATH = '/srv/app'
 
 const remoteRepo = {
@@ -32,9 +33,11 @@ function makeController(): {
     getProjectHostSetups: () => [],
     updateRepo: (_id: string, updates: Record<string, unknown>) => ({ ...remoteRepo, ...updates })
   }
+
   const addRepo = vi.fn().mockResolvedValue(remoteRepo)
   const addRemoteRepo = vi.fn().mockResolvedValue(remoteRepo)
   const cloneRepo = vi.fn().mockResolvedValue(remoteRepo)
+
   const controller = new RuntimeProjectHostSetupController({
     getStore: () => store as never,
     listRepos: () => [remoteRepo],
@@ -45,6 +48,7 @@ function makeController(): {
     invalidateWorktreeScan: vi.fn(),
     notifyReposChanged: vi.fn()
   })
+
   return {
     controller,
     addRepo,

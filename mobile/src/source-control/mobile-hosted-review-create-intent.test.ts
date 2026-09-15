@@ -44,10 +44,12 @@ function clientWith(responses: RpcResponse[]): Pick<RpcClient, 'sendRequest'> & 
   calls: Array<{ method: string; params: unknown }>
 } {
   const calls: Array<{ method: string; params: unknown }> = []
+
   return {
     calls,
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
       calls.push({ method, params })
+
       return responses.shift() ?? fail(`unexpected ${method}`)
     })
   }
@@ -67,6 +69,7 @@ describe('prepareMobileHostedReviewCreateIntent', () => {
       ok(status([], { hasUpstream: true, ahead: 0, behind: 0 })),
       ok(eligibility({ canCreate: true, blockedReason: null, nextAction: null }))
     ])
+
     const progress: string[] = []
 
     const result = await prepareMobileHostedReviewCreateIntent(client, 'repo-1::/tmp/wt', {

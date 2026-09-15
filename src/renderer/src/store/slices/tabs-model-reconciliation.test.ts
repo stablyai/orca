@@ -9,6 +9,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -569,6 +570,7 @@ describe('TabsSlice', () => {
       const tab = store
         .getState()
         .createTab(WT, undefined, undefined, { pendingActivationSpawn: true })
+
       store.getState().updateTabPtyId(tab.id, 'pty-died')
       // First reconcile promotes the legacy runtime tab into the unified model.
       expect(store.getState().reconcileWorktreeTabModel(WT).renderableTabCount).toBe(1)

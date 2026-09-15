@@ -9,9 +9,11 @@ function makeQueue(opts: { isMounted?: () => boolean; getRepoId?: () => string }
   let repoId = 'repo-1'
   const updateRepo = vi.fn()
   const onError = vi.fn()
+
   const setPersisted = vi.fn((value: RepoSourceControlAiOverrides) => {
     persisted = value
   })
+
   const queue = createRepoAiPersistQueue({
     getRepoId: opts.getRepoId ?? (() => repoId),
     getPersisted: () => persisted,
@@ -20,6 +22,7 @@ function makeQueue(opts: { isMounted?: () => boolean; getRepoId?: () => string }
     isMounted: opts.isMounted ?? (() => true),
     onError
   })
+
   return {
     queue,
     updateRepo,
@@ -102,6 +105,7 @@ describe('createRepoAiPersistQueue', () => {
 
   it('abandons a queued write when the selected repo changes before it runs', async () => {
     let releaseFirst: () => void = () => {}
+
     h.updateRepo.mockImplementationOnce(
       () =>
         new Promise<boolean>((resolve) => {
@@ -119,6 +123,7 @@ describe('createRepoAiPersistQueue', () => {
       ...base,
       customAgentCommand: 'should-not-write'
     }))
+
     // Switch repos while the first write is in flight and the second is queued.
     h.setRepoId('repo-2')
     releaseFirst()
@@ -133,6 +138,7 @@ describe('createRepoAiPersistQueue', () => {
 
   it('does not apply setPersisted when the repo switches during an in-flight updateRepo', async () => {
     let release: (ok: boolean) => void = () => {}
+
     h.updateRepo.mockImplementation(
       () =>
         new Promise<boolean>((resolve) => {

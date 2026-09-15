@@ -15,9 +15,11 @@ export function recordFailedStartDispatchIdentity(
   worker: WorkerDispatchRow
 ): void {
   const resource = db.getWorkerTerminalResourceByOwner(worker.dispatch_id)
+
   if (!resource || resource.terminal_handle !== worker.agent_terminal_handle) {
     return
   }
+
   db.db
     .prepare(
       `UPDATE dispatch_contexts

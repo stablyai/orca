@@ -16,7 +16,9 @@ import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-f
 import { observeRunningWslDistros } from './wsl-transcript-running-observer'
 
 export { readNativeChatTranscriptTail } from './transcript-tail-reader'
+
 export { getActiveNativeChatWatcherCount } from './transcript-watcher-count'
+
 export type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
@@ -31,15 +33,20 @@ async function attemptInstall(
 ): Promise<NativeChatTranscriptSubscription | null> {
   const filePath =
     args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
+
   signal?.throwIfAborted()
+
   if (!filePath) {
     return null
   }
+
   const installed = await installTranscriptWatcher(filePath, decode, args, signal)
+
   if (signal?.aborted) {
     installed?.unsubscribe()
     signal.throwIfAborted()
   }
+
   return installed
 }
 
@@ -49,8 +56,11 @@ async function attemptInstall(
 // hook paths are probed on every retry; the recursive
 // session-id fallback runs less often because a large Claude tree is expensive.
 const INITIAL_RESOLVE_POLL_MS = 500
+
 const MAX_RESOLVE_POLL_MS = 5_000
+
 const FALLBACK_RESOLVE_POLL_MS = 5_000
+
 // Why: with no frame at all a client shows a bare spinner for the whole flush
 // delay — a fresh session that has yet to be prompted never flushes, so the
 // spinner is permanent. Long enough that a merely slow resolve still wins the
@@ -59,6 +69,7 @@ const UNFLUSHED_SETTLE_MS = 1_500
 
 function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | null {
   const path = args.transcriptPath?.trim()
+
   return path && extname(path) === '.jsonl' ? path : null
 }
 
@@ -109,9 +120,11 @@ function subscribeViaResolvePoll(
    *  history and unblock consumers that require a trustworthy transcript. */
   function settleUnflushed(): void {
     settleTimer = null
+
     if (closed || settled || installed || !args.onTranscriptPending) {
       return
     }
+
     settled = true
     args.onTranscriptPending()
   }
@@ -125,9 +138,11 @@ function subscribeViaResolvePoll(
     if (closed || exactPathNeedsWslResolution) {
       return
     }
+
     const untilFallbackResolve = exactPath
       ? Math.max(0, FALLBACK_RESOLVE_POLL_MS - (Date.now() - lastFallbackResolveAt))
       : delay
+
     pollTimer = setTimeout(
       () => {
         pollTimer = null
@@ -138,6 +153,7 @@ function subscribeViaResolvePoll(
     // Why: never hold the event loop open (headless `orca serve` shutdown) for
     // a session that may genuinely never resolve.
     pollTimer.unref?.()
+
     // Only back off in production; a test-supplied interval stays fixed so
     // tests resolve in bounded, predictable time.
     if (args.resolvePollIntervalMs === undefined) {
@@ -149,9 +165,11 @@ function subscribeViaResolvePoll(
     if (closed || installed) {
       return
     }
+
     let result: NativeChatTranscriptSubscription | null
     const now = Date.now()
     const fallbackDue = !exactPath || now - lastFallbackResolveAt >= FALLBACK_RESOLVE_POLL_MS
+
     try {
       if (exactPath && !hostReadableExactPath) {
         if (!exactPathNeedsWslResolution) {
@@ -167,6 +185,7 @@ function subscribeViaResolvePoll(
           })
         }
       }
+
       result = hostReadableExactPath
         ? await attemptInstall(
             { ...args, filePath: hostReadableExactPath },
@@ -174,10 +193,12 @@ function subscribeViaResolvePoll(
             resolveController.signal
           )
         : null
+
       if (!result && exactPathNeedsWslResolution) {
         // A distro may stop after resolution; never retry a stale UNC root.
         hostReadableExactPath = null
       }
+
       if (!result && fallbackDue && !exactPathNeedsWslResolution) {
         lastFallbackResolveAt = now
         result = await attemptInstall(args, decode, resolveController.signal)
@@ -186,6 +207,7 @@ function subscribeViaResolvePoll(
       if (exactPathNeedsWslResolution) {
         hostReadableExactPath = null
       }
+
       // Why: a transient resolve failure (EACCES/EIO during the glob) must not
       // kill the poll loop with an unhandled rejection — retry like a miss. A
       // stalled WSL distro would otherwise poll silently forever, leaving the
@@ -200,20 +222,27 @@ function subscribeViaResolvePoll(
         stopSettleTimer()
         args.onInitialSnapshot([], false, 0, error.message)
       }
+
       result = null
     }
+
     if (closed) {
       // unsubscribe() ran while this attempt was in flight.
       result?.unsubscribe()
+
       return
     }
+
     if (result) {
       installed = result
       stopWslObservation()
       stopWslObservation = () => {}
+
       stopSettleTimer()
+
       return
     }
+
     scheduleAttempt()
   }
 
@@ -231,15 +260,19 @@ function subscribeViaResolvePoll(
       if (closed) {
         return
       }
+
       closed = true
       resolveController.abort()
       stopWslObservation()
       stopWslObservation = () => {}
+
       stopSettleTimer()
+
       if (pollTimer) {
         clearTimeout(pollTimer)
         pollTimer = null
       }
+
       installed?.unsubscribe()
       installed = null
     }
@@ -265,11 +298,13 @@ export async function subscribeNativeChatTranscript(
 ): Promise<NativeChatTranscriptSubscription> {
   setupSignal?.throwIfAborted()
   const decode = nativeChatLineDecoderForAgent(args.agent)
+
   if (!decode) {
     // Nothing watchable — return a no-op teardown so callers can unconditionally
     // unsubscribe without null-checks.
     return { unsubscribe: () => {}, watching: false }
   }
+
   // Why: a blank session id (and no explicit file) can never resolve — bail out
   // instead of resolve-polling an unresolvable target forever.
   if (!args.filePath && !args.sessionId.trim()) {
@@ -277,6 +312,7 @@ export async function subscribeNativeChatTranscript(
   }
 
   let installed: NativeChatTranscriptSubscription | null
+
   try {
     installed = await attemptInstall(args, decode, setupSignal)
   } catch (error) {
@@ -286,9 +322,12 @@ export async function subscribeNativeChatTranscript(
     void wslTranscriptFsRefusal(error) // rethrows anything that is not a gate refusal
     installed = null
   }
+
   if (installed) {
     return installed
   }
+
   setupSignal?.throwIfAborted()
+
   return subscribeViaResolvePoll(args, decode)
 }

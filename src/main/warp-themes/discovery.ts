@@ -37,9 +37,11 @@ function addDedupeDirectory(
   pathImpl: typeof path.posix
 ): void {
   const normalizedPath = pathImpl.normalize(pathImpl.resolve(directoryPath))
+
   if (seenDirectories.has(normalizedPath)) {
     return
   }
+
   seenDirectories.add(normalizedPath)
   directories.push(directoryPath)
 }
@@ -50,14 +52,17 @@ function warpThemeDirectoriesFromDataHomes(
 ): string[] {
   const directories: string[] = []
   const seenDirectories = new Set<string>()
+
   for (const dataHome of dataHomes) {
     addDedupeDirectory(directories, seenDirectories, pathImpl.join(dataHome, 'themes'), pathImpl)
   }
+
   return directories
 }
 
 function getMacWarpThemeDirectories(home: string): string[] {
   const pathImpl = path.posix
+
   return warpThemeDirectoriesFromDataHomes(
     [
       ...WARP_CHANNELS.map((channel) => pathImpl.join(home, channel.macName)),
@@ -73,12 +78,14 @@ function getMacWarpThemeDirectories(home: string): string[] {
 function getLinuxWarpThemeDirectories(home: string): string[] {
   const pathImpl = path.posix
   const xdgDataHome = process.env.XDG_DATA_HOME
+
   // Why: XDG_DATA_HOME is only valid as an absolute path; relative values would
   // make discovery depend on Orca's launch directory.
   const dataHome =
     xdgDataHome && pathImpl.isAbsolute(xdgDataHome)
       ? xdgDataHome
       : pathImpl.join(home, '.local', 'share')
+
   return warpThemeDirectoriesFromDataHomes(
     [
       ...WARP_CHANNELS.map((channel) => pathImpl.join(dataHome, channel.linuxName)),
@@ -97,6 +104,7 @@ function getWindowsWarpThemeDirectories(home: string): string[] {
   const warpAppData = path.win32.join(appData, 'warp')
   const directories: string[] = []
   const seenDirectories = new Set<string>()
+
   for (const channel of WARP_CHANNELS) {
     addDedupeDirectory(
       directories,
@@ -105,6 +113,7 @@ function getWindowsWarpThemeDirectories(home: string): string[] {
       path.win32
     )
   }
+
   for (const entry of readDirectoryEntries(warpAppData, (entry) => entry.isDirectory())) {
     addDedupeDirectory(
       directories,
@@ -113,6 +122,7 @@ function getWindowsWarpThemeDirectories(home: string): string[] {
       path.win32
     )
   }
+
   return directories
 }
 
@@ -142,14 +152,17 @@ export function getWarpThemeDirectories(): string[] {
 export function warpThemeSourceLabelForDirectory(directoryPath: string): string {
   const parts = directoryPath.split(/[\\/]+/).filter(Boolean)
   const themesIndex = parts.findLastIndex((part) => part.toLowerCase() === 'themes')
+
   if (themesIndex === -1) {
     return parts.at(-1) || 'Warp themes'
   }
 
   const previousPart = parts[themesIndex - 1]
   const windowsAppPart = parts[themesIndex - 2]
+
   if (previousPart?.toLowerCase() === 'data' && windowsAppPart) {
     return windowsAppPart
   }
+
   return previousPart || 'Warp themes'
 }

@@ -257,6 +257,7 @@ export async function rethrowAfterAgentSessionAcquisitionCleanup(
   cause: unknown
 ): Promise<never> {
   let released: boolean
+
   try {
     released = (await adapter.releaseAcquisition?.({ sessionId })) === true
   } catch (cleanupError) {
@@ -270,8 +271,10 @@ export async function rethrowAfterAgentSessionAcquisitionCleanup(
           new AggregateError([cause, cleanupError], 'agent session acquisition cleanup failed')
         )
   }
+
   if (released) {
     throw cause
   }
+
   throw new AgentSessionAcquisitionExitUnprovenError(cause)
 }

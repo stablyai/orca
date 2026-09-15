@@ -18,7 +18,9 @@ export function RepoForkIndicator({
   if (!upstream) {
     return null
   }
+
   const label = `Fork of ${upstream.owner}/${upstream.repo}`
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>

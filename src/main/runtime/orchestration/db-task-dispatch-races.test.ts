@@ -17,9 +17,11 @@ const harnesses: DatabaseHarness[] = []
 afterEach(() => {
   vi.restoreAllMocks()
   const closed = harnesses.splice(0)
+
   for (const harness of closed) {
     harness.db.close()
   }
+
   for (const dir of new Set(closed.map((harness) => harness.dir))) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -29,10 +31,12 @@ describe('Task/Dispatch concurrency', () => {
   it('reads a concurrent Task result before applying an explicit status correction', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
+
     const task = first.db.createTask({
       runId: 'run_legacy_local',
       spec: 'concurrent status winner'
     })
+
     const sqlite = sqliteFor(first.db)
     const exec = sqlite.exec.bind(sqlite)
     let concurrentWon = false
@@ -43,6 +47,7 @@ describe('Task/Dispatch concurrency', () => {
           concurrent.db.updateTaskStatus(task.id, 'failed', 'concurrent winner')
         ).toMatchObject({ status: 'failed' })
       }
+
       return exec(sql)
     })
 
@@ -67,12 +72,14 @@ describe('Task/Dispatch concurrency', () => {
     let concurrentBlocked = false
     vi.spyOn(sqlite, 'exec').mockImplementation((sql) => {
       const result = exec(sql)
+
       if (!concurrentBlocked && sql === 'BEGIN IMMEDIATE') {
         concurrentBlocked = true
         expect(() => concurrent.db.updateTaskStatus(task.id, 'failed', 'concurrent loser')).toThrow(
           /database is locked/
         )
       }
+
       return result
     })
 
@@ -116,16 +123,19 @@ describe('Task/Dispatch concurrency', () => {
   it('does not let stale failure overwrite a completed worker report', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
+
     const task = first.db.createTask({
       runId: 'run_legacy_local',
       spec: 'worker completion wins'
     })
+
     const started = first.db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {}
     })
+
     const capability = first.db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',
@@ -136,6 +146,7 @@ describe('Task/Dispatch concurrency', () => {
       setupState: 'not_applicable',
       terminalOwnership: 'created'
     })
+
     first.db.markWorkerDispatchReady(started.dispatch.id)
     const sqlite = sqliteFor(first.db)
     const exec = sqlite.exec.bind(sqlite)
@@ -152,6 +163,7 @@ describe('Task/Dispatch concurrency', () => {
           })
         ).toMatchObject({ action: 'settled', duplicate: false })
       }
+
       return exec(sql)
     })
 
@@ -183,10 +195,12 @@ describe('Task/Dispatch concurrency', () => {
 
   it('keeps nested dispatch failure atomic with its caller transaction', () => {
     const { db } = createDatabase()
+
     const task = db.createTask({
       runId: 'run_legacy_local',
       spec: 'nested atomic failure'
     })
+
     const dispatch = createRootDispatch(db, task.id, 'term_worker')
     const sqlite = sqliteFor(db)
 
@@ -207,26 +221,31 @@ describe('Task/Dispatch concurrency', () => {
   it('serializes reminted-pane worker authority claims', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
+
     const losingTask = first.db.createTask({
       runId: 'run_legacy_local',
       spec: 'losing worker'
     })
+
     const winningTask = first.db.createTask({
       runId: 'run_legacy_local',
       spec: 'winning worker'
     })
+
     const loser = first.db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: losingTask.id,
       startOptions: {}
     })
+
     const winner = concurrent.db.createStartingWorkerDispatch({
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: winningTask.id,
       startOptions: {}
     })
+
     const sqlite = sqliteFor(first.db)
     const exec = sqlite.exec.bind(sqlite)
     let winningCapability: string | undefined
@@ -243,6 +262,7 @@ describe('Task/Dispatch concurrency', () => {
           terminalOwnership: 'created'
         })
       }
+
       return exec(sql)
     })
 
@@ -293,6 +313,7 @@ function createDatabase(path?: string): DatabaseHarness {
   const dbPath = path ?? join(ownedDir, 'orchestration.db')
   const harness = { db: new OrchestrationDb(dbPath), dir: ownedDir, path: dbPath }
   harnesses.push(harness)
+
   return harness
 }
 

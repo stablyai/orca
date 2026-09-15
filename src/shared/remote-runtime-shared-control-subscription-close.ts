@@ -25,6 +25,7 @@ export function closeSharedControlConnectionSubscription(args: {
         send: args.send
       })
   })
+
   if (subscription && !args.subscriptions.has(args.requestId)) {
     args.retiredRequestIds.retire(args.requestId)
   }
@@ -38,6 +39,7 @@ export function sendRetiredSharedControlCleanupRequest(args: {
   send: (payload: unknown) => boolean
 }): void {
   const requestId = sendSharedControlCleanupRequest(args)
+
   if (requestId) {
     args.retiredRequestIds.retire(requestId)
   }

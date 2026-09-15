@@ -15,11 +15,15 @@ import {
 import { FAKE_AGENT_PASTE_END_SCANNER_SOURCE } from './helpers/fake-agent-paste-end-scanner'
 
 const fakeCliDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-settlement-release-'))
+
 const cliLedgerPath = path.join(fakeCliDir, 'cli.jsonl')
+
 const cliEntry = path.join(process.cwd(), 'out', 'cli', 'index.js')
+
 const fakeCodexCommand = buildFakeAgentCommandOverride(
   path.join(fakeCliDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
 )
+
 const fakeCodexSource = `
 const { appendFileSync } = require('node:fs')
 const { spawnSync } = require('node:child_process')
@@ -111,6 +115,7 @@ function readCliLedger(): CliLedgerEntry[] {
   if (!existsSync(cliLedgerPath)) {
     return []
   }
+
   return readFileSync(cliLedgerPath, 'utf8')
     .split(/\r?\n/)
     .filter(Boolean)
@@ -159,30 +164,37 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
   const coordinatorPane = await waitForActivePaneHookDescriptor(orcaPage)
   const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
   const client = new RuntimeClient(userDataDir, 30_000, null, null)
+
   const coordinator = await client.call<{ terminal: { handle: string } }>('terminal.resolvePane', {
     paneKey: coordinatorPane.paneKey
   })
+
   const run = await client.call<{ run: { id: string } }>('orchestration.runCreate', {
     objective: 'Compiled CLI settlement and release E2E',
     from: coordinator.result.terminal.handle
   })
+
   const task = await client.call<{ task: { id: string } }>('orchestration.taskCreate', {
     spec: 'Respond ACK and await the completion marker.',
     run: run.result.run.id,
     callerTerminalHandle: coordinator.result.terminal.handle
   })
+
   const coordinatorTerminal = await client.call<{ terminal: { worktreeId: string } }>(
     'terminal.show',
     { terminal: coordinator.result.terminal.handle }
   )
+
   await expect
     .poll(async () => {
       const listed = await client.call<{ worktrees: { id: string }[] }>('worktree.list', {})
+
       return listed.result.worktrees.some(
         (worktree) => worktree.id === coordinatorTerminal.result.terminal.worktreeId
       )
     })
     .toBe(true)
+
   const started = await client.call<{ effects: { kind: string; role?: string; id?: string }[] }>(
     'orchestration.workerStart',
     {
@@ -192,32 +204,40 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
       timeoutMs: 15_000
     }
   )
+
   const workerHandle = started.result.effects.find(
     (effect) => effect.kind === 'terminal' && effect.role === 'agent'
   )?.id
+
   expect(workerHandle).toBeTruthy()
 
   let worker = (
     await client.call<RuntimeTerminalListResult>('terminal.list')
   ).result.terminals.find((terminal) => terminal.handle === workerHandle)
+
   await expect
     .poll(async () => {
       const listed = await client.call<RuntimeTerminalListResult>('terminal.list')
       worker = listed.result.terminals.find((terminal) => terminal.handle === workerHandle)
+
       if (!worker) {
         return ''
       }
+
       const read = await client.call<{ terminal: RuntimeTerminalRead }>('terminal.read', {
         terminal: worker.handle,
         limit: 200
       })
+
       return read.result.terminal.tail.join('\n')
     })
     .toContain('ACK')
+
   const dispatch = await client.call<{ dispatch: { id: string; status: string } | null }>(
     'orchestration.dispatchShow',
     { task: task.result.task.id }
   )
+
   expect(dispatch.result.dispatch?.status).toBe('dispatched')
 
   const baseMarker = {
@@ -225,6 +245,7 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
     taskId: task.result.task.id,
     dispatchId: dispatch.result.dispatch!.id
   }
+
   await client.call('terminal.send', {
     terminal: workerHandle,
     text: `ORCA_E2E_WORKER_DONE:${encodeWorkerDone({ ...baseMarker, mismatch: true })}`,
@@ -237,10 +258,12 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
     ok: false,
     error: { code: 'dispatch_capability_invalid' }
   })
+
   const stillDispatched = await client.call<{ dispatch: { status: string } | null }>(
     'orchestration.dispatchShow',
     { task: task.result.task.id }
   )
+
   expect(stillDispatched.result.dispatch?.status).toBe('dispatched')
 
   await client.call('terminal.send', {
@@ -261,6 +284,7 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
         'orchestration.dispatchShow',
         { task: task.result.task.id }
       )
+
       return current.result.dispatch?.status
     })
     .toBe('completed')
@@ -269,10 +293,12 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
   await expect
     .poll(async () => {
       const listed = await client.call<RuntimeTerminalListResult>('terminal.list')
+
       return listed.result.terminals.some((terminal) => terminal.handle === workerHandle)
     })
     .toBe(false)
   const db = new Database(path.join(userDataDir, 'orchestration.db'))
+
   try {
     db.prepare(
       `UPDATE worker_terminal_resources
@@ -291,12 +317,14 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
     dispatch.result.dispatch!.id,
     '--json'
   ])
+
   expect(retained.status).toBe(0)
   expect(JSON.parse(retained.stdout)).toMatchObject({
     ok: true,
     result: { state: 'retained', reason: 'external_terminal', processAction: 'none' }
   })
   const recovery = new Database(path.join(userDataDir, 'orchestration.db'))
+
   try {
     expect(
       recovery
@@ -327,12 +355,14 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
     dispatch.result.dispatch!.id,
     '--json'
   ])
+
   expect(released.status).toBe(0)
   expect.soft(JSON.parse(released.stdout)).toMatchObject({
     ok: true,
     result: { state: 'released', processAction: 'none' }
   })
   const verified = new Database(path.join(userDataDir, 'orchestration.db'))
+
   try {
     expect
       .soft(
@@ -347,9 +377,11 @@ test('compiled CLI rejects false completion then reconciles the dead retained wo
   } finally {
     verified.close()
   }
+
   const coordinatorStillLive = await client.call<RuntimeTerminalListResult>('terminal.list', {
     worktree: `id:${worktreeId}`
   })
+
   expect(
     coordinatorStillLive.result.terminals.some(
       (terminal) => terminal.handle === coordinator.result.terminal.handle

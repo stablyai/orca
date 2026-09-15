@@ -67,8 +67,11 @@ vi.mock('../pty-descendant-termination', () => ({
 // Store App Execution Alias stub — is covered in
 // windows-powershell-executable.test.ts.
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('./windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -92,9 +95,11 @@ vi.mock('./windows-pty-job-membership', () => ({
 vi.mock('../wsl', () => ({
   parseWslPath: (path: string) => {
     const match = path.match(/^\\\\wsl\.localhost\\([^\\]+)(.*)$/)
+
     if (!match) {
       return null
     }
+
     return {
       distro: match[1],
       linuxPath: (match[2] || '').replace(/\\/g, '/') || '/'
@@ -206,6 +211,7 @@ describe('LocalPtyProvider', () => {
 
     it('retains PTY delivery for unsupported local shells without leaking wrapper state', async () => {
       vi.useFakeTimers()
+
       try {
         process.env.SHELL = '/bin/sh'
         const command = "codex '--dangerously-bypass-approvals-and-sandbox'"
@@ -245,6 +251,7 @@ describe('LocalPtyProvider', () => {
     // default-shell spawn populates (spawnMock accumulates calls across tests).
     it('uses fallback shell readiness when startup-command shell spawn falls back', async () => {
       vi.useFakeTimers()
+
       try {
         process.env.SHELL = '/usr/bin/fish'
         spawnMock.mockImplementationOnce(() => {
@@ -285,6 +292,7 @@ describe('LocalPtyProvider', () => {
 
       await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
       const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void
+
       for (const chunk of chunks) {
         dataCallback(chunk)
       }
@@ -296,6 +304,7 @@ describe('LocalPtyProvider', () => {
       vi.useFakeTimers()
       const onData = vi.fn()
       provider.configure({ onData })
+
       try {
         await provider.spawn({ cols: 80, rows: 24, command: 'printf ready' })
         const dataCallback = mockProc.onData.mock.calls[0]?.[0] as (data: string) => void

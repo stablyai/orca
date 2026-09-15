@@ -9,14 +9,17 @@ const plan = vi.hoisted(() => ({
     | { status: 'unsupported'; message: string; reason: 'no-channel' },
   calls: [] as { worktreeId: string; filePath: string }[]
 }))
+
 vi.mock('@/lib/file-preview', () => ({
   getWorkspaceFilePreviewPlan: (_state: unknown, worktreeId: string, filePath: string) => {
     plan.calls.push({ worktreeId, filePath })
+
     return plan.result
   }
 }))
 
 const CURRENT = 'repo1::/home/alice/wt1'
+
 const OTHER = 'repo1::/home/alice/wt2'
 
 function makeState(): AppState {
@@ -47,6 +50,7 @@ describe('resolveWorkspaceDocAddressTarget', () => {
       CURRENT,
       '/home/alice/wt1/docs/report.html'
     )
+
     expect(target).toEqual({
       status: 'workspace-doc',
       docLocation: {
@@ -63,6 +67,7 @@ describe('resolveWorkspaceDocAddressTarget', () => {
       CURRENT,
       '/home/alice/wt2/index.html'
     )
+
     expect(target).toMatchObject({
       status: 'workspace-doc',
       docLocation: { worktreeId: OTHER, filePath: '/home/alice/wt2/index.html' }
@@ -73,6 +78,7 @@ describe('resolveWorkspaceDocAddressTarget', () => {
   // attributing them to it selects the wrong owner — and so the wrong host — for the grant.
   it('attributes a file in a nested workspace to the nested root, not the outer one', () => {
     const state = makeState()
+
     const stateWithNested = {
       ...state,
       allWorktrees: () => [...state.allWorktrees(), { id: 'repo2::/srv', path: '/srv' }]
@@ -159,6 +165,7 @@ describe('resolveWorkspaceDocAddressTarget', () => {
   // The current worktree outranks every other root, including a more specific one nested inside it.
   it('keeps the current worktree ahead of a workspace nested inside it', () => {
     const state = makeState()
+
     const nestedInsideCurrent = {
       ...state,
       allWorktrees: () => [
@@ -178,6 +185,7 @@ describe('resolveWorkspaceDocAddressTarget', () => {
 
   it('short-circuits for a folder workspace that is the current workspace', () => {
     const state = makeState()
+
     const folderCurrent = {
       ...state,
       getKnownWorktreeById: (id: string) =>

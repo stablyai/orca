@@ -24,13 +24,16 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
   if (options?.configFile) {
     args.push('-F', options.configFile)
   }
+
   args.push('-o', options?.gssapiOnly || options?.nonInteractive ? 'BatchMode=yes' : 'BatchMode=no')
+
   if (options?.gssapiOnly) {
     // Why: the probe must neither authenticate with a key nor open an OpenSSH
     // credential prompt; failure belongs to Orca's existing ssh2 prompt path.
     args.push('-o', 'GSSAPIAuthentication=yes')
     args.push('-o', 'PreferredAuthentications=gssapi-with-mic')
   }
+
   // Forward stdin/stdout for relay communication
   args.push('-T')
 
@@ -38,10 +41,12 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
   // eliminating the ~9s handshake overhead per command. Without this, each
   // spawnSystemSshCommand call opens a new TCP connection.
   const controlPath = getOrcaControlSocketPath(target, options)
+
   const forceDisableControlMaster =
     options?.disableControlMaster === true ||
     target.systemSshConnectionReuse === false ||
     (options?.gssapiOnly === true && controlPath === null)
+
   if (forceDisableControlMaster) {
     // Why: muxed OpenSSH forwards remain registered on the master after the
     // client exits. Also honors the per-target compatibility opt-out even if
@@ -114,6 +119,7 @@ export function getOrcaControlSocketPath(
   if (shouldDisableOrcaControlMaster(target, options)) {
     return null
   }
+
   return getControlSocketPath(target, options?.resolvedConfig, options?.gssapiOnly === true)
 }
 
@@ -121,27 +127,35 @@ export function getSystemSshBuildArgsFromOperationOptions(
   options: SystemSshBuildArgsOptions | undefined
 ): SystemSshBuildArgsOptions | undefined {
   const buildArgsOptions: SystemSshBuildArgsOptions = {}
+
   if (options?.configFile !== undefined) {
     buildArgsOptions.configFile = options.configFile
   }
+
   if (options?.resolvedConfig !== undefined) {
     buildArgsOptions.resolvedConfig = options.resolvedConfig
   }
+
   if (options?.disableControlMaster === true) {
     buildArgsOptions.disableControlMaster = true
   }
+
   if (options?.suppressOrcaControlMaster === true) {
     buildArgsOptions.suppressOrcaControlMaster = true
   }
+
   if (options?.gssapiOnly === true) {
     buildArgsOptions.gssapiOnly = true
   }
+
   if (options?.nonInteractive === true) {
     buildArgsOptions.nonInteractive = true
   }
+
   if (options?.aliasClaimedByConfig === false) {
     buildArgsOptions.aliasClaimedByConfig = false
   }
+
   return Object.keys(buildArgsOptions).length === 0 ? undefined : buildArgsOptions
 }
 
@@ -153,6 +167,7 @@ function shouldDisableOrcaControlMaster(
   // while OpenSSH routes them through mutable HostName/ProxyJump settings.
   const unresolvedConfigBackedTarget =
     isOpenSshConfigBackedTarget(target) && options?.resolvedConfig == null
+
   return (
     options?.disableControlMaster === true ||
     options?.suppressOrcaControlMaster === true ||
@@ -168,6 +183,7 @@ function hasUserConfiguredControlMaster(
   if (!resolvedConfig) {
     return false
   }
+
   // Why: ControlPersist/ControlPath alone can reuse a master someone else
   // created, but they do not create the setup-burst master Orca needs.
   return (
@@ -178,6 +194,7 @@ function hasUserConfiguredControlMaster(
 
 function hasEnabledControlMaster(value: string | undefined): boolean {
   const normalized = value?.trim().toLowerCase()
+
   return (
     normalized != null &&
     normalized !== '' &&
@@ -189,6 +206,7 @@ function hasEnabledControlMaster(value: string | undefined): boolean {
 
 function hasEnabledControlPath(value: string | undefined): boolean {
   const normalized = value?.trim().toLowerCase()
+
   return normalized != null && normalized !== '' && normalized !== 'none'
 }
 
@@ -202,12 +220,15 @@ function hasEnabledControlPath(value: string | undefined): boolean {
 function appendUnclaimedAliasEndpoint(args: string[], target: SshTarget): void {
   const alias = target.configHost
   const storedHost = target.host.trim()
+
   if (storedHost && alias && storedHost !== alias) {
     args.push('-o', `Hostname=${storedHost}`)
   }
+
   if (target.port && target.port !== 22) {
     args.push('-p', String(target.port))
   }
+
   if (target.username) {
     args.push('-l', target.username)
   }
@@ -217,6 +238,7 @@ function shouldUseOpenSshConfigHost(target: SshTarget): boolean {
   if (!target.configHost) {
     return false
   }
+
   return isOpenSshConfigBackedTarget(target)
 }
 
@@ -226,9 +248,11 @@ export function isOpenSshConfigBackedTarget(
   if (target.source === 'ssh-config') {
     return true
   }
+
   if (target.source === 'manual') {
     return false
   }
+
   // Why: legacy imported aliases have a distinct configHost; manual targets
   // historically stored configHost=host and still need explicit -p/-i args.
   return Boolean(target.configHost && target.configHost !== target.host)

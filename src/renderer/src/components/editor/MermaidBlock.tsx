@@ -11,10 +11,12 @@ type MermaidApi = typeof mermaidNamespace
 // sidebar comment-markdown path). Load it on first render and cache the promise
 // so subsequent diagrams reuse the same module instance.
 let mermaidModulePromise: Promise<MermaidApi> | null = null
+
 function loadMermaid(): Promise<MermaidApi> {
   if (!mermaidModulePromise) {
     mermaidModulePromise = import('mermaid').then((mod) => mod.default)
   }
+
   return mermaidModulePromise
 }
 
@@ -62,9 +64,11 @@ export default function MermaidBlock({
     const render = async (): Promise<void> => {
       try {
         const mermaid = await loadMermaid()
+
         if (cancelled) {
           return
         }
+
         // Why: Mermaid stores initialize() config in global module state. Apply
         // the config inside the same serialized render task so another
         // MermaidBlock cannot overwrite htmlLabels/theme between initialize()
@@ -72,6 +76,7 @@ export default function MermaidBlock({
         // broken foreignObject label path again.
         mermaid.initialize(getMermaidConfig(isDark, htmlLabels))
         const { svg } = await mermaid.render(`mermaid-${id}`, content)
+
         if (!cancelled && containerRef.current) {
           // Why: although mermaid uses DOMPurify internally, we add an explicit
           // sanitization pass as defense-in-depth against XSS in case upstream
@@ -94,6 +99,7 @@ export default function MermaidBlock({
     // Serialize render calls through a module-level queue to avoid race
     // conditions from concurrent mermaid.render() invocations.
     enqueueRender(render)
+
     return () => {
       cancelled = true
     }

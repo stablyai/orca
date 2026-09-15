@@ -8,6 +8,7 @@ afterEach(() => {
 
 it('prints a rejected lifecycle verdict as a JSON failure envelope', async () => {
   const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+
   const client = {
     call: vi.fn().mockResolvedValue({
       result: {
@@ -20,7 +21,9 @@ it('prints a rejected lifecycle verdict as a JSON failure envelope', async () =>
       }
     })
   }
+
   let rejection: unknown
+
   try {
     await ORCHESTRATION_HANDLERS['orchestration send']({
       flags: new Map([

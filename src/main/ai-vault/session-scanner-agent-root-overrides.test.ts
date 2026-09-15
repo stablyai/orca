@@ -12,6 +12,7 @@ import type { AiVaultScanOptions } from './session-scanner-types'
  */
 
 const NO_OPTIONS: AiVaultScanOptions = {}
+
 const NO_WSL: readonly string[] = []
 
 async function rootDirsFor(
@@ -19,14 +20,18 @@ async function rootDirsFor(
   env: Record<string, string>
 ): Promise<string[]> {
   vi.resetModules()
+
   for (const [key, value] of Object.entries(env)) {
     vi.stubEnv(key, value)
   }
+
   const sources = await import('./session-scanner-agent-sources.js')
   const source = sources.AI_VAULT_AGENT_SOURCES[agent]
+
   if (!source) {
     throw new Error(`no source table entry for ${agent}`)
   }
+
   return source.rootDirs(NO_OPTIONS, NO_WSL)
 }
 
@@ -95,6 +100,7 @@ describe('agent scan roots from environment overrides', () => {
         const roots = await rootDirsFor(testCase.agent, {
           [testCase.envVar]: `  ${testCase.absolute}  `
         })
+
         expect(roots[0]).toBe(testCase.absoluteRoot)
       })
 
@@ -107,6 +113,7 @@ describe('agent scan roots from environment overrides', () => {
       // reads it, so the walk starts somewhere arbitrary and has no depth, entry or time cap.
       it.each(RELATIVE_VALUES)('never yields a relative root for %j', async (value) => {
         const roots = await rootDirsFor(testCase.agent, { [testCase.envVar]: value })
+
         for (const root of roots) {
           expect(root).toBe(join(root))
           expect(root.startsWith('/') || /^[A-Za-z]:[\\/]/.test(root)).toBe(true)

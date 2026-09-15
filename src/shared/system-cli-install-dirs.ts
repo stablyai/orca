@@ -39,16 +39,21 @@ export function getSystemCliInstallDirectories(
   if (platform === 'win32') {
     return []
   }
+
   const directories: string[] = []
+
   if (platform === 'darwin') {
     // Apple Silicon Homebrew; Intel Homebrew shares /usr/local with npm's prefix.
     directories.push('/opt/homebrew/bin')
   }
+
   directories.push('/usr/local/bin')
+
   if (platform === 'linux') {
     // Gated like the seed: snap and Linuxbrew ship on Linux only, so elsewhere they are phantom stats.
     directories.push('/snap/bin', '/home/linuxbrew/.linuxbrew/bin')
   }
+
   directories.push(
     '/nix/var/nix/profiles/default/bin',
     join(homePath, '.nix-profile', 'bin'),
@@ -56,5 +61,6 @@ export function getSystemCliInstallDirectories(
     join(homePath, '.opencode', 'bin'),
     join(homePath, '.vite-plus', 'bin')
   )
+
   return directories
 }

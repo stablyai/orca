@@ -201,6 +201,7 @@ describe('OrcaRuntimeService', () => {
         }
       }
     })
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
@@ -225,6 +226,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => true,
       getForegroundProcess: async () => null
     })
+
     // Bind a live pty to the persisted 'host-tab' so rename resolves by handle.
     const created = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
       tabId: 'host-tab',
@@ -240,15 +242,18 @@ describe('OrcaRuntimeService', () => {
     const persistedTab = getSession().tabsByWorktree[TEST_WORKTREE_ID]!.find(
       (tab) => tab.id === 'host-tab'
     )!
+
     expect(persistedTab.customTitle).toBe('My Title')
 
     // A cold rehydrate keeps the renamed title.
     runtime['mobileSessionTabsByWorktree'].delete(TEST_WORKTREE_ID)
     runtime['hydrateHeadlessMobileSessionTabsFromWorkspaceSession'](TEST_WORKTREE_ID)
     const rehydrated = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
     const renamed = rehydrated.tabs.find(
       (tab) => tab.type === 'terminal' && tab.parentTabId === 'host-tab'
     )
+
     expect(renamed?.title).toBe('My Title')
   })
 
@@ -279,9 +284,11 @@ describe('OrcaRuntimeService', () => {
     runtime['mobileSessionTabsByWorktree'].delete(TEST_WORKTREE_ID)
     runtime['hydrateHeadlessMobileSessionTabsFromWorkspaceSession'](TEST_WORKTREE_ID)
     const rehydrated = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
     const surface = rehydrated.tabs.find(
       (tab) => tab.type === 'terminal' && tab.parentTabId === 'host-tab'
     )
+
     expect(surface?.type === 'terminal' && surface.parentLayout?.root).toMatchObject({
       type: 'split',
       ratio: 0.7
@@ -302,15 +309,18 @@ describe('OrcaRuntimeService', () => {
     const persisted = getSession().tabsByWorktree[TEST_WORKTREE_ID]!.find(
       (tab) => tab.id === 'host-tab'
     )!
+
     expect(persisted.color).toBe('#ff8800')
     expect(persisted.isPinned).toBe(true)
 
     runtime['mobileSessionTabsByWorktree'].delete(TEST_WORKTREE_ID)
     runtime['hydrateHeadlessMobileSessionTabsFromWorkspaceSession'](TEST_WORKTREE_ID)
     const rehydrated = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
     const surface = rehydrated.tabs.find(
       (tab) => tab.type === 'terminal' && tab.parentTabId === 'host-tab'
     )
+
     expect(surface?.type === 'terminal' && surface.color).toBe('#ff8800')
     expect(surface?.type === 'terminal' && surface.isPinned).toBe(true)
   })
@@ -330,6 +340,7 @@ describe('OrcaRuntimeService', () => {
       isPreview: false,
       isPinned: false
     }
+
     const session = makeWorkspaceSessionWithHeadlessTerminal({
       unifiedTabs: { [TEST_WORKTREE_ID]: [browserTab] },
       tabGroups: {
@@ -343,6 +354,7 @@ describe('OrcaRuntimeService', () => {
         ]
       }
     })
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
@@ -370,15 +382,18 @@ describe('OrcaRuntimeService', () => {
     const persisted = getSession().unifiedTabs?.[TEST_WORKTREE_ID]?.find(
       (tab) => tab.id === 'browser-page-1'
     )
+
     expect(persisted?.color).toBe('#3b82f6')
     expect(persisted?.isPinned).toBe(true)
 
     runtime['mobileSessionTabsByWorktree'].delete(TEST_WORKTREE_ID)
     runtime['hydrateHeadlessMobileSessionTabsFromWorkspaceSession'](TEST_WORKTREE_ID)
     const rehydrated = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
     const surface = rehydrated.tabs.find(
       (tab) => tab.type === 'browser' && tab.id === 'browser-page-1'
     )
+
     expect(surface?.type === 'browser' && surface.color).toBe('#3b82f6')
     expect(surface?.type === 'browser' && surface.isPinned).toBe(true)
 
@@ -391,15 +406,18 @@ describe('OrcaRuntimeService', () => {
     const cleared = getSession().unifiedTabs?.[TEST_WORKTREE_ID]?.find(
       (tab) => tab.id === 'browser-page-1'
     )
+
     expect(cleared?.color).toBeNull()
     expect(cleared?.isPinned).toBe(false)
 
     runtime['mobileSessionTabsByWorktree'].delete(TEST_WORKTREE_ID)
     runtime['hydrateHeadlessMobileSessionTabsFromWorkspaceSession'](TEST_WORKTREE_ID)
     const rehydratedCleared = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
     const clearedSurface = rehydratedCleared.tabs.find(
       (tab) => tab.type === 'browser' && tab.id === 'browser-page-1'
     )
+
     expect(clearedSurface?.type === 'browser' && clearedSurface.color).toBeNull()
     expect(clearedSurface?.type === 'browser' && clearedSurface.isPinned).toBe(false)
   })
@@ -417,20 +435,25 @@ describe('OrcaRuntimeService', () => {
     const persisted = getSession().tabsByWorktree[TEST_WORKTREE_ID]!.find(
       (tab) => tab.id === 'host-tab'
     )!
+
     expect(persisted.viewMode).toBe('chat')
 
     const live = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
     const liveSurface = live.tabs.find(
       (tab) => tab.type === 'terminal' && tab.parentTabId === 'host-tab'
     )
+
     expect(liveSurface?.type === 'terminal' && liveSurface.viewMode).toBe('chat')
 
     runtime['mobileSessionTabsByWorktree'].delete(TEST_WORKTREE_ID)
     runtime['hydrateHeadlessMobileSessionTabsFromWorkspaceSession'](TEST_WORKTREE_ID)
     const rehydrated = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
     const surface = rehydrated.tabs.find(
       (tab) => tab.type === 'terminal' && tab.parentTabId === 'host-tab'
     )
+
     expect(surface?.type === 'terminal' && surface.viewMode).toBe('chat')
   })
 
@@ -542,6 +565,7 @@ describe('OrcaRuntimeService', () => {
       tabId: 'browser-1',
       groupId: 'right'
     })
+
     expect(afterCreate.find((g) => g.id === 'right')!.tabOrder).toContain('browser-1')
     expect(afterCreate.find((g) => g.id === 'left')!.tabOrder).not.toContain('browser-1')
 
@@ -550,13 +574,16 @@ describe('OrcaRuntimeService', () => {
       { id: 'left', activeTabId: 'web-terminal-a', tabOrder: ['web-terminal-a'] },
       { id: 'right', activeTabId: 'web-terminal-b', tabOrder: ['web-terminal-b'] }
     ]
+
     const priorAssignment = collectBrowserGroupAssignment(afterCreate, ['browser-1'])
+
     const afterRebuild = appendBrowserTabOrder(
       rebuiltGroups,
       ['browser-1'],
       undefined,
       priorAssignment
     )
+
     expect(afterRebuild.find((g) => g.id === 'right')!.tabOrder).toContain('browser-1')
     expect(afterRebuild.find((g) => g.id === 'left')!.tabOrder).not.toContain('browser-1')
   })
@@ -631,8 +658,10 @@ describe('OrcaRuntimeService', () => {
         [{ id: `tab-${index}`, ptyId: `${TEST_REPO_ID}::/tmp/worktree-${index}@@pty` }]
       ])
     )
+
     const session = { tabsByWorktree, terminalLayoutsByTabId: {} }
     const getWorkspaceSession = vi.fn(() => session)
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getWorkspaceSession,
@@ -664,8 +693,10 @@ describe('OrcaRuntimeService', () => {
         [{ id: `runtime-tab-${index}`, ptyId: `serve-runtime-${index}` }]
       ])
     )
+
     const session = { tabsByWorktree, terminalLayoutsByTabId: {} }
     const getWorkspaceSession = vi.fn(() => session)
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getWorkspaceSession,

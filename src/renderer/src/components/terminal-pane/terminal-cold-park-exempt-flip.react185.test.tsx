@@ -32,6 +32,7 @@ const harness = vi.hoisted(() => ({
 
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
+
   const useAppStore = create(() => ({
     activeGroupIdByWorktree: {} as Record<string, string | undefined>,
     groupsByWorktree: {} as Record<string, TabGroup[]>,
@@ -49,6 +50,7 @@ vi.mock('../../store', async () => {
     reconcileWorktreeTabModel: () => ({ renderableTabCount: 2 }),
     setActiveWorktree: () => {}
   }))
+
   return { useAppStore }
 })
 
@@ -70,18 +72,22 @@ vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
 vi.mock('./TerminalOverlaySlot', async () => {
   const { useEffect } = await vi.importActual<typeof ReactModule>('react')
   const { useAppStore } = await import('../../store')
+
   type SlotStoreState = {
     tabsByWorktree: Record<string, TerminalTab[]>
     terminalLayoutsByTabId: Record<string, unknown>
   }
+
   return {
     TerminalOverlaySlot: ({ terminalTabId }: { terminalTabId: string }) => {
       harness.slotRenders += 1
       useEffect(() => {
         harness.slotMounts += 1
+
         if (harness.slotMounts > 400) {
           throw new Error('harness runaway: slot remount storm exceeded 400 mounts')
         }
+
         ;(
           useAppStore as unknown as {
             setState: (update: (state: SlotStoreState) => Partial<SlotStoreState>) => void
@@ -96,6 +102,7 @@ vi.mock('./TerminalOverlaySlot', async () => {
           terminalLayoutsByTabId: { ...state.terminalLayoutsByTabId }
         }))
       }, [terminalTabId])
+
       return null
     }
   }
@@ -105,6 +112,7 @@ vi.mock('./terminal-parked-tab-watchers', async () => {
   const actual = await vi.importActual<typeof ParkedTabWatchersModule>(
     './terminal-parked-tab-watchers'
   )
+
   return {
     ...actual,
     syncParkedTerminalTabWatchers: (args: {
@@ -112,15 +120,19 @@ vi.mock('./terminal-parked-tab-watchers', async () => {
       parkedTabIds: ReadonlySet<string>
     }) => {
       harness.syncCalls += 1
+
       if (harness.syncCalls > 400) {
         throw new Error('harness runaway: watcher sync exceeded 400 reconciliations')
       }
+
       harness.observedParkedCounts.add(args.parkedTabIds.size)
+
       for (const tabId of Array.from(harness.watcherEntries)) {
         if (!args.parkedTabIds.has(tabId)) {
           harness.watcherEntries.delete(tabId)
         }
       }
+
       for (const tab of args.tabs) {
         if (args.parkedTabIds.has(tab.id)) {
           harness.watcherEntries.add(tab.id)
@@ -141,7 +153,9 @@ import {
 } from '../terminal/terminal-provider-snapshot-capability'
 
 const TAB_IDS = ['tab-a', 'tab-b'] as const
+
 const GROUP_ID = 'group-a'
+
 const LEAF_IDS: Record<string, string> = {
   'tab-a': '11111111-2222-4333-8444-55555555555a',
   'tab-b': '11111111-2222-4333-8444-55555555555b'
@@ -244,6 +258,7 @@ describe('force-park exemption flips under capability changes', () => {
     } catch {
       // A failed commit leaves no mounted tree to clean up.
     }
+
     root = undefined
     container.remove()
     clearTerminalProviderSnapshotCapabilities()
@@ -253,6 +268,7 @@ describe('force-park exemption flips under capability changes', () => {
     root = createRoot(container)
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     let thrown: unknown = null
+
     try {
       act(() => {
         root!.render(
@@ -269,6 +285,7 @@ describe('force-park exemption flips under capability changes', () => {
       })
 
       const allPtyIds = TAB_IDS.map(ptyIdFor)
+
       for (let flip = 0; flip < 6; flip += 1) {
         const syncCallsBefore = harness.syncCalls
         await act(async () => {
@@ -283,6 +300,7 @@ describe('force-park exemption flips under capability changes', () => {
             // Daemon restart: verdicts reset to unknown (exempt again).
             clearTerminalProviderSnapshotCapabilities()
           }
+
           touchStoreTitles(`flip-${flip}`)
         })
         expect(harness.syncCalls - syncCallsBefore).toBeLessThan(20)
@@ -290,6 +308,7 @@ describe('force-park exemption flips under capability changes', () => {
     } catch (error) {
       thrown = error
     }
+
     consoleError.mockRestore()
 
     expect(thrown).toBeNull()

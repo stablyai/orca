@@ -33,7 +33,9 @@ export function classifySshPtyFrameRejection(
       action: 'retire-and-reattach-delivery'
     })
   }
+
   const source = payload.source
+
   if (!source) {
     return owner?.outputFlowControl
       ? Object.freeze({
@@ -42,6 +44,7 @@ export function classifySshPtyFrameRejection(
         })
       : null
   }
+
   if (!owner?.outputFlowControl) {
     return payload.sourceRejected
       ? Object.freeze({
@@ -50,8 +53,10 @@ export function classifySshPtyFrameRejection(
         })
       : null
   }
+
   const staleClient = source.clientGeneration !== owner.clientGeneration
   const staleOwner = source.ownerGeneration !== owner.ownerGeneration
+
   if (staleClient || staleOwner) {
     return Object.freeze({
       reason:
@@ -63,12 +68,14 @@ export function classifySshPtyFrameRejection(
       action: 'retire-and-reattach-delivery'
     })
   }
+
   if (payload.sourceRejected) {
     return Object.freeze({
       reason: 'source-range-invalid',
       action: 'retire-and-reattach-delivery'
     })
   }
+
   return null
 }
 
@@ -91,10 +98,13 @@ export class SshPtyFrameRejectionLog {
       this.generation = payload.providerGeneration
       this.loggedKeys.clear()
     }
+
     const key = `${payload.id}\0${rejection.reason}`
+
     if (this.loggedKeys.has(key) || this.loggedKeys.size >= SSH_PTY_FRAME_REJECTION_LOG_KEY_LIMIT) {
       return
     }
+
     this.loggedKeys.add(key)
     console.warn('[ssh-relay-session] Rejected PTY delivery', {
       ptyId: payload.id,

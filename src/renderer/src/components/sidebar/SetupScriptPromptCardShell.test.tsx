@@ -29,6 +29,7 @@ describe('SetupScriptPromptCardShell', () => {
         />
       </TooltipProvider>
     )
+
     const layer = view.container.querySelector('[data-setup-script-prompt-layer]')
     const surface = layer?.firstElementChild
 

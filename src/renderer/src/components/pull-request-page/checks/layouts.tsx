@@ -44,6 +44,7 @@ export function ChecksTabLayouts({
       </>
     )
   }
+
   if (listLength === 0) {
     if (variant === 'page') {
       return (
@@ -66,6 +67,7 @@ export function ChecksTabLayouts({
         </div>
       )
     }
+
     return (
       <>
         {compactHeader}
@@ -78,8 +80,10 @@ export function ChecksTabLayouts({
       </>
     )
   }
+
   if (variant === 'page') {
     const countChips = getCheckCountChips(counts)
+
     return (
       <>
         <div className="flex flex-col gap-3 px-4 py-3">
@@ -123,6 +127,7 @@ export function ChecksTabLayouts({
       </>
     )
   }
+
   return (
     <>
       {compactHeader}

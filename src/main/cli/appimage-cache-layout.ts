@@ -15,9 +15,11 @@ export function resolveCachedAppImagePayloadRoot(
   if (!isAbsolute(candidatePath)) {
     return null
   }
+
   const resolvedCacheRoot = resolve(cacheRootPath)
   const segments = relative(resolvedCacheRoot, resolve(candidatePath)).split(sep)
   const [namespaceKey, generationKey, resources, bin, candidateLauncherName] = segments
+
   if (
     segments.length !== 5 ||
     !namespaceKey ||
@@ -30,5 +32,6 @@ export function resolveCachedAppImagePayloadRoot(
   ) {
     return null
   }
+
   return join(resolvedCacheRoot, namespaceKey, generationKey)
 }

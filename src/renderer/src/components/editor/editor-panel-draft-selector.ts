@@ -3,6 +3,7 @@ import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor'
 
 type EditorDraftState = Pick<AppState, 'editorDrafts'>
+
 type EditorPanelDraftSelector = (state: EditorDraftState) => Record<string, string>
 
 const EMPTY_EDITOR_PANEL_DRAFTS = Object.freeze({}) as Record<string, string>
@@ -28,6 +29,7 @@ export function createEditorPanelDraftSelector(
         )
       )
     : []
+
   let previousDrafts: AppState['editorDrafts'] | null = null
   let previousSelection = EMPTY_EDITOR_PANEL_DRAFTS
 
@@ -37,27 +39,34 @@ export function createEditorPanelDraftSelector(
     if (previousDrafts === state.editorDrafts) {
       return previousSelection
     }
+
     previousDrafts = state.editorDrafts
 
     const changed = fileIds.some((fileId) => {
       const draft = state.editorDrafts[fileId]
+
       return (
         draft !== previousSelection[fileId] ||
         (draft === undefined && Object.hasOwn(previousSelection, fileId))
       )
     })
+
     if (!changed) {
       return previousSelection
     }
 
     const nextSelection: Record<string, string> = {}
+
     for (const fileId of fileIds) {
       const draft = state.editorDrafts[fileId]
+
       if (draft !== undefined) {
         nextSelection[fileId] = draft
       }
     }
+
     previousSelection = nextSelection
+
     return previousSelection
   }
 }

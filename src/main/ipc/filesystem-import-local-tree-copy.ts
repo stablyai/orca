@@ -9,17 +9,21 @@ import { pipeline } from 'node:stream/promises'
  */
 export async function preScanForSymlinks(dirPath: string): Promise<boolean> {
   const entries = await readdir(dirPath, { withFileTypes: true })
+
   for (const entry of entries) {
     if (entry.isSymbolicLink()) {
       return true
     }
+
     if (entry.isDirectory()) {
       const childPath = join(dirPath, entry.name)
+
       if (await preScanForSymlinks(childPath)) {
         return true
       }
     }
   }
+
   return false
 }
 
@@ -31,20 +35,25 @@ export async function preScanForSymlinks(dirPath: string): Promise<boolean> {
 export async function recursiveCopyDir(srcDir: string, destDir: string): Promise<void> {
   await mkdir(destDir, { recursive: false })
   const entries = await readdir(srcDir, { withFileTypes: true })
+
   for (const entry of entries) {
     const srcPath = join(srcDir, entry.name)
     const dstPath = join(destDir, entry.name)
     const statResult = await lstat(srcPath)
+
     if (statResult.isSymbolicLink()) {
       throw new Error(`Symlink not allowed in '${entry.name}'`)
     }
+
     if (statResult.isDirectory()) {
       await recursiveCopyDir(srcPath, dstPath)
       continue
     }
+
     if (!statResult.isFile()) {
       throw new Error(`Unsupported file type in '${entry.name}'`)
     }
+
     await copyLocalFileNoFollow(srcPath, dstPath, statResult)
   }
 }
@@ -55,9 +64,11 @@ export async function copyLocalFileNoFollow(
   statResult?: Awaited<ReturnType<typeof lstat>>
 ): Promise<void> {
   const beforeOpenStat = statResult ?? (await lstat(srcPath))
+
   if (beforeOpenStat.isSymbolicLink()) {
     throw new Error(`Symlink not allowed in '${basename(srcPath)}'`)
   }
+
   if (!beforeOpenStat.isFile()) {
     throw new Error(`Unsupported file type in '${basename(srcPath)}'`)
   }
@@ -65,8 +76,10 @@ export async function copyLocalFileNoFollow(
   let destinationCreated = false
   const sourceHandle = await open(srcPath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   let destinationHandle: Awaited<ReturnType<typeof open>> | null = null
+
   try {
     const openedStat = await sourceHandle.stat()
+
     if (
       !openedStat.isFile() ||
       (typeof beforeOpenStat.size === 'number' && openedStat.size !== beforeOpenStat.size) ||
@@ -81,6 +94,7 @@ export async function copyLocalFileNoFollow(
     ) {
       throw new Error(`File changed during import: '${basename(srcPath)}'`)
     }
+
     // Why: copyFile(path, path) would follow a source symlink if the source is
     // swapped after validation. Streaming from an O_NOFOLLOW handle keeps the
     // authorized file identity pinned for the copy.
@@ -91,6 +105,7 @@ export async function copyLocalFileNoFollow(
     if (destinationCreated) {
       await unlink(dstPath).catch(() => {})
     }
+
     throw error
   } finally {
     await sourceHandle.close().catch(() => {})

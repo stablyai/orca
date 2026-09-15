@@ -10,6 +10,7 @@ const enrolment = vi.hoisted(() => ({ live: 0 }))
 
 vi.mock('./webview-drag-passthrough', async (importActual) => {
   const actual = await importActual<typeof DragPassthroughModule>()
+
   return {
     ...actual,
     registerWebviewDragPassthroughSurface: (
@@ -18,11 +19,13 @@ vi.mock('./webview-drag-passthrough', async (importActual) => {
       enrolment.live += 1
       const release = actual.registerWebviewDragPassthroughSurface(surface)
       let released = false
+
       return () => {
         if (!released) {
           released = true
           enrolment.live -= 1
         }
+
         release()
       }
     }
@@ -40,6 +43,7 @@ function startDrag(): () => void {
     release = acquireWebviewsDragPassthrough()
   })
   openReleases.push(release)
+
   return () => act(() => release())
 }
 
@@ -51,6 +55,7 @@ afterEach(() => {
   for (const release of openReleases.splice(0)) {
     release()
   }
+
   cleanup()
 })
 

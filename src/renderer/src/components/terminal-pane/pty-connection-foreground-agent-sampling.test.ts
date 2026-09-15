@@ -45,8 +45,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -67,6 +70,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -76,6 +80,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -96,6 +101,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -106,9 +112,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -118,9 +126,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -129,6 +139,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -187,6 +198,7 @@ describe('connectPanePty', () => {
       transport.getPtyId.mockImplementation(() => connectedPtyId)
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         connectedPtyId = sessionId ?? null
+
         return sessionId
           ? {
               id: sessionId,
@@ -196,12 +208,14 @@ describe('connectPanePty', () => {
           : null
       })
       transportFactoryQueue.push(transport)
+
       const deps = createDeps({
         tabId,
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: ptyId },
         ...(args.isVisibleRef ? { isVisibleRef: args.isVisibleRef } : {})
       })
+
       const binding = connectPanePty(
         createPane(1) as never,
         createManager(1) as never,
@@ -211,8 +225,10 @@ describe('connectPanePty', () => {
         sampleForegroundAgentOnFocus: () => void
         requestWindowsShiftEnterReconfirmation: () => void
       }
+
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks(20)
+
       return { binding, deps, transport, cacheKey: makePaneKey(tabId, LEAF_1) }
     }
 
@@ -251,9 +267,11 @@ describe('connectPanePty', () => {
       connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks(20)
+
       const spawnHandler = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
+
       spawnHandler?.(ptyId)
       await advanceVisibleForegroundRead()
 
@@ -295,9 +313,11 @@ describe('connectPanePty', () => {
 
     it('does not confirm foreground routing for a Windows WSL pane', async () => {
       vi.useFakeTimers()
+
       const restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+
       const ptyId = 'pty-wsl-no-confirm'
       const tabId = `tab-${ptyId}`
       mockStoreState.tabsByWorktree = {
@@ -309,6 +329,7 @@ describe('connectPanePty', () => {
           ptyId,
           tabId
         })
+
         mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
           agent: 'droid',
           routingTrusted: true,
@@ -333,9 +354,11 @@ describe('connectPanePty', () => {
 
     it('does not confirm foreground routing for a global Windows WSL shell', async () => {
       vi.useFakeTimers()
+
       const restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+
       const ptyId = 'pty-global-wsl-no-confirm'
       const tabId = `tab-${ptyId}`
       mockStoreState.tabsByWorktree = {
@@ -351,6 +374,7 @@ describe('connectPanePty', () => {
           ptyId,
           tabId
         })
+
         mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
           agent: 'droid',
           routingTrusted: true,
@@ -376,10 +400,12 @@ describe('connectPanePty', () => {
       vi.useFakeTimers()
       const ptyId = 'pty-droid-shift-enter-burst'
       const tabId = `tab-${ptyId}`
+
       const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({
         ptyId,
         tabId
       })
+
       mockStoreState.paneForegroundAgentByPaneKey[cacheKey] = {
         agent: 'droid',
         routingTrusted: true,
@@ -495,6 +521,7 @@ describe('connectPanePty', () => {
         tabId,
         launchAgent: 'droid'
       })
+
       expect(mockStoreState.registerAgentLaunchConfig).not.toHaveBeenCalled()
       expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
         agent: 'droid',
@@ -531,6 +558,7 @@ describe('connectPanePty', () => {
         tabId,
         launchAgent: 'droid'
       })
+
       expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, cacheKey)).toBe('alt-enter')
 
       await vi.advanceTimersByTimeAsync(
@@ -585,6 +613,7 @@ describe('connectPanePty', () => {
           agentEnv: {}
         }
       })
+
       await vi.advanceTimersByTimeAsync(300)
       await flushAsyncTicks(20)
 
@@ -619,6 +648,7 @@ describe('connectPanePty', () => {
         isVisibleRef,
         launchConfig: { agentCommand: 'droid', agentArgs: '', agentEnv: {} }
       })
+
       await vi.advanceTimersByTimeAsync(300)
       await flushAsyncTicks(20)
       // Launch metadata starts confirmation but is never byte-routing authority.
@@ -740,15 +770,18 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
           dataCallbackRef.current = callbacks?.onData ?? null
+
           return sessionId ? { id: sessionId } : null
         }
       )
       transportFactoryQueue.push(transport)
+
       const deps = createDeps({
         tabId,
         restoredLeafId: LEAF_1,
         restoredPtyIdByLeafId: { [LEAF_1]: ptyId }
       })
+
       connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
       await vi.advanceTimersByTimeAsync(20)
       await flushAsyncTicks(20)
@@ -778,6 +811,7 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ sessionId, callbacks }: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
           dataCallbackRef.current = callbacks?.onData ?? null
+
           return sessionId ? { id: sessionId } : null
         }
       )
@@ -790,6 +824,7 @@ describe('connectPanePty', () => {
         launchConfig: { agentArgs: '', agentEnv: {} },
         identity: { agentType: 'droid' }
       }
+
       const deps = createDeps({
         tabId,
         restoredLeafId: LEAF_1,

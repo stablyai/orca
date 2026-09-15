@@ -7,6 +7,7 @@ import { assertNonEmptyString, MAX_CAPABILITY_VERSIONS } from './pty-consumer-se
 
 export function assertPtyConsumerSessionOptions(options: PtyConsumerSessionOptions): void {
   assertNonEmptyString(options.serverBuildId, 'serverBuildId')
+
   if (
     options.outputFlowControl &&
     (!Number.isSafeInteger(options.outputFlowControl.maxWindowSu) ||
@@ -18,6 +19,7 @@ export function assertPtyConsumerSessionOptions(options: PtyConsumerSessionOptio
   ) {
     throw new Error('outputFlowControl support is invalid')
   }
+
   if (
     options.ownerGraceMs !== undefined &&
     (!Number.isSafeInteger(options.ownerGraceMs) || options.ownerGraceMs < 0)
@@ -31,9 +33,11 @@ export function intersectPtyConsumerCapabilities(
   support: PtyConsumerSessionOptions['outputFlowControl']
 ): Pick<PtyConsumerSessionGrant, 'capabilities'> {
   const offer = hello.capabilities?.outputFlowControl
+
   if (!offer || !support || !offer.versions.includes(1) || !support.versions.includes(1)) {
     return {}
   }
+
   return {
     capabilities: {
       outputFlowControl: {

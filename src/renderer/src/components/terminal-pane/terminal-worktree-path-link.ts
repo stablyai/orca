@@ -8,9 +8,11 @@ export type WorktreeRootPathLink = {
 }
 
 type WorktreeRootPathState = Pick<AppState, 'worktreesByRepo'>
+
 type WorktreeRootPathIndex = Map<string, WorktreeRootPathLink | null>
 
 const EMPTY_WORKTREE_ROOT_PATH_INDEX: WorktreeRootPathIndex = new Map()
+
 const worktreeRootPathIndexCache = new WeakMap<
   WorktreeRootPathState['worktreesByRepo'],
   WorktreeRootPathIndex
@@ -26,26 +28,33 @@ function isDriveRoot(value: string): boolean {
 
 export function normalizeWorktreeRootPathForTerminalLink(path: string): string {
   const normalizedAbsolutePath = normalizeAbsolutePath(path)
+
   if (normalizedAbsolutePath) {
     return normalizedAbsolutePath.normalized
   }
 
   let end = path.length
+
   while (end > 1 && isPathSeparator(path[end - 1])) {
     const candidate = path.slice(0, end)
+
     if (candidate === '/' || isDriveRoot(candidate)) {
       break
     }
+
     end -= 1
   }
+
   return path.slice(0, end)
 }
 
 function getWorktreeRootPathComparisonKey(path: string): string {
   const normalizedAbsolutePath = normalizeAbsolutePath(path)
+
   if (normalizedAbsolutePath) {
     return normalizedAbsolutePath.comparisonKey
   }
+
   return normalizeWorktreeRootPathForTerminalLink(path)
 }
 
@@ -57,11 +66,13 @@ function getWorktreeRootPathIndex(
   }
 
   const cachedIndex = worktreeRootPathIndexCache.get(worktreesByRepo)
+
   if (cachedIndex) {
     return cachedIndex
   }
 
   const index: WorktreeRootPathIndex = new Map()
+
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const worktree of worktrees) {
       const comparisonKey = getWorktreeRootPathComparisonKey(worktree.path)
@@ -75,6 +86,7 @@ function getWorktreeRootPathIndex(
   }
 
   worktreeRootPathIndexCache.set(worktreesByRepo, index)
+
   return index
 }
 
@@ -83,5 +95,6 @@ export function resolveKnownWorktreeRootPathLink(
   state: WorktreeRootPathState = useAppStore.getState()
 ): WorktreeRootPathLink | null {
   const pathComparisonKey = getWorktreeRootPathComparisonKey(path)
+
   return getWorktreeRootPathIndex(state.worktreesByRepo).get(pathComparisonKey) ?? null
 }

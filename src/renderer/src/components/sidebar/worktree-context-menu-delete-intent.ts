@@ -26,6 +26,7 @@ export function createWorktreeContextMenuDeleteIntent(args: {
       }))
     }
   }
+
   if (args.folderWorkspaceId) {
     return {
       kind: 'folder',
@@ -33,22 +34,28 @@ export function createWorktreeContextMenuDeleteIntent(args: {
       ...(args.worktree.hostId ? { executionHostId: args.worktree.hostId } : {})
     }
   }
+
   const { id, instanceId, hostId } = args.worktree
+
   return { kind: 'worktree', worktree: { id, instanceId, hostId } }
 }
 
 export function runWorktreeContextMenuDeleteIntent(intent: WorktreeContextMenuDeleteIntent): void {
   if (intent.kind === 'batch') {
     runWorktreeBatchDelete(intent.worktrees)
+
     return
   }
+
   if (intent.kind === 'worktree') {
     runWorktreeDelete(intent.worktree.id, {
       expectedInstanceId: intent.worktree.instanceId,
       ...(intent.worktree.hostId ? { expectedHostId: intent.worktree.hostId } : {})
     })
+
     return
   }
+
   const state = useAppStore.getState()
   void state
     .deleteFolderWorkspace(
@@ -57,6 +64,7 @@ export function runWorktreeContextMenuDeleteIntent(intent: WorktreeContextMenuDe
     )
     .then((deleted) => {
       const current = useAppStore.getState()
+
       if (
         deleted &&
         current.activeWorktreeId === folderWorkspaceKey(intent.folderWorkspaceId) &&

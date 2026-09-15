@@ -45,6 +45,7 @@ describe('agent session fork context', () => {
     const capturedText = `${'old output\r\n'.repeat(
       20_000
     )}\x1b[31mnew context\x1b[0m\r\n${String.fromCharCode(96).repeat(5)}`
+
     const replaceSpy = vi.spyOn(String.prototype, 'replace')
     const matchAllSpy = vi.spyOn(String.prototype, 'matchAll')
     let prompt: string | null = null

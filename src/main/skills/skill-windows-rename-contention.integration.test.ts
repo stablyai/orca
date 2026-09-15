@@ -7,7 +7,9 @@ import { renameSkillPathWithWindowsRetry } from './skill-filesystem-retry'
 
 const RUN_REAL_WINDOWS =
   process.platform === 'win32' && process.env.ORCA_REAL_WINDOWS_SKILL_TEST === '1'
+
 const roots: string[] = []
+
 const lockers: ChildProcessWithoutNullStreams[] = []
 
 const LOCK_SCRIPT = [
@@ -31,8 +33,10 @@ function holdFile(path: string, durationMs: number) {
       }
     }
   )
+
   lockers.push(child)
   let ready = false
+
   const locked = new Promise<void>((resolve, reject) => {
     child.once('error', reject)
     child.stdout.on('data', (chunk: Buffer) => {
@@ -47,6 +51,7 @@ function holdFile(path: string, durationMs: number) {
       }
     })
   })
+
   const released = new Promise<void>((resolve, reject) => {
     child.once('error', reject)
     child.once('exit', (code) => {
@@ -59,6 +64,7 @@ function holdFile(path: string, durationMs: number) {
       }
     })
   })
+
   return { locked, released }
 }
 
@@ -70,6 +76,7 @@ async function fixture(label: string) {
   const file = join(source, 'SKILL.md')
   await mkdir(source)
   await writeFile(file, 'private skill')
+
   return { source, target, file }
 }
 
@@ -79,6 +86,7 @@ afterEach(async () => {
       child.kill()
     }
   }
+
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 

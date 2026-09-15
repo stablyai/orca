@@ -26,11 +26,13 @@ export type StablePaneOwner = {
   persistedIncarnationId?: string
   runtimeIncarnationId?: string
 }
+
 export type StablePaneAdoption = {
   result: PtySpawnResult
   owner: StablePaneOwner
   materialized?: true
 } | null
+
 export const stablePaneAdoptionsByOwnerKey = new Map<string, Promise<StablePaneAdoption>>()
 
 export function resolvePersistedStablePaneOwner(
@@ -42,21 +44,29 @@ export function resolvePersistedStablePaneOwner(
   if (!store || typeof store.getWorkspaceSession !== 'function') {
     return null
   }
+
   const parsed = parsePaneKey(paneKey)
+
   if (!parsed) {
     return null
   }
+
   const session = store.getWorkspaceSession(
     connectionId ? toSshExecutionHostId(connectionId) : undefined
   )
+
   const tab = session.tabsByWorktree?.[worktreeId]?.find(
     (candidate) => candidate.id === parsed.tabId && candidate.worktreeId === worktreeId
   )
+
   const ptyId = session.terminalLayoutsByTabId?.[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId]
+
   if (!tab || typeof ptyId !== 'string' || ptyId.length === 0) {
     return null
   }
+
   const incarnationId = session.terminalPtyIncarnationsByPaneKey?.[paneKey]
+
   return {
     tabId: parsed.tabId,
     leafId: parsed.leafId,
@@ -75,8 +85,10 @@ export function resolveStablePaneOwner(
   if (!paneKey || !worktreeId) {
     return null
   }
+
   let resolved: ReturnType<OrcaRuntimeService['resolveTerminalPane']> | null = null
   let resolvedHandleCandidate: ReturnType<OrcaRuntimeService['resolveTerminalPane']> | null = null
+
   if (runtime && typeof runtime.resolveTerminalPane === 'function') {
     try {
       const candidate = runtime.resolveTerminalPane(paneKey, worktreeId)
@@ -88,25 +100,34 @@ export function resolveStablePaneOwner(
       }
     }
   }
+
   const persisted = resolvePersistedStablePaneOwner(store, paneKey, worktreeId, connectionId)
+
   if (resolved?.ptyId && persisted && resolved.ptyId !== persisted.ptyId) {
     throw new Error('terminal_pane_owner_conflict')
   }
+
   const ptyId = resolved?.ptyId ?? persisted?.ptyId
+
   if (!ptyId) {
     return null
   }
+
   const registeredConnectionId = ptyOwnership.get(ptyId)
   const parsedSshId = registeredConnectionId === undefined ? parseAppSshPtyId(ptyId) : null
   const ownerConnectionId = registeredConnectionId ?? parsedSshId?.connectionId ?? null
+
   if (ownerConnectionId !== (connectionId ?? null)) {
     throw new Error('terminal_pane_owner_host_mismatch')
   }
+
   const runtimeIncarnationId = ptyIncarnationById.get(ptyId)
   const parsed = parsePaneKey(paneKey)
+
   if (!parsed) {
     return null
   }
+
   return {
     ...(resolvedHandleCandidate?.ptyId === ptyId ? { handle: resolvedHandleCandidate.handle } : {}),
     tabId: resolved?.tabId || persisted?.tabId || parsed.tabId,
@@ -130,19 +151,24 @@ export function retirePersistedStablePaneOwner(
   if (!store) {
     return false
   }
+
   const paneKey = makePaneKey(owner.tabId, owner.leafId)
   const hostId = connectionId ? toSshExecutionHostId(connectionId) : undefined
   const current = resolvePersistedStablePaneOwner(store, paneKey, worktreeId, connectionId)
+
   if (!current) {
     // Why: persistence already dropped this pane binding (an earlier stop retired it while the
     // runtime kept history), so there is nothing left to clear — that is a completed retirement,
     // not a competing owner. Reporting failure here strands the pane after its PTY is proven dead.
     return true
   }
+
   if (current.ptyId !== owner.ptyId || current.incarnationId !== owner.persistedIncarnationId) {
     return false
   }
+
   const session = store.getWorkspaceSession(hostId)
+
   const retired = retireTerminalSurfaceFromPersistence(session, {
     worktreeId,
     parentTabId: owner.tabId,
@@ -150,11 +176,14 @@ export function retirePersistedStablePaneOwner(
     ptyId: owner.ptyId,
     ...(current.incarnationId ? { incarnationId: current.incarnationId } : {})
   })
+
   if (retired === session) {
     return false
   }
+
   store.setWorkspaceSession(retired, hostId)
   store.flushOrThrow()
+
   return true
 }
 
@@ -190,9 +219,11 @@ export function persistAdmittedStablePaneBinding(args: {
   connectionId: string | null | undefined
 }): boolean {
   const expectedBinding = stablePanePersistenceFence(args.owner)
+
   if (!args.store || !args.owner || !args.worktreeId || !expectedBinding) {
     return false
   }
+
   const persisted = args.store.persistPtyBinding(
     {
       worktreeId: args.worktreeId,
@@ -206,9 +237,11 @@ export function persistAdmittedStablePaneBinding(args: {
     },
     args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
   )
+
   if (persisted === false) {
     throw new Error('terminal_pane_owner_changed')
   }
+
   return true
 }
 
@@ -217,6 +250,7 @@ export async function attachStablePaneOwner(
 ): Promise<{ result: PtySpawnResult; owner: StablePaneOwner } | null> {
   const { owner, provider, runtime, spawnOptions } = args
   let result: PtySpawnResult
+
   try {
     result = await provider.spawn({
       ...spawnOptions,
@@ -238,14 +272,18 @@ export async function attachStablePaneOwner(
     if (error instanceof TerminalSessionOwnerUnverifiedError) {
       throw new Error('terminal_pane_owner_unverified')
     }
+
     // Why: translate before paired-runtime RPC strips the socket error's code and syscall.
     if (isDaemonEndpointGoneError(error)) {
       throw new TerminalHostGoneError()
     }
+
     if (!isHostReportedPtyAbsenceError(error)) {
       throw error
     }
+
     const ownerBeforeRetire = args.resolveOwner?.()
+
     if (
       ownerBeforeRetire &&
       (ownerBeforeRetire.ptyId !== owner.ptyId ||
@@ -255,6 +293,7 @@ export async function attachStablePaneOwner(
     ) {
       throw new Error('terminal_pane_owner_changed')
     }
+
     // `pty.attach` answers absent both for a pid the relay probed and found gone and for an id its
     // session map never had — every id minted before a relay restart, checked against nothing. Only
     // the marked half observed the process, so only it may certify a death; the rest publishes the
@@ -268,17 +307,21 @@ export async function attachStablePaneOwner(
     )
     clearProviderPtyState(owner.ptyId)
     ptyOwnership.delete(owner.ptyId)
+
     if (
       args.worktreeId &&
       !retirePersistedStablePaneOwner(args.store, owner, args.worktreeId, args.connectionId)
     ) {
       throw new Error('terminal_pane_owner_changed')
     }
+
     if (args.resolveOwner?.()) {
       throw new Error('terminal_pane_owner_changed')
     }
+
     return null
   }
+
   if (
     result.id !== owner.ptyId ||
     result.isReattach !== true ||
@@ -288,6 +331,7 @@ export async function attachStablePaneOwner(
   ) {
     throw new Error('terminal_pane_owner_changed')
   }
+
   return { result, owner }
 }
 
@@ -296,11 +340,14 @@ export async function spawnForStablePane(
 ): Promise<{ result: PtySpawnResult; owner: StablePaneOwner | null }> {
   if (args.owner) {
     const attached = await attachStablePaneOwner({ ...args, owner: args.owner })
+
     if (attached) {
       return attached
     }
   }
+
   const result = await args.provider.spawn(args.spawnOptions)
   args.onFreshSpawn?.(result)
+
   return { result, owner: null }
 }

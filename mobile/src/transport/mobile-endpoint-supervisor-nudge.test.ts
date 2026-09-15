@@ -13,7 +13,9 @@ import { MobileRelaySessionEstablisher } from './mobile-relay-session-establishe
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
+
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
 // Focus/network nudge routing, make-before-break replacement, and the
@@ -30,9 +32,11 @@ describe('mobile endpoint supervisor nudges', () => {
 
   it('replaces a relay make-before-break on a network nudge without going grey', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
+
     const deps = dependencies({
       openDirect: vi.fn(() => new FakeSession('disconnected'))
     })
+
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
     await supervisor.start()
@@ -51,10 +55,12 @@ describe('mobile endpoint supervisor nudges', () => {
 
   it('suspends only after a failed replacement dial, then backs off further nudges', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
+
     const openRelay = vi
       .fn()
       .mockReturnValueOnce(new FakeRelaySession('connected'))
       .mockImplementation(() => new FakeRelaySession('disconnected', new RelayOuterError(4408)))
+
     const deps = dependencies({
       openRelay,
       // Keep direct unavailable so relay recovery stays the only path under test.
@@ -62,6 +68,7 @@ describe('mobile endpoint supervisor nudges', () => {
       // Deterministic full jitter: fraction 0.5 → half the backoff window.
       randomBytes: () => new Uint8Array([128, 0])
     })
+
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
     await supervisor.start()
@@ -79,6 +86,7 @@ describe('mobile endpoint supervisor nudges', () => {
       supervisor.nudge('network-change')
       await vi.advanceTimersByTimeAsync(0)
     }
+
     expect(openRelay).toHaveBeenCalledTimes(2)
 
     // Exactly one retry fires at the 250 ms deterministic backoff boundary.
@@ -91,15 +99,18 @@ describe('mobile endpoint supervisor nudges', () => {
 
   it('restarts a disconnected Relay immediately on an app-resume retry', async () => {
     const logical = new FakeLogicalClient('disconnected', 'relay')
+
     const openRelay = vi
       .fn()
       .mockReturnValueOnce(new FakeRelaySession('disconnected', new RelayOuterError(4408)))
       .mockReturnValueOnce(new FakeRelaySession('connected'))
+
     const deps = dependencies({
       openRelay,
       openDirect: vi.fn(() => new FakeSession('disconnected')),
       randomBytes: () => new Uint8Array([128, 0])
     })
+
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
     await supervisor.start()
@@ -152,6 +163,7 @@ describe('mobile endpoint supervisor nudges', () => {
   it('queues a network replacement that lands while another dial owns the mutex', async () => {
     const logical = new FakeLogicalClient('disconnected', 'lan')
     let resolveWrite: (() => void) | null = null
+
     const deps = dependencies({
       openDirect: vi.fn(() => new FakeSession('disconnected')),
       writeBundle: vi
@@ -164,6 +176,7 @@ describe('mobile endpoint supervisor nudges', () => {
             })
         )
     })
+
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
     await supervisor.start()
     expect(deps.openRelay).toHaveBeenCalledOnce()
@@ -187,14 +200,17 @@ describe('mobile endpoint supervisor nudges', () => {
 
   it('keeps a healthy relay bound when a nudge finds no dialable credential', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
+
     const expired = {
       ...bundle,
       current: { ...bundle.current, expiresAt: 1 }
     }
+
     const deps = dependencies({
       readBundle: vi.fn(async () => expired),
       randomBytes: () => new Uint8Array([128, 0])
     })
+
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
     await supervisor.start()
 
@@ -213,6 +229,7 @@ describe('mobile endpoint supervisor nudges', () => {
     const logical = new FakeLogicalClient('connected', 'lan')
     const relaySession = new FakeRelaySession('connected')
     const setActiveSession = vi.fn()
+
     const establisher = new MobileRelaySessionEstablisher({
       logical,
       controller: { setActiveSession } as unknown as RelayReconnectController,
@@ -247,11 +264,13 @@ describe('mobile endpoint supervisor nudges', () => {
     let active = true
     logical.migrateTo.mockImplementation(async (_session, _path, _timeout, shouldAbort) => {
       active = false
+
       if (shouldAbort?.()) {
         relaySession.close()
         throw new Error('migration superseded')
       }
     })
+
     const establisher = new MobileRelaySessionEstablisher({
       logical,
       controller: { setActiveSession } as unknown as RelayReconnectController,

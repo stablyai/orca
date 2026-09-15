@@ -21,11 +21,13 @@ export function resolveWorktreeBranchLabel(worktree: Pick<Worktree, 'branch'>): 
  */
 export function resolveWorktreeDisplayName(worktree: WorktreeDisplayNameSource): string {
   const custom = typeof worktree.displayName === 'string' ? worktree.displayName.trim() : ''
+
   if (custom) {
     return custom
   }
 
   const branch = resolveWorktreeBranchLabel(worktree).trim()
+
   if (branch) {
     return branch
   }

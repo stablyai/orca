@@ -16,9 +16,11 @@ export function getProjectHostSetupMetaUpdates(
   existing?: WorktreeMeta
 ): Partial<Pick<WorktreeMeta, 'projectId' | 'hostId' | 'projectHostSetupId'>> {
   const ownership = getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
+
   const sameSetup =
     existing?.projectHostSetupId === undefined ||
     existing.projectHostSetupId === ownership.projectHostSetupId
+
   return {
     // Why: project IDs can upgrade from legacy repo IDs to provider-backed ones; repair ownership on discovery when the host setup matches.
     ...(sameSetup && existing?.projectId !== ownership.projectId
@@ -43,6 +45,7 @@ export function resolveWorktreeMetaWithDiscoveryBackfill(
   const allMeta = allMetaOverride ?? store.getAllWorktreeMeta?.()
   // Why: the locator-keyed row is only a stand-in for a missing snapshot, so don't read it when we have one.
   const legacyMeta = allMeta === undefined ? store.getWorktreeMeta?.(worktreeId) : undefined
+
   const existing =
     readWorktreeMetaForRepo(store, worktreeId, repo) ??
     getRepoOwnedWorktreeMeta(
@@ -51,18 +54,23 @@ export function resolveWorktreeMetaWithDiscoveryBackfill(
       allMeta ?? (legacyMeta ? { [worktreeId]: legacyMeta } : {}),
       repoOwnerCount
     )
+
   const ownershipUpdates = getProjectHostSetupMetaUpdates(store, repo, existing)
+
   if (existing) {
     const updates = {
       ...(!existing.instanceId ? { instanceId: randomUUID() } : {}),
       ...ownershipUpdates
     }
+
     if (Object.keys(updates).length > 0) {
       // Why: pre-lineage profiles already have WorktreeMeta rows; backfill on discovery so upgraded workspaces get lineage and host routing.
       return writeWorktreeMetaForHost(store, worktreeId, executionHostId, updates)
     }
+
     return existing
   }
+
   return writeWorktreeMetaForHost(store, worktreeId, executionHostId, {
     lastActivityAt: Date.now(),
     ...ownershipUpdates

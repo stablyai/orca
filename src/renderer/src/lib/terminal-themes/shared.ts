@@ -10,6 +10,7 @@ export function mergeTerminalThemeCatalogs(
       if (Object.hasOwn(merged, name)) {
         throw new Error(`Duplicate terminal theme name: ${name}`)
       }
+
       merged[name] = theme
     }
   }

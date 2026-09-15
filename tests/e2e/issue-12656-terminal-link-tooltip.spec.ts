@@ -32,22 +32,27 @@ async function locateUrl(page: Page, url: string): Promise<LinkProbe | null> {
   return page.evaluate((url) => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? (state.activeTabId ?? null)
         : worktreeId
           ? (state.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!tabId || !pane) {
       return null
     }
 
     const buffer = pane.terminal.buffer.active
+
     for (let row = 0; row < pane.terminal.rows; row += 1) {
       const line = buffer.getLine(buffer.viewportY + row)
       const col = line?.translateToString(true).indexOf(url) ?? -1
+
       if (col >= 0) {
         return {
           tabId,
@@ -56,6 +61,7 @@ async function locateUrl(page: Page, url: string): Promise<LinkProbe | null> {
         }
       }
     }
+
     return null
   }, url)
 }
@@ -65,19 +71,25 @@ async function moveToLink(page: Page, probe: LinkProbe): Promise<void> {
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+
     if (!pane || !screen) {
       throw new Error('xterm-screen element unavailable')
     }
+
     const cell = pane.terminal.dimensions?.css.cell
+
     if (!cell?.width || !cell.height) {
       throw new Error('terminal cell dimensions unavailable')
     }
+
     const rect = screen.getBoundingClientRect()
+
     return {
       x: rect.left + (col + 0.5) * cell.width,
       y: rect.top + (row + 0.5) * cell.height
     }
   }, probe)
+
   await page.mouse.move(point.x, point.y)
 }
 
@@ -86,6 +98,7 @@ async function readTooltipState(page: Page, tabId: string): Promise<TooltipState
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+
     if (!pane || !screen) {
       throw new Error('terminal pane unavailable')
     }
@@ -135,24 +148,30 @@ test.describe('Issue #12656 terminal link tooltip', () => {
       .poll(
         async () => {
           probe = await locateUrl(orcaPage, url)
+
           return probe
         },
         { timeout: 5_000, message: 'URL did not become visible in the terminal viewport' }
       )
       .not.toBeNull()
+
     if (!probe) {
       throw new Error('URL probe disappeared before hover')
     }
+
     const idle = await readTooltipState(orcaPage, probe.tabId)
     expect(Math.abs(idle.paneBottom - idle.terminalBottom)).toBeLessThanOrEqual(1)
     await expect
       .poll(async () => {
         const currentProbe = await locateUrl(orcaPage, url)
+
         if (!currentProbe) {
           return { display: 'none', text: '' }
         }
+
         probe = currentProbe
         await moveToLink(orcaPage, currentProbe)
+
         return readTooltipState(orcaPage, currentProbe.tabId)
       })
       .toMatchObject({ display: '', text: expect.stringContaining(url) })

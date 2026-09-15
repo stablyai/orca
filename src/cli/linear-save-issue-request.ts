@@ -22,14 +22,18 @@ export async function buildSaveIssueRequest(
   rejectAllWorkspaceForWrite(flags)
   const input = getOptionalStringFlag(flags, 'id')
   const current = flags.get('current') === true
+
   if (input && current) {
     throw new RuntimeClientError('invalid_argument', 'Pass either <id> or --current, not both')
   }
+
   const body = await readLinearBody(flags, cwd, { required: false })
   const description = getOptionalStringFlag(flags, 'description')
+
   if (body !== undefined && description !== undefined) {
     throw new RuntimeClientError('invalid_argument', 'Use either --description or --body, not both')
   }
+
   return {
     input,
     current,
@@ -55,6 +59,7 @@ function getNullableStringFlag(
   name: string
 ): string | null | undefined {
   const value = getOptionalStringFlag(flags, name)
+
   return value === 'null' ? null : value
 }
 

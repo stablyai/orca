@@ -27,6 +27,7 @@ describe('filterGitHubWorkItemAssignees', () => {
     const oversizedQuery = 'secret-assignee-filter'.repeat(
       GITHUB_WORK_ITEM_OPTION_FILTER_QUERY_MAX_BYTES
     )
+
     const throwingAssignees = [
       {
         get login(): string {

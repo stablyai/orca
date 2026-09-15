@@ -31,6 +31,7 @@ const {
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   rmSyncMock.mockImplementation(actual.rmSync)
+
   return { ...actual, rmSync: rmSyncMock }
 })
 
@@ -39,11 +40,13 @@ vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
   spawn: spawnMock
 }))
+
 vi.mock('../../main/claude-accounts/keychain', () => ({
   deleteActiveClaudeKeychainCredentialsStrict: deleteKeychainMock,
   readActiveClaudeKeychainCredentialsStrict: readKeychainMock,
   writeActiveClaudeKeychainCredentials: writeKeychainMock
 }))
+
 // Why importOriginal: withCliRuntimeOnPath is a pure filesystem-probing helper,
 // and the PATH assertions below are only meaningful against the real one.
 vi.mock('../../shared/node-cli-command-resolution', async (importOriginal) => ({
@@ -51,6 +54,7 @@ vi.mock('../../shared/node-cli-command-resolution', async (importOriginal) => ({
   getVersionManagerBinPaths: getVersionManagerBinPathsMock,
   resolveCliCommand: resolveCliCommandMock
 }))
+
 vi.mock('../../shared/windows-console-input', () => ({
   stdioForWindowsInteractiveChild: stdioForWindowsInteractiveChildMock
 }))
@@ -68,6 +72,7 @@ import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version
 function successfulChild(): EventEmitter {
   const child = new EventEmitter()
   queueMicrotask(() => child.emit('exit', 0))
+
   return child
 }
 
@@ -79,9 +84,11 @@ function newSignalListener(
   before: readonly unknown[]
 ): (signal: NodeJS.Signals) => void {
   const added = process.listeners(signal).filter((listener) => !before.includes(listener))
+
   if (added.length !== 1) {
     throw new Error(`Expected 1 new ${signal} listener, found ${added.length}`)
   }
+
   return added[0] as (signal: NodeJS.Signals) => void
 }
 
@@ -141,11 +148,13 @@ describe('account CLI handlers', () => {
   afterEach(() => {
     Object.defineProperty(process, 'platform', originalPlatform)
     logSpy.mockRestore()
+
     if (originalElectronRunAsNode === undefined) {
       delete process.env.ELECTRON_RUN_AS_NODE
     } else {
       process.env.ELECTRON_RUN_AS_NODE = originalElectronRunAsNode
     }
+
     if (originalPathAlias === undefined) {
       delete process.env.Path
     } else {
@@ -284,9 +293,11 @@ describe('account CLI handlers', () => {
     await ACCOUNT_HANDLERS['account add'](context('codex'))
 
     const env = spawnMock.mock.calls[0]?.[2].env as NodeJS.ProcessEnv
+
     const pathValues = Object.entries(env)
       .filter(([key]) => key.toLowerCase() === 'path')
       .map(([, value]) => value)
+
     expect(pathValues).toContain(`${nodeBin}${delimiter}${effectivePathBefore}`)
   })
 
@@ -316,6 +327,7 @@ describe('account CLI handlers', () => {
     let codexHome = ''
     spawnMock.mockImplementation((_command, _args, options: { env: Record<string, string> }) => {
       codexHome = options.env.CODEX_HOME
+
       return child
     })
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
@@ -349,6 +361,7 @@ describe('account CLI handlers', () => {
     let codexHome = ''
     spawnMock.mockImplementation((_command, _args, options: { env: Record<string, string> }) => {
       codexHome = options.env.CODEX_HOME
+
       return child
     })
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
@@ -388,6 +401,7 @@ describe('account CLI handlers', () => {
     let configDir = ''
     spawnMock.mockImplementation((_command, _args, options: { env: Record<string, string> }) => {
       configDir = options.env.CLAUDE_CONFIG_DIR
+
       return child
     })
     const exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
@@ -434,6 +448,7 @@ describe('account CLI handlers', () => {
     const child = Object.assign(new EventEmitter(), { kill: vi.fn() })
     spawnMock.mockImplementation(() => {
       queueMicrotask(() => child.emit('exit', 0))
+
       return child
     })
     // Why: only the registration RPC hangs — the preflight must still resolve.

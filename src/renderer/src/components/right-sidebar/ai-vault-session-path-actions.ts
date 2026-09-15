@@ -28,11 +28,14 @@ export function canOpenAiVaultSessionLogInOrca(
   session: Pick<AiVaultSession, 'filePath' | 'executionHostId'>
 ): boolean {
   const filePath = session.filePath?.trim()
+
   if (!filePath) {
     return false
   }
+
   if (!canUseLocalAiVaultSessionPathActions(session.executionHostId)) {
     return false
   }
+
   return !isAiVaultSyntheticSessionPath(filePath)
 }

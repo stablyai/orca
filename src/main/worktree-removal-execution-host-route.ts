@@ -54,6 +54,7 @@ export type WorktreeRemovalRoute =
 
 export function resolveWorktreeRemovalRoute(hostId: ExecutionHostId): WorktreeRemovalRoute {
   const route = resolveGitRouteForHost(hostId)
+
   switch (route.kind) {
     case 'local':
       return { kind: 'local', hostId: route.hostId }
@@ -63,7 +64,9 @@ export function resolveWorktreeRemovalRoute(hostId: ExecutionHostId): WorktreeRe
       if (!route.provider) {
         throw new Error(SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE)
       }
+
       const fsRoute = resolveFilesystemRouteForHost(hostId)
+
       return {
         kind: 'ssh',
         hostId: route.hostId,

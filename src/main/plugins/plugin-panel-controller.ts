@@ -53,9 +53,11 @@ export class PluginPanelController {
     panelId: string
   ): Promise<PluginPanelEntry | null> {
     const loaded = await this.load(pluginKey, panelId)
+
     if (!loaded) {
       return null
     }
+
     return {
       ...loaded.entry,
       sessionToken: this.sessions.issue(ownerKey, loaded.binding)
@@ -64,25 +66,35 @@ export class PluginPanelController {
 
   async execute(ownerKey: string, call: unknown): Promise<PluginPanelActionOutcome> {
     const sessionToken = this.extractSessionToken(call)
+
     if (!sessionToken) {
       return { ok: false, code: 'invalid_request', error: 'invalid panel session' }
     }
+
     const binding = this.sessions.resolve(ownerKey, sessionToken)
+
     if (!binding) {
       return { ok: false, code: 'invalid_request', error: 'invalid panel session' }
     }
+
     const admissionRefusal = admitPluginPanelCall(this.panelAdmission, binding.pluginKey, call)
+
     if (admissionRefusal) {
       return admissionRefusal
     }
+
     const parsed = panelActionCallSchema.safeParse(call)
+
     if (!parsed.success) {
       return { ok: false, code: 'invalid_request', error: 'malformed panel action call' }
     }
+
     const plugin = this.options.resolveApprovedPlugin(binding.pluginKey)
+
     const panelExists = plugin?.manifest.contributes.panels.some(
       (panel) => panel.id === binding.panelId
     )
+
     if (
       !plugin ||
       plugin.rootDir !== binding.rootDir ||
@@ -91,6 +103,7 @@ export class PluginPanelController {
     ) {
       return { ok: false, code: 'unavailable', error: 'panel session is no longer available' }
     }
+
     return this.options.executeHostCall(binding.pluginKey, parsed.data.action, parsed.data.params)
   }
 
@@ -102,11 +115,15 @@ export class PluginPanelController {
     if (!signal || this.boundOwnerSignals.has(signal)) {
       return
     }
+
     this.boundOwnerSignals.add(signal)
+
     if (signal.aborted) {
       this.revokeOwner(ownerKey)
+
       return
     }
+
     signal.addEventListener('abort', () => this.revokeOwner(ownerKey), { once: true })
   }
 
@@ -123,8 +140,10 @@ export class PluginPanelController {
     if (typeof call !== 'object' || call === null) {
       return null
     }
+
     try {
       const token = (call as { sessionToken?: unknown }).sessionToken
+
       return typeof token === 'string' && token.length >= 32 && token.length <= 128 ? token : null
     } catch {
       return null
@@ -134,11 +153,14 @@ export class PluginPanelController {
   private async load(pluginKey: string, panelId: string): Promise<LoadedPluginPanel | null> {
     const plugin = this.options.resolveApprovedPlugin(pluginKey)
     const panel = plugin?.manifest.contributes.panels.find((entry) => entry.id === panelId)
+
     if (!plugin || !panel) {
       return null
     }
+
     try {
       await this.options.contentVerifier.verify(plugin)
+
       const html = buildPluginPanelShellHtml(
         await readContainedPluginArtifactText(
           plugin.rootDir,
@@ -146,10 +168,13 @@ export class PluginPanelController {
           PLUGIN_PANEL_ENTRY_MAX_BYTES
         )
       )
+
       const current = this.options.resolveApprovedPlugin(pluginKey)
+
       if (current !== plugin || current.rootDir !== plugin.rootDir) {
         return null
       }
+
       return {
         entry: { html },
         binding: {
@@ -164,6 +189,7 @@ export class PluginPanelController {
         pluginKey,
         `panel entry ${panel.entry} rejected: ${error instanceof Error ? error.message : String(error)}`
       )
+
       return null
     }
   }

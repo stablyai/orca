@@ -3,6 +3,7 @@ import { createFileExplorerWatchRefreshScheduler } from './file-explorer-watch-r
 import type { FileExplorerTreeRefreshOutcome } from './file-explorer-types'
 
 const TRAILING_MS = 150
+
 const MAX_WAIT_MS = 500
 
 function createDeferred(): {
@@ -10,9 +11,11 @@ function createDeferred(): {
   resolve: (outcome?: FileExplorerTreeRefreshOutcome) => void
 } {
   let resolve!: (outcome?: FileExplorerTreeRefreshOutcome) => void
+
   const promise = new Promise<FileExplorerTreeRefreshOutcome>((res) => {
     resolve = (outcome = 'refreshed') => res(outcome)
   })
+
   return { promise, resolve }
 }
 
@@ -20,10 +23,13 @@ function setup(
   overrides: Partial<Parameters<typeof createFileExplorerWatchRefreshScheduler>[0]> = {}
 ) {
   const { refreshTree: treeImpl, refreshDir: dirImpl, ...rest } = overrides
+
   const refreshTree = vi.fn(
     treeImpl ?? (async (): Promise<FileExplorerTreeRefreshOutcome> => 'refreshed')
   )
+
   const refreshDir = vi.fn(dirImpl ?? (async (_dirPath: string) => {}))
+
   const scheduler = createFileExplorerWatchRefreshScheduler({
     refreshTree,
     refreshDir,
@@ -31,6 +37,7 @@ function setup(
     dirConcurrency: 4,
     ...rest
   })
+
   return { refreshTree, refreshDir, scheduler }
 }
 
@@ -49,6 +56,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     for (let index = 0; index < 20; index++) {
       scheduler.requestFullRefresh()
     }
+
     await vi.advanceTimersByTimeAsync(TRAILING_MS)
 
     expect(refreshTree).toHaveBeenCalledTimes(1)
@@ -58,10 +66,12 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     const { refreshTree, scheduler } = setup()
 
     scheduler.requestFullRefresh()
+
     for (let index = 0; index < 4; index++) {
       await vi.advanceTimersByTimeAsync(100)
       scheduler.requestFullRefresh()
     }
+
     expect(refreshTree).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(MAX_WAIT_MS - 400)
@@ -117,6 +127,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     // load is superseded. Nothing marks an expanded dir stale, so dropping these would leave
     // them stale until a manual refresh — collapse/re-expand does not heal it.
     const gate = createDeferred()
+
     const { refreshDir, scheduler } = setup({
       refreshTree: () => gate.promise,
       isCoveredByFullRefresh: (dirPath) => dirPath === '/repo/src'
@@ -137,6 +148,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     // Regression guard: a failed root read means the transport is down, so re-issuing buys one
     // dead timeout per dir and holds inFlight open, blocking every later refresh.
     const gate = createDeferred()
+
     const { refreshDir, scheduler } = setup({
       refreshTree: () => gate.promise,
       isCoveredByFullRefresh: () => false
@@ -204,17 +216,20 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
   it('never runs more dir refreshes at once than dirConcurrency', async () => {
     let inFlight = 0
     let peakInFlight = 0
+
     const refreshDir = vi.fn(async (_dirPath: string) => {
       inFlight++
       peakInFlight = Math.max(peakInFlight, inFlight)
       await new Promise((resolve) => setTimeout(resolve, 10))
       inFlight--
     })
+
     const { scheduler } = setup({ refreshDir, dirConcurrency: 4 })
 
     for (let index = 0; index < 20; index++) {
       scheduler.requestDirRefresh(`/repo/d${index}`)
     }
+
     await vi.advanceTimersByTimeAsync(TRAILING_MS + 20 * 10)
 
     expect(refreshDir).toHaveBeenCalledTimes(20)
@@ -259,16 +274,19 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
     // before the effect cleanup runs, so a queued path surviving cancel() would
     // be read against the NEXT worktree's binding.
     const gate = createDeferred()
+
     const refreshDir = vi.fn(async (dirPath: string) => {
       if (dirPath === '/repo/d0') {
         await gate.promise
       }
     })
+
     const { scheduler } = setup({ refreshDir, dirConcurrency: 1 })
 
     for (let index = 0; index < 4; index++) {
       scheduler.requestDirRefresh(`/repo/d${index}`)
     }
+
     await vi.advanceTimersByTimeAsync(TRAILING_MS)
     expect(refreshDir).toHaveBeenCalledTimes(1)
 
@@ -282,6 +300,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
   it('still refreshes a dir first expanded while the tree refresh was in flight', async () => {
     const gate = createDeferred()
     const expanded = new Set<string>()
+
     const { refreshDir, scheduler } = setup({
       refreshTree: () => gate.promise,
       isCoveredByFullRefresh: (dirPath) => expanded.has(dirPath)
@@ -319,9 +338,11 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
 
   it('uses the injected timer functions', async () => {
     const schedule = vi.fn((callback: () => void, delayMs: number) => setTimeout(callback, delayMs))
+
     const clear = vi.fn((timer: ReturnType<typeof setTimeout>) => {
       clearTimeout(timer)
     })
+
     const { refreshTree, scheduler } = setup({ schedule, clear })
 
     scheduler.requestFullRefresh()
@@ -335,9 +356,11 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
 
   it('keeps a full refresh ahead of the dir refreshes it does not cover', async () => {
     const order: string[] = []
+
     const { scheduler } = setup({
       refreshTree: async (): Promise<FileExplorerTreeRefreshOutcome> => {
         order.push('tree')
+
         return 'refreshed'
       },
       refreshDir: async (dirPath) => {
@@ -373,6 +396,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
         scheduler.requestFullRefresh()
         scheduler.requestDirRefresh('/repo/src')
       }
+
       await vi.advanceTimersByTimeAsync(0)
 
       expect(refreshTree).toHaveBeenCalledTimes(1)
@@ -382,6 +406,7 @@ describe('createFileExplorerWatchRefreshScheduler', () => {
 
     it('does not start a second run while one is in flight', async () => {
       const deferred = createDeferred()
+
       const { refreshTree, scheduler } = setup({
         ...zeroWindow,
         refreshTree: () => deferred.promise

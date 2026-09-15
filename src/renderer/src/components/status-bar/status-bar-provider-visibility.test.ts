@@ -298,6 +298,7 @@ describe('getVisibleUsageProvider', () => {
       null,
       usageSettings({ minimaxCookieConfigured: true })
     )
+
     expect(visible).toMatchObject({
       provider: 'minimax',
       status: 'fetching',
@@ -312,6 +313,7 @@ describe('getVisibleUsageProvider', () => {
       null,
       usageSettings({ grokAuthConfigured: true })
     )
+
     expect(visible).toMatchObject({
       provider: 'grok',
       status: 'fetching',
@@ -325,6 +327,7 @@ describe('getVisibleUsageProvider', () => {
       provider: 'minimax',
       error: 'MiniMax session expired. Replace the MiniMax cookie in Settings.'
     })
+
     expect(
       getVisibleUsageProvider(
         'minimax',
@@ -351,6 +354,7 @@ describe('getVisibleUsageProvider', () => {
       null,
       usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
     )
+
     expect(visible).toMatchObject({
       provider: 'antigravity',
       status: 'fetching',

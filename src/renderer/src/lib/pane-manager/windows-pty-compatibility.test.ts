@@ -66,6 +66,7 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
       shellOverride: null,
       executionHostId: 'local'
     })
+
     const terminal = new Terminal({ cols: 20, rows: 5, ...options })
 
     await writeTerminal(terminal, `${'─'.repeat(20)}\r\nNEXT\r\n`)
@@ -146,6 +147,7 @@ describe('buildWindowsPtyCompatibilityOptions', () => {
       cwd: '/home/me/workspaces/repo',
       shellOverride: null
     } as const
+
     expect(isLocalNativeWindowsPty(serveContext)).toBe(true)
     expect(
       buildWindowsPtyCompatibilityOptions({ ...serveContext, executionHostId: 'runtime:my-serve' })
@@ -227,6 +229,7 @@ describe('isLocalNativeWindowsConpty', () => {
     cwd: 'C:\\repo',
     shellOverride: 'powershell.exe'
   } as const
+
   const remoteServePaneOnWindowsClientContext = {
     userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
     connectionId: null,

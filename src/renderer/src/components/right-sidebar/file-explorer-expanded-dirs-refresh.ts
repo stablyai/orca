@@ -45,17 +45,20 @@ export async function refreshFileExplorerExpandedDirs({
   }
 
   const uniqueDirs = Array.from(new Map(dirs.map((dir) => [dir.dirPath, dir])).values())
+
   // Why: begin every token before the first read so a concurrent refreshDir or
   // worktree reset supersedes dirs still waiting for a concurrency slot.
   const loadTokens = new Map(
     uniqueDirs.map((dir) => [dir.dirPath, dirLoadTracker.begin(dir.dirPath)])
   )
+
   const commitBatchSize =
     maxConcurrentReads === Number.POSITIVE_INFINITY
       ? Math.max(1, uniqueDirs.length)
       : Number.isFinite(maxConcurrentReads)
         ? Math.max(1, Math.floor(maxConcurrentReads))
         : 1
+
   const pendingResults: { dirPath: string; cache: DirCache }[] = []
   let settledSinceCommit = 0
   let committedDirs = 0
@@ -75,6 +78,7 @@ export async function refreshFileExplorerExpandedDirs({
   // Why: only dirs this refresh still owns — a superseding load owns the flag for the rest.
   const clearOwnedLoadingMarks = (dirPaths: readonly string[]): void => {
     const owned = dirPaths.filter((dirPath) => dirLoadTracker.isCurrent(loadTokens.get(dirPath)!))
+
     if (owned.length > 0) {
       updateLoadingDirPaths((prev) => clearFileExplorerDirsLoading(prev, owned))
     }
@@ -84,19 +88,24 @@ export async function refreshFileExplorerExpandedDirs({
     if (stopped) {
       return
     }
+
     settledSinceCommit = 0
+
     const currentResults = pendingResults
       .splice(0)
       .filter((result) => dirLoadTracker.isCurrent(loadTokens.get(result.dirPath)!))
+
     if (currentResults.length === 0) {
       return
     }
 
     setDirCache((prev) => {
       const next = { ...prev }
+
       for (const result of currentResults) {
         next[result.dirPath] = result.cache
       }
+
       return next
     })
     clearOwnedLoadingMarks(currentResults.map((result) => result.dirPath))
@@ -105,6 +114,7 @@ export async function refreshFileExplorerExpandedDirs({
     // strand the rest of the batch with a staleness mark no later commit will clear.
     let firstCommitError: unknown
     let commitFailed = false
+
     for (const result of currentResults) {
       try {
         onDirCommitted?.(result.dirPath)
@@ -115,6 +125,7 @@ export async function refreshFileExplorerExpandedDirs({
         }
       }
     }
+
     if (commitFailed) {
       stopped = true
       throw firstCommitError
@@ -125,7 +136,9 @@ export async function refreshFileExplorerExpandedDirs({
     if (result) {
       pendingResults.push(result)
     }
+
     settledSinceCommit++
+
     if (settledSinceCommit >= commitBatchSize) {
       commitPendingResults()
     }
@@ -136,15 +149,21 @@ export async function refreshFileExplorerExpandedDirs({
       if (stopped) {
         return
       }
+
       const loadToken = loadTokens.get(dirPath)!
+
       // A superseding load owns this dir now; do not spend a round trip on a result we must drop.
       if (!dirLoadTracker.isCurrent(loadToken)) {
         settleRead()
+
         return
       }
+
       let cache: DirCache | undefined
+
       try {
         const listing = await readDirectory(dirPath)
+
         if (dirLoadTracker.isCurrent(loadToken)) {
           cache = {
             children: fileExplorerEntriesToTreeNodes(
@@ -162,8 +181,10 @@ export async function refreshFileExplorerExpandedDirs({
           cache = { children: [] }
         }
       }
+
       settleRead(cache ? { dirPath, cache } : undefined)
     })
+
     if (settledSinceCommit > 0) {
       commitPendingResults()
     }

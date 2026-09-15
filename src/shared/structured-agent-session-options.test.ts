@@ -44,6 +44,7 @@ describe('structured agent session options', () => {
 
     const bridgeRecord = createNativeChatSessionOptionRecord('codex')
     bridgeRecord.model = { value: 'gpt-5.6-sol', source: 'reported' }
+
     const bridge = buildNativeChatSessionOptionSnapshot({
       catalog: CODEX_SESSION_OPTION_CATALOG,
       models: CODEX_SESSION_OPTION_CATALOG.models,
@@ -52,6 +53,7 @@ describe('structured agent session options', () => {
       modelLabel: 'Model',
       liveTransport: 'catalog'
     })
+
     // Same catalog, same `dispatched` vocabulary — only the transport separates them.
     expect(structured.every((descriptor) => descriptor.transport === 'agent-session')).toBe(true)
     expect(bridge.every((descriptor) => descriptor.transport === 'catalog')).toBe(true)
@@ -77,6 +79,7 @@ describe('structured agent session options', () => {
         current: { model: 'persisted-unknown' }
       }
     )
+
     const model = structuredAgentSessionOptionSnapshot(state)[0]
     expect(
       model.kind.type === 'select' ? model.kind.choices.map((choice) => choice.value) : []
@@ -129,6 +132,7 @@ describe('structured agent session options', () => {
         current: { model: 'account-model', fastMode: false, confirmed: ['fastMode'] }
       }
     )
+
     expect(structuredAgentSessionOptionSnapshot(supported)).toContainEqual(
       expect.objectContaining({
         id: 'fastMode',
@@ -150,6 +154,7 @@ describe('structured agent session options', () => {
       ],
       current: { model: 'account-model' }
     })
+
     expect(structuredAgentSessionOptionSnapshot(absent).map(({ id }) => id)).toEqual(['model'])
     expect(absent.record.valuesByModel['account-model']?.fastMode).toBeUndefined()
   })

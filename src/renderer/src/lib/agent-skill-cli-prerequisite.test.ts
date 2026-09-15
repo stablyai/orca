@@ -54,6 +54,7 @@ describe('ensureOrcaCliAvailableForAgentSkillTerminal', () => {
       pathConfigured: false,
       detail: '/usr/local/bin is not currently visible on PATH.'
     })
+
     const installed = cliStatus()
     const getInstallStatus = vi.fn().mockResolvedValue(initial)
     const install = vi.fn().mockResolvedValue(installed)
@@ -89,6 +90,7 @@ describe('ensureOrcaCliAvailableForAgentSkillTerminal', () => {
       pathConfigured: null,
       detail: 'Orca could not read the Windows user PATH registry value.'
     })
+
     const install = vi.fn()
     vi.stubGlobal('window', {
       api: { cli: { getInstallStatus: vi.fn().mockResolvedValue(initial), install } }

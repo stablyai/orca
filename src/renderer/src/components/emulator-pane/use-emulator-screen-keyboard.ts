@@ -43,6 +43,7 @@ export function useEmulatorScreenKeyboard({
       if (!active) {
         cancelActivePaste()
       }
+
       captureActiveRef.current = active
       setKeyboardCaptureActive(active)
     },
@@ -51,6 +52,7 @@ export function useEmulatorScreenKeyboard({
 
   useEffect(() => {
     canInteractRef.current = canInteract
+
     if (!canInteract) {
       setCaptureActive(false)
     }
@@ -85,6 +87,7 @@ export function useEmulatorScreenKeyboard({
           event.preventDefault()
           event.stopPropagation()
         }
+
         return
       }
 
@@ -94,13 +97,16 @@ export function useEmulatorScreenKeyboard({
           event.preventDefault()
           event.stopPropagation()
         }
+
         return
       }
 
       const frames = buildServeSimKeyboardFramesForKey(event.key, { shift: event.shiftKey })
+
       if (!frames || !sendKeyboardFrames(frames)) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
     },
@@ -112,10 +118,13 @@ export function useEmulatorScreenKeyboard({
       if (!canInteract || !captureActiveRef.current) {
         return
       }
+
       const text = event.clipboardData.getData('text')
+
       if (!text) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
 
@@ -132,6 +141,7 @@ export function useEmulatorScreenKeyboard({
         if (pasteRequestIdRef.current !== pasteRequestId && result.status !== 'cancelled') {
           return
         }
+
         showEmulatorKeyboardPasteResult(result)
       })
     },
@@ -159,6 +169,7 @@ function showEmulatorKeyboardPasteResult(result: EmulatorKeyboardPasteResult): v
         'Paste is too large for emulator keyboard input.'
       )
     )
+
     return
   }
 
@@ -169,6 +180,7 @@ function showEmulatorKeyboardPasteResult(result: EmulatorKeyboardPasteResult): v
         'Emulator keyboard paste supports US keyboard text only.'
       )
     )
+
     return
   }
 

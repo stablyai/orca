@@ -76,6 +76,7 @@ function makeDetectedLinkedWorktrees(
   options: { linkedVisible?: boolean; linkedOwnership?: DetectedWorktree['ownership'] } = {}
 ): DetectedWorktreeListResult {
   const linkedVisible = options.linkedVisible ?? false
+
   return {
     repoId: 'repo-1',
     authoritative: true,
@@ -110,6 +111,7 @@ describe('getProjectDefaultCheckout', () => {
       path: '/repo-feature',
       isMainWorktree: false
     })
+
     const main = makeWorktree()
 
     expect(getProjectDefaultCheckout([feature, main])).toBe(main)
@@ -182,11 +184,13 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       path: '/local/repo',
       hostId: 'local'
     })
+
     const runtimeMain = makeWorktree({
       id: 'repo-1::same-id',
       path: '/runtime/repo',
       hostId: 'runtime:env-1'
     })
+
     mocks.state.repos = [
       {
         id: 'repo-1',
@@ -227,6 +231,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       hostId: 'ssh:private-target',
       runtimeOwnerEnvironmentId: 'env-1'
     })
+
     mocks.state.worktreesByRepo = { 'repo-1': [runtimeMain] }
 
     await openProjectDefaultCheckout({
@@ -294,6 +299,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       mocks.state.worktreesByRepo = {
         'repo-1': [defaultCheckout]
       }
+
       return true
     })
 
@@ -414,6 +420,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       mocks.state.detectedWorktreesByRepo = {
         'repo-1': makeDetectedLinkedWorktrees(defaultCheckout, { linkedVisible: true })
       }
+
       return true
     })
 

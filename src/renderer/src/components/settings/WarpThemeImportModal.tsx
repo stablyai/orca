@@ -42,6 +42,7 @@ function ThemeSwatches({ theme }: { theme: WarpThemeImportPreviewTheme }): React
     theme.terminal.cyan,
     theme.terminal.white
   ]
+
   return (
     <span className="flex shrink-0 overflow-hidden rounded-sm border border-border/60">
       {colors.map((color, index) => (
@@ -186,6 +187,7 @@ export function WarpThemeImportModal({
                   <div className="space-y-1 p-2">
                     {themes.map((theme) => {
                       const selected = selectedThemeIds.has(theme.id)
+
                       return (
                         <button
                           type="button"

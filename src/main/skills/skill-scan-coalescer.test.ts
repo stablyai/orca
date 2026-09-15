@@ -3,9 +3,11 @@ import { SkillScanCoalescer, SkillScanShedError } from './skill-scan-coalescer'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -14,8 +16,10 @@ describe('SkillScanCoalescer', () => {
     const coalescer = new SkillScanCoalescer<number>(8)
     const gate = deferred<number>()
     let runs = 0
+
     const task = (): Promise<number> => {
       runs += 1
+
       return gate.promise
     }
 
@@ -24,6 +28,7 @@ describe('SkillScanCoalescer', () => {
       coalescer.run('root', { ttlMs: 0 }, task),
       coalescer.run('root', { ttlMs: 0 }, task)
     ])
+
     gate.resolve(7)
 
     expect((await outcomes).map((outcome) => outcome.value)).toEqual([7, 7, 7])
@@ -34,9 +39,11 @@ describe('SkillScanCoalescer', () => {
   it('keeps distinct keys isolated, including paths differing only by case', async () => {
     const coalescer = new SkillScanCoalescer<string>(8)
     const seen: string[] = []
+
     const run = (key: string): Promise<{ value: string }> =>
       coalescer.run(key, { ttlMs: 1_000 }, async () => {
         seen.push(key)
+
         return key
       })
 
@@ -51,8 +58,10 @@ describe('SkillScanCoalescer', () => {
     let now = 1_000
     const coalescer = new SkillScanCoalescer<number>(8, () => now)
     let runs = 0
+
     const task = async (): Promise<number> => {
       runs += 1
+
       return runs
     }
 
@@ -68,8 +77,10 @@ describe('SkillScanCoalescer', () => {
   it('retains nothing when the ttl is zero', async () => {
     const coalescer = new SkillScanCoalescer<number>(8)
     let runs = 0
+
     const task = async (): Promise<number> => {
       runs += 1
+
       return runs
     }
 
@@ -83,8 +94,10 @@ describe('SkillScanCoalescer', () => {
     let now = 1_000
     const coalescer = new SkillScanCoalescer<number>(8, () => now)
     let runs = 0
+
     const task = async (): Promise<number> => {
       runs += 1
+
       return runs
     }
 
@@ -107,6 +120,7 @@ describe('SkillScanCoalescer', () => {
     await Promise.all(
       keys.map((key) => coalescer.run(key, { ttlMs: 10_000, refresh: true }, async () => key))
     )
+
     const readBack = await Promise.all(
       keys.map((key) => coalescer.run(key, { ttlMs: 10_000 }, async () => 're-walked'))
     )
@@ -121,11 +135,13 @@ describe('SkillScanCoalescer', () => {
 
     // A focus/mount scan is already in flight when the user installs a skill.
     const inFlight = coalescer.run('root', { ttlMs: 10_000 }, () => slowScan.promise)
+
     const refreshed = await coalescer.run(
       'root',
       { ttlMs: 10_000, refresh: true },
       async () => 'after-install'
     )
+
     expect(refreshed.value).toBe('after-install')
 
     // The older scan now lands. It must not overwrite the post-install entry with
@@ -175,6 +191,7 @@ describe('SkillScanCoalescer', () => {
   it('evicts the least recently used entry past the bound', async () => {
     let now = 1_000
     const coalescer = new SkillScanCoalescer<string>(2, () => now)
+
     const scan = (key: string): Promise<{ cached: boolean }> =>
       coalescer.run(key, { ttlMs: 10_000 }, async () => key)
 
@@ -195,9 +212,11 @@ describe('SkillScanCoalescer', () => {
     const coalescer = new SkillScanCoalescer<number>(8, () => now)
     const wedged = deferred<number>()
     let runs = 0
+
     // Mirrors `findSkillFiles`, which throws once its signal aborts.
     const task = (signal: AbortSignal): Promise<number> => {
       runs += 1
+
       // The first scan models a root on a stalled mount: its readdir never settles.
       return runs === 1
         ? Promise.race([
@@ -233,8 +252,10 @@ describe('SkillScanCoalescer', () => {
     let now = 1_000
     const coalescer = new SkillScanCoalescer<number>(8, () => now)
     const signals: AbortSignal[] = []
+
     const task = (signal: AbortSignal): Promise<number> => {
       signals.push(signal)
+
       return signals.length === 1 ? new Promise<number>(() => {}) : Promise.resolve(2)
     }
 
@@ -257,8 +278,10 @@ describe('SkillScanCoalescer', () => {
 
     const inFlight = coalescer.run('root', { ttlMs: 10_000 }, (signal) => {
       signals.push(signal)
+
       return slowScan.promise
     })
+
     await coalescer.run('root', { ttlMs: 10_000, refresh: true }, async () => 'after-install')
 
     expect(signals[0].aborted).toBe(false)
@@ -280,8 +303,10 @@ describe('SkillScanCoalescer', () => {
     for (const key of keys) {
       void coalescer.run(key, { ttlMs: 10_000 }, task).catch(() => undefined)
     }
+
     now = 40_000
     const shed: string[] = []
+
     for (const key of keys) {
       void coalescer.run(key, { ttlMs: 10_000 }, task).catch((error: unknown) => {
         if (error instanceof SkillScanShedError) {
@@ -289,6 +314,7 @@ describe('SkillScanCoalescer', () => {
         }
       })
     }
+
     await new Promise((resolve) => setImmediate(resolve))
 
     // 16 replacements are admitted; past that no further walk is started.

@@ -88,9 +88,11 @@ export type TerminalLiveInputPruneResult = TerminalLiveInputDefaultResult
 
 export function getTerminalLiveSpecialKeyBytes(key: string): string | null {
   const shortcutKey = TERMINAL_LIVE_SPECIAL_KEY_IDS.get(key)
+
   if (!shortcutKey) {
     return null
   }
+
   return buildTerminalShortcutKey({ key: shortcutKey, modifiers: [] })?.bytes ?? null
 }
 
@@ -113,6 +115,7 @@ export function defaultTerminalLiveInputHandles(
     if (defaultedHandles.has(handle)) {
       continue
     }
+
     nextEnabledHandles ??= new Set(enabledHandles)
     nextDefaultedHandles ??= new Set(defaultedHandles)
     nextEnabledHandles.add(handle)
@@ -149,6 +152,7 @@ export function applyDisabledTerminalLiveInputHandles(
     if (!disabledHandles.has(handle)) {
       continue
     }
+
     nextEnabledHandles ??= new Set(enabledHandles)
     nextEnabledHandles.delete(handle)
   }
@@ -157,6 +161,7 @@ export function applyDisabledTerminalLiveInputHandles(
     if (defaultedHandles.has(handle)) {
       continue
     }
+
     nextDefaultedHandles ??= new Set(defaultedHandles)
     nextDefaultedHandles.add(handle)
   }
@@ -184,6 +189,7 @@ export function pruneTerminalLiveInputHandles(
     if (liveTerminalHandles.has(handle)) {
       continue
     }
+
     nextEnabledHandles ??= new Set(enabledHandles)
     nextEnabledHandles.delete(handle)
   }
@@ -192,6 +198,7 @@ export function pruneTerminalLiveInputHandles(
     if (liveTerminalHandles.has(handle)) {
       continue
     }
+
     nextDefaultedHandles ??= new Set(defaultedHandles)
     nextDefaultedHandles.delete(handle)
   }
@@ -211,6 +218,7 @@ export function clearTerminalLiveInputFocusTimer(timerRef: TerminalLiveInputFocu
   if (timerRef.current === null) {
     return
   }
+
   clearTimeout(timerRef.current)
   timerRef.current = null
 }
@@ -246,6 +254,7 @@ export function focusTerminalLiveInputTarget(
     // focus() is then a no-op, so force a new focus session to reopen the keyboard.
     input.blur()
     refocus()
+
     return
   }
 

@@ -18,6 +18,7 @@ export async function resolveRuntimeWorktreeRemovalTarget(args: {
 }): Promise<RuntimeWorktreeRemovalTarget> {
   try {
     const exactTarget = parseExactWorktreeIdSelector(args.selector)
+
     const worktree =
       exactTarget && args.requiredHostId
         ? ((await args.resolveExplicitWorktreeIdScoped(exactTarget.id, args.requiredHostId)) ??
@@ -25,14 +26,18 @@ export async function resolveRuntimeWorktreeRemovalTarget(args: {
             throw new Error('selector_not_found')
           })())
         : await args.resolveWorktree(args.selector)
+
     const target = { id: worktree.id, repoId: worktree.repoId, path: worktree.path }
+
     return worktree.pushTarget ? { ...target, pushTarget: worktree.pushTarget } : target
   } catch (error) {
     if (!(error instanceof Error) || error.message !== 'selector_not_found') {
       throw error
     }
+
     const target = parseExactWorktreeIdSelector(args.selector)
     const meta = target ? args.store?.getWorktreeMeta(target.id) : undefined
+
     if (
       !target ||
       !meta ||
@@ -40,6 +45,7 @@ export async function resolveRuntimeWorktreeRemovalTarget(args: {
     ) {
       throw error
     }
+
     return meta.pushTarget ? { ...target, pushTarget: meta.pushTarget } : target
   }
 }

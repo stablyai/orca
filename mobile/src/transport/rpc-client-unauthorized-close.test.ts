@@ -42,6 +42,7 @@ class MockWebSocket {
     if (this.readyState === MockWebSocket.CLOSED) {
       return
     }
+
     this.readyState = MockWebSocket.CLOSED
     this.onclose?.()
   })
@@ -70,6 +71,7 @@ class MockWebSocket {
 }
 
 const mockSockets: MockWebSocket[] = []
+
 const originalWebSocket = globalThis.WebSocket
 
 function lastSocket(): MockWebSocket {
@@ -98,6 +100,7 @@ describe('unauthorized close-code mapping (silent 4001)', () => {
       if (i > 0) {
         await vi.advanceTimersByTimeAsync(1_000)
       }
+
       const socket = lastSocket()
       socket.open()
       socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
@@ -140,9 +143,11 @@ describe('unauthorized close-code mapping (silent 4001)', () => {
       if (i > 0) {
         await vi.advanceTimersByTimeAsync(1_000)
       }
+
       const socket = lastSocket()
       socket.open()
       socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
+
       if (i < 2) {
         socket.receive('encrypted:{"type":"e2ee_error","error":{"code":"unauthorized"}}')
       } else {
@@ -162,6 +167,7 @@ describe('unauthorized close-code mapping (silent 4001)', () => {
       if (i > 0) {
         await vi.advanceTimersByTimeAsync(60_000)
       }
+
       const socket = lastSocket()
       socket.open()
       socket.receive(JSON.stringify({ type: 'e2ee_ready' }))

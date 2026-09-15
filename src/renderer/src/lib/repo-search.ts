@@ -6,6 +6,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-te
 // higher than the worst possible display-name hit. The value must exceed any
 // realistic displayName length.
 const PATH_SCORE_OFFSET = 1000
+
 export const REPO_SEARCH_QUERY_MAX_BYTES = 2 * 1024
 
 type RepoMatch = {
@@ -23,11 +24,13 @@ export function isRepoSearchQueryTooLarge(
 
 function matchScore(repo: Repo, query: string): number | null {
   const displayNameIndex = repo.displayName.toLowerCase().indexOf(query)
+
   if (displayNameIndex !== -1) {
     return displayNameIndex
   }
 
   const pathIndex = repo.path.toLowerCase().indexOf(query)
+
   if (pathIndex !== -1) {
     // Why: repo-name matches are what issue #379 is about. Path search only
     // exists as a fallback disambiguator, so it should never outrank an actual
@@ -42,20 +45,25 @@ export function searchRepos(repos: readonly Repo[], rawQuery: string): readonly 
   if (isRepoSearchQueryTooLarge(rawQuery)) {
     return []
   }
+
   const trimmedQuery = rawQuery.trim()
   const query = trimmedQuery.toLowerCase()
+
   if (!query) {
     return repos
   }
 
   const matches: RepoMatch[] = []
+
   for (const [index, repo] of repos.entries()) {
     const score = matchScore(repo, query)
+
     if (score !== null) {
       matches.push({ repo, score, index })
     }
   }
 
   matches.sort((a, b) => a.score - b.score || a.index - b.index)
+
   return matches.map((match) => match.repo)
 }

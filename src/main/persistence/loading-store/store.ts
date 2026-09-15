@@ -34,6 +34,7 @@ import type { SshLeaseRecoveryOperations } from './ssh-lease-recovery-operations
 import type { WriteFlushBarrierOperations } from './write-flush-barriers'
 
 export type StoreOptions = StoreRuntimeOptions
+
 export type PtyBindingSourceExpectation = {
   worktreeId?: string
   tabId: string
@@ -67,12 +68,15 @@ export class Store {
     // Load is the only place an orphaned repo id can be swept: every removal path needs the repo to
     // still be registered, so rows outlive their owner without one (#17776).
     const sweptRepoIds = this.domains.repos.sweepDeregisteredRepoResidue()
+
     for (const entry of normalized.migrationUnsupportedEntries) {
       setMigrationUnsupportedPty(entry)
     }
+
     for (const entry of normalized.legacyPaneKeyAliasEntries) {
       registerPersistedPaneKeyAlias(entry)
     }
+
     setMigrationUnsupportedPtyPersistenceListener((entries) => {
       this.state.migrationUnsupportedPtyEntries = entries
       scheduleSave(this.domains.scheduling)
@@ -81,6 +85,7 @@ export class Store {
       this.state.legacyPaneKeyAliasEntries = entries
       scheduleSave(this.domains.scheduling)
     })
+
     if (
       normalized.changed ||
       this.runtime.loadNeedsSave ||
@@ -97,6 +102,7 @@ export class Store {
 
   freezeWrites(): void {
     this.runtime.writesFrozen = true
+
     if (this.runtime.writeTimer) {
       clearTimeout(this.runtime.writeTimer)
       this.runtime.writeTimer = null
@@ -126,6 +132,7 @@ export interface Store
 
 for (const OperationClass of STORE_DOMAIN_OPERATION_CLASSES) {
   const descriptors = Object.getOwnPropertyDescriptors(OperationClass.prototype)
+
   for (const [name, descriptor] of Object.entries(descriptors)) {
     if (name !== 'constructor') {
       Object.defineProperty(Store.prototype, name, descriptor)

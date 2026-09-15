@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as CrashDiagnostics from './crash-diagnostics'
 
 type DiagnosticsModule = typeof CrashDiagnostics
+
 type Listener = (event: unknown) => void
 
 describe('renderer crash diagnostics', () => {
@@ -174,15 +175,18 @@ describe('renderer crash diagnostics', () => {
       querySelectorAll
     })
     const profile = await import('./renderer-memory-profile')
+
     const unregister = profile.registerRendererMemoryProfileContributor('store', () => ({
       worktrees: 12
     }))
 
     diagnostics.installRendererCrashDiagnostics()
+
     const highwaterCalls = (): unknown[] =>
       recordBreadcrumbMock.mock.calls.filter(
         (call) => (call[0] as { name: string }).name === 'renderer_memory_highwater'
       )
+
     expect(highwaterCalls()).toHaveLength(1)
     expect(recordBreadcrumbMock).toHaveBeenCalledWith({
       name: 'renderer_memory_highwater',
@@ -287,10 +291,12 @@ describe('renderer crash diagnostics', () => {
       })
 
       diagnostics.installRendererCrashDiagnostics()
+
       const highwaterCalls = (): unknown[] =>
         recordBreadcrumbMock.mock.calls.filter(
           (call) => (call[0] as { name: string }).name === 'renderer_memory_highwater'
         )
+
       expect(highwaterCalls()).toHaveLength(0)
 
       stubHeap(400) // 78% of 512 — past the 60% threshold, still below 80%.
@@ -321,6 +327,7 @@ describe('renderer crash diagnostics', () => {
       const call = recordBreadcrumbMock.mock.calls.find(
         ([entry]) => (entry as { name: string }).name === 'renderer_memory'
       )?.[0] as { data: Record<string, unknown> }
+
       expect(call.data).toMatchObject({ usedHeapMB: 77, heapSource: 'v8', mallocedMB: 3 })
       expect(call.data).not.toHaveProperty('blinkAllocatedMB')
     })

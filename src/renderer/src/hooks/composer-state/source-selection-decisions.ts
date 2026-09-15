@@ -30,6 +30,7 @@ export function getGitHubLinkedWorkItemIdentity(
   if (!item || getLinkedWorkItemProvider(item) !== 'github') {
     return null
   }
+
   return resolveGitHubWorkItemIdentity({
     type: item.type as 'issue' | 'pr',
     number: item.number,
@@ -43,9 +44,12 @@ export function normalizeGitHubLinkedWorkItem(
   if (!item || getLinkedWorkItemProvider(item) !== 'github') {
     return item ?? null
   }
+
   const identity = getGitHubLinkedWorkItemIdentity(item)
+
   if (!identity || (identity.type === item.type && identity.number === item.number)) {
     return item
   }
+
   return { ...item, type: identity.type, number: identity.number }
 }

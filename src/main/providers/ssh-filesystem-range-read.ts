@@ -18,6 +18,7 @@ export async function readSshFileRange(
   // opaque -32000.
   const { position, length } = validateFileRangeRequest(rawPosition, rawLength)
   let result: unknown
+
   try {
     // No timeoutMs: the multiplexer's 30s default is right for a bounded
     // MAX_FILE_RANGE_READ_BYTES window on a slow link. The capability probe
@@ -34,13 +35,18 @@ export async function readSshFileRange(
     if (isMethodNotFoundError(err)) {
       throw new FileRangeReadUnsupportedError()
     }
+
     throw err
   }
+
   const payload = result as { base64?: unknown; bytesRead?: unknown } | null
+
   if (typeof payload?.base64 !== 'string' || typeof payload.bytesRead !== 'number') {
     throw new Error('fs.readFileRange returned a malformed response')
   }
+
   const bytes = Buffer.from(payload.base64, 'base64')
+
   // The remote is untrusted for framing: a count that disagrees with the
   // payload would silently shift every downstream offset.
   if (
@@ -51,5 +57,6 @@ export async function readSshFileRange(
   ) {
     throw new Error('fs.readFileRange returned an inconsistent byte count')
   }
+
   return { bytes, bytesRead: payload.bytesRead }
 }

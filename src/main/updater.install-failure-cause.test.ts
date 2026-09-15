@@ -20,6 +20,7 @@ const {
     const handlers = appEventHandlers.get(event) ?? []
     handlers.push(handler)
     appEventHandlers.set(event, handlers)
+
     return appMock
   })
 
@@ -27,6 +28,7 @@ const {
     const handlers = eventHandlers.get(event) ?? []
     handlers.push(handler)
     eventHandlers.set(event, handlers)
+
     return autoUpdaterMock
   })
 
@@ -86,21 +88,28 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: autoUpdaterMock }))
+
 vi.mock('./electron-updater-loader', () => ({
   loadElectronAutoUpdater: () => autoUpdaterMock
 }))
+
 vi.mock('@electron-toolkit/utils', () => ({ is: isMock }))
+
 vi.mock('./ipc/pty', () => ({ killAllPty: killAllPtyMock }))
+
 vi.mock('./updater-changelog', () => ({
   fetchChangelog: vi.fn().mockResolvedValue(null)
 }))
+
 vi.mock('./updater-nudge', () => ({
   fetchNudge: vi.fn().mockResolvedValue(null),
   shouldApplyNudge: vi.fn().mockReturnValue(false)
 }))
+
 vi.mock('./updater-lifecycle-diagnostics', () => ({
   recordUpdaterLifecycle: recordUpdaterLifecycleMock
 }))
+
 vi.mock('./linux-update-package-type', () => ({
   getLinuxPackageType: () => 'non-root',
   getLinuxRootPackageType: () => null,
@@ -123,6 +132,7 @@ type CapturedSpan = {
 const originalPlatform = process.platform
 
 let spans: CapturedSpan[]
+
 let tracer: typeof TracerModule | null = null
 
 function capturingSink(): TracerModule.TracerSink {
@@ -164,6 +174,7 @@ async function reachDownloaded(): Promise<typeof UpdaterModule> {
   updater.downloadUpdate()
   autoUpdaterMock.emit('update-downloaded', { version: '1.4.163' })
   expect(updater.getUpdateStatus().state).toBe('downloaded')
+
   return updater
 }
 

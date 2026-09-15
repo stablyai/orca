@@ -62,6 +62,7 @@ export function workspaceKindForWorktreeId(worktreeId: string): ProspectiveWorks
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return 'floating'
   }
+
   return parseWorkspaceKey(worktreeId)?.type === 'folder' ? 'folder' : 'git-worktree'
 }
 
@@ -69,9 +70,11 @@ function resolveExecutionHostId(store: AgentLaunchRouteStore, workspace: Prospec
   if (workspace.worktreeId) {
     return getExecutionHostIdForWorktree(store, workspace.worktreeId)
   }
+
   if (workspace.runtimeEnvironmentId) {
     return toRuntimeExecutionHostId(workspace.runtimeEnvironmentId)
   }
+
   return workspace.executionHostId ?? LOCAL_EXECUTION_HOST_ID
 }
 
@@ -85,6 +88,7 @@ function resolveProjectRuntime(
   if (executionHostId !== LOCAL_EXECUTION_HOST_ID || workspace.kind === 'floating') {
     return undefined
   }
+
   return workspace.worktreeId
     ? getLocalProjectExecutionRuntimeContext(store, workspace.worktreeId)
     : getLocalRepoProjectExecutionRuntimeContext(store, workspace.repoId)
@@ -97,6 +101,7 @@ function resolveTranscriptIsLocalReadable(
 ): boolean {
   if (workspace.worktreeId) {
     const connectionId = getConnectionIdFromState(store, workspace.worktreeId)
+
     // Why: right after creation the worktree row has not landed, and only `undefined` — "cannot
     // determine the host" — hands the question to the repo. A resolved `null` is the local answer.
     return isNativeChatTranscriptLocalReadable(
@@ -105,7 +110,9 @@ function resolveTranscriptIsLocalReadable(
         : connectionId
     )
   }
+
   const host = parseExecutionHostId(executionHostId)
+
   return host?.kind === 'ssh' ? isNativeChatTranscriptLocalReadable(host.targetId) : true
 }
 
@@ -116,6 +123,7 @@ export function buildAgentLaunchRouteInput(
 ): AgentLaunchRoutingInput {
   const { agent, workspace, tuiCustomization } = args
   const executionHostId = resolveExecutionHostId(store, workspace)
+
   return {
     agent,
     settings: store.settings,

@@ -12,6 +12,7 @@ export function buildWallClockTimestamp(
 ): number | null {
   if (!timeZone) {
     const localDate = new Date(parts.year, parts.monthIndex, parts.day, parts.hour, parts.minute)
+
     return isMatchingDateParts(localDate, parts) ? localDate.getTime() : null
   }
 
@@ -24,11 +25,15 @@ export function buildWallClockTimestamp(
     hour: '2-digit',
     minute: '2-digit'
   })
+
   const timestamp = buildTimeZoneTimestamp(parts, formatter)
+
   if (timestamp === null) {
     return null
   }
+
   const resolvedParts = getTimeZoneDateParts(timestamp, formatter)
+
   return resolvedParts && areMatchingWallClockParts(resolvedParts, parts) ? timestamp : null
 }
 
@@ -38,19 +43,24 @@ function buildTimeZoneTimestamp(
 ): number | null {
   const utcGuess = Date.UTC(parts.year, parts.monthIndex, parts.day, parts.hour, parts.minute)
   const firstOffset = getTimeZoneOffsetMs(utcGuess, formatter)
+
   if (firstOffset === null) {
     return null
   }
+
   const firstTimestamp = utcGuess - firstOffset
   const secondOffset = getTimeZoneOffsetMs(firstTimestamp, formatter)
+
   return secondOffset === null ? null : utcGuess - secondOffset
 }
 
 function getTimeZoneOffsetMs(timestamp: number, formatter: Intl.DateTimeFormat): number | null {
   const parts = getTimeZoneDateParts(timestamp, formatter)
+
   if (!parts) {
     return null
   }
+
   return Date.UTC(parts.year, parts.monthIndex, parts.day, parts.hour, parts.minute) - timestamp
 }
 
@@ -61,11 +71,13 @@ function getTimeZoneDateParts(
   const parts = Object.fromEntries(
     formatter.formatToParts(new Date(timestamp)).map((part) => [part.type, part.value])
   )
+
   const year = Number(parts.year)
   const monthIndex = Number(parts.month) - 1
   const day = Number(parts.day)
   const hour = Number(parts.hour)
   const minute = Number(parts.minute)
+
   return [year, monthIndex, day, hour, minute].every(Number.isFinite)
     ? { year, monthIndex, day, hour, minute }
     : null

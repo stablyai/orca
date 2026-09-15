@@ -29,6 +29,7 @@ const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMo
 
 vi.mock('./daemon-health', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonHealthModule>()
+
   return {
     ...actual,
     getMacDaemonSystemResolverHealth: getMacDaemonSystemResolverHealthMock
@@ -37,6 +38,7 @@ vi.mock('./daemon-health', async (importOriginal) => {
 
 vi.mock('./daemon-tcc-attribution', async (importOriginal) => {
   const actual = await importOriginal<typeof DaemonTccAttributionModule>()
+
   return {
     ...actual,
     getMacDaemonTccAttributionHealth: getMacDaemonTccAttributionHealthMock
@@ -50,6 +52,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   let server: DaemonServer
   let adapter: DaemonPtyAdapter
   let lastSubprocess: ReturnType<typeof createMockSubprocess>
+
   let lastSpawnOpts: {
     sessionId: string
     cols: number
@@ -58,15 +61,19 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     env?: Record<string, string>
     command?: string
   } | null
+
   let subprocessDataOnSubscribe: string | undefined
 
   beforeEach(async () => {
     subprocessDataOnSubscribe = undefined
+
     const harness = await startDaemonAdapterHarness((opts) => {
       lastSpawnOpts = opts
       lastSubprocess = createMockSubprocess(subprocessDataOnSubscribe)
+
       return lastSubprocess
     })
+
     dir = harness.dir
     socketPath = harness.socketPath
     tokenPath = harness.tokenPath
@@ -166,10 +173,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'pre-crash output\r\n')
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const internals = historyAdapter as unknown as {
         lastFullCheckpointAt: Map<string, number>
         sessionsNeedingFullCheckpoint: Set<string>
       }
+
       // A daemon respawn inside one adapter keeps this map, so seed a fresh cooldown as if the pre-crash generation just snapshotted.
       internals.lastFullCheckpointAt.set(sessionId, Date.now())
 
@@ -188,10 +197,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       // The old adapter may have drained records it never persisted (deferred hot-session tick), so appends must wait for a full snapshot to re-anchor the log.
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const internals = historyAdapter as unknown as {
         sessionsNeedingFullCheckpoint: Set<string>
         lastFullCheckpointAt: Map<string, number>
       }
+
       const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(result.isReattach).toBe(true)
       expect(internals.sessionsNeedingFullCheckpoint.has(sessionId)).toBe(false)
@@ -210,11 +221,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       expect(result.isReattach).toBe(true)
       expect(result.coldRestore).toBeUndefined()
+
       // The unmanaged-reattach re-anchor must survive a live remount overlay.
       const internals = historyAdapter as unknown as {
         sessionsNeedingFullCheckpoint: Set<string>
         lastFullCheckpointAt: Map<string, number>
       }
+
       expect(internals.sessionsNeedingFullCheckpoint.has(sessionId)).toBe(false)
       expect(internals.lastFullCheckpointAt.has(sessionId)).toBe(true)
     })
@@ -229,9 +242,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       lastSubprocess._simulateData('BASELINE-BEFORE-RESTART\r\n')
       await waitFor(() => firstData.includes('BASELINE-BEFORE-RESTART\r\n'))
+
       const firstInternals = first as unknown as {
         checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
       }
+
       await firstInternals.checkpointSessions([sessionId])
       expect(readFileSync(join(sessionDir, 'output.log')).includes('BASELINE-BEFORE-RESTART')).toBe(
         true
@@ -257,6 +272,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const attachedInternals = historyAdapter as unknown as {
         checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
       }
+
       expect(
         JSON.parse(readFileSync(join(sessionDir, 'checkpoint.json'), 'utf8')).snapshotAnsi
       ).toContain('BASELINE-BEFORE-RESTART')
@@ -287,26 +303,33 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await first.disconnectOnly()
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const overlayTarget = historyAdapter as unknown as {
         overlayDurableRestoreSnapshot(
           id: string,
           snapshot: TerminalSnapshot
         ): Promise<TerminalSnapshot>
       }
+
       const originalOverlay = overlayTarget.overlayDurableRestoreSnapshot.bind(historyAdapter)
       let reportOverlayReady!: () => void
+
       const overlayReady = new Promise<void>((resolve) => {
         reportOverlayReady = resolve
       })
+
       let releaseOverlay!: () => void
+
       const overlayRelease = new Promise<void>((resolve) => {
         releaseOverlay = resolve
       })
+
       vi.spyOn(overlayTarget, 'overlayDurableRestoreSnapshot').mockImplementation(
         async (id, snapshot) => {
           const result = await originalOverlay(id, snapshot)
           reportOverlayReady()
           await overlayRelease
+
           return result
         }
       )
@@ -327,9 +350,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         exitedBeforeSpawnReply: true,
         isReattach: true
       })
+
       const routerInternals = router as unknown as {
         sessionAdapters: Map<string, DaemonPtyAdapter>
       }
+
       expect(routerInternals.sessionAdapters.has(sessionId)).toBe(false)
       expect(historyAdapter.getActiveSessionIds()).toEqual([])
       expect(historyAdapter.getHistoryManager()!.hasWriter(sessionId)).toBe(false)
@@ -338,11 +363,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
     it('does not probe session aliveness when there is no restorable history', async () => {
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const client = (
         historyAdapter as unknown as {
           client: { request: (type: string, payload?: unknown) => Promise<unknown> }
         }
       ).client
+
       const requestSpy = vi.spyOn(client, 'request')
 
       await historyAdapter.spawn({ cols: 80, rows: 24, sessionId: 'fresh-no-history' })
@@ -368,18 +395,22 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'raced output\r\n')
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const client = (
         historyAdapter as unknown as {
           client: { request: (type: string, payload?: unknown) => Promise<unknown> }
         }
       ).client
+
       const originalRequest = client.request.bind(client)
       // Why: simulates the probe→createOrAttach race (session dies mid-call, writing endedAt); fallback detect must still restore, not fall through to openSession which deletes the checkpoint.
       vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
         if (type === 'getSize') {
           return { size: { cols: 100, rows: 30 } }
         }
+
         const response = await originalRequest(type, payload)
+
         if (type === 'createOrAttach') {
           writeFileSync(
             join(sessionDir, 'meta.json'),
@@ -393,6 +424,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
             })
           )
         }
+
         return response
       })
 
@@ -404,10 +436,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(lastSpawnOpts).toMatchObject({ sessionId, cols: 100, rows: 30 })
       // The recovery data must survive — openSession would have deleted it.
       expect(existsSync(join(sessionDir, 'scrollback.bin'))).toBe(true)
+
       const internals = historyAdapter as unknown as {
         sessionsNeedingFullCheckpoint: Set<string>
         lastFullCheckpointAt: Map<string, number>
       }
+
       expect(internals.sessionsNeedingFullCheckpoint.has(sessionId)).toBe(true)
       expect(internals.lastFullCheckpointAt.has(sessionId)).toBe(false)
     })
@@ -430,17 +464,20 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'probeless output\r\n')
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const client = (
         historyAdapter as unknown as {
           client: { request: (type: string, payload?: unknown) => Promise<unknown> }
         }
       ).client
+
       const originalRequest = client.request.bind(client)
       // Why: an old daemon rejects the unknown getSize method; the spawn must behave exactly like the unprobed path.
       vi.spyOn(client, 'request').mockImplementation((type: string, payload?: unknown) => {
         if (type === 'getSize') {
           return Promise.reject(new Error('Unknown request type'))
         }
+
         return originalRequest(type, payload)
       })
 
@@ -474,6 +511,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'cached output')
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const internals = historyAdapter as unknown as {
         coldRestoreCache: { byteSize: number }
       }
@@ -512,6 +550,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'cached output')
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const internals = historyAdapter as unknown as {
         coldRestoreCache: Map<string, { scrollback: string; cwd: string; oscLinks?: unknown[] }>
       }
@@ -542,6 +581,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'cached output')
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
       const internals = historyAdapter as unknown as {
         coldRestoreCache: Map<string, { scrollback: string; cwd: string; oscLinks?: unknown[] }>
       }
@@ -581,6 +621,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const meta = JSON.parse(
         readFileSync(join(historyDir, getHistorySessionDirName(sessionId), 'meta.json'), 'utf-8')
       )
+
       expect(meta.cwd).toBe('/tmp')
       expect(meta.cols).toBe(80)
       expect(meta.rows).toBe(24)
@@ -610,6 +651,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const internals = historyAdapter as unknown as {
         checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
       }
+
       await internals.checkpointSessions([sessionId])
       const checkpointPath = join(sessionDir, 'checkpoint.json')
       const checkpoint = JSON.parse(readFileSync(checkpointPath, 'utf8'))
@@ -640,11 +682,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       const first = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
       const originalWriteSync = HeadlessEmulator.prototype.writeSync
+
       const writeSyncSpy = vi
         .spyOn(HeadlessEmulator.prototype, 'writeSync')
         .mockImplementation(function (this: HeadlessEmulator, data) {
           return data.includes('recovered marker') ? false : originalWriteSync.call(this, data)
         })
+
       try {
         await first.spawn({ cols: 80, rows: 24, sessionId })
         lastSubprocess._simulateData('fresh-only output\r\n')
@@ -653,9 +697,11 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
         const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
         expect(result.coldRestore?.scrollback).toContain('recovered marker')
+
         const internals = historyAdapter as unknown as {
           checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
         }
+
         await internals.checkpointSessions([sessionId])
 
         expect(existsSync(join(sessionDir, 'checkpoint.json'))).toBe(false)

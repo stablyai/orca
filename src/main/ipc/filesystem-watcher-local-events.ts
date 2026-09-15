@@ -40,6 +40,7 @@ function coalesceEvents(
       if (prev.type === 'delete' && evt.type === 'create') {
         deleteBeforeCreate.add(p)
       }
+
       // create followed by delete → net no-op, remove both
       if (prev.type === 'create' && evt.type === 'delete') {
         lastByPath.delete(p)
@@ -76,6 +77,7 @@ function coalesceEvents(
 async function tryStatIsDirectory(filePath: string): Promise<boolean | undefined> {
   try {
     const s = await stat(filePath)
+
     return s.isDirectory()
   } catch {
     // Why: stat failure (EPERM, vanished file) → undefined; renderer treats it as a file event, the safe default (§4.4).
@@ -87,10 +89,12 @@ async function tryStatIsDirectory(filePath: string): Promise<boolean | undefined
 
 function emitOverflowPayload(root: WatchedRoot): void {
   const { rootPath } = root
+
   const payload: FsChangedPayload = {
     worktreePath: rootPath,
     events: [{ kind: 'overflow', absolutePath: rootPath }]
   }
+
   for (const [, wc] of root.listeners) {
     if (!wc.isDestroyed()) {
       wc.send('fs:changed', payload)
@@ -102,16 +106,20 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
   if (root.batch.cancelled) {
     return
   }
+
   if (root.batch.flushInFlight) {
     root.batch.flushQueued = true
+
     return
   }
 
   root.batch.flushInFlight = true
+
   if (root.batch.timer) {
     clearTimeout(root.batch.timer)
     root.batch.timer = null
   }
+
   const overflowed = root.batch.overflowed
   const rawEvents = root.batch.events.splice(0)
   root.batch.overflowed = false
@@ -127,6 +135,7 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
       if (!root.batch.cancelled) {
         emitOverflowPayload(root)
       }
+
       return
     }
 
@@ -168,8 +177,10 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
     }
   } finally {
     root.batch.flushInFlight = false
+
     if (root.batch.flushQueued) {
       root.batch.flushQueued = false
+
       if (
         !root.batch.cancelled &&
         // Why: an armed timer still owns its debounce window; draining here would split related events across payloads.
@@ -188,6 +199,7 @@ export function scheduleLocalBatchFlush(root: WatchedRoot): void {
   if (root.batch.cancelled) {
     return
   }
+
   if (root.batch.flushInFlight) {
     root.batch.flushQueued = true
   }
@@ -204,15 +216,19 @@ export function scheduleLocalBatchFlush(root: WatchedRoot): void {
       clearTimeout(root.batch.timer)
       root.batch.timer = null
     }
+
     void flushBatch(root)
+
     return
   }
 
   // Trailing-edge debounce: reset timer on each new event
   if (root.batch.timer) {
     root.batch.timer.refresh()
+
     return
   }
+
   // Why: clear the handle as it fires so `batch.timer` means "a debounce window is still open", which gates the queued drain.
   root.batch.timer = setTimeout(() => {
     root.batch.timer = null
@@ -259,19 +275,23 @@ export async function createLocalWatcher(
           emitOverflowPayload(root)
           // Why: after an error the native subscription may be invalid (deleted root); tear down the dead watcher so it doesn't dangle (§7.3).
           cancelLocalBatchFlush(root)
+
           // Why: error callback can fire before subscribe() assigns root.subscription; guard against null so cleanup doesn't crash.
           if (root.subscription) {
             retainLocalWatcherPhysicalFailure(rootKey, err)
             void trackDetachedLocalUnsubscribe(rootKey, root)
           }
+
           errorCleanedUp = true
           watcherLifecycleState.watchedRoots.delete(rootKey)
+
           return
         }
 
         if (root.batch.cancelled) {
           return
         }
+
         queueWatcherEvents(root.batch, events)
         scheduleLocalBatchFlush(root)
       },

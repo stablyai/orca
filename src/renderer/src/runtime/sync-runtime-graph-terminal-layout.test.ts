@@ -27,6 +27,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
 describe('terminal mobile session layout publication', () => {
   it('publishes large tab groups without using argument-list spreads', () => {
     const tabCount = 130_000
+
     const openFiles = Array.from({ length: tabCount }, (_, index) => ({
       id: `/repo/file-${index}.ts`,
       filePath: `/repo/file-${index}.ts`,
@@ -36,6 +37,7 @@ describe('terminal mobile session layout publication', () => {
       mode: 'edit',
       isDirty: false
     }))
+
     const unifiedTabs = openFiles.map((file, index) => ({
       id: `editor-tab-${index}`,
       groupId: 'group-1',
@@ -43,6 +45,7 @@ describe('terminal mobile session layout publication', () => {
       entityId: file.id,
       title: `file-${index}.ts`
     }))
+
     const state = makeState({
       activeGroupIdByWorktree: { 'wt-1': 'group-1' },
       activeFileIdByWorktree: { 'wt-1': openFiles[0].id },
@@ -71,6 +74,7 @@ describe('terminal mobile session layout publication', () => {
   it('publishes terminal parent layout so remote clients can keep split panes grouped', () => {
     const firstLeaf = '11111111-1111-4111-8111-111111111111'
     const secondLeaf = '22222222-2222-4222-8222-222222222222'
+
     const state = makeState({
       activeGroupIdByWorktree: { 'wt-1': 'group-1' },
       groupsByWorktree: {
@@ -167,6 +171,7 @@ describe('terminal mobile session layout publication', () => {
   it('publishes split tab groups so remote clients mirror terminal tab splits', () => {
     const leftLeaf = '11111111-1111-4111-8111-111111111111'
     const rightLeaf = '22222222-2222-4222-8222-222222222222'
+
     const state = makeState({
       activeGroupIdByWorktree: { 'wt-1': 'group-right' },
       groupsByWorktree: {
@@ -271,6 +276,7 @@ describe('terminal mobile session layout publication', () => {
 
   it('publishes the active tab from the active split group', () => {
     const rightLeaf = '22222222-2222-4222-8222-222222222222'
+
     const state = makeState({
       activeGroupIdByWorktree: { 'wt-1': 'group-right' },
       groupsByWorktree: {
@@ -375,6 +381,7 @@ describe('terminal mobile session layout publication', () => {
 
   it('does not publish web-mirrored terminal tabs back to the host session', () => {
     const leaf = '11111111-1111-4111-8111-111111111111'
+
     const state = makeState({
       activeGroupIdByWorktree: { 'wt-1': 'group-1' },
       groupsByWorktree: {
@@ -429,6 +436,7 @@ describe('terminal mobile session layout publication', () => {
 
   it('publishes legacy web-prefixed host terminal tabs when they own local PTYs', () => {
     const leaf = '11111111-1111-4111-8111-111111111111'
+
     const state = makeState({
       activeGroupIdByWorktree: { 'wt-1': 'group-1' },
       groupsByWorktree: {
@@ -492,6 +500,7 @@ describe('terminal mobile session layout publication', () => {
 
   it('does not publish stale single-pane tab labels as pane titles', () => {
     const leaf = '11111111-1111-4111-8111-111111111111'
+
     const state = makeState({
       activeGroupIdByWorktree: { 'wt-1': 'group-1' },
       groupsByWorktree: {
@@ -557,6 +566,7 @@ describe('terminal mobile session layout publication', () => {
   it('keeps pane-owned titles across split parking', () => {
     const firstLeaf = '11111111-1111-4111-8111-111111111111'
     const secondLeaf = '22222222-2222-4222-8222-222222222222'
+
     const splitState = makeState({
       tabsByWorktree: {
         'wt-1': [{ id: 'term-1', title: 'Leaked tab title', customTitle: null }]

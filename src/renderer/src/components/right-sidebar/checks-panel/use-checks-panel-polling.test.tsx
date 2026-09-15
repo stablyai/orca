@@ -12,6 +12,7 @@ const poller = vi.hoisted(() => ({
   getDelayMs: null as null | (() => number),
   cleanup: vi.fn()
 }))
+
 const gitlab = vi.hoisted(() => ({ fetchDetails: vi.fn() }))
 
 vi.mock('@/lib/window-visibility-timeout-poller', () => ({
@@ -20,12 +21,15 @@ vi.mock('@/lib/window-visibility-timeout-poller', () => ({
       poller.run = config.run
       poller.getDelayMs = config.getDelayMs
       poller.install()
+
       return poller.cleanup
     }
   )
 }))
+
 vi.mock('./gitlab-review-client', async (importOriginal) => {
   const original = await importOriginal<typeof GitLabReviewClient>()
+
   return { ...original, fetchGitLabMRDetailsForChecks: gitlab.fetchDetails }
 })
 
@@ -35,6 +39,7 @@ type PollingInput = Parameters<typeof useChecksPanelPolling>[0]
 
 function createModel(overrides: Partial<PollingInput> = {}): PollingInput {
   const fetchPRChecks = vi.fn<() => Promise<PRCheckDetail[]>>().mockResolvedValue([])
+
   return {
     activeGitLabReview: null,
     activeWorktree: null,
@@ -83,6 +88,7 @@ afterEach(() => {
 describe('useChecksPanelPolling live behavior', () => {
   it('gates installation by panel visibility and cleans the active poller', () => {
     const model = createModel({ isPanelVisible: false })
+
     const hook = renderHook(({ input }) => useChecksPanelPolling(input), {
       initialProps: { input: model }
     })
@@ -120,6 +126,7 @@ describe('useChecksPanelPolling live behavior', () => {
         headSha: 'gitlab-head'
       } as NonNullable<PollingInput['activeGitLabReview']>
     })
+
     renderHook(() => useChecksPanelPolling(model))
 
     await act(async () => poller.run?.())
@@ -132,6 +139,7 @@ describe('useChecksPanelPolling live behavior', () => {
     const ownerSettings = {
       activeRuntimeEnvironmentId: 'owner-runtime'
     } as PollingInput['settings']
+
     const model = createModel({
       activeGitLabReview: {
         provider: 'gitlab',
@@ -145,6 +153,7 @@ describe('useChecksPanelPolling live behavior', () => {
       }),
       settings: { activeRuntimeEnvironmentId: 'focused-runtime' } as PollingInput['settings']
     })
+
     const { result } = renderHook(() => useChecksPanelPolling(model))
 
     await act(async () =>
@@ -173,6 +182,7 @@ describe('useChecksPanelPolling live behavior', () => {
       pipelineJobs: PRCheckDetail[]
       comments: []
     }) => void
+
     gitlab.fetchDetails.mockReturnValueOnce(
       new Promise((resolve) => {
         resolveDetails = resolve
@@ -187,6 +197,7 @@ describe('useChecksPanelPolling live behavior', () => {
       commitAsCurrent: true,
       isRequestCurrent: () => requestCurrent
     })
+
     await act(() => Promise.resolve())
     requestCurrent = false
     resolveDetails({
@@ -208,6 +219,7 @@ describe('useChecksPanelPolling live behavior', () => {
       pipelineJobs: []
       comments: []
     }) => void)[] = []
+
     gitlab.fetchDetails.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -223,12 +235,15 @@ describe('useChecksPanelPolling live behavior', () => {
       commitAsCurrent: true,
       isRequestCurrent: () => firstRequestCurrent
     })
+
     await act(() => Promise.resolve())
     firstRequestCurrent = false
+
     const secondRequest = result.current.fetchGitLabDetails({
       mrNumberOverride: 18,
       commitAsCurrent: true
     })
+
     await act(() => Promise.resolve())
 
     detailsResolvers[0]?.({ item: { projectRef: null }, pipelineJobs: [], comments: [] })

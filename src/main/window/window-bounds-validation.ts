@@ -18,18 +18,22 @@ export function rectHasVisibleAreaOnAnyDisplay(
   try {
     return screen.getAllDisplays().some((display) => {
       const wa = display.workArea
+
       const overlapX = Math.max(
         0,
         Math.min(rect.x + rect.width, wa.x + wa.width) - Math.max(rect.x, wa.x)
       )
+
       const overlapY = Math.max(
         0,
         Math.min(rect.y + rect.height, wa.y + wa.height) - Math.max(rect.y, wa.y)
       )
+
       return overlapX >= minVisibleWidth && overlapY >= minVisibleHeight
     })
   } catch (err) {
     console.warn('[window] screen.getAllDisplays() threw; treating bounds as off-screen', err)
+
     return false
   }
 }

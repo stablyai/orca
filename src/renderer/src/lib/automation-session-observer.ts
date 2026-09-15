@@ -24,6 +24,7 @@ export async function observeExistingAutomationSession(args: {
   onExit: (code: number) => void
 }): Promise<() => void> {
   const { ptyId, paneKey, runId, onData, onExit } = args
+
   // Why: for local/SSH PTYs main already parses OSC 9999 and routes it
   // through the hook server (agentStatus:set → store); writing here too
   // would race/duplicate that path. Remote-runtime bytes never transit local
@@ -35,14 +36,18 @@ export async function observeExistingAutomationSession(args: {
       settings: useAppStore.getState().settings,
       runtimeEnvironmentId: null
     })
+
   const processAgentStatus = createAgentStatusOscProcessor()
+
   const handleData = (data: string): void => {
     onData(data)
     const processed = processAgentStatus(data)
+
     for (const payload of processed.payloads) {
       if (!mainOwnsAgentStatusWrites) {
         const state = useAppStore.getState()
         const routing = resolveLiveAgentStatusConnectionRouting({ state, paneKey, ptyId })
+
         // Why: a delayed reuse observer must not write into a pane that has
         // since rebound to another host's colliding tab/pane identifiers.
         if (routing) {
@@ -62,6 +67,7 @@ export async function observeExistingAutomationSession(args: {
           )
         }
       }
+
       args.onAgentStatus(payload)
     }
   }
@@ -69,13 +75,17 @@ export async function observeExistingAutomationSession(args: {
   if (isRemoteRuntimePtyId(ptyId)) {
     let disposed = false
     const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+
     const runtimeTarget = ownerEnvironmentId
       ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
       : getActiveRuntimeTarget(useAppStore.getState().settings)
+
     const terminal = getRemoteRuntimeTerminalHandle(ptyId)
+
     if (runtimeTarget.kind !== 'environment' || !terminal) {
       return () => {}
     }
+
     const stream = await getRemoteRuntimeTerminalMultiplexer(
       runtimeTarget.environmentId
     ).subscribeTerminal({
@@ -86,6 +96,7 @@ export async function observeExistingAutomationSession(args: {
         onSnapshot: () => {}
       }
     })
+
     void callRuntimeRpc<{ wait: { exitCode?: number | null } }>(
       runtimeTarget,
       'terminal.wait',
@@ -98,6 +109,7 @@ export async function observeExistingAutomationSession(args: {
         }
       })
       .catch(() => {})
+
     return () => {
       disposed = true
       stream.close()
@@ -106,6 +118,7 @@ export async function observeExistingAutomationSession(args: {
 
   const unsubscribeData = subscribeToPtyData(ptyId, handleData)
   const unsubscribeExit = subscribeToPtyExit(ptyId, onExit)
+
   return () => {
     unsubscribeData()
     unsubscribeExit()

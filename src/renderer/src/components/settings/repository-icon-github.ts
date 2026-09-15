@@ -5,6 +5,7 @@ import { githubRepoIdentityKey } from '../../../../shared/github/repository-iden
 import { callRuntimeRpc, type getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
 type RuntimeTarget = ReturnType<typeof getActiveRuntimeTarget>
+
 type ResolveRepositoryGitHubAvatarOptions = {
   forceLive?: boolean
 }
@@ -60,12 +61,14 @@ export async function resolveRepositoryGitHubAvatar(
     !options.forceLive && repo.upstream !== undefined
       ? repo.upstream
       : await resolveRepositoryUpstreamLive(runtimeTarget, repo).catch(() => null)
+
   // Why: a null live upstream is ambiguous (offline/unauthed vs. not-a-fork). Keep
   // the last-known parent so a transient failure can't clobber fork identity.
   const upstream = liveUpstream ?? repo.upstream ?? null
   // Why: a rejected origin probe is also ambiguous, so it propagates — callers keep
   // the stored icon rather than flipping a renamed fork back to the parent avatar.
   const slug = githubAvatarSlug(await resolveRepositorySlugLive(runtimeTarget, repo), upstream)
+
   return { repoIcon: slug ? githubAvatarIcon(slug) : null, upstream }
 }
 
@@ -76,6 +79,7 @@ function sameRepositoryIdentity(
   if (!a || !b) {
     return a === b
   }
+
   return githubRepoIdentityKey(a) === githubRepoIdentityKey(b)
 }
 
@@ -83,15 +87,19 @@ function sameRepoIcon(a: RepoIcon | null | undefined, b: RepoIcon | null | undef
   if (!a || !b) {
     return a === b
   }
+
   if (a.type !== b.type) {
     return false
   }
+
   if (a.type === 'image' && b.type === 'image') {
     return a.src === b.src && a.source === b.source && a.label === b.label
   }
+
   if (a.type === 'emoji' && b.type === 'emoji') {
     return a.emoji === b.emoji
   }
+
   return a.type === 'lucide' && b.type === 'lucide' && a.name === b.name
 }
 

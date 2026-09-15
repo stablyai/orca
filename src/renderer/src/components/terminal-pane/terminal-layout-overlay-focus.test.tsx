@@ -9,11 +9,13 @@ function createLayoutFixture() {
   document.body.append(textarea)
   textarea.focus()
   const terminal = { focus: vi.fn(() => textarea.focus()) }
+
   const manager = {
     fitAllPanes: vi.fn(),
     getActivePane: () => ({ terminal }),
     getPanes: () => [{ terminal }]
   } as unknown as PaneManager
+
   return { manager, terminal, textarea }
 }
 
@@ -25,6 +27,7 @@ function mountOverlay(role: string) {
     new DOMRect(0, 0, 100, 100)
   ] as unknown as DOMRectList)
   document.body.append(overlay)
+
   return overlay
 }
 

@@ -13,10 +13,13 @@ import os from 'node:os'
 import path from 'node:path'
 
 export const LARGE_TREE_FILE_COUNT = 88_763
+
 export const LARGE_TREE_IGNORED_FILE_COUNT = 77_792
+
 export const LARGE_TREE_NOMINAL_IGNORED_BYTES = 22 * 1024 * 1024 * 1024
 
 const FILES_PER_DIRECTORY = 256
+
 const LONG_STEM = 'remote-quick-open-transport-budget-path-'.repeat(2)
 
 function createFiles(root: string, directoryName: string, count: number, extension: string): void {
@@ -24,6 +27,7 @@ function createFiles(root: string, directoryName: string, count: number, extensi
     const directory = path.join(root, directoryName, `chunk-${String(start).padStart(6, '0')}`)
     mkdirSync(directory, { recursive: true })
     const end = Math.min(start + FILES_PER_DIRECTORY, count)
+
     for (let index = start; index < end; index++) {
       closeSync(
         openSync(
@@ -44,6 +48,7 @@ export type PairedQuickOpenLargeTreeFixture = {
 
 export function createPairedQuickOpenLargeTreeFixture(): PairedQuickOpenLargeTreeFixture {
   const root = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-quick-open-large-tree-'))
+
   try {
     execFileSync('git', ['init'], { cwd: root, stdio: 'pipe' })
     writeFileSync(path.join(root, '.gitignore'), 'data/\n')
@@ -53,8 +58,10 @@ export function createPairedQuickOpenLargeTreeFixture(): PairedQuickOpenLargeTre
     createFiles(root, 'src', visibleFileCount, 'ts')
     createFiles(root, 'data', LARGE_TREE_IGNORED_FILE_COUNT, 'bin')
     const lastIgnoredIndex = LARGE_TREE_IGNORED_FILE_COUNT - 1
+
     const lastIgnoredChunk =
       Math.floor(lastIgnoredIndex / FILES_PER_DIRECTORY) * FILES_PER_DIRECTORY
+
     const ignoredDirectory = `chunk-${String(lastIgnoredChunk).padStart(6, '0')}`
     const gitIgnoredTargetPath = `data/${ignoredDirectory}/sta-4354-gitignored-target.bin`
     renameSync(
@@ -88,6 +95,7 @@ export function createPairedQuickOpenLargeTreeFixture(): PairedQuickOpenLargeTre
       ],
       { cwd: root, stdio: 'pipe' }
     )
+
     return {
       root,
       gitIgnoredTargetPath,

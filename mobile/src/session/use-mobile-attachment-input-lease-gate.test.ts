@@ -25,6 +25,7 @@ describe('useMobileAttachmentInputLeaseGate', () => {
     showToast: (message: string, durationMs?: number) => void
   }): { gate: () => Gate } {
     let gate: Gate = () => Promise.resolve(false)
+
     function Probe(): null {
       gate = useMobileAttachmentInputLeaseGate({
         flushPendingLiveInputBeforeExternalSend: () => Promise.resolve(true),
@@ -34,11 +35,14 @@ describe('useMobileAttachmentInputLeaseGate', () => {
         nativeChatInputLeaseReadyRef: args.leaseReady,
         showToast: args.showToast
       })
+
       return null
     }
+
     act(() => {
       renderer = create(createElement(Probe))
     })
+
     return { gate: () => gate }
   }
 

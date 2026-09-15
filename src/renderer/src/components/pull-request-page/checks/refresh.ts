@@ -44,16 +44,21 @@ export async function refreshPullRequestChecks(args: {
         'Unable to refresh checks without a repository path.'
       )
     )
+
     return null
   }
+
   const refreshContextOwner =
     args.expectedContextOwner ?? args.committedChecksContextOwnerRef.current
+
   if (args.committedChecksContextOwnerRef.current !== refreshContextOwner) {
     return null
   }
+
   const refreshRequestId = ++args.nextChecksRefreshRequestIdRef.current
   args.activeChecksRefreshRequestIdRef.current = refreshRequestId
   args.setRefreshingOwner({ contextOwner: refreshContextOwner, requestId: refreshRequestId })
+
   try {
     const nextChecks = (await (args.runtimeHost
       ? callRuntimeRpc<PRCheckDetail[]>(
@@ -77,6 +82,7 @@ export async function refreshPullRequestChecks(args: {
           prRepo: args.prRepo,
           noCache: true
         }))) as PRCheckDetail[]
+
     if (
       !args.mountedRef.current ||
       args.committedChecksContextOwnerRef.current !== refreshContextOwner ||
@@ -84,12 +90,14 @@ export async function refreshPullRequestChecks(args: {
     ) {
       return null
     }
+
     args.setChecksState((current) =>
       current.contextOwner === refreshContextOwner
         ? updateGitHubChecksTabLocalChecks(resetGitHubChecksTabForSource(current), nextChecks)
         : current
     )
     args.onChecksUpdated(nextChecks)
+
     return nextChecks
   } catch (err) {
     if (
@@ -103,11 +111,13 @@ export async function refreshPullRequestChecks(args: {
           : translate('auto.components.PullRequestPage.246b2c6456', 'Failed to refresh checks')
       )
     }
+
     return null
   } finally {
     if (args.activeChecksRefreshRequestIdRef.current === refreshRequestId) {
       args.activeChecksRefreshRequestIdRef.current = null
     }
+
     if (args.mountedRef.current) {
       args.setRefreshingOwner((current) =>
         current?.requestId === refreshRequestId ? null : current

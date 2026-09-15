@@ -3,6 +3,7 @@ import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import { getWorktreeStatus, getWorktreeStatusLabel, resolveWorktreeStatus } from './worktree-status'
 
 const LEAF_ID_1 = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222'
 
 // Why: build a live-pty map from tab ids so each test can declare which

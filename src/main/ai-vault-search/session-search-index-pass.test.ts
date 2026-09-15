@@ -16,10 +16,13 @@ import { discoverSessionSearchCandidates } from './session-search-scan-roots'
 import { SessionSearchStore } from './session-search-store'
 
 const FIRST = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+
 const SECOND = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
 
 let harness: SessionSearchIndexerHarness
+
 let store: SessionSearchStore
+
 let errors: unknown[]
 
 beforeEach(async () => {
@@ -45,6 +48,7 @@ function transcript(sessionId: string): string {
 function openStore(): SessionSearchStore {
   const opened = new SessionSearchStore(harness.databasePath, (error) => errors.push(error))
   registerSessionSearchIndexConsumer(opened)
+
   return opened
 }
 

@@ -8,5 +8,6 @@ export function sessionSearchHistoryCutoffMs(
   nowMs: number
 ): number | null {
   const days = normalizeAiVaultSearchHistoryDays(historyDays)
+
   return days === null ? null : nowMs - days * DAY_MS
 }

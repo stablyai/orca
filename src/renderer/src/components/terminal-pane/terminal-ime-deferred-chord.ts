@@ -24,11 +24,13 @@ export function createTerminalImeDeferredChordSender(): TerminalImeDeferredChord
     defer: (terminalElement, send) => {
       let abandonTimer: number | undefined
       let stopComposingWait: (() => void) | null = null
+
       const stopWaiting = (): void => {
         window.clearTimeout(abandonTimer)
         pendingStops.delete(stopWaiting)
         stopComposingWait?.()
       }
+
       abandonTimer = window.setTimeout(stopWaiting, TERMINAL_IME_DEFERRED_CHORD_ABANDON_MS)
       pendingStops.add(stopWaiting)
       stopComposingWait = sendTerminalInputAfterComposition(
@@ -45,6 +47,7 @@ export function createTerminalImeDeferredChordSender(): TerminalImeDeferredChord
       for (const stopWaiting of pendingStops) {
         stopWaiting()
       }
+
       pendingStops.clear()
     }
   }

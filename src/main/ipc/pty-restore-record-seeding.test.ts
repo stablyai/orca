@@ -23,45 +23,61 @@ import {
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -71,6 +87,7 @@ describe('registerPtyHandlers', () => {
 
   it('seeds cold restore at recovered dimensions with a legacy dimensionless fallback', async () => {
     const oscLinks = [{ row: 0, startCol: 0, endCol: 8, uri: 'https://example.com/restored' }]
+
     const coldRestore = {
       scrollback: 'restored history\r\n',
       cwd: '/projects/restored',
@@ -78,6 +95,7 @@ describe('registerPtyHandlers', () => {
       rows: 43,
       oscLinks
     }
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-cold-restore', coldRestore })
@@ -85,6 +103,7 @@ describe('registerPtyHandlers', () => {
         id: 'pty-legacy-cold-restore',
         coldRestore: { scrollback: 'legacy history\r\n', cwd: '/projects/legacy' }
       })
+
     setLocalPtyProvider({
       spawn,
       write: vi.fn(),
@@ -96,6 +115,7 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(async () => []),
       getForegroundProcess: vi.fn(async () => null)
     } as never)
+
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
@@ -107,6 +127,7 @@ describe('registerPtyHandlers', () => {
       registerPreAllocatedHandleForPty: vi.fn(),
       preAllocateHandleForPty: vi.fn()
     }
+
     registerPtyHandlers(mainWindow as never, runtime as never)
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
@@ -145,6 +166,7 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(async () => []),
       getForegroundProcess: vi.fn(async () => null)
     } as never)
+
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
@@ -156,6 +178,7 @@ describe('registerPtyHandlers', () => {
       registerPreAllocatedHandleForPty: vi.fn(),
       preAllocateHandleForPty: vi.fn()
     }
+
     registerPtyHandlers(mainWindow as never, runtime as never)
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
@@ -178,6 +201,7 @@ describe('registerPtyHandlers', () => {
     const leafId = '55555555-5555-4555-8555-555555555555'
     const ptyId = `${worktreeId}@@session-restore-1`
     const session = getDefaultWorkspaceSession()
+
     const runtime = new OrcaRuntimeService({
       getWorkspaceSession: () => session,
       setWorkspaceSession: () => {},
@@ -197,6 +221,7 @@ describe('registerPtyHandlers', () => {
       getSettings: () => ({ workspaceDir: '/tmp/workspaces' }),
       getProjects: () => []
     } as never)
+
     runtime.attachWindow(1)
     // The restored window graph still knows the persisted ptyId binding.
     runtime.syncWindowGraph(1, {
@@ -258,6 +283,7 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(async () => []),
       getForegroundProcess: vi.fn(async () => null)
     } as never)
+
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
@@ -271,6 +297,7 @@ describe('registerPtyHandlers', () => {
       registerPreAllocatedHandleForPty: vi.fn(),
       preAllocateHandleForPty: vi.fn()
     }
+
     registerPtyHandlers(mainWindow as never, runtime as never)
     const gen = await handlers.get('pty:declarePendingPaneSerializer')!(null, { paneKey })
 
@@ -313,6 +340,7 @@ describe('registerPtyHandlers', () => {
       listProcesses: vi.fn(async () => []),
       getForegroundProcess: vi.fn(async () => null)
     } as never)
+
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
@@ -325,6 +353,7 @@ describe('registerPtyHandlers', () => {
       registerPreAllocatedHandleForPty: vi.fn(),
       preAllocateHandleForPty: vi.fn()
     }
+
     registerPtyHandlers(mainWindow as never, runtime as never)
 
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
@@ -340,6 +369,7 @@ describe('registerPtyHandlers', () => {
     const worktreeId = 'repo-restore::/tmp/restore-records'
     const ptyId = `${worktreeId}@@session-headless-1`
     const session = getDefaultWorkspaceSession()
+
     const repo = {
       id: 'repo-restore',
       path: '/tmp/restore-records',
@@ -347,6 +377,7 @@ describe('registerPtyHandlers', () => {
       badgeColor: '#000000',
       addedAt: 0
     }
+
     const runtime = new OrcaRuntimeService({
       getWorkspaceSession: () => session,
       setWorkspaceSession: () => {},
@@ -360,6 +391,7 @@ describe('registerPtyHandlers', () => {
       getProjects: () => [],
       persistPtyBinding: vi.fn()
     } as never)
+
     // Why: selector resolution shells out to git for real repos; prime the
     // resolved-worktree cache so this headless fixture resolves offline.
     //
@@ -370,6 +402,7 @@ describe('registerPtyHandlers', () => {
       buildResolvedWorktreeFromId(id: string): ResolvedWorktree
       resolvedWorktrees: RuntimeResolvedWorktreeCache
     }
+
     await worktreeResolutionInternals.resolvedWorktrees.getSnapshot(
       async () => ({
         worktrees: [worktreeResolutionInternals.buildResolvedWorktreeFromId(worktreeId)],
@@ -403,6 +436,7 @@ describe('registerPtyHandlers', () => {
     const created = await runtime.createTerminal(`id:${worktreeId}`, {
       presentation: 'background'
     })
+
     expect(created.ptyId).toBe(ptyId)
 
     const { terminals } = await runtime.listTerminals(`id:${worktreeId}`)
@@ -564,6 +598,7 @@ describe('registerPtyHandlers', () => {
       leafId,
       env: { ORCA_PANE_KEY: stablePaneKey }
     })) as { id: string }
+
     const second = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24,
@@ -606,6 +641,7 @@ describe('registerPtyHandlers', () => {
     const cleanupOptions = clearPaneKeyAliasesForPtyMock.mock.calls.find(
       ([ptyId]) => ptyId === 'old-pty-without-forward-pane-key'
     )?.[1]
+
     expect(cleanupOptions?.shouldClearStablePaneKey(stablePaneKey)).toBe(false)
   })
 })

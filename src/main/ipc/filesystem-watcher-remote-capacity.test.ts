@@ -10,8 +10,11 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('fs/promises', () => ({ stat: vi.fn() }))
+
 vi.mock('@parcel/watcher', () => ({ subscribe: vi.fn() }))
+
 vi.mock('./filesystem-watcher-wsl', () => ({ createWslWatcher: vi.fn() }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: getSshFilesystemProviderMock,
   onSshFilesystemProviderRegistered: () => () => {}
@@ -30,9 +33,11 @@ describe('remote filesystem watcher capacity refusals', () => {
   beforeEach(async () => {
     handleMock.mockReset()
     getSshFilesystemProviderMock.mockReset()
+
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
+
     handleMock.mockImplementation((channel, handler) => {
       handlers[channel] = handler
     })
@@ -44,6 +49,7 @@ describe('remote filesystem watcher capacity refusals', () => {
     for (const dormant of watcherLifecycleState.dormantRemoteWatchers.values()) {
       clearTimeout(dormant.timer)
     }
+
     watcherLifecycleState.dormantRemoteWatchers.clear()
     await closeAllWatchers()
     vi.useRealTimers()
@@ -54,9 +60,11 @@ describe('remote filesystem watcher capacity refusals', () => {
   // second, which is the load that pinned it (#11196).
   it('does not retry a relay watch-root capacity refusal on the fast ladder', async () => {
     vi.useFakeTimers()
+
     const watchMock = vi.fn(async () => {
       throw new Error(WATCH_ROOT_CAPACITY_REFUSAL_MESSAGE)
     })
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
     const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 1 }
     const args = { worktreePath: '/home/me/repos/one', connectionId: 'conn-capacity' }
@@ -74,9 +82,11 @@ describe('remote filesystem watcher capacity refusals', () => {
 
   it('still retries an ordinary unavailable install on the fast ladder', async () => {
     vi.useFakeTimers()
+
     const watchMock = vi.fn(async () => {
       throw new Error('Relay channel lost')
     })
+
     getSshFilesystemProviderMock.mockReturnValue({ watch: watchMock })
     const sender = { isDestroyed: () => false, send: vi.fn(), once: vi.fn(), id: 2 }
     const args = { worktreePath: '/home/me/repos/two', connectionId: 'conn-unavailable' }

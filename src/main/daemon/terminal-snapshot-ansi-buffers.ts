@@ -7,11 +7,14 @@ export function splitTerminalSnapshotAnsi(
   if (!modes.alternateScreen) {
     return { snapshotAnsi, scrollbackAnsi: '' }
   }
+
   const alternateScreenMarker = '\x1b[?1049h'
   const start = snapshotAnsi.lastIndexOf(alternateScreenMarker)
+
   if (start === -1) {
     return { snapshotAnsi, scrollbackAnsi: '' }
   }
+
   // Why: rehydrateSequences owns the alt-screen transition. Keeping the
   // normal buffer separate lets an already-alt renderer rebuild it safely.
   return {

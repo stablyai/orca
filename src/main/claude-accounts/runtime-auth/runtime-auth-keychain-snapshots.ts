@@ -12,6 +12,7 @@ import type {
 export class ClaudeRuntimeAuthKeychainSnapshots extends ClaudeRuntimeAuthManagedCredentials {
   protected isSystemDefaultSnapshot(value: unknown): value is ClaudeSystemDefaultSnapshot {
     const snapshot = this.asRecord(value)
+
     return (
       snapshot !== null &&
       Object.hasOwn(snapshot, 'credentialsJson') &&
@@ -43,10 +44,12 @@ export class ClaudeRuntimeAuthKeychainSnapshots extends ClaudeRuntimeAuthManaged
   ): string | null {
     if (managedCredentialsJson && credentialsJson === managedCredentialsJson && previousSnapshot) {
       const previousValue = this.readKeychainSnapshotValue(previousSnapshot, service)
+
       if (previousValue.status === 'captured') {
         return previousValue.credentialsJson
       }
     }
+
     return credentialsJson
   }
 
@@ -58,11 +61,14 @@ export class ClaudeRuntimeAuthKeychainSnapshots extends ClaudeRuntimeAuthManaged
       service === 'scoped'
         ? 'scopedKeychainCredentialsCaptured'
         : 'legacyKeychainCredentialsCaptured'
+
     if (snapshot[capturedKey] === false) {
       return true
     }
+
     const credentialsKey =
       service === 'scoped' ? 'scopedKeychainCredentialsJson' : 'legacyKeychainCredentialsJson'
+
     return (
       Object.hasOwn(snapshot, credentialsKey) || Object.hasOwn(snapshot, 'keychainCredentialsJson')
     )
@@ -75,21 +81,26 @@ export class ClaudeRuntimeAuthKeychainSnapshots extends ClaudeRuntimeAuthManaged
     if (!snapshot) {
       return { status: 'captured', credentialsJson: null }
     }
+
     const capturedKey =
       service === 'scoped'
         ? 'scopedKeychainCredentialsCaptured'
         : 'legacyKeychainCredentialsCaptured'
+
     if (snapshot[capturedKey] === false) {
       return { status: 'unknown' }
     }
+
     const credentialsKey =
       service === 'scoped' ? 'scopedKeychainCredentialsJson' : 'legacyKeychainCredentialsJson'
+
     if (Object.hasOwn(snapshot, credentialsKey)) {
       return {
         status: 'captured',
         credentialsJson: snapshot[credentialsKey] ?? null
       }
     }
+
     return { status: 'captured', credentialsJson: snapshot.keychainCredentialsJson }
   }
 
@@ -100,6 +111,7 @@ export class ClaudeRuntimeAuthKeychainSnapshots extends ClaudeRuntimeAuthManaged
       return await readActiveClaudeKeychainCredentials(configDir)
     } catch (error) {
       console.warn('[claude-runtime-auth] Failed to read Claude Keychain credentials:', error)
+
       return null
     }
   }
@@ -111,6 +123,7 @@ export class ClaudeRuntimeAuthKeychainSnapshots extends ClaudeRuntimeAuthManaged
       return await readActiveClaudeKeychainCredentialsStrict(configDir)
     } catch (error) {
       console.warn('[claude-runtime-auth] Failed to read Claude Keychain credentials:', error)
+
       return null
     }
   }
@@ -125,6 +138,7 @@ export class ClaudeRuntimeAuthKeychainSnapshots extends ClaudeRuntimeAuthManaged
       }
     } catch (error) {
       console.warn('[claude-runtime-auth] Failed to read Claude Keychain credentials:', error)
+
       return { status: 'failed' }
     }
   }

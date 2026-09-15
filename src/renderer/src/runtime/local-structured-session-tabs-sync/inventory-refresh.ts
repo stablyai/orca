@@ -35,11 +35,14 @@ export function refreshLocalStructuredSessionTabs(
       if (!response.ok) {
         throw new Error('structured session inventory unavailable')
       }
+
       const result = response.result as { snapshots?: RuntimeMobileSessionTabsResult[] }
       const snapshots = result.snapshots ?? []
+
       if (isCurrentLocalStructuredSessionGeneration(expectedGeneration)) {
         applyStructuredSessionTabSnapshots(snapshots, undefined, options)
       }
+
       return snapshots
     })
 }

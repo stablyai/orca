@@ -12,8 +12,11 @@ export type DeliveredNotificationIdentity = {
   notificationEpoch: string
   notificationSeq: number
 }
+
 type RecordEntry = DeliveredNotificationIdentity & { dismissedThrough: number; expiresAt: number }
+
 const LIMIT = 4096
+
 const RETENTION_MS = 7 * 86400_000
 
 export class MobileNotificationDismissalStore {
@@ -22,9 +25,11 @@ export class MobileNotificationDismissalStore {
   private unreadable = false
   constructor(userDataPath: string) {
     this.path = join(userDataPath, 'mobile-notification-dismissals.json')
+
     try {
       hardenExistingSecureFile(this.path)
       const value: unknown = JSON.parse(readFileSync(this.path, 'utf8'))
+
       if (Array.isArray(value)) {
         this.entries = value.filter(isEntry).slice(-LIMIT)
       }
@@ -40,12 +45,16 @@ export class MobileNotificationDismissalStore {
     if (!event.notificationId) {
       return
     }
+
     const now = Date.now()
     const kept = this.entries.filter((entry) => entry.expiresAt > now)
+
     const same = (entry: RecordEntry) =>
       entry.notificationId === event.notificationId &&
       entry.notificationEpoch === event.notificationEpoch
+
     let next: RecordEntry[]
+
     if (event.type === 'notification') {
       next = [
         ...kept.filter((entry) => !same(entry)),
@@ -73,15 +82,19 @@ export class MobileNotificationDismissalStore {
         expiresAt: now + RETENTION_MS
       })
     }
+
     next = next.slice(-LIMIT)
+
     if (!this.unreadable) {
       writeSecureJsonFile(this.path, next)
     }
+
     this.entries = next
   }
 
   reconcile(delivered: readonly DeliveredNotificationIdentity[]): DeliveredNotificationIdentity[] {
     const now = Date.now()
+
     return delivered.filter((item) =>
       this.entries.some(
         (entry) =>
@@ -99,7 +112,9 @@ function isEntry(value: unknown): value is RecordEntry {
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const item = value as RecordEntry
+
   return (
     typeof item.notificationId === 'string' &&
     item.notificationId.length > 0 &&

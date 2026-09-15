@@ -5,6 +5,7 @@ import { renderHook, waitFor } from '@testing-library/react'
 import { useRetiredWorktreeNames } from './useRetiredWorktreeNames'
 
 const listRetiredNames = vi.fn()
+
 const registry = (names: string[], exhaustedTiers = 0) => ({ exhaustedTiers, names })
 
 beforeEach(() => {
@@ -17,13 +18,16 @@ describe('useRetiredWorktreeNames', () => {
     // Why: refreshKey changes on every workspace-list mutation, so create-multiple refetches after
     // each create. Dropping to empty in between would suggest a spent name in exactly that window.
     listRetiredNames.mockResolvedValueOnce(registry(['nautilus']))
+
     const { result, rerender } = renderHook(
       ({ key }: { key: string }) => useRetiredWorktreeNames('repo-1', key),
       { initialProps: { key: 'a' } }
     )
+
     await waitFor(() => expect(result.current).toEqual(registry(['nautilus'])))
 
     let resolveSecond: (loaded: ReturnType<typeof registry>) => void = () => {}
+
     listRetiredNames.mockReturnValueOnce(
       new Promise<ReturnType<typeof registry>>((resolve) => {
         resolveSecond = resolve
@@ -41,10 +45,12 @@ describe('useRetiredWorktreeNames', () => {
     // The suggestion memo downstream keys on this object; a new identity per refetch reruns it.
     const loaded = registry(['nautilus'])
     listRetiredNames.mockResolvedValue(loaded)
+
     const { result, rerender } = renderHook(
       ({ key }: { key: string }) => useRetiredWorktreeNames('repo-1', key),
       { initialProps: { key: 'a' } }
     )
+
     await waitFor(() => expect(result.current).toEqual(registry(['nautilus'])))
     const first = result.current
 
@@ -55,10 +61,12 @@ describe('useRetiredWorktreeNames', () => {
 
   it('drops names when the repo changes rather than showing another repo pool', async () => {
     listRetiredNames.mockResolvedValueOnce(registry(['nautilus']))
+
     const { result, rerender } = renderHook(
       ({ repoId }: { repoId: string }) => useRetiredWorktreeNames(repoId, 'key'),
       { initialProps: { repoId: 'repo-1' } }
     )
+
     await waitFor(() => expect(result.current).toEqual(registry(['nautilus'])))
 
     listRetiredNames.mockReturnValueOnce(new Promise<never>(() => {}))
@@ -69,10 +77,12 @@ describe('useRetiredWorktreeNames', () => {
 
   it('keeps previously loaded names when a refresh fails', async () => {
     listRetiredNames.mockResolvedValueOnce(registry(['nautilus']))
+
     const { result, rerender } = renderHook(
       ({ key }: { key: string }) => useRetiredWorktreeNames('repo-1', key),
       { initialProps: { key: 'a' } }
     )
+
     await waitFor(() => expect(result.current).toEqual(registry(['nautilus'])))
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -85,10 +95,12 @@ describe('useRetiredWorktreeNames', () => {
 
   it('refetches when the refresh key changes', async () => {
     listRetiredNames.mockResolvedValue(registry(['nautilus']))
+
     const { rerender } = renderHook(
       ({ key }: { key: string }) => useRetiredWorktreeNames('repo-1', key),
       { initialProps: { key: 'a' } }
     )
+
     await waitFor(() => expect(listRetiredNames).toHaveBeenCalledTimes(1))
 
     rerender({ key: 'b' })

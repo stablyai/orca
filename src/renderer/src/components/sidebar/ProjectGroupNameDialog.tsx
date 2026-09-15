@@ -49,6 +49,7 @@ export function ProjectGroupNameDialog({
   // group; Effect-based hydration shows one frame with the prior draft.
   if (open !== previousOpenState.open || initialName !== previousOpenState.initialName) {
     setPreviousOpenState({ open, initialName })
+
     if (open) {
       setName(initialName)
       setSubmitting(false)
@@ -58,17 +59,22 @@ export function ProjectGroupNameDialog({
   const handleSubmit = useCallback(
     async (event?: React.FormEvent<HTMLFormElement>) => {
       event?.preventDefault()
+
       if (!trimmedName || submitting) {
         return
       }
+
       setSubmitting(true)
+
       try {
         await onSubmit(trimmedName)
+
         if (mountedRef.current) {
           onOpenChange(false)
         }
       } catch (error) {
         console.error('Failed to save project group name:', error)
+
         if (mountedRef.current) {
           setSubmitting(false)
         }

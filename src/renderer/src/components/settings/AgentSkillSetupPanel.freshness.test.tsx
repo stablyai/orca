@@ -46,6 +46,7 @@ function panelProps(
 }
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 describe('AgentSkillSetupPanel freshness re-check', () => {
@@ -62,6 +63,7 @@ describe('AgentSkillSetupPanel freshness re-check', () => {
     if (root) {
       await act(async () => root?.unmount())
     }
+
     root = null
     container?.remove()
     container = null
@@ -70,6 +72,7 @@ describe('AgentSkillSetupPanel freshness re-check', () => {
 
   it('rescans skill freshness and updates the rendered verdict on re-check', async () => {
     let completeRecheck: (() => void) | null = null
+
     // Why: a rescan started before the install scan finishes would re-read the same
     // pre-update disk state, so the boundary is what the assertions below pin.
     const onRecheck = vi.fn(
@@ -78,7 +81,9 @@ describe('AgentSkillSetupPanel freshness re-check', () => {
           completeRecheck = resolve
         })
     )
+
     let completeRescan: ((value: SkillFreshnessInventory) => void) | null = null
+
     const freshnessInventory = vi
       .fn()
       .mockResolvedValueOnce(inventory(['orca-linear']))
@@ -88,6 +93,7 @@ describe('AgentSkillSetupPanel freshness re-check', () => {
             completeRescan = resolve
           })
       )
+
     window.api = { skills: { freshnessInventory } } as never
 
     await act(async () => root?.render(<AgentSkillSetupPanel {...panelProps(onRecheck)} />))
@@ -99,6 +105,7 @@ describe('AgentSkillSetupPanel freshness re-check', () => {
     const recheck = Array.from(container?.querySelectorAll('button') ?? []).find(
       (candidate) => candidate.textContent?.trim() === 'Re-check'
     )
+
     expect(recheck).toBeDefined()
 
     await act(async () => {
@@ -134,6 +141,7 @@ describe('AgentSkillSetupPanel freshness re-check', () => {
       .fn()
       .mockResolvedValueOnce(inventory(['orca-linear']))
       .mockRejectedValueOnce(new Error('inventory unavailable'))
+
     window.api = { skills: { freshnessInventory } } as never
 
     await act(async () => root?.render(<AgentSkillSetupPanel {...panelProps()} />))
@@ -142,6 +150,7 @@ describe('AgentSkillSetupPanel freshness re-check', () => {
     const recheck = Array.from(container?.querySelectorAll('button') ?? []).find(
       (candidate) => candidate.textContent?.trim() === 'Re-check'
     )
+
     await act(async () => {
       recheck?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })

@@ -21,6 +21,7 @@ describe('isENOENT across the SSH relay boundary', () => {
     const local = new Error(
       "ENOENT: no such file or directory, lstat '/tmp/nope'"
     ) as NodeJS.ErrnoException
+
     local.code = 'ENOENT'
 
     expect(isENOENT(local)).toBe(true)
@@ -31,6 +32,7 @@ describe('isENOENT across the SSH relay boundary', () => {
     const fromRelay = new Error(
       "ENOENT: no such file or directory, lstat '/home/neil/projects/orca-test1234'"
     )
+
     Object.defineProperty(fromRelay, 'code', { value: -32000 })
 
     expect(isENOENT(fromRelay), 'a remote missing path must read as absent, not as a failure').toBe(

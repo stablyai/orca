@@ -29,6 +29,7 @@ function floodWithInputAcknowledgements(marker: string): string {
     "process.stdout.on('drain', () => { blocked=false })",
     "setInterval(() => { if(!blocked) blocked=!process.stdout.write(marker+':'+(++sequence)+':ACK='+ack+':'+padding+'\\n'); },8)"
   ].join(';')
+
   return `node -e ${quotePosixShell(script)}`
 }
 
@@ -51,11 +52,13 @@ test.describe('five SSH panes under simultaneous output', () => {
     await waitForActiveTerminalManager(orcaPage, 60_000)
     const runId = randomUUID()
     const owners: { leafId: string; ptyId: string; marker: string }[] = []
+
     for (let index = 0; index < 5; index++) {
       if (index > 0) {
         await splitActiveTerminalPane(orcaPage, 'vertical')
         await focusLastTerminalPane(orcaPage)
       }
+
       const ptyId = await waitForActivePanePtyId(orcaPage, 30_000)
       const identity = await readPaneIdentitySnapshot(orcaPage)
       expect(identity?.activeLeafId).toBeTruthy()
@@ -66,6 +69,7 @@ test.describe('five SSH panes under simultaneous output', () => {
         .poll(() => getTerminalContent(orcaPage, 80_000), { timeout: 60_000 })
         .toMatch(new RegExp(`${marker}:[1-9][0-9]*:ACK=:`))
     }
+
     expect(new Set(owners.map((owner) => owner.ptyId)).size).toBe(5)
     const identity = await readPaneIdentitySnapshot(orcaPage)
     expect(identity?.panes).toHaveLength(5)
@@ -82,14 +86,17 @@ test.describe('five SSH panes under simultaneous output', () => {
       await orcaPage.evaluate(() => window.__store!.getState().setActiveView('terminal'))
       await expect(visibleTerminals).toHaveCount(5)
       await waitForActiveTerminalManager(orcaPage, 60_000)
+
       for (const [index, owner] of owners.entries()) {
         await orcaPage.evaluate(
           ({ tabId, leafId }) => {
             const manager = window.__paneManagers!.get(tabId)!
             const paneId = manager.getNumericIdForLeaf(leafId)
+
             if (paneId == null) {
               throw new Error(`Flood pane ${leafId} did not remount`)
             }
+
             manager.setActivePane(paneId, { focus: true })
           },
           { tabId, leafId: owner.leafId }
@@ -97,23 +104,28 @@ test.describe('five SSH panes under simultaneous output', () => {
         expect(await waitForActivePanePtyId(orcaPage)).toBe(owner.ptyId)
         await focusActiveTerminalInput(orcaPage)
         const input = `input_${runId}_${round}_${index}`
+
         const inputTrace = await orcaPage.evaluateHandle((tabId) => {
           const manager = window.__paneManagers!.get(tabId)!
+
           const entries = manager.getPanes().map((pane) => ({
             ptyId: pane.container.dataset.ptyId,
             data: '',
             focusedBefore: pane.container.contains(document.activeElement)
           }))
+
           const subscriptions = manager.getPanes().map((pane, index) =>
             pane.terminal.onData((data) => {
               entries[index].data = (entries[index].data + data).slice(-512)
             })
           )
+
           return {
             entries,
             dispose: () => subscriptions.forEach((subscription) => subscription.dispose())
           }
         }, tabId)
+
         // The remote process repeats its latest ACK, so flood eviction cannot hide it.
         try {
           await orcaPage.keyboard.type(input)
@@ -124,6 +136,7 @@ test.describe('five SSH panes under simultaneous output', () => {
         } catch (error) {
           const panes = await orcaPage.evaluate((tabId) => {
             const manager = window.__paneManagers!.get(tabId)!
+
             return manager.getPanes().map((pane) => ({
               active: pane === manager.getActivePane(),
               focused: pane.container.contains(document.activeElement),
@@ -132,6 +145,7 @@ test.describe('five SSH panes under simultaneous output', () => {
               output: pane.serializeAddon.serialize().slice(-80_000)
             }))
           }, tabId)
+
           await testInfo.attach(`flood-input-${round}-${index}`, {
             body: JSON.stringify({
               input,

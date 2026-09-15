@@ -15,6 +15,7 @@ import { renderMobileTasksItemActions } from './mobile-tasks-item-actions'
 
 export function renderMobileTasksItemDetailDrawer(model: ConnectionPresentationModel) {
   const { actionItem, detailLoading, setActionItem, setDetailRefreshSeq, taskUiReady } = model
+
   return (
     <BottomDrawer visible={taskUiReady && actionItem != null} onClose={() => setActionItem(null)}>
       {actionItem ? (

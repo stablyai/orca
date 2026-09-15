@@ -9,6 +9,7 @@ import { build as buildVite } from 'vite'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
 
 const electronBinary = createRequire(import.meta.url)('electron') as string
+
 const fixtureRoots: string[] = []
 
 afterAll(() => {
@@ -136,16 +137,20 @@ run().catch((error) => {
 
 function readSourceChipsRow(sourceDbPath: string): SourceChipsRow {
   const db = new DatabaseSync(sourceDbPath, { readOnly: true })
+
   try {
     const rows = db
       .prepare(
         'SELECT host_key, name, value, top_frame_site_key, has_cross_site_ancestor FROM cookies ORDER BY rowid'
       )
       .all() as SourceChipsRow[]
+
     const row = rows.find((candidate) => candidate.name === 'chips-auth')
+
     if (!row) {
       throw new Error('source DB has no chips-auth row')
     }
+
     return row
   } finally {
     db.close()
@@ -160,6 +165,7 @@ async function runFixture(): Promise<{ fixture: FixtureResult; sourceChips: Sour
   const resultPath = join(root, 'result.json')
   const fixturePath = join(root, 'main.cjs')
   const sourceDbPath = join(root, SOURCE_DB_RELATIVE_PATH)
+
   const sourceDb = createChromiumCookieTestDatabase(sourceDbPath, [
     // Why: the CHIPS row is a genuine partitioned cookie: top_frame_site_key names the
     // top-level site and has_cross_site_ancestor=1 means it was set cross-site.
@@ -182,6 +188,7 @@ async function runFixture(): Promise<{ fixture: FixtureResult; sourceChips: Sour
       sameSite: 1
     }
   ])
+
   sourceDb.close()
   const sourceChips = readSourceChipsRow(sourceDbPath)
   writeFileSync(
@@ -207,18 +214,22 @@ async function runFixture(): Promise<{ fixture: FixtureResult; sourceChips: Sour
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
   const electronArgs = [fixturePath, `--user-data-dir=${join(root, 'profile')}`]
   const executable = process.platform === 'linux' ? 'xvfb-run' : electronBinary
+
   const args =
     process.platform === 'linux'
       ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
       : electronArgs
+
   const run = spawnSync(executable, args, {
     encoding: 'utf8',
     env,
     timeout: 90_000
   })
+
   const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
   expect(run.error).toBeUndefined()
   expect(run.status, `${fixtureResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
+
   return { fixture: JSON.parse(fixtureResult) as FixtureResult, sourceChips }
 }
 

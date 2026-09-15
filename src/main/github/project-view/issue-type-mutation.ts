@@ -12,13 +12,17 @@ export async function updateIssueTypeBySlug(
   args: UpdateIssueTypeBySlugArgs
 ): Promise<GitHubProjectMutationResult> {
   const validation = validateSlugArgs(args.owner, args.repo)
+
   if (!validation.ok) {
     return validation
   }
+
   const number = assertPositiveInt(args.number, 'number')
+
   if (!number.ok) {
     return { ok: false, error: number.error }
   }
+
   const lookup = await runGraphql<{
     repository?: { issue?: { id?: string } | null } | null
   }>(
@@ -28,13 +32,17 @@ export async function updateIssueTypeBySlug(
     { owner: args.owner, repo: args.repo, num: args.number },
     projectGhExecOptions(args.host)
   )
+
   if (!lookup.ok) {
     return { ok: false, error: lookup.error }
   }
+
   const issueId = lookup.data.repository?.issue?.id
+
   if (!issueId) {
     return { ok: false, error: { type: 'not_found', message: 'Issue not found.' } }
   }
+
   const query = args.issueTypeId
     ? `mutation($issueId:ID!, $issueTypeId:ID!) {
          updateIssueIssueType(input: { issueId: $issueId, issueTypeId: $issueTypeId }) {
@@ -46,9 +54,12 @@ export async function updateIssueTypeBySlug(
            issue { id }
          }
        }`
+
   const vars: GraphqlVars = args.issueTypeId
     ? { issueId, issueTypeId: args.issueTypeId }
     : { issueId }
+
   const result = await runGraphql<unknown>(query, vars, projectGhExecOptions(args.host))
+
   return result.ok ? { ok: true } : { ok: false, error: result.error }
 }

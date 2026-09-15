@@ -40,26 +40,35 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
           terminalRecoveryInstanceId: session.terminalRecoveryInstance.id
         })
       }
+
       return false
     }
+
     session.resetHiddenOutputRestoreIfPtyChanged()
     const ptyId = session.hiddenOutputRestorePtyId ?? session.transport.getPtyId()
+
     if (
       !session.hiddenOutputRestoreNeeded &&
       session.hiddenOutputRestorePendingChunks.length === 0
     ) {
       return false
     }
+
     if (!session.canUseHiddenOutputSnapshot(ptyId)) {
       return false
     }
+
     session.hiddenOutputRestorePtyId = ptyId
+
     if (session.hiddenOutputRestoreInFlight) {
       session.armHiddenOutputRestoreForegroundDeadline()
+
       return true
     }
+
     if (!opts?.bypassScheduler) {
       const priority = session.isActiveSplitPane() ? 'active' : 'inactive'
+
       if (priority === 'inactive') {
         if (!session.hiddenOutputRestoreScheduled) {
           session.hiddenOutputRestoreScheduled = true
@@ -70,6 +79,7 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
             session.pane.terminal,
             (): boolean => {
               session.hiddenOutputRestoreScheduled = false
+
               if (
                 session.disposed ||
                 session.hiddenOutputRestoreGeneration !== scheduledGeneration ||
@@ -84,32 +94,41 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
                 // this frame on the next queued pane instead of on a hidden/stale one.
                 return false
               }
+
               return session.requestHiddenOutputRestoreIfNeeded({ bypassScheduler: true }) === true
             },
             priority
           )
         }
+
         return true
       }
+
       cancelScheduledHiddenOutputRestore(session.pane.terminal)
       session.hiddenOutputRestoreScheduled = false
     }
+
     session.clearHiddenOutputRestoreDeferredRetryTimer()
     session.hiddenOutputRestoreRetryDeferred = false
 
     session.hiddenOutputRestoreInFlight = (async () => {
       // Backstop (rc.7.perf loop): bound how many snapshot fetch+replay rounds one task burns before yielding to the live stream.
       let restoreIterations = 0
+
       while (!session.disposed) {
         const currentPtyId = session.hiddenOutputRestorePtyId
+
         if (currentPtyId === null) {
           session.clearHiddenOutputRestoreState()
+
           return
         }
+
         if (!session.canUseHiddenOutputSnapshot(currentPtyId)) {
           if (session.hiddenOutputRestorePtyId === currentPtyId) {
             session.clearHiddenOutputRestoreState()
           }
+
           // Remote-only path: the transport swapped PTYs mid-restore, which is a
           // stream change, not proof the hidden bytes are unrecoverable.
           if (
@@ -120,17 +139,22 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
           ) {
             session.writeRestoreUnavailableWarning()
           }
+
           return
         }
+
         if (session.transport.getPtyId() !== currentPtyId) {
           if (session.hiddenOutputRestorePtyId === currentPtyId) {
             session.clearHiddenOutputRestoreState()
           }
+
           return
         }
+
         const restoreGeneration = session.hiddenOutputRestoreGeneration
         session.hiddenOutputRestoreNeeded = false
         let snapshotResult: HiddenOutputSnapshotResult
+
         try {
           snapshotResult = await session.serializeHiddenOutputSnapshot(currentPtyId, {
             scrollbackRows: resolveHiddenRestoreScrollbackRows(
@@ -146,22 +170,29 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
               : // Why 'host': the only reject here is the request timeout — the frame went out and the host stayed silent.
                 { kind: 'retry-worthy', source: 'host' }
         }
+
         if (session.disposed) {
           return
         }
+
         const restoreGenerationChanged = session.hiddenOutputRestoreGeneration !== restoreGeneration
+
         const restorePtyChanged =
           session.transport.getPtyId() !== currentPtyId ||
           session.hiddenOutputRestorePtyId !== currentPtyId
+
         if (restoreGenerationChanged || restorePtyChanged) {
           // Why: the snapshot belongs to the requested PTY; after reattach it's stale, and a stale generation may be an abandoned timeout superseded by a newer restore.
           if (restorePtyChanged && session.hiddenOutputRestorePtyId === currentPtyId) {
             session.clearHiddenOutputRestoreState()
           }
+
           return
         }
+
         if (snapshotResult.kind === 'retry-worthy') {
           let budgetExhausted: boolean
+
           if (snapshotResult.source === 'host') {
             session.hiddenOutputRestoreRemoteOutcomeAttempts += 1
             budgetExhausted =
@@ -173,35 +204,45 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
               session.hiddenOutputRestoreLocalGateAttempts >=
               HIDDEN_OUTPUT_RESTORE_LOCAL_GATE_MAX_ATTEMPTS
           }
+
           if (budgetExhausted) {
             session.abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, {
               rearmRemote: false
             })
+
             return
           }
+
           session.hiddenOutputRestoreNeeded = true
           session.hiddenOutputRestoreFreshSnapshotNeeded = false
           session.noteHiddenOutputRestoreFloodBackpressure()
           session.abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, { quiet: true })
+
           return
         }
+
         if (snapshotResult.kind === 'permanently-unavailable') {
           session.abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, {
             rearmRemote: false
           })
+
           return
         }
+
         if (snapshotResult.kind === 'unknown-legacy-host') {
           session.hiddenOutputRestoreLegacyPtyId = currentPtyId
           session.armHiddenOutputRestoreForegroundDeadline()
         }
+
         if (snapshotResult.kind !== 'snapshot') {
           session.hiddenOutputRestoreNeeded = true
           session.hiddenOutputRestoreFreshSnapshotNeeded = false
           session.hiddenOutputRestoreRetryDeferred = true
           session.scheduleHiddenOutputRestoreDeferredRetry()
+
           return
         }
+
         const snapshot = snapshotResult.snapshot
         session.hiddenOutputRestoreDeferredRetryAttempts = 0
         session.hiddenOutputRestoreRemoteAbandonCycles = 0
@@ -209,6 +250,7 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
         session.hiddenOutputRestoreLocalGateAttempts = 0
         restoreIterations += 1
         await session.applyMainBufferSnapshot(snapshot)
+
         if (
           session.disposed ||
           session.hiddenOutputRestoreGeneration !== restoreGeneration ||
@@ -217,6 +259,7 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
         ) {
           return
         }
+
         // Why: everything at/before snapshot.seq is now painted; chunks still draining from main's ACK backlog below it are duplicates to suppress.
         session.setRestoredSnapshotBaseline(
           currentPtyId,
@@ -227,23 +270,30 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
         const needsFreshSnapshot = session.hiddenOutputRestoreFreshSnapshotNeeded
         session.hiddenOutputRestoreFreshSnapshotNeeded = false
         const drainOutcome = session.drainPendingLiveChunksAfterSnapshot(snapshot.seq)
+
         if (drainOutcome === 'drained' && !needsFreshSnapshot) {
           session.hiddenOutputRestoreNeeded = false
           session.hiddenOutputRestorePtyId = null
           session.clearHiddenOutputRestoreForegroundDeadlineTimer()
+
           return
         }
+
         if (!shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)) {
           // Why: hidden bytes arriving during the snapshot aren't in renderer memory; leave recovery pending for reveal, don't loop snapshots in a throttled tab.
           session.hiddenOutputRestoreNeeded = true
+
           return
         }
+
         if (drainOutcome === 'overflow') {
           // Cut 1 (rc.7.perf loop): a FOREGROUND queue overflow means the stream outruns fetch+replay; re-fetching starves ACKs, so abandon and heal with one post-flood repaint.
           session.noteHiddenOutputRestoreFloodBackpressure()
           session.abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, { quiet: true })
+
           return
         }
+
         if (restoreIterations >= HIDDEN_OUTPUT_RESTORE_MAX_LOOP_ITERATIONS) {
           // Backstop: re-looping this many times means the stream is winning the race.
           warnTerminalLifecycleAnomaly('hidden output restore hit its iteration cap', {
@@ -256,8 +306,10 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
           })
           session.noteHiddenOutputRestoreFloodBackpressure()
           session.abandonHiddenOutputRestoreAndDrainPendingForeground(currentPtyId, { quiet: true })
+
           return
         }
+
         session.hiddenOutputRestoreNeeded = true
       }
     })()
@@ -267,12 +319,14 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
       if (session.hiddenOutputRestoreInFlight === trackedHiddenOutputRestore) {
         session.hiddenOutputRestoreInFlight = null
       }
+
       // Why: after dispose the task body exits immediately, so re-arming here
       // resolves instantly and re-enters this handler — an unbounded promise
       // chain that eats the heap. The pane is gone; there is nothing to restore.
       if (session.disposed) {
         return
       }
+
       if (
         session.hiddenOutputRestorePendingChunks.length > 0 ||
         session.hiddenOutputRestorePendingOverflow
@@ -280,6 +334,7 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
         session.hiddenOutputRestoreNeeded = true
         session.armHiddenOutputRestoreForegroundDeadline()
       }
+
       if (
         !session.hiddenOutputRestoreRetryDeferred &&
         session.hiddenOutputRestoreNeeded &&
@@ -289,14 +344,17 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
       }
     })
     session.hiddenOutputRestoreInFlight = trackedHiddenOutputRestore
+
     return true
   }
 
   session.unregisterBacklogRecovery = registerTerminalBacklogRecovery(session.pane.terminal, () => {
     // Why: clear the hidden-delivery bit BEFORE the restore snapshot request; bytes arriving in between are reconciled by the seq guard.
     session.syncHiddenRendererPtyDelivery()
+
     return session.requestHiddenOutputRestoreIfNeeded()
   })
+
   if (
     typeof document !== 'undefined' &&
     typeof document.addEventListener === 'function' &&
@@ -305,15 +363,19 @@ export function bindHiddenOutputRestoreRequest(session: ConnectPanePtySession): 
     const onDocumentVisibilityChange = (): void => {
       // Why: document hide/show flips the foreground predicate with no pane lifecycle event; re-sync the hidden-delivery gate both ways.
       session.syncHiddenRendererPtyDelivery()
+
       if (shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)) {
         session.requestHiddenOutputRestoreIfNeeded()
       }
     }
+
     document.addEventListener('visibilitychange', onDocumentVisibilityChange)
+
     // Why: on stale macOS occlusion (visibilityState wedged 'hidden'), user input forces a resync — no visibilitychange fires, else the gate drops bytes forever.
     const unregisterStaleVisibilityRecovery = registerStaleDocumentVisibilityRecovery(
       onDocumentVisibilityChange
     )
+
     session.unregisterDocumentVisibilityRecovery = () => {
       document.removeEventListener('visibilitychange', onDocumentVisibilityChange)
       unregisterStaleVisibilityRecovery()

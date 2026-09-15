@@ -10,6 +10,7 @@ function probes(overrides: { structured?: boolean; livePty?: boolean; leafError?
       throw overrides.leafError
     }
   })
+
   return {
     calls: { assertLiveLeaf },
     probes: {

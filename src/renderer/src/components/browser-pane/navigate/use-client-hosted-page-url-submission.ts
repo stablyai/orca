@@ -30,6 +30,7 @@ export function useClientHostedPageUrlSubmission(params: {
     onUpdatePageState,
     setAddressBarValue
   } = params
+
   return useCallback(
     (value: string) => {
       const consumedAsWorkspaceDoc = routeWorkspaceDocAddressSubmission({
@@ -38,22 +39,30 @@ export function useClientHostedPageUrlSubmission(params: {
         value,
         onLoadError: (loadError) => onUpdatePageState(browserTabId, { loadError })
       })
+
       if (consumedAsWorkspaceDoc) {
         return
       }
+
       const submission = resolveBrowserAddressBarSubmission(value, { allowFileUrls: false })
+
       if (submission.status === 'invalid') {
         onUpdatePageState(browserTabId, { loadError: submission.loadError })
+
         return
       }
+
       const webview = webviewRef.current
+
       if (!webview) {
         // Why: the page is still an optimistic stage, so park the URL for the attach effect to
         // replay rather than dropping what the user just typed.
         deferBrowserPageNavigation(browserTabId, submission.url)
         setAddressBarValue(toDisplayUrl(redactKagiSessionToken(submission.url)))
+
         return
       }
+
       // Why: the store and the address bar must never hold a Kagi session token, and an optimistic
       // title keeps the tab from reading "New Tab" until the guest reports one — as local does.
       const browserModelUrl = redactKagiSessionToken(submission.url)

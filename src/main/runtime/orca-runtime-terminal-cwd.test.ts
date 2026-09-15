@@ -21,6 +21,7 @@ function stubLaunchScope(runtime: OrcaRuntimeService, path = '/repo/app'): void 
       folderWorkspace: null
     }>
   }
+
   vi.spyOn(internals, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
     id: 'wt-1',
     path,
@@ -134,6 +135,7 @@ describe('OrcaRuntimeService terminal startup cwd', () => {
         terminalLayoutsByTabId: {}
       })
     }
+
     const runtime = new OrcaRuntimeService(store as never)
     stubLaunchScope(runtime)
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-1' })

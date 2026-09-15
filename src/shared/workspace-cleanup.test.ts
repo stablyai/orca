@@ -16,6 +16,7 @@ type CandidateOverrides = Partial<Omit<WorkspaceCleanupCandidate, 'git' | 'local
 
 function makeCandidate(overrides: CandidateOverrides = {}): WorkspaceCleanupCandidate {
   const { git, localContext, ...candidateOverrides } = overrides
+
   const candidate: WorkspaceCleanupCandidate = {
     worktreeId: 'repo-1::/tmp/feature',
     repoId: 'repo-1',
@@ -46,6 +47,7 @@ function makeCandidate(overrides: CandidateOverrides = {}): WorkspaceCleanupCand
     fingerprint: 'fingerprint',
     ...candidateOverrides
   }
+
   return {
     ...candidate,
     git: { ...candidate.git, ...git },
@@ -91,9 +93,11 @@ describe('workspace cleanup policy', () => {
   it('refuses only operations that cannot be routed', () => {
     const mainWorktree = applyWorkspaceCleanupPolicy(makeCandidate({ blockers: ['main-worktree'] }))
     const folderProject = applyWorkspaceCleanupPolicy(makeCandidate({ blockers: ['folder-repo'] }))
+
     const disconnected = applyWorkspaceCleanupPolicy(
       makeCandidate({ blockers: ['ssh-disconnected'] })
     )
+
     const dismissed = applyWorkspaceCleanupPolicy(makeCandidate({ blockers: ['dismissed'] }))
 
     expect(canQueueWorkspaceCleanupCandidate(mainWorktree)).toBe(false)
@@ -109,6 +113,7 @@ describe('workspace cleanup policy', () => {
       gitClean: true,
       lastActivityAt: 1_700_000_000_000
     })
+
     const candidate = makeCandidate({ fingerprint })
 
     expect(

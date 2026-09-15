@@ -35,22 +35,28 @@ export function writePtyFromRuntimeController(
   // Why: the backstop for every runtime write path — query replies, followups, deliveries —
   // so a caller that forgets the typed gate still cannot reach a provider.
   const admission = agentSessionPtyWriteGate.admit(ptyId)
+
   if (!admission.admitted) {
     reportAgentSessionWriteRefusal(deps.mainWindow, ptyId, admission.refusal)
+
     return options?.waitForSettlement ? writeRefused('write_gate_denied') : false
   }
+
   let provider: IPtyProvider
+
   try {
     provider = getProviderForPty(ptyId)
   } catch {
     return options?.waitForSettlement ? writeRefused('provider_unavailable') : false
   }
+
   if (options?.waitForSettlement) {
     // A provider that cannot settle says so before any effect; synthesizing acceptance
     // from the fire-and-forget write is what cleared durable mailbox reservations.
     if (!provider.writeWithSettlement) {
       return writeRefused('provider_cannot_settle')
     }
+
     try {
       return provider.writeWithSettlement(ptyId, data)
     } catch {
@@ -58,6 +64,7 @@ export function writePtyFromRuntimeController(
       return writeUnverifiable('provider_threw_after_handoff', true)
     }
   }
+
   try {
     return provider.write(ptyId, data) !== false
   } catch {
@@ -73,6 +80,7 @@ export function writePtyAgentSessionProofFromRuntimeController(
   if (!agentSessionPtyWriteGate.admitProof(ptyId, authority)) {
     return false
   }
+
   try {
     return getProviderForPty(ptyId).write(ptyId, data) !== false
   } catch {
@@ -90,22 +98,28 @@ export async function probePtyLivenessFromRuntimeController(
     if (ptyId.startsWith('remote:')) {
       return null
     }
+
     const connectionId = ptyOwnership.get(ptyId) ?? parseAppSshPtyId(ptyId)?.connectionId
     // Why: during cold start the daemon swap is in flight; the pre-swap
     // fallback would answer absent for every daemon-owned id.
     const startupPromise = deps.getLocalPtyProviderStartupPromise(connectionId)
+
     if (startupPromise) {
       await startupPromise
     }
+
     const provider = getProviderForPty(ptyId)
+
     if (provider.probePtyLiveness) {
       return await provider.probePtyLiveness(ptyId)
     }
+
     // Why: the in-process provider is its own sole owner (#12393), so its
     // refusal is authoritative; every other probe-less provider is doubt.
     if (provider instanceof LocalPtyProvider) {
       return provider.hasPty(ptyId)
     }
+
     return null
   } catch {
     return null
@@ -119,18 +133,23 @@ export async function attachPtyFromRuntimeController(
   if (ptyOwnership.get(ptyId) != null || parseAppSshPtyId(ptyId)) {
     return false
   }
+
   let provider: IPtyProvider
+
   try {
     provider = getProviderForPty(ptyId)
   } catch {
     return false
   }
+
   if (provider !== localProvider || provider instanceof LocalPtyProvider) {
     return false
   }
+
   try {
     const sequenceBeforeProviderAttach = deps.runtime?.getPtyOutputSequence?.(ptyId) ?? 0
     const attachResult = await provider.attach(ptyId)
+
     if (attachResult?.providerSequence) {
       deps.runtime?.synchronizePtyOutputSequenceFromProvider?.(
         ptyId,
@@ -138,6 +157,7 @@ export async function attachPtyFromRuntimeController(
         sequenceBeforeProviderAttach
       )
     }
+
     return true
   } catch {
     return false
@@ -162,6 +182,7 @@ export async function inspectProcessFromRuntimeController(
 export async function confirmForegroundProcessFromRuntimeController(ptyId: string) {
   try {
     const provider = getProviderForPty(ptyId)
+
     // Why: cached foreground evidence cannot resolve a fresh shell conflict.
     return (await provider.confirmForegroundProcess?.(ptyId)) ?? null
   } catch {
@@ -180,6 +201,7 @@ export async function confirmShellForegroundFromRuntimeController(ptyId: string)
 export async function getCwdFromRuntimeController(ptyId: string) {
   try {
     const cwd = await getProviderForPty(ptyId).getCwd(ptyId)
+
     return cwd || null
   } catch {
     return null
@@ -200,6 +222,7 @@ export async function clearBufferFromRuntimeController(
 ): Promise<void> {
   // Why: desktop xterm and daemon/SSH providers hold separate buffers; clear both so mobile resubscribe can't resurrect cleared history.
   deps.mainWindow.webContents.send('pty:clearBuffer:request', { ptyId })
+
   try {
     await getProviderForPty(ptyId).clearBuffer(ptyId)
   } catch {
@@ -208,6 +231,7 @@ export async function clearBufferFromRuntimeController(
 }
 
 const settledLocalPtyProviderStartups = new WeakSet<Promise<void>>()
+
 const watchedLocalPtyProviderStartups = new WeakSet<Promise<void>>()
 
 export function hasPtyFromRuntimeController(
@@ -220,8 +244,10 @@ export function hasPtyFromRuntimeController(
     if (ptyId.startsWith('remote:')) {
       return null
     }
+
     const connectionId = ptyOwnership.get(ptyId) ?? parseAppSshPtyId(ptyId)?.connectionId
     const startupPromise = deps.getLocalPtyProviderStartupPromise(connectionId)
+
     if (startupPromise && !settledLocalPtyProviderStartups.has(startupPromise)) {
       // Why: a sync probe cannot wait out the cold-start daemon swap the way
       // probePtyLiveness does, and the pre-swap provider's "no PTY" for a
@@ -229,13 +255,17 @@ export function hasPtyFromRuntimeController(
       // settles (docs/reference/ssh-execution-boundary.md rule 2).
       if (!watchedLocalPtyProviderStartups.has(startupPromise)) {
         watchedLocalPtyProviderStartups.add(startupPromise)
+
         const markSettled = (): void => {
           settledLocalPtyProviderStartups.add(startupPromise)
         }
+
         startupPromise.then(markSettled, markSettled)
       }
+
       return null
     }
+
     return getProviderForPty(ptyId).hasPty?.(ptyId) ?? null
   } catch {
     return null
@@ -246,6 +276,7 @@ export function resizePtyFromRuntimeController(ptyId: string, cols: number, rows
   try {
     getProviderForPty(ptyId).resize(ptyId, cols, rows)
     ptySizes.set(ptyId, { cols, rows })
+
     return true
   } catch {
     return false

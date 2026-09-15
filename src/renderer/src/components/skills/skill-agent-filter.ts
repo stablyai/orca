@@ -11,6 +11,7 @@ export function skillAgentLabel(agentId: string): string {
   if (agentId === SHARED_SKILL_AGENT) {
     return translate('auto.components.skills.filter.sharedAgent', 'Shared (.agents)')
   }
+
   return (AI_VAULT_AGENT_LABELS as Record<string, string>)[agentId] ?? agentId
 }
 
@@ -32,6 +33,7 @@ function skillAgents(
   agentByRootPath: ReadonlyMap<string, string>
 ): string[] {
   const roots = skill.rootPaths?.length ? skill.rootPaths : [skill.rootPath]
+
   return [...new Set(roots.map((root) => agentByRootPath.get(root)).filter(Boolean))] as string[]
 }
 
@@ -45,9 +47,11 @@ export function skillMatchesAgent(
   if (agentId === 'all') {
     return true
   }
+
   if (!agentId) {
     return false // An empty owner is never a filter; parity with the dropped `.filter(Boolean)`.
   }
+
   return skill.rootPaths?.length
     ? skill.rootPaths.some((root) => agentByRootPath.get(root) === agentId)
     : agentByRootPath.get(skill.rootPath) === agentId
@@ -57,11 +61,13 @@ export function skillMatchesAgent(
 export function skillAgentOptions(result: SkillDiscoveryResult | null): SkillAgentOption[] {
   const agentByRootPath = skillAgentByRootPath(result)
   const counts = new Map<string, number>()
+
   for (const skill of result?.skills ?? []) {
     for (const agent of skillAgents(skill, agentByRootPath)) {
       counts.set(agent, (counts.get(agent) ?? 0) + 1)
     }
   }
+
   return [...counts.entries()]
     .map(([id, count]) => ({ id, label: skillAgentLabel(id), count }))
     .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))

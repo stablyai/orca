@@ -36,6 +36,7 @@ const noop = (): void => {}
 export async function createTabBarProbeStore(): Promise<TabBarProbeStore> {
   const globalKey = '__tabBarRuntimeModelProbeStore'
   const globals = globalThis as Record<string, unknown>
+
   if (!globals[globalKey]) {
     const { create } = await import('zustand')
     globals[globalKey] = create<TabBarProbeState>(() => ({
@@ -56,6 +57,7 @@ export async function createTabBarProbeStore(): Promise<TabBarProbeStore> {
       toggleTabViewMode: noop
     }))
   }
+
   return globals[globalKey] as TabBarProbeStore
 }
 
@@ -76,22 +78,29 @@ const AGENT_PROJECTIONS = Object.freeze({
   tabAgentTypesByTabId: Object.freeze({}),
   nativeChatTabWideFallbackUnsafeTabsById: Object.freeze({})
 })
+
 const CREATION_POLICY = Object.freeze({
   'managed-browser': { state: 'enabled' },
   'mobile-emulator': { state: 'enabled' }
 })
+
 const DETECTED_AGENTS = Object.freeze({ detectedIds: Object.freeze([]) })
+
 const RUNTIME_TARGET = Object.freeze({ kind: 'local' })
+
 const CREATE_MENU = Object.freeze({})
+
 const ITEM_PROJECTION = Object.freeze({
   orderedItems: Object.freeze([]),
   activeVisibleTabId: null,
   tabStripLayoutKey: 'probe'
 })
+
 const OVERFLOW_NAVIGATION = Object.freeze({
   scrollTabStrip: noop,
   tabStripOverflowState: Object.freeze({ canScrollStart: false, canScrollEnd: false })
 })
+
 const DRAG_SCROLL = Object.freeze({
   isTabDragActive: false,
   onDragScrollStartEnter: noop,
@@ -130,6 +139,7 @@ export function tabBarShellStubs(): Record<string, () => Record<string, unknown>
     surface: () => ({
       renderTabBarSurface: () => {
         tabBarSurfaceRenders.count += 1
+
         return null
       }
     }),

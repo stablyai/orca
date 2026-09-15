@@ -25,14 +25,18 @@ export function copyHost(inv, plan, workDir) {
   mkdirSync(hostRoot, { recursive: true })
 
   const skipped = []
+
   for (const op of plan.ops) {
     const dest = destPath(hostRoot, op.destRel)
+
     if (!existsSync(op.sourcePath)) {
       if (!op.optional) {
         skipped.push(op.destRel)
       }
+
       continue
     }
+
     mkdirSync(dirname(dest), { recursive: true })
     // cpSync mirrors both files and directory trees; dereference symlinks so
     // the copy holds no link back into the app dir.
@@ -44,6 +48,7 @@ export function copyHost(inv, plan, workDir) {
   }
 
   const hostExePath = join(hostRoot, HOST_EXE)
+
   // Both paths mirror the win-unpacked layout under hostRoot, so they resolve
   // exactly as they do in the packaged app (relative to appDir).
   const daemonEntryPath = inv.daemonEntry.exists
@@ -53,6 +58,7 @@ export function copyHost(inv, plan, workDir) {
   // The relocated node-pty native dir (build/Release or prebuilds/...), mirrored
   // under the host root at node-pty's real win-unpacked-relative path.
   let nodePtyNativeDir = ''
+
   if (inv.nodePty.exists && inv.nodePty.nativeRel) {
     const pkgRel = toPosixRelative(inv.appDir, inv.nodePty.packageDir)
     nodePtyNativeDir = destPath(hostRoot, `${pkgRel}/${inv.nodePty.nativeRel}`)

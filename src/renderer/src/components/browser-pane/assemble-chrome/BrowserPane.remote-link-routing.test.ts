@@ -8,6 +8,7 @@ describe('remote browser link routing', () => {
       fileURLToPath(new URL('../stream-remote/remote-browser-page-pane.tsx', import.meta.url)),
       'utf8'
     )
+
     const paneStart = source.indexOf('function RemoteBrowserPagePane')
     const actionStart = source.indexOf('void openWorkspaceBrowserTab({', paneStart)
     const actionEnd = source.indexOf('}).catch((error) => {', actionStart)

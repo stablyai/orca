@@ -16,6 +16,7 @@ describe('orchestration setup state', () => {
       removeItem: vi.fn(),
       setItem: vi.fn()
     }
+
     const dispatchEvent = vi.fn()
     vi.stubGlobal('localStorage', localStorage)
     vi.stubGlobal('window', {

@@ -10,6 +10,7 @@ describe('federated worker stop capability', () => {
       state: 'stop_unknown',
       last_error: reason
     }))
+
     const db = {
       getFederatedDispatch: vi.fn(() => ({
         dispatch_id: 'ctx_remote',
@@ -20,12 +21,15 @@ describe('federated worker stop capability', () => {
       beginWorkerStop: vi.fn(() => ({ disposition: 'started' })),
       markWorkerStopUnknown
     } as unknown as OrchestrationDb
+
     const callOrchestrationWorkerServer = vi.fn(async (_environmentId, method) => {
       if (method === 'status.get') {
         return { capabilities: [ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY] }
       }
+
       return { state: 'stopped', processAction: 'closed_agent_terminal' }
     })
+
     const runtime = {
       getOrchestrationDb: () => db,
       getRuntimeId: () => 'runtime_current',
@@ -36,6 +40,7 @@ describe('federated worker stop capability', () => {
       }),
       callOrchestrationWorkerServer
     } as unknown as OrcaRuntimeService
+
     const method = ORCHESTRATION_WORKER_STOP_METHODS[0]!
 
     await expect(

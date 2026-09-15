@@ -30,37 +30,46 @@ export async function resolveSshBrowserNetworkExecutionRoute(
   dependencies: SshBrowserNetworkExecutionRouteDependencies
 ): Promise<BrowserNetworkExecutionRoute> {
   const host = context.executionHost
+
   if (host.kind !== 'ssh') {
     throw new Error('browser_tunnel_execution_host_mismatch')
   }
+
   const authority: DirectSshAuthority = {
     targetId: host.targetId,
     providerEpoch: host.providerEpoch as SshProviderEpoch,
     connectionGeneration: host.connectionGeneration
   }
+
   const connection = dependencies.connectionManager.getConnection(host.targetId)
+
   if (
     connection?.getState().status !== 'connected' ||
     !dependencies.isCurrentAuthority(authority)
   ) {
     throw new Error('browser_tunnel_execution_host_unavailable')
   }
+
   const invalidation = new AbortController()
   const removeAuthorityAbort = dependencies.registerAuthorityAbort(authority, invalidation)
   const abortFromContext = (): void => invalidation.abort()
   context.signal?.addEventListener('abort', abortFromContext, { once: true })
+
   const releaseInvalidation = (): void => {
     context.signal?.removeEventListener('abort', abortFromContext)
     removeAuthorityAbort()
   }
+
   if (context.signal?.aborted) {
     releaseInvalidation()
     throw new Error('browser_tunnel_execution_host_stale')
   }
+
   if (!dependencies.isCurrentAuthority(authority)) {
     releaseInvalidation()
     throw new Error('browser_tunnel_execution_host_stale')
   }
+
   const base = {
     key: browserNetworkExecutionHostKey(host),
     authority,
@@ -69,14 +78,18 @@ export async function resolveSshBrowserNetworkExecutionRoute(
     releaseInvalidation,
     dependencies
   }
+
   const client = connection.getClient()
+
   if (client) {
     return createSsh2ExecutionRoute(base, client)
   }
+
   if (!connection.usesSystemSshTransport()) {
     releaseInvalidation()
     throw new Error('browser_tunnel_execution_host_unavailable')
   }
+
   return createSystemSshExecutionRoute(base, dependencies.startDynamicForward)
 }
 
@@ -95,6 +108,7 @@ function createSsh2ExecutionRoute(
 ): BrowserNetworkExecutionRoute {
   const sockets = new Set<BrowserNetworkDeferredSocket>()
   let closed = false
+
   const isValid = (): boolean =>
     !closed &&
     !base.invalidation.signal.aborted &&
@@ -103,18 +117,23 @@ function createSsh2ExecutionRoute(
     base.dependencies.connectionManager.getConnection(base.authority.targetId) ===
       base.connection &&
     base.dependencies.isCurrentAuthority(base.authority)
+
   const close = (): void => {
     if (closed) {
       return
     }
+
     closed = true
     base.releaseInvalidation()
     base.invalidation.abort()
+
     for (const socket of sockets) {
       socket.destroy()
     }
+
     sockets.clear()
   }
+
   return {
     key: base.key,
     isValid,
@@ -123,10 +142,13 @@ function createSsh2ExecutionRoute(
       const socket = new BrowserNetworkDeferredSocket()
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
+
       if (!isValid()) {
         queueMicrotask(() => socket.fail(new Error('browser_tunnel_execution_host_stale')))
+
         return socket
       }
+
       try {
         client.forwardOut('127.0.0.1', 0, target.host, target.port, (error, channel) => {
           queueMicrotask(() => {
@@ -143,6 +165,7 @@ function createSsh2ExecutionRoute(
       } catch (error) {
         queueMicrotask(() => socket.fail(asError(error)))
       }
+
       return socket
     },
     close
@@ -154,6 +177,7 @@ async function createSystemSshExecutionRoute(
   startDynamicForward: SshBrowserNetworkExecutionRouteDependencies['startDynamicForward'] = defaultStartDynamicForward
 ): Promise<BrowserNetworkExecutionRoute> {
   let forward: SystemSshDynamicForwardProcess
+
   try {
     forward = await startDynamicForward(base.connection, base.invalidation.signal)
   } catch (error) {
@@ -161,8 +185,10 @@ async function createSystemSshExecutionRoute(
     base.invalidation.abort()
     throw error
   }
+
   const sockets = new Set<SystemSshSocksClientSocket>()
   let closed = false
+
   const isValid = (): boolean =>
     !closed &&
     !base.invalidation.signal.aborted &&
@@ -172,10 +198,12 @@ async function createSystemSshExecutionRoute(
     base.dependencies.connectionManager.getConnection(base.authority.targetId) ===
       base.connection &&
     base.dependencies.isCurrentAuthority(base.authority)
+
   const onExit = (): void => base.invalidation.abort()
   const onError = (): void => base.invalidation.abort()
   forward.process.once('exit', onExit)
   forward.process.once('error', onError)
+
   if (!isValid()) {
     forward.process.off('exit', onExit)
     forward.process.off('error', onError)
@@ -184,22 +212,27 @@ async function createSystemSshExecutionRoute(
     base.releaseInvalidation()
     throw new Error('browser_tunnel_execution_host_stale')
   }
+
   const close = async (): Promise<void> => {
     if (closed) {
       return
     }
+
     closed = true
     base.releaseInvalidation()
     base.invalidation.abort()
     forward.process.off('exit', onExit)
     forward.process.off('error', onError)
+
     for (const socket of sockets) {
       socket.destroy()
     }
+
     sockets.clear()
     forward.dispose()
     await forward.close()
   }
+
   return {
     key: base.key,
     isValid,
@@ -208,10 +241,12 @@ async function createSystemSshExecutionRoute(
       const socket = new SystemSshSocksClientSocket(forward.localPort, target)
       sockets.add(socket)
       socket.once('close', () => sockets.delete(socket))
+
       if (!isValid()) {
         // A bare destroy reaches the session as a pre-connect close; its siblings all fail loudly.
         queueMicrotask(() => socket.fail(new Error('browser_tunnel_execution_host_stale')))
       }
+
       return socket
     },
     close
@@ -233,6 +268,7 @@ function abortPromise(signal: AbortSignal): Promise<void> {
   if (signal.aborted) {
     return Promise.resolve()
   }
+
   return new Promise((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }))
 }
 

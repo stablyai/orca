@@ -53,6 +53,7 @@ const INVALID_BRANCH_PREFIX_CHARS = /[~^:?*[\\]/
 function hasControlOrSpace(value: string): boolean {
   return [...value].some((char) => {
     const code = char.charCodeAt(0)
+
     return code <= 0x20 || code === 0x7f
   })
 }
@@ -67,10 +68,12 @@ function hasControlOrSpace(value: string): boolean {
  */
 export function getBranchPrefixIssue(rawPrefix: string): 'invalid-characters' | null {
   const normalized = normalizeBranchPrefix(rawPrefix)
+
   if (!normalized) {
     // Empty after normalization means "no prefix" — valid.
     return null
   }
+
   // Mirror git check-ref-format exactly so we don't reject prefixes git accepts:
   // control chars/space, the ref-reserved set, `..`, and `@{` are forbidden
   // anywhere; the whole ref may not start with `-` (arg-injection / leading-dash)
@@ -87,6 +90,7 @@ export function getBranchPrefixIssue(rawPrefix: string): 'invalid-characters' | 
   ) {
     return 'invalid-characters'
   }
+
   return null
 }
 

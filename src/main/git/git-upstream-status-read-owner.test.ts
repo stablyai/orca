@@ -20,10 +20,12 @@ function deferredPromise<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((innerResolve, innerReject) => {
     resolve = innerResolve
     reject = innerReject
   })
+
   return { promise, resolve, reject }
 }
 
@@ -36,6 +38,7 @@ describe('GitUpstreamStatusReadOwner', () => {
     const reads = Array.from({ length: 10 }, () =>
       owner.read({ kind: 'native' }, '/repo', undefined, load)
     )
+
     await Promise.resolve()
 
     expect(load).toHaveBeenCalledTimes(1)
@@ -48,10 +51,12 @@ describe('GitUpstreamStatusReadOwner', () => {
   it('isolates paths, execution hosts, and every explicit target field', async () => {
     const owner = new GitUpstreamStatusReadOwner()
     const load = vi.fn().mockResolvedValue(upstreamStatus)
+
     const baseTarget: GitPushTarget = {
       remoteName: 'fork',
       branchName: 'feature'
     }
+
     const cases: [GitUpstreamStatusExecutionIdentity, string, GitPushTarget | undefined][] = [
       [{ kind: 'native' }, '/repo-a', undefined],
       [{ kind: 'native' }, '/repo-b', undefined],
@@ -82,6 +87,7 @@ describe('GitUpstreamStatusReadOwner', () => {
   it('runs fresh work after success and rejection', async () => {
     const owner = new GitUpstreamStatusReadOwner()
     const failure = new Error('upstream failed')
+
     const load = vi
       .fn<() => Promise<GitUpstreamStatus>>()
       .mockResolvedValueOnce(upstreamStatus)

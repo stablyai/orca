@@ -26,9 +26,11 @@ function git(args) {
 function eolAttributes(paths) {
   const fields = git(['check-attr', '-z', 'eol', '--', ...paths]).split('\0')
   const found = new Map()
+
   for (let index = 0; index + 2 < fields.length; index += 3) {
     found.set(fields[index], fields[index + 2])
   }
+
   return found
 }
 
@@ -40,14 +42,17 @@ function eolAttributes(paths) {
  */
 function trackedManifestSources() {
   const paths = new Set()
+
   for (const { filename } of RELAY_ARTIFACTS) {
     const hits = git(['ls-files', '-z', '--', `*/${filename}`])
       .split('\0')
       .filter(Boolean)
+
     for (const path of hits) {
       paths.add(path)
     }
   }
+
   return [...paths]
 }
 

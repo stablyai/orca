@@ -1,7 +1,9 @@
 import { z } from 'zod'
 
 export const BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY = 'automation-v1' as const
+
 export const BROWSER_CLIENT_AUTOMATION_PARAMS_MAX_BYTES = 256 * 1024
+
 export const BROWSER_CLIENT_AUTOMATION_RESULT_MAX_BYTES = 768 * 1024
 
 export const BROWSER_CLIENT_AUTOMATION_METHODS = [
@@ -73,6 +75,7 @@ export const BROWSER_CLIENT_AUTOMATION_METHODS = [
 ] as const
 
 export const BrowserClientAutomationMethod = z.enum(BROWSER_CLIENT_AUTOMATION_METHODS)
+
 export type BrowserClientAutomationMethod = z.infer<typeof BrowserClientAutomationMethod>
 
 const BrowserClientAutomationParams = z
@@ -102,6 +105,7 @@ export const BrowserClientAutomationCommand = z.object({
   method: BrowserClientAutomationMethod,
   params: BrowserClientAutomationParams
 })
+
 export type BrowserClientAutomationCommand = z.infer<typeof BrowserClientAutomationCommand>
 
 export const BrowserClientAutomationResult = z.discriminatedUnion('status', [
@@ -111,6 +115,7 @@ export const BrowserClientAutomationResult = z.discriminatedUnion('status', [
   }),
   z.object({ status: z.literal('failed'), errorCode: z.string().min(1).max(256) })
 ])
+
 export type BrowserClientAutomationResult = z.infer<typeof BrowserClientAutomationResult>
 
 function enforceJsonByteBudget(
@@ -120,9 +125,11 @@ function enforceJsonByteBudget(
   context: z.core.$RefinementCtx<unknown>
 ): void {
   let bytes = Number.POSITIVE_INFINITY
+
   try {
     bytes = new TextEncoder().encode(JSON.stringify(value)).byteLength
   } catch {}
+
   if (bytes > maxBytes) {
     context.addIssue({ code: 'custom', message })
   }

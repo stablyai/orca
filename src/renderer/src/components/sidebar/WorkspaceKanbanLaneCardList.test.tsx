@@ -17,8 +17,11 @@ import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualif
 import { makeWorktree } from '../../store/slices/store-test-helpers'
 
 const WINDOW_START = 20
+
 const WINDOW_END = 25
+
 const TOTAL_SIZE = 21_992
+
 const virtualizerKeys = vi.hoisted(() => [] as (string | number)[])
 
 vi.mock('@tanstack/react-virtual', () => ({
@@ -32,6 +35,7 @@ vi.mock('@tanstack/react-virtual', () => ({
     const start = count === 0 || count <= WINDOW_END + 1 ? 0 : WINDOW_START
     const end = count === 0 ? -1 : Math.min(WINDOW_END, count - 1)
     virtualizerKeys.splice(0)
+
     return {
       getTotalSize: () => (count === 0 ? 0 : count * 44 - 8),
       measurementsCache: Array.from({ length: count }, (_, index) => ({
@@ -44,6 +48,7 @@ vi.mock('@tanstack/react-virtual', () => ({
           const index = start + offset
           const key = getItemKey(index)
           virtualizerKeys.push(key)
+
           return { index, key, start: index * 44 }
         }),
       measureElement: () => {}
@@ -88,6 +93,7 @@ function renderLaneItems(
   options: { activeIdentity?: string; selectedIdentities?: readonly string[] } = {}
 ): HTMLElement {
   const scrollRef = createRef<HTMLDivElement>()
+
   const { container } = render(
     <div ref={scrollRef}>
       <WorkspaceKanbanLaneCardList
@@ -104,6 +110,7 @@ function renderLaneItems(
       />
     </div>
   )
+
   return container
 }
 
@@ -116,6 +123,7 @@ describe('WorkspaceKanbanLaneCardList', () => {
     const ids = Array.from(container.querySelectorAll('[data-workspace-board-card-id]')).map(
       (card) => card.getAttribute('data-workspace-board-card-id')
     )
+
     expect(ids).toEqual([
       'local|w20',
       'local|w21',
@@ -132,6 +140,7 @@ describe('WorkspaceKanbanLaneCardList', () => {
     const indexes = Array.from(container.querySelectorAll('[data-workspace-board-card-index]')).map(
       (card) => Number(card.getAttribute('data-workspace-board-card-index'))
     )
+
     expect(indexes).toEqual([20, 21, 22, 23, 24, 25])
   })
 
@@ -140,6 +149,7 @@ describe('WorkspaceKanbanLaneCardList', () => {
 
     const spacer = container.querySelector<HTMLElement>('[data-workspace-board-card-id]')
       ?.parentElement?.parentElement
+
     expect(spacer?.style.height).toBe(`${TOTAL_SIZE}px`)
   })
 
@@ -149,6 +159,7 @@ describe('WorkspaceKanbanLaneCardList', () => {
     const first = container.querySelector<HTMLElement>(
       '[data-workspace-board-card-id]'
     )?.parentElement
+
     expect(first?.style.transform).toBe(`translateY(${WINDOW_START * 44}px)`)
   })
 

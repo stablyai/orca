@@ -11,7 +11,9 @@ import { ReplacementAuthenticationTimeoutError } from './replacement-session-aut
 import type { RpcClient } from './rpc-client'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
+
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
 // The 2026-09-03 incident: five consecutive "authentication timed out" dials against a
@@ -41,6 +43,7 @@ describe('relay dial against a cell that took the dial and stalled', () => {
     const openRelay = vi.fn(() => new FakeRelaySession('connecting'))
     const resolveRelay = vi.fn(async () => relay)
     const onLog = vi.fn()
+
     const supervisor = new MobileEndpointSupervisor(
       logical,
       host,
@@ -65,6 +68,7 @@ describe('relay dial against a cell that took the dial and stalled', () => {
     timingOut(logical, new ReplacementAuthenticationTimeoutError('opening', 12_000))
     const openRelay = vi.fn(() => new FakeRelaySession('connecting'))
     const resolveRelay = vi.fn(async () => relay)
+
     const supervisor = new MobileEndpointSupervisor(
       logical,
       host,

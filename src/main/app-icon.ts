@@ -61,16 +61,19 @@ const MAC_DOCK_ICON_CLEAR_SCRIPT = [
 ]
 
 const MAC_DOCK_ICON_COMMAND_TIMEOUT_MS = 10_000
+
 const MAC_DOCK_ICON_COMMAND_FALLBACK_MS = 1_000
 
 const defaultExecFile: ExecFile = (file, args, optionsOrCallback, callback) => {
   if (typeof optionsOrCallback === 'function') {
     return execFileChildProcess(file, args, optionsOrCallback)
   }
+
   return execFileChildProcess(file, args, optionsOrCallback, callback ?? (() => {}))
 }
 
 let macDockIconPersistenceGeneration = 0
+
 let macDockIconPersistenceQueue = Promise.resolve()
 
 export function getAppIconPath(value: unknown): string {
@@ -83,6 +86,7 @@ export function createAppIconImage(value: unknown): Electron.NativeImage {
 
 function getMacAppBundlePath(): string | undefined {
   const appBundlePath = resolve(dirname(app.getPath('exe')), '..', '..')
+
   return appBundlePath.endsWith('.app') ? appBundlePath : undefined
 }
 
@@ -150,14 +154,18 @@ function runBoundedMacDockIconCommand({
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(fallback)
+
       if (forceFallback) {
         clearTimeout(forceFallback)
       }
+
       if (error) {
         onError(error)
       }
+
       resolve()
     }
 
@@ -165,10 +173,13 @@ function runBoundedMacDockIconCommand({
       if (settled) {
         return
       }
+
       settled = true
+
       if (forceFallback) {
         clearTimeout(forceFallback)
       }
+
       console.warn(timeoutWarning)
       resolve()
     }
@@ -177,10 +188,13 @@ function runBoundedMacDockIconCommand({
       if (settled) {
         return
       }
+
       if (!childProcess) {
         finishAfterFallback()
+
         return
       }
+
       // Why: the queue must not release while an older icon process can still win.
       childProcess.once('exit', finishAfterFallback)
       childProcess.once('close', finishAfterFallback)
@@ -198,6 +212,7 @@ function runBoundedMacDockIconCommand({
         },
         finish
       )
+
       if (isMacDockIconChildProcess(maybeChildProcess)) {
         childProcess = maybeChildProcess
       }
@@ -262,13 +277,17 @@ function clearMacCustomIconMetadata(execFile: ExecFile, appBundlePath: string): 
 export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOptions = {}): void {
   const platform = options.platform ?? process.platform
   const isDevApp = options.isDevApp ?? (is.dev || !app.isPackaged)
+
   if (platform !== 'darwin' || isDevApp) {
     return
   }
+
   const appBundlePath = options.appBundlePath ?? getMacAppBundlePath()
+
   if (!appBundlePath) {
     return
   }
+
   const execFile = options.execFile ?? defaultExecFile
   const iconId = normalizeAppIconId(value)
   const generation = ++macDockIconPersistenceGeneration
@@ -277,10 +296,13 @@ export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOp
     if (generation !== macDockIconPersistenceGeneration) {
       return
     }
+
     if (iconId === 'classic') {
       await clearMacCustomIconMetadata(execFile, appBundlePath)
+
       return
     }
+
     // Why: a stopped app's Dock tile is resolved from Finder metadata, not
     // Electron's live app.dock.setIcon state.
     await runMacCustomIconCommand(execFile, appBundlePath, MAC_DOCK_ICON_PATHS[iconId])
@@ -289,16 +311,20 @@ export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOp
 
 export function applyAppIcon(value: unknown): void {
   const image = createAppIconImage(value)
+
   if (image.isEmpty()) {
     return
   }
+
   if (process.platform === 'darwin') {
     app.dock?.setIcon(image)
   }
+
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) {
       window.setIcon(image)
     }
   }
+
   persistMacDockIcon(value)
 }

@@ -57,10 +57,12 @@ export function useAddRepoNestedReviewController({
     cancelNestedRepoScan,
     setStep
   })
+
   const remote = useAddRepoRemoteNestedScan({
     setActiveNestedScanId: review.setActiveNestedScanId,
     showNestedRepoReview: review.showNestedRepoReview
   })
+
   const imports = useAddRepoNestedImportFlow({
     activeRuntimeEnvironmentId,
     closeModal,
@@ -78,5 +80,6 @@ export function useAddRepoNestedReviewController({
     nestedRuntimeEnvironmentId: review.nestedRuntimeEnvironmentId,
     getNestedRepoRuntimeKind: review.getNestedRepoRuntimeKind
   })
+
   return { ...review, ...remote, ...imports }
 }

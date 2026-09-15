@@ -26,6 +26,7 @@ export function finalizeHostTerminalSnapshot(
   if (snapshot.tabGroups !== undefined || snapshot.tabGroupLayout !== undefined) {
     throw new Error('This fixture only supports ungrouped terminal snapshot finalization')
   }
+
   return finalizeRuntimeMobileSessionTabsResult(
     { snapshot, tabs: snapshot.tabs },
     { sanitizeGroups: () => undefined }

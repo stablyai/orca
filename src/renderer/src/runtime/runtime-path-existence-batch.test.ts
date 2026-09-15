@@ -10,13 +10,17 @@ import {
   RUNTIME_PROTOCOL_VERSION,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
 } from '../../../shared/protocol-version'
+
 installRuntimeFileClientEnvironment()
+
 const context = {
   settings: { activeRuntimeEnvironmentId: 'owner-a' },
   worktreeId: 'folder-1',
   worktreePath: '/folder'
 }
+
 const paths = Array.from({ length: 8 }, (_, i) => `/folder/file-${i}.ts`)
+
 function status(capabilities: string[]) {
   runtimeEnvironmentTransportCall.mockImplementation(async (args) =>
     args.method === 'status.get'
@@ -33,6 +37,7 @@ function status(capabilities: string[]) {
       : runtimeEnvironmentCall(args)
   )
 }
+
 it('paired runtime receives one eight-path request scoped to the folder workspace', async () => {
   status(['files.pathsExist'])
   runtimeEnvironmentCall.mockResolvedValue({
@@ -49,6 +54,7 @@ it('paired runtime receives one eight-path request scoped to the folder workspac
   })
   expect(fsPathExists).not.toHaveBeenCalled()
 })
+
 it('old paired host retains scalar stats on that runtime and does not call the new method', async () => {
   status([])
   runtimeEnvironmentCall.mockResolvedValue({ id: 'stat', ok: true, result: { size: 1 } })
@@ -61,6 +67,7 @@ it('old paired host retains scalar stats on that runtime and does not call the n
   ).toBe(true)
   expect(fsPathExists).not.toHaveBeenCalled()
 })
+
 it('new method missing after capability discovery falls back only for method_not_found', async () => {
   status(['files.pathsExist'])
   runtimeEnvironmentCall.mockImplementation(async (args) =>
@@ -73,6 +80,7 @@ it('new method missing after capability discovery falls back only for method_not
     runtimeEnvironmentCall.mock.calls.filter(([args]) => args.method === 'files.stat')
   ).toHaveLength(8)
 })
+
 it('remote errors stay errors, and an out-of-scope path cannot read the local filesystem', async () => {
   status(['files.pathsExist'])
   runtimeEnvironmentCall.mockResolvedValue({

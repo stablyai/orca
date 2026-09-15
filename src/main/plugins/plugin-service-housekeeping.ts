@@ -14,13 +14,17 @@ export class PluginServiceHousekeeping {
   }): void {
     if (!options.enabled) {
       this.stop()
+
       return
     }
+
     if (!this.reapTimer) {
       this.reapTimer = setInterval(options.reapIdle, 60_000)
       this.reapTimer.unref?.()
     }
+
     const pathsKey = JSON.stringify(options.devPaths)
+
     if (pathsKey !== this.watchedPathsKey) {
       this.devWatcher.dispose()
       this.devWatcher.start(options.devPaths, options.refresh, () => {
@@ -41,6 +45,7 @@ export class PluginServiceHousekeeping {
       clearInterval(this.reapTimer)
       this.reapTimer = null
     }
+
     this.devWatcher.dispose()
     this.watchedPathsKey = null
   }

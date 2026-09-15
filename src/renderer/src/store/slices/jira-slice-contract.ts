@@ -17,7 +17,9 @@ export type JiraReadOptions = {
 }
 
 export type JiraSearchOptions = JiraReadOptions & { signal?: AbortSignal }
+
 export type JiraPatchOptions = { sourceContext?: TaskSourceContext | null }
+
 export type JiraIssueSummaryLookupOptions = { force?: boolean; signal?: AbortSignal }
 
 export type JiraSlice = {
@@ -69,4 +71,5 @@ export type JiraSlice = {
 type JiraStateCreator = StateCreator<AppState, [], [], JiraSlice>
 
 export type JiraSliceSet = Parameters<JiraStateCreator>[0]
+
 export type JiraSliceGet = Parameters<JiraStateCreator>[1]

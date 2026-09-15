@@ -17,6 +17,7 @@ class CountingRemoteProvider extends MemoryRemoteProvider {
     if (filePath.includes('/sessions/')) {
       this.readFilePaths.push(filePath)
     }
+
     return await super.readFile(filePath)
   }
 }
@@ -52,6 +53,7 @@ describe('remote AI Vault transcript re-reads', () => {
 
   it('does not re-read an unchanged corpus on the next scan', async () => {
     const provider = new CountingRemoteProvider()
+
     for (const day of ['07/07', '07/25', '08/10']) {
       provider.addFile(
         `/home/ada/.codex/sessions/2026/${day}/rollout-${day.replace('/', '')}.jsonl`,
@@ -200,6 +202,7 @@ describe('remote AI Vault transcript re-reads', () => {
         provider.readFilePaths.push(filePath)
         throw new Error('EIO: transient relay read failure')
       }
+
       return await originalReadFile(filePath)
     }
 

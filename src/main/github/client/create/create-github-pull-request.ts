@@ -25,6 +25,7 @@ import {
 import { getOriginGitHubApiRepository, githubHostExecOptions } from '../../github-api-repository'
 import { classifyCreatePRError, parseCreatePRPayload } from './create-pr-error-classification'
 import { findOpenPRByHeadBase, readPullRequestTemplate } from './pull-request-template'
+
 export async function createGitHubPullRequest(
   repoPath: string,
   input: CreateHostedReviewInput,
@@ -48,6 +49,7 @@ export async function createGitHubPullRequest(
     connectionId,
     getHostedReviewLocalGitOptions(options)
   )
+
   if (!ownerRepo) {
     return {
       ok: false,
@@ -55,12 +57,14 @@ export async function createGitHubPullRequest(
       error: 'Creating pull requests requires a GitHub remote.'
     }
   }
+
   // The runner host-qualifies --repo from options.host for GHES (#8312).
   const repoArg = `${ownerRepo.owner}/${ownerRepo.repo}`
 
   const base = normalizeHostedReviewBaseRef(input.base)
   const head = input.head ? normalizeHostedReviewHeadRef(input.head) || undefined : undefined
   const title = input.title.trim()
+
   if (!base || !title) {
     return {
       ok: false,
@@ -68,6 +72,7 @@ export async function createGitHubPullRequest(
       error: 'Create PR failed: base branch and title are required.'
     }
   }
+
   if (head && head.toLowerCase() === base.toLowerCase()) {
     return {
       ok: false,
@@ -79,12 +84,15 @@ export async function createGitHubPullRequest(
   const tempDir = await mkdtemp(join(tmpdir(), 'orca-pr-body-'))
   await acquire()
   const bodyPath = join(tempDir, 'body.md')
+
   try {
     const body =
       input.useTemplate && !input.body?.trim()
         ? await readPullRequestTemplate(repoPath, connectionId)
         : (input.body ?? '')
+
     await writeFile(bodyPath, body, 'utf8')
+
     const createArgs = [
       'pr',
       'create',
@@ -97,14 +105,18 @@ export async function createGitHubPullRequest(
       '--body-file',
       bodyPath
     ]
+
     if (head) {
       createArgs.push('--head', head)
     }
+
     if (input.draft) {
       createArgs.push('--draft')
     }
+
     try {
       const context = githubRepoContext(repoPath, connectionId)
+
       const { stdout } = await ghExecFileAsync(createArgs, {
         ...ghRepoExecOptions(context),
         ...(connectionId ? {} : getHostedReviewLocalGitOptions(options)),
@@ -112,10 +124,13 @@ export async function createGitHubPullRequest(
         timeout: 60_000,
         idempotent: false
       })
+
       const created = parseCreatePRPayload(stdout)
+
       if (created) {
         return { ok: true, ...created }
       }
+
       const found = head
         ? await findOpenPRByHeadBase({
             repoPath,
@@ -126,9 +141,11 @@ export async function createGitHubPullRequest(
             options
           }).catch(() => null)
         : null
+
       if (found) {
         return { ok: true, ...found }
       }
+
       return {
         ok: false,
         code: 'unknown_completion',
@@ -136,6 +153,7 @@ export async function createGitHubPullRequest(
       }
     } catch (error) {
       const classified = classifyCreatePRError(error)
+
       if (
         !classified.ok &&
         (classified.code === 'already_exists' || classified.code === 'unknown_completion') &&
@@ -149,6 +167,7 @@ export async function createGitHubPullRequest(
           connectionId,
           options
         }).catch(() => null)
+
         if (existing) {
           return {
             ok: false,
@@ -158,6 +177,7 @@ export async function createGitHubPullRequest(
           }
         }
       }
+
       return classified
     }
   } finally {

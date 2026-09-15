@@ -22,12 +22,15 @@ export function getLinearCurrentIssueFromWorktree(worktree: {
   linkedLinearIssueOrganizationUrlKey?: string | null
 }): CurrentIssueLink {
   const linked = worktree.linkedLinearIssue?.trim()
+
   if (!linked) {
     throw linearError('linear_no_linked_issue', 'The current worktree is not linked to Linear.', {
       nextSteps: ['Open a Linear-linked worktree or pass an explicit issue id.']
     })
   }
+
   const parsed = parseLinearIssueInput(linked)
+
   return {
     identifier: parsed?.identifier ?? linked.toUpperCase(),
     workspaceId: worktree.linkedLinearIssueWorkspaceId,
@@ -44,12 +47,15 @@ export function resolveLegacyLinearLinkWorkspace(
 ): CurrentIssueLink['backfill'] {
   const parsed = parseLinearIssueInput(identifier)
   const organizationUrlKey = splitOrganizationUrlKey ?? parsed?.organizationUrlKey
+
   if (!organizationUrlKey) {
     return undefined
   }
+
   const matches = getConnectedWorkspaces().filter(
     (workspace) => workspace.organizationUrlKey === organizationUrlKey
   )
+
   return matches.length === 1
     ? { workspaceId: matches[0].id, organizationUrlKey }
     : { organizationUrlKey }

@@ -49,6 +49,7 @@ export function DraftReviewActions({
 }): React.JSX.Element {
   const disabled = readying || stateUpdating !== null
   const ReadyIcon = isGitLab ? GitMerge : GitPullRequestArrow
+
   return (
     <div className="space-y-1.5">
       <div className={RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS}>

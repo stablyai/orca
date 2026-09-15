@@ -254,6 +254,7 @@ describe('managed agent hook controls', () => {
     const install = installManagedAgentHooks(settings, {
       shouldContinue: (agent) => shouldContinueManagedHookStartup(isQuitting, settings, agent)
     })
+
     await vi.waitFor(() => expect(mocks.detect).toHaveBeenCalledTimes(1))
     isQuitting = true
     releaseDetection?.({ claude: { state: 'found' }, codex: { state: 'found' } })
@@ -336,6 +337,7 @@ describe('startup managed hook reconciliation (STA-5679)', () => {
       agentCmdOverrides: {},
       disabledTuiAgents: ['claude' as const]
     }
+
     mocks.detect.mockResolvedValue({ codex: { state: 'found' } })
 
     await installManagedAgentHooks(settings, {

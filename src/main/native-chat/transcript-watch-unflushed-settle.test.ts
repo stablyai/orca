@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./session-file-resolver', () => ({
   resolveSessionFilePath: mocks.resolve
 }))
+
 vi.mock('./transcript-watch-engine', () => ({
   getActiveNativeChatWatcherCount: vi.fn(() => 0),
   installTranscriptWatcher: mocks.install

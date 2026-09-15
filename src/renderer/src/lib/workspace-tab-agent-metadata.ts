@@ -16,6 +16,7 @@ export type AgentMetadata = {
 /** Latest agent activity across a tab's panes, or null if it has none. */
 export function maxAgentActivityAt(metadata: readonly AgentMetadata[]): number | null {
   let max: number | null = null
+
   for (const entry of metadata) {
     if (
       Number.isFinite(entry.lastActivityAt) &&
@@ -25,6 +26,7 @@ export function maxAgentActivityAt(metadata: readonly AgentMetadata[]): number |
       max = entry.lastActivityAt
     }
   }
+
   return max
 }
 
@@ -40,6 +42,7 @@ function normalizeText(value: string | null | undefined): string {
 
 function addText(target: string[], value: string | null | undefined): void {
   const trimmed = normalizeText(value)
+
   if (trimmed) {
     target.push(trimmed)
   }
@@ -52,15 +55,18 @@ function addProviderSession(
   if (!providerSession) {
     return
   }
+
   addText(target, providerSession.key)
   addText(target, providerSession.id)
 }
 
 function getPaneKeyTabId(paneKey: string): string | null {
   const separator = paneKey.indexOf(':')
+
   if (separator <= 0 || separator !== paneKey.lastIndexOf(':')) {
     return null
   }
+
   return paneKey.slice(0, separator)
 }
 
@@ -80,9 +86,11 @@ function agentRecordMatchesTab({
   if (recordWorktreeId && recordWorktreeId !== worktreeId) {
     return false
   }
+
   if (recordTabId) {
     return recordTabId === terminalTabId
   }
+
   return getPaneKeyTabId(paneKey) === terminalTabId
 }
 
@@ -102,10 +110,12 @@ function collectLiveMetadata(
   addText(textParts, entry.terminalTitle)
   addText(snippetCandidates, entry.terminalTitle)
   addProviderSession(textParts, entry.providerSession)
+
   for (const historyEntry of entry.stateHistory) {
     addText(textParts, historyEntry.prompt)
     addText(snippetCandidates, historyEntry.prompt)
   }
+
   return { textParts, snippetCandidates, lastActivityAt: agentStatusEvidenceObservedAt(entry) }
 }
 
@@ -121,6 +131,7 @@ function collectSleepingMetadata(
   addText(textParts, record.terminalTitle)
   addText(snippetCandidates, record.terminalTitle)
   addProviderSession(textParts, record.providerSession)
+
   return { textParts, snippetCandidates, lastActivityAt: record.updatedAt }
 }
 
@@ -154,6 +165,7 @@ export function collectAgentMetadataForTerminal({
     if (metadataByPaneKey.has(paneKey)) {
       continue
     }
+
     if (
       agentRecordMatchesTab({
         paneKey,
@@ -174,6 +186,7 @@ export function collectAgentMetadataForTerminal({
     if (metadataByPaneKey.has(paneKey)) {
       continue
     }
+
     if (
       agentRecordMatchesTab({
         paneKey,
@@ -205,10 +218,12 @@ function pushToIndex(
   entry: IndexedAgentEntry
 ): void {
   let bucket = index.get(tabId)
+
   if (!bucket) {
     bucket = []
     index.set(tabId, bucket)
   }
+
   bucket.push(entry)
 }
 
@@ -220,9 +235,11 @@ export function buildAgentMetadataTabIndex(
 
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
     const tabId = entry.tabId || getPaneKeyTabId(paneKey)
+
     if (!tabId) {
       continue
     }
+
     seenPaneKeys.add(paneKey)
     pushToIndex(index, tabId, {
       paneKey,
@@ -236,10 +253,13 @@ export function buildAgentMetadataTabIndex(
     if (seenPaneKeys.has(paneKey)) {
       continue
     }
+
     const tabId = retained.entry.tabId ?? retained.tab.id ?? getPaneKeyTabId(paneKey)
+
     if (!tabId) {
       continue
     }
+
     seenPaneKeys.add(paneKey)
     const meta = collectLiveMetadata(retained.entry)
     addText(meta.textParts, retained.tab.title)
@@ -256,10 +276,13 @@ export function buildAgentMetadataTabIndex(
     if (seenPaneKeys.has(paneKey)) {
       continue
     }
+
     const tabId = record.tabId || getPaneKeyTabId(paneKey)
+
     if (!tabId) {
       continue
     }
+
     pushToIndex(index, tabId, {
       paneKey,
       worktreeId: record.worktreeId,
@@ -278,20 +301,25 @@ export function collectAgentMetadataFromIndex(
   ambiguousWorktreeIds: ReadonlySet<string>
 ): AgentMetadata[] {
   const entries = index.get(terminalTabId)
+
   if (!entries) {
     return []
   }
+
   return entries
     .filter((entry) => {
       if (entry.worktreeId && entry.worktreeId !== worktree.id) {
         return false
       }
+
       if (entry.connectionId) {
         return isExecutionHostAliasForWorktree(toSshExecutionHostId(entry.connectionId), worktree)
       }
+
       if (entry.connectionId === undefined && ambiguousWorktreeIds.has(worktree.id)) {
         return false
       }
+
       return (
         !ambiguousWorktreeIds.has(worktree.id) ||
         isExecutionHostAliasForWorktree(LOCAL_EXECUTION_HOST_ID, worktree)

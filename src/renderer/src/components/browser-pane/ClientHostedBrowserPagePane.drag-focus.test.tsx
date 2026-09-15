@@ -9,9 +9,11 @@ const mocks = vi.hoisted(() => ({ attach: vi.fn(), createBrowserTab: vi.fn(async
 vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
+
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionBrowserTab: mocks.createBrowserTab
 }))
+
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), loading: vi.fn(), message: vi.fn() }
 }))
@@ -66,6 +68,7 @@ function createGuest(): { webview: Electron.WebviewTag; focus: ReturnType<typeof
     detach: vi.fn(),
     nextMetadataRevision: vi.fn(() => ++revision)
   })
+
   return { webview, focus }
 }
 
@@ -100,6 +103,7 @@ function startDrag(): () => void {
     release = acquireWebviewsDragPassthrough()
   })
   openReleases.push(release)
+
   return () => act(() => release())
 }
 
@@ -117,6 +121,7 @@ describe.each([
     for (const release of openReleases.splice(0)) {
       release()
     }
+
     cleanup()
   })
 

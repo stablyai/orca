@@ -21,20 +21,24 @@ export function projectSessionTabBrowserPlacements(
   if (clientCanObserveClientHostedBrowserPages(clientCapabilities)) {
     return payload
   }
+
   const removedIds = new Set(
     payload.tabs
       .filter((tab) => tab.type === 'browser' && tab.placement?.kind === 'client')
       .map((tab) => tab.id)
   )
+
   if (removedIds.size === 0) {
     return payload
   }
+
   const retainedTabs = payload.tabs.filter((tab) => !removedIds.has(tab.id))
   const active = selectProjectedActiveTab(payload.activeTabId, retainedTabs)
   const tabs = retainedTabs.map((tab) => ({ ...tab, isActive: tab.id === active?.id }))
   const tabGroups = projectTabGroups(payload.tabGroups, removedIds)
   const groupIds = new Set(tabGroups?.map((group) => group.id) ?? [])
   const activeTopLevelId = active ? topLevelTabId(active) : null
+
   const activeGroupId =
     payload.activeGroupId && groupIds.has(payload.activeGroupId)
       ? payload.activeGroupId
@@ -43,6 +47,7 @@ export function projectSessionTabBrowserPlacements(
         )?.id ??
         tabGroups?.[0]?.id ??
         null)
+
   return {
     ...payload,
     activeGroupId,
@@ -71,17 +76,22 @@ export function translateProjectedSessionTabMove(
   move: RuntimeMobileSessionTabMove
 ): RuntimeMobileSessionTabMove {
   const tabId = resolveProjectedTopLevelTabId(projected, move.tabId)
+
   if (!tabId) {
     throw new Error('tab_not_found')
   }
+
   const visibleTarget = projected.tabGroups?.find((group) => group.id === move.targetGroupId)
   const rawTarget = raw.tabGroups?.find((group) => group.id === move.targetGroupId)
+
   if (!visibleTarget || !rawTarget) {
     throw new Error('target_group_not_found')
   }
+
   if (move.kind === 'split') {
     return { ...move, tabId }
   }
+
   if (move.kind === 'move-to-group') {
     return {
       ...move,
@@ -91,17 +101,22 @@ export function translateProjectedSessionTabMove(
         : { index: translateProjectedInsertionIndex(rawTarget, visibleTarget, move.index) })
     }
   }
+
   assertExactVisibleOrder(visibleTarget.tabOrder, move.tabOrder)
   const visibleIds = new Set(visibleTarget.tabOrder)
   let visibleIndex = 0
+
   const tabOrder = rawTarget.tabOrder.map((rawTabId) => {
     if (!visibleIds.has(rawTabId)) {
       return rawTabId
     }
+
     const next = move.tabOrder[visibleIndex]
     visibleIndex += 1
+
     return next!
   })
+
   return { ...move, tabId, tabOrder }
 }
 
@@ -115,6 +130,7 @@ function resolveProjectedTopLevelTabId(
       (candidate.type === 'terminal' && candidate.parentTabId === tabId) ||
       (candidate.type === 'browser' && candidate.browserWorkspaceId === tabId)
   )
+
   return tab ? topLevelTabId(tab) : null
 }
 
@@ -124,13 +140,17 @@ function translateProjectedInsertionIndex(
   requestedIndex: number
 ): number {
   const index = Math.max(0, Math.min(requestedIndex, projected.tabOrder.length))
+
   if (index === projected.tabOrder.length) {
     return raw.tabOrder.length
   }
+
   const rawIndex = raw.tabOrder.indexOf(projected.tabOrder[index]!)
+
   if (rawIndex === -1) {
     throw new Error('invalid_tab_order')
   }
+
   return rawIndex
 }
 
@@ -167,9 +187,11 @@ function projectTabGroups(
   const projected = groups
     ?.map((group): RuntimeMobileSessionTabGroup | null => {
       const tabOrder = group.tabOrder.filter((id) => !removedIds.has(id))
+
       if (tabOrder.length === 0) {
         return null
       }
+
       return {
         ...group,
         activeTabId:
@@ -183,6 +205,7 @@ function projectTabGroups(
       }
     })
     .filter((group): group is RuntimeMobileSessionTabGroup => group !== null)
+
   return projected && projected.length > 0 ? projected : undefined
 }
 
@@ -193,13 +216,17 @@ function pruneTabGroupLayout(
   if (!layout) {
     return null
   }
+
   if (layout.type === 'leaf') {
     return groupIds.has(layout.groupId) ? layout : null
   }
+
   const first = pruneTabGroupLayout(layout.first, groupIds)
   const second = pruneTabGroupLayout(layout.second, groupIds)
+
   if (first && second) {
     return { ...layout, first, second }
   }
+
   return first ?? second
 }

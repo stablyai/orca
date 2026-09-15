@@ -13,18 +13,23 @@ export function resolveRemotePairing(
       'Use either --pairing-code or --environment, not both.'
     )
   }
+
   if (environmentSelector) {
     return resolveEnvironmentPairingOffer(userDataPath, environmentSelector)
   }
+
   if (!pairingCode) {
     return null
   }
+
   const pairing = parsePairingCode(pairingCode)
+
   if (!pairing) {
     throw new RuntimeClientError(
       'invalid_argument',
       'Invalid remote pairing code. Expected an orca://pair?... URL or bare pairing payload.'
     )
   }
+
   return pairing
 }

@@ -17,6 +17,7 @@ export async function readRelayFileContent(filePath: string) {
   const stats = await stat(filePath)
   const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
   const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+
   if (stats.size > sizeLimit) {
     throw new Error(
       `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
@@ -25,6 +26,7 @@ export async function readRelayFileContent(filePath: string) {
 
   if (mimeType) {
     const buffer = await readFile(filePath)
+
     return { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType }
   }
 
@@ -33,9 +35,11 @@ export async function readRelayFileContent(filePath: string) {
   }
 
   const buffer = await readFile(filePath)
+
   if (isBinaryBuffer(buffer)) {
     return { content: '', isBinary: true }
   }
+
   return { content: buffer.toString('utf-8'), isBinary: false }
 }
 
@@ -81,6 +85,7 @@ export async function readRelayFileStreamMetadata(
   const stats = await stat(filePath)
   const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
   const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+
   if (stats.size > sizeLimit) {
     throw new Error(
       `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
@@ -96,6 +101,7 @@ export async function readRelayFileStreamMetadata(
       empty: true
     }
   }
+
   // Why: unlike the legacy single-shot path, streaming does not read the full
   // buffer before classifying content. Probe every unknown file so small binary
   // files do not get decoded as UTF-8 text over SSH.
@@ -108,6 +114,7 @@ export async function readRelayFileStreamMetadata(
   const releaseTerminalFrameSlot = reserveTerminalFrameSlot(registry, context.clientId)
   let handle: FileHandle | undefined
   let streamId: number
+
   try {
     handle = await open(filePath, 'r')
     streamId = registry.register(handle)
@@ -163,27 +170,36 @@ const pendingTerminalFramesByClient = new WeakMap<RelayStreamRegistry, Map<numbe
 
 function reserveTerminalFrameSlot(registry: RelayStreamRegistry, clientId: number): () => void {
   let byClient = pendingTerminalFramesByClient.get(registry)
+
   if (!byClient) {
     byClient = new Map()
     pendingTerminalFramesByClient.set(registry, byClient)
   }
+
   const pending = byClient.get(clientId) ?? 0
+
   if (pending >= MAX_CONCURRENT_STREAMS) {
     throw new TooManyStreamsError()
   }
+
   byClient.set(clientId, pending + 1)
   let released = false
+
   return () => {
     if (released) {
       return
     }
+
     released = true
     const remaining = (byClient.get(clientId) ?? 1) - 1
+
     // Drop the entry at zero so a long-lived registry cannot accumulate one per detached client.
     if (remaining <= 0) {
       byClient.delete(clientId)
+
       return
     }
+
     byClient.set(clientId, remaining)
   }
 }
@@ -198,10 +214,13 @@ async function pumpChunks(
   releaseTerminalFrameSlot: () => void
 ): Promise<void> {
   const entry = registry.get(streamId)
+
   if (!entry) {
     releaseTerminalFrameSlot()
+
     return
   }
+
   const buffer = Buffer.allocUnsafe(STREAM_CHUNK_SIZE)
   let offset = 0
   let seq = 0
@@ -217,10 +236,12 @@ async function pumpChunks(
           endReason = 'stale'
           break
         }
+
         if (registry.isAborted(streamId)) {
           endReason = 'aborted'
           break
         }
+
         // Why: credit window — bulk chunks share one ordered SSH channel with
         // interactive pty.data frames. Waiting for client acks bounds how many
         // stream bytes a keystroke echo can queue behind, and yields the relay
@@ -233,31 +254,38 @@ async function pumpChunks(
           ) {
             await registry.waitForAck(streamId)
           }
+
           if (context.isStale()) {
             endReason = 'stale'
             break
           }
+
           if (registry.isAborted(streamId)) {
             endReason = 'aborted'
             break
           }
         }
+
         const want = Math.min(STREAM_CHUNK_SIZE, totalSize - offset)
         const bytesRead = await readFullStreamChunk(entry.handle, buffer, want, offset)
+
         if (bytesRead !== want) {
           endReason = 'error'
           errorCode = 'ESTREAMTRUNCATED'
           errorMessage = `File truncated mid-stream: expected ${totalSize}, got ${offset + bytesRead}`
           break
         }
+
         if (context.isStale()) {
           endReason = 'stale'
           break
         }
+
         if (registry.isAborted(streamId)) {
           endReason = 'aborted'
           break
         }
+
         const data = buffer.subarray(0, bytesRead).toString('base64')
         // Why: the bulk lane waits out sink saturation, so a flood of chunk
         // frames cannot pile up in the outbound pipe ahead of interactive
@@ -275,6 +303,7 @@ async function pumpChunks(
       // treat as aborted so we don't emit a spurious streamError to a client
       // that is already gone.
       const code = (err as { code?: string }).code
+
       if (code === 'EBADF' && registry.isAborted(streamId)) {
         endReason = 'aborted'
       } else {
@@ -293,8 +322,10 @@ async function pumpChunks(
         if (pumpOptions.clientId === undefined) {
           // Legacy broadcast path (direct calls/tests): no per-frame settlement to hold the slot on.
           dispatcher.notifyControl(method, params)
+
           return
         }
+
         slotReleaseDeferred = dispatcher.tryNotifyClient(
           pumpOptions.clientId,
           method,
@@ -302,6 +333,7 @@ async function pumpChunks(
           releaseTerminalFrameSlot
         )
       }
+
       if (endReason === 'end') {
         publishTerminal('fs.streamEnd', { streamId })
         process.stderr.write(`[relay] stream end id=${streamId}\n`)
@@ -326,6 +358,7 @@ async function pumpChunks(
     // Why: the fd goes back first — a terminal frame that can never be delivered must not
     // strand it. Cancelled/stale streams publish nothing, so nothing else frees their slot.
     await registry.release(streamId)
+
     if (!slotReleaseDeferred) {
       releaseTerminalFrameSlot()
     }
@@ -343,6 +376,7 @@ export async function readFullStreamChunk(
   offset: number
 ): Promise<number> {
   let totalRead = 0
+
   while (totalRead < length) {
     const { bytesRead } = await handle.read(
       buffer,
@@ -350,10 +384,13 @@ export async function readFullStreamChunk(
       length - totalRead,
       offset + totalRead
     )
+
     if (bytesRead === 0) {
       break
     }
+
     totalRead += bytesRead
   }
+
   return totalRead
 }

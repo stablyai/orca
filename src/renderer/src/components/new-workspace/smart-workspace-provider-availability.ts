@@ -12,6 +12,8 @@ export function canUseGitLabSmartSource({
   if (repoBackedSourcesDisabled) {
     return false
   }
+
   const parsedHost = parseExecutionHostId(sourceHostId)
+
   return parsedHost?.kind === 'ssh' || parsedHost?.kind === 'runtime' || localGitlabAvailable
 }

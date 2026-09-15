@@ -23,6 +23,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
       const result = (await this.execAgentBrowser(sessionName, [
         'snapshot'
       ])) as BrowserSnapshotResult
+
       return {
         ...result,
         browserPageId: target.browserPageId
@@ -57,19 +58,24 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
       async (_sessionName, target) => {
         const wc = this.requireTargetWebContents(target)
         const navigationUrl = normalizeBrowserNavigationUrl(url)
+
         if (!navigationUrl) {
           throw new BrowserError('invalid_argument', `Unsupported browser URL: ${url}`)
         }
+
         const navigationState: { preventUnloadEvent: Electron.Event | null } = {
           preventUnloadEvent: null
         }
+
         const onWillPreventUnload = (event: Electron.Event): void => {
           navigationState.preventUnloadEvent = event
         }
+
         wc.on('will-prevent-unload', onWillPreventUnload)
         let navigationAborted = false
         const navigationDeadline = Date.now() + EMBEDDED_NAVIGATION_TIMEOUT_MS
         let navigationTimeout: ReturnType<typeof setTimeout> | null = null
+
         try {
           await Promise.race([
             wc.loadURL(navigationUrl),
@@ -91,11 +97,13 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
             clearTimeout(navigationTimeout)
             navigationTimeout = null
           }
+
           if (!this.getWebContents(target.webContentsId)) {
             throw this.createPageUnavailableError(
               `${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`
             )
           }
+
           // Why: ERR_ABORTED also covers a page vetoing unload; that navigation did not succeed.
           if (
             !isAbortedNavigationError(error) ||
@@ -107,6 +115,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
               `Failed to navigate browser page ${target.browserPageId}: ${error instanceof Error ? error.message : String(error)}`
             )
           }
+
           navigationAborted = true
           // Why: a superseding navigation rejects the first load before its replacement has landed.
           await waitForAbortedNavigationReplacement(
@@ -116,6 +125,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
           )
         } finally {
           wc.removeListener('will-prevent-unload', onWillPreventUnload)
+
           if (navigationTimeout) {
             clearTimeout(navigationTimeout)
           }
@@ -124,15 +134,18 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         // Why: cross-process navigation can replace the guest while retaining the same authoritative page id.
         const navigatedTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
         const navigatedWebContents = this.requireTargetWebContents(navigatedTarget)
+
         const loadError = navigationAborted
           ? this.browserManager.getBrowserPageLoadError(target.browserPageId)
           : null
+
         if (loadError) {
           throw new BrowserError(
             'browser_error',
             `Failed to navigate browser page ${target.browserPageId}: ${loadError.description} (${loadError.code})`
           )
         }
+
         return { url: navigatedWebContents.getURL(), title: navigatedWebContents.getTitle() }
       },
       { ensureSession: false }
@@ -146,6 +159,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
     browserPageId?: string
   ): Promise<BrowserFillResult> {
     await assertClipboardTextWriteWithinLimitWithYield(value)
+
     // Why: agent-browser's CDP text insertion loses focus in Electron guests; edit through the browser's input pipeline instead.
     return this.enqueueTargetedCommand(
       worktreeId,
@@ -157,10 +171,12 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
           await this.execAgentBrowser(sessionName, ['eval', '--stdin'], {
             stdinText: focusedValueSetExpression(JSON.stringify(value), { dispatchEvents: true })
           })
+
           return { filled: element } as BrowserFillResult
         }
 
         await this.fillExplicitContentEditable(sessionName, element, value)
+
         return { filled: element } as BrowserFillResult
       },
       { requireScopedTarget: true }

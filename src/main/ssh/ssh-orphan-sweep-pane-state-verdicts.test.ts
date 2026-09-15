@@ -128,10 +128,12 @@ async function publish(
   capturedAgeMs = 0
 ): Promise<ReturnType<typeof toForegroundProcessEvidence>> {
   const rows = parseStrictProcessTableRows(capture.table.join('\n'))
+
   const [result] = await resolveAgentForegroundProcessesBatch(
     [{ rootPid: capture.rootPid, fallbackProcess: 'bash' }],
     { rows }
   )
+
   return toForegroundProcessEvidence(result, {
     authorityGeneration: 'relay-generation-1',
     observationEpoch: 1,
@@ -173,6 +175,7 @@ describe('what the host publishes about a pane, read by the sweep', () => {
       const row = parseStrictProcessTableRows(capture.table.join('\n')).find(
         (candidate) => candidate.pid === capture.rootPid
       )!
+
       return [
         `ppid=${row.ppid}`,
         `leadsOwnGroup=${row.pgid === row.pid}`,
@@ -191,6 +194,7 @@ describe('what the host publishes about a pane, read by the sweep', () => {
     // predicate never reads.
     const paneShape = (capture: { rootPid: number; table: readonly string[] }): string =>
       shellShape(capture).split(' ').slice(1).join(' ')
+
     expect(paneShape(CAPTURES.setMinusMBackground)).toBe(paneShape(CAPTURES.idle))
     expect(paneShape(CAPTURES.nottyGroupMember)).toBe(paneShape(CAPTURES.idle))
     expect(paneShape(CAPTURES.doubleForkedGroupMember)).toBe(paneShape(CAPTURES.idle))
@@ -296,6 +300,7 @@ describe('what the host publishes about a pane, read by the sweep', () => {
     const stale = await planFor(CAPTURES.idle, {
       capturedAgeMs: RELAY_PTY_SWEEP_MAX_EVIDENCE_AGE_MS + 1
     })
+
     expect(stale.sweep).toEqual([])
     expect(skipReason(stale)).toBe('host foreground observation is too old to authorize a stop')
 
@@ -305,6 +310,7 @@ describe('what the host publishes about a pane, read by the sweep', () => {
       capturedAgeMs: RELAY_PTY_SWEEP_MAX_EVIDENCE_AGE_MS,
       context: { evidenceAgeSinceListingMs: 1 }
     })
+
     expect(agedOnTheClient.sweep).toEqual([])
     expect(skipReason(agedOnTheClient)).toBe(
       'host foreground observation is too old to authorize a stop'
@@ -331,6 +337,7 @@ describe('what the host publishes about a pane, read by the sweep', () => {
       rootPid: CAPTURES.background.rootPid,
       table: CAPTURES.background.table.filter((line) => !line.includes('sleep 300'))
     }
+
     const plan = await planFor(finished)
     expect(plan.sweep).toEqual([{ ptyId: 'pty-1', incarnationId: 'inc-1' }])
   })

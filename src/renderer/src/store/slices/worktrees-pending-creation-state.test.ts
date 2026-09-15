@@ -69,6 +69,7 @@ describe('pending worktree creation state', () => {
 
   it('keeps source and run context on the retryable request', () => {
     const store = createTestStore()
+
     const entry = makePendingCreation('c1', {
       request: {
         repoId: 'repo-ssh',

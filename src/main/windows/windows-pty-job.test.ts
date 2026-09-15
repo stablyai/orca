@@ -4,6 +4,7 @@ import type { IPty } from 'node-pty'
 const { recordSelfInitiatedTreeKillMock } = vi.hoisted(() => ({
   recordSelfInitiatedTreeKillMock: vi.fn()
 }))
+
 vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({
   recordSelfInitiatedTreeKill: recordSelfInitiatedTreeKillMock
 }))

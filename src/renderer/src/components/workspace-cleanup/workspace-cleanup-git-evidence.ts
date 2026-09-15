@@ -62,14 +62,17 @@ export function selectWorkspaceCleanupGitEvidenceTargets(
   const resolved = options.resolvedWorktreeIds ?? new Set<string>()
   const max = options.maxTargets ?? WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS
   const targets: string[] = []
+
   for (const candidate of candidates) {
     if (targets.length >= max) {
       break
     }
+
     if (!hasWorkspaceCleanupGitEvidence(candidate) && !resolved.has(candidate.worktreeId)) {
       targets.push(candidate.worktreeId)
     }
   }
+
   return targets
 }
 
@@ -85,8 +88,10 @@ export function applyWorkspaceCleanupGitEvidence(
   if (evidenceByIdentity.size === 0) {
     return candidates
   }
+
   return candidates.map((candidate) => {
     const evidence = evidenceByIdentity.get(getWorkspaceCleanupCandidateIdentity(candidate))
+
     if (
       evidence === undefined ||
       (candidate.git.checkedAt !== null &&
@@ -94,6 +99,7 @@ export function applyWorkspaceCleanupGitEvidence(
     ) {
       return candidate
     }
+
     return applyWorkspaceCleanupPolicy({
       ...candidate,
       blockers: [

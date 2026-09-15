@@ -133,6 +133,7 @@ describe('cookie clear CDP identities', () => {
       { ...chipsCookie, domain: 'example.com', hostOnly: true, name: 'twin', value: 'host' },
       { ...chipsCookie, domain: '.example.com', hostOnly: false, name: 'twin', value: 'domain' }
     ]
+
     const identities = cookieClearIdentitiesFromCdp(
       cookies.map((cookie) => ({ cookie, url: 'https://example.com/' })),
       [
@@ -152,15 +153,18 @@ describe('cookie clear CDP identities', () => {
   it('indexes CDP cookies once instead of rescanning the jar for every cookie', () => {
     let domainReads = 0
     const count = 200
+
     const cookies = Array.from({ length: count }, (_, index) => ({
       cookie: { ...chipsCookie, domain: `host-${index}.example`, name: `cookie-${index}` },
       url: `https://host-${index}.example/`
     }))
+
     const cdpCookies = cookies.map(({ cookie }) => ({
       name: cookie.name,
       value: cookie.value,
       get domain() {
         domainReads += 1
+
         return cookie.domain
       },
       path: '/'

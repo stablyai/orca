@@ -16,10 +16,13 @@ const FIXTURE_PATH = path.join(
   process.cwd(),
   'tests/e2e/fixtures/terminal-link-mouse-owner-fixture.cjs'
 )
+
 const LINK = 'https://example.com/sta-3888'
+
 const OSC_LINK_TEXT = 'STA_3888_OSC_LINK'
 
 type LinkTarget = { x: number; y: number; mouseTrackingMode: string }
+
 type LinkMode = 'http' | 'osc'
 
 async function startMouseAwareLinkFixture(
@@ -50,32 +53,40 @@ async function startMouseAwareLinkFixture(
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen') ?? null
+
     if (!pane || !screen) {
       throw new Error('Active terminal screen unavailable')
     }
 
     const buffer = pane.terminal.buffer.active
+
     for (let viewportRow = 0; viewportRow < pane.terminal.rows; viewportRow += 1) {
       const text = buffer.getLine(buffer.viewportY + viewportRow)?.translateToString(false)
       const column = text?.indexOf(linkText) ?? -1
+
       if (column < 0) {
         continue
       }
+
       const rect = screen.getBoundingClientRect()
       const cell = pane.terminal.dimensions?.css.cell
+
       if (!cell?.width || !cell.height) {
         throw new Error('Active terminal cell dimensions unavailable')
       }
+
       return {
         x: rect.left + (column + linkText.length / 2) * cell.width,
         y: rect.top + (viewportRow + 0.5) * cell.height,
         mouseTrackingMode: pane.terminal.modes.mouseTrackingMode
       }
     }
+
     throw new Error('Rendered fixture link unavailable')
   }, renderedLinkText)
 
   expect(target.mouseTrackingMode).not.toBe('none')
+
   return { mouseLogPath, ptyId, target }
 }
 
@@ -83,6 +94,7 @@ function childMouseReportCount(mouseLogPath: string): number {
   if (!existsSync(mouseLogPath)) {
     return 0
   }
+
   return readFileSync(mouseLogPath, 'utf8').trim().split(/\s+/).filter(Boolean).length
 }
 
@@ -120,6 +132,7 @@ test.describe('terminal link click ownership', () => {
       testInfo,
       'osc'
     )
+
     await orcaPage.mouse.move(target.x, target.y)
     await expect(orcaPage.locator('.xterm-hover')).toHaveCount(1)
     await orcaPage.mouse.click(target.x, target.y)

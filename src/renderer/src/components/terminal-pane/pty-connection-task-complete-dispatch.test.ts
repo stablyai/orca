@@ -42,8 +42,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -64,6 +67,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -73,6 +77,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -93,6 +98,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -103,9 +109,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -115,9 +123,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -126,6 +136,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -168,11 +179,13 @@ describe('connectPanePty', () => {
     transportFactoryQueue.push(transport)
 
     vi.useFakeTimers()
+
     const api = (
       globalThis as unknown as {
         window: { api: { pty: { getForegroundProcess: ReturnType<typeof vi.fn> } } }
       }
     ).window.api
+
     api.pty.getForegroundProcess.mockResolvedValue('codex')
     const pane = createPane(1)
     const manager = createManager(1)
@@ -183,6 +196,7 @@ describe('connectPanePty', () => {
     const titleHandler = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!titleHandler) {
       throw new Error('Expected onTitleChange to be registered')
     }
@@ -207,11 +221,13 @@ describe('connectPanePty', () => {
     transportFactoryQueue.push(transport)
 
     vi.useFakeTimers()
+
     const api = (
       globalThis as unknown as {
         window: { api: { pty: { getForegroundProcess: ReturnType<typeof vi.fn> } } }
       }
     ).window.api
+
     api.pty.getForegroundProcess.mockResolvedValue('zsh')
     const pane = createPane(1)
     const manager = createManager(1)
@@ -222,6 +238,7 @@ describe('connectPanePty', () => {
     const titleHandler = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!titleHandler) {
       throw new Error('Expected onTitleChange to be registered')
     }
@@ -260,6 +277,7 @@ describe('connectPanePty', () => {
           lastAssistantMessage: string
         }) => void)
       | undefined
+
     if (!statusHandler) {
       throw new Error('Expected onAgentStatus to be registered')
     }
@@ -299,8 +317,10 @@ describe('connectPanePty', () => {
       agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '',
       agentEnv: {}
     }
+
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       startup: {
         command: 'codex',
@@ -321,6 +341,7 @@ describe('connectPanePty', () => {
           toolInput: string
         }) => void)
       | undefined
+
     if (!statusHandler) {
       throw new Error('Expected onAgentStatus to be registered')
     }
@@ -352,6 +373,7 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const manager = createManager(1)
     manager.getActivePane.mockReturnValue({ id: 1 })
+
     const deps = createDeps({
       startup: {
         command: 'codex',
@@ -370,9 +392,11 @@ describe('connectPanePty', () => {
     const titleHandler = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!titleHandler) {
       throw new Error('Expected onTitleChange to be registered')
     }
+
     mockStoreState.getAgentLaunchConfigForStatusMetadata.mockClear()
 
     titleHandler('Codex - action required', 'Codex - action required')
@@ -397,9 +421,11 @@ describe('connectPanePty', () => {
     const titleHandler = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!titleHandler) {
       throw new Error('Expected onTitleChange to be registered')
     }
+
     mockStoreState.getAgentLaunchConfigForStatusMetadata.mockClear()
 
     for (let index = 0; index < 100; index += 1) {
@@ -424,6 +450,7 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
     const manager = createManager(1)
     manager.getActivePane.mockReturnValue({ id: 1 })
+
     const deps = createDeps({
       startup: {
         command: 'codex',
@@ -442,6 +469,7 @@ describe('connectPanePty', () => {
     const titleHandler = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!titleHandler) {
       throw new Error('Expected onTitleChange to be registered')
     }
@@ -472,9 +500,11 @@ describe('connectPanePty', () => {
     const titleHandler = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!titleHandler) {
       throw new Error('Expected onTitleChange to be registered')
     }
+
     titleHandler('\u280b Pi', '\u280b Pi')
     expect(deps.setRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 1, '\u280b OMP')
     expect(deps.updateTabTitle).toHaveBeenCalledWith('tab-1', '\u280b OMP')
@@ -485,6 +515,7 @@ describe('connectPanePty', () => {
     const statusHandler = createdTransportOptions[0]?.onAgentStatus as
       | ((payload: { state: 'working'; prompt: string; agentType: 'pi' }) => void)
       | undefined
+
     if (!statusHandler) {
       throw new Error('Expected onAgentStatus to be registered')
     }
@@ -550,6 +581,7 @@ describe('connectPanePty', () => {
     const titleHandler = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!titleHandler) {
       throw new Error('Expected onTitleChange to be registered')
     }
@@ -584,12 +616,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       isVisibleRef: { current: false }
     })
@@ -601,6 +635,7 @@ describe('connectPanePty', () => {
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     if (!capturedDataCallback.current || !idleHandler) {
       throw new Error('Expected PTY data and idle handlers to be registered')
     }
@@ -615,9 +650,11 @@ describe('connectPanePty', () => {
 
   it('waits briefly for delayed agent status before dispatching task-complete', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
       './use-notification-dispatch'
     )
+
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
 
@@ -633,6 +670,7 @@ describe('connectPanePty', () => {
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     if (!idleHandler) {
       throw new Error('Expected onAgentBecameIdle to be registered')
     }
@@ -669,9 +707,11 @@ describe('connectPanePty', () => {
 
   it('waits past the grace delay when the assistant message arrives shortly after it', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
       './use-notification-dispatch'
     )
+
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
 
@@ -687,6 +727,7 @@ describe('connectPanePty', () => {
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     if (!idleHandler) {
       throw new Error('Expected onAgentBecameIdle to be registered')
     }
@@ -727,9 +768,11 @@ describe('connectPanePty', () => {
 
   it('does not use stale agent status from an earlier turn in task-complete notifications', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
       './use-notification-dispatch'
     )
+
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
 
@@ -758,6 +801,7 @@ describe('connectPanePty', () => {
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     if (!idleHandler) {
       throw new Error('Expected onAgentBecameIdle to be registered')
     }
@@ -768,9 +812,11 @@ describe('connectPanePty', () => {
 
     const dispatchArgs = (window.api.notifications.dispatch as ReturnType<typeof vi.fn>).mock
       .calls[0]?.[0] as Record<string, unknown> | undefined
+
     if (!dispatchArgs) {
       throw new Error('Expected notification dispatch')
     }
+
     expect(dispatchArgs).toMatchObject({
       source: 'agent-task-complete',
       worktreeId: 'wt-1',
@@ -783,9 +829,11 @@ describe('connectPanePty', () => {
 
   it('does not attach agent fields to terminal-bell notifications', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
       './use-notification-dispatch'
     )
+
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
 
@@ -808,6 +856,7 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+
     if (!bellHandler) {
       throw new Error('Expected onBell to be registered')
     }
@@ -818,9 +867,11 @@ describe('connectPanePty', () => {
 
     const dispatchArgs = (window.api.notifications.dispatch as ReturnType<typeof vi.fn>).mock
       .calls[0]?.[0] as Record<string, unknown> | undefined
+
     if (!dispatchArgs) {
       throw new Error('Expected notification dispatch')
     }
+
     expect(dispatchArgs.source).toBe('terminal-bell')
     expect('agentType' in dispatchArgs).toBe(false)
     expect('agentState' in dispatchArgs).toBe(false)
@@ -844,6 +895,7 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     const agentExitedHandler = createdTransportOptions[0]?.onAgentExited as (() => void) | undefined
+
     if (!agentExitedHandler) {
       throw new Error('Expected onAgentExited to be registered')
     }

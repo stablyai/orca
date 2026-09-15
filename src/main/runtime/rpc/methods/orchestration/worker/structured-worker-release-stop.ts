@@ -25,11 +25,13 @@ export async function stopStructuredWorkerForRelease(args: {
 }): Promise<WorkerReleaseReceipt> {
   const { structured, dispatchId, resource, runtime, db } = args
   const stop = await stopStructuredWorker(structured, dispatchId, runtime)
+
   if (!stop.stopped) {
     const unknown = db.markWorkerTerminalReleaseUnknown(
       resource.id,
       stop.reason ?? 'The structured session close was not proven.'
     )
+
     return {
       dispatchId,
       state: 'release_unknown',
@@ -39,8 +41,10 @@ export async function stopStructuredWorkerForRelease(args: {
       recovery: `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request.`
     }
   }
+
   const settled = db.settleWorkerTerminalRelease(resource.id)
   runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
+
   return {
     dispatchId,
     state: 'released',

@@ -10,18 +10,23 @@ type WslAvailabilityCache =
   | { available: false; cachedAt: number; retryable: boolean; failures: number }
 
 let wslAvailableCache: WslAvailabilityCache | null = null
+
 let wslAvailabilityProbeInFlight: Promise<boolean> | null = null
+
 let wslAvailabilityCacheGeneration = 0
 
 const WSL_AVAILABILITY_PROBE_TIMEOUT_MS = 5000
+
 // Why: availability is a separate, blocking probe. Deliberately not a multiple of the
 // renderer's 30s capability TTL, so repeated refreshes don't land on this boundary and
 // re-probe every cycle.
 const WSL_AVAILABILITY_NEGATIVE_CACHE_TTL_MS = 45_000
+
 // Why: even a definitive-looking non-zero exit can be transient — wsl.exe reports one
 // while the WSL package is servicing or LxssManager is still starting — so nothing
 // latches for the whole session; it just waits much longer before paying the probe again.
 const WSL_AVAILABILITY_DEFINITIVE_TTL_MS = 10 * 60_000
+
 const WSL_AVAILABILITY_MAX_RETRY_DELAY_MS = 30 * 60_000
 
 function isPermanentWslAvailabilityCache(cache: WslAvailabilityCache): boolean {
@@ -35,6 +40,7 @@ function wslAvailabilityRetryDelayMs(cache: { retryable: boolean; failures: numb
   const base = cache.retryable
     ? WSL_AVAILABILITY_NEGATIVE_CACHE_TTL_MS
     : WSL_AVAILABILITY_DEFINITIVE_TTL_MS
+
   return Math.min(base * 2 ** (cache.failures - 1), WSL_AVAILABILITY_MAX_RETRY_DELAY_MS)
 }
 
@@ -48,9 +54,11 @@ function wslAvailabilityRetryDelayMs(cache: { retryable: boolean; failures: numb
 // Same numeric-status rule as `wslUncDirectoryExists`; neither latches forever.
 function isRetryableWslProbeFailure(error: unknown): boolean {
   const failure = error as { status?: unknown; code?: unknown } | null
+
   if (typeof failure?.status === 'number' || typeof failure?.code === 'number') {
     return false
   }
+
   return failure?.code !== 'ENOENT'
 }
 
@@ -58,9 +66,11 @@ function isWslAvailabilityCacheFresh(cache: WslAvailabilityCache): boolean {
   if (isPermanentWslAvailabilityCache(cache)) {
     return true
   }
+
   if (!('cachedAt' in cache)) {
     return false
   }
+
   return Date.now() - cache.cachedAt < wslAvailabilityRetryDelayMs(cache)
 }
 
@@ -83,6 +93,7 @@ function cacheWslAvailabilityProbeResult(error: unknown, startedAtGeneration: nu
   if (error && startedAtGeneration !== wslAvailabilityCacheGeneration) {
     return wslAvailableCache?.available ?? false
   }
+
   writeWslAvailabilityCache(
     error
       ? {
@@ -93,6 +104,7 @@ function cacheWslAvailabilityProbeResult(error: unknown, startedAtGeneration: nu
         }
       : { available: true }
   )
+
   return !error
 }
 
@@ -101,6 +113,7 @@ function cacheWslAvailabilityProbeResult(error: unknown, startedAtGeneration: nu
 // signed form, and either spelling can reach us.
 function isMissingWsl2KernelStatus(error: unknown): boolean {
   const failure = error as { status?: unknown; code?: unknown } | null
+
   return [failure?.status, failure?.code].some((code) => code === -444 || code === 4_294_966_852)
 }
 
@@ -126,6 +139,7 @@ function wslStatusErrorAfterGuestProbe(error: unknown): unknown {
   if (!isMissingWsl2KernelStatus(error)) {
     return error
   }
+
   try {
     return runProcessSync(defaultGuestExecutionProbe()).code === 0 ? null : error
   } catch {
@@ -138,6 +152,7 @@ async function wslStatusErrorAfterGuestProbeAsync(error: unknown): Promise<unkno
   if (!isMissingWsl2KernelStatus(error)) {
     return error
   }
+
   try {
     return (await runProcess(defaultGuestExecutionProbe())).code === 0 ? null : error
   } catch {
@@ -161,8 +176,10 @@ function probeWslStatus(): Promise<void> {
       (error: unknown) => {
         if (error) {
           reject(error)
+
           return
         }
+
         resolve()
       }
     )
@@ -177,6 +194,7 @@ function probeWslStatus(): Promise<void> {
  */
 export function isWslAvailable(): boolean {
   const cached = reusableWslAvailability()
+
   if (cached !== null) {
     return cached
   }
@@ -185,6 +203,7 @@ export function isWslAvailable(): boolean {
 
   if (process.platform !== 'win32') {
     writeWslAvailabilityCache({ available: false, unsupported: true })
+
     return false
   }
 
@@ -196,6 +215,7 @@ export function isWslAvailable(): boolean {
       // from either poisons both.
       cwd: resolveWslInteropSpawnCwd()
     })
+
     return cacheWslAvailabilityProbeResult(null, startedAtGeneration)
   } catch (error) {
     return cacheWslAvailabilityProbeResult(
@@ -214,12 +234,14 @@ export function isWslAvailable(): boolean {
  */
 export function isWslAvailableAsync(): Promise<boolean> {
   const cached = reusableWslAvailability()
+
   if (cached !== null) {
     return Promise.resolve(cached)
   }
 
   if (process.platform !== 'win32') {
     writeWslAvailabilityCache({ available: false, unsupported: true })
+
     return Promise.resolve(false)
   }
 
@@ -239,6 +261,7 @@ export function isWslAvailableAsync(): Promise<boolean> {
     .finally(() => {
       wslAvailabilityProbeInFlight = null
     })
+
   return wslAvailabilityProbeInFlight
 }
 
@@ -261,6 +284,7 @@ export function getCachedWslAvailability(): boolean | null {
 // lifetime, so this cannot re-spawn the blocking probe more than once.
 export function dropStaleWslAvailabilityFailure(): void {
   wslAvailabilityCacheGeneration += 1
+
   if (wslAvailableCache && !wslAvailableCache.available && !('unsupported' in wslAvailableCache)) {
     wslAvailableCache = null
   }

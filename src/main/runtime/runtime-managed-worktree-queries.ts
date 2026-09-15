@@ -58,6 +58,7 @@ function captureLocalMetadataPruneExpectation(
   if (typeof store.captureNativeLocalWorktreeMetadataScanExpectation !== 'function') {
     return undefined
   }
+
   try {
     if (getLocalProjectWorktreeGitOptions(store as unknown as Store, repo).wslDistro) {
       return undefined
@@ -65,6 +66,7 @@ function captureLocalMetadataPruneExpectation(
   } catch {
     return undefined
   }
+
   return store.captureNativeLocalWorktreeMetadataScanExpectation(repo)
 }
 
@@ -79,15 +81,19 @@ export class RuntimeManagedWorktreeQueries {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
+
     const resolved = await this.deps.listResolved()
     const scopedRepo = repoSelector ? await this.deps.resolveRepo(repoSelector) : null
     const pathsByRepo = new Map<string, string[]>()
+
     for (const worktree of resolved) {
       const paths = pathsByRepo.get(worktree.repoId) ?? []
       paths.push(worktree.path)
       pathsByRepo.set(worktree.repoId, paths)
     }
+
     const visibilityDefaults = this.visibilityDefaults(sourceDefaultsSupported)
+
     const matchers = new Map(
       (this.deps.getStore()?.getRepos() ?? []).map((repo) => [
         repo.id,
@@ -98,13 +104,16 @@ export class RuntimeManagedWorktreeQueries {
         )
       ])
     )
+
     const worktrees = resolved.filter(
       (worktree) =>
         (!scopedRepo || worktree.repoId === scopedRepo.id) &&
         this.isVisible(worktree, matchers.get(worktree.repoId), sourceDefaultsSupported)
     )
+
     // See `listingKnownHostIds`: a scoped listing must still name the host it was asked about.
     const knownHostIds = listingKnownHostIds(scopedRepo, () => this.deps.listKnownHostIds())
+
     return buildWorktreeListingPage(worktrees, limit, knownHostIds)
   }
 
@@ -112,13 +121,17 @@ export class RuntimeManagedWorktreeQueries {
     if (connectionId === undefined) {
       return this.deps.resolveRepo(selector)
     }
+
     const wanted = connectionId?.trim() || null
+
     const matches = this.deps
       .selectRepos(selector)
       .filter((repo) => (repo.connectionId?.trim() || null) === wanted)
+
     if (matches.length !== 1) {
       throw new Error(matches.length > 1 ? 'selector_ambiguous' : 'repo_not_found')
     }
+
     return Promise.resolve(matches[0])
   }
 
@@ -127,21 +140,26 @@ export class RuntimeManagedWorktreeQueries {
     sourceDefaultsSupported = true
   ): Promise<DetectedWorktreeListResult> {
     const store = this.deps.getStore()
+
     if (!store) {
       throw new Error('runtime_unavailable')
     }
+
     const settings = store.getSettings()
     const visibilityDefaults = this.visibilityDefaults(sourceDefaultsSupported)
     const visibilitySettings = { ...settings, worktreeVisibilityDefaults: visibilityDefaults }
+
     if (isFolderRepo(repo)) {
       const worktrees = listRuntimeFolderWorkspaces(store, repo)
       const metaById = store.getAllWorktreeMeta()
       const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
+
       const matcher = createWorktreeVisibilitySourceMatcher(
         [repo.path, ...worktrees.map((worktree) => worktree.path)],
         resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
         resolveConfiguredWorktreeBasePaths(repo)
       )
+
       const detected = worktrees.map((worktree) =>
         this.toDetected(
           repo,
@@ -152,6 +170,7 @@ export class RuntimeManagedWorktreeQueries {
           getRepoOwnedWorktreeMeta(repo, worktree.id, metaById, repoOwnerCount) ?? null
         )
       )
+
       return {
         repoId: repo.id,
         authoritative: true,
@@ -159,16 +178,19 @@ export class RuntimeManagedWorktreeQueries {
         worktrees: projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
       }
     }
+
     // Why capture before the scan: listing can mutate metadata synchronously before its first
     // await, and the prune revalidates against the rows as they stood when the scan was issued.
     const metadataScanGeneration = getLocalWorktreeScanGeneration(repo.id)
     const metadataPruneExpectation = captureLocalMetadataPruneExpectation(store, repo)
     let scan: RuntimeWorktreeScanResult
+
     try {
       scan = await this.deps.scanRepo(repo)
     } catch {
       scan = { ok: false, worktrees: [] }
     }
+
     if (scan.ok) {
       // Why the runtime sweeps too: the desktop listing that used to own this runs off `ipcMain`,
       // so a headless host -- which has no renderer -- never pruned its own repos' rows (#17776).
@@ -181,25 +203,32 @@ export class RuntimeManagedWorktreeQueries {
           scanGeneration: metadataScanGeneration
         })
       }
+
       pruneLineageForMissingRepoWorktrees(store as unknown as Store, repo, scan.worktrees)
     }
+
     const matcher = createWorktreeVisibilitySourceMatcher(
       [repo.path, ...scan.worktrees.map((worktree) => worktree.path)],
       resolveCustomWorktreeVisibilitySources(repo, visibilityDefaults),
       resolveConfiguredWorktreeBasePaths(repo)
     )
+
     const expectedHostId = getRepoExecutionHostId(repo)
     const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
     const metaById = store.getAllWorktreeMeta()
+
     const detected = scan.worktrees.map((gitWorktree) => {
       const id = `${repo.id}::${gitWorktree.path}`
+
       const meta =
         readWorktreeMetaForHost(store as unknown as Store, id, expectedHostId) ??
         getRepoOwnedWorktreeMeta(repo, id, metaById, repoOwnerCount)
+
       const worktree = {
         ...mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
         hostId: repoOwnerCount === 1 ? (meta?.hostId ?? expectedHostId) : expectedHostId
       }
+
       const result = this.toDetected(
         repo,
         worktree,
@@ -208,8 +237,10 @@ export class RuntimeManagedWorktreeQueries {
         visibilitySettings,
         meta ?? null
       )
+
       return scan.ok ? result : applyMetadataFallbackVisibility(result)
     })
+
     return {
       repoId: repo.id,
       authoritative: scan.ok,
@@ -225,6 +256,7 @@ export class RuntimeManagedWorktreeQueries {
     providedSettings?: ReturnType<RuntimeStore['getSettings']>
   ): boolean {
     const repo = this.deps.getStore()?.getRepo(worktree.repoId)
+
     return repo
       ? this.toDetected(repo, worktree, matcher, sourceDefaultsSupported, providedSettings).visible
       : true
@@ -236,12 +268,15 @@ export class RuntimeManagedWorktreeQueries {
     providedSettings?: ReturnType<RuntimeStore['getSettings']>
   ): Map<string, WorktreeVisibilitySourceMatcher> {
     const checkoutPathsByRepoId = new Map<string, string[]>()
+
     for (const worktree of worktrees) {
       const checkoutPaths = checkoutPathsByRepoId.get(worktree.repoId) ?? []
       checkoutPaths.push(worktree.path)
       checkoutPathsByRepoId.set(worktree.repoId, checkoutPaths)
     }
+
     const visibilityDefaults = this.visibilityDefaults(sourceDefaultsSupported, providedSettings)
+
     return new Map(
       (this.deps.getStore()?.getRepos() ?? [])
         .filter((repo) => checkoutPathsByRepoId.has(repo.id))
@@ -266,6 +301,7 @@ export class RuntimeManagedWorktreeQueries {
   ) {
     const store = this.deps.getStore()
     const settings = providedSettings ?? store?.getSettings()
+
     if (!settings) {
       return {
         ...worktree,
@@ -274,7 +310,9 @@ export class RuntimeManagedWorktreeQueries {
         visible: true
       }
     }
+
     const visibilityDefaults = this.visibilityDefaults(sourceDefaultsSupported, settings)
+
     return toDetectedWorktree({
       repo,
       worktree,
@@ -294,17 +332,21 @@ export class RuntimeManagedWorktreeQueries {
     retiredNameTiersByRepo: Record<string, number>
   }> {
     const store = this.deps.getStore()
+
     if (!store?.getRetiredWorktreeNameRegistry || !store.mergeRetiredWorktreeNames) {
       return { retiredNamesByRepo: {}, retiredNameTiersByRepo: {} }
     }
+
     const repo = await this.deps.resolveRepo(repoSelector)
     const settings = store.getSettings()
+
     const registry = await getRetiredNameRegistryForRepo(
       store as never,
       repo,
       store.getRepos(),
       settings
     )
+
     return {
       retiredNamesByRepo: { [repo.id]: registry.names },
       retiredNameTiersByRepo: { [repo.id]: registry.exhaustedTiers }
@@ -319,6 +361,7 @@ export class RuntimeManagedWorktreeQueries {
       providedSettings !== undefined
         ? providedSettings.worktreeVisibilityDefaults
         : this.deps.getStore()?.getSettings().worktreeVisibilityDefaults
+
     return sourceDefaultsSupported || !defaults ? defaults : { external: defaults.external }
   }
 }

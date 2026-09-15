@@ -21,48 +21,61 @@ import {
 } from './filesystem-test-harness'
 
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
+
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
+
 vi.mock(
   '../wsl-unc-delete',
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
+
 vi.mock(
   '../crash-reporting/crash-breadcrumb-store',
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
+
 vi.mock(
   '../local-downloaded-folder-promotion',
   async () => (await import('./filesystem-test-harness')).folderPromotionMock
 )
+
 vi.mock(
   '../git/status',
   async () => (await import('./filesystem-test-harness')).gitStatusModuleMock
 )
+
 vi.mock(
   '../git/check-ignored-paths',
   async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
 )
+
 vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness')).gitWorktreeMock)
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
 )
+
 vi.mock(
   '../providers/ssh-git-dispatch',
   async () => (await import('./filesystem-test-harness')).sshGitDispatchMock
 )
+
 vi.mock(
   '../text-generation/commit-message-text-generation',
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
 )
+
 vi.mock(
   '../text-generation/pull-request-context',
   async () => (await import('./filesystem-test-harness')).pullRequestContextMock
 )
+
 vi.mock(
   '../source-control/pull-request-template',
   async () => (await import('./filesystem-test-harness')).pullRequestTemplateMock
 )
+
 vi.mock(
   '../source-control/pull-request-linked-issue',
   async () => (await import('./filesystem-test-harness')).pullRequestLinkedIssueMock
@@ -128,6 +141,7 @@ describe('registerFilesystemHandlers', () => {
         [`repo-1::${WORKTREE_FEATURE_PATH}`]: {}
       })
     }
+
     registerWorktreeRootsForRepo(sharedStore as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     getStatusMock.mockResolvedValue({ entries: [] })
 
@@ -160,9 +174,11 @@ describe('registerFilesystemHandlers', () => {
   it('forwards includeIgnored through local and SSH git status IPC', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     getStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
     const sshProvider = {
       getStatus: vi.fn().mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
     }
+
     getSshGitProviderMock.mockReturnValue(sshProvider)
 
     registerFilesystemHandlers(store as never)
@@ -194,6 +210,7 @@ describe('registerFilesystemHandlers', () => {
       didHitLimit: true,
       statusLength: 1_001
     }
+
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     getStatusMock.mockResolvedValue(cappedStatus)
     const sshProvider = { getStatus: vi.fn().mockResolvedValue(cappedStatus) }
@@ -214,9 +231,11 @@ describe('registerFilesystemHandlers', () => {
   it('forwards upstream-negative-cache bypass through local and SSH git status IPC', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     getStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
     const sshProvider = {
       getStatus: vi.fn().mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
     }
+
     getSshGitProviderMock.mockReturnValue(sshProvider)
 
     registerFilesystemHandlers(store as never)
@@ -246,9 +265,11 @@ describe('registerFilesystemHandlers', () => {
   it('forwards line-stat reuse through local and SSH git status IPC', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     getStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
     const sshProvider = {
       getStatus: vi.fn().mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
     }
+
     getSshGitProviderMock.mockReturnValue(sshProvider)
     registerFilesystemHandlers(store as never)
 
@@ -277,9 +298,11 @@ describe('registerFilesystemHandlers', () => {
   it('forwards a false line-stats request through local and SSH git status IPC', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     getStatusMock.mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
+
     const sshProvider = {
       getStatus: vi.fn().mockResolvedValue({ entries: [], conflictOperation: 'unknown' })
     }
+
     getSshGitProviderMock.mockReturnValue(sshProvider)
     registerFilesystemHandlers(store as never)
 
@@ -323,14 +346,17 @@ describe('registerFilesystemHandlers', () => {
 
     const firstEvent = { sender: { id: 7 } }
     const secondEvent = { sender: { id: 8 } }
+
     const firstRequest = handlers.get('git:status')!(firstEvent, {
       worktreePath: WORKTREE_FEATURE_PATH,
       requestToken: 'status-1'
     }) as Promise<unknown>
+
     const secondRequest = handlers.get('git:status')!(secondEvent, {
       worktreePath: WORKTREE_FEATURE_PATH,
       requestToken: 'status-1'
     }) as Promise<unknown>
+
     await vi.waitFor(() => expect(statusSignals).toHaveLength(2))
     await handlers.get('git:cancelStatus')!(firstEvent, { requestToken: 'status-1' })
 
@@ -345,9 +371,11 @@ describe('registerFilesystemHandlers', () => {
   it('checks ignored paths through local and SSH git providers', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     checkIgnoredPathsMock.mockResolvedValue(['dist/bundle.js'])
+
     const sshProvider = {
       checkIgnoredPaths: vi.fn().mockResolvedValue(['build/output.js'])
     }
+
     getSshGitProviderMock.mockReturnValue(sshProvider)
 
     registerFilesystemHandlers(store as never)
@@ -379,9 +407,11 @@ describe('registerFilesystemHandlers', () => {
   it('routes abort merge through local and SSH git providers', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     abortMergeMock.mockResolvedValue(undefined)
+
     const sshProvider = {
       abortMerge: vi.fn().mockResolvedValue(undefined)
     }
+
     getSshGitProviderMock.mockReturnValue(sshProvider)
 
     registerFilesystemHandlers(store as never)
@@ -401,9 +431,11 @@ describe('registerFilesystemHandlers', () => {
   it('routes abort rebase through local and SSH git providers', async () => {
     registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
     abortRebaseMock.mockResolvedValue(undefined)
+
     const sshProvider = {
       abortRebase: vi.fn().mockResolvedValue(undefined)
     }
+
     getSshGitProviderMock.mockReturnValue(sshProvider)
 
     registerFilesystemHandlers(store as never)

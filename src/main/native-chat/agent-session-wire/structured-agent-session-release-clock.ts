@@ -32,10 +32,12 @@ export class StructuredAgentSessionReleaseClock {
 
   arm(sessionId: string): void {
     this.cancel(sessionId)
+
     const timer = setTimeout(() => {
       this.timers.delete(sessionId)
       this.fire(sessionId)
     }, this.graceMs)
+
     // A pending release must never be the reason a process stays alive at quit.
     timer.unref?.()
     this.timers.set(sessionId, timer)
@@ -43,6 +45,7 @@ export class StructuredAgentSessionReleaseClock {
 
   cancel(sessionId: string): void {
     const timer = this.timers.get(sessionId)
+
     if (timer) {
       clearTimeout(timer)
       this.timers.delete(sessionId)
@@ -57,6 +60,7 @@ export class StructuredAgentSessionReleaseClock {
     for (const timer of this.timers.values()) {
       clearTimeout(timer)
     }
+
     this.timers.clear()
   }
 
@@ -64,10 +68,13 @@ export class StructuredAgentSessionReleaseClock {
     if (this.deps.isHeld(sessionId)) {
       return
     }
+
     if (this.deps.isTurnActive(sessionId)) {
       this.arm(sessionId)
+
       return
     }
+
     void this.deps.evict(sessionId).catch((error: unknown) => {
       this.deps.onError?.({ sessionId, error })
     })

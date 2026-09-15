@@ -5,6 +5,7 @@ import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-insta
 
 function createRuntime() {
   const removed: string[] = []
+
   const runtime = {
     getRuntimeId: () => 'runtime-a',
     writeFileExplorerFileBase64Chunk: vi.fn().mockResolvedValue(undefined),
@@ -15,6 +16,7 @@ function createRuntime() {
     createFileExplorerDir: vi.fn().mockResolvedValue(undefined),
     statRuntimeFile: vi.fn().mockRejectedValue(new Error('missing'))
   }
+
   return { runtime, removed }
 }
 

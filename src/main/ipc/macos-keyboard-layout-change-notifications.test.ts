@@ -54,6 +54,7 @@ describe('macOS keyboard layout change notifications', () => {
     )
     subscribeNotification.mockImplementation((_name: string, callback: () => void) => {
       notificationCallback = callback
+
       return 41
     })
     const send = vi.fn()
@@ -96,6 +97,7 @@ describe('macOS keyboard layout change notifications', () => {
     const quitListener = appOnce.mock.calls.find(([event]) => event === 'will-quit')?.[1] as
       | (() => void)
       | undefined
+
     unsubscribeNotification.mockImplementationOnce(() => {
       throw new Error('native teardown unavailable')
     })
@@ -125,6 +127,7 @@ describe('macOS keyboard layout change notifications', () => {
     )
     subscribeNotification.mockImplementation((_name: string, callback: () => void) => {
       notificationCallback = callback
+
       return 42
     })
     const send = vi.fn()

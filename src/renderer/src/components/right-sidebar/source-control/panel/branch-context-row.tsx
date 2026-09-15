@@ -32,6 +32,7 @@ function BaseRefButton({
     'Change base ref: {{value0}}',
     { value0: displayLabel }
   )
+
   return (
     <button
       type="button"
@@ -75,6 +76,7 @@ function ManualReviewLinkButton({
   if (!url) {
     return null
   }
+
   return (
     <SourceControlHeaderIconButton
       icon={ExternalLink}
@@ -95,9 +97,11 @@ function resolveHeadFlowLabel(
   if (display?.kind === 'branch') {
     return display.branchName
   }
+
   if (display?.kind === 'detached') {
     return display.sourceControlLabel
   }
+
   return null
 }
 
@@ -301,6 +305,7 @@ export function SourceControlBranchContextRow({
     if (!headDisplay) {
       return null
     }
+
     return (
       <div className="min-w-0 text-[11px] text-muted-foreground">
         <HeadIdentity display={headDisplay} />
@@ -309,11 +314,14 @@ export function SourceControlBranchContextRow({
   }
 
   const baseLabel = formatSourceControlRefLabel(displayedBaseRef)
+
   const changeBaseTitle = translate(
     'auto.components.right.sidebar.SourceControl.493f963029',
     'Change base ref'
   )
+
   const headLabel = resolveHeadFlowLabel(headDisplay)
+
   const flowLabel =
     headLabel != null
       ? translate(

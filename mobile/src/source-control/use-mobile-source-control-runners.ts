@@ -15,6 +15,7 @@ import type {
 } from './mobile-commit-failure-recovery'
 
 type GitStep = { method: string; params?: Record<string, unknown> }
+
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
 
 type Params = {
@@ -93,31 +94,40 @@ export function useMobileSourceControlRunners(params: Params) {
       if (busyActionRef.current) {
         return false
       }
+
       busyActionRef.current = actionId
       setBusyAction(actionId)
       setActionError(null)
       recordCommitFailure(null)
+
       try {
         await runner()
+
         if (!mountedRef.current) {
           return false
         }
+
         if (options?.clearCommitMessage) {
           setCommitMessage('')
         }
+
         triggerSuccess()
         await loadStatus({ preserveReadyOnFailure: true, force: true })
+
         return true
       } catch (err) {
         if (!mountedRef.current) {
           return false
         }
+
         triggerError()
         setActionError(err instanceof Error ? err.message : 'Source control action failed')
+
         return false
       } finally {
         if (busyActionRef.current === actionId) {
           busyActionRef.current = null
+
           if (mountedRef.current) {
             setBusyAction(null)
           }
@@ -168,6 +178,7 @@ export function useMobileSourceControlRunners(params: Params) {
     if (stageablePaths.length === 0) {
       return
     }
+
     await runGitAction('stage-all', 'git.bulkStage', { filePaths: stageablePaths })
   }, [runGitAction, stageablePaths])
 
@@ -175,6 +186,7 @@ export function useMobileSourceControlRunners(params: Params) {
     if (unstageablePaths.length === 0) {
       return
     }
+
     await runGitAction('unstage-all', 'git.bulkUnstage', { filePaths: unstageablePaths })
   }, [runGitAction, unstageablePaths])
 
@@ -227,6 +239,7 @@ export function useMobileSourceControlRunners(params: Params) {
     setShowActionSheet(false)
     setLocalBranches(null)
     setShowBranchPicker(true)
+
     if (client) {
       void sendGitRequest<RuntimeGitLocalBranches>('git.localBranches')
         .then((result) => {
@@ -251,13 +264,16 @@ export function useMobileSourceControlRunners(params: Params) {
 
   const openHistory = useCallback(() => {
     setShowActionSheet(false)
+
     // Inside the hub, History is a segment — switch to it rather than pushing a
     // route. Fallback pushes the hub with `tab=history` (not the redirecting
     // /history route) so deep links land in one hop.
     if (onOpenHistory) {
       onOpenHistory()
+
       return
     }
+
     if (hostId && worktreeId) {
       router.push({
         pathname: '/h/[hostId]/source-control/[worktreeId]',
@@ -297,9 +313,11 @@ export function useMobileSourceControlRunners(params: Params) {
     async (operation: string) => {
       const method =
         operation === 'merge' ? 'git.abortMerge' : operation === 'rebase' ? 'git.abortRebase' : null
+
       if (!method) {
         return
       }
+
       await runGitAction(`abort-${operation}`, method, {})
     },
     [runGitAction]

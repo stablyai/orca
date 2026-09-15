@@ -87,11 +87,13 @@ describe('web GitHub preload API', () => {
 
   it('routes every runtime-backed GitHub method through the expected RPC method', async () => {
     type GitHubApi = NonNullable<PreloadApi['gh']>
+
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -111,6 +113,7 @@ describe('web GitHub preload API', () => {
     installWebPreloadApi()
     const api = globals.window.api
     const repoPath = '/workspace/repo'
+
     const withRepo = (params: Record<string, unknown>): Record<string, unknown> => ({
       ...params,
       repo: repoPath
@@ -520,6 +523,7 @@ describe('web GitHub preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
@@ -558,6 +562,7 @@ describe('web GitHub preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,

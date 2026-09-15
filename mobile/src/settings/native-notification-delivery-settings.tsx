@@ -19,16 +19,21 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
   const refreshRevision = useRef(0)
   const saveInProgress = useRef(false)
   const support = useRemotePushCapableHosts()
+
   const refresh = useCallback(async () => {
     if (saveInProgress.current) {
       return
     }
+
     const revision = ++refreshRevision.current
+
     try {
       const value = await loadNotificationDeliveryPreferences()
+
       if (revision !== refreshRevision.current) {
         return
       }
+
       setDelivery(value)
       setLoaded(true)
       setError(null)
@@ -36,9 +41,11 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
       if (revision !== refreshRevision.current) {
         return
       }
+
       setError('Could not load delivery settings. Reopen this screen to retry.')
     }
   }, [])
+
   useFocusEffect(
     useCallback(() => {
       void refresh()
@@ -50,16 +57,20 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
         void refresh()
       }
     })
+
     return () => subscription.remove()
   }, [refresh])
+
   const change = async (value: NotificationDeliveryPreferences) => {
     if (saveInProgress.current) {
       return
     }
+
     saveInProgress.current = true
     refreshRevision.current += 1
     setSaving(true)
     setError(null)
+
     try {
       await setNotificationDeliveryPreferences(value)
       setDelivery(value)
@@ -70,11 +81,13 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
       setSaving(false)
     }
   }
+
   const hintStyle = {
     color: colors.textMuted,
     fontSize: typography.metaSize,
     marginTop: spacing.md
   }
+
   return (
     <>
       <NotificationDeliverySection

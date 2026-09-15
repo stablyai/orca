@@ -66,6 +66,7 @@ describe('jira-project-picker-filter', () => {
 
   it('rejects oversized pasted project queries before reading project metadata', () => {
     const oversizedQuery = 'secret-jira-project-query'.repeat(JIRA_PROJECT_PICKER_QUERY_MAX_BYTES)
+
     const candidate = {
       get name(): string {
         throw new Error('oversized Jira project queries must not scan names')

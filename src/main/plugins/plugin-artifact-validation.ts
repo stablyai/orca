@@ -7,10 +7,15 @@ import { parsePluginVmRecipeArtifact } from '../../shared/plugins/plugin-vm-reci
 export type PluginArtifactValidationResult = { ok: true } | { ok: false; error: string }
 
 export const PLUGIN_PANEL_ENTRY_MAX_BYTES = 10 * 1024 * 1024
+
 export const PLUGIN_WORKER_ENTRY_MAX_BYTES = 50 * 1024 * 1024
+
 const PLUGIN_ICON_MAX_BYTES = 2 * 1024 * 1024
+
 export const PLUGIN_LANGUAGE_PACK_MAX_BYTES = 5 * 1024 * 1024
+
 export const PLUGIN_VM_RECIPE_MAX_BYTES = 256 * 1024
+
 const PLUGIN_AGENT_PROFILE_MAX_BYTES = 1024 * 1024
 
 type DeclaredArtifact =
@@ -72,6 +77,7 @@ export async function resolveContainedPluginArtifact(
   maxBytes = PLUGIN_WORKER_ENTRY_MAX_BYTES
 ): Promise<string> {
   const rootReal = await realpath(resolve(rootDir))
+
   return resolvePathFromRealRoot(rootDir, rootReal, relativePath, 'file', maxBytes)
 }
 
@@ -83,14 +89,18 @@ export async function readContainedPluginArtifactText(
   const artifact = await resolveContainedPluginArtifact(rootDir, relativePath, maxBytes)
   const chunks: Buffer[] = []
   let totalBytes = 0
+
   for await (const chunk of createReadStream(artifact)) {
     const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
     totalBytes += bytes.byteLength
+
     if (totalBytes > maxBytes) {
       throw new Error(`exceeds the ${maxBytes}-byte artifact limit`)
     }
+
     chunks.push(bytes)
   }
+
   return Buffer.concat(chunks, totalBytes).toString('utf8')
 }
 
@@ -103,6 +113,7 @@ async function resolvePathFromRealRoot(
 ): Promise<string> {
   const artifactReal = await realpath(resolve(rootDir, ...relativePath.split(/[\\/]/)))
   const fromRoot = relative(rootReal, artifactReal)
+
   if (
     fromRoot.length === 0 ||
     isAbsolute(fromRoot) ||
@@ -111,16 +122,21 @@ async function resolvePathFromRealRoot(
   ) {
     throw new Error('resolves outside the plugin directory')
   }
+
   const artifactStat = await stat(artifactReal)
+
   if (kind === 'file' && !artifactStat.isFile()) {
     throw new Error('is not a regular file')
   }
+
   if (kind === 'directory' && !artifactStat.isDirectory()) {
     throw new Error('is not a directory')
   }
+
   if (kind === 'file' && maxBytes !== undefined && artifactStat.size > maxBytes) {
     throw new Error(`exceeds the ${maxBytes}-byte artifact limit`)
   }
+
   return artifactReal
 }
 
@@ -130,21 +146,27 @@ export async function validateDeclaredPluginArtifacts(
   manifest: PluginManifest
 ): Promise<PluginArtifactValidationResult> {
   const artifacts = declaredArtifactPaths(manifest)
+
   if (artifacts.length === 0) {
     return { ok: true }
   }
+
   const seen = new Set<string>()
   let rootReal: string
+
   try {
     rootReal = await realpath(resolve(rootDir))
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) }
   }
+
   for (const artifact of artifacts) {
     if (seen.has(artifact.path)) {
       continue
     }
+
     seen.add(artifact.path)
+
     try {
       await resolvePathFromRealRoot(
         rootDir,
@@ -160,6 +182,7 @@ export async function validateDeclaredPluginArtifacts(
       }
     }
   }
+
   return { ok: true }
 }
 
@@ -169,6 +192,7 @@ export async function validatePluginInstallContent(
   manifest: PluginManifest
 ): Promise<PluginArtifactValidationResult> {
   const vmRecipeIds = new Set<string>()
+
   for (const contribution of manifest.contributes.vmRecipes) {
     try {
       const recipe = parsePluginVmRecipeArtifact(
@@ -178,9 +202,11 @@ export async function validatePluginInstallContent(
           PLUGIN_VM_RECIPE_MAX_BYTES
         )
       )
+
       if (vmRecipeIds.has(recipe.id)) {
         throw new Error(`duplicate VM recipe id "${recipe.id}"`)
       }
+
       vmRecipeIds.add(recipe.id)
     } catch (error) {
       return {
@@ -189,5 +215,6 @@ export async function validatePluginInstallContent(
       }
     }
   }
+
   return { ok: true }
 }

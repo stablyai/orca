@@ -38,13 +38,17 @@ export function useMonacoEditorDecorations(params: {
 
   const updateMarkdownCompletionDocuments = useCallback((): void => {
     const modelKey = editorRef.current?.getModel()?.uri.toString() ?? null
+
     if (modelKeyRef.current && modelKeyRef.current !== modelKey) {
       clearMarkdownDocCompletionDocuments(modelKeyRef.current)
     }
+
     modelKeyRef.current = modelKey
+
     if (!modelKey) {
       return
     }
+
     if (language === 'markdown' && markdownDocuments) {
       setMarkdownDocCompletionDocuments(modelKey, markdownDocuments)
     } else {
@@ -63,25 +67,32 @@ export function useMonacoEditorDecorations(params: {
 
   useEffect(() => {
     const ed = mountedEditor
+
     if (!ed) {
       return
     }
 
     if (!conflictDecorationsEnabled) {
       conflictDecorationsRef.current?.clear()
+
       return
     }
 
     // Why: conflict markers are ordinary file text, so Monaco needs explicit decorations to keep unresolved blocks visible.
     const decorations = buildGitConflictDecorations(content)
+
     if (decorations.length === 0) {
       conflictDecorationsRef.current?.clear()
+
       return
     }
+
     if (!conflictDecorationsRef.current) {
       conflictDecorationsRef.current = ed.createDecorationsCollection(decorations)
+
       return
     }
+
     conflictDecorationsRef.current.set(decorations)
   }, [conflictDecorationsEnabled, content, mountedEditor])
 
@@ -94,6 +105,7 @@ export function useMonacoEditorDecorations(params: {
       if (modelKeyRef.current) {
         clearMarkdownDocCompletionDocuments(modelKeyRef.current)
       }
+
       markdownDocLinkDecorationsRef.current?.dispose()
       markdownDocLinkDecorationsRef.current = null
       conflictDecorationsRef.current?.clear()

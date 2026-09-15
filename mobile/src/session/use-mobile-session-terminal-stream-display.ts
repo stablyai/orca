@@ -23,6 +23,7 @@ export function useMobileSessionTerminalStreamDisplay(
     unsubscribeTerminal,
     subscribeToTerminal
   } = scope
+
   const nativeChatStream = useMobileNativeChatTerminalStream({
     showNativeChat,
     activeHandle,
@@ -40,19 +41,25 @@ export function useMobileSessionTerminalStreamDisplay(
 
   // Why: server does the resize and emits 'resized' on the existing subscription — no client-side state tracking needed.
   const toggleInFlightRef = useRef<Set<string>>(new Set())
+
   const toggleDisplayMode = useCallback(
     async (handle: string) => {
       if (!client) {
         return
       }
+
       if (toggleInFlightRef.current.has(handle)) {
         return
       }
+
       const current = terminalModes.get(handle) ?? 'auto'
+
       // Why: 'phone' is an observed state, not a setting; the toggle only requests 'auto' or 'desktop'.
       const next: 'auto' | 'desktop' =
         current === 'auto' || current === 'phone' ? 'desktop' : 'auto'
+
       toggleInFlightRef.current.add(handle)
+
       try {
         await client.sendRequest('terminal.setDisplayMode', {
           terminal: handle,
@@ -72,6 +79,7 @@ export function useMobileSessionTerminalStreamDisplay(
     },
     [client, terminalModes]
   )
+
   return {
     nativeChatStream,
     toggleInFlightRef,

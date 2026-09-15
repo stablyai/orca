@@ -24,6 +24,7 @@ import { gitExecFileAsync } from './runner'
 import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admission'
 
 afterEach(() => _resetGitAdmissionForTests())
+
 import {
   resetWslLinkedWorktreeGitRoutingForTests,
   WSL_LINKED_WORKTREE_ROUTE_PROBE_TIMEOUT_MS
@@ -34,14 +35,17 @@ function createMockChild(): EventEmitter & { pid: number; kill: ReturnType<typeo
     pid: number
     kill: ReturnType<typeof vi.fn>
   }
+
   child.pid = 1234
   child.kill = vi.fn()
+
   return child
 }
 
 async function withWindowsPlatform(run: () => Promise<void>): Promise<void> {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
   try {
     await run()
   } finally {
@@ -76,6 +80,7 @@ describe('WSL linked-worktree routing probe timeout', () => {
             callback?.(null, 'host git recovered\n', '')
           }
         })
+
         return child
       })
 
@@ -83,6 +88,7 @@ describe('WSL linked-worktree routing probe timeout', () => {
         cwd: String.raw`C:\repo`,
         wslDistro: 'Ubuntu'
       })
+
       const firstFailure = expect(first).rejects.toThrow('not a git repository')
       await vi.advanceTimersByTimeAsync(WSL_LINKED_WORKTREE_ROUTE_PROBE_TIMEOUT_MS)
       await firstFailure
@@ -95,11 +101,13 @@ describe('WSL linked-worktree routing probe timeout', () => {
       ).resolves.toEqual({ stdout: 'host git recovered\n', stderr: '' })
 
       expect(statMock).toHaveBeenCalledTimes(2)
+
       // A WSL read also warms the direct-git environment probe in the background;
       // it is not part of the routing sequence under test.
       const routedCommands = execFileMock.mock.calls
         .filter(([, args]) => !String((args as string[])?.at(-1)).includes('^GIT_'))
         .map(([command]) => command)
+
       expect(routedCommands).toEqual(['wsl.exe', 'git'])
     })
   })

@@ -3,6 +3,7 @@ import { acquireElectronDebugger } from './electron-debugger-lease'
 
 function createWebContents(attached = false) {
   let isAttached = attached
+
   return {
     isDestroyed: vi.fn(() => false),
     debugger: {

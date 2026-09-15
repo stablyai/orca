@@ -221,6 +221,7 @@ describe('createEditorSlice branch line total', () => {
   // showing the old share.
   it('produces a new state object when only the test split changed', () => {
     const store = createEditorStore()
+
     const tick = status({
       branchLineTotal: {
         added: 24,
@@ -229,6 +230,7 @@ describe('createEditorSlice branch line total', () => {
         test: { added: 4, removed: 0 }
       }
     })
+
     store.getState().setGitStatus('wt-1', tick)
     const before = store.getState()
 
@@ -251,6 +253,7 @@ describe('createEditorSlice branch line total', () => {
 
   it('produces a new state object when only the generated split changed', () => {
     const store = createEditorStore()
+
     const tick = status({
       branchLineTotal: {
         added: 24,
@@ -259,6 +262,7 @@ describe('createEditorSlice branch line total', () => {
         generated: { added: 8, removed: 0 }
       }
     })
+
     store.getState().setGitStatus('wt-1', tick)
     const before = store.getState()
 

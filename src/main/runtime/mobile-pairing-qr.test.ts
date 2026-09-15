@@ -9,6 +9,7 @@ const FIXED_INVITE_EXPIRES_AT = Date.now() + 5 * 60_000
 
 function pairingUrl(endpointLength: number, relay: boolean): string {
   const prefix = 'wss://pair.example/'
+
   const offer: PairingOffer = {
     v: 2,
     endpoint: `${prefix}${'a'.repeat(Math.max(0, endpointLength - prefix.length))}`,
@@ -30,6 +31,7 @@ function pairingUrl(endpointLength: number, relay: boolean): string {
         }
       : {})
   }
+
   return encodePairingOffer(offer)
 }
 
@@ -38,14 +40,17 @@ async function discoverEndpointBoundary(relay: boolean): Promise<number> {
   let failing = 4_000
   expect((await encodeMobilePairingQr(pairingUrl(passing, relay))).ok).toBe(true)
   expect((await encodeMobilePairingQr(pairingUrl(failing, relay))).ok).toBe(false)
+
   while (failing - passing > 1) {
     const candidate = Math.floor((passing + failing) / 2)
+
     if ((await encodeMobilePairingQr(pairingUrl(candidate, relay))).ok) {
       passing = candidate
     } else {
       failing = candidate
     }
   }
+
   return passing
 }
 
@@ -58,6 +63,7 @@ describe('encodeMobilePairingQr', () => {
 
     const result = await encodeMobilePairingQr(url)
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }

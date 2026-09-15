@@ -23,10 +23,12 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   const promise = new Promise<T>((promiseResolve, promiseReject) => {
     resolve = promiseResolve
     reject = promiseReject
   })
+
   return { promise, resolve, reject }
 }
 
@@ -50,6 +52,7 @@ describe('refreshGitStatusForWorktree', () => {
         behindCommitsArePatchEquivalent: false
       }
     }
+
     const gitStatus = vi.fn().mockResolvedValue(status)
     vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
     const deps = makeDeps()
@@ -86,6 +89,7 @@ describe('refreshGitStatusForWorktree', () => {
         behind: 3
       }
     }
+
     const gitStatus = vi.fn().mockResolvedValue(status)
     vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
     const deps = makeDeps()
@@ -110,6 +114,7 @@ describe('refreshGitStatusForWorktree', () => {
       head: 'def456',
       branch: 'refs/heads/main'
     }
+
     const gitStatus = vi.fn().mockResolvedValue(status)
     vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
     const deps = makeDeps()
@@ -138,6 +143,7 @@ describe('refreshGitStatusForWorktree', () => {
       entries: [],
       conflictOperation: 'unknown'
     }
+
     const gitStatus = vi.fn().mockResolvedValue(status)
     vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
     const deps = makeDeps()
@@ -163,6 +169,7 @@ describe('refreshGitStatusForWorktree', () => {
       conflictOperation: 'unknown',
       upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
     }
+
     const gitStatus = vi.fn().mockResolvedValue(status)
     vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
     const deps = makeDeps()
@@ -193,6 +200,7 @@ describe('refreshGitStatusForWorktree', () => {
 
   it('does not let an older automatic upstream result overwrite a strict result', async () => {
     const automaticStatus = deferred<GitStatusResult>()
+
     const strictStatus: GitStatusResult = {
       entries: [],
       conflictOperation: 'unknown',
@@ -203,15 +211,18 @@ describe('refreshGitStatusForWorktree', () => {
         behind: 1
       }
     }
+
     const staleAutomaticStatus: GitStatusResult = {
       entries: [],
       conflictOperation: 'unknown',
       upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
     }
+
     const gitStatus = vi
       .fn()
       .mockReturnValueOnce(automaticStatus.promise)
       .mockResolvedValueOnce(strictStatus)
+
     vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
     const deps = makeDeps()
 
@@ -220,6 +231,7 @@ describe('refreshGitStatusForWorktree', () => {
       worktreePath: '/repo',
       deps
     })
+
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
 
     await refreshGitStatusForWorktreeStrict({
@@ -239,15 +251,18 @@ describe('refreshGitStatusForWorktree', () => {
 
   it('does not let an older automatic status overwrite the latest automatic result', async () => {
     const olderStatus = deferred<GitStatusResult>()
+
     const latestStatus: GitStatusResult = {
       entries: [{ path: 'latest.ts', status: 'modified', area: 'unstaged' }],
       conflictOperation: 'unknown',
       head: 'latest'
     }
+
     const gitStatus = vi
       .fn()
       .mockReturnValueOnce(olderStatus.promise)
       .mockResolvedValueOnce(latestStatus)
+
     vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
     const deps = makeDeps()
 
@@ -256,6 +271,7 @@ describe('refreshGitStatusForWorktree', () => {
       worktreePath: '/repo',
       deps
     })
+
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
     await refreshGitStatusForWorktree({
       worktreeId: 'wt-automatic-race',
@@ -275,10 +291,12 @@ describe('refreshGitStatusForWorktree', () => {
 
   it('applies an earlier automatic result when a later automatic refresh fails', async () => {
     const olderStatus = deferred<GitStatusResult>()
+
     const gitStatus = vi
       .fn()
       .mockReturnValueOnce(olderStatus.promise)
       .mockRejectedValueOnce(new Error('transient index.lock'))
+
     vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
     const deps = makeDeps()
 
@@ -287,6 +305,7 @@ describe('refreshGitStatusForWorktree', () => {
       worktreePath: '/repo',
       deps
     })
+
     await vi.waitFor(() => expect(gitStatus).toHaveBeenCalledTimes(1))
     await expect(
       refreshGitStatusForWorktree({
@@ -301,6 +320,7 @@ describe('refreshGitStatusForWorktree', () => {
       conflictOperation: 'unknown',
       head: 'fresh'
     }
+
     olderStatus.resolve(freshStatus)
     await olderRefresh
 
@@ -313,6 +333,7 @@ describe('refreshGitStatusForWorktree', () => {
       conflictOperation: 'unknown',
       head: 'stale'
     }
+
     vi.stubGlobal('window', { api: { git: { status: vi.fn().mockResolvedValue(status) } } })
     const deps = makeDeps()
     const onStatusAccepted = vi.fn()
@@ -336,6 +357,7 @@ describe('refreshGitStatusForWorktree', () => {
       conflictOperation: 'unknown',
       upstreamStatus: { hasUpstream: true, upstreamName: 'origin/feature', ahead: 0, behind: 0 }
     }
+
     vi.stubGlobal('window', { api: { git: { status: vi.fn().mockResolvedValue(status) } } })
     const deps = makeDeps()
     const onStatusAccepted = vi.fn()
@@ -353,6 +375,7 @@ describe('refreshGitStatusForWorktree', () => {
 
   it('does not let an older automatic explicit upstream fetch overwrite a strict result', async () => {
     const automaticFetch = deferred<GitUpstreamStatus | null>()
+
     const strictStatus: GitStatusResult = {
       entries: [],
       conflictOperation: 'unknown',
@@ -363,7 +386,9 @@ describe('refreshGitStatusForWorktree', () => {
         behind: 1
       }
     }
+
     const staleAutomaticUpstream: GitUpstreamStatus = { hasUpstream: false, ahead: 0, behind: 0 }
+
     const gitStatus = vi
       .fn()
       .mockResolvedValueOnce({
@@ -371,6 +396,7 @@ describe('refreshGitStatusForWorktree', () => {
         conflictOperation: 'unknown'
       } satisfies GitStatusResult)
       .mockResolvedValueOnce(strictStatus)
+
     vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
     const deps = makeDeps()
     vi.mocked(deps.fetchUpstreamStatus).mockReturnValueOnce(automaticFetch.promise)
@@ -380,6 +406,7 @@ describe('refreshGitStatusForWorktree', () => {
       worktreePath: '/repo',
       deps
     })
+
     await vi.waitFor(() => expect(deps.fetchUpstreamStatus).toHaveBeenCalledTimes(1))
 
     await refreshGitStatusForWorktreeStrict({
@@ -403,6 +430,7 @@ describe('refreshGitStatusForWorktree', () => {
       conflictOperation: 'unknown',
       head: 'abc123456789'
     }
+
     const gitStatus = vi.fn().mockResolvedValue(status)
     vi.stubGlobal('window', { api: { git: { status: gitStatus } } })
     const deps = makeDeps()

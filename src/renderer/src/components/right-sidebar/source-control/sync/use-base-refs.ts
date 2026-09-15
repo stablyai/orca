@@ -56,6 +56,7 @@ export function useSourceControlBaseRefs({
     repoBaseRef: normalizedRepoBaseRef,
     defaultBaseRef
   })
+
   // Why: the compare/diff view uses this base; the PR/rebase merge target keeps effectiveBaseRef (equal when the setting is off).
   const compareBaseRef = resolveSourceControlCompareBaseRef({
     enabled: settings?.sourceControlCompareAgainstUpstream ?? false,
@@ -64,6 +65,7 @@ export function useSourceControlBaseRefs({
     upstreamName: remoteStatus?.upstreamName ?? null,
     fallbackBaseRef: effectiveBaseRef
   })
+
   const pickerBaseRef = resolveSourceControlPickerBaseRef({
     pinnedBaseRef,
     effectiveBaseRef

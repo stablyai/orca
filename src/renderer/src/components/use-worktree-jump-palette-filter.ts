@@ -41,11 +41,14 @@ export function useWorktreeJumpPaletteFilter({
   filter
 }: WorktreeJumpPaletteFilterInput) {
   const repoMap = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
+
   const repoByHostIdentity = useMemo(
     () => new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo])),
     [repos]
   )
+
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
+
   const hostOptions = useMemo(
     () =>
       buildSidebarHostOptions({
@@ -67,8 +70,10 @@ export function useWorktreeJumpPaletteFilter({
       hostLabelOverrides
     ]
   )
+
   const canCreateWorktree = repos.length > 0
   const defaultHostId = useMemo(() => getSettingsFocusedExecutionHostId(settings), [settings])
+
   const filterModel = useMemo(
     () =>
       buildPaletteFilterModel({
@@ -81,12 +86,15 @@ export function useWorktreeJumpPaletteFilter({
       }),
     [allWorktrees, defaultHostId, hostOptions, projectHostSetups, projects, repos]
   )
+
   const filterActive = isPaletteFilterActive(filter)
   const hostFilterActive = filter.hostIds.length > 0
+
   const filterPredicate = useMemo(
     () => buildPaletteFilterPredicate(filter, filterModel),
     [filter, filterModel]
   )
+
   const groupHostIdByGroupId = useMemo(
     () =>
       new Map(

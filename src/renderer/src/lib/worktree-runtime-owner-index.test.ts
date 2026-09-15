@@ -9,11 +9,13 @@ describe('worktree runtime owner index', () => {
       hostId: 'ssh:private-target' as const,
       runtimeOwnerEnvironmentId: 'hub-a'
     }
+
     const directSsh = {
       id: 'repo-1::direct',
       repoId: 'repo-1',
       hostId: 'ssh:direct-target' as const
     }
+
     const worktreesByRepo = { 'repo-1': [paired, directSsh] }
 
     expect(findIndexedWorktreeOwnerForHost(worktreesByRepo, paired.id, 'runtime:hub-a')).toBe(
@@ -36,6 +38,7 @@ describe('worktree runtime owner index', () => {
       repoId: 'direct-repo',
       hostId: 'ssh:private-target' as const
     }
+
     const paired = {
       id: 'same-id',
       repoId: 'paired-repo',
@@ -64,6 +67,7 @@ describe('worktree runtime owner index', () => {
       hostId: 'ssh:private-a' as const,
       runtimeOwnerEnvironmentId: 'hub-a'
     }
+
     const pairedB = {
       id: 'same-id',
       repoId: 'repo-b',

@@ -1,6 +1,7 @@
 import type { TaskPageGitHubSearchPaginationModel } from './use-task-page-github-search-pagination'
 import { useEffect } from 'react'
 import { runTaskPageGitHubLandingRefresh } from './task-page-github-landing-refresh-run'
+
 export function useTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPaginationModel) {
   const {
     workItemsInvalidationNonce,
@@ -12,6 +13,7 @@ export function useTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
     taskRefreshNonce,
     githubWorkItemMutationQueryKey
   } = model
+
   useEffect(() => {
     return runTaskPageGitHubLandingRefresh(model)
     // Why: selectedReposKey covers every repo field read by the request.
@@ -32,4 +34,5 @@ export function useTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
   // must NOT cancel the in-flight run's trailing bookkeeping.
   return model
 }
+
 export type TaskPageGitHubLandingRefreshModel = ReturnType<typeof useTaskPageGitHubLandingRefresh>

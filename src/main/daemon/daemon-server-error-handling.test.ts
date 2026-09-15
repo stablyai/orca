@@ -19,6 +19,7 @@ import { waitForEndpointUnreachable } from './daemon-endpoint-reachability-test-
 function createMockSubprocess(): SubprocessHandle {
   let notifyExit: ((code: number) => void) | null = null
   const exit = (): void => notifyExit?.(0)
+
   return {
     pid: 44444,
     getForegroundProcess: () => null,
@@ -35,6 +36,7 @@ function createMockSubprocess(): SubprocessHandle {
     dispose() {}
   }
 }
+
 type DaemonServerInternals = {
   endpoint: {
     hasLostOwnership(): boolean
@@ -97,6 +99,7 @@ describe('daemon server error handling', () => {
       const usurper = createServer()
       const usurperBind = join(dir, '.u')
       await new Promise<void>((resolve) => usurper.listen(usurperBind, resolve))
+
       try {
         unlinkSync(socketPath)
         linkSync(usurperBind, socketPath)
@@ -160,6 +163,7 @@ describe('daemon server error handling', () => {
       const usurper = createServer()
       const usurperBind = join(dir, '.u2')
       await new Promise<void>((resolve) => usurper.listen(usurperBind, resolve))
+
       try {
         unlinkSync(socketPath)
         linkSync(usurperBind, socketPath)
@@ -204,6 +208,7 @@ describe('daemon server error handling', () => {
       const usurper = createServer()
       const usurperBind = join(dir, '.u3')
       await new Promise<void>((resolve) => usurper.listen(usurperBind, resolve))
+
       try {
         unlinkSync(socketPath)
         linkSync(usurperBind, socketPath)
@@ -254,6 +259,7 @@ describe('daemon server error handling', () => {
       const usurper = createServer()
       const usurperBind = join(dir, '.u4')
       await new Promise<void>((resolve) => usurper.listen(usurperBind, resolve))
+
       try {
         unlinkSync(socketPath)
         linkSync(usurperBind, socketPath)
@@ -291,6 +297,7 @@ describe('daemon server error handling', () => {
       const usurper = createServer()
       const usurperBind = join(dir, '.u5')
       await new Promise<void>((resolve) => usurper.listen(usurperBind, resolve))
+
       try {
         unlinkSync(socketPath)
         linkSync(usurperBind, socketPath)
@@ -325,6 +332,7 @@ describe('daemon server error handling', () => {
       const usurper = createServer()
       const usurperBind = join(dir, '.u6')
       await new Promise<void>((resolve) => usurper.listen(usurperBind, resolve))
+
       try {
         unlinkSync(socketPath)
         linkSync(usurperBind, socketPath)
@@ -365,6 +373,7 @@ describe('daemon server error handling', () => {
       const usurper = createServer()
       const usurperBind = join(dir, '.u7')
       await new Promise<void>((resolve) => usurper.listen(usurperBind, resolve))
+
       try {
         // First loss.
         unlinkSync(socketPath)
@@ -404,6 +413,7 @@ describe('daemon server error handling', () => {
 
     expect(daemon.lifecycle.server?.listenerCount('error')).toBe(1)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       // Twice on purpose: a one-shot listener survives the first error and dies on the second,
       // so a single emit cannot tell a permanent handler from `once`.
@@ -442,9 +452,11 @@ describe('daemon server error handling', () => {
     const unsupported = connect(socketPath)
     unsupported.on('error', () => {})
     await new Promise<void>((resolve) => unsupported.once('connect', resolve))
+
     const response = new Promise<{ ok: boolean; error?: string }>((resolve) => {
       unsupported.once('data', (data) => resolve(JSON.parse(data.toString())))
     })
+
     unsupported.write(
       encodeNdjson({
         type: 'hello',

@@ -298,9 +298,11 @@ describe('terminal-history', () => {
       // Pinned so the assertion cannot accidentally read the developer's own value.
       const originalDataHome = process.env.XDG_DATA_HOME
       process.env.XDG_DATA_HOME = ['', 'main', 'process', 'data'].join(sep)
+
       try {
         const env: Record<string, string> = { XDG_DATA_HOME: ['', 'spawn', 'data'].join(sep) }
         injectHistoryEnv(env, 'repo-1::/path/wt', '/usr/bin/fish', '/path/wt')
+
         const meta = JSON.parse(writeFileSyncMock.mock.calls.at(-1)?.[1] as string) as Record<
           string,
           string
@@ -323,10 +325,12 @@ describe('terminal-history', () => {
       injectHistoryEnv(env, 'repo-1::/path/wt', '/usr/bin/fish', '/path/wt')
 
       expect(readFileSyncMock).not.toHaveBeenCalled()
+
       const meta = JSON.parse(writeFileSyncMock.mock.calls.at(-1)?.[1] as string) as Record<
         string,
         string
       >
+
       expect(meta.fishHistoryDir).toBe(['', 'active', 'fish'].join(sep))
     })
 
@@ -498,6 +502,7 @@ describe('terminal-history', () => {
       const env: Record<string, string> = {
         HISTFILE: '/fake/userData/terminal-history/abc123/zsh_history'
       }
+
       updateHistoryEnvForFallback(env, '/bin/bash', zshInjection())
       expect(env.HISTFILE).toBe('/fake/userData/terminal-history/abc123/bash_history')
     })
@@ -506,6 +511,7 @@ describe('terminal-history', () => {
       const env: Record<string, string> = {
         HISTFILE: '/fake/userData/terminal-history/abc123/zsh_history'
       }
+
       updateHistoryEnvForFallback(env, '/bin/sh', zshInjection())
       expect(env.HISTFILE).toBeUndefined()
     })
@@ -574,6 +580,7 @@ describe('terminal-history', () => {
     it('also tries this process fish dir, for meta written before that field', async () => {
       const originalDataHome = process.env.XDG_DATA_HOME
       process.env.XDG_DATA_HOME = ['', 'main', 'data'].join(sep)
+
       try {
         existsSyncMock.mockReturnValue(true)
         lstatSyncMock.mockReturnValue({ isFile: () => true })
@@ -591,6 +598,7 @@ describe('terminal-history', () => {
           process.env.XDG_DATA_HOME = originalDataHome
         }
       }
+
       await flushPendingWorktreeHistoryDeletions()
     })
 
@@ -626,6 +634,7 @@ describe('terminal-history', () => {
         if (path.endsWith('terminal-history-wsl')) {
           return ['Ubuntu']
         }
+
         return []
       })
 
@@ -661,18 +670,22 @@ describe('terminal-history', () => {
       let leftoverTombstonePresent = true
       existsSyncMock.mockImplementation((p: string) => {
         const path = String(p)
+
         if (path.includes('.pending-delete') && !path.endsWith('.pending-delete')) {
           return true
         }
+
         if (path.endsWith('terminal-history') || path.endsWith('.pending-delete')) {
           return true
         }
+
         return path.includes(hashWorktreeId('repo-1::/path/wt'))
       })
       readdirSyncMock.mockImplementation((p: string) => {
         if (String(p).endsWith('.pending-delete')) {
           return leftoverTombstonePresent ? ['leftover-tombstone'] : []
         }
+
         return []
       })
       rmAsyncMock.mockImplementation(async () => {
@@ -700,6 +713,7 @@ describe('terminal-history', () => {
         existsSyncMock.mockReturnValue(true)
 
         const env: Record<string, string> = {}
+
         const result = injectHistoryEnv(
           env,
           'repo-1::/wsl/path',
@@ -754,6 +768,7 @@ describe('terminal-history', () => {
         getPathMock.mockReturnValue('C:\\Users\\alice\\AppData\\Roaming\\Orca')
 
         const env: Record<string, string> = {}
+
         const result = injectHistoryEnv(env, 'repo-1::C:\\repo', '/bin/bash', 'C:\\repo', {
           wslDistro: 'Ubuntu'
         })

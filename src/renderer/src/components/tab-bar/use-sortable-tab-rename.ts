@@ -35,6 +35,7 @@ export function useSortableTabRename({
     if (committedOrCancelledRef.current) {
       return
     }
+
     committedOrCancelledRef.current = true
     const trimmed = renameValue.trim()
     onSetCustomTitle(tabId, trimmed.length > 0 ? trimmed : null)
@@ -51,9 +52,11 @@ export function useSortableTabRename({
       cancelAnimationFrame(renameFocusFrameRef.current)
       renameFocusFrameRef.current = null
     }
+
     if (!input) {
       return
     }
+
     // Why: defer past Radix menu teardown/focus restore; key off input mount so title updates don't re-select edited text.
     renameFocusFrameRef.current = requestAnimationFrame(() => {
       renameFocusFrameRef.current = null
@@ -73,12 +76,16 @@ export function useSortableTabRename({
   useEffect(() => {
     const onRenameRequest = (event: Event): void => {
       const detail = (event as CustomEvent<RenameTerminalTabDetail | undefined>).detail
+
       if (detail?.tabId !== tabId) {
         return
       }
+
       handleRenameOpenRef.current()
     }
+
     window.addEventListener(RENAME_TERMINAL_TAB_EVENT, onRenameRequest)
+
     return () => window.removeEventListener(RENAME_TERMINAL_TAB_EVENT, onRenameRequest)
   }, [tabId])
 

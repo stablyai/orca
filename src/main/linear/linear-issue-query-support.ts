@@ -23,6 +23,7 @@ export async function mapIssueForWorkspace(
   options?: Parameters<typeof mapLinearIssue>[1]
 ): Promise<LinearIssue> {
   const mapped = await mapLinearIssue(issue, options)
+
   return {
     ...mapped,
     workspaceId: entry.workspace.id,
@@ -39,6 +40,7 @@ export function sortLimitAndDescribeIssues(
   limit: number
 ): { items: LinearIssue[]; clipped: boolean } {
   const sorted = sortByUpdatedAtDescending(issues)
+
   return {
     items: sorted.slice(0, limit),
     clipped: sorted.length > limit
@@ -50,6 +52,7 @@ export function mapRawIssueForWorkspace(
   issue: LinearIssueNode
 ): LinearIssue {
   const labelNodes = issue.labels?.nodes ?? []
+
   return {
     id: issue.id,
     identifier: issue.identifier,
@@ -106,9 +109,11 @@ export async function readIssueConnectionPages(
     hasMore = Boolean(connection?.pageInfo?.hasNextPage)
 
     const nextCursor = connection?.pageInfo?.endCursor ?? undefined
+
     if (!hasMore || !nextCursor || nextCursor === after || nodes.length === 0) {
       break
     }
+
     after = nextCursor
   }
 
@@ -117,6 +122,7 @@ export async function readIssueConnectionPages(
 
 export function getOldestIssueTime(issues: LinearIssue[]): number {
   const oldestIssue = issues.at(-1)
+
   return oldestIssue ? new Date(oldestIssue.updatedAt).getTime() : Number.POSITIVE_INFINITY
 }
 
@@ -127,6 +133,7 @@ export function getListIssueConnectionLoader(
 ): LinearIssueConnectionLoader {
   const orderBy = 'updatedAt'
   const variables = { orderBy }
+
   // Why: apply attribute + team filters in GraphQL variables before the first-N
   // cursor walk so pagination hasMore matches the filtered set.
   const filterInput = buildLinearListIssueFilter({
@@ -145,6 +152,7 @@ export function getListIssueConnectionLoader(
         ...page,
         filter: filterInput
       })
+
       return result.data?.viewer?.assignedIssues
     }
   }
@@ -159,6 +167,7 @@ export function getListIssueConnectionLoader(
         ...page,
         filter: filterInput
       })
+
       return result.data?.viewer?.createdIssues
     }
   }
@@ -173,6 +182,7 @@ export function getListIssueConnectionLoader(
         ...page,
         filter: filterInput
       })
+
       return result.data?.viewer?.assignedIssues
     }
   }
@@ -182,6 +192,7 @@ export function getListIssueConnectionLoader(
       LinearIssueConnectionResponse,
       LinearRawVariables
     >(ALL_ISSUES_QUERY, { ...variables, ...page, filter: filterInput })
+
     return result.data?.issues
   }
 }

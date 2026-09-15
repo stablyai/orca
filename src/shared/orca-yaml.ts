@@ -22,12 +22,16 @@ function asTrimmedString(value: unknown): string | undefined {
   if (typeof value !== 'string' || !isOrcaYamlFieldWithinLimit(value)) {
     return undefined
   }
+
   const trimmed = value.trim()
+
   return trimmed || undefined
 }
 
 const DEFAULT_TAB_COLOR_RE = /^#[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3})?$/
+
 export const ORCA_VM_RECIPE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/
+
 export const ORCA_VM_RECIPE_ID_RULE =
   'Use 1-64 lowercase letters, numbers, dots, underscores, or hyphens, starting with a letter or number.'
 
@@ -48,13 +52,17 @@ function normalizeSharedDirectories(value: unknown): string[] {
   }
 
   const seen = new Set<string>()
+
   for (const entry of value.slice(0, MAX_SHARED_DIRECTORIES)) {
     const raw = asTrimmedString(entry)
+
     if (!raw) {
       continue
     }
+
     const normalized = raw.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '')
     const segments = normalized.split('/')
+
     if (
       !normalized ||
       normalized.startsWith('/') ||
@@ -66,8 +74,10 @@ function normalizeSharedDirectories(value: unknown): string[] {
     ) {
       continue
     }
+
     seen.add(normalized)
   }
+
   return Array.from(seen)
 }
 
@@ -79,16 +89,20 @@ function normalizeDefaultTabs(value: unknown): OrcaDefaultTabTemplate[] {
   return value
     .map((entry) => {
       const record = asRecord(entry)
+
       if (!record) {
         return null
       }
+
       const title = asTrimmedString(record.title)
       const command = asTrimmedString(record.command)
       const color = asTrimmedString(record.color)
       const normalizedColor = color && DEFAULT_TAB_COLOR_RE.test(color) ? color : undefined
+
       if (!title && !command && !normalizedColor) {
         return null
       }
+
       return {
         ...(title ? { title } : {}),
         ...(normalizedColor ? { color: normalizedColor } : {}),
@@ -105,9 +119,11 @@ type VmRecipeParseResult = {
 
 function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
   const diagnostics: OrcaVmRecipeDiagnostic[] = []
+
   if (!Array.isArray(value)) {
     return { recipes: [], diagnostics }
   }
+
   if (value.length > MAX_ORCA_YAML_COLLECTION_ENTRIES) {
     return {
       recipes: [],
@@ -121,62 +137,81 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
   }
 
   const seenIds = new Set<string>()
+
   const recipes = value
     .map((entry, index) => {
       const record = asRecord(entry)
+
       if (!record) {
         diagnostics.push({
           index,
           message: 'Recipe entry must be a mapping.'
         })
+
         return null
       }
+
       const id = asTrimmedString(record.id)
       const name = asTrimmedString(record.name)
       const create = asTrimmedString(record.create) ?? asTrimmedString(record.command)
+
       if (!id) {
         diagnostics.push({ index, field: 'id', message: 'Recipe id is required.' })
+
         return null
       }
+
       if (!ORCA_VM_RECIPE_ID_PATTERN.test(id)) {
         diagnostics.push({
           index,
           field: 'id',
           message: `Invalid recipe id "${id}". ${ORCA_VM_RECIPE_ID_RULE}`
         })
+
         return null
       }
+
       if (seenIds.has(id)) {
         diagnostics.push({
           index,
           field: 'id',
           message: `Duplicate recipe id "${id}". Recipe ids must be unique.`
         })
+
         return null
       }
+
       if (!name) {
         diagnostics.push({ index, field: 'name', message: `Recipe "${id}" is missing name.` })
+
         return null
       }
+
       if (!create) {
         diagnostics.push({ index, field: 'create', message: `Recipe "${id}" is missing create.` })
+
         return null
       }
+
       seenIds.add(id)
       const description = asTrimmedString(record.description)
       const checkoutMode = asTrimmedString(record.checkoutMode)
+
       if (checkoutMode && checkoutMode !== 'orca-worktree' && checkoutMode !== 'provisioned-root') {
         diagnostics.push({
           index,
           field: 'checkoutMode',
           message: `Recipe "${id}" checkoutMode must be "orca-worktree" or "provisioned-root".`
         })
+
         return null
       }
+
       const suspend = asTrimmedString(record.suspend)
       const resume = asTrimmedString(record.resume)
       const destroyValue = asTrimmedString(record.destroy) ?? asTrimmedString(record.cleanup)
       const destroyDisabled = destroyValue === 'none'
+
       return {
         id,
         name,
@@ -190,6 +225,7 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
       }
     })
     .filter((entry): entry is OrcaVmRecipe => entry !== null)
+
   return { recipes, diagnostics }
 }
 
@@ -202,6 +238,7 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   }
 
   let root: unknown
+
   try {
     const document = parseDocument(content, {
       keepSourceTokens: false,
@@ -209,15 +246,18 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
       prettyErrors: false,
       uniqueKeys: true
     })
+
     if (document.errors.length > 0) {
       return null
     }
+
     root = document.toJS({ maxAliasCount: MAX_ORCA_YAML_ALIAS_COUNT })
   } catch {
     return null
   }
 
   const record = asRecord(root)
+
   if (!record) {
     return null
   }
@@ -225,17 +265,20 @@ export function parseOrcaYaml(content: string): OrcaHooks | null {
   const scriptsRecord = asRecord(record.scripts)
   const setup = scriptsRecord ? asTrimmedString(scriptsRecord.setup) : undefined
   const archive = scriptsRecord ? asTrimmedString(scriptsRecord.archive) : undefined
+
   const setupAgentStartupPolicy =
     record.setupAgentStartupPolicy === 'start-immediately' ||
     record.setupAgentStartupPolicy === 'wait-for-setup'
       ? record.setupAgentStartupPolicy
       : undefined
+
   const issueCommand = asTrimmedString(record.issueCommand)
   const defaultTabs = normalizeDefaultTabs(record.defaultTabs)
   const environmentRecipeParse = normalizeVmRecipes(record.environmentRecipes)
   const environmentRecipes = environmentRecipeParse.recipes
   const environmentRecipeDiagnostics = environmentRecipeParse.diagnostics
   const worktreeRecord = asRecord(record.worktree)
+
   const sharedDirectories = worktreeRecord
     ? normalizeSharedDirectories(worktreeRecord.sharedDirectories)
     : []

@@ -16,7 +16,9 @@ type FrameStub = {
 }
 
 let frames: FrameStub
+
 let openAttachments: BrowserClientPageVisibleAttachment[]
+
 let visibilityState: DocumentVisibilityState
 
 function installFrameStub(): FrameStub {
@@ -26,12 +28,14 @@ function installFrameStub(): FrameStub {
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     nextId += 1
     scheduled.set(nextId, callback)
+
     return nextId
   })
   vi.stubGlobal('cancelAnimationFrame', (id: number) => {
     cancelled.push(id)
     scheduled.delete(id)
   })
+
   return {
     pending: () => scheduled.size,
     cancelled: () => cancelled,
@@ -74,6 +78,7 @@ async function attachHost(
   moveContainer(rig.container, left, 0)
   await rig.mount(identity)
   openAttachments.push(rig.attach(identity))
+
   return {
     container: rig.container,
     registry: rig.registry,
@@ -98,6 +103,7 @@ afterEach(() => {
   for (const attachment of openAttachments.splice(0)) {
     attachment.detach()
   }
+
   disposeRetainedHostFixtures()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()

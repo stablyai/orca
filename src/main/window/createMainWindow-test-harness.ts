@@ -5,29 +5,44 @@ import type { Mock } from 'vitest'
 export type MainWindowSpy = Mock<(...args: unknown[]) => unknown>
 
 export const menuPopupMock: MainWindowSpy = vi.fn()
+
 export const notificationShowMock: MainWindowSpy = vi.fn()
+
 /** Constructor spy: suites read the options object back off `mock.calls`. */
 export const browserWindowMock: Mock<
   (options: Electron.BrowserWindowConstructorOptions) => unknown
 > = vi.fn()
+
 export const openExternalMock: MainWindowSpy = vi.fn()
+
 export const attachGuestPoliciesMock: MainWindowSpy = vi.fn()
+
 export const attachRouteGuestMock: MainWindowSpy = vi.fn(() => false)
+
 export const retireRouteRendererMock: MainWindowSpy = vi.fn()
+
 export const attachClientPageRendererMock: MainWindowSpy = vi.fn()
+
 export const retireClientPageRendererMock: MainWindowSpy = vi.fn()
+
 export const buildFromTemplateMock: Mock<(...args: unknown[]) => { popup: MainWindowSpy }> = vi.fn(
   () => ({ popup: menuPopupMock })
 )
+
 export const notificationMock: Mock<(...args: unknown[]) => { show: MainWindowSpy }> = vi.fn(
   function () {
     return { show: notificationShowMock }
   }
 )
+
 export const powerMonitorOnMock: MainWindowSpy = vi.fn()
+
 export const powerMonitorRemoveListenerMock: MainWindowSpy = vi.fn()
+
 export const routePartitionAllowedMock: Mock<(partition: string) => boolean> = vi.fn(() => false)
+
 export const isMock = { dev: false }
+
 export const macosTahoeMock = { value: false }
 
 type IpcMainMock = {
@@ -140,6 +155,7 @@ export function resetMainWindowMocks(): void {
 export function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return run()
   } finally {

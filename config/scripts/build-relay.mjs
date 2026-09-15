@@ -30,11 +30,16 @@ import {
 } from '../../src/shared/relay-artifacts.ts'
 
 const __dirname = import.meta.dirname
+
 // Why: the script lives under config/scripts, so go two levels up to reach the repo root.
 const ROOT = join(__dirname, '..', '..')
+
 const RELAY_ENTRY = join(ROOT, 'src', 'relay', 'relay.ts')
+
 const WATCHER_ENTRY = join(ROOT, 'src', 'main', 'ipc', 'parcel-watcher-process-entry.ts')
+
 const AI_VAULT_SERVICE_ENTRY = join(ROOT, 'src', 'relay', 'ai-vault-service-entry.ts')
+
 const WSL_TRANSCRIPT_FS_PROCESS_ENTRY = join(
   ROOT,
   'src',
@@ -42,6 +47,7 @@ const WSL_TRANSCRIPT_FS_PROCESS_ENTRY = join(
   'native-chat',
   'wsl-transcript-fs-process-entry.ts'
 )
+
 const MANAGED_HOOK_RUNTIME_ENTRY = join(
   ROOT,
   'src',
@@ -49,28 +55,36 @@ const MANAGED_HOOK_RUNTIME_ENTRY = join(
   'agent-hooks',
   'managed-hook-runtime.ts'
 )
+
 const JSONC_PARSER_ESM_ENTRY = join(ROOT, 'node_modules', 'jsonc-parser', 'lib', 'esm', 'main.js')
+
 const NODE_PTY_CONSOLE_LIST_PATCH_FILENAME = 'node-pty-1.1.0-console-list-agent-patch.cjs'
+
 const NODE_PTY_CONSOLE_LIST_PATCH_SOURCE = join(
   ROOT,
   'config',
   'relay-assets',
   NODE_PTY_CONSOLE_LIST_PATCH_FILENAME
 )
+
 const NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME = 'node-pty-1.1.0-windows-pty-teardown-patch.cjs'
+
 const NODE_PTY_WINDOWS_TEARDOWN_PATCH_SOURCE = join(
   ROOT,
   'config',
   'relay-assets',
   NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME
 )
+
 const NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME = 'node-pty-1.1.0-master-cloexec-patch.cjs'
+
 const NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE = join(
   ROOT,
   'config',
   'relay-assets',
   NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME
 )
+
 // Written by build-windows-process-tree-relay-addon.mjs, which only runs on a
 // Windows machine.
 const WINDOWS_PROCESS_TREE_BUILD_DIR = join(ROOT, '.build', 'windows-process-tree')
@@ -88,19 +102,24 @@ function stageWindowsProcessTreeAddon(platform, outDir) {
   if (!isWindowsRelayPlatform(platform)) {
     return
   }
+
   const arch = platform.slice('win32-'.length)
   const source = join(WINDOWS_PROCESS_TREE_BUILD_DIR, arch, RELAY_WINDOWS_PROCESS_TREE_FILENAME)
+
   if (!existsSync(source)) {
     if (REQUIRED_ADDON_ARCHES.includes(arch) || REQUIRED_ADDON_ARCHES.includes('all')) {
       throw new Error(
         `Relay ${platform} needs ${source}. Run: node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=${arch} (Windows only).`
       )
     }
+
     console.log(
       `Relay ${platform}: no ${RELAY_WINDOWS_PROCESS_TREE_FILENAME}; relay will use the PowerShell scan.`
     )
+
     return
   }
+
   copyFileSync(source, join(outDir, RELAY_WINDOWS_PROCESS_TREE_FILENAME))
 }
 
@@ -144,6 +163,7 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
       join(outDir, NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME)
     )
   }
+
   copyFileSync(
     NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE,
     join(outDir, NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME)
@@ -219,41 +239,51 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
   // companion-only change still selects a fresh immutable relay directory.
   const expected = relayArtifactFilenames(isWindowsRelayPlatform(platform))
   const hash = createHash('sha256')
+
   for (const filename of expected) {
     const artifactPath = join(outDir, filename)
+
     if (!existsSync(artifactPath)) {
       throw new Error(
         `Relay ${platform} declares ${filename} in RELAY_ARTIFACTS but never emitted it. ` +
           'Add the build step, or drop it from src/shared/relay-artifacts.ts.'
       )
     }
+
     hash.update(readFileSync(artifactPath))
   }
+
   // Why hashed only when present: a relay carrying the native addon answers
   // differently from one that falls back to the scan, so the two must not share
   // an immutable directory -- but a build without it is still valid.
   for (const filename of relayOptionalArtifactFilenames(isWindowsRelayPlatform(platform))) {
     const artifactPath = join(outDir, filename)
+
     if (existsSync(artifactPath)) {
       hash.update(readFileSync(artifactPath))
     }
   }
+
   const contentHash = hash.digest('hex').slice(0, 12)
 
   // Close the loop: an artifact emitted here but absent from the manifest would
   // ship unhashed and unprobed — exactly how the WSL helper went missing.
   const emitted = readdirSync(outDir).filter((name) => name !== RELAY_VERSION_FILENAME)
+
   const declared = [
     ...expected,
     ...relayOptionalArtifactFilenames(isWindowsRelayPlatform(platform))
   ]
+
   const undeclared = emitted.filter((name) => !declared.includes(name))
+
   if (undeclared.length > 0) {
     throw new Error(
       `Relay ${platform} emitted undeclared artifacts: ${undeclared.join(', ')}. ` +
         'Add them to RELAY_ARTIFACTS in src/shared/relay-artifacts.ts.'
     )
   }
+
   writeFileSync(join(outDir, RELAY_VERSION_FILENAME), `${RELAY_VERSION}+${contentHash}`)
 
   console.log(`Built relay for ${platform} → ${outDir}/relay.js`)
@@ -300,10 +330,12 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     }
   })
   const browserNetworkContent = readFileSync(join(outDir, 'wsl-browser-network-relay.js'))
+
   const browserNetworkHash = createHash('sha256')
     .update(browserNetworkContent)
     .digest('hex')
     .slice(0, 12)
+
   writeFileSync(join(outDir, '.browser-network-version'), `${RELAY_VERSION}+${browserNetworkHash}`)
   console.log(`Built WSL browser network relay → ${outDir}/wsl-browser-network-relay.js`)
 }

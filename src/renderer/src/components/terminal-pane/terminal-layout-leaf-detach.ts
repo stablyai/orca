@@ -24,15 +24,19 @@ function removeLeafFromTree(
 
   const first = removeLeafFromTree(node.first, leafId)
   const second = removeLeafFromTree(node.second, leafId)
+
   if (!first.removed && !second.removed) {
     return { node, removed: false }
   }
+
   if (!first.node) {
     return { node: second.node, removed: true }
   }
+
   if (!second.node) {
     return { node: first.node, removed: true }
   }
+
   return {
     node: {
       ...node,
@@ -50,8 +54,10 @@ function omitLeafRecord(
   if (!source || !Object.hasOwn(source, leafId)) {
     return source
   }
+
   const next = { ...source }
   delete next[leafId]
+
   return Object.keys(next).length > 0 ? next : undefined
 }
 
@@ -60,6 +66,7 @@ function singleLeafRecord(
   leafId: string
 ): Record<string, string> | undefined {
   const value = source?.[leafId]
+
   return value ? { [leafId]: value } : undefined
 }
 
@@ -68,16 +75,19 @@ export function detachTerminalLayoutLeaf(
   leafId: string
 ): DetachedTerminalLayoutLeaf | null {
   const layout = normalizeTerminalLayoutSnapshot(snapshot).snapshot
+
   if (!layout.root) {
     return null
   }
 
   const originalLeafIds = collectLeafIdsInOrder(layout.root)
+
   if (!originalLeafIds.includes(leafId) || originalLeafIds.length <= 1) {
     return null
   }
 
   const removal = removeLeafFromTree(layout.root, leafId)
+
   if (!removal.removed || !removal.node) {
     return null
   }
@@ -86,6 +96,7 @@ export function detachTerminalLayoutLeaf(
   const buffersByLeafId = omitLeafRecord(layout.buffersByLeafId, leafId)
   const scrollbackRefsByLeafId = omitLeafRecord(layout.scrollbackRefsByLeafId, leafId)
   const titlesByLeafId = omitLeafRecord(layout.titlesByLeafId, leafId)
+
   const sourceLayout: TerminalLayoutSnapshot = {
     root: removal.node,
     activeLeafId: resolveTerminalLayoutActiveLeafId({
@@ -104,6 +115,7 @@ export function detachTerminalLayoutLeaf(
   const detachedBuffersByLeafId = singleLeafRecord(layout.buffersByLeafId, leafId)
   const detachedScrollbackRefsByLeafId = singleLeafRecord(layout.scrollbackRefsByLeafId, leafId)
   const detachedTitlesByLeafId = singleLeafRecord(layout.titlesByLeafId, leafId)
+
   return {
     sourceLayout,
     detachedLayout: {

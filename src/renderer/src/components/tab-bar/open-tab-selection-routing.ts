@@ -36,6 +36,7 @@ export function activateOpenTabSearchResult(result: OpenTabSearchResult): OpenTa
       workspaceId: result.workspaceId,
       worktreeId: result.worktreeId
     })
+
     if (activation.status === 'failed') {
       return failed(
         activation.reason,
@@ -45,6 +46,7 @@ export function activateOpenTabSearchResult(result: OpenTabSearchResult): OpenTa
         )
       )
     }
+
     return {
       status: 'activated',
       focus: () =>
@@ -58,6 +60,7 @@ export function activateOpenTabSearchResult(result: OpenTabSearchResult): OpenTa
       tabId: result.tabId,
       worktreeId: result.worktreeId
     })
+
     if (activation.status === 'failed') {
       return failed(
         activation.reason,
@@ -67,6 +70,7 @@ export function activateOpenTabSearchResult(result: OpenTabSearchResult): OpenTa
         )
       )
     }
+
     return { status: 'activated', focus: null }
   }
 
@@ -78,12 +82,14 @@ export function activateOpenTabSearchResult(result: OpenTabSearchResult): OpenTa
     tabId: result.tabId,
     worktreeId: result.worktreeId
   })
+
   if (activation.status === 'failed') {
     return failed(
       activation.reason,
       translate('auto.components.tab.bar.TabBarCreateEntry.4f0d9a71c2', 'Tab no longer exists')
     )
   }
+
   // Editors focus themselves when they mount; only the terminal surface needs a handoff.
   return {
     status: 'activated',

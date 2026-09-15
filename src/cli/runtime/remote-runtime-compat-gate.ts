@@ -43,6 +43,7 @@ export class RemoteRuntimeCompatGate {
         args.envelope
       )
     }
+
     return args.transport.sendWebSocketRequestWithStatusPreflight<TResult>(
       args.pairing,
       args.method,
@@ -52,7 +53,9 @@ export class RemoteRuntimeCompatGate {
         if (response.ok === false) {
           throw new RuntimeRpcFailureError(response)
         }
+
         this.noteVerifiedStatus(response.result)
+
         if (this.environmentSelector) {
           markEnvironmentUsed(this.userDataPath, this.environmentSelector, {
             runtimeId: response._meta.runtimeId
@@ -71,9 +74,11 @@ export class RemoteRuntimeCompatGate {
       serverMinCompatibleClientProtocolVersion:
         status.minCompatibleRuntimeClientVersion ?? status.minCompatibleMobileVersion
     })
+
     if (verdict.kind === 'blocked') {
       throw new RuntimeClientError('incompatible_runtime', describeRuntimeCompatBlock(verdict))
     }
+
     this.checked = true
   }
 }

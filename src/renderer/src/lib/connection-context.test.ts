@@ -524,6 +524,7 @@ describe('getConnectionIdFromState', () => {
     // Why: the Quick Open hook subscribes to store slices and must resolve from
     // the snapshot it receives, not by re-reading useAppStore.getState().
     const getStateSpy = vi.spyOn(useAppStore, 'getState')
+
     const state: ConnectionContextState = {
       folderWorkspaces: [makeFolderWorkspace({ connectionId: 'ssh-1' })],
       projectGroups: [makeProjectGroup({ connectionId: 'ssh-1' })],
@@ -682,14 +683,17 @@ describe('getConnectionIdFromState', () => {
 
     for (let repoIndex = 0; repoIndex < 100; repoIndex += 1) {
       const repoId = `repo-${repoIndex}`
+
       const repo = makeRepo({
         id: repoId,
         ...(repoId === targetRepoId ? { connectionId: 'ssh-target' } : {})
       })
+
       Object.defineProperty(repo, 'id', {
         enumerable: true,
         get: () => {
           repoIdReads += 1
+
           return repoId
         }
       })
@@ -701,12 +705,15 @@ describe('getConnectionIdFromState', () => {
           enumerable: true,
           get: () => {
             worktreeIdReads += 1
+
             return worktreeId
           }
         })
+
         return worktree
       })
     }
+
     const state: ConnectionContextState = {
       folderWorkspaces: [],
       projectGroups: [],
@@ -738,18 +745,21 @@ describe('getConnectionIdFromState', () => {
       'repo-ssh::/home/neil/repo-feature',
       '/home/neil/repo-feature/README.md'
     )
+
     const unresolved: ConnectionContextState = {
       folderWorkspaces: [],
       projectGroups: [],
       repos: [],
       worktreesByRepo: {}
     }
+
     expect(selector(unresolved)).toBeUndefined()
 
     const hydrated: ConnectionContextState = {
       ...unresolved,
       repos: [makeRepo({ id: 'repo-ssh', connectionId: 'ssh-hydrated' })]
     }
+
     expect(selector(hydrated)).toBe('ssh-hydrated')
   })
 })

@@ -15,6 +15,7 @@ export const COMMAND_CODE_OUTPUT_DONE_SETTLE_MS = 1500
 type CommandCodeDoneSettleExecutor = (normalizedPrompt: string) => void
 
 const executorByPaneKey = new Map<string, CommandCodeDoneSettleExecutor>()
+
 const timerByPaneKey = new Map<string, ReturnType<typeof setTimeout>>()
 
 /** Registers the current writer for this pane; returns its release.
@@ -26,6 +27,7 @@ export function setCommandCodeDoneSettleExecutor(
   execute: CommandCodeDoneSettleExecutor
 ): () => void {
   executorByPaneKey.set(paneKey, execute)
+
   return () => {
     // Why identity-checked: on reveal the remounted pane registers before the parked watcher releases.
     if (executorByPaneKey.get(paneKey) === execute) {
@@ -48,6 +50,7 @@ export function openCommandCodeDoneSettle(paneKey: string, normalizedPrompt: str
 
 export function cancelCommandCodeDoneSettle(paneKey: string): void {
   const timer = timerByPaneKey.get(paneKey)
+
   if (timer !== undefined) {
     clearTimeout(timer)
     timerByPaneKey.delete(paneKey)
@@ -59,6 +62,7 @@ export function _resetCommandCodeDoneSettlesForTest(): void {
   for (const timer of timerByPaneKey.values()) {
     clearTimeout(timer)
   }
+
   timerByPaneKey.clear()
   executorByPaneKey.clear()
 }

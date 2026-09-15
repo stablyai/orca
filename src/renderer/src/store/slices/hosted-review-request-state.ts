@@ -2,6 +2,7 @@ import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { slowTaskRequiredIdleMs } from '@/components/right-sidebar/coalesced-poll-runner'
 
 const HOSTED_REVIEW_REVALIDATION_IDLE_MULTIPLIER = 5
+
 const HOSTED_REVIEW_REVALIDATION_MAX_INTERVAL_MS = 5 * 60_000
 
 export const inflightHostedReviewRequests = new Map<
@@ -15,6 +16,7 @@ export const inflightHostedReviewRequests = new Map<
 >()
 
 export const hostedReviewRequestGenerations = new Map<string, number>()
+
 type HostedReviewRevalidationLane = {
   inFlight: Promise<HostedReviewInfo | null> | null
   lastRunDurationMs: number
@@ -22,6 +24,7 @@ type HostedReviewRevalidationLane = {
   pendingStartRequest: (() => Promise<HostedReviewInfo | null>) | null
   timer: ReturnType<typeof setTimeout> | null
 }
+
 const hostedReviewRevalidationLanes = new Map<string, HostedReviewRevalidationLane>()
 
 export function hostedReviewRequestKey(cacheKey: string, hintKey: string): string {
@@ -51,15 +54,20 @@ function scheduleHostedReviewRevalidationLane(
   if (lane.inFlight || lane.timer !== null) {
     return
   }
+
   const allowedAt = lane.lastRunEndedAt + requiredHostedReviewRevalidationIdleMs(lane)
   const delayMs = allowedAt - Date.now()
+
   if (delayMs <= 0 && lane.pendingStartRequest) {
     startHostedReviewRevalidationLane(requestKey, lane)
+
     return
   }
+
   lane.timer = setTimeout(
     () => {
       lane.timer = null
+
       if (lane.pendingStartRequest) {
         startHostedReviewRevalidationLane(requestKey, lane)
       } else if (!lane.inFlight) {
@@ -77,15 +85,18 @@ function observeHostedReviewRevalidationPromise(
   startedAt: number
 ): void {
   lane.inFlight = promise
+
   const finish = (): void => {
     if (lane.inFlight !== promise) {
       return
     }
+
     lane.inFlight = null
     lane.lastRunEndedAt = Date.now()
     lane.lastRunDurationMs = lane.lastRunEndedAt - startedAt
     scheduleHostedReviewRevalidationLane(requestKey, lane)
   }
+
   void promise.then(finish, finish)
 }
 
@@ -94,13 +105,16 @@ function startHostedReviewRevalidationLane(
   lane: HostedReviewRevalidationLane
 ): void {
   const startRequest = lane.pendingStartRequest
+
   if (!startRequest) {
     return
   }
+
   clearHostedReviewRevalidationTimer(lane)
   lane.pendingStartRequest = null
   const startedAt = Date.now()
   const promise = startRequest()
+
   if (lane.inFlight !== promise) {
     observeHostedReviewRevalidationPromise(requestKey, lane, promise, startedAt)
   }
@@ -111,9 +125,11 @@ export function supersedeHostedReviewRevalidation(
   request: { promise: Promise<HostedReviewInfo | null>; startedAt: number }
 ): void {
   const lane = hostedReviewRevalidationLanes.get(requestKey)
+
   if (!lane) {
     return
   }
+
   clearHostedReviewRevalidationTimer(lane)
   lane.pendingStartRequest = null
   observeHostedReviewRevalidationPromise(requestKey, lane, request.promise, request.startedAt)
@@ -130,9 +146,12 @@ export function queueHostedReviewRevalidation(
 ): void {
   if (inflightRequest?.force) {
     supersedeHostedReviewRevalidation(requestKey, inflightRequest)
+
     return
   }
+
   let lane = hostedReviewRevalidationLanes.get(requestKey)
+
   if (!lane) {
     lane = {
       inFlight: null,
@@ -143,7 +162,9 @@ export function queueHostedReviewRevalidation(
     }
     hostedReviewRevalidationLanes.set(requestKey, lane)
   }
+
   lane.pendingStartRequest = startRequest
+
   if (!lane.inFlight && inflightRequest) {
     observeHostedReviewRevalidationPromise(
       requestKey,
@@ -151,8 +172,10 @@ export function queueHostedReviewRevalidation(
       inflightRequest.promise,
       inflightRequest.startedAt
     )
+
     return
   }
+
   scheduleHostedReviewRevalidationLane(requestKey, lane)
 }
 
@@ -165,9 +188,11 @@ export function _getHostedReviewRequestGenerationCountForTest(): number {
 export function _clearHostedReviewRequestGenerationsForTest(): void {
   hostedReviewRequestGenerations.clear()
   inflightHostedReviewRequests.clear()
+
   for (const lane of hostedReviewRevalidationLanes.values()) {
     clearHostedReviewRevalidationTimer(lane)
   }
+
   hostedReviewRevalidationLanes.clear()
 }
 

@@ -9,7 +9,9 @@ import {
 } from './mobile-endpoint-supervisor-test-fakes'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+
 vi.mock('expo-secure-store', () => ({ WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'when-unlocked' }))
+
 vi.mock('expo-crypto', () => ({ getRandomBytes: (length: number) => new Uint8Array(length) }))
 
 describe('mobile endpoint supervisor direct probe', () => {

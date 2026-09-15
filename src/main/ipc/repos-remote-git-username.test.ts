@@ -4,28 +4,38 @@ import type * as RepoModule from '../git/repo'
 
 const { reposMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./repos-remote-test-harness')
+
   return { reposMocks: moduleMocks.createReposIpcMocks(), moduleMocks }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(reposMocks))
+
 vi.mock('../git/repo', async (importOriginal) =>
   moduleMocks.gitRepoModuleMock(await importOriginal<typeof RepoModule>())
 )
+
 vi.mock('../git/runner', async (importOriginal) =>
   moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
 )
+
 vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
+
 vi.mock('./registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
+
 vi.mock('../worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
+
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(reposMocks))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () =>
   moduleMocks.sshFilesystemDispatchModuleMock(reposMocks)
 )
+
 vi.mock('./ssh', () => moduleMocks.sshModuleMock(reposMocks))
+
 vi.mock('../ssh/ssh-target-registry', () => moduleMocks.sshModuleMock(reposMocks))
 
 import { registerRepoHandlers } from './repos'
@@ -70,11 +80,14 @@ describe('repos:getGitUsername', () => {
           'user.email': 'remote-user@example.com',
           'user.name': 'Remote User'
         }
+
         const value = valueByKey[args[2]]
+
         if (value) {
           return { stdout: `${value}\n`, stderr: '' }
         }
       }
+
       throw new Error(`unexpected git args: ${args.join(' ')}`)
     })
 

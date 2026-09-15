@@ -59,28 +59,40 @@ export class RelayFilesystemWatchRegistry {
 
   watch(rootPath: string, context?: RequestContext, watchId?: number): Promise<void> {
     const rootKey = normalizeRuntimePathForComparison(rootPath)
+
     if (this.removalFence.isActive(rootKey)) {
       return Promise.reject(new Error('Remote worktree deletion already in progress'))
     }
+
     const existing = this.watches.get(rootKey)
+
     if (existing) {
       const hasLiveClient = [...existing.clients.values()].some((isStale) => !isStale())
+
       if (hasLiveClient) {
         const clientId = context?.clientId ?? 0
         existing.clients.set(clientId, context?.isStale ?? (() => false))
+
         if (watchId !== undefined) {
           existing.clientWatchIds.set(clientId, watchId)
         }
+
         return this.awaitSetupForClient(existing, clientId, context)
       }
+
       void this.closeWatch(existing).catch(() => {})
     }
+
     const pendingSetup = this.pendingSetups.get(rootKey)
+
     if (pendingSetup) {
       const retry = (): Promise<void> => this.watch(rootPath, context, watchId)
+
       return joinRelayWatcherPendingSetup(pendingSetup, context?.signal, retry)
     }
+
     const setup = this.installWatch(rootKey, rootPath, context, watchId)
+
     return trackRelayWatcherSetup(this.pendingSetups, rootKey, setup)
   }
 
@@ -93,26 +105,36 @@ export class RelayFilesystemWatchRegistry {
     const staleTeardown = releaseStaleRelayWatches(this.watches.values(), (state) =>
       this.closeWatch(state)
     )
+
     if (staleTeardown) {
       await staleTeardown
     }
+
     const rootTeardown = this.teardownTracker.join(rootKey)
+
     if (rootTeardown) {
       await rootTeardown
     }
+
     const capacityRelease = this.capacityGate.release(rootKey, context?.signal)
+
     if (capacityRelease) {
       await capacityRelease
     }
+
     const clientId = context?.clientId ?? 0
     const isStale = context?.isStale ?? (() => false)
     const existing = this.watches.get(rootKey)
+
     if (existing) {
       existing.clients.set(clientId, isStale)
+
       if (watchId !== undefined) {
         existing.clientWatchIds.set(clientId, watchId)
       }
+
       await this.awaitSetupForClient(existing, clientId, context)
+
       return
     }
 
@@ -127,11 +149,15 @@ export class RelayFilesystemWatchRegistry {
   unwatch(rootPath: string, context?: RequestContext): void {
     const rootKey = normalizeRuntimePathForComparison(rootPath)
     const state = this.watches.get(rootKey)
+
     if (state) {
       this.releaseWatchClient(state, context?.clientId ?? 0)
+
       return
     }
+
     const setup = this.pendingSetups.get(rootKey)
+
     if (setup) {
       // Why: notification teardown must not disappear before async setup publishes ownership.
       void setup.promise.then(() => this.unwatch(rootPath, context)).catch(() => {})
@@ -141,30 +167,40 @@ export class RelayFilesystemWatchRegistry {
   async unwatchAndWait(rootPath: string, context?: RequestContext): Promise<void> {
     const rootKey = normalizeRuntimePathForComparison(rootPath)
     let state = this.watches.get(rootKey)
+
     if (!state) {
       await this.pendingSetups.get(rootKey)?.promise.catch(() => undefined)
       state = this.watches.get(rootKey)
     }
+
     if (!state) {
       const failed = this.teardownTracker.failedState(rootKey)
+
       if (failed) {
         await this.closeWatch(failed)
+
         return
       }
+
       await this.teardownTracker.join(rootKey)
+
       return
     }
+
     const clientId = context?.clientId ?? 0
+
     for (const [registeredClientId, isStale] of state.clients) {
       if (registeredClientId !== clientId && isStale()) {
         state.clients.delete(registeredClientId)
         state.clientWatchIds.delete(registeredClientId)
       }
     }
+
     if ([...state.clients.keys()].some((registeredClientId) => registeredClientId !== clientId)) {
       // Why: destructive cleanup cannot acknowledge while another client owns the handle.
       throw new Error('Remote path is still watched by another client')
     }
+
     state.clients.delete(clientId)
     state.clientWatchIds.delete(clientId)
     await this.closeWatch(state)
@@ -195,12 +231,14 @@ export class RelayFilesystemWatchRegistry {
         try {
           await this.subscribeState(state)
           emitRelayWatcherOverflow(this.dispatcher, state.rootPath, state.closed)
+
           return
         } catch (quarantineError) {
           void this.closeWatch(state).catch(() => {})
           throw quarantineError
         }
       }
+
       void this.closeWatch(state).catch(() => {})
       throw firstError
     }
@@ -208,11 +246,13 @@ export class RelayFilesystemWatchRegistry {
 
   private subscribeState(state: RelayWatcherTeardownState): Promise<void> {
     const generation = ++state.generation
+
     const emitOverflow = (): void => {
       if (state.generation === generation) {
         emitRelayWatcherOverflow(this.dispatcher, state.rootPath, state.closed)
       }
     }
+
     return this.watcherPool
       .subscribe(
         state.rootPath,
@@ -220,13 +260,16 @@ export class RelayFilesystemWatchRegistry {
           if (state.closed || state.generation !== generation) {
             return
           }
+
           if (error) {
             process.stderr.write(
               `[relay] File watcher error for ${state.rootPath}: ${error.message}\n`
             )
             emitOverflow()
+
             return
           }
+
           emitRelayWatcherEvents(this.dispatcher, state.rootPath, state.closed, events)
         },
         RELAY_WATCH_OPTIONS,
@@ -246,8 +289,10 @@ export class RelayFilesystemWatchRegistry {
           this.watches.get(state.rootKey) !== state
         ) {
           await subscription.unsubscribe()
+
           return
         }
+
         state.subscription = subscription
       })
   }
@@ -260,6 +305,7 @@ export class RelayFilesystemWatchRegistry {
     if (state.closed || state.generation !== failedGeneration) {
       return
     }
+
     state.subscription = null
     emitRelayWatcherOverflow(this.dispatcher, state.rootPath, state.closed)
     const recovery = this.subscribeState(state)
@@ -285,16 +331,20 @@ export class RelayFilesystemWatchRegistry {
       await awaitRelayWatcherSetup(state.setupWaiters, context?.signal)
     } catch (error) {
       this.releaseWatchClient(state, clientId)
+
       const expectedAbort =
         (error instanceof Error && error.name === 'AbortError') ||
         (isWatcherProcessFailure(error) && error.code === 'subscribe_aborted')
+
       if (expectedAbort) {
         return
       }
+
       const message = error instanceof Error ? error.message : String(error)
       process.stderr.write(`[relay] File watcher not available for ${state.rootPath}: ${message}\n`)
       throw error
     }
+
     if (context?.isStale()) {
       this.releaseWatchClient(state, clientId)
     }
@@ -307,6 +357,7 @@ export class RelayFilesystemWatchRegistry {
   private releaseWatchClient(state: RelayWatcherTeardownState, clientId: number): void {
     state.clients.delete(clientId)
     state.clientWatchIds.delete(clientId)
+
     if (!state.closed && state.clients.size === 0) {
       void this.closeWatch(state).catch(() => {})
     }

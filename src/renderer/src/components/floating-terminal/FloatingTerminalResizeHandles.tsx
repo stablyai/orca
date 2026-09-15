@@ -44,6 +44,7 @@ export function FloatingTerminalResizeHandles({
       if (event.button !== 0) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       resizeRef.current = {
@@ -59,47 +60,61 @@ export function FloatingTerminalResizeHandles({
 
   const handleResizeMove = (event: React.PointerEvent<HTMLDivElement>): void => {
     const resize = resizeRef.current
+
     if (!resize || resize.pointerId !== event.pointerId) {
       return
     }
+
     const dx = event.clientX - resize.startX
     const dy = event.clientY - resize.startY
+
     if (dx === 0 && dy === 0) {
       return
     }
+
     const next = { ...resize.bounds }
+
     if (resize.edge.includes('e')) {
       next.width = resize.bounds.width + dx
     }
+
     if (resize.edge.includes('s')) {
       next.height = resize.bounds.height + dy
     }
+
     if (resize.edge.includes('w')) {
       next.left = resize.bounds.left + dx
       next.width = resize.bounds.width - dx
     }
+
     if (resize.edge.includes('n')) {
       next.top = resize.bounds.top + dy
       next.height = resize.bounds.height - dy
     }
+
     if (next.width < MIN_PANEL_WIDTH && resize.edge.includes('w')) {
       next.left = resize.bounds.left + resize.bounds.width - MIN_PANEL_WIDTH
     }
+
     if (next.height < MIN_PANEL_HEIGHT && resize.edge.includes('n')) {
       next.top = resize.bounds.top + resize.bounds.height - MIN_PANEL_HEIGHT
     }
+
     resize.moved = true
     onPreviewBounds(next)
   }
 
   const handleResizeEnd = (event: React.PointerEvent<HTMLDivElement>): void => {
     const resize = resizeRef.current
+
     if (!resize || resize.pointerId !== event.pointerId) {
       return
     }
+
     if (resize.moved) {
       onCommitBounds()
     }
+
     resizeRef.current = null
   }
 

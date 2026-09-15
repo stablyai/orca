@@ -21,6 +21,7 @@ import {
 } from './local-worktree-metadata-scan-expectation'
 
 export { captureNativeLocalWorktreeMetadataScanExpectation } from './local-worktree-metadata-scan-expectation'
+
 export type {
   LocalWorktreeMetadataPruneExpectation,
   NativeLocalWorktreeMetadataScanExpectation
@@ -35,11 +36,13 @@ function collectPersistedWorkspaceOwners(
   addPersistedSessionWorktreeOwners(state, collector)
   const add = collector.addOwner
   add(state.ui.lastActiveWorktreeId)
+
   for (const selections of Object.values(state.mobileClientTabSelectionsByDeviceId ?? {})) {
     for (const worktreeId of Object.keys(selections)) {
       add(worktreeId)
     }
   }
+
   for (const lease of state.sshRemotePtyLeases) {
     // A lease that can never be reattached is a routing tombstone, not a claim on a workspace:
     // `terminated` is the operator close, and an `expired` row marked `supersededBy` /
@@ -48,21 +51,26 @@ function collectPersistedWorkspaceOwners(
     if (!sshRemotePtyLeaseAllowsReattach(lease)) {
       continue
     }
+
     add(lease.worktreeId)
   }
+
   for (const entry of state.migrationUnsupportedPtyEntries) {
     add(entry.worktreeId)
   }
+
   for (const automation of state.automations) {
     if (automation.enabled && automation.workspaceMode === 'existing') {
       add(automation.workspaceId)
     }
   }
+
   for (const run of state.automationRuns) {
     if (!isFinalAutomationRunStatus(run.status)) {
       add(run.workspaceId)
     }
   }
+
   return collector.owners
 }
 
@@ -72,6 +80,7 @@ function repoStillMatches(
 ): boolean {
   const owners = state.repos.filter((repo) => repo.id === expected.id)
   const current = owners[0]
+
   return Boolean(
     owners.length === 1 &&
     current &&
@@ -93,6 +102,7 @@ function routingStillMatches(
   const currentProject = state.projects.find((project) =>
     project.sourceRepoIds.includes(expected.repo.id)
   )
+
   return (
     currentProject === expected.routing.expectedProject &&
     currentProject?.updatedAt === expected.routing.expectedProjectUpdatedAt &&
@@ -106,6 +116,7 @@ function isValidCandidateId(
   platform: NodeJS.Platform
 ): boolean {
   const parsed = splitWorktreeId(worktreeId)
+
   return Boolean(
     parsed?.repoId === repoId &&
     parsed.worktreePath.length > 0 &&
@@ -136,11 +147,14 @@ export function selectProbeableLocalWorktreeMetadataCandidates(
   platform = process.platform
 ): readonly LocalWorktreeMetadataPruneExpectation[] {
   const candidateIds = new Set(scan.metadata.map(({ worktreeId }) => worktreeId))
+
   if (candidateIds.size === 0) {
     return scan.metadata
   }
+
   const sessionOwners = collectPersistedWorkspaceOwners(state, candidateIds, platform)
   const aliasesByWorktreeId = indexMetadataAliasesForWorktreeIds(state, candidateIds)
+
   return scan.metadata.filter(
     ({ worktreeId }) =>
       isValidCandidateId(scan.repo.id, worktreeId, platform) &&
@@ -172,8 +186,10 @@ export function pruneSessionlessMissingLocalWorktreeMetadataForRepo(
   const aliasesByWorktreeId = indexMetadataAliasesForWorktreeIds(state, candidateIds)
   const removedIdentityKeys = new Set<string>()
   const removedIds: string[] = []
+
   for (const expectation of missingMetadata) {
     const { worktreeId } = expectation
+
     if (
       !isValidCandidateId(scan.repo.id, worktreeId, platform) ||
       sessionOwners.has(worktreeId) ||
@@ -186,13 +202,16 @@ export function pruneSessionlessMissingLocalWorktreeMetadataForRepo(
     ) {
       continue
     }
+
     delete state.worktreeLineageById[worktreeId]
     delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
     removedIds.push(worktreeId)
   }
+
   if (removedIds.length > 0) {
     // Why: a global sweep could delete unrelated unaliased rows from another repo or host.
     pruneUnreferencedWorktreeIdentityMeta(state, removedIdentityKeys)
   }
+
   return removedIds
 }

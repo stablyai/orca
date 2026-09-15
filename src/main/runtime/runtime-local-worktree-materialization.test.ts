@@ -13,9 +13,11 @@ vi.mock('../ipc/worktree-symlinks', () => ({
   createWorktreeLinkedPaths: mocks.createWorktreeLinkedPaths,
   createWorktreeSharedPaths: mocks.createWorktreeSharedPaths
 }))
+
 vi.mock('../git/worktree-include-file', () => ({
   resolveWorktreeIncludePaths: mocks.resolveWorktreeIncludePaths
 }))
+
 vi.mock('../git/worktree-shared-directories', () => ({
   resolveWorktreeSharedDirectories: mocks.resolveWorktreeSharedDirectories
 }))
@@ -29,6 +31,7 @@ describe('materializeRuntimeLocalWorktree', () => {
       order.push('filesystem')
       throw new Error('link failed')
     })
+
     const store = {
       getProjectHostSetups: () => [],
       setWorktreeMeta: vi.fn((_id, updates) => ({ ...updates, hostId: 'local' }))
@@ -64,6 +67,7 @@ describe('materializeRuntimeLocalWorktree', () => {
         localWorktreeGitOptions: {},
         onMetadataPersisted: () => {
           order.push('metadata')
+
           return null
         }
       } as never)

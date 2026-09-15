@@ -22,8 +22,11 @@ const remoteRepo: Repo = {
 }
 
 const reposList = vi.fn()
+
 const promotionWorktreeId = 'local-repo::/local'
+
 const promotionTabId = 'restored-tab'
+
 const promotionPtyId = 'original-daemon-pty'
 
 function makePromotionSession(): WorkspaceSessionState {
@@ -73,9 +76,11 @@ describe('repos slice stale-fetch race (#7020)', () => {
   it('drops a stale repos fetch that resolves after a newer one', async () => {
     const store = createTestStore()
     let resolveStale!: (repos: Repo[]) => void
+
     const stalePromise = new Promise<Repo[]>((resolve) => {
       resolveStale = resolve
     })
+
     // Why: mirrors the delete-project-group burst — the first fetch reads
     // pre-removal state (both repos) but resolves LAST; the second reads
     // post-removal state (remoteRepo gone) and resolves first.
@@ -95,9 +100,11 @@ describe('repos slice stale-fetch race (#7020)', () => {
   it('a superseding fetch that later rejects still blocks the older stale fetch', async () => {
     const store = createTestStore()
     let resolveStale!: (repos: Repo[]) => void
+
     const stalePromise = new Promise<Repo[]>((resolve) => {
       resolveStale = resolve
     })
+
     // The stale fetch reads pre-removal state and resolves LAST; the superseding
     // fetch reads post-removal state but REJECTS. Because the generation is
     // claimed synchronously before the await, the failed fetch still supersedes
@@ -132,12 +139,15 @@ describe('repos slice stale-fetch race (#7020)', () => {
   it('waits for the superseding catalog fetch before startup hydration', async () => {
     let resolveStartup!: (repos: Repo[]) => void
     let resolveRefresh!: (repos: Repo[]) => void
+
     const startupRepos = new Promise<Repo[]>((resolve) => {
       resolveStartup = resolve
     })
+
     const refreshedRepos = new Promise<Repo[]>((resolve) => {
       resolveRefresh = resolve
     })
+
     reposList.mockReturnValueOnce(startupRepos).mockReturnValueOnce(refreshedRepos)
     const store = createTestStore()
 
@@ -147,12 +157,14 @@ describe('repos slice stale-fetch race (#7020)', () => {
     await startup
 
     let settled = false
+
     const settlement = store
       .getState()
       .awaitLocalRepoCatalogSettlement()
       .then(() => {
         settled = true
       })
+
     await Promise.resolve()
     expect(settled).toBe(false)
 
@@ -173,9 +185,11 @@ describe('repos slice stale-fetch race (#7020)', () => {
 
   it('waits for a refresh started after initial settlement before startup hydration', async () => {
     let resolveRefresh!: (repos: Repo[]) => void
+
     const refreshedRepos = new Promise<Repo[]>((resolve) => {
       resolveRefresh = resolve
     })
+
     reposList.mockResolvedValueOnce([localRepo]).mockReturnValueOnce(refreshedRepos)
     const store = createTestStore()
 
@@ -183,6 +197,7 @@ describe('repos slice stale-fetch race (#7020)', () => {
     await store.getState().awaitLocalRepoCatalogSettlement()
     const refresh = store.getState().fetchRepos()
     let hydrated = false
+
     const hydration = (async () => {
       await store.getState().awaitLocalRepoCatalogSettlement()
       store.getState().hydrateWorkspaceSession(makePromotionSession())
@@ -200,9 +215,11 @@ describe('repos slice stale-fetch race (#7020)', () => {
 
   it('rejects startup settlement when the superseding local catalog fails', async () => {
     let resolveStartup!: (repos: Repo[]) => void
+
     const startupRepos = new Promise<Repo[]>((resolve) => {
       resolveStartup = resolve
     })
+
     reposList.mockReturnValueOnce(startupRepos).mockRejectedValueOnce(new Error('catalog failed'))
     const store = createTestStore()
 
@@ -215,6 +232,7 @@ describe('repos slice stale-fetch race (#7020)', () => {
       await store.getState().awaitLocalRepoCatalogSettlement()
       store.getState().hydrateWorkspaceSession(makePromotionSession())
     }
+
     await expect(hydration()).rejects.toThrow('catalog failed')
     expect(store.getState().tabsByWorktree).toEqual({})
     expect(store.getState().terminalLayoutsByTabId).toEqual({})

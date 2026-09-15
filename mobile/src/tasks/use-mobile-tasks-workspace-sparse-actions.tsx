@@ -33,6 +33,7 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
     workspaceSparsePresetsLoaded,
     workspaceSparsePresetsLoading
   } = model
+
   const startNewWorkspaceSparsePreset = useCallback(() => {
     if (
       !workspaceSparseCheckoutAvailable ||
@@ -41,6 +42,7 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
     ) {
       return
     }
+
     setWorkspaceSparseDraft({ mode: 'new', name: '', directoriesText: '' })
     setShowWorkspaceSparsePicker(false)
   }, [
@@ -58,6 +60,7 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
       ) {
         return
       }
+
       setWorkspaceSparseDraft({
         mode: 'edit',
         presetId: preset.id,
@@ -80,8 +83,10 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
     ) {
       return
     }
+
     setWorkspaceSparseSaving(true)
     setWorkspaceSparsePresetsError('')
+
     try {
       const reply = await repoSparsePresetSaveRun.request(client, {
         repo: `id:${workspaceCreateTargetRepo.id}`,
@@ -89,19 +94,25 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
         name: workspaceSparseDraftName,
         directories: workspaceSparseDraftParsed.directories
       })
+
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
       const saved = repoSparsePresetSaveRun.interpret(reply) as SparsePreset | undefined
+
       if (!saved) {
         throw new Error('Failed to save sparse preset.')
       }
+
       setWorkspaceSparsePresets((current) => {
         const withoutSaved = current.filter((preset) => preset.id !== saved.id)
+
         return sortSparsePresetsByName([...withoutSaved, saved])
       })
       setWorkspaceSparsePresetsLoaded(true)
+
       if (workspaceSparseDraft.mode === 'new' || workspaceSparsePresetId === saved.id) {
         setWorkspaceSparsePresetId(saved.id)
       }
+
       setWorkspaceSparseDraft(null)
     } catch (err) {
       setWorkspaceSparsePresetsError(
@@ -125,6 +136,7 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
     if (!tasksSupported || !client || !workspaceCreateDraft || !workspaceCreateTargetConnectionId) {
       setWorkspaceSshState(null)
       setWorkspaceSshConnecting(false)
+
       return
     }
 
@@ -135,9 +147,11 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
         if (stale) {
           return
         }
+
         const state =
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
           (sshRepoStateRead.interpret(reply) as SshConnectionState | null | undefined) ?? null
+
         setWorkspaceSshState(
           state ?? {
             targetId: workspaceCreateTargetConnectionId,
@@ -162,6 +176,7 @@ export function useMobileTasksWorkspaceSparseActions(model: WorkspaceSourceEffec
       stale = true
     }
   }, [client, tasksSupported, workspaceCreateDraft, workspaceCreateTargetConnectionId])
+
   return Object.assign(model, {
     startNewWorkspaceSparsePreset,
     startEditWorkspaceSparsePreset,

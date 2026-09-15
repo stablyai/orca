@@ -21,7 +21,9 @@ function limitSection(value: string, maxChars: number): string {
   if (value.length <= maxChars) {
     return value
   }
+
   const omitted = value.length - maxChars
+
   return `${value.slice(0, maxChars)}\n\n[truncated: ${omitted} characters omitted]`
 }
 
@@ -34,6 +36,7 @@ export function buildCommitMessagePrompt(
   const patch = context.stagedPatch.trim()
     ? truncateDiffForPrompt(context.stagedPatch)
     : '(diff omitted — too large to read; infer the change from the staged file list above)'
+
   const base = [
     'You are generating a single git commit message.',
     'Return only the commit message text. Do not include a preamble, quotes, or code fences.',
@@ -57,9 +60,11 @@ export function buildCommitMessagePrompt(
   ].join('\n')
 
   const trimmedPrompt = customPrompt.trim()
+
   if (!trimmedPrompt) {
     return base
   }
+
   return [base, '', 'Additional user prompt:', limitSection(trimmedPrompt, 4_000)].join('\n')
 }
 
@@ -70,6 +75,7 @@ export function splitGeneratedCommitMessage(message: string): GeneratedCommitMes
   const subject = subjectLine.trim().replace(/[.]+$/g, '').slice(0, 72).trimEnd()
   const body = firstNewline === -1 ? '' : normalized.slice(firstNewline + 1).trim()
   const safeSubject = subject.length > 0 ? subject : 'Update project files'
+
   return {
     subject: safeSubject,
     body,

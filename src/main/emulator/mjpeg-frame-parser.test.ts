@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { extractJpegFrames } from './mjpeg-frame-parser'
 
 const JPEG_A = Buffer.from([0xff, 0xd8, 0x01, 0x02, 0xff, 0xd9])
+
 const JPEG_B = Buffer.from([0xff, 0xd8, 0x03, 0x04, 0xff, 0xd9])
 
 describe('extractJpegFrames', () => {

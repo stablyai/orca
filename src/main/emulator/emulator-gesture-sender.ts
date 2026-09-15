@@ -14,12 +14,14 @@ export async function sendEmulatorGestureSequence(
     const ws = new WebSocket(wsUrl)
     let index = 0
     let timer: NodeJS.Timeout | null = null
+
     const cleanup = (): void => {
       if (timer) {
         clearTimeout(timer)
         timer = null
       }
     }
+
     const sendNext = (): void => {
       if (index >= points.length) {
         cleanup()
@@ -27,12 +29,15 @@ export async function sendEmulatorGestureSequence(
           ws.close()
           resolve()
         }, 50)
+
         return
       }
+
       const point = points[index++]
       ws.send(Buffer.from(encodeServeSimTouchFrame(point)))
       timer = setTimeout(sendNext, 16)
     }
+
     ws.on('open', sendNext)
     ws.on('error', (error) => {
       cleanup()
@@ -40,6 +45,7 @@ export async function sendEmulatorGestureSequence(
     })
     ws.on('close', () => {
       cleanup()
+
       if (index < points.length) {
         reject(new Error('Emulator gesture stream closed before all points were sent'))
       }

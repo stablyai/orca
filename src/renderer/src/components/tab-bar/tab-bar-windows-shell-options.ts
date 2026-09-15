@@ -26,9 +26,11 @@ export function buildWindowsShellMenuEntries({
   if (!showWindowsShellMenu || !hasShellLauncher) {
     return undefined
   }
+
   const includeHostShells = projectRuntimeShellMenuMode !== 'wsl'
   const includeWslShell = projectRuntimeShellMenuMode !== 'host'
   const allShells: WindowsShellMenuEntry[] = []
+
   if (includeHostShells) {
     allShells.push(
       {
@@ -40,6 +42,7 @@ export function buildWindowsShellMenuEntries({
         shell: 'cmd.exe'
       }
     )
+
     if (gitBashAvailable) {
       allShells.push({
         label: translate('auto.components.tab.bar.TabBar.efb33546ff', 'Git Bash'),
@@ -47,17 +50,21 @@ export function buildWindowsShellMenuEntries({
       })
     }
   }
+
   if (includeWslShell && wslAvailable) {
     allShells.push({
       label: translate('auto.components.tab.bar.TabBar.d1afac112b', 'WSL'),
       shell: 'wsl.exe'
     })
   }
+
   if (allShells.length === 0) {
     return undefined
   }
+
   const defaultEntry =
     allShells.find((shell) => shell.shell === defaultWindowsShell) ?? allShells[0]
+
   return [defaultEntry, ...allShells.filter((shell) => shell.shell !== defaultEntry.shell)].map(
     (entry) => ({ label: entry.label, shell: entry.shell })
   )

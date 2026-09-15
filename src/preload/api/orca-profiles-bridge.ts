@@ -8,6 +8,7 @@ export const orcaProfilesApi = {
   onAuthStatusChanged: (callback: () => void): (() => void) => {
     const listener = (): void => callback()
     ipcRenderer.on(ORCA_PROFILE_AUTH_STATUS_CHANGED_CHANNEL, listener)
+
     return () => ipcRenderer.removeListener(ORCA_PROFILE_AUTH_STATUS_CHANGED_CHANNEL, listener)
   },
   createLocal: (args) => ipcRenderer.invoke('orcaProfiles:createLocal', args),

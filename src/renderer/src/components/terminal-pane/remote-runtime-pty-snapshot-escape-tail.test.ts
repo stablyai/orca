@@ -19,6 +19,7 @@ describe('remote transport snapshot escape-tail threading (#7329)', () => {
   const runtimeCall = vi.fn()
   const runtimeSubscribe = vi.fn()
   const subscriptionSendBinary = vi.fn()
+
   let subscriptionCallbacks: {
     onResponse: (response: unknown) => void
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
@@ -46,6 +47,7 @@ describe('remote transport snapshot escape-tail threading (#7329)', () => {
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
@@ -58,11 +60,13 @@ describe('remote transport snapshot escape-tail threading (#7329)', () => {
 
   it('delivers the SnapshotStart pendingEscapeTailAnsi to onReplayData meta', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId: 'pane:1'
     })
+
     const onReplayData = vi.fn()
     transport.attach({
       existingPtyId: 'remote:env-1@@terminal-1',
@@ -79,9 +83,11 @@ describe('remote transport snapshot escape-tail threading (#7329)', () => {
     await expect
       .poll(() => subscriptionSendBinary.mock.calls.length, { timeout: 5000 })
       .toBeGreaterThan(0)
+
     const subscribeFrame = subscriptionSendBinary.mock.calls
       .map((call) => decodeTerminalStreamFrame(call[0] as Uint8Array))
       .find((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe)
+
     expect(subscribeFrame).toBeDefined()
     const subscribePayload = decodeTerminalStreamJson<{ streamId: number }>(subscribeFrame!.payload)
     const streamId = subscribePayload!.streamId
@@ -115,6 +121,7 @@ describe('remote transport snapshot escape-tail threading (#7329)', () => {
         payload: new Uint8Array(0)
       })
     ]
+
     for (const frame of frames) {
       subscriptionCallbacks?.onBinary?.(frame)
     }

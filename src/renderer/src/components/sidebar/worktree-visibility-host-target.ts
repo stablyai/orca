@@ -14,11 +14,14 @@ export function resolveWorktreeVisibilityHostTarget(
 ) {
   const requestedHostId =
     typeof modalHostId === 'string' ? parseExecutionHostId(modalHostId)?.id : undefined
+
   const repo = findRepoForHost(state.repos, repoId, {
     hostId: requestedHostId,
     settings: state.settings
   })
+
   const detectedForRepo = repoId ? state.detectedWorktreesByRepo[repoId] : undefined
+
   const detected =
     detectedForRepo && repo && requestedHostId
       ? {
@@ -28,7 +31,9 @@ export function resolveWorktreeVisibilityHostTarget(
           )
         }
       : detectedForRepo
+
   const scope = repo ? getRepoHostIdentity(repo) : `${requestedHostId ?? ''}\0${repoId}`
+
   return { detected, repo, requestedHostId, scope }
 }
 
@@ -45,6 +50,7 @@ export function useWorktreeVisibilityHostActions(
       }),
     [fetchWorktrees, requestedHostId]
   )
+
   const updateTargetRepo = useCallback(
     (repoId: string, updates: Parameters<AppState['updateRepo']>[1]) =>
       requestedHostId
@@ -52,5 +58,6 @@ export function useWorktreeVisibilityHostActions(
         : updateRepo(repoId, updates),
     [requestedHostId, updateRepo]
   )
+
   return { refreshTargetRepo, updateTargetRepo }
 }

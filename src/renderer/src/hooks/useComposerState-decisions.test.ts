@@ -82,6 +82,7 @@ describe('useComposerState public decisions', () => {
       title: 'Fix it',
       url: 'https://github.com/orca/orca/issues/42'
     }
+
     const context = {
       kind: 'task-source' as const,
       provider: 'jira' as const,
@@ -89,6 +90,7 @@ describe('useComposerState public decisions', () => {
       hostId: 'local' as const,
       providerIdentity: null
     }
+
     expect(getMatchingLinkedTaskSourceContext(linkedItem, context)).toBeNull()
   })
 })

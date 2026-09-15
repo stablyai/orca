@@ -1,4 +1,5 @@
 const DEFAULT_COLS = 80
+
 const DEFAULT_ROWS = 24
 
 export function isValidPtySize(cols: number, rows: number): boolean {
@@ -9,5 +10,6 @@ export function normalizePtySize(cols: number, rows: number): { cols: number; ro
   if (isValidPtySize(cols, rows)) {
     return { cols, rows }
   }
+
   return { cols: DEFAULT_COLS, rows: DEFAULT_ROWS }
 }

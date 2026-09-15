@@ -25,20 +25,27 @@ export function activateSimulatorTabPaletteResult({
   worktreeId
 }: SimulatorTabPaletteActivationTarget): SimulatorTabPaletteActivationResult {
   const initialState = useAppStore.getState()
+
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(
     getPaletteOwnershipWorktreeIds(initialState)
   )
+
   if (!executionHostId && ambiguousWorktreeIds.has(worktreeId)) {
     return { status: 'failed', reason: 'missing-worktree' }
   }
+
   const worktree = initialState.getKnownWorktreeById(worktreeId, executionHostId)
+
   if (!worktree) {
     return { status: 'failed', reason: 'missing-worktree' }
   }
+
   const tabs = (initialState.unifiedTabsByWorktree[worktreeId] ?? []).filter(
     (candidate) => candidate.id === tabId
   )
+
   const tab = tabs[0]
+
   if (
     tabs.length !== 1 ||
     tab.contentType !== 'simulator' ||
@@ -48,10 +55,12 @@ export function activateSimulatorTabPaletteResult({
   }
 
   const targetHostId = executionHostId ?? worktree.hostId
+
   const activated = activateAndRevealWorktree(
     worktree.id,
     targetHostId ? { executionHostId: targetHostId } : {}
   )
+
   if (!activated) {
     return { status: 'failed', reason: 'missing-worktree' }
   }
@@ -61,5 +70,6 @@ export function activateSimulatorTabPaletteResult({
   state.activateTab(tab.id, { worktreeId })
   state.setActiveTab(tab.id)
   state.setActiveTabType('simulator')
+
   return { status: 'activated', tabId: tab.id }
 }

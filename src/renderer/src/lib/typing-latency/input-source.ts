@@ -64,10 +64,13 @@ export function createInputSourceTally(): InputSourceTally {
     direct: emptySourceTally(),
     ime: emptySourceTally()
   }
+
   const imeCommitChars: number[] = []
+
   return {
     recordInput: (source, text) => {
       bySource[source].observedInputs += 1
+
       if (source === 'ime' && text.length > 0) {
         appendTypingLatencySample(imeCommitChars, Array.from(text).length)
       }
@@ -76,8 +79,10 @@ export function createInputSourceTally(): InputSourceTally {
       if (observation.attribution === 'single-input') {
         bySource[observation.source].exactInputs += 1
         appendExactLatencySample(bySource[observation.source].exact, observation)
+
         return
       }
+
       bySource.direct.ambiguousInputs += observation.sourceCounts.direct
       bySource.ime.ambiguousInputs += observation.sourceCounts.ime
     },

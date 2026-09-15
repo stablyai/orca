@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ runDelete: vi.fn(), runBatchDelete: vi.fn() }))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
+
 vi.mock('./delete-worktree-flow', () => ({
   runWorktreeDelete: mocks.runDelete,
   runWorktreeBatchDelete: mocks.runBatchDelete
@@ -18,6 +19,7 @@ describe('createWorktreeContextMenuDeleteIntent', () => {
   it('routes a same-id row through the host that owns the context menu', () => {
     const local = { id: 'shared', instanceId: 'local-instance', hostId: 'local' as const }
     const ssh = { id: 'shared', instanceId: 'ssh-instance', hostId: 'ssh:box' as const }
+
     const intent = createWorktreeContextMenuDeleteIntent({
       worktree: ssh,
       batchDeleteWorktrees: [local, ssh],
@@ -37,6 +39,7 @@ describe('createWorktreeContextMenuDeleteIntent', () => {
       { id: 'shared', instanceId: 'local-instance', hostId: 'local' as const },
       { id: 'shared', instanceId: 'ssh-instance', hostId: 'ssh:box' as const }
     ]
+
     const intent = createWorktreeContextMenuDeleteIntent({
       worktree: worktrees[1],
       batchDeleteWorktrees: worktrees,
@@ -80,10 +83,12 @@ describe('deferWorktreeContextMenuDeleteIntent', () => {
 
   it('dispatches the selected workspace identity after the menu event completes', () => {
     const defer = vi.fn<(callback: () => void) => void>()
+
     const intent = {
       kind: 'worktree' as const,
       worktree: { id: 'repo::/work/wt', instanceId: 'instance-1' }
     }
+
     const onDispatched = vi.fn()
 
     deferWorktreeContextMenuDeleteIntent(intent, onDispatched, defer)
@@ -118,6 +123,7 @@ describe('deferWorktreeContextMenuDeleteIntent', () => {
   it('dispatches on the next macrotask by default', () => {
     vi.useFakeTimers()
     vi.stubGlobal('window', { setTimeout })
+
     const intent = {
       kind: 'worktree' as const,
       worktree: { id: 'wt-1', instanceId: 'instance-1' }

@@ -26,10 +26,15 @@ type SelectorDependencies = {
 }
 
 const EMPTY_BROWSER_TABS: FloatingTerminalPanelInputs['browserTabs'] = []
+
 const EMPTY_EXPANDED_PANES: FloatingTerminalPanelInputs['expandedPaneByTabId'] = {}
+
 const EMPTY_FILES: FloatingTerminalPanelInputs['floatingFiles'] = []
+
 const EMPTY_GROUPS: FloatingTerminalPanelInputs['groups'] = []
+
 const EMPTY_TABS: FloatingTerminalPanelInputs['tabs'] = []
+
 const EMPTY_UNIFIED_TABS: FloatingTerminalPanelInputs['unifiedTabs'] = []
 
 function reuseArrayIfEqual<T>(previous: T[], next: T[]): T[] {
@@ -43,9 +48,11 @@ function reuseExpandedPanesIfEqual(
   next: Record<string, boolean>
 ): Record<string, boolean> {
   const nextKeys = Object.keys(next)
+
   if (Object.keys(previous).length !== nextKeys.length) {
     return next
   }
+
   return nextKeys.every((key) => previous[key] === next[key]) ? previous : next
 }
 
@@ -61,32 +68,41 @@ export function createFloatingTerminalPanelInputsSelector(
 
   return (state) => {
     const tabs = state.tabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_TABS
+
     const browserTabs =
       state.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_BROWSER_TABS
+
     const groups = state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_GROUPS
+
     const unifiedTabs =
       state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? EMPTY_UNIFIED_TABS
 
     if (state.openFiles !== openFilesSource) {
       const nextFloatingFiles = [] as AppState['openFiles']
+
       for (const file of state.openFiles) {
         dependencies.onOpenFileVisited?.(file.id)
+
         if (file.worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
           nextFloatingFiles.push(file)
         }
       }
+
       floatingFiles = reuseArrayIfEqual(floatingFiles, nextFloatingFiles)
       openFilesSource = state.openFiles
     }
 
     if (tabs !== expandedTabsSource || state.expandedPaneByTabId !== expandedPanesSource) {
       const nextExpandedPaneByTabId: Record<string, boolean> = {}
+
       for (const tab of tabs) {
         dependencies.onExpandedTabVisited?.(tab.id)
+
         if (state.expandedPaneByTabId[tab.id] === true) {
           nextExpandedPaneByTabId[tab.id] = true
         }
       }
+
       expandedPaneByTabId = reuseExpandedPanesIfEqual(expandedPaneByTabId, nextExpandedPaneByTabId)
       expandedTabsSource = tabs
       expandedPanesSource = state.expandedPaneByTabId
@@ -111,6 +127,7 @@ export function createFloatingTerminalPanelInputsSelector(
       tabs,
       unifiedTabs
     }
+
     return previous
   }
 }

@@ -133,6 +133,7 @@ export async function composeHangulSyllable(
   for (const frame of frames) {
     await dispatchImeProcessKey(session, frame.jamoKey)
     await setImeComposition(session, frame.preedit)
+
     if (pauseMs > 0) {
       await page.waitForTimeout(pauseMs)
     }
@@ -153,9 +154,11 @@ export async function composeHangulSyllable(
 export async function dispatchResumedCompositionUpdate(page: Page, data: string): Promise<void> {
   await page.evaluate((preedit: string) => {
     const textarea = document.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea:focus')
+
     if (!textarea) {
       throw new Error('xterm helper textarea is not focused')
     }
+
     textarea.dispatchEvent(
       new CompositionEvent('compositionupdate', {
         bubbles: true,

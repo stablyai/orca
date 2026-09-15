@@ -7,7 +7,9 @@ export class WorktreeWatcherFailureRefreshCooldown {
     if (this.refreshedAt !== null && now - this.refreshedAt < WATCHER_FAILURE_REFRESH_COOLDOWN_MS) {
       return false
     }
+
     this.refreshedAt = now
+
     return true
   }
 

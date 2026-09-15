@@ -17,9 +17,11 @@ export class CliPathRegistration extends CliCommandInstallation {
     }
 
     const result = await this.userPathReader()
+
     if (result.state === 'unknown') {
       return { configured: null, detail: result.detail }
     }
+
     return {
       configured: splitPathEntries('win32', result.value).some((entry) =>
         samePathEntry('win32', entry, pathDirectory, this.windowsEnvironment, result.expandable)
@@ -34,6 +36,7 @@ export class CliPathRegistration extends CliCommandInstallation {
     pathProbe: { configured: boolean | null; detail: string | null }
   ): CliInstallStatus {
     const { configured: pathConfigured } = pathProbe
+
     if (
       this.isWindowsPackagedBundledCommand(status.commandPath, status.launcherPath) &&
       status.state === 'installed' &&
@@ -90,6 +93,7 @@ export class CliPathRegistration extends CliCommandInstallation {
   protected async ensureWindowsPathEntry(pathDirectory: string): Promise<void> {
     const current = await this.readWindowsUserPathForMutation()
     const entries = splitPathEntries('win32', current.value)
+
     if (
       entries.some((entry) =>
         samePathEntry('win32', entry, pathDirectory, this.windowsEnvironment, current.expandable)
@@ -97,6 +101,7 @@ export class CliPathRegistration extends CliCommandInstallation {
     ) {
       return
     }
+
     entries.push(pathDirectory)
     await this.writeWindowsUserPathEntry(entries.join(';'), pathDirectory, 'add')
   }
@@ -105,15 +110,19 @@ export class CliPathRegistration extends CliCommandInstallation {
     if (this.platform !== 'win32') {
       return
     }
+
     const current = await this.readWindowsUserPathForMutation()
     const entries = splitPathEntries('win32', current.value)
+
     const nextEntries = entries.filter(
       (entry) =>
         !samePathEntry('win32', entry, pathDirectory, this.windowsEnvironment, current.expandable)
     )
+
     if (nextEntries.length === entries.length) {
       return
     }
+
     await this.writeWindowsUserPathEntry(nextEntries.join(';'), pathDirectory, 'remove')
   }
 
@@ -122,9 +131,11 @@ export class CliPathRegistration extends CliCommandInstallation {
     expandable: boolean
   }> {
     const result = await this.userPathMutationReader()
+
     if (result.state === 'success') {
       return { value: result.value, expandable: result.expandable }
     }
+
     // Why: PATH is read-modify-write; continuing after a failed read could clobber the user's PATH with a partial value.
     throw new Error(`${result.detail} No PATH changes were made.`)
   }
@@ -142,10 +153,12 @@ export class CliPathRegistration extends CliCommandInstallation {
       if (!isWindowsUserPathPermissionError(error)) {
         throw error
       }
+
       const guidance =
         action === 'add'
           ? `Add this folder to your PATH manually: ${pathDirectory}. Or run Orca as an administrator and try again.`
           : `Remove this folder from your PATH manually: ${pathDirectory}. Or run Orca as an administrator and try again.`
+
       throw new Error(
         `Windows blocked updating your user PATH (access denied). This usually means your PATH environment variable is managed by Group Policy or your organization's device management. ${guidance}`,
         { cause: error }

@@ -11,6 +11,7 @@ import { ORCHESTRATION_METHODS } from '../../orchestration'
 
 describe('orchestration new-worktree workers', () => {
   type CreateWorktreeResult = Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>
+
   const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
@@ -76,6 +77,7 @@ describe('orchestration new-worktree workers', () => {
 
   afterEach(() => {
     db.close()
+
     for (const path of paths.splice(0)) {
       rmSync(path, { recursive: true, force: true })
     }
@@ -83,12 +85,15 @@ describe('orchestration new-worktree workers', () => {
 
   async function startWorker(overrides: Record<string, unknown> = {}) {
     const task = db.createTask({ spec: 'new-worktree task', runId })
+
     const method = ORCHESTRATION_METHODS.find(
       (candidate) => candidate.name === 'orchestration.workerStart'
     )
+
     if (!method) {
       throw new Error('workerStart method is not registered')
     }
+
     const params = method.params!.parse({
       task: task.id,
       from: 'term_coord',
@@ -97,7 +102,9 @@ describe('orchestration new-worktree workers', () => {
       agent: 'codex',
       ...overrides
     })
+
     const result = await method.handler(params, { runtime })
+
     return { result, task }
   }
 
@@ -123,6 +130,7 @@ describe('orchestration new-worktree workers', () => {
           options?.terminals?.find((terminal) => terminal.title === 'Setup')?.handle
       }
     } as never)
+
     if (options?.terminals) {
       vi.mocked(runtime.listTerminals).mockResolvedValue({
         terminals: options.terminals,
@@ -195,9 +203,11 @@ describe('orchestration new-worktree workers', () => {
     } as never)
     const createWorktree = vi.spyOn(runtime, 'createManagedWorktree')
     const task = db.createTask({ spec: 'folder task', runId })
+
     const method = ORCHESTRATION_METHODS.find(
       (candidate) => candidate.name === 'orchestration.workerStart'
     )
+
     if (!method) {
       throw new Error('workerStart method is not registered')
     }
@@ -533,6 +543,7 @@ describe('orchestration new-worktree workers', () => {
         })
     )
     const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+
     const request: RpcRequest = {
       id: 'rpc_worker_start',
       authToken: 'caller-token',
@@ -600,6 +611,7 @@ describe('orchestration new-worktree workers', () => {
     )
     const task = db.createTask({ spec: 'recover dispatch input', runId })
     const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+
     const request: RpcRequest = {
       id: 'rpc_worker_start',
       authToken: 'caller-token',
@@ -616,13 +628,16 @@ describe('orchestration new-worktree workers', () => {
     }
 
     const first = await dispatcher.dispatch(request)
+
     if (!first.ok) {
       throw new Error(`Initial worker start failed: ${first.error.code}`)
     }
+
     const firstReceipt = first.result as {
       dispatchId: string
       residualResources: unknown[]
     }
+
     db.close()
 
     db = new OrchestrationDb(join(dir, 'orchestration.db'))
@@ -633,16 +648,20 @@ describe('orchestration new-worktree workers', () => {
         ? `tab_coord_reminted:${coordinatorPaneKey.split(':')[1]}`
         : null
     )
+
     const recreateWorktree = vi
       .spyOn(restartedRuntime, 'createManagedWorktree')
       .mockRejectedValue(new Error('replay recreated the worktree'))
+
     const reinjectPrompt = vi
       .spyOn(restartedRuntime, 'sendTerminalAgentPrompt')
       .mockRejectedValue(new Error('replay reinjected the prompt'))
+
     const restartedDispatcher = new RpcDispatcher({
       runtime: restartedRuntime,
       methods: ORCHESTRATION_METHODS
     })
+
     const replay = await restartedDispatcher.dispatch({
       ...request,
       id: 'rpc_worker_start_retry',
@@ -680,12 +699,15 @@ describe('orchestration new-worktree workers', () => {
 
   it('persists pre-effect, post-effect, and post-input stages in order', async () => {
     mockCreatedWorktree({ hookFound: false })
+
     let finishWait:
       | ((value: Awaited<ReturnType<OrcaRuntimeService['waitForTerminal']>>) => void)
       | undefined
+
     let finishPrompt:
       | ((value: Awaited<ReturnType<OrcaRuntimeService['sendTerminalAgentPrompt']>>) => void)
       | undefined
+
     vi.mocked(runtime.waitForTerminal).mockImplementationOnce(
       async () =>
         await new Promise((resolve) => {

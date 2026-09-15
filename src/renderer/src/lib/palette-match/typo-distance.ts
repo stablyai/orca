@@ -6,9 +6,11 @@ export const PALETTE_TYPO_MIN_LENGTH = 4
  */
 export function isWithinOnePaletteEdit(a: string, b: string): boolean {
   const lengthDelta = a.length - b.length
+
   if (lengthDelta > 1 || lengthDelta < -1) {
     return false
   }
+
   if (a === b) {
     return true
   }
@@ -24,13 +26,17 @@ export function isWithinOnePaletteEdit(a: string, b: string): boolean {
       longIndex += 1
       continue
     }
+
     edits += 1
+
     if (edits > 1) {
       return false
     }
+
     if (shorter.length === longer.length) {
       shortIndex += 1
     }
+
     longIndex += 1
   }
 

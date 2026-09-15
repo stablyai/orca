@@ -35,9 +35,11 @@ const RUN_LIVE =
 
 // Long enough for three handshake-timeout cycles (≈17s) plus CI scheduling slack.
 const OBSERVE_MS = 22_000
+
 const SAMPLE_MS = 200
 
 let server: WebSocketServer | null = null
+
 const serverSockets: ServerWebSocket[] = []
 
 // Completes the WebSocket upgrade, then answers e2ee_hello later than the
@@ -49,9 +51,11 @@ async function startSlowHandshakeDesktop(replyAfterMs: number): Promise<number> 
     serverSockets.push(socket)
     socket.on('message', (data) => {
       const text = data.toString()
+
       if (!text.includes('e2ee_hello')) {
         return
       }
+
       setTimeout(() => {
         if (socket.readyState === socket.OPEN) {
           socket.send(JSON.stringify({ type: 'e2ee_ready', publicKeyB64: 'server-public-key' }))
@@ -61,9 +65,11 @@ async function startSlowHandshakeDesktop(replyAfterMs: number): Promise<number> 
   })
   await new Promise<void>((resolve) => wss.once('listening', resolve))
   const address = wss.address()
+
   if (typeof address === 'string' || address === null) {
     throw new Error('expected a TCP address')
   }
+
   return address.port
 }
 
@@ -75,11 +81,14 @@ describe.runIf(RUN_LIVE)('issue #10119 — real socket, handshake slower than th
 
   afterEach(async () => {
     vi.restoreAllMocks()
+
     for (const socket of serverSockets) {
       socket.terminate()
     }
+
     const wss = server
     server = null
+
     if (wss) {
       await new Promise<void>((resolve) => wss.close(() => resolve()))
     }
@@ -94,6 +103,7 @@ describe.runIf(RUN_LIVE)('issue #10119 — real socket, handshake slower than th
     const states: string[] = []
     let maxAttempts = 0
     const started = Date.now()
+
     while (Date.now() - started < OBSERVE_MS) {
       const state = client.getState()
       const attempts = client.getReconnectAttempt()
@@ -111,6 +121,7 @@ describe.runIf(RUN_LIVE)('issue #10119 — real socket, handshake slower than th
       )
       await new Promise((resolve) => setTimeout(resolve, SAMPLE_MS))
     }
+
     client.close()
 
     // The dial loop really did run and really did keep failing.

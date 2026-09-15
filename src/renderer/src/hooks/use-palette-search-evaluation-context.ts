@@ -8,6 +8,7 @@ import {
 export function usePaletteSearchEvaluationContext(snapshot: unknown): PaletteSearchContext {
   return useMemo(() => {
     void snapshot
+
     // oxlint-disable-next-line react/purity -- Each changed snapshot starts one synchronous evaluation clock.
     return createPaletteSearchContext(Date.now())
   }, [snapshot])

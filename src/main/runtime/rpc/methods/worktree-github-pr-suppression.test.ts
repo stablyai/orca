@@ -10,6 +10,7 @@ describe('worktree GitHub PR suppression RPC', () => {
       getRuntimeId: () => 'test-runtime',
       updateManagedWorktreeMeta: vi.fn().mockResolvedValue({ id: 'wt-1' })
     } as unknown as OrcaRuntimeService
+
     const request: RpcRequest = {
       id: 'req-1',
       authToken: 'tok',

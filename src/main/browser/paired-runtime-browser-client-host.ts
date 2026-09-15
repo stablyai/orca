@@ -80,11 +80,13 @@ export class PairedRuntimeBrowserClientHost {
     if (this.closed) {
       return Promise.reject(new Error('Browser client host is closed'))
     }
+
     return this.lease.start()
   }
 
   close(error = new Error('Browser client host is closed')): Promise<boolean> {
     this.closePromise ??= this.closeHost(error)
+
     return this.closePromise
   }
 
@@ -92,6 +94,7 @@ export class PairedRuntimeBrowserClientHost {
     if (!this.dispatcher || this.closed) {
       return Promise.reject(new Error('Browser client host dispatcher is unavailable'))
     }
+
     return this.dispatcher.retirePage(browserPageId, pageHostGeneration)
   }
 
@@ -106,6 +109,7 @@ export class PairedRuntimeBrowserClientHost {
     if (this.fileChannelNegotiated) {
       return 'negotiated'
     }
+
     return this.authority && this.authority.fileChannelProtocolVersion !== 1
       ? 'unsupported'
       : 'unavailable'
@@ -130,6 +134,7 @@ export class PairedRuntimeBrowserClientHost {
     if (this.closed) {
       return Promise.reject(new Error('Browser client host is closed'))
     }
+
     return this.lease.refreshPageInventory()
   }
 
@@ -145,6 +150,7 @@ export class PairedRuntimeBrowserClientHost {
     if (this.closed || this.dispatcher) {
       throw new Error('Browser client host authority is unavailable')
     }
+
     this.authority = authority
     this.options.onAuthority?.(authority)
     this.dispatcher = new BrowserClientHostCommandDispatcher({
@@ -160,30 +166,38 @@ export class PairedRuntimeBrowserClientHost {
     if (!this.dispatcher || this.closed) {
       return Promise.reject(new Error('Browser client host dispatcher is unavailable'))
     }
+
     return this.dispatcher.dispatch(command)
   }
 
   private async closeHost(error: Error): Promise<boolean> {
     this.closed = true
     let leaseError: Error | null = null
+
     try {
       await this.lease.close(error)
     } catch (caught) {
       leaseError = caught instanceof Error ? caught : new Error(String(caught))
     }
+
     const settled = this.dispatcher ? await this.dispatcher.close() : true
+
     if (leaseError !== null) {
       throw leaseError
     }
+
     return settled
   }
 
   private handleLeaseError(error: Error): void {
     void this.close(error).catch(() => undefined)
+
     if (this.errorReported) {
       return
     }
+
     this.errorReported = true
+
     try {
       this.options.onError?.(error)
     } catch {

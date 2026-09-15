@@ -6,9 +6,11 @@ function deferred<T = void>(): {
   resolve: (value: T | PromiseLike<T>) => void
 } {
   let resolve!: (value: T | PromiseLike<T>) => void
+
   const promise = new Promise<T>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
 
@@ -40,10 +42,12 @@ describe('createWorktreeChangeRefreshQueue', () => {
   it('does not overlap refreshes for the same repo', async () => {
     const firstRefresh = deferred()
     const secondRefresh = deferred()
+
     const handler = vi
       .fn()
       .mockReturnValueOnce(firstRefresh.promise)
       .mockReturnValueOnce(secondRefresh.promise)
+
     const queue = createWorktreeChangeRefreshQueue(handler)
 
     queue.enqueue({ repoId: 'repo-1' })
@@ -64,9 +68,11 @@ describe('createWorktreeChangeRefreshQueue', () => {
 
   it('runs different repos independently', async () => {
     const repoOneRefresh = deferred()
+
     const handler = vi.fn((repoId: string) =>
       repoId === 'repo-1' ? repoOneRefresh.promise : Promise.resolve()
     )
+
     const queue = createWorktreeChangeRefreshQueue(handler)
 
     queue.enqueue({ repoId: 'repo-1' })
@@ -82,13 +88,16 @@ describe('createWorktreeChangeRefreshQueue', () => {
 
   it('continues draining queued refreshes after a failed refresh', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       const firstRefresh = deferred()
+
       const handler = vi
         .fn()
         .mockReturnValueOnce(firstRefresh.promise)
         .mockRejectedValueOnce(new Error('refresh failed'))
         .mockResolvedValue(undefined)
+
       const queue = createWorktreeChangeRefreshQueue(handler)
       const renamed = { oldWorktreeId: 'wt-old', newWorktreeId: 'wt-new' }
 

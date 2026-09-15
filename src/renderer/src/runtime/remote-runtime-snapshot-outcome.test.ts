@@ -46,31 +46,40 @@ class ScriptedSnapshotServer {
 
   receive(bytes: Uint8Array<ArrayBufferLike>): void {
     const frame = decodeTerminalStreamFrame(bytes)
+
     if (!frame) {
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.Subscribe) {
       this.streamId = decodeTerminalStreamJson<{ streamId: number }>(frame.payload)?.streamId ?? 0
       this.sendStart({})
       this.send(TerminalStreamOpcode.SnapshotChunk, encodeTerminalStreamText('INITIAL'))
       this.send(TerminalStreamOpcode.SnapshotEnd, new Uint8Array())
+
       return
     }
+
     if (frame.opcode !== TerminalStreamOpcode.SnapshotRequest) {
       return
     }
+
     const requestId = decodeTerminalStreamJson<{ requestId?: number }>(frame.payload)?.requestId
     this.requestIds.push(requestId)
+
     if (typeof requestId !== 'number') {
       if (this.holdResyncReplies) {
         return
       }
+
       // Untagged resync request: answer it so the resync gate does not stay latched.
       this.sendStart({})
       this.send(TerminalStreamOpcode.SnapshotChunk, encodeTerminalStreamText('RECOVERED'))
       this.send(TerminalStreamOpcode.SnapshotEnd, new Uint8Array())
+
       return
     }
+
     this.replyToRequest(requestId, this.nextRequestedReply)
   }
 
@@ -78,6 +87,7 @@ class ScriptedSnapshotServer {
   releaseHeldRequest(reply: RequestedReply): void {
     const requestId = this.heldRequestId
     this.heldRequestId = null
+
     if (requestId !== null) {
       this.replyToRequest(requestId, reply)
     }
@@ -86,28 +96,38 @@ class ScriptedSnapshotServer {
   private replyToRequest(requestId: number, reply: RequestedReply): void {
     if (reply.kind === 'hold') {
       this.heldRequestId = requestId
+
       return
     }
+
     if (reply.kind === 'truncated') {
       this.sendStart({ requestId, truncated: true, unavailable: reply.unavailable })
       this.send(TerminalStreamOpcode.SnapshotEnd, new Uint8Array())
+
       return
     }
+
     if (reply.kind === 'oversized') {
       this.sendStart({ requestId })
+
       for (let index = 0; index < reply.chunks; index += 1) {
         this.send(TerminalStreamOpcode.SnapshotChunk, encodeTerminalStreamText('x'.repeat(512_000)))
       }
+
       this.send(TerminalStreamOpcode.SnapshotEnd, new Uint8Array())
+
       return
     }
+
     this.sendStart({
       requestId,
       unavailable: 'unavailable' in reply ? reply.unavailable : undefined
     })
+
     if (reply.data.length > 0) {
       this.send(TerminalStreamOpcode.SnapshotChunk, encodeTerminalStreamText(reply.data))
     }
+
     this.send(TerminalStreamOpcode.SnapshotEnd, new Uint8Array())
   }
 
@@ -131,10 +151,13 @@ class ScriptedSnapshotServer {
 
   output(text: string): void {
     this.cursorUnits += text.length
+
     if (this.dropNextOutput) {
       this.dropNextOutput = false
+
       return
     }
+
     this.send(TerminalStreamOpcode.Output, encodeTerminalStreamText(text))
   }
 }
@@ -152,6 +175,7 @@ describe('remote terminal snapshot outcome reasons', () => {
           subscribe: vi.fn(async (_args: unknown, callbacks: SubscribeCallbacks) => {
             server = new ScriptedSnapshotServer((bytes) => callbacks.onBinary?.(bytes))
             queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+
             return {
               unsubscribe: vi.fn(),
               sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => server.receive(bytes)
@@ -172,8 +196,10 @@ describe('remote terminal snapshot outcome reasons', () => {
       client: { id: 'desktop-1', type: 'desktop' },
       callbacks: { onData: () => {}, onSnapshot: () => {} }
     })
+
     await Promise.resolve()
     await Promise.resolve()
+
     return stream
   }
 

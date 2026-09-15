@@ -18,12 +18,15 @@ import {
   getLinearStateMarkerStyle
 } from '@/components/linear-state-pill-style'
 import { LoaderCircle, ChevronDown } from 'lucide-react'
+
 export type LinearProjectTab = 'overview' | 'issues'
+
 export type LinearGroupSection = {
   key: string
   label: string
   issues: LinearIssue[]
 }
+
 export type LinearIssueListRow =
   | {
       type: 'section'
@@ -35,14 +38,17 @@ export type LinearIssueListRow =
       type: 'issue'
       issue: LinearIssue
     }
+
 export const LINEAR_CUSTOM_VIEW_MODELS = [
   'issue',
   'project'
 ] satisfies readonly LinearCustomViewModel[]
+
 export function mergeLinearCollectionResults<T>(
   results: LinearCollectionResult<T>[]
 ): LinearCollectionResult<T> {
   const errors = results.flatMap((result) => result.errors ?? [])
+
   return {
     items: results.flatMap((result) => result.items),
     ...(errors.length > 0
@@ -57,14 +63,17 @@ export function mergeLinearCollectionResults<T>(
       : {})
   }
 }
+
 export function getLinearStatusSectionState(
   section: LinearGroupSection
 ): LinearIssue['state'] | null {
   if (!section.key.startsWith('status:')) {
     return null
   }
+
   return section.issues[0]?.state ?? null
 }
+
 export function findLinearWorkflowStateForStatus(
   states: LinearWorkflowState[],
   targetState: LinearIssue['state']
@@ -74,6 +83,7 @@ export function findLinearWorkflowStateForStatus(
     states.find((state) => state.name === targetState.name)
   )
 }
+
 export function LinearStateCell({
   issue,
   className,
@@ -90,23 +100,29 @@ export function LinearStateCell({
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
   const reqRef = useRef(0)
+
   const currentStateId = states.data.find(
     (s) => s.name === issue.state.name && s.type === issue.state.type
   )?.id
+
   const handleStateChange = useCallback(
     (stateId: string) => {
       const newState = states.data.find((s) => s.id === stateId)
+
       if (!newState || stateId === currentStateId || pending) {
         return
       }
+
       reqRef.current += 1
       const reqId = reqRef.current
       const previousState = issue.state
+
       const nextState: LinearIssue['state'] = {
         name: newState.name,
         type: newState.type,
         color: newState.color
       }
+
       setPending(true)
       patchLinearIssue(
         issue.id,
@@ -129,6 +145,7 @@ export function LinearStateCell({
           if (reqId !== reqRef.current) {
             return
           }
+
           if (result.ok === false) {
             patchLinearIssue(
               issue.id,
@@ -143,8 +160,10 @@ export function LinearStateCell({
               result.error ??
                 translate('auto.components.TaskPage.6775c05483', 'Failed to update Linear state')
             )
+
             return
           }
+
           useAppStore.getState().invalidateLinearIssueLists({
             sourceContext
           })
@@ -154,6 +173,7 @@ export function LinearStateCell({
           if (reqId !== reqRef.current) {
             return
           }
+
           patchLinearIssue(
             issue.id,
             {
@@ -185,6 +205,7 @@ export function LinearStateCell({
       states.data
     ]
   )
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>

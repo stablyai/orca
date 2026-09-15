@@ -29,10 +29,12 @@ export function createTabsCreateActions(
           worktreeId,
           init?.targetGroupId ?? state.activeGroupIdByWorktree[worktreeId]
         )
+
         const existingTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
 
         let nextTabs = existingTabs
         let nextOrder = dedupeTabOrder(group.tabOrder)
+
         if (init?.isPreview) {
           const existingPreview = existingTabs.find(
             (tab) =>
@@ -40,6 +42,7 @@ export function createTabsCreateActions(
               tab.isPreview &&
               canReplacePreviewContentType(contentType, tab.contentType)
           )
+
           if (existingPreview) {
             nextTabs = existingTabs.filter((tab) => tab.id !== existingPreview.id)
             nextOrder = nextOrder.filter((tabId) => tabId !== existingPreview.id)
@@ -48,8 +51,10 @@ export function createTabsCreateActions(
 
         const shouldActivate = init?.activate ?? true
         const createdAt = Date.now()
+
         const executionHostId =
           init?.executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
+
         created = {
           id,
           entityId: init?.entityId ?? id,
@@ -77,10 +82,12 @@ export function createTabsCreateActions(
         nextOrder = dedupeTabOrder([...nextOrder, created.id])
         const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
         const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
+
         // Why: automation-created browser tabs must paint without stealing the visible group selection from the user's current tab.
         const nextRecent = shouldActivate
           ? pushRecentTabId(sanitizedRecent, created.id)
           : sanitizedRecent
+
         return {
           unifiedTabsByWorktree: {
             ...state.unifiedTabsByWorktree,
@@ -102,9 +109,11 @@ export function createTabsCreateActions(
           }
         }
       })
+
       if (init?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
+
       return created
     },
 
@@ -119,18 +128,24 @@ export function createTabsCreateActions(
           worktreeId,
           target.sourceGroupId
         )
+
         if (!sourceGroup) {
           return state
         }
+
         const existingTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
         const currentGroups = state.groupsByWorktree[worktreeId] ?? []
         const shouldActivate = init?.activate ?? true
+
         const currentLayout =
           state.layoutByWorktree[worktreeId] ??
           ({ type: 'leaf', groupId: target.sourceGroupId } as const)
+
         const createdAt = Date.now()
+
         const executionHostId =
           init?.executionHostId ?? getActiveExecutionHostIdForWorktree(state, worktreeId)
+
         const createdTab: Tab = {
           id,
           entityId: init?.entityId ?? id,
@@ -154,6 +169,7 @@ export function createTabsCreateActions(
           isPreview: init?.isPreview,
           isPinned: init?.isPinned
         }
+
         const newGroup: TabGroup = {
           id: newGroupId,
           worktreeId,
@@ -161,7 +177,9 @@ export function createTabsCreateActions(
           tabOrder: [id],
           recentTabIds: shouldActivate ? [id] : []
         }
+
         created = createdTab
+
         const replacement = buildSplitNode(
           target.sourceGroupId,
           newGroupId,
@@ -170,25 +188,31 @@ export function createTabsCreateActions(
             : 'vertical',
           target.splitDirection === 'left' || target.splitDirection === 'up' ? 'first' : 'second'
         )
+
         const nextUnifiedTabsByWorktree = {
           ...state.unifiedTabsByWorktree,
           [worktreeId]: [...existingTabs, createdTab]
         }
+
         const nextGroupsByWorktree = {
           ...state.groupsByWorktree,
           [worktreeId]: [...currentGroups, newGroup]
         }
+
         const nextLayoutByWorktree = {
           ...state.layoutByWorktree,
           [worktreeId]: replaceLeaf(currentLayout, target.sourceGroupId, replacement)
         }
+
         const nextActiveGroupIdByWorktree = shouldActivate
           ? {
               ...state.activeGroupIdByWorktree,
               [worktreeId]: newGroupId
             }
           : state.activeGroupIdByWorktree
+
         moved = true
+
         return {
           unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
           groupsByWorktree: nextGroupsByWorktree,
@@ -209,12 +233,15 @@ export function createTabsCreateActions(
             : {})
         }
       })
+
       if (created && init?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
+
       if (moved && init?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('tab-splits')
       }
+
       return created
     }
   }

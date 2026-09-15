@@ -12,6 +12,7 @@ import { createTestStore, makeTab } from './store-test-helpers'
 // unstamped row must be indistinguishable to every consumer that reads status today.
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+
 const OBSERVATION: AgentStatusObservation = {
   origin: 'hook',
   authorityId: 'main-agent-hooks:test',
@@ -26,6 +27,7 @@ const STATES: AgentStatusState[] = ['working', 'blocked', 'waiting', 'done']
 
 function withoutObservation(entry: AgentStatusEntry): Omit<AgentStatusEntry, 'observation'> {
   const { observation: _observation, ...rest } = entry
+
   return rest
 }
 
@@ -53,9 +55,11 @@ function applyStatus(
   })
   const snapshot = store.getState()
   const entry = snapshot.agentStatusByPaneKey[PANE_KEY]
+
   if (!entry) {
     throw new Error(`expected a live entry for ${state}`)
   }
+
   return {
     entry,
     agentStatusEpoch: snapshot.agentStatusEpoch,
@@ -107,12 +111,14 @@ describe('agent status observation is behavior-neutral', () => {
         retained: [],
         now: at
       })
+
       const unstampedRows = buildWorktreeAgentRows({
         tabs,
         entries: [unstamped],
         retained: [],
         now: at
       })
+
       // Why: an empty-vs-empty comparison would pass without proving anything.
       expect(stampedRows).toHaveLength(1)
       expect(stampedRows.map((row) => ({ ...row, entry: withoutObservation(row.entry) }))).toEqual(
@@ -130,6 +136,7 @@ describe('agent status observation is behavior-neutral', () => {
     // Why: old hosts, persisted rehydration, title-derived rows and subagent rows all reach
     // consumers with no observation at all; that path must not have moved.
     const now = 1_700_000_000_000
+
     const entry: AgentStatusEntry = {
       paneKey: PANE_KEY,
       state: 'blocked',
@@ -144,12 +151,14 @@ describe('agent status observation is behavior-neutral', () => {
     expect(resolveAttention([{ kind: 'hook', entry, hasLivePty: false }], now)).toMatchObject({
       cls: 1
     })
+
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })],
       entries: [entry],
       retained: [],
       now
     })
+
     expect(rows).toHaveLength(1)
     expect(rows[0].entry.observation).toBeUndefined()
     expect(getAgentDotState(rows[0])).toBe('blocked')

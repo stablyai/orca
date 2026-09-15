@@ -17,6 +17,7 @@ import { track } from './telemetry'
 
 const SETUP_GUIDE_TELEMETRY_COMPLETED_STEPS_STORAGE_KEY =
   'orca.setupGuideTelemetryCompletedSteps.v1'
+
 const TERMINAL_PANE_SPLIT_TELEMETRY_STORAGE_KEY = 'orca.terminalPaneSplitTelemetry.v1'
 
 type FeatureEducationTelemetryEventName = Extract<
@@ -78,6 +79,7 @@ export function trackSetupGuideOpened(args: {
     total_steps: 8,
     first_incomplete_step_id: args.firstIncompleteStepId
   })
+
   return source
 }
 
@@ -90,10 +92,12 @@ export function trackSetupGuideClosed(args: {
   activeStepId: FeatureWallSetupStepId | 'none'
 }): void {
   const initialCompletedCount = clampSetupGuideStepCount(args.initialCompletedCount)
+
   const finalCompletedCount = Math.max(
     initialCompletedCount,
     clampSetupGuideStepCount(args.finalCompletedCount)
   )
+
   emitFeatureEducationTelemetry('setup_guide_closed', {
     source: args.source,
     outcome: args.outcome,
@@ -126,6 +130,7 @@ export function trackTerminalPaneSplit(args: {
   if (!reserveTerminalPaneSplitTelemetry(args.source, args.direction)) {
     return
   }
+
   emitFeatureEducationTelemetry('terminal_pane_split', {
     source: args.source,
     direction: args.direction
@@ -136,13 +141,16 @@ export function readEmittedSetupGuideStepIds(): Set<FeatureWallSetupStepId> {
   if (globalThis.localStorage === undefined) {
     return new Set()
   }
+
   try {
     const raw = JSON.parse(
       globalThis.localStorage.getItem(SETUP_GUIDE_TELEMETRY_COMPLETED_STEPS_STORAGE_KEY) ?? '[]'
     )
+
     if (!Array.isArray(raw)) {
       return new Set()
     }
+
     return new Set(raw.filter(isFeatureWallSetupStepId))
   } catch {
     return new Set()
@@ -153,6 +161,7 @@ export function persistEmittedSetupGuideStepId(id: FeatureWallSetupStepId): void
   if (globalThis.localStorage === undefined) {
     return
   }
+
   try {
     const next = readEmittedSetupGuideStepIds()
     next.add(id)
@@ -173,17 +182,21 @@ export function reserveTerminalPaneSplitTelemetry(
   if (globalThis.localStorage === undefined) {
     return true
   }
+
   try {
     const emitted = readTerminalPaneSplitTelemetryKeys()
     const key = getTerminalPaneSplitTelemetryKey(source, direction, new Date())
+
     if (emitted.has(key)) {
       return false
     }
+
     emitted.add(key)
     globalThis.localStorage.setItem(
       TERMINAL_PANE_SPLIT_TELEMETRY_STORAGE_KEY,
       JSON.stringify([...emitted].slice(-32))
     )
+
     return true
   } catch {
     // Telemetry cost controls are best-effort; storage failures must not block split behavior.
@@ -206,6 +219,7 @@ function clampTourStepCount(value: number, min = 0): number {
   if (!Number.isFinite(value)) {
     return min
   }
+
   return Math.min(8, Math.max(min, Math.round(value)))
 }
 
@@ -213,6 +227,7 @@ function clampSetupGuideStepCount(value: number, min = 0): number {
   if (!Number.isFinite(value)) {
     return min
   }
+
   return Math.min(8, Math.max(min, Math.round(value)))
 }
 
@@ -220,9 +235,11 @@ function readTerminalPaneSplitTelemetryKeys(): Set<string> {
   const raw = JSON.parse(
     globalThis.localStorage?.getItem(TERMINAL_PANE_SPLIT_TELEMETRY_STORAGE_KEY) ?? '[]'
   )
+
   if (!Array.isArray(raw)) {
     return new Set()
   }
+
   return new Set(raw.filter((value): value is string => typeof value === 'string'))
 }
 
@@ -234,5 +251,6 @@ function getTerminalPaneSplitTelemetryKey(
   const day = Number.isFinite(date.getTime())
     ? date.toISOString().slice(0, 10)
     : new Date(0).toISOString().slice(0, 10)
+
   return `${day}:${source}:${direction}`
 }

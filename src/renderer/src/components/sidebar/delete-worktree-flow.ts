@@ -38,22 +38,27 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
   // deleting the SSH row destroys the local checkout at the same path. A caller
   // that names no host keeps the old first-wins behaviour.
   const target = getWorktreeOnHostFromState(state, worktreeId, options.expectedHostId) ?? null
+
   const instanceChanged =
     Object.hasOwn(options, 'expectedInstanceId') &&
     target?.instanceId !== options.expectedInstanceId
+
   if (!target || instanceChanged) {
     // Why: folder workspaces are never in the worktree map — their callers own that route, so a
     // miss there is a routing gap, not a stale list, and must not claim the workspace is gone.
     if (parseWorkspaceKey(worktreeId)?.type !== 'folder') {
       showWorkspaceListChangedToast()
     }
+
     return
   }
+
   if (target.isMainWorktree) {
     const repo = findRepoForHost(state.repos, target.repoId, {
       hostId: target.hostId,
       settings: state.settings
     })
+
     const hostId = repo ? getRepoExecutionHostId(repo) : target.hostId
     // Why: git refuses to delete the primary checkout; users can still remove the owning project from Orca (disk contents kept).
     state.openModal('confirm-remove-folder', {
@@ -61,8 +66,10 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
       displayName: repo?.displayName ?? target.displayName,
       ...(hostId ? { hostId } : {})
     })
+
     return
   }
+
   if (target.hostId) {
     state.clearWorktreeDeleteState(worktreeId, target.hostId)
   } else {
@@ -72,11 +79,13 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
   // Why: a disconnected SSH host has no provider, so worktrees:remove throws; route to reconnect-and-delete or local-only forget.
   // Skip on paired web/mobile clients: SSH state is desktop-only, so empty sshTargetLabels misclassifies SSH repos as ghosts; their worktree.rm RPC still handles the delete.
   const matchingRepos = state.repos.filter((entry) => entry.id === target.repoId)
+
   const repo = target.hostId
     ? findRepoForHost(matchingRepos, target.repoId, { hostId: target.hostId })
     : matchingRepos.length === 1
       ? matchingRepos[0]
       : null
+
   const sshResolution = isPairedWebClientWindow()
     ? { kind: 'not-ssh' as const }
     : resolveSshWorkspaceForget({
@@ -84,6 +93,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
         sshConnectionStates: state.sshConnectionStates,
         sshTargetLabels: state.sshTargetLabels
       })
+
   if (sshResolution.kind === 'ghost' || sshResolution.kind === 'disconnected') {
     // Why no lineage-children warning: forget-local is metadata-only per-worktree, so it can't fail on a still-registered child.
     state.openModal('forget-ssh-workspace', {
@@ -91,6 +101,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
       displayName: target.displayName,
       resolution: sshResolution
     })
+
     return
   }
 
@@ -99,12 +110,16 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     getAllWorktreesFromState(state),
     state.worktreeLineageById
   )
+
   const hasLineageChildren = deleteLineage.descendants.length > 0
   const skipConfirm = state.settings?.skipDeleteWorktreeConfirm ?? false
+
   if (skipConfirm && !hasLineageChildren) {
     void runWorktreeDeleteWithToast(toWorktreeRemovalTarget(target), target.displayName)
+
     return
   }
+
   state.openModal('delete-worktree', {
     worktreeId,
     worktreeDeleteIdentities: toWorktreeDeleteIdentities([target]),
@@ -122,16 +137,20 @@ export function runWorktreeBatchDelete(
   options: WorktreeBatchDeleteOptions = {}
 ): boolean {
   const state = useAppStore.getState()
+
   const targets = resolveWorktreeBatchDeleteTargets(requestedWorktrees, (worktreeId, hostId) =>
     getWorktreeOnHostFromState(state, worktreeId, hostId)
   )
+
   if (!targets) {
     showWorkspaceListChangedToast()
+
     return false
   }
 
   if (targets.length === 0) {
     showNoDeletableWorkspacesToast()
+
     return false
   }
 
@@ -152,12 +171,15 @@ export function runWorktreeBatchDelete(
           state.worktreeLineageById
         )
       : null
+
   const singleTargetHasLineageChildren = (singleTargetLineage?.descendants.length ?? 0) > 0
+
   const skipConfirm =
     !options.forceConfirm &&
     targets.length === 1 &&
     !singleTargetHasLineageChildren &&
     (state.settings?.skipDeleteWorktreeConfirm ?? false)
+
   if (skipConfirm) {
     void runWorktreeDeletesInParallel(targets, {
       onForceDeleted: (deletedTarget) => options.onDeleted?.([deletedTarget])
@@ -166,6 +188,7 @@ export function runWorktreeBatchDelete(
         options.onDeleted?.(deletedTargets)
       }
     })
+
     return true
   }
 
@@ -186,6 +209,7 @@ export function runWorktreeBatchDelete(
       ...(options.onDeleted ? { onDeleted: options.onDeleted } : {}),
       ...(options.forceOnConfirm === false ? { forceOnConfirm: false } : {})
     })
+
     return true
   }
 
@@ -196,5 +220,6 @@ export function runWorktreeBatchDelete(
     ...(options.onDeleted ? { onDeleted: options.onDeleted } : {}),
     ...(options.forceOnConfirm === false ? { forceOnConfirm: false } : {})
   })
+
   return true
 }

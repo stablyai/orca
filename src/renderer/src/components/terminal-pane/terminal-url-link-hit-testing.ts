@@ -26,6 +26,7 @@ import {
 } from './terminal-link-action-request'
 
 export { extractTerminalHttpLinks } from './terminal-http-url-extraction'
+
 export { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
 
 type UrlLinkHitTestDeps = {
@@ -62,6 +63,7 @@ function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
   if (event.defaultPrevented || event.button !== 0) {
     return false
   }
+
   // Why: Shift-only, Alt, and non-primary clicks remain available to the terminal or child TUI.
   return isTerminalOwnedLinkGesture(event)
 }
@@ -75,11 +77,13 @@ export function handleTerminalHttpLink(
     const forceDestination = event?.shiftKey
       ? (deps.actionDestinations?.alternate ?? deps.actionDestinations?.primary)
       : deps.actionDestinations?.primary
+
     openRoutedHttpLink(url, {
       ...deps,
       modifierHeld: forceDestination ? false : Boolean(event?.shiftKey),
       forceDestination
     })
+
     return true
   }
 
@@ -100,10 +104,13 @@ export function openHttpLinkAtTerminalMouseEvent(
   if (event.button !== 0 || !isTerminalHttpLinkActivation(event)) {
     return false
   }
+
   const position = getTerminalBufferPositionForMouseEvent(terminal, event)
+
   if (!position) {
     return false
   }
+
   return openHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, deps)
 }
 
@@ -114,7 +121,9 @@ export function findHttpLinkAtTerminalMouseEvent(
   if (event.button !== 0 || !isTerminalOwnedLinkGesture(event)) {
     return null
   }
+
   const position = getTerminalBufferPositionForMouseEvent(terminal, event)
+
   return position
     ? findHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
     : null
@@ -128,20 +137,25 @@ export function installHttpLinkClickFallback(
     if (isTerminalLinkifierHoverActive(terminal)) {
       return true
     }
+
     const position = getTerminalBufferPositionForMouseEvent(terminal, event)
+
     return Boolean(
       position && findHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
     )
   }
+
   const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(
     terminal,
     isLinkMouseEvent,
     (event) => {
       const context = deps.getLinkActionContext?.()
+
       return Boolean(context?.pointerGesture.canRequestAction(event) && isLinkMouseEvent(event))
     },
     (event) => Boolean(deps.getLinkActionContext?.()?.pointerGesture.canRequestAction(event))
   )
+
   const handleMouseUp = (event: MouseEvent): void => {
     if (!isDesktopHttpLinkFallbackActivation(event)) {
       return
@@ -149,6 +163,7 @@ export function installHttpLinkClickFallback(
 
     // Why: xterm's WebLinksAddon misses first clicks before hover state exists.
     const url = findHttpLinkAtTerminalMouseEvent(terminal, event)
+
     const handled = Boolean(
       url &&
       handleTerminalHttpLink(url, event, {
@@ -159,6 +174,7 @@ export function installHttpLinkClickFallback(
         actionDestinations: deps.getActionDestinations?.()
       })
     )
+
     if (handled) {
       event.preventDefault()
       terminal.clearSelection()
@@ -167,6 +183,7 @@ export function installHttpLinkClickFallback(
 
   const terminalElement = terminal.element
   terminalElement?.addEventListener('mouseup', handleMouseUp)
+
   return {
     ptyMouseSuppression,
     dispose: () => {
@@ -183,10 +200,13 @@ export function openHttpLinkAtBufferPosition(
   deps: UrlLinkHitTestDeps
 ): boolean {
   const url = findHttpLinkAtBufferPosition(buffer, position, terminalColumns)
+
   if (!url) {
     return false
   }
+
   openRoutedHttpLink(url, deps)
+
   return true
 }
 
@@ -196,6 +216,7 @@ function findHttpLinkAtBufferPosition(
   terminalColumns: number
 ): string | null {
   const nativeWrappedLogicalLine = buildWrappedLogicalLine(buffer, position.y)
+
   const logicalLines = dedupeLogicalLines([
     ...(nativeWrappedLogicalLine && nativeWrappedLogicalLine.rows.length > 1
       ? [nativeWrappedLogicalLine]
@@ -206,6 +227,7 @@ function findHttpLinkAtBufferPosition(
       ? [nativeWrappedLogicalLine]
       : [])
   ])
+
   if (logicalLines.length === 0) {
     return null
   }
@@ -213,9 +235,11 @@ function findHttpLinkAtBufferPosition(
   for (const logicalLine of logicalLines) {
     for (const parsed of extractTerminalHttpLinks(logicalLine.text)) {
       const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
+
       if (!range || !rangeContainsBufferPosition(range, position, terminalColumns)) {
         continue
       }
+
       return parsed.url
     }
   }
@@ -231,5 +255,6 @@ function rangeContainsBufferPosition(
   const lower = range.start.y * terminalColumns + range.start.x
   const upper = range.end.y * terminalColumns + range.end.x
   const current = position.y * terminalColumns + position.x
+
   return lower <= current && current <= upper
 }

@@ -24,6 +24,7 @@ describe('getResolvedExecutionHostIdForWorktree', () => {
         'local-repo': [{ id: 'local-repo::wt-a', repoId: 'local-repo' }]
       }
     }
+
     expect(getResolvedExecutionHostIdForWorktree(localState, 'local-repo::wt-a')).toBe('local')
 
     const remoteState: WorktreeRuntimeOwnerState = {
@@ -38,6 +39,7 @@ describe('getResolvedExecutionHostIdForWorktree', () => {
         ]
       }
     }
+
     expect(getResolvedExecutionHostIdForWorktree(remoteState, 'same-repo::/remote/worktree')).toBe(
       'ssh:target-1'
     )

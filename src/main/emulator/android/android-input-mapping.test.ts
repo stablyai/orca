@@ -61,6 +61,7 @@ describe('androidButtonKeycode', () => {
 
   it('throws EmulatorError with code emulator_error on unknown name', () => {
     expect(() => androidButtonKeycode('rotate')).toThrowError(EmulatorError)
+
     try {
       androidButtonKeycode('rotate')
       throw new Error('expected androidButtonKeycode to throw')

@@ -20,6 +20,7 @@ describe('MimoCodeHookService buildPtyEnv', () => {
       if (name === 'userData') {
         return userDataDir
       }
+
       throw new Error(`unexpected getPath: ${name}`)
     })
     setAppEnvironment({

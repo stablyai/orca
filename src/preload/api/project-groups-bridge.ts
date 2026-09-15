@@ -15,7 +15,9 @@ export const projectGroupsApi = {
       _event: Electron.IpcRendererEvent,
       data: { scanId: string; scan: NestedRepoScanResult }
     ) => callback(data)
+
     ipcRenderer.on('projectGroups:scanNestedProgress', listener)
+
     return () => ipcRenderer.removeListener('projectGroups:scanNestedProgress', listener)
   },
   importNested: (args) => ipcRenderer.invoke('projectGroups:importNested', args)

@@ -80,6 +80,7 @@ vi.mock('../workspace-cleanup-scan-snapshot', () => ({
 import { scanWorkspaceCleanup } from './workspace-cleanup'
 
 const NOW = 1_700_000_000_000
+
 const REPO: Repo = {
   id: 'repo-1',
   path: '/repo',
@@ -88,10 +89,12 @@ const REPO: Repo = {
   addedAt: NOW,
   symlinkPaths: ['node_modules']
 }
+
 const LARGE_WORKTREE_COUNT = 150_000
 
 function buildGitWorktrees(count: number): GitWorktreeInfo[] {
   const worktrees: GitWorktreeInfo[] = []
+
   for (let index = 0; index < count; index += 1) {
     worktrees.push({
       path: `/repo-feature-${index}`,
@@ -101,14 +104,17 @@ function buildGitWorktrees(count: number): GitWorktreeInfo[] {
       isMainWorktree: false
     })
   }
+
   return worktrees
 }
 
 function buildWorktreeIds(repoId: string, count: number): string[] {
   const worktreeIds: string[] = []
+
   for (let index = 0; index < count; index += 1) {
     worktreeIds.push(`${repoId}::/repo-feature-${index}`)
   }
+
   return worktreeIds
 }
 
@@ -138,6 +144,7 @@ function makeStore(
   } = {}
 ): Store {
   const baseRef = Object.hasOwn(options, 'baseRef') ? options.baseRef : 'origin/main'
+
   return {
     getRepos: () => options.repos ?? [REPO],
     getWorktreeMeta: () => ({
@@ -246,15 +253,19 @@ describe('workspace cleanup scan', () => {
       totalWorktreeCount: 1,
       candidates: []
     })
+
     const candidateProgress = progress.filter(
       (event): event is WorkspaceCleanupScanProgress =>
         (event as WorkspaceCleanupScanProgress).candidateMode === 'append' &&
         (event as WorkspaceCleanupScanProgress).candidates.length > 0
     )
+
     expect(candidateProgress.length).toBeLessThanOrEqual(2)
+
     const progressWorktreeIds = candidateProgress.flatMap((event) =>
       event.candidates.map((candidate) => candidate.worktreeId)
     )
+
     expect(progressWorktreeIds).toHaveLength(2)
     expect(progressWorktreeIds).toEqual(
       expect.arrayContaining(['repo-1::/repo-feature-a', 'repo-1::/repo-feature-b'])
@@ -287,6 +298,7 @@ describe('workspace cleanup scan', () => {
       if (targetPath.startsWith('/repo-feature-a')) {
         return new Promise(() => undefined)
       }
+
       return Promise.resolve({ mtimeMs: 0 })
     })
     const progress: WorkspaceCleanupScanProgress[] = []
@@ -334,6 +346,7 @@ describe('workspace cleanup scan', () => {
     let signal: AbortSignal | undefined
     listRepoWorktreesMock.mockImplementation((_repo: Repo, options?: { signal?: AbortSignal }) => {
       signal = options?.signal
+
       return new Promise<GitWorktreeInfo[]>(() => {})
     })
 
@@ -368,16 +381,20 @@ describe('workspace cleanup scan', () => {
 
   it('uses direct metadata lookup for focused disconnected remote preflight', async () => {
     const targetWorktreeId = 'repo-1::/remote/repo-feature'
+
     const targetMeta = makeWorktreeMeta({
       displayName: 'Remote Feature',
       lastActivityAt: NOW - 2 * 24 * 60 * 60 * 1000
     })
+
     const getWorktreeMeta = vi.fn((worktreeId: string) =>
       worktreeId === targetWorktreeId ? targetMeta : undefined
     )
+
     const getAllWorktreeMeta = vi.fn(() => {
       throw new Error('focused disconnected SSH preflight should not enumerate all metadata')
     })
+
     const store = {
       getRepos: () => [{ ...REPO, connectionId: 'ssh-1' }],
       getWorktreeMeta,
@@ -446,6 +463,7 @@ describe('workspace cleanup scan', () => {
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
       } satisfies GitStatusResult)
     }
+
     getSshGitProviderMock.mockReturnValue(provider)
 
     const result = await scanWorkspaceCleanup(
@@ -475,6 +493,7 @@ describe('workspace cleanup scan', () => {
       listWorktrees: vi.fn().mockRejectedValue(new Error('ssh timeout')),
       getStatus: vi.fn()
     }
+
     getSshGitProviderMock.mockReturnValue(provider)
 
     const result = await scanWorkspaceCleanup(
@@ -533,6 +552,7 @@ describe('workspace cleanup scan', () => {
         isMainWorktree: false
       }
     ])
+
     const metadataByWorktreeId: Record<string, WorktreeMeta> = {
       'repo-1::/repo-old': makeWorktreeMeta({
         lastActivityAt: NOW - 40 * 24 * 60 * 60 * 1000,
@@ -548,6 +568,7 @@ describe('workspace cleanup scan', () => {
         baseRef: 'origin/main'
       })
     }
+
     const store = {
       ...makeStore(),
       getWorktreeMeta: (worktreeId: string) => metadataByWorktreeId[worktreeId]
@@ -573,6 +594,7 @@ describe('workspace cleanup scan', () => {
       { scanId: 'scan-1' },
       { onProgress: (event) => progress.push(event) }
     )
+
     await vi.advanceTimersByTimeAsync(8_000)
 
     const result = await scanPromise

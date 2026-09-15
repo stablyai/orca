@@ -76,6 +76,7 @@ describe('project-host workspace target resolution', () => {
   it('chooses the focused host setup when one project exists on multiple hosts', () => {
     const repos = [makeRepo('orca-local'), makeRepo('orca-ssh', { connectionId: 'openclaw-2' })]
     const projects = [makeProject('github:stablyai/orca', ['orca-local', 'orca-ssh'])]
+
     const projectHostSetups = [
       makeSetup('orca-local', 'github:stablyai/orca', 'local', 'orca-local'),
       makeSetup('orca-ssh', 'github:stablyai/orca', 'ssh:openclaw-2', 'orca-ssh')
@@ -94,11 +95,14 @@ describe('project-host workspace target resolution', () => {
 
   it('matches duplicate repo ids to the setup execution host', () => {
     const localRepo = makeRepo('orca', { path: '/local/orca' })
+
     const sshRepo = makeRepo('orca', {
       path: '/remote/orca',
       connectionId: 'builder'
     })
+
     const projects = [makeProject('github:stablyai/orca', ['orca'])]
+
     const projectHostSetups = [
       makeSetup('local-setup', 'github:stablyai/orca', 'local', 'orca'),
       makeSetup('ssh-setup', 'github:stablyai/orca', 'ssh:builder', 'orca')
@@ -124,6 +128,7 @@ describe('project-host workspace target resolution', () => {
     const localRepo = makeRepo('orca', { path: '/local/orca' })
     const sshRepo = makeRepo('orca', { path: '/remote/orca', connectionId: 'builder' })
     const projects = [makeProject('github:stablyai/orca', ['orca'])]
+
     const projectHostSetups = [
       makeSetup('local-setup', 'github:stablyai/orca', 'local', 'orca'),
       makeSetup('ssh-setup', 'github:stablyai/orca', 'ssh:builder', 'orca')
@@ -151,6 +156,7 @@ describe('project-host workspace target resolution', () => {
     const localRepo = makeRepo('orca', { path: '/local/orca' })
     const sshRepo = makeRepo('orca', { path: '/remote/orca', connectionId: 'builder' })
     const projects = [makeProject('github:stablyai/orca', ['orca'])]
+
     const projectHostSetups = [
       makeSetup('local-setup', 'github:stablyai/orca', 'local', 'orca'),
       makeSetup('ssh-setup', 'github:stablyai/orca', 'ssh:builder', 'orca')
@@ -181,7 +187,9 @@ describe('project-host workspace target resolution', () => {
       makeRepo('orca-local'),
       makeRepo('orca-runtime', { executionHostId: 'runtime:gpu-1' })
     ]
+
     const projects = [makeProject('github:stablyai/orca', ['orca-local', 'orca-runtime'])]
+
     const projectHostSetups = [
       makeSetup('orca-local', 'github:stablyai/orca', 'local', 'orca-local'),
       makeSetup('orca-runtime', 'github:stablyai/orca', 'runtime:gpu-1', 'orca-runtime')
@@ -212,6 +220,7 @@ describe('project-host workspace target resolution', () => {
     // transient worktree path the user never sees.
     const repos = [makeRepo('orca-main'), makeRepo('orca-worktree')]
     const projects = [makeProject('github:stablyai/orca', ['orca-main', 'orca-worktree'])]
+
     const projectHostSetups = [
       makeSetup('orca-main', 'github:stablyai/orca', 'local', 'orca-main'),
       makeSetup('orca-worktree', 'github:stablyai/orca', 'local', 'orca-worktree')
@@ -233,6 +242,7 @@ describe('project-host workspace target resolution', () => {
   it('keeps an explicit setup id that is the only one on its host', () => {
     const repos = [makeRepo('orca-local'), makeRepo('orca-ssh', { connectionId: 'builder' })]
     const projects = [makeProject('github:stablyai/orca', ['orca-local', 'orca-ssh'])]
+
     const projectHostSetups = [
       makeSetup('orca-local', 'github:stablyai/orca', 'local', 'orca-local'),
       makeSetup('orca-ssh', 'github:stablyai/orca', 'ssh:builder', 'orca-ssh')
@@ -289,6 +299,7 @@ describe('project-host workspace target resolution', () => {
     const localRepo = makeRepo('orca-local')
     const remoteRepo = makeRepo('orca-ssh', { connectionId: 'builder' })
     const projects = [makeProject('github:stablyai/orca', ['orca-local', 'orca-ssh'])]
+
     const projectHostSetups = [
       makeSetup('orca-local', 'github:stablyai/orca', 'local', 'orca-local')
     ]
@@ -311,6 +322,7 @@ describe('project-host workspace target resolution', () => {
   it('reports setup-not-ready when the selected host has pending setup metadata', () => {
     const repo = makeRepo('orca')
     const projects = [makeProject('github:stablyai/orca', ['orca'])]
+
     const projectHostSetups = [
       makeSetup('orca', 'github:stablyai/orca', 'local', 'orca'),
       makeSetup('gpu-pending', 'github:stablyai/orca', 'runtime:gpu', '', {
@@ -337,6 +349,7 @@ describe('project-host workspace target resolution', () => {
   it('reports unavailable when an explicit setup is not ready', () => {
     const repo = makeRepo('orca')
     const projects = [makeProject('github:stablyai/orca', ['orca'])]
+
     const projectHostSetups = [
       makeSetup('orca', 'github:stablyai/orca', 'local', 'orca', { setupState: 'setting-up' })
     ]
@@ -357,6 +370,7 @@ describe('project-host workspace target resolution', () => {
   it('does not resolve workspace creation through a removed host', () => {
     const remoteRepo = makeRepo('remote-repo', { connectionId: 'removed' })
     const projects = [makeProject('repo:remote', ['remote-repo'])]
+
     const projectHostSetups = [
       makeSetup('removed-setup', 'repo:remote', 'ssh:removed', 'remote-repo')
     ]
@@ -377,6 +391,7 @@ describe('project-host workspace target resolution', () => {
     const remoteRepo = makeRepo('remote-repo', { connectionId: 'removed' })
     const localRepo = makeRepo('local-repo')
     const projects = [makeProject('repo:orca', ['remote-repo', 'local-repo'])]
+
     const projectHostSetups = [
       makeSetup('removed-setup', 'repo:orca', 'ssh:removed', 'remote-repo'),
       makeSetup('local-setup', 'repo:orca', 'local', 'local-repo')
@@ -401,10 +416,12 @@ describe('project-host workspace target resolution', () => {
   // own host instead of returning '' (the silent no-op the dropdown showed).
   describe('cross-host project selection', () => {
     const repos = [makeRepo('local-repo'), makeRepo('remote-repo', { connectionId: 'remote-1' })]
+
     const projects = [
       makeProject('repo:local-repo', ['local-repo']),
       makeProject('repo:remote-repo', ['remote-repo'])
     ]
+
     const projectHostSetups = [
       makeSetup('local-repo', 'repo:local-repo', 'local', 'local-repo'),
       makeSetup('remote-repo', 'repo:remote-repo', 'ssh:remote-1', 'remote-repo')
@@ -436,6 +453,7 @@ describe('project-host workspace target resolution', () => {
 
     it('still prefers the current host when the project is set up on it', () => {
       const multiHostProjects = [makeProject('repo:multi', ['multi-local', 'multi-remote'])]
+
       const multiHostSetups = [
         makeSetup('multi-local', 'repo:multi', 'local', 'multi-local'),
         makeSetup('multi-remote', 'repo:multi', 'ssh:remote-1', 'multi-remote')

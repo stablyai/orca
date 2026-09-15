@@ -8,18 +8,22 @@ import { SSH_EXIT_UNCONFIRMED_REASON } from '../../shared/pty-liveness-verdict'
 // provider's own answer separates an observed exit from lost contact.
 
 const WORKTREE_ID = 'repo-1::/tmp/inventory-verdict'
+
 const REMOTE_PTY_ID = 'ssh:conn-1@@relay-9'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((settle) => {
     resolve = settle
   })
+
   return { promise, resolve }
 }
 
 function makeStore() {
   const session = getDefaultWorkspaceSession()
+
   return {
     getWorkspaceSession: vi.fn(() => session),
     setWorkspaceSession: vi.fn(),
@@ -56,6 +60,7 @@ function makeRuntimeMissingFromInventory(
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
   runtime.registerPty(REMOTE_PTY_ID, WORKTREE_ID, 'conn-1')
+
   return runtime
 }
 
@@ -133,6 +138,7 @@ describe('inventory sweep liveness verdicts', () => {
 
   it('records positive host evidence when reconnect inventory observes the PTY live', async () => {
     let reconnected = false
+
     const runtime = makeRuntimeMissingFromInventory(
       () => null,
       vi.fn(async () => (reconnected ? [{ id: REMOTE_PTY_ID, worktreeId: WORKTREE_ID }] : []))
@@ -204,6 +210,7 @@ describe('inventory sweep liveness verdicts', () => {
 
   it('retains unresolved verdicts for every still-addressable PTY', () => {
     const runtime = new OrcaRuntimeService(makeStore() as never)
+
     for (let index = 0; index < 257; index += 1) {
       const ptyId = `ssh:conn-1@@relay-${index}`
       runtime.registerPty(ptyId, WORKTREE_ID, 'conn-1')
@@ -220,6 +227,7 @@ describe('inventory sweep liveness verdicts', () => {
     // Eviction classifies by CURRENT addressability, so churn cannot push an active PTY's verdict
     // out: only ids that no record, handle, or leaf still names are candidates.
     const runtime = new OrcaRuntimeService(makeStore() as never)
+
     for (let index = 0; index < 400; index += 1) {
       const ptyId = `ssh:conn-1@@churn-${index}`
       runtime.registerPty(ptyId, WORKTREE_ID, 'conn-1')

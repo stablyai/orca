@@ -46,28 +46,35 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
   function firstPending(): PendingPtyInputWrite | undefined {
     const ordinary = peekHeadQueue(pendingOrdinary)
     const reply = peekHeadQueue(pendingReplies)
+
     if (!ordinary) {
       return reply
     }
+
     if (!reply) {
       return ordinary
     }
+
     return ordinary.sequence < reply.sequence ? ordinary : reply
   }
 
   function shiftOrdinary(): PendingPtyInputWrite | undefined {
     const removed = shiftHeadQueue(pendingOrdinary)
     resetSequenceIfEmpty()
+
     return removed
   }
 
   function shiftReply(): PendingPtyInputWrite | undefined {
     const removed = shiftHeadQueue(pendingReplies)
+
     if (removed) {
       pendingReplyCount -= 1
       pendingReplyCodeUnits -= removed.text.length
     }
+
     resetSequenceIfEmpty()
+
     return removed
   }
 
@@ -77,6 +84,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
     } else {
       shiftOrdinary()
     }
+
     if (accepted !== undefined) {
       item.resolveAccepted?.(accepted)
     }
@@ -86,6 +94,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
     if (text.length > PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLY_CODE_UNITS) {
       return false
     }
+
     while (
       pendingReplyCount >= PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES ||
       pendingReplyCodeUnits + text.length > PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLY_CODE_UNITS
@@ -94,6 +103,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
         return false
       }
     }
+
     return true
   }
 
@@ -101,6 +111,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
     for (let index = pendingOrdinary.head; index < pendingOrdinary.items.length; index += 1) {
       pendingOrdinary.items[index]?.resolveAccepted?.(false)
     }
+
     resetHeadQueue(pendingOrdinary)
     resetHeadQueue(pendingReplies)
     pendingReplyCount = 0
@@ -113,12 +124,15 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
   // long-lived pane accumulated one record per acknowledged write (Esc, Ctrl+C).
   async function writeAcceptedChunk(id: string, data: string): Promise<boolean> {
     let cancel = (): void => undefined
+
     const cancelled = new Promise<boolean>((resolve) => {
       cancel = () => resolve(false)
     })
+
     // Registered before the write starts so a clear() inside a synchronous
     // writeAccepted callback still unblocks this race.
     pendingAcceptedCancels.add(cancel)
+
     try {
       return await Promise.race([
         cancelled,
@@ -133,29 +147,37 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
     let failureGeneration = generation
     // Why: the drain yields, so the owner may rebind before the failure surfaces; report the id that actually failed.
     let failingId: string | null = null
+
     try {
       let next: PendingPtyInputWrite | undefined
+
       while ((next = firstPending())) {
         failureGeneration = generation
         failingId = next.id
+
         if (!deps.isWritable(next.id)) {
           removePending(next, false)
           continue
         }
+
         if (next.tooLarge !== false) {
           next.tooLarge = await Promise.resolve(next.tooLarge).catch(() => true)
+
           if (firstPending() !== next) {
             continue
           }
+
           if (next.tooLarge) {
             removePending(next, false)
             continue
           }
+
           if (!deps.isWritable(next.id)) {
             removePending(next, false)
             continue
           }
         }
+
         // Why: dense input streams (SGR wheel reports during trackpad momentum,
         // key auto-repeat) enqueue one tiny item per event. Writing one item per
         // macrotask turn lets Chromium's nested-timer clamp pace the drain at
@@ -167,6 +189,7 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
           let payload = next.text
           removePending(next)
           let peek: PendingPtyInputWrite | undefined
+
           while ((peek = firstPending())) {
             if (
               peek.id !== next.id ||
@@ -177,51 +200,70 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
             ) {
               break
             }
+
             payload += peek.text
             removePending(peek)
           }
+
           deps.write(next.id, payload)
+
           if (firstPending()) {
             await yieldBetweenWrites()
           }
+
           continue
         }
+
         next.chunks ??= iterateTerminalInputChunks(next.text)
+
         const chunk =
           next.nextChunk === undefined ? next.chunks.next() : { done: false, value: next.nextChunk }
+
         next.nextChunk = undefined
+
         if (chunk.done) {
           removePending(next, true)
           continue
         }
+
         const writeGeneration = generation
+
         const accepted = next.resolveAccepted
           ? await writeAcceptedChunk(next.id, chunk.value)
           : (deps.write(next.id, chunk.value), true)
+
         if (generation !== writeGeneration || firstPending() !== next) {
           continue
         }
+
         if (!accepted) {
           clearPending()
+
           return
         }
+
         const following = next.chunks.next()
+
         if (following.done) {
           removePending(next, true)
         } else {
           next.nextChunk = following.value
         }
+
         if (firstPending()) {
           await yieldBetweenWrites()
         }
       }
     } catch (error) {
       const failureIsCurrent = generation === failureGeneration
+
       if (failureIsCurrent) {
         clearPending()
         failedGeneration = generation
       }
+
       console.warn('[pty-input-write-queue] drain failed:', error)
+
       if (failureIsCurrent && failingId !== null) {
         try {
           deps.onDrainFailure?.(failingId)
@@ -236,12 +278,15 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
     if (drainPromise) {
       return
     }
+
     const finishDrain = (): void => {
       drainPromise = null
+
       if (firstPending()) {
         scheduleDrain()
       }
     }
+
     // Reserve the worker before drain() can invoke a reentrant write callback.
     drainPromise = Promise.resolve()
     drainPromise = drain().finally(finishDrain)
@@ -256,20 +301,28 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
     try {
       if (failedGeneration === generation) {
         resolveAccepted?.(false)
+
         return false
       }
+
       // Every query reply stays atomic so host-side ordering can classify it (#13892).
       const replyOnly = queryReply
+
       if (replyOnly && !admitReply(data)) {
         return false
       }
+
       const tooLarge = replyOnly ? false : isTerminalInputTooLargeWithDeferredMeasurement(data)
+
       if (tooLarge === true) {
         resolveAccepted?.(false)
+
         return false
       }
+
       const item = { sequence: nextSequence, id, text: data, replyOnly, tooLarge, resolveAccepted }
       nextSequence += 1
+
       if (replyOnly) {
         pendingReplies.items.push(item)
         pendingReplyCount += 1
@@ -277,10 +330,13 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
       } else {
         pendingOrdinary.items.push(item)
       }
+
       scheduleDrain()
+
       return true
     } catch {
       resolveAccepted?.(false)
+
       return false
     }
   }
@@ -309,9 +365,11 @@ export function createPtyInputWriteQueue(deps: PtyInputWriteQueueDeps): PtyInput
       generation += 1
       failedGeneration = null
       clearPending()
+
       for (const cancel of pendingAcceptedCancels) {
         cancel()
       }
+
       pendingAcceptedCancels.clear()
     }
   }

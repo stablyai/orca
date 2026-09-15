@@ -6,6 +6,7 @@ import {
 } from './codex-app-server-capability-cache'
 
 const unsupportedError = new Error('unsupported')
+
 const isUnsupported = (error: unknown): boolean => error === unsupportedError
 
 describe('CodexAppServerCapabilityCache', () => {
@@ -128,24 +129,28 @@ describe('CodexAppServerCapabilityCache', () => {
   it('dedupes concurrent probes on one host to a single app-server session', async () => {
     const cache = new CodexAppServerCapabilityCache()
     let releaseProbe!: (error: unknown) => void
+
     const preferred = vi.fn(
       () =>
         new Promise<string>((_resolve, reject) => {
           releaseProbe = reject
         })
     )
+
     const first = cache.runWithFallback(
       'native',
       preferred,
       () => Promise.resolve('fallback'),
       isUnsupported
     )
+
     const second = cache.runWithFallback(
       'native',
       preferred,
       () => Promise.resolve('fallback'),
       isUnsupported
     )
+
     await Promise.resolve()
     releaseProbe(unsupportedError)
 
@@ -157,25 +162,30 @@ describe('CodexAppServerCapabilityCache', () => {
   it('lets a waiter run its own work once the in-flight probe reports support', async () => {
     const cache = new CodexAppServerCapabilityCache()
     let releaseProbe!: (value: string) => void
+
     const firstPreferred = vi.fn(
       () =>
         new Promise<string>((resolve) => {
           releaseProbe = resolve
         })
     )
+
     const secondPreferred = vi.fn(() => Promise.resolve('second'))
+
     const first = cache.runWithFallback(
       'native',
       firstPreferred,
       () => Promise.resolve('fallback'),
       isUnsupported
     )
+
     const second = cache.runWithFallback(
       'native',
       secondPreferred,
       () => Promise.resolve('fallback'),
       isUnsupported
     )
+
     await Promise.resolve()
     releaseProbe('first')
 

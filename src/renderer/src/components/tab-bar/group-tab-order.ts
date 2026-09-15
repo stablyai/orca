@@ -34,28 +34,34 @@ export function getGroupVisibleTabOrder(
   preserveTypeCollisions = false
 ): VisibleTabRef[] {
   const tabsById = new Map(groupTabs.map((t) => [t.id, t]))
+
   const toRef = (tab: Tab): VisibleTabRef | null => {
     if (tab.contentType === 'terminal') {
       return terminalEntityIds.has(tab.entityId)
         ? { type: 'terminal', id: tab.entityId, tabId: tab.id }
         : null
     }
+
     if (tab.contentType === 'browser') {
       return browserEntityIds.has(tab.entityId)
         ? { type: 'browser', id: tab.entityId, tabId: tab.id }
         : null
     }
+
     if (tab.contentType === 'simulator') {
       return simulatorTabIds.has(tab.id) ? { type: 'simulator', id: tab.id, tabId: tab.id } : null
     }
+
     if (tab.contentType === 'agent-session') {
       // Structured chat tabs are self-backed: the unified tab is the entity, so none can be stale.
       return { type: 'agent-session', id: tab.entityId, tabId: tab.id }
     }
+
     return editorEntityIds.has(tab.entityId)
       ? { type: 'editor', id: tab.entityId, tabId: tab.id }
       : null
   }
+
   // Why: the strip keys terminals/browsers by entity id and editors/simulators by unified tab id
   // (see useTabGroupItemProjections) — reconcileTabOrder must see that same id domain.
   const visibleIdOf = (tab: Tab): string =>
@@ -73,19 +79,26 @@ export function getGroupVisibleTabOrder(
       simulator: new Set<string>(),
       'agent-session': new Set<string>()
     }
+
     const result: VisibleTabRef[] = []
+
     for (const unifiedId of group.tabOrder) {
       const tab = tabsById.get(unifiedId)
+
       if (!tab) {
         continue
       }
+
       const ref = toRef(tab)
+
       if (!ref || seenByType[ref.type].has(visibleIdOf(tab))) {
         continue
       }
+
       seenByType[ref.type].add(visibleIdOf(tab))
       result.push(ref)
     }
+
     return result
   }
 
@@ -93,14 +106,17 @@ export function getGroupVisibleTabOrder(
   // last declared tab while the reconciled visible id still occupies one position.
   const declaredTabs = group.tabOrder.flatMap((unifiedId) => {
     const tab = tabsById.get(unifiedId)
+
     return tab ? [tab] : []
   })
+
   const refByVisibleId = new Map<string, VisibleTabRef>()
   const terminalIds: string[] = []
   const editorIds: string[] = []
   const browserIds: string[] = []
   const simulatorIds: string[] = []
   const agentSessionIds: string[] = []
+
   const idsByType = {
     terminal: terminalIds,
     editor: editorIds,
@@ -108,13 +124,17 @@ export function getGroupVisibleTabOrder(
     simulator: simulatorIds,
     'agent-session': agentSessionIds
   }
+
   for (const tab of [...declaredTabs, ...groupTabs]) {
     const visibleId = visibleIdOf(tab)
     const ref = toRef(tab)
+
     if (!ref) {
       continue
     }
+
     const existing = refByVisibleId.get(visibleId)
+
     if (existing) {
       // Keep the same type precedence as buildOrderedTabItems, whose terminal map wins over
       // editor/browser/simulator maps when visible ids collide across content types.
@@ -125,12 +145,15 @@ export function getGroupVisibleTabOrder(
         simulator: 3,
         'agent-session': 4
       } as const
+
       if (priority[ref.type] > priority[existing.type]) {
         continue
       }
+
       refByVisibleId.set(visibleId, ref)
       continue
     }
+
     refByVisibleId.set(visibleId, ref)
     idsByType[ref.type].push(visibleId)
   }
@@ -144,6 +167,7 @@ export function getGroupVisibleTabOrder(
     agentSessionIds
   ).flatMap((visibleId) => {
     const ref = refByVisibleId.get(visibleId)
+
     return ref ? [ref] : []
   })
 }
@@ -177,15 +201,19 @@ export function getActiveTabNavOrder(
   ids: ActiveTabNavOrderIds = {}
 ): VisibleTabRef[] {
   const terminalIds = ids.terminalIds ?? (state.tabsByWorktree[worktreeId] ?? []).map((t) => t.id)
+
   const editorIds =
     ids.editorIds ?? state.openFiles.filter((f) => f.worktreeId === worktreeId).map((f) => f.id)
+
   const browserIds =
     ids.browserIds ?? (state.browserTabsByWorktree?.[worktreeId] ?? []).map((t) => t.id)
+
   const simulatorIds =
     ids.simulatorIds ??
     (state.unifiedTabsByWorktree[worktreeId] ?? [])
       .filter((tab) => tab.contentType === 'simulator')
       .map((tab) => tab.id)
+
   const agentSessionIds =
     ids.agentSessionIds ??
     (state.unifiedTabsByWorktree[worktreeId] ?? [])
@@ -193,6 +221,7 @@ export function getActiveTabNavOrder(
       .map((tab) => tab.id)
 
   const activeGroupId = state.activeGroupIdByWorktree[worktreeId]
+
   const group = activeGroupId
     ? (state.groupsByWorktree[worktreeId] ?? []).find((g) => g.id === activeGroupId)
     : undefined
@@ -201,12 +230,14 @@ export function getActiveTabNavOrder(
     const groupTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
       (tab) => tab.groupId === group.id
     )
+
     // The group strip renders unified terminal tabs before their legacy runtime rows hydrate.
     // Keep those tabs keyboard-cyclable; activation can hydrate/reconnect the backing runtime.
     const groupTerminalIds = new Set([
       ...terminalIds,
       ...groupTabs.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
     ])
+
     return getGroupVisibleTabOrder(
       group,
       groupTabs,
@@ -226,12 +257,14 @@ export function getActiveTabNavOrder(
     simulatorIds,
     agentSessionIds
   )
+
   const terminalIdSet = new Set(terminalIds)
   const editorIdSet = new Set(editorIds)
   const browserIdSet = new Set(browserIds)
   const simulatorIdSet = new Set(simulatorIds)
   const agentSessionIdSet = new Set(agentSessionIds)
   const result: VisibleTabRef[] = []
+
   for (const id of visibleIds) {
     if (terminalIdSet.has(id)) {
       result.push({ type: 'terminal', id })
@@ -245,10 +278,12 @@ export function getActiveTabNavOrder(
       const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === id && candidate.contentType === 'agent-session'
       )
+
       if (tab) {
         result.push({ type: 'agent-session', id: tab.entityId, tabId: tab.id })
       }
     }
   }
+
   return result
 }

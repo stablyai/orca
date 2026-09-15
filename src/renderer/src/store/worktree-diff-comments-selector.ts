@@ -27,10 +27,13 @@ export function selectWorktreeDiffComments(
   if (!worktreeId) {
     return undefined
   }
+
   const scope = parseWorkspaceKey(worktreeId)
+
   if (scope?.type === 'folder') {
     return findFolderWorkspaceOwner(state, scope.folderWorkspaceId)?.diffComments
   }
+
   // Why: mounted Monaco and diff surfaces rerun this selector on every store
   // write, so share the immutable-snapshot index instead of rescanning all worktrees.
   return getIndexedWorktreeById(state.worktreesByRepo, worktreeId)?.diffComments

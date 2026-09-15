@@ -16,8 +16,10 @@ import {
 } from './runtime-status-hydration'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn(), info: vi.fn() } }))
+
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -25,11 +27,17 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentGetStatus = vi.fn()
+
 const settingsSet = vi.fn().mockResolvedValue(undefined)
+
 const settingsGet = vi.fn()
+
 const runtimeEnvironmentList = vi.fn()
+
 const setActiveRuntimeEnvironmentPreference = vi.fn().mockResolvedValue(undefined)
+
 const worktreesListDetected = vi.fn()
 
 const env2Lineage: WorktreeLineage = {
@@ -44,6 +52,7 @@ const env2Lineage: WorktreeLineage = {
 
 function makeRuntimeEnvironment(id: string): PublicKnownRuntimeEnvironment {
   const endpointId = `ws-${id}`
+
   return {
     id,
     name: id,
@@ -58,11 +67,14 @@ function makeRuntimeEnvironment(id: string): PublicKnownRuntimeEnvironment {
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {}
+
   let reject: (reason?: unknown) => void = () => {}
+
   const promise = new Promise<T>((promiseResolve, promiseReject) => {
     resolve = promiseResolve
     reject = promiseReject
   })
+
   return { promise, resolve, reject }
 }
 
@@ -88,6 +100,7 @@ beforeEach(() => {
     ({ method, params }: { method: string; params?: { repo?: string } }) => {
       const detectedRepoId = params?.repo ?? 'repo-env-2'
       const detectedPath = detectedRepoId === 'repo-env-1' ? '/env-1/repo' : '/env-2/repo'
+
       const result =
         method === 'status.get'
           ? {
@@ -147,6 +160,7 @@ beforeEach(() => {
                       : method === 'settings.get'
                         ? { settings: {} }
                         : {}
+
       return Promise.resolve({ id: 'rpc-1', ok: true, result, _meta: { runtimeId: 'runtime-2' } })
     }
   )
@@ -186,6 +200,7 @@ describe('createSettingsSlice checked persistence', () => {
       pluginSystemEnabled: true,
       notifications: {}
     } as unknown as NonNullable<AppState['settings']>
+
     settingsSet.mockResolvedValueOnce(authoritativeSettings)
     const store = createTestStore()
     store.setState({
@@ -205,10 +220,12 @@ describe('createSettingsSlice checked persistence', () => {
 
   it('rejects a failed checked update without changing local settings', async () => {
     const persistenceError = new Error('settings IPC failed')
+
     const currentSettings = {
       pluginSystemEnabled: false,
       notifications: {}
     } as unknown as NonNullable<AppState['settings']>
+
     settingsSet.mockRejectedValueOnce(persistenceError)
     const store = createTestStore()
     store.setState({ settings: currentSettings })
@@ -222,10 +239,12 @@ describe('createSettingsSlice checked persistence', () => {
 
   it('keeps the existing update action best-effort and logs persistence failures', async () => {
     const persistenceError = new Error('settings IPC failed')
+
     const currentSettings = {
       pluginSystemEnabled: false,
       notifications: {}
     } as unknown as NonNullable<AppState['settings']>
+
     settingsSet.mockRejectedValueOnce(persistenceError)
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     const store = createTestStore()

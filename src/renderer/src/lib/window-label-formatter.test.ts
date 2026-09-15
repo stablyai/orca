@@ -3,6 +3,7 @@ import { formatResetCountdown, formatResetDuration } from '../../../shared/rate-
 import { formatRateLimitWindowChipLabel, formatWindowLabel } from './window-label-formatter'
 
 const MIN = 60_000
+
 const HOUR = 60 * MIN
 
 describe('formatWindowLabel', () => {

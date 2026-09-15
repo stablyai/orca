@@ -4,18 +4,23 @@ import { hasWorkspaceDragData } from './workspace-status'
 
 function getWheelPixels(event: WheelEvent): number {
   const unit = event.deltaMode === WheelEvent.DOM_DELTA_LINE ? 16 : window.innerHeight
+
   if (event.deltaMode === WheelEvent.DOM_DELTA_PIXEL) {
     return event.deltaY || event.deltaX
   }
+
   return (event.deltaY || event.deltaX) * unit
 }
 
 function isEventInsideElement(event: WheelEvent, element: HTMLElement): boolean {
   const target = event.target
+
   if (target instanceof Node && element.contains(target)) {
     return true
   }
+
   const rect = element.getBoundingClientRect()
+
   return (
     event.clientX >= rect.left &&
     event.clientX <= rect.right &&
@@ -31,7 +36,9 @@ function pointIsInsideElement(
   if (!point) {
     return false
   }
+
   const rect = element.getBoundingClientRect()
+
   return (
     point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom
   )
@@ -65,6 +72,7 @@ export function useWorkspaceKanbanShiftWheelScroll(
       if (!isWorkspaceDragActive) {
         return
       }
+
       lastDragPoint = { x: event.clientX, y: event.clientY }
     }
 
@@ -72,6 +80,7 @@ export function useWorkspaceKanbanShiftWheelScroll(
       const board = boardRef.current
       const scroller = scrollerRef.current
       const isPointerDragActive = isPointerDragActiveRef?.current === true
+
       if (
         !event.shiftKey ||
         (!isWorkspaceDragActive && !isPointerDragActive) ||
@@ -83,9 +92,11 @@ export function useWorkspaceKanbanShiftWheelScroll(
       }
 
       const delta = getWheelPixels(event)
+
       if (delta === 0) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       event.stopImmediatePropagation()
@@ -100,6 +111,7 @@ export function useWorkspaceKanbanShiftWheelScroll(
     // Why: Chromium can cancel the native drag if Shift+wheel reaches default
     // scrolling first, so intercept before bubble listeners see the event.
     document.addEventListener('wheel', handleWheel, { capture: true, passive: false })
+
     return () => {
       document.removeEventListener('dragstart', handleDragStart, true)
       document.removeEventListener('dragover', handleDragOver, true)

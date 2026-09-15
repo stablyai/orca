@@ -146,6 +146,7 @@ describe('GitLab IPC handlers', () => {
   beforeEach(() => {
     setPlatform(ORIGINAL_PLATFORM)
     ipcHandlers.clear()
+
     for (const mock of [
       listMergeRequestsMock,
       getIssueMock,
@@ -184,6 +185,7 @@ describe('GitLab IPC handlers', () => {
       connectionId: 'builder',
       executionHostId: toSshExecutionHostId('builder')
     })
+
     listWorkItemsMock.mockResolvedValueOnce({ items: [] })
     registerGitLabHandlers(storeWithRepos([repo(), remoteRepo]) as Store)
 
@@ -303,6 +305,7 @@ describe('GitLab IPC handlers', () => {
       connectionId: 'builder',
       executionHostId: toSshExecutionHostId('builder')
     })
+
     getWorkItemByProjectRefMock.mockResolvedValueOnce({
       type: 'issue',
       number: 42,
@@ -340,6 +343,7 @@ describe('GitLab IPC handlers', () => {
 
   it('routes local WSL project GitLab issue, MR, work-item, and todo IPC through project git options', async () => {
     setPlatform('win32')
+
     const projects: ReturnType<Store['getProjects']> = [
       {
         id: 'project-1',
@@ -351,6 +355,7 @@ describe('GitLab IPC handlers', () => {
         updatedAt: 0
       }
     ]
+
     listMergeRequestsMock.mockResolvedValue({ items: [] })
     listWorkItemsMock.mockResolvedValue({ items: [] })
     listIssuesMock.mockResolvedValue({ items: [], totalPages: 3 })
@@ -385,12 +390,14 @@ describe('GitLab IPC handlers', () => {
       page: 1,
       perPage: 20
     })
+
     const issueListResult = await ipcHandlers.get('gitlab:listIssues')?.(null, {
       repoPath: '/local/orca',
       state: 'opened',
       limit: 20,
       page: 3
     })
+
     await ipcHandlers.get('gitlab:issue')?.(null, { repoPath: '/local/orca', number: 7 })
     await ipcHandlers.get('gitlab:createIssue')?.(null, {
       repoPath: '/local/orca',
@@ -491,6 +498,7 @@ describe('GitLab IPC handlers', () => {
 
   it('routes local WSL project GitLab MR details, review, job, and pasted URL IPC through project git options', async () => {
     setPlatform('win32')
+
     const projects: ReturnType<Store['getProjects']> = [
       {
         id: 'project-1',
@@ -502,6 +510,7 @@ describe('GitLab IPC handlers', () => {
         updatedAt: 0
       }
     ]
+
     const inlineInput = {
       body: 'Inline',
       path: 'src/app.ts',
@@ -510,6 +519,7 @@ describe('GitLab IPC handlers', () => {
       startSha: 'start',
       headSha: 'head'
     }
+
     getWorkItemDetailsMock.mockResolvedValue({ body: 'Details' })
     closeMRMock.mockResolvedValue({ ok: true })
     reopenMRMock.mockResolvedValue({ ok: true })
@@ -687,6 +697,7 @@ describe('GitLab IPC handlers', () => {
       ...Array.from({ length: 400 }, (_, index) => `line ${index}`),
       '\u001b[0;31mERROR: Job failed: exit code 1\u001b[0m'
     ].join('\n')
+
     getJobTraceMock.mockResolvedValue({ ok: true, trace: noisyTrace })
     registerGitLabHandlers(storeWithRepos([repo()]) as Store)
 
@@ -694,6 +705,7 @@ describe('GitLab IPC handlers', () => {
       repoPath: '/local/orca',
       jobId: 99
     })) as { ok: true; trace: string }
+
     const excerpt = (await ipcHandlers.get('gitlab:jobTrace')?.(null, {
       repoPath: '/local/orca',
       jobId: 99,

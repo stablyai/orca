@@ -14,8 +14,10 @@ export function appendBoundaryAttributionLines(
   if (details[CRASH_REPORT_ATTRIBUTION_DETAIL_KEY] !== UNRELIABLE_BOUNDARY_ATTRIBUTION) {
     return
   }
+
   const note = details[CRASH_REPORT_ATTRIBUTION_NOTE_DETAIL_KEY]
   lines.push('', `Attribution: ${UNRELIABLE_BOUNDARY_ATTRIBUTION}`)
+
   if (typeof note === 'string' && note) {
     lines.push(note)
   }

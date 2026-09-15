@@ -14,18 +14,22 @@ vi.mock('electron', () => ({
   ipcMain: { on: vi.fn(), removeListener: vi.fn() },
   webContents: { fromId: webContentsFromId }
 }))
+
 vi.mock('../browser/browser-screencast-stream', () => ({ startBrowserScreencast }))
 
 function deferred() {
   let resolve!: () => void
+
   const promise = new Promise<void>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
 
 function createCommandsHost(): RuntimeBrowserCommandHost {
   const runtimeBrowserPages = new RuntimeBrowserPageRegistry()
+
   const bridge = {
     getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),
     getActivePageId: vi.fn(() => 'page-1'),
@@ -41,6 +45,7 @@ function createCommandsHost(): RuntimeBrowserCommandHost {
       ]
     }))
   } as unknown as AgentBrowserBridge
+
   return {
     resolveWorktreeSelector: async () => ({ id: 'wt-1' }),
     getAgentBrowserBridge: () => bridge,
@@ -66,6 +71,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
     const commands = new RuntimeBrowserCommands(createCommandsHost())
     const firstSend = vi.fn(() => false)
     const secondSend = vi.fn(() => true)
+
     const first = await commands.browserScreencast(
       {
         worktree: 'id:wt-1',
@@ -76,6 +82,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
       },
       { sendBinary: firstSend }
     )
+
     const second = await commands.browserScreencast(
       {
         worktree: 'id:wt-1',
@@ -113,6 +120,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
     const updateViewport = vi.fn(async () => {})
     startBrowserScreencast.mockResolvedValue({ stop, done: done.promise, updateViewport })
     const commands = new RuntimeBrowserCommands(createCommandsHost())
+
     const sized = await commands.browserScreencast(
       {
         worktree: 'id:wt-1',
@@ -123,6 +131,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
       },
       { sendBinary: vi.fn(() => true) }
     )
+
     const sizeless = await commands.browserScreencast(
       { worktree: 'id:wt-1', page: 'page-1', format: 'jpeg' },
       { sendBinary: vi.fn(() => true) }
@@ -146,13 +155,16 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
     const done = deferred()
     const snapshot = new Uint8Array([9, 9, 9])
     let onFrame: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void = () => true
+
     // Why: updateViewport exists to capture a frame for the joiner, and it runs while the
     // joiner's ready gate is still closed.
     const updateViewport = vi.fn(async () => {
       onFrame(snapshot)
     })
+
     startBrowserScreencast.mockImplementation(async (_guest: unknown, options: never) => {
       onFrame = (options as { onFrame: typeof onFrame }).onFrame
+
       return {
         stop: vi.fn(() => done.resolve()),
         done: done.promise,
@@ -174,6 +186,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
     )
     let gateOpen = false
     const joinerSend = vi.fn(() => gateOpen)
+
     const joiner = await commands.browserScreencast(
       {
         worktree: 'id:wt-1',
@@ -211,6 +224,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
       updateFrameBudget
     })
     const commands = new RuntimeBrowserCommands(createCommandsHost())
+
     const desktop = await commands.browserScreencast(
       {
         worktree: 'id:wt-1',
@@ -223,6 +237,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
       },
       { sendBinary: vi.fn(() => true) }
     )
+
     expect(startBrowserScreencast).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({ maxWidth: 3840, everyNthFrame: 2, minFrameIntervalMs: 0 })
@@ -241,6 +256,7 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
       },
       { sendBinary: vi.fn(() => true) }
     )
+
     expect(updateFrameBudget).toHaveBeenLastCalledWith({
       quality: 70,
       maxWidth: 975,
@@ -272,10 +288,12 @@ describe('RuntimeBrowserCommands screencast fanout', () => {
     })
     const sendBinary = vi.fn(() => true)
     const commands = new RuntimeBrowserCommands(createCommandsHost())
+
     const started = await commands.browserScreencast(
       { worktree: 'id:wt-1', page: 'page-1', format: 'jpeg' },
       { sendBinary }
     )
+
     const { onFrame } = startBrowserScreencast.mock.calls[0][1]
 
     expect(onFrame(new Uint8Array(REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES + 1))).toBe(true)
@@ -298,6 +316,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
 
   function pumpFrames(count: number): void {
     const onFrame = startBrowserScreencast.mock.calls[0][1].onFrame
+
     for (let index = 0; index < count; index += 1) {
       onFrame(new Uint8Array([index & 0xff]))
     }
@@ -307,6 +326,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
   // its socket leaves OPEN, which is exactly what a force-quit client leaves behind.
   function sendUntilQuit(framesBeforeQuit: number) {
     let sent = 0
+
     return vi.fn((_bytes: Uint8Array<ArrayBufferLike>) => sent++ < framesBeforeQuit)
   }
 
@@ -318,6 +338,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
     startBrowserScreencast.mockResolvedValue({ stop, done: done.promise, updateViewport })
     const commands = new RuntimeBrowserCommands(createCommandsHost())
     const survivorSend = vi.fn(() => true)
+
     const survivor: Subscription = await commands.browserScreencast(
       {
         worktree: 'id:wt-1',
@@ -328,7 +349,9 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
       },
       { sendBinary: survivorSend }
     )
+
     const ghostSend = sendUntilQuit(1)
+
     const ghost: Subscription = await commands.browserScreencast(
       {
         worktree: 'id:wt-1',
@@ -339,6 +362,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
       },
       { sendBinary: ghostSend }
     )
+
     updateViewport.mockClear()
 
     pumpFrames(BROWSER_SCREENCAST_GHOST_SUBSCRIBER_REFUSAL_LIMIT)
@@ -375,6 +399,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
       updateViewport: vi.fn(async () => {})
     })
     const commands = new RuntimeBrowserCommands(createCommandsHost())
+
     const only: Subscription = await commands.browserScreencast(
       { worktree: 'id:wt-1', page: 'page-1', format: 'jpeg' },
       { sendBinary: sendUntilQuit(1) }
@@ -396,6 +421,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
     })
     const commands = new RuntimeBrowserCommands(createCommandsHost())
     let sends = 0
+
     // Why: this is the backpressure shape — a link that drains one frame per window must never
     // be mistaken for a socket that is gone.
     const backpressured: Subscription = await commands.browserScreencast(
@@ -425,6 +451,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
     const commands = new RuntimeBrowserCommands(createCommandsHost())
     let gateOpen = false
     const joinerSend = vi.fn(() => gateOpen)
+
     const joiner: Subscription = await commands.browserScreencast(
       { worktree: 'id:wt-1', page: 'page-1', format: 'jpeg' },
       { sendBinary: joinerSend }
@@ -453,6 +480,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
     startBrowserScreencast.mockResolvedValue({ stop, done: done.promise, updateViewport })
     const commands = new RuntimeBrowserCommands(createCommandsHost())
     const ghostSend = vi.fn(() => true)
+
     const ghost: Subscription = await commands.browserScreencast(
       {
         worktree: 'id:wt-1',
@@ -463,6 +491,7 @@ describe('RuntimeBrowserCommands screencast ghost eviction', () => {
       },
       { sendBinary: ghostSend, pairedDeviceId: 'device-a' }
     )
+
     const otherSend = vi.fn(() => true)
     await commands.browserScreencast(
       { worktree: 'id:wt-1', page: 'page-1', format: 'jpeg' },

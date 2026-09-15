@@ -42,17 +42,20 @@ describe('installTerminalImeNativeTextForwarder', () => {
     sendInput: ReturnType<typeof vi.fn>
   } {
     const sendInput = vi.fn()
+
     const forwarder = installTerminalImeNativeTextForwarder({
       terminalElement: element,
       isComposing,
       sendInput
     })
+
     return { forwarder, sendInput }
   }
 
   describe('the claim is structural', () => {
     it('claims every single printable key regardless of which character it is', () => {
       const { forwarder } = install()
+
       // Punctuation, letters, digits, already-substituted CJK glyphs, Hangul
       // jamo and a won sign are all the same case: one printable character.
       for (const key of [
@@ -94,6 +97,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
 
     it('rejects named keys and multi-code-unit keys on length alone', () => {
       const { forwarder } = install()
+
       // No enumeration needed: none of these is one code unit long.
       for (const key of [
         'Enter',
@@ -236,6 +240,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
 
     it('drops a stale claim on the next keydown rather than on elapsed time', () => {
       vi.useFakeTimers()
+
       try {
         const { forwarder, sendInput } = install()
         // First press is swallowed by the IME: no input event ever arrives.
@@ -366,12 +371,14 @@ describe('installTerminalImeNativeTextForwarder', () => {
       sendInput: ReturnType<typeof vi.fn>
     } {
       const sendInput = vi.fn()
+
       const forwarder = installTerminalImeNativeTextForwarder({
         terminalElement: element,
         isComposing,
         sendInput,
         getKittyKeyboardFlags
       })
+
       return { forwarder, sendInput }
     }
 
@@ -561,6 +568,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
         () => 8,
         () => true
       )
+
       expect(forwarder.claimKeyEvent(keyEvent({ key: 'r' }))).toBe(false)
       dispatchInsertText(textarea, '한')
       expect(sendInput).not.toHaveBeenCalled()
@@ -618,11 +626,13 @@ describe('installTerminalImeNativeTextForwarder', () => {
     it('writes the commit raw when the caller tracks no flags at all', () => {
       // The preview bridge installs the forwarder with no pane to negotiate with.
       const sendInput = vi.fn()
+
       const forwarder = installTerminalImeNativeTextForwarder({
         terminalElement: element,
         isComposing: () => false,
         sendInput
       })
+
       forwarder.claimKeyEvent(keyEvent({ key: ',' }))
       dispatchInsertText(textarea, '，')
       expect(sendInput).toHaveBeenCalledExactlyOnceWith('，')
@@ -639,6 +649,7 @@ describe('installTerminalImeNativeTextForwarder', () => {
 
   it('is a no-op when no terminal element is provided', () => {
     const sendInput = vi.fn()
+
     const forwarder = installTerminalImeNativeTextForwarder({
       terminalElement: null,
       isComposing: () => false,

@@ -8,8 +8,11 @@ import {
 } from './runtime-repo-client'
 
 const getBaseRefDefault = vi.fn()
+
 const searchBaseRefs = vi.fn()
+
 const searchBaseRefDetails = vi.fn()
+
 const runtimeCall = vi.fn()
 
 beforeEach(() => {

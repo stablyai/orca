@@ -27,37 +27,46 @@ export function registerSpeechHandlers(store: Store): void {
 
   ipcMain.handle('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
     saveOpenAiSpeechApiKey(apiKey)
+
     return { configured: true }
   })
 
   ipcMain.handle('speech:clearOpenAiApiKey', async () => {
     clearOpenAiSpeechApiKey()
+
     return { configured: false }
   })
 
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {
     const manager = getSpeechModelManager(store)
     const window = BrowserWindow.fromWebContents(event.sender)
+
     if (!window) {
       return
     }
+
     const clearProgressCallback = manager.setProgressCallback((id, progress) => {
       if (!window.isDestroyed()) {
         window.webContents.send('speech:downloadProgress', { modelId: id, progress })
       }
     })
+
     // Why: ModelManager is process-wide; scope this BrowserWindow closure to
     // the download/window lifetime so stale windows are not retained.
     let progressCallbackCleared = false
+
     const cleanupProgressCallback = (): void => {
       if (progressCallbackCleared) {
         return
       }
+
       progressCallbackCleared = true
       window.off('closed', cleanupProgressCallback)
       clearProgressCallback()
     }
+
     window.once('closed', cleanupProgressCallback)
+
     try {
       await manager.downloadModel(modelId)
     } finally {
@@ -80,6 +89,7 @@ export function registerSpeechHandlers(store: Store): void {
 
   const getHotwordsFilePath = (content: string): string => {
     const digest = createHash('sha256').update(content).digest('hex').slice(0, 12)
+
     // Why: sherpa-onnx cannot read non-ASCII Windows paths, so co-locate the
     // hotwords file with the ASCII-safe model cache instead of userData.
     return join(getSpeechModelManager(store).getModelsDir(), `speech-hotwords-${digest}.txt`)
@@ -92,12 +102,15 @@ export function registerSpeechHandlers(store: Store): void {
     'speech:startDictation',
     async (event, modelId: string, hotwords?: string[], sessionId = 'desktop') => {
       const window = BrowserWindow.fromWebContents(event.sender)
+
       if (!window) {
         return
       }
+
       let resolvedHotwordsPath: string | undefined
       let windowClosed = false
       const owner = getDesktopOwner(event.sender.id, sessionId)
+
       const cleanupOnWindowClosed = (): void => {
         windowClosed = true
         void getSpeechSttService(store)
@@ -109,9 +122,11 @@ export function registerSpeechHandlers(store: Store): void {
           })
           .catch(() => {})
       }
+
       const cleanupSessionListener = (): void => {
         window.off('closed', cleanupOnWindowClosed)
       }
+
       window.once('closed', cleanupOnWindowClosed)
 
       try {
@@ -121,9 +136,11 @@ export function registerSpeechHandlers(store: Store): void {
         // permission prompt if not yet granted.
         if (process.platform === 'darwin') {
           const micStatus = systemPreferences.getMediaAccessStatus('microphone')
+
           if (micStatus !== 'granted') {
             await systemPreferences.askForMediaAccess('microphone')
             const newStatus = systemPreferences.getMediaAccessStatus('microphone')
+
             if (newStatus !== 'granted') {
               throw new Error(
                 'Microphone access not granted. In System Settings > Privacy & Security > Microphone, ' +
@@ -142,9 +159,11 @@ export function registerSpeechHandlers(store: Store): void {
 
         if (windowClosed || window.isDestroyed()) {
           cleanupSessionListener()
+
           if (resolvedHotwordsPath) {
             unlink(resolvedHotwordsPath).catch(() => {})
           }
+
           return
         }
 
@@ -154,6 +173,7 @@ export function registerSpeechHandlers(store: Store): void {
             if (window.isDestroyed()) {
               return
             }
+
             switch (msg.type) {
               case 'ready':
                 window.webContents.send('speech:ready', { sessionId })
@@ -180,14 +200,17 @@ export function registerSpeechHandlers(store: Store): void {
           resolvedHotwordsPath,
           owner
         )
+
         if (resolvedHotwordsPath) {
           unlink(resolvedHotwordsPath).catch(() => {})
         }
       } catch (err) {
         cleanupSessionListener()
+
         if (resolvedHotwordsPath) {
           unlink(resolvedHotwordsPath).catch(() => {})
         }
+
         throw err
       }
     }

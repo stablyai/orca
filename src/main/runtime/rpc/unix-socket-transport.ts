@@ -9,8 +9,11 @@ import { chmodSync, existsSync, rmSync } from 'node:fs'
 import type { RpcMessageContext, RpcTransport } from './transport'
 
 const MAX_RUNTIME_RPC_MESSAGE_BYTES = 1024 * 1024
+
 const RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS = 30_000
+
 const MAX_RUNTIME_RPC_CONNECTIONS = 32
+
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 10_000
 
 export type UnixSocketTransportOptions = {
@@ -59,6 +62,7 @@ export class UnixSocketTransport implements RpcTransport {
     const server = createServer((socket) => {
       this.handleConnection(socket)
     })
+
     server.maxConnections = MAX_RUNTIME_RPC_CONNECTIONS
 
     await new Promise<void>((resolve, reject) => {
@@ -79,24 +83,31 @@ export class UnixSocketTransport implements RpcTransport {
   async stop(): Promise<void> {
     const server = this.server
     this.server = null
+
     if (!server) {
       return
     }
+
     const closePromise = new Promise<void>((resolve, reject) => {
       server.close((error) => {
         if (error) {
           reject(error)
+
           return
         }
+
         resolve()
       })
     })
+
     // Why: server.close() stops accepting new connections but waits for
     // existing sockets; long-poll keepalives can otherwise hold shutdown open.
     for (const socket of Array.from(this.activeSockets)) {
       socket.destroy()
     }
+
     await closePromise
+
     if (this.kind === 'unix' && existsSync(this.endpoint)) {
       rmSync(this.endpoint, { force: true })
     }
@@ -127,6 +138,7 @@ export class UnixSocketTransport implements RpcTransport {
       for (const cleanup of inflight) {
         cleanup()
       }
+
       inflight.clear()
       this.activeSockets.delete(socket)
     })
@@ -134,9 +146,11 @@ export class UnixSocketTransport implements RpcTransport {
       if (oversized) {
         return
       }
+
       buffer += chunk
       // setEncoding('utf8') keeps split codepoints intact, so chunk byte lengths add exactly.
       retainedBytes += Buffer.byteLength(chunk, 'utf8')
+
       // Why: the Orca runtime lives in Electron main, so it must reject
       // oversized local RPC frames instead of letting a local client grow an
       // unbounded buffer and stall the app.
@@ -146,20 +160,27 @@ export class UnixSocketTransport implements RpcTransport {
           socket.write(`${response}\n`)
           socket.end()
         })
+
         return
       }
+
       if (!chunk.includes('\n')) {
         return
       }
+
       let newlineIndex = buffer.indexOf('\n')
+
       while (newlineIndex !== -1) {
         const rawMessage = buffer.slice(0, newlineIndex).trim()
         buffer = buffer.slice(newlineIndex + 1)
+
         if (rawMessage) {
           this.dispatchMessage(socket, rawMessage, inflight)
         }
+
         newlineIndex = buffer.indexOf('\n')
       }
+
       retainedBytes = Buffer.byteLength(buffer, 'utf8')
     })
   }
@@ -175,20 +196,26 @@ export class UnixSocketTransport implements RpcTransport {
     // dispatches that already replied on the same connection.
     const abortController = new AbortController()
     let cleanedUp = false
+
     const cleanupDispatch = (abort: boolean): void => {
       if (cleanedUp) {
         return
       }
+
       cleanedUp = true
+
       if (keepaliveTimer) {
         clearInterval(keepaliveTimer)
         keepaliveTimer = null
       }
+
       if (abort) {
         abortController.abort()
       }
+
       inflight.delete(abortDispatch)
     }
+
     const abortDispatch = (): void => cleanupDispatch(true)
     inflight.add(abortDispatch)
 
@@ -196,8 +223,10 @@ export class UnixSocketTransport implements RpcTransport {
       if (replied) {
         return
       }
+
       replied = true
       cleanupDispatch(false)
+
       if (!socket.destroyed && socket.writable) {
         socket.write(`${response}\n`)
       }
@@ -207,13 +236,17 @@ export class UnixSocketTransport implements RpcTransport {
       if (keepaliveTimer || replied) {
         return
       }
+
       keepaliveTimer = setInterval(() => {
         if (replied || socket.destroyed || !socket.writable) {
           cleanupDispatch(socket.destroyed || !socket.writable)
+
           return
         }
+
         socket.write('{"_keepalive":true}\n')
       }, this.keepaliveIntervalMs)
+
       // Why: don't hold the process open solely on the keepalive interval.
       if (typeof keepaliveTimer.unref === 'function') {
         keepaliveTimer.unref()

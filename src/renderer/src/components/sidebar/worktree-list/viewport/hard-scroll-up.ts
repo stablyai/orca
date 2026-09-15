@@ -78,18 +78,22 @@ export function normalizeWheelDeltaY(deltaY: number, deltaMode: number): number 
   if (deltaMode === 1) {
     return deltaY * 16
   }
+
   if (deltaMode === 2) {
     return deltaY * 600
   }
+
   return deltaY
 }
 
 function pruneByTime<T extends { t: number }>(samples: readonly T[], t: number): T[] {
   const cutoff = t - HARD_SCROLL_UP.windowMs
   const pruned = samples.filter((sample) => sample.t >= cutoff)
+
   if (pruned.length <= HARD_SCROLL_UP.maxSamples) {
     return pruned
   }
+
   return pruned.slice(pruned.length - HARD_SCROLL_UP.maxSamples)
 }
 
@@ -107,14 +111,17 @@ function isNearTop(scrollTop: number): boolean {
 
 function computeWheelIntent(samples: readonly HardScrollUpWheelSample[]): boolean {
   const upSamples = samples.filter((sample) => sample.upDeltaPx > 0)
+
   if (upSamples.length < HARD_SCROLL_UP.minUpEvents) {
     return false
   }
 
   let totalUp = 0
   let peakUp = 0
+
   for (const sample of upSamples) {
     totalUp += sample.upDeltaPx
+
     if (sample.upDeltaPx > peakUp) {
       peakUp = sample.upDeltaPx
     }
@@ -133,6 +140,7 @@ function computeVelocityIntent(samples: readonly HardScrollUpScrollSample[], t: 
   }
 
   const newest = samples.at(-1)
+
   if (!newest || t - newest.t > HARD_SCROLL_UP.velocitySustainMs) {
     return false
   }
@@ -140,28 +148,35 @@ function computeVelocityIntent(samples: readonly HardScrollUpScrollSample[], t: 
   // Walk backward to the oldest sample still inside the window, then measure
   // average upward velocity across that span.
   let oldest = newest
+
   for (let i = samples.length - 2; i >= 0; i -= 1) {
     const sample = samples.at(i)
+
     if (!sample) {
       continue
     }
+
     if (newest.t - sample.t > HARD_SCROLL_UP.windowMs) {
       break
     }
+
     oldest = sample
   }
 
   const elapsedMs = newest.t - oldest.t
+
   if (elapsedMs < HARD_SCROLL_UP.velocitySustainMs) {
     return false
   }
 
   const upwardPx = oldest.scrollTop - newest.scrollTop
+
   if (upwardPx <= 0) {
     return false
   }
 
   const velocity = (upwardPx / elapsedMs) * 1000
+
   return velocity >= HARD_SCROLL_UP.hardVelocityPxPerSec
 }
 
@@ -180,6 +195,7 @@ function withVisibility(
     ) {
       return state
     }
+
     return createHardScrollUpDetectorState()
   }
 
@@ -224,6 +240,7 @@ export function reduceHardScrollUpOnWheel(
   const pixelDeltaY = normalizeWheelDeltaY(deltaY, deltaMode)
   // Browser: negative deltaY = scroll up (content moves down, viewport toward top).
   const upDeltaPx = -pixelDeltaY
+
   const wheelDownDeltaPx =
     upDeltaPx < 0
       ? state.wheelDownDeltaPx + Math.abs(upDeltaPx)
@@ -239,9 +256,11 @@ export function reduceHardScrollUpOnWheel(
     upDeltaPx > 0 ? [...state.wheelSamples, { t, upDeltaPx }] : [],
     t
   )
+
   const nextScrollSamples = pruneByTime(state.scrollSamples, t)
 
   const intent = upDeltaPx > 0 && computeWheelIntent(nextWheelSamples)
+
   return withVisibility(
     {
       ...state,
@@ -272,6 +291,7 @@ export function reduceHardScrollUpOnScroll(
   const last = state.scrollSamples.at(-1)
   const downDeltaPx = last ? Math.max(0, scrollTop - last.scrollTop) : 0
   const upDeltaPx = last ? Math.max(0, last.scrollTop - scrollTop) : 0
+
   const scrollDownDeltaPx =
     downDeltaPx > 0
       ? state.scrollDownDeltaPx + downDeltaPx
@@ -297,9 +317,11 @@ export function reduceHardScrollUpOnScroll(
     [...(downDeltaPx > 0 ? [] : state.scrollSamples), { t, scrollTop }],
     t
   )
+
   const nextWheelSamples = pruneByTime(state.wheelSamples, t)
 
   const intent = upDeltaPx > 0 && computeVelocityIntent(nextScrollSamples, t)
+
   return withVisibility(
     {
       ...state,
@@ -319,6 +341,7 @@ export function reduceHardScrollUpOnIdle(
   if (!state.visible) {
     return state
   }
+
   return withVisibility(state, { t, scrollTop, maxScroll, intent: false })
 }
 
@@ -334,5 +357,6 @@ export function reduceHardScrollUpOnDismiss(
   ) {
     return state
   }
+
   return createHardScrollUpDetectorState()
 }

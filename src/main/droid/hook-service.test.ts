@@ -16,6 +16,7 @@ vi.mock('electron', () => ({
 
 vi.mock('os', async () => {
   const actual = (await vi.importActual('os')) as Record<string, unknown>
+
   return {
     ...actual,
     homedir: homedirMock
@@ -39,6 +40,7 @@ describe('DroidHookService', () => {
       if (name === 'userData') {
         return userDataDir
       }
+
       throw new Error(`unexpected getPath(${name})`)
     })
   })
@@ -58,6 +60,7 @@ describe('DroidHookService', () => {
     const config = JSON.parse(readFileSync(join(homeDir, '.factory', 'settings.json'), 'utf8')) as {
       hooks: Record<string, { matcher?: string; hooks: { command: string }[] }[]>
     }
+
     expect(Object.keys(config.hooks).sort()).toEqual(
       [
         'Notification',
@@ -76,9 +79,11 @@ describe('DroidHookService', () => {
     expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(
       process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /droid-hook/
     )
+
     if (process.platform !== 'win32') {
       expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
     }
+
     expect(config.hooks.PreToolUse[0].hooks[0].command).not.toContain(userDataDir)
   })
 
@@ -92,6 +97,7 @@ describe('DroidHookService', () => {
       const spaceHome = join(tmpdir(), 'orca droid home with spaces')
       mkdirSync(spaceHome, { recursive: true })
       homedirMock.mockReturnValue(spaceHome)
+
       try {
         expect(new DroidHookService().install().state).toBe('installed')
 

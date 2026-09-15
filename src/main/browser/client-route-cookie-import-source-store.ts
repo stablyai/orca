@@ -11,6 +11,7 @@ import type { BrowserSessionProfileSource } from '../../shared/browser-workspace
  * it onto the server's profile list.
  */
 const FILE_NAME = 'client-route-cookie-import-sources.json'
+
 // Why: one entry per (paired server × profile) the user imported into — a cap this
 // generous only guards against pathological growth, evicting oldest imports first.
 const MAX_ENTRIES = 128
@@ -31,9 +32,11 @@ function load(): StoredSources {
   if (cached) {
     return cached
   }
+
   try {
     const parsed: unknown = JSON.parse(readFileSync(storePath(), 'utf-8'))
     cached = {}
+
     if (parsed && typeof parsed === 'object') {
       for (const [key, value] of Object.entries(parsed)) {
         if (
@@ -48,11 +51,13 @@ function load(): StoredSources {
   } catch {
     cached = {}
   }
+
   return cached
 }
 
 function persist(sources: StoredSources): void {
   cached = sources
+
   try {
     const path = storePath()
     mkdirSync(dirname(path), { recursive: true })
@@ -71,13 +76,17 @@ export function recordClientRouteCookieImportSource(args: {
     ...load(),
     [entryKey(args.environmentId, args.profileId)]: args.source
   }
+
   const keys = Object.keys(next)
+
   if (keys.length > MAX_ENTRIES) {
     const byAge = keys.sort((a, b) => (next[a]?.importedAt ?? 0) - (next[b]?.importedAt ?? 0))
+
     for (const key of byAge.slice(0, keys.length - MAX_ENTRIES)) {
       delete next[key]
     }
   }
+
   persist(next)
 }
 
@@ -87,11 +96,13 @@ export function clientRouteCookieImportSources(
 ): Record<string, BrowserSessionProfileSource> {
   const prefix = `${environmentId}\u0000`
   const result: Record<string, BrowserSessionProfileSource> = {}
+
   for (const [key, source] of Object.entries(load())) {
     if (key.startsWith(prefix)) {
       result[key.slice(prefix.length)] = source
     }
   }
+
   return result
 }
 

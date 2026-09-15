@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('./AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: (props: Record<string, unknown> & { footer?: ReactNode }) => {
     mocks.panelProps.push(props)
+
     return (
       <section>
         {!props.hideHeader && <h3>{String(props.title)}</h3>}
@@ -110,6 +111,7 @@ vi.mock('@/store', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 async function renderPane(): Promise<HTMLDivElement> {
@@ -119,6 +121,7 @@ async function renderPane(): Promise<HTMLDivElement> {
   await act(async () => {
     root?.render(<LinearAgentSkillPane />)
   })
+
   return container
 }
 
@@ -129,6 +132,7 @@ describe('LinearAgentSkillPane', () => {
         root?.unmount()
       })
     }
+
     root = null
     container?.remove()
     container = null
@@ -144,6 +148,7 @@ describe('LinearAgentSkillPane', () => {
 
   it('keeps a clickable route to the Integrations credentials pane', async () => {
     const rendered = await renderPane()
+
     const link = [...rendered.querySelectorAll('button')].find(
       (button) => button.textContent === 'Integrations'
     )
@@ -163,6 +168,7 @@ describe('LinearAgentSkillPane', () => {
 
   it('routes the connected checklist credential action to Integrations', async () => {
     const rendered = await renderPane()
+
     const manageKeys = [...rendered.querySelectorAll('button')].find(
       (button) => button.textContent === 'Manage keys'
     )
@@ -203,6 +209,7 @@ describe('LinearAgentSkillPane', () => {
     expect(markup.indexOf('Example prompts')).toBeLessThan(markup.indexOf('Good to know'))
     const examples = getLinearUsageExamples()
     expect(examples).toHaveLength(5)
+
     for (const example of examples) {
       expect(markup).toContain(example.title)
       expect(example.prompt).toContain('/orca-linear')

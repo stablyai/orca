@@ -38,6 +38,7 @@ describe('normalizeGitHubPRForBranchOutcome', () => {
       message: 'network unavailable',
       fetchedAt: 10
     }
+
     expect(normalizeGitHubPRForBranchOutcome(outcome, 20)).toBe(outcome)
   })
 })

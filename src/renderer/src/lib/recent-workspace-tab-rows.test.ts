@@ -12,6 +12,7 @@ import {
 } from '../../../shared/agent-status-types'
 
 const NOW = 1_700_000_000_000
+
 const LEAF_ID = '11111111-2222-4333-8444-555555555555'
 
 function entry(
@@ -47,10 +48,12 @@ function sources(
   overrides: Partial<TabPaneInputSources> = {}
 ): TabPaneInputSources {
   const entriesByTabId = new Map<string, AgentStatusEntry[]>()
+
   for (const item of entries) {
     const tabId = item.paneKey.split(':')[0]
     entriesByTabId.set(tabId, [...(entriesByTabId.get(tabId) ?? []), item])
   }
+
   return {
     entriesByTabId,
     ptyIdsByTabId: {},
@@ -67,6 +70,7 @@ describe('orderRecentWorkspaceTabs', () => {
       row('recent', { lastFocusedAt: NOW - 60_000, worktreeHostId: 'ssh:builder' }),
       row('newest', { lastFocusedAt: NOW, worktreeId: 'folder:/project' })
     ]
+
     expect(orderRecentWorkspaceTabs({ rows })).toEqual(['newest', 'recent', 'old'])
   })
 
@@ -78,6 +82,7 @@ describe('orderRecentWorkspaceTabs', () => {
       row('infinite', { lastFocusedAt: Infinity }),
       row('second', { lastFocusedAt: NOW })
     ]
+
     expect(orderRecentWorkspaceTabs({ rows })).toEqual([
       'first',
       'second',
@@ -93,6 +98,7 @@ describe('orderRecentWorkspaceTabs', () => {
       row('same', { occurrenceId: 'local', lastFocusedAt: NOW - 1 }),
       row('same', { occurrenceId: 'ssh', worktreeHostId: 'ssh:builder', lastFocusedAt: NOW })
     ]
+
     expect(orderRecentWorkspaceTabs({ rows })).toEqual(['ssh', 'local'])
   })
 
@@ -101,6 +107,7 @@ describe('orderRecentWorkspaceTabs', () => {
       lastFocusedAt: NOW - 3 * 86400_000,
       terminalTab: { id: 'old', title: 'OMP - action required' }
     })
+
     const paneSources = sources([], { ptyIdsByTabId: { old: ['pty-1'] } })
     expect(resolveRecentWorkspaceTabStatus(old, paneSources, NOW)).toBe('permission')
     expect(
@@ -115,10 +122,12 @@ describe('resolveRecentWorkspaceTabStatus', () => {
     (surface) => {
       const title = 'Codex - action required'
       const stale = entry('stale', 'done', NOW - AGENT_STATUS_STALE_AFTER_MS - 1)
+
       const paneSources = sources([stale], {
         ptyIdsByTabId: { stale: ['pty-1'] },
         runtimePaneTitlesByTabId: surface === 'pane' ? { stale: { 1: title } } : {}
       })
+
       expect(
         resolveRecentWorkspaceTabStatus(
           row('stale', { terminalTab: { id: 'stale', title } }),
@@ -135,6 +144,7 @@ describe('resolveRecentWorkspaceTabStatus', () => {
 
   it('keeps stale-pane spinner fallback and permission on an uncovered split sibling', () => {
     const stale = entry('split', 'done', NOW - AGENT_STATUS_STALE_AFTER_MS - 1)
+
     const paneSources = sources([stale], {
       ptyIdsByTabId: { split: ['pty-1', 'pty-2'] },
       terminalLayoutsByTabId: {
@@ -151,6 +161,7 @@ describe('resolveRecentWorkspaceTabStatus', () => {
       },
       runtimePaneTitlesByTabId: { split: { 1: 'Codex - action required', 2: 'zsh' } }
     })
+
     expect(resolveRecentWorkspaceTabStatus(row('split'), paneSources, NOW)).toBe('active')
     paneSources.runtimePaneTitlesByTabId.split = { 1: '⠹ codex working', 2: 'zsh' }
     expect(resolveRecentWorkspaceTabStatus(row('split'), paneSources, NOW)).toBe('working')
@@ -171,6 +182,7 @@ describe('resolveRecentWorkspaceTabStatus', () => {
       paneKey: `mixed:${LEAF_ID}`,
       interrupted: true
     })
+
     const finished = entry('mixed', 'done', NOW - 2_000, {
       paneKey: 'mixed:22222222-2222-4222-8222-222222222222'
     })
@@ -197,6 +209,7 @@ describe('resolveRecentWorkspaceTabStatus', () => {
 
   it('preserves monitoring unless another pane is actively working', () => {
     const monitoring = row('monitoring')
+
     const monitoringEntry = entry('monitoring', 'working', NOW, {
       workingMode: 'monitoring'
     })

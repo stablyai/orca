@@ -25,6 +25,7 @@ const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_WORKTREE_ID',
   'ORCA_AGENT_LAUNCH_TOKEN'
 ] as const
+
 const WINDOWS_PATH_ENV_KEY_RE = /^path$/i
 
 function composeGuardedDaemonGitConfigEnv(
@@ -34,9 +35,11 @@ function composeGuardedDaemonGitConfigEnv(
 ): void {
   const policy = explicitEnv?.[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]
   delete env[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV]
+
   if (policy !== 'guard' && launchAgent === undefined) {
     return
   }
+
   // Why: the daemon can outlive Electron, so its process.env is the authoritative inherited config; append only the guard.
   Object.assign(env, gitCredentialPromptGuardEnv(env, process.platform))
 }
@@ -50,9 +53,11 @@ function deleteRequestedDaemonEnvKeys(
     keys?.includes('ORCA_CODEX_HOME') === true &&
     env.ORCA_CODEX_HOME !== undefined &&
     env.CODEX_HOME === env.ORCA_CODEX_HOME
+
   for (const key of keys ?? []) {
     delete env[key]
   }
+
   if (deleteOrcaOwnedCodexHome) {
     delete env.CODEX_HOME
   }
@@ -77,21 +82,28 @@ function collapseWindowsPathEnvKeys(
   if (process.platform !== 'win32') {
     return
   }
+
   const pathKeys = Object.keys(env).filter((key) => WINDOWS_PATH_ENV_KEY_RE.test(key))
+
   if (pathKeys.length < 2) {
     return
   }
+
   // Why: a one-key main patch is authoritative; zero or two keys came from inherited state.
   const requestedKeys = requestedEnv
     ? Object.keys(requestedEnv).filter((key) => WINDOWS_PATH_ENV_KEY_RE.test(key))
     : []
+
   if (requestedKeys.length !== 1) {
     return
   }
+
   const survivingKey = requestedKeys[0]
+
   if (!survivingKey || env[survivingKey] === undefined) {
     return
   }
+
   for (const key of pathKeys) {
     if (key !== survivingKey) {
       delete env[key]
@@ -107,15 +119,19 @@ function promoteAgentTeamsShimPath(
   if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
     return
   }
+
   const normalizedRequestedPath =
     process.platform === 'win32'
       ? expandWindowsEnvironmentVariables(requestedPath, env)
       : requestedPath
+
   const pathDelimiter = process.platform === 'win32' ? ';' : delimiter
   const shimDir = normalizedRequestedPath.split(pathDelimiter)[0]
+
   if (!shimDir) {
     return
   }
+
   const pathKey = resolvePathEnvKey(env, process.platform)
   const currentParts = env[pathKey]?.split(pathDelimiter).filter(Boolean) ?? []
   env[pathKey] = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
@@ -140,27 +156,35 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
     FORCE_HYPERLINK: '1'
   } as Record<string, string>
+
   stripLegacyTerminalShimEnv(env, process.platform)
   composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
   deleteRequestedDaemonEnvKeys(env, opts.envToDelete)
+
   if (opts.env?.TERM) {
     env.TERM = opts.env.TERM
   }
+
   removeUnspecifiedPaneIdentityEnv(env, opts.env)
+
   if (opts.env?.fish_history === undefined) {
     dropInheritedOrcaFishHistory(env)
   }
+
   if (opts.env?.HISTFILE === undefined) {
     dropInheritedOrcaHistFile(env)
   }
+
   if (opts.env?.ORCA_HISTFILE === undefined) {
     delete env.ORCA_HISTFILE
   }
+
   removeInheritedDevAgentHookEndpoint(env, opts.env)
   delete env.ELECTRON_RUN_AS_NODE
   removeAppImageRuntimeEnv(env)
   removeInheritedNoColor(env)
   env.LANG ??= 'en_US.UTF-8'
+
   return env
 }
 
@@ -169,6 +193,7 @@ export function rescrubDaemonPtyEnvironment(
   opts: PtySubprocessOptions
 ): void {
   deleteRequestedDaemonEnvKeys(env, opts.envToDelete)
+
   if (opts.env?.TERM) {
     env.TERM = opts.env.TERM
   }
@@ -180,9 +205,11 @@ export function finalizeDaemonPtyEnvironment(
 ): void {
   expandWindowsPathEnvironmentVariables(env)
   collapseWindowsPathEnvKeys(env, requestedEnv)
+
   const requestedPath = requestedEnv
     ? requestedEnv[resolvePathEnvKey(requestedEnv, process.platform)]
     : undefined
+
   promoteAgentTeamsShimPath(env, requestedPath)
   stripLegacyTerminalShimEnv(env, process.platform)
   dropIncoherentCondaActivationEnv(env, process.platform)

@@ -9,12 +9,19 @@ import {
 } from './running-agent-targets'
 
 const WORKTREE_ID = 'wt-1'
+
 const OTHER_WORKTREE_ID = 'wt-2'
+
 const TAB_ID = 'tab-1'
+
 const OTHER_TAB_ID = 'tab-2'
+
 const LEFT_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const RIGHT_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const OTHER_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+
 const NOW = 10_000
 
 function tab(
@@ -63,6 +70,7 @@ function state(
   > = {}
 ) {
   const terminalLayoutsByTabId = overrides.terminalLayoutsByTabId ?? {}
+
   return {
     agentStatusByPaneKey: {},
     tabsByWorktree: {
@@ -97,6 +105,7 @@ function deriveLivePtyIdsByTabId(
 describe('running agent send targets', () => {
   it('marks fresh done agents with a leaf PTY as eligible', () => {
     const paneKey = makePaneKey(TAB_ID, LEFT_LEAF_ID)
+
     const targets = deriveRunningAgentSendTargets(
       state({
         agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'done') },
@@ -121,6 +130,7 @@ describe('running agent send targets', () => {
     const workingPaneKey = makePaneKey(TAB_ID, LEFT_LEAF_ID)
     const waitingPaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
     const blockedPaneKey = makePaneKey(OTHER_TAB_ID, OTHER_LEAF_ID)
+
     const targets = deriveRunningAgentSendTargets(
       state({
         agentStatusByPaneKey: {
@@ -177,6 +187,7 @@ describe('running agent send targets', () => {
 
   it('disables a status-backed working row when the live pane title needs permission', () => {
     const paneKey = makePaneKey(TAB_ID, LEFT_LEAF_ID)
+
     const targets = deriveRunningAgentSendTargets(
       state({
         agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'working') },
@@ -207,6 +218,7 @@ describe('running agent send targets', () => {
 
   it('keeps stale agent status rows disabled when no live title proves the agent is sendable', () => {
     const stalePaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+
     const target = resolveRunningAgentSendTarget(
       state({
         agentStatusByPaneKey: {
@@ -236,6 +248,7 @@ describe('running agent send targets', () => {
 
   it('keeps stale agent status rows disabled when only a bare agent title remains', () => {
     const stalePaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+
     const target = resolveRunningAgentSendTarget(
       state({
         agentStatusByPaneKey: {
@@ -266,6 +279,7 @@ describe('running agent send targets', () => {
 
   it('promotes stale agent status rows when a live pane title proves the agent is sendable', () => {
     const stalePaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+
     const target = resolveRunningAgentSendTarget(
       state({
         agentStatusByPaneKey: {
@@ -296,6 +310,7 @@ describe('running agent send targets', () => {
 
   it('does not promote an unconfirmed restored row from its preserved title', () => {
     const paneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+
     const target = resolveRunningAgentSendTarget(
       state({
         agentStatusByPaneKey: {
@@ -326,6 +341,7 @@ describe('running agent send targets', () => {
 
   it('treats a missing tab title as absent live title evidence', () => {
     const paneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+
     const target = resolveRunningAgentSendTarget(
       state({
         agentStatusByPaneKey: {
@@ -357,6 +373,7 @@ describe('running agent send targets', () => {
 
   it('keeps stale agent status rows disabled when the live pane title needs permission', () => {
     const stalePaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+
     const target = resolveRunningAgentSendTarget(
       state({
         agentStatusByPaneKey: {
@@ -387,6 +404,7 @@ describe('running agent send targets', () => {
 
   it('requires the clicked pane leaf PTY and ignores tab-level fallback PTYs', () => {
     const paneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+
     const target = resolveRunningAgentSendTarget(
       state({
         agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'blocked') },
@@ -420,6 +438,7 @@ describe('running agent send targets', () => {
 
   it('disables a stale layout PTY after the live PTY map has been cleared', () => {
     const paneKey = makePaneKey(TAB_ID, LEFT_LEAF_ID)
+
     const target = resolveRunningAgentSendTarget(
       state({
         agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'done') },
@@ -449,6 +468,7 @@ describe('running agent send targets', () => {
   it('keeps other-workspace and remote PTY targets scoped correctly', () => {
     const localPaneKey = makePaneKey(TAB_ID, LEFT_LEAF_ID)
     const remotePaneKey = makePaneKey(OTHER_TAB_ID, OTHER_LEAF_ID)
+
     const base = state({
       agentStatusByPaneKey: {
         [localPaneKey]: entry(localPaneKey, 'waiting'),
@@ -483,6 +503,7 @@ describe('running agent send targets', () => {
   it('skips retained-only, malformed, and legacy numeric pane keys', () => {
     const missingTabPaneKey = makePaneKey('missing-tab', LEFT_LEAF_ID)
     const validPaneKey = makePaneKey(TAB_ID, RIGHT_LEAF_ID)
+
     const targets = deriveRunningAgentSendTargets(
       state({
         agentStatusByPaneKey: {

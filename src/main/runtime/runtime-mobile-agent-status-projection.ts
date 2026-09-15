@@ -18,6 +18,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   if (!status || !pty) {
     return status
   }
+
   // Same-class Claude title repaints can postdate a fresh permission hook without
   // contradicting it; only a working or released-pane title retires the question (#11761).
   if (
@@ -27,6 +28,7 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   ) {
     return status
   }
+
   if (
     options.preserveQuestionUnderShellTitle &&
     status.interactivePrompt != null &&
@@ -34,13 +36,17 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   ) {
     return status
   }
+
   const richStatusCanOwnTitleInterval =
     pty.lastAgentStatusRichInvalidatedAtEpochMs === null ||
     agentStatusAuthorityObservedAt(status) > pty.lastAgentStatusRichInvalidatedAtEpochMs
+
   const titleEvidenceAt = pty.lastOscTitleEpochMs
+
   if (titleEvidenceAt === null) {
     return richStatusCanOwnTitleInterval ? status : null
   }
+
   const buildTitleOnlyStatus = (
     state: AgentStatusEntry['state'],
     updatedAt: number,
@@ -59,10 +65,12 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     ...(status.terminalTitle ? { terminalTitle: status.terminalTitle } : {}),
     ...(status.providerSession ? { providerSession: status.providerSession } : {})
   })
+
   const titleConfirmsState =
     (pty.lastAgentStatus === 'working' && status.state === 'working') ||
     (pty.lastAgentStatus === 'permission' &&
       (status.state === 'blocked' || status.state === 'waiting'))
+
   if (!titleConfirmsState) {
     if (
       richStatusCanOwnTitleInterval &&
@@ -70,35 +78,44 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
     ) {
       return status
     }
+
     if (pty.lastAgentStatus === null && !terminalTitleBlocksExplicitAgentStatus(pty.lastOscTitle)) {
       return status
     }
+
     const titleState =
       pty.lastAgentStatus === 'working'
         ? 'working'
         : pty.lastAgentStatus === 'permission'
           ? 'blocked'
           : 'done'
+
     return buildTitleOnlyStatus(
       titleState,
       titleEvidenceAt,
       pty.lastAgentStatusStartedAtEpochMs ?? titleEvidenceAt
     )
   }
+
   const richStatusOwnsCurrentState =
     Date.now() - agentStatusAuthorityObservedAt(status) <= AGENT_STATUS_STALE_AFTER_MS &&
     richStatusCanOwnTitleInterval
+
   // Fresh explicit evidence from this title interval owns acknowledgement identity.
   const stateStartedAt = richStatusOwnsCurrentState
     ? status.stateStartedAt
     : (pty.lastAgentStatusStartedAtEpochMs ?? status.stateStartedAt)
+
   if (richStatusOwnsCurrentState) {
     pty.lastAgentStatusStartedAtEpochMs = stateStartedAt
   }
+
   const updatedAt = Math.max(status.updatedAt, titleEvidenceAt)
+
   if (!richStatusOwnsCurrentState) {
     return buildTitleOnlyStatus(status.state, updatedAt, stateStartedAt)
   }
+
   return updatedAt === status.updatedAt && stateStartedAt === status.stateStartedAt
     ? status
     : { ...status, updatedAt, stateStartedAt }
@@ -121,10 +138,12 @@ export function selectRuntimeHookAgentRowForPane(
   let agent: AgentStatusIpcPayload | null = null
   let live: AgentStatusIpcPayload | null = null
   const freshAfter = Date.now() - AGENT_STATUS_STALE_AFTER_MS
+
   for (const entry of rows) {
     if (entry.providerSession && (!session || entry.receivedAt > session.receivedAt)) {
       session = entry
     }
+
     if (
       entry.agentType &&
       (entry.providerSessionOnly !== true ||
@@ -134,6 +153,7 @@ export function selectRuntimeHookAgentRowForPane(
     ) {
       agent = entry
     }
+
     if (
       entry.providerSessionOnly !== true &&
       // Restored rows cannot prove liveness because the turn may have ended while offline (#12346).
@@ -144,6 +164,7 @@ export function selectRuntimeHookAgentRowForPane(
       live = entry
     }
   }
+
   return {
     providerSession: session?.providerSession ?? null,
     providerSessionAgentType: session?.agentType ?? null,
@@ -172,9 +193,11 @@ export function resolveRuntimeHookLiveAgentRow(
   if (!live) {
     return null
   }
+
   if (live.payload.interactivePrompt != null) {
     return live
   }
+
   // This is the pane's only wall-clock title timestamp comparable to when the hook evidence
   // was observed; replay delivery order must not make old evidence outrank a newer title.
   return !nonAgentTitle &&

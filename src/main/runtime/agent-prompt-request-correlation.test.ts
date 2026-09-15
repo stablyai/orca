@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AgentPromptRequestCorrelation } from './agent-prompt-request-correlation'
 
 const PTY = 'pty-1'
+
 const GENERATION = 1
 
 function lifecycle(workingSequence: number) {

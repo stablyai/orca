@@ -4,9 +4,11 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const dailyWorkflow = parse(
   readFileSync(join(projectDir, '.github/workflows/daily-mac-build.yml'), 'utf8')
 )
+
 const e2eWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/e2e.yml'), 'utf8'))
 
 describe('daily E2E dispatch contract', () => {

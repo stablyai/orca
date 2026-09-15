@@ -46,34 +46,43 @@ export async function streamExternalFileToRuntime(
   // dropped file names its source instead of a path the user never chose.
   const displayPath = args.entryRelativePath || basename(args.sourceRootPath)
   const lstatResult = await lstat(sourcePath)
+
   if (lstatResult.isSymbolicLink()) {
     throw new Error(`Symlink not allowed in '${displayPath}'`)
   }
+
   if (!lstatResult.isFile()) {
     throw new Error(`Unsupported file type in '${displayPath}'`)
   }
+
   if (args.entryRelativePath) {
     await assertEntryInsideRoot(args.sourceRootPath, sourcePath, displayPath)
   }
+
   assertMatchesStagedIdentity(lstatResult, args.expected, displayPath)
 
   args.signal?.throwIfAborted()
 
   const handle = await open(sourcePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
+
   try {
     const openedStat = await handle.stat()
+
     if (!openedStat.isFile()) {
       throw new Error(`Unsupported file type in '${displayPath}'`)
     }
+
     if (!isSameFile(openedStat, lstatResult)) {
       throw new Error(`File changed during upload: '${displayPath}'`)
     }
+
     // Why: the handle is what the slices are read from, so the staged identity
     // has to hold here too — checking only the pre-open lstat leaves a window
     // where the path is swapped between lstat and open.
     assertMatchesStagedIdentity(openedStat, args.expected, displayPath)
 
     const totalBytes = openedStat.size
+
     // Why: enforced again where the bytes actually move. Staging is a separate
     // call, so the ceiling only holds here if this boundary checks it too.
     if (totalBytes > REMOTE_IMPORT_MAX_FILE_BYTES) {
@@ -82,6 +91,7 @@ export async function streamExternalFileToRuntime(
           `${formatByteCeiling(REMOTE_IMPORT_MAX_FILE_BYTES)} per-file remote import limit`
       )
     }
+
     if (totalBytes === 0) {
       // Why: a zero-byte source produces no slices, but the destination still
       // has to exist before commitUpload renames it into place.
@@ -89,14 +99,17 @@ export async function streamExternalFileToRuntime(
     } else {
       const buffer = Buffer.allocUnsafe(Math.min(RUNTIME_UPLOAD_SLICE_BYTES, totalBytes))
       let offset = 0
+
       while (offset < totalBytes) {
         // Why: checked per slice, so an abort stops the transfer at the next
         // boundary instead of after the whole file has moved.
         args.signal?.throwIfAborted()
         const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, offset)
+
         if (bytesRead === 0) {
           throw new Error(`File truncated during upload: '${displayPath}'`)
         }
+
         await sendChunk(args, buffer.subarray(0, bytesRead).toString('base64'), offset > 0)
         offset += bytesRead
       }
@@ -107,9 +120,11 @@ export async function streamExternalFileToRuntime(
     // mtime catches an in-place edit that kept the size. An empty source runs
     // this too: its chunk is still a round trip the source can change during.
     const afterReadStat = await handle.stat()
+
     if (afterReadStat.mtimeMs !== openedStat.mtimeMs || !isSameFile(afterReadStat, openedStat)) {
       throw new Error(`File changed during upload: '${displayPath}'`)
     }
+
     return { byteLength: totalBytes }
   } finally {
     await handle.close()
@@ -132,6 +147,7 @@ function assertMatchesStagedIdentity(
     observed.mtimeMs !== expected.modifiedAtMs ||
     (expected.inode !== 0 && observed.ino !== 0 && observed.ino !== expected.inode) ||
     (expected.deviceId !== 0 && observed.dev !== 0 && observed.dev !== expected.deviceId)
+
   if (changed) {
     throw new Error(`File changed since it was staged: '${displayPath}'`)
   }
@@ -158,6 +174,7 @@ async function sendChunk(
   if (isRuntimeEnvironmentManuallyDisconnected(args.environmentId)) {
     throw new Error(RUNTIME_MANUALLY_DISCONNECTED_MESSAGE)
   }
+
   const response = await callRuntimeEnvironment(
     args.userDataPath,
     args.environmentId,
@@ -183,6 +200,7 @@ async function sendChunk(
       signal: args.signal
     }
   )
+
   if (response.ok !== true) {
     throw new Error(response.error.message || response.error.code)
   }
@@ -192,6 +210,7 @@ function resolveEntrySourcePath(sourceRootPath: string, entryRelativePath: strin
   // Why: staging resolves before authorizing, so the streamer has to agree on
   // the same absolute path or the two checks can disagree.
   const root = resolve(sourceRootPath)
+
   return entryRelativePath ? join(root, entryRelativePath) : root
 }
 
@@ -203,6 +222,7 @@ async function assertEntryInsideRoot(
   const rootRealPath = await realpath(sourceRootPath)
   const candidateRealPath = await realpath(candidatePath)
   const relativeToRoot = relative(rootRealPath, candidateRealPath)
+
   // Why: `..name` is a valid child path; only `..` and `../...` escape.
   if (
     relativeToRoot !== '' &&

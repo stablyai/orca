@@ -45,9 +45,11 @@ export async function fetchChangelog(
   const res = await net.fetch('https://onorca.dev/whats-new/changelog.json', {
     signal: AbortSignal.timeout(5000)
   })
+
   if (!res.ok) {
     return null
   }
+
   const json: unknown = await res.json()
 
   // Why: the JSON endpoint is external and could serve malformed data.
@@ -56,14 +58,17 @@ export async function fetchChangelog(
   if (!Array.isArray(json)) {
     return null
   }
+
   const entries = json as ChangelogEntry[]
 
   const localIndex = entries.findIndex((e) => e.version === localVersion)
 
   // ── Try exact match first ────────────────────────────────────────
   const incomingIndex = entries.findIndex((e) => e.version === incomingVersion)
+
   if (incomingIndex !== -1) {
     const entry = entries[incomingIndex]
+
     if (isValidEntry(entry) && hasRichContent(entry)) {
       const releasesBehind =
         localIndex === -1
@@ -71,7 +76,9 @@ export async function fetchChangelog(
           : localIndex - incomingIndex > 0
             ? localIndex - incomingIndex
             : null
+
       const { version: _, ...release } = entry
+
       return { release, releasesBehind }
     }
   }
@@ -86,6 +93,7 @@ export async function fetchChangelog(
   // version.
   for (let i = 0; i < entries.length; i++) {
     const candidate = entries[i]
+
     if (!isValidEntry(candidate) || !hasRichContent(candidate)) {
       continue
     }
@@ -118,13 +126,16 @@ export async function fetchChangelog(
     // is -1, the incoming version is newer than anything in the JSON —
     // treat it as being at the front (index 0) for counting purposes.
     const effectiveIncomingIndex = incomingIndex !== -1 ? incomingIndex : 0
+
     const releasesBehind =
       localIndex === -1
         ? null
         : localIndex - effectiveIncomingIndex > 0
           ? localIndex - effectiveIncomingIndex
           : null
+
     const { version: _, ...release } = candidate
+
     // Why: the shown content is from an older entry, not the incoming version.
     // Point to the generic changelog page so the link doesn't mislead.
     return { release: { ...release, releaseNotesUrl: CHANGELOG_URL }, releasesBehind }

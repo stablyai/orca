@@ -11,12 +11,15 @@ type BrowserRequestArgs = {
   setError: Dispatch<SetStateAction<string | null>>
   worktreeId: string
 }
+
 export function useMobileBrowserRequest(args: BrowserRequestArgs) {
   const { busyRef, client, pageId, setBusy, setError, worktreeId } = args
+
   const pageParams = useCallback(() => {
     if (!pageId) {
       return null
     }
+
     return {
       worktree: `id:${worktreeId}`,
       page: pageId
@@ -30,29 +33,37 @@ export function useMobileBrowserRequest(args: BrowserRequestArgs) {
       opts: { showBusy?: boolean; suppressError?: boolean; timeoutMs?: number } = {}
     ): Promise<unknown | null> => {
       const base = pageParams()
+
       if (!client || !base) {
         return null
       }
+
       if (opts.showBusy) {
         busyRef.current = true
         setBusy(true)
       }
+
       try {
         const response = await client.sendRequest(
           method,
           { ...base, ...params },
           { timeoutMs: opts.timeoutMs ?? 15_000 }
         )
+
         if (!response.ok) {
           throw new Error((response as RpcFailure).error.message)
         }
+
         setError(null)
+
         return (response as RpcSuccess).result
       } catch (err) {
         const message = browserErrorMessage(err, 'Browser command failed')
+
         if (!opts.suppressError && shouldSurfaceBrowserError(message)) {
           setError(message)
         }
+
         return null
       } finally {
         if (opts.showBusy) {
@@ -63,5 +74,6 @@ export function useMobileBrowserRequest(args: BrowserRequestArgs) {
     },
     [client, pageParams]
   )
+
   return { pageParams, sendBrowserRequest }
 }

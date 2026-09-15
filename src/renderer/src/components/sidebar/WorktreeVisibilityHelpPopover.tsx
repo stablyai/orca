@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 
 export default function WorktreeVisibilityHelpPopover(): React.JSX.Element {
   const [open, setOpen] = useState(false)
+
   const title = translate(
     'auto.components.sidebar.WorktreeVisibilityHelpPopover.c41f2d7e90',
     'Which worktrees are hidden by default?'

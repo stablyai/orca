@@ -25,6 +25,7 @@ export const SESSION_TAB_METHODS = [
     params: WorktreeTabSelector,
     handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
       await restoreStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
+
       return projectSessionTabsForClient(
         await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
         clientKind,
@@ -38,6 +39,7 @@ export const SESSION_TAB_METHODS = [
     params: null,
     handler: async (_params, context) => {
       await restoreStructuredTabsIfSupported(context)
+
       return listSessionTabsInventory(context)
     }
   }),
@@ -52,6 +54,7 @@ export const SESSION_TAB_METHODS = [
           runtime.ensureStructuredAgentSessionHost()
         )
       }
+
       return runtime.createMobileSessionTerminal(params.worktree, {
         afterTabId: params.afterTabId,
         targetGroupId: params.targetGroupId,
@@ -90,13 +93,16 @@ export const SESSION_TAB_METHODS = [
     ) => {
       let subscribedWorktree: string | null = null
       let unsubscribe = (): void => {}
+
       let closed = false
       let initialized = false
       await restoreStructuredTabsIfSupported({ runtime, clientKind, clientCapabilities })
       const initial = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
+
       if (closed) {
         return
       }
+
       subscribedWorktree = initial.worktree
       const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:${subscribedWorktree}`
       const subscriptionId = requestId ? `${cleanupPrefix}:${requestId}` : cleanupPrefix
@@ -107,15 +113,18 @@ export const SESSION_TAB_METHODS = [
         () => {
           closed = true
           unsubscribe()
+
           if (initialized) {
             emit({ type: 'end' })
           }
         },
         connectionId
       )
+
       if (closed) {
         return
       }
+
       const withProofDelta = createSessionTabsRetirementProofDelta(clientCapabilities)
       emit({
         type: 'snapshot',
@@ -129,6 +138,7 @@ export const SESSION_TAB_METHODS = [
         )
       })
       initialized = true
+
       if (closed) {
         return
       }
@@ -148,6 +158,7 @@ export const SESSION_TAB_METHODS = [
           })
         }
       }, pairedDeviceId)
+
       if (closed) {
         unsubscribe()
       }
@@ -159,15 +170,19 @@ export const SESSION_TAB_METHODS = [
     handler: async (params, { runtime, connectionId, pairedDeviceId }) => {
       const snapshot = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
       const connection = connectionId ?? 'local'
+
       if (params.subscriptionId) {
         runtime.cleanupSubscription(
           `session.tabs:${connection}:${snapshot.worktree}:${params.subscriptionId}`
         )
+
         return { unsubscribed: true }
       }
+
       runtime.cleanupSubscription(`session.tabs:${connection}:${params.worktree}`)
       runtime.cleanupSubscription(`session.tabs:${connection}:${snapshot.worktree}`)
       runtime.cleanupSubscriptionsByPrefix(`session.tabs:${connection}:${snapshot.worktree}:`)
+
       return { unsubscribed: true }
     }
   }),
@@ -176,6 +191,7 @@ export const SESSION_TAB_METHODS = [
     params: null,
     handler: async (_params, context, emit) => {
       await restoreStructuredTabsIfSupported(context)
+
       return subscribeSessionTabsInventory(context, emit)
     }
   }),
@@ -184,12 +200,16 @@ export const SESSION_TAB_METHODS = [
     params: SessionTabsUnsubscribeAllParams,
     handler: async (params, { runtime, connectionId }) => {
       const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`
+
       if (params?.subscriptionId) {
         runtime.cleanupSubscription(`${cleanupPrefix}:${params.subscriptionId}`)
+
         return { unsubscribed: true }
       }
+
       runtime.cleanupSubscription(cleanupPrefix)
       runtime.cleanupSubscriptionsByPrefix(`${cleanupPrefix}:`)
+
       return { unsubscribed: true }
     }
   }),

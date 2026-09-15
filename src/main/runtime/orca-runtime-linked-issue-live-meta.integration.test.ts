@@ -35,7 +35,9 @@ vi.mock('../text-generation/commit-message-text-generation', async () => ({
 }))
 
 const REPO_ID = 'repo-1'
+
 const STAGED_CONTEXT = { branch: 'main', stagedSummary: 'M\tREADME.md', stagedPatch: '+hello' }
+
 const PARAMS = { agentId: 'codex', model: 'gpt-5.4-mini' }
 
 const tempDirs: string[] = []
@@ -47,6 +49,7 @@ const tempDirs: string[] = []
  */
 function makeStore(worktreePath: string) {
   const worktreeId = `${REPO_ID}::${worktreePath}`
+
   const worktreeMeta: Record<string, WorktreeMeta> = {
     [worktreeId]: {
       instanceId: worktreeId,
@@ -62,6 +65,7 @@ function makeStore(worktreePath: string) {
       lastActivityAt: 0
     }
   }
+
   return {
     worktreeId,
     updateLinkedIssue: (linkedIssue: number | null): void => {
@@ -81,6 +85,7 @@ function makeStore(worktreePath: string) {
       getWorktreeMeta: (id: string) => worktreeMeta[id],
       setWorktreeMeta: (id: string, updates: Partial<WorktreeMeta>) => {
         worktreeMeta[id] = { ...worktreeMeta[id], ...updates }
+
         return worktreeMeta[id]
       },
       getSettings: () => ({})
@@ -94,6 +99,7 @@ async function generatedCommitContext(
 ): Promise<Record<string, unknown>> {
   mocks.generateCommitMessageFromContext.mockClear()
   await runtime.generateRuntimeCommitMessage(`id:${worktreeId}`)
+
   return mocks.generateCommitMessageFromContext.mock.calls[0][0]
 }
 

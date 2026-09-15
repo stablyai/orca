@@ -22,6 +22,7 @@ export type DetectedAgentsSlice = LocalDetectedAgentState & {
 // Why: these are module-scoped (not in the store) so we can deduplicate
 // concurrent callers without storing a Promise in Zustand state.
 const remoteDetectPromises = new Map<string, Promise<TuiAgent[]>>()
+
 const remoteRefreshPromises = new Map<string, Promise<TuiAgent[]>>()
 
 export function _getRemoteDetectPromiseCountForTest(): number {
@@ -39,13 +40,16 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
 
   ensureRemoteDetectedAgents: (connectionId: string, options?: { force?: boolean }) => {
     const existing = get().remoteDetectedAgentIds[connectionId]
+
     // Why: an empty result ([]) is truthy, so a prior "no agents found" detection
     // must not be treated as cached — re-detect so a later install / PATH fix is
     // picked up without a reconnect. Non-empty results still short-circuit.
     if (existing?.length && options?.force !== true) {
       return Promise.resolve(existing)
     }
+
     const inflight = remoteDetectPromises.get(connectionId)
+
     if (inflight) {
       return inflight
     }
@@ -58,12 +62,14 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       .detectRemoteAgents({ connectionId })
       .then((ids) => {
         const typed = ids as TuiAgent[]
+
         if (remoteDetectPromises.get(connectionId) === pending) {
           set((s) => ({
             remoteDetectedAgentIds: { ...s.remoteDetectedAgentIds, [connectionId]: typed },
             isDetectingRemoteAgents: { ...s.isDetectingRemoteAgents, [connectionId]: false }
           }))
         }
+
         return typed
       })
       .catch(() => {
@@ -73,6 +79,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
             isDetectingRemoteAgents: { ...s.isDetectingRemoteAgents, [connectionId]: false }
           }))
         }
+
         return [] as TuiAgent[]
       })
       .finally(() => {
@@ -85,15 +92,19 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
       })
 
     remoteDetectPromises.set(connectionId, pending)
+
     return pending
   },
 
   refreshRemoteDetectedAgents: (connectionId: string) => {
     const inflightRefresh = remoteRefreshPromises.get(connectionId)
+
     if (inflightRefresh) {
       return inflightRefresh
     }
+
     const inflightDetect = remoteDetectPromises.get(connectionId)
+
     if (inflightDetect) {
       return inflightDetect
     }
@@ -105,7 +116,9 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
           remoteRefreshPromises.delete(connectionId)
         }
       })
+
     remoteRefreshPromises.set(connectionId, pending)
+
     return pending
   },
 
@@ -119,6 +132,7 @@ export const createDetectedAgentsSlice: StateCreator<AppState, [], [], DetectedA
     set((s) => {
       const { [connectionId]: _, ...restAgents } = s.remoteDetectedAgentIds
       const { [connectionId]: __, ...restLoading } = s.isDetectingRemoteAgents
+
       return { remoteDetectedAgentIds: restAgents, isDetectingRemoteAgents: restLoading }
     })
   }

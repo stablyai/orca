@@ -40,6 +40,7 @@ export function TerminalQuickCommandContentSection({
   toggleAppendEnter
 }: TerminalQuickCommandContentSectionProps): React.JSX.Element {
   const commandText = isTerminalAgentQuickCommand(draft) ? draft.prompt : draft.command
+
   // Why: the frame header is a plain span, so the textarea carries the accessible name itself.
   const commandFieldLabel = isAgentAction
     ? translate(
@@ -108,6 +109,7 @@ export function TerminalQuickCommandContentSection({
               >
                 {QUICK_COMMAND_AGENT_OPTIONS.map((entry) => {
                   const supported = supportsTerminalAgentQuickCommand(entry.id)
+
                   return (
                     <SelectItem key={entry.id} value={entry.id} disabled={!supported}>
                       <span className="flex min-w-0 items-center gap-2">

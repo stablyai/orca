@@ -9,10 +9,13 @@ export function resolveCreateReviewDraftTitle({
   eligibilityTitle?: string | null
 }): string {
   const title = eligibilityTitle?.trim()
+
   if (title) {
     return title
   }
+
   const normalizedBranch = normalizeHostedReviewHeadRef(branch)
   const branchLeaf = normalizedBranch.split('/').pop()?.replace(/_/g, '-') ?? ''
+
   return humanizeBranchSlug(branchLeaf) || normalizedBranch
 }

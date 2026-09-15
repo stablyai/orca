@@ -1,4 +1,5 @@
 const resumeListeners = new Set<() => void>()
+
 let unsubscribeSystemResumed: (() => void) | null = null
 
 function dispatchBrowserSystemResume(): void {
@@ -17,6 +18,7 @@ export function subscribeBrowserSystemResume(listener: () => void): () => void {
 
   return () => {
     resumeListeners.delete(listener)
+
     if (resumeListeners.size === 0) {
       unsubscribeSystemResumed?.()
       unsubscribeSystemResumed = null

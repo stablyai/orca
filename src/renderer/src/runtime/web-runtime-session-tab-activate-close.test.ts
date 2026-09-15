@@ -50,6 +50,7 @@ vi.mock('./web-session-tabs-sync', () => ({
   getWebSessionTabsTrackingGeneration: mocks.getWebSessionTabsTrackingGeneration,
   applyWebSessionTabsStorePatch: (buildPatch: (state: unknown) => unknown) => {
     mocks.setState(buildPatch)
+
     // The production caller invokes the returned settle receipt.
     return () => {}
   },
@@ -208,6 +209,7 @@ describe('web runtime session tab actions', () => {
       .mockResolvedValueOnce({ id: 'list-1', ok: true, result: makeSnapshot() })
       .mockResolvedValueOnce({ id: 'close-2', ok: true, result: {} })
       .mockResolvedValueOnce({ id: 'list-2', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -263,6 +265,7 @@ describe('web runtime session tab actions', () => {
       ok: true,
       result: makeSnapshot()
     })
+
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: runtimeCall } }
     })
@@ -296,6 +299,7 @@ describe('web runtime session tab actions', () => {
       .fn()
       .mockResolvedValueOnce({ id: 'close', ok: false, error: { code, message: code } })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     await expect(
@@ -318,6 +322,7 @@ describe('web runtime session tab actions', () => {
       .fn()
       .mockResolvedValueOnce({ id: 'close', ok: false, error: { code, message: code } })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     await closeWebRuntimeSessionTab({
@@ -348,6 +353,7 @@ describe('web runtime session tab actions', () => {
     const owner = { environmentId: ENVIRONMENT_ID }
     const hostTabIds = [toHostSessionTabId('local-browser-unified'), 'host-browser-unified']
     let pendingWhileHostRepublished: boolean[] = []
+
     try {
       const runtimeCall = vi
         .fn()
@@ -356,6 +362,7 @@ describe('web runtime session tab actions', () => {
           pendingWhileHostRepublished = hostTabIds.map((hostTabId) =>
             isWebSessionCloseIntentPending(owner, WORKTREE_ID, hostTabId, clock)
           )
+
           return Promise.resolve({
             id: 'close',
             ok: false,
@@ -363,6 +370,7 @@ describe('web runtime session tab actions', () => {
           })
         })
         .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
       vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
       await expect(
@@ -396,6 +404,7 @@ describe('web runtime session tab actions', () => {
         }
       })
       .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+
     vi.stubGlobal('window', {
       api: { runtimeEnvironments: { call: runtimeCall } }
     })
@@ -434,6 +443,7 @@ describe('web runtime session tab actions', () => {
   it('restores reconciliation authority when the host refuses a lifecycle close', async () => {
     const authoritative = makeSnapshot()
     authoritative.snapshotVersion = 6
+
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -537,6 +547,7 @@ describe('web runtime session tab actions', () => {
       ok: false,
       error: { code: 'conflict', message: 'runtime_environment_replaced' }
     })
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     await expect(

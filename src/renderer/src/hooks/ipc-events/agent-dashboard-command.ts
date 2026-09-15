@@ -17,14 +17,19 @@ export function toggleAgentDashboardFromShortcut(
   ) {
     return
   }
+
   if (state.settings.experimentalAgentDashboardMode === 'popout') {
     openPopout()
+
     return
   }
+
   const nextOpen = !state.agentDashboardDrawerOpen
+
   // The drawer self-closes with the sidebar: reveal only when opening, never while closing.
   if (nextOpen) {
     state.setSidebarOpen(true)
   }
+
   state.setAgentDashboardDrawerOpen(nextOpen)
 }

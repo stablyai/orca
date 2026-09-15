@@ -64,6 +64,7 @@ type RecoveryRequest = {
 }
 
 const activeTerminalRecoveryInstanceIds = new Set<number>()
+
 const pendingRetryByTabId = new Map<
   string,
   {
@@ -71,6 +72,7 @@ const pendingRetryByTabId = new Map<
     requestsByInstanceId: Map<number | undefined, RecoveryRequest>
   }
 >()
+
 let nextTerminalRecoveryInstanceId = 0
 
 function toRemountRequest(request: RecoveryRequest, now: number): TerminalRecoveryRemountRequest {
@@ -91,14 +93,17 @@ function shouldScheduleRecoveryRetry(
   if (decline.declinedBy === 'cooldown') {
     return request.terminalRecoveryGeneration !== undefined
   }
+
   if (decline.declinedBy === 'unsettled') {
     // A pane that never reports leaves 'pending' standing; re-asking once the
     // settlement bound elapses is how that tab gets a second chance at all.
     return request.terminalRecoveryGeneration !== undefined
   }
+
   if (decline.declinedBy === 'window-cap') {
     return request.reason !== 'reattach-unverifiable'
   }
+
   // 'settled-failure' deliberately schedules nothing: a retry timer would be
   // the counting loop again. Only a new trigger reopens that reason.
   return false
@@ -106,6 +111,7 @@ function shouldScheduleRecoveryRetry(
 
 export function captureTerminalPaneRecoveryGeneration(tabId: string): number {
   const state = useAppStore.getState()
+
   return captureTabRecoveryGeneration(locateTerminalTab(state.tabsByWorktree, tabId)?.tab)
 }
 
@@ -115,12 +121,14 @@ export function registerTerminalPaneRecoveryInstance(tabId: string): {
 } {
   const id = ++nextTerminalRecoveryInstanceId
   activeTerminalRecoveryInstanceIds.add(id)
+
   return {
     id,
     unregister: () => {
       activeTerminalRecoveryInstanceIds.delete(id)
       const pendingRetry = pendingRetryByTabId.get(tabId)
       pendingRetry?.requestsByInstanceId.delete(id)
+
       if (pendingRetry?.requestsByInstanceId.size === 0) {
         cancelPendingRecoveryRetry(tabId)
       }
@@ -146,25 +154,33 @@ function scheduleRecoveryRetry(request: RecoveryRequest, delayMs: number): void 
   if (!isCurrentTerminalRecoveryRequest(request)) {
     return
   }
+
   const pendingRetry = pendingRetryByTabId.get(request.tabId)
+
   if (pendingRetry) {
     // Multiple split panes share a tab-wide remount. Keep one request per
     // concrete xterm so disposing one pane cannot cancel a sibling's heal.
     pendingRetry.requestsByInstanceId.set(request.terminalRecoveryInstanceId, request)
+
     return
   }
+
   const requestsByInstanceId = new Map<number | undefined, RecoveryRequest>([
     [request.terminalRecoveryInstanceId, request]
   ])
+
   const timer = setTimeout(
     () => {
       pendingRetryByTabId.delete(request.tabId)
+
       const currentRequests = [...requestsByInstanceId.values()].filter(
         isCurrentTerminalRecoveryRequest
       )
+
       if (currentRequests.length === 0) {
         return
       }
+
       // Why: one split's liveness probe may fail or never settle while a
       // sibling has a probe-certified dead renderer. Start every current
       // request so the first valid remount wins and invalidates the rest.
@@ -174,6 +190,7 @@ function scheduleRecoveryRetry(request: RecoveryRequest, delayMs: number): void 
     },
     Math.max(delayMs, 1_000)
   )
+
   pendingRetryByTabId.set(request.tabId, {
     timer,
     requestsByInstanceId
@@ -182,6 +199,7 @@ function scheduleRecoveryRetry(request: RecoveryRequest, delayMs: number): void 
 
 function cancelPendingRecoveryRetry(tabId: string): void {
   const pendingRetry = pendingRetryByTabId.get(tabId)
+
   if (pendingRetry !== undefined) {
     clearTimeout(pendingRetry.timer)
     pendingRetryByTabId.delete(tabId)
@@ -197,9 +215,11 @@ function handleDeclinedRecovery(request: RecoveryRequest, decline: TerminalRecov
       reason: request.reason
     })
   }
+
   if (shouldScheduleRecoveryRetry(request, decline)) {
     scheduleRecoveryRetry(request, decline.retryInMs)
   }
+
   return false
 }
 
@@ -220,8 +240,10 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
   ) {
     return false
   }
+
   const state = useAppStore.getState()
   const tab = locateTerminalTab(state.tabsByWorktree, request.tabId)?.tab
+
   // A terminal-backed tab is intentionally hidden while native chat owns the
   // provider. Late xterm callbacks from that hidden surface must not remount
   // the tab and race the handoff's owner transition.
@@ -236,30 +258,37 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
   if (tab?.viewMode === 'chat' || state.getTab?.(request.tabId)?.viewMode === 'chat') {
     return false
   }
+
   // Fail fast before the liveness probe. The authoritative admission runs
   // again inside remountTerminalTabForRecovery's write.
   const admission = admitTerminalRecoveryRemount(tab, toRemountRequest(request, Date.now()))
+
   if (!admission.admitted) {
     if (admission.declinedBy === 'stale-generation') {
       return false
     }
+
     // 'tab-missing' deliberately falls through: the store call below is what
     // records the remount-unavailable breadcrumb for a vanished tab.
     if (admission.declinedBy !== 'tab-missing') {
       return handleDeclinedRecovery(request, admission)
     }
   }
+
   // 'input-rejected-by-host' is deliberately absent: no local probe can speak
   // for the id it carries, and its evidence already came from the PTY's owner.
   if (request.reason === 'input-undeliverable') {
     if (!request.ptyId) {
       return false
     }
+
     try {
       const live = await window.api.pty.hasPty(request.ptyId)
+
       if (live === false) {
         return false
       }
+
       if (request.requireAuthoritativeLiveness && live !== true) {
         return false
       }
@@ -272,7 +301,9 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
       // broken state.
     }
   }
+
   let result: TerminalRecoveryRemountResult
+
   try {
     result = useAppStore
       .getState()
@@ -288,8 +319,10 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
       tabId: request.tabId,
       reason: request.reason
     })
+
     return false
   }
+
   if (!result.remounted) {
     if (result.declinedBy === 'tab-missing') {
       // Why: this was the one silent outcome — the tab is gone from the store
@@ -299,20 +332,25 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
         tabId: request.tabId,
         reason: request.reason
       })
+
       return false
     }
+
     return result.declinedBy === 'stale-generation'
       ? false
       : handleDeclinedRecovery(request, result)
   }
+
   // A remount replaces every pane xterm in the tab; a previously scheduled
   // retry would only re-remount the fresh, healthy panes.
   cancelPendingRecoveryRetry(request.tabId)
+
   if (request.endpointReplaced) {
     // Why here and not at request time: arming before the remount is certain
     // would suppress input on a pane that never recovered.
     armTerminalInputQuarantine(request.tabId)
   }
+
   // warn, not error: this is the recovery succeeding, and the breadcrumb below is
   // what diagnostics actually read. STA-2373 made this path routine (every daemon
   // death remounts each live pane), so error level just floods the logs.
@@ -323,6 +361,7 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
     tabId: request.tabId,
     reason: request.reason
   })
+
   return true
 }
 
@@ -337,15 +376,18 @@ export function settleTerminalPaneRecovery(
   if (generation === undefined) {
     return
   }
+
   useAppStore.getState().settleTerminalTabRecovery?.(tabId, generation, outcome)
 }
 
 export function _resetTerminalPaneRecoveryForTests(): void {
   activeTerminalRecoveryInstanceIds.clear()
   nextTerminalRecoveryInstanceId = 0
+
   for (const pendingRetry of pendingRetryByTabId.values()) {
     clearTimeout(pendingRetry.timer)
   }
+
   pendingRetryByTabId.clear()
   _resetTerminalInputQuarantineForTests()
 }

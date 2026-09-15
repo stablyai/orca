@@ -91,6 +91,7 @@ describe('structured mailbox pointer host', () => {
         value: { submission: { dispatchState } }
       })
     )
+
     hostRef.current = { send }
     await expect(
       createStructuredMailboxPointerHost().send({
@@ -116,6 +117,7 @@ describe('structured mailbox pointer host', () => {
       ok: true,
       value: { submission: { dispatchState: 'accepted' } }
     }))
+
     hostRef.current = { send }
     await expect(
       createStructuredMailboxPointerHost().send({

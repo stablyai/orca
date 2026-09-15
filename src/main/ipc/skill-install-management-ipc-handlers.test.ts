@@ -44,6 +44,7 @@ async function waitForCalls(count: number): Promise<void> {
   ) {
     await Promise.resolve()
   }
+
   expect(callRuntimeEnvironmentMock).toHaveBeenCalledTimes(count)
 }
 
@@ -76,6 +77,7 @@ describe('skill install management IPC', () => {
         peakActive = Math.max(peakActive, active)
         await new Promise<void>((resolve) => pending.push(resolve))
         active -= 1
+
         return {
           ok: true,
           result: {
@@ -91,6 +93,7 @@ describe('skill install management IPC', () => {
     registerSkillInstallManagementIpcHandlers({} as never)
     const handler = handlers.get('skills:previewBundleInstall')
     expect(handler).toBeDefined()
+
     const selectedSkills = Array.from({ length: 17 }, (_, index) => ({
       id: `skill-${index}`,
       name: `skill-${index}`,

@@ -6,6 +6,7 @@ import {
 } from './helpers/docker-ssh-relay-target'
 
 export const REMOTE_MONITOR_PATH = '/tmp/orca-idle-grid-monitor.mjs'
+
 export const REMOTE_STATE_PATH = '/tmp/orca-idle-grid-state.json'
 
 export type Grid = { cols: number; rows: number }
@@ -78,12 +79,14 @@ export function installIdleGridMonitor(target: DockerSshRelayTarget): void {
 
 export function readRemoteGrid(target: DockerSshRelayTarget): RemoteGridState {
   const json = execDockerSshRelayTargetCommand(target, `cat ${REMOTE_STATE_PATH}`)
+
   return JSON.parse(json) as RemoteGridState
 }
 
 export async function readRendererGrid(page: Page, ptyId: string): Promise<RendererGridState> {
   return page.evaluate(async (id) => {
     let xterm: Grid | null = null
+
     for (const manager of window.__paneManagers?.values() ?? []) {
       for (const pane of manager.getPanes?.() ?? []) {
         if (pane.container?.dataset?.ptyId === id) {
@@ -91,6 +94,7 @@ export async function readRendererGrid(page: Page, ptyId: string): Promise<Rende
         }
       }
     }
+
     return {
       applied: (await window.api.pty.getSize(id)) ?? null,
       xterm
@@ -121,6 +125,7 @@ export async function sampleRemoteConvergence(args: {
   const startedAt = Date.now()
   const stale: ReproSample[] = []
   let last: ReproSample | null = null
+
   while (Date.now() - startedAt < (args.timeoutMs ?? 6_000)) {
     const remote = readRemoteGrid(args.target)
     const renderer = await readRendererGrid(args.page, args.ptyId)
@@ -130,15 +135,19 @@ export async function sampleRemoteConvergence(args: {
       remote,
       renderer
     }
+
     if (actualGridMatchesXterm(remote, renderer)) {
       return { last, stale }
     }
+
     stale.push(last)
     await args.page.waitForTimeout(100)
   }
+
   if (!last) {
     throw new Error('Remote grid convergence sampling produced no samples')
   }
+
   return { last, stale }
 }
 

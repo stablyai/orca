@@ -36,14 +36,18 @@ function projectWorktreeTabModelReconciliations(
   // Private working copy so batch-owned maps can be written in place.
   const working = { ...state }
   const merged: Partial<AppState> = {}
+
   for (const worktreeId of worktreeIds) {
     const { patch } = projectWorktreeTabModelReconciliation(working, worktreeId, batch)
+
     if (Object.keys(patch).length === 0) {
       continue
     }
+
     Object.assign(merged, patch)
     Object.assign(working, patch)
   }
+
   return merged
 }
 
@@ -59,7 +63,9 @@ export function createTabsSessionActions(
       if (worktreeIds.length === 0) {
         return
       }
+
       const patch = projectWorktreeTabModelReconciliations(get(), worktreeIds)
+
       if (Object.keys(patch).length > 0) {
         set(patch)
       }
@@ -67,9 +73,11 @@ export function createTabsSessionActions(
 
     reconcileWorktreeTabModel: (worktreeId) => {
       const reconciliation = projectWorktreeTabModelReconciliation(get(), worktreeId)
+
       if (Object.keys(reconciliation.patch).length > 0) {
         set(reconciliation.patch)
       }
+
       return {
         renderableTabCount: reconciliation.renderableTabCount,
         activeRenderableTabId: reconciliation.activeRenderableTabId
@@ -81,15 +89,20 @@ export function createTabsSessionActions(
       const persistedWorktreeIds = collectPersistedWorktreeIdsForSessionHydration(session)
       const validWorktreeIds = buildValidWorktreeIdsForSessionHydration(state, persistedWorktreeIds)
       validWorktreeIds.add(FLOATING_TERMINAL_WORKTREE_ID)
+
       for (const workspace of state.folderWorkspaces) {
         validWorktreeIds.add(folderWorkspaceKey(workspace.id))
       }
+
       addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
       const hydrated = buildHydratedTabState(session, validWorktreeIds)
+
       if (!options?.replaceWorkspaceKeys) {
         set(hydrated)
+
         return
       }
+
       const replaceWorkspaceKeys = new Set(options.replaceWorkspaceKeys)
       set((current) => ({
         unifiedTabsByWorktree: replaceWorkspaceRecordKeys(

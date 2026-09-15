@@ -2,11 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { sessionsByPartition, fromPartitionMock } = vi.hoisted(() => {
   const sessionsByPartition = new Map<string, Record<string, ReturnType<typeof vi.fn>>>()
+
   const fromPartitionMock = vi.fn((partition: string) => {
     const existing = sessionsByPartition.get(partition)
+
     if (existing) {
       return existing
     }
+
     const created = {
       resolveProxy: vi.fn(async () => 'DIRECT'),
       setProxy: vi.fn(async () => {}),
@@ -19,9 +22,12 @@ const { sessionsByPartition, fromPartitionMock } = vi.hoisted(() => {
       removeListener: vi.fn(),
       on: vi.fn()
     }
+
     sessionsByPartition.set(partition, created)
+
     return created
   })
+
   return { sessionsByPartition, fromPartitionMock }
 })
 
@@ -31,6 +37,7 @@ vi.mock('electron', () => ({
     fromPartition: fromPartitionMock
   }
 }))
+
 vi.mock('./browser-manager', () => ({
   browserManager: {
     installCertificateRequestGuard: vi.fn(),
@@ -39,18 +46,22 @@ vi.mock('./browser-manager', () => ({
     handleGuestWillDownload: vi.fn()
   }
 }))
+
 vi.mock('./browser-media-access', () => ({
   hasSystemMediaAccess: vi.fn(() => false),
   requestSystemMediaAccess: vi.fn(async () => false)
 }))
+
 vi.mock('./browser-session-ua', () => ({
   cleanElectronUserAgent: vi.fn((ua: string) => ua),
   setupGoogleAuthUserAgentOverride: vi.fn()
 }))
+
 vi.mock('./browser-session-user-agent-mode', () => ({
   setBrowserSessionUserAgentMode: vi.fn(),
   clearBrowserSessionUserAgentMode: vi.fn()
 }))
+
 vi.mock('./browser-webauthn-access', () => ({
   allowsBrowserWebAuthnPermission: vi.fn(() => false),
   clearBrowserWebAuthnAccessHandlers: vi.fn(),
@@ -69,9 +80,11 @@ import {
 import { handleElectronProxyLogin } from '../network/electron-proxy-credentials'
 
 let partitionCounter = 0
+
 function nextProfile() {
   partitionCounter += 1
   const partition = `persist:orca-browser-session-install-${partitionCounter}`
+
   return {
     id: `p${partitionCounter}`,
     scope: 'isolated' as const,
@@ -84,6 +97,7 @@ function nextProfile() {
 describe('installBrowserSessionPartitionPolicies proxy wiring', () => {
   beforeEach(() => {
     setBrowserNetworkProxySettingsResolver(null)
+
     // Why: the host shell may export proxy vars, which would otherwise stand in for the setting.
     for (const key of [
       'HTTP_PROXY',

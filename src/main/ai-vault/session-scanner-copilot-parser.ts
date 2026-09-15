@@ -43,6 +43,7 @@ export async function parseCopilotSessionFile(
     input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
+
   return parseCopilotSessionLines({ file, lines, platform, messages })
 }
 
@@ -63,27 +64,38 @@ export async function parseCopilotSessionContent(
 
 function consumeCopilotRecordLine(accumulator: SessionAccumulator, line: string): void {
   const record = parseJsonObject(line)
+
   if (!record) {
     return
   }
+
   updateTimeline(accumulator, extractString(record.timestamp))
   const data = asRecord(record.data)
+
   if (record.type === 'session.start' && data) {
     const sessionId = extractString(data.sessionId)
+
     if (sessionId) {
       accumulator.sessionId = sessionId
     }
+
     updateTimeline(accumulator, extractString(data.startTime))
+
     return
   }
+
   if (record.type === 'session.model_change' && data) {
     accumulator.model = extractString(data.newModel) ?? accumulator.model
+
     return
   }
+
   if (record.type === 'session.info' && data) {
     accumulator.cwd = extractTrustedFolder(data.message) ?? accumulator.cwd
+
     return
   }
+
   if (record.type === 'user.message' && data) {
     accumulator.messageCount++
     accumulator.title ??= normalizeTitleText(
@@ -94,8 +106,10 @@ function consumeCopilotRecordLine(accumulator: SessionAccumulator, line: string)
       text: extractString(data.transformedContent) ?? extractString(data.content),
       timestamp: record.timestamp
     })
+
     return
   }
+
   if (record.type === 'assistant.message' && data) {
     accumulator.messageCount++
     addPreviewMessage(accumulator, {
@@ -103,8 +117,10 @@ function consumeCopilotRecordLine(accumulator: SessionAccumulator, line: string)
       text: extractString(data.content),
       timestamp: record.timestamp
     })
+
     return
   }
+
   if (record.type === 'session.shutdown' && data) {
     accumulator.model = extractString(data.currentModel) ?? accumulator.model
     accumulator.totalTokens += numberValue(data.currentTokens)
@@ -135,8 +151,10 @@ async function parseCopilotSessionLines(args: {
   messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
   const state = createCopilotSessionResumeState(args.file, args.messages)
+
   for await (const line of args.lines) {
     state.consumeLine(line)
   }
+
   return state.finalize(args.platform, args.options)
 }

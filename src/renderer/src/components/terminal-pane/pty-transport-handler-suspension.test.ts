@@ -9,6 +9,7 @@ describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onData: ((payload: { id: string; data: string }) => void) | null = null
   let onReplay: ((payload: { id: string; data: string }) => void) | null = null
+
   let onExit:
     | ((payload: { id: string; code: number; preserveRendererBinding?: boolean }) => void)
     | null = null
@@ -147,6 +148,7 @@ describe('createIpcPtyTransport', () => {
       restorePtyDataHandlersAfterFailedShutdown,
       unregisterPtyDataHandlers
     } = await import('./pty-transport')
+
     const onDataCallback = vi.fn()
     const transport = createIpcPtyTransport()
 
@@ -169,6 +171,7 @@ describe('createIpcPtyTransport', () => {
       restorePtyDataHandlersAfterFailedShutdown,
       unregisterPtyDataHandlers
     } = await import('./pty-transport')
+
     const first = createIpcPtyTransport()
     await first.connect({ url: '', callbacks: { onReplayData: vi.fn() } })
 
@@ -193,6 +196,7 @@ describe('createIpcPtyTransport', () => {
       restorePtyDataHandlersAfterFailedShutdown,
       unregisterPtyDataHandlers
     } = await import('./pty-transport')
+
     const { ptyDataSidecars } = await import('./pty-dispatcher')
     const onDataCallback = vi.fn()
     const sidecar = vi.fn()
@@ -217,6 +221,7 @@ describe('createIpcPtyTransport', () => {
 
   it('unregisterPtyDataHandlers cancels staleTitleTimer so it cannot fire stale idle transition', async () => {
     vi.useFakeTimers()
+
     try {
       const { createIpcPtyTransport, unregisterPtyDataHandlers } = await import('./pty-transport')
       const onTitleChange = vi.fn()
@@ -248,6 +253,7 @@ describe('createIpcPtyTransport', () => {
 
       // The staleTitleTimer must NOT have fired onAgentBecameIdle
       expect(onAgentBecameIdle).not.toHaveBeenCalled()
+
       for (const snapshot of snapshots) {
         snapshot.commit()
       }

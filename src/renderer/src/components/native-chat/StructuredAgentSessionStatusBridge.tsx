@@ -38,11 +38,13 @@ export function getStructuredAgentSessionTabs(
   unifiedTabsByWorktree: Record<string, Tab[]>
 ): readonly StructuredTab[] {
   const cached = structuredTabsByUnifiedTabsSnapshot.get(unifiedTabsByWorktree)
+
   if (cached) {
     return cached
   }
 
   const tabs: StructuredTab[] = []
+
   for (const worktreeTabs of Object.values(unifiedTabsByWorktree)) {
     for (const tab of worktreeTabs) {
       if (isStructuredTab(tab)) {
@@ -50,7 +52,9 @@ export function getStructuredAgentSessionTabs(
       }
     }
   }
+
   structuredTabsByUnifiedTabsSnapshot.set(unifiedTabsByWorktree, tabs)
+
   return tabs
 }
 
@@ -61,16 +65,19 @@ function useStructuredAgentSessionStatusSummary(
 ): { summary: AgentSessionStatusSummary | null; observation: 'live' | 'unverifiable' } {
   const feed = useMemo(() => getStructuredAgentSessionStatusFeed(target), [target])
   useEffect(() => feed.activate(), [feed])
+
   const summary = useSyncExternalStore(
     feed.subscribe,
     () => feed.getSnapshot().get(sessionId) ?? null,
     () => null
   )
+
   const observation = useSyncExternalStore(
     feed.subscribe,
     () => feed.getSessionObservation(sessionId),
     () => 'unverifiable' as const
   )
+
   return { summary, observation }
 }
 
@@ -106,12 +113,16 @@ function subagentSnapshotsFromTasks(
   if (!tasks) {
     return undefined
   }
+
   const snapshots: AgentSubagentSnapshot[] = []
+
   for (const task of tasks) {
     const id = task.id.trim()
+
     if (task.kind !== 'agent' || id.length === 0 || id.length > SUBAGENT_ID_MAX_LENGTH) {
       continue
     }
+
     snapshots.push({
       id,
       state: subagentStateFromTask(task),
@@ -119,10 +130,12 @@ function subagentSnapshotsFromTasks(
       ...(task.name ? { agentType: task.name } : {}),
       ...(task.description ? { description: task.description } : {})
     })
+
     if (snapshots.length >= AGENT_STATUS_MAX_SUBAGENTS) {
       break
     }
   }
+
   return snapshots.length > 0 ? snapshots : undefined
 }
 
@@ -133,14 +146,18 @@ function projectStatus(
 ): void {
   const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
   const store = useAppStore.getState()
+
   // No persisted turn yet (or nothing known): the row shows no agent status at all.
   if (!summary?.status) {
     if (store.agentStatusByPaneKey?.[paneKey]) {
       store.removeAgentStatus(paneKey)
     }
+
     return
   }
+
   const subagents = subagentSnapshotsFromTasks(summary.backgroundTasks)
+
   const desired = {
     // Shared with `worktree ps`, so the CLI and this row cannot disagree about one session.
     state: structuredAgentSessionStatusState(summary.status),
@@ -155,7 +172,9 @@ function projectStatus(
     ...(subagents ? { subagents, subagentObservation: observation } : {}),
     sessionBoundary: false
   } as const
+
   const current = store.agentStatusByPaneKey?.[paneKey]
+
   if (
     current?.state === desired.state &&
     current.prompt === desired.prompt &&
@@ -182,6 +201,7 @@ function projectStatus(
   ) {
     return
   }
+
   store.setAgentStatus(
     paneKey,
     desired,
@@ -209,10 +229,12 @@ function StructuredAgentSessionStatusProjection({ tab }: { tab: StructuredTab })
   const environmentId = useAppStore((state) =>
     getRuntimeEnvironmentIdForWorktree(state, tab.worktreeId)
   )
+
   const target = useMemo(
     () => getActiveRuntimeTarget({ activeRuntimeEnvironmentId: environmentId }),
     [environmentId]
   )
+
   const { summary, observation } = useStructuredAgentSessionStatusSummary(tab.entityId, target)
   useEffect(() => {
     projectStatus(tab, summary, observation)
@@ -222,6 +244,7 @@ function StructuredAgentSessionStatusProjection({ tab }: { tab: StructuredTab })
       useAppStore.getState().removeAgentStatus(structuredAgentSessionPaneKey(tab.id, tab.entityId)),
     [tab.entityId, tab.id]
   )
+
   return null
 }
 
@@ -229,6 +252,7 @@ export function StructuredAgentSessionStatusBridge(): React.JSX.Element {
   const tabs = useAppStore(
     useShallow((state) => getStructuredAgentSessionTabs(state.unifiedTabsByWorktree))
   )
+
   return (
     <>
       {tabs.map((tab) => (

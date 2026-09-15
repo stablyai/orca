@@ -1,7 +1,9 @@
 export const PR_COMMENT_CODE_CONTEXT_BLOCK_SCAN_CODE_UNITS = 512 * 1024
+
 export const PR_COMMENT_CODE_CONTEXT_LINE_MAX_CODE_UNITS = 8 * 1024
 
 const LINE_FEED_CODE_UNIT = 10
+
 const CARRIAGE_RETURN_CODE_UNIT = 13
 
 export type PrCommentCodeContextRange = {
@@ -48,6 +50,7 @@ export function getPrCommentCodeContext({
   const from = Math.max(1, commentFrom - contextBefore)
   const to = Math.min(totalLines, commentTo + contextAfter)
   const selectedLines = getPrCommentCodeContextLines(source, from, to)
+
   if (selectedLines.length === 0) {
     return null
   }
@@ -56,15 +59,19 @@ export function getPrCommentCodeContext({
     source.length <= PR_COMMENT_CODE_CONTEXT_BLOCK_SCAN_CODE_UNITS
       ? findNearestBraceBlock(source, commentFrom)
       : null
+
   const candidateBlockLineCount = candidateBlockRange
     ? candidateBlockRange.endLine - candidateBlockRange.startLine + 1
     : 0
+
   const isWholeFileBlock =
     candidateBlockRange !== null &&
     candidateBlockRange.startLine <= 2 &&
     candidateBlockRange.endLine >= totalLines - 1
+
   const shouldUseBlockRange =
     candidateBlockRange !== null && !isWholeFileBlock && candidateBlockLineCount <= maxBlockLines
+
   const blockRange = shouldUseBlockRange
     ? candidateBlockRange
     : {
@@ -89,11 +96,13 @@ export function getPrCommentCodeContext({
 
 function countPrCommentCodeContextLines(source: string): number {
   let lineCount = 1
+
   for (let index = 0; index < source.length; index += 1) {
     if (source.charCodeAt(index) === LINE_FEED_CODE_UNIT) {
       lineCount += 1
     }
   }
+
   return lineCount
 }
 
@@ -106,12 +115,15 @@ function getPrCommentCodeContextLines(source: string, from: number, to: number):
     if (index < source.length && source.charCodeAt(index) !== LINE_FEED_CODE_UNIT) {
       continue
     }
+
     if (lineNumber >= from && lineNumber <= to) {
       lines.push(slicePrCommentCodeContextLine(source, lineStart, index))
     }
+
     if (lineNumber >= to) {
       break
     }
+
     lineStart = index + 1
     lineNumber += 1
   }
@@ -124,6 +136,7 @@ function slicePrCommentCodeContextLine(source: string, lineStart: number, lineEn
     lineEnd > lineStart && source.charCodeAt(lineEnd - 1) === CARRIAGE_RETURN_CODE_UNIT
       ? lineEnd - 1
       : lineEnd
+
   return source.slice(
     lineStart,
     Math.min(normalizedLineEnd, lineStart + PR_COMMENT_CODE_CONTEXT_LINE_MAX_CODE_UNITS)
@@ -145,10 +158,12 @@ function findNearestBraceBlock(
     if (index < source.length && source.charCodeAt(index) !== LINE_FEED_CODE_UNIT) {
       continue
     }
+
     const lineEnd =
       index > lineStart && source.charCodeAt(index - 1) === CARRIAGE_RETURN_CODE_UNIT
         ? index - 1
         : index
+
     updateBraceBlockCandidatesForLine({
       source,
       lineStart,
@@ -191,18 +206,24 @@ function updateBraceBlockCandidatesForLine({
 }): void {
   for (let index = lineStart; index < lineEnd; index += 1) {
     const character = source[index]
+
     if (character === '{') {
       stack.push(lineNumber - 1)
       continue
     }
+
     if (character !== '}') {
       continue
     }
+
     const startLineIndex = stack.pop()
+
     if (startLineIndex === undefined || startLineIndex > lineNumber - 1) {
       continue
     }
+
     const range = { startLine: startLineIndex + 1, endLine: lineNumber }
+
     if (startLineIndex <= targetIndex && targetIndex <= lineNumber - 1) {
       setContainingRange(range)
     } else if (startLineIndex >= targetIndex && startLineIndex - targetIndex <= 8) {
@@ -218,6 +239,7 @@ function getShorterPrCommentCodeContextRange(
   if (!current) {
     return candidate
   }
+
   return candidate.endLine - candidate.startLine < current.endLine - current.startLine
     ? candidate
     : current
@@ -230,5 +252,6 @@ function getEarlierPrCommentCodeContextRange(
   if (!current) {
     return candidate
   }
+
   return candidate.startLine < current.startLine ? candidate : current
 }

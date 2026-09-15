@@ -62,9 +62,11 @@ export class WatcherProcessSupervisor {
     hooks: WatcherProcessHooks = {}
   ): Promise<WatcherProcessSubscription> {
     const queued = this.terminationQueue.waitFor(() => this.subscribe(dir, callback, opts, hooks))
+
     if (queued) {
       return queued
     }
+
     return this.capacityWait.run(
       subscribeThroughWatcherSupervisor({
         dir,
@@ -120,16 +122,21 @@ export class WatcherProcessSupervisor {
     if (this.shutdownRequested || this.terminatingChild) {
       return null
     }
+
     if (this.child?.connected) {
       return this.child
     }
+
     if (this.crashFuse.isOpen()) {
       return null
     }
+
     if (!existsSync(entryPath)) {
       console.error(`[parcel-watcher-process] entry not found at ${entryPath}; refusing fail-open`)
+
       return null
     }
+
     const launched = launchWatcherChild(
       entryPath,
       this.canaryDir,
@@ -140,12 +147,16 @@ export class WatcherProcessSupervisor {
       },
       (child, code, signal) => this.handleChildGone(child, code, signal)
     )
+
     if (!launched) {
       this.canaryDir = null
+
       return null
     }
+
     this.canaryDir = launched.canaryDir
     this.child = launched.child
+
     return launched.child
   }
 
@@ -184,10 +195,13 @@ export class WatcherProcessSupervisor {
     if (this.child !== proc) {
       return
     }
+
     if (code === undefined) {
       this.terminateUnavailableChild(proc)
+
       return
     }
+
     this.child = null
     this.cancelledSubscribes.completeForChild(proc)
     resolvePendingWatcherUnsubscribes(this.pendingUnsubscribes)
@@ -207,16 +221,21 @@ export class WatcherProcessSupervisor {
 
   private terminateUnavailableChild(requestedChild: ChildProcess | null): Promise<void> {
     const currentTermination = this.terminationQueue.getCurrent()
+
     if (currentTermination) {
       return currentTermination
     }
+
     const proc = requestedChild ?? this.terminatingChild
+
     if (!proc) {
       return Promise.resolve()
     }
+
     this.child = null
     this.terminatingChild = proc
     this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
+
     return this.terminationQueue.track(
       terminateDisconnectedWatcherChild(
         proc,
@@ -226,9 +245,11 @@ export class WatcherProcessSupervisor {
         this.crashFuse,
         (exited) => {
           this.terminatingChild = null
+
           if (!exited) {
             this.shutdownRequested = true
           }
+
           return !this.shutdownRequested
         },
         () => this.ensureWatcherProcess(),
@@ -242,17 +263,22 @@ export class WatcherProcessSupervisor {
 
   private killWatcherChildIfIdle(): Promise<void> {
     const terminationPromise = this.terminationQueue.getCurrent()
+
     if (terminationPromise) {
       return terminationPromise
     }
+
     const proc = this.child
+
     if (!proc || this.records.size > 0) {
       return Promise.resolve()
     }
+
     this.child = null
     this.terminatingChild = proc
     // Why: destructive Windows cleanup must await exit to release directory handles.
     this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
+
     return this.terminationQueue.track(
       termination.terminateIdleWatcherChild(proc, this.pendingUnsubscribes, () => {
         // Why: an idle child owns zero records, so a missed exit deadline has no
@@ -282,14 +308,18 @@ export class WatcherProcessSupervisor {
 
   private restartAfterCancelledSubscribe(proc: ChildProcess | null): Promise<void> {
     const activeTermination = this.terminationQueue.getCurrent()
+
     if (activeTermination || !proc || !this.cancelledSubscribes.beginRestart(proc)) {
       return activeTermination ?? Promise.resolve()
     }
+
     if (this.child === proc) {
       this.child = null
     }
+
     this.terminatingChild = proc
     this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
+
     return this.terminationQueue.track(
       restartCancelledWatcherChild(
         proc,
@@ -298,9 +328,11 @@ export class WatcherProcessSupervisor {
         this.cancelledSubscribes,
         (exited) => {
           this.terminatingChild = null
+
           if (!exited) {
             this.shutdownRequested = true
           }
+
           return !this.shutdownRequested
         },
         () => this.ensureWatcherProcess(),

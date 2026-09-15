@@ -33,6 +33,7 @@ export type VisualStreamGeometry = {
 
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value))
+
 const FIT_MARGIN_PX = 0.5
 
 export function resolveDeviceFrameKind(
@@ -42,9 +43,11 @@ export function resolveDeviceFrameKind(
   if (deviceName && /ipad/i.test(deviceName)) {
     return 'tablet'
   }
+
   if (deviceName && /iphone/i.test(deviceName)) {
     return 'phone'
   }
+
   return screenAspectRatio > 0.62 && screenAspectRatio < 1.62 ? 'tablet' : 'phone'
 }
 
@@ -65,14 +68,18 @@ export function resolveVisualStreamGeometry(
   const height = streamSize?.height ?? 19
   const shortSide = Math.min(width, height)
   const longSide = Math.max(width, height)
+
   const visualSize =
     visualOrientation === 'landscape'
       ? { width: longSide, height: shortSide }
       : { width: shortSide, height: longSide }
+
   const streamIsLandscape = streamSize ? streamSize.width > streamSize.height : false
   const visualIsLandscape = visualOrientation === 'landscape'
+
   const streamRotation =
     streamSize && streamIsLandscape !== visualIsLandscape ? (visualIsLandscape ? 90 : -90) : 0
+
   return {
     aspectRatio: visualSize.width / visualSize.height,
     size: streamSize ? visualSize : null,
@@ -86,6 +93,7 @@ function fitScreenToPane(paneSize: PaneSize | null, aspectRatio: number): PaneSi
   }
 
   const paneAspectRatio = paneSize.width / paneSize.height
+
   if (paneAspectRatio > aspectRatio) {
     return {
       width: Math.max(1, paneSize.height * aspectRatio),
@@ -122,17 +130,21 @@ export function fitDeviceFrameToPane(
   }
 
   let screenSize = fitScreenToPane(paneSize, screenAspectRatio)
+
   for (let index = 0; index < 4; index += 1) {
     if (!screenSize) {
       return null
     }
+
     const chrome = measureChrome(screenSize, kind)
+
     // Why: fractional aspect-ratio math can overshoot the pane by a sub-pixel,
     // which shows up as clipped hardware in split panes.
     const availableWidth = Math.max(
       1,
       paneSize.width - chrome.hardwareOutset * 2 - chrome.bezel * 2 - FIT_MARGIN_PX
     )
+
     const availableHeight = Math.max(1, paneSize.height - chrome.bezel * 2 - FIT_MARGIN_PX)
     screenSize = fitScreenToPane(
       {
@@ -151,8 +163,10 @@ export function fitDeviceFrameToPane(
   const shellWidth = screenSize.width + bezel * 2
   const shellHeight = screenSize.height + bezel * 2
   const shortSide = Math.min(screenSize.width, screenSize.height)
+
   const outerRadius =
     kind === 'phone' ? clamp(shortSide * 0.135, 44, 92) : clamp(shortSide * 0.065, 24, 56)
+
   const innerRadius =
     kind === 'phone' ? clamp(outerRadius - bezel, 34, 82) : clamp(outerRadius - bezel * 0.7, 18, 48)
 

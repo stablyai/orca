@@ -40,6 +40,7 @@ vi.mock('child_process', () => {
   const execFileWithPromisify = Object.assign(execFileMock, {
     [Symbol.for('nodejs.util.promisify.custom')]: execFileAsyncMock
   })
+
   return {
     execFile: execFileWithPromisify,
     spawn: vi.fn()
@@ -70,6 +71,7 @@ vi.mock('../pty/windows-environment-path', () => ({
 vi.mock('./ssh', () => ({
   getActiveMultiplexer: getActiveMultiplexerMock
 }))
+
 vi.mock('../ssh/ssh-target-registry', () => ({
   getActiveMultiplexer: getActiveMultiplexerMock
 }))
@@ -174,6 +176,7 @@ describe('preflight', () => {
       gitBashAvailable: true,
       hostPlatform: 'win32'
     })
+
     getActiveMultiplexerMock.mockReturnValue({
       isDisposed: () => false,
       request

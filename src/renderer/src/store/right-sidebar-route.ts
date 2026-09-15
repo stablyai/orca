@@ -31,14 +31,17 @@ export function normalizeRightSidebarRoute(
   if (tab === 'search') {
     return { rightSidebarTab: 'explorer', rightSidebarExplorerView: 'search' }
   }
+
   // Why: plugin tabs are open-ended keys; validate their shape so a persisted
   // plugin tab isn't reset to Explorer on restart.
   if (typeof tab === 'string' && isPluginPanelTabKey(tab)) {
     if (options?.installedPluginTabKeys && !options.installedPluginTabKeys.has(tab)) {
       return { rightSidebarTab: 'explorer', rightSidebarExplorerView: 'files' }
     }
+
     return { rightSidebarTab: tab, rightSidebarExplorerView: 'files' }
   }
+
   if (
     tab === 'explorer' ||
     tab === 'vault' ||
@@ -54,5 +57,6 @@ export function normalizeRightSidebarRoute(
         tab === 'explorer' ? normalizeRightSidebarExplorerView(explorerView) : 'files'
     }
   }
+
   return { rightSidebarTab: 'explorer', rightSidebarExplorerView: 'files' }
 }

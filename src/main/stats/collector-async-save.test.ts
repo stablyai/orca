@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // two points it can park: before its temp write, and after, on the rename itself.
 
 let userDataDir: string
+
 const statsPath = (): string => join(userDataDir, 'orca-stats.json')
 
 vi.mock('electron', () => ({
@@ -32,28 +33,37 @@ const gate = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
+
   const writeFile = (async (...args: Parameters<typeof actual.writeFile>) => {
     gate.writeFileCalls += 1
+
     if (gate.blocked) {
       await new Promise<void>((resolve) => gate.waiters.push(resolve))
     }
+
     if (gate.failNextWrite) {
       gate.failNextWrite = false
       throw new Error('transient write failure')
     }
+
     return actual.writeFile(...args)
   }) as typeof actual.writeFile
+
   const rename = (async (...args: Parameters<typeof actual.rename>) => {
     gate.renameCalls += 1
+
     if (gate.failNextRenameEnoent) {
       gate.failNextRenameEnoent = false
       throw Object.assign(new Error('missing temp'), { code: 'ENOENT' })
     }
+
     if (gate.blockRename) {
       await new Promise<void>((resolve) => gate.renameWaiters.push(resolve))
     }
+
     return actual.rename(...args)
   }) as typeof actual.rename
+
   return { ...actual, writeFile, rename }
 })
 
@@ -119,6 +129,7 @@ describe('StatsCollector async debounced save', () => {
       collector.onAgentStart(`pty-${index}`, index * 1_000)
       await vi.advanceTimersByTimeAsync(5_000)
     }
+
     expect(gate.writeFileCalls).toBe(1)
 
     gate.blocked = false

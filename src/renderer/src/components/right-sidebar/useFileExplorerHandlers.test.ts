@@ -11,6 +11,7 @@ describe('activateFileExplorerNode', () => {
     isDirectory: true,
     depth: 0
   }
+
   const symlinkNode: TreeNode = {
     name: 'linked-docs',
     path: '/repo/linked-docs',
@@ -158,13 +159,17 @@ describe('activateFileExplorerNode', () => {
 
   it('grants the symlink target local path access before resolving it', async () => {
     const order: string[] = []
+
     const authorizeExternalPath = vi.fn(async () => {
       order.push('authorize')
     })
+
     const statPath = vi.fn(async () => {
       order.push('stat')
+
       return { isDirectory: false }
     })
+
     const openFile = vi.fn()
     useAppStore.setState({
       worktreesByRepo: {
@@ -257,6 +262,7 @@ describe('activateFileExplorerNode', () => {
       depth: 0,
       operationOwner: { kind: 'local' }
     }
+
     const openFile = vi.fn()
     useAppStore.setState({
       worktreesByRepo: {

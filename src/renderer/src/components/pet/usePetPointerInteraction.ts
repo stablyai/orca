@@ -49,6 +49,7 @@ export function usePetPointerInteraction(
     if (event.button !== 0 || activePointerRef.current !== null) {
       return
     }
+
     activePointerRef.current = event.pointerId
     dragOffsetRef.current = {
       x: event.clientX - position.x,
@@ -67,17 +68,21 @@ export function usePetPointerInteraction(
     if (event.pointerId !== activePointerRef.current) {
       return
     }
+
     const next = nextPetDragAnimation(
       dragDirectionRef.current,
       event.clientX - dragBaselineXRef.current
     )
+
     if (next.accepted) {
       dragBaselineXRef.current = event.clientX
+
       if (next.animation !== dragDirectionRef.current) {
         dragDirectionRef.current = next.animation
         setDragAnimation(next.animation)
       }
     }
+
     moveTo({
       x: event.clientX - dragOffsetRef.current.x,
       y: event.clientY - dragOffsetRef.current.y
@@ -88,11 +93,14 @@ export function usePetPointerInteraction(
     if (event.pointerId !== activePointerRef.current) {
       return
     }
+
     activePointerRef.current = null
     dragDirectionRef.current = null
+
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
+
     setDragging(false)
     setDragAnimation(null)
   }

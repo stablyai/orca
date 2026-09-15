@@ -14,6 +14,7 @@ export function findWorktreeIdForTab(
       return worktreeId
     }
   }
+
   return undefined
 }
 
@@ -34,34 +35,42 @@ export function createLazyTerminalTabLookup(session: WorkspaceSessionState): Ter
       if (tabsById.has(requestedTabId)) {
         return tabsById.get(requestedTabId)
       }
+
       if (exhausted) {
         return undefined
       }
 
       while (worktreeIndex < tabsByWorktree.length) {
         const tabs = tabsByWorktree[worktreeIndex][1]
+
         while (tabIndex < tabs.length) {
           const currentIndex = tabIndex
           tabIndex += 1
+
           // Array#some, used by the prior lookup, skips sparse holes.
           if (!(currentIndex in tabs)) {
             continue
           }
+
           const tab = tabs[currentIndex]
           const tabId = tab.id
+
           // Preserve first-match behavior when persisted IDs collide.
           if (!tabsById.has(tabId)) {
             tabsById.set(tabId, tab)
           }
+
           if (tabId === requestedTabId) {
             return tabsById.get(requestedTabId)
           }
         }
+
         worktreeIndex += 1
         tabIndex = 0
       }
 
       exhausted = true
+
       return undefined
     }
   }
@@ -78,26 +87,34 @@ export function registerLegacyPaneKeyAliasesForTab(args: {
   const legacyPaneKeyAliasEntries: LegacyPaneKeyAliasEntry[] = []
   const registeredLegacyPaneKeys = new Set<string>()
   const hasLeafPtyBindings = Object.keys(args.inputLayout.ptyIdsByLeafId ?? {}).length > 0
+
   const fallbackPtyId =
     !hasLeafPtyBindings && typeof args.tab?.ptyId === 'string' ? args.tab.ptyId : undefined
+
   const registerLegacyAlias = (inputLeafId: string, leafId: string, ptyId?: string): boolean => {
     if (!isTerminalLeafId(leafId)) {
       return false
     }
+
     let paneKey: string
+
     try {
       paneKey = makePaneKey(args.tabId, leafId)
     } catch {
       return false
     }
+
     const numeric = /^(?:pane:)?(\d+)$/.exec(inputLeafId)?.[1]
+
     if (!numeric) {
       return false
     }
+
     // Why: PaneManager ids are 1-based; a zero-based alias in split layouts makes tab:1 ambiguous and misroutes panes.
     const legacyPaneKey = `${args.tabId}:${numeric}`
     agentHookServer.registerPaneKeyAlias(legacyPaneKey, paneKey, ptyId)
     registeredLegacyPaneKeys.add(legacyPaneKey)
+
     if (ptyId) {
       legacyPaneKeyAliasEntries.push({
         ptyId,
@@ -105,19 +122,25 @@ export function registerLegacyPaneKeyAliasesForTab(args: {
         stablePaneKey: paneKey,
         updatedAt: Date.now()
       })
+
       return true
     }
+
     return false
   }
+
   const inputLeafIds = new Set([
     ...collectLayoutLeafIdsInOrder(args.inputLayout.root),
     ...Object.keys(args.inputLayout.ptyIdsByLeafId ?? {})
   ])
+
   for (const inputLeafId of inputLeafIds) {
     if (isTerminalLeafId(inputLeafId)) {
       continue
     }
+
     const leafId = args.leafIdByInputLeafId.get(inputLeafId)
+
     if (leafId) {
       registerLegacyAlias(
         inputLeafId,
@@ -126,10 +149,13 @@ export function registerLegacyPaneKeyAliasesForTab(args: {
       )
     }
   }
+
   if (args.tab?.ptyId && !hasLeafPtyBindings) {
     const fallbackLeafId =
       args.normalizedLayout.activeLeafId ?? firstLayoutLeafId(args.normalizedLayout.root)
+
     let paneKey: string | undefined
+
     if (fallbackLeafId && isTerminalLeafId(fallbackLeafId)) {
       try {
         paneKey = makePaneKey(args.tabId, fallbackLeafId)
@@ -137,11 +163,13 @@ export function registerLegacyPaneKeyAliasesForTab(args: {
         // Why: a persisted tabId can be malformed; skip the alias instead of aborting the whole load-time normalization.
       }
     }
+
     if (paneKey) {
       for (const legacyPaneKey of [`${args.tabId}:0`, `${args.tabId}:1`]) {
         if (registeredLegacyPaneKeys.has(legacyPaneKey)) {
           continue
         }
+
         agentHookServer.registerPaneKeyAlias(legacyPaneKey, paneKey, args.tab.ptyId)
         legacyPaneKeyAliasEntries.push({
           ptyId: args.tab.ptyId,
@@ -152,5 +180,6 @@ export function registerLegacyPaneKeyAliasesForTab(args: {
       }
     }
   }
+
   return legacyPaneKeyAliasEntries
 }

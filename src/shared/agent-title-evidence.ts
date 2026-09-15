@@ -100,6 +100,7 @@ const DISPLAY_LABELS = [
 ] satisfies readonly (readonly [string, TuiAgent])[]
 
 const GEMINI_GLYPHS = [GEMINI_WORKING, GEMINI_SILENT_WORKING, GEMINI_IDLE, GEMINI_PERMISSION]
+
 const ANTIGRAVITY_MODEL_TITLE_RE = /^(?:agy|antigravity)(?:\s*[·—:-]\s*|\s+)gemini\s+\d/i
 
 /**
@@ -108,9 +109,13 @@ const ANTIGRAVITY_MODEL_TITLE_RE = /^(?:agy|antigravity)(?:\s*[·—:-]\s*|\s+)g
  * worktree name (`review-14600-codex`), which is a directory, not an owner declaration.
  */
 const OWNER_SUFFIX_RE = /\s-\s+([A-Za-z][\w-]*)\s*$/
+
 const WINDOWS_LAUNCHER_SUFFIX_RE = /\.(?:exe|cmd|bat|ps1)$/i
+
 const WRAPPER_SEPARATOR = ' | '
+
 const MAX_WRAPPER_EVIDENCE_SEGMENTS = 8
+
 const RESERVED_OWNER_IDS: ReadonlyMap<string, TuiAgent> = new Map([
   ['pi', 'pi'],
   ['omp', 'omp'],
@@ -121,32 +126,40 @@ const RESERVED_OWNER_IDS: ReadonlyMap<string, TuiAgent> = new Map([
 function getEvidenceTitleSegments(title: string): string[] {
   const segments = [title]
   let separatorIndex = title.lastIndexOf(WRAPPER_SEPARATOR)
+
   while (separatorIndex >= 0 && segments.length < MAX_WRAPPER_EVIDENCE_SEGMENTS) {
     const wrapped = title.slice(separatorIndex + WRAPPER_SEPARATOR.length).trim()
+
     if (wrapped && !segments.includes(wrapped)) {
       segments.push(wrapped)
     }
+
     const previousSeparatorIndex = separatorIndex
     separatorIndex = title.lastIndexOf(WRAPPER_SEPARATOR, separatorIndex - 1)
+
     if (separatorIndex === previousSeparatorIndex) {
       break
     }
   }
+
   return segments
 }
 
 function namesIn(text: string): TuiAgent[] {
   const found = new Set<TuiAgent>()
+
   for (const [token, agent] of NAME_TOKENS) {
     if (titleHasAgentName(text, token)) {
       found.add(agent)
     }
   }
+
   for (const [pattern, agent] of PATTERN_NAMES) {
     if (pattern.test(text)) {
       found.add(agent)
     }
   }
+
   return [...found]
 }
 
@@ -159,19 +172,24 @@ function stripBareNameDecoration(text: string): string {
 
 function agentForBareName(text: string): TuiAgent | null {
   const trimmed = text.trim()
+
   if (!trimmed || /[\\/]/.test(trimmed)) {
     return null
   }
+
   const stripped = stripBareNameDecoration(trimmed)
   // Why labels too: an agent may write its own display name as the entire title (`⠐ Claude Code`).
   // That is the same claim as a bare token, just spelled the way the vendor spells it.
   const normalized = stripped.toLowerCase()
   const label = DISPLAY_LABELS.find(([text]) => text === normalized)
+
   if (label) {
     return label[1]
   }
+
   const bareToken = stripped.replace(WINDOWS_LAUNCHER_SUFFIX_RE, '')
   const names = namesIn(bareToken)
+
   // Why the length check: the remainder must BE the name, not merely contain it. "agy" anchors;
   // "fix the agy hook" does not, and neither does a hyphenated worktree name like "codex-split".
   return names.length === 1 && /^[\p{L}\p{N}]+$/u.test(bareToken) ? names[0] : null
@@ -179,35 +197,45 @@ function agentForBareName(text: string): TuiAgent | null {
 
 function agentForWholeTitle(text: string): TuiAgent | null {
   const trimmed = text.trim()
+
   if (!trimmed || /[\\/]/.test(trimmed)) {
     return null
   }
+
   const stripped = stripBareNameDecoration(trimmed)
   const normalized = stripped.toLowerCase()
   const label = DISPLAY_LABELS.find(([text]) => text === normalized)
+
   if (label) {
     return label[1]
   }
+
   if (!WINDOWS_LAUNCHER_SUFFIX_RE.test(stripped)) {
     return null
   }
+
   return agentForBareName(stripped)
 }
 
 function agentForOwnerSuffix(text: string): TuiAgent | null {
   const normalized = text.trim().toLowerCase()
+
   return RESERVED_OWNER_IDS.get(normalized) ?? agentForBareName(text)
 }
 
 function agentForSyntheticTitle(text: string): TuiAgent | null {
   const trimmed = text.trim()
+
   if (/[\\/]/.test(trimmed)) {
     return null
   }
+
   const normalized = trimmed.replace(/^[^\p{L}\p{N}]+/u, '').toLowerCase()
+
   for (const agent of SYNTHETIC_AGENT_TITLE_AGENTS) {
     const profile = SYNTHETIC_AGENT_TITLE_PROFILES[agent]
     const emittedLabels = [profile.permissionLabel, profile.idleLabel]
+
     if (profile.synthesizeWorkingTitle !== false) {
       // Working labels are emitted only as spinner frames; a bare name is free text.
       if (
@@ -218,6 +246,7 @@ function agentForSyntheticTitle(text: string): TuiAgent | null {
         return agent
       }
     }
+
     if (
       profile.synthesizeTerminalTitle !== false &&
       emittedLabels.some((label) => normalized === label.toLowerCase())
@@ -225,17 +254,20 @@ function agentForSyntheticTitle(text: string): TuiAgent | null {
       return agent
     }
   }
+
   return null
 }
 
 function collectVendorMarkers(segments: readonly string[]): TuiAgent[] {
   const markers = new Set<TuiAgent>()
+
   for (const segment of segments) {
     // Why prefix-only: a sigil marks the pane's own status line only in the identity position.
     // The same character inside task text is decoration, not a vendor emission.
     if (GEMINI_GLYPHS.some((glyph) => segment.startsWith(glyph))) {
       markers.add('gemini')
     }
+
     if (
       segment.startsWith(`${CLAUDE_IDLE} `) ||
       segment === CLAUDE_IDLE ||
@@ -244,10 +276,12 @@ function collectVendorMarkers(segments: readonly string[]): TuiAgent[] {
     ) {
       markers.add('claude')
     }
+
     if (isCursorNativeAgentTitle(segment)) {
       markers.add('cursor')
     }
   }
+
   return [...markers]
 }
 
@@ -256,15 +290,18 @@ function namesConsumedByAnchoredLabels(
   anchoredNames: ReadonlySet<TuiAgent>
 ): Set<TuiAgent> {
   const consumed = new Set<TuiAgent>()
+
   for (const segment of segments) {
     const normalized = stripBareNameDecoration(segment).toLowerCase()
     const label = DISPLAY_LABELS.find(([text]) => text === normalized)
+
     if (label && anchoredNames.has(label[1])) {
       for (const name of namesIn(label[0])) {
         consumed.add(name)
       }
     }
   }
+
   return consumed
 }
 
@@ -279,8 +316,10 @@ function collectAnchoredNames(segments: readonly string[]): TuiAgent[] {
     }
 
     const suffix = OWNER_SUFFIX_RE.exec(segment)
+
     if (suffix) {
       const agent = agentForOwnerSuffix(suffix[1])
+
       if (agent) {
         anchored.add(agent)
       }
@@ -291,14 +330,19 @@ function collectAnchoredNames(segments: readonly string[]): TuiAgent[] {
     const withoutSigil = segment.startsWith(`${CLAUDE_IDLE} `)
       ? segment.slice(CLAUDE_IDLE.length)
       : segment
+
     const bare = agentForWholeTitle(withoutSigil)
+
     if (bare) {
       anchored.add(bare)
     }
+
     const synthetic = agentForSyntheticTitle(segment)
+
     if (synthetic) {
       anchored.add(synthetic)
     }
+
     if (isClaudeIdentityFrameSegment(segment)) {
       anchored.add('claude')
     }
@@ -307,11 +351,13 @@ function collectAnchoredNames(segments: readonly string[]): TuiAgent[] {
     // own title carries a whole `gemini` token. Read as identity-plus-model, the gemini token is
     // metadata — which is the general rule, not an exception inside the Gemini detector.
     const undecorated = stripLeadingAgentTitleDecorationOrEmpty(segment).trim()
+
     if (ANTIGRAVITY_MODEL_TITLE_RE.test(undecorated)) {
       anchored.add('antigravity')
     }
 
     const piCompatible = getPiCompatibleSyntheticAgentLabel(segment)
+
     if (piCompatible === 'Pi') {
       anchored.add('pi')
     } else if (piCompatible === 'OMP') {
@@ -325,6 +371,7 @@ function collectAnchoredNames(segments: readonly string[]): TuiAgent[] {
 /** Collects every identity signal in `title` and ranks them by class, never by declaration order. */
 export function collectAgentTitleEvidence(title: string): AgentTitleEvidence {
   const empty = { vendorMarkers: [], anchoredNames: [], freeTextNames: [] } as const
+
   if (!title.trim() || isClaudeManagementTitle(title)) {
     // Why: a `claude agents` management screen is Claude's own UI, not an agent session.
     return { ...empty, agent: null, reason: 'no-evidence' }
@@ -335,21 +382,26 @@ export function collectAgentTitleEvidence(title: string): AgentTitleEvidence {
   const anchoredNames = collectAnchoredNames(segments)
   const anchoredSet = new Set(anchoredNames)
   const anchoredLabelNames = namesConsumedByAnchoredLabels(segments, anchoredSet)
+
   const freeTextNames = namesIn(title).filter(
     (agent) => !anchoredSet.has(agent) && !anchoredLabelNames.has(agent)
   )
+
   const evidence = { vendorMarkers, anchoredNames, freeTextNames } as const
 
   if (anchoredNames.length === 1) {
     // Why anchored beats a vendor marker: `✳ agy` is an agy pane whose title kept Claude's sigil.
     return { ...evidence, agent: anchoredNames[0], reason: 'anchored' }
   }
+
   if (anchoredNames.length > 1) {
     return { ...evidence, agent: null, reason: 'conflicting-anchored-names' }
   }
+
   if (vendorMarkers.length > 1) {
     return { ...evidence, agent: null, reason: 'conflicting-vendor-markers' }
   }
+
   if (vendorMarkers.length === 1) {
     // Why free text does not veto here: `✳ Fix Codex false attention notifications` is a Claude
     // pane describing Codex work. The sigil is emitted by the agent; the name was typed by a
@@ -357,6 +409,7 @@ export function collectAgentTitleEvidence(title: string): AgentTitleEvidence {
     // `✳ agy` resolve to Antigravity without also blinding the 13 recorded titles of this shape.
     return { ...evidence, agent: vendorMarkers[0], reason: 'vendor-marker' }
   }
+
   return {
     ...evidence,
     agent: null,

@@ -22,6 +22,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
+
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
   getCohortAtEmitMock: vi.fn()
@@ -36,9 +37,11 @@ vi.mock('electron', () => ({
     encryptString: (plaintext: string) => Buffer.from(`encrypted:${plaintext}`, 'utf-8'),
     decryptString: (ciphertext: Buffer) => {
       const decoded = ciphertext.toString('utf-8')
+
       if (!decoded.startsWith('encrypted:')) {
         throw new Error('invalid ciphertext')
       }
+
       return decoded.slice('encrypted:'.length)
     }
   }
@@ -66,6 +69,7 @@ describe('Store', () => {
   it('can clear an automation back to the project default branch', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ worktreeBaseRef: 'origin/main' }))
+
     const automation = store.createAutomation({
       name: 'Nightly',
       prompt: 'Run checks',
@@ -89,6 +93,7 @@ describe('Store', () => {
   it('returns the existing automation for a repeated creation key', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const input = {
       creationKey: 'move-retry-1',
       name: 'Retry-safe move',
@@ -124,6 +129,7 @@ describe('Store', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
+
     const newPerRun = store.createAutomation({
       name: 'Fresh',
       prompt: 'Run checks',
@@ -164,6 +170,7 @@ describe('Store', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
+
     const existing = store.createAutomation({
       name: 'Reuse',
       prompt: 'Summarize changes',
@@ -181,6 +188,7 @@ describe('Store', () => {
     expect(existing.setupDecision).toBeUndefined()
 
     const skipped = store.updateAutomation(newPerRun.id, { setupDecision: 'skip' })
+
     const switchedToExisting = store.updateAutomation(newPerRun.id, {
       workspaceMode: 'existing',
       workspaceId: 'wt1'
@@ -199,6 +207,7 @@ describe('Store', () => {
     // and must not take the `null` clear branch reserved for a real user clear.
     const store = await createStore()
     store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))
+
     const automation = store.createAutomation({
       name: 'Nightly',
       prompt: 'Run checks',
@@ -233,6 +242,7 @@ describe('Store', () => {
       workspaceMode: 'existing',
       workspaceId: 'wt1'
     })
+
     expect(store.updateAutomation(existing.id, { workspaceId: undefined }).workspaceId).toBe('wt1')
   })
 
@@ -307,6 +317,7 @@ describe('Store', () => {
   it('re-derives a stored client-perspective context on an explicit move, not on a toggle', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))
+
     const automation = store.createAutomation({
       name: 'Nightly',
       prompt: 'Run checks',
@@ -317,6 +328,7 @@ describe('Store', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
+
     const persisted = readDataFile() as { automations: Record<string, unknown>[] }
     // A record a pre-fix host stored from a paired client's create input.
     persisted.automations[0].runContext = {
@@ -370,6 +382,7 @@ describe('Store', () => {
   it('snapshots automation contexts onto runs', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))
+
     const automation = store.createAutomation({
       name: 'Nightly',
       prompt: 'Run checks',
@@ -401,6 +414,7 @@ describe('Store', () => {
         connectionId: 'builder'
       })
     )
+
     const automation = store.createAutomation({
       name: 'Legacy nightly',
       prompt: 'Run checks',
@@ -411,11 +425,14 @@ describe('Store', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
+
     const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+
     const persisted = readDataFile() as {
       automations: Record<string, unknown>[]
       automationRuns: Record<string, unknown>[]
     }
+
     delete persisted.automations[0].runContext
     delete persisted.automations[0].sourceContext
     delete persisted.automationRuns[0].runContext
@@ -423,9 +440,11 @@ describe('Store', () => {
     writeDataFile(persisted)
 
     const reloaded = await createStore()
+
     const migratedAutomation = reloaded
       .listAutomations()
       .find((entry) => entry.id === automation.id)
+
     const migratedRun = reloaded
       .listAutomationRuns(automation.id)
       .find((entry) => entry.id === run.id)
@@ -459,6 +478,7 @@ describe('Store', () => {
         connectionId: 'builder'
       })
     )
+
     const automation = seed.createAutomation({
       name: 'Every minute',
       prompt: 'Run checks',
@@ -469,6 +489,7 @@ describe('Store', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
+
     seed.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
     seed.flush()
 
@@ -487,13 +508,16 @@ describe('Store', () => {
         createdAt: 1_000 + i,
         scheduledFor: 1_000 + i
       }
+
       // Legacy files predate runNumber; backfill must run BEFORE the prune so survivors keep their true ordinals.
       delete legacy.runNumber
+
       return legacy
     })
     writeDataFile(persisted)
 
     vi.useFakeTimers()
+
     try {
       const reloaded = await createStore()
       expect(reloaded.listAutomationRuns(automation.id)).toHaveLength(100)
@@ -521,6 +545,7 @@ describe('Store', () => {
         connectionId: 'builder'
       })
     )
+
     const automation = store.createAutomation({
       name: 'Every minute',
       prompt: 'Run checks',
@@ -531,6 +556,7 @@ describe('Store', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
+
     const base = new Date('2026-05-13T09:00:00Z').getTime()
     const inFlight = store.createAutomationRun(automation, base)
     store.updateAutomationRun({
@@ -542,6 +568,7 @@ describe('Store', () => {
 
     // 120 later runs reach a final status while the first one is still dispatched.
     let firstCompletedId = ''
+
     for (let i = 1; i <= 120; i++) {
       const later = store.createAutomationRun(automation, base + i * 60_000)
       firstCompletedId ||= later.id
@@ -560,6 +587,7 @@ describe('Store', () => {
       workspaceId: null,
       error: null
     })
+
     expect(completed.id).toBe(inFlight.id)
 
     const runs = store.listAutomationRuns(automation.id)
@@ -572,6 +600,7 @@ describe('Store', () => {
   it('persists automation precheck config and run results', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Conditional',
       prompt: 'Run checks',
@@ -587,6 +616,7 @@ describe('Store', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
+
     const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
 
     store.updateAutomationRun({
@@ -622,6 +652,7 @@ describe('Store', () => {
   it('numbers automation run titles per automation', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Nightly',
       prompt: 'Run checks',
@@ -635,10 +666,12 @@ describe('Store', () => {
     })
 
     const first = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+
     const duplicate = store.createAutomationRun(
       automation,
       new Date('2026-05-13T09:00:00Z').getTime()
     )
+
     const second = store.createAutomationRun(automation, new Date('2026-05-14T09:00:00Z').getTime())
 
     expect(first.title).toBe('Nightly run 1')
@@ -650,6 +683,7 @@ describe('Store', () => {
   it('records feature interactions when automations are created or manually queued', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Nightly',
       prompt: 'Run checks',
@@ -680,6 +714,7 @@ describe('Store', () => {
     const store = await createStore()
     store.addRepo(makeRepo())
     store.setWorktreeMeta('wt1', { displayName: 'Nightly workspace' })
+
     const automation = store.createAutomation({
       name: 'Nightly',
       prompt: 'Run checks',
@@ -704,6 +739,7 @@ describe('Store', () => {
   it('backfills automation run workspace names before workspace deletion', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Nightly',
       prompt: 'Run checks',
@@ -715,6 +751,7 @@ describe('Store', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
+
     store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
 
     const updatedCount = store.snapshotAutomationRunWorkspaceDisplayName('wt1', 'Deleted workspace')
@@ -728,6 +765,7 @@ describe('Store', () => {
   it('persists automation run output snapshots across later status updates', async () => {
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Nightly',
       prompt: 'Run checks',
@@ -739,6 +777,7 @@ describe('Store', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
+
     const run = store.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
     const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
 

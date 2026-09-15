@@ -69,6 +69,7 @@ export function TerminalTabLeadingIcon({
   // Why: shared mapper with Cmd+J recent badges — working/permission/done only; active/inactive
   // fall through to agent/shell identity.
   const dotState = terminalTabActivityToAgentDotState(activityStatus)
+
   if (dotState) {
     return (
       <span

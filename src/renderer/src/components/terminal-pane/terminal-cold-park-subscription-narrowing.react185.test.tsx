@@ -8,12 +8,14 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const WORKTREE_ID = 'repo::/cold-park-narrowing'
+
 const OTHER_WORKTREE_ID = 'repo::/cold-park-narrowing-other'
 
 const harness = vi.hoisted(() => ({ renders: 0 }))
 
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
+
   const useAppStore = create(() => ({
     pendingStartupByTabId: {} as Record<string, unknown>,
     ptyIdsByTabId: {} as Record<string, string[]>,
@@ -23,6 +25,7 @@ vi.mock('../../store', async () => {
     sleepingAgentSessionsByPaneKey: {} as Record<string, unknown>,
     terminalLayoutsByTabId: {} as Record<string, unknown>
   }))
+
   return { useAppStore }
 })
 
@@ -42,6 +45,7 @@ import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 const terminalTabs = ['tab-1', 'tab-2'].map(
   (id) => ({ id, ptyId: `${WORKTREE_ID}@@session-${id}` }) as TerminalTab
 )
+
 const assignments = new Map<string, { groupId: string; isActiveInGroup: boolean }>()
 
 function sleepingRecord(
@@ -51,6 +55,7 @@ function sleepingRecord(
 ): SleepingAgentSessionRecord {
   return { paneKey, worktreeId, ...extra } as unknown as SleepingAgentSessionRecord
 }
+
 const activityTerminalPortals: never[] = []
 
 function ColdParkingHarness(): null {
@@ -66,6 +71,7 @@ function ColdParkingHarness(): null {
     activityTerminalPortals,
     activationDeferredMountTabIds: null
   })
+
   return null
 }
 

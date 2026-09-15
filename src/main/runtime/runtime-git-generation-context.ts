@@ -25,16 +25,20 @@ export function pullRequestDraftGitExec(
 ): PullRequestDraftGitExec {
   if (route.kind === 'ssh') {
     const provider = route.provider
+
     if (!provider) {
       throw new Error('ssh_git_provider_unavailable')
     }
+
     return (argv, options) => {
       const timeoutMs = options?.timeoutMs ?? options?.timeout
+
       return timeoutMs === undefined
         ? provider.exec(argv, target.worktree.path)
         : provider.exec(argv, target.worktree.path, { timeoutMs })
     }
   }
+
   return (argv, options) =>
     gitExecFileAsync(argv, {
       cwd: target.worktree.path,
@@ -60,6 +64,7 @@ export function getRuntimeGitGenerationSettings(
   operation: SourceControlAiOperation
 ): GlobalSettings {
   const mergedSettings = { ...settings, ...settingsOverride }
+
   if (
     settingsOverride?.commitMessageAi !== undefined &&
     settingsOverride.sourceControlAi === undefined
@@ -70,6 +75,7 @@ export function getRuntimeGitGenerationSettings(
       { pullRequestInstructionsFromLegacy: operation === 'pullRequest' }
     )
   }
+
   return mergedSettings
 }
 
@@ -77,6 +83,7 @@ export function localAgentRuntimeTargetForTarget(
   target: RuntimeGitTarget
 ): CommitMessageAgentRuntimeTarget {
   const wslDistro = localGitOptionsForTarget(target).wslDistro
+
   return wslDistro ? { runtime: 'wsl', wslDistro } : { runtime: 'host' }
 }
 
@@ -85,6 +92,7 @@ export function localTextGenerationTargetForTarget(
   env?: NodeJS.ProcessEnv
 ): Extract<CommitMessageGenerationTarget, { kind: 'local' }> {
   const wslDistro = localGitOptionsForTarget(target).wslDistro
+
   return {
     kind: 'local',
     cwd: target.worktree.path,
@@ -98,6 +106,7 @@ export function linkedIssueForTarget(
   target: RuntimeGitTarget
 ): number | null | undefined {
   const live = host.getWorktreeLinkedIssue?.(target.worktree.id)
+
   // Why: `undefined` means the host could not answer, not "unlinked".
   return live === undefined ? target.worktree.linkedIssue : live
 }
@@ -107,10 +116,13 @@ export function linkedIssueMetaForTarget(
   target: RuntimeGitTarget
 ): PullRequestLinkedIssueMeta | null {
   const live = host.getWorktreeLinkedIssueMeta?.(target.worktree.id)
+
   if (live !== undefined) {
     return live
   }
+
   const liveGitHubIssue = host.getWorktreeLinkedIssue?.(target.worktree.id)
+
   return {
     linkedIssue: liveGitHubIssue === undefined ? target.worktree.linkedIssue : liveGitHubIssue,
     linkedGitLabIssue: target.worktree.linkedGitLabIssue,

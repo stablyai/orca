@@ -8,6 +8,7 @@ import type { AppState } from '@/store/types'
 import PinnedTabCloseDialog from './PinnedTabCloseDialog'
 
 const initialState = useAppStore.getInitialState()
+
 const mountedRoots: Root[] = []
 
 async function renderDialog({
@@ -45,17 +46,21 @@ function getButton(label: string): HTMLButtonElement {
   const button = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
     (candidate) => candidate.textContent === label
   )
+
   if (!button) {
     throw new Error(`Button not found: ${label}`)
   }
+
   return button
 }
 
 function getCheckbox(): HTMLButtonElement {
   const checkbox = document.body.querySelector<HTMLButtonElement>('[role="checkbox"]')
+
   if (!checkbox) {
     throw new Error('Checkbox not found')
   }
+
   return checkbox
 }
 

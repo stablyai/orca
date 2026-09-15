@@ -8,22 +8,28 @@ function creationGroup(): ShortcutGroup {
     ['tab.newTerminal', 'tab.newBrowser', 'tab.newMarkdown', 'tab.newSimulator'] as const
   ).map((actionId) => {
     const definition = getKeybindingDefinition(actionId)
+
     if (!definition) {
       throw new Error(`Missing keybinding definition: ${actionId}`)
     }
+
     return definition
   })
+
   return { title: 'Tabs', items }
 }
 
 function globalGroup(): ShortcutGroup {
   const items = (['workspace.openBoard', 'dashboard.toggle'] as const).map((actionId) => {
     const definition = getKeybindingDefinition(actionId)
+
     if (!definition) {
       throw new Error(`Missing keybinding definition: ${actionId}`)
     }
+
     return definition
   })
+
   return { title: 'Global', items }
 }
 

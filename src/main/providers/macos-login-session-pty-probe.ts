@@ -2,8 +2,11 @@ import { execFile, type ExecFileException } from 'node:child_process'
 import { existsSync } from 'node:fs'
 
 const MACOS_EXPECT_PATH = '/usr/bin/expect'
+
 const LOGIN_PREFLIGHT_MARKER = 'ORCA_LOGIN_PREFLIGHT_OK'
+
 const LOGIN_PROBE_USERNAME_ENV = 'ORCA_LOGIN_PROBE_USERNAME'
+
 // Why: expect owns the PTY without adding a long-lived native handle to the daemon.
 const EXPECT_LOGIN_PROBE_SCRIPT =
   'log_user 1; ' +
@@ -21,10 +24,12 @@ export function classifyLoginPreflightError(error: ExecFileException): LoginPref
   if (error.killed || error.code === 'ETIMEDOUT') {
     return { ok: false, conclusive: false, reason: 'timeout' }
   }
+
   // Why: a natural nonzero exit is login(1)'s conclusive rejection verdict.
   if (typeof error.code === 'number') {
     return { ok: false, conclusive: true, reason: 'rejected' }
   }
+
   return { ok: false, conclusive: false, reason: 'error' }
 }
 
@@ -39,6 +44,7 @@ export function runMacosLoginSessionPtyProbe(
   if (!existsSync(MACOS_EXPECT_PATH)) {
     return Promise.resolve({ ok: false, conclusive: false, reason: 'error' })
   }
+
   return new Promise((resolve) => {
     try {
       const child = execFile(
@@ -61,8 +67,10 @@ export function runMacosLoginSessionPtyProbe(
                 ? { ok: false, conclusive: false, reason: 'timeout' }
                 : { ok: false, conclusive: false, reason: 'error' }
             )
+
             return
           }
+
           resolve(
             stdout.includes(LOGIN_PREFLIGHT_MARKER)
               ? { ok: true, conclusive: true, reason: 'accepted' }
@@ -70,6 +78,7 @@ export function runMacosLoginSessionPtyProbe(
           )
         }
       )
+
       child.stdin?.end()
     } catch {
       resolve({ ok: false, conclusive: false, reason: 'error' })

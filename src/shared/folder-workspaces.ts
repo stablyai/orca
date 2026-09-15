@@ -11,6 +11,7 @@ export function normalizeFolderWorkspaceName(
   fallback = 'Untitled workspace'
 ): string {
   const trimmed = typeof name === 'string' ? name.trim() : ''
+
   return trimmed.length > 0 ? trimmed : fallback
 }
 
@@ -21,7 +22,9 @@ export function normalizeFolderWorkspaces(
   if (!Array.isArray(value)) {
     return []
   }
+
   const folderGroups = new Map<string, ProjectGroup>()
+
   for (const group of projectGroups) {
     if (group.parentPath) {
       folderGroups.set(group.id, group)
@@ -30,11 +33,14 @@ export function normalizeFolderWorkspaces(
 
   const workspaces: FolderWorkspace[] = []
   const seen = new Set<string>()
+
   for (const candidate of value) {
     if (!candidate || typeof candidate !== 'object') {
       continue
     }
+
     const raw = candidate as Partial<FolderWorkspace>
+
     if (
       typeof raw.id !== 'string' ||
       raw.id.trim().length === 0 ||
@@ -44,14 +50,18 @@ export function normalizeFolderWorkspaces(
     ) {
       continue
     }
+
     const group = folderGroups.get(raw.projectGroupId)
+
     const folderPath =
       typeof raw.folderPath === 'string' && raw.folderPath.trim().length > 0
         ? raw.folderPath
         : group?.parentPath
+
     if (!folderPath) {
       continue
     }
+
     const now = Date.now()
     const linkedTask = normalizeWorkspaceLinkedItem(raw.linkedTask)
     const linkedTaskSourceContext = normalizeStoredTaskSourceContext(raw.linkedTaskSourceContext)
@@ -113,6 +123,7 @@ export function normalizeFolderWorkspaces(
       ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {})
     })
   }
+
   return workspaces.sort(
     (left, right) => right.sortOrder - left.sortOrder || left.name.localeCompare(right.name)
   )

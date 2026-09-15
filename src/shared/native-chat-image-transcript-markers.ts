@@ -5,11 +5,17 @@ import {
 import { isTextBlock, type NativeChatBlock, type NativeChatMessage } from './native-chat-types'
 
 const IMAGE_SOURCE_MARKER = /^\[Image:\s*source:\s*(.+?)\]\s*$/
+
 const IMAGE_PROMPT_MARKER = /\[Image #\d+\]/
+
 const IMAGE_PROMPT_MARKERS = /\[Image #\d+\]/g
+
 const IMAGE_PROMPT_MARKER_AT_START = /^[^\S\r\n]*\[Image #\d+\]/
+
 const IMAGE_PROMPT_MARKER_AT_END = /\[Image #\d+\][^\S\r\n]*$/
+
 const HORIZONTAL_WHITESPACE_START = /^[^\S\r\n]+/
+
 const HORIZONTAL_WHITESPACE_END = /[^\S\r\n]+$/
 
 export function imageSourcePathFromText(text: string): string | null {
@@ -27,17 +33,23 @@ export function imageSourcePathsFromMessage(message: NativeChatMessage): string[
   if (message.role !== 'user' || message.blocks.length === 0) {
     return []
   }
+
   const paths: string[] = []
+
   for (const block of message.blocks) {
     if (!isTextBlock(block)) {
       return []
     }
+
     const path = imageSourcePathFromText(block.text)
+
     if (path === null) {
       return []
     }
+
     paths.push(path)
   }
+
   return paths
 }
 
@@ -47,15 +59,19 @@ export function isImageSourceUserTurn(message: NativeChatMessage): boolean {
 
 export function stripImagePromptMarker(text: string): string {
   const stripped = text.replace(IMAGE_PROMPT_MARKERS, '')
+
   if (stripped === text) {
     return text
   }
+
   let result = IMAGE_PROMPT_MARKER_AT_START.test(text)
     ? stripped.replace(HORIZONTAL_WHITESPACE_START, '')
     : stripped
+
   if (IMAGE_PROMPT_MARKER_AT_END.test(text)) {
     result = result.replace(HORIZONTAL_WHITESPACE_END, '')
   }
+
   return result
 }
 
@@ -73,12 +89,14 @@ export function normalizedNativeChatUserMessageText(message: NativeChatMessage):
   if (message.role !== 'user') {
     return null
   }
+
   const normalized = normalizeNativeChatUserText(
     message.blocks
       .filter(isTextBlock)
       .map((block) => block.text)
       .join(' ')
   )
+
   return normalized || null
 }
 
@@ -87,26 +105,33 @@ function stripImagePromptMarkersFromTextBlocks(
 ): NativeChatBlock[] {
   let sawText = false
   let next: NativeChatBlock[] | null = null
+
   for (let index = 0; index < blocks.length; index += 1) {
     const block = blocks[index]!
+
     if (!isTextBlock(block)) {
       next?.push(block)
       continue
     }
+
     const isFirstText = !sawText
     sawText = true
     const text = stripImagePromptMarker(block.text)
+
     if (!text.trim() && (text !== block.text || isFirstText)) {
       next ??= blocks.slice(0, index)
       continue
     }
+
     if (text !== block.text) {
       next ??= blocks.slice(0, index)
       next.push({ ...block, text })
       continue
     }
+
     next?.push(block)
   }
+
   return next ?? (blocks as NativeChatBlock[])
 }
 
@@ -120,20 +145,26 @@ export function normalizeImageTranscriptMessages(
   messages: readonly NativeChatMessage[]
 ): NativeChatMessage[] {
   let normalized: NativeChatMessage[] | null = null
+
   for (let index = 0; index < messages.length; index += 1) {
     const message = messages[index]!
+
     if (message.role !== 'user') {
       normalized?.push(message)
       continue
     }
+
     const messageImagePaths = imageSourcePathsFromMessage(message)
+
     if (messageImagePaths.length > 0) {
       normalized ??= messages.slice(0, index)
       const imagePaths = [...messageImagePaths]
       let nextIndex = index + 1
+
       while (nextIndex < messages.length) {
         const candidate = messages[nextIndex]!
         const candidatePaths = imageSourcePathsFromMessage(candidate)
+
         if (
           candidate.role !== 'user' ||
           candidate.source !== message.source ||
@@ -141,10 +172,13 @@ export function normalizeImageTranscriptMessages(
         ) {
           break
         }
+
         imagePaths.push(...candidatePaths)
         nextIndex += 1
       }
+
       const prompt = messages[nextIndex]
+
       if (
         prompt?.role === 'user' &&
         prompt.source === message.source &&
@@ -160,6 +194,7 @@ export function normalizeImageTranscriptMessages(
         index = nextIndex
         continue
       }
+
       // Only THIS turn's paths: `imagePaths` also holds the following source turns the
       // fold scan looked at, and without a prompt to fold into they stay separate turns.
       normalized.push({
@@ -168,7 +203,9 @@ export function normalizeImageTranscriptMessages(
       })
       continue
     }
+
     const blocks = stripImagePromptMarkersFromTextBlocks(message.blocks)
+
     if (blocks === message.blocks) {
       normalized?.push(message)
     } else {
@@ -176,5 +213,6 @@ export function normalizeImageTranscriptMessages(
       normalized.push({ ...message, blocks })
     }
   }
+
   return normalized ?? (messages as NativeChatMessage[])
 }

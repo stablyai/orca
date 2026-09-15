@@ -14,6 +14,7 @@ function validateRequiredString(value: unknown, label: string): string {
   if (typeof value !== 'string' || value.trim() === '') {
     throw new Error(`${label} is required`)
   }
+
   return value
 }
 
@@ -30,8 +31,10 @@ async function assertDownloadFolderDestinationAvailable(destinationPath: string)
     if (isENOENT(error)) {
       return
     }
+
     throw error
   }
+
   throw new Error('Destination folder already exists')
 }
 
@@ -56,46 +59,59 @@ export function registerFilesystemDownloadFolderHandlers(): void {
       const dirPath = validateRequiredString(args?.dirPath, 'dirPath')
       const connectionId = validateRequiredString(args?.connectionId, 'connectionId')
       const provider = requireSshFilesystemProvider(connectionId)
+
       if (!provider.downloadFolder) {
         throw new Error(
           'Remote folder download is unavailable. Reconnect the SSH target and retry.'
         )
       }
+
       const abortController = new AbortController()
+
       const abortOnSenderDestroyed = (): void => {
         abortController.abort(new Error('Folder download canceled because the window closed'))
       }
+
       event.sender.once('destroyed', abortOnSenderDestroyed)
+
       if (event.sender.isDestroyed()) {
         abortOnSenderDestroyed()
       }
+
       try {
         abortController.signal.throwIfAborted()
         const remoteBasename = getRuntimePathBasename(dirPath)
         const destinationBasename = sanitizeLocalDownloadFilename(remoteBasename)
         const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined
+
         // Why: after the local capability/abort checks, open the picker before
         // remote tree validation so SSH latency does not delay click feedback.
         const dialogOptions: Electron.OpenDialogOptions = {
           properties: ['openDirectory', 'createDirectory']
         }
+
         const dialogResult = parentWindow
           ? await dialog.showOpenDialog(parentWindow, dialogOptions)
           : await dialog.showOpenDialog(dialogOptions)
+
         const destinationParent = dialogResult.filePaths?.[0]
+
         if (dialogResult.canceled || !destinationParent) {
           return { canceled: true }
         }
+
         abortController.signal.throwIfAborted()
 
         const destinationPath = join(destinationParent, destinationBasename)
         await assertDownloadFolderDestinationAvailable(destinationPath)
 
         const tempPath = createSiblingTransferPath(destinationPath, 'download')
+
         try {
           await provider.downloadFolder(dirPath, tempPath, { signal: abortController.signal })
           abortController.signal.throwIfAborted()
           await promoteLocalDownloadedFolder(tempPath, destinationPath, abortController.signal)
+
           return { canceled: false, destinationPath }
         } finally {
           await cleanupLocalTransferDirectory(tempPath)

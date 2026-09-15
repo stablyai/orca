@@ -11,6 +11,7 @@ export type LinuxPackageType = LinuxRootPackageType | 'non-root' | 'unusable'
 
 // Why: `undefined` means "not resolved yet"; every other value is stable for this process.
 let cachedPackageType: LinuxPackageType | undefined
+
 let cachedExternallyManaged: boolean | undefined
 
 // Bounded by construction: the marker is read at most once per process.
@@ -26,6 +27,7 @@ function isAbsolutePathString(value: unknown): value is string {
 
 function isInsideDirectory(root: string, candidate: string): boolean {
   const relative = path.relative(root, candidate)
+
   return (
     relative.length > 0 &&
     relative !== '..' &&
@@ -48,6 +50,7 @@ export function isLegacyAppImageRuntimeIdentity(identity: {
   ) {
     return false
   }
+
   return (
     isInsideDirectory(identity.appDirPath, identity.execPath) &&
     isInsideDirectory(identity.appDirPath, identity.resourcesPath)
@@ -67,12 +70,17 @@ function readPackageTypeMarker(): LinuxPackageType {
   if (process.platform !== 'linux' || !app.isPackaged) {
     return 'non-root'
   }
+
   const resourcesPath = process.resourcesPath
+
   if (typeof resourcesPath !== 'string' || resourcesPath.length === 0) {
     warnMarkerUnusable('resourcesPath unavailable')
+
     return 'unusable'
   }
+
   let raw: string
+
   try {
     raw = readFileSync(path.join(resourcesPath, 'package-type'), 'utf8')
   } catch (error) {
@@ -82,19 +90,26 @@ function readPackageTypeMarker(): LinuxPackageType {
     ) {
       return 'non-root'
     }
+
     warnMarkerUnusable(
       (error as NodeJS.ErrnoException)?.code === 'ENOENT' ? 'marker missing' : 'marker unreadable'
     )
+
     return 'unusable'
   }
+
   const value = raw.trim()
+
   if (value === 'deb' || value === 'rpm') {
     return value
   }
+
   if (value === 'AppImage') {
     return 'non-root'
   }
+
   warnMarkerUnusable('marker is not AppImage, deb, or rpm')
+
   return 'unusable'
 }
 
@@ -107,12 +122,14 @@ export function getLinuxPackageType(): LinuxPackageType {
   if (cachedPackageType === undefined) {
     cachedPackageType = readPackageTypeMarker()
   }
+
   return cachedPackageType
 }
 
 /** Returns a root package type when this build supports manual package recovery. */
 export function getLinuxRootPackageType(): LinuxRootPackageType | null {
   const packageType = getLinuxPackageType()
+
   return packageType === 'deb' || packageType === 'rpm' ? packageType : null
 }
 
@@ -132,5 +149,6 @@ export function isExternallyManagedLinuxInstall(): boolean {
     const packageType = getLinuxRootPackageType()
     cachedExternallyManaged = packageType !== null && !hasTrustedPackageManagerFor(packageType)
   }
+
   return cachedExternallyManaged
 }

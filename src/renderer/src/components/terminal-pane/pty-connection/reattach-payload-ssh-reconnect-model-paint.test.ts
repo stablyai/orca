@@ -10,9 +10,13 @@ import type { ReattachPayloadContext } from './reattach-payload-context'
 import type { ReattachPayloadSession } from './reattach-payload-session'
 
 const ALT_ON = '\x1b[?1049h'
+
 const ALT_OFF = '\x1b[?1049l'
+
 const MODEL_MARKER = 'MODEL-FULL-SCREEN-FRAME'
+
 const PARK_MARKER = 'PARK-PREFETCHED-FRAME'
+
 // Shaped like the real fragment: a ~100KiB relay tail begins mid-escape, so its
 // head prints as literal text instead of rebuilding the frame it no longer holds.
 const RELAY_TAIL = '30;1Hupd-0003312'
@@ -94,6 +98,7 @@ describe('reattach payload SSH reconnect model paint', () => {
     const fireLog: FireLog = []
     const session = createSession(fireLog)
     const probe = vi.fn(async () => createModelSnapshot())
+
     const ctx = createContext({
       reconnectMayUseModel: true,
       fetchSshMainModelReattachSnapshot: probe
@@ -121,6 +126,7 @@ describe('reattach payload SSH reconnect model paint', () => {
     const fireLog: FireLog = []
     const session = createSession(fireLog)
     const probe = vi.fn(async () => createModelSnapshot())
+
     const ctx = createContext({
       connectResult: { id: 'pty-1', isReattach: true, replay: '' },
       reconnectMayUseModel: true,
@@ -140,6 +146,7 @@ describe('reattach payload SSH reconnect model paint', () => {
     const session = createSession(fireLog)
     const probe = vi.fn(async () => createModelSnapshot())
     const exitedReplay = `${ALT_ON}stale frame${ALT_OFF}$ echo done\r\ndone\r\n$ `
+
     const ctx = createContext({
       connectResult: { id: 'pty-1', replay: exitedReplay },
       reconnectMayUseModel: true,
@@ -161,6 +168,7 @@ describe('reattach payload SSH reconnect model paint', () => {
     const fireLog: FireLog = []
     const session = createSession(fireLog)
     const probe = vi.fn(async () => createModelSnapshot())
+
     // Both flags set deliberately: the handler must resolve the precedence itself
     // rather than relying on the caller keeping park and reconnect disjoint.
     const ctx = createContext({

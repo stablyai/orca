@@ -35,6 +35,7 @@ export class PRRefreshQueueDrainer {
     if (this.timer) {
       clearTimeout(this.timer)
     }
+
     this.timer = setTimeout(() => {
       this.timer = null
       void this.drain()
@@ -52,8 +53,10 @@ export class PRRefreshQueueDrainer {
   ): void {
     if (!this.visibility.has(key)) {
       this.retry.reset(key)
+
       return
     }
+
     if (outcome.kind === 'upstream-error') {
       const retryAt = options?.plannedRetryAt ?? this.retry.nextVisibleErrorRetryAt(key)
       this.queue.setVisibleFollowUp({
@@ -67,15 +70,19 @@ export class PRRefreshQueueDrainer {
         windowId
       })
       this.schedule(retryAt - Date.now())
+
       return
     }
+
     this.retry.reset(key)
     const followUpCandidate = visibleCandidateAfterOutcome(candidate, outcome)
     const regularDueAt = freshRetryAt(followUpCandidate) ?? Date.now()
+
     const pendingDueAt =
       options?.pendingMergeabilityDelayMs !== undefined && isMergeabilityPendingOutcome(outcome)
         ? outcome.fetchedAt + options.pendingMergeabilityDelayMs
         : null
+
     const dueAt = pendingDueAt === null ? regularDueAt : Math.min(regularDueAt, pendingDueAt)
     this.queue.setVisibleFollowUp({
       key,
@@ -98,13 +105,16 @@ export class PRRefreshQueueDrainer {
   private nextQueuedWakeDelay(excludedKey: string): number | null {
     const now = Date.now()
     let nextDelay = Number.POSITIVE_INFINITY
+
     for (const entry of this.queue.values()) {
       if (entry.key === excludedKey) {
         continue
       }
+
       const delay = entry.dueAt > now ? entry.dueAt - now : this.pacing.entryDelay(entry)
       nextDelay = Math.min(nextDelay, delay)
     }
+
     return Number.isFinite(nextDelay) ? Math.max(0, nextDelay) : null
   }
 
@@ -112,27 +122,34 @@ export class PRRefreshQueueDrainer {
     if (this.draining) {
       return
     }
+
     this.draining = true
+
     try {
       while (this.queue.size > 0) {
         let next = this.ordered()[0]
         const waitMs = next.dueAt - Date.now()
+
         if (waitMs > 0) {
           this.schedule(waitMs)
+
           return
         }
 
         let delay = this.pacing.entryDelay(next)
+
         if (delay > 0) {
           const runnable = this.ordered().find(
             (entry) => entry.dueAt <= Date.now() && this.pacing.entryDelay(entry) === 0
           )
+
           if (runnable && runnable.key !== next.key) {
             next = runnable
             delay = 0
           } else {
             this.notePacingDelay(next)
             this.schedule(Math.min(delay, this.nextQueuedWakeDelay(next.key) ?? delay))
+
             return
           }
         }
@@ -140,11 +157,13 @@ export class PRRefreshQueueDrainer {
         this.queue.delete(next.key)
         const aliases = Array.from(next.aliases.values())
         const skippedReason = validateCandidate(next.candidate)
+
         if (skippedReason) {
           this.events.record('skipped', next.reason, skippedReason)
           this.events.broadcast({ aliases, reason: next.reason, status: 'skipped', skippedReason })
           continue
         }
+
         if (next.reason === 'visible' && !this.visibility.has(next.key)) {
           this.retry.reset(next.key)
           this.events.broadcast({
@@ -155,6 +174,7 @@ export class PRRefreshQueueDrainer {
           })
           continue
         }
+
         const requestSequence = this.events.nextSequence()
         const requestStartedAt = Date.now()
         this.events.broadcast(
@@ -164,6 +184,7 @@ export class PRRefreshQueueDrainer {
 
         if (isBackground(next.reason)) {
           const pausedUntil = await prRefreshRateLimitPausedUntil(next.candidate, true)
+
           if (pausedUntil !== null) {
             this.queue.set(next.key, { ...next, dueAt: pausedUntil })
             this.events.broadcast({
@@ -176,12 +197,14 @@ export class PRRefreshQueueDrainer {
             this.schedule(Math.max(1_000, pausedUntil - Date.now()))
             continue
           }
+
           if (
             next.bypassBackgroundBudget !== true &&
             (next.reason === 'visible' || next.reason === 'swr')
           ) {
             this.pacing.noteBackgroundStart()
           }
+
           if (next.reason === 'active') {
             this.pacing.noteActiveStart(next)
           }
@@ -195,12 +218,15 @@ export class PRRefreshQueueDrainer {
           next.candidate.linkedPRNumber == null ? (next.candidate.fallbackPRNumber ?? null) : null,
           ...hostedReviewOptionArgs(next.candidate, next.reason)
         )
+
         let plannedRetryAt: number | undefined
         let broadcastOutcome = outcome
+
         if (outcome.kind === 'upstream-error' && this.visibility.has(next.key)) {
           plannedRetryAt = this.retry.nextVisibleErrorRetryAt(next.key)
           broadcastOutcome = this.retry.withErrorSchedule(outcome, plannedRetryAt)
         }
+
         this.events.observe(next.candidate, outcome)
         this.retry.noteManualGate(next.key, broadcastOutcome)
         this.events.broadcast(
@@ -231,6 +257,7 @@ export class PRRefreshQueueDrainer {
         status: 'queued'
       })
     }
+
     if (
       entry.bypassBackgroundBudget !== true &&
       (entry.reason === 'visible' || entry.reason === 'swr') &&

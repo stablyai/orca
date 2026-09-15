@@ -78,6 +78,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -95,6 +96,7 @@ describe('browserManager', () => {
 
   it('allows registered safe popup URLs as Electron child windows', () => {
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 103,
       isDestroyed: vi.fn(() => false),
@@ -105,13 +107,16 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -130,11 +135,14 @@ describe('browserManager', () => {
       overrideBrowserWindowOptions?: unknown
       createWindow?: unknown
     }
+
     expect(handler({ url: 'about:blank' })).toMatchObject({ action: 'allow' })
+
     const response = handler({
       url: 'https://example.com/login',
       features: 'alwaysOnTop=yes,frame=no,fullscreen=yes,kiosk=yes,modal=yes,transparent=yes'
     })
+
     expect(response.action).toBe('allow')
     expect(response.overrideBrowserWindowOptions).toEqual({
       alwaysOnTop: false,
@@ -184,6 +192,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -199,22 +208,26 @@ describe('browserManager', () => {
       features: string
       disposition: string
     }) => { action: 'allow' | 'deny' }
+
     const openerDependentOpens = [
       { url: 'https://sso.example.com/auth', frameName: 'ssoWindow', features: '' },
       { url: 'https://sso.example.com/auth', frameName: '', features: 'width=500,height=600' },
       { url: 'about:blank', frameName: '', features: '' }
     ]
+
     for (const disposition of ['foreground-tab', 'background-tab', 'new-window']) {
       for (const open of openerDependentOpens) {
         expect(handler({ ...open, disposition })).toMatchObject({ action: 'allow' })
       }
     }
+
     expect(shellOpenExternalMock).not.toHaveBeenCalled()
   })
 
   it('routes unnamed featureless window.open safely, including after renderer destruction', () => {
     const rendererSendMock = vi.fn()
     let rendererDestroyed = false
+
     const guest = {
       id: 142,
       isDestroyed: vi.fn(() => false),
@@ -225,13 +238,16 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => rendererDestroyed), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -248,6 +264,7 @@ describe('browserManager', () => {
       features: string
       disposition: string
     }) => { action: 'allow' | 'deny' }
+
     for (const disposition of ['foreground-tab', 'background-tab']) {
       expect(
         handler({
@@ -290,6 +307,7 @@ describe('browserManager', () => {
 
   it('shares the page-initiated tab budget across the whole opener popup tree', () => {
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 150,
       isDestroyed: vi.fn(() => false),
@@ -301,11 +319,13 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     const guestsById = new Map<number, unknown>([[guest.id, guest]])
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return guestsById.get(id) ?? null
     })
 
@@ -325,11 +345,13 @@ describe('browserManager', () => {
       action: 'allow' | 'deny'
       createWindow?: (options: Record<string, never>) => unknown
     }
+
     const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as WindowOpenHandler
 
     // A named child popup keeps a real child window; each one used to start with a fresh budget.
     const openNamedChild = (index: number): WindowOpenHandler => {
       const childSetWindowOpenHandlerMock = vi.fn()
+
       const child = {
         id: 1500 + index,
         isDestroyed: vi.fn(() => false),
@@ -341,24 +363,29 @@ describe('browserManager', () => {
         off: vi.fn(),
         openDevTools: vi.fn()
       }
+
       guestsById.set(child.id, child)
       openPopupWithOriginBarMock.mockReturnValueOnce({
         contentWebContents: child,
         close: vi.fn(),
         onClosed: vi.fn()
       })
+
       const result = handler({
         url: `https://sso.example.com/child-${index}`,
         frameName: `child-${index}`,
         features: '',
         disposition: 'new-window'
       })
+
       expect(result).toMatchObject({ action: 'allow' })
       result.createWindow?.({})
+
       return childSetWindowOpenHandlerMock.mock.calls[0][0] as WindowOpenHandler
     }
 
     const childHandlers = [openNamedChild(0), openNamedChild(1), openNamedChild(2)]
+
     for (const [childIndex, childHandler] of childHandlers.entries()) {
       for (let openIndex = 0; openIndex < MAX_PAGE_INITIATED_TABS_PER_WINDOW; openIndex++) {
         expect(
@@ -375,6 +402,7 @@ describe('browserManager', () => {
     const routedTabs = rendererSendMock.mock.calls.filter(
       ([channel]) => channel === 'browser:open-link-in-orca-tab'
     )
+
     expect(routedTabs).toHaveLength(MAX_PAGE_INITIATED_TABS_PER_WINDOW)
     expect(rendererSendMock).toHaveBeenCalledWith('browser:popup', {
       browserPageId: 'browser-1',
@@ -387,6 +415,7 @@ describe('browserManager', () => {
   it('keeps plain links current and routes explicit new-tab gestures to Orca tabs', async () => {
     const rendererSendMock = vi.fn()
     const executeJavaScriptInIsolatedWorldMock = vi.fn().mockResolvedValue(undefined)
+
     const guest = {
       id: 141,
       isDestroyed: vi.fn(() => false),
@@ -398,13 +427,16 @@ describe('browserManager', () => {
       openDevTools: guestOpenDevToolsMock,
       executeJavaScriptInIsolatedWorld: executeJavaScriptInIsolatedWorldMock
     }
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -418,17 +450,21 @@ describe('browserManager', () => {
     const domReadyHandler = guestOnMock.mock.calls.find(([event]) => event === 'dom-ready')?.[1] as
       | (() => void)
       | undefined
+
     domReadyHandler?.()
     await vi.waitFor(() => expect(executeJavaScriptInIsolatedWorldMock).toHaveBeenCalledTimes(1))
 
     const script = executeJavaScriptInIsolatedWorldMock.mock.calls[0][1][0].code as string
+
     const clickedLinkFrameNames = {
       foreground: script.match(/__orca_clicked_link_foreground_[0-9a-f-]+/)?.[0],
       background: script.match(/__orca_clicked_link_background_[0-9a-f-]+/)?.[0]
     }
+
     if (!clickedLinkFrameNames.foreground || !clickedLinkFrameNames.background) {
       throw new Error('Expected private clicked-link frame names')
     }
+
     expect(clickedLinkFrameNames.foreground).toMatch(/^__orca_clicked_link_foreground_/)
     expect(executeJavaScriptInIsolatedWorldMock).toHaveBeenCalledWith(
       expect.any(Number),
@@ -446,6 +482,7 @@ describe('browserManager', () => {
       url: string
       frameName: string
     }) => { action: 'allow' | 'deny' }
+
     expect(
       handler({
         url: 'https://docs.example.com/guide',
@@ -471,6 +508,7 @@ describe('browserManager', () => {
     const rendererSendMock = vi.fn()
     const executeJavaScriptMock = vi.fn().mockResolvedValue(undefined)
     const frameOnceMock = vi.fn()
+
     const frame = {
       parent: {},
       isDestroyed: vi.fn(() => false),
@@ -478,6 +516,7 @@ describe('browserManager', () => {
       once: frameOnceMock,
       off: vi.fn()
     }
+
     const guest = {
       id: 142,
       isDestroyed: vi.fn(() => false),
@@ -489,13 +528,16 @@ describe('browserManager', () => {
       openDevTools: guestOpenDevToolsMock,
       executeJavaScriptInIsolatedWorld: vi.fn().mockResolvedValue(undefined)
     }
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -505,29 +547,38 @@ describe('browserManager', () => {
       webContentsId: guest.id,
       rendererWebContentsId
     })
+
     const frameCreatedHandler = guestOnMock.mock.calls.find(
       ([event]) => event === 'frame-created'
     )?.[1] as ((event: Electron.Event, details: Electron.FrameCreatedDetails) => void) | undefined
+
     frameCreatedHandler?.({} as Electron.Event, { frame } as never)
+
     const frameDomReadyHandler = frameOnceMock.mock.calls.find(
       ([event]) => event === 'dom-ready'
     )?.[1] as (() => void) | undefined
+
     frameDomReadyHandler?.()
 
     await vi.waitFor(() => expect(executeJavaScriptMock).toHaveBeenCalledTimes(1))
     const firstScript = executeJavaScriptMock.mock.calls[0][0] as string
+
     const foregroundFrameName = firstScript.match(
       /__orca_clicked_link_iframe_foreground_[0-9a-f-]+/
     )?.[0]
+
     const backgroundFrameName = firstScript.match(
       /__orca_clicked_link_iframe_background_[0-9a-f-]+/
     )?.[0]
+
     if (!foregroundFrameName) {
       throw new Error('Expected a private child-frame routing token')
     }
+
     if (!backgroundFrameName) {
       throw new Error('Expected a private background child-frame routing token')
     }
+
     expect(firstScript).toContain('installBrowserIframeClickedLinkRouting')
     expect(executeJavaScriptMock).toHaveBeenCalledWith(firstScript, false)
 
@@ -535,6 +586,7 @@ describe('browserManager', () => {
       url: string
       frameName: string
     }) => { action: string }
+
     expect(
       popupHandler({
         url: 'https://docs.example.com/from-frame',
@@ -563,6 +615,7 @@ describe('browserManager', () => {
   it('hosts allowed popups in an origin-bar window with inherited guest policies', () => {
     const rendererSendMock = vi.fn()
     const guestOnceMock = vi.fn()
+
     const guest = {
       id: 150,
       isDestroyed: vi.fn(() => false),
@@ -574,13 +627,16 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -601,6 +657,7 @@ describe('browserManager', () => {
       once: vi.fn(),
       off: vi.fn()
     }
+
     const popupCloseMock = vi.fn()
     const popupOnClosedMock = vi.fn()
     openPopupWithOriginBarMock.mockReturnValue({
@@ -615,6 +672,7 @@ describe('browserManager', () => {
       action: string
       createWindow: (options: Record<string, unknown>) => unknown
     }
+
     const response = handler({ url: 'https://sso.example.com/auth?code=SECRET' })
     const preCreatedContents = { id: 152 }
     const options = { webContents: preCreatedContents, width: 500, height: 600 }
@@ -649,6 +707,7 @@ describe('browserManager', () => {
     const popupHandler = popupContents.setWindowOpenHandler.mock.calls[0][0] as (details: {
       url: string
     }) => { action: string }
+
     openPopupWithOriginBarMock.mockReturnValue({
       contentWebContents: { ...popupContents, id: 153 },
       close: vi.fn(),
@@ -661,6 +720,7 @@ describe('browserManager', () => {
 
   it('blocks unsafe popup URLs for registered guests', () => {
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 106,
       isDestroyed: vi.fn(() => false),
@@ -671,13 +731,16 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -691,6 +754,7 @@ describe('browserManager', () => {
     const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
       url: string
     }) => { action: 'allow' | 'deny' }
+
     expect(handler({ url: 'javascript:alert(1)' })).toEqual({ action: 'deny' })
     expect(handler({ url: 'file:///etc/passwd' })).toEqual({ action: 'deny' })
     expect(handler({ url: 'file:///C:/Users/example/.ssh/id_rsa' })).toEqual({ action: 'deny' })
@@ -719,6 +783,7 @@ describe('browserManager', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockReturnValue(guest)
 
     browserManager.attachGuestPolicies(guest as never)
@@ -726,6 +791,7 @@ describe('browserManager', () => {
     const handler = guestSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
       url: string
     }) => { action: 'deny' }
+
     expect(handler({ url: 'https://example.com/login' })).toEqual({ action: 'deny' })
 
     expect(shellOpenExternalMock).toHaveBeenCalledWith('https://example.com/login')
@@ -733,6 +799,7 @@ describe('browserManager', () => {
 
   it('offers opening a link in another Orca browser tab from the guest context menu', () => {
     const rendererSendMock = vi.fn()
+
     const guest = {
       id: 104,
       isDestroyed: vi.fn(() => false),
@@ -749,13 +816,16 @@ describe('browserManager', () => {
       },
       reload: vi.fn()
     }
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 

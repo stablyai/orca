@@ -46,6 +46,7 @@ function createState(overrides: Partial<DraftTargetSyncInput> = {}): DraftTarget
     taskSourceContext: null,
     tuiAgent: 'claude'
   } satisfies DraftTargetSyncInput
+
   return { ...defaults, ...overrides }
 }
 
@@ -54,6 +55,7 @@ describe('useDraftTargetSync', () => {
     const calls: string[] = []
     const setNewWorkspaceDraft = vi.fn(() => calls.push('persist'))
     const setRepoId = vi.fn(() => calls.push('repair'))
+
     const state = createState({
       eligibleRepos: [createRepo('repo-1')],
       setNewWorkspaceDraft,
@@ -93,6 +95,7 @@ describe('useDraftTargetSync', () => {
 
   it('loads sparse presets only once for a local git repo', () => {
     const fetchSparsePresets = vi.fn()
+
     const state = createState({
       repoId: 'repo-1',
       selectedRepoIsGit: true,
@@ -100,6 +103,7 @@ describe('useDraftTargetSync', () => {
       fetchSparsePresets,
       sparsePresetsByRepo: {}
     })
+
     const hook = renderHook(() => useDraftTargetSync(state))
 
     expect(fetchSparsePresets).toHaveBeenCalledWith('repo-1')

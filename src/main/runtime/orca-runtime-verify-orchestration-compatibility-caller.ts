@@ -19,13 +19,17 @@ export class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaR
   ): OrchestrationCompatibilityCallerAuthority | null {
     const terminalHandle =
       typeof evidence?.terminalHandle === 'string' ? evidence.terminalHandle.trim() : ''
+
     const claimedPaneKey = typeof evidence?.paneKey === 'string' ? evidence.paneKey.trim() : ''
     const launchToken = typeof evidence?.launchToken === 'string' ? evidence.launchToken.trim() : ''
     const host = evidence?.host
+
     if (!terminalHandle || !claimedPaneKey || !launchToken) {
       return null
     }
+
     const terminal = this.getOrchestrationDispatchAuthority(terminalHandle)
+
     if (
       !terminal?.processIncarnation ||
       !terminal.paneKey ||
@@ -33,15 +37,19 @@ export class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaR
     ) {
       return null
     }
+
     const launchTokenHash = createHash('sha256').update(launchToken).digest('hex')
     let terminalProvenance: 'current_runtime' | 'restored'
+
     if (terminal.launchTokenHash) {
       if (launchTokenHash !== terminal.launchTokenHash) {
         return null
       }
+
       terminalProvenance = 'current_runtime'
     } else {
       const receipt = this.restoredOrchestrationAuthorityByPtyId.get(terminal.ptyId)
+
       if (
         !receipt ||
         receipt.ptyId !== terminal.ptyId ||
@@ -53,8 +61,10 @@ export class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaR
       ) {
         return null
       }
+
       terminalProvenance = 'restored'
     }
+
     if (
       options?.currentRuntimeLaunchSufficient &&
       terminalProvenance === 'current_runtime' &&
@@ -70,15 +80,18 @@ export class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaR
         launchTokenHash
       )
     }
+
     const attestation = this.attestAgentHookCompatibilityAuthorityFn?.({
       paneKey: claimedPaneKey,
       launchTokenHash,
       connectionId: terminal.hostScope.kind === 'ssh' ? terminal.hostScope.targetId : null,
       terminalProvenance
     })
+
     if (!attestation || attestation.paneKey !== terminal.paneKey) {
       return null
     }
+
     return this.freezeOrchestrationCompatibilityCallerAuthority(
       terminal,
       terminal.processIncarnation,
@@ -111,15 +124,19 @@ export class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaR
     if (hostScope.kind === 'local') {
       return host === undefined
     }
+
     if (hostScope.kind === 'wsl') {
       return (
         host?.kind === 'wsl' && host.hostId === hostScope.hostId && host.distro === hostScope.distro
       )
     }
+
     if (host?.kind !== 'ssh' || host.targetId !== hostScope.targetId) {
       return false
     }
+
     const authority = this.orchestrationCompatibilitySshAttachments.get(host.attachmentId)
+
     return (
       authority?.targetId === host.targetId &&
       authority.connectionIncarnation === host.connectionIncarnation
@@ -133,12 +150,15 @@ export class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaR
     if (left.kind !== right.kind) {
       return false
     }
+
     if (left.kind === 'local' && right.kind === 'local') {
       return left.hostId === right.hostId
     }
+
     if (left.kind === 'wsl' && right.kind === 'wsl') {
       return left.hostId === right.hostId && left.distro === right.distro
     }
+
     return left.kind === 'ssh' && right.kind === 'ssh' && left.targetId === right.targetId
   }
 
@@ -148,9 +168,11 @@ export class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaR
     if (pty.connectionId) {
       return { kind: 'ssh', targetId: pty.connectionId }
     }
+
     if (pty.isWsl || pty.wslDistro) {
       return pty.wslDistro ? { kind: 'wsl', hostId: 'local', distro: pty.wslDistro } : null
     }
+
     return { kind: 'local', hostId: 'local' }
   }
 
@@ -161,10 +183,13 @@ export class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaR
   ): void {
     const paneKey = pty.paneKey
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
+
     if (!paneKey || !parsePaneKey(paneKey) || !hostScope) {
       this.restoredOrchestrationAuthorityByPtyId.delete(pty.ptyId)
+
       return
     }
+
     this.restoredOrchestrationAuthorityByPtyId.set(
       pty.ptyId,
       Object.freeze({

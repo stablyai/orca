@@ -45,9 +45,11 @@ export default function ProjectCell({
 }: Props): React.JSX.Element {
   const value = row.fieldValuesByFieldId[field.id]
   const editableValue = editable && row.itemType !== 'REDACTED'
+
   if (field.dataType === 'TITLE') {
     return <ProjectTitleCell row={row} onOpenDialog={onOpenDialog} />
   }
+
   if (field.dataType === TYPE_FIELD_DATA_TYPE) {
     return (
       <ProjectTypeCell
@@ -59,6 +61,7 @@ export default function ProjectCell({
       />
     )
   }
+
   if (field.dataType === 'ASSIGNEES') {
     return (
       <ProjectAssigneesCell
@@ -70,6 +73,7 @@ export default function ProjectCell({
       />
     )
   }
+
   if (field.dataType === 'LABELS') {
     return (
       <ProjectLabelsCell
@@ -81,11 +85,13 @@ export default function ProjectCell({
       />
     )
   }
+
   if (field.dataType === 'REPOSITORY') {
     return (
       <span className="truncate text-xs text-muted-foreground">{row.content.repository ?? ''}</span>
     )
   }
+
   if (field.dataType === 'PARENT_ISSUE') {
     return (
       <span className="truncate text-xs text-muted-foreground">
@@ -93,6 +99,7 @@ export default function ProjectCell({
       </span>
     )
   }
+
   if (field.kind === 'single-select') {
     return (
       <ProjectSingleSelectCell
@@ -103,6 +110,7 @@ export default function ProjectCell({
       />
     )
   }
+
   if (field.kind === 'iteration') {
     return (
       <ProjectIterationCell
@@ -113,8 +121,10 @@ export default function ProjectCell({
       />
     )
   }
+
   if (field.dataType === 'TEXT') {
     const text = value?.kind === 'text' ? value.text : ''
+
     return (
       <ProjectTextCell
         value={text}
@@ -126,8 +136,10 @@ export default function ProjectCell({
       />
     )
   }
+
   if (field.dataType === 'NUMBER') {
     const number = value?.kind === 'number' ? String(value.number) : ''
+
     return (
       <ProjectTextCell
         value={number}
@@ -141,8 +153,10 @@ export default function ProjectCell({
       />
     )
   }
+
   if (field.dataType === 'DATE') {
     const date = value?.kind === 'date' ? value.date : ''
+
     return (
       <ProjectDateCell
         key={date}
@@ -153,6 +167,7 @@ export default function ProjectCell({
       />
     )
   }
+
   if (value?.kind === 'labels') {
     return (
       <div className="flex flex-wrap gap-1">
@@ -162,6 +177,7 @@ export default function ProjectCell({
       </div>
     )
   }
+
   if (value?.kind === 'users') {
     return (
       <div className="flex flex-wrap gap-1">
@@ -171,15 +187,19 @@ export default function ProjectCell({
       </div>
     )
   }
+
   return <span />
 }
 
 function commitNumber(fieldId: string, value: string, onEditField: Props['onEditField']): void {
   if (value === '') {
     onEditField?.(fieldId, null)
+
     return
   }
+
   const number = Number(value)
+
   if (Number.isFinite(number)) {
     onEditField?.(fieldId, { kind: 'number', number })
   }

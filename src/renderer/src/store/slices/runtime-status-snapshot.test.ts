@@ -12,10 +12,12 @@ import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-e
 import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
 
 vi.mock('sonner', () => ({ toast: { warning: vi.fn(), dismiss: vi.fn() } }))
+
 vi.mock('@/runtime/restored-client-hosted-browser-host-attach', () => ({
   ensureBrowserClientHostsForRestoredPages: vi.fn(),
   ensureBrowserClientHostForRestartedRuntime: vi.fn()
 }))
+
 vi.mock('@/runtime/client-hosted-browser-close-intent-replay', () => ({
   replayClientHostedBrowserCloseIntents: vi.fn()
 }))
@@ -24,6 +26,7 @@ beforeEach(() => {
   clearRuntimeEnvironmentConnectionGenerationsForTests()
   vi.clearAllMocks()
 })
+
 const environment = {
   id: 'env-a',
   name: 'Host',
@@ -32,13 +35,17 @@ const environment = {
   endpoints: [],
   preferredEndpointId: ''
 } as unknown as PublicKnownRuntimeEnvironment
+
 function store() {
   const value = create<RuntimeStatusSlice>()((...args) =>
     createRuntimeStatusSlice(...(args as unknown as Parameters<typeof createRuntimeStatusSlice>))
   )
+
   value.getState().setRuntimeEnvironments([environment])
+
   return value
 }
+
 function snapshot(
   sequence: number,
   patch: Partial<RuntimeHostStatusSnapshot> = {}
@@ -70,9 +77,11 @@ it('hydrates both viewers and rejects an older read after a newer publication', 
 it('represents failed verification honestly without manufacturing a session restart or toast', () => {
   const viewer = store()
   viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(1))
+
   const generation = viewer
     .getState()
     .runtimeStatusByEnvironmentId.get('env-a')?.connectionGeneration
+
   viewer.getState().applyRuntimeHostStatusSnapshot(snapshot(2, { verification: 'unavailable' }))
   expect(
     runtimeHostConnectionStateForEntry(viewer.getState().runtimeStatusByEnvironmentId.get('env-a'))

@@ -732,6 +732,7 @@ describe('createAgentStatusTracker', () => {
 
     for (const chunk of chunks) {
       const title = extractLastOscTitle(chunk)
+
       if (title !== null) {
         tracker.handleTitle(title)
       }
@@ -754,6 +755,7 @@ describe('createAgentStatusTracker', () => {
 
     for (const chunk of chunks) {
       const title = extractLastOscTitle(chunk)
+
       if (title !== null) {
         tracker.handleTitle(title)
       }

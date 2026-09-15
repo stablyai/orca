@@ -14,8 +14,10 @@ export class BrowserRoutePageAvailability {
     const listeners = this.listeners.get(browserPageId) ?? new Set()
     listeners.add(listener)
     this.listeners.set(browserPageId, listeners)
+
     return () => {
       listeners.delete(listener)
+
       if (listeners.size === 0) {
         this.listeners.delete(browserPageId)
       }
@@ -38,9 +40,11 @@ export function reportBrowserRoutePageAvailabilityLoss(
   availability: BrowserRoutePageAvailability
 ): void {
   const registration = state.registration
+
   if (state.retirementRequested || state.availabilityLossReported || !registration) {
     return
   }
+
   state.availabilityLossReported = true
   availability.report(registration)
 }

@@ -38,25 +38,31 @@ export type DiscoveryState =
   | { status: 'found'; preview: GhosttyImportPreview; fields: string[] }
   | { status: 'imported'; fields: string[] }
   | { status: 'absent' }
+
 type _DiscoveryStatusEmittedSync =
   Exclude<DiscoveryState['status'], 'idle' | 'detecting'> extends DiscoveryStatusEmitted
     ? DiscoveryStatusEmitted extends Exclude<DiscoveryState['status'], 'idle' | 'detecting'>
       ? true
       : never
     : never
+
 const _discoveryStatusEmittedSyncCheck: _DiscoveryStatusEmittedSync = true
+
 void _discoveryStatusEmittedSyncCheck
 
 function fieldGroupCountBucket(count: number): '0' | '1-3' | '4-7' | '8+' {
   if (count <= 0) {
     return '0'
   }
+
   if (count <= 3) {
     return '1-3'
   }
+
   if (count <= 7) {
     return '4-7'
   }
+
   return '8+'
 }
 
@@ -76,6 +82,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
     if (!navigator.userAgent.includes('Mac')) {
       return
     }
+
     let cancelled = false
     // oxlint-disable-next-line react-doctor/no-initialize-state -- Why: non-Mac intentionally remains idle; only Mac enters detecting before IPC.
     setDiscovery({ status: 'detecting' })
@@ -85,6 +92,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
         if (cancelled) {
           return
         }
+
         // Why: hide the row when there's nothing to import. An empty diff can
         // mean "settings already match" *or* "every key in the config was
         // unsupported by the mapper" (e.g. theme = some-named-theme); we can't
@@ -95,8 +103,10 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
             state: 'absent',
             field_group_count_bucket: '0'
           })
+
           return
         }
+
         const fields = humanFields(preview.diff)
         setDiscovery({ status: 'found', preview, fields })
         track('onboarding_ghostty_discovered', {
@@ -108,12 +118,14 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
         if (cancelled) {
           return
         }
+
         setDiscovery({ status: 'absent' })
         track('onboarding_ghostty_discovered', {
           state: 'absent',
           field_group_count_bucket: '0'
         })
       })
+
     return () => {
       cancelled = true
     }
@@ -123,13 +135,16 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
     if (!settings || importing) {
       return
     }
+
     // Why: track AFTER the busy guard so a double-click during an in-flight
     // import doesn't inflate the click counter when no second import attempt
     // actually proceeds.
     track('onboarding_ghostty_import_clicked', {})
     setImporting(true)
+
     try {
       const resolved = preview.found ? preview : await window.api.settings.previewGhosttyImport()
+
       if (!resolved.found || Object.keys(resolved.diff).length === 0) {
         if (mountedRef.current) {
           toast.info(
@@ -139,9 +154,12 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
             )
           )
         }
+
         track('onboarding_ghostty_import_failed', { reason: 'empty_diff' })
+
         return
       }
+
       await updateSettings({
         ...resolved.diff,
         ...(resolved.diff.terminalColorOverrides
@@ -153,15 +171,19 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
             }
           : {})
       })
+
       // Why: parent controller holds local `theme` state that overwrites
       // settings.theme on Continue; sync it so the import isn't clobbered.
       if (resolved.diff.theme && mountedRef.current) {
         onThemeChange(resolved.diff.theme)
       }
+
       const importedFields = humanFields(resolved.diff)
+
       if (mountedRef.current) {
         setDiscovery({ status: 'imported', fields: importedFields })
       }
+
       track('onboarding_ghostty_discovered', {
         state: 'imported',
         field_group_count_bucket: fieldGroupCountBucket(importedFields.length)
@@ -178,6 +200,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
           }
         )
       }
+
       track('onboarding_ghostty_import_failed', { reason: 'unknown' })
     } finally {
       if (mountedRef.current) {
@@ -217,6 +240,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
       <div className="grid grid-cols-3 gap-3">
         {themes.map(({ id, label, hint, icon: Icon }) => {
           const selected = theme === id
+
           return (
             <button
               key={id}
@@ -314,5 +338,6 @@ function humanFields(diff: Partial<GlobalSettings>): string[] {
       keys: ['terminalMacOptionAsAlt']
     }
   ]
+
   return groups.filter(({ keys }) => keys.some((k) => k in diff)).map(({ label }) => label)
 }

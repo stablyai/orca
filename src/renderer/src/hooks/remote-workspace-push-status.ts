@@ -14,6 +14,7 @@ function currentTransientAuthority(
   fallback: RemoteWorkspacePushAuthority
 ): RemoteWorkspacePushAuthority {
   const current = store.remoteWorkspaceSyncStatusByTargetId[targetId]
+
   return current?.hostObservationToken === fallback.hostObservationToken &&
     typeof current.revision === 'number'
     ? {
@@ -52,6 +53,7 @@ export function applyRemoteWorkspacePushStatus(
   } else {
     const authority =
       result.snapshot ?? currentTransientAuthority(store, targetId, fallbackAuthority)
+
     store.setRemoteWorkspaceSyncStatus(targetId, {
       phase: result.reason === 'stale-revision' ? 'conflict' : 'offline',
       direction: 'push',

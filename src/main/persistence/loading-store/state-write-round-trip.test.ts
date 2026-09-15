@@ -35,16 +35,19 @@ const { Store } = await import('./store')
 const HOST_ID = 'ssh:user@host'
 
 const stores: InstanceType<typeof Store>[] = []
+
 afterEach(() => {
   for (const store of stores.splice(0)) {
     store.flush()
   }
+
   vi.restoreAllMocks()
 })
 
 function openStore(dataFile: string): InstanceType<typeof Store> {
   const store = new Store({ dataFile })
   stores.push(store)
+
   return store
 }
 
@@ -76,6 +79,7 @@ describe('persisted state survives a save/load round trip', () => {
       realpathSync(mkdtempSync(join(tmpdir(), 'orca-store-round-trip-'))),
       'orca-data.json'
     )
+
     const written = openStore(dataFile)
     written.updateSettings({
       // Three secret slots, i.e. three sentinels in one save — the case the old loop paid 7 copies for.

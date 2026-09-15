@@ -79,11 +79,13 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       displayName: 'Alpha',
       lastActivityAt: 10
     })
+
     const beta = makeWorktree({
       id: 'repo-1::/beta',
       displayName: 'Beta',
       lastActivityAt: 50
     })
+
     const gamma = makeWorktree({
       id: 'repo-1::/gamma',
       displayName: 'Gamma',
@@ -115,10 +117,12 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       id: 'repo-1::/visible',
       instanceId: 'fresh'
     })
+
     const archived = makeWorktree({
       id: 'repo-1::/archived',
       isArchived: true
     })
+
     const stale = makeWorktree({ id: 'repo-1::/stale', instanceId: 'fresh' })
 
     const result = getAttachedWorktreesForFolderWorkspace({
@@ -145,6 +149,7 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       id: 'repo-1::/parent',
       instanceId: 'parent'
     })
+
     const nested = makeWorktree({
       id: 'repo-1::/nested',
       instanceId: 'nested'
@@ -170,10 +175,12 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       id: 'repo-1::/parent',
       instanceId: 'parent'
     })
+
     const nested = makeWorktree({
       id: 'repo-1::/nested',
       instanceId: 'nested'
     })
+
     const inlineNested = {
       ...nested,
       lineage: makeWorktreeLineage(nested, parent)
@@ -196,6 +203,7 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
   it('keeps a stale side-map entry authoritative over valid inline lineage', () => {
     const parent = makeWorktree({ id: 'repo-1::/parent', instanceId: 'parent' })
     const nested = makeWorktree({ id: 'repo-1::/nested', instanceId: 'nested' })
+
     const inlineNested = {
       ...nested,
       lineage: makeWorktreeLineage(nested, parent)
@@ -225,11 +233,13 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
       hostId: LOCAL_EXECUTION_HOST_ID,
       projectId: 'project-1'
     })
+
     const hostChild = makeWorktree({
       id: 'repo-1::/host-child',
       instanceId: 'host-child',
       hostId: toSshExecutionHostId('other')
     })
+
     const projectChild = makeWorktree({
       id: 'repo-1::/project-child',
       instanceId: 'project-child',

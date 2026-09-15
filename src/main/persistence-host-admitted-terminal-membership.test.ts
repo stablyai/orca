@@ -14,6 +14,7 @@ vi.mock('electron', () => ({
 }))
 
 const WORKTREE = 'repo1::/worktree'
+
 const OTHER_WORKTREE = 'repo1::/other-worktree'
 
 /** The renderer's own publication: it knows only about the tab it created. */

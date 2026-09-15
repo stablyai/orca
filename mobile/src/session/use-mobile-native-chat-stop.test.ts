@@ -8,6 +8,7 @@ import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 
 // Why mocked: the reporter is tested on its own; here Stop's escapes must be counted alone.
 const reportWorkerTerminalUserInput = vi.fn()
+
 vi.mock('../terminal/worker-terminal-takeover-report', () => ({
   reportWorkerTerminalUserInput: (...args: unknown[]) => reportWorkerTerminalUserInput(...args)
 }))
@@ -51,12 +52,14 @@ describe('useMobileNativeChatStop', () => {
       cancelPending: vi.fn(),
       onSendError
     })
+
     return null
   }
 
   async function render(enabled: boolean, streamIdentity: string): Promise<void> {
     await act(async () => {
       const element = createElement(Harness, { enabled, streamIdentity })
+
       if (renderer) {
         renderer.update(element)
       } else {
@@ -137,6 +140,7 @@ describe('useMobileNativeChatStop', () => {
     sendRequest.mockImplementation(() => {
       const index = call
       call += 1
+
       return index === failIndex
         ? Promise.reject(markRpcDeliveryUnknown(new Error('rpc timeout')))
         : Promise.resolve({ ok: true, result: { send: { accepted: true } } })
@@ -173,9 +177,11 @@ describe('useMobileNativeChatStop', () => {
 
   it('suppresses an older Stop verdict after a newer Stop succeeds', async () => {
     let rejectFirst!: (error: Error) => void
+
     const first = new Promise((_, reject) => {
       rejectFirst = reject
     })
+
     sendRequest
       .mockReturnValueOnce(first)
       .mockResolvedValue({ ok: true, result: { send: { accepted: true } } })

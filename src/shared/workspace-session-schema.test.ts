@@ -11,6 +11,7 @@ describe('parseWorkspaceSession', () => {
       tabsByWorktree: {},
       terminalLayoutsByTabId: {}
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -35,6 +36,7 @@ describe('parseWorkspaceSession', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.openFilesByWorktree?.wt?.[0]?.externalSshTargetId).toBe('ssh-1')
     }
@@ -61,6 +63,7 @@ describe('parseWorkspaceSession', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.openFilesByWorktree?.wt).toEqual([])
     }
@@ -100,6 +103,7 @@ describe('parseWorkspaceSession', () => {
       },
       activeWorktreeIdsOnShutdown: ['repo1::/path/wt1']
     })
+
     expect(result.ok).toBe(true)
   })
 
@@ -132,10 +136,13 @@ describe('parseWorkspaceSession', () => {
         ]
       }
     })
+
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     expect(result.value.browserTabsByWorktree?.wt?.[0]?.sessionPartition).toBe(
       'persist:orca-browser-session-iso-profile'
     )
@@ -163,7 +170,9 @@ describe('parseWorkspaceSession', () => {
       },
       terminalLayoutsByTabId: {}
     })
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt[0].launchAgent).toBe('codex')
     }
@@ -191,7 +200,9 @@ describe('parseWorkspaceSession', () => {
       },
       terminalLayoutsByTabId: {}
     })
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt[0].launchAgent).toBeUndefined()
     }
@@ -218,7 +229,9 @@ describe('parseWorkspaceSession', () => {
       },
       terminalLayoutsByTabId: {}
     })
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt).toEqual([])
     }
@@ -277,6 +290,7 @@ describe('parseWorkspaceSession', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt[0].generatedTitle).toBe('Refactor auth')
       expect(result.value.tabsByWorktree.wt[0].aiVaultTitle?.title).toBe('Provider thread name')
@@ -327,6 +341,7 @@ describe('parseWorkspaceSession', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt[0].aiVaultTitle).toBeUndefined()
       expect(result.value.unifiedTabs?.wt[0].aiVaultTitle).toBeUndefined()
@@ -385,6 +400,7 @@ describe('parseWorkspaceSession', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt[0].quickCommandLabel).toBe('Run tests')
       expect(result.value.tabsByWorktree.wt[1].quickCommandLabel).toBeUndefined()
@@ -397,6 +413,7 @@ describe('parseWorkspaceSession', () => {
       activeRepoId: null
       // missing activeWorktreeId, tabsByWorktree, etc.
     })
+
     expect(result.ok).toBe(false)
   })
 
@@ -422,6 +439,7 @@ describe('parseWorkspaceSession', () => {
       sortOrder: 0,
       createdAt: 1_700_000_000_000
     }
+
     const result = parseWorkspaceSession({
       activeRepoId: null,
       activeWorktreeId: 'worktree-good',
@@ -444,6 +462,7 @@ describe('parseWorkspaceSession', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.tabsByWorktree).toEqual({
         'worktree-good': [validTab],
@@ -467,7 +486,9 @@ describe('parseWorkspaceSession', () => {
         string: 'nope'
       }
     })
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.lastVisitedAtByWorktreeId).toEqual({ good: 1_700_000_000_000 })
     }
@@ -486,6 +507,7 @@ describe('parseWorkspaceSession', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.defaultTerminalTabsAppliedByWorktreeId).toEqual({
         'repo1::/path/wt1': true
@@ -511,6 +533,7 @@ describe('parseWorkspaceSession', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.browserUrlHistory).toHaveLength(MAX_BROWSER_HISTORY_ENTRIES)
       expect(result.value.browserUrlHistory?.[0]?.faviconUrl).toBe(
@@ -545,7 +568,9 @@ describe('parseWorkspaceSession', () => {
         ]
       }
     })
+
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.unifiedTabs?.wt[0].viewMode).toBe('chat')
     }
@@ -580,6 +605,7 @@ describe('parseWorkspaceSession', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.unifiedTabs?.wt[0]).toMatchObject({
         contentType: 'agent-session',
@@ -616,8 +642,10 @@ describe('parseWorkspaceSession', () => {
         ]
       }
     })
+
     // The whole-session parse must still succeed; the unknown mode degrades.
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.unifiedTabs?.wt[0].viewMode).toBe('terminal')
     }
@@ -656,6 +684,7 @@ describe('parseWorkspaceSession', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.browserPagesByWorkspace?.['workspace-1']?.[0]).toMatchObject({
         remoteBrowserPageId: 'remote-page-1',
@@ -691,6 +720,7 @@ describe('parseWorkspaceSession', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       const page = result.value.browserPagesByWorkspace?.['workspace-1']?.[0]
       expect(page?.id).toBe('page-1')

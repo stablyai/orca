@@ -24,6 +24,7 @@ import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 const ONBOARDING_FLOW_VERSION = 4
+
 const ONBOARDING_FINAL_STEP = 5
 
 /**
@@ -40,6 +41,7 @@ export function createSeededRepo(dir) {
   writeFileSync(path.join(dir, 'README.md'), '# win-update-e2e fixture repo\n')
   git('add', '-A')
   git('commit', '-m', 'seed')
+
   return {
     id: '00000000-0000-4000-8000-00000000e2e0',
     path: dir,

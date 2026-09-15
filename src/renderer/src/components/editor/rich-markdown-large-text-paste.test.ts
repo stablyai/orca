@@ -20,11 +20,13 @@ function makePasteEvent(text: string, html = ''): ClipboardEvent {
     bubbles: true,
     cancelable: true
   }) as ClipboardEvent
+
   Object.defineProperty(event, 'clipboardData', {
     value: {
       getData: (type: string) => (type === 'text/plain' ? text : type === 'text/html' ? html : '')
     }
   })
+
   return event
 }
 
@@ -39,6 +41,7 @@ function makeEditor(): {
   const chunks: string[] = []
   let destroyed = false
   let focused = true
+
   const editor = {
     get isDestroyed() {
       return destroyed

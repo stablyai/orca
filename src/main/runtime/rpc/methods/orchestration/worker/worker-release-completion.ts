@@ -59,23 +59,30 @@ export function completeWorkerTerminalRelease(
   args: WorkerTerminalReleaseArgs
 ): Promise<WorkerReleaseReceipt> {
   let activeByResource = activeReleaseByRuntime.get(args.runtime)
+
   if (!activeByResource) {
     activeByResource = new Map()
     activeReleaseByRuntime.set(args.runtime, activeByResource)
   }
+
   const active = activeByResource.get(args.resource.id)
+
   if (active) {
     active.recoveryRequested ||= args.mode === 'recovery'
+
     return active.promise
   }
+
   const activeRelease = {
     recoveryRequested: args.mode === 'recovery'
   } as ActiveWorkerTerminalRelease
+
   const release = completeWorkerTerminalReleaseOnce(args)
     .then((receipt) => {
       if (activeRelease.recoveryRequested) {
         args.db.recordWorkerTerminalRecoveryAttempt(args.resource.id)
       }
+
       return receipt
     })
     .finally(() => {
@@ -83,8 +90,10 @@ export function completeWorkerTerminalRelease(
         activeByResource.delete(args.resource.id)
       }
     })
+
   activeRelease.promise = release
   activeByResource.set(args.resource.id, activeRelease)
+
   return release
 }
 
@@ -92,6 +101,7 @@ async function completeWorkerTerminalReleaseOnce(
   args: WorkerTerminalReleaseArgs
 ): Promise<WorkerReleaseReceipt> {
   const { runtime, db, dispatchId, resource } = args
+
   if (isStructuredWorkerHandle(resource.terminal_handle)) {
     // Observation and archive capture both read the structured host, and after a restart nothing
     // has installed it yet — the startup recovery reconciler runs exactly this path. Installing it
@@ -109,9 +119,12 @@ async function completeWorkerTerminalReleaseOnce(
       )
     })
   }
+
   const worker = db.getWorkerDispatch(dispatchId)
+
   if (!worker || worker.agent_terminal_handle !== resource.terminal_handle) {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
+
     return {
       dispatchId,
       state: 'retained',
@@ -120,9 +133,12 @@ async function completeWorkerTerminalReleaseOnce(
       archive: archiveSummary(retained)
     }
   }
+
   const observation = await inspectWorkerTerminal(runtime, db, dispatchId)
+
   if (observation.status === 'identity_changed') {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
+
     return {
       dispatchId,
       state: 'retained',
@@ -131,6 +147,7 @@ async function completeWorkerTerminalReleaseOnce(
       archive: archiveSummary(retained)
     }
   }
+
   if (observation.status === 'missing' || observation.status === 'unattached') {
     if (args.mode === 'recovery') {
       // A close can succeed before the process crashes, leaving `releasing` durable state while
@@ -141,14 +158,17 @@ async function completeWorkerTerminalReleaseOnce(
           resource.process_incarnation,
           resource.host_scope
         )
+
         if (processLiveness === 'exited') {
           const reconciled = db.settleDeadWorkerTerminalRelease({
             requestingDispatchId: dispatchId,
             resourceId: resource.id,
             processIncarnation: resource.process_incarnation
           })
+
           if (reconciled.disposition === 'released') {
             runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
+
             return {
               dispatchId,
               state: 'released',
@@ -158,6 +178,7 @@ async function completeWorkerTerminalReleaseOnce(
           }
         }
       }
+
       // Inventory may still be incomplete during startup/reconnect discovery; defer.
       return {
         dispatchId,
@@ -168,12 +189,14 @@ async function completeWorkerTerminalReleaseOnce(
           'The recorded terminal has not been rediscovered yet; recovery will retry after the next terminal inventory.'
       }
     }
+
     // Why: the handle resolves nowhere, but the PTY could have been re-homed after a restart —
     // claiming released would hide a live process; only an exact observation may settle it.
     const unknown = db.markWorkerTerminalReleaseUnknown(
       resource.id,
       'The recorded terminal no longer resolves; whether its process is gone cannot be proven.'
     )
+
     return {
       dispatchId,
       state: 'release_unknown',
@@ -186,6 +209,7 @@ async function completeWorkerTerminalReleaseOnce(
 
   if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource)) {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
+
     return {
       dispatchId,
       state: 'retained',
@@ -194,11 +218,13 @@ async function completeWorkerTerminalReleaseOnce(
       archive: archiveSummary(retained)
     }
   }
+
   const archive = db.getWorkerTerminalArchive(dispatchId)
   let archiveSource = resource.archive_source as 'transcript' | 'terminal' | null
   let archiveStatus: WorkerTerminalArchiveStatus | null = resource.archive_status
   let capturedArchive: { kind: WorkerTerminalArchiveKind; content: string } | undefined
   const structured = resolveStructuredWorkerForDispatch(db, dispatchId)
+
   if (!archive) {
     const captured = await captureWorkerOutputArchive({
       runtime,
@@ -207,6 +233,7 @@ async function completeWorkerTerminalReleaseOnce(
       attachedAtMs: orchestrationTimestampToMs(worker.created_at),
       structuredWorker: structured
     })
+
     capturedArchive = { kind: captured.kind, content: JSON.stringify(captured.content) }
     archiveSource = captured.kind === 'terminal_tail' ? 'terminal' : 'transcript'
     archiveStatus = captured.status
@@ -215,6 +242,7 @@ async function completeWorkerTerminalReleaseOnce(
     archiveSource ??= stored.source
     archiveStatus ??= stored.status
   }
+
   const releasing = db.commitWorkerTerminalArchiveForRelease({
     dispatchId,
     resourceId: resource.id,
@@ -222,6 +250,7 @@ async function completeWorkerTerminalReleaseOnce(
     archiveSource,
     archiveStatus: archiveStatus === 'empty' ? 'empty' : 'captured'
   })
+
   if (releasing.ownership_state !== 'owned' || releasing.release_state !== 'releasing') {
     return {
       dispatchId,
@@ -231,8 +260,10 @@ async function completeWorkerTerminalReleaseOnce(
       archive: archiveSummary(releasing)
     }
   }
+
   if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, releasing)) {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
+
     return {
       dispatchId,
       state: 'retained',
@@ -254,10 +285,13 @@ async function completeWorkerTerminalReleaseOnce(
         archiveStatus
       })
     }
+
     const close = await runtime.closeTerminal(resource.terminal_handle)
+
     if (!close.ptyKilled) {
       const reason = describeUnconfirmedAgentStop(close)
       const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason)
+
       return {
         dispatchId,
         state: 'release_unknown',
@@ -270,6 +304,7 @@ async function completeWorkerTerminalReleaseOnce(
   } catch (error) {
     const closeError = classifyWorkerTerminalCloseError(error)
     const reason = closeError.reason
+
     // A close that finds nothing to close is this release's goal once the host certified the
     // exit; anything else keeps the record open for recovery.
     if (!(closeError.alreadyGone && observation.status === 'exited')) {
@@ -285,7 +320,9 @@ async function completeWorkerTerminalReleaseOnce(
             'The owning endpoint is temporarily unavailable; recovery will retry this release after reconnect without another coordinator decision.'
         }
       }
+
       const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason)
+
       return {
         dispatchId,
         state: 'release_unknown',
@@ -296,8 +333,10 @@ async function completeWorkerTerminalReleaseOnce(
       }
     }
   }
+
   const released = db.settleWorkerTerminalRelease(resource.id)
   runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
+
   return {
     dispatchId,
     state: 'released',
@@ -315,8 +354,10 @@ function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalReta
   if (resource.retained_reason) {
     return resource.retained_reason as WorkerTerminalRetainedReason
   }
+
   if (resource.ownership_state === 'user_owned') {
     return 'user_takeover'
   }
+
   return 'identity_unproven'
 }

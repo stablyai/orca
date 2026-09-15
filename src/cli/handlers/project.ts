@@ -53,6 +53,7 @@ async function callProjectHostSetup<TResult>(
         'This Orca server does not support project host setup yet. Update Orca on the server and try again.'
       )
     }
+
     throw error
   }
 }
@@ -62,9 +63,11 @@ async function getResolvedHostId(
   client: HandlerContext['client']
 ): Promise<ExecutionHostId> {
   const host = await resolveHostFlagTarget(flags, client)
+
   if (!host) {
     throw new RuntimeClientError('invalid_argument', 'Missing required --host')
   }
+
   return host.id
 }
 
@@ -73,20 +76,25 @@ async function getResolvedHostId(
 // target" and imply the command would have worked with the right id.
 function getRequiredHostId(flags: Map<string, string | boolean>): ExecutionHostId {
   const host = parseHostFlag(flags)
+
   if (!host) {
     throw new RuntimeClientError('invalid_argument', 'Missing required --host')
   }
+
   return host.id
 }
 
 function getOptionalRepoKind(flags: Map<string, string | boolean>): RepoKind | undefined {
   const kind = getOptionalStringFlag(flags, 'kind')
+
   if (kind === undefined) {
     return undefined
   }
+
   if (kind === 'git' || kind === 'folder') {
     return kind
   }
+
   throw new RuntimeClientError('invalid_argument', '--kind must be git or folder')
 }
 
@@ -98,15 +106,18 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
   'project setups': async ({ flags, client, json }) => {
     const projectFilter = getOptionalStringFlag(flags, 'project')
     const hostFilter = await resolveHostFlagTarget(flags, client)
+
     const result = await callProjectHostSetup<{ setups: ProjectHostSetup[] }>(
       client,
       'projectHostSetup.list'
     )
+
     const setups = result.result.setups.filter(
       (setup) =>
         (projectFilter === undefined || setup.projectId === projectFilter) &&
         (hostFilter === undefined || hostFilterMatchesHostId(hostFilter, setup.hostId))
     )
+
     printResult({ ...result, result: { setups } }, json, formatProjectHostSetupList)
   },
   'project setup-existing-folder': async ({ flags, client, cwd, json }) => {
@@ -115,6 +126,7 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     // An SSH host's filesystem is not the CLI's, so resolving a relative path against the client
     // cwd would register a path that names the wrong machine.
     const pathIsOffClient = client.isRemote || getSshTargetIdForExecutionHost(hostId) !== null
+
     const args: ProjectHostSetupExistingFolderArgs = {
       projectId: getRequiredStringFlag(flags, 'project'),
       hostId,
@@ -122,15 +134,18 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
       kind: getOptionalRepoKind(flags),
       displayName: getOptionalStringFlag(flags, 'display-name')
     }
+
     const result = await callProjectHostSetup<{ result: ProjectHostSetupResult }>(
       client,
       'projectHostSetup.setupExistingFolder',
       args
     )
+
     printResult(result, json, formatProjectHostSetupResult)
   },
   'project setup-clone': async ({ flags, client, cwd, json }) => {
     const rawDestination = getRequiredStringFlag(flags, 'destination')
+
     const args: ProjectHostSetupCloneArgs = {
       projectId: getRequiredStringFlag(flags, 'project'),
       hostId: getRequiredHostId(flags),
@@ -143,15 +158,18 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
       ),
       displayName: getOptionalStringFlag(flags, 'display-name')
     }
+
     const result = await callProjectHostSetup<{ result: ProjectHostSetupResult }>(
       client,
       'projectHostSetup.clone',
       args
     )
+
     printResult(result, json, formatProjectHostSetupResult)
   },
   'project setup-create': async ({ flags, client, cwd, json }) => {
     const path = getOptionalStringFlag(flags, 'path')
+
     const args: ProjectHostSetupCreateArgs = {
       projectId: getRequiredStringFlag(flags, 'project'),
       // Why: unlike the setup paths below, the runtime does not reject `ssh:` here — this records
@@ -172,15 +190,18 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
       setupState: getOptionalSetupState(flags),
       setupMethod: getOptionalIndependentSetupMethod(flags)
     }
+
     const result = await callProjectHostSetup<{ result: ProjectHostSetupCreateResult }>(
       client,
       'projectHostSetup.create',
       args
     )
+
     printResult(result, json, formatProjectHostSetupCreateResult)
   },
   'project setup-update': async ({ flags, client, cwd, json }) => {
     const path = getOptionalStringFlag(flags, 'path')
+
     const args: ProjectHostSetupUpdateArgs = {
       setupId: getRequiredStringFlag(flags, 'setup'),
       updates: {
@@ -196,11 +217,13 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
         setupMethod: getOptionalSetupMethod(flags)
       }
     }
+
     const result = await callProjectHostSetup<{ result: ProjectHostSetupUpdateResult }>(
       client,
       'projectHostSetup.update',
       args
     )
+
     printResult(result, json, formatProjectHostSetupUpdateResult)
   },
   'project setup-delete': async ({ flags, client, json }) => {
@@ -211,6 +234,7 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
         setupId: getRequiredStringFlag(flags, 'setup')
       }
     )
+
     printResult(result, json, formatProjectHostSetupDeleteResult)
   }
 }
@@ -219,9 +243,11 @@ function getOptionalSetupState(
   flags: Map<string, string | boolean>
 ): ProjectHostSetupUpdateArgs['updates']['setupState'] {
   const state = getOptionalStringFlag(flags, 'state')
+
   if (state === undefined) {
     return undefined
   }
+
   if (
     state === 'ready' ||
     state === 'not-set-up' ||
@@ -231,6 +257,7 @@ function getOptionalSetupState(
   ) {
     return state
   }
+
   throw new RuntimeClientError(
     'invalid_argument',
     '--state must be ready, not-set-up, setting-up, error, or unsupported'
@@ -241,12 +268,15 @@ function getOptionalIndependentSetupMethod(
   flags: Map<string, string | boolean>
 ): ProjectHostSetupCreateArgs['setupMethod'] {
   const method = getOptionalStringFlag(flags, 'method')
+
   if (method === undefined) {
     return undefined
   }
+
   if (method === 'imported-existing-folder' || method === 'cloned' || method === 'provisioned') {
     return method
   }
+
   throw new RuntimeClientError(
     'invalid_argument',
     '--method must be imported-existing-folder, cloned, or provisioned'
@@ -257,9 +287,11 @@ function getOptionalSetupMethod(
   flags: Map<string, string | boolean>
 ): ProjectHostSetupUpdateArgs['updates']['setupMethod'] {
   const method = getOptionalStringFlag(flags, 'method')
+
   if (method === undefined) {
     return undefined
   }
+
   if (
     method === 'legacy-repo' ||
     method === 'imported-existing-folder' ||
@@ -268,6 +300,7 @@ function getOptionalSetupMethod(
   ) {
     return method
   }
+
   throw new RuntimeClientError(
     'invalid_argument',
     '--method must be legacy-repo, imported-existing-folder, cloned, or provisioned'

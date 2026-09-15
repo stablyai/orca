@@ -59,10 +59,12 @@ export function shouldSkipAltFrameForWidthMismatch(
   if (typeof snapshotCols !== 'number' || !Number.isFinite(snapshotCols) || snapshotCols <= 0) {
     return false
   }
+
   if (typeof targetCols !== 'number' || !Number.isFinite(targetCols) || targetCols <= 0) {
     // Keep the frame at its capture grid until a real fit can replace that grid.
     return false
   }
+
   // Fixed-grid alt rows clip at narrower columns; normal history remains reflowable.
   return snapshotCols > targetCols
 }
@@ -89,10 +91,12 @@ export function buildMainModelSnapshotReplayWrites(
   options: { skipAltFrame?: boolean; paneOnAlternateScreen: boolean }
 ): string[] {
   const { paneOnAlternateScreen } = options
+
   const normalPrologue = buildSnapshotReplayPrologue({
     targetAlternateScreen: false,
     paneOnAlternateScreen
   })
+
   // The alt payload always follows a hop through the normal buffer in the split
   // branch, so its own switch is judged from there, not from where we started.
   const altPrologue = (fromAlternateScreen: boolean): string =>
@@ -100,6 +104,7 @@ export function buildMainModelSnapshotReplayWrites(
       targetAlternateScreen: true,
       paneOnAlternateScreen: fromAlternateScreen
     })
+
   if (!snapshot.alternateScreen) {
     // Why the switch can be needed here: the gap can eat the TUI's own exit
     // sequence, leaving the renderer on alt while the model moved to normal —
@@ -107,12 +112,14 @@ export function buildMainModelSnapshotReplayWrites(
     // scrollback stays empty (STA-4042).
     return abortGapBeforeFirstWrite([normalPrologue, snapshot.data])
   }
+
   // Older snapshot producers do not expose the mode/frame boundary. Keep their
   // composed data rather than dropping terminal modes together with the frame.
   const altFrame =
     options.skipAltFrame && snapshot.frameRestoreAnsi !== undefined
       ? [snapshot.frameRestoreAnsi]
       : [snapshot.data]
+
   if (snapshot.scrollbackAnsi !== undefined) {
     // Why a prologue per payload: main serializes the buffers separately and
     // each is diffed against the baseline. scrollbackAnsi used to replay before
@@ -124,6 +131,7 @@ export function buildMainModelSnapshotReplayWrites(
       ...altFrame
     ])
   }
+
   // Why the prologue clears: `?1049h` does not clear the alt buffer, so the
   // pre-hide frame would bleed through the snapshot's blank cells.
   return abortGapBeforeFirstWrite([altPrologue(paneOnAlternateScreen), ...altFrame])

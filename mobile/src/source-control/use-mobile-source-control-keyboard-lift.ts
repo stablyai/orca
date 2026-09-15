@@ -13,6 +13,7 @@ export function useMobileSourceControlKeyboardLift(): number {
       // Subtracting the safe-area inset lets the commit bar tuck under the keyboard.
       setKeyboardLift(Math.max(0, event.endCoordinates.height))
     })
+
     const onHide = Keyboard.addListener(hideEvent, () => setKeyboardLift(0))
 
     return () => {

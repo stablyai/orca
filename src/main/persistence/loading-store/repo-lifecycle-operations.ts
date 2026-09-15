@@ -35,6 +35,7 @@ type RepoLifecycleOperationsRuntime = Pick<
 >
 
 const repoLifecycleOperationsContext = Symbol('RepoLifecycleOperations')
+
 type RepoLifecycleOperationsContext = {
   runtime: RepoLifecycleOperationsRuntime
   scheduling: WriteSchedulingOperations
@@ -64,12 +65,15 @@ export class RepoLifecycleOperations {
     const repoRemoved = this[repoLifecycleOperationsContext].runtime.state.repos.some(
       (repo) => repo.id === id
     )
+
     this[repoLifecycleOperationsContext].runtime.state.repos = this[
       repoLifecycleOperationsContext
     ].runtime.state.repos.filter((r) => r.id !== id)
+
     if (repoRemoved) {
       bumpLocalWorktreeScanGeneration(id)
     }
+
     syncProjectHostSetupCompatibilityState(this)
     // Why: presets are repo-scoped and unreachable once the repo is gone, so drop them with it.
     delete this[repoLifecycleOperationsContext].runtime.state.sparsePresetsByRepo[id]
@@ -92,23 +96,29 @@ export class RepoLifecycleOperations {
     const repoRemoved = this[repoLifecycleOperationsContext].runtime.state.repos.some(
       (repo) => repo.id === id && getRepoExecutionHostId(repo) === hostId
     )
+
     this[repoLifecycleOperationsContext].runtime.state.repos = this[
       repoLifecycleOperationsContext
     ].runtime.state.repos.filter((r) => !(r.id === id && getRepoExecutionHostId(r) === hostId))
+
     if (repoRemoved) {
       bumpLocalWorktreeScanGeneration(id)
     }
+
     const idStillPresent = this[repoLifecycleOperationsContext].runtime.state.repos.some(
       (r) => r.id === id
     )
+
     // Why: presets and retirements are repo-id-scoped (not host-scoped); drop them only when the last host's copy is gone.
     if (!idStillPresent) {
       delete this[repoLifecycleOperationsContext].runtime.state.sparsePresetsByRepo[id]
       delete this[repoLifecycleOperationsContext].runtime.state.retiredWorktreeNamesByRepo?.[id]
     }
+
     syncProjectHostSetupCompatibilityState(this)
     // Why: prune only this host's worktree metas if the id survives elsewhere; otherwise prune everything (matches removeProject).
     pruneWorktreeStateForRepo(this, id, idStillPresent ? hostId : null)
+
     if (!idStillPresent) {
       this[repoLifecycleOperationsContext].runtime.state.workspaceSession =
         removeRepoFromWorkspaceSession(
@@ -123,6 +133,7 @@ export class RepoLifecycleOperations {
     } else if (parseExecutionHostId(hostId)?.kind === 'runtime') {
       const session =
         this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
+
       if (session) {
         this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId = {
           ...this[repoLifecycleOperationsContext].runtime.state.workspaceSessionsByHostId,
@@ -130,6 +141,7 @@ export class RepoLifecycleOperations {
         }
       }
     }
+
     scheduleSave(this[repoLifecycleOperationsContext].scheduling)
   }
 
@@ -143,9 +155,11 @@ export class RepoLifecycleOperations {
   sweepDeregisteredRepoResidue(): string[] {
     const state = this[repoLifecycleOperationsContext].runtime.state
     const orphanRepoIds = collectDeregisteredRepoIds(state)
+
     if (orphanRepoIds.size === 0) {
       return []
     }
+
     for (const repoId of orphanRepoIds) {
       pruneWorktreeStateForRepo(this, repoId, null)
       state.workspaceSession = removeRepoFromWorkspaceSession(state.workspaceSession, repoId)
@@ -154,7 +168,9 @@ export class RepoLifecycleOperations {
         repoId
       )
     }
+
     pruneDeregisteredRepoUiResidue(state.ui, orphanRepoIds)
+
     return [...orphanRepoIds]
   }
 
@@ -207,6 +223,7 @@ export function getRepoOrderOperations(
       syncProjectHostSetupCompatibilityState: () => syncProjectHostSetupCompatibilityState(owner),
       scheduleSave: () => scheduleSave(owner[repoLifecycleOperationsContext].scheduling)
     })
+
   return owner[repoLifecycleOperationsContext].runtime.repoOrderOperations
 }
 
@@ -238,6 +255,7 @@ export function pruneMobileClientTabSelections(
         delete selectionsByWorktree[worktreeId]
       }
     }
+
     if (Object.keys(selectionsByWorktree).length === 0) {
       delete owner[repoLifecycleOperationsContext].runtime.state
         .mobileClientTabSelectionsByDeviceId?.[clientNavigationId]
@@ -251,13 +269,17 @@ function pruneDeregisteredRepoUiResidue(
 ): void {
   const isOrphanWorktree = (worktreeId: string): boolean =>
     orphanRepoIds.has(getRepoIdFromWorktreeId(worktreeId))
+
   if (ui.lastActiveRepoId && orphanRepoIds.has(ui.lastActiveRepoId)) {
     ui.lastActiveRepoId = null
   }
+
   if (ui.lastActiveWorktreeId && isOrphanWorktree(ui.lastActiveWorktreeId)) {
     ui.lastActiveWorktreeId = null
   }
+
   ui.filterRepoIds = ui.filterRepoIds?.filter((repoId) => !orphanRepoIds.has(repoId)) ?? []
+
   for (const worktreeId of Object.keys(ui.showDotfilesByWorktree ?? {})) {
     if (isOrphanWorktree(worktreeId)) {
       delete ui.showDotfilesByWorktree?.[worktreeId]
@@ -276,6 +298,7 @@ export function getRepoUpdateOperations(
       scheduleSave: () => scheduleSave(owner[repoLifecycleOperationsContext].scheduling),
       hydrateRepo: (repo) => hydrateRepo(owner, repo)
     })
+
   return owner[repoLifecycleOperationsContext].runtime.repoUpdateOperations
 }
 
@@ -284,6 +307,7 @@ export function syncProjectHostSetupCompatibilityState(owner: RepoLifecycleOpera
     owner[repoLifecycleOperationsContext].runtime.state,
     owner[repoLifecycleOperationsContext].runtime.state.repos
   )
+
   owner[repoLifecycleOperationsContext].runtime.state.projects = compatibilityState.projects
   owner[repoLifecycleOperationsContext].runtime.state.projectHostSetups =
     compatibilityState.projectHostSetups
@@ -298,6 +322,7 @@ export function getProjectHostSetupOperations(
       updateRepo: (id, updates, hostId) => owner.updateRepo(id, updates, hostId),
       scheduleSave: () => scheduleSave(owner[repoLifecycleOperationsContext].scheduling)
     })
+
   return owner[repoLifecycleOperationsContext].runtime.projectHostSetupOperations
 }
 

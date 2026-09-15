@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 // the renderer's first layout can be a size the window is about to leave. One unchanged
 // frame can land inside that gap; two straddle it.
 const REQUIRED_STABLE_FRAMES = 2
+
 // Why a cap: a window that never stops resizing (a drag, a display change) must not hold
 // the panel's terminals forever. Mounting at a stale size is recoverable; never mounting is not.
 const MAX_SETTLE_MS = 300
@@ -28,21 +29,28 @@ export function useSettledPanelViewport(): boolean {
     if (settled || typeof window === 'undefined') {
       return
     }
+
     if (typeof requestAnimationFrame !== 'function') {
       setSettled(true)
+
       return
     }
+
     let frameId: number | null = null
     let previous = readViewport()
     let stableFrames = 0
+
     const settle = (): void => {
       if (frameId !== null) {
         cancelAnimationFrame(frameId)
         frameId = null
       }
+
       setSettled(true)
     }
+
     const capId = setTimeout(settle, MAX_SETTLE_MS)
+
     const step = (): void => {
       const current = readViewport()
       stableFrames =
@@ -50,15 +58,21 @@ export function useSettledPanelViewport(): boolean {
           ? stableFrames + 1
           : 0
       previous = current
+
       if (stableFrames >= REQUIRED_STABLE_FRAMES) {
         settle()
+
         return
       }
+
       frameId = requestAnimationFrame(step)
     }
+
     frameId = requestAnimationFrame(step)
+
     return () => {
       clearTimeout(capId)
+
       if (frameId !== null) {
         cancelAnimationFrame(frameId)
       }

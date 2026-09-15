@@ -19,16 +19,19 @@ async function snapshotPrimaryCheckoutMetadata(
 ): Promise<PrimaryMetadataSnapshot> {
   const signatures = new Map<string, string>()
   const statusRefPaths = new Set(getStatusRefPaths())
+
   const paths = [
     ...(includePrimary
       ? PRIMARY_CHECKOUT_METADATA_FILES.map((name) => join(commonDirPath, name))
       : []),
     ...statusRefPaths
   ]
+
   await Promise.all(
     paths.map(async (filePath) => {
       try {
         const value = await stat(filePath)
+
         if (value.isFile()) {
           signatures.set(filePath, `${value.mtimeMs}:${value.ctimeMs}:${value.ino}:${value.size}`)
         }
@@ -37,6 +40,7 @@ async function snapshotPrimaryCheckoutMetadata(
       }
     })
   )
+
   return { signatures, statusRefPaths }
 }
 
@@ -47,12 +51,15 @@ function classifyMetadataSignatureDiff(
   if (prevSignature === undefined && nextSignature === undefined) {
     return null
   }
+
   if (prevSignature === undefined) {
     return 'create'
   }
+
   if (nextSignature === undefined) {
     return 'delete'
   }
+
   return prevSignature === nextSignature ? null : 'update'
 }
 
@@ -62,16 +69,21 @@ function diffPrimaryMetadata(
 ): WorktreeBasePollEvent[] {
   const events: WorktreeBasePollEvent[] = []
   const paths = new Set([...prev.signatures.keys(), ...next.signatures.keys()])
+
   for (const path of paths) {
     const isStatusRef = prev.statusRefPaths.has(path) || next.statusRefPaths.has(path)
+
     if (isStatusRef && (!prev.statusRefPaths.has(path) || !next.statusRefPaths.has(path))) {
       continue
     }
+
     const type = classifyMetadataSignatureDiff(prev.signatures.get(path), next.signatures.get(path))
+
     if (type) {
       events.push({ type, path })
     }
   }
+
   return events
 }
 
@@ -87,42 +99,54 @@ export async function startGitCommonPrimaryPolling(
 ): Promise<WorktreeBaseSubscription> {
   let disposed = false
   let ticking = false
+
   let snapshot = await snapshotPrimaryCheckoutMetadata(
     commonDirPath,
     getStatusRefPaths,
     includePrimary
   )
+
   let timer: ReturnType<typeof setTimeout> | null = null
   let parkedWhileHidden = false
 
   const tick = async (): Promise<void> => {
     timer = null
+
     if (disposed) {
       return
     }
+
     if (!visibility.isWindowVisible()) {
       parkedWhileHidden = true
+
       return
     }
+
     if (ticking) {
       return
     }
+
     ticking = true
     const startedAt = Date.now()
+
     if (includePrimary) {
       onFullScan?.()
     }
+
     try {
       const next = await snapshotPrimaryCheckoutMetadata(
         commonDirPath,
         getStatusRefPaths,
         includePrimary
       )
+
       if (disposed) {
         return
       }
+
       const events = diffPrimaryMetadata(snapshot, next)
       snapshot = next
+
       if (events.length > 0) {
         onEvents(events)
       }
@@ -131,11 +155,13 @@ export async function startGitCommonPrimaryPolling(
     } finally {
       ticking = false
     }
+
     if (!disposed) {
       const nextDelay = Math.max(
         0,
         Math.min(pollIntervalMs, pollIntervalMs - (Date.now() - startedAt))
       )
+
       timer = setTimeout(() => void tick(), nextDelay)
       timer.unref?.()
     }
@@ -145,18 +171,22 @@ export async function startGitCommonPrimaryPolling(
     if (disposed || !parkedWhileHidden) {
       return
     }
+
     parkedWhileHidden = false
     void tick()
   })
+
   timer = setTimeout(() => void tick(), pollIntervalMs)
   timer.unref?.()
 
   return {
     unsubscribe: async () => {
       disposed = true
+
       if (timer) {
         clearTimeout(timer)
       }
+
       unsubscribeVisibility()
     }
   }

@@ -11,6 +11,7 @@ import {
 } from './pr-code-change-scope.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const prWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
 
 const expensiveJobs = [
@@ -103,6 +104,7 @@ describe('per-job path classification', () => {
   it('runs every expensive job on an empty diff rather than skipping by accident', () => {
     const result = classifyPrJobs([])
     expect(result.should_run).toBe(true)
+
     for (const job of PR_CHECK_JOBS) {
       expect(result[job], job).toBe(true)
     }
@@ -149,6 +151,7 @@ describe('per-job path classification', () => {
     expectClassification(['src/main/codex/codex-index-heal-binary-contract.test.ts'], {
       codex_index_heal_contract: true
     })
+
     // Keep the real-binary gate live when a transport or launch dependency changes.
     for (const file of [
       'src/main/codex/codex-app-server-capability-signal.ts',
@@ -166,6 +169,7 @@ describe('per-job path classification', () => {
         package_windows: true
       })
     }
+
     // A neighbouring Codex module must not drag the real-binary job in.
     expectClassification(['src/main/codex/codex-home-paths.ts'], {
       package: true,
@@ -248,6 +252,7 @@ describe('per-job path classification', () => {
         package_windows: true
       })
     }
+
     expectClassification(['src/main/orcad/orcad-native-preflight.ts'], {
       package: true,
       package_windows: true
@@ -285,6 +290,7 @@ describe('per-job path classification', () => {
         package_windows: true
       })
     }
+
     expectClassification(
       ['tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts'],
       { 'cross-version-wire': true }
@@ -294,9 +300,11 @@ describe('per-job path classification', () => {
   it('runs workflow-self-change and lockfile diffs as force-all', () => {
     const result = classifyPrJobs(['.github/workflows/pr.yml'])
     expect(result.should_run).toBe(true)
+
     for (const job of PR_CHECK_JOBS) {
       expect(result[job], job).toBe(true)
     }
+
     expect(classifyPrJobs(['pnpm-lock.yaml']).git_compatibility).toBe(true)
   })
 
@@ -304,6 +312,7 @@ describe('per-job path classification', () => {
     expect(classifyPrJobs([]).native_cache_changed).toBe(true)
     expect(classifyPrJobs(['README.md']).native_cache_changed).toBe(false)
     expect(classifyPrJobs(['src/main/index.ts']).native_cache_changed).toBe(false)
+
     for (const file of [
       'package.json',
       'pnpm-lock.yaml',
@@ -346,6 +355,7 @@ describe('per-job path classification', () => {
       encoding: 'utf8',
       input: 'config/patches/xterm-upstream.json\n'
     })
+
     expect(result.status, result.stderr).toBe(0)
     expect(result.stdout).toContain('should_run=true\n')
     expect(result.stdout).toContain('xterm_patch_sync=true\n')
@@ -362,6 +372,7 @@ describe('per-job path classification', () => {
       { length: 12_000 },
       (_, index) => `docs/reference/generated-placeholder-${index}.md`
     )
+
     const input = `${[...filler, 'config/patches/xterm-upstream.json'].join('\n')}\n`
     expect(input.length).toBeGreaterThan(64 * 1024)
 
@@ -369,6 +380,7 @@ describe('per-job path classification', () => {
       cwd: projectDir,
       stdio: ['pipe', 'pipe', 'pipe']
     })
+
     let stdout = ''
     let stderr = ''
     let brokePipe = false
@@ -383,15 +395,19 @@ describe('per-job path classification', () => {
     const exitCode = await new Promise((resolvePromise) => {
       child.on('close', resolvePromise)
       let offset = 0
+
       const step = () => {
         if (offset >= input.length) {
           child.stdin.end()
+
           return
         }
+
         child.stdin.write(input.slice(offset, offset + 64 * 1024))
         offset += 64 * 1024
         setTimeout(step, 20)
       }
+
       step()
     })
 
@@ -408,11 +424,13 @@ describe('PR Checks skip wiring', () => {
     const classify = prWorkflow.jobs.code_paths.steps.find(
       (step) => step.name === 'Classify changed paths'
     )
+
     expect(classify.run).toContain('--diff-filter=ACDMR')
     expect(classify.run).toContain('--no-renames')
     expect(classify.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
     expect(classify.run).toContain('node config/scripts/pr-code-change-scope.mjs')
     expect(classify.run).toContain('tee -a "$GITHUB_OUTPUT"')
+
     for (const jobName of ['should_run', 'native_cache_changed', ...expensiveJobs]) {
       expect(prWorkflow.jobs.code_paths.outputs[jobName], jobName).toBe(
         `\${{ steps.filter.outputs.${jobName} }}`
@@ -446,6 +464,7 @@ describe('PR Checks skip wiring', () => {
         `needs.code_paths.outputs.${jobName} == 'true'`
       )
     }
+
     expect(prWorkflow.jobs.test.needs).toEqual(['code_paths', 'test_native_cache'])
     expect(prWorkflow.jobs.test.if).toContain("needs.code_paths.outputs.test == 'true'")
     expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'success'")
@@ -455,9 +474,11 @@ describe('PR Checks skip wiring', () => {
       "needs.code_paths.outputs.native_cache_changed == 'true'"
     )
     expect(prWorkflow.jobs.test_native_cache.strategy).toBeUndefined()
+
     const primerInstall = prWorkflow.jobs.test_native_cache.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
+
     expect(primerInstall.with['node-version']).toBe('24')
   })
 
@@ -473,16 +494,19 @@ describe('PR Checks skip wiring', () => {
     const verifyStep = prWorkflow.jobs.verify.steps.find(
       (step) => step.name === 'Require successful checks'
     )
+
     expect(prWorkflow.jobs.verify.needs[0]).toBe('code_paths')
     expect(verifyStep.env.SHOULD_RUN).toBe('${{ needs.code_paths.outputs.should_run }}')
     expect(verifyStep.run).toContain('"$ROOT_DIRECTORY_GUARD" != "success"')
     expect(verifyStep.run).toContain('# Require success when the PR has code-relevant changes')
     expect(verifyStep.run).toContain('expected skipped')
     expect(verifyStep.run).toContain('expected success')
+
     for (const job of prWorkflow.jobs.verify.needs) {
       if (job === 'code_paths' || job === 'root_directory_guard') {
         continue
       }
+
       const envVar = `${job.replaceAll('-', '_').toUpperCase()}_SHOULD_RUN`
       expect(verifyStep.env[envVar]).toBe(`\${{ needs.code_paths.outputs.${job} }}`)
       expect(verifyStep.run).toContain(`"$${envVar}"`)

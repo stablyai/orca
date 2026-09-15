@@ -96,8 +96,10 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
         setLinkedGitLabMR(null)
         setLinkedTaskSourceContext(null)
         setLinkedWorkItem(linkedItem)
+
         const suggestedName =
           getLinkedItemDisplayName(linkedItem) ?? getLinearIssueWorkspaceName(issue)
+
         if (
           shouldApplyWorkspaceSourceAutoName({
             currentName: name,
@@ -108,8 +110,10 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
           setName(suggestedName)
           lastAutoNameRef.current = suggestedName
         }
+
         return
       }
+
       setLinkedIssue('')
       setLinkedPR(null)
       setLinkedGitLabIssue(null)
@@ -118,6 +122,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       const linkedLinearIssue = buildLinearIssueLinkedWorkItem(issue)
       setLinkedWorkItem(linkedLinearIssue)
       const suggestedName = getLinearIssueWorkspaceName(issue)
+
       // Why: same lookup-text rule as applyLinkedWorkItem, plus the typed Linear identifier ("STA-123") that matched this issue.
       if (
         shouldApplyWorkspaceSourceAutoName({
@@ -129,6 +134,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
         setName(suggestedName)
         lastAutoNameRef.current = suggestedName
       }
+
       const linearBranchName = getLinearLinkedWorkItemBranchName(linkedLinearIssue)
       setBranchNameOverride(linearBranchName)
       setBranchNameOverridePreservesNameEdits(Boolean(linearBranchName))
@@ -170,9 +176,11 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       branchAutoNameRef.current = ''
       setLinkedWorkItem(linkedItem)
       setLinkedTaskSourceContext(sourceContext)
+
       const suggestedName =
         getLinkedWorkItemWorkspaceName(linkedItem)?.seedName ??
         getLinkedWorkItemSuggestedName(linkedItem)
+
       // Why: the Jira lookup is async, so a name the user typed while it resolved must survive.
       if (
         suggestedName &&
@@ -223,10 +231,12 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     setForkPushWarning(null)
     branchAutoNameRef.current = ''
     setStartFromResetHint(null)
+
     if (name === lastAutoNameRef.current) {
       setName('')
       lastAutoNameRef.current = ''
     }
+
     if (noteRef.current === lastAutoNoteRef.current) {
       setNote('')
       lastAutoNoteRef.current = ''
@@ -261,6 +271,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
     if (isProjectGroupTarget) {
       return getFolderSmartNameSelection(linkedWorkItem)
     }
+
     return buildWorkspaceSourceSelection({
       linkedWorkItem,
       baseBranch

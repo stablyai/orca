@@ -20,7 +20,9 @@ type ConflictReviewTreeEntry = ConflictReviewEntry & {
 type ConflictReviewTreeNode = SourceControlTreeNode<ConflictReviewTreeEntry, 'conflict-review'>
 
 const CONFLICT_REVIEW_TREE_INDENT_PX = 12
+
 const CONFLICT_REVIEW_DIRECTORY_PADDING_PX = 8
+
 const CONFLICT_REVIEW_FILE_PADDING_PX = 20
 
 function buildConflictReviewRows(
@@ -30,6 +32,7 @@ function buildConflictReviewRows(
   const roots = compactSourceControlTree(
     buildSourceControlTree('conflict-review', [...entries])
   ) as ConflictReviewTreeNode[]
+
   return flattenSourceControlTree(roots, collapsedDirectoryKeys) as ConflictReviewTreeNode[]
 }
 
@@ -49,18 +52,22 @@ export function ConflictReviewFileTree({
   const [collapsedDirectoryKeys, setCollapsedDirectoryKeys] = React.useState<Set<string>>(
     () => new Set()
   )
+
   const rows = React.useMemo(
     () => buildConflictReviewRows(entries, collapsedDirectoryKeys),
     [collapsedDirectoryKeys, entries]
   )
+
   const toggleDirectory = React.useCallback((key: string) => {
     setCollapsedDirectoryKeys((prev) => {
       const next = new Set(prev)
+
       if (next.has(key)) {
         next.delete(key)
       } else {
         next.add(key)
       }
+
       return next
     })
   }, [])

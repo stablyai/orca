@@ -120,8 +120,10 @@ describe('RateLimitService', () => {
 
   it('passes WSL Codex managed homes into inactive account rate-limit fetches', async () => {
     const service = new RateLimitService()
+
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
+
     service.setInactiveCodexAccountsResolver(() => [
       inactiveCodexAccount('account-1', wslCodexHome)
     ])
@@ -152,6 +154,7 @@ describe('RateLimitService', () => {
   it('skips an unavailable inactive home without dropping its cache and recovers later', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-08-17T12:00:00Z'))
+
     try {
       const service = new RateLimitService()
       let unavailable = false
@@ -251,10 +254,12 @@ describe('RateLimitService', () => {
   it('keeps sibling inactive Codex preview fetches alive when one account is evicted', async () => {
     const service = new RateLimitService()
     const accountFetch = deferred<ProviderRateLimits>()
+
     let inactiveAccounts = [
       inactiveCodexAccount('account-a', '/tmp/account-a/home'),
       inactiveCodexAccount('account-b', '/tmp/account-b/home')
     ]
+
     service.setInactiveCodexAccountsResolver(() => inactiveAccounts)
     vi.mocked(fetchCodexRateLimits).mockReturnValueOnce(accountFetch.promise)
 
@@ -332,6 +337,7 @@ describe('RateLimitService', () => {
 
   it('staggers inactive Codex probes instead of bursting every account at once', async () => {
     vi.useFakeTimers()
+
     try {
       const service = new RateLimitService()
       service.setInactiveCodexAccountsResolver(() => [
@@ -357,6 +363,7 @@ describe('RateLimitService', () => {
 
   it('does not start another inactive Codex batch during the inter-account stagger', async () => {
     vi.useFakeTimers()
+
     try {
       const service = new RateLimitService()
       service.setInactiveCodexAccountsResolver(() => [

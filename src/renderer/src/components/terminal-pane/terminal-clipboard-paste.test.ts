@@ -28,6 +28,7 @@ describe('terminal clipboard paste', () => {
 
   it('forces generated image paste onto the native bracketed-paste path after Ctrl+C', async () => {
     const observedIgnoreBracketedPasteMode: boolean[] = []
+
     const terminal = {
       modes: { bracketedPasteMode: true },
       options: { ignoreBracketedPasteMode: false },
@@ -38,6 +39,7 @@ describe('terminal clipboard paste', () => {
         observedIgnoreBracketedPasteMode.push(terminal.options.ignoreBracketedPasteMode)
       })
     }
+
     markTerminalBracketedPasteInterrupted(terminal)
 
     await pasteTerminalClipboard({
@@ -58,6 +60,7 @@ describe('terminal clipboard paste', () => {
 
   it('forces generated image paste even when xterm bracketed paste mode is off', async () => {
     const observedIgnoreBracketedPasteMode: boolean[] = []
+
     const terminal = {
       modes: { bracketedPasteMode: false },
       options: { ignoreBracketedPasteMode: false },
@@ -87,6 +90,7 @@ describe('terminal clipboard paste', () => {
 
   it('forwards SSH connection context and bracket-pastes the returned remote image path', async () => {
     const pasteText = vi.fn()
+
     const saveClipboardImageAsTempFile = vi
       .fn()
       .mockResolvedValue('/var/tmp/orca-paste-1760000000000-id.png')
@@ -110,6 +114,7 @@ describe('terminal clipboard paste', () => {
 
   it('forwards remote runtime context and bracket-pastes the runtime image path', async () => {
     const pasteText = vi.fn()
+
     const saveClipboardImageAsTempFile = vi
       .fn()
       .mockResolvedValue('/tmp/orca-paste-1760000000000-runtime.png')
@@ -150,6 +155,7 @@ describe('terminal clipboard paste', () => {
 
   it('still tries image paste when browser text clipboard reads fail', async () => {
     const pasteText = vi.fn()
+
     const saveClipboardImageAsTempFile = vi
       .fn()
       .mockResolvedValue('/tmp/orca-paste-1760000000000-id.png')
@@ -247,6 +253,7 @@ describe('terminal clipboard paste', () => {
 
   it('reports rejected image-path paste without treating it as image extraction failure', async () => {
     const onImagePasteError = vi.fn()
+
     const result = await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue(''),
       saveClipboardImageAsTempFile: vi
@@ -264,6 +271,7 @@ describe('terminal clipboard paste', () => {
     const imageError = new Error('no image data')
     const pasteText = vi.fn()
     const onImagePasteError = vi.fn()
+
     const result = await pasteTerminalClipboard({
       readClipboardText: vi.fn().mockResolvedValue(''),
       saveClipboardImageAsTempFile: vi.fn().mockRejectedValue(imageError),
@@ -357,6 +365,7 @@ describe('terminal clipboard paste', () => {
     } finally {
       codePointAtSpy.mockRestore()
     }
+
     expect(pasteText).toHaveBeenCalledWith('x'.repeat(64), {
       forceBracketedPasteForMultiline: true
     })
@@ -365,6 +374,7 @@ describe('terminal clipboard paste', () => {
 
   it('keeps normal single-line text paste on the stale Ctrl+C protection path', async () => {
     const observedIgnoreBracketedPasteMode: boolean[] = []
+
     const terminal = {
       modes: { bracketedPasteMode: true },
       options: { ignoreBracketedPasteMode: false },
@@ -375,6 +385,7 @@ describe('terminal clipboard paste', () => {
         observedIgnoreBracketedPasteMode.push(terminal.options.ignoreBracketedPasteMode)
       })
     }
+
     const saveClipboardImageAsTempFile = vi.fn()
     markTerminalBracketedPasteInterrupted(terminal)
 

@@ -8,6 +8,7 @@ import type { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
 const TEST_TIMEOUT_MS = 15_000
+
 const REQUEST_TIMEOUT_MS = 5_000
 
 it(
@@ -15,13 +16,16 @@ it(
   { timeout: TEST_TIMEOUT_MS },
   async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-close-intent-'))
+
     const refuseUnattributedMobileSessionTabClose = vi.fn().mockResolvedValue({
       closed: true,
       refused: true,
       refusalReason: 'missing-intent',
       snapshotRepublished: true
     })
+
     const closeMobileSessionTab = vi.fn()
+
     const listMobileSessionTabs = vi.fn().mockResolvedValue({
       worktree: 'wt-1',
       publicationEpoch: 'epoch-1',
@@ -43,6 +47,7 @@ it(
         }
       ]
     })
+
     const runtime = {
       configureNotificationDismissalStore: () => {},
       getRuntimeId: () => 'close-intent-runtime-test',
@@ -54,6 +59,7 @@ it(
       refuseUnattributedMobileSessionTabClose,
       closeMobileSessionTab
     } as unknown as OrcaRuntimeService
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
@@ -62,16 +68,22 @@ it(
     })
 
     await server.start()
+
     try {
       const offer = server.createPairingOffer({ name: 'integration', scope: 'runtime' })
+
       if (!offer.available) {
         throw new Error('pairing unavailable')
       }
+
       const pairing = parsePairingCode(offer.pairingUrl)
+
       if (!pairing) {
         throw new Error('invalid pairing')
       }
+
       const connection = new RemoteRuntimeRequestConnection(pairing)
+
       try {
         await expect(
           connection.request(

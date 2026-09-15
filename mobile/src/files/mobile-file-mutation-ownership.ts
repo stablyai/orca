@@ -6,6 +6,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 
 const FILE_MUTATION_TIMEOUT_MS = 15_000
+
 const SSH_OWNER_CHANGED_MESSAGE =
   "Couldn't verify the SSH connection. Reconnect the host and try again."
 
@@ -18,15 +19,19 @@ export function buildMobileFileMutationOwnership(
   sshState: SshConnectionState | null = null
 ): MobileFileMutationOwnership {
   const host = parseExecutionHostId(worktreeHostId)
+
   if (worktreeHostId !== undefined && !host) {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
+
   if (!host || host.kind === 'local' || host.kind === 'runtime') {
     return { expectedExecutionHostId: 'local' }
   }
+
   if (sshState?.targetId !== host.targetId || sshState.connectionGeneration === undefined) {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
+
   return {
     expectedExecutionHostId: host.id,
     expectedSshTargetId: host.targetId,
@@ -43,6 +48,7 @@ export async function captureMobileFileMutationOwnership(
     'status.get',
     undefined
   )
+
   assertFileMutationOwnershipCapability(status)
 
   const result = await requestResult<{ worktree?: { hostId?: string | null } }>(
@@ -50,11 +56,13 @@ export async function captureMobileFileMutationOwnership(
     'worktree.show',
     { worktree }
   )
+
   if (!result.worktree) {
     throw new Error(SSH_OWNER_CHANGED_MESSAGE)
   }
 
   const host = parseExecutionHostId(result.worktree.hostId)
+
   const sshState =
     host?.kind === 'ssh'
       ? (
@@ -63,6 +71,7 @@ export async function captureMobileFileMutationOwnership(
           })
         ).state
       : null
+
   return buildMobileFileMutationOwnership(result.worktree.hostId, sshState)
 }
 
@@ -74,8 +83,10 @@ async function requestResult<TResult>(
   const response = await client.sendRequest(method, params, {
     timeoutMs: FILE_MUTATION_TIMEOUT_MS
   })
+
   if (!response.ok) {
     throw new Error((response as RpcFailure).error.message)
   }
+
   return (response as RpcSuccess).result as TResult
 }

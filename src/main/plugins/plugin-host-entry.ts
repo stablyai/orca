@@ -28,10 +28,12 @@ function dieFatally(error: unknown): void {
   } catch {
     // Channel already gone; nothing left to report to.
   }
+
   process.exit(1)
 }
 
 process.on('uncaughtException', dieFatally)
+
 process.on('unhandledRejection', dieFatally)
 
 // Why: if the parent dies without sending shutdown, the IPC channel closes;

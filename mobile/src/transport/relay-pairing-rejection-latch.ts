@@ -36,6 +36,7 @@ export class RelayPairingRejectionLatch {
   private update(count: number): void {
     const wasRejected = this.rejected()
     this.count = count
+
     if (wasRejected !== this.rejected()) {
       this.reporter?.(this.rejected())
     }

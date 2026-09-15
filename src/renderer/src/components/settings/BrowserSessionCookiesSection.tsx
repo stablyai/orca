@@ -42,6 +42,7 @@ export function BrowserSessionCookiesSection({
   onSelectProfile
 }: BrowserSessionCookiesSectionProps): React.JSX.Element {
   const selectedHost = hostOptions.find((host) => host.id === selectedHostId) ?? hostOptions[0]
+
   return (
     <SearchableSetting
       id="browser-session-cookies"

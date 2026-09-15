@@ -17,19 +17,25 @@ export function formatGrabPayloadAsText(payload: BrowserGrabPayload): string {
   // Selected element summary
   lines.push('Selected element:')
   lines.push(payload.target.tagName)
+
   if (payload.target.accessibility.accessibleName) {
     lines.push(`Accessible name: "${payload.target.accessibility.accessibleName}"`)
   }
+
   if (payload.target.accessibility.role) {
     lines.push(`Role: ${payload.target.accessibility.role}`)
   }
+
   lines.push(`Selector: ${payload.target.selector}`)
+
   if (payload.target.sourceFile) {
     lines.push(`Source: ${payload.target.sourceFile}`)
   }
+
   if (payload.target.reactComponents) {
     lines.push(`React: ${payload.target.reactComponents}`)
   }
+
   const { rectViewport } = payload.target
   lines.push(`Dimensions: ${Math.round(rectViewport.width)}x${Math.round(rectViewport.height)}`)
   lines.push('')
@@ -44,35 +50,45 @@ export function formatGrabPayloadAsText(payload: BrowserGrabPayload): string {
   // Nearby context
   if (payload.nearbyText.length > 0) {
     lines.push('Nearby context:')
+
     for (const text of payload.nearbyText) {
       lines.push(`- ${text}`)
     }
+
     lines.push('')
   }
 
   // Computed styles
   const styles = payload.target.computedStyles
   const styleLines: string[] = []
+
   if (styles.display && styles.display !== 'inline') {
     styleLines.push(`display: ${styles.display}`)
   }
+
   if (styles.position && styles.position !== 'static') {
     styleLines.push(`position: ${styles.position}`)
   }
+
   if (styles.fontSize) {
     styleLines.push(`font-size: ${styles.fontSize}`)
   }
+
   if (styles.color) {
     styleLines.push(`color: ${styles.color}`)
   }
+
   if (styles.backgroundColor && styles.backgroundColor !== 'rgba(0, 0, 0, 0)') {
     styleLines.push(`background: ${styles.backgroundColor}`)
   }
+
   if (styleLines.length > 0) {
     lines.push('Computed styles:')
+
     for (const sl of styleLines) {
       lines.push(`  ${sl}`)
     }
+
     lines.push('')
   }
 
@@ -87,6 +103,7 @@ export function formatGrabPayloadAsText(payload: BrowserGrabPayload): string {
   if (payload.ancestorPath.length > 0) {
     lines.push(`Ancestor path: ${payload.ancestorPath.join(' > ')}`)
   }
+
   if (payload.target.fullPath) {
     lines.push(`Full DOM path: ${payload.target.fullPath}`)
   }
@@ -105,9 +122,11 @@ function EscapedText({ text, className }: { text: string; className?: string }):
 
 function getNearbyTextRows(nearbyText: readonly string[]): { key: string; text: string }[] {
   const counts = new Map<string, number>()
+
   return nearbyText.map((text) => {
     const count = counts.get(text) ?? 0
     counts.set(text, count + 1)
+
     return { key: `${text}:${count}`, text }
   })
 }

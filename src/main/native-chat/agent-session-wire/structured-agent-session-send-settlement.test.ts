@@ -81,6 +81,7 @@ describe('structured send settlement compatibility wait', () => {
 
   it('caps compatibility observers retained for one session', async () => {
     const settlements = new StructuredAgentSessionSendSettlement(() => journal('pending'))
+
     const retained = Array.from({ length: 64 }, () =>
       settlements.wait('session-1', 'client-1').catch(() => undefined)
     )
@@ -92,6 +93,7 @@ describe('structured send settlement compatibility wait', () => {
 
   it('caps compatibility observers retained across sessions', async () => {
     const settlements = new StructuredAgentSessionSendSettlement(() => journal('pending'))
+
     const retained = Array.from({ length: 1_024 }, (_, index) =>
       settlements.wait(`session-${index}`, 'client-1').catch(() => undefined)
     )

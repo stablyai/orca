@@ -11,9 +11,11 @@ let originalApiDescriptor: PropertyDescriptor | undefined
 
 beforeEach(() => {
   originalApiDescriptor = Object.getOwnPropertyDescriptor(window, 'api')
+
   const gh = {
     repoSlug: vi.fn<Window['api']['gh']['repoSlug']>()
   } satisfies Pick<Window['api']['gh'], 'repoSlug'>
+
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: { gh }
@@ -22,14 +24,17 @@ beforeEach(() => {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
 afterEach(() => {
   vi.restoreAllMocks()
+
   if (originalApiDescriptor) {
     Object.defineProperty(window, 'api', originalApiDescriptor)
   } else {
@@ -45,6 +50,7 @@ describe('useComposerProviderRuntimeSync', () => {
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise)
     const setSelectedRepoSlug = vi.fn<ComposerProviderRuntimeSyncInput['setSelectedRepoSlug']>()
+
     const common = {
       promptCaretFrameRef: { current: null },
       selectedRepoExecutionHostId: 'local',
@@ -66,6 +72,7 @@ describe('useComposerProviderRuntimeSync', () => {
       ComposerProviderRuntimeSyncInput,
       'repoId' | 'selectedRepo' | 'selectedRepoPath'
     >
+
     const state = (repoId: string): ComposerProviderRuntimeSyncInput => ({
       ...common,
       repoId,
@@ -78,6 +85,7 @@ describe('useComposerProviderRuntimeSync', () => {
       },
       selectedRepoPath: `/repos/${repoId}`
     })
+
     const hook = renderHook(({ repoId }) => useComposerProviderRuntimeSync(state(repoId)), {
       initialProps: { repoId: 'first' }
     })

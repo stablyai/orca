@@ -18,10 +18,13 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/store', async () => {
   const { useSyncExternalStore } = await vi.importActual<typeof React>('react')
+
   const subscribe = (listener: () => void): (() => void) => {
     mocks.listeners.add(listener)
+
     return () => mocks.listeners.delete(listener)
   }
+
   return {
     useAppStore: (
       selector: (value: {
@@ -63,9 +66,11 @@ function status(connected: boolean): JiraConnectionStatus {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
@@ -79,6 +84,7 @@ describe('useJiraSourceConnection', () => {
   it('exposes Jira only after the selected source host reports a connection', async () => {
     mocks.readJiraStatus.mockResolvedValue(status(true))
     const context = sourceContext()
+
     const { result } = renderHook(() =>
       useJiraSourceConnection({ enabled: true, sourceContext: context })
     )
@@ -95,6 +101,7 @@ describe('useJiraSourceConnection', () => {
 
   it('keeps Jira hidden when the selected source host is disconnected', async () => {
     mocks.readJiraStatus.mockResolvedValue(status(false))
+
     const { result } = renderHook(() =>
       useJiraSourceConnection({ enabled: true, sourceContext: sourceContext('ssh:host-1') })
     )
@@ -109,6 +116,7 @@ describe('useJiraSourceConnection', () => {
   it('reads no status until the composer engages Jira', async () => {
     mocks.readJiraStatus.mockResolvedValue(status(true))
     const context = sourceContext()
+
     const { result, rerender } = renderHook(
       ({ enabled }) => useJiraSourceConnection({ enabled, sourceContext: context }),
       { initialProps: { enabled: false } }
@@ -132,6 +140,7 @@ describe('useJiraSourceConnection', () => {
   it('keeps a loaded status after engagement drops without re-reading it', async () => {
     mocks.readJiraStatus.mockResolvedValue(status(true))
     const context = sourceContext()
+
     const { result, rerender } = renderHook(
       ({ enabled }) => useJiraSourceConnection({ enabled, sourceContext: context }),
       { initialProps: { enabled: true } }
@@ -155,6 +164,7 @@ describe('useJiraSourceConnection', () => {
   it('ignores a stale connection result after the source host changes', async () => {
     const local = deferred<JiraConnectionStatus>()
     mocks.readJiraStatus.mockReturnValueOnce(local.promise).mockResolvedValueOnce(status(false))
+
     const { result, rerender } = renderHook(
       ({ context }) => useJiraSourceConnection({ enabled: true, sourceContext: context }),
       { initialProps: { context: sourceContext() } }
@@ -176,6 +186,7 @@ describe('useJiraSourceConnection', () => {
     const context = sourceContext('runtime:environment-1')
     const revisionKey = getJiraSourceConnectionRevisionKey(context)
     mocks.readJiraStatus.mockResolvedValueOnce(status(true)).mockResolvedValueOnce(status(false))
+
     const { result } = renderHook(() =>
       useJiraSourceConnection({ enabled: true, sourceContext: context })
     )
@@ -187,9 +198,11 @@ describe('useJiraSourceConnection', () => {
 
     await act(async () => {
       mocks.jiraConnectionRevisions = { 'runtime:other#0': 1 }
+
       for (const listener of mocks.listeners) {
         listener()
       }
+
       await Promise.resolve()
     })
     expect(mocks.readJiraStatus).toHaveBeenCalledTimes(1)
@@ -199,9 +212,11 @@ describe('useJiraSourceConnection', () => {
         ...mocks.jiraConnectionRevisions,
         [revisionKey!]: 1
       }
+
       for (const listener of mocks.listeners) {
         listener()
       }
+
       await Promise.resolve()
     })
     expect(mocks.readJiraStatus).toHaveBeenCalledTimes(2)

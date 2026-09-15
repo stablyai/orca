@@ -20,6 +20,7 @@ function makeRuntime(): {
   cleanups: (() => void)[]
 } {
   const cleanups: (() => void)[] = []
+
   const onClientEvent = vi.fn(
     (
       _listener: (event: RuntimeClientEvent) => void,
@@ -27,12 +28,14 @@ function makeRuntime(): {
     ) =>
       () => {}
   )
+
   const runtime = {
     onClientEvent,
     registerSubscriptionCleanup: (_id: string, cleanup: () => void) => {
       cleanups.push(cleanup)
     }
   } as unknown as OrcaRuntimeService
+
   return { runtime, onClientEvent, cleanups }
 }
 

@@ -31,6 +31,7 @@ type ProfilePreferencesRuntime = Pick<
 >
 
 const profilePreferencesContext = Symbol('ProfilePreferences')
+
 type ProfilePreferencesContext = {
   runtime: ProfilePreferencesRuntime
   scheduling: WriteSchedulingOperations
@@ -55,6 +56,7 @@ export class ProfilePreferences {
     ) => void
   ): () => void {
     this[profilePreferencesContext].runtime.settingsChangeListeners.add(listener)
+
     return () => {
       this[profilePreferencesContext].runtime.settingsChangeListeners.delete(listener)
     }
@@ -62,6 +64,7 @@ export class ProfilePreferences {
 
   onUIChanged(listener: (ui: PersistedState['ui']) => void): () => void {
     this[profilePreferencesContext].runtime.uiChangeListeners.add(listener)
+
     return () => {
       this[profilePreferencesContext].runtime.uiChangeListeners.delete(listener)
     }
@@ -91,6 +94,7 @@ export class ProfilePreferences {
 
   getOnboarding(): PersistedState['onboarding'] {
     const defaults = getDefaultOnboardingState()
+
     return {
       ...defaults,
       ...this[profilePreferencesContext].runtime.state.onboarding,
@@ -116,6 +120,7 @@ export class ProfilePreferences {
       }
     }
     scheduleSave(this[profilePreferencesContext].scheduling)
+
     return this.getOnboarding()
   }
 
@@ -145,7 +150,9 @@ export function notifyUIChanged(owner: ProfilePreferences): void {
   if (owner[profilePreferencesContext].runtime.uiChangeListeners.size === 0) {
     return
   }
+
   const ui = owner.getUI()
+
   for (const listener of owner[profilePreferencesContext].runtime.uiChangeListeners) {
     listener(ui)
   }

@@ -84,6 +84,7 @@ describe('fetchWorktreeLinkedPR', () => {
         throw new Error('transport closed')
       })
     } as unknown as Pick<RpcClient, 'sendRequest'>
+
     expect(await fetchWorktreeLinkedPR(rejecting, 'w')).toBeNull()
   })
 })
@@ -95,6 +96,7 @@ describe('linkMobilePr transport rejection', () => {
         throw new Error('socket hung up')
       })
     } as unknown as Pick<RpcClient, 'sendRequest'>
+
     expect(await linkMobilePr(rejecting, 'w', 5)).toEqual({ ok: false, error: 'socket hung up' })
   })
 })

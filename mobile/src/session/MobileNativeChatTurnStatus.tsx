@@ -19,10 +19,13 @@ function useElapsedSeconds(startedAt: number | null, counting: boolean): number 
     if (!counting) {
       return
     }
+
     setNow(Date.now())
     const timer = setInterval(() => setNow(Date.now()), 1_000)
+
     return () => clearInterval(timer)
   }, [counting])
+
   return counting ? nativeChatElapsedSeconds(startedAt, mountedAt, now) : 0
 }
 
@@ -50,6 +53,7 @@ export function MobileNativeChatTurnStatus({
   const settled = workedSeconds != null
   const counting = !settled && !thinking && !activityText?.trim()
   const elapsedSeconds = useElapsedSeconds(startedAt, counting)
+
   const label = settled
     ? formatNativeChatTurnStatusLabel({ thinking, workedSeconds, elapsedSeconds })
     : formatNativeChatActiveTurnLabel({ activityText, thinking, elapsedSeconds })

@@ -22,17 +22,21 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
 
   protected getWslCodexHomePathForSelection(target: CodexAccountSelectionTarget): string | null {
     const settings = this.store.getSettings()
+
     const account = this.getActiveAccount(
       settings.codexManagedAccounts,
       getSelectedCodexAccountIdForTarget(settings, target)
     )
+
     if (account) {
       const targetDistro = this.resolveWslDefaultTarget(target).wslDistro?.trim()
       const accountHome = this.getWslLaunchCodexHomePath(account, targetDistro)
+
       if (accountHome) {
         return accountHome
       }
     }
+
     return this.getWslSystemCodexHomePath(target)
   }
 
@@ -41,16 +45,21 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
     targetDistro: string | undefined
   ): string | null {
     const wslHome = this.getWslManagedHomeIdentity(account)
+
     if (!wslHome) {
       return null
     }
+
     const accountDistro = wslHome.distro
+
     if (targetDistro && accountDistro.toLowerCase() !== targetDistro.toLowerCase()) {
       return null
     }
+
     if (/^[A-Za-z]:[\\/]/.test(account.managedHomePath)) {
       return toWindowsWslUncPath(wslHome.linuxHomePath, accountDistro)
     }
+
     return account.managedHomePath || toWindowsWslUncPath(wslHome.linuxHomePath, accountDistro)
   }
 
@@ -61,16 +70,22 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
     if (process.platform !== 'win32') {
       return Promise.resolve()
     }
+
     const distro = target.wslDistro?.trim() || getDefaultWslDistro()
+
     if (!distro) {
       return Promise.resolve()
     }
+
     const guestHome = getWslHome(distro)
     const guestHomeLinuxPath = guestHome ? toLinuxPath(guestHome).trim() : ''
+
     if (!guestHomeLinuxPath.startsWith('/')) {
       return Promise.resolve()
     }
+
     let legacyPanePresent = true
+
     try {
       legacyPanePresent = hasRecordedLegacyWslCodexPane(getCodexSelectionLaneKey(target))
     } catch (error) {
@@ -78,6 +93,7 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
       // still keep the direct home from launching stale auth.
       console.warn('[codex-wsl-auth-drain] Pane registry unavailable; preserving source:', error)
     }
+
     return startLegacyWslRuntimeAuthDrain(
       {
         distro,
@@ -96,14 +112,17 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
   ): Promise<LegacyWslRuntimeAuthDestination | null> {
     const accountHomes = this.store.getSettings().codexManagedAccounts.flatMap((account) => {
       const wslHome = this.getWslManagedHomeIdentity(account)
+
       return wslHome?.distro.toLowerCase() === distro.toLowerCase()
         ? [{ account, linuxPath: wslHome.linuxHomePath }]
         : []
     })
+
     const accounts = accountHomes.map(({ account }) => account)
     const systemHome = this.getWslSystemCodexHomePath({ runtime: 'wsl', wslDistro: distro })
     const parsedSystemHome = systemHome ? parseWslUncPath(systemHome) : null
     let reads: WslCodexAuthRead[]
+
     try {
       reads = await readWslCodexAuths(distro, [
         ...accountHomes.map(({ linuxPath }) => linuxPath),
@@ -111,25 +130,32 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
       ])
     } catch {
       reads = accountHomes.map(() => ({ kind: 'unreadable' }))
+
       if (parsedSystemHome) {
         reads.push({ kind: 'unreadable' })
       }
     }
+
     const authReads = new Map<string, WslCodexAuthRead>(
       accountHomes.map(({ account }, index) => [account.id, reads[index] ?? { kind: 'unreadable' }])
     )
+
     const match = this.findManagedAccountForRuntimeAuth(runtimeAuthContents, undefined, {
       accounts,
       authReads
     })
+
     if (match.kind === 'ambiguous') {
       return null
     }
+
     if (match.kind === 'matched') {
       const accountHome = accountHomes.find(({ account }) => account.id === match.account.id)
+
       if (!accountHome) {
         return null
       }
+
       return {
         authContents: match.managedAuthContents,
         linuxHomePath: accountHome.linuxPath
@@ -139,10 +165,13 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
     if (!systemHome || !parsedSystemHome) {
       return null
     }
+
     const systemAuth = reads[accountHomes.length] ?? { kind: 'unreadable' }
+
     if (systemAuth.kind !== 'present') {
       return null
     }
+
     return this.runtimeAuthMatchesSystemDefaultIdentity(runtimeAuthContents, systemAuth.contents)
       ? { authContents: systemAuth.contents, linuxHomePath: parsedSystemHome.linuxPath }
       : null
@@ -160,7 +189,9 @@ export abstract class CodexRuntimeHomeWsl extends CodexRuntimeHomeWslCore {
     if (target.runtime !== 'wsl' || target.wslDistro?.trim()) {
       return target
     }
+
     const defaultDistro = getDefaultWslDistro()
+
     return defaultDistro ? { runtime: 'wsl', wslDistro: defaultDistro } : target
   }
 }

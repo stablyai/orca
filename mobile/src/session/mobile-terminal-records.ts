@@ -78,11 +78,14 @@ export function mobileTerminalThemesEqual(
   if (left === right) {
     return true
   }
+
   if (!left || !right || left.mode !== right.mode) {
     return false
   }
+
   const leftColors = left.theme as Readonly<Record<string, unknown>>
   const rightColors = right.theme as Readonly<Record<string, unknown>>
+
   for (const color in leftColors) {
     if (
       Object.hasOwn(leftColors, color) &&
@@ -91,11 +94,13 @@ export function mobileTerminalThemesEqual(
       return false
     }
   }
+
   for (const color in rightColors) {
     if (Object.hasOwn(rightColors, color) && !Object.hasOwn(leftColors, color)) {
       return false
     }
   }
+
   return true
 }
 
@@ -119,6 +124,7 @@ function mobileSessionTabEqual(
   ) {
     return false
   }
+
   switch (a.type) {
     case 'terminal':
       return (
@@ -186,11 +192,14 @@ export function mergeTerminalRecordsByCurrentOrder(
   if (currentTerminals.length === 0) {
     return terminalTabs
   }
+
   const terminalTabsByHandle = new Map(terminalTabs.map((tab) => [tab.handle, tab]))
   const currentHandles = new Set(currentTerminals.map((terminal) => terminal.handle))
+
   return [
     ...currentTerminals.map((terminal) => {
       const snapshotTerminal = terminalTabsByHandle.get(terminal.handle)
+
       return snapshotTerminal
         ? mergeTerminalSnapshotWithKnownRecord(snapshotTerminal, terminal)
         : terminal
@@ -210,12 +219,15 @@ export function hasConnectedTerminalAbsentFromSessionTabs(
   const tabbable = currentTerminals.filter(
     (terminal) => terminal.connected === true && terminal.orphaned !== true
   )
+
   if (tabbable.length === 0) {
     return false
   }
+
   const tabHandles = new Set(
     getTerminalRecordsFromSessionTabs(tabs).map((terminal) => terminal.handle)
   )
+
   return tabbable.some((terminal) => !tabHandles.has(terminal.handle))
 }
 
@@ -226,6 +238,7 @@ export function getTerminalRecordsFromSessionTabs(
     if (tab.type !== 'terminal' || typeof tab.terminal !== 'string') {
       return []
     }
+
     return [
       {
         handle: tab.terminal,
@@ -246,12 +259,15 @@ export function mergeTerminalListWithKnownRecords(
   const currentTerminalsByHandle = new Map(
     currentTerminals.map((terminal) => [terminal.handle, terminal])
   )
+
   const sessionTerminalsByHandle = new Map(
     getTerminalRecordsFromSessionTabs(sessionTabs).map((terminal) => [terminal.handle, terminal])
   )
+
   return terminalList.map((terminal) => {
     const sessionTerminal = sessionTerminalsByHandle.get(terminal.handle)
     const currentTerminal = currentTerminalsByHandle.get(terminal.handle)
+
     // Why: terminal.list summaries can omit the mobile theme; keep the richer
     // session-tab/current record so polling cannot reset TerminalWebView.
     return {

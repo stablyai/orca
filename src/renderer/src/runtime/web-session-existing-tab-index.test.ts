@@ -24,6 +24,7 @@ describe('buildWebSessionExistingTabIndex', () => {
     const firstFileId = '/repo/file.ts'
     const firstByFileId = makeTab('older-host-id', firstFileId, 'editor')
     const laterByHostId = makeTab('current-host-id', '/repo/other.ts', 'editor')
+
     const index = buildWebSessionExistingTabIndex({
       unifiedTabs: [firstByFileId, laterByHostId]
     })

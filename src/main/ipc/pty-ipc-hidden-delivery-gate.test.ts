@@ -5,45 +5,61 @@ import { redactPtyIdForDiagnostics } from '../../shared/pty-delivery-diagnostics
 import { registerPtyHandlers, getPtyRendererDeliveryDebugSnapshot } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -67,6 +83,7 @@ describe('registerPtyHandlers', () => {
   describe('hidden renderer delivery gate', () => {
     it('foregrounds a preserved daemon PTY after handler recreation loses sync memory', async () => {
       const daemon = installObservableDaemonTestProvider()
+
       const firstRuntime = {
         setPtyController: vi.fn(),
         hasRawTerminalViewSubscriber: vi.fn(() => false),
@@ -77,7 +94,9 @@ describe('registerPtyHandlers', () => {
         onPtyExit: vi.fn(),
         onPtyData: vi.fn()
       }
+
       registerPtyHandlers(mainWindow as never, firstRuntime as never)
+
       const result = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -90,6 +109,7 @@ describe('registerPtyHandlers', () => {
       daemon.setPtyBackgrounded.mockClear()
       handlers.clear()
       let rawSubscriberPresent = false
+
       const nextRuntime = {
         setPtyController: vi.fn(),
         hasRawTerminalViewSubscriber: vi.fn(() => rawSubscriberPresent),
@@ -99,6 +119,7 @@ describe('registerPtyHandlers', () => {
           this.onRemoteTerminalViewPresenceChanged?.(id)
         }
       }
+
       registerPtyHandlers(mainWindow as never, nextRuntime as never)
 
       nextRuntime.registerRawTerminalViewSubscriber(result.id)
@@ -110,6 +131,7 @@ describe('registerPtyHandlers', () => {
     })
     it('drops hidden PTY data after model ingestion and emits one out-of-band restore marker', async () => {
       vi.useFakeTimers()
+
       const runtime = {
         setPtyController: vi.fn(),
         registerPty: vi.fn(),
@@ -122,14 +144,18 @@ describe('registerPtyHandlers', () => {
         createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-1'),
         registerPreAllocatedHandleForPty: vi.fn()
       }
+
       const daemon = installObservableDaemonTestProvider()
+
       try {
         registerPtyHandlers(mainWindow as never, runtime as never)
+
         const result = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           sessionId: 'daemon-session'
         })) as { id: string }
+
         const setHidden = getPtySetHiddenRendererPtyListener()
         mainWindow.webContents.send.mockClear()
 
@@ -175,13 +201,16 @@ describe('registerPtyHandlers', () => {
       vi.useFakeTimers()
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const daemon = installObservableDaemonTestProvider()
+
       try {
         registerPtyHandlers(mainWindow as never)
+
         const result = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           sessionId: 'daemon-session'
         })) as { id: string }
+
         const setHidden = getPtySetHiddenRendererPtyListener()
         const setVisible = getPtySetRendererPtyVisibleListener()
 
@@ -216,13 +245,16 @@ describe('registerPtyHandlers', () => {
       vi.useFakeTimers()
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const daemon = installObservableDaemonTestProvider()
+
       try {
         registerPtyHandlers(mainWindow as never)
+
         const result = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           sessionId: 'daemon-session'
         })) as { id: string }
+
         const setHidden = getPtySetHiddenRendererPtyListener()
         const setVisible = getPtySetRendererPtyVisibleListener()
         setVisible(null, { id: result.id, visible: true })
@@ -234,9 +266,11 @@ describe('registerPtyHandlers', () => {
         expect(diagnostics.appVersion).toBe('0.0.0-test')
         expect(diagnostics.windowFocused).toBe(true)
         expect(diagnostics.windowVisible).toBe(true)
+
         const entry = diagnostics.perPty.find(
           (candidate) => candidate.id === redactPtyIdForDiagnostics(result.id)
         )
+
         expect(entry).toMatchObject({
           hidden: true,
           visible: true,
@@ -260,11 +294,13 @@ describe('registerPtyHandlers', () => {
 
       try {
         registerPtyHandlers(mainWindow as never)
+
         const spawnResult = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '/tmp'
         })) as { id: string }
+
         const writeListener = getPtyWriteListener()
         const setHidden = getPtySetHiddenRendererPtyListener()
 
@@ -292,11 +328,13 @@ describe('registerPtyHandlers', () => {
 
       try {
         registerPtyHandlers(mainWindow as never)
+
         const spawnResult = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '/tmp'
         })) as { id: string }
+
         const setHidden = getPtySetHiddenRendererPtyListener()
         const setInterest = getPtySetDeliveryInterestListener()
         mainWindow.webContents.send.mockClear()
@@ -330,11 +368,13 @@ describe('registerPtyHandlers', () => {
 
       try {
         registerPtyHandlers(mainWindow as never)
+
         const spawnResult = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '/tmp'
         })) as { id: string }
+
         const setHidden = getPtySetHiddenRendererPtyListener()
         const setInterest = getPtySetDeliveryInterestListener()
         const setActive = getPtySetActiveRendererPtyListener()
@@ -384,11 +424,13 @@ describe('registerPtyHandlers', () => {
 
       try {
         registerPtyHandlers(mainWindow as never, undefined, undefined, (() => settings) as never)
+
         const spawnResult = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '/tmp'
         })) as { id: string }
+
         const setHidden = getPtySetHiddenRendererPtyListener()
         mainWindow.webContents.send.mockClear()
 
@@ -411,19 +453,23 @@ describe('registerPtyHandlers', () => {
         vi.useFakeTimers()
         const mockProc = createMockProc()
         spawnMock.mockReturnValue(mockProc.proc)
+
         const settings = {
           terminalHiddenDeliveryGate: true,
           terminalMainSideEffectAuthority: true
         }
+
         settings[settingName] = false
 
         try {
           registerPtyHandlers(mainWindow as never, undefined, undefined, (() => settings) as never)
+
           const spawnResult = (await handlers.get('pty:spawn')!(null, {
             cols: 80,
             rows: 24,
             cwd: '/tmp'
           })) as { id: string }
+
           getMainFrameNavigationListener()()
           getPtySetHiddenRendererPtyListener()(null, { id: spawnResult.id, hidden: true })
           mainWindow.webContents.send.mockClear()
@@ -458,11 +504,13 @@ describe('registerPtyHandlers', () => {
 
       try {
         registerPtyHandlers(mainWindow as never)
+
         const spawnResult = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '/tmp'
         })) as { id: string }
+
         const setHidden = getPtySetHiddenRendererPtyListener()
         mainWindow.webContents.send.mockClear()
 
@@ -490,11 +538,13 @@ describe('registerPtyHandlers', () => {
 
       try {
         registerPtyHandlers(mainWindow as never)
+
         const spawnResult = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '/tmp'
         })) as { id: string }
+
         const setHidden = getPtySetHiddenRendererPtyListener()
         mainWindow.webContents.send.mockClear()
 
@@ -528,11 +578,13 @@ describe('registerPtyHandlers', () => {
 
       try {
         registerPtyHandlers(mainWindow as never)
+
         const spawnResult = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '/tmp'
         })) as { id: string }
+
         const setHidden = getPtySetHiddenRendererPtyListener()
         mainWindow.webContents.send.mockClear()
 
@@ -551,11 +603,13 @@ describe('registerPtyHandlers', () => {
 
       try {
         registerPtyHandlers(mainWindow as never)
+
         const spawnResult = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '/tmp'
         })) as { id: string }
+
         const setHidden = getPtySetHiddenRendererPtyListener()
 
         setHidden(null, { id: spawnResult.id, hidden: true })
@@ -579,11 +633,13 @@ describe('registerPtyHandlers', () => {
 
       try {
         registerPtyHandlers(mainWindow as never)
+
         const spawnResult = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           cwd: '/tmp'
         })) as { id: string }
+
         const setHidden = getPtySetHiddenRendererPtyListener()
         mainWindow.webContents.send.mockClear()
 
@@ -607,6 +663,7 @@ describe('registerPtyHandlers', () => {
     })
     it('keeps drop memory across a renderer reload while clearing hidden/interest state', async () => {
       vi.useFakeTimers()
+
       const runtime = {
         setPtyController: vi.fn(),
         registerPty: vi.fn(),
@@ -619,19 +676,25 @@ describe('registerPtyHandlers', () => {
         createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-1'),
         registerPreAllocatedHandleForPty: vi.fn()
       }
+
       const daemon = installObservableDaemonTestProvider()
+
       try {
         registerPtyHandlers(mainWindow as never, runtime as never)
+
         // Why daemon provider: survives reloads and keeps orphan-kill off this webContents, so 'did-finish-load' means gate reset only.
         const reloadHandlers = mainWindow.webContents.on.mock.calls
           .filter((call: unknown[]) => call[0] === 'did-finish-load')
           .map((call: unknown[]) => call[1] as () => void)
+
         expect(reloadHandlers).toHaveLength(1)
+
         const result = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           sessionId: 'daemon-session'
         })) as { id: string }
+
         const setHidden = getPtySetHiddenRendererPtyListener()
         mainWindow.webContents.send.mockClear()
 
@@ -660,6 +723,7 @@ describe('registerPtyHandlers', () => {
     })
     it('clears leaked delivery interest on renderer reload so the gate re-engages', async () => {
       vi.useFakeTimers()
+
       const runtime = {
         setPtyController: vi.fn(),
         registerPty: vi.fn(),
@@ -672,18 +736,24 @@ describe('registerPtyHandlers', () => {
         createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-1'),
         registerPreAllocatedHandleForPty: vi.fn()
       }
+
       const daemon = installObservableDaemonTestProvider()
+
       try {
         registerPtyHandlers(mainWindow as never, runtime as never)
+
         const reloadHandlers = mainWindow.webContents.on.mock.calls
           .filter((call: unknown[]) => call[0] === 'did-finish-load')
           .map((call: unknown[]) => call[1] as () => void)
+
         expect(reloadHandlers).toHaveLength(1)
+
         const result = (await handlers.get('pty:spawn')!(null, {
           cols: 80,
           rows: 24,
           sessionId: 'daemon-session'
         })) as { id: string }
+
         const setHidden = getPtySetHiddenRendererPtyListener()
         const setInterest = getPtySetDeliveryInterestListener()
         mainWindow.webContents.send.mockClear()

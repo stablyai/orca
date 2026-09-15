@@ -7,16 +7,20 @@ import {
 
 export async function readTerminalPaneDomLeafOrder(page: Page): Promise<string[]> {
   const snapshot = await readPaneIdentitySnapshot(page)
+
   if (!snapshot) {
     return []
   }
 
   return page.evaluate((tabId) => {
     const manager = window.__paneManagers?.get(tabId)
+
     if (!manager) {
       return []
     }
+
     const paneElements = new Set(manager.getPanes().map((pane) => pane.container))
+
     return Array.from(document.querySelectorAll<HTMLElement>('.pane[data-leaf-id]'))
       .filter((element) => paneElements.has(element))
       .map((element) => element.dataset.leafId ?? '')
@@ -31,6 +35,7 @@ export async function moveTerminalPaneByLeafId(
   zone: 'top' | 'bottom' | 'left' | 'right'
 ): Promise<void> {
   const snapshot = await readPaneIdentitySnapshot(page)
+
   if (!snapshot) {
     throw new Error('moveTerminalPaneByLeafId: no active terminal tab')
   }
@@ -38,14 +43,18 @@ export async function moveTerminalPaneByLeafId(
   await page.evaluate(
     ({ tabId, sourceLeafId, targetLeafId, zone }) => {
       const manager = window.__paneManagers?.get(tabId)
+
       if (!manager) {
         throw new Error('moveTerminalPaneByLeafId: active pane manager not ready')
       }
+
       const sourcePaneId = manager.getNumericIdForLeaf(sourceLeafId)
       const targetPaneId = manager.getNumericIdForLeaf(targetLeafId)
+
       if (sourcePaneId == null || targetPaneId == null) {
         throw new Error('moveTerminalPaneByLeafId: source or target leaf is not mounted')
       }
+
       manager.movePane(sourcePaneId, targetPaneId, zone)
     },
     { tabId: snapshot.tabId, sourceLeafId, targetLeafId, zone }
@@ -70,14 +79,18 @@ export async function waitForActiveTerminalManager(page: Page, timeoutMs = 30_00
     .poll(
       async () => {
         const tabId = await resolveActiveTabId(page)
+
         if (!tabId) {
           return false
         }
+
         return page.evaluate((tabId) => {
           const paneManagers = window.__paneManagers
+
           if (!paneManagers) {
             return false
           }
+
           return (paneManagers.get(tabId)?.getPanes?.().length ?? 0) > 0
         }, tabId)
       },
@@ -94,18 +107,22 @@ export async function splitActiveTerminalPane(
   direction: 'vertical' | 'horizontal'
 ): Promise<void> {
   const tabId = await resolveActiveTabId(page)
+
   if (!tabId) {
     throw new Error('splitActiveTerminalPane: no active terminal tab')
   }
+
   await page.evaluate(
     ({ tabId, direction }) => {
       const paneManagers = window.__paneManagers
+
       if (!paneManagers) {
         throw new Error('splitActiveTerminalPane: terminal store/manager unavailable')
       }
 
       const manager = paneManagers.get(tabId)
       const activePane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
       if (!manager?.splitPane || !activePane) {
         throw new Error('splitActiveTerminalPane: active pane manager not ready')
       }
@@ -122,22 +139,27 @@ export async function splitActiveTerminalPane(
 
 export async function closeActiveTerminalPane(page: Page): Promise<void> {
   const tabId = await resolveActiveTabId(page)
+
   if (!tabId) {
     throw new Error('closeActiveTerminalPane: no active terminal tab')
   }
+
   await page.evaluate((tabId) => {
     const paneManagers = window.__paneManagers
+
     if (!paneManagers) {
       throw new Error('closeActiveTerminalPane: terminal store/manager unavailable')
     }
 
     const manager = paneManagers.get(tabId)
     const panes = manager?.getPanes?.() ?? []
+
     if (!manager?.closePane || panes.length < 2) {
       return
     }
 
     const activePane = manager.getActivePane?.() ?? panes[0]
+
     if (!activePane) {
       return
     }
@@ -148,11 +170,14 @@ export async function closeActiveTerminalPane(page: Page): Promise<void> {
 
 export async function focusLastTerminalPane(page: Page): Promise<void> {
   const tabId = await resolveActiveTabId(page)
+
   if (!tabId) {
     throw new Error('focusLastTerminalPane: no active terminal tab')
   }
+
   await page.evaluate((tabId) => {
     const paneManagers = window.__paneManagers
+
     if (!paneManagers) {
       throw new Error('focusLastTerminalPane: terminal store/manager unavailable')
     }
@@ -160,6 +185,7 @@ export async function focusLastTerminalPane(page: Page): Promise<void> {
     const manager = paneManagers.get(tabId)
     const panes = manager?.getPanes?.() ?? []
     const lastPane = panes.at(-1) ?? null
+
     if (!manager?.setActivePane || !lastPane) {
       throw new Error('focusLastTerminalPane: active pane manager not ready')
     }
@@ -172,28 +198,35 @@ export async function focusLastTerminalPane(page: Page): Promise<void> {
 // manager tracks the authoritative active split layout independently of CSS.
 export async function countVisibleTerminalPanes(page: Page): Promise<number> {
   const tabId = await resolveActiveTabId(page)
+
   if (!tabId) {
     return 0
   }
+
   return page.evaluate((tabId) => {
     const managerCount = window.__paneManagers?.get(tabId)?.getPanes?.().length ?? 0
+
     if (managerCount > 0) {
       return managerCount
     }
 
     const layout = window.__store?.getState().terminalLayoutsByTabId[tabId]
+
     if (!layout) {
       return 0
     }
 
     // Why: `root: null` means the default single-pane tab (no splits yet).
     type N = { type: 'leaf' } | { type: 'split'; first: N | null; second: N | null } | null
+
     const countLeaves = (node: N): number => {
       if (!node || node.type === 'leaf') {
         return 1
       }
+
       return countLeaves(node.first) + countLeaves(node.second)
     }
+
     return countLeaves(layout.root as N)
   }, tabId)
 }

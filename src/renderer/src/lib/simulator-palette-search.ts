@@ -124,16 +124,21 @@ function compareEmptyQueryResults(
   if (a.isCurrentTab !== b.isCurrentTab) {
     return a.isCurrentTab ? -1 : 1
   }
+
   if (a.isCurrentWorktree !== b.isCurrentWorktree) {
     return a.isCurrentWorktree ? -1 : 1
   }
+
   if (a.score !== b.score) {
     return a.score - b.score
   }
+
   const worktreeCmp = compareText(a.worktreeName, b.worktreeName)
+
   if (worktreeCmp !== 0) {
     return worktreeCmp
   }
+
   return compareText(a.title, b.title)
 }
 
@@ -143,6 +148,7 @@ function positionScore(entry: SearchableSimulatorTab): number {
   if (entry.isCurrentTab) {
     return entry.worktreeSortIndex * 100 - 4000
   }
+
   return entry.worktreeSortIndex * 100 - (entry.isCurrentWorktree ? 1000 : 0)
 }
 
@@ -155,10 +161,12 @@ function baseResult(
   context: PaletteSearchContext
 ): SimulatorPaletteSearchResult {
   const executionHostId = getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree)
+
   const activity = preparePaletteActivity(
     maxValidPaletteActivityTimestamp([entry.tab.lastFocusedAt, entry.tab.createdAt]),
     context
   )
+
   return {
     ...(executionHostId ? { executionHostId } : {}),
     paletteIdentity: encodePaletteIdentity([
@@ -209,13 +217,16 @@ export function buildSearchableSimulatorTabs({
 }: BuildSearchableSimulatorTabsOptions): SearchableSimulatorTab[] {
   const entries: SearchableSimulatorTab[] = []
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(ownershipWorktrees ?? worktrees)
+
   for (const worktree of worktrees) {
     const repoName =
       resolvePaletteRepoForWorktree(worktree, repoMap, repoMapByHostIdentity)?.displayName ?? ''
+
     const worktreeSortIndex =
       worktreeOrder.get(getPaletteWorktreeIdentity(worktree)) ??
       worktreeOrder.get(worktree.id) ??
       Number.MAX_SAFE_INTEGER
+
     const activeUnifiedTabId = getActiveSimulatorTabId({
       worktreeId: worktree.id,
       worktreeHostId: worktree.hostId,
@@ -226,8 +237,10 @@ export function buildSearchableSimulatorTabs({
       activeGroupId: activeGroupIdByWorktree[worktree.id],
       groups: groupsByWorktree[worktree.id]
     })
+
     const tabs = unifiedTabsByWorktree[worktree.id] ?? []
     const duplicateTabIds = findDuplicateIds(tabs)
+
     for (const tab of tabs) {
       if (
         duplicateTabIds.has(tab.id) ||
@@ -236,6 +249,7 @@ export function buildSearchableSimulatorTabs({
       ) {
         continue
       }
+
       entries.push({
         tab,
         worktree,
@@ -261,6 +275,7 @@ export function buildSearchableSimulatorTabs({
       })
     }
   }
+
   return entries
 }
 
@@ -270,10 +285,13 @@ export function searchSimulatorTabs(
   options: { context?: PaletteSearchContext; fieldMode?: 'all' | 'omnibox' } = {}
 ): SimulatorPaletteSearchResult[] {
   const context = options.context ?? createPaletteSearchContext(Date.now())
+
   if (isSimulatorPaletteQueryTooLarge(query)) {
     return []
   }
+
   const prepared = preparePaletteTabQuery(query)
+
   if (!prepared) {
     return query.trim()
       ? []
@@ -281,15 +299,19 @@ export function searchSimulatorTabs(
   }
 
   const results: SimulatorPaletteSearchResult[] = []
+
   for (const entry of entries) {
     const match = matchPaletteTabDocument(entry.document, prepared, {
       isFieldAllowed: options.fieldMode === 'omnibox' ? isOmniboxPaletteTabFieldAllowed : undefined
     })
+
     if (!match) {
       continue
     }
+
     const alias =
       match.typeAlias !== null ? SIMULATOR_TYPE_SEARCH_ALIASES[match.typeAlias.index] : undefined
+
     results.push({
       ...baseResult(entry, context),
       titleRanges: match.titleRanges,

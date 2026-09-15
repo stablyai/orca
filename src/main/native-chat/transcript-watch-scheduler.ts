@@ -1,5 +1,7 @@
 const DEFAULT_DEBOUNCE_MS = 40
+
 const EVENT_DRAIN_MAX_WAIT_MS = 250
+
 const DEFAULT_RECONCILIATION_MS = 1_000
 
 type TranscriptWatchSchedulerOptions = {
@@ -35,6 +37,7 @@ export function createTranscriptWatchScheduler(
     if (!drainTimer) {
       return
     }
+
     clearTimeout(drainTimer)
     drainTimer = null
   }
@@ -54,6 +57,7 @@ export function createTranscriptWatchScheduler(
     if (disposed || reconciliationTimer) {
       return
     }
+
     reconciliationTimer = setTimeout(() => {
       reconciliationTimer = null
       // Why: wait for the host-side stat/drain check before rearming so a slow
@@ -68,6 +72,7 @@ export function createTranscriptWatchScheduler(
       if (disposed) {
         return
       }
+
       const now = Date.now()
       firstEventAt ??= now
       const remainingMaxWait = Math.max(0, maxEventWaitMs - (now - firstEventAt))
@@ -78,8 +83,10 @@ export function createTranscriptWatchScheduler(
       if (disposed || drainTimer) {
         return false
       }
+
       firstEventAt = null
       armDrain(delayMs)
+
       return true
     },
     startReconciliation(): void {
@@ -89,12 +96,15 @@ export function createTranscriptWatchScheduler(
       if (disposed) {
         return
       }
+
       disposed = true
       clearDrainTimer()
+
       if (reconciliationTimer) {
         clearTimeout(reconciliationTimer)
         reconciliationTimer = null
       }
+
       firstEventAt = null
     }
   }

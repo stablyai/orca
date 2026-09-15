@@ -24,20 +24,26 @@ export function useTerminalFontZoom({
     if (!isActive) {
       return
     }
+
     const MIN_FONT_SIZE = 8
     const MAX_FONT_SIZE = 32
     const FONT_SIZE_STEP = 1
 
     return window.api.ui.onTerminalZoom((direction) => {
       const container = containerRef.current
+
       if (!container || !getPaneOwnedActiveHelperTextarea(container, document.activeElement)) {
         return
       }
+
       const manager = managerRef.current
+
       if (!manager) {
         return
       }
+
       const pane = manager.getActivePane()
+
       if (!pane) {
         return
       }
@@ -46,6 +52,7 @@ export function useTerminalFontZoom({
       const currentSize = paneFontSizesRef.current.get(pane.id) ?? globalSize
 
       let nextSize: number
+
       if (direction === 'reset') {
         nextSize = globalSize
         paneFontSizesRef.current.delete(pane.id)

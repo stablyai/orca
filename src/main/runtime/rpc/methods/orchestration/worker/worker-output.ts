@@ -38,26 +38,34 @@ export async function readExactWorkerOutput(args: {
 
   const observedAfter = orchestrationTimestampToMs(args.attachedAt)
   const session = args.runtime.getExactWorkerProviderSession(args.terminalHandle, observedAfter)
+
   if (!session) {
     if (cursor?.source === 'transcript') {
       throw sourceChanged()
     }
+
     return fallbackOrThrow(args, 'session_not_reported')
   }
+
   const isWslSession = isWslHookRelayConnectionId(session.connectionId)
+
   if (isWslSession && !session.wslDistro) {
     return fallbackOrThrow(args, 'remote_capability_unavailable')
   }
+
   const remoteFilesystemProvider =
     session.connectionId && !isWslSession
       ? getSshFilesystemProvider(session.connectionId)
       : undefined
+
   if (session.connectionId && !isWslSession && !remoteFilesystemProvider) {
     return fallbackOrThrow(args, 'remote_capability_unavailable')
   }
+
   if (cursor?.source === 'transcript' && !cursor.boundaryCheckpoint) {
     throw sourceChanged()
   }
+
   const transcript = await readWorkerTranscript({
     agent: session.agent,
     sessionId: session.providerSession.id,
@@ -69,15 +77,19 @@ export async function readExactWorkerOutput(args: {
     limit: args.limit,
     filesystemProvider: remoteFilesystemProvider
   })
+
   if (!transcript.ok) {
     if (transcript.reason === 'source_changed') {
       throw sourceChanged()
     }
+
     if (cursor?.source === 'transcript') {
       throw transcriptRequired(args.dispatchId, transcript.reason)
     }
+
     return fallbackOrThrow(args, transcript.reason, transcript.warnings)
   }
+
   const sourceIdentity = createWorkerOutputSourceIdentity([
     'transcript',
     session.processIncarnation,
@@ -88,13 +100,16 @@ export async function readExactWorkerOutput(args: {
     transcript.filePath,
     transcript.sourceFingerprint
   ])
+
   if (cursor?.source === 'transcript' && cursor.sourceIdentity !== sourceIdentity) {
     throw sourceChanged()
   }
+
   const sessionAfterRead = args.runtime.getExactWorkerProviderSession(
     args.terminalHandle,
     observedAfter
   )
+
   if (
     !sessionAfterRead ||
     sessionAfterRead.processIncarnation !== session.processIncarnation ||
@@ -107,6 +122,7 @@ export async function readExactWorkerOutput(args: {
   ) {
     throw sourceChanged()
   }
+
   const nextCursor = encodeWorkerOutputCursor(
     args.dispatchId,
     'transcript',
@@ -114,6 +130,7 @@ export async function readExactWorkerOutput(args: {
     transcript.nextOffset,
     transcript.boundaryCheckpoint
   )
+
   return {
     dispatchId: args.dispatchId,
     source: 'transcript',
@@ -145,13 +162,16 @@ async function readTerminalOutput(
 ): Promise<OrchestrationWorkerReadResult> {
   const processIncarnation = args.runtime.getTerminalProcessIncarnation(args.terminalHandle)
   const paneKey = args.runtime.getTerminalPaneKey(args.terminalHandle)
+
   if (!processIncarnation || !paneKey) {
     throw new OrchestrationError(
       'worker_identity_changed',
       `Worker Dispatch ${args.dispatchId} no longer resolves to its exact process.`
     )
   }
+
   const sourceIdentity = createWorkerOutputSourceIdentity(['terminal', processIncarnation, paneKey])
+
   if (
     cursor?.source === 'terminal' &&
     cursor.sourceIdentity !== null &&
@@ -159,24 +179,30 @@ async function readTerminalOutput(
   ) {
     throw sourceChanged()
   }
+
   const terminal = await args.runtime.readTerminal(args.terminalHandle, {
     cursor: cursor?.source === 'terminal' ? cursor.position : undefined,
     limit: args.limit
   })
+
   const redactedTerminal = redactWorkerTerminalLines([
     ...terminal.tail,
     ...(terminal.draft ? [terminal.draft] : [])
   ])
+
   const redactedTail = redactedTerminal.lines.slice(0, terminal.tail.length)
   const redactedDraft = terminal.draft ? redactedTerminal.lines.at(-1) : undefined
+
   const position =
     terminal.nextCursor !== null && /^\d+$/.test(terminal.nextCursor)
       ? Number.parseInt(terminal.nextCursor, 10)
       : null
+
   const nextCursor =
     position === null
       ? null
       : encodeWorkerOutputCursor(args.dispatchId, 'terminal', sourceIdentity, position)
+
   return {
     dispatchId: args.dispatchId,
     source: 'terminal',
@@ -208,7 +234,9 @@ async function fallbackOrThrow(
   if (args.source === 'transcript') {
     throw transcriptRequired(args.dispatchId, reason)
   }
+
   const fallback = await readTerminalOutput(args, null)
+
   return fallback.source === 'terminal'
     ? {
         ...fallback,
@@ -237,7 +265,9 @@ export function orchestrationTimestampToMs(value: string): number {
   const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(value)
     ? `${value.replace(' ', 'T')}Z`
     : value
+
   const parsed = Date.parse(normalized)
+
   return Number.isFinite(parsed) ? parsed : 0
 }
 

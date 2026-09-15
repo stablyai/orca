@@ -42,6 +42,7 @@ vi.mock('@/store', async () => {
     }
   })
   mocks.store = useAppStore
+
   return { useAppStore }
 })
 
@@ -105,9 +106,11 @@ function statuses(): AgentStatusEntry[] {
 /** The host side of the most recent status subscription. */
 function feed(index = 0): { target: unknown; emit: (event: AgentSessionStatusEvent) => void } {
   const call = mocks.subscribeStatus.mock.calls[index]
+
   if (!call) {
     throw new Error('status feed not subscribed')
   }
+
   return { target: call[0], emit: call[1] as (event: AgentSessionStatusEvent) => void }
 }
 
@@ -135,6 +138,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
       id: 'structured-tab-2',
       entityId: 'session-2'
     }
+
     const tabsByWorktree: Record<string, Tab[]> = {
       'wt-1': [structuredTab],
       'wt-2': [secondStructuredTab]
@@ -150,6 +154,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
       ...tabsByWorktree,
       'wt-3': [{ ...structuredTab, id: 'structured-tab-3', entityId: 'session-3' }]
     }
+
     expect(getStructuredAgentSessionTabs(nextTabsByWorktree)).toEqual([
       structuredTab,
       secondStructuredTab,
@@ -324,12 +329,14 @@ describe('StructuredAgentSessionStatusBridge', () => {
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
     const live = summary({ backgroundTasks: [{ id: 'child', kind: 'agent', state: 'working' }] })
+
     const childState = () =>
       buildSubagentChildRows({
         parentEntry: statuses()[0],
         tab: structuredTab as never,
         parentIsFresh: false
       })[0]?.state
+
     act(() => feed().emit({ type: 'snapshot', sessions: [live] }))
     // A hook's evidence window has expired, but the host has not retracted its live task.
     expect(childState()).toBe('working')
@@ -531,6 +538,7 @@ describe('StructuredAgentSessionStatusBridge', () => {
 
   it('reconnects after the host ends the stream', async () => {
     vi.useFakeTimers()
+
     try {
       render(<StructuredAgentSessionStatusBridge />)
       await act(() => Promise.resolve())

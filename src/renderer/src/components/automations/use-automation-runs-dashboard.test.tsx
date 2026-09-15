@@ -23,13 +23,17 @@ const PAGES: Record<string, AutomationRunsPage> = {
 }
 
 const row = makeAutomationListRow()
+
 const rows = [row]
+
 const context = { capturedOwners: new Map(), authority: { kind: 'desktop' as const } }
 
 type DashboardResult = ReturnType<typeof useAutomationRunsDashboard>
 
 let container: HTMLDivElement
+
 let root: Root
+
 let latest: DashboardResult | null = null
 
 type HarnessProps = {
@@ -47,6 +51,7 @@ function Harness({ enabled, authority, target }: HarnessProps): null {
     authorityForRow: useCallback(() => authority ?? { kind: 'desktop' }, [authority]),
     reloadToken: 0
   })
+
   return null
 }
 
@@ -119,6 +124,7 @@ describe('useAutomationRunsDashboard', () => {
       environmentId: 'env-1',
       pairingRevision
     })
+
     await render(true, { authority: paired(1) })
     await act(async () => latest?.loadMore())
     expect(latest?.entries).toHaveLength(2)

@@ -57,13 +57,17 @@ export function parseTccPromptEvent(line: string): TccPromptEvent | null {
   if (!line.includes('AUTHREQ_PROMPTING')) {
     return null
   }
+
   const service = /\bservice=(kTCCService\w+)/.exec(line)?.[1]
   const accessingIdentifier = /\bSub:\{([^}]*)\}/.exec(line)?.[1]
   const responsibleIdentifier = /\bResp:\{TCCDProcess:\s*identifier=([^,}]+)/.exec(line)?.[1]
+
   if (!service || !accessingIdentifier || !responsibleIdentifier) {
     return null
   }
+
   const binaryPath = /\bbinary_path=([^,}]+)/.exec(line)?.[1]
+
   return {
     service,
     accessingIdentifier: accessingIdentifier.trim(),
@@ -115,8 +119,10 @@ export class MacosTccPromptWatch {
     if (process.platform !== 'darwin' || this.child || this.stopped) {
       return
     }
+
     const spawnLogStream = this.options.spawnLogStream ?? spawnDefaultLogStream
     let child: LogStreamChild
+
     try {
       child = spawnLogStream()
     } catch {
@@ -124,6 +130,7 @@ export class MacosTccPromptWatch {
       // break startup, and there is nothing actionable to tell the user.
       return
     }
+
     this.child = child
     child.on('error', () => this.handleUnexpectedTermination(child))
     child.on('exit', () => this.handleUnexpectedTermination(child))
@@ -135,12 +142,15 @@ export class MacosTccPromptWatch {
     if (this.child !== child) {
       return
     }
+
     this.reader?.close()
     this.reader = null
     this.child = null
+
     if (this.stopped || this.restartAttempted) {
       return
     }
+
     this.restartAttempted = true
     // Why: recover one transient logd failure without respawning forever when logging is unavailable.
     this.restartTimer = setTimeout(() => {
@@ -151,18 +161,22 @@ export class MacosTccPromptWatch {
 
   private handleLine(line: string): void {
     const event = parseTccPromptEvent(line)
+
     if (!event || !isOrcaAttributedPrompt(event)) {
       return
     }
+
     this.options.onPrompt(event)
   }
 
   stop(): void {
     this.stopped = true
+
     if (this.restartTimer) {
       clearTimeout(this.restartTimer)
       this.restartTimer = null
     }
+
     this.reader?.close()
     this.reader = null
     // Why: log stream ignores a closed stdout, so the child needs an explicit kill or it outlives quit.

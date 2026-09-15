@@ -10,6 +10,7 @@ const { getUnreadBadgeCount } = vi.hoisted(() => ({ getUnreadBadgeCount: vi.fn()
 vi.mock('@/lib/unread-badge-count', async (importOriginal) => {
   const actual = await importOriginal<typeof UnreadBadgeCountModule>()
   getUnreadBadgeCount.mockImplementation(actual.getUnreadBadgeCount)
+
   return { ...actual, getUnreadBadgeCount }
 })
 
@@ -73,12 +74,14 @@ describe('useUnreadDockBadge', () => {
     const worktrees = Array.from({ length: 100 }, (_, index) =>
       makeWorktree({ id: `repo::worktree-${index}`, repoId: 'repo' })
     )
+
     const tabsByWorktree = Object.fromEntries(
       worktrees.map((worktree, index) => [
         worktree.id,
         [makeTab({ id: `tab-${index}`, worktreeId: worktree.id })]
       ])
     )
+
     useAppStore.setState({
       worktreesByRepo: { repo: worktrees },
       tabsByWorktree,
@@ -91,6 +94,7 @@ describe('useUnreadDockBadge', () => {
       for (let index = 0; index < 100; index += 1) {
         useAppStore.setState({ agentStatusEpoch: useAppStore.getState().agentStatusEpoch + 1 })
       }
+
       useAppStore.setState({
         runtimeStatusByEnvironmentId: new Map(useAppStore.getState().runtimeStatusByEnvironmentId)
       })
@@ -102,10 +106,12 @@ describe('useUnreadDockBadge', () => {
 
   it('recounts when worktree, tab, or unread references change', () => {
     renderHook(() => useUnreadDockBadge())
+
     const worktree = makeWorktree({
       id: 'repo::unread',
       repoId: 'repo'
     })
+
     const tab = makeTab({ id: 'tab-unread', worktreeId: worktree.id })
 
     act(() => useAppStore.setState({ worktreesByRepo: { repo: [worktree] } }))
@@ -131,12 +137,14 @@ describe('useUnreadDockBadge', () => {
     const worktrees = Array.from({ length: 20 }, (_, index) =>
       makeWorktree({ id: `repo::worktree-${index}`, repoId: 'repo' })
     )
+
     const tabsByWorktree = Object.fromEntries(
       worktrees.map((worktree, index) => [
         worktree.id,
         [makeTab({ id: `tab-${index}`, worktreeId: worktree.id })]
       ])
     )
+
     useAppStore.setState({
       worktreesByRepo: { repo: worktrees },
       tabsByWorktree,
@@ -145,6 +153,7 @@ describe('useUnreadDockBadge', () => {
     let renders = 0
     renderHook(() => {
       renders += 1
+
       return useUnreadDockBadge()
     })
     const rendersAfterMount = renders

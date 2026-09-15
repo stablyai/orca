@@ -18,9 +18,11 @@ export function useNativeChatTypedInsertion(args: {
   const insertTypedText = useCallback(
     (text: string): boolean => {
       const textarea = textareaRef.current
+
       if (!textarea || textarea.disabled) {
         return false
       }
+
       const selectionStart = textarea.selectionStart ?? caret
       const selectionEnd = textarea.selectionEnd ?? selectionStart
       const next = `${draft.slice(0, selectionStart)}${text}${draft.slice(selectionEnd)}`
@@ -33,6 +35,7 @@ export function useNativeChatTypedInsertion(args: {
       requestAnimationFrame(() => {
         textarea.setSelectionRange(nextCaret, nextCaret)
       })
+
       return true
     },
     [caret, draft, setActiveSuggestion, setCaret, setDraft, setHistory, textareaRef]
@@ -40,10 +43,13 @@ export function useNativeChatTypedInsertion(args: {
 
   const focus = useCallback((): boolean => {
     const textarea = textareaRef.current
+
     if (!textarea || textarea.disabled) {
       return false
     }
+
     textarea.focus()
+
     return true
   }, [textareaRef])
 

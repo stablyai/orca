@@ -24,24 +24,29 @@ export function assertBrowserHostReconnectNegotiation(input: BrowserHostLeaseAtt
   ) {
     throw new Error('browser_host_reconnect_protocol_unsupported')
   }
+
   if (input.leaseReconnectProtocolVersion === 1 && input.pageInventoryProtocolVersion !== 1) {
     throw new Error('browser_host_reconnect_inventory_required')
   }
+
   if (
     input.pageReconciliationProtocolVersion !== undefined &&
     input.pageReconciliationProtocolVersion !== 1
   ) {
     throw new Error('browser_host_reconciliation_protocol_unsupported')
   }
+
   if (
     input.pageReconciliationProtocolVersion === 1 &&
     (input.pageCommandProtocolVersion !== 1 || input.pageInventoryProtocolVersion !== 1)
   ) {
     throw new Error('browser_host_reconciliation_protocol_dependencies_required')
   }
+
   if (input.fileChannelProtocolVersion !== undefined && input.fileChannelProtocolVersion !== 1) {
     throw new Error('browser_host_file_channel_protocol_unsupported')
   }
+
   if (input.fileChannelProtocolVersion === 1 && input.pageCommandProtocolVersion !== 1) {
     throw new Error('browser_host_file_channel_command_protocol_required')
   }
@@ -55,6 +60,7 @@ export function createBrowserHostLeaseState(options: {
   pageInventory: readonly BrowserClientHostedPageInventory[] | undefined
 }): BrowserHostLeaseState {
   const { input } = options
+
   const state: BrowserHostLeaseState = {
     token: Symbol(input.browserHostClientId),
     connectionToken: Symbol(input.connectionId),
@@ -85,6 +91,7 @@ export function createBrowserHostLeaseState(options: {
     routes: new Set(),
     executionHostGrants: new BrowserExecutionHostGrantRegistry()
   }
+
   if (input.pageCommandProtocolVersion) {
     state.commandLedger = new BrowserHostCommandLedger({
       authority: {
@@ -99,5 +106,6 @@ export function createBrowserHostLeaseState(options: {
       }
     })
   }
+
   return state
 }

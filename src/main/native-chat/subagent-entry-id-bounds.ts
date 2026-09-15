@@ -21,7 +21,9 @@ export function boundSubagentEntryId(id: string): string {
   if (id.length <= MAX_SUBAGENT_ENTRY_ID_CHARS) {
     return id
   }
+
   const digest = createHash('sha256').update(id, 'utf8').digest('base64url').slice(0, DIGEST_CHARS)
   const suffix = `…#${digest}`
+
   return `${id.slice(0, MAX_SUBAGENT_ENTRY_ID_CHARS - suffix.length)}${suffix}`
 }

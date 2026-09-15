@@ -45,6 +45,7 @@ describe('createShutdownCheckpointGuard', () => {
     const persist = vi.fn().mockImplementationOnce(() => {
       throw new Error('disk full')
     })
+
     const guard = createShutdownCheckpointGuard(persist)
 
     expect(guard.persistOnce()).toBe(false)
@@ -55,8 +56,10 @@ describe('createShutdownCheckpointGuard', () => {
 
   it('publishes the failure cause and records a crash breadcrumb (STA-5505)', () => {
     const recordBreadcrumb = vi.fn()
+
     ;(window as unknown as { api: unknown }).api = { crashReports: { recordBreadcrumb } }
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const guard = createShutdownCheckpointGuard(() => {
       throw new Error('sendSync payload rejected')
     })
@@ -72,6 +75,7 @@ describe('createShutdownCheckpointGuard', () => {
 
   it('clears a stale failure cause once a later checkpoint succeeds (STA-5505)', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const guard = createShutdownCheckpointGuard(
       vi.fn().mockImplementationOnce(() => {
         throw new Error('disk full')
@@ -86,6 +90,7 @@ describe('createShutdownCheckpointGuard', () => {
 
   it('keeps failure reporting non-throwing for unstringifiable thrown values', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const guard = createShutdownCheckpointGuard(() => {
       throw Object.create(null)
     })
@@ -98,6 +103,7 @@ describe('createShutdownCheckpointGuard', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const error = new Error('placeholder')
     error.message = ''
+
     const guard = createShutdownCheckpointGuard(() => {
       throw error
     })
@@ -127,9 +133,11 @@ describe('createShutdownCheckpointGuard', () => {
   it('reports checkpoint failure separately from the unload verdict', () => {
     const eventTarget = new EventTarget()
     const failed = vi.fn()
+
     const guard = createShutdownCheckpointGuard(() => {
       throw new Error('invalid session')
     })
+
     eventTarget.addEventListener(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT, failed)
     eventTarget.addEventListener('beforeunload', createShutdownCheckpointBeforeUnloadHandler(guard))
 
@@ -156,9 +164,11 @@ describe('createShutdownCheckpointGuard', () => {
 
   it('cancels unload when persistence fails and remains retryable', () => {
     const eventTarget = new EventTarget()
+
     const persist = vi.fn().mockImplementationOnce(() => {
       throw new Error('disk full')
     })
+
     const guard = createShutdownCheckpointGuard(persist)
     const checkpoint = createShutdownCheckpointBeforeUnloadHandler(guard)
     eventTarget.addEventListener('beforeunload', checkpoint)
@@ -173,9 +183,11 @@ describe('createShutdownCheckpointGuard', () => {
     const eventTarget = new EventTarget()
     const persist = vi.fn()
     const guard = createShutdownCheckpointGuard(persist)
+
     const preventReload = (event: Event): void => {
       preventUnloadAndScheduleShutdownCheckpointReset(event, eventTarget)
     }
+
     eventTarget.addEventListener('beforeunload', preventReload)
     eventTarget.addEventListener('beforeunload', createShutdownCheckpointBeforeUnloadHandler(guard))
     eventTarget.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, guard.abandonAttempt)
@@ -193,6 +205,7 @@ describe('createShutdownCheckpointGuard', () => {
       join(process.cwd(), 'src/renderer/src/components/use-terminal-editor-close-foundation.ts'),
       'utf8'
     )
+
     const closeStart = source.indexOf('const confirmNativeWindowClose = useCallback(() => {')
     const closeEnd = source.indexOf('window.api.ui.confirmWindowClose()', closeStart)
     expect(closeStart).toBeGreaterThanOrEqual(0)
@@ -209,9 +222,11 @@ describe('createShutdownCheckpointGuard', () => {
       join(process.cwd(), 'src/renderer/src/components/use-terminal-window-lifecycle.ts'),
       'utf8'
     )
+
     const dirtyGuardStart = source.indexOf(
       'const dirtyFiles = useAppStore.getState().openFiles.filter((file) => file.isDirty)'
     )
+
     const dirtyGuardEnd = source.indexOf("window.addEventListener('beforeunload', handler)")
     expect(dirtyGuardStart).toBeGreaterThanOrEqual(0)
     expect(dirtyGuardEnd).toBeGreaterThan(dirtyGuardStart)

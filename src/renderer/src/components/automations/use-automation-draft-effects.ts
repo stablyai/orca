@@ -27,6 +27,7 @@ export function useAutomationDraftEffects({
   pageRefresh: AutomationsPageRefresh
 }) {
   const { repos, worktreesByRepo } = store
+
   const {
     draft,
     setDraft,
@@ -38,11 +39,13 @@ export function useAutomationDraftEffects({
     setupDecisionTouchedRef,
     setCreateTarget
   } = local
+
   const {
     loadAutomationYamlHooksForRepo,
     getDraftSetupDecisionDefault,
     getDraftSetupDecisionDefaultSignature
   } = setup
+
   const { createDestinationHostId } = destination
   const { dialogWorktrees } = destinationForm
   const { getDefaultTarget } = pageRefresh
@@ -50,9 +53,11 @@ export function useAutomationDraftEffects({
   useEffect(() => {
     if (!draft.projectId && editingAutomationId === null) {
       const target = getDefaultTarget()
+
       if (!target.projectId) {
         return
       }
+
       setDraft((current) => ({
         ...current,
         projectId: target.projectId,
@@ -64,7 +69,9 @@ export function useAutomationDraftEffects({
     if (!draft.projectId) {
       return
     }
+
     const defaultWorktree = getDefaultWorktree(dialogWorktrees)
+
     if (!draft.workspaceId && defaultWorktree) {
       setDraft((current) => ({ ...current, workspaceId: defaultWorktree.id }))
     }
@@ -78,6 +85,7 @@ export function useAutomationDraftEffects({
     ) {
       return
     }
+
     void loadAutomationYamlHooksForRepo(draft.projectId, createDestinationHostId)
   }, [
     createOpen,
@@ -92,24 +100,31 @@ export function useAutomationDraftEffects({
       setupDecisionPolicyDefaultRef.current = undefined
       setupDecisionDefaultSignatureRef.current = null
       setupDecisionTouchedRef.current = false
+
       return
     }
+
     const nextDefault = getDraftSetupDecisionDefault(draft)
     const nextSignature = getDraftSetupDecisionDefaultSignature(draft)
+
     if (setupDecisionDefaultSignatureRef.current !== nextSignature) {
       setupDecisionDefaultSignatureRef.current = nextSignature
       setupDecisionTouchedRef.current = false
     }
+
     const previousDefault = setupDecisionPolicyDefaultRef.current
     setupDecisionPolicyDefaultRef.current = nextDefault
+
     const shouldApplyPolicyDefault =
       !setupDecisionTouchedRef.current &&
       (nextDefault === undefined ||
         draft.setupDecision === undefined ||
         draft.setupDecision === previousDefault)
+
     if (!shouldApplyPolicyDefault || draft.setupDecision === nextDefault) {
       return
     }
+
     setDraft((current) => ({ ...current, setupDecision: nextDefault }))
   }, [
     createOpen,
@@ -139,15 +154,19 @@ export function useAutomationDraftEffects({
     },
     [setDraft]
   )
+
   const handleCreateTargetChange = useCallback(
     (target: AutomationCreateTarget): void => {
       setCreateTarget(target)
+
       if (target !== 'hermes') {
         return
       }
+
       const localRepos = getAutomationCreateRepos(repos, { kind: 'local' })
       setDraft((current) => {
         const currentRepo = repos.find((repo) => repo.id === current.projectId)
+
         const currentRepoIsLocal =
           currentRepo !== undefined &&
           localRepos.some(
@@ -155,10 +174,13 @@ export function useAutomationDraftEffects({
               repo.id === currentRepo.id &&
               (repo.connectionId ?? null) === (currentRepo.connectionId ?? null)
           )
+
         const nextRepo = currentRepoIsLocal ? currentRepo : localRepos[0]
+
         const nextWorkspace = nextRepo
           ? getDefaultWorktree(worktreesByRepo[nextRepo.id] ?? [])
           : null
+
         return {
           ...current,
           agentId: 'hermes',

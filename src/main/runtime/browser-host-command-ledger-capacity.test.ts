@@ -20,15 +20,18 @@ describe('BrowserHostCommandLedger capacity and snapshots', () => {
       maxCachedResults: 2,
       maxCachedResultsPerPage: 1
     })
+
     ledger.attach(vi.fn())
     const first = issueCreate(ledger, 'page-a', 1)
     ledger.settle(resultParams(first.event, { status: 'completed' }))
     await first.result
+
     const second = ledger.issue({
       browserPageId: 'page-a',
       pageHostGeneration: 1,
       command: { type: 'navigate', url: 'https://remote.internal/a' }
     })
+
     ledger.settle(resultParams(second.event, { status: 'completed' }))
     await second.result
 
@@ -55,18 +58,22 @@ describe('BrowserHostCommandLedger capacity and snapshots', () => {
     const mutableAuthority = { ...authority }
     const ledger = new BrowserHostCommandLedger({ authority: mutableAuthority })
     ledger.attach(vi.fn())
+
     const command = {
       type: 'createPage' as const,
       browserProfileId: 'default',
       executionHostKey: 'host-key-original'
     }
+
     const issued = ledger.issue({ browserPageId: 'page-a', pageHostGeneration: 1, command })
     mutableAuthority.authorityEpoch = 'epoch-b'
     command.executionHostKey = 'host-key-mutated'
+
     const result: BrowserClientHostCommandResult = {
       status: 'failed',
       errorCode: 'original'
     }
+
     ledger.settle(resultParams(issued.event, result))
     result.errorCode = 'mutated'
 
@@ -82,6 +89,7 @@ describe('BrowserHostCommandLedger capacity and snapshots', () => {
       .mockImplementationOnce(() => {
         throw new Error('transport closed')
       })
+
     const ledger = new BrowserHostCommandLedger({ authority })
     ledger.attach(delivery)
     const first = issueCreate(ledger, 'page-a', 1)
@@ -121,6 +129,7 @@ describe('BrowserHostCommandLedger capacity and snapshots', () => {
     const created = issueCreate(ledger, 'page-a', 1)
     ledger.settle(resultParams(created.event, { status: 'completed' }))
     await created.result
+
     const closed = ledger.issue({
       browserPageId: 'page-a',
       pageHostGeneration: 1,
@@ -135,6 +144,7 @@ describe('BrowserHostCommandLedger capacity and snapshots', () => {
         }
       }
     })
+
     ledger.settle(resultParams(closed.event, { status: 'completed' }))
     await closed.result
 

@@ -30,6 +30,7 @@ describe('findRichMarkdownTocHeadingTarget', () => {
       <h5>Options</h5>
     `
     const headings = container.querySelectorAll<HTMLElement>('h1, h4, h5')
+
     const items = [
       makeTocItem('intro', 1, 'Intro'),
       makeTocItem('configure', 4, 'Configure'),

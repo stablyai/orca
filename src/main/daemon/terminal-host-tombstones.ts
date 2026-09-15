@@ -10,10 +10,13 @@ export class TerminalHostTombstones {
   record(sessionId: string): void {
     this.killed.delete(sessionId)
     this.killed.set(sessionId, Date.now())
+
     if (this.killed.size <= this.capacity) {
       return
     }
+
     const oldest = this.killed.keys().next().value
+
     if (oldest) {
       this.killed.delete(oldest)
     }

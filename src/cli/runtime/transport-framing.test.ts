@@ -5,7 +5,9 @@ import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { sendRequest } from './transport'
 
 const { createConnection } = vi.hoisted(() => ({ createConnection: vi.fn() }))
+
 vi.mock('node:net', () => ({ createConnection }))
+
 vi.mock('node:crypto', () => ({ randomUUID: () => 'request-1' }))
 
 const metadata: RuntimeMetadata = {
@@ -15,6 +17,7 @@ const metadata: RuntimeMetadata = {
   authToken: 'token',
   startedAt: 1
 }
+
 const reply = (result: unknown) =>
   `${JSON.stringify({ id: 'request-1', ok: true, result, _meta: { runtimeId: 'runtime-1' } })}\n`
 
@@ -24,12 +27,14 @@ class TestSocket extends EventEmitter {
   end = vi.fn()
   destroy = vi.fn()
 }
+
 let socket: TestSocket
 
 beforeEach(() => {
   socket = new TestSocket()
   createConnection.mockReturnValue(socket)
 })
+
 afterEach(() => {
   vi.restoreAllMocks()
   vi.useRealTimers()
@@ -42,9 +47,11 @@ describe('CLI runtime response framing', () => {
       const result = { data: '界😀'.repeat(10000) }
       const encoded = reply(result)
       const pending = sendRequest(metadata, 'terminal.read', {}, 30000)
+
       for (let offset = 0; offset < encoded.length; offset += size) {
         socket.emit('data', encoded.slice(offset, offset + size))
       }
+
       await expect(pending).resolves.toMatchObject({ result })
       expect(socket.setEncoding).toHaveBeenCalledExactlyOnceWith('utf8')
       expect(socket.end).toHaveBeenCalledOnce()
@@ -54,9 +61,11 @@ describe('CLI runtime response framing', () => {
   it('accepts Unicode split across socket bytes using the existing UTF-8 decoder', async () => {
     const pending = sendRequest(metadata, 'terminal.read', {}, 30000)
     const decoder = new StringDecoder('utf8')
+
     for (const byte of Buffer.from(reply({ data: '界😀é' }))) {
       socket.emit('data', decoder.write(Buffer.from([byte])))
     }
+
     socket.emit('data', decoder.end())
     await expect(pending).resolves.toMatchObject({ result: { data: '界😀é' } })
   })
@@ -66,14 +75,17 @@ describe('CLI runtime response framing', () => {
     const pending = sendRequest(metadata, 'terminal.read', {}, 30000)
     const originalIndexOf = String.prototype.indexOf
     let searchedCharacters = 0
+
     const search = vi
       .spyOn(String.prototype, 'indexOf')
       .mockImplementation(function (this: string, value, position) {
         if (value === '\n') {
           searchedCharacters += this.length - (position ?? 0)
         }
+
         return originalIndexOf.call(this, value, position)
       })
+
     try {
       for (let offset = 0; offset < encoded.length; offset += 256) {
         socket.emit('data', encoded.slice(offset, offset + 256))
@@ -81,6 +93,7 @@ describe('CLI runtime response framing', () => {
     } finally {
       search.mockRestore()
     }
+
     await expect(pending).resolves.toMatchObject({ ok: true })
     expect(searchedCharacters).toBe(encoded.length)
   })

@@ -10,24 +10,31 @@ export function getRuntimeFeatureInteractionId(
   if (method === 'browser.profileImportFromBrowser') {
     return hasBooleanResult(result, 'ok') ? 'cookie-import' : null
   }
+
   if (method === 'browser.profileClearDefaultCookies') {
     return hasBooleanResult(result, 'cleared') ? 'cookie-import' : null
   }
+
   if (method === 'browser.screencast.unsubscribe') {
     return null
   }
+
   if (method.startsWith('browser.') && isBrowserPaneUiRuntimeRpcParams(rawParams)) {
     return null
   }
+
   if (method.startsWith('browser.') && !method.startsWith('browser.profile')) {
     return 'agent-browser-use'
   }
+
   if (method.startsWith('emulator.')) {
     return null
   }
+
   if (method === 'computer.permissions') {
     return 'computer-use-setup'
   }
+
   if (
     method.startsWith('computer.') &&
     method !== 'computer.capabilities' &&
@@ -35,6 +42,7 @@ export function getRuntimeFeatureInteractionId(
   ) {
     return 'computer-use'
   }
+
   return method.startsWith('orchestration.') ? 'agent-orchestration' : null
 }
 
@@ -46,9 +54,11 @@ export function recordRuntimeFeatureInteraction(
   rawParams?: unknown
 ): void {
   const id = getRuntimeFeatureInteractionId(method, result, rawParams)
+
   if (!id || alreadyRecorded?.has(id)) {
     return
   }
+
   try {
     runtime.recordFeatureInteraction(id)
     alreadyRecorded?.add(id)

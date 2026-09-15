@@ -24,19 +24,24 @@ import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 export const VM_HANDLERS: Record<string, CommandHandler> = {
   'vm recipe doctor': async ({ flags, cwd, json }) => {
     const recipeId = getStringFlag(flags, 'recipe-id')
+
     if (!recipeId) {
       throw new RuntimeClientError('invalid_argument', 'Missing recipe id.')
     }
+
     const repoPath = getStringFlag(flags, 'repo-path') ?? cwd
     const shouldProvision = flags.get('provision') === true || flags.get('connect') === true
+
     const result = shouldProvision
       ? await doctorRecipeWithProvision(repoPath, recipeId)
       : doctorRecipe(repoPath, recipeId)
+
     if (json) {
       console.log(JSON.stringify(result, null, 2))
     } else {
       console.log(formatDoctorResult(result))
     }
+
     if (!result.ok) {
       process.exitCode = 1
     }
@@ -45,6 +50,7 @@ export const VM_HANDLERS: Record<string, CommandHandler> = {
 
 function doctorRecipe(repoPath: string, recipeId: string): DoctorResult {
   const yamlPath = join(repoPath, 'orca.yaml')
+
   if (!existsSync(yamlPath)) {
     return {
       recipeId,
@@ -62,18 +68,21 @@ function doctorRecipe(repoPath: string, recipeId: string): DoctorResult {
   }
 
   const hooks = parseOrcaYaml(readTextFile(yamlPath))
+
   const parseCheck: EphemeralVmRecipeDoctorCheck = {
     id: 'orca_yaml.parse',
     status: hooks ? 'pass' : 'fail',
     message: hooks ? 'orca.yaml parsed successfully.' : 'orca.yaml has no supported Orca config.',
     ...(hooks ? {} : { remediation: 'Add an environmentRecipes entry to orca.yaml.' })
   }
+
   const result = doctorEphemeralVmRecipe({
     repoPath,
     recipeId,
     recipes: hooks?.environmentRecipes ?? [],
     localExecutionSupported: true
   })
+
   return {
     ...result,
     ok: parseCheck.status !== 'fail' && result.ok,
@@ -111,11 +120,14 @@ const MAX_TRANSCRIPT_STREAM_BYTES = 16_000
 // failure itself (tail) — rather than only the last 500 chars.
 function capTranscriptStream(value: string): string {
   const redacted = redactEphemeralVmRecipeDiagnosticText(value)
+
   if (redacted.length <= MAX_TRANSCRIPT_STREAM_BYTES) {
     return redacted
   }
+
   const half = Math.floor(MAX_TRANSCRIPT_STREAM_BYTES / 2)
   const omitted = redacted.length - half * 2
+
   return `${redacted.slice(0, half)}\n…[${omitted} chars omitted]…\n${redacted.slice(-half)}`
 }
 
@@ -124,6 +136,7 @@ async function doctorRecipeWithProvision(
   recipeId: string
 ): Promise<DoctorResult> {
   const baseline = doctorRecipe(repoPath, recipeId)
+
   if (!baseline.ok) {
     return {
       ...baseline,
@@ -140,11 +153,13 @@ async function doctorRecipeWithProvision(
   }
 
   const recipe = loadRecipe(repoPath, recipeId)
+
   if (!recipe) {
     return baseline
   }
 
   const start = await runEphemeralVmRecipeStart({ repoPath, recipe })
+
   if (!start.ok) {
     return {
       ...baseline,
@@ -185,6 +200,7 @@ async function doctorRecipeWithProvision(
       message: `Recipe returned projectRoot: ${getEphemeralVmRecipeResultProjectRoot(start.result)}`
     }
   ]
+
   for (const warning of getEphemeralVmRecipeResultWarnings(start.result)) {
     checks.push({
       id: warning.id,
@@ -200,6 +216,7 @@ async function doctorRecipeWithProvision(
     context: start.context,
     recipeResult: start.result
   })
+
   if (cleanup.skipped) {
     checks.push({
       id: 'recipe.destroy.run',
@@ -255,6 +272,7 @@ function buildProvisionFailureRemediation(stderr: string, stdout: string): strin
   const redactedStderr = redactEphemeralVmRecipeDiagnosticText(stderr).trim()
   const redactedStdout = redactEphemeralVmRecipeDiagnosticText(stdout).trim()
   const detail = redactedStderr || redactedStdout
+
   return detail
     ? `Check recipe output. Last captured output: ${detail.slice(-500)}`
     : 'Check recipe stderr and ensure stdout contains the VM recipe result JSON.'
@@ -262,6 +280,7 @@ function buildProvisionFailureRemediation(stderr: string, stdout: string): strin
 
 function loadRecipe(repoPath: string, recipeId: string): OrcaVmRecipe | null {
   const hooks = parseOrcaYaml(readTextFile(join(repoPath, 'orca.yaml')))
+
   return hooks?.environmentRecipes?.find((entry) => entry.id === recipeId) ?? null
 }
 
@@ -272,33 +291,42 @@ function formatDoctorResult(result: DoctorResult): string {
     `ok: ${result.ok}`,
     ...result.checks.map((check) => {
       const suffix = check.remediation ? `\n  next: ${check.remediation}` : ''
+
       return `${check.status.toUpperCase()} ${check.id}: ${check.message}${suffix}`
     })
   ]
+
   if (result.provisionTranscript) {
     lines.push(...formatTranscriptStage('create', result.provisionTranscript.provision))
+
     if (result.provisionTranscript.destroy) {
       lines.push(...formatTranscriptStage('destroy', result.provisionTranscript.destroy))
     }
   }
+
   return lines.join('\n')
 }
 
 function formatTranscriptStage(label: string, stage: ProvisionStageTranscript): string[] {
   const out = [`--- ${label} (exit ${stage.exitCode ?? stage.signal ?? 'unknown'}) ---`]
+
   if (stage.parseError) {
     out.push(`parseError: ${stage.parseError}`)
   }
+
   if (stage.stdout.trim()) {
     out.push(`stdout:\n${stage.stdout}`)
   }
+
   if (stage.stderr.trim()) {
     out.push(`stderr:\n${stage.stderr}`)
   }
+
   return out
 }
 
 function getStringFlag(flags: Map<string, string | boolean>, name: string): string | null {
   const value = flags.get(name)
+
   return typeof value === 'string' && value.length > 0 ? value : null
 }

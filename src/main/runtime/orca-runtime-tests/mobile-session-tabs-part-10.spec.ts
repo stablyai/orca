@@ -14,11 +14,13 @@ describe('OrcaRuntimeService', () => {
     const layout = makeHeadlessTerminalLayout({
       [HEADLESS_LEAF_ID]: 'pty-a'
     })
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         terminalLayoutsByTabId: { 'host-tab': layout }
       })
     )
+
     const spawn = vi.fn().mockResolvedValue({ id: 'unexpected-pty' })
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({
@@ -45,6 +47,7 @@ describe('OrcaRuntimeService', () => {
       [HEADLESS_LEAF_ID]: 'pty-a',
       [HEADLESS_SECOND_LEAF_ID]: 'pty-b'
     })
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
@@ -64,6 +67,7 @@ describe('OrcaRuntimeService', () => {
         terminalLayoutsByTabId: { 'host-tab': layout }
       })
     )
+
     const kill = vi.fn(() => true)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({
@@ -114,6 +118,7 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setPtyController({
       write: () => true,
@@ -131,6 +136,7 @@ describe('OrcaRuntimeService', () => {
 
   it('tears down a serve-owned headless tab on close while a renderer is attached so it cannot resurrect', async () => {
     const servePtyId = 'serve-headless-1'
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
@@ -152,6 +158,7 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+
     const kill = vi.fn(() => true)
     const closeTerminal = vi.fn()
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -198,6 +205,7 @@ describe('OrcaRuntimeService', () => {
   it('delegates a renderer-owned daemon-session (worktreeId@@uuid) local terminal to the renderer', async () => {
     // Why: the daemon mints <worktreeId>@@<uuid> for ordinary renderer-owned terminals too, so id shape alone must not mark it runtime-owned (regression: killed normal locals).
     const daemonPtyId = `${TEST_WORKTREE_ID}@@d9213842`
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
@@ -219,6 +227,7 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+
     const kill = vi.fn(() => true)
     const closeTerminal = vi.fn()
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -264,6 +273,7 @@ describe('OrcaRuntimeService', () => {
   it('tears down a leaked daemon-session headless tab the renderer never published', async () => {
     // Why: same <worktreeId>@@<uuid> id but absent from the renderer graph — a real leak that must be de-persisted so syncMobileSessionTabs can't resurrect it.
     const daemonPtyId = `${TEST_WORKTREE_ID}@@77e25ca0`
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
@@ -285,6 +295,7 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+
     const kill = vi.fn(() => true)
     const closeTerminal = vi.fn()
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -309,6 +320,7 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
+
     const kill = vi.fn(() => true)
     const closeTerminal = vi.fn()
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -368,6 +380,7 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
+
     const kill = vi.fn(() => true)
     const closeTerminal = vi.fn()
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -431,6 +444,7 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
+
     const kill = vi.fn(() => true)
     const closeTerminal = vi.fn()
     const runtime = new OrcaRuntimeService(runtimeStore as never)
@@ -457,6 +471,7 @@ describe('OrcaRuntimeService', () => {
       [HEADLESS_LEAF_ID]: 'serve-left',
       [HEADLESS_SECOND_LEAF_ID]: 'serve-right'
     })
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
@@ -476,6 +491,7 @@ describe('OrcaRuntimeService', () => {
         terminalLayoutsByTabId: { 'host-tab': layout }
       })
     )
+
     const kill = vi.fn(() => true)
     const closeTerminal = vi.fn()
     const runtime = new OrcaRuntimeService(runtimeStore as never)

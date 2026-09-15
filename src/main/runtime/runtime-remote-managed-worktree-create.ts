@@ -86,14 +86,17 @@ export async function createRuntimeRemoteManagedWorktree(
 
   let sequencedStartup = args.startup
   let wrappedSetupCommandStr: string | undefined
+
   if (args.startup && result.setup?.waitForAgentStartup === true) {
     const platform = setupPlatform(result.setup)
+
     const sequenced = createSequencedSetupAgentCommands({
       runnerScriptPath: result.setup.runnerScriptPath,
       startupCommand: args.startup.command,
       platform,
       shell: result.setup.shell
     })
+
     sequencedStartup = {
       ...args.startup,
       command: sequenced.startupCommand,
@@ -105,9 +108,11 @@ export async function createRuntimeRemoteManagedWorktree(
   if (sequencedStartup && deps.canSpawn()) {
     try {
       const startupTrustAgent = args.startupDraftPaste?.agent ?? args.createdWithAgent
+
       if (startupTrustAgent) {
         await deps.markTrusted(startupTrustAgent, repo.connectionId!, result.worktree.path)
       }
+
       const terminal = await deps.createTerminal(`path:${result.worktree.path}`, {
         command: sequencedStartup.command,
         ...(result.setup && args.startup
@@ -121,12 +126,15 @@ export async function createRuntimeRemoteManagedWorktree(
         telemetry: sequencedStartup.telemetry,
         ...ownerSurfacing(shouldActivate)
       })
+
       if (args.startupDraftPaste) {
         deps.pasteDraft(terminal.handle, args.startupDraftPaste)
       }
+
       if (args.startupFollowup) {
         deps.sendFollowup(terminal.handle, args.startupFollowup)
       }
+
       didSpawnStartup = true
       startupTerminalHandle = terminal.handle
       startupTerminalTabId = terminal.tabId ?? null
@@ -143,6 +151,7 @@ export async function createRuntimeRemoteManagedWorktree(
   if (shouldActivate) {
     const runtimeWillProvisionTerminals =
       didSpawnStartup && Boolean(result.setup || result.defaultTabs)
+
     if (runtimeWillProvisionTerminals) {
       // Why: remote/mobile task creates spawn the agent terminal in runtime,
       // so renderer activation may not materialize setup/default tabs. Await so
@@ -161,9 +170,11 @@ export async function createRuntimeRemoteManagedWorktree(
         // remote Setup tab runs the same script the sequenced agent waits on.
         ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {})
       })
+
       didSpawnSetup = provisioned.setupSpawned
       setupTerminalHandle = provisioned.setupTerminalHandle
     }
+
     // Why: omit setup from activation when runtime spawned it; on spawn
     // failure fall through with the wrapped command so renderer retries.
     const activationSetup = didSpawnSetup
@@ -176,7 +187,9 @@ export async function createRuntimeRemoteManagedWorktree(
               : {})
           }
         : undefined
+
     const activationDefaultTabs = runtimeWillProvisionTerminals ? undefined : result.defaultTabs
+
     if (args.startup && !didSpawnStartup) {
       deps.activate(
         repo.id,
@@ -210,6 +223,7 @@ export async function createRuntimeRemoteManagedWorktree(
       ...(wrappedSetupCommandStr ? { wrappedSetupCommand: wrappedSetupCommandStr } : {}),
       surfaceOwner: false
     })
+
     // Why: runtime owns setup spawning here, so omit setup from the RPC result
     // to keep the headless/mobile caller from launching it a second time.
     if (args.awaitTerminalProvisioning) {
@@ -218,6 +232,7 @@ export async function createRuntimeRemoteManagedWorktree(
       setupTerminalHandle = provisioned.setupTerminalHandle
     } else {
       void provisioning
+
       if (result.setup) {
         didSpawnSetup = true
       }

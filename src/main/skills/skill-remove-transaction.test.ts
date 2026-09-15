@@ -33,12 +33,14 @@ async function installedFixture(): Promise<{
     join(source, 'SKILL.md'),
     '---\nname: remove-skill\ndescription: Remove\n---\n\n# Remove\n'
   )
+
   const archive = await createSkillPackageArchive({
     sourceDirectory: source,
     archivePath: join(root, 'package.tar.gz'),
     packageId: 'package_1',
     versionId: 'version_1'
   })
+
   const destinationRoot = join(root, 'skills')
   const stateDirectory = join(root, 'state')
   await installLocalSkillPackage({
@@ -52,9 +54,11 @@ async function installedFixture(): Promise<{
   })
   const canonicalPath = join(destinationRoot, 'remove-skill')
   const receipt = await readSkillInstallReceipt(stateDirectory, canonicalPath)
+
   if (!receipt) {
     throw new Error('fixture receipt missing')
   }
+
   return { root, canonicalPath, stateDirectory, receipt }
 }
 
@@ -70,6 +74,7 @@ describe('skill removal recovery', () => {
     await writeFile(join(outside, 'keep.txt'), 'keep')
     const sourcePath = outside
     const backupPath = join(dirname(sourcePath), `.${basename(sourcePath)}.orca-remove-backup-x`)
+
     const journal: SkillRemovalJournalV1 = {
       schemaVersion: 1,
       operation: 'remove',
@@ -103,6 +108,7 @@ describe('skill removal recovery', () => {
       },
       allowedProviderRoots: []
     }
+
     await writeSkillStateFile(
       skillRemovalJournalPath(fixture.stateDirectory, fixture.canonicalPath),
       journal
@@ -116,12 +122,15 @@ describe('skill removal recovery', () => {
 
   it('preserves a moved backup whose bytes changed before recovery', async () => {
     const fixture = await installedFixture()
+
     const backupPath = join(
       dirname(fixture.canonicalPath),
       `.${basename(fixture.canonicalPath)}.orca-remove-backup-x`
     )
+
     await rename(fixture.canonicalPath, backupPath)
     await writeFile(join(backupPath, 'local.md'), 'changed')
+
     const journal: SkillRemovalJournalV1 = {
       schemaVersion: 1,
       operation: 'remove',
@@ -144,6 +153,7 @@ describe('skill removal recovery', () => {
       receipt: fixture.receipt,
       allowedProviderRoots: []
     }
+
     await writeSkillStateFile(
       skillRemovalJournalPath(fixture.stateDirectory, fixture.canonicalPath),
       journal
@@ -211,11 +221,13 @@ describe('skill removal recovery', () => {
     const canonicalExists = await readFile(join(fixture.canonicalPath, 'SKILL.md'), 'utf8')
       .then(() => true)
       .catch(() => false)
+
     const receipt = await readSkillInstallReceipt(fixture.stateDirectory, fixture.canonicalPath)
     expect(Boolean(receipt)).toBe(canonicalExists)
     await expect(
       readFile(skillRemovalJournalPath(fixture.stateDirectory, fixture.canonicalPath))
     ).rejects.toMatchObject({ code: 'ENOENT' })
+
     if (canonicalExists) {
       await expect(
         removeLocalSharedSkill({

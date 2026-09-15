@@ -79,9 +79,11 @@ describe('hostedReviewCache stays bounded on the PR-refresh write path', () => {
   it('caps hostedReviewCache when driven past the cap by the real writer', () => {
     const store = createTestStore()
     const total = MAX_ENTRIES + 150
+
     for (let i = 0; i < total; i++) {
       store.getState().applyGitHubPRRefreshEvent(foundEvent(`branch-${i}`, i + 1))
     }
+
     const cache = store.getState().hostedReviewCache
     expect(Object.keys(cache).length).toBeLessThanOrEqual(MAX_ENTRIES)
     // Newest survives, oldest is evicted.
@@ -91,9 +93,11 @@ describe('hostedReviewCache stays bounded on the PR-refresh write path', () => {
 
   it('keeps every entry while under the cap', () => {
     const store = createTestStore()
+
     for (let i = 0; i < 10; i++) {
       store.getState().applyGitHubPRRefreshEvent(foundEvent(`kept-${i}`, i + 1))
     }
+
     const cache = store.getState().hostedReviewCache
     expect(Object.keys(cache)).toHaveLength(10)
     expect(cache['local::/repo::kept-0']).toBeDefined()

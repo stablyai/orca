@@ -14,6 +14,7 @@ import { LoaderCircle } from 'lucide-react'
 import { TaskPageGitHubRows } from './Rows'
 import { PaginationBar } from '../PaginationBar'
 import { supersedeGitHubListScrollRestore } from '../../task-page-github-list-scroll-restore'
+
 export function TaskPageGitHubList({
   model
 }: {
@@ -50,6 +51,7 @@ export function TaskPageGitHubList({
     totalPages,
     handleLoadNextPage
   } = model
+
   return (
     // Why: bottom of the joined GitHub list card — flush under the filter
     // chrome (no gap, no top border/radius) so toolbar + table read as one.
@@ -63,10 +65,13 @@ export function TaskPageGitHubList({
         }}
         onScroll={(event) => {
           const state = useAppStore.getState()
+
           if (state.activeView !== 'tasks' || state.taskPageData.openGitHubWorkItem) {
             return
           }
+
           const scrollTop = event.currentTarget.scrollTop
+
           // Why: a restore's own write must not be saved as the user's position, but a real
           // user scroll has to supersede a pending restore or saving stays suppressed.
           if (
@@ -78,6 +83,7 @@ export function TaskPageGitHubList({
           ) {
             return
           }
+
           githubListScrollTopRef.current = scrollTop
           taskListPositionRef.current = {
             contextKey: githubResumeContextKey,
@@ -148,6 +154,7 @@ export function TaskPageGitHubList({
           .filter((s) => s.error)
           .map((s) => {
             const err = s.error!
+
             // Why: Retry re-fetches force=true via the shared refresh nonce, invalidating any still-failing in-flight request first.
             return (
               <div
@@ -311,9 +318,11 @@ export function TaskPageGitHubList({
             onPageChange={(page) => {
               pendingGithubScrollRestoreRef.current = null
               githubListScrollTopRef.current = 0
+
               if (githubListScrollRef.current) {
                 githubListScrollRef.current.scrollTop = 0
               }
+
               if (pages[page] !== null && pages[page] !== undefined) {
                 currentPageRef.current = page
                 setCurrentPage(page)

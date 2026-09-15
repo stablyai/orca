@@ -14,6 +14,7 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
     const returnPreamble = flags.has('return-preamble') ? true : undefined
     // Why: --to is only required for non-dry-run; the RPC handler re-enforces.
     const to = dryRun ? getOptionalStringFlag(flags, 'to') : getRequiredStringFlag(flags, 'to')
+
     const result = await callOrchestrationMutation<{
       dispatch: { id: string; task_id: string; status: string } | null
       injected?: boolean
@@ -29,11 +30,14 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
       returnPreamble,
       devMode: isDevCliInvocation()
     })
+
     printResult(result, json, (value) => {
       if (value.dryRun) {
         return value.preamble ?? ''
       }
+
       const base = `Dispatched ${value.dispatch?.task_id} -> ${value.dispatch?.id} [${value.dispatch?.status}]`
+
       return value.preamble ? `${base}\n\n--- Preamble ---\n${value.preamble}` : base
     })
   }
@@ -42,10 +46,12 @@ export const ORCHESTRATION_DISPATCH_HANDLER: Record<string, CommandHandler> = {
 export const ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration dispatch-show': async ({ flags, client, cwd, json }) => {
     const showPreamble = flags.has('preamble') ? true : undefined
+
     // Why: a preview must embed the same real coordinator handle as an actual dispatch.
     const from = showPreamble
       ? await resolveCoordinatorTerminalHandle(flags, cwd, client)
       : undefined
+
     const result = await client.call<{
       dispatch: { id: string; task_id: string; status: string } | null
       preamble?: string
@@ -55,13 +61,16 @@ export const ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS: Record<string, CommandH
       from,
       devMode: isDevCliInvocation()
     })
+
     printResult(result, json, (value) => {
       if (value.preamble && showPreamble) {
         return value.preamble
       }
+
       if (!value.dispatch) {
         return 'No dispatch context found.'
       }
+
       return `${value.dispatch.id} task=${value.dispatch.task_id} [${value.dispatch.status}]`
     })
   },

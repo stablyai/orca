@@ -33,9 +33,11 @@ vi.mock('./browser-cookie-import', () => ({
   importCookiesFromBrowser: importCookiesFromBrowserMock,
   selectBrowserProfile: vi.fn()
 }))
+
 vi.mock('./browser-route-partition-binding-runtime', () => ({
   currentBrowserRoutePartitionBindingStore: () => bindingStore
 }))
+
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
     getProfile: getProfileMock,
@@ -43,6 +45,7 @@ vi.mock('./browser-session-registry', () => ({
     updateProfileSource: updateProfileSourceMock
   }
 }))
+
 vi.mock('./paired-runtime-browser-client-host-runtime', () => ({
   getPairedRuntimeBrowserClientRouteIdentity: getRouteIdentityMock
 }))
@@ -61,9 +64,13 @@ import {
 } from './browser-route-session-registry'
 
 const orcaProfileId = 'orca-profile-a'
+
 const browserProfileId = 'default'
+
 const authorityConnectionIdentity = 'paired-runtime:authority-a'
+
 const authorityRuntimeId = 'runtime-a'
+
 const storageScope = 'e'.repeat(64)
 
 const authority: BrowserHostLeaseAuthority = {
@@ -87,15 +94,18 @@ async function pagePartition(host: BrowserNetworkExecutionHost): Promise<string>
       close: vi.fn(async () => {})
     })
   })
+
   const route = await routes.retain(
     browserNetworkExecutionHostKey(host),
     new AbortController().signal
   )
+
   const session: BrowserRouteElectronSession = {
     setProxy: vi.fn(async () => {}),
     closeAllConnections: vi.fn(async () => {}),
     resolveProxy: vi.fn(async () => 'SOCKS5 127.0.0.1:43123')
   }
+
   // Why: no derivePartition override — this is the same default derivation a real page gets.
   const sessions = new BrowserRouteSessionRegistry({
     validateProfile: vi.fn(),
@@ -105,6 +115,7 @@ async function pagePartition(host: BrowserNetworkExecutionHost): Promise<string>
     retirePageAuthority: vi.fn(() => true),
     bindingStore: createBrowserRoutePartitionBindingStoreFake()
   })
+
   const handle = await sessions.preparePage({
     identity: {
       orcaProfileId,
@@ -118,10 +129,12 @@ async function pagePartition(host: BrowserNetworkExecutionHost): Promise<string>
     rendererWebContentsId: 11,
     proxyEndpoint: route.proxyEndpoint
   })
+
   const partition = handle.partition
   handle.release()
   await route.release()
   await routes.close()
+
   return partition
 }
 
@@ -152,6 +165,7 @@ async function importPartition(): Promise<string> {
   })
 
   expect(result).toMatchObject({ ok: true })
+
   return importCookiesFromBrowserMock.mock.calls.at(-1)?.[1] as string
 }
 

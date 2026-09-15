@@ -7,6 +7,7 @@ const { spawnMock, terminateMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node:child_process', () => ({ spawn: spawnMock }))
+
 vi.mock('./subprocess-tree-termination', () => ({
   terminateRelaySubprocessTree: terminateMock
 }))
@@ -24,6 +25,7 @@ function createChild(): MockChild {
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
   child.pid = 1234
+
   return child
 }
 
@@ -37,13 +39,16 @@ describe('streamRelayGitStdout', () => {
     const child = createChild()
     spawnMock.mockReturnValue(child)
     let output = ''
+
     const pending = streamRelayGitStdout(['status', '--porcelain=v2'], '/repo', {
       disableOptionalLocks: true,
       onStdout: (chunk) => {
         output += chunk
+
         return output.includes('\n')
       }
     })
+
     const bytes = Buffer.from('? café-😀.txt\n')
     const emojiStart = bytes.indexOf(Buffer.from('😀'))
     child.stdout.emit('data', bytes.subarray(0, emojiStart + 2))
@@ -68,11 +73,13 @@ describe('streamRelayGitStdout', () => {
   it('rejects parser failures after terminating and detaching the child', async () => {
     const child = createChild()
     spawnMock.mockReturnValue(child)
+
     const pending = streamRelayGitStdout(['status'], '/repo', {
       onStdout: () => {
         throw new Error('parser failed')
       }
     })
+
     const rejection = expect(pending).rejects.toThrow('parser failed')
     child.stdout.emit('data', Buffer.from('? file.ts\n'))
 
@@ -87,10 +94,12 @@ describe('streamRelayGitStdout', () => {
     const child = createChild()
     spawnMock.mockReturnValue(child)
     const controller = new AbortController()
+
     const pending = streamRelayGitStdout(['status'], '/repo', {
       signal: controller.signal,
       onStdout: () => {}
     })
+
     const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
     controller.abort()
 
@@ -104,10 +113,12 @@ describe('streamRelayGitStdout', () => {
     child.pid = undefined
     spawnMock.mockReturnValue(child)
     const controller = new AbortController()
+
     const pending = streamRelayGitStdout(['status'], '/repo', {
       signal: controller.signal,
       onStdout: () => {}
     })
+
     const rejection = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
 
     controller.abort()
@@ -120,10 +131,12 @@ describe('streamRelayGitStdout', () => {
   it('bounds stderr and cleans up after command failure', async () => {
     const child = createChild()
     spawnMock.mockReturnValue(child)
+
     const pending = streamRelayGitStdout(['status'], '/repo', {
       maxBuffer: 64,
       onStdout: () => {}
     })
+
     const rejection = expect(pending).rejects.toThrow('git exited with 128: fatal: nope')
     child.stderr.emit('data', Buffer.from('fatal: nope'))
     child.emit('close', 128)

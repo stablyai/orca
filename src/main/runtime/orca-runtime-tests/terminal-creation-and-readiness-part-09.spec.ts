@@ -24,13 +24,16 @@ describe('OrcaRuntimeService', () => {
     expect(terminalB).toBeDefined()
 
     let releaseReveal!: (value: { tabId: string }) => void
+
     const revealGate = new Promise<{ tabId: string }>((resolve) => {
       releaseReveal = resolve
     })
+
     const revealTerminalSession = vi
       .fn()
       .mockImplementationOnce(() => revealGate)
       .mockResolvedValue({ tabId: 'tab-b' })
+
     runtime.setNotifier({ revealTerminalSession } as never)
 
     const first = runtime.focusTerminal(terminalA!.handle)
@@ -52,18 +55,22 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     runtime.registerPty('pty-a', TEST_WORKTREE_ID)
+
     const terminal = (await runtime.listTerminals()).terminals.find(
       (candidate) => candidate.ptyId === 'pty-a'
     )
+
     expect(terminal).toBeDefined()
 
     let releaseReveal!: (value: { tabId: string }) => void
+
     const revealTerminalSession = vi.fn(
       () =>
         new Promise<{ tabId: string }>((resolve) => {
           releaseReveal = resolve
         })
     )
+
     runtime.setNotifier({ revealTerminalSession } as never)
 
     const focus = runtime.focusTerminal(terminal!.handle)
@@ -106,20 +113,26 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     })
+
     const leafTerminal = (await runtime.listTerminals()).terminals.find(
       (terminal) => terminal.tabId === 'tab-leaf'
     )
+
     runtime.registerPty('pty-a', TEST_WORKTREE_ID)
+
     const ptyTerminal = (await runtime.listTerminals()).terminals.find(
       (terminal) => terminal.ptyId === 'pty-a'
     )
+
     expect(ptyTerminal).toBeDefined()
     expect(leafTerminal).toBeDefined()
 
     let releaseReveal!: (value: { tabId: string }) => void
+
     const revealGate = new Promise<{ tabId: string }>((resolve) => {
       releaseReveal = resolve
     })
+
     const focusTerminal = vi.fn()
     const revealTerminalSession = vi.fn(() => revealGate)
     runtime.setNotifier({
@@ -276,6 +289,7 @@ describe('OrcaRuntimeService', () => {
     const secondRead = await runtime.readTerminal(terminal.handle, {
       cursor: Number(firstRead.nextCursor)
     })
+
     expect(secondRead.tail).toEqual([])
     expect(secondRead.nextCursor).toBe('0')
 
@@ -284,6 +298,7 @@ describe('OrcaRuntimeService', () => {
     const thirdRead = await runtime.readTerminal(terminal.handle, {
       cursor: Number(secondRead.nextCursor)
     })
+
     expect(thirdRead.tail).toEqual(['hello', 'world'])
     expect(thirdRead.nextCursor).toBe('2')
   })
@@ -348,6 +363,7 @@ describe('OrcaRuntimeService', () => {
       cursor: Number(firstPage.nextCursor),
       limit: 200
     })
+
     expect(secondPage.tail).toHaveLength(100)
     expect(secondPage.tail[0]).toBe('line-50')
     expect(secondPage.nextCursor).toBe('150')
@@ -384,10 +400,12 @@ describe('OrcaRuntimeService', () => {
 
     const [terminal] = (await runtime.listTerminals()).terminals
     const linePayload = 'x'.repeat(24)
+
     const lines = Array.from(
       { length: 2000 },
       (_, index) => `line-${index.toString().padStart(4, '0')}-${linePayload}`
     )
+
     runtime.onPtyData('pty-1', `${lines.join('\n')}\n`, 100)
 
     const preview = await runtime.readTerminal(terminal.handle)
@@ -402,6 +420,7 @@ describe('OrcaRuntimeService', () => {
     const collected: string[] = []
     let cursor = Number(preview.oldestCursor)
     const latestCursor = Number(preview.latestCursor)
+
     for (let pageIndex = 0; cursor < latestCursor; pageIndex += 1) {
       expect(pageIndex).toBeLessThan(10)
       const page = await runtime.readTerminal(terminal.handle, { cursor, limit: 333 })
@@ -434,9 +453,12 @@ describe('OrcaRuntimeService', () => {
     let shiftCallCount = 0
     Array.prototype.shift = function (...args) {
       shiftCallCount += 1
+
       return originalShift.apply(this, args)
     }
+
     let preview: Awaited<ReturnType<typeof runtime.readTerminal>>
+
     try {
       preview = await runtime.readTerminal(terminal.handle)
     } finally {
@@ -455,6 +477,7 @@ describe('OrcaRuntimeService', () => {
       cols: 80,
       rows: 24
     })
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -513,6 +536,7 @@ describe('OrcaRuntimeService', () => {
       seq: 900,
       source: 'headless'
     })
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -544,6 +568,7 @@ describe('OrcaRuntimeService', () => {
       seq: 900,
       source: 'headless'
     })
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -593,13 +618,16 @@ describe('OrcaRuntimeService', () => {
       source: 'headless'
       alternateScreen: boolean
     }
+
     let resolveSnapshot!: (snapshot: Snapshot) => void
+
     const serializeProviderBuffer = vi.fn(
       () =>
         new Promise<Snapshot>((resolve) => {
           resolveSnapshot = resolve
         })
     )
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,

@@ -20,9 +20,11 @@ export function WorktreeVisibilityScanStatus({
       </p>
     )
   }
+
   if (state !== 'failed') {
     return null
   }
+
   return (
     <div className="flex min-w-0 items-center gap-3" role="alert">
       <p className="min-w-0 flex-1 text-xs text-destructive">

@@ -68,6 +68,7 @@ describe('orchestration setup completion signal', () => {
     // Regression (#6896): a Git Bash terminal with a batch setup script still gets a .cmd
     // runner; observing it must not shell out to bash or type a bare `cmd.exe /c` switch.
     const runnerPath = 'C:\\repo\\.git\\orca\\setup-runner.cmd'
+
     const observed = buildObservedSetupCommand(runnerPath, 'windows', 'token-git-bash-cmd', {
       family: 'posix'
     })

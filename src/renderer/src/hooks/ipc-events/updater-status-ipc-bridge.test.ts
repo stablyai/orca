@@ -29,6 +29,7 @@ describe('registerUpdaterStatusIpcBridge', () => {
         updater: {
           getStatus: () => {
             order.push('snapshot')
+
             return new Promise<{ state: string }>((resolve) => {
               resolveSnapshot = resolve
             })
@@ -36,6 +37,7 @@ describe('registerUpdaterStatusIpcBridge', () => {
           onStatus: (listener: (status: { state: string }) => void) => {
             order.push('listener')
             statusListener = listener
+
             return statusCleanup
           },
           onClearDismissal: () => dismissalCleanup

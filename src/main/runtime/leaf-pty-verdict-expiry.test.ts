@@ -19,6 +19,7 @@ function createRuntime(
     probePtyLiveness
   })
   const internals = runtime as unknown as VerdictInternals
+
   return {
     runtime,
     probe: probePtyLiveness,
@@ -33,9 +34,11 @@ describe('leaf PTY verdict expiry', () => {
   it('retires old unique IDs on a live-PTY consult without probing that live PTY', async () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(100_000)
     const { verdicts, isAbsent, probe } = createRuntime()
+
     for (let index = 0; index < 1_000; index++) {
       await expect(isAbsent(`retired-${index}`)).resolves.toBe(true)
     }
+
     expect(verdicts.size).toBe(1_000)
     now.mockReturnValue(100_000 + TTL_MS)
 
@@ -50,17 +53,21 @@ describe('leaf PTY verdict expiry', () => {
     const { verdicts, isAbsent, probe } = createRuntime()
     await isAbsent('initial')
     now.mockReturnValue(101_000)
+
     for (let index = 0; index < 1_000; index++) {
       await isAbsent(`fresh-${index}`)
     }
+
     now.mockReturnValue(100_000 + TTL_MS)
     await isAbsent('live')
     expect(verdicts.size).toBe(1_000)
     now.mockReturnValue(101_000 + TTL_MS - 1)
     probe.mockClear()
+
     for (let index = 0; index < 1_000; index++) {
       await expect(isAbsent(`fresh-${index}`)).resolves.toBe(true)
     }
+
     expect(probe).not.toHaveBeenCalled()
     now.mockReturnValue(101_000 + TTL_MS)
     probe.mockResolvedValue(null)
@@ -75,15 +82,19 @@ describe('leaf PTY verdict expiry', () => {
     const now = vi.spyOn(Date, 'now').mockReturnValue(100_000)
     const { verdicts, isAbsent } = createRuntime()
     const iterations = vi.spyOn(verdicts, Symbol.iterator)
+
     for (let index = 0; index < 1_000; index++) {
       await isAbsent(`dead-${index}`)
       await isAbsent('live')
     }
+
     expect(iterations).toHaveBeenCalledOnce()
     now.mockReturnValue(100_000 + TTL_MS)
+
     for (let index = 0; index < 1_000; index++) {
       await isAbsent('live')
     }
+
     expect(iterations).toHaveBeenCalledTimes(2)
     expect(verdicts.size).toBe(0)
   })

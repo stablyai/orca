@@ -4,10 +4,14 @@ export function filterGitHubWorkItemLabels(labels: readonly string[], query: str
   if (isGitHubWorkItemOptionFilterQueryTooLarge(query)) {
     return []
   }
+
   const trimmedQuery = query.trim()
+
   if (!trimmedQuery) {
     return [...labels]
   }
+
   const normalizedQuery = trimmedQuery.toLowerCase()
+
   return labels.filter((label) => label.toLowerCase().includes(normalizedQuery))
 }

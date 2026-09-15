@@ -9,12 +9,16 @@ const { handleMock, statMock, subscribeViaWatcherProcessMock, disposeWatcherProc
   }))
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
+
 vi.mock('node:fs/promises', () => ({ stat: statMock }))
+
 vi.mock('./parcel-watcher-process', () => ({
   subscribeViaWatcherProcess: subscribeViaWatcherProcessMock,
   disposeWatcherProcess: disposeWatcherProcessMock
 }))
+
 vi.mock('./filesystem-watcher-wsl', () => ({ createWslWatcher: vi.fn() }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: vi.fn(),
   onSshFilesystemProviderRegistered: () => () => {}
@@ -33,9 +37,11 @@ type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 function fillWatcherChildCapacity(): (() => void)[] {
   return Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN }, () => {
     const release = reserveWatcherChild()
+
     if (!release) {
       throw new Error('expected watcher child reservation')
     }
+
     return release
   })
 }
@@ -49,9 +55,11 @@ describe('native filesystem watcher capacity recovery', () => {
     subscribeViaWatcherProcessMock.mockReset()
     disposeWatcherProcessMock.mockReset()
     resetWatcherChildRegistryForTest()
+
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
+
     handleMock.mockImplementation((channel, handler) => {
       handlers[channel] = handler
     })

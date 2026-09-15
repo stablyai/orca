@@ -53,10 +53,13 @@ export function replayJournal(
   if (readOnly) {
     return emptyReadOnlyLoad(sessionId)
   }
+
   const epoch = readJournalSessionEpoch(db, sessionId)
+
   if (!epoch) {
     return null
   }
+
   const state = createJournalReducerState(sessionId, epoch)
   const repairedFrom = pendingJournalRepairSequence(db, sessionId, epoch)
   let expectedSequence = FIRST_JOURNAL_SEQUENCE
@@ -71,22 +74,28 @@ export function replayJournal(
 
   for (const entry of iterateJournalEpochRows(db, sessionId, epoch)) {
     const parsed = parseJournalRow(entry.rowJson)
+
     if (!parsed.ok) {
       truncateFrom = entry.seq
       latched = parsed.unreadable
       malformedRows = parsed.unreadable ? 0 : 1
       break
     }
+
     const row = parsed.row
+
     // Parse past a gap so an unreadable future row still latches read-only.
     if (gapSequence !== undefined) {
       continue
     }
+
     if (row.seq !== expectedSequence) {
       gapSequence = row.seq
       continue
     }
+
     expectedSequence += 1
+
     if (row.seq === FIRST_JOURNAL_SEQUENCE) {
       if (row.kind === 'epoch') {
         anchor = row
@@ -94,19 +103,24 @@ export function replayJournal(
         unanchoredSequence = row.seq
       }
     }
+
     if (!anchor) {
       continue
     }
+
     applyJournalRow(state, row)
     const disclosure = row.kind === 'item' && row.itemId === JOURNAL_REPAIR_DISCLOSURE_ITEM_ID
+
     if (!disclosure) {
       repairHasContent ||= repairedFrom !== null && row.seq >= repairedFrom
       providerHasContent ||= row.seq >= FIRST_JOURNAL_SEQUENCE + 1
     }
   }
+
   // Anchor rejection takes precedence over a gap, which takes precedence over malformed rows.
   truncateFrom = unanchoredSequence ?? gapSequence ?? truncateFrom
   state.oldestSequence = FIRST_JOURNAL_SEQUENCE
+
   return {
     state,
     readOnly: latched,
@@ -131,13 +145,17 @@ export function readJournalRowsAfterCursor(
   limit?: number
 ): JournalRow[] {
   const rows: JournalRow[] = []
+
   for (const stored of readJournalRowsAfter(db, sessionId, epoch, afterSequence, limit)) {
     const parsed = parseJournalRow(stored.rowJson)
+
     if (!parsed.ok) {
       break
     }
+
     rows.push(parsed.row)
   }
+
   return rows
 }
 
@@ -145,10 +163,13 @@ export function readJournalRowsAfterCursor(
  *  so a caller holding only the returned value holds no handle. */
 export function loadJournal(journalDir: string, sessionId: string): JournalLoad | null {
   const dbPath = journalDatabaseFile(journalDir)
+
   if (!existsSync(dbPath)) {
     return null
   }
+
   const opened = openJournalDatabase(dbPath)
+
   try {
     return replayJournal(opened.db, opened.readOnly, sessionId)
   } finally {

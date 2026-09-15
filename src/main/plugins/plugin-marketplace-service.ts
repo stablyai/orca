@@ -26,6 +26,7 @@ import type {
   PluginMarketplaceListing,
   PluginMarketplaceSourceState
 } from './plugin-marketplace-projection'
+
 export type {
   PluginMarketplaceListing,
   PluginMarketplaceSourceState
@@ -58,10 +59,12 @@ export class PluginMarketplaceService {
   async listSources(): Promise<PluginMarketplaceSourceState[]> {
     await this.waitForOfficialSeed()
     const sources = await this.store.listSources()
+
     return Promise.all(
       sources.map(async (source) => {
         try {
           const error = this.sourceErrors.get(source.id)
+
           return this.stateFromSnapshot(
             source,
             await this.store.readSnapshot(source.id),
@@ -79,44 +82,55 @@ export class PluginMarketplaceService {
     const parsedSource = pluginMarketplaceGitSourceSchema.parse(source)
     const sourceId = marketplaceSourceId(parsedSource)
     const existing = (await this.store.listSources()).find((candidate) => candidate.id === sourceId)
+
     const candidate: PluginMarketplaceRegisteredSource = existing ?? {
       id: sourceId,
       source: parsedSource,
       addedAt: Date.now()
     }
+
     const fetched = await this.fetchAndValidate(candidate)
     const registered = existing ?? (await this.store.addSource(parsedSource, candidate.addedAt))
+
     try {
       const snapshot = await this.store.writeSnapshot({ source: registered, ...fetched })
       this.sourceErrors.delete(registered.id)
+
       return this.stateFromSnapshot(registered, snapshot, false)
     } catch (error) {
       if (!existing) {
         await this.store.removeSource(registered.id).catch(() => undefined)
       }
+
       throw error
     }
   }
 
   async removeSource(sourceId: string): Promise<boolean> {
     const source = (await this.store.listSources()).find((candidate) => candidate.id === sourceId)
+
     if (source && isOfficialMarketplaceGitSource(source.source.url)) {
       throw new Error('the official marketplace is managed by Orca and cannot be removed')
     }
+
     const removed = await this.store.removeSource(sourceId)
+
     if (removed) {
       this.sourceErrors.delete(sourceId)
+
       if (this.officialSeedRequested) {
         // Why: an existing profile may already occupy every source slot. Once
         // the user frees one, recover the managed source without a restart.
         await this.seedOfficialSource().catch(() => undefined)
       }
     }
+
     return removed
   }
 
   seedOfficialSource(): Promise<PluginMarketplaceSourceState> {
     this.officialSeedRequested = true
+
     if (!this.officialSeedPromise) {
       const seed = this.performOfficialSeed()
       this.officialSeedPromise = seed
@@ -128,6 +142,7 @@ export class PluginMarketplaceService {
         }
       })
     }
+
     return this.officialSeedPromise
   }
 
@@ -135,6 +150,7 @@ export class PluginMarketplaceService {
     const previous = this.refreshChains.get(sourceId) ?? Promise.resolve(null)
     const refresh = previous.catch(() => null).then(() => this.performRefresh(sourceId))
     this.refreshChains.set(sourceId, refresh)
+
     try {
       return await refresh
     } finally {
@@ -147,12 +163,14 @@ export class PluginMarketplaceService {
   async refreshAll(): Promise<PluginMarketplaceSourceState[]> {
     await this.waitForOfficialSeed()
     const sources = await this.store.listSources()
+
     return Promise.all(sources.map((source) => this.refreshSource(source.id)))
   }
 
   async listPlugins(): Promise<PluginMarketplaceListing[]> {
     await this.waitForOfficialSeed()
     const states = await this.listSnapshots()
+
     return states
       .flatMap(({ source, snapshot }) =>
         snapshot.marketplace.plugins
@@ -175,36 +193,46 @@ export class PluginMarketplaceService {
     const source = (await this.store.listSources()).find(
       (candidate) => candidate.id === marketplaceSourceId
     )
+
     if (!source) {
       return null
     }
+
     const snapshot = await this.store.readSnapshot(source.id)
+
     // Why: preview and install resolve listings through here, so an unsupported
     // pack must be unreachable by key too — hiding only the catalog card would
     // move the dead install one click later instead of removing it.
     const entry = snapshot?.marketplace.plugins.find(
       (plugin) => plugin.id === pluginKey && isMarketplaceListingSupported(plugin.categories)
     )
+
     return snapshot && entry ? this.listingFromEntry(source, snapshot, entry) : null
   }
 
   private async performRefresh(sourceId: string): Promise<PluginMarketplaceSourceState> {
     const source = (await this.store.listSources()).find((candidate) => candidate.id === sourceId)
+
     if (!source) {
       throw new Error(`unknown marketplace source: ${sourceId}`)
     }
+
     try {
       const fetched = await this.fetchAndValidate(source)
       const snapshot = await this.store.writeSnapshot({ source, ...fetched })
       this.sourceErrors.delete(source.id)
+
       return this.stateFromSnapshot(source, snapshot, false)
     } catch (error) {
       const cached = await this.store.readSnapshot(source.id).catch(() => null)
+
       if (!cached) {
         throw error
       }
+
       const message = pluginMarketplaceErrorMessage(error)
       this.sourceErrors.set(source.id, message)
+
       return this.stateFromSnapshot(source, cached, true, message)
     }
   }
@@ -212,12 +240,16 @@ export class PluginMarketplaceService {
   private async performOfficialSeed(): Promise<PluginMarketplaceSourceState> {
     const sources = await this.store.listSources()
     const existing = sources.find((source) => isOfficialMarketplaceGitSource(source.source.url))
+
     const source =
       existing ?? (await this.store.addSource(OFFICIAL_MARKETPLACE_GIT_SOURCE, Date.now()))
+
     const snapshot = await this.store.readSnapshot(source.id).catch(() => null)
+
     if (snapshot) {
       return this.stateFromSnapshot(source, snapshot, false)
     }
+
     try {
       return await this.performRefresh(source.id)
     } catch (error) {
@@ -225,6 +257,7 @@ export class PluginMarketplaceService {
       // or startup refresh can recover without asking the user for its URL.
       const message = pluginMarketplaceErrorMessage(error)
       this.sourceErrors.set(source.id, message)
+
       return this.stateFromSnapshot(source, null, true, message)
     }
   }
@@ -238,6 +271,7 @@ export class PluginMarketplaceService {
   ): Promise<PluginMarketplaceFetchResult> {
     const fetched = await this.fetcher(source)
     validateMarketplaceProvenance(source, fetched)
+
     return fetched
   }
 
@@ -245,12 +279,14 @@ export class PluginMarketplaceService {
     { source: PluginMarketplaceRegisteredSource; snapshot: PluginMarketplaceCachedSnapshot }[]
   > {
     const sources = await this.store.listSources()
+
     const snapshots = await Promise.all(
       sources.map(async (source) => ({
         source,
         snapshot: await this.store.readSnapshot(source.id)
       }))
     )
+
     return snapshots.filter(
       (
         candidate
@@ -271,7 +307,9 @@ export class PluginMarketplaceService {
       snapshot.marketplace.owner.toLowerCase() === OFFICIAL_MARKETPLACE_OWNER &&
       isOfficialPluginIdentity(entry.id) &&
       isOfficialOrganizationGitSource(entry.source.url)
+
     const blocked = this.getKillListEntry(entry.id)
+
     return {
       marketplaceSourceId: source.id,
       marketplaceName: snapshot.marketplace.name,

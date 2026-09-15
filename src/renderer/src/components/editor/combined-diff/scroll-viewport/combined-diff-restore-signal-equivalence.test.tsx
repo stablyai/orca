@@ -11,6 +11,7 @@ const capturedRestoreSignals: (string | undefined)[] = []
 
 vi.mock('@/hooks/useVirtualizedScrollAnchor', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     useVirtualizedScrollAnchor: (options: { restoreSignal?: string }) => {
@@ -20,9 +21,12 @@ vi.mock('@/hooks/useVirtualizedScrollAnchor', async (importOriginal) => {
 })
 
 const { createProgrammaticScrollMarks } = await import('@/hooks/programmatic-scroll-marks')
+
 const { useCombinedDiffScrollAnchors } = await import('./use-combined-diff-scroll-anchors')
+
 const { useCombinedDiffSectionRowKeys } =
   await import('../resolve-changes/use-combined-diff-section-row-keys')
+
 const { createCombinedDiffSectionIndexMap } =
   await import('../resolve-changes/combined-diff-section-identity')
 
@@ -66,24 +70,29 @@ type Step = {
 
 function changePoints(signals: readonly (string | undefined)[]): number[] {
   const points: number[] = []
+
   for (let index = 1; index < signals.length; index += 1) {
     if (signals[index] !== signals[index - 1]) {
       points.push(index)
     }
   }
+
   return points
 }
 
 function renderSignals(steps: readonly Step[]): (string | undefined)[] {
   capturedRestoreSignals.length = 0
   const sectionsRef = { current: steps[0]!.sections } as React.RefObject<DiffSection[]>
+
   const view = renderHook(
     (step: Step) => {
       sectionsRef.current = step.sections
+
       const rowKeys = useCombinedDiffSectionRowKeys({
         generation: step.generation,
         sections: step.sections
       })
+
       useCombinedDiffScrollAnchors({
         clampRestoreCount: step.clampRestoreCount,
         generation: step.generation,
@@ -109,13 +118,16 @@ function renderSignals(steps: readonly Step[]): (string | undefined)[] {
     },
     { initialProps: steps[0]! }
   )
+
   // Only the render-phase signal matters; drop React's duplicate renders of the same props.
   const perStep: (string | undefined)[] = [capturedRestoreSignals.at(-1)]
+
   for (const step of steps.slice(1)) {
     capturedRestoreSignals.length = 0
     view.rerender(step)
     perStep.push(capturedRestoreSignals.at(-1))
   }
+
   return perStep
 }
 
@@ -128,6 +140,7 @@ describe('combined diff restore signal', () => {
       section('d.ts'),
       section('e.ts')
     ]
+
     const loadedC = base.slice()
     loadedC[2] = section('c.ts', { loading: false })
     const collapsedB = loadedC.slice()
@@ -167,6 +180,7 @@ describe('combined diff restore signal', () => {
     const count = 500
     let sections = Array.from({ length: count }, (_, index) => section(`file-${index}.ts`))
     const steps: Step[] = [{ clampRestoreCount: 0, generation: 1, sections, sideBySide: false }]
+
     for (let index = 0; index < count; index += 1) {
       const next = sections.slice()
       next[index] = section(`file-${index}.ts`, { loading: false })

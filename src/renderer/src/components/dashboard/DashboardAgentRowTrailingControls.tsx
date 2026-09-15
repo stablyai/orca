@@ -33,11 +33,13 @@ export function DashboardAgentRowTrailingControls({
   const stopMouseDown = useCallback((event: React.MouseEvent) => {
     event.stopPropagation()
   }, [])
+
   const stopKeyDown = useCallback((event: React.KeyboardEvent) => {
     if (event.key === 'Enter' || event.key === ' ') {
       event.stopPropagation()
     }
   }, [])
+
   const handleDismiss = useCallback(
     (event: React.MouseEvent) => {
       event.stopPropagation()
@@ -45,6 +47,7 @@ export function DashboardAgentRowTrailingControls({
     },
     [onDismiss, paneKey]
   )
+
   const handleToggleExpand = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
@@ -53,10 +56,12 @@ export function DashboardAgentRowTrailingControls({
     },
     [onToggleExpanded]
   )
+
   const handleInlineSendTargetClick = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
       event.stopPropagation()
+
       if (sendTargetStatus === 'eligible') {
         onSendTargetClick?.(paneKey)
       }

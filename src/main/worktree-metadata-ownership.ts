@@ -10,6 +10,7 @@ export function getRepoOwnedWorktreeMeta(
   repoOwnerCount: number
 ): WorktreeMeta | undefined {
   const existingMeta = metaById[worktreeId]
+
   return isWorktreeMetaOwnedByRepo(repo, existingMeta, repoOwnerCount) ? existingMeta : undefined
 }
 

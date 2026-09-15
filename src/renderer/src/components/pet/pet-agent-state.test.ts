@@ -3,6 +3,7 @@ import type { AgentStatusEntry, AgentStatusState } from '../../../../shared/agen
 import { nextPetDragAnimation, selectPetAnimationName } from './pet-agent-state'
 
 const NOW = 1_000
+
 const STALE_AFTER_MS = 500
 
 function entry(

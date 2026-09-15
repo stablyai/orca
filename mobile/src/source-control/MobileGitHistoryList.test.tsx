@@ -24,7 +24,9 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
+
 vi.mock('lucide-react-native', () => ({ ChevronDown: 'ChevronDown', ChevronRight: 'ChevronRight' }))
+
 vi.mock('../transport/client-context', () => ({ useForceReconnect: () => vi.fn() }))
 
 // Captured at module scope: the list renders rows against Date.now() a few ms later,
@@ -92,6 +94,7 @@ describe('MobileGitHistoryList', () => {
 
   it('keeps loaded commits visible across a disconnect and its reconnect refetch', async () => {
     let releaseRefetch: (() => void) | null = null
+
     const sendRequest = vi
       .fn()
       .mockResolvedValueOnce(historyResponse('first load'))
@@ -101,6 +104,7 @@ describe('MobileGitHistoryList', () => {
             releaseRefetch = () => resolve(historyResponse('after reconnect'))
           })
       )
+
     const client = { sendRequest } as unknown as RpcClient
 
     await render(client, 'connected')
@@ -129,6 +133,7 @@ describe('MobileGitHistoryList', () => {
       .fn()
       .mockResolvedValueOnce(historyResponse('worktree one'))
       .mockReturnValueOnce(new Promise(() => {}))
+
     const client = { sendRequest } as unknown as RpcClient
 
     await render(client, 'connected')
@@ -153,8 +158,10 @@ describe('MobileGitHistoryList', () => {
       if (method === 'git.history') {
         return Promise.resolve(historyResponse('expandable'))
       }
+
       return Promise.resolve(compareResponse)
     })
+
     const client = { sendRequest } as unknown as RpcClient
 
     await render(client, 'connected')
@@ -163,6 +170,7 @@ describe('MobileGitHistoryList', () => {
     const row = renderer?.root.findAll(
       (node) => node.type === 'Pressable' && node.props.onPress !== undefined
     )[0]
+
     await act(async () => {
       row?.props.onPress()
     })

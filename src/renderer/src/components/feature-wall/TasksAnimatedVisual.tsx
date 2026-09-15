@@ -34,10 +34,15 @@ type Phase =
 // Beat timings (ms). Match the HTML mock's runCycle so the React port reads
 // the same as the prototype.
 const HOVER_SETTLE_MS = 700
+
 const HOVER_TO_BUTTON_MS = 700
+
 const PRESS_MS = 360
+
 const CREATING_MS = 2000
+
 const READY_MS = 2400
+
 const RESET_MS = 500
 
 function CursorIcon(): JSX.Element {
@@ -84,32 +89,45 @@ function useFakeCursor(
   useLayoutEffect(() => {
     if (reducedMotion) {
       setPos((p) => ({ ...p, visible: false }))
+
       return
     }
+
     const panel = panelRef.current
+
     if (!panel) {
       return
     }
+
     if (target.kind === 'hidden') {
       setPos((p) => ({ ...p, visible: false }))
+
       return
     }
+
     const panelRect = panel.getBoundingClientRect()
+
     if (target.kind === 'row') {
       const row = rowRefs.current?.[target.issueIdx]
+
       if (!row) {
         return
       }
+
       const rect = row.getBoundingClientRect()
       const x = rect.left - panelRect.left + (target.settle ? 50 : 30)
       const y = rect.top - panelRect.top + rect.height * 0.7
       setPos({ x: x - 4, y: y - 4, visible: true })
+
       return
     }
+
     const btn = buttonRefs.current?.[target.issueIdx]
+
     if (!btn) {
       return
     }
+
     const rect = btn.getBoundingClientRect()
     const x = rect.left - panelRect.left + rect.width * 0.5
     const y = rect.top - panelRect.top + rect.height * 0.5
@@ -135,17 +153,22 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
     if (reducedMotion) {
       setPhase({ kind: 'idle' })
       setCursorTarget({ kind: 'hidden' })
+
       return
     }
+
     let cancelled = false
     const timeouts: number[] = []
+
     function schedule(fn: () => void, delay: number): void {
       const id = window.setTimeout(() => {
         if (cancelled) {
           return
         }
+
         fn()
       }, delay)
+
       timeouts.push(id)
     }
 
@@ -198,7 +221,9 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
         runCycle()
       }, teardown + RESET_MS)
     }
+
     runCycle()
+
     return () => {
       cancelled = true
       timeouts.forEach((id) => window.clearTimeout(id))
@@ -214,6 +239,7 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
     phase.kind === 'ready'
       ? phase.issueIdx
       : -1
+
   // Why: the dropdown appears as soon as the workspace starts being created so
   // the user sees a "Creating workspace" beat, but the workspace card itself
   // only materialises once the workspace is ready — at which point the Claude
@@ -231,6 +257,7 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
         {ISSUES.map((issue, i) => {
           const isActive = i === activeIdx
           const isPressing = phase.kind === 'pressing' && phase.issueIdx === i
+
           return (
             <div
               key={issue.number}

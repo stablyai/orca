@@ -71,6 +71,7 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
     // Tab ids are validated only as non-empty and colon-free, and createTab honours caller-supplied
     // id hints, so the id is reachable rather than theoretical.
     const current = sessionState({ tabsByWorktree: { [WORKTREE]: [] } })
+
     const remote = sessionState({
       tabsByWorktree: { [WORKTREE]: [terminalTab('toString')] },
       terminalLayoutsByTabId: { toString: { root: { type: 'leaf', paneId: 'p' } } as never },
@@ -88,12 +89,14 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
     // The tombstone carries the worktree it was closed in, so suppression cannot reach another
     // workspace's tab. Structural, rather than a property of where the call sites happen to sit.
     const other = 'repo-1::/home/user/other'
+
     const current = sessionState({
       tabsByWorktree: { [WORKTREE]: [] },
       closedTerminalTabTombstonesByTabId: {
         'tab-x': { closedAt: Date.now(), worktreeId: other }
       }
     })
+
     const remote = sessionState({ tabsByWorktree: { [WORKTREE]: [terminalTab('tab-x')] } })
 
     const merged = merge(current, remote, {}, 2)
@@ -103,6 +106,7 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
 
   it('does not re-insert a tombstoned tab the host still lists', () => {
     const ghost = terminalTab('ghost')
+
     const remote = sessionState({
       tabsByWorktree: { [WORKTREE]: [ghost] },
       terminalLayoutsByTabId: { ghost: { type: 'single', tabId: 'ghost' } as never },
@@ -121,10 +125,12 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
     // The stale persisted payload still lists it, and the host has never heard of it. Without the
     // tombstone that combination is exactly what the host-unknown branch exists to preserve.
     const ghost = terminalTab('ghost')
+
     const current = sessionState({
       tabsByWorktree: { [WORKTREE]: [ghost] },
       closedTerminalTabTombstonesByTabId: { ghost: { closedAt: Date.now(), worktreeId: WORKTREE } }
     })
+
     const remote = sessionState({ tabsByWorktree: { [WORKTREE]: [] } })
 
     const merged = merge(current, remote, {}, 3)
@@ -137,6 +143,7 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
     // against the rows below and nulls what they no longer name, so the merge leaves them be.
     const ghost = terminalTab('ghost')
     const survivor = terminalTab('survivor')
+
     const remote = sessionState({
       tabsByWorktree: { [WORKTREE]: [ghost, survivor] },
       activeTabId: 'ghost',
@@ -150,10 +157,12 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
 
   it('a live local tab beats a stale tombstone for its id', () => {
     const live = terminalTab('live')
+
     const current = sessionState({
       tabsByWorktree: { [WORKTREE]: [live] },
       closedTerminalTabTombstonesByTabId: { live: { closedAt: Date.now(), worktreeId: WORKTREE } }
     })
+
     const remote = sessionState({ tabsByWorktree: { [WORKTREE]: [live] } })
 
     const merged = merge(current, remote, { [WORKTREE]: [live] }, 3)

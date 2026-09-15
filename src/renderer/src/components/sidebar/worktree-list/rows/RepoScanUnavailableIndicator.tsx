@@ -19,18 +19,22 @@ export function RepoScanUnavailableIndicator({ repo }: { repo: Repo }): React.JS
   const detected = useAppStore((s) => s.detectedWorktreesByRepo[repo.id])
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const [pending, setPending] = React.useState(false)
+
   if (!detected || detected.authoritative || !detected.unavailableReason) {
     return null
   }
+
   const title = translate(
     'auto.components.sidebar.RepoScanUnavailableIndicator.title',
     'Worktree scan failed for {{value0}}',
     { value0: repo.displayName }
   )
+
   const retryLabel = translate(
     'auto.components.sidebar.RepoScanUnavailableIndicator.retry',
     'Retry scan'
   )
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>

@@ -39,5 +39,6 @@ export function isNativeChatImageAttachmentPath(path: string): boolean {
  *  instead of the basename. */
 export function isNativeChatPastedImagePath(path: string): boolean {
   const base = path.split(/[\\/]/).findLast(Boolean) ?? path
+
   return /^orca-paste-.+\.png$/i.test(base)
 }

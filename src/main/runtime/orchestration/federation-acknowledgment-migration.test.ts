@@ -14,6 +14,7 @@ describe('federation acknowledgment migration', () => {
 
   afterEach(() => {
     db?.close()
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
     }

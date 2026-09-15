@@ -35,7 +35,9 @@ export const uiClipboardAndWindowControlsApi = {
         runtimeEnvironmentId?: string
       }
     ) => callback(data)
+
     ipcRenderer.on('ui:openDiffFromMobile', listener)
+
     return () => ipcRenderer.removeListener('ui:openDiffFromMobile', listener)
   },
   onMobileMarkdownRequest: (
@@ -43,7 +45,9 @@ export const uiClipboardAndWindowControlsApi = {
   ): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, request: RuntimeMobileMarkdownRequest) =>
       callback(request)
+
     ipcRenderer.on('ui:mobileMarkdownRequest', listener)
+
     return () => ipcRenderer.removeListener('ui:mobileMarkdownRequest', listener)
   },
   respondMobileMarkdownRequest: (response: RuntimeMobileMarkdownResponse): void => {
@@ -56,13 +60,17 @@ export const uiClipboardAndWindowControlsApi = {
       _event: Electron.IpcRendererEvent,
       data: { tabId: string; paneRuntimeId?: number }
     ) => callback(data)
+
     ipcRenderer.on('ui:closeTerminal', listener)
+
     return () => ipcRenderer.removeListener('ui:closeTerminal', listener)
   },
   onTerminalTabCloseRequest: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, request: Parameters<typeof callback>[0]) =>
       callback(request)
+
     ipcRenderer.on('ui:terminalTabCloseRequest', listener)
+
     return () => ipcRenderer.removeListener('ui:terminalTabCloseRequest', listener)
   },
   respondTerminalTabClose: (response) => {
@@ -71,19 +79,25 @@ export const uiClipboardAndWindowControlsApi = {
   onSleepWorktree: (callback: (data: { worktreeId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
       callback(data)
+
     ipcRenderer.on('ui:sleepWorktree', listener)
+
     return () => ipcRenderer.removeListener('ui:sleepWorktree', listener)
   },
   onResumeSleepingAgents: (callback: (data: { worktreeId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
       callback(data)
+
     ipcRenderer.on('ui:resumeSleepingAgents', listener)
+
     return () => ipcRenderer.removeListener('ui:resumeSleepingAgents', listener)
   },
   onTerminalZoom: (callback: (direction: 'in' | 'out' | 'reset') => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, direction: 'in' | 'out' | 'reset') =>
       callback(direction)
+
     ipcRenderer.on('terminal:zoom', listener)
+
     return () => ipcRenderer.removeListener('terminal:zoom', listener)
   },
   readClipboardText: (options?: ReadClipboardTextOptions): Promise<string> =>
@@ -148,18 +162,23 @@ export const uiClipboardAndWindowControlsApi = {
       _event: Electron.IpcRendererEvent,
       payload: RichMarkdownContextMenuCommandPayload
     ) => callback(payload)
+
     ipcRenderer.on(richMarkdownContextMenuCommandChannel, listener)
+
     return () => ipcRenderer.removeListener(richMarkdownContextMenuCommandChannel, listener)
   },
   onFullscreenChanged: (callback: (isFullScreen: boolean) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, isFullScreen: boolean) =>
       callback(isFullScreen)
+
     ipcRenderer.on('window:fullscreen-changed', listener)
+
     return () => ipcRenderer.removeListener('window:fullscreen-changed', listener)
   },
   onSystemResumed: (callback: () => void): (() => void) => {
     const listener = () => callback()
     ipcRenderer.on('system:resumed', listener)
+
     return () => ipcRenderer.removeListener('system:resumed', listener)
   },
   minimize: (): void => {
@@ -172,7 +191,9 @@ export const uiClipboardAndWindowControlsApi = {
   onMaximizeChanged: (callback: (isMaximized: boolean) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, isMaximized: boolean) =>
       callback(isMaximized)
+
     ipcRenderer.on('window:maximize-changed', listener)
+
     return () => ipcRenderer.removeListener('window:maximize-changed', listener)
   },
   requestClose: (): void => {
@@ -190,7 +211,9 @@ export const uiClipboardAndWindowControlsApi = {
       ipcRenderer.send('window:close-request-received', data?.requestId)
       callback({ isQuitting: data?.isQuitting ?? false })
     }
+
     ipcRenderer.on('window:close-requested', listener)
+
     return () => ipcRenderer.removeListener('window:close-requested', listener)
   },
   confirmWindowClose: (): void => {

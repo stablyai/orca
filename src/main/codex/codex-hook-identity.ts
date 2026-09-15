@@ -44,6 +44,7 @@ export function createCodexHookTrustEntry(
   hook: HookCommandConfig
 ): CodexTrustEntry | null {
   const eventLabel = CODEX_HOOK_EVENT_LABEL[eventName]
+
   if (!eventLabel || !hook.command) {
     return null
   }

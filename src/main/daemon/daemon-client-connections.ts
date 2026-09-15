@@ -59,13 +59,17 @@ export class DaemonClientConnections {
           retryable: true
         })
       )
+
       return
     }
+
     const decoder = new StringDecoder('utf8')
+
     const parser = createNdjsonParser(
       (message) => this.handleFirstMessage(socket, message),
       () => socket.destroy()
     )
+
     socket.on('data', (chunk) => parser.feed(decoder.write(chunk)))
   }
 
@@ -96,21 +100,27 @@ export class DaemonClientConnections {
       client.controlSocket.destroy()
       client.streamSocket?.destroy()
     }
+
     this.clients.clear()
+
     for (const socket of this.transportSockets) {
       socket.destroy()
     }
+
     this.transportSockets.clear()
   }
 
   private handleFirstMessage(socket: Socket, message: unknown): void {
     const hello = message as HelloMessage
+
     if (hello.type !== 'hello') {
       this.options.log.log('client-hello-rejected', { reason: 'expected-hello' })
       socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Expected hello' }))
       socket.destroy()
+
       return
     }
+
     if (hello.version !== this.options.protocolVersion) {
       this.options.log.log('client-hello-rejected', {
         reason: 'protocol-mismatch',
@@ -118,20 +128,25 @@ export class DaemonClientConnections {
       })
       socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Protocol version mismatch' }))
       socket.destroy()
+
       return
     }
+
     if (hello.token !== this.options.token) {
       this.options.log.log('client-hello-rejected', { reason: 'invalid-token', role: hello.role })
       socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Invalid token' }))
       socket.destroy()
+
       return
     }
+
     if (hello.role !== 'control' && hello.role !== 'stream') {
       this.options.log.log('client-hello-rejected', {
         reason: 'invalid-role',
         role: hello.role
       })
       socket.end(encodeNdjson({ type: 'hello', ok: false, error: 'Invalid role' }))
+
       return
     }
 
@@ -158,36 +173,47 @@ export class DaemonClientConnections {
 
     if (hello.role === 'control') {
       this.installControlSocket(socket, hello.clientId)
+
       return
     }
+
     if (hello.role === 'stream') {
       const client = this.clients.get(hello.clientId)
+
       if (!client) {
         socket.destroy()
+
         return
       }
+
       this.installStreamSocket(socket, client)
       client.authenticatedPairEstablished = true
       this.options.onAuthenticatedPair()
+
       return
     }
+
     // Parsed wire data is not made safe by the HelloMessage assertion above.
     socket.destroy()
   }
 
   private installControlSocket(socket: Socket, clientId: string): void {
     const previous = this.clients.get(clientId)
+
     const client: ConnectedDaemonClient = {
       clientId,
       controlSocket: socket,
       streamSocket: null,
       authenticatedPairEstablished: false
     }
+
     this.clients.set(clientId, client)
     this.setupControlParser(socket, clientId)
+
     if (!previous) {
       return
     }
+
     this.options.onControlReplaced(clientId)
     this.recordFullyAuthenticatedDisconnect(previous.authenticatedPairEstablished)
     previous.streamSocket?.destroy()
@@ -196,17 +222,21 @@ export class DaemonClientConnections {
 
   private setupControlParser(socket: Socket, clientId: string): void {
     const decoder = new StringDecoder('utf8')
+
     const parser = createNdjsonParser(
       (message) => this.options.onControlRequest(socket, clientId, message as DaemonRequest),
       () => {}
     )
+
     socket.removeAllListeners('data')
     socket.on('data', (chunk) => parser.feed(decoder.write(chunk)))
     socket.on('close', () => {
       const client = this.clients.get(clientId)
+
       if (client?.controlSocket !== socket) {
         return
       }
+
       this.options.onClientDisconnected(clientId)
       const wasFullyAuthenticated = client.authenticatedPairEstablished
       client.streamSocket?.destroy()
@@ -231,17 +261,22 @@ export class DaemonClientConnections {
     socket.removeAllListeners('data')
     client.streamSocket = socket
     socket.on('drain', () => this.options.streamDataBatcher.flush(client.clientId))
+
     const cleanup = (): void => {
       socket.removeListener('close', cleanup)
       socket.removeListener('error', cleanup)
+
       if (this.clients.get(client.clientId) !== client || client.streamSocket !== socket) {
         return
       }
+
       this.options.onStreamDisconnected(client.clientId)
       client.streamSocket = null
     }
+
     socket.on('close', cleanup)
     socket.on('error', cleanup)
+
     if (previous && previous !== socket) {
       previous.destroy()
     }

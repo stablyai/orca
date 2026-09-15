@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const callMock = vi.fn()
 
 vi.mock('../format', () => ({ printResult: vi.fn() }))
+
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
@@ -15,7 +16,9 @@ function renderedLine(result: unknown): string {
     boolean,
     (value: unknown) => string
   ]
+
   expect(value).toBe(result)
+
   return render(value)
 }
 
@@ -25,6 +28,7 @@ async function showWorker(observation: unknown): Promise<string> {
     worker: { state: 'ready', stage: 'dispatch_input', agent_terminal_handle: 'term_1' },
     ...(observation === undefined ? {} : { observation })
   }
+
   callMock.mockResolvedValue(result)
   await ORCHESTRATION_HANDLERS['orchestration worker-show']({
     flags: new Map<string, string | boolean>([['dispatch', 'ctx_1']]),
@@ -32,6 +36,7 @@ async function showWorker(observation: unknown): Promise<string> {
     cwd: '/tmp/repo',
     json: false
   } as never)
+
   return renderedLine(result)
 }
 

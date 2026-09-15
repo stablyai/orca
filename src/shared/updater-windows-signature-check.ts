@@ -7,9 +7,11 @@
 // real integrity failure, not environment interference.
 export function isWindowsSignatureCheckUnavailableFailure(message: string): boolean {
   const normalized = message.toLowerCase()
+
   if (normalized.includes('not signed by the application owner')) {
     return false
   }
+
   return normalized.includes('get-authenticodesignature')
 }
 

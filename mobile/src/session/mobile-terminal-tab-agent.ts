@@ -26,12 +26,15 @@ export function resolveMobileTerminalTabOwnedAgentId(
   tab: MobileTerminalTabAgentIdentity
 ): string | null {
   const hookAgentType = tab.agentStatus?.agentType?.trim()
+
   if (hookAgentType && hookAgentType !== 'unknown') {
     return hookAgentType
   }
+
   if (tab.launchAgent) {
     return tab.launchAgent
   }
+
   return null
 }
 
@@ -39,37 +42,47 @@ export function resolveMobileTerminalTabAgentId(
   tab: MobileTerminalTabAgentIdentity
 ): string | null {
   const ownedAgent = resolveMobileTerminalTabOwnedAgentId(tab)
+
   if (ownedAgent) {
     return ownedAgent
   }
+
   return resolveExplicitTerminalTitleAgentType(tab.title)
 }
 
 export function getMobileSessionTabTitle(tab: MobileSessionTab): string {
   if (tab.type === 'browser') {
     const title = tab.title.trim()
+
     if (title && !isBlankBrowserUrl(title)) {
       return title
     }
+
     if (isBlankBrowserUrl(tab.url)) {
       return 'New Browser'
     }
+
     return 'Browser'
   }
+
   if (tab.type === 'markdown') {
     return tab.title || 'Markdown'
   }
+
   if (tab.type === 'file') {
     return tab.title || 'File'
   }
+
   if (tab.type === 'agent-session') {
     return tab.title || 'Chat'
   }
+
   // Why: strip the leading agent status glyph (✳ etc.) once the tab shows the
   // provider icon. Mobile falls back for glyph-only titles because iOS can
   // render the bare status glyph as a stray colored box beside the icon.
   if (resolveMobileTerminalTabAgentId(tab)) {
     return stripLeadingAgentTitleDecorationOrEmpty(tab.title) || 'Terminal'
   }
+
   return tab.title || 'Terminal'
 }

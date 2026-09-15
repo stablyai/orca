@@ -32,29 +32,35 @@ export async function getBranchCompare(
   // The base-ref probe peels to a commit. Only branch refs are guaranteed to store
   // commits; remote-tracking refs may store annotated tags whose raw oid must be preserved.
   const reusableProbedOidByRef = new Map<string, string>()
+
   const { compareRef, headOidResult, baseOidResult } = await readBranchCompareHead({
     readCompareRef: () => resolveCompareRef(worktreePath, options),
     resolveBaseRef: () =>
       // Why: short refs like "origin/main" can collide with a local branch; use the proven remote-tracking ref.
       resolveWorktreeAddBaseRef(baseRef, async (qualifiedRef) => {
         const oid = await resolveWorktreeBaseCommitOid(worktreePath, qualifiedRef, options)
+
         if (oid !== null && qualifiedRef.startsWith('refs/heads/')) {
           reusableProbedOidByRef.set(qualifiedRef, oid)
         }
+
         return oid !== null
       }),
     readHeadOid: () => resolveRefOid(worktreePath, 'HEAD', options),
     readBaseOid: (ref) => {
       const reusableOid = reusableProbedOidByRef.get(ref)
+
       return reusableOid === undefined
         ? resolveRefOid(worktreePath, ref, options)
         : Promise.resolve(reusableOid)
     }
   })
+
   summary.compareRef = compareRef
 
   let headOid = ''
   let baseOid = ''
+
   if (headOidResult.ok) {
     headOid = headOidResult.oid
     summary.headOid = headOid
@@ -67,11 +73,14 @@ export async function getBranchCompare(
       summary.commitsAhead = 0
       summary.commitsBehind = 0
       summary.status = 'ready'
+
       return { summary, entries: [] }
     }
+
     summary.status = 'unborn-head'
     summary.errorMessage =
       'This branch does not have a committed HEAD yet, so compare-to-base is unavailable.'
+
     return { summary, entries: [] }
   }
 
@@ -81,16 +90,19 @@ export async function getBranchCompare(
   } else {
     summary.status = 'invalid-base'
     summary.errorMessage = `Base ref ${baseRef} could not be resolved in this repository.`
+
     return { summary, entries: [] }
   }
 
   let mergeBase = ''
+
   try {
     mergeBase = await resolveMergeBase(worktreePath, baseOid, headOid, options)
     summary.mergeBase = mergeBase
   } catch {
     summary.status = 'no-merge-base'
     summary.errorMessage = `This branch and ${baseRef} do not share a merge base, so compare-to-base is unavailable.`
+
     return { summary, entries: [] }
   }
 
@@ -99,14 +111,17 @@ export async function getBranchCompare(
       loadBranchChanges(worktreePath, mergeBase, headOid, options),
       countCompareDivergence(worktreePath, baseOid, headOid, options)
     ])
+
     summary.changedFiles = entries.length
     summary.commitsAhead = divergence.ahead
     summary.commitsBehind = divergence.behind
     summary.status = 'ready'
+
     return { summary, entries }
   } catch (error) {
     summary.status = 'error'
     summary.errorMessage = error instanceof Error ? error.message : 'Failed to load branch compare'
+
     return { summary, entries: [] }
   }
 }

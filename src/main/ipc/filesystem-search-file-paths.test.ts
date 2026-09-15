@@ -42,6 +42,7 @@ import { searchQuickOpenFilePaths } from './filesystem-search-file-paths'
 
 function createMockProcess(spawned = true): ChildProcess {
   const child = new EventEmitter() as ChildProcess
+
   ;(child as unknown as Record<string, unknown>).stdout = new EventEmitter()
   ;(
     (child as unknown as Record<string, unknown>).stdout as EventEmitter & {
@@ -53,6 +54,7 @@ function createMockProcess(spawned = true): ChildProcess {
   ;(child as unknown as Record<string, unknown>).exitCode = null
   ;(child as unknown as Record<string, unknown>).signalCode = null
   Object.defineProperty(child, 'pid', { configurable: true, value: spawned ? 1 : undefined })
+
   return child
 }
 
@@ -77,11 +79,13 @@ describe('searchQuickOpenFilePaths', () => {
   it('finds fuzzy matches after 100k paths without returning excluded worktrees', async () => {
     const child = createMockProcess()
     wslAwareSpawnMock.mockReturnValue(child)
+
     const promise = searchQuickOpenFilePaths('/repo', {} as Store, {
       query: 's4354tgt',
       limit: 2,
       excludePaths: ['/repo/nested']
     })
+
     await flushMicrotasks()
 
     expect(wslAwareSpawnMock).toHaveBeenCalledTimes(1)
@@ -107,11 +111,13 @@ describe('searchQuickOpenFilePaths', () => {
     const child = createMockProcess()
     wslAwareSpawnMock.mockReturnValue(child)
     const controller = new AbortController()
+
     const promise = searchQuickOpenFilePaths('/repo', {} as Store, {
       query: 'target',
       limit: 32,
       signal: controller.signal
     })
+
     await flushMicrotasks()
 
     controller.abort()
@@ -142,6 +148,7 @@ describe('searchQuickOpenFilePaths', () => {
       query: 'target',
       limit: 32
     })
+
     await flushMicrotasks()
     ;(child.stdout as unknown as EventEmitter).emit('data', 'src/target.ts\n')
     child.emit('close', 0, null)
@@ -154,10 +161,12 @@ describe('searchQuickOpenFilePaths', () => {
     const failed = createMockProcess(false)
     const succeeded = createMockProcess()
     wslAwareSpawnMock.mockReturnValueOnce(failed).mockReturnValueOnce(succeeded)
+
     const promise = searchQuickOpenFilePaths('/repo', {} as Store, {
       query: 'sta4354gitignored',
       limit: 32
     })
+
     await flushMicrotasks()
 
     failed.emit('error', createSpawnError('EAGAIN'))
@@ -188,6 +197,7 @@ describe('searchQuickOpenFilePaths', () => {
       query: 'target',
       limit: 32
     })
+
     await flushMicrotasks()
     ;(succeeded.stdout as unknown as EventEmitter).emit('data', 'src/target.ts\n')
     succeeded.emit('close', 0, null)
@@ -199,10 +209,12 @@ describe('searchQuickOpenFilePaths', () => {
   it('still reports a missing ripgrep binary when rg is genuinely absent', async () => {
     const child = createMockProcess(false)
     wslAwareSpawnMock.mockReturnValue(child)
+
     const promise = searchQuickOpenFilePaths('/repo', {} as Store, {
       query: 'target',
       limit: 32
     })
+
     await flushMicrotasks()
 
     child.emit('error', createSpawnError('ENOENT'))
@@ -216,10 +228,12 @@ describe('searchQuickOpenFilePaths', () => {
     wslAwareSpawnMock.mockReturnValueOnce(failed).mockImplementationOnce(() => {
       throw new RipgrepUnavailableError()
     })
+
     const promise = searchQuickOpenFilePaths('/repo', {} as Store, {
       query: 'target',
       limit: 32
     })
+
     await flushMicrotasks()
 
     failed.emit('error', createSpawnError('EAGAIN'))
@@ -232,11 +246,13 @@ describe('searchQuickOpenFilePaths', () => {
     const child = createMockProcess(false)
     wslAwareSpawnMock.mockReturnValue(child)
     const controller = new AbortController()
+
     const promise = searchQuickOpenFilePaths('/repo', {} as Store, {
       query: 'target',
       limit: 32,
       signal: controller.signal
     })
+
     await flushMicrotasks()
 
     controller.abort()
@@ -250,11 +266,13 @@ describe('searchQuickOpenFilePaths', () => {
     const child = createMockProcess(false)
     wslAwareSpawnMock.mockReturnValue(child)
     const controller = new AbortController()
+
     const promise = searchQuickOpenFilePaths('/repo', {} as Store, {
       query: 'target',
       limit: 32,
       signal: controller.signal
     })
+
     await flushMicrotasks()
 
     // Abort lands after the scan rejected but before the retry decision resumes.

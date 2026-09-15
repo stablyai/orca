@@ -29,6 +29,7 @@ export function deriveRunningAgentSendTargets(
   now = Date.now()
 ): RunningAgentSendTarget[] {
   const tabs = state.tabsByWorktree[worktreeId] ?? []
+
   if (tabs.length === 0) {
     return []
   }
@@ -38,21 +39,27 @@ export function deriveRunningAgentSendTargets(
 
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
     const parsed = parsePaneKey(paneKey)
+
     if (!parsed) {
       continue
     }
+
     const tab = tabsById.get(parsed.tabId)
+
     if (!tab) {
       continue
     }
 
     const layoutPtyId =
       state.terminalLayoutsByTabId?.[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
+
     const tabPtyIds = state.ptyIdsByTabId?.[parsed.tabId]
+
     const ptyId =
       layoutPtyId && (tabPtyIds === undefined || tabPtyIds.includes(layoutPtyId))
         ? layoutPtyId
         : null
+
     let disabledReason: string | undefined
 
     // Why: the shared resolver gates hook freshness; a null hookState means the
@@ -66,11 +73,13 @@ export function deriveRunningAgentSendTargets(
       hasLivePty: ptyId !== null,
       now
     })
+
     // Why: hook-backed rows can go stale while the same PTY is still a live
     // agent; live titles are the runtime proof that the row remains targetable.
     const liveTitleStatus = ptyId
       ? detectLiveAgentPaneStatus(state, parsed.tabId, parsed.leafId, tab.title)
       : null
+
     if (entry.restoredUnconfirmed) {
       disabledReason = 'Agent status is stale'
     } else if (decision.hookState === null) {
@@ -114,9 +123,11 @@ function detectLiveAgentPaneStatus(
   // Why: runtime pane titles are the freshest title signal for split panes; use
   // the tab title only before the runtime has reported a pane title for the leaf.
   const title = paneTitleResolution.title ?? (paneTitleResolution.hasAnyPaneTitle ? null : tabTitle)
+
   if (title === null) {
     return null
   }
+
   return detectAgentSendTitleStatus(title)
 }
 

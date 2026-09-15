@@ -9,5 +9,6 @@ export function useReusedArrayIdentity<T>(next: T[]): T[] {
   useEffect(() => {
     previousRef.current = result
   }, [result])
+
   return result
 }

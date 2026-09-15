@@ -1,10 +1,15 @@
 import { QUICK_OPEN_LISTING_MAX_RESULTS } from './quick-open-listing-limits'
 
 export const QUICK_OPEN_READDIR_MAX_FILES = QUICK_OPEN_LISTING_MAX_RESULTS
+
 export const QUICK_OPEN_READDIR_MAX_ENTRIES = 50_000
+
 export const QUICK_OPEN_READDIR_MAX_DIRECTORIES = 25_000
+
 export const QUICK_OPEN_READDIR_MAX_DEPTH = 256
+
 export const QUICK_OPEN_READDIR_MAX_PATH_CODE_UNITS = 16 * 1024 * 1024
+
 export const QUICK_OPEN_READDIR_TIMEOUT_MS = 10_000
 
 export type QuickOpenReaddirBudget = {
@@ -36,6 +41,7 @@ export function createQuickOpenReaddirBudget(
   const maxDirectories = opts.maxDirectories ?? QUICK_OPEN_READDIR_MAX_DIRECTORIES
   const maxDepth = opts.maxDepth ?? QUICK_OPEN_READDIR_MAX_DEPTH
   const maxPathCodeUnits = opts.maxPathCodeUnits ?? QUICK_OPEN_READDIR_MAX_PATH_CODE_UNITS
+
   for (const [name, value] of Object.entries({
     maxFiles,
     maxEntries,
@@ -47,6 +53,7 @@ export function createQuickOpenReaddirBudget(
       throw new RangeError(`${name} must be a non-negative safe integer`)
     }
   }
+
   return {
     remainingFiles: maxFiles,
     remainingEntries: maxEntries,
@@ -62,11 +69,13 @@ export function createQuickOpenReaddirBudget(
 }
 
 const FILE_LISTING_TIMED_OUT = 'File listing timed out'
+
 const FILE_LISTING_EXCEEDED_PREFIX = 'File listing exceeded'
 
 /** Budget errors are the only fallback failures translated into install-rg guidance. */
 export function isQuickOpenReaddirBudgetError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : ''
+
   return message === FILE_LISTING_TIMED_OUT || message.startsWith(FILE_LISTING_EXCEEDED_PREFIX)
 }
 
@@ -80,6 +89,7 @@ export function consumeQuickOpenReaddirFileBudget(budget: QuickOpenReaddirBudget
   if (budget.remainingFiles <= 0) {
     throw new Error(`${FILE_LISTING_EXCEEDED_PREFIX} ${budget.maxFiles} files`)
   }
+
   budget.remainingFiles--
 }
 
@@ -87,6 +97,7 @@ export function consumeQuickOpenReaddirEntryBudget(budget: QuickOpenReaddirBudge
   if (budget.remainingEntries <= 0) {
     throw new Error(`${FILE_LISTING_EXCEEDED_PREFIX} ${budget.maxEntries} entries`)
   }
+
   budget.remainingEntries--
 }
 
@@ -94,6 +105,7 @@ export function consumeQuickOpenReaddirDirectoryBudget(budget: QuickOpenReaddirB
   if (budget.remainingDirectories <= 0) {
     throw new Error(`${FILE_LISTING_EXCEEDED_PREFIX} ${budget.maxDirectories} directories`)
   }
+
   budget.remainingDirectories--
 }
 
@@ -110,5 +122,6 @@ export function consumeQuickOpenReaddirPathBudget(
   if (path.length > budget.remainingPathCodeUnits) {
     throw new Error(`${FILE_LISTING_EXCEEDED_PREFIX} ${budget.maxPathCodeUnits} path code units`)
   }
+
   budget.remainingPathCodeUnits -= path.length
 }

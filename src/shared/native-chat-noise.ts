@@ -14,9 +14,11 @@ export function isNoiseMessage(message: NativeChatMessage): boolean {
   if (message.role !== 'user' && message.role !== 'system') {
     return false
   }
+
   if (message.blocks.some((block) => block.type === 'tool-call' || block.type === 'tool-result')) {
     return false
   }
+
   return isKnownHarnessInjectedUserTurnText(messageText(message))
 }
 

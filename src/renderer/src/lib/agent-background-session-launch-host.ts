@@ -10,6 +10,7 @@ import { getRepoSshConnectionId } from '../../../shared/execution-host'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 
 type LaunchStore = ReturnType<typeof useAppStore.getState>
+
 type LaunchRepo = LaunchStore['repos'][number]
 
 export type AgentBackgroundLaunchHost = {
@@ -27,9 +28,11 @@ function resolveFolderWorkspaceConnectionIdForLaunch(
   worktreeId: string
 ): string | null | undefined {
   const parsed = parseWorkspaceKey(worktreeId)
+
   if (parsed?.type !== 'folder') {
     return undefined
   }
+
   return getFolderWorkspaceConnectionId(store, parsed.folderWorkspaceId)
 }
 
@@ -41,11 +44,13 @@ export function resolveAgentBackgroundLaunchHost(args: {
   repo: LaunchRepo | null | undefined
 }): AgentBackgroundLaunchHost {
   const { store, worktreeId, worktreePath, repo } = args
+
   if (repo) {
     // Why: SSH ownership has two spellings, so the raw field spawns an `executionHostId: 'ssh:*'`-only
     // repo on the client with a remote path. One resolution feeds the route, the trust write and the
     // launch shape, which must not disagree about the host.
     const sshConnectionId = getRepoSshConnectionId(repo)
+
     return {
       connectionId: sshConnectionId,
       platform: getAgentLaunchPlatformForRepo(
@@ -56,11 +61,14 @@ export function resolveAgentBackgroundLaunchHost(args: {
       expectedConnectionId: sshConnectionId
     }
   }
+
   const folderWorkspaceConnectionId = resolveFolderWorkspaceConnectionIdForLaunch(store, worktreeId)
   const isFolderWorkspace = parseWorkspaceKey(worktreeId)?.type === 'folder'
+
   if (isFolderWorkspace && folderWorkspaceConnectionId === undefined) {
     throw new Error('The target folder workspace host is unavailable or ambiguous.')
   }
+
   return {
     connectionId: folderWorkspaceConnectionId ?? null,
     platform: folderWorkspaceConnectionId

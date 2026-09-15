@@ -43,6 +43,7 @@ export function cdpPointerButtonFromMask(buttons: number): CdpPointerButton | 'n
       return button
     }
   }
+
   return 'none'
 }
 
@@ -50,7 +51,9 @@ export function cdpMouseModifierMask(modifiers: BrowserMouseModifier[] | undefin
   if (!modifiers || modifiers.length === 0) {
     return 0
   }
+
   let mask = 0
+
   for (const modifier of modifiers) {
     if (modifier === 'alt') {
       mask |= 1
@@ -62,6 +65,7 @@ export function cdpMouseModifierMask(modifiers: BrowserMouseModifier[] | undefin
       mask |= 8
     }
   }
+
   return mask
 }
 
@@ -69,6 +73,7 @@ export function readClickPoint(value: unknown, fallback: BrowserClickPoint): Bro
   const point = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
   const x = point?.x
   const y = point?.y
+
   if (
     typeof x !== 'number' ||
     !Number.isFinite(x) ||
@@ -77,6 +82,7 @@ export function readClickPoint(value: unknown, fallback: BrowserClickPoint): Bro
   ) {
     return fallback
   }
+
   return { x, y, adjusted: point?.adjusted === true, handled: point?.handled === true }
 }
 
@@ -199,17 +205,21 @@ export async function resolveMobileTouchClickPoint(
   allowDomActivation: boolean
 ): Promise<BrowserClickPoint> {
   const fallback = { x, y, adjusted: false, handled: false }
+
   if (typeof radius !== 'number' || !Number.isFinite(radius) || radius <= 0) {
     return fallback
   }
+
   try {
     const result = await dbg.sendCommand('Runtime.evaluate', {
       expression: mobileTouchClickExpression(x, y, radius, allowDomActivation),
       returnByValue: true,
       silent: true
     })
+
     const raw = result && typeof result === 'object' ? (result as Record<string, unknown>) : null
     const evaluated = raw?.result && typeof raw.result === 'object' ? raw.result : null
+
     return readClickPoint((evaluated as Record<string, unknown> | null)?.value, fallback)
   } catch {
     return fallback

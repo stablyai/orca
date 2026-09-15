@@ -34,6 +34,7 @@ export function scanChromiumCookieRows(
       context.integritySkipped++
       continue
     }
+
     // Why: transplanting these replaces a working sign-in with a session the site rejects.
     if (isNonTransplantableCookieDomain(domain)) {
       context.nonTransplantableSkipped++
@@ -45,30 +46,37 @@ export function scanChromiumCookieRows(
     const encBuf = encRaw instanceof Uint8Array ? Buffer.from(encRaw) : null
     const plainRaw = sourceRow.value
     let decryptedValue: Buffer
+
     if (encBuf && encBuf.length > 0) {
       const version = cookieEncryptionVersion(encBuf)
       const appBoundIneligible = version === 'v20'
+
       const keyringIneligible =
         version === 'v11' &&
         sourceKey?.mode === 'aes-128-cbc' &&
         sourceKey.keyringUnavailable === true
+
       const raw =
         sourceKey && !appBoundIneligible && !keyringIneligible
           ? decryptCookieValueRaw(encBuf, sourceKey)
           : null
+
       if (!raw) {
         // Why: once decrypt returns null every failure looks identical, so attribute the cause
         // here while the version prefix is still in hand. Without this an undecryptable profile
         // is indistinguishable from an empty one and reports success.
         context.decryptFailed++
+
         if (appBoundIneligible) {
           context.appBoundFailed++
         } else if (keyringIneligible) {
           context.keyringUnavailableFailed++
         }
+
         context.skipped++
         continue
       }
+
       decryptedValue = raw
     } else if (plainRaw instanceof Uint8Array) {
       decryptedValue = Buffer.from(plainRaw)
@@ -79,14 +87,17 @@ export function scanChromiumCookieRows(
     }
 
     let validDomain = context.sourceDomainValidity.get(domain)
+
     if (validDomain === undefined) {
       validDomain = normalizeCookieImportDomain(domain) !== null
       context.sourceDomainValidity.set(domain, validDomain)
     }
+
     if (!validDomain) {
       context.skipped++
       continue
     }
+
     // Decryption failures are already counted above. Every other row suppressed by the
     // pre-decryption family plan is counted once here, keeping partitionSkipped a breakdown.
     if (!plannedSourceRows.has(sourceRow)) {
@@ -127,6 +138,7 @@ export function scanChromiumCookieRows(
   for (const { entry } of context.scanned) {
     context.domainSet.add(entry.domain.startsWith('.') ? entry.domain.slice(1) : entry.domain)
   }
+
   // Why (STA-4797): the import may only destroy what it is replacing. Naming the scope from the
   // plan — the same rows the writes come from — is what keeps the removal set from drifting past
   // the write set, and it is derived here rather than at the clear because the staged image below
@@ -147,6 +159,7 @@ export function scanChromiumCookieRows(
   // leak in.
   for (const { entry, sourceRow } of context.scanned) {
     context.decryptedCookies.push(entry)
+
     if (context.insertStmt && targetColumnInfo) {
       try {
         const params = buildChromiumCookieInsertParams(
@@ -154,11 +167,13 @@ export function scanChromiumCookieRows(
           sourceRow,
           entry.decryptedValue
         )
+
         context.insertStmt.run(...params)
       } catch (err) {
         context.disableStaging(String(err))
       }
     }
+
     // Why: counts importable cookies, not staged rows — the summary must stay truthful when
     // the optional staging DB is unavailable.
     context.imported++
@@ -180,11 +195,13 @@ export function scanChromiumCookieRows(
   if (context.partitionSkipped > 0 && context.options.canReportPartitionSkippedCookies === false) {
     context.closeStagingDb()
     context.discardStagingFile()
+
     return {
       ok: false,
       reason:
         'This Orca client cannot report cookies skipped for an unreadable site partition. Update Orca on this device and try again.'
     }
   }
+
   return null
 }

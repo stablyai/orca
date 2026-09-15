@@ -27,6 +27,7 @@ describe('selectPaletteStatusInputs', () => {
       ptyIdsByTabId: { 'tab-1': ['pty-1'] },
       tabsByWorktree: { 'wt-1': [] }
     }
+
     const afterChurn = selectPaletteStatusInputs(churned, false)
     expect(afterChurn).toBe(EMPTY_PALETTE_STATUS_INPUTS)
     expect(shallow(inactive, afterChurn)).toBe(true)
@@ -50,11 +51,13 @@ describe('selectPaletteStatusInputs', () => {
   // on every one of them — which is exactly what the dots' own subscription now covers instead.
   it('does not move when the two hot maps churn while active', () => {
     const r1 = selectPaletteStatusInputs(BASE, true)
+
     const churned: PaletteStatusInputsState = {
       ...BASE,
       agentStatusByPaneKey: { 'tab-1:leaf-1': {} as never },
       runtimePaneTitlesByTabId: { 'tab-1': { 0: 'claude' } }
     }
+
     expect(shallow(r1, selectPaletteStatusInputs(churned, true))).toBe(true)
   })
 
@@ -72,10 +75,12 @@ describe('selectPaletteIndexStatusSnapshot', () => {
   it('passes the hot maps through while active', () => {
     const titles = { 'tab-1': { 0: 'claude' } }
     const statuses = { 'tab-1:leaf-1': {} as never }
+
     const snapshot = selectPaletteIndexStatusSnapshot(
       { ...BASE, runtimePaneTitlesByTabId: titles, agentStatusByPaneKey: statuses },
       true
     )
+
     expect(snapshot.runtimePaneTitlesByTabId).toBe(titles)
     expect(snapshot.agentStatusByPaneKey).toBe(statuses)
   })
@@ -85,30 +90,36 @@ describe('selectPaletteIndexStatusSnapshot', () => {
   it('snapshots the unread maps alongside the status maps', () => {
     const unreadTabs = { 'term-1': true } as const
     const unreadPanes = { 'term-1:leaf-1': true } as const
+
     const snapshot = selectPaletteIndexStatusSnapshot(
       { ...BASE, unreadTerminalTabs: unreadTabs, unreadAgentCompletionPanes: unreadPanes },
       true
     )
+
     expect(snapshot.unreadTerminalTabs).toBe(unreadTabs)
     expect(snapshot.unreadAgentCompletionPanes).toBe(unreadPanes)
   })
 
   it('keeps unread churn out of the subscribed bundle', () => {
     const r1 = selectPaletteStatusInputs(BASE, true)
+
     const churned: PaletteStatusInputsState = {
       ...BASE,
       unreadTerminalTabs: { 'term-1': true },
       unreadAgentCompletionPanes: { 'term-1:leaf-1': true }
     }
+
     expect(shallow(r1, selectPaletteStatusInputs(churned, true))).toBe(true)
   })
 
   it('drops its hold on the live maps once inactive', () => {
     const titles = { 'tab-1': { 0: 'claude' } }
+
     const inactive = selectPaletteIndexStatusSnapshot(
       { ...BASE, runtimePaneTitlesByTabId: titles },
       false
     )
+
     expect(inactive.runtimePaneTitlesByTabId).toEqual({})
     // Stable identity, so a closed palette re-reading it can't churn a memo.
     expect(selectPaletteIndexStatusSnapshot(BASE, false)).toBe(inactive)

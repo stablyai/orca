@@ -180,6 +180,7 @@ describeIfBuilt('orca orchestration check --wait subprocess (§3.4)', () => {
         if (line.trim().length === 0) {
           continue
         }
+
         if (line.includes('_keepalive')) {
           expect(() => JSON.parse(line)).not.toThrow()
           expect(line).not.toContain('\n')
@@ -227,6 +228,7 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
         'hello',
         '--json'
       ])
+
       expect(send.exitCode, send.stderr).toBe(0)
 
       const create = await runBuiltCli(userDataPath, [
@@ -238,6 +240,7 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
         'term_cli',
         '--json'
       ])
+
       expect(create.exitCode, create.stderr).toBe(0)
       expect(db.getInbox()).toHaveLength(1)
       expect(db.listTasks()).toHaveLength(1)
@@ -249,11 +252,14 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
         '--messages',
         '--json'
       ])
+
       expect(invalid.exitCode).toBe(1)
+
       const invalidPayload = JSON.parse(invalid.stdout) as {
         ok: boolean
         error: { code: string; message: string }
       }
+
       expect(invalidPayload.ok).toBe(false)
       expect(invalidPayload.error.code).toBe('invalid_argument')
       expect(invalidPayload.error.message).toContain('Choose exactly one reset scope')
@@ -266,6 +272,7 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
         '--tasks',
         '--json'
       ])
+
       expect(resetTasks.exitCode, resetTasks.stderr).toBe(0)
       expect(JSON.parse(resetTasks.stdout)).toMatchObject({ ok: true, result: { reset: 'tasks' } })
       expect(db.getInbox()).toHaveLength(1)
@@ -278,6 +285,7 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
         coordinatorHandle: 'term_cli',
         coordinatorPaneKey
       })
+
       const recreate = await runBuiltCli(userDataPath, [
         'orchestration',
         'task-create',
@@ -287,6 +295,7 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
         'term_cli',
         '--json'
       ])
+
       expect(recreate.exitCode, recreate.stderr).toBe(0)
       expect(db.getInbox()).toHaveLength(1)
       expect(db.listTasks()).toHaveLength(1)
@@ -306,6 +315,7 @@ describeIfBuilt('orca orchestration reset subprocess', () => {
         '--all',
         '--json'
       ])
+
       expect(resetAll.exitCode, resetAll.stderr).toBe(0)
       expect(JSON.parse(resetAll.stdout)).toMatchObject({ ok: true, result: { reset: 'all' } })
       expect(db.getInbox()).toHaveLength(0)
@@ -347,10 +357,13 @@ describeIfBuilt('orca orchestration task readiness subprocess', () => {
         'term_cli',
         '--json'
       ])
+
       expect(dependencyCreate.exitCode, dependencyCreate.stderr).toBe(0)
+
       const dependencyPayload = JSON.parse(dependencyCreate.stdout) as {
         result: { task: { id: string; status: string } }
       }
+
       const dependencyId = dependencyPayload.result.task.id
 
       const dependencyComplete = await runBuiltCli(userDataPath, [
@@ -364,6 +377,7 @@ describeIfBuilt('orca orchestration task readiness subprocess', () => {
         'term_cli',
         '--json'
       ])
+
       expect(dependencyComplete.exitCode, dependencyComplete.stderr).toBe(0)
 
       const childCreate = await runBuiltCli(userDataPath, [
@@ -377,10 +391,13 @@ describeIfBuilt('orca orchestration task readiness subprocess', () => {
         'term_cli',
         '--json'
       ])
+
       expect(childCreate.exitCode, childCreate.stderr).toBe(0)
+
       const childPayload = JSON.parse(childCreate.stdout) as {
         result: { task: { id: string; status: string } }
       }
+
       const child = childPayload.result.task
       expect(child.status).toBe('ready')
 
@@ -391,15 +408,19 @@ describeIfBuilt('orca orchestration task readiness subprocess', () => {
         'term_cli',
         '--json'
       ])
+
       expect(taskList.exitCode, taskList.stderr).toBe(0)
+
       const taskListPayload = JSON.parse(taskList.stdout) as {
         result: { tasks: { id: string; status: string }[] }
       }
+
       expect(taskListPayload.result.tasks).toContainEqual(
         expect.objectContaining({ id: child.id, status: 'ready' })
       )
 
       const persisted = new OrchestrationDb(dbPath)
+
       try {
         expect(persisted.getTask(child.id)?.status).toBe('ready')
       } finally {

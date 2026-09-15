@@ -9,16 +9,20 @@ import { useElementGuestFocus } from './browser-page-guest-focus'
 import { useBrowserPageChromeFocus } from './use-browser-page-chrome-focus'
 
 const PAGE_ID = 'page-a'
+
 const WORKSPACE_ID = 'workspace-a'
+
 const ADDRESS_VALUE = 'about:blank'
 
 let frameCallbacks: FrameRequestCallback[] = []
+
 let focusAddressBarFromIpc: (() => void) | null = null
 
 function flushFrames(cycles = 8): void {
   for (let index = 0; index < cycles; index += 1) {
     const pending = frameCallbacks
     frameCallbacks = []
+
     for (const callback of pending) {
       callback(0)
     }
@@ -53,6 +57,7 @@ function ChromeHarness({
     addressBarInputRef,
     guestFocus
   })
+
   return (
     <div data-browser-overlay-tab-id={workspaceId}>
       <input
@@ -119,6 +124,7 @@ describe('useBrowserPageChromeFocus', () => {
     chromeFocus = null
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
     vi.stubGlobal('cancelAnimationFrame', () => {})
@@ -128,6 +134,7 @@ describe('useBrowserPageChromeFocus', () => {
         ui: {
           onFocusBrowserAddressBar: (callback: () => void) => {
             focusAddressBarFromIpc = callback
+
             return () => {
               focusAddressBarFromIpc = null
             }
@@ -202,6 +209,7 @@ describe('useBrowserPageChromeFocus', () => {
         <input data-testid="outside" />
       </>
     )
+
     act(() => flushFrames())
     act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'address-bar' }))
     act(() => flushFrames(1))
@@ -225,12 +233,14 @@ describe('useBrowserPageChromeFocus', () => {
 
   it('drops both grabs when a palette request lands on a blank tab already grabbing', () => {
     queuePendingAddressBarFocus()
+
     const view = render(
       <>
         <ChromeHarness />
         <input data-testid="outside" />
       </>
     )
+
     act(() => flushFrames(1))
     act(() => requestBrowserFocus({ pageId: PAGE_ID, target: 'address-bar' }))
     act(() => flushFrames(1))

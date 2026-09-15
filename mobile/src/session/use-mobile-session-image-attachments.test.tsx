@@ -47,6 +47,7 @@ describe('useMobileSessionImageAttachments', () => {
 
   function Harness({ args }: { args: HookArgs }): null {
     useMobileSessionImageAttachments(args)
+
     return null
   }
 

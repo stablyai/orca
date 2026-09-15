@@ -25,15 +25,19 @@ describe('DaemonSessionOwnerResolver', () => {
     let releaseFallback!: (processes: PtyProcessInfo[]) => void
     let releaseCurrent!: (processes: PtyProcessInfo[]) => void
     let releaseLegacy!: (processes: PtyProcessInfo[]) => void
+
     const fallbackGate = new Promise<PtyProcessInfo[]>((resolve) => {
       releaseFallback = resolve
     })
+
     const currentGate = new Promise<PtyProcessInfo[]>((resolve) => {
       releaseCurrent = resolve
     })
+
     const legacyGate = new Promise<PtyProcessInfo[]>((resolve) => {
       releaseLegacy = resolve
     })
+
     const fallbackInventory = vi.fn(() => fallbackGate)
     const currentInventory = vi.fn(() => currentGate)
     const legacyInventory = vi.fn(() => legacyGate)
@@ -58,7 +62,9 @@ describe('DaemonSessionOwnerResolver', () => {
         rows: 24
       })
     ]
+
     let settled = 0
+
     for (const resolution of resolutions) {
       void resolution.then(
         () => {
@@ -75,9 +81,11 @@ describe('DaemonSessionOwnerResolver', () => {
     expect(legacyInventory).toHaveBeenCalledOnce()
     releaseFallback([])
     releaseCurrent([])
+
     for (let iteration = 0; iteration < 10; iteration += 1) {
       await Promise.resolve()
     }
+
     expect(settled).toBe(0)
     expect(fallback.spawn).not.toHaveBeenCalled()
     expect(current.spawn).not.toHaveBeenCalled()
@@ -126,9 +134,11 @@ describe('DaemonSessionOwnerResolver', () => {
         if (index === 50) {
           throw new Error('offline')
         }
+
         return []
       })
     )
+
     const resolver = new DaemonSessionOwnerResolver(
       inventories.map((inventory) => provider(inventory)),
       new Map()
@@ -145,9 +155,11 @@ describe('DaemonSessionOwnerResolver', () => {
 
   it('reuses incomplete inventory across serialized restores', async () => {
     const firstInventory = vi.fn(async () => [])
+
     const secondInventory = vi.fn(async () => {
       throw new Error('offline')
     })
+
     const resolver = new DaemonSessionOwnerResolver(
       [provider(firstInventory), provider(secondInventory)],
       new Map()
@@ -163,9 +175,11 @@ describe('DaemonSessionOwnerResolver', () => {
   it('does not extend incomplete inventory lifetime on cache hits', async () => {
     let now = 1_000
     const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+
     const inventory = vi.fn(async () => {
       throw new Error('offline')
     })
+
     const resolver = new DaemonSessionOwnerResolver(
       [provider(async () => []), provider(inventory)],
       new Map()
@@ -187,11 +201,13 @@ describe('DaemonSessionOwnerResolver', () => {
   it('does not let startup inventory hide a session created before restore', async () => {
     const sessions: PtyProcessInfo[] = []
     const inventory = vi.fn(async () => sessions)
+
     const owner = provider(inventory, async (opts) => ({
       id: opts.sessionId!,
       incarnationId: 'live',
       isReattach: true
     }))
+
     const resolver = new DaemonSessionOwnerResolver([owner, provider(async () => [])], new Map())
 
     await resolver.discoverRoutes()
@@ -207,9 +223,11 @@ describe('DaemonSessionOwnerResolver', () => {
     const oldOwner = provider(async () => [
       { id: 'session', incarnationId: 'old', cwd: '', title: 'old' }
     ])
+
     const exactOwner = provider(async () => [
       { id: 'session', incarnationId: 'expected', cwd: '', title: 'exact' }
     ])
+
     const resolver = new DaemonSessionOwnerResolver([oldOwner, exactOwner], new Map())
 
     await expect(resolver.resolve('session', 'expected')).resolves.toMatchObject({
@@ -222,6 +240,7 @@ describe('DaemonSessionOwnerResolver', () => {
     const liveOwner = provider(async () => [
       { id: 'session', incarnationId: 'live', cwd: '', title: 'live' }
     ])
+
     const resolver = new DaemonSessionOwnerResolver([liveOwner], new Map())
 
     await expect(resolver.resolve('session', 'stale')).resolves.toMatchObject({
@@ -235,9 +254,11 @@ describe('DaemonSessionOwnerResolver', () => {
       async () => [{ id: 'session', incarnationId: 'live', cwd: '', title: 'live' }],
       async () => ({ id: 'session', incarnationId: 'live', isReattach: true })
     )
+
     const unrelatedInventory = vi.fn(async () => {
       throw new Error('offline')
     })
+
     const resolver = new DaemonSessionOwnerResolver(
       [routedOwner, provider(unrelatedInventory)],
       new Map([['session', routedOwner]])
@@ -260,10 +281,12 @@ describe('DaemonSessionOwnerResolver', () => {
       async () => [{ id: 'session', incarnationId: 'other', cwd: '', title: 'stale' }],
       async () => ({ id: 'session', incarnationId: 'other', isReattach: true })
     )
+
     const exactOwner = provider(
       async () => [{ id: 'session', incarnationId: 'expected', cwd: '', title: 'exact' }],
       async () => ({ id: 'session', incarnationId: 'expected', isReattach: true })
     )
+
     const resolver = new DaemonSessionOwnerResolver(
       [staleRoute, exactOwner],
       new Map([['session', staleRoute]])
@@ -285,6 +308,7 @@ describe('DaemonSessionOwnerResolver', () => {
   it('refreshes incomplete inventory when a routed owner refuses a moved session', async () => {
     let firstOwnsSession = true
     let secondOwnsSession = false
+
     const first = provider(
       async () =>
         firstOwnsSession
@@ -294,6 +318,7 @@ describe('DaemonSessionOwnerResolver', () => {
         throw new SessionNotFoundError('session')
       }
     )
+
     const second = provider(
       async () =>
         secondOwnsSession
@@ -301,9 +326,11 @@ describe('DaemonSessionOwnerResolver', () => {
           : [],
       async () => ({ id: 'session', incarnationId: 'runtime', isReattach: true })
     )
+
     const unavailable = provider(async () => {
       throw new Error('offline')
     })
+
     const resolver = new DaemonSessionOwnerResolver([first, second, unavailable], new Map())
 
     await expect(resolver.resolve('session', 'runtime', true)).resolves.toMatchObject({
@@ -332,6 +359,7 @@ describe('DaemonSessionOwnerResolver', () => {
     const exactOwner = provider(async () => [
       { id: 'session', incarnationId: 'runtime', cwd: '', title: 'exact' }
     ])
+
     const resolver = new DaemonSessionOwnerResolver(
       [
         exactOwner,
@@ -397,6 +425,7 @@ describe('DaemonSessionOwnerResolver', () => {
         throw new SessionNotFoundError('missing')
       }
     )
+
     const resolver = new DaemonSessionOwnerResolver([owner], new Map())
 
     await expect(
@@ -414,9 +443,11 @@ describe('DaemonSessionOwnerResolver', () => {
 
   it('preserves an unresolved owner when any provider inventory fails', async () => {
     const reachable = provider(async () => [])
+
     const unreachable = provider(async () => {
       throw new Error('offline')
     })
+
     const resolver = new DaemonSessionOwnerResolver([reachable, unreachable], new Map())
 
     await expect(
@@ -435,6 +466,7 @@ describe('DaemonSessionOwnerResolver', () => {
         throw new SessionNotFoundError('session')
       }
     )
+
     const resolver = new DaemonSessionOwnerResolver(
       [
         candidate,
@@ -459,6 +491,7 @@ describe('DaemonSessionOwnerResolver', () => {
         throw new SessionNotFoundError('session')
       }
     )
+
     const resolver = new DaemonSessionOwnerResolver(
       [candidate, provider(async () => [])],
       new Map()
@@ -476,6 +509,7 @@ describe('DaemonSessionOwnerResolver', () => {
       { id: 'first', cwd: '', title: 'first' },
       { id: 'second', cwd: '', title: 'second' }
     ])
+
     const owner = provider(inventory)
     const emptyInventory = vi.fn(async () => [])
     const resolver = new DaemonSessionOwnerResolver([owner, provider(emptyInventory)], new Map())
@@ -489,13 +523,17 @@ describe('DaemonSessionOwnerResolver', () => {
 
   it('discards an inventory completed after daemon identity replacement', async () => {
     let release!: () => void
+
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
+
     const inventory = vi.fn(async () => {
       await gate
+
       return [{ id: 'session', cwd: '', title: 'stale' }]
     })
+
     const owner = provider(inventory)
     const resolver = new DaemonSessionOwnerResolver([owner], new Map())
 
@@ -512,23 +550,29 @@ describe('DaemonSessionOwnerResolver', () => {
   it('fails closed across identity replacement then confirms absence on retry', async () => {
     let releaseCurrent!: (processes: PtyProcessInfo[]) => void
     let releaseLegacy!: (processes: PtyProcessInfo[]) => void
+
     const currentGate = new Promise<PtyProcessInfo[]>((resolve) => {
       releaseCurrent = resolve
     })
+
     const legacyGate = new Promise<PtyProcessInfo[]>((resolve) => {
       releaseLegacy = resolve
     })
+
     const currentInventory = vi
       .fn<() => Promise<PtyProcessInfo[]>>()
       .mockReturnValueOnce(currentGate)
       .mockResolvedValueOnce([])
+
     const legacyInventory = vi
       .fn<() => Promise<PtyProcessInfo[]>>()
       .mockReturnValueOnce(legacyGate)
       .mockResolvedValueOnce([])
+
     const current = provider(currentInventory)
     const legacy = provider(legacyInventory)
     const resolver = new DaemonSessionOwnerResolver([current, legacy], new Map())
+
     const attach = {
       sessionId: 'pty-persisted-after-identity-change',
       expectedIncarnationId: 'incarnation-before-identity-change',
@@ -563,6 +607,7 @@ describe('DaemonSessionOwnerResolver', () => {
       async () => [],
       async () => {
         resolver.invalidateProvider(owner)
+
         return { id: 'session', incarnationId: 'inc', isReattach: true }
       }
     )

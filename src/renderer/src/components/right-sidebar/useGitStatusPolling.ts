@@ -24,10 +24,13 @@ import {
 } from './git-status-refresh-scheduler'
 
 const STATUS_SAFETY_INTERVAL_MS = 60_000
+
 const STATUS_ACTIVITY_DEBOUNCE_MS = 125
+
 // Why: evidence-driven status refreshes must keep the pre-scheduler floor so
 // sustained terminal/file signals can never run git back-to-back (#7983).
 const STATUS_ACTIVITY_MIN_GAP_MS = 3000
+
 // Why: status scans and remote conflict probes can take longer than their
 // timers; duration-aware spacing prevents a slow task from running nonstop.
 export const SLOW_GIT_POLL_BACKOFF = {
@@ -46,9 +49,11 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const enabled = options.enabled ?? true
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorktree = useWorktreeById(activeWorktreeId)
+
   const activeExecutionHostId = useAppStore((s) =>
     getExecutionHostIdForWorktree(s, activeWorktreeId)
   )
+
   const allWorktrees = useAllWorktrees()
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setGitStatus = useAppStore((s) => s.setGitStatus)
@@ -70,11 +75,13 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const activeRepo = useRepoById(activeRepoId)
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
   const activeConnectionId = activeRepo?.connectionId ?? null
+
   const isConnectionReady = useCallback(
     (connectionId: string | null | undefined): boolean =>
       !connectionId || sshConnectionStates.get(connectionId)?.status === 'connected',
     [sshConnectionStates]
   )
+
   const activeGitStatusPollingArgs = {
     activeWorktreeId,
     worktreePath,
@@ -83,7 +90,9 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     rightSidebarExplorerView,
     openFiles
   }
+
   const isActiveConnectionReady = isConnectionReady(activeConnectionId)
+
   const canFetchActiveWorktreeGitStatus =
     enabled &&
     !!activeWorktreeId &&
@@ -91,6 +100,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     activeRepoSupportsGit &&
     shouldPollActiveGitStatus(activeGitStatusPollingArgs) &&
     isActiveConnectionReady
+
   // Why: the huge flag must only pause evidence-free polling, not push-signal
   // refreshes — a fresh non-huge status result is the only thing that can
   // clear the flag, so gating every lane on it would deadlock the worktree
@@ -99,9 +109,11 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     canFetchActiveWorktreeGitStatus &&
     !!activeWorktreeId &&
     !gitStatusHugeByWorktree?.[activeWorktreeId]
+
   const activeStatusPollScope = shouldPollActiveWorktreeGitStatus
     ? `${activeExecutionHostId}\0${activeWorktreeId}\0${worktreePath}`
     : null
+
   // Why: opening any git-status consumer (Source Control, Files, Checks, or an
   // editor file) must refresh promptly, matching the pre-scheduler behavior
   // where the interactive interval flip re-ran an immediate poll.
@@ -133,6 +145,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
       ) {
         return
       }
+
       try {
         const connectionId = getConnectionId(activeWorktreeId) ?? undefined
         const runtimeSettings = getRightSidebarWorktreeRuntimeSettings(activeWorktreeId)
@@ -182,6 +195,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   const statusRefreshGenerationRef = useRef(0)
 
   const statusSchedulerRef = useRef<GitStatusRefreshScheduler | null>(null)
+
   // Why: pacing belongs to the current worktree, not to scheduler instances —
   // execution-host/push-target rebuilds must not reset it, or a flapping host id
   // lets sustained change signals run git at the bare debounce.
@@ -189,15 +203,19 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     key: string
     pacing: GitStatusRefreshPacing
   } | null>(null)
+
   useEffect(() => {
     const generation = ++statusRefreshGenerationRef.current
     const pacingKey = `${activeWorktreeId}\0${worktreePath}`
+
     let pacing =
       statusPacingRef.current?.key === pacingKey ? statusPacingRef.current.pacing : undefined
+
     if (!pacing) {
       pacing = createGitStatusRefreshPacing()
       statusPacingRef.current = { key: pacingKey, pacing }
     }
+
     const scheduler = createGitStatusRefreshScheduler(
       ({ reason, signal }) =>
         runFetchStatusRef.current({
@@ -217,10 +235,13 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
         pacing
       }
     )
+
     statusSchedulerRef.current = scheduler
+
     return () => {
       statusRefreshGenerationRef.current += 1
       scheduler.dispose()
+
       if (statusSchedulerRef.current === scheduler) {
         statusSchedulerRef.current = null
       }
@@ -233,28 +254,39 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
   useEffect(() => {
     const reconcile = (catchUp: boolean): void => {
       const scheduler = statusSchedulerRef.current
+
       if (!scheduler) {
         return
       }
+
       if (!canFetchActiveWorktreeGitStatus || !isWindowVisible()) {
         scheduler.pause()
+
         return
       }
+
       if (activeStatusPollScope) {
         scheduler.resumeSafety()
+
         return
       }
+
       scheduler.suspendSafety()
+
       if (catchUp) {
         scheduler.refreshNow()
       }
     }
+
     reconcile(false)
+
     if (typeof document === 'undefined' || typeof document.addEventListener !== 'function') {
       return
     }
+
     const handleVisibilityChange = (): void => reconcile(isWindowVisible())
     document.addEventListener('visibilitychange', handleVisibilityChange)
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
@@ -265,8 +297,10 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     visible: interactiveConsumerVisible,
     canFetch: canFetchActiveWorktreeGitStatus
   })
+
   useEffect(() => {
     const previous = previousConsumerVisibilityRef.current
+
     if (
       interactiveConsumerVisible &&
       previous.worktreeId === activeWorktreeId &&
@@ -277,6 +311,7 @@ export function useGitStatusPolling(options: { enabled?: boolean } = {}): void {
     ) {
       statusSchedulerRef.current?.refreshNow()
     }
+
     previousConsumerVisibilityRef.current = {
       worktreeId: activeWorktreeId,
       visible: interactiveConsumerVisible,

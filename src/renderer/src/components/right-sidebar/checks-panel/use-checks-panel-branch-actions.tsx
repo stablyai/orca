@@ -35,11 +35,14 @@ export function useChecksPanelBranchActions(model: ChecksPanelBranchActionsInput
     setIsSyncingBranch,
     syncBranch
   } = model
+
   const pushBeforeCreatePullRequest = useCallback(async (): Promise<boolean> => {
     if (!activeWorktreeId || !activeWorktree?.path) {
       return false
     }
+
     const connectionId = activeConnectionId ?? undefined
+
     try {
       await pushBranch(
         activeWorktreeId,
@@ -52,6 +55,7 @@ export function useChecksPanelBranchActions(model: ChecksPanelBranchActionsInput
       await fetchUpstreamStatus(activeWorktreeId, activeWorktree.path, connectionId, undefined, {
         runtimeTargetSettings: ownerSettings
       })
+
       return true
     } catch {
       return false
@@ -74,8 +78,10 @@ export function useChecksPanelBranchActions(model: ChecksPanelBranchActionsInput
     ) {
       return
     }
+
     const connectionId = activeConnectionId ?? undefined
     setIsPublishingBranch(true)
+
     try {
       await pushBranch(
         activeWorktreeId,
@@ -117,8 +123,10 @@ export function useChecksPanelBranchActions(model: ChecksPanelBranchActionsInput
     if (!activeWorktreeId || !activeWorktree?.path || isSyncingBranch || isRemoteOperationActive) {
       return
     }
+
     const connectionId = activeConnectionId ?? undefined
     setIsSyncingBranch(true)
+
     try {
       await syncBranch(
         activeWorktreeId,
@@ -155,6 +163,7 @@ export function useChecksPanelBranchActions(model: ChecksPanelBranchActionsInput
     setIsSyncingBranch,
     setGitStatusRefreshNonce
   ])
+
   return { pushBeforeCreatePullRequest, handlePublishBranch, handleSyncBranch }
 }
 

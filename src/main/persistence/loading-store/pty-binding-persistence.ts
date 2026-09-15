@@ -57,6 +57,7 @@ type PersistPtyBindingArgs = {
 }
 
 const ptyBindingPersistenceOperationsContext = Symbol('PtyBindingPersistenceOperations')
+
 type PtyBindingPersistenceOperationsContext = {
   runtime: PtyBindingPersistenceOperationsRuntime
   sessions: SessionHostPartitionOperations
@@ -75,20 +76,26 @@ export class PtyBindingPersistenceOperations {
   persistPtyBinding(args: PersistPtyBindingArgs, hostId?: string | null): boolean {
     const runtime = this[ptyBindingPersistenceOperationsContext].runtime
     const resolvedHostId = resolveHostId(hostId)
+
     const session =
       this[ptyBindingPersistenceOperationsContext].sessions.getWorkspaceSession(resolvedHostId)
+
     const paneKey = `${args.tabId}:${args.leafId}`
     const bindingWorktreeId = args.expectedSourceBinding?.worktreeId ?? args.worktreeId
+
     const span = startPtyBindingSpan({
       hostKind: parseExecutionHostId(resolvedHostId)?.kind ?? 'local',
       origin: args.origin ?? 'unknown',
       savePending: runtime.writeTimer !== null || runtime.pendingWrite !== null,
       generationGap: runtime.writeGeneration - runtime.lastDurableWriteGeneration
     })
+
     if (ptyBindingIsRefused(args, session, bindingWorktreeId, paneKey)) {
       span.finish('refused')
+
       return false
     }
+
     // A durable reattach needs neither a session clone nor whole-state serialization.
     const verdict = evaluatePtyBindingFastLane(
       args,
@@ -96,18 +103,24 @@ export class PtyBindingPersistenceOperations {
       bindingWorktreeId,
       !runtime.quitFlushStarted && runtime.lastDurableWriteGeneration >= runtime.writeGeneration
     )
+
     span.setEligibility(verdict)
+
     if (verdict.eligible) {
       span.finish('fast_lane')
+
       return true
     }
+
     try {
       writePtyBinding(this, args, session, resolvedHostId, bindingWorktreeId, paneKey)
     } catch (err) {
       span.finish('threw', err)
       throw err
     }
+
     span.finish('flushed')
+
     return true
   }
 }
@@ -122,6 +135,7 @@ function writePtyBinding(
 ): void {
   const runtime = owner[ptyBindingPersistenceOperationsContext].runtime
   const sessionBeforeBinding = cloneWorkspaceSessionState(session)
+
   try {
     if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
       runtime.state.workspaceSessionsByHostId = {
@@ -129,6 +143,7 @@ function writePtyBinding(
         [resolvedHostId]: session
       }
     }
+
     applyPtyBinding(args, session, bindingWorktreeId, paneKey)
     runtime.flushOrThrow()
   } catch (err) {
@@ -140,6 +155,7 @@ function writePtyBinding(
         [resolvedHostId]: sessionBeforeBinding
       }
     }
+
     throw err
   }
 }
@@ -152,33 +168,40 @@ function applyPtyBinding(
 ): void {
   const reconciledIncarnation =
     args.expectedBinding !== undefined && args.incarnationId !== args.expectedBinding.incarnationId
+
   let terminalMembershipChanged = false
   let hostAdmittedTabCreated = false
+
   const advanceTopologyFence = (): void => {
     const repoId = getRepoIdFromWorktreeId(bindingWorktreeId)
     const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
+
     // Why: a split, or a host-admitted tab the renderer has never seen, is itself
     // the authority — with no fence the renderer's pre-create tab list replays
     // over it and the tab is lost even on the repo's first such change.
     const establishesMembershipAuthority =
       args.expectedSourceBinding !== undefined || hostAdmittedTabCreated
+
     if (
       !reconciledIncarnation &&
       (!terminalMembershipChanged || (currentRevision <= 0 && !establishesMembershipAuthority))
     ) {
       return
     }
+
     // Why: host-admitted membership or incarnation changes must outrank a stale renderer replay.
     session.terminalTopologyRevisionByRepoId = {
       ...session.terminalTopologyRevisionByRepoId,
       [repoId]: currentRevision + 1
     }
   }
+
   if (args.incarnationId) {
     session.terminalPtyIncarnationsByPaneKey = {
       ...session.terminalPtyIncarnationsByPaneKey,
       [paneKey]: args.incarnationId
     }
+
     if (session.terminalSurfaceTombstonesByPaneKey?.[paneKey]) {
       session.terminalSurfaceTombstonesByPaneKey = {
         ...session.terminalSurfaceTombstonesByPaneKey
@@ -186,8 +209,10 @@ function applyPtyBinding(
       delete session.terminalSurfaceTombstonesByPaneKey[paneKey]
     }
   }
+
   const tabs = session.tabsByWorktree?.[bindingWorktreeId]
   const tab = tabs?.find((t) => t.id === args.tabId)
+
   if (tab) {
     tab.ptyId = tabRowPtyIdAfterLeafBinding(
       tab,
@@ -198,6 +223,7 @@ function applyPtyBinding(
   } else {
     terminalMembershipChanged = true
     hostAdmittedTabCreated = args.hostAdmittedMembership === true
+
     // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
     const nextTabs = [
       ...(tabs ?? []),
@@ -207,6 +233,7 @@ function applyPtyBinding(
         existingTabCount: tabs?.length ?? 0
       })
     ]
+
     session.tabsByWorktree = {
       ...session.tabsByWorktree,
       [bindingWorktreeId]: nextTabs
@@ -218,12 +245,16 @@ function applyPtyBinding(
       [bindingWorktreeId]: session.activeTabIdByWorktree?.[bindingWorktreeId] ?? args.tabId
     }
   }
+
   if (!isTerminalLeafId(args.leafId)) {
     // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
     advanceTopologyFence()
+
     return
   }
+
   const layout = session.terminalLayoutsByTabId?.[args.tabId]
+
   if (layout) {
     if (!layout.root) {
       terminalMembershipChanged = true
@@ -241,10 +272,12 @@ function applyPtyBinding(
         second: { type: 'leaf', leafId: args.leafId }
       }
       layout.activeLeafId = args.leafId
+
       if (layout.expandedLeafId && !layoutContainsLeafId(layout.root, layout.expandedLeafId)) {
         layout.expandedLeafId = null
       }
     }
+
     layout.ptyIdsByLeafId = {
       ...layout.ptyIdsByLeafId,
       [args.leafId]: args.ptyId
@@ -262,6 +295,7 @@ function applyPtyBinding(
       }
     }
   }
+
   advanceTopologyFence()
 }
 

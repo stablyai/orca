@@ -11,6 +11,7 @@ const IMPORT_FROM_KEYS = [
   'auto.components.settings.BrowserProfileRow.c5a273a809',
   'auto.components.settings.BrowserUsePane.5301857d88'
 ]
+
 const LAST_IMPORTED_FROM_KEY = 'auto.components.settings.BrowserUsePane.112f70adc4'
 
 function catalogEntry(key: string): unknown {
@@ -18,6 +19,7 @@ function catalogEntry(key: string): unknown {
     if (typeof node === 'object' && node !== null) {
       return (node as Record<string, unknown>)[part]
     }
+
     return undefined
   }, en)
 }
@@ -40,6 +42,7 @@ describe('import-cookies "From <browser>" label', () => {
     for (const key of IMPORT_FROM_KEYS) {
       expect(catalogEntry(key)).toBe('From {{value0}}')
     }
+
     expect(catalogEntry(LAST_IMPORTED_FROM_KEY)).toBe('Last imported from {{value0}}')
   })
 

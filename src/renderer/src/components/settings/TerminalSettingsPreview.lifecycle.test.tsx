@@ -38,10 +38,12 @@ const mockLigaturesAddon = vi.hoisted(() => ({
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useEffect: (effect: () => void | Cleanup) => {
       const cleanup = effect()
+
       if (typeof cleanup === 'function') {
         mockReactRuntime.cleanups.push(cleanup)
       }
@@ -49,10 +51,13 @@ vi.mock('react', async () => {
     useMemo: (factory: () => unknown) => factory(),
     useRef: (initialValue: unknown) => {
       const ref = { current: initialValue }
+
       if (mockReactRuntime.refCallIndex === 0) {
         ref.current = mockReactRuntime.container
       }
+
       mockReactRuntime.refCallIndex += 1
+
       return ref
     },
     useState: (initialValue: unknown) => [
@@ -181,6 +186,7 @@ function runCleanups(): void {
   for (const cleanup of [...mockReactRuntime.cleanups].toReversed()) {
     cleanup()
   }
+
   mockReactRuntime.cleanups.length = 0
 }
 

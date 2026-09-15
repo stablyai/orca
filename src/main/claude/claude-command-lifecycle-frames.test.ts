@@ -8,11 +8,13 @@ import { createClaudeJournalTranslator } from './claude-structured-journal-trans
 
 function sinkState() {
   const items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] = []
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity, body) => items.push({ identity, body }),
     appendTombstone: () => {},
     publish: vi.fn()
   }
+
   return { sink, items }
 }
 

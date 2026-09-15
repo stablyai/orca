@@ -47,6 +47,7 @@ describe('codex question option ids', () => {
     const longAnswer = 'answer '.repeat(5_000)
     const optionId = encodeCodexJournalQuestionOptionId(longQuestionId, longAnswer)
     const registry = new CodexPromptRegistry()
+
     const prompt = registry.register({
       id: 9,
       method: 'item/tool/requestUserInput',
@@ -77,6 +78,7 @@ describe('CodexPromptRegistry', () => {
 
   it('keeps two prompts that share one tool item apart', () => {
     const registry = new CodexPromptRegistry()
+
     const ask = (id: number, approvalId: string): void => {
       registry.register({
         id,
@@ -159,6 +161,7 @@ describe('CodexPromptRegistry', () => {
   it('rejects a request turn id beyond the wire identity bound', () => {
     const registry = new CodexPromptRegistry()
     const turnId = 'x'.repeat(AGENT_SESSION_ID_MAX_LENGTH + 1)
+
     const prompt = registry.register({
       id: 1,
       method: 'item/commandExecution/requestApproval',
@@ -184,6 +187,7 @@ describe('CodexPromptRegistry', () => {
 
   it('keeps identical item ids on different threads independently answerable', () => {
     const registry = new CodexPromptRegistry()
+
     const register = (id: number, threadId: string) =>
       registry.register({
         id,
@@ -257,9 +261,11 @@ describe('applyCodexPromptAnswer', () => {
 
   it('refuses question and option collections that exceed bounded live state', () => {
     const registry = new CodexPromptRegistry()
+
     const tooManyQuestions = registry.register(
       userInputRequest(Array.from({ length: 65 }, (_, index) => `q${index}`))
     )
+
     expect(tooManyQuestions).toBeNull()
 
     const hugeOptionRequest = {
@@ -273,6 +279,7 @@ describe('applyCodexPromptAnswer', () => {
         ]
       }
     }
+
     expect(registry.register(hugeOptionRequest)).toBeNull()
 
     const hugeQuestionId = 'x'.repeat(32 * 1024 + 1)

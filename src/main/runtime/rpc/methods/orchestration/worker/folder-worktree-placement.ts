@@ -10,6 +10,7 @@ export async function assertOrchestrationWorktreeCreationSupported(args: {
   if (!isFolderRepo(await args.runtime.showRepo(args.repoSelector))) {
     return
   }
+
   throw new OrchestrationError(
     'invalid_argument',
     `Folder projects cannot create orchestration worktrees; use ${args.existingPlacement}.`

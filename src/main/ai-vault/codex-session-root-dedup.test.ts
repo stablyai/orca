@@ -8,8 +8,10 @@ import {
 
 const REAL_HOME_ROLLOUT =
   '/Users/ada/.codex/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl'
+
 const MANAGED_HOME_ROLLOUT =
   '/Users/ada/Library/Application Support/orca/codex-runtime-home/home/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl'
+
 const MANAGED_HOME = '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
 
 function codexSession(overrides: Partial<AiVaultSession>): AiVaultSession {
@@ -45,6 +47,7 @@ describe('dedupeCodexRolloutFileAliases', () => {
     codexHome: string | null
     hardlinkIdentity?: string
   }
+
   const accessors = {
     isCodex: (candidate: Candidate) => candidate.agent === 'codex',
     getFilePath: (candidate: Candidate) => candidate.path,
@@ -59,12 +62,14 @@ describe('dedupeCodexRolloutFileAliases', () => {
       codexHome: MANAGED_HOME,
       hardlinkIdentity: '1:42'
     }
+
     const real = {
       agent: 'codex',
       path: REAL_HOME_ROLLOUT,
       codexHome: null,
       hardlinkIdentity: '1:42'
     }
+
     expect(dedupeCodexRolloutFileAliases([managed, real], accessors)).toEqual([real])
     expect(dedupeCodexRolloutFileAliases([real, managed], accessors)).toEqual([real])
   })
@@ -76,12 +81,14 @@ describe('dedupeCodexRolloutFileAliases', () => {
       codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home',
       hardlinkIdentity: '1:42'
     }
+
     const wslReal = {
       agent: 'codex',
       path: `\\\\wsl$\\Ubuntu\\home\\ada\\.codex\\sessions\\2026\\07\\01\\rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl`,
       codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.codex',
       hardlinkIdentity: '1:42'
     }
+
     expect(dedupeCodexRolloutFileAliases([wslReal, managed], accessors)).toEqual([managed])
   })
 
@@ -92,27 +99,32 @@ describe('dedupeCodexRolloutFileAliases', () => {
       codexHome: 'C:\\Users\\ada\\AppData\\Roaming\\orca\\codex-runtime-home\\home',
       hardlinkIdentity: '7:9'
     }
+
     const custom = {
       agent: 'codex',
       path: 'D:\\codex\\sessions\\2026\\07\\01\\rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl',
       codexHome: 'D:\\codex',
       hardlinkIdentity: '7:9'
     }
+
     expect(dedupeCodexRolloutFileAliases([custom, managed], accessors)).toEqual([managed])
   })
 
   it('keeps distinct rollouts, non-codex candidates, and non-rollout file names', () => {
     const real = { agent: 'codex', path: REAL_HOME_ROLLOUT, codexHome: null }
+
     const other = {
       agent: 'codex',
       path: '/Users/ada/.codex/sessions/2026/07/02/rollout-2026-07-02T09-00-00-029f0000-1111-7222-8333-555555555555.jsonl',
       codexHome: null
     }
+
     const oddName = {
       agent: 'codex',
       path: `${MANAGED_HOME}/sessions/notes.jsonl`,
       codexHome: MANAGED_HOME
     }
+
     const claude = { agent: 'claude', path: REAL_HOME_ROLLOUT, codexHome: null }
     expect(dedupeCodexRolloutFileAliases([real, other, oddName, claude], accessors)).toEqual([
       real,
@@ -129,12 +141,14 @@ describe('dedupeCodexRolloutFileAliases', () => {
       codexHome: null,
       hardlinkIdentity: '1:10'
     }
+
     const differentFile = {
       agent: 'codex',
       path: MANAGED_HOME_ROLLOUT,
       codexHome: MANAGED_HOME,
       hardlinkIdentity: '1:11'
     }
+
     const unprovenCopy = {
       agent: 'codex',
       path: MANAGED_HOME_ROLLOUT,
@@ -153,12 +167,14 @@ describe('dedupeCodexRolloutFileAliases', () => {
 
   it('never treats matching host and WSL inode tuples as one hardlink', () => {
     const rolloutName = REAL_HOME_ROLLOUT.split('/').at(-1)
+
     const host = {
       agent: 'codex',
       path: `C:\\Users\\ada\\.codex\\sessions\\${rolloutName}`,
       codexHome: null,
       hardlinkIdentity: '1:42'
     }
+
     const wsl = {
       agent: 'codex',
       path: `\\\\wsl$\\Ubuntu\\home\\ada\\.codex\\sessions\\${rolloutName}`,
@@ -177,12 +193,14 @@ describe('dedupeCodexRolloutFileAliases', () => {
         '/Users/ada/Library/Application Support/orca/codex-accounts/019f0000-aaaa-bbbb/home',
       hardlinkIdentity: '3:71'
     }
+
     const custom = {
       agent: 'codex',
       path: '/Users/ada/custom-codex/sessions/2026/07/01/rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl',
       codexHome: '/Users/ada/custom-codex',
       hardlinkIdentity: '3:71'
     }
+
     expect(dedupeCodexRolloutFileAliases([custom, perAccount], accessors)).toEqual([perAccount])
     expect(dedupeCodexRolloutFileAliases([perAccount, custom], accessors)).toEqual([perAccount])
   })
@@ -195,12 +213,14 @@ describe('dedupeCodexRolloutFileAliases', () => {
         '/Users/ada/Library/Application Support/orca/codex-accounts/019f0000-aaaa-bbbb/home',
       hardlinkIdentity: '1:42'
     }
+
     const real = {
       agent: 'codex',
       path: REAL_HOME_ROLLOUT,
       codexHome: null,
       hardlinkIdentity: '1:42'
     }
+
     expect(dedupeCodexRolloutFileAliases([perAccount, real], accessors)).toEqual([real])
   })
 })
@@ -211,6 +231,7 @@ describe('dedupeCodexRolloutCopyAliases', () => {
     path: string
     codexHome: string | null
   }
+
   const accessors = {
     isCodex: (candidate: Candidate) => candidate.agent === 'codex',
     getFilePath: (candidate: Candidate) => candidate.path,
@@ -219,11 +240,13 @@ describe('dedupeCodexRolloutCopyAliases', () => {
 
   it('collapses cross-volume copies only after session_meta proves the same id', async () => {
     const real = { agent: 'codex', path: REAL_HOME_ROLLOUT, codexHome: null }
+
     const managed = {
       agent: 'codex',
       path: MANAGED_HOME_ROLLOUT,
       codexHome: MANAGED_HOME
     }
+
     const readSessionMetaId = vi.fn(async () => 'shared-session-id')
 
     await expect(
@@ -234,6 +257,7 @@ describe('dedupeCodexRolloutCopyAliases', () => {
 
   it('keeps same-name files when ids differ or metadata cannot prove identity', async () => {
     const real = { agent: 'codex', path: REAL_HOME_ROLLOUT, codexHome: null }
+
     const managed = {
       agent: 'codex',
       path: MANAGED_HOME_ROLLOUT,
@@ -252,16 +276,19 @@ describe('dedupeCodexRolloutCopyAliases', () => {
 
   it('does not compare copies across native and WSL execution namespaces', async () => {
     const rolloutName = REAL_HOME_ROLLOUT.split('/').at(-1)
+
     const native = {
       agent: 'codex',
       path: `C:\\Users\\ada\\.codex\\sessions\\${rolloutName}`,
       codexHome: null
     }
+
     const wsl = {
       agent: 'codex',
       path: `\\\\wsl$\\Ubuntu\\home\\ada\\.codex\\sessions\\${rolloutName}`,
       codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.codex'
     }
+
     const readSessionMetaId = vi.fn(async () => 'shared-session-id')
 
     await expect(
@@ -273,11 +300,13 @@ describe('dedupeCodexRolloutCopyAliases', () => {
   it('proves only contested same-name candidates', async () => {
     const real = { agent: 'codex', path: REAL_HOME_ROLLOUT, codexHome: null }
     const managed = { agent: 'codex', path: MANAGED_HOME_ROLLOUT, codexHome: MANAGED_HOME }
+
     const lone = {
       agent: 'codex',
       path: '/Users/ada/.codex/sessions/rollout-2026-08-20T09-00-00-lone.jsonl',
       codexHome: null
     }
+
     const readSessionMetaId = vi.fn(async () => 'shared-session-id')
 
     await expect(
@@ -312,11 +341,13 @@ describe('dedupeCodexSessionsBySessionId', () => {
       codexHome: MANAGED_HOME,
       id: `local:codex:session-1:${MANAGED_HOME_ROLLOUT}`
     })
+
     const real = codexSession({
       filePath: REAL_HOME_ROLLOUT,
       codexHome: null,
       id: `local:codex:session-1:${REAL_HOME_ROLLOUT}`
     })
+
     expect(dedupeCodexSessionsBySessionId([managed, real])).toEqual([real])
     expect(dedupeCodexSessionsBySessionId([real, managed])).toEqual([real])
   })
@@ -327,11 +358,13 @@ describe('dedupeCodexSessionsBySessionId', () => {
       filePath: `${MANAGED_HOME}/sessions/2026/07/01/rollout-a.jsonl`,
       codexHome: MANAGED_HOME
     })
+
     const realOnly = codexSession({
       sessionId: 'real-only',
       filePath: REAL_HOME_ROLLOUT,
       codexHome: null
     })
+
     expect(dedupeCodexSessionsBySessionId([managedOnly, realOnly])).toEqual([managedOnly, realOnly])
   })
 
@@ -341,17 +374,20 @@ describe('dedupeCodexSessionsBySessionId', () => {
       executionHostId: 'local',
       filePath: '/home/ada/.codex/sessions/rollout-shared.jsonl'
     })
+
     const remote = codexSession({
       sessionId: 'session-1',
       executionHostId: 'ssh:build-box',
       filePath: '/home/ada/.codex/sessions/rollout-shared.jsonl',
       id: 'ssh:build-box:codex:session-1:/home/ada/.codex/sessions/x.jsonl'
     })
+
     const claude = codexSession({
       sessionId: 'session-1',
       agent: 'claude',
       filePath: '/home/ada/.codex/sessions/rollout-shared.jsonl'
     })
+
     expect(dedupeCodexSessionsBySessionId([local, remote, claude])).toEqual([local, remote, claude])
   })
 
@@ -363,6 +399,7 @@ describe('dedupeCodexSessionsBySessionId', () => {
       updatedAt: '2026-07-01T10:00:00.000Z',
       modifiedAt: '2026-07-01T10:00:00.000Z'
     })
+
     const newer = codexSession({
       sessionId: 'collision',
       filePath: '/Users/ada/.codex/sessions/2026/07/02/rollout-new.jsonl',
@@ -370,6 +407,7 @@ describe('dedupeCodexSessionsBySessionId', () => {
       updatedAt: '2026-07-02T10:00:00.000Z',
       modifiedAt: '2026-07-02T10:00:00.000Z'
     })
+
     expect(dedupeCodexSessionsBySessionId([older, newer])).toEqual([older, newer])
   })
 
@@ -379,11 +417,13 @@ describe('dedupeCodexSessionsBySessionId', () => {
       filePath: '/Users/ada/a/.codex/sessions/2026/07/01/rollout-tie.jsonl',
       codexHome: null
     })
+
     const tieB = codexSession({
       sessionId: 'tie',
       filePath: '/Users/ada/b/.codex/sessions/2026/07/01/rollout-tie.jsonl',
       codexHome: null
     })
+
     expect(dedupeCodexSessionsBySessionId([tieB, tieA])).toEqual([tieA])
   })
 
@@ -394,21 +434,25 @@ describe('dedupeCodexSessionsBySessionId', () => {
         '\\\\wsl$\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home\\sessions\\rollout-a.jsonl',
       codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home'
     })
+
     const wslReal = codexSession({
       sessionId: 'wsl-pair',
       filePath: '\\\\wsl$\\Ubuntu\\home\\ada\\.codex\\sessions\\rollout-a.jsonl',
       codexHome: '\\\\wsl$\\Ubuntu\\home\\ada\\.codex'
     })
+
     expect(dedupeCodexSessionsBySessionId([wslReal, wslManaged])).toEqual([wslManaged])
   })
 
   it('never collapses matching host and WSL session identities', () => {
     const rolloutName = REAL_HOME_ROLLOUT.split('/').at(-1)
+
     const host = codexSession({
       sessionId: 'shared-id',
       filePath: `C:\\Users\\ada\\.codex\\sessions\\${rolloutName}`,
       codexHome: null
     })
+
     const wsl = codexSession({
       sessionId: 'shared-id',
       filePath: `\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\orca\\codex-runtime-home\\home\\sessions\\${rolloutName}`,

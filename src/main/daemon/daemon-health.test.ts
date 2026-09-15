@@ -45,8 +45,10 @@ function closeServer(server: Server): Promise<void> {
   return new Promise((resolve) => {
     if (!server.listening) {
       resolve()
+
       return
     }
+
     server.close(() => resolve())
   })
 }
@@ -54,10 +56,12 @@ function closeServer(server: Server): Promise<void> {
 function canConnect(socketPath: string): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = connect({ path: socketPath })
+
     const timer = setTimeout(() => {
       socket.destroy()
       resolve(false)
     }, 500)
+
     socket.on('connect', () => {
       clearTimeout(timer)
       socket.destroy()
@@ -93,12 +97,14 @@ describe('daemon health', () => {
 
   it('passes when a daemon answers ping', async () => {
     const ptySpawnHealthCheck = vi.fn(async () => {})
+
     const server = new DaemonServer({
       socketPath,
       tokenPath,
       ptySpawnHealthCheck,
       spawnSubprocess: () => createMockSubprocess()
     })
+
     await server.start()
 
     try {
@@ -119,6 +125,7 @@ describe('daemon health', () => {
       }),
       spawnSubprocess: () => createMockSubprocess()
     })
+
     await server.start()
 
     try {
@@ -142,8 +149,10 @@ describe('daemon health', () => {
       tokenPath,
       spawnSubprocess: () => createMockSubprocess()
     })
+
     await server.start()
     vi.stubEnv(E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV, '1')
+
     try {
       await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('unreachable')
       await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(false)
@@ -162,6 +171,7 @@ describe('daemon health', () => {
       tokenPath,
       spawnSubprocess: () => createMockSubprocess()
     })
+
     await server.start()
 
     try {
@@ -217,6 +227,7 @@ describe('parseDaemonPidFile', () => {
       entryPath: '/repo/out/main/daemon-entry.js',
       appVersion: '1.2.3'
     })
+
     expect(parseDaemonPidFile(serialized)).toEqual({
       pid: 12345,
       startedAtMs: 1_700_000_000_000,
@@ -237,6 +248,7 @@ describe('parseDaemonPidFile', () => {
       linuxStartTicks: '4242',
       bootId: 'boot-a'
     })
+
     expect(parseDaemonPidFile(serialized)).toMatchObject({
       launchNonce: 'launch-a',
       linuxStartTicks: '4242',
@@ -316,6 +328,7 @@ describe('Linux process start-time parsing', () => {
         (typeof separator === 'string' && (separator === '\n' || separator === ' ')) ||
         (separator instanceof RegExp && separator.source.includes('\\s+'))
     )
+
     splitSpy.mockRestore()
     expect(usedUnboundedSplit).toBe(false)
   })
@@ -333,8 +346,10 @@ describe('startTimeMatches', () => {
       // Windows always returns null from getProcessStartedAtMs, which is the
       // fail-open case we want.
       expect(startTimeMatches(process.pid, 1_700_000_000_000)).toBe(true)
+
       return
     }
+
     // Pid 0 is the kernel scheduler — ps -p 0 / /proc/0 both fail, so
     // getProcessStartedAtMs returns null and the check fails open.
     expect(startTimeMatches(0, 1_700_000_000_000)).toBe(true)
@@ -345,20 +360,25 @@ describe('startTimeMatches', () => {
       // Skip on Windows — getProcessStartedAtMs always returns null.
       return
     }
+
     const actual = getProcessStartedAtMs(process.pid)
+
     if (actual === null) {
       // Platform can't probe — skip
       return
     }
+
     // Tolerance is ±1500ms. Shift expected by 500ms, still within tolerance.
     expect(startTimeMatches(process.pid, actual + 500)).toBe(true)
   })
 
   it('returns false for start times outside tolerance', () => {
     const actual = getProcessStartedAtMs(process.pid)
+
     if (actual === null) {
       return
     }
+
     // Shift expected by 10s — clearly outside the ±1500ms tolerance.
     expect(startTimeMatches(process.pid, actual + 10_000)).toBe(false)
   })
@@ -431,13 +451,16 @@ describe('killStaleDaemon pid identity guards', () => {
     // expected and not a real kill. We only care that no actual termination
     // signal is sent.
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
     try {
       await expect(killStaleDaemon(dir, socketPath, tokenPath)).resolves.toMatchObject({
         killed: false
       })
+
       const terminationSignals = killSpy.mock.calls.filter(
         ([, sig]) => sig === 'SIGTERM' || sig === 'SIGKILL'
       )
+
       expect(terminationSignals).toEqual([])
     } finally {
       killSpy.mockRestore()
@@ -494,7 +517,9 @@ describe('killStaleDaemon ownership decisions', () => {
       startedAtMs: null,
       launchNonce: 'live-owner'
     })
+
     writeFileSync(getDaemonPidPath(dir), record, { mode: 0o600 })
+
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
       throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
     })
@@ -545,6 +570,7 @@ describe('killStaleDaemon ownership decisions', () => {
         ],
         { stdio: ['ignore', 'pipe', 'ignore'] }
       )
+
       // The handler must exist before SIGTERM to hold the fencing window open.
       await new Promise<void>((resolve, reject) => {
         child.once('error', reject)
@@ -563,7 +589,9 @@ describe('killStaleDaemon ownership decisions', () => {
         startedAtMs: 2_000,
         launchNonce: 'daemon-b'
       })
+
       const replacement = createServer((socket) => socket.end())
+
       const handover = setTimeout(() => {
         void listenOnSocketPath(replacement, socketPath).then(() => {
           writeFileSync(getDaemonPidPath(dir), replacementRecord, { mode: 0o600 })
@@ -579,11 +607,13 @@ describe('killStaleDaemon ownership decisions', () => {
         await expect(canConnect(socketPath)).resolves.toBe(true)
       } finally {
         clearTimeout(handover)
+
         try {
           process.kill(childPid, 'SIGKILL')
         } catch {
           // Already gone.
         }
+
         await childExited
         await closeServer(replacement)
       }

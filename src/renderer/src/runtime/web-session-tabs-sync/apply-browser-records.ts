@@ -29,13 +29,16 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
   if (removedBrowserWorkspaceIds.size > 0) {
     const nextBrowserWorkspaceIds = new Set(nextBrowserTabs?.map((tab) => tab.id) ?? [])
     const nextBrowserPageIds = new Set(mirroredBrowserTabs.map((entry) => entry.page.id))
+
     for (const workspace of retainedBrowserTabs) {
       for (const page of state.browserPagesByWorkspace[workspace.id] ?? []) {
         nextBrowserPageIds.add(page.id)
       }
     }
+
     for (const removedWorkspaceId of removedBrowserWorkspaceIds) {
       const pages = nextBrowserPagesByWorkspace[removedWorkspaceId] ?? []
+
       if (
         !nextBrowserWorkspaceIds.has(removedWorkspaceId) &&
         nextBrowserPagesByWorkspace[removedWorkspaceId]
@@ -46,10 +49,12 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
             : nextBrowserPagesByWorkspace
         delete nextBrowserPagesByWorkspace[removedWorkspaceId]
       }
+
       for (const page of pages) {
         if (nextBrowserPageIds.has(page.id)) {
           continue
         }
+
         if (nextBrowserCertificateFailuresByPageId[page.id]) {
           nextBrowserCertificateFailuresByPageId =
             nextBrowserCertificateFailuresByPageId === state.browserCertificateFailuresByPageId
@@ -61,6 +66,7 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
               : nextBrowserCertificateFailuresByPageId
           delete nextBrowserCertificateFailuresByPageId[page.id]
         }
+
         if (nextRemoteBrowserPageHandlesByPageId[page.id]) {
           nextRemoteBrowserPageHandlesByPageId =
             nextRemoteBrowserPageHandlesByPageId === state.remoteBrowserPageHandlesByPageId
@@ -78,6 +84,7 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
 
   for (const { page, certificateFailure, remotePageId, placement } of mirroredBrowserTabs) {
     const current = nextBrowserPagesByWorkspace[page.workspaceId] ?? []
+
     if (!sameBrowserPages(current, [page])) {
       nextBrowserPagesByWorkspace =
         nextBrowserPagesByWorkspace === state.browserPagesByWorkspace
@@ -85,7 +92,9 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
           : nextBrowserPagesByWorkspace
       nextBrowserPagesByWorkspace[page.workspaceId] = [page]
     }
+
     const currentHandle = nextRemoteBrowserPageHandlesByPageId[page.id]
+
     if (
       currentHandle?.environmentId !== environmentId ||
       currentHandle.remotePageId !== remotePageId ||
@@ -105,7 +114,9 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
         ...(placement ? { placement } : {})
       }
     }
+
     markWebSessionBrowserPlacementAdopted({ environmentId, worktreeId, remotePageId })
+
     if (
       placement?.kind !== 'client' &&
       !browserCertificateFailureEqual(
@@ -117,6 +128,7 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
         nextBrowserCertificateFailuresByPageId === state.browserCertificateFailuresByPageId
           ? writableWebSessionTabsRecord(state, 'browserCertificateFailuresByPageId', batchContext)
           : nextBrowserCertificateFailuresByPageId
+
       if (certificateFailure) {
         nextBrowserCertificateFailuresByPageId[page.id] = certificateFailure
       } else {

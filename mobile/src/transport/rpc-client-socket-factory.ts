@@ -54,6 +54,7 @@ export class RpcClientSocketFactory {
         : 'Opening WebSocket',
       redactSocketEndpoint(this.options.endpoint)
     )
+
     return new RpcClientSocketSession({
       endpoint: this.options.endpoint,
       deviceToken: this.options.deviceToken,

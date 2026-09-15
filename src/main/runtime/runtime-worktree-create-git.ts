@@ -29,13 +29,16 @@ export async function resolveCreateBranchName(
       username
     )
   }
+
   if (branchNameOverride.startsWith('-')) {
     throw new Error('Branch name must not start with "-"')
   }
+
   await gitExecFileAsync(['check-ref-format', '--branch', branchNameOverride], {
     cwd: repoPath,
     ...gitOptions
   })
+
   return branchNameOverride
 }
 
@@ -46,24 +49,29 @@ export async function canCheckoutExistingLocalBranch(
   gitOptions: { wslDistro?: string } = {}
 ): Promise<boolean> {
   let localHead = ''
+
   try {
     const { stdout } = await gitExecFileAsync(
       ['rev-parse', '--verify', '--quiet', `refs/heads/${branchName}^{commit}`],
       { cwd: repoPath, ...gitOptions }
     )
+
     localHead = stdout.trim()
   } catch {
     return false
   }
+
   if (normalizeLocalBranchName(baseBranch) !== branchName) {
     if (!localHead) {
       return false
     }
+
     try {
       const { stdout } = await gitExecFileAsync(
         ['rev-parse', '--verify', '--quiet', `${baseBranch}^{commit}`],
         { cwd: repoPath, ...gitOptions }
       )
+
       if (stdout.trim() !== localHead) {
         return false
       }
@@ -71,7 +79,9 @@ export async function canCheckoutExistingLocalBranch(
       return false
     }
   }
+
   const worktrees = await listWorktrees(repoPath, gitOptions)
+
   return !worktrees.some((worktree) => normalizeLocalBranchName(worktree.branch) === branchName)
 }
 
@@ -94,9 +104,11 @@ export async function getSelectedHostedReviewForBranch(
   executionOptions: HostedReviewExecutionOptions = {}
 ): Promise<{ matchesSelected: boolean; number: number } | null> {
   const selectedReview = getSelectedReviewBranch(args)
+
   if (!selectedReview) {
     return null
   }
+
   const review = await getHostedReviewForBranch({
     repoPath: repo.path,
     executionHostId: getRepoHostedReviewExecutionHostId(repo),
@@ -104,6 +116,7 @@ export async function getSelectedHostedReviewForBranch(
     ...executionOptions,
     ...getSelectedReviewLookupHints(args)
   })
+
   return review
     ? {
         matchesSelected:

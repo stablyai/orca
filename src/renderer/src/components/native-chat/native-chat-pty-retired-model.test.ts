@@ -24,6 +24,7 @@ function createGrokSurface(args?: Partial<CreateNativeChatPtySessionOptionsArgs>
   persisted: () => PersistedNativeChatSessionOptions
 } {
   let persisted: PersistedNativeChatSessionOptions = {}
+
   const surface = createNativeChatPtySessionOptions({
     agent: 'grok',
     scopeKey: 'pty-1',
@@ -41,6 +42,7 @@ function createGrokSurface(args?: Partial<CreateNativeChatPtySessionOptionsArgs>
     },
     ...args
   })!
+
   return { surface, persisted: () => persisted }
 }
 

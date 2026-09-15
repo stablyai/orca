@@ -34,8 +34,11 @@ vi.mock('../pwsh', () => ({
 // tests run on non-Windows CI. The real resolver (which skips the Store App
 // Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('../providers/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -48,6 +51,7 @@ vi.mock('../providers/windows-powershell-executable', () => ({
 
 vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
+
   return {
     ...actual,
     resolveUnixShellPath: resolveUnixShellPathMock,
@@ -59,6 +63,7 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
 vi.mock('../providers/agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
     const value = await resolveAgentForegroundProcessMock(...args)
+
     return value && typeof value === 'object' && 'available' in value
       ? value
       : { available: true, processName: value }
@@ -92,16 +97,19 @@ describe('createPtySubprocess', () => {
     spawnMock.mockReturnValue(proc)
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     const previousWslEnv = process.env.WSLENV
+
     const savedGitConfigEnv = Object.fromEntries(
       Object.entries(process.env).filter(([key]) =>
         /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/.test(key)
       )
     )
+
     for (const key of Object.keys(process.env)) {
       if (/^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/.test(key)) {
         delete process.env[key]
       }
     }
+
     process.env.GIT_CONFIG_COUNT = '1'
     process.env.GIT_CONFIG_KEY_0 = 'core.quotePath'
     process.env.GIT_CONFIG_VALUE_0 = 'false'
@@ -133,12 +141,15 @@ describe('createPtySubprocess', () => {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
+
       for (const key of Object.keys(process.env)) {
         if (/^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/.test(key)) {
           delete process.env[key]
         }
       }
+
       Object.assign(process.env, savedGitConfigEnv)
+
       if (previousWslEnv === undefined) {
         delete process.env.WSLENV
       } else {
@@ -150,16 +161,19 @@ describe('createPtySubprocess', () => {
   it('does not infer a guard from caller-set prompt scalars', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
+
     const savedGitConfigEnv = Object.fromEntries(
       Object.entries(process.env).filter(([key]) =>
         /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/.test(key)
       )
     )
+
     for (const key of Object.keys(process.env)) {
       if (/^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/.test(key)) {
         delete process.env[key]
       }
     }
+
     process.env.GIT_CONFIG_COUNT = '3'
     process.env.GIT_CONFIG_KEY_0 = 'core.quotePath'
     process.env.GIT_CONFIG_VALUE_0 = 'false'
@@ -199,6 +213,7 @@ describe('createPtySubprocess', () => {
           delete process.env[key]
         }
       }
+
       Object.assign(process.env, savedGitConfigEnv)
     }
   })

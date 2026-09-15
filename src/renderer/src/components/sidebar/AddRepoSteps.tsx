@@ -57,9 +57,11 @@ export function useRemoteRepo(
     setRemotePath('~/')
     setRemoteError(null)
     setIsAddingRemote(false)
+
     if (remoteNestedScanId) {
       void cancelNestedRepoScan(remoteNestedScanId, { runtimeEnvironmentId: null })
     }
+
     setRemoteNestedScanId(null)
   }, [cancelNestedRepoScan, remoteNestedScanId])
 
@@ -67,6 +69,7 @@ export function useRemoteRepo(
     if (!remoteNestedScanId) {
       return
     }
+
     void cancelNestedRepoScan(remoteNestedScanId, { runtimeEnvironmentId: null })
   }, [cancelNestedRepoScan, remoteNestedScanId])
 
@@ -74,31 +77,42 @@ export function useRemoteRepo(
     async (preferredTargetId?: string | null) => {
       const gen = ++remoteGenRef.current
       setStep('remote')
+
       try {
         const targets = (await window.api.ssh.listTargets()) as SshTarget[]
+
         if (gen !== remoteGenRef.current) {
           return
         }
+
         const withState = await Promise.all(
           targets.map(async (t) => {
             const state = (await window.api.ssh.getState({
               targetId: t.id
             })) as SshConnectionState | null
+
             return { ...t, state: state ?? undefined }
           })
         )
+
         if (gen !== remoteGenRef.current) {
           return
         }
+
         setSshTargets(withState)
+
         const preferred = preferredTargetId
           ? withState.find((t) => t.id === preferredTargetId)
           : undefined
+
         const connected = withState.find((t) => t.state?.status === 'connected')
+
         if (preferred) {
           setSelectedTargetId(preferred.id)
+
           return
         }
+
         if (connected) {
           setSelectedTargetId(connected.id)
         }
@@ -106,6 +120,7 @@ export function useRemoteRepo(
         if (gen !== remoteGenRef.current) {
           return
         }
+
         setSshTargets([])
       }
     },
@@ -118,10 +133,12 @@ export function useRemoteRepo(
   useEffect(() => {
     const unsubscribe = window.api.ssh.onStateChanged(({ targetId, state }) => {
       setSshTargets((prev) => prev.map((t) => (t.id === targetId ? { ...t, state } : t)))
+
       if (state.status === 'connected') {
         setSelectedTargetId((curr) => curr ?? targetId)
       }
     })
+
     return unsubscribe
   }, [])
 
@@ -146,10 +163,12 @@ export function useRemoteRepo(
     const gen = ++remoteGenRef.current
     setIsAddingRemote(true)
     setRemoteError(null)
+
     try {
       const attemptId = createNestedRepoTelemetryAttemptId()
       const scanId = `nested-repo-scan-${Date.now()}-${Math.random().toString(36).slice(2)}`
       setRemoteNestedScanId(scanId)
+
       const scan = await scanNestedRepos?.(trimmedRemotePath, selectedTargetId, {
         scanId,
         runtimeEnvironmentId: null,
@@ -162,6 +181,7 @@ export function useRemoteRepo(
           ) {
             return
           }
+
           showNestedRepoReview?.(
             progressScan,
             trimmedRemotePath,
@@ -172,23 +192,31 @@ export function useRemoteRepo(
           )
         }
       })
+
       if (!mountedRef.current || gen !== remoteGenRef.current) {
         return
       }
+
       onNestedScanResult?.(scan ?? null, attemptId)
+
       if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
         showNestedRepoReview?.(scan, trimmedRemotePath, selectedTargetId, attemptId, false, scanId)
         setRemoteNestedScanId(null)
+
         return
       }
+
       setRemoteNestedScanId(null)
+
       const result = await window.api.repos.addRemote({
         connectionId: selectedTargetId,
         remotePath: trimmedRemotePath
       })
+
       if ('error' in result) {
         throw new Error(result.error)
       }
+
       const { alreadyPresent, repo } = upsertAddedRepoWithProjectHostSetup(result.repo, {
         sshConnectionId: selectedTargetId
       })
@@ -200,6 +228,7 @@ export function useRemoteRepo(
       if (!mountedRef.current || gen !== remoteGenRef.current) {
         return
       }
+
       toast.success(
         translate('auto.components.sidebar.AddRepoSteps.df8b0e6c22', 'Project added on SSH host'),
         { description: repo.displayName }
@@ -208,12 +237,15 @@ export function useRemoteRepo(
       // non-authoritative, finish onto the project row instead of stranding the dialog.
       const ownerOptions = worktreeRefreshOptions(undefined, selectedTargetId)
       await fetchWorktrees(repo.id, ownerOptions)
+
       if (!mountedRef.current || gen !== remoteGenRef.current) {
         return
       }
+
       await onGitRepoReady?.(repo.id, ownerOptions.executionHostId)
     } catch (err) {
       const message = extractIpcErrorMessage(err, String(err))
+
       if (message.includes('Not a valid git repository')) {
         // Why: match the local add-project flow — show confirmation dialog so
         // users understand git features will be unavailable, rather than
@@ -223,8 +255,10 @@ export function useRemoteRepo(
           folderPath: trimmedRemotePath,
           connectionId: selectedTargetId
         })
+
         return
       }
+
       if (mountedRef.current && gen === remoteGenRef.current) {
         setRemoteError(message)
       }

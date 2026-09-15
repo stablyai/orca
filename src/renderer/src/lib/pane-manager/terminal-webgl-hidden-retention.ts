@@ -16,11 +16,13 @@ const retainedEntries: RetainedHiddenEntry[] = []
 
 function liveContextCount(entry: RetainedHiddenEntry): number {
   let count = 0
+
   for (const pane of entry.livePanes()) {
     if (pane.webglAddon) {
       count += 1
     }
   }
+
   return count
 }
 
@@ -32,6 +34,7 @@ function disposeEntryContexts(entry: RetainedHiddenEntry): void {
 
 function removeEntry(owner: object): void {
   const index = retainedEntries.findIndex((entry) => entry.owner === owner)
+
   if (index !== -1) {
     retainedEntries.splice(index, 1)
   }
@@ -49,21 +52,27 @@ export function tryRetainHiddenPanesWebgl(
   removeEntry(owner)
   const entry: RetainedHiddenEntry = { owner, livePanes }
   const ownCount = liveContextCount(entry)
+
   // Nothing to retain (GPU off / first-mount hidden), or a single tab too wide
   // for the cap — normal dispose keeps eviction from thrashing every other tab.
   if (ownCount === 0 || ownCount > MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS) {
     return false
   }
+
   let total = ownCount
+
   for (const other of retainedEntries) {
     total += liveContextCount(other)
   }
+
   while (total > MAX_RETAINED_HIDDEN_WEBGL_CONTEXTS && retainedEntries.length > 0) {
     const evicted = retainedEntries.shift()!
     total -= liveContextCount(evicted)
     disposeEntryContexts(evicted)
   }
+
   retainedEntries.push(entry)
+
   return true
 }
 

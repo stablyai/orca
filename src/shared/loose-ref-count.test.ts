@@ -10,12 +10,14 @@ const readdirCalls = vi.hoisted(() => ({ outstanding: 0, peak: 0, count: 0 }))
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   const realReaddir = actual.readdir as (...args: unknown[]) => Promise<never>
+
   return {
     ...actual,
     readdir: async (...args: unknown[]) => {
       readdirCalls.outstanding += 1
       readdirCalls.count += 1
       readdirCalls.peak = Math.max(readdirCalls.peak, readdirCalls.outstanding)
+
       try {
         return await realReaddir(...args)
       } finally {
@@ -33,14 +35,18 @@ async function makeRefsTree(counts: Record<string, number>): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-loose-refs-'))
   roots.push(root)
   const refs = join(root, 'refs')
+
   for (const [namespace, count] of Object.entries(counts)) {
     const directory = join(refs, namespace)
     await mkdir(directory, { recursive: true })
+
     for (let index = 0; index < count; index += 1) {
       await writeFile(join(directory, `ref-${index}`), 'a'.repeat(40))
     }
   }
+
   await mkdir(refs, { recursive: true })
+
   return refs
 }
 
@@ -85,6 +91,7 @@ describe('countLooseRefs', () => {
       'remotes/d': 3,
       'remotes/e/deep': 3
     })
+
     readdirCalls.peak = 0
     readdirCalls.count = 0
 

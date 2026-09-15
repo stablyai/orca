@@ -35,9 +35,11 @@ export function runApplyScript(options: DrainApplyInterference = {}): DrainApply
   const legacyHome = join(root, 'legacy')
   const targetHome = join(root, 'account')
   const binDir = join(root, 'bin')
+
   for (const dir of [legacyHome, targetHome, binDir]) {
     mkdirSync(dir, { recursive: true })
   }
+
   const legacyAuthPath = join(legacyHome, 'auth.json')
   const targetAuthPath = join(targetHome, 'auth.json')
   const legacyCredentialsPath = join(legacyHome, '.credentials.json')
@@ -45,14 +47,17 @@ export function runApplyScript(options: DrainApplyInterference = {}): DrainApply
   const markerPath = join(root, 'drain-marker.json')
   writeFileSync(legacyAuthPath, SOURCE_AUTH)
   writeFileSync(targetAuthPath, TARGET_AUTH)
+
   if (options.sourceAuthSymlink) {
     const sourceAuthTarget = join(root, 'linked-source-auth.json')
     renameSync(legacyAuthPath, sourceAuthTarget)
     symlinkSync(sourceAuthTarget, legacyAuthPath)
   }
+
   if (options.sourceCredentials !== undefined) {
     writeFileSync(legacyCredentialsPath, options.sourceCredentials)
   }
+
   if (options.sourceSession !== undefined) {
     const sessionPath = join(legacyHome, ...RETIRED_SESSION_SEGMENTS)
     mkdirSync(join(sessionPath, '..'), { recursive: true })
@@ -62,6 +67,7 @@ export function runApplyScript(options: DrainApplyInterference = {}): DrainApply
   const counterPath = join(root, 'hash-calls')
   writeFileSync(counterPath, '0')
   installDrainInterferenceShims(binDir, options)
+
   if (options.killDuringSessionCommit) {
     const rmShimPath = join(binDir, 'rm')
     writeFileSync(
@@ -88,6 +94,7 @@ process.exit(result.status ?? 1)
     )
     chmodSync(rmShimPath, 0o755)
   }
+
   if (
     options.crossFilesystemBridge ||
     options.killBeforeDestinationRecoveryLink ||
@@ -149,6 +156,7 @@ process.exit(result.status ?? 1)
   }
 
   let status = 0
+
   try {
     execFileSync(
       '/bin/sh',
@@ -214,6 +222,7 @@ process.exit(result.status ?? 1)
   } catch (error) {
     status = (error as { status?: number }).status ?? -1
   }
+
   if (
     options.killAfterDestinationInstall ||
     options.killBeforeDestinationRecoveryLink ||
@@ -226,11 +235,13 @@ process.exit(result.status ?? 1)
       chmodSync(quarantinePath, 0o600)
       writeFileSync(quarantinePath, NEWER_AUTH)
     }
+
     if (options.replaceTargetBeforeRecovery) {
       const replacementPath = `${targetAuthPath}.replacement`
       writeFileSync(replacementPath, NEWER_AUTH)
       renameSync(replacementPath, targetAuthPath)
     }
+
     try {
       execFileSync(
         '/bin/sh',
@@ -248,6 +259,7 @@ process.exit(result.status ?? 1)
       // Recovery succeeds before inspect continues and emits the pending auth payload.
     }
   }
+
   return {
     legacyAuth: existsSync(legacyAuthPath) ? readFileSync(legacyAuthPath, 'utf8') : null,
     markerExists: existsSync(markerPath),

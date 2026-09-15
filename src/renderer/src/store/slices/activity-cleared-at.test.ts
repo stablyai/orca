@@ -18,6 +18,7 @@ function makeRetained(paneKey: string, worktreeId = 'wt-1'): RetainedAgentEntry 
     stateHistory: [],
     agentType: 'claude'
   }
+
   const tab: TerminalTab = {
     id: paneKey.split(':')[0],
     ptyId: 'pty-1',
@@ -28,6 +29,7 @@ function makeRetained(paneKey: string, worktreeId = 'wt-1'): RetainedAgentEntry 
     sortOrder: 0,
     createdAt: 1
   }
+
   return { entry, worktreeId, tab, agentType: 'claude', startedAt: 1_000 }
 }
 

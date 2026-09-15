@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
 const LOCALES = ['es', 'ja', 'ko', 'zh']
+
 const KEYS = [
   'auto.hooks.useMacosTccPromptNotice.title',
   'auto.hooks.useMacosTccPromptNotice.description',
@@ -29,8 +30,10 @@ function getValue(catalog, key) {
 describe('macOS TCC prompt localization', () => {
   it('survives the canonical catalog repair policy', () => {
     const english = readCatalog('en')
+
     for (const locale of LOCALES) {
       const catalog = readCatalog(locale)
+
       for (const key of KEYS) {
         const enValue = getValue(english, key)
         const localeValue = getValue(catalog, key)

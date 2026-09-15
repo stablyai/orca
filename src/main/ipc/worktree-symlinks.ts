@@ -51,6 +51,7 @@ export function worktreeSymlinkTypeCandidates(
   if (!sourceIsDirectory) {
     return ['file']
   }
+
   return platform === 'win32' ? ['junction', 'dir'] : ['dir']
 }
 
@@ -66,11 +67,13 @@ async function symlinkWorktreePath(
   // unconditionally is safe and removes a Windows-only failure mode when Node
   // can't auto-detect from the source.
   const candidates = worktreeSymlinkTypeCandidates(platform, sourceIsDirectory)
+
   for (let index = 0; index < candidates.length; index++) {
     try {
       // Why: `source` is always absolute (`resolve()` guarantees it), which a
       // junction requires.
       await symlink(source, target, candidates[index])
+
       return
     } catch (error) {
       if (index === candidates.length - 1) {
@@ -125,17 +128,21 @@ async function createWorktreeLinkedPath(
             options.apfsCloneDeps ?? defaultApfsCloneDeps,
             apfsFilesystemCache
           ))
+
       await cloneWorktreePath(copySource, target, sourceIsDirectory)
+
       return
     } catch (error) {
       if (error instanceof WorktreeLinkedPathTargetExistsError) {
         return
       }
+
       // Why: APFS clone-copy can fail across volumes or on non-APFS disks.
       // Fall back per mode without touching any target path that may have
       // appeared after our preflight.
       if (!(error instanceof ApfsCloneUnavailableError)) {
         console.warn(`[worktree-symlinks] APFS clone-copy unavailable for "${target}":`, error)
+
         // Why: the fallback is a real byte-for-byte copy. If this entry was
         // admitted as a free clone its bytes were never charged, so bill them
         // now — and refuse if they no longer fit, rather than silently
@@ -146,10 +153,13 @@ async function createWorktreeLinkedPath(
       }
     }
   }
+
   if (mode === 'copy') {
     await copyWorktreePath(copySource, target)
+
     return
   }
+
   await symlinkWorktreePath(source, target, sourceIsDirectory, options.platform ?? process.platform)
 }
 
@@ -164,11 +174,13 @@ async function copyIsCopyOnWrite(
   if (options.platform !== 'darwin') {
     return false
   }
+
   // An injected clone stands in for the real one, so treat it as cloning —
   // probing the real filesystem here would make these tests host-dependent.
   if (options.cloneWorktreePath) {
     return true
   }
+
   return await canCloneWithApfs(
     source,
     worktreePath,
@@ -182,6 +194,7 @@ async function targetExists(target: string): Promise<boolean> {
     // Why: lstat so a pre-existing symlink (even a broken one) is detected and
     // preserved rather than overwritten.
     await lstat(target)
+
     return true
   } catch {
     return false
@@ -206,6 +219,7 @@ async function materializeWorktreePaths(
 
   for (const rawPath of paths) {
     const safePath = getSafeRelativePath(rawPath)
+
     if (!safePath.safe) {
       // Users can only configure paths relative to the repo root; absolute
       // paths and `..` traversal are not supported.
@@ -218,6 +232,7 @@ async function materializeWorktreePaths(
 
     let sourceIsDirectory = false
     let sourceIsSymbolicLink = false
+
     try {
       sourceIsSymbolicLink = (await lstat(source)).isSymbolicLink()
       const s = await stat(source)
@@ -240,11 +255,13 @@ async function materializeWorktreePaths(
     let copySource = source
     let bytesAreCopied = true
     let measuredBytes = 0
+
     if (mode === 'copy') {
       try {
         if (sourceIsSymbolicLink) {
           copySource = await realpath(source)
         }
+
         // Why: an APFS clone is copy-on-write — a 2.7 GB tree clones in ~20ms
         // and consumes no disk — so bytes are not the cost there, inodes are.
         // Charging bytes on that path would refuse work that is already free.
@@ -255,6 +272,7 @@ async function materializeWorktreePaths(
           apfsFilesystemCache
         ))
         const verdict = await copyBudget.admit(copySource, { bytesAreCopied })
+
         if (!verdict.withinBudget) {
           // Why: refuse before the first byte is written. Aborting mid-copy is
           // not available (`fs.cp` ignores its `signal`) and would strand a
@@ -265,6 +283,7 @@ async function materializeWorktreePaths(
           )
           continue
         }
+
         measuredBytes = verdict.bytes
       } catch (error) {
         console.error(`[worktree-symlinks] Failed to size "${safePath.rel}" (${source}):`, error)
@@ -297,12 +316,14 @@ async function materializeWorktreePaths(
         console.warn(`[worktree-symlinks] Skipping "${safePath.rel}": ${error.message}`)
         continue
       }
+
       console.error(
         `[worktree-symlinks] Failed to link "${safePath.rel}" (${source} -> ${target}):`,
         error
       )
     }
   }
+
   return skipped
 }
 
@@ -366,12 +387,16 @@ export async function removeWorktreeLinkedPaths(
 ): Promise<void> {
   for (const rawPath of paths) {
     const safePath = getSafeRelativePath(rawPath)
+
     if (!safePath.safe) {
       continue
     }
+
     const target = resolve(worktreePath, safePath.rel)
+
     try {
       const s = await lstat(target)
+
       if (s.isSymbolicLink()) {
         await unlink(target)
       }

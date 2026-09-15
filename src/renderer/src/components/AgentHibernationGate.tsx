@@ -11,8 +11,10 @@ export function AgentHibernationGate(): null {
   useEffect(() => {
     if (!enabled) {
       stopAgentHibernationCoordinator()
+
       return
     }
+
     return startAgentHibernationCoordinator()
   }, [enabled])
 

@@ -14,6 +14,7 @@ export function findCreatedWorktree<T extends { path: string; branch?: string }>
   const direct = worktrees.find((worktree) =>
     areWorktreePathsEqual(worktree.path, requestedPath, platform)
   )
+
   if (direct) {
     return direct
   }
@@ -54,11 +55,14 @@ export async function resolveCreatedWorktree(
 ): Promise<CreatedWorktreeResolution> {
   const startedAt = Date.now()
   let listingError: unknown
+
   try {
     const worktrees = options
       ? await listWorktreesSharedStrict(repoPath, options)
       : await listWorktreesSharedStrict(repoPath)
+
     const created = findCreatedWorktree(worktrees, worktreePath, branchName)
+
     if (created) {
       return { created, worktrees, listingComplete: true }
     }
@@ -68,6 +72,7 @@ export async function resolveCreatedWorktree(
 
   let described: GitWorktreeInfo | undefined
   let describeError: unknown
+
   try {
     // One budget for verifying the create, not one per attempt: a hung Git already spent the
     // listing's deadline, and charging the recovery a fresh one doubles the wait before the error.
@@ -75,6 +80,7 @@ export async function resolveCreatedWorktree(
       WORKTREE_LIST_TIMEOUT_MS - (Date.now() - startedAt),
       MIN_CREATED_WORKTREE_RECOVERY_MS
     )
+
     described = await describeCreatedWorktree(repoPath, worktreePath, branchName, {
       ...options,
       timeout: options?.timeout ?? remainingMs
@@ -83,18 +89,23 @@ export async function resolveCreatedWorktree(
     // Why keep, not rethrow: the recovery must not replace the listing's own, more informative failure.
     describeError = err
   }
+
   if (described) {
     return { created: described, worktrees: [], listingComplete: false }
   }
+
   if (listingError) {
     throw listingError
   }
+
   const notFound = createdWorktreeNotFoundError(worktreePath, branchName)
+
   if (describeError) {
     // The listing simply omitted the row, so the direct read holds the only actionable failure.
     throw new Error(
       `${notFound.message}: ${describeError instanceof Error ? describeError.message : String(describeError)}`
     )
   }
+
   throw notFound
 }

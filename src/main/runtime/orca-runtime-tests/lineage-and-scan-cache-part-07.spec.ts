@@ -61,35 +61,46 @@ function lineageOf<T extends { attention?: unknown }>(
   if (!context) {
     return undefined
   }
+
   const { attention: _attention, ...lineage } = context
+
   return lineage
 }
 
 describe('OrcaRuntimeService orchestration lineage across restart', () => {
   it('projects the coordinator pane key as the worker parent after the handles are reminted', () => {
     const terminals = makeTerminals()
+
     const paneKey = (name: string): string => {
       const terminal = terminals.find((entry) => entry.name === name) as RestartTerminal
+
       return makePaneKey(terminal.tabId, terminal.leafId)
     }
+
     const db = new OrchestrationDb(':memory:')
     const before = new OrcaRuntimeService(store)
+
     try {
       const beforeHandles = Object.fromEntries(
         terminals.map((terminal) => [terminal.name, before.preAllocateHandleForPty(terminal.ptyId)])
       )
+
       before.setOrchestrationDb(db)
       before.attachWindow(1)
       before.syncWindowGraph(1, makeGraph(terminals))
+
       const coordinatorAuthority = before.getOrchestrationDispatchAuthority(
         beforeHandles.coordinator
       )
+
       expect(coordinatorAuthority?.processIncarnation).toBeTruthy()
+
       const run = db.createRun({
         objective: 'survive a restart',
         coordinatorHandle: beforeHandles.coordinator,
         coordinatorPaneKey: paneKey('coordinator')
       })
+
       const workerTask = db.createTask({
         spec: 'worker task',
         runId: run.id,
@@ -98,7 +109,9 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
         createdByProcessIncarnation: coordinatorAuthority?.processIncarnation ?? undefined,
         createdByRunGeneration: run.consumer_generation
       })
+
       const workerAuthority = before.getOrchestrationDispatchAuthority(beforeHandles.worker)
+
       const workerDispatch = createRootDispatch(
         db,
         workerTask.id,
@@ -107,6 +120,7 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
         undefined,
         workerAuthority?.processIncarnation ?? undefined
       )
+
       const nestedTask = db.createTask({
         spec: 'nested task',
         runId: run.id,
@@ -115,12 +129,14 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
         createdByProcessIncarnation: workerAuthority?.processIncarnation ?? undefined,
         createdByRunGeneration: run.consumer_generation
       })
+
       const nestedDispatch = createRootDispatch(
         db,
         nestedTask.id,
         beforeHandles['nested-worker'],
         paneKey('nested-worker')
       )
+
       expect(
         before.syncWindowGraph(1, makeGraph(terminals)).agentOrchestrationByPaneKey
       ).toMatchObject({
@@ -180,21 +196,26 @@ describe('OrcaRuntimeService orchestration lineage across restart', () => {
   it('omits a stale coordinator handle when no live pane owns the coordinator pane key', () => {
     const terminals = makeTerminals().filter((terminal) => terminal.name === 'worker')
     const workerPaneKey = makePaneKey('tab-worker', terminals[0]!.leafId)
+
     const coordinatorPaneKey = makePaneKey(
       'tab-coordinator',
       '11111111-1111-4111-8111-111111111111'
     )
+
     const db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService(store)
+
     try {
       const workerHandle = runtime.preAllocateHandleForPty('pty-worker')
       runtime.setOrchestrationDb(db)
       runtime.attachWindow(1)
+
       const run = db.createRun({
         objective: 'coordinator pane closed before restart',
         coordinatorHandle: 'term_stale-coordinator',
         coordinatorPaneKey: coordinatorPaneKey
       })
+
       const task = db.createTask({ spec: 'orphaned worker', runId: run.id })
       const dispatch = createRootDispatch(db, task.id, workerHandle, workerPaneKey)
 

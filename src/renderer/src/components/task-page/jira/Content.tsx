@@ -10,6 +10,7 @@ import { formatRelativeTime } from '../../task-page-source-context'
 import { getJiraStatusTone } from '@/components/task-page-jira-status-tone'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
 import { TaskPageLinearContent } from '../linear/Content'
+
 export function TaskPageJiraContent({
   model
 }: {
@@ -41,6 +42,7 @@ export function TaskPageJiraContent({
     setJiraConnectOpen,
     handleUseJiraItem
   } = model
+
   return taskSource === 'jira' ? (
     !jiraStatusReady ? (
       <div className="mt-4 flex items-center justify-center py-14">

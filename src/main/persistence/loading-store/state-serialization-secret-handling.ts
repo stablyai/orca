@@ -27,6 +27,7 @@ export class StateSerializationSecretHandlingOperations {
 
   getDurableState(): Omit<PersistedState, 'githubCache'> {
     const { githubCache: _memoryOnly, ...durable } = this.runtime.state
+
     return durable
   }
 
@@ -47,28 +48,37 @@ export class StateSerializationSecretHandlingOperations {
     const secretSubs: SecretSentinelSubstitution[] = []
     const protectedSecretUpdates: ProtectedSecretRetentionUpdate[] = []
     let protectedStorageDegraded = false
+
     const encryptToSentinel = (slot: string, plaintext: string): string => {
       const encrypted = this.runtime.protectedSecrets.encrypt(slot, plaintext)
+
       if (encrypted.retentionUpdate) {
         protectedSecretUpdates.push(encrypted.retentionUpdate)
       }
+
       protectedStorageDegraded ||= encrypted.degraded
       const { blob, hashValue = plaintext } = encrypted
+
       // Values already identical in payload and hash need no sentinel substitution.
       if (blob === plaintext && hashValue === plaintext) {
         return blob
       }
+
       const sentinel = `orca-secret-slot-${randomUUID()}`
       secretSubs.push({ sentinel, blob, hashValue })
+
       return sentinel
     }
+
     const encryptOptionalToSentinel = (
       slot: string,
       plaintext: string | null | undefined
     ): string | null => {
       const encrypted = encryptToSentinel(slot, plaintext ?? '')
+
       return encrypted || null
     }
+
     // Ordered before the default omission on purpose: the two maps hold the SAME row object, so
     // the projection settles almost every row on a reference check. Omitting first rebuilds each
     // row twice into two distinct objects and forces a deep compare per row instead. Omission is
@@ -81,6 +91,7 @@ export class StateSerializationSecretHandlingOperations {
             this.runtime.state.worktreeMetaByIdentity,
             this.runtime.state
           )
+
     // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
@@ -141,9 +152,11 @@ export class StateSerializationSecretHandlingOperations {
         )
       }
     }
+
     // Why compact: ~20% fewer bytes and less serialize time; all readers JSON.parse so formatting is irrelevant.
     // One full-state stringify; secret slots currently hold sentinels.
     const serialized = JSON.stringify(stateToSave)
+
     // Substitute each unique sentinel: ciphertext for the on-disk payload, a stable normalized
     // value for the guard hash. One pass builds both, so the multi-MB state is never copied per
     // sentinel and never encoded twice.
@@ -152,6 +165,7 @@ export class StateSerializationSecretHandlingOperations {
       secretSubs,
       protectedStorageDegraded ? 'safeStorage-degraded\0' : ''
     )
+
     return { payload, stateHash, protectedSecretUpdates }
   }
 }

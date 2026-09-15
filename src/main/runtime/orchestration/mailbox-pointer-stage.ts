@@ -34,18 +34,24 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
   args: StagePointerArgs<TWaiter>
 ): void {
   const ptyId = args.leaf.ptyId
+
   if (!ptyId) {
     return
   }
+
   const expectedTarget = args.deps.resolveSubmitTarget(args.leaf, ptyId)
+
   if (!expectedTarget) {
     return
   }
+
   const db = args.deps.getDb()
+
   const reservationTarget = {
     ptyId,
     processIncarnation: expectedTarget.processIncarnation
   }
+
   if (
     !db ||
     shouldReleaseOrchestrationPointer(
@@ -57,9 +63,11 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
   ) {
     return
   }
+
   const flight = args.state.beginFlight(ptyId)
   flight.processIncarnation = expectedTarget.processIncarnation
   flight.stagedMessageIds = args.messages.map((message) => message.id)
+
   try {
     if (
       !db.stageMailboxPointerEnter(flight.stagedMessageIds, reservationTarget) ||
@@ -69,30 +77,39 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
       // Not forced: a retry would fail on the same reservation, but a park from an
       // earlier flight still has to drain.
       args.redrive(args.mailboxHandle)
+
       return
     }
   } catch {
     // The reservation may already be durable; recovery decides whether redrive is safe.
     args.settle(ptyId, flight)
+
     return
   }
+
   // The watermark parks concurrent deliveries, so it must never outlive the DB reservation.
   args.state.setWatermark(args.mailboxHandle, args.newestSequence, ptyId, args.leafKey)
+
   // Only `refused` proves no bytes left, so only `refused` may release the reservation.
   const settlePointerWrite = (settlement: WriteSettlement): void => {
     if (settlement.outcome === 'unverifiable') {
       preserveAmbiguousWrite()
+
       return
     }
+
     finishPointerWriteAndStageEnter(args, ptyId, flight, expectedTarget, settlement)
   }
+
   const preserveAmbiguousWrite = (): void => {
     if (!args.state.isCurrentFlight(ptyId, flight)) {
       return
     }
+
     args.state.deactivateWatermark(args.mailboxHandle, args.newestSequence, ptyId)
     args.settle(ptyId, flight)
   }
+
   try {
     const writeResult = args.deps.writePty(
       ptyId,
@@ -102,10 +119,13 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
         args.deps.getCliCommand(expectedTarget.terminalHandle)
       )
     )
+
     if (isSettledWrite(writeResult)) {
       settlePointerWrite(writeResult)
+
       return
     }
+
     void writeResult.then(settlePointerWrite, preserveAmbiguousWrite).catch(() => undefined)
   } catch {
     preserveAmbiguousWrite()
@@ -120,19 +140,25 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
   settlement: Extract<WriteSettlement, { outcome: 'accepted' | 'refused' }>
 ): void {
   let delayedSettle = false
+
   try {
     if (!args.state.isCurrentFlight(ptyId, flight)) {
       return
     }
+
     const db = args.deps.getDb()
+
     if (settlement.outcome === 'refused') {
       db?.markAsUndelivered(flight.stagedMessageIds)
+
       if (args.state.clearWatermark(args.mailboxHandle, args.newestSequence, ptyId)) {
         // A delivery parked behind this watermark has to drain now that it is gone.
         args.redrive(args.mailboxHandle)
       }
+
       return
     }
+
     if (
       !db ||
       shouldReleaseOrchestrationPointer(
@@ -145,8 +171,10 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
       if (args.state.clearWatermark(args.mailboxHandle, args.newestSequence, ptyId)) {
         args.redrive(args.mailboxHandle)
       }
+
       return
     }
+
     if (
       [args.leaf.lastOscTitle, args.leaf.paneTitle, args.deps.getTabTitle(args.leaf.tabId)].some(
         isCursorAgentTitle
@@ -155,8 +183,10 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
       db.markAsDelivered(flight.stagedMessageIds)
       args.state.clearWatermark(args.mailboxHandle, args.newestSequence, ptyId)
       args.redrive(args.mailboxHandle)
+
       return
     }
+
     const submitEnter = (): void =>
       submitOrchestrationMailboxPointer(
         {
@@ -180,10 +210,13 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           expectedTarget
         }
       )
+
     flight.submitEnter = submitEnter
+
     const deferredEnter = flight.idleObservedWhileDeferred
       ? args.state.takeDeferredEnter(ptyId)
       : null
+
     if (!deferredEnter && !flight.deferredUntilIdle) {
       flight.enterTimer = setTimeout(() => {
         flight.enterTimer = null
@@ -191,6 +224,7 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
         submitEnter()
       }, args.enterDelayMs)
     }
+
     delayedSettle = true
     deferredEnter?.()
   } finally {

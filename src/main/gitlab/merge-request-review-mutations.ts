@@ -35,6 +35,7 @@ export async function addMRComment(
     projectRef,
     async (projectRef) => {
       await acquire()
+
       try {
         const { stdout } = await glabExecFileAsync(
           [
@@ -48,12 +49,14 @@ export async function addMRComment(
           ],
           glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
+
         const data = JSON.parse(stdout) as {
           id?: number
           author?: { username?: string; avatar_url?: string; state?: string } | null
           body?: string
           created_at?: string
         }
+
         return {
           ok: true,
           comment: {
@@ -93,12 +96,16 @@ export async function addMRInlineComment(
     projectRef,
     async (projectRef) => {
       const body = input.body.trim()
+
       if (!body) {
         return { ok: false, error: 'Comment body is required' }
       }
+
       await acquire()
+
       try {
         const oldPath = input.oldPath ?? input.path
+
         const { stdout } = await glabExecFileAsync(
           [
             'api',
@@ -125,6 +132,7 @@ export async function addMRInlineComment(
           ],
           glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
+
         const data = JSON.parse(stdout) as {
           id?: string
           notes?: {
@@ -135,7 +143,9 @@ export async function addMRInlineComment(
             position?: { new_path?: string; new_line?: number } | null
           }[]
         }
+
         const note = data.notes?.[0]
+
         return {
           ok: true,
           comment: {
@@ -154,6 +164,7 @@ export async function addMRInlineComment(
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+
         return { ok: false, error: classifyGlabError(msg).message }
       } finally {
         release()
@@ -181,10 +192,13 @@ export async function resolveMRDiscussion(
     projectRef,
     async (projectRef) => {
       const trimmedDiscussionId = discussionId.trim()
+
       if (!trimmedDiscussionId) {
         return { ok: false, error: 'Discussion id is required' }
       }
+
       await acquire()
+
       try {
         // Why: GitLab resolves/reopens the whole discussion thread, not a single note.
         await glabExecFileAsync(
@@ -199,9 +213,11 @@ export async function resolveMRDiscussion(
           ],
           glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
+
         return { ok: true }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+
         return { ok: false, error: classifyGlabError(msg).message }
       } finally {
         release()
@@ -222,6 +238,7 @@ function mapGitLabReviewer(raw: {
   if (!raw.username) {
     return null
   }
+
   return {
     ...(typeof raw.id === 'number' ? { id: raw.id } : {}),
     username: raw.username,
@@ -247,11 +264,13 @@ export async function updateMRReviewers(
     projectRef,
     async (projectRef) => {
       await acquire()
+
       try {
         const fields =
           reviewerIds.length > 0
             ? reviewerIds.flatMap((id) => ['-f', `reviewer_ids[]=${id}`])
             : ['-f', 'reviewer_ids=']
+
         const { stdout } = await glabExecFileAsync(
           [
             'api',
@@ -263,7 +282,9 @@ export async function updateMRReviewers(
           ],
           glabRepoExecOptions(repoPath, connectionId, localGitOptions)
         )
+
         const data = JSON.parse(stdout) as { reviewers?: Parameters<typeof mapGitLabReviewer>[0][] }
+
         return {
           ok: true,
           reviewers: (data.reviewers ?? [])
@@ -272,6 +293,7 @@ export async function updateMRReviewers(
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+
         return { ok: false, error: classifyGlabError(msg).message }
       } finally {
         release()

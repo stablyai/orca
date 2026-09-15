@@ -29,6 +29,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/components/settings/AgentsPane', () => ({
   AgentsPane: (props: ComponentProps<typeof AgentsPane>) => {
     testState.agentsPaneProps = props
+
     return null
   }
 }))
@@ -56,6 +57,7 @@ function installCapabilityTransports(localHostPlatform: NodeJS.Platform = 'win32
   const localWslAvailable = vi.fn().mockResolvedValue(true)
   const localWslDistros = vi.fn().mockResolvedValue(['Ubuntu'])
   const runtimeGetStatus = vi.fn().mockResolvedValue({ hostPlatform: localHostPlatform })
+
   const runtimeEnvironmentCall = vi.fn(async (args: { method: string }) => ({
     id: args.method,
     ok: true,
@@ -84,6 +86,7 @@ function installCapabilityTransports(localHostPlatform: NodeJS.Platform = 'win32
       runtimeEnvironments: { call: runtimeEnvironmentCall }
     } as unknown as Window['api']
   })
+
   return { localWslAvailable, localWslDistros, runtimeGetStatus, runtimeEnvironmentCall }
 }
 
@@ -205,9 +208,11 @@ describe('AgentSettingsDialog', () => {
     testState.isWebClient = true
     testState.settings = { ...testState.settings!, activeRuntimeEnvironmentId: null }
     testState.runtimeEnvironments = [{ id: 'paired-a', createdAt: 1 }]
+
     const { localWslAvailable, localWslDistros, runtimeGetStatus } = installCapabilityTransports(
       args.firstPlatform
     )
+
     localWslAvailable.mockResolvedValue(args.firstAvailable)
     localWslDistros.mockResolvedValue(args.firstDistros)
 

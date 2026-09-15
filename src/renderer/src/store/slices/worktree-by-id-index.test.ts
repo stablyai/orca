@@ -51,6 +51,7 @@ describe('buildWorktreeByIdIndex', () => {
       repoA: [worktree('shared', 'repoA')],
       repoB: [worktree('shared', 'repoB')]
     }
+
     expect(buildWorktreeByIdIndex(duplicated).get('shared')?.repoId).toBe('repoA')
     expect(buildWorktreeByIdIndex(duplicated).get('shared')).toEqual(
       findByFlatten(duplicated, 'shared')
@@ -65,6 +66,7 @@ describe('buildByIdIndex', () => {
       { id: 'b', n: 2 },
       { id: 'c', n: 3 }
     ]
+
     for (const id of ['a', 'b', 'c', 'zzz']) {
       expect(buildByIdIndex(rows).get(id)).toEqual(rows.find((row) => row.id === id))
     }
@@ -75,6 +77,7 @@ describe('buildByIdIndex', () => {
       { id: 'dup', n: 1 },
       { id: 'dup', n: 2 }
     ]
+
     expect(buildByIdIndex(rows).get('dup')).toEqual(rows.find((row) => row.id === 'dup'))
     expect(buildByIdIndex(rows).get('dup')?.n).toBe(1)
   })

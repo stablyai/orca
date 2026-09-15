@@ -15,6 +15,7 @@ type ChunkCall = {
   expectedSshConnectionGeneration?: number
   expectedExecutionHostId?: string
 }
+
 type RuntimeCallOptions = { expectedEnvironmentRuntimeId?: string; signal?: AbortSignal }
 
 const callRuntimeEnvironment =
@@ -35,7 +36,9 @@ vi.mock('./runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: (...args: Parameters<typeof callRuntimeEnvironment>) =>
     callRuntimeEnvironment(...args)
 }))
+
 vi.mock('./filesystem-auth', () => ({ authorizeExternalPath: () => {} }))
+
 // Why: see filesystem-runtime-upload-staging.test.ts — a real over-limit fixture
 // would allocate gigabytes on Windows.
 vi.mock('./runtime-import-limits', async (importOriginal) => ({
@@ -45,6 +48,7 @@ vi.mock('./runtime-import-limits', async (importOriginal) => ({
 
 const { RUNTIME_UPLOAD_SLICE_BYTES, streamExternalFileToRuntime } =
   await import('./runtime-upload-file-stream')
+
 const {
   clearRuntimeEnvironmentManualDisconnect,
   markRuntimeEnvironmentManuallyDisconnected,
@@ -66,6 +70,7 @@ function uploadedBytes(): Buffer {
 /** Mirrors what staging records, so tests exercise the real identity contract. */
 async function stagedIdentity(filePath: string): Promise<StagedRuntimeUploadFileIdentity> {
   const stat = await lstat(filePath)
+
   return {
     byteLength: stat.size,
     inode: stat.ino,
@@ -113,9 +118,11 @@ describe('streamExternalFileToRuntime', () => {
   it('sends a file larger than the old 25 MB cap as ordered append-only slices', async () => {
     const size = RUNTIME_UPLOAD_SLICE_BYTES * 2 + 1234
     const contents = Buffer.alloc(size)
+
     for (let index = 0; index < size; index += 1) {
       contents[index] = index % 251
     }
+
     const filePath = join(workDir, 'big.bin')
     await writeFile(filePath, contents)
 
@@ -187,6 +194,7 @@ describe('streamExternalFileToRuntime', () => {
         const bumped = new Date(args.expected.modifiedAtMs + 5_000)
         await utimes(filePath, bumped, bumped)
       }
+
       return { id: 'x', ok: true, result: {}, _meta: {} }
     })
 
@@ -244,6 +252,7 @@ describe('streamExternalFileToRuntime', () => {
 
     callRuntimeEnvironment.mockImplementation(async () => {
       await writeFile(filePath, 'content arrived during the empty write')
+
       return { id: 'x', ok: true, result: {}, _meta: {} }
     })
 
@@ -266,6 +275,7 @@ describe('streamExternalFileToRuntime', () => {
         revision,
         runtimeId: options?.expectedEnvironmentRuntimeId
       }))
+
     expect(guards).toEqual([
       { revision: 41, runtimeId: 'runtime-7' },
       { revision: 41, runtimeId: 'runtime-7' }
@@ -279,6 +289,7 @@ describe('streamExternalFileToRuntime', () => {
 
     callRuntimeEnvironment.mockImplementation(async () => {
       controller.abort(new Error('window closed'))
+
       return { id: 'x', ok: true, result: {}, _meta: {} }
     })
 
@@ -314,6 +325,7 @@ describe('streamExternalFileToRuntime', () => {
     const signals = callRuntimeEnvironment.mock.calls
       .filter(([, , method]) => method === 'files.writeBase64Chunk')
       .map(([, , , , , , , options]) => options?.signal)
+
     expect(signals).toEqual([controller.signal, controller.signal])
   })
 
@@ -377,7 +389,9 @@ describe('streamExternalFileToRuntime', () => {
     const calls = callRuntimeEnvironment.mock.calls
       .filter(([, , method]) => method === 'files.writeBase64Chunk')
       .map(([, , , params]) => params)
+
     expect(calls).toHaveLength(2)
+
     for (const params of calls) {
       expect(params).toMatchObject({
         expectedSshTargetId: 'ssh-1',
@@ -416,6 +430,7 @@ describe('manual disconnect during a transfer', () => {
       if (method === 'files.writeBase64Chunk' && chunkCalls().length === 1) {
         markRuntimeEnvironmentManuallyDisconnected('env-1')
       }
+
       return { id: 'x', ok: true, result: {}, _meta: {} }
     })
 

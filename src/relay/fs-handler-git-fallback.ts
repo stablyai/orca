@@ -44,13 +44,16 @@ export function listFilesWithGit(
   options: { signal?: AbortSignal; maxResults?: number } = {}
 ): Promise<string[]> {
   const { signal, maxResults } = options
+
   if (signal?.aborted) {
     return Promise.reject(fileListingCancellationError(signal))
   }
+
   const gitPaths = new Set<string>()
   const directoryPaths = new Set<string>()
   const directFileCandidates = new Set<string>()
   const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen(excludePathPrefixes)
+
   const children: {
     child: ReturnType<typeof spawn>
     isDone: () => boolean
@@ -67,15 +70,18 @@ export function listFilesWithGit(
         if (!path) {
           return false
         }
+
         if (path.endsWith('/')) {
           directoryPaths.add(path)
         } else {
           gitPaths.add(path)
+
           if (maxResults !== undefined) {
             // Why: this duplicate classification exists only to stop bounded
             // scans; unbounded SSH scans must not retain another full listing.
             const parsed = parseQuickOpenGitLsFilesEntry(path)
             const relPath = parsed.path.replace(/\/+$/, '')
+
             if (
               !parsed.isGitlink &&
               !parsed.isUntrackedDir &&
@@ -86,6 +92,7 @@ export function listFilesWithGit(
             }
           }
         }
+
         // Why: placeholders need IO classification and can disappear; only
         // guaranteed final files are allowed to stop the remote Git processes.
         return maxResults !== undefined && directFileCandidates.size >= maxResults
@@ -96,34 +103,42 @@ export function listFilesWithGit(
         env: buildRelayGitEnv(),
         stdio: ['ignore', 'pipe', 'pipe']
       })
+
       let timer: ReturnType<typeof setTimeout> | null = null
+
       const cleanup = (): void => {
         if (timer) {
           clearTimeout(timer)
           timer = null
         }
+
         child.stdout!.off('data', handleStdoutData)
         child.stderr!.off('data', handleStderrData)
         child.off('error', handleError)
         child.off('close', handleClose)
       }
+
       const rejectPass = (error: Error): void => {
         if (done) {
           return
         }
+
         done = true
         buf = ''
         cleanup()
         reject(error)
       }
+
       const resolvePass = (): void => {
         if (done) {
           return
         }
+
         done = true
         cleanup()
         resolve()
       }
+
       children.push({
         child,
         isDone: () => done,
@@ -135,43 +150,57 @@ export function listFilesWithGit(
         buf += chunk
         let start = 0
         let idx = buf.indexOf('\0', start)
+
         while (idx !== -1) {
           if (processPath(buf.substring(start, idx))) {
             buf = ''
             finishAtLimit()
+
             return
           }
+
           start = idx + 1
           idx = buf.indexOf('\0', start)
         }
+
         buf = start < buf.length ? buf.substring(start) : ''
       }
+
       function handleStderrData(): void {
         /* drain */
       }
+
       function handleError(err: Error): void {
         rejectPass(err)
       }
+
       function handleClose(code: number | null, signal: NodeJS.Signals | null): void {
         if (done) {
           return
         }
+
         if (signal) {
           // Why: a signal exit means the child was killed (timeout or
           // external). Treat that as a load failure rather than silently
           // resolving with whatever git had managed to print.
           rejectPass(new Error(`git ls-files killed by ${signal}`))
+
           return
         }
+
         if (buf && processPath(buf)) {
           buf = ''
           finishAtLimit()
+
           return
         }
+
         if (code === 0) {
           resolvePass()
+
           return
         }
+
         // Why: a non-zero exit (e.g. not a git repo) means the listing is
         // incomplete; reject so the caller surfaces the failure instead of
         // expanding a partial result set. Matches the main-process fallback.
@@ -197,9 +226,11 @@ export function listFilesWithGit(
       if (entry.isDone()) {
         continue
       }
+
       if (entry.child.exitCode === null && entry.child.signalCode === null) {
         entry.child.kill()
       }
+
       entry.reject(new Error(reason))
     }
   }
@@ -209,7 +240,9 @@ export function listFilesWithGit(
       if (entry.isDone()) {
         continue
       }
+
       entry.resolve()
+
       if (entry.child.exitCode === null && entry.child.signalCode === null) {
         entry.child.kill()
       }
@@ -233,6 +266,7 @@ export function listFilesWithGit(
         )
       }
     })
+
   const passes =
     maxResults === undefined
       ? Promise.all([runGitLsFiles(primary), runIgnoredPass()])
@@ -250,15 +284,18 @@ export function listFilesWithGit(
         signal,
         maxResults
       })
+
       // Why: directory placeholders are expanded after Git exits; restore
       // Git's path order for empty queries and fuzzy-score ties over SSH.
       return files.sort().slice(0, maxResults)
     })
     .catch((err) => {
       killSurvivors('git ls-files canceled after sibling failure')
+
       if (signal?.aborted) {
         throw fileListingCancellationError(signal)
       }
+
       throw err
     })
     .finally(() => {
@@ -286,12 +323,14 @@ export function searchWithGitGrep(
       env: buildRelayGitEnv(),
       stdio: ['ignore', 'pipe', 'pipe']
     })
+
     let killTimeout: ReturnType<typeof setTimeout>
 
     function resolveOnce(): void {
       if (done) {
         return
       }
+
       done = true
       lines.clear()
       clearTimeout(killTimeout)
@@ -306,6 +345,7 @@ export function searchWithGitGrep(
 
     function processLine(line: string): void {
       const verdict = ingestGitGrepLine(line, rootPath, matchRegex, acc, opts.maxResults)
+
       if (verdict === 'stop') {
         child.kill()
       }
@@ -325,9 +365,11 @@ export function searchWithGitGrep(
 
     function handleClose(): void {
       const tail = lines.finish()
+
       if (tail !== null) {
         processLine(tail)
       }
+
       resolveOnce()
     }
 

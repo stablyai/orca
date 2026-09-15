@@ -38,9 +38,11 @@ async function createBrowserFixture(
   await waitForActiveWorktree(page)
   await ensureTerminalVisible(page)
   const worktreeId = await getActiveWorktreeId(page)
+
   if (!worktreeId) {
     throw new Error('Expected an active worktree')
   }
+
   const browserTab = await page.evaluate(
     ({ targetWorktreeId, targetUrl }) =>
       window.__store?.getState().createBrowserTab(targetWorktreeId, targetUrl, {
@@ -49,9 +51,11 @@ async function createBrowserFixture(
       }),
     { targetWorktreeId: worktreeId, targetUrl: fixtureUrl }
   )
+
   if (!browserTab?.activePageId) {
     throw new Error('Failed to create browser recovery fixture tab')
   }
+
   return {
     browserTab: { id: browserTab.id, activePageId: browserTab.activePageId },
     fixtureUrl,
@@ -71,6 +75,7 @@ async function readBrowserPageRecoveryState(
         .browserPagesByWorkspace[targetWorkspaceId]?.find(
           (entry) => entry.id === targetBrowserPageId
         )
+
       return {
         loadErrorCode: browserPage?.loadError?.code ?? null,
         url: browserPage?.url ?? null
@@ -137,6 +142,7 @@ test('browser chrome recovers a live registered file guest after renderer loss',
       const overlay = document.querySelector(
         `[data-browser-overlay-tab-id="${targetBrowserTabId}"]`
       )
+
       const webview = overlay?.querySelector('webview') as Electron.WebviewTag
       await webview.executeJavaScript(
         `document.querySelector('#recovery-state').value = ${JSON.stringify(targetValue)}`
@@ -180,6 +186,7 @@ test('browser chrome recovers a live registered file guest after renderer loss',
       }),
     { targetWorktreeId: worktreeId }
   )
+
   expect(backgroundTab?.id).toBeTruthy()
   await expect
     .poll(() => readBrowserGuestState(orcaPage, backgroundTab!.id), { timeout: 10_000 })
@@ -229,6 +236,7 @@ test('dom-ready ID loss waits for validation without reloading the guest', async
     orcaPage,
     registerPostElectronShutdownCleanup
   )
+
   await expect
     .poll(() => readBrowserGuestState(orcaPage, browserTab.id))
     .toMatchObject({ marker: 'painted-file-guest', url: fixtureUrl })
@@ -247,7 +255,9 @@ test('dom-ready ID loss waits for validation without reloading the guest', async
           failedReads -= 1
           throw new Error('guest detached')
         }
+
         webview.dataset.domReadyIdRestored = 'true'
+
         return getWebContentsId()
       }
     })
@@ -302,6 +312,7 @@ test('explicit navigation repairs a recovery error without dom-ready churn', asy
     orcaPage,
     registerPostElectronShutdownCleanup
   )
+
   await expect
     .poll(() => readBrowserGuestState(orcaPage, browserTab.id))
     .toMatchObject({ marker: 'painted-file-guest', url: fixtureUrl })
@@ -335,10 +346,12 @@ test('explicit navigation repairs a recovery error without dom-ready churn', asy
     const testState = globalThis as typeof globalThis & {
       browserRecoveryValidationCalls?: number
     }
+
     testState.browserRecoveryValidationCalls = 0
     ipcMain.removeHandler('browser:isGuestRegistered')
     ipcMain.handle('browser:isGuestRegistered', () => {
       testState.browserRecoveryValidationCalls = (testState.browserRecoveryValidationCalls ?? 0) + 1
+
       return false
     })
   })
@@ -357,40 +370,54 @@ test('explicit navigation repairs a recovery error without dom-ready churn', asy
   const addressBar = orcaPage.locator(
     `[data-browser-overlay-tab-id="${browserTab.id}"] [data-orca-browser-address-bar="true"]`
   )
+
   let resolvePrecommitRequest: (() => void) | null = null
+
   const precommitRequest = new Promise<void>((resolve) => {
     resolvePrecommitRequest = resolve
   })
+
   let resolveCommittedRequest: (() => void) | null = null
+
   const committedRequest = new Promise<void>((resolve) => {
     resolveCommittedRequest = resolve
   })
+
   let resolveRedirectedRequest: (() => void) | null = null
+
   const redirectedRequest = new Promise<void>((resolve) => {
     resolveRedirectedRequest = resolve
   })
+
   const stalledServer = createServer((request, response) => {
     if (request.url === '/redirect') {
       response.writeHead(302, { Location: '/redirected' })
       response.end()
+
       return
     }
+
     if (request.url === '/redirected') {
       response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
       response.end(
         '<!doctype html><html><body><h1 id="recovery-marker">painted-redirected-guest</h1></body></html>'
       )
       resolveRedirectedRequest?.()
+
       return
     }
+
     if (request.url === '/committed') {
       response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
       response.write('<!doctype html><html><head><title>Committed stall</title></head><body>')
       resolveCommittedRequest?.()
+
       return
     }
+
     resolvePrecommitRequest?.()
   })
+
   await new Promise<void>((resolve, reject) => {
     stalledServer.once('error', reject)
     stalledServer.listen(0, '127.0.0.1', resolve)
@@ -402,9 +429,11 @@ test('explicit navigation repairs a recovery error without dom-ready churn', asy
     })
   })
   const stalledAddress = stalledServer.address()
+
   if (!stalledAddress || typeof stalledAddress === 'string') {
     throw new Error('Expected a local stalled server address')
   }
+
   const stalledOrigin = `http://127.0.0.1:${stalledAddress.port}`
   await addressBar.fill(`${stalledOrigin}/precommit`)
   await addressBar.press('Enter')
@@ -412,10 +441,12 @@ test('explicit navigation repairs a recovery error without dom-ready churn', asy
   await orcaPage.evaluate((targetBrowserTabId) => {
     const overlay = document.querySelector(`[data-browser-overlay-tab-id="${targetBrowserTabId}"]`)
     const webview = overlay?.querySelector('webview')
+
     const inPageNavigation = Object.assign(new Event('did-navigate-in-page'), {
       isMainFrame: true,
       url: `${webview?.getAttribute('src') ?? 'about:blank'}#stale`
     })
+
     webview?.dispatchEvent(inPageNavigation)
     webview?.dispatchEvent(new Event('dom-ready'))
   }, browserTab.id)
@@ -430,6 +461,7 @@ test('explicit navigation repairs a recovery error without dom-ready churn', asy
       const testState = globalThis as typeof globalThis & {
         browserRecoveryValidationCalls?: number
       }
+
       return testState.browserRecoveryValidationCalls ?? 0
     })
   ).toBe(0)
@@ -457,6 +489,7 @@ test('explicit navigation repairs a recovery error without dom-ready churn', asy
       const testState = globalThis as typeof globalThis & {
         browserRecoveryValidationCalls?: number
       }
+
       return testState.browserRecoveryValidationCalls ?? 0
     })
   ).toBe(0)
@@ -484,6 +517,7 @@ test('explicit navigation repairs a recovery error without dom-ready churn', asy
       const testState = globalThis as typeof globalThis & {
         browserRecoveryValidationCalls?: number
       }
+
       return testState.browserRecoveryValidationCalls ?? 0
     })
   ).toBe(1)
@@ -516,6 +550,7 @@ test('explicit navigation repairs a recovery error without dom-ready churn', asy
     const testState = globalThis as typeof globalThis & {
       browserRecoveryValidationCalls?: number
     }
+
     testState.browserRecoveryValidationCalls = 0
   })
 
@@ -545,6 +580,7 @@ test('explicit navigation repairs a recovery error without dom-ready churn', asy
       const testState = globalThis as typeof globalThis & {
         browserRecoveryValidationCalls?: number
       }
+
       return testState.browserRecoveryValidationCalls ?? 0
     })
   ).toBe(1)
@@ -559,6 +595,7 @@ test('recovery error stays visible until toolbar retry repairs registration', as
     orcaPage,
     registerPostElectronShutdownCleanup
   )
+
   await expect
     .poll(() => readBrowserGuestState(orcaPage, browserTab.id))
     .toMatchObject({ marker: 'painted-file-guest', url: fixtureUrl })
@@ -629,6 +666,7 @@ test('attachment keeps recovery error until document readiness', async ({
     orcaPage,
     registerPostElectronShutdownCleanup
   )
+
   await expect
     .poll(() => readBrowserGuestState(orcaPage, browserTab.id))
     .toMatchObject({ marker: 'painted-file-guest', url: fixtureUrl })
@@ -662,6 +700,7 @@ test('attachment keeps recovery error until document readiness', async ({
     .locator('button')
     .nth(2)
     .click()
+
   const recoveryErrorCode = await orcaPage.evaluate(
     ({ workspaceId, browserPageId }) =>
       new Promise<number | null>((resolve) => {
@@ -676,6 +715,7 @@ test('attachment keeps recovery error until document readiness', async ({
       }),
     { workspaceId: browserTab.id, browserPageId: browserTab.activePageId }
   )
+
   expect(recoveryErrorCode).toBe(BROWSER_GUEST_RECOVERY_ERROR_CODE)
 })
 
@@ -684,12 +724,15 @@ async function occludeHeadedWindow(electronApp: ElectronApplication, page: Page)
   await host.evaluate((window) => window.minimize())
   const deadline = Date.now() + 2_000
   let minimized = false
+
   while (!minimized && Date.now() < deadline) {
     minimized = await host.evaluate((window) => window.isMinimized())
+
     if (!minimized) {
       await page.waitForTimeout(50)
     }
   }
+
   if (!minimized) {
     // Why: Xvfb has no window manager, so Electron minimize is a no-op on
     // Linux CI (especially frameless). Hide still unpaints the guest compositor.
@@ -719,6 +762,7 @@ test('minimized browser guest stays painted and registered after restore @headfu
     orcaPage,
     registerPostElectronShutdownCleanup
   )
+
   await expect
     .poll(() => readBrowserGuestState(orcaPage, browserTab.id))
     .toMatchObject({ marker: 'painted-file-guest', url: fixtureUrl })

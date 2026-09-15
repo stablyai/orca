@@ -61,6 +61,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       acceptingChunksRef.current = false
       pendingChunksRef.current.clear()
       pendingAudioBudgetRef.current.reset()
+
       try {
         toggleRecording(false)
       } catch (err) {
@@ -68,6 +69,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         // the wake tag and dictation state would leak.
         console.error('Failed to stop microphone recording', err)
       }
+
       void keepAwakeOwner.release(dictationId ?? undefined).catch(() => undefined)
     },
     [keepAwakeOwner]
@@ -76,14 +78,18 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const failActiveDictation = useCallback(
     (dictationId: string, err: unknown) => {
       const client = clientRef.current
+
       if (activeIdRef.current !== dictationId) {
         return
       }
+
       activeIdRef.current = null
       closeDictationAudio(dictationId)
+
       if (client && dictationId) {
         void client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
       }
+
       reportError(err)
     },
     [closeDictationAudio, reportError]
@@ -99,19 +105,24 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         activeIdRef.current === id || finishingIdRef.current === id,
       failActiveDictation
     }
+
     const sub = addExpoTwoWayAudioEventListener('onMicrophoneData', (event) => {
       const client = clientRef.current
       const dictationId = activeIdRef.current
+
       if (!client || !dictationId || !enabledRef.current || !acceptingChunksRef.current) {
         return
       }
+
       enqueueMobileDictationAudioChunk(client, dictationId, event, audioChunkQueue)
     })
+
     return () => sub.remove()
   }, [failActiveDictation, reportError])
 
   const start = useCallback(async () => {
     const client = clientRef.current
+
     if (!client || !enabledRef.current || activeIdRef.current) {
       return
     }
@@ -121,25 +132,32 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     setError(null)
     setStatus('starting')
     const permission = await requestMicrophonePermissionsAsync()
+
     if (generationRef.current !== generation || !enabledRef.current) {
       if (generationRef.current === generation) {
         setStatus('idle')
       }
+
       return
     }
+
     if (!permission.granted) {
       setStatus('idle')
       throw new Error('Microphone permission denied')
     }
 
     const initialized = await initialize()
+
     if (generationRef.current !== generation || !enabledRef.current) {
       void tearDown()
+
       if (generationRef.current === generation) {
         setStatus('idle')
       }
+
       return
     }
+
     if (!initialized) {
       setStatus('idle')
       throw new Error('Failed to initialize microphone')
@@ -166,10 +184,13 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         acceptingChunksRef.current = true
         pendingChunksRef.current.clear()
         pendingAudioBudgetRef.current.reset()
+
         if (!toggleRecording(true)) {
           return false
         }
+
         setStatus('recording')
+
         return true
       },
       rollbackRecordingStart: () => {
@@ -184,6 +205,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
   const stop = useCallback(async () => {
     const client = clientRef.current
     const dictationId = activeIdRef.current
+
     if (!client || !dictationId) {
       return
     }
@@ -193,11 +215,13 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     finishingIdRef.current = dictationId
     setStatus('processing')
     acceptingChunksRef.current = false
+
     try {
       // Inside the try so a throwing native shutdown still runs the finally
       // release and error cleanup.
       toggleRecording(false)
       await Promise.allSettled(Array.from(pendingChunksRef.current))
+
       if (
         !isCurrentMobileDictationFinish(
           generationRef.current,
@@ -210,14 +234,17 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       ) {
         return
       }
+
       const response = await client.sendRequest(
         'speech.dictation.finish',
         { dictationId },
         { timeoutMs: DICTATION_FINISH_TIMEOUT_MS }
       )
+
       if (!response.ok) {
         throw new Error(response.error.message)
       }
+
       if (
         !isCurrentMobileDictationFinish(
           generationRef.current,
@@ -230,6 +257,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       ) {
         return
       }
+
       const result = response.result as { text?: unknown }
       const text = typeof result.text === 'string' ? result.text.trim() : ''
       activeIdRef.current = null
@@ -237,6 +265,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       pendingChunksRef.current.clear()
       pendingAudioBudgetRef.current.reset()
       setStatus('idle')
+
       if (text) {
         onTranscriptRef.current(text)
       } else {
@@ -248,6 +277,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       // Hold the wake tag through chunk drain and the finish RPC: a screen
       // lock mid-processing suspends the app and loses the transcript.
       void keepAwakeOwner.release(dictationId).catch(() => undefined)
+
       if (finishingIdRef.current === dictationId) {
         finishingIdRef.current = null
       }
@@ -261,9 +291,11 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     activeIdRef.current = null
     finishingIdRef.current = null
     closeDictationAudio(dictationId)
+
     if (client && dictationId) {
       await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
     }
+
     setStatus('idle')
     setError(null)
   }, [closeDictationAudio])
@@ -276,6 +308,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         void cancel()
       }
     })
+
     return () => sub.remove()
   }, [cancel])
 
@@ -293,6 +326,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       finishingIdRef.current = null
       closeDictationAudio(dictationId)
       void tearDown()
+
       if (clientRef.current && dictationId) {
         void clientRef.current
           .sendRequest('speech.dictation.cancel', { dictationId })

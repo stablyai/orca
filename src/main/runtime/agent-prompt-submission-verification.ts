@@ -1,8 +1,10 @@
 export { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../shared/orchestration-timing-budgets'
+
 import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../shared/orchestration-timing-budgets'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 export const AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS = AGENT_PROMPT_EFFECT_TIMEOUT_MS
+
 const AGENT_PROMPT_EFFECT_POLL_MS = 50
 
 const HOOK_OBSERVED_TURN_START_AGENTS = new Set<TuiAgent>(['codex', 'kimi'])
@@ -61,6 +63,7 @@ export function isAgentPromptStalledError(error: unknown): boolean {
   if (error instanceof Error && error.message === AGENT_PROMPT_STALLED_ERROR) {
     return true
   }
+
   // Why: a relayed submission surfaces the same verdict as an RPC error code, not a message.
   return (
     typeof error === 'object' &&
@@ -77,9 +80,11 @@ export function readAgentPromptWaitText(
   if (cache.outputSequence === outputSequence && cache.waitText !== undefined) {
     return cache.waitText
   }
+
   const waitText = readWaitText()
   cache.outputSequence = outputSequence
   cache.waitText = waitText
+
   return waitText
 }
 
@@ -90,10 +95,12 @@ export async function verifyAgentPromptSubmission(
   assertPromptNotBlocked(options.baseline, options.baseline)
 
   const deadline = Date.now() + (options.timeoutMs ?? AGENT_PROMPT_EFFECT_TIMEOUT_MS)
+
   while (Date.now() < deadline) {
     const current = options.readActivity()
     assertSamePromptGeneration(options.baseline, current)
     assertPromptNotBlocked(options.baseline, current)
+
     if (
       agentPromptEffectAccepted(
         options.baseline,
@@ -105,12 +112,14 @@ export async function verifyAgentPromptSubmission(
     ) {
       return
     }
+
     await waitForAgentPromptPoll(options.signal)
   }
 
   const current = options.readActivity()
   assertSamePromptGeneration(options.baseline, current)
   assertPromptNotBlocked(options.baseline, current)
+
   if (
     agentPromptEffectAccepted(
       options.baseline,
@@ -122,6 +131,7 @@ export async function verifyAgentPromptSubmission(
   ) {
     return
   }
+
   throw new Error(AGENT_PROMPT_STALLED_ERROR)
 }
 
@@ -140,6 +150,7 @@ function agentPromptEffectAccepted(
       }) ?? true
     )
   }
+
   if (allowHookEvidence && observedHookWorkingAfterBaseline(baseline, current)) {
     return (
       acceptTurnStart?.({
@@ -148,6 +159,7 @@ function agentPromptEffectAccepted(
       }) ?? true
     )
   }
+
   return allowOutputEvidence && observedDeliveryEvidence(baseline, current)
 }
 
@@ -198,18 +210,23 @@ function throwIfAgentPromptAborted(signal?: AbortSignal): void {
 async function waitForAgentPromptPoll(signal?: AbortSignal): Promise<void> {
   if (!signal) {
     await new Promise((resolve) => setTimeout(resolve, AGENT_PROMPT_EFFECT_POLL_MS))
+
     return
   }
+
   await new Promise<void>((resolve, reject) => {
     const onAbort = (): void => {
       clearTimeout(timer)
       reject(new Error('request_aborted'))
     }
+
     const timer = setTimeout(() => {
       signal.removeEventListener('abort', onAbort)
       resolve()
     }, AGENT_PROMPT_EFFECT_POLL_MS)
+
     signal.addEventListener('abort', onAbort, { once: true })
+
     if (signal.aborted) {
       onAbort()
     }

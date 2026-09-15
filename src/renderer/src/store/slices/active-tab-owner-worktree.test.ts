@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 const recordRendererCrashBreadcrumb = vi.fn()
+
 vi.mock('../../lib/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: (...args: unknown[]) => recordRendererCrashBreadcrumb(...args)
 }))
@@ -25,6 +26,7 @@ describe('resolveActiveTabOwnerWorktreeId', () => {
       'wt-a',
       't1'
     )
+
     expect(owner).toBe('wt-a')
     expect(recordRendererCrashBreadcrumb).not.toHaveBeenCalled()
   })
@@ -41,6 +43,7 @@ describe('resolveActiveTabOwnerWorktreeId', () => {
       'wt-active',
       't1'
     )
+
     expect(owner).toBe('wt-active')
     expect(recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
       'terminal_tab_id_owned_by_multiple_worktrees',
@@ -54,6 +57,7 @@ describe('resolveActiveTabOwnerWorktreeId', () => {
       'wt-active',
       't1'
     )
+
     expect(owner).toBe('wt-x')
     expect(recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
       'terminal_tab_id_owned_by_multiple_worktrees',
@@ -68,14 +72,17 @@ describe('resolveActiveTabOwnerWorktreeId', () => {
       '',
       't1'
     )
+
     expect(owner).toBe('')
   })
 
   it('breadcrumbs a given tab id once per verdict so it cannot flood the ring', () => {
     const maps = { 'wt-a': [tab('t1', 'wt-a')], 'wt-b': [tab('t1', 'wt-b')] }
+
     for (let i = 0; i < 5; i += 1) {
       resolveActiveTabOwnerWorktreeId(maps, 'wt-a', 't1')
     }
+
     expect(recordRendererCrashBreadcrumb).toHaveBeenCalledTimes(1)
   })
 
@@ -106,9 +113,11 @@ describe('resolveActiveTabOwnerWorktreeId', () => {
   it('never exceeds two crumbs for one tab id however the active worktree moves', () => {
     const maps = { 'wt-a': [tab('t1', 'wt-a')], 'wt-b': [tab('t1', 'wt-b')] }
     const activeWorktreeIds = ['wt-a', 'wt-b', 'wt-c', '', 'wt-d', 'wt-a']
+
     for (let i = 0; i < 600; i += 1) {
       resolveActiveTabOwnerWorktreeId(maps, activeWorktreeIds[i % activeWorktreeIds.length], 't1')
     }
+
     expect(recordRendererCrashBreadcrumb).toHaveBeenCalledTimes(2)
   })
 
@@ -120,6 +129,7 @@ describe('resolveActiveTabOwnerWorktreeId', () => {
       resolveActiveTabOwnerWorktreeId(maps, 'wt-a', id)
       resolveActiveTabOwnerWorktreeId(maps, 'wt-c', id)
     }
+
     expect(recordRendererCrashBreadcrumb).toHaveBeenCalledTimes(256)
   })
 })

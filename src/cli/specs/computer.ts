@@ -2,7 +2,9 @@ import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
 
 const COMPUTER_FLAGS = [...GLOBAL_FLAGS, 'worktree', 'session', 'app']
+
 const COMPUTER_WINDOW_TARGET_FLAGS = ['window-id', 'window-index']
+
 const COMPUTER_ACTION_FLAGS = [
   ...COMPUTER_FLAGS,
   ...COMPUTER_WINDOW_TARGET_FLAGS,

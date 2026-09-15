@@ -75,9 +75,11 @@ describe('splitGeneratedCommitMessage', () => {
     expect(result.subject).toBe('Add generated paste protection')
     expect(result.body.startsWith('- Explain one generated change\n')).toBe(true)
     expect(result.body.endsWith('- Explain one generated change')).toBe(true)
+
     const usedLineSplit = splitSpy.mock.calls.some(
       ([separator]) => typeof separator === 'string' && separator === '\n'
     )
+
     expect(usedLineSplit).toBe(false)
   })
 })

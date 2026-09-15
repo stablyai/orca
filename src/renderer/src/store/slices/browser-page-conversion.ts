@@ -55,18 +55,23 @@ export function planBrowserPageConversion(
   options?: { leg?: BrowserPageConversionLeg }
 ): BrowserPageConversionPlan | null {
   const oldPage = findPage(state.browserPagesByWorkspace, pageId)
+
   if (!oldPage) {
     return null
   }
+
   const workspace = findWorkspace(state.browserTabsByWorktree, oldPage.workspaceId)
+
   if (!workspace) {
     return null
   }
+
   if (target.kind === 'web' && !oldPage.docLocation) {
     // Why refused: a web page taking a new URL is navigation, and it must ride the navigation
     // doors (loading state, history, guest reuse) — conversion would silently drop all of them.
     return null
   }
+
   if (
     target.kind === 'workspace-doc' &&
     browserPageDocLocationsEqual(oldPage.docLocation ?? null, target.docLocation)
@@ -86,6 +91,7 @@ export function planBrowserPageConversion(
           ? { browserRuntimeEnvironmentId: oldPage.browserRuntimeEnvironmentId }
           : {})
       }
+
   // The crossed pointer is consumed by construction — the new page never inherits either field —
   // so each leg leaves exactly one pointer behind and history stays two entries deep.
   const convertedFrom = options?.leg === 'history-return' ? null : departed
@@ -124,6 +130,7 @@ export function planBrowserPageConversion(
 
   const currentPages = state.browserPagesByWorkspace[workspace.id] ?? []
   const nextPages = currentPages.map((page) => (page.id === pageId ? newPage : page))
+
   const nextWorkspace = mirrorWorkspaceFromActivePage(
     {
       ...workspace,

@@ -19,6 +19,7 @@ describe('useMobileNativeChatSessionOptions', () => {
 
   function Probe(): null {
     api = useMobileNativeChatSessionOptions(hookArgs)
+
     return null
   }
 
@@ -194,12 +195,14 @@ describe('useMobileNativeChatSessionOptions', () => {
     await act(async () => {
       await api!.setOption('model', 'opus')
     })
+
     // Far more scopes than the cap, revisiting the live tab in between the way a
     // chat↔terminal flip does — insertion-order eviction would shed it.
     for (let index = 0; index < 40; index += 1) {
       update({ scopeKey: `host\0worktree\0overflow-${index}` })
       update({ scopeKey: 'host\0worktree\0tab' })
     }
+
     expect(api!.snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
     expect(api!.snapshot[0]!.kind).toMatchObject({ currentValue: 'opus' })
   })

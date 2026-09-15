@@ -17,6 +17,7 @@ vi.mock('electron', () => ({
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof osModule>()
+
   return {
     ...actual,
     homedir: homedirMock
@@ -40,6 +41,7 @@ describe('GeminiHookService', () => {
       if (name === 'userData') {
         return userDataDir
       }
+
       throw new Error(`unexpected getPath(${name})`)
     })
   })
@@ -51,14 +53,17 @@ describe('GeminiHookService', () => {
 
   it('removes stale PreToolUse hooks when reinstalling managed Gemini hooks', () => {
     const managedHookFileName = process.platform === 'win32' ? 'gemini-hook.cmd' : 'gemini-hook.sh'
+
     const staleManagedHookPath =
       process.platform === 'win32'
         ? `C:\\Users\\ramzi\\.orca\\agent-hooks\\${managedHookFileName}`
         : `/Users/ramzi/.orca/agent-hooks/${managedHookFileName}`
+
     const staleManagedCommand =
       process.platform === 'win32'
         ? staleManagedHookPath
         : `if [ -x '${staleManagedHookPath}' ]; then /bin/sh '${staleManagedHookPath}'; fi`
+
     const managedHookPath = join(homeDir, '.orca', 'agent-hooks', managedHookFileName)
     const configDir = join(homeDir, '.gemini')
     mkdirSync(configDir, { recursive: true })
@@ -103,10 +108,12 @@ describe('GeminiHookService', () => {
     expect(config.hooks.PreToolUse).toBeUndefined()
     expect(config.hooks.BeforeAgent).toHaveLength(2)
     expect(config.hooks.BeforeAgent[0].hooks[0].command).toBe('echo user-before-agent')
+
     const managedCommandPattern =
       process.platform === 'win32'
         ? WINDOWS_POWERSHELL_LAUNCHER
         : new RegExp(managedHookPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+
     expect(config.hooks.BeforeAgent[1].hooks[0].command).toMatch(managedCommandPattern)
     expect(config.hooks.AfterAgent[0].hooks[0].command).toMatch(managedCommandPattern)
     expect(config.hooks.AfterTool[0].hooks[0].command).toMatch(managedCommandPattern)
@@ -123,6 +130,7 @@ describe('GeminiHookService', () => {
       const spaceHome = join(tmpdir(), 'orca gemini home with spaces')
       mkdirSync(spaceHome, { recursive: true })
       homedirMock.mockReturnValue(spaceHome)
+
       try {
         expect(new GeminiHookService().install().state).toBe('installed')
 
@@ -143,14 +151,17 @@ describe('GeminiHookService', () => {
 
   it('preserves user-authored PreToolUse hooks while sweeping stale managed Gemini hooks', () => {
     const managedHookFileName = process.platform === 'win32' ? 'gemini-hook.cmd' : 'gemini-hook.sh'
+
     const staleManagedHookPath =
       process.platform === 'win32'
         ? `C:\\Users\\ramzi\\.orca\\agent-hooks\\${managedHookFileName}`
         : `/Users/ramzi/.orca/agent-hooks/${managedHookFileName}`
+
     const staleManagedCommand =
       process.platform === 'win32'
         ? staleManagedHookPath
         : `if [ -x '${staleManagedHookPath}' ]; then /bin/sh '${staleManagedHookPath}'; fi`
+
     const configDir = join(homeDir, '.gemini')
     mkdirSync(configDir, { recursive: true })
     writeFileSync(
@@ -175,6 +186,7 @@ describe('GeminiHookService', () => {
 
     const status = new GeminiHookService().install()
     const config = JSON.parse(readFileSync(join(configDir, 'settings.json'), 'utf8'))
+
     const preToolCommands = config.hooks.PreToolUse.flatMap(
       (definition: { hooks?: { command: string }[] }) =>
         (definition.hooks ?? []).map((hook) => hook.command)

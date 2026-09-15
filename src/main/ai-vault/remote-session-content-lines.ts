@@ -7,6 +7,7 @@ export type RemoteSessionContent = string | AsyncIterable<string>
 const MAX_REMOTE_SESSION_RECORD_BYTES = 10 * 1024 * 1024
 
 const REMOTE_CONTENT_YIELD_LINE_COUNT = 200
+
 const REMOTE_CONTENT_YIELD_CHAR_COUNT = 256 * 1024
 
 /** Splits transcript content into lines. Without a signal there is nothing to
@@ -20,6 +21,7 @@ export function remoteSessionContentLines(
   if (typeof content !== 'string') {
     return content
   }
+
   return signal ? cancellableContentLines(content, signal) : content.split(/\r?\n/)
 }
 
@@ -39,6 +41,7 @@ async function* cancellableContentLines(
       const lineBreak = newline === -1 ? content.length : newline
       // Bound the jump so a newline-free segment still observes cancellation.
       const windowEnd = yieldStart + REMOTE_CONTENT_YIELD_CHAR_COUNT
+
       if (lineBreak > windowEnd) {
         await yieldUnlessCancelled(signal)
         linesSinceYield = 0
@@ -47,12 +50,15 @@ async function* cancellableContentLines(
         index = windowEnd - 1
         continue
       }
+
       index = lineBreak
     }
+
     const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
     yield content.slice(lineStart, lineEnd)
     lineStart = index + 1
     linesSinceYield++
+
     if (
       linesSinceYield >= REMOTE_CONTENT_YIELD_LINE_COUNT ||
       index - yieldStart >= REMOTE_CONTENT_YIELD_CHAR_COUNT
@@ -82,14 +88,18 @@ export async function* streamedSessionContentLines(
 ): AsyncGenerator<string> {
   let count = 0
   let chars = 0
+
   for await (const record of splitTranscriptStreamLines(bytes, MAX_REMOTE_SESSION_RECORD_BYTES)) {
     throwIfAiVaultScanCancelled(signal)
+
     const line =
       record.line.endsWith('\r') && (record.terminated || signal)
         ? record.line.slice(0, -1)
         : record.line
+
     yield line
     chars += line.length
+
     if (++count >= REMOTE_CONTENT_YIELD_LINE_COUNT || chars >= REMOTE_CONTENT_YIELD_CHAR_COUNT) {
       await yieldToEventLoop()
       throwIfAiVaultScanCancelled(signal)

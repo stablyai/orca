@@ -29,9 +29,13 @@ import {
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 const host = getRemoteHostPlatform('linux-x64')
+
 let root = ''
+
 let dataDir = ''
+
 let snapshotDir = ''
+
 let versionDir = ''
 
 function sh(command: string): string {
@@ -136,6 +140,7 @@ describe('liveness and stop commands, run for real', () => {
 
   it('reports LIVE for a running process and stops it with SIGTERM', async () => {
     const child = spawn('/bin/sh', ['-c', 'sleep 30'], { stdio: 'ignore' })
+
     try {
       writeFileSync(join(versionDir, ORCAD_PID_FILENAME), String(child.pid))
       expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('LIVE')
@@ -143,6 +148,7 @@ describe('liveness and stop commands, run for real', () => {
       const exited = new Promise<NodeJS.Signals | null>((resolve) =>
         child.once('exit', (_code, signal) => resolve(signal))
       )
+
       expect(
         parseOrcadStopOutcome(sh(stopOrcadCommand(host, versionDir, { waitSeconds: 10 })))
       ).toBe('stopped')
@@ -158,6 +164,7 @@ describe('liveness and stop commands, run for real', () => {
   // a dead version dir forever. Verified as a real macOS behaviour, not a hypothetical.
   it('reports a zombie as DEAD, not as a running process', () => {
     const child = spawn('/bin/sh', ['-c', 'exit 0'], { stdio: 'ignore' })
+
     try {
       writeFileSync(join(versionDir, ORCAD_PID_FILENAME), String(child.pid))
       // Block the event loop so Node never reaps it; the process is now a zombie.

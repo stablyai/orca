@@ -24,6 +24,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
     'gitlab:issue',
     async (_event, args: GitLabRepoSelectorArgs & { number: number }) => {
       const repo = assertRegisteredRepo(args, store)
+
       return getIssue(
         repo.path,
         args.number,
@@ -52,6 +53,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
       const page = normalizeGitLabPositiveInteger(args.page, 1, 10_000)
       const state = normalizeGitLabIssueListState(args.state)
       const assignee = normalizeGitLabIssueAssignee(args.assignee)
+
       const result = await listIssues(
         repo.path,
         limit,
@@ -62,6 +64,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
         localGitOptionArgs(store, repo)[0] ?? {},
         page
       )
+
       // Why: Tasks page expects GitLabWorkItem[] so it can share row
       // rendering with MRs. Map IssueInfo → WorkItem here so the renderer
       // doesn't need a separate code path.
@@ -77,6 +80,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
         author: issue.author ?? null,
         repoId: repo.id
       }))
+
       return {
         items: workItems,
         totalPages: result.totalPages,
@@ -89,6 +93,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
     'gitlab:createIssue',
     async (_event, args: GitLabRepoSelectorArgs & { title: string; body: string }) => {
       const repo = assertRegisteredRepo(args, store)
+
       return createIssue(
         repo.path,
         args.title,
@@ -107,6 +112,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
       args: GitLabRepoSelectorArgs & { number: number; updates: GitLabIssueUpdate }
     ) => {
       const repo = assertRegisteredRepo(args, store)
+
       return updateIssue(
         repo.path,
         args.number,
@@ -123,6 +129,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
     'gitlab:addIssueComment',
     async (_event, args: GitLabRepoSelectorArgs & { number: number; body: string }) => {
       const repo = assertRegisteredRepo(args, store)
+
       return addIssueComment(
         repo.path,
         args.number,
@@ -137,6 +144,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
 
   ipcMain.handle('gitlab:listLabels', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
+
     return listLabels(
       repo.path,
       repo.issueSourcePreference,
@@ -147,6 +155,7 @@ export function registerGitLabIssueHandlers(store: Store): void {
 
   ipcMain.handle('gitlab:listAssignableUsers', async (_event, args: GitLabRepoSelectorArgs) => {
     const repo = assertRegisteredRepo(args, store)
+
     return listAssignableUsers(
       repo.path,
       repo.issueSourcePreference,

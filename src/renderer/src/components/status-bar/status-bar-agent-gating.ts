@@ -23,8 +23,10 @@ export function isStatusBarItemAvailable(
   if (!CLI_GATED_ITEMS.has(id)) {
     return true
   }
+
   if (detectedAgentIds === null) {
     return true
   }
+
   return detectedAgentIds.includes(id as TuiAgent)
 }

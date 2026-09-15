@@ -11,11 +11,13 @@ import {
 describe('federation acknowledgment checkpoints', () => {
   it('matches checkpoints only to their exact remote identity and never moves backward', () => {
     const runtime = {} as OrcaRuntimeService
+
     const identity: FederationAckIdentity = {
       environmentId: 'environment_windows',
       peerFingerprint: 'windows_peer_fingerprint',
       remoteRuntimeEpoch: 'remote_epoch_1'
     }
+
     const lease = acquireFederationAckLease(runtime, 'dispatch_remote')
     recordFederationAckCheckpoint(runtime, lease, {
       ...identity,
@@ -43,11 +45,13 @@ describe('federation acknowledgment checkpoints', () => {
 
   it('fences delayed writes after runtime reset', () => {
     const runtime = {} as OrcaRuntimeService
+
     const identity: FederationAckIdentity = {
       environmentId: 'environment_windows',
       peerFingerprint: 'windows_peer_fingerprint',
       remoteRuntimeEpoch: 'remote_epoch_1'
     }
+
     const staleRuntimeLease = acquireFederationAckLease(runtime, 'dispatch_remote')
     clearFederationAckCheckpoints(runtime)
     recordFederationAckCheckpoint(runtime, staleRuntimeLease, {

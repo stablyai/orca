@@ -12,12 +12,16 @@ export function routeAddRepoBrowse(
 ): void {
   if (host?.kind === 'runtime') {
     actions.browseRuntime()
+
     return
   }
+
   if (host?.kind === 'ssh') {
     actions.browseSsh(host.targetId)
+
     return
   }
+
   if (host?.kind === 'local') {
     actions.browseLocal()
   }

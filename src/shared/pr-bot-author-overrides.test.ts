@@ -9,15 +9,18 @@ import {
 describe('PR bot author override normalization', () => {
   it('bounds inspected entries before normalizing untrusted arrays', () => {
     let reads = 0
+
     const values = Array.from(
       { length: MAX_PR_BOT_AUTHOR_OVERRIDES + 20 },
       (_, index) => `bot-${index}`
     )
+
     const tracked = new Proxy(values, {
       get(target, property, receiver) {
         if (typeof property === 'string' && /^\d+$/.test(property)) {
           reads += 1
         }
+
         return Reflect.get(target, property, receiver)
       }
     })

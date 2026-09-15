@@ -16,6 +16,7 @@ import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import { launchAgentInStructuredNewTab } from './launch-agent-in-new-tab-structured'
 
 type Delivery = 'auto-submit' | 'submit-after-ready' | 'draft'
+
 const structuredPlan = (prompt: string, promptDelivery: Delivery, onPromptDelivered?: () => void) =>
   adoptAgentSessionLaunchVerdict({
     route: 'structured-native-chat',
@@ -27,6 +28,7 @@ const structuredPlan = (prompt: string, promptDelivery: Delivery, onPromptDelive
   })
 
 const delivered = { delivered: true, failureNotified: false }
+
 const undelivered = { delivered: false, failureNotified: true }
 
 /** Mirrors the shared loop: a refusal runs the caller's fallback once and settles with its result. */
@@ -41,7 +43,9 @@ function settleWith(settlement: StructuredAgentLaunchSettlement | 'refusal') {
       if (settlement !== 'refusal') {
         return settlement
       }
+
       const fallback = await hooks.legacyFallback?.()
+
       return fallback
         ? { kind: 'refused-then-legacy', ...fallback }
         : { kind: 'failed', error: null }
@@ -91,6 +95,7 @@ describe('launchAgentInStructuredNewTab', () => {
   it('runs the terminal launch exactly once on refusal and reports its delivery', async () => {
     settleWith('refusal')
     const legacyDelivery = Promise.resolve(delivered)
+
     const legacyLaunch = vi.fn(() => ({
       tabId: 'tab-1',
       startupPlan: {} as never,
@@ -114,6 +119,7 @@ describe('launchAgentInStructuredNewTab', () => {
 
   it('counts an argv-carried prompt as delivered when the terminal launch returns no promise', async () => {
     settleWith('refusal')
+
     const legacyLaunch = vi.fn(() => ({
       tabId: 'tab-1',
       startupPlan: {} as never,

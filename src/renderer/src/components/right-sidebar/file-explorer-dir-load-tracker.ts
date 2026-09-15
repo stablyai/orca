@@ -22,6 +22,7 @@ export function createFileExplorerDirLoadTracker(): FileExplorerDirLoadTracker {
     begin: (dirPath) => {
       const revision = (revisionsByDir.get(dirPath) ?? 0) + 1
       revisionsByDir.set(dirPath, revision)
+
       return { dirPath, revision, session }
     },
     isCurrent: (token) =>

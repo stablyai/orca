@@ -21,6 +21,7 @@ export class RuntimeLinearCommands extends RuntimeLinearReadCommands {
 
   linearDisconnect(workspaceId?: string): { ok: true } {
     disconnectLinear(workspaceId)
+
     return { ok: true }
   }
 

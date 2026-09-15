@@ -60,12 +60,15 @@ export function classifyInputSourceId(id: string | null | undefined): InputSourc
   if (!id) {
     return 'unknown'
   }
+
   const normalized = id.toLowerCase()
+
   for (const allowed of META_INPUT_SOURCE_IDS) {
     if (normalized === allowed) {
       return 'meta'
     }
   }
+
   // Why: any other macOS input source ID composes via Option. This
   // includes ABC (not to be confused with US), Polish Pro, US Extended,
   // ABC Extended, every international layout, Dvorak, Colemak, and

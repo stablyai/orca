@@ -30,17 +30,21 @@ export function MatchedText({
   className?: string
 }): React.JSX.Element {
   const marks = new Set(hits)
+
   if (marks.size === 0) {
     return <span className={cn('min-w-0 truncate', className)}>{text}</span>
   }
+
   // Hits are UTF-16 offsets but rendering splits by code point, so an astral
   // glyph (an emoji-named folder) shifted every mark one position late.
   let codeUnit = 0
+
   return (
     <span className={cn('min-w-0 truncate', className)}>
       {[...text].map((char) => {
         const index = codeUnit
         codeUnit += char.length
+
         return marks.has(index) ? (
           <mark
             key={`${index}-${char}`}
@@ -72,6 +76,7 @@ export function ProjectOptionDetail({
 }): React.JSX.Element {
   const ranges = hits?.map((index) => ({ start: index, end: index + 1 }))
   const split = splitPathHeadForElision(detail, ranges)
+
   if (!split) {
     return (
       <span className={cn('min-w-0 truncate', className)} title={detail}>
@@ -79,6 +84,7 @@ export function ProjectOptionDetail({
       </span>
     )
   }
+
   return (
     <span className={cn('flex min-w-0 items-baseline overflow-hidden', className)} title={detail}>
       <span className="min-w-0 shrink-[999] truncate">{split.head}</span>

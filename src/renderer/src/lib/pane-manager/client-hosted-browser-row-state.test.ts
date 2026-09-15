@@ -177,6 +177,7 @@ describe('active client-hosted row for a strip', () => {
     groupId: 'group-1',
     groupActiveTabIdAtSelection: 'tab-1'
   }
+
   const scope = { worktreeId: 'wt-1', groupId: 'group-1', groupActiveTabId: 'tab-1' }
 
   it('names the picked row', () => {

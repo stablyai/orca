@@ -21,7 +21,9 @@ export type UndeliverableWriteReason = 'write-stalled' | 'replay-wedged'
 type UndeliverableWriteHandler = (reason: UndeliverableWriteReason) => void
 
 const handlersByTerminal = new WeakMap<object, UndeliverableWriteHandler>()
+
 const certifiedDeadTerminals = new WeakSet<object>()
+
 // Why: wedge verdicts must distinguish "dead" from "alive but behind". A
 // generation avoids same-millisecond misses and wall-clock adjustments while
 // keeping the completion hot path constant-time and terminal-scoped.
@@ -57,13 +59,16 @@ export const WRITE_PIPELINE_STALL_CHECK_MS = 10_000
 
 function certifyTerminalWritePipelineDead(terminal: object, expectedWatch?: StallWatch): void {
   const watch = stallWatchByTerminal.get(terminal)
+
   // Why: a real parse can settle and remove the watch before a stale probe
   // deadline runs. Only the watch that armed that deadline may certify.
   if (expectedWatch && watch !== expectedWatch) {
     return
   }
+
   if (watch) {
     stallWatchByTerminal.delete(terminal)
+
     try {
       watch.onCertifiedDead?.()
     } catch {
@@ -71,6 +76,7 @@ function certifyTerminalWritePipelineDead(terminal: object, expectedWatch?: Stal
       // notification must still run after cleanup fails.
     }
   }
+
   notifyUndeliverableWrite(terminal, 'write-stalled')
 }
 
@@ -79,6 +85,7 @@ export function registerUndeliverableWriteHandler(
   handler: UndeliverableWriteHandler
 ): () => void {
   handlersByTerminal.set(terminal, handler)
+
   return () => {
     if (handlersByTerminal.get(terminal) === handler) {
       handlersByTerminal.delete(terminal)
@@ -92,7 +99,9 @@ export function notifyUndeliverableWrite(terminal: object, reason: Undeliverable
   if (certifiedDeadTerminals.has(terminal)) {
     return
   }
+
   certifiedDeadTerminals.add(terminal)
+
   try {
     handlersByTerminal.get(terminal)?.(reason)
   } catch {
@@ -125,37 +134,50 @@ function armTerminalWritePipelineWatch(
   if (certifiedDeadTerminals.has(terminal)) {
     return
   }
+
   const existingWatch = stallWatchByTerminal.get(terminal)
+
   if (existingWatch) {
     if (options.mode === 'fifo-probe') {
       existingWatch.mode = 'fifo-probe'
     }
+
     return
   }
+
   const stallCheckMs = options.stallCheckMs ?? WRITE_PIPELINE_STALL_CHECK_MS
+
   const watch: StallWatch = {
     mode: options.mode,
     onCertifiedDead: options.onCertifiedDead,
     timer: setTimeout(probeForStall, stallCheckMs)
   }
+
   const certifyDead = (): void => certifyTerminalWritePipelineDead(terminal, watch)
+
   function armProbeQuietWindow(quietSinceGeneration: number): void {
     watch.timer = setTimeout(() => {
       if (stallWatchByTerminal.get(terminal) !== watch) {
         return
       }
+
       if (hasTerminalParseProgressSince(terminal, quietSinceGeneration)) {
         armProbeQuietWindow(captureTerminalParseProgressGeneration(terminal))
+
         return
       }
+
       certifyDead()
     }, stallCheckMs)
   }
+
   function probeForStall(): void {
     if (stallWatchByTerminal.get(terminal) !== watch) {
       return
     }
+
     const probeQueuedAtGeneration = captureTerminalParseProgressGeneration(terminal)
+
     try {
       terminal.write('', () => {
         // Why: replay guards share this terminal-scoped generation; even an
@@ -164,6 +186,7 @@ function armTerminalWritePipelineWatch(
         // Why: a parsed probe proves the pipeline is alive — the stalled
         // completion was just slow. Disarm; the next write re-arms.
         const current = stallWatchByTerminal.get(terminal)
+
         if (current === watch) {
           clearTimeout(current.timer)
           stallWatchByTerminal.delete(terminal)
@@ -171,12 +194,15 @@ function armTerminalWritePipelineWatch(
       })
     } catch {
       certifyDead()
+
       return
     }
+
     if (stallWatchByTerminal.get(terminal) === watch) {
       armProbeQuietWindow(probeQueuedAtGeneration)
     }
   }
+
   stallWatchByTerminal.set(terminal, watch)
 }
 
@@ -198,9 +224,11 @@ export function requestTerminalWritePipelineProbe(
 /** Cancel a pending watch without claiming that any bytes parsed. */
 export function cancelTerminalWriteStallWatch(terminal: object): void {
   const watch = stallWatchByTerminal.get(terminal)
+
   if (!watch) {
     return
   }
+
   clearTimeout(watch.timer)
   stallWatchByTerminal.delete(terminal)
 }
@@ -208,9 +236,11 @@ export function cancelTerminalWriteStallWatch(terminal: object): void {
 /** Write completed normally — the pipeline is healthy; drop any pending watch. */
 export function settleTerminalWriteStallWatch(terminal: object): void {
   recordTerminalParseProgress(terminal)
+
   if (stallWatchByTerminal.get(terminal)?.mode === 'fifo-probe') {
     return
   }
+
   cancelTerminalWriteStallWatch(terminal)
 }
 
@@ -223,9 +253,11 @@ export function failTerminalWriteStallWatch(terminal: object): void {
 export function _resetWritePipelineHealthForTests(terminal?: object): void {
   if (terminal) {
     const watch = stallWatchByTerminal.get(terminal)
+
     if (watch) {
       clearTimeout(watch.timer)
     }
+
     stallWatchByTerminal.delete(terminal)
     handlersByTerminal.delete(terminal)
     certifiedDeadTerminals.delete(terminal)

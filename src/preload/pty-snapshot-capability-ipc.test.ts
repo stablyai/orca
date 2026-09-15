@@ -43,6 +43,7 @@ describe('PTY snapshot capability preload IPC', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+
     if (originalContextIsolated) {
       Object.defineProperty(process, 'contextIsolated', originalContextIsolated)
     } else {

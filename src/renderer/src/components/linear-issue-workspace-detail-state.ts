@@ -31,10 +31,13 @@ export function mergeLinearIssueHydration(
   if (!hasEdited || !current) {
     return fetched
   }
+
   const merged = { ...fetched }
+
   for (const field of EDITED_LINEAR_ISSUE_FIELDS) {
     Object.assign(merged, { [field]: current[field] })
   }
+
   return merged
 }
 
@@ -45,7 +48,9 @@ export function mergeLinearIssueComments(
   if (optimistic.length === 0) {
     return fetched
   }
+
   const fetchedIds = new Set(fetched.map((comment) => comment.id))
+
   return [...fetched, ...optimistic.filter((comment) => !fetchedIds.has(comment.id))]
 }
 
@@ -84,6 +89,7 @@ export function useLinearIssueWorkspaceDetail({
   const commentsRequestIdRef = useRef(0)
   const hydrationRequestIdRef = useRef(0)
   const mountedRef = useMountedRef()
+
   const handleEditStateChange = useCallback((patch: Partial<LinearEditState>) => {
     hasEditedRef.current = true
     setFullIssue((current) => ({ ...current, ...patch }))
@@ -109,6 +115,7 @@ export function useLinearIssueWorkspaceDetail({
       createdAt: comment.createdAt,
       user: { displayName: 'You' }
     }
+
     optimisticCommentsRef.current.push(added)
     setComments((current) => [...current, added])
   }, [])
@@ -118,6 +125,7 @@ export function useLinearIssueWorkspaceDetail({
       const requestId = ++commentsRequestIdRef.current
       setCommentsLoading(true)
       setCommentsError(null)
+
       return linearIssueComments(targetProviderSettings, targetIssue.id, targetIssue.workspaceId)
         .then((fetched) => {
           if (mountedRef.current && requestId === commentsRequestIdRef.current) {
@@ -156,7 +164,9 @@ export function useLinearIssueWorkspaceDetail({
         if (!mountedRef.current || requestId !== hydrationRequestIdRef.current || !fetched) {
           return
         }
+
         setFullIssue((current) => mergeLinearIssueHydration(fetched, current, hasEditedRef.current))
+
         if (!hasEditedRef.current) {
           setEditState(initLinearIssueEditState(fetched))
         }
@@ -170,6 +180,7 @@ export function useLinearIssueWorkspaceDetail({
         }
       })
     void loadComments(initialRequest.issue, initialRequest.providerSettings)
+
     return () => {
       hydrationRequestIdRef.current += 1
       commentsRequestIdRef.current += 1

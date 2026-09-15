@@ -45,12 +45,14 @@ export function GeneralSupportSection({
       if (cancelled) {
         return
       }
+
       if (result === null) {
         setStarState('web-fallback')
       } else {
         setStarState(result ? 'starred' : 'not-starred')
       }
     })
+
     return () => {
       cancelled = true
     }
@@ -60,25 +62,33 @@ export function GeneralSupportSection({
     if (starState === 'web-fallback') {
       setStarState('opening-github')
       await window.api.shell.openUrl(ORCA_GITHUB_URL)
+
       if (mountedRef.current) {
         setStarState('web-fallback')
       }
+
       return
     }
+
     if (starState !== 'not-starred') {
       return
     }
+
     setStarState('starring')
     const ok = await window.api.gh.starOrca('settings')
+
     if (!ok) {
       if (mountedRef.current) {
         setStarState('web-fallback')
       }
+
       return
     }
+
     if (mountedRef.current) {
       setStarState('starred')
     }
+
     // Why: clicking star anywhere should also permanently mute the
     // threshold-based nag so the user isn't re-prompted via the popup.
     await window.api.starNag.complete()

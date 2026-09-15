@@ -9,8 +9,10 @@ import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from '../settings/appearance-usag
 
 // Why: let startup modals settle before the status-bar callout competes for focus.
 const SHOW_DELAY_MS = 1_800
+
 // Why: gap between the top of the status-bar meters and the bottom of the card.
 const ANCHOR_GAP_PX = 10
+
 const CARD_WIDTH_PX = 320
 
 type AnchorPosition = {
@@ -33,6 +35,7 @@ function openUsagePercentageSettings(): void {
 function measureAnchorPosition(anchor: HTMLElement): AnchorPosition {
   const rect = anchor.getBoundingClientRect()
   const maxLeft = Math.max(8, window.innerWidth - CARD_WIDTH_PX - 8)
+
   return {
     // Why: fixed + bottom keeps the card glued above the meters as the window
     // resizes; CSS bottom is distance from the viewport bottom edge.
@@ -77,11 +80,14 @@ export function UsagePercentageDisplayChangeNotice({
   useEffect(() => {
     if (!eligible) {
       setDelayElapsed(false)
+
       return
     }
+
     const timer = window.setTimeout(() => {
       setDelayElapsed(true)
     }, SHOW_DELAY_MS)
+
     return () => {
       window.clearTimeout(timer)
     }
@@ -92,9 +98,12 @@ export function UsagePercentageDisplayChangeNotice({
   useLayoutEffect(() => {
     if (!open) {
       setAnchorPosition(null)
+
       return
     }
+
     const anchor = anchorRef.current
+
     if (!anchor) {
       return
     }
@@ -108,6 +117,7 @@ export function UsagePercentageDisplayChangeNotice({
         prev && prev.bottom === next.bottom && prev.left === next.left ? prev : next
       )
     }
+
     update()
 
     // Why: meters reflow when the status bar goes compact/icon-only or the
@@ -115,6 +125,7 @@ export function UsagePercentageDisplayChangeNotice({
     const observer = new ResizeObserver(update)
     observer.observe(anchor)
     window.addEventListener('resize', update)
+
     return () => {
       observer.disconnect()
       window.removeEventListener('resize', update)
@@ -125,13 +136,16 @@ export function UsagePercentageDisplayChangeNotice({
     if (!open) {
       return
     }
+
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.preventDefault()
         dismiss()
       }
     }
+
     window.addEventListener('keydown', onKeyDown)
+
     return () => {
       window.removeEventListener('keydown', onKeyDown)
     }

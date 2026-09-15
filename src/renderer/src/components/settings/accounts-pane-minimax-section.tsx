@@ -19,18 +19,23 @@ export function renderMiniMaxAccountsSection(model: AccountsPaneSectionModel): R
     updateSettings,
     recordFeatureInteraction
   } = model
+
   const consoleUrl =
     settings.minimaxEndpoint === 'cn'
       ? 'https://platform.minimaxi.com/console/usage'
       : 'https://platform.minimax.io/console/usage'
+
   const configured = miniMaxConfigured || miniMaxApiKeyConfigured
+
   const handleMiniMaxEndpointChange = (value: string): void => {
     if ((value !== 'overseas' && value !== 'cn') || value === settings.minimaxEndpoint) {
       return
     }
+
     recordFeatureInteraction('usage-tracking')
     void updateSettings({ minimaxEndpoint: value })
   }
+
   return (
     <section key="minimax" id="accounts-minimax" className="space-y-4 scroll-mt-6">
       <div className="flex items-start justify-between gap-3">

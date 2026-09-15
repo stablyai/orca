@@ -33,6 +33,7 @@ export function createLegacyIdentityTracker(input: {
   if (input.transcriptAgent === 'claude') {
     return { identify: (line, index) => claudeIdentity(line, index, input.agent, input.sessionId) }
   }
+
   return {
     identify: (line, index) => ({
       provider: 'legacy',
@@ -51,9 +52,11 @@ function claudeIdentity(
 ): AgentJournalItemIdentity {
   const record = parseRecord(line)
   const uuid = stringField(record, 'uuid')
+
   if (!uuid) {
     return { provider: 'legacy', agent, sessionId, recordId: `#${lineIndex}` }
   }
+
   // The record's own session id wins: a forked transcript keeps the original
   // item uuids, and pairing them with the fork's id would mint new identities.
   return { provider: 'claude', sessionId: stringField(record, 'sessionId') ?? sessionId, uuid }
@@ -66,12 +69,14 @@ function legacyRecordId(line: string, lineIndex: number): string {
   const record = parseRecord(line)
   const payload = record?.payload
   const id = stringField(payload, 'id') ?? stringField(record, 'id') ?? stringField(record, 'uuid')
+
   return id ?? `#${lineIndex}`
 }
 
 function parseRecord(line: string): Record<string, unknown> | null {
   try {
     const parsed: unknown = JSON.parse(line)
+
     return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
   } catch {
     return null
@@ -82,6 +87,8 @@ function stringField(source: unknown, key: string): string | null {
   if (!source || typeof source !== 'object') {
     return null
   }
+
   const value = (source as Record<string, unknown>)[key]
+
   return typeof value === 'string' && value ? value : null
 }

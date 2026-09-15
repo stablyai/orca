@@ -12,6 +12,7 @@ export function structuredAgentSessionProviderSessionMetadata(
   record: AgentSessionRecord | null
 ): AgentProviderSessionMetadata | undefined {
   const head = record ? agentSessionProviderHandleChainHead(record.providerHandleChain) : null
+
   return head
     ? {
         key: 'session_id',
@@ -28,9 +29,11 @@ export function readStructuredAgentSessionHistoryResult(input: {
   const result = readAgentSessionHistory(input.journal, input.request)
   const fence = input.record?.lease.runtimeFence
   const providerSession = structuredAgentSessionProviderSessionMetadata(input.record)
+
   if (fence === undefined) {
     return providerSession ? { ...result, providerSession } : result
   }
+
   return {
     ...result,
     page: { ...result.page, fence },

@@ -47,12 +47,15 @@ export default function SparseCheckoutPresetSelect({
   const presetsLoaded = presetsForRepo !== undefined
   const isLoadingPresets = !disabled && presetsLoading
   const hasPresetLoadError = !disabled && !presetsLoaded && !!presetsLoadError
+
   const selectedPreset = useMemo(
     () => visiblePresets.find((preset) => preset.id === selectedPresetId) ?? null,
     [visiblePresets, selectedPresetId]
   )
+
   const parsedDirectories = draft ? parseSparsePresetDirectories(draft.directoriesText) : null
   const trimmedName = draft?.name.trim() ?? ''
+
   const nameCollision =
     draft && trimmedName
       ? (visiblePresets.find(
@@ -60,6 +63,7 @@ export default function SparseCheckoutPresetSelect({
             preset.id !== draft.presetId && preset.name.toLowerCase() === trimmedName.toLowerCase()
         ) ?? null)
       : null
+
   const nameError =
     draft && trimmedName.length === 0
       ? 'Name is required.'
@@ -68,6 +72,7 @@ export default function SparseCheckoutPresetSelect({
         : nameCollision
           ? `"${nameCollision.name}" already exists.`
           : null
+
   const canSave =
     draft !== null &&
     !submitting &&
@@ -81,6 +86,7 @@ export default function SparseCheckoutPresetSelect({
     if (nameInputFocusFrameRef.current === null) {
       return
     }
+
     cancelAnimationFrame(nameInputFocusFrameRef.current)
     nameInputFocusFrameRef.current = null
   }, [])
@@ -91,6 +97,7 @@ export default function SparseCheckoutPresetSelect({
       if (!node) {
         cancelNameInputFocusFrame()
       }
+
       nameInputRef.current = node
     },
     [cancelNameInputFocusFrame]
@@ -101,6 +108,7 @@ export default function SparseCheckoutPresetSelect({
       if (disabled || !presetsLoaded) {
         return
       }
+
       setDraft(nextDraft)
       cancelNameInputFocusFrame()
       nameInputFocusFrameRef.current = requestAnimationFrame(() => {
@@ -120,6 +128,7 @@ export default function SparseCheckoutPresetSelect({
     if (disabled || presetsLoading) {
       return
     }
+
     setDraft(null)
     void fetchSparsePresets(repoId)
   }, [disabled, fetchSparsePresets, presetsLoading, repoId])
@@ -140,7 +149,9 @@ export default function SparseCheckoutPresetSelect({
     if (!draft || !canSave || !parsedDirectories) {
       return
     }
+
     setSubmitting(true)
+
     try {
       const saved = await saveSparsePreset({
         repoId,
@@ -148,10 +159,12 @@ export default function SparseCheckoutPresetSelect({
         name: trimmedName,
         directories: parsedDirectories.directories
       })
+
       if (saved && mountedRef.current) {
         if (draft.mode === 'new' || selectedPresetId === saved.id) {
           onSelectPreset(saved)
         }
+
         setDraft(null)
         setOpen(false)
       }
@@ -176,6 +189,7 @@ export default function SparseCheckoutPresetSelect({
     if (disabled || !presetsLoaded) {
       return
     }
+
     onSelectPreset(null)
     setDraft(null)
     setOpen(false)
@@ -186,6 +200,7 @@ export default function SparseCheckoutPresetSelect({
       if (disabled || !presetsLoaded) {
         return
       }
+
       onSelectPreset(preset)
       setDraft(null)
       setOpen(false)
@@ -210,9 +225,12 @@ export default function SparseCheckoutPresetSelect({
         if (nextOpen && presetsLoading) {
           setOpen(false)
           setDraft(null)
+
           return
         }
+
         setOpen(nextOpen)
+
         if (!nextOpen) {
           setDraft(null)
         }

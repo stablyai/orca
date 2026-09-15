@@ -11,19 +11,23 @@ import * as deltaCoalescer from './agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 
 const SESSION_ID = 'session-1'
+
 const THREAD_ID = 'thread-1'
+
 const TURN_ID = 'turn-1'
 
 function recordingSink() {
   const rows: AgentJournalItemBody[] = []
   const tombstones: AgentJournalItemIdentity[] = []
   const activities: (AgentSessionTurnActivity | null)[] = []
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (_identity, body) => rows.push(body),
     appendTombstone: (identity) => tombstones.push(identity),
     publish: vi.fn(),
     setActivity: (activity) => activities.push(activity)
   }
+
   return { sink, rows, tombstones, activities }
 }
 
@@ -38,11 +42,13 @@ function claudeMessage(message: Record<string, unknown>) {
 describe('provider turn activity routing', () => {
   it('routes Codex activity without creating protocol rows', () => {
     const state = recordingSink()
+
     const translator = createCodexJournalTranslator({
       sink: state.sink,
       primaryThreadId: () => THREAD_ID,
       schedule: () => () => {}
     })
+
     translator.handle(codexNotification('turn/started', { turn: { id: TURN_ID } }))
     const lifecycleRows = state.rows.length
 
@@ -91,26 +97,33 @@ describe('provider turn activity routing', () => {
   it('does not materialize full stream snapshots for activity on token deltas', () => {
     const original = deltaCoalescer.createAgentSessionDeltaCoalescer
     const snapshot = vi.fn()
+
     const factory = vi
       .spyOn(deltaCoalescer, 'createAgentSessionDeltaCoalescer')
       .mockImplementation((deps) => {
         const coalescer = original(deps)
+
         return {
           ...coalescer,
           snapshot: (key) => {
             snapshot()
+
             return coalescer.snapshot(key)
           }
         }
       })
+
     try {
       const state = recordingSink()
+
       const translator = createCodexJournalTranslator({
         sink: state.sink,
         primaryThreadId: () => THREAD_ID,
         schedule: () => () => {}
       })
+
       translator.handle(codexNotification('turn/started', { turn: { id: TURN_ID } }))
+
       for (const method of [
         'item/agentMessage/delta',
         'item/commandExecution/outputDelta',
@@ -127,6 +140,7 @@ describe('provider turn activity routing', () => {
           )
         }
       }
+
       expect(snapshot).not.toHaveBeenCalled()
       translator.dispose()
     } finally {
@@ -136,13 +150,16 @@ describe('provider turn activity routing', () => {
 
   it('uses the newest summary part and stops republishing its body', () => {
     const state = recordingSink()
+
     const translator = createCodexJournalTranslator({
       sink: state.sink,
       primaryThreadId: () => THREAD_ID,
       schedule: () => () => {}
     })
+
     translator.handle(codexNotification('turn/started', { turn: { id: TURN_ID } }))
     const params = { turnId: TURN_ID, itemId: 'reasoning-1' }
+
     for (const [summaryIndex, headline] of ['First headline', 'Newest headline'].entries()) {
       translator.handle(
         codexNotification('item/reasoning/summaryPartAdded', { ...params, summaryIndex })
@@ -164,7 +181,9 @@ describe('provider turn activity routing', () => {
       )
       expect(state.activities.at(-1)?.text).toBe(headline)
     }
+
     const publications = state.activities.length
+
     for (let index = 0; index < 100; index++) {
       translator.handle(
         codexNotification('item/reasoning/summaryTextDelta', {
@@ -174,6 +193,7 @@ describe('provider turn activity routing', () => {
         })
       )
     }
+
     expect(state.activities).toHaveLength(publications)
     translator.handle(
       codexNotification('turn/completed', { turn: { id: TURN_ID, status: 'completed' } })
@@ -193,10 +213,12 @@ describe('provider turn activity routing', () => {
 
   it('keeps Codex tool rows singular and the activity free of tool labels', () => {
     const state = recordingSink()
+
     const translator = createCodexJournalTranslator({
       sink: state.sink,
       primaryThreadId: () => THREAD_ID
     })
+
     translator.handle(codexNotification('turn/started', { turn: { id: TURN_ID } }))
     const lifecycleRows = state.rows.length
     translator.handle(

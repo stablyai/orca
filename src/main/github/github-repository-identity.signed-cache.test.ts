@@ -26,7 +26,9 @@ vi.mock('./local-git-config-signature', () => ({
 import { getOwnerRepoForRemote, _resetOwnerRepoCache } from './github-repository-identity'
 
 const REPO = '/tmp/signed-cache-repo'
+
 const THIRTY_SECONDS = 30_000
+
 const FOUR_MINUTES = 4 * 60_000
 
 let remoteUrl = 'https://github.com/stablyai/orca.git'
@@ -99,6 +101,7 @@ describe('owner/repo identity cache', () => {
       getOwnerRepoForRemote(REPO, 'origin'),
       getOwnerRepoForRemote(REPO, 'origin')
     ])
+
     expect(first).toEqual({ owner: 'stablyai', repo: 'orca' })
     expect(second).toEqual(first)
     expect(remoteGetUrlCalls()).toBe(1)

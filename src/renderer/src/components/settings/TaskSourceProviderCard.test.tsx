@@ -15,6 +15,7 @@ const readiness = {
 }
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 afterEach(async () => {
@@ -23,6 +24,7 @@ afterEach(async () => {
       root?.unmount()
     })
   }
+
   root = null
   container?.remove()
   container = null
@@ -78,6 +80,7 @@ describe('TaskSourceProviderCard', () => {
     container = document.createElement('div')
     document.body.appendChild(container)
     root = createRoot(container)
+
     const card = (defaultExpanded: boolean): React.JSX.Element => (
       <TaskSourceProviderCard
         icon={<span />}

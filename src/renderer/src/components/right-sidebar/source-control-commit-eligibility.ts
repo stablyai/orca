@@ -19,12 +19,15 @@ export function resolveCommitDisabledReason(
   if (inputs.hasUnresolvedConflicts) {
     return 'Resolve conflicts before committing'
   }
+
   if (inputs.stagedCount === 0) {
     return 'Stage at least one file to commit'
   }
+
   if (!inputs.hasMessage) {
     return COMMIT_MESSAGE_REQUIRED_REASON
   }
+
   return null
 }
 
@@ -46,6 +49,8 @@ export function isCommitMessageFieldDisabled(inputs: CommitEligibilityInputs): b
   if (isCommitGloballyBusy(inputs)) {
     return true
   }
+
   const commitDisabledReason = resolveCommitDisabledReason(inputs)
+
   return commitDisabledReason !== null && commitDisabledReason !== COMMIT_MESSAGE_REQUIRED_REASON
 }

@@ -15,16 +15,22 @@ export function handleDesktopMobileE2EEV2Inbound(args: {
     typeof args.raw === 'string'
       ? args.session.openText(args.raw)
       : args.session.openBinary(args.raw)
+
   if (plaintext === null) {
     args.onDecryptFailure()
+
     return
   }
+
   args.onDecryptSuccess()
+
   if (args.awaitingAuth) {
     if (typeof plaintext !== 'string') {
       args.onProtocolError()
+
       return
     }
+
     args.onAuth(plaintext)
   } else if (typeof plaintext === 'string') {
     args.onText(plaintext)

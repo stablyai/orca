@@ -19,14 +19,17 @@ function clientOf(byMethod: Record<string, RpcResponse>): {
   calls: string[]
 } {
   const calls: string[] = []
+
   return {
     calls,
     sendRequest: (method: string) => {
       calls.push(method)
       const response = byMethod[method]
+
       if (!response) {
         throw new Error(`unexpected method ${method}`)
       }
+
       return Promise.resolve(response)
     }
   }
@@ -39,11 +42,13 @@ describe('resolveMobileFileTabDoc', () => {
     const client = clientOf({
       'git.diff': ok({ kind: 'text', originalContent: 'a\n', modifiedContent: 'a\nb\n' })
     })
+
     const doc = await resolveMobileFileTabDoc(client, {
       ...WT,
       relativePath: 'a.ts',
       diffSource: 'staged'
     })
+
     expect(doc.kind).toBe('diff')
     expect(client.calls).toEqual(['git.diff'])
   })
@@ -59,11 +64,13 @@ describe('resolveMobileFileTabDoc', () => {
         mimeType: 'image/png'
       })
     })
+
     const doc = await resolveMobileFileTabDoc(client, {
       ...WT,
       relativePath: 'm1.png',
       diffSource: 'unstaged'
     })
+
     expect(doc).toEqual({
       status: 'ready',
       kind: 'image',
@@ -82,6 +89,7 @@ describe('resolveMobileFileTabDoc', () => {
         mimeType: 'image/png'
       })
     })
+
     await expect(
       resolveMobileFileTabDoc(client, { ...WT, relativePath: 'm1.png', diffSource: 'unstaged' })
     ).rejects.toThrow('binary_file')
@@ -98,6 +106,7 @@ describe('resolveMobileFileTabDoc', () => {
     const client = clientOf({
       'files.readPreview': ok({ content: PNG_BASE64, isImage: true, mimeType: 'image/png' })
     })
+
     const doc = await resolveMobileFileTabDoc(client, { ...WT, relativePath: 'logo.png' })
     expect(doc).toEqual({
       status: 'ready',
@@ -111,6 +120,7 @@ describe('resolveMobileFileTabDoc', () => {
     const client = clientOf({
       'files.readPreview': ok({ content: '', isImage: true, mimeType: 'image/png' })
     })
+
     await expect(
       resolveMobileFileTabDoc(client, { ...WT, relativePath: 'logo.png' })
     ).rejects.toThrow('binary_file')
@@ -120,6 +130,7 @@ describe('resolveMobileFileTabDoc', () => {
     const client = clientOf({
       'files.read': ok({ content: '<h1>hi</h1>', truncated: false, byteLength: 11 })
     })
+
     const doc = await resolveMobileFileTabDoc(client, { ...WT, relativePath: 'page.html' })
     expect(doc).toEqual({ status: 'ready', kind: 'html', content: '<h1>hi</h1>' })
   })
@@ -128,6 +139,7 @@ describe('resolveMobileFileTabDoc', () => {
     const client = clientOf({
       'files.read': ok({ content: 'hello', truncated: true, byteLength: 5 })
     })
+
     const doc = await resolveMobileFileTabDoc(client, { ...WT, relativePath: 'notes.txt' })
     expect(doc).toEqual({
       status: 'ready',
@@ -144,6 +156,7 @@ describe('resolveMobileFileTabDoc', () => {
     const client = clientOf({
       'git.diff': fail('diff_too_large', 'This diff is too large to open over a remote connection.')
     })
+
     await expect(
       resolveMobileFileTabDoc(client, { ...WT, relativePath: 'a.ts', diffSource: 'staged' })
     ).rejects.toThrow('This diff is too large to open over a remote connection.')

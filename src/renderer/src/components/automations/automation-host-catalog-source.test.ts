@@ -86,6 +86,7 @@ describe('automation host catalog source', () => {
       runtimeCatalogSettled: true,
       orphanCount: () => 0
     })
+
     const unsettled = buildAutomationHostCatalogSource({
       desktopSsh: EMPTY_SSH,
       runtimes: [],

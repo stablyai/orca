@@ -53,6 +53,7 @@ describe('matchNativeChatCatalogModelId', () => {
       ...CLAUDE_SESSION_OPTION_CATALOG,
       models: ['a', 'abc', 'xyz'].map((id) => ({ id, label: id, options: [] }))
     }
+
     expect(matchNativeChatCatalogModelId(catalog, 'provider-xyz-abc')).toBe('abc')
     expect(catalog.models.map((model) => model.id)).toEqual(['a', 'abc', 'xyz'])
   })

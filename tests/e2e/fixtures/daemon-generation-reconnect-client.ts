@@ -36,26 +36,33 @@ type ClientConfig = {
 }
 
 const WORKTREE_ID = DAEMON_GENERATION_WORKTREE_ID
+
 const PARENT_TAB_ID = 'remote-reconnect-tab'
+
 const MAX_OUTPUT_CHARS = 32_768
 
 function readConfig(): ClientConfig {
   const configIndex = process.argv.indexOf('--config')
   const configPath = configIndex !== -1 ? process.argv[configIndex + 1] : undefined
+
   if (!configPath) {
     throw new Error('Reconnect client requires --config <path>')
   }
+
   return JSON.parse(readFileSync(configPath, 'utf8')) as ClientConfig
 }
 
 async function waitFor(description: string, predicate: () => boolean): Promise<void> {
   const deadline = Date.now() + 10_000
+
   while (Date.now() <= deadline) {
     if (predicate()) {
       return
     }
+
     await new Promise<void>((resolve) => setTimeout(resolve, 25))
   }
+
   throw new Error(`Timed out waiting for ${description}`)
 }
 
@@ -80,6 +87,7 @@ async function connectThroughDesktopDiscovery(
 ): Promise<DaemonPtyRouter> {
   const { router, adapters } = await createDesktopDiscoveredDaemonRouter(config)
   const outputBySessionId = new Map<string, string>()
+
   for (const adapter of adapters) {
     const protocolVersion = adapter.protocolVersion
     adapter.onData((event) => {
@@ -87,6 +95,7 @@ async function connectThroughDesktopDiscovery(
         (candidate) =>
           candidate.protocolVersion === protocolVersion && candidate.sessionId === event.id
       )
+
       if (session) {
         outputBySessionId.set(
           event.id,
@@ -98,6 +107,7 @@ async function connectThroughDesktopDiscovery(
 
   await router.getCurrentAdapter().listProcesses()
   await router.discoverLegacySessions()
+
   for (const session of config.sessions) {
     const attached = await router.spawn({
       sessionId: session.sessionId,
@@ -106,9 +116,11 @@ async function connectThroughDesktopDiscovery(
       rows: 30,
       cwd: config.cwd
     })
+
     if (!attached.isReattach || attached.pid !== session.rootPid) {
       throw new Error(`Reconnect changed ${session.label} process incarnation`)
     }
+
     const nonce = `reconnect-${burst}-${randomUUID().slice(0, 8)}`
     router.write(session.sessionId, `PING ${session.label} ${nonce}\r`)
     await waitFor(`${session.label} reconnect reply`, () =>
@@ -117,13 +129,16 @@ async function connectThroughDesktopDiscovery(
       )
     )
   }
+
   return router
 }
 
 async function connectParallelRuntimeClients(config: ClientConfig): Promise<void> {
   const clients = [...createDirectAdapters(config.generations).values()]
+
   try {
     const lists = await Promise.all(clients.map((client) => client.listProcesses()))
+
     if (!lists.every((sessions) => sessions.length === 2)) {
       throw new Error('Parallel runtime client did not see both sessions in every generation')
     }
@@ -142,21 +157,26 @@ function createRuntimeClosePath(
   pendingShutdowns: Promise<void>[]
 }> {
   const pendingShutdowns: Promise<void>[] = []
+
   const surfaces = config.sessions.map((session, index) => {
     // Why: app relaunch must target the same persisted mirror incarnation, not
     // accidentally mint a different tab identity that weakens the repetition proof.
     const leafId = `00000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`
+
     return { session, leafId, mobileTabId: `${PARENT_TAB_ID}::${leafId}` }
   })
+
   const runtime = new OrcaRuntimeService()
   runtime.setPtyController({
     write: (ptyId, data) => {
       router.write(ptyId, data)
+
       return true
     },
     kill: (ptyId) => {
       const shutdown = router.shutdown(ptyId, { immediate: false })
       pendingShutdowns.push(shutdown)
+
       return true
     },
     listProcesses: (options) => router.listProcesses(options),
@@ -169,6 +189,7 @@ function createRuntimeClosePath(
     }
   } as never)
   runtime.attachWindow(1)
+
   const snapshot: RuntimeMobileSessionTabsSnapshot = {
     worktree: WORKTREE_ID,
     publicationEpoch: 'stale-remote-mirror',
@@ -186,6 +207,7 @@ function createRuntimeClosePath(
       isActive: index === 0
     }))
   }
+
   runtime.syncWindowGraph(1, {
     tabs: [
       {
@@ -206,26 +228,33 @@ function createRuntimeClosePath(
     })),
     mobileSessionTabs: [snapshot]
   })
+
   return runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`).then((accepted) => {
     const acceptedTerminalIds = accepted.tabs.flatMap((tab) =>
       tab.type === 'terminal' ? [tab.id] : []
     )
+
     if (!surfaces.every((surface) => acceptedTerminalIds.includes(surface.mobileTabId))) {
       throw new Error(`Runtime did not retain reconnect surfaces: ${JSON.stringify(accepted.tabs)}`)
     }
+
     const internals = runtime as unknown as {
       tabs: Map<string, unknown>
       mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
     }
+
     const stored = internals.mobileSessionTabsByWorktree.get(WORKTREE_ID)
+
     const storedLeafCount =
       stored?.tabs.filter((tab) => tab.type === 'terminal' && tab.parentTabId === PARENT_TAB_ID)
         .length ?? 0
+
     if (!internals.tabs.has(PARENT_TAB_ID) || storedLeafCount !== surfaces.length) {
       throw new Error(
         `Runtime close precondition drifted: parent=${internals.tabs.has(PARENT_TAB_ID)} leaves=${storedLeafCount}`
       )
     }
+
     return {
       dispatcher: new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS }),
       targets: new Map(
@@ -233,9 +262,11 @@ function createRuntimeClosePath(
           .filter((surface) => surface.session.role === 'stale-mirror')
           .map((surface) => {
             const acceptedTab = accepted.tabs.find((tab) => tab.id === surface.mobileTabId)
+
             if (!acceptedTab || acceptedTab.type !== 'terminal' || acceptedTab.status !== 'ready') {
               throw new Error(`Missing lifecycle claim for ${surface.mobileTabId}`)
             }
+
             return [
               surface.mobileTabId,
               {
@@ -263,14 +294,17 @@ async function waitForFinish(): Promise<void> {
 async function main(): Promise<void> {
   const config = readConfig()
   let router: DaemonPtyRouter | null = null
+
   try {
     for (let burst = 1; burst <= config.reconnectBursts; burst += 1) {
       if (router) {
         await router.disconnectOnly()
         router.dispose()
       }
+
       router = await connectThroughDesktopDiscovery(config, burst)
     }
+
     await connectParallelRuntimeClients(config)
     const { dispatcher, targets, pendingShutdowns } = await createRuntimeClosePath(config, router)
     await dispatchFixtureCloseBursts({ dispatcher, worktreeId: WORKTREE_ID, targets })

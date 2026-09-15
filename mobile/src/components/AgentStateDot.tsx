@@ -15,6 +15,7 @@ const DOT_COLORS: Record<Exclude<AgentDotState, 'working' | 'monitoring'>, strin
   interrupted: '#ef4444',
   idle: 'rgba(115,115,115,0.4)'
 }
+
 const WORKING_COLOR = '#eab308'
 
 export function AgentStateDot({ state }: { state: AgentDotState }) {
@@ -30,15 +31,20 @@ export function AgentStateDot({ state }: { state: AgentDotState }) {
           useNativeDriver: true
         })
       )
+
       animation.start()
+
       return () => animation.stop()
     }
+
     spinValue.setValue(0)
+
     return undefined
   }, [state, spinValue])
 
   if (state === 'working') {
     const rotate = spinValue.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] })
+
     return (
       <View style={styles.wrapper}>
         <Animated.View style={[styles.spinner, { transform: [{ rotate }] }]} />

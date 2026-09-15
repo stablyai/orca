@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const {
   readElfMachine,
   declaredArchFromPath,
@@ -91,6 +92,7 @@ describe('verify-linux-glibc-floor parsing', () => {
       { library: 'libstdc++.so.6', name: 'GLIBCXX_3.4.29', weak: false },
       { library: 'libc.so.6', name: 'GLIBC_2.34', weak: false }
     ]
+
     // A launch-critical module: both are violations.
     expect(
       findFloorViolations(needs, '/opt/app/node_modules/node-pty/pty.node').map((v) => v.name)
@@ -115,6 +117,7 @@ describe('verify-linux-glibc-floor parsing', () => {
         '    0x00 0x00 04 GLIBCXX_3.4.22'
       ].join('\n')
     )
+
     expect(findFloorViolations(needs, '/opt/app/pty.node')).toEqual([])
   })
 })
@@ -142,6 +145,7 @@ describe('DT_NEEDED provider check', () => {
       '0000000000000000  w   DF *UND*\t0000000000000000 __cxa_finalize@GLIBC_2.2.5',
       '0000000000000000      DF .text\t0000000000000000 defined_symbol'
     ].join('\n')
+
     const imported = parseImportedSymbols(output)
     expect(imported.has('openpty')).toBe(true)
     expect(imported.has('__cxa_finalize')).toBe(true)
@@ -164,6 +168,7 @@ describe('DT_NEEDED provider check', () => {
 describe('collectNativeBinaries', () => {
   it('collects only ELF .node/.so/executable files, skipping non-ELF and symlinks', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-glibc-collect-'))
+
     try {
       await mkdir(join(root, 'nested'), { recursive: true })
       await writeFile(join(root, 'addon.node'), ELF_HEADER)
@@ -173,6 +178,7 @@ describe('collectNativeBinaries', () => {
       await writeFile(join(root, 'script.js'), ELF_HEADER) // has extension, not native
       await writeFile(join(root, 'text.node'), 'not an elf file') // native name, non-ELF
       await writeFile(join(root, 'notes.md'), ELF_HEADER)
+
       try {
         await symlink(join(root, 'addon.node'), join(root, 'alias.node'))
       } catch {
@@ -235,11 +241,13 @@ describe.skipIf(process.platform === 'win32')('verifyLinuxGlibcFloor', () => {
       ].join('\n'),
       { mode: 0o755 }
     )
+
     return stubPath
   }
 
   it('throws listing binaries over the floor (glibc, DT_RELR marker, and libstdc++)', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-glibc-over-'))
+
     try {
       const objdumpPath = await writeStubObjdump(root)
       await mkdir(join(root, 'app', 'resources'), { recursive: true })
@@ -249,11 +257,13 @@ describe.skipIf(process.platform === 'win32')('verifyLinuxGlibcFloor', () => {
       await writeFile(join(root, 'app', 'good.so'), ELF_HEADER)
 
       let error
+
       try {
         verifyLinuxGlibcFloor(join(root, 'app'), { objdumpPath })
       } catch (e) {
         error = e
       }
+
       expect(error).toBeDefined()
       expect(error.message).toMatch(/bad-pty\.node needs GLIBC_2\.34/)
       expect(error.message).toMatch(/relr-exe\.node needs GLIBC_ABI_DT_RELR/)
@@ -265,6 +275,7 @@ describe.skipIf(process.platform === 'win32')('verifyLinuxGlibcFloor', () => {
 
   it('throws when a pinned binary imports openpty without libutil.so.1 in DT_NEEDED', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-glibc-noutil-'))
+
     try {
       const objdumpPath = await writeStubObjdump(root)
       await mkdir(join(root, 'app'), { recursive: true })
@@ -282,6 +293,7 @@ describe.skipIf(process.platform === 'win32')('verifyLinuxGlibcFloor', () => {
 
   it('passes weak/at-floor needs and the exempt sherpa-onnx libstdc++ prebuilt', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-glibc-under-'))
+
     try {
       const objdumpPath = await writeStubObjdump(root)
       const sherpaDir = join(root, 'app', 'node_modules', 'sherpa-onnx-linux-x64')
@@ -299,6 +311,7 @@ describe.skipIf(process.platform === 'win32')('verifyLinuxGlibcFloor', () => {
 
   it('fails closed when objdump cannot read a binary (non-zero exit)', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-glibc-closed-'))
+
     try {
       const objdumpPath = await writeStubObjdump(root)
       await mkdir(join(root, 'app'), { recursive: true })
@@ -314,6 +327,7 @@ describe.skipIf(process.platform === 'win32')('verifyLinuxGlibcFloor', () => {
 
   it('is a no-op (no objdump needed) when there are no native binaries', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-glibc-empty-'))
+
     try {
       await mkdir(join(root, 'app'), { recursive: true })
       await writeFile(join(root, 'app', 'readme.txt'), 'no binaries here')
@@ -335,6 +349,7 @@ function elfHeader(machine) {
   header[6] = 1 // EV_CURRENT
   header.writeUInt16LE(3, 16) // ET_DYN
   header.writeUInt16LE(machine, 18)
+
   return header
 }
 

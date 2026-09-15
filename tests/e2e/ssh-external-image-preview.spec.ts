@@ -19,7 +19,9 @@ import {
 } from './helpers/terminal'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const REMOTE_IMAGE_PATH = '/tmp/orca-ssh-external-preview.png'
+
 const IMAGE_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR4AWN8z8DwnwEJMDGgAcICAO2mBAXmO4drAAAAAElFTkSuQmCC'
 
@@ -31,17 +33,22 @@ async function findTerminalLink(page: Page, text: string): Promise<LinkProbe> {
     const tabId = state?.activeTabId ?? null
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     if (!tabId || !pane) {
       throw new Error('Active terminal pane is unavailable')
     }
+
     const terminal = pane.terminal
+
     for (let row = 0; row < terminal.rows; row += 1) {
       const line = terminal.buffer.active.getLine(terminal.buffer.active.viewportY + row)
       const col = line?.translateToString(true).indexOf(text) ?? -1
+
       if (col >= 0) {
         return { col: col + Math.floor(text.length / 2), row, tabId }
       }
     }
+
     throw new Error('External image path is not visible in the terminal')
   }, text)
 }
@@ -54,9 +61,11 @@ async function activateTerminalLink(page: Page, probe: LinkProbe, text: string):
           const manager = window.__paneManagers?.get(tabId)
           const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
           const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+
           if (!pane || !screen) {
             throw new Error('Active terminal screen is unavailable')
           }
+
           const rect = screen.getBoundingClientRect()
           screen.dispatchEvent(
             new MouseEvent('mousemove', {
@@ -67,12 +76,15 @@ async function activateTerminalLink(page: Page, probe: LinkProbe, text: string):
             })
           )
         }, probe)
+
         return page.evaluate((tabId) => {
           const manager = window.__paneManagers?.get(tabId)
           const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
           const core = pane?.terminal as unknown as
             | { _core?: { linkifier?: { currentLink?: { link?: { text?: string } } } } }
             | undefined
+
           return core?._core?.linkifier?.currentLink?.link?.text ?? null
         }, probe.tabId)
       },
@@ -84,10 +96,13 @@ async function activateTerminalLink(page: Page, probe: LinkProbe, text: string):
     const manager = window.__paneManagers?.get(tabId)
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+
     if (!pane || !screen) {
       throw new Error('Active terminal screen is unavailable')
     }
+
     const rect = screen.getBoundingClientRect()
+
     const mouse = {
       bubbles: true,
       cancelable: true,
@@ -97,6 +112,7 @@ async function activateTerminalLink(page: Page, probe: LinkProbe, text: string):
       metaKey: navigator.userAgent.includes('Mac'),
       ctrlKey: !navigator.userAgent.includes('Mac')
     }
+
     screen.dispatchEvent(new MouseEvent('mousedown', { ...mouse, buttons: 1 }))
     screen.dispatchEvent(new MouseEvent('mouseup', mouse))
   }, probe)
@@ -113,6 +129,7 @@ test.describe('SSH external image preview', () => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
     let cleanupDeferred = false
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       registerPostElectronShutdownCleanup(async () => cleanupDockerSshRelayTarget(target))
@@ -124,9 +141,11 @@ test.describe('SSH external image preview', () => {
 
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
+
       const remote = await connectDockerSshRelayTarget(orcaPage, target, {
         remotePath: DOCKER_SSH_RELAY_REMOTE_REPO_PATH
       })
+
       await ensureTerminalVisible(orcaPage, 45_000)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       const ptyId = await waitForActivePanePtyId(orcaPage, 60_000)
@@ -165,6 +184,7 @@ test.describe('SSH external image preview', () => {
 
       const state = await orcaPage.evaluate((filePath) => {
         const file = window.__store?.getState().openFiles.find((item) => item.filePath === filePath)
+
         return file
           ? {
               externalSshTargetId: file.externalSshTargetId,
@@ -172,6 +192,7 @@ test.describe('SSH external image preview', () => {
             }
           : null
       }, REMOTE_IMAGE_PATH)
+
       expect(state).toEqual({
         externalSshTargetId: remote.targetId,
         relativePath: REMOTE_IMAGE_PATH
@@ -181,6 +202,7 @@ test.describe('SSH external image preview', () => {
         target,
         `sha256sum ${shellQuote(REMOTE_IMAGE_PATH)} | cut -d' ' -f1`
       )
+
       expect(remoteHash).toBe(
         createHash('sha256').update(Buffer.from(IMAGE_BASE64, 'base64')).digest('hex')
       )

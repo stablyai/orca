@@ -14,6 +14,7 @@ export function showBlockedNotificationFallbackToast(): void {
   if (shownThisSession) {
     return
   }
+
   shownThisSession = true
   toast.warning(
     translate(

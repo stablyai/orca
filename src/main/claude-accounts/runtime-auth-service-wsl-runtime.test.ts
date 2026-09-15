@@ -22,6 +22,7 @@ vi.mock('./oauth-refresh', () => createOauthRefreshMock())
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -46,11 +47,13 @@ describe('ClaudeRuntimeAuthService', () => {
       getWslHome: () => null,
       toWindowsWslPath: (value: string) => value
     }))
+
     const ubuntuAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'ubuntu-account',
       createClaudeCredentialsJson('ubuntu@example.com', 'ubuntu-token')
     )
+
     const settings = createSettings({
       localAccountRuntime: 'wsl',
       localAccountWslDistro: 'Ubuntu',
@@ -69,6 +72,7 @@ describe('ClaudeRuntimeAuthService', () => {
         wsl: { Ubuntu: 'ubuntu-account' }
       }
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
@@ -94,11 +98,13 @@ describe('ClaudeRuntimeAuthService', () => {
       getWslHome: () => null,
       toWindowsWslPath: (value: string) => value
     }))
+
     const ubuntuAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'ubuntu-account',
       createClaudeCredentialsJson('ubuntu@example.com', 'ubuntu-token')
     )
+
     const settings = createSettings({
       localAccountRuntime: 'auto',
       localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
@@ -115,6 +121,7 @@ describe('ClaudeRuntimeAuthService', () => {
         wsl: { Ubuntu: 'ubuntu-account' }
       }
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
@@ -135,10 +142,12 @@ describe('ClaudeRuntimeAuthService', () => {
       getWslHome: () => null,
       toWindowsWslPath: (value: string) => value
     }))
+
     const settings = createSettings({
       localAccountRuntime: 'wsl',
       localAccountWslDistro: 'Ubuntu'
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
@@ -160,11 +169,13 @@ describe('ClaudeRuntimeAuthService', () => {
       getWslHome: () => null,
       toWindowsWslPath: (value: string) => value
     }))
+
     const settings = createSettings({
       localAccountRuntime: 'host',
       terminalWindowsShell: 'wsl.exe',
       terminalWindowsWslDistro: 'Debian'
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
@@ -183,6 +194,7 @@ describe('ClaudeRuntimeAuthService', () => {
     const managedAuthPath = join(testState.userDataDir, 'claude-accounts', 'account-1', 'auth')
     mkdirSync(managedAuthPath, { recursive: true })
     writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+
     const settings = createSettings({
       claudeManagedAccounts: [
         createClaudeAccount('account-1', managedAuthPath, {
@@ -194,10 +206,12 @@ describe('ClaudeRuntimeAuthService', () => {
       activeClaudeManagedAccountId: null,
       activeClaudeManagedAccountIdsByRuntime: { host: null, wsl: { Ubuntu: 'account-1' } }
     })
+
     const store = createStore(settings)
 
     const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
     const service = new ClaudeRuntimeAuthService(store as never)
+
     const preparation = await service.prepareForClaudeLaunch({
       runtime: 'wsl',
       wslDistro: 'Ubuntu'
@@ -220,16 +234,19 @@ describe('ClaudeRuntimeAuthService', () => {
       getWslHome: () => join(testState.userDataDir, 'wsl-home'),
       toWindowsWslPath: (value: string) => value
     }))
+
     const ubuntuAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'ubuntu-account',
       createClaudeCredentialsJson('ubuntu@example.com', 'ubuntu-token')
     )
+
     const debianAuthPath = createManagedClaudeAuth(
       testState.userDataDir,
       'debian-account',
       createClaudeCredentialsJson('debian@example.com', 'debian-token')
     )
+
     const settings = createSettings({
       claudeManagedAccounts: [
         createClaudeAccount('ubuntu-account', ubuntuAuthPath, {
@@ -249,11 +266,13 @@ describe('ClaudeRuntimeAuthService', () => {
         wsl: { Ubuntu: 'ubuntu-account', Debian: 'debian-account' }
       }
     })
+
     const store = createStore(settings)
 
     try {
       const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
       const service = new ClaudeRuntimeAuthService(store as never)
+
       const preparation = await service.prepareForClaudeLaunch({
         runtime: 'wsl',
         wslDistro: null

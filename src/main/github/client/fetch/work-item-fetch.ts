@@ -17,6 +17,7 @@ import {
   type MainWorkItem
 } from './../map/work-item-field-coercion'
 import { mapIssueWorkItem, mapPullRequestWorkItem } from './../map/work-item'
+
 export async function fetchIssueWorkItem(
   repoPath: string,
   ownerRepo: GitHubApiRepository | null,
@@ -30,15 +31,19 @@ export async function fetchIssueWorkItem(
     ...githubHostExecOptions(ownerRepo),
     ...(environment ? { env: environment } : {})
   }
+
   if (ownerRepo) {
     const { stdout } = await ghExecFileAsync(
       ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${number}`],
       ghOptions
     )
+
     const item = JSON.parse(stdout) as Record<string, unknown>
+
     if ('pull_request' in item) {
       return null
     }
+
     return mapIssueWorkItem(item)
   }
 
@@ -52,6 +57,7 @@ export async function fetchIssueWorkItem(
     ['issue', 'view', String(number), '--json', 'number,title,state,url,labels,updatedAt,author'],
     ghOptions
   )
+
   return mapIssueWorkItem(JSON.parse(stdout) as Record<string, unknown>)
 }
 
@@ -75,8 +81,10 @@ export async function fetchPullRequestReviewFields(
           WORK_ITEM_PR_REVIEW_JSON_FIELDS
         ]
       : ['pr', 'view', String(number), '--json', WORK_ITEM_PR_REVIEW_JSON_FIELDS]
+
     const { stdout } = await ghExecFileAsync(args, ghOptions)
     const item = JSON.parse(stdout) as Record<string, unknown>
+
     return {
       ...(item.reviewRequests !== undefined
         ? { reviewRequests: usersFromUnknown(item.reviewRequests) }
@@ -101,6 +109,7 @@ export async function fetchPullRequestWorkItem(
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(ownerRepo)
   }
+
   if (ownerRepo) {
     try {
       const { stdout } = await ghExecFileAsync(
@@ -115,12 +124,15 @@ export async function fetchPullRequestWorkItem(
         ],
         ghOptions
       )
+
       const item = JSON.parse(stdout) as Record<string, unknown>
       const mapped = mapPullRequestWorkItem(item, ownerRepo)
       // Why: merge-metadata GraphQL is best-effort — don't fall through to REST, which drops latestReviews and blanks bot-only reviewer lists.
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
+
       try {
         const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
+
         return {
           ...mapped,
           mergeQueueRequired: mergeMetadata.mergeQueueRequired,
@@ -139,11 +151,14 @@ export async function fetchPullRequestWorkItem(
         ['api', `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${number}`],
         ghOptions
       )
+
       const mapped = mapPullRequestWorkItem(
         JSON.parse(stdout) as Record<string, unknown>,
         ownerRepo
       )
+
       const reviewFields = await fetchPullRequestReviewFields(number, ownerRepo, ghOptions)
+
       return { ...mapped, ...reviewFields }
     }
   }
@@ -158,6 +173,7 @@ export async function fetchPullRequestWorkItem(
     ['pr', 'view', String(number), '--json', WORK_ITEM_PR_DETAIL_JSON_FIELDS],
     ghOptions
   )
+
   return mapPullRequestWorkItem(JSON.parse(stdout) as Record<string, unknown>)
 }
 
@@ -174,12 +190,15 @@ export async function fetchPullRequestWorkItemFromCandidates(
     connectionId,
     localGitOptions
   )
+
   if (candidates.length === 0) {
     if (preference === 'origin') {
       return null
     }
+
     return fetchPullRequestWorkItem(repoPath, null, number, connectionId, localGitOptions)
   }
+
   for (const candidate of candidates) {
     try {
       return await fetchPullRequestWorkItem(
@@ -192,10 +211,12 @@ export async function fetchPullRequestWorkItemFromCandidates(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       const classification = classifyGhError(message).type
+
       if (classification !== 'not_found' && classification !== 'permission_denied') {
         throw err
       }
     }
   }
+
   return null
 }

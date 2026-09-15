@@ -19,10 +19,13 @@ export function resolveBrowserRouteSessionPartition(
     storageScope: input.storageScope,
     derivePartition
   })
+
   const persisted = dependencies.bindingStore.get(derived.partition)
+
   if (persisted !== null && persisted !== derived.bindingFingerprint) {
     throw new Error('browser_route_partition_binding_conflict')
   }
+
   return derived
 }
 
@@ -39,13 +42,16 @@ export function persistBrowserRouteSessionBinding(
 ): void {
   if (dependencies.bindingStore.get(derived.partition) !== null) {
     dependencies.bindingStore.touch(derived.partition)
+
     return
   }
+
   const evicted = dependencies.bindingStore.set(
     derived.partition,
     derived.bindingFingerprint,
     storageScope
   )
+
   if (evicted.length > 0) {
     dependencies.releaseEvictedPartitions?.(evicted)
   }

@@ -10,6 +10,7 @@ const PLAYWRIGHT_METADATA_FIELDS = new Set(['source', 'scenario', 'panes', 'fram
 
 export function parseBenchmarkComparisonArgs(argv = process.argv.slice(2)) {
   const args = argv[0] === '--' ? argv.slice(1) : [...argv]
+
   const parsed = {
     higherIsBetter: new Set(),
     title: 'Benchmark comparison'
@@ -17,55 +18,69 @@ export function parseBenchmarkComparisonArgs(argv = process.argv.slice(2)) {
 
   for (let index = 0; index < args.length; index += 1) {
     const flag = args[index]
+
     if (flag === '--baseline') {
       parsed.baselinePath = readRequiredValue(args, ++index, '--baseline requires a path')
       continue
     }
+
     if (flag === '--candidate') {
       parsed.candidatePath = readRequiredValue(args, ++index, '--candidate requires a path')
       continue
     }
+
     if (flag === '--title') {
       parsed.title = readRequiredValue(args, ++index, '--title requires a value')
       continue
     }
+
     if (flag === '--output') {
       parsed.outputPath = readRequiredValue(args, ++index, '--output requires a path')
       continue
     }
+
     if (flag === '--json-output') {
       parsed.jsonOutputPath = readRequiredValue(args, ++index, '--json-output requires a path')
       continue
     }
+
     if (flag === '--higher-is-better') {
       let consumed = 0
+
       while (args[index + 1] != null && !args[index + 1].startsWith('--')) {
         parsed.higherIsBetter.add(args[index + 1])
         index += 1
         consumed += 1
       }
+
       if (consumed === 0) {
         throw new Error('--higher-is-better requires a metric key')
       }
+
       continue
     }
+
     throw new Error(USAGE)
   }
 
   if (!parsed.baselinePath) {
     throw new Error(USAGE)
   }
+
   if (!parsed.candidatePath) {
     throw new Error(USAGE)
   }
+
   return parsed
 }
 
 function readRequiredValue(args, index, message) {
   const value = args[index]
+
   if (value == null || value.startsWith('--')) {
     throw new Error(message)
   }
+
   return value
 }
 
@@ -77,14 +92,17 @@ export function normalizeBenchmarkArtifact(path, artifact = readBenchmarkArtifac
   if (artifact?.valid === false || artifact?.status === 'failed') {
     throw new Error(`${path}: benchmark artifact is marked invalid`)
   }
+
   if (artifact?.summaryMedianMs != null) {
     return normalizeNumericObject(path, artifact, 'startup', artifact.summaryMedianMs, () => 'ms')
   }
+
   if (artifact?.summaryMedian != null) {
     return normalizeNumericObject(path, artifact, 'daemon', artifact.summaryMedian, (key) =>
       key.endsWith('Count') || key.endsWith('After') ? 'count' : 'ms'
     )
   }
+
   if (artifact?.headlineMs != null) {
     return normalizeNumericObject(
       path,
@@ -94,12 +112,15 @@ export function normalizeBenchmarkArtifact(path, artifact = readBenchmarkArtifac
       () => 'ms'
     )
   }
+
   if (artifact?.suites != null) {
     return normalizePlaywrightArtifact(path, artifact)
   }
+
   if (artifact?.summary != null) {
     return normalizeSummaryArtifact(path, artifact)
   }
+
   throw new Error(
     `${path}: unsupported benchmark artifact; expected summaryMedianMs, summaryMedian, headlineMs, Playwright suites, or top-level summary`
   )
@@ -129,30 +150,38 @@ function normalizeNumericObject(path, artifact, kind, values, unitForKey) {
 function normalizePlaywrightArtifact(path, artifact) {
   const rows = collectTerminalPerfRows(artifact, basename(path), { typePrefix: 'opencode-' })
   const groupedMetrics = new Map()
+
   for (const row of rows) {
     for (const [field, rawValue] of Object.entries(row)) {
       if (PLAYWRIGHT_METADATA_FIELDS.has(field)) {
         continue
       }
+
       const parsed = parseMetricValue(rawValue)
+
       if (parsed == null) {
         continue
       }
+
       const key = `${row.scenario}.${field}`
+
       const metricGroup = groupedMetrics.get(key) ?? {
         unit: parsed.unit,
         values: []
       }
+
       metricGroup.values.push(parsed.value)
       groupedMetrics.set(key, metricGroup)
     }
   }
+
   const metrics = [...groupedMetrics.entries()].map(([key, metricGroup]) => ({
     direction: 'lower-is-better',
     key,
     unit: metricGroup.unit,
     value: mean(metricGroup.values)
   }))
+
   return {
     kind: 'playwright',
     label: artifactLabel(path, artifact),
@@ -167,20 +196,25 @@ function mean(values) {
 function parseMetricValue(rawValue) {
   if (typeof rawValue === 'string') {
     const msMatch = rawValue.match(/^(-?\d+(?:\.\d+)?)ms$/)
+
     if (msMatch) {
       return { unit: 'ms', value: Number(msMatch[1]) }
     }
   }
+
   const numericValue = Number(rawValue)
+
   if (!Number.isFinite(numericValue)) {
     return null
   }
+
   return { unit: 'count', value: numericValue }
 }
 
 function normalizeSummaryArtifact(path, artifact) {
   const metrics = []
   flattenSummary(metrics, ['summary'], artifact.summary)
+
   return {
     kind: 'summary',
     label: artifactLabel(path, artifact),
@@ -197,11 +231,14 @@ function flattenSummary(metrics, pathParts, value) {
       unit: unitForSummaryKey(pathParts),
       value
     })
+
     return
   }
+
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
     return
   }
+
   for (const [childKey, childValue] of Object.entries(value)) {
     flattenSummary(metrics, [...pathParts, childKey], childValue)
   }
@@ -211,9 +248,11 @@ function unitForSummaryKey(pathParts) {
   if (pathParts.some((part) => part.endsWith('CpuPercent'))) {
     return '%'
   }
+
   if (pathParts.some((part) => part.endsWith('Bytes'))) {
     return 'bytes'
   }
+
   return ''
 }
 
@@ -233,14 +272,17 @@ export function compareBenchmarkArtifacts({
 
   for (const baselineMetric of baseline.metrics) {
     const candidateMetric = candidateMetrics.get(baselineMetric.key)
+
     if (!isComparableMetric(baselineMetric)) {
       skippedMetrics.push({ key: baselineMetric.key, reason: 'missing baseline metric' })
       continue
     }
+
     if (!isComparableMetric(candidateMetric)) {
       skippedMetrics.push({ key: baselineMetric.key, reason: 'missing candidate metric' })
       continue
     }
+
     if (baselineMetric.unit !== candidateMetric.unit) {
       skippedMetrics.push({
         key: baselineMetric.key,
@@ -248,9 +290,11 @@ export function compareBenchmarkArtifacts({
       })
       continue
     }
+
     const direction = higherIsBetter.has(baselineMetric.key)
       ? 'higher-is-better'
       : baselineMetric.direction
+
     metrics.push(compareMetric(baselineMetric, candidateMetric, direction))
   }
 
@@ -287,10 +331,13 @@ function benchmarkDisplayPath(path, cwd = process.cwd()) {
   if (!isAbsolute(path)) {
     return path
   }
+
   const relativePath = relative(cwd, path)
+
   if (relativePath && !relativePath.startsWith('..') && !isAbsolute(relativePath)) {
     return relativePath
   }
+
   return basename(path)
 }
 
@@ -301,10 +348,12 @@ function isComparableMetric(metric) {
 function compareMetric(baselineMetric, candidateMetric, direction) {
   const rawDelta = candidateMetric.value - baselineMetric.value
   const absoluteDelta = roundOneDecimal(rawDelta)
+
   const percentDelta =
     baselineMetric.value === 0
       ? null
       : roundOneDecimal((rawDelta / Math.abs(baselineMetric.value)) * 100)
+
   return {
     key: baselineMetric.key,
     unit: baselineMetric.unit,
@@ -329,9 +378,11 @@ function metricStatus(absoluteDelta, direction) {
   if (absoluteDelta === 0) {
     return 'unchanged'
   }
+
   if (direction === 'higher-is-better') {
     return absoluteDelta > 0 ? 'improved' : 'regressed'
   }
+
   return absoluteDelta < 0 ? 'improved' : 'regressed'
 }
 
@@ -346,17 +397,21 @@ export function formatBenchmarkComparisonMarkdown(comparison) {
     '| Metric | Baseline | Candidate | Delta | Delta % | Result |',
     '|---|---:|---:|---:|---:|---|'
   ]
+
   for (const metric of comparison.metrics) {
     lines.push(
       `| ${markdownTableCell(metric.key)} | ${formatMetricValue(metric.baseline, metric.unit)} | ${formatMetricValue(metric.candidate, metric.unit)} | ${formatMetricValue(metric.absoluteDelta, metric.unit)} | ${formatPercent(metric.percentDelta)} | ${metric.status} |`
     )
   }
+
   if (comparison.skippedMetrics.length > 0) {
     lines.push('', '## Skipped metrics')
+
     for (const skippedMetric of comparison.skippedMetrics) {
       lines.push(`- ${markdownText(skippedMetric.key)}: ${markdownText(skippedMetric.reason)}`)
     }
   }
+
   return `${lines.join('\n')}\n`
 }
 
@@ -383,16 +438,20 @@ export function runBenchmarkComparisonCli(args = {}) {
   const parsed = parseBenchmarkComparisonArgs(argv)
   const comparison = compareBenchmarkArtifacts(parsed)
   const markdown = formatBenchmarkComparisonMarkdown(comparison)
+
   if (parsed.outputPath) {
     mkdirSync(dirname(parsed.outputPath), { recursive: true })
     writeFileSync(parsed.outputPath, markdown)
   }
+
   if (parsed.jsonOutputPath) {
     mkdirSync(dirname(parsed.jsonOutputPath), { recursive: true })
     writeFileSync(parsed.jsonOutputPath, `${JSON.stringify(comparison, null, 2)}\n`)
   }
+
   const stdout = args.stdout ?? process.stdout
   stdout.write(markdown)
+
   return comparison
 }
 

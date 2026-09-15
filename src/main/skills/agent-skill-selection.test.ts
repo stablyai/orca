@@ -54,17 +54,21 @@ describe('agent skill selection', () => {
 
 it('indexes a batch of selectors without rescanning discovery', () => {
   let reads = 0
+
   const skills = Array.from({ length: 1000 }, (_, index) => ({
     ...skill(`id-${index}`, `name-${index}`),
     get id() {
       reads++
+
       return `id-${index}`
     }
   }))
+
   const selected = selectDiscoveredSkills(
     skills,
     skills.map((_, index) => `id-${index}`)
   )
+
   expect(selected).toHaveLength(1000)
   expect(selected[999]).toBe(skills[999])
   expect(reads).toBeLessThan(10000)
@@ -72,13 +76,16 @@ it('indexes a batch of selectors without rescanning discovery', () => {
 
 it('indexes only the requested selectors, not every discovered skill', () => {
   let nameReads = 0
+
   const skills = Array.from({ length: 1000 }, (_, index) => ({
     ...skill(`id-${index}`, `name-${index}`),
     get name() {
       nameReads++
+
       return `name-${index}`
     }
   }))
+
   expect(selectDiscoveredSkills(skills, ['id-900'])).toEqual([skills[900]])
   // One membership probe per discovered skill, plus reads for the single match's
   // own bucket and the trailing collision check. Indexing every name would need
@@ -90,6 +97,7 @@ it('indexes only the requested selectors, not every discovered skill', () => {
 // index must report every match in discovery order, exactly like the old filter.
 it('reports every ambiguous match in discovery order', () => {
   let thrown: unknown
+
   try {
     selectDiscoveredSkills(
       [skill('one', 'same'), skill('unrelated', 'other'), skill('two', 'same')],
@@ -98,6 +106,7 @@ it('reports every ambiguous match in discovery order', () => {
   } catch (error) {
     thrown = error
   }
+
   expect(thrown).toBeInstanceOf(AgentSkillSharingError)
   const error = thrown as AgentSkillSharingError
   expect(error.code).toBe(AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE)

@@ -77,6 +77,7 @@ export function ProjectPickerBrowse(props: Props): React.JSX.Element {
 
 function ProjectBrowseRows(props: Props): React.JSX.Element {
   const { projectSettings } = props
+
   return (
     <div className="max-h-[340px] overflow-y-auto p-1 scrollbar-sleek">
       {projectSettings.pinned.length > 0 ? (
@@ -85,9 +86,11 @@ function ProjectBrowseRows(props: Props): React.JSX.Element {
         >
           {projectSettings.pinned.map((project) => {
             const key = githubProjectIdentityKey(project)
+
             const match = props.browseProjects.find(
               (candidate) => githubProjectIdentityKey(candidate) === key
             )
+
             return (
               <ProjectPickerRow
                 key={key}
@@ -154,21 +157,25 @@ function ProjectBrowseRows(props: Props): React.JSX.Element {
 
 function RecentProjects(props: Props): React.JSX.Element {
   const { projectSettings } = props
+
   const projects = projectSettings.recent.filter(
     (recent) =>
       !projectSettings.pinned.some(
         (pinned) => githubProjectIdentityKey(pinned) === githubProjectIdentityKey(recent)
       )
   )
+
   return (
     <ProjectPickerSection
       label={translate('auto.components.github.project.ProjectPicker.b3044b7a25', 'Recent')}
     >
       {projects.map((project) => {
         const key = githubProjectIdentityKey(project)
+
         const match = props.browseProjects.find(
           (candidate) => githubProjectIdentityKey(candidate) === key
         )
+
         return (
           <ProjectPickerRow
             key={key}

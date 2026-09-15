@@ -54,21 +54,28 @@ function readHookTrustProvenance(
 ): Map<string, HookTrustProvenanceEntry> | null {
   const provenancePath = getProvenancePath(runtimeHomePath)
   let rawProvenance: string
+
   try {
     rawProvenance = readFileSync(provenancePath, 'utf-8')
   } catch {
     return null
   }
+
   try {
     const parsed: unknown = JSON.parse(rawProvenance)
+
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null
     }
+
     const entries = (parsed as HookTrustProvenanceFile).entries
+
     if (!entries || typeof entries !== 'object' || Array.isArray(entries)) {
       return null
     }
+
     const result = new Map<string, HookTrustProvenanceEntry>()
+
     for (const [key, value] of Object.entries(entries)) {
       if (value && typeof value === 'object' && !Array.isArray(value)) {
         result.set(key, {
@@ -77,6 +84,7 @@ function readHookTrustProvenance(
         })
       }
     }
+
     return result
   } catch {
     return null
@@ -99,6 +107,7 @@ function readHookTrustProvenance(
 function provenanceIsUnreadable(provenancePath: string): boolean {
   try {
     readFileSync(provenancePath, 'utf-8')
+
     return false
   } catch (error) {
     return !isDefinitiveAbsence(error)
@@ -111,20 +120,25 @@ export function snapshotCodexRuntimeHookTrustProvenance(
   if (provenanceIsUnreadable(getProvenancePath(runtimeHomePath))) {
     return
   }
+
   try {
     const runtimeHooksPath = join(runtimeHomePath, 'hooks.json')
     const canonicalRuntimeHooksPath = getCodexExplicitHomeHookSourcePath(runtimeHooksPath)
     const entries: Record<string, HookTrustProvenanceEntry> = {}
+
     for (const [key, state] of readHookTrustEntries(join(runtimeHomePath, 'config.toml'))) {
       const parsed = parseTrustKey(key)
+
       if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, canonicalRuntimeHooksPath)) {
         continue
       }
+
       entries[normalizeHookTrustKeyForLookup(key)] = {
         ...(state.trustedHash !== undefined ? { trustedHash: state.trustedHash } : {}),
         ...(state.enabled !== undefined ? { enabled: state.enabled } : {})
       }
     }
+
     const file: HookTrustProvenanceFile = { version: 1, entries }
     writeFileSync(getProvenancePath(runtimeHomePath), `${JSON.stringify(file, null, 2)}\n`, {
       encoding: 'utf-8',
@@ -160,13 +174,17 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
   const runtimeHooksPath = join(runtimeHomePath, 'hooks.json')
   const systemHooksPath = join(systemHomePath, 'hooks.json')
   const canonicalRuntimeHooksPath = getCodexExplicitHomeHookSourcePath(runtimeHooksPath)
+
   if (canonicalRuntimeHooksPath === normalizeCodexHookSourcePath(systemHooksPath)) {
     return
   }
+
   const runtimeTomlPath = join(runtimeHomePath, 'config.toml')
+
   if (!existsSync(runtimeTomlPath)) {
     return
   }
+
   // Why: without a snapshot of what Orca last wrote (first launch after
   // upgrading to a build with promotion, or a corrupted snapshot), a mirrored
   // copy of since-revoked system trust is indistinguishable from a genuine
@@ -174,33 +192,44 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
   // ~/.codex, so skip this launch — install() writes the first snapshot and
   // promotion starts on the next one.
   const provenance = readHookTrustProvenance(runtimeHomePath)
+
   if (!provenance) {
     return
   }
+
   const runtimeTrust = readHookTrustEntries(runtimeTomlPath)
+
   if (runtimeTrust.size === 0) {
     return
   }
+
   // Why: promotion inspects the hooks.json layout Codex actually approved
   // against — the one still on disk from the previous launch — so it must run
   // before install() rewrites the runtime hooks.json.
   const runtimeConfig = readHooksJson(runtimeHooksPath)
   const systemConfig = readHooksJson(systemHooksPath)
+
   if (!runtimeConfig?.hooks || !systemConfig?.hooks) {
     return
   }
+
   const isManagedCommand = createManagedCommandMatcher(getCodexManagedScriptFileName())
 
   const promotions: CodexTrustEntry[] = []
+
   for (const [key, state] of runtimeTrust) {
     if (!state.trustedHash) {
       continue
     }
+
     const parsed = parseTrustKey(key)
+
     if (!parsed || !codexHookSourcePathsEqual(parsed.sourcePath, canonicalRuntimeHooksPath)) {
       continue
     }
+
     const previous = provenance.get(normalizeHookTrustKeyForLookup(key))
+
     if (
       previous &&
       previous.trustedHash === state.trustedHash &&
@@ -209,20 +238,25 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
       // Orca wrote this entry and nothing touched it since — not an approval.
       continue
     }
+
     const eventName = CODEX_EVENT_NAME_BY_LABEL[parsed.eventLabel]
     const runtimeDefinitions = runtimeConfig.hooks[eventName]
+
     const definition = Array.isArray(runtimeDefinitions)
       ? runtimeDefinitions[parsed.groupIndex]
       : undefined
+
     const hook = Array.isArray(definition?.hooks)
       ? definition.hooks[parsed.handlerIndex]
       : undefined
+
     // Why: never write trust for Orca's managed status hook into the user's
     // real config — mutating ~/.codex for Orca's own hooks is exactly what the
     // runtime CODEX_HOME isolation exists to prevent.
     if (!definition || !hook?.command || isManagedCommand(hook.command)) {
       continue
     }
+
     const runtimeEntry = createCodexHookTrustEntry(
       canonicalRuntimeHooksPath,
       eventName,
@@ -231,9 +265,11 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
       definition,
       hook
     )
+
     if (!runtimeEntry) {
       continue
     }
+
     collectSystemPromotionTargets(
       promotions,
       systemHooksPath,
@@ -245,6 +281,7 @@ function promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath: string)
       state.enabled ?? true
     )
   }
+
   if (promotions.length > 0) {
     upsertHookTrustEntries(join(systemHomePath, 'config.toml'), promotions)
   }
@@ -264,15 +301,18 @@ function collectSystemPromotionTargets(
   enabled: boolean
 ): void {
   const systemDefinitions = systemHooks[eventName]
+
   if (!Array.isArray(systemDefinitions)) {
     return
   }
+
   systemDefinitions.forEach((systemDefinition, groupIndex) => {
     const hooks = Array.isArray(systemDefinition.hooks) ? systemDefinition.hooks : []
     hooks.forEach((systemHook, handlerIndex) => {
       if (isManagedCommand(systemHook.command)) {
         return
       }
+
       const systemEntry = createCodexHookTrustEntry(
         systemHooksPath,
         eventName,
@@ -281,9 +321,11 @@ function collectSystemPromotionTargets(
         systemDefinition,
         systemHook
       )
+
       if (!systemEntry || getCodexHookTrustSignature(systemEntry) !== signature) {
         return
       }
+
       promotions.push({ ...systemEntry, trustedHash, enabled })
     })
   })

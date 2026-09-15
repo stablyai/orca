@@ -9,6 +9,7 @@ export type WorktreeIdentityRef = {
   /** Durable identity for this checkout occupant. */
   instanceId: string
 }
+
 export type WorktreeIdentity = Omit<WorktreeIdentityRef, 'worktreeId'> & {
   key: string
 }
@@ -20,6 +21,7 @@ export type WorktreeIdentity = Omit<WorktreeIdentityRef, 'worktreeId'> & {
 export function canonicalWorktreeIdentity(ref: WorktreeIdentityRef): string {
   return `wt2:${encodeURIComponent(ref.executionHostId)}:${encodeURIComponent(ref.instanceId)}`
 }
+
 export function createWorktreeIdentity(ref: WorktreeIdentityRef): WorktreeIdentity {
   return {
     key: canonicalWorktreeIdentity(ref),

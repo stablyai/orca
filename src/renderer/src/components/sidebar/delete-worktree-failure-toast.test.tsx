@@ -19,6 +19,7 @@ const mountedRoots: Root[] = []
 function renderToastBody(method: 'error' | 'info'): HTMLElement {
   const description = vi.mocked(toast[method]).mock.calls.at(-1)?.[1]
     ?.description as React.ReactElement
+
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
@@ -26,6 +27,7 @@ function renderToastBody(method: 'error' | 'info'): HTMLElement {
   act(() => {
     root.render(description)
   })
+
   return container
 }
 
@@ -33,9 +35,11 @@ function clickButton(container: HTMLElement, label: string): void {
   const button = [...container.querySelectorAll('button')].find(
     (el) => el.textContent?.trim() === label
   )
+
   if (!button) {
     throw new Error(`button "${label}" not found`)
   }
+
   act(() => {
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
@@ -70,9 +74,11 @@ describe('showDeleteWorktreeFailureToast', () => {
         duration: Infinity
       })
     )
+
     const options = vi.mocked(toast.info).mock.calls.at(-1)?.[1] as
       | { action?: unknown; cancel?: unknown }
       | undefined
+
     expect(options?.action).toBeUndefined()
     expect(options?.cancel).toBeUndefined()
 

@@ -18,16 +18,19 @@ const CREATE_REQUEST_TIMEOUT_MS = 60_000
 
 function envValue(name: string): string | null {
   const value = process.env[name]?.trim() ?? ''
+
   return value.length > 0 ? value : null
 }
 
 function normalizeApiBaseUrl(value: string): string {
   const trimmed = value.trim().replace(/\/+$/, '')
+
   return /\/api\/v1$/i.test(trimmed) ? trimmed : `${trimmed}/api/v1`
 }
 
 function configuredApiBaseUrl(repo: GiteaRepoRef): string {
   const configured = envValue('ORCA_GITEA_API_BASE_URL')
+
   return configured ? normalizeApiBaseUrl(configured) : repo.apiBaseUrl
 }
 
@@ -37,6 +40,7 @@ export function isGiteaReviewCreationAuthenticated(): boolean {
 
 function authHeaders(): Record<string, string> {
   const token = envValue('ORCA_GITEA_TOKEN')
+
   return token ? { Authorization: `token ${token}` } : {}
 }
 
@@ -54,11 +58,14 @@ function apiErrorMessage(error: unknown): string {
 
 function classifyCreateError(error: unknown): CreateHostedReviewResult {
   const message = apiErrorMessage(error)
+
   if (message) {
     console.warn('createGiteaPullRequest failed:', message)
   }
+
   const lower = message.toLowerCase()
   const status = error instanceof HostedReviewApiRequestError ? error.status : null
+
   if (
     status === 401 ||
     status === 403 ||
@@ -73,6 +80,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
         'Create PR failed: Gitea is not authenticated. Next step: set ORCA_GITEA_TOKEN in this environment.'
     }
   }
+
   if (status === 409 || lower.includes('already exists') || lower.includes('already open')) {
     return {
       ok: false,
@@ -80,6 +88,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       error: 'A pull request already exists for this branch.'
     }
   }
+
   if (error instanceof HostedReviewApiRequestError && error.timedOut) {
     return {
       ok: false,
@@ -87,6 +96,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
       error: 'PR creation may have completed. Refreshing branch review state...'
     }
   }
+
   if (status === 400 || status === 422 || lower.includes('validation')) {
     return {
       ok: false,
@@ -95,6 +105,7 @@ function classifyCreateError(error: unknown): CreateHostedReviewResult {
         'Create PR failed: Gitea rejected the pull request. Check the base branch and branch state, then try again.'
     }
   }
+
   return {
     ok: false,
     code: 'unknown',
@@ -110,10 +121,13 @@ async function findExistingPullRequest(
   // Why: only called after a create attempt, which may have just mutated the
   // remote — a cached /pulls scan from before the POST would miss the new PR.
   const repo = await getGiteaRepoRef(repoPath, connectionId)
+
   if (repo) {
     invalidateGiteaPullRequestScanForRepo(repo)
   }
+
   const existing = await getGiteaPullRequestForBranch(repoPath, head, null, connectionId)
+
   return existing ? { number: existing.number, url: existing.url } : null
 }
 
@@ -134,6 +148,7 @@ export async function createGiteaPullRequest(
   const connectionId = hostedReviewSshConnectionId(executionHostId)
 
   const repo = await getGiteaRepoRef(repoPath, connectionId)
+
   if (!repo) {
     return {
       ok: false,
@@ -145,6 +160,7 @@ export async function createGiteaPullRequest(
   const base = normalizeHostedReviewBaseRef(input.base)
   const head = input.head ? normalizeHostedReviewHeadRef(input.head) : ''
   const title = input.title.trim()
+
   if (!base || !head || !title) {
     return {
       ok: false,
@@ -152,6 +168,7 @@ export async function createGiteaPullRequest(
       error: 'Create PR failed: base branch, head branch, and title are required.'
     }
   }
+
   if (head.toLowerCase() === base.toLowerCase()) {
     return {
       ok: false,
@@ -164,6 +181,7 @@ export async function createGiteaPullRequest(
     input.useTemplate && !input.body?.trim()
       ? await readHostedPullRequestTemplate(repoPath, connectionId)
       : (input.body ?? '')
+
   const requestBody = {
     base,
     head,
@@ -186,12 +204,17 @@ export async function createGiteaPullRequest(
       },
       CREATE_REQUEST_TIMEOUT_MS
     )
+
     const created = mapGiteaPullRequest(raw, 'neutral')
+
     if (created) {
       invalidateGiteaPullRequestScanForRepo(repo)
+
       return { ok: true, number: created.number, url: created.url }
     }
+
     const found = await findExistingPullRequest(repoPath, head, connectionId).catch(() => null)
+
     return found
       ? { ok: true, ...found }
       : {
@@ -201,11 +224,13 @@ export async function createGiteaPullRequest(
         }
   } catch (error) {
     const classified = classifyCreateError(error)
+
     if (
       !classified.ok &&
       (classified.code === 'already_exists' || classified.code === 'unknown_completion')
     ) {
       const existing = await findExistingPullRequest(repoPath, head, connectionId).catch(() => null)
+
       if (existing) {
         return {
           ok: false,
@@ -215,6 +240,7 @@ export async function createGiteaPullRequest(
         }
       }
     }
+
     return classified
   }
 }

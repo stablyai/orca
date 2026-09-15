@@ -16,16 +16,19 @@ describe('OrcaRuntimeService', () => {
     const childWorktreeId = `${TEST_REPO_ID}::${join(tmpdir(), 'workspaces', 'run-a-worker')}`
     const folderWorktreeId = `${TEST_REPO_ID}::${join(tmpdir(), 'folder')}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}11111111-1111-4111-8111-111111111111`
     const meta = store.getAllWorktreeMeta()[TEST_WORKTREE_ID]
+
     const metaById = {
       ...store.getAllWorktreeMeta(),
       [childWorktreeId]: meta,
       [folderWorktreeId]: meta
     }
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId]
     } as never)
+
     const terminals = [
       {
         name: 'coordinator-a',
@@ -63,28 +66,36 @@ describe('OrcaRuntimeService', () => {
       ptyId: `pty-${terminal.name}`,
       paneRuntimeId: index + 1
     }))
+
     const terminalByName = Object.fromEntries(
       terminals.map((terminal) => [terminal.name, terminal])
     )
+
     const handles = Object.fromEntries(
       terminals.map((terminal) => [terminal.name, runtime.preAllocateHandleForPty(terminal.ptyId)])
     )
+
     const paneKey = (name: string): string => {
       const terminal = terminalByName[name]
+
       return makePaneKey(terminal.tabId, terminal.leafId)
     }
+
     const db = new OrchestrationDb(':memory:')
+
     try {
       const runA = db.createRun({
         objective: 'coordinate run A',
         coordinatorHandle: handles['coordinator-a'],
         coordinatorPaneKey: paneKey('coordinator-a')
       })
+
       const runB = db.createRun({
         objective: 'coordinate run B',
         coordinatorHandle: handles['coordinator-b'],
         coordinatorPaneKey: paneKey('coordinator-b')
       })
+
       const dispatches = Object.fromEntries(
         [
           ['worker-cross-worktree', runA.id],
@@ -92,19 +103,23 @@ describe('OrcaRuntimeService', () => {
           ['worker-folder', runB.id]
         ].map(([name, runId]) => {
           const task = db.createTask({ spec: name, runId })
+
           return [name, createRootDispatch(db, task.id, handles[name], paneKey(name))]
         })
       )
+
       const legacyTask = db.createTask({
         runId: 'run_legacy_local',
         spec: 'legacy worker'
       })
+
       const legacyDispatch = createRootDispatch(
         db,
         legacyTask.id,
         handles['legacy-worker'],
         paneKey('legacy-worker')
       )
+
       db.createCoordinatorRun({
         spec: 'unrelated legacy coordinator',
         coordinatorHandle: handles['coordinator-b']
@@ -146,6 +161,7 @@ describe('OrcaRuntimeService', () => {
           orchestrationRunId: run.id
         })
       }
+
       const legacyContext = result.agentOrchestrationByPaneKey?.[paneKey('legacy-worker')]
       expect(legacyContext).toMatchObject({
         taskId: legacyTask.id,
@@ -163,6 +179,7 @@ describe('OrcaRuntimeService', () => {
 
   it('uses the still-bound owning Run coordinator after a creator pane rebinds', () => {
     const runtime = new OrcaRuntimeService(store)
+
     const terminals = [
       {
         name: 'coordinator',
@@ -186,16 +203,21 @@ describe('OrcaRuntimeService', () => {
       ptyId: `pty-${terminal.name}`,
       paneRuntimeId: index + 1
     }))
+
     const terminalByName = Object.fromEntries(
       terminals.map((terminal) => [terminal.name, terminal])
     )
+
     const handles = Object.fromEntries(
       terminals.map((terminal) => [terminal.name, runtime.preAllocateHandleForPty(terminal.ptyId)])
     )
+
     const paneKey = (name: string): string => {
       const terminal = terminalByName[name]
+
       return makePaneKey(terminal.tabId, terminal.leafId)
     }
+
     const graph = () => ({
       tabs: terminals.map((terminal) => ({
         tabId: terminal.tabId,
@@ -213,16 +235,20 @@ describe('OrcaRuntimeService', () => {
         paneTitle: null
       }))
     })
+
     const db = new OrchestrationDb(':memory:')
+
     try {
       runtime.setOrchestrationDb(db)
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, graph())
+
       const runA = db.createRun({
         objective: 'own the nested worker',
         coordinatorHandle: handles.coordinator,
         coordinatorPaneKey: paneKey('coordinator')
       })
+
       const creatorAuthority = runtime.getOrchestrationDispatchAuthority(handles.creator)
       const coordinatorAuthority = runtime.getOrchestrationDispatchAuthority(handles.coordinator)
       expect(creatorAuthority?.processIncarnation).toBeTruthy()
@@ -236,6 +262,7 @@ describe('OrcaRuntimeService', () => {
         undefined,
         creatorAuthority?.processIncarnation ?? undefined
       )
+
       const workerTask = db.createTask({
         spec: 'nested work',
         runId: runA.id,
@@ -244,12 +271,14 @@ describe('OrcaRuntimeService', () => {
         createdByProcessIncarnation: creatorAuthority?.processIncarnation ?? undefined,
         createdByRunGeneration: runA.consumer_generation
       })
+
       const workerDispatch = createRootDispatch(
         db,
         workerTask.id,
         handles.worker,
         paneKey('worker')
       )
+
       const coordinatorCreatedTask = db.createTask({
         spec: 'coordinator-created work',
         runId: runA.id,
@@ -258,12 +287,14 @@ describe('OrcaRuntimeService', () => {
         createdByProcessIncarnation: coordinatorAuthority?.processIncarnation ?? undefined,
         createdByRunGeneration: runA.consumer_generation
       })
+
       const coordinatorCreatedDispatch = createRootDispatch(
         db,
         coordinatorCreatedTask.id,
         handles['coordinator-created-worker'],
         paneKey('coordinator-created-worker')
       )
+
       expect(
         runtime.syncWindowGraph(1, graph()).agentOrchestrationByPaneKey?.[paneKey('worker')]
       ).toMatchObject({
@@ -278,11 +309,13 @@ describe('OrcaRuntimeService', () => {
       terminalByName.creator.ptyId = 'pty-creator-reminted'
       const remintedCreatorHandle = runtime.preAllocateHandleForPty(terminalByName.creator.ptyId)
       runtime.syncWindowGraph(1, graph())
+
       const runB = db.createRun({
         objective: 'rebind the creator pane',
         coordinatorHandle: remintedCreatorHandle,
         coordinatorPaneKey: paneKey('creator')
       })
+
       const reboundContext = runtime.syncWindowGraph(1, graph()).agentOrchestrationByPaneKey?.[
         paneKey('worker')
       ]
@@ -308,6 +341,7 @@ describe('OrcaRuntimeService', () => {
         coordinatorHandle: handles.coordinator,
         coordinatorPaneKey: paneKey('coordinator')
       })
+
       const unboundContext = runtime.syncWindowGraph(1, graph()).agentOrchestrationByPaneKey?.[
         paneKey('coordinator-created-worker')
       ]
@@ -337,27 +371,33 @@ describe('OrcaRuntimeService', () => {
 
   it('queries each stable terminal handle once while publishing orchestration context', () => {
     const runtime = new OrcaRuntimeService(store)
+
     const terminals = Array.from({ length: 100 }, (_, index) => ({
       tabId: `tab-query-${index}`,
       leafId: `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
       ptyId: `pty-query-${index}`,
       paneRuntimeId: index + 1
     }))
+
     const handles = terminals.map((terminal) => runtime.preAllocateHandleForPty(terminal.ptyId))
     const db = new OrchestrationDb(':memory:')
+
     try {
       const run = db.createRun({
         objective: 'query count oracle',
         coordinatorHandle: handles[99],
         coordinatorPaneKey: makePaneKey(terminals[99].tabId, terminals[99].leafId)
       })
+
       const task = db.createTask({ spec: 'one dispatched terminal', runId: run.id })
+
       const dispatch = createRootDispatch(
         db,
         task.id,
         handles[0],
         makePaneKey(terminals[0].tabId, terminals[0].leafId)
       )
+
       const getActiveDispatchForTerminal = vi.spyOn(db, 'getActiveDispatchForTerminal')
       const getLatestDispatchForTerminal = vi.spyOn(db, 'getLatestDispatchForTerminal')
       const getTask = vi.spyOn(db, 'getTask')
@@ -384,6 +424,7 @@ describe('OrcaRuntimeService', () => {
           paneTitle: null
         }))
       }
+
       runtime.syncWindowGraph(1, graph)
 
       const queryCounts = {
@@ -398,6 +439,7 @@ describe('OrcaRuntimeService', () => {
       db.completeDispatch(dispatch.id)
       vi.useFakeTimers()
       vi.setSystemTime(Date.now() + AGENT_STATUS_STALE_AFTER_MS + 5_000)
+
       for (const query of [
         getActiveDispatchForTerminal,
         getLatestDispatchForTerminal,
@@ -408,6 +450,7 @@ describe('OrcaRuntimeService', () => {
       ]) {
         query.mockClear()
       }
+
       runtime.syncWindowGraph(1, graph)
 
       const historicalQueryCounts = {
@@ -418,6 +461,7 @@ describe('OrcaRuntimeService', () => {
         legacyCoordinator: getActiveCoordinatorRun.mock.calls.length,
         attention: getWorkerAttentionFacts.mock.calls.length
       }
+
       expect({
         active: {
           ...queryCounts,

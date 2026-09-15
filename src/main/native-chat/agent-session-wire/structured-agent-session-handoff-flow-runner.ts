@@ -50,9 +50,11 @@ export class StructuredAgentSessionHandoffFlowRunner {
       operationId: params.envelope.clientOperationId,
       fingerprint
     })
+
     const flow = this.run(params, turnId, tuiAlreadyExited, journalSequence)
       .then(() => {
         this.input.operationGuard.finish(sessionId, params.envelope.clientOperationId)
+
         return this.input.deps.store.recordOperationOutcome({
           callerKey,
           operationId: params.envelope.clientOperationId,
@@ -70,10 +72,12 @@ export class StructuredAgentSessionHandoffFlowRunner {
           // Best-effort: a store write failure must not suppress the client's failure
           // notification or leak the flow as an unhandled rejection.
         }
+
         this.input.operationGuard.finish(sessionId, params.envelope.clientOperationId)
         this.input.fail(params, error)
       })
       .finally(() => this.input.operationGuard.finish(sessionId, params.envelope.clientOperationId))
+
     this.track(flow)
   }
 
@@ -84,6 +88,7 @@ export class StructuredAgentSessionHandoffFlowRunner {
     journalSequence: number
   ): Promise<void> {
     const sessionId = params.envelope.sessionId
+
     return this.input.deps.schedule(sessionId, async () => {
       const context = this.input.flowContext()
       assertScheduledStructuredHandoffIsAdmissible({
@@ -95,12 +100,15 @@ export class StructuredAgentSessionHandoffFlowRunner {
         tuiAlreadyExited,
         tuiStatus: structuredTuiStatus(context.owner(sessionId), this.input.deps.transport)
       })
+
       if (turnId && params.mode === 'stop-turn') {
         const stopped = await stopStructuredNativeTurn(this.input.deps, sessionId, turnId)
+
         if (!stopped) {
           throw new Error('The current turn did not acknowledge cancellation.')
         }
       }
+
       await (params.direction === 'to-tui'
         ? handoffStructuredSessionToTui(context, params, params.action === 'retry')
         : handoffStructuredSessionToNative(

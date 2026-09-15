@@ -10,6 +10,7 @@ import { wslUncDirectoryExists, wslUncDirectoryExistsAsync } from '../wsl'
 import { PrioritySemaphore } from '../../shared/priority-semaphore'
 
 const pendingWorkingDirectoryValidations = new Map<string, Promise<void>>()
+
 // Why: a dead UNC share answers `stat` in ~21s on Windows and holds one of
 // libuv's 4 default fs threads the whole time, so a handful of distinct paths on
 // one unreachable server would starve every other async fs read in the daemon —
@@ -33,32 +34,42 @@ export function uncRouteKey(cwd: string): string | null {
   if (!cwd.startsWith('\\\\')) {
     return null
   }
+
   const wslInfo = parseWslUncPath(cwd)
+
   if (wslInfo) {
     return `wsl:${wslInfo.distro.trim().toLowerCase()}`
   }
+
   const server = cwd.slice(2).split(/[\\/]/, 1)[0]
+
   return `unc:${server.toLowerCase()}`
 }
 
 async function withUncRouteLane<T>(cwd: string, run: () => Promise<T>): Promise<T> {
   const key = uncRouteKey(cwd)
+
   if (key === null) {
     return run()
   }
+
   let lane = uncRouteLanes.get(key)
+
   if (!lane) {
     lane = { semaphore: new PrioritySemaphore(MAX_CONCURRENT_UNC_VALIDATIONS), waiters: 0 }
     uncRouteLanes.set(key, lane)
   }
+
   // Counted before acquiring so a queued caller keeps the lane alive.
   lane.waiters += 1
   const release = await lane.semaphore.acquire(0)
+
   try {
     return await run()
   } finally {
     release()
     lane.waiters -= 1
+
     if (lane.waiters === 0) {
       uncRouteLanes.delete(key)
     }
@@ -83,12 +94,14 @@ export function formatLocalPtyEnvironmentDiag(extra: Record<string, string> = {}
   const systemVersion =
     (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ||
     release()
+
   const parts = {
     ...extra,
     arch: process.arch,
     platform: `${process.platform} ${systemVersion}`,
     orca: process.env.ORCA_APP_VERSION?.trim() || '0.0.0-dev'
   }
+
   return Object.entries(parts)
     .map(([key, value]) => `${key}: ${value}`)
     .join(', ')
@@ -112,9 +125,11 @@ export function validateWorkingDirectory(cwd: string): void {
   // distro itself; only fall back to the fs check when wsl.exe is inconclusive.
   if (isWslUncPath(cwd)) {
     const existsInDistro = wslUncDirectoryExists(cwd)
+
     if (existsInDistro === false) {
       throwMissingWorkingDirectory(cwd)
     }
+
     if (existsInDistro === true) {
       return
     }
@@ -123,6 +138,7 @@ export function validateWorkingDirectory(cwd: string): void {
   if (!existsSync(cwd)) {
     throwMissingWorkingDirectory(cwd)
   }
+
   if (!statSync(cwd).isDirectory()) {
     throw new Error(`Working directory "${cwd}" is not a directory.`)
   }
@@ -142,10 +158,12 @@ export function validateWorkingDirectoryAsync(
 ): Promise<void> {
   const key = cwd
   let validation = pendingWorkingDirectoryValidations.get(key)
+
   if (!validation) {
     validation = validateWorkingDirectoryUncached(cwd)
     pendingWorkingDirectoryValidations.set(key, validation)
     const started = validation
+
     // Why: dropped only on settle. `fs.stat` is uninterruptible, so retiring a
     // still-running probe on a timer frees no libuv thread — it only lets the
     // next caller pin a second one. Callers escape through `signal` instead, so
@@ -156,21 +174,29 @@ export function validateWorkingDirectoryAsync(
         pendingWorkingDirectoryValidations.delete(key)
       }
     }
+
     void validation.then(forget, forget)
   }
+
   const signal = options.signal
+
   if (!signal) {
     return validation
   }
+
   const shared = validation
   // The shared probe outlives this caller; keep it from surfacing as unhandled.
   void shared.catch(() => {})
+
   return new Promise<void>((resolve, reject) => {
     const onAbort = (): void => reject(new WorkingDirectoryValidationAbortedError(cwd))
+
     if (signal.aborted) {
       onAbort()
+
       return
     }
+
     signal.addEventListener('abort', onAbort, { once: true })
     shared.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
   })
@@ -183,21 +209,25 @@ function validateWorkingDirectoryUncached(cwd: string): Promise<void> {
 async function probeWorkingDirectory(cwd: string): Promise<void> {
   if (isWslUncPath(cwd)) {
     const existsInDistro = await wslUncDirectoryExistsAsync(cwd)
+
     if (existsInDistro === false) {
       throwMissingWorkingDirectory(cwd)
     }
+
     if (existsInDistro === true) {
       return
     }
   }
 
   let stats: Awaited<ReturnType<typeof stat>>
+
   try {
     stats = await stat(cwd)
   } catch {
     // One stat avoids paying an unreachable filesystem timeout twice.
     throwMissingWorkingDirectory(cwd)
   }
+
   if (!stats.isDirectory()) {
     throw new Error(`Working directory "${cwd}" is not a directory.`)
   }

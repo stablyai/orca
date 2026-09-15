@@ -17,6 +17,7 @@ function callRpc(method: string, params?: Record<string, unknown>): RpcResponse 
     {} as WebSocket
   )
   expect(response).toBeDefined()
+
   return response!
 }
 
@@ -68,6 +69,7 @@ describe('mock server session tabs fixture', () => {
     const terminals = callRpc('terminal.list').result as {
       terminals: { worktreeId: string }[]
     }
+
     const expected = terminals.terminals[0]?.worktreeId
     expect(expected).toBeTruthy()
 

@@ -39,27 +39,35 @@ export function finalizeModelDiscoveryOutput(
       stdout,
       stderr
     })
+
     return {
       success: false,
       error: formatAgentCliFailureMessage(spec.label, stdout, stderr, code)
     }
   }
+
   let models = spec.modelDiscovery?.parse(stdout) ?? []
+
   if (models.length === 0 && stderr.trim()) {
     models = spec.modelDiscovery?.parse(stderr) ?? []
   }
+
   if (models.length === 0) {
     if (spec.models.length > 0) {
       console.warn('[commit-message] Model discovery returned no models; using static fallback:', {
         label: spec.label
       })
+
       return staticModelDiscoveryResult(spec)
     }
+
     return { success: false, error: `${spec.label} returned no available models.` }
   }
+
   const defaultModelId = models.some((model) => model.id === spec.defaultModelId)
     ? spec.defaultModelId
     : models[0].id
+
   return staticModelDiscoveryResult(spec, models, defaultModelId, 'probe')
 }
 
@@ -69,13 +77,17 @@ export function planModelDiscovery(
   backslash: CommandTemplateBackslash = 'escape'
 ): { ok: true; plan: CommitMessagePlan } | { ok: false; error: string } {
   const modelDiscovery = spec.modelDiscovery
+
   if (!modelDiscovery) {
     return { ok: false, error: `${spec.label} does not support dynamic model discovery.` }
   }
+
   const command = planAgentBinary(modelDiscovery.binary, agentCommandOverride, backslash)
+
   if (!command.ok) {
     return command
   }
+
   return {
     ok: true,
     plan: {

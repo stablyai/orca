@@ -14,6 +14,7 @@ describe('repo cache', () => {
 
   it('expires stale entries', () => {
     vi.useFakeTimers()
+
     try {
       setCachedRepos('host-stale', [{ id: 'repo-stale' }])
       vi.advanceTimersByTime(60_001)

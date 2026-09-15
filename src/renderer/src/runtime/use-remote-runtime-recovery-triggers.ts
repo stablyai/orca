@@ -8,11 +8,14 @@ export function useRemoteRuntimeRecoveryTriggers(): void {
       void window.api?.runtimeEnvironments?.retryConnectionsNow?.().catch(() => undefined)
       retryAllRemoteRuntimePtyRecoveriesNow()
     }
+
     window.addEventListener('online', advanceRemoteRuntimeRecoveryBackoffs)
+
     const unsubscribeSystemResumed =
       typeof window.api?.ui?.onSystemResumed === 'function'
         ? window.api.ui.onSystemResumed(advanceRemoteRuntimeRecoveryBackoffs)
         : null
+
     return () => {
       window.removeEventListener('online', advanceRemoteRuntimeRecoveryBackoffs)
       unsubscribeSystemResumed?.()

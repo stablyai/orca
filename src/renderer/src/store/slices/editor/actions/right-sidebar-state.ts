@@ -91,6 +91,7 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
               }
             : {})
         }
+
         if (!s.activeWorktreeId) {
           return next
         }
@@ -100,6 +101,7 @@ export function createRightSidebarState(set: EditorSet, _get: EditorGet): RightS
         const current = s.fileSearchStateByWorktree[s.activeWorktreeId] || defaultFileSearchState()
         const shouldSeed = Boolean(query || (includePattern && current.query.trim()))
         const shouldFocus = !shouldSeed
+
         const nextSearchState = {
           ...current,
           ...(query ? { query } : {}),

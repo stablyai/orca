@@ -30,21 +30,31 @@ import {
 } from '../../src/shared/orcad-artifacts.ts'
 
 const ROOT = join(import.meta.dirname, '..', '..')
+
 const OUT_DIR = join(ROOT, 'out', 'orcad')
+
 const ENTRY = join(ROOT, 'src/main/orcad/main.ts')
+
 // Why beside orcad.js: the watcher runs in a forked child so a native @parcel/watcher
 // fault crashes that child instead of the server, and `resolveWatcherProcessEntryPath`
 // looks for it in the app root. A deployment has no desktop out/main to fall back to.
 const WATCHER_ENTRY = join(ROOT, 'src/main/ipc/parcel-watcher-process-entry.ts')
+
 const WATCHER_OUT_FILE = join(OUT_DIR, 'parcel-watcher-process-entry.js')
+
 // Why beside orcad.js: orcad forks the terminal daemon so PTYs outlive the runtime process,
 // and `getDaemonEntryPath()` probes the app root for this exact filename. Without it every
 // orcad restart would SIGKILL every running terminal.
 const DAEMON_ENTRY = join(ROOT, 'src/main/daemon/daemon-entry.ts')
+
 const DAEMON_OUT_FILE = join(OUT_DIR, 'daemon-entry.js')
+
 const AGENT_BROWSER_NAME = `agent-browser-${platform()}-${arch()}${process.platform === 'win32' ? '.exe' : ''}`
+
 const OUT_FILE = join(OUT_DIR, 'orcad.js')
+
 const AGENT_BROWSER_SOURCE = join(ROOT, 'node_modules', 'agent-browser', 'bin', AGENT_BROWSER_NAME)
+
 const AGENT_BROWSER_OUTPUT = join(OUT_DIR, AGENT_BROWSER_NAME)
 
 // Native addons must exist on the host; they cannot be bundled.
@@ -78,8 +88,11 @@ const externalNativeAddons = {
 }
 
 rmSync(OUT_DIR, { recursive: true, force: true })
+
 mkdirSync(OUT_DIR, { recursive: true })
+
 copyFileSync(AGENT_BROWSER_SOURCE, AGENT_BROWSER_OUTPUT)
+
 if (process.platform !== 'win32') {
   chmodSync(AGENT_BROWSER_OUTPUT, 0o755)
 }
@@ -129,6 +142,7 @@ const result = await build({
 const output = Object.values(result.metafile.outputs).find(
   (o) => o.entryPoint === 'src/main/orcad/main.ts'
 )
+
 // Why check `original` and not just `path`: when electron is bundleable, esbuild
 // rewrites `path` to the resolved file under node_modules and the naive check passes
 // while the package is very much in the bundle.
@@ -137,6 +151,7 @@ const output = Object.values(result.metafile.outputs).find(
 // path whose whole point is that terminals survive.
 function collectImporters(metafiles, matches) {
   const importers = new Set()
+
   for (const metafile of metafiles) {
     for (const [file, info] of Object.entries(metafile.inputs)) {
       for (const imported of info.imports ?? []) {
@@ -146,17 +161,21 @@ function collectImporters(metafiles, matches) {
       }
     }
   }
+
   return importers
 }
 
 const metafiles = [result.metafile, ...childResults.map((child) => child.metafile)]
+
 const electronImporters = collectImporters(
   metafiles,
   (specifier) => specifier === 'electron' || specifier.startsWith('electron/')
 )
+
 const sqliteImporters = collectImporters(metafiles, (specifier) => specifier === 'node:sqlite')
 
 const graphErrors = []
+
 if (electronImporters.size > 0) {
   graphErrors.push(
     `${electronImporters.size} module(s) in the bundle import electron:\n${[...electronImporters]
@@ -164,6 +183,7 @@ if (electronImporters.size > 0) {
       .join('\n')}`
   )
 }
+
 if (sqliteImporters.size > 0) {
   graphErrors.push(
     `${sqliteImporters.size} module(s) in the bundle import node:sqlite:\n${[...sqliteImporters]
@@ -193,7 +213,9 @@ if (graphErrors.length > 0) {
     encoding: 'utf8',
     timeout: 60_000
   })
+
   const smokeOutput = `${smoke.stdout ?? ''}${smoke.stderr ?? ''}`
+
   if (smoke.error || smoke.signal || smoke.status !== 0) {
     console.error(
       `[build-orcad] the bundle did not load under plain Node.\n` +
@@ -203,6 +225,7 @@ if (graphErrors.length > 0) {
     )
     process.exitCode = 1
   }
+
   // Why require + parseArgs and not a real daemon: requiring the bundle evaluates every
   // top-level import, and calling its exported argv parser proves the entry's own code is
   // there rather than a graph that merely resolved. Booting one would need a socket, a
@@ -222,7 +245,9 @@ if (graphErrors.length > 0) {
       env: { ...process.env, ORCA_DAEMON_ENTRY_LOAD_CHECK: '1' }
     }
   )
+
   const daemonSmokeOutput = `${daemonSmoke.stdout ?? ''}${daemonSmoke.stderr ?? ''}`
+
   if (daemonSmoke.error || daemonSmoke.signal || daemonSmoke.status !== 0) {
     console.error(
       `[build-orcad] the daemon child did not load under plain Node.\n` +
@@ -232,7 +257,9 @@ if (graphErrors.length > 0) {
     )
     process.exitCode = 1
   }
+
   const watcherFailure = await smokeLoadWatcherChild()
+
   if (watcherFailure) {
     console.error(
       `[build-orcad] the watcher child did not run under plain Node.\n${watcherFailure}`
@@ -247,16 +274,20 @@ if (graphErrors.length > 0) {
 // bytes while reporting the new version.
 if (process.exitCode !== 1) {
   const hash = createHash('sha256')
+
   for (const filename of orcadArtifactFilenames()) {
     const artifactPath = join(OUT_DIR, filename)
+
     if (!existsSync(artifactPath)) {
       throw new Error(
         `orcad declares ${filename} in ORCAD_ARTIFACTS but never emitted it. Add the build ` +
           'step, or drop it from src/shared/orcad-artifacts.ts.'
       )
     }
+
     hash.update(readFileSync(artifactPath))
   }
+
   const fullVersion = `${ORCAD_VERSION}+${hash.digest('hex').slice(0, 12)}`
   writeFileSync(join(OUT_DIR, ORCAD_VERSION_FILENAME), fullVersion)
   console.log(
@@ -280,16 +311,19 @@ async function smokeLoadWatcherChild() {
   child.stderr?.on('data', (chunk) => {
     stderr += String(chunk)
   })
+
   try {
     return await new Promise((resolve) => {
       const timer = setTimeout(() => {
         child.kill('SIGKILL')
         resolve(`No 'subscribe-started' ack within 30s.\n${stderr.slice(0, 2000)}`)
       }, 30_000)
+
       const settle = (failure) => {
         clearTimeout(timer)
         resolve(failure)
       }
+
       child.on('message', (message) => {
         if (message?.op === 'subscribe-started') {
           child.disconnect()

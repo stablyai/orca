@@ -46,6 +46,7 @@ function makeRelayDroppedRuntime(): OrcaRuntimeService {
   const pty = internals.ptysById.get(PTY_ID)!
   pty.connected = false
   expect(pty.lastExitCode).toBeNull()
+
   return real
 }
 
@@ -54,6 +55,7 @@ function createRuntime(real: OrcaRuntimeService): {
   runtime: OrcaRuntimeService
 } {
   const registry = createSubscriptionRegistryDouble()
+
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     requestRendererTerminalTabMount: () => false,
@@ -80,6 +82,7 @@ function createRuntime(real: OrcaRuntimeService): {
     subscribeToPtyExit: (ptyId: string, listener: () => void) =>
       real.subscribeToPtyExit(ptyId, listener)
   } as unknown as OrcaRuntimeService
+
   return { registry, runtime }
 }
 

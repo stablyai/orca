@@ -8,6 +8,7 @@ export function buildSplitNode(
 ): TabGroupLayoutNode {
   const existingLeaf: TabGroupLayoutNode = { type: 'leaf', groupId: existingGroupId }
   const newLeaf: TabGroupLayoutNode = { type: 'leaf', groupId: newGroupId }
+
   return {
     type: 'split',
     direction,
@@ -25,6 +26,7 @@ export function replaceLeaf(
   if (root.type === 'leaf') {
     return root.groupId === targetGroupId ? replacement : root
   }
+
   return {
     ...root,
     first: replaceLeaf(root.first, targetGroupId, replacement),
@@ -40,16 +42,21 @@ export function updateSplitRatio(
   if (path.length === 0) {
     return root.type === 'split' ? { ...root, ratio } : root
   }
+
   if (root.type !== 'split') {
     return root
   }
+
   const [segment, ...rest] = path
+
   if (segment === 'first') {
     return { ...root, first: updateSplitRatio(root.first, rest, ratio) }
   }
+
   if (segment === 'second') {
     return { ...root, second: updateSplitRatio(root.second, rest, ratio) }
   }
+
   return root
 }
 
@@ -61,12 +68,15 @@ export function findSiblingGroupId(root: TabGroupLayoutNode, targetGroupId: stri
   if (root.type === 'leaf') {
     return null
   }
+
   if (root.first.type === 'leaf' && root.first.groupId === targetGroupId) {
     return root.second.type === 'leaf' ? root.second.groupId : findFirstLeaf(root.second)
   }
+
   if (root.second.type === 'leaf' && root.second.groupId === targetGroupId) {
     return root.first.type === 'leaf' ? root.first.groupId : findFirstLeaf(root.first)
   }
+
   return (
     findSiblingGroupId(root.first, targetGroupId) ?? findSiblingGroupId(root.second, targetGroupId)
   )
@@ -76,20 +86,26 @@ function removeLeaf(root: TabGroupLayoutNode, targetGroupId: string): TabGroupLa
   if (root.type === 'leaf') {
     return root.groupId === targetGroupId ? null : root
   }
+
   if (root.first.type === 'leaf' && root.first.groupId === targetGroupId) {
     return root.second
   }
+
   if (root.second.type === 'leaf' && root.second.groupId === targetGroupId) {
     return root.first
   }
+
   const first = removeLeaf(root.first, targetGroupId)
   const second = removeLeaf(root.second, targetGroupId)
+
   if (first === null) {
     return second
   }
+
   if (second === null) {
     return first
   }
+
   return { ...root, first, second }
 }
 
@@ -104,17 +120,21 @@ export function collapseGroupLayout(
   activeGroupIdByWorktree: Record<string, string>
 } {
   const currentLayout = layoutByWorktree[worktreeId]
+
   if (!currentLayout) {
     return { layoutByWorktree, activeGroupIdByWorktree }
   }
+
   const siblingId = findSiblingGroupId(currentLayout, groupId)
   const collapsed = removeLeaf(currentLayout, groupId)
   const nextLayoutByWorktree = { ...layoutByWorktree }
+
   if (collapsed) {
     nextLayoutByWorktree[worktreeId] = collapsed
   } else {
     delete nextLayoutByWorktree[worktreeId]
   }
+
   return {
     layoutByWorktree: nextLayoutByWorktree,
     activeGroupIdByWorktree: {

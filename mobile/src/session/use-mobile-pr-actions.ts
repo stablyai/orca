@@ -49,6 +49,7 @@ export function useMobilePrActions(input: PrActionsInput) {
 
   // A no-op refetch until props provide one; lets the engine exist before ready.
   const engineRef = useRef<PrActionsEngine | null>(null)
+
   if (engineRef.current === null) {
     engineRef.current = new PrActionsEngine({
       mutations: input.mutations ?? (client ? realMutations(client, worktreeId) : noopMutations()),
@@ -59,6 +60,7 @@ export function useMobilePrActions(input: PrActionsInput) {
       onChange: forceRender
     })
   }
+
   const engine = engineRef.current
 
   // Keep engine config in sync without recreating it (preserves in-flight guards).
@@ -148,6 +150,7 @@ export function useMobilePrActions(input: PrActionsInput) {
 // on `ready`) but keep the engine constructable.
 function noopMutations(): PrActionMutations {
   const fail = async () => ({ ok: false as const, error: 'Not connected' })
+
   return {
     mergePR: fail,
     setPRAutoMerge: fail,

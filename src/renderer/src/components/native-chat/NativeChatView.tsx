@@ -37,6 +37,7 @@ function NativeChatBridgeView({
     terminalTabId,
     preferredPaneKey
   )
+
   return (
     <NativeChatSessionGate
       paneKey={paneKey}

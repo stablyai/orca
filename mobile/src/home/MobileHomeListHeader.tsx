@@ -7,10 +7,13 @@ function formatDuration(ms: number): string {
   const totalHours = Math.floor(totalMinutes / 60)
   const days = Math.floor(totalHours / 24)
   const hours = totalHours % 24
+
   if (days > 0) {
     return `${days}d ${hours}h`
   }
+
   const minutes = totalMinutes % 60
+
   return totalHours > 0 ? `${totalHours}h ${minutes}m` : `${totalMinutes}m`
 }
 

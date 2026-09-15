@@ -7,6 +7,7 @@ import type { GitHubPRFile } from '../../../../../shared/github/pull-request-typ
 import type { PRFilesCombinedDiffViewerProps } from '@/components/github/pr-file-diff-mapping'
 
 const capturedSectionIndexMaps = vi.hoisted(() => ({ list: [] as ReadonlyMap<string, number>[] }))
+
 const loaders = vi.hoisted(() => ({ loadSection: (_index: number) => {} }))
 
 vi.mock('@/store', () => ({
@@ -21,6 +22,7 @@ vi.mock('./pr-files-combined-diff-body', () => ({
   }) => {
     capturedSectionIndexMaps.list.push(props.sectionIndexByKey)
     loaders.loadSection = props.loadSection
+
     return null
   }
 }))
@@ -50,6 +52,7 @@ vi.mock('./pr-files-combined-diff-load', () => ({
 const { PRFilesCombinedDiffViewer } = await import('./pr-files-combined-diff-viewer')
 
 let host: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {

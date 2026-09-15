@@ -36,21 +36,27 @@ export function isStrongRtlCodePoint(codePoint: number): boolean {
 function containsStrongRtlText(text: string): boolean {
   for (let index = 0; index < text.length; index++) {
     const unit = text.charCodeAt(index)
+
     if (unit < RTL_SCAN_FLOOR) {
       continue
     }
+
     let codePoint = unit
+
     if (unit >= 0xd800 && unit <= 0xdbff && index + 1 < text.length) {
       const low = text.charCodeAt(index + 1)
+
       if (low >= 0xdc00 && low <= 0xdfff) {
         codePoint = (unit - 0xd800) * 0x400 + (low - 0xdc00) + 0x10000
         index++
       }
     }
+
     if (isStrongRtlCodePoint(codePoint)) {
       return true
     }
   }
+
   return false
 }
 
@@ -59,11 +65,14 @@ function isRunNeutralCharCode(charCode: number): boolean {
   if (charCode < 0x20) {
     return false
   }
+
   if (charCode <= 0x7e) {
     const isAsciiLetter =
       (charCode >= 0x41 && charCode <= 0x5a) || (charCode >= 0x61 && charCode <= 0x7a)
+
     return !isAsciiLetter
   }
+
   return charCode === 0xa0
 }
 
@@ -84,6 +93,7 @@ function isRtlRunTransparentCodePoint(codePoint: number): boolean {
 
 // Why: opening a run at a combining mark (renders in its base cell) makes an empty joined range that blanks a glyph in WebGL.
 const COMBINING_MARK = /\p{Mn}/u
+
 function canOpenRtlRun(codePoint: number): boolean {
   return !COMBINING_MARK.test(String.fromCodePoint(codePoint))
 }
@@ -102,13 +112,16 @@ function canOpenRtlRun(codePoint: number): boolean {
 export function findRtlJoinRanges(text: string): [number, number][] {
   const length = text.length
   let i = 0
+
   for (; i < length; i++) {
     if (text.charCodeAt(i) >= RTL_SCAN_FLOOR) {
       break
     }
   }
+
   // Why: xterm merges other joiners' results into this array in place, so it must be freshly allocated each call.
   const ranges: [number, number][] = []
+
   if (i === length) {
     return ranges
   }
@@ -116,31 +129,39 @@ export function findRtlJoinRanges(text: string): [number, number][] {
   let runStart = -1
   let runEnd = -1
   let runRtlCount = 0
+
   const closeRun = (): void => {
     if (runStart !== -1 && runRtlCount >= 2) {
       ranges.push([runStart, runEnd])
     }
+
     runStart = -1
     runRtlCount = 0
   }
 
   for (; i < length; i++) {
     const unit = text.charCodeAt(i)
+
     if (unit < RTL_SCAN_FLOOR) {
       if (runStart !== -1 && !isRunNeutralCharCode(unit)) {
         closeRun()
       }
+
       continue
     }
+
     let codePoint = unit
     let codeUnitLength = 1
+
     if (unit >= 0xd800 && unit <= 0xdbff && i + 1 < length) {
       const low = text.charCodeAt(i + 1)
+
       if (low >= 0xdc00 && low <= 0xdfff) {
         codePoint = (unit - 0xd800) * 0x400 + (low - 0xdc00) + 0x10000
         codeUnitLength = 2
       }
     }
+
     if (isRtlRunTransparentCodePoint(codePoint)) {
       // Run-transparent format controls: skip without opening or closing.
     } else if (isStrongRtlCodePoint(codePoint)) {
@@ -148,6 +169,7 @@ export function findRtlJoinRanges(text: string): [number, number][] {
         if (runStart === -1) {
           runStart = i
         }
+
         runEnd = i + codeUnitLength
         runRtlCount++
       }
@@ -155,9 +177,12 @@ export function findRtlJoinRanges(text: string): [number, number][] {
       // Non-RTL above the floor (box drawing, CJK, emoji) breaks the run so TUI borders and CJK keep per-cell rendering.
       closeRun()
     }
+
     i += codeUnitLength - 1
   }
+
   closeRun()
+
   return ranges
 }
 
@@ -170,6 +195,7 @@ export function registerArabicShapingJoiner(
   const joinerId = terminal.registerCharacterJoiner((text) =>
     isShapingActive() ? findRtlJoinRanges(text) : []
   )
+
   return () => {
     terminal.deregisterCharacterJoiner(joinerId)
   }
@@ -181,6 +207,7 @@ export function configureLazyArabicShapingJoiner(
   isShapingActive: () => boolean
 ): () => void {
   const previousState = lazyArabicShapingJoinerByTerminal.get(terminal)
+
   try {
     previousState?.cleanup?.()
   } catch {
@@ -193,12 +220,14 @@ export function configureLazyArabicShapingJoiner(
     registrationAttempted: false,
     trailingHighSurrogate: ''
   }
+
   lazyArabicShapingJoinerByTerminal.set(terminal, state)
 
   return () => {
     if (lazyArabicShapingJoinerByTerminal.get(terminal) !== state) {
       return
     }
+
     try {
       state.cleanup?.()
     } catch {
@@ -215,6 +244,7 @@ export function ensureArabicShapingJoinerForText(
   text: string
 ): void {
   const state = lazyArabicShapingJoinerByTerminal.get(terminal)
+
   if (!state || state.cleanup || state.registrationAttempted) {
     return
   }
@@ -225,12 +255,14 @@ export function ensureArabicShapingJoinerForText(
   const finalCodeUnit = finalCharacter.charCodeAt(0)
   state.trailingHighSurrogate =
     finalCodeUnit >= 0xd800 && finalCodeUnit <= 0xdbff ? finalCharacter : ''
+
   if (!containsStrongRtlText(scanText)) {
     return
   }
 
   state.trailingHighSurrogate = ''
   state.registrationAttempted = true
+
   try {
     state.cleanup = registerArabicShapingJoiner(terminal, state.isShapingActive)
   } catch {

@@ -12,6 +12,7 @@ describe('structured agent session client mutations', () => {
       sessionId: 'session-1',
       fields: { body: { role: 'user', kind: 'message' }, omitted: undefined }
     })
+
     const second = structuredAgentSessionPayloadFingerprint({
       method: 'agentSession.send',
       sessionId: 'session-1',

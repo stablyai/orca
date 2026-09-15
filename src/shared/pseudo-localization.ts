@@ -7,6 +7,7 @@ export function pseudoLocalizeString(value: string): string {
   if (!value || value.startsWith('[')) {
     return value
   }
+
   return `[${value}]`
 }
 

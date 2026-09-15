@@ -9,12 +9,15 @@ import WorkspaceCleanupDialog from './WorkspaceCleanupDialog'
 import { WorkspaceCleanupScanSupersededError } from '@/store/slices/workspace-cleanup-broad-scan-registry'
 
 const probes = vi.hoisted(() => ({ facets: vi.fn() }))
+
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
 
 vi.mock('sonner', () => ({ toast }))
+
 vi.mock('./use-workspace-cleanup-facet-rows', () => ({
   useWorkspaceCleanupFacetRows: () => {
     probes.facets()
+
     return {
       rows: [],
       selectableIdentities: [],
@@ -41,8 +44,10 @@ vi.mock('./use-workspace-cleanup-facet-rows', () => ({
     }
   }
 }))
+
 vi.mock('@/components/ui/dialog', async () => {
   const Passthrough = ({ children }: { children: ReactNode }) => <>{children}</>
+
   return {
     Dialog: Passthrough,
     DialogContent: () => <div data-workspace-cleanup-content="true" />
@@ -50,7 +55,9 @@ vi.mock('@/components/ui/dialog', async () => {
 })
 
 const initialState = useAppStore.getInitialState()
+
 let container: HTMLDivElement
+
 let root: Root
 
 function emptyScan(scannedAt: number): WorkspaceCleanupScanResult {
@@ -134,9 +141,11 @@ describe('WorkspaceCleanupDialog mount gating', () => {
 
   it('keeps scan completion ownership after heavy content unmounts', async () => {
     let resolveScan!: (result: WorkspaceCleanupScanResult) => void
+
     const scanPromise = new Promise<WorkspaceCleanupScanResult>((resolve) => {
       resolveScan = resolve
     })
+
     const scanWorkspaceCleanup = vi.fn(() => scanPromise)
     seedStore(scanWorkspaceCleanup)
     await act(async () => root.render(<WorkspaceCleanupDialog />))

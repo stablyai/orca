@@ -21,11 +21,14 @@ function clientWithResponses(responses: RpcResponse[]): {
 } {
   const sendRequest = vi.fn(async () => {
     const response = responses.shift()
+
     if (!response) {
       throw new Error('Unexpected RPC request')
     }
+
     return response
   })
+
   return { client: { sendRequest }, sendRequest }
 }
 
@@ -87,6 +90,7 @@ describe('mobile file mutation ownership', () => {
 
   it('captures SSH generation from the HUB before building mutation params', async () => {
     const state = sshState('target-1', 9)
+
     const { client, sendRequest } = clientWithResponses([
       success({ capabilities: [FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY] }),
       success({ worktree: { hostId: 'ssh:target-1' } }),

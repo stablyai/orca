@@ -104,6 +104,7 @@ export const TabSwitch = BrowserTarget.extend({
     if (val.page !== undefined) {
       return true
     }
+
     return val.index !== undefined && Number.isInteger(val.index) && val.index >= 0
   },
   { message: 'Missing required --index (non-negative integer) or --page' }

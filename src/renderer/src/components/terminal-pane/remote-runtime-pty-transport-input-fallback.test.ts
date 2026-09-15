@@ -9,6 +9,7 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const { runtimeCall, runtimeSubscribe, subscriptionSendBinary, resetRemoteRuntimeTransport } =
@@ -33,9 +34,11 @@ describe('createRemoteRuntimePtyTransport', () => {
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
+
     try {
       const defaultRuntimeCall = runtimeCall.getMockImplementation()
       runtimeCall.mockImplementation((args: { method: string }) => {
@@ -45,10 +48,12 @@ describe('createRemoteRuntimePtyTransport', () => {
             result: { send: { handle: 'terminal-1', accepted: false, bytesWritten: 0 } }
           })
         }
+
         return defaultRuntimeCall?.(args)
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onWriteUnavailable = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -75,9 +80,11 @@ describe('createRemoteRuntimePtyTransport', () => {
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
+
     try {
       const defaultRuntimeCall = runtimeCall.getMockImplementation()
       runtimeCall.mockImplementation((args: { method: string }) => {
@@ -87,11 +94,13 @@ describe('createRemoteRuntimePtyTransport', () => {
             error: { code: 'internal_error', message: 'terminal_not_writable' }
           })
         }
+
         return defaultRuntimeCall?.(args)
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const onWriteUnavailable = vi.fn()
       const onError = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -119,24 +128,30 @@ describe('createRemoteRuntimePtyTransport', () => {
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
+
     try {
       let settleSend: (response: unknown) => void = () => {}
+
       const sendResponse = new Promise((resolve) => {
         settleSend = resolve
       })
+
       const defaultRuntimeCall = runtimeCall.getMockImplementation()
       runtimeCall.mockImplementation((args: { method: string }) => {
         if (args.method === 'terminal.send') {
           return sendResponse
         }
+
         return defaultRuntimeCall?.(args)
       })
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
       const oldWriteUnavailable = vi.fn()
       const replacementWriteUnavailable = vi.fn()
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -186,11 +201,14 @@ describe('createRemoteRuntimePtyTransport', () => {
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
@@ -232,6 +250,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const oldSubscription = {
       reject: null as ((error: Error) => void) | null
     }
+
     const newStream = {
       streamId: 2,
       sendInput: vi.fn(() => true),
@@ -239,6 +258,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       serializeBuffer: vi.fn(async () => null),
       close: vi.fn()
     }
+
     const subscribeTerminal = vi
       .fn()
       .mockImplementationOnce(
@@ -249,8 +269,10 @@ describe('createRemoteRuntimePtyTransport', () => {
       )
       .mockImplementationOnce(async (args: { callbacks: { onSubscribed?: () => void } }) => {
         args.callbacks.onSubscribed?.()
+
         return newStream
       })
+
     vi.doMock('../../runtime/remote-runtime-terminal-multiplexer', () => ({
       REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE: 'remote_terminal_snapshot_too_large',
       getRemoteRuntimeTerminalMultiplexer: vi.fn(() => ({ subscribeTerminal }))
@@ -258,6 +280,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
     const onPtyExit = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -294,6 +317,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('does not send queued input through a stale stream during remote handle replacement', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -309,6 +333,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
 
     vi.useFakeTimers()
+
     try {
       subscriptionSendBinary.mockClear()
       runtimeCall.mockClear()
@@ -328,6 +353,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       const inputFrames = subscriptionSendBinary.mock.calls
         .map((call) => decodeTerminalStreamFrame(call[0]))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
+
       expect(inputFrames).toEqual([])
       expect(runtimeCall).not.toHaveBeenCalledWith(
         expect.objectContaining({ method: 'terminal.send' })

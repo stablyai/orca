@@ -20,12 +20,14 @@ const AUTHORITY_HEALTHS: AutomationAuthorityHealth[] = [
   'unavailable',
   'incompatible'
 ]
+
 const SCOPE_GAPS: AutomationHostScopeGap[] = [
   'target-removed',
   'target-unverified',
   'target-unregistered',
   'authority-unscoped'
 ]
+
 const EXECUTION_HEALTHS: AutomationExecutionHealth[] = [
   'connected',
   'connecting',
@@ -54,6 +56,7 @@ describe('automation host status descriptors', () => {
   it('gives every authority health a distinct id and non-empty copy', () => {
     const ids = AUTHORITY_HEALTHS.map((health) => authorityHealthDescriptor(health).id)
     expect(new Set(ids).size).toBe(AUTHORITY_HEALTHS.length)
+
     for (const health of AUTHORITY_HEALTHS) {
       const descriptor = authorityHealthDescriptor(health)
       expect(descriptor.label).not.toBe('')
@@ -86,9 +89,11 @@ describe('automation host status descriptors', () => {
     expect(hostScopeDescriptor(entry({ querySupport: 'incompatible' }))?.id).toBe(
       'query-incompatible'
     )
+
     const gapIds = SCOPE_GAPS.map(
       (scopeGap) => hostScopeDescriptor(entry({ querySupport: 'legacy-unscoped', scopeGap }))?.id
     )
+
     expect(new Set(gapIds).size).toBe(SCOPE_GAPS.length)
   })
 
@@ -103,6 +108,7 @@ describe('automation host status descriptors', () => {
       /server/i.test(
         hostScopeDescriptor(entry({ querySupport: 'legacy-unscoped', scopeGap }))?.description ?? ''
       )
+
     expect(SCOPE_GAPS.filter(blamesServer)).toEqual(['authority-unscoped'])
   })
 })

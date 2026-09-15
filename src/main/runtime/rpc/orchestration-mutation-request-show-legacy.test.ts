@@ -15,6 +15,7 @@ describe('orchestration.requestShow legacy coordinator recovery', () => {
   it('reads the same receipt namespace as the original compatibility mutation', async () => {
     const harness = createHarness()
     const mutationRequestId = 'legacy-task-create'
+
     const mutation = await harness.dispatcher.dispatch(
       request(
         'orchestration.taskCreate',
@@ -23,6 +24,7 @@ describe('orchestration.requestShow legacy coordinator recovery', () => {
         mutationRequestId
       )
     )
+
     expect(mutation).toMatchObject({ ok: true, result: { mutation: { replayed: false } } })
 
     const shown = await harness.dispatcher.dispatch(

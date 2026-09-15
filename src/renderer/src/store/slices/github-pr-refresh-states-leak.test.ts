@@ -92,6 +92,7 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
 
     // Each distinct branch produces a distinct cache key — an unbounded key space.
     const total = MAX_ENTRIES + 150
+
     for (let i = 0; i < total; i++) {
       store.getState().applyGitHubPRRefreshEvent(statusEvent(`branch-${i}`, 1))
     }
@@ -110,9 +111,11 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
     // Oldest entry is a settled error; the rest are active in-flight refreshes,
     // filling the map exactly to the cap.
     const seeded: Record<string, SeedState> = { 'stale-error': errorState() }
+
     for (let i = 0; i < MAX_ENTRIES - 1; i++) {
       seeded[`active-${i}`] = inFlightState()
     }
+
     store.setState({ prRefreshStates: seeded })
 
     // One more active refresh pushes over the cap by one.
@@ -138,9 +141,11 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
     const store = createTestStore()
     // Fill exactly to the cap with active entries (no settled ones to evict first).
     const seeded: Record<string, SeedState> = {}
+
     for (let i = 0; i < MAX_ENTRIES; i++) {
       seeded[`seed-${i}`] = inFlightState()
     }
+
     store.setState({ prRefreshStates: seeded })
 
     // Refresh the OLDEST key (move-to-end), then add a brand-new key to force a
@@ -158,6 +163,7 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
   it('hides expired active states through the effective reader without mutating during read', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
+
     try {
       const store = createTestStore()
       store.setState({
@@ -201,6 +207,7 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
   it('prunes expired active states on refreshAll without writing a PR miss', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
+
     try {
       const store = createTestStore()
       store.setState({
@@ -228,13 +235,16 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
   it('manual expiry does not remove a newer active state for the same cache key', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
+
     try {
       const store = createTestStore()
+
       const token = {
         sequence: 1,
         status: 'in-flight' as const,
         updatedAt: 1_000_000 - 121_000
       }
+
       store.setState({
         prRefreshSequences: { branch: 2 },
         prRefreshStates: {
@@ -256,6 +266,7 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
   it('manual expiry does not notify subscribers when the token no longer matches', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
+
     try {
       const store = createTestStore()
       const subscriber = vi.fn()
@@ -288,6 +299,7 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
   it('manual expiry does not notify subscribers for an active state that is still fresh', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
+
     try {
       const store = createTestStore()
       const subscriber = vi.fn()
@@ -319,6 +331,7 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
   it('manual expiry notifies subscribers when it removes the captured stale active state', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
+
     try {
       const store = createTestStore()
       const subscriber = vi.fn()
@@ -351,6 +364,7 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
   it('expires the stale active state captured by a rejected forced PR refresh', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
+
     try {
       const store = createTestStore()
       const repoPath = '/repo'
@@ -378,6 +392,7 @@ describe('prRefreshStates stays bounded (leak regression)', () => {
   it('accepts a late terminal outcome after the active status timed out', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
+
     try {
       const store = createTestStore()
       const repoPath = '/repo'

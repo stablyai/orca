@@ -23,12 +23,15 @@ const HISTORY_ROOT = join(homedir(), '.orca-remote', 'terminal-history')
 
 function historyFilename(shell: string): string | null {
   const name = basename(shell).toLowerCase()
+
   if (name.startsWith('bash')) {
     return 'bash_history'
   }
+
   if (name.startsWith('zsh')) {
     return 'zsh_history'
   }
+
   return null
 }
 
@@ -46,34 +49,44 @@ export function injectRelayHistoryEnv(
   // pane carries the launching worktree's path into this one; honouring it below
   // would scope every pane to that worktree's history file.
   dropInheritedOrcaHistFile(env)
+
   if (env.HISTFILE) {
     return null
   }
+
   // WSL's outer exe is wsl.exe, which matches no shell name; the guest login
   // shell reads HISTFILE regardless, so pick the file the desktop path picks.
   const filename = historyFilename(options.wsl ? 'bash' : shell)
+
   if (!filename) {
     return null
   }
+
   try {
     mkdirSync(HISTORY_ROOT, { recursive: true, mode: 0o700 })
     const rootStat = lstatSync(HISTORY_ROOT)
+
     if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
       return null
     }
+
     const path = join(HISTORY_ROOT, `${hashWorktreeId(worktreeId)}-${filename}`)
     let existing: ReturnType<typeof lstatSync> | null = null
+
     try {
       const stat = lstatSync(path, { bigint: true })
+
       if (stat.isSymbolicLink() || !stat.isFile()) {
         return null
       }
+
       existing = stat
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
         return null
       }
     }
+
     const fd = openSync(
       path,
       fsConstants.O_RDWR |
@@ -81,14 +94,18 @@ export function injectRelayHistoryEnv(
         (process.platform === 'win32' ? 0 : fsConstants.O_NOFOLLOW),
       0o600
     )
+
     const actual = fstatSync(fd, { bigint: true })
+
     if (
       !actual.isFile() ||
       (existing && (actual.dev !== existing.dev || actual.ino !== existing.ino))
     ) {
       closeSync(fd)
+
       return null
     }
+
     closeSync(fd)
     // Why the same host file rather than a distro-scoped one: the guest reaches
     // it over drvfs, so `deleteRelayHistory` still reclaims it by host path.
@@ -99,6 +116,7 @@ export function injectRelayHistoryEnv(
     // contract the desktop PTY path uses. Under WSL it holds the guest-visible
     // path and stays out of WSLENV, matching the desktop; no wrapper reads it there.
     env.ORCA_HISTFILE = env.HISTFILE
+
     return HISTORY_ROOT
   } catch {
     return null
@@ -108,11 +126,14 @@ export function injectRelayHistoryEnv(
 export function deleteRelayHistory(worktreeId: string): void {
   try {
     const rootStat = lstatSync(HISTORY_ROOT)
+
     if (rootStat.isSymbolicLink() || !rootStat.isDirectory()) {
       return
     }
+
     for (const filename of ['bash_history', 'zsh_history']) {
       const path = join(HISTORY_ROOT, `${hashWorktreeId(worktreeId)}-${filename}`)
+
       try {
         if (!lstatSync(path).isSymbolicLink()) {
           unlinkSync(path)
@@ -139,9 +160,11 @@ export function injectRelayFishHistoryEnv(env: Record<string, string>, worktreeI
   // the relay's own env or the client's. `PtyHandler.buildSpawnEnv` already scrubs
   // every spawn path, so this is belt-and-braces for any other caller.
   dropInheritedOrcaFishHistory(env)
+
   if (env.fish_history) {
     return
   }
+
   env.fish_history = relayFishHistorySessionName(hashWorktreeId(worktreeId))
 }
 

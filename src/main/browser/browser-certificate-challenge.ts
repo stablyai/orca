@@ -2,7 +2,9 @@ import type { BrowserCertificateFailure } from '../../shared/browser-workspace-t
 import { SUPPORTED_CERTIFICATE_ERROR_CODE } from './browser-certificate-identity'
 
 export const CERTIFICATE_CHALLENGE_TTL_MS = 5 * 60_000
+
 export const MAX_PENDING_CERTIFICATE_CHALLENGES = 32
+
 export const MAX_CERTIFICATE_GRANTS = 32
 
 export type ManagedBrowserGuestContext = {

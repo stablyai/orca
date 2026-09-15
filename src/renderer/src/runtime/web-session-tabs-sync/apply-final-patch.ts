@@ -60,6 +60,7 @@ export function buildWebSessionTabsFinalPatch(
     now,
     batchContext
   )
+
   // A tombstone clears all environments' view of a worktree; it is not a terminal retraction.
   const retractedTabSweepPatch = isWebSessionTabsWorktreeRemovalFrame(snapshot)
     ? null
@@ -71,6 +72,7 @@ export function buildWebSessionTabsFinalPatch(
         removedTerminalResourceIds,
         batchContext
       )
+
   const remirroredClosedTabLiftPatch = buildRemirroredClosedTabMarkerLiftPatch(
     retractedTabSweepPatch?.recentlyClosedAgentStatusTabIds ??
       state.recentlyClosedAgentStatusTabIds,
@@ -142,5 +144,6 @@ export function buildWebSessionTabsFinalPatch(
       ? { activeTabTypeByWorktree: nextActiveTabTypeByWorktree }
       : {})
   }
+
   return Object.keys(patch).length === 0 ? state : patch
 }

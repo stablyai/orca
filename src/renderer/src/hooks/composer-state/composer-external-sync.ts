@@ -34,6 +34,7 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     settings: target.composerTargetStore.settings,
     tuiAgent: target.workspaceIdentityState.tuiAgent
   })
+
   const linkedItemLookupEffects = useLinkedItemLookupEffects({
     baseBranch: target.workspaceIdentityState.baseBranch,
     linkPopoverOpen: target.asyncComposerState.linkPopoverOpen,
@@ -58,6 +59,7 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     shouldWaitForSetupCheck: target.derivedComposerState.shouldWaitForSetupCheck,
     sshConnectedGeneration: target.composerTargetStore.sshConnectedGeneration
   })
+
   const githubSourceApplication = useGitHubSourceApplication({
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
     lastAutoNameRef: target.asyncComposerState.lastAutoNameRef,
@@ -74,6 +76,7 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     setLinkedWorkItem: target.sourceContextState.setLinkedWorkItem,
     setName: target.sourceContextState.setName
   })
+
   const githubSubmitResolution = useGitHubSubmitResolution({
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
     folderSourceRepos: target.runtimeTargetSelection.folderSourceRepos,
@@ -103,6 +106,7 @@ export function useComposerExternalSync(target: ComposerTargetState): ComposerEx
     smartGitHubPrStartPointSelectionRef:
       target.asyncComposerState.smartGitHubPrStartPointSelectionRef
   })
+
   return {
     hostRuntimeEffects,
     linkedItemLookupEffects,

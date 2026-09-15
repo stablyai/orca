@@ -16,6 +16,7 @@ export function ReviewAnimatedVisual(props: {
 }): JSX.Element {
   const { reducedMotion, activeStepId, widthPx } = props
   const scale = widthPx ? widthPx / PANEL_WIDTH : 1
+
   return (
     <div
       className="relative overflow-visible"

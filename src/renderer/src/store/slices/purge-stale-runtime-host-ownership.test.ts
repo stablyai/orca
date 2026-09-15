@@ -17,6 +17,7 @@ globalThis.window = { api: {} }
 import { createTestStore, makeTab, makeWorktree, seedStore } from './store-test-helpers'
 
 const RUNTIME_A = toRuntimeExecutionHostId('env-a')
+
 const RUNTIME_B = toRuntimeExecutionHostId('env-b')
 
 describe('purgeStaleRuntimeHostState ownership evidence', () => {
@@ -144,6 +145,7 @@ describe('purgeStaleRuntimeHostState ownership evidence', () => {
     const store = createTestStore()
     const removedWorktreeId = 'shared::/removed-host'
     const survivingWorktreeId = 'shared::/surviving-host'
+
     const survivingTabs = [
       makeTab({
         id: 'surviving-host-tab',
@@ -151,6 +153,7 @@ describe('purgeStaleRuntimeHostState ownership evidence', () => {
         ptyId: 'remote:env-b@@terminal-b'
       })
     ]
+
     seedStore(store, {
       repos: [],
       worktreesByRepo: {},

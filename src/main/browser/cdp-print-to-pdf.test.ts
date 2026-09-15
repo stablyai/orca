@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { buildPrintToPdfOptions, CdpPdfStreamStore } from './cdp-print-to-pdf'
 
 const DEFAULT_MARGIN_INCHES = 1 / 2.54
+
 const TTL_MS = 5 * 60 * 1000
 
 describe('buildPrintToPdfOptions', () => {
@@ -61,6 +62,7 @@ describe('buildPrintToPdfOptions', () => {
       paperHeight: 11,
       marginTop: Number.NaN
     })
+
     expect(options.scale).toBeUndefined()
     expect(options.pageSize).toBeUndefined()
     expect(options.margins).toBeUndefined()

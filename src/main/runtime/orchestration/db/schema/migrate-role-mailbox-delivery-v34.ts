@@ -8,6 +8,7 @@ export function migrateRoleMailboxDeliveryV34(this: OrchestrationDb, current: nu
   const mailboxColumn = (
     this.db.pragma('table_info(deliveries)') as { name: string; notnull: number }[]
   ).find((column) => column.name === 'mailbox_handle')
+
   if (mailboxColumn?.notnull === 1) {
     this.db.exec(`
       DROP INDEX IF EXISTS idx_deliveries_one_outstanding;
@@ -16,12 +17,14 @@ export function migrateRoleMailboxDeliveryV34(this: OrchestrationDb, current: nu
       CREATE INDEX IF NOT EXISTS idx_deliveries_run_created
         ON deliveries(run_id, created_at);
     `)
+
     return
   }
 
   const mailboxExpression = mailboxColumn
     ? "COALESCE(mailbox_handle, 'run:' || run_id)"
     : "'run:' || run_id"
+
   this.db.exec(`
     CREATE TABLE deliveries_new (
       id                    TEXT PRIMARY KEY,

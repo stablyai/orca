@@ -14,17 +14,21 @@ type ClaudeStatusAccount = ClaudeRateLimitAccountsState['accounts'][number]
 
 function getSingleConcreteClaudeWslDistro(state: ClaudeRateLimitAccountsState): string | null {
   const keys = new Set<string>()
+
   for (const [key, accountId] of Object.entries(state.activeAccountIdsByRuntime?.wsl ?? {})) {
     if (accountId && key !== '__default__') {
       keys.add(key)
     }
   }
+
   for (const account of state.accounts) {
     const key = getCodexStatusWslKey(account.wslDistro)
+
     if (account.managedAuthRuntime === 'wsl' && key !== '__default__') {
       keys.add(key)
     }
   }
+
   return keys.size === 1 ? Array.from(keys)[0] : null
 }
 
@@ -35,7 +39,9 @@ export function normalizeClaudeStatusRuntimeTarget(
   if (target.runtime !== 'wsl' || target.wslDistro) {
     return target
   }
+
   const concreteDistro = getSingleConcreteClaudeWslDistro(state)
+
   return concreteDistro ? { runtime: 'wsl', wslDistro: concreteDistro } : target
 }
 
@@ -44,14 +50,19 @@ export function getClaudeStatusActiveId(
   target: CodexStatusRuntimeTarget
 ): string | null {
   const selection = state.activeAccountIdsByRuntime
+
   if (target.runtime === 'host') {
     return selection?.host ?? state.activeAccountId ?? null
   }
+
   const distroSelection = selection?.wsl?.[getCodexStatusWslKey(target.wslDistro)]
+
   if (target.wslDistro || distroSelection) {
     return distroSelection ?? null
   }
+
   const selectedIds = Array.from(new Set(Object.values(selection?.wsl ?? {}).filter(Boolean)))
+
   return selectedIds.length === 1 ? selectedIds[0] : null
 }
 
@@ -62,6 +73,7 @@ function getClaudeStatusAccountsForTarget(
   if (target.runtime === 'host') {
     return state.accounts.filter((account) => account.managedAuthRuntime !== 'wsl')
   }
+
   return state.accounts.filter(
     (account) =>
       account.managedAuthRuntime === 'wsl' &&
@@ -76,9 +88,11 @@ export function buildClaudeStatusSwitchGroups(
 ): ClaudeStatusSwitchGroup[] {
   const groups: ClaudeStatusSwitchGroup[] = []
   const normalizedCurrentTarget = normalizeClaudeStatusRuntimeTarget(state, currentTarget)
+
   const makeGroup = (target: CodexStatusRuntimeTarget): ClaudeStatusSwitchGroup => {
     const activeId = getClaudeStatusActiveId(state, target)
     const accountsForTarget = getClaudeStatusAccountsForTarget(state, target)
+
     return {
       key: getCodexStatusRuntimeKey(target),
       label: getCodexStatusRuntimeLabel(target, options.hostLabel),
@@ -103,19 +117,24 @@ export function buildClaudeStatusSwitchGroups(
   groups.push(makeGroup({ runtime: 'host', wslDistro: null }))
 
   const wslKeys = new Set<string>(Object.keys(state.activeAccountIdsByRuntime?.wsl ?? {}))
+
   if (normalizedCurrentTarget.runtime === 'wsl') {
     wslKeys.add(getCodexStatusWslKey(normalizedCurrentTarget.wslDistro))
   }
+
   for (const account of state.accounts) {
     if (account.managedAuthRuntime === 'wsl') {
       wslKeys.add(getCodexStatusWslKey(account.wslDistro))
     }
   }
+
   if (options.includeFallbackWsl) {
     wslKeys.add(getCodexStatusWslKey(options.fallbackWslDistro))
   }
+
   if (currentTarget.runtime === 'wsl' && currentTarget.wslDistro === null) {
     const concreteDistro = getSingleConcreteClaudeWslDistro(state)
+
     if (concreteDistro) {
       wslKeys.delete('__default__')
     }
@@ -125,9 +144,11 @@ export function buildClaudeStatusSwitchGroups(
     if (a === '__default__') {
       return -1
     }
+
     if (b === '__default__') {
       return 1
     }
+
     return a.localeCompare(b)
   })) {
     groups.push(makeGroup({ runtime: 'wsl', wslDistro: key === '__default__' ? null : key }))
@@ -142,6 +163,7 @@ function getClaudeStatusAccountsFromSettings(
   if (!settings) {
     return null
   }
+
   return {
     accounts: settings.claudeManagedAccounts
       .map((account) => ({
@@ -180,5 +202,6 @@ export function resolveClaudeStatusAccountState(
   if (settings?.activeRuntimeEnvironmentId?.trim()) {
     return runtimeState
   }
+
   return getClaudeStatusAccountsFromSettings(settings) ?? runtimeState
 }

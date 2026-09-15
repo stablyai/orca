@@ -36,6 +36,7 @@ describe('codex trust grant main-thread boundary', () => {
     const offenders = listCodexSourceFiles().filter((name) =>
       SYNC_SPAWN_PATTERN.test(codeText(readFileSync(join(CODEX_DIR, name), 'utf8')))
     )
+
     expect(offenders).toEqual([])
   })
 

@@ -19,12 +19,15 @@ export const app = {
     if (name === 'userData') {
       return userDataPath
     }
+
     if (name === 'temp') {
       return tmpdir()
     }
+
     if (name === 'home') {
       return homedir()
     }
+
     return join(userDataPath, name)
   },
   on: () => {},
@@ -42,12 +45,19 @@ export const ipcMain = {
 }
 
 export const powerMonitor = { on: () => {}, once: () => {} }
+
 export const nativeTheme = { shouldUseDarkColors: false, on: () => {} }
+
 export const shell = { openPath: async () => '', openExternal: async () => {} }
+
 export const dialog = { showMessageBox: async () => ({ response: 0 }) }
+
 export const safeStorage = { isEncryptionAvailable: () => false }
+
 export const clipboard = { readText: () => '', writeText: () => {} }
+
 export const screen = { getPrimaryDisplay: () => ({ workAreaSize: { width: 0, height: 0 } }) }
+
 export const session = { defaultSession: undefined }
 
 export default {

@@ -39,6 +39,7 @@ export function summarizeJobSteps(job: Pick<PRCheckJob, 'steps'>): JobStepBreakd
     pending: [],
     total: job.steps.length
   }
+
   for (const step of job.steps) {
     switch (resolveStepOutcome(step)) {
       case 'failure':
@@ -55,5 +56,6 @@ export function summarizeJobSteps(job: Pick<PRCheckJob, 'steps'>): JobStepBreakd
         break
     }
   }
+
   return breakdown
 }

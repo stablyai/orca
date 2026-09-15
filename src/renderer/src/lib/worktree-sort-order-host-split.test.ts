@@ -32,6 +32,7 @@ describe('splitWorktreeSortOrderByHost', () => {
       },
       ['legacy::wt']
     )
+
     expect(groups).toEqual([{ hostId: 'runtime:focused-env', orderedIds: ['legacy::wt'] }])
   })
 })

@@ -19,9 +19,11 @@ export function normalizeRawUsage(value: unknown): CodexUsageRawUsage | null {
 
   const record = value as Record<string, unknown>
   const inputTokens = ensureNumber(record.input_tokens)
+
   const cachedInputTokens = ensureNumber(
     record.cached_input_tokens ?? record.cache_read_input_tokens
   )
+
   const outputTokens = ensureNumber(record.output_tokens)
   const reasoningOutputTokens = ensureNumber(record.reasoning_output_tokens)
   const totalTokens = ensureNumber(record.total_tokens)
@@ -96,9 +98,11 @@ function looksLikeStaleRegression(
   const previousTotal = rawUsageMagnitude(previous)
   const currentTotal = rawUsageMagnitude(current)
   const lastTotal = rawUsageMagnitude(last)
+
   if (previousTotal <= 0 || currentTotal <= 0 || lastTotal <= 0) {
     return false
   }
+
   return currentTotal * 100 >= previousTotal * 98 || currentTotal + lastTotal * 2 >= previousTotal
 }
 
@@ -111,12 +115,14 @@ export function resolveCodexUsageDelta(
     if (rawUsageEquals(totalUsage, previousTotals)) {
       return null
     }
+
     if (
       !rawUsageIsMonotonic(totalUsage, previousTotals) &&
       looksLikeStaleRegression(totalUsage, previousTotals, lastUsage)
     ) {
       return null
     }
+
     // Why: Codex totals are mutable snapshots after compaction/resume. The
     // last_token_usage payload is the billable increment; totals are the baseline.
     return { kind: 'event', delta: lastUsage, nextTotals: totalUsage }
@@ -130,9 +136,11 @@ export function resolveCodexUsageDelta(
     if (rawUsageEquals(totalUsage, previousTotals)) {
       return null
     }
+
     if (!rawUsageIsMonotonic(totalUsage, previousTotals)) {
       return { kind: 'baseline', nextTotals: totalUsage }
     }
+
     return {
       kind: 'event',
       delta: subtractRawUsage(totalUsage, previousTotals),
@@ -174,5 +182,6 @@ export function buildCodexUsageEventKey(
           usage.totalTokens
         ].join(',')
       : ''
+
   return [timestamp, tupleOf(totalUsage), tupleOf(lastUsage)].join('|')
 }

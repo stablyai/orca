@@ -14,17 +14,22 @@ type BrowserDriverChangeEvent = {
 }
 
 type BrowserDriverChangeListener = (event: BrowserDriverChangeEvent) => void
+
 const changeListeners = new Set<BrowserDriverChangeListener>()
+
 const snapshotListeners = new Set<() => void>()
+
 let version = 0
 
 export function onBrowserDriverChange(listener: BrowserDriverChangeListener): () => void {
   changeListeners.add(listener)
+
   return () => changeListeners.delete(listener)
 }
 
 function subscribe(listener: () => void): () => void {
   snapshotListeners.add(listener)
+
   return () => {
     snapshotListeners.delete(listener)
   }
@@ -40,9 +45,11 @@ function getServerSnapshot(): number {
 
 function notifyChange(event: BrowserDriverChangeEvent): void {
   version += 1
+
   for (const listener of changeListeners) {
     listener(event)
   }
+
   for (const listener of snapshotListeners) {
     listener()
   }
@@ -54,6 +61,7 @@ export function setDriverForBrowserPage(browserPageId: string, driver: BrowserDr
   } else {
     driverByBrowserPageId.set(browserPageId, driver)
   }
+
   notifyChange({ browserPageId, driver })
 }
 
@@ -65,6 +73,7 @@ export function useBrowserDriverForPage(
   browserPageId: string | null | undefined
 ): BrowserDriverState {
   useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+
   return browserPageId ? getDriverForBrowserPage(browserPageId) : IDLE_BROWSER_DRIVER
 }
 
@@ -82,11 +91,13 @@ export function getBrowserMobileDrivenPageIds(
   browserPageIds: readonly (string | null | undefined)[]
 ): Set<string> {
   const mobileDrivenPageIds = new Set<string>()
+
   for (const pageId of browserPageIds) {
     if (pageId && isBrowserPageMobileDriven(pageId)) {
       mobileDrivenPageIds.add(pageId)
     }
   }
+
   return mobileDrivenPageIds
 }
 
@@ -94,6 +105,7 @@ export function useBrowserMobileDriverForAny(
   browserPageIds: readonly (string | null | undefined)[]
 ): boolean {
   useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+
   return hasMobileDriverForAnyBrowserPage(browserPageIds)
 }
 
@@ -101,6 +113,7 @@ export function useBrowserMobileDrivenPageIds(
   browserPageIds: readonly (string | null | undefined)[]
 ): Set<string> {
   useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+
   return getBrowserMobileDrivenPageIds(browserPageIds)
 }
 
@@ -112,6 +125,7 @@ export function hydrateBrowserDrivers(
 
   for (const { browserPageId, driver } of drivers) {
     affectedPageIds.add(browserPageId)
+
     if (driver.kind !== 'idle') {
       driverByBrowserPageId.set(browserPageId, driver)
     }

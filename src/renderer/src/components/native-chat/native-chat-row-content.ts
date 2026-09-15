@@ -22,6 +22,7 @@ const derivations = new WeakMap<object, NativeChatRowContent>()
 function derive(blocks: readonly NativeChatBlock[]) {
   const split = splitNativeChatBlocks(blocks)
   const groups = subagentGroupBlocks(split.prose)
+
   // A spawn-group row carries a plain-text twin so a client without the block type
   // still reads the roster. This draws the block, so only the twin is dropped —
   // never real text beside it, which a lane folding a roster into a message keeps.
@@ -33,6 +34,7 @@ function derive(blocks: readonly NativeChatBlock[]) {
             !isSubagentGroupBlock(block) &&
             !(block.type === 'text' && isSubagentGroupFallbackText(block.text))
         )
+
   return {
     prose,
     tools: split.tools,
@@ -46,16 +48,20 @@ export function deriveNativeChatRowContent(
   blocks: readonly NativeChatBlock[]
 ): NativeChatRowContent {
   const cached = derivations.get(blocks)
+
   if (cached) {
     return cached
   }
+
   const content = derive(blocks)
   derivations.set(blocks, content)
+
   return content
 }
 
 /** Whether the row draws anything. An empty row takes no slot in the transcript. */
 export function nativeChatRowRendersContent(blocks: readonly NativeChatBlock[]): boolean {
   const { markdown, hasImages, tools, subagentGroups } = deriveNativeChatRowContent(blocks)
+
   return markdown.length > 0 || hasImages || tools.length > 0 || subagentGroups.length > 0
 }

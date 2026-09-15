@@ -13,6 +13,7 @@ const GPU_FALLBACK_CRASH_REASONS = new Set(['abnormal-exit', 'crashed', 'launch-
 // churn, so Orca never reacted. A tight burst is the signal that hardware
 // acceleration is unusable on this machine.
 export const DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS = 30_000
+
 export const DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD = 3
 
 /**
@@ -54,20 +55,26 @@ export class GpuCrashFallbackTracker {
       // not recorded, so a reported crashesInWindow can understate the actual burst.
       return { shouldEngageFallback: false, crashesInWindow: this.recentCrashes.length }
     }
+
     // Why: out-of-order arrivals would corrupt the sorted window, and a clock
     // that jumps backwards must not resurrect crashes already pruned.
     const at = Math.max(msSinceLaunch, this.recentCrashes.at(-1) ?? 0)
     this.recentCrashes.push(at)
     const cutoff = at - this.windowMs
     let stale = 0
+
     while (stale < this.recentCrashes.length && this.recentCrashes[stale] < cutoff) {
       stale += 1
     }
+
     this.recentCrashes.splice(0, stale)
+
     if (this.recentCrashes.length >= this.threshold) {
       this.engaged = true
+
       return { shouldEngageFallback: true, crashesInWindow: this.recentCrashes.length }
     }
+
     return { shouldEngageFallback: false, crashesInWindow: this.recentCrashes.length }
   }
 

@@ -157,9 +157,11 @@ describe('capability gating', () => {
 
   it('registers every structured method on the runtime manifest', () => {
     const names = new Set(ALL_RPC_METHODS.map((method) => method.name))
+
     for (const method of STRUCTURED_AGENT_SESSION_METHODS) {
       expect(names).toContain(method.name)
     }
+
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
     expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(22)
@@ -170,6 +172,7 @@ describe('capability gating', () => {
       clientKind: 'runtime',
       clientCapabilities: ['terminal.stream.v1']
     })
+
     expect(response).toMatchObject({
       ok: false,
       error: { message: expect.stringContaining('structured_agent_session_unsupported') }
@@ -179,6 +182,7 @@ describe('capability gating', () => {
 
   it('rejects create intent before resolving host-owned fields for an old client', async () => {
     const worktree = 'id:workspace-1'
+
     const response = await call(
       'agentSession.create',
       {
@@ -220,6 +224,7 @@ describe('capability gating', () => {
       submittedAt: 1,
       resolvedAt: null
     }
+
     hostCalls.send.mockResolvedValueOnce({
       ok: true,
       replayed: true,
@@ -331,6 +336,7 @@ describe('capability gating', () => {
     const response = await call('agentSession.send', sendParams(), STRUCTURED_MOBILE_CLIENT, {
       getClientSettings: () => ({ experimentalStructuredNativeChat: false })
     })
+
     expect(response).toMatchObject({
       ok: false,
       error: { message: expect.stringContaining('structured_agent_session_unsupported') }
@@ -342,6 +348,7 @@ describe('capability gating', () => {
     const response = await call('agentSession.send', sendParams(), STRUCTURED_MOBILE_CLIENT, {
       getClientSettings: () => ({ experimentalStructuredNativeChat: true })
     })
+
     expect(response).toMatchObject({ ok: true })
     expect(hostCalls.send).toHaveBeenCalledTimes(1)
   })
@@ -396,6 +403,7 @@ describe('capability gating', () => {
 describe('method routing', () => {
   it('creates from a client intent while the host resolves paths and provider identity', async () => {
     const worktree = 'id:workspace-1'
+
     const params = {
       envelope: envelope({
         expectedRuntimeFence: null,
@@ -408,6 +416,7 @@ describe('method routing', () => {
       worktree,
       agent: 'codex'
     }
+
     const created = await call('agentSession.create', params, STRUCTURED_CLIENT)
     expect(created).toMatchObject({ ok: true, result: { ok: true } })
     expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).toHaveBeenCalledWith({
@@ -435,6 +444,7 @@ describe('method routing', () => {
         agent,
         resumeFrom: { providerSessionId: 'prior-session' }
       }
+
       const params = {
         envelope: envelope({
           expectedRuntimeFence: null,
@@ -446,6 +456,7 @@ describe('method routing', () => {
         }),
         ...fields
       }
+
       expect(await call('agentSession.create', params, STRUCTURED_CLIENT)).toMatchObject({
         ok: true,
         result: { ok: true }
@@ -459,11 +470,13 @@ describe('method routing', () => {
 
   it('routes Claude create support and create through the provider-aware runtime', async () => {
     const worktree = 'id:workspace-1'
+
     const support = await call(
       'agentSession.createSupport',
       { worktree, agent: 'claude' },
       STRUCTURED_CLIENT
     )
+
     expect(support).toMatchObject({ ok: true, result: { supported: true } })
     expect(runtimeCalls.getStructuredAgentSessionCreateSupport).toHaveBeenCalledWith(
       worktree,
@@ -482,6 +495,7 @@ describe('method routing', () => {
       worktree,
       agent: 'claude'
     }
+
     const created = await call('agentSession.create', params, STRUCTURED_CLIENT)
     expect(created).toMatchObject({ ok: true, result: { ok: true } })
     expect(runtimeCalls.resolveStructuredAgentSessionCreateIntent).toHaveBeenCalledWith({
@@ -505,6 +519,7 @@ describe('method routing', () => {
 
   it('reports an unknown create outcome when attach commits before tab publication fails', async () => {
     const worktree = 'id:workspace-1'
+
     const params = {
       envelope: envelope({
         expectedRuntimeFence: null,
@@ -584,6 +599,7 @@ describe('method routing', () => {
       expectedRevision: 1,
       optionId: 'allow'
     }
+
     await call('agentSession.respondToApproval', params, STRUCTURED_CLIENT)
     await call('agentSession.respondToQuestion', params, STRUCTURED_CLIENT)
     expect(hostCalls.respondToPrompt.mock.calls.map((invocation) => invocation[1].kind)).toEqual([
@@ -728,6 +744,7 @@ describe('parameter validation', () => {
         (_, optionIndex) => `q${questionIndex + 1}:choice-${optionIndex + 1}`
       )
     }))
+
     const optionId = `question-group:${encodeURIComponent(JSON.stringify(maximumSelections))}`
     expect(optionId.length).toBe(610)
 
@@ -741,6 +758,7 @@ describe('parameter validation', () => {
       },
       STRUCTURED_CLIENT
     )
+
     expect(response).toMatchObject({ ok: true })
     expect(hostCalls.respondToPrompt).toHaveBeenCalledWith(
       expect.anything(),
@@ -780,6 +798,7 @@ describe('parameter validation', () => {
       },
       STRUCTURED_CLIENT
     )
+
     expect(response).toMatchObject({ ok: true })
   })
 })
@@ -827,6 +846,7 @@ describe('rewind wire boundary', () => {
     ]) {
       expect(await call('agentSession.rewind', params, STRUCTURED_CLIENT)).toHaveProperty('error')
     }
+
     expect(hostCalls.rewind).not.toHaveBeenCalled()
   })
 })

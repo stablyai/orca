@@ -111,6 +111,7 @@ describe('SourceControlAgentActionDialogForm', () => {
 
   it('checks already-saved copy against the selected save target', () => {
     const settings = settingsWithSavedGlobalRecipe()
+
     const saveTargets = [
       { value: 'none', label: "Don't save" },
       { value: 'repo', label: 'This repository' },
@@ -123,6 +124,7 @@ describe('SourceControlAgentActionDialogForm', () => {
       saveTargets,
       saveTargetValue: 'global'
     })
+
     const repoMarkup = renderForm({
       settings,
       repo: repoWithoutSavedRecipe,

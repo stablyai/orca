@@ -17,7 +17,9 @@ import {
 } from './browser-network-tunnel-stream-state'
 
 const TUNNEL_GENERATION = 7
+
 const CHUNK_BYTES = 64 * 1024
+
 // The session admits this many unconnected opens at once; a leaked pending-open
 // claim is invisible until an admission is refused.
 const SESSION_MAX_PENDING_OPENS = 16
@@ -195,9 +197,11 @@ describe('browser network tunnel conformance', () => {
     stalled.destination.autoSettleWrites = false
 
     const windowChunks = BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES / CHUNK_BYTES
+
     for (let index = 0; index < windowChunks; index += 1) {
       await writeChunk(stalled.duplex, new Uint8Array(CHUNK_BYTES).fill(index))
     }
+
     stalled.duplex.write(new Uint8Array(CHUNK_BYTES).fill(0xff))
     await settle()
 
@@ -222,6 +226,7 @@ describe('browser network tunnel conformance', () => {
     const consumer = consumeDuplex(stalled.duplex, { autoSettle: false })
 
     const windowChunks = BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES / CHUNK_BYTES
+
     for (let index = 0; index <= windowChunks; index += 1) {
       stalled.destination.emit('data', new Uint8Array(CHUNK_BYTES).fill(index))
       await settle()
@@ -245,10 +250,12 @@ describe('browser network tunnel conformance', () => {
     const consumer = consumeDuplex(stalled.duplex, { autoSettle: false })
 
     const windowChunks = BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES / CHUNK_BYTES
+
     for (let index = 0; index <= windowChunks; index += 1) {
       stalled.destination.emit('data', new Uint8Array(CHUNK_BYTES).fill(index))
       await settle()
     }
+
     expect(consumer.byteLength()).toBe(BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES)
     expect(tunnel.aggregate.bytes).toBeGreaterThan(0)
 
@@ -288,6 +295,7 @@ describe('browser network tunnel conformance', () => {
       tunnel.destinations.at(-1)!.emit('close')
       await rejected
     }
+
     for (let index = 0; index < SESSION_MAX_PENDING_OPENS; index += 1) {
       const stream = await openStream(tunnel, `cycled-${index}.internal`)
       stream.duplex.resume()
@@ -363,22 +371,27 @@ class FakeDestination extends EventEmitter implements BrowserNetworkTunnelSocket
 
   pause(): this {
     this.paused = true
+
     return this
   }
 
   resume(): this {
     this.paused = false
+
     return this
   }
 
   write(bytes: Uint8Array<ArrayBufferLike>, callback?: () => void): boolean {
     this.written.push(bytes.slice())
+
     if (callback) {
       this.unsettled.push(callback)
+
       if (this.autoSettleWrites) {
         queueMicrotask(() => this.settleWrites())
       }
     }
+
     return true
   }
 
@@ -390,11 +403,13 @@ class FakeDestination extends EventEmitter implements BrowserNetworkTunnelSocket
 
   end(): this {
     this.ended = true
+
     return this
   }
 
   destroy(): this {
     this.destroyed = true
+
     return this
   }
 }
@@ -408,15 +423,18 @@ type AggregateBudgetProbe = {
 function createAggregateBudgetProbe(): AggregateBudgetProbe {
   let outstanding = 0
   let bytes = 0
+
   return {
     claim: (claimed: number) => {
       outstanding += 1
       bytes += claimed
       let released = false
+
       return () => {
         if (released) {
           return
         }
+
         released = true
         outstanding -= 1
         bytes -= claimed
@@ -435,9 +453,11 @@ function createConformanceTunnel(): ConformanceTunnel {
   const aggregate = createAggregateBudgetProbe()
   const memory = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
   const lease = memory.acquire('conformance-host')
+
   if (!lease) {
     throw new Error('conformance outbound memory lease was refused')
   }
+
   const tunnel = {
     destinations: [] as FakeDestination[],
     frames: [] as RecordedFrame[],
@@ -448,6 +468,7 @@ function createConformanceTunnel(): ConformanceTunnel {
     releaseMemoryLease: lease.release,
     refuseNextConnect: false
   } as ConformanceTunnel
+
   tunnel.session = new BrowserNetworkTunnelSession({
     tunnelGeneration: TUNNEL_GENERATION,
     connect: () => {
@@ -455,13 +476,16 @@ function createConformanceTunnel(): ConformanceTunnel {
         tunnel.refuseNextConnect = false
         throw new Error('connect refused')
       }
+
       const destination = new FakeDestination()
       tunnel.destinations.push(destination)
+
       return destination
     },
     sendBinary: (bytes) => {
       record(tunnel, 'sessionToClient', bytes)
       tunnel.client.handleBinary(bytes)
+
       return true
     },
     onClose: tunnel.onSessionClose,
@@ -472,11 +496,13 @@ function createConformanceTunnel(): ConformanceTunnel {
     sendBinary: (bytes) => {
       record(tunnel, 'clientToSession', bytes)
       tunnel.session.handleBinary(bytes)
+
       return true
     },
     outboundMemory: lease,
     onClosed: (error) => tunnel.closures.push(error)
   })
+
   return tunnel
 }
 
@@ -485,19 +511,23 @@ function createRawFramePeerSession() {
   const aggregate = createAggregateBudgetProbe()
   const frames: RecordedFrame[] = []
   const onClose = vi.fn<() => void>()
+
   const session = new BrowserNetworkTunnelSession({
     tunnelGeneration: TUNNEL_GENERATION,
     connect: () => new FakeDestination(),
     sendBinary: (bytes) => {
       const frame = decodeBrowserNetworkTunnelFrame(bytes)
+
       if (frame) {
         frames.push({ direction: 'sessionToClient', ...frame })
       }
+
       return true
     },
     onClose,
     claimAggregateRetainedBytes: aggregate.claim
   })
+
   return {
     session,
     onClose,
@@ -514,9 +544,11 @@ function createRawFramePeerSession() {
 
 function record(tunnel: ConformanceTunnel, direction: FrameDirection, bytes: Uint8Array): void {
   const frame = decodeBrowserNetworkTunnelFrame(bytes)
+
   if (!frame) {
     throw new Error(`${direction} emitted an undecodable frame`)
   }
+
   tunnel.frames.push({ direction, ...frame })
 }
 
@@ -527,6 +559,7 @@ async function openStream(
   const opening = tunnel.client.open({ host, port: 443 })
   const destination = tunnel.destinations.at(-1)!
   destination.emit('connect')
+
   return { duplex: await opening, destination }
 }
 
@@ -555,15 +588,18 @@ function consumeDuplex(
     byteLength: () => consumer.chunks.reduce((total, chunk) => total + chunk.byteLength, 0),
     settleAll: () => {
       const owed = unsettled.splice(0)
+
       for (const bytes of owed) {
         duplex.settleRead(bytes)
       }
     }
   }
+
   const unsettled: number[] = []
   duplex.on('data', (chunk: Buffer) => {
     consumer.chunks.push(chunk)
     unsettled.push(chunk.byteLength)
+
     if (options.autoSettle !== false) {
       queueMicrotask(() => consumer.settleAll())
     }
@@ -572,6 +608,7 @@ function consumeDuplex(
   duplex.once('end', () => {
     consumer.ended = true
   })
+
   return consumer
 }
 
@@ -581,11 +618,13 @@ function probePendingOpenBudget(tunnel: ConformanceTunnel): {
 } {
   const failures: string[] = []
   const opened = tunnel.destinations.length
+
   for (let index = 0; index < SESSION_MAX_PENDING_OPENS; index += 1) {
     void tunnel.client
       .open({ host: `probe-${index}.internal`, port: 443 })
       .catch((error: Error) => failures.push(error.message))
   }
+
   return {
     refusals: () => failures,
     release: () => {
@@ -687,6 +726,7 @@ function openFrame(streamId: number, host: string, port: number): Uint8Array {
   view.setUint16(0, port, false)
   view.setUint16(2, name.byteLength, false)
   payload.set(name, 4)
+
   return encodeBrowserNetworkTunnelFrame({
     opcode: BrowserNetworkTunnelOpcode.Open,
     tunnelGeneration: TUNNEL_GENERATION,

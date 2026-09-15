@@ -28,6 +28,7 @@ describe('inventory after the terminal host dies (#10087)', () => {
       })
       await respawnServer.start()
     })
+
     return {
       adapter: new DaemonPtyAdapter({
         socketPath: harness.socketPath,
@@ -45,6 +46,7 @@ describe('inventory after the terminal host dies (#10087)', () => {
     // the whole app was restarted. spawn already recovers from this; inventory
     // did not, so the destructive path was the one that could not heal.
     const { adapter, respawn } = healingAdapter()
+
     try {
       await adapter.spawn({ cols: 80, rows: 24 })
       await harness.server.shutdown()
@@ -62,6 +64,7 @@ describe('inventory after the terminal host dies (#10087)', () => {
     // Control: proves the harness really kills the host, so the test above is
     // not passing because nothing broke.
     const { adapter, respawn } = healingAdapter()
+
     try {
       await adapter.spawn({ cols: 80, rows: 24 })
       await harness.server.shutdown()

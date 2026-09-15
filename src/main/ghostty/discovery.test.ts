@@ -24,15 +24,18 @@ function enoent(): Error {
 
 // Why: Capture original env values once so we can restore them after every test.
 const originalXdgConfigHome = process.env.XDG_CONFIG_HOME
+
 const originalAppData = process.env.APPDATA
 
 afterEach(() => {
   vi.clearAllMocks()
+
   if (originalXdgConfigHome !== undefined) {
     process.env.XDG_CONFIG_HOME = originalXdgConfigHome
   } else {
     delete process.env.XDG_CONFIG_HOME
   }
+
   if (originalAppData !== undefined) {
     process.env.APPDATA = originalAppData
   } else {
@@ -121,6 +124,7 @@ describe('findGhosttyConfigPath', () => {
       if (p === '/Users/alice/.config/ghostty/config') {
         return { isFile: () => true }
       }
+
       throw enoent()
     })
 
@@ -140,6 +144,7 @@ describe('findGhosttyConfigPath', () => {
       ) {
         return { isFile: () => true }
       }
+
       throw enoent()
     })
 
@@ -156,6 +161,7 @@ describe('findGhosttyConfigPath', () => {
       if (p === '/Users/alice/Library/Application Support/com.mitchellh.ghostty/config') {
         return { isFile: () => true }
       }
+
       throw enoent()
     })
 
@@ -172,6 +178,7 @@ describe('findGhosttyConfigPath', () => {
       if (p === '/Users/alice/.config/ghostty/config.ghostty') {
         return { isFile: () => true }
       }
+
       throw enoent()
     })
 
@@ -191,6 +198,7 @@ describe('findGhosttyConfigPath', () => {
       ) {
         return { isFile: () => true }
       }
+
       throw enoent()
     })
 
@@ -219,6 +227,7 @@ describe('findGhosttyConfigPath', () => {
       if (p === '/home/bob/.config/ghostty/config') {
         return { isFile: () => true }
       }
+
       throw enoent()
     })
 
@@ -235,6 +244,7 @@ describe('findGhosttyConfigPath', () => {
       if (p === '/home/bob/.config/ghostty/config.ghostty') {
         return { isFile: () => true }
       }
+
       throw enoent()
     })
 
@@ -251,6 +261,7 @@ describe('findGhosttyConfigPath', () => {
       if (p === '/custom/config/ghostty/config') {
         return { isFile: () => true }
       }
+
       throw enoent()
     })
 
@@ -267,6 +278,7 @@ describe('findGhosttyConfigPath', () => {
       if (p === '/custom/xdg/ghostty/config') {
         return { isFile: () => true }
       }
+
       throw enoent()
     })
 
@@ -287,6 +299,7 @@ describe('findGhosttyConfigPath', () => {
     homedirMock.mockReturnValue('C:\\Users\\Charlie')
     platformMock.mockReturnValue('win32')
     process.env.APPDATA = 'C:\\Users\\Charlie\\AppData\\Roaming'
+
     const expectedPath = path.win32.join(
       'C:\\Users\\Charlie\\AppData\\Roaming',
       'ghostty',
@@ -297,6 +310,7 @@ describe('findGhosttyConfigPath', () => {
       if (p === expectedPath) {
         return { isFile: () => true }
       }
+
       throw enoent()
     })
 
@@ -308,6 +322,7 @@ describe('findGhosttyConfigPath', () => {
     homedirMock.mockReturnValue('C:\\Users\\Charlie')
     platformMock.mockReturnValue('win32')
     process.env.APPDATA = 'C:\\Users\\Charlie\\AppData\\Roaming'
+
     const expectedPath = path.win32.join(
       'C:\\Users\\Charlie\\AppData\\Roaming',
       'ghostty',
@@ -318,6 +333,7 @@ describe('findGhosttyConfigPath', () => {
       if (p === expectedPath) {
         return { isFile: () => true }
       }
+
       throw enoent()
     })
 

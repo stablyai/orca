@@ -34,14 +34,17 @@ import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 const PetStatusSegment = lazyWithRetry(() =>
   import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
 )
+
 const ResourceUsageStatusSegment = lazyWithRetry(() =>
   import('./ResourceUsageStatusSegment').then((module) => ({
     default: module.ResourceUsageStatusSegment
   }))
 )
+
 const PortsStatusSegment = lazyWithRetry(() =>
   import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment }))
 )
+
 const SshStatusSegment = lazyWithRetry(() =>
   import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
 )
@@ -54,9 +57,11 @@ export function StatusBarSurface({
   floatingTerminalOpen
 }: StatusBarProps): React.JSX.Element | null {
   const controller = useStatusBarController(floatingTerminalOpen)
+
   if (!controller) {
     return null
   }
+
   const {
     anyFetching,
     anyVisible,
@@ -98,6 +103,7 @@ export function StatusBarSurface({
         if (!shouldOpenStatusBarContextMenu(event.target)) {
           return
         }
+
         // Why: mirror the app-wide right-click pattern — close peer menus, then anchor a hidden trigger at the cursor so re-clicks reposition.
         event.preventDefault()
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))
@@ -185,6 +191,7 @@ export function StatusBarSurface({
                         />
                       )
                     }
+
                     if (p.provider === 'codex') {
                       return (
                         <CodexSwitcherMenu
@@ -196,6 +203,7 @@ export function StatusBarSurface({
                         />
                       )
                     }
+
                     return (
                       <ProviderDetailsMenu
                         provider={p}

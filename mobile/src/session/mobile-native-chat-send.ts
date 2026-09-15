@@ -32,6 +32,7 @@ export type MobileNativeChatSendOutcome = 'accepted' | 'rejected' | 'unknown'
  *  the composer holds `sending` (send arrow dimmed, no error) for as long as it
  *  pends. Chat writes are interactive: fail them so the user can retry. */
 export const MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS = 15_000
+
 export const MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS = 2_000
 
 /** Opens a budget for one user action. Multi-write actions (heal → paste → text, a
@@ -46,10 +47,12 @@ export async function sendMobileNativeChatMessageWithOutcome(
 ): Promise<MobileNativeChatSendOutcome> {
   const timeoutMs =
     args.deadline === undefined ? MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS : args.deadline - Date.now()
+
   // Starting an underfunded final write risks delivery followed by a false timeout.
   if (timeoutMs < MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
     return 'rejected'
   }
+
   try {
     const response = await args.client.sendRequest(
       'terminal.send',
@@ -65,10 +68,13 @@ export async function sendMobileNativeChatMessageWithOutcome(
       // pins the composer for twice as long.
       { timeoutMs, budgetSpansConnect: true }
     )
+
     if (!isTerminalSendRpcAccepted(response)) {
       return 'rejected'
     }
+
     reportWorkerTerminalUserInput(args.client, args.terminal)
+
     return 'accepted'
   } catch (error) {
     // Why: a logical relay↔direct cutover rejects the in-flight send without
@@ -97,11 +103,13 @@ export async function typeMobileNativeChatCommandWithOutcome(args: {
   deadline?: number
 }): Promise<MobileNativeChatSendOutcome> {
   let writeIndex = 0
+
   return typeAgentTuiCommand({
     command: args.command,
     write: (key) => {
       const isSubmit = writeIndex === args.command.length + 1
       writeIndex += 1
+
       return sendMobileNativeChatMessageWithOutcome({
         client: args.client,
         terminal: args.terminal,
@@ -135,9 +143,11 @@ export async function clearMobileNativeChatInput(args: {
 }): Promise<boolean> {
   const timeoutMs =
     args.deadline === undefined ? MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS : args.deadline - Date.now()
+
   if (timeoutMs < MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
     return false
   }
+
   try {
     const response = await args.client.sendRequest(
       'terminal.send',
@@ -149,6 +159,7 @@ export async function clearMobileNativeChatInput(args: {
       },
       { timeoutMs, budgetSpansConnect: true }
     )
+
     return isTerminalSendRpcAccepted(response)
   } catch {
     // A failed clear must not send the body on top of an uncleared line.

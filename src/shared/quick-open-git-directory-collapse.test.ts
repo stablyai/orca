@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { buildGitLsFilesArgsForQuickOpen } from './quick-open-filter'
 
 const execFileAsync = promisify(execFile)
+
 const tempDirs: string[] = []
 
 async function writeRel(root: string, relPath: string): Promise<void> {
@@ -39,6 +40,7 @@ describe('Quick Open git directory collapse', () => {
     ])
 
     const { primary, ignoredPass } = buildGitLsFilesArgsForQuickOpen()
+
     const [primaryResult, ignoredResult] = await Promise.all(
       [primary, ignoredPass].map((args) =>
         execFileAsync('git', ['-c', 'core.excludesFile=', 'ls-files', ...args], {
@@ -47,6 +49,7 @@ describe('Quick Open git directory collapse', () => {
         })
       )
     )
+
     const primaryPaths = primaryResult.stdout.toString().split('\0').filter(Boolean)
     const ignoredPaths = ignoredResult.stdout.toString().split('\0').filter(Boolean)
 

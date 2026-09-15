@@ -51,6 +51,7 @@ export function aiVaultSessionCwdMatchesWorkspace(
   if (!cwd || !workspacePath) {
     return false
   }
+
   return (
     normalizeRuntimePathForComparison(cwd.trim()) ===
     normalizeRuntimePathForComparison(workspacePath.trim())
@@ -70,31 +71,38 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   structuredRouteAvailable: boolean
 }): AiVaultResumeInChatEligibility {
   const { session } = args
+
   if (!isAgentSessionHandleProvider(session.agent)) {
     return { available: false, reason: 'agent' }
   }
+
   // An already-adopted row reopens its own chat instead; offering a second resume of it would ask
   // for a conflict the host would rightly refuse.
   if (session.structuredSession) {
     return { available: false, reason: 'already-structured' }
   }
+
   if (
     session.executionHostId !== LOCAL_EXECUTION_HOST_ID ||
     isWslStoredAiVaultSessionFile(session.filePath)
   ) {
     return { available: false, reason: 'remote' }
   }
+
   if (!isAiVaultSessionResumableContent(session)) {
     return { available: false, reason: 'empty' }
   }
+
   if (!args.targetWorkspaceId || !args.structuredRouteAvailable) {
     return { available: false, reason: 'workspace' }
   }
+
   if (
     aiVaultSessionResumeInChatWorkspaceMatters(session.agent) &&
     !aiVaultSessionCwdMatchesWorkspace(session.cwd, args.targetWorkspacePath)
   ) {
     return { available: false, reason: 'workspace' }
   }
+
   return { available: true, workspaceId: args.targetWorkspaceId }
 }

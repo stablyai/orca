@@ -88,6 +88,7 @@ function buildHangulRun(length: number): HangulSyllable[] {
     const choseong = CHOSEONG[position % CHOSEONG.length]
     const jungseong = JUNGSEONG[Math.floor(position / CHOSEONG.length) % JUNGSEONG.length]
     const text = String.fromCharCode(0xac00 + (choseong.index * 21 + jungseong.index) * 28)
+
     return {
       text,
       frames: [
@@ -106,11 +107,14 @@ async function readPaneGrid(page: Page, ptyId: string): Promise<PaneGrid> {
       const pane = manager
         .getPanes?.()
         .find((candidate) => candidate.container.dataset.ptyId === targetPtyId)
+
       if (pane) {
         const buffer = pane.terminal.buffer.active
+
         return { cols: pane.terminal.cols, cursorRow: buffer.baseY + buffer.cursorY }
       }
     }
+
     return { cols: 0, cursorRow: 0 }
   }, ptyId)
 }
@@ -128,6 +132,7 @@ async function narrowPaneBySplitting(page: Page, splits: number): Promise<void> 
   await waitForActiveWorktree(page)
   await ensureTerminalVisible(page)
   await waitForActiveTerminalManager(page, 30_000)
+
   for (let split = 0; split < splits; split += 1) {
     await splitActiveTerminalPane(page, 'vertical')
     await waitForPaneCount(page, split + 2)
@@ -142,11 +147,13 @@ async function waitForSettledCols(page: Page, ptyId: string): Promise<number> {
         const observed = (await readPaneGrid(page, ptyId)).cols
         const stable = observed === settled && observed > 0
         settled = observed
+
         return stable
       },
       { timeout: 10_000, message: 'terminal width never settled' }
     )
     .toBe(true)
+
   return settled
 }
 
@@ -171,14 +178,17 @@ async function composeThenCommitPhrase(
   pauseMs: number
 ): Promise<void> {
   let preedit = ''
+
   for (const syllable of run) {
     preedit += syllable.text
     await dispatchImeProcessKey(session, syllable.frames[0].jamoKey)
     await setImeComposition(session, preedit)
+
     if (pauseMs > 0) {
       await page.waitForTimeout(pauseMs)
     }
   }
+
   await commitImeText(session, preedit)
 }
 
@@ -259,6 +269,7 @@ test.describe('Terminal Hangul wrap-boundary byte exactness', () => {
         const arena = await openTerminalImePaneArena(orcaPage)
         const reader = createTerminalImeByteReader(testRepoPath, 1)
         let completed = false
+
         try {
           await startTerminalImeByteReader(orcaPage, arena.ptyId, reader)
 
@@ -272,9 +283,11 @@ test.describe('Terminal Hangul wrap-boundary byte exactness', () => {
           })
 
           const startRow = (await readPaneGrid(orcaPage, arena.ptyId)).cursorRow
+
           if (scenario.offsetByOneCell) {
             await dispatchImeRewrittenPrintableKey(arena.session, OFFSET_KEY)
           }
+
           await scenario.drive(arena.session, orcaPage, run)
           // The guard that stops this passing by measuring nothing: the echoed run has to have
           // pushed the cursor onto a later row, which is the wrap the whole spec is about.

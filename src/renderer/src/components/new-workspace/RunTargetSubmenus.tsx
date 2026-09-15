@@ -35,6 +35,7 @@ export function RecipesSubmenuRow({
   onSelectRecipe: (recipeId: string) => void
 }): React.JSX.Element {
   const [hoveredKey, setHoveredKey] = React.useState<string | null>(null)
+
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor asChild>
@@ -111,6 +112,7 @@ export function AddHostSubmenuRow({
 }): React.JSX.Element {
   const [hoveredKey, setHoveredKey] = React.useState<string | null>(null)
   const addHostLabel = translate('auto.components.NewWorkspaceComposerCard.addHost', 'Add host')
+
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor asChild>

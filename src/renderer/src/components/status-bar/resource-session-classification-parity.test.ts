@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const CONTROLLER_PATH = resolve(__dirname, 'use-resource-usage-status-controller.ts')
+
 const DERIVED_MODEL_PATH = resolve(__dirname, 'use-resource-usage-derived-model.ts')
 
 /**
@@ -14,12 +15,14 @@ const DERIVED_MODEL_PATH = resolve(__dirname, 'use-resource-usage-derived-model.
 describe('resource session classification parity', () => {
   it('feeds the row merge the same binding inputs as the bulk selector', () => {
     const source = readFileSync(DERIVED_MODEL_PATH, 'utf8')
+
     const mergeCall = source.slice(
       source.indexOf('mergeSnapshotAndSessions(resourceSnapshot'),
       source.indexOf('ambiguousWorktreeIds\n          })')
     )
 
     expect(mergeCall).toContain('...resourceSessionBindings')
+
     // Any of these appearing inline means the call site is re-deriving bindings and can drift.
     for (const field of [
       'ptyIdsByTabId,',
@@ -34,6 +37,7 @@ describe('resource session classification parity', () => {
 
   it('keeps every binding source in the one object both paths read', () => {
     const source = readFileSync(CONTROLLER_PATH, 'utf8')
+
     const bindings = source.slice(
       source.indexOf('const resourceSessionBindings = useMemo'),
       source.indexOf('const popoverBodyRef')

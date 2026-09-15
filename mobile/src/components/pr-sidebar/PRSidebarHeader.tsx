@@ -99,6 +99,7 @@ export function PRSidebarHeader({
   if (bare) {
     return <View style={styles.identityBlock}>{body}</View>
   }
+
   return (
     <View style={styles.section}>
       <View style={styles.sectionBody}>{body}</View>
@@ -123,14 +124,17 @@ function PRTitle({
     setDraft(title)
     setEditing(true)
   }
+
   const cancel = () => {
     titleAction.clearError()
     setEditing(false)
   }
+
   const save = async () => {
     // setTitle trims + short-circuits empty/unchanged to a successful no-op; on a
     // real edit it refetches, so on success we just collapse the editor.
     const ok = await titleAction.setTitle(draft, title)
+
     if (ok) {
       setEditing(false)
     }

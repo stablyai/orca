@@ -14,10 +14,13 @@ const FAIL_DISPATCH_SAVEPOINT = 'fail_dispatch'
 
 export function completeDispatch(this: OrchestrationDb, ctxId: string): void {
   const dispatch = this.getDispatchContextById(ctxId)
+
   if (!dispatch || !['pending', 'dispatched'].includes(dispatch.status)) {
     return
   }
+
   this.db.exec('SAVEPOINT complete_dispatch_transition')
+
   try {
     transitionLifecycleWithDb(this.db, {
       entity: 'dispatch',
@@ -51,6 +54,7 @@ export function settleActiveDispatchesForTask(
       "SELECT * FROM dispatch_contexts WHERE task_id = ? AND status IN ('pending', 'dispatched')"
     )
     .all(taskId) as DispatchContextRow[]
+
   for (const row of rows) {
     transitionLifecycleWithDb(db.db, {
       entity: 'dispatch',
@@ -80,6 +84,7 @@ export function failActiveDispatchForTask(
   error: string
 ): DispatchContextRow | undefined {
   const active = getActiveDispatchForTask(this, taskId)
+
   return active ? this.failDispatch(active.id, error) : undefined
 }
 
@@ -116,13 +121,17 @@ export function failDispatch(
 ): DispatchContextRow | undefined {
   // Why: reserve the WAL writer before lifecycle reads so a concurrent commit cannot cause SQLITE_BUSY_SNAPSHOT.
   const transaction = beginLifecycleWriteTransaction(this.db, FAIL_DISPATCH_SAVEPOINT)
+
   try {
     const before = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
       | DispatchContextRow
       | undefined
+
     const workerBefore = this.getWorkerDispatch(ctxId)
+
     if (!before || !['pending', 'dispatched'].includes(before.status)) {
       const worker = workerBefore
+
       if (
         before &&
         worker &&
@@ -135,9 +144,12 @@ export function failDispatch(
           { dispatchId: ctxId }
         )
       }
+
       commitLifecycleWriteTransaction(this.db, transaction)
+
       return before
     }
+
     if (
       !options.workerProcessExited &&
       workerBefore &&
@@ -149,8 +161,10 @@ export function failDispatch(
         { dispatchId: ctxId }
       )
     }
+
     const nextStatus =
       before.failure_count + 1 >= DISPATCH_CIRCUIT_BREAK_FAILURES ? 'circuit_broken' : 'failed'
+
     transitionLifecycleWithDb(this.db, {
       entity: 'dispatch',
       id: ctxId,
@@ -164,14 +178,19 @@ export function failDispatch(
         capability_revoked_at: before.capability_revoked_at ?? new Date().toISOString()
       }
     })
+
     const ctx = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
       | DispatchContextRow
       | undefined
+
     if (!ctx) {
       commitLifecycleWriteTransaction(this.db, transaction)
+
       return undefined
     }
+
     const worker = this.getWorkerDispatch(ctxId)
+
     if (worker && options.workerProcessExited) {
       transitionLifecycleWithDb(this.db, {
         entity: 'worker',
@@ -190,6 +209,7 @@ export function failDispatch(
     const taskStatus: TaskStatus = ctx.status === 'circuit_broken' ? 'failed' : 'ready'
     // Why: the status guard keeps a late failure from reopening a task that already completed or was retried elsewhere.
     const task = this.getTask(ctx.task_id)
+
     if (
       task?.status === 'dispatched' &&
       !this.db
@@ -206,11 +226,15 @@ export function failDispatch(
         projection: { completed_at: taskStatus === 'failed' ? new Date().toISOString() : null }
       })
     }
+
     this.closeQuestionsForDispatch(ctxId)
+
     const updated = this.db.prepare('SELECT * FROM dispatch_contexts WHERE id = ?').get(ctxId) as
       | DispatchContextRow
       | undefined
+
     commitLifecycleWriteTransaction(this.db, transaction)
+
     return updated
   } catch (cause) {
     rollbackLifecycleWriteTransaction(this.db, transaction)

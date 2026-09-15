@@ -13,31 +13,39 @@ import {
 } from './orca-runtime-files-terminal-artifact-fixtures'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
+
 vi.mock('fs/promises', async () =>
   (await import('./orca-runtime-files-mock-registry')).fsPromisesModuleMock()
 )
+
 vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
+
 vi.mock('../ipc/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
+
 vi.mock(
   '../ipc/rg-availability',
   async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
 )
+
 vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
 )
+
 vi.mock(
   '../ipc/filesystem-search-git',
   async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
 )
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
@@ -122,10 +130,12 @@ describe('RuntimeFileCommands', () => {
       const worktreePath = '\\\\server\\share\\repo'
       const expectedPath = '//server/share/repo/src/index.ts'
       const resolveTerminalFileUriHostname = vi.fn(() => 'server')
+
       const { commands } = createRuntimeFileCommands({
         path: worktreePath,
         resolveTerminalFileUriHostname
       })
+
       statAsFile()
 
       const result = await commands.resolveTerminalPath(
@@ -154,6 +164,7 @@ describe('RuntimeFileCommands', () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
       const artifactPath = await tempFile('result.json', '{}')
       const resolveTerminalFileUriHostname = vi.fn(() => 'laptop.local')
+
       const { commands } = createRuntimeFileCommands({
         path: '/repo',
         resolveTerminalFileUriHostname
@@ -193,11 +204,13 @@ describe('RuntimeFileCommands', () => {
     it('opens host-qualified remote POSIX terminal links when the source terminal verified the host', async () => {
       const resolveTerminalFileUriHostname = vi.fn(() => 'remote-host')
       const hasRecentTerminalOutputPath = vi.fn(() => true)
+
       const { commands, store } = createRuntimeFileCommands({
         path: '/home/me/repo',
         resolveTerminalFileUriHostname,
         hasRecentTerminalOutputPath
       })
+
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
       const stat = vi.fn().mockResolvedValue({ type: 'file', size: 2, mtime: 3 })
       const realpath = vi.fn(async (p: string) => p)
@@ -226,10 +239,12 @@ describe('RuntimeFileCommands', () => {
 
     it('opens host-qualified Windows SSH worktree file URLs with a drive path', async () => {
       const resolveTerminalFileUriHostname = vi.fn(() => 'remote-host')
+
       const { commands, store } = createRuntimeFileCommands({
         path: 'C:/Users/me/repo',
         resolveTerminalFileUriHostname
       })
+
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
       const stat = vi.fn().mockResolvedValue({ type: 'file', size: 2, mtime: 3 })
       const realpath = vi.fn(async (p: string) => p)

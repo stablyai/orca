@@ -22,6 +22,7 @@ export const MAX_PENDING_OS_OPENED_MARKDOWN_FILES = 32
  */
 function localPathFromArgument(argument: string, platform: NodeJS.Platform): string | null {
   const pathApi = platform === 'win32' ? path.win32 : path.posix
+
   if (argument.startsWith('file://')) {
     try {
       // Why the explicit windows flag: this must decode the same way on any host so the
@@ -31,6 +32,7 @@ function localPathFromArgument(argument: string, platform: NodeJS.Platform): str
       return null
     }
   }
+
   return pathApi.isAbsolute(argument) ? argument : null
 }
 
@@ -48,24 +50,31 @@ export function markdownPathsFromArguments(
   const pathApi = platform === 'win32' ? path.win32 : path.posix
   const seen = new Set<string>()
   const paths: string[] = []
+
   for (const rawArgument of argv) {
     if (!rawArgument || rawArgument.startsWith('-')) {
       continue
     }
+
     const argument = localPathFromArgument(rawArgument, platform)
+
     if (!argument || !isMarkdownDocumentName(argument)) {
       continue
     }
+
     const normalized = pathApi.normalize(argument)
     // Why lowercased on win32: the shell round-trips drive letters and 8.3 casing
     // inconsistently, and two spellings of one path must not open two tabs.
     const key = platform === 'win32' ? normalized.toLowerCase() : normalized
+
     if (seen.has(key)) {
       continue
     }
+
     seen.add(key)
     paths.push(normalized)
   }
+
   return paths
 }
 
@@ -92,6 +101,7 @@ export class OsOpenedMarkdownFileState {
   consume(): string[] {
     const pending = this.pending
     this.pending = []
+
     return pending
   }
 
@@ -104,17 +114,22 @@ export class OsOpenedMarkdownFileState {
     if (filePaths.length === 0) {
       return false
     }
+
     const merged = [...this.pending]
     let index = 0
+
     for (; index < filePaths.length; index++) {
       if (merged.length >= MAX_PENDING_OS_OPENED_MARKDOWN_FILES) {
         break
       }
+
       const filePath = filePaths[index]!
+
       if (!merged.includes(filePath)) {
         merged.push(filePath)
       }
     }
+
     if (index < filePaths.length) {
       // Why logged: the cap drops the tail of an oversized selection, and a file the
       // user explicitly asked to open must not vanish without leaving a trace.
@@ -122,8 +137,10 @@ export class OsOpenedMarkdownFileState {
         `[os-open] Dropped ${filePaths.length - index} of ${filePaths.length} OS-opened markdown files; the pending queue is capped at ${MAX_PENDING_OS_OPENED_MARKDOWN_FILES}.`
       )
     }
+
     this.pending = merged.slice(0, MAX_PENDING_OS_OPENED_MARKDOWN_FILES)
     publish?.()
+
     return true
   }
 }
@@ -138,8 +155,10 @@ export async function resolveOpenedMarkdownDocuments(
   if (filePaths.length === 0) {
     return []
   }
+
   const floatingRoot = await ensureDefaultFloatingWorkspacePath()
   const documents: MarkdownDocument[] = []
+
   for (const filePath of filePaths) {
     try {
       // Why: the shell can hand over a bundle directory named `*.md`, or a path already
@@ -150,6 +169,7 @@ export async function resolveOpenedMarkdownDocuments(
     } catch {
       continue
     }
+
     authorizeExternalPath(filePath)
     documents.push(
       markdownDocumentFromFilePath(floatingRoot, filePath, {
@@ -157,5 +177,6 @@ export async function resolveOpenedMarkdownDocuments(
       })
     )
   }
+
   return documents
 }

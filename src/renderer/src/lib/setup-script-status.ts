@@ -6,6 +6,7 @@ export function hasEffectiveSetupCommand(repo: Repo, hooksResult: HookCheckResul
   const localSetup = repo.hookSettings?.scripts?.setup?.trim()
   const sharedSetup = hooksResult.hooks?.scripts?.setup?.trim()
   const rawPolicy = repo.hookSettings?.commandSourcePolicy
+
   const sourcePolicy = resolveHookCommandSourcePolicy(rawPolicy, {
     hasLocalScript: Boolean(localSetup)
   })

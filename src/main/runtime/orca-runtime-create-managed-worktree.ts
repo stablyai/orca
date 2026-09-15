@@ -23,13 +23,16 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     const repo = await this.resolveRepoSelector(args.repoSelector)
     const createSettings = this.store.getSettings()
     const requestedAgent = args.startupAgent ?? args.createdWithAgent
+
     const requestedAgentEnabled =
       requestedAgent !== undefined
         ? isTuiAgentEnabled(requestedAgent, createSettings.disabledTuiAgents)
         : false
+
     if ((args.startup || args.startupAgent) && requestedAgent && !requestedAgentEnabled) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }
+
     if (
       args.startup &&
       args.startupDraftPaste &&
@@ -37,6 +40,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     ) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }
+
     const agentStartup =
       !args.startup && args.startupAgent
         ? this.buildStartupForAgent(
@@ -46,17 +50,21 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
             args.startupLaunchPreferences
           )
         : null
+
     const draftStartup =
       !args.startup && !agentStartup && args.startupDraft
         ? await this.buildStartupForDraft(repo, args.startupDraft, requestedAgent)
         : null
+
     const effectiveStartup = args.startup ?? agentStartup?.startup ?? draftStartup?.startup
     const effectiveStartupFollowup = agentStartup?.followup
+
     const effectiveCreatedWithAgent = args.startup
       ? args.createdWithAgent
       : (agentStartup?.agent ??
         draftStartup?.agent ??
         (requestedAgentEnabled ? requestedAgent : undefined))
+
     const effectiveDraftPaste = args.startupDraftPaste ?? draftStartup?.draftPaste
     // Resolve the execution host once, shared with the `worktrees:create` IPC entry point so the
     // two cannot answer differently for the same repo. Reading the raw `connectionId` field routes
@@ -66,6 +74,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     // `null` on a `runtime:` host is deliberate: its nested target is addressable only inside that
     // environment, so the trust write must not go to a same-named target in this client's table.
     const sshConnectionId = createRoute.kind === 'ssh' ? createRoute.connectionId : null
+
     if (isFolderRepo(repo)) {
       // A folder workspace is a registration, not a filesystem create, so it is host-agnostic —
       // except for the agent trust write, which must land on the host that will run the agent.
@@ -99,12 +108,16 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
         }
       })
     }
+
     const lineageInput =
       args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
+
     const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput)
+
     if (createRoute.kind === 'runtime') {
       throw new ExecutionHostNotDispatchableError(createRoute.hostId)
     }
+
     if (createRoute.kind === 'ssh') {
       // `createRoute.repo` carries the resolved connection in `connectionId`, because the
       // remote-create pipeline still reads `repo.connectionId!` at every depth. See the workaround
@@ -117,6 +130,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
         ...(effectiveCreatedWithAgent ? { createdWithAgent: effectiveCreatedWithAgent } : {}),
         ...(effectiveDraftPaste ? { startupDraftPaste: effectiveDraftPaste } : {})
       })
+
       const recordedLineage = this.recordCreatedWorktreeLineage(result.worktree, lineageResolution)
       this.emitWorktreeLifecycle({
         kind: 'created',
@@ -124,6 +138,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
         path: result.worktree.path,
         branch: result.worktree.branch
       })
+
       return {
         ...result,
         worktree: {
@@ -142,6 +157,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
           : {})
       }
     }
+
     const { worktree, worktreePath, includeCopyWarning, created, addResult, metadataResult } =
       await createRuntimeLocalManagedWorktree({
         request: args,
@@ -160,6 +176,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
         onWorktreeMetadataPersisted: (persistedWorktree) =>
           this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution)
       })
+
     const settings = createSettings
     const { lineage, workspaceLineage, warnings: lineageWarnings } = metadataResult
 
@@ -194,6 +211,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
     invalidateAuthorizedRootsCache()
 
     this.notifyWorktreesChanged(repo.id)
+
     const {
       warning: terminalWarning,
       returnedSetup,
@@ -233,6 +251,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
           )
       }
     })
+
     warning = terminalWarning
     this.emitWorktreeLifecycle({
       kind: 'created',
@@ -240,6 +259,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       path: worktree.path,
       branch: worktree.branch
     })
+
     return {
       worktree: {
         ...worktree,

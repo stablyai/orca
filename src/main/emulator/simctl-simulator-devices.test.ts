@@ -12,6 +12,7 @@ vi.mock('child_process', () => ({
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof Os>()
+
   return {
     ...actual,
     platform: platformMock

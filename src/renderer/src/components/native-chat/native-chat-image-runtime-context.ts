@@ -79,22 +79,29 @@ function stableSettingsForRoute(
       runtimeEnvironmentId
     })
   }
+
   const source = settings as object
   let byRuntime = settingsBySource.get(source)
+
   if (!byRuntime) {
     byRuntime = new Map()
     settingsBySource.set(source, byRuntime)
   }
+
   const cacheKey = runtimeEnvironmentId ?? ''
   const cached = byRuntime.get(cacheKey)
+
   if (cached) {
     return cached
   }
+
   const resolved = settingsForWorktreeOperationRoute(settings, {
     executionHostId: null,
     runtimeEnvironmentId
   })
+
   byRuntime.set(cacheKey, resolved)
+
   return resolved
 }
 
@@ -104,24 +111,30 @@ function resolvePath(
   hostId: ExecutionHostId | null
 ): string | null {
   const known = state.getKnownWorktreeById(worktreeId, hostId ?? undefined)
+
   if (known?.path) {
     return known.path
   }
+
   const workspace = parseWorkspaceKey(worktreeId)
+
   if (workspace?.type === 'folder') {
     return (
       state.folderWorkspaces.find((entry) => entry.id === workspace.folderWorkspaceId)
         ?.folderPath ?? null
     )
   }
+
   for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
     const match = worktrees.find(
       (entry) => entry.id === worktreeId && (!hostId || entry.hostId === hostId)
     )
+
     if (match?.path) {
       return match.path
     }
   }
+
   return null
 }
 
@@ -130,34 +143,46 @@ export function resolveNativeChatImageRuntimeContext(
   tabId: string
 ): NativeChatImageRuntimeContext {
   const linkContext = resolveNativeChatFileLinkContext(state, tabId)
+
   if (!linkContext) {
     return null
   }
+
   const routeResolution = resolveWorktreeOperationRouteResult(state, linkContext.worktreeId)
+
   if (routeResolution.kind !== 'resolved') {
     return null
   }
+
   const route = routeResolution.route
+
   const executionHostId =
     route.executionHostId ??
     (route.runtimeEnvironmentId ? toRuntimeExecutionHostId(route.runtimeEnvironmentId) : null)
+
   if (!executionHostId) {
     return null
   }
+
   const worktreePath = resolvePath(state, linkContext.worktreeId, executionHostId)
+
   if (!worktreePath) {
     return null
   }
+
   const host = parseExecutionHostId(executionHostId)
+
   if (!host) {
     return null
   }
+
   const context: RuntimeFileOperationArgs = {
     settings: stableSettingsForRoute(state.settings, route.runtimeEnvironmentId),
     worktreeId: linkContext.worktreeId,
     worktreePath,
     expectedExecutionHostId: host.kind === 'ssh' ? host.id : 'local'
   }
+
   if (host.kind === 'ssh') {
     try {
       const expectation = captureDirectSshMutationExpectation(
@@ -165,8 +190,10 @@ export function resolveNativeChatImageRuntimeContext(
         host.targetId,
         route.runtimeEnvironmentId
       )
+
       context.expectedSshTargetId = expectation.expectedSshTargetId
       context.expectedSshConnectionGeneration = expectation.expectedSshConnectionGeneration
+
       if (!route.runtimeEnvironmentId) {
         context.connectionId = host.targetId
         context.expectedExternalSshTargetId = host.targetId
@@ -175,10 +202,12 @@ export function resolveNativeChatImageRuntimeContext(
       return null
     }
   }
+
   return context
 }
 
 export function useNativeChatImageRuntimeContext(tabId: string): NativeChatImageRuntimeContext {
   const ownerState = useAppStore(useShallow(selectNativeChatImageOwnerState))
+
   return useMemo(() => resolveNativeChatImageRuntimeContext(ownerState, tabId), [ownerState, tabId])
 }

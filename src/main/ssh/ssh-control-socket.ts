@@ -23,7 +23,9 @@ export type SystemSshResolvedConfig = Pick<
 >
 
 const OPENSSH_CONTROL_SOCKET_SUFFIX_BUDGET = 18
+
 const UNIX_SOCKET_PATH_LIMIT = process.platform === 'darwin' ? 104 : 108
+
 const CONTROL_SOCKET_PATH_MAX_LENGTH = UNIX_SOCKET_PATH_LIMIT - OPENSSH_CONTROL_SOCKET_SUFFIX_BUDGET
 
 export function getControlSocketPath(
@@ -34,12 +36,15 @@ export function getControlSocketPath(
   if (process.platform === 'win32') {
     return null
   }
+
   const uid = process.getuid?.()
+
   if (uid === undefined) {
     return null
   }
 
   const dir = findControlSocketDirectory(uid)
+
   if (!dir) {
     return null
   }
@@ -63,8 +68,10 @@ export function getControlSocketPath(
     // Why: a Kerberos-only session must not reuse a master authenticated by a key.
     gssapiOnly
   })
+
   const hash = createHash('sha256').update(key).digest('hex').slice(0, 16)
   const socketPath = pathJoin(dir, hash)
+
   return socketPath.length <= CONTROL_SOCKET_PATH_MAX_LENGTH ? socketPath : null
 }
 
@@ -78,21 +85,26 @@ export function removeControlSocketPath(socketPath: string): void {
 
 function findControlSocketDirectory(uid: number): string | null {
   const candidates = getControlSocketDirectoryCandidates(uid)
+
   for (const dir of candidates) {
     if (ensurePrivateDirectory(dir, uid)) {
       return dir
     }
   }
+
   return null
 }
 
 function getControlSocketDirectoryCandidates(uid: number): string[] {
   const candidates: string[] = []
   const xdgRuntimeDir = process.env.XDG_RUNTIME_DIR
+
   if (xdgRuntimeDir && isAbsolute(xdgRuntimeDir)) {
     candidates.push(pathJoin(xdgRuntimeDir, 'orca-ssh'))
   }
+
   candidates.push(pathJoin(tmpdir(), `orca-ssh-${uid}`))
+
   return candidates
 }
 
@@ -102,6 +114,7 @@ function ensurePrivateDirectory(dir: string, uid: number): boolean {
     // Why: mkdir mode is ignored for pre-existing dirs; lstat rejects symlink
     // swaps and the owner/perms check avoids exposing the mux socket cross-user.
     const st = lstatSync(dir)
+
     return st.isDirectory() && st.uid === uid && (st.mode & 0o77) === 0
   } catch {
     return false
@@ -114,6 +127,7 @@ function normalizeResolvedConfig(
   if (!resolvedConfig) {
     return null
   }
+
   return {
     hostname: resolvedConfig.hostname || '',
     port: resolvedConfig.port || 22,

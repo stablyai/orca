@@ -27,6 +27,7 @@ export function useEditorCmdSaveRequest({
     if (!enabled) {
       return
     }
+
     const handler = (event: Event): void => {
       if (
         !activeFile ||
@@ -34,23 +35,31 @@ export function useEditorCmdSaveRequest({
       ) {
         return
       }
+
       const saveTargetFile = getEditorSaveTargetFile(activeFile, openFiles)
+
       if (!saveTargetFile) {
         return
       }
+
       // Why: a markdown preview tab is read-only but fronts the same document,
       // so Cmd/Ctrl+S should save the source editor's current draft.
       const state = useAppStore.getState()
       const draft = state.editorDrafts[saveTargetFile.id]
+
       if (!draft && !saveTargetFile.isUntitled && !saveTargetFile.isDirty) {
         return
       }
+
       const fallbackContent =
         draft ??
         (activeFile.mode === 'markdown-preview' ? fileContents[activeFile.id]?.content : '')
+
       void handleSave(fallbackContent ?? '')
     }
+
     window.addEventListener(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, handler)
+
     return () => window.removeEventListener(ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT, handler)
   }, [activeFile, enabled, fileContents, handleSave, openFiles])
 }

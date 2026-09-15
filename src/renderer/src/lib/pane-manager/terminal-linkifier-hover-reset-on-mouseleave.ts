@@ -6,6 +6,7 @@ export function installTerminalLinkifierHoverResetOnMouseLeave(
   linkTooltip?: HTMLElement
 ): IDisposable {
   const screen = terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+
   if (!screen) {
     return { dispose: () => undefined }
   }
@@ -14,10 +15,13 @@ export function installTerminalLinkifierHoverResetOnMouseLeave(
     if (linkTooltip) {
       linkTooltip.style.display = 'none'
     }
+
     resetTerminalLinkifierHoverState(terminal)
   }
+
   // Why: xterm clears its active link but keeps the cell cache on mouseleave.
   screen.addEventListener('mouseleave', resetHover)
+
   return {
     dispose: () => screen.removeEventListener('mouseleave', resetHover)
   }
@@ -28,6 +32,7 @@ export function installTerminalLinkifierHoverResetOnWindowBlur(
   linkTooltip: HTMLElement
 ): IDisposable {
   const ownerWindow = linkTooltip.ownerDocument?.defaultView
+
   if (!ownerWindow) {
     return { dispose: () => undefined }
   }
@@ -36,7 +41,9 @@ export function installTerminalLinkifierHoverResetOnWindowBlur(
     linkTooltip.style.display = 'none'
     resetTerminalLinkifierHoverState(terminal)
   }
+
   ownerWindow.addEventListener('blur', resetHover)
+
   return {
     dispose: () => ownerWindow.removeEventListener('blur', resetHover)
   }

@@ -118,6 +118,7 @@ export function renderFloatingTerminalPanelSurface({
         if (maximized || !stagedBoundsRef.current) {
           return
         }
+
         const rect = event.currentTarget.getBoundingClientRect()
         commitUserBounds({
           ...stagedBoundsRef.current,
@@ -179,9 +180,11 @@ export function renderFloatingTerminalPanelSurface({
               onCloseBrowserTab={closeFloatingItemConfirmed}
               onDuplicateBrowserTab={(browserTabId) => {
                 const source = browserTabs.find((tab) => tab.id === browserTabId)
+
                 if (!source) {
                   return
                 }
+
                 createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, source.url, {
                   ...buildDuplicatedBrowserTabOptions(source),
                   targetGroupId: activeGroup?.id,
@@ -217,6 +220,7 @@ export function renderFloatingTerminalPanelSurface({
                 .filter((tab) => !parkedTerminalTabIds.has(tab.id))
                 .map((tab) => {
                   const isActive = tab.id === activeTerminalId
+
                   return (
                     <div
                       key={`${tab.id}-${tab.generation ?? 0}`}
@@ -239,11 +243,14 @@ export function renderFloatingTerminalPanelSurface({
                         onPtyExit={(ptyId, exitCode) => {
                           if (exitCode !== undefined && !isProvenProcessExit(exitCode)) {
                             useAppStore.getState().markUnverifiedPtyLoss(tab.id)
+
                             return
                           }
+
                           if (shouldDeferParkedPtyExitTabClose(tab.id, ptyId)) {
                             return
                           }
+
                           closeTerminalTab(tab.id, {
                             reason: 'pty-exit',
                             lifecyclePtyId: ptyId
@@ -257,6 +264,7 @@ export function renderFloatingTerminalPanelSurface({
             : null}
           {browserTabs.map((tab) => {
             const isActive = tab.id === activeBrowserTab?.id
+
             return (
               <div
                 key={tab.id}
@@ -269,6 +277,7 @@ export function renderFloatingTerminalPanelSurface({
           })}
           {simulatorItems.map((tab) => {
             const isActive = tab.id === activeTab?.id
+
             return (
               <div
                 key={tab.id}

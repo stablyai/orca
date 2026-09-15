@@ -177,6 +177,7 @@ describe('execution host id delimiter invariant', () => {
     for (const id of ['ssh:', 'ssh:a|b', 'ssh:%zz', 'runtime:', 'quantum:box'] as const) {
       expect(getExecutionHostLabel(id as never)).toBe('Unknown host')
     }
+
     expect(getExecutionHostLabel(null)).toBe('Unknown host')
     expect(getExecutionHostLabel(ALL_EXECUTION_HOSTS_SCOPE)).toBe('All hosts')
     expect(getExecutionHostLabel('ssh:box')).toBe('box')

@@ -90,9 +90,11 @@ function buildSplitLayout(
 function persistExitedPaneOutput(tabId: string, leafId: string, output: string): void {
   const store = useAppStore.getState()
   const layout = store.terminalLayoutsByTabId[tabId]
+
   if (!layout) {
     return
   }
+
   const { ptyIdsByLeafId: existingPtyIds, buffersByLeafId: existingBuffers, ...rest } = layout
   const nextPtyIds = { ...existingPtyIds }
   delete nextPtyIds[leafId]
@@ -117,10 +119,12 @@ function persistExitedPaneOutput(tabId: string, leafId: string, output: string):
 // into this handler tears the pane down seconds after it launched.
 function registerBackgroundPaneBuffer(tabId: string, leafId: string, pane: SpawnedPane): void {
   let eagerBuffer: EagerPtyHandle | null = null
+
   const onExit = (exitPtyId: string): void => {
     persistExitedPaneOutput(tabId, leafId, eagerBuffer?.flush() ?? '')
     useAppStore.getState().clearTabPtyId(tabId, exitPtyId)
   }
+
   eagerBuffer = registerEagerPtyBuffer(pane.ptyId, onExit, pane.incarnationId)
 }
 
@@ -155,6 +159,7 @@ async function spawnPane(args: {
     tabId: args.tabId,
     leafId: args.leafId
   })
+
   return {
     ptyId: result.id,
     ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
@@ -167,13 +172,16 @@ async function createBackgroundTab(args: {
   launch: BackgroundTerminalLaunch
 }): Promise<BackgroundTab> {
   const store = useAppStore.getState()
+
   const tab = store.createTab(args.worktree.id, undefined, undefined, {
     activate: false,
     recordInteraction: false
   })
+
   if (args.launch.title) {
     store.setTabCustomTitle(tab.id, args.launch.title, { recordInteraction: false })
   }
+
   if (args.launch.color) {
     store.setTabColor(tab.id, args.launch.color)
   }
@@ -181,6 +189,7 @@ async function createBackgroundTab(args: {
   const leafId = createBrowserUuid()
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId))
   let pane: SpawnedPane
+
   try {
     pane = await spawnPane({
       worktree: args.worktree,
@@ -194,6 +203,7 @@ async function createBackgroundTab(args: {
     store.closeTab(tab.id, { recordInteraction: false, reason: 'cleanup' })
     throw error
   }
+
   if (
     await retireUnownedTerminal({
       owner: { tabId: tab.id },
@@ -203,9 +213,11 @@ async function createBackgroundTab(args: {
   ) {
     throw new Error('The terminal tab was closed before its session finished starting.')
   }
+
   store.updateTabPtyId(tab.id, pane.ptyId)
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, pane.ptyId))
   registerBackgroundPaneBuffer(tab.id, leafId, pane)
+
   return { tabId: tab.id, primary: { leafId, ptyId: pane.ptyId } }
 }
 
@@ -218,6 +230,7 @@ async function addSetupSplit(args: {
 }): Promise<void> {
   const store = useAppStore.getState()
   const setupLeafId = createBrowserUuid()
+
   const setupPane = await spawnPane({
     worktree: args.worktree,
     connectionId: args.connectionId,
@@ -226,6 +239,7 @@ async function addSetupSplit(args: {
     command: buildSetupCommand(args.setup),
     env: args.setup.envVars
   })
+
   if (
     await retireUnownedTerminal({
       owner: { tabId: args.tab.tabId },
@@ -235,6 +249,7 @@ async function addSetupSplit(args: {
   ) {
     return
   }
+
   store.updateTabPtyId(args.tab.tabId, setupPane.ptyId)
   store.setTabLayout(
     args.tab.tabId,
@@ -253,6 +268,7 @@ function getDefaultTabLaunches(
 ): BackgroundTerminalLaunch[] {
   return (defaultTabs?.tabs ?? []).map((tab) => {
     const command = tab.command?.trim()
+
     return {
       ...(tab.title ? { title: tab.title } : {}),
       ...(tab.color ? { color: tab.color } : {}),
@@ -267,19 +283,24 @@ export async function launchWorktreeBackgroundTerminals(
   if (!args.setup && !args.defaultTabs) {
     return
   }
+
   const store = useAppStore.getState()
+
   const runtimeTarget = getActiveRuntimeTarget(
     getSettingsForWorktreeRuntimeOwner(store, args.worktreeId)
   )
+
   if (runtimeTarget.kind === 'environment') {
     // Runtime-owned worktrees materialize setup/defaultTabs inside createManagedWorktree.
     return
   }
 
   const worktree = store.allWorktrees().find((entry) => entry.id === args.worktreeId)
+
   if (!worktree) {
     throw new Error('The target workspace is no longer available.')
   }
+
   const repo = store.repos.find((entry) => entry.id === worktree.repoId)
   const connectionId = repo?.connectionId ?? null
   const defaultLaunches = getDefaultTabLaunches(args.defaultTabs)
@@ -294,11 +315,14 @@ export async function launchWorktreeBackgroundTerminals(
   }
 
   const setupMode = store.settings?.setupScriptLaunchMode ?? 'new-tab'
+
   const shouldSplitSetup =
     args.setup && (setupMode === 'split-horizontal' || setupMode === 'split-vertical')
+
   if (shouldSplitSetup) {
     const primaryTab =
       launchedTabs[0] ?? (await createBackgroundTab({ worktree, connectionId, launch: {} }))
+
     await addSetupSplit({
       worktree,
       connectionId,
@@ -306,6 +330,7 @@ export async function launchWorktreeBackgroundTerminals(
       setup: args.setup!,
       direction: setupMode === 'split-horizontal' ? 'horizontal' : 'vertical'
     })
+
     return
   }
 
@@ -313,6 +338,7 @@ export async function launchWorktreeBackgroundTerminals(
     if (launchedTabs.length === 0) {
       launchedTabs.push(await createBackgroundTab({ worktree, connectionId, launch: {} }))
     }
+
     await createBackgroundTab({
       worktree,
       connectionId,

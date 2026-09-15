@@ -20,11 +20,14 @@ const recordKeyCountCache = new WeakMap<Record<string, unknown>, number>()
 
 export function countRecordKeysByReference(record: Record<string, unknown>): number {
   const cached = recordKeyCountCache.get(record)
+
   if (cached !== undefined) {
     return cached
   }
+
   const count = Object.keys(record).length
   recordKeyCountCache.set(record, count)
+
   return count
 }
 
@@ -48,6 +51,7 @@ export function useVirtualRowMeasurementSync(args: {
     hasDirectScrollInput,
     shouldSkipScrollAnchorRestore
   } = args
+
   const { virtualizer, isCurrentVirtualRowElement } = virtualization
   const prCacheLen = useAppStore((s) => countRecordKeysByReference(s.prCache))
   const issueCacheLen = useAppStore((s) => countRecordKeysByReference(s.issueCache))
@@ -55,6 +59,7 @@ export function useVirtualRowMeasurementSync(args: {
   const lineageRowRekeys = useMemo(() => buildLineageRowRekeyMap(renderRows), [renderRows])
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
+
   const activeStickyIndexes = getActiveStickyIndexesForScroll({
     rows: renderRows,
     rangeStartIndex: virtualization.stickyRangeStartIndexRef.current,
@@ -62,6 +67,7 @@ export function useVirtualRowMeasurementSync(args: {
     stickyHeaderIndexes: virtualization.stickyHeaderIndexes,
     virtualItems
   })
+
   virtualization.activeStickyHeaderIndexRef.current = activeStickyIndexes.groupIndex
   virtualization.activeStickyHostIndexRef.current = activeStickyIndexes.hostIndex
 
@@ -70,18 +76,23 @@ export function useVirtualRowMeasurementSync(args: {
       if (!isCurrentVirtualRowElement(element)) {
         return
       }
+
       virtualizer.measureElement(element)
     })
   }, [isCurrentVirtualRowElement, virtualizer])
+
   const measureVirtualRowElement = useCallback(
     (element: HTMLDivElement | null) => {
       if (!element) {
         virtualizer.measureElement(null)
+
         return
       }
+
       if (!isCurrentVirtualRowElement(element)) {
         return
       }
+
       virtualizer.measureElement(element)
     },
     [isCurrentVirtualRowElement, virtualizer]
@@ -95,6 +106,7 @@ export function useVirtualRowMeasurementSync(args: {
     // Why: a stale retained element after delete/collapse measures 0px and corrupts the next slot; measure only key-matched rows.
     measureMountedRows()
     const frameId = window.requestAnimationFrame(measureMountedRows)
+
     return () => window.cancelAnimationFrame(frameId)
   }, [activeRenderRowKeys, prCacheLen, issueCacheLen, measureMountedRows, virtualizer])
 

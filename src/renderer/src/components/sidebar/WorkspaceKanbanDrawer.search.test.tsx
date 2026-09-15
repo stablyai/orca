@@ -75,6 +75,7 @@ vi.mock('@/components/ui/sheet', () => ({
 vi.mock('./WorkspaceKanbanDrawerHeader', () => ({
   default: (props: HeaderCapture) => {
     headerState.current = props
+
     return <div data-testid="workspace-board-header" />
   }
 }))
@@ -82,6 +83,7 @@ vi.mock('./WorkspaceKanbanDrawerHeader', () => ({
 vi.mock('./WorkspaceKanbanLaneGrid', () => ({
   default: (props: GridCapture) => {
     gridState.current = props
+
     return <div data-testid="workspace-board-lanes" />
   }
 }))
@@ -104,6 +106,7 @@ vi.mock('./use-workspace-kanban-selection', () => ({
     renderedWorktrees?: readonly Worktree[]
   ) => {
     selectionScopeState.current = renderedWorktrees ?? boardWorktrees
+
     return {
       selectedWorktreeIds: new Set(selectionState.current.map(getWorktreeHostIdentity)),
       selectedWorktrees: selectionState.current,
@@ -151,6 +154,7 @@ vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
 vi.mock('./use-workspace-kanban-card-pointer-drag', () => ({
   useWorkspaceKanbanCardPointerDrag: (params: PointerDragCapture) => {
     pointerDragState.current = params
+
     return { isPointerDragActiveRef: { current: false }, onCardPointerDownCapture: vi.fn() }
   }
 }))
@@ -190,14 +194,21 @@ function worktree(name: string, manualOrder: number, workspaceStatus: string): W
 }
 
 const alpha = worktree('Alpha', 100, 'todo')
+
 const beta = worktree('Beta', 200, 'todo')
+
 const gamma = worktree('Gamma', 300, 'todo')
+
 const delta = worktree('Delta', 400, 'todo')
+
 const omega = worktree('Omega', 100, 'in-review')
+
 const allWorktrees = [alpha, beta, gamma, delta, omega]
 
 let container: HTMLDivElement
+
 let root: Root
+
 let updateWorktreesMeta: ReturnType<typeof vi.fn<UpdateWorktreesMeta>>
 
 function renderDrawer(open = true): void {
@@ -413,11 +424,13 @@ describe('WorkspaceKanbanDrawer search', () => {
 
     const payload = updateWorktreesMeta.mock.calls.at(-1)?.[0]
     let dropped: Partial<WorktreeMeta> | undefined
+
     if (Array.isArray(payload)) {
       dropped = payload.find((entry) => entry.worktreeId === omega.id)?.updates
     } else if (payload && 'get' in payload) {
       dropped = payload.get(omega.id)
     }
+
     expect(dropped?.workspaceStatus).toBe('todo')
     expect(dropped?.manualOrder).toBeGreaterThan(gamma.manualOrder ?? 0)
     expect(dropped?.manualOrder).toBeLessThan(delta.manualOrder ?? 0)

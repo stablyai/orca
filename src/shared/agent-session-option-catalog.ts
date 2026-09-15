@@ -26,6 +26,7 @@ export type {
   CatalogOption,
   CatalogOptionApply
 } from './agent-session-option-catalog-types'
+
 export { createClaudeCatalogOptions }
 
 const CATALOGS: AgentSessionOptionCatalogMap = {
@@ -60,14 +61,19 @@ export function mergeCatalogModels(
   discovered: readonly CatalogModel[]
 ): CatalogModel[] {
   const discoveredById = new Map(discovered.map((model) => [model.id, model]))
+
   const merged = seed.map((model) => {
     const live = discoveredById.get(model.id)
+
     if (!live) {
       return model
     }
+
     discoveredById.delete(model.id)
+
     return { ...model, ...live, options: model.options }
   })
+
   return [...merged, ...discoveredById.values()]
 }
 
@@ -79,11 +85,14 @@ export function mergeDiscoveredAuthoritativeModels(
   discovered: readonly CatalogModel[]
 ): CatalogModel[] {
   const inheritedOptions = (seed.find((model) => model.isDefault) ?? seed[0])?.options ?? []
+
   return discovered.map((disc) => {
     const seedMatch = seed.find((model) => model.id === disc.id)
+
     const { isDefault: _seeded, ...merged } = seedMatch
       ? { ...seedMatch, ...disc, options: seedMatch.options }
       : { ...disc, options: inheritedOptions }
+
     // Why: the probe reports which id the CLI defaults to today; a seed flag frozen at
     // release would keep naming the old one after the account's default moves.
     return disc.isDefault ? { ...merged, isDefault: true } : merged

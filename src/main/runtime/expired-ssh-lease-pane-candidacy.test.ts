@@ -9,6 +9,7 @@ import type { SshRemotePtyLease } from '../../shared/ssh-types'
 // config/vitest.config.ts — the config CI runs — includes only `*.test.ts`.
 
 const TARGET = 'ssh-target'
+
 const TAB_ID = 'tab-candidacy'
 
 type LeaseReader = {
@@ -32,6 +33,7 @@ type LeaseReader = {
 
 function leaseFor(ptyId: string, marks: Partial<SshRemotePtyLease> = {}): SshRemotePtyLease {
   const now = Date.now()
+
   return {
     targetId: TARGET,
     ptyId,
@@ -97,13 +99,16 @@ describe('recent expired SSH lease candidacy', () => {
   it('collects the same tabs the per-tab reader reports, in one sweep of the leases', () => {
     const leases = [leaseFor('pty-1', { supersededBy: 'pty-2' }), leaseFor('pty-2')]
     let sweeps = 0
+
     const reader = new OrcaRuntimeService({
       ...store,
       getSshRemotePtyLeases: () => {
         sweeps += 1
+
         return leases
       }
     }) as unknown as LeaseReader
+
     const tabs = Array.from({ length: 8 }, (_, index) => ({
       id: index === 7 ? TAB_ID : `tab-${index}`,
       ptyId: null

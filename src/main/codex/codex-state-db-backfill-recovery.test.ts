@@ -16,6 +16,7 @@ import {
 import type { CodexStateDbBackfillStatus } from './codex-state-db'
 
 const temporaryRoots: string[] = []
+
 const originalPlatform = process.platform
 
 function createFakeChild(): EventEmitter & {
@@ -35,6 +36,7 @@ function createFakeChild(): EventEmitter & {
 async function createTemporaryRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-codex-backfill-recovery-'))
   temporaryRoots.push(root)
+
   return root
 }
 
@@ -52,10 +54,12 @@ describe('Codex state DB backfill recovery', () => {
   it('does not restart an exhausted supervisor when later triggers arrive', async () => {
     vi.spyOn(console, 'info').mockImplementation(() => {})
     const run = vi.fn(async () => ({ outcome: 'gave-up' as const, spawnCount: 5 }))
+
     const withLock = vi.fn(
       async (_home: string, _signal: AbortSignal | undefined, claim: () => Promise<unknown>) =>
         await claim()
     )
+
     const dependencies = {
       isPending: vi.fn(() => true),
       run,
@@ -76,6 +80,7 @@ describe('Codex state DB backfill recovery', () => {
   it('releases a completed supervisor entry', async () => {
     vi.spyOn(console, 'info').mockImplementation(() => {})
     const run = vi.fn(async () => ({ outcome: 'completed' as const, spawnCount: 1 }))
+
     const dependencies = {
       isPending: vi.fn().mockReturnValueOnce(true).mockReturnValue(false),
       run,
@@ -99,6 +104,7 @@ describe('Codex state DB backfill recovery', () => {
   it('releases a failed owner-lock attempt for later arbitration', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.spyOn(console, 'info').mockImplementation(() => {})
+
     const dependencies = {
       isPending: vi.fn(() => true),
       run: vi.fn(async () => ({ outcome: 'completed' as const, spawnCount: 1 })),
@@ -125,6 +131,7 @@ describe('Codex state DB backfill recovery', () => {
 
   it('bounds permanent coordinator failures across later triggers', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const dependencies = {
       isPending: vi.fn(() => true),
       run: vi.fn(),
@@ -132,6 +139,7 @@ describe('Codex state DB backfill recovery', () => {
         throw new Error('permanent lock-root failure')
       })
     }
+
     const tasks: Promise<unknown>[] = []
 
     for (let attempt = 0; attempt < 6; attempt += 1) {
@@ -139,6 +147,7 @@ describe('Codex state DB backfill recovery', () => {
         '/managed-home',
         dependencies as never
       )
+
       tasks.push(task)
       await expect(task).resolves.toBeNull()
     }
@@ -160,17 +169,21 @@ describe('Codex state DB backfill recovery', () => {
     let maxLiveChildren = 0
     let safetyFuseTripped = false
     const terminate = vi.fn(async () => {})
+
     const spawnProcess = vi.fn(() => {
       const child = createFakeChild()
       children.set(child, now + 10_001)
       maxLiveChildren = Math.max(maxLiveChildren, children.size)
+
       return child
     })
+
     const sleep = vi.fn(async (ms: number) => {
       timerDurations.push(ms)
       pendingTimers += 1
       maxPendingTimers = Math.max(maxPendingTimers, pendingTimers)
       const wakeAt = now + ms
+
       for (const [child, exitAt] of children) {
         if (exitAt <= wakeAt) {
           now = exitAt
@@ -179,13 +192,16 @@ describe('Codex state DB backfill recovery', () => {
           child.emit('exit', 1, null)
         }
       }
+
       now = wakeAt
       pendingTimers -= 1
+
       if (ms === 2_000 && spawnProcess.mock.calls.length === 6) {
         safetyFuseTripped = true
         controller.abort()
         throw Object.assign(new Error('reproduction safety fuse'), { name: 'AbortError' })
       }
+
       await Promise.resolve()
     })
 
@@ -237,19 +253,24 @@ describe('Codex state DB backfill recovery', () => {
     let exitCount = 0
     let pendingTimers = 0
     let maxLiveChildren = 0
+
     const spawnProcess = vi.fn(() => {
       const child = createFakeChild()
       children.set(child, now + 10_001)
       maxLiveChildren = Math.max(maxLiveChildren, children.size)
+
       return child
     })
+
     const terminate = vi.fn(async (child: ReturnType<typeof createFakeChild>) => {
       children.delete(child)
     })
+
     const sleep = vi.fn(async (ms: number) => {
       timerDurations.push(ms)
       pendingTimers += 1
       const wakeAt = now + ms
+
       for (const [child, exitAt] of children) {
         if (exitAt <= wakeAt) {
           now = exitAt
@@ -258,6 +279,7 @@ describe('Codex state DB backfill recovery', () => {
           child.emit('exit', 1, null)
         }
       }
+
       now = wakeAt
       pendingTimers -= 1
       await Promise.resolve()
@@ -313,13 +335,17 @@ describe('Codex state DB backfill recovery', () => {
     let spawnCount = 0
     let now = 0
     const timerDurations: number[] = []
+
     const spawnProcess = vi.fn(() => {
       const child = children[spawnCount++]
+
       if (spawnCount === 1) {
         queueMicrotask(() => child.emit('error', new Error('temporary launch failure')))
       }
+
       return child
     })
+
     const terminate = vi.fn(async () => {})
 
     await expect(
@@ -348,6 +374,7 @@ describe('Codex state DB backfill recovery', () => {
   it('keeps the successful app-server claimant alive until Codex marks its DB complete', async () => {
     const child = createFakeChild()
     const terminate = vi.fn(async () => {})
+
     const readStatus = vi
       .fn()
       .mockReturnValueOnce({ kind: 'incomplete', stateDbPath: '/state.sqlite', status: 'running' })
@@ -370,6 +397,7 @@ describe('Codex state DB backfill recovery', () => {
     const child = createFakeChild()
     const spawnProcess = vi.fn(() => child)
     const codexCommand = 'C:\\Users\\alice\\AppData\\Roaming\\npm\\codex.cmd'
+
     const readStatus = vi
       .fn()
       .mockReturnValueOnce({ kind: 'incomplete', stateDbPath: 'state.sqlite', status: 'running' })
@@ -393,6 +421,7 @@ describe('Codex state DB backfill recovery', () => {
       string[],
       { cwd?: string; env?: NodeJS.ProcessEnv }
     ]
+
     expect(spawnFile).toBe(getCmdExePath())
     expect(spawnArgs).toEqual([
       '/d',
@@ -416,13 +445,17 @@ describe('Codex state DB backfill recovery', () => {
     const children = [first, second]
     let now = 0
     let spawnCount = 0
+
     const spawnProcess = vi.fn(() => {
       const child = children[spawnCount++]
+
       if (child === first) {
         queueMicrotask(() => child.emit('exit', 1, null))
       }
+
       return child
     })
+
     const readStatus = vi.fn((): CodexStateDbBackfillStatus =>
       spawnCount >= 2
         ? { kind: 'complete', stateDbPath: '/state.sqlite' }
@@ -447,6 +480,7 @@ describe('Codex state DB backfill recovery', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     const child = createFakeChild()
     const spawnProcess = vi.fn(() => child)
+
     const readStatus = vi
       .fn()
       .mockReturnValueOnce({ kind: 'incomplete', stateDbPath: 'state.sqlite', status: 'running' })
@@ -473,6 +507,7 @@ describe('Codex state DB backfill recovery', () => {
     const command = spawnCall[1].join(' ')
     expect(command).toContain('export CODEX_HOME=')
     expect(command).toContain('/home/alice/.codex')
+
     for (const arg of CODEX_READ_ONLY_APP_SERVER_ARGS) {
       expect(command).toContain(arg)
     }
@@ -511,11 +546,13 @@ describe.skipIf(process.platform === 'win32')('Codex backfill supervisor owner l
     vi.stubEnv('ORCA_USER_DATA_PATH', userData)
     const home = join(userData, 'managed-home')
     let releaseFirst!: () => void
+
     const first = withCodexBackfillSupervisorLock(
       home,
       undefined,
       async () => await new Promise<void>((resolve) => (releaseFirst = resolve))
     )
+
     await vi.waitFor(async () => {
       await expect(
         import('node:fs/promises').then(({ readFile }) =>

@@ -10,7 +10,9 @@ import { ChecksList } from './checks-panel/checks-list'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const openCheckRunDetails = vi.fn()
+
 const patchOpenCheckRunDetails = vi.fn()
+
 const activeWorktreeState = vi.hoisted(() => ({
   current: null as { id: string } | null
 }))
@@ -28,6 +30,7 @@ vi.mock('@/store/selectors', () => ({
 }))
 
 let container: HTMLDivElement
+
 let root: Root
 
 const failingCheck: PRCheckDetail = {
@@ -104,6 +107,7 @@ function renderChecksList(
             props.onLoadCheckDetails ??
             (async () => {
               await Promise.resolve()
+
               return checkDetails
             })
           }
@@ -153,6 +157,7 @@ describe('ChecksList expanded check details', () => {
     const button = [...container.querySelectorAll('button')].find((candidate) =>
       candidate.textContent?.includes('View full logs')
     )
+
     expect(button).toBeDefined()
 
     act(() => {
@@ -182,6 +187,7 @@ describe('ChecksList expanded check details', () => {
     const button = [...container.querySelectorAll('button')].find((candidate) =>
       candidate.textContent?.includes('View full logs')
     )
+
     expect(button).toBeDefined()
 
     act(() => {
@@ -217,15 +223,18 @@ describe('ChecksList expanded check details', () => {
 
   it('finishes the full-details tab when its sidebar unmounts during loading', async () => {
     let resolveDetails: (details: PRCheckRunDetails) => void = () => {}
+
     const request = new Promise<PRCheckRunDetails>((resolve) => {
       resolveDetails = resolve
     })
+
     renderChecksList({ worktreeId: 'wt-child-1', onLoadCheckDetails: () => request })
 
     await act(async () => {
       await Promise.resolve()
     })
     patchOpenCheckRunDetails.mockClear()
+
     const button = [...container.querySelectorAll('button')].find((candidate) =>
       candidate.textContent?.includes('View full details')
     )
@@ -249,15 +258,18 @@ describe('ChecksList expanded check details', () => {
 
   it('shows a load error in the full-details tab after its sidebar unmounts', async () => {
     let rejectDetails: (error: Error) => void = () => {}
+
     const request = new Promise<PRCheckRunDetails>((_resolve, reject) => {
       rejectDetails = reject
     })
+
     renderChecksList({ worktreeId: 'wt-child-1', onLoadCheckDetails: () => request })
 
     await act(async () => {
       await Promise.resolve()
     })
     patchOpenCheckRunDetails.mockClear()
+
     const button = [...container.querySelectorAll('button')].find((candidate) =>
       candidate.textContent?.includes('View full details')
     )
@@ -281,22 +293,27 @@ describe('ChecksList expanded check details', () => {
 
   it('retries an inline details error', async () => {
     let resolveRetry: (details: PRCheckRunDetails) => void = () => {}
+
     const retryRequest = new Promise<PRCheckRunDetails>((resolve) => {
       resolveRetry = resolve
     })
+
     const onLoadCheckDetails = vi
       .fn<() => Promise<PRCheckRunDetails | null>>()
       .mockRejectedValueOnce(new Error('GitHub request failed'))
       .mockReturnValueOnce(retryRequest)
+
     renderChecksList({ onLoadCheckDetails })
 
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
     })
+
     const retry = [...container.querySelectorAll('button')].find(
       (candidate) => candidate.textContent?.trim() === 'Retry'
     )
+
     retry!.focus()
 
     await act(async () => {
@@ -324,6 +341,7 @@ describe('ChecksList expanded check details', () => {
       resolve: (details: PRCheckRunDetails) => void
       reject: (error: Error) => void
     }[] = []
+
     const onLoadCheckDetails = vi.fn(
       () =>
         new Promise<PRCheckRunDetails>((resolve, reject) => {
@@ -400,6 +418,7 @@ describe('ChecksList expanded check details', () => {
       url: null,
       gitlabJobId: 987654
     }
+
     const onLoadCheckDetails = vi.fn(async () => ({
       ...checkDetails,
       name: gitLabCheck.name,
@@ -429,6 +448,7 @@ describe('ChecksList expanded check details', () => {
       url: null,
       gitlabJobId: 5150
     }
+
     const onLoadCheckDetails = vi
       .fn<(check: PRCheckDetail) => Promise<PRCheckRunDetails | null>>()
       .mockRejectedValueOnce(new Error('401 Unauthorized'))
@@ -469,6 +489,7 @@ describe('ChecksList expanded check details', () => {
       url: null,
       gitlabJobId: 5150
     }
+
     const onLoadCheckDetails = vi
       .fn<(check: PRCheckDetail) => Promise<PRCheckRunDetails | null>>()
       .mockResolvedValueOnce(null)
@@ -501,6 +522,7 @@ describe('ChecksList expanded check details', () => {
     const onLoadCheckDetails = vi
       .fn<(check: PRCheckDetail) => Promise<PRCheckRunDetails | null>>()
       .mockRejectedValue(new Error('401 Unauthorized'))
+
     const gitLabCheck: PRCheckDetail = {
       name: 'test: unit',
       status: 'completed',

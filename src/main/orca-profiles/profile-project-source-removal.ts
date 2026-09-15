@@ -38,9 +38,11 @@ export function removeSourceRepo(
       showDotfilesByWorktree: removeRepoWorktreeRecord(state.ui.showDotfilesByWorktree, repoId)
     }
   }
+
   delete next.sparsePresetsByRepo[repoId]
   delete next.retiredWorktreeNamesByRepo?.[repoId]
   removeRepoWorktreeMetadata(next, repoId)
+
   return rebuildRepoBackedProjectState(next)
 }
 
@@ -50,14 +52,17 @@ function removeRepoWorktreeMetadata(state: TransferProfileState, repoId: string)
       delete state.worktreeMeta[key]
     }
   }
+
   for (const [key, lineage] of Object.entries(state.worktreeLineageById)) {
     if (isRepoWorktreeId(repoId, key) || isRepoWorktreeId(repoId, lineage.parentWorktreeId)) {
       delete state.worktreeLineageById[key]
     }
   }
+
   for (const [key, lineage] of Object.entries(state.workspaceLineageByChildKey)) {
     const child = parseWorkspaceKey(key)
     const parent = parseWorkspaceKey(lineage.parentWorkspaceKey)
+
     if (
       (child?.type === 'worktree' && isRepoWorktreeId(repoId, child.worktreeId)) ||
       (parent?.type === 'worktree' && isRepoWorktreeId(repoId, parent.worktreeId))

@@ -46,10 +46,13 @@ function bundleFailureResult(
   failure: NonNullable<ReturnType<typeof skillInstallFailureFromError>>
 ): SkillBundleInstallResult {
   const manifest = grant.version.manifest
+
   if (!('skills' in manifest)) {
     throw new Error('skill-bundle-cloud-manifest-required')
   }
+
   const selectedSkillIds = new Set(request.selectedSkillIds)
+
   return {
     operationId: request.operationId,
     packageId: request.package.packageId,
@@ -78,9 +81,11 @@ export async function installSkillBundleCloudGrant(
   onProgress?: (progress: SkillBundleInstallProgress) => void
 ) {
   const manifest = grant.version.manifest
+
   if (!('skills' in manifest)) {
     throw new Error('skill-bundle-cloud-manifest-required')
   }
+
   const request: SkillBundleInstallRequest = {
     operationId: input.operationId,
     package: {
@@ -96,6 +101,7 @@ export async function installSkillBundleCloudGrant(
     ...(input.providers ? { providers: input.providers } : {}),
     conflictDecisions: input.conflictDecisions ?? []
   }
+
   try {
     if (!input.environmentId) {
       return {
@@ -103,8 +109,10 @@ export async function installSkillBundleCloudGrant(
         value: await runtime.installSharedSkillBundleRequest(request, undefined, onProgress)
       }
     }
+
     const userDataPath = app.getPath('userData')
     const status = await getRuntimeEnvironmentStatus(userDataPath, input.environmentId, 15_000)
+
     if (
       status.ok !== true ||
       status.result.capabilities?.includes(SKILL_BUNDLE_INSTALL_CAPABILITY) !== true
@@ -115,8 +123,10 @@ export async function installSkillBundleCloudGrant(
           destination: 'remote-runtime'
         })
       }
+
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
+
     return {
       status: 'ok' as const,
       value: await installSkillBundleOnRemoteRuntime({
@@ -131,12 +141,15 @@ export async function installSkillBundleCloudGrant(
     }
   } catch (error) {
     const failure = skillInstallFailureFromError(error)
+
     if (failure?.category === 'compatibility') {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
+
     if (!failure) {
       throw error
     }
+
     return { status: 'ok' as const, value: bundleFailureResult(grant, request, failure) }
   }
 }
@@ -165,12 +178,15 @@ export async function installSkillCloudGrant(
     ...(input.providers ? { providers: input.providers } : {}),
     conflictResolution: input.conflictResolution
   }
+
   try {
     if (!input.environmentId) {
       return { status: 'ok' as const, value: await runtime.installSharedSkillRequest(request) }
     }
+
     const userDataPath = app.getPath('userData')
     const status = await getRuntimeEnvironmentStatus(userDataPath, input.environmentId, 15_000)
+
     if (
       status.ok !== true ||
       status.result.capabilities?.includes(SKILL_INSTALL_CAPABILITY) !== true
@@ -181,8 +197,10 @@ export async function installSkillCloudGrant(
           destination: 'remote-runtime'
         })
       }
+
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
+
     return {
       status: 'ok' as const,
       value: await installSkillOnRemoteRuntime({
@@ -196,12 +214,15 @@ export async function installSkillCloudGrant(
     }
   } catch (error) {
     const failure = skillInstallFailureFromError(error)
+
     if (failure?.category === 'compatibility') {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
+
     if (!failure) {
       throw error
     }
+
     return {
       status: 'ok' as const,
       value: {

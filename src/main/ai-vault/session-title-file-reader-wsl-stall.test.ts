@@ -2,13 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
 
 const UNC_PATH = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects\\p\\stalled.jsonl'
+
 const STALLED_SESSION_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+
 const LOCAL_SESSION_ID = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff'
 
 const mocks = vi.hoisted(() => ({ lstat: vi.fn() }))
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const original = await importOriginal<typeof NodeFsPromisesModule>()
+
   return {
     ...original,
     // Only the WSL request is faked; the local sibling reads a real temp file.
@@ -30,6 +33,7 @@ import {
 } from '../native-chat/wsl-transcript-fs-gate'
 
 let releaseStall: (() => void) | undefined
+
 let tempRoot: string | undefined
 
 function stalls(): Promise<never> {
@@ -62,6 +66,7 @@ afterEach(async () => {
   releaseStall = undefined
   await vi.advanceTimersByTimeAsync(0)
   vi.useRealTimers()
+
   if (tempRoot) {
     await rm(tempRoot, { recursive: true, force: true })
     tempRoot = undefined
@@ -79,6 +84,7 @@ describe('AI Vault session titles with a stalled WSL transcript lstat', () => {
       { agent: 'claude', sessionId: STALLED_SESSION_ID, transcriptPath: UNC_PATH },
       { agent: 'claude', sessionId: LOCAL_SESSION_ID, transcriptPath: localPath }
     ])
+
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS + 1)
 
     const { titles } = await pending

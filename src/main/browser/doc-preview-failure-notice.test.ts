@@ -55,7 +55,9 @@ describe('publishDocPreviewFailure', () => {
     const send = vi.fn(() => {
       throw new Error('Object has been destroyed')
     })
+
     setDocPreviewFailureSink({ send })
+
     const failure = {
       grantId: 'd'.repeat(32),
       relativePath: 'index.html',

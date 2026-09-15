@@ -3,7 +3,9 @@ import type { AppState } from '../types'
 
 /** Session-only text drafts for Linear/Jira creation dialogs; picker selections stay fresh. */
 export type NewLinearIssueDraft = { title: string; body: string }
+
 export type NewLinearProjectDraft = { name: string; description: string; content: string }
+
 export type NewJiraIssueDraft = { title: string; body: string }
 
 /** Empty forms do not replace a later open with a meaningless draft. */

@@ -15,13 +15,16 @@ function node(path: string, isDirectory = false): TreeNode {
 describe('selectDeletionRoots', () => {
   it('normalizes each selected path once instead of once per possible parent', () => {
     let reads = 0
+
     const nodes = Array.from({ length: 1000 }, (_, i) => ({
       ...node(`/repo/directory-${i}`, true),
       get path() {
         reads++
+
         return `/repo/directory-${i}`
       }
     }))
+
     const selected = selectDeletionRoots(nodes)
     expect(reads).toBe(2000)
     selected.forEach((entry, index) => expect(entry).toBe(nodes[index]))
@@ -61,13 +64,16 @@ describe('selectDeletionRoots', () => {
 
   it('reads directory membership once per selected node, including file-only selections', () => {
     let directoryReads = 0
+
     const nodes = Array.from({ length: 1_000 }, (_, index) => ({
       ...node(`/repo/file-${index}.ts`),
       get isDirectory() {
         directoryReads += 1
+
         return false
       }
     }))
+
     const selected = selectDeletionRoots(nodes)
     expect(directoryReads).toBe(nodes.length)
     expect(selected).not.toBe(nodes)
@@ -77,14 +83,17 @@ describe('selectDeletionRoots', () => {
   it('preserves order, node identity and host ownership when children precede parents', () => {
     const child = node('/repo/docs/guide.md')
     const first = { ...node('/repo/first.ts'), operationOwner: { kind: 'local' as const } }
+
     const parent = {
       ...node('/repo/docs', true),
       operationOwner: { kind: 'ssh' as const, connectionId: 'ssh-owner' }
     }
+
     const last = {
       ...node('/repo/last.ts'),
       operationOwner: { kind: 'unresolved' as const }
     }
+
     const nodes = [child, first, parent, last]
     const selected = selectDeletionRoots(nodes)
     expect(selected).toEqual([first, parent, last])
@@ -126,8 +135,10 @@ describe('runBatchDeletion', () => {
   it('asks for confirmation once and deletes every root in order', async () => {
     const confirmBatch = vi.fn().mockResolvedValue(true)
     const order: string[] = []
+
     const deleteNode = vi.fn(async (n: TreeNode) => {
       order.push(n.path)
+
       return true
     })
 

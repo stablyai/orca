@@ -6,6 +6,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
 const ORCA_REPO_URL = 'https://github.com/stablyai/orca'
+
 type StarNagMode = 'gh' | 'web'
 
 /**
@@ -30,15 +31,19 @@ export function StarNagCard(): React.JSX.Element | null {
       if (payload?.surface && payload.surface !== 'card') {
         setBusy(false)
         setVisible(false)
+
         return
       }
+
       setMode(payload?.mode === 'web' ? 'web' : 'gh')
       setVisible(true)
     })
+
     const unsubscribeHide = window.api.starNag.onHide(() => {
       setBusy(false)
       setVisible(false)
     })
+
     return () => {
       unsubscribeShow()
       unsubscribeHide()
@@ -49,6 +54,7 @@ export function StarNagCard(): React.JSX.Element | null {
     if (busy) {
       return
     }
+
     setVisible(false)
     // Why: fire-and-forget. If persisting the dismissal fails the worst case
     // is we re-fire the same threshold on next launch — not worth blocking
@@ -60,6 +66,7 @@ export function StarNagCard(): React.JSX.Element | null {
     if (busy) {
       return
     }
+
     setVisible(false)
     void window.api.starNag.later()
   }
@@ -68,12 +75,15 @@ export function StarNagCard(): React.JSX.Element | null {
     if (!visible) {
       return
     }
+
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         handleClose()
       }
     }
+
     window.addEventListener('keydown', onKeyDown)
+
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [handleClose, visible])
 
@@ -88,13 +98,16 @@ export function StarNagCard(): React.JSX.Element | null {
     if (busy) {
       return
     }
+
     const openGithubFallback = async (): Promise<boolean> => {
       try {
         await window.api.shell.openUrl(ORCA_REPO_URL)
         await window.api.starNag.openWeb()
+
         if (mountedRef.current) {
           setVisible(false)
         }
+
         return true
       } catch {
         // Why: failing to open the external browser is recoverable; keep the
@@ -102,8 +115,10 @@ export function StarNagCard(): React.JSX.Element | null {
         return false
       }
     }
+
     if (mode === 'web') {
       setBusy(true)
+
       try {
         await openGithubFallback()
       } finally {
@@ -111,15 +126,19 @@ export function StarNagCard(): React.JSX.Element | null {
           setBusy(false)
         }
       }
+
       return
     }
+
     setBusy(true)
     let ok = false
+
     try {
       ok = await window.api.starNag.starOrca()
     } catch {
       ok = false
     }
+
     try {
       if (!ok) {
         // Why: preflight chooses whether direct starring should be offered. If
@@ -127,8 +146,10 @@ export function StarNagCard(): React.JSX.Element | null {
         if (mountedRef.current) {
           setMode('web')
         }
+
         return
       }
+
       if (mountedRef.current) {
         setVisible(false)
       }

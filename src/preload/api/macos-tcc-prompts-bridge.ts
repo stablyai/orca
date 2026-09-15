@@ -5,7 +5,9 @@ export const macosTccPromptsApi = {
   onThreshold: (callback: (payload: { promptCount: number }) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, payload: { promptCount: number }): void =>
       callback(payload)
+
     ipcRenderer.on('macosTccPrompts:threshold', listener)
+
     return (): void => {
       ipcRenderer.removeListener('macosTccPrompts:threshold', listener)
     }

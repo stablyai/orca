@@ -100,6 +100,7 @@ describe('canToggleNativeChat', () => {
         launchAgent: 'omp',
         nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
       })
+
     expect(forConnection('ssh-target-1')).toBe(false)
     expect(forConnection(null)).toBe(true)
     expect(forConnection('runtime-ssh-env-1')).toBe(true)

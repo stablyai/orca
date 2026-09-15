@@ -62,6 +62,7 @@ it('prints an unknown code with its message and nextSteps unchanged', () => {
     },
     _meta: { runtimeId: 'runtime_1' }
   }
+
   const error = new RuntimeRpcFailureError(failure)
 
   expect(formatCliError(error, { commandPath: ['orchestration', 'dispatch'] })).toBe(

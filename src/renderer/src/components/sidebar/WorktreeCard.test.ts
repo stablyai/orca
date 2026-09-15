@@ -7,9 +7,11 @@ vi.mock('@/lib/agent-status', () => ({
     if (title.includes('permission')) {
       return 'permission'
     }
+
     if (title.includes('working')) {
       return 'working'
     }
+
     return null
   }),
   isExplicitAgentStatusFresh: vi.fn(

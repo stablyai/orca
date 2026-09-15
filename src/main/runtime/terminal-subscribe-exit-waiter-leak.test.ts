@@ -40,10 +40,12 @@ describe('terminal.subscribe exit-waiter leak regression', () => {
     registerLivePty(runtime, 'pty-live', 'handle-live')
 
     const controller = new AbortController()
+
     const wait = runtime.waitForTerminal('handle-live', {
       condition: 'exit',
       signal: controller.signal
     })
+
     // Swallow the abort rejection; we assert on the waiter set, not the result.
     const settled: Promise<RuntimeTerminalWait | 'aborted'> = wait.catch(() => 'aborted' as const)
     await Promise.resolve()
@@ -65,6 +67,7 @@ describe('terminal.subscribe exit-waiter leak regression', () => {
     for (let i = 0; i < 3; i += 1) {
       void runtime.waitForTerminal('handle-live', { condition: 'exit' }).catch(() => {})
     }
+
     await Promise.resolve()
 
     // Nothing frees them short of real PTY exit — they accumulate.
@@ -77,9 +80,11 @@ describe('terminal.subscribe exit-waiter leak regression', () => {
 
     for (let i = 0; i < 25; i += 1) {
       const controller = new AbortController()
+
       const settled = runtime
         .waitForTerminal('handle-live', { condition: 'exit', signal: controller.signal })
         .catch(() => 'aborted' as const)
+
       await Promise.resolve()
       controller.abort()
       await settled

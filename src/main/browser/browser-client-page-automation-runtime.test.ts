@@ -109,15 +109,20 @@ function input(overrides: Record<string, unknown> = {}) {
 function createFixture() {
   let registeredWebContentsId: number | null = null
   const getGuestWebContentsId = vi.fn(() => registeredWebContentsId)
+
   const registerGuest = vi.fn((registered: { webContentsId: number }) => {
     registeredWebContentsId = registered.webContentsId
+
     return true
   })
+
   const unregisterGuest = vi.fn(() => {
     registeredWebContentsId = null
   })
+
   const onTabClosed = vi.fn(async () => {})
   const executeRpc = vi.fn(async () => ({ clicked: true }))
+
   return {
     runtime: new BrowserClientPageAutomationRuntime({
       browserManager: { getGuestWebContentsId, registerGuest, unregisterGuest },

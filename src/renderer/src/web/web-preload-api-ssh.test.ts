@@ -21,6 +21,7 @@ describe('web SSH preload API', () => {
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           const state =
             method === 'ssh.connect'
               ? {
@@ -38,6 +39,7 @@ describe('web SSH preload API', () => {
                   reconnectAttempt: 0,
                   providerEpoch: 'partial-provider-epoch'
                 }
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,

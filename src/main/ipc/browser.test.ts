@@ -132,10 +132,12 @@ describe('registerBrowserHandlers', () => {
 
   it('does not resolve registration waiters when BrowserManager rejects the guest', async () => {
     vi.useFakeTimers()
+
     try {
       registerGuestMock.mockReturnValue(false)
       const settled = Promise.allSettled([waitForTabRegistration('page-1', 1000)])
       registerBrowserHandlers()
+
       const registerHandler = handleMock.mock.calls.find(
         ([channel]) => channel === 'browser:registerGuest'
       )?.[1] as (event: { sender: Electron.WebContents }, args: object) => boolean
@@ -168,9 +170,11 @@ describe('registerBrowserHandlers', () => {
   it('validates exact live guest registration only for the trusted renderer', () => {
     getGuestWebContentsIdMock.mockReturnValue(123)
     registerBrowserHandlers()
+
     const validateHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:isGuestRegistered'
     )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => boolean
+
     const trustedSender = {
       id: 91,
       isDestroyed: () => false,
@@ -206,6 +210,7 @@ describe('registerBrowserHandlers', () => {
 
   it('repairs only a live webview owned by the trusted renderer', () => {
     registerBrowserHandlers()
+
     const repairHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:repairGuestRegistration'
     )?.[1] as (
@@ -217,19 +222,23 @@ describe('registerBrowserHandlers', () => {
         webContentsId: number
       }
     ) => boolean
+
     const trustedSender = {
       id: 91,
       isDestroyed: () => false,
       getType: () => 'window',
       getURL: () => 'file:///renderer/index.html'
     } as Electron.WebContents
+
     const guest = {
       id: 123,
       hostWebContents: trustedSender,
       isDestroyed: () => false,
       getType: () => 'webview'
     } as Electron.WebContents
+
     webContentsFromIdMock.mockReturnValue(guest)
+
     const args = {
       browserPageId: 'page-1',
       workspaceId: 'workspace-1',
@@ -301,9 +310,11 @@ describe('registerBrowserHandlers', () => {
 
   it('allows only the trusted renderer to approve an exact certificate challenge', () => {
     registerBrowserHandlers()
+
     const proceedHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:proceedCertificate'
     )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => unknown
+
     const trustedSender = {
       id: 91,
       isDestroyed: () => false,
@@ -320,12 +331,14 @@ describe('registerBrowserHandlers', () => {
     expect(proceedCertificateMock).toHaveBeenCalledWith('page-1', 'challenge-1')
 
     proceedCertificateMock.mockClear()
+
     const untrustedSender = {
       id: 92,
       isDestroyed: () => false,
       getType: () => 'webview',
       getURL: () => 'https://localhost:3443/'
     } as Electron.WebContents
+
     expect(
       proceedHandler(
         { sender: untrustedSender },
@@ -337,9 +350,11 @@ describe('registerBrowserHandlers', () => {
 
   it('rejects malformed certificate approval IPC arguments', () => {
     registerBrowserHandlers()
+
     const proceedHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:proceedCertificate'
     )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => unknown
+
     const sender = {
       id: 91,
       isDestroyed: () => false,
@@ -350,6 +365,7 @@ describe('registerBrowserHandlers', () => {
     for (const args of [null, {}, { browserPageId: 1, challengeId: 'challenge-1' }]) {
       expect(proceedHandler({ sender }, args)).toEqual({ ok: false, reason: 'missing' })
     }
+
     expect(proceedCertificateMock).not.toHaveBeenCalled()
   })
 
@@ -382,6 +398,7 @@ describe('registerBrowserHandlers', () => {
 
   it('resolves concurrent tab registration waiters for the same page', async () => {
     vi.useFakeTimers()
+
     try {
       getGuestWebContentsIdMock.mockReturnValue(null)
       const first = waitForTabRegistration('page-1', 1000)
@@ -435,18 +452,21 @@ describe('registerBrowserHandlers', () => {
     getGuestWebContentsIdMock.mockReturnValue(122)
     getAuthorizedGuestMock.mockReturnValueOnce(null).mockReturnValue(guest)
     registerBrowserHandlers()
+
     const sender = {
       id: 91,
       isDestroyed: () => false,
       getType: () => 'window',
       getURL: () => 'file:///renderer/index.html'
     } as Electron.WebContents
+
     const setGrabModeHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:setGrabMode'
     )?.[1] as (
       event: { sender: Electron.WebContents },
       args: { browserPageId: string; enabled: boolean }
     ) => Promise<unknown>
+
     const registerHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:registerGuest'
     )?.[1] as (
@@ -481,16 +501,19 @@ describe('registerBrowserHandlers', () => {
 
   it('returns not-ready when grab registration does not arrive', async () => {
     vi.useFakeTimers()
+
     try {
       getGuestWebContentsIdMock.mockReturnValue(null)
       getAuthorizedGuestMock.mockReturnValue(null)
       registerBrowserHandlers()
+
       const sender = {
         id: 91,
         isDestroyed: () => false,
         getType: () => 'window',
         getURL: () => 'file:///renderer/index.html'
       } as Electron.WebContents
+
       const setGrabModeHandler = handleMock.mock.calls.find(
         ([channel]) => channel === 'browser:setGrabMode'
       )?.[1] as (
@@ -502,6 +525,7 @@ describe('registerBrowserHandlers', () => {
         { sender },
         { browserPageId: 'page-1', enabled: true }
       )
+
       await vi.advanceTimersByTimeAsync(1_001)
 
       await expect(pendingResult).resolves.toEqual({ ok: false, reason: 'not-ready' })
@@ -516,18 +540,21 @@ describe('registerBrowserHandlers', () => {
     let registered = false
     getAuthorizedGuestMock.mockImplementation(() => (registered ? guest : null))
     registerBrowserHandlers()
+
     const sender = {
       id: 91,
       isDestroyed: () => false,
       getType: () => 'window',
       getURL: () => 'file:///renderer/index.html'
     } as Electron.WebContents
+
     const setGrabModeHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:setGrabMode'
     )?.[1] as (
       event: { sender: Electron.WebContents },
       args: { browserPageId: string; enabled: boolean }
     ) => Promise<unknown>
+
     const registerHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:registerGuest'
     )?.[1] as (
@@ -567,18 +594,21 @@ describe('registerBrowserHandlers', () => {
     let registered = false
     getAuthorizedGuestMock.mockImplementation(() => (registered ? guest : null))
     registerBrowserHandlers()
+
     const sender = {
       id: 91,
       isDestroyed: () => false,
       getType: () => 'window',
       getURL: () => 'file:///renderer/index.html'
     } as Electron.WebContents
+
     const setGrabModeHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:setGrabMode'
     )?.[1] as (
       event: { sender: Electron.WebContents },
       args: { browserPageId: string; enabled: boolean }
     ) => Promise<unknown>
+
     const registerHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:registerGuest'
     )?.[1] as (
@@ -617,18 +647,22 @@ describe('registerBrowserHandlers', () => {
   it('serializes in-flight mode changes so a stale enable cannot tear down the latest one', async () => {
     const guest = { id: 123 } as Electron.WebContents
     let resolveFirstEnable!: (success: boolean) => void
+
     const firstEnable = new Promise<boolean>((resolve) => {
       resolveFirstEnable = resolve
     })
+
     getAuthorizedGuestMock.mockReturnValue(guest)
     setGrabModeMock.mockReturnValueOnce(firstEnable).mockResolvedValue(true)
     registerBrowserHandlers()
+
     const sender = {
       id: 91,
       isDestroyed: () => false,
       getType: () => 'window',
       getURL: () => 'file:///renderer/index.html'
     } as Electron.WebContents
+
     const setGrabModeHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:setGrabMode'
     )?.[1] as (
@@ -661,12 +695,14 @@ describe('registerBrowserHandlers', () => {
     getAuthorizedGuestMock.mockReturnValue(guest)
     setGrabModeMock.mockResolvedValue(false)
     registerBrowserHandlers()
+
     const sender = {
       id: 91,
       isDestroyed: () => false,
       getType: () => 'window',
       getURL: () => 'file:///renderer/index.html'
     } as Electron.WebContents
+
     const setGrabModeHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:setGrabMode'
     )?.[1] as (
@@ -681,6 +717,7 @@ describe('registerBrowserHandlers', () => {
 
   it('resolves worktree and any-tab registration waiters when a guest registers', async () => {
     vi.useFakeTimers()
+
     try {
       getWebContentsIdByTabIdMock.mockReturnValue(new Map())
       const worktreeWait = waitForWorktreeTabRegistration('worktree-1', 1000)
@@ -750,14 +787,17 @@ describe('registerBrowserHandlers', () => {
     webContentsFromIdMock.mockReturnValue({ isDestroyed: () => true })
 
     let resolved = false
+
     const wait = waitForWorktreeTabRegistration('worktree-1', 1000).then(() => {
       resolved = true
     })
+
     await Promise.resolve()
 
     expect(resolved).toBe(false)
 
     registerBrowserHandlers()
+
     const registerHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:registerGuest'
     )?.[1] as (

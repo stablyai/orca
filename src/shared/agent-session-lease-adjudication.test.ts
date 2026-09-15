@@ -39,6 +39,7 @@ function lease(overrides: Partial<AgentSessionLease> = {}): AgentSessionLease {
 }
 
 const MATCHED: AgentSessionOwnerProbe = { outcome: 'identity-matched', matchedOn: ['spawn-token'] }
+
 const INDETERMINATE: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no answer' }
 
 function acquire(
@@ -161,6 +162,7 @@ describe('acquisition compare-and-swap', () => {
         ownerProcess: null,
         claimStatus: 'reserved'
       })
+
       expect(acquire(mid, { outcome: 'reservation-unused' }, 'op-2')).toEqual({
         decision: 'refused',
         code: 'agent_session_operation_conflict'
@@ -210,6 +212,7 @@ describe('restart reconciliation', () => {
       probe: { outcome: 'identity-mismatch', field: 'process-start-time' },
       observedAt: 9_000
     })
+
     expect(result).toEqual({
       disposition: 'evicted',
       nextFence: 8,

@@ -25,6 +25,7 @@ import { iterateTerminalHistorySeedChunks } from './terminal-history-seed-chunks
 // signals a real pid.
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
@@ -35,8 +36,11 @@ vi.mock('../pty-descendant-termination', () => ({
 import { POST_REPLAY_LIVE_AGENT_REATTACH_RESET } from '../../shared/terminal-mode-reset-profiles'
 
 const ANY_MOTION_TRACKING_ON = '\x1b[?1003h'
+
 const SGR_ENCODING_ON = '\x1b[?1006h'
+
 const ANY_MOTION_TRACKING_OFF = '\x1b[?1003l'
+
 const SGR_ENCODING_OFF = '\x1b[?1006l'
 
 function createFakeSubprocess(foregroundProcess: string) {
@@ -44,6 +48,7 @@ function createFakeSubprocess(foregroundProcess: string) {
   let onExit: ((code: number) => void) | null = null
   const written: string[] = []
   const signals: string[] = []
+
   return {
     written,
     signals,
@@ -73,10 +78,12 @@ function createFakeSubprocess(foregroundProcess: string) {
 async function waitForEmulatorParse(session: Session): Promise<void> {
   for (let i = 0; i < 200; i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 1))
+
     if (session.getSnapshot()?.snapshotAnsi.includes('$ ')) {
       return
     }
   }
+
   throw new Error('setup: emulator never parsed the agent output')
 }
 
@@ -100,6 +107,7 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
 
     // 1. A live agent TUI arms any-motion tracking + SGR encoding.
     const agentPty = createFakeSubprocess('claude')
+
     const agent = new Session({
       sessionId,
       cols: 80,
@@ -108,6 +116,7 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
       launchAgent: 'claude',
       shellReadySupported: false
     })
+
     agentPty.emit(`${ANY_MOTION_TRACKING_ON}${SGR_ENCODING_ON}`)
     agentPty.emit('user@host ~ % claude\r\nclaude> analyzing...\r\nuser@host ~ $ ')
     await waitForEmulatorParse(agent)
@@ -137,11 +146,13 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
     //    seeded with the recovered history exactly as daemon-server does.
     const restoreInfo = await reader.detectColdRestore(sessionId)
     expect(restoreInfo).not.toBeNull()
+
     const seedChunks = [
       ...iterateTerminalHistorySeedChunks(getRecoveredHistorySeedSegments(restoreInfo!))
     ]
 
     const shellPty = createFakeSubprocess('zsh')
+
     const shell = new Session({
       sessionId,
       cols: 80,
@@ -150,7 +161,9 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
       shellReadySupported: false,
       historySeedChunks: seedChunks
     })
+
     const revived = shell.getSnapshot()
+
     try {
       // #12101: the replacement shell's OWN state says mouse tracking is on,
       // so every snapshot it serves — reattach, checkpoint, mobile — re-arms it.
@@ -172,6 +185,7 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
     const reader = new HistoryReader(dir)
 
     const agentPty = createFakeSubprocess('claude')
+
     const agent = new Session({
       sessionId,
       cols: 80,
@@ -180,6 +194,7 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
       launchAgent: 'claude',
       shellReadySupported: false
     })
+
     agentPty.emit(`${ANY_MOTION_TRACKING_ON}${SGR_ENCODING_ON}`)
     agentPty.emit('user@host ~ $ ')
     await waitForEmulatorParse(agent)
@@ -192,6 +207,7 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
 
     const restoreInfo = await reader.detectColdRestore(sessionId)
     const shellPty = createFakeSubprocess('zsh')
+
     const shell = new Session({
       sessionId,
       cols: 80,
@@ -202,6 +218,7 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
         ...iterateTerminalHistorySeedChunks(getRecoveredHistorySeedSegments(restoreInfo!))
       ]
     })
+
     const revived = shell.getSnapshot()!
 
     // Reattach paint into a REAL renderer xterm, using the weakest profile in the
@@ -210,6 +227,7 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
     // half: the seed alone must leave the revived session unarmed, because the
     // daemon emulator's own state is what mobile and every other consumer read.
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+
     try {
       await new Promise<void>((resolve) => term.write('\x1b[2J\x1b[3J\x1b[H', resolve))
       await new Promise<void>((resolve) =>
@@ -232,6 +250,7 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
     const reader = new HistoryReader(dir)
 
     const agentPty = createFakeSubprocess('vim')
+
     const agent = new Session({
       sessionId,
       cols: 80,
@@ -239,10 +258,12 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
       subprocess: agentPty,
       shellReadySupported: false
     })
+
     agentPty.emit(`${ANY_MOTION_TRACKING_ON}${SGR_ENCODING_ON}`)
     agentPty.emit('user@host ~ $ ')
     await waitForEmulatorParse(agent)
     agentPty.emit(`${ANY_MOTION_TRACKING_OFF}${SGR_ENCODING_OFF}`)
+
     for (let i = 0; i < 50 && agent.getSnapshot()?.modes.mouseTracking !== false; i += 1) {
       await new Promise((resolve) => setTimeout(resolve, 1))
     }
@@ -255,6 +276,7 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
 
     const restoreInfo = await reader.detectColdRestore(sessionId)
     const shellPty = createFakeSubprocess('zsh')
+
     const shell = new Session({
       sessionId,
       cols: 80,
@@ -265,6 +287,7 @@ describe('#12101 mouse tracking survives the death of the process that armed it'
         ...iterateTerminalHistorySeedChunks(getRecoveredHistorySeedSegments(restoreInfo!))
       ]
     })
+
     try {
       expect(shell.getSnapshot()?.modes.mouseTracking).toBe(false)
       expect(shell.getSnapshot()?.rehydrateSequences).toBe('')

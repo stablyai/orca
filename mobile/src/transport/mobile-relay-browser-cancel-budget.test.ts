@@ -17,16 +17,19 @@ describe('relay browser cancellation resource budget', () => {
     let sendBinary: (bytes: Uint8Array) => boolean | void = () => false
     let hostRun: Promise<void> | undefined
     const methods: string[] = []
+
     const cleanup = (id: string): void => {
       const release = subscriptions.get(id)
       subscriptions.delete(id)
       void release?.()
     }
+
     const host = new RuntimeBrowserScreencastController({
       getCommands: () =>
         ({
           browserScreencast: async (_params, stream) => {
             sendBinary = stream.sendBinary
+
             return {
               subscriptionId: 'server-stream',
               ready: { type: 'ready', subscriptionId: 'server-stream', browserPageId: 'page' },
@@ -47,17 +50,20 @@ describe('relay browser cancellation resource budget', () => {
       setDriver: () => {},
       notifyRemoteViewersChanged: () => {}
     })
+
     const streams = new MobileRelayRpcStreams({
       nextId: () => `request-${++sequence}`,
       waitForConnected: async () => {},
       sendFrame: (request) => {
         methods.push(request.method)
+
         if (request.method === 'browser.screencast' && (request.params as { page?: string }).page) {
           hostRun = host.start(request.params as Parameters<typeof host.start>[0], {
             connectionId: 'relay-connection',
             sendBinary: (bytes) => {
               frameSends++
               frameBytes += bytes.byteLength
+
               return true
             },
             emit: (result: BrowserScreencastResult) => {
@@ -75,24 +81,32 @@ describe('relay browser cancellation resource budget', () => {
         } else if (request.method === 'browser.screencast.unsubscribe') {
           cleanup((request.params as { subscriptionId: string }).subscriptionId)
         }
+
         return true
       }
     })
+
     const cancel = streams.subscribe('browser.screencast', { page: 'page' }, () => {})
+
     try {
       const response = await ready.promise
+
       if (early) {
         cancel()
       }
+
       streams.handleResponse(response)
+
       if (!early) {
         cancel()
       }
+
       for (let frame = 0; frame < 100; frame++) {
         if (!stopped) {
           sendBinary(new Uint8Array(65_536))
         }
       }
+
       expect({ stopped, subscriptions: subscriptions.size, frameSends, frameBytes }).toEqual({
         stopped: true,
         subscriptions: 0,

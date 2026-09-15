@@ -5,7 +5,9 @@ import type {
 } from '../../../src/shared/git-diff-compare-types'
 
 export type MobileGitBranchChangeEntry = GitBranchChangeEntry
+
 export type MobileGitBranchCompareSummary = GitBranchCompareSummary
+
 export type MobileGitBranchCompareResult = GitBranchCompareResult
 
 export type MobileBranchCompareSection<
@@ -21,11 +23,14 @@ export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchCh
   if (entries.length === 0) {
     return null
   }
+
   const data = [...entries]
+
   if (data.length > 1) {
     const collator = new Intl.Collator(undefined, { numeric: true })
     data.sort((a, b) => collator.compare(a.path, b.path))
   }
+
   return {
     title: 'Committed on Branch',
     data
@@ -38,11 +43,15 @@ export function formatMobileBranchCompareSummary(
   if (summary.status !== 'ready') {
     return summary.errorMessage ?? null
   }
+
   const parts = [`${summary.changedFiles} ${summary.changedFiles === 1 ? 'file' : 'files'}`]
+
   if (summary.commitsAhead !== undefined) {
     parts.push(`${summary.commitsAhead} ${summary.commitsAhead === 1 ? 'commit' : 'commits'}`)
   }
+
   parts.push(`vs ${summary.baseRef}`)
+
   return parts.join(' - ')
 }
 

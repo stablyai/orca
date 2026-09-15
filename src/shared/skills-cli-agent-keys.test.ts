@@ -95,6 +95,7 @@ describe('skills CLI agent keys', () => {
         expect(SKILLS_CLI_VALID_AGENT_KEYS, `${agent} -> ${key}`).toContain(key)
       }
     }
+
     expect(SKILLS_CLI_VALID_AGENT_KEYS).toContain(SKILLS_CLI_UNIVERSAL_AGENT_KEY)
   })
 
@@ -119,6 +120,7 @@ describe('skills CLI agent keys', () => {
     for (const bad of ['-y', '--copy', '', ' ', 'a b', 'a,b']) {
       expect(isSkillsCliAgentKeyShaped(bad), bad).toBe(false)
     }
+
     for (const good of ['claude-code', 'universal', 'trae-cn', 'inference-sh', '*']) {
       expect(isSkillsCliAgentKeyShaped(good), good).toBe(true)
     }

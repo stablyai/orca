@@ -27,10 +27,13 @@ import {
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 
 const SESSION_ID = 'session-1'
+
 const THREAD_ID = 'thread-abc'
+
 const TURN_ID = 'turn-1'
 
 type Row = { key: string; body: AgentJournalItemBody }
+
 type LifecycleBatch = {
   settlementId: string
   mutations: JournalLifecycleMutationInput[]
@@ -41,6 +44,7 @@ function recorder() {
   const tombstones: string[] = []
   const bound: [string, string, string][] = []
   let publishes = 0
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity: AgentJournalItemIdentity, body) =>
       rows.push({ key: agentJournalItemKey(identity), body }),
@@ -49,6 +53,7 @@ function recorder() {
       publishes += 1
     }
   }
+
   return {
     sink,
     rows,
@@ -63,11 +68,14 @@ function recorder() {
 /** Fires the coalescing window on demand instead of on wall time. */
 function manualWindow() {
   const pending: (() => void)[] = []
+
   return {
     schedule: (run: () => void) => {
       pending.push(run)
+
       return () => {
         const index = pending.indexOf(run)
+
         if (index !== -1) {
           pending.splice(index, 1)
         }
@@ -75,6 +83,7 @@ function manualWindow() {
     },
     fire: () => {
       const due = pending.splice(0)
+
       for (const run of due) {
         run()
       }
@@ -95,6 +104,7 @@ function translatorWith(tap = recorder(), window = manualWindow()) {
     bindPromptItemId: tap.bindPromptItemId,
     schedule: window.schedule
   })
+
   return { translator, tap, window }
 }
 
@@ -107,6 +117,7 @@ function deferredTarget(
     journal: {
       appendItem: vi.fn(async (_identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
         log.push(body)
+
         return { cursor: { epoch: 'e', sequence: log.length } }
       }),
       appendTombstone: vi.fn(async () => ({ epoch: 'e', sequence: log.length })),
@@ -117,6 +128,7 @@ function deferredTarget(
               log.push(mutation.body)
             }
           }
+
           return { epoch: 'e', sequence: log.length }
         }
       )
@@ -146,12 +158,15 @@ function terminalExitBatches(count: number, outputBytes: number): LifecycleBatch
   tap.sink.appendLifecycleBatch = (settlementId, mutations) => {
     batches.push({ settlementId, mutations: [...mutations] })
   }
+
   const translator = createCodexJournalTranslator({
     sink: tap.sink,
     primaryThreadId: () => THREAD_ID
   })
+
   const output = 'x'.repeat(outputBytes)
   translator.handle(TURN_STARTED)
+
   for (let index = 0; index < count; index += 1) {
     const itemId = `exec-${index}`
     translator.handle(
@@ -166,6 +181,7 @@ function terminalExitBatches(count: number, outputBytes: number): LifecycleBatch
     )
     translator.handle(notification('item/commandExecution/outputDelta', { itemId, delta: output }))
   }
+
   translator.handle({
     type: 'ended',
     sessionId: SESSION_ID,
@@ -174,6 +190,7 @@ function terminalExitBatches(count: number, outputBytes: number): LifecycleBatch
     fence: 7,
     acquisitionGeneration: 'generation-1'
   })
+
   return batches
 }
 
@@ -181,9 +198,11 @@ function expectLifecycleBatchBounds(batches: readonly LifecycleBatch[]): void {
   for (const [index, batch] of batches.entries()) {
     expect(batch.mutations.length).toBeLessThanOrEqual(MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS)
     const state = createJournalReducerState(SESSION_ID, 'epoch-test')
+
     const row = journalLifecycleBatchRowBuilder(() => state, batch.settlementId, batch.mutations, {
       fence: 7
     })(index + 1, index + 1)
+
     expect(journalRowByteLength(row)).toBeLessThanOrEqual(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES)
   }
 }
@@ -193,6 +212,7 @@ describe('codex journal translation', () => {
     const bodies: AgentJournalItemBody[] = []
     const publishes: string[] = []
     const deferred = hardWatermarkDeferred()
+
     const translator = createCodexJournalTranslator({
       sink: deferred.sink,
       primaryThreadId: () => THREAD_ID
@@ -230,6 +250,7 @@ describe('codex journal translation', () => {
     const bodies: AgentJournalItemBody[] = []
     const publishes: string[] = []
     const deferred = hardWatermarkDeferred()
+
     const translator = createCodexJournalTranslator({
       sink: deferred.sink,
       primaryThreadId: () => THREAD_ID
@@ -278,6 +299,7 @@ describe('codex journal translation', () => {
   it('retries a rejected terminal admission without losing tool, prompt, turn, or session truth', () => {
     const batches: LifecycleBatch[] = []
     let rejected = false
+
     const sink: StructuredAgentSessionEventSink = {
       appendItem: vi.fn(),
       appendTombstone: vi.fn(),
@@ -285,13 +307,17 @@ describe('codex journal translation', () => {
       tryAppendLifecycleBatch: (settlementId, mutations) => {
         if (settlementId.startsWith('provider-exit:') && !rejected) {
           rejected = true
+
           return { accepted: false, reason: 'backpressure' as const }
         }
+
         batches.push({ settlementId, mutations: [...mutations] })
+
         return { accepted: true }
       },
       tryPublish: () => ({ accepted: true })
     }
+
     const translator = createCodexJournalTranslator({
       sink,
       primaryThreadId: () => THREAD_ID
@@ -317,6 +343,7 @@ describe('codex journal translation', () => {
       codexItemId: 'exec-retry-settlement',
       promptKey: 'approval-retry-settlement'
     })
+
     const ended = {
       type: 'ended' as const,
       sessionId: SESSION_ID,
@@ -355,10 +382,12 @@ describe('codex journal translation', () => {
     tap.sink.appendLifecycleBatch = (settlementId, mutations) => {
       batches.push({ settlementId, mutations: [...mutations] })
     }
+
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
       primaryThreadId: () => THREAD_ID
     })
+
     const huge = 'x'.repeat(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES + 1_024)
 
     translator.handle(TURN_STARTED)
@@ -422,6 +451,7 @@ describe('codex journal translation', () => {
 
   it('partitions large terminal settlements by both byte and mutation bounds', () => {
     const batches = terminalExitBatches(240, 20_000)
+
     const mutationOnlyChunkCount = Math.ceil(
       batches.flatMap((batch) => batch.mutations).length / MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
     )
@@ -436,11 +466,13 @@ describe('codex journal translation', () => {
     tap.sink.appendLifecycleBatch = (settlementId, mutations) => {
       batches.push({ settlementId, mutations: [...mutations] })
     }
+
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
       primaryThreadId: () => THREAD_ID,
       maxRetainedBytes: MAX_JOURNAL_LIFECYCLE_BATCH_BYTES + 1_024
     })
+
     const oversized = 'a'.repeat(MAX_JOURNAL_LIFECYCLE_BATCH_BYTES + 1_024)
 
     translator.handle(TURN_STARTED)
@@ -460,15 +492,18 @@ describe('codex journal translation', () => {
     })
 
     const checkpoint = tap.rows.find((row) => row.body.kind === 'message')?.body
+
     const settled = batches
       .flatMap((batch) => batch.mutations)
       .find((mutation) => mutation.kind === 'item' && mutation.body.kind === 'message') as
       | Extract<JournalLifecycleMutationInput, { kind: 'item' }>
       | undefined
+
     const checkpointText =
       checkpoint?.kind === 'message' && checkpoint.blocks[0]?.type === 'text'
         ? checkpoint.blocks[0].text
         : ''
+
     const settledText =
       settled?.body.kind === 'message' && settled.body.blocks[0]?.type === 'text'
         ? settled.body.blocks[0].text
@@ -492,8 +527,10 @@ describe('codex journal translation', () => {
     )
 
     const body = tap.rows[0]?.body
+
     const text =
       body?.kind === 'message' && body.blocks[0]?.type === 'text' ? body.blocks[0].text : ''
+
     expect(text).toContain('output truncated')
     expect(Buffer.byteLength(JSON.stringify(body), 'utf8')).toBeLessThan(20 * 1024)
   })
@@ -504,6 +541,7 @@ describe('codex journal translation', () => {
     tap.sink.appendLifecycleBatch = (settlementId, mutations) => {
       batches.push({ settlementId, mutations: [...mutations] })
     }
+
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
       primaryThreadId: () => THREAD_ID
@@ -590,6 +628,7 @@ describe('codex journal translation', () => {
 
   it('journals one row per approval when a tool item asks twice', () => {
     const { translator, tap } = translatorWith()
+
     const ask = (promptKey: string): void => {
       translator.handle({
         type: 'prompt',
@@ -690,6 +729,7 @@ describe('codex journal translation', () => {
 
   it('keeps interleaved thread turns, items, and deltas separate', () => {
     const { translator, tap } = translatorWith()
+
     const child = (method: string, params: unknown): CodexStructuredSessionEvent => ({
       type: 'notification',
       sessionId: SESSION_ID,
@@ -733,6 +773,7 @@ describe('codex journal translation', () => {
       translator.handle(notification('item/agentMessage/delta', { itemId: 'item-1', delta: 'x' }))
       window.fire()
     }
+
     translator.flush()
 
     expect(tap.rows.length).toBeLessThan(40)
@@ -756,6 +797,7 @@ describe('codex journal translation', () => {
       )
       window.fire()
     }
+
     translator.flush()
 
     expect(new Set(tap.rows.map((row) => row.key))).toEqual(
@@ -809,7 +851,9 @@ describe('codex journal translation', () => {
       if (body.kind === 'diff' && rejectPatch) {
         return { accepted: false as const, reason: 'backpressure' as const }
       }
+
       tap.sink.appendItem(identity, body, blobs)
+
       return { accepted: true as const }
     }
 
@@ -818,12 +862,14 @@ describe('codex journal translation', () => {
         item: { type: 'fileChange', id: 'patch-retry', changes: [], status: 'inProgress' }
       })
     )
+
     const rejected = translator.handle(
       notification('item/fileChange/patchUpdated', {
         itemId: 'patch-retry',
         changes: [{ path: 'src/app.ts', kind: { type: 'update' }, diff: '@@ -1 +1 @@' }]
       })
     )
+
     expect(rejected).toEqual({ accepted: false, reason: 'backpressure' })
     expect(tap.rows.some((row) => row.body.kind === 'diff')).toBe(false)
 

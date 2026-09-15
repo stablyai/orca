@@ -7,6 +7,7 @@ export function getEmulatorScreenAriaLabel(
   if (!isLive) {
     return undefined
   }
+
   return keyboardCaptureActive
     ? translate(
         'auto.components.emulator.pane.emulator.device.frame.8f25ffaf8a',

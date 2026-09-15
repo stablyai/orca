@@ -9,16 +9,22 @@ import { allocateTerminalSubscriptionStreamId } from './terminal-subscription-st
 
 export async function runTerminalLeaseSubscription(args: TerminalSubscriptionArgs): Promise<void> {
   const { params, runtime, connectionId, signal, emit, ptyId, clientId } = args
+
   if (!clientId) {
     return
   }
+
   let closed = false
   let stopWatchingLifetime = (): void => {}
+
   let resolveStream = (): void => {}
+
   const streamClosed = new Promise<void>((resolve) => {
     resolveStream = resolve
   })
+
   const subscriptionId = `${params.terminal}:${clientId}`
+
   // Why: chat needs the input-floor ack without registering a view subscriber or transporting duplicate PTY output.
   const registration = runtime.registerOwnedSubscriptionCleanup(
     subscriptionId,
@@ -31,14 +37,18 @@ export async function runTerminalLeaseSubscription(args: TerminalSubscriptionArg
     },
     connectionId
   )
+
   stopWatchingLifetime = watchSubscriptionLifetime(runtime, ptyId, signal, registration)
+
   if (closed) {
     // Why: an already-exited pty releases synchronously, so cleanup ran before this setup registers anything.
     return
   }
+
   try {
     // Why: a lease-only subscriber has no terminal view, so its cached viewport must never phone-fit the PTY.
     await runtime.handleMobileSubscribe(ptyId, clientId, undefined)
+
     if (closed || signal?.aborted) {
       // Why: a disconnect can win the awaited subscribe and resurrect mobile presence after cleanup already released it.
       // Unguarded on purpose: this must still fire when our own cleanup already ran.
@@ -47,11 +57,14 @@ export async function runTerminalLeaseSubscription(args: TerminalSubscriptionArg
       // first. Adding an await there — or passing a viewport here — makes a
       // superseded handler delete the replacement's (ptyId, clientId) presence.
       runtime.handleMobileUnsubscribe(ptyId, clientId)
+
       if (!closed) {
         registration.releaseIfCurrent()
       }
+
       return
     }
+
     emit({ type: 'subscribed', streamId: null, lines: [], truncated: false })
     await streamClosed
   } catch (error) {
@@ -71,6 +84,7 @@ export async function runTerminalJsonSubscription(args: TerminalSubscriptionArgs
     clientId,
     supportsDesktopViewportClaims
   } = args
+
   // Why: only unregister the width floor this subscription took (see the multiplex stream's registeredRemoteDesktopDriver note).
   let registeredRemoteDesktopDriver = false
 
@@ -80,12 +94,17 @@ export async function runTerminalJsonSubscription(args: TerminalSubscriptionArgs
   let closed = false
   let outputBatcher: TerminalOutputBatcher | null = null
   let unsubscribeData = (): void => {}
+
   let unsubscribeFit = (): void => {}
+
   let stopWatchingLifetime = (): void => {}
+
   let resolveStream = (): void => {}
+
   const streamClosed = new Promise<void>((resolve) => {
     resolveStream = resolve
   })
+
   // Why: register before viewport/snapshot awaits so a socket close can't orphan the stream listeners or its remote-desktop width floor.
   const registration = runtime.registerOwnedSubscriptionCleanup(
     subscriptionId,
@@ -96,19 +115,24 @@ export async function runTerminalJsonSubscription(args: TerminalSubscriptionArgs
       outputBatcher?.dispose()
       unsubscribeData()
       unsubscribeFit()
+
       if (registeredRemoteDesktopDriver && clientId) {
         runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
       }
+
       emit({ type: 'end' })
       resolveStream()
     },
     connectionId
   )
+
   stopWatchingLifetime = watchSubscriptionLifetime(runtime, ptyId, signal, registration)
+
   if (closed) {
     // Why: an already-exited pty releases synchronously, so cleanup ran before this setup registers anything.
     return
   }
+
   try {
     if (clientId && params.client && params.viewport) {
       registeredRemoteDesktopDriver = true
@@ -123,16 +147,22 @@ export async function runTerminalJsonSubscription(args: TerminalSubscriptionArgs
         !supportsDesktopViewportClaims
       )
     }
+
     if (closed || signal?.aborted) {
       registration.releaseIfCurrent()
+
       return
     }
+
     const read = await runtime.readTerminal(params.terminal)
     const serialized = await serializeBudgetedMobileSnapshot(runtime, ptyId, false)
+
     if (closed || signal?.aborted) {
       registration.releaseIfCurrent()
+
       return
     }
+
     const size = runtime.getTerminalSize(ptyId)
     const displayMode = runtime.getMobileDisplayMode(ptyId)
     const seq = runtime.getLayout(ptyId)?.seq
@@ -153,22 +183,27 @@ export async function runTerminalJsonSubscription(args: TerminalSubscriptionArgs
     outputBatcher = createTerminalOutputBatcher((chunk) => {
       emit({ type: 'data', chunk })
     })
+
     const unsubscribeStreamData = runtime.subscribeToTerminalData(ptyId, (data) => {
       outputBatcher?.push(data)
     })
+
     // Why: the legacy JSON stream can feed a live xterm view, so register as a view subscriber; worst case is a withheld model reply, safer than a double reply.
     const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(ptyId)
     unsubscribeData = () => {
       releaseViewSubscriber()
       unsubscribeStreamData()
     }
+
     unsubscribeFit = runtime.subscribeToFitOverrideChanges(ptyId, (event) => {
       outputBatcher?.flush()
+
       const mode =
         event.mode === 'mobile-fit'
           ? event.mode
           : (runtime.getRemoteDesktopFitHold?.(ptyId, remoteDesktopSubscriptionKey).mode ??
             'desktop-fit')
+
       emit({
         type: 'fit-override-changed',
         mode,

@@ -76,9 +76,11 @@ describe('registerPetHandlers', () => {
   function getHandler(channel: string): (event: unknown, ...args: unknown[]) => Promise<unknown> {
     registerPetHandlers()
     const handler = handlers.get(channel)
+
     if (!handler) {
       throw new Error(`${channel} handler not registered`)
     }
+
     return handler
   }
 
@@ -113,11 +115,13 @@ describe('registerPetHandlers', () => {
   function webpVp8x(width: number, height: number): Buffer {
     const u24 = (value: number): Buffer =>
       Buffer.from([value & 0xff, (value >> 8) & 0xff, (value >> 16) & 0xff])
+
     const payload = Buffer.concat([Buffer.from([0, 0, 0, 0]), u24(width - 1), u24(height - 1)])
     const size = Buffer.alloc(4)
     size.writeUInt32LE(payload.byteLength, 0)
     const riffSize = Buffer.alloc(4)
     riffSize.writeUInt32LE(4 + 8 + payload.byteLength, 0)
+
     return Buffer.concat([
       Buffer.from('RIFF'),
       riffSize,
@@ -144,6 +148,7 @@ describe('registerPetHandlers', () => {
       })
     )
     await writeFile(join(bundleDir, 'sheet.webp'), webpVp8x(4, 2))
+
     return bundleDir
   }
 
@@ -151,6 +156,7 @@ describe('registerPetHandlers', () => {
     const bundleDir = await writeSpriteBundle({
       idle: { row: 0, frames: 2, frameDurationsMs: [1680, 1920] }
     })
+
     showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [bundleDir] })
 
     const result = (await getHandler('pet:importPetBundle')({ sender: {} })) as CustomPet
@@ -166,6 +172,7 @@ describe('registerPetHandlers', () => {
     const bundleDir = await writeSpriteBundle({
       idle: { row: 0, frames: 2, frameDurationsMs: [1680] }
     })
+
     showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: [bundleDir] })
 
     await expect(getHandler('pet:importPetBundle')({ sender: {} })).rejects.toThrow(

@@ -39,11 +39,13 @@ export function prepareWebSessionTabsSnapshotBase(
 ) {
   const snapshotHostTabId = (tab: RuntimeMobileSessionTabsResult['tabs'][number]): string =>
     tab.type === 'terminal' ? tab.parentTabId : tab.id
+
   reconcileWebSessionCloseIntents(
     { environmentId },
     worktreeId,
     new Set(rawSnapshot.tabs.map((tab) => snapshotHostTabId(tab)))
   )
+
   const snapshot: RuntimeMobileSessionTabsResult = rawSnapshot.tabs.some((tab) =>
     isWebSessionCloseIntentPending({ environmentId }, worktreeId, snapshotHostTabId(tab), now)
   )
@@ -60,9 +62,11 @@ export function prepareWebSessionTabsSnapshotBase(
         )
       }
     : rawSnapshot
+
   // Why: only a caller-recorded create intent may focus its arriving tab; unsolicited server-active must not steal focus (#5435).
   const focusIntent = peekWebSessionFocusIntent({ environmentId }, worktreeId)
   const focusIntentHostTabId = focusIntent?.hostTabId ?? null
+
   const matchingFocusIntentTab =
     focusIntentHostTabId === null
       ? null
@@ -79,52 +83,68 @@ export function prepareWebSessionTabsSnapshotBase(
               (tab.type === 'terminal' && tab.parentTabId === focusIntentHostTabId) ||
               (tab.type === 'browser' && tab.browserPageId === focusIntentHostTabId)
           ) ?? null)
+
   const expectedCurrentLocalTabId = focusIntent?.expectedCurrentLocalTabId
   const currentVisibleLocalTabId = resolveWebSessionVisibleTabId(state, worktreeId)
+
   const callerFocusIntentTab =
     matchingFocusIntentTab &&
     (expectedCurrentLocalTabId === undefined ||
       expectedCurrentLocalTabId === currentVisibleLocalTabId)
       ? matchingFocusIntentTab
       : null
+
   const followIntentTab =
     snapshot.navigationIntent === 'follow'
       ? (snapshot.tabs.find((tab) => tab.id === snapshot.activeTabId) ?? null)
       : null
+
   const navigationIntentTab = callerFocusIntentTab ?? followIntentTab
   const honorSnapshotActiveFocus = navigationIntentTab !== null
+
   if (matchingFocusIntentTab) {
     clearWebSessionFocusIntent({ environmentId }, worktreeId)
   }
+
   const currentTerminalTabs = state.tabsByWorktree[worktreeId] ?? []
   const existingTerminalById = new Map(currentTerminalTabs.map((tab) => [tab.id, tab]))
   const reconcilesNonAgentTabs = options?.contentScope !== 'agent-session'
+
   const terminalSurfaceTabs = reconcilesNonAgentTabs
     ? snapshot.tabs.filter(isTerminalSurfaceTab)
     : []
+
   const readyTerminalTabs = terminalSurfaceTabs.filter(isReadyTerminalTab)
+
   const nextRemotePtyIds = new Set(
     readyTerminalTabs.map((tab) => toRemoteRuntimePtyId(tab.terminal, environmentId))
   )
+
   const nextMirroredTerminalIds = new Set(
     terminalSurfaceTabs.map((tab) => toWebTerminalSurfaceTabId(tab.parentTabId))
   )
+
   const nextHostTerminalTabIds = new Set(terminalSurfaceTabs.map((tab) => tab.parentTabId))
   const provisionalHandoffHostTabIds = new Map<string, string>()
+
   for (const tab of currentTerminalTabs) {
     if (isMirroredTerminalSurfaceId(tab.id)) {
       continue
     }
+
     if (nextHostTerminalTabIds.has(tab.id)) {
       provisionalHandoffHostTabIds.set(tab.id, tab.id)
       continue
     }
+
     const handoff = {
       environmentId,
       worktreeId,
       provisionalTabId: tab.id
     }
+
     const hostTabId = resolveWebAgentSessionHandoff(handoff)
+
     if (
       hostTabId !== null &&
       (nextHostTerminalTabIds.has(hostTabId) ||
@@ -133,12 +153,15 @@ export function prepareWebSessionTabsSnapshotBase(
       provisionalHandoffHostTabIds.set(tab.id, hostTabId)
     }
   }
+
   const exactProvisionalHandoffs = new Set(provisionalHandoffHostTabIds.keys())
+
   const replacedConversations = new Set(
     snapshot.tabs.flatMap((tab) =>
       tab.type === 'agent-session' && tab.replacesSessionId ? [tab.replacesSessionId] : []
     )
   )
+
   const replacedTerminalIds = new Set(
     (state.unifiedTabsByWorktree[worktreeId] ?? [])
       .filter(
@@ -149,6 +172,7 @@ export function prepareWebSessionTabsSnapshotBase(
       )
       .map((tab) => tab.entityId)
   )
+
   const retainedTerminalTabs = (
     reconcilesNonAgentTabs
       ? currentTerminalTabs.filter(
@@ -163,6 +187,7 @@ export function prepareWebSessionTabsSnapshotBase(
         )
       : currentTerminalTabs
   ).filter((tab) => !replacedTerminalIds.has(tab.id))
+
   const mirroredTerminalTabs = buildMirroredTerminalTabs(
     snapshot,
     environmentId,
@@ -178,19 +203,25 @@ export function prepareWebSessionTabsSnapshotBase(
       : undefined,
     options?.terminalPtyMode
   )
+
   const mirroredTerminalTabEntries = mirroredTerminalTabs.map((entry) => entry.tab)
   const retainedTerminalIds = new Set(retainedTerminalTabs.map((tab) => tab.id))
+
   const nextTerminalTabs =
     retainedTerminalTabs.length + mirroredTerminalTabEntries.length > 0
       ? [...retainedTerminalTabs, ...mirroredTerminalTabEntries]
       : null
+
   const mirroredTerminalIds = new Set(mirroredTerminalTabEntries.map((tab) => tab.id))
+
   const removedTerminalIds = new Set(
     currentTerminalTabs.filter((tab) => !retainedTerminalIds.has(tab.id)).map((tab) => tab.id)
   )
+
   const removedTerminalResourceIds = [...removedTerminalIds].filter(
     (tabId) => !mirroredTerminalIds.has(tabId)
   )
+
   for (const provisionalTabId of exactProvisionalHandoffs) {
     clearWebAgentSessionHandoff({ environmentId, worktreeId, provisionalTabId })
   }

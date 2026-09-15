@@ -30,12 +30,14 @@ export default function NoticeHostGlyph({
   keyboardFocusable
 }: NoticeHostGlyphProps): React.JSX.Element | null {
   const host = parseExecutionHostId(hostId)
+
   // Why the shared derivation, not raw truthiness: an absent entry means "not probed yet",
   // which is not the same verdict as a probe that came back unreachable.
   const isDisconnected = useAppStore((s) => {
     if (host?.kind !== 'runtime') {
       return false
     }
+
     return isDisconnectedRuntimeHostState(
       runtimeHostConnectionStateForEntry(s.runtimeStatusByEnvironmentId.get(host.environmentId))
     )

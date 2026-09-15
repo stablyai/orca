@@ -45,9 +45,11 @@ export function BrowserUseCookieImportStep({
     browserProfile?: string
   ): Promise<void> => {
     const profileId = 'default'
+
     const result = await useAppStore
       .getState()
       .importCookiesFromBrowser(profileId, browserFamily, browserProfile)
+
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       emitBrowserCookieImportToast(
@@ -70,6 +72,7 @@ export function BrowserUseCookieImportStep({
 
   const handleImportFromFile = async (): Promise<void> => {
     const result = await useAppStore.getState().importCookiesToProfile('default')
+
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,

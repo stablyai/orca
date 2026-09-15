@@ -22,6 +22,7 @@ vi.mock('../runtime-client', async () => {
   // against ./runtime/types, so a look-alike would collapse every CLI error
   // code into the generic `runtime_error` shape.
   const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
+
   return { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError }
 })
 
@@ -47,6 +48,7 @@ describe('orca emulator CLI handlers', () => {
     } else {
       process.env.ORCA_WORKSPACE_ID = originalWorkspaceId
     }
+
     if (originalWorktreeId === undefined) {
       delete process.env.ORCA_WORKTREE_ID
     } else {

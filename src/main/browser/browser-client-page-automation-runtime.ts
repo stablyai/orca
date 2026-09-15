@@ -45,8 +45,10 @@ export class BrowserClientPageAutomationRuntime {
     if (signal.aborted) {
       throw new BrowserClientPageCommandError('browser_client_page_command_aborted')
     }
+
     this.requireRegistration(input)
     const { page: _page, worktree: _worktree, ...params } = input.params
+
     return this.dependencies.executeRpc(
       input.method,
       { ...params, page: input.browserPageId },
@@ -56,6 +58,7 @@ export class BrowserClientPageAutomationRuntime {
 
   async retire(input: AutomationPageRetirement): Promise<void> {
     const current = this.registrations.get(input.browserPageId)
+
     if (
       !current ||
       current.pageHostGeneration !== input.pageHostGeneration ||
@@ -63,21 +66,26 @@ export class BrowserClientPageAutomationRuntime {
     ) {
       return
     }
+
     const bridge = this.dependencies.getAgentBrowserBridge()
+
     if (bridge) {
       await bridge.onTabClosed(current.webContentsId)
     }
+
     if (
       this.dependencies.browserManager.getGuestWebContentsId(input.browserPageId) ===
       current.webContentsId
     ) {
       this.dependencies.browserManager.unregisterGuest(input.browserPageId)
     }
+
     this.registrations.delete(input.browserPageId)
   }
 
   private requireRegistration(input: AutomationPageInput): void {
     const current = this.registrations.get(input.browserPageId)
+
     if (current) {
       if (
         current.pageHostGeneration !== input.pageHostGeneration ||
@@ -85,17 +93,21 @@ export class BrowserClientPageAutomationRuntime {
       ) {
         throw new BrowserClientPageCommandError('browser_client_page_automation_registration_stale')
       }
+
       return
     }
+
     const registeredWebContentsId = this.dependencies.browserManager.getGuestWebContentsId(
       input.browserPageId
     )
+
     if (
       registeredWebContentsId !== null &&
       registeredWebContentsId !== input.registration.webContentsId
     ) {
       throw new BrowserClientPageCommandError('browser_client_page_automation_registration_stale')
     }
+
     if (registeredWebContentsId === null) {
       const registration: BrowserGuestRegistration = {
         browserPageId: input.browserPageId,
@@ -105,12 +117,14 @@ export class BrowserClientPageAutomationRuntime {
         webContentsId: input.registration.webContentsId,
         rendererWebContentsId: input.registration.rendererWebContentsId
       }
+
       if (!this.dependencies.browserManager.registerGuest(registration)) {
         throw new BrowserClientPageCommandError(
           'browser_client_page_automation_registration_failed'
         )
       }
     }
+
     this.registrations.set(input.browserPageId, {
       pageHostGeneration: input.pageHostGeneration,
       webContentsId: input.registration.webContentsId
@@ -133,6 +147,7 @@ export function executeBrowserClientPageAutomation(
   if (!configuredRuntime) {
     return Promise.reject(new Error('browser_client_page_automation_runtime_unavailable'))
   }
+
   return configuredRuntime.execute(input, signal)
 }
 

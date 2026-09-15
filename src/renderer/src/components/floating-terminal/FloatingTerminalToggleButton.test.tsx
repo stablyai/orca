@@ -17,6 +17,7 @@ const hookRuntime = vi.hoisted(() => ({
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useCallback: <T,>(callback: T) => callback,
@@ -29,24 +30,29 @@ vi.mock('react', async () => {
     useRef: <T,>(initialValue: T) => {
       const index = hookRuntime.index
       hookRuntime.index += 1
+
       if (hookRuntime.values[index] === undefined) {
         hookRuntime.values[index] = { current: initialValue }
       }
+
       return hookRuntime.values[index] as { current: T }
     },
     useState: <T,>(initialValue: T | (() => T)) => {
       const index = hookRuntime.index
       hookRuntime.index += 1
+
       if (hookRuntime.values[index] === undefined) {
         hookRuntime.values[index] =
           typeof initialValue === 'function' ? (initialValue as () => T)() : initialValue
       }
+
       const setValue = (nextValue: T | ((current: T) => T)): void => {
         hookRuntime.values[index] =
           typeof nextValue === 'function'
             ? (nextValue as (current: T) => T)(hookRuntime.values[index] as T)
             : nextValue
       }
+
       return [hookRuntime.values[index] as T, setValue] as const
     }
   }
@@ -104,14 +110,19 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return
   }
+
   if (Array.isArray(node)) {
     node.forEach((entry) => visit(entry, cb))
+
     return
   }
+
   const element = node as ReactElementLike
+
   if (!element.props) {
     return
   }
+
   cb(element)
   visit(element.props.children, cb)
 }
@@ -123,9 +134,11 @@ function findByProp(node: unknown, propName: string): ReactElementLike {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error(`${propName} not found`)
   }
+
   return found
 }
 
@@ -136,15 +149,19 @@ function hasProp(node: unknown, propName: string): boolean {
       found = true
     }
   })
+
   return found
 }
 
 function runEffects(): void {
   const layoutEffects = hookRuntime.layoutEffects.splice(0)
+
   for (const effect of layoutEffects) {
     effect()
   }
+
   const effects = hookRuntime.effects.splice(0)
+
   for (const effect of effects) {
     effect()
   }
@@ -153,12 +170,14 @@ function runEffects(): void {
 async function renderToggle(open = false, onToggle = vi.fn()): Promise<unknown> {
   hookRuntime.index = 0
   const { FloatingTerminalToggleButton } = await import('./FloatingTerminalToggleButton')
+
   return FloatingTerminalToggleButton({ open, onToggle })
 }
 
 function getToggleStylePosition(element: unknown): { left: number; top: number } {
   const container = findByProp(element, 'currentLocation')
   const style = container.props.style as Record<string, number>
+
   return { left: style.left, top: style.top }
 }
 
@@ -189,10 +208,12 @@ describe('FloatingTerminalToggleButton positioning', () => {
     hookRuntime.layoutEffects = []
     hookRuntime.index = 0
     hookRuntime.values = []
+
     const localStorage = {
       getItem: vi.fn(() => null),
       setItem: vi.fn()
     }
+
     vi.stubGlobal('window', {
       addEventListener: vi.fn(),
       innerHeight: 800,
@@ -227,6 +248,7 @@ describe('FloatingTerminalToggleButton positioning', () => {
 
   it('previews drag movement without writing storage until pointer end', async () => {
     let element = await renderToggle()
+
     const button = getToggleButton(element)
 
     ;(button.props.onPointerDown as (event: unknown) => void)({
@@ -247,6 +269,7 @@ describe('FloatingTerminalToggleButton positioning', () => {
     expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
 
     const movedButton = getToggleButton(element)
+
     ;(movedButton.props.onPointerUp as (event: unknown) => void)({ pointerId: 1 })
 
     expect(getMockedLocalStorage().setItem).toHaveBeenCalledWith(

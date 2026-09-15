@@ -21,6 +21,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       createLegacyHome: false,
       script: _internals.inspectLegacyAuthScript
     })
+
     const retained = runAbsentLegacyHomeScript({
       createLegacyHome: true,
       script: _internals.inspectLegacyAuthScript
@@ -96,6 +97,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       rewriteTarget: 'source-credentials',
       sourceCredentials: SOURCE_CREDENTIALS
     })
+
     expect(outcome.status).toBe(43)
     expect(outcome.targetCredentials).toBeNull()
   })
@@ -106,6 +108,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       rewriteAfterHashCall: 4,
       rewriteTarget: 'target-auth'
     })
+
     expect(outcome.status).toBe(39)
     expect(outcome.targetAuth).toBe(NEWER_AUTH)
   })
@@ -436,6 +439,7 @@ describe.skipIf(isWindows)('legacy WSL auth drain apply script', () => {
       rewriteBytes: NEWER_AUTH,
       rewriteTarget: 'target-auth'
     })
+
     expect(changedDestination.status).toBe(45)
     expect(changedDestination.legacyAuth).toBe(SOURCE_AUTH)
     expect(changedDestination.markerExists).toBe(false)

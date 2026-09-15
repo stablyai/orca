@@ -80,6 +80,7 @@ describe('buildSourceControlTree', () => {
       entry({ path: 'src/app.ts', area: 'staged' }),
       entry({ path: 'docs/readme.md', area: 'staged' })
     ])
+
     const collapsed = new Set(['dir::staged::src'])
 
     expect(labels(flattenSourceControlTree(tree, collapsed))).toEqual([
@@ -109,6 +110,7 @@ describe('buildSourceControlTree', () => {
       { path: 'packages/app/src/index.ts', status: 'modified' },
       { path: 'packages/app/package.json', status: 'added' }
     ]
+
     const tree = buildSourceControlTree('branch', entries)
 
     expect(labels(flattenSourceControlTree(tree, new Set()))).toEqual([
@@ -199,6 +201,7 @@ describe('buildSourceControlTree', () => {
       ),
       new Set()
     )
+
     const directory = rows.find((node) => node.type === 'directory')
     const file = rows.find((node) => node.type === 'file')
 

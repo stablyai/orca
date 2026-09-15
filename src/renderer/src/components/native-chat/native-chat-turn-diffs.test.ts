@@ -25,6 +25,7 @@ describe('turn diff rollups', () => {
       diff('second', 'a.ts'),
       diff('third', 'b.ts')
     ])
+
     const turn = nativeChatTurnDiffs(messages, ['turn']).get('turn')!
     expect(turn.files).toHaveLength(2)
     expect(turn).toMatchObject({ added: 3, removed: 3, truncated: false })
@@ -54,10 +55,12 @@ describe('turn diff rollups', () => {
         'diff --git a/gone.ts b/gone.ts\ndeleted file mode 100644\n--- a/gone.ts\n+++ /dev/null\n@@ -1 +0,0 @@\n-gone'
       )
     ]
+
     const turn = nativeChatTurnDiffs(
       messages,
       messages.map(() => 'turn')
     ).get('turn')!
+
     expect(turn.files.map((file) => file.path)).toEqual(['final.ts', 'gone.ts'])
     expect(turn).toMatchObject({ added: 1, removed: 2 })
     expect(turn.files[0]?.target.messageId).toBe('rename-again')
@@ -68,6 +71,7 @@ describe('turn diff rollups', () => {
       [diff('orphan', 'orphan.ts'), diff('a', 'a.ts'), diff('b', 'a.ts')],
       [undefined, 'one', 'two']
     )
+
     expect([...result.keys()]).toEqual(['one', 'two'])
     expect(result.get('one')?.added).toBe(1)
     expect(result.get('two')?.files).toHaveLength(1)
@@ -76,6 +80,7 @@ describe('turn diff rollups', () => {
   it('uses the existing multi-file parser and preserves truncated counts', () => {
     const patch =
       'diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/b.ts b/b.ts\n--- a/b.ts\n+++ b/b.ts\n@@ -1 +1 @@\n-old\n+new\n… (9999 bytes)'
+
     const turn = nativeChatTurnDiffs([diff('multi', 'changes', patch)], ['turn']).get('turn')!
     expect(turn.files.map((file) => file.path)).toEqual(['a.ts', 'b.ts'])
     expect(turn).toMatchObject({ added: 2, removed: 2, truncated: true })
@@ -90,12 +95,15 @@ describe('turn diff rollups', () => {
         { type: 'tool-result', output: '@@ -1 +1 @@\n-old\n+new' }
       ] as NativeChatBlock[]
     }))
+
     messages.push(diff('invalid', 'x', 'no patch'))
+
     for (const state of ['running', 'failed'] as const) {
       const message = diff(state, 'x')
       message.blocks[0] = { type: 'tool-call', name: 'Diff', input: { path: 'x' }, state }
       messages.push(message)
     }
+
     expect(
       nativeChatTurnDiffs(
         messages,

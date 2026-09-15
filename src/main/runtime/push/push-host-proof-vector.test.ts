@@ -11,11 +11,14 @@ describe('push host proof vector', () => {
   it('answers the checked-in gateway challenge with the expected proof', () => {
     const secret = Buffer.from(vector.challengeSecretB64, 'base64')
     const transcript = Buffer.from(vector.transcriptB64, 'base64')
+
     const expected = createHmac('sha256', secret)
       .update(Buffer.from('orca-push-host-proof/v1\0ack\0'))
       .update(transcript)
       .digest('base64')
+
     const reasons: string[] = []
+
     const proof = answerPushHostChallenge(vector.challenge, {
       gatewayOrigin: vector.gatewayOrigin,
       hostFingerprint: vector.hostFingerprint,
@@ -24,6 +27,7 @@ describe('push host proof vector', () => {
       now: () => vector.issuedAt + 1_000,
       onInvalid: (reason) => reasons.push(reason)
     })
+
     expect(reasons).toEqual([])
     expect(proof).toBe(expected)
   })

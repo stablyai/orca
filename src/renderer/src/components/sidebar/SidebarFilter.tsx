@@ -55,17 +55,21 @@ const SidebarFilter = React.memo(function SidebarFilter({
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
+
   const setHideAutomationGeneratedWorkspaces = useAppStore(
     (s) => s.setHideAutomationGeneratedWorkspaces
   )
+
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const setHideCliCreatedWorkspaces = useAppStore((s) => s.setHideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const setHideDetachedHeadWorkspaces = useAppStore((s) => s.setHideDetachedHeadWorkspaces)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
+
   const setAlwaysShowDefaultBranchWorkspace = useAppStore(
     (s) => s.setAlwaysShowDefaultBranchWorkspace
   )
+
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
   const repos = useAppStore((s) => s.repos)
@@ -79,6 +83,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
     (next: boolean) => {
       setOpen(next)
       onMenuOpenChange?.(next)
+
       if (!next) {
         setQuery('')
       }
@@ -98,26 +103,32 @@ const SidebarFilter = React.memo(function SidebarFilter({
   )
 
   const canFilterRepos = repos.length > 1
+
   // Why: derive from current repos so stale ids (e.g. lingering after a repo
   // is removed) don't inflate counts or falsely signal an applied filter.
   const selectedRepoIdSet = useMemo(() => {
     const set = new Set<string>()
+
     for (const r of repos) {
       if (filterRepoIds.includes(r.id)) {
         set.add(r.id)
       }
     }
+
     return set
   }, [repos, filterRepoIds])
+
   const selectedCount = selectedRepoIdSet.size
   const hasRepoFilter = selectedCount > 0
   const hasSleepingFilter = showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES
+
   // Why counted: turning the exemption off is the only way that row narrows the
   // list — but only while its parent row is on, which is also when it renders.
   const hasSleepingExemptionFilter = isSleepingSweepExemptionNarrowingList(
     showSleepingWorkspaces,
     alwaysShowDefaultBranchWorkspace
   )
+
   const hasAnyFilter =
     hasSleepingFilter ||
     hideDefaultBranchWorkspace ||
@@ -126,6 +137,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
     hideDetachedHeadWorkspaces ||
     hasSleepingExemptionFilter ||
     hasRepoFilter
+
   const activeFilterCount =
     (hasSleepingFilter ? 1 : 0) +
     (hideDefaultBranchWorkspace ? 1 : 0) +
@@ -136,10 +148,12 @@ const SidebarFilter = React.memo(function SidebarFilter({
     selectedCount
 
   const filteredRepos = useMemo(() => searchRepos(repos, query), [repos, query])
+
   const commandValue =
     commandValueOverride && filteredRepos.some((repo) => repo.id === commandValueOverride)
       ? commandValueOverride
       : (filteredRepos[0]?.id ?? '')
+
   const allSelected = canFilterRepos && selectedCount === repos.length
 
   const clearAll = useCallback(() => {
@@ -343,6 +357,7 @@ const SidebarFilter = React.memo(function SidebarFilter({
                 </CommandEmpty>
                 {filteredRepos.map((r) => {
                   const checked = selectedRepoIdSet.has(r.id)
+
                   return (
                     <CommandItem
                       key={r.id}

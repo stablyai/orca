@@ -12,6 +12,7 @@ function createSubscription() {
     onNotification: vi.fn(),
     request: vi.fn(async () => ({ canceled: true, sentEndSu: 0, creditedEndSu: 0 }))
   }
+
   const dataListeners = new Set<(payload: { id: string; data: string }) => void>()
   const replayListeners = new Set<(payload: { id: string; data: string }) => void>()
   const exitListeners = new Set<(payload: { id: string; code: number }) => void>()
@@ -37,6 +38,7 @@ function createSubscription() {
     method: string,
     params: Record<string, unknown>
   ) => void
+
   if (!handler) {
     throw new Error('notification handler was not registered')
   }
@@ -135,6 +137,7 @@ describe('subscribeSshPtyNotifications', () => {
       resolvePtyIncarnation,
       installReceivingActivation
     } = createSubscription()
+
     const onData = vi.fn()
     dataListeners.add(onData)
     livePtyIds.add('ssh:conn@@unrelated')
@@ -195,6 +198,7 @@ describe('subscribeSshPtyNotifications', () => {
   it('keeps exact source incarnation independent without mutating legacy delivery state', () => {
     const { handler, dataListeners, resolvePtyIncarnation, installReceivingActivation } =
       createSubscription()
+
     const onData = vi.fn()
     dataListeners.add(onData)
     handler('pty.data', { id: 'pty-1', data: 'legacy' })
@@ -231,6 +235,7 @@ describe('subscribeSshPtyNotifications', () => {
       resolvePtyIncarnation,
       installReceivingActivation
     } = createSubscription()
+
     const onData = vi.fn()
     dataListeners.add(onData)
     livePtyIds.add('ssh:conn@@unrelated')
@@ -285,6 +290,7 @@ describe('subscribeSshPtyNotifications', () => {
     const { handler, mux, dataListeners, installReceivingActivation } = createSubscription()
     const onData = vi.fn()
     dataListeners.add(onData)
+
     const sourceParams = {
       id: 'pty-1',
       ptyIncarnation: 'incarnation-1',
@@ -292,6 +298,7 @@ describe('subscribeSshPtyNotifications', () => {
       ownerGeneration: 3,
       sourceLengthSu: 3
     }
+
     installReceivingActivation('pty-1', sourceActivation({ recoveryEndSu: 3 })).commit()
 
     handler('pty.data', {
@@ -339,6 +346,7 @@ describe('subscribeSshPtyNotifications', () => {
     const { handler, mux, dataListeners, installReceivingActivation } = createSubscription()
     const onData = vi.fn()
     dataListeners.add(onData)
+
     const frame = (
       data: string,
       deliveryToken: string,
@@ -403,13 +411,16 @@ describe('subscribeSshPtyNotifications', () => {
         resolvePtyIncarnation,
         installReceivingActivation
       } = createSubscription()
+
       const onData = vi.fn()
       dataListeners.add(onData)
+
       const base = {
         id: 'pty-1',
         ptyIncarnation: 'incarnation-1',
         sourceLengthSu: 3
       }
+
       installReceivingActivation(
         'pty-1',
         sourceActivation({ deliveryToken: 'token-current', recoveryEndSu: 3 })
@@ -459,6 +470,7 @@ describe('subscribeSshPtyNotifications', () => {
   it('does not cancel an incomplete malformed identity or mutate provider state', () => {
     const { handler, mux, dataListeners, livePtyIds, toAppPtyId, resolvePtyIncarnation } =
       createSubscription()
+
     const onData = vi.fn()
     dataListeners.add(onData)
     livePtyIds.add('ssh:conn@@unrelated')
@@ -484,6 +496,7 @@ describe('subscribeSshPtyNotifications', () => {
     const { handler, dataListeners, installReceivingActivation } = createSubscription()
     const onData = vi.fn()
     dataListeners.add(onData)
+
     const lease = installReceivingActivation(
       'pty-1',
       sourceActivation({ checkpointSourceEndSu: 4, recoveryEndSu: 8 })
@@ -515,10 +528,12 @@ describe('subscribeSshPtyNotifications', () => {
     const onData = vi.fn()
     const onRecoveryData = vi.fn()
     dataListeners.add(onData)
+
     const lease = installReceivingActivation(
       'pty-1',
       sourceActivation({ checkpointSourceEndSu: 4, recoveryEndSu: 12 })
     )
+
     const publishSource = (data: string, sourceEndSu: number): void => {
       handler('pty.data', {
         id: 'pty-1',
@@ -552,6 +567,7 @@ describe('subscribeSshPtyNotifications', () => {
   it('retires an exited private recovery when its activation commits', () => {
     const { handler, mux, dataListeners, livePtyIds, installReceivingActivation } =
       createSubscription()
+
     const onData = vi.fn()
     const onRecoveryData = vi.fn()
     dataListeners.add(onData)
@@ -609,6 +625,7 @@ describe('subscribeSshPtyNotifications', () => {
       sourceEndSu: 3,
       sourceLengthSu: 3
     })
+
     const replacement = installReceivingActivation(
       'pty-1',
       sourceActivation({
@@ -619,6 +636,7 @@ describe('subscribeSshPtyNotifications', () => {
         recoveryEndSu: 6
       })
     )
+
     handler('pty.data', {
       id: 'pty-1',
       data: 'new',
@@ -682,12 +700,15 @@ describe('subscribeSshPtyNotifications', () => {
   it('drops provisional frames and settles cancellation before rollback completes', async () => {
     const { handler, mux, dataListeners, livePtyIds, installReceivingActivation } =
       createSubscription()
+
     const onData = vi.fn()
     dataListeners.add(onData)
+
     const lease = installReceivingActivation(
       'pty-1',
       sourceActivation({ checkpointSourceEndSu: 4, recoveryEndSu: 8 })
     )
+
     handler('pty.data', {
       id: 'pty-1',
       data: 'next',
@@ -726,6 +747,7 @@ describe('subscribeSshPtyNotifications', () => {
       sourceEndSu: 3,
       sourceLengthSu: 3
     })
+
     const replacement = installReceivingActivation(
       'pty-1',
       sourceActivation({
@@ -736,6 +758,7 @@ describe('subscribeSshPtyNotifications', () => {
         recoveryEndSu: 3
       })
     )
+
     handler('pty.data', {
       id: 'pty-1',
       data: 'new',
@@ -767,6 +790,7 @@ describe('subscribeSshPtyNotifications', () => {
     const onData = vi.fn()
     dataListeners.add(onData)
     const older = installReceivingActivation('pty-1', sourceActivation())
+
     const newer = installReceivingActivation(
       'pty-1',
       sourceActivation({
@@ -824,6 +848,7 @@ describe('subscribeSshPtyNotifications', () => {
       recordExit,
       resolvePtyIncarnation
     } = createSubscription()
+
     const onData = vi.fn()
     const onReplay = vi.fn()
     const onExit = vi.fn()

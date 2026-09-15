@@ -24,16 +24,19 @@ function seedEnvironment(name: string, endpoint: string): string {
   // A valid Curve25519 public key lets the client reach the socket-connect step
   // (and fail there) instead of bailing out early on key parsing.
   const keyPair = generateKeyPair()
+
   const offer: PairingOffer = {
     v: 2,
     endpoint,
     deviceToken: 'a'.repeat(48),
     publicKeyB64: publicKeyToBase64(keyPair.publicKey)
   }
+
   const environment = addEnvironmentFromPairingCode(userDataPath, {
     name,
     pairingCode: encodePairingOffer(offer)
   })
+
   return environment.id
 }
 
@@ -51,6 +54,7 @@ describe('Tailscale hint on remote runtime connection failure', () => {
     const id = seedEnvironment('lan-host', 'ws://127.0.0.1:9')
     const response = await getRuntimeEnvironmentStatus(userDataPath, id, 1000)
     expect(response.ok).toBe(false)
+
     if (response.ok === false) {
       expect(response.error.message).toContain('connect both devices to Tailscale')
       expect(response.error.message).toContain('https://tailscale.com/download')
@@ -61,6 +65,7 @@ describe('Tailscale hint on remote runtime connection failure', () => {
     const id = seedEnvironment('ts-host', 'ws://100.64.0.1:9')
     const response = await getRuntimeEnvironmentStatus(userDataPath, id, 800)
     expect(response.ok).toBe(false)
+
     if (response.ok === false) {
       expect(response.error.message).toContain('Funnel reverted to tailnet-only')
       expect(response.error.message).not.toContain('https://tailscale.com/download')

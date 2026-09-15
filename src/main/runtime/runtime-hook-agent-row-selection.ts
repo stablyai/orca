@@ -42,6 +42,7 @@ export function selectFreshExplicitAgentStatus(args: {
   let bestStatus: NonNullable<RuntimeTerminalAgentStatus['status']> | null = null
   let bestUpdatedAt = -1
   let bestStateStartedAt = -1
+
   const consider = (
     state: AgentStatusEntry['state'] | undefined,
     updatedAt: number | null | undefined,
@@ -53,20 +54,25 @@ export function selectFreshExplicitAgentStatus(args: {
     if (!state || restoredUnconfirmed || providerSessionOnly || typeof updatedAt !== 'number') {
       return
     }
+
     if (now - (evidenceObservedAt ?? updatedAt) > AGENT_STATUS_STALE_AFTER_MS) {
       return
     }
+
     const status = mapExplicitAgentStateToRuntimeTerminalStatus(state)
+
     if (updatedAt > bestUpdatedAt || (updatedAt === bestUpdatedAt && status === 'permission')) {
       bestStatus = status
       bestUpdatedAt = updatedAt
       bestStateStartedAt = typeof stateStartedAt === 'number' ? stateStartedAt : updatedAt
     }
   }
+
   for (const row of args.hookRows) {
     if (row.terminalHandle !== args.handle && (!args.paneKey || row.paneKey !== args.paneKey)) {
       continue
     }
+
     consider(
       row.state,
       row.receivedAt,
@@ -76,6 +82,7 @@ export function selectFreshExplicitAgentStatus(args: {
       row.stateStartedAt
     )
   }
+
   return bestStatus
     ? {
         status: bestStatus,
@@ -94,6 +101,7 @@ export function selectFreshAgentRowForMobileTab(args: {
 }): RuntimeAgentRowSnapshot | null {
   let match: AgentStatusIpcPayload | null = null
   const now = Date.now()
+
   for (const row of args.hookRows) {
     if (
       !isLiveObservation(row) ||
@@ -101,12 +109,15 @@ export function selectFreshAgentRowForMobileTab(args: {
     ) {
       continue
     }
+
     if (row.paneKey === args.paneKey) {
       if (!match || match.paneKey !== args.paneKey || row.receivedAt > match.receivedAt) {
         match = row
       }
+
       continue
     }
+
     if (
       match?.paneKey !== args.paneKey &&
       args.terminalHandle !== null &&
@@ -116,9 +127,11 @@ export function selectFreshAgentRowForMobileTab(args: {
       match = row
     }
   }
+
   if (!match) {
     return null
   }
+
   return {
     paneKey: match.paneKey,
     connectionId: match.connectionId ?? null,

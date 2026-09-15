@@ -66,6 +66,7 @@ class MockWebSocket {
 }
 
 const mockSockets: MockWebSocket[] = []
+
 const originalWebSocket = globalThis.WebSocket
 
 function hasSentRequest(socket: MockWebSocket, method: string): boolean {
@@ -81,6 +82,7 @@ function connectAuthenticated(): { client: ReturnType<typeof connect>; socket: M
   socket.open()
   socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
   socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
   return { client, socket }
 }
 
@@ -108,11 +110,14 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
             client: connect('ws://desktop.invalid', 'token', 'server-key'),
             socket: mockSockets[0]!
           }
+
       const client = createStableLogicalRpcClient(physical.client, 'lan')
       const replacement = connectAuthenticated()
+
       const requestError = client
         .sendRequest('worktree.create', { name: 'new' })
         .catch((error: unknown) => error)
+
       await Promise.resolve()
       expect(hasSentRequest(physical.socket, 'worktree.create')).toBe(sent)
 
@@ -147,10 +152,12 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
 
   it('marks in-flight requests as delivery-unknown when the socket drops', async () => {
     const { client, socket } = connectAuthenticated()
+
     const requestError = client.sendRequest('terminal.send', { terminal: 't' }).then(
       () => null,
       (error: Error) => error
     )
+
     await Promise.resolve()
     expect(hasSentRequest(socket, 'terminal.send')).toBe(true)
 
@@ -164,10 +171,12 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
 
   it('marks an in-flight request when the client closes before its response arrives', async () => {
     const { client, socket } = connectAuthenticated()
+
     const requestError = client.sendRequest('terminal.send', { terminal: 't' }).then(
       () => null,
       (error: Error) => error
     )
+
     await Promise.resolve()
     expect(hasSentRequest(socket, 'terminal.send')).toBe(true)
 
@@ -180,6 +189,7 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
 
   it('marks timed-out requests as delivery-unknown', async () => {
     const { client, socket } = connectAuthenticated()
+
     // Short override so the request times out before the activity probe
     // declares the whole socket dead (which is the drop case above).
     const requestError = client
@@ -188,6 +198,7 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
         () => null,
         (error: Error) => error
       )
+
     await Promise.resolve()
     expect(hasSentRequest(socket, 'terminal.send')).toBe(true)
 
@@ -201,12 +212,15 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
 
   it('marks a written request unknown when another request triggers auth recovery', async () => {
     const { client, socket } = connectAuthenticated()
+
     const sendError = client.sendRequest('terminal.send', { terminal: 't' }).then(
       () => null,
       (error: Error) => error
     )
+
     const authProbe = client.sendRequest('status.get')
     await Promise.resolve()
+
     const probe = socket.sent
       .map(
         (payload) =>
@@ -236,6 +250,7 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
       () => null,
       (caught: Error) => caught
     )
+
     expect(error).toMatchObject({ message: 'Connection interrupted' })
     expect(isRpcDeliveryUnknown(error)).toBe(false)
     client.close()

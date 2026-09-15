@@ -27,11 +27,13 @@ describe('dispatchWorkItem', () => {
 
   it('coerces unknown type values to undefined', async () => {
     const fn = vi.fn().mockResolvedValue(null)
+
     const bogus = {
       repoPath: '/r',
       number: 42,
       type: 'bogus' as unknown as 'issue' | 'pr'
     }
+
     await dispatchWorkItem(bogus, repo, fn)
     expect(fn).toHaveBeenCalledWith('/r', 42, undefined, null, undefined, undefined)
   })

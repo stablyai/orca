@@ -9,6 +9,7 @@ describe('endSubprocessStdin', () => {
     const stdin = new EventEmitter() as Writable
     stdin.end = vi.fn(() => {
       stdin.emit('error', pipeError)
+
       return stdin
     }) as Writable['end']
     expect(() => endSubprocessStdin(stdin, 'x'.repeat(1_000_000))).not.toThrow()

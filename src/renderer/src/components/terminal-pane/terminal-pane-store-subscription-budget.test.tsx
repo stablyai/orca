@@ -19,6 +19,7 @@ import {
   TERMINAL_PANE_STORE_ACTION_KEYS,
   useTerminalPaneStoreActions
 } from './use-terminal-pane-store-actions'
+
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 /**
@@ -27,12 +28,14 @@ import {
  * above before you do.
  */
 const TERMINAL_PANE_LISTENER_BUDGET = 16
+
 /** What the same mount cost before the stable-action and unified-tab folds. */
 const PRE_FOLD_LISTENERS_PER_PANE = 49
 
 const originalState = useAppStore.getState()
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function mount(node: ReactNode): void {
@@ -50,6 +53,7 @@ function unmount(): void {
   if (root) {
     act(() => root?.unmount())
   }
+
   root = null
   container?.remove()
   container = null
@@ -57,9 +61,11 @@ function unmount(): void {
 
 function listenerCount(): number {
   const count = readStoreListenerCount()
+
   if (count === null) {
     throw new Error('store listener census unavailable')
   }
+
   return count
 }
 
@@ -74,6 +80,7 @@ function PaneProbe({ tabId }: { tabId: string }): null {
     } as never,
     createRef()
   )
+
   return null
 }
 
@@ -133,8 +140,10 @@ describe('TerminalPane store subscription budget', () => {
 
   it('binds the live store actions without opening a listener for any of them', () => {
     let bound: Record<string, unknown> | null = null
+
     function ActionsProbe(): null {
       bound = useTerminalPaneStoreActions() as unknown as Record<string, unknown>
+
       return null
     }
 
@@ -144,10 +153,13 @@ describe('TerminalPane store subscription budget', () => {
     expect(listenerCount()).toBe(baseline)
     const state = useAppStore.getState() as unknown as Record<string, unknown>
     const boundActions = bound as Record<string, unknown> | null
+
     if (!boundActions) {
       throw new Error('probe did not render')
     }
+
     expect(Object.keys(boundActions).sort()).toEqual([...TERMINAL_PANE_STORE_ACTION_KEYS].sort())
+
     for (const key of TERMINAL_PANE_STORE_ACTION_KEYS) {
       expect(boundActions[key]).toBe(state[key])
     }

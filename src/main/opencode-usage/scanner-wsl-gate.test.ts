@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
 
 const UNC_DATA_DIR = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.local\\share\\opencode'
+
 const UNC_DATABASE = `${UNC_DATA_DIR}\\opencode.db`
 
 const mocks = vi.hoisted(() => ({
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../opencode/opencode-data-directory', () => ({
   resolveOpenCodeDataDirectory: mocks.resolveDataDirectory
 }))
+
 vi.mock('node:fs/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFsPromisesModule>()),
   readdir: mocks.readdir,
@@ -56,13 +58,17 @@ function dirent(name: string) {
 // so the call must still be pending at the deadline and settle just after it.
 async function settlesOnlyAtTheScanDeadline(pending: Promise<string[]>): Promise<string[]> {
   let settled = false
+
   const tracked = pending.then((value) => {
     settled = true
+
     return value
   })
+
   await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS - 1)
   expect(settled).toBe(false)
   await vi.advanceTimersByTimeAsync(2)
+
   return await tracked
 }
 
@@ -87,6 +93,7 @@ afterEach(async () => {
   releaseStall = undefined
   await vi.advanceTimersByTimeAsync(0)
   vi.useRealTimers()
+
   if (originalDatabaseOverride === undefined) {
     delete process.env.OPENCODE_DB
   } else {

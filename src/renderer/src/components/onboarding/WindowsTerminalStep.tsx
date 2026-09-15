@@ -45,6 +45,7 @@ function normalizeWindowsShell(value: string | null | undefined): BuiltInWindows
   ) {
     return value
   }
+
   return 'powershell.exe'
 }
 
@@ -57,10 +58,12 @@ export function WindowsTerminalStep({
   const windowsShell = normalizeWindowsShell(settings?.terminalWindowsShell)
   const selectedWslDistroName = settings?.terminalWindowsWslDistro?.trim() || null
   const selectedWslDistro = selectedWslDistroName || DEFAULT_WSL_DISTRO_VALUE
+
   const wslDistroOptions =
     selectedWslDistroName && !capabilities.wslDistros.includes(selectedWslDistroName)
       ? [selectedWslDistroName, ...capabilities.wslDistros]
       : capabilities.wslDistros
+
   const showGitBashOption = capabilities.gitBashAvailable || windowsShell === WINDOWS_GIT_BASH_SHELL
   const showWslOption = capabilities.wslAvailable || windowsShell === 'wsl.exe'
 
@@ -170,6 +173,7 @@ export function WindowsTerminalStep({
   }
 
   const rightClickValue = settings.terminalRightClickToPaste ? 'paste' : 'menu'
+
   const rightClickDescription =
     rightClickOptions.find((option) => option.value === rightClickValue)?.description ??
     rightClickOptions[0].description

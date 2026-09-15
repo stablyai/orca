@@ -88,6 +88,7 @@ describe('resolveGroupAddress', () => {
         makeSummary('term_b', { worktreeId: 'wt_1' }),
         makeSummary('term_c', { worktreeId: 'wt_2' })
       ]
+
       const result = resolveGroupAddress('@worktree:wt_1', 'term_a', terminals, noStatus)
       expect(result).toEqual(['term_b'])
     })
@@ -110,6 +111,7 @@ describe('resolveGroupAddress', () => {
         makeSummary('term_b', { agentIdentity: 'claude' }),
         makeSummary('term_c', { agentIdentity: 'codex' })
       ]
+
       expect(resolveGroupAddress('@claude', 'term_a', terminals, noStatus)).toEqual(['term_b'])
     })
 
@@ -128,6 +130,7 @@ describe('resolveGroupAddress', () => {
         makeSummary('target', { agentIdentity: agentIdentity as never }),
         makeSummary('other', { agentIdentity: 'claude' })
       ]
+
       const expected = agentIdentity === 'claude' ? ['target', 'other'] : ['target']
       expect(resolveGroupAddress(group, 'sender', terminals, noStatus)).toEqual(expected)
     })
@@ -142,6 +145,7 @@ describe('resolveGroupAddress', () => {
         makeSummary('sender', { agentIdentity: 'grok' }),
         makeSummary('target', { agentIdentity: 'grok' })
       ]
+
       expect(resolveGroupAddress('@grok', 'sender', terminals, noStatus)).toEqual(['target'])
     })
 
@@ -156,6 +160,7 @@ describe('resolveGroupAddress', () => {
             title: 'Review the Claude session-history fix'
           })
         ]
+
         expect(resolveGroupAddress('@claude', 'sender', terminals, noStatus)).toEqual([])
       })
 
@@ -167,6 +172,7 @@ describe('resolveGroupAddress', () => {
             title: 'Switch Claude and Codex off the load balancer… - grok'
           })
         ]
+
         expect(resolveGroupAddress('@codex', 'sender', terminals, noStatus)).toEqual([])
         expect(resolveGroupAddress('@grok', 'sender', terminals, noStatus)).toEqual(['grok_pane'])
       })
@@ -179,6 +185,7 @@ describe('resolveGroupAddress', () => {
             title: 'fix the text cursor blink'
           })
         ]
+
         expect(resolveGroupAddress('@cursor', 'sender', terminals, noStatus)).toEqual([])
       })
     })

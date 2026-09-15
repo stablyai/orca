@@ -39,12 +39,14 @@ describe('resolveBottomDrawerFillHeight', () => {
     // screen 844, top 54, gap 16, keyboard 292 → height 482; marginBottom 292
     // bottom edge at 844-292=552; top edge at 552-482=70 (= 54+16)
     const keyboardInset = 292
+
     const height = resolveBottomDrawerFillHeight({
       screenHeight: 844,
       topInset: 54,
       keyboardInset,
       topGap: 16
     })
+
     const topEdge = 844 - keyboardInset - height
     expect(height).toBe(482)
     expect(topEdge).toBe(54 + 16)
@@ -55,12 +57,14 @@ describe('resolveBottomDrawerFillHeight', () => {
     const topInset = 50
     const topGap = 16
     const keyboardInset = 300
+
     const height = resolveBottomDrawerFillHeight({
       screenHeight,
       topInset,
       keyboardInset,
       topGap
     })
+
     const topEdge = screenHeight - keyboardInset - height
     expect(topEdge).toBe(topInset + topGap)
   })

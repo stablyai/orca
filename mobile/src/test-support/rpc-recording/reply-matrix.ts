@@ -59,14 +59,18 @@ export function replyPartitions(normal: unknown): ReplyPartition[] {
  */
 export function replyMatrixSites(base: RecordingScenario): string[] {
   const sites = base.steps.flatMap((step) => ('complete' in step ? [step.complete] : []))
+
   if (!sites.length) {
     throw new Error(`No scripted reply to drive a matrix over: ${base.id}`)
   }
+
   const repeated = sites.filter((name, index) => sites.indexOf(name) !== index)
+
   if (repeated.length) {
     // A repeated name would make the divergence ambiguous; the manifest binds concurrent requests.
     throw new Error(`Matrix sites must be unique: ${base.id} repeats ${repeated.join(', ')}`)
   }
+
   return sites
 }
 
@@ -83,10 +87,13 @@ export function driveReplyMatrix(
   const sites = base.steps.flatMap((step, index) =>
     'complete' in step && step.complete === request ? [index] : []
   )
+
   if (sites.length !== 1) {
     throw new Error(`Matrix requires exactly one completion: ${request}`)
   }
+
   const divergence = sites[0]!
+
   return hoistPreludeCheckpoints(
     base,
     replyPartitions(normal).map((partition) => ({

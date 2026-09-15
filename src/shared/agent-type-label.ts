@@ -31,6 +31,7 @@ export function formatAgentTypeLabel(agentType: AgentType | null | undefined): s
   if (!agentType || agentType === 'unknown') {
     return 'Agent'
   }
+
   // Capitalize well-known names nicely; pass through custom names as-is
   return WELL_KNOWN_LABELS[agentType] ?? agentType
 }

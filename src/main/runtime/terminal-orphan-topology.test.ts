@@ -115,6 +115,7 @@ describe('terminal orphan topology', () => {
       first: { type: 'leaf' as const, groupId: 'group-a' },
       second: { type: 'leaf' as const, groupId: 'group-b' }
     }
+
     expect(
       mergeTerminalOrphanGroupLayout({
         existingLayout,

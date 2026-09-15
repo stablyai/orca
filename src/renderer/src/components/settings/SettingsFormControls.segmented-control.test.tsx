@@ -25,6 +25,7 @@ function renderControl(onChange = vi.fn()): { onChange: ReturnType<typeof vi.fn>
       />
     </TooltipProvider>
   )
+
   return { onChange }
 }
 

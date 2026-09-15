@@ -30,11 +30,13 @@ async function resolveTargetRepo(
   if (target.repo) {
     return (await client.call<{ repo: Repo }>('repo.show', { repo: target.repo })).result.repo
   }
+
   const worktree = (
     await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
       worktree: target.workspace
     })
   ).result.worktree
+
   return (await client.call<{ repo: Repo }>('repo.show', { repo: `id:${worktree.repoId}` })).result
     .repo
 }
@@ -51,10 +53,13 @@ async function sshTargetGeneration(
 ): Promise<number | undefined> {
   const targets = (await client.call<{ targets: SshTargetSummary[] }>('ssh.listTargetSummaries'))
     .result.targets
+
   const match = targets.find((candidate) => candidate.id === targetId)
+
   if (!match) {
     throw new AutomationOwnerConflictError(AUTOMATION_OWNER_CONFLICT_CODES.invalidDestination)
   }
+
   return match.generation
 }
 
@@ -65,12 +70,16 @@ export async function resolveAutomationDestination(
   if (!target.repo && !target.workspace) {
     return undefined
   }
+
   const repo = await resolveTargetRepo(client, target)
   const connectionId = repo.connectionId?.trim()
+
   if (!connectionId) {
     return { selector: { kind: 'self' } }
   }
+
   const generation = await sshTargetGeneration(client, connectionId)
+
   return generation === undefined
     ? undefined
     : { selector: { kind: 'ssh', targetId: connectionId, targetGeneration: generation } }

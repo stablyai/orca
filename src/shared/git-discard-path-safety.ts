@@ -12,6 +12,7 @@ function isENOENT(error: unknown): boolean {
 
 function isInsideOrEqual(rootPath: string, candidatePath: string): boolean {
   const relativePath = path.relative(rootPath, candidatePath)
+
   return (
     relativePath === '' ||
     (relativePath !== '..' &&
@@ -26,6 +27,7 @@ async function assertRealPathInsideWorktree(
   originalFilePath: string
 ): Promise<void> {
   const realCandidatePath = path.resolve(await realpath(candidatePath))
+
   if (!isInsideOrEqual(realWorktreePath, realCandidatePath)) {
     throw new Error(`Path "${originalFilePath}" resolves outside the worktree`)
   }
@@ -37,14 +39,17 @@ async function assertNearestExistingParentInsideWorktree(
   originalFilePath: string
 ): Promise<void> {
   let parentPath = path.dirname(candidatePath)
+
   while (parentPath !== path.dirname(parentPath)) {
     try {
       await assertRealPathInsideWorktree(realWorktreePath, parentPath, originalFilePath)
+
       return
     } catch (error) {
       if (!isENOENT(error)) {
         throw error
       }
+
       parentPath = path.dirname(parentPath)
     }
   }
@@ -58,6 +63,7 @@ function assertTargetIsWorktreeChild(
   originalFilePath: string
 ): void {
   const relativeTarget = path.relative(resolvedWorktreePath, resolvedTarget)
+
   // Why: force-removing the worktree root is never a valid untracked discard,
   // even when callers accidentally pass an empty or self-referential path.
   if (
@@ -83,16 +89,19 @@ async function validateUntrackedDiscardTarget(
 
   try {
     const targetStats = await lstat(resolvedTarget)
+
     // Why: discard should remove a symlink leaf itself, but symlinked parents
     // must not redirect recursive removal outside the real worktree.
     const pathToValidate = targetStats.isSymbolicLink()
       ? path.dirname(resolvedTarget)
       : resolvedTarget
+
     await assertRealPathInsideWorktree(realWorktreePath, pathToValidate, filePath)
   } catch (error) {
     if (!isENOENT(error)) {
       throw error
     }
+
     await assertNearestExistingParentInsideWorktree(realWorktreePath, resolvedTarget, filePath)
   }
 

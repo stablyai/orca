@@ -19,6 +19,7 @@ export async function listLabels(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<string[]> {
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
+
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -26,10 +27,13 @@ export async function listLabels(
     connectionId,
     localGitOptions
   )
+
   if (!projectRef) {
     return []
   }
+
   await acquire()
+
   try {
     const { stdout } = await glabExecFileAsync(
       [
@@ -42,6 +46,7 @@ export async function listLabels(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
+
     return stdout
       .trim()
       .split('\n')
@@ -60,6 +65,7 @@ export async function listAssignableUsers(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabAssignableUser[]> {
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
+
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -67,10 +73,13 @@ export async function listAssignableUsers(
     connectionId,
     localGitOptions
   )
+
   if (!projectRef) {
     return []
   }
+
   await acquire()
+
   try {
     // Why: `members/all` returns project members including those inherited
     // from parent groups — important for projects under a top-level group
@@ -87,6 +96,7 @@ export async function listAssignableUsers(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
+
     type RESTMember = {
       id?: number
       username?: string
@@ -94,14 +104,19 @@ export async function listAssignableUsers(
       avatar_url?: string | null
       state?: string | null
     }
+
     const users: GitLabAssignableUser[] = []
+
     for (const line of stdout.split('\n')) {
       const trimmed = line.trim()
+
       if (!trimmed) {
         continue
       }
+
       try {
         const user = JSON.parse(trimmed) as RESTMember
+
         if (user.username) {
           users.push({
             ...(typeof user.id === 'number' ? { id: user.id } : {}),
@@ -115,6 +130,7 @@ export async function listAssignableUsers(
         // Skip malformed NDJSON lines defensively.
       }
     }
+
     return users
   } catch {
     return []

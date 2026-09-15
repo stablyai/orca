@@ -32,6 +32,7 @@ describe('remote terminal stale stream frames', () => {
 
     const subscribe = vi.fn(async (_args: unknown, callbacks: SubscribeCallbacks) => {
       queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+
       return {
         unsubscribe: vi.fn(),
         sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => {
@@ -39,6 +40,7 @@ describe('remote terminal stale stream frames', () => {
         }
       }
     })
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
   })
 
@@ -52,7 +54,9 @@ describe('remote terminal stale stream frames', () => {
       client: { id: 'desktop-1', type: 'desktop' },
       callbacks: { onData: () => {}, onSnapshot: () => {} }
     })
+
     await Promise.resolve()
+
     return stream
   }
 

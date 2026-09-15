@@ -9,12 +9,19 @@ import type { TuiAgent } from '../../shared/tui-agent'
 // the idle poll's quiescence gate, which read a missing output clock as "never quiet".
 
 const WORKTREE_ID = 'repo-1::/tmp/followups'
+
 const TAB_ID = 'c1c1c1c1-c1c1-4c1c-8c1c-c1c1c1c1c1c1'
+
 const LEAF_ID = 'c2c2c2c2-c2c2-4c2c-8c2c-c2c2c2c2c2c2'
+
 const PTY_ID = 'pty-followups'
+
 const ESC = String.fromCharCode(27)
+
 const BEL = String.fromCharCode(7)
+
 const osc = (title: string) => `${ESC}]0;${title}${BEL}`
+
 const agentStatus = (state: string, agentType: string) =>
   `${ESC}]9999;{"state":"${state}","agentType":"${agentType}"}${BEL}`
 
@@ -40,6 +47,7 @@ async function makeRuntime(launchAgent: TuiAgent | null, foreground = 'codex') {
     repoPath: '/tmp/followups',
     getForegroundProcess: async () => foreground
   })
+
   runtime.attachWindow(1)
   runtime.syncWindowGraph(1, GRAPH)
   runtime.registerPty(PTY_ID, WORKTREE_ID, null, {
@@ -49,6 +57,7 @@ async function makeRuntime(launchAgent: TuiAgent | null, foreground = 'codex') {
     ...(launchAgent ? { agentLaunchAuthority: { launchToken: 'tok', launchAgent } } : {})
   })
   const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+
   return { runtime, handle: terminals[0].handle }
 }
 
@@ -118,6 +127,7 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
     const { runtime } = await makeRuntime('codex')
     const deliver = watchDelivery(runtime)
     runtime.onPtyData(PTY_ID, `${osc('Codex')}output\n`, Date.now())
+
     // Keep the stream alive across the whole retry window.
     // Deterministic streaming: one chunk every 250ms of virtual time, so the gap between
     // chunks can never drift past the quiescence window the way a real interval can.
@@ -125,6 +135,7 @@ describe('mailbox delivery honours the tui-idle evidence ranking', () => {
       runtime.onPtyData(PTY_ID, 'more output\n', Date.now())
       await vi.advanceTimersByTimeAsync(250)
     }
+
     expect(deliver).not.toHaveBeenCalled()
   })
 
@@ -178,9 +189,11 @@ describe('quiescence treats a missing output clock as quiet', () => {
     // No launch metadata: Orca did not start this agent, so the quiet-foreground lane is
     // the only evidence available, and `lastOutputAt` is null because nothing ever arrived.
     const { runtime, handle } = await makeRuntime(null, 'codex')
+
     const leaves =
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: reading the runtime's own leaf map to assert the precondition this test depends on.
       (runtime as never as { leaves: Map<string, { lastOutputAt: number | null }> }).leaves
+
     expect([...leaves.values()][0].lastOutputAt).toBeNull()
 
     await expect(

@@ -42,6 +42,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
             }
           : {})
       })
+
       if (result.status === 'created') {
         toast.success(
           translate('auto.store.slices.orca.profiles.319d7cf39b', 'Cloud profile created')
@@ -56,6 +57,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
           { description: result.error }
         )
       }
+
       return result
     } catch (err) {
       console.error('Failed to create Orca cloud profile:', err)
@@ -65,6 +67,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
           description: err instanceof Error ? err.message : String(err)
         }
       )
+
       return null
     }
   },
@@ -73,7 +76,9 @@ export const createOrcaProfilesAuthActions: StateCreator<
     if (get().orcaProfileConnecting) {
       return null
     }
+
     set({ orcaProfileConnecting: true })
+
     try {
       const result = await window.api.orcaProfiles.connectCurrent()
       set({
@@ -86,6 +91,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
             }
           : {})
       })
+
       if (result.status === 'unconfigured') {
         toast.error(
           translate(
@@ -104,6 +110,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
       } else if (result.status === 'connected') {
         toast.success(translate('auto.store.slices.orca.profiles.9fcb07a796', 'Profile connected'))
       }
+
       return result
     } catch (err) {
       console.error('Failed to connect Orca profile:', err)
@@ -114,6 +121,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
           description: err instanceof Error ? err.message : String(err)
         }
       )
+
       return null
     }
   },
@@ -130,6 +138,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
             }
           : {})
       })
+
       if (result.status === 'reconnect-required') {
         toast.error(
           translate('auto.store.slices.orca.profiles.d6e764e7db', 'Reconnect this profile')
@@ -140,6 +149,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
           { description: result.error }
         )
       }
+
       return result
     } catch (err) {
       console.error('Failed to refresh Orca profile auth:', err)
@@ -149,6 +159,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
           description: err instanceof Error ? err.message : String(err)
         }
       )
+
       return null
     }
   },
@@ -164,12 +175,14 @@ export const createOrcaProfilesAuthActions: StateCreator<
       toast.success(
         translate('auto.store.slices.orca.profiles.a37b5e6d37', 'Signed out of profile')
       )
+
       return result
     } catch (err) {
       console.error('Failed to sign out of Orca profile:', err)
       toast.error(translate('auto.store.slices.orca.profiles.83600521e7', 'Failed to sign out'), {
         description: err instanceof Error ? err.message : String(err)
       })
+
       return null
     }
   },
@@ -186,6 +199,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
             }
           : {})
       })
+
       if (result.status === 'reconnect-required') {
         toast.error(
           translate('auto.store.slices.orca.profiles.d6e764e7db', 'Reconnect this profile')
@@ -196,6 +210,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
           { description: result.error }
         )
       }
+
       return result
     } catch (err) {
       console.error('Failed to switch Orca profile org:', err)
@@ -205,6 +220,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
           description: err instanceof Error ? err.message : String(err)
         }
       )
+
       return null
     }
   }

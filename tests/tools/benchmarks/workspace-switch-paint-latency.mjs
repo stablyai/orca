@@ -31,14 +31,17 @@ function parseArgs(argv) {
     out: null,
     json: false
   }
+
   for (let i = 0; i < argv.length; i += 1) {
     const [flag, inlineValue] = argv[i].split('=')
     const value = inlineValue ?? argv[i + 1]
+
     const consume = () => {
       if (inlineValue === undefined) {
         i += 1
       }
     }
+
     switch (flag) {
       case '--port':
         args.port = Number(value)
@@ -73,6 +76,7 @@ function parseArgs(argv) {
         break
     }
   }
+
   return args
 }
 
@@ -82,21 +86,27 @@ function quantile(sorted, q) {
   if (sorted.length === 0) {
     return null
   }
+
   const pos = (sorted.length - 1) * q
   const lo = Math.floor(pos)
   const hi = Math.ceil(pos)
+
   if (lo === hi) {
     return sorted[lo]
   }
+
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo)
 }
 
 function summarize(values) {
   const clean = values.filter((v) => typeof v === 'number' && Number.isFinite(v))
+
   if (clean.length === 0) {
     return null
   }
+
   const sorted = [...clean].sort((a, b) => a - b)
+
   return {
     n: sorted.length,
     min: +sorted[0].toFixed(1),
@@ -188,16 +198,21 @@ async function dismissOverlays(page) {
     const blocked = await page.evaluate(() =>
       [...document.querySelectorAll('body *')].some((el) => {
         const r = el.getBoundingClientRect()
+
         if (r.width < window.innerWidth * 0.9 || r.height < window.innerHeight * 0.9) {
           return false
         }
+
         const s = getComputedStyle(el)
+
         return s.position === 'fixed' && s.pointerEvents !== 'none' && Number(s.zIndex) >= 40
       })
     )
+
     if (!blocked) {
       return
     }
+
     await page.keyboard.press('Escape')
     await page.waitForTimeout(200)
   }
@@ -208,17 +223,20 @@ async function main() {
   const contexts = browser.contexts()
   const pages = contexts.flatMap((c) => c.pages())
   let page = null
+
   for (const candidate of pages) {
     const hasStore = await candidate
       .evaluate(
         () => Boolean(window.__store) && Boolean(document.querySelector('[data-worktree-id]'))
       )
       .catch(() => false)
+
     if (hasStore) {
       page = candidate
       break
     }
   }
+
   if (!page) {
     throw new Error(
       'No renderer page with window.__store + a mounted sidebar. Is the app past startup, and is the sidebar open?'
@@ -237,15 +255,19 @@ async function main() {
     state.setShowActiveOnly?.(false)
     state.setFilterRepoIds?.([])
     const viewportH = window.innerHeight
+
     // Only cards fully inside the viewport are clickable: the list is
     // virtualized, so off-screen rows are unmounted or positioned outside.
     return [...document.querySelectorAll('[data-worktree-id]')]
       .filter((el) => {
         const surface = el.querySelector('[data-worktree-card-surface]')
+
         if (!surface) {
           return false
         }
+
         const r = surface.getBoundingClientRect()
+
         return r.height > 0 && r.top >= 0 && r.bottom <= viewportH
       })
       .map((el) => el.dataset.worktreeId)
@@ -262,12 +284,15 @@ async function main() {
   // start — clicking the active card short-circuits and measures nothing.
   const activeAtStart = await page.evaluate(() => window.__store.getState().activeWorktreeId)
   const pair = worktreeIds.filter((id) => id !== activeAtStart).slice(0, 2)
+
   if (pair.length < 2) {
     throw new Error('Need two visible non-active cards to alternate between')
   }
+
   console.error(`alternating between:\n  ${pair[0]}\n  ${pair[1]}`)
 
   const samples = []
+
   for (let i = 0; i < args.switches; i += 1) {
     const targetId = pair[i % 2]
 
@@ -302,10 +327,12 @@ async function main() {
       const frames = p.frames
       let maxGap = 0
       let prev = 0
+
       for (const f of frames) {
         maxGap = Math.max(maxGap, f - prev)
         prev = f
       }
+
       return {
         firstPaintMs: frames.length ? frames[0] : null,
         maxFrameGapMs: +maxGap.toFixed(1),
@@ -318,7 +345,9 @@ async function main() {
         worstLongTaskMs: p.longTasks.reduce((a, t) => Math.max(a, t.durationMs), 0)
       }
     })
+
     sample.targetId = targetId
+
     // Why: a click that never activated would report a fast "first paint" and
     // silently make every commit look good during a bisect.
     if (sample.attrFlipMs === null && sample.renderedCommitMs === null) {
@@ -326,6 +355,7 @@ async function main() {
         `switch ${i + 1} clicked card ${targetId} but it never became active — the measurement is not valid`
       )
     }
+
     samples.push(sample)
     console.error(
       `switch ${i + 1}/${args.switches} -> firstPaint=${sample.firstPaintMs}ms ` +
@@ -364,6 +394,7 @@ async function main() {
     mkdirSync(path.dirname(args.out), { recursive: true })
     writeFileSync(args.out, JSON.stringify(report, null, 2))
   }
+
   if (args.json) {
     console.log(JSON.stringify(report, null, 2))
   } else {

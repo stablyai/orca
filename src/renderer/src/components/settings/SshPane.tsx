@@ -21,6 +21,7 @@ import { getAllWorktreesFromState } from '@/store/selectors'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useSshAddTargetIntent } from './use-ssh-add-target-intent'
+
 export { getSshPaneSearchEntries } from './ssh-search'
 
 type SshPaneProps = { addTargetIntentSignal?: number }
@@ -39,6 +40,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
   // land two addTarget/updateTarget writes for one draft.
   const [saving, setSaving] = useState(false)
   const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
+
   // Why: when a target still has workspaces, route removal through the shared
   // workspace-aware HostRemoveDialog (same as the sidebar) instead of the plain
   // confirm, so the user chooses to delete or keep them rather than silently
@@ -47,6 +49,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     targetId: string
     label: string
   } | null>(null)
+
   const mountedRef = useMountedRef()
 
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
@@ -56,9 +59,11 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     async (opts?: { signal?: AbortSignal }) => {
       try {
         const result = (await window.api.ssh.listTargets()) as SshTarget[]
+
         if (opts?.signal?.aborted || !mountedRef.current) {
           return
         }
+
         setTargets(result)
         setSshTargetsMetadata(result)
       } catch {
@@ -84,11 +89,14 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       } catch {
         // Surfaced on demand via the explicit Import button; ignore here.
       }
+
       if (abortController.signal.aborted) {
         return
       }
+
       await loadTargets({ signal: abortController.signal })
     })()
+
     return () => abortController.abort()
   }, [loadTargets])
 
@@ -99,17 +107,22 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     setForm(EMPTY_FORM)
     setShowForm(true)
   }, [])
+
   useSshAddTargetIntent(addTargetIntentSignal, openAddTargetForm)
 
   const handleSave = async (): Promise<void> => {
     const savePayload = buildSshTargetSavePayload(form)
+
     if (!savePayload.ok) {
       toast.error(savePayload.error)
+
       return
     }
+
     if (saving) {
       return
     }
+
     setSaving(true)
 
     try {
@@ -119,10 +132,13 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
         const result = await window.api.ssh.addTarget({ target: savePayload.payload.target })
         useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
       }
+
       recordFeatureInteraction('ssh')
+
       if (!mountedRef.current) {
         return
       }
+
       toast.success(
         editingId
           ? translate('auto.components.settings.SshPane.b4ba0ce33d', 'Target updated')
@@ -159,10 +175,13 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       worktrees: getAllWorktreesFromState(useAppStore.getState()),
       sshConnectionStates: useAppStore.getState().sshConnectionStates
     })
+
     if (resolution.workspaceCount > 0) {
       setHostRemoveTarget({ targetId: target.id, label: target.label })
+
       return
     }
+
     requestPlainRemove(target)
   }
 
@@ -172,9 +191,11 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       // Why: a deleted passphrase-gated target may still have deferred
       // reconnect metadata; clear it so focused SSH tabs stop retrying it.
       clearRemovedSshTargetState(id)
+
       if (mountedRef.current) {
         toast.success(translate('auto.components.settings.SshPane.a0237eb1ca', 'Target removed'))
       }
+
       await loadTargets()
     } catch (err) {
       if (mountedRef.current) {
@@ -238,11 +259,13 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
   const handleResetRelay = async (targetId: string): Promise<void> => {
     try {
       await window.api.ssh.resetRelay({ targetId })
+
       if (mountedRef.current) {
         toast.success(
           translate('auto.components.settings.SshPane.db2e48975e', 'Remote relay reset')
         )
       }
+
       await loadTargets()
     } catch (err) {
       if (mountedRef.current) {
@@ -260,9 +283,11 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
 
   const handleTest = async (targetId: string): Promise<void> => {
     setTestingIds((prev) => new Set(prev).add(targetId))
+
     try {
       const result = await window.api.ssh.testConnection({ targetId })
       recordFeatureInteraction('ssh')
+
       if (mountedRef.current) {
         if (result.success) {
           toast.success(
@@ -288,6 +313,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
         setTestingIds((prev) => {
           const next = new Set(prev)
           next.delete(targetId)
+
           return next
         })
       }
@@ -302,6 +328,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       const result = await window.api.ssh.importConfig({ reAdopt: true })
       useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
       recordFeatureInteraction('ssh')
+
       if (mountedRef.current) {
         if (result.targets.length === 0) {
           toast('~/.ssh/config already in sync')
@@ -315,6 +342,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
           )
         }
       }
+
       await loadTargets()
     } catch (err) {
       if (mountedRef.current) {

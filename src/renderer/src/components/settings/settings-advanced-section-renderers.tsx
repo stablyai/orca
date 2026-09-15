@@ -14,6 +14,7 @@ export function renderAdvancedSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element | null {
   const { model, navigation, view } = context
+
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="advanced"
@@ -33,6 +34,7 @@ export function renderAdvancedSettingsSection(
 
 export function renderDevSettingsSection(context: SettingsRenderContext): React.JSX.Element | null {
   const { model, navigation, view } = context
+
   return model.showDesktopOnlySettings && import.meta.env.DEV ? (
     <SettingsSection
       id="dev"
@@ -56,6 +58,7 @@ export function renderExperimentalSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element {
   const { model, navigation, view } = context
+
   return (
     <SettingsSection
       id="experimental"
@@ -88,6 +91,7 @@ export function renderPluginsSettingsSection(
   context: SettingsRenderContext
 ): React.JSX.Element | null {
   const { model, view } = context
+
   return model.showDesktopOnlySettings ? (
     <PluginsSettingsSection
       mounted={view.isSectionMounted('plugins')}

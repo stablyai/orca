@@ -23,6 +23,7 @@ function makeDeps(
 describe('createShutdownCheckpointPersist', () => {
   it('does not fail the checkpoint when the sleeping-agent quit capture throws (STA-5505)', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const deps = makeDeps({
       captureSleepingAgentSessions: () => {
         throw new Error('capture exploded')
@@ -41,6 +42,7 @@ describe('createShutdownCheckpointPersist', () => {
 
   it('keeps sleeping-capture diagnostics non-throwing for unstringifiable values', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const deps = makeDeps({
       captureSleepingAgentSessions: () => {
         throw Object.create(null)
@@ -56,6 +58,7 @@ describe('createShutdownCheckpointPersist', () => {
     const stageBeforeUnloadSync = vi.fn(() => {
       throw new Error('sync IPC staging failed')
     })
+
     const { run: persist } = createShutdownCheckpointPersist(makeDeps({ stageBeforeUnloadSync }))
 
     // A transient failure must not silently cost the full snapshot on attempt one.
@@ -65,11 +68,13 @@ describe('createShutdownCheckpointPersist', () => {
 
   it('degrades to durable-only staging when full staging fails again on retry (STA-5505)', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const stageBeforeUnloadSync = vi.fn((args: { sessions: unknown[] }) => {
       if (args.sessions.length > 0) {
         throw new Error('sync IPC staging failed')
       }
     })
+
     const { run: persist } = createShutdownCheckpointPersist(makeDeps({ stageBeforeUnloadSync }))
 
     expect(persist).toThrow('sync IPC staging failed')
@@ -84,12 +89,15 @@ describe('createShutdownCheckpointPersist', () => {
 
   it('stages the full snapshot when a retry after a transient staging failure succeeds', () => {
     let calls = 0
+
     const stageBeforeUnloadSync = vi.fn(() => {
       calls += 1
+
       if (calls === 1) {
         throw new Error('transient staging failure')
       }
     })
+
     const { run: persist } = createShutdownCheckpointPersist(makeDeps({ stageBeforeUnloadSync }))
 
     expect(persist).toThrow('transient staging failure')
@@ -107,6 +115,7 @@ describe('createShutdownCheckpointPersist', () => {
         throw new Error('sync IPC staging failed')
       })
     })
+
     const { run: persist } = createShutdownCheckpointPersist(deps)
 
     expect(persist).toThrow('sync IPC staging failed')
@@ -120,6 +129,7 @@ describe('createShutdownCheckpointPersist', () => {
         throw new Error('sync IPC staging failed')
       })
     })
+
     const { run: persist } = createShutdownCheckpointPersist(deps)
 
     expect(persist).toThrow('sync IPC staging failed')
@@ -128,6 +138,7 @@ describe('createShutdownCheckpointPersist', () => {
 
   it('fails the checkpoint when even durable-only staging throws', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const deps = makeDeps({
       buildSessionSnapshots: () => {
         throw new Error('snapshot build failed')
@@ -143,6 +154,7 @@ describe('createShutdownCheckpointPersist', () => {
 
   it('keeps the durable-session fallback for snapshot build failures', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const deps = makeDeps({
       buildSessionSnapshots: () => {
         throw new Error('snapshot build failed')
@@ -187,6 +199,7 @@ describe('createShutdownCheckpointPersist', () => {
     const stageBeforeUnloadSync = vi.fn(() => {
       throw new Error('sync IPC staging failed')
     })
+
     const persist = createShutdownCheckpointPersist(makeDeps({ stageBeforeUnloadSync }))
 
     expect(persist.run).toThrow('sync IPC staging failed')

@@ -19,16 +19,20 @@ function getDefaultProjectLabel(cwd: string | null): string {
   if (!cwd) {
     return 'Unknown location'
   }
+
   const parts = cwd.replace(/\\/g, '/').split('/').filter(Boolean)
+
   if (parts.length >= 2) {
     return parts.slice(-2).join('/')
   }
+
   return parts.at(-1) ?? cwd
 }
 
 async function canonicalizePath(pathValue: string): Promise<string> {
   try {
     const resolved = await realpath(pathValue)
+
     return normalizeComparablePath(resolved)
   } catch {
     return normalizeComparablePath(pathValue)
@@ -37,12 +41,14 @@ async function canonicalizePath(pathValue: string): Promise<string> {
 
 function normalizeComparablePath(pathValue: string): string {
   const normalized = pathValue.replace(/\\/g, '/')
+
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
 function isContainedPath(parentPath: string, childPath: string): boolean {
   const parent = normalizeComparablePath(parentPath).replace(/\/+$/, '')
   const child = normalizeComparablePath(childPath).replace(/\/+$/, '')
+
   return child === parent || child.startsWith(`${parent}/`)
 }
 
@@ -52,6 +58,7 @@ function findContainingWorktree(
 ): ClaudeUsageWorktreeRef | null {
   const normalizedCwd = normalizeComparablePath(cwd)
   const exact = worktreeLookup.get(normalizedCwd)
+
   if (exact) {
     return exact
   }
@@ -69,24 +76,31 @@ function getSortedWorktreeEntries(
   worktreeLookup: Map<string, ClaudeUsageWorktreeRef>
 ): ClaudeUsageWorktreeEntry[] {
   const cached = sortedWorktreeEntriesByLookup.get(worktreeLookup)
+
   if (cached) {
     return cached
   }
+
   const sorted = [...worktreeLookup.entries()].sort(
     ([leftPath], [rightPath]) => rightPath.length - leftPath.length
   )
+
   sortedWorktreeEntriesByLookup.set(worktreeLookup, sorted)
+
   return sorted
 }
 
 function localDayFromTimestamp(timestamp: string): string | null {
   const parsed = new Date(timestamp)
+
   if (Number.isNaN(parsed.getTime())) {
     return null
   }
+
   const year = parsed.getFullYear()
   const month = String(parsed.getMonth() + 1).padStart(2, '0')
   const day = String(parsed.getDate()).padStart(2, '0')
+
   return `${year}-${month}-${day}`
 }
 
@@ -94,9 +108,11 @@ export async function buildWorktreeLookup(
   worktrees: ClaudeUsageWorktreeRef[]
 ): Promise<Map<string, ClaudeUsageWorktreeRef>> {
   const lookup = new Map<string, ClaudeUsageWorktreeRef>()
+
   for (const worktree of worktrees) {
     lookup.set(await canonicalizePath(worktree.path), worktree)
   }
+
   return lookup
 }
 
@@ -109,6 +125,7 @@ export async function attributeClaudeUsageTurns(
 
   for (const turn of turns) {
     const day = localDayFromTimestamp(turn.timestamp)
+
     if (!day) {
       continue
     }
@@ -120,11 +137,13 @@ export async function attributeClaudeUsageTurns(
 
     if (turn.cwd) {
       let worktree = worktreeByCwd.get(turn.cwd)
+
       if (worktree === undefined) {
         const canonicalCwd = await canonicalizePath(turn.cwd)
         worktree = findContainingWorktree(canonicalCwd, worktreeLookup)
         worktreeByCwd.set(turn.cwd, worktree)
       }
+
       if (worktree) {
         repoId = worktree.repoId
         worktreeId = worktree.worktreeId

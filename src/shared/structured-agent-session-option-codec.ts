@@ -9,6 +9,7 @@ export function encodeStructuredAgentSessionOptionValue(
   if (STRUCTURED_BOOLEAN_OPTION_IDS.has(optionId)) {
     return typeof value === 'boolean' ? String(value) : null
   }
+
   return typeof value === 'string' ? value : null
 }
 
@@ -19,5 +20,6 @@ export function decodeStructuredAgentSessionOptionValue(
   if (!STRUCTURED_BOOLEAN_OPTION_IDS.has(optionId)) {
     return value
   }
+
   return value === 'true' ? true : value === 'false' ? false : null
 }

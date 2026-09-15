@@ -15,6 +15,7 @@ function createPane(id: number, container: HTMLElement): ManagedPaneInternal {
   container.classList.add('pane')
   container.dataset.paneId = String(id)
   container.dataset.leafId = leafId
+
   return {
     id,
     leafId,
@@ -49,11 +50,13 @@ function createVerticalSplit(paneIds: readonly number[]): Map<number, ManagedPan
   document.body.appendChild(split)
 
   const panes = new Map<number, ManagedPaneInternal>()
+
   for (const id of paneIds) {
     const container = document.createElement('div')
     split.appendChild(container)
     panes.set(id, createPane(id, container))
   }
+
   return panes
 }
 

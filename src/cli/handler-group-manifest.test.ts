@@ -20,9 +20,11 @@ const HANDLER_RECORD_EXPORT = /_HANDLERS?$/
 function listHandlerModules(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name)
+
     if (entry.isDirectory()) {
       return listHandlerModules(path)
     }
+
     return entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts') ? [path] : []
   })
 }
@@ -45,37 +47,45 @@ describe('handler group manifest', () => {
 
   it('matches each group export key-for-key', async () => {
     const drift: string[] = []
+
     for (const group of HANDLER_GROUPS) {
       const actual = Object.keys(await group.load()).sort()
       const declared = [...group.keys].sort()
+
       if (JSON.stringify(actual) !== JSON.stringify(declared)) {
         drift.push(
           `${group.name}: manifest ${JSON.stringify(declared)} !== export ${JSON.stringify(actual)}`
         )
       }
     }
+
     expect(drift).toEqual([])
   })
 
   it('exposes every declared key as a callable handler', async () => {
     const notCallable: string[] = []
+
     for (const group of HANDLER_GROUPS) {
       const loaded = await group.load()
+
       for (const key of group.keys) {
         if (typeof loaded[key] !== 'function') {
           notCallable.push(`${group.name}/${key}`)
         }
       }
     }
+
     expect(notCallable).toEqual([])
   })
 
   it('reaches every group through dispatch routing', () => {
     const routes = buildHandlerRoutes(HANDLER_GROUPS)
     const reached = new Set([...routes.values()].map((group) => group.name))
+
     const unreachable = HANDLER_GROUPS.filter((group) => !reached.has(group.name)).map(
       (group) => group.name
     )
+
     expect(unreachable).toEqual([])
   })
 
@@ -86,12 +96,15 @@ describe('handler group manifest', () => {
   it('routes every command exported by a handler module', async () => {
     const routes = buildHandlerRoutes(HANDLER_GROUPS)
     const unroutable: string[] = []
+
     for (const file of listHandlerModules(HANDLERS_DIR)) {
       const exports: Record<string, unknown> = await import(file)
+
       for (const [name, value] of Object.entries(exports)) {
         if (!HANDLER_RECORD_EXPORT.test(name) || !isHandlerRecord(value)) {
           continue
         }
+
         for (const key of Object.keys(value)) {
           if (!routes.has(key)) {
             unroutable.push(`${relative(HANDLERS_DIR, file)} ${name}: ${key}`)
@@ -99,6 +112,7 @@ describe('handler group manifest', () => {
         }
       }
     }
+
     expect(unroutable).toEqual([])
   })
 

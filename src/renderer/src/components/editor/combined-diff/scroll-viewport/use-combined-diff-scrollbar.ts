@@ -32,10 +32,12 @@ export function useCombinedDiffScrollbar({
     top: 0,
     height: COMBINED_DIFF_SCROLLBAR_THUMB_MIN_HEIGHT
   })
+
   const activeScrollbarDragCleanupRef = useRef<CombinedDiffScrollbarDragCleanup | null>(null)
 
   const updateScrollbar = useCallback(() => {
     const container = scrollContainerRef.current
+
     if (!container || container.scrollHeight <= container.clientHeight + 1) {
       setScrollThumb((prev) =>
         prev.visible
@@ -46,11 +48,13 @@ export function useCombinedDiffScrollbar({
             }
           : prev
       )
+
       return
     }
 
     const trackHeight = Math.max(1, container.clientHeight - 8)
     const maxScrollTop = Math.max(1, container.scrollHeight - container.clientHeight)
+
     const height = Math.min(
       trackHeight,
       Math.max(
@@ -58,6 +62,7 @@ export function useCombinedDiffScrollbar({
         (container.clientHeight / container.scrollHeight) * trackHeight
       )
     )
+
     const top = ((trackHeight - height) * container.scrollTop) / maxScrollTop
     setScrollThumb({ visible: true, top, height })
   }, [scrollContainerRef])
@@ -71,6 +76,7 @@ export function useCombinedDiffScrollbar({
   const handleScrollbarPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       const container = scrollContainerRef.current
+
       if (!container) {
         return
       }
@@ -78,6 +84,7 @@ export function useCombinedDiffScrollbar({
       event.preventDefault()
       markDirectScrollInput()
       const track = event.currentTarget
+
       const thumb =
         event.target instanceof HTMLElement
           ? event.target.closest('[data-combined-diff-scrollbar-thumb]')
@@ -85,6 +92,7 @@ export function useCombinedDiffScrollbar({
 
       const getLiveThumbHeight = (): number => {
         const trackHeight = Math.max(1, track.getBoundingClientRect().height)
+
         return Math.min(
           trackHeight,
           Math.max(
@@ -101,6 +109,7 @@ export function useCombinedDiffScrollbar({
         const maxThumbTop = Math.max(1, trackHeight - thumbHeight)
         const maxScrollTop = Math.max(1, container.scrollHeight - container.clientHeight)
         const thumbTop = Math.max(0, Math.min(maxThumbTop, clientY - trackRect.top - grabOffset))
+
         return (thumbTop / maxThumbTop) * maxScrollTop
       }
 
@@ -119,6 +128,7 @@ export function useCombinedDiffScrollbar({
         container.scrollTop = getScrollTopForPointer(moveEvent.clientY, grabOffset)
         updateScrollbar()
       }
+
       cleanupActiveScrollbarDrag()
       let cleanupPointerDrag: CombinedDiffScrollbarDragCleanup
       cleanupPointerDrag = beginCombinedDiffScrollbarDrag({

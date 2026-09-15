@@ -23,30 +23,37 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
     lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined
   ): RuntimeTerminalWaitBlockedReason | null {
     const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
+
     if (!blockedByWaitText) {
       return null
     }
+
     const liveTitleClearsBlockedText =
       terminal.titleStatusIsLive &&
       terminal.titleStatus !== null &&
       terminal.titleStatus !== 'permission' &&
       !isOpenCodeNativeTitle(terminal.title) &&
       blockedByWaitText !== 'agent-approval-prompt'
+
     if (liveTitleClearsBlockedText && lifecycle?.status !== terminal.titleStatus) {
       return null
     }
+
     if (blockedByWaitText === 'agent-approval-prompt') {
       return blockedByWaitText
     }
+
     const newestPermissionAt = Math.max(
       explicitStatus?.status === 'permission' ? explicitStatus.updatedAt : -1,
       lifecycle?.status === 'permission' ? lifecycle.updatedAt : -1,
       terminal.waitBlockedAt ?? -1
     )
+
     const newestClearAt = Math.max(
       explicitStatus && explicitStatus.status !== 'permission' ? explicitStatus.updatedAt : -1,
       lifecycle?.status && lifecycle.status !== 'permission' ? lifecycle.updatedAt : -1
     )
+
     return newestPermissionAt >= 0 && newestPermissionAt >= newestClearAt ? blockedByWaitText : null
   }
 
@@ -84,21 +91,27 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
   protected getPtyWriteHostPlatform(ptyId: string): NodeJS.Platform {
     const pty = this.ptysById.get(ptyId)
     const connectionId = pty?.connectionId
+
     if (!connectionId) {
       return process.platform
     }
+
     const remotePlatform = getRegisteredSshState(connectionId)?.remotePlatform
+
     if (remotePlatform) {
       return remotePlatform
     }
+
     // Why: remotePlatform only arrives with the relay handshake; until then the worktree path
     // flavor is the same signal getAgentLaunchPlatformForRepo already trusts for a remote repo.
     const worktreePath = pty ? splitWorktreeIdForFilesystem(pty.worktreeId)?.worktreePath : null
+
     return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'linux'
   }
 
   protected getPtyAgent(ptyId: string): TuiAgent | null {
     const pty = this.ptysById.get(ptyId)
+
     return pty?.launchAgent ?? pty?.foregroundAgent ?? null
   }
 

@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 
 const updateWebRuntimePaneLayout = vi.fn()
+
 vi.mock('@/runtime/web-runtime-session', () => ({
   updateWebRuntimePaneLayout: (...args: unknown[]) => updateWebRuntimePaneLayout(...args)
 }))
@@ -19,9 +20,11 @@ const PERSISTS = 100
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve = (_value: T): void => undefined
+
   const promise = new Promise<T>((complete) => {
     resolve = complete
   })
+
   return { promise, resolve }
 }
 
@@ -49,10 +52,12 @@ describe('createRemotePaneLayoutPusher', () => {
 
   it('pushes once across 100 persists of an unchanged layout', () => {
     const pusher = createRemotePaneLayoutPusher()
+
     for (let i = 0; i < PERSISTS; i += 1) {
       // Fresh object each time: persistLayoutSnapshot re-serializes on every call.
       pusher.push({ worktreeId: 'wt-1', tabId: 'tab-1', layout: makeLayout() })
     }
+
     expect(updateWebRuntimePaneLayout).toHaveBeenCalledTimes(1)
   })
 

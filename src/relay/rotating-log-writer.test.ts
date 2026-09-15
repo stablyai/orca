@@ -31,8 +31,10 @@ describe('RotatingLogWriter', () => {
   it('rotates relay.log -> relay.log.1 at the cap and keeps the current log tail-able', () => {
     const cap = 4 * 1024
     const writer = new RotatingLogWriter(logPath, cap)
+
     try {
       const line = `${'a'.repeat(200)}\n`
+
       // Write well past the cap so at least one rotation happens.
       for (let i = 0; i < 60; i += 1) {
         writer.write(line)
@@ -56,6 +58,7 @@ describe('RotatingLogWriter', () => {
   it('preserves pre-existing boot output already in relay.log (append, not truncate)', () => {
     writeFileSync(logPath, 'BOOT-LINE-FROM-SHELL-REDIRECT\n')
     const writer = new RotatingLogWriter(logPath, 1024 * 1024)
+
     try {
       writer.write('runtime line\n')
       const contents = readFileSync(logPath, 'utf-8')
@@ -69,6 +72,7 @@ describe('RotatingLogWriter', () => {
   it('bounds a single oversized log write and keeps its newest tail', () => {
     const cap = 1024
     const writer = new RotatingLogWriter(logPath, cap)
+
     try {
       writer.write(`${'old'.repeat(1000)}LATEST-CONTEXT`)
       expect(statSync(logPath).size).toBeLessThanOrEqual(cap)
@@ -81,11 +85,14 @@ describe('RotatingLogWriter', () => {
   it('caps total footprint to ~2x maxBytes (current + one archive)', () => {
     const cap = 8 * 1024
     const writer = new RotatingLogWriter(logPath, cap)
+
     try {
       const line = `${'z'.repeat(256)}\n`
+
       for (let i = 0; i < 500; i += 1) {
         writer.write(line)
       }
+
       const currentSize = statSync(logPath).size
       const archiveSize = existsSync(`${logPath}.1`) ? statSync(`${logPath}.1`).size : 0
       // Never more than the current file + a single archived generation.
@@ -104,11 +111,14 @@ describe('RotatingLogWriter', () => {
     mkdirSync(`${logPath}.1`, { recursive: true })
     const cap = 4 * 1024
     const writer = new RotatingLogWriter(logPath, cap)
+
     try {
       const line = `${'q'.repeat(200)}\n`
+
       for (let i = 0; i < 100; i += 1) {
         writer.write(line)
       }
+
       // The cap still holds via truncate-in-place even though no archive was made.
       expect(statSync(logPath).size).toBeLessThanOrEqual(cap)
       writer.write('MARKER-LAST\n')
@@ -121,6 +131,7 @@ describe('RotatingLogWriter', () => {
   it('installRelayLogRotation routes stdout/stderr through the rotator and restores', () => {
     const cap = 2 * 1024
     const { restore } = installRelayLogRotation(logPath, cap)
+
     try {
       process.stderr.write('via-stderr-line\n')
       process.stdout.write('via-stdout-line\n')
@@ -129,15 +140,18 @@ describe('RotatingLogWriter', () => {
     } finally {
       restore()
     }
+
     // After restore, process.stderr no longer targets the rotator file. Spy so
     // the assertion write does not leak to the real test-runner stderr.
     const sizeAfterRestore = statSync(logPath).size
     const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       process.stderr.write('should-not-be-in-relay-log\n')
     } finally {
       spy.mockRestore()
     }
+
     expect(statSync(logPath).size).toBe(sizeAfterRestore)
   })
 
@@ -145,6 +159,7 @@ describe('RotatingLogWriter', () => {
     mkdirSync(logPath)
     const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       const { writer, restore } = installRelayLogRotation(logPath)
       expect(writer.active).toBe(false)

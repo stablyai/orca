@@ -18,6 +18,7 @@ export function contextOnlyAbandonWarning(result: {
   if (result.alreadySettled) {
     return `Dispatch was already ${result.state}; no state or process changed.`
   }
+
   return result.releasedCurrentTask
     ? 'The assignment was abandoned; its unsupervised terminal process was retained.'
     : 'The superseded assignment was abandoned without changing the current Task or terminal process.'
@@ -47,17 +48,21 @@ export function releaseContextOnlyDispatch(
       completed_at: dispatch.completed_at ?? new Date().toISOString()
     }
   })
+
   const remaining = db
     .prepare(
       `SELECT 1 FROM dispatch_contexts
        WHERE task_id = ? AND status IN ('pending', 'dispatched') LIMIT 1`
     )
     .get(dispatch.task_id)
+
   let releasedCurrentTask = false
+
   if (!remaining) {
     const task = db.prepare('SELECT status FROM tasks WHERE id = ?').get(dispatch.task_id) as
       | { status: string }
       | undefined
+
     if (task?.status === 'dispatched') {
       releasedCurrentTask = transitionLifecycleWithDb(db, {
         entity: 'task',
@@ -67,6 +72,7 @@ export function releaseContextOnlyDispatch(
       }).changed
     }
   }
+
   return { state: requestedState, alreadySettled: false, releasedCurrentTask }
 }
 

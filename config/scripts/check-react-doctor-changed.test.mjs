@@ -4,6 +4,7 @@ import process from 'node:process'
 import { describe, expect, it } from 'vitest'
 
 const repoRoot = path.resolve(import.meta.dirname, '..', '..')
+
 const script = path.join(repoRoot, 'config', 'scripts', 'check-react-doctor-changed.mjs')
 
 function runWithBase(base) {

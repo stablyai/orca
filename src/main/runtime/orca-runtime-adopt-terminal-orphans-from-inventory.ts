@@ -26,6 +26,7 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
   ): Promise<RuntimeTerminalOrphanAdoptionResult> {
     const store = this.store
     const session = this.getWorkspaceSessionForWorktree(workspace.id)
+
     if (
       !store?.setWorkspaceSession ||
       (!store.flushPendingOrThrowAsync && !store.flushOrThrow) ||
@@ -33,12 +34,16 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
     ) {
       throw new Error('workspace_session_unavailable')
     }
+
     const sessionWorktreeId = resolveTerminalSessionWorktreeId(session, workspace.id)
+
     if (!sessionWorktreeId) {
       throw new Error('terminal_orphan_competing_owner')
     }
+
     const worktreeConnectionId = workspace.connectionId
     let worktreeWslDistro: string | null = null
+
     if (!worktreeConnectionId && workspace.repo) {
       try {
         worktreeWslDistro =
@@ -47,6 +52,7 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
         throw new Error('terminal_orphan_owner_mismatch')
       }
     }
+
     return adoptRuntimeTerminalOrphansFromInventory({
       request,
       workspace,
@@ -82,6 +88,7 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
       onlyRuntimeOwnedTerminals: true
     })
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+
     return this.getMobileSessionTabsForWorktree(worktreeId)
   }
 
@@ -95,9 +102,11 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
       const targetWorktreeId = worktreeSelector
         ? (await this.resolveWorktreeSelector(worktreeSelector)).id
         : null
+
       const snapshots = targetWorktreeId
         ? [this.getMobileSessionTabsForWorktree(targetWorktreeId)]
         : await this.listAllMobileSessionTabs()
+
       // Skipped for an identity claim for the same reason as the ready path below: the active tab
       // is where the user last looked, which says nothing about which terminal the CALLER is.
       for (const snapshot of options.requireUnambiguous ? [] : snapshots) {
@@ -108,23 +117,30 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
             tab.status === 'ready' &&
             typeof tab.terminal === 'string'
         )
+
         if (activeTerminal?.type === 'terminal' && activeTerminal.terminal) {
           return activeTerminal.terminal
         }
       }
+
       const listed = await this.listTerminals(worktreeSelector, undefined, {
         includeVisualLayouts: false
       })
+
       // Same arbitrary pick, same misattribution: refuse for callers claiming their own identity.
       if (options.requireUnambiguous && listed.terminals.length > 1) {
         throw new Error('no_active_terminal')
       }
+
       const first = listed.terminals[0]?.handle
+
       if (first) {
         return first
       }
+
       throw new Error('no_active_terminal')
     }
+
     this.assertGraphReady()
 
     const targetWorktreeId = worktreeSelector
@@ -139,11 +155,14 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
       if (targetWorktreeId && tab.worktreeId !== targetWorktreeId) {
         continue
       }
+
       if (!tab.activeLeafId) {
         continue
       }
+
       const leafKey = this.getLeafKey(tab.tabId, tab.activeLeafId)
       const leaf = this.leaves.get(leafKey)
+
       if (leaf) {
         return this.issueHandle(leaf)
       }
@@ -166,18 +185,23 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
     // pane the guess resolves. Such a child now carries `ORCA_STRUCTURED_SESSION` and the CLI
     // refuses before reaching here (`shared/structured-session-marker.ts`).
     const candidates: RuntimeLeafRecord[] = []
+
     for (const leaf of this.leaves.values()) {
       if (targetWorktreeId && leaf.worktreeId !== targetWorktreeId) {
         continue
       }
+
       if (!options.requireUnambiguous) {
         return this.issueHandle(leaf)
       }
+
       candidates.push(leaf)
+
       if (candidates.length > 1) {
         break
       }
     }
+
     if (candidates.length === 1) {
       return this.issueHandle(candidates[0]!)
     }
@@ -200,6 +224,7 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
       handle,
       this.getOrchestrationDbIfAvailable?.() ?? null
     )
+
     if (structured) {
       // `resolveBareOrchestrationRecipient` routes direct mail through this, not through
       // getTerminalPaneKey. The connected-gate below exists so mail is never routed to a corpse,
@@ -208,16 +233,22 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
         ? structured.identity.paneKey
         : null
     }
+
     const runtimePty = this.getLivePtyForHandle(handle)
+
     if (runtimePty) {
       return runtimePty.pty.connected ? (runtimePty.pty.paneKey ?? null) : null
     }
+
     try {
       const leaf = this.resolveLiveLeafForHandle(handle)
+
       if (!leaf?.ptyId) {
         return null
       }
+
       const pty = this.ptysById.get(leaf.ptyId)
+
       return pty?.connected === false ? null : this.getPaneKeyForTerminalHandle(handle)
     } catch {
       return null
@@ -229,6 +260,7 @@ export class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends OrcaRuntim
   // death certificate has to stay readable.
   getTerminalLivenessVerdict(handle: string): PtyLivenessVerdict | null {
     const record = this.getLivePtyForHandle(handle)?.record ?? this.handles.get(handle)
+
     return record?.ptyId ? this.getPtyLivenessVerdict(record.ptyId) : null
   }
 }

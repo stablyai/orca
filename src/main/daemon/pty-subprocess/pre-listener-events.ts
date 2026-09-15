@@ -6,6 +6,7 @@ import {
 const PENDING_PRE_LISTENER_DATA_MAX_CHARS = 512 * 1024
 
 type DataListener = (data: string) => void
+
 type ExitListener = (code: number, cause?: TerminalExitCause) => void
 
 /** Preserves spawn-time output and exit ordering until Session installs its listeners. */
@@ -20,16 +21,22 @@ export class PtyPreListenerEvents {
   acceptData(data: string): void {
     if (this.onDataCb) {
       this.onDataCb(data)
+
       return
     }
+
     this.pendingData.push(data)
     this.pendingDataChars += data.length
+
     while (this.pendingDataChars > PENDING_PRE_LISTENER_DATA_MAX_CHARS) {
       const removed = this.pendingData.shift()
+
       if (removed === undefined) {
         this.pendingDataChars = 0
+
         return
       }
+
       this.pendingDataChars -= removed.length
     }
   }
@@ -40,6 +47,7 @@ export class PtyPreListenerEvents {
     hostReportsChildExitStatus: boolean
   }): void {
     const cause = resolveProcessExitCause(args)
+
     if (this.onExitCb) {
       this.flushData()
       this.onExitCb(args.exitCode, cause)
@@ -56,9 +64,11 @@ export class PtyPreListenerEvents {
 
   onExit(cb: ExitListener): void {
     this.onExitCb = cb
+
     if (this.pendingExitCode === null) {
       return
     }
+
     const code = this.pendingExitCode
     const cause = this.pendingExitCause ?? resolveProcessExitCause({ exitCode: code })
     this.pendingExitCode = null
@@ -80,9 +90,11 @@ export class PtyPreListenerEvents {
     if (!this.onDataCb || this.pendingData.length === 0) {
       return
     }
+
     const pending = this.pendingData
     this.pendingData = []
     this.pendingDataChars = 0
+
     for (const data of pending) {
       this.onDataCb(data)
     }

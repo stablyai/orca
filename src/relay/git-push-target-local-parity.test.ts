@@ -42,11 +42,13 @@ type GitSpyTarget = {
 /** One scripted repository, driven identically by both hosts. */
 function scriptGit(fixture: GitConfigFixture) {
   const configValues = new Map<string, string>()
+
   const put = (key: string, value: string | undefined): void => {
     if (value !== undefined) {
       configValues.set(key, value)
     }
   }
+
   put(`branch.${fixture.branch}.merge`, fixture.merge)
   put(`branch.${fixture.branch}.remote`, fixture.branchRemote)
   put(`branch.${fixture.branch}.pushRemote`, fixture.pushRemote)
@@ -54,32 +56,41 @@ function scriptGit(fixture: GitConfigFixture) {
   put('remote.pushDefault', fixture.pushDefault)
 
   const calls: string[][] = []
+
   return {
     calls,
     run: async (args: string[]): Promise<{ stdout: string; stderr: string }> => {
       calls.push(args)
+
       if (args[0] === 'symbolic-ref') {
         return { stdout: `${fixture.branch}\n`, stderr: '' }
       }
+
       if (args[0] === 'config' && args[1] === '--get') {
         const value = configValues.get(args[2] ?? '')
+
         // Why throw: `git config --get` exits 1 for a missing key, and the resolver's
         // fallback chain reads that rejection, not an empty string.
         if (value === undefined) {
           throw Object.assign(new Error('missing config key'), { code: 1 })
         }
+
         return { stdout: `${value}\n`, stderr: '' }
       }
+
       if (args[0] === 'remote' && args[1] === '-v') {
         const lines = Object.entries(fixture.remotes ?? {}).flatMap(([name, url]) => [
           `${name}\t${url} (fetch)`,
           `${name}\t${url} (push)`
         ])
+
         return { stdout: `${lines.join('\n')}\n`, stderr: '' }
       }
+
       if (args[0] === 'push') {
         return { stdout: '', stderr: '' }
       }
+
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     }
   }
@@ -87,9 +98,11 @@ function scriptGit(fixture: GitConfigFixture) {
 
 function pushArgv(calls: string[][]): string[] {
   const push = calls.find((args) => args[0] === 'push')
+
   if (!push) {
     throw new Error('no push command was issued')
   }
+
   return push
 }
 
@@ -99,6 +112,7 @@ async function pushOverRelay(fixture: GitConfigFixture): Promise<string[]> {
   const script = scriptGit(fixture)
   vi.spyOn(handler as unknown as GitSpyTarget, 'git').mockImplementation((args) => script.run(args))
   await dispatcher.callRequest('git.push', { worktreePath: WORKTREE_PATH })
+
   return pushArgv(script.calls)
 }
 
@@ -106,6 +120,7 @@ async function pushLocally(fixture: GitConfigFixture): Promise<string[]> {
   const script = scriptGit(fixture)
   gitExecFileAsyncMock.mockImplementation((args: string[]) => script.run(args))
   await gitPush(WORKTREE_PATH)
+
   return pushArgv(script.calls)
 }
 

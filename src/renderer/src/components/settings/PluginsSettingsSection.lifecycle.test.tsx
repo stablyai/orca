@@ -37,6 +37,7 @@ vi.mock('../ui/dropdown-menu', () => ({
 }))
 
 vi.mock('./PluginInstallDialog', () => ({ PluginInstallDialog: () => null }))
+
 vi.mock('./PluginMarketplaceBrowser', () => ({
   PluginMarketplaceBrowser: ({
     renderInstalledContent
@@ -44,6 +45,7 @@ vi.mock('./PluginMarketplaceBrowser', () => ({
     renderInstalledContent?: (search: string) => React.ReactNode
   }) => <>{renderInstalledContent?.('')}</>
 }))
+
 vi.mock('./PluginConsentDialog', () => ({
   PluginConsentDialog: ({
     plugin,
@@ -53,6 +55,7 @@ vi.mock('./PluginConsentDialog', () => ({
     onDecision: (key: string, reviewedFingerprint: string, decision: 'approve') => Promise<void>
   }) => {
     const [dirty, setDirty] = useState(false)
+
     return plugin ? (
       <>
         <button
@@ -68,6 +71,7 @@ vi.mock('./PluginConsentDialog', () => ({
     ) : null
   }
 }))
+
 vi.mock('./PluginRemoveDialog', () => ({
   PluginRemoveDialog: ({
     plugin,
@@ -78,6 +82,7 @@ vi.mock('./PluginRemoveDialog', () => ({
   }) =>
     plugin ? <button onClick={() => onConfirm(plugin.pluginKey)}>Confirm remove</button> : null
 }))
+
 vi.mock('./PluginRollbackDialog', () => ({
   PluginRollbackDialog: ({
     plugin,
@@ -121,9 +126,11 @@ type Deferred<T> = {
 
 function deferred<T>(): Deferred<T> {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((nextResolve) => {
     resolve = nextResolve
   })
+
   return { promise, resolve }
 }
 
@@ -148,6 +155,7 @@ async function renderSection(
       />
     )
   })
+
   return { root, container, updateSettings }
 }
 
@@ -179,6 +187,7 @@ function installApi(overrides: Record<string, unknown> = {}): {
       }
     }
   })
+
   return { unsubscribe }
 }
 
@@ -212,13 +221,16 @@ describe('PluginsSettingsSection lifecycle', () => {
     const first = deferred<PluginHostListEntry[]>()
     const second = deferred<PluginHostListEntry[]>()
     let onChanged: (() => void) | undefined
+
     const { unsubscribe } = installApi({
       list: vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise),
       onChanged: vi.fn((callback: () => void) => {
         onChanged = callback
+
         return unsubscribe
       })
     })
+
     const { root, container } = await renderSection()
 
     act(() => onChanged?.())
@@ -233,14 +245,18 @@ describe('PluginsSettingsSection lifecycle', () => {
 
   it('persists the feature switch before refreshing discovery', async () => {
     const updateSettings = vi.fn().mockResolvedValue(undefined)
+
     const { container } = await renderSection(
       { ...getDefaultSettings('/tmp'), pluginSystemEnabled: false },
       updateSettings
     )
+
     const featureSwitch = container.querySelector('[aria-labelledby="plugin-system-label"]')
+
     if (!featureSwitch) {
       throw new Error('missing feature switch')
     }
+
     expect(window.api.plugins.list).not.toHaveBeenCalled()
 
     await act(async () => click(featureSwitch))
@@ -252,6 +268,7 @@ describe('PluginsSettingsSection lifecycle', () => {
   it('routes enablement and confirmed removal through plugin IPC', async () => {
     const { container } = await renderSection()
     const pluginSwitch = container.querySelector('[aria-label="Disable Notes"]')
+
     if (!pluginSwitch) {
       throw new Error('missing plugin switch')
     }
@@ -270,16 +287,21 @@ describe('PluginsSettingsSection lifecycle', () => {
     const removeAction = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Remove'
     )
+
     if (!removeAction) {
       throw new Error('missing remove action')
     }
+
     await act(async () => click(removeAction))
+
     const confirm = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Confirm remove'
     )
+
     if (!confirm) {
       throw new Error('missing remove confirmation')
     }
+
     await act(async () => click(confirm))
     expect(window.api.plugins.remove).toHaveBeenCalledWith({ pluginKey: plugin.pluginKey })
   })
@@ -298,23 +320,29 @@ describe('PluginsSettingsSection lifecycle', () => {
         }
       }
     }
+
     installApi({ list: vi.fn().mockResolvedValue([marketplacePlugin]) })
     const { container } = await renderSection()
+
     const rollbackAction = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Roll back'
     )
+
     if (!rollbackAction) {
       throw new Error('missing rollback action')
     }
 
     await act(async () => click(rollbackAction))
     expect(window.api.plugins.rollbackMarketplacePlugin).not.toHaveBeenCalled()
+
     const confirm = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Confirm rollback'
     )
+
     if (!confirm) {
       throw new Error('missing rollback confirmation')
     }
+
     await act(async () => click(confirm))
 
     expect(window.api.plugins.rollbackMarketplacePlugin).toHaveBeenCalledWith({
@@ -335,6 +363,7 @@ describe('PluginsSettingsSection lifecycle', () => {
     const { container } = await renderSection()
     const notesSwitch = container.querySelector<HTMLButtonElement>('[aria-label="Disable Notes"]')
     const tasksSwitch = container.querySelector<HTMLButtonElement>('[aria-label="Disable Tasks"]')
+
     if (!notesSwitch || !tasksSwitch) {
       throw new Error('missing plugin switches')
     }
@@ -364,9 +393,11 @@ describe('PluginsSettingsSection lifecycle', () => {
     installApi({ getLogs })
     const { container } = await renderSection()
     expect(getLogs).not.toHaveBeenCalled()
+
     const viewLogs = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'View logs'
     )
+
     if (!viewLogs) {
       throw new Error('missing logs action')
     }
@@ -404,11 +435,13 @@ describe('PluginsSettingsSection lifecycle', () => {
         .mockReturnValueOnce(reinstalledList.promise),
       onChanged: vi.fn((callback: () => void) => {
         onChanged = callback
+
         return unsubscribe
       }),
       getLogs: vi.fn().mockReturnValueOnce(oldLogs.promise).mockReturnValueOnce(freshLogs.promise)
     })
     const { container } = await renderSection()
+
     const findButton = (label: string): HTMLButtonElement | undefined =>
       Array.from(container.querySelectorAll('button')).find(
         (button) => button.textContent?.trim() === label
@@ -442,13 +475,16 @@ describe('PluginsSettingsSection lifecycle', () => {
 
   it('clears feature busy state and skips refresh when the setting write fails', async () => {
     const updateSettings = vi.fn().mockRejectedValue(new Error('disk write failed'))
+
     const { container } = await renderSection(
       { ...getDefaultSettings('/tmp'), pluginSystemEnabled: false },
       updateSettings
     )
+
     const featureSwitch = container.querySelector<HTMLButtonElement>(
       '[aria-labelledby="plugin-system-label"]'
     )
+
     if (!featureSwitch) {
       throw new Error('missing feature switch')
     }
@@ -464,9 +500,11 @@ describe('PluginsSettingsSection lifecycle', () => {
     const updateSettings = vi.fn().mockResolvedValue(undefined)
     const { container } = await renderSection(undefined, updateSettings)
     const input = container.querySelector<HTMLInputElement>('details input')
+
     if (!input) {
       throw new Error('missing development path input')
     }
+
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
         input,
@@ -474,9 +512,11 @@ describe('PluginsSettingsSection lifecycle', () => {
       )
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
+
     const add = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Add path'
     )
+
     if (!add) {
       throw new Error('missing add path action')
     }
@@ -491,9 +531,11 @@ describe('PluginsSettingsSection lifecycle', () => {
     const updateSettings = vi.fn().mockRejectedValue(new Error('disk write failed'))
     const { container } = await renderSection(undefined, updateSettings)
     const input = container.querySelector<HTMLInputElement>('details input')
+
     if (!input) {
       throw new Error('missing development path input')
     }
+
     await act(async () => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
         input,
@@ -501,9 +543,11 @@ describe('PluginsSettingsSection lifecycle', () => {
       )
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
+
     const add = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Add path'
     )
+
     if (!add) {
       throw new Error('missing add path action')
     }
@@ -518,15 +562,19 @@ describe('PluginsSettingsSection lifecycle', () => {
 
   it('keeps a development path and handles a failed removal without rejection', async () => {
     const updateSettings = vi.fn().mockRejectedValue(new Error('disk write failed'))
+
     const settings = {
       ...getDefaultSettings('/tmp'),
       pluginSystemEnabled: true,
       devPluginPaths: ['/plugins/demo']
     }
+
     const { container } = await renderSection(settings, updateSettings)
+
     const remove = Array.from(container.querySelectorAll('button')).find(
       (button) => button.textContent === 'Remove' && button.closest('details')
     )
+
     if (!remove) {
       throw new Error('missing development path remove action')
     }

@@ -14,6 +14,7 @@ export function AutomationListLastRunCell({
 }): React.JSX.Element {
   const cell = formatAutomationLastRunCell(snapshot, now)
   const failed = cell.tone === 'failed'
+
   return (
     <span
       className={cn(

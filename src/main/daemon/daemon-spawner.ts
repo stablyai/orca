@@ -78,6 +78,7 @@ export class DaemonSpawner {
     // post-restart — funnels through this method, so this is the only place a crash loop
     // cannot route around.
     const admission = this.respawnThrottle.admit()
+
     if (!admission.allowed) {
       throw new DaemonCrashLoopError(admission)
     }
@@ -115,6 +116,7 @@ export class DaemonSpawner {
     if (!this.handle) {
       return
     }
+
     const handle = this.handle
     this.handle = null
     await handle.shutdown()
@@ -130,8 +132,10 @@ export function getDaemonSocketPath(
   // an older build is never reused after a breaking protocol change.
   if (process.platform === 'win32') {
     const suffix = createHash('sha256').update(runtimeDir).digest('hex').slice(0, 12)
+
     return `\\\\?\\pipe\\orca-terminal-host-v${protocolVersion}-${suffix}`
   }
+
   return join(runtimeDir, `daemon-v${protocolVersion}.sock`)
 }
 
@@ -178,6 +182,7 @@ export function getDaemonArtifactHoldClaimPath(filePath: string): string {
 export function replaceDaemonPidFile(pidPath: string, pidFile: DaemonPidFile): boolean {
   const claimedPath = getDaemonPidSwapClaimPath(pidPath)
   let claimedExisting = false
+
   try {
     renameSync(pidPath, claimedPath)
     claimedExisting = true
@@ -201,6 +206,7 @@ export function replaceDaemonPidFile(pidPath: string, pidFile: DaemonPidFile): b
         // A uniquely named restored claim is inert.
       }
     }
+
     return false
   }
 
@@ -211,6 +217,7 @@ export function replaceDaemonPidFile(pidPath: string, pidFile: DaemonPidFile): b
       // The canonical record is authoritative; the uniquely named claim is inert.
     }
   }
+
   return true
 }
 
@@ -224,19 +231,24 @@ export function unlinkOwnedDaemonPidFile(
   return claimAndUnlinkOwnedFile(pidPath, (content) => {
     try {
       const parsed: unknown = JSON.parse(content.trim())
+
       // Why: the oldest records are a bare integer, not an object. Rejecting them left the
       // file in place, and the replacement's exclusive publish then failed with EEXIST —
       // trading a stale record for a daemon that cannot start at all.
       if (typeof parsed === 'number') {
         return expectedLaunchNonce === null && parsed === expectedPid
       }
+
       if (!parsed || typeof parsed !== 'object') {
         return false
       }
+
       const record = parsed as { pid?: unknown; launchNonce?: unknown }
+
       if (record.pid !== expectedPid) {
         return false
       }
+
       return expectedLaunchNonce === null
         ? record.launchNonce === undefined || record.launchNonce === null
         : record.launchNonce === expectedLaunchNonce
@@ -267,6 +279,7 @@ function claimAndUnlinkOwnedFile(
   ownsContent: (content: string) => boolean
 ): boolean {
   const claimedPath = getDaemonArtifactHoldClaimPath(filePath)
+
   try {
     // Why: rename claims one exact directory entry before inspection, so a replacement
     // installed afterward stays at the canonical path and cannot be unlinked by us.
@@ -274,9 +287,11 @@ function claimAndUnlinkOwnedFile(
   } catch {
     return false
   }
+
   try {
     if (ownsContent(readFileSync(claimedPath, 'utf8'))) {
       unlinkSync(claimedPath)
+
       return true
     }
   } catch {
@@ -284,6 +299,7 @@ function claimAndUnlinkOwnedFile(
   }
 
   const restoredOrReplaced = restoreClaimedDaemonArtifact(claimedPath, filePath)
+
   if (restoredOrReplaced) {
     try {
       unlinkSync(claimedPath)
@@ -291,6 +307,7 @@ function claimAndUnlinkOwnedFile(
       // A uniquely named unowned claim is safer to leave than overwriting a replacement.
     }
   }
+
   return false
 }
 
@@ -305,10 +322,13 @@ export function restoreClaimedDaemonArtifact(
   const copyExclusive =
     operations.copyExclusive ??
     ((source: string, target: string) => copyFileSync(source, target, constants.COPYFILE_EXCL))
+
   const canonicalExists = operations.canonicalExists ?? existsSync
+
   try {
     // Why: exclusive restore never overwrites a newer canonical replacement.
     copyExclusive(claimedPath, canonicalPath)
+
     return true
   } catch (error) {
     // Why: copy failures can leave a partial canonical file. Only EEXIST proves

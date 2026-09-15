@@ -24,6 +24,7 @@ export function getLocalImageCacheKey(
 ): string {
   const runtimeEnvironmentId =
     runtimeContext?.settings?.activeRuntimeEnvironmentId?.trim() ?? 'client'
+
   return [
     runtimeEnvironmentId,
     runtimeContext?.connectionId ?? connectionId ?? 'local',
@@ -40,9 +41,11 @@ export function getLocalImageCacheKey(
 function base64ToBlobUrl(base64: string, mimeType: string): { url: string; byteLength: number } {
   const binary = atob(base64.replace(/\s/g, ''))
   const bytes = new Uint8Array(binary.length)
+
   for (let i = 0; i < binary.length; i += 1) {
     bytes[i] = binary.charCodeAt(i)
   }
+
   return {
     url: URL.createObjectURL(new Blob([bytes], { type: mimeType })),
     byteLength: bytes.byteLength
@@ -83,39 +86,50 @@ export function useLocalImageSrc(
     if (!rawSrc || runtimeContext === null) {
       return undefined
     }
+
     if (isExternalUrl(rawSrc)) {
       return rawSrc
     }
+
     const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
+
     if (absolutePath) {
       const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
+
       if (blobUrlCache.has(cacheKey)) {
         return blobUrlCache.get(cacheKey)
       }
     }
+
     return undefined
   })
 
   useEffect(() => {
     if (!rawSrc || runtimeContext === null) {
       setDisplaySrc(undefined)
+
       return
     }
 
     if (isExternalUrl(rawSrc)) {
       setDisplaySrc(rawSrc)
+
       return
     }
 
     const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
+
     if (!absolutePath) {
       setDisplaySrc(undefined)
+
       return
     }
 
     const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
+
     if (blobUrlCache.has(cacheKey)) {
       setDisplaySrc(blobUrlCache.get(cacheKey))
+
       return
     }
 
@@ -126,6 +140,7 @@ export function useLocalImageSrc(
         if (cancelled) {
           return
         }
+
         setDisplaySrc(getLocalImageCacheGeneration() === effectGeneration && url ? url : undefined)
       })
       .catch(() => {
@@ -158,17 +173,20 @@ export async function loadLocalImageSrc(
   if (isExternalUrl(rawSrc)) {
     return rawSrc
   }
+
   if (runtimeContext === null) {
     return null
   }
 
   const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
+
   if (!absolutePath) {
     return null
   }
 
   const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
   const cached = blobUrlCache.get(cacheKey)
+
   if (cached) {
     return cached
   }
@@ -186,19 +204,23 @@ export function loadLocalImageAbsolutePath(
   if (runtimeContext === null) {
     return Promise.resolve(null)
   }
+
   const cacheKey = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
   const cached = blobUrlCache.get(cacheKey)
+
   if (cached) {
     return Promise.resolve(cached)
   }
 
   const inFlight = inFlightBlobUrlLoads.get(cacheKey)
+
   if (inFlight) {
     return inFlight
   }
 
   const readGeneration = getLocalImageCacheGeneration()
   const readLeaseVersion = getLocalImageCacheKeyVersion(cacheKey)
+
   const loadPromise = readLocalImagePreview(absolutePath, connectionId, runtimeContext)
     .then((result) => {
       if (
@@ -208,11 +230,15 @@ export function loadLocalImageAbsolutePath(
       ) {
         return null
       }
+
       const { url, byteLength } = base64ToBlobUrl(result.content, result.mimeType ?? 'image/png')
+
       if (getLocalImageCacheGeneration() !== readGeneration) {
         URL.revokeObjectURL(url)
+
         return null
       }
+
       return cacheLocalImageBlob(cacheKey, url, byteLength, readLeaseVersion) ? url : null
     })
     .catch(() => null)
@@ -220,9 +246,12 @@ export function loadLocalImageAbsolutePath(
       if (inFlightBlobUrlLoads.get(cacheKey) === loadPromise) {
         inFlightBlobUrlLoads.delete(cacheKey)
       }
+
       cleanupLocalImageCacheKeyVersion(cacheKey)
     })
+
   inFlightBlobUrlLoads.set(cacheKey, loadPromise)
+
   return loadPromise
 }
 
@@ -245,12 +274,16 @@ export function acquireLocalImageSrcLease(
   if (!rawSrc || isExternalUrl(rawSrc) || runtimeContext === null) {
     return undefined
   }
+
   const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
+
   if (!absolutePath) {
     return undefined
   }
+
   const key = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
   pinLocalImageCache(key)
+
   return () => unpinLocalImageCache(key)
 }
 
@@ -266,10 +299,13 @@ export function releaseLocalImageSrc(
   if (!rawSrc || isExternalUrl(rawSrc) || runtimeContext === null) {
     return
   }
+
   const absolutePath = resolveImageAbsolutePath(rawSrc, filePath)
+
   if (!absolutePath) {
     return
   }
+
   const key = getLocalImageCacheKey(absolutePath, connectionId, runtimeContext)
   releaseLocalImageBlob(key)
 }

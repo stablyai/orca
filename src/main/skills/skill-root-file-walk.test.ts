@@ -11,11 +11,13 @@ let onStat: ((path: string) => Promise<void>) | null = null
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
+
   return {
     ...actual,
     stat: async (path: string, ...rest: unknown[]) => {
       const result = await (actual.stat as (...args: unknown[]) => Promise<unknown>)(path, ...rest)
       await onStat?.(path)
+
       return result
     }
   }
@@ -52,6 +54,7 @@ describe('findSkillFiles', () => {
     const target = join(base, 'linked')
     await writeFileAt(join(edge, 'SKILL.md'))
     await writeFileAt(join(target, 'SKILL.md'))
+
     for (let index = 0; index < 32; index += 1) {
       await symlink(
         target,
@@ -59,6 +62,7 @@ describe('findSkillFiles', () => {
         process.platform === 'win32' ? 'junction' : 'dir'
       )
     }
+
     const statPaths: string[] = []
     onStat = async (path) => {
       statPaths.push(path)

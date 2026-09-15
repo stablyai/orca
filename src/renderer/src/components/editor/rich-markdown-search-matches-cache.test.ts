@@ -26,10 +26,12 @@ describe('rich markdown search match reuse', () => {
     const walk = vi.spyOn(doc, 'nodesBetween')
     const highlighted = find(doc, 'beta')
     const live = find(doc, 'betas')
+
     for (let index = 0; index < 100; index++) {
       expect(find(doc, 'beta')).toBe(highlighted)
       expect(find(doc, 'betas')).toBe(live)
     }
+
     expect(walk).toHaveBeenCalledTimes(2)
   })
 
@@ -38,6 +40,7 @@ describe('rich markdown search match reuse', () => {
     const doc = createDoc()
     const anyCase = find(doc, 'beta')
     expect(find(doc, 'beta', { matchCase: false, wholeWord: false })).toBe(anyCase)
+
     for (const options of [
       { matchCase: true },
       { wholeWord: true },
@@ -47,6 +50,7 @@ describe('rich markdown search match reuse', () => {
         findRichMarkdownSearchMatches(doc, 'beta', options)
       )
     }
+
     const changedDoc = createDoc('A different beta')
     expect(find(changedDoc, 'beta')).toEqual(findRichMarkdownSearchMatches(changedDoc, 'beta'))
     expect(find(doc, 'beta')).not.toBe(anyCase)
@@ -70,20 +74,27 @@ it.skipIf(process.env.ORCA_SEARCH_CACHE_BENCH !== '1')(
       const find = createRichMarkdownSearchMatchesCache()
       const expected = findRichMarkdownSearchMatches(doc, 'beta')
       expect(find(doc, 'beta')).toEqual(expected)
+
       const measure = (run: () => unknown) => {
         const samples: number[] = []
+
         for (let round = 0; round < 5; round++) {
           const start = performance.now()
+
           for (let index = 0; index < 100; index++) {
             run()
           }
+
           samples.push((performance.now() - start) / 100)
         }
+
         return samples.sort((a, b) => a - b)[2]!
       }
+
       const beforeMs = measure(() =>
         findRichMarkdownSearchMatches(doc, 'beta').some((match) => match.touchesReadOnlyAtom)
       )
+
       const afterMs = measure(() => find(doc, 'beta').some((match) => match.touchesReadOnlyAtom))
       process.stdout.write(
         `${JSON.stringify({ blockCount, matchCount: expected.length, beforeMs, afterMs })}\n`

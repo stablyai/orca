@@ -12,8 +12,11 @@ import {
 type ExecMock = Mock<GitRemoteExec>
 
 const REPO_PATH = '/repo-root'
+
 const REPO_ID = 'repo-1'
+
 const FORK_URL = 'git@github.com:contributor/orca.git'
+
 const FORK_REMOTE = 'pr-contributor-orca'
 
 function worktreeId(suffix: string): string {
@@ -36,9 +39,11 @@ function metaWith(pushTarget: GitPushTarget | undefined): WorktreeMeta {
 
 function storeOf(entries: Record<string, GitPushTarget | undefined>): WorktreePushTargetStore {
   const meta: Record<string, WorktreeMeta> = {}
+
   for (const [id, pushTarget] of Object.entries(entries)) {
     meta[id] = metaWith(pushTarget)
   }
+
   return { getAllWorktreeMeta: () => meta }
 }
 
@@ -50,19 +55,24 @@ type ExecScript = {
 
 function makeExec(script: ExecScript = {}): ExecMock {
   const { remotes = '', branchConfig = '', localBranches = '' } = script
+
   return vi.fn<GitRemoteExec>(async (args: string[]) => {
     if (args[0] === 'remote' && args[1] === '-v') {
       return { stdout: remotes, stderr: '' }
     }
+
     if (args[0] === 'config') {
       return { stdout: branchConfig, stderr: '' }
     }
+
     if (args[0] === 'for-each-ref') {
       return { stdout: localBranches, stderr: '' }
     }
+
     if (args[0] === 'remote' && args[1] === 'remove') {
       return { stdout: '', stderr: '' }
     }
+
     return { stdout: '', stderr: '' }
   })
 }
@@ -98,6 +108,7 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
   it('leaves a remote alone when no worktree metadata ever proves Orca created it (user-created, ambiguous)', async () => {
     // Same naming shape a user could coincidentally pick; no pushTarget anywhere claims it.
     const exec = makeExec({ remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]) })
+
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
       REPO_PATH,
       REPO_ID,
@@ -105,6 +116,7 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       exec,
       []
     )
+
     expect(reclaimed).toEqual([])
     expect(removeCalls(exec)).toEqual([])
   })
@@ -113,6 +125,7 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
     const exec = makeExec({
       remotes: remoteLines([{ name: 'my-fork', url: FORK_URL }])
     })
+
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
       REPO_PATH,
       REPO_ID,
@@ -120,12 +133,14 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       exec,
       []
     )
+
     expect(reclaimed).toEqual([])
     expect(removeCalls(exec)).toEqual([])
   })
 
   it('leaves a remote alone that a live worktree still references (path guard)', async () => {
     const exec = makeExec({ remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]) })
+
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
       REPO_PATH,
       REPO_ID,
@@ -133,6 +148,7 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       exec,
       ['/wt/a']
     )
+
     expect(reclaimed).toEqual([])
     expect(removeCalls(exec)).toEqual([])
   })
@@ -143,6 +159,7 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       branchConfig: `branch.contributor/fix.remote ${FORK_REMOTE}`,
       localBranches: 'contributor/fix\nmain'
     })
+
     // Metadata for the worktree that created it is gone, but the branch it preserved lives on.
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
       REPO_PATH,
@@ -151,6 +168,7 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       exec,
       []
     )
+
     expect(reclaimed).toEqual([])
     expect(removeCalls(exec)).toEqual([])
   })
@@ -162,6 +180,7 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       branchConfig: `branch.contributor/fix.remote ${FORK_REMOTE}`,
       localBranches: 'main'
     })
+
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
       REPO_PATH,
       REPO_ID,
@@ -169,12 +188,14 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       exec,
       []
     )
+
     expect(reclaimed).toEqual([FORK_REMOTE])
     expect(removeCalls(exec)).toEqual([['remote', 'remove', FORK_REMOTE]])
   })
 
   it('reclaims a remote left behind by a worktree removed outside Orca (path 3)', async () => {
     const exec = makeExec({ remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]) })
+
     // Metadata still records the (now-vanished) worktree's Orca-created pushTarget.
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
       REPO_PATH,
@@ -183,12 +204,14 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       exec,
       [] // no live worktrees at all
     )
+
     expect(reclaimed).toEqual([FORK_REMOTE])
     expect(removeCalls(exec)).toEqual([['remote', 'remove', FORK_REMOTE]])
   })
 
   it('reclaims a remote even when the only referencing metadata lacks remoteCreated, as long as another entry proves provenance (path 1)', async () => {
     const exec = makeExec({ remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]) })
+
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
       REPO_PATH,
       REPO_ID,
@@ -201,6 +224,7 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       exec,
       []
     )
+
     expect(reclaimed).toEqual([FORK_REMOTE])
   })
 
@@ -211,6 +235,7 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
         { name: 'upstream', url: FORK_URL }
       ])
     })
+
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
       REPO_PATH,
       REPO_ID,
@@ -218,12 +243,14 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       exec,
       []
     )
+
     expect(reclaimed).toEqual([])
     expect(removeCalls(exec)).toEqual([])
   })
 
   it('scopes provenance and liveness to the same repo (remotes are repo-local)', async () => {
     const exec = makeExec({ remotes: remoteLines([{ name: FORK_REMOTE, url: FORK_URL }]) })
+
     const reclaimed = await reconcileOrphanedPrRemotesWithExec(
       REPO_PATH,
       REPO_ID,
@@ -231,6 +258,7 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       exec,
       []
     )
+
     expect(reclaimed).toEqual([])
   })
 
@@ -241,6 +269,7 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       branchConfig: `branch.contributor/fix.remote ${FORK_REMOTE}`,
       localBranches: 'main'
     })
+
     await reconcileOrphanedPrRemotesWithExec(
       REPO_PATH,
       REPO_ID,
@@ -249,6 +278,7 @@ describe('reconcileOrphanedPrRemotesWithExec', () => {
       []
     )
     expect(exec.mock.calls.length).toBeGreaterThan(0)
+
     for (const [args] of exec.mock.calls) {
       expect(() => validateGitExecArgs(args)).not.toThrow()
     }

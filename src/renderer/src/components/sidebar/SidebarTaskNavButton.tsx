@@ -67,20 +67,25 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
+
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const prefetchWorkItems = useAppStore((s) => s.prefetchWorkItems)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const defaultTaskViewPreset = useAppStore((s) => s.settings?.defaultTaskViewPreset ?? 'all')
+
   const preferredVisibleTaskProviders = React.useMemo(
     () => normalizeVisibleTaskProviders(rawVisibleTaskProviders),
     [rawVisibleTaskProviders]
   )
+
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
+
   const visibleTaskProviders = React.useMemo(
     () =>
       restoreAvailableDefaultTaskProvider(
@@ -99,6 +104,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
       preflightStatus?.glab?.installed
     ]
   )
+
   const resolvedDefaultTaskSource = React.useMemo(
     () => resolveVisibleTaskProvider(defaultTaskSource, visibleTaskProviders),
     [defaultTaskSource, visibleTaskProviders]
@@ -108,6 +114,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     if (!preflightStatusChecked || !preflightStatusCurrent) {
       void refreshPreflightStatus()
     }
+
     if (!linearStatusChecked) {
       void checkLinearConnection()
     }
@@ -123,9 +130,11 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     if (resolvedDefaultTaskSource !== 'github') {
       return
     }
+
     const activeRepo = activeRepoId ? (repoMap.get(activeRepoId) ?? null) : null
     const activeGitRepo = activeRepo && isGitRepoKind(activeRepo) ? activeRepo : null
     const firstGitRepo = activeGitRepo ?? repos.find((r) => isGitRepoKind(r))
+
     if (firstGitRepo?.path) {
       prefetchWorkItems(
         firstGitRepo.id,

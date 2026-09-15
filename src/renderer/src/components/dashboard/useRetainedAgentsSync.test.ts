@@ -13,8 +13,11 @@ import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { buildRetainedAgentsSyncSnapshot } from './useRetainedAgents'
 
 const ACTIVE_PANE_KEY = makePaneKey('tab-active', '22222222-2222-4222-8222-222222222222')
+
 const ARCHIVED_PANE_KEY = makePaneKey('tab-archived', '33333333-3333-4333-8333-333333333333')
+
 const FOLDER_PANE_KEY = makePaneKey('tab-folder', '44444444-4444-4444-8444-444444444444')
+
 const ARCHIVED_FOLDER_PANE_KEY = makePaneKey(
   'tab-folder-archived',
   '55555555-5555-4555-8555-555555555555'

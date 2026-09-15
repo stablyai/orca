@@ -35,6 +35,7 @@ function modelDescriptor(snapshot: { id: string; kind: unknown }[]): {
   choices: { value: string }[]
 } {
   const model = snapshot.find((descriptor) => descriptor.id === 'model')
+
   return model?.kind as { currentValue?: string; choices: { value: string }[] }
 }
 
@@ -51,6 +52,7 @@ describe('useNativeChatSessionOptions model reporting', () => {
     // had to invent — and by then the frame may have scrolled out of the buffer,
     // so re-reading the screen is not an option.
     let resolveDiscovery: (models: CatalogModel[]) => void = () => {}
+
     discoverModels.mockReturnValue(
       new Promise<readonly CatalogModel[]>((resolve) => {
         resolveDiscovery = resolve
@@ -60,8 +62,10 @@ describe('useNativeChatSessionOptions model reporting', () => {
     // Stable identity, and the frame scrolls out of the buffer before discovery
     // lands — so nothing but the cached screen can drive the re-resolution.
     let frameVisible = true
+
     const readTerminalScreen = (): string | null =>
       frameVisible ? CLAUDE_SCREEN : 'conversation has scrolled past the frame'
+
     const dispatchCommand = vi.fn()
 
     const { result } = renderHook(() =>
@@ -91,25 +95,30 @@ describe('useNativeChatSessionOptions model reporting', () => {
 
   it('does not re-resolve a late snapshot from the previous pty', async () => {
     let resolveDiscovery: (models: CatalogModel[]) => void = () => {}
+
     discoverModels.mockReturnValue(
       new Promise<readonly CatalogModel[]>((resolve) => {
         resolveDiscovery = resolve
       })
     )
     let resolveOldSnapshot: (snapshot: { data: string; alternateScreen: false }) => void = () => {}
+
     const oldSnapshot = new Promise<{ data: string; alternateScreen: false }>((resolve) => {
       resolveOldSnapshot = resolve
     })
+
     const getMainBufferSnapshot = vi
       .fn()
       .mockReturnValueOnce(oldSnapshot)
       .mockReturnValueOnce(new Promise(() => {}))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { pty: { getMainBufferSnapshot } }
     })
 
     const dispatchCommand = vi.fn()
+
     const { result, rerender } = renderHook(
       ({ targetPtyId }) =>
         useNativeChatSessionOptions({
@@ -137,21 +146,25 @@ describe('useNativeChatSessionOptions model reporting', () => {
 
   it('clears a previously reported screen when the target pty changes', async () => {
     let resolveDiscovery: (models: CatalogModel[]) => void = () => {}
+
     discoverModels.mockReturnValue(
       new Promise<readonly CatalogModel[]>((resolve) => {
         resolveDiscovery = resolve
       })
     )
+
     const getMainBufferSnapshot = vi
       .fn()
       .mockResolvedValueOnce({ data: CLAUDE_SCREEN, alternateScreen: false })
       .mockReturnValueOnce(new Promise(() => {}))
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { pty: { getMainBufferSnapshot } }
     })
 
     const dispatchCommand = vi.fn()
+
     const { result, rerender } = renderHook(
       ({ targetPtyId }) =>
         useNativeChatSessionOptions({
@@ -163,6 +176,7 @@ describe('useNativeChatSessionOptions model reporting', () => {
         }),
       { initialProps: { targetPtyId: 'pty-reported' } }
     )
+
     await waitFor(() => expect(modelDescriptor(result.current.snapshot).currentValue).toBe('opus'))
 
     rerender({ targetPtyId: 'pty-empty' })

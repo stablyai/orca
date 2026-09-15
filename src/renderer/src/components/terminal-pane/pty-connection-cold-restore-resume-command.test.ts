@@ -37,8 +37,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -59,6 +62,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -68,6 +72,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -88,6 +93,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -98,9 +104,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -110,9 +118,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -121,6 +131,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -151,6 +162,7 @@ describe('connectPanePty', () => {
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
       pendingTimeouts.push(fn)
+
       return 999 as unknown as ReturnType<typeof setTimeout>
     }) as unknown as typeof setTimeout
 
@@ -163,13 +175,18 @@ describe('connectPanePty', () => {
         async (opts: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
           if (opts.sessionId) {
             opts.callbacks?.onError?.('SSH_SESSION_EXPIRED: restored-session')
+
             return undefined
           }
+
           capturedDataCallback.current = opts.callbacks?.onData ?? null
+
           const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
             | ((ptyId: string) => void)
             | undefined
+
           onPtySpawn?.('fresh-ssh-pty')
+
           return 'fresh-ssh-pty'
         }
       )
@@ -199,6 +216,7 @@ describe('connectPanePty', () => {
       } as StoreState
       const pane = createPane(2)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
@@ -210,6 +228,7 @@ describe('connectPanePty', () => {
       expect(transport.sendInput).not.toHaveBeenCalled()
 
       capturedDataCallback.current?.('\x1b]777;orca-shell-ready\x07user@remote $ ')
+
       for (const fn of pendingTimeouts.splice(0)) {
         fn()
       }
@@ -244,6 +263,7 @@ describe('connectPanePty', () => {
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
       pendingTimeouts.push(fn)
+
       return 999 as unknown as ReturnType<typeof setTimeout>
     }) as unknown as typeof setTimeout
 
@@ -259,6 +279,7 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
         if (opts.sessionId) {
           activePtyId = opts.sessionId
+
           return {
             id: opts.sessionId,
             isReattach: true,
@@ -267,11 +288,15 @@ describe('connectPanePty', () => {
             coldRestore: undefined
           }
         }
+
         activePtyId = 'fresh-resume-pty'
+
         const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
           | ((ptyId: string) => void)
           | undefined
+
         onPtySpawn?.('fresh-resume-pty')
+
         return 'fresh-resume-pty'
       })
       transportFactoryQueue.push(transport)
@@ -300,19 +325,23 @@ describe('connectPanePty', () => {
       } as StoreState
       const pane = createPane(2)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
       })
+
       vi.mocked(window.api.pty.declarePendingPaneSerializer)
         .mockResolvedValueOnce(1)
         .mockResolvedValueOnce(2)
 
       connectPanePty(pane as never, manager as never, deps as never)
       await flushAsyncTicks(20)
+
       for (const fn of pendingTimeouts) {
         fn()
       }
+
       await flushAsyncTicks(10)
 
       expect(transport.disconnect).toHaveBeenCalledTimes(1)
@@ -348,10 +377,12 @@ describe('connectPanePty', () => {
     const restoreNavigator = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     )
+
     const pendingTimeouts: (() => void)[] = []
     const originalSetTimeout = globalThis.setTimeout
     globalThis.setTimeout = vi.fn((fn: () => void) => {
       pendingTimeouts.push(fn)
+
       return 999 as unknown as ReturnType<typeof setTimeout>
     }) as unknown as typeof setTimeout
 
@@ -367,6 +398,7 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {
         if (opts.sessionId) {
           activePtyId = opts.sessionId
+
           return {
             id: opts.sessionId,
             isReattach: true,
@@ -375,11 +407,15 @@ describe('connectPanePty', () => {
             coldRestore: undefined
           }
         }
+
         activePtyId = 'fresh-resume-pty'
+
         const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
           | ((ptyId: string) => void)
           | undefined
+
         onPtySpawn?.('fresh-resume-pty')
+
         return 'fresh-resume-pty'
       })
       transportFactoryQueue.push(transport)
@@ -414,19 +450,23 @@ describe('connectPanePty', () => {
           }
         }
       } as StoreState
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
       })
+
       vi.mocked(window.api.pty.declarePendingPaneSerializer)
         .mockResolvedValueOnce(1)
         .mockResolvedValueOnce(2)
 
       connectPanePty(createPane(2) as never, createManager(2) as never, deps as never)
       await flushAsyncTicks(20)
+
       for (const fn of pendingTimeouts) {
         fn()
       }
+
       await flushAsyncTicks(10)
 
       return (transport.connect.mock.calls.at(-1)?.[0] as { command?: string } | undefined)?.command
@@ -490,6 +530,7 @@ describe('connectPanePty', () => {
     } as StoreState
     const pane = createPane(2)
     const manager = createManager(2)
+
     const deps = createDeps({
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
@@ -549,6 +590,7 @@ describe('connectPanePty', () => {
     } as StoreState
     const pane = createPane(2)
     const manager = createManager(2)
+
     const deps = createDeps({
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
@@ -571,8 +613,10 @@ describe('connectPanePty', () => {
       (opts: { sessionId?: string; callbacks?: ConnectCallbacks }) => {
         if (opts.sessionId) {
           opts.callbacks?.onError?.('SSH_SESSION_EXPIRED: restored-session')
+
           return reattach.promise
         }
+
         return Promise.resolve('fresh-ssh-pty')
       }
     )
@@ -585,6 +629,7 @@ describe('connectPanePty', () => {
     } as StoreState
     const pane = createPane(2)
     const manager = createManager(2)
+
     const deps = createDeps({
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }

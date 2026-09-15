@@ -17,6 +17,7 @@ export function useMobileNativeChatStop(args: {
 }): () => void {
   const { client, enabled, handleRef, deviceTokenRef, streamIdentity, cancelPending, onSendError } =
     args
+
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const generationRef = useRef(0)
   /** Settles the paced second Escape when it is cancelled rather than sent, so a
@@ -25,15 +26,18 @@ export function useMobileNativeChatStop(args: {
   const dropSecondEscapeRef = useRef<(() => void) | null>(null)
   const activeRouteRef = useRef({ client, enabled, streamIdentity })
   activeRouteRef.current = { client, enabled, streamIdentity }
+
   const cancelSecondEscape = useCallback(() => {
     if (timerRef.current) {
       clearTimeout(timerRef.current)
       timerRef.current = null
     }
+
     const drop = dropSecondEscapeRef.current
     dropSecondEscapeRef.current = null
     drop?.()
   }, [])
+
   useEffect(
     () => () => {
       generationRef.current += 1
@@ -41,12 +45,16 @@ export function useMobileNativeChatStop(args: {
     },
     [cancelSecondEscape, client, enabled, streamIdentity]
   )
+
   return useCallback(() => {
     const handle = handleRef.current
+
     if (!client || !handle || !enabled) {
       onSendError('Stop not sent (terminal not ready)')
+
       return
     }
+
     cancelPending()
     generationRef.current += 1
     const generation = generationRef.current
@@ -62,6 +70,7 @@ export function useMobileNativeChatStop(args: {
     let sawAccepted = false
     let sawUnknown = false
     let sawRejected = false
+
     const reportIfSettled = (): void => {
       if (
         generationRef.current !== generation ||
@@ -71,13 +80,16 @@ export function useMobileNativeChatStop(args: {
       ) {
         return
       }
+
       // Why: an ack lost after the frame was written (or a logical cutover) may
       // still have stopped the agent — a definite "not sent" would invite a second
       // Escape into changed state. Mirrors the cancel/answer wording.
       onSendError(sawUnknown ? 'Stop unconfirmed — check chat before retrying' : 'Stop not sent')
     }
+
     const sendEscape = (): void => {
       const activeRoute = activeRouteRef.current
+
       if (
         !activeRoute.enabled ||
         activeRoute.client !== client ||
@@ -86,14 +98,18 @@ export function useMobileNativeChatStop(args: {
       ) {
         return
       }
+
       pending += 1
       const timeoutMs = deadline - Date.now()
+
       if (timeoutMs <= 0) {
         sawRejected = true
         pending -= 1
         reportIfSettled()
+
         return
       }
+
       void client
         .sendRequest(
           'terminal.send',
@@ -132,11 +148,13 @@ export function useMobileNativeChatStop(args: {
           reportIfSettled()
         })
     }
+
     sendEscape()
     dropSecondEscapeRef.current = () => {
       pending -= 1
       reportIfSettled()
     }
+
     // Why: two paced Escape bytes reliably stop TUIs without remote coalescing.
     timerRef.current = setTimeout(() => {
       timerRef.current = null

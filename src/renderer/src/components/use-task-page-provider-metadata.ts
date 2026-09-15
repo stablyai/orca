@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import type { LinearTeam } from '../../../shared/linear/workspace-types'
 import type { JiraProject } from '../../../shared/jira-types'
 import { jiraListProjects } from '@/runtime/runtime-jira-client'
+
 export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationModel) {
   const {
     settings,
@@ -17,6 +18,7 @@ export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationMode
     jiraTaskSourceContext,
     taskResumeApplied
   } = model
+
   // Why: fetch the full Linear team list so the selector shows all teams, not just those with issues in the fetch window.
   const [availableTeams, setAvailableTeams] = useState<LinearTeam[]>([])
   const [linearTeamRefreshNonce, setLinearTeamRefreshNonce] = useState(0)
@@ -24,14 +26,19 @@ export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationMode
     if (!taskResumeApplied) {
       return
     }
+
     if (taskSource !== 'linear' || !linearConnected) {
       setAvailableTeams([])
+
       return
     }
+
     let cancelled = false
+
     const cachedTeams = getCachedLinearTeams(selectedLinearWorkspaceId, {
       sourceContext: linearTaskSourceContext
     })
+
     // Why: on a workspace switch, drop the prior workspace's teams during the pending fetch but seed from the workspace-scoped cache.
     setAvailableTeams(cachedTeams ?? [])
     void listLinearTeams(selectedLinearWorkspaceId, {
@@ -47,6 +54,7 @@ export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationMode
           console.warn('[TaskPage] Failed to fetch Linear teams')
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -67,11 +75,14 @@ export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationMode
     if (!taskResumeApplied) {
       return
     }
+
     if (taskSource !== 'jira' || !jiraConnected) {
       setAvailableJiraProjects([])
       setJiraProjectsLoading(false)
+
       return
     }
+
     let cancelled = false
     setAvailableJiraProjects([])
     setJiraProjectsLoading(true)
@@ -91,6 +102,7 @@ export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationMode
           setJiraProjectsLoading(false)
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -114,6 +126,7 @@ export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationMode
     jiraProjectsLoading: typeof jiraProjectsLoading
     setJiraProjectsLoading: typeof setJiraProjectsLoading
   }
+
   nextModel.availableTeams = availableTeams
   nextModel.setAvailableTeams = setAvailableTeams
   nextModel.linearTeamRefreshNonce = linearTeamRefreshNonce
@@ -122,6 +135,8 @@ export function useTaskPageProviderMetadata(model: TaskPageResumeRestorationMode
   nextModel.setAvailableJiraProjects = setAvailableJiraProjects
   nextModel.jiraProjectsLoading = jiraProjectsLoading
   nextModel.setJiraProjectsLoading = setJiraProjectsLoading
+
   return nextModel
 }
+
 export type TaskPageProviderMetadataModel = ReturnType<typeof useTaskPageProviderMetadata>

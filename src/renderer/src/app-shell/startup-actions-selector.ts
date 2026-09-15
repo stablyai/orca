@@ -101,6 +101,7 @@ export function selectStartupActions(state: StartupActions): StartupActions {
     pruneLastVisitedTimestamps: state.pruneLastVisitedTimestamps,
     seedActiveWorktreeLastVisitedIfMissing: state.seedActiveWorktreeLastVisitedIfMissing
   }
+
   return cachedStartupActions
 }
 

@@ -45,15 +45,18 @@ export function automationHostCatalogEntryFingerprint(entry: AutomationHostCatal
 
 function fingerprintByAuthority(catalog: AutomationHostCatalog): Map<string, string> {
   const parts = new Map<string, string[]>()
+
   for (const entry of catalog.entries) {
     const key = automationAuthorityCatalogKey(entry.stableRef.authority)
     const bucket = parts.get(key)
+
     if (bucket) {
       bucket.push(automationHostCatalogEntryFingerprint(entry))
     } else {
       parts.set(key, [automationHostCatalogEntryFingerprint(entry)])
     }
   }
+
   // Entries arrive in the deterministic catalog order, so the join is stable.
   return new Map([...parts].map(([key, values]) => [key, values.join('\n')]))
 }
@@ -67,24 +70,31 @@ export function createAutomationCatalogGenerationRegistry(): AutomationCatalogGe
   const reincarnations = (catalog: AutomationHostCatalog): string[] => {
     const reincarnated: string[] = []
     const listed = new Set<string>()
+
     for (const entry of catalog.entries) {
       listed.add(entry.stableKey)
+
       if (!entry.owner) {
         continue
       }
+
       const next = ownerKey(entry.owner)
       const previous = ownerKeyByStableKey.get(entry.stableKey)
+
       if (previous !== undefined && previous !== next) {
         reincarnated.push(entry.stableKey)
       }
+
       ownerKeyByStableKey.set(entry.stableKey, next)
     }
+
     // Deleting during iteration is defined for Map; a visited key is never revisited.
     for (const stableKey of ownerKeyByStableKey.keys()) {
       if (!listed.has(stableKey)) {
         ownerKeyByStableKey.delete(stableKey)
       }
     }
+
     return reincarnated
   }
 
@@ -102,12 +112,14 @@ export function createAutomationCatalogGenerationRegistry(): AutomationCatalogGe
       const reincarnatedStableKeys = reincarnations(catalog)
       const next = fingerprintByAuthority(catalog)
       const advanced: string[] = []
+
       for (const [authorityKey, fingerprint] of next) {
         if (fingerprintByAuthorityKey.get(authorityKey) !== fingerprint) {
           advance(authorityKey, fingerprint)
           advanced.push(authorityKey)
         }
       }
+
       // Why: an authority that left the catalog must invalidate its captured requests too.
       for (const authorityKey of fingerprintByAuthorityKey.keys()) {
         if (!next.has(authorityKey) && fingerprintByAuthorityKey.get(authorityKey) !== '') {
@@ -115,6 +127,7 @@ export function createAutomationCatalogGenerationRegistry(): AutomationCatalogGe
           advanced.push(authorityKey)
         }
       }
+
       return { advancedAuthorityKeys: advanced, reincarnatedStableKeys }
     },
     reset: () => {

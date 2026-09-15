@@ -9,6 +9,7 @@ export async function captureLocalUploadRoot(
 ): Promise<string> {
   const rootRealPath = await realpath(sourcePath)
   const rootRealStat = await lstat(rootRealPath)
+
   if (
     statIdentityPartChanged(sourceStat.ino, rootRealStat.ino) ||
     statIdentityPartChanged(sourceStat.dev, rootRealStat.dev) ||
@@ -16,6 +17,7 @@ export async function captureLocalUploadRoot(
   ) {
     throw new Error(`Upload source changed while being inspected: ${sourcePath}`)
   }
+
   return rootRealPath
 }
 
@@ -24,18 +26,23 @@ export async function preScanSshImportDirectory(
   remotePathFlavor: RemotePathFlavor
 ): Promise<boolean> {
   const entries = await readdir(dirPath, { withFileTypes: true })
+
   for (const entry of entries) {
     assertSafeRemotePathSegment(entry.name, remotePathFlavor)
+
     if (entry.isSymbolicLink()) {
       return true
     }
+
     if (entry.isDirectory()) {
       const childPath = join(dirPath, entry.name)
+
       if (await preScanSshImportDirectory(childPath, remotePathFlavor)) {
         return true
       }
     }
   }
+
   return false
 }
 
@@ -50,6 +57,7 @@ export async function uploadSshImportDirectory(
 ): Promise<void> {
   await assertLocalUploadPathInsideRoot(rootRealPath, localDir)
   const entries = await readdir(localDir, { withFileTypes: true })
+
   for (const entry of entries) {
     assertSafeRemotePathSegment(entry.name, remotePathFlavor)
     const localPath = join(localDir, entry.name)
@@ -77,6 +85,7 @@ export async function uploadSshImportDirectory(
       )
       continue
     }
+
     assertCurrent?.()
     await uploadSession.uploadFile(localPath, remotePath, { exclusive: true })
   }
@@ -88,6 +97,7 @@ function statIdentityPartChanged(
 ): boolean {
   const leftKnown = left !== undefined && left !== 0 && left !== 0n
   const rightKnown = right !== undefined && right !== 0 && right !== 0n
+
   return leftKnown && rightKnown && left !== right
 }
 
@@ -97,6 +107,7 @@ async function assertLocalUploadPathInsideRoot(
 ): Promise<void> {
   const candidateRealPath = await realpath(candidatePath)
   const relativeToRoot = relative(rootRealPath, candidateRealPath)
+
   if (
     relativeToRoot !== '' &&
     (relativeToRoot === '..' || relativeToRoot.startsWith(`..${sep}`) || isAbsolute(relativeToRoot))

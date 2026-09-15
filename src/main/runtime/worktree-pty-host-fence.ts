@@ -17,6 +17,7 @@ export function worktreePtyBelongsToHost(
   if (fence.resolvedRuntimeEnvironmentId !== undefined) {
     return ptyId.startsWith(`remote:${encodeURIComponent(fence.resolvedRuntimeEnvironmentId)}@@`)
   }
+
   return (
     fence.resolvedConnectionId === undefined ||
     (connectionId ?? null) === fence.resolvedConnectionId

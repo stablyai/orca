@@ -21,6 +21,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
     if (session.pendingStartupCommand) {
       return null
     }
+
     const state = useAppStore.getState()
     const entry = state.agentStatusByPaneKey[session.cacheKey]
     const sleepingRecordEntry = session.getSleepingRecordForPane(state)
@@ -28,15 +29,19 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
 
     const useLiveEntry = entry && entry.state !== 'done'
     const agent = useLiveEntry ? entry.agentType : sleepingRecord?.agent
+
     if (!agent || !isResumableTuiAgent(agent)) {
       return null
     }
+
     const providerSession = normalizeAgentProviderSession(
       useLiveEntry ? entry.providerSession : sleepingRecord?.providerSession
     )
+
     if (!providerSession) {
       return null
     }
+
     const matchingSleepingLaunchConfig =
       sleepingRecord?.launchConfig &&
       (!useLiveEntry ||
@@ -44,9 +49,11 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
           agentProviderSessionsEqual(agent, sleepingRecord.providerSession, providerSession)))
         ? sleepingRecord.launchConfig
         : undefined
+
     const launchConfig =
       (useLiveEntry && entry ? state.getAgentLaunchConfigForStatusEntry(entry) : undefined) ??
       matchingSleepingLaunchConfig
+
     // Why: the resume line is typed into this pane's live shell, so its quoting must
     // follow the tab's effective Windows shell, not the win32 PowerShell default.
     const resumeTarget = resolveAgentResumeLaunchTarget({
@@ -57,6 +64,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       terminalWindowsShell: state.settings?.terminalWindowsShell,
       tabShellOverride: session.shellOverride
     })
+
     const startupPlan = buildAgentResumeStartupPlan({
       agent,
       providerSession,
@@ -76,10 +84,13 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       platform: resumeTarget.platform,
       shell: resumeTarget.shell
     })
+
     if (!startupPlan) {
       return null
     }
+
     const coldRestoreLaunchToken = createBrowserUuid()
+
     // Why: cold restore means the PTY process is gone but the agent provider
     // session is still resumable, so the replacement spawn must launch it.
     return {

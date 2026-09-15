@@ -25,15 +25,18 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   delete target.relayGracePeriodSeconds
   delete target.systemSshConnectionReuse
   delete target.experimentalPtySourceCreditV1
+
   // Why: prefer the synced grace over stale relayGracePeriodSeconds so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
     legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
       ? legacyGracePeriodSeconds
       : currentGracePeriodSeconds
+
   const normalized: SshTarget = {
     ...target,
     configHost: target.configHost ?? target.label ?? target.host
   }
+
   // Why: old SSH form persisted 10800 even without a user choice; treat that legacy default as the new implicit default.
   if (
     relayGracePeriodSeconds !== undefined &&
@@ -41,9 +44,11 @@ export function normalizeSshTarget(t: SshTarget): SshTarget {
   ) {
     normalized.relayGracePeriodSeconds = relayGracePeriodSeconds
   }
+
   if (systemSshConnectionReuse === false) {
     normalized.systemSshConnectionReuse = false
   }
+
   return normalized
 }
 
@@ -52,16 +57,22 @@ export function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | 
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const raw = value as Partial<SshRemotePtyLease>
+
   if (typeof raw.targetId !== 'string' || typeof raw.ptyId !== 'string') {
     return null
   }
+
   const state = raw.state ?? 'detached'
+
   if (!['attached', 'detached', 'terminated', 'expired'].includes(state)) {
     return null
   }
+
   const now = Date.now()
   const pendingKill = normalizeSshPendingPtyKill(raw.pendingKill)
+
   return {
     targetId: raw.targetId,
     ptyId: raw.ptyId,
@@ -84,6 +95,7 @@ export function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | 
 }
 
 export const SSH_PTY_OWNER_LEASE_MAX_LENGTH = 512
+
 export const ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH = 4096
 
 export function normalizeSshPtyConsumerRecovery(
@@ -93,9 +105,11 @@ export function normalizeSshPtyConsumerRecovery(
   if (!value || typeof value !== 'object') {
     return null
   }
+
   const raw = value as Partial<SshPtyConsumerRecovery>
   const clientGeneration = raw.clientGeneration
   const ownerGeneration = raw.ownerGeneration
+
   if (
     typeof raw.targetId !== 'string' ||
     raw.targetId.length === 0 ||
@@ -118,11 +132,14 @@ export function normalizeSshPtyConsumerRecovery(
   ) {
     return null
   }
+
   const flow = raw.outputFlowControl
+
   const outputFlowControl =
     flow?.version === 1 && Number.isSafeInteger(flow.windowSu) && flow.windowSu > 0
       ? { version: 1 as const, windowSu: flow.windowSu }
       : undefined
+
   return {
     targetId: raw.targetId,
     clientInstanceId: raw.clientInstanceId,

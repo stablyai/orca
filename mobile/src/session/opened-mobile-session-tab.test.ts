@@ -76,6 +76,7 @@ describe('refreshOpenedMobileSessionTabs', () => {
   it('waits for a current refresh before requesting a post-open snapshot', async () => {
     const order: string[] = []
     let resolveCurrentRefresh: () => void = () => {}
+
     const currentRefresh = new Promise<void>((resolve) => {
       resolveCurrentRefresh = resolve
     })
@@ -110,6 +111,7 @@ describe('activateOpenedMobileSessionTab', () => {
     let activeTerminalHandle: string | null = 'pty-1'
     let activeTabType: string | null = 'terminal'
     const switched: string[] = []
+
     return {
       setTabs(nextTabs: OpenedMobileSessionTabCandidate[]) {
         tabs = nextTabs
@@ -143,6 +145,7 @@ describe('activateOpenedMobileSessionTab', () => {
             activeTabType = tab.type
             activeTerminalHandle = null
             switched.push(tab.id)
+
             return true
           }
         }
@@ -217,6 +220,7 @@ describe('activateOpenedSourceControlDiffTab', () => {
     const activationSeq = 1
     let latestActivationSeq = 1
     const switched: string[] = []
+
     return {
       setTabs(nextTabs: OpenedMobileSessionTabCandidate[]) {
         tabs = nextTabs

@@ -17,6 +17,7 @@ function createBridgeState(
   getTabIdForWebContentsId: (webContentsId: number) => string | null
 ) {
   let activeWebContentsId: number | null = null
+
   const bindings = {
     getActiveWebContentsId: () => activeWebContentsId,
     setActiveWebContentsId: (webContentsId: number | null) => {
@@ -38,6 +39,7 @@ describe('CdpBridgeState reverse tab lookup', () => {
     const lookupCount = 1_000
     const registeredTabs = new Map<string, number>()
     const tabIdByWebContentsId = new Map<number, string>()
+
     for (let index = 0; index < tabCount; index += 1) {
       const tabId = `tab-${index}`
       const webContentsId = 10_000 + index
@@ -48,9 +50,11 @@ describe('CdpBridgeState reverse tab lookup', () => {
     const getRegisteredTabs = vi.fn(() => {
       throw new Error('unexpected registered-tab enumeration')
     })
+
     const getTabIdForWebContentsId = vi.fn(
       (webContentsId: number) => tabIdByWebContentsId.get(webContentsId) ?? null
     )
+
     const state = createBridgeState(getRegisteredTabs, getTabIdForWebContentsId)
     const targetWebContentsId = 10_000 + tabCount - 1
 
@@ -66,6 +70,7 @@ describe('CdpBridgeState reverse tab lookup', () => {
   it('keeps strict and safe resolution semantics when a registration changes', () => {
     const registeredTabs = new Map([['tab-a', 101]])
     const tabIdByWebContentsId = new Map([[101, 'tab-a']])
+
     const state = createBridgeState(
       () => registeredTabs,
       (webContentsId) => tabIdByWebContentsId.get(webContentsId) ?? null
@@ -83,13 +88,16 @@ describe('CdpBridgeState reverse tab lookup', () => {
 
   it('lets CdpTabCommands read the active page id through the reverse map', () => {
     const tabIdByWebContentsId = new Map([[101, 'tab-a']])
+
     const getRegisteredTabs = vi.fn(() => {
       throw new Error('unexpected registered-tab enumeration')
     })
+
     const state = createBridgeState(
       getRegisteredTabs,
       (webContentsId) => tabIdByWebContentsId.get(webContentsId) ?? null
     )
+
     const commands = new CdpTabCommands(state, {} as never, {} as never, {} as never)
 
     state.activeWebContentsId = 101

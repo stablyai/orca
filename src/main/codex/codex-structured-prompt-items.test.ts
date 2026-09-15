@@ -13,6 +13,7 @@ import {
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../native-chat/agent-session-journal/journal-row-schema'
 
 const THREAD_ID = 'thread-abc'
+
 const CODEX_ITEM_ID = 'item-4'
 
 describe('codex approval items', () => {
@@ -186,6 +187,7 @@ describe('codex question items', () => {
   it('bounds question text, options, labels, and prompt identity components', () => {
     const longQuestionId = 'question-id-'.repeat(500)
     const longLabel = 'option '.repeat(5_000)
+
     const items = codexQuestionItems({
       threadId: 'thread-'.repeat(500),
       promptKey: 'prompt-'.repeat(500),
@@ -199,11 +201,13 @@ describe('codex question items', () => {
         ]
       }
     })
+
     const item = items[0]
 
     if (!item) {
       throw new Error('expected a bounded question item')
     }
+
     expect(item.body.question).toContain('output truncated')
     expect(item.body.options).toHaveLength(64)
     expect(item.body.options[0]?.label).toContain('output truncated')

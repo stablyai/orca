@@ -19,6 +19,7 @@ export async function withAgentSessionStoreTransactionLock<T>(
   await mkdir(directory, { recursive: true, mode: 0o700 })
   await chmod(directory, 0o700)
   const release = await lock(filePath, { realpath: false, retries: LOCK_RETRIES })
+
   try {
     return await apply()
   } finally {

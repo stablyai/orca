@@ -24,6 +24,7 @@ export async function runBrowserRouteDnsPrefetchProbe(): Promise<BrowserRouteDns
   const socks = createServer((socket) => socket.destroy())
   let result: BrowserRouteDnsPrefetchProbeResult | null = null
   let primaryFailure: unknown = null
+
   try {
     const socksPort = await listen(socks, sockets)
     const netLogPath = join(root, 'netlog.json')
@@ -35,9 +36,11 @@ export async function runBrowserRouteDnsPrefetchProbe(): Promise<BrowserRouteDns
       JSON.stringify({ netLogPath, probeHost, resultPath, socksPort })
     )
     const parsed = await runBrowserRouteEgressElectron(root, mainPath)
+
     if (typeof parsed.resolvedProxy !== 'string') {
       throw new Error(`browser_route_dns_prefetch_result_invalid:${JSON.stringify(parsed)}`)
     }
+
     const netLog = readFileSync(netLogPath, 'utf8')
     result = {
       resolvedProxy: parsed.resolvedProxy,
@@ -49,7 +52,9 @@ export async function runBrowserRouteDnsPrefetchProbe(): Promise<BrowserRouteDns
   } catch (error) {
     primaryFailure = error
   }
+
   const cleanupFailures = await cleanup(root, socks, sockets)
+
   if (primaryFailure || cleanupFailures.length > 0) {
     throw new AggregateError(
       [...(primaryFailure ? [primaryFailure] : []), ...cleanupFailures],
@@ -58,9 +63,11 @@ export async function runBrowserRouteDnsPrefetchProbe(): Promise<BrowserRouteDns
         : 'browser_route_dns_prefetch_probe_failed'
     )
   }
+
   if (!result) {
     throw new Error('browser_route_dns_prefetch_probe_result_missing')
   }
+
   return result
 }
 
@@ -78,23 +85,31 @@ function findHostResolverEvents(netLog: string, host: string): string[] {
   const eventTypeNames = invert(parsed.constants?.logEventTypes ?? {})
   const events = parsed.events ?? []
   const hostSourceIds = new Set<number>()
+
   for (const event of events) {
     const sourceId = event.source?.id
+
     if (sourceId !== undefined && JSON.stringify(event.params ?? null).includes(host)) {
       hostSourceIds.add(sourceId)
     }
   }
+
   const names = new Set<string>()
+
   for (const event of events) {
     const sourceId = event.source?.id
+
     if (sourceId === undefined || !hostSourceIds.has(sourceId) || event.type === undefined) {
       continue
     }
+
     const name = eventTypeNames.get(event.type)
+
     if (name?.startsWith('HOST_RESOLVER')) {
       names.add(name)
     }
   }
+
   return [...names].sort()
 }
 
@@ -117,15 +132,19 @@ function listen(server: Server, sockets: Set<Socket>): Promise<number> {
     socket.on('error', () => socket.destroy())
     socket.once('close', () => sockets.delete(socket))
   })
+
   return new Promise((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', () => {
       server.off('error', reject)
       const address = server.address()
+
       if (!address || typeof address === 'string') {
         reject(new Error('browser_route_dns_prefetch_listener_unavailable'))
+
         return
       }
+
       resolve(address.port)
     })
   })
@@ -133,10 +152,13 @@ function listen(server: Server, sockets: Set<Socket>): Promise<number> {
 
 async function cleanup(root: string, socks: Server, sockets: Set<Socket>): Promise<unknown[]> {
   const failures: unknown[] = []
+
   for (const socket of sockets) {
     socket.destroy()
   }
+
   sockets.clear()
+
   try {
     await new Promise<void>((resolve, reject) =>
       socks.close((error) => (error ? reject(error) : resolve()))
@@ -144,10 +166,12 @@ async function cleanup(root: string, socks: Server, sockets: Set<Socket>): Promi
   } catch (error) {
     failures.push(error)
   }
+
   try {
     rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   } catch (error) {
     failures.push(error)
   }
+
   return failures
 }

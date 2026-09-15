@@ -80,6 +80,7 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     setRightSidebarTab,
     updateWorktreeMeta
   })
+
   const pullRequestGeneration = useSourceControlPullRequestGeneration({
     activeRepo,
     activeRepoSettings,
@@ -94,6 +95,7 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     updatePullRequestGenerationRecord,
     worktreePath
   })
+
   const createReviewComposer = useSourceControlCreateReviewComposer({
     activePullRequestGenerationKey: pullRequestGeneration.activePullRequestGenerationKey,
     activePullRequestGenerationRecord: pullRequestGeneration.activePullRequestGenerationRecord,
@@ -123,6 +125,7 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     updatePullRequestGenerationRecord,
     worktreePath
   })
+
   const { prBase, prBody, prDraft, prGenerating, prTitle } = createReviewComposer
 
   useSourceControlHostedReviewEligibility({
@@ -153,6 +156,7 @@ export function useSourceControlReviewFlows(foundation: SourceControlPanelFounda
     setHostedReviewCreationState,
     worktreePath
   })
+
   const hostedReviewCreationAction = useSourceControlHostedReviewCreation({
     activeRepo,
     activeWorktreeId,

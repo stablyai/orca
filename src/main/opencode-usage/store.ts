@@ -40,6 +40,7 @@ function getOpenCodeUsageFile(): string {
   if (!_openCodeUsageFile) {
     _openCodeUsageFile = join(app.getPath('userData'), 'orca-opencode-usage.json')
   }
+
   return _openCodeUsageFile
 }
 
@@ -81,6 +82,7 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
     range: OpenCodeUsageRange
   ): Promise<OpenCodeUsageSummary> {
     await this.refresh(false)
+
     return this.buildSummary(scope, range)
   }
 
@@ -98,6 +100,7 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
     range: OpenCodeUsageRange
   ): Promise<OpenCodeUsageDailyPoint[]> {
     await this.refresh(false)
+
     return this.buildDaily(scope, range)
   }
 
@@ -114,6 +117,7 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
     kind: OpenCodeUsageBreakdownKind
   ): Promise<OpenCodeUsageBreakdownRow[]> {
     await this.refresh(false)
+
     return this.buildBreakdown(scope, range, kind)
   }
 
@@ -135,6 +139,7 @@ export class OpenCodeUsageStore extends UsageProviderStoreLifecycle<
     limit = 10
   ): Promise<OpenCodeUsageSessionRow[]> {
     await this.refresh(false)
+
     return this.buildRecentSessions(scope, range, limit)
   }
 

@@ -87,6 +87,7 @@ describe('applyBrowserPageZoom', () => {
       }),
       setZoomLevel: vi.fn()
     }
+
     const setZoomFailure = {
       getZoomLevel: vi.fn(() => 0),
       setZoomLevel: vi.fn(() => {
@@ -112,6 +113,7 @@ describe('setBrowserPageZoomLevel', () => {
 
   it('restores the configured level when Chromium carries zoom across reloads', () => {
     let live = 0.5
+
     const webview = {
       getZoomLevel: vi.fn(() => live),
       setZoomLevel: vi.fn((level: number) => {
@@ -191,6 +193,7 @@ describe('browser pane zoom across reloads', () => {
     const originZoom = new Map<string, number>()
     let url = 'https://a.example'
     let live = 0
+
     const webview = {
       getZoomLevel: () => live,
       setZoomLevel: (level: number) => {
@@ -198,6 +201,7 @@ describe('browser pane zoom across reloads', () => {
         originZoom.set(url, level)
       }
     }
+
     let paneLevel = sharedSetting.level
     webview.setZoomLevel(paneLevel)
 
@@ -207,6 +211,7 @@ describe('browser pane zoom across reloads', () => {
       },
       zoom(direction: 'in' | 'out' | 'reset') {
         const next = applyBrowserPageZoom(webview, direction)
+
         if (next !== null) {
           paneLevel = next
           sharedSetting.level = next
@@ -295,12 +300,14 @@ describe('browser pane zoom across reloads', () => {
 describe('browser panes sharing one hostname', () => {
   it('skips the host-wide write when the pane already holds its level', () => {
     let hostLevel = 0
+
     const webviewFor = (): { getZoomLevel: () => number; setZoomLevel: (n: number) => void } => ({
       getZoomLevel: () => hostLevel,
       setZoomLevel: (level: number) => {
         hostLevel = level
       }
     })
+
     const tabA = webviewFor()
     const tabB = webviewFor()
 

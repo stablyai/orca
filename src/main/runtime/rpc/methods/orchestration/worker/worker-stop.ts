@@ -20,6 +20,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
       dedupeWorkerStop(runtime, params.dispatch, async () => {
         const db = runtime.getOrchestrationDb()
         const federated = db.getFederatedDispatch(params.dispatch)
+
         if (federated) {
           if (!orchestrationMutation) {
             throw new OrchestrationError(
@@ -27,11 +28,14 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
               'Remote worker-stop requires a durable retry request.'
             )
           }
+
           const server = resolvePinnedFederatedServer(runtime, federated)
           const begun = db.beginWorkerStop(params.dispatch, runtime.getRuntimeId())
+
           if (begun.disposition === 'already_settled') {
             return settledReceipt(params.dispatch, begun.worker.state)
           }
+
           try {
             const status = (await runtime.callOrchestrationWorkerServer(
               server.environmentId,
@@ -41,6 +45,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
               undefined,
               { expectedEnvironmentPairingRevision: server.pairingRevision }
             )) as RuntimeStatus
+
             if (
               !status.capabilities?.includes(ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY)
             ) {
@@ -53,6 +58,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
                 'none'
               )
             }
+
             const remote = (await runtime.callOrchestrationWorkerServer(
               server.environmentId,
               'orchestration.federationStop',
@@ -61,8 +67,10 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
               { orchestrationRequestId: orchestrationMutation.requestId },
               { expectedEnvironmentPairingRevision: server.pairingRevision }
             )) as RemoteStopReceipt
+
             if (remote.state === 'stopped') {
               const worker = db.reconcileFederatedWorkerStop(params.dispatch)
+
               return {
                 dispatchId: params.dispatch,
                 state: worker.state,
@@ -71,11 +79,13 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
                 close: remote.close
               }
             }
+
             if (remote.state === 'succeeded' || remote.state === 'failed') {
               db.resumeFederatedWorkerForTerminalRelay(params.dispatch)
               await runtime
                 .syncOrchestrationFederatedDispatchAfterCurrent(params.dispatch)
                 .catch(() => undefined)
+
               return {
                 dispatchId: params.dispatch,
                 state: db.getWorkerDispatch(params.dispatch)?.state ?? remote.state,
@@ -83,6 +93,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
                 processAction: 'none'
               }
             }
+
             return unknownReceipt(
               params.dispatch,
               db.markWorkerStopUnknown(
@@ -93,6 +104,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             )
           } catch (error) {
             const reason = error instanceof Error ? error.message : String(error)
+
             return unknownReceipt(
               params.dispatch,
               db.markWorkerStopUnknown(params.dispatch, reason),
@@ -102,13 +114,16 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
         }
 
         const begun = db.beginWorkerStop(params.dispatch, runtime.getRuntimeId())
+
         if (begun.disposition === 'already_settled') {
           return settledReceipt(params.dispatch, begun.worker.state)
         }
+
         if (begun.disposition === 'context_only') {
           if (!begun.alreadySettled) {
             runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
           }
+
           return {
             dispatchId: params.dispatch,
             state: begun.state,
@@ -117,7 +132,9 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             warning: contextOnlyStopWarning(begun)
           }
         }
+
         const handle = begun.worker.agent_terminal_handle
+
         if (!handle) {
           return unknownReceipt(
             params.dispatch,
@@ -128,6 +145,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             'unknown'
           )
         }
+
         if (isStructuredWorkerHandle(handle)) {
           // The same install release performs, for the same reason: after a restart nothing has
           // installed the structured host, and both the observation below and the close read it.
@@ -140,10 +158,13 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             )
           })
         }
+
         const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
+
         // The host exit can settle this stop while terminal inspection is awaiting inventory.
         if (db.getWorkerDispatch(params.dispatch)?.state === 'stopped') {
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
+
           return {
             dispatchId: params.dispatch,
             state: 'stopped',
@@ -151,6 +172,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             processAction: 'none'
           }
         }
+
         // Why `unverifiable` still proceeds: losing contact is a reason to report
         // the outcome honestly, never a reason to stop trying to stop the worker.
         if (
@@ -166,9 +188,12 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             'none'
           )
         }
+
         const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
+
         if (!resource || resource.ownership_state !== 'owned') {
           const ownership = resource?.ownership_state ?? 'unproven'
+
           return unknownReceipt(
             params.dispatch,
             db.markWorkerStopUnknown(
@@ -178,9 +203,12 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             'none'
           )
         }
+
         const structured = resolveStructuredWorkerForDispatch(db, params.dispatch)
+
         if (structured) {
           const stop = await stopStructuredWorker(structured, params.dispatch, runtime)
+
           if (!stop.stopped) {
             // Close is retried by the host; only a proven exit may settle the dispatch. And when no
             // close was issued at all — no host in this runtime generation — the receipt says so
@@ -191,8 +219,10 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
               stop.closeAttempted ? 'closed_agent_terminal' : 'none'
             )
           }
+
           const stopped = db.settleWorkerStop(params.dispatch)
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
+
           return {
             dispatchId: params.dispatch,
             state: stopped.state,
@@ -200,6 +230,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             processAction: 'closed_agent_terminal'
           }
         }
+
         const closed = await runtime
           .closeTerminal(handle)
           .then((close) => ({ close }) as const)
@@ -207,6 +238,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
             (error: unknown) =>
               ({ error: error instanceof Error ? error.message : String(error) }) as const
           )
+
         // The process exit can land mid-close and settle the stop from the exit path; that exit
         // is this stop's proof of success, so do not re-settle it or report it as unknown.
         if (db.getWorkerDispatch(params.dispatch)?.state !== 'stopped') {
@@ -217,6 +249,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
               'unknown'
             )
           }
+
           if (!closed.close.ptyKilled) {
             // The tab is retired, but the agent process was never confirmed stopped —
             // settling here is the false success this receipt exists to prevent.
@@ -226,9 +259,12 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
               'closed_agent_terminal'
             )
           }
+
           db.settleWorkerStop(params.dispatch)
         }
+
         runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
+
         return {
           dispatchId: params.dispatch,
           state: db.getWorkerDispatch(params.dispatch)?.state ?? 'stopped',
@@ -251,20 +287,26 @@ function dedupeWorkerStop(
   stop: () => Promise<unknown>
 ): Promise<unknown> {
   let active = activeStopByRuntime.get(runtime)
+
   if (!active) {
     active = new Map()
     activeStopByRuntime.set(runtime, active)
   }
+
   const inFlight = active.get(dispatchId)
+
   if (inFlight) {
     return inFlight
   }
+
   const started: Promise<unknown> = stop().finally(() => {
     if (active.get(dispatchId) === started) {
       active.delete(dispatchId)
     }
   })
+
   active.set(dispatchId, started)
+
   return started
 }
 
@@ -288,6 +330,7 @@ function contextOnlyStopWarning(result: {
   if (result.alreadySettled) {
     return `Dispatch was already ${result.state}; no terminal process changed.`
   }
+
   return result.releasedCurrentTask
     ? 'The assignment was stopped without closing its unsupervised terminal process.'
     : 'The superseded assignment was stopped without changing the current Task or terminal process.'

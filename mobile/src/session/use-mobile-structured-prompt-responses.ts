@@ -30,6 +30,7 @@ export function useMobileStructuredPromptResponses(args: {
   respondQuestion: (answer: string) => Promise<boolean>
 } {
   const { mutate, onSendError, sessionKey, stateRef } = args
+
   // Partially answered grouped question, held only until its last step is submitted. The session it
   // was collected in is stored with it and checked on read, so switching sessions drops the draft
   // without an effect that would render the stale one for a frame first.
@@ -37,6 +38,7 @@ export function useMobileStructuredPromptResponses(args: {
     sessionKey: string
     draft: GroupedQuestionDraft
   } | null>(null)
+
   const groupedDraft = collected?.sessionKey === sessionKey ? collected.draft : null
 
   const respondPermission = useCallback(
@@ -45,18 +47,23 @@ export function useMobileStructuredPromptResponses(args: {
         optionId,
         stateRef.current.items.find(pendingStructuredApproval) ?? null
       )
+
       if (!target) {
         return false
       }
+
       const result = await mutate<AgentSessionPromptResult>(
         'agentSession.respondToApproval',
         'agentSession.respondTo:approval',
         target
       )
+
       if (result.status === 'unknown') {
         onSendError('Response unconfirmed — check chat before retrying')
+
         return false
       }
+
       return result.status === 'accepted'
     },
     [mutate, onSendError, stateRef]
@@ -65,26 +72,33 @@ export function useMobileStructuredPromptResponses(args: {
   const respondQuestion = useCallback(
     async (answer: string): Promise<boolean> => {
       const prompt = stateRef.current.items.find(pendingStructuredQuestion) ?? null
+
       if (prompt?.body.questions) {
         const promptKey = groupedQuestionPromptKey(prompt.itemId, prompt.revision)
+
         const grouped = advanceGroupedQuestion({
           response: answer,
           questions: prompt.body.questions,
           draft: groupedDraft,
           promptKey
         })
+
         if (!grouped) {
           return false
         }
+
         if (grouped.kind === 'advance') {
           setCollected({ sessionKey, draft: grouped.draft })
+
           return true
         }
+
         const result = await mutate<AgentSessionPromptResult>(
           'agentSession.respondToQuestion',
           'agentSession.respondTo:question',
           { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: grouped.optionId }
         )
+
         if (result.status !== 'rejected') {
           // The group left the phone; a retry must start from the first question, not a stale tail.
           setCollected((current) =>
@@ -93,25 +107,34 @@ export function useMobileStructuredPromptResponses(args: {
               : current
           )
         }
+
         if (result.status === 'unknown') {
           onSendError('Answer unconfirmed — check chat before retrying')
+
           return false
         }
+
         return result.status === 'accepted'
       }
+
       const target = structuredQuestionResponseTarget(answer, prompt)
+
       if (!target) {
         return false
       }
+
       const result = await mutate<AgentSessionPromptResult>(
         'agentSession.respondToQuestion',
         'agentSession.respondTo:question',
         target
       )
+
       if (result.status === 'unknown') {
         onSendError('Answer unconfirmed — check chat before retrying')
+
         return false
       }
+
       return result.status === 'accepted'
     },
     [groupedDraft, mutate, onSendError, sessionKey, stateRef]

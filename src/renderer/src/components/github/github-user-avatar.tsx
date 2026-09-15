@@ -11,15 +11,18 @@ export function githubAvatarUrl(login: string): string {
  */
 function initialsFor(login: string, name?: string | null): string {
   const source = (name?.trim() || login).trim()
+
   if (!source) {
     return '?'
   }
+
   // Iterate by code point (not UTF-16 unit) and keep only letters/digits, so a
   // display name that leads with an emoji or other non-BMP char yields clean
   // initials instead of a broken surrogate half. Words that are all symbols are
   // skipped; an all-symbol name falls back to '?'.
   const alnum = (word: string): string[] => [...word].filter((ch) => /[\p{L}\p{N}]/u.test(ch))
   const parts = source.split(/\s+/).filter(Boolean)
+
   const letters =
     parts.length >= 2
       ? parts
@@ -28,6 +31,7 @@ function initialsFor(login: string, name?: string | null): string {
           .slice(0, 2)
           .join('')
       : alnum(source).slice(0, 2).join('')
+
   return letters.toUpperCase() || '?'
 }
 
@@ -40,13 +44,17 @@ export function resolveGitHubUserAvatarSrc(
   avatarUrl?: string | null
 ): string | null {
   const fromApi = avatarUrl?.trim()
+
   if (fromApi) {
     return fromApi
   }
+
   const trimmedLogin = login.trim()
+
   if (!trimmedLogin) {
     return null
   }
+
   return githubAvatarUrl(trimmedLogin)
 }
 
@@ -76,6 +84,7 @@ export function GitHubUserAvatar({
   // latched boolean would keep showing the placeholder forever. See #8784.
   const [failedSrc, setFailedSrc] = useState<string | null>(null)
   const src = resolveGitHubUserAvatarSrc(login, avatarUrl)
+
   if (src && failedSrc !== src) {
     return (
       <img
@@ -92,6 +101,7 @@ export function GitHubUserAvatar({
       />
     )
   }
+
   return (
     <span
       title={title}

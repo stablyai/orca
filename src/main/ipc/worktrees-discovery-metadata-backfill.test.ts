@@ -6,83 +6,107 @@ import { makeWorktreeMeta } from './worktrees-test-fixtures'
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
+
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )
+
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
 vi.mock('../git/git-username', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
     .resolveLocalGitUsernameMock
 }))
+
 vi.mock('../github/client', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
+
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
+
 vi.mock('../providers/ssh-git-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
 )
+
 vi.mock('../providers/ssh-filesystem-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
+
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
+
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+
 vi.mock('../ssh/ssh-target-registry', async () =>
   (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
+
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
+
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../worktree-runner-script', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../effective-hook-config', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../setup-hook-env-vars', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('./worktree-logic', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
+
 vi.mock('../ports/advertised-url-watcher', async () =>
   (await import('./worktrees-test-module-mocks')).advertisedUrlWatcherModuleMock()
 )
+
 vi.mock('../workspace-cleanup-scan-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupScanSnapshotModuleMock()
 )
+
 vi.mock('../workspace-space-analysis-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceSpaceAnalysisSnapshotModuleMock()
 )
+
 vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
+
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
+
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
 describe('registerWorktreeHandlers', () => {
@@ -102,12 +126,14 @@ describe('registerWorktreeHandlers', () => {
       }
     ])
     store.getWorktreeMeta.mockReturnValue(undefined)
+
     const stampedMeta = {
       projectId: 'repo:repo-1',
       hostId: 'local',
       projectHostSetupId: 'repo-1',
       lastActivityAt: 1_700_000_000_000
     }
+
     store.setWorktreeMeta.mockReturnValue(stampedMeta)
 
     const listed = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as {
@@ -304,6 +330,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'ssh-target-1'
     }
+
     store.getRepo.mockReturnValue(repo)
     store.getAllWorktreeMeta.mockReturnValue({
       'repo-ssh::/remote/orca': makeWorktreeMeta({
@@ -558,10 +585,12 @@ describe('registerWorktreeHandlers', () => {
       badgeColor: '#000',
       addedAt: 0
     }))
+
     store.getRepos.mockReturnValue(repos)
     let activeScans = 0
     let maxActiveScans = 0
     let notifyScanStarted: (() => void) | undefined
+
     const waitForScanCount = async (count: number): Promise<void> => {
       while (listWorktreesMock.mock.calls.length < count) {
         await new Promise<void>((resolve, reject) => {
@@ -569,6 +598,7 @@ describe('registerWorktreeHandlers', () => {
             () => reject(new Error(`Timed out waiting for ${count} scans`)),
             1000
           )
+
           notifyScanStarted = () => {
             clearTimeout(timeout)
             resolve()
@@ -576,6 +606,7 @@ describe('registerWorktreeHandlers', () => {
         })
       }
     }
+
     const pendingScans: (() => void)[] = []
     listWorktreesMock.mockImplementation(
       async (
@@ -591,6 +622,7 @@ describe('registerWorktreeHandlers', () => {
           notifyScanStarted = undefined
         })
         activeScans -= 1
+
         return [
           {
             path: repoPath,
@@ -606,6 +638,7 @@ describe('registerWorktreeHandlers', () => {
     const listPromise = handlers['worktrees:listAll'](null, undefined) as Promise<
       { path: string }[]
     >
+
     await Promise.resolve()
 
     expect(listWorktreesMock).toHaveBeenCalledTimes(8)
@@ -614,6 +647,7 @@ describe('registerWorktreeHandlers', () => {
     for (const resolve of pendingScans.splice(0)) {
       resolve()
     }
+
     await waitForScanCount(10)
 
     expect(listWorktreesMock).toHaveBeenCalledTimes(10)
@@ -621,6 +655,7 @@ describe('registerWorktreeHandlers', () => {
     for (const resolve of pendingScans.splice(0)) {
       resolve()
     }
+
     const listed = await listPromise
 
     expect(maxActiveScans).toBe(8)

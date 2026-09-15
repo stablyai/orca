@@ -11,6 +11,7 @@ describe('linkedIssue template substitution', () => {
     stagedSummary: 'M src/login.ts',
     stagedPatch: 'diff --git a/src/login.ts b/src/login.ts'
   }
+
   const PULL_REQUEST_CONTEXT = {
     branch: 'feature/login',
     base: 'main',
@@ -40,6 +41,7 @@ describe('linkedIssue template substitution', () => {
       missingBinaryLocation: 'remote PATH',
       execute: async (plan) => {
         capture(plan.stdinPayload ?? '')
+
         return {
           stdout: '{"base":"main","title":"Fix login","body":"body","draft":false}',
           stderr: '',
@@ -91,6 +93,7 @@ describe('linkedIssue template substitution', () => {
   // character counts that truncateDiffForPrompt/limitSection emit, so growing any
   // fixture past its limit would fail these guards for reasons unrelated to leakage.
   const BUILT_IN_PROMPT_SENTINEL_ISSUE = 987654
+
   const builtInPromptParams = {
     agentId: 'custom' as const,
     model: '',

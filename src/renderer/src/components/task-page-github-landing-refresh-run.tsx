@@ -25,6 +25,7 @@ import {
   shouldResetTaskPagePaginationAfterLandingRefresh,
   reconcileTaskPagePagesAfterLandingRefresh
 } from '@/components/task-page-cache-selectors'
+
 export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPaginationModel) {
   const {
     fetchWorkItemsAcrossRepos,
@@ -68,20 +69,25 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
     setRetryingSourceKeys,
     githubWorkItemMutationQueryKey
   } = model
+
   if (!taskResumeApplied) {
     return
   }
+
   // Why: both early-return branches must clear retryingSourceKeys — if they fire, neither .then nor .catch runs and Retry stays stuck.
   if (taskSource !== 'github' || githubMode !== 'items') {
     setRetryingSourceKeys(new Set())
     setTasksRefreshing(false)
     setTasksFiltering(false)
+
     return
   }
+
   if (selectedRepos.length === 0) {
     setRetryingSourceKeys(new Set())
     setTasksRefreshing(false)
     setTasksFiltering(false)
+
     return
   } // unreachable — multi-combobox forbids empty
 
@@ -90,26 +96,33 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
   let cancelled = false
   const contextChanged = githubResumeContextRef.current !== githubResumeContextKey
   githubResumeContextRef.current = githubResumeContextKey
+
   const savedPosition = !githubResumeConsumedRef.current
     ? useAppStore.getState().taskListPosition
     : undefined
+
   githubResumeConsumedRef.current = true
   const savedPositionMatches = savedPosition?.contextKey === githubResumeContextKey
+
   const targetPage = savedPositionMatches
     ? savedPosition.page
     : contextChanged
       ? 0
       : currentPageRef.current
+
   const liveTargetItems = pagesRef.current[targetPage]
+
   const cachedTargetPage = liveTargetItems
     ? {
         items: liveTargetItems,
         cachedAt: Date.now()
       }
     : taskPageGitHubResumeCache.read(githubResumeContextKey, targetPage)
+
   const cachedTargetIsFresh =
     cachedTargetPage !== null &&
     Date.now() - cachedTargetPage.cachedAt < TASK_PAGE_GITHUB_RESUME_FRESH_MS
+
   if (savedPositionMatches) {
     pendingGithubScrollRestoreRef.current = savedPosition.scrollTop
   } else if (contextChanged) {
@@ -120,6 +133,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
   const preMerged: GitHubWorkItem[] = []
   let anyUncached = false
   let anyRepoCached = false
+
   for (const r of selectedRepos) {
     const cached = getCachedWorkItems(
       r.id,
@@ -128,6 +142,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
       r.path,
       getTaskPageRepoSourceContext(r, 'github')
     )
+
     if (cached === null) {
       anyUncached = true
     } else {
@@ -135,9 +150,11 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
       preMerged.push(...cached)
     }
   }
+
   // Why: page-one metadata and the restored numbered page have independent lifecycles.
   const page0Raw =
     preMerged.length > 0 ? sortWorkItemsByNumber(preMerged).slice(0, githubPageSize) : []
+
   // Why: pre-paint must still overlay in-flight mutations (K4/K18).
   const landingPages: (GitHubWorkItem[] | null)[] = Array.from(
     {
@@ -145,14 +162,17 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
     },
     () => null
   )
+
   landingPages[0] = materializeTaskPageItemList({
     networkItems: page0Raw,
     previousItems: pagesRef.current.flatMap((page) => page ?? []),
     queryKey: githubWorkItemMutationQueryKey
   })
+
   if (targetPage > 0 && cachedTargetPage) {
     landingPages[targetPage] = overlayPendingOnTaskPagePages([cachedTargetPage.items])[0] ?? []
   }
+
   pagesRef.current = landingPages
   currentPageRef.current = targetPage
   setPages(landingPages)
@@ -169,43 +189,55 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
   // Preserve the existing nonce-gated force behavior.
   const forceRefresh = taskRefreshNonce !== lastFetchedNonceRef.current
   lastFetchedNonceRef.current = taskRefreshNonce
+
   // Why: treat a preference-flip nonce bump as a forced refresh so it bypasses the dedupe map and can't reuse pre-flip data.
   const preferenceInvalidated =
     workItemsInvalidationNonce !== lastFetchedInvalidationNonceRef.current
+
   lastFetchedInvalidationNonceRef.current = workItemsInvalidationNonce
   const forcedFetch = (forceRefresh && taskRefreshNonce > 0) || preferenceInvalidated
+
   if (forcedFetch) {
     hardRefreshEpochRef.current += 1
   }
+
   const forcedFetchAuthorityGeneration = forcedFetch
     ? getOrCreateQuietRevalidateState(githubWorkItemMutationQueryKey).dirtyGeneration
     : null
+
   const repoArgs = selectedRepos.map((r) => ({
     repoId: r.id,
     path: r.path,
     executionHostId: r.executionHostId,
     sourceContext: getTaskPageRepoSourceContext(r, 'github')
   }))
+
   const landingRefreshKey = `${repoArgs.map((r) => `${r.repoId}:${r.path}`).join('|')}::${q}`
+
   const shouldProbeOnLanding =
     !forcedFetch &&
     !cachedTargetIsFresh &&
     anyRepoCached &&
     !landingGitHubRefreshKeysRef.current.has(landingRefreshKey)
+
   if (shouldProbeOnLanding) {
     landingGitHubRefreshKeysRef.current = new Set([
       ...landingGitHubRefreshKeysRef.current,
       landingRefreshKey
     ])
   }
+
   // Why: manual refresh keeps cached rows (tasksLoading stays false), so track forced fetch separately for the toolbar spinner.
   setTasksRefreshing(forcedFetch)
+
   if (targetPage > 0 && (!cachedTargetIsFresh || forcedFetch)) {
     const requestGeneration = paginationGenerationRef.current
+
     if (!cachedTargetPage) {
       setPaginationLoading(true)
       setLoadingTargetPage(targetPage)
     }
+
     void fetchWorkItemsNextPage(
       repoArgs,
       githubPerRepoPageLimit,
@@ -217,6 +249,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
         if (cancelled || paginationGenerationRef.current !== requestGeneration) {
           return
         }
+
         if (items.length === 0) {
           const { reason } = resolveEmptyPageOutcome({
             target: targetPage,
@@ -224,23 +257,29 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
             errorTypes,
             countedTotalPages: null
           })
+
           if (reason === 'load-failed' && cachedTargetPage) {
             return
           }
+
           pendingGithubScrollRestoreRef.current = 0
           currentPageRef.current = 0
           setCurrentPage(0)
           const next = [pagesRef.current[0] ?? []]
           pagesRef.current = next
           setPages(next)
+
           return
         }
+
         const restoredItems = overlayPendingOnTaskPagePages([items])[0] ?? []
         taskPageGitHubResumeCache.write(githubResumeContextKey, targetPage, restoredItems)
         const next = [...pagesRef.current]
+
         while (next.length <= targetPage) {
           next.push(null)
         }
+
         next[targetPage] = restoredItems
         pagesRef.current = next
         setPages(next)
@@ -274,15 +313,20 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
           if (dispatchedRetrySourceKeys.size === 0) {
             return prev
           }
+
           const next = new Set(prev)
+
           for (const key of dispatchedRetrySourceKeys) {
             next.delete(key)
           }
+
           return next
         })
+
         if (cancelled) {
           return
         }
+
         // Why: user hard refresh (force) is design tier-3 — drop confirmed
         // authority so search can adopt for non-pending families. Pending ops
         // still overlay. Quiet path must NOT clear authority.
@@ -297,15 +341,18 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
             forcedFetchAuthorityGeneration
           )
         }
+
         // Why: best-effort cache re-apply after wholesale list replace (K4).
         const sourceContextByRepoId = new Map(
           repoArgs.map((r) => [r.repoId, r.sourceContext] as const)
         )
+
         reapplyPendingTaskPageGitHubMutationsToCache({
           items,
           patchWorkItem: useAppStore.getState().patchWorkItem,
           sourceContextByRepoId
         })
+
         if (targetPage > 0) {
           const next = [...pagesRef.current]
           next[0] = materializeTaskPageItemList({
@@ -323,6 +370,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
               page ? (overlayPendingOnTaskPagePages([page])[0] ?? []) : null
             )
           )
+
           if (replaceFirstPage || resetPagination) {
             currentPageRef.current = 0
             setCurrentPage(0)
@@ -338,11 +386,14 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
           currentPageRef.current = 0
           setCurrentPage(0)
         }
+
         setFailedCount(failed)
         setGithubUnavailable(unavailable)
+
         if (targetPage === 0 || cachedTargetPage) {
           setTasksLoading(false)
         }
+
         setTasksRefreshing(false)
         setTasksFiltering(false)
       }
@@ -354,21 +405,28 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
         if (dispatchedRetrySourceKeys.size === 0) {
           return prev
         }
+
         const next = new Set(prev)
+
         for (const key of dispatchedRetrySourceKeys) {
           next.delete(key)
         }
+
         return next
       })
+
       if (cancelled) {
         return
       }
+
       setTasksError(err instanceof Error ? err.message : 'Failed to load GitHub work.')
       setFailedCount(0) // the per-repo banner would be misleading next to tasksError
       setGithubUnavailable(false)
+
       if (targetPage === 0 || cachedTargetPage) {
         setTasksLoading(false)
       }
+
       setTasksRefreshing(false)
       setTasksFiltering(false)
     })
@@ -392,6 +450,7 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPagin
       setCountedTotalPages(countedPages)
     }
   })
+
   return () => {
     cancelled = true
   }

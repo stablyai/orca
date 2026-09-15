@@ -14,6 +14,7 @@ const {
   safelyRevealMock
 } = vi.hoisted(() => {
   const map = new Map<string, (...args: unknown[]) => unknown>()
+
   return {
     handlers: map,
     ipcMainMock: {
@@ -33,6 +34,7 @@ const {
 })
 
 vi.mock('electron', () => ({ app: appMock, ipcMain: ipcMainMock }))
+
 vi.mock('../window/dashboard-popout-window', () => ({
   createOrFocusDashboardPopout: createPopoutMock,
   closeDashboardPopout: closePopoutMock,
@@ -40,7 +42,9 @@ vi.mock('../window/dashboard-popout-window', () => ({
   isDashboardPopoutRenderer: isPopoutRendererMock,
   onDashboardPopoutOpenChanged: vi.fn()
 }))
+
 vi.mock('../window/focus-existing-window', () => ({ safelyRevealWindow: safelyRevealMock }))
+
 vi.mock('./ui', () => ({
   getTrustedUIRendererWindow: getTrustedWindowMock,
   isTrustedUIRenderer: isTrustedUIRendererMock,
@@ -50,9 +54,13 @@ vi.mock('./ui', () => ({
 import { registerDashboardPopoutHandlers } from './dashboard-popout'
 
 const mainSender = { id: 1, send: vi.fn() }
+
 const popoutSender = { id: 2, send: vi.fn() }
+
 const untrustedSender = { id: 3, send: vi.fn() }
+
 const SNAPSHOT = { generatedAt: 1, cards: [] }
+
 const CARD = {
   paneKey: 'tab-1:leaf-1',
   ptyId: 'pty-1',
@@ -83,10 +91,12 @@ function makeStore(enabled = true) {
   let settingsListener:
     | ((updates: Record<string, unknown>, settings: Record<string, unknown>) => void)
     | null = null
+
   return {
     getSettings: vi.fn(() => ({ experimentalAgentDashboardPopout: enabled })),
     onSettingsChanged: vi.fn((listener) => {
       settingsListener = listener
+
       return vi.fn()
     }),
     fireSettingsChanged: (nextEnabled: boolean) =>
@@ -103,6 +113,7 @@ beforeEach(() => {
   vi.stubEnv('ORCA_E2E_HEADLESS', undefined)
   vi.stubEnv('ORCA_E2E_HEADFUL', undefined)
 })
+
 afterEach(() => vi.unstubAllEnvs())
 
 describe('registerDashboardPopoutHandlers', () => {

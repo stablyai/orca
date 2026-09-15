@@ -42,6 +42,7 @@ export function matchesWorkspaceCleanupFilters(
   now: number = Date.now()
 ): boolean {
   const query = filters.query.trim().toLowerCase()
+
   return matchesWorkspaceCleanupFiltersWithQuery(facets, filters, now, query)
 }
 
@@ -54,6 +55,7 @@ function matchesWorkspaceCleanupFiltersWithQuery(
   if (query && !facets.searchText.includes(query)) {
     return false
   }
+
   return (
     matchesWorkspaceCleanupSafety(facets, filters.safety) &&
     matchesWorkspaceCleanupActivity(facets, filters.activity, now) &&
@@ -74,6 +76,7 @@ export function filterWorkspaceCleanupFacets(
   now: number = Date.now()
 ): WorkspaceCleanupFacets[] {
   const query = filters.query.trim().toLowerCase()
+
   return facets.filter((entry) =>
     matchesWorkspaceCleanupFiltersWithQuery(entry, filters, now, query)
   )
@@ -86,6 +89,7 @@ export function runWorkspaceCleanupQuery(
 ): WorkspaceCleanupQueryResult {
   const matched = filterWorkspaceCleanupFacets(facets, query.filters, now)
   const rows = sortWorkspaceCleanupFacets(matched, query.sort)
+
   return {
     rows,
     selectableIdentities: rows.filter((row) => row.isSelectable).map((row) => row.identity),
@@ -133,10 +137,12 @@ function count(
   predicate: (facets: WorkspaceCleanupFacets) => boolean
 ): number {
   let total = 0
+
   for (const entry of facets) {
     if (predicate(entry)) {
       total += 1
     }
   }
+
   return total
 }

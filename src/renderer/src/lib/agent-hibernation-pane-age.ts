@@ -4,6 +4,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/termin
 type PtyBinding = { ptyId: string; firstSeenAt: number; lastSeenAt: number }
 
 const ptyBindingByPaneKey = new Map<string, PtyBinding>()
+
 const boundaryResolvedAtByPaneKey = new Map<string, number>()
 
 /**
@@ -22,26 +23,34 @@ export function observeHibernationPtyBindings(args: {
   idleMs: number
 }): void {
   const liveTabIds = new Set<string>()
+
   for (const tabs of Object.values(args.tabsByWorktree)) {
     for (const tab of tabs) {
       liveTabIds.add(tab.id)
     }
   }
+
   const seenPaneKeys = new Set<string>()
+
   for (const tabId of liveTabIds) {
     const ptyIdsByLeafId = args.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId
+
     for (const [leafId, ptyId] of Object.entries(ptyIdsByLeafId ?? {})) {
       if (!ptyId) {
         continue
       }
+
       let paneKey: string
+
       try {
         paneKey = makePaneKey(tabId, leafId)
       } catch {
         continue
       }
+
       seenPaneKeys.add(paneKey)
       const existing = ptyBindingByPaneKey.get(paneKey)
+
       if (existing && existing.ptyId === ptyId) {
         existing.lastSeenAt = args.now
       } else {
@@ -49,6 +58,7 @@ export function observeHibernationPtyBindings(args: {
       }
     }
   }
+
   // Why: a transient layout gap already makes the planner fail closed, so dropping
   // the binding there would hand the same PTY a fresh idle window on reappearance.
   // Retain unseen entries; expire only on authoritative tab removal or by age.
@@ -56,13 +66,17 @@ export function observeHibernationPtyBindings(args: {
     if (seenPaneKeys.has(paneKey)) {
       continue
     }
+
     const tabId = paneKey.slice(0, paneKey.indexOf(':'))
+
     if (!liveTabIds.has(tabId) || args.now - binding.lastSeenAt > args.idleMs) {
       ptyBindingByPaneKey.delete(paneKey)
     }
   }
+
   for (const paneKey of boundaryResolvedAtByPaneKey.keys()) {
     const tabId = paneKey.slice(0, paneKey.indexOf(':'))
+
     // Why: closed split panes mint fresh leaf ids when reopened. Once their
     // retained binding expires, keeping the boundary stamp would leak one map
     // entry per closed pane for the renderer's lifetime.
@@ -74,9 +88,11 @@ export function observeHibernationPtyBindings(args: {
 
 export function getHibernationPtyBindingFirstSeenAtByPaneKey(): Record<string, number> {
   const out: Record<string, number> = {}
+
   for (const [paneKey, binding] of ptyBindingByPaneKey) {
     out[paneKey] = binding.firstSeenAt
   }
+
   return out
 }
 

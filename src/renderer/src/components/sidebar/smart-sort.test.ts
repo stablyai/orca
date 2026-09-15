@@ -17,7 +17,9 @@ import {
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 
 const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()
+
 const LEAF_ID_1 = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222'
 
 function paneKey(tabId: string, leaf: '1' | '2' = '1'): string {
@@ -99,11 +101,13 @@ function makeHistory(
 
 function ptyMapForTabs(tabsByWorktree: Record<string, TerminalTab[]>): Record<string, string[]> {
   const out: Record<string, string[]> = {}
+
   for (const tabs of Object.values(tabsByWorktree)) {
     for (const tab of tabs) {
       out[tab.id] = ['pty-1']
     }
   }
+
   return out
 }
 
@@ -125,6 +129,7 @@ function sortSmartAt(
     ptyMapForTabs(tabsByWorktree),
     now
   )
+
   return [...worktrees].sort(buildWorktreeComparator('smart', repoMap, now, attention))
 }
 
@@ -140,10 +145,12 @@ describe('smart sort — class invariants', () => {
   it('ranks blocked above done regardless of which stateStartedAt is newer', () => {
     const blocked = makeWorktree({ id: 'blocked', displayName: 'Blocked' })
     const done = makeWorktree({ id: 'done', displayName: 'Done' })
+
     const tabs = {
       [blocked.id]: [makeTab({ id: 'tab-blocked', worktreeId: blocked.id })],
       [done.id]: [makeTab({ id: 'tab-done', worktreeId: done.id })]
     }
+
     const entries = {
       [paneKey('tab-blocked', '1')]: makeEntry({
         paneKey: paneKey('tab-blocked', '1'),
@@ -160,6 +167,7 @@ describe('smart sort — class invariants', () => {
         updatedAt: NOW - 1_000
       })
     }
+
     const sorted = sortSmart([done, blocked], tabs, entries)
     expect(sorted.map((w) => w.id)).toEqual(['blocked', 'done'])
   })
@@ -167,10 +175,12 @@ describe('smart sort — class invariants', () => {
   it('ranks done above working', () => {
     const done = makeWorktree({ id: 'done', displayName: 'Done' })
     const working = makeWorktree({ id: 'working', displayName: 'Working' })
+
     const tabs = {
       [done.id]: [makeTab({ id: 'tab-done', worktreeId: done.id })],
       [working.id]: [makeTab({ id: 'tab-working', worktreeId: working.id })]
     }
+
     const entries = {
       [paneKey('tab-done', '1')]: makeEntry({
         paneKey: paneKey('tab-done', '1'),
@@ -186,12 +196,14 @@ describe('smart sort — class invariants', () => {
         updatedAt: NOW - 500
       })
     }
+
     const sorted = sortSmart([working, done], tabs, entries)
     expect(sorted.map((w) => w.id)).toEqual(['done', 'working'])
   })
 
   it('ranks working above idle', () => {
     const working = makeWorktree({ id: 'working', displayName: 'Working' })
+
     const idle = makeWorktree({
       id: 'idle',
       displayName: 'Idle',
@@ -199,10 +211,12 @@ describe('smart sort — class invariants', () => {
       // class layer it would outrank the working worktree on a recency tie.
       lastActivityAt: NOW - 1_000
     })
+
     const tabs = {
       [working.id]: [makeTab({ id: 'tab-working', worktreeId: working.id })],
       [idle.id]: [makeTab({ id: 'tab-idle', worktreeId: idle.id })]
     }
+
     const entries = {
       [paneKey('tab-working', '1')]: makeEntry({
         paneKey: paneKey('tab-working', '1'),
@@ -211,6 +225,7 @@ describe('smart sort — class invariants', () => {
         updatedAt: NOW - 1_000
       })
     }
+
     const sorted = sortSmart([idle, working], tabs, entries)
     expect(sorted.map((w) => w.id)).toEqual(['working', 'idle'])
   })
@@ -220,10 +235,12 @@ describe('smart sort — within-class recency', () => {
   it('orders two blocked worktrees by stateStartedAt (newer first)', () => {
     const older = makeWorktree({ id: 'older', displayName: 'A-Older' })
     const newer = makeWorktree({ id: 'newer', displayName: 'B-Newer' })
+
     const tabs = {
       [older.id]: [makeTab({ id: 'tab-older', worktreeId: older.id })],
       [newer.id]: [makeTab({ id: 'tab-newer', worktreeId: newer.id })]
     }
+
     const entries = {
       [paneKey('tab-older', '1')]: makeEntry({
         paneKey: paneKey('tab-older', '1'),
@@ -238,6 +255,7 @@ describe('smart sort — within-class recency', () => {
         updatedAt: NOW - 1_000
       })
     }
+
     const sorted = sortSmart([older, newer], tabs, entries)
     expect(sorted.map((w) => w.id)).toEqual(['newer', 'older'])
   })
@@ -245,10 +263,12 @@ describe('smart sort — within-class recency', () => {
   it('ranks a working worktree with prior done above one with no history', () => {
     const withHistory = makeWorktree({ id: 'with-history', displayName: 'A-WithHistory' })
     const fresh = makeWorktree({ id: 'fresh', displayName: 'B-Fresh' })
+
     const tabs = {
       [withHistory.id]: [makeTab({ id: 'tab-with', worktreeId: withHistory.id })],
       [fresh.id]: [makeTab({ id: 'tab-fresh', worktreeId: fresh.id })]
     }
+
     const entries = {
       [paneKey('tab-with', '1')]: makeEntry({
         paneKey: paneKey('tab-with', '1'),
@@ -267,6 +287,7 @@ describe('smart sort — within-class recency', () => {
         updatedAt: NOW - 1_000
       })
     }
+
     const sorted = sortSmart([fresh, withHistory], tabs, entries)
     expect(sorted.map((w) => w.id)).toEqual(['with-history', 'fresh'])
   })
@@ -276,11 +297,14 @@ describe('smart sort — within-class recency', () => {
       id: 'only-interrupted',
       displayName: 'A-OnlyInterrupted'
     })
+
     const fresh = makeWorktree({ id: 'fresh', displayName: 'B-Fresh' })
+
     const tabs = {
       [onlyInterrupted.id]: [makeTab({ id: 'tab-i', worktreeId: onlyInterrupted.id })],
       [fresh.id]: [makeTab({ id: 'tab-f', worktreeId: fresh.id })]
     }
+
     const entries = {
       [paneKey('tab-i', '1')]: makeEntry({
         paneKey: paneKey('tab-i', '1'),
@@ -296,6 +320,7 @@ describe('smart sort — within-class recency', () => {
         updatedAt: NOW - 1_000
       })
     }
+
     const sorted = sortSmart([onlyInterrupted, fresh], tabs, entries)
     // fresh has newer current stateStartedAt and onlyInterrupted's history is
     // skipped, so fresh wins on within-class recency.
@@ -310,11 +335,14 @@ describe('smart sort — interrupted and stale handling', () => {
       displayName: 'Interrupted',
       lastActivityAt: NOW - 60_000
     })
+
     const realDone = makeWorktree({ id: 'real-done', displayName: 'Real Done' })
+
     const tabs = {
       [interrupted.id]: [makeTab({ id: 'tab-i', worktreeId: interrupted.id })],
       [realDone.id]: [makeTab({ id: 'tab-d', worktreeId: realDone.id })]
     }
+
     const entries = {
       [paneKey('tab-i', '1')]: makeEntry({
         paneKey: paneKey('tab-i', '1'),
@@ -330,6 +358,7 @@ describe('smart sort — interrupted and stale handling', () => {
         updatedAt: NOW - 1_000
       })
     }
+
     const sorted = sortSmart([interrupted, realDone], tabs, entries)
     expect(sorted.map((w) => w.id)).toEqual(['real-done', 'interrupted'])
   })
@@ -340,11 +369,14 @@ describe('smart sort — interrupted and stale handling', () => {
       displayName: 'Stale',
       lastActivityAt: NOW - 60_000
     })
+
     const fresh = makeWorktree({ id: 'fresh', displayName: 'Fresh' })
+
     const tabs = {
       [stale.id]: [makeTab({ id: 'tab-s', worktreeId: stale.id })],
       [fresh.id]: [makeTab({ id: 'tab-f', worktreeId: fresh.id })]
     }
+
     const entries = {
       [paneKey('tab-s', '1')]: makeEntry({
         paneKey: paneKey('tab-s', '1'),
@@ -359,6 +391,7 @@ describe('smart sort — interrupted and stale handling', () => {
         updatedAt: NOW - 1_000
       })
     }
+
     const sorted = sortSmart([stale, fresh], tabs, entries)
     // fresh is Class 2; stale falls to Class 4.
     expect(sorted.map((w) => w.id)).toEqual(['fresh', 'stale'])
@@ -375,11 +408,13 @@ describe('smart sort — completed-agent eligibility clock', () => {
     const done = makeWorktree({ id: 'fix-linear-persistent', displayName: 'fix-linear-persistent' })
     const workingA = makeWorktree({ id: 'allow-editing', displayName: 'allow-editing' })
     const workingB = makeWorktree({ id: 'resume-terminal', displayName: 'resume-terminal' })
+
     const tabs = {
       [done.id]: [makeTab({ id: 'tab-done', worktreeId: done.id })],
       [workingA.id]: [makeTab({ id: 'tab-a', worktreeId: workingA.id })],
       [workingB.id]: [makeTab({ id: 'tab-b', worktreeId: workingB.id })]
     }
+
     const entries = {
       [paneKey('tab-done', '1')]: makeEntry({
         paneKey: paneKey('tab-done', '1'),
@@ -401,6 +436,7 @@ describe('smart sort — completed-agent eligibility clock', () => {
         updatedAt: workingUpdatedAt - 5_000
       })
     }
+
     return { worktrees: [done, workingA, workingB], tabs, entries }
   }
 
@@ -428,15 +464,18 @@ describe('smart sort — Class 4 ordering', () => {
       displayName: 'Z-Recent',
       lastActivityAt: NOW - 60_000
     })
+
     const lessRecentlyActive = makeWorktree({
       id: 'older',
       displayName: 'A-Older',
       lastActivityAt: NOW - 10 * 60_000
     })
+
     const tabs = {
       [recentlyActive.id]: [makeTab({ id: 'tab-r', worktreeId: recentlyActive.id })],
       [lessRecentlyActive.id]: [makeTab({ id: 'tab-o', worktreeId: lessRecentlyActive.id })]
     }
+
     const sorted = sortSmart([lessRecentlyActive, recentlyActive], tabs, {})
     // Both Class 4, recency wins despite alphabetical ordering being inverted.
     expect(sorted.map((w) => w.id)).toEqual(['recently-active', 'older'])
@@ -448,15 +487,18 @@ describe('smart sort — Class 4 ordering', () => {
       displayName: 'A-First',
       lastActivityAt: NOW - 60_000
     })
+
     const b = makeWorktree({
       id: 'b',
       displayName: 'B-Second',
       lastActivityAt: NOW - 60_000
     })
+
     const tabs = {
       [a.id]: [makeTab({ id: 'tab-a', worktreeId: a.id })],
       [b.id]: [makeTab({ id: 'tab-b', worktreeId: b.id })]
     }
+
     const sorted = sortSmart([b, a], tabs, {})
     expect(sorted.map((w) => w.id)).toEqual(['a', 'b'])
   })
@@ -468,15 +510,18 @@ describe('smart sort — Class 4 ordering', () => {
       createdAt: NOW,
       lastActivityAt: NOW
     })
+
     const bumped = makeWorktree({
       id: 'bumped',
       displayName: 'A-Bumped',
       lastActivityAt: NOW + 100
     })
+
     const tabs = {
       [fresh.id]: [makeTab({ id: 'tab-fresh', worktreeId: fresh.id })],
       [bumped.id]: [makeTab({ id: 'tab-bumped', worktreeId: bumped.id })]
     }
+
     const sorted = sortSmart([bumped, fresh], tabs, {})
     // Grace floor (createdAt + 5min) lifts fresh above the slightly-newer bump.
     expect(sorted.map((w) => w.id)).toEqual(['fresh', 'bumped'])
@@ -487,10 +532,12 @@ describe('smart sort — multi-pane resolution', () => {
   it('any blocked pane promotes the whole worktree to Class 1', () => {
     const splitWorktree = makeWorktree({ id: 'split', displayName: 'Split' })
     const otherDone = makeWorktree({ id: 'other-done', displayName: 'OtherDone' })
+
     const tabs = {
       [splitWorktree.id]: [makeTab({ id: 'tab-split', worktreeId: splitWorktree.id })],
       [otherDone.id]: [makeTab({ id: 'tab-other', worktreeId: otherDone.id })]
     }
+
     const entries = {
       [paneKey('tab-split', '1')]: makeEntry({
         paneKey: paneKey('tab-split', '1'),
@@ -511,6 +558,7 @@ describe('smart sort — multi-pane resolution', () => {
         updatedAt: NOW - 1_000
       })
     }
+
     const sorted = sortSmart([otherDone, splitWorktree], tabs, entries)
     expect(sorted.map((w) => w.id)).toEqual(['split', 'other-done'])
   })
@@ -528,12 +576,15 @@ describe('sortWorktreesSmart — cold start fallback', () => {
 
   it('uses fresh attributed agents before their headless tabs are mirrored', () => {
     const blocked = makeWorktree({ id: 'blocked', displayName: 'Blocked', sortOrder: 0 })
+
     const persistedFirst = makeWorktree({
       id: 'persisted-first',
       displayName: 'Persisted first',
       sortOrder: 100
     })
+
     const key = paneKey('headless-tab')
+
     const entries = {
       [key]: makeEntry({
         paneKey: key,
@@ -552,15 +603,19 @@ describe('sortWorktreesSmart — cold start fallback', () => {
 
   it('uses a fresh agent resolved through its mirrored tab without a worktree stamp', () => {
     const blocked = makeWorktree({ id: 'blocked', displayName: 'Blocked', sortOrder: 0 })
+
     const persistedFirst = makeWorktree({
       id: 'persisted-first',
       displayName: 'Persisted first',
       sortOrder: 100
     })
+
     const key = paneKey('mirrored-tab')
+
     const tabsByWorktree = {
       [blocked.id]: [makeTab({ id: 'mirrored-tab', worktreeId: blocked.id })]
     }
+
     const entries = {
       [key]: makeEntry({
         paneKey: key,
@@ -591,6 +646,7 @@ describe('sortWorktreesSmart — cold start fallback', () => {
       }),
       displayName: undefined
     } as unknown as Worktree
+
     const named = makeWorktree({ id: 'named', displayName: 'Zulu', sortOrder: 1 })
 
     const sorted = sortWorktreesSmart([named, missingDisplayName], {}, repoMap, {}, {}, {})
@@ -604,9 +660,11 @@ describe('sortWorktreesSmart — cold start fallback', () => {
     // must fall back to persisted sortOrder.
     const a = makeWorktree({ id: 'a', sortOrder: 1, displayName: 'a' })
     const b = makeWorktree({ id: 'b', sortOrder: 2, displayName: 'b' })
+
     const tabsByWorktree = {
       [a.id]: [makeTab({ id: 'ta', worktreeId: a.id, ptyId: 'wake-hint' })]
     }
+
     // ptyIdsByTabId is empty — slept tab has wake-hint ptyId but no live entry.
     const sorted = sortWorktreesSmart([a, b], tabsByWorktree, repoMap, {}, {}, {})
     expect(sorted.map((w) => w.id)).toEqual(['b', 'a'])
@@ -615,10 +673,12 @@ describe('sortWorktreesSmart — cold start fallback', () => {
   it('uses the smart comparator once a PTY is alive', () => {
     const blocked = makeWorktree({ id: 'blocked', displayName: 'Blocked', sortOrder: 0 })
     const done = makeWorktree({ id: 'done', displayName: 'Done', sortOrder: 100 })
+
     const tabsByWorktree = {
       [blocked.id]: [makeTab({ id: 'tab-blocked', worktreeId: blocked.id })],
       [done.id]: [makeTab({ id: 'tab-done', worktreeId: done.id })]
     }
+
     const entries = {
       [paneKey('tab-blocked', '1')]: makeEntry({
         paneKey: paneKey('tab-blocked', '1'),
@@ -633,6 +693,7 @@ describe('sortWorktreesSmart — cold start fallback', () => {
         updatedAt: NOW - 1_000
       })
     }
+
     const sorted = sortWorktreesSmart(
       [done, blocked],
       tabsByWorktree,
@@ -641,6 +702,7 @@ describe('sortWorktreesSmart — cold start fallback', () => {
       {},
       ptyMapForTabs(tabsByWorktree)
     )
+
     // Smart comparator wins over sortOrder because at least one PTY is live.
     expect(sorted.map((w) => w.id)).toEqual(['blocked', 'done'])
   })
@@ -653,14 +715,17 @@ describe('sortWorktreesSmart — palette caller regression', () => {
   it('palette ranks blocked above working when both flow through sortWorktreesSmart', () => {
     const blocked = makeWorktree({ id: 'blocked', displayName: 'A-Blocked' })
     const working = makeWorktree({ id: 'working', displayName: 'B-Working' })
+
     const tabsByWorktree = {
       [blocked.id]: [makeTab({ id: 'tab-blocked', worktreeId: blocked.id })],
       [working.id]: [makeTab({ id: 'tab-working', worktreeId: working.id })]
     }
+
     // Why live clock: sortWorktreesSmart reads Date.now(), so fixed-epoch stamps would be
     // stale and land both worktrees in the same decayed class — the class layer this test
     // exists to pin would never run.
     const liveNow = Date.now()
+
     const agentStatusByPaneKey: Record<string, AgentStatusEntry> = {
       [paneKey('tab-blocked', '1')]: makeEntry({
         paneKey: paneKey('tab-blocked', '1'),
@@ -676,6 +741,7 @@ describe('sortWorktreesSmart — palette caller regression', () => {
         updatedAt: liveNow - 500
       })
     }
+
     const sorted = sortWorktreesSmart(
       [working, blocked],
       tabsByWorktree,
@@ -684,6 +750,7 @@ describe('sortWorktreesSmart — palette caller regression', () => {
       {},
       ptyMapForTabs(tabsByWorktree)
     )
+
     expect(sorted.map((w) => w.id)).toEqual(['blocked', 'working'])
   })
 })
@@ -695,11 +762,13 @@ describe('buildWorktreeComparator — recent (lastActivityAt)', () => {
       displayName: 'Older',
       lastActivityAt: 1000
     })
+
     const newer = makeWorktree({
       id: 'newer',
       displayName: 'Newer',
       lastActivityAt: 2000
     })
+
     const worktrees = [older, newer]
 
     worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))
@@ -713,11 +782,13 @@ describe('buildWorktreeComparator — recent (lastActivityAt)', () => {
       displayName: 'Touched',
       lastActivityAt: 1000
     })
+
     const legacy = makeWorktree({
       id: 'legacy',
       displayName: 'Legacy',
       lastActivityAt: 0
     })
+
     const worktrees = [legacy, touched]
 
     worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))
@@ -731,11 +802,13 @@ describe('buildWorktreeComparator — recent (lastActivityAt)', () => {
       displayName: 'Bravo',
       lastActivityAt: 1000
     })
+
     const alpha = makeWorktree({
       id: 'alpha',
       displayName: 'Alpha',
       lastActivityAt: 1000
     })
+
     const worktrees = [bravo, alpha]
 
     worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))
@@ -750,12 +823,14 @@ describe('buildWorktreeComparator — recent (lastActivityAt)', () => {
       sortOrder: 9_999_999_999_999,
       lastActivityAt: 1000
     })
+
     const freshActive = makeWorktree({
       id: 'fresh-active',
       displayName: 'Other repo',
       sortOrder: 1,
       lastActivityAt: 5000
     })
+
     const worktrees = [staleHighOrder, freshActive]
 
     worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))
@@ -781,6 +856,7 @@ describe('effectiveRecentActivity — create-grace floor', () => {
       createdAt: NOW - CREATE_GRACE_MS - 60_000,
       lastActivityAt: NOW - 1000
     })
+
     expect(effectiveRecentActivity(wt, NOW)).toBe(NOW - 1000)
   })
 
@@ -814,11 +890,13 @@ describe('buildWorktreeComparator — manual order', () => {
       displayName: 'Restored Top',
       sortOrder: 5000
     })
+
     const restoredBottom = makeWorktree({
       id: 'restored-bottom',
       displayName: 'Restored Bottom',
       sortOrder: 1000
     })
+
     const worktrees = [restoredBottom, restoredTop]
 
     worktrees.sort(buildWorktreeComparator('manual', repoMap, NOW, new Map()))
@@ -835,11 +913,13 @@ describe('buildWorktreeComparator — recent with createdAt grace window', () =>
       createdAt: NOW,
       lastActivityAt: NOW
     })
+
     const bumpedByAmbient = makeWorktree({
       id: 'bumped',
       displayName: 'Bumped',
       lastActivityAt: NOW + 100
     })
+
     const worktrees = [bumpedByAmbient, newWorktree]
 
     worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))
@@ -854,11 +934,13 @@ describe('buildWorktreeComparator — recent with createdAt grace window', () =>
       createdAt: NOW - CREATE_GRACE_MS - 10_000,
       lastActivityAt: NOW - 30_000
     })
+
     const freshActivity = makeWorktree({
       id: 'fresh-activity',
       displayName: 'Fresh activity',
       lastActivityAt: NOW - 1000
     })
+
     const worktrees = [oldCreated, freshActivity]
 
     worktrees.sort(buildWorktreeComparator('recent', repoMap, NOW, new Map()))

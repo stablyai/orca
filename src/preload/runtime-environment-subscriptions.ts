@@ -65,6 +65,7 @@ function releaseIdleDispatcher(
   if (callbacks.size > 0) {
     return
   }
+
   ipc.removeListener(SUBSCRIPTION_EVENT_CHANNEL, listener)
   subscriptionDispatchers.delete(ipc)
 }
@@ -77,6 +78,7 @@ function releaseSubscription(
   if (!dispatcher.callbacks.delete(subscriptionId)) {
     return
   }
+
   releaseIdleDispatcher(ipc, dispatcher.callbacks, dispatcher.listener)
 }
 
@@ -84,15 +86,20 @@ function getOrCreateDispatcher(
   ipc: RuntimeEnvironmentSubscriptionIpc
 ): RuntimeEnvironmentSubscriptionDispatcher {
   const existing = subscriptionDispatchers.get(ipc)
+
   if (existing) {
     return existing
   }
+
   const callbacks = new Map<string, RuntimeEnvironmentSubscriptionCallbacks>()
+
   const listener = (_event: unknown, event: RuntimeEnvironmentSubscriptionEvent): void => {
     const subscriptionCallbacks = callbacks.get(event.subscriptionId)
+
     if (!subscriptionCallbacks) {
       return
     }
+
     if (event.type === 'response') {
       subscriptionCallbacks.onResponse(event.response)
     } else if (event.type === 'binary') {
@@ -110,17 +117,21 @@ function getOrCreateDispatcher(
       subscriptionCallbacks.onClose?.()
     }
   }
+
   const dispatcher: RuntimeEnvironmentSubscriptionDispatcher = { callbacks, listener }
   subscriptionDispatchers.set(ipc, dispatcher)
   ipc.on(SUBSCRIPTION_EVENT_CHANNEL, listener)
+
   return dispatcher
 }
 
 function createRuntimeEnvironmentSubscriptionId(): string {
   const randomUuid = globalThis.crypto?.randomUUID
+
   if (typeof randomUuid === 'function') {
     return randomUuid.call(globalThis.crypto)
   }
+
   return `sub-${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
@@ -135,14 +146,17 @@ export async function subscribeRuntimeEnvironmentFromPreload(
   // resolves, so the dispatcher must be routing this id before invoking.
   const dispatcher = getOrCreateDispatcher(ipc)
   dispatcher.callbacks.set(subscriptionId, callbacks)
+
   const releaseCurrentSubscription = (): void => {
     releaseSubscription(ipc, dispatcher, subscriptionId)
   }
+
   try {
     const result = (await ipc.invoke('runtimeEnvironments:subscribe', {
       ...args,
       subscriptionId
     })) as { subscriptionId: string; requestId: string }
+
     if (result.subscriptionId !== subscriptionId) {
       releaseCurrentSubscription()
       throw new Error('Runtime environment subscription id mismatch')

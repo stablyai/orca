@@ -27,11 +27,13 @@ import {
 
 vi.mock('@/store', async () => {
   const store = await import('./terminal-recovery-ledger-test-store')
+
   return { useAppStore: { getState: () => store.recoveryLedgerStoreState() } }
 })
 
 vi.mock('@/lib/crash-breadcrumb-recorder', async () => {
   const store = await import('./terminal-recovery-ledger-test-store')
+
   return { recordRendererCrashBreadcrumb: store.recoveryLedgerMocks.recordRendererCrashBreadcrumb }
 })
 
@@ -82,6 +84,7 @@ describe('a pane that never reports an outcome', () => {
       vi.setSystemTime(now)
       expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(false)
     }
+
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
     expect(mocks.recordRendererCrashBreadcrumb).toHaveBeenCalledWith(
       'terminal_pane_recovery_window_cap',
@@ -133,6 +136,7 @@ describe('a pane that never reports an outcome', () => {
       vi.setSystemTime(now)
       expect(await requestTerminalPaneRecovery(NEVER_SETTLES)).toBe(true)
     }
+
     vi.setSystemTime(93_000)
 
     // The backstop is deliberately unconditional: a user Retry and an authority

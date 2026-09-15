@@ -24,12 +24,18 @@ import { sampleCpu } from '../tools/benchmarks/spinner-rendering/sample-cpu.mjs'
 import { traceIterations } from '../tools/benchmarks/spinner-rendering/trace-iterations.mjs'
 
 const enabled = process.env.ORCA_SPINNER_BENCH === '1'
+
 const sampleMs = Number(process.env.ORCA_SPINNER_SAMPLE_MS ?? 10000)
+
 const rounds = Number(process.env.ORCA_SPINNER_ROUNDS ?? 4)
+
 const keyCount = Number(process.env.ORCA_SPINNER_KEYS ?? 48)
+
 // Avoid phase-locking keystrokes to the 200 ms status burst or 60 Hz frames.
 const keyCadenceMs = Number(process.env.ORCA_SPINNER_KEY_CADENCE_MS ?? 113)
+
 const variants = (process.env.ORCA_SPINNER_VARIANTS ?? 'original,long').split(',')
+
 if (enabled) {
   for (const [name, value, minimum] of [
     ['sample duration', sampleMs, 1000],
@@ -42,6 +48,7 @@ if (enabled) {
     }
   }
 }
+
 const scenarios = [
   { name: 'one-agent', worktrees: 1, lineageDepth: 0, agentsPerWorktree: 1, subagentsPerAgent: 0 },
   { name: 'one-family', worktrees: 1, lineageDepth: 0, agentsPerWorktree: 2, subagentsPerAgent: 2 },
@@ -65,6 +72,7 @@ test.use({
   trace: 'off',
   screenshot: 'off'
 })
+
 test.skip(!enabled, 'Opt-in performance benchmark')
 
 for (const scenario of scenarios) {
@@ -97,12 +105,15 @@ for (const scenario of scenarios) {
     expect(census.agentRows.storeLive).toBeGreaterThanOrEqual(
       scenario.worktrees * scenario.agentsPerWorktree
     )
+
     if (scenario.subagentsPerAgent) {
       expect(rings.workingSubagentRows).toBeGreaterThan(0)
     }
+
     if (scenario.lineageDepth) {
       expect(census.worktrees.mountedUnique).toBe(scenario.worktrees)
     }
+
     const report = {
       benchmark: 'working-spinner-workspaces',
       createdAt: new Date().toISOString(),
@@ -116,11 +127,13 @@ for (const scenario of scenarios) {
       samples: [] as unknown[],
       typing: [] as unknown[]
     }
+
     const save = () =>
       writeFileSync(
         path.join(output, `${scenario.name}.json`),
         `${JSON.stringify(report, null, 2)}\n`
       )
+
     save()
     console.log(
       JSON.stringify({
@@ -131,8 +144,10 @@ for (const scenario of scenarios) {
     )
     const cdp = await page.context().newCDPSession(page)
     await cdp.send('Performance.enable')
+
     for (let round = 0; round < (process.env.ORCA_SPINNER_CPU === '0' ? 0 : rounds); round++) {
       const order = round % 2 ? variants.toReversed() : variants
+
       for (const variant of order) {
         await setSpinnerVariant(page, variant)
         await refreshSpinnerAgents(page)
@@ -144,22 +159,27 @@ for (const scenario of scenarios) {
         report.samples.push(sample)
         save()
         console.log(JSON.stringify({ scenario: scenario.name, ...sample }))
+
         if (round === rounds - 1) {
           const trace = await traceIterations(
             cdp,
             path.join(output, `${scenario.name}-${variant}-trace.json`)
           )
+
           report.traces.push({ variant, ...trace })
           save()
         }
       }
     }
+
     const ptyId = await waitForActivePanePtyId(page)
+
     for (let round = 0; round < Math.min(rounds, 2); round++) {
       for (const variant of round % 2 ? variants.toReversed() : variants) {
         if (keyCount === 0) {
           continue
         }
+
         await setSpinnerVariant(page, variant)
         await refreshSpinnerAgents(page)
         const runId = randomUUID()
@@ -169,12 +189,15 @@ for (const scenario of scenarios) {
         await sendToTerminal(page, ptyId, `node ${path.basename(scriptPath)}\r`)
         await waitForTerminalOutput(page, typingProbeReadyMarker(runId), 15000)
         const traffic = await startSpinnerStatusTraffic(page)
+
         try {
           await page.waitForTimeout(2000)
+
           const measurement = await measurePacedTyping(page, runId, sidecarPath, {
             keyCount,
             keyCadenceMs
           })
+
           expect(measurement.missingEchoCount).toBe(0)
           expect(measurement.missingPtyArrivalCount).toBe(0)
           report.typing.push({ variant, round, measurement })
@@ -194,6 +217,7 @@ for (const scenario of scenarios) {
         }
       }
     }
+
     await setSpinnerVariant(page, 'long')
     await page.screenshot({ path: path.join(output, `${scenario.name}.png`) })
     expect(

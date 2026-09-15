@@ -22,9 +22,11 @@ function renderDrawer(
       )
     )
   })
+
   if (!renderer) {
     throw new Error('Bottom drawer did not render')
   }
+
   return renderer
 }
 
@@ -54,12 +56,14 @@ describe('BottomDrawer close lifecycle', () => {
     const originalConsoleError = console.error
     vi.spyOn(console, 'error').mockImplementation((...args) => {
       const message = args[0]
+
       if (
         typeof message === 'string' &&
         message.includes('The current testing environment is not configured to support act')
       ) {
         return
       }
+
       originalConsoleError(...args)
     })
   })
@@ -71,9 +75,11 @@ describe('BottomDrawer close lifecycle', () => {
   it('keeps close stable and delivers the latest action once after unmount', () => {
     const firstAfterClose = vi.fn()
     const rendered: { current?: ReactTestRenderer } = {}
+
     const latestAfterClose = vi.fn(() => {
       expect(rendered.current?.toJSON()).toBeNull()
     })
+
     const renderer = renderDrawer(true, vi.fn(), firstAfterClose)
     rendered.current = renderer
     const initialOnHidden = mountedDrawer(renderer).props.onHidden

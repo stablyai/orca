@@ -63,6 +63,7 @@ export function PaletteLiveStatusProvider({
   children: React.ReactNode
 }): React.JSX.Element {
   const now = useNow(30_000, active)
+
   const {
     agentStatusByPaneKey,
     runtimePaneTitlesByTabId,
@@ -90,6 +91,7 @@ export function PaletteLiveStatusProvider({
         : EMPTY_LIVE_INPUTS
     )
   )
+
   const statusEpoch = useAppStore((s) => (active ? s.agentStatusEpoch : 0))
 
   const value = useMemo<PaletteLiveStatus>(() => {
@@ -99,7 +101,9 @@ export function PaletteLiveStatusProvider({
       agentStatusByPaneKey,
       migrationUnsupportedByPtyId
     )
+
     const livePaneIds = buildLiveAgentStatusPaneIdsByTabId(entriesByTabId, now)
+
     return {
       liveAgentStatusByWorktreeId: getLiveAgentStatusByWorktreeId(
         agentStatusByPaneKey,
@@ -150,14 +154,18 @@ function buildLiveAgentStatusPaneIdsByTabId(
 } {
   const paneIdsByTabId: Record<string, ReadonlySet<string>> = {}
   const stalePaneIdsByTabId: Record<string, ReadonlySet<string>> = {}
+
   for (const [tabId, entries] of entriesByTabId) {
     const paneIds = new Set<string>()
     const stalePaneIds = new Set<string>()
+
     for (const entry of entries) {
       const paneId = parsePaneKey(entry.paneKey)?.leafId
+
       if (!paneId) {
         continue
       }
+
       if (
         entry.restoredUnconfirmed !== true &&
         !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
@@ -165,15 +173,19 @@ function buildLiveAgentStatusPaneIdsByTabId(
         stalePaneIds.add(paneId)
         continue
       }
+
       paneIds.add(paneId)
     }
+
     if (paneIds.size > 0) {
       paneIdsByTabId[tabId] = paneIds
     }
+
     if (stalePaneIds.size > 0) {
       stalePaneIdsByTabId[tabId] = stalePaneIds
     }
   }
+
   return { paneIdsByTabId, stalePaneIdsByTabId }
 }
 
@@ -203,9 +215,11 @@ export function PaletteWorktreeStatusDot({
   worktree: Pick<Worktree, 'id'>
 }): React.JSX.Element | null {
   const live = useLiveStatus()
+
   if (!live) {
     return null
   }
+
   const status = getWorktreeStatus(
     live.tabsByWorktree[worktree.id] ?? [],
     live.browserTabsByWorktree[worktree.id] ?? [],
@@ -218,6 +232,7 @@ export function PaletteWorktreeStatusDot({
       terminalLayoutsByTabId: live.paneSources.terminalLayoutsByTabId
     }
   )
+
   return (
     <>
       <StatusIndicator status={status} aria-hidden="true" />
@@ -239,10 +254,12 @@ export function PaletteRecentTabStatusDot({
 }): React.JSX.Element {
   const live = useLiveStatus()
   const terminalTabId = row?.terminalTab?.id
+
   const status: WorktreeStatus | null =
     live && row?.terminalTab
       ? resolveRecentWorkspaceTabStatus(row, live.paneSources, live.now)
       : null
+
   const hasUnread =
     live != null &&
     terminalTabId != null &&
@@ -251,10 +268,13 @@ export function PaletteRecentTabStatusDot({
       unreadTerminalTabs: live.unreadTerminalTabs,
       unreadAgentCompletionPanes: live.unreadAgentCompletionPanes
     })
+
   const badge = resolveTerminalTabAttentionBadge({ status, hasUnread })
+
   if (badge == null) {
     return <>{fallback}</>
   }
+
   const statusLabel =
     badge === 'unread'
       ? // Why the tab-bar key: same bell, same sentence — a fresh key here would ship untranslated
@@ -264,6 +284,7 @@ export function PaletteRecentTabStatusDot({
           'Unread agent completion'
         )
       : getWorktreeStatusLabel(badge)
+
   // Why: the outer hit target owns the tooltip because the overlaid pip ignores pointer events.
   return (
     <StateIndicatorTooltip label={statusLabel}>
@@ -291,6 +312,7 @@ function RecentTabAttentionBadgeGlyph({
   if (badge === 'unread') {
     return <FilledBellIcon className="size-2.5 text-amber-500 drop-shadow-sm" />
   }
+
   // Why: AgentStateDot owns working/permission/done glyphs app-wide (spinner / ? / check).
   return <AgentStateDot state={badge} size="sm" title={null} />
 }

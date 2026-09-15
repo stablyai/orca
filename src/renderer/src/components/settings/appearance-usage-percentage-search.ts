@@ -18,6 +18,7 @@ export function resolveAppearanceAccordionDeepLink(
   if (sectionId === USAGE_PERCENTAGE_DISPLAY_SETTING_ID) {
     return 'window'
   }
+
   return null
 }
 

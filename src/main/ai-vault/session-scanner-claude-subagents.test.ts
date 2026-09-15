@@ -183,6 +183,7 @@ describe('listClaudeSubagentSessions', () => {
         toolUseResult: { status: 'completed', agentId: 'syncdone', agentType: 'Explore' }
       }
     ])
+
     for (const agentId of ['finished', 'crashed', 'active', 'stale', 'syncdone']) {
       await writeSubagentTranscript({
         subagentsDir,
@@ -191,6 +192,7 @@ describe('listClaudeSubagentSessions', () => {
         timestamp: '2026-07-05T10:00:10.000Z'
       })
     }
+
     // A transcript silent for an hour with no terminal notification has no
     // trustworthy status.
     const staleTime = new Date(Date.now() - 60 * 60_000)
@@ -199,9 +201,11 @@ describe('listClaudeSubagentSessions', () => {
     const result = await listClaudeSubagentSessions({ parentFilePath, platform: 'darwin' })
 
     expect(result.issues).toEqual([])
+
     const statusByTitle = Object.fromEntries(
       result.sessions.map((session) => [session.title, session.subagent?.status ?? null])
     )
+
     expect(statusByTitle).toEqual({
       'Task for finished': 'completed',
       'Task for crashed': 'failed',
@@ -228,6 +232,7 @@ describe('listClaudeSubagentSessions', () => {
       '<output-file>/private/tmp/claude-501/-Users-me-orca-workspaces-project/' +
       'parent-session/tasks/bigtask.output</output-file>\n' +
       '<status>completed</status>\n<summary>Agent finished</summary>\n</task-notification>'
+
     expect(notification.indexOf('<status>')).toBeGreaterThan(96)
 
     await writeJsonlFile(parentFilePath, [

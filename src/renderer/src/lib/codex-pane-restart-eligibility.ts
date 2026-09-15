@@ -11,14 +11,17 @@ function normalizeProcessName(processName: string | null): string | null {
   if (!processName) {
     return null
   }
+
   return processName.toLowerCase().replace(/\.exe$/, '')
 }
 
 export function isCodexForegroundProcess(processName: string | null): boolean {
   const normalized = normalizeProcessName(processName)
+
   if (!normalized) {
     return false
   }
+
   // Why: node-pty exposes the OS foreground process name, which can be the
   // shipped Codex binary name (for example "codex-aarch64-ap" on macOS)
   // instead of the shell command the user typed. Match on a Codex prefix so
@@ -48,16 +51,21 @@ export function isCodexRestartEligiblePane(args: {
   if (isClientOnlyUnverifiableInspection(args.inspection)) {
     return false
   }
+
   const { foregroundProcess, hasChildProcesses } = args.inspection
+
   if (isCodexForegroundProcess(foregroundProcess)) {
     return true
   }
+
   if (args.launchAgent !== 'codex' || foregroundProcess === null || !hasChildProcesses) {
     return false
   }
+
   if (isShellProcess(foregroundProcess)) {
     return false
   }
+
   return (
     recognizeAgentProcess(foregroundProcess) !== null ||
     isAgentForegroundWrapperProcess(foregroundProcess)

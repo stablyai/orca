@@ -15,19 +15,23 @@ import {
 } from '../shared/wsl-hook-relay-contract'
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const PANE_KEY = makePaneKey('tab-2', LEAF_ID)
 
 // Parse an endpoint file tolerantly across platforms: POSIX writes `KEY=value`,
 // Windows writes `set KEY=value`. Strips the optional `set ` prefix.
 function parseEndpointFile(contents: string): Record<string, string> {
   const env: Record<string, string> = {}
+
   for (const rawLine of contents.split(/\r?\n/)) {
     const line = rawLine.replace(/^set /, '')
     const eq = line.indexOf('=')
+
     if (eq > 0) {
       env[line.slice(0, eq)] = line.slice(eq + 1)
     }
   }
+
   return env
 }
 
@@ -47,12 +51,14 @@ describe('RelayAgentHookServer host-given coordinates (WSL relay)', () => {
 
   it('binds the preferred port with the fixed token when the port is free', async () => {
     const probe = createServer()
+
     const freePort = await new Promise<number>((resolve) => {
       probe.listen(0, '127.0.0.1', () => {
         const address = probe.address()
         resolve(typeof address === 'object' && address ? address.port : 0)
       })
     })
+
     await new Promise<void>((resolve) => probe.close(() => resolve()))
 
     server = new RelayAgentHookServer({
@@ -70,12 +76,14 @@ describe('RelayAgentHookServer host-given coordinates (WSL relay)', () => {
 
   it('falls back to an ephemeral port when the preferred port is occupied', async () => {
     const occupant = createServer()
+
     const occupiedPort = await new Promise<number>((resolve) => {
       occupant.listen(0, '127.0.0.1', () => {
         const address = occupant.address()
         resolve(typeof address === 'object' && address ? address.port : 0)
       })
     })
+
     try {
       server = new RelayAgentHookServer({
         endpointDir: tmpDir,
@@ -115,6 +123,7 @@ describe('RelayAgentHookServer host-given coordinates (WSL relay)', () => {
       headers: { 'Content-Type': 'application/json', 'X-Orca-Agent-Hook-Token': 'wrong-token' },
       body: '{}'
     })
+
     expect(rejected.status).toBe(403)
     expect(forward).not.toHaveBeenCalled()
 
@@ -129,6 +138,7 @@ describe('RelayAgentHookServer host-given coordinates (WSL relay)', () => {
         payload: { hook_event_name: 'UserPromptSubmit', prompt: 'hi' }
       })
     })
+
     expect(accepted.status).toBe(204)
     expect(forward).toHaveBeenCalledTimes(1)
     expect(forward.mock.calls[0][0].paneKey).toBe(PANE_KEY)
@@ -136,12 +146,14 @@ describe('RelayAgentHookServer host-given coordinates (WSL relay)', () => {
 
   it('publishes the fallback port + fixed token into the endpoint file after EADDRINUSE', async () => {
     const occupant = createServer()
+
     const occupiedPort = await new Promise<number>((resolve) => {
       occupant.listen(0, '127.0.0.1', () => {
         const address = occupant.address()
         resolve(typeof address === 'object' && address ? address.port : 0)
       })
     })
+
     try {
       server = new RelayAgentHookServer({
         endpointDir: tmpDir,

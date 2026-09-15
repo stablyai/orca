@@ -16,6 +16,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
 const TEST_TIMEOUT_MS = 15_000
+
 const REQUEST_TIMEOUT_MS = 5_000
 
 type ControlledSubprocess = SubprocessHandle & { exit: (code?: number) => void }
@@ -23,13 +24,16 @@ type ControlledSubprocess = SubprocessHandle & { exit: (code?: number) => void }
 function createControlledSubprocess(): ControlledSubprocess {
   let onExit: ((code: number) => void) | null = null
   let exited = false
+
   const exit = (code = 0): void => {
     if (exited) {
       return
     }
+
     exited = true
     onExit?.(code)
   }
+
   return {
     pid: 41_000,
     getForegroundProcess: () => (exited ? null : 'claude'),
@@ -50,13 +54,17 @@ function createControlledSubprocess(): ControlledSubprocess {
 
 function requirePairing(server: OrcaRuntimeRpcServer, name: string) {
   const offer = server.createPairingOffer({ name, scope: 'runtime' })
+
   if (!offer.available) {
     throw new Error('pairing unavailable')
   }
+
   const pairing = parsePairingCode(offer.pairingUrl)
+
   if (!pairing) {
     throw new Error('invalid pairing')
   }
+
   return pairing
 }
 
@@ -77,11 +85,14 @@ describe('remote agent-session host authority integration', () => {
       cleanups.push(() => rmSync(userDataPath, { recursive: true, force: true }))
 
       const subprocesses: ControlledSubprocess[] = []
+
       const spawnSubprocess = vi.fn(() => {
         const subprocess = createControlledSubprocess()
         subprocesses.push(subprocess)
+
         return subprocess
       })
+
       const host = new TerminalHost({ spawnSubprocess })
       cleanups.push(() => host.dispose())
 
@@ -103,12 +114,14 @@ describe('remote agent-session host authority integration', () => {
         getWorktreeMeta: () => undefined,
         getProjects: () => []
       }
+
       const runtime = new OrcaRuntimeService(store as never)
       let nextRequestedSession = 0
       runtime.setPtyController({
         spawn: async (options) => {
           const requestedSessionId = `remote-repro-${++nextRequestedSession}`
           let resolvedSessionId = requestedSessionId
+
           const result = await host.createOrAttach({
             sessionId: requestedSessionId,
             cols: options.cols,
@@ -127,6 +140,7 @@ describe('remote agent-session host authority integration', () => {
               resolvedSessionId = sessionId
             }
           })
+
           return {
             id: result.agentSessionEnsure?.owner.ptyId ?? resolvedSessionId,
             ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {})
@@ -143,6 +157,7 @@ describe('remote agent-session host authority integration', () => {
         enableWebSocket: true,
         wsPort: 0
       })
+
       await server.start()
       cleanups.push(() => server.stop())
 
@@ -160,6 +175,7 @@ describe('remote agent-session host authority integration', () => {
         providerSession: { key: 'session_id', id: 'provider-session-repro' },
         presentation: 'background'
       }
+
       const [first, second] = await Promise.all([
         firstClient.request<RuntimeEnsureAgentSessionResult>(
           'terminal.ensureAgentSession',
@@ -175,9 +191,11 @@ describe('remote agent-session host authority integration', () => {
 
       expect(first.ok).toBe(true)
       expect(second.ok).toBe(true)
+
       if (!first.ok || !second.ok) {
         throw new Error('structured resume failed')
       }
+
       expect([first.result.disposition, second.result.disposition].sort()).toEqual([
         'adopted',
         'created'
@@ -198,6 +216,7 @@ describe('remote agent-session host authority integration', () => {
         request,
         REQUEST_TIMEOUT_MS
       )
+
       expect(retry).toMatchObject({
         ok: true,
         result: {
@@ -226,6 +245,7 @@ describe('remote agent-session host authority integration', () => {
             REQUEST_TIMEOUT_MS
           )
         ])
+
         expect(terminals).toMatchObject({ ok: true, result: { terminals: [] } })
         expect(tabs).toMatchObject({ ok: true, result: { tabs: [] } })
       })

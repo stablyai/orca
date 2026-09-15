@@ -66,8 +66,11 @@ function mockElement(opts: {
 }
 
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
+
 const LEAF_3 = '33333333-3333-4333-8333-333333333333'
+
 const LEAF_4 = '44444444-4444-4444-8444-444444444444'
 
 // ---------------------------------------------------------------------------
@@ -161,10 +164,12 @@ describe('serializePaneTree', () => {
       classList: ['pane'],
       dataset: { paneId: '1', leafId: LEAF_1 }
     })
+
     const second = new MockHTMLElement({
       classList: ['pane'],
       dataset: { paneId: '2', leafId: LEAF_2 }
     })
+
     const split = mockElement({ classList: ['pane-split'], children: [first, second] })
 
     expect(serializePaneTree(split)).toEqual({
@@ -180,10 +185,12 @@ describe('serializePaneTree', () => {
       classList: ['pane'],
       dataset: { paneId: '3', leafId: LEAF_3 }
     })
+
     const second = new MockHTMLElement({
       classList: ['pane'],
       dataset: { paneId: '4', leafId: LEAF_4 }
     })
+
     const split = mockElement({
       classList: ['pane-split', 'is-horizontal'],
       children: [first, second]
@@ -203,11 +210,13 @@ describe('serializePaneTree', () => {
       dataset: { paneId: '1', leafId: LEAF_1 },
       style: { flex: '3' }
     })
+
     const second = new MockHTMLElement({
       classList: ['pane'],
       dataset: { paneId: '2', leafId: LEAF_2 },
       style: { flex: '1' }
     })
+
     const split = mockElement({ classList: ['pane-split'], children: [first, second] })
 
     const result = serializePaneTree(split)
@@ -226,11 +235,13 @@ describe('serializePaneTree', () => {
       dataset: { paneId: '1', leafId: LEAF_1 },
       style: { flex: '1' }
     })
+
     const second = new MockHTMLElement({
       classList: ['pane'],
       dataset: { paneId: '2', leafId: LEAF_2 },
       style: { flex: '1' }
     })
+
     const split = mockElement({ classList: ['pane-split'], children: [first, second] })
 
     const result = serializePaneTree(split)
@@ -242,10 +253,12 @@ describe('serializePaneTree', () => {
       classList: ['pane'],
       dataset: { paneId: '1', leafId: LEAF_1 }
     })
+
     const leaf2 = new MockHTMLElement({
       classList: ['pane'],
       dataset: { paneId: '2', leafId: LEAF_2 }
     })
+
     const leaf3 = new MockHTMLElement({
       classList: ['pane'],
       dataset: { paneId: '3', leafId: LEAF_3 }
@@ -255,6 +268,7 @@ describe('serializePaneTree', () => {
       classList: ['pane-split', 'is-horizontal'],
       children: [leaf2, leaf3]
     })
+
     const outerSplit = mockElement({
       classList: ['pane-split'],
       children: [leaf1, innerSplit]
@@ -298,7 +312,9 @@ describe('serializeTerminalLayout', () => {
       classList: ['pane'],
       dataset: { paneId: '5', leafId: LEAF_1 }
     })
+
     const root = mockElement({ firstElementChild: child }) as unknown as HTMLDivElement
+
     const result = serializeTerminalLayout(
       root,
       5,
@@ -308,6 +324,7 @@ describe('serializeTerminalLayout', () => {
         [6, LEAF_2]
       ])
     )
+
     expect(result).toEqual({
       root: { type: 'leaf', leafId: LEAF_1 },
       activeLeafId: LEAF_1,
@@ -320,7 +337,9 @@ describe('serializeTerminalLayout', () => {
       classList: ['pane'],
       dataset: { paneId: '5', leafId: LEAF_1 }
     })
+
     const root = mockElement({ firstElementChild: child }) as unknown as HTMLDivElement
+
     const result = serializeTerminalLayout(
       root,
       5,
@@ -330,6 +349,7 @@ describe('serializeTerminalLayout', () => {
         [6, 'pane:6']
       ])
     )
+
     expect(result).toEqual({
       root: { type: 'leaf', leafId: LEAF_1 },
       activeLeafId: null,
@@ -344,6 +364,7 @@ describe('replayTerminalLayout', () => {
       id: 1,
       leafId: opts?.leafId ?? LEAF_4
     }))
+
     return {
       createInitialPane,
       splitPane: vi.fn()
@@ -433,6 +454,7 @@ describe('replayTerminalLayout', () => {
 describe('restoreScrollbackBuffers', () => {
   it('marks panes with restored scrollback for fresh-shell viewport blanking', () => {
     const writes: string[] = []
+
     const pane = {
       id: 1,
       terminal: {
@@ -442,10 +464,12 @@ describe('restoreScrollbackBuffers', () => {
         })
       }
     }
+
     const manager = {
       getPanes: vi.fn(() => [pane]),
       hasWebglRenderer: vi.fn(() => true)
     }
+
     const replayingPanesRef = { current: new Map<number, number>() }
     const restoredViewportBlankingPanesRef = { current: new Set<number>() }
 

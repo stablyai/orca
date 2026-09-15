@@ -12,6 +12,7 @@ describe('OrcaRuntimeService', () => {
       stopAndWait: async (ptyId, opts) => {
         stopped.push(ptyId)
         expect(opts).toEqual({ keepHistory: true })
+
         return false
       },
       getForegroundProcess: async () => null,
@@ -57,6 +58,7 @@ describe('OrcaRuntimeService', () => {
       stopAndWait: async (ptyId) => {
         stopped.push(ptyId)
         runtime.onPtyExit(ptyId, -1)
+
         return true
       },
       getForegroundProcess: async () => null,
@@ -111,6 +113,7 @@ describe('OrcaRuntimeService', () => {
   it('allows target-only exact terminal stop when sibling PTYs remain live', async () => {
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []
+
     const processLists = [
       [
         { id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' },
@@ -118,6 +121,7 @@ describe('OrcaRuntimeService', () => {
       ],
       [{ id: 'pty-shell', cwd: TEST_WORKTREE_PATH, title: 'Shell' }]
     ]
+
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -125,6 +129,7 @@ describe('OrcaRuntimeService', () => {
         stopped.push(ptyId)
         expect(opts).toEqual({ keepHistory: true })
         runtime.onPtyExit(ptyId, -1)
+
         return true
       },
       getForegroundProcess: async () => null,
@@ -191,6 +196,7 @@ describe('OrcaRuntimeService', () => {
       stopAndWait: async (ptyId) => {
         stopped.push(ptyId)
         runtime.onPtyExit(ptyId, -1)
+
         return true
       },
       getForegroundProcess: async () => null,
@@ -245,6 +251,7 @@ describe('OrcaRuntimeService', () => {
       stopAndWait: async (ptyId) => {
         stopped.push(ptyId)
         runtime.onPtyExit(ptyId, -1)
+
         return true
       },
       getForegroundProcess: async () => null,

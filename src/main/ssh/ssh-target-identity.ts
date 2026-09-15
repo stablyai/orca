@@ -17,6 +17,7 @@ export function normalizeSshIdentityPart(value: string | undefined): string {
  *  defaults configHost to host, so a manual add carries the hostname there, not a real alias. */
 export function meaningfulSshAlias(fields: SshIdentityFields): string {
   const alias = normalizeSshIdentityPart(fields.configHost)
+
   return alias && alias !== normalizeSshIdentityPart(fields.host) ? alias : ''
 }
 

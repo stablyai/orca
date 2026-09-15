@@ -42,9 +42,11 @@ export async function runCreatePrIntentReviewStep({
     hasUncommittedChanges: snapshot.entries.length > 0,
     upstreamStatus: snapshot.upstreamStatus
   })
+
   if (abortIfStale()) {
     return
   }
+
   if (!eligibility) {
     setCreatePrIntentNoticeForWorktree(token.worktreeId, {
       tone: 'destructive',
@@ -53,17 +55,23 @@ export async function runCreatePrIntentReviewStep({
         'Could not refresh Source Control. Retry Create PR.'
       )
     })
+
     return
   }
+
   if (shouldAttemptCreateHostedReviewForIntent(eligibility)) {
     await createHostedReviewForCreatePrIntent(token, eligibility)
+
     if (abortIfStale()) {
       return
     }
+
     return
   }
+
   if (eligibility.blockedReason === 'existing_review') {
     setCreatePrIntentNoticeForWorktree(token.worktreeId, null)
+
     return
   }
 
@@ -71,15 +79,18 @@ export async function runCreatePrIntentReviewStep({
     eligibility.blockedReason === 'no_upstream'
       ? await refreshBranchCompareForCreatePrIntent(token)
       : undefined
+
   if (abortIfStale()) {
     return
   }
+
   const remoteStep = resolveCreatePrIntentRemoteStep({
     upstreamStatus: snapshot.upstreamStatus,
     hostedReviewCreation: eligibility,
     branchCommitsAhead: branchAhead,
     hasCurrentBranch: Boolean(token.branch)
   })
+
   if (remoteStep === 'blocked' || remoteStep === 'none') {
     setCreatePrIntentNoticeForWorktree(token.worktreeId, {
       tone: 'muted',
@@ -95,6 +106,7 @@ export async function runCreatePrIntentReviewStep({
               'Branch is not ready to create a review yet.'
             )
     })
+
     return
   }
 
@@ -122,17 +134,21 @@ export async function runCreatePrIntentReviewStep({
                 'Pushing commits…'
               )
   })
+
   const remoteResult = await runRemoteAction(remoteStep, {
     target: operationTarget,
     baseRef: token.baseRef
   })
+
   if (abortIfStale()) {
     return
   }
+
   // Superseded by a newer remote action — drop quietly, same as target drift.
   if (remoteResult.status === 'superseded') {
     return
   }
+
   if (remoteResult.status !== 'ok') {
     setCreatePrIntentNoticeForWorktree(token.worktreeId, {
       tone: 'destructive',
@@ -141,30 +157,40 @@ export async function runCreatePrIntentReviewStep({
         'Could not update the remote branch. Retry Create PR.'
       )
     })
+
     return
   }
+
   if (!(await refreshIntentSnapshot())) {
     return
   }
+
   await refreshBranchCompareForCreatePrIntent(token)
+
   if (abortIfStale()) {
     return
   }
+
   eligibility = await readHostedReviewCreationEligibilityForIntent({
     token,
     hasUncommittedChanges: snapshot.entries.length > 0,
     upstreamStatus: snapshot.upstreamStatus
   })
+
   if (abortIfStale()) {
     return
   }
+
   if (eligibility && shouldAttemptCreateHostedReviewForIntent(eligibility)) {
     await createHostedReviewForCreatePrIntent(token, eligibility)
+
     if (abortIfStale()) {
       return
     }
+
     return
   }
+
   // Why: prefer the blocked-reason notice (incl. unavailable lookup) over a generic stop.
   const blockedNotice = resolveBlockedCreateReviewNoticeMessage(eligibility)
   setCreatePrIntentNoticeForWorktree(token.worktreeId, {

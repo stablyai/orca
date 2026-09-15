@@ -16,6 +16,7 @@ function sliceSessionSource(startPattern: string, endPattern: string): string {
   expect(start).toBeGreaterThanOrEqual(0)
   const end = lifecycleSource.indexOf(endPattern, start)
   expect(end).toBeGreaterThan(start)
+
   return lifecycleSource.slice(start, end)
 }
 
@@ -32,6 +33,7 @@ type RecoveryHarness = {
 
 function createHarness(): RecoveryHarness {
   const scheduled: Array<() => void> = []
+
   return {
     activeHandleRef: { current: 'term-1' },
     terminalRefs: {
@@ -150,9 +152,11 @@ describe('terminal foreground recovery', () => {
     expect(foregroundPredicate).toContain('Platform.OS')
     expect(lifecycleSource).toContain('recoverActiveTerminalAfterForeground({')
     expect(lifecycleSource).toContain("AppState.addEventListener('change'")
+
     const readinessInvalidation = lifecycleSource.indexOf(
       'terminalRef.prepareForForegroundRecovery()'
     )
+
     const replay = lifecycleSource.indexOf('recoverActiveTerminalAfterForeground({')
     expect(readinessInvalidation).toBeGreaterThanOrEqual(0)
     expect(replay).toBeGreaterThan(readinessInvalidation)
@@ -165,10 +169,12 @@ describe('terminal foreground recovery', () => {
     expect(lifecycleSource).toContain(
       "pendingForegroundRecoveryRef.current = outcome === 'deferred'"
     )
+
     const reconnectRetry = sliceSessionSource(
       "if (connState !== 'connected' || !pendingForegroundRecoveryRef.current)",
       'recoverActiveTerminalAfterForeground({'
     )
+
     expect(reconnectRetry).toContain('pendingForegroundRecoveryRef.current = false')
     expect(reconnectRetry).toContain("AppState.currentState !== 'active'")
   })

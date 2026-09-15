@@ -23,6 +23,7 @@ import type { IPtyProvider, PtyProcessInfo } from '../providers/types'
 // making failures land as clean assertion failures in their own test.
 function settleTeardown<T>(promise: Promise<T>): Promise<T> {
   void promise.catch(() => undefined)
+
   return promise
 }
 
@@ -48,10 +49,12 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
   // fact exited — wedging the workspace on every retry.
   it('verifies a failed stop against a fresh budget when the sweeps spent the deadline', async () => {
     vi.useFakeTimers()
+
     try {
       const localProvider = createProviderStub(
         () => new Promise((resolve) => setTimeout(() => resolve([]), 90))
       )
+
       ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
         new Error('Session not found: stale-1')
       )
@@ -66,6 +69,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
           requirePhysicalStop: true
         })
       )
+
       await vi.runAllTimersAsync()
 
       await expect(teardown).resolves.toEqual({
@@ -88,10 +92,12 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
     // same tick — a 100ms margin here raced under parallel load.
     const listDelayMs = WORKTREE_PROCESS_SWEEP_TIMEOUT_MS / 2
     vi.useFakeTimers()
+
     try {
       const localProvider = createProviderStub(
         () => new Promise((resolve) => setTimeout(() => resolve([]), listDelayMs))
       )
+
       ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
         new Error('Session not found: term_abab11ee')
       )
@@ -105,6 +111,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
           requirePhysicalStop: true
         })
       )
+
       await vi.runAllTimersAsync()
 
       await expect(teardown).resolves.toEqual({
@@ -121,6 +128,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
     const localProvider = createProviderStub(async () => [
       { id: 'w1@@live-1', cwd: '/tmp/w1', title: 'shell' }
     ])
+
     ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error('kill failed')
     )
@@ -135,6 +143,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
   // exists; commit 3 moved that loop, so pin it before it can silently vanish.
   it('clears PTY state once a failed stop is proven to have exited', async () => {
     const localProvider = createProviderStub(async () => [])
+
     ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error('Session not found: stale-1')
     )
@@ -157,6 +166,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
     const localProvider = createProviderStub(async () => [
       { id: 'w1@@live-1', cwd: '/tmp/w1', title: 'shell' }
     ])
+
     ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error('kill failed')
     )
@@ -171,6 +181,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
       () => new Error('expected a rejection'),
       (rejection: Error) => rejection
     )
+
     expect(error.message).toContain('w1@@live-1')
     expect(error.message).not.toContain('w1@@gone-2')
   })
@@ -184,6 +195,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
     // straight past a live remote agent.
     const localProvider = createProviderStub(async () => [])
     listRegisteredPtysMock.mockReturnValue([])
+
     const runtime = {
       stopTerminalsForWorktree: async (
         _worktreeId: string,
@@ -195,6 +207,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
         }
       ) => {
         await opts.stopPty?.('ssh:conn-1@@relay-9', () => false)
+
         return { stopped: 0 }
       },
       getPtyLivenessVerdict: (ptyId: string) =>
@@ -220,6 +233,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
   it('does not infer a remote exit from fallback local inventory without a cached verdict', async () => {
     const localProvider = createProviderStub(async () => [])
     listRegisteredPtysMock.mockReturnValue([])
+
     const runtime = {
       stopTerminalsForWorktree: async (
         _worktreeId: string,
@@ -231,6 +245,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
         }
       ) => {
         await opts.stopPty?.('ssh:conn-1@@relay-10', () => false)
+
         return { stopped: 0 }
       },
       getPtyLivenessVerdict: () => null
@@ -253,6 +268,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
     const localProvider = createProviderStub(async () => {
       throw new Error('daemon socket closed')
     })
+
     listRegisteredPtysMock.mockReturnValue([
       { ptyId: 'stale-1', worktreeId: 'w1', sessionId: null, paneKey: null, pid: 100 }
     ])
@@ -273,8 +289,10 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
   // the sweep-level failures that reject before the unproven-stop gate is reached.
   it('lets force through a provider whose inventory rejects outright', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       listRegisteredPtysMock.mockReturnValue([])
+
       const localProvider = createProviderStub(async () => {
         throw new Error('ssh channel closed')
       })
@@ -298,8 +316,10 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
     // Why: hand the stub a resolver instead of a permanently dangling promise, so
     // this test leaves no in-flight continuation to interleave into a later one.
     let releaseList: (sessions: PtyProcessInfo[]) => void = () => {}
+
     try {
       listRegisteredPtysMock.mockReturnValue([])
+
       const localProvider = createProviderStub(
         () =>
           new Promise<PtyProcessInfo[]>((resolve) => {
@@ -315,6 +335,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
           allowUnverifiedStop: true
         })
       )
+
       await vi.runAllTimersAsync()
 
       await expect(teardown).resolves.toEqual({
@@ -342,11 +363,14 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
   // about to release its handles — EBUSY for a process ~300ms from exiting.
   it('waits for in-flight sweeps before force returns', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const localProvider = createProviderStub(async () => {
         throw new Error('ssh channel closed')
       })
+
       let shutdownFinished = false
+
       ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
         async () => {
           await new Promise((resolve) => setTimeout(resolve, 20))
@@ -377,11 +401,14 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
   it('warns with the specific sweep failure, not the generic deadline', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.useFakeTimers()
+
     try {
       listRegisteredPtysMock.mockReturnValue([])
+
       const localProvider = createProviderStub(async () => {
         throw new Error('ssh channel closed')
       })
+
       const runtime = {
         stopTerminalsForWorktree: () => new Promise(() => {})
       } as unknown as Parameters<typeof killAllProcessesForWorktree>[1]['runtime']
@@ -395,6 +422,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
           allowUnverifiedStop: true
         })
       )
+
       await vi.runAllTimersAsync()
       await teardown
 
@@ -414,6 +442,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
 
   it('still fails closed on a sweep-level failure without force', async () => {
     listRegisteredPtysMock.mockReturnValue([])
+
     const localProvider = createProviderStub(async () => {
       throw new Error('ssh channel closed')
     })
@@ -428,6 +457,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
   // cannot recognise. Failing closed with no Force Delete button is the dead end itself.
   it('offers force delete for a sweep-level failure without losing the provider wording', async () => {
     listRegisteredPtysMock.mockReturnValue([])
+
     const localProvider = createProviderStub(async () => {
       throw new Error('SSH channel closed while listing processes')
     })
@@ -439,6 +469,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
       () => new Error('expected a rejection'),
       (rejection: Error) => rejection
     )
+
     expect(error.message).toContain('SSH channel closed while listing processes')
     expect(classifyWorktreeForceDeleteReason(error.message)).toBe('unstopped-pty')
     // Nothing was verified here, so it must not read as the proven-live verdict.
@@ -452,12 +483,16 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
   it('waits for a shutdown the deadline abandoned before force returns', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     let releaseShutdown: () => void = () => {}
+
     try {
       listRegisteredPtysMock.mockReturnValue([])
+
       const localProvider = createProviderStub(async () => [
         { id: 'w1@@live-1', cwd: '/tmp/w1', title: 'shell' }
       ])
+
       let shutdownFinished = false
+
       ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockImplementation(
         async () =>
           await new Promise<void>((resolve) => {
@@ -476,6 +511,7 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
           allowUnverifiedStop: true
         })
       )
+
       let returned = false
       void teardown.then(() => {
         returned = true
@@ -498,10 +534,12 @@ describe('destructive teardown when a PTY stop cannot be proven', () => {
 
   it('lets an explicit force removal proceed past PTYs it could not stop', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const localProvider = createProviderStub(async () => [
         { id: 'w1@@live-1', cwd: '/tmp/w1', title: 'shell' }
       ])
+
       ;(localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(
         new Error('kill failed')
       )

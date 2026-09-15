@@ -32,6 +32,7 @@ function createViewportElement({
   }) as unknown as HTMLElement['scrollTo']
   element.focus = vi.fn()
   document.body.append(element)
+
   return element
 }
 
@@ -85,6 +86,7 @@ describe('useWorktreeListScrollToTop', () => {
         element.dispatchEvent(new WheelEvent('wheel', { deltaY: -4 }))
       })
     }
+
     expect(clockMs - intentAt).toBeLessThan(HARD_SCROLL_UP.hideAfterIdleMs)
     expect(result.current.showScrollToTop).toBe(true)
 
@@ -111,6 +113,7 @@ describe('useWorktreeListScrollToTop', () => {
   it('suppresses detection for the post-jump window after scrollToTop', () => {
     const element = createViewportElement()
     const onUserScrollIntent = vi.fn()
+
     const { result } = renderHook(() =>
       useWorktreeListScrollToTop({ scrollElement: element, onUserScrollIntent })
     )
@@ -155,6 +158,7 @@ describe('useWorktreeListScrollToTop', () => {
 
   it('clears the timer and detaches listeners when the scroll element goes away', () => {
     const element = createViewportElement()
+
     const { result, rerender } = renderHook(
       ({ scrollElement }: { scrollElement: HTMLElement | null }) =>
         useWorktreeListScrollToTop({ scrollElement }),

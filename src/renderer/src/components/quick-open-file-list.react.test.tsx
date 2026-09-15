@@ -14,7 +14,9 @@ import { useRuntimeFileListForWorktree, type RuntimeFileListState } from './quic
 import { QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS } from './quick-open-search'
 
 const listRuntimeFilesMock = vi.hoisted(() => vi.fn())
+
 const cancelRuntimeFileListMock = vi.hoisted(() => vi.fn())
+
 const searchRuntimeFilePathsMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/runtime/runtime-file-client', () => ({
@@ -24,6 +26,7 @@ vi.mock('@/runtime/runtime-file-client', () => ({
 }))
 
 const initialAppState = useAppStore.getInitialState()
+
 const roots: Root[] = []
 
 function makeProjectGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
@@ -107,6 +110,7 @@ function HookProbe({
   worktreeId: string | null
 }): null {
   onState(useRuntimeFileListForWorktree({ enabled, worktreeId, query }))
+
   return null
 }
 
@@ -120,10 +124,12 @@ async function flushEffects(): Promise<void> {
 async function waitForListRuntimeFilesCall(): Promise<void> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     await flushEffects()
+
     if (listRuntimeFilesMock.mock.calls.length > 0) {
       return
     }
   }
+
   throw new Error('listRuntimeFiles was not called')
 }
 
@@ -141,6 +147,7 @@ async function renderProbe(args: {
     root.render(createElement(HookProbe, args))
   })
   await flushEffects()
+
   return root
 }
 
@@ -157,6 +164,7 @@ afterEach(async () => {
       root.unmount()
     })
   }
+
   roots.length = 0
   useAppStore.setState(initialAppState, true)
 })
@@ -293,6 +301,7 @@ describe('useRuntimeFileListForWorktree', () => {
       onState: () => {},
       worktreeId: workspaceKey
     })
+
     await waitForListRuntimeFilesCall()
 
     const [listContext, listRequest] = listRuntimeFilesMock.mock.calls[0]
@@ -321,6 +330,7 @@ describe('useRuntimeFileListForWorktree', () => {
       onState: () => {},
       worktreeId: workspaceKey
     })
+
     await waitForListRuntimeFilesCall()
 
     const [listContext, listRequest] = listRuntimeFilesMock.mock.calls[0]
@@ -465,6 +475,7 @@ describe('useRuntimeFileListForWorktree', () => {
         query: 'target',
         worktreeId: 'wt-remote'
       })
+
       await act(async () => vi.advanceTimersByTimeAsync(120))
       await flushEffects()
       expect(states.at(-1)?.files).toEqual(['src/target.ts'])
@@ -531,6 +542,7 @@ describe('useRuntimeFileListForWorktree', () => {
         query: 'tar',
         worktreeId: 'wt-remote'
       })
+
       await act(async () => vi.advanceTimersByTimeAsync(120))
       const firstSignal = searchRuntimeFilePathsMock.mock.calls[0]?.[1].signal as AbortSignal
 
@@ -581,6 +593,7 @@ describe('useRuntimeFileListForWorktree', () => {
       query: 'one',
       worktreeId: workspaceKey
     })
+
     await waitForListRuntimeFilesCall()
 
     await act(async () => {

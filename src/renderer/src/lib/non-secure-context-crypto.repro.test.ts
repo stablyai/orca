@@ -39,10 +39,13 @@ describe('non-secure context (plain HTTP LAN web client)', () => {
   // trusted on the desktop app.
   it('produces the same hash as crypto.subtle did in a secure context', async () => {
     const { hashOrcaHookScript } = await import('./orca-hook-trust')
+
     const secureHash = await (async () => {
       Object.defineProperty(globalThis, 'crypto', { configurable: true, value: realCrypto })
+
       return hashOrcaHookScript('echo hi')
     })()
+
     Object.defineProperty(globalThis, 'crypto', {
       configurable: true,
       value: { getRandomValues: realCrypto.getRandomValues.bind(realCrypto) }

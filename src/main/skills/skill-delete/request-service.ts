@@ -28,6 +28,7 @@ async function serviceInput(
   dependencies: SkillDeleteRequestDependencies
 ): Promise<SkillDeleteServiceInput> {
   const providerRootOverrides = await dependencies.resolveProviderRootOverrides?.(target)
+
   return {
     request,
     target,

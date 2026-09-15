@@ -112,27 +112,36 @@ export async function waitForAgentPromptPromise<T>(
   if (!signal) {
     return await promise
   }
+
   assertAgentPromptRequestActive(signal)
+
   return await new Promise<T>((resolve, reject) => {
     let settled = false
+
     const finish = (result: { value: T } | { error: unknown }): void => {
       if (settled) {
         return
       }
+
       settled = true
       signal.removeEventListener('abort', onAbort)
+
       if ('error' in result) {
         reject(result.error)
       } else {
         resolve(result.value)
       }
     }
+
     const onAbort = (): void => finish({ error: new Error('request_aborted') })
     signal.addEventListener('abort', onAbort, { once: true })
+
     if (signal.aborted) {
       onAbort()
+
       return
     }
+
     promise.then(
       (value) => finish({ value }),
       (error: unknown) => finish({ error })
@@ -157,19 +166,24 @@ export async function waitForAgentPromptDelay(
 ): Promise<void> {
   if (!signal) {
     await new Promise((resolve) => setTimeout(resolve, delayMs))
+
     return
   }
+
   assertAgentPromptRequestActive(signal)
   await new Promise<void>((resolve, reject) => {
     const onAbort = (): void => {
       clearTimeout(timer)
       reject(new Error('request_aborted'))
     }
+
     const timer = setTimeout(() => {
       signal.removeEventListener('abort', onAbort)
       resolve()
     }, delayMs)
+
     signal.addEventListener('abort', onAbort, { once: true })
+
     if (signal.aborted) {
       onAbort()
     }
@@ -179,38 +193,49 @@ export async function waitForAgentPromptDelay(
 export function findLastCompleteOscTitleRange(data: string): { start: number; end: number } | null {
   let last: { start: number; end: number } | null = null
   let searchFrom = 0
+
   while (searchFrom < data.length) {
     const start = data.indexOf('\x1b]', searchFrom)
+
     if (start === -1) {
       break
     }
+
     const command = data[start + 2]
+
     if ((command !== '0' && command !== '1' && command !== '2') || data[start + 3] !== ';') {
       searchFrom = start + 2
       continue
     }
+
     let cursor = start + 4
+
     for (; cursor < data.length; cursor += 1) {
       if (data[cursor] === '\x07') {
         last = { start, end: cursor + 1 }
         searchFrom = cursor + 1
         break
       }
+
       if (data[cursor] !== '\x1b') {
         continue
       }
+
       if (data[cursor + 1] === '\\') {
         last = { start, end: cursor + 2 }
         searchFrom = cursor + 2
       } else {
         searchFrom = cursor
       }
+
       break
     }
+
     if (cursor === data.length) {
       break
     }
   }
+
   return last
 }
 
@@ -223,6 +248,7 @@ export function createTerminalRevealWarning(handle: string, error?: unknown): st
     error instanceof Error && error.message.trim().length > 0
       ? ` Reason: ${error.message.trim()}.`
       : ''
+
   return [
     `Terminal ${handle} is running, but Orca could not make it discoverable.${reason}`,
     `Run \`orca terminal focus --terminal ${handle}\` to reveal and focus it.`
@@ -243,9 +269,11 @@ export function resolveTerminalPresentation(opts: {
   if (opts.presentation) {
     return opts.presentation
   }
+
   if (opts.focus === true || opts.activate === true) {
     return 'focused'
   }
+
   return undefined
 }
 
@@ -257,14 +285,18 @@ export function addListenerToMap<T>(
   listener: T
 ): () => void {
   let listeners = map.get(key)
+
   if (!listeners) {
     listeners = new Set<T>()
     map.set(key, listeners)
   }
+
   const set = listeners
   set.add(listener)
+
   return () => {
     set.delete(listener)
+
     if (set.size === 0) {
       map.delete(key)
     }
@@ -273,6 +305,7 @@ export function addListenerToMap<T>(
 
 export function isPathWithinDirectory(directory: string, candidate: string): boolean {
   const relativePath = relative(resolve(directory), resolve(candidate))
+
   return relativePath === '' || (!relativePath.startsWith('..') && !isAbsolute(relativePath))
 }
 

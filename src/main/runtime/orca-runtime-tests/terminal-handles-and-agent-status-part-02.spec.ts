@@ -23,6 +23,7 @@ describe('OrcaRuntimeService', () => {
       command: 'claude agents',
       title: 'claude agents'
     })
+
     const pty = (
       runtime as unknown as {
         ptysById: Map<
@@ -35,10 +36,13 @@ describe('OrcaRuntimeService', () => {
         >
       }
     ).ptysById.get('pty-bg')
+
     expect(pty).toBeDefined()
+
     if (!pty) {
       throw new Error('expected runtime PTY record')
     }
+
     pty.lastAgentStatus = 'working'
     pty.lastOscTitle = 'claude agents'
     pty.lastOscTitleAt = 0
@@ -200,10 +204,12 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'claude',
       title: 'claude working'
     })
+
     runtime.onPtyData('pty-bg', '\x1b]0;claude working\x07', 100)
 
     syncSinglePty(runtime, 'pty-bg', { paneTitle: 'claude agents' })
@@ -221,10 +227,12 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'claude',
       title: 'claude working'
     })
+
     runtime.onPtyData('pty-bg', '\x1b]0;claude working\x07', 100)
 
     syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
@@ -242,6 +250,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'bash',
       title: 'bash'
@@ -257,6 +266,7 @@ describe('OrcaRuntimeService', () => {
       .fn()
       .mockResolvedValueOnce('node')
       .mockResolvedValueOnce('codex')
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -266,6 +276,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'bash',
       title: 'bash'
@@ -282,6 +293,7 @@ describe('OrcaRuntimeService', () => {
       .fn()
       .mockResolvedValueOnce('node')
       .mockResolvedValueOnce('codex')
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -291,6 +303,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'bash',
       title: 'bash'
@@ -342,6 +355,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => true,
       getForegroundProcess: async () => 'zsh'
     })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'codex',
       title: 'Codex working',
@@ -363,6 +377,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'bash',
       title: 'bash'
@@ -371,6 +386,7 @@ describe('OrcaRuntimeService', () => {
     syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
     vi.useFakeTimers()
     vi.setSystemTime(0)
+
     try {
       const result = runtime.isTerminalRunningAgent(handle)
       await vi.advanceTimersByTimeAsync(4_200)
@@ -392,6 +408,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'bash',
       title: 'bash'
@@ -413,6 +430,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'bash',
       title: 'bash'
@@ -421,6 +439,7 @@ describe('OrcaRuntimeService', () => {
     syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
 
     vi.useFakeTimers()
+
     try {
       const result = runtime.isTerminalRunningAgent(handle)
       await vi.advanceTimersByTimeAsync(7_000)
@@ -437,6 +456,7 @@ describe('OrcaRuntimeService', () => {
       .fn()
       .mockResolvedValueOnce('node')
       .mockResolvedValueOnce('codex')
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       write: () => true,
@@ -455,6 +475,7 @@ describe('OrcaRuntimeService', () => {
       .fn()
       .mockResolvedValueOnce('node')
       .mockResolvedValueOnce('claude')
+
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -464,6 +485,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'claude agents',
       title: 'claude agents'
@@ -485,6 +507,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'claude agents',
       title: 'claude agents'
@@ -505,10 +528,12 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'codex',
       title: 'Codex working'
     })
+
     syncSinglePty(runtime, 'pty-bg', { paneTitle: 'bash' })
     runtime.onPtyData(
       'pty-bg',
@@ -529,10 +554,12 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'claude agents',
       title: 'claude agents'
     })
+
     runtime.onPtyData('pty-bg', '\x1b]0;claude agents\x07', 100)
 
     syncSinglePty(runtime, 'pty-bg', { paneTitle: 'claude working' })
@@ -555,6 +582,7 @@ describe('OrcaRuntimeService', () => {
       command: 'claude agents',
       title: 'claude agents'
     })
+
     const pty = (
       runtime as unknown as {
         ptysById: Map<
@@ -566,10 +594,13 @@ describe('OrcaRuntimeService', () => {
         >
       }
     ).ptysById.get('pty-bg')
+
     expect(pty).toBeDefined()
+
     if (!pty) {
       throw new Error('expected runtime PTY record')
     }
+
     pty.lastOscTitle = 'claude working'
     pty.lastOscTitleAt = 0
 
@@ -591,6 +622,7 @@ describe('OrcaRuntimeService', () => {
       command: 'claude',
       title: 'claude working'
     })
+
     const pty = (
       runtime as unknown as {
         ptysById: Map<
@@ -602,10 +634,13 @@ describe('OrcaRuntimeService', () => {
         >
       }
     ).ptysById.get('pty-bg')
+
     expect(pty).toBeDefined()
+
     if (!pty) {
       throw new Error('expected runtime PTY record')
     }
+
     pty.lastOscTitle = 'claude agents'
     pty.lastOscTitleAt = 0
 
@@ -627,6 +662,7 @@ describe('OrcaRuntimeService', () => {
       command: 'claude agents',
       title: 'claude agents'
     })
+
     runtime.onPtyData('pty-bg', '\x1b]0;claude working\x07', 100)
 
     await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(true)
@@ -643,6 +679,7 @@ describe('OrcaRuntimeService', () => {
     })
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'claude agents',
       title: 'claude agents'

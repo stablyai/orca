@@ -14,6 +14,7 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 describe('session tabs inventory RPC methods', () => {
   it('withholds an old-client list until the host inventory is authoritative', async () => {
     let resolveInventory!: (value: { snapshots: []; authoritative: true }) => void
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
@@ -24,6 +25,7 @@ describe('session tabs inventory RPC methods', () => {
           })
       )
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const messages: string[] = []
 
@@ -32,9 +34,11 @@ describe('session tabs inventory RPC methods', () => {
       (message) => messages.push(message),
       { clientKind: 'runtime' }
     )
+
     for (let index = 0; index < 20 && !resolveInventory; index += 1) {
       await Promise.resolve()
     }
+
     expect(messages).toEqual([])
 
     resolveInventory({ snapshots: [], authoritative: true })
@@ -48,6 +52,7 @@ describe('session tabs inventory RPC methods', () => {
   // (e.g. one configured-but-disconnected SSH host) without a second collect.
   it('serves a capable client an unlabeled list when the census fails', async () => {
     const legacyListAll = vi.fn()
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
@@ -66,6 +71,7 @@ describe('session tabs inventory RPC methods', () => {
       })),
       listAllMobileSessionTabs: legacyListAll
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const messages: string[] = []
 
@@ -86,6 +92,7 @@ describe('session tabs inventory RPC methods', () => {
 
   it('propagates disconnect errors to legacy clients', async () => {
     const legacyListAll = vi.fn()
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
@@ -94,6 +101,7 @@ describe('session tabs inventory RPC methods', () => {
       }),
       listAllMobileSessionTabs: legacyListAll
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const messages: string[] = []
 
@@ -119,6 +127,7 @@ describe('session tabs inventory RPC methods', () => {
         authoritative: true as const
       }))
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const messages: string[] = []
 
@@ -136,6 +145,7 @@ describe('session tabs inventory RPC methods', () => {
 
   it('serves an old client the degraded scan when terminal liveness cannot be proven', async () => {
     const legacyListAll = vi.fn()
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
@@ -154,6 +164,7 @@ describe('session tabs inventory RPC methods', () => {
       })),
       listAllMobileSessionTabs: legacyListAll
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const messages: string[] = []
 
@@ -174,13 +185,16 @@ describe('session tabs inventory RPC methods', () => {
       if (signal?.aborted) {
         throw new Error('client_disconnected')
       }
+
       return { snapshots: [] }
     })
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
       listAllMobileSessionTabsInventory: inventory
     } as unknown as OrcaRuntimeService
+
     const controller = new AbortController()
     controller.abort()
 
@@ -196,10 +210,12 @@ describe('session tabs inventory RPC methods', () => {
       authoritative: true
       changeSequence: number
     }) => void
+
     const listeners: ((
       snapshot: RuntimeMobileSessionTabsResult,
       changeSequence: number
     ) => void)[] = []
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
@@ -216,12 +232,14 @@ describe('session tabs inventory RPC methods', () => {
       onMobileSessionTabsChanged: vi.fn(
         (listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void) => {
           listeners.push(listener)
+
           return vi.fn()
         }
       ),
       registerSubscriptionCleanup: vi.fn(),
       cleanupSubscription: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const messages: string[] = []
 
@@ -233,6 +251,7 @@ describe('session tabs inventory RPC methods', () => {
         clientCapabilities: [SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY]
       }
     )
+
     await Promise.resolve()
     listeners[0]?.(
       {
@@ -304,10 +323,12 @@ describe('session tabs inventory RPC methods', () => {
       authoritative: true
       changeSequence: number
     }) => void
+
     const listeners: ((
       snapshot: RuntimeMobileSessionTabsResult,
       changeSequence: number
     ) => void)[] = []
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
@@ -320,14 +341,17 @@ describe('session tabs inventory RPC methods', () => {
       onMobileSessionTabsChanged: vi.fn(
         (listener: (snapshot: RuntimeMobileSessionTabsResult, changeSequence: number) => void) => {
           listeners.push(listener)
+
           return vi.fn()
         }
       ),
       registerSubscriptionCleanup: vi.fn(),
       cleanupSubscription: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const messages: string[] = []
+
     const snapshot = (snapshotVersion: number): RuntimeMobileSessionTabsResult => ({
       worktree: 'wt-buffered',
       publicationEpoch: 'epoch-buffered',
@@ -346,6 +370,7 @@ describe('session tabs inventory RPC methods', () => {
         clientCapabilities: [SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY]
       }
     )
+
     await Promise.resolve()
     listeners[0]?.(snapshot(2), 1)
     listeners[0]?.(snapshot(3), 2)
@@ -366,6 +391,7 @@ describe('session tabs inventory RPC methods', () => {
       onMobileSessionTabsChanged: vi.fn(),
       registerSubscriptionCleanup: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const controller = new AbortController()
     const messages: string[] = []
@@ -392,6 +418,7 @@ describe('session tabs inventory RPC methods', () => {
     runtime.attachWindow(1)
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const messages: string[] = []
+
     const pending = dispatcher.dispatchStreaming(
       makeRequest('session.tabs.subscribeAll'),
       (message) => messages.push(message),
@@ -400,11 +427,14 @@ describe('session tabs inventory RPC methods', () => {
         clientCapabilities: [SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY]
       }
     )
+
     const waiters = (runtime as unknown as { sessionTabsInventoryWaiters: Set<() => void> })
       .sessionTabsInventoryWaiters
+
     for (let index = 0; index < 20 && waiters.size === 0; index += 1) {
       await Promise.resolve()
     }
+
     expect(waiters.size).toBe(1)
 
     runtime.cleanupSubscription('session.tabs:conn-cancel:*:req-1')

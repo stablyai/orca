@@ -4,7 +4,9 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
   execCommand: vi.fn(),
   isUnconfirmedSshCommandTermination: () => false
 }))
+
 vi.mock('./ssh-connection-utils', () => ({ shellEscape: (s: string) => `'${s}'` }))
+
 vi.mock('./ssh-relay-install-transfers', () => ({
   writeRelayFile: vi.fn().mockResolvedValue(undefined),
   uploadRelayDirectory: vi.fn().mockResolvedValue(undefined)
@@ -18,8 +20,11 @@ import { getRemoteHostPlatform } from './ssh-remote-platform'
 import type { SshConnection } from './ssh-connection'
 
 const mockExec = vi.mocked(execCommand)
+
 const ACTIVE = '0.2.0+bb01'
+
 const TARGET = '0.1.0+aa01'
+
 const BUILD_HASH = 'abc123def4567890'
 
 function record(overrides: Partial<OrcadActivationRecord> = {}): OrcadActivationRecord {
@@ -71,27 +76,37 @@ function readyLine(version: string): string {
 function scriptHost(log: string[], overrides: { restore?: string } = {}): void {
   mockExec.mockImplementation(async (_conn, command: string) => {
     const text = String(command)
+
     if (text.includes('state.tar') && text.includes('test -f') && !text.includes('tar -C')) {
       return 'PRESENT'
     }
+
     if (text.includes('find ') && text.includes('stat')) {
       return 'UNKNOWN'
     }
+
     if (text.includes('kill -TERM')) {
       log.push(`stop:${text.includes(ACTIVE) ? ACTIVE : TARGET}`)
+
       return 'STOPPED'
     }
+
     if (text.includes('tar -C') && text.includes('-xf')) {
       log.push('restore')
+
       return overrides.restore ?? 'RESTORED'
     }
+
     if (text.includes('nohup')) {
       log.push(`launch:${text.includes(ACTIVE) ? ACTIVE : TARGET}`)
+
       return '9999'
     }
+
     if (text.startsWith('cat ') && text.includes('.orcad-readiness')) {
       return readyLine(TARGET)
     }
+
     return ''
   })
 }
@@ -133,9 +148,11 @@ describe('rollbackOrcad', () => {
   it('refuses before touching anything when terminals started after activation', async () => {
     const log: string[] = []
     scriptHost(log)
+
     const result = await rollbackOrcad(
       options({ census: { liveSessions: 3, startedSinceActivation: 2 } })
     )
+
     expect(result).toMatchObject({
       outcome: 'refused',
       code: 'orcad_rollback_orphans_live_terminals'
@@ -168,15 +185,19 @@ describe('rollbackOrcad', () => {
     scriptHost(log)
     mockExec.mockImplementation(async (_conn, command: string) => {
       const text = String(command)
+
       if (text.includes('state.tar') && text.includes('test -f') && !text.includes('tar -C')) {
         return 'PRESENT'
       }
+
       if (text.includes('kill -TERM')) {
         return 'STOPPED'
       }
+
       if (text.includes('tar -C') && text.includes('-xf')) {
         return 'RESTORED'
       }
+
       // The target never publishes readiness.
       return ''
     })
@@ -191,9 +212,11 @@ describe('rollbackOrcad', () => {
     const log: string[] = []
     scriptHost(log)
     await rollbackOrcad(options())
+
     const written = vi
       .mocked(writeRelayFile)
       .mock.calls.find((call) => String(call[2]).endsWith('orcad-active.json'))
+
     expect(JSON.parse(String(written?.[3]))).toMatchObject({
       active: TARGET,
       previous: null,

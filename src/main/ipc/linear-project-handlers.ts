@@ -23,6 +23,7 @@ export function registerLinearProjectHandlers(): void {
       }
     ) => {
       const limit = Math.min(Math.max(1, args?.limit ?? 20), 50)
+
       return listProjects(
         args?.query,
         limit,
@@ -53,25 +54,31 @@ export function registerLinearProjectHandlers(): void {
       if (typeof args?.name !== 'string' || !args.name.trim()) {
         return { ok: false, error: 'Project name is required' }
       }
+
       let teamIds: string[]
+
       try {
         teamIds = normalizeIdList(args.teamIds, 'team IDs') ?? []
       } catch (error) {
         return { ok: false, error: error instanceof Error ? error.message : 'Invalid team IDs' }
       }
+
       if (teamIds.length === 0) {
         return { ok: false, error: 'At least one team is required' }
       }
+
       if (
         args.priority !== undefined &&
         (!Number.isInteger(args.priority) || args.priority < 0 || args.priority > 4)
       ) {
         return { ok: false, error: 'Invalid priority' }
       }
+
       let memberIds: string[] | undefined
       let labelIds: string[] | undefined
       let startDate: string | undefined
       let targetDate: string | undefined
+
       try {
         memberIds = normalizeIdList(args.memberIds, 'member IDs')
         labelIds = normalizeIdList(args.labelIds, 'label IDs')
@@ -80,6 +87,7 @@ export function registerLinearProjectHandlers(): void {
       } catch (error) {
         return { ok: false, error: error instanceof Error ? error.message : 'Invalid project' }
       }
+
       return createProject(
         {
           name: args.name.trim(),
@@ -104,6 +112,7 @@ export function registerLinearProjectHandlers(): void {
       if (typeof args?.id !== 'string' || !args.id.trim()) {
         throw new Error('Project ID is required')
       }
+
       return getProject(
         args.id.trim(),
         normalizeConcreteWorkspaceId(args.workspaceId),
@@ -121,7 +130,9 @@ export function registerLinearProjectHandlers(): void {
       if (typeof args?.projectId !== 'string' || !args.projectId.trim()) {
         throw new Error('Project ID is required')
       }
+
       const limit = clampLinearIssueListLimit(args?.limit)
+
       return listProjectIssues(
         args.projectId.trim(),
         limit,

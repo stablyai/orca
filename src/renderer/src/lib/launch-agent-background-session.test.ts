@@ -10,24 +10,43 @@ import {
 } from '@/lib/agent-background-session-test-state'
 
 const mockSpawn = vi.fn()
+
 const mockKill = vi.fn()
+
 const mockWrite = vi.fn()
+
 const mockRuntimeEnvironmentCall = vi.fn()
+
 const mockRuntimeEnvironmentTransportCall = vi.fn()
+
 const mockRuntimeEnvironmentSubscribe = vi.fn()
+
 const mockCreateTab = vi.fn()
+
 const mockSetTabCustomTitle = vi.fn()
+
 const mockUpdateTabPtyId = vi.fn()
+
 const mockCloseTab = vi.fn()
+
 const mockSetTabLayout = vi.fn()
+
 const mockRegisterAgentLaunchConfig = vi.fn()
+
 const mockRegisterEagerPtyBuffer = vi.fn()
+
 const mockSubscribeToPtyData = vi.fn()
+
 const mockSubscribeToPtyExit = vi.fn()
+
 const mockPasteDraftWhenAgentReady = vi.fn()
+
 const mockMarkTrusted = vi.fn()
+
 const mockDispatchEvent = vi.fn()
+
 const mockGetAgentLaunchPlatformForRepo = vi.fn<() => NodeJS.Platform>()
+
 const state = createAgentBackgroundSessionTestState({
   createTab: mockCreateTab,
   setTabCustomTitle: mockSetTabCustomTitle,
@@ -36,6 +55,7 @@ const state = createAgentBackgroundSessionTestState({
   setTabLayout: mockSetTabLayout,
   registerAgentLaunchConfig: mockRegisterAgentLaunchConfig
 })
+
 let currentStoreState = state
 
 vi.mock('@/store', () => ({
@@ -187,6 +207,7 @@ describe('launchAgentBackgroundSession', () => {
       worktreeId: 'wt-1',
       prompt: 'run slowly'
     })
+
     await Promise.resolve()
 
     // Publishing a PTY-less tab here reproduces #2989.
@@ -220,6 +241,7 @@ describe('launchAgentBackgroundSession', () => {
       worktreeId: 'wt-1',
       prompt: 'run slowly'
     })
+
     await vi.waitFor(() => expect(mockSpawn).toHaveBeenCalledOnce())
     state.worktreesByRepo['repo-1'] = []
     resolveSpawn({ id: 'pty-after-close' })
@@ -288,6 +310,7 @@ describe('launchAgentBackgroundSession', () => {
       agentArgs: '--dangerously-skip-permissions',
       agentEnv: { ORCA_AGENT_TEAMS_TEAM_ID: 'team-fresh' }
     }
+
     mockSpawn.mockResolvedValue({ id: 'pty-1', launchConfig: effectiveLaunchConfig })
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
 
@@ -553,6 +576,7 @@ describe('launchAgentBackgroundSession', () => {
           'wt-1': [{ id: args.tabId, title: 'Squatter' }]
         }
       }
+
       return Promise.resolve({ id: 'pty-1' })
     })
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')

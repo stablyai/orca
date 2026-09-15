@@ -15,14 +15,18 @@ export async function handleStarNagOnboardingCompleted(
 ): Promise<void> {
   const ui = deps.store.getUI()
   const cooldownActive = deps.isCooldownActive(ui.starNagDeferredUntil)
+
   if (ui.starNagCompleted || cooldownActive || deps.isEvaluating()) {
     if (!ui.starNagCompleted && !cooldownActive && deps.isEvaluating()) {
       deps.queueAfterEvaluation()
     }
+
     return
   }
+
   if (deps.isPromptVisible()) {
     deps.clearVisiblePrompt()
   }
+
   await deps.showToast()
 }

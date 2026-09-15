@@ -7,6 +7,7 @@ import { agentSessionStorePath } from './agent-session-record-store-file'
 import type { AgentSessionReserveRequest } from './agent-session-reservation-admission'
 
 const NOW = 1_800_000_000_000
+
 let directory: string
 
 function reserveRequest(): AgentSessionReserveRequest {
@@ -49,10 +50,12 @@ describe('agent session record store security', () => {
     async () => {
       const nestedDirectory = join(directory, 'agent-sessions')
       await chmod(directory, 0o755)
+
       const store = await AgentSessionRecordStore.open({
         directory: nestedDirectory,
         hostId: 'local'
       })
+
       await store.reserveOwner(reserveRequest())
 
       expect((await stat(nestedDirectory)).mode & 0o777).toBe(0o700)

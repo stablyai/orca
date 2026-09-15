@@ -35,16 +35,20 @@ async function locateLink(page: Page, label: string): Promise<LinkProbe> {
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const screen = pane?.terminal.element?.querySelector<HTMLElement>('.xterm-screen')
+
     if (!tabId || !pane || !screen) {
       throw new Error('active terminal pane unavailable')
     }
 
     const buffer = pane.terminal.buffer.active
+
     for (let row = pane.terminal.rows - 1; row >= 0; row -= 1) {
       const line = buffer.getLine(buffer.viewportY + row)
       const col = line?.translateToString(true).lastIndexOf(label) ?? -1
+
       if (col >= 0) {
         const rect = screen.getBoundingClientRect()
+
         return {
           clientX: rect.left + (col + label.length / 2) * (rect.width / pane.terminal.cols),
           clientY: rect.top + (row + 0.5) * (rect.height / pane.terminal.rows),
@@ -52,6 +56,7 @@ async function locateLink(page: Page, label: string): Promise<LinkProbe> {
         }
       }
     }
+
     throw new Error('OSC 8 label not visible in terminal viewport')
   }, label)
 }
@@ -70,30 +75,39 @@ async function readLinkState(
     ({ label, tabId }) => {
       const manager = window.__paneManagers?.get(tabId)
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
       if (!pane) {
         throw new Error('terminal pane unavailable')
       }
+
       const buffer = pane.terminal.buffer.active
+
       for (let row = buffer.viewportY; row < buffer.viewportY + pane.terminal.rows; row += 1) {
         const line = buffer.getLine(row)
         const col = line?.translateToString(true).lastIndexOf(label) ?? -1
+
         if (col < 0) {
           continue
         }
+
         const cell = line?.getCell(col) as
           | (ReturnType<NonNullable<typeof line>['getCell']> & {
               extended?: { urlId?: number }
             })
           | undefined
+
         const linkId = cell?.extended?.urlId ?? 0
+
         const terminal = pane.terminal as unknown as {
           _core?: {
             _oscLinkService?: { getLinkData: (id: number) => { uri: string } | undefined }
           }
         }
+
         const uri = linkId
           ? (terminal._core?._oscLinkService?.getLinkData(linkId)?.uri ?? null)
           : null
+
         return {
           bufferType: buffer.type,
           serializedUri: uri ? pane.serializeAddon.serialize().includes(uri) : false,
@@ -101,6 +115,7 @@ async function readLinkState(
           uri
         }
       }
+
       throw new Error('OSC 8 label disappeared from terminal buffer')
     },
     { label, tabId }
@@ -110,9 +125,11 @@ async function readLinkState(
 async function activateTerminalTab(page: Page, tabId: string): Promise<void> {
   await page.evaluate((tabId) => {
     const state = window.__store?.getState()
+
     if (!state) {
       throw new Error('Orca store unavailable')
     }
+
     state.setActiveTabType('terminal')
     state.setActiveTab(tabId)
   }, tabId)
@@ -138,6 +155,7 @@ test('restores and opens an OSC 8 link after its terminal is cold-parked', async
   const label = `#${randomUUID().slice(0, 6)}`
   const url = `https://example.com/orca-osc8-${randomUUID()}`
   const linkedOutput = `\x1b[?1049h\x1b[2J\x1b[H\x1b]8;id=cold-park;${url}\x1b\\${label}\x1b]8;;\x1b\\\n`
+
   // Why staged rather than `node -e`: PowerShell mangles the escapes (#8521), and it
   // keeps the label out of the command line so the readiness poll below cannot be
   // satisfied by the shell's own echo. `staged.command` is bypassed because it runs a
@@ -145,6 +163,7 @@ test('restores and opens an OSC 8 link after its terminal is cold-parked', async
   const staged = stageNodeScriptForTerminal(alternateScreenFixtureScript(linkedOutput), {
     prefix: 'orca-osc8-cold-park'
   })
+
   try {
     await sendToTerminal(orcaPage, ptyId, `${nodeTerminalCommand([staged.scriptPath])}\r`)
     await expect.poll(() => getTerminalContent(orcaPage, 4_000)).toContain(label)

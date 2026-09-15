@@ -45,14 +45,17 @@ export async function assessWindowCloseRunningWork(params: {
   isQuitting: boolean
 }): Promise<WindowCloseRunningWork> {
   const state = useAppStore.getState()
+
   const ptyIds = new Set(
     Object.values(state.tabsByWorktree)
       .flatMap((worktreeTabs) => worktreeTabs ?? [])
       .flatMap((tab) => collectTabPtyIds(state, tab.id))
   )
+
   const candidatePtyIds = params.isQuitting
     ? [...ptyIds].filter(isRemoteExecutionHostPtyId)
     : [...ptyIds]
+
   if (candidatePtyIds.length === 0) {
     return { kind: 'none' }
   }
@@ -60,11 +63,14 @@ export async function assessWindowCloseRunningWork(params: {
   const probes = await probePtyRunningWork(state.settings, candidatePtyIds, {
     timeoutMs: WINDOW_CLOSE_PROBE_TIMEOUT_MS
   })
+
   if (probes.some((probe) => probe.verdict === 'live')) {
     return { kind: 'running' }
   }
+
   if (probes.some((probe) => probe.remote && probe.verdict === 'unverifiable')) {
     return { kind: 'unverifiable' }
   }
+
   return { kind: 'none' }
 }

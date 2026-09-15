@@ -19,6 +19,7 @@ export type IncrementalAgentFixture = {
 export function cursorFixture(): IncrementalAgentFixture {
   const line = (role: string, text: string, at: string) =>
     JSON.stringify({ role, message: { content: text }, timestamp: at })
+
   return {
     agent: 'cursor',
     fileName: 'agent-transcripts-aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl',
@@ -37,6 +38,7 @@ export function cursorFixture(): IncrementalAgentFixture {
 export function copilotFixture(): IncrementalAgentFixture {
   const line = (type: string, data: Record<string, unknown>, at: string) =>
     JSON.stringify({ type, data, timestamp: at })
+
   return {
     agent: 'copilot',
     fileName: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl',

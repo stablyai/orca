@@ -7,10 +7,12 @@ const mocks = vi.hoisted(() => ({
   registeredIds: new Map<string, number>(),
   isRegistered: vi.fn(async () => true)
 }))
+
 vi.mock('./webview-registry', () => ({
   registeredWebContentsIds: mocks.registeredIds,
   replacePersistentWebview: mocks.replace
 }))
+
 vi.mock('../describe-page/browser-page-load-error', () => ({ browserPageExists: () => true }))
 
 function createPage(id: string) {
@@ -19,12 +21,14 @@ function createPage(id: string) {
     if (!webview.isConnected) {
       throw new Error('guest destroyed')
     }
+
     return 1
   })
   document.body.appendChild(webview)
   const paintable = { current: false }
   const setGeneration = vi.fn()
   const ref = <T>(current: T) => ({ current })
+
   const session = createBrowserPageWebviewGuestSession({
     webview,
     browserTabId: id,
@@ -48,6 +52,7 @@ function createPage(id: string) {
     syncNavigationState: vi.fn(),
     syncBrowserAnnotationViewportBridge: vi.fn()
   })
+
   return { webview, paintable, setGeneration, recovery: session.guestRecovery }
 }
 
@@ -76,6 +81,7 @@ describe('retained browser panes after guest eviction', () => {
       page.webview.remove()
       page.recovery.validateAfterResume()
     }
+
     expect(mocks.replace).not.toHaveBeenCalled()
     pages[199].paintable.current = true
     pages[199].recovery.validateAfterResume()

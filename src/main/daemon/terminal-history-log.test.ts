@@ -37,6 +37,7 @@ describe('terminal history log codec', () => {
       { kind: 'clear' },
       { kind: 'output', data: 'after clear' }
     ]
+
     const log = decodeTerminalHistoryLog(buildLog(7, [{ seq: 3, records }]))
     expect(log).not.toBeNull()
     expect(log!.generation).toBe(7)
@@ -52,6 +53,7 @@ describe('terminal history log codec', () => {
         { seq: 7, records: [] }
       ])
     )
+
     expect(log!.batches.map((batch) => batch.seq)).toEqual([5, 6, 7])
   })
 
@@ -65,6 +67,7 @@ describe('terminal history log codec', () => {
         { seq: 7, records: [{ kind: 'output', data: 'b' }] }
       ])
     )
+
     expect(log).toBeNull()
   })
 
@@ -73,6 +76,7 @@ describe('terminal history log codec', () => {
       { seq: 1, records: [{ kind: 'output', data: 'complete' }] },
       { seq: 2, records: [{ kind: 'output', data: 'torn-away-tail' }] }
     ])
+
     for (const cut of [1, 3, 7] as const) {
       const torn = full.subarray(0, full.length - cut)
       const log = decodeTerminalHistoryLog(torn)
@@ -92,6 +96,7 @@ describe('terminal history log codec', () => {
       // a stream that starts with a bare output frame.
       encodeLogBatch(1, [{ kind: 'output', data: 'x' }]).subarray(9)
     ])
+
     expect(decodeTerminalHistoryLog(orphanRecord)).toBeNull()
   })
 

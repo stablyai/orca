@@ -10,9 +10,11 @@ describe('installWorktreeVisibleRefreshVisibilityListener', () => {
   it('subscribes to document visibility changes so visible PR refresh can rerun on return', () => {
     const listeners = new Map<string, () => void>()
     const onChange = vi.fn()
+
     const addEventListener = vi.fn((event: string, listener: () => void) => {
       listeners.set(event, listener)
     })
+
     const removeEventListener = vi.fn()
 
     vi.stubGlobal('document', {

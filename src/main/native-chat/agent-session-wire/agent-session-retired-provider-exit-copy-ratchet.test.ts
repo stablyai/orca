@@ -21,6 +21,7 @@ const RETIRED_COPY_PREFIX = 'Provider exited'
 export function findRetiredProviderExitCopyLines(source: string): number[] {
   const code = stripComments(source)
   const pattern = new RegExp(`['"\`]${RETIRED_COPY_PREFIX}`, 'g')
+
   return [...code.matchAll(pattern)].map((match) => code.slice(0, match.index).split('\n').length)
 }
 
@@ -31,6 +32,7 @@ describe('retired provider-exit copy ratchet', () => {
       `appendStatus("Provider exited")`,
       'appendStatus(`Provider exited: ${reason}`)'
     ]
+
     for (const source of flagged) {
       expect(findRetiredProviderExitCopyLines(source), source).toHaveLength(1)
     }
@@ -51,6 +53,7 @@ describe('retired provider-exit copy ratchet', () => {
       `const text = 'Provider exit was not proven'`,
       `if (text.startsWith(prefix)) {}`
     ]
+
     for (const source of allowed) {
       expect(findRetiredProviderExitCopyLines(source), source).toEqual([])
     }
@@ -69,6 +72,7 @@ describe('retired provider-exit copy ratchet', () => {
     const offenders = files.flatMap(({ relativePath, source }) =>
       findRetiredProviderExitCopyLines(source).map((line) => `src/${relativePath}:${line}`)
     )
+
     expect(
       offenders,
       `A status row whose copy opens with "${RETIRED_COPY_PREFIX}" lands in the user's transcript ` +

@@ -51,13 +51,16 @@ export class WorktreeTerminalMutationLock {
 
     if (this.canGrantImmediately(entry, kind)) {
       this.markActive(entry, kind)
+
       return this.createRelease(key, entry, kind)
     }
 
     let grant!: () => void
+
     const granted = new Promise<void>((resolve) => {
       grant = resolve
     })
+
     const waiter: Waiter = { kind, grant }
     entry.queue.push(waiter)
 
@@ -77,9 +80,11 @@ export class WorktreeTerminalMutationLock {
       // makes a grant-after-timeout unrepresentable, so no tombstone flag is
       // needed — a queued waiter is by construction still live.
       const index = entry.queue.indexOf(waiter)
+
       if (index !== -1) {
         entry.queue.splice(index, 1)
       }
+
       this.drain(key, entry)
       throw error
     }
@@ -91,9 +96,11 @@ export class WorktreeTerminalMutationLock {
     if (entry.activeSleep) {
       return false
     }
+
     if (kind === 'exclusive') {
       return entry.activeSpawns === 0 && entry.queue.length === 0
     }
+
     // Writer preference: a queued exclusive blocks later shared acquires.
     return !entry.queue.some((waiter) => waiter.kind === 'exclusive')
   }
@@ -101,8 +108,10 @@ export class WorktreeTerminalMutationLock {
   private markActive(entry: LockEntry, kind: WorktreeTerminalMutationKind): void {
     if (kind === 'exclusive') {
       entry.activeSleep = true
+
       return
     }
+
     entry.activeSpawns += 1
   }
 
@@ -112,16 +121,20 @@ export class WorktreeTerminalMutationLock {
     kind: WorktreeTerminalMutationKind
   ): () => void {
     let released = false
+
     return () => {
       if (released) {
         return
       }
+
       released = true
+
       if (kind === 'exclusive') {
         entry.activeSleep = false
       } else {
         entry.activeSpawns = Math.max(0, entry.activeSpawns - 1)
       }
+
       this.drain(key, entry)
     }
   }
@@ -130,13 +143,16 @@ export class WorktreeTerminalMutationLock {
     // Granting a sleep sets activeSleep, which ends the loop on the next test.
     while (!entry.activeSleep && entry.queue.length > 0) {
       const next = entry.queue[0]!
+
       if (next.kind === 'exclusive' && entry.activeSpawns > 0) {
         break
       }
+
       entry.queue.shift()
       this.markActive(entry, next.kind)
       next.grant()
     }
+
     if (entry.activeSpawns === 0 && !entry.activeSleep && entry.queue.length === 0) {
       if (this.entries.get(key) === entry) {
         this.entries.delete(key)

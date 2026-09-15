@@ -52,6 +52,7 @@ import { selectScopedDaemon } from './daemon-identity.mjs'
 import { reattachSentinelMatches, selectCreatedTabId } from './reattach-proof.mjs'
 
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
+
 // The per-shell env var stamped into the interactive shell; reading it back after
 // relaunch proves keystrokes reach the SAME survivor shell (a fresh re-spawn lacks it).
 const SENTINEL_ENV = 'ORCA_CRASH_SENTINEL'
@@ -62,16 +63,21 @@ function log(step, msg) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2))
+
   if (opts.help) {
     console.log(opts.usage)
+
     return 0
   }
+
   // Assert win32 BEFORE surfacing arg errors so an off-win32 invocation gets the
   // clear platform message, not a confusing "no Orca.exe found" default-resolution
   // failure.
   assertWin32('win-crash-survival-e2e')
+
   if (opts.errors?.length) {
     console.error(`Argument errors:\n  - ${opts.errors.join('\n  - ')}\n${opts.usage}`)
+
     return 2
   }
 
@@ -87,22 +93,27 @@ async function main() {
   const ctx = { session: null }
   const diagDir = process.env.ORCA_E2E_DIAG_DIR || path.join(runDir, 'diag')
   let passed = false
+
   try {
     passed = await runProof(ctx, { opts, canary, runDir, userDataDir, shellPidFile, reattachFile })
+
     if (!passed && ctx.session?.page) {
       const diag = await captureFailureDiagnostics(ctx.session.page, diagDir, 'assertion-failure')
       log('diag', `captured -> ${diagDir} (store=${diag.info?.hasStore ?? 'n/a'})`)
     }
   } catch (err) {
     console.error(`[win-crash-survival-e2e] FATAL: ${err.stack || err.message}`)
+
     if (ctx.session?.page) {
       const diag = await captureFailureDiagnostics(ctx.session.page, diagDir, 'driving-failure')
       log('diag', `captured -> ${diagDir} (store=${diag.info?.hasStore ?? 'n/a'})`)
     }
+
     passed = false
   } finally {
     await teardown({ app: ctx.session?.app, userDataDir, keepProfile: opts.keepProfile, runDir })
   }
+
   return passed ? 0 : 1
 }
 
@@ -159,6 +170,7 @@ async function runProof(ctx, args) {
   // runs in the main process, so process.pid there is the exact main of the
   // instance this harness launched — authoritative, not a machine-wide scan.
   const mainPid = await resolveElectronMainPid(session.app, { allowLauncherFallback: false })
+
   if (!Number.isInteger(mainPid) || mainPid <= 0) {
     throw new Error(`could not resolve app main pid (got ${mainPid})`)
   }
@@ -190,6 +202,7 @@ async function runProof(ctx, args) {
   session = await launchInstalledApp({ exePath: opts.exePath, userDataDir })
   ctx.session = session
   let reattachProven = false
+
   try {
     // No create on relaunch: the terminal must be RESTORED, not freshly made.
     await ensureTerminal(session.page, { allowCreate: false })
@@ -203,6 +216,7 @@ async function runProof(ctx, args) {
   } catch (err) {
     log('relaunch', `reattach proof did not complete: ${err.message}`)
   }
+
   log('relaunch', `reattached UI bound to survivor shell: ${reattachProven}`)
 
   const postDaemon = resolveScopedDaemon(userDataDir)
@@ -213,6 +227,7 @@ async function runProof(ctx, args) {
   // read. Scan after the reattach keystroke so the user-visible 0xE9 is covered.
   const { events: failFastEvents } = scanPwshFailFast(crashStartMs)
   log('event-log', `pwsh FailFast/0xE9 events since crash: ${failFastEvents.length}`)
+
   for (const e of failFastEvents.slice(0, 3)) {
     log('event-log', `  ${e.provider}#${e.id}@${e.timeCreated}`)
   }
@@ -229,9 +244,11 @@ async function runProof(ctx, args) {
     reattachProven,
     failFastEvents
   })
+
   const passed = allPassed(assertions)
   console.log(renderTable(assertions, 'win-crash-survival-e2e'))
   log('result', passed ? 'PASS' : 'FAIL')
+
   return passed
 }
 
@@ -254,6 +271,7 @@ async function proveReattachedShell(
 
   const deadline = Date.now() + 30_000
   let attempt = 0
+
   while (Date.now() < deadline) {
     attempt++
     const readinessBudgetMs = Math.max(deadline - Date.now(), 1)
@@ -268,18 +286,23 @@ async function proveReattachedShell(
       terminalTabId
     )
     const remainingMs = deadline - Date.now()
+
     const hit = await waitForSentinel(
       file,
       expectedCanary,
       expectedShellPid,
       Math.min(3_000, Math.max(remainingMs, 0))
     )
+
     if (hit) {
       log('relaunch', `same-shell sentinel read back on attempt ${attempt}`)
+
       return true
     }
+
     log('relaunch', `same-shell probe attempt ${attempt} produced no matching sentinel`)
   }
+
   return false
 }
 
@@ -287,6 +310,7 @@ async function proveReattachedShell(
  *  survivor PID. Either check alone is weaker than the asserted shell identity. */
 async function waitForSentinel(file, expectedCanary, expectedShellPid, timeoutMs) {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     try {
       if (reattachSentinelMatches(readFileSync(file, 'utf8'), expectedCanary, expectedShellPid)) {
@@ -295,8 +319,10 @@ async function waitForSentinel(file, expectedCanary, expectedShellPid, timeoutMs
     } catch {
       /* not written yet */
     }
+
     await delay(500)
   }
+
   return false
 }
 
@@ -309,6 +335,7 @@ async function waitForSentinel(file, expectedCanary, expectedShellPid, timeoutMs
 function resolveScopedDaemon(userDataDir) {
   const pidFiles = readDaemonPidFiles(userDataDir)
   const scan = findDaemonProcesses(userDataDir)
+
   return selectScopedDaemon(pidFiles, scan)
 }
 
@@ -319,11 +346,13 @@ function resolveScopedDaemon(userDataDir) {
  */
 function clearSingletonLocks(userDataDir) {
   let entries = []
+
   try {
     entries = readdirSync(userDataDir)
   } catch {
     return
   }
+
   for (const entry of entries) {
     if (entry.startsWith('Singleton')) {
       try {
@@ -352,13 +381,17 @@ async function teardown({ app, userDataDir, keepProfile, runDir }) {
   } catch {
     /* already closed / never launched */
   }
+
   for (const proc of findDaemonProcesses(userDataDir)) {
     killPidTree(proc.pid)
   }
+
   if (keepProfile) {
     log('teardown', `--keep-profile set; leaving ${runDir}`)
+
     return
   }
+
   // Best-effort: a just-killed daemon/child can briefly hold file handles under
   // the profile, so a locked rmSync must not turn cleanup into a FATAL.
   try {
@@ -372,6 +405,7 @@ function killPidTree(pid) {
   if (!Number.isInteger(pid) || pid <= 0) {
     return
   }
+
   try {
     execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
   } catch {
@@ -382,18 +416,22 @@ function killPidTree(pid) {
 /** Poll until a pid is no longer alive (the crash landed), or timeout. */
 async function waitForPidDead(pid, timeoutMs) {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     if (!isPidAlive(pid)) {
       return true
     }
+
     await delay(500)
   }
+
   return false
 }
 
 function readIntFile(filePath) {
   try {
     const n = Number(readFileSync(filePath, 'utf8').trim())
+
     return Number.isInteger(n) ? n : null
   } catch {
     return null
@@ -404,13 +442,17 @@ function readIntFile(filePath) {
  *  typed command runs), returning the int or null after timeoutMs. */
 async function waitForIntFile(filePath, timeoutMs) {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     const n = readIntFile(filePath)
+
     if (n != null) {
       return n
     }
+
     await delay(500)
   }
+
   return null
 }
 

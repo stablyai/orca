@@ -40,14 +40,17 @@ const OLDER_BUILD_FILES = {
 describe.skipIf(process.platform === 'win32')('zsh wrapper dir written by mixed builds', () => {
   itWithZsh('ignores an older build’s files and loads the user’s config instead', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-wrapper-mismatch-'))
+
     const home = makeZshHome({
       '.zshenv': 'export ORCA_TEST_USER_ZSHENV=1\n',
       '.zprofile': 'export ORCA_TEST_USER_ZPROFILE=1\n',
       '.zshrc': 'export ORCA_TEST_USER_ZSHRC=1\n'
     })
+
     try {
       expect(ensureOverlayRestoreWrappers(root)).toBe(true)
       const zshDir = join(root, 'zsh')
+
       for (const [name, content] of Object.entries(OLDER_BUILD_FILES)) {
         writeFileSync(join(zshDir, name), content)
       }
@@ -86,9 +89,11 @@ describe.skipIf(process.platform === 'win32')('zsh wrapper dir written by mixed 
 
   it('leaves an older build’s files in place so that build can still use them', () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-wrapper-mismatch-keep-'))
+
     try {
       expect(ensureOverlayRestoreWrappers(root)).toBe(true)
       const zshDir = join(root, 'zsh')
+
       for (const [name, content] of Object.entries(OLDER_BUILD_FILES)) {
         writeFileSync(join(zshDir, name), content)
       }

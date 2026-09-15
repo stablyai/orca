@@ -40,6 +40,7 @@ describe('ThreadAgentStateIndicator', () => {
         createElement(ThreadAgentStateIndicator, { thread: threads[0]! })
       )
     )
+
     const titles = [...markup.matchAll(/\stitle="([^"]*)"/g)].map((match) => match[1])
 
     expect(markup).toContain('data-slot="tooltip-trigger"')
@@ -55,6 +56,7 @@ describe('activity thread grouping', () => {
     const worktree = makeWorktree()
     const tab1 = makeTabWithIds('tab-1', worktree.id)
     const tab2 = makeTabWithIds('tab-2', worktree.id)
+
     const sharedDone: Omit<
       AgentStatusEntry,
       'paneKey' | 'interrupted' | 'updatedAt' | 'stateStartedAt'
@@ -65,6 +67,7 @@ describe('activity thread grouping', () => {
       stateHistory: [],
       agentType: 'claude'
     }
+
     const { events, liveAgentByPaneKey } = buildActivityEvents({
       agentStatusByPaneKey: {
         [PANE_KEY]: {
@@ -89,6 +92,7 @@ describe('activity thread grouping', () => {
       acknowledgedAgentsByPaneKey: {},
       now: 3_000
     })
+
     const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
     const groups = buildActivityThreadGroups(threads, 'status')
 
@@ -104,6 +108,7 @@ describe('activity thread grouping', () => {
   it('project grouping falls back to unknown project when repo is missing', () => {
     const worktree = makeWorktreeWithId('wt-unknown', 'missing-repo', 'unknown-wt')
     const tab = makeTabWithIds('tab-unknown', worktree.id)
+
     const { events, liveAgentByPaneKey } = buildActivityEvents({
       agentStatusByPaneKey: {
         [UNKNOWN_PANE_KEY]: {
@@ -124,6 +129,7 @@ describe('activity thread grouping', () => {
       acknowledgedAgentsByPaneKey: {},
       now: 1_000
     })
+
     const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
     const group = getActivityThreadGroup(threads[0], 'project')
 
@@ -136,6 +142,7 @@ describe('activity thread grouping', () => {
         [PANE_KEY]: makeWorkingEntryWithoutHistory()
       }
     })
+
     const threads = makeThreads(result)
 
     expect(getActivityThreadGroup(threads[0], 'worktree')).toEqual({
@@ -155,6 +162,7 @@ describe('activity thread grouping', () => {
     const tabA1 = makeTabWithIds('tab-a1', wtA.id)
     const tabB1 = makeTabWithIds('tab-b1', wtB.id)
     const tabA2 = makeTabWithIds('tab-a2', wtA.id)
+
     const { events, liveAgentByPaneKey } = buildActivityEvents({
       agentStatusByPaneKey: {
         [PANE_KEY_A1]: {
@@ -198,6 +206,7 @@ describe('activity thread grouping', () => {
       acknowledgedAgentsByPaneKey: {},
       now: 3_000
     })
+
     const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
     const groups = buildActivityThreadGroups(threads, 'worktree')
 

@@ -31,7 +31,9 @@ export function settleCodexOversizedNotificationFrame(input: {
   if (input.kind !== 'frame:oversized-notification') {
     return null
   }
+
   const method = readCodexJournalString(readCodexJournalRecord(input.payload), 'method')
+
   return method
     ? settleCodexOversizedNotification({
         sessionId: input.sessionId,

@@ -10,6 +10,7 @@ export function getPRReviewCommentLineNumbersFromPatch(patch: string | undefined
 
   for (const line of patch.split('\n')) {
     const hunk = HUNK_HEADER_RE.exec(line)
+
     if (hunk) {
       const start = Number(hunk[1])
       const count = hunk[2] === undefined ? 1 : Number(hunk[2])

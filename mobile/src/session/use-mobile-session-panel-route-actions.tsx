@@ -36,6 +36,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     clearDeliveredDiffComments,
     handleCreateTerminal
   } = scope
+
   const createTabAgentActions =
     createTabAgentLoadState === 'loading'
       ? [
@@ -76,6 +77,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                 }
               ]
             : []
+
   const sendDiffNotesAgentActions =
     pendingDiffNotesDelivery === null
       ? []
@@ -97,9 +99,11 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
               onPress: () => {
                 const delivery = pendingDiffNotesDelivery
                 setPendingDiffNotesDelivery(null)
+
                 if (!delivery) {
                   return
                 }
+
                 void handleCreateTerminal(option.agent, {
                   initialPrompt: delivery.prompt,
                   onPromptSent: () => void clearDeliveredDiffComments(delivery.comments)
@@ -135,10 +139,13 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
 
   const handlePanelTap = (tapped: Exclude<ActivePanel, null>) => {
     const action = resolvePanelAction({ canDock: canDockPanel, tapped, current: activePanel })
+
     if (action.kind === 'dock') {
       setActivePanel(action.next)
+
       return
     }
+
     const descriptor = panelRouteDescriptor(action.panel)
     router.push({
       pathname: descriptor.pathname,
@@ -158,15 +165,19 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     const params = new URLSearchParams({ name: worktreeName || '' })
     router.push(`/h/${hostId}/agent-history/${encodeURIComponent(worktreeId)}?${params.toString()}`)
   }
+
   const showAgentSessionHistoryAction =
     !isFolderWorkspaceRoute && !isFloatingWorkspaceRoute && agentSessionHistorySupported === true
+
   const showChecksAction = shouldShowSessionHeaderChecksAction({
     isFolderWorkspaceRoute: isFolderWorkspaceRoute || isFloatingWorkspaceRoute,
     repoContextLoaded: prRepoContextLoaded,
     hostedChecksSupported: prIsGithubRepo
   })
+
   const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction
   const createTabBusy = creating || creatingBrowser || creatingMarkdown
+
   return {
     createTabAgentActions,
     sendDiffNotesAgentActions,

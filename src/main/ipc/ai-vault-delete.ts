@@ -36,6 +36,7 @@ export async function deleteAiVaultSession(
   // The validator tolerates a malformed agent/filePath but destructures `args`,
   // so an absent payload is defaulted here to keep the never-throws boundary.
   const wslHomeDirs = await getAiVaultWslHomeDirs()
+
   const result = await deleteAiVaultSessionFile({
     agent: args?.agent as AiVaultAgent,
     sessionId: args?.sessionId,

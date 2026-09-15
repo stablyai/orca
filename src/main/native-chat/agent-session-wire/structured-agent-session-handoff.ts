@@ -39,6 +39,7 @@ import type {
   StructuredAgentSessionHandoffFlowContext
 } from './structured-agent-session-handoff-types'
 import { StructuredAgentSessionHandoffState } from './structured-agent-session-handoff-state'
+
 export class StructuredAgentSessionHandoffCoordinator {
   private readonly state: StructuredAgentSessionHandoffState
   private readonly queue = new StructuredAgentSessionHandoffQueue()
@@ -70,6 +71,7 @@ export class StructuredAgentSessionHandoffCoordinator {
   ): Promise<AgentSessionMutationResult<AgentSessionHandoffResult>> {
     const record = this.requireRecord(params.envelope.sessionId)
     const currentStatus = this.state.cachedStatus(record.sessionId)
+
     const admission = await admitStructuredHandoffRequest({
       deps: this.deps,
       operationGuard: this.operationGuard,
@@ -78,18 +80,24 @@ export class StructuredAgentSessionHandoffCoordinator {
       record,
       ...(currentStatus ? { status: currentStatus } : {})
     })
+
     if (admission.decision === 'replay') {
       const replayedRefusal = replayedStructuredHandoffRefusal(admission.outcome)
+
       if (replayedRefusal) {
         return { ok: false, refusal: replayedRefusal }
       }
+
       return this.success(record.sessionId, true)
     }
+
     if (admission.decision === 'refused') {
       return { ok: false, refusal: admission.refusal }
     }
+
     const { fingerprint } = admission
     const action = params.action ?? 'start'
+
     if (action === 'cancel-queued') {
       if (currentStatus?.phase !== 'queued' || currentStatus?.direction !== params.direction) {
         return this.refuseAdmitted(
@@ -99,6 +107,7 @@ export class StructuredAgentSessionHandoffCoordinator {
           'No matching queued handoff exists.'
         )
       }
+
       this.queue.cancel(record.sessionId)
       this.setStatus(record.sessionId, idleStructuredHandoffStatus(record))
       await this.deps.store.recordOperationOutcome({
@@ -106,8 +115,10 @@ export class StructuredAgentSessionHandoffCoordinator {
         operationId: params.envelope.clientOperationId,
         outcome: { status: 'succeeded', sessionId: record.sessionId }
       })
+
       return this.success(record.sessionId, false)
     }
+
     if (!this.deps.transport) {
       return this.refuseAdmitted(
         callerKey,
@@ -116,8 +127,10 @@ export class StructuredAgentSessionHandoffCoordinator {
         'Agent TUI handoff is unavailable on this host.'
       )
     }
+
     if (action === 'recover') {
       const status = this.status(record.sessionId)
+
       const started = await requestStructuredManualRecovery({
         deps: this.deps,
         operationGuard: this.operationGuard,
@@ -130,6 +143,7 @@ export class StructuredAgentSessionHandoffCoordinator {
         restore: this.restore,
         setStatus: this.setStatus
       })
+
       if (!started) {
         return this.refuseAdmitted(
           callerKey,
@@ -138,8 +152,10 @@ export class StructuredAgentSessionHandoffCoordinator {
           'This handoff is no longer eligible for proof recovery.'
         )
       }
+
       return this.success(record.sessionId, false)
     }
+
     if (action === 'retry') {
       if (!structuredHandoffRetryIsAdmissible(this.status(record.sessionId), params)) {
         return this.refuseAdmitted(
@@ -149,10 +165,14 @@ export class StructuredAgentSessionHandoffCoordinator {
           'This handoff is no longer retryable.'
         )
       }
+
       this.begin(callerKey, params, null, fingerprint)
+
       return this.success(record.sessionId, false)
     }
+
     const expectedOwner = params.direction === 'to-tui' ? 'native' : 'tui'
+
     if (record.lease.runtimeKind !== expectedOwner || record.lease.claimStatus !== 'live') {
       return this.refuseAdmitted(
         callerKey,
@@ -161,6 +181,7 @@ export class StructuredAgentSessionHandoffCoordinator {
         `The ${expectedOwner} runtime does not own this session.`
       )
     }
+
     if (structuredSessionHasPendingPrompt(this.deps.session(record.sessionId).journal)) {
       return this.refuseAdmitted(
         callerKey,
@@ -169,14 +190,18 @@ export class StructuredAgentSessionHandoffCoordinator {
         'Resolve the pending question or approval before switching.'
       )
     }
+
     const turnId = activeStructuredAgentSessionTurnId(
       this.deps.session(record.sessionId).journal.snapshot().items
     )
+
     const tuiOwner = this.state.owner(record.sessionId)
+
     const busy =
       expectedOwner === 'native'
         ? turnId !== null
         : structuredTuiStatus(tuiOwner, this.deps.transport) !== 'idle'
+
     if (busy && params.mode === 'now') {
       return this.refuseAdmitted(
         callerKey,
@@ -185,6 +210,7 @@ export class StructuredAgentSessionHandoffCoordinator {
         'The current turn must finish before switching.'
       )
     }
+
     if (busy && params.mode === 'after-turn') {
       queueStructuredHandoffAfterTurn({
         callerKey,
@@ -196,8 +222,10 @@ export class StructuredAgentSessionHandoffCoordinator {
         begin: (key, next, tuiAlreadyExited) =>
           this.begin(key, next, null, fingerprint, tuiAlreadyExited)
       })
+
       return this.success(record.sessionId, false)
     }
+
     if (busy && expectedOwner === 'tui' && params.mode === 'stop-turn') {
       return this.refuseAdmitted(
         callerKey,
@@ -206,7 +234,9 @@ export class StructuredAgentSessionHandoffCoordinator {
         'Exit the agent terminal after this turn to continue in chat.'
       )
     }
+
     this.begin(callerKey, params, turnId, fingerprint)
+
     return this.success(record.sessionId, false)
   }
   async restore(sessionId: string): Promise<void> {

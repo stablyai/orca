@@ -53,6 +53,7 @@ test.describe('Terminal 2-Set Korean composing-chord order', () => {
     const arena = await openTerminalImePaneArena(orcaPage)
     const reader = createTerminalImeByteReader(testRepoPath, 1)
     let completed = false
+
     try {
       await startTerminalImeByteReader(orcaPage, arena.ptyId, reader)
 

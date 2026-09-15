@@ -16,6 +16,7 @@ type NewWorkspaceFabProps = {
 // never intercepts list row taps, and lifted above the home indicator.
 export function NewWorkspaceFab({ onPress, disabled }: NewWorkspaceFabProps): React.JSX.Element {
   const insets = useSafeAreaInsets()
+
   return (
     <Pressable
       style={({ pressed }) => [

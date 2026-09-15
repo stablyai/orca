@@ -26,9 +26,12 @@ export async function addPullRequestLineComment(args: {
         'Unable to comment without the PR head SHA.'
       )
     )
+
     return false
   }
+
   let result: Awaited<ReturnType<typeof addPRReviewCommentForRepo>>
+
   try {
     result = await addPRReviewCommentForRepo({
       repoPath: args.repoPath,
@@ -48,16 +51,21 @@ export async function addPullRequestLineComment(args: {
         ? error.message
         : translate('auto.components.PullRequestPage.19628e058d', 'Failed to add review comment.')
     )
+
     return false
   }
+
   if (!result.ok) {
     toast.error(
       result.error ||
         translate('auto.components.PullRequestPage.19628e058d', 'Failed to add review comment.')
     )
+
     return false
   }
+
   args.onCommentAdded(result.comment)
   toast.success(translate('auto.components.PullRequestPage.eff839f438', 'Review comment added.'))
+
   return true
 }

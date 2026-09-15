@@ -26,11 +26,14 @@ export function useClientHostedGuestActivationFocus({
   useEffect(() => {
     if (!isActive) {
       focusedForActivationRef.current = false
+
       return
     }
+
     if (focusedForActivationRef.current) {
       return
     }
+
     // Why the drag gate: a tab drag preview-activates whatever it hovers, and focusing the guest
     // hands focus to another WebContents — the embedder blur that follows reads as an aborted drag.
     // Why it alone leaves the latch down: the activation it suppressed still wants its focus, and
@@ -38,11 +41,14 @@ export function useClientHostedGuestActivationFocus({
     if (dragPassthroughActive) {
       return
     }
+
     focusedForActivationRef.current = true
+
     // Why: a new blank tab is claiming the address bar; focusing the guest here would yank it straight back.
     if (keepAddressBarFocusRef.current) {
       return
     }
+
     guestFocus.focus()
   }, [dragPassthroughActive, guestFocus, isActive, keepAddressBarFocusRef])
 }

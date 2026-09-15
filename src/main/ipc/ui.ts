@@ -29,18 +29,23 @@ export function getTrustedUIRendererWebContents(
 ): WebContents | null {
   // Why: exact targeting avoids waking retained browser/utility windows that cannot consume app UI events.
   const rendererId = trustedUIRendererWebContentsId
+
   if (rendererId == null || rendererId === excludedWebContentsId) {
     return null
   }
+
   const renderer = webContents.fromId(rendererId)
+
   if (!renderer || renderer.isDestroyed()) {
     return null
   }
+
   return renderer
 }
 
 export function getTrustedUIRendererWindow(): BrowserWindow | null {
   const renderer = getTrustedUIRendererWebContents()
+
   return renderer ? BrowserWindow.fromWebContents(renderer) : null
 }
 
@@ -71,6 +76,7 @@ export function registerUIHandlers(
     if (!isFeatureInteractionId(id)) {
       throw new Error('invalid_feature_interaction_id')
     }
+
     return store.recordFeatureInteraction(id)
   })
 
@@ -79,13 +85,17 @@ export function registerUIHandlers(
     if (!isTrustedUIRenderer(event.sender)) {
       return
     }
+
     // Why: coordinated renderer paste falls back here only after no Orca owner
     // claims the app-menu action; paste back into the requesting window only.
     const webContents = BrowserWindow.fromWebContents(event.sender)?.webContents
+
     if (options?.mode === 'paste-and-match-style') {
       webContents?.pasteAndMatchStyle()
+
       return
     }
+
     webContents?.paste()
   })
 
@@ -97,7 +107,9 @@ export function registerUIHandlers(
     ) {
       return
     }
+
     const target = BrowserWindow.fromWebContents(event.sender)?.webContents
+
     if (action === 'copy') {
       target?.copy()
     } else if (action === 'select-all') {
@@ -110,11 +122,13 @@ export function isTrustedUIRenderer(sender: WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
   }
+
   if (trustedUIRendererWebContentsId != null) {
     return sender.id === trustedUIRendererWebContentsId
   }
 
   const senderUrl = sender.getURL()
+
   if (process.env.ELECTRON_RENDERER_URL) {
     try {
       return new URL(senderUrl).origin === new URL(process.env.ELECTRON_RENDERER_URL).origin

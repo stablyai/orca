@@ -13,15 +13,19 @@ export function resolveBrowserReopenOnServerUrl(
   if (typeof url !== 'string') {
     return undefined
   }
+
   let normalized: string | null = null
+
   try {
     normalized = normalizeBrowserNavigationUrl(url)
   } catch {
     return undefined
   }
+
   if (!normalized || normalized === ORCA_BROWSER_BLANK_URL || normalized.startsWith('file:')) {
     return undefined
   }
+
   return normalized
 }
 

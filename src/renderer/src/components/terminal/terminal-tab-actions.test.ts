@@ -551,6 +551,7 @@ describe('closeTerminalTab', () => {
     overrides: { confirmClosePinnedTab: boolean } & Record<string, unknown>
   ): Record<string, unknown> {
     const { confirmClosePinnedTab, ...rest } = overrides
+
     return {
       settings: { activeRuntimeEnvironmentId: null, confirmClosePinnedTab },
       tabsByWorktree: {},

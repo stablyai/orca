@@ -26,6 +26,7 @@ describe('daemon endpoint ownership on win32', () => {
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
+
     rmSync(dir, { recursive: true, force: true })
   })
 

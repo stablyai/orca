@@ -21,12 +21,14 @@ export async function discardChanges(
   invalidateGitReadCaches()
   const resolvedWorktree = path.resolve(worktreePath)
   const resolvedTarget = path.resolve(worktreePath, filePath)
+
   try {
     if (!isWithinWorktree(path, resolvedWorktree, resolvedTarget)) {
       throw new Error(`Path "${filePath}" resolves outside the worktree`)
     }
 
     let tracked = false
+
     try {
       await gitExecFileAsync(
         ['ls-files', '--error-unmatch', '--', literalPathspec(filePath, options)],
@@ -46,6 +48,7 @@ export async function discardChanges(
           ...gitOptionsForWorktree(worktreePath, options)
         }
       )
+
       return
     }
 
@@ -64,6 +67,7 @@ async function listTrackedPathSpecs(
 ): Promise<string[]> {
   const trackedPaths: string[] = []
   const commands = bulkPathspecCommands(['ls-files', '-z', '--'], filePaths, worktreePath, options)
+
   for (const args of commands) {
     const { stdout } = await gitExecFileAsync(args, {
       ...gitOptionsForWorktree(worktreePath, options),
@@ -72,6 +76,7 @@ async function listTrackedPathSpecs(
       // path that fails to match is silently reclassified as untracked.
       captureWslLoginShellOutput: true
     })
+
     // Why: a tracked directory can hold enough paths to exceed the JS argument limit.
     for (const trackedPath of stdout.split('\0')) {
       if (trackedPath) {
@@ -79,6 +84,7 @@ async function listTrackedPathSpecs(
       }
     }
   }
+
   return trackedPaths
 }
 
@@ -90,6 +96,7 @@ async function cleanUntrackedPaths(
   // Why: Git pathspec cleanup avoids raw recursive deletion through symlinked parents.
   // A pathspec-free `clean -ffdx` would sweep the whole worktree; the chunker emits no empty chunk.
   const commands = bulkPathspecCommands(['clean', '-ffdx', '--'], filePaths, worktreePath, options)
+
   for (const args of commands) {
     await gitExecFileAsync(args, { ...gitOptionsForWorktree(worktreePath, options) })
   }
@@ -104,14 +111,17 @@ export async function bulkDiscardChanges(
   options: GitRuntimeOptions = {}
 ): Promise<void> {
   invalidateGitReadCaches()
+
   if (filePaths.length === 0) {
     return
   }
 
   try {
     const resolvedWorktree = path.resolve(worktreePath)
+
     for (const filePath of filePaths) {
       const resolvedTarget = path.resolve(worktreePath, filePath)
+
       if (!isWithinWorktree(path, resolvedWorktree, resolvedTarget)) {
         throw new Error(`Path "${filePath}" resolves outside the worktree`)
       }
@@ -130,6 +140,7 @@ export async function bulkDiscardChanges(
           worktreePath,
           options
         )
+
         for (const args of commands) {
           await gitExecFileAsync(args, { ...gitOptionsForWorktree(worktreePath, options) })
         }
@@ -146,6 +157,7 @@ export function isWithinWorktree(
   resolvedTarget: string
 ): boolean {
   const relativeTarget = pathApi.relative(resolvedWorktree, resolvedTarget)
+
   return !(
     relativeTarget === '' ||
     relativeTarget === '..' ||

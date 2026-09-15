@@ -14,10 +14,13 @@ import { NativeChatMessageList } from './NativeChatMessageList'
 import { installNativeChatMessageListTestViewport } from './native-chat-message-list-test-viewport'
 
 let restoreViewport = (): void => {}
+
 beforeAll(() => {
   restoreViewport = installNativeChatMessageListTestViewport()
 })
+
 afterAll(() => restoreViewport())
+
 afterEach(cleanup)
 
 const session: NativeChatLiveSession = {
@@ -306,6 +309,7 @@ describe('NativeChatMessageList spawn-group roster', () => {
   // the three real children were still running and completed 57-87s later.
   it('keeps live children working after a newer turn supersedes their own', () => {
     const startedAt = Date.now() - 3000
+
     const live = rosterSession(
       [
         { id: 'a', label: 'read_readme', state: 'working', startedAt },
@@ -313,6 +317,7 @@ describe('NativeChatMessageList spawn-group roster', () => {
       ],
       startedAt
     )
+
     render(
       <NativeChatMessageList
         session={{
@@ -372,11 +377,13 @@ describe('NativeChatMessageList childless spawn group', () => {
   function emptySlots(container: HTMLElement): Element[] {
     const column = container.querySelector('.max-w-4xl')
     expect(column).not.toBeNull()
+
     return Array.from(column!.children).filter((slot) => slot.textContent === '')
   }
 
   it('mounts no row for a bare spawn group with no children', () => {
     const startedAt = Date.now() - 3000
+
     const { container } = render(
       <NativeChatMessageList
         session={rosterSession(
@@ -396,6 +403,7 @@ describe('NativeChatMessageList childless spawn group', () => {
 
   it('falls back to the plain-text twin when the block it stands in for cannot draw', () => {
     const startedAt = Date.now() - 3000
+
     const { container } = render(
       <NativeChatMessageList
         session={rosterSession(

@@ -19,6 +19,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
     params: FederationPullParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
+
       return {
         dispatchId: params.dispatchId,
         runtimeEpoch: runtime.getRuntimeId(),
@@ -40,12 +41,16 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
     params: FederationAckParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
+
       const receivedSettlements = (params.settlements ?? []).filter(
         (settlement) => settlement.sequence <= params.throughSequence
       )
+
       const settlementsBySequence = new Map<number, (typeof receivedSettlements)[number]>()
+
       for (const settlement of receivedSettlements) {
         const existing = settlementsBySequence.get(settlement.sequence)
+
         if (
           existing &&
           !areFederatedLifecycleSettlementsEqual(existing.lifecycle, settlement.lifecycle)
@@ -55,22 +60,28 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
             `Federation acknowledgment for ${params.dispatchId} contains conflicting settlements.`
           )
         }
+
         settlementsBySequence.set(settlement.sequence, existing ?? settlement)
       }
+
       const settlements = [...settlementsBySequence.values()]
+
       const terminalSettlements = settlements.filter(
         (settlement) =>
           settlement.lifecycle.action === 'completed' || settlement.lifecycle.action === 'failed'
       )
+
       const terminalOutcomes = new Set(
         terminalSettlements.map((settlement) => settlement.lifecycle.action)
       )
+
       if (terminalOutcomes.size > 1) {
         throw new OrchestrationError(
           'request_mismatch',
           `Federation acknowledgment for ${params.dispatchId} contains conflicting settlements.`
         )
       }
+
       runtime.getOrchestrationDb().acknowledgeFederationRelay({
         dispatchId: params.dispatchId,
         direction: 'to_home',
@@ -88,6 +99,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
               }))
             })
       })
+
       for (const settlement of settlements) {
         publishFederatedLifecycleSettlement(
           runtime,
@@ -96,6 +108,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
           settlement.lifecycle as FederatedLifecycleSettlement
         )
       }
+
       return { dispatchId: params.dispatchId, acknowledgedThrough: params.throughSequence }
     }
   }),
@@ -104,13 +117,16 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
     params: FederationImportParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       const db = runtime.getOrchestrationDb()
+
       const attachment = requireHomeAttachment(
         runtime,
         params.dispatchId,
         authenticatedCallerFingerprint
       )
+
       let cursor = attachment.to_worker_imported_sequence
       let imported = 0
+
       for (const item of params.items) {
         if (item.dispatch_id !== params.dispatchId || item.sequence > cursor + 1) {
           throw new OrchestrationError(
@@ -118,20 +134,24 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
             `Home relay for ${params.dispatchId} is not contiguous after sequence ${cursor}.`
           )
         }
+
         if (item.sequence <= cursor) {
           continue
         }
+
         const currentAttachment = requireHomeAttachment(
           runtime,
           params.dispatchId,
           authenticatedCallerFingerprint
         )
+
         if (currentAttachment.state !== 'ready') {
           throw new OrchestrationError(
             'dispatch_inactive',
             `Remote Dispatch ${params.dispatchId} is not active.`
           )
         }
+
         if (item.kind === 'reply') {
           const reply = parseFederatedReply(item.payload)
           db.answerRemoteQuestion({
@@ -151,12 +171,15 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
               `Remote Dispatch ${params.dispatchId} does not support coordinator control mail.`
             )
           }
+
           const controlMessage = importFederatedControlMessage(db, {
             dispatchId: params.dispatchId,
             messageId: item.message_id,
             payload: item.payload
           })
+
           imported += controlMessage.imported ? 1 : 0
+
           if (controlMessage.imported) {
             runtime.notifyMessageArrived(`dispatch:${params.dispatchId}`, controlMessage.type)
           }
@@ -166,9 +189,11 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
             `Federated worker relay kind ${item.kind} is not supported.`
           )
         }
+
         cursor = item.sequence
         db.setRemoteWorkerImportSequence(params.dispatchId, cursor)
       }
+
       return { dispatchId: params.dispatchId, acknowledgedThrough: cursor, imported }
     }
   })
@@ -180,12 +205,14 @@ function requireHomeAttachment(
   callerFingerprint: string | undefined
 ) {
   const attachment = runtime.getOrchestrationDb().getRemoteDispatchAttachment(dispatchId)
+
   if (!attachment || attachment.home_peer_fingerprint !== callerFingerprint) {
     throw new OrchestrationError(
       'dispatch_not_found',
       `Remote Dispatch ${dispatchId} was not found for this Run home.`
     )
   }
+
   return attachment
 }
 
@@ -195,12 +222,15 @@ function parseFederatedReply(payload: string): {
   body: string
 } {
   let parsed: unknown
+
   try {
     parsed = JSON.parse(payload)
   } catch {
     throw new OrchestrationError('invalid_argument', 'Federated reply payload is invalid JSON.')
   }
+
   const reply = parsed as Record<string, unknown> | null
+
   if (
     !reply ||
     typeof reply.questionId !== 'string' ||
@@ -209,6 +239,7 @@ function parseFederatedReply(payload: string): {
   ) {
     throw new OrchestrationError('invalid_argument', 'Federated reply payload is incomplete.')
   }
+
   return {
     questionId: reply.questionId,
     answerMessageId: reply.answerMessageId,

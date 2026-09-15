@@ -50,23 +50,29 @@ function groupReferencedKeys(
   keys: Iterable<string> | undefined
 ): ReadonlyMap<string, ReferencedAuthorityScope> {
   const grouped = new Map<string, ReferencedAuthorityScope>()
+
   for (const key of keys ?? []) {
     const ref = parseHostStableKey(key)
+
     if (!ref) {
       continue
     }
+
     const authorityKey = automationAuthorityCatalogKey(ref.authority)
     let scope = grouped.get(authorityKey)
+
     if (!scope) {
       scope = { targetIds: new Set(), orphan: false }
       grouped.set(authorityKey, scope)
     }
+
     if (ref.selector.kind === 'ssh') {
       scope.targetIds.add(ref.selector.targetId)
     } else if (ref.selector.kind === 'orphan') {
       scope.orphan = true
     }
   }
+
   return grouped
 }
 
@@ -133,6 +139,7 @@ function resolveSshCatalogState(
   if (isLive) {
     return targetsHydrated ? 'authoritative' : 'unhydrated'
   }
+
   // Why: a tombstone is positive evidence recorded by the owning authority; a
   // bare absence only counts once that authority's target list actually loaded.
   return isTombstoned || targetsHydrated ? 'removed' : 'unhydrated'
@@ -151,13 +158,16 @@ function resolveSshScopeGap(
   if (querySupport !== 'scoped') {
     return authorityScopeGap(querySupport)
   }
+
   if (catalogState === 'removed') {
     return 'target-removed'
   }
+
   // Checked before the generation: a stale bucket drops generations on a mere disconnect.
   if (catalogState === 'unhydrated') {
     return 'target-unverified'
   }
+
   return generation === undefined ? 'target-unregistered' : undefined
 }
 
@@ -167,24 +177,32 @@ function projectSshEntries(ctx: AuthorityProjectionContext): AutomationHostCatal
       .filter((target) => !isRuntimeOwnedSshTargetId(target.targetId))
       .map((target) => [target.targetId, target])
   )
+
   const candidateIds = new Set<string>(liveTargets.keys())
+
   for (const targetId of ctx.ssh.removedTargetLabels.keys()) {
     candidateIds.add(targetId)
   }
+
   for (const targetId of ctx.referenced.targetIds) {
     candidateIds.add(targetId)
   }
+
   const entries: AutomationHostCatalogEntry[] = []
+
   for (const targetId of candidateIds) {
     if (isRuntimeOwnedSshTargetId(targetId)) {
       continue
     }
+
     const live = liveTargets.get(targetId)
+
     const catalogState = resolveSshCatalogState(
       live !== undefined,
       ctx.ssh.removedTargetLabels.has(targetId),
       ctx.ssh.targetsHydrated
     )
+
     const generation = live?.generation
     const scoped = ctx.querySupport === 'scoped' && generation !== undefined
     entries.push(
@@ -213,15 +231,18 @@ function projectSshEntries(ctx: AuthorityProjectionContext): AutomationHostCatal
       )
     )
   }
+
   return entries
 }
 
 function projectOrphanEntry(ctx: AuthorityProjectionContext): AutomationHostCatalogEntry | null {
   const orphanCount = ctx.orphanCount
   const settled = orphanCount !== undefined
+
   if (!ctx.referenced.orphan && !(orphanCount !== undefined && orphanCount > 0)) {
     return null
   }
+
   return makeEntry(
     { authority: ctx.authority, selector: { kind: 'orphan' } },
     {
@@ -240,6 +261,7 @@ function projectOrphanEntry(ctx: AuthorityProjectionContext): AutomationHostCata
 
 function projectAuthority(ctx: AuthorityProjectionContext): AutomationHostCatalogEntry[] {
   const orphan = projectOrphanEntry(ctx)
+
   return [projectSelfEntry(ctx), ...projectSshEntries(ctx), ...(orphan ? [orphan] : [])]
 }
 
@@ -248,6 +270,7 @@ export function buildAutomationHostCatalog(
 ): AutomationHostCatalog {
   const referenced = groupReferencedKeys(input.referencedStableKeys)
   const desktopAuthority: StableAutomationAuthorityRef = { kind: 'desktop' }
+
   const contexts: AuthorityProjectionContext[] = [
     {
       authority: desktopAuthority,
@@ -264,6 +287,7 @@ export function buildAutomationHostCatalog(
         kind: 'runtime',
         environmentId: runtime.environmentId
       }
+
       return {
         authority,
         authorityLabel: runtime.label,
@@ -276,8 +300,10 @@ export function buildAutomationHostCatalog(
       }
     })
   ]
+
   const entries = orderAutomationHostCatalogEntries(contexts.flatMap(projectAuthority))
   const byStableKey = new Map(entries.map((entry) => [entry.stableKey, entry]))
+
   return {
     entries,
     byStableKey,

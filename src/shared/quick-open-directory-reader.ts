@@ -23,15 +23,18 @@ export async function readQuickOpenDirectoryEntries(opts: {
 }): Promise<QuickOpenDirectoryEntry[]> {
   try {
     const stat = await lstat(opts.absPath)
+
     if (!isQuickOpenReadableDirectory(stat, opts.allowSymlinkedRoot)) {
       return []
     }
 
     const entries: QuickOpenDirectoryEntry[] = []
     const directory = await opendir(opts.absPath)
+
     try {
       throwIfFileListingCancelled(opts.signal)
       assertQuickOpenReaddirDeadline(opts.budget)
+
       for await (const entry of directory) {
         throwIfFileListingCancelled(opts.signal)
         assertQuickOpenReaddirDeadline(opts.budget)
@@ -53,16 +56,19 @@ export async function readQuickOpenDirectoryEntries(opts: {
         await directory.close()
       } catch {}
     }
+
     entries.sort((left, right) => compareFileNames(left.name, right.name))
 
     // Why: discard buffered names if the path became a symlink while its
     // directory handle was open; descendants must never escape the root.
     const statAfterRead = await lstat(opts.absPath)
+
     return isQuickOpenReadableDirectory(statAfterRead, opts.allowSymlinkedRoot) ? entries : []
   } catch (error) {
     if (isQuickOpenReaddirBudgetError(error) || isFileListingCancellation(error)) {
       throw error
     }
+
     // Permission denied or a vanished subtree must not hide readable siblings.
     return []
   }

@@ -11,9 +11,11 @@ import type { TerminalBulkCloseController } from './use-terminal-bulk-close-acti
 
 export function useTerminalActivationActions(controller: TerminalBulkCloseController) {
   const { activeWorktreeId, setActiveBrowserTab, setActiveTab, setActiveTabType } = controller
+
   const handleActivateTab = useCallback(
     (tabId: string) => {
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+
       if (activeWorktreeId && isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         void activateWebRuntimeSessionTab({
           worktreeId: activeWorktreeId,
@@ -21,6 +23,7 @@ export function useTerminalActivationActions(controller: TerminalBulkCloseContro
           environmentId: runtimeEnvironmentId
         })
       }
+
       setActiveTab(tabId)
       setActiveTabType('terminal')
     },
@@ -43,6 +46,7 @@ export function useTerminalActivationActions(controller: TerminalBulkCloseContro
     (tabId: string) => {
       const state = useAppStore.getState()
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+
       if (
         activeWorktreeId &&
         isWebRuntimeSessionActive(runtimeEnvironmentId) &&
@@ -54,6 +58,7 @@ export function useTerminalActivationActions(controller: TerminalBulkCloseContro
           environmentId: runtimeEnvironmentId
         })
       }
+
       setActiveBrowserTab(tabId)
       setActiveTabType('browser')
     },

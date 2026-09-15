@@ -22,15 +22,19 @@ import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from './ssh-connection-utils
 import { MIN_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../../shared/ssh-types'
 
 vi.mock('ssh2', async () => (await import('./ssh-connection-test-harness')).createSsh2Module())
+
 vi.mock('./system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
+
 vi.mock('./ssh-system-fallback', async () =>
   (await import('./ssh-connection-test-harness')).createSystemFallbackModule()
 )
+
 vi.mock('./ssh-control-socket', async () =>
   (await import('./ssh-connection-test-harness')).createControlSocketModule()
 )
+
 vi.mock('./ssh-config-parser', async () =>
   (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
 )
@@ -42,12 +46,14 @@ describe('SshConnection', () => {
 
   it('forces a fresh SSH connection for an explicit reconnect', async () => {
     const states: string[] = []
+
     const conn = new SshConnection(
       createTarget(),
       createCallbacks({
         onStateChange: vi.fn((_id, state) => states.push(state.status))
       })
     )
+
     await conn.connect()
 
     await conn.reconnect()
@@ -59,6 +65,7 @@ describe('SshConnection', () => {
 
   it('escalates the backoff across repeated post-handshake drops', async () => {
     vi.useFakeTimers()
+
     try {
       const conn = new SshConnection(createTarget(), createCallbacks())
       await connectWithFakeTimers(conn)
@@ -83,8 +90,10 @@ describe('SshConnection', () => {
 
   it('publishes reconnectAttempt=0 on the reconnected state and the escalating step while reconnecting', async () => {
     vi.useFakeTimers()
+
     try {
       const published: { status: string; reconnectAttempt: number }[] = []
+
       const conn = new SshConnection(
         createTarget(),
         createCallbacks({
@@ -93,6 +102,7 @@ describe('SshConnection', () => {
           )
         })
       )
+
       await connectWithFakeTimers(conn)
 
       for (let drop = 0; drop < 3; drop++) {
@@ -116,8 +126,10 @@ describe('SshConnection', () => {
     // Accepted delta: reset() puts the ladder at the head and the explicit attempt consumes no
     // step, so the first failure publishes 0/1000ms where the single-counter version published 1/2000ms.
     vi.useFakeTimers()
+
     try {
       const published: { status: string; reconnectAttempt: number }[] = []
+
       const conn = new SshConnection(
         createTarget(),
         createCallbacks({
@@ -126,6 +138,7 @@ describe('SshConnection', () => {
           )
         })
       )
+
       await connectWithFakeTimers(conn)
 
       ssh2Mock.connectBehavior = 'error'
@@ -149,20 +162,24 @@ describe('SshConnection', () => {
 
   it('reaches reconnection-failed after 9 consecutive handshake failures', async () => {
     vi.useFakeTimers()
+
     try {
       const statuses: string[] = []
+
       const conn = new SshConnection(
         createTarget(),
         createCallbacks({
           onStateChange: vi.fn((_id, state) => statuses.push(state.status))
         })
       )
+
       await connectWithFakeTimers(conn)
 
       ssh2Mock.connectBehavior = 'error'
       ssh2Mock.connectErrorMessage = 'connect ETIMEDOUT 10.0.0.5:22'
       ssh2Mock.connectErrorCode = 'ETIMEDOUT'
       emitSshEvent('close')
+
       for (const delayMs of RECONNECT_BACKOFF_MS) {
         await advanceToNextSshClient(delayMs)
       }
@@ -178,6 +195,7 @@ describe('SshConnection', () => {
 
   it('retries a saturated flap streak while the remote relay is still in grace', async () => {
     vi.useFakeTimers()
+
     try {
       const conn = new SshConnection(createTarget(), createCallbacks())
       await connectWithFakeTimers(conn)
@@ -188,6 +206,7 @@ describe('SshConnection', () => {
         emitSshEvent('close')
         await advanceToNextSshClient(45_000)
       }
+
       expect(conn.getState().status).toBe('connected')
 
       const before = clientInstances.length
@@ -206,6 +225,7 @@ describe('SshConnection', () => {
   it('logs the delay ladder position separately from the failure streak', async () => {
     vi.useFakeTimers()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const conn = new SshConnection(createTarget(), createCallbacks())
       await connectWithFakeTimers(conn)
@@ -218,6 +238,7 @@ describe('SshConnection', () => {
       const lastReconnectLog = warn.mock.calls
         .map((call) => String(call[0]))
         .findLast((line) => line.includes('Reconnecting to'))
+
       // A saturated flap ladder must not read like the connection is one step from giving up.
       expect(lastReconnectLog).toContain('delay step 9/9')
       expect(lastReconnectLog).toContain('failed handshakes 0/9')
@@ -229,14 +250,17 @@ describe('SshConnection', () => {
 
   it('keeps retrying when a flap streak is followed by one handshake failure', async () => {
     vi.useFakeTimers()
+
     try {
       const statuses: string[] = []
+
       const conn = new SshConnection(
         createTarget(),
         createCallbacks({
           onStateChange: vi.fn((_id, state) => statuses.push(state.status))
         })
       )
+
       await connectWithFakeTimers(conn)
 
       // 12 flaps saturate the delay ladder without ever touching the failure streak.
@@ -244,6 +268,7 @@ describe('SshConnection', () => {
         emitSshEvent('close')
         await advanceToNextSshClient(30_000)
       }
+
       ssh2Mock.connectSequence = [new Error('connect ETIMEDOUT 10.0.0.5:22')]
       emitSshEvent('close')
       await advanceToNextSshClient(30_000)
@@ -258,15 +283,18 @@ describe('SshConnection', () => {
 
   it('keeps a system-transport target on the ladder after a probe timeout', async () => {
     vi.useFakeTimers()
+
     try {
       vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
       const statuses: string[] = []
+
       const conn = new SshConnection(
         createTarget(),
         createCallbacks({
           onStateChange: vi.fn((_id, state) => statuses.push(state.status))
         })
       )
+
       await conn.connect()
       expect(conn.usesSystemSshTransport()).toBe(true)
 
@@ -298,6 +326,7 @@ describe('SshConnection', () => {
           releaseParked = () => resolve(null)
         })
     )
+
     const conn = new SshConnection(
       createTarget(),
       createCallbacks({
@@ -326,6 +355,7 @@ describe('SshConnection', () => {
           releaseParked = () => resolve(null)
         })
     )
+
     const conn = new SshConnection(
       createTarget(),
       createCallbacks({

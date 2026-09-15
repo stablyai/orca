@@ -53,12 +53,15 @@ export function buildStructuredJournalArchive(input: {
 }): WorkerStructuredJournalArchive {
   const bounded = boundStructuredJournalTail(input.items)
   const warnings = [...bounded.warnings]
+
   if (input.hasOlder) {
     warnings.push('Older journal items were omitted from the bounded archive.')
   }
+
   if (bounded.limited) {
     warnings.push('The oldest archived journal messages were dropped to fit the size bound.')
   }
+
   return {
     version: 1,
     agent: input.agent,

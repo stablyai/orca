@@ -17,14 +17,23 @@ const localRepo: Repo = {
 }
 
 const projectsList = vi.fn()
+
 const projectsUpdate = vi.fn()
+
 const projectsCreateHostSetup = vi.fn()
+
 const projectsSetupExistingFolder = vi.fn()
+
 const projectsUpdateHostSetup = vi.fn()
+
 const projectsDeleteHostSetup = vi.fn()
+
 const reposList = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
+
 const dispatchEventMock = vi.fn()
 
 beforeEach(() => {
@@ -80,6 +89,7 @@ describe('repo slice project runtime updates', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     projectsUpdate.mockResolvedValue({
       ...project,
       localWindowsRuntimePreference: { kind: 'windows-host' }
@@ -111,6 +121,7 @@ describe('repo slice project runtime updates', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const setup: ProjectHostSetup = {
       id: 'setup-1',
       projectId: project.id,
@@ -123,6 +134,7 @@ describe('repo slice project runtime updates', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     projectsList.mockResolvedValue([project])
     window.api.projects.listHostSetups = vi.fn().mockResolvedValue([setup])
     reposList.mockResolvedValue([localRepo])
@@ -146,6 +158,7 @@ describe('repo slice project runtime updates', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     const refreshedProject: Project = {
       id: staleProject.id,
       displayName: staleProject.displayName,
@@ -154,6 +167,7 @@ describe('repo slice project runtime updates', () => {
       createdAt: 1,
       updatedAt: 2
     }
+
     const setup: ProjectHostSetup = {
       id: 'setup-1',
       projectId: staleProject.id,
@@ -166,6 +180,7 @@ describe('repo slice project runtime updates', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     projectsList.mockResolvedValue([refreshedProject])
     window.api.projects.listHostSetups = vi.fn().mockResolvedValue([setup])
     reposList.mockResolvedValue([localRepo])
@@ -186,6 +201,7 @@ describe('repo slice project runtime updates', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     projectsUpdate.mockResolvedValue({
       ...project,
       localWindowsRuntimePreference: { kind: 'windows-host' }
@@ -216,6 +232,7 @@ describe('repo slice project runtime updates', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-project-update',
       ok: true,
@@ -278,6 +295,7 @@ describe('repo slice project runtime updates', () => {
       createdAt: 0,
       updatedAt: 0
     }
+
     projectsUpdate.mockResolvedValue({
       ...project,
       sourceRepoIds: ['local-repo'],
@@ -305,6 +323,7 @@ describe('repo slice project runtime updates', () => {
       createdAt: 1,
       updatedAt: 2
     }
+
     projectsUpdate.mockResolvedValue({
       ...project,
       sourceRepoIds: ['local-repo'],
@@ -334,6 +353,7 @@ describe('repo slice project runtime updates', () => {
       createdAt: 1,
       updatedAt: 2
     }
+
     projectsUpdate.mockResolvedValue({
       id: project.id,
       displayName: project.displayName,

@@ -23,9 +23,11 @@ export function clearLazyChunkBreadcrumbDedupeForTest(): void {
 
 function describeLazyChunkCause(error: Error): string {
   const cause = (error as { cause?: unknown }).cause
+
   if (cause instanceof Error) {
     return `${cause.name}: ${cause.message}`
   }
+
   return cause === undefined ? 'unknown' : String(cause)
 }
 
@@ -55,8 +57,10 @@ export class RichMarkdownErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, info: React.ErrorInfo): void {
     console.error('[RichMarkdownEditor] render crash contained by boundary', error, info)
+
     if (isLazyChunkLoadError(error)) {
       const cause = describeLazyChunkCause(error)
+
       if (!recordedLazyChunkCauses.has(cause)) {
         recordedLazyChunkCauses.add(cause)
         recordRendererCrashBreadcrumb('lazy_chunk_boundary_degraded', {
@@ -65,8 +69,10 @@ export class RichMarkdownErrorBoundary extends React.Component<Props, State> {
           cause
         })
       }
+
       return
     }
+
     void reportReactErrorBoundaryCrash({
       boundaryId: 'editor.rich-markdown',
       surface: 'rich-markdown-editor',
@@ -104,6 +110,7 @@ export class RichMarkdownErrorBoundary extends React.Component<Props, State> {
         </div>
       )
     }
+
     return this.props.children
   }
 }

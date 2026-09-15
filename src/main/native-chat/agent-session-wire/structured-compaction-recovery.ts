@@ -9,6 +9,7 @@ export async function recoverInterruptedCompaction(
   fence: number
 ): Promise<void> {
   const command = store.getRecord(sessionId)?.conversationCommand
+
   if (
     command?.command !== 'compact' ||
     command.phase !== 'prepared' ||
@@ -17,6 +18,7 @@ export async function recoverInterruptedCompaction(
   ) {
     return
   }
+
   const error = 'Previous compaction completion could not be confirmed after session recovery.'
   await journal.appendItem(
     { provider: 'orca', clientMessageId: `compact:${command.operationId}` },

@@ -89,6 +89,7 @@ describe('checklistItemsFromVersion', () => {
         ]
       }
     } as unknown as SkillCloudVersion
+
     expect(checklistItemsFromVersion(bundled).map((item) => item.name)).toEqual(['alpha', 'beta'])
   })
 })

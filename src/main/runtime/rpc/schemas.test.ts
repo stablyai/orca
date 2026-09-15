@@ -37,9 +37,11 @@ function methodParams(
   name: string
 ): ZodType {
   const method = methods.find((candidate) => candidate.name === name)
+
   if (!method?.params) {
     throw new Error(`missing test method schema: ${name}`)
   }
+
   return method.params
 }
 
@@ -88,6 +90,7 @@ describe('RPC optional pipe schemas', () => {
 
   it('requires complete, bounded orphan adoption claims and a topology revision', () => {
     const adopt = methodParams(TERMINAL_ORPHAN_METHODS, 'terminal.adoptOrphans')
+
     const claim = {
       terminal: 'term-live',
       ptyId: 'pty-live',

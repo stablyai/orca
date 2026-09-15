@@ -30,6 +30,7 @@ export type RelayAiVaultServiceRequest =
     }
 
 export type RelayAiVaultServiceLane = 'cache' | 'interactive'
+
 export type RelayAiVaultServiceOperation = RelayAiVaultServiceRequest['operation']
 
 /** Title reads must not queue behind a full scan; they back interactive UI. */
@@ -64,7 +65,9 @@ export function isRelayAiVaultServiceRequest(value: unknown): value is RelayAiVa
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const message = value as Record<string, unknown>
+
   return (
     message.type === 'request' &&
     Number.isSafeInteger(message.id) &&
@@ -78,9 +81,12 @@ export function isRelayAiVaultServiceChildMessage(
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const message = value as Record<string, unknown>
+
   if (message.type === 'ready') {
     return message.protocol === RELAY_AI_VAULT_SERVICE_PROTOCOL && Number.isSafeInteger(message.pid)
   }
+
   return (message.type === 'result' || message.type === 'error') && Number.isSafeInteger(message.id)
 }

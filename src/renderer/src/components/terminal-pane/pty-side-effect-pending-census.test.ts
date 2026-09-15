@@ -4,6 +4,7 @@ import { registerPtySideEffectPendingGauge } from './pty-side-effect-pending-cen
 
 function ptySideEffectCounts(): { pending: number; retained: number; processors: number } {
   const counts = collectRendererMemoryProfileCounts()
+
   return {
     pending: counts['ptySideEffects.pending'],
     retained: counts['ptySideEffects.retained'],
@@ -14,6 +15,7 @@ function ptySideEffectCounts(): { pending: number; retained: number; processors:
 function fixedGauge(pending: number, retained = pending): { dispose: () => void } {
   // Why the local: the census holds gauges weakly, so a test gauge needs a strong owner too.
   const gauge = { pending: () => pending, retained: () => retained }
+
   return { dispose: registerPtySideEffectPendingGauge(gauge) }
 }
 
@@ -58,6 +60,7 @@ describe('pty side-effect pending census', () => {
   it('stops tracking new gauges past the cap so a missed dispose cannot grow it', () => {
     const before = ptySideEffectCounts()
     const owners = Array.from({ length: 600 }, () => fixedGauge(1))
+
     try {
       expect(ptySideEffectCounts().processors).toBe(512)
     } finally {
@@ -65,6 +68,7 @@ describe('pty side-effect pending census', () => {
         owner.dispose()
       }
     }
+
     expect(ptySideEffectCounts()).toEqual(before)
   })
 
@@ -106,6 +110,7 @@ describe('pty side-effect pending census', () => {
     for (let i = 0; i < 100; i += 1) {
       processor.processData(`\x1b]0;census-title-${i}\x07`, { onData: vi.fn() })
     }
+
     expect(ptySideEffectCounts()).toEqual({
       pending: before.pending + 100,
       retained: before.retained + 100,

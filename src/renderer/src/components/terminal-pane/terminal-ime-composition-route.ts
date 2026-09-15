@@ -2,6 +2,7 @@ import type { IDisposable, Terminal } from '@xterm/xterm'
 import type { PtyTransport } from './pty-transport'
 
 export const XTERM_COMPOSITION_SESSION_START_EVENT = 'xterm-composition-session-start'
+
 export const XTERM_COMPOSITION_SESSION_END_EVENT = 'xterm-composition-session-end'
 
 export type TerminalImeCompositionSessionDetail = {
@@ -30,14 +31,17 @@ function addPendingCompositionSession(terminalElement: HTMLElement, sessionId: n
 function removePendingCompositionSession(terminalElement: HTMLElement, sessionId: number): void {
   const sessionCounts = pendingCompositionSessionCountsByElement.get(terminalElement)
   const count = sessionCounts?.get(sessionId)
+
   if (!sessionCounts || count === undefined) {
     return
   }
+
   if (count > 1) {
     sessionCounts.set(sessionId, count - 1)
   } else {
     sessionCounts.delete(sessionId)
   }
+
   if (!sessionCounts.size) {
     pendingCompositionSessionCountsByElement.delete(terminalElement)
   }
@@ -49,6 +53,7 @@ export function capturePendingTerminalImeCompositionSessions(
   if (!terminalElement) {
     return new Set()
   }
+
   return new Set(pendingCompositionSessionCountsByElement.get(terminalElement)?.keys())
 }
 
@@ -60,18 +65,23 @@ export function hasPendingTerminalImeComposition(
   if (!terminalElement) {
     return false
   }
+
   const sessionCounts = pendingCompositionSessionCountsByElement.get(terminalElement)
+
   if (!sessionCounts) {
     return false
   }
+
   if (!snapshot) {
     return true
   }
+
   for (const sessionId of snapshot) {
     if (sessionCounts.has(sessionId)) {
       return true
     }
   }
+
   return false
 }
 
@@ -81,14 +91,19 @@ export function readTerminalImeCompositionSessionDetail(
   if (!(event instanceof CustomEvent)) {
     return null
   }
+
   const detail = event.detail as Partial<TerminalImeCompositionSessionDetail> | null
+
   if (!detail) {
     return null
   }
+
   const id = detail.id
+
   if (typeof id !== 'number' || !Number.isSafeInteger(id) || id <= 0) {
     return null
   }
+
   return {
     id,
     data: typeof detail.data === 'string' ? detail.data : undefined,
@@ -116,12 +131,15 @@ export function installTerminalImeCompositionRoute(args: {
 
   const onSessionStart = (event: Event): void => {
     const detail = readTerminalImeCompositionSessionDetail(event)
+
     if (!detail || disposed) {
       return
     }
+
     if (!sessions.has(detail.id)) {
       addPendingCompositionSession(terminalElement, detail.id)
     }
+
     sessions.set(detail.id, {
       ptyId: args.capturedTransport.getPtyId()
     })
@@ -129,19 +147,24 @@ export function installTerminalImeCompositionRoute(args: {
 
   const onSessionEnd = (event: Event): void => {
     const detail = readTerminalImeCompositionSessionDetail(event)
+
     if (!detail) {
       return
     }
+
     const captured = sessions.get(detail.id)
+
     if (!captured) {
       // Not our session — the route was installed mid-composition, so no start was seen.
       // Cancelling here would suppress xterm's own insertion with nothing to replace it.
       return
     }
+
     // Owned, so xterm stands down even on the drop paths below: that drop is this route's call.
     event.preventDefault()
     sessions.delete(detail.id)
     removePendingCompositionSession(terminalElement, detail.id)
+
     if (
       disposed ||
       detail.dataPendingReconciliation ||
@@ -152,6 +175,7 @@ export function installTerminalImeCompositionRoute(args: {
     ) {
       return
     }
+
     args.terminal.input(detail.data)
   }
 
@@ -161,9 +185,11 @@ export function installTerminalImeCompositionRoute(args: {
   return {
     dispose: () => {
       disposed = true
+
       for (const sessionId of sessions.keys()) {
         removePendingCompositionSession(terminalElement, sessionId)
       }
+
       sessions.clear()
       terminalElement.removeEventListener(XTERM_COMPOSITION_SESSION_START_EVENT, onSessionStart)
       terminalElement.removeEventListener(XTERM_COMPOSITION_SESSION_END_EVENT, onSessionEnd)

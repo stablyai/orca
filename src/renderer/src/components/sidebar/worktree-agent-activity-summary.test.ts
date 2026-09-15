@@ -66,6 +66,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const firstPaneKey = makePaneKey('tab-1', LEAF_ID)
     const retainedTab = makeTab('tab-2', 'repo::/wt-2')
+
     const state: AgentActivityInput = {
       tabsByWorktree: {
         'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')],
@@ -102,12 +103,15 @@ describe('selectWorktreeAgentActivitySummary', () => {
   it('reuses the cached summary when same-state agent pings only clone the status map', () => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)
+
     const tabsByWorktree = {
       'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')]
     }
+
     const migrationUnsupportedByPtyId = {}
     const retainedAgentsByPaneKey = {}
     const entry = makeAgentStatusEntry({ paneKey, state: 'working' })
+
     const state: AgentActivityInput = {
       tabsByWorktree,
       agentStatusEpoch: 0,
@@ -118,6 +122,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
       runtimeAgentOrchestrationByPaneKey: {},
       retainedAgentsByPaneKey
     }
+
     const sameStatePing = {
       ...state,
       agentStatusByPaneKey: {
@@ -141,11 +146,14 @@ describe('selectWorktreeAgentActivitySummary', () => {
   it('rebuilds the summary when the agent status epoch changes', () => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)
+
     const tabsByWorktree = {
       'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')]
     }
+
     const migrationUnsupportedByPtyId = {}
     const retainedAgentsByPaneKey = {}
+
     const state: AgentActivityInput = {
       tabsByWorktree,
       agentStatusEpoch: 0,
@@ -156,6 +164,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
       runtimeAgentOrchestrationByPaneKey: {},
       retainedAgentsByPaneKey
     }
+
     const changedState = {
       ...state,
       agentStatusEpoch: 1,
@@ -178,6 +187,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
   it('separates passive monitoring from active working', () => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)
+
     const summary = selectWorktreeAgentActivitySummary(
       {
         tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
@@ -202,6 +212,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
   it('separates interrupted outcomes from clean completion', () => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)
+
     const summary = selectWorktreeAgentActivitySummary(
       {
         tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
@@ -226,6 +237,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
   it('lets an unconfirmed restored row suppress only its pane title', () => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const paneKey = makePaneKey('tab-1', LEAF_ID)
+
     const summary = selectWorktreeAgentActivitySummary(
       {
         tabsByWorktree: {
@@ -253,27 +265,34 @@ describe('selectWorktreeAgentActivitySummary', () => {
   it('limits summary-reference churn to the transitioning worktree at scale', () => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const worktreeIds = Array.from({ length: 12 }, (_, index) => `repo::/wt-${index}`)
+
     const tabsByWorktree = Object.fromEntries(
       worktreeIds.map((worktreeId, index) => [worktreeId, [makeTab(`tab-${index}`, worktreeId)]])
     )
+
     const initialStatuses = Object.fromEntries(
       worktreeIds.map((_, index) => {
         const paneKey = makePaneKey(`tab-${index}`, LEAF_ID)
+
         return [paneKey, makeAgentStatusEntry({ paneKey, state: 'working' })]
       })
     )
+
     const changedPaneKey = makePaneKey('tab-11', LEAF_ID)
+
     const baseInputs = {
       tabsByWorktree,
       migrationUnsupportedByPtyId: {},
       runtimeAgentOrchestrationByPaneKey: {},
       retainedAgentsByPaneKey: {}
     }
+
     const state: AgentActivityInput = {
       ...baseInputs,
       agentStatusEpoch: 0,
       agentStatusByPaneKey: initialStatuses
     }
+
     const changedState: AgentActivityInput = {
       ...baseInputs,
       agentStatusEpoch: 1,
@@ -286,10 +305,13 @@ describe('selectWorktreeAgentActivitySummary', () => {
     const before = worktreeIds.map((worktreeId) =>
       selectWorktreeAgentActivitySummary(state, worktreeId)
     )
+
     const after = worktreeIds.map((worktreeId) =>
       selectWorktreeAgentActivitySummary(changedState, worktreeId)
     )
+
     const changedReferenceCount = after.filter((summary, index) => summary !== before[index]).length
+
     const shallowNotificationCount = after.filter(
       (summary, index) => !shallow(summary, before[index])
     ).length
@@ -307,11 +329,13 @@ describe('selectWorktreeAgentActivitySummary', () => {
     const firstPaneKey = makePaneKey('tab-1', LEAF_ID)
     const secondPaneKey = makePaneKey('tab-2', LEAF_ID)
     const replacementPaneKey = makePaneKey('tab-3', LEAF_ID)
+
     const sharedInputs = {
       migrationUnsupportedByPtyId: {},
       runtimeAgentOrchestrationByPaneKey: {},
       retainedAgentsByPaneKey: {}
     }
+
     const initial: AgentActivityInput = {
       ...sharedInputs,
       tabsByWorktree: {
@@ -323,6 +347,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
         [secondPaneKey]: makeAgentStatusEntry({ paneKey: secondPaneKey, state: 'working' })
       }
     }
+
     const reordered: AgentActivityInput = {
       ...initial,
       agentStatusEpoch: 1,
@@ -331,6 +356,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
         [firstPaneKey]: initial.agentStatusByPaneKey[firstPaneKey]
       }
     }
+
     const replacement: AgentActivityInput = {
       ...sharedInputs,
       tabsByWorktree: { [worktreeId]: [makeTab('tab-3', worktreeId)] },
@@ -342,6 +368,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
         })
       }
     }
+
     const removed: AgentActivityInput = {
       ...replacement,
       agentStatusEpoch: 3,
@@ -366,6 +393,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
   it('summarizes worktree-attributed rows missing from the tab list', () => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const childPaneKey = makePaneKey('tab-child', '22222222-2222-4222-8222-222222222222')
+
     const state: AgentActivityInput = {
       tabsByWorktree: {
         'repo::/wt-1': [makeTab('tab-parent', 'repo::/wt-1')]
@@ -392,6 +420,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const parentPaneKey = makePaneKey('tab-parent', LEAF_ID)
     const childPaneKey = makePaneKey('tab-child', '22222222-2222-4222-8222-222222222222')
+
     const state: AgentActivityInput = {
       tabsByWorktree: {
         'repo::/wt-1': [makeTab('tab-parent', 'repo::/wt-1')]
@@ -418,6 +447,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     vi.spyOn(Date, 'now').mockReturnValue(2_000)
     const parentPaneKey = makePaneKey('tab-parent', LEAF_ID)
     const childPaneKey = makePaneKey('tab-child', '22222222-2222-4222-8222-222222222222')
+
     const state: AgentActivityInput = {
       tabsByWorktree: {
         'repo::/wt-1': [makeTab('tab-parent', 'repo::/wt-1')]
@@ -453,6 +483,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const entry = makeAgentStatusEntry({ paneKey, state: 'done', worktreeId: 'repo::/wt-1' })
     vi.spyOn(Date, 'now').mockReturnValue(entry.updatedAt + AGENT_STATUS_STALE_AFTER_MS + 1)
+
     const state: AgentActivityInput = {
       tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
       agentStatusEpoch: 0,
@@ -479,6 +510,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
     const entry = makeAgentStatusEntry({ paneKey, state: 'done', worktreeId: 'repo::/wt-1' })
     vi.spyOn(Date, 'now').mockReturnValue(entry.updatedAt + AGENT_STATUS_STALE_AFTER_MS + 1)
     const tab = { ...makeTab('tab-1', 'repo::/wt-1'), title: 'Codex - action required' }
+
     const state: AgentActivityInput = {
       tabsByWorktree: { 'repo::/wt-1': [tab] },
       agentStatusEpoch: 0,
@@ -487,6 +519,7 @@ describe('selectWorktreeAgentActivitySummary', () => {
       runtimeAgentOrchestrationByPaneKey: {},
       retainedAgentsByPaneKey: {}
     }
+
     const summary = selectWorktreeAgentActivitySummary(state, 'repo::/wt-1')
 
     const status = resolveWorktreeStatus({

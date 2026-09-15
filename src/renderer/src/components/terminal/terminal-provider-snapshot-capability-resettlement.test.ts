@@ -21,6 +21,7 @@ import {
 } from './terminal-provider-snapshot-capability'
 
 const WORKTREE_ID = 'wt-resettlement'
+
 const PTY_ID = `${WORKTREE_ID}${PTY_SESSION_ID_SEPARATOR}session-1`
 
 /** Drives synchronize past each retry deadline until the budget is exhausted. */
@@ -30,6 +31,7 @@ async function exhaustRetryBudget(
 ): Promise<number> {
   const livePtyIds = [PTY_ID]
   let nowMs = startMs
+
   // 8 attempts across the 1/2/4/8/16/30/30s ladder, plus slack iterations.
   for (let attempt = 0; attempt < 12; attempt += 1) {
     const retryDelayMs = await synchronizeTerminalProviderSnapshotCapabilities(
@@ -37,11 +39,14 @@ async function exhaustRetryBudget(
       resolver,
       nowMs
     )
+
     if (retryDelayMs === null) {
       break
     }
+
     nowMs += retryDelayMs + 1
   }
+
   return nowMs
 }
 
@@ -52,6 +57,7 @@ describe('terminal provider snapshot capability re-settlement', () => {
     const failingResolver = vi.fn(async () => {
       throw new Error('daemon unavailable')
     })
+
     await synchronizeTerminalProviderSnapshotCapabilities([PTY_ID], failingResolver, 1_000)
 
     expect(failingResolver).toHaveBeenCalled()
@@ -63,6 +69,7 @@ describe('terminal provider snapshot capability re-settlement', () => {
     const failingResolver = vi.fn(async () => {
       throw new Error('daemon unavailable')
     })
+
     const settledAtMs = await exhaustRetryBudget(failingResolver, 1_000)
     // The outage itself must leave the pty exempt.
     expect(isEvictionExemptTerminalPty(PTY_ID, WORKTREE_ID)).toBe(true)
@@ -70,6 +77,7 @@ describe('terminal provider snapshot capability re-settlement', () => {
     const healthyResolver = vi.fn(async (ids: string[]) =>
       ids.map((id) => ({ id, authoritative: true }))
     )
+
     // Daemon recovered; give the slow re-ask cadence generous room (a fresh
     // pty-set identity models the session's ordinary tab churn too).
     const recoveredAtMs = settledAtMs + 10 * 60_000
@@ -96,6 +104,7 @@ describe('terminal provider snapshot capability re-settlement', () => {
     const healthyResolver = vi.fn(async (ids: string[]) =>
       ids.map((id) => ({ id, authoritative: true }))
     )
+
     await synchronizeTerminalProviderSnapshotCapabilities([PTY_ID], healthyResolver, 1_000)
     expect(classifyEvictionExemptTerminalPty(PTY_ID, WORKTREE_ID)).toBeNull()
 

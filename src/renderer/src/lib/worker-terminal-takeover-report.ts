@@ -4,7 +4,9 @@ import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 // user_owned, but a pane can host a LATER dispatch, so re-report on continued typing instead
 // of latching forever.
 const REPORT_INTERVAL_MS = 30_000
+
 const REPORT_GATE_PRUNE_SIZE = 256
+
 const REPORT_RETRY_DELAY_MS = 250
 
 const lastReportByPaneKey = new Map<string, number>()
@@ -40,9 +42,11 @@ function reportTakeover(
   const now = Date.now()
   const gateKey = JSON.stringify([runtimeEnvironmentId, subject])
   const last = lastReportByPaneKey.get(gateKey)
+
   if (last !== undefined && now - last < REPORT_INTERVAL_MS) {
     return
   }
+
   if (lastReportByPaneKey.size >= REPORT_GATE_PRUNE_SIZE) {
     for (const [key, reportedAt] of lastReportByPaneKey) {
       if (now - reportedAt >= REPORT_INTERVAL_MS) {
@@ -50,6 +54,7 @@ function reportTakeover(
       }
     }
   }
+
   lastReportByPaneKey.set(gateKey, now)
   void sendTakeoverReport(subject, runtimeEnvironmentId).catch(() => {
     if (lastReportByPaneKey.get(gateKey) === now) {
@@ -66,11 +71,13 @@ async function sendTakeoverReport(
     runtimeEnvironmentId !== null
       ? ({ kind: 'environment', environmentId: runtimeEnvironmentId } as const)
       : ({ kind: 'local' } as const)
+
   const report = () =>
     callRuntimeRpc(target, 'orchestration.workerTerminalUserInput', subject, {
       suppressFeatureInteraction: true,
       reuseRecentCompatibilityFailure: true
     })
+
   try {
     await report()
   } catch {

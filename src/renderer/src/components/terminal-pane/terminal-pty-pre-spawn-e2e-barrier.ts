@@ -19,13 +19,17 @@ let barrier: BarrierState | null = null
 
 function createBarrier(): BarrierState {
   let release = (): void => {}
+
   let reportBlocked = (): void => {}
+
   const released = new Promise<void>((resolve) => {
     release = resolve
   })
+
   const blockedReported = new Promise<void>((resolve) => {
     reportBlocked = resolve
   })
+
   return { blocked: false, release, released, reportBlocked, blockedReported }
 }
 
@@ -33,17 +37,20 @@ function exposeBarrier(): void {
   if (!e2eConfig.exposeStore || typeof window === 'undefined') {
     return
   }
+
   window.__terminalPtyPreSpawnE2EBarrier ??= {
     arm: () => {
       if (barrier) {
         throw new Error('Terminal PTY pre-spawn E2E barrier is already armed')
       }
+
       barrier = createBarrier()
     },
     waitUntilBlocked: async () => {
       if (!barrier) {
         throw new Error('Terminal PTY pre-spawn E2E barrier is not armed')
       }
+
       await barrier.blockedReported
     },
     release: () => {
@@ -57,13 +64,17 @@ export function waitAtTerminalPtyPreSpawnE2EBarrier(): Promise<void> | null {
   if (!e2eConfig.exposeStore || typeof window === 'undefined') {
     return null
   }
+
   exposeBarrier()
   const current = barrier
+
   if (!current || current.blocked) {
     return null
   }
+
   current.blocked = true
   current.reportBlocked()
+
   return current.released.then(() => {
     if (barrier === current) {
       barrier = null

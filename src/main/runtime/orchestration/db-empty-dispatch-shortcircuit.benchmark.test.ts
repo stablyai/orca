@@ -14,14 +14,18 @@ function simulateGraphPublish(db: OrchestrationDb, terminalHandles: string[]): n
   if (db.hasAnyDispatchContexts() === false) {
     return 0
   }
+
   let contexts = 0
+
   for (const handle of terminalHandles) {
     const active = db.getActiveDispatchForTerminal(handle)
     const recent = active ?? db.getLatestDispatchForTerminal(handle)
+
     if (recent) {
       contexts++
     }
   }
+
   return contexts
 }
 
@@ -32,20 +36,25 @@ describe('orchestration empty-dispatch short-circuit (benchmark)', () => {
 
     // Instrument the real query methods to count executions.
     let queries = 0
+
     const wrap = <T extends (...a: never[]) => unknown>(fn: T): T =>
       ((...a: Parameters<T>) => {
         queries++
+
         return fn(...a)
       }) as T
+
     const original = {
       active: db.getActiveDispatchForTerminal.bind(db),
       latest: db.getLatestDispatchForTerminal.bind(db)
     }
+
     db.getActiveDispatchForTerminal = wrap(original.active)
     db.getLatestDispatchForTerminal = wrap(original.latest)
 
     // 60 publishes/s * 5s = 300 ticks, 100 terminals each.
     const TICKS = 300
+
     for (let t = 0; t < TICKS; t++) {
       simulateGraphPublish(db, handles)
     }
@@ -76,11 +85,13 @@ describe('orchestration empty-dispatch short-circuit (benchmark)', () => {
   it('predicate lifecycle: false when empty, true after dispatch (even completed), false after reset', () => {
     const db = new OrchestrationDb(':memory:')
     expect(db.hasAnyDispatchContexts()).toBe(false)
+
     const ctx = createRootDispatch(
       db,
       db.createTask({ runId: 'run_legacy_local', spec: 'work' }).id,
       'term_worker'
     )
+
     expect(db.hasAnyDispatchContexts()).toBe(true)
     // Completed rows still count — recent-completed lookups must stay valid.
     db.completeDispatch(ctx.id)

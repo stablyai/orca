@@ -38,18 +38,24 @@ export function handleSharedControlLogicalResponse(args: {
 }): void {
   if (!args.subscription.closeAfterReady) {
     handleSharedControlSubscriptionResponse(args.subscriptions, args.subscription, args.response)
+
     return
   }
+
   if (args.response.ok) {
     const subscriptionId = getSubscriptionId(args.response.result)
+
     if (subscriptionId) {
       args.subscription.remoteSubscriptionId = subscriptionId
     }
+
     const cleanup = getCleanupRequest(args.subscription)
+
     if (cleanup) {
       args.request(cleanup.method, cleanup.params)
     }
   }
+
   finishSharedControlSubscription(args.subscriptions, args.subscription, false)
 }
 
@@ -61,12 +67,16 @@ export function closeSharedControlLogicalSubscription(args: {
   if (!args.subscription) {
     return
   }
+
   const cleanup = getCleanupRequest(args.subscription)
+
   if (cleanup) {
     finishSharedControlSubscription(args.subscriptions, args.subscription, false)
     args.request(cleanup.method, cleanup.params)
+
     return
   }
+
   if (
     (args.subscription.sent || args.subscription.awaitingResubscribe) &&
     cleanupNeedsRemoteSubscriptionId(args.subscription.method)
@@ -76,8 +86,10 @@ export function closeSharedControlLogicalSubscription(args: {
     // also covers the reconnect replay window (sent===false, id cleared) where
     // a resubscribe is in flight — finishing locally there would leak it.
     args.subscription.closeAfterReady = true
+
     return
   }
+
   finishSharedControlSubscription(args.subscriptions, args.subscription, false)
 }
 
@@ -90,12 +102,14 @@ export function sendSharedControlCleanupRequest(args: {
   // Why: cleanup is best-effort and often runs during teardown; send it
   // synchronously so close() cannot race the async request path.
   const requestId = randomUUID()
+
   const sent = args.send({
     id: requestId,
     deviceToken: args.deviceToken,
     method: args.method,
     params: args.params
   })
+
   return sent ? requestId : null
 }
 
@@ -110,15 +124,18 @@ export function replaySharedControlSubscriptions(args: {
     if (subscription.closeAfterReady) {
       continue
     }
+
     subscription.sent = false
     subscription.remoteSubscriptionId = null
     // Why: mark the id-less window so a close() racing this resubscribe defers
     // to closeAfterReady instead of finishing locally and leaking the server
     // subscription the resubscribe is about to create.
     subscription.awaitingResubscribe = true
+
     if (args.tagReplayedResponses) {
       subscription.pendingReplayTag = true
     }
+
     args.send(subscription)
   }
 }

@@ -6,10 +6,15 @@ import {
 } from '../../../shared/mobile-relay-credential-contract'
 
 const OpaqueIdSchema = z.string().min(1).max(128)
+
 const Base64Url32ByteSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/)
+
 const Base6432ByteSchema = z.string().regex(/^[A-Za-z0-9+/]{43}=$/)
+
 const Base64Raw24ByteSchema = z.string().regex(/^[A-Za-z0-9+/]{32}$/)
+
 const EpochMsSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+
 const GenerationSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 
 export const RelayHostChallengeMessageSchema = z
@@ -140,16 +145,23 @@ export const RelayControlErrorMessageSchema = z
   .strict()
 
 export type RelayPendingConnection = z.infer<typeof PendingConnectionSchema>
+
 export type RelayHostHelloAckMessage = z.infer<typeof RelayHostHelloAckMessageSchema>
+
 export type RelayConnectionOpenMessage = z.infer<typeof RelayConnectionOpenMessageSchema>
+
 export type RelayDrainMessage = z.infer<typeof RelayDrainMessageSchema>
+
 export type RelayInviteCreatedMessage = z.infer<typeof RelayInviteCreatedMessageSchema>
+
 export type RelayDeviceCredentialInstalledMessage = z.infer<
   typeof RelayDeviceCredentialInstalledMessageSchema
 >
+
 export type RelayDeviceCredentialInstallStatusResultMessage = z.infer<
   typeof RelayDeviceCredentialInstallStatusResultMessageSchema
 >
+
 export type RelayDeviceResumeConfirmedMessage = z.infer<
   typeof RelayDeviceResumeConfirmedMessageSchema
 >
@@ -157,6 +169,7 @@ export type RelayDeviceResumeConfirmedMessage = z.infer<
 export function parseRelayControlMessage(raw: RawData): Record<string, unknown> | null {
   try {
     const parsed = JSON.parse(raw.toString()) as unknown
+
     return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : null

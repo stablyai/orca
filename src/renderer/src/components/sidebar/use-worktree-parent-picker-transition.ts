@@ -18,26 +18,33 @@ export function useWorktreeParentPickerTransition(args: {
 }) {
   const openPendingParentPicker = useCallback(() => {
     const pending = args.pendingRef.current
+
     if (!pending) {
       return
     }
+
     args.pendingRef.current = null
+
     if (args.fallbackTimerRef.current != null) {
       window.clearTimeout(args.fallbackTimerRef.current)
       args.fallbackTimerRef.current = null
     }
+
     if (args.unmountTimerRef.current != null) {
       window.clearTimeout(args.unmountTimerRef.current)
       args.unmountTimerRef.current = null
     }
+
     args.setParentPicker(pending)
     args.setParentPickerOpen(true)
   }, [args])
+
   const handleParentPickerOpenChange = useCallback(
     (open: boolean) => {
       if (open) {
         return
       }
+
       args.setParentPickerOpen(false)
       args.unmountTimerRef.current = window.setTimeout(() => {
         args.unmountTimerRef.current = null
@@ -46,18 +53,22 @@ export function useWorktreeParentPickerTransition(args: {
     },
     [args]
   )
+
   const handleOpenParentPicker = useCallback(
     (event?: { preventDefault: () => void }) => {
       event?.preventDefault()
       const anchorElement = getWorktreeParentPickerAnchor(args.scopeRef.current, args.worktreeId)
+
       if (!anchorElement) {
         return
       }
+
       args.pendingRef.current = { childWorktreeId: args.worktreeId, anchorElement }
       args.setMenuOpenState(false)
       args.fallbackTimerRef.current = window.setTimeout(openPendingParentPicker, 50)
     },
     [args, openPendingParentPicker]
   )
+
   return { handleOpenParentPicker, handleParentPickerOpenChange, openPendingParentPicker }
 }

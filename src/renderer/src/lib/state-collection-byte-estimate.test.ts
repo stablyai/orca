@@ -61,10 +61,12 @@ describe('estimateStateCollectionKB', () => {
       { slice: new Map(Array.from({ length: 2_000 }, (_, i) => [`key${i}`, 'v'.repeat(128)])) },
       'slice'
     )
+
     const setKB = kbOf(
       { slice: new Set(Array.from({ length: 2_000 }, (_, i) => `member-${i}-${'v'.repeat(128)}`)) },
       'slice'
     )
+
     // 2000 entries x ~128 chars ≈ >250KB either way; well above rounding noise.
     expect(mapKB).toBeGreaterThan(250)
     expect(setKB).toBeGreaterThan(250)
@@ -84,9 +86,11 @@ describe('estimateStateCollectionKB', () => {
 
   it('returns bounded work on pathological nesting', () => {
     let deep: Record<string, unknown> = { leaf: true }
+
     for (let i = 0; i < 10_000; i += 1) {
       deep = { child: deep }
     }
+
     const wide = { slice: Array.from({ length: 100 }, () => ({ deep })) }
     expect(() => estimateStateCollectionKB(wide, 4)).not.toThrow()
   })
@@ -99,6 +103,7 @@ describe('estimateStateCollectionKB', () => {
       tiny: 'x',
       count: 7
     }
+
     const result = estimateStateCollectionKB(state, 2)
     expect(Object.keys(result)).toEqual(['big', 'medium', '__totalKB'])
     expect(result.big).toBeGreaterThan(result.medium)
@@ -110,6 +115,7 @@ describe('estimateStateCollectionKB', () => {
       b: 'x'.repeat(100_000),
       c: 'x'.repeat(100_000)
     }
+
     const result = estimateStateCollectionKB(state, 1)
     expect(result.__totalKB).toBeGreaterThan((result.a ?? 0) * 2.5)
   })

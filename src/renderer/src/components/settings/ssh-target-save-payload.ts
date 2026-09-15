@@ -22,6 +22,7 @@ type SshTargetSavePayloadResult =
 
 export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePayloadResult {
   const { host, configHost, username, port } = getSshTargetDraftConnectionFields(form)
+
   if (!host) {
     return {
       ok: false,
@@ -43,6 +44,7 @@ export function buildSshTargetSavePayload(form: EditingTarget): SshTargetSavePay
   }
 
   const graceSeconds = parseRelayGracePeriodSeconds(form)
+
   if (!isRelayGracePeriodValid(form, graceSeconds)) {
     return {
       ok: false,

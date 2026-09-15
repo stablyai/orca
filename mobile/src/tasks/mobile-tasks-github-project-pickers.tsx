@@ -42,6 +42,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
     showGitHubProjectPicker,
     taskUiReady
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && showGitHubProjectPicker}
@@ -146,8 +147,10 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                 <Text style={styles.linearStatesTitle}>Pinned</Text>
                 {pinnedGitHubProjects.map((project, index) => {
                   const key = githubProjectKey(project)
+
                   const selected =
                     activeGitHubProject !== null && githubProjectKey(activeGitHubProject) === key
+
                   return (
                     <View key={`pinned:${key}`}>
                       {index > 0 ? <View style={styles.actionSeparator} /> : null}
@@ -193,8 +196,10 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                 <Text style={styles.linearStatesTitle}>Recent</Text>
                 {recentGitHubProjects.map((project, index) => {
                   const key = githubProjectKey(project)
+
                   const selected =
                     activeGitHubProject !== null && githubProjectKey(activeGitHubProject) === key
+
                   return (
                     <View key={`recent:${key}`}>
                       {index > 0 ? <View style={styles.actionSeparator} /> : null}
@@ -254,6 +259,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                 const selected =
                   activeGitHubProject !== null &&
                   githubProjectKey(activeGitHubProject) === githubProjectKey(project)
+
                 return (
                   <View key={project.id}>
                     {index > 0 ? <View style={styles.actionSeparator} /> : null}
@@ -300,6 +306,7 @@ export function renderMobileTasksGitHubProjectViewPicker(model: ConnectionPresen
     showGitHubProjectViewPicker,
     taskUiReady
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && showGitHubProjectViewPicker}
@@ -308,22 +315,29 @@ export function renderMobileTasksGitHubProjectViewPicker(model: ConnectionPresen
       selected={pendingGitHubProjectViewSelection ? '' : (activeGitHubProjectViewId ?? '')}
       onSelect={(viewId) => {
         const view = githubProjectViews.find((candidate) => candidate.id === viewId)
+
         if (view && view.layout !== 'TABLE_LAYOUT') {
           setGithubProjectError("Orca doesn't support this GitHub Project layout yet.")
+
           return
         }
+
         if (pendingGitHubProjectViewSelection) {
           commitGitHubProjectView(pendingGitHubProjectViewSelection, viewId)
           setPendingGitHubProjectViewSelection(null)
+
           return
         }
+
         if (!activeGitHubProject || !activeGitHubProjectKey) {
           return
         }
+
         commitGitHubProjectView(activeGitHubProject, viewId)
       }}
       onClose={() => {
         setShowGitHubProjectViewPicker(false)
+
         if (pendingGitHubProjectViewSelection) {
           setPendingGitHubProjectViewSelection(null)
         }
@@ -341,6 +355,7 @@ export function renderMobileTasksGitHubProjectSortPicker(model: ConnectionPresen
     showGitHubProjectSortPicker,
     taskUiReady
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && showGitHubProjectSortPicker}
@@ -350,15 +365,19 @@ export function renderMobileTasksGitHubProjectSortPicker(model: ConnectionPresen
       onSelect={(fieldId) => {
         if (fieldId === PROJECT_VIEW_DEFAULT_SORT) {
           setGithubProjectSortOverride(null)
+
           return
         }
+
         setGithubProjectSortOverride((current) => {
           if (!current || current.fieldId !== fieldId) {
             return { fieldId, direction: 'ASC' }
           }
+
           if (current.direction === 'ASC') {
             return { fieldId, direction: 'DESC' }
           }
+
           return null
         })
       }}

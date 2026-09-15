@@ -23,13 +23,16 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
       expectedSshConnectionGeneration
     )
     const provider = requireRuntimeFileProvider(target)
+
     if (provider) {
       await provider.createDirNoClobber(target.path)
+
       return { ok: true }
     }
 
     const dirPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
     await mkdir(dirPath, { recursive: false })
+
     return { ok: true }
   }
 
@@ -45,6 +48,7 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
       tempRelativePath,
       finalRelativePath
     ])
+
     assertRuntimeFileMutationExpectation(
       tempTarget.executionHostId,
       expectedExecutionHostId,
@@ -52,9 +56,11 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
       expectedSshConnectionGeneration
     )
     const provider = requireRuntimeFileProvider(tempTarget)
+
     if (provider) {
       await provider.copy(tempTarget.path, finalTarget.path)
       await provider.deletePath(tempTarget.path, false).catch(() => {})
+
       return { ok: true }
     }
 
@@ -64,6 +70,7 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
     await mkdir(dirname(finalPath), { recursive: true })
     await copyFile(tempPath, finalPath, constants.COPYFILE_EXCL)
     await rm(tempPath, { force: true })
+
     return { ok: true }
   }
 
@@ -79,6 +86,7 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
       oldRelativePath,
       newRelativePath
     ])
+
     assertRuntimeFileMutationExpectation(
       oldTarget.executionHostId,
       expectedExecutionHostId,
@@ -86,8 +94,10 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
       expectedSshConnectionGeneration
     )
     const provider = requireRuntimeFileProvider(oldTarget)
+
     if (provider) {
       await provider.renameNoClobber(oldTarget.path, newTarget.path)
+
       return { ok: true }
     }
 
@@ -95,6 +105,7 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
     const oldPath = await resolveAuthorizedPath(oldTarget.path, store, { preserveSymlink: true })
     const newPath = await resolveAuthorizedPath(newTarget.path, store, { preserveSymlink: true })
     await renameLocalPathSerializedByDestination(oldPath, newPath)
+
     return { ok: true }
   }
 
@@ -110,6 +121,7 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
       worktreeSelector,
       [sourceRelativePath, destinationRelativePath]
     )
+
     assertRuntimeFileMutationExpectation(
       sourceTarget.executionHostId,
       expectedExecutionHostId,
@@ -117,21 +129,27 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
       expectedSshConnectionGeneration
     )
     const provider = requireRuntimeFileProvider(sourceTarget)
+
     if (provider) {
       await provider.copy(sourceTarget.path, destinationTarget.path)
+
       return { ok: true }
     }
 
     const store = this.host.requireStore()
+
     const sourcePath = await resolveAuthorizedPath(sourceTarget.path, store, {
       preserveSymlink: true
     })
+
     const destinationPath = await resolveAuthorizedPath(destinationTarget.path, store, {
       preserveSymlink: true
     })
+
     await mkdir(dirname(destinationPath), { recursive: true })
     // Why: COPYFILE_EXCL preserves the no-clobber invariant of the local shell copy IPC (caller already deconflicts names).
     await copyFile(sourcePath, destinationPath, constants.COPYFILE_EXCL)
+
     return { ok: true }
   }
 
@@ -151,16 +169,20 @@ export class RuntimeFileCommandsWithCreateFileExplorerDirNoClobber extends Runti
       expectedSshConnectionGeneration
     )
     const provider = requireRuntimeFileProvider(target)
+
     if (provider) {
       await provider.deletePath(target.path, recursive)
+
       return { ok: true }
     }
 
     const targetPath = await resolveAuthorizedPath(target.path, this.host.requireStore(), {
       preserveSymlink: true
     })
+
     // Why: a non-local runtime has no client Trash; this delete is permanent, so the renderer confirms before calling.
     await rm(targetPath, { recursive: recursive === true, force: true })
+
     return { ok: true }
   }
 }

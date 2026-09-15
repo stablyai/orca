@@ -24,16 +24,22 @@ describe('native chat transcript tail cancellation', () => {
     let finishTailRead: (() => void) | undefined
     let readCount = 0
     const close = vi.fn(async () => {})
+
     const read = vi.fn((buffer: Buffer) => {
       readCount++
+
       if (readCount === 1) {
         buffer[0] = 0x0a
+
         return Promise.resolve({ bytesRead: 1, buffer })
       }
+
       if (readCount > 2) {
         buffer.fill(0x0a)
+
         return Promise.resolve({ bytesRead: buffer.length, buffer })
       }
+
       return new Promise<{ bytesRead: number; buffer: Buffer }>((resolve) => {
         finishTailRead = () => {
           buffer.fill(0x0a)
@@ -41,10 +47,12 @@ describe('native chat transcript tail cancellation', () => {
         }
       })
     })
+
     fsMocks.stat.mockResolvedValue({ size: 8 * 64 * 1024 + 1 })
     fsMocks.open.mockResolvedValue({ close, read })
     const controller = new AbortController()
     const canceled = new Error('request canceled')
+
     const pending = readNativeChatTranscriptTail(
       {
         agent: 'claude',
@@ -54,6 +62,7 @@ describe('native chat transcript tail cancellation', () => {
       },
       controller.signal
     )
+
     const rejection = expect(pending).rejects.toBe(canceled)
     await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(2))
 
@@ -78,6 +87,7 @@ describe('native chat transcript tail cancellation', () => {
     )
     const controller = new AbortController()
     const canceled = new Error('request canceled while opening')
+
     const pending = readNativeChatTranscriptTail(
       {
         agent: 'claude',
@@ -87,6 +97,7 @@ describe('native chat transcript tail cancellation', () => {
       },
       controller.signal
     )
+
     const rejection = expect(pending).rejects.toBe(canceled)
     await vi.waitFor(() => expect(fsMocks.open).toHaveBeenCalledOnce())
 

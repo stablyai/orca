@@ -26,20 +26,27 @@ export class RuntimeMobileDictationController {
   }): Promise<{ dictationId: string; modelId: string }> {
     const store = this.requireStore()
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
+
     if (!voice.enabled) {
       throw new Error('voice_dictation_disabled')
     }
+
     const modelId = params.modelId || voice.sttModel
+
     if (!modelId) {
       throw new Error('voice_model_not_selected')
     }
+
     const modelState = await getSpeechModelManager(store).getModelState(modelId)
+
     if (modelState.status !== 'ready') {
       throw new Error(`voice_model_not_ready:${modelState.status}`)
     }
+
     if (!params.clientId) {
       throw new Error('dictation_requires_mobile_client')
     }
+
     if (this.session) {
       throw new Error('dictation_already_active')
     }
@@ -55,6 +62,7 @@ export class RuntimeMobileDictationController {
       finalTexts: [],
       errors: []
     }
+
     try {
       await getSpeechSttService(store).startDictation(
         modelId,
@@ -62,16 +70,20 @@ export class RuntimeMobileDictationController {
         undefined,
         owner
       )
+
       if (this.session?.id !== params.dictationId) {
         throw new Error('dictation_canceled')
       }
+
       this.session.state = 'active'
     } catch (error) {
       if (this.session?.id === params.dictationId) {
         this.session = null
       }
+
       throw error
     }
+
     return { dictationId: params.dictationId, modelId }
   }
 
@@ -83,18 +95,24 @@ export class RuntimeMobileDictationController {
     connectionId?: string
   }): { dictationId: string } {
     const session = this.requireOwnedSession(params)
+
     if (session.state !== 'active') {
       throw new Error('dictation_stream_closing')
     }
+
     if (session.errors.length > 0) {
       throw new Error(session.errors[0])
     }
+
     const pcm = Buffer.from(params.audioBase64, 'base64')
     const samples = new Float32Array(Math.floor(pcm.length / 2))
+
     for (let i = 0; i < samples.length; i += 1) {
       samples[i] = pcm.readInt16LE(i * 2) / 32768
     }
+
     getSpeechSttService(this.requireStore()).feedAudio(samples, params.sampleRate, session.owner)
+
     return { dictationId: params.dictationId }
   }
 
@@ -105,11 +123,14 @@ export class RuntimeMobileDictationController {
   }): Promise<{ dictationId: string; text: string }> {
     const session = this.requireOwnedSession(params)
     session.state = 'closing'
+
     try {
       await getSpeechSttService(this.requireStore()).stopDictation(session.owner)
+
       if (session.errors.length > 0) {
         throw new Error(session.errors[0])
       }
+
       return {
         dictationId: params.dictationId,
         text: [...session.finalTexts, session.partialText].join(' ').trim()
@@ -127,6 +148,7 @@ export class RuntimeMobileDictationController {
     connectionId?: string
   }): Promise<{ dictationId: string }> {
     const session = this.session
+
     if (
       session?.id === params.dictationId &&
       params.clientId &&
@@ -134,6 +156,7 @@ export class RuntimeMobileDictationController {
       (!session.connectionId || session.connectionId === params.connectionId)
     ) {
       session.state = 'closing'
+
       try {
         await getSpeechSttService(this.requireStore()).stopDictation(session.owner)
       } finally {
@@ -142,6 +165,7 @@ export class RuntimeMobileDictationController {
         }
       }
     }
+
     return { dictationId: params.dictationId }
   }
 
@@ -162,13 +186,16 @@ export class RuntimeMobileDictationController {
     event: { type: string; text?: string; error?: string }
   ): void {
     const session = this.session
+
     if (!session || session.id !== dictationId) {
       return
     }
+
     if (event.type === 'partial') {
       session.partialText = event.text ?? ''
     } else if (event.type === 'final') {
       const text = event.text?.trim()
+
       if (text) {
         session.finalTexts.push(text)
         session.partialText = ''
@@ -184,15 +211,19 @@ export class RuntimeMobileDictationController {
     connectionId?: string
   }): MobileDictationSession {
     const session = this.session
+
     if (!session || session.id !== params.dictationId) {
       throw new Error('dictation_stream_not_started')
     }
+
     if (!params.clientId || session.clientId !== params.clientId) {
       throw new Error('dictation_owner_mismatch')
     }
+
     if (session.connectionId && session.connectionId !== params.connectionId) {
       throw new Error('dictation_owner_mismatch')
     }
+
     return session
   }
 
@@ -200,6 +231,7 @@ export class RuntimeMobileDictationController {
     if (session.state === 'closing') {
       return
     }
+
     session.state = 'closing'
     void getSpeechSttService(this.requireStore())
       .stopDictation(session.owner)
@@ -212,9 +244,11 @@ export class RuntimeMobileDictationController {
 
   private requireStore(): RuntimeStore {
     const store = this.getStore()
+
     if (!store) {
       throw new Error('voice_dictation_unavailable')
     }
+
     return store
   }
 }

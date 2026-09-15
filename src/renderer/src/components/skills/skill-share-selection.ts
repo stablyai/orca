@@ -22,18 +22,21 @@ export function skillShareEligibilityReason(
       'Open this skill on its owning machine to share it.'
     )
   }
+
   if (!skill.installed) {
     return translate(
       'auto.components.skills.SkillShareSelectionControls.01c5a15e07',
       'Install this skill before sharing it.'
     )
   }
+
   if (skill.sourceKind !== 'home' && skill.sourceKind !== 'repo') {
     return translate(
       'auto.components.skills.SkillShareSelectionControls.01c5a15e08',
       'Only home and workspace skills can be shared.'
     )
   }
+
   return duplicateNameSelected
     ? translate(
         'auto.components.skills.SkillShareSelectionControls.01c5a15e09',
@@ -100,10 +103,12 @@ export function updatedSkillSelection(
   maxSelection?: number
 ): Set<string> {
   const next = new Set(current)
+
   if (selected && (maxSelection === undefined || next.size < maxSelection)) {
     next.add(skillId)
   } else {
     next.delete(skillId)
   }
+
   return next
 }

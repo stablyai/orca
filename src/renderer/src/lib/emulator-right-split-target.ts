@@ -9,6 +9,7 @@ function firstLeafGroupId(node: TabGroupLayoutNode): string {
   if (node.type === 'leaf') {
     return node.groupId
   }
+
   return firstLeafGroupId(node.first)
 }
 
@@ -24,6 +25,7 @@ function findReusableRightSplitTarget(
   }
 
   const first = findReusableRightSplitTarget(node.first, sourceGroupId)
+
   if (first.containsSource) {
     return {
       containsSource: true,
@@ -35,6 +37,7 @@ function findReusableRightSplitTarget(
   }
 
   const second = findReusableRightSplitTarget(node.second, sourceGroupId)
+
   return {
     containsSource: second.containsSource,
     reusableGroupId: second.reusableGroupId
@@ -48,5 +51,6 @@ export function findReusableRightSplitGroupId(
   if (!layout) {
     return null
   }
+
   return findReusableRightSplitTarget(layout, sourceGroupId).reusableGroupId
 }

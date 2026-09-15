@@ -18,6 +18,7 @@ vi.mock('lucide-react-native', () => ({
 
 vi.mock('./PickerModal', async () => {
   const React = await import('react')
+
   return {
     PickerModal: (props: unknown) => React.createElement('PickerModal', props)
   }
@@ -46,21 +47,25 @@ describe('MobileHomeQuickActions', () => {
   async function renderQuickActions(connectedHosts: HostProfile[]) {
     const onPairDesktop = vi.fn()
     const onCreateWorkspace = vi.fn()
+
     const quickActions = (hosts: HostProfile[]) =>
       createElement(MobileHomeQuickActions, {
         connectedHosts: hosts,
         onPairDesktop,
         onCreateWorkspace
       })
+
     const consoleError = vi.spyOn(console, 'error').mockImplementation((...args) => {
       if (typeof args[0] !== 'string' || !args[0].includes('react-test-renderer is deprecated')) {
         throw new Error(String(args[0]))
       }
     })
+
     await act(async () => {
       renderer = create(quickActions(connectedHosts))
     })
     consoleError.mockRestore()
+
     return {
       onCreateWorkspace,
       rerender: async (hosts: HostProfile[]) => {

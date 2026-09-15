@@ -32,6 +32,7 @@ function createBindingStorePath(): string {
 }
 
 const storageKeyA = 'a'.repeat(64)
+
 const storageKeyB = 'b'.repeat(64)
 
 function createRegistry(
@@ -58,16 +59,20 @@ async function partitionFor(
   authorityStorageKey = storageKeyA
 ): Promise<string> {
   const registry = createRegistry(host, authorityStorageKey)
+
   const route = await registry.retain(
     browserNetworkExecutionHostKey(host),
     new AbortController().signal
   )
+
   const derived = deriveBrowserRoutePartition({
     ...baseIdentity,
     executionHostIdentity: route.executionHostIdentity
   })
+
   await route.release()
   await registry.close()
+
   return derived.partition
 }
 
@@ -77,32 +82,40 @@ async function bindPartition(
   authorityStorageKey = storageKeyA
 ): Promise<string> {
   const registry = createRegistry(host, authorityStorageKey)
+
   const route = await registry.retain(
     browserNetworkExecutionHostKey(host),
     new AbortController().signal
   )
+
   const derived = deriveBrowserRoutePartition({
     ...baseIdentity,
     executionHostIdentity: route.executionHostIdentity
   })
+
   const store = new BrowserRoutePartitionBindingStore({ filePath })
+
   if (store.get(derived.partition) === null) {
     store.set(derived.partition, derived.bindingFingerprint, 'e'.repeat(64))
   }
+
   await route.release()
   await registry.close()
+
   return derived.partition
 }
 
 describe('client-hosted route partition stability', () => {
   it('keeps one partition and one binding across remote runtime restarts', async () => {
     const filePath = createBindingStorePath()
+
     // Why: the remote mints runtimeId with randomUUID() per process, so a restart moves BOTH
     // runtimeId and revision -- holding runtimeId fixed here would pass without testing anything.
     const before = await bindPartition(
       { kind: 'native', runtimeId: 'runtime-a', revision: 1_700_000_000 },
       filePath
     )
+
     const after = await bindPartition(
       { kind: 'native', runtimeId: 'runtime-restarted', revision: 1_800_000_000 },
       filePath
@@ -114,6 +127,7 @@ describe('client-hosted route partition stability', () => {
 
   it('keeps one partition across SSH reconnect generations and provider epochs', async () => {
     const filePath = createBindingStorePath()
+
     const before = await bindPartition(
       {
         kind: 'ssh',
@@ -123,6 +137,7 @@ describe('client-hosted route partition stability', () => {
       },
       filePath
     )
+
     // Why: the provider mints a fresh epoch on every generation bump, so both move together.
     const after = await bindPartition(
       {
@@ -145,6 +160,7 @@ describe('client-hosted route partition stability', () => {
       providerEpoch: 'epoch-1',
       connectionGeneration: 3
     })
+
     // Why: SshConnectionStore mints `ssh-<now>-<rand>` per record, so a readd never reuses an id.
     const after = await partitionFor({
       kind: 'ssh',
@@ -163,18 +179,21 @@ describe('client-hosted route partition stability', () => {
       revision: 1,
       distro: 'Ubuntu'
     })
+
     const debian = await partitionFor({
       kind: 'wsl',
       runtimeId: 'runtime-a',
       revision: 1,
       distro: 'Debian'
     })
+
     const sameDistroRestartedRuntime = await partitionFor({
       kind: 'wsl',
       runtimeId: 'runtime-restarted',
       revision: 99,
       distro: 'Ubuntu'
     })
+
     const native = await partitionFor({
       kind: 'native',
       runtimeId: 'runtime-a',
@@ -188,6 +207,7 @@ describe('client-hosted route partition stability', () => {
 
   it('separates distinct environment records and never leaks raw host identity', async () => {
     const first = await partitionFor({ kind: 'native', runtimeId: 'runtime-a', revision: 1 })
+
     const second = await partitionFor(
       { kind: 'native', runtimeId: 'runtime-a', revision: 1 },
       storageKeyB
@@ -201,5 +221,6 @@ describe('client-hosted route partition stability', () => {
 
 function bindingCount(filePath: string): number {
   const store = new BrowserRoutePartitionBindingStore({ filePath })
+
   return store.listBindings().size
 }

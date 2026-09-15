@@ -13,7 +13,9 @@ import { pluginLanguageResourceId } from '../../../shared/plugins/plugin-languag
 import { DEFAULT_LOCALE } from './supported-languages'
 
 const PACK_ID = 'plugin:smwbev.russian/ru-RU' as const
+
 const PACK_RESOURCE = pluginLanguageResourceId(PACK_ID)
+
 const PACK = {
   id: PACK_ID,
   resourceLanguage: PACK_RESOURCE,
@@ -33,6 +35,7 @@ async function activate(language: string, packs: Packs = []): Promise<void> {
 function withSupportedLocales(supported: readonly string[]): void {
   vi.spyOn(Intl.DateTimeFormat, 'supportedLocalesOf').mockImplementation((requested) => {
     const tags = Array.isArray(requested) ? requested : [requested as string]
+
     return tags.filter((tag) => supported.includes(tag)) as string[]
   })
 }

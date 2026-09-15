@@ -18,6 +18,7 @@ describe('host support evidence', () => {
     const getStructuredAgentSessionCreateSupport = vi
       .fn()
       .mockRejectedValue(new Error('disconnected'))
+
     const runtime = { getStructuredAgentSessionCreateSupport }
     const unknown = await resolveWorkerStartModeOnHost(runtime, mode, 'workspace-1', 'claude')
     expect(unknown).toMatchObject({

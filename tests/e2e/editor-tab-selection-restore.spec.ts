@@ -23,6 +23,7 @@ test('preserves highlighted editor text across worktree tab switches', async ({
   })
 
   const explorer = orcaPage.locator('[data-orca-explorer-shell]')
+
   const rowNamed = (name: string) =>
     explorer.locator('[data-file-explorer-row]').filter({
       has: orcaPage.locator('[data-file-explorer-row-name]').getByText(name, { exact: true })
@@ -44,16 +45,20 @@ test('preserves highlighted editor text across worktree tab switches', async ({
       message: 'Monaco did not select the searched text'
     })
     .not.toBeNull()
+
   const selectedRange = await orcaPage.evaluate(
     () => window.__monacoEditorE2E?.snapshot().selection ?? null
   )
+
   if (!selectedRange) {
     throw new Error('Monaco selection disappeared before the tab switch')
   }
+
   expect([selectedRange.selectionStartLineNumber, selectedRange.selectionStartColumn]).not.toEqual([
     selectedRange.positionLineNumber,
     selectedRange.positionColumn
   ])
+
   if (process.env.ORCA_E2E_RECORD_VIDEO === '1') {
     await orcaPage.waitForTimeout(700)
   }
@@ -72,6 +77,7 @@ test('preserves highlighted editor text across worktree tab switches', async ({
     .poll(() => orcaPage.evaluate(() => window.__monacoEditorE2E?.snapshot().selection ?? null))
     .toEqual(selectedRange)
   await expect(monaco.locator('.selected-text').first()).toBeVisible()
+
   if (process.env.ORCA_E2E_RECORD_VIDEO === '1') {
     await orcaPage.waitForTimeout(700)
   }

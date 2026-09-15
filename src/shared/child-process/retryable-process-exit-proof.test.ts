@@ -26,6 +26,7 @@ describe('RetryableProcessExitProof', () => {
 
   it('permits another attempt after proof rejects', async () => {
     const proof = new RetryableProcessExitProof()
+
     const proveExit = vi
       .fn()
       .mockRejectedValueOnce(new Error('probe failed'))

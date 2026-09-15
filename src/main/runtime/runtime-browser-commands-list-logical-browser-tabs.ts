@@ -16,6 +16,7 @@ export class RuntimeBrowserCommandsWithListLogicalBrowserTabs extends RuntimeBro
   ): BrowserTabListResult['tabs'] {
     const clientPageActive = clientPages.some((page) => page.active)
     const bridge = this.host.getAgentBrowserBridge()
+
     const serverTabs =
       bridge && typeof bridge.tabList === 'function'
         ? bridge.tabList(worktreeId).tabs.map((tab) => ({
@@ -23,10 +24,12 @@ export class RuntimeBrowserCommandsWithListLogicalBrowserTabs extends RuntimeBro
             active: clientPageActive ? false : tab.active
           }))
         : []
+
     const clientTabs = clientPages.map((page, offset) => {
       const profile =
         browserSessionRegistry.getProfile(page.browserProfileId) ??
         browserSessionRegistry.getDefaultProfile()
+
       return {
         browserPageId: page.browserPageId,
         index: serverTabs.length + offset,
@@ -40,10 +43,13 @@ export class RuntimeBrowserCommandsWithListLogicalBrowserTabs extends RuntimeBro
         profileLabel: profile.label
       }
     })
+
     const tabs = [...serverTabs, ...clientTabs]
+
     if (tabs.length > 0 && !tabs.some((tab) => tab.active)) {
       tabs[0] = { ...tabs[0]!, active: true }
     }
+
     return tabs.map((tab, index) => ({ ...tab, index }))
   }
 
@@ -54,7 +60,9 @@ export class RuntimeBrowserCommandsWithListLogicalBrowserTabs extends RuntimeBro
     if (!selector) {
       return
     }
+
     const workspace = await this.host.resolveBrowserWorkspace(selector)
+
     if (workspace.id !== page.workspaceId) {
       throw new BrowserError(
         'browser_tab_not_found',
@@ -67,16 +75,21 @@ export class RuntimeBrowserCommandsWithListLogicalBrowserTabs extends RuntimeBro
     params: BrowserCommandTargetParams
   ): Promise<RuntimeBrowserClientPage | undefined> {
     const pages = this.host.getRuntimeBrowserPageRegistry()
+
     if (params.page) {
       const page = pages.getPage(params.page)
+
       if (page) {
         await this.assertClientPageWorkspace(page, params.worktree)
       }
+
       return page
     }
+
     const workspaceId = params.worktree
       ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
       : undefined
+
     return pages.listPages(workspaceId).find((page) => page.active)
   }
 
@@ -85,9 +98,11 @@ export class RuntimeBrowserCommandsWithListLogicalBrowserTabs extends RuntimeBro
     explicitWorktreeId?: string
   ): BrowserTabListResult['tabs'][number] {
     const worktreeId = explicitWorktreeId ?? browserManager.getWorktreeIdForTab(browserPageId)
+
     const tab = this.requireAgentBrowserBridge()
       .tabList(worktreeId)
       .tabs.find((entry) => entry.browserPageId === browserPageId)
+
     if (!tab) {
       const scope = worktreeId ? ' in this worktree' : ''
       throw new BrowserError(
@@ -95,6 +110,7 @@ export class RuntimeBrowserCommandsWithListLogicalBrowserTabs extends RuntimeBro
         `Browser page ${browserPageId} was not found${scope}`
       )
     }
+
     return this.enrichBrowserTabInfo(tab)
   }
 
@@ -122,14 +138,17 @@ export class RuntimeBrowserCommandsWithListLogicalBrowserTabs extends RuntimeBro
         if (event.sender !== win.webContents || reply.requestId !== requestId) {
           return
         }
+
         clearTimeout(timer)
         ipcMain.removeListener('browser:tabCreateReply', handler)
+
         if (reply.error) {
           reject(new Error(reply.error))
         } else {
           resolve(reply.browserPageId!)
         }
       }
+
       ipcMain.on('browser:tabCreateReply', handler)
       win.webContents.send('browser:requestTabCreate', {
         requestId,

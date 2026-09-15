@@ -30,11 +30,17 @@ import {
 } from './web-session-tabs-sync'
 
 const WT = 'repo1::/path/wt1'
+
 const ENV = 'web-env-1'
+
 const HOST_TAB_ID = 'host-tab-1'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const MIRROR_PANE_KEY = makePaneKey(toWebTerminalSurfaceTabId(HOST_TAB_ID), LEAF_ID)
+
 const T0 = 1_700_000_000_000
+
 /** Enough skew to swamp the window in either direction. */
 const HOST_SKEW_MS = AGENT_STATUS_STALE_AFTER_MS * 2
 
@@ -87,6 +93,7 @@ function seedPairedClientStore(): TestStore {
     worktreesByRepo: { repo1: [makeWorktree({ id: WT, repoId: 'repo1', path: '/path/wt1' })] },
     activeWorktreeId: WT
   } as Partial<AppState>)
+
   return store
 }
 
@@ -99,16 +106,20 @@ function applyHostSnapshot(
 ): boolean {
   vi.setSystemTime(clientNow)
   const state = store.getState()
+
   const patch = applyFreshWebSessionTabsSnapshot(
     state,
     hostSnapshot({ snapshotVersion: version, hostNow }),
     ENV,
     clientNow
   )
+
   if (patch === state) {
     return false
   }
+
   store.setState(patch as Partial<AppState>)
+
   return true
 }
 
@@ -127,6 +138,7 @@ function applyChangedHostSnapshot(
 function mirroredRowIsFreshAt(store: TestStore, clientNow: number): boolean {
   const row = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
   expect(row, 'the mirrored row must exist for freshness to mean anything').toBeDefined()
+
   return isExplicitAgentStatusFresh(row, clientNow, AGENT_STATUS_STALE_AFTER_MS)
 }
 
@@ -169,6 +181,7 @@ describe('a mirrored remote row decays on the replica clock, not the host clock'
     for (const elapsed of [1_000, AGENT_STATUS_STALE_AFTER_MS / 2]) {
       expect(mirroredRowIsFreshAt(store, T0 + elapsed)).toBe(true)
     }
+
     expect(mirroredRowIsFreshAt(store, T0 + AGENT_STATUS_STALE_AFTER_MS * 3)).toBe(false)
   })
 

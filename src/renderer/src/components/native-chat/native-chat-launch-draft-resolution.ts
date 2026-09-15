@@ -17,6 +17,7 @@ export function nativeChatLaunchDraftTurnBaseline(
   messages: NativeChatMessage[]
 ): NativeChatLaunchDraftTurnBaseline {
   const userTurns = messages.filter((message) => message.role === 'user')
+
   return {
     userTurnCount: userTurns.length,
     lastUserTurnId: userTurns.at(-1)?.id ?? null
@@ -42,15 +43,19 @@ export function launchDraftResolvedByTranscript(
   const provablyOlder = (message: NativeChatMessage): boolean =>
     message.timestamp !== null &&
     message.timestamp + LIFECYCLE_CLOCK_SKEW_SLACK_MS < entry.createdAt
+
   if (messages.some((message) => message.role === 'user' && !provablyOlder(message))) {
     return true
   }
+
   // Backstop for host clock skew wider than the slack: the transcript grew a new
   // tail user turn since the draft was first observed.
   if (!baseline) {
     return false
   }
+
   const userTurns = messages.filter((message) => message.role === 'user')
+
   return (
     userTurns.length > baseline.userTurnCount &&
     (userTurns.at(-1)?.id ?? null) !== baseline.lastUserTurnId

@@ -174,6 +174,7 @@ function AgentAction(props: { action: 'Read' | 'Grep' }): JSX.Element {
     props.action === 'Read'
       ? translate('auto.components.feature.wall.WorkbenchAnimatedVisual.9923847785', 'Read')
       : translate('auto.components.feature.wall.WorkbenchAnimatedVisual.17cfdc3344', 'Grep')
+
   const target =
     props.action === 'Read'
       ? translate(
@@ -184,6 +185,7 @@ function AgentAction(props: { action: 'Read' | 'Grep' }): JSX.Element {
           'auto.components.feature.wall.WorkbenchAnimatedVisual.0d93c298a7',
           'throw src/auth'
         )
+
   return (
     <TermLine>
       <PassedCheck />
@@ -202,6 +204,7 @@ function RightPaneScrollback(props: {
     <>
       {props.lines.map((line) => {
         const key = getWorkbenchTerminalLineKey(line)
+
         if (line.kind === 'submitted-command') {
           return (
             <TermLine key={key}>
@@ -210,6 +213,7 @@ function RightPaneScrollback(props: {
             </TermLine>
           )
         }
+
         if (line.kind === 'session-started') {
           return (
             <TermLine key={key} muted>
@@ -232,6 +236,7 @@ function RightPaneScrollback(props: {
             </TermLine>
           )
         }
+
         if (line.kind === 'submitted-prompt') {
           return (
             <TermLine key={key} wrap>
@@ -242,6 +247,7 @@ function RightPaneScrollback(props: {
             </TermLine>
           )
         }
+
         if (line.kind === 'thinking') {
           return (
             <TermLine key={key}>
@@ -255,6 +261,7 @@ function RightPaneScrollback(props: {
             </TermLine>
           )
         }
+
         if (line.kind === 'agent-action') {
           return (
             <TermLine key={key}>
@@ -264,6 +271,7 @@ function RightPaneScrollback(props: {
             </TermLine>
           )
         }
+
         return (
           <TermLine key={key}>
             {line.withGlyph ? (
@@ -290,12 +298,15 @@ function getWorkbenchTerminalLineKey(line: WorkbenchTerminalLine): string {
   if (line.kind === 'submitted-command' || line.kind === 'submitted-prompt') {
     return `${line.kind}:${line.text}`
   }
+
   if (line.kind === 'agent-action') {
     return `${line.kind}:${line.action}:${line.target}`
   }
+
   if (line.kind === 'response-skeleton') {
     return `${line.kind}:${line.widthPct}`
   }
+
   return line.kind
 }
 

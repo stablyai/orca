@@ -48,6 +48,7 @@ export function normalizeWorkspaceCleanupFilterState(value: unknown): WorkspaceC
   const context = asRecord(raw.context)
   const location = asRecord(raw.location)
   const safety = asRecord(raw.safety)
+
   return {
     query: asString(raw.query, base.query),
     activity: {
@@ -116,6 +117,7 @@ export function normalizeWorkspaceCleanupFilterState(value: unknown): WorkspaceC
 
 export function normalizeWorkspaceCleanupSortState(value: unknown): WorkspaceCleanupSortState {
   const raw = asRecord(value)
+
   return {
     field: asEnum(
       raw.field,
@@ -152,9 +154,11 @@ export function asNullableNumber(
   if (value === null) {
     return null
   }
+
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return fallback
   }
+
   return min !== undefined && value < min ? min : value
 }
 
@@ -168,8 +172,10 @@ export function asEnumList<T extends string>(value: unknown, allowed: readonly T
   if (!Array.isArray(value)) {
     return []
   }
+
   const seen = new Set<string>()
   const result: T[] = []
+
   for (const entry of value) {
     if (
       typeof entry === 'string' &&
@@ -180,6 +186,7 @@ export function asEnumList<T extends string>(value: unknown, allowed: readonly T
       result.push(entry as T)
     }
   }
+
   return result
 }
 
@@ -187,12 +194,15 @@ export function asStringList(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return []
   }
+
   const seen = new Set<string>()
+
   for (const entry of value) {
     if (typeof entry === 'string' && entry.length > 0) {
       seen.add(entry)
     }
   }
+
   return [...seen]
 }
 
@@ -200,16 +210,21 @@ function asExecutionHostIdList(value: unknown): ExecutionHostId[] {
   if (!Array.isArray(value)) {
     return []
   }
+
   const result = new Set<ExecutionHostId>()
+
   for (const entry of value) {
     if (typeof entry !== 'string') {
       continue
     }
+
     const hostId = normalizeExecutionHostId(entry)
+
     if (hostId) {
       result.add(hostId)
     }
   }
+
   return [...result]
 }
 

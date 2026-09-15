@@ -21,8 +21,11 @@ import {
 } from './appimage-stable-launcher'
 
 const CACHE_DIR_SEGMENTS = ['orca', 'appimage'] as const
+
 const EXTRACT_OUTPUT_DIR = 'squashfs-root'
+
 const MAX_GENERATION_ATTEMPTS = 2
+
 const EXTRACTION_STAGING_PREFIX = '.extract-'
 
 export type AppImageExtractedRoot = {
@@ -39,8 +42,10 @@ export type AppImageExtractionOptions = {
 
 export function getAppImageCacheRootPath(homePath = homedir()): string {
   const xdgCacheHome = process.env.XDG_CACHE_HOME
+
   const cacheHome =
     xdgCacheHome && isAbsolute(xdgCacheHome) ? xdgCacheHome : join(homePath, '.cache')
+
   return join(cacheHome, ...CACHE_DIR_SEGMENTS)
 }
 
@@ -56,6 +61,7 @@ export function getAppImageCacheRootPath(homePath = homedir()): string {
 export function resolveAppImageCacheKey(appImagePath: string): string | null {
   try {
     const stats = statSync(appImagePath)
+
     return digest(`${stats.dev}\0${stats.ino}\0${stats.size}\0${stats.mtimeMs}`)
   } catch {
     return null
@@ -66,11 +72,14 @@ export function resolveAppImageExtractedRoot(
   options: AppImageExtractionOptions
 ): AppImageExtractedRoot | null {
   const cacheKey = resolveAppImageCacheKey(options.appImagePath)
+
   if (!cacheKey) {
     return null
   }
+
   const cacheRootPath = resolveAppImageCacheRootPath(options)
   const rootPath = join(resolveAppImageNamespacePath(options), cacheKey)
+
   return extractedRootAt(rootPath, cacheRootPath)
 }
 
@@ -82,7 +91,9 @@ export function isAppImageExtractedLauncherPath(
   if (!isAbsolute(candidatePath)) {
     return false
   }
+
   const cacheRootPath = resolveAppImageCacheRootPath(options)
+
   if (
     launcherName === LINUX_CLI_COMMAND_NAME &&
     resolve(candidatePath) === resolveAppImageStableLauncherPath(cacheRootPath)
@@ -100,6 +111,7 @@ export function isAppImageExtractionComplete(root: AppImageExtractedRoot): boole
 export function isAppImageInstalledLauncherCurrent(options: AppImageExtractionOptions): boolean {
   const root = resolveAppImageExtractedRoot(options)
   const cacheRootPath = resolveAppImageCacheRootPath(options)
+
   if (
     !root ||
     !isAppImageStableLauncherReady(cacheRootPath) ||
@@ -107,7 +119,9 @@ export function isAppImageInstalledLauncherCurrent(options: AppImageExtractionOp
   ) {
     return false
   }
+
   const endpointPath = resolveAppImageLauncherEndpointPath(cacheRootPath, 'installed')
+
   try {
     return resolve(dirname(endpointPath), readlinkSync(endpointPath)) === root.payloadLauncherPath
   } catch {
@@ -120,9 +134,11 @@ export function isAppImageInstalledLauncherOwnedBySibling(
 ): boolean {
   const cacheRootPath = resolveAppImageCacheRootPath(options)
   const endpointPath = resolveAppImageLauncherEndpointPath(cacheRootPath, 'installed')
+
   try {
     const targetPath = resolve(dirname(endpointPath), readlinkSync(endpointPath))
     const targetRoot = resolveCachedAppImagePayloadRoot(cacheRootPath, targetPath)
+
     return (
       targetRoot !== null &&
       hasPayloadLauncher(targetRoot) &&
@@ -138,28 +154,36 @@ export async function ensureAppImageExtractedRoot(
 ): Promise<AppImageExtractedRoot | null> {
   for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS; attempt += 1) {
     const root = resolveAppImageExtractedRoot(options)
+
     if (!root) {
       return null
     }
+
     const complete =
       isAppImageExtractionComplete(root) || (await extractAppImageGeneration(options, root))
+
     if (isCurrentGeneration(options, root)) {
       if (!complete || !isAppImageExtractionComplete(root)) {
         await cleanFailedEndpointPublication(root)
         continue
       }
+
       const launcherPath = publishAppImageLauncherEndpoint(
         resolveAppImageCacheRootPath(options),
         'installed',
         root.payloadLauncherPath
       )
+
       if (launcherPath === root.stableLauncherPath) {
         await rm(getAppImageActiveExtractionPath(root.rootPath), { force: true }).catch(() => {})
+
         return root
       }
     }
+
     await cleanFailedEndpointPublication(root)
   }
+
   return null
 }
 
@@ -176,13 +200,17 @@ async function extractAppImageGeneration(
   await mkdir(namespacePath, { recursive: true })
   const stagingPath = await mkdtemp(join(namespacePath, EXTRACTION_STAGING_PREFIX))
   const stopTracking = trackAppImageExtraction(stagingPath)
+
   try {
     await (options.runExtract ?? runAppImageExtract)(options.appImagePath, stagingPath)
     const extractedPath = join(stagingPath, EXTRACT_OUTPUT_DIR)
+
     if (!hasPayloadLauncher(extractedPath) || !isCurrentGeneration(options, root)) {
       return false
     }
+
     await writeFile(getAppImageActiveExtractionPath(root.rootPath), '')
+
     return await publishExtractedRoot(extractedPath, root)
   } catch {
     // A concurrent extractor may have published the same payload first.
@@ -231,19 +259,24 @@ async function publishExtractedRoot(
 
   // Claim the destination atomically so a raced complete winner can be restored.
   const displacedPath = `${extractedPath}.displaced`
+
   if (!(await renameRoot(root.rootPath, displacedPath))) {
     return (await renameRoot(extractedPath, root.rootPath)) || isAppImageExtractionComplete(root)
   }
+
   if (hasPayloadLauncher(displacedPath)) {
     return (await renameRoot(displacedPath, root.rootPath)) || isAppImageExtractionComplete(root)
   }
+
   await removeExtractedAppImagePayload(displacedPath)
+
   return (await renameRoot(extractedPath, root.rootPath)) || isAppImageExtractionComplete(root)
 }
 
 function hasPayloadLauncher(rootPath: string): boolean {
   try {
     const stats = lstatSync(join(rootPath, 'resources', 'bin', LINUX_CLI_COMMAND_NAME))
+
     return stats.isFile() && (stats.mode & 0o111) !== 0
   } catch {
     return false
@@ -253,6 +286,7 @@ function hasPayloadLauncher(rootPath: string): boolean {
 async function renameRoot(sourcePath: string, destinationPath: string): Promise<boolean> {
   try {
     await rename(sourcePath, destinationPath)
+
     return true
   } catch {
     return false
@@ -268,9 +302,11 @@ async function runAppImageExtract(appImagePath: string, cwd: string): Promise<vo
     maxOutputBytes: 1024 * 1024,
     terminationBarrier: true
   })
+
   if (result.timedOut) {
     throw new Error('AppImage extraction timed out.')
   }
+
   if (result.code !== 0) {
     throw new Error(result.stderr.trim() || `AppImage extraction exited ${result.code ?? 'early'}.`)
   }

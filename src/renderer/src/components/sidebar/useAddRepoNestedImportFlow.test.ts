@@ -8,6 +8,7 @@ import type { Repo } from '../../../../shared/repo-types'
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: never[]) => unknown>(fn: T) => fn,
@@ -40,6 +41,7 @@ vi.mock('@/store', () => {
       getState: () => mocks.state
     }
   )
+
   return { useAppStore }
 })
 
@@ -207,6 +209,7 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
       kind: 'git',
       connectionId: 'ssh-builder'
     }
+
     const importNestedRepos = vi.fn().mockResolvedValue({
       projects: [
         { path: importedRepo.path, projectId: importedRepo.id, status: 'imported' as const }
@@ -215,9 +218,11 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
       alreadyKnownCount: 0,
       failedCount: 0
     })
+
     const fetchWorktrees = vi.fn()
     const onGitRepoReady = vi.fn()
     mocks.state.repos = []
+
     const { handleImportNestedRepos } = useTestAddRepoNestedImportFlow({
       activeRuntimeEnvironmentId: null,
       nestedConnectionId: 'ssh-builder',

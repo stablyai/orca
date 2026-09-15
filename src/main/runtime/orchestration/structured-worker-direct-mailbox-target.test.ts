@@ -9,6 +9,7 @@ vi.mock('../../native-chat/agent-session-wire/structured-agent-session-registry'
 
 const { OrcaRuntimeWithGetPtyRecordForPaneKey } =
   await import('../orca-runtime-get-pty-record-for-pane-key')
+
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -52,18 +53,21 @@ function registerWorker(): string {
     worktreeId: 'wt_1',
     hostScope: { kind: 'local', hostId: 'local' }
   })
+
   return handle
 }
 
 function probe(activeDispatch: { id: string } | undefined, run?: { coordinator_handle: string }) {
   const findActiveDispatchForAssignee = vi.fn(() => activeDispatch)
   const getRun = vi.fn(() => run)
+
   const instance = Object.assign(Object.create(MailboxTargetProbe.prototype), {
     _orchestrationDb: { findActiveDispatchForAssignee, getRun },
     getLiveLeafForHandle: () => {
       throw new Error('no leaf backs a native-born structured worker')
     }
   }) as MailboxTargetProbe
+
   return { instance, findActiveDispatchForAssignee, getRun }
 }
 

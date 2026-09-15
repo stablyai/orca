@@ -9,8 +9,10 @@ export function rekeyFileIdRecord<T>(
 ): Record<string, T> {
   let changed = false
   const next: Record<string, T> = {}
+
   for (const [key, value] of Object.entries(record)) {
     const mapped = migrations.get(key)
+
     if (mapped !== undefined && mapped !== key) {
       next[mapped] = value
       changed = true
@@ -18,6 +20,7 @@ export function rekeyFileIdRecord<T>(
       next[key] = value
     }
   }
+
   return changed ? next : record
 }
 
@@ -27,6 +30,7 @@ export function nextActiveIdAfterRemoval(
   removedIds: ReadonlySet<string>
 ): string | null {
   const recent = (recentIds ?? []).toReversed().find((id) => !removedIds.has(id))
+
   return recent ?? ids.find((id) => !removedIds.has(id)) ?? null
 }
 
@@ -34,14 +38,18 @@ export function nextActiveIdAfterRemoval(
  * same object when the group never referenced them. */
 export function removeTabIdsFromGroup(group: TabGroup, removedIds: ReadonlySet<string>): TabGroup {
   const recentTabIds = group.recentTabIds ?? []
+
   const references =
     group.tabOrder.some((id) => removedIds.has(id)) ||
     recentTabIds.some((id) => removedIds.has(id)) ||
     (group.activeTabId !== null && removedIds.has(group.activeTabId))
+
   if (!references) {
     return group
   }
+
   const tabOrder = group.tabOrder.filter((id) => !removedIds.has(id))
+
   return {
     ...group,
     activeTabId:
@@ -68,11 +76,15 @@ export function removeEmptyEditorGroups(
       )
       .map((group) => group.id)
   )
+
   const remaining = groups.filter((group) => !emptiedGroupIds.has(group.id))
+
   if (remaining.length === 0) {
     return { groups: [], layout: undefined }
   }
+
   const validIds = new Set(remaining.map((group) => group.id))
+
   return {
     groups: remaining,
     layout: layout ? (pruneTabGroupLayoutForGroups(layout, validIds) ?? undefined) : undefined

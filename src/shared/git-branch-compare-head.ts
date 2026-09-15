@@ -27,14 +27,17 @@ export async function readBranchCompareHead(
   const compareRefPromise = readers.readCompareRef()
   const resolvedBaseRefPromise = readers.resolveBaseRef()
   const headOidResultPromise = settleOid(readers.readHeadOid())
+
   const baseOidResultPromise = resolvedBaseRefPromise.then((resolvedBaseRef) =>
     settleOid(readers.readBaseOid(resolvedBaseRef))
   )
+
   const [compareRef, resolvedBaseRef, headOidResult, baseOidResult] = await Promise.all([
     compareRefPromise,
     resolvedBaseRefPromise,
     headOidResultPromise,
     baseOidResultPromise
   ])
+
   return { compareRef, resolvedBaseRef, headOidResult, baseOidResult }
 }

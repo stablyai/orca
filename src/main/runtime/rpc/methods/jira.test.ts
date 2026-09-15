@@ -19,6 +19,7 @@ describe('jira RPC methods', () => {
       jiraSelectSite: vi.fn().mockResolvedValue({ connected: true, viewer: null }),
       jiraDisconnect: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: JIRA_METHODS })
 
     await dispatcher.dispatch(makeRequest('jira.status'))
@@ -58,6 +59,7 @@ describe('jira RPC methods', () => {
       jiraAddIssueComment: vi.fn().mockResolvedValue({ ok: true, id: 'comment-1' }),
       jiraIssueComments: vi.fn().mockResolvedValue([{ id: 'comment-2' }])
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: JIRA_METHODS })
     const summaryController = new AbortController()
 
@@ -137,6 +139,7 @@ describe('jira RPC methods', () => {
       getRuntimeId: () => 'test-runtime',
       jiraLookupIssueSummary: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: JIRA_METHODS })
 
     await expect(
@@ -147,10 +150,12 @@ describe('jira RPC methods', () => {
 
   it('streams Jira image-bearing payloads in bounded JSON chunks', async () => {
     const description = `![shot](data:image/png;base64,${'a'.repeat(300_000)})`
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       jiraGetIssue: vi.fn().mockResolvedValue({ key: 'ABC-3', description })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: JIRA_METHODS })
     const replies: string[] = []
 
@@ -162,6 +167,7 @@ describe('jira RPC methods', () => {
     const messages = replies.map(
       (response) => (JSON.parse(response) as { result: { type: string; content?: string } }).result
     )
+
     expect(messages.at(-1)).toEqual({ type: 'end' })
     expect(messages.filter((message) => message.type === 'chunk')).toHaveLength(2)
     const payload = messages.map((message) => message.content ?? '').join('')
@@ -182,6 +188,7 @@ describe('jira RPC methods', () => {
         statusIdsByColumn: [['status-1']]
       })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: JIRA_METHODS })
 
     await dispatcher.dispatch(makeRequest('jira.listProjects', { siteId: 'all' }))

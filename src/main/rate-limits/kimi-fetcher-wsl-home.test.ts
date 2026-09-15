@@ -2,32 +2,41 @@ import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const netFetchMock = vi.hoisted(() => vi.fn())
+
 const files = vi.hoisted(() => new Map<string, string>())
+
 const STALLED = vi.hoisted(() => '__stalled_unc_read__')
 
 vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
+
 vi.mock('node:fs/promises', () => ({
   readFile: async (path: string) => {
     const contents = files.get(path)
+
     if (contents === undefined) {
       const error = new Error(`ENOENT: ${path}`) as NodeJS.ErrnoException
       error.code = 'ENOENT'
       throw error
     }
+
     if (contents === STALLED) {
       // A distro that is down parks the UNC read instead of failing.
       return await new Promise<string>(() => {})
     }
+
     return contents
   }
 }))
+
 vi.mock('node:os', () => ({ homedir: () => '/home/neil' }))
 
 import { fetchKimiRateLimits } from './kimi-fetcher'
 
 // Built with `join` so the key matches the separator the fetcher emits on this runner's platform.
 const HOST_CREDENTIALS = join('/home/neil', '.kimi-code', 'credentials', 'kimi-code.json')
+
 const WSL_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\neil\\.kimi-code'
+
 const WSL_CREDENTIALS = `${WSL_HOME}\\credentials\\kimi-code.json`
 
 function credentials(token: string, expiresInSeconds: number): string {
@@ -127,6 +136,7 @@ describe('fetchKimiRateLimits with a WSL credentials home', () => {
     const pending = fetchKimiRateLimits({
       home: { runtime: 'wsl', wslDistro: 'Stopped', path: stalledHome }
     })
+
     expect(timeout).toHaveBeenCalledWith(5_000)
     await Promise.resolve()
     await Promise.resolve()

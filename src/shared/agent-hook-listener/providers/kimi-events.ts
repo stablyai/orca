@@ -32,6 +32,7 @@ export function normalizeKimiEvent(
   const isUserInputTool = isKimiUserInputTool(toolName)
 
   let stateName: 'working' | 'waiting' | 'done' | null = null
+
   if (
     eventName === 'UserPromptSubmit' ||
     eventName === 'PostToolUse' ||

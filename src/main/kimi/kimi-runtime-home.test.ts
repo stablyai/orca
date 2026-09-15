@@ -6,6 +6,7 @@ const wslMocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../wsl', () => wslMocks)
+
 vi.mock('node:os', () => ({ homedir: () => 'C:\\Users\\neil' }))
 
 import { getHostKimiHome, getKimiRuntimeTarget, resolveKimiHome } from './kimi-runtime-home'

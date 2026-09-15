@@ -187,6 +187,7 @@ describe('DesktopScriptProviderClient snapshots', () => {
     const client = await createDesktopScriptProviderClient('linux', '/tmp/runtime.py')
 
     await client.snapshot({ app: 'Text Editor', windowIndex: 3 })
+
     const result = await client.action('click', {
       app: 'Text Editor',
       windowIndex: 3,

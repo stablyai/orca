@@ -65,6 +65,7 @@ describe('browserManager popup child policies', () => {
     const childOnMock = vi.fn()
     const childOffMock = vi.fn()
     const childOpenDevToolsMock = vi.fn()
+
     const childGuest = {
       id: 4040,
       isDestroyed: vi.fn(() => false),
@@ -75,6 +76,7 @@ describe('browserManager popup child policies', () => {
       off: childOffMock,
       openDevTools: childOpenDevToolsMock
     }
+
     const guest = {
       id: 404,
       isDestroyed: vi.fn(() => false),
@@ -85,13 +87,16 @@ describe('browserManager popup child policies', () => {
       off: guestOffMock,
       openDevTools: guestOpenDevToolsMock
     }
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
 
@@ -105,6 +110,7 @@ describe('browserManager popup child policies', () => {
     const didCreateWindowHandler = guestOnMock.mock.calls.find(
       ([event]) => event === 'did-create-window'
     )?.[1] as ((window: { webContents: typeof childGuest }) => void) | undefined
+
     expect(didCreateWindowHandler).toBeTypeOf('function')
 
     didCreateWindowHandler?.({ webContents: childGuest })
@@ -120,6 +126,7 @@ describe('browserManager popup child policies', () => {
     const childWindowOpenHandler = childSetWindowOpenHandlerMock.mock.calls[0][0] as (details: {
       url: string
     }) => { action: 'allow' | 'deny' }
+
     expect(childWindowOpenHandler({ url: 'https://identity.example.com/login' })).toMatchObject({
       action: 'allow'
     })
@@ -151,6 +158,7 @@ describe('browserManager popup child policies', () => {
           isMainFrame: boolean
         ) => void)
       | undefined
+
     childDidFailLoadHandler?.(
       {} as Electron.Event,
       -105,
@@ -178,9 +186,11 @@ describe('browserManager popup child policies', () => {
     const managerState = browserManager as unknown as {
       popupOwnerContextByGuestId: Map<number, unknown>
     }
+
     expect(managerState.popupOwnerContextByGuestId.has(childGuest.id)).toBe(true)
 
     const cleanupChildOnMock = vi.fn()
+
     const cleanupChildGuest = {
       ...childGuest,
       id: 4041,
@@ -189,19 +199,25 @@ describe('browserManager popup child policies', () => {
       setBackgroundThrottling: vi.fn(),
       setWindowOpenHandler: vi.fn()
     }
+
     const childDidCreateWindowHandler = childOnMock.mock.calls.find(
       ([event]) => event === 'did-create-window'
     )?.[1] as ((window: { webContents: typeof cleanupChildGuest }) => void) | undefined
+
     childDidCreateWindowHandler?.({ webContents: cleanupChildGuest })
     expect(managerState.popupOwnerContextByGuestId.has(cleanupChildGuest.id)).toBe(true)
+
     const cleanupChildWindowOpenHandler = cleanupChildGuest.setWindowOpenHandler.mock
       .calls[0][0] as (details: { url: string }) => { action: 'allow' | 'deny' }
+
     expect(
       cleanupChildWindowOpenHandler({ url: 'https://identity.example.com/continue' })
     ).toMatchObject({ action: 'allow' })
+
     const cleanupChildDestroyedHandler = cleanupChildOnMock.mock.calls.find(
       ([event]) => event === 'destroyed'
     )?.[1] as (() => void) | undefined
+
     cleanupChildDestroyedHandler?.()
     expect(managerState.popupOwnerContextByGuestId.has(cleanupChildGuest.id)).toBe(false)
 
@@ -213,16 +229,20 @@ describe('browserManager popup child policies', () => {
       setBackgroundThrottling: vi.fn(),
       setWindowOpenHandler: vi.fn()
     }
+
     webContentsFromIdMock.mockImplementation((id: number) => {
       if (id === guest.id) {
         return guest
       }
+
       if (id === replacementGuest.id) {
         return replacementGuest
       }
+
       if (id === rendererWebContentsId) {
         return { isDestroyed: vi.fn(() => false), send: rendererSendMock }
       }
+
       return null
     })
     browserManager.attachGuestPolicies(replacementGuest as never)
@@ -241,6 +261,7 @@ describe('browserManager popup child policies', () => {
     const childDestroyedHandler = childOnMock.mock.calls.find(
       ([event]) => event === 'destroyed'
     )?.[1] as (() => void) | undefined
+
     childDestroyedHandler?.()
     expect(managerState.popupOwnerContextByGuestId.has(childGuest.id)).toBe(false)
 

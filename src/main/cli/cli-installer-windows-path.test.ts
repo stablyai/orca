@@ -42,6 +42,7 @@ describe('CliInstaller', () => {
     const fixture = await makeFixture()
     const installPath = join(fixture.root, 'Programs', 'Orca', 'bin', 'orca.cmd')
     let userPath = 'C:\\Windows\\System32'
+
     const installer = new CliInstaller({
       platform: 'win32',
       isPackaged: false,
@@ -77,6 +78,7 @@ describe('CliInstaller', () => {
     async (permissionMarker) => {
       const fixture = await makeFixture()
       const installPath = join(fixture.root, 'Programs', 'Orca', 'bin', 'orca.cmd')
+
       const installer = new CliInstaller({
         platform: 'win32',
         isPackaged: false,
@@ -90,6 +92,7 @@ describe('CliInstaller', () => {
           const error = new Error(
             `Command failed: powershell -NoProfile -Command [Environment]::SetEnvironmentVariable('Path', '...', 'User')\nFullyQualifiedErrorId : ${permissionMarker},Microsoft.PowerShell.Commands`
           )
+
           Object.assign(error, { code: 1 })
           throw error
         }
@@ -109,6 +112,7 @@ describe('CliInstaller', () => {
   it('skips the Windows PATH write when removing an absent entry', async () => {
     const fixture = await makeFixture()
     const userPathWriter = vi.fn()
+
     const installer = new CliInstaller({
       platform: 'win32',
       isPackaged: false,
@@ -135,6 +139,7 @@ describe('CliInstaller', () => {
     async (_name, message) => {
       const fixture = await makeFixture()
       const installPath = join(fixture.root, 'Programs', 'Orca', 'bin', 'orca.cmd')
+
       const installer = new CliInstaller({
         platform: 'win32',
         isPackaged: false,
@@ -157,6 +162,7 @@ describe('CliInstaller', () => {
   it('reports an unknown Windows PATH without spawning PowerShell', async () => {
     const fixture = await makeFixture()
     const installPath = join(fixture.root, 'Programs', 'Orca', 'bin', 'orca.cmd')
+
     const installer = new CliInstaller({
       platform: 'win32',
       isPackaged: false,
@@ -181,6 +187,7 @@ describe('CliInstaller', () => {
   it('fails closed without writing when a Windows PATH mutation cannot read the registry', async () => {
     const fixture = await makeFixture()
     const userPathWriter = vi.fn()
+
     const installer = new CliInstaller({
       platform: 'win32',
       isPackaged: false,
@@ -204,6 +211,7 @@ describe('CliInstaller', () => {
     const installPath = join(fixture.root, 'Programs', 'Orca', 'bin', 'orca.cmd')
     const pathDirectory = dirname(installPath)
     let registryPath = 'C:\\Tools'
+
     const registryReader = new WindowsUserPathRegistryReader({
       platform: 'win32',
       registryLoader: async () => ({
@@ -213,9 +221,11 @@ describe('CliInstaller', () => {
         })
       })
     })
+
     const userPathWriter = vi.fn(async (value: string) => {
       registryPath = value
     })
+
     const installer = new CliInstaller({
       platform: 'win32',
       isPackaged: false,
@@ -242,6 +252,7 @@ describe('CliInstaller', () => {
     const fixture = await makeFixture()
     const installPath = join(fixture.root, 'Local App Data', 'Orca', 'bin', 'orca.cmd')
     const userPathWriter = vi.fn()
+
     const installer = new CliInstaller({
       platform: 'win32',
       isPackaged: false,
@@ -266,6 +277,7 @@ describe('CliInstaller', () => {
     const installPath = join(fixture.root, 'Local App Data', 'Orca', 'bin', 'orca.cmd')
     const pathDirectory = dirname(installPath)
     const userPathWriter = vi.fn()
+
     const installer = new CliInstaller({
       platform: 'win32',
       isPackaged: false,
@@ -343,6 +355,7 @@ describe('CliInstaller', () => {
     await writeFile(bundledLauncher, bundledContent, 'utf8')
 
     let userPath: string | null = null
+
     const installer = new CliInstaller({
       platform: 'win32',
       isPackaged: true,

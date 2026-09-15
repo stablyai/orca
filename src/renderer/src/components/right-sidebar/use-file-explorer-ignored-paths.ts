@@ -4,6 +4,7 @@ import { getRuntimeGitIgnoredPaths } from '@/runtime/runtime-git-client'
 import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
 
 const EMPTY_IGNORED_PATHS: readonly string[] = []
+
 export const FILE_EXPLORER_IGNORED_QUERY_DEBOUNCE_MS = 300
 
 export type IgnoredPathResult = {
@@ -58,6 +59,7 @@ export function useFileExplorerIgnoredPaths({
     }
 
     let canceled = false
+
     const refresh = (): void => {
       const connectionId = getConnectionId(activeWorktreeId) ?? undefined
       void getRuntimeGitIgnoredPaths(
@@ -87,12 +89,14 @@ export function useFileExplorerIgnoredPaths({
     const timer = shouldDebounceIgnoredQuery
       ? window.setTimeout(refresh, FILE_EXPLORER_IGNORED_QUERY_DEBOUNCE_MS)
       : null
+
     if (timer === null) {
       refresh()
     }
 
     return () => {
       canceled = true
+
       if (timer !== null) {
         window.clearTimeout(timer)
       }

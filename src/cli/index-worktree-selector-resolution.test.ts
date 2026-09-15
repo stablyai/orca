@@ -21,6 +21,7 @@ const {
 
 vi.mock('./runtime-client', async () => {
   const { createRuntimeClientModuleMock } = await import('./index-test-harness.js')
+
   return createRuntimeClientModuleMock({
     callMock,
     runtimeClientConstructorMock,
@@ -38,6 +39,7 @@ vi.mock('./runtime/environments', () => ({
 
 vi.mock('child_process', async () => {
   const { createChildProcessModuleMock } = await import('./index-test-harness.js')
+
   return createChildProcessModuleMock(spawnMock)
 })
 
@@ -104,6 +106,7 @@ describe('orca cli worktree awareness', () => {
     // shell's cwd carried in ORCA_CLI_CWD (#7716); cwd-based selectors must
     // resolve against it, not the host process cwd.
     process.env.ORCA_CLI_CWD = '/tmp/repo/feature/src'
+
     try {
       queueFixtures(
         callMock,

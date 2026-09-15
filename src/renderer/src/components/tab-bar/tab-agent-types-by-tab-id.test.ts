@@ -34,6 +34,7 @@ describe('selectTabAgentTypesByTabId', () => {
       'tab-1:leaf-b': entry({ agentType: 'codex' }),
       'tab-2:leaf-a': entry({ agentType: 'codex' })
     }
+
     const projection = selectTabAgentTypesByTabId(map)
     expect(projection).toEqual({ 'tab-1': 'claude', 'tab-2': 'codex' })
 
@@ -48,6 +49,7 @@ describe('selectTabAgentTypesByTabId', () => {
       'tab-1:leaf-a': entry({ agentType: undefined }),
       'tab-1:leaf-b': entry({ agentType: 'claude' })
     }
+
     // First matching pane wins (claims the tab) with no agentType -> null, exactly
     // like findTabAgentEntry(...)?.agentType ?? null.
     expect(selectTabAgentTypesByTabId(map)['tab-1'] ?? null).toBe(
@@ -57,10 +59,12 @@ describe('selectTabAgentTypesByTabId', () => {
 
   it('uses the active split leaf regardless of pane-map insertion order', () => {
     const layouts = { 'tab-1': splitLayout('leaf-b') }
+
     const agentFirst = {
       'tab-1:leaf-a': entry({ agentType: 'claude' }),
       'tab-1:leaf-b': entry({ agentType: 'codex' })
     }
+
     const activeFirst = {
       'tab-1:leaf-b': entry({ agentType: 'codex' }),
       'tab-1:leaf-a': entry({ agentType: 'claude' })
@@ -184,10 +188,12 @@ describe('selectTabAgentTypesByTabId', () => {
     const working: Record<string, AgentStatusEntry> = {
       'tab-1:leaf-a': entry({ agentType: 'claude', state: 'working' })
     }
+
     // A status write replaces the entry object but not the agentType.
     const done: Record<string, AgentStatusEntry> = {
       'tab-1:leaf-a': entry({ agentType: 'claude', state: 'done' })
     }
+
     expect(shallow(selectTabAgentTypesByTabId(working), selectTabAgentTypesByTabId(done))).toBe(
       true
     )
@@ -197,10 +203,12 @@ describe('selectTabAgentTypesByTabId', () => {
     const before = selectTabAgentTypesByTabId({
       'tab-1:leaf-a': entry({ agentType: 'claude' })
     })
+
     const gained = selectTabAgentTypesByTabId({
       'tab-1:leaf-a': entry({ agentType: 'claude' }),
       'tab-2:leaf-a': entry({ agentType: 'codex' })
     })
+
     expect(shallow(before, gained)).toBe(false)
   })
 
@@ -212,16 +220,19 @@ describe('selectTabAgentTypesByTabId', () => {
     const onStatusEntryVisited = vi.fn()
     const onAgentTypeLayoutVisited = vi.fn()
     const onUnsafeLayoutVisited = vi.fn()
+
     const select = createTabBarAgentProjectionSelector({
       onStatusEntryVisited,
       onAgentTypeLayoutVisited,
       onUnsafeLayoutVisited
     })
+
     const statuses = {
       'tab-1:leaf-a': entry({ agentType: 'claude' }),
       'tab-2:leaf-a': entry({ agentType: 'codex' }),
       'tab-3:leaf-a': entry({ agentType: 'grok' })
     }
+
     const layouts = {
       'tab-1': splitLayout('leaf-a'),
       'tab-2': splitLayout('leaf-a')
@@ -244,12 +255,15 @@ describe('selectTabAgentTypesByTabId', () => {
     const onStatusEntryVisited = vi.fn()
     const onAgentTypeLayoutVisited = vi.fn()
     const onUnsafeLayoutVisited = vi.fn()
+
     const select = createTabBarAgentProjectionSelector({
       onStatusEntryVisited,
       onAgentTypeLayoutVisited,
       onUnsafeLayoutVisited
     })
+
     const split = { 'tab-1': splitLayout('leaf-a') }
+
     const working = {
       'tab-1:leaf-a': entry({ agentType: 'claude', state: 'working' }),
       'tab-1:leaf-b': entry({ agentType: 'codex', state: 'working' })
@@ -260,10 +274,12 @@ describe('selectTabAgentTypesByTabId', () => {
       agentStatusByPaneKey: working,
       terminalLayoutsByTabId: split
     })
+
     const done = {
       'tab-1:leaf-a': entry({ agentType: 'claude', state: 'done' }),
       'tab-1:leaf-b': entry({ agentType: 'codex', state: 'done' })
     }
+
     const afterStatus = select({
       settings: { experimentalNativeChat: true },
       agentStatusByPaneKey: done,
@@ -282,6 +298,7 @@ describe('selectTabAgentTypesByTabId', () => {
         expandedLeafId: null
       }
     }
+
     const afterLayout = select({
       settings: { experimentalNativeChat: true },
       agentStatusByPaneKey: done,
@@ -311,11 +328,13 @@ describe('selectTabAgentTypesByTabId', () => {
     const onStatusEntryVisited = vi.fn()
     const onAgentTypeLayoutVisited = vi.fn()
     const onUnsafeLayoutVisited = vi.fn()
+
     const select = createTabBarAgentProjectionSelector({
       onStatusEntryVisited,
       onAgentTypeLayoutVisited,
       onUnsafeLayoutVisited
     })
+
     const state = {
       settings: { experimentalNativeChat: true },
       agentStatusByPaneKey: { 'tab-1:leaf-a': entry({ agentType: 'claude' }) },
@@ -335,24 +354,29 @@ describe('selectTabAgentTypesByTabId', () => {
   it('production selector skips all map scans while native chat is disabled', () => {
     let statusEnumerations = 0
     let layoutEnumerations = 0
+
     const statuses = new Proxy(
       { 'tab-1:leaf-a': entry({ agentType: 'claude' }) },
       {
         ownKeys(target) {
           statusEnumerations++
+
           return Reflect.ownKeys(target)
         }
       }
     )
+
     const layouts = new Proxy(
       { 'tab-1': splitLayout('leaf-a') },
       {
         ownKeys(target) {
           layoutEnumerations++
+
           return Reflect.ownKeys(target)
         }
       }
     )
+
     const disabledState = {
       settings: { experimentalNativeChat: false },
       agentStatusByPaneKey: statuses,
@@ -360,9 +384,11 @@ describe('selectTabAgentTypesByTabId', () => {
     }
 
     const disabled = selectTabBarAgentProjections(disabledState)
+
     for (let consumer = 0; consumer < 100; consumer++) {
       expect(selectTabBarAgentProjections(disabledState)).toBe(disabled)
     }
+
     expect(statusEnumerations).toBe(0)
     expect(layoutEnumerations).toBe(0)
 
@@ -370,10 +396,13 @@ describe('selectTabAgentTypesByTabId', () => {
       ...disabledState,
       settings: { experimentalNativeChat: true }
     }
+
     const enabled = selectTabBarAgentProjections(enabledState)
+
     for (let consumer = 0; consumer < 100; consumer++) {
       expect(selectTabBarAgentProjections(enabledState)).toBe(enabled)
     }
+
     expect(statusEnumerations).toBe(1)
     expect(layoutEnumerations).toBe(2)
   })

@@ -28,6 +28,7 @@ export function NotificationDeliverySection({ value, disabled, onChange }: Props
       </View>
     )
   }
+
   return (
     <>
       <View style={styles.section}>

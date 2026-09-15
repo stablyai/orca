@@ -19,6 +19,7 @@ vi.mock('./system-ssh-binary', () => ({ findSystemSsh: findSystemSshMock }))
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<{ homedir: () => string }>()
+
   return {
     ...actual,
     homedir: () => process.env.ORCA_TEST_SSH_HOME || actual.homedir()
@@ -26,7 +27,9 @@ vi.mock('node:os', async (importOriginal) => {
 })
 
 const ED25519_SECURITY_KEY = 'sk-ssh-ed25519@openssh.com'
+
 const ECDSA_SECURITY_KEY = 'sk-ecdsa-sha2-nistp256@openssh.com'
+
 const tempDirs: string[] = []
 
 function createTarget(overrides: Partial<SshTarget> = {}): SshTarget {
@@ -50,6 +53,7 @@ async function writeKey(contents: Buffer, filename = 'security key'): Promise<st
   tempDirs.push(directory)
   const keyPath = join(directory, filename)
   await writeFile(keyPath, contents)
+
   return keyPath
 }
 
@@ -57,9 +61,11 @@ async function createDefaultKeyHome(files: Record<string, Buffer>): Promise<stri
   const directory = await mkdtemp(join(tmpdir(), 'orca-default-key-home-'))
   tempDirs.push(directory)
   await mkdir(join(directory, '.ssh'))
+
   for (const [name, contents] of Object.entries(files)) {
     await writeFile(join(directory, '.ssh', name), contents)
   }
+
   return directory
 }
 
@@ -94,6 +100,7 @@ describe('isOpenSshSecurityKeyPrivateKey', () => {
       cipher: 'aes256-gcm@openssh.com',
       authTag: Buffer.alloc(16, 7)
     })
+
     expect(isOpenSshSecurityKeyPrivateKey(key)).toBe(true)
   })
 
@@ -123,6 +130,7 @@ describe('isOpenSshSecurityKeyPrivateKey', () => {
     const key = createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY], {
       privateBlock: Buffer.alloc(0)
     })
+
     const unpadded = Buffer.from(key.toString().replace(/=+(?=\n-----END)/, ''))
     expect(unpadded).not.toEqual(key)
     expect(isOpenSshSecurityKeyPrivateKey(unpadded)).toBe(true)
@@ -132,6 +140,7 @@ describe('isOpenSshSecurityKeyPrivateKey', () => {
     const key = createOpenSshPrivateKeyFixture(['ssh-ed25519'], {
       privateBlock: Buffer.from(ED25519_SECURITY_KEY)
     })
+
     expect(isOpenSshSecurityKeyPrivateKey(key)).toBe(false)
     expect(
       isOpenSshSecurityKeyPrivateKey(Buffer.from(`${ED25519_SECURITY_KEY} AAAA comment`))
@@ -163,13 +172,16 @@ describe('isOpenSshSecurityKeyPrivateKey', () => {
 
   it('rejects malformed and truncated OpenSSH envelopes without throwing', () => {
     const key = createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
+
     const malformedLength = Buffer.concat([
       Buffer.from('openssh-key-v1\0', 'ascii'),
       Buffer.from([0xff, 0xff, 0xff, 0xff])
     ]).toString('base64')
+
     const malformedKey = Buffer.from(
       `-----BEGIN OPENSSH PRIVATE KEY-----\n${malformedLength}\n-----END OPENSSH PRIVATE KEY-----\n`
     )
+
     expect(isOpenSshSecurityKeyPrivateKey(key.subarray(0, -20))).toBe(false)
     expect(isOpenSshSecurityKeyPrivateKey(malformedKey)).toBe(false)
     expect(isOpenSshSecurityKeyPrivateKey(Buffer.from('not a private key'))).toBe(false)
@@ -181,6 +193,7 @@ describe('requiresSystemSshForSecurityKey', () => {
     const directory = await createDefaultKeyHome({
       id_ed25519_sk: createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
     })
+
     vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
 
     await expect(requiresSystemSshForSecurityKey(createTarget(), null)).resolves.toBe(true)
@@ -194,6 +207,7 @@ describe('requiresSystemSshForSecurityKey', () => {
       id_rsa: createOpenSshPrivateKeyFixture(['ssh-rsa']),
       id_ed25519_sk: createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
     })
+
     vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
 
     await expect(requiresSystemSshForSecurityKey(createTarget(), null)).resolves.toBe(true)
@@ -206,6 +220,7 @@ describe('requiresSystemSshForSecurityKey', () => {
     const directory = await createDefaultKeyHome({
       id_rsa: createOpenSshPrivateKeyFixture(['ssh-rsa'])
     })
+
     vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
 
     await expect(requiresSystemSshForSecurityKey(createTarget(), null)).resolves.toBe(false)
@@ -216,6 +231,7 @@ describe('requiresSystemSshForSecurityKey', () => {
       id_rsa: createOpenSshPrivateKeyFixture(['ssh-rsa']),
       id_ed25519_sk: createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
     })
+
     const identityFile = listBuiltInDefaultIdentityFiles(directory)
 
     await expect(requiresSystemSshForSecurityKey(createTarget(), { identityFile })).resolves.toBe(
@@ -241,6 +257,7 @@ describe('requiresSystemSshForSecurityKey', () => {
     const directory = await createDefaultKeyHome({
       id_ed25519_sk: createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
     })
+
     vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
     findSystemSshMock.mockReturnValue(null)
 
@@ -252,6 +269,7 @@ describe('requiresSystemSshForSecurityKey', () => {
       'id_ed25519.pub': createOpenSshPublicKeyFixture('ssh-ed25519'),
       id_ed25519_sk: createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY])
     })
+
     vi.stubEnv('ORCA_TEST_SSH_HOME', directory)
 
     await expect(requiresSystemSshForSecurityKey(createTarget(), null)).resolves.toBe(true)
@@ -266,10 +284,12 @@ describe('requiresSystemSshForSecurityKey', () => {
 
   it('checks every fresh resolved identity for config-backed targets', async () => {
     const regularKey = await writeKey(createOpenSshPrivateKeyFixture(['ssh-ed25519']), 'regular')
+
     const securityKey = await writeKey(
       createOpenSshPrivateKeyFixture([ECDSA_SECURITY_KEY], { encrypted: true }),
       'security'
     )
+
     const target = createTarget({
       source: 'ssh-config',
       configHost: 'workbox',
@@ -300,6 +320,7 @@ describe('requiresSystemSshForSecurityKey', () => {
       createOpenSshPrivateKeyFixture(['ssh-ed25519']),
       'regular-with-stale-sidecar'
     )
+
     await writeFile(`${identityPath}.pub`, createOpenSshPublicKeyFixture(ED25519_SECURITY_KEY))
 
     await expect(
@@ -310,6 +331,7 @@ describe('requiresSystemSshForSecurityKey', () => {
   it('ignores stale imported identity paths when fresh config has regular keys', async () => {
     const staleKey = await writeKey(createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY]), 'stale')
     const regularKey = await writeKey(createOpenSshPrivateKeyFixture(['ssh-ed25519']), 'regular')
+
     const target = createTarget({
       source: 'ssh-config',
       configHost: 'workbox',
@@ -323,6 +345,7 @@ describe('requiresSystemSshForSecurityKey', () => {
 
   it('keeps a manual target identity authoritative over resolved defaults', async () => {
     const regularKey = await writeKey(createOpenSshPrivateKeyFixture(['ssh-ed25519']), 'manual')
+
     const securityKey = await writeKey(
       createOpenSshPrivateKeyFixture([ED25519_SECURITY_KEY]),
       'resolved'

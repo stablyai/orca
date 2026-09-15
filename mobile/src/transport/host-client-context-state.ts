@@ -31,13 +31,17 @@ export function subscribeHostStateListener(
   listener: (state: ConnectionState) => void
 ): () => void {
   let hostListeners = listeners.get(hostId)
+
   if (!hostListeners) {
     hostListeners = new Set()
     listeners.set(hostId, hostListeners)
   }
+
   hostListeners.add(listener)
+
   return () => {
     hostListeners.delete(listener)
+
     if (hostListeners.size === 0) {
       listeners.delete(hostId)
     }
@@ -49,6 +53,7 @@ export function subscribeAllHostListener(
   listener: () => void
 ): () => void {
   listeners.add(listener)
+
   return () => listeners.delete(listener)
 }
 
@@ -70,12 +75,15 @@ export function createHostClientSelectors(
 ) {
   const getKnownState = (hostId: string): ConnectionState | null => {
     const entry = entries.get(hostId)
+
     if (entry) {
       return entry.state
     }
+
     // Why: the Keychain pass predates the store entry; this window is connecting.
     return pendingOpens.getActivePromise(hostId) ? 'connecting' : null
   }
+
   return {
     getKnownState,
     getState: (hostId: string): ConnectionState => getKnownState(hostId) ?? 'disconnected',
@@ -96,24 +104,29 @@ export function createHostClientSelectors(
 
 export function clientHostSignedOut(client: RpcClient | undefined): boolean {
   const logical = client as Partial<StableLogicalRpcClient> | undefined
+
   return logical?.isHostSignedOut?.() ?? false
 }
 
 export function clientPairingRejected(client: RpcClient | undefined): boolean {
   const logical = client as Partial<StableLogicalRpcClient> | undefined
+
   return logical?.isPairingRejected?.() ?? false
 }
 
 export function clientActivePath(client: RpcClient | undefined): MobileConnectionPath {
   const logical = client as Partial<StableLogicalRpcClient> | undefined
+
   if (typeof logical?.getActivePath !== 'function') {
     return 'lan'
   }
+
   // Why: during migration the pending path is what the user is waiting on.
   return logical.getPendingPath?.() ?? logical.getActivePath()
 }
 
 export function clientPendingPath(client: RpcClient | undefined): MobileConnectionPath | null {
   const logical = client as Partial<StableLogicalRpcClient> | undefined
+
   return logical?.getPendingPath?.() ?? null
 }

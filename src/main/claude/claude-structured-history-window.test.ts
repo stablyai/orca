@@ -14,6 +14,7 @@ import {
 } from './claude-structured-history-window'
 
 const PROVIDER_SESSION = 'provider-1'
+
 const ORCA_SESSION = 'session-1'
 
 let accountHome: string
@@ -33,6 +34,7 @@ function prompt(uuid: string, parentUuid: string | null, content: unknown, extra
 
 function jsonl(rows: Row[], leafUuid: string): string {
   const lines = [...rows, { type: 'last-prompt', sessionId: PROVIDER_SESSION, leafUuid }]
+
   return `${lines.map((row) => JSON.stringify(row)).join('\n')}\n`
 }
 

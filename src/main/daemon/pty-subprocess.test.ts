@@ -37,8 +37,11 @@ vi.mock('../pwsh', () => ({
 // tests run on non-Windows CI. The real resolver (which skips the Store App
 // Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('../providers/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -51,6 +54,7 @@ vi.mock('../providers/windows-powershell-executable', () => ({
 
 vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
+
   return {
     ...actual,
     resolveUnixShellPath: resolveUnixShellPathMock,
@@ -62,6 +66,7 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
 vi.mock('../providers/agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
     const value = await resolveAgentForegroundProcessMock(...args)
+
     return value && typeof value === 'object' && 'available' in value
       ? value
       : { available: true, processName: value }
@@ -87,6 +92,7 @@ import {
 } from './pty-subprocess-test-harness'
 
 const itOnMacHost = process.platform === 'darwin' ? it : it.skip
+
 const itOnPosixHost = process.platform === 'win32' ? it.skip : it
 
 describe('createPtySubprocess', () => {
@@ -135,9 +141,11 @@ describe('createPtySubprocess', () => {
 
   it('does not spawn after cancellation wins during async cwd validation', async () => {
     let releaseValidation: () => void = () => {}
+
     const validationGate = new Promise<void>((resolve) => {
       releaseValidation = resolve
     })
+
     validateWorkingDirectoryMock.mockImplementationOnce(() => validationGate)
     let canceled = false
 
@@ -147,6 +155,7 @@ describe('createPtySubprocess', () => {
       rows: 24,
       isCanceled: () => canceled
     })
+
     await vi.waitFor(() => expect(validateWorkingDirectoryMock).toHaveBeenCalled())
 
     canceled = true
@@ -217,9 +226,11 @@ describe('createPtySubprocess', () => {
       )
     } finally {
       warn.mockRestore()
+
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
+
       if (previousShell === undefined) {
         delete process.env.SHELL
       } else {
@@ -264,19 +275,23 @@ describe('createPtySubprocess', () => {
       expect(spawnOptions.env.SHELL).toBe('/bin/sh')
     } finally {
       warn.mockRestore()
+
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
+
       if (previousShell === undefined) {
         delete process.env.SHELL
       } else {
         process.env.SHELL = previousShell
       }
+
       if (previousFeatures === undefined) {
         delete process.env.ORCA_SHELL_FEATURES
       } else {
         process.env.ORCA_SHELL_FEATURES = previousFeatures
       }
+
       if (previousZdotdir === undefined) {
         delete process.env.ZDOTDIR
       } else {
@@ -374,6 +389,7 @@ describe('createPtySubprocess', () => {
       expect(chdirSpy).toHaveBeenCalledWith(ptyEnv.userDataPath)
     } finally {
       restoreCwdStubs()
+
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
@@ -408,6 +424,7 @@ describe('createPtySubprocess', () => {
       expect(chdirSpy).toHaveBeenCalledWith(ptyEnv.userDataPath)
     } finally {
       restoreCwdStubs()
+
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
@@ -483,6 +500,7 @@ describe('createPtySubprocess', () => {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
+
       if (origHome === undefined) {
         delete process.env.HOME
       } else {
@@ -557,16 +575,19 @@ describe('createPtySubprocess', () => {
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
+
       if (originalUserProfile === undefined) {
         delete process.env.USERPROFILE
       } else {
         process.env.USERPROFILE = originalUserProfile
       }
+
       if (originalHomeDrive === undefined) {
         delete process.env.HOMEDRIVE
       } else {
         process.env.HOMEDRIVE = originalHomeDrive
       }
+
       if (originalHomePath === undefined) {
         delete process.env.HOMEPATH
       } else {
@@ -599,6 +620,7 @@ describe('checkPtySpawnHealth (retry on transient failure)', () => {
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
     }
+
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
@@ -613,11 +635,13 @@ describe('checkPtySpawnHealth (retry on transient failure)', () => {
         .mockImplementationOnce(() => {
           const proc = mockPtyProcess()
           queueMicrotask(() => proc._simulateExit(1))
+
           return proc
         })
         .mockImplementationOnce(() => {
           const proc = mockPtyProcess()
           queueMicrotask(() => proc._simulateExit(0))
+
           return proc
         })
 
@@ -633,6 +657,7 @@ describe('checkPtySpawnHealth (retry on transient failure)', () => {
     spawnMock.mockImplementation(() => {
       const proc = mockPtyProcess()
       queueMicrotask(() => proc._simulateExit(1))
+
       return proc
     })
 

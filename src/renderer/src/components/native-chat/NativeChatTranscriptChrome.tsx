@@ -19,11 +19,13 @@ import { isNativeChatPastedImagePath } from './native-chat-image-paste'
 type VisibilityListener = (isVisible: boolean) => void
 
 const visibilityListeners = new Map<Element, VisibilityListener>()
+
 let visibilityObserver: IntersectionObserver | null = null
 
 function observeTranscriptVisibility(element: Element, listener: VisibilityListener): () => void {
   if (typeof IntersectionObserver === 'undefined') {
     listener(true)
+
     return () => {}
   }
 
@@ -41,6 +43,7 @@ function observeTranscriptVisibility(element: Element, listener: VisibilityListe
   return () => {
     visibilityListeners.delete(element)
     visibilityObserver?.unobserve(element)
+
     if (visibilityListeners.size === 0) {
       visibilityObserver?.disconnect()
       visibilityObserver = null
@@ -58,9 +61,11 @@ function transcriptImageIdentity(
 ): string {
   const source = block.url?.trim() || block.path
   const filePath = block.path ?? source ?? ''
+
   if (renderableImageSource(source)) {
     return `external\0${source ?? ''}`
   }
+
   return `${source ?? ''}\0${filePath}\0${
     runtimeContext === null
       ? 'unresolved'
@@ -86,13 +91,16 @@ function TranscriptImagePreview({
   const filePath = block.path ?? source ?? ''
   const external = renderableImageSource(source)
   const leaseActive = near || open
+
   const localSrc = useLocalImageSrc(
     leaseActive && !external && runtimeContext !== undefined ? source : undefined,
     filePath,
     runtimeContext?.connectionId,
     runtimeContext
   )
+
   const displaySrc = external && leaseActive ? source : localSrc
+
   const label =
     block.alt?.trim() ||
     (block.path && isNativeChatPastedImagePath(block.path)
@@ -100,7 +108,9 @@ function TranscriptImagePreview({
       : block.path
         ? basename(block.path)
         : 'Image')
+
   const viewImageLabel = translate('components.native-chat.composer.viewAttachment', 'View image')
+
   const fallback = (
     <div
       className="flex max-w-full items-center gap-1.5 rounded-md border border-border bg-background px-2 py-1 text-xs text-muted-foreground"
@@ -113,19 +123,24 @@ function TranscriptImagePreview({
 
   useEffect(() => {
     const element = ref.current
+
     if (!element) {
       return
     }
+
     return observeTranscriptVisibility(element, setNear)
   }, [])
   useEffect(() => {
     const context = runtimeContext
+
     if (!source || external || context === undefined || context === null) {
       return
     }
+
     if (!leaseActive) {
       releaseLocalImageSrc(source, filePath, context.connectionId, context)
     }
+
     return () => releaseLocalImageSrc(source, filePath, context.connectionId, context)
   }, [external, filePath, leaseActive, runtimeContext, source])
 
@@ -139,6 +154,7 @@ function TranscriptImagePreview({
   if (!showPreview) {
     return <div ref={ref}>{fallback}</div>
   }
+
   return (
     <div ref={ref} className="relative size-20 shrink-0">
       <button
@@ -191,10 +207,13 @@ export function NativeChatImageAttachments({
   enablePreview?: boolean
 }): React.JSX.Element | null {
   const images = blocks.filter((block) => block.type === 'image-ref')
+
   if (images.length === 0) {
     return null
   }
+
   const imageKeyCounts = new Map<string, number>()
+
   if (!enablePreview) {
     return (
       <div className="mb-2 flex flex-wrap gap-1.5">
@@ -203,12 +222,14 @@ export function NativeChatImageAttachments({
           const imageKeyBase = `${label}-${image.url ?? ''}-${image.path ?? ''}`
           const occurrence = imageKeyCounts.get(imageKeyBase) ?? 0
           imageKeyCounts.set(imageKeyBase, occurrence + 1)
+
           const name =
             image.path && isNativeChatPastedImagePath(image.path)
               ? translate('components.native-chat.composer.pastedImageLabel', 'Pasted image')
               : image.path
                 ? basename(image.path)
                 : label
+
           return (
             <div
               key={`${imageKeyBase}-${occurrence}`}
@@ -223,6 +244,7 @@ export function NativeChatImageAttachments({
       </div>
     )
   }
+
   return (
     <div className="mb-2 flex flex-wrap gap-1.5">
       {images.map((image) => {
@@ -231,6 +253,7 @@ export function NativeChatImageAttachments({
         const occurrence = imageKeyCounts.get(imageKeyBase) ?? 0
         imageKeyCounts.set(imageKeyBase, occurrence + 1)
         const identity = transcriptImageIdentity(image, runtimeContext)
+
         return (
           <TranscriptImagePreview
             key={`${imageKeyBase}-${identity}-${occurrence}`}
@@ -284,7 +307,9 @@ export function ProviderFrameRow({
   if (block.type !== 'text' || !block.providerFrame) {
     return null
   }
+
   const frame = block.providerFrame
+
   return (
     <details className="group text-xs text-muted-foreground">
       <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md px-2 py-1 font-mono hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">

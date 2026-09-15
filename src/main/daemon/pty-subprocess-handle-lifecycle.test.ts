@@ -34,8 +34,11 @@ vi.mock('../pwsh', () => ({
 // tests run on non-Windows CI. The real resolver (which skips the Store App
 // Execution Alias stub) is exercised in windows-powershell-executable.test.ts.
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
+
 vi.mock('../providers/windows-powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
@@ -48,6 +51,7 @@ vi.mock('../providers/windows-powershell-executable', () => ({
 
 vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
+
   return {
     ...actual,
     getNodePtySpawnHelperCandidates: () => [import.meta.filename],
@@ -60,6 +64,7 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
 vi.mock('../providers/agent-foreground-process', () => ({
   resolveAgentForegroundProcessWithAvailability: async (...args: unknown[]) => {
     const value = await resolveAgentForegroundProcessMock(...args)
+
     return value && typeof value === 'object' && 'available' in value
       ? value
       : { available: true, processName: value }
@@ -178,6 +183,7 @@ describe('createPtySubprocess', () => {
       throw new Error('native fallback rejected')
     })
     spawnMock.mockReturnValue(proc)
+
     const killSpy = vi
       .spyOn(process, 'kill')
       .mockImplementationOnce(() => {
@@ -305,6 +311,7 @@ describe('createPtySubprocess', () => {
       const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'linux' })
       const originalKill = proc.kill
+
       try {
         await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
         expect(proc.kill).toBe(originalKill)
@@ -323,6 +330,7 @@ describe('createPtySubprocess', () => {
       const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'win32' })
       const originalKill = proc.kill
+
       try {
         await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
         proc._simulateExit(0)
@@ -336,11 +344,13 @@ describe('createPtySubprocess', () => {
       const proc = mockPtyProcess() as ReturnType<typeof mockPtyProcess> & {
         destroy: ReturnType<typeof vi.fn>
       }
+
       proc.destroy = vi.fn()
       spawnMock.mockReturnValue(proc)
       const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'darwin' })
       const originalKill = proc.kill
+
       try {
         const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
         handle.dispose()
@@ -355,11 +365,13 @@ describe('createPtySubprocess', () => {
       const proc = mockPtyProcess() as ReturnType<typeof mockPtyProcess> & {
         destroy: ReturnType<typeof vi.fn>
       }
+
       proc.destroy = vi.fn()
       spawnMock.mockReturnValue(proc)
       const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'win32' })
       const originalKill = proc.kill
+
       try {
         const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
         handle.dispose()
@@ -374,10 +386,12 @@ describe('createPtySubprocess', () => {
       const proc = mockPtyProcess() as ReturnType<typeof mockPtyProcess> & {
         destroy: ReturnType<typeof vi.fn>
       }
+
       proc.destroy = vi.fn(() => proc.kill())
       spawnMock.mockReturnValue(proc)
       const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'win32' })
+
       try {
         const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
         handle.kill()
@@ -393,13 +407,17 @@ describe('createPtySubprocess', () => {
       const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
         destroy: ReturnType<typeof vi.fn>
       }
+
       proc.destroy = vi.fn(() => proc.kill())
       spawnMock.mockReturnValue(proc)
+
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
         throw new Error('already gone')
       })
+
       const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'win32' })
+
       try {
         const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
         handle.kill()
@@ -431,6 +449,7 @@ describe('createPtySubprocess', () => {
       spawnMock.mockReturnValue(proc)
       const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'win32' })
+
       try {
         const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
         handle.kill()
@@ -449,13 +468,17 @@ describe('createPtySubprocess', () => {
       const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & {
         destroy: ReturnType<typeof vi.fn>
       }
+
       proc.destroy = vi.fn(() => proc.kill())
       spawnMock.mockReturnValue(proc)
+
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => {
         throw new Error('already gone')
       })
+
       const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
       Object.defineProperty(process, 'platform', { value: 'win32' })
+
       try {
         const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
         handle.forceKill()
@@ -473,6 +496,7 @@ describe('createPtySubprocess', () => {
       const proc = mockPtyProcess() as ReturnType<typeof mockPtyProcess> & {
         destroy: ReturnType<typeof vi.fn>
       }
+
       proc.destroy = vi.fn()
       spawnMock.mockReturnValue(proc)
       const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })

@@ -1,13 +1,17 @@
 const METADATA_TTL = 300_000 // 5 min
+
 const MAX_METADATA_CACHE_ENTRIES = 500
+
 // Why: an unreachable provider/runtime fails every consumer render; without a
 // negative cache each settlement re-issues the fetch, which storms a dead
 // remote. Failures are remembered briefly so retries are paced, not disabled —
 // short enough that a recovered provider is picked up within seconds.
 const METADATA_FAILURE_TTL = 10_000
+
 const MAX_METADATA_FAILURE_ENTRIES = 200
 
 type CachedMetadata<T> = { data: T; fetchedAt: number }
+
 type CachedMetadataFailure = { error: unknown; failedAt: number }
 
 export type MetadataRequestStore<T> = {
@@ -42,6 +46,7 @@ function pruneMetadataCache<T>(
   maxEntries = MAX_METADATA_CACHE_ENTRIES
 ): void {
   store.nextCacheExpiryAt = Infinity
+
   for (const [key, entry] of store.cache) {
     if (now - entry.fetchedAt >= METADATA_TTL) {
       store.cache.delete(key)
@@ -49,13 +54,17 @@ function pruneMetadataCache<T>(
       store.nextCacheExpiryAt = Math.min(store.nextCacheExpiryAt, entry.fetchedAt + METADATA_TTL)
     }
   }
+
   if (store.cache.size <= maxEntries) {
     return
   }
+
   const sorted = [...store.cache.entries()].sort((a, b) => b[1].fetchedAt - a[1].fetchedAt)
+
   for (const [key] of sorted.slice(maxEntries)) {
     store.cache.delete(key)
   }
+
   // Why: capacity eviction drops the oldest entries, so the gate computed above
   // points at an expiry that no longer exists and would force a needless sweep.
   const oldestSurvivor = sorted[maxEntries - 1]?.[1]
@@ -70,10 +79,13 @@ export function getFreshMetadata<T>(
   if (now >= store.nextCacheExpiryAt) {
     pruneMetadataCache(store, now)
   }
+
   const entry = store.cache.get(key)
+
   if (!entry || now - entry.fetchedAt >= METADATA_TTL) {
     return null
   }
+
   return entry
 }
 
@@ -87,10 +99,13 @@ function pruneMetadataFailures<T>(
       store.failures.delete(key)
     }
   }
+
   if (store.failures.size <= maxEntries) {
     return
   }
+
   const sorted = [...store.failures.entries()].sort((a, b) => b[1].failedAt - a[1].failedAt)
+
   for (const [key] of sorted.slice(maxEntries)) {
     store.failures.delete(key)
   }
@@ -102,9 +117,11 @@ export function getRecentMetadataFailure<T>(
   now = Date.now()
 ): CachedMetadataFailure | null {
   const entry = store.failures.get(key)
+
   if (!entry || now - entry.failedAt >= METADATA_FAILURE_TTL) {
     return null
   }
+
   return entry
 }
 
@@ -115,16 +132,19 @@ export function loadMetadata<T>(
   now = Date.now
 ): Promise<T> {
   const cached = getFreshMetadata(store, key, now())
+
   if (cached) {
     return Promise.resolve(cached.data)
   }
 
   const inflight = store.inflight.get(key)
+
   if (inflight) {
     return inflight
   }
 
   const recentFailure = getRecentMetadataFailure(store, key, now())
+
   if (recentFailure) {
     return Promise.reject(recentFailure.error)
   }
@@ -132,6 +152,7 @@ export function loadMetadata<T>(
   // Why: clearMetadataRequestStore invalidates auth/repo boundaries; late
   // responses from the previous generation must not repopulate the cache.
   const generation = store.generation
+
   const promise = fetcher()
     .then((data) => {
       if (store.generation === generation) {
@@ -143,6 +164,7 @@ export function loadMetadata<T>(
         // long sessions do not retain stale metadata indefinitely.
         pruneMetadataCache(store, fetchedAt)
       }
+
       return data
     })
     .catch((error: unknown) => {
@@ -151,6 +173,7 @@ export function loadMetadata<T>(
         store.failures.set(key, { error, failedAt })
         pruneMetadataFailures(store, failedAt)
       }
+
       throw error
     })
     .finally(() => {
@@ -160,5 +183,6 @@ export function loadMetadata<T>(
     })
 
   store.inflight.set(key, promise)
+
   return promise
 }

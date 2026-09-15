@@ -9,8 +9,11 @@ import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
 const MERGE_BASE = '1f3c0d9a5b6e7f8091a2b3c4d5e6f708192a3b4c'
 
 const gitStatus = vi.fn()
+
 const gitCancelStatus = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 beforeEach(() => {

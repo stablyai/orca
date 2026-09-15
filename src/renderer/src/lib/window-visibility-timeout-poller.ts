@@ -12,9 +12,11 @@ export function installWindowVisibilityTimeoutPoller(args: {
     args.setTimeoutFn ??
     ((callback: () => void, delayMs: number): WindowVisibilityTimeoutPollerTimer =>
       setTimeout(callback, delayMs))
+
   const clearTimeoutFn =
     args.clearTimeoutFn ??
     ((handle: WindowVisibilityTimeoutPollerTimer): void => clearTimeout(handle))
+
   let timeoutId: WindowVisibilityTimeoutPollerTimer | null = null
   let disposed = false
   let inFlight = false
@@ -23,15 +25,18 @@ export function installWindowVisibilityTimeoutPoller(args: {
     if (!timeoutId) {
       return
     }
+
     clearTimeoutFn(timeoutId)
     timeoutId = null
   }
 
   const schedulePoll = (): void => {
     clearScheduledPoll()
+
     if (disposed || !isWindowVisible()) {
       return
     }
+
     timeoutId = setTimeoutFn(() => {
       timeoutId = null
       runAndSchedule()
@@ -40,9 +45,11 @@ export function installWindowVisibilityTimeoutPoller(args: {
 
   function runAndSchedule(): void {
     clearScheduledPoll()
+
     if (disposed || !isWindowVisible() || inFlight) {
       return
     }
+
     inFlight = true
     void Promise.resolve(args.run()).finally(() => {
       inFlight = false
@@ -59,9 +66,11 @@ export function installWindowVisibilityTimeoutPoller(args: {
   }
 
   runAndSchedule()
+
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('focus', reconcileVisibility)
   }
+
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
     document.addEventListener('visibilitychange', reconcileVisibility)
   }
@@ -69,9 +78,11 @@ export function installWindowVisibilityTimeoutPoller(args: {
   return () => {
     disposed = true
     clearScheduledPoll()
+
     if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
       window.removeEventListener('focus', reconcileVisibility)
     }
+
     if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
       document.removeEventListener('visibilitychange', reconcileVisibility)
     }

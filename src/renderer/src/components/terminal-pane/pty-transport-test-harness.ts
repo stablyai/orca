@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 
 export type PtyStreamPayload = { id: string; data: string }
+
 export type PtyExitPayload = {
   id: string
   code: number
@@ -37,20 +38,24 @@ export function installIpcPtyWindow(
         writeAccepted: vi.fn().mockResolvedValue(true),
         onWriteUnavailable: vi.fn((callback: (payload: { id: string }) => void) => {
           sinks.writeUnavailable?.(callback)
+
           return () => {}
         }),
         resize: vi.fn(),
         kill: vi.fn(),
         onData: vi.fn((callback: (payload: PtyStreamPayload) => void) => {
           sinks.data?.(callback)
+
           return () => {}
         }),
         onReplay: vi.fn((callback: (payload: PtyStreamPayload) => void) => {
           sinks.replay?.(callback)
+
           return () => {}
         }),
         onExit: vi.fn((callback: (payload: PtyExitPayload) => void) => {
           sinks.exit?.(callback)
+
           return () => {}
         })
       }

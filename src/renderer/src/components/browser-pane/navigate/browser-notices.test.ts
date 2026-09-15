@@ -34,6 +34,7 @@ describe('browser notice formatting', () => {
       permission: 'top-level-storage-access',
       origin: 'https://example.com'
     })
+
     expect(notice).not.toContain('top-level-storage-access')
     expect(notice).toBe(
       'https://example.com asked for cookie access on behalf of an embedded site, and Orca denied it.'
@@ -178,6 +179,7 @@ describe('browser notice formatting', () => {
       description: 'The browser page stopped unexpectedly. Retry to restore it.',
       validatedUrl: 'http://localhost:3000'
     }
+
     expect(
       formatLoadFailureDescription(loadError, { host: 'localhost:3000', isLocalhostLike: true })
     ).toBe('The browser page stopped unexpectedly. Retry to restore it.')
@@ -188,6 +190,7 @@ describe('browser notice formatting', () => {
 
   it('formats certificate failures without local-server recovery advice', () => {
     const meta = { host: 'localhost:3443', isLocalhostLike: true }
+
     const loadError = (code: number) => ({
       code,
       description: 'certificate error',

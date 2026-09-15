@@ -229,6 +229,7 @@ describe('OrcaRuntimeService automation methods', () => {
       workspaceId: 'repo-1::/tmp/orca',
       baseBranch: null
     } satisfies Automation
+
     const store = makeStore([existing])
     const runtime = new OrcaRuntimeService(store as never)
 
@@ -245,6 +246,7 @@ describe('OrcaRuntimeService automation methods', () => {
       baseBranch: null,
       reuseSession: true
     } satisfies Automation
+
     const store = makeStore([existing])
     const runtime = new OrcaRuntimeService(store as never)
 
@@ -291,6 +293,7 @@ describe('OrcaRuntimeService automation methods', () => {
       workspaceId: 'repo-1::/tmp/orca-worktree',
       baseBranch: null
     } satisfies Automation
+
     const store = makeStore([existing])
     const runtime = new OrcaRuntimeService(store as never)
 

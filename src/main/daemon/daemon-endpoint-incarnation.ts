@@ -38,6 +38,7 @@ export function readDaemonPidRecord(pidPath: string | null): ParsedDaemonPid | n
   if (!pidPath) {
     return null
   }
+
   try {
     return parseDaemonPidFile(readFileSync(pidPath, 'utf8'))
   } catch {

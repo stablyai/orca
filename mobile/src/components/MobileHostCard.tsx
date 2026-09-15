@@ -25,32 +25,40 @@ export function MobileHostCard(props: {
   const credentialUnavailable = props.credentialStatus === 'temporarily-unavailable'
   const credentialMissing = props.credentialStatus === 'missing'
   const connected = props.state === 'connected' && !credentialUnavailable && !credentialMissing
+
   const isError =
     credentialMissing || ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
+
   const statusLabel = credentialMissing
     ? 'Pairing invalid'
     : credentialUnavailable
       ? 'Pairing temporarily unavailable'
       : verdictDisplayLabel(props.verdict)
+
   const statusVerdict: ConnectionVerdict = credentialMissing
     ? { kind: 'auth-failed', label: statusLabel }
     : credentialUnavailable
       ? { kind: 'warning', label: statusLabel }
       : props.verdict
+
   const worktreeSummary = homeHostWorktreeSummary(props.worktreeInfo)
+
   const connectionPathLabel =
     !credentialMissing && !credentialUnavailable && connected
       ? mobileConnectionPathLabel(props.path)
       : null
+
   const discoveryHint =
     props.verdict.kind === 'unreachable' && !props.host.relay
       ? 'Update desktop Orca and sign in to connect from anywhere'
       : null
+
   const credentialHint = credentialMissing
     ? 'Tap to re-pair with your desktop'
     : credentialUnavailable
       ? 'Unlock your phone, then tap to retry'
       : null
+
   const accessibilityLabel = [
     `Open ${props.host.name}`,
     statusLabel,
@@ -61,6 +69,7 @@ export function MobileHostCard(props: {
   ]
     .filter(Boolean)
     .join(', ')
+
   return (
     <View style={styles.card}>
       <Pressable

@@ -86,6 +86,7 @@ vi.mock('./rate-limit', () => ({
 
 vi.mock('./github-api-repository', async (importOriginal) => {
   const actual = await importOriginal<typeof GithubApiRepositoryModule>()
+
   return {
     ...actual,
     // Why: these suites drive source resolution through the legacy gh-utils
@@ -130,6 +131,7 @@ import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 beforeEach(() => {
   _resetOriginGitHubApiRepositoryCache()
 })
+
 // Why: split from client-work-items.test.ts to keep both suites under the
 // max-lines cap; this file owns query/paging request-shaping cases.
 describe('listWorkItems query paging', () => {

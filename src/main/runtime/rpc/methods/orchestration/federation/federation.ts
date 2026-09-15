@@ -36,26 +36,33 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           'Federated worker attachment requires a durable retry request.'
         )
       }
+
       await assertWorkerStartTaskSpecWithinPromptBudget(params.taskSpec)
+
       if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
         throw new OrchestrationError(
           'invalid_argument',
           '--timeout-ms is too large for worker-start transport grace; the derived timeout must fit within the timer limit.'
         )
       }
+
       const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
+
       if (params.worktree === 'current' || params.worktree === 'new-child') {
         throw new OrchestrationError(
           'invalid_argument',
           'A remote worker requires an exact existing worktree or new-top-level.'
         )
       }
+
       const createsWorktree = params.worktree === 'new-top-level'
+
       const { agent, launch } = prepareFederationAttachmentWorkerStart({
         params,
         createsWorktree,
         runtime
       })
+
       if (createsWorktree) {
         await assertOrchestrationWorktreeCreationSupported({
           runtime,
@@ -79,9 +86,11 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
       let failedStage = createsWorktree ? 'worktree_create' : 'worktree_resolve'
       let worktree
       let terminalHandle = params.terminal
+
       const setupSource = createsWorktree
         ? (params.setupSource ?? (params.setup ? 'explicit_request' : 'orchestration_default'))
         : 'existing_worktree'
+
       let setup: WorkerSetupReceipt = {
         requested: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
         effective: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
@@ -90,6 +99,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         startupPolicy: 'start-immediately',
         state: createsWorktree ? 'not_configured' : 'not_applicable'
       }
+
       try {
         if (createsWorktree) {
           db.recordRemoteAttachmentStage({
@@ -97,6 +107,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             stage: 'worktree_creating'
           })
           const setupDecision = params.setup ?? 'run'
+
           const created = await runtime.createManagedWorktree({
             repoSelector: params.repo as string,
             name: params.name as string,
@@ -115,6 +126,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             activate: false,
             lineage: { noParent: true }
           })
+
           worktree = created.worktree
           terminalHandle = created.startupTerminal?.handle
           effects.push({
@@ -130,14 +142,17 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             startupPolicy: created.setupReceipt?.startupPolicy ?? 'start-immediately',
             state: created.setupReceipt?.state ?? 'not_configured'
           }
+
           if (!terminalHandle) {
             throw new Error(
               created.warning ?? 'Agent-first worktree creation returned no terminal.'
             )
           }
+
           const listed = await runtime.listTerminals(`id:${created.worktree.id}`, undefined, {
             includeVisualLayouts: false
           })
+
           appendFederationTerminalEffects(
             effects,
             listed.terminals,
@@ -156,20 +171,24 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             { kind: 'worktree', action: 'reused', id: worktree.id },
             { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
           )
+
           if (terminalHandle) {
             const terminal = await runtime.showTerminal(terminalHandle)
+
             if (terminal.worktreeId !== worktree.id) {
               throw new OrchestrationError(
                 'terminal_worktree_mismatch',
                 `Terminal ${terminalHandle} does not belong to worktree ${worktree.id}.`
               )
             }
+
             if (!(await runtime.isTerminalRunningAgent(terminalHandle))) {
               throw new OrchestrationError(
                 'agent_unconfigured',
                 `Terminal ${terminalHandle} is not running a recognized agent.`
               )
             }
+
             effects.push({
               kind: 'terminal',
               role: 'agent',
@@ -178,6 +197,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             })
           } else {
             failedStage = 'terminal_create'
+
             const terminal = await runtime.createTerminal(`id:${worktree.id}`, {
               // Why: agent ids are not shell commands (`cursor` is the desktop app,
               // its CLI is `cursor-agent`); resolve through the TUI agent config.
@@ -186,6 +206,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
               title: `worker-${params.taskId}`,
               presentation: 'background'
             })
+
             terminalHandle = terminal.handle
             effects.push({
               kind: 'terminal',
@@ -195,9 +216,11 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             })
           }
         }
+
         if (!worktree || !terminalHandle) {
           throw new Error('Federated worker topology did not resolve.')
         }
+
         const setupStage = {
           db,
           dispatchId: params.dispatchId,
@@ -206,34 +229,44 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           setup,
           effects
         }
+
         if (persistFederatedSetupSpawnFailure(setupStage)) {
           failedStage = 'setup_start'
           throw new Error('Setup terminal failed to start before the gated agent launch.')
         }
+
         persistFederatedReadinessStage(setupStage)
         failedStage = 'agent_readiness'
+
         const wait = await runtime.waitForTerminal(terminalHandle, {
           condition: 'tui-idle',
           timeoutMs: readinessTimeoutMs
         })
+
         persistFederatedSetupWaitOutcome({ ...setupStage, wait })
+
         if (!wait.satisfied) {
           if (setup.state === 'failed') {
             failedStage = 'setup_wait'
           }
+
           throw new Error(
             wait.blockedReason
               ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
               : `Agent did not become ready (${wait.status}).`
           )
         }
+
         const authority = runtime.getOrchestrationDispatchAuthority(terminalHandle)
         const paneKey = authority?.paneKey ?? runtime.getTerminalPaneKey(terminalHandle)
+
         const processIncarnation =
           authority?.processIncarnation ?? runtime.getTerminalProcessIncarnation(terminalHandle)
+
         if (!paneKey || !processIncarnation) {
           throw new Error('stable_pane_required')
         }
+
         const capability = db.prepareRemoteAttachmentAuthority({
           dispatchId: params.dispatchId,
           paneKey,
@@ -245,7 +278,9 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           hostScope: authority?.hostScope ? JSON.stringify(authority.hostScope) : null,
           terminalOwnership: params.terminal ? 'external' : 'created'
         })
+
         failedStage = 'dispatch_input'
+
         const prompt = await runtime.sendTerminalAgentPrompt(
           terminalHandle,
           buildDispatchPreamble({
@@ -267,6 +302,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             requestId: orchestrationMutation.requestId
           }
         )
+
         effects.push({
           kind: 'dispatch_input',
           role: 'agent',
@@ -275,6 +311,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         })
         const attachment = db.markRemoteAttachmentReady(params.dispatchId, effects)
         monitorFederatedSetup({ ...setupStage, runtime })
+
         return {
           dispatchId: params.dispatchId,
           state: attachment.state,

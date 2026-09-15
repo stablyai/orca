@@ -24,6 +24,7 @@ it('captures the pairing revision before awaiting the compatibility probe', asyn
         resolveStatus = resolve
       })
     }
+
     return Promise.resolve({
       id: method,
       ok: true,

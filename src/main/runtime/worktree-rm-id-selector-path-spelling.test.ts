@@ -11,6 +11,7 @@ const electronMocks = vi.hoisted(() => {
     removeListener: vi.fn(() => ipcMain),
     emit: vi.fn(() => true)
   }
+
   return {
     BrowserWindow: { fromId: vi.fn((): unknown => null) },
     webContents: { fromId: vi.fn((): unknown => null) },
@@ -18,9 +19,11 @@ const electronMocks = vi.hoisted(() => {
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
   }
 })
+
 vi.mock('electron', () => electronMocks)
 
 const getSshGitProviderMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
   getSshGitProviderGeneration: vi.fn(() => 0),
@@ -29,6 +32,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../git/worktree', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWorktreesStrict: listWorktreesStrictMock
@@ -38,9 +42,12 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const REPO_ID = 'repo-local'
+
 const REPO_PATH = '/srv/projects/app'
+
 /** The spelling `git worktree list` reports. */
 const WORKTREE_PATH = '/srv/projects/workspaces/plugin-host'
+
 const CANONICAL_ID = `${REPO_ID}::${WORKTREE_PATH}`
 
 /** One directory, other spellings a stored id can legitimately carry. */
@@ -55,12 +62,14 @@ const ID_SPELLINGS: [label: string, worktreePath: string, repoPath?: string][] =
 /** What a scan reports for a stored id: the same directory, canonically spelled. */
 function scannedSpellingOf(storedPath: string): string {
   const slashed = /^[A-Za-z]:[\\/]/.test(storedPath) ? storedPath.replace(/\\/g, '/') : storedPath
+
   return slashed.normalize('NFC').replace(/\/+/g, '/').replace(/\/$/, '')
 }
 
 /** One registered repo whose worktree meta is writable, so a delete's `forgetLocal` is observable. */
 function makeStore(repoPath: string = REPO_PATH) {
   const metaById: Record<string, Record<string, unknown>> = {}
+
   const store = {
     getRepo: (id: string) => store.getRepos().find((repo) => repo.id === id),
     getRepos: () => [
@@ -70,6 +79,7 @@ function makeStore(repoPath: string = REPO_PATH) {
     getWorktreeMeta: (id: string) => metaById[id],
     setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
       metaById[id] = { ...metaById[id], ...meta }
+
       return metaById[id]
     },
     removeWorktreeMeta: () => {},
@@ -87,6 +97,7 @@ function makeStore(repoPath: string = REPO_PATH) {
     }),
     getProjects: () => []
   }
+
   return store
 }
 

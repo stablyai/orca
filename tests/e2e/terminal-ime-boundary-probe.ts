@@ -31,21 +31,25 @@ export async function installTerminalImeBoundaryProbe(page: Page): Promise<void>
 
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const textarea = pane?.container.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')
+
     if (!pane || !textarea) {
       throw new Error('No active terminal textarea for IME boundary probe')
     }
 
     const dom: TerminalImeDomEvent[] = []
     const onData: string[] = []
+
     const record = (event: Event): void => {
       const input = event instanceof InputEvent ? event : null
       const composition = event instanceof CompositionEvent ? event : null
@@ -63,6 +67,7 @@ export async function installTerminalImeBoundaryProbe(page: Page): Promise<void>
         value: textarea.value
       })
     }
+
     const eventTypes = [
       'compositionstart',
       'compositionupdate',
@@ -73,9 +78,11 @@ export async function installTerminalImeBoundaryProbe(page: Page): Promise<void>
       'keypress',
       'keyup'
     ]
+
     for (const eventType of eventTypes) {
       textarea.addEventListener(eventType, record, true)
     }
+
     const onDataDisposable = pane.terminal.onData((data) => onData.push(data))
     targetWindow.__terminalImeBoundaryProbe = {
       dom,
@@ -84,6 +91,7 @@ export async function installTerminalImeBoundaryProbe(page: Page): Promise<void>
         for (const eventType of eventTypes) {
           textarea.removeEventListener(eventType, record, true)
         }
+
         onDataDisposable.dispose()
       }
     }
@@ -93,6 +101,7 @@ export async function installTerminalImeBoundaryProbe(page: Page): Promise<void>
 export async function readTerminalImeBoundaryTrace(page: Page): Promise<TerminalImeBoundaryTrace> {
   return page.evaluate(() => {
     const probe = (window as TerminalImeProbeWindow).__terminalImeBoundaryProbe
+
     return probe ? { dom: [...probe.dom], onData: [...probe.onData] } : { dom: [], onData: [] }
   })
 }
@@ -116,15 +125,18 @@ export async function attachTerminalImeBoundaryEvidence(
     null,
     2
   )}\n`
+
   await testInfo.attach(`${name}.json`, {
     body,
     contentType: 'application/json'
   })
   const evidenceDir = path.join(process.cwd(), 'test-results', 'terminal-ime-evidence')
+
   const title = testInfo.title
     .replaceAll(/[^a-z0-9]+/gi, '-')
     .replaceAll(/^-|-$/g, '')
     .toLowerCase()
+
   mkdirSync(evidenceDir, { recursive: true })
   writeFileSync(path.join(evidenceDir, `${name}-${title}.json`), body)
 }

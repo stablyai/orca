@@ -27,21 +27,26 @@ export function createShutdownCheckpointGuard(
   abandonPersistAttempt?: () => void
 ): ShutdownCheckpointGuard {
   let persisted = false
+
   return {
     persistOnce(): boolean {
       if (persisted) {
         return true
       }
+
       try {
         persist()
       } catch (error) {
         // Why: browser event targets swallow listener exceptions. Returning a
         // failure lets the caller cancel unload and keep this attempt retryable.
         reportShutdownCheckpointFailure(error)
+
         return false
       }
+
       persisted = true
       clearShutdownCheckpointFailureReason()
+
       return true
     },
     abortAfterCheckpointFailure(): void {

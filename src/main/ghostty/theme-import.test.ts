@@ -20,6 +20,7 @@ vi.mock('os', () => ({
 import { previewGhosttyImport } from './index'
 
 const originalXdgConfigHome = process.env.XDG_CONFIG_HOME
+
 const originalGhosttyResourcesDir = process.env.GHOSTTY_RESOURCES_DIR
 
 beforeEach(() => {
@@ -29,11 +30,13 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks()
+
   if (originalXdgConfigHome !== undefined) {
     process.env.XDG_CONFIG_HOME = originalXdgConfigHome
   } else {
     delete process.env.XDG_CONFIG_HOME
   }
+
   if (originalGhosttyResourcesDir !== undefined) {
     process.env.GHOSTTY_RESOURCES_DIR = originalGhosttyResourcesDir
   } else {
@@ -55,12 +58,14 @@ describe('previewGhosttyImport theme references', () => {
       if (p === configPath || p === themePath) {
         return { isFile: () => true, size: 128 }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockImplementation(async (p: string) => {
       if (p === themePath) {
         return 'palette = 1=#d54e53\nbackground = #000000\nforeground = #eaeaea\n'
       }
+
       return 'theme = Tomorrow Night Bright\nfont-size = 14\n'
     })
 
@@ -84,12 +89,14 @@ describe('previewGhosttyImport theme references', () => {
       if (p === configPath || p === themePath) {
         return { isFile: () => true, size: 128 }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockImplementation(async (p: string) => {
       if (p === themePath) {
         return 'palette = 1=#d54e53\npalette = 2=#b9ca4a\nbackground = #000000\n'
       }
+
       return 'theme = night\nbackground = #101010\npalette = 1=#ff0000\n'
     })
 
@@ -113,12 +120,14 @@ describe('previewGhosttyImport theme references', () => {
       if (p === configPath || p === themePath) {
         return { isFile: () => true, size: 128 }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockImplementation(async (p: string) => {
       if (p === themePath) {
         return 'background = #202020\nforeground = #f0f0f0\n'
       }
+
       return `theme = ${themePath}\n`
     })
 
@@ -143,6 +152,7 @@ describe('previewGhosttyImport theme references', () => {
       if (p === configPath) {
         return { isFile: () => true, size: 128 }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockResolvedValue('theme = Missing Theme\n')
@@ -159,6 +169,7 @@ describe('previewGhosttyImport theme references', () => {
       if (p === configPath) {
         return { isFile: () => true, size: 128 }
       }
+
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     })
     readFileMock.mockResolvedValue('theme = light:Tomorrow,dark:Tomorrow Night\n')

@@ -87,6 +87,7 @@ describe('useMobileNativeChatPermissionSend', () => {
       ok: true,
       result: { send: { handle: 'terminal', accepted: true, bytesWritten: 1 } }
     })
+
     function Harness(): null {
       respond = useMobileNativeChatPermissionSend({
         client: { sendRequest } as unknown as RpcClient,
@@ -95,8 +96,10 @@ describe('useMobileNativeChatPermissionSend', () => {
         deviceTokenRef: { current: null },
         onSendError: vi.fn()
       })
+
       return null
     }
+
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -115,10 +118,12 @@ describe('useMobileNativeChatPermissionSend', () => {
 
   it('rejects a choice while another composed write holds the terminal, then recovers', async () => {
     const onSendError = vi.fn()
+
     const sendRequest = vi.fn().mockResolvedValue({
       ok: true,
       result: { send: { handle: 'terminal', accepted: true, bytesWritten: 1 } }
     })
+
     function Harness(): null {
       respond = useMobileNativeChatPermissionSend({
         client: { sendRequest } as unknown as RpcClient,
@@ -127,8 +132,10 @@ describe('useMobileNativeChatPermissionSend', () => {
         deviceTokenRef: { current: null },
         onSendError
       })
+
       return null
     }
+
     act(() => {
       renderer = create(createElement(Harness))
     })

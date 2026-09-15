@@ -29,6 +29,7 @@ export function useSmartWorkspaceGitlabSearch({
     setGitlabItems,
     setGitlabLoading
   } = foundation
+
   // Why: the project-internal /-/ separator excludes non-GitLab URLs.
   const parsedGlLink = useMemo(
     () => (sourceQueryWithinLimit ? parseGitLabIssueOrMRLink(debouncedQuery) : null),
@@ -41,16 +42,22 @@ export function useSmartWorkspaceGitlabSearch({
       if (!shouldQueryGitlab || (parsedGlLink === null && mode !== 'gitlab')) {
         setGitlabItems([])
       }
+
       setGitlabLoading(false)
+
       return
     }
+
     if (parsedGlLink === null) {
       if (mode !== 'gitlab') {
         setGitlabItems([])
       }
+
       setGitlabLoading(false)
+
       return
     }
+
     let stale = false
     setGitlabLoading(true)
     void Promise.all(
@@ -71,6 +78,7 @@ export function useSmartWorkspaceGitlabSearch({
         if (stale) {
           return
         }
+
         setGitlabItems(items.filter((item): item is GitLabWorkItem => item !== null))
       })
       .catch(() => {
@@ -83,6 +91,7 @@ export function useSmartWorkspaceGitlabSearch({
           setGitlabLoading(false)
         }
       })
+
     return () => {
       stale = true
     }
@@ -104,23 +113,30 @@ export function useSmartWorkspaceGitlabSearch({
         setGitlabItems([])
         setGitlabLoading(false)
       }
+
       return
     }
+
     if (repoBackedSearchTargets.length === 0) {
       setGitlabItems([])
       setGitlabLoading(false)
+
       return
     }
+
     if (parsedGlLink !== null) {
       return
     }
+
     let stale = false
     setGitlabLoading(true)
     const trimmedQuery = debouncedQuery.trim() || undefined
+
     // Why: empty-query list must not briefly paint the previous non-empty result set.
     if (trimmedQuery === undefined) {
       setGitlabItems([])
     }
+
     void Promise.all(
       repoBackedSearchTargets.map((target) =>
         listGitLabMRsForSource({
@@ -138,6 +154,7 @@ export function useSmartWorkspaceGitlabSearch({
         if (stale) {
           return
         }
+
         setGitlabItems(
           results
             .flatMap((result) => result.items)
@@ -155,6 +172,7 @@ export function useSmartWorkspaceGitlabSearch({
           setGitlabLoading(false)
         }
       })
+
     return () => {
       stale = true
     }

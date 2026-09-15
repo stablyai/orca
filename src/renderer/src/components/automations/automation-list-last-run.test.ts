@@ -95,6 +95,7 @@ describe('automation-list-last-run', () => {
       makeRun({ id: 'new', createdAt: 50, dispatchedAt: 50, status: 'dispatch_failed' }),
       makeRun({ id: 'other', automationId: 'automation-2', createdAt: 20 })
     ])
+
     expect(latest.get('automation-1')?.id).toBe('new')
     expect(latest.get('automation-2')?.id).toBe('other')
   })
@@ -111,6 +112,7 @@ describe('automation-list-last-run', () => {
       makeAutomation({ lastRunAt: 5 }),
       makeRun({ status: 'dispatch_failed', dispatchedAt: 40, createdAt: 40 })
     )
+
     expect(snapshot.tone).toBe('failed')
     expect(snapshot.at).toBe(40)
     expect(snapshot.statusLabel).toBe('Failed')
@@ -149,19 +151,23 @@ describe('automation-list-last-run', () => {
 
   it('formats last-run cells as status plus relative time', () => {
     const now = Date.parse('2026-08-12T10:00:00Z')
+
     const failed = formatAutomationLastRunCell(
       { at: now - 8 * 60 * 60 * 1000, tone: 'failed', statusLabel: 'Failed' },
       now
     )
+
     expect(failed.text).toBe('Failed 8h ago')
     expect(failed.tone).toBe('failed')
     expect(
       formatAutomationLastRunCell({ at: null, tone: 'never', statusLabel: '' }, now).text
     ).toBe('Never')
+
     const failedNoTime = formatAutomationLastRunCell(
       { at: null, tone: 'failed', statusLabel: 'Failed' },
       now
     )
+
     expect(failedNoTime.text).toBe('Failed')
     expect(failedNoTime.tone).toBe('failed')
   })

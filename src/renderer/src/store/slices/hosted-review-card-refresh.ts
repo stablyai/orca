@@ -27,6 +27,7 @@ export function refreshHostedReviewCard(
   args: RefreshHostedReviewCardArgs
 ): Promise<HostedReviewInfo | null> {
   const fallbackGitHubPR = args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null
+
   return fetchHostedReviewForBranch(args.repoPath, args.branch, {
     force: true,
     repoId: args.repoId,

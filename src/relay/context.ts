@@ -8,12 +8,15 @@ export function expandTilde(p: string): string {
   if (p === '~' || p === '~/' || p === '~\\') {
     return homedir()
   }
+
   if (p.startsWith('~/')) {
     return resolve(homedir(), p.slice(2))
   }
+
   if (p.startsWith('~\\')) {
     return `${homedir()}\\${p.slice(2)}`
   }
+
   return p
 }
 

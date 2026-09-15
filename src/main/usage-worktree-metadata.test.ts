@@ -16,6 +16,7 @@ describe('loadKnownUsageWorktreesByRepo', () => {
         }
       }))
     }
+
     const repos = [
       {
         id: 'repo-1',
@@ -55,17 +56,21 @@ describe('loadKnownUsageWorktreesByRepo', () => {
   it('indexes repos once for many persisted worktrees', () => {
     const repoCount = 200
     let repoIdReads = 0
+
     const repos = Array.from({ length: repoCount }, (_, index) => ({
       get id() {
         repoIdReads += 1
+
         return `repo-${index}`
       },
       path: `/workspace/repo-${index}`,
       displayName: `Repo ${index}`
     }))
+
     const worktreeMeta = Object.fromEntries(
       Array.from({ length: repoCount }, (_, offset) => {
         const index = repoCount - offset - 1
+
         return [
           `repo-${index}::/workspace/repo-${index}-feature`,
           { displayName: `Feature ${index}` }

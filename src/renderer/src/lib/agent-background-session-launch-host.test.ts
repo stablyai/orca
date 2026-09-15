@@ -85,6 +85,7 @@ describe('resolveAgentBackgroundLaunchHost', () => {
         path: '/srv/repo'
       } as never
     })
+
     const unified = resolveAgentBackgroundLaunchHost({
       store: makeFolderHostState({ connectionId: null, folderPath: '/project' }) as never,
       worktreeId: 'repo-1::/srv/repo',
@@ -147,6 +148,7 @@ describe('resolveAgentBackgroundLaunchHost', () => {
 
   it('uses Linux startup quoting for a local WSL folder', () => {
     const folderPath = '\\\\wsl.localhost\\Ubuntu\\home\\me\\project'
+
     const host = resolveAgentBackgroundLaunchHost({
       store: makeFolderHostState({ connectionId: null, folderPath }) as never,
       worktreeId: 'folder:folder-1',

@@ -26,9 +26,11 @@ export function repoWithFetchedOwner(
   if (target.kind === 'environment') {
     return { ...repo, executionHostId: getRuntimeTargetHostId(target) }
   }
+
   if (repo.connectionId) {
     return { ...repo, executionHostId: getRepoExecutionHostId(repo) }
   }
+
   return repo.executionHostId ? repo : { ...repo, executionHostId: LOCAL_EXECUTION_HOST_ID }
 }
 
@@ -38,24 +40,30 @@ export function settingsForRepoOwner(
   hostId?: ExecutionHostId
 ) {
   const repo = findRepoForHost(state.repos, repoId, { settings: state.settings, hostId })
+
   if (!repo) {
     return state.settings
   }
+
   if (!repo.executionHostId && !repo.connectionId) {
     return state.settings
   }
+
   const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
+
   if (parsed?.kind === 'runtime') {
     return state.settings
       ? { ...state.settings, activeRuntimeEnvironmentId: parsed.environmentId }
       : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
   }
+
   if (
     (parsed?.kind === 'local' || parsed?.kind === 'ssh') &&
     state.settings?.activeRuntimeEnvironmentId
   ) {
     return { ...state.settings, activeRuntimeEnvironmentId: null }
   }
+
   return state.settings
 }
 
@@ -70,6 +78,7 @@ export function getAddRepoPathRouteSettings(
 
 export function getRuntimeEnvironmentDisplayName(state: AppState, environmentId: string): string {
   const environment = state.runtimeEnvironments.find((entry) => entry.id === environmentId)
+
   return environment?.name || environmentId
 }
 
@@ -86,6 +95,7 @@ export async function fetchRuntimeAddProjectPathStatus(args: {
     ),
     15_000
   )
+
   try {
     const { status } = await callRuntimeRpc<{ status: FolderWorkspacePathStatus }>(
       args.target,
@@ -93,9 +103,11 @@ export async function fetchRuntimeAddProjectPathStatus(args: {
       { scope: 'path', path: args.path },
       { timeoutMs: 15_000 }
     )
+
     return status
   } catch (err) {
     console.warn('Failed to check runtime folder path status:', err)
+
     return null
   }
 }

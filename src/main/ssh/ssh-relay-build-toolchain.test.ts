@@ -54,6 +54,7 @@ describe('parseBuildToolchainProbe', () => {
     const status = parseBuildToolchainProbe(
       'Welcome to Acme\nHAVE make\nHAVE g++\nHAVE python3\nMOTD line\nPKG apk'
     )
+
     expect(status.toolchainMissing).toBe(false)
     expect(status.packageManager).toBe('apk')
   })

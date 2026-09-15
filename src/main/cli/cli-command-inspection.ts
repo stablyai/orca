@@ -22,12 +22,15 @@ export class CliCommandInspection extends CliInstallLocation {
   ): Promise<CliInstallStatus> {
     try {
       const stats = await lstat(commandPath)
+
       if (!stats.isSymbolicLink()) {
         if (stats.isFile()) {
           const currentContent = await readFile(commandPath, 'utf8')
+
           const managedTarget =
             extractManagedUnixLauncherTarget(currentContent) ??
             extractLegacyAppImageCliWrapperTarget(currentContent)
+
           if (managedTarget) {
             return this.buildStatus({
               commandPath,
@@ -56,10 +59,12 @@ export class CliCommandInspection extends CliInstallLocation {
       const resolvedCurrentTarget = resolve(dirname(commandPath), currentTarget)
       const resolvedLauncher = resolve(launcherPath)
       const isInstalled = resolvedCurrentTarget === resolvedLauncher && existsSync(resolvedLauncher)
+
       const isManagedStaleTarget =
         !isInstalled &&
         (resolvedCurrentTarget === resolvedLauncher ||
           this.isManagedSymlinkTarget(resolvedCurrentTarget, launcherPath))
+
       return this.buildStatus({
         commandPath,
         launcherPath,
@@ -85,12 +90,14 @@ export class CliCommandInspection extends CliInstallLocation {
           detail: `Register ${commandPath} to use Orca from the terminal.`
         })
       }
+
       throw error
     }
   }
 
   protected isManagedSymlinkTarget(resolvedTarget: string, launcherPath: string): boolean {
     const expectedName = basename(launcherPath)
+
     if (this.isPackaged && this.isSiblingDevLauncherTarget(resolvedTarget, expectedName)) {
       return true
     }
@@ -100,6 +107,7 @@ export class CliCommandInspection extends CliInstallLocation {
     }
 
     const devLauncherDir = resolve(this.userDataPath, ...DEV_LAUNCHER_DIR)
+
     if (isPathInsideOrEqual(devLauncherDir, resolvedTarget)) {
       return true
     }
@@ -115,7 +123,9 @@ export class CliCommandInspection extends CliInstallLocation {
       if (this.isPackagedLinuxLauncherTarget(resolvedTarget, expectedName)) {
         return true
       }
+
       const extractionOptions = this.appImageExtractionOptions()
+
       return extractionOptions
         ? isAppImageExtractedLauncherPath(extractionOptions, resolvedTarget)
         : false
@@ -173,6 +183,7 @@ export class CliCommandInspection extends CliInstallLocation {
   ): Promise<CliInstallStatus> {
     try {
       const stats = await lstat(commandPath)
+
       if (!stats.isFile()) {
         return this.buildStatus({
           commandPath,
@@ -199,6 +210,7 @@ export class CliCommandInspection extends CliInstallLocation {
 
       const currentContent = await readFile(commandPath, 'utf8')
       const expectedContent = buildWindowsForwarder(launcherPath)
+
       return this.buildStatus({
         commandPath,
         launcherPath,
@@ -223,6 +235,7 @@ export class CliCommandInspection extends CliInstallLocation {
           detail: `Register ${commandPath} to use Orca from Command Prompt or PowerShell.`
         })
       }
+
       throw error
     }
   }

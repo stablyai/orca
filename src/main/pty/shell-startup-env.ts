@@ -5,16 +5,21 @@ import { posix } from 'node:path'
 // files breaks the "last assignment wins matches the live shell" guarantee —
 // a stale .bash_profile on a zsh user would clobber the real .zshrc value.
 const ZSH_ENV_FILE = '.zshenv'
+
 const ZSH_AFTER_ENV_FILES = ['.zprofile', '.zshrc', '.zlogin']
+
 // Why: Orca launches bash as a login shell (see local-pty-shell-ready.ts
 // getBashShellReadyRcfileContent and daemon/shell-ready.ts) which sources
 // .bash_profile / .bash_login / .profile but intentionally does NOT force
 // .bashrc. Scanning .bashrc would mirror values the live Orca bash never sees.
 const BASH_LOGIN_FILES = ['.bash_profile', '.bash_login', '.profile']
+
 // Why: fish sources conf.d/*.fish (sorted by name) before config.fish, for
 // login and non-login shells alike — verified against fish 4.7.
 const FISH_SNIPPET_DIR = 'conf.d'
+
 const FISH_SNIPPET_SUFFIX = '.fish'
+
 const FISH_CONFIG_FILE = 'config.fish'
 
 /** Assignment grammar of a startup file: `export NAME=value` vs fish `set -gx NAME value`. */
@@ -39,14 +44,17 @@ function parseAssignedValue(
     syntax === 'fish-set'
       ? new RegExp(`^set\\s+((?:-{1,2}[A-Za-z][\\w-]*\\s+)+)${name}\\s+(.+)$`)
       : new RegExp(`^export\\s+${name}=()(.+)$`)
+
   let lastMatch: string | undefined
 
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim()
     const match = assignment.exec(line)
+
     if (!match?.[2] || (syntax === 'fish-set' && !fishFlagsExport(match[1] ?? ''))) {
       continue
     }
+
     // Why: strip trailing unquoted `# comment` first so quoted values like
     // `"$HOME/.opencode" # note` survive intact for unquoteShellValue.
     const decommented = stripTrailingComment(match[2])
@@ -54,6 +62,7 @@ function parseAssignedValue(
     // Why: $HOME / ${HOME} / ~ expansion mimics what the live shell would
     // do for double-quoted and unquoted values; single-quoted is literal.
     const expanded = quoted === "'" ? text : expandHome(text, home)
+
     if (expanded.length > 0) {
       lastMatch = expanded
     }
@@ -81,6 +90,7 @@ function readStartupFile(path: string): string | null {
   if (!existsSync(path)) {
     return null
   }
+
   try {
     return readFileSync(path, 'utf8')
   } catch {
@@ -99,21 +109,25 @@ function shellStartupFiles(
   }
 
   const name = posix.basename(shell).toLowerCase()
+
   if (name === 'zsh') {
     return { paths: zshStartupFilePaths(home), syntax: 'export' }
   }
+
   if (name === 'bash') {
     return {
       paths: BASH_LOGIN_FILES.map((file) => posix.join(home, file)),
       syntax: 'export'
     }
   }
+
   if (name === 'fish') {
     return {
       paths: fishStartupFilePaths(home, configHome),
       syntax: 'fish-set'
     }
   }
+
   // Why: unsupported explicit shells (nushell, custom wrappers) do not use
   // Orca's zsh/bash/fish shell-ready startup files, so scanning those files
   // would mirror values the live PTY shell never sees.
@@ -122,6 +136,7 @@ function shellStartupFiles(
 
 function fishStartupFilePaths(home: string, configHome: string | undefined): readonly string[] {
   const fishDir = posix.join(configHome?.trim() || posix.join(home, '.config'), 'fish')
+
   return [
     ...fishSnippetPaths(posix.join(fishDir, FISH_SNIPPET_DIR)),
     posix.join(fishDir, FISH_CONFIG_FILE)
@@ -146,19 +161,23 @@ function zshStartupFilePaths(home: string): readonly string[] {
   // for .zprofile/.zshrc/.zlogin. Mirror that enough for static env discovery
   // so users who keep zsh config in ~/.config/zsh do not lose overlay sources.
   const zshDir = zshEnv ? (parseExportedValue(zshEnv, 'ZDOTDIR', home) ?? home) : home
+
   return [zshEnvPath, ...ZSH_AFTER_ENV_FILES.map((file) => posix.join(zshDir, file))]
 }
 
 function unquoteShellValue(value: string): { text: string; quoted: '"' | "'" | null } {
   const trimmed = value.trim()
+
   if (trimmed.length >= 2) {
     if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
       return { text: trimmed.slice(1, -1), quoted: '"' }
     }
+
     if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
       return { text: trimmed.slice(1, -1), quoted: "'" }
     }
   }
+
   return { text: trimmed, quoted: null }
 }
 
@@ -168,19 +187,23 @@ function stripTrailingComment(value: string): string {
   // and `path/with#hash` (no preceding whitespace) are preserved literally.
   let inSingle = false
   let inDouble = false
+
   for (let i = 0; i < value.length; i++) {
     const ch = value[i]
+
     if (ch === "'" && !inDouble) {
       inSingle = !inSingle
     } else if (ch === '"' && !inSingle) {
       inDouble = !inDouble
     } else if (ch === '#' && !inSingle && !inDouble) {
       const prev = value[i - 1]
+
       if (prev === undefined || prev === ' ' || prev === '\t') {
         return value.slice(0, i).trimEnd()
       }
     }
   }
+
   return value
 }
 
@@ -229,6 +252,7 @@ export function readShellStartupEnvVar(
   if (!home || !isShellStartupEnvProbeSupported()) {
     return undefined
   }
+
   // Why: the regex above is fixed; rejecting unsafe names is cheap defense
   // for the day a future caller passes something with regex metacharacters.
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
@@ -236,6 +260,7 @@ export function readShellStartupEnvVar(
   }
 
   const cacheKey = `${name}\0${home}\0${shell ?? ''}\0${configHome ?? ''}`
+
   if (cache.has(cacheKey)) {
     return cache.get(cacheKey)
   }
@@ -243,19 +268,23 @@ export function readShellStartupEnvVar(
   let lastMatch: string | undefined
 
   const { paths, syntax } = shellStartupFiles(home, shell, configHome)
+
   for (const path of paths) {
     const content = readStartupFile(path)
+
     if (content === null) {
       continue
     }
 
     const match = parseAssignedValue(content, name, home, syntax)
+
     if (match !== undefined) {
       lastMatch = match
     }
   }
 
   cache.set(cacheKey, lastMatch)
+
   return lastMatch
 }
 

@@ -64,13 +64,16 @@ describe('resolveProjectCloneUrlPrefill', () => {
   })
   it('stops on the first usable source and indexes later misses only once', () => {
     let reads = 0
+
     const repos = Array.from({ length: 1000 }, (_, i) => ({
       ...repo(`repo-${i}`, 'https://gitlab.com/acme/repo.git'),
       get id() {
         reads++
+
         return `repo-${i}`
       }
     }))
+
     const sourceIds = Array.from({ length: 1000 }, (_, i) => `repo-${i}`)
     expect(resolveProjectCloneUrlPrefill([project(sourceIds)], repos, 'project-orca')).toBe(
       'https://gitlab.com/acme/repo.git'

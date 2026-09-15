@@ -50,15 +50,19 @@ export function confirmTrackedWebSessionTabsInventoryAbsence(
     fingerprint,
     observations: Math.min(observations, 2)
   })
+
   while (
     sessionTabsInventoryOmissionsByWorktree.size > MAX_TRACKED_SESSION_TABS_INVENTORY_OMISSIONS
   ) {
     const oldest = sessionTabsInventoryOmissionsByWorktree.keys().next().value
+
     if (typeof oldest !== 'string') {
       break
     }
+
     sessionTabsInventoryOmissionsByWorktree.delete(oldest)
   }
+
   return observations >= 2
 }
 
@@ -68,6 +72,7 @@ export function isTrackedWebSessionTabsOmissionCurrent(
 ): boolean {
   const key = sessionTabsFreshnessKey(environmentId, trackedWorktree.worktree)
   const current = latestSessionTabsSnapshotByWorktree.get(key)
+
   return (
     current?.publicationEpoch === trackedWorktree.freshness.publicationEpoch &&
     current.snapshotVersion === trackedWorktree.freshness.snapshotVersion
@@ -106,15 +111,20 @@ export function buildMissingWebSessionTabsRemovals(
     .filter((trackedWorktree) => {
       if (publishedWorktrees.has(trackedWorktree.worktree)) {
         clearTrackedWebSessionTabsInventoryAbsence(environmentId, trackedWorktree.worktree)
+
         return false
       }
+
       if (!isTrackedWebSessionTabsOmissionCurrent(environmentId, trackedWorktree)) {
         return false
       }
+
       if (hostAuthoritative) {
         clearTrackedWebSessionTabsInventoryAbsence(environmentId, trackedWorktree.worktree)
+
         return true
       }
+
       return confirmTrackedWebSessionTabsInventoryAbsence(environmentId, trackedWorktree)
     })
     .map((trackedWorktree) => ({

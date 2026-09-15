@@ -8,6 +8,7 @@ describe('HostOpenRetryScheduler', () => {
   it('advances through bounded retry tiers', async () => {
     let generation = 1
     const open = vi.fn()
+
     const scheduler = new HostOpenRetryScheduler({
       canRetry: (_hostId, candidate) => candidate === generation,
       open
@@ -28,6 +29,7 @@ describe('HostOpenRetryScheduler', () => {
   it('expedites without forgiving the failure streak', async () => {
     let generation = 1
     const open = vi.fn()
+
     const scheduler = new HostOpenRetryScheduler({
       canRetry: (_hostId, candidate) => candidate === generation,
       open

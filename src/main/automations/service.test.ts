@@ -26,6 +26,7 @@ async function createStore() {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store, initDataPath } = await import('../persistence')
   initDataPath()
+
   return new Store()
 }
 
@@ -61,6 +62,7 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:59:00'))
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Morning check',
       prompt: 'Check the repo',
@@ -101,6 +103,7 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Manual check',
       prompt: 'Check the repo',
@@ -112,6 +115,7 @@ describe('AutomationService', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-14T00:00:00Z').getTime()
     })
+
     const send = vi.fn()
     const service = new AutomationService(store, { tickMs: 60_000 })
     service.setWebContents({
@@ -136,6 +140,7 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:00:00Z'))
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Manual check',
       prompt: 'Check the repo',
@@ -146,6 +151,7 @@ describe('AutomationService', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-14T00:00:00Z').getTime()
     })
+
     mutateDataFile((state) => {
       state.automations[0].runContext = {
         kind: 'workspace-run',
@@ -177,6 +183,7 @@ describe('AutomationService', () => {
     const store = await createStore()
     store.addRepo(makeRepo({ path: '/repo/current' }))
     const setup = store.getProjectHostSetups()[0]!
+
     const automation = store.createAutomation({
       name: 'Manual check',
       prompt: 'Check the repo',
@@ -187,6 +194,7 @@ describe('AutomationService', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-14T00:00:00Z').getTime()
     })
+
     mutateDataFile((state) => {
       state.automations[0].runContext = {
         kind: 'workspace-run',
@@ -219,6 +227,7 @@ describe('AutomationService', () => {
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
     store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
     const setup = store.getProjectHostSetups()[0]!
+
     const automation = store.createAutomation({
       name: 'Remote check',
       prompt: 'Check the remote repo',
@@ -237,6 +246,7 @@ describe('AutomationService', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-14T00:00:00Z').getTime()
     })
+
     const send = vi.fn()
     const service = new AutomationService(store, { tickMs: 60_000 })
     service.setWebContents({
@@ -258,6 +268,7 @@ describe('AutomationService', () => {
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
     store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
     const setup = store.getProjectHostSetups()[0]!
+
     const automation = store.createAutomation({
       name: 'Remote check',
       prompt: 'Check the remote repo',
@@ -276,11 +287,14 @@ describe('AutomationService', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-14T00:00:00Z').getTime()
     })
+
     const send = vi.fn()
+
     const service = new AutomationService(store, {
       tickMs: 60_000,
       allowRemoteHostScheduling: true
     })
+
     service.setWebContents({
       isDestroyed: () => false,
       send
@@ -305,6 +319,7 @@ describe('AutomationService', () => {
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
     store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
     const setup = store.getProjectHostSetups()[0]!
+
     const automation = store.createAutomation({
       name: 'Remote check',
       prompt: 'Check the remote repo',
@@ -323,6 +338,7 @@ describe('AutomationService', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-14T00:00:00Z').getTime()
     })
+
     const service = new AutomationService(store, {
       tickMs: 60_000,
       allowRemoteHostScheduling: true,
@@ -377,6 +393,7 @@ describe('AutomationService', () => {
     const runtimeHostId = toRuntimeExecutionHostId('gpu-server')
     store.addRepo(makeRepo({ executionHostId: runtimeHostId }))
     const setup = store.getProjectHostSetups()[0]!
+
     const automation = store.createAutomation({
       name: 'Morning check',
       prompt: 'Check the repo',
@@ -403,6 +420,7 @@ describe('AutomationService', () => {
       terminalPaneKey: 'pane-1',
       terminalPtyId: 'pty-1'
     })
+
     const service = new AutomationService(store, {
       tickMs: 60_000,
       allowRemoteHostScheduling: true,
@@ -433,6 +451,7 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T10:00:00'))
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Costed check',
       prompt: 'Check spend',
@@ -444,6 +463,7 @@ describe('AutomationService', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
+
     const run = store.createAutomationRun(automation, Date.now(), 'manual')
     store.updateAutomationRun({
       runId: run.id,
@@ -452,6 +472,7 @@ describe('AutomationService', () => {
       terminalSessionId: 'tab-1',
       error: null
     })
+
     const usage = {
       status: 'known' as const,
       provider: 'claude' as const,
@@ -470,7 +491,9 @@ describe('AutomationService', () => {
       unavailableReason: null,
       unavailableMessage: null
     }
+
     const getAutomationRunUsage = vi.fn().mockResolvedValue(usage)
+
     const service = new AutomationService(store, {
       tickMs: 60_000,
       claudeUsage: { getAutomationRunUsage } as never
@@ -497,6 +520,7 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T10:00:00'))
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Costed check',
       prompt: 'Check spend',
@@ -508,6 +532,7 @@ describe('AutomationService', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
+
     const run = store.createAutomationRun(automation, Date.now(), 'manual')
     store.updateAutomationRun({
       runId: run.id,
@@ -516,6 +541,7 @@ describe('AutomationService', () => {
       terminalSessionId: 'tab-1',
       error: null
     })
+
     const usage = {
       status: 'known' as const,
       provider: 'claude' as const,
@@ -534,11 +560,14 @@ describe('AutomationService', () => {
       unavailableReason: null,
       unavailableMessage: null
     }
+
     const getAutomationRunUsage = vi.fn().mockResolvedValue(usage)
+
     const service = new AutomationService(store, {
       tickMs: 60_000,
       claudeUsage: { getAutomationRunUsage } as never
     })
+
     const result = {
       runId: run.id,
       status: 'completed' as const,
@@ -559,6 +588,7 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T10:00:00'))
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Costed check',
       prompt: 'Check spend',
@@ -570,6 +600,7 @@ describe('AutomationService', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
+
     const base = Date.now()
     const run = store.createAutomationRun(automation, base, 'manual')
     store.updateAutomationRun({
@@ -579,6 +610,7 @@ describe('AutomationService', () => {
       terminalSessionId: 'tab-1',
       error: null
     })
+
     // While usage collection is awaited the run is already final, so a
     // scheduler tick creating newer runs can prune it away mid-flight.
     const getAutomationRunUsage = vi.fn().mockImplementation(async () => {
@@ -591,8 +623,10 @@ describe('AutomationService', () => {
           error: null
         })
       }
+
       return null
     })
+
     const service = new AutomationService(store, {
       tickMs: 60_000,
       claudeUsage: { getAutomationRunUsage } as never
@@ -615,6 +649,7 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T10:00:00'))
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Gemini check',
       prompt: 'Check spend',
@@ -626,6 +661,7 @@ describe('AutomationService', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-13T00:00:00Z').getTime()
     })
+
     const run = store.createAutomationRun(automation, Date.now(), 'manual')
     store.updateAutomationRun({
       runId: run.id,
@@ -653,6 +689,7 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:59:00'))
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const poison = store.createAutomation({
       name: 'A poison schedule',
       prompt: 'Check the repo',
@@ -664,6 +701,7 @@ describe('AutomationService', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-12T00:00:00').getTime()
     })
+
     const healthy = store.createAutomation({
       name: 'B healthy schedule',
       prompt: 'Check the repo',
@@ -675,6 +713,7 @@ describe('AutomationService', () => {
       rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
       dtstart: new Date('2026-05-12T00:00:00').getTime()
     })
+
     // Persisted by an older build, or hand-edited: WEEKLY with no BYDAY cannot resolve a day.
     mutateDataFile((state) => {
       const entry = state.automations.find((automation) => automation.id === poison.id)!
@@ -712,6 +751,7 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:59:00'))
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const poison = store.createAutomation({
       name: 'A poison cron',
       prompt: 'Check the repo',
@@ -723,6 +763,7 @@ describe('AutomationService', () => {
       rrule: '0 9 * * *',
       dtstart: new Date('2026-05-12T00:00:00').getTime()
     })
+
     const healthy = store.createAutomation({
       name: 'B healthy cron',
       prompt: 'Check the repo',
@@ -734,6 +775,7 @@ describe('AutomationService', () => {
       rrule: '0 9 * * *',
       dtstart: new Date('2026-05-12T00:00:00').getTime()
     })
+
     // Day of month 32 never validates at input; only a hand-edited or older-build row has it.
     mutateDataFile((state) => {
       const entry = state.automations.find((automation) => automation.id === poison.id)!
@@ -769,6 +811,7 @@ describe('AutomationService', () => {
     vi.setSystemTime(new Date('2026-05-13T08:59:00'))
     const store = await createStore()
     store.addRepo(makeRepo())
+
     const automation = store.createAutomation({
       name: 'Renderer gone',
       prompt: 'Check the repo',
@@ -780,13 +823,16 @@ describe('AutomationService', () => {
       rrule: '0 9 * * *',
       dtstart: new Date('2026-05-12T00:00:00').getTime()
     })
+
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     logged.mockClear()
 
     vi.setSystemTime(new Date('2026-05-13T09:01:00'))
+
     const send = vi.fn(() => {
       throw new Error('renderer is gone')
     })
+
     const service = new AutomationService(store, { tickMs: 60_000 })
     service.setWebContents({ isDestroyed: () => false, send })
 

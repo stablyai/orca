@@ -24,6 +24,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
   return {
     readDir: async ({ dirPath }) => {
       const file = await resolveRuntimeFilePath(dirPath)
+
       return callRuntimeResult<DirEntry[]>('files.readDir', {
         worktree: toRuntimeWorktreeSelector(file.worktree.id),
         relativePath: file.relativePath
@@ -31,6 +32,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     },
     readFile: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
+
       return callRuntimeResult('files.readPreview', {
         worktree: toRuntimeWorktreeSelector(file.worktree.id),
         relativePath: file.relativePath
@@ -67,6 +69,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     },
     listMarkdownDocuments: async ({ rootPath }) => {
       const file = await resolveRuntimeFilePath(rootPath)
+
       return callRuntimeResult('files.listMarkdownDocuments', {
         worktree: toRuntimeWorktreeSelector(file.worktree.id)
       })
@@ -77,6 +80,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     authorizeExternalPath: () => Promise.resolve(),
     stat: async ({ filePath }) => {
       const file = await resolveRuntimeFilePath(filePath)
+
       return callRuntimeResult('files.stat', {
         worktree: toRuntimeWorktreeSelector(file.worktree.id),
         relativePath: file.relativePath
@@ -89,16 +93,19 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
           worktree: toRuntimeWorktreeSelector(file.worktree.id),
           relativePath: file.relativePath
         })
+
         return true
       } catch (error) {
         if (isMissingPathError(error)) {
           return false
         }
+
         throw error
       }
     },
     listFiles: async ({ rootPath, excludePaths }) => {
       const file = await resolveRuntimeFilePath(rootPath)
+
       const result = await callRuntimeResult<{ files: { relativePath: string }[] }>(
         'files.listAll',
         {
@@ -106,6 +113,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
           excludePaths
         }
       )
+
       return result.files.map((entry) => entry.relativePath)
     },
     cancelListFiles: async () => {
@@ -113,6 +121,7 @@ export function createFileApi(): NonNullable<Partial<PreloadApi>['fs']> {
     },
     search: async (args) => {
       const file = await resolveRuntimeFilePath(args.rootPath)
+
       return callRuntimeResult<SearchResult>('files.search', {
         worktree: toRuntimeWorktreeSelector(file.worktree.id),
         query: args.query,
@@ -146,6 +155,7 @@ export function captureWebFileMutationSession(): {
 } {
   const environment = requireActiveEnvironment()
   const client = getClientForEnvironment(environment)
+
   const assertCurrent = (): void => {
     if (
       webRuntimeState.activeClient !== client ||
@@ -154,31 +164,40 @@ export function captureWebFileMutationSession(): {
       throw new Error('Runtime pairing changed; refresh and try again')
     }
   }
+
   const callBoundRuntimeEnvelope: WebRuntimeEnvelopeCaller = async <TResult>(
     method: string,
     params?: unknown,
     timeoutMs?: number
   ): Promise<RuntimeRpcResponse<TResult>> => {
     assertCurrent()
+
     const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
       assertCurrent()
+
       return client.call(method, params, { timeoutMs })
     })
+
     assertCurrent()
     updateEnvironmentFromResponse(environment, response)
+
     return response as RuntimeRpcResponse<TResult>
   }
+
   const callBoundRuntimeResult: WebRuntimeResultCaller = async <TResult>(
     method: string,
     params?: unknown,
     timeoutMs?: number
   ): Promise<TResult> => {
     const response = await callBoundRuntimeEnvelope<TResult>(method, params, timeoutMs)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     return response.result as TResult
   }
+
   return {
     resolveFilePath: (filePath) =>
       resolveRuntimeFilePath(

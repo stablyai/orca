@@ -31,11 +31,13 @@ export function activeWorkspaceSnapshotPruneKeys(
   scannedAt: number
 ): Set<string> {
   const keys = new Set<string>()
+
   for (const [key, entry] of tombstones ?? []) {
     if (entry.prunedAt >= scannedAt) {
       keys.add(key)
     }
   }
+
   return keys
 }
 
@@ -46,6 +48,7 @@ export function registerWorkspaceSnapshotPrunesForFile(
 ): void {
   const tombstones = tombstonesByFile.get(file) ?? new Map()
   const prunedAt = Date.now()
+
   for (const { worktreeId, executionHostId } of targets) {
     tombstones.set(workspaceSnapshotPruneKey(worktreeId, executionHostId), {
       worktreeId,
@@ -53,5 +56,6 @@ export function registerWorkspaceSnapshotPrunesForFile(
       prunedAt
     })
   }
+
   tombstonesByFile.set(file, tombstones)
 }

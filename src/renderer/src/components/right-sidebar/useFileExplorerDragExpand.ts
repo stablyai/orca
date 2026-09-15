@@ -22,6 +22,7 @@ export function useFileExplorerDragExpand({
       if (!activeWorktreeId || expanded.has(dirPath)) {
         return
       }
+
       toggleDir(activeWorktreeId, dirPath)
     },
     [activeWorktreeId, expanded, toggleDir]
@@ -38,13 +39,17 @@ export function useFileExplorerDragExpand({
       if (!activeWorktreeId) {
         return
       }
+
       useAppStore.setState((state) => {
         const current = state.expandedDirs[activeWorktreeId] ?? new Set<string>()
+
         if (current.has(dirPath)) {
           return state
         }
+
         const next = new Set(current)
         next.add(dirPath)
+
         return { expandedDirs: { ...state.expandedDirs, [activeWorktreeId]: next } }
       })
     },

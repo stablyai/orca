@@ -11,11 +11,17 @@ import {
 } from './codex-structured-prompt-replies'
 
 export const CODEX_MCP_ELICITATION_METHOD = 'mcpServer/elicitation/request'
+
 export const CODEX_PERMISSIONS_APPROVAL_METHOD = 'item/permissions/requestApproval'
+
 export const CODEX_DYNAMIC_TOOL_CALL_METHOD = 'item/tool/call'
+
 export const CODEX_AUTH_TOKEN_REFRESH_METHOD = 'account/chatgptAuthTokens/refresh'
+
 export const CODEX_ATTESTATION_METHOD = 'attestation/generate'
+
 export const CODEX_LEGACY_APPLY_PATCH_APPROVAL_METHOD = 'applyPatchApproval'
+
 export const CODEX_LEGACY_EXEC_APPROVAL_METHOD = 'execCommandApproval'
 
 export const CODEX_BLOCKING_SERVER_REQUEST_METHODS = [
@@ -44,6 +50,7 @@ export function disposeCodexServerRequest(
   request: CodexAppServerServerRequest
 ): CodexServerRequestDisposition {
   const prompt = registry.register(request)
+
   if (prompt) {
     return { kind: 'prompt', prompt }
   }
@@ -84,5 +91,6 @@ export function disposeCodexServerRequest(
         `Orca rejected unrecognized blocking request ${request.method}`
       )
   }
+
   return { kind: 'responded', method: request.method }
 }

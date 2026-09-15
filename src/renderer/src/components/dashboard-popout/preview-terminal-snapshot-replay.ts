@@ -18,23 +18,30 @@ export function replayPreviewConnectionSnapshot(args: {
   write: (chunk: string, live: boolean) => void
 }): void {
   const { snapshot, kittyKeyboardModes } = args
+
   // Why: carry only live-proven flags across a flagless resync; a fresh mirror's zero is ungrounded.
   const provenFlags =
     parseTerminalKittyKeyboardFlags(snapshot.kittyKeyboardFlags) ??
     (kittyKeyboardModes.hasProvenBaseline ? kittyKeyboardModes.snapshotFlags : undefined)
+
   kittyKeyboardModes.resetForSnapshot()
+
   if (snapshot.scrollbackAnsi) {
     args.write(snapshot.scrollbackAnsi, false)
   }
+
   if (snapshot.data) {
     args.write(snapshot.data, false)
   }
+
   if (snapshot.pendingEscapeTailAnsi) {
     args.write(snapshot.pendingEscapeTailAnsi, false)
   }
+
   if (provenFlags !== undefined) {
     kittyKeyboardModes.restoreSnapshotFlags(provenFlags)
   }
+
   for (const chunk of args.replay) {
     args.write(chunk.data, chunk.mode === 'live')
   }

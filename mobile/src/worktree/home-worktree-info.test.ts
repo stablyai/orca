@@ -53,6 +53,7 @@ describe('markHomeWorktreeCatalogUnavailable', () => {
 
 describe('homeHostWorktreeSummary', () => {
   const provenAt = 1_700_000_000_000
+
   const loaded: HostWorktreeInfo = {
     hostId: 'host-1',
     totalWorktrees: 12,

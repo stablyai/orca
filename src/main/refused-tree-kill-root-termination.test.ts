@@ -11,7 +11,9 @@ vi.mock('node:child_process', async (importOriginal) => ({
   spawn: spawnMock,
   execFile: execFileMock
 }))
+
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn(), on: vi.fn() } }))
+
 vi.mock('./providers/windows-foreground-process-rows', () => ({
   queryWindowsProcessDescendants: queryWindowsProcessDescendantsMock
 }))
@@ -57,6 +59,7 @@ function appEnvironment(): AppEnvironment {
 }
 
 let previousEnvironment: AppEnvironment | null = null
+
 let previousPlatform: PropertyDescriptor | undefined
 
 function setPlatform(platform: NodeJS.Platform): void {
@@ -79,12 +82,15 @@ beforeEach(() => {
 
 afterEach(() => {
   setProcessTreeKillGate(null)
+
   if (previousPlatform) {
     Object.defineProperty(process, 'platform', previousPlatform)
   }
+
   if (previousEnvironment) {
     setAppEnvironment(previousEnvironment)
   }
+
   _resetTracerForTests()
 })
 
@@ -196,6 +202,7 @@ describe('a refused tree-kill still terminates the root it owns', () => {
 describe('a refused tree-kill with no handle to fall back to', () => {
   it('reports the codex turn as not cancelled and records the refused added root', async () => {
     const appServerPid = 500
+
     const addedRoot = {
       pid: RENDERER_PID,
       ppid: appServerPid,
@@ -203,6 +210,7 @@ describe('a refused tree-kill with no handle to fall back to', () => {
       command: 'node',
       depth: 1
     }
+
     queryWindowsProcessDescendantsMock.mockResolvedValue([addedRoot])
 
     await expect(

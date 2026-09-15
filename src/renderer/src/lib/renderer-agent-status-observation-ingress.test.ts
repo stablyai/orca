@@ -9,6 +9,7 @@ const { setAgentStatusMock } = vi.hoisted(() => ({ setAgentStatusMock: vi.fn() }
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ setAgentStatus: setAgentStatusMock }) }
 }))
+
 vi.mock('./agent-status-connection-ownership', () => ({
   resolveLiveAgentStatusConnectionRouting: () => ({ connectionId: null })
 }))
@@ -46,10 +47,13 @@ function titleRowObservation(now: number): AgentStatusObservation {
     terminalLayoutsByTabId: { 'tab-1': makeSingleLayout() },
     now
   })
+
   const observation = rows[0]?.entry.observation
+
   if (!observation) {
     throw new Error('expected a title-derived row carrying an observation')
   }
+
   return observation
 }
 
@@ -76,9 +80,12 @@ describe('renderer-side observation origins', () => {
 
   it('tags renderer-parsed OSC 9999 rows as osc-origin under the renderer authority', async () => {
     setAgentStatusMock.mockReset()
+
     const { createBackgroundAgentStatusConsumer } =
       await import('./background-agent-status-consumer')
+
     const paneKey = 'tab-osc:99999999-9999-4999-8999-999999999999'
+
     const consumer = createBackgroundAgentStatusConsumer({
       paneKey,
       launchToken: 'launch-1',
@@ -93,9 +100,11 @@ describe('renderer-side observation origins', () => {
     consumer.consume(`\x1b]9999;{"state":"done","prompt":"remote turn"}\x07`)
 
     expect(setAgentStatusMock).toHaveBeenCalledTimes(2)
+
     const observations = setAgentStatusMock.mock.calls.map(
       (call) => (call[1] as { observation?: AgentStatusObservation }).observation
     )
+
     for (const observation of observations) {
       expect(observation).toMatchObject({
         origin: 'osc',
@@ -103,6 +112,7 @@ describe('renderer-side observation origins', () => {
         authorityId: expect.stringMatching(/^renderer:/)
       })
     }
+
     expect(observations[1]!.revision).toBeGreaterThan(observations[0]!.revision)
   })
 })

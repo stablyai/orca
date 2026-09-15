@@ -8,6 +8,7 @@ describe('orchestration message timestamps', () => {
 
   it('exposes SQLite timestamps with an explicit UTC designator', () => {
     db = new OrchestrationDb(':memory:')
+
     const message = db.insertMessage({
       runId: 'run_legacy_local',
       from: 'a',

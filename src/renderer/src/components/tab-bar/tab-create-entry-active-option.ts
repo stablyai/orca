@@ -47,9 +47,11 @@ export function getActiveOptionId(option: ActiveOption): string {
   if (option.kind === 'agent') {
     return `agent:${option.option.agent}`
   }
+
   if (option.kind === 'menu') {
     return `menu:${option.option.id}`
   }
+
   // Tab and history ids already carry their own prefix and are stable across renders.
   return option.option.id
 }

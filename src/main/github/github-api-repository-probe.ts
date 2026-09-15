@@ -11,6 +11,7 @@ export function githubApiRepositoryProbeCacheKey(
   const runtimeKey = connectionId
     ? `ssh:${connectionId}:${getSshGitProviderGeneration(connectionId)}`
     : `local:${localGitOptions.wslDistro ?? 'host'}`
+
   return `${runtimeKey}\0${repoPath}\0${remoteName}\0${requireVerifiedSshProbe ? 'verified' : 'tolerant'}`
 }
 
@@ -21,5 +22,6 @@ export function resolveGitHubApiRepositoryProbe<T>(
   if (value === undefined && requireVerifiedSshProbe) {
     throw new Error('GitHub repository identity is unverifiable.')
   }
+
   return value ?? null
 }

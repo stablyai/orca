@@ -23,9 +23,11 @@ import {
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = (): void => {}
+
   const promise = new Promise<void>((finish) => {
     resolve = finish
   })
+
   return { promise, resolve }
 }
 
@@ -38,6 +40,7 @@ function lifecycleRecorder(acceptPromptCancellation = true): {
   const bodies = new Map<string, AgentJournalItemBody>()
   const tombstones = new Set<string>()
   const order: string[] = []
+
   const appendTombstone = (
     identity: Parameters<StructuredAgentSessionEventSink['appendTombstone']>[0],
     options?: StructuredAgentSessionAppendOptions
@@ -45,20 +48,24 @@ function lifecycleRecorder(acceptPromptCancellation = true): {
     const key = agentJournalItemKey(identity)
     bodies.delete(key)
     tombstones.add(key)
+
     if (options?.lifecycle === true) {
       order.push('prompt-lifecycle')
     }
   }
+
   const appendItem = (
     identity: Parameters<StructuredAgentSessionEventSink['appendItem']>[0],
     body: Parameters<StructuredAgentSessionEventSink['appendItem']>[1],
     options?: StructuredAgentSessionAppendOptions
   ): void => {
     bodies.set(agentJournalItemKey(identity), body)
+
     if (options?.lifecycle === true) {
       order.push('prompt-lifecycle')
     }
   }
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem,
     appendTombstone,
@@ -66,13 +73,16 @@ function lifecycleRecorder(acceptPromptCancellation = true): {
       if (!acceptPromptCancellation) {
         return { accepted: false, reason: 'backpressure' }
       }
+
       appendTombstone(identity, options)
+
       return { accepted: true }
     },
     tryAppendLifecycleBatch: (_settlementId, mutations, options) => {
       if (!acceptPromptCancellation) {
         return { accepted: false, reason: 'backpressure' }
       }
+
       for (const mutation of mutations) {
         if (mutation.kind === 'tombstone') {
           appendTombstone(mutation.identity, options)
@@ -80,11 +90,13 @@ function lifecycleRecorder(acceptPromptCancellation = true): {
           appendItem(mutation.identity, mutation.body, options)
         }
       }
+
       return { accepted: true }
     },
     publish: (_options?: StructuredAgentSessionAppendOptions) => {},
     tryPublish: () => ({ accepted: true })
   }
+
   return { sink, bodies, tombstones, order }
 }
 
@@ -106,12 +118,15 @@ describe('Claude live prompt ownership', () => {
     const adapter = await acquired(claude)
     await startTurn(adapter)
     const connection = claude.connections[0]
+
     if (!connection) {
       throw new Error('expected Claude connection')
     }
+
     const answered = invokeCanUseTool(connection, 'Bash', 'permission-1', 'tool-1', {
       input: { command: 'git status' }
     })
+
     adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-1')
     const commitGate = deferred()
     const commitStarted = vi.fn()
@@ -128,6 +143,7 @@ describe('Claude live prompt ownership', () => {
         await commitGate.promise
       }
     })
+
     await vi.waitFor(() => expect(commitStarted).toHaveBeenCalledOnce())
 
     await expect(
@@ -151,23 +167,29 @@ describe('Claude live prompt ownership', () => {
   it('lets prompt cancellation win and waits for SDK abort cleanup', async () => {
     const interruptGate = deferred()
     const controller = new AbortController()
+
     const claude = fakeClaude({
       replayUuid: 'turn-1',
       routes: { interrupt: () => interruptGate.promise }
     })
+
     const adapter = await acquired(claude)
     await startTurn(adapter)
     const connection = claude.connections[0]
+
     if (!connection) {
       throw new Error('expected Claude connection')
     }
+
     const answered = invokeCanUseTool(connection, 'Bash', 'permission-1', 'tool-1', {
       input: { command: 'git status' },
       signal: controller.signal
     })
+
     adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-1')
 
     let cancellationSettled = false
+
     const cancellation = adapter
       .cancelTurn({
         sessionId: 'session-1',
@@ -178,6 +200,7 @@ describe('Claude live prompt ownership', () => {
       .finally(() => {
         cancellationSettled = true
       })
+
     await vi.waitFor(() => expect(claude.connections[0]?.calls.at(-1)?.subtype).toBe('interrupt'))
     const commit = vi.fn(async () => undefined)
     await expect(
@@ -216,27 +239,33 @@ describe('Claude live prompt ownership', () => {
   it('cancels an owned prompt after another dispatch queues behind its turn', async () => {
     const controller = new AbortController()
     let queuedUuid = ''
+
     const claude = fakeClaude({
       replayUuids: ['turn-1', null],
       capabilities: ['interrupt_cancel_queued_v1'],
       routes: {
         interrupt: () => {
           controller.abort()
+
           return { still_queued: [], cancelled: [queuedUuid] }
         }
       }
     })
+
     const lateSettlements: unknown[] = []
     const adapter = await acquired(claude, {}, [], (settlement) => lateSettlements.push(settlement))
     await startTurn(adapter)
     const connection = claude.connections[0]
+
     if (!connection) {
       throw new Error('expected Claude connection')
     }
+
     const answered = invokeCanUseTool(connection, 'Bash', 'permission-queued', 'tool-queued', {
       input: { command: 'git status' },
       signal: controller.signal
     })
+
     adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-queued')
     await expect(
       adapter.dispatch({
@@ -247,9 +276,11 @@ describe('Claude live prompt ownership', () => {
       })
     ).resolves.toEqual({ state: 'admitted' })
     const sentUuid = connection.sent.at(-1)?.uuid
+
     if (typeof sentUuid !== 'string') {
       throw new Error('expected queued dispatch uuid')
     }
+
     queuedUuid = sentUuid
 
     await expect(
@@ -278,14 +309,18 @@ describe('Claude live prompt ownership', () => {
     const adapter = await acquired(claude)
     await startTurn(adapter)
     const connection = claude.connections[0]
+
     if (!connection) {
       throw new Error('expected Claude connection')
     }
+
     const controller = new AbortController()
+
     const answered = invokeCanUseTool(connection, 'Bash', 'permission-legacy', 'tool-legacy', {
       input: { command: 'git status' },
       signal: controller.signal
     })
+
     adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-legacy')
     await expect(
       adapter.dispatch({
@@ -314,14 +349,18 @@ describe('Claude live prompt ownership', () => {
     const adapter = await acquired(claude)
     await startTurn(adapter)
     const connection = claude.connections[0]
+
     if (!connection) {
       throw new Error('expected Claude connection')
     }
+
     const controller = new AbortController()
+
     const answered = invokeCanUseTool(connection, 'Bash', 'permission-stale', 'tool-stale', {
       input: { command: 'git status' },
       signal: controller.signal
     })
+
     adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-stale')
     await startTurn(adapter, 'turn-2')
 
@@ -375,15 +414,19 @@ describe('Claude live prompt ownership', () => {
         }
       }
     })
+
     const adapter = await acquired(claude)
     await startTurn(adapter)
     const connection = claude.connections[0]
+
     if (!connection) {
       throw new Error('expected Claude connection')
     }
+
     const answered = invokeCanUseTool(connection, 'Bash', 'permission-1', 'tool-1', {
       input: { command: 'git status' }
     })
+
     adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-1')
 
     await expect(
@@ -410,10 +453,12 @@ describe('Claude live prompt ownership', () => {
 
   it('enqueues terminal prompt state before a confirmed cancellation resolves', async () => {
     const controller = new AbortController()
+
     const claude = fakeClaude({
       replayUuid: 'turn-1',
       routes: { interrupt: () => controller.abort() }
     })
+
     const recorded = lifecycleRecorder()
     const adapter = adapterFor(claude)
     await adapter.acquire({
@@ -424,13 +469,16 @@ describe('Claude live prompt ownership', () => {
     })
     await startTurn(adapter)
     const connection = claude.connections[0]
+
     if (!connection) {
       throw new Error('expected Claude connection')
     }
+
     const answered = invokeCanUseTool(connection, 'Bash', 'permission-1', 'tool-1', {
       input: { command: 'git status' },
       signal: controller.signal
     })
+
     adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-1')
     const promptItemId = [...recorded.bodies].find(([, body]) => body.kind === 'approval')?.[0]
 
@@ -443,14 +491,17 @@ describe('Claude live prompt ownership', () => {
       })
       .then((result) => {
         recorded.order.push('resolved')
+
         return result
       })
 
     await expect(cancellation).resolves.toEqual({ cancelled: true })
     await expect(answered.promise).resolves.toBeNull()
+
     if (!promptItemId) {
       throw new Error('expected a recorded prompt item')
     }
+
     expect(recorded.order).toEqual(['prompt-lifecycle', 'resolved'])
     expect(
       [...recorded.bodies.values()].some(
@@ -517,10 +568,12 @@ describe('Claude live prompt ownership', () => {
 
   it('does not report success or release the claim when prompt lifecycle admission fails', async () => {
     const controller = new AbortController()
+
     const claude = fakeClaude({
       replayUuid: 'turn-1',
       routes: { interrupt: () => controller.abort() }
     })
+
     const recorded = lifecycleRecorder(false)
     const adapter = adapterFor(claude)
     await adapter.acquire({
@@ -531,14 +584,17 @@ describe('Claude live prompt ownership', () => {
     })
     await startTurn(adapter)
     const connection = claude.connections[0]
+
     if (!connection) {
       throw new Error('expected Claude connection')
     }
+
     invokeCanUseTool(connection, 'Bash', 'permission-1', 'tool-1', {
       input: { command: 'git status' },
       signal: controller.signal
     })
     const promptItemId = [...recorded.bodies].find(([, body]) => body.kind === 'approval')?.[0]
+
     if (!promptItemId) {
       throw new Error('expected durable Claude prompt')
     }
@@ -570,12 +626,15 @@ describe('Claude live prompt ownership', () => {
     const adapter = await acquired(claude)
     await startTurn(adapter)
     const connection = claude.connections[0]
+
     if (!connection) {
       throw new Error('expected Claude connection')
     }
+
     const answered = invokeCanUseTool(connection, 'Bash', 'permission-1', 'tool-1', {
       input: { command: 'git status' }
     })
+
     adapter.bindPromptItemId('session-1', 'journal-prompt', 'permission-1')
 
     for (const input of [
@@ -592,6 +651,7 @@ describe('Claude live prompt ownership', () => {
         })
       ).resolves.toEqual({ cancelled: false })
     }
+
     expect(claude.connections[0]?.calls.some((call) => call.subtype === 'interrupt')).toBe(false)
 
     await adapter.acquire({ identity: identityFor(), fence: 8, spawnToken: 'spawn-10' })
@@ -621,22 +681,29 @@ describe('Claude live prompt ownership', () => {
 
   it('rejects a grouped prompt batch without partially revising its first row', () => {
     const tombstones: string[] = []
+
     const appendTombstone = vi.fn(
       (identity: Parameters<StructuredAgentSessionEventSink['appendTombstone']>[0]) => {
         tombstones.push(agentJournalItemKey(identity))
       }
     )
+
     let rowAdmission = 0
+
     const tryAppendTombstone = vi.fn(
       (identity: Parameters<StructuredAgentSessionEventSink['appendTombstone']>[0]) => {
         rowAdmission += 1
+
         if (rowAdmission === 2) {
           return { accepted: false as const, reason: 'backpressure' as const }
         }
+
         appendTombstone(identity)
+
         return { accepted: true as const }
       }
     )
+
     const tryAppendLifecycleBatch = vi.fn(
       (
         _settlementId: string,
@@ -648,9 +715,11 @@ describe('Claude live prompt ownership', () => {
           kind: 'item',
           body: { resolution: { state: 'cancelled' } }
         })
+
         return { accepted: false as const, reason: 'backpressure' as const }
       }
     )
+
     const prompts = new ClaudeJournalPrompts({
       sink: {
         appendItem: () => {},
@@ -661,6 +730,7 @@ describe('Claude live prompt ownership', () => {
       },
       questionItems: (input) => {
         const item = claudeQuestionItems(input)[0]
+
         return item
           ? [
               {
@@ -675,6 +745,7 @@ describe('Claude live prompt ownership', () => {
           : []
       }
     })
+
     const prompt: ClaudePendingPrompt = {
       requestId: 'grouped-request',
       promptKey: 'grouped-request',
@@ -692,6 +763,7 @@ describe('Claude live prompt ownership', () => {
       answers: new Map(),
       settle: vi.fn()
     }
+
     prompts.handle({ type: 'prompt', sessionId: 'session-1', prompt })
 
     expect(prompts.cancel(prompt.promptKey)).toEqual({
@@ -706,6 +778,7 @@ describe('Claude live prompt ownership', () => {
   it('keeps every backpressured prompt cancellation retry in its owned entry', () => {
     let backpressured = true
     let lifecycleAttempts = 0
+
     const prompts = new ClaudeJournalPrompts({
       sink: {
         appendItem: () => {},
@@ -713,12 +786,15 @@ describe('Claude live prompt ownership', () => {
         publish: () => {},
         tryAppendLifecycleBatch: () => {
           lifecycleAttempts += 1
+
           return backpressured ? { accepted: false, reason: 'backpressure' } : { accepted: true }
         }
       }
     })
+
     const registerCancellation = (index: number): void => {
       const promptKey = `permission-${index}`
+
       const prompt: ClaudePendingPrompt = {
         requestId: promptKey,
         promptKey,
@@ -731,6 +807,7 @@ describe('Claude live prompt ownership', () => {
         answers: new Map(),
         settle: vi.fn()
       }
+
       prompts.handle({ type: 'prompt', sessionId: 'session-1', prompt })
       prompts.cancel(promptKey)
     }
@@ -738,9 +815,11 @@ describe('Claude live prompt ownership', () => {
     registerCancellation(0)
     prompts.cancel('permission-0')
     expect(prompts.pendingCancellationCount).toBe(1)
+
     for (let index = 1; index < 65; index += 1) {
       registerCancellation(index)
     }
+
     expect(prompts.pendingCancellationCount).toBe(65)
 
     backpressured = false

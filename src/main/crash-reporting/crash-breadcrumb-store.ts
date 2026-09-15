@@ -6,8 +6,10 @@ import {
 } from '../../shared/crash-reporting'
 
 const MAX_BREADCRUMBS = 30
+
 // Two threshold ladders, two marks each, across both renderer surfaces.
 const MAX_RETAINED_BREADCRUMBS = 8
+
 // Why: coalesceKey embeds an open-string agentType (length-trimmed only, never
 // enum-checked), so the key space is unbounded over a long multi-agent/SSH session.
 // Bound the coalesce map the same way ProcessGoneDedupe bounds its key map.
@@ -34,14 +36,18 @@ type CoalescedBreadcrumbState = {
 }
 
 let breadcrumbs: CrashReportBreadcrumb[] = []
+
 let retainedBreadcrumbs = new Map<string, CrashReportBreadcrumb>()
+
 let coalescedBreadcrumbs = new Map<string, CoalescedBreadcrumbState>()
 
 function retainedBreadcrumbKey(breadcrumb: CrashReportBreadcrumb): string | null {
   if (breadcrumb.name !== 'renderer_memory_highwater') {
     return null
   }
+
   const surface = breadcrumb.data?.rendererSurface
+
   // Why both: the heap-ratio marks and the private-footprint marks are separate
   // one-shot ladders. Keying only on `thresholdPct` collapses every footprint
   // crumb onto one `undefined` slot, so the second mark evicts the first.
@@ -49,6 +55,7 @@ function retainedBreadcrumbKey(breadcrumb: CrashReportBreadcrumb): string | null
     breadcrumb.data?.thresholdPct !== undefined
       ? `pct${String(breadcrumb.data.thresholdPct)}`
       : `privMB${String(breadcrumb.data?.thresholdPrivateMB)}`
+
   return `${breadcrumb.name}:${String(surface)}:${threshold}:${breadcrumb.origin ?? 'global'}`
 }
 
@@ -66,27 +73,38 @@ export function recordCrashBreadcrumb(
       ...(origin ? { origin } : {})
     }
   ])
+
   const breadcrumb = sanitized?.[0]
+
   if (!breadcrumb) {
     return
   }
+
   const retainedKey = retainedBreadcrumbKey(breadcrumb)
+
   if (retainedKey) {
     retainedBreadcrumbs.delete(retainedKey)
     retainedBreadcrumbs.set(retainedKey, breadcrumb)
+
     while (retainedBreadcrumbs.size > MAX_RETAINED_BREADCRUMBS) {
       const oldestKey = retainedBreadcrumbs.keys().next()
+
       if (oldestKey.done) {
         break
       }
+
       retainedBreadcrumbs.delete(oldestKey.value)
     }
+
     return breadcrumb
   }
+
   breadcrumbs.push(breadcrumb)
+
   if (breadcrumbs.length > MAX_BREADCRUMBS) {
     breadcrumbs.shift()
   }
+
   return breadcrumb
 }
 
@@ -105,6 +123,7 @@ export function recordCoalescedCrashBreadcrumb({
 }): { suppressedSinceLast: number } | undefined {
   const now = monotonicNow()
   const previous = coalescedBreadcrumbs.get(coalesceKey)
+
   if (previous && now - previous.windowStartedAtMs < minIntervalMs) {
     previous.suppressed += 1
     // Stash the newest payload for the entry this key already owns: the burst
@@ -119,6 +138,7 @@ export function recordCoalescedCrashBreadcrumb({
     // A hot key stays LRU-recent without renewing its fixed suppression window.
     coalescedBreadcrumbs.delete(coalesceKey)
     coalescedBreadcrumbs.set(coalesceKey, previous)
+
     return undefined
   }
 
@@ -134,14 +154,17 @@ export function recordCoalescedCrashBreadcrumb({
       if (key !== coalesceKey) {
         preservePendingCoalescedBreadcrumb(entry)
       }
+
       coalescedBreadcrumbs.delete(key)
     }
   }
+
   coalescedBreadcrumbs.delete(coalesceKey)
   // Claim only repeats no resolve has already folded into the previous crumb —
   // a snapshot mid-window attributes them there, and forensic totals must not
   // count one burst twice.
   const suppressedSinceLast = previous ? previous.suppressed - previous.resolved : 0
+
   const state: CoalescedBreadcrumbState = {
     name,
     windowStartedAtMs: now,
@@ -150,20 +173,26 @@ export function recordCoalescedCrashBreadcrumb({
     resolved: 0,
     ...(origin ? { origin } : {})
   }
+
   coalescedBreadcrumbs.set(coalesceKey, state)
+
   while (coalescedBreadcrumbs.size > MAX_COALESCE_KEYS) {
     const oldest = coalescedBreadcrumbs.entries().next()
+
     if (oldest.done) {
       break
     }
+
     preservePendingCoalescedBreadcrumb(oldest.value[1])
     coalescedBreadcrumbs.delete(oldest.value[0])
   }
+
   state.emitted = recordCrashBreadcrumb(
     name,
     suppressedSinceLast > 0 ? { ...data, suppressedSinceLast } : data,
     origin
   )
+
   return { suppressedSinceLast }
 }
 
@@ -177,12 +206,15 @@ function isCoalescedCrumbStillInEvidence(
   const retained = [...retainedBreadcrumbs.values()].filter((breadcrumb) =>
     isVisibleToReporter(breadcrumb, reporterOrigin)
   )
+
   if (retained.some((retainedBreadcrumb) => retainedBreadcrumb === crumb)) {
     return true
   }
+
   const visibleRecent = breadcrumbs.filter((breadcrumb) =>
     isVisibleToReporter(breadcrumb, reporterOrigin)
   )
+
   return visibleRecent
     .slice(-(MAX_BREADCRUMBS - retained.length))
     .some((recentBreadcrumb) => recentBreadcrumb === crumb)
@@ -197,6 +229,7 @@ function resolvePendingCoalescedBreadcrumb(
   if (!state.emitted || state.suppressed <= state.resolved) {
     return
   }
+
   // Eviction can orphan the crumb mid-window; folding into it would mark the
   // repeats resolved into evidence no snapshot can see, and the next emit would
   // then claim nothing — the burst vanishes from the record entirely. Drop the
@@ -204,8 +237,10 @@ function resolvePendingCoalescedBreadcrumb(
   // later emit or bounded cleanup can materialize the unclaimed repeats.
   if (!isCoalescedCrumbStillInEvidence(state.emitted, reporterOrigin)) {
     state.emitted = undefined
+
     return
   }
+
   // The crumb's claim is a running total: what it was born claiming plus every
   // repeat folded since. Dropping `carried` would erase the previous window's
   // count from the record; omitting `resolved` bookkeeping would let the next
@@ -223,9 +258,11 @@ function resolvePendingCoalescedBreadcrumb(
 function preservePendingCoalescedBreadcrumb(state: CoalescedBreadcrumbState): void {
   resolvePendingCoalescedBreadcrumb(state, state.origin)
   const unresolved = state.suppressed - state.resolved
+
   if (state.emitted || unresolved <= 0) {
     return
   }
+
   recordCrashBreadcrumb(
     state.name,
     { ...state.pending, suppressedSinceLast: unresolved },
@@ -240,6 +277,7 @@ function resolveAllPendingCoalescedBreadcrumbs(reporterOrigin?: string): void {
     if (reporterOrigin && state.origin && state.origin !== reporterOrigin) {
       continue
     }
+
     resolvePendingCoalescedBreadcrumb(state, reporterOrigin)
   }
 }
@@ -253,14 +291,18 @@ function isVisibleToReporter(
 
 export function getCrashBreadcrumbSnapshot(reporterOrigin?: string): CrashReportBreadcrumb[] {
   resolveAllPendingCoalescedBreadcrumbs(reporterOrigin)
+
   // Why: long sessions must retain threshold profiles without growing the 30-entry budget.
   const retained = [...retainedBreadcrumbs.values()].filter((breadcrumb) =>
     isVisibleToReporter(breadcrumb, reporterOrigin)
   )
+
   const visibleRecent = breadcrumbs.filter((breadcrumb) =>
     isVisibleToReporter(breadcrumb, reporterOrigin)
   )
+
   const recent = visibleRecent.slice(-(MAX_BREADCRUMBS - retained.length))
+
   return [...retained, ...recent]
     .sort((left, right) => left.createdAt.localeCompare(right.createdAt))
     .map((breadcrumb) => ({

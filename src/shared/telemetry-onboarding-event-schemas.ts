@@ -29,6 +29,7 @@ export const advancedViaSchema = z.enum(['button', 'keyboard']).optional()
 export const onboardingStartedSchema = z
   .object({ resumed_from_step: onboardingStepSchema.optional(), cohort: cohortSchema })
   .strict()
+
 export const onboardingStepViewedSchema = z
   .object({
     step: onboardingStepSchema,
@@ -36,6 +37,7 @@ export const onboardingStepViewedSchema = z
     cohort: cohortSchema
   })
   .strict()
+
 export const onboardingStepCompletedSchema = z
   .object({
     step: onboardingStepSchema,
@@ -45,6 +47,7 @@ export const onboardingStepCompletedSchema = z
     cohort: cohortSchema
   })
   .strict()
+
 export const onboardingStepSkippedSchema = z
   .object({
     step: onboardingStepSchema,
@@ -54,6 +57,7 @@ export const onboardingStepSkippedSchema = z
     cohort: cohortSchema
   })
   .strict()
+
 export type OnboardingTourOutcomeTelemetry = {
   outcome: z.infer<typeof onboardingTourOutcomeSchema>
   tour_dwell_ms?: number
@@ -71,6 +75,7 @@ export function validateOnboardingTourOutcome(
   if (props.outcome !== 'skipped_intro') {
     return
   }
+
   for (const key of [
     'tour_dwell_ms',
     'furthest_step',
@@ -104,9 +109,11 @@ export const onboardingTourOutcomeEventSchema = z
   })
   .strict()
   .superRefine(validateOnboardingTourOutcome)
+
 export const onboardingStep4PathClickedSchema = z
   .object({ path: onboardingPathSchema, cohort: cohortSchema })
   .strict()
+
 export const onboardingStep4PathFailedSchema = z
   .object({
     path: onboardingPathSchema,
@@ -114,6 +121,7 @@ export const onboardingStep4PathFailedSchema = z
     cohort: cohortSchema
   })
   .strict()
+
 export const onboardingTaskSourcesSnapshotSchema = z
   .object({
     github_status: onboardingTaskSourcesGithubStatusSchema,
@@ -124,6 +132,7 @@ export const onboardingTaskSourcesSnapshotSchema = z
     cohort: cohortSchema
   })
   .strict()
+
 export const onboardingWindowsTerminalSnapshotSchema = z
   .object({
     default_shell: onboardingWindowsTerminalShellSchema,
@@ -134,6 +143,7 @@ export const onboardingWindowsTerminalSnapshotSchema = z
     cohort: cohortSchema
   })
   .strict()
+
 // Why: no `is_git_repo` here; the signal moved to `repo_added.is_git_repo`.
 export const onboardingCompletedSchema = z
   .object({
@@ -142,6 +152,7 @@ export const onboardingCompletedSchema = z
     cohort: cohortSchema
   })
   .strict()
+
 export const onboardingDismissedSchema = z
   .object({
     last_step: onboardingStepSchema,
@@ -150,6 +161,7 @@ export const onboardingDismissedSchema = z
     cohort: cohortSchema
   })
   .strict()
+
 export const activationChecklistItemCompletedSchema = z
   .object({
     item: onboardingChecklistItemSchema,
@@ -159,6 +171,7 @@ export const activationChecklistItemCompletedSchema = z
 
 // Why: disambiguates `on_path:false` rows on dashboard 1562016 (shell-hydration failure vs genuinely-not-on-PATH). See docs/agent-on-path-detection.md.
 export const pathSourceSchema = z.enum(['shell_hydrate', 'sync_seed_only'])
+
 export const pathFailureReasonSchema = z.enum([
   'none',
   'no_shell',
@@ -174,7 +187,9 @@ export type _PathFailureReasonSync =
       ? true
       : never
     : never
+
 export const _pathFailureReasonSyncCheck: _PathFailureReasonSync = true
+
 void _pathFailureReasonSyncCheck
 
 export type _PathSourceSync =
@@ -183,7 +198,9 @@ export type _PathSourceSync =
       ? true
       : never
     : never
+
 export const _pathSourceSyncCheck: _PathSourceSync = true
+
 void _pathSourceSyncCheck
 
 // Fired at click time (captures mind-changes); `agent_kind` uses `tuiAgentToAgentKind` to keep the wire enum closed.
@@ -213,7 +230,9 @@ export type _GhosttyDiscoveryStateSync =
       ? true
       : never
     : never
+
 export const _ghosttyDiscoveryStateSyncCheck: _GhosttyDiscoveryStateSync = true
+
 void _ghosttyDiscoveryStateSyncCheck
 
 export const onboardingGhosttyDiscoveredSchema = z
@@ -224,6 +243,7 @@ export const onboardingGhosttyDiscoveredSchema = z
     cohort: cohortSchema
   })
   .strict()
+
 export const onboardingGhosttyImportClickedSchema = z.object({ cohort: cohortSchema }).strict()
 
 // Smart-sort telemetry: measures whether the redesign concentrates users in Class 1-3, and flags Smart→Recent abandonment as a regression.
@@ -239,13 +259,16 @@ export const smartSortClassDistributionSchema = z
     total_worktrees: z.number().int().nonnegative()
   })
   .strict()
+
 export const smartSortClass1PromotionSchema = z
   .object({
     cause: z.enum(['blocked', 'waiting', 'title-heuristic'])
   })
   .strict()
+
 // Why `_v` not `z.object({})`: empty zod object infers as TS `{}` ("anything"), breaking the `keyof EventMap[N]` roster probes.
 export const smartToRecentSwitchSchema = z.object({ _v: z.literal(1).optional() }).strict()
+
 export const onboardingGhosttyImportFailedSchema = z
   .object({
     // `'no_config'` is reserved for future use; call sites currently emit `'empty_diff'` or `'unknown'`.
@@ -253,6 +276,7 @@ export const onboardingGhosttyImportFailedSchema = z
     cohort: cohortSchema
   })
   .strict()
+
 export const onboardingFeatureSetupToggledSchema = z
   .object({
     feature: onboardingFeatureSetupFeatureSchema,
@@ -260,6 +284,7 @@ export const onboardingFeatureSetupToggledSchema = z
     cohort: cohortSchema
   })
   .strict()
+
 export const onboardingFeatureSetupRunSchema = z
   .object({
     ...onboardingFeatureSetupSelectionSchema,
@@ -276,6 +301,7 @@ export const onboardingFeatureSetupRunSchema = z
     onboardingFeatureSetupSelectedCountRefinement
   )
   .strict()
+
 export const onboardingFeatureSetupTerminalOpenedSchema = z
   .object({
     ...onboardingFeatureSetupSelectionSchema,
@@ -286,6 +312,7 @@ export const onboardingFeatureSetupTerminalOpenedSchema = z
     onboardingFeatureSetupSelectedCountRefinement
   )
   .strict()
+
 export const onboardingFeatureSetupTerminalInteractedSchema = z
   .object({
     ...onboardingFeatureSetupSelectionSchema,

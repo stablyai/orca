@@ -21,6 +21,7 @@ function workspacePassesFilters(
   folderWorkspaces: readonly FolderWorkspace[]
 ): boolean {
   const identity = getWorktreeHostIdentity(worktree)
+
   return (
     worktrees.some((candidate) => getWorktreeHostIdentity(candidate) === identity) ||
     folderWorkspaces.some((workspace) => folderWorkspaceKey(workspace.id) === worktree.id)
@@ -55,6 +56,7 @@ export function useSidebarRevealRequests(args: {
     hasFilters,
     clearFilters
   } = args
+
   const setGroupBy = useAppStore((s) => s.setGroupBy)
   const pendingRevealSidebarRow = useAppStore((s) => s.pendingRevealSidebarRow)
   const revealSidebarRow = useAppStore((s) => s.revealSidebarRow)
@@ -70,15 +72,20 @@ export function useSidebarRevealRequests(args: {
     if (!pendingRevealSidebarRow) {
       return
     }
+
     const rowKey = pendingRevealSidebarRow.rowKey
+
     const isProjectHeaderTarget =
       rowKey.startsWith('project-group:') ||
       rowKey.startsWith('project:') ||
       rowKey.startsWith('repo:')
+
     if (isProjectHeaderTarget && groupBy !== 'repo') {
       setGroupBy('repo')
+
       return
     }
+
     if (!renderedSidebarRowKeys.has(rowKey) && hasFilters) {
       clearFilters()
     }
@@ -97,20 +104,25 @@ export function useSidebarRevealRequests(args: {
         event instanceof CustomEvent
           ? (event.detail as ScrollToCurrentWorkspaceRevealRequestDetail | undefined)
           : undefined
+
       if (detail?.target?.type === 'sidebar-row') {
         const sidebarDetail = detail as Extract<
           ScrollToCurrentWorkspaceRevealRequestDetail,
           { target: { type: 'sidebar-row' } }
         >
+
         revealSidebarRow(detail.target.rowKey, {
           behavior: 'smooth',
           highlight: sidebarDetail.highlight !== false
         })
+
         return
       }
+
       if (!currentSidebarWorktreeId) {
         return
       }
+
       const activeWorktree = getKnownSidebarWorktreeById(
         currentSidebarWorktreeId,
         worktreeMap,
@@ -118,9 +130,11 @@ export function useSidebarRevealRequests(args: {
         worktrees,
         currentSidebarExecutionHostId
       )
+
       if (!activeWorktree || activeWorktree.isArchived) {
         return
       }
+
       // Collapsed groups hide rows without excluding their workspaces from the filter results.
       if (
         hasFilters &&
@@ -129,8 +143,10 @@ export function useSidebarRevealRequests(args: {
         if (confirmationPending.current) {
           return
         }
+
         confirmationPending.current = true
         let confirmed: boolean
+
         try {
           confirmed = await confirm({
             icon: Crosshair,
@@ -147,7 +163,9 @@ export function useSidebarRevealRequests(args: {
         } finally {
           confirmationPending.current = false
         }
+
         const latest = latestArgs.current
+
         // A workspace switch while the dialog is open must not clear filters for a stale target.
         if (
           !confirmed ||
@@ -156,6 +174,7 @@ export function useSidebarRevealRequests(args: {
         ) {
           return
         }
+
         if (
           latest.hasFilters &&
           !workspacePassesFilters(
@@ -167,6 +186,7 @@ export function useSidebarRevealRequests(args: {
           latest.clearFilters()
         }
       }
+
       revealWorktreeInSidebar(currentSidebarWorktreeId, {
         behavior: 'smooth',
         highlight: true,
@@ -194,6 +214,7 @@ export function useSidebarRevealRequests(args: {
       SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
       handleRevealCurrentWorkspaceRequest
     )
+
     return () => {
       window.removeEventListener(
         SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,

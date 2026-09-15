@@ -41,6 +41,7 @@ describe('web file preload API', () => {
 
   it('returns false for runtime missing-path errors from fs.pathExists', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
+
     const worktree = {
       id: 'wt-1',
       repoId: 'repo-1',
@@ -63,10 +64,12 @@ describe('web file preload API', () => {
       lastActivityAt: 0,
       workspaceStatus: 'todo'
     }
+
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
+
           if (method === 'repo.list') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -75,6 +78,7 @@ describe('web file preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           if (method === 'worktree.detectedList') {
             return Promise.resolve({
               id: `call-${runtimeCalls.length}`,
@@ -83,6 +87,7 @@ describe('web file preload API', () => {
               _meta: { runtimeId: 'runtime-1' }
             })
           }
+
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: false,

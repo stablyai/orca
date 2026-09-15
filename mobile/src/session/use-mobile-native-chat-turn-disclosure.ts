@@ -8,7 +8,9 @@ import {
 } from './use-mobile-native-chat-turn-status'
 
 const EMPTY_TURN_IDS: ReadonlySet<string> = new Set()
+
 const EMPTY_TURN_KEYS: readonly undefined[] = []
+
 const MAX_EXPANDED_TURNS = 128
 
 export type MobileNativeChatTurnRow = {
@@ -60,56 +62,70 @@ export function useMobileNativeChatTurnDisclosure({
     thinking,
     scopeKey
   })
+
   const [expandedTurns, setExpandedTurns] = useState<{
     scopeKey: string
     turnIds: ReadonlySet<string>
   }>(() => ({ scopeKey, turnIds: new Set() }))
+
   const expandedTurnIds =
     expandedTurns.scopeKey === scopeKey ? expandedTurns.turnIds : EMPTY_TURN_IDS
+
   const toggleExpandedTurn = useCallback(
     (turnKey: string) => {
       setExpandedTurns((current) => {
         const next = new Set(current.scopeKey === scopeKey ? current.turnIds : [])
+
         if (!next.delete(turnKey)) {
           if (next.size >= MAX_EXPANDED_TURNS) {
             const oldest = next.values().next().value
+
             if (oldest) {
               next.delete(oldest)
             }
           }
+
           next.add(turnKey)
         }
+
         return { scopeKey, turnIds: next }
       })
     },
     [scopeKey]
   )
+
   // Resolve each row's turn boundary once — a findLast per row is quadratic on a
   // long transcript.
   const turnKeys = useMemo(() => {
     if (!enabled) {
       return EMPTY_TURN_KEYS
     }
+
     let turnKey: string | undefined
+
     return messages.map((message) => {
       if (message.role === 'user') {
         turnKey = message.id
       }
+
       return turnKey
     })
   }, [enabled, messages])
 
   const { active, activeTurnKey, completedByTurn } = turnStatuses
   const activeActivityText = enabled && isWorking ? (activityText ?? null) : null
+
   const resolveRow = useCallback(
     (index: number, message: NativeChatMessage): MobileNativeChatTurnRow => {
       const turnKey = turnKeys[index]
+
       const turnStatus =
         !enabled || message.role !== 'user'
           ? null
           : turnKey
             ? (completedByTurn[turnKey] ?? null)
             : null
+
       return {
         turnStatus,
         turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,

@@ -14,11 +14,14 @@ export function selectDeletionRoots(nodes: TreeNode[]): TreeNode[] {
       node,
       matches: createNormalizedPathInsideOrEqualMatcher(node.path)
     }))
+
   if (directories.length === 0) {
     return [...nodes]
   }
+
   return nodes.filter((node) => {
     const candidate = normalizeRuntimePathForComparison(node.path)
+
     return !directories.some((other) => other.node !== node && other.matches(candidate))
   })
 }
@@ -42,14 +45,17 @@ export async function runBatchDeletion({
   if (needsConfirmation && !(await confirmBatch())) {
     return null
   }
+
   // Why: process sequentially in the caller's tree order so each delete
   // fully settles before the next begins — this avoids concurrent writes
   // to the same parent directory and makes failure toasts deterministic.
   const deleted: TreeNode[] = []
+
   for (const node of roots) {
     if (await deleteNode(node)) {
       deleted.push(node)
     }
   }
+
   return deleted
 }

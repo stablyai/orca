@@ -16,11 +16,15 @@ import type { StructuredAgentSessionLeaseStore } from './structured-agent-sessio
 import { retryLoadedStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
 
 const SESSION = 'session-alpha-1'
+
 const THREAD = 'thread-1'
+
 const FENCE = 8
 
 let root: string
+
 let journal: AgentSessionJournal
+
 let record: AgentSessionRecord
 
 function store(): StructuredAgentSessionLeaseStore {
@@ -28,6 +32,7 @@ function store(): StructuredAgentSessionLeaseStore {
     getRecord: () => record,
     transitionHandoff: async (_sessionId, transition) => {
       record = transition(record)
+
       return record
     }
   }
@@ -42,6 +47,7 @@ function retry(settlementId: string, deathEvidence: AgentSessionDeathEvidence) {
     settlementRetryRequired: true,
     settlementRetryId: settlementId
   })
+
   return retryLoadedStructuredAgentSessionSettlement({
     deps: { store: store() },
     sessionId: SESSION,

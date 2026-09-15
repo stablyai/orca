@@ -45,12 +45,14 @@ export function useHostedReviewStackParent({
   const normalizedBase = normalizeHostedReviewBaseRef(base).trim()
   const normalizedDefault = normalizeHostedReviewBaseRef(repoDefaultBase ?? '').trim()
   const normalizedHead = normalizeHostedReviewBaseRef(head).trim()
+
   const canLookup =
     enabled &&
     repoPath.length > 0 &&
     normalizedBase.length > 0 &&
     normalizedBase.toLowerCase() !== normalizedDefault.toLowerCase() &&
     normalizedBase.toLowerCase() !== normalizedHead.toLowerCase()
+
   const lookupKey = canLookup ? `${repoId ?? repoPath}:${normalizedBase}` : null
   const [settled, setSettled] = useState<SettledLookup | null>(null)
 
@@ -58,7 +60,9 @@ export function useHostedReviewStackParent({
     if (!lookupKey) {
       return
     }
+
     let cancelled = false
+
     const timer = setTimeout(() => {
       void fetchHostedReviewForBranch(repoPath, normalizedBase, {
         ...(repoId ? { repoId } : {}),
@@ -68,10 +72,12 @@ export function useHostedReviewStackParent({
           if (cancelled) {
             return
           }
+
           const openGitHubReview =
             review?.provider === 'github' && (review.state === 'open' || review.state === 'draft')
               ? { number: review.number, url: review.url }
               : null
+
           setSettled({ key: lookupKey, review: openGitHubReview })
         },
         () => {

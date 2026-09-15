@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => {
       { isDeleting?: boolean; error?: string | null; canForceDelete?: boolean }
     >
   }
+
   return { state }
 })
 
@@ -41,6 +42,7 @@ vi.mock('@/store/selectors', () => ({
     const rows = mocks.state.worktreeRows.filter(
       (row) => (row as { id?: string }).id === worktreeId
     ) as { hostId?: string }[]
+
     return hostId ? rows.find((row) => row.hostId === hostId) : rows[0]
   }
 }))
@@ -70,6 +72,7 @@ function runDeletesForCurrentWorktrees(
 ) {
   mocks.state.worktreeRows = [...targets]
   mocks.state.worktreeMap = new Map(targets.map((target) => [target.id, target]))
+
   return runWorktreeDeletesInParallel(targets, options)
 }
 
@@ -78,9 +81,11 @@ function deferredDeleteResult(): {
   resolve: (value: { ok: true }) => void
 } {
   let resolve: (value: { ok: true }) => void = () => {}
+
   const promise = new Promise<{ ok: true }>((innerResolve) => {
     resolve = innerResolve
   })
+
   return { promise, resolve }
 }
 
@@ -115,6 +120,7 @@ describe('runWorktreeDeletesInParallel', () => {
         }
       }
     })
+
     const targets = Array.from({ length: 100 }, (_, index) => ({
       id: `wt-${index}`,
       displayName: `workspace ${index}`,
@@ -128,9 +134,11 @@ describe('runWorktreeDeletesInParallel', () => {
     const batchId = begin.mock.calls[0]?.[0].batchId
     expect(batchId).toEqual(expect.any(String))
     expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(100)
+
     for (const call of mocks.state.removeWorktree.mock.calls) {
       expect(call[2]).toMatchObject({ snapshotPruneBatchId: batchId })
     }
+
     expect(finish).toHaveBeenCalledOnce()
     expect(finish).toHaveBeenCalledWith({ batchId })
     expect(record).not.toHaveBeenCalled()
@@ -281,6 +289,7 @@ describe('runWorktreeDeletesInParallel', () => {
       repoId: 'repo-a',
       path: '/workspaces/one'
     }
+
     mocks.state.removeWorktree
       .mockResolvedValueOnce({ ok: true })
       .mockResolvedValueOnce({ ok: false, error: 'selector_not_found' })
@@ -346,6 +355,7 @@ describe('runWorktreeDeletesInParallel', () => {
           error: 'changed files',
           canForceDelete: true
         }
+
         return { ok: false, error: 'changed files' }
       }
     )
@@ -379,6 +389,7 @@ describe('runWorktreeDeletesInParallel', () => {
       path: '/workspaces/parent/child',
       hostId: 'ssh:host-a' as const
     }
+
     const hostBParent = {
       id: 'parent-b',
       instanceId: 'parent-b-instance',
@@ -387,6 +398,7 @@ describe('runWorktreeDeletesInParallel', () => {
       path: '/workspaces/parent',
       hostId: 'ssh:host-b' as const
     }
+
     mocks.state.removeWorktree.mockImplementation(
       async ({ executionHostId }: { executionHostId: string | null }) =>
         executionHostId === hostAChild.hostId ? { ok: false, error: 'changed files' } : { ok: true }

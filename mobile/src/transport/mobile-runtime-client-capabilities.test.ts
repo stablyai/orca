@@ -11,6 +11,7 @@ import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from './mobile-runtime-client-capa
  *  dropping every capability, not just the excess — when the array is longer than this or any
  *  entry is longer than 128 chars. Growing past it would look exactly like an old client. */
 const HOST_CAPABILITY_LIMIT = 64
+
 const HOST_CAPABILITY_NAME_LIMIT = 128
 
 describe('mobile runtime client capabilities', () => {
@@ -27,6 +28,7 @@ describe('mobile runtime client capabilities', () => {
 
   it('stays inside the bounds the host parses, which fail closed to no capabilities at all', () => {
     expect(MOBILE_RUNTIME_CLIENT_CAPABILITIES.length).toBeLessThanOrEqual(HOST_CAPABILITY_LIMIT)
+
     for (const capability of MOBILE_RUNTIME_CLIENT_CAPABILITIES) {
       expect(capability.length).toBeGreaterThan(0)
       expect(capability.length).toBeLessThanOrEqual(HOST_CAPABILITY_NAME_LIMIT)

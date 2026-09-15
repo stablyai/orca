@@ -21,6 +21,7 @@ import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connecti
 import { createRestartSession } from './helpers/orca-restart'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const TAB_COUNT = 6
 
 test.use({ seedTestRepo: false })
@@ -42,6 +43,7 @@ test.describe('SSH cold activation restore', () => {
   }, testInfo) => {
     test.setTimeout(240_000)
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
@@ -55,6 +57,7 @@ test.describe('SSH cold activation restore', () => {
       while ((await readRemoteTerminalTabs(orcaPage, remote.worktreeId)).length < TAB_COUNT) {
         await createRemoteTerminalTab(orcaPage, remote.worktreeId)
       }
+
       const beforeReload = await readRemoteTerminalTabs(orcaPage, remote.worktreeId)
       expect(beforeReload).toHaveLength(TAB_COUNT)
       expect(new Set(beforeReload.map((tab) => tab.ptyId)).size).toBe(TAB_COUNT)
@@ -66,6 +69,7 @@ test.describe('SSH cold activation restore', () => {
             orcaPage.evaluate(
               async ({ targetId, worktreePath }) => {
                 const snapshot = await window.api.remoteWorkspace.get({ targetId })
+
                 return (
                   snapshot?.session.tabsByWorktreePath[worktreePath]?.map((tab) => tab.id) ?? []
                 )
@@ -86,9 +90,11 @@ test.describe('SSH cold activation restore', () => {
             orcaPage.evaluate(
               async ({ targetId, worktreeId, expectedTabIds }) => {
                 const session = await window.api.session.get()
+
                 const persistedTabIds = new Set(
                   (session.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
                 )
+
                 return (
                   session.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
                   expectedTabIds.every((tabId) => persistedTabIds.has(tabId))
@@ -145,9 +151,11 @@ test.describe('SSH cold activation restore', () => {
       )
 
       const firstTabId = beforeReload[0]?.id
+
       if (!firstTabId) {
         throw new Error('Restored SSH tabs disappeared')
       }
+
       // Six restored tabs overflow the strip at CI's window size and the restore pins it to the END,
       // so Terminal 1 starts outside the scroll viewport. Neither `click()` nor
       // `scrollIntoViewIfNeeded()` can reach it: both wait for the element to hold still, and the
@@ -169,12 +177,15 @@ test.describe('SSH cold activation restore', () => {
               el.scrollLeft = 0
             })
             const box = await firstTab.boundingBox()
+
             if (!box) {
               return null
             }
+
             await orcaPage.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
             await orcaPage.mouse.down()
             await orcaPage.mouse.up()
+
             return orcaPage.evaluate(() => window.__store?.getState().activeTabId ?? null)
           },
           {
@@ -186,9 +197,11 @@ test.describe('SSH cold activation restore', () => {
       await orcaPage.evaluate((tabId) => {
         const manager = window.__paneManagers?.get(tabId)
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+
         if (!pane) {
           throw new Error('Restored SSH pane unavailable')
         }
+
         pane.terminal.options.screenReaderMode = true
         pane.terminal.refresh(0, pane.terminal.rows - 1)
       }, firstTabId)
@@ -216,6 +229,7 @@ test.describe('SSH cold activation restore', () => {
     let target: DockerSshRelayTarget | null = null
     let firstApp: ElectronApplication | null = null
     let secondApp: ElectronApplication | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       const firstLaunch = await restart.launch()
@@ -242,9 +256,11 @@ test.describe('SSH cold activation restore', () => {
 
       const beforeTabs = await readRemoteTerminalTabs(firstLaunch.page, remote.worktreeId)
       const restoredTabId = beforeTabs.find((tab) => tab.ptyId === firstPtyId)?.id
+
       if (!restoredTabId) {
         throw new Error('Active SSH terminal was not persisted in its worktree')
       }
+
       await firstLaunch.page.evaluate(() => window.dispatchEvent(new Event('beforeunload')))
       await expect
         .poll(
@@ -252,6 +268,7 @@ test.describe('SSH cold activation restore', () => {
             firstLaunch.page.evaluate(
               async ({ targetId, worktreeId, tabId }) => {
                 const persisted = await window.api.session.get()
+
                 return (
                   persisted.activeConnectionIdsAtShutdown?.includes(targetId) === true &&
                   persisted.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId) === true
@@ -277,9 +294,11 @@ test.describe('SSH cold activation restore', () => {
       await secondLaunch.page.evaluate((tabId) => {
         const manager = window.__paneManagers?.get(tabId)
         const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+
         if (!pane) {
           throw new Error('Restored SSH pane unavailable')
         }
+
         pane.terminal.options.screenReaderMode = true
         pane.terminal.refresh(0, pane.terminal.rows - 1)
       }, restoredTabId)
@@ -300,9 +319,11 @@ test.describe('SSH cold activation restore', () => {
       if (secondApp) {
         await restart.close(secondApp)
       }
+
       if (firstApp) {
         await restart.close(firstApp)
       }
+
       await restart.dispose()
       cleanupDockerSshRelayTarget(target)
     }

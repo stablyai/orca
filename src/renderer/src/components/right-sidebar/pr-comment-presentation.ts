@@ -58,17 +58,21 @@ export function getPRCommentGroupSurfaceClasses(
   options?: { queued?: boolean }
 ): string {
   const classes = [presentation.group]
+
   if (options?.queued) {
     classes.push(presentation.groupQueued)
+
     // Why: queued selection already owns the leading affordance; stacking the
     // open rail next to its checkbox makes the card edge visually crowded.
     return classes.join(' ')
   }
+
   if (actionState === 'open' && presentation.groupOpen) {
     classes.push(presentation.groupOpen)
   } else if (actionState === 'resolved') {
     classes.push(presentation.groupResolved)
   }
+
   return classes.join(' ')
 }
 
@@ -120,11 +124,17 @@ const RESOLVED_SECTION_LABEL =
 // Why: matches the document-variant body (PullRequestPage/GitHubItemDialog) so the same
 // bot markdown reads the same everywhere; 12px left no room for a heading step above it.
 const CARD_COMMENT_BODY_SIZE = 'text-[13px] leading-relaxed'
+
 const CARD_COMMENT_AUTHOR_SIZE = 'text-[13px]'
+
 const CARD_COMMENT_LIST_GAP = 'gap-2'
+
 const CARD_COMMENT_BODY_PADDING = 'px-4 py-2.5'
+
 const CARD_COMMENT_HEADER_PADDING = 'px-3 py-2'
+
 const CARD_COMMENT_META_INDENT = 'pl-7'
+
 const CARD_COMMENT_META_SELECTION_INDENT = 'pl-[3.25rem]'
 
 const RESOLVED_SECTION_TRIGGER = cn(
@@ -142,10 +152,13 @@ export function resolvePRCommentPresentationVariant(): PRCommentPresentationVari
   if (typeof window === 'undefined') {
     return DEFAULT_PR_COMMENT_PRESENTATION_VARIANT
   }
+
   const stored = window.localStorage.getItem(STORAGE_KEY)
+
   if (isVariant(stored)) {
     return stored
   }
+
   return DEFAULT_PR_COMMENT_PRESENTATION_VARIANT
 }
 

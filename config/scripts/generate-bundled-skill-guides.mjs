@@ -10,6 +10,7 @@ import {
 } from './skill-stub-composition.mjs'
 
 const SCRIPT_DIR = import.meta.dirname
+
 const REPO_ROOT = path.resolve(SCRIPT_DIR, '..', '..')
 
 const CANONICAL_GUIDE_NAMES = [
@@ -59,10 +60,13 @@ function normalizeMarkdown(markdown) {
 function parseFrontmatter(markdown, sourcePath) {
   const normalized = normalizeMarkdown(markdown)
   const match = /^---\s*\n([\s\S]*?)\n---\s*(?:\n|$)/.exec(normalized)
+
   if (!match) {
     throw new Error(`Guide source has no YAML frontmatter: ${sourcePath}`)
   }
+
   let values
+
   try {
     values = parse(match[1])
   } catch (error) {
@@ -70,6 +74,7 @@ function parseFrontmatter(markdown, sourcePath) {
       `Guide source has invalid YAML frontmatter: ${sourcePath}: ${error instanceof Error ? error.message : String(error)}`
     )
   }
+
   if (
     !values ||
     typeof values !== 'object' ||
@@ -78,6 +83,7 @@ function parseFrontmatter(markdown, sourcePath) {
   ) {
     throw new Error(`Guide source must declare name and description: ${sourcePath}`)
   }
+
   return {
     name: values.name,
     description: values.description.replace(/\s+/g, ' ').trim()
@@ -87,9 +93,11 @@ function parseFrontmatter(markdown, sourcePath) {
 function frontmatterBlock(markdown, sourcePath) {
   const normalized = normalizeMarkdown(markdown)
   const match = /^---[ \t]*\n[\s\S]*?\n---[ \t]*\n/.exec(normalized)
+
   if (!match) {
     throw new Error(`Guide source has no YAML frontmatter block: ${sourcePath}`)
   }
+
   return match[0]
 }
 
@@ -99,25 +107,31 @@ function frontmatterBlock(markdown, sourcePath) {
 // normalized to LF with exactly one trailing newline.
 function composeStubProjection(guideMarkdown, stubBody, sourcePath, { sharedBlocks }) {
   const block = frontmatterBlock(guideMarkdown, sourcePath)
+
   const composed = renderSharedStubBody(normalizeMarkdown(stubBody), {
     blocks: sharedBlocks,
     sourcePath
   })
+
   const body = composed.replace(/^\n+/, '').replace(/\n*$/, '\n')
+
   return `${block}\n${body}`
 }
 
 async function readSharedStubBlocks(repoRoot) {
   const sourcePath = path.join(repoRoot, ...SHARED_STUB_SOURCE.split('/'))
   let markdown
+
   try {
     markdown = normalizeMarkdown(await readFile(sourcePath, 'utf8'))
   } catch (error) {
     if (error.code === 'ENOENT') {
       throw new Error(`Stub topics require the shared fragment: ${SHARED_STUB_SOURCE}`)
     }
+
     throw error
   }
+
   return parseSharedStubBlocks(markdown, SHARED_STUB_SOURCE)
 }
 
@@ -137,16 +151,19 @@ function composeFullMarkdown(markdown, references) {
   if (references.length === 0) {
     return markdown
   }
+
   const packageHeader =
     '\n\n---\n\n# Bundled references\n\n' +
     'These references belong to the version-matched guide above. Read only the documents ' +
     'named by its action gates.\n'
+
   const documents = references
     .map(
       ({ relativePath, markdown: referenceMarkdown }) =>
         `\n<!-- bundled-reference: ${relativePath} -->\n\n${referenceMarkdown.trimEnd()}\n`
     )
     .join('')
+
   return `${markdown.trimEnd()}${packageHeader}${documents}`
 }
 
@@ -154,38 +171,46 @@ function serializeEmbeddedModule(guides) {
   const referenceConstants = guides.flatMap((guide) =>
     guide.references.map((reference) => referenceConstantName(guide.name, reference.name))
   )
+
   // Why: the constant name flattens guide and reference names, so two topics could otherwise
   // produce one identifier and silently serve the wrong reference.
   if (new Set(referenceConstants).size !== referenceConstants.length) {
     throw new Error(`Guide reference constant names collide: ${referenceConstants.join(', ')}`)
   }
+
   const markdownConstants = guides
     .flatMap((guide) => {
       const constants = [
         `// oxfmt-ignore\nconst ${constantName(guide.name)} = ${JSON.stringify(guide.markdown)}`
       ]
+
       if (guide.fullMarkdown !== guide.markdown) {
         constants.push(
           `// oxfmt-ignore\nconst ${fullConstantName(guide.name)} = ${JSON.stringify(guide.fullMarkdown)}`
         )
       }
+
       for (const reference of guide.references) {
         constants.push(
           `// oxfmt-ignore\nconst ${referenceConstantName(guide.name, reference.name)} = ${JSON.stringify(reference.markdown)}`
         )
       }
+
       return constants
     })
     .join('\n\n')
+
   const guideEntries = guides
     .map((guide) => {
       const markdownConstant = constantName(guide.name)
+
       const referenceEntries = guide.references
         .map(
           (reference) =>
             `{ name: ${JSON.stringify(reference.name)}, markdown: ${referenceConstantName(guide.name, reference.name)} }`
         )
         .join(', ')
+
       return [
         '  {',
         `    name: ${JSON.stringify(guide.name)},`,
@@ -205,29 +230,36 @@ function serializeEmbeddedModule(guides) {
 async function readGuideReferences(repoRoot, guideName) {
   const referenceRoot = path.join(repoRoot, 'skill-guides', guideName, 'references')
   let entries
+
   try {
     entries = await readdir(referenceRoot, { withFileTypes: true })
   } catch (error) {
     if (error.code === 'ENOENT') {
       return []
     }
+
     throw error
   }
+
   const unsupported = entries.find((entry) => !entry.isFile() || !entry.name.endsWith('.md'))
+
   if (unsupported) {
     throw new Error(
       `Guide references must be Markdown files: skill-guides/${guideName}/references/${unsupported.name}`
     )
   }
+
   return Promise.all(
     entries
       .sort((left, right) => left.name.localeCompare(right.name, 'en'))
       .map(async (entry) => {
         const sourcePath = path.join(referenceRoot, entry.name)
         const markdown = normalizeMarkdown(await readFile(sourcePath, 'utf8'))
+
         if (!markdown.trim()) {
           throw new Error(`Guide reference is empty: ${toPosixRelativePath(repoRoot, sourcePath)}`)
         }
+
         return { name: entry.name.slice(0, -3), relativePath: `references/${entry.name}`, markdown }
       })
   )
@@ -236,14 +268,17 @@ async function readGuideReferences(repoRoot, guideName) {
 function assertAliasContract(guides) {
   const canonicalNames = new Set(guides.map((guide) => guide.name))
   const seenAliases = new Set()
+
   for (const guide of guides) {
     for (const alias of guide.aliases) {
       if (canonicalNames.has(alias)) {
         throw new Error(`Guide alias collides with canonical name: ${alias}`)
       }
+
       if (seenAliases.has(alias)) {
         throw new Error(`Guide alias is assigned more than once: ${alias}`)
       }
+
       seenAliases.add(alias)
     }
   }
@@ -252,6 +287,7 @@ function assertAliasContract(guides) {
 async function assertStubSourcesMatchTopics(repoRoot) {
   const stubRoot = path.join(repoRoot, 'skill-stubs')
   let names = []
+
   try {
     names = (await readdir(stubRoot, { withFileTypes: true }))
       .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
@@ -262,13 +298,16 @@ async function assertStubSourcesMatchTopics(repoRoot) {
       throw error
     }
   }
+
   const found = names.sort((left, right) => left.localeCompare(right, 'en'))
   const expected = [...STUB_TOPICS].sort((left, right) => left.localeCompare(right, 'en'))
+
   if (JSON.stringify(found) !== JSON.stringify(expected)) {
     throw new Error(
       `skill-stubs sources must match STUB_TOPICS.\nExpected: ${expected.join(', ') || '(none)'}\nFound: ${found.join(', ') || '(none)'}`
     )
   }
+
   for (const name of STUB_TOPICS) {
     if (!CANONICAL_GUIDE_NAMES.includes(name)) {
       throw new Error(`Stub topic is not a canonical guide: ${name}`)
@@ -284,33 +323,40 @@ function toPosixRelativePath(repoRoot, filePath, pathModule = path) {
 
 async function buildArtifacts(repoRoot = REPO_ROOT) {
   const guideRoot = path.join(repoRoot, 'skill-guides')
+
   const sourceFiles = (await readdir(guideRoot, { withFileTypes: true }))
     .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
     .map((entry) => entry.name.slice(0, -3))
     .sort((left, right) => left.localeCompare(right, 'en'))
+
   const expectedNames = [...CANONICAL_GUIDE_NAMES].sort((left, right) =>
     left.localeCompare(right, 'en')
   )
+
   if (JSON.stringify(sourceFiles) !== JSON.stringify(expectedNames)) {
     throw new Error(
       `Guide sources must match the canonical topic list.\nExpected: ${expectedNames.join(', ')}\nFound: ${sourceFiles.join(', ')}`
     )
   }
+
   await assertStubSourcesMatchTopics(repoRoot)
 
   const stubTopics = new Set(STUB_TOPICS)
   const sharedBlocks = stubTopics.size > 0 ? await readSharedStubBlocks(repoRoot) : new Map()
   const guides = []
   const projections = []
+
   for (const name of expectedNames) {
     const sourcePath = path.join(guideRoot, `${name}.md`)
     // Why: Git may render text with native EOLs despite repository policy; the
     // embedded guide and generated projection must have one platform-neutral identity.
     const markdown = normalizeMarkdown(await readFile(sourcePath, 'utf8'))
     const frontmatter = parseFrontmatter(markdown, toPosixRelativePath(repoRoot, sourcePath))
+
     if (frontmatter.name !== name) {
       throw new Error(`Guide source ${name}.md declares mismatched name ${frontmatter.name}`)
     }
+
     const aliases = GUIDE_ALIASES[name]
     const references = await readGuideReferences(repoRoot, name)
     // Why: the embedded table always carries the full guide (served by `skills get`);
@@ -329,6 +375,7 @@ async function buildArtifacts(repoRoot = REPO_ROOT) {
       }))
     })
     const stubPath = path.join(repoRoot, 'skill-stubs', `${name}.md`)
+
     const content = stubTopics.has(name)
       ? composeStubProjection(
           markdown,
@@ -337,11 +384,13 @@ async function buildArtifacts(repoRoot = REPO_ROOT) {
           { sharedBlocks }
         )
       : markdown
+
     projections.push({
       path: path.join(repoRoot, 'skills', name, 'SKILL.md'),
       content
     })
   }
+
   assertAliasContract(guides)
 
   return [
@@ -362,9 +411,11 @@ async function writeArtifacts(artifacts) {
 
 async function verifyArtifacts(artifacts, repoRoot = REPO_ROOT) {
   const stale = []
+
   for (const artifact of artifacts) {
     try {
       await access(artifact.path, constants.R_OK)
+
       if ((await readFile(artifact.path, 'utf8')) !== artifact.content) {
         stale.push(artifact.path)
       }
@@ -372,6 +423,7 @@ async function verifyArtifacts(artifacts, repoRoot = REPO_ROOT) {
       stale.push(artifact.path)
     }
   }
+
   if (stale.length > 0) {
     throw new Error(
       `Generated bundled skill guides are stale:\n${stale

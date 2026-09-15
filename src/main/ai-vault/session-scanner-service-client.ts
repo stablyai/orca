@@ -48,13 +48,17 @@ export class AiVaultScannerServiceClient {
     if (this.disposed) {
       return Promise.reject(new Error('AI Vault service client was disposed.'))
     }
+
     if (signal?.aborted) {
       return Promise.reject(createAiVaultScanCancelledError())
     }
+
     if (this.queue.length + this.active.size >= AI_VAULT_SERVICE_MAX_CALLS) {
       return Promise.reject(new Error('AI Vault service queue is full.'))
     }
+
     const request = { ...body, id: this.nextId++ } as AiVaultServiceRequest
+
     return new Promise<T>((resolve, reject) => {
       const call: AiVaultServicePendingCall = {
         request,
@@ -68,10 +72,12 @@ export class AiVaultScannerServiceClient {
         sent: false,
         startRetried: false
       }
+
       if (signal) {
         call.onAbort = () => this.cancel(call)
         signal.addEventListener('abort', call.onAbort, { once: true })
       }
+
       this.queue.push(call)
       this.idleRetirement.clear()
       this.pump()
@@ -83,10 +89,13 @@ export class AiVaultScannerServiceClient {
     if (this.disposed) {
       return
     }
+
     if (!this.sessionSearch.record(init, this.child)) {
       this.scheduleIdleIfNeeded()
+
       return
     }
+
     this.idleRetirement.clear()
     this.startSessionSearchChild()
   }
@@ -100,8 +109,10 @@ export class AiVaultScannerServiceClient {
     if (paths.length === 0 || this.disposed) {
       return
     }
+
     this.idleRetirement.clear()
     const child = await this.ensureChild()
+
     return this.invalidations.send(child, paths, {
       busy: () => this.active.size > 0,
       onFault: (error) => this.onFault(error)
@@ -112,13 +123,16 @@ export class AiVaultScannerServiceClient {
     if (this.disposed) {
       return
     }
+
     this.disposed = true
     this.restartPolicy.dispose()
     this.idleRetirement.clear()
     const error = new Error('AI Vault service client was disposed.')
+
     for (const call of [...this.active.values(), ...this.queue]) {
       rejectAiVaultServiceCall(call, error)
     }
+
     this.active.clear()
     this.queue.length = 0
     this.invalidations.rejectAll(error)
@@ -129,14 +143,18 @@ export class AiVaultScannerServiceClient {
     if (this.restartPolicy.restartScheduled) {
       return
     }
+
     for (const lane of ['cache', 'interactive'] as const) {
       if (this.active.has(lane)) {
         continue
       }
+
       const index = this.queue.findIndex((call) => call.lane === lane)
+
       if (index === -1) {
         continue
       }
+
       const call = this.queue.splice(index, 1)[0]!
       this.active.set(lane, call)
       void this.ensureChild().then(
@@ -151,12 +169,14 @@ export class AiVaultScannerServiceClient {
           if (this.active.get(lane) !== call) {
             return
           }
+
           this.active.delete(lane)
           this.retryStartOrReject(call, error)
           this.pump()
         }
       )
     }
+
     this.startSessionSearchChild()
     this.scheduleIdleIfNeeded()
   }
@@ -171,6 +191,7 @@ export class AiVaultScannerServiceClient {
     if (this.disposed || !this.sessionSearch.holdsChild || this.child || this.readyWaiter) {
       return
     }
+
     void this.ensureChild().catch((error: unknown) => {
       this.options.onStderr?.(`session search child unavailable: ${aiVaultServiceErrorText(error)}`)
     })
@@ -189,38 +210,50 @@ export class AiVaultScannerServiceClient {
     if (this.child && !this.readyWaiter) {
       return Promise.resolve(this.child)
     }
+
     if (this.readyWaiter) {
       return this.readyWaiter.promise
     }
+
     const startError = this.restartPolicy.startError()
+
     if (startError) {
       return Promise.reject(startError)
     }
+
     let child: ChildProcess
+
     try {
       child = this.options.processFactory()
     } catch (error) {
       this.restartPolicy.recordFault(() => this.pump())
+
       return Promise.reject(error instanceof Error ? error : new Error(String(error)))
     }
+
     this.child = child
+
     const waiter = createAiVaultServiceReadyWaiter(AI_VAULT_SERVICE_READY_TIMEOUT_MS, () =>
       this.onFault(new Error('AI Vault service did not become ready.'))
     )
+
     this.readyWaiter = waiter
     attachAiVaultServiceChild(child, this.options.init(), {
       onMessage: (message) => this.onMessage(message),
       onFault: (error) => this.onFault(error),
       onStderr: this.options.onStderr
     })
+
     return waiter.promise
   }
 
   private onMessage(message: unknown): void {
     if (!isAiVaultServiceChildMessage(message)) {
       this.onFault(new Error('AI Vault service sent a malformed message.'))
+
       return
     }
+
     if (message.type === 'sessionSearchRoots') {
       const child = this.child
       const resolve = this.options.resolveSessionSearchRoots
@@ -232,30 +265,41 @@ export class AiVaultScannerServiceClient {
             child.send({ type: 'sessionSearchRoots', id: message.id, roots }, () => undefined)
           }
         })
+
       return
     }
+
     if (message.type === 'ready') {
       const waiter = this.readyWaiter
+
       if (!waiter || !this.child) {
         return
       }
+
       clearTimeout(waiter.timer)
       this.readyWaiter = null
       waiter.resolve(this.child)
+
       return
     }
+
     if (message.type === 'invalidated') {
       if (this.invalidations.settle(message.generation)) {
         this.scheduleIdleIfNeeded()
       }
+
       return
     }
+
     const call = [...this.active.values()].find((entry) => entry.request.id === message.id)
+
     if (!call) {
       return
     }
+
     this.active.delete(call.lane)
     clearAiVaultServiceCall(call)
+
     if (!call.cancelled) {
       if (message.type === 'error') {
         call.reject(new Error(message.message))
@@ -263,6 +307,7 @@ export class AiVaultScannerServiceClient {
         call.resolve((message as { value: AiVaultServiceResultValue['value'] }).value)
       }
     }
+
     this.pump()
   }
 
@@ -278,25 +323,31 @@ export class AiVaultScannerServiceClient {
 
   private onFault(error: Error): void {
     const child = this.child
+
     if (!child) {
       return
     }
+
     this.child = null
     child.removeAllListeners()
     child.kill()
+
     if (this.readyWaiter) {
       clearTimeout(this.readyWaiter.timer)
       this.readyWaiter.reject(error)
       this.readyWaiter = null
     }
+
     // Recorded before the pending calls are settled so retryStartOrReject can see
     // whether a respawn is actually coming.
     this.restartPolicy.recordFault(() => this.pump())
     const active = [...this.active.values()]
     this.active.clear()
+
     for (const call of active) {
       this.retryStartOrReject(call, error)
     }
+
     this.invalidations.rejectAll(error)
   }
 
@@ -316,9 +367,11 @@ export class AiVaultScannerServiceClient {
     this.idleRetirement.clear()
     const child = this.child
     this.child = null
+
     if (!child) {
       return
     }
+
     retireAiVaultServiceChild(child)
   }
 }

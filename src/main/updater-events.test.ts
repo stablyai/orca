@@ -34,9 +34,11 @@ vi.mock('./linux-update-package-type', () => ({
 }))
 
 vi.mock('./updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))
+
 vi.mock('./updater-lifecycle-diagnostics', () => ({ recordUpdaterLifecycle: vi.fn() }))
 
 const DEB_PATH = '/home/tester/.cache/orca-updater/pending/orca-ide_1.0.61_amd64.deb'
+
 // A real 64-byte SHA-512; capture rejects a digest that cannot decode to one.
 const DEB_SHA512 =
   'LHlL7dKoqg98gS2nfQv878dK+UoktbAkm4M20/hoJ2Qr0Kqsa3MSL4VmWy/Lll/MYjQFkpvOxduQ/vswentozA=='
@@ -48,9 +50,11 @@ function createUpdaterStub(): {
   emit: (event: string, ...args: unknown[]) => void
 } {
   const handlers = new Map<string, ((...args: unknown[]) => void)[]>()
+
   const stub = {
     on: (event: string, handler: (...args: unknown[]) => void) => {
       handlers.set(event, [...(handlers.get(event) ?? []), handler])
+
       return stub
     },
     emit: (event: string, ...args: unknown[]) => {
@@ -59,6 +63,7 @@ function createUpdaterStub(): {
       }
     }
   }
+
   return stub
 }
 
@@ -137,6 +142,7 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
     const { registerAutoUpdaterHandlers } = await import('./updater-events')
     registerAutoUpdaterHandlers(context)
     const { getTrackedLinuxPackageArtifact } = await import('./linux-package-update-recovery')
+
     return {
       context,
       emit: (context.autoUpdater as unknown as ReturnType<typeof createUpdaterStub>).emit,
@@ -202,6 +208,7 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
       version: '1.0.61',
       retryable: false
     }
+
     expect(context.sendStatus).toHaveBeenLastCalledWith(status)
     expect(context.sendStatus).not.toHaveBeenCalledWith(
       expect.objectContaining({ recovery: expect.anything() })
@@ -215,10 +222,12 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
     const { emit, context } = await register()
 
     emit('update-downloaded', downloadedEvent())
+
     if (process.platform === 'darwin') {
       const handler = nativeUpdaterMock.on.mock.calls.find(
         ([eventName]) => eventName === 'update-downloaded'
       )?.[1] as (() => void) | undefined
+
       handler?.()
     }
 
@@ -400,6 +409,7 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
     const { emit, getArtifact } = await register({
       getPendingInstallVersion: vi.fn(() => '1.0.62')
     })
+
     emit('update-downloaded', downloadedEvent())
 
     emit('download-progress', { percent: 12 })
@@ -415,9 +425,11 @@ describe('registerAutoUpdaterHandlers linux package artifact tracking', () => {
     async (externallyManaged) => {
       isExternallyManagedLinuxInstallMock.mockReturnValue(externallyManaged)
       let status: UpdateStatus = { state: 'downloading', percent: 100, version: '1.0.61' }
+
       const { emit, context, getArtifact } = await register({
         getCurrentStatus: vi.fn(() => status)
       })
+
       emit('update-downloaded', downloadedEvent())
 
       // Why: the download already emitted the manual-install status, so waitFor would pass on that

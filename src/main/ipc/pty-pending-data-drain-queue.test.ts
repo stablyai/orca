@@ -12,9 +12,11 @@ function pending(data: string): PendingPtyData {
 function createQueueState() {
   const active = new Set<string>()
   const blocked = new Set<string>()
+
   const queue = new PtyPendingDataDrainQueue((id) =>
     blocked.has(id) ? 'blocked' : active.has(id) ? 'active' : 'background'
   )
+
   return { active, blocked, queue }
 }
 
@@ -38,14 +40,18 @@ describe('PtyPendingDataDrainQueue', () => {
 
     const round = queue.beginRound()
     const order: string[] = []
+
     for (;;) {
       const selection = queue.takeNext(round)
+
       if (!selection) {
         break
       }
+
       order.push(selection.id)
       queue.remove(selection)
     }
+
     queue.endRound(round)
 
     expect(order).toEqual(['active-1', 'active-2', 'background-1', 'background-2'])
@@ -95,14 +101,18 @@ describe('PtyPendingDataDrainQueue', () => {
     expect(queue.getDebugSnapshot().allocationIdsByPty.b).toBe(2)
 
     const currentRoundOrder: string[] = []
+
     for (;;) {
       const selection = queue.takeNext(firstRound)
+
       if (!selection) {
         break
       }
+
       currentRoundOrder.push(selection.id)
       queue.remove(selection)
     }
+
     queue.endRound(firstRound)
 
     expect(currentRoundOrder).toEqual(['c'])
@@ -129,14 +139,18 @@ describe('PtyPendingDataDrainQueue', () => {
 
     const secondRound = queue.beginRound()
     const order: string[] = []
+
     for (;;) {
       const selection = queue.takeNext(secondRound)
+
       if (!selection) {
         break
       }
+
       order.push(selection.id)
       queue.remove(selection)
     }
+
     queue.endRound(secondRound)
 
     expect(order).toEqual(['earlier', 'later'])
@@ -182,10 +196,12 @@ describe('PtyPendingDataDrainQueue', () => {
       terminalHiddenDeliveryGate: true,
       unrelated: 0
     }
+
     const queue = new PtyPendingDataDrainQueue(
       () => 'background',
       () => settings.terminalMainSideEffectAuthority && settings.terminalHiddenDeliveryGate
     )
+
     queue.set('a', pending('a'))
     const firstRound = queue.beginRound()
     queue.endRound(firstRound)
@@ -343,6 +359,7 @@ describe('PtyPendingDataDrainQueue', () => {
   it('visits 100 one-chunk candidates exactly once across 50 bounded rounds', () => {
     const { queue } = createQueueState()
     const legacy = new Map<string, PendingPtyData>()
+
     for (let index = 0; index < 100; index++) {
       const id = `pty-${index}`
       const value = pending(String(index))
@@ -352,17 +369,23 @@ describe('PtyPendingDataDrainQueue', () => {
 
     let rounds = 0
     let timerDecisions = 1
+
     while (queue.size > 0) {
       rounds += 1
       const round = queue.beginRound()
+
       for (let writes = 0; writes < 2; writes++) {
         const selection = queue.takeNext(round)
+
         if (!selection) {
           break
         }
+
         queue.remove(selection)
       }
+
       queue.endRound(round)
+
       if (queue.size > 0) {
         timerDecisions += 1
       }
@@ -370,12 +393,15 @@ describe('PtyPendingDataDrainQueue', () => {
 
     let legacySelectionVisits = 0
     let legacyTimerDecisions = 1
+
     while (legacy.size > 0) {
       const snapshot = [...legacy.keys()]
       legacySelectionVisits += snapshot.length
+
       for (const id of snapshot.slice(0, 2)) {
         legacy.delete(id)
       }
+
       if (legacy.size > 0) {
         legacyTimerDecisions += 1
       }

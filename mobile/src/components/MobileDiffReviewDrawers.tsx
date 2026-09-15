@@ -18,6 +18,7 @@ type Props = {
 export function MobileDiffReviewDrawers({ controller }: Props) {
   const sendActions = useSendActions(controller)
   const overflowActions = useOverflowActions(controller)
+
   return (
     <>
       <ActionSheetModal
@@ -51,6 +52,7 @@ export function MobileDiffReviewDrawers({ controller }: Props) {
         onConfirm={() => {
           const target = controller.discardTarget
           controller.setDiscardTarget(null)
+
           if (target) {
             void controller.runGitMutation('git.discard', target)
           }
@@ -66,6 +68,7 @@ export function MobileDiffReviewDrawers({ controller }: Props) {
 function useSendActions(controller: ReturnType<typeof useMobileDiffReviewController>) {
   return useMemo<ActionSheetAction[]>(() => {
     const comments = controller.unsentComments
+
     const terminalActions =
       controller.sendSheet?.kind === 'ready' || controller.sendSheet?.kind === 'error'
         ? controller.sendSheet.terminals.map((terminal) => ({
@@ -76,6 +79,7 @@ function useSendActions(controller: ReturnType<typeof useMobileDiffReviewControl
             onPress: () => void controller.sendPromptToTerminal(terminal.terminal, comments)
           }))
         : []
+
     return [
       ...terminalActions,
       {
@@ -162,6 +166,7 @@ function sendSheetMessage(
 
 function NoteComposerDrawer({ controller }: Props) {
   const composer = controller.composer
+
   return (
     <BottomDrawer visible={composer !== null} onClose={controller.closeComposer}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -236,6 +241,7 @@ function SaveNoteButton({
   composer: ReturnType<typeof useMobileDiffReviewController>['composer']
 }) {
   const disabled = controller.composerBody.trim().length === 0
+
   return (
     <Pressable
       style={({ pressed }) => [
@@ -257,6 +263,7 @@ function SaveNoteButton({
 function CompletionDrawer({ controller }: Props) {
   const noteCount =
     controller.screenState.kind === 'ready' ? controller.screenState.comments.length : 0
+
   return (
     <BottomDrawer
       visible={controller.showCompletion}

@@ -24,8 +24,11 @@ vi.mock('../telemetry/cohort-classifier', () => ({
 }))
 
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
+
 const TAB = structuredAgentSessionTabId(SESSION)
+
 const STRUCTURED_PANE = structuredAgentSessionPaneKey(TAB, SESSION)
+
 const OBSERVED_AT = 1_757_030_400_000
 
 function summary(over: Partial<AgentSessionStatusSummary> = {}): AgentSessionStatusSummary {
@@ -133,9 +136,11 @@ describe('AgentHookServer ingestStructuredStatus', () => {
   // so a remnant here would be an unclearable row that every null-status publish re-minted.
   it('leaves no resume-identity remnant behind, even carrying a provider session', () => {
     const server = new AgentHookServer()
+
     const withProviderSession = summary({
       providerSession: { key: 'session_id', id: 'codex-thread-1' }
     })
+
     server.ingestStructuredStatus(withProviderSession)
     expect(server.getStatusSnapshot()[0]?.providerSession).toEqual({
       key: 'session_id',
@@ -221,6 +226,7 @@ describe('structured rows and last-status.json', () => {
   it('are never written, while hook rows still are', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       server.ingestTerminalStatus({
         paneKey: PANE,
@@ -236,10 +242,12 @@ describe('structured rows and last-status.json', () => {
     const file = JSON.parse(readFileSync(lastStatusPath(), 'utf8')) as {
       entries: Record<string, unknown>
     }
+
     expect(Object.keys(file.entries)).toEqual([PANE])
 
     const restored = new AgentHookServer()
     await restored.start({ env: 'production', userDataPath })
+
     try {
       expect(restored.getStatusSnapshot().map((row) => row.paneKey)).toEqual([PANE])
     } finally {
@@ -268,6 +276,7 @@ describe('structured rows and last-status.json', () => {
     )
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       expect(server.getStatusSnapshot()).toEqual([])
     } finally {

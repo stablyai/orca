@@ -10,6 +10,7 @@ import { CodexPromptRegistry } from './codex-structured-prompt-replies'
 
 /** Pre-publication buffering is bounded so a provider cannot pin closures. */
 export const MAX_CODEX_ACQUISITION_BUFFER_OPERATIONS = 1024
+
 export const MAX_CODEX_ACQUISITION_BUFFER_BYTES = 4 * 1024 * 1024
 
 export class CodexAcquisitionWindow {
@@ -31,7 +32,9 @@ export class CodexAcquisitionWindow {
     if (!this.open) {
       return false
     }
+
     const bytes = Number.isFinite(retainedBytes) && retainedBytes > 0 ? Math.ceil(retainedBytes) : 1
+
     if (
       this.buffered.length >= MAX_CODEX_ACQUISITION_BUFFER_OPERATIONS ||
       this.retainedBytes + bytes > MAX_CODEX_ACQUISITION_BUFFER_BYTES
@@ -41,10 +44,13 @@ export class CodexAcquisitionWindow {
       this.open = false
       this.buffered.length = 0
       this.retainedBytes = 0
+
       return false
     }
+
     this.buffered.push(event)
     this.retainedBytes += bytes
+
     return true
   }
 
@@ -52,6 +58,7 @@ export class CodexAcquisitionWindow {
   drain(): (() => void)[] {
     this.open = false
     this.retainedBytes = 0
+
     return this.buffered.splice(0)
   }
 }

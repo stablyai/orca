@@ -1,7 +1,9 @@
 export const MOBILE_E2EE_V2_PROTOCOL = 'orca-mobile-e2ee'
+
 export const MOBILE_E2EE_V2_TRANSCRIPT_DOMAIN = 'orca-mobile-e2ee/v2/transcript'
 
 export type MobileE2EETransport = 'direct' | 'relay'
+
 export type MobileE2EEPayloadKind = 'text' | 'binary'
 
 export type MobileE2EEV2Context = {
@@ -58,6 +60,7 @@ export function validateMobileE2EEV2Handshake(
   ) {
     return null
   }
+
   if (
     !isExactRecord(readyValue, [
       'type',
@@ -71,20 +74,26 @@ export function validateMobileE2EEV2Handshake(
   ) {
     return null
   }
+
   if (helloValue.type !== 'e2ee_hello' || helloValue.v !== 2) {
     return null
   }
+
   if (readyValue.type !== 'e2ee_ready' || readyValue.v !== 2) {
     return null
   }
+
   if (!hasExactCapabilities(helloValue.capabilities) || !hasExactSelection(readyValue.selection)) {
     return null
   }
+
   const helloContext = parseContext(helloValue.context)
   const readyContext = parseContext(readyValue.context)
+
   if (!helloContext || !readyContext || !contextsEqual(helloContext, readyContext)) {
     return null
   }
+
   if (readyValue.clientNonceB64 !== helloValue.clientNonceB64) {
     return null
   }
@@ -93,6 +102,7 @@ export function validateMobileE2EEV2Handshake(
   const desktopPublicKey = decodeCanonicalBase64Bytes(readyValue.desktopPublicKeyB64, 32)
   const clientNonce = decodeCanonicalBase64Bytes(helloValue.clientNonceB64, 32)
   const desktopNonce = decodeCanonicalBase64Bytes(readyValue.desktopNonceB64, 32)
+
   if (!clientPublicKey || !desktopPublicKey || !clientNonce || !desktopNonce) {
     return null
   }
@@ -109,6 +119,7 @@ export function validateMobileE2EEV2Handshake(
 
 export function encodeMobileE2EEV2Transcript(handshake: MobileE2EEV2Handshake): Uint8Array {
   const { hello, ready } = handshake
+
   const fields: [string, Uint8Array][] = [
     ['domain', utf8(MOBILE_E2EE_V2_TRANSCRIPT_DOMAIN)],
     ['mobile-to-desktop.type', utf8(hello.type)],
@@ -138,6 +149,7 @@ export function encodeMobileE2EEV2Transcript(handshake: MobileE2EEV2Handshake): 
     ['desktop-to-mobile.context.transport', utf8(ready.context.transport)],
     ['desktop-to-mobile.context.relay-host-id', utf8(ready.context.relayHostId ?? '')]
   ]
+
   return concatBytes(
     fields.map(([name, value]) =>
       concatBytes([uint32(utf8(name).length), utf8(name), uint32(value.length), value])
@@ -149,14 +161,18 @@ function parseContext(value: unknown): MobileE2EEV2Context | null {
   if (!isRecord(value)) {
     return null
   }
+
   const transport = value.transport
+
   const keys =
     transport === 'relay'
       ? ['protocol', 'initiator', 'responder', 'transport', 'relayHostId']
       : ['protocol', 'initiator', 'responder', 'transport']
+
   if (!isExactRecord(value, keys)) {
     return null
   }
+
   if (
     value.protocol !== MOBILE_E2EE_V2_PROTOCOL ||
     value.initiator !== 'mobile' ||
@@ -165,12 +181,14 @@ function parseContext(value: unknown): MobileE2EEV2Context | null {
   ) {
     return null
   }
+
   if (
     transport === 'relay' &&
     (typeof value.relayHostId !== 'string' || !BASE64URL_16_PATTERN.test(value.relayHostId))
   ) {
     return null
   }
+
   return value as MobileE2EEV2Context
 }
 
@@ -216,9 +234,11 @@ function decodeCanonicalBase64Bytes(value: unknown, length: number): Uint8Array 
   ) {
     return null
   }
+
   try {
     const binary = atob(value)
     const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+
     return bytes.length === length && encodeBase64(bytes) === value ? bytes : null
   } catch {
     return null
@@ -227,9 +247,11 @@ function decodeCanonicalBase64Bytes(value: unknown, length: number): Uint8Array 
 
 function encodeBase64(bytes: Uint8Array): string {
   let binary = ''
+
   for (const byte of bytes) {
     binary += String.fromCharCode(byte)
   }
+
   return btoa(binary)
 }
 
@@ -242,6 +264,7 @@ function encodeStringList(values: readonly string[]): Uint8Array {
     uint32(values.length),
     ...values.map((value) => {
       const bytes = utf8(value)
+
       return concatBytes([uint32(bytes.length), bytes])
     })
   ])
@@ -250,6 +273,7 @@ function encodeStringList(values: readonly string[]): Uint8Array {
 function uint32(value: number): Uint8Array {
   const bytes = new Uint8Array(4)
   new DataView(bytes.buffer).setUint32(0, value, false)
+
   return bytes
 }
 
@@ -260,10 +284,12 @@ function utf8(value: string): Uint8Array {
 function concatBytes(parts: readonly Uint8Array[]): Uint8Array {
   const result = new Uint8Array(parts.reduce((total, part) => total + part.length, 0))
   let offset = 0
+
   for (const part of parts) {
     result.set(part, offset)
     offset += part.length
   }
+
   return result
 }
 
@@ -275,7 +301,9 @@ function isExactRecord(value: unknown, keys: readonly string[]): value is Record
   if (!isRecord(value)) {
     return false
   }
+
   const actual = Object.keys(value).sort()
   const expected = [...keys].sort()
+
   return actual.length === expected.length && actual.every((key, index) => key === expected[index])
 }

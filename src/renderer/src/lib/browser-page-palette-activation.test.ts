@@ -266,6 +266,7 @@ describe('activateBrowserPagePaletteResult', () => {
     // resolve the wrong target — the pre-capture is what keeps this correct.
     mocks.activateAndRevealWorktree.mockImplementation(() => {
       useAppStore.setState({ browserPagesByWorkspace: {} })
+
       return true
     })
 

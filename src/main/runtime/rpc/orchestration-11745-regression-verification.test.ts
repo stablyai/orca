@@ -28,16 +28,20 @@ import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixtu
 // Why: an unrelated caller the runtime CAN resolve to a pane — otherwise the refusal would be
 // stable_pane_required and would prove nothing about Run authorization.
 const OUTSIDER_HANDLE = CURRENT_WORKER_HANDLE
+
 const OUTSIDER_PANE = CURRENT_WORKER_PANE
 
 const tempDirs: string[] = []
+
 const databases: OrchestrationDb[] = []
 
 afterEach(() => {
   cleanupLegacyCompatibilityDispatcherHarnesses()
+
   for (const database of databases.splice(0)) {
     database.close()
   }
+
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -79,6 +83,7 @@ async function legacyClaimsAdoptedRun(
       `${id}-legacy-claim`
     )
   )
+
   expect(response).toMatchObject({ ok: true })
 }
 
@@ -94,6 +99,7 @@ async function currentCoordinatorTakesOver(
       `${id}-takeover`
     )
   )
+
   expect(response).toMatchObject({ ok: true })
 }
 
@@ -194,11 +200,13 @@ describe('#11745 H1 — gate methods authorize the caller Run', () => {
       coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
       coordinatorPaneKey: CURRENT_COORDINATOR_PANE
     })
+
     const runC = db.createRun({
       objective: 'run C',
       coordinatorHandle: OUTSIDER_HANDLE,
       coordinatorPaneKey: OUTSIDER_PANE
     })
+
     const strangerTask = db.createTask({ spec: 'stranger work', runId: runC.id })
 
     // The Run-scope decision the gate handler makes: A's pane resolves to A, never to C.
@@ -238,6 +246,7 @@ describe('#11745 H1 — gate methods authorize the caller Run', () => {
         'v-positive-list'
       )
     )
+
     expect(listed).toMatchObject({ ok: true, result: { runId: runA, count: 1 } })
 
     const resolved = await harness.dispatcher.dispatch(
@@ -248,6 +257,7 @@ describe('#11745 H1 — gate methods authorize the caller Run', () => {
         'v-positive-resolve'
       )
     )
+
     expect(resolved).toMatchObject({ ok: true, result: { gate: { status: 'resolved' } } })
     expect(harness.db.getTask(ownTask.id)?.status).toBe('ready')
   })
@@ -278,6 +288,7 @@ describe('#11745 H1 — gate methods authorize the caller Run', () => {
         'v-legacy-resolve'
       )
     )
+
     expect(resolved).toMatchObject({ ok: true, result: { gate: { status: 'resolved' } } })
     expect(harness.db.getTask(harness.taskId)?.status).toBe('ready')
   })
@@ -348,11 +359,13 @@ describe('#11745 H1 — is --from an authenticated identity?', () => {
   it('refuses an attested caller rebinding another terminal with runUse', async () => {
     const harness = createHarness()
     const runA = bindRunA(harness)
+
     const workerRun = harness.db.createRun({
       objective: 'worker Run',
       coordinatorHandle: CURRENT_WORKER_HANDLE,
       coordinatorPaneKey: CURRENT_WORKER_PANE
     })
+
     const beforeA = harness.db.getRun(runA)
     const beforeWorker = harness.db.getRun(workerRun.id)
 
@@ -590,6 +603,7 @@ describe('#11745 H4 — unattested caller on a taken-over adopted Run', () => {
     // Why: evidence names a different terminal, so this is an impostor rather than the owner
     // ownsRunBinding is meant to admit. The attested handle must win over the declared one.
     const before = adoptedGraph(harness)
+
     const response = await harness.dispatcher.dispatch(
       request(
         'orchestration.taskCreate',
@@ -642,17 +656,20 @@ function createAdoptedDb(options: { settleWork: boolean }): {
   const dbPath = join(dir, 'orchestration.db')
 
   const before = new OrchestrationDb(dbPath)
+
   const task = before.createTask({
     runId: 'run_legacy_local',
     spec: 'legacy assignment',
     createdByTerminalHandle: 'term_old'
   })
+
   createRootDispatch(
     before,
     task.id,
     'term_old_worker',
     'tab_old:33333333-3333-4333-8333-333333333333'
   )
+
   const recovery = before.insertMessage({
     runId: 'run_legacy_local',
     from: 'term_old_worker',
@@ -660,12 +677,15 @@ function createAdoptedDb(options: { settleWork: boolean }): {
     subject: 'recovered worker outcome',
     type: 'worker_done'
   })
+
   before.close()
 
   const raw = new SyncDatabase(dbPath)
+
   if (options.settleWork) {
     raw.exec("UPDATE dispatch_contexts SET status = 'completed'")
   }
+
   raw.exec(`
     DROP INDEX IF EXISTS idx_messages_delivery_contract;
     DROP TABLE legacy_mail_receipts;
@@ -678,6 +698,7 @@ function createAdoptedDb(options: { settleWork: boolean }): {
 
   const db = new OrchestrationDb(dbPath)
   databases.push(db)
+
   return {
     db,
     adoptedRunId: db.getLegacyAdoption()?.adopted_run_id as string,
@@ -734,16 +755,19 @@ describe('#11745 L6 — indexed getCurrentRunForPane keeps pane equivalence', ()
     tempDirs.push(dir)
     const db = new OrchestrationDb(join(dir, 'orchestration.db'))
     databases.push(db)
+
     return db
   }
 
   function leaf(index: number): string {
     const hex = index.toString(16).padStart(12, '0')
+
     return `${hex.slice(0, 8)}-0000-4000-8000-${hex}`
   }
 
   it('resolves a reminted tab half by leaf UUID', () => {
     const db = paneDb()
+
     const run = db.createRun({
       objective: 'reminted',
       coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
@@ -758,16 +782,19 @@ describe('#11745 L6 — indexed getCurrentRunForPane keeps pane equivalence', ()
 
   it('keeps unparseable pane keys on exact-match semantics', () => {
     const db = paneDb()
+
     const noColon = db.createRun({
       objective: 'no colon',
       coordinatorHandle: 'term_a',
       coordinatorPaneKey: 'nocolonpanekey'
     })
+
     const twoColons = db.createRun({
       objective: 'two colons',
       coordinatorHandle: 'term_b',
       coordinatorPaneKey: `win:tab:${leaf(3)}`
     })
+
     const emptyLeaf = db.createRun({
       objective: 'empty leaf',
       coordinatorHandle: 'term_c',
@@ -788,11 +815,13 @@ describe('#11745 L6 — indexed getCurrentRunForPane keeps pane equivalence', ()
 
   it('unbinds the equivalent pane when a reminted key binds a new Run', () => {
     const db = paneDb()
+
     const first = db.createRun({
       objective: 'first',
       coordinatorHandle: 'term_a',
       coordinatorPaneKey: `tab_one:${leaf(4)}`
     })
+
     const second = db.createRun({
       objective: 'second',
       coordinatorHandle: 'term_a',
@@ -805,6 +834,7 @@ describe('#11745 L6 — indexed getCurrentRunForPane keeps pane equivalence', ()
 
   it.each([60, 2000])('stays correct and fast at %i bound Runs', (total) => {
     const db = paneDb()
+
     for (let index = 0; index < total; index += 1) {
       db.createRun({
         objective: `run ${index}`,
@@ -815,9 +845,11 @@ describe('#11745 L6 — indexed getCurrentRunForPane keeps pane equivalence', ()
 
     const target = `tab_reminted:${leaf(total + 99)}`
     const started = performance.now()
+
     for (let probe = 0; probe < 200; probe += 1) {
       expect(db.getCurrentRunForPane(target)).toBeDefined()
     }
+
     const elapsed = performance.now() - started
 
     // Generous ceiling: the pre-fix full-table scan at 2000 Runs was orders of magnitude slower.

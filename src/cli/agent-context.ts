@@ -43,6 +43,7 @@ export function buildAgentContext(specs: CommandSpec[]): AgentContextSchema {
     }))
     // Why: deterministic ordering so the JSON diffs cleanly across runs.
     .sort((a, b) => a.command.localeCompare(b.command))
+
   return {
     schemaVersion: SCHEMA_VERSION,
     commandCount: commands.length,

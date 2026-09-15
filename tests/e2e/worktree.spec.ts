@@ -48,11 +48,13 @@ test.describe('Create Workspace', () => {
       pageErrors.push(err)
     })
     const consoleErrors: string[] = []
+
     const onConsole = (msg: ConsoleMessage): void => {
       if (msg.type() === 'error') {
         consoleErrors.push(msg.text())
       }
     }
+
     orcaPage.on('console', onConsole)
 
     const workspaceName = `e2e-create-${Date.now()}`
@@ -78,9 +80,11 @@ test.describe('Create Workspace', () => {
       // StartFromField trigger no longer exists (#1191).
       await orcaPage.evaluate(async () => {
         const repoId = Object.values(window.__store!.getState().worktreesByRepo).flat()[0]?.repoId
+
         if (!repoId) {
           return
         }
+
         await window.api.repos.getBaseRefDefault({ repoId })
       })
       await orcaPage.waitForTimeout(100)
@@ -120,6 +124,7 @@ test.describe('Create Workspace', () => {
         .poll(
           async () => {
             const id = await getActiveWorktreeId(orcaPage)
+
             return id !== null && id !== worktreeIdBefore
           },
           { timeout: 10_000, message: 'New worktree did not become the active worktree' }
@@ -136,9 +141,11 @@ test.describe('Create Workspace', () => {
       expect(pageErrors, `pageerror fired: ${pageErrors.map((e) => e.message).join(', ')}`).toEqual(
         []
       )
+
       const reactChildErrors = consoleErrors.filter((text) =>
         /Objects are not valid as a React child|Minified React error #31/i.test(text)
       )
+
       expect(reactChildErrors, `React render error: ${reactChildErrors.join(', ')}`).toEqual([])
     } finally {
       orcaPage.off('console', onConsole)
@@ -177,8 +184,10 @@ test.describe('Create Workspace', () => {
 
       const branch = await orcaPage.evaluate((displayName) => {
         const worktrees = Object.values(window.__store!.getState().worktreesByRepo).flat()
+
         return worktrees.find((worktree) => worktree.displayName === displayName)?.branch ?? null
       }, workspaceName)
+
       expect(branch).toBe('refs/heads/rocket-test-tube-sparkles')
     } finally {
       await orcaPage
@@ -231,10 +240,13 @@ test.describe('Create Workspace', () => {
   test('shows a failed workspace entry when worktree creation fails', async ({ orcaPage }) => {
     await orcaPage.evaluate(() => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available')
       }
+
       const originalCreateWorktree = store.getState().createWorktree
+
       ;(
         window as unknown as {
           __restoreCreateWorktree?: () => void
@@ -242,6 +254,7 @@ test.describe('Create Workspace', () => {
       ).__restoreCreateWorktree = () => {
         store.setState({ createWorktree: originalCreateWorktree })
       }
+
       store.setState({
         createWorktree: async () => {
           throw new Error('could not resolve a default base ref for the E2E fixture')
@@ -267,9 +280,11 @@ test.describe('Create Workspace', () => {
       await createButton.click()
 
       await expect(dialog).toBeHidden()
+
       const failedWorkspace = orcaPage.getByRole('button', {
         name: new RegExp(`${workspaceName} No base branch found`)
       })
+
       await expect(failedWorkspace).toBeVisible()
       await expect(orcaPage.getByText('Couldn’t create worktree')).toBeVisible()
       await expect(failedWorkspace).toContainText('No base branch found')
@@ -311,6 +326,7 @@ test.describe('Create Workspace', () => {
             __smartGitHubLookupCount: number
             __smartResolvePrBaseCount: number
           }
+
           counters.__smartGitHubLookupCount = 0
           counters.__smartResolvePrBaseCount = 0
           ipcMain.removeHandler('gh:workItemByOwnerRepo')
@@ -324,6 +340,7 @@ test.describe('Create Workspace', () => {
               }
             ) => {
               counters.__smartGitHubLookupCount += 1
+
               return {
                 id: `e2e-pr-${args.number}`,
                 type: 'pr',
@@ -344,6 +361,7 @@ test.describe('Create Workspace', () => {
           // resolve the PR base to HEAD, which always exists regardless.
           ipcMain.handle('worktrees:resolvePrBase', () => {
             counters.__smartResolvePrBaseCount += 1
+
             return { baseBranch: 'HEAD' }
           })
         },
@@ -361,6 +379,7 @@ test.describe('Create Workspace', () => {
               __smartGitHubLookupCount?: number
               __smartResolvePrBaseCount?: number
             }
+
             return {
               githubLookupCount: counters.__smartGitHubLookupCount ?? -1,
               resolvePrBaseCount: counters.__smartResolvePrBaseCount ?? -1
@@ -389,6 +408,7 @@ test.describe('Create Workspace', () => {
               __smartGitHubLookupCount?: number
               __smartResolvePrBaseCount?: number
             }
+
             return {
               githubLookupCount: counters.__smartGitHubLookupCount ?? -1,
               resolvePrBaseCount: counters.__smartResolvePrBaseCount ?? -1

@@ -17,11 +17,13 @@ type VisibilityHarness = {
 function createVisibilityHarness(initiallyVisible: boolean): VisibilityHarness {
   let visible = initiallyVisible
   const listeners = new Set<() => void>()
+
   return {
     visibility: {
       isWindowVisible: () => visible,
       onWindowBecameVisible: (listener) => {
         listeners.add(listener)
+
         return () => {
           listeners.delete(listener)
         }
@@ -30,6 +32,7 @@ function createVisibilityHarness(initiallyVisible: boolean): VisibilityHarness {
     setVisible: (next) => {
       const wasVisible = visible
       visible = next
+
       if (!wasVisible && next) {
         for (const listener of Array.from(listeners)) {
           listener()
@@ -49,10 +52,12 @@ function createMux(ports: () => DetectedPort[]): {
   request: ReturnType<typeof vi.fn>
 } {
   const request = vi.fn(async () => ({ ports: ports(), platform: 'linux' }))
+
   return { mux: { request } as unknown as SshChannelMultiplexer, request }
 }
 
 const BASE = SSH_PORT_SCAN_BASE_INTERVAL_MS
+
 const MAX = SSH_PORT_SCAN_MAX_INTERVAL_MS
 
 describe('PortScanner', () => {
@@ -195,12 +200,14 @@ describe('PortScanner', () => {
   it('never overlaps a slow in-flight request and resumes the chain after it settles', async () => {
     const harness = createVisibilityHarness(true)
     let resolveFirst: ((value: { ports: DetectedPort[]; platform: string }) => void) | null = null
+
     const request = vi.fn(
       () =>
         new Promise<{ ports: DetectedPort[]; platform: string }>((resolve) => {
           resolveFirst = resolve
         })
     )
+
     const scanner = new PortScanner(harness.visibility)
     scanner.startScanning('t1', { request } as unknown as SshChannelMultiplexer, vi.fn())
     expect(request).toHaveBeenCalledTimes(1)
@@ -238,18 +245,23 @@ describe('PortScanner', () => {
   it('aborts in-flight requests before stopping or replacing a target scan', async () => {
     const harness = createVisibilityHarness(true)
     const signals: AbortSignal[] = []
+
     const request = vi.fn(
       (_method: string, _params?: Record<string, unknown>, options?: { signal?: AbortSignal }) =>
         new Promise<never>((_resolve, reject) => {
           const signal = options?.signal
+
           if (!signal) {
             reject(new Error('missing request signal'))
+
             return
           }
+
           signals.push(signal)
           signal.addEventListener('abort', () => reject(signal.reason), { once: true })
         })
     )
+
     const mux = { request } as unknown as SshChannelMultiplexer
     const scanner = new PortScanner(harness.visibility)
 

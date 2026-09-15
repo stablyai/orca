@@ -32,6 +32,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   const { defaultAgent, setSelectedId } = store
   const [automations, setAutomations] = useState<Automation[]>([])
   const [automationHostTargetKey, setAutomationHostTargetKey] = useState<string | null>(null)
+
   const [selectedAutomationRuns, setSelectedAutomationRuns] =
     useState<SelectedAutomationRunHistoryOutcome>({
       automationId: null,
@@ -40,20 +41,26 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
       runs: [],
       notice: null
     })
+
   const [runHistoryReloadToken, setRunHistoryReloadToken] = useState(0)
+
   const [failedAuthorityKeys, setFailedAuthorityKeys] = useState<ReadonlySet<string>>(
     () => new Set()
   )
+
   const [ownerAction, setOwnerAction] = useState<{
     notice: AutomationActionNotice
     host: AutomationHostCatalogEntry | null
   } | null>(null)
+
   const [editorNotice, setEditorNotice] = useState<AutomationActionNotice | null>(null)
   const [editorNoticeHost, setEditorNoticeHost] = useState<AutomationHostCatalogEntry | null>(null)
   const [externalActionKey, setExternalActionKey] = useState<string | null>(null)
+
   const [rerunRunIdsInFlight, setRerunRunIdsInFlight] = useState<ReadonlySet<string>>(
     () => new Set()
   )
+
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [listSearchQuery, setListSearchQuery] = useState('')
@@ -63,23 +70,29 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   const [createTarget, setCreateTarget] = useState<AutomationCreateTarget>('orca')
   const [editingAutomationId, setEditingAutomationId] = useState<string | null>(null)
   const [editingRowKey, setEditingRowKey] = useState<string | null>(null)
+
   const [editingDestination, setEditingDestination] = useState<{
     projectId: string
     destination: AutomationCreateDestination
   } | null>(null)
+
   const [editingHostStableKey, setEditingHostStableKey] = useState<string | null>(null)
   const moveCreationKeysRef = useRef(new Map<string, string>())
   const [relativeNow, setRelativeNow] = useState(() => Date.now())
   const [pageView, setPageView] = useState<AutomationsPageView>('automations')
   const [runPageOrigin, setRunPageOrigin] = useState<AutomationRunPageOrigin>('runs')
   const [activePaneTab, setActivePaneTab] = useState<AutomationPaneTab>('overview')
+
   const [selectedAutomationRunPageId, setSelectedAutomationRunPageId] = useState<string | null>(
     null
   )
+
   const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null)
   const [selectedExternalKey, setSelectedExternalKey] = useState<string | null>(null)
+
   const [selectedExternalRunPage, setSelectedExternalRunPage] =
     useState<SelectedExternalRunPage | null>(null)
+
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const selectedExternalKeyRef = useRef<string | null>(null)
   useEffect(() => {
@@ -94,27 +107,33 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     },
     [setSelectedId]
   )
+
   const selectExternalKey = useCallback((externalKey: string | null): void => {
     setSelectedExternalRunPage(null)
     setSelectedExternalKey(externalKey)
   }, [])
+
   const [draftAtOpen, setDraftAtOpen] = useState<AutomationDraft | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AutomationListRow | null>(null)
+
   const [externalDeleteTarget, setExternalDeleteTarget] = useState<{
     manager: ExternalAutomationManager
     job: ExternalAutomationJob
     scope: ExternalAutomationScope
   } | null>(null)
+
   useContextualTour(
     'automations',
     !isLoading && !createOpen && !deleteTarget && !externalDeleteTarget,
     'automations_open'
   )
+
   const [editingExternalTarget, setEditingExternalTarget] = useState<{
     manager: ExternalAutomationManager
     job: ExternalAutomationJob
     scope: ExternalAutomationScope
   } | null>(null)
+
   const [dontAskDeleteAgain, setDontAskDeleteAgain] = useState(false)
   const editRequestRef = useRef(0)
   const deleteConfirmButtonRef = useRef<HTMLButtonElement>(null)
@@ -124,12 +143,15 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
   const setupDecisionPolicyDefaultRef = useRef<AutomationDraft['setupDecision']>(undefined)
   const setupDecisionDefaultSignatureRef = useRef<string | null>(null)
   const setupDecisionTouchedRef = useRef(false)
+
   const automationHookCheckPromisesRef = useRef<
     Map<string, Promise<{ hooks: OrcaHooks | null; ok: boolean }>>
   >(new Map())
+
   const [automationYamlHooksByRepoKey, setAutomationYamlHooksByRepoKey] = useState<
     Record<string, OrcaHooks | null>
   >({})
+
   const [draft, setDraft] = useState<AutomationDraft>({
     name: '',
     prompt: '',
@@ -150,6 +172,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     savedSchedule: null,
     scheduleWarning: null
   })
+
   const draftRef = useRef(draft)
   // Keep async editor actions on the latest draft before they can run.
   // react-doctor-disable-next-line react-doctor/no-ref-current-in-render

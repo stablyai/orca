@@ -12,6 +12,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -99,6 +100,7 @@ describe('TabsSlice', () => {
         label: 'file-a.ts',
         isPreview: true
       })
+
       store.getState().createUnifiedTab(WT, 'editor', {
         id: 'file-b.ts',
         label: 'file-b.ts',
@@ -222,6 +224,7 @@ describe('TabsSlice', () => {
 
     it('removes a mobile-closed markdown tab from open files so it is not republished', () => {
       const groupId = 'editor-group'
+
       const file = makeOpenFile({
         id: '/tmp/feature/README.md',
         filePath: '/tmp/feature/README.md',
@@ -229,6 +232,7 @@ describe('TabsSlice', () => {
         language: 'markdown',
         worktreeId: WT
       })
+
       const tab = makeUnifiedTab({
         id: 'readme-unified',
         entityId: file.id,
@@ -237,6 +241,7 @@ describe('TabsSlice', () => {
         worktreeId: WT,
         groupId
       })
+
       store.setState({
         openFiles: [file],
         unifiedTabsByWorktree: { [WT]: [tab] },
@@ -271,6 +276,7 @@ describe('TabsSlice', () => {
 
     it('removes a mobile-closed regular file tab from open files so fallback closes do not resurrect', () => {
       const groupId = 'editor-group'
+
       const file = makeOpenFile({
         id: '/tmp/feature/src/app.ts',
         filePath: '/tmp/feature/src/app.ts',
@@ -278,6 +284,7 @@ describe('TabsSlice', () => {
         language: 'typescript',
         worktreeId: WT
       })
+
       const tab = makeUnifiedTab({
         id: 'app-unified',
         entityId: file.id,
@@ -286,6 +293,7 @@ describe('TabsSlice', () => {
         worktreeId: WT,
         groupId
       })
+
       store.setState({
         openFiles: [file],
         unifiedTabsByWorktree: { [WT]: [tab] },
@@ -326,6 +334,7 @@ describe('TabsSlice', () => {
         language: 'typescript',
         worktreeId: WT
       })
+
       store.setState({
         openFiles: [file],
         unifiedTabsByWorktree: { [WT]: [] },
@@ -441,6 +450,7 @@ describe('TabsSlice', () => {
       const t2 = store.getState().createUnifiedTab(WT, 'terminal', {
         targetGroupId: secondGroupId!
       })
+
       const t3 = store.getState().createUnifiedTab(WT, 'terminal', {
         targetGroupId: secondGroupId!
       })
@@ -612,6 +622,7 @@ describe('TabsSlice', () => {
   describe('cross-content-type neighbor selection', () => {
     it('selects an editor tab as neighbor when closing a terminal tab', () => {
       const term = store.getState().createUnifiedTab(WT, 'terminal')
+
       const editor = store.getState().createUnifiedTab(WT, 'editor', {
         id: 'file.ts',
         label: 'file.ts'
@@ -626,6 +637,7 @@ describe('TabsSlice', () => {
 
     it('selects a terminal tab as neighbor when closing an editor tab', () => {
       const term = store.getState().createUnifiedTab(WT, 'terminal')
+
       const editor = store.getState().createUnifiedTab(WT, 'editor', {
         id: 'file.ts',
         label: 'file.ts'

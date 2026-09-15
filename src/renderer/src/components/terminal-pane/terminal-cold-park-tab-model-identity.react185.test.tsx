@@ -28,6 +28,7 @@ const harness = vi.hoisted(() => ({
 
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
+
   const useAppStore = create(() => ({
     activeGroupIdByWorktree: {} as Record<string, string | undefined>,
     groupsByWorktree: {} as Record<string, TabGroup[]>,
@@ -45,6 +46,7 @@ vi.mock('../../store', async () => {
     reconcileWorktreeTabModel: () => ({ renderableTabCount: 2 }),
     setActiveWorktree: () => {}
   }))
+
   return { useAppStore }
 })
 
@@ -67,6 +69,7 @@ vi.mock('./terminal-parked-tab-watchers', () => ({
 vi.mock('./terminal-parking-e2e-overrides', () => ({
   getTerminalParkingPolicyOverrides: () => {
     harness.parkEffectRuns += 1
+
     return { coldParkDelayMs: 0, hotRetainMs: 0 }
   }
 }))
@@ -77,7 +80,9 @@ import { useAppStore } from '../../store'
 import TerminalPaneOverlayLayer from './TerminalPaneOverlayLayer'
 
 const TAB_IDS = ['tab-a', 'tab-b'] as const
+
 const GROUP_ID = 'group-a'
+
 /** Above React's nested-update limit so the cascade actually reaches the bail. */
 const CASCADE_COMMITS = REACT_NESTED_UPDATE_LIMIT * 2
 
@@ -140,15 +145,18 @@ function UnrelatedCascadeDriver(): null {
     if (tick >= CASCADE_COMMITS) {
       return
     }
+
     publishRuntimeTitle(tick)
     setTick((current) => current + 1)
   }, [tick])
+
   return null
 }
 
 function renderTree(root: Root): unknown {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
   let error: unknown = null
+
   try {
     act(() => {
       root.render(
@@ -166,7 +174,9 @@ function renderTree(root: Root): unknown {
   } catch (thrown) {
     error = thrown
   }
+
   consoleError.mockRestore()
+
   return error
 }
 
@@ -204,6 +214,7 @@ describe('cold-park effect vs. unrelated commit cascade', () => {
     } catch {
       /* a failed commit leaves no mounted tree */
     }
+
     root = undefined
     container.remove()
   })

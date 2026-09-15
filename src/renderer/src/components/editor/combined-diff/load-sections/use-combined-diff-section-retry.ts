@@ -47,10 +47,12 @@ export function useCombinedDiffSectionRetry({
       // the virtualizer item key, so it would remount every rendered Monaco editor (STA-3420).
       sectionLoadTokensRef.current.set(index, (sectionLoadTokensRef.current.get(index) ?? 0) + 1)
       const coalesced = reloadTimersRef.current.get(index)
+
       if (coalesced !== undefined) {
         window.clearTimeout(coalesced)
         reloadTimersRef.current.delete(index)
       }
+
       setSectionHeights((prev) => removeDiffSectionMeasuredHeight(prev, index))
       setSections((prev) =>
         prev.map((section, sectionIndex) =>
@@ -68,9 +70,11 @@ export function useCombinedDiffSectionRetry({
             : section
         )
       )
+
       if (collapsed) {
         return
       }
+
       loadSchedulerRef.current.rerequest(index)
     },
     [
@@ -85,6 +89,7 @@ export function useCombinedDiffSectionRetry({
       setSections
     ]
   )
+
   retrySectionRef.current = retrySection
 
   // Why: invalidation (rebase/commit/external write) revalidates in place — it must not tear the
@@ -93,28 +98,35 @@ export function useCombinedDiffSectionRetry({
   const requestSectionReload = useCallback(
     (index: number): void => {
       const section = sectionsRef.current[index]
+
       if (!section || section.dirty) {
         return
       }
+
       loadedIndicesRef.current.delete(index)
       invalidateViewStateCache()
       sectionLoadTokensRef.current.set(index, (sectionLoadTokensRef.current.get(index) ?? 0) + 1)
+
       if (loadingIndicesRef.current.has(index)) {
         // Why: the in-flight load now carries a stale token, so it re-drives this reload when it
         // settles. Scheduling one here would fetch the same large diff a second time.
         return
       }
+
       if (section.collapsed || !renderedIndicesRef.current.has(index)) {
         // Why: a rebase invalidates every touched path at once. Refetching off-screen sections is
         // unbounded work nobody can see; the row reloads on mount once it scrolls into view.
         return
       }
+
       // Why: a rebase touches the same path many times over a few seconds. Without coalescing
       // each touch refetches a whole diff, and the payload churn alone stalls the renderer.
       const pending = reloadTimersRef.current.get(index)
+
       if (pending !== undefined) {
         window.clearTimeout(pending)
       }
+
       reloadTimersRef.current.set(
         index,
         window.setTimeout(() => {
@@ -134,14 +146,17 @@ export function useCombinedDiffSectionRetry({
       sectionsRef
     ]
   )
+
   requestSectionReloadRef.current = requestSectionReload
 
   const ensureSectionLoaded = useCallback(
     (index: number): void => {
       const section = sectionsRef.current[index]
+
       if (!shouldRequestCombinedDiffSectionLoad(section, loadingIndicesRef.current.has(index))) {
         return
       }
+
       loadedIndicesRef.current.delete(index)
       loadSchedulerRef.current.request(index)
     },

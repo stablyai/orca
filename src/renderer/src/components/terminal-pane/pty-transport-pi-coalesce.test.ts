@@ -10,8 +10,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ESC = '\x1b'
+
 const BEL = '\x07'
+
 const workingFrame = (frame: string): string => `${ESC}]0;${frame} π - cwd${BEL}`
+
 const idleTitle = (): string => `${ESC}]0;π - cwd${BEL}`
 
 function flushPtySideEffects(): Promise<void> {
@@ -37,6 +40,7 @@ describe('pty-transport — coalesced OSC titles from Pi', () => {
           kill: vi.fn(),
           onData: vi.fn((cb: (payload: { id: string; data: string }) => void) => {
             onData = cb
+
             return () => {}
           }),
           onReplay: vi.fn(() => () => {}),

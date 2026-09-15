@@ -69,6 +69,7 @@ describe('environment footer helpers', () => {
       message: 'Working directory missing.',
       info: SAMPLE
     })
+
     expect(withFooter).toContain('Working directory missing.')
     expect(withFooter).toContain('Orca: 1.4.178-rc.2')
     expect(appendClientEnvironmentFooter({ message: withFooter, info: SAMPLE })).toBe(withFooter)

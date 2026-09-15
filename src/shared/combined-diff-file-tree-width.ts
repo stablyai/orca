@@ -1,7 +1,11 @@
 export const COMBINED_DIFF_FILE_TREE_MIN_WIDTH = 200
+
 export const COMBINED_DIFF_FILE_TREE_DEFAULT_WIDTH = 256
+
 export const COMBINED_DIFF_FILE_TREE_MIN_DIFF_WIDTH = 200
+
 export const COMBINED_DIFF_FILE_TREE_MAX_WIDTH = 640
+
 export const COMBINED_DIFF_FILE_TREE_RESIZE_STEP = 16
 
 export function computeCombinedDiffFileTreeWidthBounds(containerWidth: number): {
@@ -20,6 +24,7 @@ export function computeCombinedDiffFileTreeWidthBounds(containerWidth: number): 
     COMBINED_DIFF_FILE_TREE_MAX_WIDTH,
     containerWidth - COMBINED_DIFF_FILE_TREE_MIN_DIFF_WIDTH
   )
+
   if (fittedMax >= COMBINED_DIFF_FILE_TREE_MIN_WIDTH) {
     return { maxWidth: fittedMax, minWidth: COMBINED_DIFF_FILE_TREE_MIN_WIDTH }
   }
@@ -27,6 +32,7 @@ export function computeCombinedDiffFileTreeWidthBounds(containerWidth: number): 
   // Why: below both minimums combined nothing fits, so split the container evenly rather than
   // hold the tree at its minimum and push the diff pane out of the container.
   const shared = Math.max(0, Math.floor(containerWidth / 2))
+
   return { maxWidth: shared, minWidth: shared }
 }
 

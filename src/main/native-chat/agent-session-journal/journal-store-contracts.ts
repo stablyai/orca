@@ -40,6 +40,7 @@ export type JournalAppendResult = {
 }
 
 export type JournalItemAppendOptions = { fence: number; observedAt?: number; recovered?: true }
+
 export type JournalTombstoneInput = { fence: number }
 
 export type JournalLifecycleBatchInput = {

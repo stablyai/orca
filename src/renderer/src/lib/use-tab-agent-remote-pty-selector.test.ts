@@ -6,11 +6,13 @@ const REMOTE_PTY = 'remote:environment-1@@terminal-1'
 describe('hasRemoteRuntimePtyForTab', () => {
   it('short-circuits on a tab-level remote PTY', () => {
     let leafReads = 0
+
     const leafPtyIdsById = new Proxy(
       { leaf: REMOTE_PTY },
       {
         ownKeys: () => {
           leafReads += 1
+
           return ['leaf']
         }
       }
@@ -36,9 +38,11 @@ describe('hasRemoteRuntimePtyForTab', () => {
 
   it('avoids transient Set and Object.values allocations across repeated checks', () => {
     const originalSet = globalThis.Set
+
     const valuesSpy = vi.spyOn(Object, 'values').mockImplementation(() => {
       throw new Error('unexpected Object.values allocation')
     })
+
     vi.stubGlobal(
       'Set',
       class UnexpectedSet {

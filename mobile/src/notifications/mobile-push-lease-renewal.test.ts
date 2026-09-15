@@ -3,16 +3,20 @@ import { AppState } from 'react-native'
 import { startMobilePushLeaseRenewal } from './mobile-push-lease-renewal'
 
 let onChange: (state: string) => void
+
 const remove = vi.fn()
+
 vi.mock('react-native', () => ({
   AppState: {
     currentState: 'active',
     addEventListener: (_: string, callback: typeof onChange) => {
       onChange = callback
+
       return { remove }
     }
   }
 }))
+
 afterEach(() => {
   vi.useRealTimers()
   vi.clearAllMocks()

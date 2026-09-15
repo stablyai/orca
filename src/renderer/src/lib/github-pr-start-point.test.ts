@@ -5,6 +5,7 @@ import { resolveGitHubPrStartPointForRepo } from './github-pr-start-point'
 
 vi.mock('@/runtime/runtime-rpc-client', async () => {
   const actual = await vi.importActual<typeof RuntimeRpcClient>('@/runtime/runtime-rpc-client')
+
   return {
     ...actual,
     callRuntimeRpc: vi.fn()

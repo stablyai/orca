@@ -17,6 +17,7 @@ describe('hasCtrlEnterCsiUAuthorityForPane', () => {
         )
       ).toBe(true)
     }
+
     expect(
       hasCtrlEnterCsiUAuthorityForPane(
         {
@@ -35,6 +36,7 @@ describe('hasCtrlEnterCsiUAuthorityForPane', () => {
         [PANE_KEY]: { agent: 'droid' as const, shellForeground: false }
       }
     }
+
     expect(hasCtrlEnterCsiUAuthorityForPane(state, PANE_KEY, '⠋ Droid')).toBe(true)
     expect(hasCtrlEnterCsiUAuthorityForPane(state, PANE_KEY, 'C:\\work\\grok-project')).toBe(false)
     expect(

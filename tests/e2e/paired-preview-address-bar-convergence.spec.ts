@@ -19,7 +19,9 @@ import {
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const FIXTURE_NAME = 'convergence-doc.html'
+
 const FIXTURE_HEADING = 'address bar convergence'
+
 const FIXTURE_TITLE = 'Convergence Document'
 
 type PreparedPairedClient = {
@@ -34,6 +36,7 @@ async function preparePairedClient(
   testRepoPath: string
 ): Promise<PreparedPairedClient> {
   const client = await launchPairedElectronClient(offer, testInfo, 'Address-bar convergence')
+
   try {
     // A workstation-sized window: under CI's default size the split preview squeezes the document
     // chip below its content width (min-w-0 + overflow-hidden), leaving no chip pixels to click.
@@ -52,22 +55,27 @@ async function preparePairedClient(
         { timeout: 120_000, message: 'paired client never received the host worktree' }
       )
       .not.toBeNull()
+
     const worktree = await client.page.evaluate((repoPath) => {
       const match = window.__store
         ?.getState()
         .allWorktrees()
         .find((candidate) => candidate.path === repoPath)
+
       return match ? { id: match.id, path: match.path } : null
     }, testRepoPath)
+
     if (!worktree) {
       throw new Error('paired client worktree disappeared after discovery')
     }
+
     await client.page.evaluate(
       ({ environmentId, worktreeId }) => {
         window.__store?.getState().setActiveWorktree(worktreeId, `runtime:${environmentId}`)
       },
       { environmentId: client.environmentId, worktreeId: worktree.id }
     )
+
     return { client, worktreeId: worktree.id, worktreePath: worktree.path }
   } catch (error) {
     await client.dispose()
@@ -83,13 +91,17 @@ async function preparePairedClient(
 async function openPairedWebTab(page: Page, url: string): Promise<void> {
   await page.evaluate(async (pageUrl) => {
     const state = window.__store?.getState()
+
     if (!state?.activeWorktreeId) {
       throw new Error('Paired client has no active worktree')
     }
+
     const groupId = state.activeGroupIdByWorktree[state.activeWorktreeId]
+
     if (!groupId) {
       throw new Error('Paired client has no active tab group')
     }
+
     state.setBrowserDefaultUrl(pageUrl)
     await state.openNewBrowserTabInActiveWorkspace(groupId)
   }, url)
@@ -128,6 +140,7 @@ test('converts a preview to a web tab and back from the address bar', async ({
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
   const marker = await startClientHostedMarkerFixture()
   let prepared: PreparedPairedClient | null = null
+
   try {
     prepared = await preparePairedClient(offer, testInfo, testRepoPath)
     const { client, worktreeId, worktreePath } = prepared
@@ -146,9 +159,11 @@ test('converts a preview to a web tab and back from the address bar', async ({
     await expect
       .poll(() => readDocPreviewRenderedText(page, 'h1'), { timeout: 60_000 })
       .toContain(FIXTURE_HEADING)
+
     const preview = requireSingleDocWorkspace(
       await readPairedHtmlPreviewInventory(page, inventoryArgs)
     )
+
     // The activation click a reader would make: the preview opened to the side, unfocused.
     // Browser rows in the strip are keyed by workspace id.
     await page.locator(`[data-tab-id="${preview.workspaceId}"]`).click()
@@ -179,6 +194,7 @@ test('converts a preview to a web tab and back from the address bar', async ({
       .poll(
         async () => {
           const inventory = await readPairedHtmlPreviewInventory(page, inventoryArgs)
+
           return {
             docWorkspaces: inventory.docWorkspaces.length,
             publishedTabs: inventory.hostSessionBrowserTabs.length
@@ -187,13 +203,17 @@ test('converts a preview to a web tab and back from the address bar', async ({
         { timeout: 60_000, message: 'the conversion never reached the store' }
       )
       .toEqual({ docWorkspaces: 0, publishedTabs: 0 })
+
     const converted = await page.evaluate(
       ({ targetWorktreeId, workspaceId }) => {
         const state = window.__store?.getState()
+
         const workspace = (state?.browserTabsByWorktree[targetWorktreeId] ?? []).find(
           (tab) => tab.id === workspaceId
         )
+
         const pages = state?.browserPagesByWorkspace[workspaceId] ?? []
+
         return workspace
           ? {
               url: workspace.url,
@@ -204,6 +224,7 @@ test('converts a preview to a web tab and back from the address bar', async ({
       },
       { targetWorktreeId: worktreeId, workspaceId: preview.workspaceId }
     )
+
     expect(converted?.url).toBe(marker.markerUrl)
     expect(converted?.docLocation).toBeNull()
     expect(converted?.convertedFrom).toMatchObject({ kind: 'workspace-doc' })
@@ -309,6 +330,7 @@ test('converts a preview to a web tab and back from the address bar', async ({
     const returned = requireSingleDocWorkspace(
       await readPairedHtmlPreviewInventory(page, inventoryArgs)
     )
+
     await page.evaluate((workspaceId) => {
       window.__store?.getState().closeBrowserTab(workspaceId)
     }, returned.workspaceId)
@@ -347,29 +369,34 @@ test('converts a preview to a web tab and back from the address bar', async ({
       .poll(
         async () => {
           await secondInput.click()
+
           return secondInput.getAttribute('aria-expanded')
         },
         { timeout: 30_000, message: 'the suggestion dropdown never opened' }
       )
       .toBe('true')
     await secondInput.pressSequentially('Convergence', { delay: 40 })
+
     // Scoped to the suggestion popover: the doc tab's own strip label carries the same title, and
     // a strip click would satisfy a bare text locator without the dropdown existing at all.
     const docSuggestion = page
       .locator('[data-slot="popover-content"]')
       .getByText(FIXTURE_TITLE, { exact: false })
       .first()
+
     await expect(docSuggestion).toBeVisible({ timeout: 10_000 })
     await docSuggestion.click()
     await expect
       .poll(
         async () => {
           const inventory = await readPairedHtmlPreviewInventory(page, inventoryArgs)
+
           const activeWorkspaceId = await page.evaluate(
             (targetWorktreeId) =>
               window.__store?.getState().activeBrowserTabIdByWorktree[targetWorktreeId] ?? null,
             worktreeId
           )
+
           return { docTabs: inventory.docWorkspaces.length, activeWorkspaceId }
         },
         { timeout: 30_000, message: 'selecting the doc suggestion did not activate the doc tab' }

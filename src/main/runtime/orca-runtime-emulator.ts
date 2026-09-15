@@ -35,11 +35,14 @@ export class RuntimeEmulatorCommands {
 
   private requireEmulatorBridge(): EmulatorBridge {
     const bridge = this.host.getEmulatorBridge()
+
     if (!bridge) {
       throw new EmulatorError('emulator_no_active', 'No emulator session is active')
     }
+
     // Honor the user's configured Android SDK path before the backend resolves it.
     setConfiguredAndroidSdkPath(this.host.getSettings().androidSdkPath ?? null)
+
     return bridge
   }
 
@@ -53,6 +56,7 @@ export class RuntimeEmulatorCommands {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     await bridge.tap(params.x, params.y, { device: params.device ?? params.emulator, worktreeId })
+
     return RuntimeEmulatorCommands.OK
   }
 
@@ -65,6 +69,7 @@ export class RuntimeEmulatorCommands {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     await bridge.gesture(params.points, { device: params.device ?? params.emulator, worktreeId })
+
     return RuntimeEmulatorCommands.OK
   }
 
@@ -77,6 +82,7 @@ export class RuntimeEmulatorCommands {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     await bridge.type(params.text, { device: params.device ?? params.emulator, worktreeId })
+
     return RuntimeEmulatorCommands.OK
   }
 
@@ -89,6 +95,7 @@ export class RuntimeEmulatorCommands {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
     await bridge.button(params.name, { device: params.device ?? params.emulator, worktreeId })
+
     return RuntimeEmulatorCommands.OK
   }
 
@@ -104,6 +111,7 @@ export class RuntimeEmulatorCommands {
       device: params.device ?? params.emulator,
       worktreeId
     })
+
     return RuntimeEmulatorCommands.OK
   }
 
@@ -115,6 +123,7 @@ export class RuntimeEmulatorCommands {
   }): Promise<unknown> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveWorktreeId(params.worktree)
+
     return bridge.exec(params.command, {
       device: params.device,
       emulator: params.emulator,
@@ -128,41 +137,54 @@ export class RuntimeEmulatorCommands {
     focus?: boolean
   }): Promise<{ attached: boolean; info?: EmulatorSessionInfo }> {
     const settings = this.host.getSettings()
+
     if (settings.mobileEmulatorEnabled === false) {
       throw new EmulatorError('emulator_disabled', 'Mobile Emulator is disabled in Settings.')
     }
+
     const bridge = this.requireEmulatorBridge()
     let device = params.device ?? settings.mobileEmulatorDefaultDeviceUdid ?? undefined
+
     if (!device) {
       device = await resolveDefaultAttachDevice(bridge)
     }
+
     if (!device) {
       throw new EmulatorError(
         'emulator_device_not_found',
         'No emulator device specified. Choose a default device in Settings > Mobile Emulator or pass a device.'
       )
     }
+
     const worktreeId = await this.resolveWorktreeId(params.worktree)
+
     if (worktreeId) {
       const reusable = await bridge.getReusableActiveForWorktree(worktreeId, device)
+
       if (reusable) {
         // Why: renderer remounts should reconnect to the existing stream, not
         // kill it and create the stream-disconnected reload loop users see.
         this.notifyRendererEmulatorAutoAttach(worktreeId, reusable)
+
         if (params.focus) {
           this.notifyRendererEmulatorPaneFocus(worktreeId)
         }
+
         return { attached: true, info: reusable }
       }
+
       // A different requested device is an explicit switch; the bridge keeps a
       // slow-to-boot Android emulator alive for instant switch-back.
       await bridge.stopActiveForSwitch(worktreeId)
     }
+
     const lease = await bridge.acquireHelperForDevice(device)
     const { info } = lease
+
     if (worktreeId) {
       try {
         const currentWorktreeId = await this.resolveWorktreeId(params.worktree)
+
         if (currentWorktreeId !== worktreeId) {
           throw new EmulatorError(
             'emulator_no_active',
@@ -172,38 +194,46 @@ export class RuntimeEmulatorCommands {
       } catch (error) {
         // Why: the workspace can disappear while a slow Android device boots.
         await lease.release({ cleanupIfUnused: true }).catch(() => {})
+
         if (error instanceof Error && error.message === 'selector_not_found') {
           throw new EmulatorError(
             'emulator_no_active',
             'The workspace changed while the emulator was starting. Reattach the emulator.'
           )
         }
+
         throw error
       }
+
       bridge.registerActiveEmulator(worktreeId, info, { managed: true })
       await lease.release()
       this.notifyRendererEmulatorAutoAttach(worktreeId, info)
+
       if (params.focus) {
         this.notifyRendererEmulatorPaneFocus(worktreeId)
       }
     } else {
       await lease.release()
     }
+
     // Default: no auto steal (mirror browser tab create/switch). --focus sends emulator:pane-focus only when requested.
     return { attached: true, info }
   }
 
   async emulatorList(_params: { worktree?: string } = {}): Promise<unknown> {
     const bridge = this.requireEmulatorBridge()
+
     return bridge.listRunningHelpers()
   }
 
   async emulatorUnregisterActive(params: { worktree?: string }): Promise<{ ok: true }> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveCleanupWorktreeId(params.worktree)
+
     if (worktreeId) {
       bridge.unregisterActiveEmulator(worktreeId)
     }
+
     return RuntimeEmulatorCommands.OK
   }
 
@@ -213,6 +243,7 @@ export class RuntimeEmulatorCommands {
     // rely on startHelperForDevice + ensureDeviceBooted to boot if needed. Worktree param ignored
     // (simulators are host-local, not per-worktree).
     const bridge = this.requireEmulatorBridge()
+
     return bridge.listSimulators()
   }
 
@@ -243,6 +274,7 @@ export class RuntimeEmulatorCommands {
       { device: params.device ?? params.emulator, worktreeId },
       (backend, device) => backend.installApp!(device, params.path, { reinstall: params.reinstall })
     )
+
     return RuntimeEmulatorCommands.OK
   }
 
@@ -255,6 +287,7 @@ export class RuntimeEmulatorCommands {
       { device: params.device ?? params.emulator, worktreeId },
       (backend, device) => backend.launchApp!(device, params.package, params.activity)
     )
+
     return RuntimeEmulatorCommands.OK
   }
 
@@ -272,11 +305,13 @@ export class RuntimeEmulatorCommands {
       (backend, device) =>
         backend.setPermission!(device, params.op, params.package ?? '', params.permission)
     )
+
     return RuntimeEmulatorCommands.OK
   }
 
   async emulatorAx(params: EmulatorTargetParams): Promise<unknown> {
     const worktreeId = await this.resolveWorktreeId(params.worktree)
+
     return this.requireEmulatorBridge().accessibilityTree({
       device: params.device ?? params.emulator,
       worktreeId
@@ -287,6 +322,7 @@ export class RuntimeEmulatorCommands {
     params: EmulatorTargetParams & { lines?: number; filters?: string[] }
   ): Promise<unknown> {
     const worktreeId = await this.resolveWorktreeId(params.worktree)
+
     return this.requireEmulatorBridge().runCapability(
       'logcat',
       { device: params.device ?? params.emulator, worktreeId },
@@ -302,6 +338,7 @@ export class RuntimeEmulatorCommands {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveCleanupWorktreeId(params.worktree)
     const killedUdid = await bridge.kill(params.device ?? params.emulator, worktreeId)
+
     return { ok: true, deviceUdid: killedUdid }
   }
 
@@ -313,11 +350,15 @@ export class RuntimeEmulatorCommands {
   }): Promise<{ ok: true; deviceUdid?: string }> {
     const bridge = this.requireEmulatorBridge()
     const worktreeId = await this.resolveCleanupWorktreeId(params.worktree)
+
     if (params.managedOnly && worktreeId && !params.device && !params.emulator) {
       const shutdownUdid = await bridge.shutdownActiveManagedForWorktree(worktreeId)
+
       return { ok: true, deviceUdid: shutdownUdid ?? undefined }
     }
+
     const shutdownUdid = await bridge.shutdown(params.device ?? params.emulator, worktreeId)
+
     return { ok: true, deviceUdid: shutdownUdid }
   }
 

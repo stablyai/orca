@@ -16,6 +16,7 @@ import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
 
 const desktop = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
+
 const client = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
 
 function setup() {
@@ -26,6 +27,7 @@ function setup() {
     clientNonce: new Uint8Array(32).fill(3),
     clientKeyPair: client
   })
+
   const ready: MobileE2EEV2Ready = {
     type: 'e2ee_ready',
     v: 2,
@@ -35,6 +37,7 @@ function setup() {
     selection: { framing: 2, payloadKinds: ['text', 'binary'] },
     context: session.hello.context
   }
+
   return { session, ready }
 }
 
@@ -54,22 +57,26 @@ describe('mobile E2EE v2 client session', () => {
   it('seals auth at counter zero and rejects replayed desktop frames', () => {
     const { session, ready } = setup()
     expect(session.acceptReady(ready)).toBe(true)
+
     const auth = JSON.stringify({
       type: 'e2ee_auth',
       v: 2,
       transcriptHashB64: session.transcriptHashB64,
       deviceToken: 'token'
     })
+
     const authFrame = Buffer.from(session.sealText(auth), 'base64')
     expect(authFrame.subarray(16, 24)).toEqual(Buffer.alloc(8, 0))
 
     const handshake = validateMobileE2EEV2Handshake(session.hello, ready)!
+
     const schedule = deriveMobileE2EEV2KeySchedule({
       sharedSecret: deriveSharedKey(desktop.secretKey, client.publicKey),
       transcript: encodeMobileE2EEV2Transcript(handshake),
       clientNonce: handshake.clientNonce,
       desktopNonce: handshake.desktopNonce
     })
+
     const response = sealMobileE2EEV2Frame({
       payload: new TextEncoder().encode('authenticated'),
       key: schedule.desktopToMobileKey,
@@ -78,6 +85,7 @@ describe('mobile E2EE v2 client session', () => {
       payloadKind: 'text',
       counter: 0n
     })
+
     const encoded = Buffer.from(response).toString('base64')
     expect(session.openText(encoded)).toBe('authenticated')
     expect(session.openText(encoded)).toBeNull()

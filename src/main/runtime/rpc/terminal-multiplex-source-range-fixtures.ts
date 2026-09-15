@@ -57,24 +57,30 @@ export async function acknowledgeSourceRangeOverflow(
       harness.messages.some((message) => JSON.parse(message).result?.type === 'subscribed')
     ).toBe(true)
   )
+
   const subscribed = harness.messages
     .map((message) => JSON.parse(message).result)
     .find((event) => event?.type === 'subscribed')
+
   harness.binaryFrames.splice(0)
   dataListener(data, {
     seq: data.length,
     rawLength: data.length,
     sourceRanges: [sourceRange(0, data.length)]
   })
+
   const outputFrames = harness.binaryFrames
     .map(decodeTerminalStreamFrame)
     .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+
   const acceptedEndByte = outputFrames.reduce(
     (total, frame) => total + (frame?.payload.byteLength ?? 0),
     0
   )
+
   const ackedEndByte =
     acknowledge === 'first' ? (outputFrames[0]?.payload.byteLength ?? 0) : acceptedEndByte
+
   expect(ackedEndByte).toBeGreaterThan(0)
   harness.handlers.get(7)?.(
     decodeTerminalStreamFrame(
@@ -89,6 +95,7 @@ export async function acknowledgeSourceRangeOverflow(
       })
     )!
   )
+
   return { acceptedEndByte, ackedEndByte, streamGeneration: subscribed.streamGeneration }
 }
 
@@ -107,28 +114,37 @@ export function startSourceRangeOverflowHarness(options: {
 }) {
   let dataListener: ((data: string, meta?: RuntimeTerminalDataMeta) => void) | undefined
   const lifecycle: string[] = []
+
   const reserve = vi.fn((identity, requiredSeq: number, reason: string) => {
     if (reason !== 'ack-pending-overflow') {
       return null
     }
+
     lifecycle.push('reserve')
+
     return Object.freeze({
       reservationId: 'overflow-replacement',
       identity: Object.freeze({ ...identity }),
       requiredSeq
     })
   })
+
   const commit = vi.fn(() => {
     lifecycle.push('commit')
+
     return options.commit?.() ?? true
   })
+
   const rollback = vi.fn(() => {
     lifecycle.push('rollback')
+
     return true
   })
+
   const cancel = vi.fn(() => {
     lifecycle.push('cancel')
   })
+
   const harness = startDesktopMultiplexSubscribe(
     {
       attachRemoteTerminalSourceRangeConsumer: vi.fn(() => true),
@@ -149,15 +165,18 @@ export function startSourceRangeOverflowHarness(options: {
         .mockImplementationOnce(options.recover),
       subscribeToTerminalData: vi.fn((_ptyId, listener) => {
         dataListener = listener
+
         return vi.fn()
       })
     },
     undefined,
     (bytes) => {
       const frame = decodeTerminalStreamFrame(bytes)
+
       return frame ? options.onFrame?.(frame) : undefined
     }
   )
+
   return {
     ...harness,
     lifecycle,

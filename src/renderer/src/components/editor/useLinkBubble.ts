@@ -41,24 +41,31 @@ export function useLinkBubble(
     linkContext.htmlSuperscriptLinkContext.getSnapshot,
     linkContext.htmlSuperscriptLinkContext.getSnapshot
   )
+
   useEffect(() => {
     if (!linkBubble) {
       return
     }
+
     const openEnabled = classifyHtmlSuperscriptLinkAction(linkBubble.href, citationContextSnapshot)
+
     if (openEnabled !== linkBubble.openEnabled) {
       setLinkBubble({ ...linkBubble, openEnabled })
     }
   }, [citationContextSnapshot, linkBubble, setLinkBubble])
+
   const startLinkEdit = useCallback(() => {
     if (!editor) {
       return
     }
+
     const pos = getLinkBubblePosition(editor, rootRef.current)
+
     if (pos) {
       const href = editor.isActive('link')
         ? (editor.getAttributes('link').href as string) || ''
         : ''
+
       setLinkBubble({
         kind: 'markdown',
         href,
@@ -81,6 +88,7 @@ export function useLinkBubble(
           editor.chain().focus().extendMarkRange('link').setLink({ href }).run()
         } else {
           const { from, to } = editor.state.selection
+
           if (from === to) {
             // No selection: insert URL as both the link text and href.
             editor
@@ -101,6 +109,7 @@ export function useLinkBubble(
       } else {
         editor.commands.focus()
       }
+
       setIsEditingLink(false)
     },
     [editor, setIsEditingLink]
@@ -110,6 +119,7 @@ export function useLinkBubble(
     if (!editor) {
       return
     }
+
     editor.chain().focus().extendMarkRange('link').unsetLink().run()
     setLinkBubble(null)
     setIsEditingLink(false)
@@ -117,9 +127,11 @@ export function useLinkBubble(
 
   const handleLinkEditCancel = useCallback(() => {
     setIsEditingLink(false)
+
     if (!linkBubble?.href) {
       setLinkBubble(null)
     }
+
     editor?.commands.focus()
   }, [editor, linkBubble?.href, setLinkBubble, setIsEditingLink])
 
@@ -133,10 +145,13 @@ export function useLinkBubble(
     ) {
       return
     }
+
     if (linkBubble.href.startsWith('#')) {
       scrollToAnchorInEditor(rootRef.current, linkBubble.href.slice(1))
+
       return
     }
+
     void activateMarkdownLink(linkBubble.href, {
       sourceFilePath: linkContext.sourceFilePath,
       worktreeId: linkContext.worktreeId,
@@ -160,6 +175,7 @@ export function useLinkBubble(
     if (!linkBubble?.href || !linkBubble.copyEnabled) {
       return
     }
+
     void copyRichMarkdownLink(linkBubble.href)
   }, [linkBubble?.copyEnabled, linkBubble?.href])
 
@@ -167,6 +183,7 @@ export function useLinkBubble(
     if (!editor) {
       return
     }
+
     if (editor.isActive('link')) {
       editor.chain().focus().extendMarkRange('link').unsetLink().run()
       setLinkBubble(null)

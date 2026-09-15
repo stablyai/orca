@@ -24,6 +24,7 @@ vi.mock('electron', () => ({
   screen: { getCursorScreenPoint: browserMocks.screenGetCursorScreenPointMock },
   webContents: { fromId: browserMocks.webContentsFromIdMock }
 }))
+
 vi.mock('./popup-origin-bar-window', () => ({
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
 }))
@@ -62,6 +63,7 @@ type GuestFake = {
 
 function createGuest(id: number, url: string): GuestFake {
   const listeners = new Map<string, ((...args: never[]) => void)[]>()
+
   const guest: GuestFake = {
     id,
     url,
@@ -100,6 +102,7 @@ function createGuest(id: number, url: string): GuestFake {
       )
     }
   }
+
   return guest
 }
 
@@ -111,9 +114,11 @@ function listenerCount(guest: GuestFake, event: string): number {
 function navigateTo(guest: GuestFake, url: string): boolean {
   let prevented = false
   const event = { preventDefault: () => (prevented = true) } as never
+
   for (const listener of guest.listeners.get('will-navigate') ?? []) {
     ;(listener as (event: unknown, url: string) => void)(event, url)
   }
+
   return prevented
 }
 
@@ -133,14 +138,17 @@ describe('guest policy profiles', () => {
     browserPageId: string
   } {
     const browserPageId = `doc-page-${id}`
+
     const grant = mintDocPreviewGrant({
       owner: { kind: 'ssh', connectionId: 'ssh-1' },
       root: '/home/alice/docs',
       entryRelativePath: 'index.html',
       browserPageId
     })
+
     const guest = createGuest(id, buildDocPreviewUrl(grant.id, 'index.html'))
     browserManager.attachGuestPolicies(guest as never, null, { profile: 'workspace-doc', host })
+
     return { guest, grantId: grant.id, browserPageId }
   }
 
@@ -224,6 +232,7 @@ describe('guest policy profiles', () => {
         webContentsId: id,
         rendererWebContentsId: host.id
       })
+
       return guest
     }
 

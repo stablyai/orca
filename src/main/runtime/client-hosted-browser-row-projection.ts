@@ -18,6 +18,7 @@ export function projectClientHostedBrowserRows(
 ): ClientHostedBrowserRow[] {
   return pages.map((page) => {
     const hostAbsent = !sources.hasLivePlacement(page.browserPageId)
+
     return {
       browserPageId: page.browserPageId,
       worktreeId: page.workspaceId,

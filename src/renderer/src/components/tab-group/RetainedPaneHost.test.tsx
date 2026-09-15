@@ -4,7 +4,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RetainedPaneHost } from './RetainedPaneHost'
 
 const disconnect = vi.fn()
+
 let notifyResize: () => void
+
 let anchors: HTMLDivElement[]
 
 beforeEach(() => {
@@ -25,6 +27,7 @@ beforeEach(() => {
     anchor.dataset.tabGroupBodyId = id
     anchor.getBoundingClientRect = () => new DOMRect(index * 400, 32, 400, 568)
     document.body.append(anchor)
+
     return anchor
   })
 })
@@ -38,11 +41,13 @@ afterEach(() => {
 it('retains pane content across group moves and visibility changes using measured browser bounds', () => {
   const focus = vi.fn()
   const content = <input defaultValue="draft" />
+
   const view = render(
     <RetainedPaneHost groupId="left" isVisible onFocusOwningGroup={focus}>
       {content}
     </RetainedPaneHost>
   )
+
   const host = view.container.firstElementChild as HTMLDivElement
   const input = view.getByRole('textbox')
   expect(host.style.top).toBe('32px')
@@ -87,11 +92,13 @@ it('retains pane content across group moves and visibility changes using measure
 
 it('allows hidden terminal startup measurement without exposing input or starting fit timers for chat', () => {
   const timeout = vi.spyOn(window, 'setTimeout')
+
   const view = render(
     <RetainedPaneHost groupId="left" isVisible={false} measureWhileHidden>
       <input />
     </RetainedPaneHost>
   )
+
   const host = view.container.firstElementChild as HTMLDivElement
   expect(host.style.display).toBe('flex')
   expect(host.style.opacity).toBe('0')

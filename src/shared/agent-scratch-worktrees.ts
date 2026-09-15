@@ -28,6 +28,7 @@ export function createAgentScratchWorktreePathMatcher(
     checkoutPaths,
     configuredWorktreeBasePaths
   )
+
   return (worktreePath) => classify(worktreePath)?.kind === 'built-in'
 }
 
@@ -53,6 +54,7 @@ const AGENT_SCRATCH_REPO_ROOT_SEGMENTS: readonly (readonly string[])[] = [
 
 export function isAgentScratchRepoRootPath(repoPath: string): boolean {
   const segments = normalizeRuntimePathForComparison(repoPath).split('/')
+
   for (const marker of AGENT_SCRATCH_REPO_ROOT_SEGMENTS) {
     // Why: match the marker anywhere above the repo root (the repo lives at or
     // under the scratch container), unlike worktree matching which anchors to a
@@ -63,5 +65,6 @@ export function isAgentScratchRepoRootPath(repoPath: string): boolean {
       }
     }
   }
+
   return false
 }

@@ -3,8 +3,11 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 
 const require = createRequire(import.meta.url)
+
 const scriptDir = import.meta.dirname
+
 const mobileRoot = path.resolve(scriptDir, '..')
+
 const outputPath = path.join(
   mobileRoot,
   'src',
@@ -19,6 +22,7 @@ const outputPath = path.join(
 // integrity-checked through the lockfile and available offline.
 async function main() {
   const packageJsonPath = require.resolve('mermaid/package.json')
+
   const [packageJson, bundleJs] = await Promise.all([
     readFile(packageJsonPath, 'utf8').then(JSON.parse),
     readFile(path.join(path.dirname(packageJsonPath), 'dist', 'mermaid.min.js'), 'utf8')

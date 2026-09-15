@@ -16,7 +16,9 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 // nothing while every one of its own tests stays green.
 
 const THREAD_ID = '01a07d54-3785-71d0-b065-82c8ebbc572a'
+
 const PARENT_TURN = '01a07d54-37be-72e1-8206-8f0c23dd2cef'
+
 const CHILD_ID = '01a07d54-5523-78a3-91f5-e0acb1dab065'
 
 /** A three-route stand-in, deliberately smaller than the full adapter harness:
@@ -26,8 +28,10 @@ function fakeCodex(close: () => Promise<boolean> = async () => true): {
   openConnection: typeof openCodexAppServerConnection
 } {
   let live: CodexAppServerConnectionHandlers = {}
+
   const openConnection = (async (_launch, handlers = {}) => {
     live = handlers
+
     const connection: CodexAppServerConnection = {
       pid: 4321,
       closed: false,
@@ -38,8 +42,10 @@ function fakeCodex(close: () => Promise<boolean> = async () => true): {
       respondWithError: () => {},
       close
     } as unknown as CodexAppServerConnection
+
     return connection
   }) as typeof openCodexAppServerConnection
+
   return { handlers: () => live, openConnection }
 }
 
@@ -82,6 +88,7 @@ async function adapterWithSession(
   close?: () => Promise<boolean>
 ): Promise<{ adapter: CodexStructuredSessionAdapter; codex: ReturnType<typeof fakeCodex> }> {
   const codex = fakeCodex(close)
+
   const adapter = new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
       command: 'codex',
@@ -95,6 +102,7 @@ async function adapterWithSession(
     onEvent,
     onBackgroundTasksChanged: (sessionId, state) => published.push({ sessionId, state })
   })
+
   await adapter.acquire({
     identity: identity('session-1'),
     fence: 7,
@@ -109,6 +117,7 @@ async function adapterWithSession(
     threadId: CHILD_ID,
     turn: { id: 'child-turn', status: 'inProgress' }
   })
+
   return { adapter, codex }
 }
 
@@ -173,16 +182,20 @@ describe('codex background tasks reach the strip', () => {
     const published: { sessionId: string; state: AgentSessionBackgroundTaskState | null }[] = []
     const observed: CodexStructuredSessionEvent[] = []
     const appendItem = vi.fn()
+
     const { adapter, codex } = await adapterWithSession(
       published,
       { appendItem, appendTombstone: () => {}, publish: () => {} },
       (event) => observed.push(event)
     )
+
     appendItem.mockClear()
     observed.length = 0
+
     const admission = vi
       .spyOn(CodexBackgroundTaskTracker.prototype, 'canObserve')
       .mockReturnValue(false)
+
     try {
       codex.handlers().onNotification?.('item/started', {
         threadId: THREAD_ID,
@@ -219,6 +232,7 @@ describe('codex background tasks reach the strip', () => {
   it('publishes the fan-out while it runs and keeps it past the spawning turn', async () => {
     const published: { sessionId: string; state: AgentSessionBackgroundTaskState | null }[] = []
     const { adapter, codex } = await adapterWithSession(published)
+
     const running = {
       state: 'monitoring',
       supportsStopAll: false,

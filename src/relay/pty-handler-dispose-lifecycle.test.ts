@@ -36,6 +36,7 @@ import { beginPtyHandlerTest, endPtyHandlerTest, testPtyId } from './pty-handler
 import type { MockDispatcher } from './pty-handler-test-harness'
 
 const PTY_1 = testPtyId(1)
+
 const PTY_2 = testPtyId(2)
 
 describe('PtyHandler', () => {
@@ -145,9 +146,11 @@ describe('PtyHandler', () => {
     })
 
     let settled = false
+
     const shutdown = handler.shutdownForWorktreePath('/repo').finally(() => {
       settled = true
     })
+
     await Promise.resolve()
     expect(firstKill).toHaveBeenCalledWith('SIGKILL')
     expect(secondKill).not.toHaveBeenCalled()
@@ -209,6 +212,7 @@ describe('PtyHandler', () => {
       'PTY handler is shutting down'
     )
     const aliveSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
     try {
       await expect(
         dispatcher.callRequest('pty.revive', {
@@ -230,11 +234,13 @@ describe('PtyHandler', () => {
   it('retries a rejected force kill during dispose and waits for physical exit', async () => {
     let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     let forceAttempts = 0
+
     const mockKill = vi.fn((signal: string) => {
       if (signal === 'SIGKILL' && forceAttempts++ === 0) {
         throw new Error('transient dispose kill failure')
       }
     })
+
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
       kill: mockKill,
@@ -263,11 +269,13 @@ describe('PtyHandler', () => {
   it('takes ownership when dispose overlaps a queued graceful force-kill retry', async () => {
     let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     let forceAttempts = 0
+
     const mockKill = vi.fn((signal: string) => {
       if (signal === 'SIGKILL' && forceAttempts++ < 2) {
         throw new Error('transient overlapping kill failure')
       }
     })
+
     mockPtySpawn.mockReturnValue({
       ...mockPtyInstance,
       kill: mockKill,
@@ -323,9 +331,11 @@ describe('PtyHandler', () => {
     // destroy() as an orphan on the remote host. SIGKILL is not ignorable.
     expect(mockKill).toHaveBeenCalledWith('SIGKILL')
     expect(handler.activePtyCount).toBe(2)
+
     for (const onExit of onExitCallbacks) {
       onExit({ exitCode: 137 })
     }
+
     await dispose
     expect(exits).toEqual([
       { id: PTY_1, paneKey: 'tab-dispose:0' },

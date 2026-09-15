@@ -34,7 +34,9 @@ const REPOS = [
 ]
 
 let container: HTMLDivElement
+
 let root: Root
+
 let setFilterRepoIds: ReturnType<typeof vi.fn>
 
 function setState(overrides: Record<string, unknown> = {}): void {
@@ -64,9 +66,11 @@ function render(): void {
 /** Radix's trigger opens on pointer, the real path users take with a mouse. */
 function openSubmenu(): void {
   const trigger = document.querySelector<HTMLElement>('[data-slot="dropdown-menu-sub-trigger"]')
+
   if (!trigger) {
     throw new Error('sub-trigger not rendered')
   }
+
   act(() => {
     trigger.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }))
     trigger.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, pointerType: 'mouse' }))
@@ -76,9 +80,11 @@ function openSubmenu(): void {
 
 function closeSubmenu(): void {
   const content = document.querySelector<HTMLElement>('[data-slot="dropdown-menu-sub-content"]')
+
   if (!content) {
     throw new Error('sub-content not rendered')
   }
+
   act(() => {
     content.dispatchEvent(
       new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true })
@@ -100,9 +106,11 @@ async function settle(): Promise<void> {
 /** Types into whatever currently holds focus, so routing is part of the assertion. */
 function typeIntoFocused(value: string): void {
   const input = document.activeElement
+
   if (!(input instanceof HTMLInputElement)) {
     throw new Error(`focus is on ${document.activeElement?.nodeName ?? 'nothing'}, not an input`)
   }
+
   act(() => {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
     setter?.call(input, value)
@@ -117,8 +125,11 @@ beforeEach(() => {
   // Radix probes pointer capture and scrolling that happy-dom does not model.
   Element.prototype.hasPointerCapture ??= () => false
   Element.prototype.setPointerCapture ??= () => {}
+
   Element.prototype.releasePointerCapture ??= () => {}
+
   Element.prototype.scrollIntoView ??= () => {}
+
   globalThis.ResizeObserver ??= class {
     observe(): void {}
     unobserve(): void {}

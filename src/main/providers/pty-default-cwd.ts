@@ -6,6 +6,7 @@ function homeDrivePath(env: NodeJS.ProcessEnv): string | null {
   if (!env.HOMEDRIVE || !env.HOMEPATH) {
     return null
   }
+
   return `${env.HOMEDRIVE}${env.HOMEPATH}`
 }
 
@@ -18,7 +19,9 @@ export function resolveSafePtyDefaultCwd(env: NodeJS.ProcessEnv = process.env): 
     process.platform === 'win32'
       ? [env.USERPROFILE, homeDrivePath(env), homedir()]
       : [env.HOME, homedir()]
+
   const selected = candidates.find(isSafeImplicitPtyCwd)
+
   // Why: silently falling back to "/" or a drive root is the exact runaway-CPU
   // bug this module prevents (see runaway-cpu-hidden-usage-pty-design.md) — fail loud.
   if (!selected) {
@@ -30,6 +33,7 @@ export function resolveSafePtyDefaultCwd(env: NodeJS.ProcessEnv = process.env): 
     )
     throw new Error('No safe default working directory is available for terminal launch.')
   }
+
   return selected
 }
 
@@ -37,6 +41,7 @@ export function assertSafeAgentStartupCwd(cwd: string | undefined, command: stri
   if (isSafeImplicitPtyCwd(cwd)) {
     return
   }
+
   throw new Error(
     `Automatic agent startup command "${command}" requires a non-root workspace working directory.`
   )

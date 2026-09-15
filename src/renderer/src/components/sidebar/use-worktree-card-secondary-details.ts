@@ -13,7 +13,9 @@ import type { useWorktreeCardLinkedDetails } from './use-worktree-card-linked-de
 import type { useWorktreeCardReviewDetails } from './use-worktree-card-review-details'
 
 type Foundation = ReturnType<typeof useWorktreeCardFoundation>
+
 type LinkedDetails = ReturnType<typeof useWorktreeCardLinkedDetails>
+
 type ReviewDetails = ReturnType<typeof useWorktreeCardReviewDetails>
 
 export function useWorktreeCardSecondaryDetails({
@@ -89,22 +91,28 @@ export function useWorktreeCardSecondaryDetails({
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
   const metaComment = showComment ? hoverComment : null
   const showInlineAgentList = cardProps.includes('inline-agents') && (newCardStyle || !compactCards)
+
   const compactInlineAgentRows = useWorktreeAgentRows(
     worktree.id,
     showInlineAgentList && agentActivityDisplayMode === 'compact'
   )
+
   const compactInlineAgentRowsVisible =
     showInlineAgentList &&
     agentActivityDisplayMode === 'compact' &&
     compactInlineAgentRows.length > 0
+
   const showAggregateCacheTimer = !compactCards && !compactInlineAgentRowsVisible
+
   const handleOpenGitHubIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
       const issueUrl = hoverIssue && 'url' in hoverIssue ? hoverIssue.url : undefined
+
       if (!repo || !hoverIssue || !issueUrl) {
         return
       }
+
       const item: GitHubWorkItem = {
         id: issueUrl,
         type: 'issue',
@@ -117,16 +125,20 @@ export function useWorktreeCardSecondaryDetails({
         author: null,
         repoId: repo.id
       }
+
       openTaskPage({ taskSource: 'github', preselectedRepoId: repo.id, openGitHubWorkItem: item })
     },
     [hoverIssue, openTaskPage, repo]
   )
+
   const handleOpenReviewInOrca = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
+
       if (!repo || !hoverReview?.url || hoverReview.provider !== 'github') {
         return
       }
+
       const item: GitHubWorkItem = {
         id: hoverReview.url,
         type: 'pr',
@@ -140,10 +152,12 @@ export function useWorktreeCardSecondaryDetails({
         headSha: 'headSha' in hoverReview ? hoverReview.headSha : undefined,
         repoId: repo.id
       }
+
       openTaskPage({ taskSource: 'github', preselectedRepoId: repo.id, openGitHubWorkItem: item })
     },
     [hoverReview, openTaskPage, repo]
   )
+
   const openLinkedUrlInBrowser = useCallback(
     (url: string): void => {
       void openWorkspaceBrowserTab({
@@ -160,33 +174,40 @@ export function useWorktreeCardSecondaryDetails({
     },
     [worktree.id]
   )
+
   const handleOpenIssueInBrowser = useCallback(
     (url: string): void => {
       openLinkedUrlInBrowser(url)
     },
     [openLinkedUrlInBrowser]
   )
+
   const handleOpenReviewInBrowser = useCallback(
     (url: string): void => {
       openLinkedUrlInBrowser(url)
     },
     [openLinkedUrlInBrowser]
   )
+
   const hoverReviewProvider = hoverReview?.provider
+
   const canUnlinkReview =
     hoverReviewProvider === 'github' ||
     (hoverReviewProvider === 'gitlab' && linkedGitLabMR !== null) ||
     (hoverReviewProvider === 'bitbucket' && linkedBitbucketPR !== null) ||
     (hoverReviewProvider === 'azure-devops' && linkedAzureDevOpsPR !== null) ||
     (hoverReviewProvider === 'gitea' && linkedGiteaPR !== null)
+
   const hasExplicitLinkedReview =
     (hoverReviewProvider === 'github' && worktree.linkedPR !== null) ||
     (hoverReviewProvider === 'gitlab' && linkedGitLabMR !== null) ||
     (hoverReviewProvider === 'bitbucket' && linkedBitbucketPR !== null) ||
     (hoverReviewProvider === 'azure-devops' && linkedAzureDevOpsPR !== null) ||
     (hoverReviewProvider === 'gitea' && linkedGiteaPR !== null)
+
   const handleUnlinkReview = useCallback(async () => {
     const options = { executionHostId: worktree.hostId ?? 'local' }
+
     switch (hoverReviewProvider) {
       case 'github':
         if (hoverReview) {
@@ -195,19 +216,24 @@ export function useWorktreeCardSecondaryDetails({
             { linkedPR: null, suppressedGitHubPR: hoverReview.number },
             options
           )
+
           if (!result.ok) {
             toast.error(result.error)
           }
         }
+
         return
       case 'gitlab':
         void updateWorktreeMeta(worktree.id, { linkedGitLabMR: null }, options)
+
         return
       case 'bitbucket':
         void updateWorktreeMeta(worktree.id, { linkedBitbucketPR: null }, options)
+
         return
       case 'azure-devops':
         void updateWorktreeMeta(worktree.id, { linkedAzureDevOpsPR: null }, options)
+
         return
       case 'gitea':
         void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null }, options)
@@ -217,16 +243,20 @@ export function useWorktreeCardSecondaryDetails({
         break
     }
   }, [hoverReview, hoverReviewProvider, updateWorktreeMeta, worktree.hostId, worktree.id])
+
   const handleOpenLinearIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
+
       if (!linearIssue) {
         return
       }
+
       openTaskPage({ taskSource: 'linear', openLinearIssue: linearIssue })
     },
     [linearIssue, openTaskPage]
   )
+
   const hasDetails = hasWorktreeCardDetails({
     issue: metaIssue,
     linearIssue: metaLinearIssue,
@@ -236,6 +266,7 @@ export function useWorktreeCardSecondaryDetails({
     automationProvenance: metaAutomationProvenance,
     cliProvenance: metaCliProvenance
   })
+
   const hasPorts = showPorts && workspacePorts.length > 0
   const cacheStartedAt = usePromptCacheCountdownStartedAt(worktree.id, showAggregateCacheTimer)
   // Why: derived from the settings the card already subscribes to — a third store

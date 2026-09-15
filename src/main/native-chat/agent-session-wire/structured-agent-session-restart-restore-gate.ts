@@ -5,13 +5,17 @@ export class StructuredAgentSessionRestartRestoreGate {
     if (this.current) {
       return this.current
     }
+
     const tracked = restore().catch((error: unknown) => {
       if (this.current === tracked) {
         this.current = null
       }
+
       throw error
     })
+
     this.current = tracked
+
     return tracked
   }
 }

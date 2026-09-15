@@ -73,20 +73,26 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const showPinnedRepoIcon = inPinnedSection && !!repo
   // Why: new card style retired the Compact/Detailed switch; repo identity uses the compact chip, not a lower pill.
   const showRepoIdentityInTitle = newCardStyle || compactCards
+
   const showInlineRepoBadge =
     showRepoIdentityInTitle && !!repo && !hideRepoBadge && !isFolder && !showPinnedRepoIcon
+
   const showRepoBadgeInMetaRow =
     !showRepoIdentityInTitle && !!repo && !hideRepoBadge && !showPinnedRepoIcon
+
   const showHostContextBadge = !compactCards && !!hostContextLabel
   const showDetachedHeadInMetaRow = !compactCards && !isFolder && detachedHeadDisplay !== null
+
   const showBranch =
     !isFolder &&
     branch.length > 0 &&
     !newCardStyle &&
     (!compactCards || branch !== worktree.displayName)
+
   // Why: rebases already surface in source control, so dense cards skip the persistent rebase chip.
   const showConflictOperationBadge =
     !!conflictOperation && conflictOperation !== 'unknown' && conflictOperation !== 'rebase'
+
   const hasMetadataBadge = showConflictOperationBadge
   const showUnreadQuickAction = !affiliateListMode && showStatus && !newCardStyle
   // Why: the slot owns the unread/status lane; legacy keeps the bell toggle, the new card keeps the glyph passive.
@@ -94,6 +100,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const showTitleRowPrimary = compactCards && worktree.isMainWorktree && !isFolder
   const showMetaRowDetails = !newCardStyle && !compactCards && (hasDetails || hasPorts)
   const showTitleRowIndicators = (newCardStyle || compactCards) && (hasDetails || hasPorts)
+
   // Why: grouped views can hide the repo badge; don't reserve a blank metadata lane unless there's real content.
   const hasDetailedMetaRowContent = Boolean(
     (showRepoBadgeInMetaRow && repo) ||
@@ -106,27 +113,34 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     cacheStartedAt != null ||
     showMetaRowDetails
   )
+
   const hasMetaRow = compactCards
     ? hasMetadataBadge || cacheStartedAt != null
     : hasDetailedMetaRowContent
+
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
   // Why: normalize the title once so title/branch de-dupe and identity-only hover eligibility stay in sync.
   const trimmedVisibleCardTitle = visibleCardTitle.trim()
+
   const showBranchIdentityHover = newCardStyle
     ? Boolean(identityDisplay) &&
       !cardProps.includes('branch') &&
       identityDisplay !== trimmedVisibleCardTitle
     : compactCards && showBranch
+
   const hoverBranchName = newCardStyle
     ? identityDisplay
     : showBranchIdentityHover
       ? branch
       : undefined
+
   const hoverWorkspaceTitle =
     trimmedVisibleCardTitle.length > 0 && trimmedVisibleCardTitle !== hoverBranchName
       ? trimmedVisibleCardTitle
       : undefined
+
   const hasHoverIdentity = Boolean(hoverWorkspaceTitle || hoverBranchName)
+
   const hasHoverDetails =
     newCardStyle &&
     (hasWorktreeCardDetails({
@@ -140,6 +154,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     }) ||
       workspacePorts.length > 0 ||
       hasHoverIdentity)
+
   // Why: the parent row owns metadata hover; don't stack the title's truncation tooltip on the details popover.
   const titleWrapper = newCardStyle
     ? hasHoverDetails
@@ -190,18 +205,23 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
           </WorktreeCardDetailsHover>
         )
       : undefined
+
   // Why: sidebar rows need a small surface inset while content stays aligned with the pre-inset layout.
   const applyNewCardStyleStatusLaneOffset = newCardStyle && showCombinedStatusSlot
+
   const cardPaddingLeft = flushSurface
     ? getFlushWorktreeCardPaddingLeft(contentIndent, applyNewCardStyleStatusLaneOffset)
     : contentIndent > 0
       ? `calc(0.125rem + ${contentIndent}px)`
       : null
+
   const parentContentMarginLeft =
     flushSurface && applyNewCardStyleStatusLaneOffset
       ? getNewCardStyleParentContentMarginLeft(contentIndent)
       : 0
+
   const cardStyle = cardPaddingLeft ? { paddingLeft: cardPaddingLeft } : undefined
+
   const detailsAndPortsContent =
     hasDetails || hasPorts ? (
       <div className="flex shrink-0 items-center gap-1">
@@ -220,6 +240,7 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
         )}
       </div>
     ) : null
+
   const detailsAndPorts =
     detailsAndPortsContent && !newCardStyle ? (
       <WorktreeCardDetailsHover
@@ -254,11 +275,14 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
     ) : (
       detailsAndPortsContent
     )
+
   const titleRowIndicators = showTitleRowIndicators ? (
     <div className="ml-auto flex shrink-0 items-center gap-1 pr-1.5">{detailsAndPorts}</div>
   ) : null
+
   const hasSecondaryCardContent =
     hasMetaRow || !!remoteBranchConflict || showInlineAgentList || showLineageChildChip
+
   const titleOnlyCard = !hasSecondaryCardContent
 
   return {

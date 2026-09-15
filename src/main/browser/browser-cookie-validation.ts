@@ -53,31 +53,41 @@ export function normalizeSameSite(
   if (typeof raw === 'number') {
     return databaseSameSite(raw)
   }
+
   if (typeof raw !== 'string') {
     return 'unspecified'
   }
+
   const lower = raw.toLowerCase()
+
   if (lower === 'lax') {
     return 'lax'
   }
+
   if (lower === 'strict') {
     return 'strict'
   }
+
   if (lower === 'none' || lower === 'no_restriction') {
     return 'no_restriction'
   }
+
   return 'unspecified'
 }
 
 // Why: a cookie identity needs a url to scope it; derive it from domain + secure flag.
 export function deriveUrl(domain: string, secure: boolean): string | null {
   const normalizedDomain = normalizeCookieDomain(domain)
+
   if (!normalizedDomain) {
     return null
   }
+
   const protocol = secure ? 'https' : 'http'
+
   try {
     const url = new URL(`${protocol}://${normalizedDomain}/`)
+
     return url.toString()
   } catch {
     return null
@@ -88,9 +98,11 @@ export function validateCookieEntry(raw: RawCookieEntry): ValidatedCookie | null
   if (typeof raw.domain !== 'string' || raw.domain.trim().length === 0) {
     return null
   }
+
   if (typeof raw.name !== 'string' || raw.name.trim().length === 0) {
     return null
   }
+
   if (typeof raw.value !== 'string') {
     return null
   }
@@ -98,6 +110,7 @@ export function validateCookieEntry(raw: RawCookieEntry): ValidatedCookie | null
   const domain = raw.domain.trim()
   const secure = raw.secure === true || raw.secure === 1
   const url = deriveUrl(domain, secure)
+
   if (!url) {
     return null
   }

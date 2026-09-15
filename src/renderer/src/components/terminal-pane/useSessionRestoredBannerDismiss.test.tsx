@@ -10,6 +10,7 @@ const mountedRoots: Root[] = []
 function Probe({ visible, dismiss }: { visible: boolean; dismiss: () => void }): React.JSX.Element {
   const ref = useRef<HTMLDivElement | null>(null)
   useSessionRestoredBannerDismiss(visible, ref, dismiss)
+
   return <div ref={ref} data-testid="pane" />
 }
 

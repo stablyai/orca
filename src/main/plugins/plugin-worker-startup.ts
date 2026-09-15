@@ -49,6 +49,7 @@ export async function startPluginWorkerAttempt(options: {
   const lease = await options.slots.acquire(options.signal)
   let handle: PluginWorkerHandle | null = null
   let retained = false
+
   try {
     options.assertActive()
     const factory = options.factory ?? startPluginWorker
@@ -66,6 +67,7 @@ export async function startPluginWorkerAttempt(options: {
     let startCompleted = false
     let earlyExit = false
     let earlyExitCode: number | null = null
+
     const worker: StartedPluginWorker = {
       spec: options.spec,
       generation: options.generation,
@@ -73,23 +75,29 @@ export async function startPluginWorkerAttempt(options: {
       lease,
       completeStart: () => {
         startCompleted = true
+
         return { exited: earlyExit, code: earlyExitCode }
       }
     }
+
     handle.onExit((code) => {
       if (!startCompleted) {
         earlyExit = true
         earlyExitCode = code
+
         return
       }
+
       options.onExit(worker, code)
     })
     retained = true
+
     return worker
   } catch (error) {
     if (handle) {
       await handle.dispose().catch(() => undefined)
     }
+
     throw error
   } finally {
     if (!retained) {

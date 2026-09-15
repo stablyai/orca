@@ -11,6 +11,7 @@ const LOCAL_HOST_LABEL = getLocalExecutionHostLabel('darwin')
 describe('new workspace project targets', () => {
   it('groups local and SSH checkouts of the same project', () => {
     const upstream = { owner: 'stablyai', repo: 'orca' }
+
     const options = buildNewWorkspaceProjectOptions([
       { id: 'local', displayName: 'orca', path: '/src/orca', upstream },
       {
@@ -73,6 +74,7 @@ describe('new workspace project targets', () => {
 
   it('shows one target per host when the project has multiple local worktrees', () => {
     const upstream = { owner: 'stablyai', repo: 'orca' }
+
     const repos = [
       { id: 'local-a', displayName: 'orca-a', path: '/src/orca-a', upstream },
       { id: 'local-b', displayName: 'orca-b', path: '/src/orca-b', upstream },
@@ -84,6 +86,7 @@ describe('new workspace project targets', () => {
         upstream
       }
     ]
+
     const projectId = buildNewWorkspaceProjectOptions(repos)[0]?.id ?? null
 
     expect(buildNewWorkspaceRunTargetOptions(repos, projectId, 'darwin')).toEqual([

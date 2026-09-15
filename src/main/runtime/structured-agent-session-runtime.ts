@@ -49,6 +49,7 @@ export function hasPersistedStructuredAgentSessionStore(
   fileExists: (path: string) => boolean = existsSync
 ): boolean {
   const filePath = agentSessionStorePath(join(stateDirectory, RECORD_STORE_DIR_NAME))
+
   return fileExists(filePath) || fileExists(`${filePath}.bak`)
 }
 
@@ -119,6 +120,7 @@ export function ensureStructuredAgentSessionHost(
     installing = null
     throw error
   })
+
   return installing.then((installed) => installed.host)
 }
 
@@ -147,10 +149,13 @@ export async function stopStructuredAgentSessionRuntime(): Promise<void> {
   const outstanding = [...pendingTeardown]
   pendingTeardown.clear()
   const installed = pending ? await pending.catch(() => null) : null
+
   if (installed) {
     outstanding.push(installed)
   }
+
   const failures: unknown[] = []
+
   for (const runtime of outstanding) {
     try {
       await tearDownRuntime(runtime)
@@ -159,9 +164,11 @@ export async function stopStructuredAgentSessionRuntime(): Promise<void> {
       failures.push(error)
     }
   }
+
   if (failures.length === 1) {
     throw failures[0]
   }
+
   if (failures.length > 1) {
     throw new AggregateError(failures, 'structured agent-session runtime teardown failed')
   }
@@ -172,6 +179,7 @@ async function tearDownRuntime(installed: InstalledRuntime): Promise<void> {
   // be writing lifecycle rows or acquiring a replacement child.
   await installed.waitForRecovery()
   const failures: unknown[] = []
+
   // Host teardown runs FIRST, which inverts the older order. It is what stops this host's
   // provider children now: it evicts each owned session through the adapter, and that eviction
   // only releases the lease once `disposeSession` PROVES the child gone. Closing the adapter
@@ -189,21 +197,25 @@ async function tearDownRuntime(installed: InstalledRuntime): Promise<void> {
   } catch (error) {
     failures.push(error)
   }
+
   try {
     // Backstop for children eviction never took: unindexed acquisitions and refused evictions.
     await installed.adapter.closeAll()
   } catch (error) {
     failures.push(error)
   }
+
   // A backstop close can still deliver a final exit callback.
   try {
     await installed.waitForRecovery()
   } catch (error) {
     failures.push(error)
   }
+
   if (failures.length === 1) {
     throw failures[0]
   }
+
   if (failures.length > 1) {
     throw new AggregateError(failures, 'structured agent-session runtime teardown failed')
   }
@@ -216,17 +228,21 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   if (typeof deps.resolveClaudeAuthPolicy !== 'function') {
     throw new Error(CLAUDE_STRUCTURED_AUTH_POLICY_REQUIRED)
   }
+
   const bootEnvironment = (deps.resolveEnvironment ?? resolveLoginShellEnvironment)()
+
   const resolveCodexEnvironment = async (): Promise<NodeJS.ProcessEnv> => ({
     ...(await bootEnvironment),
     ...(await deps.resolveLaunchEnv?.()),
     ...(await deps.resolveLaunchEnvOverlay?.()),
     ...deps.resolveCodexOverrides?.()
   })
+
   const store = await AgentSessionRecordStore.open({
     directory: join(deps.stateDirectory, RECORD_STORE_DIR_NAME),
     hostId: deps.hostId
   })
+
   agentSessionPtyWriteGate.attachRecordLookup((sessionId) => store.getRecord(sessionId))
   // Why: only the durable store can identify a provider child lost before record publication.
   void (deps.reapOrphanChildren ?? stopOrphanAgentSessionChildren)({ store }).catch((error) => {
@@ -243,9 +259,11 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       )
     }
   })
+
   try {
     let host: StructuredAgentSessionHost | null = null
     let recoveryChain = Promise.resolve()
+
     const onDispatchSettledLate = (
       settlement: Parameters<StructuredAgentSessionHost['settleLateDispatch']>[0]
     ): void => {
@@ -256,6 +274,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
         })
       )
     }
+
     const codex = new CodexStructuredSessionAdapter({
       resolveLaunch: createCodexStructuredLaunchResolver({
         store,
@@ -272,6 +291,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
         if (event.type !== 'ended' || !('cause' in event) || event.cause !== 'unexpected-exit') {
           return
         }
+
         // Serialize recovery with teardown. Exit callbacks arrive from child
         // process tasks, so a fire-and-forget callback can otherwise append
         // after the host has flushed and its journal directory is removed.
@@ -284,6 +304,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
         })
       }
     })
+
     const claude = createStructuredClaudeRuntimeAdapter({
       store,
       resolveWorkspacePath: deps.resolveWorkspacePath,
@@ -313,9 +334,11 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       ...(deps.openClaudeConnection ? { openClaudeConnection: deps.openClaudeConnection } : {}),
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {})
     })
+
     const adapter = new StructuredAgentSessionAdapterRouter({ codex, claude }, async () => {
       await Promise.all([codex.closeAll(), claude.closeAll()])
     })
+
     host = new StructuredAgentSessionHost({
       store,
       adapter,
@@ -343,6 +366,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       ...(deps.handoffTransport ? { handoffTransport: deps.handoffTransport } : {})
     })
     setStructuredAgentSessionHost(host)
+
     return {
       host,
       adapter,
@@ -356,6 +380,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
           await claude.drainObservedExits()
           const observed = recoveryChain
           await observed
+
           if (observed === recoveryChain) {
             return
           }

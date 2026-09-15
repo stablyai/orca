@@ -11,6 +11,7 @@ afterEach(() => {
 describe('createCommandCodeOutputStatusDetector', () => {
   it('marks Command Code working with the submitted prompt when the TUI starts thinking', () => {
     const onWorking = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: 'command-code --trust',
       onWorking
@@ -23,6 +24,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
   it('waits for the Command Code banner before trusting generic status text', () => {
     const onWorking = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: null,
       onWorking
@@ -37,6 +39,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
   it('detects the Command Code banner across PTY chunk boundaries', () => {
     const onWorking = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: null,
       onWorking
@@ -51,6 +54,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
   it('detects the banner after chunks that carry no banner characters at all', () => {
     const onWorking = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: null,
       onWorking
@@ -67,6 +71,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
   it('detects the Command Code banner when ANSI styling splits the words', () => {
     const onWorking = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: null,
       onWorking
@@ -80,6 +85,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
   it('does not trust near-miss Command Code banner text', () => {
     const onWorking = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: null,
       onWorking
@@ -92,6 +98,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
   it('does not arm when another agent merely discusses Command Code', () => {
     const onWorking = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: null,
       onWorking
@@ -220,6 +227,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
     'Razzmatazzing'
   ])('marks Command Code working when the TUI reports %s', (statusText) => {
     const onWorking = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: 'command-code --trust',
       onWorking
@@ -234,6 +242,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
     'marks Command Code working when the TUI reports %s',
     (statusText) => {
       const onWorking = vi.fn()
+
       const detector = createCommandCodeOutputStatusDetector({
         startupCommand: 'command-code --trust',
         onWorking
@@ -247,6 +256,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
   it('marks Command Code working when active status text is split across PTY chunks', () => {
     const onWorking = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: 'command-code --trust',
       onWorking
@@ -260,6 +270,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
   it('does not capture a styled idle composer as the submitted prompt', () => {
     const onWorking = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: 'command-code --trust',
       onWorking
@@ -274,6 +285,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
   it('captures a submitted prompt when styling is split across PTY chunks', () => {
     const onWorking = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: 'command-code --trust',
       onWorking
@@ -288,10 +300,12 @@ describe('createCommandCodeOutputStatusDetector', () => {
   it('folds whitespace-heavy submitted prompts without whitespace regex replacement', () => {
     const replaceSpy = vi.spyOn(String.prototype, 'replace')
     const onWorking = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: 'command-code --trust',
       onWorking
     })
+
     const nonBreakingSpace = String.fromCharCode(160)
     const prompt = `❯ Fix\t  the${nonBreakingSpace}${nonBreakingSpace}status   row\r\n✻ Thinking...`
 
@@ -308,6 +322,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
   it('marks Command Code done when a no-tool turn returns to the idle prompt', () => {
     const onWorking = vi.fn()
     const onDone = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: 'command-code --trust',
       onWorking,
@@ -327,6 +342,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
   it('does not mark the initial idle composer as done before a submitted prompt', () => {
     const onDone = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: 'command-code --trust',
       onWorking: vi.fn(),
@@ -340,6 +356,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
 
   it('does not treat completed thought text as a working status', () => {
     const onWorking = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: 'command-code --trust',
       onWorking
@@ -353,10 +370,12 @@ describe('createCommandCodeOutputStatusDetector', () => {
     const replaceSpy = vi.spyOn(String.prototype, 'replace')
     const matchAllSpy = vi.spyOn(String.prototype, 'matchAll')
     const onWorking = vi.fn()
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: 'command-code --trust',
       onWorking
     })
+
     const largeEchoedPaste = `${'pasted Command Code \x1b[35mnoise\r\n'.repeat(10_000)}❯ Fix bounded scans\r\n✻ Thinking...`
 
     expect(detector.observe(largeEchoedPaste)).toBe(true)
@@ -369,6 +388,7 @@ describe('createCommandCodeOutputStatusDetector', () => {
   it('bounds pre-banner scans for large non-Command-Code terminal output', () => {
     const replaceSpy = vi.spyOn(String.prototype, 'replace')
     const matchAllSpy = vi.spyOn(String.prototype, 'matchAll')
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: null,
       onWorking: vi.fn()
@@ -391,10 +411,12 @@ function maxStringContextLength(contexts: unknown[]): number {
 describe('terminal control stripping', () => {
   const esc = String.fromCharCode(0x1b)
   const bel = String.fromCharCode(0x07)
+
   const ansiEscape = new RegExp(
     `${esc}(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~]|\\][^${bel}]*(?:${bel}|${esc}\\\\))`,
     'g'
   )
+
   const incompleteAnsiEscape = new RegExp(
     `${esc}(?:\\[[0-?]*[ -/]*|\\][^${bel}${esc}]*|\\S?)?$`,
     'g'
@@ -403,22 +425,28 @@ describe('terminal control stripping', () => {
   function legacyStripTerminalControl(data: string): string {
     const withoutAnsi = data.replace(ansiEscape, '').replace(incompleteAnsiEscape, '')
     let output = ''
+
     for (let index = 0; index < withoutAnsi.length; index += 1) {
       const code = withoutAnsi.charCodeAt(index)
+
       if ((code <= 0x1f && code !== 0x0a && code !== 0x0d) || (code >= 0x7f && code <= 0x9f)) {
         continue
       }
+
       output += withoutAnsi[index]
     }
+
     return output
   }
 
   function makeRandom(seed: number): () => number {
     let state = seed >>> 0
+
     return () => {
       state ^= state << 13
       state ^= state >>> 17
       state ^= state << 5
+
       return (state >>> 0) / 0x1_0000_0000
     }
   }
@@ -429,13 +457,16 @@ describe('terminal control stripping', () => {
 
   function promptFrom(raw: string): string | null {
     let captured: string | null = null
+
     const detector = createCommandCodeOutputStatusDetector({
       startupCommand: 'command-code',
       onWorking: (prompt) => {
         captured = prompt
       }
     })
+
     detector.observe(raw)
+
     return captured
   }
 
@@ -478,6 +509,7 @@ describe('terminal control stripping', () => {
 
   it('matches legacy output at density thresholds and block resets', () => {
     const control = '\x01'
+
     const fixtures = [
       `${control.repeat(31)}${'a'.repeat(33)}`,
       `${control.repeat(32)}${'a'.repeat(32)}`,
@@ -487,6 +519,7 @@ describe('terminal control stripping', () => {
       `${'a'.repeat(64 * 3)}${control.repeat(32)}tail`,
       `${'a\x01'.repeat(2048)}tail`
     ]
+
     for (const data of fixtures) {
       expectLegacyEquivalent(data)
     }
@@ -494,19 +527,23 @@ describe('terminal control stripping', () => {
 
   it('exhaustively matches short strings over control and Unicode code units', () => {
     const alphabet = ['a', '\r', '\n', '\x01', '\x7f', '\x80', '\u20ac', '\ud83d']
+
     for (let encoded = 0; encoded < alphabet.length ** 4; encoded += 1) {
       let cursor = encoded
       let data = ''
+
       for (let position = 0; position < 4; position += 1) {
         data += alphabet[cursor % alphabet.length]
         cursor = Math.floor(cursor / alphabet.length)
       }
+
       expectLegacyEquivalent(data)
     }
   })
 
   it('matches seeded random terminal text', () => {
     const random = makeRandom(0xc0de_0727)
+
     const alphabet = [
       'a',
       'Z',
@@ -522,12 +559,15 @@ describe('terminal control stripping', () => {
       '\x1b[35m',
       '\x1b[0m'
     ]
+
     for (let trial = 0; trial < 2_000; trial += 1) {
       let data = ''
       const parts = Math.floor(random() * 256)
+
       for (let index = 0; index < parts; index += 1) {
         data += alphabet[Math.floor(random() * alphabet.length)]
       }
+
       expectLegacyEquivalent(data)
     }
   })

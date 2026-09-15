@@ -77,14 +77,17 @@ export function buildProjectHostSetupOptions({
   if (!projectId) {
     return []
   }
+
   const readyOptions = buildReadySetupOptions({
     projectId,
     projectHostSetups,
     eligibleRepos,
     hosts
   })
+
   const readySetupByHost = new Map(readyOptions.map((option) => [option.hostId, option]))
   const pendingSetupByHost = getPendingSetupByHost(projectId, projectHostSetups)
+
   return [
     ...readyOptions,
     ...buildNeedsSetupOptions({
@@ -101,14 +104,17 @@ function getPendingSetupByHost(
   projectHostSetups: readonly ProjectHostSetup[]
 ): Map<ExecutionHostId, ProjectHostSetup> {
   const setups = new Map<ExecutionHostId, ProjectHostSetup>()
+
   for (const setup of projectHostSetups) {
     if (setup.projectId !== projectId || setup.setupState === 'ready') {
       continue
     }
+
     if (!setups.has(setup.hostId)) {
       setups.set(setup.hostId, setup)
     }
   }
+
   return setups
 }
 
@@ -120,9 +126,11 @@ function buildReadySetupOptions({
 }: BuildReadySetupOptionsInput): ReadyProjectHostSetupOption[] {
   const eligibleRepoIds = new Set(eligibleRepos.map((repo) => repo.id))
   const hostById = new Map(hosts.map((host) => [host.id, host]))
+
   return projectHostSetups
     .filter((setup) => {
       const host = hostById.get(setup.hostId)
+
       return (
         setup.projectId === projectId &&
         setup.setupState === 'ready' &&
@@ -152,11 +160,14 @@ function buildReadySetupOptions({
 // the row shown is the one workspace creation actually uses.
 function dedupeByHost(): (option: ReadyProjectHostSetupOption) => boolean {
   const seenHosts = new Set<ExecutionHostId>()
+
   return (option) => {
     if (seenHosts.has(option.hostId)) {
       return false
     }
+
     seenHosts.add(option.hostId)
+
     return true
   }
 }
@@ -178,6 +189,7 @@ function buildNeedsSetupOptions({
       const pendingSetup = pendingSetupByHost.get(host.id)
       const availability = getHostSetupAvailability(host)
       const connectAction = getHostConnectAction(host)
+
       return {
         id: `needs-setup:${host.id}`,
         kind: 'needs-setup' as const,
@@ -206,6 +218,7 @@ function isEphemeralVmProjectHost(host: ExecutionHostRegistryEntry | undefined):
 // hostId directly so the hidden target never becomes a selectable run-target option.
 function isRuntimeOwnedSshSetupHost(hostId: ExecutionHostId): boolean {
   const parsed = parseExecutionHostId(hostId)
+
   return parsed?.kind === 'ssh' && isRuntimeOwnedSshTargetId(parsed.targetId)
 }
 
@@ -219,15 +232,18 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
       detail: 'Orca server version is incompatible'
     }
   }
+
   // Why: disconnected hosts cannot confirm project setup or runtime capabilities,
   // so connection state needs to win over setup guidance.
   const healthUnavailableDetail = getHostHealthUnavailableDetail(host.health)
+
   if (healthUnavailableDetail) {
     return {
       isAvailable: false,
       detail: healthUnavailableDetail
     }
   }
+
   if (host.kind === 'runtime') {
     if (!host.capabilities) {
       return {
@@ -235,6 +251,7 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
         detail: 'Checking host capabilities'
       }
     }
+
     if (
       !host.capabilities.includes(PROJECT_HOST_SETUP_RUNTIME_CAPABILITY) ||
       !host.capabilities.includes(WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY)
@@ -245,6 +262,7 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
       }
     }
   }
+
   return {
     isAvailable: true,
     detail: ''
@@ -279,9 +297,11 @@ function canSetProjectLocation(
   if (!isAvailable || isHostLocalProjectId(projectId)) {
     return false
   }
+
   if (!pendingSetup) {
     return true
   }
+
   return pendingSetup.setupState === 'not-set-up' || pendingSetup.setupState === 'error'
 }
 
@@ -291,13 +311,17 @@ function getHostConnectAction(
   if (host.health !== 'disconnected' && host.health !== 'error') {
     return undefined
   }
+
   const parsed = parseExecutionHostId(host.id)
+
   if (parsed?.kind === 'ssh') {
     return { kind: 'ssh', targetId: parsed.targetId }
   }
+
   if (parsed?.kind === 'runtime') {
     return { kind: 'runtime', environmentId: parsed.environmentId }
   }
+
   return undefined
 }
 
@@ -323,10 +347,13 @@ function compareProjectHostSetupOptions(
   if (a.hostId === LOCAL_EXECUTION_HOST_ID && b.hostId !== LOCAL_EXECUTION_HOST_ID) {
     return -1
   }
+
   if (b.hostId === LOCAL_EXECUTION_HOST_ID && a.hostId !== LOCAL_EXECUTION_HOST_ID) {
     return 1
   }
+
   const aDetail = a.kind === 'ready' ? a.path : a.detail
   const bDetail = b.kind === 'ready' ? b.path : b.detail
+
   return a.label.localeCompare(b.label) || aDetail.localeCompare(bDetail)
 }

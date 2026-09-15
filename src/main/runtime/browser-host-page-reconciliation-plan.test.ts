@@ -106,6 +106,7 @@ describe('browser host page reconciliation plan', () => {
       pageHostGeneration: 7,
       pairedDeviceId: 'device-a'
     }
+
     const intent = currentIntent({ reclaimFrom: previous })
     const page = currentPage(inventoryPageAuthority(previous))
 
@@ -133,7 +134,9 @@ describe('browser host page reconciliation plan', () => {
       pairedDeviceId: 'device-a',
       ...previousOverride
     }
+
     const intent = currentIntent(previousOverride === undefined ? {} : { reclaimFrom: previous })
+
     const page = currentPage({
       authorityRuntimeId: 'runtime-old',
       authorityEpoch: 'epoch-old',
@@ -159,6 +162,7 @@ describe('browser host page reconciliation plan', () => {
       pageHostGeneration: 7,
       pairedDeviceId: 'device-a'
     }
+
     const intent = currentIntent({ browserHostClientId: 'client-b', reclaimFrom: previous })
     const page = currentPage(inventoryPageAuthority(previous))
 
@@ -176,11 +180,13 @@ describe('browser host page reconciliation plan', () => {
       pageHostGeneration: 12,
       pairedDeviceId: 'device-a'
     }
+
     const intent = currentIntent({
       browserHostGeneration: 8,
       pageHostGeneration: 11,
       reclaimFrom: previous
     })
+
     const page = currentPage(inventoryPageAuthority(previous))
 
     expect(
@@ -197,11 +203,13 @@ describe('browser host page reconciliation plan', () => {
       pageHostGeneration: 12,
       pairedDeviceId: 'device-a'
     }
+
     const intent = currentIntent({
       browserHostGeneration: 1,
       pageHostGeneration: 1,
       reclaimFrom: previous
     })
+
     const page = currentPage(inventoryPageAuthority(previous))
 
     expect(planBrowserHostPageReconciliation([intent], [page], inventorySource).reclaim).toEqual([
@@ -218,10 +226,12 @@ describe('browser host page reconciliation plan', () => {
       pageHostGeneration: 7,
       pairedDeviceId: 'device-a'
     }
+
     const intent = currentIntent({
       executionHostKey: JSON.stringify(['ssh', 'target-a', 'provider-a', 3]),
       reclaimFrom: previous
     })
+
     const page = currentPage({
       ...inventoryPageAuthority(previous),
       executionHostKey: intent.executionHostKey
@@ -241,6 +251,7 @@ describe('browser host page reconciliation plan', () => {
       pageHostGeneration: 7,
       pairedDeviceId: 'device-a'
     }
+
     const intent = currentIntent({ reclaimFrom: previous })
     const page = currentPage(inventoryPageAuthority(previous))
 
@@ -262,6 +273,7 @@ describe('browser host page reconciliation plan', () => {
         pairedDeviceId: 'device-a'
       }
     })
+
     const page = currentPage({ state: 'outcomeUnknown' })
 
     expect(planBrowserHostPageReconciliation([intent], [page], inventorySource)).toEqual({

@@ -8,21 +8,37 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 // evicts the entry.
 
 const dropStatusEntry = vi.fn()
+
 const dropPersistedStatusEntry = vi.fn()
+
 const dropPersistedStatusEntries = vi.fn(() => [] as string[])
+
 const dropStatusEntriesByTabPrefix = vi.fn()
+
 const retirePaneAuthority = vi.fn()
+
 const transferPaneAuthority = vi.fn()
+
 const canTransferPaneAuthority = vi.fn(() => true)
+
 const getStatusSnapshot = vi.fn()
+
 const inferInterrupt = vi.fn()
+
 const clearMigrationUnsupportedPtysByTabPrefix = vi.fn()
+
 const clearMigrationUnsupportedPtysForPaneKey = vi.fn()
+
 const onHandlers = new Map<string, (event: unknown, ...args: unknown[]) => void>()
+
 const handleHandlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
+
 const removeHandler = vi.fn()
+
 const removeAllListeners = vi.fn()
+
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+
 const CHILD_PANE_KEY = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
 
 vi.mock('electron', () => ({
@@ -42,6 +58,7 @@ vi.mock('../agent-hooks/server', async () => {
   // Why: import the real isValidPaneKey so this test stays in sync with any
   // tightening of the validator (length cap, character allow-list, etc).
   const actual = await vi.importActual<typeof AgentHookServerModule>('../agent-hooks/server')
+
   return {
     ...actual,
     agentHookServer: {
@@ -67,42 +84,55 @@ vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
 vi.mock('../claude/hook-service', () => ({
   claudeHookService: { getStatus: vi.fn(() => ({ agent: 'claude', state: 'absent' })) }
 }))
+
 vi.mock('../openclaude/hook-service', () => ({
   openClaudeHookService: { getStatus: vi.fn(() => ({ agent: 'openclaude', state: 'absent' })) }
 }))
+
 vi.mock('../codex/hook-service', () => ({
   codexHookService: { getStatus: vi.fn(() => ({ agent: 'codex', state: 'absent' })) }
 }))
+
 vi.mock('../gemini/hook-service', () => ({
   geminiHookService: { getStatus: vi.fn(() => ({ agent: 'gemini', state: 'absent' })) }
 }))
+
 vi.mock('../antigravity/hook-service', () => ({
   antigravityHookService: { getStatus: vi.fn(() => ({ agent: 'antigravity', state: 'absent' })) }
 }))
+
 vi.mock('../amp/hook-service', () => ({
   ampHookService: { getStatus: vi.fn(() => ({ agent: 'amp', state: 'absent' })) }
 }))
+
 vi.mock('../cursor/hook-service', () => ({
   cursorHookService: { getStatus: vi.fn(() => ({ agent: 'cursor', state: 'absent' })) }
 }))
+
 vi.mock('../droid/hook-service', () => ({
   droidHookService: { getStatus: vi.fn(() => ({ agent: 'droid', state: 'absent' })) }
 }))
+
 vi.mock('../command-code/hook-service', () => ({
   commandCodeHookService: { getStatus: vi.fn(() => ({ agent: 'command-code', state: 'absent' })) }
 }))
+
 vi.mock('../grok/hook-service', () => ({
   grokHookService: { getStatus: vi.fn(() => ({ agent: 'grok', state: 'absent' })) }
 }))
+
 vi.mock('../copilot/hook-service', () => ({
   copilotHookService: { getStatus: vi.fn(() => ({ agent: 'copilot', state: 'absent' })) }
 }))
+
 vi.mock('../hermes/hook-service', () => ({
   hermesHookService: { getStatus: vi.fn(() => ({ agent: 'hermes', state: 'absent' })) }
 }))
+
 vi.mock('../devin/hook-service', () => ({
   devinHookService: { getStatus: vi.fn(() => ({ agent: 'devin', state: 'absent' })) }
 }))
+
 vi.mock('../kimi/hook-service', () => ({
   kimiHookService: { getStatus: vi.fn(() => ({ agent: 'kimi', state: 'absent' })) }
 }))
@@ -143,6 +173,7 @@ describe('agentStatus:getSnapshot IPC', () => {
         stateStartedAt: 1_699_999_999_000
       }
     ]
+
     getStatusSnapshot.mockReturnValue(snapshot)
     const { registerAgentHookHandlers } = await import('./agent-hooks')
     registerAgentHookHandlers()
@@ -204,7 +235,9 @@ describe('agentStatus:getSnapshot IPC', () => {
         stateStartedAt: 1_700_000_000_500
       }
     ]
+
     getStatusSnapshot.mockReturnValue(snapshot)
+
     const runtime = {
       getAgentStatusTerminalHandleForPaneKey: vi.fn((paneKey: string) =>
         paneKey === PANE_KEY ? 'term-parent' : paneKey === CHILD_PANE_KEY ? 'term-child' : undefined
@@ -222,6 +255,7 @@ describe('agentStatus:getSnapshot IPC', () => {
       ),
       getTerminalProcessIncarnation: vi.fn(() => 'pty-1:inc-1')
     }
+
     const { registerAgentHookHandlers } = await import('./agent-hooks')
     registerAgentHookHandlers(runtime)
 
@@ -255,6 +289,7 @@ describe('agentStatus:inferInterrupt IPC', () => {
 
     const handler = handleHandlers.get('agentStatus:inferInterrupt')
     expect(handler).toBeDefined()
+
     const request = {
       paneKey: PANE_KEY,
       baselineUpdatedAt: 1_000,
@@ -274,9 +309,11 @@ describe('agentStatus:inferInterrupt IPC', () => {
 
     const handler = handleHandlers.get('agentStatus:inferInterrupt')
     expect(handler).toBeDefined()
+
     for (const value of [null, undefined, '', 123, true]) {
       expect(handler!({}, value)).toBe(false)
     }
+
     expect(inferInterrupt).not.toHaveBeenCalled()
   })
 })
@@ -309,6 +346,7 @@ describe('agentStatus:drop IPC', () => {
     registerAgentHookHandlers()
 
     const handler = onHandlers.get('agentStatus:drop')!
+
     const bad: unknown[] = [
       123,
       undefined,
@@ -321,9 +359,11 @@ describe('agentStatus:drop IPC', () => {
       'trailing:', // empty leafId half
       'a:b:c' // multiple colons
     ]
+
     for (const value of bad) {
       expect(() => handler({}, value)).not.toThrow()
     }
+
     expect(dropStatusEntry).not.toHaveBeenCalled()
   })
 })
@@ -335,11 +375,13 @@ describe('agentStatus:dropPersisted IPC', () => {
 
     const handler = onHandlers.get('agentStatus:dropPersisted')
     expect(handler).toBeDefined()
+
     const identity = {
       paneKey: PANE_KEY,
       receivedAt: 2_000,
       stateStartedAt: 1_000
     }
+
     handler!({}, identity)
     expect(dropPersistedStatusEntry).toHaveBeenCalledWith(identity)
     expect(dropStatusEntry).not.toHaveBeenCalled()
@@ -366,9 +408,11 @@ describe('agentStatus:dropPersisted IPC', () => {
     registerAgentHookHandlers()
 
     const handler = onHandlers.get('agentStatus:dropPersistedBatch')!
+
     for (const value of [null, {}, 'x', [], [{ paneKey: PANE_KEY }]]) {
       expect(() => handler({}, value)).not.toThrow()
     }
+
     expect(dropPersistedStatusEntries).not.toHaveBeenCalled()
   })
 
@@ -377,6 +421,7 @@ describe('agentStatus:dropPersisted IPC', () => {
     registerAgentHookHandlers()
 
     const handler = onHandlers.get('agentStatus:dropPersisted')!
+
     for (const value of [
       null,
       undefined,
@@ -389,6 +434,7 @@ describe('agentStatus:dropPersisted IPC', () => {
     ]) {
       expect(() => handler({}, value)).not.toThrow()
     }
+
     expect(dropPersistedStatusEntry).not.toHaveBeenCalled()
   })
 })
@@ -410,6 +456,7 @@ describe('agentStatus:dropByTabPrefix IPC', () => {
     registerAgentHookHandlers()
 
     const handler = onHandlers.get('agentStatus:dropByTabPrefix')!
+
     const bad: unknown[] = [
       123,
       undefined,
@@ -422,9 +469,11 @@ describe('agentStatus:dropByTabPrefix IPC', () => {
       'trailing-space ',
       'x'.repeat(161)
     ]
+
     for (const value of bad) {
       expect(() => handler({}, value)).not.toThrow()
     }
+
     expect(dropStatusEntriesByTabPrefix).not.toHaveBeenCalled()
     expect(clearMigrationUnsupportedPtysByTabPrefix).not.toHaveBeenCalled()
   })

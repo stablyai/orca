@@ -16,11 +16,14 @@ describe('RelayAuthCoordinator transient recovery', () => {
   it('retries a transient assignment failure and activates without an external event', async () => {
     vi.useFakeTimers()
     const broker = { closeNow: vi.fn() }
+
     const openBroker = vi
       .fn()
       .mockRejectedValueOnce(new RelayHttpError('assignment', 500))
       .mockResolvedValueOnce(broker)
+
     const statuses: string[] = []
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => context,
       openBroker,
@@ -42,10 +45,12 @@ describe('RelayAuthCoordinator transient recovery', () => {
   it('does not retry initial relay setup before the server Retry-After window', async () => {
     vi.useFakeTimers()
     const broker = { closeNow: vi.fn() }
+
     const openBroker = vi
       .fn()
       .mockRejectedValueOnce(new RelayHttpError('assignment', 503, 30_000))
       .mockResolvedValueOnce(broker)
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => context,
       openBroker,
@@ -64,11 +69,14 @@ describe('RelayAuthCoordinator transient recovery', () => {
   it('retries when cloud-session refresh fails before identity can be read', async () => {
     vi.useFakeTimers()
     const broker = { closeNow: vi.fn() }
+
     const readContext = vi
       .fn()
       .mockRejectedValueOnce(new Error('temporary cloud session refresh failure'))
       .mockResolvedValueOnce(context)
+
     const openBroker = vi.fn().mockResolvedValue(broker)
+
     const coordinator = new RelayAuthCoordinator({
       readContext,
       openBroker,
@@ -90,6 +98,7 @@ describe('RelayAuthCoordinator transient recovery', () => {
   it('backs a sustained outage off to the five-minute jitter cap', async () => {
     vi.useFakeTimers()
     const openBroker = vi.fn().mockRejectedValue(new Error('temporary control open failure'))
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => context,
       openBroker,
@@ -104,6 +113,7 @@ describe('RelayAuthCoordinator transient recovery', () => {
     for (const delayMs of [500, 1_000, 2_000, 4_000, 8_000, 16_000, 32_000, 64_000, 128_000]) {
       await vi.advanceTimersByTimeAsync(delayMs)
     }
+
     expect(openBroker).toHaveBeenCalledTimes(10)
 
     await vi.advanceTimersByTimeAsync(149_999)
@@ -118,6 +128,7 @@ describe('RelayAuthCoordinator transient recovery', () => {
   it('does not retry a permanent authorization response', async () => {
     vi.useFakeTimers()
     const openBroker = vi.fn().mockRejectedValue(new RelayHttpError('token-exchange', 403))
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => context,
       openBroker,
@@ -136,6 +147,7 @@ describe('RelayAuthCoordinator transient recovery', () => {
     vi.useFakeTimers()
     let demanded = true
     const openBroker = vi.fn().mockRejectedValue(new Error('temporary control open failure'))
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => context,
       hasDemand: () => demanded,
@@ -161,6 +173,7 @@ describe('RelayAuthCoordinator transient recovery', () => {
     let demanded = true
     const statuses: string[] = []
     const openBroker = vi.fn().mockRejectedValue(new Error('temporary control open failure'))
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => context,
       hasDemand: () => demanded,
@@ -185,6 +198,7 @@ describe('RelayAuthCoordinator transient recovery', () => {
     vi.useFakeTimers()
     let current = context
     const openBroker = vi.fn().mockRejectedValue(new RelayHttpError('assignment', 500))
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => current,
       openBroker,
@@ -207,6 +221,7 @@ describe('RelayAuthCoordinator transient recovery', () => {
   it('cancels a pending retry immediately when the coordinator is fenced', async () => {
     vi.useFakeTimers()
     const openBroker = vi.fn().mockRejectedValue(new Error('temporary control open failure'))
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => context,
       openBroker,
@@ -229,10 +244,12 @@ describe('RelayAuthCoordinator transient recovery', () => {
     vi.useFakeTimers()
     let current = context
     const broker = { closeNow: vi.fn() }
+
     const openBroker = vi
       .fn()
       .mockRejectedValueOnce(new Error('temporary control open failure'))
       .mockResolvedValueOnce(broker)
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => current,
       openBroker,
@@ -262,6 +279,7 @@ describe('RelayAuthCoordinator liveness safety net', () => {
   it('withholds a dead broker from control work while identity matching still sees it', async () => {
     vi.useFakeTimers()
     const dead = { closeNow: vi.fn(), isLive: () => false }
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => context,
       openBroker: vi.fn().mockResolvedValue(dead),
@@ -280,6 +298,7 @@ describe('RelayAuthCoordinator liveness safety net', () => {
     // died is withheld; silence must never cost a working relay.
     vi.useFakeTimers()
     const unverifiable = { closeNow: vi.fn() }
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => context,
       openBroker: vi.fn().mockResolvedValue(unverifiable),
@@ -300,6 +319,7 @@ describe('RelayAuthCoordinator liveness safety net', () => {
     const dead = { closeNow: vi.fn(), isLive: () => false }
     const live = { closeNow: vi.fn(), isLive: () => true }
     const openBroker = vi.fn().mockResolvedValueOnce(dead).mockResolvedValueOnce(live)
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => context,
       openBroker,
@@ -324,6 +344,7 @@ describe('RelayAuthCoordinator liveness safety net', () => {
     vi.useFakeTimers()
     const broker = { closeNow: vi.fn(), isLive: () => true }
     let releaseOpen: ((value: typeof broker) => void) | undefined
+
     const openBroker = vi
       .fn()
       .mockRejectedValueOnce(new RelayHttpError('assignment', 503, 30_000))
@@ -333,6 +354,7 @@ describe('RelayAuthCoordinator liveness safety net', () => {
             releaseOpen = resolve
           })
       )
+
     const coordinator = new RelayAuthCoordinator({
       readContext: async () => context,
       openBroker,

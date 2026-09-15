@@ -7,7 +7,9 @@ import { BrowserClientPageMetadataParams } from '../../shared/browser-client-pag
 import { recordBrowserClientPagePublishedUrl } from './browser-client-page-inventory'
 
 const HOST_CLIENT_ID = 'client-a'
+
 const PAGE_ID = 'page-a'
+
 const PAGE_HOST_GENERATION = 4
 
 const inventory = (
@@ -102,6 +104,7 @@ describe('recordBrowserClientPagePublishedUrl', () => {
 
   it('stores a url exactly at the inventory url cap', () => {
     const pages = tracked()
+
     const url = `https://remote.example/${'a'.repeat(
       BROWSER_CLIENT_HOST_PAGE_INVENTORY_URL_MAX_LENGTH - 'https://remote.example/'.length
     )}`

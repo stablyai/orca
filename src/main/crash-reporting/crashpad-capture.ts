@@ -19,17 +19,23 @@ import {
 // delivers process-gone on the main thread; the two race. Poll a short window
 // rather than sampling once and losing the dump most of the time.
 const DUMP_WAIT_TIMEOUT_MS = 8_000
+
 const DUMP_POLL_INTERVAL_MS = 250
+
 // A dump older than this belongs to an earlier crash, not the one we're pairing.
 const DUMP_RECENCY_WINDOW_MS = 30_000
+
 // Renderer dumps run ~1-15 MiB; well past that means we mis-picked a file.
 const MAX_DUMP_BYTES = 64 * 1024 * 1024
+
 // Match Crashpad's default budget, but enforce it after crashes instead of
 // waiting for its first 10-minute and later daily pruning passes.
 const MAX_STORED_DUMP_BYTES = 128 * 1024 * 1024
+
 // A burst of small dumps stays under the byte budget while still growing the
 // directory walk, so cap the file count too.
 const MAX_STORED_DUMPS = 64
+
 const DUMP_PRUNE_DELAY_MS = 2_000
 
 type DumpCandidate = {
@@ -42,10 +48,15 @@ type DumpCandidate = {
 // (at whenReady for packaged builds; before startCrashpadCapture in dev). Snapshot where Crashpad
 // was actually pointed.
 let crashpadDumpDirectory: string | null = null
+
 let captureStarted = false
+
 let captureStartedAtMs: number | null = null
+
 const claimedDumpPaths = new Map<string, number>()
+
 const reservedDumpPaths = new Set<string>()
+
 let dumpPruneTimer: NodeJS.Timeout | null = null
 
 export type CrashpadCaptureOptions = {
@@ -61,6 +72,7 @@ export function startCrashpadCapture(options: CrashpadCaptureOptions = {}): bool
   if (captureStarted) {
     return true
   }
+
   try {
     crashReporter.start({
       // Why: no submitURL is configured anywhere, and uploadToServer:true with
@@ -75,8 +87,10 @@ export function startCrashpadCapture(options: CrashpadCaptureOptions = {}): bool
     captureStartedAtMs = Date.now()
   } catch (error) {
     console.error('[crash-reporting] Crashpad start failed:', error)
+
     return false
   }
+
   crashpadDumpDirectory = options.dumpDirectory ?? resolveDumpDirectory()
   // Why: a dying main process never delivers process-gone, so a crash loop
   // never reaches the post-crash prune, and Crashpad's own pass runs in the
@@ -86,6 +100,7 @@ export function startCrashpadCapture(options: CrashpadCaptureOptions = {}): bool
   void pruneCrashpadDumps().catch((error) => {
     console.error('[crash-reporting] Crashpad startup dump pruning failed:', error)
   })
+
   return true
 }
 
@@ -110,6 +125,7 @@ export function _setCrashpadCaptureStateForTest(
   captureStartedAtMs = state?.started ? (state.startedAtMs ?? Number.NEGATIVE_INFINITY) : null
   claimedDumpPaths.clear()
   reservedDumpPaths.clear()
+
   if (dumpPruneTimer) {
     clearTimeout(dumpPruneTimer)
     dumpPruneTimer = null
@@ -118,6 +134,7 @@ export function _setCrashpadCaptureStateForTest(
 
 async function collectDumpCandidates(directory: string): Promise<DumpCandidate[]> {
   let entries: Dirent[]
+
   try {
     entries = await readdir(directory, {
       withFileTypes: true,
@@ -126,13 +143,17 @@ async function collectDumpCandidates(directory: string): Promise<DumpCandidate[]
   } catch {
     return []
   }
+
   const candidates: DumpCandidate[] = []
+
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith('.dmp')) {
       continue
     }
+
     // `recursive` yields nested names relative to parentPath, not directory.
     const filePath = path.join(entry.parentPath ?? directory, entry.name)
+
     try {
       const stats = await stat(filePath)
       candidates.push({ filePath, mtimeMs: stats.mtimeMs, size: stats.size })
@@ -140,6 +161,7 @@ async function collectDumpCandidates(directory: string): Promise<DumpCandidate[]
       // Crashpad renames dumps as it promotes them; a vanished file is normal.
     }
   }
+
   return candidates
 }
 
@@ -148,27 +170,34 @@ async function pruneCrashpadDumps(
   maxDumps = MAX_STORED_DUMPS
 ): Promise<void> {
   const directory = crashpadDumpDirectory
+
   if (!directory) {
     return
   }
+
   const candidates = (await collectDumpCandidates(directory)).sort(
     (left, right) => right.mtimeMs - left.mtimeMs
   )
+
   let retainedBytes = 0
   let retainedCount = 0
+
   for (let index = 0; index < candidates.length; index += 1) {
     const candidate = candidates[index]
+
     // claimed dumps are referenced by a persisted report; pruning one leaves a
     // dangling minidumpPath behind.
     const mustKeep =
       index === 0 ||
       reservedDumpPaths.has(candidate.filePath) ||
       claimedDumpPaths.has(candidate.filePath)
+
     if (mustKeep || (retainedBytes + candidate.size <= maxBytes && retainedCount < maxDumps)) {
       retainedBytes += candidate.size
       retainedCount += 1
       continue
     }
+
     try {
       await rm(candidate.filePath, { force: true })
     } catch {
@@ -182,6 +211,7 @@ export function scheduleCrashpadDumpPrune(): void {
   if (!crashpadDumpDirectory || dumpPruneTimer) {
     return
   }
+
   dumpPruneTimer = setTimeout(() => {
     void pruneCrashpadDumps()
       .catch((error) => {
@@ -217,11 +247,13 @@ function freshDumpCandidates(candidates: DumpCandidate[], crashedAtMs: number): 
     crashedAtMs - DUMP_RECENCY_WINDOW_MS,
     captureStartedAtMs ?? Number.NEGATIVE_INFINITY
   )
+
   for (const [filePath, mtimeMs] of claimedDumpPaths) {
     if (mtimeMs < floorMs) {
       claimedDumpPaths.delete(filePath)
     }
   }
+
   return candidates
     .filter((candidate) => candidate.mtimeMs >= floorMs && candidate.size <= MAX_DUMP_BYTES)
     .sort((a, b) => b.mtimeMs - a.mtimeMs)
@@ -233,26 +265,34 @@ async function pollDumpCandidates<T>(
   select: (candidate: DumpCandidate) => Promise<T | null>
 ): Promise<T | null> {
   const directory = crashpadDumpDirectory
+
   if (!directory) {
     return null
   }
+
   const timeoutMs = options.timeoutMs ?? DUMP_WAIT_TIMEOUT_MS
   const now = options.now ?? Date.now
+
   const sleep =
     options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+
   const deadline = now() + timeoutMs
 
   for (;;) {
     const fresh = freshDumpCandidates(await collectDumpCandidates(directory), crashedAtMs)
+
     for (const candidate of fresh) {
       const selected = await select(candidate)
+
       if (selected !== null) {
         return selected
       }
     }
+
     if (now() >= deadline) {
       return null
     }
+
     await sleep(DUMP_POLL_INTERVAL_MS)
   }
 }
@@ -281,6 +321,7 @@ export async function captureMinidumpSignature(
   options: CrashMinidumpCaptureOptions = {}
 ): Promise<CapturedMinidump | null> {
   const rejectedDumpPaths = new Set<string>()
+
   try {
     return await pollDumpCandidates(crashedAtMs, options, async (dump) => {
       if (
@@ -290,20 +331,26 @@ export async function captureMinidumpSignature(
       ) {
         return null
       }
+
       reservedDumpPaths.add(dump.filePath)
+
       try {
         const signature = parseMinidumpCrashSignature(await readFile(dump.filePath), {
           expectedProcessType: options.expectedProcessType
         })
+
         if (
           !signature ||
           (options.expectedProcessType !== undefined &&
             signature.processType !== options.expectedProcessType)
         ) {
           rejectedDumpPaths.add(dump.filePath)
+
           return null
         }
+
         claimedDumpPaths.set(dump.filePath, dump.mtimeMs)
+
         return { filePath: dump.filePath, sizeBytes: dump.size, signature }
       } finally {
         reservedDumpPaths.delete(dump.filePath)
@@ -311,6 +358,7 @@ export async function captureMinidumpSignature(
     })
   } catch (error) {
     console.error('[crash-reporting] minidump signature capture failed:', error)
+
     return null
   }
 }

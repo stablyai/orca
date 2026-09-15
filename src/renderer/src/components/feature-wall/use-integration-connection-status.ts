@@ -14,15 +14,18 @@ export function deriveIntegrationStepStates(input: {
   codeHostTaskConnected: boolean
 }): { review: IntegrationStepState; task: IntegrationStepState; complete: boolean } {
   const review: IntegrationStepState = input.reviewConnected ? 'done' : 'active'
+
   // A dedicated tracker resolves tasks outright. The code host only counts
   // once review is connected, since step 2 is unreachable before then.
   const taskResolved =
     input.trackerConnected || (input.reviewConnected && input.codeHostTaskConnected)
+
   const task: IntegrationStepState = taskResolved
     ? 'done'
     : input.reviewConnected
       ? 'active'
       : 'upcoming'
+
   return { review, task, complete: input.reviewConnected && taskResolved }
 }
 
@@ -42,11 +45,13 @@ export function deriveIntegrationFlowState(input: {
   // have settled for this runtime, so the collapsed summary names the right
   // completion reason instead of flashing the code-host fallback copy.
   const codeHostTaskReady = input.codeHostTaskProviderName !== null && !input.trackerChecking
+
   const stepStates = deriveIntegrationStepStates({
     reviewConnected: input.reviewConnected,
     trackerConnected,
     codeHostTaskConnected: codeHostTaskReady
   })
+
   return {
     ...stepStates,
     taskResolved: stepStates.task === 'done'
@@ -126,9 +131,11 @@ function isAzureDevOpsReviewConfigured(status: TokenReviewStatus | undefined): b
   if (status?.configured !== true) {
     return false
   }
+
   if (status.tokenConfigured === true && status.baseUrl && status.authenticated !== true) {
     return false
   }
+
   return true
 }
 
@@ -136,9 +143,11 @@ function isGiteaReviewConfigured(status: TokenReviewStatus | undefined): boolean
   if (status?.configured !== true) {
     return false
   }
+
   if (status.tokenConfigured === true && status.authenticated !== true) {
     return false
   }
+
   return true
 }
 
@@ -146,21 +155,28 @@ export function deriveIntegrationConnectionStatus(
   facts: ProviderStatusFacts
 ): IntegrationConnectionStatus {
   const preflightCurrent = facts.preflightStatusContextKey === facts.expectedPreflightContextKey
+
   const reviewChecking =
     facts.preflightStatusLoading || !facts.preflightStatusChecked || !preflightCurrent
+
   const reviewReadyForConnection = !reviewChecking && facts.preflightStatusError === null
+
   const githubConnected =
     reviewReadyForConnection &&
     facts.preflightStatus?.gh?.installed === true &&
     facts.preflightStatus.gh.authenticated === true
+
   const gitlabConnected =
     reviewReadyForConnection &&
     facts.preflightStatus?.glab?.installed === true &&
     facts.preflightStatus.glab.authenticated === true
+
   const bitbucketConnected =
     reviewReadyForConnection && isBitbucketReviewConnected(facts.preflightStatus?.bitbucket)
+
   const azureDevOpsConnected =
     reviewReadyForConnection && isAzureDevOpsReviewConfigured(facts.preflightStatus?.azureDevOps)
+
   const giteaConnected =
     reviewReadyForConnection && isGiteaReviewConfigured(facts.preflightStatus?.gitea)
 
@@ -168,8 +184,10 @@ export function deriveIntegrationConnectionStatus(
   const jiraStatusCurrent = facts.jiraStatusContextKey === facts.providerRuntimeContextKey
   const linearChecking = !linearStatusCurrent || !facts.linearStatusChecked
   const jiraChecking = !jiraStatusCurrent || !facts.jiraStatusChecked
+
   const linearConnected =
     !linearChecking && linearStatusCurrent && facts.linearStatus.connected === true
+
   const jiraConnected = !jiraChecking && jiraStatusCurrent && facts.jiraStatus.connected === true
 
   const reviewProviderName = githubConnected
@@ -183,14 +201,17 @@ export function deriveIntegrationConnectionStatus(
           : giteaConnected
             ? 'Gitea'
             : null
+
   const codeHostTaskProviderName = githubConnected ? 'GitHub' : gitlabConnected ? 'GitLab' : null
   const trackerProviderName = linearConnected ? 'Linear' : jiraConnected ? 'Jira' : null
+
   const taskSourceNames: IntegrationConnectionStatus['taskSourceNames'] = [
     ...(linearConnected ? (['Linear'] as const) : []),
     ...(jiraConnected ? (['Jira'] as const) : []),
     ...(githubConnected ? (['GitHub'] as const) : []),
     ...(gitlabConnected ? (['GitLab'] as const) : [])
   ]
+
   const hasUsableTaskSource = taskSourceNames.length > 0
   // Why: one resolved task source is enough for parent setup readiness, but the
   // local "use code host issues" acknowledgement waits until tracker checks
@@ -231,6 +252,7 @@ export function useIntegrationConnectionStatus(): IntegrationConnectionStatus {
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
   const settings = useAppStore((s) => s.settings)
+
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )

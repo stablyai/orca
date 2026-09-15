@@ -59,12 +59,15 @@ export function navigateBrowserPageToUrl({
 }: NavigateBrowserPageToUrlArgs): void {
   const navigateBrowserUrl = (targetUrl: string): void => {
     const browserModelUrl = redactKagiSessionToken(targetUrl)
+
     const normalizedBrowserModelUrl =
       normalizeBrowserNavigationUrl(browserModelUrl) ?? browserModelUrl
+
     const recoveryLoadError =
       activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
         ? activeLoadFailureRef.current
         : null
+
     setAddressBarValue(toDisplayUrl(browserModelUrl))
     onSetUrlRef.current(browserTabId, browserModelUrl)
     onUpdatePageStateRef.current(browserTabId, {
@@ -75,48 +78,60 @@ export function navigateBrowserPageToUrl({
     setResourceNotice(null)
 
     const webview = webviewRef.current
+
     if (!webview) {
       return
     }
+
     trackNextLoadingEventRef.current = targetUrl !== ORCA_BROWSER_BLANK_URL
     lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl
     recoveryNavigationValidationRef.current = recoveryLoadError
       ? { committed: false, started: false, targetUrl: normalizedBrowserModelUrl }
       : null
     webview.src = targetUrl
+
     if (targetUrl !== ORCA_BROWSER_BLANK_URL) {
       focusWebviewNow()
     }
   }
 
   const notebookPath = getNotebookPathFromBrowserUrl(url)
+
   if (notebookPath) {
     void (async () => {
       const store = useAppStore.getState()
       const connectionId = getConnectionId(worktreeId)
+
       if (connectionId !== null) {
         navigateBrowserUrl(url)
+
         return
       }
 
       try {
         const activeWorktree = store.allWorktrees().find((w) => w.id === worktreeId)
+
         const fileContext: RuntimeFileOperationArgs = {
           settings: store.settings,
           worktreeId,
           worktreePath: activeWorktree?.path,
           connectionId: undefined
         }
+
         if (!isRemoteRuntimeFileOperation(fileContext, notebookPath)) {
           await window.api.fs.authorizeExternalPath({ targetPath: notebookPath })
         }
+
         const stat = await statRuntimePath(fileContext, notebookPath)
+
         if (stat.isDirectory) {
           navigateBrowserUrl(url)
+
           return
         }
 
         let relativePath = notebookPath
+
         if (activeWorktree?.path && isPathInsideWorktree(notebookPath, activeWorktree.path)) {
           relativePath = toWorktreeRelativePath(notebookPath, activeWorktree.path) ?? notebookPath
         }
@@ -137,6 +152,7 @@ export function navigateBrowserPageToUrl({
         navigateBrowserUrl(url)
       }
     })()
+
     return
   }
 

@@ -8,9 +8,13 @@ import WorkspaceKanbanSearchField, { overlayReserve } from './WorkspaceKanbanSea
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 let container: HTMLDivElement
+
 let root: Root
+
 const onQueryChange = vi.fn()
+
 const onClear = vi.fn()
+
 const onClose = vi.fn()
 
 function renderField(props: {
@@ -38,9 +42,11 @@ function renderField(props: {
 
 function input(): HTMLInputElement {
   const element = container.querySelector<HTMLInputElement>('input')
+
   if (!element) {
     throw new Error('field not rendered')
   }
+
   return element
 }
 
@@ -50,9 +56,11 @@ function clearButton(): HTMLButtonElement | null {
 
 function liveRegion(): HTMLElement {
   const element = container.querySelector<HTMLElement>('[aria-live="polite"]')
+
   if (!element) {
     throw new Error('live region not rendered')
   }
+
   return element
 }
 

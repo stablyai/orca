@@ -4,6 +4,7 @@ import { agentMapOrchestrationPaneKeys, filterAgentMapCards } from './agent-map-
 import { applyAgentMapQuickView, emptyAgentMapFilterState } from './agent-map-quick-views'
 
 const NOW = 2_000_000_000
+
 const MINUTE = 60_000
 
 function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
@@ -34,6 +35,7 @@ const TYPES = ['claude', 'codex']
 
 function visible(cards: DashboardCard[], view: Parameters<typeof applyAgentMapQuickView>[0]) {
   const state = applyAgentMapQuickView(view, TYPES)
+
   return filterAgentMapCards({
     cards,
     enabledStates: state.states,

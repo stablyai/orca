@@ -72,6 +72,7 @@ export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWork
     args.session.agent === 'codex' && args.session.codexHome === null
       ? (['CODEX_HOME', 'ORCA_CODEX_HOME'] as const)
       : undefined
+
   return buildAiVaultResumeForWorktree(args, true, clearEnvNames).command
 }
 
@@ -103,6 +104,7 @@ export function buildAiVaultDropRepinStartup(args: {
   if (args.payload.sessionCwd === undefined || !args.payload.sessionFilePath) {
     return null
   }
+
   return buildAiVaultResumeStartupForWorktree({
     state: args.state,
     worktreeId: args.worktreeId,
@@ -126,6 +128,7 @@ function buildAiVaultResumeForWorktree(
   clearEnvNames?: readonly string[]
 ): AiVaultResumeStartup {
   const providerSession = getAiVaultAgentProviderSession(args.session)
+
   if (
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
@@ -140,16 +143,21 @@ function buildAiVaultResumeForWorktree(
       ...(providerSession ? { providerSession } : {})
     }
   }
+
   const platform =
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
     args.session.executionHostPlatform
       ? args.session.executionHostPlatform
       : getAiVaultResumePlatform(args.state, args.worktreeId)
+
   const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
+
   const isLocalSession =
     !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
+
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, platform)
+
   // Why: local shell settings do not describe a remote Windows host, whose
   // queued resume command uses the remote default PowerShell syntax.
   const liveShell: AgentStartupShell | undefined =
@@ -158,8 +166,10 @@ function buildAiVaultResumeForWorktree(
         ? resolveAiVaultResumeShell(args)
         : 'powershell'
       : undefined
+
   const cwd = embedCwd ? args.session.cwd : null
   const startupCwd = !embedCwd && args.session.cwd ? { cwd: args.session.cwd } : {}
+
   if (providerSession && isResumableTuiAgent(args.session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: args.session.agent,
@@ -179,6 +189,7 @@ function buildAiVaultResumeForWorktree(
         ? { ompResumeFilePath: resumeFilePath }
         : {})
     })
+
     if (startupPlan) {
       return {
         command:
@@ -240,8 +251,10 @@ function resolveAiVaultResumeShell(args: AiVaultResumeWorktreeArgs): AgentStartu
     args.session.executionHostPlatform
       ? args.session.executionHostPlatform
       : getAiVaultResumePlatform(args.state, args.worktreeId)
+
   const isLocalSession =
     !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
+
   return resolveAiVaultResumeStartupShell({
     state: args.state,
     worktreeId: args.worktreeId,
@@ -256,14 +269,17 @@ export function getAiVaultAgentProviderSession(
   if (!isResumableTuiAgent(session.agent)) {
     return null
   }
+
   if (session.agent === 'antigravity') {
     return { key: 'conversation_id', id: session.sessionId }
   }
+
   if (session.agent === 'pi' || session.agent === 'prime-agent') {
     return session.filePath
       ? { key: 'session_id', id: session.sessionId, transcriptPath: session.filePath }
       : null
   }
+
   return { key: 'session_id', id: session.sessionId }
 }
 
@@ -276,6 +292,7 @@ function getAiVaultResumeCodexHome(
   if (!codexHome || platform !== 'linux') {
     return codexHome
   }
+
   return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
 }
 
@@ -295,18 +312,22 @@ export function getAiVaultResumePlatform(
 ): NodeJS.Platform {
   const targetWorktreeId = worktreeId ?? state.activeWorktreeId
   const executionHost = parseExecutionHostId(getExecutionHostIdForWorktree(state, targetWorktreeId))
+
   if (executionHost?.kind === 'ssh' || executionHost?.kind === 'runtime') {
     return 'linux'
   }
 
   const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId, CLIENT_PLATFORM)
+
   if (projectRuntime?.status === 'repair-required') {
     return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
   }
+
   if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
     return 'linux'
   }
 
   const workspacePath = getAiVaultResumeWorkspacePath(state, targetWorktreeId)
+
   return workspacePath && parseWslUncPath(workspacePath) ? 'linux' : CLIENT_PLATFORM
 }

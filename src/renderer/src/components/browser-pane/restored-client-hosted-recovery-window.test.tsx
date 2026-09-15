@@ -10,9 +10,11 @@ const mocks = vi.hoisted(() => ({ attach: vi.fn(), createBrowserTab: vi.fn(async
 vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
+
 vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionBrowserTab: mocks.createBrowserTab
 }))
+
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), loading: vi.fn(), message: vi.fn() }
 }))
@@ -24,6 +26,7 @@ import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
 import { RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS } from './restored-client-hosted-recovery-window'
 
 const PAGE_ID = 'page-a'
+
 const ENVIRONMENT_ID = 'environment-a'
 
 function page(): BrowserPage {
@@ -52,6 +55,7 @@ function runtimeStatusMap(
   if (reachability === 'absent') {
     return new Map()
   }
+
   return new Map([
     [
       ENVIRONMENT_ID,

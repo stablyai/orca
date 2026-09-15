@@ -13,10 +13,13 @@ export type LinearIssueWorkspaceAttachmentIndex = ReadonlyMap<string, readonly W
 
 export function normalizeLinearIdentifier(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
+
   if (!trimmed) {
     return null
   }
+
   const parsed = parseLinearIssueInput(trimmed)
+
   return (parsed?.identifier ?? trimmed).toUpperCase()
 }
 
@@ -28,6 +31,7 @@ function scopeMatchScore(args: {
 }): number | null {
   const issueWorkspaceId = args.issueWorkspaceId?.trim() || null
   const worktreeWorkspaceId = args.worktreeWorkspaceId?.trim() || null
+
   // Why: when both sides declare a workspace, refuse cross-workspace identifier collisions.
   if (issueWorkspaceId && worktreeWorkspaceId && issueWorkspaceId !== worktreeWorkspaceId) {
     return null
@@ -35,6 +39,7 @@ function scopeMatchScore(args: {
 
   const issueOrgKey = args.issueOrganizationUrlKey?.trim().toLowerCase() || null
   const worktreeOrgKey = args.worktreeOrganizationUrlKey?.trim().toLowerCase() || null
+
   if (issueOrgKey && worktreeOrgKey && issueOrgKey !== worktreeOrgKey) {
     return null
   }
@@ -52,6 +57,7 @@ function findScopedAttachment(
   const issueOrganizationUrlKey = getLinearOrganizationUrlKeyFromIssueUrl(issue.url)
   let best: Worktree | null = null
   let bestScore = -1
+
   for (const worktree of candidates) {
     const score = scopeMatchScore({
       issueWorkspaceId: issue.workspaceId,
@@ -59,6 +65,7 @@ function findScopedAttachment(
       issueOrganizationUrlKey,
       worktreeOrganizationUrlKey: worktree.linkedLinearIssueOrganizationUrlKey
     })
+
     if (
       score != null &&
       (score > bestScore ||
@@ -68,6 +75,7 @@ function findScopedAttachment(
       bestScore = score
     }
   }
+
   return best
 }
 
@@ -76,6 +84,7 @@ export function findLinearIssueWorkspaceAttachment(
   issue: LinearIssueAttachmentRef
 ): Worktree | null {
   const identifier = normalizeLinearIdentifier(issue.identifier)
+
   if (!identifier) {
     return null
   }
@@ -95,21 +104,27 @@ export function buildLinearIssueWorkspaceAttachmentIndex(
   worktrees: readonly Worktree[]
 ): LinearIssueWorkspaceAttachmentIndex {
   const index = new Map<string, Worktree[]>()
+
   for (const worktree of worktrees) {
     if (worktree.isArchived) {
       continue
     }
+
     const identifier = normalizeLinearIdentifier(worktree.linkedLinearIssue)
+
     if (!identifier) {
       continue
     }
+
     const bucket = index.get(identifier)
+
     if (bucket) {
       bucket.push(worktree)
     } else {
       index.set(identifier, [worktree])
     }
   }
+
   return index
 }
 
@@ -118,9 +133,12 @@ export function findLinearIssueWorkspaceAttachmentInIndex(
   issue: LinearIssueAttachmentRef
 ): Worktree | null {
   const identifier = normalizeLinearIdentifier(issue.identifier)
+
   if (!identifier) {
     return null
   }
+
   const candidates = index.get(identifier)
+
   return candidates ? findScopedAttachment(candidates, issue) : null
 }

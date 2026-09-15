@@ -41,24 +41,32 @@ export type GhRateLimitScopeParts =
 export function parseGhRateLimitScopeKey(scope: string): GhRateLimitScopeParts | null {
   if (scope.startsWith('native:')) {
     const host = scope.slice('native:'.length)
+
     return host ? { runtime: 'native', host } : null
   }
+
   if (scope.startsWith('wsl:')) {
     // Hosts may carry a port (host:port), so only the first colon after the
     // distro is a separator.
     const rest = scope.slice('wsl:'.length)
     const sep = rest.indexOf(':')
+
     if (sep <= 0 || sep === rest.length - 1) {
       return null
     }
+
     return { runtime: 'wsl', wslDistro: rest.slice(0, sep), host: rest.slice(sep + 1) }
   }
+
   return null
 }
 
 const DEFAULT_SCOPE = ghRateLimitScopeKey('native', 'github.com')
+
 const GH_RATE_LIMIT_BLOCK_MAX_ENTRIES = 1024
+
 const blockedUntilMsByScopeAndBucket = new Map<string, number>()
+
 let resetProbe: ((bucket: GhRateLimitBucket, scope: string) => void) | null = null
 
 function breakerKey(bucket: GhRateLimitBucket, scope = DEFAULT_SCOPE): string {
@@ -89,35 +97,46 @@ const GH_API_VALUE_FLAGS = new Set([
 function findGhApiEndpoint(args: readonly string[]): string | null {
   for (let i = 1; i < args.length; i++) {
     const arg = args[i]
+
     if (!arg.startsWith('-')) {
       return arg
     }
+
     if (GH_API_VALUE_FLAGS.has(arg)) {
       i++
     }
   }
+
   return null
 }
 
 export function classifyGhRateLimitBucket(args: readonly string[]): GhRateLimitBucket {
   const command = args[0]
+
   if (command === 'search') {
     return 'search'
   }
+
   if (command !== 'api') {
     return 'core'
   }
+
   const endpoint = findGhApiEndpoint(args)
+
   if (!endpoint) {
     return 'core'
   }
+
   const path = endpoint.replace(/^\//, '')
+
   if (path.startsWith('search/')) {
     return 'search'
   }
+
   if (path === 'graphql' || path.startsWith('graphql?')) {
     return 'graphql'
   }
+
   return 'core'
 }
 
@@ -127,7 +146,9 @@ export function isGhRateLimitProbe(args: readonly string[]): boolean {
   if (args[0] !== 'api') {
     return false
   }
+
   const endpoint = findGhApiEndpoint(args)
+
   return endpoint === 'rate_limit' || endpoint === '/rate_limit'
 }
 
@@ -137,6 +158,7 @@ export function isGhRateLimitProbe(args: readonly string[]): boolean {
  */
 export function isGhPrimaryRateLimitStderr(stderr: string): boolean {
   const s = stderr.toLowerCase()
+
   return s.includes('api rate limit exceeded') && !s.includes('secondary rate limit')
 }
 
@@ -152,11 +174,14 @@ export function recordGhPrimaryRateLimit(
   // main-process map for the lifetime of the app.
   blockedUntilMsByScopeAndBucket.delete(key)
   blockedUntilMsByScopeAndBucket.set(key, Math.max(existing, blockedUntilMs))
+
   while (blockedUntilMsByScopeAndBucket.size > GH_RATE_LIMIT_BLOCK_MAX_ENTRIES) {
     const oldestKey = blockedUntilMsByScopeAndBucket.keys().next().value
+
     if (oldestKey === undefined) {
       break
     }
+
     blockedUntilMsByScopeAndBucket.delete(oldestKey)
   }
 }
@@ -175,19 +200,25 @@ export function getGhRateLimitBlockedUntilMs(
       blockedUntilMsByScopeAndBucket.delete(key)
     }
   }
+
   const key = breakerKey(bucket, scope)
   const blockedUntil = blockedUntilMsByScopeAndBucket.get(key)
+
   if (blockedUntil === undefined) {
     return null
   }
+
   if (blockedUntil <= nowMs) {
     blockedUntilMsByScopeAndBucket.delete(key)
+
     return null
   }
+
   // Why: active blocks are hot entries; refresh their insertion order so a
   // stream of one-off hostile hosts evicts cold scopes before an active one.
   blockedUntilMsByScopeAndBucket.delete(key)
   blockedUntilMsByScopeAndBucket.set(key, blockedUntil)
+
   return blockedUntil
 }
 
@@ -207,6 +238,7 @@ export function registerGhRateLimitResetProbe(
 /** Called by the runner when a gh spawn came back with a primary 403. */
 export function notifyGhPrimaryRateLimit(bucket: GhRateLimitBucket, scope = DEFAULT_SCOPE): void {
   recordGhPrimaryRateLimit(bucket, Date.now() + FALLBACK_BLOCK_MS[bucket], scope)
+
   // The probe receives the tripping scope so it can run gh against that
   // runtime/host and refine the fallback block into the real reset time.
   try {
@@ -224,6 +256,7 @@ export function createGhRateLimitBlockedError(
   // Why: "rate limit" (and no "HTTP 403") so classifyGhError maps this to
   // rate_limited instead of permission_denied, matching a real gh failure.
   const message = `GitHub API rate limit exceeded (${bucket}); retrying in ~${resetsIn}s without spawning gh.`
+
   return Object.assign(new Error(message), {
     stderr: message,
     ghRateLimitBlocked: true as const

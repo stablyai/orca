@@ -17,6 +17,7 @@ const tempDirs: string[] = []
 function makeTempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'orca-omp-sqlite-overlay-'))
   tempDirs.push(dir)
+
   return dir
 }
 
@@ -45,6 +46,7 @@ describe('OMP SQLite overlay persistence', () => {
     writeFileSync(join(overlayDir, 'agent.db'), 'new credentials')
 
     expect(readFileSync(join(sourceDir, 'agent.db'), 'utf8')).toBe('new credentials')
+
     if (process.platform !== 'win32') {
       expect(lstatSync(join(overlayDir, 'agent.db')).isSymbolicLink()).toBe(true)
       expect(existsSync(join(overlayDir, 'agent.db-wal'))).toBe(false)

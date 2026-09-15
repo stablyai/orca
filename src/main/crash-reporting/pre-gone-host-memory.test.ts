@@ -168,11 +168,13 @@ describe('pre-gone host memory', () => {
   // which a relocated pagefile does not live on.
   it('never reads free disk as proof the pagefile could have grown', () => {
     setSystemMemoryInfoReaderForTest(() => FIXED_PAGEFILE_UNDER_PRESSURE)
+
     const fixedPagefile = withSwapVolumeFreeSpace(
       getSystemMemoryDetails('win32'),
       { freeMB: 812_000, volume: 'C:' },
       'win32'
     )
+
     // 180 MB of commit beside 812 GB of free disk: co-timed, and still not a
     // verdict — reading it as "the pagefile had room" is the opposite conclusion.
     expect(fixedPagefile.systemMemoryPressureSignal).toBe('available-commit-volume-cotimed')
@@ -198,6 +200,7 @@ describe('pre-gone host memory', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     vi.useFakeTimers()
     let resolveVolume: (value: SwapVolumeFreeSpace) => void = () => {}
+
     try {
       setSystemMemoryInfoReaderForTest(() => BEFORE_THE_STORM)
       setSwapVolumeFreeSpaceReaderForTest(
@@ -249,6 +252,7 @@ describe('pre-gone host memory', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     vi.useFakeTimers()
     let resolveVolume: (value: SwapVolumeFreeSpace) => void = () => {}
+
     try {
       setSystemMemoryInfoReaderForTest(() => BEFORE_THE_STORM)
       setSwapVolumeFreeSpaceReaderForTest(
@@ -285,15 +289,18 @@ describe('pre-gone host memory', () => {
     setSystemMemoryInfoReaderForTest(readHostMemory)
     setSwapVolumeFreeSpaceReaderForTest(() => Promise.resolve({ freeMB: 120, volume: 'C:' }))
     const setIntervalSpy = vi.spyOn(globalThis, 'setInterval')
+
     try {
       startPreGoneCrashSampling()
 
       // Literal millisecond values: asserting the constants against themselves
       // would let a cadence regression through, and 37 s of staleness is the bug.
       expect(setIntervalSpy.mock.calls.map(([, ms]) => ms)).toEqual([60_000, 10_000])
+
       for (const { value } of setIntervalSpy.mock.results) {
         expect((value as NodeJS.Timeout).hasRef()).toBe(false)
       }
+
       expect(readHostMemory).toHaveBeenCalledTimes(1)
 
       readHostMemory.mockReturnValue(AFTER_THE_CORPSE_RELEASED)
@@ -340,6 +347,7 @@ describe('pre-gone host memory', () => {
 
   it('carries the last volume reading forward, aged, instead of dropping it', async () => {
     vi.useFakeTimers()
+
     try {
       setSystemMemoryInfoReaderForTest(() => UNDER_COMMIT_PRESSURE)
       setSwapVolumeFreeSpaceReaderForTest(() => Promise.resolve({ freeMB: 42, volume: 'C:' }))

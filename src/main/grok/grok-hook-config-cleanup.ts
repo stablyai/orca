@@ -23,6 +23,7 @@ export function removeManagedGrokHookEntries(
     if (!Array.isArray(definitions)) {
       continue
     }
+
     if (
       definitions.some((definition) =>
         hookDefinitionHasManagedCommand(definition, isManagedCommand)
@@ -30,7 +31,9 @@ export function removeManagedGrokHookEntries(
     ) {
       removedAny = true
     }
+
     const cleaned = removeManagedCommands(definitions, isManagedCommand)
+
     if (cleaned.length === 0) {
       delete nextHooks[eventName]
     } else {
@@ -41,11 +44,13 @@ export function removeManagedGrokHookEntries(
   if (!removedAny) {
     return { config, removedAny: false }
   }
+
   if (Object.keys(nextHooks).length === 0) {
     delete nextConfig.hooks
   } else {
     nextConfig.hooks = nextHooks
   }
+
   return { config: nextConfig, removedAny: true }
 }
 

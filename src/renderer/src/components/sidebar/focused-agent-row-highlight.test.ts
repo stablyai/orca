@@ -11,12 +11,19 @@ import {
 } from './focused-agent-row-highlight'
 
 const WORKTREE_ID = 'repo-1::/worktree'
+
 const OTHER_WORKTREE_ID = 'repo-1::/other'
+
 const TAB_ID = 'tab-1'
+
 const OTHER_TAB_ID = 'tab-2'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
+
 const OTHER_PANE_KEY = makePaneKey(TAB_ID, OTHER_LEAF_ID)
 
 function makeTab(id: string, worktreeId = WORKTREE_ID): TerminalTab {
@@ -127,6 +134,7 @@ describe('getFocusedAgentPaneKeyForWorktree', () => {
 
   it('returns retained agent row pane keys for the focused pane', () => {
     const entry = makeAgentStatusEntry(PANE_KEY)
+
     const state = makeState({
       retainedAgentsByPaneKey: {
         [PANE_KEY]: {

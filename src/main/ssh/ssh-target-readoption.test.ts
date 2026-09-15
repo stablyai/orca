@@ -21,6 +21,7 @@ function makeTarget(overrides: Partial<SshTarget> = {}): SshTarget {
 function makeFakeStore(tombstones: RemovedSshTargetTombstone[]) {
   const reassigned: { oldId: string; newId: string }[] = []
   let current = [...tombstones]
+
   const store = {
     getRemovedSshTargetTombstones: () => [...current],
     releaseRemovedSshTargetTombstone: (oldTargetId: string) => {
@@ -28,9 +29,11 @@ function makeFakeStore(tombstones: RemovedSshTargetTombstone[]) {
     },
     reassignSshTargetId: (oldTargetId: string, newTargetId: string) => {
       reassigned.push({ oldId: oldTargetId, newId: newTargetId })
+
       return ['repo-1']
     }
   } as unknown as Store
+
   return { store, reassigned, remaining: () => current }
 }
 
@@ -49,10 +52,12 @@ const tombstone = (
 describe('readoptOrphanedWorkspacesForTarget', () => {
   it('re-adopts on matching configHost alias', () => {
     const fake = makeFakeStore([tombstone({ configHost: 'devbox', host: 'changed.example.com' })])
+
     const readoptions = readoptOrphanedWorkspacesForTarget(
       fake.store,
       makeTarget({ configHost: 'devbox', host: 'now.example.com' })
     )
+
     expect(readoptions).toEqual([
       { oldTargetId: 'ssh-old', newTargetId: 'ssh-new', repoIds: ['repo-1'] }
     ])
@@ -71,10 +76,12 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
 
   it('does not re-adopt when identity differs', () => {
     const fake = makeFakeStore([tombstone({ host: 'other.example.com', username: 'root' })])
+
     const readoptions = readoptOrphanedWorkspacesForTarget(
       fake.store,
       makeTarget({ host: 'dev.example.com', username: 'tim' })
     )
+
     expect(readoptions).toEqual([])
     expect(fake.reassigned).toEqual([])
     expect(fake.remaining()).toHaveLength(1) // tombstone left for a future match
@@ -82,10 +89,12 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
 
   it('matches host/user/port case-insensitively', () => {
     const fake = makeFakeStore([tombstone({ host: 'Dev.Example.COM', username: 'Tim' })])
+
     const readoptions = readoptOrphanedWorkspacesForTarget(
       fake.store,
       makeTarget({ host: 'dev.example.com', username: 'tim' })
     )
+
     expect(readoptions).toHaveLength(1)
   })
 
@@ -94,10 +103,12 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
     const fake = makeFakeStore([
       tombstone({ configHost: 'prod', host: 'prod.example.com', username: 'root' })
     ])
+
     const readoptions = readoptOrphanedWorkspacesForTarget(
       fake.store,
       makeTarget({ configHost: 'devbox', host: 'dev.example.com', username: 'tim' })
     )
+
     expect(readoptions).toEqual([])
   })
 
@@ -112,10 +123,12 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
     const fake = makeFakeStore([
       tombstone({ configHost: 'prod-deploy', host: 'prod.example.com', username: 'deploy' })
     ])
+
     const readoptions = readoptOrphanedWorkspacesForTarget(
       fake.store,
       makeTarget({ configHost: 'prod-admin', host: 'prod.example.com', username: 'deploy' })
     )
+
     expect(readoptions).toEqual([])
     expect(fake.reassigned).toEqual([])
     expect(fake.remaining()).toHaveLength(1) // tombstone preserved
@@ -133,6 +146,7 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
         username: 'alice'
       })
     ])
+
     const readoptions = readoptOrphanedWorkspacesForTarget(
       fake.store,
       makeTarget({
@@ -142,6 +156,7 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
         username: 'bob'
       })
     )
+
     expect(readoptions).toEqual([])
     expect(fake.reassigned).toEqual([])
   })
@@ -155,6 +170,7 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
         username: 'alice'
       })
     ])
+
     const readoptions = readoptOrphanedWorkspacesForTarget(
       fake.store,
       makeTarget({
@@ -164,6 +180,7 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
         username: 'alice'
       })
     )
+
     expect(readoptions).toHaveLength(1)
   })
 
@@ -173,10 +190,12 @@ describe('readoptOrphanedWorkspacesForTarget', () => {
     const fake = makeFakeStore([
       tombstone({ configHost: 'devbox', host: 'dev.example.com', username: 'tim' })
     ])
+
     const readoptions = readoptOrphanedWorkspacesForTarget(
       fake.store,
       makeTarget({ configHost: undefined, host: 'dev.example.com', username: 'tim' })
     )
+
     expect(readoptions).toHaveLength(1)
   })
 })

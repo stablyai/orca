@@ -42,6 +42,7 @@ describe('dropAgentStatus + retention suppressor', () => {
     vi.useFakeTimers()
     const store = createTestStore()
     const now = Date.now()
+
     const entry: AgentStatusEntry = {
       state: 'done',
       prompt: '',
@@ -50,6 +51,7 @@ describe('dropAgentStatus + retention suppressor', () => {
       paneKey: 'tab-retained:0',
       stateHistory: []
     }
+
     const retained: RetainedAgentEntry = {
       entry,
       worktreeId: 'wt-x',
@@ -57,6 +59,7 @@ describe('dropAgentStatus + retention suppressor', () => {
       agentType: 'claude',
       startedAt: now
     }
+
     store.getState().retainAgents([retained])
 
     const agentEpochBefore = store.getState().agentStatusEpoch
@@ -88,6 +91,7 @@ describe('dropAgentStatus + retention suppressor', () => {
     // same paneKey" state that the dropAgentStatus hasLive+hasRetained branch
     // (agent-status.ts lines 301-311) handles.
     const now = Date.now()
+
     const retainedEntry: AgentStatusEntry = {
       state: 'done',
       prompt: '',
@@ -96,6 +100,7 @@ describe('dropAgentStatus + retention suppressor', () => {
       paneKey: 'tab-1:0',
       stateHistory: []
     }
+
     const retained: RetainedAgentEntry = {
       entry: retainedEntry,
       worktreeId: 'wt-x',
@@ -103,6 +108,7 @@ describe('dropAgentStatus + retention suppressor', () => {
       agentType: 'claude',
       startedAt: now
     }
+
     store.getState().retainAgents([retained])
 
     // Sanity-check the precondition: both maps carry the paneKey.

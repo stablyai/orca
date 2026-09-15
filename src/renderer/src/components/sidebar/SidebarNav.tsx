@@ -72,15 +72,19 @@ const SidebarNav = React.memo(function SidebarNav() {
   const artifactsActive = activeView === 'artifacts'
   const skillsActive = activeView === 'skills'
   const mobileOnboardingBadge = useMobileSidebarOnboardingBadge(showMobileButton)
+
   const hideAutomationsButton = React.useCallback(() => {
     void updateSettings({ showAutomationsButton: false })
   }, [updateSettings])
+
   const hideMobileButton = React.useCallback(() => {
     void updateSettings({ showMobileButton: false })
   }, [updateSettings])
+
   const hideArtifactsButton = React.useCallback(() => {
     void updateSettings({ showArtifactsButton: false })
   }, [updateSettings])
+
   const hideSkillsButton = React.useCallback(() => {
     void updateSettings({ showSkillsButton: false })
   }, [updateSettings])

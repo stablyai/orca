@@ -25,18 +25,21 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const question = getOptionalStringFlag(flags, 'question')
     const resume = getOptionalStringFlag(flags, 'resume')
+
     if ((question ? 1 : 0) + (resume ? 1 : 0) !== 1) {
       throw new RuntimeClientError(
         'invalid_argument',
         'Choose exactly one of --question or --resume.'
       )
     }
+
     if (resume && flags.has('options')) {
       throw new RuntimeClientError(
         'invalid_argument',
         '--options is only valid when creating a new question.'
       )
     }
+
     const result = await callOrchestrationMutation<{
       answer: string | null
       messageId: string | null
@@ -68,6 +71,7 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
         orchestrationCapability: getOptionalStringFlag(flags, 'dispatch-capability')
       }
     )
+
     // Why: same {ok, result} envelope as every sibling verb; ask used to print a bare object.
     if (json) {
       printResult(result, true, () => '')
@@ -77,12 +81,16 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
     } else if (result.result.answer !== null) {
       console.log(result.result.answer)
     }
+
     if (result.result.legacyCompatibility?.resumeRequired) {
       await flushOrchestrationStdout()
       process.exitCode = 75
+
       return
     }
+
     const answerAck = result.result.legacyCompatibility?.answerAcknowledgement
+
     if (answerAck && result.result.answer !== null) {
       await flushOrchestrationStdout()
       await client.call('orchestration.check', {
@@ -90,12 +98,14 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
         compatibilityQuestionAck: JSON.stringify(answerAck)
       })
     }
+
     if (result.result.timedOut) {
       if (!json) {
         // Why: report the server's clamped effective budget rather than overstating the wait.
         const waitedMs = result.result.timeoutMs ?? timeoutMs
         const messageId = result.result.messageId
         const dispatchCapability = getOptionalStringFlag(flags, 'dispatch-capability')
+
         const resumeCommand =
           messageId === null
             ? undefined
@@ -111,14 +121,17 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
                 '--timeout-ms',
                 String(waitedMs)
               ])
+
         console.error(
           resumeCommand
             ? `ask timeout after ${waitedMs}ms; question is still pending (messageId: ${messageId}). Resume waiting; do not ask again:\n${resumeCommand}`
             : `ask timeout after ${waitedMs}ms; question identity was not returned, so it cannot be resumed safely.`
         )
       }
+
       process.exitCode = 1
     }
+
     if (result.result.cancelled) {
       if (!json) {
         console.error(
@@ -127,6 +140,7 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
             : `ask cancelled (question ${result.result.messageId})`
         )
       }
+
       process.exitCode = 1
     }
   }

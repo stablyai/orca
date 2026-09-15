@@ -37,7 +37,9 @@ export async function fetchRepoCatalogForTarget(
             reuseRecentCompatibilityFailure: true
           })
         ).repos
+
   const repos = fetchedRepos.map((repo) => repoWithFetchedOwner(repo, target))
+
   return {
     repos,
     projectHostSetupCompatibility: await fetchProjectHostSetupCompatibility(target, repos),
@@ -54,6 +56,7 @@ export function mergeFetchedRepoCatalog(
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 } {
   const repos = mergeFetchedReposForHost(currentRepos, catalog.repos, catalog.hostId)
+
   return {
     repos,
     projectHostSetupCompatibility: catalog.projectHostSetupCompatibility,
@@ -76,19 +79,23 @@ export function filterSetupsForPrunedRepoRows(
   const survivingOwners = new Set(
     reconciledRepos.map((repo) => `${getRepoExecutionHostId(repo)}:${repo.id}`)
   )
+
   const prunedOwners = new Set(
     mergedRepos
       .filter((repo) => !survivingOwners.has(`${getRepoExecutionHostId(repo)}:${repo.id}`))
       .map((repo) => `${getRepoExecutionHostId(repo)}:${repo.id}`)
   )
+
   // Why: this result feeds the compat merge as `previous`, so an unconditional copy would discard
   // the identity that merge is about to try to preserve.
   if (prunedOwners.size === 0) {
     return setups
   }
+
   const filtered = setups.filter(
     (setup) => !setup.repoId || !prunedOwners.has(`${setup.hostId}:${setup.repoId}`)
   )
+
   return filtered.length === setups.length ? setups : filtered
 }
 
@@ -97,13 +104,16 @@ export function reconcileReadoptedSshWorktreeState(
   readoptions: readonly SshRepoReadoption[]
 ): Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'> {
   const worktreesByRepo = reconcileReadoptedSshWorktreesByRepo(state.worktreesByRepo, readoptions)
+
   const detectedRows = Object.fromEntries(
     Object.entries(state.detectedWorktreesByRepo).map(([repoId, result]) => [
       repoId,
       result.worktrees
     ])
   )
+
   const reconciledDetectedRows = reconcileReadoptedSshWorktreesByRepo(detectedRows, readoptions)
+
   const detectedWorktreesByRepo =
     reconciledDetectedRows === detectedRows
       ? state.detectedWorktreesByRepo
@@ -113,6 +123,7 @@ export function reconcileReadoptedSshWorktreeState(
             { ...result, worktrees: reconciledDetectedRows[repoId] }
           ])
         )
+
   return {
     worktreesByRepo,
     detectedWorktreesByRepo,
@@ -132,10 +143,12 @@ export function filterTrustedOrcaHooksToValidRepos(
   validRepoIds: Set<string>
 ): AppState['trustedOrcaHooks'] {
   const next: AppState['trustedOrcaHooks'] = {}
+
   for (const [repoId, entry] of Object.entries(trust)) {
     if (validRepoIds.has(repoId)) {
       next[repoId] = entry
     }
   }
+
   return next
 }

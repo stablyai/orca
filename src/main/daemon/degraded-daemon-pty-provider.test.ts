@@ -24,13 +24,16 @@ function createProvider(
 ): ProviderMock {
   const dataListeners: ((payload: { id: string; data: string; sequenceChars?: number }) => void)[] =
     []
+
   const replayListeners: ((payload: { id: string; data: string }) => void)[] = []
   const exitListeners: ((payload: { id: string; code: number }) => void)[] = []
   const writeUnavailableListeners: ((payload: { id: string }) => void)[] = []
+
   return {
     spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
       const id = opts.sessionId ?? `${label}-new`
       sessions.push(id)
+
       return { id }
     }),
     attach: vi.fn(async () => {}),
@@ -42,6 +45,7 @@ function createProvider(
     resize: vi.fn(),
     shutdown: vi.fn(async (id: string) => {
       const idx = sessions.indexOf(id)
+
       if (idx !== -1) {
         sessions.splice(idx, 1)
       }
@@ -63,8 +67,10 @@ function createProvider(
     onData: vi.fn(
       (callback: (payload: { id: string; data: string; sequenceChars?: number }) => void) => {
         dataListeners.push(callback)
+
         return () => {
           const idx = dataListeners.indexOf(callback)
+
           if (idx !== -1) {
             dataListeners.splice(idx, 1)
           }
@@ -73,8 +79,10 @@ function createProvider(
     ),
     onReplay: vi.fn((callback: (payload: { id: string; data: string }) => void) => {
       replayListeners.push(callback)
+
       return () => {
         const idx = replayListeners.indexOf(callback)
+
         if (idx !== -1) {
           replayListeners.splice(idx, 1)
         }
@@ -82,8 +90,10 @@ function createProvider(
     }),
     onExit: vi.fn((callback: (payload: { id: string; code: number }) => void) => {
       exitListeners.push(callback)
+
       return () => {
         const idx = exitListeners.indexOf(callback)
+
         if (idx !== -1) {
           exitListeners.splice(idx, 1)
         }
@@ -106,8 +116,10 @@ function createProvider(
     },
     onWriteUnavailable: vi.fn((callback: (payload: { id: string }) => void) => {
       writeUnavailableListeners.push(callback)
+
       return () => {
         const idx = writeUnavailableListeners.indexOf(callback)
+
         if (idx !== -1) {
           writeUnavailableListeners.splice(idx, 1)
         }
@@ -166,11 +178,13 @@ it('routes attach-only to a legacy session created after startup inventory', asy
   const legacySessions = ['legacy-at-startup']
   const legacy = createDaemonAdapter('legacy', legacySessions)
   const fallback = createProvider('fallback')
+
   const provider = new DegradedDaemonPtyProvider({
     current,
     legacy: [legacy],
     fallback
   })
+
   await provider.discoverDaemonSessions()
   legacySessions.push('legacy-created-later')
 
@@ -190,6 +204,7 @@ it('keeps an attach unresolved when a legacy inventory listing fails', async () 
   const current = createDaemonAdapter('daemon')
   const legacy = createDaemonAdapter('legacy')
   vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('wedged'))
+
   const provider = new DegradedDaemonPtyProvider({
     current,
     legacy: [legacy],
@@ -216,6 +231,7 @@ it('confirms repeated stale-binding absence without falling back or spawning', a
       : { id: 'pty-fresh-local', incarnationId: 'incarnation-fresh-local' }
   )
   const provider = new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+
   const attach = {
     sessionId: 'pty-persisted-missing',
     expectedIncarnationId: 'incarnation-persisted-missing',
@@ -280,11 +296,13 @@ it('preserves client-only unverifiable inspection from an owning daemon', async 
     verdict: 'unverifiable',
     reason: 'old_host'
   })
+
   const provider = new DegradedDaemonPtyProvider({
     current: daemon,
     legacy: [],
     fallback: createProvider('fallback')
   })
+
   await provider.discoverDaemonSessions()
 
   await expect(provider.inspectProcess('daemon-session')).resolves.toEqual({
@@ -325,11 +343,13 @@ describe('DegradedDaemonPtyProvider', () => {
     const legacy = createDaemonAdapter('legacy', ['daemon-session'])
     const providerSequence = { value: 204, generation: 'continued' as const }
     vi.mocked(legacy.attach).mockResolvedValueOnce({ providerSequence })
+
     const provider = new DegradedDaemonPtyProvider({
       current: createDaemonAdapter('current'),
       legacy: [legacy],
       fallback: createProvider('fallback')
     })
+
     await provider.discoverDaemonSessions()
 
     await expect(provider.attach('daemon-session')).resolves.toEqual({ providerSequence })
@@ -397,16 +417,19 @@ describe('DegradedDaemonPtyProvider', () => {
   it('routes later fresh PTYs to the daemon after spawn health recovers', async () => {
     const current = createDaemonAdapter('daemon')
     const fallback = createProvider('fallback')
+
     const probeCurrentDaemonSpawn = vi
       .fn<() => Promise<boolean>>()
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true)
+
     const provider = new DegradedDaemonPtyProvider({
       current,
       legacy: [],
       fallback,
       probeCurrentDaemonSpawn
     })
+
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
 
     try {
@@ -432,12 +455,14 @@ describe('DegradedDaemonPtyProvider', () => {
 
   it('coalesces concurrent fresh-spawn recovery probes', async () => {
     let resolveProbe: ((healthy: boolean) => void) | undefined
+
     const probeCurrentDaemonSpawn = vi.fn(
       () =>
         new Promise<boolean>((resolve) => {
           resolveProbe = resolve
         })
     )
+
     const provider = new DegradedDaemonPtyProvider({
       current: createDaemonAdapter('daemon'),
       legacy: [],
@@ -457,14 +482,17 @@ describe('DegradedDaemonPtyProvider', () => {
 
   it('does not retain recovered daemon ownership after exit beats the spawn reply', async () => {
     const current = createDaemonAdapter('daemon')
+
     const provider = new DegradedDaemonPtyProvider({
       current,
       legacy: [],
       fallback: createProvider('fallback'),
       probeCurrentDaemonSpawn: vi.fn(async () => true)
     })
+
     vi.mocked(current.spawn).mockImplementation(async () => {
       current.emitExit('daemon-fast-exit', 0)
+
       return { id: 'daemon-fast-exit', exitedBeforeSpawnReply: true }
     })
 
@@ -536,6 +564,7 @@ describe('DegradedDaemonPtyProvider', () => {
   it('routes authoritative recovery snapshots to the owning daemon', async () => {
     const current = createDaemonAdapter('daemon', ['daemon-session'])
     const fallback = createProvider('fallback')
+
     const snapshot = {
       data: 'alt frame',
       scrollbackAnsi: 'normal history',
@@ -544,6 +573,7 @@ describe('DegradedDaemonPtyProvider', () => {
       seq: 42,
       source: 'headless' as const
     }
+
     current.getBufferSnapshot = vi.fn(async () => snapshot)
     const provider = new DegradedDaemonPtyProvider({ current, legacy: [], fallback })
 

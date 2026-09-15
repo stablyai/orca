@@ -6,13 +6,16 @@ import {
 } from '../shared/app-version'
 
 export const compareVersions = compareAppVersions
+
 export const isPrereleaseVersion = isPrereleaseAppVersion
+
 export const isValidVersion = isValidAppVersion
 
 export function statusesEqual(left: UpdateStatus, right: UpdateStatus): boolean {
   if (left.source !== right.source) {
     return false
   }
+
   switch (left.state) {
     case 'idle':
       return right.state === 'idle'
@@ -71,6 +74,7 @@ export function isGitHubReleaseTransitionFailure(normalizedMessage: string): boo
 
 export function isMissingUpdateManifestFailure(message: string): boolean {
   const normalizedMessage = message.toLowerCase()
+
   return (
     normalizedMessage.includes('404') &&
     (normalizedMessage.includes('cannot find channel') ||

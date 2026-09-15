@@ -266,10 +266,12 @@ describe('readPersistedWindowsPathSegments', () => {
   it('does not let injected test reads populate production fallback state', () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     const execFileSync = vi
       .fn()
       .mockReturnValueOnce('    Path    REG_SZ    C:\\InjectedMachine\r\n')
       .mockReturnValueOnce('    Path    REG_SZ    C:\\InjectedUser\r\n')
+
     registryGetKeyMock.mockImplementation(() => {
       throw new Error('registry unavailable')
     })
@@ -455,6 +457,7 @@ describe('readPersistedWindowsPathSegments', () => {
       .mockReturnValueOnce(registryPath('C:\\OldMachine'))
       .mockImplementationOnce(() => {
         queueMicrotask(invalidatePersistedWindowsPathCache)
+
         return registryPath('C:\\OldUser')
       })
       .mockReturnValueOnce(registryPath('C:\\NewMachine'))
@@ -489,6 +492,7 @@ describe('readPersistedWindowsPathSegments', () => {
 describe('mergePersistedWindowsPath', () => {
   it('expands variables already present in the inherited PATH', () => {
     const execFileSync = vi.fn().mockReturnValue('    Path    REG_SZ    \r\n')
+
     const env = {
       ORCA_PATH_ROOT: 'C:\\Users\\orca\\AppData\\Local',
       Path: '%orca_path_root%\\agy\\bin;C:\\Windows'
@@ -518,6 +522,7 @@ describe('mergePersistedWindowsPath', () => {
           ''
         ].join('\r\n')
       )
+
     const env = { Path: 'C:\\Existing' }
 
     mergePersistedWindowsPath(env, { platform: 'win32', execFileSync })
@@ -532,6 +537,7 @@ describe('mergePersistedWindowsPath', () => {
       .fn()
       .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
       .mockReturnValueOnce('    Path    REG_SZ    C:\\User\r\n')
+
     const env = { PATH: 'C:\\Current' }
 
     mergePersistedWindowsPath(env, { platform: 'win32', execFileSync })
@@ -544,6 +550,7 @@ describe('mergePersistedWindowsPath', () => {
       .fn()
       .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
       .mockReturnValueOnce('    Path    REG_SZ    C:\\User\r\n')
+
     const env: Record<string, string> = {}
 
     mergePersistedWindowsPath(env, {
@@ -560,6 +567,7 @@ describe('mergePersistedWindowsPath', () => {
       .fn()
       .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
       .mockReturnValueOnce('    Path    REG_SZ    C:\\User\r\n')
+
     const env: Record<string, string> = {}
 
     mergePersistedWindowsPath(env, {
@@ -575,10 +583,12 @@ describe('mergePersistedWindowsPath', () => {
     const python = 'C:\\Users\\me\\AppData\\Local\\Programs\\Python\\Python314\\'
     const scripts = `${python}Scripts\\`
     const windowsApps = 'C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps'
+
     const execFileSync = vi
       .fn()
       .mockReturnValueOnce('    Path    REG_EXPAND_SZ    C:\\Windows\\system32;C:\\Windows\r\n')
       .mockReturnValueOnce(`    Path    REG_EXPAND_SZ    ${python};${scripts};${windowsApps}\r\n`)
+
     const env = { Path: `C:\\Windows\\system32;C:\\Windows;${windowsApps}` }
 
     mergePersistedWindowsPath(env, { platform: 'win32', execFileSync })
@@ -592,10 +602,12 @@ describe('mergePersistedWindowsPath', () => {
     const injected = 'C:\\Users\\me\\AppData\\Local\\Orca\\resources\\bin'
     const python = 'C:\\Users\\me\\AppData\\Local\\Programs\\Python\\Python314\\'
     const windowsApps = 'C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps'
+
     const execFileSync = vi
       .fn()
       .mockReturnValueOnce('    Path    REG_EXPAND_SZ    C:\\Windows\\system32\r\n')
       .mockReturnValueOnce(`    Path    REG_EXPAND_SZ    ${python};${windowsApps}\r\n`)
+
     const env = { Path: `${injected};C:\\Windows\\system32;${windowsApps}` }
 
     mergePersistedWindowsPath(env, { platform: 'win32', execFileSync })
@@ -607,6 +619,7 @@ describe('mergePersistedWindowsPath', () => {
     const execFileSync = vi.fn().mockImplementation(() => {
       throw new Error('ERROR: Access is denied.')
     })
+
     const env = { Path: 'C:\\Windows\\system32;C:\\Existing' }
 
     mergePersistedWindowsPath(env, { platform: 'win32', execFileSync })
@@ -619,6 +632,7 @@ describe('mergePersistedWindowsPath', () => {
       .fn()
       .mockReturnValueOnce('    Path    REG_SZ    C:\\Tools\r\n')
       .mockReturnValueOnce('    Path    REG_SZ    \r\n')
+
     const env = { Path: 'C:\\Tools\\' }
 
     mergePersistedWindowsPath(env, { platform: 'win32', execFileSync })
@@ -631,6 +645,7 @@ describe('mergePersistedWindowsPath', () => {
       .fn()
       .mockReturnValueOnce('    Path    REG_SZ    C:\\\\\r\n')
       .mockReturnValueOnce('    Path    REG_SZ    \r\n')
+
     const env = { Path: 'C:/' }
 
     mergePersistedWindowsPath(env, { platform: 'win32', execFileSync })

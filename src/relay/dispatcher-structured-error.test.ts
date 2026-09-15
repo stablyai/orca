@@ -10,7 +10,9 @@ function decodeResponse(frame: Buffer): JsonRpcResponse | null {
   if (frame[0] !== MessageType.Regular) {
     return null
   }
+
   const length = frame.readUInt32BE(9)
+
   return JSON.parse(frame.subarray(13, 13 + length).toString('utf8')) as JsonRpcResponse
 }
 
@@ -25,15 +27,19 @@ describe('RelayDispatcher structured errors', () => {
   it('preserves validated skill failure data without publishing nonnumeric JSON-RPC codes', async () => {
     vi.useFakeTimers()
     const written: Buffer[] = []
+
     const dispatcher = new RelayDispatcher((data) => {
       written.push(Buffer.from(data))
     })
+
     dispatchers.push(dispatcher)
+
     const data = {
       category: 'archive',
       code: 'skill-package-archive-invalid',
       retryable: false
     }
+
     dispatcher.onRequest('fail.structured', async () => {
       throw Object.assign(new Error(data.code), { code: 'skill_install_failure', data })
     })
@@ -62,10 +68,13 @@ describe('RelayDispatcher structured errors', () => {
     // machinery that can repair it runs on the client. Prose cannot be acted on.
     vi.useFakeTimers()
     const written: Buffer[] = []
+
     const dispatcher = new RelayDispatcher((data) => {
       written.push(Buffer.from(data))
     })
+
     dispatchers.push(dispatcher)
+
     const cause: TerminalUnavailableCause = {
       status: 'blocked',
       reason: 'abi_mismatch',
@@ -80,6 +89,7 @@ describe('RelayDispatcher structured errors', () => {
         nodeVersion: 'v20.11.0'
       }
     }
+
     dispatcher.onRequest('pty.spawn', async () => {
       throw Object.assign(new Error('Remote terminals are unavailable'), {
         code: TERMINAL_UNAVAILABLE_RPC_ERROR_CODE,

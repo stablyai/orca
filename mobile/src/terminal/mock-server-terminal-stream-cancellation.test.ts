@@ -37,9 +37,11 @@ describe('mock terminal stream cancellation', () => {
     vi.useFakeTimers()
     const ws = { OPEN: 1, readyState: 1 } as unknown as WebSocket
     const deferred: DeferredResponse[] = []
+
     const respond: RpcRespond = (response, shouldSend) => {
       deferred.push({ response, shouldSend })
     }
+
     const handle = (rpcRequest: RpcRequest) =>
       handleMockTerminalRequest(rpcRequest, respond, success, ws, () => 'wt')
 

@@ -10,7 +10,9 @@ import {
 } from './durable-file-write'
 
 const queues = new Map<string, Promise<unknown>>()
+
 const staleTempCleanups = new Map<string, Promise<void>>()
+
 const STALE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
 export function sidecarSnapshotFile(snapshotDirectory: string, fileName: string): string {
@@ -28,6 +30,7 @@ export function withSidecarSnapshotQueue<T>(file: string, task: () => Promise<T>
       () => undefined
     )
   )
+
   return run
 }
 
@@ -42,10 +45,12 @@ export async function readSidecarSnapshot(file: string): Promise<unknown> {
 
 export async function writeSidecarSnapshot(file: string, payload: unknown): Promise<void> {
   let cleanup = staleTempCleanups.get(file)
+
   if (!cleanup) {
     cleanup = removeStaleDurableWriteTempFiles(file, { minimumAgeMs: STALE_TEMP_AGE_MS })
     staleTempCleanups.set(file, cleanup)
   }
+
   await cleanup
   await writeFileDurable(durableWriteTempPath(file), file, JSON.stringify(payload))
 }

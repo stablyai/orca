@@ -14,6 +14,7 @@ describe('agentMapDirectLineageChevronPath', () => {
       { x: 0, y: 0, radius: 4 },
       { x: 40, y: 40, radius: 4 }
     )
+
     const tips = [...path.matchAll(/M [-\d.]+ [-\d.]+ L ([-\d.]+) ([-\d.]+) L/g)].map((match) => ({
       x: Number(match[1]),
       y: Number(match[2])
@@ -61,6 +62,7 @@ describe('agentMapDirectLineageChevronPath', () => {
       ].map((match) => Number(match[1]))
 
       expect(tips.length).toBeGreaterThan(2)
+
       return tips.slice(1).map((tip, index) => tip - tips[index])
     })
 
@@ -75,6 +77,7 @@ describe('agentMapDirectLineageChevronPath', () => {
       { x: 9, y: 23 },
       { x: 30, y: 23 }
     ])
+
     const tips = [...path.matchAll(/M [-\d.]+ [-\d.]+ L ([-\d.]+) ([-\d.]+) L/g)].map((match) => ({
       x: Number(match[1]),
       y: Number(match[2])
@@ -92,8 +95,10 @@ describe('agentMapDirectLineageChevronPath', () => {
 
   it('serves an unmoved edge from cache instead of rebuilding it', async () => {
     vi.resetModules()
+
     const { agentMapDirectLineageChevronPath: cachedPath } =
       await import('./agent-map-lineage-chevron-path')
+
     const parent = { x: 3, y: 5, radius: 20 }
     const child = { x: 903, y: 5, radius: 20 }
     const hypot = vi.spyOn(Math, 'hypot')
@@ -109,13 +114,16 @@ describe('agentMapDirectLineageChevronPath', () => {
 
   it('keeps 512 recently used paths and evicts the least-recently-used path', async () => {
     vi.resetModules()
+
     const { agentMapDirectLineageChevronPath: cachedPath } =
       await import('./agent-map-lineage-chevron-path')
+
     const edge = (x: number) =>
       [
         { x, y: 1_000, radius: 2 },
         { x, y: 1_200, radius: 2 }
       ] as const
+
     for (let i = 0; i < 512; i += 1) {
       cachedPath(...edge(i))
     }

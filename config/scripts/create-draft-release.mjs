@@ -3,16 +3,21 @@
 import { pathToFileURL } from 'node:url'
 
 const API_VERSION = '2022-11-28'
+
 const MAX_RELEASE_BODY_LENGTH = 120_000
+
 const TRUNCATION_NOTICE =
   '\n\n---\nRelease notes were truncated because GitHub release bodies are limited to 125,000 characters.'
+
 const DESKTOP_RELEASE_TAG_PATTERN = /^v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/
 
 export function parseDesktopReleaseTag(tag) {
   const match = DESKTOP_RELEASE_TAG_PATTERN.exec(tag)
+
   if (!match) {
     return null
   }
+
   return {
     tag,
     major: Number(match[1]),
@@ -24,26 +29,33 @@ export function parseDesktopReleaseTag(tag) {
 
 function compareDesktopReleaseTags(a, b) {
   const versionDiff = a.major - b.major || a.minor - b.minor || a.patch - b.patch
+
   if (versionDiff !== 0) {
     return versionDiff
   }
+
   if (a.rc === b.rc) {
     return 0
   }
+
   if (a.rc === null) {
     return 1
   }
+
   if (b.rc === null) {
     return -1
   }
+
   return a.rc - b.rc
 }
 
 export function latestPreviousPublishedDesktopReleaseTag(releases, tag) {
   const current = parseDesktopReleaseTag(tag)
+
   if (!current) {
     return ''
   }
+
   const previousReleases = releases
     .filter((release) => release?.draft === false && typeof release.tag_name === 'string')
     .map((release) => parseDesktopReleaseTag(release.tag_name))
@@ -53,6 +65,7 @@ export function latestPreviousPublishedDesktopReleaseTag(releases, tag) {
     // stable releases summarize since the prior stable, not the latest RC.
     .filter((candidate) => current.rc !== null || candidate.rc === null)
     .sort(compareDesktopReleaseTags)
+
   return previousReleases.at(-1)?.tag ?? ''
 }
 
@@ -72,29 +85,36 @@ async function githubJson(fetchImpl, url, token, options = {}) {
       ...options.headers
     }
   })
+
   if (!res.ok) {
     const body = await res.text().catch(() => '')
     throw new Error(`GitHub request failed ${res.status} ${res.statusText}: ${body.slice(0, 300)}`)
   }
+
   return res.json()
 }
 
 async function fetchRepoReleases(repo, token, fetchImpl) {
   const releases = []
+
   for (let page = 1; ; page += 1) {
     const pageReleases = await githubJson(
       fetchImpl,
       `https://api.github.com/repos/${repo}/releases?per_page=100&page=${page}`,
       token
     )
+
     if (!Array.isArray(pageReleases)) {
       throw new Error(`GitHub releases response page ${page} for ${repo} was not an array`)
     }
+
     releases.push(...pageReleases)
+
     if (pageReleases.length < 100) {
       break
     }
   }
+
   return releases
 }
 
@@ -104,6 +124,7 @@ export function truncateReleaseBody(body, maxLength = MAX_RELEASE_BODY_LENGTH) {
   }
 
   const availableLength = maxLength - TRUNCATION_NOTICE.length
+
   if (availableLength <= 0) {
     throw new Error('Release truncation notice is longer than the maximum release body length')
   }
@@ -121,21 +142,26 @@ export async function createDraftRelease({
   if (!repo) {
     throw new Error('repo is required')
   }
+
   if (!tag) {
     throw new Error('tag is required')
   }
+
   if (!token) {
     throw new Error('token is required')
   }
 
   const releases = await fetchRepoReleases(repo, token, fetchImpl)
   const existingRelease = releases.find((release) => release?.tag_name === tag)
+
   if (existingRelease && existingRelease.draft !== true) {
     log(`Release ${tag} already exists and is published.`)
+
     return
   }
 
   const previousTag = latestPreviousPublishedDesktopReleaseTag(releases, tag)
+
   const generateNotesBody = {
     tag_name: tag,
     target_commitish: tag,
@@ -156,14 +182,17 @@ export async function createDraftRelease({
 
   const generatedBody = typeof releaseNotes.body === 'string' ? releaseNotes.body : ''
   const body = truncateReleaseBody(generatedBody)
+
   const name =
     typeof releaseNotes.name === 'string' && releaseNotes.name.length > 0 ? releaseNotes.name : tag
+
   const prerelease = tag.includes('-rc.')
 
   if (existingRelease) {
     if (!Number.isInteger(existingRelease.id)) {
       throw new Error(`Draft release ${tag} is missing a GitHub release id`)
     }
+
     // Why: the listing is a snapshot; the draft can be published while notes
     // generate, and patching then overwrites a live release body.
     const currentRelease = await githubJson(
@@ -171,10 +200,13 @@ export async function createDraftRelease({
       `https://api.github.com/repos/${repo}/releases/${existingRelease.id}`,
       token
     )
+
     if (currentRelease?.draft !== true) {
       log(`Release ${tag} was published while notes were generated; leaving it unchanged.`)
+
       return
     }
+
     // Why: the PATCH endpoint supports no conditional/versioned update, so the
     // GET above cannot close the window. The PATCH response reports the state we
     // actually wrote to; if publication won, put the published body back.
@@ -187,12 +219,16 @@ export async function createDraftRelease({
         body: JSON.stringify({ body })
       }
     )
+
     if (patchedRelease?.draft !== true) {
       const publishedBody = typeof currentRelease.body === 'string' ? currentRelease.body : ''
+
       if (publishedBody === body) {
         log(`Release ${tag} was published while notes were patched; its body is unchanged.`)
+
         return
       }
+
       // Why: the rollback must not clobber a body written after our PATCH, so
       // restore only while the release still carries exactly what we wrote.
       const releaseBeforeRollback = await githubJson(
@@ -200,12 +236,15 @@ export async function createDraftRelease({
         `https://api.github.com/repos/${repo}/releases/${existingRelease.id}`,
         token
       )
+
       if (releaseBeforeRollback?.body !== body) {
         log(
           `Release ${tag} was published and its body changed again while notes were patched; leaving the newer body in place.`
         )
+
         return
       }
+
       await githubJson(
         fetchImpl,
         `https://api.github.com/repos/${repo}/releases/${existingRelease.id}`,
@@ -218,6 +257,7 @@ export async function createDraftRelease({
       log(
         `Release ${tag} was published while notes were patched; restored its published body and left the generated notes unapplied.`
       )
+
       return
     }
   } else {

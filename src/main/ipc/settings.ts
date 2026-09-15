@@ -51,11 +51,13 @@ type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
 function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<GlobalSettings> {
   const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedArgs } =
     args as LegacyTerminalScrollbackSettingsUpdate
+
   void _legacyScrollbackBytes
   // Plugin consent and enablement are main-owned authority state. Renderer
   // writes must pass the dedicated reviewed-fingerprint handlers.
   delete sanitizedArgs.pluginConsents
   delete sanitizedArgs.disabledPlugins
+
   return sanitizedArgs
 }
 
@@ -90,6 +92,7 @@ export function registerSettingsHandlers(
     for (const window of BrowserWindow.getAllWindows()) {
       const isOrigin =
         originWebContentsId !== undefined && window.webContents.id === originWebContentsId
+
       if (!window.isDestroyed() && !isOrigin) {
         window.webContents.send('settings:changed', updates)
       }
@@ -109,6 +112,7 @@ export function registerSettingsHandlers(
         { prBotAuthorOverrides: next },
         { notifyListeners: true, originWebContentsId: event.sender.id }
       )
+
       return store.getSettings()
     }
   )
@@ -130,6 +134,7 @@ export function registerSettingsHandlers(
     // Why: Floating Workspace grants are trusted only when written by the
     // main-process directory picker, never by renderer-provided settings IPC.
     delete sanitizedArgs.floatingTerminalTrustedCwds
+
     if ('computerAwakeMode' in sanitizedArgs) {
       Object.assign(
         sanitizedArgs,
@@ -146,83 +151,104 @@ export function registerSettingsHandlers(
         computerAwakeSettingsForMode(sanitizedArgs.keepComputerAwakeWhileAgentsRun ? 'auto' : 'off')
       )
     }
+
     if (typeof args.floatingTerminalCwd === 'string') {
       sanitizedArgs.floatingTerminalCwd = await sanitizeFloatingWorkspaceDirectorySetting(
         store,
         args.floatingTerminalCwd
       )
     }
+
     if ('httpProxyUrl' in args) {
       const proxyUrl = normalizeProxyUrl(args.httpProxyUrl)
       sanitizedArgs.httpProxyUrl = proxyUrl.ok ? proxyUrl.value : ''
     }
+
     if ('httpProxyBypassRules' in args) {
       sanitizedArgs.httpProxyBypassRules = normalizeProxyBypassRules(args.httpProxyBypassRules)
     }
+
     if ('appIcon' in args) {
       sanitizedArgs.appIcon = normalizeAppIconId(args.appIcon)
     }
+
     if ('aiVaultSearch' in args) {
       sanitizedArgs.aiVaultSearch = resolveAiVaultSearchSettings(args)
     }
+
     if ('terminalCustomThemes' in args) {
       sanitizedArgs.terminalCustomThemes = normalizeTerminalCustomThemes(args.terminalCustomThemes)
     }
+
     if ('terminalScrollbackRows' in args) {
       sanitizedArgs.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
         args.terminalScrollbackRows
       )
     }
+
     if ('terminalLineHeight' in args) {
       sanitizedArgs.terminalLineHeight = normalizeTerminalLineHeight(args.terminalLineHeight)
     }
+
     if ('uiLanguage' in args) {
       sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)
     }
+
     if ('mobilePairingCustomAddress' in args) {
       sanitizedArgs.mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(
         args.mobilePairingCustomAddress
       )
     }
+
     if ('mobilePairingCustomAddresses' in args) {
       sanitizedArgs.mobilePairingCustomAddresses = normalizeMobilePairingCustomAddresses(
         args.mobilePairingCustomAddresses
       )
     }
+
     if (args.theme) {
       nativeTheme.themeSource = args.theme
     }
+
     // Why: capture the pre-update value so we only emit when the value
     // actually changes. The settings UI sometimes re-saves the same value
     // (e.g. blur after a no-op edit), and a `settings_changed` event for a
     // no-op flip would inflate the experimental-feature-adoption signal.
     const before = store.getSettings()
+
     const result = store.updateSettings(sanitizedArgs, {
       notifyListeners: true,
       originWebContentsId: event.sender.id
     })
+
     const proxySettingsChanged =
       ('httpProxyUrl' in sanitizedArgs && before.httpProxyUrl !== result.httpProxyUrl) ||
       ('httpProxyBypassRules' in sanitizedArgs &&
         before.httpProxyBypassRules !== result.httpProxyBypassRules)
+
     if (proxySettingsChanged) {
       // Start both authorities before yielding so requests cannot enter between their barriers.
       const defaultSessionApply = applyElectronProxySettings(result)
+
       const browserSessionsApply = applyBrowserSessionProxies(
         browserSessionRegistry.listProfiles(),
         result
       )
+
       const [defaultSessionResult, browserSessionsResult] = await Promise.allSettled([
         defaultSessionApply,
         browserSessionsApply
       ])
+
       if (defaultSessionResult.status === 'rejected') {
         console.warn('[settings] failed to apply network proxy settings')
       }
+
       if (browserSessionsResult.status === 'rejected') {
         console.warn('[settings] failed to apply network proxy settings to browser sessions')
       }
     }
+
     if (
       'computerAwakeMode' in sanitizedArgs ||
       'keepComputerAwakeWhileAgentsRun' in sanitizedArgs
@@ -231,11 +257,13 @@ export function registerSettingsHandlers(
         normalizeComputerAwakeMode(result.computerAwakeMode, result.keepComputerAwakeWhileAgentsRun)
       )
     }
+
     const hookSettingChanged =
       ('agentStatusHooksEnabled' in sanitizedArgs &&
         before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||
       ('disabledTuiAgents' in sanitizedArgs &&
         !haveSameDisabledTuiAgents(before.disabledTuiAgents, result.disabledTuiAgents))
+
     if (hookSettingChanged) {
       try {
         await applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled, result, {
@@ -244,6 +272,7 @@ export function registerSettingsHandlers(
           onInstallError: recordManagedHookInstallFailure,
           shouldContinue: (agent) => {
             const settings = store.getSettings()
+
             return (
               settings.agentStatusHooksEnabled !== false &&
               !settings.disabledTuiAgents.includes(agent)
@@ -254,10 +283,12 @@ export function registerSettingsHandlers(
         console.warn('[settings] failed to reconcile managed agent hooks:', error)
       }
     }
+
     if ('uiLanguage' in sanitizedArgs && before.uiLanguage !== result.uiLanguage) {
       await setMainUiLanguage(result.uiLanguage)
       rebuildAppMenu()
     }
+
     if (
       ('workspaceDir' in sanitizedArgs && before.workspaceDir !== result.workspaceDir) ||
       ('nestWorkspaces' in sanitizedArgs && before.nestWorkspaces !== result.nestWorkspaces)
@@ -265,12 +296,15 @@ export function registerSettingsHandlers(
       void prepareLocalWorktreeRootsForRepos(store)
       scheduleCurrentWorktreeBaseDirectoryWatcherSync()
     }
+
     if (APPEARANCE_MENU_KEYS.some((key) => key in sanitizedArgs)) {
       rebuildAppMenu()
     }
+
     if ('appIcon' in sanitizedArgs && before.appIcon !== result.appIcon) {
       applyAppIcon(result.appIcon)
     }
+
     if ('aiVaultSearch' in sanitizedArgs) {
       applySessionSearchSettingsChange(before, result)
     }
@@ -287,15 +321,19 @@ export function registerSettingsHandlers(
       if (!SETTINGS_CHANGED_WHITELIST_SET.has(key)) {
         continue
       }
+
       const beforeValue = (before as Record<string, unknown>)[key]
       const afterValue = (result as Record<string, unknown>)[key]
+
       if (beforeValue === afterValue) {
         continue
       }
+
       if (typeof afterValue !== 'boolean') {
         // No non-bool whitelist entries today; skip rather than guess.
         continue
       }
+
       track('settings_changed', {
         setting_key: key as SettingsChangedKey,
         value_kind: 'bool'
@@ -309,12 +347,16 @@ export function registerSettingsHandlers(
     'settings:set-active-runtime-environment-preference',
     (event, args: { environmentId?: unknown }): GlobalSettings => {
       const requestedEnvironmentId = args?.environmentId
+
       if (requestedEnvironmentId !== null && typeof requestedEnvironmentId !== 'string') {
         throw new Error('Invalid Active Server preference')
       }
+
       const requestedId = requestedEnvironmentId?.trim() || null
+
       const environmentId =
         requestedId === null ? null : resolveEnvironment(app.getPath('userData'), requestedId).id
+
       return store.updateSettings(
         { activeRuntimeEnvironmentId: environmentId },
         { notifyListeners: true, originWebContentsId: event.sender.id }
@@ -332,6 +374,7 @@ export function registerSettingsHandlers(
 
   ipcMain.handle('settings:previewWarpThemeImport', (event, args?: unknown) => {
     const source = args === undefined ? { kind: 'auto' } : args
+
     return previewWarpThemeImport(store, source, event.sender)
   })
 

@@ -41,10 +41,12 @@ type ReplayGuardBreadcrumbData = {
 
 function hashReplayIdentity(value: string): string {
   let hash = 0x811c9dc5
+
   for (let index = 0; index < value.length; index += 1) {
     hash ^= value.charCodeAt(index)
     hash = Math.imul(hash, 0x01000193)
   }
+
   return (hash >>> 0).toString(16).padStart(8, '0')
 }
 
@@ -53,18 +55,23 @@ function replayGuardBreadcrumbData(
   identity: ReplayTerminalOptions['breadcrumbIdentity']
 ): ReplayGuardBreadcrumbData {
   const data: ReplayGuardBreadcrumbData = { paneId: pane.id }
+
   if (pane.leafId) {
     data.leafIdHash = hashReplayIdentity(pane.leafId)
   }
+
   if (identity?.tabId) {
     data.tabIdHash = hashReplayIdentity(identity.tabId)
   }
+
   if (identity?.worktreeId) {
     data.worktreeIdHash = hashReplayIdentity(identity.worktreeId)
   }
+
   if (identity?.ptyId) {
     data.ptyId = redactPtyIdForDiagnostics(identity.ptyId)
   }
+
   return data
 }
 
@@ -73,6 +80,7 @@ export function isPaneReplaying(ref: ReplayingPanesRef, paneId: number): boolean
 }
 
 type ReplayGuardWriteTarget = Pick<ManagedPane['terminal'], 'write'>
+
 type ReplayGuardWriteCallbacks = {
   onParsed: () => void
   onWriteFailure: () => void
@@ -94,21 +102,27 @@ function engageReplayGuard(
   map.set(paneId, (map.get(paneId) ?? 0) + 1)
   let released = false
   let timer: ReturnType<typeof setTimeout> | null = null
+
   const release = (reason: 'parsed' | 'lost-completion' | 'wedged'): void => {
     if (released) {
       return
     }
+
     released = true
+
     if (timer !== null) {
       clearTimeout(timer)
       timer = null
     }
+
     const remaining = (map.get(paneId) ?? 1) - 1
+
     if (remaining <= 0) {
       map.delete(paneId)
     } else {
       map.set(paneId, remaining)
     }
+
     if (reason === 'lost-completion') {
       console.error(
         `[terminal] replay guard released for pane ${paneId} — the probe write parsed but the replay completion never arrived (lost write callback)`
@@ -122,26 +136,34 @@ function engageReplayGuard(
       // Why: a rejected replay or silent probe makes the pipeline undeliverable; recover instead of a fossil that eats input.
       notifyUndeliverableWrite(terminal, 'replay-wedged')
     }
+
     onRelease?.()
   }
+
   const armWedgeDeadline = (quietSinceGeneration: number): void => {
     timer = setTimeout(() => {
       if (released) {
         return
       }
+
       // Why: completions after the probe prove the FIFO is alive, just behind; certify wedged only after a fully quiet window.
       if (hasTerminalParseProgressSince(terminal, quietSinceGeneration)) {
         armWedgeDeadline(captureTerminalParseProgressGeneration(terminal))
+
         return
       }
+
       release('wedged')
     }, stallCheckMs)
   }
+
   const probeForStall = (): void => {
     if (released) {
       return
     }
+
     const probeQueuedAtGeneration = captureTerminalParseProgressGeneration(terminal)
+
     try {
       // FIFO certification: this callback runs only after every replay byte queued before it has parsed.
       terminal.write('', () => {
@@ -151,11 +173,15 @@ function engageReplayGuard(
     } catch {
       // write threw (terminal disposed mid-replay): nothing will parse, so no auto-replies can leak.
       release('wedged')
+
       return
     }
+
     armWedgeDeadline(probeQueuedAtGeneration)
   }
+
   timer = setTimeout(probeForStall, stallCheckMs)
+
   return {
     onParsed: () => {
       // Why record even after release: a late completion is still parse progress that sibling guards' wedge deadlines consult.
@@ -179,11 +205,14 @@ export function replayIntoTerminal(
   if (!data) {
     return
   }
+
   // Why: a certified-dead pipeline never parses; retrying only re-arms a guard for another wedged release, so skip it.
   if (isTerminalWritePipelineCertifiedDead(pane.terminal)) {
     return
   }
+
   ensureArabicShapingJoinerForText(pane.terminal, data)
+
   const guardCallbacks = engageReplayGuard(
     replayingPanesRef.current,
     pane.id,
@@ -191,6 +220,7 @@ export function replayIntoTerminal(
     options.stallCheckMs ?? REPLAY_GUARD_STALL_CHECK_MS,
     replayGuardBreadcrumbData(pane, options.breadcrumbIdentity)
   )
+
   // Why: hidden/snapshot replay skips the foreground path; WebGL/canvas still need a post-parse repaint to drop stale cells.
   writeForegroundTerminalChunk(pane.terminal, data, {
     forceViewportRefresh: true,
@@ -211,11 +241,14 @@ export function replayIntoTerminalAsync(
   if (!data) {
     return Promise.resolve()
   }
+
   // Why: same certified-dead short-circuit as replayIntoTerminal; resolve so awaited chains don't hang on a dead parser.
   if (isTerminalWritePipelineCertifiedDead(pane.terminal)) {
     return Promise.resolve()
   }
+
   ensureArabicShapingJoinerForText(pane.terminal, data)
+
   return new Promise((resolve) => {
     // Why resolve on either release path: callers await this; a lost completion must not hang the restore chain.
     const guardCallbacks = engageReplayGuard(
@@ -226,6 +259,7 @@ export function replayIntoTerminalAsync(
       replayGuardBreadcrumbData(pane, options.breadcrumbIdentity),
       resolve
     )
+
     writeForegroundTerminalChunk(pane.terminal, data, {
       forceViewportRefresh: true,
       followupViewportRefresh: true,
@@ -246,21 +280,27 @@ export function waitForTerminalReplayWritesParsed(
   return new Promise((resolve) => {
     let finished = false
     let stallTimer: ReturnType<typeof setTimeout> | null = null
+
     const finish = (): void => {
       if (finished) {
         return
       }
+
       finished = true
+
       if (stallTimer !== null) {
         clearTimeout(stallTimer)
         stallTimer = null
       }
+
       resolve()
     }
+
     const queueProbe = (): void => {
       if (finished) {
         return
       }
+
       try {
         // Why: empty write is FIFO after replay bytes; its callback recovers a lost sentinel without changing parser state.
         terminal.write('', finish)
@@ -269,7 +309,9 @@ export function waitForTerminalReplayWritesParsed(
         finish()
       }
     }
+
     stallTimer = setTimeout(queueProbe, options.stallCheckMs ?? REPLAY_GUARD_STALL_CHECK_MS)
+
     try {
       // Why empty: keep pendingEscapeTailAnsi as the final replay bytes; xterm still orders this completion after earlier writes.
       terminal.write('', finish)

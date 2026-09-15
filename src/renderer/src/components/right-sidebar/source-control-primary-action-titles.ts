@@ -16,5 +16,6 @@ export function describeForcePushWithLease(
 ): string {
   const countText =
     count && count > 0 ? `${count} branch commit${count === 1 ? '' : 's'}` : 'this branch'
+
   return `Remote only has older copies of local commits. Force push ${countText} with lease to update ${upstreamName ?? 'the remote branch'}.`
 }

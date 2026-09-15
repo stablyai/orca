@@ -13,6 +13,7 @@ type Props = {
 export function SmartWorkspaceAdvancedFields({ composer, selectedRepoIsGit }: Props) {
   const selection = composer.smartNameSelection
   const showBranchOverride = selectedRepoIsGit && (!selection || selection.kind === 'branch')
+
   return (
     <>
       {selection ? (

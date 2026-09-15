@@ -33,13 +33,16 @@ export function fontFamilyHasKnownLigatures(fontFamily: string | null | undefine
   if (!fontFamily) {
     return false
   }
+
   // `terminalFontFamily` is a single family name in settings, but
   // defensively split on commas so the helper also works when fed a full
   // `font-family` stack (e.g. via `buildFontFamily`).
   const primary = fontFamily.split(',')[0]?.replace(/"/g, '').trim().toLowerCase() ?? ''
+
   if (!primary) {
     return false
   }
+
   return LIGATURE_FONT_TOKENS.some((token) => primary.includes(token))
 }
 
@@ -54,8 +57,10 @@ export function resolveTerminalLigaturesEnabled(
   if (mode === 'on') {
     return true
   }
+
   if (mode === 'off') {
     return false
   }
+
   return fontFamilyHasKnownLigatures(fontFamily)
 }

@@ -11,14 +11,20 @@ import {
 } from './codex-detached-pane-restart-scheduler'
 
 const ACCOUNT_A = 'a@example.com'
+
 const ACCOUNT_B = 'b@example.com'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const OLD_PTY = 'wt1@@old'
+
 const NEW_PTY = 'wt1@@new'
+
 const UNLOCATED_PTY = 'wt1@@unlocated'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   return { promise: new Promise<T>((done) => (resolve = done)), resolve }
 }
 
@@ -90,6 +96,7 @@ describe('codex detached pane restart executor', () => {
     resetCodexDetachedPaneRestartExecutorForTests()
     ptyDataHandlers.delete(OLD_PTY)
     vi.useRealTimers()
+
     if (originalWindow) {
       ;(globalThis as { window: typeof window }).window = originalWindow
     } else {
@@ -140,6 +147,7 @@ describe('codex detached pane restart executor', () => {
 
   it('executes via the store subscription without a lifecycle timeout', async () => {
     const uninstall = installCodexDetachedPaneRestartExecutor()
+
     try {
       seedQueuedRestart()
       expect(window.api.pty.spawn).not.toHaveBeenCalled()
@@ -181,6 +189,7 @@ describe('codex detached pane restart executor', () => {
         if (ptyId === UNLOCATED_PTY) {
           throw new Error('corrupt restored claim')
         }
+
         return consumePendingCodexPaneRestart(ptyId)
       }
     })
@@ -292,6 +301,7 @@ describe('codex detached pane restart executor', () => {
 
   it('leaves a tab with a mounted TerminalPane to its own restart effect', async () => {
     seedQueuedRestart()
+
     const unregister = registerRuntimeTerminalTab({
       tabId: 'tab-1',
       worktreeId: 'wt1',
@@ -300,6 +310,7 @@ describe('codex detached pane restart executor', () => {
       getPtyIdForPane: () => null,
       getTabWideAgentHintLeafId: () => null
     })
+
     try {
       await sweepUnclaimedCodexPaneRestarts()
 
@@ -320,6 +331,7 @@ describe('codex detached pane restart executor', () => {
 
     const restart = sweepUnclaimedCodexPaneRestarts()
     await vi.waitFor(() => expect(window.api.pty.spawn).toHaveBeenCalledTimes(1))
+
     const unregister = registerRuntimeTerminalTab({
       tabId: 'tab-1',
       worktreeId: 'wt1',
@@ -328,6 +340,7 @@ describe('codex detached pane restart executor', () => {
       getPtyIdForPane: () => OLD_PTY,
       getTabWideAgentHintLeafId: () => null
     })
+
     try {
       pendingSpawn.resolve({ id: NEW_PTY })
       await vi.waitFor(() => expect(window.api.pty.kill).toHaveBeenCalledExactlyOnceWith(NEW_PTY))

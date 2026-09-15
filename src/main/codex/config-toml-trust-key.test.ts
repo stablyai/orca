@@ -87,6 +87,7 @@ describe('computeTrustKey', () => {
   it('uses native Windows backslashes in the trust key Codex looks up', () => {
     // Why: Codex 0.140 writes approved Windows hook trust keys as raw native paths under [hooks.state].
     const winPath = 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json'
+
     const key = computeTrustKey({
       sourcePath: winPath,
       eventLabel: 'session_start',
@@ -94,6 +95,7 @@ describe('computeTrustKey', () => {
       handlerIndex: 0,
       command: 'echo'
     })
+
     expect(key).toContain('\\')
     expect(key.startsWith('C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json:')).toBe(true)
   })
@@ -123,6 +125,7 @@ describe('computeTrustKey', () => {
     }
   )
 })
+
 describe('parseTrustKey', () => {
   it('parses a typical posix-style key', () => {
     expect(parseTrustKey('/Users/x/.codex/hooks.json:pre_tool_use:0:0')).toEqual({
@@ -172,6 +175,7 @@ describe('parseTrustKey', () => {
       handlerIndex: 7,
       command: 'irrelevant'
     }
+
     const parsed = parseTrustKey(computeTrustKey(entry))
     expect(parsed).toEqual({
       sourcePath: entry.sourcePath,

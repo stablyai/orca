@@ -14,16 +14,21 @@ export function parsePtyStartupIngressIntent(value: unknown): PtyStartupIngressI
   if (!value || typeof value !== 'object') {
     return undefined
   }
+
   const record = value as Record<string, unknown>
   const colors = record.colors
+
   if (!colors || typeof colors !== 'object') {
     return undefined
   }
+
   const colorRecord = colors as Record<string, unknown>
+
   const normalizedColors = {
     ...(typeof colorRecord.foreground === 'string' ? { foreground: colorRecord.foreground } : {}),
     ...(typeof colorRecord.background === 'string' ? { background: colorRecord.background } : {})
   }
+
   if (
     !terminalOscColorQueryReplies(normalizedColors, [10, 11]) ||
     typeof record.deadlineMs !== 'number' ||
@@ -33,6 +38,7 @@ export function parsePtyStartupIngressIntent(value: unknown): PtyStartupIngressI
   ) {
     return undefined
   }
+
   return {
     colors: normalizedColors,
     deadlineMs: record.deadlineMs

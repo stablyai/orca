@@ -27,6 +27,7 @@ import {
 } from '../ipc/preflight-runtime-target'
 
 export type { PreflightRuntimeContext }
+
 import { hydrateShellPathForAgentDetection } from '../ipc/agent-detection-shell-path'
 import {
   execCommandInWslOrThrow,
@@ -72,11 +73,13 @@ export type PreflightStatus = {
 }
 
 export { detectRemoteWindowsTerminalCapabilities }
+
 export type { RemoteWindowsTerminalCapabilities }
 
 // Why: cache the result so repeated Landing mounts don't re-spawn processes.
 // The check only runs once per app session — relaunch to re-check.
 let cached: PreflightStatus | null = null
+
 // Why keyed by distro rather than one slot: each distro carries its own
 // toolchain, so distro A's result must never answer for distro B. Previously a
 // WSL target skipped the cache entirely and re-spawned five wsl.exe probes —
@@ -88,7 +91,9 @@ let cached: PreflightStatus | null = null
 // would report "git not installed" until relaunch; expiring lets it self-heal
 // while still collapsing the burst of calls that made this expensive.
 const WSL_PREFLIGHT_CACHE_TTL_MS = 30_000
+
 const cachedByWslDistro = new Map<string, { result: PreflightStatus; expiresAt: number }>()
+
 // Collapses concurrent callers (several panes mounting at once) onto one probe
 // set instead of one full set each before the first result lands.
 const preflightInFlight = new Map<string, Promise<PreflightStatus>>()
@@ -100,7 +105,9 @@ const preflightInFlight = new Map<string, Promise<PreflightStatus>>()
 // same for `_resetPreflightCache`, which integrations call on credential
 // changes: a probe already in flight must not repopulate the cache it cleared.
 const latestPreflightRun = new Map<string, number>()
+
 let preflightRunCounter = 0
+
 let preflightCacheEpoch = 0
 
 const LOCAL_PREFLIGHT_CACHE_KEY = 'local'
@@ -129,24 +136,29 @@ async function detectCommandRuntime(
   context?: PreflightRuntimeContext
 ): Promise<{ installed: boolean; wslTarget?: WslPreflightTarget }> {
   const wslTarget = getPreflightWslTarget(context)
+
   if (wslTarget) {
     return (await isCommandAvailable(command, wslTarget))
       ? { installed: true, wslTarget }
       : { installed: false }
   }
+
   if (await isCommandAvailable(command)) {
     return { installed: true }
   }
+
   return { installed: false }
 }
 
 export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
   const wslTarget = getPreflightWslTarget(context)
+
   if (wslTarget) {
     const foundCommands = await detectWslCommandsOnPath(
       wslTarget,
       getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, 'wsl')
     )
+
     return resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl')
   }
 
@@ -154,21 +166,25 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     process.platform
   )
+
   const pathChecks = await Promise.all(
     probeCommands.map(async (cmd) => ({
       cmd,
       installedOnPath: await isCommandOnPath(cmd)
     }))
   )
+
   const missedCommands = pathChecks.filter((check) => !check.installedOnPath).map(({ cmd }) => cmd)
   // Why: PATH may still be unhydrated on a cold GUI launch; bulk resolution
   // computes user install dirs once instead of blocking once per missed CLI.
   const installDirCommands = detectCommandsInInstallDirs(missedCommands)
+
   const foundCommands = new Set(
     pathChecks
       .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
       .map(({ cmd }) => cmd)
   )
+
   return resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     foundCommands,
@@ -180,6 +196,7 @@ export async function detectInstalledAgentsWithShellPathHydration(
   context?: PreflightRuntimeContext
 ): Promise<string[]> {
   await hydrateShellPathForAgentDetection(context)
+
   return detectInstalledAgents(context)
 }
 
@@ -210,6 +227,7 @@ export async function refreshShellPathAndDetectAgents(
   context?: PreflightRuntimeContext
 ): Promise<RefreshAgentsResult> {
   const wslTarget = getPreflightWslTarget(context)
+
   if (wslTarget) {
     // Why invalidate first: the guest PATH is cached per distro for the process
     // lifetime, so Refresh would otherwise re-read the pre-install PATH and
@@ -217,6 +235,7 @@ export async function refreshShellPathAndDetectAgents(
     // function exists to handle.
     invalidateWslGuestEnvironment(wslTarget.distro)
     const agents = await detectInstalledAgents(context)
+
     return {
       agents,
       addedPathSegments: [],
@@ -229,6 +248,7 @@ export async function refreshShellPathAndDetectAgents(
   const hydration = await hydrateShellPath({ force: true })
   const added = hydration.ok ? mergePathSegments(hydration.segments) : []
   const agents = await detectInstalledAgents(context)
+
   return {
     agents,
     addedPathSegments: added,
@@ -240,14 +260,17 @@ export async function refreshShellPathAndDetectAgents(
 
 export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
   const mux = getActiveMultiplexer(args.connectionId)
+
   if (!mux || mux.isDisposed()) {
     // Why: remote agent detection is passive UI polling. A disconnected host has
     // no detectable agents until reconnect, but should not spam IPC errors.
     return []
   }
+
   const result = (await mux.request('preflight.detectAgents', {
     commands: KNOWN_TUI_AGENT_DETECTION_COMMANDS
   })) as { agents: string[] }
+
   return uniqueAgentIds(result.agents)
 }
 
@@ -256,6 +279,7 @@ async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolea
     await (wslTarget
       ? execCommandInWslOrThrow(wslTarget, `${shellQuote('gh')} auth status`)
       : execLocalPreflightCommandOrThrow('gh', ['auth', 'status']))
+
     // Why: for plain-text `gh auth status`, exit 0 means gh did not detect any
     // authentication issues for the checked hosts/accounts.
     return true
@@ -266,6 +290,7 @@ async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolea
     const stdout = (error as { stdout?: string }).stdout ?? ''
     const stderr = (error as { stderr?: string }).stderr ?? ''
     const output = `${stdout}\n${stderr}`
+
     return output.includes('Logged in') || output.includes('Active account: true')
   }
 }
@@ -277,11 +302,13 @@ async function isGlabAuthenticated(wslTarget?: WslPreflightTarget): Promise<bool
     await (wslTarget
       ? execCommandInWslOrThrow(wslTarget, `${shellQuote('glab')} auth status`)
       : execLocalPreflightCommandOrThrow('glab', ['auth', 'status']))
+
     return true
   } catch (error) {
     const stdout = (error as { stdout?: string }).stdout ?? ''
     const stderr = (error as { stderr?: string }).stderr ?? ''
     const output = `${stdout}\n${stderr}`
+
     return output.includes('Logged in')
   }
 }
@@ -296,13 +323,16 @@ export async function runPreflightCheck(
   if (!force) {
     if (wslTarget) {
       const entry = cachedByWslDistro.get(cacheKey)
+
       if (entry && entry.expiresAt > Date.now()) {
         return entry.result
       }
     } else if (cached) {
       return cached
     }
+
     const inFlight = preflightInFlight.get(cacheKey)
+
     if (inFlight) {
       return inFlight
     }
@@ -314,12 +344,15 @@ export async function runPreflightCheck(
 
   const run = executePreflightCheck(force, context, wslTarget)
   preflightInFlight.set(cacheKey, run)
+
   try {
     const result = await run
+
     // Superseded by a newer run, or the cache was reset while this was out:
     // return what we probed, but do not let it become the cached answer.
     const isCurrent =
       latestPreflightRun.get(cacheKey) === runId && epochAtStart === preflightCacheEpoch
+
     if (isCurrent) {
       if (wslTarget) {
         cachedByWslDistro.set(cacheKey, {
@@ -330,6 +363,7 @@ export async function runPreflightCheck(
         cached = result
       }
     }
+
     return result
   } finally {
     // Why the identity check: a concurrent force run replaces this entry, and

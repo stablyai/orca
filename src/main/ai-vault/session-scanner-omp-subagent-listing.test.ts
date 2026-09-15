@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { listOmpSubagentSessions } from './session-scanner-omp-subagent-listing'
 
 const SESSION_STEM = '2026-05-01T10-00-00-000Z_cccccccc-dddd-4eee-8fff-000000000000'
+
 const PARENT_SESSION_ID = 'cccccccc-dddd-4eee-8fff-000000000000'
 
 let tempRoots: string[] = []
@@ -105,9 +106,11 @@ describe('listOmpSubagentSessions', () => {
       sessionId: 'worker-id',
       subagentTranscriptCount: 1
     })
+
     const grandchildren = await listOmpSubagentSessions({
       parentFilePath: children.sessions[0].filePath
     })
+
     expect(grandchildren.issues).toEqual([])
     expect(grandchildren.sessions).toHaveLength(1)
     expect(grandchildren.sessions[0]).toMatchObject({

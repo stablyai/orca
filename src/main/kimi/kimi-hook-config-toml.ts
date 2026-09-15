@@ -33,6 +33,7 @@ const MARKERS: ManagedTomlMarkers = {
   startMarker: '# >>> orca-managed-kimi-hooks (managed by Orca; do not edit) >>>',
   endMarker: '# <<< orca-managed-kimi-hooks <<<'
 }
+
 const HOOK_TABLE_HEADER = '[[hooks]]'
 
 export type ManagedCommandMatcher = (command: string | undefined) => boolean
@@ -54,22 +55,29 @@ function matchManagedHookTable(
   if (lines[index].trim() !== HOOK_TABLE_HEADER) {
     return null
   }
+
   const pairs = new Map<string, string>()
   let cursor = index + 1
+
   while (cursor < lines.length) {
     const line = lines[cursor].trim()
+
     // A blank, the next table header or a comment (the end marker included)
     // ends the table's key run.
     if (line === '' || line.startsWith('[') || line.startsWith('#')) {
       break
     }
+
     const pair = line.match(/^([A-Za-z_][\w-]*)\s*=\s*(.*)$/)
+
     if (!pair || pairs.has(pair[1])) {
       return null
     }
+
     pairs.set(pair[1], pair[2].trim())
     cursor++
   }
+
   // TOML lets blank lines and comments sit between keys of one table, so a gap
   // is not proof the table ended. If more keys follow it, the run above covered
   // only part of the table and splicing it would strand the rest without its
@@ -77,11 +85,14 @@ function matchManagedHookTable(
   if (keysFollowGap(lines, cursor)) {
     return null
   }
+
   // Raw (still-escaped) literal; createManagedCommandMatcher normalizes separators itself.
   const command = readTomlString(pairs.get('command'))
+
   if (!isManagedCommand(command)) {
     return null
   }
+
   return { lineCount: cursor - index, value: readEventName(pairs.get('event')) }
 }
 
@@ -90,11 +101,14 @@ function matchManagedHookTable(
 function keysFollowGap(lines: readonly string[], from: number): boolean {
   for (let cursor = from; cursor < lines.length; cursor++) {
     const line = lines[cursor].trim()
+
     if (line === '' || line.startsWith('#')) {
       continue
     }
+
     return !line.startsWith('[')
   }
+
   return false
 }
 
@@ -112,6 +126,7 @@ function readEventName(value: string | undefined): string | null {
   if (value === undefined) {
     return null
   }
+
   return readTomlString(value) ?? value.trim() ?? null
 }
 
@@ -147,11 +162,13 @@ function tomlBasicString(value: string): string {
     .replace(/\n/g, '\\n')
     .replace(/\r/g, '\\r')
     .replace(/\t/g, '\\t')
+
   return `"${escaped}"`
 }
 
 export function buildManagedKimiHooksBlock(command: string, eol = '\n'): string {
   const commandLiteral = tomlBasicString(command)
+
   // Omit `matcher`: Kimi treats it as a regex (so Claude's literal "*" is
   // invalid) and an absent matcher already matches every tool.
   // `timeout` is the host-level backstop; the shell wrapper's curl budget is
@@ -164,6 +181,7 @@ export function buildManagedKimiHooksBlock(command: string, eol = '\n'): string 
       `timeout = ${MANAGED_HOOK_TIMEOUT_SECONDS}`
     ].join(eol)
   )
+
   return [MARKERS.startMarker, ...entries, MARKERS.endMarker].join(eol)
 }
 
@@ -177,11 +195,14 @@ export function applyManagedKimiHooks(
   isManagedCommand: ManagedCommandMatcher
 ): string {
   const eol = detectEol(configText)
+
   const withoutManaged = stripManagedTomlRegions(
     configText,
     findOwnedRegions(configText, isManagedCommand)
   ).text.replace(/\s+$/, '')
+
   const block = buildManagedKimiHooksBlock(command, eol)
+
   return withoutManaged.length > 0
     ? `${withoutManaged}${eol}${eol}${block}${eol}`
     : `${block}${eol}`
@@ -195,11 +216,14 @@ export function removeManagedKimiHooks(
     configText,
     findOwnedRegions(configText, isManagedCommand)
   )
+
   if (!stripped.changed) {
     return { text: configText, changed: false }
   }
+
   const eol = detectEol(configText)
   const trimmed = stripped.text.replace(/\s+$/, '')
+
   return { text: trimmed.length > 0 ? `${trimmed}${eol}` : '', changed: true }
 }
 
@@ -212,10 +236,12 @@ export function readManagedKimiHookEvents(
   isManagedCommand: ManagedCommandMatcher
 ): Set<string> {
   const events = new Set<string>()
+
   for (const table of recognizeManagedTables(configText, isManagedCommand)) {
     if (table.value) {
       events.add(table.value)
     }
   }
+
   return events
 }

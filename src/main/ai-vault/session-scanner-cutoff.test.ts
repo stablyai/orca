@@ -9,6 +9,7 @@ import { scanAiVaultSessions } from './session-scanner'
 import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
 
 const tempRoots: string[] = []
+
 afterEach(async () => {
   vi.restoreAllMocks()
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
@@ -25,8 +26,10 @@ describe('session scanner cutoff', () => {
       tempRoots.push(root)
       const roots = isolatedScanRoots(root)
       await mkdir(roots.codexSessionsDir, { recursive: true })
+
       for (let index = 0; index < count; index++) {
         const name = `rollout-session-${index}.jsonl`
+
         const content = jsonLines([
           { type: 'session_meta', payload: { id: `session-${index}`, cwd: '/repo/folder' } },
           {
@@ -35,7 +38,9 @@ describe('session scanner cutoff', () => {
             payload: { type: 'user_message', message: 'Check this session' }
           }
         ])
+
         const mtime = 10_000 - index
+
         if (host === 'native') {
           const filePath = join(roots.codexSessionsDir, name)
           await writeFile(filePath, content)
@@ -44,14 +49,17 @@ describe('session scanner cutoff', () => {
           provider.addFile(`/home/ada/.codex/sessions/${name}`, content, mtime)
         }
       }
+
       let numericSorts = 0
       const originalSort = Array.prototype.sort
       vi.spyOn(Array.prototype, 'sort').mockImplementation(function (this: unknown[], compare) {
         if (typeof this[0] === 'number') {
           numericSorts++
         }
+
         return originalSort.call(this, compare)
       })
+
       const scan = () =>
         host === 'native'
           ? scanAiVaultSessions({ ...roots, limit })

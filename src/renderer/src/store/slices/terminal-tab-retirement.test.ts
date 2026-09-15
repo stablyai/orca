@@ -129,6 +129,7 @@ describe('terminal tab retirement planning', () => {
 
   it('does not retire a PTY still referenced by another live surface', () => {
     const shared = 'pty-in-transfer'
+
     const state = makeState({
       tabsByWorktree: {
         'wt-1': [makeTab('tab-1', 'wt-1', shared), makeTab('tab-2', 'wt-1', null)]
@@ -153,6 +154,7 @@ describe('terminal tab retirement planning', () => {
   it('protects a scoped runtime terminal referenced through its legacy alias', () => {
     const scoped = 'remote:env-1@@terminal-1'
     const legacy = 'remote:terminal-1'
+
     const state = makeState({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
       worktreesByRepo: {
@@ -196,6 +198,7 @@ describe('terminal tab retirement planning', () => {
 
   it('ignores stale ownership maps and never routes malformed remote ids locally', () => {
     const malformedRemote = 'remote:'
+
     const state = makeState({
       tabsByWorktree: {
         'wt-1': [makeTab('tab-1', 'wt-1', malformedRemote)]
@@ -388,14 +391,17 @@ describe('terminal tab retirement planning', () => {
     const tabs = Array.from({ length: 100 }, (_, index) =>
       makeTab(`tab-${index}`, 'wt-1', `pty-${index}`)
     )
+
     let terminalStoreScans = 0
     let unifiedStoreScans = 0
+
     const state = makeState({
       tabsByWorktree: new Proxy(
         { 'wt-1': tabs },
         {
           ownKeys(target) {
             terminalStoreScans += 1
+
             return Reflect.ownKeys(target)
           }
         }
@@ -405,6 +411,7 @@ describe('terminal tab retirement planning', () => {
         {
           ownKeys(target) {
             unifiedStoreScans += 1
+
             return Reflect.ownKeys(target)
           }
         }
@@ -426,6 +433,7 @@ describe('terminal tab retirement planning', () => {
 describe('sleeping agent retirement', () => {
   it('removes key- and metadata-owned records while preserving siblings by reference', () => {
     const sibling = makeSleepingRecord('tab-2:leaf-2', 'tab-2')
+
     const records = {
       'tab-1:leaf-1': makeSleepingRecord('tab-1:leaf-1'),
       'legacy-pane-key': makeSleepingRecord('legacy-pane-key', 'tab-1'),

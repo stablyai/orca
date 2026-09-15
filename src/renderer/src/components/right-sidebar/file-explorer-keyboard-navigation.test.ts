@@ -29,8 +29,10 @@ const SAMPLE_ROWS = [
 ]
 
 const isCollapsed = (): false => false
+
 function isExpandedSet(paths: string[]): (path: string) => boolean {
   const set = new Set(paths)
+
   return (path) => set.has(path)
 }
 

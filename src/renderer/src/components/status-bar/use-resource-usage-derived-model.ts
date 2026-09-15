@@ -54,37 +54,46 @@ export function useResourceUsageDerivedModel({
 }) {
   const repoDisplayNameById = useMemo(() => {
     const map = new Map<string, string>()
+
     for (const repo of repos) {
       const display = repo.displayName?.trim()
+
       if (display) {
         map.set(repo.id, display)
       }
     }
+
     const ambiguousGroupIds = findDuplicateIds(projectGroups)
+
     for (const group of projectGroups) {
       if (!ambiguousGroupIds.has(group.id)) {
         map.set(`folder-workspace:${group.id}`, group.name)
       }
     }
+
     return map
   }, [repos, projectGroups])
 
   // Why: non-null connectionId is the only honest "remote" signal (SSH PTYs run remote); build from the store, not a missing memory sample.
   const repoConnectionIdById = useMemo(() => {
     const map = new Map<string, string | null>()
+
     for (const repo of repos) {
       map.set(repo.id, repo.connectionId ?? null)
     }
+
     return map
   }, [repos])
 
   // Why: runtime-hosted repos have no local daemon samples or killable sessions; this map drives their per-row exclusion in the merge.
   const repoRuntimeScopedById = useMemo(() => {
     const map = new Map<string, boolean>()
+
     for (const repo of repos) {
       const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
       map.set(repo.id, parsed?.kind === 'runtime')
     }
+
     return map
   }, [repos])
 
@@ -92,6 +101,7 @@ export function useResourceUsageDerivedModel({
     () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
     [allWorktrees]
   )
+
   // Why: a bare resource identity cannot choose between the same workspace id on different
   // hosts, but the id still exists; keep the map whole and let the merge gate attribution only.
   const ambiguousWorktreeIds = useMemo(() => findAmbiguousWorktreeIds(allWorktrees), [allWorktrees])
@@ -134,6 +144,7 @@ export function useResourceUsageDerivedModel({
     if (!open || !workspaceSessionReady) {
       return 0
     }
+
     return countUnboundDaemonSessions(sessions, resourceSessionBindings)
   }, [open, sessions, resourceSessionBindings, workspaceSessionReady])
 
@@ -144,16 +155,19 @@ export function useResourceUsageDerivedModel({
   const memoryMetricCopy = getResourceMemoryMetricCopy(
     resourceSnapshot?.processMemoryMetric ?? 'rss'
   )
+
   // Why null-not-zero: a host that cannot read commit (every Unix host, and any
   // host older than the field) must render nothing here, never "0 B committed".
   const commitMetricCopy = resourceSnapshot?.processCommitMetric
     ? getResourceCommitMetricCopy()
     : null
+
   const { totalMemory, totalCpu, memBadgeLabel, totalPrivateMemory, commitToneClass } =
     useMemo(() => {
       const memory = resourceSnapshot?.totalMemory ?? 0
       const cpu = resourceSnapshot?.totalCpu ?? 0
       const privateMemory = resourceSnapshot?.totalPrivateMemory
+
       return {
         totalMemory: memory,
         totalCpu: cpu,
@@ -165,6 +179,7 @@ export function useResourceUsageDerivedModel({
         })
       }
     }, [resourceSnapshot])
+
   const commitBadgeLabel =
     commitMetricCopy && totalPrivateMemory !== undefined ? formatMemory(totalPrivateMemory) : null
 
@@ -172,6 +187,7 @@ export function useResourceUsageDerivedModel({
   const daemonUnreachable = sessionsError && (memorySnapshotError !== null || snapshot === null)
   // Why: sessions IPC can fail while snapshot IPC works; flag it so the empty session list isn't mistaken for healthy.
   const sessionsOnlyError = sessionsError && memorySnapshotError === null
+
   const resourceManagerTooltipLines = getResourceManagerTooltipLines({
     memoryLabel: resourceSnapshot
       ? [
@@ -186,6 +202,7 @@ export function useResourceUsageDerivedModel({
     sessionCount: triggerSessionCount,
     spaceScanReady
   })
+
   const resourceManagerAriaLabel = getResourceManagerAriaLabel({
     sessionCount: triggerSessionCount,
     spaceScanReady

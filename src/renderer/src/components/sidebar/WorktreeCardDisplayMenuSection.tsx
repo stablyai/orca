@@ -38,21 +38,27 @@ export function WorktreeCardDisplayMenuSection({
   const projectGroups = useAppStore((s) => s.projectGroups)
   const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
   const cardLayout = settings?.compactWorktreeCards ? 'compact' : 'detailed'
+
   const cardLayoutLabel =
     CARD_LAYOUT_OPTIONS.find((opt) => opt.id === cardLayout)?.label ?? 'Detailed'
+
   const visiblePropertyCount = PROPERTY_OPTIONS.filter((opt) =>
     worktreeCardProperties.includes(opt.id)
   ).length
+
   const hasProjectGroups = projectGroups.length > 0
+
   const worktreeCardPropertyOptions = useMemo(
     () => getWorktreeCardPropertyOptions({ newCardStyle, hasProjectGroups }),
     [newCardStyle, hasProjectGroups]
   )
+
   const handleWorktreeCardPropertyChange = useCallback(
     (properties: readonly WorktreeCardProperty[], checked: boolean): void => {
       const next = checked
         ? [...worktreeCardProperties, ...properties]
         : worktreeCardProperties.filter((property) => !properties.includes(property))
+
       setWorktreeCardProperties(next)
     },
     [setWorktreeCardProperties, worktreeCardProperties]

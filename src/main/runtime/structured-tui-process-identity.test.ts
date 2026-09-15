@@ -12,6 +12,7 @@ describe('structured TUI process identity', () => {
       command: 'codex resume first',
       foreground: true
     }
+
     const duplicate = { ...child, command: 'codex resume duplicate' }
 
     expect(
@@ -26,21 +27,26 @@ describe('structured TUI process identity', () => {
   it('indexes process rows once instead of rescanning for every descendant', () => {
     const rowCount = 64
     let pidReads = 0
+
     const rows = Array.from({ length: rowCount }, (_, index) => {
       const pid = 100 + index
+
       const row = {
         pid,
         ppid: index === 0 ? 1 : pid - 1,
         command: index === 0 ? '/bin/zsh' : `codex resume ${index}`,
         foreground: index > 0
       }
+
       Object.defineProperty(row, 'pid', {
         configurable: true,
         get: () => {
           pidReads += 1
+
           return pid
         }
       })
+
       return row
     })
 
@@ -132,6 +138,7 @@ describe('structured TUI process identity', () => {
         platform: 'darwin',
         readPosixRows: async () => {
           snapshots += 1
+
           return [
             { pid: 100, ppid: 1, stat: 'Ss', command: '/bin/zsh' },
             ...(snapshots >= 3
@@ -175,6 +182,7 @@ describe('structured TUI process identity', () => {
   }> {
     let clockMs = 0
     let captures = 0
+
     return readStructuredTuiProcessIdentity({
       hostId: 'local',
       rootPid: 100,
@@ -184,6 +192,7 @@ describe('structured TUI process identity', () => {
       readPosixRows: async () => {
         captures += 1
         clockMs += input.captureCostMs
+
         return [
           { pid: 100, ppid: 1, stat: 'Ss', command: '/bin/zsh' },
           ...(input.childAppearsAtMs !== null && clockMs >= input.childAppearsAtMs
@@ -227,6 +236,7 @@ describe('structured TUI process identity', () => {
     // count and same detection time as the flat 50ms poll.
     for (const childAppearsAtMs of [0, 200, 500, 900]) {
       const flatPollCaptures = Math.max(1, Math.ceil(childAppearsAtMs / (55 + 50)) + 1)
+
       const { captures, identifiedAtMs } = await countCapturesForIdentification({
         captureCostMs: 55,
         childAppearsAtMs
@@ -256,6 +266,7 @@ describe('structured TUI process identity', () => {
           captures += 1
           const observedAtMs = clockMs
           clockMs += 6_200
+
           return [
             { pid: 100, ppid: 1, stat: 'Ss', command: '/bin/zsh' },
             ...(observedAtMs >= 3_500

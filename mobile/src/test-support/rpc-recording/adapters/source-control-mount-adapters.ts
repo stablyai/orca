@@ -15,11 +15,14 @@ export function sourceControlMountAdapters(
       const resolve = modules.load<typeof import('../../../source-control/mobile-branch-base-ref')>(
         'mobile/src/source-control/mobile-branch-base-ref.ts'
       ).resolveMobileBranchCompareBaseRef
+
       let baseRef: unknown = 'unresolved'
+
       return {
         action: (_name, args) =>
           resolve(client, String(args.workspace ?? WORKTREE)).then((value) => {
             baseRef = value
+
             return value
           }),
         state: () => ({ baseRef }),
@@ -30,11 +33,14 @@ export function sourceControlMountAdapters(
       const history = modules.load<typeof import('../../../source-control/mobile-git-history')>(
         'mobile/src/source-control/mobile-git-history.ts'
       )
+
       let rows: unknown = 'unloaded'
+
       return {
         action: () =>
           history.fetchMobileGitHistory(client, WORKTREE).then((result) => {
             rows = history.mapMobileCommitRows(result, Date.now())
+
             return rows
           }),
         state: () => ({ rows }),
@@ -45,14 +51,18 @@ export function sourceControlMountAdapters(
       const ai = modules.load<typeof import('../../../source-control/mobile-commit-message-ai')>(
         'mobile/src/source-control/mobile-commit-message-ai.ts'
       )
+
       let generated: unknown = 'ungenerated'
+
       return {
         action(name) {
           if (name === 'cancel') {
             return ai.cancelMobileCommitMessage(client, WORKTREE)
           }
+
           return ai.requestMobileCommitMessage(client, WORKTREE).then((result) => {
             generated = result
+
             return result
           })
         },
@@ -64,16 +74,20 @@ export function sourceControlMountAdapters(
       const link = modules.load<typeof import('../../../source-control/mobile-pr-link')>(
         'mobile/src/source-control/mobile-pr-link.ts'
       )
+
       let outcome: unknown = 'unlinked'
       let linkedPR: unknown = 'unread'
+
       return {
         action(name) {
           if (name === 'read') {
             return link.fetchWorktreeLinkedPR(client, WORKTREE).then((value) => {
               linkedPR = value
+
               return value
             })
           }
+
           const request =
             name === 'unlink'
               ? link.unlinkMobilePr(client, WORKTREE)
@@ -82,8 +96,10 @@ export function sourceControlMountAdapters(
                     baseRef: ' origin/release '
                   })
                 : link.linkMobilePr(client, WORKTREE, 12)
+
           return request.then((value) => {
             outcome = value
+
             return value
           })
         },
@@ -97,14 +113,18 @@ export function sourceControlMountAdapters(
       >(
         'mobile/src/source-control/reveal-mobile-source-control-session-diff.ts'
       ).revealMobileSourceControlSessionDiff
+
       let result: unknown = 'unrevealed'
       let current = true
+
       return {
         action(name, args) {
           if (name === 'cancel') {
             current = false
+
             return
           }
+
           return reveal({
             client,
             worktreeId: WORKTREE,
@@ -114,6 +134,7 @@ export function sourceControlMountAdapters(
             isCurrent: () => current
           }).then((value) => {
             result = value
+
             return value
           })
         },

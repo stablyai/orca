@@ -71,9 +71,11 @@ test.describe('terminal push-delivery loss recovery', () => {
     // Engage the field wedge and speed the watchdog up for CI.
     await orcaPage.evaluate(() => {
       const watchdog = (window as DeliveryWatchdogWindow).__terminalDeliveryWatchdog
+
       if (!watchdog) {
         throw new Error('delivery watchdog e2e hook missing — exposeStore build?')
       }
+
       watchdog.configure({ intervalMs: 500, healCooldownMs: 3_000 })
       watchdog.blackhole(true)
     })

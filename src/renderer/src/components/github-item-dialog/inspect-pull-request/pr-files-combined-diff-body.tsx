@@ -112,9 +112,11 @@ export function PRFilesCombinedDiffBody({
           <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const section = sections[virtualItem.index]
+
               if (!section) {
                 return null
               }
+
               return (
                 <div
                   key={virtualItem.key}

@@ -10,17 +10,21 @@ function fixture(reverted = true) {
     if (method === 'thread/read') {
       return { thread: { id: 'thread', historyMode: 'paginated', status: { type: 'idle' } } }
     }
+
     if (method === 'thread/revert') {
       reverted = true
+
       return {
         thread: { id: 'thread', turns: [] },
         turnsBackwardsCursor: 'turn-cursor',
         itemsBackwardsCursor: 'item-cursor'
       }
     }
+
     if (method === 'thread/turns/list') {
       return { data: [...(reverted ? [] : [{ id: 'drop' }]), { id: 'kept' }], nextCursor: null }
     }
+
     return {
       data: [
         {
@@ -35,6 +39,7 @@ function fixture(reverted = true) {
       nextCursor: null
     }
   })
+
   const session = {
     connection: { request },
     threadId: 'thread',
@@ -43,6 +48,7 @@ function fixture(reverted = true) {
     historyMode: 'paginated',
     activeTurnIds: new Set()
   } as unknown as CodexSession
+
   return { request, session }
 }
 
@@ -58,6 +64,7 @@ describe('Codex rewind', () => {
       'thread/turns/list',
       'thread/items/list'
     ])
+
     for (const method of ['thread/turns/list', 'thread/items/list']) {
       expect(request).toHaveBeenCalledWith(
         method,
@@ -90,13 +97,16 @@ describe('Codex rewind', () => {
         if (method !== 'thread/turns/list') {
           return original(method)
         }
+
         pages++
+
         if (limit === 'entries') {
           return {
             data: Array.from({ length: 1025 }, (_, i) => ({ id: String(i) })),
             nextCursor: null
           }
         }
+
         if (limit === 'bytes') {
           return {
             data: [],
@@ -104,6 +114,7 @@ describe('Codex rewind', () => {
             nextCursor: null
           }
         }
+
         return { data: [], nextCursor: limit === 'cycle' ? 'repeated' : String(pages) }
       })
       await expect(recoverCodexRewind(session, { fence: 2, beforeTurnId: 'drop' })).rejects.toThrow(
@@ -120,6 +131,7 @@ describe('Codex rewind', () => {
       if (method === 'thread/items/list') {
         throw new Error('offline')
       }
+
       return original(method)
     })
     await expect(recoverCodexRewind(session, { fence: 2, beforeTurnId: 'drop' })).rejects.toThrow(
@@ -138,6 +150,7 @@ describe('Codex rewind', () => {
       if (method === 'thread/items/list') {
         session.activeTurnIds!.add('racing-turn')
       }
+
       return original(method)
     })
     expect(await recoverCodexRewind(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
@@ -147,12 +160,14 @@ describe('Codex rewind', () => {
   })
   it('uses native revert and reads both retained indexes despite empty response turns', async () => {
     const { session, request } = fixture(false)
+
     const onPrepared = vi.fn<NonNullable<Parameters<typeof rewindCodexSession>[1]['onPrepared']>>(
       async (items) => {
         expect(items).toMatchObject([{ identity: { turnId: 'kept' } }])
         expect(request.mock.calls.some(([method]) => method === 'thread/revert')).toBe(false)
       }
     )
+
     expect(
       await rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop', onPrepared })
     ).toMatchObject({
@@ -193,6 +208,7 @@ describe('Codex rewind', () => {
       if (method === 'thread/turns/list') {
         return { data: [{ id: 'drop' }, ...turns.map((id) => ({ id }))], nextCursor: null }
       }
+
       if (method === 'thread/items/list') {
         return {
           data: turns.map((turnId) => ({
@@ -202,6 +218,7 @@ describe('Codex rewind', () => {
           nextCursor: null
         }
       }
+
       return original(method)
     })
     const onReverted = vi.fn()
@@ -227,6 +244,7 @@ describe('Codex rewind', () => {
       if (method === 'thread/read' && ++reads === 2) {
         return { thread: { id: 'thread', status: { type: 'active' } } }
       }
+
       return original(method)
     })
     expect(await rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
@@ -242,9 +260,11 @@ describe('Codex rewind', () => {
       if (method === 'thread/read') {
         return { thread: { id: 'thread', status: { type: 'idle' } } }
       }
+
       if (method !== 'thread/revert') {
         return original(method)
       }
+
       throw new CodexAppServerRequestError(
         'thread/revert',
         -32600,
@@ -267,6 +287,7 @@ describe('Codex rewind', () => {
     const { session, request } = fixture()
     request.mockImplementationOnce(async () => {
       session.activeTurnIds!.add('racing-turn')
+
       return { thread: { id: 'thread', status: { type: 'idle' } } }
     })
     expect(await rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).toEqual({
@@ -283,9 +304,11 @@ describe('Codex rewind', () => {
       if (method === 'thread/revert') {
         reverted = true
       }
+
       if (method === 'thread/items/list' && reverted) {
         throw new Error('offline')
       }
+
       return original(method)
     })
     await expect(rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).rejects.toThrow(
@@ -298,6 +321,7 @@ describe('Codex rewind', () => {
       const request = vi.fn(async (_method: string, _params?: unknown) => ({
         thread: { id: 'thread', historyMode: 'legacy' }
       }))
+
       expect(
         await openCodexThread({ request }, { cwd: '/workspace', resumeThreadId }, 10)
       ).toMatchObject({ historyMode: 'legacy' })
@@ -312,6 +336,7 @@ describe('Codex rewind', () => {
       if (method === 'thread/revert') {
         reverted = true
       }
+
       if (method === 'thread/items/list' && !reverted) {
         return {
           data: [2, 1].map((i) => ({
@@ -325,6 +350,7 @@ describe('Codex rewind', () => {
           nextCursor: null
         }
       }
+
       return original(method)
     })
     await expect(rewindCodexSession(session, { fence: 2, beforeTurnId: 'drop' })).rejects.toThrow(

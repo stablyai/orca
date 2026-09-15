@@ -95,6 +95,7 @@ describe('mobile file syntax highlighting', () => {
       { length: 120 },
       (_, index) => `const value${index}: string = "${index}"`
     ).join('; ')
+
     const highlighted = highlightMobileDiffLines(
       [
         { kind: 'add', text: denseLine, newLineNumber: 1 },

@@ -19,6 +19,7 @@ export const WORKTREE_CATALOG_METHODS = [
           params.supportsWorktreeVisibilitySourceDefaults
         )
       )
+
       // Why: callers that never send the field get the byte-exact legacy response.
       return params.afterSnapshotId === undefined
         ? result

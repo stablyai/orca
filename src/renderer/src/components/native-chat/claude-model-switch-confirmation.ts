@@ -6,6 +6,7 @@ import { NATIVE_CHAT_SUBMIT } from './native-chat-send'
 import { stripScrollbackAnsi } from './native-chat-scrape-fallback'
 
 const DETECTION_TIMEOUT_MS = 5_000
+
 const MAX_OBSERVED_BYTES = 64 * 1024
 
 type SubscribeToData = (watcher: (data: string) => void) => Promise<() => void> | (() => void)
@@ -22,6 +23,7 @@ export type ClaudeModelSwitchConfirmationObserver = {
 
 export function hasClaudeModelSwitchConfirmation(buffer: string): boolean {
   const text = compactTerminalText(buffer)
+
   return (
     text.includes('switchmodel?') && text.includes('thisconversationiscachedforthecurrentmodel')
   )
@@ -36,25 +38,33 @@ function compactTerminalText(buffer: string): string {
 function hasClaudeModelSwitchSuccess(buffer: string, modelLabel: string): boolean {
   const text = compactTerminalText(buffer)
   const marker = `setmodelto${modelLabel.replace(/\s+/g, '').toLowerCase()}`
+
   if (text.includes(marker)) {
     return true
   }
+
   // Why: resolved echoes insert a version ("Opus 5 (1M context)"); retaining
   // every picker token prevents one context variant from confirming another.
   const labelTokens = modelLabel.toLowerCase().match(/[a-z]+|\d+[a-z]*/g) ?? []
   const successStart = text.lastIndexOf('setmodelto')
+
   if (successStart === -1 || labelTokens.length === 0) {
     return false
   }
+
   const successText = text.slice(successStart)
   let tokenEnd = 0
+
   for (const token of labelTokens) {
     const tokenStart = successText.indexOf(token, tokenEnd)
+
     if (tokenStart === -1) {
       return false
     }
+
     tokenEnd = tokenStart + token.length
   }
+
   return true
 }
 
@@ -71,6 +81,7 @@ function subscribeToClaudeModelSwitchData(args: {
   if (args.subscribeToData) {
     return args.subscribeToData(args.watcher)
   }
+
   if (isRemoteRuntimePtyId(args.ptyId)) {
     return subscribeToRuntimeTerminalData(
       args.settings,
@@ -80,6 +91,7 @@ function subscribeToClaudeModelSwitchData(args: {
       { startAtLiveTail: true }
     )
   }
+
   return subscribeToPtyData(args.ptyId, args.watcher)
 }
 
@@ -99,9 +111,11 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
   let unsubscribe: (() => void) | null = null
   let resolveResult!: (outcome: ClaudeModelSwitchOutcome) => void
   let resolveReady!: () => void
+
   const result = new Promise<ClaudeModelSwitchOutcome>((resolve) => {
     resolveResult = resolve
   })
+
   const ready = new Promise<void>((resolve) => {
     resolveReady = resolve
   })
@@ -110,11 +124,14 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
     if (settled) {
       return
     }
+
     settled = true
+
     if (timeout !== null) {
       clearTimeout(timeout)
       timeout = null
     }
+
     unsubscribe?.()
     unsubscribe = null
     resolveResult(outcome)
@@ -124,6 +141,7 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
     if (timeout !== null) {
       clearTimeout(timeout)
     }
+
     timeout = setTimeout(() => finish('unknown'), args.timeoutMs ?? DETECTION_TIMEOUT_MS)
   }
 
@@ -131,27 +149,37 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
     if (!armed || settled) {
       return
     }
+
     observed = `${observed}${data}`.slice(-MAX_OBSERVED_BYTES)
+
     if (args.expectedModelLabel && hasClaudeModelSwitchSuccess(observed, args.expectedModelLabel)) {
       finish('applied')
+
       return
     }
+
     if (hasClaudeModelSwitchRejection(observed)) {
       finish('rejected')
+
       return
     }
+
     if (!confirmationSubmitted && hasClaudeModelSwitchConfirmation(observed)) {
       confirmationSubmitted = true
+
       try {
         // Why: the picker selection already expresses consent to switch; this
         // exact Claude warning defaults to “Yes” and needs only one Enter.
         const accepted = args.submitConfirmation
           ? args.submitConfirmation() !== false
           : sendRuntimePtyInput(args.settings, args.ptyId, NATIVE_CHAT_SUBMIT)
+
         if (!accepted) {
           finish('unknown')
+
           return
         }
+
         scheduleTimeout()
       } catch {
         finish('unknown')
@@ -166,6 +194,7 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
       subscribeToData: args.subscribeToData,
       watcher: observeData
     })
+
     void Promise.resolve(subscription)
       .then((dispose) => {
         if (settled) {
@@ -188,6 +217,7 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
       if (settled || armed) {
         return
       }
+
       armed = true
     },
     startDetection: () => {
@@ -198,6 +228,7 @@ export function createClaudeModelSwitchConfirmationObserver(args: {
       if (settled) {
         return
       }
+
       scheduleTimeout()
     },
     dispose: () => finish('unknown')

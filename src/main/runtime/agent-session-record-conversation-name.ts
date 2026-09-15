@@ -14,14 +14,20 @@ export function setAgentSessionRecordConversationName(
   now: number
 ): AgentSessionRecord {
   const normalized = name === null ? null : normalizeAgentSessionConversationName(name)
+
   if ((record.conversationName ?? null) === normalized) {
     return record
   }
+
   const next = { ...record, updatedAt: now }
+
   if (normalized === null) {
     delete next.conversationName
+
     return next
   }
+
   next.conversationName = normalized
+
   return next
 }

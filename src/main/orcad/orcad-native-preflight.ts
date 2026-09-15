@@ -47,6 +47,7 @@ export function runOrcadNativePreflight(hooks: NativePreflightHooks = {}): boole
     // Why clear rather than leave alone: a previous run in this process may have recorded
     // a cause, and status.get must not keep reporting a degradation that no longer holds.
     setRuntimeTerminalUnavailableCause(null)
+
     return true
   }
 
@@ -61,6 +62,7 @@ export function runOrcadNativePreflight(hooks: NativePreflightHooks = {}): boole
     const hints = (hooks.toolchainHints ?? probeLocalBuildToolchainHints)(verdict.abi.platform)
     fail(`orcad: ${formatNodePtyPreconditionReport(verdict, message, hints)}`)
     exit(ORCAD_NATIVE_PRECONDITION_EXIT_CODE)
+
     return false
   }
 
@@ -68,5 +70,6 @@ export function runOrcadNativePreflight(hooks: NativePreflightHooks = {}): boole
   // host can still serve around; the second established nothing, and refusing to boot on
   // an inconclusive probe would take down hosts that work.
   warn(`orcad: ${formatNodePtyPreconditionReport(verdict, message)}`)
+
   return true
 }

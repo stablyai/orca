@@ -28,6 +28,7 @@ describe('editor external watch path batch index', () => {
       filePath: '//wsl.localhost/Ubuntu/workspace/repo/file.ts',
       externalMutation: 'deleted'
     })
+
     const index = indexEditorExternalWatchBatchPaths(
       {
         worktreePath: wslScope.worktreePath,
@@ -61,7 +62,9 @@ describe('editor external watch path batch index', () => {
       id: 'mounted',
       filePath: '//wsl.localhost/Ubuntu/mnt/c/Repo/File.ts'
     })
+
     const nativeScope = { ...wslScope, worktreePath: 'C:\\Repo' }
+
     const matching = indexEditorExternalWatchBatchPaths(
       {
         worktreePath: nativeScope.worktreePath,
@@ -70,6 +73,7 @@ describe('editor external watch path batch index', () => {
       [mounted],
       nativeScope
     )
+
     const wrongLinuxCase = indexEditorExternalWatchBatchPaths(
       {
         worktreePath: nativeScope.worktreePath,
@@ -93,6 +97,7 @@ describe('editor external watch path batch index', () => {
       id: 'restored',
       filePath: '//wsl.localhost/Ubuntu/workspace/repo/file.ts'
     })
+
     const payload = {
       worktreePath: wslScope.worktreePath,
       events: [
@@ -123,22 +128,26 @@ describe('editor external watch path batch index', () => {
         allowLocalWindowsWslAliases: undefined
       }
     )
+
     expect(posix.matchingOpenFiles(posix.changes[0])).toEqual([])
   })
 
   it('filters owners and preserves open-file ordering across edit and diff matches', () => {
     const edit = file({ id: 'edit', filePath: 'C:\\Repo\\file.ts' })
+
     const runtime = file({
       id: 'runtime',
       filePath: 'C:\\Repo\\file.ts',
       runtimeEnvironmentId: 'env-1'
     })
+
     const diff = file({
       id: 'diff',
       filePath: 'C:\\Repo\\file.ts',
       mode: 'diff',
       diffSource: 'unstaged'
     })
+
     const index = indexEditorExternalWatchBatchPaths(
       {
         worktreePath: 'C:\\Repo',

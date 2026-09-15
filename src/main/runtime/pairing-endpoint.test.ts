@@ -87,6 +87,7 @@ describe('resolveAdvertisedPairingEndpoint', () => {
     const prefix = 'wss://example.test/'
     const atLimit = `${prefix}${'a'.repeat(PAIRING_ENDPOINT_MAX_CHARACTERS - prefix.length)}`
     const aboveLimit = `${atLimit}a`
+
     const offer = (endpoint: string) => ({
       v: PAIRING_OFFER_VERSION,
       endpoint,

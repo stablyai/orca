@@ -37,7 +37,9 @@ function isState(value: unknown): value is CloudSessionMutationState {
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const candidate = value as Partial<CloudSessionMutationState>
+
   return (
     candidate.version === MUTATION_STATE_VERSION &&
     Number.isSafeInteger(candidate.epoch) &&
@@ -50,14 +52,18 @@ function isState(value: unknown): value is CloudSessionMutationState {
 
 function readState(profileId: string, userDataPath: string): CloudSessionMutationState | null {
   const path = statePath(profileId, userDataPath)
+
   if (!existsSync(path)) {
     return null
   }
+
   try {
     const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
+
     if (!isState(parsed)) {
       throw new Error('invalid_cloud_session_mutation_state')
     }
+
     return parsed
   } catch {
     throw new Error('invalid_cloud_session_mutation_state')
@@ -90,6 +96,7 @@ export function captureCloudSessionMutation(
 ): CloudSessionMutationSnapshot {
   const key = identityKey(identity)
   let state = readState(identity.localProfileId, userDataPath)
+
   if (!state) {
     state = {
       version: MUTATION_STATE_VERSION,
@@ -99,6 +106,7 @@ export function captureCloudSessionMutation(
     }
     saveState(identity.localProfileId, userDataPath, state)
   }
+
   return { epoch: state.epoch, identityKey: key }
 }
 
@@ -108,6 +116,7 @@ export function recordSuccessfulCloudSessionLogin(
 ): CloudSessionMutationSnapshot {
   const key = identityKey(identity)
   const previous = readState(identity.localProfileId, userDataPath)
+
   const state: CloudSessionMutationState = {
     version: MUTATION_STATE_VERSION,
     epoch: (previous?.epoch ?? -1) + 1,
@@ -116,7 +125,9 @@ export function recordSuccessfulCloudSessionLogin(
       (candidate) => candidate !== key
     )
   }
+
   saveState(identity.localProfileId, userDataPath, state)
+
   return { epoch: state.epoch, identityKey: key }
 }
 
@@ -126,13 +137,16 @@ export function recordCloudSessionIdentityMutation(
 ): CloudSessionMutationSnapshot {
   const key = identityKey(identity)
   const previous = readState(identity.localProfileId, userDataPath)
+
   const state: CloudSessionMutationState = {
     version: MUTATION_STATE_VERSION,
     epoch: (previous?.epoch ?? -1) + 1,
     expectedIdentityKey: key,
     tombstonedIdentityKeys: previous?.tombstonedIdentityKeys ?? []
   }
+
   saveState(identity.localProfileId, userDataPath, state)
+
   return { epoch: state.epoch, identityKey: key }
 }
 
@@ -155,6 +169,7 @@ export function isCloudSessionMutationCurrent(
   snapshot: CloudSessionMutationSnapshot
 ): boolean {
   const state = readState(profileId, userDataPath)
+
   return Boolean(
     state &&
     state.epoch === snapshot.epoch &&
@@ -171,5 +186,6 @@ export function recordCloudSessionIdentityMutationIfCurrent(
   if (!isCloudSessionMutationCurrent(identity.localProfileId, userDataPath, snapshot)) {
     return null
   }
+
   return recordCloudSessionIdentityMutation(identity, userDataPath)
 }

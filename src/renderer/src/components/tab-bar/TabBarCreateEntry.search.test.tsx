@@ -13,6 +13,7 @@ import { QUICK_OPEN_QUERY_MAX_BYTES } from '../quick-open-search'
 const fileListMock = vi.hoisted(() => ({
   current: { files: [] as string[], loading: false, loadError: null as string | null }
 }))
+
 vi.mock('../quick-open-file-list', () => ({
   useRuntimeFileListForWorktree: () => fileListMock.current
 }))
@@ -21,9 +22,11 @@ const tabSearchMock = vi.hoisted(() => ({
   calls: [] as { enabled: boolean; query: string }[],
   results: [] as unknown[]
 }))
+
 vi.mock('./use-open-tab-search', () => ({
   useOpenTabSearch: ({ enabled, query }: { enabled: boolean; query: string }) => {
     tabSearchMock.calls.push({ enabled, query })
+
     return { query, results: tabSearchMock.results }
   }
 }))
@@ -33,6 +36,7 @@ import TabBarCreateEntry from './TabBarCreateEntry'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 let container: HTMLDivElement
+
 let root: Root
 
 function renderEntry(props: Record<string, unknown> = {}): void {
@@ -53,10 +57,12 @@ function renderEntry(props: Record<string, unknown> = {}): void {
 
 function setQuery(value: string): void {
   const input = container.querySelector('input')!
+
   const nativeSetter = Object.getOwnPropertyDescriptor(
     window.HTMLInputElement.prototype,
     'value'
   )?.set
+
   act(() => {
     nativeSetter?.call(input, value)
     input.dispatchEvent(new window.Event('input', { bubbles: true }))
@@ -176,12 +182,14 @@ describe('TabBarCreateEntry search behavior', () => {
 
   it('disables the active submission and exposes failures to assistive technology', async () => {
     let rejectOpen: ((error: Error) => void) | undefined
+
     const onOpenEntry = vi.fn(
       () =>
         new Promise<void>((_resolve, reject) => {
           rejectOpen = reject
         })
     )
+
     renderEntry({ onOpenEntry })
     setQuery('react hooks')
     submit()
@@ -208,12 +216,14 @@ describe('TabBarCreateEntry search behavior', () => {
   it('ignores completion from a previous menu session', async () => {
     let resolveOpen: (() => void) | undefined
     const onDidOpenEntry = vi.fn()
+
     const onOpenEntry = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           resolveOpen = resolve
         })
     )
+
     renderEntry({ onDidOpenEntry, onOpenEntry })
     setQuery('react hooks')
     submit()
@@ -264,12 +274,15 @@ describe('TabBarCreateEntry search behavior', () => {
         relativePath: null
       }
     ]
+
     const menuOptions: TabCreateMenuOption[] = [
       { id: 'new-browser', kind: 'new-browser', keywords: ['gem'], label: 'Gem action' }
     ]
+
     const agentOptions: TabAgentLaunchOption[] = [
       { agent: 'gemini', aliases: ['gem'], label: 'Gemini' }
     ]
+
     const onOpenEntry = vi.fn().mockResolvedValue(undefined)
     renderEntry({ agentOptions, menuOptions, onOpenEntry })
     setQuery('?gem')

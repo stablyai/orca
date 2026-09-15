@@ -20,7 +20,9 @@ import {
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const FISH_VERSION = '4.8.1'
+
 const FISH_ASSETS = {
   aarch64: {
     asset: `fish-${FISH_VERSION}-linux-aarch64.tar.xz`,
@@ -57,9 +59,11 @@ function remoteOscQueryScript(runId: string): string {
 function installRemoteFish(target: DockerSshRelayTarget): void {
   const arch = execDockerSshRelayTargetCommand(target, 'uname -m') as keyof typeof FISH_ASSETS
   const release = FISH_ASSETS[arch]
+
   if (!release) {
     throw new Error(`No pinned fish binary for Docker architecture ${arch}`)
   }
+
   const url = `https://github.com/fish-shell/fish-shell/releases/download/${FISH_VERSION}/${release.asset}`
   execDockerSshRelayTargetCommand(
     target,
@@ -82,6 +86,7 @@ test.describe('PTY input write queue over SSH', () => {
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
@@ -105,6 +110,7 @@ test.describe('PTY input write queue over SSH', () => {
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       installRemoteFish(target)
@@ -147,10 +153,12 @@ test.describe('PTY input write queue over SSH', () => {
       await waitForSessionReady(orcaPage)
       await waitForActiveWorktree(orcaPage)
       await connectDockerSshRelayTarget(orcaPage, target)
+
       const relayExports = execDockerSshRelayTargetCommand(
         target,
         'module=$(find /root/.orca-remote -type d -path \'*/node_modules/node-pty\' | head -n 1); node -e "const p=require(process.argv[1]); console.log(Object.keys(p.native || {}).join(\',\'))" "$module"'
       )
+
       testInfo.annotations.push({ type: 'relay-node-pty-exports', description: relayExports })
       expect(relayExports).not.toContain('echoState')
 

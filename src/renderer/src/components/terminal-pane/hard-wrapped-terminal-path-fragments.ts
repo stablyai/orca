@@ -46,10 +46,13 @@ export function getHardWrappedPathSuffix(
   row: HardWrappedPathFragmentRow
 ): HardWrappedPathFragmentRow | null {
   let startIndex = row.text.length
+
   while (startIndex > 0 && HARD_WRAPPED_PATH_FRAGMENT_PATTERN.test(row.text[startIndex - 1])) {
     startIndex--
   }
+
   const suffix = sliceHardWrappedPathFragmentRow(row, startIndex, row.text.length)
+
   return isHardWrappedPathContinuation(suffix.text) ? suffix : null
 }
 
@@ -57,12 +60,15 @@ export function getHardWrappedPathPrefix(
   row: HardWrappedPathFragmentRow
 ): HardWrappedPathFragmentRow | null {
   let endIndex = 0
+
   while (
     endIndex < row.text.length &&
     HARD_WRAPPED_PATH_FRAGMENT_PATTERN.test(row.text[endIndex])
   ) {
     endIndex++
   }
+
   const prefix = sliceHardWrappedPathFragmentRow(row, 0, endIndex)
+
   return isHardWrappedPathContinuation(prefix.text) ? prefix : null
 }

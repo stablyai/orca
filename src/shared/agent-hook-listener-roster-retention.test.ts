@@ -20,6 +20,7 @@ function claudeEvent(
 describe('Claude hook roster retention', () => {
   it('does not retain rosters for malformed lifecycle events across unique panes', () => {
     const state = createHookListenerState()
+
     for (let index = 0; index <= MAX_AGENT_HOOK_STATUS_CACHE_PANES; index += 1) {
       const paneKey = makePaneKey(`malformed-${index}`, LEAF_ID)
       expect(claudeEvent(state, paneKey, { hook_event_name: 'TeammateIdle' })).toBeNull()
@@ -31,6 +32,7 @@ describe('Claude hook roster retention', () => {
 
   it('does not retain rosters for unknown child endings across unique panes', () => {
     const state = createHookListenerState()
+
     for (let index = 0; index <= MAX_AGENT_HOOK_STATUS_CACHE_PANES; index += 1) {
       const paneKey = makePaneKey(`unknown-stop-${index}`, LEAF_ID)
       expect(
@@ -56,6 +58,7 @@ describe('Claude hook roster retention', () => {
       agent_id: 'areviewer-6d3cb5b52120b7bf',
       agent_type: 'security-reviewer'
     })
+
     expect(started?.payload.subagents).toEqual([
       expect.objectContaining({ id: 'areviewer-6d3cb5b52120b7bf', state: 'working' })
     ])
@@ -64,6 +67,7 @@ describe('Claude hook roster retention', () => {
       hook_event_name: 'TeammateIdle',
       teammate_name: 'reviewer'
     })
+
     expect(idled?.payload.state).toBe('done')
     expect(idled?.payload.subagents).toEqual([
       expect.objectContaining({ id: 'areviewer-6d3cb5b52120b7bf', state: 'idle' })

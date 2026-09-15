@@ -16,11 +16,14 @@ function openTerminal(screenReaderMode = false): {
   const terminal = new Terminal({ screenReaderMode })
   terminal.open(container)
   const textarea = terminal.textarea
+
   if (!textarea) {
     throw new Error('xterm helper textarea was not created')
   }
+
   const emitted: string[] = []
   terminal.onData((data) => emitted.push(data))
+
   return { emitted, terminal, textarea }
 }
 
@@ -51,9 +54,11 @@ function dispatchKeydown(
 ): void {
   const keydown = new KeyboardEvent('keydown', { key, code, isComposing, bubbles: true })
   Object.defineProperty(keydown, 'keyCode', { value: keyCode })
+
   if (timeStamp !== undefined) {
     Object.defineProperty(keydown, 'timeStamp', { value: timeStamp })
   }
+
   textarea.dispatchEvent(keydown)
 }
 
@@ -88,6 +93,7 @@ function startObservedIbusComposition(textarea: HTMLTextAreaElement, text: strin
   dispatchCompositionEvent(textarea, 'compositionstart')
   dispatchKeydown(textarea, 'Process', 'KeyG', 229)
   updateObservedIbusComposition(textarea, prefix, text)
+
   return prefix
 }
 
@@ -134,6 +140,7 @@ function getPendingFinalizationCount(terminal: Terminal): number {
       _core: { _compositionHelper: { _pendingComposition?: unknown } }
     }
   )._core._compositionHelper._pendingComposition
+
   return pending === undefined ? 0 : 1
 }
 
@@ -393,6 +400,7 @@ describe('xterm IME composition de-duplication', () => {
         _core: { _compositionHelper: { _compositionPosition: { start: number; end: number } } }
       }
     )._core._compositionHelper._compositionPosition
+
     expect(compositionPosition).toEqual({ start: 1, end: 1 })
     dispatchCompositionEvent(textarea, 'compositionend', '글')
     await nextEventLoop()
@@ -496,6 +504,7 @@ describe('xterm IME composition de-duplication', () => {
       dispatchCompositionEvent(textarea, 'compositionend', '가')
       expect(getPendingFinalizationCount(terminal)).toBeLessThanOrEqual(1)
     }
+
     await nextEventLoop()
 
     expect(emitted.join('')).toBe('가'.repeat(20))
@@ -566,6 +575,7 @@ describe('xterm IME composition de-duplication', () => {
     // xterm's keypress path has already emitted it.
     textarea.value = ''
     dispatchCompositionEvent(textarea, 'compositionend')
+
     const compositionHelper = (
       terminal as unknown as {
         _core: {
@@ -573,6 +583,7 @@ describe('xterm IME composition de-duplication', () => {
         }
       }
     )._core._compositionHelper
+
     expect(compositionHelper._pendingComposition).toBeDefined()
     dispatchKeypress(textarea, '한')
     expect(compositionHelper._pendingComposition?.keypressData).toBe('한')

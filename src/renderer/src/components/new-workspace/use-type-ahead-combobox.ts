@@ -64,6 +64,7 @@ export function useTypeAheadCombobox(deriveRowKeys: (query: string) => readonly 
   const moveArm = useCallback(
     (step: number): void => {
       const next = rowKeys[Math.min(Math.max(armedIndex + step, 0), rowKeys.length - 1)]
+
       if (next !== undefined) {
         setArmed({ key: next, query })
       }
@@ -80,8 +81,10 @@ export function useTypeAheadCombobox(deriveRowKeys: (query: string) => readonly 
     (next: boolean): void => {
       if (next) {
         setOpen(true)
+
         return
       }
+
       close()
     },
     [close]

@@ -38,20 +38,26 @@ export function createAgentBrowserProcessEnvironment(options: {
   userDataPath: string
 }): AgentBrowserProcessEnvironment {
   const env = { ...options.inheritedEnv }
+
   if (!env.AGENT_BROWSER_IDLE_TIMEOUT_MS?.trim()) {
     env.AGENT_BROWSER_IDLE_TIMEOUT_MS = String(AGENT_BROWSER_IDLE_TIMEOUT_MS)
   }
+
   if (options.platform === 'win32' || env.AGENT_BROWSER_SOCKET_DIR?.trim()) {
     return { env, ownsSocketDirectory: false }
   }
+
   const profileKey = createHash('sha256').update(options.userDataPath).digest('hex').slice(0, 16)
   const socketDirectory = join('/tmp', `${AGENT_BROWSER_SOCKET_DIRECTORY_PREFIX}${profileKey}`)
+
   try {
     mkdirSync(socketDirectory, { recursive: true, mode: 0o700 })
     chmodSync(socketDirectory, 0o700)
   } catch {
     return { env, ownsSocketDirectory: false }
   }
+
   env.AGENT_BROWSER_SOCKET_DIR = socketDirectory
+
   return { env, ownsSocketDirectory: true }
 }

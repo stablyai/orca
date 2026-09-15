@@ -4,14 +4,17 @@ import { parsePaneKey } from '../../../../../shared/stable-pane-id'
 
 export function resolvePaneKeyWorktreeIdFromTabs(state: AppState, paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
+
   if (!parsed) {
     return null
   }
+
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree ?? {})) {
     if (tabs.some((tab) => tab.id === parsed.tabId)) {
       return worktreeId
     }
   }
+
   return null
 }
 
@@ -31,7 +34,9 @@ export function collectAcknowledgedAgentNotificationId({
   if (typeof stateStartedAt !== 'number' || previousAckAt >= stateStartedAt) {
     return
   }
+
   const id = buildAgentNotificationId({ worktreeId, paneKey, stateStartedAt })
+
   if (id) {
     ids.add(id)
   }
@@ -47,9 +52,11 @@ export function latestAgentTurnTimestamp(entry: {
   stateHistory?: { startedAt?: number }[]
 }): number {
   let latest = usableTimestamp(entry.stateStartedAt)
+
   // Why history too: Activity renders one event per stateHistory entry, each with its own unread check.
   for (const history of entry.stateHistory ?? []) {
     latest = Math.max(latest, usableTimestamp(history.startedAt))
   }
+
   return latest
 }

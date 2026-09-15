@@ -12,6 +12,7 @@ async function makeLog(content: string): Promise<string> {
   tempPaths.push(directory)
   const filePath = join(directory, 'session.jsonl')
   await writeFile(filePath, content)
+
   return filePath
 }
 
@@ -49,6 +50,7 @@ describe('readLocalLogTailRange', () => {
       initial.nextByteOffset,
       initial.fileIdentity
     )
+
     expect(result.reset).toBe(true)
     expect(result.nextByteOffset).toBe(0)
     expect(result.fileSize).toBe(2)
@@ -66,6 +68,7 @@ describe('readLocalLogTailRange', () => {
       initial.nextByteOffset,
       initial.fileIdentity
     )
+
     expect(result.reset).toBe(true)
     expect(result.fileIdentity).not.toBe(initial.fileIdentity)
   })

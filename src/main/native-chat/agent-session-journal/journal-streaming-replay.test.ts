@@ -11,8 +11,11 @@ import type { JournalRow } from './journal-row-schema'
 import * as reducer from './journal-reducer'
 
 let root: string
+
 let opened: OpenJournalDatabase
+
 const sessionId = 'streaming-session'
+
 const epoch = 'epoch-1'
 
 function anchor(): JournalRow {
@@ -61,14 +64,18 @@ afterEach(async () => {
 describe('streaming journal replay', () => {
   it('releases superseded revision bodies while reducing a long journal', () => {
     const gc = global.gc
+
     if (!gc) {
       throw new Error('Run retention tests with --expose-gc')
     }
+
     opened.db.exec('BEGIN')
     put(anchor())
+
     for (let seq = 2; seq <= 2049; seq++) {
       put(revision(seq, `${'x'.repeat(16384)}:${seq}`))
     }
+
     opened.db.exec('COMMIT')
     gc()
     const initial = process.memoryUsage().heapUsed
@@ -80,10 +87,12 @@ describe('streaming journal replay', () => {
       // The probe must not retain old row bodies in Vitest's call history.
       spy.mockClear()
       applied += 1
+
       if (row.seq % 256 === 0) {
         gc()
         peak = Math.max(peak, process.memoryUsage().heapUsed)
       }
+
       apply(state, row)
     })
     const loaded = replayJournal(opened.db, false, sessionId)!
@@ -97,15 +106,18 @@ describe('streaming journal replay', () => {
 
   it('holds no read snapshot while reducing, so a checkpoint can pass mid-replay', () => {
     put(anchor())
+
     for (let seq = 2; seq <= 300; seq++) {
       put(revision(seq))
     }
+
     const apply = reducer.applyJournalRow
     const checkpoints: { busy: number }[] = []
     vi.spyOn(reducer, 'applyJournalRow').mockImplementation((state, row) => {
       if (row.seq === 2 || row.seq === 200) {
         checkpoints.push(...(opened.db.pragma('wal_checkpoint(PASSIVE)') as { busy: number }[]))
       }
+
       apply(state, row)
     })
     const loaded = replayJournal(opened.db, false, sessionId)!

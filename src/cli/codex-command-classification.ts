@@ -26,6 +26,7 @@ const CODEX_NON_INTERACTIVE_SUBCOMMANDS = new Set([
   'help',
   'version'
 ])
+
 const CODEX_NON_INTERACTIVE_CLOUD_SUBCOMMANDS = new Set([
   'exec',
   'status',
@@ -34,7 +35,9 @@ const CODEX_NON_INTERACTIVE_CLOUD_SUBCOMMANDS = new Set([
   'diff',
   'help'
 ])
+
 const CODEX_NON_INTERACTIVE_LOGIN_SUBCOMMANDS = new Set(['status', 'help'])
+
 const CODEX_GLOBAL_FLAGS_WITH_VALUES = new Set([
   '--config',
   '-c',
@@ -57,6 +60,7 @@ const CODEX_GLOBAL_FLAGS_WITH_VALUES = new Set([
   '--ask-for-approval',
   '-a'
 ])
+
 const CODEX_GLOBAL_BOOLEAN_FLAGS = new Set([
   '--oss',
   '--dangerously-bypass-approvals-and-sandbox',
@@ -67,7 +71,9 @@ const CODEX_GLOBAL_BOOLEAN_FLAGS = new Set([
   '--version',
   '-V'
 ])
+
 const CODEX_LOGIN_FLAGS_WITH_VALUES = new Set(['-c', '--config', '--enable', '--disable'])
+
 const CODEX_LOGIN_BOOLEAN_FLAGS = new Set([
   '--with-api-key',
   '--with-access-token',
@@ -75,7 +81,9 @@ const CODEX_LOGIN_BOOLEAN_FLAGS = new Set([
   '--help',
   '-h'
 ])
+
 const CODEX_CLOUD_FLAGS_WITH_VALUES = new Set(['-c', '--config', '--enable', '--disable'])
+
 const CODEX_CLOUD_BOOLEAN_FLAGS = new Set(['--help', '-h', '--version', '-V'])
 
 type CodexCommandToken = {
@@ -90,39 +98,49 @@ function tokenizeLeadingShellWords(command: string, limit: number): string[] {
 
   for (let i = 0; i < command.length; i += 1) {
     const ch = command[i]
+
     if (quote) {
       if (ch === quote) {
         quote = null
       } else {
         current += ch
       }
+
       continue
     }
+
     if (ch === '"' || ch === "'") {
       quote = ch
       continue
     }
+
     if (/\s/.test(ch)) {
       if (current) {
         tokens.push(current)
+
         if (tokens.length >= limit) {
           return tokens
         }
+
         current = ''
       }
+
       continue
     }
+
     current += ch
   }
 
   if (current && tokens.length < limit) {
     tokens.push(current)
   }
+
   return tokens
 }
 
 function commandBasename(command: string): string {
   const normalized = command.replace(/\\/g, '/')
+
   return normalized.slice(normalized.lastIndexOf('/') + 1).toLowerCase()
 }
 
@@ -140,37 +158,47 @@ function isShellAssignment(token: string): boolean {
 
 function stripShellLaunchPrefix(tokens: string[]): string[] {
   const remaining = [...tokens]
+
   while (remaining[0] && isShellAssignment(remaining[0])) {
     remaining.shift()
   }
+
   if (remaining[0] && commandBasename(remaining[0]) === 'env') {
     remaining.shift()
+
     while (remaining[0]) {
       const token = remaining[0]
+
       if (isShellAssignment(token)) {
         remaining.shift()
         continue
       }
+
       if (token === '-u' || token === '--unset') {
         remaining.splice(0, 2)
         continue
       }
+
       if (token.startsWith('--unset=')) {
         remaining.shift()
         continue
       }
+
       if (token.startsWith('-')) {
         remaining.shift()
         continue
       }
+
       break
     }
   }
+
   return remaining
 }
 
 function codexGlobalOptionName(token: string): string {
   const separatorIndex = token.indexOf('=')
+
   return separatorIndex === -1 ? token : token.slice(0, separatorIndex)
 }
 
@@ -184,6 +212,7 @@ function isVersionFlag(token: string): boolean {
 
 function isClaudePrintFlag(token: string): boolean {
   const optionName = codexGlobalOptionName(token)
+
   return optionName === '-p' || optionName === '--print'
 }
 
@@ -195,25 +224,32 @@ function findCodexSubcommand(
 ): CodexCommandToken | null {
   for (let i = startIndex; i < tokens.length; i += 1) {
     const token = tokens[i]
+
     if (token === '--') {
       return tokens[i + 1] ? { value: '<prompt>', index: i + 1 } : null
     }
 
     const optionName = codexGlobalOptionName(token)
+
     if (isHelpFlag(optionName) || isVersionFlag(optionName)) {
       return { value: isVersionFlag(optionName) ? 'version' : 'help', index: i }
     }
+
     if (flagsWithValues.has(optionName)) {
       if (optionName === token) {
         i += 1
       }
+
       continue
     }
+
     if (booleanFlags.has(optionName)) {
       continue
     }
+
     return { value: token, index: i }
   }
+
   return null
 }
 
@@ -224,21 +260,25 @@ function isNonInteractiveCodexSubcommand(tokens: string[]): boolean {
     CODEX_GLOBAL_FLAGS_WITH_VALUES,
     CODEX_GLOBAL_BOOLEAN_FLAGS
   )
+
   if (!subcommand) {
     return false
   }
 
   const normalizedSubcommand = subcommand.value.toLowerCase()
+
   if (normalizedSubcommand === 'login') {
     // Why: bare `codex login` displays an auth flow; only explicit status/help
     // or stdin-fed token modes are safe to leave in a background PTY.
     const loginStartIndex = subcommand.index + 1
+
     const loginSubcommand = findCodexSubcommand(
       tokens,
       loginStartIndex,
       CODEX_LOGIN_FLAGS_WITH_VALUES,
       CODEX_LOGIN_BOOLEAN_FLAGS
     )
+
     return (
       tokens
         .slice(loginStartIndex)
@@ -248,16 +288,19 @@ function isNonInteractiveCodexSubcommand(tokens: string[]): boolean {
         CODEX_NON_INTERACTIVE_LOGIN_SUBCOMMANDS.has(loginSubcommand.value.toLowerCase()))
     )
   }
+
   if (normalizedSubcommand === 'cloud') {
     // Why: bare `codex cloud` opens the interactive cloud browser, while its
     // named child commands are plain one-shot commands.
     const cloudStartIndex = subcommand.index + 1
+
     const cloudSubcommand = findCodexSubcommand(
       tokens,
       cloudStartIndex,
       CODEX_CLOUD_FLAGS_WITH_VALUES,
       CODEX_CLOUD_BOOLEAN_FLAGS
     )
+
     return (
       tokens.slice(cloudStartIndex).some((token) => isHelpFlag(token) || isVersionFlag(token)) ||
       (cloudSubcommand !== null &&
@@ -278,6 +321,7 @@ export function shouldUseRendererBackedCodexTerminal(command: string | undefined
   )
 
   const executable = tokens[0] ? commandBasename(tokens[0]) : ''
+
   if (!isCodexExecutable(executable)) {
     return false
   }
@@ -295,13 +339,16 @@ export function shouldUseRendererBackedInteractiveTerminal(command: string | und
   )
 
   const executable = tokens[0] ? commandBasename(tokens[0]) : ''
+
   if (isCodexExecutable(executable)) {
     return !isNonInteractiveCodexSubcommand(tokens)
   }
+
   if (isClaudeExecutable(executable)) {
     return !tokens
       .slice(1)
       .some((token) => isHelpFlag(token) || isVersionFlag(token) || isClaudePrintFlag(token))
   }
+
   return false
 }

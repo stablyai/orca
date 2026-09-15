@@ -29,6 +29,7 @@ vi.mock('electron', () => ({
   ipcMain: { removeHandler: vi.fn(), handle: handleMock },
   nativeImage: { createFromBuffer: vi.fn() }
 }))
+
 vi.mock('node:fs/promises', () => ({
   access: vi.fn(),
   lstat: vi.fn(),
@@ -41,14 +42,17 @@ vi.mock('node:fs/promises', () => ({
   writeFile: fsWriteFileMock,
   default: { writeFile: fsWriteFileMock }
 }))
+
 vi.mock('../ipc/filesystem-auth', () => ({
   PATH_ACCESS_DENIED_MESSAGE: 'denied',
   resolveAuthorizedPath: vi.fn(),
   authorizeExternalPath: vi.fn()
 }))
+
 vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
+
 vi.mock('./dashboard-popout-window', () => ({ isDashboardPopoutRenderer: () => false }))
 
 import { registerClipboardHandlers } from './clipboard-ipc-handlers'
@@ -62,7 +66,9 @@ import {
 type SaveImageHandler = (event: unknown, args?: unknown) => Promise<string | null>
 
 const RUNTIME_ID = 'ubuntu-server'
+
 const RUNTIME_SSH_TARGET = 'jetson'
+
 const CLIENT_SSH_TARGET = 'client-dialed'
 
 const rendererEvent = {
@@ -78,9 +84,11 @@ function saveImageHandler(): SaveImageHandler {
   handleMock.mockClear()
   registerClipboardHandlers({} as never)
   const call = handleMock.mock.calls.find((c) => c[0] === 'clipboard:saveImageAsTempFile')
+
   if (!call) {
     throw new Error('clipboard:saveImageAsTempFile not registered')
   }
+
   return call[1] as SaveImageHandler
 }
 
@@ -91,6 +99,7 @@ function mockRuntimeUpload(
     if (method in overrides) {
       return { ...overrides[method], _meta: { runtimeId: 'r' } }
     }
+
     switch (method) {
       case 'clipboard.startImageUpload':
         return { ok: true, result: { uploadId: 'upload-1' }, _meta: { runtimeId: 'r' } }

@@ -13,6 +13,7 @@ describe('OrcaRuntimeService', () => {
     setPlatform('linux')
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg' })
+
     const runtimeStore = {
       ...store,
       getSettings: () => ({
@@ -20,6 +21,7 @@ describe('OrcaRuntimeService', () => {
         claudeAgentTeamsMode: 'off' as const
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn,
@@ -71,6 +73,7 @@ describe('OrcaRuntimeService', () => {
     const spawnCall = spawn.mock.calls[0]?.[0] as
       | { command?: string; env?: Record<string, string> }
       | undefined
+
     expect(spawnCall?.command).toBe('claude --teammate-mode auto --resume claude-session')
     expect(spawnCall?.env).toMatchObject({
       CLAUDE_PROFILE: 'captured',
@@ -104,6 +107,7 @@ describe('OrcaRuntimeService', () => {
   it('does not apply current Agent Teams mode to captured plain Claude resumes', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-bg' })
+
     const runtimeStore = {
       ...store,
       getSettings: () => ({
@@ -111,6 +115,7 @@ describe('OrcaRuntimeService', () => {
         claudeAgentTeamsMode: 'in-process' as const
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore)
     runtime.setPtyController({
       spawn,
@@ -148,6 +153,7 @@ describe('OrcaRuntimeService', () => {
     const spawnCall = spawn.mock.calls[0]?.[0] as
       | { command?: string; env?: Record<string, string> }
       | undefined
+
     expect(spawnCall?.command).toBe('claude --resume claude-session')
     expect(spawnCall?.env?.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBeUndefined()
     expect(revealTerminalSession).toHaveBeenCalledWith(
@@ -187,6 +193,7 @@ describe('OrcaRuntimeService', () => {
 
     const spawnedEnv =
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+
     expect(spawnedEnv.ORCA_TAB_ID).toBe(tabId)
     expect(spawnedEnv.ORCA_PANE_KEY).toBe(`${tabId}:${leafId}`)
   })
@@ -211,6 +218,7 @@ describe('OrcaRuntimeService', () => {
 
     const spawnedEnv =
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+
     expect(spawnedEnv.ORCA_TAB_ID).not.toBe(tabId)
     expect(spawnedEnv.ORCA_TAB_ID).not.toMatch(/^web-terminal-/)
     expect(spawnedEnv.ORCA_PANE_KEY).toMatch(`${spawnedEnv.ORCA_TAB_ID}:`)
@@ -266,6 +274,7 @@ describe('OrcaRuntimeService', () => {
     const spawnOptions = spawn.mock.calls[0]?.[0] as
       | { persistHostSessionBinding?: boolean }
       | undefined
+
     expect(spawnOptions?.persistHostSessionBinding).toBe(true)
   })
 
@@ -422,9 +431,11 @@ describe('OrcaRuntimeService', () => {
     // the only channel a paired client learns about the terminal on — a degraded
     // focused create must still land there selected, or focus is silently lost.
     const tabs = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
     const published = tabs.tabs.find(
       (tab) => tab.type === 'terminal' && tab.parentTabId === created.tabId
     )
+
     expect(published).toBeDefined()
     expect(published?.isActive).toBe(true)
     expect(tabs.activeTabId).toBe(published?.id)
@@ -433,6 +444,7 @@ describe('OrcaRuntimeService', () => {
   it('keeps focus-requested terminal creates on the renderer when a window exists', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-should-not-spawn' })
     const webContents = { send: vi.fn() }
+
     const send = vi.fn((_channel: string, payload: { requestId: string }) => {
       runtime.syncWindowGraph(1, {
         tabs: [
@@ -461,6 +473,7 @@ describe('OrcaRuntimeService', () => {
         { requestId: payload.requestId, tabId: 'tab-focused', title: 'Focused Terminal' }
       )
     })
+
     webContents.send = send
     const runtime = new OrcaRuntimeService(store)
     runtime.attachWindow(1)
@@ -495,6 +508,7 @@ describe('OrcaRuntimeService', () => {
 
   it('accepts renderer-backed terminal create replies only from the target renderer', async () => {
     const webContents = { send: vi.fn() }
+
     const send = vi.fn((_channel: string, payload: { requestId: string }) => {
       ipcMain.emit(
         'terminal:tabCreateReply',
@@ -528,6 +542,7 @@ describe('OrcaRuntimeService', () => {
         { requestId: payload.requestId, tabId: 'tab-renderer', title: 'Renderer Terminal' }
       )
     })
+
     webContents.send = send
     const runtime = new OrcaRuntimeService(store)
     runtime.attachWindow(1)

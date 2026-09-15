@@ -182,6 +182,7 @@ describe('attachEditorAutosaveController', () => {
     store.getState().markFileDirty('/repo/file.ts', true)
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       await requestDirtyFileSave()
 
@@ -251,6 +252,7 @@ describe('attachEditorAutosaveController', () => {
     store.getState().markFileDirty('/home/neil/platform/api/src/file.ts', true)
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       await requestDirtyFileSave()
 
@@ -271,16 +273,19 @@ describe('attachEditorAutosaveController', () => {
   it('saves runtime-owned folder workspace files through the folder root', async () => {
     clearRuntimeCompatibilityCacheForTests()
     const writeFile = vi.fn().mockResolvedValue(undefined)
+
     const runtimeCall = vi.fn().mockResolvedValue({
       ok: true,
       result: {},
       _meta: { runtimeId: 'runtime-env-1' }
     })
+
     const runtimeTransportCall = vi.fn((args: RuntimeEnvironmentCallRequest) => {
       return (
         createCompatibleRuntimeStatusResponseIfNeeded(args, 'runtime-env-1') ?? runtimeCall(args)
       )
     })
+
     const eventTarget = new EventTarget()
     vi.stubGlobal('window', {
       addEventListener: eventTarget.addEventListener.bind(eventTarget),
@@ -331,6 +336,7 @@ describe('attachEditorAutosaveController', () => {
     store.getState().markFileDirty('/runtime/folder/src/file.ts', true)
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       await requestDirtyFileSave()
 
@@ -356,16 +362,19 @@ describe('attachEditorAutosaveController', () => {
   it('saves remote files through the owning runtime environment', async () => {
     clearRuntimeCompatibilityCacheForTests()
     const writeFile = vi.fn().mockResolvedValue(undefined)
+
     const runtimeCall = vi.fn().mockResolvedValue({
       ok: true,
       result: {},
       _meta: { runtimeId: 'runtime-env-1' }
     })
+
     const runtimeTransportCall = vi.fn((args: RuntimeEnvironmentCallRequest) => {
       return (
         createCompatibleRuntimeStatusResponseIfNeeded(args, 'runtime-env-1') ?? runtimeCall(args)
       )
     })
+
     const eventTarget = new EventTarget()
     vi.stubGlobal('window', {
       addEventListener: eventTarget.addEventListener.bind(eventTarget),
@@ -402,6 +411,7 @@ describe('attachEditorAutosaveController', () => {
     store.getState().markFileDirty('/remote/repo/file.ts', true)
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       await requestDirtyFileSave()
 
@@ -452,7 +462,9 @@ describe('attachEditorAutosaveController', () => {
     const unregisterFlush = registerPendingEditorFlush('/repo/file.md', () => {
       store.getState().setEditorDraft('/repo/file.md', 'pending rich edit')
     })
+
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       await requestDirtyFileSave()
 
@@ -496,6 +508,7 @@ describe('attachEditorAutosaveController', () => {
     })
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       store.getState().setEditorDraft('/repo/file.ts', 'edited')
       store.getState().markFileDirty('/repo/file.ts', true)
@@ -513,9 +526,11 @@ describe('attachEditorAutosaveController', () => {
 
   it('drops an autosave already queued when owner migration starts', async () => {
     let releaseFirstWrite!: () => void
+
     const firstWrite = new Promise<void>((resolve) => {
       releaseFirstWrite = resolve
     })
+
     const writeFile = vi.fn().mockReturnValueOnce(firstWrite).mockResolvedValue(undefined)
     const eventTarget = new EventTarget()
     vi.stubGlobal('window', {
@@ -536,6 +551,7 @@ describe('attachEditorAutosaveController', () => {
       mode: 'edit'
     })
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       store.getState().setEditorDraft('/repo/file.ts', 'first autosave')
       store.getState().markFileDirty('/repo/file.ts', true)
@@ -547,6 +563,7 @@ describe('attachEditorAutosaveController', () => {
       await vi.advanceTimersByTimeAsync(1000)
       store.getState().setRestoredEditorOwnerMigrationPending('/repo/file.ts', true)
       releaseFirstWrite()
+
       for (let index = 0; index < 6; index += 1) {
         await Promise.resolve()
       }
@@ -591,6 +608,7 @@ describe('attachEditorAutosaveController', () => {
     store.getState().markFileDirty('/repo/file.md', true)
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       await requestEditorHotExitBackup()
       await vi.advanceTimersByTimeAsync(1000)
@@ -638,6 +656,7 @@ describe('attachEditorAutosaveController', () => {
     store.getState().markFileDirty('/repo/file.md', true)
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       await expect(requestEditorHotExitBackup()).rejects.toThrow(
         'Some unsaved editor changes cannot be backed up before restart.'
@@ -681,11 +700,13 @@ describe('attachEditorAutosaveController', () => {
       configurable: true,
       value: (...args: Parameters<typeof openFiles.map>) => {
         mapCalls += 1
+
         return originalMap(...args)
       }
     })
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       expect(mapCalls).toBe(1)
       mapCalls = 0
@@ -727,13 +748,17 @@ describe('attachEditorAutosaveController', () => {
     store.getState().markFileDirty('/repo/file.md', true)
 
     const drafts = ['after quiesce', 'after save']
+
     const unregisterFlush = registerPendingEditorFlush('/repo/file.md', () => {
       const nextDraft = drafts.shift()
+
       if (nextDraft) {
         store.getState().setEditorDraft('/repo/file.md', nextDraft)
       }
     })
+
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       await requestEditorSaveQuiesce({ fileId: '/repo/file.md' })
       expect(store.getState().editorDrafts['/repo/file.md']).toBe('after quiesce')
@@ -781,6 +806,7 @@ describe('attachEditorAutosaveController', () => {
     store.getState().markFileDirty('/repo/file.md', true)
 
     const cleanup = attachEditorAutosaveController(store)
+
     try {
       await expect(requestEditorFileSave({ fileId: '/repo/file.md' })).rejects.toThrow('disk full')
       expect(hasRecentSelfWrite('/repo/file.md')).toBe(false)

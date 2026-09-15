@@ -52,11 +52,13 @@ export function setSecretStore(store: SecretStore): void {
 
 export function getSecretStore(): SecretStore {
   const current = read()
+
   if (!current) {
     throw new Error(
       'SecretStore not initialized — call setSecretStore() during startup before reading or writing secrets'
     )
   }
+
   return current
 }
 

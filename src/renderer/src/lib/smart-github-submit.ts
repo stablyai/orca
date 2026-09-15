@@ -58,8 +58,11 @@ export type SmartGitHubSubmitLookup = {
 }
 
 const SMART_GITHUB_SUBMIT_LOOKUP_TTL_MS = 60_000
+
 const SMART_GITHUB_SUBMIT_LOOKUP_CACHE_MAX_ENTRIES = 128
+
 const GITHUB_ITEM_URL_RE = /https?:\/\/[^\s/]+\/\S+/i
+
 const TRAILING_GITHUB_ITEM_URL_PUNCTUATION_RE = /[),.;\]}]+$/
 
 type SmartGitHubSubmitLookupCacheEntry = {
@@ -75,22 +78,27 @@ function pruneSmartGitHubSubmitLookupCache(now: number): void {
       smartGitHubSubmitLookupCache.delete(key)
     }
   }
+
   while (smartGitHubSubmitLookupCache.size > SMART_GITHUB_SUBMIT_LOOKUP_CACHE_MAX_ENTRIES) {
     const oldestKey = smartGitHubSubmitLookupCache.keys().next().value
+
     if (oldestKey === undefined) {
       return
     }
+
     smartGitHubSubmitLookupCache.delete(oldestKey)
   }
 }
 
 export function getSmartGitHubSubmitIntent(input: string): SmartGitHubSubmitIntent | null {
   const trimmed = input.trim()
+
   if (!trimmed) {
     return null
   }
 
   const link = parseGitHubIssueOrPRLink(trimmed) ?? parseGitHubIssueOrPRLinkFromText(trimmed)
+
   if (link) {
     return {
       kind: 'link',
@@ -116,6 +124,7 @@ function parseGitHubIssueOrPRLinkFromText(
   input: string
 ): ReturnType<typeof parseGitHubIssueOrPRLink> {
   const match = GITHUB_ITEM_URL_RE.exec(input)
+
   return match
     ? parseGitHubIssueOrPRLink(match[0].replace(TRAILING_GITHUB_ITEM_URL_PUNCTUATION_RE, ''))
     : null
@@ -134,9 +143,11 @@ function getSmartGitHubSubmitLookupCacheKey({
 }): string {
   const sourceScope = sourceContext ? getTaskSourceCacheScope(sourceContext) : 'default'
   const repoScope = `${sourceScope}:${repoId}:${repoPath}`
+
   if (intent.kind === 'hash-number') {
     return `${repoScope}:hash:${intent.number}`
   }
+
   return `${repoScope}:link:${githubRepoIdentityKey(intent)}:${intent.type}:${intent.number}`
 }
 
@@ -152,6 +163,7 @@ export function lookupSmartGitHubSubmitItem({
   const now = Date.now()
   pruneSmartGitHubSubmitLookupCache(now)
   const cached = smartGitHubSubmitLookupCache.get(key)
+
   if (cached && cached.expiresAt > now) {
     return cached.promise
   }
@@ -174,6 +186,7 @@ export function lookupSmartGitHubSubmitItem({
           sourceContext,
           number: intent.number
         })
+
   const stampedPromise = promise.then((item) => (item ? { ...item, repoId } : null))
   smartGitHubSubmitLookupCache.set(key, {
     promise: stampedPromise,
@@ -187,6 +200,7 @@ export function lookupSmartGitHubSubmitItem({
       smartGitHubSubmitLookupCache.delete(key)
     }
   })
+
   return stampedPromise
 }
 
@@ -206,6 +220,7 @@ export function getSmartGitHubSubmitResolution(
   const fallbackName = `${identity.type}-${identity.number}`
   const titleName = getLinkedWorkItemWorkspaceName(normalizedItem)
   const workspaceName = titleName?.seedName || fallbackName
+
   const linkedWorkItem: LinkedWorkItemSummary = {
     type: identity.type,
     number: identity.number,

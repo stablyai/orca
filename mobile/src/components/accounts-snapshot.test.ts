@@ -67,15 +67,19 @@ function makeSnapshot(): unknown {
 
 function setPath(root: unknown, path: string[], value: unknown): void {
   let current: unknown = root
+
   for (const segment of path.slice(0, -1)) {
     if (!current || typeof current !== 'object' || Array.isArray(current)) {
       throw new Error(`Invalid fixture path: ${path.join('.')}`)
     }
+
     current = (current as Record<string, unknown>)[segment]
   }
+
   if (!current || typeof current !== 'object' || Array.isArray(current)) {
     throw new Error(`Invalid fixture path: ${path.join('.')}`)
   }
+
   const record = current as Record<string, unknown>
   record[path.at(-1)!] = value
 }
@@ -94,6 +98,7 @@ describe('decodeAccountsSnapshot', () => {
     const raw = makeSnapshot() as {
       rateLimits: { claudeTarget?: unknown; codexTarget?: unknown }
     }
+
     delete raw.rateLimits.claudeTarget
     delete raw.rateLimits.codexTarget
 

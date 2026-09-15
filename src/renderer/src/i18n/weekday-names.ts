@@ -10,11 +10,13 @@ let cached: { locale: string; names: readonly string[] } | null = null
 // names only, never ordering: many locales start the week on Monday while the persisted
 // AutomationDraft.dayOfWeek stays Sunday-indexed.
 const SUNDAY_UTC_MS = Date.UTC(2026, 0, 4)
+
 const DAY_MS = 24 * 60 * 60 * 1000
 
 /** Full weekday names in the UI language, Sunday first, indexed by cron day-of-week number. */
 export function getUiWeekdayNames(): readonly string[] {
   const locale = getIntlLocale()
+
   if (!cached || cached.locale !== locale) {
     const formatter = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' })
     cached = {
@@ -24,5 +26,6 @@ export function getUiWeekdayNames(): readonly string[] {
       )
     }
   }
+
   return cached.names
 }

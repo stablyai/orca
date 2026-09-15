@@ -30,6 +30,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
     visibleClaudeAccounts,
     wslCapabilitiesLoading
   } = model
+
   return (
     <section key="claude-accounts" id="accounts-claude" className="space-y-4 scroll-mt-6">
       <div className="space-y-1">
@@ -181,6 +182,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                 accountRuntime,
                 accountVisibilityOptions
               )
+
               const isReauthing = claudeAction === `reauth:${account.id}`
               const isBusy = claudeAction !== 'idle' || accountRuntimeUnavailable
 

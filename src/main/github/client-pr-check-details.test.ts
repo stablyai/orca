@@ -185,6 +185,7 @@ describe('getPRCheckDetails', () => {
 
   it('aborts host work at the cumulative check-details deadline', async () => {
     vi.useFakeTimers()
+
     try {
       getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
       ghExecFileAsyncMock.mockImplementation(
@@ -214,6 +215,7 @@ describe('getPRCheckDetails', () => {
 
   it('stops waiting for shared repository resolution at the host deadline', async () => {
     vi.useFakeTimers()
+
     try {
       getOwnerRepoMock.mockImplementationOnce(() => new Promise(() => {}))
       const request = getPRCheckDetails('/repo-root', { checkRunId: 88 })
@@ -304,6 +306,7 @@ describe('getPRCheckDetails', () => {
     ghExecFileAsyncMock.mockImplementation(async (args: string[], options?: { host?: string }) => {
       const endpoint = args.find((arg) => arg.startsWith('repos/')) ?? ''
       const enterprise = options?.host === 'github.acme-corp.com'
+
       if (endpoint.endsWith('/check-runs/99')) {
         return {
           stdout: JSON.stringify({
@@ -314,9 +317,11 @@ describe('getPRCheckDetails', () => {
           })
         }
       }
+
       if (endpoint.endsWith('/check-runs/99/annotations?per_page=20')) {
         return { stdout: '[]' }
       }
+
       if (endpoint.endsWith('/actions/runs/77/jobs?per_page=100')) {
         return {
           stdout: JSON.stringify({
@@ -332,9 +337,11 @@ describe('getPRCheckDetails', () => {
           })
         }
       }
+
       if (endpoint.endsWith('/actions/jobs/9901/logs')) {
         return { stdout: enterprise ? 'enterprise log' : 'github.com log' }
       }
+
       throw new Error(`unexpected gh call: ${args.join(' ')}`)
     })
 
@@ -342,6 +349,7 @@ describe('getPRCheckDetails', () => {
       checkRunId: 99,
       prRepo: { owner: 'acme', repo: 'widgets', host: 'github.com' }
     })
+
     const enterprise = await getPRCheckDetails('/repo-root', {
       checkRunId: 99,
       prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme-corp.com' }
@@ -349,9 +357,11 @@ describe('getPRCheckDetails', () => {
 
     expect(githubDotCom?.jobs[0]?.logTail).toBe('github.com log')
     expect(enterprise?.jobs[0]?.logTail).toBe('enterprise log')
+
     const logCalls = ghExecFileAsyncMock.mock.calls.filter(([args]) =>
       args.some((arg) => arg.endsWith('/actions/jobs/9901/logs'))
     )
+
     expect(logCalls).toHaveLength(2)
     expect(logCalls[1]?.[1]).toEqual(expect.objectContaining({ host: 'github.acme-corp.com' }))
   })

@@ -32,6 +32,7 @@ export async function waitForRequestCount(
     if (mock.mock.calls.length >= count) {
       return
     }
+
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
   }
 }

@@ -30,6 +30,7 @@ describe('terminateCodexAppServerProcessTree', () => {
       platform: 'win32',
       terminateWindowsTree
     })
+
     expect(target.kill).not.toHaveBeenCalled()
     release.resolve()
     await teardown
@@ -40,11 +41,13 @@ describe('terminateCodexAppServerProcessTree', () => {
 
   it('kills exact Linux spawn-token PIDs before the recorded wrapper', async () => {
     const target = child()
+
     const findSpawnTokenProcesses = vi
       .fn<() => Promise<number[] | null>>()
       .mockResolvedValueOnce([1234, 2345, 3456])
       .mockResolvedValueOnce([1234])
       .mockResolvedValueOnce([1234])
+
     const signalPid = vi.fn()
 
     await expect(
@@ -88,6 +91,7 @@ describe('terminateCodexAppServerProcessTree', () => {
       captureDescendants: async () => snapshot,
       terminateDescendants: () => release.promise
     })
+
     await vi.waitFor(() => expect(target.kill).toHaveBeenCalledWith('SIGSTOP'))
     expect(target.kill).not.toHaveBeenCalledWith('SIGKILL')
     release.resolve(true)
@@ -182,10 +186,12 @@ describe('terminateCodexAppServerProcessTree', () => {
 
   it('tears down 40 dedicated groups without process-table scans or cross-group fanout', async () => {
     const killMocks = Array.from({ length: 40 }, () => vi.fn(() => true))
+
     const targets = killMocks.map((kill, index) => ({
       pid: 10_000 + index,
       kill: kill as ChildProcess['kill']
     }))
+
     const captureDescendants = vi.fn()
     const signalProcessGroup = vi.fn()
 

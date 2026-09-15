@@ -8,28 +8,38 @@ import type * as RepoModule from '../git/repo'
 
 const { reposMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./repos-remote-test-harness')
+
   return { reposMocks: moduleMocks.createReposIpcMocks(), moduleMocks }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(reposMocks))
+
 vi.mock('../git/repo', async (importOriginal) =>
   moduleMocks.gitRepoModuleMock(await importOriginal<typeof RepoModule>())
 )
+
 vi.mock('../git/runner', async (importOriginal) =>
   moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
 )
+
 vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
+
 vi.mock('./registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
+
 vi.mock('../worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
+
 vi.mock('../providers/ssh-git-dispatch', () => moduleMocks.sshGitDispatchModuleMock(reposMocks))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () =>
   moduleMocks.sshFilesystemDispatchModuleMock(reposMocks)
 )
+
 vi.mock('./ssh', () => moduleMocks.sshModuleMock(reposMocks))
+
 vi.mock('../ssh/ssh-target-registry', () => moduleMocks.sshModuleMock(reposMocks))
 
 import { registerRepoHandlers } from './repos'
@@ -66,8 +76,10 @@ describe('repos:add + repos:clone', () => {
   const createTempRoot = async (): Promise<string> => {
     const root = await mkdtemp(join(tmpdir(), 'orca-repos-clone-'))
     tempRoots.push(root)
+
     return root
   }
+
   beforeEach(() => {
     captureHandlers(handleMock)
     resetLocalRepoMocks(reposMocks)
@@ -118,6 +130,7 @@ describe('repos:add + repos:clone', () => {
         cloned = true
         proc.emit('close', 0, null)
       })
+
       return proc
     })
 
@@ -131,12 +144,14 @@ describe('repos:add + repos:clone', () => {
     const configReads = gitExecFileAsyncMock.mock.calls.filter(
       ([args]) => args[0] === 'config' && args.includes('.gitmodules')
     )
+
     expect(configReads).toHaveLength(2)
   })
 
   it('preserves existing badgeColor when repos:clone upgrades folder->git after dedupe', async () => {
     const destination = await createTempRoot()
     const clonePath = join(destination, 'orca')
+
     const existing = {
       id: 'folder-repo',
       path: clonePath,
@@ -145,6 +160,7 @@ describe('repos:add + repos:clone', () => {
       addedAt: 1,
       kind: 'folder'
     }
+
     const upgraded = { ...existing, kind: 'git' as const }
     mockStore.getRepos.mockReturnValue([existing])
     mockStore.updateRepo.mockReturnValue(upgraded)
@@ -271,6 +287,7 @@ describe('repos:add + repos:clone', () => {
           const abort = (): void => {
             reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
           }
+
           if (options.signal?.aborted) {
             abort()
           } else {
@@ -285,6 +302,7 @@ describe('repos:add + repos:clone', () => {
         destination
       })
     )
+
     const rejection = expect(clonePromise).rejects.toThrow('Clone failed')
     await waitForAssertion(() =>
       expect(gitSpawnAfterWindowsEnvironmentReadyMock).toHaveBeenCalledOnce()
@@ -306,6 +324,7 @@ describe('repos:add + repos:clone', () => {
           const abort = (): void => {
             reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
           }
+
           if (options.signal?.aborted) {
             abort()
           } else {
@@ -320,12 +339,14 @@ describe('repos:add + repos:clone', () => {
         destination: firstDestination
       })
     )
+
     const secondClone = Promise.resolve(
       handlers.get('repos:clone')!(null, {
         url: 'https://example.com/second.git',
         destination: secondDestination
       })
     )
+
     const firstRejection = expect(firstClone).rejects.toThrow('Clone failed')
     const secondRejection = expect(secondClone).rejects.toThrow('Clone failed')
     await waitForAssertion(() =>
@@ -352,6 +373,7 @@ describe('repos:add + repos:clone', () => {
       url: 'https://example.com/orca.git',
       destination
     })
+
     await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
 
     await handlers.get('repos:cloneAbort')!(null, undefined)
@@ -373,6 +395,7 @@ describe('repos:add + repos:clone', () => {
       url: 'https://example.com/orca.git',
       destination
     })
+
     await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
 
     await handlers.get('repos:cloneAbort')!(null, undefined)
@@ -392,6 +415,7 @@ describe('repos:add + repos:clone', () => {
       url: 'https://example.com/orca.git',
       destination
     })
+
     await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
 
     await handlers.get('repos:cloneAbort')!(null, undefined)
@@ -413,6 +437,7 @@ describe('repos:add + repos:clone', () => {
       url: 'https://example.com/orca.git',
       destination
     })
+
     await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
     await writeFile(partialFile, 'git wrote this before failing')
 
@@ -432,6 +457,7 @@ describe('repos:add + repos:clone', () => {
       url: 'https://example.com/orca.git',
       destination
     })
+
     await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
 
     proc.stderr.emit(
@@ -461,6 +487,7 @@ describe('repos:add + repos:clone', () => {
       url: 'https://example.com/orca.git',
       destination
     })
+
     await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
     await writeFile(partialFile, 'git wrote this before spawn failure')
 
@@ -480,6 +507,7 @@ describe('repos:add + repos:clone', () => {
       url: 'https://example.com/orca.git',
       destination
     })
+
     await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
 
     await handlers.get('repos:cloneAbort')!(null, undefined)
@@ -508,13 +536,16 @@ describe('repos:add + repos:clone', () => {
       url: 'https://example.com/orca.git',
       destination
     })
+
     await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
 
     await handlers.get('repos:cloneAbort')!(null, undefined)
+
     const secondClonePromise = handlers.get('repos:clone')!(null, {
       url: 'https://example.com/orca.git',
       destination
     })
+
     await new Promise((resolve) => setImmediate(resolve))
     expect(gitSpawnMock).toHaveBeenCalledTimes(1)
 
@@ -541,10 +572,12 @@ describe('repos:add + repos:clone', () => {
       url: 'https://example.com/orca.git',
       destination
     })
+
     const secondClonePromise = handlers.get('repos:clone')!(null, {
       url: 'https://example.com/orca.git',
       destination
     })
+
     await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
 
     firstProc.emit('close', 0, null)
@@ -566,6 +599,7 @@ describe('repos:add + repos:clone', () => {
       url: 'https://example.com/orca.git',
       destination
     })
+
     await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
     await writeFile(partialFile, 'first clone wrote this before abort')
     await handlers.get('repos:cloneAbort')!(null, undefined)
@@ -574,6 +608,7 @@ describe('repos:add + repos:clone', () => {
       url: 'https://example.com/orca.git',
       destination
     })
+
     await new Promise((resolve) => setImmediate(resolve))
     expect(gitSpawnMock).toHaveBeenCalledTimes(1)
     expect(existsSync(partialFile)).toBe(true)
@@ -602,6 +637,7 @@ describe('repos:add + repos:clone', () => {
       url: 'https://example.com/orca.git',
       destination
     })
+
     await waitForAssertion(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
 
     await handlers.get('repos:cloneAbort')!(null, undefined)

@@ -13,6 +13,7 @@ const assistant = (text: string): NativeChatMessage => ({
   timestamp: null,
   source: 'transcript'
 })
+
 const user = (text: string): NativeChatMessage => ({
   id: `u-${text.length}`,
   role: 'user',
@@ -54,6 +55,7 @@ describe('deriveNativeChatStreamingText', () => {
       timestamp: 20,
       source: 'scrape' as const
     }
+
     expect(
       deriveNativeChatStreamingText({
         messages: [assistant('A much longer answer from the completed prior turn'), optimistic],

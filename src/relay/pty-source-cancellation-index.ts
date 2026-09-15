@@ -8,6 +8,7 @@ export class RecentPtySourceCancellationIndex {
 
   remember(proof: PtySourceDeliveryCancellation): void {
     this.proofs.set(proof.deliveryToken, proof)
+
     while (this.proofs.size > RECENT_PTY_SOURCE_CANCELLATION_LIMIT) {
       this.proofs.delete(this.proofs.keys().next().value!)
     }
@@ -23,6 +24,7 @@ export class RecentPtySourceCancellationIndex {
     grant: Readonly<PtyConsumerSessionGrant> | null
   ): PtySourceDeliveryCancellation | undefined {
     const proof = this.proofs.get(deliveryToken)
+
     return grant?.capabilities?.outputFlowControl &&
       proof?.clientGeneration === grant.clientGeneration &&
       params.id === proof.id &&

@@ -8,6 +8,7 @@ function throttleAt(clock: { time: number }, onTrigger = vi.fn()) {
     windowMs: 60_000,
     now: () => clock.time
   })
+
   return { throttle, onTrigger }
 }
 
@@ -24,20 +25,24 @@ describe('UnpairedDeviceAuthThrottle', () => {
   it('fires once when the threshold is reached inside the window', () => {
     const clock = { time: 0 }
     const { throttle, onTrigger } = throttleAt(clock)
+
     for (let i = 0; i < 3; i++) {
       throttle.recordFailure()
       clock.time += 500
     }
+
     expect(onTrigger).toHaveBeenCalledOnce()
   })
 
   it('never fires twice in one session even as failures continue', () => {
     const clock = { time: 0 }
     const { throttle, onTrigger } = throttleAt(clock)
+
     for (let i = 0; i < 20; i++) {
       throttle.recordFailure()
       clock.time += 500
     }
+
     expect(onTrigger).toHaveBeenCalledOnce()
   })
 

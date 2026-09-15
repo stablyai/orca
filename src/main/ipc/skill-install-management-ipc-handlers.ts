@@ -23,7 +23,9 @@ import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { handleMainWindowSkillIpc } from './skill-ipc-main-window'
 
 const environmentIdSchema = z.string().min(1).max(128)
+
 const skillNameSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/)
+
 const installPreviewSchema = z
   .object({
     environmentId: environmentIdSchema.optional(),
@@ -32,6 +34,7 @@ const installPreviewSchema = z
     destination: SkillInstallDestinationSchema
   })
   .strict()
+
 const removeSchema = z
   .object({
     environmentId: environmentIdSchema.optional(),
@@ -51,8 +54,10 @@ async function previewBundleInstall(runtime: OrcaRuntimeService, input: BundlePr
   if (!input.environmentId) {
     return runtime.previewSharedSkillBundleInstallRequest(input)
   }
+
   const environmentId = input.environmentId
   const previews: z.infer<typeof SkillInstallPreviewSchema>[] = []
+
   for (
     let offset = 0;
     offset < input.selectedSkills.length;
@@ -73,6 +78,7 @@ async function previewBundleInstall(runtime: OrcaRuntimeService, input: BundlePr
             name: skill.name,
             destination: input.destination
           }
+
           const response = await callRuntimeEnvironment(
             app.getPath('userData'),
             environmentId,
@@ -80,14 +86,17 @@ async function previewBundleInstall(runtime: OrcaRuntimeService, input: BundlePr
             request,
             30_000
           )
+
           if (response.ok !== true) {
             throw new Error(`skill-bundle-preview-remote-${response.error.code}`)
           }
+
           return SkillInstallPreviewSchema.parse(response.result)
         })
       ))
     )
   }
+
   return SkillBundleInstallPreviewSchema.parse({
     packageId: input.package.packageId,
     versionId: input.package.versionId,
@@ -103,9 +112,11 @@ async function previewBundleInstall(runtime: OrcaRuntimeService, input: BundlePr
 export function registerSkillInstallManagementIpcHandlers(runtime: OrcaRuntimeService): void {
   handleMainWindowSkillIpc('skills:listWslDistros', async (_event, environmentIdValue: unknown) => {
     const environmentId = environmentIdSchema.optional().parse(environmentIdValue)
+
     if (!environmentId) {
       return listWslDistrosAsync()
     }
+
     const response = await callRuntimeEnvironment(
       app.getPath('userData'),
       environmentId,
@@ -113,6 +124,7 @@ export function registerSkillInstallManagementIpcHandlers(runtime: OrcaRuntimeSe
       {},
       15_000
     )
+
     return response.ok === true && Array.isArray(response.result)
       ? response.result.filter((distro): distro is string => typeof distro === 'string')
       : []
@@ -120,16 +132,20 @@ export function registerSkillInstallManagementIpcHandlers(runtime: OrcaRuntimeSe
   handleMainWindowSkillIpc('skills:previewInstall', async (_event, value: unknown) => {
     const input = installPreviewSchema.parse(value)
     const request = { package: input.package, name: input.name, destination: input.destination }
+
     if (!input.environmentId) {
       return {
         status: 'ok' as const,
         value: await runtime.previewSharedSkillInstallRequest(request)
       }
     }
+
     const userDataPath = app.getPath('userData')
+
     if (!(await supportsSkillRuntimeManagement(userDataPath, input.environmentId))) {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
+
     const response = await callRuntimeEnvironment(
       userDataPath,
       input.environmentId,
@@ -137,9 +153,11 @@ export function registerSkillInstallManagementIpcHandlers(runtime: OrcaRuntimeSe
       request,
       30_000
     )
+
     if (response.ok !== true) {
       throw new Error(`skill-preview-remote-${response.error.code}`)
     }
+
     return { status: 'ok' as const, value: SkillInstallPreviewSchema.parse(response.result) }
   })
   handleMainWindowSkillIpc('skills:previewBundleInstall', async (_event, value: unknown) => {
@@ -152,6 +170,7 @@ export function registerSkillInstallManagementIpcHandlers(runtime: OrcaRuntimeSe
       })
       .strict()
       .parse(value)
+
     if (
       parsed.environmentId &&
       (!(await supportsSkillRuntimeManagement(app.getPath('userData'), parsed.environmentId)) ||
@@ -159,26 +178,32 @@ export function registerSkillInstallManagementIpcHandlers(runtime: OrcaRuntimeSe
     ) {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
+
     return { status: 'ok' as const, value: await previewBundleInstall(runtime, parsed) }
   })
   handleMainWindowSkillIpc('skills:removeInstall', async (_event, value: unknown) => {
     const input = removeSchema.parse(value)
+
     const request = {
       operationId: randomUUID(),
       name: input.name,
       destination: input.destination,
       conflictResolution: input.conflictResolution
     }
+
     if (!input.environmentId) {
       return {
         status: 'ok' as const,
         value: await runtime.removeSharedSkillInstallRequest(request)
       }
     }
+
     const userDataPath = app.getPath('userData')
+
     if (!(await supportsSkillRuntimeManagement(userDataPath, input.environmentId))) {
       return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
     }
+
     const response = await callRuntimeEnvironment(
       userDataPath,
       input.environmentId,
@@ -186,26 +211,34 @@ export function registerSkillInstallManagementIpcHandlers(runtime: OrcaRuntimeSe
       request,
       5 * 60_000
     )
+
     if (response.ok !== true) {
       throw new Error(`skill-remove-remote-${response.error.code}`)
     }
+
     return { status: 'ok' as const, value: SkillInstallResultSchema.parse(response.result) }
   })
   handleMainWindowSkillIpc(
     'skills:listManagedInstalls',
     async (_event, environmentIdValue: unknown) => {
       const environmentId = environmentIdSchema.optional().parse(environmentIdValue)
+
       if (!environmentId) {
         return { status: 'ok' as const, value: await runtime.listManagedSkillInstalls() }
       }
+
       if (environmentId.startsWith('ssh:')) {
         const value = await runtime.listManagedSkillInstalls(environmentId.slice('ssh:'.length))
+
         return { status: 'ok' as const, value }
       }
+
       const userDataPath = app.getPath('userData')
+
       if (!(await supportsSkillRuntimeManagement(userDataPath, environmentId))) {
         return { status: 'unsupported' as const, message: SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE }
       }
+
       const response = await callRuntimeEnvironment(
         userDataPath,
         environmentId,
@@ -213,9 +246,11 @@ export function registerSkillInstallManagementIpcHandlers(runtime: OrcaRuntimeSe
         {},
         30_000
       )
+
       if (response.ok !== true) {
         throw new Error(`skill-list-managed-remote-${response.error.code}`)
       }
+
       return { status: 'ok' as const, value: ManagedSkillInstallListSchema.parse(response.result) }
     }
   )

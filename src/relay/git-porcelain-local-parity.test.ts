@@ -33,6 +33,7 @@ const tempRoots: string[] = []
 async function createTempDir(prefix: string): Promise<string> {
   const root = await mkdtemp(path.join(tmpdir(), prefix))
   tempRoots.push(root)
+
   return root
 }
 
@@ -46,6 +47,7 @@ async function createWorktreeFixture(prefix: string): Promise<string> {
   // directory would add a relay-only `prunable` annotation and muddy the comparison.
   await mkdir(path.join(mainPath, 'sparse-wt'))
   await mkdir(path.join(mainPath, 'locked-wt'))
+
   return mainPath
 }
 
@@ -55,6 +57,7 @@ async function listWorktreesOverRelay(
 ): Promise<GitWorktreeInfo[]> {
   const { dispatcher, handler } = createRelay()
   vi.spyOn(handler as unknown as GitSpyTarget, 'git').mockImplementation(git)
+
   return (await dispatcher.callRequest('git.listWorktrees', {
     repoPath: mainPath
   })) as GitWorktreeInfo[]
@@ -105,6 +108,7 @@ function unsupportedZError(): Error {
 function createRelay(): { dispatcher: MockDispatcher; handler: GitHandler } {
   const dispatcher = createMockDispatcher()
   const handler = new GitHandler(dispatcher as unknown as RelayDispatcher, new RelayContext())
+
   return { dispatcher, handler }
 }
 
@@ -130,6 +134,7 @@ describe('relay/desktop worktree-list porcelain parity', () => {
       if (args.includes('-z')) {
         throw unsupportedZError()
       }
+
       return { stdout: porcelain, stderr: '' }
     })
 
@@ -139,6 +144,7 @@ describe('relay/desktop worktree-list porcelain parity', () => {
 
   it('leaves isSparse absent on a Git 2.25 host that never emits the sparse line', async () => {
     const mainPath = await createTempDir('orca-parity-wt-baseline-')
+
     const porcelain = toNulPorcelain([
       [`worktree ${mainPath}`, 'HEAD abc123', 'branch refs/heads/main']
     ])
@@ -157,6 +163,7 @@ describe('relay/desktop unmerged-entry porcelain parity', () => {
   it('resolves C-quoted conflict paths and the working-tree probe the same way', async () => {
     const worktreePath = await createTempDir('orca-parity-conflict-')
     await writeFile(path.join(worktreePath, 'present é.ts'), 'conflict\n')
+
     const unmergedLines = [
       'u UU N... 100644 100644 100644 100644 aa bb cc plain.ts',
       'u UD N... 100644 100644 000000 100644 aa bb cc "present \\303\\251.ts"',
@@ -164,14 +171,18 @@ describe('relay/desktop unmerged-entry porcelain parity', () => {
       'u UD N... 100644 100644 000000 000000 aa bb cc "missing \\303\\251.ts"',
       'u DD N... 100644 100644 000000 000000 aa bb cc both-gone.ts'
     ]
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args.includes('status')) {
         return { stdout: `${unmergedLines.join('\n')}\n`, stderr: '' }
       }
+
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
+
     const streamGit: RelayGitStreamExec = async (args, cwd, options) => {
       const { stdout } = await git(args, cwd, { signal: options.signal })
+
       return { stoppedEarly: options.onStdout(stdout) === true }
     }
 
@@ -181,6 +192,7 @@ describe('relay/desktop unmerged-entry porcelain parity', () => {
     })
 
     const desktopEntries: (GitStatusEntry | null)[] = []
+
     for (const line of unmergedLines) {
       desktopEntries.push(await parseUnmergedEntry(worktreePath, line))
     }
@@ -221,14 +233,18 @@ describe('relay/desktop unmerged-entry porcelain parity', () => {
   it('drops submodule conflicts on both paths', async () => {
     const worktreePath = await createTempDir('orca-parity-conflict-submodule-')
     const line = 'u UU S... 160000 160000 160000 160000 aa bb cc vendor/submodule'
+
     const git = vi.fn<GitExec>(async (args) => {
       if (args.includes('status')) {
         return { stdout: `${line}\n`, stderr: '' }
       }
+
       throw new Error(`Unexpected git command: ${args.join(' ')}`)
     })
+
     const streamGit: RelayGitStreamExec = async (args, cwd, options) => {
       const { stdout } = await git(args, cwd, { signal: options.signal })
+
       return { stoppedEarly: options.onStdout(stdout) === true }
     }
 

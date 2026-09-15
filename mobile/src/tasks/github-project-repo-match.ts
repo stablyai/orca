@@ -26,13 +26,17 @@ export function dropFailedGitHubRepoSlugEntries(
   slugsByRepoId: Record<string, GitHubRepoSlugCacheEntry | undefined>
 ): Record<string, GitHubRepoSlugCacheEntry | undefined> {
   const retryable = Object.entries(slugsByRepoId).filter(([, entry]) => entry?.failed === true)
+
   if (retryable.length === 0) {
     return slugsByRepoId
   }
+
   const next = { ...slugsByRepoId }
+
   for (const [repoId] of retryable) {
     delete next[repoId]
   }
+
   return next
 }
 
@@ -43,13 +47,17 @@ type CachedSlugState =
 
 export function normalizeGitHubRepositorySlug(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
+
   if (!trimmed) {
     return null
   }
+
   const [owner, repo, extra] = trimmed.split('/')
+
   if (!owner || !repo || extra) {
     return null
   }
+
   return `${owner}/${repo}`.toLowerCase()
 }
 
@@ -58,12 +66,15 @@ function cachedSlugStateForRepo(
   slugsByRepoId: Record<string, GitHubRepoSlugCacheEntry | undefined>
 ): CachedSlugState {
   const cached = slugsByRepoId[repo.id]
+
   if (!cached) {
     return { status: 'missing' }
   }
+
   if (cached.path !== repo.path) {
     return { status: 'stale' }
   }
+
   return { status: 'resolved', repository: cached.repository }
 }
 
@@ -76,12 +87,15 @@ function upstreamIdentityKeyForRepo(
   originState: CachedSlugState | undefined
 ): string | null {
   const upstream = repo.upstream
+
   if (!upstream?.owner || !upstream.repo) {
     return null
   }
+
   if (originState?.status !== 'resolved' || !originState.repository) {
     return null
   }
+
   return githubRepoIdentityKey({
     ...upstream,
     host: upstream.host ?? originState.repository.host
@@ -95,6 +109,7 @@ export function findRepoForGitHubProjectRepository(
   projectHost?: string
 ): GitHubProjectRepoMatch | null {
   const slug = normalizeGitHubRepositorySlug(repository)
+
   if (!slug) {
     return null
   }
@@ -102,22 +117,27 @@ export function findRepoForGitHubProjectRepository(
   const slugStates = new Map(
     repos.map((repo) => [repo.id, cachedSlugStateForRepo(repo, slugsByRepoId)])
   )
+
   const requestedIdentityKey = githubRepoIdentityKey({
     owner: slug.split('/')[0]!,
     repo: slug.split('/')[1]!,
     ...(projectHost ? { host: projectHost } : {})
   })
+
   const slugMatches = repos.filter((repo) => {
     const state = slugStates.get(repo.id)
+
     return (
       state?.status === 'resolved' &&
       state.repository !== null &&
       githubRepoIdentityKey(state.repository) === requestedIdentityKey
     )
   })
+
   if (slugMatches.length === 1) {
     return slugMatches[0]!
   }
+
   if (slugMatches.length > 1) {
     return null
   }
@@ -129,9 +149,11 @@ export function findRepoForGitHubProjectRepository(
   const upstreamMatches = repos.filter(
     (repo) => upstreamIdentityKeyForRepo(repo, slugStates.get(repo.id)) === requestedIdentityKey
   )
+
   if (upstreamMatches.length === 1) {
     return upstreamMatches[0]!
   }
+
   if (upstreamMatches.length > 1) {
     return null
   }
@@ -145,11 +167,14 @@ export function findRepoForGitHubProjectRepository(
   return (
     repos.find((repo) => {
       const state = slugStates.get(repo.id)
+
       if (state?.status === 'resolved' && state.repository !== null) {
         return false
       }
+
       const display = repo.displayName.trim().toLowerCase()
       const path = repo.path.trim().toLowerCase().replace(/\\/g, '/')
+
       return display === slug || path.endsWith(`/${slug}`)
     }) ?? null
   )

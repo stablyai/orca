@@ -47,6 +47,7 @@ describe('restored terminal input readiness', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+
     if (originalWindowDescriptor) {
       Object.defineProperty(globalThis, 'window', originalWindowDescriptor)
     } else {
@@ -57,12 +58,15 @@ describe('restored terminal input readiness', () => {
   it('retries after replay drops the first full input payload', async () => {
     let content = ''
     let attempts = 0
+
     const input = vi.fn((data: string) => {
       attempts += 1
+
       if (attempts >= 2) {
         content = data
       }
     })
+
     installPaneWindow({
       container: { dataset: { ptyId: 'pty-1' } },
       serializeAddon: { serialize: () => content },
@@ -76,11 +80,13 @@ describe('restored terminal input readiness', () => {
 
   it('accepts a healthy PTY echo that arrives after multiple poll intervals', async () => {
     let content = ''
+
     const input = vi.fn((data: string) => {
       setTimeout(() => {
         content = data
       }, 250)
     })
+
     installPaneWindow({
       container: { dataset: { ptyId: 'pty-1' } },
       serializeAddon: { serialize: () => content },
@@ -106,18 +112,22 @@ describe('restored terminal input readiness', () => {
   it('does not accept a marker replayed into a replacement pane', async () => {
     let activePane: TestPane
     let replacementContent = ''
+
     const replacementInput = vi.fn((data: string) => {
       replacementContent = data
     })
+
     const replacementPane: TestPane = {
       container: { dataset: { ptyId: 'pty-1' } },
       serializeAddon: { serialize: () => replacementContent },
       terminal: { input: replacementInput }
     }
+
     const firstInput = vi.fn((data: string) => {
       replacementContent = data
       activePane = replacementPane
     })
+
     activePane = {
       container: { dataset: { ptyId: 'pty-1' } },
       serializeAddon: { serialize: () => '' },
@@ -146,22 +156,28 @@ describe('restored terminal input readiness', () => {
   it('discards stale attempts when document replacement rejects evaluation', async () => {
     let activePane: TestPane
     let replacementContent = ''
+
     const replacementInput = vi.fn((data: string) => {
       replacementContent = data
     })
+
     const replacementPane: TestPane = {
       container: { dataset: { ptyId: 'pty-1' } },
       serializeAddon: { serialize: () => replacementContent },
       terminal: { input: replacementInput }
     }
+
     let originalInputCalls = 0
+
     const firstInput = vi.fn((data: string) => {
       originalInputCalls += 1
+
       if (originalInputCalls === 2) {
         replacementContent = data
         activePane = replacementPane
       }
     })
+
     activePane = {
       container: { dataset: { ptyId: 'pty-1' } },
       serializeAddon: { serialize: () => '' },
@@ -184,6 +200,7 @@ describe('restored terminal input readiness', () => {
 
     const pendingAttemptCounts: number[] = []
     let evaluateCalls = 0
+
     const page = {
       evaluate: async (callback: (arg: unknown) => unknown, arg: unknown) => {
         evaluateCalls += 1
@@ -191,9 +208,11 @@ describe('restored terminal input readiness', () => {
           (arg as { pendingAttempts: readonly unknown[] }).pendingAttempts.length
         )
         const result = callback(arg)
+
         if (evaluateCalls === 2) {
           throw new Error('Execution context was destroyed')
         }
+
         return result
       },
       waitForTimeout: async (timeoutMs: number) => {

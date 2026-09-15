@@ -18,6 +18,7 @@ import { getUsageRosterRowState, type UsageRosterRowState } from './usage-roster
 import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
 
 type ProviderId = ProviderRateLimits['provider']
+
 export type UsageSection = { label: string; window: RateLimitWindow }
 
 // Windows/buckets that actually carry data — absent limits arrive as null, but a
@@ -44,11 +45,13 @@ function shortLabel(
   if (p.buckets?.some((b) => b.name === section.label)) {
     return section.label
   }
+
   // fableWeekly shares the 7d window with weekly; label it distinctly so the two
   // don't both render as "wk".
   if (section.window === p.fableWeekly) {
     return 'Fable'
   }
+
   return useRemainingDuration
     ? formatRateLimitWindowChipLabel(section.window)
     : formatWindowLabel(section.window.windowMinutes)
@@ -56,9 +59,11 @@ function shortLabel(
 
 export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | null {
   const sections = usedSections(p)
+
   if (sections.length === 0) {
     return null
   }
+
   // Why: the footer promises one quiet summary per provider; choose urgency by
   // consumption even when the user displays the complementary “% left” value.
   const tightest = sections.reduce((current, candidate) =>
@@ -66,6 +71,7 @@ export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | n
       ? candidate
       : current
   )
+
   return { ...tightest, label: shortLabel(p, tightest, true) }
 }
 
@@ -74,9 +80,11 @@ function soonestResetLabel(sections: UsageSection[], now: number): string | null
   const resets = sections
     .map((s) => s.window.resetsAt)
     .filter((r): r is number => typeof r === 'number' && Number.isFinite(r))
+
   if (resets.length === 0) {
     return null
   }
+
   return formatResetCountdown(Math.min(...resets) - now)
 }
 
@@ -223,6 +231,7 @@ export function UsageRosterPanel({
       usedSections(provider).map((section) => section.window.resetsAt)
     )
   )
+
   // Worst-first so the agent nearest a limit sits on top.
   const sorted = [...providers].sort(
     (a, b) => providerMaxUsed(usedSections(b)) - providerMaxUsed(usedSections(a))
@@ -289,6 +298,7 @@ export function UsageRosterPanel({
       {sorted.map((p) => {
         const state = getUsageRosterRowState(p, usedSections(p).length > 0)
         const showSignInAction = state.kind === 'sign-in' && canSignIn(p.provider)
+
         const rowNode = (
           <UsageRow
             p={p}
@@ -299,6 +309,7 @@ export function UsageRosterPanel({
             mode={statusBarUsageMode}
           />
         )
+
         if (showSignInAction) {
           return (
             <DropdownMenuItem
@@ -310,10 +321,13 @@ export function UsageRosterPanel({
             </DropdownMenuItem>
           )
         }
+
         const custom = renderRow?.(p, rowNode)
+
         if (custom) {
           return <React.Fragment key={p.provider}>{custom}</React.Fragment>
         }
+
         return (
           <DropdownMenuItem
             key={p.provider}

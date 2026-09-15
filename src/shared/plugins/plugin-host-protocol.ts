@@ -102,13 +102,18 @@ export const pluginWorkerChildMessageSchema = z.discriminatedUnion('type', [
 ])
 
 export type PluginWorkerParentMessage = z.infer<typeof pluginWorkerParentMessageSchema>
+
 export type PluginWorkerChildMessage = z.infer<typeof pluginWorkerChildMessageSchema>
+
 export type PluginWorkerInit = z.infer<typeof pluginWorkerInitSchema>
 
 export const PLUGIN_WORKER_READY_TIMEOUT_MS = 10_000
+
 export const PLUGIN_WORKER_INVOKE_TIMEOUT_MS = 30_000
+
 /** Idle reap: a worker with no in-flight work for this long is disposed and
  *  re-forked on the next trigger. */
 export const PLUGIN_WORKER_IDLE_REAP_MS = 5 * 60_000
+
 /** Default cap on concurrently-active workers; excess activations queue. */
 export const PLUGIN_WORKER_MAX_ACTIVE_DEFAULT = 5

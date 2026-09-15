@@ -30,6 +30,7 @@ afterEach(async () => {
 async function makeTempDir(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-parse-cache-agents-'))
   tempRoots.push(root)
+
   return root
 }
 
@@ -39,6 +40,7 @@ async function candidateFor(
   codexHome: string | null = null
 ): Promise<SessionFileCandidate> {
   const fileStat = await stat(path)
+
   return {
     agent,
     file: {
@@ -116,6 +118,7 @@ describe.each(allIncrementalAgentFixtures())('incremental parse parity: $agent',
       await candidateFor(fixture.agent, path),
       process.platform
     )
+
     expect(shown).toEqual(
       await parseAgentSessionFile(await candidateFor(fixture.agent, path), process.platform)
     )
@@ -124,11 +127,13 @@ describe.each(allIncrementalAgentFixtures())('incremental parse parity: $agent',
     // the fold and a cold parse must skip it identically) and appends more.
     await appendFile(path, `age": }\n${fixture.appendLines.join('\n')}\n`)
     const stats = createSessionParseStats()
+
     const completed = await parseAgentSessionFileCached(
       await candidateFor(fixture.agent, path),
       process.platform,
       stats
     )
+
     expect(stats.incremental).toBe(1)
     expect(completed).toEqual(
       await parseAgentSessionFile(await candidateFor(fixture.agent, path), process.platform)
@@ -143,11 +148,13 @@ describe('codex-specific resume behavior', () => {
     await writeFile(path, `${codexWorkerFixtureLines().join('\n')}\n`)
 
     const stats = createSessionParseStats()
+
     const seeded = await parseAgentSessionFileCached(
       await candidateFor('codex', path),
       process.platform,
       stats
     )
+
     expect(seeded).toBeNull()
 
     await appendFile(
@@ -158,11 +165,13 @@ describe('codex-specific resume behavior', () => {
         payload: { type: 'agent_message', message: 'worker keeps writing' }
       })}\n`
     )
+
     const grown = await parseAgentSessionFileCached(
       await candidateFor('codex', path),
       process.platform,
       stats
     )
+
     // The append is dismissed without a read, so it is an early stop rather
     // than an incremental parse.
     expect(stats).toMatchObject({ earlyStopped: 1, incremental: 0 })
@@ -183,6 +192,7 @@ describe('codex-specific resume behavior', () => {
       await candidateFor('codex', path, codexHome),
       process.platform
     )
+
     expect(seeded?.title).toBe('codex seed question')
 
     // Codex names the thread lazily; an unchanged transcript must still adopt it.
@@ -191,11 +201,13 @@ describe('codex-specific resume behavior', () => {
       `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Indexed thread title' })}\n`
     )
     const stats = createSessionParseStats()
+
     const renamed = await parseAgentSessionFileCached(
       await candidateFor('codex', path, codexHome),
       process.platform,
       stats
     )
+
     expect(stats.reused).toBe(1)
     expect(renamed?.title).toBe('Indexed thread title')
     expect(renamed).toEqual(
@@ -219,6 +231,7 @@ describe('non-resumable formats keep reuse-only caching', () => {
         started_at: '2026-05-01T10:00:00Z'
       })
     )
+
     const writeMessages = (text: string): Promise<void> =>
       writeFile(
         messagesPath,
@@ -227,6 +240,7 @@ describe('non-resumable formats keep reuse-only caching', () => {
           messages: [{ role: 'user', content: [{ type: 'text', text }] }]
         })
       )
+
     await writeMessages('first ask')
 
     // Cline reads the sidecar as part of its parse, so a change to it has to
@@ -234,6 +248,7 @@ describe('non-resumable formats keep reuse-only caching', () => {
     const candidate = async (): Promise<SessionFileCandidate> => {
       const base = await candidateFor('cline', metadataPath)
       const sidecarStat = await stat(messagesPath)
+
       return {
         ...base,
         file: {
@@ -275,16 +290,19 @@ describe('non-resumable formats keep reuse-only caching', () => {
     )
 
     const stats = createSessionParseStats()
+
     const seeded = await parseAgentSessionFileCached(
       await candidateFor('grok', path),
       process.platform,
       stats
     )
+
     const reused = await parseAgentSessionFileCached(
       await candidateFor('grok', path),
       process.platform,
       stats
     )
+
     expect(reused).toBe(seeded)
     expect(stats).toMatchObject({ fullParses: 1, reused: 1, incremental: 0 })
 
@@ -296,11 +314,13 @@ describe('non-resumable formats keep reuse-only caching', () => {
         updated_at: '2026-05-01T11:00:00Z'
       })
     )
+
     const rewritten = await parseAgentSessionFileCached(
       await candidateFor('grok', path),
       process.platform,
       stats
     )
+
     expect(stats).toMatchObject({ fullParses: 2, incremental: 0 })
     expect(rewritten).toEqual(
       await parseAgentSessionFile(await candidateFor('grok', path), process.platform)

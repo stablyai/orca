@@ -11,6 +11,7 @@ const activeHiddenRateLimitPtys = new Set<HiddenPty>()
 
 export function registerHiddenRateLimitPty(term: HiddenPty): Disposable {
   activeHiddenRateLimitPtys.add(term)
+
   return {
     dispose: () => {
       activeHiddenRateLimitPtys.delete(term)
@@ -50,6 +51,7 @@ export function cleanupHiddenRateLimitPty(
   if (process.platform !== 'win32') {
     term.kill = () => {}
   }
+
   try {
     term.destroy?.()
   } catch {

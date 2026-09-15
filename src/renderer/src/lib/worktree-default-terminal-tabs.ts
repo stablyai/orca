@@ -34,20 +34,25 @@ export function applyDefaultTerminalTabs(
   if (!defaultTabs || store.defaultTerminalTabsAppliedByWorktreeId[worktreeId]) {
     return null
   }
+
   store.markDefaultTerminalTabsApplied(worktreeId)
+
   if (defaultTabs.tabs.length === 0) {
     return null
   }
 
   let firstTabId: string | null = null
+
   for (const [index, template] of defaultTabs.tabs.entries()) {
     const isStartupTab = index === 0 && startup !== undefined
+
     const launchAgent =
       isStartupTab && startup?.launchAgent
         ? startup.launchAgent
         : isStartupTab && startup?.telemetry
           ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
           : undefined
+
     const tab = store.createTab(worktreeId, undefined, undefined, {
       pendingActivationSpawn: true,
       recordInteraction: false,
@@ -67,16 +72,21 @@ export function applyDefaultTerminalTabs(
         : {}),
       ...(opts?.activateCreatedTabs === false ? { activate: false } : {})
     })
+
     if (index === 0) {
       firstTabId = tab.id
     }
+
     if (template.title) {
       store.setTabCustomTitle(tab.id, template.title, { recordInteraction: false })
     }
+
     if (template.color) {
       store.setTabColor(tab.id, template.color)
     }
+
     const templateCommand = template.command?.trim()
+
     if (templateCommand && defaultTabs.runCommands && !(index === 0 && startup)) {
       store.queueTabStartupCommand(tab.id, { command: templateCommand })
     }
@@ -85,20 +95,25 @@ export function applyDefaultTerminalTabs(
   if (!firstTabId) {
     return null
   }
+
   if (opts?.activateCreatedTabs !== false) {
     store.setActiveTab(firstTabId)
   }
+
   if (startup) {
     const startupAgent =
       startup.launchAgent ??
       (startup.telemetry
         ? (agentKindToTuiAgent(startup.telemetry.agent_kind) ?? undefined)
         : undefined)
+
     if (startupAgent) {
       seedNativeChatAppliedSessionOptions(firstTabId, startupAgent, startup.sessionOptions)
     }
+
     store.queueTabStartupCommand(firstTabId, startup)
   }
+
   queueSetupAndIssueCommands(
     store,
     worktreeId,
@@ -108,5 +123,6 @@ export function applyDefaultTerminalTabs(
     wrappedSetupCommandStr,
     opts
   )
+
   return firstTabId
 }

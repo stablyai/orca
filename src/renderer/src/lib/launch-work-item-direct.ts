@@ -64,10 +64,13 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     agentOverride,
     agentArgs
   } = args
+
   const store = useAppStore.getState()
   const repo = store.repos.find((r) => r.id === repoId)
+
   if (!repo) {
     openModalFallback()
+
     return false
   }
 
@@ -77,6 +80,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   const repoOwnerSettings = getSettingsForRepoRuntimeOwner(store, repoId)
   const promptDelivery = args.promptDelivery ?? 'draft'
   const repoConnectionId = repo.connectionId?.trim() || null
+
   const githubIdentity =
     item.number !== null && (item.type === 'issue' || item.type === 'pr')
       ? resolveGitHubWorkItemIdentity({
@@ -85,11 +89,14 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
           url: item.url
         })
       : null
+
   const itemType = githubIdentity?.type ?? item.type
   const itemNumber = githubIdentity?.number ?? item.number
+
   const repoProjectRuntime = repoConnectionId
     ? undefined
     : getLocalRepoProjectExecutionRuntimeContext(store, repoId, CLIENT_PLATFORM)
+
   const preflightLaunchPlatform =
     args.launchPlatform ??
     resolveSourceControlLaunchPlatform({
@@ -97,14 +104,18 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       worktreePath: repo.path,
       projectRuntime: repoProjectRuntime
     })
+
   const shell = preflightLaunchPlatform === 'win32' ? 'powershell' : 'posix'
   const agentArgsPlan = planAgentCliArgsSuffix(agentArgs, shell)
+
   if (!agentArgsPlan.ok) {
     // Why: direct launches may create a worktree before the agent startup plan
     // is built; reject malformed saved args before touching user workspaces.
     toast.error(agentArgsPlan.error)
+
     return false
   }
+
   // Why: agent detection shells out and can be cold/slow. Start it now, but
   // don't let it serialize setup-policy resolution or git worktree creation.
   const detectedAgentsPromise = agentOverride
@@ -114,12 +125,15 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       : store.ensureDetectedAgents()
 
   const setupResolution = await resolveDirectSetupDecision(repoId, repo, repoOwnerSettings)
+
   if (setupResolution.kind === 'needs-modal') {
     openModalFallback()
+
     return false
   }
 
   const trustDecision = await ensureHooksConfirmed(useAppStore.getState(), repoId, 'setup')
+
   const finalSetupDecision: SetupDecision =
     trustDecision === 'skip' ? 'skip' : setupResolution.decision
 
@@ -130,6 +144,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
           workItem: { ...item, type: itemType, number: itemNumber }
         })
       : null
+
   const workspaceName = getWorkspaceSeedName({
     explicitName: item.linearIdentifier
       ? getLinearIssueWorkspaceName({ identifier: item.linearIdentifier, title: item.title })
@@ -138,10 +153,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     linkedIssueNumber: itemType === 'issue' ? (itemNumber ?? null) : null,
     linkedPR: itemType === 'pr' ? (itemNumber ?? null) : null
   })
+
   let resolvedBaseBranch = baseBranch
   let resolvedPushTarget: GitPushTarget | undefined
   let resolvedBranchNameOverride: string | undefined
   let resolvedCompareBaseRef: string | undefined
+
   if (!resolvedBaseBranch && itemType === 'pr' && itemNumber) {
     try {
       // Why: direct "Use PR" launches bypass the Start-from picker, so they
@@ -154,12 +171,14 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     } catch (error) {
       toast.error(error instanceof Error ? error.message : resolvePrHeadErrorMessage())
       openModalFallback()
+
       return false
     }
   }
 
   let worktreeId: string,
     worktreePath = ''
+
   let primaryTabId: string | null
   let startupPlan = null as ReturnType<typeof buildDirectWorkItemAgentStartupPlan>['startupPlan']
   let effectiveAgent: TuiAgent | null = null
@@ -167,6 +186,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let plan: AgentSessionLaunchPlan | null = null
   const draftContent = await getDirectWorkItemDraftContent(item, repoConnectionId)
   let startupPlanFailed = false
+
   try {
     const result = await store.createWorktree(
       repoId,
@@ -195,10 +215,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       undefined,
       resolvedCompareBaseRef
     )
+
     worktreeId = result.worktree.id
     worktreePath = result.worktree.path
 
     const latestStore = useAppStore.getState()
+
     const launchPreparation = await prepareDirectWorkItemAgentLaunch({
       worktreeId,
       worktreePath,
@@ -215,14 +237,17 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       repoProjectRuntime,
       planLaunch: planAgentSessionLaunch
     })
+
     if (launchPreparation.unavailable) {
       activateAndRevealWorktree(worktreeId, {
         sidebarRevealBehavior: 'auto',
         setup: result.setup
       })
       toast.error(unavailableAgentErrorMessage())
+
       return false
     }
+
     effectiveAgent = launchPreparation.effectiveAgent
     startupPlan = launchPreparation.startupPlan
     draftLaunchedNatively = launchPreparation.draftLaunchedNatively
@@ -242,16 +267,20 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
             promptDelivery === 'draft' ? draftContent : undefined
           ))
     })
+
     if (!activation) {
       // Worktree vanished between create and activate — extremely unlikely but
       // worth handling explicitly rather than silently dropping the draft.
       toast.error(workspaceActivationErrorMessage())
+
       return false
     }
+
     primaryTabId = activation.primaryTabId
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create workspace.'
     toast.error(message)
+
     return false
   }
 
@@ -266,18 +295,22 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     startupPlan,
     launchSource
   })
+
   if (structuredResult.visibilityUnknown || structuredResult.failed) {
     // Why: callers hang irreversible follow-up work off a `true` here, so a structured launch that
     // opened no surface must not report the workspace as started.
     return false
   }
+
   if (structuredResult.completed) {
     return true
   }
+
   primaryTabId = structuredResult.primaryTabId
 
   if (startupPlanFailed) {
     toast.error(agentLaunchCommandErrorMessage())
+
     return false
   }
 
@@ -290,6 +323,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       text: draftContent
     })
   }
+
   if (
     primaryTabId &&
     startupPlan &&
@@ -307,5 +341,6 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       onTimeout: () => notifyDirectWorkItemAgentStartTimeout(agent, submit)
     })
   }
+
   return true
 }

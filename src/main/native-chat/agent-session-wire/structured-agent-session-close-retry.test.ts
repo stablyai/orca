@@ -41,6 +41,7 @@ vi.mock('./structured-agent-session-attach-flow', () => ({
     ) => Promise<void>
   }) => {
     await input.onAttached({ journal: attachFlow.journal!, recovery: null }, null)
+
     return { ok: true, value: {} }
   }
 }))
@@ -56,6 +57,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
 }
 
 let root: string
+
 const journals = createTrackedJournalOpener()
 
 async function exists(path: string): Promise<boolean> {
@@ -88,16 +90,19 @@ function hostSession(journal: AgentSessionJournal): StructuredAgentSessionHostSe
  *  store so the handle it holds is a real one. */
 function flakyClose(journal: AgentSessionJournal, failures: number): AgentSessionJournal {
   let remaining = failures
+
   return new Proxy(journal, {
     get(target, property, receiver) {
       if (property !== 'close') {
         return Reflect.get(target, property, receiver)
       }
+
       return async () => {
         if (remaining > 0) {
           remaining -= 1
           throw new Error('close rejected')
         }
+
         await target.close()
       }
     }
@@ -114,6 +119,7 @@ function attachContext(
     bind: () => undefined,
     close: () => undefined
   }
+
   return {
     deps: { store: { getRecord: () => null }, claimKeyId: 'key-1', journalRoot: root },
     runtimeState: {
@@ -156,6 +162,7 @@ describe('the registry', () => {
   it('retains a journal whose close rejected and releases it on the retry', async () => {
     const directory = join(root, 'retained')
     const registry = new JournalCloseRetryRegistry()
+
     const journal = flakyClose(
       await journals.open({ identity: IDENTITY, journalDir: directory }),
       1
@@ -175,14 +182,17 @@ describe('the attach orchestration', () => {
   it('ABORTS the map replacement when the previous journal will not close', async () => {
     const previousDir = join(root, 'previous')
     const provisionalDir = join(root, 'provisional')
+
     const previous = flakyClose(
       await journals.open({ identity: IDENTITY, journalDir: previousDir }),
       1
     )
+
     const provisional = await journals.open({
       identity: IDENTITY,
       journalDir: provisionalDir
     })
+
     attachFlow.journal = provisional
     const sessions = new Map([[SESSION, hostSession(previous)]])
 
@@ -200,13 +210,16 @@ describe('the attach orchestration', () => {
 
   it('retains the provisional journal when its own close rejects on the barrier path', async () => {
     const provisionalDir = join(root, 'provisional-barrier')
+
     const provisional = flakyClose(
       await journals.open({ identity: IDENTITY, journalDir: provisionalDir }),
       1
     )
+
     attachFlow.journal = provisional
     const sessions = new Map<string, StructuredAgentSessionHostSession>()
     const context = attachContext(sessions)
+
     const failing = {
       sink: {},
       drained: async () => ({ ok: false, error: new Error('sink barrier failed') }) as const,
@@ -214,6 +227,7 @@ describe('the attach orchestration', () => {
       bind: () => undefined,
       close: () => undefined
     }
+
     context.runtimeState.eventSinkFor = (() =>
       failing) as unknown as typeof context.runtimeState.eventSinkFor
 

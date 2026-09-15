@@ -19,6 +19,7 @@ const HUNG_THRESHOLD_MS = 10 * 60 * 1000
 export function warnStaleDispatches(db: OrchestrationDb, onLog: (msg: string) => void): void {
   const thresholdIso = new Date(Date.now() - HUNG_THRESHOLD_MS).toISOString()
   const stale = db.getStaleDispatches(thresholdIso)
+
   for (const ctx of stale) {
     const minutes = Math.round(HUNG_THRESHOLD_MS / 60000)
     onLog(
@@ -37,11 +38,13 @@ export async function listAvailableWorkerTerminals(
     const result = await runtime.listTerminals(worktree, undefined, {
       includeVisualLayouts: false
     })
+
     const dispatched = db.listTasks({ status: 'dispatched' })
     const busyHandles = new Set<string>()
 
     for (const task of dispatched) {
       const ctx = db.getDispatchContext(task.id)
+
       if (ctx?.assignee_handle) {
         busyHandles.add(ctx.assignee_handle)
       }
@@ -88,16 +91,20 @@ export async function dispatchTaskToWorker(params: {
         `in the task spec to override. Task remains in 'ready'; coordinator ` +
         `will retry on the next tick.`
     )
+
     return 'stale-base-refused'
   }
 
   const dispatchAuthority = runtime.getOrchestrationDispatchAuthority?.(targetHandle)
+
   const assigneePaneKey =
     dispatchAuthority?.paneKey ?? runtime.getTerminalPaneKey?.(targetHandle) ?? undefined
+
   const processIncarnation =
     dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
       ? dispatchAuthority.processIncarnation
       : undefined
+
   const dispatch = db.createDispatchContext({
     taskId: task.id,
     assigneeHandle: targetHandle,
@@ -130,6 +137,7 @@ export async function dispatchTaskToWorker(params: {
   // Why: surface a since-resolved decision gate's outcome to the worker via the preamble.
   const gates = db.listGates({ taskId: task.id, status: 'resolved' })
   let gateContext = ''
+
   if (gates.length > 0) {
     const latest = gates.at(-1)!
     gateContext = `\n\n--- DECISION GATE RESOLVED ---\nQuestion: ${latest.question}\nResolution: ${latest.resolution}\n\n---\n`
@@ -151,15 +159,20 @@ export async function dispatchTaskToWorker(params: {
         `Dispatched task ${task.id} to ${targetHandle}; turn start was not observed. ` +
           `The preamble is already in the pane, so the dispatch stays active instead of being resent.`
       )
+
       return 'dispatched-unobserved'
     }
+
     const updated = db.failDispatch(dispatch.id, err instanceof Error ? err.message : String(err))
+
     if (updated?.status === 'circuit_broken') {
       params.onCircuitBroken(task.id)
     }
+
     throw err
   }
 
   onLog(`Dispatched task ${task.id} to ${targetHandle}`)
+
   return 'dispatched'
 }

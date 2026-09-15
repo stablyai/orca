@@ -12,14 +12,19 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     if (Date.now() - this.lastInactiveClaudeFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
       return
     }
+
     this.pruneInactiveClaudeState()
+
     if (this.inactiveClaudeFetching.size > 0) {
       return
     }
+
     const accounts = this.inactiveClaudeAccountsResolver?.() ?? []
+
     if (accounts.length === 0) {
       return
     }
+
     const fetchGeneration = this.inactiveClaudeAccountsGeneration
     const controller = this.beginFetchCycle()
     const signal = controller.signal
@@ -27,6 +32,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     for (const account of accounts) {
       this.inactiveClaudeFetching.add(account.id)
     }
+
     this.pushToRenderer()
 
     try {
@@ -37,30 +43,37 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           !this.isCurrentInactiveClaudeAccount(account.id)
         ) {
           this.inactiveClaudeFetching.delete(account.id)
+
           if (!this.isCurrentInactiveClaudeAccount(account.id)) {
             this.inactiveClaudeCache.delete(account.id)
           }
+
           this.pushToRenderer()
           continue
         }
+
         try {
           const fresh = await fetchManagedAccountUsage(account, {
             allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
             networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })
+
           if (
             signal.aborted ||
             fetchGeneration !== this.inactiveClaudeAccountsGeneration ||
             !this.isCurrentInactiveClaudeAccount(account.id)
           ) {
             this.inactiveClaudeFetching.delete(account.id)
+
             if (!this.isCurrentInactiveClaudeAccount(account.id)) {
               this.inactiveClaudeCache.delete(account.id)
             }
+
             this.pushToRenderer()
             continue
           }
+
           const cached = this.inactiveClaudeCache.get(account.id) ?? null
           this.inactiveClaudeCache.set(account.id, this.applyStalePolicy(fresh, cached))
         } catch {
@@ -73,6 +86,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             this.inactiveClaudeCache.delete(account.id)
           }
         }
+
         this.inactiveClaudeFetching.delete(account.id)
         this.pushToRenderer()
       }
@@ -89,14 +103,19 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     if (Date.now() - this.lastInactiveCodexFetchAt < INACTIVE_FETCH_DEBOUNCE_MS) {
       return
     }
+
     this.pruneInactiveCodexState()
+
     if (this.inactiveCodexFetchInFlight) {
       return
     }
+
     const accounts = this.inactiveCodexAccountsResolver?.() ?? []
+
     if (accounts.length === 0) {
       return
     }
+
     // Why: account switching can activate a previewed account while its RPC-only fetch is still in flight; ignore stale results.
     const fetchGeneration = this.inactiveCodexAccountsGeneration
     const controller = this.beginFetchCycle()
@@ -104,6 +123,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     this.inactiveCodexFetchInFlight = true
 
     let staggerNextProbe = false
+
     try {
       for (const account of accounts) {
         if (
@@ -112,14 +132,18 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           !this.isCurrentInactiveCodexAccount(account.id)
         ) {
           this.inactiveCodexFetching.delete(account.id)
+
           if (!this.isCurrentInactiveCodexAccount(account.id)) {
             this.inactiveCodexCache.delete(account.id)
           }
+
           this.pushToRenderer()
           continue
         }
+
         if (staggerNextProbe) {
           await delayUnlessAborted(INACTIVE_CODEX_PROBE_STAGGER_MS, signal)
+
           // Why: the account set can change while the stagger delay runs.
           if (
             signal.aborted ||
@@ -127,20 +151,26 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             !this.isCurrentInactiveCodexAccount(account.id)
           ) {
             this.inactiveCodexFetching.delete(account.id)
+
             if (!this.isCurrentInactiveCodexAccount(account.id)) {
               this.inactiveCodexCache.delete(account.id)
             }
+
             this.pushToRenderer()
             continue
           }
         }
+
         const home = account.resolveHome()
+
         if (home.kind === 'skip') {
           continue
         }
+
         staggerNextProbe = true
         this.inactiveCodexFetching.add(account.id)
         this.pushToRenderer()
+
         try {
           // Why: point fetchCodexRateLimits at the managed home directly, avoiding materializing credentials into the shared runtime location.
           // Why: no PTY fallback — the switcher preview shouldn't spawn hidden PTYs per account (can crash ConPTY on Windows); RPC-only is enough.
@@ -149,18 +179,22 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             allowPtyFallback: false,
             signal
           })
+
           if (
             signal.aborted ||
             fetchGeneration !== this.inactiveCodexAccountsGeneration ||
             !this.isCurrentInactiveCodexAccount(account.id)
           ) {
             this.inactiveCodexFetching.delete(account.id)
+
             if (!this.isCurrentInactiveCodexAccount(account.id)) {
               this.inactiveCodexCache.delete(account.id)
             }
+
             this.pushToRenderer()
             continue
           }
+
           const cached = this.inactiveCodexCache.get(account.id) ?? null
           this.inactiveCodexCache.set(account.id, this.applyStalePolicy(fresh, cached))
         } catch {
@@ -173,6 +207,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
             this.inactiveCodexCache.delete(account.id)
           }
         }
+
         this.inactiveCodexFetching.delete(account.id)
         this.pushToRenderer()
       }
@@ -209,11 +244,13 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     const currentIds = new Set(
       (this.inactiveClaudeAccountsResolver?.() ?? []).map((account) => account.id)
     )
+
     for (const accountId of this.inactiveClaudeCache.keys()) {
       if (!currentIds.has(accountId)) {
         this.inactiveClaudeCache.delete(accountId)
       }
     }
+
     for (const accountId of this.inactiveClaudeFetching) {
       if (!currentIds.has(accountId)) {
         this.inactiveClaudeFetching.delete(accountId)
@@ -225,11 +262,13 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
     const currentIds = new Set(
       (this.inactiveCodexAccountsResolver?.() ?? []).map((account) => account.id)
     )
+
     for (const accountId of this.inactiveCodexCache.keys()) {
       if (!currentIds.has(accountId)) {
         this.inactiveCodexCache.delete(accountId)
       }
     }
+
     for (const accountId of this.inactiveCodexFetching) {
       if (!currentIds.has(accountId)) {
         this.inactiveCodexFetching.delete(accountId)

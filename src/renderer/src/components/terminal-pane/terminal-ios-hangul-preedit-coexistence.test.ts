@@ -26,6 +26,7 @@ import {
 async function typePinyin(rig: IosHangulRig, spelling: string, committed: string): Promise<void> {
   const base = rig.textarea.value
   dispatchComposition(rig, 'compositionstart', '')
+
   for (let index = 1; index <= spelling.length; index += 1) {
     const preedit = spelling.slice(0, index)
     dispatchKey(rig, 'keydown', {
@@ -37,6 +38,7 @@ async function typePinyin(rig: IosHangulRig, spelling: string, committed: string
     rig.textarea.value = base + preedit
     dispatchInput(rig, 'insertCompositionText', preedit, { isComposing: true })
   }
+
   rig.textarea.value = base + committed
   dispatchComposition(rig, 'compositionend', committed)
   dispatchInput(rig, 'insertCompositionText', committed)
@@ -58,12 +60,15 @@ describe('the iPadOS Hangul path alongside everything else', () => {
 
   afterEach(() => {
     disposeOpenTerminals()
+
     if (originalUserAgent) {
       Object.defineProperty(navigator, 'userAgent', originalUserAgent)
     }
+
     if (originalMaxTouchPoints) {
       Object.defineProperty(navigator, 'maxTouchPoints', originalMaxTouchPoints)
     }
+
     vi.restoreAllMocks()
     document.body.replaceChildren()
   })
@@ -194,6 +199,7 @@ describe('the iPadOS Hangul path alongside everything else', () => {
         ),
         'utf8'
       )
+
       expect(lifecycle.match(/const isIosWeb =/g)).toHaveLength(1)
       expect(lifecycle.match(/isCurrentPlatformIosWeb\(/g)).toHaveLength(1)
       // And that the one gate is what installs the controller.
@@ -225,6 +231,7 @@ describe('the iPadOS Hangul path alongside everything else', () => {
     // its keypress and its `input` alike and arrive as nothing.
     pretendIosWeb()
     const rig = openIosTerminal()
+
     for (const key of ['п', 'р', 'α', 'ω', 'あ', 'カ', 'é', 'ü', '€']) {
       await typePrintable(rig, { key, keyCode: 71, written: key, replaces: false })
     }

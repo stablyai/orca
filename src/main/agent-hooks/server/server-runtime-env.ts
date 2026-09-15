@@ -14,6 +14,7 @@ export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRem
     if (this.port <= 0 || !this.token) {
       return {}
     }
+
     const env: Record<string, string> = {
       ORCA_AGENT_HOOK_PORT: String(this.port),
       ORCA_AGENT_HOOK_TOKEN: this.token,
@@ -21,10 +22,12 @@ export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRem
       ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION,
       ORCA_AGENT_HOOK_TRANSPORT: ORCA_HOOK_RAW_JSON_TRANSPORT
     }
+
     // Why: hooks source this file at invocation; dev namespaces it so parallel `pnpm dev` runs don't steal each other's hooks.
     if (this.endpointFileWritten && this.endpointFilePathCache) {
       env.ORCA_AGENT_HOOK_ENDPOINT = this.endpointFilePathCache
     }
+
     return env
   }
 
@@ -41,7 +44,9 @@ export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRem
     if (!this.endpointDir || !this.endpointFilePathCache) {
       return
     }
+
     this.endpointFileWritten = false
+
     const ok = writeEndpointFile(this.endpointDir, this.endpointFilePathCache, {
       port: this.port,
       token: this.token,
@@ -49,6 +54,7 @@ export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRem
       version: ORCA_HOOK_PROTOCOL_VERSION,
       transport: ORCA_HOOK_RAW_JSON_TRANSPORT
     })
+
     this.endpointFileWritten = ok
   }
 

@@ -21,6 +21,7 @@ function readSshFsCapabilities(
   signal?: AbortSignal
 ): Promise<RelayFsCapabilities> {
   const cached = capabilitiesByMux.get(mux)
+
   const probe =
     cached ??
     mux
@@ -32,8 +33,10 @@ function readSshFsCapabilities(
         if (isMethodNotFoundError(error)) {
           return null
         }
+
         throw error
       })
+
   if (!cached) {
     capabilitiesByMux.set(mux, probe)
     void probe.catch(() => {
@@ -42,6 +45,7 @@ function readSshFsCapabilities(
       }
     })
   }
+
   return waitForSshCapabilityProbe(probe, signal)
 }
 

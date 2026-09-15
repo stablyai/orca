@@ -31,6 +31,7 @@ export function invalidateGitReadCaches(): void {
 
 export async function runWithGitReadCacheInvalidation<T>(run: () => Promise<T>): Promise<T> {
   invalidateGitReadCaches()
+
   try {
     return await run()
   } finally {

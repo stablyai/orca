@@ -40,6 +40,7 @@ async function createStore(): Promise<Store> {
   installFakeAppEnvironment({ getPath: () => testState.dir })
   const { Store: StoreClass, initDataPath } = await import('../persistence')
   initDataPath()
+
   return new StoreClass()
 }
 
@@ -74,6 +75,7 @@ function seedSshAutomation(store: Store, options: { capture?: boolean } = {}): A
     addedAt: 1,
     connectionId: TARGET_ID
   } as Repo)
+
   return store.createAutomation({
     name: 'Nightly check',
     prompt: 'Check the repo',
@@ -95,6 +97,7 @@ function seedMissingSetupAutomation(store: Store): Automation {
     badgeColor: '#fff',
     addedAt: 1
   } as Repo)
+
   const automation = store.createAutomation({
     name: 'Other check',
     prompt: 'Check the other repo',
@@ -105,6 +108,7 @@ function seedMissingSetupAutomation(store: Store): Automation {
     rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
     dtstart: new Date('2026-05-12T00:00:00').getTime()
   })
+
   // Drift after storage: the setup the record captured no longer exists. The
   // create path derives contexts itself, so the drifted record is built here.
   return {
@@ -134,6 +138,7 @@ function seedRemoteScheduledAutomation(store: Store): Automation {
     addedAt: 1,
     executionHostId: 'runtime:vm-1'
   } as Repo)
+
   return store.createAutomation({
     name: 'Remote check',
     prompt: 'Check the remote repo',
@@ -159,6 +164,7 @@ function attachedService(store: Store): {
   const send = vi.fn()
   const service = new AutomationService(store, { tickMs: 60_000 })
   service.setWebContents({ isDestroyed: () => false, send } as never)
+
   return { service, send }
 }
 
@@ -171,6 +177,7 @@ async function evaluateAt(
 ): Promise<void> {
   const nextRunAt = (): number | undefined =>
     store.listAutomations().find((entry) => entry.id === automationId)?.nextRunAt
+
   const before = nextRunAt()
   vi.setSystemTime(new Date(when))
   service.setRendererReady()
@@ -227,10 +234,12 @@ describe('scheduled dispatch fenced on the host the record captured', () => {
     const store = await createStore()
     const automation = seedRemoteScheduledAutomation(store)
     const send = vi.fn()
+
     const service = new AutomationService(store, {
       tickMs: 60_000,
       allowRemoteHostScheduling: true
     })
+
     service.setWebContents({ isDestroyed: () => false, send } as never)
 
     expect(automation.schedulerOwner).toBe('remote_host_service')

@@ -41,20 +41,25 @@ export function buildProcessTableIndex<Row extends ProcessIdentityRow>(
   if (stats) {
     stats.indexBuilds += 1
   }
+
   const byPid = new Map<number, Row>()
   const childrenByPpid = new Map<number, Row[]>()
+
   for (const row of rows) {
     if (stats) {
       stats.rowVisits += 1
     }
+
     // Preserve rows.find() semantics if a malformed table repeats a pid
     if (!byPid.has(row.pid)) {
       byPid.set(row.pid, row)
     }
+
     const children = childrenByPpid.get(row.ppid) ?? []
     children.push(row)
     childrenByPpid.set(row.ppid, children)
   }
+
   return { rows, byPid, childrenByPpid, stats }
 }
 
@@ -71,13 +76,16 @@ export function collectDescendantsFromIndex<Row extends ProcessIdentityRow>(
 ): (Row & { depth: number })[] {
   const descendants: (Row & { depth: number })[] = []
   const stack = (index.childrenByPpid.get(rootPid) ?? []).map((row) => ({ row, depth: 1 }))
+
   while (stack.length > 0) {
     const { row, depth } = stack.pop()!
     descendants.push({ ...row, depth })
+
     for (const child of index.childrenByPpid.get(row.pid) ?? []) {
       stack.push({ row: child, depth: depth + 1 })
     }
   }
+
   return descendants
 }
 
@@ -89,6 +97,7 @@ export function lookupProcessTableIndex<Row extends ProcessIdentityRow, T>(
   if (stats) {
     stats.indexLookups += 1
   }
+
   return lookup(index)
 }
 
@@ -113,10 +122,13 @@ export function getProcessTableIndex<Row extends ProcessIdentityRow>(
   rows: readonly Row[]
 ): ProcessTableIndexOf<Row> {
   const cached = processTableIndexes.get(rows) as ProcessTableIndexOf<Row> | undefined
+
   if (cached) {
     return cached
   }
+
   const index = buildProcessTableIndex(rows)
   processTableIndexes.set(rows, index)
+
   return index
 }

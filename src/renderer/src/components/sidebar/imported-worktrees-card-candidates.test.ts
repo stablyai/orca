@@ -70,6 +70,7 @@ function detectedResult(
 describe('getHiddenImportedWorktrees', () => {
   it('returns only authoritative hidden external worktrees', () => {
     const hidden = detectedWorktree({ id: 'hidden' })
+
     const result = getHiddenImportedWorktrees(
       detectedResult([
         hidden,

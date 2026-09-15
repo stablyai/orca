@@ -23,6 +23,7 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
   const renameCancelledRef = useRef(false)
   const renameFocusFrameRef = useRef<number | null>(null)
   const currentFileName = basename(activeFile.filePath)
+
   // Why: read-only tabs (AI Vault View Log) are never renameable — rename would
   // rewrite the agent-owned artifact's backing path.
   const canRename =
@@ -36,6 +37,7 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
     if (!canRename) {
       return
     }
+
     renameCancelledRef.current = false
     setIsRenaming(true)
   }
@@ -43,21 +45,28 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
   const commitRename = (): void => {
     if (renameCancelledRef.current) {
       setIsRenaming(false)
+
       return
     }
+
     const input = renameInputElementRef.current
+
     if (!input) {
       setIsRenaming(false)
+
       return
     }
+
     const newName = input.value.trim()
     // onBlur follows Enter when the input unmounts; consume that trailing event
     // so one user action cannot start a second rename against the old path.
     renameCancelledRef.current = true
     setIsRenaming(false)
+
     if (!newName || newName === currentFileName) {
       return
     }
+
     const worktreePath = getUntitledFileRoot(activeFile, worktree?.path ?? null)
     void renameFileOnDisk({
       oldPath: activeFile.filePath,
@@ -76,6 +85,7 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
     if (renameFocusFrameRef.current === null) {
       return
     }
+
     cancelAnimationFrame(renameFocusFrameRef.current)
     renameFocusFrameRef.current = null
   }, [])
@@ -84,6 +94,7 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
     (el) => {
       renameInputElementRef.current = el
       clearRenameFocusFrame()
+
       if (!el || !isRenaming) {
         return
       }
@@ -92,11 +103,14 @@ export function useEditorHeaderFileRename(activeFile: OpenFile): EditorHeaderFil
       // previous timing so header layout settles before selecting text.
       renameFocusFrameRef.current = requestAnimationFrame(() => {
         renameFocusFrameRef.current = null
+
         if (renameInputElementRef.current !== el) {
           return
         }
+
         el.focus()
         const dotIndex = currentFileName.lastIndexOf('.')
+
         if (dotIndex > 0) {
           el.setSelectionRange(0, dotIndex)
         } else {

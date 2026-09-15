@@ -24,6 +24,7 @@ describe('Antigravity AI Vault discovery', () => {
     const roots = isolatedScanRoots(root)
     const wslHome = join(root, 'wsl-home')
     const sessionId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+
     const transcriptPath = await writeAntigravityTranscript(
       join(wslHome, '.gemini', 'antigravity-cli', 'brain'),
       sessionId,
@@ -36,6 +37,7 @@ describe('Antigravity AI Vault discovery', () => {
         }
       ]
     )
+
     await writeFile(join(dirname(transcriptPath), 'transcript_full.jsonl'), 'duplicate')
     await writeAntigravityHistory(join(wslHome, '.gemini', 'antigravity-cli', 'brain'), [
       {

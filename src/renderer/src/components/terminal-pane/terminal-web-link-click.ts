@@ -33,6 +33,7 @@ export function handleTerminalWebLinkClick(
 
   let handled: boolean
   const completeUrl = deps.terminal ? findHttpLinkAtTerminalMouseEvent(deps.terminal, event) : null
+
   if (completeUrl) {
     handled = handleTerminalHttpLink(completeUrl, event, {
       worktreeId: deps.worktreeId,
@@ -57,5 +58,6 @@ export function handleTerminalWebLinkClick(
     // clearing selection also detaches its pending drag-selection listeners.
     deps.terminal?.clearSelection()
   }
+
   return handled
 }

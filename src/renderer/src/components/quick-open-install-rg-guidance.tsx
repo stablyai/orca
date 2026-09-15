@@ -31,9 +31,11 @@ export function parseQuickOpenInstallRgGuidance(
   const match = message.match(
     /^Quick Open scan too large \((.+?)\)\. Install ripgrep (on the remote|on the host running the Quick Open scan) to enable fast, gitignore-aware listing: (.+)$/
   )
+
   if (!match) {
     return null
   }
+
   const reason = match[1]
   const location = match[2] === REMOTE_LOCATION_PHRASE ? 'remote' : 'local'
   const tail = match[3].trim()
@@ -41,6 +43,7 @@ export function parseQuickOpenInstallRgGuidance(
   // your package manager (e.g. apt/dnf/pacman)"; there is no single command
   // to copy, so surface it as plain guidance without the code block.
   const looksLikeCommand = /^(sudo\s+)?(brew|apt|dnf|pacman|apk)\s/.test(tail)
+
   return {
     reason,
     location,
@@ -71,6 +74,7 @@ export function QuickOpenInstallRgGuidance({
   const setCopyButtonRef = useCallback(
     (node: HTMLButtonElement | null) => {
       isMountedRef.current = node !== null
+
       if (node === null) {
         clearCopiedResetTimer()
       }
@@ -82,6 +86,7 @@ export function QuickOpenInstallRgGuidance({
     if (!command) {
       return
     }
+
     // Why: use Electron's clipboard IPC instead of navigator.clipboard; the
     // latter often fails silently in the renderer due to focus/permission
     // quirks inside Radix dialogs. All other copy buttons in the app go
@@ -92,6 +97,7 @@ export function QuickOpenInstallRgGuidance({
         if (!isMountedRef.current) {
           return
         }
+
         clearCopiedResetTimer()
         setCopied(true)
         copiedResetTimerRef.current = window.setTimeout(() => {

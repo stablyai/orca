@@ -18,6 +18,7 @@ import {
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
 
 const NOW = 1_800_000_000_000
+
 const LEASE_TTL_MS = 60_000
 
 const LOCATION: AgentSessionExecutionLocation = {
@@ -26,6 +27,7 @@ const LOCATION: AgentSessionExecutionLocation = {
   workspaceId: 'workspace-1',
   workspaceKind: 'git-worktree'
 }
+
 const INDETERMINATE: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no answer' }
 
 /** The link an adopting create seeds: fence 1, because that is a new record's first. */
@@ -78,6 +80,7 @@ function storeState(records: readonly AgentSessionRecord[] = []): AgentSessionSt
 describe('adopted handle chain seeding', () => {
   it('seeds a new record with the adopted link alone, at the first fence of the record', () => {
     const link = adoptedLink()
+
     const { record, disposition } = applyAgentSessionReservation(
       storeState(),
       reserveRequest({ adoptedHandleLink: link }),
@@ -133,6 +136,7 @@ describe('adopted conversation ownership', () => {
     // create-by-intent, which always carries a null expected fence, and an existing record with a
     // null expected fence is refused a few lines below anyway.
     const link = adoptedLink()
+
     const committed: AgentSessionRecord = {
       ...agentSessionRecordFixture(
         agentSessionLeaseFixture({

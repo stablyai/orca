@@ -35,9 +35,11 @@ export function createRuntimeFileWatcherRemoval(fileCommands: FileExplorerWatche
         `file explorer watcher close for ${worktreePath}`
       )
     ])
+
     const failure = results.find(
       (result): result is PromiseRejectedResult => result.status === 'rejected'
     )
+
     if (failure) {
       // Why: restoration must wait until every bounded teardown settles.
       throw failure.reason
@@ -59,6 +61,7 @@ export function createRuntimeFileWatcherRemoval(fileCommands: FileExplorerWatche
     } else {
       getWorktreeWatcherRemoval().forgetLocal(worktreePath)
     }
+
     fileCommands.forgetFileExplorerWatchersAfterRemoval(worktreePath, connectionId)
   }
 
@@ -68,28 +71,37 @@ export function createRuntimeFileWatcherRemoval(fileCommands: FileExplorerWatche
   ): Promise<{ finish(removed: boolean): Promise<void> }> => {
     const gate = acquireWatcherRemovalGate(worktreePath, connectionId)
     const deadline = createWatcherRemovalDeadline()
+
     try {
       await close(worktreePath, connectionId, deadline)
+
       const fenceDrain = await drainBeforeWatcherRemoval(
         gate.ready,
         deadline,
         `watcher install fence for ${worktreePath}`
       )
+
       if (fenceDrain === 'timeout') {
         gate.abandonPendingInstalls()
       }
+
       await close(worktreePath, connectionId, deadline)
       let finished = false
+
       return {
         finish: async (removed) => {
           if (finished) {
             return
           }
+
           finished = true
+
           if (removed) {
             forget(worktreePath, connectionId)
           }
+
           gate.release()
+
           if (!removed) {
             await restore(worktreePath, connectionId).catch((restoreError: unknown) => {
               console.error('[worktrees] failed to restore watchers after removal failed', {

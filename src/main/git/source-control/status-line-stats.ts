@@ -32,12 +32,14 @@ async function runNumstat(
         env: gitOptionalLocksDisabledEnv()
       }
     )
+
     return parseNumstat(stdout)
   } catch (error) {
     // Why: an aborted pass must reject; only a genuine numstat failure degrades to uncounted rows.
     if (options.signal?.aborted) {
       throw error
     }
+
     // Why: a numstat failure leaves rows uncounted; null (not empty map) flags the pass incomplete and uncacheable.
     return null
   }
@@ -52,8 +54,10 @@ export async function attachLineStats(
   if (entries.length === 0) {
     return true
   }
+
   const { hasStaged, hasUnstaged, untrackedPaths } = collectGitStatusLineStatInputs(entries)
   const emptyStats = new Map<string, GitLineStats>()
+
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
     hasStaged ? runNumstat(worktreePath, true, options) : Promise.resolve(emptyStats),
     hasUnstaged ? runNumstat(worktreePath, false, options) : Promise.resolve(emptyStats),
@@ -64,6 +68,7 @@ export async function attachLineStats(
       options.signal
     )
   ])
+
   for (const entry of entries) {
     const area = entry.area
     applyLineStats(
@@ -75,5 +80,6 @@ export async function attachLineStats(
           : untrackedStats.get(entry.path)
     )
   }
+
   return stagedStats !== null && unstagedStats !== null
 }

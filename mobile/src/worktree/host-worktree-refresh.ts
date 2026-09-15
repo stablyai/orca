@@ -5,6 +5,7 @@ import type { RpcClient } from '../transport/rpc-client'
 const WORKTREE_REFRESH_MS = 3000
 
 type WorktreeRefreshOptions = { allowDuringModal?: boolean }
+
 type RepoRefreshOptions = { force?: boolean; queueIfInFlight?: boolean }
 
 type HostWorktreeRefreshArgs = {
@@ -25,6 +26,7 @@ export function startHostWorktreeRefresh({
     if (AppState.currentState !== 'active') {
       return
     }
+
     void fetchWorktrees({ allowDuringModal: true })
     void fetchRepoMetadata({ queueIfInFlight: true })
   }
@@ -34,10 +36,12 @@ export function startHostWorktreeRefresh({
       refreshOnForeground()
     }
   })
+
   const interval = setInterval(() => {
     if (AppState.currentState !== 'active') {
       return
     }
+
     void fetchWorktrees()
     // Why: desktop Settings repo edits (icon/color/name, repo removal) now emit `reposChanged`
     // (#11994), but a host on an older build does not; keep this periodic repo.list as the
@@ -46,6 +50,7 @@ export function startHostWorktreeRefresh({
     // the waste (both stop while backgrounded).
     void fetchRepoMetadata()
   }, WORKTREE_REFRESH_MS)
+
   const unsubscribe = client.subscribe(
     'runtime.clientEvents.subscribe',
     null,
@@ -53,21 +58,28 @@ export function startHostWorktreeRefresh({
       if (stale || !payload || typeof payload !== 'object') {
         return
       }
+
       const event = payload as RuntimeClientEventStreamMessage | { type: 'error' }
+
       if (event.type === 'ready') {
         const replayedAfterReconnect = eventStreamReady
         eventStreamReady = true
+
         if (replayedAfterReconnect) {
           // Why: client events are not queued while disconnected, so re-read both snapshots after replay.
           void fetchWorktrees()
           void fetchRepoMetadata({ force: true, queueIfInFlight: true })
         }
+
         return
       }
+
       if (event.type === 'end' || event.type === 'error') {
         eventStreamReady = false
+
         return
       }
+
       if (event.type === 'reposChanged') {
         // Why: folder workspace mutations publish reposChanged, and worktree.ps owns this catalog.
         void fetchWorktrees()

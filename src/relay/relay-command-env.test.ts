@@ -59,6 +59,7 @@ describe('buildRelayCommandEnv', () => {
       { HOME: '/home/me', PATH: '', CARGO_HOME: '/opt/cargo' },
       'linux'
     )
+
     const segments = env.PATH?.split(':') ?? []
 
     expect(segments).toContain('/opt/cargo/bin')
@@ -70,6 +71,7 @@ describe('buildRelayCommandEnv', () => {
       { HOME: '/home/me', PATH: '', BUN_INSTALL: '/opt/bun' },
       'linux'
     )
+
     const segments = env.PATH?.split(':') ?? []
 
     expect(segments).toContain('/opt/bun/bin')
@@ -81,6 +83,7 @@ describe('buildRelayCommandEnv', () => {
       { HOME: '/home/me', PATH: '', DENO_INSTALL: '/opt/deno' },
       'linux'
     )
+
     const segments = env.PATH?.split(':') ?? []
 
     expect(segments).toContain('/opt/deno/bin')
@@ -108,6 +111,7 @@ describe('buildRelayCommandEnv', () => {
       { HOME: '/home/me', PATH: '', PNPM_HOME: '/opt/pnpm' },
       'linux'
     )
+
     const segments = env.PATH?.split(':') ?? []
 
     expect(segments).toContain('/opt/pnpm')
@@ -119,6 +123,7 @@ describe('buildRelayCommandEnv', () => {
       { HOME: '/home/me', PATH: '', XDG_DATA_HOME: '/opt/xdg' },
       'linux'
     )
+
     const segments = env.PATH?.split(':') ?? []
 
     expect(segments).toContain('/opt/xdg/pnpm')
@@ -149,6 +154,7 @@ describe('buildRelayCommandEnv', () => {
       },
       'win32'
     )
+
     const segments = env.Path?.split(';') ?? []
 
     expect(segments).toEqual(
@@ -176,6 +182,7 @@ describe('buildRelayCommandEnv', () => {
       },
       'win32'
     )
+
     const segments = env.Path?.split(';') ?? []
 
     expect(segments).toEqual(

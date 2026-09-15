@@ -20,6 +20,7 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
     setTabPaneExpanded,
     tabId
   } = controller
+
   const writePanePtyLayoutBindingForLeaf = useCallback(
     (
       leafId: string,
@@ -28,15 +29,19 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
       sourcePaneId?: number
     ): void => {
       const existingLayout = useAppStore.getState().terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT
+
       const { ptyIdsByLeafId: _existingPtyIdsByLeafId, ...layoutWithoutPtyBindings } =
         existingLayout
+
       const existingBindings = existingLayout.ptyIdsByLeafId ?? {}
 
       if (ptyId && sourcePaneId !== undefined) {
         const currentTransportPtyId = paneTransportsRef.current.get(sourcePaneId)?.getPtyId()
+
         const tabPtyId = Object.values(useAppStore.getState().tabsByWorktree)
           .flat()
           .find((tab) => tab.id === tabId)?.ptyId
+
         if (
           currentTransportPtyId &&
           currentTransportPtyId !== ptyId &&
@@ -55,14 +60,18 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
           ...layoutWithoutPtyBindings,
           ptyIdsByLeafId: { ...existingBindings, [leafId]: ptyId }
         })
+
         return
       }
+
       const nextBindings = { ...existingBindings }
       delete nextBindings[leafId]
+
       const nextLayout = {
         ...layoutWithoutPtyBindings,
         ...(Object.keys(nextBindings).length > 0 ? { ptyIdsByLeafId: nextBindings } : {})
       }
+
       if (
         repairActiveLeafOnClear &&
         existingLayout.activeLeafId === leafId &&
@@ -74,42 +83,53 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
           ptyIdsByLeafId: nextBindings
         })
       }
+
       setTabLayout(tabId, nextLayout)
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [setTabLayout, tabId]
   )
+
   const writePanePtyLayoutBinding = useCallback(
     (paneId: number, ptyId: string | null, repairActiveLeafOnClear: boolean): void => {
       const leafId = managerRef.current?.getLeafId(paneId)
+
       if (!leafId) {
         return
       }
+
       writePanePtyLayoutBindingForLeaf(leafId, ptyId, repairActiveLeafOnClear, paneId)
     },
     [managerRef, writePanePtyLayoutBindingForLeaf]
   )
+
   const syncPanePtyLayoutBinding = useCallback(
     (paneId: number, ptyId: string | null): void => {
       writePanePtyLayoutBinding(paneId, ptyId, false)
     },
     [writePanePtyLayoutBinding]
   )
+
   const syncPanePtyLayoutBindingForLeaf = useCallback(
     (leafId: string, ptyId: string | null, sourcePaneId: number): void => {
       writePanePtyLayoutBindingForLeaf(leafId, ptyId, false, sourcePaneId)
     },
     [writePanePtyLayoutBindingForLeaf]
   )
+
   const clearExitedPanePtyLayoutBindingForLeaf = useCallback(
     (leafId: string, exitedPtyId: string): void => {
       const existingLayout = useAppStore.getState().terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT
+
       const { ptyIdsByLeafId: _existingPtyIdsByLeafId, ...layoutWithoutPtyBindings } =
         existingLayout
+
       const existingBindings = existingLayout.ptyIdsByLeafId ?? {}
+
       if (existingBindings[leafId] !== exitedPtyId) {
         return
       }
+
       const nextBindings = { ...existingBindings }
       delete nextBindings[leafId]
       setTabLayout(tabId, {
@@ -124,12 +144,15 @@ export function useTerminalPaneLayoutBindings(controller: TerminalPaneLayoutCont
     },
     [setTabLayout, tabId]
   )
+
   const clearExitedPanePtyLayoutBinding = useCallback(
     (paneId: number, exitedPtyId: string): void => {
       const leafId = managerRef.current?.getLeafId(paneId)
+
       if (!leafId) {
         return
       }
+
       clearExitedPanePtyLayoutBindingForLeaf(leafId, exitedPtyId)
     },
     [clearExitedPanePtyLayoutBindingForLeaf, managerRef]

@@ -5,13 +5,16 @@ describe('renderer document navigation', () => {
   function createFixture(currentUrl: string, onStarted = vi.fn(() => vi.fn())) {
     const handlers = new Map<string, (...args: unknown[]) => void>()
     let loadingMainFrame = false
+
     const on = vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       handlers.set(event, handler)
     })
+
     registerRendererDocumentNavigation(
       { getURL: () => currentUrl, isLoadingMainFrame: () => loadingMainFrame, on } as never,
       onStarted
     )
+
     return {
       navigate: handlers.get('did-start-navigation'),
       failProvisionalLoad: handlers.get('did-fail-provisional-load'),
@@ -53,6 +56,7 @@ describe('renderer document navigation', () => {
 
   it('cancels only the matching main-frame provisional navigation', async () => {
     const cancel = vi.fn()
+
     const fixture = createFixture(
       'http://localhost:5173/',
       vi.fn(() => cancel)
@@ -89,6 +93,7 @@ describe('renderer document navigation', () => {
 
   it('restores an idle surviving document after loading stops', async () => {
     const cancel = vi.fn()
+
     const fixture = createFixture(
       'http://localhost:5173/',
       vi.fn(() => cancel)
@@ -107,10 +112,12 @@ describe('renderer document navigation', () => {
 
   it('restores after a concurrent failure and blocked replacement both settle', async () => {
     const cancel = vi.fn()
+
     const fixture = createFixture(
       'http://localhost:5173/',
       vi.fn(() => cancel)
     )
+
     const event = { defaultPrevented: false }
 
     fixture.navigate?.({}, 'http://localhost:5173/reload-a', false, true)
@@ -130,6 +137,7 @@ describe('renderer document navigation', () => {
 
   it('does not cancel a navigation after its document commits', () => {
     const cancel = vi.fn()
+
     const fixture = createFixture(
       'file:///opt/orca/renderer/index.html',
       vi.fn(() => cancel)
@@ -160,14 +168,17 @@ describe('renderer document navigation', () => {
 
   it('does not let a stale same-URL failure cancel a replacement navigation', async () => {
     const cancels: ReturnType<typeof vi.fn>[] = []
+
     const fixture = createFixture(
       'http://localhost:5173/',
       vi.fn(() => {
         const cancel = vi.fn()
         cancels.push(cancel)
+
         return cancel
       })
     )
+
     const url = 'http://localhost:5173/reload'
 
     fixture.navigate?.({}, url, false, true)
@@ -188,10 +199,12 @@ describe('renderer document navigation', () => {
 
   it('cancels when a later will-navigate listener blocks the navigation', async () => {
     const cancel = vi.fn()
+
     const fixture = createFixture(
       'http://localhost:5173/',
       vi.fn(() => cancel)
     )
+
     const event = { defaultPrevented: false }
 
     fixture.navigate?.({}, 'http://localhost:5173/reload', false, true)

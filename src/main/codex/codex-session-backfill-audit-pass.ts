@@ -46,9 +46,11 @@ export async function createCodexSessionBackfillAuditPass(
   const coverage = await readCodexSessionBackfillAuditCoverage(auditLogPath)
   const writeAuditRecord = createCodexSessionBackfillAuditWriter(auditLogPath)
   let auditChanged = false
+
   const appendRecord: CodexSessionBackfillAuditWriter = async (record) => {
     const appended = await writeAuditRecord(record)
     auditChanged ||= appended
+
     return appended
   }
 
@@ -58,10 +60,13 @@ export async function createCodexSessionBackfillAuditPass(
       const fileEventId = targetStat
         ? createCodexSessionBackfillFileEventId(target, targetStat)
         : undefined
+
       if (fileEventId && coverage.fileEventIds.has(fileEventId)) {
         summary.skippedExistingFiles += 1
+
         return
       }
+
       if (
         await recordExistingCodexSessionForHeal(appendRecord, summary, source, target, fileEventId)
       ) {
@@ -72,9 +77,11 @@ export async function createCodexSessionBackfillAuditPass(
     },
     async recordPublished(summary, action, source, target): Promise<void> {
       const targetStat = await readCodexSessionTargetStat(target)
+
       const fileEventId = targetStat
         ? createCodexSessionBackfillFileEventId(target, targetStat)
         : undefined
+
       if (
         await appendCodexSessionHealAuditRecord(appendRecord, summary, {
           action,
@@ -93,9 +100,11 @@ export async function createCodexSessionBackfillAuditPass(
         ...record,
         sourceStat
       })
+
       if (coverage.diagnosticEventIds.has(diagnosticEventId)) {
         return
       }
+
       if (await appendRecord({ ...record, diagnosticEventId })) {
         coverage.diagnosticEventIds.add(diagnosticEventId)
       }

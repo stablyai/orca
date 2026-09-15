@@ -28,6 +28,7 @@ function gitLabProjectKeyParts(slug: ProjectSlug): GitRemoteKeyParts {
 
 function gitLabProjectKey(slug: ProjectSlug): string {
   const { host, tail } = gitLabProjectKeyParts(slug)
+
   return `${host}/${tail}`
 }
 
@@ -45,9 +46,11 @@ function repoMatchesGitLabSlug(repo: Repo | undefined, slug: ProjectSlug): boole
     repo?.gitRemoteIdentity?.canonicalKey,
     foldComparableGitLabHost
   )
+
   if (!identityParts) {
     return 'unknown'
   }
+
   // Why trust a project-path mismatch whichever remote it came from: a resolved identity is
   // re-probed once a repo/project list sweep finds it past its ~6h TTL, so it is not frozen at the
   // moment the repo was added. Accepted cost: only one remote is stored, so a fork whose `upstream`
@@ -64,35 +67,42 @@ export function worktreeMatchesGitLabUrl(
   const linkedUrl = worktree.linkedWorkItem?.url
     ? parseGitLabIssueOrMRLink(worktree.linkedWorkItem.url)
     : null
+
   if (linkedUrl && gitLabLinksEqual(linkedUrl, link)) {
     return true
   }
 
   const reviewUrl =
     review?.provider === 'gitlab' && review.url ? parseGitLabIssueOrMRLink(review.url) : null
+
   if (reviewUrl && gitLabLinksEqual(reviewUrl, link)) {
     return true
   }
 
   const linkedItem = worktree.linkedWorkItem
+
   const linkedItemMatches =
     linkedItem?.provider === 'gitlab' &&
     linkedItem.type === link.type &&
     linkedItem.number === link.number
+
   const numberMatches =
     linkedItemMatches ||
     (link.type === 'mr'
       ? worktree.linkedGitLabMR === link.number
       : worktree.linkedGitLabIssue === link.number)
+
   if (!numberMatches) {
     return false
   }
 
   // Why: iids are per-project, so a bare number only survives when the repo remote agrees.
   const repoMatch = repoMatchesGitLabSlug(repo, link.slug)
+
   if (repoMatch !== 'unknown') {
     return repoMatch
   }
+
   // Identity unresolvable: stay permissive unless the stored URL names the same type+number in a
   // different project, which is a contradiction rather than a plausible cross-project reference.
   return !(linkedUrl && linkedUrl.type === link.type && linkedUrl.number === link.number)

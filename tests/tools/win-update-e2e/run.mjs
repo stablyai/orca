@@ -43,14 +43,19 @@ function log(step, msg) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2))
+
   if (opts.help) {
     console.log(opts.usage)
+
     return 0
   }
+
   if (opts.errors?.length) {
     console.error(`Argument errors:\n  - ${opts.errors.join('\n  - ')}\n${opts.usage}`)
+
     return 2
   }
+
   assertWin32('win-update-e2e')
 
   const installDir = opts.installDir ?? null
@@ -70,6 +75,7 @@ async function main() {
     'setup',
     `runId=${runId} runDir=${runDir} profile=${opts.expect}${isolated ? ` installDir=${installDir}` : ''}`
   )
+
   if (isolated && opts.keepInstall) {
     log(
       'setup',
@@ -83,7 +89,9 @@ async function main() {
     allowExistingInstall: opts.allowExistingInstall,
     installDir
   })
+
   const hadPreexistingInstall = Boolean(existingInstall)
+
   for (const w of warnings) {
     log('preflight-warning', w)
   }
@@ -92,6 +100,7 @@ async function main() {
   // any install writes over them. Everything after this must run through the
   // try/finally so the snapshot is always restored, even on failure.
   let manifest = null
+
   if (isolated) {
     manifest = backupInstallState(runDir)
     log('isolated', `backed up install registry/shortcut state -> ${manifest.backupDir}`)
@@ -118,17 +127,21 @@ async function main() {
   const ctx = { session: null }
   const diagDir = process.env.ORCA_E2E_DIAG_DIR || path.join(runDir, 'diag')
   let passed = false
+
   try {
     passed = await runProof(ctx, runArgs)
   } catch (err) {
     console.error(`[win-update-e2e] FATAL: ${err.stack || err.message}`)
+
     if (ctx.session?.page) {
       const diag = await captureFailureDiagnostics(ctx.session.page, diagDir, 'driving-failure')
       log('diag', `captured -> ${diagDir} (store=${diag.info?.hasStore ?? 'n/a'})`)
+
       if (diag.info?.bodyText) {
         log('diag', `visible text: ${diag.info.bodyText.replace(/\s+/g, ' ').slice(0, 300)}`)
       }
     }
+
     passed = false
   } finally {
     await (isolated
@@ -150,6 +163,7 @@ async function main() {
           runDir
         }))
   }
+
   return passed ? 0 : 1
 }
 
@@ -177,6 +191,7 @@ async function runProof(ctx, args) {
     releaseTag: opts.fromRelease,
     assetPattern: opts.assetPattern
   })
+
   log('install-base', `installing ${fromInstaller}`)
   const base = silentInstall(fromInstaller, { installDir })
   // Track the install now (not only after the update at L238) so a failure
@@ -235,6 +250,7 @@ async function runProof(ctx, args) {
     releaseTag: opts.toRelease,
     assetPattern: opts.assetPattern
   })
+
   log('update', `installing ${toInstaller}`)
   const updated = silentInstall(toInstaller, { installDir })
   // Record the exact dir the harness installed into so non-isolated teardown
@@ -259,6 +275,7 @@ async function runProof(ctx, args) {
     preScrollback,
     echoBeforeUpdate
   })
+
   evidence.postDaemon?.pids?.forEach((p) => created.daemonPids.add(p))
 
   // --- Soak, then stop the watch and evaluate ---
@@ -275,10 +292,12 @@ async function runProof(ctx, args) {
     daemonLog: readDaemonLog(userDataDir),
     ...evidence
   }
+
   const assertions = buildAssertions(assertionCtx)
   const passed = allPassed(assertions)
   console.log(renderTable(assertions))
   log('result', passed ? 'PASS' : 'FAIL')
+
   return passed
 }
 
@@ -301,10 +320,12 @@ async function gatherEvidence(args) {
     )
     dumpDaemonLog(userDataDir)
     const heartbeatBefore = fileMtimeMs(heartbeatFile)
+
     const heartbeatAdvancedAfterUpdate = await heartbeatAdvancedSince(
       heartbeatFile,
       heartbeatBefore
     )
+
     // Sample marker survival BEFORE interrupting it: the pre-update shell must be
     // measured while its heartbeat loop still runs, not after
     // probeCtrlCInterruptsMarker deliberately breaks that loop.
@@ -319,6 +340,7 @@ async function gatherEvidence(args) {
     // the echo probe is meaningful only after the interrupt.
     const ctrlCInterrupted = await probeCtrlCInterruptsMarker(page, runDir, heartbeatFile)
     const echoObserved = await probeEcho(page, runDir, 'echo-post')
+
     return {
       preDaemonPid: preDaemon.pid,
       preDaemonAliveAfter,
@@ -338,6 +360,7 @@ async function gatherEvidence(args) {
   await createTerminalTab(page)
   const echoObserved = await probeEcho(page, runDir, 'echo-fresh')
   const ctrlCInterrupted = await probeCtrlCOnFreshLoop(page, runDir)
+
   return {
     preDaemonPid: preDaemon.pid,
     preDaemonAliveAfter: preDaemon.pid != null && isPidAlive(preDaemon.pid),
@@ -359,19 +382,23 @@ function resolveScopedDaemon(userDataDir) {
   const pidFiles = readDaemonPidFiles(userDataDir)
   const scan = findDaemonProcesses(userDataDir)
   const pids = new Set()
+
   for (const rec of pidFiles) {
     if (typeof rec.pid === 'number') {
       pids.add(rec.pid)
     }
   }
+
   for (const proc of scan) {
     if (typeof proc.pid === 'number') {
       pids.add(proc.pid)
     }
   }
+
   const primary = pidFiles.find((r) => typeof r.pid === 'number')
   const pid = primary?.pid ?? scan[0]?.pid ?? null
   const scanEntry = scan.find((p) => p.pid === pid) ?? scan[0]
+
   return {
     pid,
     appVersion: primary?.appVersion ?? null,
@@ -388,9 +415,11 @@ function resolveScopedDaemon(userDataDir) {
  *  visible in the CI log before teardown removes the userData dir. */
 function dumpDaemonLog(userDataDir) {
   const logPath = path.join(userDataDir, 'logs', 'daemon.log')
+
   try {
     const lines = readFileSync(logPath, 'utf8').trim().split('\n')
     log('daemon-log', `${logPath} (${lines.length} lines):`)
+
     for (const line of lines.slice(-40)) {
       console.log(`    ${line}`)
     }
@@ -404,22 +433,29 @@ function daemonExePath(commandLine) {
   if (typeof commandLine !== 'string') {
     return null
   }
+
   const trimmed = commandLine.trim()
+
   if (trimmed.startsWith('"')) {
     const end = trimmed.indexOf('"', 1)
+
     return end > 0 ? trimmed.slice(1, end) : null
   }
+
   const space = trimmed.indexOf(' ')
+
   return space > 0 ? trimmed.slice(0, space) : trimmed
 }
 
 function isMarkerAlive(runDir) {
   const pid = readIntFile(path.join(runDir, 'marker.pid'))
+
   return pid != null && isPidAlive(pid)
 }
 
 async function heartbeatAdvancedSince(heartbeatFile, sinceMs) {
   await delay(1500)
+
   return fileMtimeMs(heartbeatFile) > sinceMs
 }
 
@@ -429,13 +465,16 @@ function scrollbackFidelity(before, after) {
   if (!before || !before.trim() || !after || !after.trim()) {
     return null
   }
+
   const marker = before
     .trim()
     .split('\n')
     .find((l) => l.trim().length > 3)
+
   if (!marker) {
     return null
   }
+
   return after.includes(marker.trim())
 }
 
@@ -449,25 +488,33 @@ export function readDaemonLog(userDataDir) {
   // normal version-skew during an update. Non-JSON lines fall back to a raw
   // FATAL match so an unstructured crash dump still counts.
   const logPath = path.join(userDataDir, 'logs', 'daemon.log')
+
   if (!existsSync(logPath)) {
     return null
   }
+
   const errorLines = []
   let suppressedCount = 0
+
   for (const raw of readFileSync(logPath, 'utf8').split('\n')) {
     const line = raw.trim()
+
     if (!line) {
       continue
     }
+
     let rec
+
     try {
       rec = JSON.parse(line)
     } catch {
       if (/\bFATAL\b/.test(line)) {
         errorLines.push(line)
       }
+
       continue
     }
+
     if (rec.event === 'uncaught-exception-suppressed') {
       suppressedCount += 1
     } else if (
@@ -477,6 +524,7 @@ export function readDaemonLog(userDataDir) {
       errorLines.push(line)
     }
   }
+
   return { path: logPath, errorLines, suppressedCount }
 }
 
@@ -493,10 +541,13 @@ async function isolatedTeardown({ app, created, userDataDir, installDir, manifes
   } catch {
     /* already closed / never launched */
   }
+
   killPid(created.markerPid)
+
   for (const pid of resolveScopedDaemon(userDataDir).pids) {
     killPid(pid)
   }
+
   for (const pid of created.daemonPids) {
     killPid(pid)
   }
@@ -550,20 +601,25 @@ async function teardown({
   } catch {
     /* already closed */
   }
+
   // Kill ONLY processes this harness created: the marker and this run's daemon
   // (scoped to the isolated userData). Never touch pre-existing user processes.
   killPid(created.markerPid)
+
   for (const pid of resolveScopedDaemon(userDataDir).pids) {
     killPid(pid)
   }
+
   for (const pid of created.daemonPids) {
     killPid(pid)
   }
 
   if (keepInstall) {
     log('teardown', `--keep-install set; leaving install + ${runDir}`)
+
     return
   }
+
   // Only uninstall when the harness fully OWNS the install (no pre-existing
   // build). When it overwrote a developer's existing install, leave it in place
   // — uninstalling would remove a build we did not put there.
@@ -580,10 +636,12 @@ async function teardown({
     const uninstalled = silentUninstall(path.dirname(installedExePath), {
       allowDefaultLocation: true
     })
+
     log('teardown', `uninstalled: ${uninstalled}`)
   } else {
     log('teardown', 'no install path recorded; skipping uninstall (nothing owned to remove)')
   }
+
   rmSync(runDir, { recursive: true, force: true })
 }
 
@@ -591,6 +649,7 @@ function killPid(pid) {
   if (!Number.isInteger(pid) || pid <= 0) {
     return
   }
+
   try {
     execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
   } catch {
@@ -601,6 +660,7 @@ function killPid(pid) {
 function readIntFile(filePath) {
   try {
     const n = Number(readFileSync(filePath, 'utf8').trim())
+
     return Number.isInteger(n) ? n : null
   } catch {
     return null

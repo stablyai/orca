@@ -54,24 +54,31 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     terminalErrorsByPaneId,
     terminalTab
   } = controller
+
   const effectiveAppearance = settings
     ? resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
     : null
+
   const terminalBackground =
     settings?.terminalColorOverrides?.background ?? effectiveAppearance?.theme?.background
+
   const titleUsesLightSurface = isTerminalBackgroundLight(terminalBackground, {
     appSurface: effectiveAppearance?.mode,
     backgroundOpacity: settings?.terminalBackgroundOpacity
   })
+
   const paneTitleBackground =
     resolveOpaqueTerminalBackground(terminalBackground, {
       appSurface: effectiveAppearance?.mode,
       backgroundOpacity: settings?.terminalBackgroundOpacity
     }) ?? (titleUsesLightSurface ? '#ffffff' : '#000000')
+
   const terminalContentVisible = isVisible || shouldMeasureHiddenStartup
+
   const hiddenStartupStyle: CSSProperties = shouldMeasureHiddenStartup
     ? { opacity: 0, pointerEvents: 'none' }
     : {}
+
   const terminalContainerStyle: CSSProperties = {
     display: terminalContentVisible ? 'flex' : 'none',
     overflow: 'hidden',
@@ -83,6 +90,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
       DEFAULT_TERMINAL_DIVIDER_DARK
     )
   }
+
   const activePane = managerRef.current?.getActivePane()
   const managedPanes = managerRef.current?.getPanes() ?? []
   const showSshReconnectOverlay = isActive && isVisible && sshReconnectOwnsTerminalErrors
@@ -92,6 +100,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     if (!sshReconnectOwnsTerminalErrors) {
       return
     }
+
     setTerminalError((current) =>
       current === null ? null : stripSshReconnectOwnedErrorLines(current)
     )
@@ -100,21 +109,26 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     )
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [sshReconnectOwnsTerminalErrors])
+
   const visibleTerminalError = terminalErrorForPane(
     terminalError,
     terminalErrorsByPaneId,
     activePane?.id ?? null
   )
+
   const menuPaneHasCustomTitle =
     contextMenu.menuPaneId !== null && Boolean(paneTitles[contextMenu.menuPaneId])
+
   const menuAgentSessionId = useAppStore((state) =>
     contextMenu.open && contextMenuLeafId
       ? resolvePaneAgentSessionId(state, makePaneKey(tabId, contextMenuLeafId))
       : null
   )
+
   const chatLeafStillMounted = chatLeafId
     ? managedPanes.some((pane) => pane.leafId === chatLeafId)
     : false
+
   useEffect(() => {
     const activeLeafId = activePane?.leafId ?? null
     applyNativeChatLeafRoute(
@@ -136,35 +150,45 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     isChatEligibleForLeaf,
     structuredSessionId
   ])
+
   const chatPane =
     isChatViewMode && chatLeafId
       ? (managedPanes.find((pane) => pane.leafId === chatLeafId) ?? null)
       : null
+
   const chatPanePtyId = chatPane
     ? (paneTransportsRef.current.get(chatPane.id)?.getPtyId() ?? null)
     : null
+
   const chatPaneResolvedAgent = chatPane ? resolveTitleAgentForLeaf(chatPane.leafId) : null
+
   const chatPaneLaunchAgent = nativeChatLaunchAgentForLeaf({
     launchAgent: terminalTab?.launchAgent,
     launchAgentLeafId: getTabWideAgentHintLeafId(),
     leafId: chatPane?.leafId ?? null,
     leafIds: getNativeChatLeafIds()
   })
+
   const structuredChatAgent = structuredSessionAgent ?? chatPaneResolvedAgent ?? chatPaneLaunchAgent
   const structuredChatTarget = useMemo(() => ({ kind: 'local' as const }), [])
+
   const chatPaneOwnsTabWideLaunchDraft = nativeChatLeafOwnsTabWideEvidence({
     ownerLeafId: getTabWideAgentHintLeafId(),
     leafId: chatPane?.leafId ?? null,
     leafIds: getNativeChatLeafIds()
   })
+
   const activePaneIsChatLeaf = Boolean(
     isChatViewMode && activePane?.leafId && activePane.leafId === chatLeafId
   )
+
   const resolveAgentForLeaf = (leafId: string | null): string | null => {
     const detectedAgent = leafId ? (tabAgentTypeByLeaf[leafId] ?? null) : null
+
     if (detectedAgent) {
       return detectedAgent
     }
+
     return (
       nativeChatLaunchAgentForLeaf({
         launchAgent: terminalTab?.launchAgent,
@@ -174,23 +198,30 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
       }) ?? resolveTitleAgentForLeaf(leafId)
     )
   }
+
   const activePaneCanContinueInNewSession = canContinueAgentSessionInNewSession(
     resolveAgentForLeaf(activePane?.leafId ?? null)
   )
+
   const contextMenuCanContinueInNewSession = canContinueAgentSessionInNewSession(
     resolveAgentForLeaf(contextMenuLeafId)
   )
+
   // Each switcher gates on its own leaf (header=active, menu=opened-over), so mixed splits show it only where chat can render.
   const activePaneCanToggleChat = canToggleChatForLeaf(activePane?.leafId ?? null)
   const contextMenuCanToggleChat = canToggleChatForLeaf(contextMenuLeafId)
   const contextMenuIsChatView = effectiveChatViewMode && contextMenuLeafId === chatLeafId
+
   const handleContextMenuToggleNativeChat = useCallback(() => {
     const leafId = getContextMenuLeafId()
+
     if (!leafId) {
       return
     }
+
     toggleNativeChatForLeaf(leafId)
   }, [getContextMenuLeafId, toggleNativeChatForLeaf])
+
   return {
     effectiveAppearance,
     terminalBackground,

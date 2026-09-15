@@ -15,6 +15,7 @@ vi.mock('@/i18n/i18n', () => ({
     if (!values) {
       return fallback
     }
+
     return Object.entries(values).reduce(
       (text, [key, value]) => text.replace(`{{${key}}}`, value),
       fallback
@@ -42,7 +43,9 @@ const entry: HostedTerminalQuickCommand = {
 }
 
 let container: HTMLDivElement
+
 let root: Root
+
 let writeClipboardText: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
@@ -81,6 +84,7 @@ function renderItem(item: HostedTerminalQuickCommand = entry): {
       )
     )
   })
+
   return { onRun, onEdit, onDelete }
 }
 
@@ -89,6 +93,7 @@ describe('TabBarQuickCommandItem', () => {
     const { onRun, onEdit, onDelete } = renderItem()
 
     const copyButton = container.querySelector('button[aria-label="Copy Git status"]')
+
     if (!(copyButton instanceof HTMLButtonElement)) {
       throw new Error('copy button not found')
     }
@@ -121,6 +126,7 @@ describe('TabBarQuickCommandItem', () => {
     })
 
     const copyButton = container.querySelector('button[aria-label="Copy Explore codebase"]')
+
     if (!(copyButton instanceof HTMLButtonElement)) {
       throw new Error('copy button not found')
     }
@@ -149,9 +155,11 @@ describe('TabBarQuickCommandItem', () => {
     })
 
     const copyButton = container.querySelector('button[aria-label="Nothing to copy"]')
+
     if (!(copyButton instanceof HTMLButtonElement)) {
       throw new Error('disabled copy button not found')
     }
+
     expect(copyButton.disabled).toBe(true)
     expect(writeClipboardText).not.toHaveBeenCalled()
   })
@@ -161,6 +169,7 @@ describe('TabBarQuickCommandItem', () => {
     renderItem()
 
     const copyButton = container.querySelector('button[aria-label="Copy Git status"]')
+
     if (!(copyButton instanceof HTMLButtonElement)) {
       throw new Error('copy button not found')
     }
@@ -177,6 +186,7 @@ describe('TabBarQuickCommandItem', () => {
   it('prevents nested action pointerdown from selecting the command row', () => {
     const { onRun } = renderItem()
     const copyButton = container.querySelector('button[aria-label="Copy Git status"]')
+
     if (!(copyButton instanceof HTMLButtonElement)) {
       throw new Error('copy button not found')
     }

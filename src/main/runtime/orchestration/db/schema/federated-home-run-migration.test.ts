@@ -71,6 +71,7 @@ describe('federated home Run migration', () => {
   it('repairs rows a rolled-back v1.4.198 host inserted after user_version reached 40', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-federated-home-run-'))
     const dbPath = join(dir, 'orchestration.db')
+
     try {
       const upgraded = new OrchestrationDb(dbPath)
       expect(upgraded.db.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
@@ -89,6 +90,7 @@ describe('federated home Run migration', () => {
       upgraded.close()
 
       const reopened = new OrchestrationDb(dbPath)
+
       try {
         const stubRunId = federatedStubHomeRunId('ctx_rolled_back')
         expect(reopened.getRemoteDispatchAttachment('ctx_rolled_back')?.home_run_id).toBe(stubRunId)

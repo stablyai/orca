@@ -37,7 +37,9 @@ import type { ProjectHostSetup } from '../../../../shared/project-types'
 installAutomationsPageHarness()
 
 const SSH_TARGET_ID = 'ssh-target-1'
+
 const SSH_REPO_ID = 'repo-ssh'
+
 const SSH_HOST_KEY = hostStableKey({
   authority: { kind: 'desktop' },
   selector: { kind: 'ssh', targetId: SSH_TARGET_ID }
@@ -47,6 +49,7 @@ const DESKTOP_SELF_KEY = hostStableKey({
   authority: { kind: 'desktop' },
   selector: { kind: 'self' }
 })
+
 const RUNTIME_SELF_KEY = hostStableKey({
   authority: { kind: 'runtime', environmentId: RUNTIME_ID },
   selector: { kind: 'self' }
@@ -70,6 +73,7 @@ function addSshProject(): void {
     worktreeBaseRef: 'main',
     connectionId: SSH_TARGET_ID
   } as Repo
+
   mocks.state.repos = [...(mocks.state.repos as Repo[]), repo]
   mocks.repoMap.set(SSH_REPO_ID, repo)
   // Without a ready setup on that host the project has no run context, and a
@@ -102,6 +106,7 @@ function addCollidingRuntimeProject(): void {
     worktreeBaseRef: 'main',
     executionHostId: `runtime:${RUNTIME_ID}`
   } as Repo
+
   mocks.state.repos = [...(mocks.state.repos as Repo[]), repo]
   mocks.state.projectHostSetups = [
     ...(mocks.state.projectHostSetups as ProjectHostSetup[]),
@@ -128,6 +133,7 @@ function runtimeCreateReturns(automation: Automation): void {
       if (method === 'automation.create') {
         return { automation }
       }
+
       return await previous?.(target, method, params, options)
     }
   )
@@ -424,6 +430,7 @@ describe('AutomationsPage edit dialog projects', () => {
       projectId: RUNTIME_REPO_ID,
       workspaceId: RUNTIME_WORKSPACE_ID
     })
+
     // The ambient list is the desktop's and never held this record, so an
     // id lookup there answers with nothing and the row's owner is all there is.
     api.automations.list.mockResolvedValue([])
@@ -545,8 +552,10 @@ describe('AutomationsPage edit destination', () => {
             failCreate = false
             throw new Error('socket hang up')
           }
+
           return { automation: makeAutomation({ id: 'a-moved', projectId: RUNTIME_REPO_ID }) }
         }
+
         return await previous?.(target, method, params, options)
       }
     )
@@ -575,6 +584,7 @@ describe('AutomationsPage edit destination', () => {
     const realNow = Date.now.bind(Date)
     let clockSkew = 0
     const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => realNow() + clockSkew)
+
     try {
       await save()
       clockSkew = 5000
@@ -586,6 +596,7 @@ describe('AutomationsPage edit destination', () => {
     const creationKeys = runtimeCreateCalls().map(
       (call) => (call[2] as { creationKey?: string }).creationKey
     )
+
     expect(creationKeys).toHaveLength(2)
     expect(creationKeys[0]).toBeTruthy()
     expect(creationKeys[1]).toBe(creationKeys[0])

@@ -9,6 +9,7 @@ describe('resolveStableForegroundProcess', () => {
       { available: false, processName: 'powershell.exe' },
       'claude'
     )
+
     expect(result.processName).toBe('claude')
     expect(result.lastRecognizedAgent).toBe('claude')
   })
@@ -26,6 +27,7 @@ describe('resolveStableForegroundProcess', () => {
       { available: true, processName: 'powershell.exe' },
       'claude'
     )
+
     expect(result.processName).toBe('powershell.exe')
     expect(result.lastRecognizedAgent).toBeNull()
   })
@@ -35,6 +37,7 @@ describe('resolveStableForegroundProcess', () => {
       { available: false, processName: 'powershell.exe' },
       null
     )
+
     expect(result.processName).toBe('powershell.exe')
     expect(result.lastRecognizedAgent).toBeNull()
   })

@@ -40,6 +40,7 @@ describe('buildWorktreeManualOrderCatalog', () => {
 
   it('treats a same-id host cluster as durable only when every owner agrees', () => {
     const sameId = 'repo::/same'
+
     const complete = buildWorktreeManualOrderCatalog({
       worktrees: [
         row(sameId, { hostId: 'local', manualOrder: 900 }),
@@ -47,6 +48,7 @@ describe('buildWorktreeManualOrderCatalog', () => {
       ],
       folderWorkspaces: []
     })
+
     const incomplete = buildWorktreeManualOrderCatalog({
       worktrees: [
         row(sameId, { hostId: 'local', manualOrder: 900 }),

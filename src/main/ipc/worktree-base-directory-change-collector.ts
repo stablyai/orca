@@ -64,15 +64,19 @@ function addMatchingChange(
   buckets: ChangeBuckets
 ): void {
   const change = classifyWorktreeBaseChange(target, event)
+
   for (const repoId of change.structureRepoIds) {
     buckets.structureRepoIds.add(repoId)
   }
+
   for (const repoId of change.gitStatusRepoIds) {
     buckets.gitStatusRepoIds.add(repoId)
   }
+
   for (const repoId of change.headIdentityRepoIds) {
     buckets.headIdentityRepoIds.add(repoId)
   }
+
   buckets.headIdentityScope = mergeHeadIdentityScopes(
     buckets.headIdentityScope,
     change.headIdentityScope
@@ -94,9 +98,11 @@ export function collectLocalWorktreeBaseChanges(
   events: WorktreeBaseWatcherEvent[]
 ): WorktreeBaseCollectedChanges {
   const buckets = emptyBuckets()
+
   for (const event of events) {
     addMatchingChange(target, event, buckets)
   }
+
   return toCollectedChanges(buckets)
 }
 
@@ -105,18 +111,23 @@ export function collectRemoteWorktreeBaseChanges(
   events: FsChangeEvent[]
 ): WorktreeBaseCollectedChanges {
   const buckets = emptyBuckets()
+
   for (const event of events) {
     if (event.kind === 'overflow') {
       return overflowChanges()
     }
+
     if (event.kind === 'rename') {
       if (event.oldAbsolutePath) {
         addMatchingChange(target, { type: 'delete', path: event.oldAbsolutePath }, buckets)
       }
+
       addMatchingChange(target, { type: 'create', path: event.absolutePath }, buckets)
       continue
     }
+
     addMatchingChange(target, { type: event.kind, path: event.absolutePath }, buckets)
   }
+
   return toCollectedChanges(buckets)
 }

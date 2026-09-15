@@ -10,8 +10,10 @@ export const LONG_POLL_CAP = 16
 // workers would otherwise hold every slot and starve the mobile/web/CLI/relay
 // clients sharing this runtime. Reserve half the budget for the other classes.
 export const ASK_LONG_POLL_SHARE = 0.5
+
 // Why: eight host slots preserve four-host overlap for two independently paired desktops.
 export const BROWSER_HOST_LONG_POLL_SHARE = 0.5
+
 // Why: asks and permanent hosts together retain the prior quarter-budget reservation for waits.
 export const SPECIALIZED_LONG_POLL_SHARE = 0.75
 
@@ -26,12 +28,15 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   if (request.method === 'orchestration.workerStart') {
     return 'wait'
   }
+
   if (request.method === 'browser.clientHost.attach') {
     return 'browser-host'
   }
+
   if (request.method === 'terminal.wait') {
     return 'wait'
   }
+
   // Agent-prompt submission waits for the PTY's lifecycle transition (up to
   // the verification budget); keep the local socket alive for that wait.
   if (
@@ -42,6 +47,7 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   ) {
     return 'wait'
   }
+
   // Why: orchestration.ask blocks unconditionally (default 600 s) holding the
   // RPC open until a reply lands or the deadline passes, so it needs the same
   // keepalive as check --wait or the 30 s socket idle timer tears it down. It
@@ -50,9 +56,12 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   if (request.method === 'orchestration.ask') {
     return 'ask'
   }
+
   if (request.method === 'orchestration.check') {
     const params = request.params as { wait?: unknown } | undefined
+
     return params?.wait === true ? 'wait' : null
   }
+
   return null
 }

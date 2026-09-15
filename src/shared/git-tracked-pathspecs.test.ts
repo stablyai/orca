@@ -3,13 +3,17 @@ import { isTrackedPathSpec, partitionTrackedPathSpecs } from './git-tracked-path
 
 function previousPartition(filePaths: readonly string[], trackedPaths: readonly string[]) {
   const normalize = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/, '')
+
   const isTracked = (filePath: string) => {
     const normalized = normalize(filePath)
+
     return trackedPaths.some((trackedPath) => {
       const normalizedTracked = normalize(trackedPath)
+
       return normalizedTracked === normalized || normalizedTracked.startsWith(`${normalized}/`)
     })
   }
+
   return {
     trackedPaths: filePaths.filter(isTracked),
     untrackedPaths: filePaths.filter((filePath) => !isTracked(filePath))
@@ -18,8 +22,10 @@ function previousPartition(filePaths: readonly string[], trackedPaths: readonly 
 
 function countNormalizations(run: () => unknown): number {
   const replace = vi.spyOn(String.prototype, 'replace')
+
   try {
     run()
+
     return replace.mock.calls.filter(
       ([pattern]) => pattern instanceof RegExp && pattern.source === '\\\\'
     ).length
@@ -91,6 +97,7 @@ describe('tracked pathspec partition', () => {
       '//host/share',
       'C:\\a'
     ]
+
     for (const tracked of [[], paths, ...paths.map((entry) => [entry])]) {
       expect(partitionTrackedPathSpecs(paths, tracked)).toEqual(previousPartition(paths, tracked))
     }

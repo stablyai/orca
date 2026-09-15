@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const native = vi.hoisted(() => ({ available: true }))
+
 vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   UIManager: { hasViewManagerConfig: () => native.available },
@@ -20,15 +21,20 @@ vi.mock('react-native', () => ({
     hairlineWidth: 1
   }
 }))
+
 vi.mock('react-native/Libraries/Utilities/codegenNativeComponent', () => ({
   default: (name: string) => name
 }))
+
 // Exercise the dependency's real span conversion without a native runtime.
 vi.mock('react-native-uitextview', () => import('react-native-uitextview/src/Text'))
+
 vi.mock('./MobileSelectableText', () => import('./MobileSelectableText.ios'))
+
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
 
 let renderer: ReactTestRenderer | undefined
+
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = undefined
@@ -41,6 +47,7 @@ function render(element: React.ReactElement): ReactTestRenderer {
   act(() => {
     renderer = create(element)
   })
+
   return renderer!
 }
 
@@ -54,6 +61,7 @@ describe('iOS selectable text boundary', () => {
     const { MobileMarkdown } = await import('./MobileMarkdown')
     const onOpenFile = vi.fn()
     const line = '**same** [file](src/main.ts)'
+
     const tree = render(
       createElement(MobileMarkdown, {
         content: `${line}\n${line}`,
@@ -61,6 +69,7 @@ describe('iOS selectable text boundary', () => {
         onOpenFile
       })
     )
+
     expect(
       nodes(tree, 'RNUITextViewChild')
         .map((node) => node.props.text)
@@ -104,6 +113,7 @@ describe('iOS selectable text boundary', () => {
 
   it('keeps fragments, arrays, newlines and nested styles in one native root', async () => {
     const { MobileSelectableText: Text } = await import('./MobileSelectableText.ios')
+
     const tree = render(
       createElement(
         Text,
@@ -114,6 +124,7 @@ describe('iOS selectable text boundary', () => {
         ' after'
       )
     )
+
     expect(nodes(tree, 'RNUITextView')).toHaveLength(1)
     expect(nodes(tree, 'Text')).toHaveLength(0)
     const spans = nodes(tree, 'RNUITextViewChild')
@@ -131,6 +142,7 @@ describe('iOS selectable text boundary', () => {
   it('preserves Markdown text, inline styles and file-link callbacks', async () => {
     const { MobileMarkdown } = await import('./MobileMarkdown')
     const onOpenFile = vi.fn()
+
     const tree = render(
       createElement(MobileMarkdown, {
         content: 'Hello 😀 [src/main.ts](src/main.ts) and `code`.\nNext line.',
@@ -138,6 +150,7 @@ describe('iOS selectable text boundary', () => {
         onOpenFile
       })
     )
+
     const spans = nodes(tree, 'RNUITextViewChild')
     expect(spans.map((node) => node.props.text).join('')).toBe(
       'Hello 😀 src/main.ts and code.\nNext line.'
@@ -174,12 +187,14 @@ describe('iOS selectable text boundary', () => {
 
   it('keeps code-language labels on styled React Native Text', async () => {
     const { MobileMarkdown } = await import('./MobileMarkdown')
+
     const tree = render(
       createElement(MobileMarkdown, {
         content: '```ts\nconst value = 1\n```',
         rangeSelectable: true
       })
     )
+
     const label = nodes(tree, 'Text').find((node) => node.children.join('') === 'ts')!
     expect(label.props.style.textTransform).toBe('uppercase')
     expect(nodes(tree, 'RNUITextView')).toHaveLength(1)
@@ -188,9 +203,11 @@ describe('iOS selectable text boundary', () => {
   it('falls back for older clients without the native view', async () => {
     native.available = false
     const { MobileSelectableText: Text } = await import('./MobileSelectableText.ios')
+
     const tree = render(
       createElement(Text, { selectable: true }, 'Old client ', createElement(Text, null, 'inline'))
     )
+
     expect(nodes(tree, 'RNUITextView')).toHaveLength(0)
     expect(nodes(tree, 'Text')).toHaveLength(2)
     expect(nodes(tree, 'Text')[0]!.props.selectable).toBe(true)

@@ -22,6 +22,7 @@ const duplicateEntries: ConnectionLogEntry[] = [
 
 describe('ConnectionLog', () => {
   type RenderedNode = { props: { style?: unknown } }
+
   type Renderer = {
     root: {
       findAllByType: (type: unknown) => RenderedNode[]
@@ -43,6 +44,7 @@ describe('ConnectionLog', () => {
         createElement(ConnectionLog, { entries, fillAvailableHeight })
       ) as unknown as Renderer
     })
+
     return renderer as Renderer
   }
 

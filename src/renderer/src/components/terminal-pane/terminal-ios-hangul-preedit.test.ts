@@ -45,12 +45,15 @@ describe('iPadOS Hangul typed as bare keydowns', () => {
 
   afterEach(() => {
     disposeOpenTerminals()
+
     if (originalUserAgent) {
       Object.defineProperty(navigator, 'userAgent', originalUserAgent)
     }
+
     if (originalMaxTouchPoints) {
       Object.defineProperty(navigator, 'maxTouchPoints', originalMaxTouchPoints)
     }
+
     vi.restoreAllMocks()
     document.body.replaceChildren()
   })
@@ -100,6 +103,7 @@ describe('iPadOS Hangul typed as bare keydowns', () => {
   it('composes after text already sitting on the line', async () => {
     pretendIosWeb()
     const rig = openIosTerminal()
+
     for (const [key, keyCode] of [
       ['e', 69],
       ['c', 67],
@@ -109,6 +113,7 @@ describe('iPadOS Hangul typed as bare keydowns', () => {
     ] as const) {
       await typePrintable(rig, { key, keyCode, written: key, replaces: false })
     }
+
     await typeHangeul(rig)
     dispatchKey(rig, 'keydown', { key: 'Enter', code: 'Enter', keyCode: 13 })
 
@@ -242,11 +247,13 @@ describe('iPadOS Hangul typed as bare keydowns', () => {
     // reads as the previous syllable settling — each jamo would go out alone.
     pretendIosWeb()
     const rig = openIosTerminal()
+
     const steps: [string, string][] = [
       ['\u314E', '\u1112'],
       ['\u3153', '\u1112\u1165'],
       ['\u3134', '\u1112\u1165\u11AB']
     ]
+
     for (const [key, field] of steps) {
       dispatchKey(rig, 'keydown', { key, keyCode: key.charCodeAt(0) })
       rig.textarea.value = field

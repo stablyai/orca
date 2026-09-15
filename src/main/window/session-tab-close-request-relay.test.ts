@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ipcEmitter = new EventEmitter()
+
 const ipcMainMock = {
   on: vi.fn((channel: string, listener: (...args: unknown[]) => void) => {
     ipcEmitter.on(channel, listener)
@@ -18,10 +19,12 @@ function createMainWindow() {
     isDestroyed: () => false,
     send: vi.fn()
   })
+
   const mainWindow = Object.assign(new EventEmitter(), {
     isDestroyed: () => false,
     webContents
   })
+
   return { mainWindow, webContents }
 }
 
@@ -37,6 +40,7 @@ describe('requestSessionTabCloseFromRenderer', () => {
     const { requestSessionTabCloseFromRenderer } = await import('./session-tab-close-request-relay')
     const { mainWindow, webContents } = createMainWindow()
     const pending = requestSessionTabCloseFromRenderer(mainWindow as never, 'tab-1', 'wt-1')
+
     const request = webContents.send.mock.calls[0]?.[1] as {
       requestId: string
       tabId: string
@@ -94,6 +98,7 @@ describe('requestSessionTabCloseFromRenderer', () => {
     async (eventName) => {
       const { requestSessionTabCloseFromRenderer } =
         await import('./session-tab-close-request-relay')
+
       const { mainWindow, webContents } = createMainWindow()
       const pending = requestSessionTabCloseFromRenderer(mainWindow as never, 'tab-1', 'wt-1')
 

@@ -26,6 +26,7 @@ function sshMutationArguments(
   ) {
     return []
   }
+
   return [
     params.expectedSshConnectionGeneration,
     params.expectedSshTargetId,

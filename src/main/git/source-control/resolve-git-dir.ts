@@ -18,6 +18,7 @@ export async function resolveGitDir(
 
   try {
     const gitDir = parseGitdirMarkerPayload(await readFile(dotGitPath, 'utf-8'))
+
     if (gitDir) {
       return resolveGitMetadataPath(hostWorktreePath, gitDir, options) ?? dotGitPath
     }

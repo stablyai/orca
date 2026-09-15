@@ -72,6 +72,7 @@ function repoHeader(project: Repo): Extract<Row, { type: 'header' }> {
 
 function item(id: string, project: Repo): Extract<Row, { type: 'item' }> {
   const sectionKey = `repo:${project.id}`
+
   return {
     type: 'item',
     rowKey: `${sectionKey}:${id}`,
@@ -91,6 +92,7 @@ function pinnedItem(id: string, project: Repo, sectionKey: string): Extract<Row,
   row.worktree.isPinned = true
   row.rowKey = `${sectionKey}:${id}`
   row.sectionKey = sectionKey
+
   return row
 }
 
@@ -110,6 +112,7 @@ function folderWorkspaceRow(
     createdAt: 1,
     updatedAt: 1
   }
+
   const folderWorkspace: FolderWorkspace = {
     id: 'folder-1',
     projectGroupId: projectGroup.id,
@@ -126,6 +129,7 @@ function folderWorkspaceRow(
     createdAt: 1,
     updatedAt: 1
   }
+
   return {
     type: 'folder-workspace',
     key: 'folder-workspace:folder-1',
@@ -314,6 +318,7 @@ describe('addHostSectionRows', () => {
   it('copies global pinned and all headers into each mixed-host section without duplicating pins', () => {
     const local = repo('local')
     const ssh = repo('ssh', 'ssh-1')
+
     const rows = [
       pinnedHeader(
         new Map([
@@ -411,6 +416,7 @@ describe('addHostSectionRows', () => {
     const local = repo('local')
     const pinned = pinnedItem('ssh-pinned', local, PINNED_GROUP_KEY)
     pinned.worktree.hostId = 'ssh:ssh-1'
+
     const rows = [
       pinnedHeader(new Map([['ssh:ssh-1', 1]]), new Map([['ssh:ssh-1', ['ssh-pinned']]])),
       pinned,
@@ -451,6 +457,7 @@ describe('addHostSectionRows', () => {
   it('does not double-count a collapsed pinned header and its natural duplicate row', () => {
     const local = repo('local')
     const ssh = repo('ssh', 'ssh-1')
+
     const rows = [
       pinnedHeader(new Map([['local', 1]]), new Map([['local', ['wt-1']]])),
       { ...header('all', 'All'), count: 1, worktreeIds: ['wt-1'] },
@@ -483,6 +490,7 @@ describe('addHostSectionRows', () => {
   it('localizes collapsed natural headers even when the hidden rows are owned by one host', () => {
     const ssh = repo('ssh', 'ssh-1')
     const localHostId = 'local' as const
+
     const rows = [
       {
         ...header('all', 'All'),
@@ -530,6 +538,7 @@ describe('addHostSectionRows', () => {
   it('groups explicitly runtime-owned repos under their owner host, not the focused host', () => {
     const localOwned: Repo = { ...repo('local-project'), executionHostId: 'local' }
     const runtimeOwned: Repo = { ...repo('remote-project'), executionHostId: 'runtime:env-2' }
+
     const rows = [
       repoHeader(localOwned),
       item('local-wt', localOwned),
@@ -645,6 +654,7 @@ describe('addHostSectionRows', () => {
   it('uses the focused runtime as the owner for non-SSH repos', () => {
     const localOwned: Repo = { ...repo('local-project'), executionHostId: 'local' }
     const project = repo('runtime-project')
+
     const rows = [
       repoHeader(localOwned),
       item('local-wt', localOwned),
@@ -685,6 +695,7 @@ describe('addHostSectionRows', () => {
   it('passes host kind and blocked compatibility through to the header row', () => {
     const localOwned: Repo = { ...repo('local-project'), executionHostId: 'local' }
     const project = repo('runtime-project')
+
     const rows = [
       repoHeader(localOwned),
       item('local-wt', localOwned),

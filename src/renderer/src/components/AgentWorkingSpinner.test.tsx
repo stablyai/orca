@@ -26,6 +26,7 @@ describe('AgentWorkingSpinner', () => {
       HTMLElement.prototype,
       'getAnimations'
     )
+
     Object.defineProperty(HTMLElement.prototype, 'getAnimations', {
       configurable: true,
       value: undefined
@@ -42,6 +43,7 @@ describe('AgentWorkingSpinner', () => {
     } finally {
       act(() => root.unmount())
       container.remove()
+
       if (originalGetAnimations === undefined) {
         Reflect.deleteProperty(HTMLElement.prototype, 'getAnimations')
       } else {
@@ -59,11 +61,14 @@ describe('AgentWorkingSpinner', () => {
       animationName: 'agent-spinner-rotate',
       startTime: 321
     } as unknown as Animation
+
     const getAnimations = vi.fn(() => [animation])
+
     const originalGetAnimations = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,
       'getAnimations'
     )
+
     Object.defineProperty(HTMLElement.prototype, 'getAnimations', {
       configurable: true,
       value: getAnimations
@@ -71,6 +76,7 @@ describe('AgentWorkingSpinner', () => {
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
+
     const fireAnimationStart = async (): Promise<void> => {
       const event = new Event('animationstart', { bubbles: true })
       Object.defineProperty(event, 'animationName', { value: 'agent-spinner-rotate' })
@@ -97,6 +103,7 @@ describe('AgentWorkingSpinner', () => {
     } finally {
       act(() => root.unmount())
       container.remove()
+
       if (originalGetAnimations === undefined) {
         Reflect.deleteProperty(HTMLElement.prototype, 'getAnimations')
       } else {
@@ -110,10 +117,12 @@ describe('AgentWorkingSpinner', () => {
   // adds no exposure here — both paths were already no-ops.
   it('anchors nothing when reduced motion leaves no animation to start', async () => {
     const getAnimations = vi.fn(() => [] as Animation[])
+
     const originalGetAnimations = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,
       'getAnimations'
     )
+
     Object.defineProperty(HTMLElement.prototype, 'getAnimations', {
       configurable: true,
       value: getAnimations
@@ -134,6 +143,7 @@ describe('AgentWorkingSpinner', () => {
     } finally {
       act(() => root.unmount())
       container.remove()
+
       if (originalGetAnimations === undefined) {
         Reflect.deleteProperty(HTMLElement.prototype, 'getAnimations')
       } else {
@@ -147,11 +157,14 @@ describe('AgentWorkingSpinner', () => {
       animationName: 'agent-spinner-rotate',
       startTime: 321
     } as unknown as Animation
+
     const getAnimations = vi.fn(() => [animation])
+
     const originalGetAnimations = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,
       'getAnimations'
     )
+
     Object.defineProperty(HTMLElement.prototype, 'getAnimations', {
       configurable: true,
       value: getAnimations
@@ -175,6 +188,7 @@ describe('AgentWorkingSpinner', () => {
     } finally {
       act(() => root.unmount())
       container.remove()
+
       if (originalGetAnimations === undefined) {
         Reflect.deleteProperty(HTMLElement.prototype, 'getAnimations')
       } else {
@@ -195,6 +209,7 @@ describe('AgentWorkingSpinner', () => {
     const reducedMotionBlock = css.match(
       /@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.agent-working-spinner\s*\{[^}]*\}/
     )?.[0]
+
     expect(reducedMotionBlock).toContain('animation: none')
   })
 })

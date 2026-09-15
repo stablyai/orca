@@ -10,45 +10,61 @@ import {
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -64,10 +80,12 @@ describe('registerPtyHandlers', () => {
   it('fails closed without spawning when a recovered owner provider disconnects', async () => {
     const connectionId = 'ssh-agent-owner-gone'
     const ownerPtyId = `ssh:${connectionId}@@relay-owner`
+
     const claim = {
       ...recoveredAgentClaim,
       identityDigest: 'ccccccccccccccccccccccccccccccccccccccccccc'
     }
+
     const owner: AgentSessionOwnerBinding = {
       claim,
       generation: 'generation-remote',
@@ -75,6 +93,7 @@ describe('registerPtyHandlers', () => {
       ptyId: ownerPtyId,
       surface: recoveredAgentSurface
     }
+
     const remoteProvider = createAgentClaimProvider({
       sessions: [
         {
@@ -87,6 +106,7 @@ describe('registerPtyHandlers', () => {
       ],
       livePtyIds: new Set([ownerPtyId])
     })
+
     registerSshPtyProvider(connectionId, remoteProvider as never)
     setLocalPtyProvider(createAgentClaimProvider({}) as never)
     const controller = registerAgentClaimController()
@@ -120,6 +140,7 @@ describe('registerPtyHandlers', () => {
       ...recoveredAgentClaim,
       identityDigest: 'ddddddddddddddddddddddddddddddddddddddddddd'
     }
+
     const localOwner: AgentSessionOwnerBinding = {
       claim,
       generation: 'generation-conflict',
@@ -127,10 +148,12 @@ describe('registerPtyHandlers', () => {
       ptyId: 'pty-conflict-local',
       surface: recoveredAgentSurface
     }
+
     const remoteOwner: AgentSessionOwnerBinding = {
       ...localOwner,
       ptyId: 'ssh:ssh-agent-conflict@@pty-conflict-remote'
     }
+
     const localSpawn = vi.fn(async () => ({ id: 'must-not-spawn' }))
     setLocalPtyProvider(
       createAgentClaimProvider({
@@ -181,6 +204,7 @@ describe('registerPtyHandlers', () => {
       ...recoveredAgentClaim,
       identityDigest: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee'
     }
+
     const ownerA: AgentSessionOwnerBinding = {
       claim,
       generation: 'generation-a',
@@ -188,11 +212,13 @@ describe('registerPtyHandlers', () => {
       ptyId: 'pty-conflict-a',
       surface: recoveredAgentSurface
     }
+
     const ownerB: AgentSessionOwnerBinding = {
       ...ownerA,
       generation: 'generation-b',
       ptyId: 'ssh:ssh-agent-converge@@pty-conflict-b'
     }
+
     const localSessions = [
       {
         id: ownerA.ptyId,
@@ -202,6 +228,7 @@ describe('registerPtyHandlers', () => {
         agentSessionOwners: [ownerA]
       }
     ]
+
     const remoteSessions = [
       {
         id: ownerB.ptyId,
@@ -211,6 +238,7 @@ describe('registerPtyHandlers', () => {
         agentSessionOwners: [ownerB]
       }
     ]
+
     const local = createAgentClaimProvider({ sessions: localSessions })
     setLocalPtyProvider(local as never)
     registerSshPtyProvider(
@@ -218,6 +246,7 @@ describe('registerPtyHandlers', () => {
       createAgentClaimProvider({ sessions: remoteSessions }) as never
     )
     const controller = registerAgentClaimController()
+
     const request = {
       cols: 80,
       rows: 24,
@@ -242,6 +271,7 @@ describe('registerPtyHandlers', () => {
       ...recoveredAgentClaim,
       identityDigest: 'fffffffffffffffffffffffffffffffffffffffffff'
     }
+
     const oldOwner: AgentSessionOwnerBinding = {
       claim,
       generation: 'generation-old',
@@ -249,6 +279,7 @@ describe('registerPtyHandlers', () => {
       ptyId: 'pty-reused',
       surface: recoveredAgentSurface
     }
+
     const sessions = [
       {
         id: oldOwner.ptyId,
@@ -258,14 +289,17 @@ describe('registerPtyHandlers', () => {
         agentSessionOwners: [oldOwner]
       }
     ]
+
     const spawn = vi.fn(
       async (options: {
         agentSessionEnsure?: { claim: typeof claim; surface: typeof recoveredAgentSurface }
       }) => {
         const ensured = options.agentSessionEnsure
+
         if (!ensured) {
           throw new Error('missing test claim')
         }
+
         const owner: AgentSessionOwnerBinding = {
           claim: ensured.claim,
           generation: 'generation-new',
@@ -273,6 +307,7 @@ describe('registerPtyHandlers', () => {
           ptyId: 'pty-new-owner',
           surface: ensured.surface
         }
+
         sessions.push({
           id: owner.ptyId,
           incarnationId: 'incarnation-new',
@@ -280,15 +315,18 @@ describe('registerPtyHandlers', () => {
           title: 'Codex',
           agentSessionOwners: [owner]
         })
+
         return {
           id: owner.ptyId,
           agentSessionEnsure: { disposition: 'created' as const, owner }
         }
       }
     )
+
     const provider = createAgentClaimProvider({ sessions, spawn })
     setLocalPtyProvider(provider as never)
     const controller = registerAgentClaimController()
+
     const request = {
       cols: 80,
       rows: 24,
@@ -309,10 +347,12 @@ describe('registerPtyHandlers', () => {
   })
   it('preserves an owner fence across disconnect and adopts it after reconnect', async () => {
     const connectionId = 'ssh-agent-reconnect'
+
     const claim = {
       ...recoveredAgentClaim,
       identityDigest: '9999999999999999999999999999999999999999999'
     }
+
     const owner: AgentSessionOwnerBinding = {
       claim,
       generation: 'generation-reconnect',
@@ -320,6 +360,7 @@ describe('registerPtyHandlers', () => {
       ptyId: `ssh:${connectionId}@@pty-owner`,
       surface: recoveredAgentSurface
     }
+
     const sessions = [
       {
         id: owner.ptyId,
@@ -329,10 +370,12 @@ describe('registerPtyHandlers', () => {
         agentSessionOwners: [owner]
       }
     ]
+
     const firstProvider = createAgentClaimProvider({ sessions })
     setLocalPtyProvider(createAgentClaimProvider({}) as never)
     registerSshPtyProvider(connectionId, firstProvider as never)
     const controller = registerAgentClaimController()
+
     const request = {
       cols: 80,
       rows: 24,

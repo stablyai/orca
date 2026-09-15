@@ -27,20 +27,25 @@ export async function readRuntimeJiraPayload<TResult>(
 
   return new Promise<TResult>((resolve, reject) => {
     let settled = false
+
     const fail = (error: unknown): void => {
       if (settled) {
         return
       }
+
       settled = true
       close()
       reject(error)
     }
+
     const finish = (): void => {
       if (settled) {
         return
       }
+
       settled = true
       close()
+
       try {
         resolve(JSON.parse(chunks.join('')) as TResult)
       } catch {
@@ -59,24 +64,35 @@ export async function readRuntimeJiraPayload<TResult>(
         {
           onResponse: (response) => {
             const rpcResponse = response as RuntimeRpcResponse<unknown>
+
             if (!rpcResponse.ok) {
               fail(new RuntimeRpcCallError(rpcResponse))
+
               return
             }
+
             const message = rpcResponse.result
+
             if (!isJiraPayloadStreamMessage(message)) {
               fail(new Error('Remote Jira payload stream returned an invalid message.'))
+
               return
             }
+
             if (message.type === 'end') {
               finish()
+
               return
             }
+
             receivedChars += message.content.length
+
             if (receivedChars > JIRA_PAYLOAD_MAX_CHARS) {
               fail(new Error('Remote Jira payload exceeded the transfer limit.'))
+
               return
             }
+
             chunks.push(message.content)
           },
           onError: fail,
@@ -85,6 +101,7 @@ export async function readRuntimeJiraPayload<TResult>(
       )
       .then((handle) => {
         unsubscribe = handle.unsubscribe
+
         if (unsubscribeWhenReady) {
           unsubscribe()
         }

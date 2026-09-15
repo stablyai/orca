@@ -21,9 +21,11 @@ export function retainOpenTabResultsForQuery({
   if (resultsQuery.trim() === query.trim() || results.length === 0) {
     return results
   }
+
   if (!query.trim() || !entries) {
     return NO_RESULTS
   }
+
   // Why re-run the engines instead of re-reading the row text: only they know
   // every matchable field — type aliases, absolute paths, agent snippets,
   // browser workspace labels — and Enter must never submit a row the query on
@@ -31,7 +33,9 @@ export function retainOpenTabResultsForQuery({
   const liveResultIds = new Set(
     searchOpenTabs({ ...entriesBehindResults(entries, results), query }).map((result) => result.id)
   )
+
   const retained = results.filter((result) => liveResultIds.has(result.id))
+
   // Why the same array: an unchanged list must not invalidate the row memos.
   return retained.length === results.length ? results : retained
 }
@@ -45,6 +49,7 @@ function entriesBehindResults(
   const workspaceTabIds = new Set<string>()
   const browserPageIds = new Set<string>()
   const simulatorTabIds = new Set<string>()
+
   for (const result of results) {
     if (result.source === 'workspace') {
       workspaceTabIds.add(result.tabId)
@@ -54,6 +59,7 @@ function entriesBehindResults(
       simulatorTabIds.add(result.tabId)
     }
   }
+
   return {
     workspaceTabs: entries.workspaceTabs.filter((entry) => workspaceTabIds.has(entry.tab.id)),
     browserPages: entries.browserPages.filter((entry) => browserPageIds.has(entry.page.id)),

@@ -15,9 +15,12 @@ export function revealDashboardAgent(args: DashboardRevealAgentArgs): boolean {
     args.worktreeId,
     args.executionHostId ? { executionHostId: args.executionHostId } : undefined
   )
+
   if (activated === false) {
     return false
   }
+
   activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
+
   return true
 }

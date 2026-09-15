@@ -21,6 +21,7 @@ import {
 describe('OrcaRuntimeService', () => {
   it('forwards generated-name provenance while launching SSH startup drafts', async () => {
     detectRemoteAgentsMock.mockResolvedValue(['claude'])
+
     const created = {
       path: '/remote/repo-nautilus-2',
       head: 'def',
@@ -28,7 +29,9 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const metaById: Record<string, WorktreeMeta> = {}
+
     const remoteStore = {
       ...store,
       getRepos: () => [
@@ -59,31 +62,39 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       }
     }
+
     const provider = {
       exec: vi.fn(async (args: string[]) => {
         if (args[0] === 'config') {
           return { stdout: 'Remote User\n', stderr: '' }
         }
+
         if (args[0] === 'branch') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'symbolic-ref') {
           return { stdout: 'origin/main\n', stderr: '' }
         }
+
         if (isOriginMainBaseRefProbe(args)) {
           return { stdout: 'main-sha\n', stderr: '' }
         }
+
         if (args[0] === 'fetch') {
           return { stdout: '', stderr: '' }
         }
+
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([created])
     }
+
     registerSshGitProvider('ssh-1', provider as never)
     getActiveMultiplexerMock.mockReturnValue({ request: muxRequestMock, notify: vi.fn() })
     const runtime = new OrcaRuntimeService(remoteStore as never)
@@ -96,6 +107,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     const draftUrl = 'https://github.com/stablyai/orca/pull/456'
+
     const result = await runtime.createManagedWorktree({
       repoSelector: TEST_REPO_ID,
       name: 'nautilus',
@@ -125,6 +137,7 @@ describe('OrcaRuntimeService', () => {
   it('pre-marks remote Codex workspaces trusted before pasting startup drafts', async () => {
     detectRemoteAgentsMock.mockResolvedValue(['codex'])
     muxRequestMock.mockResolvedValue({ resolvedPath: '/home/dev' })
+
     const created = {
       path: '/remote/mobile-codex-draft',
       head: 'def',
@@ -132,7 +145,9 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const metaById: Record<string, WorktreeMeta> = {}
+
     const remoteStore = {
       ...store,
       getRepos: () => [
@@ -162,37 +177,46 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       }
     }
+
     const gitProvider = {
       exec: vi.fn(async (args: string[]) => {
         if (args[0] === 'config') {
           return { stdout: 'Remote User\n', stderr: '' }
         }
+
         if (args[0] === 'branch') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'symbolic-ref') {
           return { stdout: 'origin/main\n', stderr: '' }
         }
+
         if (isOriginMainBaseRefProbe(args)) {
           return { stdout: 'main-sha\n', stderr: '' }
         }
+
         if (args[0] === 'fetch') {
           return { stdout: '', stderr: '' }
         }
+
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([created])
     }
+
     const fsProvider = {
       realpath: vi.fn().mockResolvedValue('/remote/mobile-codex-draft'),
       readFile: vi.fn().mockRejectedValue(new Error('missing config')),
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
     }
+
     registerSshGitProvider('ssh-1', gitProvider as never)
     registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
@@ -242,6 +266,7 @@ describe('OrcaRuntimeService', () => {
 
   it('pre-marks remote Codex workspaces trusted before explicit startup commands', async () => {
     muxRequestMock.mockResolvedValue({ resolvedPath: '/home/dev' })
+
     const created = {
       path: '/remote/mobile-codex-command',
       head: 'def',
@@ -249,7 +274,9 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const metaById: Record<string, WorktreeMeta> = {}
+
     const remoteStore = {
       ...store,
       getRepos: () => [
@@ -275,37 +302,46 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       }
     }
+
     const gitProvider = {
       exec: vi.fn(async (args: string[]) => {
         if (args[0] === 'config') {
           return { stdout: 'Remote User\n', stderr: '' }
         }
+
         if (args[0] === 'branch') {
           return { stdout: '', stderr: '' }
         }
+
         if (args[0] === 'symbolic-ref') {
           return { stdout: 'origin/main\n', stderr: '' }
         }
+
         if (isOriginMainBaseRefProbe(args)) {
           return { stdout: 'main-sha\n', stderr: '' }
         }
+
         if (args[0] === 'fetch') {
           return { stdout: '', stderr: '' }
         }
+
         throw new Error(`unexpected git call: ${args.join(' ')}`)
       }),
       addWorktree: vi.fn().mockResolvedValue(undefined),
       listWorktrees: vi.fn().mockResolvedValue([created])
     }
+
     const fsProvider = {
       realpath: vi.fn().mockResolvedValue('/remote/mobile-codex-command'),
       readFile: vi.fn().mockRejectedValue(new Error('missing config')),
       createDir: vi.fn().mockResolvedValue(undefined),
       writeFile: vi.fn().mockResolvedValue(undefined)
     }
+
     registerSshGitProvider('ssh-1', gitProvider as never)
     registerSshFilesystemProvider('ssh-1', fsProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)

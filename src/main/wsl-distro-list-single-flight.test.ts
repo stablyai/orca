@@ -8,6 +8,7 @@ const { execFileMock, execFileSyncMock } = vi.hoisted(() => ({
 
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof childProcess>()
+
   return {
     ...actual,
     execFile: execFileMock,

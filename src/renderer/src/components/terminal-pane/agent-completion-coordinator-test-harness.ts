@@ -20,9 +20,11 @@ export function processResult(
 
 export function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolveDeferred!: (value: T) => void
+
   const promise = new Promise<T>((resolve) => {
     resolveDeferred = resolve
   })
+
   return { promise, resolve: resolveDeferred }
 }
 

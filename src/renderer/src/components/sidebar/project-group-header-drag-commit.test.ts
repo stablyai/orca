@@ -42,11 +42,13 @@ function makeSession(
 describe('commitProjectGroupHeaderDragDrop', () => {
   it('commits dense tabOrder updates for the affected Project Group siblings', () => {
     const onCommitProjectGroupTabOrder = vi.fn()
+
     const groups = [
       group('a', { tabOrder: 0 }),
       group('b', { tabOrder: 10 }),
       group('c', { tabOrder: 20 })
     ]
+
     const projectGroupById = new Map(groups.map((entry) => [entry.id, entry]))
 
     commitProjectGroupHeaderDragDrop({
@@ -69,6 +71,7 @@ describe('commitProjectGroupHeaderDragDrop', () => {
     const siblingA = group('sibling-a', { parentGroupId: root.id, tabOrder: 0 })
     const siblingB = group('sibling-b', { parentGroupId: root.id, tabOrder: 10 })
     const otherParentGroup = group('other-parent-group', { tabOrder: -100 })
+
     const projectGroupById = new Map(
       [root, siblingA, siblingB, otherParentGroup].map((entry) => [entry.id, entry])
     )

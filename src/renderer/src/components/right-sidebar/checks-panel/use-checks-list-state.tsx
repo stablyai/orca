@@ -40,19 +40,24 @@ export function useChecksListState({
   const patchOpenCheckRunDetails = useAppStore((s) => s.patchOpenCheckRunDetails)
   const [checksExpanded, setChecksExpanded] = useState(true)
   const [expandedCheckKeys, setExpandedCheckKeys] = useState<Set<string>>(new Set())
+
   const [detailsByCheckKey, setDetailsByCheckKey] = useState<Record<string, CheckDetailsLoadState>>(
     {}
   )
+
   const detailsContextRef = useRef(checkDetailsContextKey)
   const autoExpandedContextRef = useRef<string | null>(null)
   // Why: expanded check details already sit inside the sidebar scroller; keeping
   // the list scroller too creates nested scrollbars around CI annotations.
   const shouldConstrainCheckList = checksExpanded && expandedCheckKeys.size === 0
+
   const { detailsHeight, handleResizeStart } = useCheckDetailsResize(
     shouldConstrainCheckList && checks.length > 0
   )
+
   detailsContextRef.current = checkDetailsContextKey
   const sorted = React.useMemo(() => sortChecksBySeverity(checks), [checks])
+
   const rows = React.useMemo(
     () =>
       sorted.map((check, index) => ({
@@ -61,6 +66,7 @@ export function useChecksListState({
       })),
     [checkDetailsContextKey, sorted]
   )
+
   // Why: every header count comes from the same classifier the checks pill uses — counting only
   // `success` made a 2-success/3-skipped PR say "2 passing" next to "5/5 passed", and treating a
   // null conclusion as pending kept a completed-but-unresolved check spinning forever.
@@ -75,22 +81,28 @@ export function useChecksListState({
     const validKeys = new Set(rows.map((row) => row.key))
     setDetailsByCheckKey((current) => {
       const next: Record<string, CheckDetailsLoadState> = {}
+
       for (const [key, state] of Object.entries(current)) {
         if (validKeys.has(key)) {
           next[key] = state
         }
       }
+
       return next
     })
     setExpandedCheckKeys((current) => {
       const next = new Set([...current].filter((key) => validKeys.has(key)))
+
       if (autoExpandedContextRef.current !== checkDetailsContextKey) {
         const firstFailed = rows.find((row) => isFailedCheck(row.check))
+
         if (firstFailed) {
           next.add(firstFailed.key)
         }
+
         autoExpandedContextRef.current = checkDetailsContextKey
       }
+
       return next
     })
   }, [checkDetailsContextKey, rows])
@@ -99,11 +111,14 @@ export function useChecksListState({
     setDetailsByCheckKey((current) => {
       let changed = false
       const next: Record<string, CheckDetailsLoadState> = { ...current }
+
       for (const row of rows) {
         const cached = next[row.key]
+
         if (!cached || cached.loading) {
           continue
         }
+
         // Why: a failed load (GitLab auth blip, 404, offline) otherwise pins its error
         // forever — there is no retry affordance — so re-arm it once the job moves on.
         const stale = cached.details
@@ -114,11 +129,13 @@ export function useChecksListState({
               (cached.errorAt.status !== row.check.status ||
                 cached.errorAt.conclusion !== row.check.conclusion)
             )
+
         if (stale) {
           delete next[row.key]
           changed = true
         }
       }
+
       return changed ? next : current
     })
   }, [rows])
@@ -128,6 +145,7 @@ export function useChecksListState({
       if (detailsByCheckKey[row.key]?.loading || detailsByCheckKey[row.key]?.details) {
         return
       }
+
       if (
         !row.check.checkRunId &&
         !row.check.workflowRunId &&
@@ -145,8 +163,10 @@ export function useChecksListState({
             )
           }
         }))
+
         return
       }
+
       if (!onLoadCheckDetails) {
         setDetailsByCheckKey((current) => ({
           ...current,
@@ -159,8 +179,10 @@ export function useChecksListState({
             )
           }
         }))
+
         return
       }
+
       const requestContextKey = checkDetailsContextKey
       const requestId = createCheckRunDetailsRequestId()
       const retryError = detailsByCheckKey[row.key]?.error ?? null
@@ -168,6 +190,7 @@ export function useChecksListState({
         ...current,
         [row.key]: { requestId, loading: true, details: null, error: retryError }
       }))
+
       if (resolvedWorktreeId) {
         patchOpenCheckRunDetails(resolvedWorktreeId, requestContextKey, row.check, {
           requestId,
@@ -178,6 +201,7 @@ export function useChecksListState({
           gitlabProjectRef: getGitLabProjectRef?.() ?? null
         })
       }
+
       const request = Promise.resolve().then(() => onLoadCheckDetails(row.check))
       void request
         .then((details) => {
@@ -196,13 +220,16 @@ export function useChecksListState({
               gitlabProjectRef: getGitLabProjectRef?.() ?? null
             })
           }
+
           if (detailsContextRef.current !== requestContextKey) {
             return
           }
+
           setDetailsByCheckKey((current) => {
             if (current[row.key]?.requestId !== requestId) {
               return current
             }
+
             return {
               ...current,
               [row.key]: {
@@ -231,6 +258,7 @@ export function useChecksListState({
                   'auto.components.right.sidebar.checks.panel.content.e45324fbed',
                   'Failed to load check details.'
                 )
+
           if (resolvedWorktreeId) {
             patchOpenCheckRunDetails(resolvedWorktreeId, requestContextKey, row.check, {
               requestId,
@@ -241,13 +269,16 @@ export function useChecksListState({
               gitlabProjectRef: getGitLabProjectRef?.() ?? null
             })
           }
+
           if (detailsContextRef.current !== requestContextKey) {
             return
           }
+
           setDetailsByCheckKey((current) => {
             if (current[row.key]?.requestId !== requestId) {
               return current
             }
+
             return {
               ...current,
               [row.key]: {
@@ -276,6 +307,7 @@ export function useChecksListState({
     if (!checksExpanded) {
       return
     }
+
     for (const row of rows) {
       if (expandedCheckKeys.has(row.key) && !detailsByCheckKey[row.key]) {
         requestCheckDetails(row)
@@ -287,11 +319,14 @@ export function useChecksListState({
     if (!resolvedWorktreeId) {
       return
     }
+
     for (const row of rows) {
       const detailsState = detailsByCheckKey[row.key]
+
       if (!detailsState) {
         continue
       }
+
       patchOpenCheckRunDetails(resolvedWorktreeId, checkDetailsContextKey, row.check, {
         requestId: detailsState.requestId,
         details: detailsState.details ?? null,
@@ -316,19 +351,23 @@ export function useChecksListState({
       const willExpand = !expandedCheckKeys.has(row.key)
       setExpandedCheckKeys((current) => {
         const next = new Set(current)
+
         if (next.has(row.key)) {
           next.delete(row.key)
         } else {
           next.add(row.key)
         }
+
         return next
       })
+
       if (willExpand) {
         requestCheckDetails(row)
       }
     },
     [expandedCheckKeys, requestCheckDetails]
   )
+
   return {
     resolvedWorktreeId,
     checksExpanded,

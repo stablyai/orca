@@ -281,6 +281,7 @@ describe('ActivityThreadListPane collapsible sections', () => {
     const markUnreadButton = container.querySelector(
       'button[aria-label="Mark thread unread"]'
     ) as HTMLButtonElement | null
+
     expect(markUnreadButton).not.toBeNull()
     expect(markUnreadButton?.disabled).toBe(false)
 

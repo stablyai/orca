@@ -14,14 +14,18 @@ export class BrowserHostCommandResultCache {
 
   remember(page: BrowserHostCommandPageState, record: BrowserHostCommandRecord): void {
     this.settledRecords.set(record, page)
+
     while (page.settledSequences.length > this.maxResultsPerPage) {
       this.evict(page, page.settledSequences[0])
     }
+
     while (this.settledRecords.size > this.maxResults) {
       const oldest = this.settledRecords.entries().next().value
+
       if (!oldest) {
         break
       }
+
       this.evict(oldest[1], oldest[0].event.commandSequence, oldest[0])
     }
   }
@@ -42,15 +46,19 @@ export class BrowserHostCommandResultCache {
     expected?: BrowserHostCommandRecord
   ): void {
     const record = page.records.get(sequence)
+
     if (!record?.settled || (expected && record !== expected)) {
       return
     }
+
     page.records.delete(sequence)
     this.settledRecords.delete(record)
     const index = page.settledSequences.indexOf(sequence)
+
     if (index !== -1) {
       page.settledSequences.splice(index, 1)
     }
+
     if (page.activeCapacityReleased && page.records.size === 0) {
       this.onReleasedPageEmpty(record.event.browserPageId)
     }

@@ -9,7 +9,9 @@ import {
 } from './agent-hibernation-pane-age'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const PANE = `tab-1:${LEAF}`
+
 const IDLE_MS = 30 * 60 * 1000
 
 function tab(id = 'tab-1'): TerminalTab {

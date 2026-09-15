@@ -46,22 +46,27 @@ function getWorktreeSidebarDragUnitRects(args: {
 
   return args.groupIds.flatMap((worktreeId, unitIndex) => {
     const rootRect = rectByWorktreeId.get(worktreeId)
+
     if (!rootRect) {
       return []
     }
+
     const nextRootTop =
       args.groupIds
         .slice(unitIndex + 1)
         .flatMap((nextId) => {
           const nextRect = rectByWorktreeId.get(nextId)
+
           return nextRect ? [nextRect.top] : []
         })
         .at(0) ?? Number.POSITIVE_INFINITY
+
     const unitBottom = sortedRects.reduce(
       (bottom, rect) =>
         rect.top >= rootRect.top && rect.top < nextRootTop ? Math.max(bottom, rect.bottom) : bottom,
       rootRect.bottom
     )
+
     return [
       {
         worktreeId,
@@ -92,11 +97,15 @@ export function resolveWorktreeSidebarStatusDropCommitTarget(args: {
   if (hasWorktreeSidebarStatusDropTarget(args.currentTarget)) {
     return { target: args.currentTarget, preview: args.currentPreview }
   }
+
   const latest = args.latestTrackedTarget
+
   if (!latest || !hasWorktreeSidebarStatusDropTarget(latest.target)) {
     return { target: args.currentTarget, preview: args.currentPreview }
   }
+
   const distance = Math.hypot(args.x - latest.x, args.y - latest.y)
+
   return distance <= STATUS_DROP_TARGET_FALLBACK_TOLERANCE_PX
     ? { target: latest.target, preview: latest.preview }
     : { target: args.currentTarget, preview: args.currentPreview }
@@ -119,16 +128,21 @@ function getWorktreeSidebarDropIndicatorY(args: {
   if (args.placeholderTop !== null) {
     return Math.max(0, args.placeholderTop - 3)
   }
+
   // A no-op drop leaves the card where it is; park the line on its own top edge
   // rather than jumping to a neighbour that never moves.
   if (args.activeRect) {
     return Math.max(0, args.activeRect.top - 3)
   }
+
   const target = args.rects.find((rect) => rect.groupIndex === args.dropIndex)
+
   if (target) {
     return Math.max(0, target.top - 3)
   }
+
   const last = args.rects.at(-1)
+
   return last ? last.bottom + 3 : 0
 }
 
@@ -147,13 +161,16 @@ function getWorktreeSidebarClosestCenterDropIndex(args: {
 }): number {
   let overIndex = args.rects[0]!.groupIndex
   let bestDistance = Number.POSITIVE_INFINITY
+
   for (const rect of args.rects) {
     const distance = Math.abs((rect.top + rect.bottom) / 2 - args.referenceY)
+
     if (distance < bestDistance) {
       bestDistance = distance
       overIndex = rect.groupIndex
     }
   }
+
   // Dropping onto a slot below the dragged card means landing after it.
   return overIndex > args.activeIndex ? overIndex + 1 : overIndex
 }
@@ -167,6 +184,7 @@ function getWorktreeSidebarPointerDropIndex(args: {
       return rect.groupIndex
     }
   }
+
   return args.rects.at(-1)!.groupIndex + 1
 }
 
@@ -190,18 +208,22 @@ export function computeWorktreeSidebarDropPreview(args: {
     rects: args.rects,
     groupIds: args.groupIds
   })
+
   if (rects.length === 0 || args.groupIds.length === 0) {
     return null
   }
 
   const localY = args.pointerY - args.containerTop + args.scrollTop
+
   const activeGroupIndex = args.draggingWorktreeId
     ? args.groupIds.indexOf(args.draggingWorktreeId)
     : -1
+
   const activeRect =
     activeGroupIndex >= 0
       ? (rects.find((rect) => rect.worktreeId === args.draggingWorktreeId) ?? null)
       : null
+
   const referenceY = getWorktreeSidebarDragReferenceY({
     localY,
     grab: args.grab ?? null,
@@ -210,12 +232,14 @@ export function computeWorktreeSidebarDropPreview(args: {
 
   const first = rects[0]!
   const last = rects.at(-1)!
+
   const boundaryDrop = getWorktreeSidebarBoundaryDrop({
     localY,
     firstRect: first,
     lastRect: last,
     sourceGroupSize: args.groupIds.length
   })
+
   if (boundaryDrop.kind === 'outside') {
     return null
   }
@@ -223,7 +247,9 @@ export function computeWorktreeSidebarDropPreview(args: {
   const heldIndex = args.anchor
     ? resolveWorktreeSidebarDropAnchorIndex({ anchor: args.anchor, groupIds: args.groupIds })
     : null
+
   let dropIndex: number
+
   if (heldIndex !== null) {
     dropIndex = heldIndex
   } else if (boundaryDrop.kind === 'drop') {
@@ -247,6 +273,7 @@ export function computeWorktreeSidebarDropPreview(args: {
     dropIndex,
     rects
   })
+
   return {
     dropIndex,
     dropIndicatorY: getWorktreeSidebarDropIndicatorY({

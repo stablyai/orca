@@ -22,7 +22,9 @@ export type RemoteRuntimeOutboundQueueOptions = {
 }
 
 const SUBSCRIPTION_REQUEST_SOFT_CAP_BYTES = 1024 * 1024
+
 const SUBSCRIPTION_REQUEST_MAX_QUEUED_BYTES = 16 * 1024 * 1024
+
 const SUBSCRIPTION_REQUEST_MAX_QUEUED_FRAMES = 64
 
 /**
@@ -76,30 +78,38 @@ export class RemoteRuntimeSubscriptionOutbound {
   retainSocketMemoryUntilClose(socket: WebSocket): void {
     if (socket.readyState === WebSocket.CLOSED) {
       this.releaseSocketMemory()
+
       return
     }
+
     if (this.socketMemoryCloseSource === socket) {
       return
     }
+
     this.socketMemoryCloseSource = socket
     socket.once('close', () => this.releaseSocketMemory())
   }
 
   private ensureSocketMemory(socket: WebSocket): boolean {
     const memoryBudget = this.options.memoryBudget
+
     if (!memoryBudget || this.socketMemory) {
       return true
     }
+
     this.socketMemory = memoryBudget.registerBufferedAmount(() => socket.bufferedAmount)
+
     if (this.socketMemory) {
       return true
     }
+
     this.options.fail(
       new RemoteRuntimeClientError(
         'remote_runtime_unavailable',
         'Remote Orca runtime outbound memory admission failed; reconnecting.'
       )
     )
+
     return false
   }
 
@@ -108,6 +118,7 @@ export class RemoteRuntimeSubscriptionOutbound {
     claimQueuedBytes?: (bytes: number) => (() => void) | null
   } {
     const memoryBudget = this.options.memoryBudget
+
     return {
       canSend: (bytes, alreadyRetained) =>
         this.socketMemory?.canSend(bytes, alreadyRetained) ?? true,
@@ -124,6 +135,7 @@ export class RemoteRuntimeSubscriptionOutbound {
       if (!this.ensureSocketMemory(socket)) {
         return null
       }
+
       this.binaryQueue = createWsOutboundBackpressureQueue<Buffer>({
         send: (frame) => socket.send(frame, { binary: true }),
         byteLengthOf: (frame) => frame.byteLength,
@@ -140,6 +152,7 @@ export class RemoteRuntimeSubscriptionOutbound {
         ...this.memoryAdmission()
       })
     }
+
     return this.binaryQueue
   }
 
@@ -150,6 +163,7 @@ export class RemoteRuntimeSubscriptionOutbound {
       if (!this.ensureSocketMemory(socket)) {
         return null
       }
+
       this.requestQueue = createWsOutboundBackpressureQueue<string>({
         send: (frame) => socket.send(frame),
         byteLengthOf: (frame) => Buffer.byteLength(frame),
@@ -168,6 +182,7 @@ export class RemoteRuntimeSubscriptionOutbound {
         ...this.memoryAdmission()
       })
     }
+
     return this.requestQueue
   }
 }

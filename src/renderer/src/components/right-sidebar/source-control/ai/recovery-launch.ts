@@ -35,6 +35,7 @@ export function getDefaultSourceControlRecoveryLaunchCopy(
   recoveryKind: 'commit' | 'push'
 ): SourceControlRecoveryLaunchCopy {
   const subject = recoveryKind === 'push' ? 'push' : 'commit'
+
   return {
     promptUnavailable: translate(
       'auto.components.right.sidebar.source.control.ai.recovery.launch.4f4e0418a0',
@@ -98,37 +99,48 @@ export async function launchSourceControlRecoveryAgentWithDefault({
   copy: SourceControlRecoveryLaunchCopy
 }): Promise<boolean> {
   const worktreeConnectionId = getConnectionId(activeWorktreeId)
+
   const connectionId =
     worktreeConnectionId !== undefined ? worktreeConnectionId : sourceRepoConnectionId
+
   if (connectionId === undefined) {
     toast.error(copy.connectionUnavailable)
+
     return false
   }
 
   const store = getStoreState()
   const savedRecipe = getLaunchActionRecipe(actionId)
+
   const agentArgsPlan = planAgentCliArgsSuffix(
     savedRecipe.agentArgs,
     activeSourceControlLaunchPlatform === 'win32' ? 'powershell' : 'posix'
   )
+
   if (!agentArgsPlan.ok) {
     // Why: saved launch recipes are shared with direct launches; reject bad
     // argv before remote agent detection or terminal creation has side effects.
     toast.error(agentArgsPlan.error)
+
     return false
   }
+
   if (!basePrompt) {
     toast.error(copy.promptUnavailable)
+
     return false
   }
+
   const prompt = buildSourceControlRecoveryAgentCommandInput({
     actionId,
     promptOverride,
     commandInputTemplate: savedRecipe.commandInputTemplate,
     basePrompt
   })
+
   if (!prompt) {
     toast.error(copy.emptyPrompt)
+
     return false
   }
 
@@ -136,25 +148,32 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     typeof connectionId === 'string'
       ? await store.ensureRemoteDetectedAgents(connectionId)
       : await store.ensureDetectedAgents()
+
   const savedAgent = readSourceControlLaunchRecipeAgentId(savedRecipe)
+
   if (
     savedAgent &&
     (!detectedAgents.includes(savedAgent) ||
       !isTuiAgentEnabled(savedAgent, store.settings?.disabledTuiAgents))
   ) {
     toast.error(copy.savedAgentUnavailable)
+
     return false
   }
+
   const agent = pickSourceControlLaunchAgent({
     savedAgent,
     defaultAgent: store.settings?.defaultTuiAgent,
     detectedAgents,
     disabledAgents: store.settings?.disabledTuiAgents
   })
+
   if (!agent) {
     toast.error(copy.noEnabledAgent)
+
     return false
   }
+
   const result = launchAgentInNewTab({
     agent,
     worktreeId: activeWorktreeId,
@@ -165,14 +184,18 @@ export async function launchSourceControlRecoveryAgentWithDefault({
     launchPlatform: activeSourceControlLaunchPlatform,
     launchSource: 'source_control_recovery'
   })
+
   if (!result) {
     toast.error(copy.launchCommandUnavailable)
+
     return false
   }
 
   if (result.tabId) {
     focusTerminalTabSurface(result.tabId)
   }
+
   toast.success(copy.success)
+
   return true
 }

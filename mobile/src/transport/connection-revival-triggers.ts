@@ -14,6 +14,7 @@ export function subscribeConnectionRevivalTriggers(
       nudge('app-resume')
     }
   })
+
   let lastNetwork: Pick<NetworkState, 'isConnected' | 'type'> | null = null
   let disposed = false
   // Why: the listener only fires on *changes*; without a seeded baseline the
@@ -26,16 +27,20 @@ export function subscribeConnectionRevivalTriggers(
       }
     })
     .catch(() => {})
+
   const networkSub = addNetworkStateListener((state) => {
     const previous = lastNetwork
     lastNetwork = { isConnected: state.isConnected, type: state.type }
+
     if (state.isConnected !== true) {
       return
     }
+
     const cameOnline = previous != null && previous.isConnected !== true
     // Why: a type change while staying "connected" is the Wi-Fi → cellular
     // handoff case — the old socket is dead even though we never went offline.
     const switchedNetworks = previous?.type != null && state.type !== previous.type
+
     if (cameOnline || switchedNetworks) {
       console.log('[net] network changed — nudging clients', {
         type: state.type,
@@ -44,6 +49,7 @@ export function subscribeConnectionRevivalTriggers(
       nudge('network-change')
     }
   })
+
   return () => {
     disposed = true
     appStateSub.remove()

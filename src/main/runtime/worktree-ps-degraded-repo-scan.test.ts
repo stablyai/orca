@@ -6,6 +6,7 @@ const electronMocks = vi.hoisted(() => {
     removeListener: vi.fn(() => ipcMain),
     emit: vi.fn(() => true)
   }
+
   return {
     BrowserWindow: { fromId: vi.fn((): unknown => null) },
     webContents: { fromId: vi.fn((): unknown => null) },
@@ -13,9 +14,11 @@ const electronMocks = vi.hoisted(() => {
     app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
   }
 })
+
 vi.mock('electron', () => electronMocks)
 
 const getSshGitProviderMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock,
   getSshGitProviderGeneration: vi.fn(() => 0),
@@ -24,6 +27,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../git/worktree', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWorktreesStrict: listWorktreesStrictMock
@@ -33,12 +37,19 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const REPO_ID = 'repo-remote'
+
 const REPO_PATH = '/home/user/projects/app'
+
 const WORKTREE_PATH = '/home/user/projects/app-feature'
+
 const WORKTREE_ID = `${REPO_ID}::${WORKTREE_PATH}`
+
 const SCRATCH_ID = `${REPO_ID}::${REPO_PATH}/.claude/worktrees/scratch`
+
 const SSH_CONNECTION_ID = 'ssh-remote-1'
+
 const SSH_HOST_ID = `ssh:${SSH_CONNECTION_ID}`
+
 const LOCAL_REPO_PATH = '/Users/me/dev/app'
 
 function makeMeta(overrides: Record<string, unknown> = {}) {
@@ -90,7 +101,9 @@ function makeStore(options: StoreOptions = {}) {
     [WORKTREE_ID]: makeMeta(),
     [MAIN_WORKTREE_ID]: makeMeta({ displayName: 'main', instanceId: 'parent-instance' })
   }
+
   const lineageById = makeLineage()
+
   const store = {
     getRepo: (id: string) => store.getRepos().find((repo) => repo.id === id),
     getRepos: () => [
@@ -113,6 +126,7 @@ function makeStore(options: StoreOptions = {}) {
     getWorktreeMeta: (id: string) => metaById[id],
     setWorktreeMeta: (id: string, meta: Record<string, unknown>) => {
       metaById[id] = { ...(metaById[id] ?? makeMeta()), ...meta } as never
+
       return metaById[id]
     },
     removeWorktreeMeta: () => {},
@@ -130,6 +144,7 @@ function makeStore(options: StoreOptions = {}) {
     }),
     getProjects: () => []
   }
+
   return store
 }
 
@@ -149,6 +164,7 @@ function makeHealthySshScan() {
 
 async function advancePastRepoScanBudget<T>(pending: Promise<T>): Promise<T> {
   await vi.advanceTimersByTimeAsync(6_000)
+
   return pending
 }
 
@@ -161,6 +177,7 @@ describe('worktree.ps on a degraded repo scan', () => {
 
   it('keeps persisted worktrees when a remote scan stalls past the per-repo budget', async () => {
     vi.useFakeTimers()
+
     try {
       getSshGitProviderMock.mockReturnValue({ listWorktrees: vi.fn(neverSettles) })
       const runtime = new OrcaRuntimeService(makeStore({ connectionId: 'ssh-remote-1' }) as never)
@@ -184,6 +201,7 @@ describe('worktree.ps on a degraded repo scan', () => {
 
   it('keeps persisted worktrees when a local scan stalls past the per-repo budget', async () => {
     vi.useFakeTimers()
+
     try {
       listWorktreesStrictMock.mockImplementation(neverSettles)
       const runtime = new OrcaRuntimeService(makeStore() as never)
@@ -219,6 +237,7 @@ describe('worktree.ps on a degraded repo scan', () => {
   // Why: an authoritative empty scan must retain the normal backoff instead of spawning Git on every ~1s snapshot.
   it('caches a zero-row local scan instead of rescanning on every poll', async () => {
     vi.useFakeTimers()
+
     try {
       listWorktreesStrictMock.mockResolvedValue([])
       const runtime = new OrcaRuntimeService(makeStore() as never)
@@ -235,6 +254,7 @@ describe('worktree.ps on a degraded repo scan', () => {
 
   it('caches a failed local scan instead of respawning Git on every poll', async () => {
     vi.useFakeTimers()
+
     try {
       listWorktreesStrictMock.mockRejectedValue(new Error('spawn git EAGAIN'))
       const runtime = new OrcaRuntimeService(makeStore() as never)
@@ -252,11 +272,14 @@ describe('worktree.ps on a degraded repo scan', () => {
   // Why: remote disconnects should recover on the next poll; only local failures need backoff against spawn storms.
   it('rescans a degraded remote repo on the next poll instead of caching the failure', async () => {
     vi.useFakeTimers()
+
     try {
       const listWorktrees = vi.fn(async () => {
         throw new Error('provider offline')
       })
+
       getSshGitProviderMock.mockReturnValue({ listWorktrees })
+
       const runtime = new OrcaRuntimeService(
         makeStore({ connectionId: SSH_CONNECTION_ID }) as never
       )
@@ -274,9 +297,11 @@ describe('worktree.ps on a degraded repo scan', () => {
   // Why: one repo id can be registered on several execution hosts, so a stalled host must not republish another host's rows.
   it('does not overwrite another execution host’s healthy rows when this host’s scan stalls', async () => {
     vi.useFakeTimers()
+
     try {
       getSshGitProviderMock.mockReturnValue(makeHealthySshScan())
       listWorktreesStrictMock.mockImplementation(neverSettles)
+
       const runtime = new OrcaRuntimeService(
         makeStore({
           connectionId: SSH_CONNECTION_ID,
@@ -304,9 +329,11 @@ describe('worktree.ps on a degraded repo scan', () => {
 
   it('does not claim an unstamped persisted row when the repo id is registered on two hosts', async () => {
     vi.useFakeTimers()
+
     try {
       getSshGitProviderMock.mockReturnValue(makeHealthySshScan())
       listWorktreesStrictMock.mockImplementation(neverSettles)
+
       const runtime = new OrcaRuntimeService(
         makeStore({
           connectionId: SSH_CONNECTION_ID,
@@ -331,8 +358,10 @@ describe('worktree.ps on a degraded repo scan', () => {
   // Why: the ownership gate must not cost the single-host case the fix exists for — a stamped row on its own host still comes back.
   it('restores persisted rows stamped for this host when its only owner stalls', async () => {
     vi.useFakeTimers()
+
     try {
       listWorktreesStrictMock.mockImplementation(neverSettles)
+
       const runtime = new OrcaRuntimeService(
         makeStore({
           metaById: {
@@ -352,10 +381,12 @@ describe('worktree.ps on a degraded repo scan', () => {
       expect(restored?.hostId).toBe(LOCAL_EXECUTION_HOST_ID)
       // Why: no git answered, so a restored row must not claim a branch it cannot have verified.
       expect(restored?.branch).toBe('')
+
       // Why: `worktree.ps` summaries carry no head, so pin the blank head on the resolved row the restore path actually builds.
       const resolved = await advancePastRepoScanBudget(
         runtime.showManagedWorktree(`id:${WORKTREE_ID}`)
       )
+
       expect(resolved.head).toBe('')
       expect(resolved.git.head).toBe('')
     } finally {
@@ -366,6 +397,7 @@ describe('worktree.ps on a degraded repo scan', () => {
   // Why: the timeout fires per poll, so only the in-flight scan map keeps a permanent stall from re-spawning `git worktree list`.
   it('does not re-spawn the git scan on every poll while a scan stays stalled', async () => {
     vi.useFakeTimers()
+
     try {
       listWorktreesStrictMock.mockImplementation(neverSettles)
       const runtime = new OrcaRuntimeService(makeStore() as never)
@@ -385,6 +417,7 @@ describe('worktree.ps on a degraded repo scan', () => {
     listWorktreesStrictMock.mockResolvedValue([
       { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
     ])
+
     const runtime = new OrcaRuntimeService(
       makeStore({ removeWorktreeLineage, removeWorkspaceLineage }) as never
     )
@@ -398,10 +431,12 @@ describe('worktree.ps on a degraded repo scan', () => {
 
   it('does not prune lineage while a scan is stalled', async () => {
     vi.useFakeTimers()
+
     try {
       const removeWorktreeLineage = vi.fn()
       const removeWorkspaceLineage = vi.fn()
       listWorktreesStrictMock.mockImplementation(neverSettles)
+
       const runtime = new OrcaRuntimeService(
         makeStore({ removeWorktreeLineage, removeWorkspaceLineage }) as never
       )
@@ -429,8 +464,10 @@ describe('worktree.ps on a degraded repo scan', () => {
 
   it('lists restored worktrees while a scan is stalled and still hides agent scratch', async () => {
     vi.useFakeTimers()
+
     try {
       listWorktreesStrictMock.mockImplementation(neverSettles)
+
       const runtime = new OrcaRuntimeService(
         makeStore({
           metaById: {

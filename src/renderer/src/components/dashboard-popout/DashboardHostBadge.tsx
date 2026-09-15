@@ -16,12 +16,15 @@ type DashboardHostBadgeProps = {
 
 function fallbackHostLabel(executionHostId: ExecutionHostId | undefined): string | null {
   const parsed = parseExecutionHostId(executionHostId)
+
   if (parsed?.kind === 'ssh') {
     return parsed.targetId
   }
+
   if (parsed?.kind === 'runtime') {
     return parsed.environmentId
   }
+
   return null
 }
 
@@ -33,12 +36,15 @@ export function dashboardHostTooltipLabel({
   if (hostKind !== 'ssh' && hostKind !== 'remote') {
     return null
   }
+
   const label = hostLabel?.trim() || fallbackHostLabel(executionHostId)
+
   if (hostKind === 'ssh') {
     return label
       ? translate('dashboardPopout.host.sshNamed', 'SSH host · {{host}}', { host: label })
       : translate('dashboardPopout.host.ssh', 'SSH host')
   }
+
   return label
     ? translate('dashboardPopout.host.remoteNamed', 'Remote Orca host · {{host}}', { host: label })
     : translate('dashboardPopout.host.remote', 'Remote Orca host')
@@ -53,9 +59,11 @@ export function DashboardHostBadge({
   iconClassName
 }: DashboardHostBadgeProps): React.JSX.Element | null {
   const tooltipLabel = dashboardHostTooltipLabel({ hostKind, executionHostId, hostLabel })
+
   if (!tooltipLabel) {
     return null
   }
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>

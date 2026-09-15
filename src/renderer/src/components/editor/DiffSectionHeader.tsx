@@ -52,6 +52,7 @@ export function DiffSectionHeader({
             if (event.key !== 'Enter' && event.key !== ' ') {
               return
             }
+
             event.preventDefault()
             event.stopPropagation()
             void window.api.ui.writeClipboardText(path).catch((error) => {

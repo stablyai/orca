@@ -8,6 +8,7 @@ import { EMPTY_AI_VAULT_SESSIONS, reuseAiVaultListResult } from './ai-vault-sess
 function makeProductionSession(index: number, title = `session-${index}`): AiVaultSession {
   const id = `local:codex:session-${index}:/sessions/session-${index}.jsonl`
   const timestamp = new Date(Date.UTC(2026, 6, 1, 0, 0, index)).toISOString()
+
   return {
     id,
     executionHostId: 'local',
@@ -53,6 +54,7 @@ function makeProductionSession(index: number, title = `session-${index}`): AiVau
 function cloneResult(result: AiVaultListResult, scannedAt: string): AiVaultListResult {
   const cloned = structuredClone(result)
   cloned.scannedAt = scannedAt
+
   return cloned
 }
 
@@ -71,6 +73,7 @@ describe('reuseAiVaultListResult', () => {
       ],
       scannedAt: '2026-07-01T00:00:00.000Z'
     }
+
     const incoming = cloneResult(current, '2026-07-01T00:00:15.000Z')
     expect(incoming).not.toBe(current)
     expect(incoming.sessions).not.toBe(current.sessions)
@@ -93,11 +96,14 @@ describe('reuseAiVaultListResult', () => {
       issues: [],
       scannedAt: '2026-07-01T00:00:00.000Z'
     }
+
     const incoming = cloneResult(current, '2026-07-01T00:00:15.000Z')
     const changed = incoming.sessions[1]
+
     if (!changed?.previewMessages[0]) {
       throw new Error('expected a nested preview message')
     }
+
     changed.previewMessages[0] = { ...changed.previewMessages[0], text: 'a new user turn' }
 
     const reused = reuseAiVaultListResult(current, incoming)
@@ -117,11 +123,13 @@ describe('reuseAiVaultListResult', () => {
       path: 'dev-box',
       message: 'Remote connection dropped.'
     }
+
     const current: AiVaultListResult = {
       sessions: [makeProductionSession(1)],
       issues: [hostIssue],
       scannedAt: '2026-07-01T00:00:00.000Z'
     }
+
     const incoming = cloneResult(current, '2026-07-01T00:00:15.000Z')
     incoming.issues = []
 

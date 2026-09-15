@@ -22,7 +22,9 @@ export type WslGuestEnvironment = {
 }
 
 const PROBE_TIMEOUT_MS = 10_000
+
 const PROBE_MAX_OUTPUT_BYTES = 64 * 1024
+
 /**
  * A stopped distro recovers; one that cannot produce a POSIX PATH will not.
  *
@@ -32,6 +34,7 @@ const PROBE_MAX_OUTPUT_BYTES = 64 * 1024
  * that the user's next click reaches a distro that has since warmed up.
  */
 const TRANSIENT_RETRY_MS = 5_000
+
 /**
  * Even a "permanent" verdict expires eventually.
  *
@@ -48,8 +51,11 @@ type ProbeOutcome =
   | { kind: 'transient' }
 
 const inFlight = new Map<string, Promise<WslGuestEnvironment | null>>()
+
 const resolved = new Map<string, WslGuestEnvironment>()
+
 const retryAfter = new Map<string, number>()
+
 // The budget the cached probe actually had. A caller with materially more time
 // deserves its own attempt rather than inheriting a verdict from a probe that
 // was starved -- an optional 5s read must not hard-fail the 10s scan behind it.
@@ -60,15 +66,20 @@ function parseProbePayload(payload: string | null): WslGuestEnvironment | null {
   if (payload === null) {
     return null
   }
+
   const [path = '', home = '', envBinary = ''] = payload.split('\0')
+
   const isCleanAbsolute = (value: string): boolean =>
     value.startsWith('/') && !value.includes('\n') && !value.includes('\r')
+
   if (!path.includes('/') || path.length > 32_768 || /[\n\r]/.test(path)) {
     return null
   }
+
   if (!isCleanAbsolute(home) || !isCleanAbsolute(envBinary)) {
     return null
   }
+
   return { path, home, envBinary }
 }
 
@@ -83,7 +94,9 @@ async function probeGuestEnvironment(
     'case "$_orca_env" in /*) [ -x "$_orca_env" ] || exit 127 ;; *) exit 127 ;; esac',
     `printf '%s\\0%s\\0%s' "$PATH" "$HOME" "$_orca_env"`
   ].join('\n')
+
   const captured = buildWslCapturedLoginShellCommand(script)
+
   const result = await runProcess({
     program: resolveWslExecutablePath(),
     args: buildWslExecArgs(distro, ['sh', '-c', captured.command]),
@@ -94,15 +107,19 @@ async function probeGuestEnvironment(
     timeoutMs: Math.min(PROBE_TIMEOUT_MS, budgetMs),
     maxOutputBytes: PROBE_MAX_OUTPUT_BYTES
   })
+
   if (result.timedOut) {
     return { kind: 'transient' }
   }
+
   if (result.code !== 0) {
     // 127 is our own "no usable env"; anything else is the distro being
     // unavailable, which is worth retrying.
     return result.code === 127 ? { kind: 'rejected' } : { kind: 'transient' }
   }
+
   const environment = parseProbePayload(captured.readStdout(result.stdout))
+
   // Why transient and not rejected: an unparseable payload is usually a fence
   // lost to a chatty rc truncated at PROBE_MAX_OUTPUT_BYTES, which recovers.
   // Caching that permanently would disable every WSL feature on this distro
@@ -126,19 +143,24 @@ export function getWslGuestEnvironment(
 ): Promise<WslGuestEnvironment | null> {
   const key = cacheKey(distro)
   const cached = resolved.get(key)
+
   if (cached) {
     return Promise.resolve(cached)
   }
+
   const retry = retryAfter.get(key)
+
   if (retry !== undefined && Date.now() >= retry) {
     inFlight.delete(key)
     retryAfter.delete(key)
     probedWithBudget.delete(key)
   }
+
   // A failed verdict from a starved probe should not bind a caller who brought
   // more time. 1.5x is the threshold: enough to matter, not so low that every
   // caller re-probes.
   const failedBudget = probedWithBudget.get(key)
+
   if (failedBudget !== undefined && budgetMs > failedBudget * 1.5) {
     inFlight.delete(key)
     retryAfter.delete(key)
@@ -149,16 +171,19 @@ export function getWslGuestEnvironment(
   // means nothing else stops a re-probe inside the window, so the burst this
   // cache exists to collapse would come straight back.
   const cooldown = retryAfter.get(key)
+
   if (cooldown !== undefined && Date.now() < cooldown && !inFlight.has(key)) {
     return Promise.resolve(resolved.get(key) ?? null)
   }
 
   const existing = inFlight.get(key)
+
   if (existing) {
     // Why race: joining an in-flight probe used to mean waiting out the
     // *starter's* budget, so a joiner could reach its own command with 1ms --
     // the exact hazard the budget plumbing was added to remove.
     let timer: ReturnType<typeof setTimeout>
+
     return Promise.race([
       existing,
       new Promise<null>((resolve) => {
@@ -167,6 +192,7 @@ export function getWslGuestEnvironment(
       })
     ]).finally(() => clearTimeout(timer))
   }
+
   // Store before awaiting so a burst collapses into one probe.
   // Why catch: runProcess REJECTS when the child cannot be started (ENOENT on a
   // host without System32\wsl.exe, EAGAIN under memory pressure). Uncaught, the
@@ -178,26 +204,33 @@ export function getWslGuestEnvironment(
       if (inFlight.get(key) !== probe) {
         return outcome.kind === 'resolved' ? outcome.environment : null
       }
+
       if (outcome.kind === 'resolved') {
         resolved.set(key, outcome.environment)
         retryAfter.delete(key)
         probedWithBudget.delete(key)
+
         return outcome.environment
       }
+
       retryAfter.set(
         key,
         Date.now() + (outcome.kind === 'transient' ? TRANSIENT_RETRY_MS : REJECTED_RETRY_MS)
       )
       probedWithBudget.set(key, budgetMs)
+
       // Why drop the entry: keeping a null-resolving promise in `inFlight` made
       // `retryAfter` the only way back, and the probe cap left the 1.5x budget
       // escape unreachable. Deleting it lets the window alone gate the re-probe.
       if (outcome.kind === 'transient' && inFlight.get(key) === probe) {
         inFlight.delete(key)
       }
+
       return null
     })
+
   inFlight.set(key, probe)
+
   return probe
 }
 
@@ -211,8 +244,10 @@ export function invalidateWslGuestEnvironment(distro?: string, all = false): voi
     resolved.clear()
     retryAfter.clear()
     probedWithBudget.clear()
+
     return
   }
+
   const key = cacheKey(distro)
   inFlight.delete(key)
   resolved.delete(key)

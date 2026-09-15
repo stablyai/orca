@@ -317,6 +317,7 @@ describe('automation target availability', () => {
         path: '/repo'
       }
     })
+
     const repo = makeRepo({ connectionId: 'devbox', executionHostId: 'ssh:devbox' })
 
     expect(
@@ -455,11 +456,14 @@ describe('automation target availability', () => {
         path: '/repo'
       }
     })
+
     const repo = makeRepo({ executionHostId: 'runtime:env-1' })
+
     const setup = makeProjectHostSetup({
       hostId: 'runtime:env-1',
       executionHostId: 'runtime:env-1'
     })
+
     const base = {
       automation,
       repo,

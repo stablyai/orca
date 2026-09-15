@@ -33,6 +33,7 @@ export function createContextualTourInteractionSnapshot(args: {
 }): { persisted: Promise<void>; wasPreviouslyInteracted: boolean } {
   const wasPreviouslyInteracted =
     args.wasFeaturePreviouslyInteracted ?? hasFeatureInteraction(args.featureInteractions, args.id)
+
   return {
     wasPreviouslyInteracted,
     persisted: args.recordFeatureInteractionForTour
@@ -48,6 +49,7 @@ export async function shouldRequestContextualTourAfterInteraction(args: {
   getContextualToursSeenIds: () => ContextualTourId[]
 }): Promise<boolean> {
   await args.persisted
+
   return !args.isCancelled() && !args.getContextualToursSeenIds().includes(args.id)
 }
 
@@ -62,6 +64,7 @@ export function useContextualTour(
     featureInteractionPersisted,
     wasFeaturePreviouslyInteracted
   } = options
+
   const requestContextualTour = useAppStore((s) => s.requestContextualTour)
   const suppressContextualTour = useAppStore((s) => s.suppressContextualTour)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
@@ -69,16 +72,20 @@ export function useContextualTour(
   const activeModal = useAppStore((s) => s.activeModal)
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
   const activeContextualTourSource = useAppStore((s) => s.activeContextualTourSource)
+
   const activeContextualTourSourceDetached = useAppStore(
     (s) => s.activeContextualTourSourceDetached
   )
+
   const contextualToursSeenIds = useAppStore((s) => s.contextualToursSeenIds)
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
   const contextualTourShownThisSession = useAppStore((s) => s.contextualTourShownThisSession)
   const contextualToursOnboardingVisible = useAppStore((s) => s.contextualToursOnboardingVisible)
+
   const contextualToursBlockingSurfaceVisible = useAppStore(
     (s) => s.contextualToursBlockingSurfaceVisible
   )
+
   const enabledInteractionSnapshotRef = useRef<{
     id: ContextualTourId
     source: string
@@ -89,14 +96,17 @@ export function useContextualTour(
   useEffect(() => {
     if (!enabled || !persistedUIReady) {
       enabledInteractionSnapshotRef.current = null
+
       return
     }
+
     if (
       enabledInteractionSnapshotRef.current?.id === id &&
       enabledInteractionSnapshotRef.current.source === source
     ) {
       return
     }
+
     const snapshot = createContextualTourInteractionSnapshot({
       id,
       featureInteractions: useAppStore.getState().featureInteractions,
@@ -105,6 +115,7 @@ export function useContextualTour(
       featureInteractionPersisted,
       wasFeaturePreviouslyInteracted
     })
+
     enabledInteractionSnapshotRef.current = {
       id,
       source,
@@ -148,6 +159,7 @@ export function useContextualTour(
   useEffect(() => {
     return () => {
       const state = useAppStore.getState()
+
       // Why: surfaces like sheets can unmount without rendering an `enabled=false`
       // pass, so suppress their active tour during cleanup too.
       if (
@@ -180,14 +192,18 @@ export function useContextualTour(
     let attempts = 0
     let requestPending = false
     let cancelled = false
+
     const request = (): void => {
       if (frame !== null || requestPending) {
         return
       }
+
       requestPending = true
       const snapshot = enabledInteractionSnapshotRef.current
+
       const persisted =
         snapshot?.id === id && snapshot.source === source ? snapshot.persisted : Promise.resolve()
+
       void shouldRequestContextualTourAfterInteraction({
         id,
         persisted,
@@ -195,16 +211,20 @@ export function useContextualTour(
         getContextualToursSeenIds: () => useAppStore.getState().contextualToursSeenIds
       }).then((shouldRequest) => {
         requestPending = false
+
         if (!shouldRequest) {
           return
         }
+
         attempts += 1
         frame = window.requestAnimationFrame(() => {
           frame = null
           const latestSnapshot = enabledInteractionSnapshotRef.current
+
           if (useAppStore.getState().contextualToursSeenIds.includes(id)) {
             return
           }
+
           requestContextualTour(
             id,
             source,
@@ -218,31 +238,38 @@ export function useContextualTour(
 
     request()
     const timeout = window.setTimeout(request, 250)
+
     const observer =
       typeof MutationObserver === 'undefined' || !document.body
         ? null
         : new MutationObserver(request)
+
     observer?.observe(document.body, {
       subtree: true,
       childList: true,
       attributes: true,
       attributeFilter: ['aria-hidden', 'class', 'data-contextual-tour-target', 'hidden', 'style']
     })
+
     // Why: native prompts and async surface hydration can pause or miss the
     // first target measurement; retry briefly without long-lived polling.
     const interval = window.setInterval(() => {
       if (attempts >= 20) {
         window.clearInterval(interval)
+
         return
       }
+
       request()
     }, 500)
 
     return () => {
       cancelled = true
+
       if (frame !== null) {
         window.cancelAnimationFrame(frame)
       }
+
       window.clearTimeout(timeout)
       window.clearInterval(interval)
       observer?.disconnect()

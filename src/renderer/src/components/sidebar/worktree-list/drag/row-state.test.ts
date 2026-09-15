@@ -41,10 +41,12 @@ describe('lineage drop preview', () => {
 
   it('clears nesting feedback when returning to a reorder edge at the same height', () => {
     const before = applyWorktreeLineageDropPreview(reorderedState(), 'parent', 150)
+
     const after = applyWorktreeDropPreview(before, reorderPreview, {
       pointerY: 150,
       matchPointerY: true
     })
+
     expect(after.lineageDropTargetId).toBeNull()
     expect(after.dropIndicatorY).toBe(180)
   })

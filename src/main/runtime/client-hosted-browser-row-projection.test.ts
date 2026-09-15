@@ -38,6 +38,7 @@ function registryWithPages(): RuntimeBrowserPageRegistry {
     loading: true,
     active: false
   })
+
   return registry
 }
 
@@ -130,6 +131,7 @@ describe('projectClientHostedBrowserRows', () => {
       hasLivePlacement: () => true,
       resolveDeviceName: (pairedDeviceId) => {
         resolved.push(pairedDeviceId)
+
         return 'should not be asked for'
       }
     })

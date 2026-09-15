@@ -59,6 +59,7 @@ export function walkTree(
 ): void {
   if (node.ignored) {
     walkChildren(node, nodeById, depth, entries, nextRef)
+
     return
   }
 
@@ -67,6 +68,7 @@ export function walkTree(
 
   if (SKIP_ROLES.has(role)) {
     walkChildren(node, nodeById, depth, entries, nextRef)
+
     return
   }
 
@@ -77,11 +79,13 @@ export function walkTree(
 
   if (!isInteractive && !isHeading && !isLandmark && !isStaticText) {
     walkChildren(node, nodeById, depth, entries, nextRef)
+
     return
   }
 
   if (!name && !isLandmark) {
     walkChildren(node, nodeById, depth, entries, nextRef)
+
     return
   }
 
@@ -96,6 +100,7 @@ export function walkTree(
       depth
     })
     walkChildren(node, nodeById, depth + 1, entries, nextRef)
+
     return
   }
 
@@ -107,6 +112,7 @@ export function walkTree(
       backendDOMNodeId: node.backendDOMNodeId ?? 0,
       depth
     })
+
     return
   }
 
@@ -118,6 +124,7 @@ export function walkTree(
       backendDOMNodeId: node.backendDOMNodeId ?? 0,
       depth
     })
+
     return
   }
 
@@ -130,6 +137,7 @@ export function walkTree(
       backendDOMNodeId: node.backendDOMNodeId ?? 0,
       depth
     })
+
     return
   }
 
@@ -146,8 +154,10 @@ function walkChildren(
   if (!node.childIds) {
     return
   }
+
   for (const childId of node.childIds) {
     const child = nodeById.get(childId)
+
     if (child) {
       walkTree(child, nodeById, depth, entries, nextRef)
     }
@@ -158,10 +168,13 @@ function isFocusable(node: AXNode): boolean {
   if (!node.properties) {
     return true
   }
+
   const focusable = node.properties.find((p) => p.name === 'focusable')
+
   if (focusable && focusable.value.value === false) {
     return false
   }
+
   return true
 }
 
@@ -189,6 +202,7 @@ function formatLandmarkRole(role: string, name: string): string {
   if (name) {
     return `[${name}]`
   }
+
   switch (role) {
     case 'banner':
       return '[Header]'

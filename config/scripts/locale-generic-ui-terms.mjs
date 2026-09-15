@@ -86,9 +86,11 @@ export function canonicalGenericRenderings(locale) {
 
 function spansOf(value, needle) {
   const spans = []
+
   for (let at = value.indexOf(needle); at !== -1; at = value.indexOf(needle, at + 1)) {
     spans.push([at, at + needle.length])
   }
+
   return spans
 }
 
@@ -96,6 +98,7 @@ function spansOf(value, needle) {
 // electrical-connector mistranslation would cut a valid word in half.
 export function overlapsCanonicalRendering(term, locale, value, start, end) {
   const renderings = RENDERINGS_BY_TERM.get(term)?.[locale] ?? []
+
   return renderings.some((form) =>
     spansOf(value, form).some(([from, to]) => start < to && from < end)
   )

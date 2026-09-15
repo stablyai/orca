@@ -20,6 +20,7 @@ export function limitQuickOpenSearchReplyBySerializedBytes<T extends QuickOpenSe
 
   for (let length = result.files.length - 1; length >= 0; length -= 1) {
     const bounded = { ...result, files: result.files.slice(0, length), truncated: true } as T
+
     if (Buffer.byteLength(JSON.stringify(bounded), 'utf8') <= maxBytes) {
       return bounded
     }
@@ -34,13 +35,17 @@ export function limitQuickOpenFilesBySerializedBytes(
 ): string[] {
   const bounded: string[] = []
   let serializedBytes = 2 // []
+
   for (const path of files) {
     const nextBytes = serializedQuickOpenPathBytes(path) + (bounded.length === 0 ? 0 : 1)
+
     if (serializedBytes + nextBytes > maxBytes) {
       break
     }
+
     bounded.push(path)
     serializedBytes += nextBytes
   }
+
   return bounded
 }

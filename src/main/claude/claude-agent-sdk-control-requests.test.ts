@@ -9,11 +9,14 @@ afterEach(() => {
 describe('createClaudeControlSurface stopTask', () => {
   it('bounds a lost reply and permits a later stop request', async () => {
     vi.useFakeTimers()
+
     const stopTask = vi
       .fn<() => Promise<void>>()
       .mockImplementationOnce(() => new Promise(() => {}))
       .mockResolvedValueOnce()
+
     const controls = createClaudeControlSurface({ stopTask } as unknown as Query)
+
     const timedOut = expect(controls.stopTask('task-1', { timeoutMs: 25 })).rejects.toThrow(
       'claude stop_task request timed out'
     )

@@ -55,11 +55,14 @@ const ptyKillHunk = (() => {
   // Anchored on the hunk header's function context rather than its line
   // numbers, which shift whenever anything above it in the patch changes.
   const header = /^@@ .* @@ static Napi::Value PtyKill\(.*$/m.exec(PATCH)
+
   if (!header) {
     throw new Error('no PtyKill hunk in config/patches/node-pty@1.1.0.patch')
   }
+
   const from = header.index
   const next = PATCH.indexOf('\n@@ ', from + 1)
+
   return PATCH.slice(from, next === -1 ? undefined : next)
 })()
 
@@ -69,9 +72,11 @@ const ptyKillHunk = (() => {
  */
 function indexIn(haystack: string, marker: string): number {
   const at = haystack.indexOf(marker)
+
   if (at === -1) {
     throw new Error(`marker not found in the PtyKill hunk: ${marker}`)
   }
+
   return at
 }
 
@@ -110,6 +115,7 @@ describe('node-pty patch: pseudoconsole close on the self-exit path', () => {
       ptyKillHunk,
       '+  HANDLE hLibrary = LoadConptyDll(info, useConptyDll);'
     )
+
     const claim = indexIn(ptyKillHunk, '+      handle->consoleClosed = true;')
     expect(dllResolve).toBeLessThan(claim)
   })
@@ -123,11 +129,13 @@ describe('node-pty patch: pseudoconsole close on the self-exit path', () => {
     const guarded = ptyKillHunk.slice(start, end)
     expect(guarded).toContain('DuplicateHandle(GetCurrentProcess(), handle->hShell')
     expect(guarded).toContain('TerminateProcess(handle->hShell, 1);')
+
     // No ADDED line outside that guard may terminate through hShell. Removed
     // (`-`) lines still carry upstream's unguarded call, which is the point.
     const strayAdds = PATCH.replace(guarded, '')
       .split('\n')
       .filter((line) => line.startsWith('+') && line.includes('TerminateProcess(handle->hShell'))
+
     expect(strayAdds).toEqual([])
   })
 

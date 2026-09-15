@@ -17,9 +17,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { getPosixOmpShellWrapper } from './omp-shell-wrapper'
 
 const describePosix = process.platform === 'win32' ? describe.skip : describe
+
 const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version']).status === 0
+
 const hasZsh = process.platform !== 'win32' && spawnSync('zsh', ['--version']).status === 0
+
 const itWithBash = hasBash ? it : it.skip
+
 const itWithZsh = hasZsh ? it : it.skip
 
 type PosixShell = 'bash' | 'zsh'
@@ -29,6 +33,7 @@ const tempDirs: string[] = []
 function makeTempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'orca-omp-node-pty-'))
   tempDirs.push(dir)
+
   return dir
 }
 
@@ -89,6 +94,7 @@ async function runInteractivePosixPty(args: {
   })
 
   let timeout: ReturnType<typeof setTimeout> | null = null
+
   const timeoutPromise = new Promise<never>((_resolve, reject) => {
     timeout = setTimeout(
       () => reject(new Error(`timed out waiting for ${shell} PTY output:\n${output}`)),
@@ -101,11 +107,13 @@ async function runInteractivePosixPty(args: {
     proc.write(input.replace(/\n/g, '\r'))
     const { exitCode } = await Promise.race([exitPromise, timeoutPromise])
     expect(exitCode).toBe(0)
+
     return output
   } finally {
     if (timeout !== null) {
       clearTimeout(timeout)
     }
+
     try {
       proc.kill()
     } catch {
@@ -168,6 +176,7 @@ exit 0
 
     const wrappedCapture = join(tempDir, 'wrapped-capture')
     const wrappedAfterPi = join(tempDir, 'wrapped-after-pi')
+
     const wrappedOutput = await runInteractivePosixPty({
       cwd: tempDir,
       rcfileContent: getPosixOmpShellWrapper(),
@@ -412,6 +421,7 @@ __orca_test_missing_status=$?
 exit 0
 `
     )
+
     const output = await runInteractivePosixPty({
       shell,
       cwd: projectDir,

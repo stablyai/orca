@@ -12,6 +12,7 @@ type ScheduleHost = {
 
 function createScheduleHost(): ScheduleHost {
   const prototype = OrcaRuntimeWithScheduleWaitBlockedCheck.prototype as unknown as ScheduleHost
+
   return {
     waitBlockedCheckStateByPtyId: new Map(),
     runWaitBlockedCheck: () => {},
@@ -22,6 +23,7 @@ function createScheduleHost(): ScheduleHost {
 describe('wait-blocked keyword carry storage', () => {
   it('owns the carry so it stops pinning the lowercased chunk window', () => {
     const own = vi.spyOn(ownership, 'ownRetainedString')
+
     try {
       const host = createScheduleHost()
       const chunk = `${'Building Project '.repeat(4096)}tail-marker-text`

@@ -12,6 +12,7 @@ vi.mock('sonner', () => ({
 const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
   notifyHostOfMirroredEditorCloseMock: vi.fn()
 }))
+
 vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
@@ -51,6 +52,7 @@ describe('createEditorSlice right sidebar state', () => {
     const store = createEditorTabsStore()
     const sourceTab = store.getState().createUnifiedTab('wt-1', 'terminal', { id: 'terminal-1' })
     const targetGroupId = store.getState().createEmptySplitGroup('wt-1', sourceTab.groupId, 'right')
+
     if (!targetGroupId) {
       throw new Error('expected split group')
     }
@@ -69,6 +71,7 @@ describe('createEditorSlice right sidebar state', () => {
     const editorTab = store
       .getState()
       .unifiedTabsByWorktree['wt-1']?.find((tab) => tab.contentType === 'editor')
+
     expect(editorTab?.groupId).toBe(targetGroupId)
     // Why: the pane matches the handoff on its own tab id, so a drifting id silently drops it.
     expect(store.getState().pendingEditorFocusRequest?.viewStateId).toBe(editorTab?.id)

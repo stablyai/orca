@@ -9,6 +9,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -216,6 +217,7 @@ describe('terminal slice behaviors', () => {
     const store = createTestStore()
     const worktreeCount = 125
     const targetIndex = 73
+
     const worktrees = Array.from({ length: worktreeCount }, (_, index) =>
       makeWorktree({
         id: `repo1::/path/wt-${index}`,
@@ -224,6 +226,7 @@ describe('terminal slice behaviors', () => {
         hostId: 'local'
       })
     )
+
     const tabsByWorktree = Object.fromEntries(
       worktrees.map((worktree, index) => [
         worktree.id,
@@ -245,9 +248,11 @@ describe('terminal slice behaviors', () => {
     store.getState().updateTabPtyId(targetTabId, 'pty-fresh')
 
     const after = store.getState().tabsByWorktree
+
     const changedWorktreeIds = Object.keys(after).filter(
       (worktreeId) => after[worktreeId] !== before[worktreeId]
     )
+
     expect(changedWorktreeIds).toEqual([`repo1::/path/wt-${targetIndex}`])
   })
 

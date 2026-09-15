@@ -31,6 +31,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
 }): Promise<{ terminal: RuntimeTerminalCreate }> {
   const operation = createAgentSessionCreateOperation()
   const launchPreferences = toAgentLaunchPreferences(args.sessionOptions)
+
   return await runRemoteAgentSessionLaunch({
     environmentId: args.environmentId,
     hostAuthority: () =>

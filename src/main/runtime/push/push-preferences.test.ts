@@ -23,6 +23,7 @@ it('applies desktop category eligibility regardless of phone sound preferences',
       }
     ]
   })
+
   harness.dispatcher.enqueue(notification({ source: 'terminal-bell', desktopAllowed: false }))
   await flush()
   expect(harness.sends).toHaveLength(0)
@@ -50,6 +51,7 @@ it('keeps sound preferences separate when several phones receive the same event'
       }
     ]
   })
+
   harness.dispatcher.enqueue(notification())
   await flush()
   expect(harness.sends).toHaveLength(2)
@@ -78,6 +80,7 @@ it('applies burst suppression independently to each eligible phone', async () =>
       }
     ]
   })
+
   harness.dispatcher.enqueue(notification({ source: 'terminal-bell', emittedAt: 10000 }))
   harness.dispatcher.enqueue(notification({ emittedAt: 10250 }))
   await flush()

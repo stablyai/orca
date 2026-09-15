@@ -41,9 +41,11 @@ export const createKeybindingsSlice: StateCreator<AppState, [], [], KeybindingsS
     if (!window.api.keybindings) {
       return null
     }
+
     try {
       const snapshot = await window.api.keybindings.ensureFile()
       set(applySnapshot(snapshot))
+
       return snapshot
     } catch (error) {
       console.error('Failed to prepare keybindings file:', error)
@@ -55,6 +57,7 @@ export const createKeybindingsSlice: StateCreator<AppState, [], [], KeybindingsS
     if (!window.api.keybindings) {
       return
     }
+
     try {
       const snapshot = await window.api.keybindings.get()
       set(applySnapshot(snapshot))
@@ -97,6 +100,7 @@ export const createKeybindingsSlice: StateCreator<AppState, [], [], KeybindingsS
     if (!window.api.keybindings) {
       return
     }
+
     try {
       const snapshot = await window.api.keybindings.reload()
       set(applySnapshot(snapshot))
@@ -109,6 +113,7 @@ export const createKeybindingsSlice: StateCreator<AppState, [], [], KeybindingsS
     if (!window.api.keybindings) {
       return
     }
+
     try {
       const snapshot = await window.api.keybindings.openFile()
       set(applySnapshot(snapshot))
@@ -121,6 +126,7 @@ export const createKeybindingsSlice: StateCreator<AppState, [], [], KeybindingsS
     if (!window.api.keybindings) {
       return
     }
+
     try {
       const snapshot = await window.api.keybindings.revealFile()
       set(applySnapshot(snapshot))

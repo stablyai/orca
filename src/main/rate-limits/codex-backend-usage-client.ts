@@ -36,13 +36,16 @@ function backendWindowToSnapshot(
   if (!raw) {
     return null
   }
+
   const limitWindowSeconds = raw.limit_window_seconds
+
   const windowDurationMins =
     typeof limitWindowSeconds === 'number' &&
     Number.isFinite(limitWindowSeconds) &&
     limitWindowSeconds > 0
       ? Math.ceil(limitWindowSeconds / 60)
       : undefined
+
   return { usedPercent: raw.used_percent, windowDurationMins, resetsAt: raw.reset_at }
 }
 
@@ -51,6 +54,7 @@ function snapshotWindowMinutes(
   fallbackWindowMinutes: number
 ): number {
   const duration = snapshot?.windowDurationMins
+
   return typeof duration === 'number' && Number.isFinite(duration) && duration > 0
     ? duration
     : fallbackWindowMinutes
@@ -62,22 +66,30 @@ export async function fetchCodexRateLimitsViaBackend(
 ): Promise<ProviderRateLimits | null> {
   const signal = createCodexBackendRequestSignal(options?.signal)
   const headers = await getCodexBackendAuthHeaders(options, signal)
+
   if (!headers || signal.aborted) {
     return null
   }
+
   const response = await request('https://chatgpt.com/backend-api/wham/usage', { headers, signal })
+
   if (!response.ok) {
     await cancelUnreadResponseBody(response)
+
     return null
   }
+
   const payload = (await response.json()) as BackendUsageResponse
+
   if (typeof payload.plan_type !== 'string') {
     return null
   }
+
   const classified = classifyCodexRateLimitWindows({
     primary: backendWindowToSnapshot(payload.rate_limit?.primary_window),
     secondary: backendWindowToSnapshot(payload.rate_limit?.secondary_window)
   })
+
   return {
     provider: 'codex',
     session: mapCodexRateLimitWindow(
@@ -109,17 +121,22 @@ export async function supplementCodexSessionWindow(
   if (options?.signal?.aborted || limits.session || !limits.weekly) {
     return limits
   }
+
   try {
     const backend = await fetchCodexRateLimitsViaBackend(request, options)
+
     if (!backend) {
       return limits
     }
+
     const rateLimitResetCredits = backend.rateLimitResetCredits ?? limits.rateLimitResetCredits
+
     if (!backend.session) {
       return rateLimitResetCredits === limits.rateLimitResetCredits
         ? limits
         : { ...limits, rateLimitResetCredits }
     }
+
     return {
       ...limits,
       session: backend.session,

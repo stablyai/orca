@@ -17,10 +17,13 @@ export async function readRuntimeDirectory(
   dirPath: string
 ): Promise<DirEntry[]> {
   const remoteArgs = getRemoteFileArgs(context, dirPath)
+
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
+
     return window.api.fs.readDir({ dirPath, connectionId: context.connectionId })
   }
+
   return callRuntimeRpc<DirEntry[]>(
     remoteArgs.target,
     'files.readDir',
@@ -35,13 +38,16 @@ export async function writeRuntimeFile(
   content: string
 ): Promise<void> {
   const remoteArgs = getRemoteFileArgs(context, filePath)
+
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
     await window.api.fs.writeFile(
       withSshMutationExpectation(context, { filePath, content, connectionId: context.connectionId })
     )
+
     return
   }
+
   await callRuntimeFileMutation(
     remoteArgs.target,
     'files.write',
@@ -60,6 +66,7 @@ export async function createRuntimePath(
   kind: 'file' | 'directory'
 ): Promise<void> {
   const remoteArgs = getRemoteFileArgs(context, path)
+
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
     await (kind === 'directory'
@@ -72,8 +79,10 @@ export async function createRuntimePath(
             connectionId: context.connectionId
           })
         ))
+
     return
   }
+
   await callRuntimeFileMutation(
     remoteArgs.target,
     kind === 'directory' ? 'files.createDir' : 'files.createFile',
@@ -92,13 +101,16 @@ export async function renameRuntimePath(
 ): Promise<void> {
   const oldRemoteArgs = getRemoteFileArgs(context, oldPath)
   const newRelativePath = getRelativePathInsideWorktree(context.worktreePath, newPath)
+
   if (!oldRemoteArgs || newRelativePath === null) {
     assertLocalFilesystemFallbackAllowed(context)
     await window.api.fs.rename(
       withSshMutationExpectation(context, { oldPath, newPath, connectionId: context.connectionId })
     )
+
     return
   }
+
   await callRuntimeFileMutation(
     oldRemoteArgs.target,
     'files.rename',
@@ -118,6 +130,7 @@ export async function copyRuntimePath(
 ): Promise<void> {
   const sourceArgs = getRemoteFileArgs(context, sourcePath)
   const destinationArgs = getRemoteFileArgs(context, destinationPath)
+
   if (!sourceArgs || !destinationArgs) {
     assertLocalFilesystemFallbackAllowed(context)
     await window.api.fs.copy(
@@ -127,8 +140,10 @@ export async function copyRuntimePath(
         connectionId: context.connectionId
       })
     )
+
     return
   }
+
   await callRuntimeFileMutation(
     sourceArgs.target,
     'files.copy',
@@ -147,6 +162,7 @@ export async function deleteRuntimePath(
   recursive?: boolean
 ): Promise<void> {
   const remoteArgs = getRemoteFileArgs(context, targetPath)
+
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
     await window.api.fs.deletePath(
@@ -156,8 +172,10 @@ export async function deleteRuntimePath(
         recursive
       })
     )
+
     return
   }
+
   await callRuntimeFileMutation(
     remoteArgs.target,
     'files.delete',
@@ -176,6 +194,7 @@ export async function deleteRuntimeRelativePath(
   recursive?: boolean
 ): Promise<boolean> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (
     target.kind !== 'environment' ||
     !context.worktreeId ||
@@ -183,6 +202,7 @@ export async function deleteRuntimeRelativePath(
   ) {
     return false
   }
+
   await callRuntimeFileMutation(
     target,
     'files.delete',
@@ -193,5 +213,6 @@ export async function deleteRuntimeRelativePath(
     }),
     15_000
   )
+
   return true
 }

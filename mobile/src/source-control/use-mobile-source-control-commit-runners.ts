@@ -7,7 +7,9 @@ import type {
 } from './mobile-commit-failure-recovery'
 
 type GitStep = { method: string; params?: Record<string, unknown> }
+
 type SendGitRequest = <T>(method: string, params?: Record<string, unknown>) => Promise<T>
+
 type RunGitWorkflow = (
   actionId: string,
   runner: () => Promise<void>,
@@ -51,9 +53,11 @@ export function useMobileSourceControlCommitRunners(params: Params) {
 
   const commit = useCallback(async () => {
     const message = commitMessage.trim()
+
     if (!message) {
       return false
     }
+
     return await runGitWorkflow(
       'commit',
       async () => {
@@ -75,37 +79,47 @@ export function useMobileSourceControlCommitRunners(params: Params) {
   const runCommitFollowUps = useCallback(
     async (actionId: string, afterCommit: () => Promise<void>) => {
       const message = commitMessage.trim()
+
       if (!message) {
         return false
       }
+
       if (busyActionRef.current) {
         return false
       }
+
       busyActionRef.current = actionId
       setBusyAction(actionId)
       setActionError(null)
       recordCommitFailure(null)
       let didCommit = false
+
       try {
         await sendCommitRequest(message)
         didCommit = true
         await afterCommit()
+
         if (!mountedRef.current) {
           return false
         }
+
         setCommitMessage('')
         triggerSuccess()
         await loadStatus({ preserveReadyOnFailure: true, force: true })
+
         return true
       } catch (err) {
         if (!mountedRef.current) {
           return false
         }
+
         triggerError()
         const errorMessage = err instanceof Error ? err.message : 'Source control action failed'
+
         if (!didCommit) {
           recordCommitFailure({ error: errorMessage, commitMessage: message, stagedEntries })
         }
+
         if (didCommit) {
           setCommitMessage('')
           await loadStatus({
@@ -114,11 +128,14 @@ export function useMobileSourceControlCommitRunners(params: Params) {
             force: true
           })
         }
+
         setActionError(errorMessage)
+
         return false
       } finally {
         if (busyActionRef.current === actionId) {
           busyActionRef.current = null
+
           if (mountedRef.current) {
             setBusyAction(null)
           }

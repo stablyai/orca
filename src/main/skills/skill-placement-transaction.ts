@@ -28,6 +28,7 @@ import {
 
 function normalizedPath(path: string): string {
   const normalized = resolve(path)
+
   return process.platform === 'win32' ? normalized.toLocaleLowerCase('en-US') : normalized
 }
 
@@ -41,24 +42,31 @@ async function settleDeselectedAction(
     if (!(await placementBackupMatchesPrevious(journal, action, filesystem))) {
       throw new Error('skill-placement-recovery-conflict')
     }
+
     await filesystem.remove(action.backupPath)
   }
+
   const previous = journal.previousReceipt?.placements.find(
     (placement) => normalizedPath(placement.path) === normalizedPath(action.destinationPath)
   )
+
   if (!previous || !(await placementPathExists(action.destinationPath))) {
     return null
   }
+
   const removable = await isRemovableSkillPlacement({
     placement: previous,
     receipt: journal.previousReceipt!,
     allowedProviderRoots,
     filesystem
   })
+
   if (removable) {
     await filesystem.rename(action.destinationPath, action.backupPath)
+
     return null
   }
+
   return {
     ...previous,
     status: 'skipped',
@@ -78,9 +86,11 @@ export async function recoverSkillPlacementTransaction(
   options: { finalize?: boolean; signal?: AbortSignal } = {}
 ): Promise<SkillInstallReceiptV1 | null> {
   const journal = await readSkillPlacementRecoveryJournal(stateDirectory, canonicalPath)
+
   if (!journal) {
     return null
   }
+
   if (!(await placementMatchesDigest(canonicalPath, journal.packageDigest, journal, filesystem))) {
     if (
       journal.previousReceipt &&
@@ -99,8 +109,10 @@ export async function recoverSkillPlacementTransaction(
         ])
       )
       await rm(skillPlacementJournalPath(stateDirectory, canonicalPath), { force: true })
+
       return journal.previousReceipt
     }
+
     if (
       !journal.previousReceipt &&
       !(await placementPathExists(canonicalPath)) &&
@@ -114,11 +126,15 @@ export async function recoverSkillPlacementTransaction(
       ).some(Boolean)
     ) {
       await rm(skillPlacementJournalPath(stateDirectory, canonicalPath), { force: true })
+
       return null
     }
+
     throw new Error('skill-placement-canonical-mismatch')
   }
+
   const allowedProviderRoots = journal.actions.map((action) => action.rootPath)
+
   const placements: SkillPlacementResult[] = [
     {
       provider: 'agent-skills',
@@ -127,6 +143,7 @@ export async function recoverSkillPlacementTransaction(
       status: 'installed'
     }
   ]
+
   for (const action of journal.actions) {
     if (!action.desired) {
       const skipped = await settleDeselectedAction(
@@ -135,11 +152,14 @@ export async function recoverSkillPlacementTransaction(
         filesystem,
         allowedProviderRoots
       )
+
       if (skipped) {
         placements.push(skipped)
       }
+
       continue
     }
+
     if (options.signal?.aborted) {
       placements.push({
         provider: action.provider,
@@ -155,7 +175,9 @@ export async function recoverSkillPlacementTransaction(
       })
       continue
     }
+
     const recoveredArtifacts = await settleDesiredPlacementArtifacts(journal, action, filesystem)
+
     if (
       recoveredArtifacts &&
       (await placementPathExists(action.destinationPath)) &&
@@ -176,11 +198,13 @@ export async function recoverSkillPlacementTransaction(
       })
       continue
     }
+
     const destination = {
       provider: action.provider as never,
       rootPath: action.rootPath,
       readsCanonicalRoot: false
     }
+
     const placement = await reconcileSkillProviderPlacement({
       canonicalPath,
       skillName: basename(canonicalPath),
@@ -192,19 +216,23 @@ export async function recoverSkillPlacementTransaction(
       transaction: { stagingPath: action.stagingPath, backupPath: action.backupPath },
       ...(journal.wslDistro ? { targetPlatform: 'linux' as const } : {})
     })
+
     if (placement) {
       placements.push(placement)
     }
   }
+
   const receipt = { ...journal.receipt, placements, providers: journal.providers }
   await writeSkillInstallReceipt(stateDirectory, receipt)
   await writeSkillStateFile(skillPlacementJournalPath(stateDirectory, canonicalPath), {
     ...journal,
     receipt
   })
+
   if (options.finalize !== false) {
     await finishSkillPlacementTransaction(stateDirectory, canonicalPath, filesystem)
   }
+
   return receipt
 }
 
@@ -214,19 +242,24 @@ export async function finishSkillPlacementTransaction(
   filesystem: SkillInstallFilesystem = nativeSkillInstallFilesystem
 ): Promise<void> {
   const journal = await readSkillPlacementRecoveryJournal(stateDirectory, canonicalPath)
+
   if (!journal) {
     return
   }
+
   await Promise.all(
     journal.actions.map(async (action) => {
       if (action.desired) {
         await settleDesiredPlacementArtifacts(journal, action, filesystem)
       }
+
       await filesystem.remove(action.stagingPath)
+
       if (await placementPathExists(action.backupPath)) {
         if (!(await placementBackupMatchesPrevious(journal, action, filesystem))) {
           throw new Error('skill-placement-recovery-conflict')
         }
+
         await filesystem.remove(action.backupPath)
       }
     })

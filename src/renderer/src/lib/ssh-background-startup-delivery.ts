@@ -31,6 +31,7 @@ export function sshBackgroundLaunchWaitsForShellReady(startupPlan: {
 }
 
 const SSH_SHELL_READY_STARTUP_FALLBACK_MS = 1500
+
 // Why: a remote shell that has not emitted a single byte is still booting —
 // /etc/profile plus nvm/conda/pyenv over a cold link routinely needs more than
 // the post-output deadline. Force-delivering there writes the bracketed-paste
@@ -79,19 +80,23 @@ export function createSshBackgroundStartupDelivery(
       injectTimer = null
     }
   }
+
   const clearFallbackTimer = (): void => {
     if (fallbackTimer !== null) {
       clearTimeout(fallbackTimer)
       fallbackTimer = null
     }
   }
+
   function markShellReady(): void {
     if (startupShellReady) {
       return
     }
+
     startupShellReady = true
     markerObserved = true
     clearFallbackTimer()
+
     if (pendingCommand && lastPtyId) {
       schedule(lastPtyId)
     }
@@ -99,9 +104,11 @@ export function createSshBackgroundStartupDelivery(
 
   const armFallback = (ptyId: string): void => {
     lastPtyId = ptyId
+
     if (!pendingCommand || fallbackTimer !== null) {
       return
     }
+
     // The long budget only buys time for the shell-ready marker; the fast path
     // pastes nothing prompt-sensitive, so delaying it there is pure latency.
     const waitingForSilentShell = waitForShellReady && !sawOutput
@@ -119,21 +126,27 @@ export function createSshBackgroundStartupDelivery(
 
   const schedule = (ptyId: string): void => {
     lastPtyId = ptyId
+
     if (!pendingCommand) {
       return
     }
+
     if (!startupShellReady) {
       armFallback(ptyId)
+
       return
     }
+
     clearFallbackTimer()
     clearInjectTimer()
     injectTimer = setTimeout(() => {
       injectTimer = null
       const command = pendingCommand
+
       if (!command) {
         return
       }
+
       pendingCommand = null
       // Why: the SSH relay treats spawn.command as metadata for interactive
       // PTYs; hidden automation tabs still submit the command themselves.
@@ -157,18 +170,23 @@ export function createSshBackgroundStartupDelivery(
       // collapses back to the original post-output deadline.
       if (!sawOutput && data.length > 0) {
         sawOutput = true
+
         if (fallbackTimer !== null && !startupShellReady && lastPtyId) {
           clearFallbackTimer()
           armFallback(lastPtyId)
         }
       }
+
       if (!markerScan) {
         return data
       }
+
       const scanned = scanForShellReadyMarker(markerScan, data)
+
       if (scanned.matched) {
         markShellReady()
       }
+
       return scanned.output
     },
     armFallback,
@@ -177,11 +195,13 @@ export function createSshBackgroundStartupDelivery(
       if (armed !== false || !waitForShellReady) {
         return
       }
+
       // Not a marker sighting: bracketed paste stays unproven, so the submit stays raw.
       waitForShellReady = false
       startupShellReady = true
       markerScan = null
       clearFallbackTimer()
+
       if (lastPtyId) {
         schedule(lastPtyId)
       }

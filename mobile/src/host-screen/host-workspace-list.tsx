@@ -40,6 +40,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
     settings,
     state
   } = controller
+
   const { rawSections, sections, uniqueRepoColors } = sectionsResult
 
   return (
@@ -120,13 +121,17 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
             if (!section.title) {
               return null
             }
+
             const isCollapsed = state.collapsedGroups.has(section.key)
             const rawSection = rawSections.find((s) => s.key === section.key)
             const count = rawSection?.data.length ?? 0
+
             const repoSectionColor =
               state.groupMode === 'repo' ? uniqueRepoColors.get(section.title) : null
+
             const repoSectionIcon =
               state.groupMode === 'repo' ? state.repoIconsByName.get(section.title) : null
+
             return (
               <Pressable
                 style={styles.sectionHeader}

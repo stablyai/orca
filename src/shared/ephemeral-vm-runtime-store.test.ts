@@ -59,6 +59,7 @@ describe('ephemeral VM runtime store', () => {
     if (originalPlatform) {
       Object.defineProperty(process, 'platform', originalPlatform)
     }
+
     for (const dir of tempDirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -67,12 +68,14 @@ describe('ephemeral VM runtime store', () => {
   function makeUserDataPath(): string {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-ephemeral-vm-store-'))
     tempDirs.push(userDataPath)
+
     return userDataPath
   }
 
   it('persists recipe-created runtimes separately from saved remote environments', () => {
     const userDataPath = makeUserDataPath()
     const first = upsertEphemeralVmRuntime(userDataPath, runtimeRecord())
+
     const second = upsertEphemeralVmRuntime(
       userDataPath,
       runtimeRecord({

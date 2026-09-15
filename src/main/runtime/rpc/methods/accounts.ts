@@ -36,6 +36,7 @@ export const ACCOUNT_METHODS = [
       if (params.refreshUsage) {
         await runtime.refreshAccountsForMobile()
       }
+
       return runtime.getAccountsSnapshot()
     }
   }),
@@ -82,6 +83,7 @@ export const ACCOUNT_METHODS = [
       if (clientKind !== undefined) {
         throw new Error('Adding Claude accounts is only available on the Orca host runtime.')
       }
+
       return runtime.addClaudeAccountFromConfigDir(params.configDir, {
         runtime: params.runtime,
         wslDistro: params.wslDistro ?? null,
@@ -96,6 +98,7 @@ export const ACCOUNT_METHODS = [
       if (clientKind !== undefined) {
         throw new Error('Adding Codex accounts is only available on the Orca host runtime.')
       }
+
       return runtime.addCodexAccountFromHome(params.sourceHome, {
         runtime: params.runtime,
         wslDistro: params.wslDistro ?? null
@@ -145,6 +148,7 @@ export const ACCOUNT_METHODS = [
     params: AccountsUnsubscribeParams,
     handler: async (params, { runtime }) => {
       runtime.cleanupSubscription(params.subscriptionId)
+
       return { unsubscribed: true }
     }
   })

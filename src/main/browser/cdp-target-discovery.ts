@@ -18,6 +18,7 @@ export class CdpTargetDiscovery {
 
   handleHttpRequest(req: IncomingMessage, res: ServerResponse): void {
     const url = req.url ?? ''
+
     if (url === '/json/version' || url === '/json/version/') {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       // Why: agent-browser reads this endpoint to identify the browser. Returning
@@ -33,8 +34,10 @@ export class CdpTargetDiscovery {
           webSocketDebuggerUrl: `ws://127.0.0.1:${this.getPort()}`
         })
       )
+
       return
     }
+
     if (url === '/json' || url === '/json/' || url === '/json/list' || url === '/json/list/') {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(
@@ -46,8 +49,10 @@ export class CdpTargetDiscovery {
           }
         ])
       )
+
       return
     }
+
     res.writeHead(404)
     res.end()
   }
@@ -60,30 +65,41 @@ export class CdpTargetDiscovery {
   ): boolean {
     if (msg.method === 'Target.getTargets') {
       this.responder.sendResult(clientId, { targetInfos: [this.buildTargetInfo()] }, client)
+
       return true
     }
+
     if (msg.method === 'Target.getTargetInfo') {
       this.responder.sendResult(clientId, { targetInfo: this.buildTargetInfo() }, client)
+
       return true
     }
+
     if (msg.method === 'Target.setDiscoverTargets' || msg.method === 'Target.detachFromTarget') {
       if (msg.method === 'Target.detachFromTarget') {
         const detachedSessionId = msg.params?.sessionId
         this.sessions.detachSession(detachedSessionId)
       }
+
       this.responder.sendResult(clientId, {}, client)
+
       return true
     }
+
     if (msg.method === 'Target.attachToBrowserTarget') {
       const sessionId = this.sessions.attachBrowserSession()
       this.responder.sendResult(clientId, { sessionId }, client)
+
       return true
     }
+
     if (msg.method === 'Target.attachToTarget') {
       const sessionId = this.sessions.attachPageSession()
       this.responder.sendResult(clientId, { sessionId }, client)
+
       return true
     }
+
     if (msg.method === 'Browser.getVersion') {
       // Why: returning "Orca/Electron" identifies this as an embedded automation
       // surface to agent-browser. Use a generic Chrome product string instead.
@@ -98,13 +114,16 @@ export class CdpTargetDiscovery {
         },
         client
       )
+
       return true
     }
+
     return false
   }
 
   private buildTargetInfo(): Record<string, unknown> {
     const destroyed = this.webContents.isDestroyed()
+
     return {
       targetId: 'orca-proxy-target',
       type: 'page',

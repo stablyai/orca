@@ -19,6 +19,7 @@ function searchClient(
   executionHostScope?: ExecutionHostId
 ): ReturnType<typeof createSessionSearchClient> {
   const remote = executionHostScope !== undefined && executionHostScope !== LOCAL_EXECUTION_HOST_ID
+
   return createSessionSearchClient(
     (method, params) =>
       method === 'aiVault.searchSessions'
@@ -49,6 +50,7 @@ export const aiVaultApi = {
   onWindowFocused: (callback: () => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('aiVault:windowFocused', listener)
+
     return () => ipcRenderer.removeListener('aiVault:windowFocused', listener)
   }
 } satisfies PreloadApi['aiVault']

@@ -51,6 +51,7 @@ export function MobileDiffReviewFileSummary({
 }: Props) {
   const hunkDisabled = diffState.kind !== 'ready' || diffState.hunks.length === 0
   const badgeColor = statusColor(item.status)
+
   return (
     <View style={styles.fileHeader}>
       <View style={styles.fileTitleRow}>

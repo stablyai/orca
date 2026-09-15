@@ -34,15 +34,18 @@ const WHEEL_DOWN_REPORT = '\x1b[<65;10;10M'
 function createIsolatedProofRepo(): string {
   // Why realpathSync: macOS tmpdir symlinks through /private and Orca canonicalizes repo.path.
   const repoDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-mouse-reattach-repo-')))
+
   const git = (...args: string[]): void => {
     execFileSync('git', args, { cwd: repoDir, stdio: 'pipe' })
   }
+
   git('init', '-q')
   git('config', 'user.email', 'e2e@test.local')
   git('config', 'user.name', 'E2E Test')
   writeFileSync(path.join(repoDir, 'README.md'), '# Orca mouse-mode reattach proof repo\n')
   git('add', '-A')
   git('commit', '-q', '-m', 'Seed commit for the reattach mouse-mode proof')
+
   return repoDir
 }
 
@@ -61,19 +64,23 @@ async function readTerminalSurface(page: Page): Promise<TerminalSurface | null> 
   return page.evaluate(async () => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
     const element = pane?.terminal?.element ?? null
     const screenElement = element?.querySelector<HTMLElement>('.xterm-screen') ?? null
+
     if (!pane || !element || !screenElement) {
       return null
     }
+
     // Why a zero-length write: xterm's write queue is FIFO, so this callback fires only after
     // every earlier replay/reset write was parsed.
     await new Promise<void>((resolve) => {
@@ -85,10 +92,13 @@ async function readTerminalSurface(page: Page): Promise<TerminalSurface | null> 
     })
     const buffer = pane.terminal.buffer.active
     const lines: string[] = []
+
     for (let row = 0; row < pane.terminal.rows; row += 1) {
       lines.push(buffer.getLine(buffer.viewportY + row)?.translateToString(true) ?? '')
     }
+
     const rect = screenElement.getBoundingClientRect()
+
     return {
       mouseEventsClass: element.classList.contains('enable-mouse-events'),
       mouseTrackingMode: String(pane.terminal.modes?.mouseTrackingMode ?? 'unavailable'),
@@ -116,20 +126,24 @@ async function waitForTerminalSurface(
     .poll(
       async () => {
         const surface = await readTerminalSurface(page)
+
         return surface !== null && predicate(surface)
       },
       { timeout: timeoutMs, message }
     )
     .toBe(true)
   const surface = await readTerminalSurface(page)
+
   if (!surface) {
     throw new Error(`${message}: terminal surface disappeared after settling`)
   }
+
   return surface
 }
 
 function readRenderedTuiOffset(visibleText: string): number | null {
   const match = /TUI_SCROLL_READY offset=(\d+)/.exec(visibleText)
+
   return match ? Number(match[1]) : null
 }
 
@@ -181,6 +195,7 @@ test.describe('terminal reattach mouse mode', () => {
           surface.visibleText.includes('TUI_SCROLL_READY') && surface.mouseEventsClass === true,
         'TUI fixture never armed mouse reporting before the restart'
       )
+
       expect(beforeRestart.mouseTrackingMode).toBe('any')
 
       // Why: the daemon is a detached fork, so closing the app leaves this PTY
@@ -206,6 +221,7 @@ test.describe('terminal reattach mouse mode', () => {
       // point — no sleep needed before sampling the modes.
       const secondPtyId = await waitForActivePanePtyId(secondLaunch.page)
       await sendToTerminal(secondLaunch.page, secondPtyId, WHEEL_DOWN_REPORT)
+
       const afterReattach = await waitForTerminalSurface(
         secondLaunch.page,
         (surface) => readRenderedTuiOffset(surface.visibleText) === 1,
@@ -219,9 +235,11 @@ test.describe('terminal reattach mouse mode', () => {
       // so the recorder's WebM never flushes. This frame IS the proof — on main the drag
       // paints an xterm row selection across the live TUI; here it must stay clean.
       const proofShot = process.env.ORCA_E2E_PROOF_SCREENSHOT
+
       if (proofShot) {
         await secondLaunch.page.screenshot({ path: proofShot })
       }
+
       expect(afterDrag, 'terminal surface unavailable after the drag').not.toBeNull()
       expect(
         afterDrag!.selectionText,
@@ -233,15 +251,18 @@ test.describe('terminal reattach mouse mode', () => {
       const wheelTargetX = afterReattach.screen.left + afterReattach.screen.width / 2
       const wheelTargetY = afterReattach.screen.top + afterReattach.screen.height / 2
       await secondLaunch.page.mouse.move(wheelTargetX, wheelTargetY)
+
       for (let i = 0; i < 5; i += 1) {
         await secondLaunch.page.mouse.wheel(0, Math.min(49, afterReattach.screen.cellHeight))
       }
+
       const afterWheel = await waitForTerminalSurface(
         secondLaunch.page,
         (surface) => (readRenderedTuiOffset(surface.visibleText) ?? 0) > 1,
         'Wheel gestures never reached the reattached TUI — its rendered offset row never advanced',
         15_000
       )
+
       expect(readRenderedTuiOffset(afterWheel.visibleText)).toBeGreaterThan(1)
       expect(afterWheel.mouseEventsClass).toBe(true)
       expect(afterWheel.mouseTrackingMode).toBe('any')
@@ -249,9 +270,11 @@ test.describe('terminal reattach mouse mode', () => {
       if (secondApp) {
         await session.close(secondApp)
       }
+
       if (firstApp) {
         await session.close(firstApp)
       }
+
       await session.dispose()
       rmSync(repoPath, { recursive: true, force: true })
     }

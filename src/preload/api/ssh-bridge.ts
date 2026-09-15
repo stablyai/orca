@@ -46,6 +46,7 @@ export const sshApi = {
 
   connect: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
     const state: unknown = await ipcRenderer.invoke('ssh:connect', args)
+
     return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
   },
 
@@ -60,6 +61,7 @@ export const sshApi = {
 
   getState: async (args: { targetId: string }): Promise<SshConnectionState | null> => {
     const state: unknown = await ipcRenderer.invoke('ssh:getState', args)
+
     return state ? admitSshConnectionStateForAuthorityReconciliation(state, args.targetId) : null
   },
 
@@ -73,9 +75,11 @@ export const sshApi = {
       'ssh:testConnection',
       args
     )
+
     const state = result.state
       ? admitSshConnectionStateForAuthorityReconciliation(result.state, args.targetId)
       : null
+
     return { ...result, ...(state ? { state } : { state: undefined }) }
   },
 
@@ -87,11 +91,14 @@ export const sshApi = {
       data: { targetId: string; state: unknown }
     ): void => {
       const state = admitSshConnectionStateForAuthorityReconciliation(data.state, data.targetId)
+
       if (state) {
         callback({ targetId: data.targetId, state })
       }
     }
+
     ipcRenderer.on('ssh:state-changed', listener)
+
     return () => ipcRenderer.removeListener('ssh:state-changed', listener)
   },
 
@@ -128,7 +135,9 @@ export const sshApi = {
       _event: Electron.IpcRendererEvent,
       data: { targetId: string; forwards: PortForwardEntry[] }
     ) => callback(data)
+
     ipcRenderer.on('ssh:port-forwards-changed', handler)
+
     return () => ipcRenderer.removeListener('ssh:port-forwards-changed', handler)
   },
 
@@ -139,7 +148,9 @@ export const sshApi = {
       _event: Electron.IpcRendererEvent,
       data: { targetId: string; ports: unknown }
     ) => callback({ targetId: data.targetId, ports: admitSshDetectedPorts(data.ports) })
+
     ipcRenderer.on('ssh:detected-ports-changed', handler)
+
     return () => ipcRenderer.removeListener('ssh:detected-ports-changed', handler)
   },
 
@@ -169,14 +180,18 @@ export const sshApi = {
         detail: string
       }
     ) => callback(data)
+
     ipcRenderer.on('ssh:credential-request', listener)
+
     return () => ipcRenderer.removeListener('ssh:credential-request', listener)
   },
 
   onCredentialResolved: (callback: (data: { requestId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { requestId: string }) =>
       callback(data)
+
     ipcRenderer.on('ssh:credential-resolved', listener)
+
     return () => ipcRenderer.removeListener('ssh:credential-resolved', listener)
   },
 

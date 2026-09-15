@@ -17,7 +17,9 @@ export function resolveDispatchCreator(
     // the pre-existing Run-binding check already gives this case.
     return { kind: 'system' }
   }
+
   const authority = runtime.getOrchestrationDispatchAuthority?.(callerHandle)
+
   return {
     kind: 'terminal',
     handle: callerHandle,

@@ -36,8 +36,11 @@ export type WslWatcherDeps = {
 }
 
 const POLL_INTERVAL_SECONDS = 2
+
 const STARTUP_TIMEOUT_MS = 10_000
+
 const [SNAPSHOT_START, SNAPSHOT_END] = ['\x1e', '\x1f']
+
 const MAX_STREAM_BUFFER_CHARS = 10 * 1024 * 1024
 
 type WslSnapshotEntry = {
@@ -56,6 +59,7 @@ function quoteSafeFindName(name: string): string {
   if (!/^[A-Za-z0-9_.-]+$/.test(name)) {
     throw new Error(`Unsupported WSL watcher ignore name: ${name}`)
   }
+
   return `'${name}'`
 }
 
@@ -63,12 +67,15 @@ function buildPruneExpression(ignoreDirs: readonly string[]): string {
   if (ignoreDirs.length === 0) {
     return ''
   }
+
   const names = ignoreDirs.map((name) => `-name ${quoteSafeFindName(name)}`).join(' -o ')
+
   return `\\( -type d \\( ${names} \\) -prune \\) -o`
 }
 
 function buildSnapshotScript(ignoreDirs: readonly string[]): string {
   const prune = buildPruneExpression(ignoreDirs)
+
   return [
     'set -efu',
     'root=$1',
@@ -85,26 +92,34 @@ function buildSnapshotScript(ignoreDirs: readonly string[]): string {
 
 function parseSnapshotFrame(frame: string, distro: string): WslSnapshot {
   const snapshot: WslSnapshot = new Map()
+
   for (const rawEntry of frame.split('\0')) {
     if (!rawEntry) {
       continue
     }
+
     const firstTab = rawEntry.indexOf('\t')
     const secondTab = firstTab === -1 ? -1 : rawEntry.indexOf('\t', firstTab + 1)
+
     if (firstTab <= 0 || secondTab <= firstTab + 1) {
       continue
     }
+
     const linuxPath = rawEntry.slice(secondTab + 1)
+
     if (!linuxPath.startsWith('/')) {
       continue
     }
+
     const entry: WslSnapshotEntry = {
       type: rawEntry.slice(0, firstTab),
       mtime: rawEntry.slice(firstTab + 1, secondTab),
       path: toWslUncPath(linuxPath, distro)
     }
+
     snapshot.set(entry.path, entry)
   }
+
   return snapshot
 }
 
@@ -113,15 +128,18 @@ function diffSnapshots(prev: WslSnapshot, next: WslSnapshot): WatcherEvent[] {
 
   for (const [entryPath, nextEntry] of next) {
     const prevEntry = prev.get(entryPath)
+
     if (!prevEntry) {
       events.push({ type: 'create', path: entryPath } as WatcherEvent)
       continue
     }
+
     if (prevEntry.type !== nextEntry.type) {
       events.push({ type: 'delete', path: entryPath } as WatcherEvent)
       events.push({ type: 'create', path: entryPath } as WatcherEvent)
       continue
     }
+
     if (prevEntry.mtime !== nextEntry.mtime) {
       events.push({ type: 'update', path: entryPath } as WatcherEvent)
     }
@@ -141,6 +159,7 @@ function markOverflowWithoutUncStat(root: WatchedRoot): void {
     clearTimeout(root.batch.timer)
     root.batch.timer = null
   }
+
   root.batch.events = []
   root.batch.overflowed = true
 }
@@ -157,9 +176,11 @@ export async function createWslWatcher(
   }
 
   const wsl = parseWslUncPath(worktreePath)
+
   if (!wsl) {
     throw new Error(`Not a WSL path: ${worktreePath}`)
   }
+
   const distro = wsl.distro
   const linuxPath = wsl.linuxPath
 
@@ -184,9 +205,11 @@ export async function createWslWatcher(
     if (stopped) {
       return
     }
+
     if (!prevSnapshot) {
       return
     }
+
     stopped = true
     markOverflowWithoutUncStat(root)
     deps.scheduleBatchFlush(root)
@@ -197,12 +220,16 @@ export async function createWslWatcher(
     if (root.batch.cancelled) {
       return
     }
+
     const nextSnapshot = parseSnapshotFrame(frame, distro)
+
     if (!prevSnapshot) {
       prevSnapshot = nextSnapshot
       startup.settle()
+
       return
     }
+
     const events = diffSnapshots(prevSnapshot, nextSnapshot)
     prevSnapshot = nextSnapshot
 
@@ -215,22 +242,29 @@ export async function createWslWatcher(
   function drainFrames(): void {
     while (true) {
       const start = streamBuffer.indexOf(SNAPSHOT_START)
+
       if (start === -1) {
         streamBuffer = streamBuffer.slice(-1)
+
         return
       }
+
       if (start > 0) {
         streamBuffer = streamBuffer.slice(start)
       }
+
       const end = streamBuffer.indexOf(SNAPSHOT_END, 1)
+
       if (end === -1) {
         if (streamBuffer.length > MAX_STREAM_BUFFER_CHARS) {
           streamBuffer = ''
           markOverflowWithoutUncStat(root)
           deps.scheduleBatchFlush(root)
         }
+
         return
       }
+
       const frame = streamBuffer.slice(1, end)
       streamBuffer = streamBuffer.slice(end + 1)
       ingestFrame(frame)
@@ -239,9 +273,11 @@ export async function createWslWatcher(
 
   let child: ChildProcessWithoutNullStreams
   const releaseChildReservation = reserveWatcherChild()
+
   if (!releaseChildReservation) {
     throw new WatcherChildCapacityError()
   }
+
   try {
     child = spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-s', '--', linuxPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -264,6 +300,7 @@ export async function createWslWatcher(
     startup.settle(new DOMException('WSL watcher subscription aborted', 'AbortError'))
     processExit.requestStopBestEffort()
   }
+
   signal?.addEventListener('abort', onAbort, { once: true })
 
   const startupTimer = setTimeout(() => {
@@ -283,6 +320,7 @@ export async function createWslWatcher(
     if (disposed) {
       return
     }
+
     streamBuffer += stdoutDecoder.write(chunk)
     drainFrames()
   })
@@ -294,8 +332,10 @@ export async function createWslWatcher(
   child.stdout.on('error', (error) => {
     if (!startup.settled) {
       startup.settle(error)
+
       return
     }
+
     if (!disposed) {
       signalWatcherStopped()
     }
@@ -311,10 +351,13 @@ export async function createWslWatcher(
     if (child.pid === undefined) {
       processExit.markPhysicalExit()
     }
+
     if (!startup.settled) {
       startup.settle(error)
+
       return
     }
+
     if (!disposed) {
       signalWatcherStopped()
     }
@@ -322,13 +365,16 @@ export async function createWslWatcher(
 
   child.once('close', (code, signal) => {
     processExit.markPhysicalExit()
+
     if (!startup.settled) {
       const suffix = stderrTail.trim() ? `: ${stderrTail.trim()}` : ''
       startup.settle(
         new Error(`WSL watcher exited before first snapshot (${code ?? signal})${suffix}`)
       )
+
       return
     }
+
     if (!disposed) {
       signalWatcherStopped()
     }

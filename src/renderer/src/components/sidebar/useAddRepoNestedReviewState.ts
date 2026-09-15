@@ -50,15 +50,19 @@ export function useAddRepoNestedReviewState({
   const [nestedGroupName, setNestedGroupName] = useState('')
   const [nestedConnectionId, setNestedConnectionId] = useState<string | null>(null)
   const [nestedAttemptId, setNestedAttemptId] = useState<string | null>(null)
+
   const [nestedRuntimeKind, setNestedRuntimeKind] = useState<NestedRepoTelemetryRuntimeKind | null>(
     null
   )
+
   const [nestedScanInProgress, setNestedScanInProgress] = useState(false)
   const [nestedScanId, setNestedScanId] = useState<string | null>(null)
   const [nestedImportScanId, setNestedImportScanId] = useState<string | null>(null)
+
   const [nestedRuntimeEnvironmentId, setNestedRuntimeEnvironmentId] = useState<
     string | null | undefined
   >(undefined)
+
   const nestedScanIdRef = useRef<string | null>(null)
   const nestedScanRuntimeEnvironmentIdRef = useRef<string | null | undefined>(undefined)
 
@@ -67,6 +71,7 @@ export function useAddRepoNestedReviewState({
       if (connectionId) {
         return 'ssh'
       }
+
       return activeRuntimeEnvironmentId?.trim() ? 'runtime' : 'local'
     },
     [activeRuntimeEnvironmentId]
@@ -101,9 +106,11 @@ export function useAddRepoNestedReviewState({
 
   const handleStopNestedScan = useCallback(() => {
     const scanId = nestedScanIdRef.current
+
     if (!scanId) {
       return
     }
+
     void cancelNestedRepoScan(scanId, {
       runtimeEnvironmentId: nestedScanRuntimeEnvironmentIdRef.current
     })
@@ -111,11 +118,13 @@ export function useAddRepoNestedReviewState({
 
   const resetNestedRepoReviewState = useCallback((): void => {
     const activeNestedScanId = nestedScanIdRef.current
+
     if (activeNestedScanId) {
       void cancelNestedRepoScan(activeNestedScanId, {
         runtimeEnvironmentId: nestedScanRuntimeEnvironmentIdRef.current
       })
     }
+
     setNestedScan(null)
     setNestedSelectedPaths(new Set())
     setNestedGroupName('')

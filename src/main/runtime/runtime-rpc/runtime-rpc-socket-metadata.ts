@@ -7,25 +7,32 @@ export const RUNTIME_SOCKET_NAME_REGEX = /^o-(\d+)-[A-Za-z0-9_-]+\.sock$/
 
 export function sweepOrphanedRuntimeSockets(userDataPath: string, ownPid: number): void {
   let entries: string[]
+
   try {
     entries = readdirSync(userDataPath)
   } catch {
     // Why: first-launch userData may not exist yet; nothing to sweep.
     return
   }
+
   for (const entry of entries) {
     const match = RUNTIME_SOCKET_NAME_REGEX.exec(entry)
+
     if (!match) {
       continue
     }
+
     const pid = Number(match[1])
+
     if (!Number.isFinite(pid)) {
       continue
     }
+
     // Why: never delete our own socket — a bug here would rmSync one we're about to bind.
     if (pid === ownPid) {
       continue
     }
+
     try {
       // Why: signal 0 is the POSIX liveness probe (sends nothing); ESRCH = dead pid, EPERM = foreign owner (left alone).
       process.kill(pid, 0)
@@ -48,6 +55,7 @@ export function createRuntimeTransportMetadata(
   runtimeId = 'runtime'
 ): RuntimeTransportMetadata {
   const endpointSuffix = runtimeId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 4) || 'rt'
+
   if (platform === 'win32') {
     return {
       kind: 'named-pipe',
@@ -55,6 +63,7 @@ export function createRuntimeTransportMetadata(
       endpoint: `\\\\.\\pipe\\orca-${pid}-${endpointSuffix}`
     }
   }
+
   return {
     kind: 'unix',
     endpoint: join(userDataPath, `o-${pid}-${endpointSuffix}.sock`)

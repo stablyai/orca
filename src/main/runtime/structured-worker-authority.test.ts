@@ -8,6 +8,7 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 
 const { resolveStructuredWorkerIdentity, structuredWorkerAgent } =
   await import('./structured-worker-authority')
+
 const {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey,
@@ -43,12 +44,15 @@ function durableRow(handle: string): {
 function rehydratedIdentity(): NonNullable<ReturnType<typeof resolveStructuredWorkerIdentity>> {
   const handle = mintStructuredWorkerHandle()
   const row = durableRow(handle)
+
   const identity = resolveStructuredWorkerIdentity(handle, {
     getWorkerTerminalResourceByHandle: () => row
   } as never)
+
   if (!identity) {
     throw new Error('the durable row should rehydrate')
   }
+
   return identity
 }
 
@@ -69,6 +73,7 @@ describe('structuredWorkerAgent', () => {
   it('keeps the provider this process registered, without consulting the record', () => {
     installRecordProvider('claude')
     const handle = mintStructuredWorkerHandle()
+
     const identity = structuredWorkerIdentities.register({
       handle,
       sessionId: SESSION_ID,
@@ -78,6 +83,7 @@ describe('structuredWorkerAgent', () => {
       worktreeId: 'wt_1',
       hostScope: { kind: 'local', hostId: 'local' }
     })
+
     expect(structuredWorkerAgent(identity)).toBe('codex')
   })
 

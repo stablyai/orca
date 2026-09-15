@@ -192,12 +192,14 @@ describe('forge provider interface', () => {
       ['azure-devops', true],
       ['gitea', true]
     ])
+
     // Why: the shared list is what the Create blocker and the renderer read.
     // When it drifted from this one, Bitbucket had a working createReview but
     // still reported "provider does not support creating a pull request".
     for (const provider of FORGE_PROVIDERS) {
       expect(supportsHostedReviewCreation(provider.id)).toBe(provider.supportsReviewCreation)
     }
+
     createGitHubPullRequestMock.mockResolvedValue({
       ok: true,
       number: 12,
@@ -241,12 +243,14 @@ describe('forge provider interface', () => {
     })
 
     const provider = getForgeProviderById('bitbucket')
+
     const input = {
       provider: 'bitbucket' as const,
       base: 'main',
       head: 'feature/provider-interface',
       title: 'Add provider interface'
     }
+
     await expect(provider.createReview?.('/repo', input, 'local')).resolves.toEqual({
       ok: true,
       number: 23,

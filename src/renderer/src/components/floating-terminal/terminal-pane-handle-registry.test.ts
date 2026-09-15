@@ -51,9 +51,11 @@ describe('createTerminalPaneHandleRegistry', () => {
     // One render + commit of the pane: React only touches the ref when its identity changed.
     const commit = (): void => {
       const next = registry.getRefCallback('tab-1')
+
       if (next === attachedCallback) {
         return
       }
+
       attachedCallback?.(null)
       handle = createHandle()
       next(handle)

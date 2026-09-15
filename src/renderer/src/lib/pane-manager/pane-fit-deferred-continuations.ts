@@ -26,6 +26,7 @@ export function deferFitContinuation(
 ): void {
   const deferred =
     deferredByTerminal.get(pane.terminal) ?? new Map<string, DeferredFitContinuation>()
+
   // Same key replaces: a newer reattach owns the grid the older one was going to send.
   deferred.set(operationKey, entry)
   deferredByTerminal.set(pane.terminal, deferred)
@@ -33,15 +34,19 @@ export function deferFitContinuation(
 
 export function flushDeferredFitContinuations(pane: ManagedPane): void {
   const deferred = deferredByTerminal.get(pane.terminal)
+
   if (!deferred) {
     return
   }
+
   // Why delete first: a continuation can fit again re-entrantly, and it must not re-run itself.
   deferredByTerminal.delete(pane.terminal)
+
   for (const entry of deferred.values()) {
     if (!entry.shouldContinue()) {
       continue
     }
+
     try {
       entry.continuation()
     } catch {
@@ -62,13 +67,17 @@ export function clearDeferredFitContinuation(
   expected?: DeferredFitContinuation
 ): void {
   const deferred = deferredByTerminal.get(pane.terminal)
+
   if (!deferred) {
     return
   }
+
   if (expected && deferred.get(operationKey) !== expected) {
     return
   }
+
   deferred.delete(operationKey)
+
   if (deferred.size === 0) {
     deferredByTerminal.delete(pane.terminal)
   }

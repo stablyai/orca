@@ -60,6 +60,7 @@ export function parseDetailsAttributes(rawAttributes: string): Record<string, un
   const variantMatch = rawAttributes.match(
     /\sdata-orca-toggle\s*=\s*(?:"(heading-[1-5])"|'(heading-[1-5])'|(heading-[1-5]))(?:\s|$)/i
   )
+
   return {
     open: /\sopen(?:\s|=|$)/i.test(rawAttributes),
     variant: parseToggleHeadingVariant(
@@ -80,6 +81,7 @@ export function renderDetailsAttributes(attrs: Record<string, unknown> | undefin
   const attributes = ['class="orca-details"']
 
   const variant = parseToggleHeadingVariant(attrs?.variant)
+
   if (variant) {
     attributes.push(`data-orca-toggle="${variant}"`)
   }
@@ -98,11 +100,13 @@ function markdownFenceRanges(content: string): MarkdownFenceRanges {
 
   for (const lineMatch of content.matchAll(/[^\r\n]*(?:\r\n|\n|\r|$)/g)) {
     const line = lineMatch[0]
+
     if (line === '') {
       break
     }
 
     const lineText = line.replace(/(?:\r\n|\n|\r)$/u, '')
+
     if (openFence) {
       // Built once per fence: rebuilding it per line recompiled the same regex for every fenced line.
       if (openFence.closingPattern.test(lineText)) {
@@ -111,6 +115,7 @@ function markdownFenceRanges(content: string): MarkdownFenceRanges {
       }
     } else {
       const openingFenceMatch = lineText.match(/^ {0,3}(`{3,}|~{3,})/u)
+
       if (openingFenceMatch?.[1]) {
         openFence = {
           closingPattern: new RegExp(
@@ -141,6 +146,7 @@ export function matchDetailsHtmlBlock(
   precomputedFenceRanges?: MarkdownFenceRanges
 ): DetailsHtmlBlock | null {
   const openingMatch = content.slice(start).match(/^<details\b[^>]*>/i)
+
   if (!openingMatch) {
     return null
   }
@@ -153,11 +159,13 @@ export function matchDetailsHtmlBlock(
 
   for (;;) {
     const tagMatch = detailsTagPattern.exec(content)
+
     if (!tagMatch) {
       return null
     }
 
     const tag = tagMatch[0]
+
     if (tagMatch.index !== start && isInsideRange(tagMatch.index, fenceRanges)) {
       continue
     }
@@ -166,8 +174,10 @@ export function matchDetailsHtmlBlock(
 
     if (isClosingTag) {
       depth -= 1
+
       if (depth === 0) {
         const closingEnd = tagMatch.index + tag.length
+
         return {
           raw: content.slice(start, closingEnd),
           openingAttributes: openingMatch[0].replace(/^<details\b/i, '').replace(/>$/u, ''),
@@ -199,24 +209,30 @@ function hasOnlyPlainParagraphAndBreakTags(content: string): boolean {
 
 export function extractDetailsSummaryHtml(inner: string): DetailsSummaryHtml | null {
   let startIndex = 0
+
   while (startIndex < inner.length && isHtmlWhitespace(inner.charCodeAt(startIndex))) {
     startIndex++
   }
 
   const tagName = '<summary'
+
   if (!startsWithAsciiIgnoreCase(inner, tagName, startIndex)) {
     return null
   }
+
   if (isHtmlTagNamePart(inner.charCodeAt(startIndex + tagName.length))) {
     return null
   }
 
   const openingEndIndex = inner.indexOf('>', startIndex + tagName.length)
+
   if (openingEndIndex === -1) {
     return null
   }
+
   const closingTag = '</summary>'
   const closingStartIndex = indexOfAsciiIgnoreCase(inner, closingTag, openingEndIndex + 1)
+
   if (closingStartIndex === -1) {
     return null
   }
@@ -234,11 +250,13 @@ function isHtmlWhitespace(code: number): boolean {
 
 function indexOfAsciiIgnoreCase(value: string, search: string, fromIndex: number): number {
   const lastStart = value.length - search.length
+
   for (let index = Math.max(0, fromIndex); index <= lastStart; index++) {
     if (startsWithAsciiIgnoreCase(value, search, index)) {
       return index
     }
   }
+
   return -1
 }
 
@@ -246,11 +264,13 @@ function startsWithAsciiIgnoreCase(value: string, search: string, startIndex: nu
   if (startIndex < 0 || startIndex + search.length > value.length) {
     return false
   }
+
   for (let index = 0; index < search.length; index++) {
     if (toLowerAsciiCode(value.charCodeAt(startIndex + index)) !== search.charCodeAt(index)) {
       return false
     }
   }
+
   return true
 }
 
@@ -281,6 +301,7 @@ function stripEditableNestedDetails(bodyHtml: string, nestingLevel: number): str
 
   for (;;) {
     const nestedStart = indexOfAsciiIgnoreCase(bodyHtml, '<details', index)
+
     if (nestedStart === -1) {
       return result + bodyHtml.slice(index)
     }
@@ -291,6 +312,7 @@ function stripEditableNestedDetails(bodyHtml: string, nestingLevel: number): str
 
     fenceRanges ??= markdownFenceRanges(bodyHtml)
     const nested = matchDetailsHtmlBlock(bodyHtml, nestedStart, fenceRanges)
+
     if (!nested || !isEditableDetailsHtmlBlock(nested, nestingLevel + 1)) {
       return null
     }
@@ -306,6 +328,7 @@ export function isEditableDetailsHtmlBlock(block: DetailsHtmlBlock, nestingLevel
   }
 
   const summary = extractDetailsSummaryHtml(block.inner)
+
   if (!summary) {
     return false
   }
@@ -319,6 +342,7 @@ export function isEditableDetailsHtmlBlock(block: DetailsHtmlBlock, nestingLevel
   }
 
   const bodyHtml = stripEditableNestedDetails(block.inner.slice(summary.rawLength), nestingLevel)
+
   if (bodyHtml === null) {
     return false
   }

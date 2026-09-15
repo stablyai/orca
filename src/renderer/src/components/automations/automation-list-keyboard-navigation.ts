@@ -51,9 +51,11 @@ export function findAutomationListSelectionIndex(
   if (selectedExternalKey !== null) {
     return items.findIndex((item) => item.kind === 'external' && item.id === selectedExternalKey)
   }
+
   if (selectedId != null) {
     return items.findIndex((item) => item.kind === 'local' && item.id === selectedId)
   }
+
   return -1
 }
 
@@ -64,17 +66,23 @@ export function getAutomationListArrowNavigationTarget(args: {
   key: AutomationListArrowKey
 }): Pick<AutomationListViewItem, 'id' | 'kind'> | null {
   const { items, selectedId, selectedExternalKey, key } = args
+
   if (items.length === 0) {
     return null
   }
+
   const currentIndex = findAutomationListSelectionIndex(items, selectedId, selectedExternalKey)
+
   if (currentIndex < 0) {
     return items[key === 'ArrowDown' ? 0 : items.length - 1] ?? null
   }
+
   const nextIndex = key === 'ArrowDown' ? currentIndex + 1 : currentIndex - 1
+
   if (nextIndex < 0 || nextIndex >= items.length) {
     return items[currentIndex] ?? null
   }
+
   return items[nextIndex] ?? null
 }
 
@@ -84,13 +92,17 @@ export function getAutomationListEnterNavigationTarget(args: {
   selectedExternalKey: string | null
 }): Pick<AutomationListViewItem, 'id' | 'kind'> | null {
   const { items, selectedId, selectedExternalKey } = args
+
   if (items.length === 0) {
     return null
   }
+
   const currentIndex = findAutomationListSelectionIndex(items, selectedId, selectedExternalKey)
+
   if (currentIndex >= 0) {
     return items[currentIndex] ?? null
   }
+
   return items[0] ?? null
 }
 
@@ -104,9 +116,11 @@ export function activateAutomationListEnterTarget(args: {
   onOpenDetail: () => void
 }): void {
   const target = getAutomationListEnterNavigationTarget(args)
+
   if (!target) {
     return
   }
+
   if (target.kind === 'local') {
     args.selectExternalKey(null)
     args.selectAutomationRow(target.id)
@@ -115,6 +129,7 @@ export function activateAutomationListEnterTarget(args: {
     args.selectExternalKey(target.id)
     args.setActivePaneTab('overview')
   }
+
   args.onOpenDetail()
 }
 

@@ -8,10 +8,12 @@ const refresh = vi.hoisted(() => ({ calls: [] as string[] }))
 
 vi.mock('@/store/slices/hosted-review-card-refresh', async (importOriginal) => {
   const original = await importOriginal<typeof HostedReviewCardRefresh>()
+
   return {
     ...original,
     refreshHostedReviewCard: vi.fn(async () => {
       refresh.calls.push('hosted-review')
+
       return null
     })
   }
@@ -35,12 +37,15 @@ describe('useChecksPanelManualRefresh ordering', () => {
       headSha: 'head-2',
       prRepo: { owner: 'orca', repo: 'app', host: 'github.com' }
     } as NonNullable<RefreshInput['pr']>
+
     const setChecksLoading: RefreshInput['setChecksLoading'] = vi.fn((loading) => {
       refresh.calls.push(`checks-loading:${String(loading)}`)
     })
+
     const setCommentsLoading: RefreshInput['setCommentsLoading'] = vi.fn((loading) => {
       refresh.calls.push(`comments-loading:${String(loading)}`)
     })
+
     const input: RefreshInput = {
       activeConnectionId: null,
       activeGitLabReview: null,
@@ -55,14 +60,17 @@ describe('useChecksPanelManualRefresh ordering', () => {
       fetchHostedReviewForBranch: vi.fn(),
       fetchPRChecks: vi.fn(async () => {
         refresh.calls.push('checks')
+
         return []
       }),
       fetchPRComments: vi.fn(async () => {
         refresh.calls.push('comments')
+
         return []
       }),
       fetchPRForBranch: vi.fn(async () => {
         refresh.calls.push('review')
+
         return refreshedPR
       }),
       gitStatusSnapshot: null,
@@ -96,6 +104,7 @@ describe('useChecksPanelManualRefresh ordering', () => {
       }),
       updateWorktreeGitIdentity: vi.fn()
     }
+
     const { result } = renderHook(() => useChecksPanelManualRefresh(input))
 
     await act(async () => result.current.handleRefresh())

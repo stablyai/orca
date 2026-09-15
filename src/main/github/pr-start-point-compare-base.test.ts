@@ -13,7 +13,9 @@ import { resolveGitHubPrStartPoint } from './pr-start-point'
 import { reviewHeadRemoteRefComponent } from '../../shared/review-head-tracking-ref'
 
 const ORIGIN_URL = 'git@github.com:acme/orca.git'
+
 const durablePrLocalRef = `refs/orca/pull/${reviewHeadRemoteRefComponent('origin', ORIGIN_URL)}/42`
+
 const durablePrRev = `${durablePrLocalRef}^{commit}`
 
 describe('resolveGitHubPrStartPoint compare base', () => {
@@ -28,12 +30,15 @@ describe('resolveGitHubPrStartPoint compare base', () => {
     const fetchRemoteTrackingRef = vi.fn(async () => {
       throw new Error("fatal: couldn't find remote ref refs/heads/main")
     })
+
     const fetchPullRequestHeadRef = vi.fn(async () => durablePrLocalRef)
+
     // Why: durable ref for the head resolves; the compare base does not exist.
     const gitExec = vi.fn(async (args: string[]) => {
       if (args[2] === durablePrRev) {
         return { stdout: 'fork-head-sha\n', stderr: '' }
       }
+
       throw new Error('fatal: Needed a single revision')
     })
 
@@ -67,14 +72,18 @@ describe('resolveGitHubPrStartPoint compare base', () => {
       // Why: transient network failure — the previously-fetched base is still on disk.
       throw new Error('fatal: unable to access repo: Could not resolve host: github.com')
     })
+
     const fetchPullRequestHeadRef = vi.fn(async () => durablePrLocalRef)
+
     const gitExec = vi.fn(async (args: string[]) => {
       if (args[2] === durablePrRev) {
         return { stdout: 'fork-head-sha\n', stderr: '' }
       }
+
       if (args[2] === 'refs/remotes/origin/main^{commit}') {
         return { stdout: 'base-commit-sha\n', stderr: '' }
       }
+
       throw new Error(`unexpected git call: ${args.join(' ')}`)
     })
 
@@ -110,10 +119,12 @@ describe('resolveGitHubPrStartPoint compare base', () => {
         throw new Error('network unavailable')
       }
     })
+
     const gitExec = vi.fn(async (args: string[]) => {
       if (args[2] === 'refs/remotes/origin/main^{commit}') {
         return { stdout: 'base-commit-sha\n', stderr: '' }
       }
+
       return { stdout: 'same-repo-head-sha\n', stderr: '' }
     })
 
@@ -143,10 +154,12 @@ describe('resolveGitHubPrStartPoint compare base', () => {
         throw new Error('network unavailable')
       }
     })
+
     const gitExec = vi.fn(async (args: string[]) => {
       if (args[2] === 'refs/remotes/origin/main^{commit}') {
         throw new Error('fatal: Needed a single revision')
       }
+
       return { stdout: 'same-repo-head-sha\n', stderr: '' }
     })
 

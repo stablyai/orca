@@ -31,6 +31,7 @@ import {
 /** Spawn-group rows kept live per session, and children per row. Both bound an
  *  event-accumulated map that no provider snapshot ever prunes. */
 const MAX_SUBAGENT_GROUPS = 32
+
 const MAX_SUBAGENTS_PER_GROUP = 64
 
 /** The turn a group belongs to when Claude reports a task outside any turn. */
@@ -64,10 +65,13 @@ export class ClaudeSubagentRoster {
   /** Consume a `message:system:task_*` frame. Returns false when it is not one. */
   observeSystemFrame(message: Record<string, unknown>): boolean {
     const frame = readClaudeSubagentTaskFrame(message)
+
     if (!frame) {
       return false
     }
+
     this.announcesTasks ||= frame.announcement
+
     if (frame.excluded) {
       // Child traffic may already have built a provisional row under the tool id;
       // the announcement is the first frame that says it is not a subagent.
@@ -77,17 +81,22 @@ export class ClaudeSubagentRoster {
           this.remove(id)
         }
       }
+
       return true
     }
+
     if (this.ids.isExcluded(frame.taskId, frame.toolUseId)) {
       return true
     }
+
     if (frame.toolUseId) {
       this.ids.alias(frame.toolUseId, frame.taskId)
     }
+
     const located =
       this.locate(frame.taskId) ??
       (frame.toolUseId ? this.adopt(frame.toolUseId, frame.taskId) : null)
+
     if (!located) {
       if (frame.announcesSubagent) {
         this.create(
@@ -98,17 +107,22 @@ export class ClaudeSubagentRoster {
           frame.toolUseId
         )
       }
+
       return true
     }
+
     const tracked = located.group.entries.get(frame.taskId)
+
     if (tracked && !applyClaudeSubagentInvocation(tracked, frame, this.now)) {
       return true
     }
+
     this.revise(located.group, frame.taskId, {
       label: frame.label,
       state: frame.state,
       backgrounded: frame.backgrounded
     })
+
     return true
   }
 
@@ -119,12 +133,15 @@ export class ClaudeSubagentRoster {
    */
   observeChildActivity(parentToolUseId: string): void {
     const canonical = this.ids.canonical(parentToolUseId)
+
     if (this.ids.isExcluded(parentToolUseId, canonical)) {
       return
     }
+
     if (this.locate(canonical)) {
       return
     }
+
     if (this.announcesTasks) {
       // A nested Task, a workflow child, or a grandchild parented to a tool id
       // inside the sidechain all reach here. This CLI announces what it spawns,
@@ -133,12 +150,14 @@ export class ClaudeSubagentRoster {
       // bounded exclusion set cannot cover an id that was never announced.
       return
     }
+
     if (!isBoundedClaudeTaskId(canonical)) {
       // `claudeTaskId` rejects an over-long announced id rather than truncating
       // it; a provisional id becomes the same durable entry key, so it cannot
       // enter under a looser rule.
       return
     }
+
     this.create(canonical, null, 'working', false, parentToolUseId)
   }
 
@@ -151,6 +170,7 @@ export class ClaudeSubagentRoster {
   observeToolResult(toolUseId: string, failed: boolean): void {
     const canonical = this.ids.canonical(toolUseId)
     const located = this.locate(canonical)
+
     if (
       !located ||
       located.tracked.invocationIds === null ||
@@ -159,6 +179,7 @@ export class ClaudeSubagentRoster {
     ) {
       return
     }
+
     this.revise(located.group, canonical, {
       label: null,
       state: failed ? 'failed' : 'completed',
@@ -202,20 +223,25 @@ export class ClaudeSubagentRoster {
     if (!group) {
       return
     }
+
     let changed = false
+
     for (const [id, tracked] of group.entries) {
       if (isTerminalSubagentState(tracked.entry.state)) {
         continue
       }
+
       if (tracked.backgrounded && !includeBackgrounded) {
         continue
       }
+
       group.entries.set(id, {
         ...tracked,
         entry: { ...tracked.entry, state: 'unverifiable', settledAt: this.now() }
       })
       changed = true
     }
+
     if (changed) {
       this.write(group)
     }
@@ -229,9 +255,11 @@ export class ClaudeSubagentRoster {
     toolUseId: string | null
   ): void {
     const group = this.groupFor()
+
     if (group.admittedEntries >= MAX_SUBAGENTS_PER_GROUP) {
       return
     }
+
     group.admittedEntries += 1
     const now = this.now()
     const labelBase = label ?? UNLABELLED_AGENT
@@ -262,14 +290,17 @@ export class ClaudeSubagentRoster {
     }
   ): void {
     const tracked = group.entries.get(id)
+
     if (!tracked) {
       return
     }
+
     const next: TrackedEntry = {
       ...tracked,
       backgrounded: change.backgrounded ?? tracked.backgrounded,
       entry: { ...tracked.entry }
     }
+
     // A provisional row built from child traffic takes the real name the first
     // announcement carries; an announced row keeps the name it was given.
     if (
@@ -280,13 +311,16 @@ export class ClaudeSubagentRoster {
       next.labelBase = change.label
       next.entry.label = claimClaudeSubagentLabel(group, change.label)
     }
+
     // Proven outcomes latch; lost contact can still receive a later verdict.
     if (change.state && canReplaceSubagentState(tracked.entry.state, change.state)) {
       next.entry.state = change.state
+
       if (isTerminalSubagentState(change.state)) {
         next.entry.settledAt = this.now()
       }
     }
+
     group.entries.set(id, next)
     this.write(group)
   }
@@ -297,10 +331,13 @@ export class ClaudeSubagentRoster {
     if (toolUseId === taskId) {
       return null
     }
+
     const located = this.locate(toolUseId)
+
     if (!located) {
       return null
     }
+
     located.group.entries.delete(toolUseId)
     located.group.entries.set(taskId, {
       ...located.tracked,
@@ -308,14 +345,17 @@ export class ClaudeSubagentRoster {
     })
     this.groupIdByEntry.delete(toolUseId)
     this.groupIdByEntry.set(taskId, located.group.groupId)
+
     return { group: located.group }
   }
 
   private remove(id: string): void {
     const located = this.locate(id)
+
     if (!located) {
       return
     }
+
     located.group.entries.delete(id)
     this.groupIdByEntry.delete(id)
     this.write(located.group)
@@ -325,15 +365,18 @@ export class ClaudeSubagentRoster {
     const groupId = this.groupIdByEntry.get(id)
     const group = groupId === undefined ? undefined : this.groups.get(groupId)
     const tracked = group?.entries.get(id)
+
     return group && tracked ? { group, tracked } : null
   }
 
   private groupFor(): RosterGroup {
     const groupId = this.deps.currentGroupKey() ?? OUTSIDE_TURN
     const existing = this.groups.get(groupId)
+
     if (existing) {
       return existing
     }
+
     const group: RosterGroup = {
       groupId,
       identity: claudeSubagentGroupIdentity(groupId),
@@ -342,27 +385,35 @@ export class ClaudeSubagentRoster {
       claimedLabels: new Set(),
       lastSerialized: null
     }
+
     this.groups.set(groupId, group)
+
     while (this.groups.size > MAX_SUBAGENT_GROUPS) {
       const oldest = this.groups.keys().next()
+
       if (oldest.done || oldest.value === groupId) {
         break
       }
+
       const evicted = this.groups.get(oldest.value)
       // Once the group leaves the map nothing can reach its children again —
       // not even a session sweep — so contact is lost here.
       this.sweep(evicted, true)
+
       for (const id of evicted?.entries.keys() ?? []) {
         this.groupIdByEntry.delete(id)
       }
+
       this.groups.delete(oldest.value)
     }
+
     return group
   }
 
   private write(group: RosterGroup): void {
     const agents = [...group.entries.values()].map((tracked) => tracked.entry)
     const options = { coalescingKey: `claude-subagents:${group.groupId}` }
+
     if (agents.length === 0) {
       // The row's last child turned out not to be a subagent. An empty roster is
       // not a roster of nothing, so the row goes rather than reading "Ran 0".
@@ -371,14 +422,18 @@ export class ClaudeSubagentRoster {
         this.deps.sink.appendTombstone(group.identity, options)
         this.deps.sink.publish()
       }
+
       return
     }
+
     const body = claudeSubagentGroupBody(group.groupId, agents)
     const serialized = JSON.stringify(body)
+
     if (serialized === group.lastSerialized) {
       // Nothing changed — a duplicate delivery must not burn a revision.
       return
     }
+
     group.lastSerialized = serialized
     this.deps.sink.appendItem(group.identity, body, options)
     // Publish keeps the sink's own coalescing slot: sharing the row's key makes

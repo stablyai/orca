@@ -21,12 +21,14 @@ import { resetSessionSearchServiceInitForTests } from './session-search-service-
  */
 
 const updateSessionSearchInService = vi.hoisted(() => vi.fn())
+
 vi.mock('../ai-vault/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   updateSessionSearchInService
 }))
 
 const localAiVaultScanRoots = vi.hoisted(() => vi.fn())
+
 vi.mock('../ai-vault/cached-session-list', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   localAiVaultScanRoots
@@ -35,6 +37,7 @@ vi.mock('../ai-vault/cached-session-list', async (importOriginal) => ({
 const ROOT = join(import.meta.dirname, '..', '..', '..')
 
 let harness: SessionSearchIndexerHarness
+
 let installed: { dispose(): void } | null
 
 beforeEach(async () => {
@@ -86,6 +89,7 @@ it('registers the desktop service and pushes the stored policy at boot', async (
 it('forwards only a real settings change to the child', async () => {
   const { applySessionSearchSettingsChange, installChildSessionSearchService } =
     await import('./session-search-enablement')
+
   installed = installChildSessionSearchService({
     dataRoot: harness.root,
     getSettings: () => ({ aiVaultSearch: { enabled: false, historyDays: null } })
@@ -163,6 +167,7 @@ it.each([
 it('disables immediately without root discovery', async () => {
   const { installChildSessionSearchService, applySessionSearchSettingsChange } =
     await import('./session-search-enablement')
+
   let settings = { aiVaultSearch: { enabled: true, historyDays: null } }
   installed = installChildSessionSearchService({
     dataRoot: harness.root,
@@ -195,11 +200,14 @@ it('orcad resolves no roots while disabled and discovers late roots when enabled
   const id = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
   await writeClaudeTranscript(join(late, 'project', `${id}.jsonl`), ['latehostroot'], id)
   localAiVaultScanRoots.mockResolvedValue({ ...harness.roots, claudeProjectsDir: late })
+
   const response = await searchSessionService(
     { query: 'latehostroot', freshness: 'wait-until-current' },
     'ipc'
   )
+
   expect(response.kind).toBe('results')
+
   if (response.kind === 'results') {
     expect(response.hits.map((hit) => hit.sessionId)).toEqual([id])
   }

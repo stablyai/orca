@@ -7,6 +7,7 @@ import { connectOrcaMainInspector } from './orca-main-inspector-connection.mjs'
 test('IPC polling records a rejection and permits the next poll', async () => {
   let poll
   let calls = 0
+
   const window = {
     api: {
       app: {
@@ -18,6 +19,7 @@ test('IPC polling records a rejection and permits the next poll', async () => {
       }
     }
   }
+
   runInNewContext(`(${String(installRendererIpcProbe)})()`, {
     window,
     performance,
@@ -25,6 +27,7 @@ test('IPC polling records a rejection and permits the next poll', async () => {
     document: { addEventListener() {}, removeEventListener() {} },
     setInterval(callback) {
       poll = callback
+
       return 1
     },
     clearInterval() {}
@@ -40,6 +43,7 @@ test('IPC polling records a rejection and permits the next poll', async () => {
 test('socket closure rejects outstanding and subsequent requests without timeout timers', async () => {
   let socket
   const timers = new Set()
+
   class FakeSocket {
     static OPEN = 1
     readyState = 1
@@ -49,6 +53,7 @@ test('socket closure rejects outstanding and subsequent requests without timeout
     }
     send(payload) {
       const { id, params } = JSON.parse(payload)
+
       if (params.expression === 'process.pid') {
         queueMicrotask(() =>
           this.onmessage({ data: JSON.stringify({ id, result: { result: { value: 42 } } }) })
@@ -60,17 +65,20 @@ test('socket closure rejects outstanding and subsequent requests without timeout
       this.onclose()
     }
   }
+
   const connect = runInNewContext(`(${String(connectOrcaMainInspector)})`, {
     fetch: async () => ({ json: async () => [{ webSocketDebuggerUrl: 'ws://fixture' }] }),
     WebSocket: FakeSocket,
     setTimeout(callback) {
       timers.add(callback)
+
       return callback
     },
     clearTimeout(timer) {
       timers.delete(timer)
     }
   })
+
   const connection = await connect(42)
   const first = connection.send('Profiler.start')
   const second = connection.send('Profiler.stop')

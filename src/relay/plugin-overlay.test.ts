@@ -227,6 +227,7 @@ describe('PluginOverlayManager', () => {
       mkdirSync(join(agentDir, 'extensions', `${tag}-ext`), { recursive: true })
       writeFileSync(join(agentDir, 'extensions', `${tag}-ext`, 'ext.ts'), `${tag} extension`)
       writeFileSync(join(agentDir, 'auth.json'), `${tag} token`)
+
       return agentDir
     }
 
@@ -297,9 +298,11 @@ describe('PluginOverlayManager', () => {
           materializeDefaultHome: false
         })
       ).toBeNull()
+
       const bareOmp = manager.materializePi('tab-bare-omp:0', undefined, 'omp', {
         materializeDefaultHome: false
       })
+
       // Why: bare OMP keeps status via ~/.orca-relay/… without SOURCE_AGENT_DIR or ~/.omp.
       expect(bareOmp?.sourceAgentDir).toBeUndefined()
       expect(bareOmp?.statusExtensionPath).toEqual(
@@ -394,6 +397,7 @@ describe('resolvePiSourceAgentDir', () => {
       ORCA_PI_CODING_AGENT_DIR: '/tmp/parent-orca-pi-overlay',
       ORCA_PI_SOURCE_AGENT_DIR: '/user/.pi/agent'
     }
+
     try {
       expect(resolvePiSourceAgentDir(env, undefined, 'pi')).toBe('/user/.pi/agent')
       expect(resolvePiSourceAgentDir(env, undefined, 'omp')).toBeUndefined()
@@ -408,6 +412,7 @@ describe('resolvePiSourceAgentDir', () => {
       PI_CODING_AGENT_DIR: '/user/custom-omp-agent',
       ORCA_PI_SOURCE_AGENT_DIR: '/user/.pi/agent'
     }
+
     try {
       expect(resolvePiSourceAgentDir(env, undefined, 'omp')).toBe('/user/custom-omp-agent')
     } finally {

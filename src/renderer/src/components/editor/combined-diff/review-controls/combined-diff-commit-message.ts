@@ -4,17 +4,21 @@ export function getCombinedDiffCommitMessageBody(
 ): string {
   const rawMessage = message ?? ''
   const trimBounds = findTrimBounds(rawMessage, 0, rawMessage.length)
+
   if (trimBounds.start >= trimBounds.end) {
     return ''
   }
 
   const firstLineEnd = findCombinedDiffCommitFirstLineEnd(rawMessage, trimBounds)
   const firstLine = rawMessage.slice(trimBounds.start, firstLineEnd)
+
   if (subject && firstLine.trim() === subject.trim()) {
     const bodyStart = findCombinedDiffCommitNextLineStart(rawMessage, firstLineEnd, trimBounds.end)
     const bodyBounds = findTrimBounds(rawMessage, bodyStart, trimBounds.end)
+
     return normalizeCombinedDiffCommitMessageSlice(rawMessage, bodyBounds)
   }
+
   return normalizeCombinedDiffCommitMessageSlice(rawMessage, trimBounds)
 }
 
@@ -36,6 +40,7 @@ function findTrimBounds(
   while (trimStart < trimEnd && TRIM_WHITESPACE_PATTERN.test(message.charAt(trimStart))) {
     trimStart += 1
   }
+
   while (trimEnd > trimStart && TRIM_WHITESPACE_PATTERN.test(message.charAt(trimEnd - 1))) {
     trimEnd -= 1
   }
@@ -56,6 +61,7 @@ function normalizeCombinedDiffCommitMessageSlice(
     if (message.charCodeAt(index) !== 13 || message.charCodeAt(index + 1) !== 10) {
       continue
     }
+
     normalized += `${message.slice(sliceStart, index)}\n`
     index += 1
     sliceStart = index + 1
@@ -74,10 +80,12 @@ function findCombinedDiffCommitFirstLineEnd(
 ): number {
   for (let index = bounds.start; index < bounds.end; index += 1) {
     const code = message.charCodeAt(index)
+
     if (code === 10 || code === 13) {
       return index
     }
   }
+
   return bounds.end
 }
 
@@ -89,8 +97,10 @@ function findCombinedDiffCommitNextLineStart(
   if (lineEnd >= end) {
     return end
   }
+
   if (message.charCodeAt(lineEnd) === 13 && message.charCodeAt(lineEnd + 1) === 10) {
     return Math.min(lineEnd + 2, end)
   }
+
   return lineEnd + 1
 }

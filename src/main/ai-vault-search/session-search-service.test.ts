@@ -21,13 +21,16 @@ afterEach(async () => {
 async function fixture() {
   harness = await openSessionSearchHarness('public-contract')
   const { enabled: _enabled, generation: _generation, ...status } = unavailableSessionSearchStatus()
+
   // degradedRoots is re-stated because the contract type leaves `root` optional
   // for relay redaction, while the indexer always names the root it degraded.
   const indexer = {
     status: () => ({ ...status, degradedRoots: [] }),
     reconcile: vi.fn(async () => {})
   }
+
   const service = createSessionSearchService({ engine: harness.engine, indexer })
+
   return { ...harness, service, indexer }
 }
 
@@ -39,18 +42,22 @@ describe('real index to public service adapter', () => {
     const first = await service.search({ query: 'needle', limit: 1, debug: true })
     expect(AiVaultSearchResponseSchema.parse(first)).toEqual(first)
     expect(first.kind).toBe('results')
+
     if (first.kind !== 'results') {
       throw new Error('Expected results')
     }
+
     expect(first.debug?.plannerReport.scope).toBe('all')
     expect(first).not.toHaveProperty('route')
     expect(first).not.toHaveProperty('tier')
     expect(first.page.hasMore).toBe(true)
     const next = await service.search({ query: 'needle', cursor: first.page.cursor!, limit: 1 })
     expect(next.kind).toBe('results')
+
     if (next.kind !== 'results') {
       throw new Error('Expected results')
     }
+
     expect(next.hits[0].sessionId).not.toBe(first.hits[0].sessionId)
     expect(next).not.toHaveProperty('debug')
     const hits = [...first.hits, ...next.hits]

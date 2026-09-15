@@ -79,6 +79,7 @@ describe('worktree git status ref watch binding', () => {
     const replacement = makeTarget()
     let current = [first]
     let finish: (ref: string) => void = () => {}
+
     const pending = new Promise<string>((resolve) => {
       finish = resolve
     })
@@ -88,6 +89,7 @@ describe('worktree git status ref watch binding', () => {
       () => current,
       () => pending
     )
+
     current = [replacement]
     finish('refs/remotes/origin/feature/main')
     await update

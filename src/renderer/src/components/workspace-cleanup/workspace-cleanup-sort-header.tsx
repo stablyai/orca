@@ -31,6 +31,7 @@ export function WorkspaceCleanupSortHeader({
 }): React.JSX.Element {
   const allSelected = selectableCount > 0 && selectedCount >= selectableCount
   const someSelected = selectableCount > 0 && selectedCount > 0 && !allSelected
+
   const selectAllLabel =
     selectableCount === 1
       ? translate(
@@ -42,6 +43,7 @@ export function WorkspaceCleanupSortHeader({
           'Select all {{value0}} safety-checked workspaces',
           { value0: selectableCount }
         )
+
   return (
     <div className="flex items-center gap-1 border-b border-border bg-muted/25 px-3 py-1.5">
       <button

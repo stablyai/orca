@@ -8,6 +8,7 @@ export function findRenamableUnifiedTab(
   tabId: string
 ): Tab | undefined {
   const unified = Object.values(unifiedTabsByWorktree).flat()
+
   return (
     unified.find((entry) => entry.contentType === 'terminal' && entry.entityId === tabId) ??
     unified.find((entry) => entry.contentType === 'agent-session' && entry.id === tabId)

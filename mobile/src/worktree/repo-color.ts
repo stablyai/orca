@@ -10,8 +10,10 @@ const REPO_COLOR_PALETTE = [
 
 export function repoColor(name: string): string {
   let hash = 0
+
   for (let i = 0; i < name.length; i += 1) {
     hash = (hash * 31 + name.charCodeAt(i)) | 0
   }
+
   return REPO_COLOR_PALETTE[Math.abs(hash) % REPO_COLOR_PALETTE.length]!
 }

@@ -61,7 +61,9 @@ function validMove(move: unknown, journal: SkillDeleteJournalV1): move is SkillD
   if (typeof move !== 'object' || move === null) {
     return false
   }
+
   const candidate: Partial<SkillDeleteJournalMove> = move
+
   if (
     typeof candidate.sourcePath !== 'string' ||
     typeof candidate.stagedPath !== 'string' ||
@@ -69,8 +71,10 @@ function validMove(move: unknown, journal: SkillDeleteJournalV1): move is SkillD
   ) {
     return false
   }
+
   const semantics = nativeSkillPathSemantics()
   const api = semantics.sep === '\\' ? pathWin32 : pathPosix
+
   // A sibling rename by construction: same parent, hidden name, our marker.
   return (
     api.dirname(candidate.sourcePath) === api.dirname(candidate.stagedPath) &&
@@ -86,7 +90,9 @@ function isDeleteJournal(value: unknown, canonicalPath: string): value is SkillD
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const journal: Partial<SkillDeleteJournalV1> = value
+
   if (
     journal.schemaVersion !== 1 ||
     journal.operation !== 'delete' ||
@@ -100,11 +106,15 @@ function isDeleteJournal(value: unknown, canonicalPath: string): value is SkillD
   ) {
     return false
   }
+
   const candidate = journal as SkillDeleteJournalV1
+
   if (candidate.movedCount < 0 || candidate.movedCount > candidate.moves.length) {
     return false
   }
+
   const sources = new Set(candidate.moves.map((move: SkillDeleteJournalMove) => move?.sourcePath))
+
   return (
     sources.size === candidate.moves.length &&
     candidate.moves.every((move) => validMove(move, candidate))
@@ -131,14 +141,17 @@ export async function readSkillDeleteRecoveryJournal(
         )
       ).buffer.toString('utf8')
     )
+
     if (!isDeleteJournal(parsed, canonicalPath)) {
       throw new Error('skill-delete-journal-invalid')
     }
+
     return parsed
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return null
     }
+
     throw error
   }
 }
@@ -149,15 +162,19 @@ export async function recoverSkillDeleteTransaction(
   filesystem: SkillInstallFilesystem = nativeSkillInstallFilesystem
 ): Promise<void> {
   const journal = await readSkillDeleteRecoveryJournal(stateDirectory, canonicalPath)
+
   if (!journal) {
     return
   }
+
   const staged = journal.moves.slice(0, journal.movedCount)
+
   if (journal.phase === 'staged') {
     // Roll forward: the skill is already gone from every discovered location.
     for (const move of staged) {
       await filesystem.remove(move.stagedPath)
     }
+
     // A receipt cleanup failure leaves the journal in place so startup can
     // retry it alongside the already-idempotent staged removals.
     await removeSkillInstallReceipt(stateDirectory, canonicalPath)
@@ -166,8 +183,10 @@ export async function recoverSkillDeleteTransaction(
     // a canonical directory that does not exist yet. Indexed rather than
     // `toReversed()`: this module reaches the Node 18 relay bundle.
     let restoredEvery = true
+
     for (let index = staged.length - 1; index >= 0; index -= 1) {
       const move = staged[index]
+
       try {
         await filesystem.rename(move.stagedPath, move.sourcePath)
       } catch {
@@ -190,12 +209,15 @@ export async function recoverSkillDeleteTransaction(
         filesystem: SkillInstallFilesystem
       ): Promise<boolean> {
         const inspections = await filesystem.inspectPaths?.([stagedPath]).catch(() => null)
+
         return inspections?.get(stagedPath)?.kind === 'missing'
       }
     }
+
     if (!restoredEvery) {
       return
     }
   }
+
   await rm(skillDeleteJournalPath(stateDirectory, canonicalPath), { force: true })
 }

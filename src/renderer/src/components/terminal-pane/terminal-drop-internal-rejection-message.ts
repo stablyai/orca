@@ -9,6 +9,7 @@ export function getTerminalInternalFileDropRejectionMessage(
       'Drop contains too many paths for a safe terminal paste.'
     )
   }
+
   return translate(
     'auto.components.terminal.pane.terminal.drop.handler.internalPathsTooLarge',
     'Drop path list is too large for a safe terminal paste.'

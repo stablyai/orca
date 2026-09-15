@@ -37,6 +37,7 @@ export function buildMobileAiVaultResumeCommand(args: {
     args.hostPlatform === 'win32'
       ? resolveWindowsShellStartupFamily(args.hostTerminalWindowsShell)
       : undefined
+
   return buildAiVaultResumeCommand({
     agent: args.session.agent,
     sessionId: args.session.sessionId,
@@ -76,12 +77,16 @@ export function buildMobileAiVaultResumeLaunch(args: {
     args.hostPlatform === 'win32'
       ? resolveWindowsShellStartupFamily(args.hostTerminalWindowsShell)
       : undefined
+
   const codexHome = getMobileAiVaultResumeCodexHome(args.session.codexHome, args.hostPlatform)
+
   const cmdOverrides = normalizeMobileAiVaultResumeCommandOverrides(
     args.settings?.agentCmdOverrides
   )
+
   const commandOverride = cmdOverrides[args.session.agent] ?? null
   const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, args.hostPlatform)
+
   if (isResumableTuiAgent(args.session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: args.session.agent,
@@ -95,6 +100,7 @@ export function buildMobileAiVaultResumeLaunch(args: {
         ? { ompResumeFilePath: resumeFilePath }
         : {})
     })
+
     if (startupPlan) {
       return {
         command:
@@ -124,6 +130,7 @@ export function buildMobileAiVaultResumeLaunch(args: {
       }
     }
   }
+
   return {
     command: buildMobileAiVaultResumeCommand({
       session: args.session,
@@ -139,14 +146,17 @@ function normalizeMobileAiVaultResumeCommandOverrides(
   overrides: Partial<Record<TuiAgent, string | null>> | null | undefined
 ): Partial<Record<TuiAgent, string>> {
   const normalized: Partial<Record<TuiAgent, string>> = {}
+
   if (!overrides) {
     return normalized
   }
+
   for (const [agent, command] of Object.entries(overrides) as [TuiAgent, string | null][]) {
     if (typeof command === 'string' && command.trim()) {
       normalized[agent] = command
     }
   }
+
   return normalized
 }
 
@@ -170,13 +180,17 @@ export async function resumeAiVaultSessionInTerminal(
     },
     { timeoutMs: RESUME_RPC_TIMEOUT_MS }
   )
+
   if (!created.ok) {
     throw new Error(created.error?.message || 'Failed to create terminal')
   }
+
   const terminalTab = readMobileReviewCreatedTerminal(created.result)
+
   if (!terminalTab) {
     throw new Error('Created terminal response was invalid')
   }
+
   const sent = await client.sendRequest(
     'terminal.send',
     {
@@ -186,12 +200,15 @@ export async function resumeAiVaultSessionInTerminal(
     },
     { timeoutMs: RESUME_RPC_TIMEOUT_MS }
   )
+
   if (!sent.ok) {
     throw new Error(sent.error?.message || 'Failed to send resume command')
   }
+
   if (!readMobileReviewTerminalSendAccepted(sent.result)) {
     throw new Error('Terminal input is locked')
   }
+
   return terminalTab
 }
 
@@ -207,14 +224,18 @@ export function createMobileAiVaultResumeMutationRegistry(
   mintId: (sessionId: string) => string
 ): MobileAiVaultResumeMutationRegistry {
   const bySessionId = new Map<string, string>()
+
   return {
     claim(sessionId: string): string {
       const existing = bySessionId.get(sessionId)
+
       if (existing) {
         return existing
       }
+
       const minted = mintId(sessionId)
       bySessionId.set(sessionId, minted)
+
       return minted
     },
     releaseOnSuccess(sessionId: string): void {
@@ -227,7 +248,9 @@ export function readMobileRuntimeTerminalWindowsShell(statusResult: unknown): st
   if (!statusResult || typeof statusResult !== 'object') {
     return null
   }
+
   const shell = (statusResult as { terminalWindowsShell?: unknown }).terminalWindowsShell
+
   return typeof shell === 'string' && shell.trim().length > 0 ? shell : null
 }
 
@@ -242,18 +265,22 @@ export function resolveMobileAiVaultResumePlatform(
     // host instead of the phone or local desktop platform.
     return 'linux'
   }
+
   if (targetStatus === 'local') {
     if (terminalPlatform === 'linux' && hostPlatform === 'win32') {
       // Why: Windows-hosted WSL project terminals run a POSIX shell even when
       // the visible workspace path is a normal Windows path.
       return 'linux'
     }
+
     if (workspacePath && parseWslUncPath(workspacePath)) {
       // Why: a WSL UNC workspace on a Windows host runs in a Linux shell.
       return 'linux'
     }
+
     return hostPlatform
   }
+
   return null
 }
 
@@ -264,5 +291,6 @@ function getMobileAiVaultResumeCodexHome(
   if (!codexHome || platform !== 'linux') {
     return codexHome
   }
+
   return parseWslUncPath(codexHome)?.linuxPath ?? codexHome
 }

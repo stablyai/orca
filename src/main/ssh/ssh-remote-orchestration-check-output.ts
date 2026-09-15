@@ -18,21 +18,26 @@ export function formatRemoteOrchestrationCheck(
       ? { stdout: `${JSON.stringify(response, null, 2)}\n`, stderr: '' }
       : formatRemoteCli(response)
   }
+
   const messages = Array.isArray(response.result.messages)
     ? response.result.messages.filter(isMessageSummary)
     : []
+
   const count = typeof response.result.count === 'number' ? response.result.count : messages.length
+
   const result = prepareOrchestrationCheckOutput(
     { ...(response.result as OrchestrationCheckOutput), messages, count },
     terminal,
     formattedRequested
   )
+
   if (json) {
     return {
       stdout: `${JSON.stringify({ ...response, result }, null, 2)}\n`,
       stderr: ''
     }
   }
+
   return {
     stdout: `${formatOrchestrationCheckText(result, terminal)}\n`,
     stderr: ''

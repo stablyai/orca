@@ -20,6 +20,7 @@ import {
 } from './smart-source-paste-intent'
 
 const DEBOUNCE_MS = 200
+
 const RESULT_LIMIT = 36
 
 export type SmartCrossRepoPrompt = {
@@ -70,6 +71,7 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
     linearWorkspaceId,
     repos
   } = args
+
   const [fan, setFan] = useState<SmartFanOutResult>(EMPTY_FAN)
   const [paste, setPaste] = useState<PasteResolved>({ github: null, gitlab: null })
   const [loading, setLoading] = useState(false)
@@ -78,6 +80,7 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
   // the mode/repo changes so one provider's rows never render under another tab.
   const scopeRef = useRef('')
   const dismissedPasteRef = useRef<string>('')
+
   const repoSlugCacheRef = useRef<
     Map<string, { owner: string; repo: string; host?: string } | null>
   >(new Map())
@@ -88,18 +91,23 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
       setPaste({ github: null, gitlab: null })
       setLoading(false)
       setCrossRepoPrompt(null)
+
       return
     }
+
     const scope = `${mode}:${repoId ?? ''}`
     const scopeChanged = scopeRef.current !== scope
     scopeRef.current = scope
+
     if (scopeChanged) {
       setFan(EMPTY_FAN)
       setPaste({ github: null, gitlab: null })
       setCrossRepoPrompt(null)
     }
+
     setLoading(true)
     let stale = false
+
     const timer = setTimeout(() => {
       void runSmartSearch({
         client,
@@ -119,6 +127,7 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
           if (stale) {
             return
           }
+
           setFan(result.fan)
           setPaste(result.paste)
           setCrossRepoPrompt(result.crossRepoPrompt)
@@ -130,6 +139,7 @@ export function useSmartWorkspaceSource(args: UseSmartWorkspaceSourceArgs) {
           }
         })
     }, DEBOUNCE_MS)
+
     return () => {
       stale = true
       clearTimeout(timer)
@@ -196,6 +206,7 @@ async function resolvePastedItem(args: {
   repoSlugCache: Map<string, { owner: string; repo: string; host?: string } | null>
 }): Promise<PasteLookup> {
   const { client, intent, repoId, repos, repoSlugCache } = args
+
   if (intent.kind === 'github-number') {
     return {
       paste: {
@@ -205,6 +216,7 @@ async function resolvePastedItem(args: {
       crossRepoPrompt: null
     }
   }
+
   if (intent.kind === 'github-link') {
     const matchingRepo = await findRepoMatchingSlugForPaste(
       client,
@@ -212,12 +224,14 @@ async function resolvePastedItem(args: {
       intent.link.slug,
       repoSlugCache
     )
+
     if (matchingRepo && matchingRepo.id !== repoId) {
       return {
         paste: { github: null, gitlab: null },
         crossRepoPrompt: { link: intent.link, matchingRepo }
       }
     }
+
     return {
       paste: {
         github: await lookupGitHubItemByOwnerRepo(
@@ -232,6 +246,7 @@ async function resolvePastedItem(args: {
       crossRepoPrompt: null
     }
   }
+
   return {
     paste: { github: null, gitlab: await lookupGitLabItemByPath(client, repoId, intent.link) },
     crossRepoPrompt: null
@@ -257,10 +272,12 @@ async function runSmartSearch(args: {
   crossRepoPrompt: SmartCrossRepoPrompt | null
 }> {
   const { client, mode, query, repoId, repos, dismissedPasteRef, repoSlugCache } = args
+
   const intent =
     mode === 'branches' || dismissedPasteRef.current === query.trim()
       ? null
       : resolvePasteIntent(query)
+
   // Why: the paste lookup and the provider fan-out hit different host endpoints,
   // so awaiting the fan-out first stacked two full round trips on the one path a
   // user is most likely to take — typing a PR/issue number. Run them together.
@@ -273,5 +290,6 @@ async function runSmartSearch(args: {
         )
       : Promise.resolve(EMPTY_PASTE_LOOKUP)
   ])
+
   return { fan, paste: pasteLookup.paste, crossRepoPrompt: pasteLookup.crossRepoPrompt }
 }

@@ -24,6 +24,7 @@ const VERIFY_TIMEOUT_MS = 6000
 
 function normalize(value: string | null | undefined): string | null {
   const trimmed = value?.trim() ?? ''
+
   return trimmed.length > 0 ? trimmed : null
 }
 
@@ -42,6 +43,7 @@ export async function connectBitbucket(
   input: BitbucketConnectArgs
 ): Promise<BitbucketConnectResult> {
   const config = buildCandidateConfig(input)
+
   if (!hasAuth(config)) {
     return {
       ok: false,
@@ -51,7 +53,9 @@ export async function connectBitbucket(
           : 'Enter both an email and an API token.'
     }
   }
+
   const result = await fetchBitbucketUserResult(config, VERIFY_TIMEOUT_MS)
+
   if (!result.ok) {
     return {
       ok: false,
@@ -63,6 +67,7 @@ export async function connectBitbucket(
           : 'Could not reach Bitbucket. Check your connection or the API base URL, then try again.'
     }
   }
+
   const account = accountNameFromUser(result.user)
   saveBitbucketCredential({
     authMode: input.authMode,
@@ -72,6 +77,7 @@ export async function connectBitbucket(
     accessToken: config.accessToken,
     apiToken: config.apiToken
   })
+
   return { ok: true, account }
 }
 
@@ -83,6 +89,7 @@ export function disconnectBitbucket(): void {
 // card can call it on every open without a keychain prompt.
 export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
   const env = getEnvAuthConfig()
+
   if (hasAuth(env)) {
     return {
       configured: true,
@@ -93,8 +100,10 @@ export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
       baseUrl: envValue('ORCA_BITBUCKET_API_BASE_URL')
     }
   }
+
   if (hasStoredBitbucketCredential()) {
     const metadata = getStoredBitbucketMetadata()
+
     return {
       configured: true,
       source: 'stored',
@@ -104,6 +113,7 @@ export function getBitbucketConnectionStatus(): BitbucketConnectionStatus {
       baseUrl: metadata?.baseUrl ?? null
     }
   }
+
   return {
     configured: false,
     source: 'none',

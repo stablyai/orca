@@ -20,6 +20,7 @@ function createClient(
     processFactory: () => {
       const child = new AiVaultServiceTestChild(20_000 + children.length)
       children.push(child)
+
       return child.asChildProcess()
     },
     idleTimeoutMs
@@ -38,9 +39,11 @@ function relayRequestCount(child: AiVaultServiceTestChild, operation: string): n
 
 function relayRequestId(child: AiVaultServiceTestChild, operation: string): number {
   const request = relayRequests(child, operation).at(-1)
+
   if (!request) {
     throw new Error(`No ${operation} request was sent.`)
   }
+
   return request.id
 }
 
@@ -57,9 +60,11 @@ describe('RelayAiVaultServiceClient', () => {
     expect(child.sent).toEqual([expect.objectContaining({ type: 'init', protocol: 1 })])
     readyAiVaultServiceChild(child)
     await Promise.resolve()
+
     const listRequest = child.sent.find(
       (message) => (message as { operation?: string }).operation === 'list'
     ) as { id: number }
+
     child.emit('message', {
       type: 'result',
       id: listRequest.id,
@@ -67,9 +72,11 @@ describe('RelayAiVaultServiceClient', () => {
       value: { sessions: [], issues: [], scannedAt: '2026-08-09T00:00:00.000Z' }
     })
     await expect(list).resolves.toMatchObject({ sessions: [] })
+
     const titleRequest = child.sent.find(
       (message) => (message as { operation?: string }).operation === 'titles'
     ) as { id: number }
+
     child.emit('message', {
       type: 'result',
       id: titleRequest.id,
@@ -93,6 +100,7 @@ describe('RelayAiVaultServiceClient', () => {
     const titles = client.resolveSessionTitles([
       { agent: 'claude', sessionId: 'session-1', transcriptPath: '/home/ada/session-1.jsonl' }
     ])
+
     await Promise.resolve()
     child.emit('message', {
       type: 'result',
@@ -209,6 +217,7 @@ describe('RelayAiVaultServiceClient', () => {
     const child = children[0]!
     readyAiVaultServiceChild(child)
     await Promise.resolve()
+
     const firstRequest = child.sent.find(
       (message) => (message as { operation?: string }).operation === 'list'
     ) as { id: number }
@@ -220,9 +229,11 @@ describe('RelayAiVaultServiceClient', () => {
     vi.advanceTimersByTime(2_000)
 
     expect(child.killed).toBe(false)
+
     const titleRequest = child.sent.find(
       (message) => (message as { operation?: string }).operation === 'titles'
     ) as { id: number }
+
     child.emit('message', {
       type: 'result',
       id: titleRequest.id,
@@ -271,9 +282,11 @@ describe('RelayAiVaultServiceClient', () => {
     const child = children[0]!
     readyAiVaultServiceChild(child)
     await Promise.resolve()
+
     const request = child.sent.find(
       (message) => (message as { operation?: string }).operation === 'list'
     ) as { id: number }
+
     child.emit('message', {
       type: 'result',
       id: request.id,

@@ -37,6 +37,7 @@ describe('parseWorkspaceSession terminal fields', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt[0].startupCwd).toBe('/repo/packages/app')
       expect(result.value.tabsByWorktree.wt[1].startupCwd).toBeUndefined()
@@ -68,6 +69,7 @@ describe('parseWorkspaceSession terminal fields', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.value.tabsByWorktree.wt).toEqual([])
     }
@@ -100,7 +102,9 @@ describe('parseWorkspaceSession terminal fields', () => {
         },
         terminalLayoutsByTabId: {}
       })
+
       expect(result.ok).toBe(true)
+
       return result.ok ? result.value.tabsByWorktree.wt[0] : undefined
     }
 

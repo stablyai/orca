@@ -106,11 +106,13 @@ type MobileHomeHostRowProps = Pick<
 
 const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostRowProps) {
   const { item, onLongPress, onOpen, onOpenActions } = props
+
   const state = resolveHomeHostConnectionState(
     item.id,
     props.hostStates[item.id],
     props.autoConnectHostIds
   )
+
   const verdict = classifyConnection({
     state,
     reconnectAttempts: props.hostAttempts[item.id] ?? 0,
@@ -120,6 +122,7 @@ const MobileHomeHostRow = memo(function MobileHomeHostRow(props: MobileHomeHostR
     pairingRejected: props.hostPairingRejected[item.id] ?? false,
     hostSignedOut: props.hostSignedOut[item.id] ?? false
   })
+
   const open = useCallback(() => onOpen(item), [item, onOpen])
   const longPress = useCallback(() => onLongPress(item), [item, onLongPress])
   const openActions = useCallback(() => onOpenActions(item), [item, onOpenActions])

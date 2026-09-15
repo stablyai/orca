@@ -15,24 +15,31 @@ export function workspaceSshStatusLabel(status: SshConnectionStatus | null): str
   if (status === 'connected') {
     return 'Connected'
   }
+
   if (status === 'connecting') {
     return 'Connecting'
   }
+
   if (status === 'deploying-relay') {
     return 'Deploying relay'
   }
+
   if (status === 'reconnecting') {
     return 'Reconnecting'
   }
+
   if (status === 'auth-failed') {
     return 'Authentication failed'
   }
+
   if (status === 'reconnection-failed') {
     return 'Reconnect failed'
   }
+
   if (status === 'error') {
     return 'Connection failed'
   }
+
   return 'Disconnected'
 }
 
@@ -43,7 +50,9 @@ export function deriveWorkspaceSshGate(args: {
 }): WorkspaceSshGate {
   const matchingState =
     args.connectionId && args.state?.targetId === args.connectionId ? args.state : null
+
   const status = matchingState?.status ?? null
+
   return {
     status,
     requiresConnection: args.connectionId !== null && status !== 'connected',

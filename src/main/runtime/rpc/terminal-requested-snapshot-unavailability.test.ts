@@ -14,6 +14,7 @@ import {
 } from '../../../shared/terminal-stream-protocol'
 
 type SerializedBuffer = { data: string; cols: number; rows: number } | null
+
 type SnapshotStartPayload = Record<string, unknown>
 
 // Why: 256 KiB is the pending-output budget, so this many 1 KiB chunks always trips the overflow guard.
@@ -33,22 +34,29 @@ async function requestSnapshotReply(options: {
 }): Promise<{ start: SnapshotStartPayload; chunks: string }> {
   const messages: string[] = []
   const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
   const handlers = new Map<
     number,
     (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
   >()
+
   const cleanups = new Map<string, () => void>()
   const dataListenerRef: { current?: (data: string) => void } = {}
   let attempt = 0
+
   const serializeTerminalBuffer = vi.fn(async () => {
     attempt += 1
+
     if (attempt === 1) {
       return { data: 'initial', cols: 120, rows: 40 }
     }
+
     const requestedAttempt = attempt - 1
     options.duringSerialize?.(requestedAttempt, (data) => dataListenerRef.current?.(data))
+
     return options.serializeRequested(requestedAttempt)
   })
+
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     registerRemoteTerminalViewSubscriber: () => () => {},
@@ -69,6 +77,7 @@ async function requestSnapshotReply(options: {
     getLayout: vi.fn().mockReturnValue({ seq: 1 }),
     subscribeToTerminalData: vi.fn((_: string, listener: (data: string) => void) => {
       dataListenerRef.current = listener
+
       return vi.fn()
     }),
     subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
@@ -85,6 +94,7 @@ async function requestSnapshotReply(options: {
   } as unknown as OrcaRuntimeService
 
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
   const dispatchPromise = dispatcher.dispatchStreaming(
     makeRequest('terminal.multiplex', {}),
     (msg) => messages.push(msg),
@@ -95,6 +105,7 @@ async function requestSnapshotReply(options: {
       },
       registerBinaryStreamHandler: (streamId, handler) => {
         handlers.set(streamId, handler)
+
         return () => handlers.delete(streamId)
       }
     }
@@ -142,12 +153,15 @@ async function requestSnapshotReply(options: {
         .some((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotEnd)
     ).toBe(true)
   )
+
   const replyFrames = binaryFrames
     .slice(framesBeforeRequest)
     .map((frame) => decodeTerminalStreamFrame(frame))
+
   const start = replyFrames.find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)!
   cleanups.get(`terminal-multiplex:${options.connectionId}`)?.()
   await dispatchPromise
+
   return {
     start: decodeTerminalStreamJson<SnapshotStartPayload>(start.payload)!,
     chunks: replyFrames
@@ -163,6 +177,7 @@ describe('requested terminal snapshot unavailability reasons', () => {
       connectionId: 'conn-reason-success',
       serializeRequested: async () => ({ data: 'restored output', cols: 120, rows: 40 })
     })
+
     expect(chunks).toBe('restored output')
     expect(start).toMatchObject({ requestId: 77, truncated: false })
     expect(start.unavailable).toBeUndefined()
@@ -173,6 +188,7 @@ describe('requested terminal snapshot unavailability reasons', () => {
       connectionId: 'conn-reason-empty',
       serializeRequested: async () => ({ data: '', cols: 120, rows: 40 })
     })
+
     expect(chunks).toBe('')
     expect(start).toMatchObject({ requestId: 77, truncated: false })
     expect(start.unavailable).toBeUndefined()
@@ -183,6 +199,7 @@ describe('requested terminal snapshot unavailability reasons', () => {
       connectionId: 'conn-reason-null',
       serializeRequested: async () => null
     })
+
     expect(chunks).toBe('')
     // Legacy fields stay exactly as an old client expects them.
     expect(start).toMatchObject({
@@ -204,6 +221,7 @@ describe('requested terminal snapshot unavailability reasons', () => {
         }
       }
     })
+
     expect(chunks).toBe('')
     expect(start).toMatchObject({
       requestId: 77,
@@ -221,11 +239,13 @@ describe('requested terminal snapshot unavailability reasons', () => {
         if (attempt > 1) {
           return
         }
+
         for (let index = 0; index < OVERFLOW_CHUNKS; index += 1) {
           pushOutput(String(index).padStart(3, '0') + 'x'.repeat(1021))
         }
       }
     })
+
     expect(chunks).toBe('retry snapshot')
     expect(start).toMatchObject({ requestId: 77, truncated: false })
     expect(start.unavailable).toBeUndefined()

@@ -47,6 +47,7 @@ describe('MobileAgentIcon OMP gradient', () => {
         throw new Error(String(args[0]))
       }
     })
+
     await act(async () => {
       renderer = create(createElement(MobileAgentIcon, { agentId: 'omp' }))
     })

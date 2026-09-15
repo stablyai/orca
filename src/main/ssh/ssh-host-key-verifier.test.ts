@@ -9,7 +9,9 @@ import {
 } from './ssh-host-key-verifier'
 
 const ED_A = 'AAAAC3NzaC1lZDI1NTE5AAAAIKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq'
+
 const ED_B = 'AAAAC3NzaC1lZDI1NTE5AAAAILu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7'
+
 const RSA_A =
   'AAAAB3NzaC1yc2EAAABAzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzA=='
 
@@ -38,9 +40,11 @@ function run(
 ): { accepted: boolean | undefined; returned: unknown } {
   let accepted: boolean | undefined
   const verifier = createHostKeyVerifier(deps(overrides))
+
   const returned = verifier(blob(key), (ok) => {
     accepted = ok
   })
+
   return { accepted, returned }
 }
 
@@ -87,6 +91,7 @@ describe('the ssh2 host key verifier', () => {
         throw new Error('store unreadable')
       }
     })
+
     expect(accepted).toBe(false)
     expect(returned).toBeUndefined()
   })
@@ -176,6 +181,7 @@ describe('the ssh2 host key verifier', () => {
     // the handshake instead of failing it.
     it('still denies when reporting the denial throws', () => {
       let accepted: boolean | undefined
+
       const verifier = createHostKeyVerifier(
         deps({
           onDecision: () => {
@@ -183,6 +189,7 @@ describe('the ssh2 host key verifier', () => {
           }
         })
       )
+
       expect(() =>
         verifier(Buffer.alloc(2), (ok) => {
           accepted = ok

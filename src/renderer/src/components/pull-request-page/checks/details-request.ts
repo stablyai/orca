@@ -33,16 +33,21 @@ export function requestPullRequestCheckDetails(args: {
   ) {
     return
   }
+
   const requestId = ++args.nextCheckDetailsRequestIdRef.current
+
   const commit = (next: Omit<CheckDetailsLoadState, 'requestId'>): void => {
     if (!args.mountedRef.current) {
       return
     }
+
     args.setChecksState((current) =>
       settleGitHubChecksTabDetails(current, args.key, requestId, next)
     )
   }
+
   args.setChecksState((current) => beginGitHubChecksTabDetails(current, args.key, requestId))
+
   const detailsRequest = withGitHubCheckDetailsTimeout((signal) =>
     args.runtimeHost
       ? callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.prCheckDetails>>>(
@@ -69,6 +74,7 @@ export function requestPullRequestCheckDetails(args: {
           prRepo: args.prRepo
         })
   )
+
   void detailsRequest
     .then((details) => {
       commit({

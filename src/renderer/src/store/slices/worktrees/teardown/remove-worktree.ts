@@ -53,6 +53,7 @@ export function createRemoveWorktree(
     // caller confirmed ONE host's row; route at that host instead of the active
     // workspace's, which owns the same id elsewhere.
     const requiredExecutionHostId = removalTarget.executionHostId
+
     const start = beginHostQualifiedRemoval(
       get,
       worktreeId,
@@ -60,20 +61,25 @@ export function createRemoveWorktree(
       forgetLocalOnly,
       options?.ignoreWorkspaceCleanupScanSurvivors === true
     )
+
     if (!start.ok) {
       return { ok: false, error: start.error }
     }
+
     const {
       removalRoute,
       hostId,
       removalGenerationGuard,
       sameIdSurvivingHostId: catalogSameIdSurvivingHostId
     } = start
+
     const sameIdSurvivingHostId =
       catalogSameIdSurvivingHostId ?? options?.sameIdSurvivingHostId ?? null
+
     const deleteStateKey = requiredExecutionHostId
       ? composeWorktreeHostIdentity(requiredExecutionHostId, worktreeId)
       : worktreeId
+
     set((s) => ({
       deleteStateByWorktreeId: {
         ...s.deleteStateByWorktreeId,
@@ -105,12 +111,15 @@ export function createRemoveWorktree(
         worktreeId,
         requiredExecutionHostId
       )
+
       const terminalPtyIdsBeforeRemoval = (get().tabsByWorktree[worktreeId] ?? []).flatMap(
         (tab) => get().ptyIdsByTabId[tab.id] ?? []
       )
+
       if (!forgetLocalOnly) {
         removalGenerationGuard?.assertCurrent()
       }
+
       // Why: forget-local clears Orca's records via local IPC regardless of host — the remote is gone or unreachable.
       const target = getActiveRuntimeTarget(
         removalRoute
@@ -119,14 +128,18 @@ export function createRemoveWorktree(
             ? { ...get().settings, activeRuntimeEnvironmentId: null }
             : { activeRuntimeEnvironmentId: null }
       )
+
       const unprovableRemoteRouting = forgetLocalOnly
         ? null
         : refuseUnprovableRemoteHostRouting(get, worktreeId, target.kind)
+
       if (unprovableRemoteRouting) {
         throw new Error(unprovableRemoteRouting)
       }
+
       let removalResult: RemoveWorktreeResult
       let snapshotPruneHandledByLocalMain = forgetLocalOnly || target.kind === 'local'
+
       try {
         removalResult = await dispatchWorktreeRemoval({
           worktreeId,
@@ -148,12 +161,15 @@ export function createRemoveWorktree(
           const currentResolution = requiredExecutionHostId
             ? resolveWorktreeOperationRouteResultForHost(get(), worktreeId, requiredExecutionHostId)
             : resolveWorktreeOperationRouteResult(get(), worktreeId)
+
           if (currentResolution.kind === 'ambiguous') {
             throw error
           }
+
           if (currentResolution.kind === 'resolved') {
             removalGenerationGuard?.assertCurrent()
           }
+
           try {
             removalResult = await window.api.worktrees.forgetLocal({
               worktreeId,
@@ -195,7 +211,9 @@ export function createRemoveWorktree(
           requiredExecutionHostId,
           options?.ignoreWorkspaceCleanupScanSurvivors === true
         )
+
         const confirmedSurvivingHostId = currentSameIdSurvivingHostId ?? sameIdSurvivingHostId
+
         if (confirmedSurvivingHostId) {
           const sameIdStillSurvives = prepareHostScopedRemovalCompletion(
             set,
@@ -204,6 +222,7 @@ export function createRemoveWorktree(
             confirmedSurvivingHostId,
             options?.ignoreWorkspaceCleanupScanSurvivors === true
           )
+
           if (sameIdStillSurvives) {
             return completeSameIdHostScopedRemoval({
               set,
@@ -224,6 +243,7 @@ export function createRemoveWorktree(
       // Why: invalidate stale probes once deletion is authoritative, so an old toast can't mutate a same-path replacement.
       forgetHugeRepoWarningDismissalsForWorktrees([worktreeId])
       forgetWorktreeSleepIntent(worktreeId)
+
       // Why: forget-local is legal while the host is unreachable, so record the removal here too — otherwise an
       // in-flight metadata read that snapshotted this row re-appends it, and disconnected polls never drop it.
       if (hostId && parseExecutionHostId(hostId)?.kind === 'ssh') {
@@ -231,6 +251,7 @@ export function createRemoveWorktree(
       }
 
       const worktreeDisplayName = worktreeBeforeRemoval?.displayName?.trim()
+
       if (worktreeDisplayName) {
         try {
           await window.api.automations?.snapshotWorkspaceName?.({
@@ -254,6 +275,7 @@ export function createRemoveWorktree(
       // Why: Source Control may be unmounted during deletion, so it can't be the only stale-draft cleanup path.
       clearSessionCommitDraftForWorktree(worktreeId)
       const preservedBranch = removalResult?.preservedBranch
+
       const cleanup = preservedBranch
         ? {
             worktreeId,
@@ -265,12 +287,14 @@ export function createRemoveWorktree(
               : {})
           }
         : null
+
       if (preservedBranch) {
         preservedBranchRuntimeTargetByCleanupKey.set(preservedBranchCleanupKey(cleanup!), {
           cleanup: cleanup!,
           target
         })
       }
+
       if (preservedBranch && options?.suppressPreservedBranchToast !== true) {
         showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
           void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead, {
@@ -281,7 +305,9 @@ export function createRemoveWorktree(
           })
         })
       }
+
       pruneHostedReviewLinkMutationGenerations([worktreeId])
+
       return preservedBranch && cleanup
         ? {
             ok: true as const,
@@ -298,11 +324,13 @@ export function createRemoveWorktree(
       // Why: git refusing a non-force delete for dirty/untracked files is a handled user decision, not an app error.
       console.warn('Failed to remove worktree:', err)
       const error = err instanceof Error ? err.message : String(err)
+
       const forceDeleteReason = classifyWorktreeForceDeleteReason(
         error,
         force,
         options?.allowUnverifiedPtyStop === true
       )
+
       const locked = isLockedWorktreeRemovalError(error)
       set((s) => ({
         deleteStateByWorktreeId: {
@@ -317,6 +345,7 @@ export function createRemoveWorktree(
           }
         }
       }))
+
       return { ok: false as const, error }
     }
   }

@@ -41,25 +41,31 @@ export function WorktreeJumpPaletteWorktreeRow({
     hostFilterActive,
     handleSelectItem
   } = controller
+
   const worktree = entry.worktree
   const repo = resolvePaletteRepoForWorktree(worktree, repoMap, controller.repoByHostIdentity)
   const repoName = repo?.displayName ?? ''
   const branch = resolveWorktreeBranchLabel(worktree)
   const worktreeLabel = resolveWorktreeDisplayName(worktree)
+
   const isCurrentWorktree = isPaletteCurrentWorktree(
     worktree,
     activeWorktreeId,
     controller.activeWorkspaceExecutionHostId
   )
+
   const sessionAge = formatPaletteSessionAge(
     controller.hasQuery ? entry.match.lastActiveAt : worktree.lastActivityAt,
     controller.paletteNowMs
   )
+
   const sshConnectionId =
     repo?.connectionId && !isRuntimeOwnedSshTargetId(repo.connectionId) ? repo.connectionId : null
+
   const sshStatus = sshConnectionId
     ? (sshConnectionStates.get(sshConnectionId)?.status ?? 'disconnected')
     : null
+
   const isSshDisconnected = sshStatus != null && sshStatus !== 'connected'
   const hostBadge = getPaletteHostBadge(repo, hostOptions, hostFilterActive)
 

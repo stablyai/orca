@@ -26,6 +26,7 @@ export const rateLimitsApi = {
   onUpdate: (callback: (state: RateLimitState) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, state: RateLimitState) => callback(state)
     ipcRenderer.on('rateLimits:update', listener)
+
     return () => ipcRenderer.removeListener('rateLimits:update', listener)
   }
 } satisfies PreloadApi['rateLimits']

@@ -47,6 +47,7 @@ describe('parseAgentStatusPayload', () => {
     const result = parseAgentStatusPayload(
       '{"state":"working","prompt":"Fix the flaky assertion","agentType":"codex"}'
     )
+
     expect(result).toEqual({
       state: 'working',
       prompt: 'Fix the flaky assertion',
@@ -96,6 +97,7 @@ describe('parseAgentStatusPayload', () => {
   it('rejects excessive nesting before JSON.parse', () => {
     const parseSpy = vi.spyOn(JSON, 'parse')
     const depth = AGENT_STATUS_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+
     try {
       expect(parseAgentStatusPayload(`${'['.repeat(depth)}0${']'.repeat(depth)}`)).toBeNull()
       expect(parseSpy).not.toHaveBeenCalled()
@@ -115,6 +117,7 @@ describe('parseAgentStatusPayload', () => {
     const result = parseAgentStatusPayload(
       '{"state":"working","prompt":"line one\\nline two\\nline three"}'
     )
+
     expect(result!.prompt).toBe('line one line two line three')
   })
 
@@ -122,6 +125,7 @@ describe('parseAgentStatusPayload', () => {
     const result = parseAgentStatusPayload(
       '{"state":"working","prompt":"line one\\r\\nline two\\r\\nline three"}'
     )
+
     expect(result!.prompt).toBe('line one line two line three')
   })
 
@@ -142,6 +146,7 @@ describe('parseAgentStatusPayload', () => {
       { length: 50 },
       (_, i) => `orca orchestration send --to term_parent --type heartbeat --phase step-${i}`
     ).join('\n')
+
     const result = parseAgentStatusPayload(
       JSON.stringify({
         state: 'working',
@@ -155,6 +160,7 @@ ${longCliNoise}
 Fix dispatch fallback preview for normalized status prompts`
       })
     )
+
     expect(result).not.toBeNull()
     expect(result!.prompt.length).toBeLessThanOrEqual(AGENT_STATUS_MAX_FIELD_LENGTH)
     expect(result!.prompt.includes('\n')).toBe(false)
@@ -218,9 +224,11 @@ Fix dispatch fallback preview for normalized status prompts`
 
   it('truncates agentType beyond AGENT_TYPE_MAX_LENGTH', () => {
     const longAgentType = 'a'.repeat(AGENT_TYPE_MAX_LENGTH + 20)
+
     const result = parseAgentStatusPayload(
       JSON.stringify({ state: 'working', agentType: longAgentType })
     )
+
     expect(result!.agentType).toHaveLength(AGENT_TYPE_MAX_LENGTH)
   })
 
@@ -244,6 +252,7 @@ Fix dispatch fallback preview for normalized status prompts`
         lastAssistantMessage: 'Here is the edit I made.'
       })
     )
+
     expect(result).toEqual({
       state: 'working',
       prompt: '',
@@ -258,6 +267,7 @@ Fix dispatch fallback preview for normalized status prompts`
     const interactivePrompt = JSON.stringify({
       questions: [{ question: 'Pick one', options: ['a', 'b'] }]
     })
+
     const result = parseAgentStatusPayload(JSON.stringify({ state: 'waiting', interactivePrompt }))
     // Why: interactivePrompt is raw JSON the client parses back, so content must survive untouched (unlike toolInput).
     expect(result!.interactivePrompt).toBe(interactivePrompt)
@@ -271,9 +281,11 @@ Fix dispatch fallback preview for normalized status prompts`
 
   it('caps interactivePrompt at its generous max length (not the toolInput cap)', () => {
     const long = 'x'.repeat(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH + 500)
+
     const result = parseAgentStatusPayload(
       JSON.stringify({ state: 'waiting', interactivePrompt: long })
     )
+
     expect(result!.interactivePrompt).toHaveLength(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH)
     expect(AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH).toBe(16000)
   })
@@ -292,6 +304,7 @@ Fix dispatch fallback preview for normalized status prompts`
     const longName = 'n'.repeat(AGENT_STATUS_TOOL_NAME_MAX_LENGTH + 50)
     const longInput = 'i'.repeat(AGENT_STATUS_TOOL_INPUT_MAX_LENGTH + 50)
     const longMessage = 'm'.repeat(AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH + 500)
+
     const result = parseAgentStatusPayload(
       JSON.stringify({
         state: 'working',
@@ -300,6 +313,7 @@ Fix dispatch fallback preview for normalized status prompts`
         lastAssistantMessage: longMessage
       })
     )
+
     expect(result!.toolName).toHaveLength(AGENT_STATUS_TOOL_NAME_MAX_LENGTH)
     expect(result!.toolInput).toHaveLength(AGENT_STATUS_TOOL_INPUT_MAX_LENGTH)
     expect(result!.lastAssistantMessage).toHaveLength(AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH)
@@ -316,6 +330,7 @@ Fix dispatch fallback preview for normalized status prompts`
     const result = parseAgentStatusPayload(
       '{"state":"working","toolName":42,"toolInput":null,"lastAssistantMessage":[]}'
     )
+
     expect(result!.toolName).toBeUndefined()
     expect(result!.toolInput).toBeUndefined()
     expect(result!.lastAssistantMessage).toBeUndefined()
@@ -325,6 +340,7 @@ Fix dispatch fallback preview for normalized status prompts`
     const result = parseAgentStatusPayload(
       '{"state":"working","toolName":"   ","toolInput":"","lastAssistantMessage":"   "}'
     )
+
     expect(result!.toolName).toBeUndefined()
     expect(result!.toolInput).toBeUndefined()
     expect(result!.lastAssistantMessage).toBeUndefined()
@@ -368,6 +384,7 @@ Fix dispatch fallback preview for normalized status prompts`
     const result = parseAgentStatusPayload(
       '{"state":"done","lastAssistantMessage":"Summary line.\\n\\nDetails paragraph."}'
     )
+
     expect(result!.lastAssistantMessage).toBe('Summary line.\n\nDetails paragraph.')
   })
 
@@ -375,11 +392,13 @@ Fix dispatch fallback preview for normalized status prompts`
     const result = parseAgentStatusPayload(
       '{"state":"done","lastAssistantMessage":"a\\r\\nb\\n\\n\\n\\nc"}'
     )
+
     expect(result!.lastAssistantMessage).toBe('a\nb\n\nc')
   })
 
   it('normalizes large assistant messages without full-string replacement passes', () => {
     const replaceSpy = vi.spyOn(String.prototype, 'replace')
+
     const lastAssistantMessage = `Summary\r\n${'\r\n'.repeat(10_000)}Details ${'x'.repeat(
       AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
     )}`
@@ -390,11 +409,13 @@ Fix dispatch fallback preview for normalized status prompts`
     expect(result!.lastAssistantMessage!.length).toBeLessThanOrEqual(
       AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
     )
+
     const usedMultilineReplace = replaceSpy.mock.calls.some(
       ([pattern]) =>
         pattern instanceof RegExp &&
         ['\\r\\n', '\\r', '[\\u2028\\u2029]', '\\n{3,}'].includes(pattern.source)
     )
+
     expect(usedMultilineReplace).toBe(false)
   })
 
@@ -403,24 +424,29 @@ Fix dispatch fallback preview for normalized status prompts`
     const resultLineSep = parseAgentStatusPayload(
       '{"state":"done","lastAssistantMessage":"a\u2028\u2028\u2028\u2028b"}'
     )
+
     expect(resultLineSep!.lastAssistantMessage).toBe('a\n\nb')
 
     const resultParaSep = parseAgentStatusPayload(
       '{"state":"done","lastAssistantMessage":"a\u2029\u2029\u2029\u2029b"}'
     )
+
     expect(resultParaSep!.lastAssistantMessage).toBe('a\n\nb')
 
     const resultMixed = parseAgentStatusPayload(
       '{"state":"done","lastAssistantMessage":"a\u2028\u2029\\n\u2028\u2029b"}'
     )
+
     expect(resultMixed!.lastAssistantMessage).toBe('a\n\nb')
   })
 
   it('still respects the base prompt cap independent of the new fields', () => {
     const prompt = 'p'.repeat(300)
+
     const result = parseAgentStatusPayload(
       JSON.stringify({ state: 'working', prompt, toolInput: 'x'.repeat(5) })
     )
+
     expect(result!.prompt).toHaveLength(AGENT_STATUS_MAX_FIELD_LENGTH)
     expect(result!.toolInput).toBe('xxxxx')
   })
@@ -441,10 +467,12 @@ Fix dispatch fallback preview for normalized status prompts`
     expect(
       parseAgentStatusPayload('{"state":"done","sessionBoundary":true}')!.sessionBoundary
     ).toBe(true)
+
     for (const state of ['working', 'blocked', 'waiting'] as const) {
       const result = parseAgentStatusPayload(`{"state":"${state}","sessionBoundary":true}`)
       expect(result!.sessionBoundary).toBeUndefined()
     }
+
     // Why: parser uses `=== true`, so truthy sentinels don't count.
     expect(
       parseAgentStatusPayload('{"state":"done","sessionBoundary":"true"}')!.sessionBoundary
@@ -458,17 +486,20 @@ Fix dispatch fallback preview for normalized status prompts`
           .turnCompletedAt
       ).toBe(1767225601000)
     }
+
     for (const state of ['blocked', 'waiting'] as const) {
       expect(
         parseAgentStatusPayload(`{"state":"${state}","turnCompletedAt":1767225601000}`)!
           .turnCompletedAt
       ).toBeUndefined()
     }
+
     for (const raw of ['"1767225601000"', 'null', 'true']) {
       expect(
         parseAgentStatusPayload(`{"state":"done","turnCompletedAt":${raw}}`)!.turnCompletedAt
       ).toBeUndefined()
     }
+
     for (const value of [Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(
         normalizeAgentStatusPayload({ state: 'done', turnCompletedAt: value })!.turnCompletedAt
@@ -509,6 +540,7 @@ Fix dispatch fallback preview for normalized status prompts`
     const secondLast = len >= 2 ? result!.prompt.charCodeAt(len - 2) : 0
     const isLoneHighSurrogate = last >= 0xd800 && last <= 0xdbff
     expect(isLoneHighSurrogate).toBe(false)
+
     // Why: a trailing low surrogate must follow a high surrogate, else it's also malformed UTF-16.
     if (last >= 0xdc00 && last <= 0xdfff) {
       expect(secondLast >= 0xd800 && secondLast <= 0xdbff).toBe(true)
@@ -520,9 +552,11 @@ Fix dispatch fallback preview for normalized status prompts`
     const surrogatePairs = Math.floor(AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH / 2) + 1
     // Why: prepend one code unit so truncation lands ON a high surrogate, else the test passes without the guard.
     const message = `x${'😀'.repeat(surrogatePairs)}`
+
     const result = parseAgentStatusPayload(
       JSON.stringify({ state: 'done', lastAssistantMessage: message })
     )
+
     expect(result!.lastAssistantMessage!.length).toBeLessThanOrEqual(
       AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
     )
@@ -535,6 +569,7 @@ Fix dispatch fallback preview for normalized status prompts`
     const secondLast = len >= 2 ? result!.lastAssistantMessage!.charCodeAt(len - 2) : 0
     const isLoneHighSurrogate = last >= 0xd800 && last <= 0xdbff
     expect(isLoneHighSurrogate).toBe(false)
+
     // Why: a trailing low surrogate must follow a high surrogate, else it's also malformed UTF-16.
     if (last >= 0xdc00 && last <= 0xdfff) {
       expect(secondLast >= 0xd800 && secondLast <= 0xdbff).toBe(true)
@@ -560,6 +595,7 @@ Fix dispatch fallback preview for normalized status prompts`
         ]
       })
     )
+
     expect(result?.subagents?.length).toBe(AGENT_STATUS_MAX_SUBAGENTS)
     expect(result?.subagents?.[0]).toEqual({
       id: 'a1',
@@ -691,6 +727,7 @@ describe('WellKnownAgentType', () => {
       'mistral-vibe',
       'claude-agent-teams'
     ]
+
     const sentinel: WellKnownAgentType = 'unknown'
 
     expect([...formerlyMissing, sentinel, widenTuiAgent('rovo')]).toEqual([

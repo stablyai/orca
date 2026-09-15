@@ -6,43 +6,81 @@ import type * as Wsl from '../wsl'
 // per-file (hoisting is per-file) but delegate their factories here so the vi.fn instances
 // are one shared set the tests can assert on.
 export const handleMock: Mock = vi.fn()
+
 export const onMock: Mock = vi.fn()
+
 export const removeHandlerMock: Mock = vi.fn()
+
 export const removeAllListenersMock: Mock = vi.fn()
+
 export const existsSyncMock: Mock = vi.fn()
+
 export const statSyncMock: Mock = vi.fn()
+
 export const accessSyncMock: Mock = vi.fn()
+
 export const mkdirSyncMock: Mock = vi.fn()
+
 export const readFileSyncMock: Mock = vi.fn()
+
 export const writeFileSyncMock: Mock = vi.fn()
+
 export const chmodSyncMock: Mock = vi.fn()
+
 export const linuxCliShimMock: Mock = vi.fn()
+
 export const renameSyncMock: Mock = vi.fn()
+
 export const rmSyncMock: Mock = vi.fn()
+
 export const getPathMock: Mock = vi.fn()
+
 export const loginPreflightExecFileMock: Mock = vi.fn()
+
 export const spawnMock: Mock = vi.fn()
+
 export const openCodeBuildPtyEnvMock: Mock = vi.fn()
+
 export const mimoCodeBuildPtyEnvMock: Mock = vi.fn()
+
 export const isPwshAvailableMock: Mock = vi.fn()
+
 export const wslUncDirectoryExistsAsyncMock: Mock = vi.fn()
+
 export const openCodeClearPtyMock: Mock = vi.fn()
+
 export const buildAgentHookEnvMock: Mock = vi.fn()
+
 export const clearAgentHookPaneStateMock: Mock = vi.fn()
+
 export const registerPaneKeyAliasMock: Mock = vi.fn()
+
 export const piBuildPtyEnvMock: Mock = vi.fn()
+
 export const piClearPtyMock: Mock = vi.fn()
+
 export const trackMock: Mock = vi.fn()
+
 export const classifyErrorMock: Mock = vi.fn()
+
 export const registerPtyMock: Mock = vi.fn()
+
 export const unregisterPtyMock: Mock = vi.fn()
+
 export const setMigrationUnsupportedPtyMock: Mock = vi.fn()
+
 export const clearMigrationUnsupportedPtyMock: Mock = vi.fn()
+
 export const clearMigrationUnsupportedPtysForPaneKeyMock: Mock = vi.fn()
+
 export const clearPaneKeyAliasesForPtyMock: Mock = vi.fn()
+
 export const recordCodexPaneAccountMock: Mock = vi.fn()
+
 export const forgetCodexPaneAccountMock: Mock = vi.fn()
+
 export const getCodexPaneAccountMock: Mock = vi.fn()
+
 export const ensureCodexBackfillRecoveryMock: Mock<() => Promise<void>> = vi.fn(() =>
   Promise.resolve()
 )

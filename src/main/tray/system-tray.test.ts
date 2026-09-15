@@ -28,6 +28,7 @@ const {
     toBitmap: vi.fn(() => Buffer.alloc(16 * 16 * 4)),
     toDataURL: vi.fn(() => `data:image/png;base64,${name}`)
   })
+
   const resizedImage = makeImage('windows')
   const baseMacImage = makeImage('mac-base')
   const retinaMacImage = makeImage('mac-retina')
@@ -36,6 +37,7 @@ const {
   const devBadgeImage = makeImage('dev-badge')
   const devBadgeRetinaImage = makeImage('dev-badge-retina')
   const themeState = { updatedListener: null as (() => void) | null }
+
   const nativeThemeMock = {
     shouldUseDarkColors: false,
     on: vi.fn((_event: string, listener: () => void) => {
@@ -47,6 +49,7 @@ const {
       }
     })
   }
+
   return {
     attentionImage,
     baseMacImage,
@@ -111,6 +114,7 @@ vi.mock('./tray-dev-badge', () => ({
 }))
 
 type TrayModule = typeof SystemTrayModule
+
 type MenuItem = { label?: string; type?: string; click?: () => void }
 
 const originalPlatform = process.platform
@@ -121,6 +125,7 @@ function setPlatform(platform: NodeJS.Platform): void {
 
 async function loadModule(): Promise<TrayModule> {
   vi.resetModules()
+
   return import('./system-tray')
 }
 
@@ -164,6 +169,7 @@ beforeEach(() => {
   stampDevBadgeMock.mockImplementation((_base: unknown, scaleFactor?: number) =>
     scaleFactor === 2 ? devBadgeRetinaImage : devBadgeImage
   )
+
   for (const image of [
     baseMacImage,
     retinaMacImage,
@@ -179,6 +185,7 @@ beforeEach(() => {
     image.toBitmap.mockClear()
     image.toDataURL.mockClear().mockReturnValue(`data:image/png;base64,${image.name}`)
   }
+
   nativeThemeMock.shouldUseDarkColors = false
   nativeThemeMock.on.mockClear()
   nativeThemeMock.removeListener.mockClear()

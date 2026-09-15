@@ -16,6 +16,7 @@ afterEach(() => {
 describe('linear agent skill setup reminders', () => {
   it('bounds runtime reminder state through prolonged key churn', () => {
     const churnedRuntimeCount = MAX_LINEAR_AGENT_SKILL_SETUP_REMINDER_RUNTIME_KEYS * 4
+
     for (let i = 0; i < churnedRuntimeCount; i += 1) {
       getLinearAgentSkillSetupReminderState(`runtime-${i}`)
     }
@@ -31,6 +32,7 @@ describe('linear agent skill setup reminders', () => {
 
   it('retains recently reused keys while trimming', () => {
     getLinearAgentSkillSetupReminderState('keep').modalShown = true
+
     for (let i = 0; i < MAX_LINEAR_AGENT_SKILL_SETUP_REMINDER_RUNTIME_KEYS - 1; i += 1) {
       getLinearAgentSkillSetupReminderState(`runtime-${i}`).toastCount = 1
     }
@@ -48,6 +50,7 @@ describe('linear agent skill setup reminders', () => {
 
   it('keeps active toast state ahead of inactive stale entries when trimming', () => {
     getLinearAgentSkillSetupReminderState('toast-active').activeToastId = 'toast-id'
+
     for (let i = 0; i < MAX_LINEAR_AGENT_SKILL_SETUP_REMINDER_RUNTIME_KEYS; i += 1) {
       getLinearAgentSkillSetupReminderState(`runtime-${i}`)
     }

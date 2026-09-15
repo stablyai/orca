@@ -44,9 +44,11 @@ export async function submitDiffSectionComment({
       body
     })
   }
+
   if (!worktreeId) {
     return false
   }
+
   // Why: await persistence before closing the popover. If the store rolls back
   // the optimistic insert, keep the user's draft open so they can retry.
   const result = await addDiffComment({
@@ -58,8 +60,10 @@ export async function submitDiffSectionComment({
     body,
     side: 'modified'
   })
+
   if (!result) {
     console.error('Failed to add diff comment — draft preserved')
   }
+
   return Boolean(result)
 }

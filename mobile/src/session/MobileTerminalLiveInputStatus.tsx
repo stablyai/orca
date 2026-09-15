@@ -25,6 +25,7 @@ export function MobileTerminalLiveInputStatus({
       : dictation.isStarting
         ? 'Starting mic'
         : 'Live input'
+
   const detail = dictation.isRecording
     ? 'Tap mic to stop'
     : dictation.isProcessing

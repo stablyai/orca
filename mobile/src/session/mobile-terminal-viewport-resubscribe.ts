@@ -47,18 +47,22 @@ export function resolveTerminalViewportResubscribe(args: {
   attempts: number
 }): TerminalViewportResubscribeDecision {
   const overBudget = args.attempts >= MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS
+
   // First subscribe carries no viewport; resubscribing is how the server learns it.
   if (!args.viewportMeasured || args.viewport == null) {
     return overBudget ? { kind: 'exhausted' } : { kind: 'resubscribe', delayMs: 0 }
   }
+
   // Why: a host that doesn't report PTY dims can never converge — resubscribing
   // replays the identical frame, so keep the stream instead of probing it.
   if (args.hostCols == null || args.hostRows == null) {
     return { kind: 'hold' }
   }
+
   if (args.hostCols === args.viewport.cols && args.hostRows === args.viewport.rows) {
     return { kind: 'converged' }
   }
+
   return overBudget
     ? { kind: 'exhausted' }
     : { kind: 'resubscribe', delayMs: resubscribeDelayMs(args.attempts) }
@@ -76,6 +80,7 @@ export function shouldResubscribeAfterViewportMeasure(args: {
   if (!args.viewportWasMeasured) {
     return true
   }
+
   return args.hostCols !== args.measured.cols || args.hostRows !== args.measured.rows
 }
 
@@ -99,11 +104,14 @@ export class TerminalViewportResubscribeBudget {
 
   retryGeneration(handle: string): object {
     const existing = this.retryGenerationByHandle.get(handle)
+
     if (existing) {
       return existing
     }
+
     const generation = {}
     this.retryGenerationByHandle.set(handle, generation)
+
     return generation
   }
 
@@ -119,9 +127,11 @@ export class TerminalViewportResubscribeBudget {
     const { hostCols, hostRows } = readTerminalViewportDims(data)
     const cols = hostCols ?? 80
     const rows = hostRows ?? 24
+
     if (viewport?.cols === cols && viewport.rows === rows) {
       this.markConverged(handle)
     }
+
     return [cols, rows]
   }
 
@@ -134,7 +144,9 @@ export class TerminalViewportResubscribeBudget {
     if (this.announcedExhaustion.has(handle)) {
       return false
     }
+
     this.announcedExhaustion.add(handle)
+
     return true
   }
 
@@ -143,10 +155,12 @@ export class TerminalViewportResubscribeBudget {
       if (this.attempts(handle) < MAX_TERMINAL_VIEWPORT_RESUBSCRIBE_ATTEMPTS) {
         continue
       }
+
       if (!liveHandles.has(handle)) {
         this.absentSinceExhaustion.add(handle)
         continue
       }
+
       // Why: only an absence marker buys a refill — the handle's PTY may be live
       // again, so a fresh budget (and a fresh degrade announcement) is warranted.
       if (this.absentSinceExhaustion.delete(handle)) {
@@ -205,6 +219,7 @@ export type TerminalViewportFitPassArgs = {
 export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): void {
   const { handle, seq, hostCols, hostRows, budget, diagnostics } = args
   const retryGeneration = budget.retryGeneration(handle)
+
   const decision = resolveTerminalViewportResubscribe({
     hostCols,
     hostRows,
@@ -212,34 +227,45 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     viewport: args.viewportRef.current,
     attempts: budget.attempts(handle)
   })
+
   if (decision.kind === 'converged') {
     budget.markConverged(handle)
+
     return
   }
+
   if (decision.kind === 'hold') {
     diagnostics.streamResubscribeHeld(handle, seq)
+
     return
   }
+
   if (decision.kind === 'exhausted') {
     diagnostics.streamResubscribeExhausted(handle, seq, budget.attempts(handle))
+
     if (budget.shouldAnnounceExhaustion(handle)) {
       args.showToast("Couldn't fit the terminal to this screen", 4000)
     }
+
     return
   }
+
   const viewportWasMeasured = args.viewportMeasuredRef.current
   void (async () => {
     // Why: wait for init()'s rAF chain before measuring, else the measure races ahead and returns null (log dump 2026-05-06).
     await args.getTerminalRef(handle)?.awaitReady()
+
     if (
       args.subscribeSeqRef.current.get(handle) !== seq ||
       !budget.isRetryGenerationCurrent(handle, retryGeneration)
     ) {
       return
     }
+
     const dims = await args
       .getTerminalRef(handle)
       ?.measureFitDimensions(args.terminalFrameHeightRef.current || undefined)
+
     // Why: re-check seq — the awaits may have let a newer subscribe cycle arm; tearing it down would resubscribe a stale generation.
     if (
       args.subscribeSeqRef.current.get(handle) !== seq ||
@@ -247,11 +273,14 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     ) {
       return
     }
+
     if (!args.getTerminalRef(handle) || !dims) {
       return
     }
+
     args.viewportRef.current = dims
     args.viewportMeasuredRef.current = true
+
     if (
       !shouldResubscribeAfterViewportMeasure({
         hostCols,
@@ -262,8 +291,10 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
     ) {
       // Why: the pre-measure mismatch was a stale cached viewport; the server already agrees.
       budget.markConverged(handle)
+
       return
     }
+
     const resubscribe = (): void => {
       if (
         args.subscribeSeqRef.current.get(handle) !== seq ||
@@ -271,18 +302,22 @@ export function runTerminalViewportFitPass(args: TerminalViewportFitPassArgs): v
       ) {
         return
       }
+
       if (!args.getTerminalRef(handle)) {
         return
       }
+
       diagnostics.streamResubscribing(handle, seq, dims, budget.attempts(handle), decision.delayMs)
       args.unsubscribeTerminal(handle)
       args.initializedHandlesRef.current.delete(handle)
       args.subscribeToTerminal(handle)
+
       // Why: only a resubscribe that actually armed spends budget; one turned away by its own gates never reached the host.
       if (args.terminalUnsubsRef.current.has(handle)) {
         budget.chargeAttempt(handle)
       }
     }
+
     if (decision.delayMs > 0) {
       // Why: keep the live stream up through the backoff so input keeps flowing; teardown happens only when the retry fires.
       args.scheduleDelayedAction(resubscribe, decision.delayMs)

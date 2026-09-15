@@ -15,6 +15,7 @@ const OPERATION = '1800000000000-00000000000000000000000000000001'
 
 function committedReplay(overrides: { callerKey?: string; operationId?: string } = {}) {
   const lease = agentSessionLeaseFixture({ sessionId: 'codex_adopted' })
+
   return findCommittedStructuredAgentSessionAdoptionReplay({
     agent: 'codex',
     providerSessionId: 'thread-1',

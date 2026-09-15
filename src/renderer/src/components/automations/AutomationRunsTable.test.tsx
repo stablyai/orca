@@ -28,6 +28,7 @@ vi.mock('@tanstack/react-virtual', () => ({
 
 function entries(count: number): AutomationRunsDashboardEntry[] {
   const automation = { id: 'automation', name: 'Daily check' } as Automation
+
   const row = {
     key: 'row',
     automation,
@@ -35,6 +36,7 @@ function entries(count: number): AutomationRunsDashboardEntry[] {
     hostLabel: 'Local Mac',
     usageSummary: null
   } as const
+
   return Array.from({ length: count }, (_, index) => ({
     key: `row:run-${index}`,
     hostKey: 'desktop:self',

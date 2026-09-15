@@ -6,6 +6,7 @@ import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inp
 export function useFloatingTerminalPanelStoreState() {
   const { tabs, browserTabs, groups, unifiedTabs, floatingFiles, expandedPaneByTabId } =
     useAppStore(selectFloatingTerminalPanelInputs)
+
   const createTab = useAppStore((state) => state.createTab)
   const createBrowserTab = useAppStore((state) => state.createBrowserTab)
   const closeTab = useAppStore((state) => state.closeTab)
@@ -23,9 +24,11 @@ export function useFloatingTerminalPanelStoreState() {
   const openFile = useAppStore((state) => state.openFile)
   const browserDefaultUrl = useAppStore((state) => state.browserDefaultUrl)
   const floatingTerminalCwd = useAppStore((state) => state.settings?.floatingTerminalCwd ?? '')
+
   const generatedTabTitlesEnabled = useAppStore(
     (state) => state.settings?.tabAutoGenerateTitle === true
   )
+
   const managedBrowserCreationEnabled = useAppStore(
     (state) =>
       getClientCreationActionPolicy(state, FLOATING_TERMINAL_WORKTREE_ID)['managed-browser']

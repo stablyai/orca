@@ -24,6 +24,7 @@ export function shouldShowWorktree(args: {
   if (args.isSelectedCheckout || args.ownership === 'orca-managed') {
     return true
   }
+
   if (
     isExplicitlyImportedExternalWorktreePath(args.worktree.path, {
       importedExternalWorktreePaths: args.importedExternalWorktreePaths
@@ -31,6 +32,7 @@ export function shouldShowWorktree(args: {
   ) {
     return true
   }
+
   if (args.visibilitySource) {
     return (
       effectiveWorktreeSourceVisibility(
@@ -40,12 +42,15 @@ export function shouldShowWorktree(args: {
       ) === 'show'
     )
   }
+
   if (args.ownership === 'agent-scratch') {
     return effectiveAgentWorktreeVisibility(args.repo) === 'show'
   }
+
   if (args.ownership === 'unknown-legacy' && args.isLegacyRepoForVisibility) {
     return true
   }
+
   return (
     effectiveExternalWorktreeVisibility(
       args.repo,

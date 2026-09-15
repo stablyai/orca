@@ -20,6 +20,7 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
   // Why: forward grab's Cmd/Ctrl+C from a focused guest only when no edit field/selection is active, so native copy still works.
   protected setupGrabShortcut(browserTabId: string, guest: Electron.WebContents): void {
     const previousCleanup = this.grabShortcutCleanupByTabId.get(browserTabId)
+
     if (previousCleanup) {
       previousCleanup()
       this.grabShortcutCleanupByTabId.delete(browserTabId)
@@ -41,6 +42,7 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
   // Why: a focused webview guest is a separate process, so its key events never reach the renderer; intercept and forward app shortcuts.
   protected setupShortcutForwarding(browserTabId: string, guest: Electron.WebContents): void {
     const previousCleanup = this.shortcutForwardingCleanupByTabId.get(browserTabId)
+
     if (previousCleanup) {
       previousCleanup()
       this.shortcutForwardingCleanupByTabId.delete(browserTabId)
@@ -64,6 +66,7 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
 
   protected setupMouseWheelZoomForwarding(browserTabId: string, guest: Electron.WebContents): void {
     const previousCleanup = this.mouseWheelZoomCleanupByTabId.get(browserTabId)
+
     if (previousCleanup) {
       previousCleanup()
       this.mouseWheelZoomCleanupByTabId.delete(browserTabId)
@@ -78,6 +81,7 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
           resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
         isViewportPresetActive: () => {
           const state = this.viewportPresetActiveByTabId.get(browserTabId)
+
           return state?.guestWebContentsId === guest.id && state.active
         },
         canViewportScroll: (mouse) => this.canViewportScroll(browserTabId, mouse),

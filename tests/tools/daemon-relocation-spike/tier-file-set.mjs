@@ -35,12 +35,15 @@ function isGpuDll(name) {
  */
 export function selectTierDlls(topLevelDlls, tier) {
   const def = TIER_DEFINITIONS[tier]
+
   if (!def || def.dlls === 'none') {
     return []
   }
+
   if (def.dlls === 'all') {
     return topLevelDlls
   }
+
   return topLevelDlls.filter((e) => !isGpuDll(e.name))
 }
 
@@ -75,8 +78,10 @@ export function resolveTierFileSet(inv, tier) {
       if (requiredLabel) {
         warnings.push(`missing required input: ${requiredLabel}`)
       }
+
       return
     }
+
     ops.push({
       sourcePath: entry.path,
       destRel: toPosixRelative(appDir, entry.path),
@@ -87,6 +92,7 @@ export function resolveTierFileSet(inv, tier) {
 
   // Core: exe + runtime data blobs live next to Orca.exe in win-unpacked.
   addFile(inv.hostExe, 'Orca.exe')
+
   for (const entry of inv.runtimeData) {
     addFile(entry, entry.name)
   }

@@ -22,15 +22,19 @@ export function startTerminalTabProviderRetirement({
   const fallbackWorktreeRoute = retirementPlan.worktreeId
     ? resolveTerminalWorktreeRoute(state, retirementPlan.worktreeId)
     : { runtimeEnvironmentId: null }
+
   const retirementTasks: Promise<unknown>[] = localPtyTeardownOwnedExternally
     ? []
     : retirementPlan.localOrSshPtyIds.map(async (ptyId) => window.api.pty.kill(ptyId))
+
   const localOrSshTaskCount = retirementTasks.length
+
   if (!remoteCloseOwnedByHost) {
     for (const terminal of retirementPlan.runtimeTerminals) {
       if (!terminal.environmentId && !fallbackWorktreeRoute) {
         continue
       }
+
       const environmentId = terminal.environmentId ?? fallbackWorktreeRoute?.runtimeEnvironmentId
       retirementTasks.push(
         callRuntimeRpc(
@@ -41,6 +45,7 @@ export function startTerminalTabProviderRetirement({
       )
     }
   }
+
   if (retirementPlan.unroutablePtyIds.length > 0) {
     // Log the worktree shape, never its id, because worktree ids embed absolute paths.
     console.warn('[terminal-retirement] skipped PTYs with no resolvable owner', {
@@ -49,14 +54,17 @@ export function startTerminalTabProviderRetirement({
       count: retirementPlan.unroutablePtyIds.length
     })
   }
+
   // Close remains synchronous; provider failures cannot block ownership revocation.
   void Promise.allSettled(retirementTasks).then((results) => {
     const localOrSshFailures = results
       .slice(0, localOrSshTaskCount)
       .filter((result) => result.status === 'rejected').length
+
     const runtimeFailures = results
       .slice(localOrSshTaskCount)
       .filter((result) => result.status === 'rejected').length
+
     if (localOrSshFailures > 0 || runtimeFailures > 0) {
       console.warn('[terminal-retirement] provider teardown failed', {
         tabId,

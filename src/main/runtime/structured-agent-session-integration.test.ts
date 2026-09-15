@@ -46,9 +46,13 @@ import {
 const journals = createTrackedJournalOpener()
 
 const SESSION = 'session-integration-1'
+
 const THREAD = 'thread-integration'
+
 const TURN = 'turn-1'
+
 const WORKSPACE = 'workspace-1'
+
 // The capability set the desktop renderer advertises. Without the pending-send
 // one the host holds the reply until the send settles, which is a shim for
 // clients too old to render a pending bubble — not what this suite models.
@@ -84,6 +88,7 @@ type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
 
 function fakeCodex(): CodexScript {
   const connections: FakeConnection[] = []
+
   const openConnection = (async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
@@ -95,16 +100,21 @@ function fakeCodex(): CodexScript {
       closed: false,
       request: async (method, params) => {
         connection.calls.push({ method, params })
+
         if (method === 'thread/start') {
           return { thread: { id: THREAD, path: '/rollouts/integration.jsonl' } }
         }
+
         if (method === 'thread/resume') {
           connection.resumedThreadId = (params as { threadId: string }).threadId
+
           return { thread: { id: connection.resumedThreadId } }
         }
+
         if (method === 'turn/start') {
           return { turn: { id: TURN } }
         }
+
         if (method === 'model/list') {
           return {
             data: [
@@ -123,6 +133,7 @@ function fakeCodex(): CodexScript {
             nextCursor: null
           }
         }
+
         return {}
       },
       notify: () => {},
@@ -130,19 +141,26 @@ function fakeCodex(): CodexScript {
       respondWithError: (id, code) => connection.replies.push({ id, code }),
       close: async () => {
         connection.closed = true
+
         return true
       }
     }
+
     connections.push(connection)
+
     return connection
   }) as typeof openCodexAppServerConnection
+
   const live = (): FakeConnection => {
     const connection = connections.at(-1)
+
     if (!connection) {
       throw new Error('no codex app-server has been opened')
     }
+
     return connection
   }
+
   return {
     connections,
     openConnection,
@@ -161,6 +179,7 @@ let operations = 0
  *  its own clock and refuses a future-dated id. */
 function operationId(): string {
   operations += 1
+
   return `${Date.now()}-${operations.toString(16).padStart(32, '0')}`
 }
 
@@ -191,12 +210,14 @@ function attachParams(fence: number | null) {
     runtimeKind: 'native' as const,
     providerHandle: { kind: 'codex' as const, threadId: THREAD }
   }
+
   const envelope = {
     sessionId: SESSION,
     clientOperationId: operationId(),
     expectedRuntimeFence: fence,
     payloadFingerprint: ''
   }
+
   return {
     ...params,
     envelope: {
@@ -213,14 +234,20 @@ function attachParams(fence: number | null) {
 function createIntentParams() {
   const worktree = `id:${WORKSPACE}`
   const fields = { worktree, agent: 'codex' }
+
   return { envelope: envelope('agentSession.create', fields, null), ...fields }
 }
 
 let codex: CodexScript
+
 let root: string
+
 let dispatcher: RpcDispatcher
+
 let bootEnvironmentReads: number
+
 let codexOverrideReads: number
+
 let configuredCodexProfile: string
 
 /** Runs a one-shot method and returns its decoded reply. */
@@ -229,9 +256,11 @@ async function call(method: string, params: unknown): Promise<RpcResponse> {
   const request: RpcRequest = { id: `req-${operations}`, authToken: 'token', method, params }
   await dispatcher.dispatchStreaming(request, (raw) => replies.push(JSON.parse(raw)), CLIENT)
   const first = replies[0]
+
   if (!first) {
     throw new Error(`no reply for ${method}`)
   }
+
   return first
 }
 
@@ -241,6 +270,7 @@ async function ok<T>(method: string, params: unknown): Promise<T> {
   expect(response, `${method} failed: ${JSON.stringify(response)}`).toMatchObject({ ok: true })
   const result = (response as { result: { ok: boolean; value?: T; refusal?: unknown } }).result
   expect(result, `${method} refused: ${JSON.stringify(result.refusal)}`).toMatchObject({ ok: true })
+
   return result.value as T
 }
 
@@ -259,12 +289,14 @@ async function subscribe(
     },
     (raw) => {
       const response = JSON.parse(raw) as { ok: boolean; result?: AgentSessionSubscribeEvent }
+
       if (response.ok && response.result) {
         frames.push(response.result)
       }
     },
     CLIENT
   )
+
   return frames
 }
 
@@ -276,6 +308,7 @@ function drainStreamedEvents(): Promise<void> {
 
 function textOf(item: AgentJournalRenderItem): string {
   const body = item.body
+
   return body?.kind === 'message'
     ? body.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
     : ''
@@ -297,6 +330,7 @@ async function historyPage(
     direction,
     ...extra
   })
+
   return (response as { result: AgentSessionHistoryResult }).result
 }
 
@@ -307,6 +341,7 @@ beforeEach(async () => {
   bootEnvironmentReads = 0
   codexOverrideReads = 0
   configuredCodexProfile = 'configured'
+
   const runtime = {
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
@@ -317,6 +352,7 @@ beforeEach(async () => {
         providerHandle: _providerHandle,
         ...resolved
       } = attachParams(null)
+
       return resolved
     },
     publishStructuredAgentSessionTab: () => {},
@@ -330,6 +366,7 @@ beforeEach(async () => {
         resolveClaudeAuthPolicy: () => ({ stripAuthEnv: true }),
         resolveEnvironment: async () => {
           bootEnvironmentReads += 1
+
           return {
             PATH: '/shell/bin:/usr/bin',
             EXAMPLE_GATEWAY_TOKEN: 'shell-exported',
@@ -338,6 +375,7 @@ beforeEach(async () => {
         },
         resolveCodexOverrides: () => {
           codexOverrideReads += 1
+
           return { CODEX_PROFILE: configuredCodexProfile }
         },
         openCodexConnection: codex.openConnection,
@@ -349,6 +387,7 @@ beforeEach(async () => {
       }
     })
   }
+
   dispatcher = new RpcDispatcher({
     runtime: runtime as unknown as OrcaRuntimeService,
     methods: STRUCTURED_AGENT_SESSION_METHODS
@@ -357,6 +396,7 @@ beforeEach(async () => {
 
 function itemsOf(frames: AgentSessionSubscribeEvent[]): AgentJournalRenderItem[] {
   const items = new Map<string, AgentJournalRenderItem>()
+
   for (const frame of frames) {
     const published =
       frame.type === 'snapshot' || frame.type === 'reset'
@@ -364,23 +404,28 @@ function itemsOf(frames: AgentSessionSubscribeEvent[]): AgentJournalRenderItem[]
         : frame.type === 'batch'
           ? frame.batch.items
           : []
+
     for (const item of published) {
       items.set(item.itemId, item)
     }
   }
+
   return [...items.values()]
 }
 
 function cursorOf(frames: AgentSessionSubscribeEvent[]): { epoch: string; sequence: number } {
   for (let index = frames.length - 1; index >= 0; index -= 1) {
     const frame = frames[index] as AgentSessionSubscribeEvent
+
     if (frame.type === 'batch') {
       return frame.batch.cursor
     }
+
     if (frame.type === 'snapshot' || frame.type === 'reset') {
       return frame.page.liveCursor ?? frame.page.window.nextCursor
     }
   }
+
   throw new Error('subscription published no cursor')
 }
 
@@ -399,10 +444,12 @@ describe('a structured codex session over agentSession.*', () => {
       agent: 'codex' as const,
       providerHandle: { kind: 'codex' as const, threadId: THREAD }
     }
+
     const journal = await journals.open({
       identity,
       journalDir: journalDirectoryFor(root, identity)
     })
+
     await appendLegacyTranscriptMessages({
       journal,
       agent: 'codex',
@@ -423,6 +470,7 @@ describe('a structured codex session over agentSession.*', () => {
       'agentSession.create',
       createIntentParams()
     )
+
     expect(created.page.items.map(textOf)).toContain('legacy question')
     expect(await call('agentSession.options', { sessionId: SESSION })).toMatchObject({
       ok: true,
@@ -438,6 +486,7 @@ describe('a structured codex session over agentSession.*', () => {
       'agentSession.create',
       createIntentParams()
     )
+
     expect(created.page.items).toEqual([])
     expect(codex.live().launch.env).toMatchObject({
       CODEX_PROFILE: 'configured',
@@ -457,6 +506,7 @@ describe('a structured codex session over agentSession.*', () => {
       envelope: envelope('agentSession.send', { body }, created.fence),
       body
     })
+
     // Admission, not identity. `turn/start` proves Codex owns the message, but a
     // send coalesced into a running turn is answered with that turn's id, so
     // which message landed where is knowable only from the echo.
@@ -500,10 +550,12 @@ describe('a structured codex session over agentSession.*', () => {
     // ── create ──────────────────────────────────────────────────────────────
     // No host exists yet; `create` is the call that builds one.
     expect(getStructuredAgentSessionHost()).toBeNull()
+
     const created = await ok<{ fence: number; page: { items: unknown[] } }>(
       'agentSession.create',
       createIntentParams()
     )
+
     expect(created.page.items).toEqual([])
     expect(codex.live().calls[0]).toMatchObject({
       method: 'thread/start',
@@ -541,6 +593,7 @@ describe('a structured codex session over agentSession.*', () => {
 
     // ── send ────────────────────────────────────────────────────────────────
     const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'list files' }] }
+
     const sent = await ok<{
       clientMessageId: string
       submission: { dispatchState: string; providerItemId: string | null }
@@ -548,6 +601,7 @@ describe('a structured codex session over agentSession.*', () => {
       envelope: envelope('agentSession.send', { body }, fence),
       body
     })
+
     // Codex took the message, so the submission is pending rather than
     // "delivery unconfirmed" — it carries no identity yet, because the response
     // to a coalesced send names the running turn rather than this message.
@@ -634,6 +688,7 @@ describe('a structured codex session over agentSession.*', () => {
         optionId: 'accept'
       }
     )
+
     expect(answered.resolution).toMatchObject({ state: 'resolved', selectedOptionId: 'accept' })
     // The durable journal item id round-tripped back to the live Codex request.
     expect(codex.live().replies).toEqual([{ id: 7, result: { decision: 'accept' } }])
@@ -643,6 +698,7 @@ describe('a structured codex session over agentSession.*', () => {
       envelope: envelope('agentSession.cancel', { turnId: TURN }, fence),
       turnId: TURN
     })
+
     expect(cancelled).toEqual({ turnId: TURN, cancelled: true })
     expect(codex.live().calls.at(-1)).toMatchObject({
       method: 'turn/interrupt',
@@ -674,10 +730,12 @@ describe('a structured codex session over agentSession.*', () => {
     // fence advances, the old child is reaped, and its replacement resumes the
     // thread this session proved rather than forking a new one.
     const reaped = codex.live()
+
     const resumed = await ok<{ fence: number; page: { items: AgentJournalRenderItem[] } }>(
       'agentSession.ensure',
       attachParams(fence)
     )
+
     expect(resumed.fence).toBe(fence + 1)
     expect(reaped.closed).toBe(true)
     expect(codex.live().resumedThreadId).toBe(THREAD)
@@ -694,17 +752,22 @@ describe('a structured codex session over agentSession.*', () => {
     // ── page history ────────────────────────────────────────────────────────
     const tail = await historyPage('tail', { limit: 2 })
     expect(tail.ok).toBe(true)
+
     if (!tail.ok) {
       throw new Error('history reset')
     }
+
     expect(tail.page.hasOlder).toBe(true)
+
     const older = await historyPage('before', {
       cursor: tail.page.window.nextCursor,
       limit: 10
     })
+
     if (!older.ok) {
       throw new Error('history reset')
     }
+
     expect(older.page.hasOlder).toBe(false)
     // Every step of the conversation, in order, from the durable journal alone —
     // no page overlaps another, and nothing the live stream showed is missing.
@@ -785,22 +848,27 @@ describe('a structured codex session over agentSession.*', () => {
       delta: 'Final text before shutdown.'
     })
     const host = getStructuredAgentSessionHost()
+
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
+
     const appendEntered = Promise.withResolvers<void>()
     const appendGate = Promise.withResolvers<void>()
     const originalAppend = journal.appendItem.bind(journal)
     vi.spyOn(journal, 'appendItem').mockImplementationOnce(async (...args) => {
       appendEntered.resolve()
       await appendGate.promise
+
       return originalAppend(...args)
     })
 
     let stopped = false
+
     const stopping = stopStructuredAgentSessionRuntime().then(() => {
       stopped = true
     })
+
     await appendEntered.promise
     await new Promise<void>((resolve) => setImmediate(resolve))
     const waitedForFinalAppend = !stopped
@@ -808,6 +876,7 @@ describe('a structured codex session over agentSession.*', () => {
     await stopping
 
     expect(waitedForFinalAppend).toBe(true)
+
     const identity = {
       sessionId: SESSION,
       workspaceId: WORKSPACE,
@@ -815,10 +884,12 @@ describe('a structured codex session over agentSession.*', () => {
       agent: 'codex' as const,
       providerHandle: { kind: 'codex' as const, threadId: THREAD }
     }
+
     const reopened = await journals.open({
       identity,
       journalDir: journalDirectoryFor(root, identity)
     })
+
     expect(reopened.snapshot().items.map(textOf)).toContain('Final text before shutdown.')
     expect(
       reopened
@@ -848,9 +919,11 @@ describe('a structured codex session over agentSession.*', () => {
     await drainStreamedEvents()
 
     const host = getStructuredAgentSessionHost()
+
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
+
     const item = journal.snapshot().items.find((candidate) => candidate.body?.kind === 'tool-call')
     const bounded = item?.body?.kind === 'tool-call' ? item.body.output : undefined
     expect(bounded).toMatchObject({ truncated: true, byteLength: Buffer.byteLength(output) })
@@ -877,9 +950,11 @@ describe('a structured codex session over agentSession.*', () => {
     })
     await drainStreamedEvents()
     const host = getStructuredAgentSessionHost()
+
     const journal = (
       host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
     ).sessions.get(SESSION)!.journal
+
     const approval = journal.snapshot().items.find((item) => item.body?.kind === 'approval')
     expect(approval?.body).toMatchObject({
       kind: 'approval',

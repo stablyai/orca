@@ -28,6 +28,7 @@ export function useWorktreeJumpPaletteController({
 }) {
   const storeState = useWorktreeJumpPaletteStoreState({ visible, lingering })
   const localState = useWorktreeJumpPaletteLocalState({ createLookupGuard, visible })
+
   const paletteEvaluationSnapshot = useMemo(
     () => ({
       query: localState.paletteSearchQuery,
@@ -54,21 +55,26 @@ export function useWorktreeJumpPaletteController({
       visible
     ]
   )
+
   const paletteSearchContext = usePaletteSearchEvaluationContext(paletteEvaluationSnapshot)
   const evaluation = { paletteSearchContext }
+
   const taskUrl = useWorktreeJumpPaletteTaskUrl({
     visible,
     createWorktreeName: localState.createWorktreeName,
     taskSourceUrl: localState.taskSourceUrl,
     createLookupGuard
   })
+
   const filter = useWorktreeJumpPaletteFilter({ ...storeState, ...localState })
+
   const worktrees = useWorktreeJumpPaletteWorktrees({
     ...storeState,
     ...localState,
     ...filter,
     ...evaluation
   })
+
   const openTabs = useWorktreeJumpPaletteOpenTabs({
     ...storeState,
     ...localState,
@@ -76,6 +82,7 @@ export function useWorktreeJumpPaletteController({
     ...worktrees,
     ...evaluation
   })
+
   const recentTabs = useWorktreeJumpPaletteRecentTabs({
     ...storeState,
     ...localState,
@@ -83,12 +90,14 @@ export function useWorktreeJumpPaletteController({
     ...worktrees,
     ...openTabs
   })
+
   const projectTargets = useWorktreeJumpPaletteProjectTargets({
     ...storeState,
     ...localState,
     ...filter,
     ...worktrees
   })
+
   const quickActions = useWorktreeJumpPaletteQuickActions({
     ...storeState,
     ...localState,
@@ -96,6 +105,7 @@ export function useWorktreeJumpPaletteController({
     ...openTabs,
     ...projectTargets
   })
+
   const sections = useWorktreeJumpPaletteSections({
     ...localState,
     ...filter,
@@ -106,6 +116,7 @@ export function useWorktreeJumpPaletteController({
     ...quickActions,
     ...taskUrl
   })
+
   const listEntries = useWorktreeJumpPaletteListEntries({
     ...localState,
     ...worktrees,
@@ -113,6 +124,7 @@ export function useWorktreeJumpPaletteController({
     ...sections,
     ...taskUrl
   })
+
   const selectionLifecycle = useWorktreeJumpPaletteSelectionLifecycle({
     ...storeState,
     ...localState,
@@ -126,17 +138,20 @@ export function useWorktreeJumpPaletteController({
     ...listEntries,
     ...taskUrl
   })
+
   const selectionActions = useWorktreeJumpPaletteSelectionActions({
     ...storeState,
     ...localState,
     ...quickActions,
     ...selectionLifecycle
   })
+
   const emojiInput = useWorkspaceEmojiShortcodeInput({
     inputRef: localState.inputRef,
     onValueChange: selectionLifecycle.handleQueryChange,
     value: localState.query
   })
+
   const createAction = useWorktreeJumpPaletteCreateAction({
     ...storeState,
     ...localState,

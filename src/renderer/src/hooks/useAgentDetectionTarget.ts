@@ -39,14 +39,17 @@ export function getAgentDetectionTargetKeyForWorktree(
   if (worktreeId === null) {
     return AGENT_DETECTION_LOCAL_TARGET_KEY
   }
+
   if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
     const explicitRuntimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(
       state,
       worktreeId
     )
+
     if (explicitRuntimeEnvironmentId) {
       return `runtime:${explicitRuntimeEnvironmentId}`
     }
+
     // Why: a hostless folder can span local and SSH children, so keep the
     // ambiguity gate before applying its focused-runtime fallback.
     if (getConnectionIdFromState(state, worktreeId) === undefined) {
@@ -57,13 +60,17 @@ export function getAgentDetectionTargetKeyForWorktree(
     // must stay unresolved instead of probing the repo row's local owner.
     return undefined
   }
+
   const executionHost = parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
+
   if (executionHost?.kind === 'ssh') {
     return `ssh:${executionHost.targetId}`
   }
+
   if (executionHost?.kind === 'runtime') {
     return `runtime:${executionHost.environmentId}`
   }
+
   return getLocalAgentDetectionTargetKey(worktreeId)
 }
 
@@ -73,16 +80,20 @@ export function parseAgentDetectionTargetKey(
   if (key === undefined) {
     return undefined
   }
+
   if (key === AGENT_DETECTION_LOCAL_TARGET_KEY) {
     return { kind: 'local' }
   }
+
   if (key.startsWith(`${AGENT_DETECTION_LOCAL_TARGET_KEY}:`)) {
     const [encodedWorktreeId, encodedContextKey] = key
       .slice(`${AGENT_DETECTION_LOCAL_TARGET_KEY}:`.length)
       .split(':')
+
     if (!encodedWorktreeId || !encodedContextKey) {
       return { kind: 'local' }
     }
+
     try {
       return {
         kind: 'local',
@@ -93,12 +104,15 @@ export function parseAgentDetectionTargetKey(
       return { kind: 'local' }
     }
   }
+
   if (key.startsWith('ssh:')) {
     return { kind: 'ssh', connectionId: key.slice('ssh:'.length) }
   }
+
   if (key.startsWith('runtime:')) {
     return { kind: 'runtime', environmentId: key.slice('runtime:'.length) }
   }
+
   return { kind: 'local' }
 }
 
@@ -106,5 +120,6 @@ export function useAgentDetectionTargetForWorktree(
   worktreeId: string | null
 ): AgentDetectionTarget | undefined {
   const key = useAppStore((s) => getAgentDetectionTargetKeyForWorktree(s, worktreeId))
+
   return useMemo(() => parseAgentDetectionTargetKey(key), [key])
 }

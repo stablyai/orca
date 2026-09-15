@@ -20,6 +20,7 @@ const XTERM_SCROLL_INTENT_POINTER_TARGET_CLASSES = [
   'xterm-scrollbar',
   'xterm-slider'
 ] as const
+
 const XTERM_SCROLL_INTENT_POINTER_TARGET_SELECTOR = XTERM_SCROLL_INTENT_POINTER_TARGET_CLASSES.map(
   (className) => `.${className}`
 ).join(',')
@@ -28,6 +29,7 @@ function isTerminalScrollIntentPointerTarget(target: EventTarget | null): target
   if (typeof Element === 'undefined' || !(target instanceof Element)) {
     return false
   }
+
   // xterm's custom scrollbar uses separate thumb/track nodes from the viewport.
   return target.closest(XTERM_SCROLL_INTENT_POINTER_TARGET_SELECTOR) !== null
 }
@@ -67,25 +69,32 @@ function subscribeScrollIntentUserInputResync(
 ): { dispose: () => void } | null {
   const terminalWithInput = terminal as TerminalWithOnData
   const onData = terminalWithInput.onData
+
   if (typeof onData !== 'function') {
     return null
   }
+
   const onUserInput = terminalWithInput._core?.coreService?.onUserInput
   let pendingUserInputRevision: number | null = null
+
   try {
     const dataSubscription = onData((data: string) => {
       if (isMouseReportInput(data)) {
         pendingUserInputRevision = null
+
         if (isActive() && getTerminalScrollIntentKind(terminal) === 'pinnedViewport') {
           // Why: xterm treats mouse reports as user input and scrolls bottom
           // before onData. Restore the reading position before output follows.
           enforceTerminalCurrentScrollIntent(terminal)
         }
+
         return
       }
+
       if (typeof onUserInput === 'function') {
         const interactionRevision = pendingUserInputRevision
         pendingUserInputRevision = null
+
         if (interactionRevision !== null && isActive()) {
           resyncUserInput(interactionRevision)
         }
@@ -95,16 +104,19 @@ function subscribeScrollIntentUserInputResync(
         resyncUserInput(captureInteractionRevision())
       }
     })
+
     const userInputSubscription = onUserInput?.(() => {
       // Why: xterm emits onUserInput immediately before its matching onData.
       // Reserve order here, then let onData classify typing versus mouse.
       pendingUserInputRevision = captureInteractionRevision()
     })
+
     return {
       dispose: () => {
         if (dataSubscription && typeof dataSubscription.dispose === 'function') {
           dataSubscription.dispose()
         }
+
         if (userInputSubscription && typeof userInputSubscription.dispose === 'function') {
           userInputSubscription.dispose()
         }
@@ -126,6 +138,7 @@ export function attachTerminalScrollIntentTracking(
   if (!bindTerminalScrollIntentKey(terminal, intentKey)) {
     syncTerminalScrollIntentFromViewport(terminal)
   }
+
   let disposed = false
   const isActive = (): boolean => !disposed
   let pointerScrollActive = false
@@ -142,17 +155,23 @@ export function attachTerminalScrollIntentTracking(
     if (interactionRevision < latestCommittedInteractionRevision) {
       return false
     }
+
     latestCommittedInteractionRevision = interactionRevision
+
     if (!isTerminalScrollIntentRebuildInFlight(terminal)) {
       syncTerminalScrollIntentFromViewport(terminal, { allowBufferShrink: true })
+
       return true
     }
+
     postRebuildSync = { revision: interactionRevision, mode }
+
     if (!cancelPostRebuildSync) {
       cancelPostRebuildSync = onTerminalScrollIntentBufferRebuildComplete(terminal, (completed) => {
         cancelPostRebuildSync = null
         const pendingSync = postRebuildSync
         postRebuildSync = null
+
         if (
           completed &&
           isActive() &&
@@ -162,16 +181,19 @@ export function attachTerminalScrollIntentTracking(
           // Why: wheel/scrollbar movement during replay must be sampled from
           // the completed buffer, never from its transient cleared rows.
           const preservePinnedAtBottom = pendingSync.mode === 'preservePinnedAtBottom'
+
           if (
             preservePinnedAtBottom &&
             getTerminalScrollIntentKind(terminal) !== 'pinnedViewport'
           ) {
             markTerminalPinnedViewport(terminal)
           }
+
           syncTerminalScrollIntentFromViewport(terminal, {
             allowBufferShrink: true,
             preservePinnedAtBottom
           })
+
           if (preservePinnedAtBottom) {
             // Why: an upward wheel or scrollbar gesture against the cleared 0/0
             // buffer must not erase the durable pin. Settle after restoration so
@@ -185,8 +207,10 @@ export function attachTerminalScrollIntentTracking(
         }
       })
     }
+
     return false
   }
+
   const userInputResync = subscribeScrollIntentUserInputResync(
     terminal,
     isActive,
@@ -198,14 +222,17 @@ export function attachTerminalScrollIntentTracking(
     if (!syncFromViewportOrAfterRebuild(event.deltaY < 0 ? 'preservePinnedAtBottom' : 'sample')) {
       return
     }
+
     if (event.deltaY < 0) {
       markTerminalPinnedViewport(terminal)
       syncTerminalScrollIntentSoon(terminal, {
         preservePinnedAtBottom: true,
         shouldSync: isActive
       })
+
       return
     }
+
     syncTerminalScrollIntentSoon(terminal, { shouldSync: isActive })
   }
 
@@ -217,6 +244,7 @@ export function attachTerminalScrollIntentTracking(
     if (!pointerScrollActive) {
       return
     }
+
     pointerScrollActive = false
     syncFromViewportOrAfterRebuild('preservePinnedAtBottom')
   }
@@ -232,6 +260,7 @@ export function attachTerminalScrollIntentTracking(
   host.addEventListener('scroll', onScroll, true)
   globalThis.addEventListener?.('pointerup', onPointerDone, true)
   globalThis.addEventListener?.('pointercancel', onPointerDone, true)
+
   return {
     dispose: () => {
       // Why: native pinned output can grow baseY without a DOM scroll event;
@@ -240,6 +269,7 @@ export function attachTerminalScrollIntentTracking(
       if (isTerminalScrollIntentKeyBindingCurrent(terminal)) {
         syncTerminalScrollIntentFromViewport(terminal)
       }
+
       disposed = true
       cancelPostRebuildSync?.()
       cancelPostRebuildSync = null

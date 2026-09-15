@@ -4,12 +4,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 export type MobileSessionView = 'terminal' | 'chat'
 
 const DEFAULT_SESSION_VIEW_KEY = 'orca:defaultSessionView'
+
 const NATIVE_CHAT_TABS_PREFIX = 'orca:nativeChatTabs:'
 
 // Why: default stays terminal so native chat remains strictly opt-in.
 export const DEFAULT_SESSION_VIEW: MobileSessionView = 'terminal'
 
 let defaultViewWriteBarrier: Promise<void> | null = null
+
 const overrideUpdateBarriers = new Map<string, Promise<void>>()
 
 function sessionViewOverridesKey(hostId: string, worktreeId: string): string {
@@ -31,8 +33,10 @@ export type DefaultSessionViewPreference = {
 /** Reads the raw per-device default and whether its storage key exists. */
 export async function readDefaultSessionViewPreference(): Promise<DefaultSessionViewPreference> {
   await defaultViewWriteBarrier
+
   try {
     const raw = await AsyncStorage.getItem(DEFAULT_SESSION_VIEW_KEY)
+
     return {
       value: raw === 'chat' || raw === 'terminal' ? raw : null,
       loaded: true,
@@ -54,9 +58,11 @@ export function saveDefaultSessionView(view: MobileSessionView): Promise<void> {
   const write = (defaultViewWriteBarrier ?? Promise.resolve()).then(() =>
     AsyncStorage.setItem(DEFAULT_SESSION_VIEW_KEY, view)
   )
+
   const barrier = write.catch(() => undefined)
   defaultViewWriteBarrier = barrier
   void barrier.then(() => clearDefaultViewWriteBarrier(barrier))
+
   return write
 }
 
@@ -69,21 +75,26 @@ async function readSessionViewOverridesStorage(
   key: string
 ): Promise<SessionViewOverridesPreference> {
   let raw: string | null
+
   try {
     raw = await AsyncStorage.getItem(key)
   } catch {
     return { overrides: new Map(), loaded: false }
   }
+
   if (!raw) {
     return { overrides: new Map(), loaded: true }
   }
+
   let parsed: unknown
+
   try {
     parsed = JSON.parse(raw) as unknown
   } catch {
     // Invalid preference data is safe to replace on the next user mutation.
     return { overrides: new Map(), loaded: true }
   }
+
   // Legacy format: an array of tab ids that were showing native chat.
   if (Array.isArray(parsed)) {
     return {
@@ -95,13 +106,16 @@ async function readSessionViewOverridesStorage(
       loaded: true
     }
   }
+
   if (parsed && typeof parsed === 'object') {
     const entries = Object.entries(parsed as Record<string, unknown>).filter(
       (entry): entry is [string, MobileSessionView] =>
         entry[1] === 'terminal' || entry[1] === 'chat'
     )
+
     return { overrides: new Map(entries), loaded: true }
   }
+
   return { overrides: new Map(), loaded: true }
 }
 
@@ -122,6 +136,7 @@ export async function readSessionViewOverridesPreference(
 ): Promise<SessionViewOverridesPreference> {
   const key = sessionViewOverridesKey(hostId, worktreeId)
   await overrideUpdateBarriers.get(key)
+
   return readSessionViewOverridesStorage(key)
 }
 
@@ -134,18 +149,23 @@ export async function updateSessionViewOverride(
 ): Promise<void> {
   const key = sessionViewOverridesKey(hostId, worktreeId)
   const previous = overrideUpdateBarriers.get(key) ?? Promise.resolve()
+
   const update = previous.then(async () => {
     const current = await readSessionViewOverridesStorage(key)
+
     // Why: a transient read failure must not replace valid saved siblings with
     // a partial map containing only the latest tab.
     if (!current.loaded) {
       throw new Error('Session view overrides could not be read')
     }
+
     current.overrides.set(tabId, view)
     await AsyncStorage.setItem(key, JSON.stringify(Object.fromEntries(current.overrides)))
   })
+
   const barrier = update.catch(() => undefined)
   overrideUpdateBarriers.set(key, barrier)
+
   try {
     await update
   } finally {

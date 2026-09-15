@@ -9,12 +9,14 @@ export async function listRuntimeMarkdownDocuments(
   rootPath: string
 ): Promise<MarkdownDocument[]> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind !== 'environment' || !context.worktreeId) {
     return window.api.fs.listMarkdownDocuments({
       rootPath,
       connectionId: context.connectionId
     })
   }
+
   return callRuntimeRpc<MarkdownDocument[]>(
     target,
     'files.listMarkdownDocuments',
@@ -28,13 +30,16 @@ export async function statRuntimePath(
   absolutePath: string
 ): Promise<{ size: number; isDirectory: boolean; mtime: number }> {
   const remoteArgs = getRemoteFileArgs(context, absolutePath)
+
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
+
     return window.api.fs.stat({
       filePath: absolutePath,
       connectionId: context.connectionId
     })
   }
+
   return callRuntimeRpc<{ size: number; isDirectory: boolean; mtime: number }>(
     remoteArgs.target,
     'files.stat',
@@ -45,6 +50,7 @@ export async function statRuntimePath(
 
 export function isMissingRuntimePathError(error: unknown): boolean {
   const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase()
+
   return (
     message.includes('enoent') || message.includes('not found') || message.includes('no such file')
   )
@@ -56,8 +62,10 @@ export async function runtimePathExists(
   expectedEnvironmentPairingRevision?: number
 ): Promise<boolean> {
   const remoteArgs = getRemoteFileArgs(context, absolutePath)
+
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
+
     return window.api.fs.pathExists({
       filePath: absolutePath,
       connectionId: context.connectionId
@@ -71,11 +79,13 @@ export async function runtimePathExists(
       { worktree: remoteArgs.worktreeSelector, relativePath: remoteArgs.relativePath },
       { timeoutMs: 15_000, expectedEnvironmentPairingRevision }
     )
+
     return true
   } catch (err) {
     if (isMissingRuntimePathError(err)) {
       return false
     }
+
     throw err
   }
 }

@@ -17,6 +17,7 @@ export function normalizeDevinEvent(
   if (eventName === 'SessionStart') {
     // Why: Devin emits SessionStart on idle TUI open/resume; mapping it to 'working' showed a spinner before the user typed, so only UserPromptSubmit/tool activity may create a row.
     clearPaneTurnCacheState(state, paneKey)
+
     return null
   }
 

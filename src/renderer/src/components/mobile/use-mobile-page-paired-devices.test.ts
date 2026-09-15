@@ -31,12 +31,14 @@ import { useMobilePagePairedDevices } from './use-mobile-page-paired-devices'
 type HookApi = ReturnType<typeof useMobilePagePairedDevices>
 
 let latest: HookApi | null = null
+
 let latestStep: StepIndex | null = null
 
 function Probe(): null {
   const [stepIdx, setStepIdx] = useState<StepIndex>(0)
   latestStep = stepIdx
   latest = useMobilePagePairedDevices({ stepIdx, setStepIdx })
+
   return null
 }
 

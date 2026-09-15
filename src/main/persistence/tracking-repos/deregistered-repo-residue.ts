@@ -19,6 +19,7 @@ function ownerKeyRepoIds(ownerKey: string | null | undefined): string[] {
   return ownerKey
     ? ownerKeyWorktreeIds(ownerKey).flatMap((worktreeId) => {
         const repoId = splitWorktreeId(worktreeId)?.repoId
+
         return repoId ? [repoId] : []
       })
     : []
@@ -34,38 +35,47 @@ function ownerKeyRepoIds(ownerKey: string | null | undefined): string[] {
  */
 export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
   const liveRepoIds = new Set(state.repos.map((repo) => repo.id))
+
   const retainOwner = (ownerKey: string | null | undefined): void => {
     for (const repoId of ownerKeyRepoIds(ownerKey)) {
       liveRepoIds.add(repoId)
     }
   }
+
   // `owners` goes unread: the walker only ever calls `addOwner`.
   const retainCollector = { owners: new Set<string>(), addOwner: retainOwner }
+
   for (const [hostId, session] of Object.entries(state.workspaceSessionsByHostId ?? {})) {
     if (session && isPairedHost(hostId)) {
       addWorkspaceSessionWorktreeOwners(session, retainCollector)
     }
   }
+
   for (const [worktreeId, meta] of Object.entries(state.worktreeMeta)) {
     if (isPairedHost(meta.hostId)) {
       retainOwner(worktreeId)
     }
   }
+
   for (const alias of Object.keys(state.worktreeIdentityAliases ?? {})) {
     if (isPairedHost(getExecutionHostIdFromWorktreeHostIdentity(alias))) {
       retainOwner(getWorktreeIdFromHostIdentity(alias))
     }
   }
+
   const orphanRepoIds = new Set<string>()
+
   // Only a full `<repoId>::<path>` locator seeds the set. A bare key -- a folder workspace id, a
   // repo-keyed topology revision, a test-shaped locator -- cannot be told apart from a repo id, and
   // guessing wrong here deletes live session state.
   const addWorktreeId = (worktreeId: string | null | undefined): void => {
     const repoId = worktreeId ? splitWorktreeId(worktreeId)?.repoId : undefined
+
     if (repoId && !liveRepoIds.has(repoId)) {
       orphanRepoIds.add(repoId)
     }
   }
+
   /**
    * Seed from an owner key, which can read as two different locators (see `ownerKeyWorktreeIds`).
    * All or nothing: if either reading names a live repo the key is that repo's, and seeding the
@@ -73,6 +83,7 @@ export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
    */
   const addOwnerKey = (ownerKey: string): void => {
     const repoIds = ownerKeyRepoIds(ownerKey)
+
     if (repoIds.length > 0 && repoIds.every((repoId) => !liveRepoIds.has(repoId))) {
       for (const repoId of repoIds) {
         orphanRepoIds.add(repoId)
@@ -86,30 +97,37 @@ export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
   for (const worktreeId of Object.keys(state.worktreeMeta)) {
     addWorktreeId(worktreeId)
   }
+
   for (const alias of Object.keys(state.worktreeIdentityAliases ?? {})) {
     addWorktreeId(getWorktreeIdFromHostIdentity(alias))
   }
+
   for (const [childId, lineage] of Object.entries(state.worktreeLineageById)) {
     addWorktreeId(childId)
     addWorktreeId(lineage.parentWorktreeId)
   }
+
   for (const [childKey, lineage] of Object.entries(state.workspaceLineageByChildKey)) {
     addOwnerKey(childKey)
     addOwnerKey(lineage.parentWorkspaceKey)
   }
+
   for (const selections of Object.values(state.mobileClientTabSelectionsByDeviceId ?? {})) {
     for (const worktreeId of Object.keys(selections)) {
       addWorktreeId(worktreeId)
     }
   }
+
   const sessions: (WorkspaceSessionState | undefined)[] = [
     state.workspaceSession,
     ...Object.values(state.workspaceSessionsByHostId ?? {})
   ]
+
   for (const session of sessions) {
     if (!session) {
       continue
     }
+
     for (const field of SESSION_FIELDS_PRUNED_BY_OWNER_KEY) {
       for (const ownerKey of Object.keys(
         (session[field] as Record<string, unknown> | undefined) ?? {}
@@ -117,12 +135,15 @@ export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
         addOwnerKey(ownerKey)
       }
     }
+
     for (const ownerKey of Object.keys(session.tabsByWorktree ?? {})) {
       addOwnerKey(ownerKey)
     }
+
     for (const ownerKey of Object.keys(session.browserTabsByWorktree ?? {})) {
       addOwnerKey(ownerKey)
     }
+
     // Pruned by bespoke rules rather than by owner key, so the loop above never reaches them.
     for (const ownerKey of [
       session.activeWorktreeId,
@@ -133,15 +154,18 @@ export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
         addOwnerKey(ownerKey)
       }
     }
+
     // Not seeded from `terminalTopologyRevisionByRepoId`: its keys are bare repo ids by contract,
     // and a bare key is exactly what `addWorktreeId` refuses to trust. Rows there are removed once
     // any locator seeds their repo id, which every repo that ever opened a terminal has.
     for (const record of Object.values(session.sleepingAgentSessionsByPaneKey ?? {})) {
       addWorktreeId(record.worktreeId)
     }
+
     for (const tombstone of Object.values(session.terminalSurfaceTombstonesByPaneKey ?? {})) {
       addWorktreeId(tombstone.worktreeId)
     }
   }
+
   return orphanRepoIds
 }

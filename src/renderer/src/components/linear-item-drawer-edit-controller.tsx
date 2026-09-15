@@ -35,6 +35,7 @@ export function useLinearIssueEditController({
     labelIds: localLabelIds,
     labels: localLabels
   } = editState
+
   const [estimateInput, setEstimateInput] = useState(() => formatLinearEstimateInput(localEstimate))
 
   const teamId = issue.team?.id || null
@@ -45,6 +46,7 @@ export function useLinearIssueEditController({
   const handleEstimatePopoverOpenChange = useCallback(
     (open: boolean) => {
       setEstimatePopoverOpen(open)
+
       if (open) {
         setEstimateInput(formatLinearEstimateInput(localEstimate))
       }
@@ -55,6 +57,7 @@ export function useLinearIssueEditController({
   const handleStateChange = useCallback(
     (stateId: string) => {
       const newState = states.data.find((s) => s.id === stateId)
+
       if (!newState) {
         return
       }
@@ -161,12 +164,15 @@ export function useLinearIssueEditController({
 
   const handleEstimateSubmit = useCallback(() => {
     const trimmed = estimateInput.trim()
+
     if (!trimmed) {
       handleEstimateChange(null)
+
       return
     }
 
     const estimate = Number(trimmed)
+
     if (!Number.isInteger(estimate) || estimate < 0) {
       toast.error(
         translate(
@@ -174,6 +180,7 @@ export function useLinearIssueEditController({
           'Estimate must be a non-negative integer'
         )
       )
+
       return
     }
 
@@ -185,9 +192,11 @@ export function useLinearIssueEditController({
       const assigneeId = memberId === '__unassign__' ? null : memberId
       const member = members.data.find((m) => m.id === memberId)
       const prevAssignee = localAssignee
+
       const newAssignee = member
         ? { id: member.id, displayName: member.displayName, avatarUrl: member.avatarUrl }
         : undefined
+
       run('assignee', {
         mutate: () =>
           linearUpdateIssue(providerSettings, issue.id, { assigneeId }, issue.workspaceId),
@@ -224,9 +233,11 @@ export function useLinearIssueEditController({
       const prevLabelIds = localLabelIds
       const prevLabels = localLabels
       const isRemoving = prevLabelIds.includes(labelId)
+
       const newLabelIds = isRemoving
         ? prevLabelIds.filter((id) => id !== labelId)
         : [...prevLabelIds, labelId]
+
       const newLabels = newLabelIds
         .map((id) => labels.data.find((l) => l.id === id)?.name)
         .filter((n): n is string => !!n)
@@ -279,11 +290,13 @@ export function useLinearIssueEditController({
   const currentStateId = states.data.find(
     (s) => s.name === localState.name && s.type === localState.type
   )?.id
+
   const statePending = isPending('state')
   const priorityPending = isPending('priority')
   const estimatePending = isPending('estimate')
   const assigneePending = isPending('assignee')
   const labelsPending = isPending('labels')
+
   const labelSummary =
     localLabels.length === 0
       ? '+ Label'

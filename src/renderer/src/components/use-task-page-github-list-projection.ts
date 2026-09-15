@@ -11,6 +11,7 @@ import {
   getTaskPageRepoSourceContext
 } from './task-page-source-context'
 import { sameOptionalGitHubOwnerRepo } from './task-page-github-review-model'
+
 export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetadataModel) {
   const {
     repoMap,
@@ -29,6 +30,7 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     activeGithubTaskKind,
     githubWorkItemMutation
   } = model
+
   // Why: defense-in-depth — keep stale cache rows from leaking across the issue/PR split tabs.
   const applyTypeFilter = useCallback(
     (items: GitHubWorkItem[]) => {
@@ -38,11 +40,14 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     },
     [activeGithubTaskKind]
   )
+
   const currentPageItems = useMemo(() => pages[currentPage] ?? [], [pages, currentPage])
+
   const typeFilteredCurrentPageItems = useMemo(
     () => applyTypeFilter(currentPageItems),
     [applyTypeFilter, currentPageItems]
   )
+
   // Why: soft-hide keeps membership-exit rows in pages for rollback/cursors but
   // removes them from the visible table (sticky ∪ pending membership).
   const filteredWorkItems = useMemo(
@@ -55,18 +60,23 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
       ),
     [githubWorkItemMutation.softHiddenItemKeys, typeFilteredCurrentPageItems]
   )
+
   const softHiddenVisibleCount = useMemo(
     () => typeFilteredCurrentPageItems.length - filteredWorkItems.length,
     [filteredWorkItems.length, typeFilteredCurrentPageItems.length]
   )
+
   const showGitHubTaskSkeletons = tasksFiltering || (tasksLoading && filteredWorkItems.length === 0)
+
   const loadedGitHubAuthorLogins = useMemo(() => {
     const seen = new Set<string>()
     const logins: string[] = []
+
     for (const page of pages) {
       if (!page) {
         continue
       }
+
       for (const item of page) {
         if (
           !item.author ||
@@ -74,38 +84,51 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
         ) {
           continue
         }
+
         const key = item.author.toLowerCase()
+
         if (seen.has(key)) {
           continue
         }
+
         seen.add(key)
         logins.push(item.author)
       }
     }
+
     return logins
   }, [activeGithubTaskKind, pages])
+
   const primaryGithubFilterSlug = useMemo(() => {
     for (const state of perRepoSourceState) {
       const source = activeGithubTaskKind === 'prs' ? state.sources?.prs : state.sources?.issues
+
       if (source) {
         return source
       }
     }
+
     return null
   }, [activeGithubTaskKind, perRepoSourceState])
+
   const showPRManagementColumns = activeGithubTaskKind === 'prs'
+
   const githubTaskGridClass = showPRManagementColumns
     ? GITHUB_PR_TASK_GRID_CLASS
     : GITHUB_TASK_GRID_CLASS
+
   const ensurePRChecksLoaded = useCallback(
     (item: GitHubWorkItem): void => {
       if (item.type !== 'pr' || item.checksSummary) {
         return
       }
+
       const repo = repoMap.get(item.repoId)
+
       if (!repo) {
         return
       }
+
       const requestedHeadSha = item.headSha
       const requestedPRRepo = item.prRepo ?? null
       void fetchPRChecks(
@@ -136,26 +159,32 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     },
     [fetchPRChecks, patchTaskPageWorkItemRows, repoMap]
   )
+
   useEffect(() => {
     if (taskSource !== 'github' || githubMode !== 'items' || !showPRManagementColumns) {
       return
     }
+
     for (const item of filteredWorkItems.slice(0, PR_CHECKS_EAGER_PREFETCH_LIMIT)) {
       ensurePRChecksLoaded(item)
     }
   }, [ensurePRChecksLoaded, filteredWorkItems, githubMode, showPRManagementColumns, taskSource])
   let lastLoadedPageIndex = 0
+
   for (let index = 0; index < pages.length; index += 1) {
     if (pages[index] !== null) {
       lastLoadedPageIndex = index
     }
   }
+
   // Why: when counts fail, a full loaded page is enough evidence to expose one more page without faking empty results.
   const lastLoadedPageFull =
     (pages[lastLoadedPageIndex]?.length ?? 0) >= Math.max(1, githubPageSize)
+
   const fallbackTotalPages = lastLoadedPageFull
     ? Math.max(pages.length, lastLoadedPageIndex + 2)
     : Math.max(1, pages.length)
+
   const totalPages = deriveAdvertisedTotalPages({
     loadedPages: pages.length,
     countedTotalPages,
@@ -181,6 +210,7 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     fallbackTotalPages: typeof fallbackTotalPages
     totalPages: typeof totalPages
   }
+
   nextModel.applyTypeFilter = applyTypeFilter
   nextModel.currentPageItems = currentPageItems
   nextModel.typeFilteredCurrentPageItems = typeFilteredCurrentPageItems
@@ -196,6 +226,8 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
   nextModel.lastLoadedPageFull = lastLoadedPageFull
   nextModel.fallbackTotalPages = fallbackTotalPages
   nextModel.totalPages = totalPages
+
   return nextModel
 }
+
 export type TaskPageGitHubListProjectionModel = ReturnType<typeof useTaskPageGitHubListProjection>

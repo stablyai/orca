@@ -67,12 +67,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('does not mask OAuth usage rate limits with the PTY fallback', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({
         claudeAiOauth: {
@@ -118,12 +120,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('omits retryAtMs when a 429 has no Retry-After header', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({
         claudeAiOauth: {
@@ -153,12 +157,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('uses CLI fallback for OAuth auth failures when automatic repair is safe', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({
         claudeAiOauth: {
@@ -195,12 +201,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('re-reads credentials and retries OAuth once after CLI repair', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict)
       .mockResolvedValueOnce(
         JSON.stringify({
@@ -271,6 +279,7 @@ describe('fetchClaudeRateLimits', () => {
 
   it('explains auth failures when a live Claude terminal owns managed refresh', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
@@ -278,6 +287,7 @@ describe('fetchClaudeRateLimits', () => {
       managedRefreshDeferredByLivePty: true,
       provenance: 'managed:account-1'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({
         claudeAiOauth: {
@@ -313,6 +323,7 @@ describe('fetchClaudeRateLimits', () => {
 
   it('does not start CLI fallback when live Claude owns managed refresh and no token is readable', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
@@ -338,12 +349,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('does not start the PTY fallback when disabled for background fetches', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({
         claudeAiOauth: {
@@ -368,12 +381,14 @@ describe('fetchClaudeRateLimits', () => {
 
   it('does not start the PTY fallback for refresh-only credentials when disabled', async () => {
     const configDir = '/Users/test/.claude'
+
     const authPreparation: ClaudeRuntimeAuthPreparation = {
       configDir,
       envPatch: { CLAUDE_CONFIG_DIR: configDir },
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentialsStrict).mockResolvedValueOnce(
       JSON.stringify({
         claudeAiOauth: {
@@ -423,6 +438,7 @@ describe('fetchClaudeRateLimits', () => {
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(fetchViaPty).mockResolvedValueOnce({
       provider: 'claude',
       session: null,
@@ -470,6 +486,7 @@ describe('fetchClaudeRateLimits', () => {
       stripAuthEnv: false,
       provenance: 'system'
     }
+
     vi.mocked(readActiveClaudeKeychainCredentials).mockRejectedValueOnce(
       new Error('security timed out after 3000ms')
     )

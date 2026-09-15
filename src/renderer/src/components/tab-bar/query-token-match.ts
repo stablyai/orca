@@ -15,18 +15,23 @@ export function normalizeMatchQuery(value: string): string {
 function foldMatchQueryWhitespace(value: string): string {
   let normalized = ''
   let pendingWhitespace = false
+
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index)
+
     if (isMatchQueryWhitespace(code)) {
       pendingWhitespace = normalized.length > 0
       continue
     }
+
     if (pendingWhitespace) {
       normalized += ' '
       pendingWhitespace = false
     }
+
     normalized += value.charAt(index)
   }
+
   return normalized
 }
 
@@ -56,19 +61,23 @@ export function tokenizeMatchValue(value: string): string[] {
 // token wins over a prefix, which wins over a mid-string substring.
 export function scoreQueryTokens(query: string, values: readonly string[]): QueryTokenMatch {
   const candidateTokens = values.flatMap(tokenizeMatchValue)
+
   if (candidateTokens.length === 0) {
     return { allTokensMatched: false, score: 0 }
   }
 
   const queryTokens = tokenizeMatchValue(query)
+
   if (queryTokens.length === 0) {
     return { allTokensMatched: false, score: 0 }
   }
 
   let score = 0
   let allTokensMatched = true
+
   for (const queryToken of queryTokens) {
     let best = 0
+
     for (const candidateToken of candidateTokens) {
       if (candidateToken === queryToken) {
         best = Math.max(best, 3)
@@ -78,10 +87,13 @@ export function scoreQueryTokens(query: string, values: readonly string[]): Quer
         best = Math.max(best, 1)
       }
     }
+
     if (best === 0) {
       allTokensMatched = false
     }
+
     score += best
   }
+
   return { allTokensMatched, score }
 }

@@ -7,6 +7,7 @@ const { httpRequestMock, httpsRequestMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node:http', () => ({ request: httpRequestMock }))
+
 vi.mock('node:https', () => ({ request: httpsRequestMock }))
 
 import { MAX_RESPONSE_BYTES, postJsonForJson } from './diagnostic-upload-http'
@@ -29,6 +30,7 @@ describe('diagnostic upload HTTP', () => {
     response.statusCode = 503
     httpRequestMock.mockImplementationOnce((_options, callback) => {
       callback(response)
+
       return request
     })
     const result = postJsonForJson('http://diagnostics.example/upload', {}, 1000)
@@ -44,6 +46,7 @@ describe('diagnostic upload HTTP', () => {
     const response = new FakeResponse()
     httpRequestMock.mockImplementationOnce((_options, callback) => {
       callback(response)
+
       return request
     })
 
@@ -64,6 +67,7 @@ describe('diagnostic upload HTTP', () => {
     const response = new FakeResponse()
     httpRequestMock.mockImplementationOnce((_options, callback) => {
       callback(response)
+
       return request
     })
 

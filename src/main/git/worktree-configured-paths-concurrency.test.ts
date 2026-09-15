@@ -28,6 +28,7 @@ import { resolveWorktreeIncludePaths } from './worktree-include-file'
 import { resolveWorktreeSharedDirectories } from './worktree-shared-directories'
 
 const PATH_COUNT = 16
+
 const configuredPaths = Array.from({ length: PATH_COUNT }, (_, index) => `path-${index}`)
 
 async function delayedProbe<T>(value: T): Promise<T> {
@@ -35,6 +36,7 @@ async function delayedProbe<T>(value: T): Promise<T> {
   concurrency.max = Math.max(concurrency.max, concurrency.active)
   await new Promise((resolve) => setTimeout(resolve, 5))
   concurrency.active -= 1
+
   return value
 }
 
@@ -69,6 +71,7 @@ describe('configured worktree path probe concurrency', () => {
       if (path === includePath) {
         return { isFile: () => true, size: 1 }
       }
+
       return delayedProbe({})
     })
     readFileMock.mockResolvedValue(configuredPaths.join('\n'))

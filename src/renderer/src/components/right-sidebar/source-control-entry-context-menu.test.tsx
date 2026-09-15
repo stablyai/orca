@@ -9,6 +9,7 @@ const items = vi.hoisted(() => ({ list: [] as ItemProps[] }))
 
 vi.mock('@/components/ui/context-menu', async () => {
   const React_ = await import('react')
+
   const passthrough = ({ children }: { children?: React.ReactNode }) =>
     React_.createElement(React_.Fragment, null, children)
 
@@ -17,6 +18,7 @@ vi.mock('@/components/ui/context-menu', async () => {
     ContextMenuContent: passthrough,
     ContextMenuItem: (props: ItemProps) => {
       items.list.push(props)
+
       return React_.createElement(React_.Fragment, null, props.children)
     },
     ContextMenuSeparator: () => null,

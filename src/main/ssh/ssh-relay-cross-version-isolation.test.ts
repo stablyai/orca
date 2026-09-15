@@ -71,6 +71,7 @@ function makeMockConnection(): SshConnection {
     // Why: production attaches and removes real SFTP/write-stream listeners, so the fake must be an emitter.
     sftp: vi.fn().mockImplementation(() => {
       const sftp = new EventEmitter()
+
       return Promise.resolve(
         Object.assign(sftp, {
           mkdir: vi.fn((_p: string, cb: (err: Error | null) => void) => cb(null)),
@@ -83,6 +84,7 @@ function makeMockConnection(): SshConnection {
           ),
           createWriteStream: vi.fn().mockImplementation(() => {
             const ws = new EventEmitter()
+
             return Object.assign(ws, {
               end: vi.fn(() => setTimeout(() => ws.emit('close'), 0))
             })
@@ -114,50 +116,65 @@ describe('cross-version isolation', () => {
           '__ORCA_UPLOAD_STAGE_SLOT__.sftp-namespace-00000000000000000000000000000000:slot-0'
         )
       }
+
       if (command.includes('__ORCA_UPLOAD_STAGE_PROMOTION__')) {
         return Promise.resolve(
           '__ORCA_UPLOAD_STAGE_PROMOTION__.sftp-namespace-00000000000000000000000000000000:PROMOTED'
         )
       }
+
       if (command.includes('__ORCA_REMOTE_PLATFORM__')) {
         return Promise.resolve('__ORCA_REMOTE_PLATFORM__ Linux x86_64')
       }
+
       if (command === 'echo $HOME') {
         return Promise.resolve('/home/u')
       }
+
       if (command.includes("-name 'relay-0.1.0+222222222222.upload-*'")) {
         return Promise.resolve('')
       }
+
       if (command.includes('relay-watcher.js') && command.includes('.install-complete')) {
         return Promise.resolve('MISSING')
       }
+
       if (command.includes('.gc-claim') && command.includes('echo LOCKED || echo OPEN')) {
         return Promise.resolve('OPEN')
       }
+
       if (command.startsWith('if mkdir ') && command.includes('.install-lock')) {
         return Promise.resolve('OK')
       }
+
       if (command.includes('ORCA-NPTY-PROBE-OK')) {
         return Promise.resolve('ORCA-NPTY-PROBE-OK\n')
       }
+
       if (command.includes('process.stdout.write("READY")')) {
         return Promise.resolve('READY')
       }
+
       if (command.includes('test -S') && command.includes('echo ALIVE || echo DEAD')) {
         return Promise.resolve('DEAD')
       }
+
       if (command.includes('__ORCA_RELAY_GC_FIND_STATUS__')) {
         return Promise.resolve('relay-0.1.0+111111111111\nrelay-0.1.0+222222222222\n')
       }
+
       if (command.includes('relay-0.1.0+111111111111/.install-lock')) {
         return Promise.resolve('OPEN')
       }
+
       if (command.includes('relay-0.1.0+111111111111/.install-complete')) {
         return Promise.resolve('COMPLETE')
       }
+
       if (command.includes('relay-0.1.0+111111111111') && command.includes('relay-*.sock')) {
         return Promise.resolve('ALIVE')
       }
+
       return Promise.resolve('')
     })
 
@@ -179,7 +196,9 @@ describe('cross-version isolation', () => {
       .mocked(conn.exec)
       .mock.calls.map(([c]) => c as string)
       .filter((c) => c.includes('--sock-path'))
+
     expect(launchAndConnectCmds.length).toBeGreaterThan(0)
+
     for (const cmd of launchAndConnectCmds) {
       expect(cmd).toContain('relay-0.1.0+222222222222')
       expect(cmd).not.toContain('relay-0.1.0+111111111111')
@@ -189,6 +208,7 @@ describe('cross-version isolation', () => {
     const v1RemoveCmds = allCmds.filter(
       (c) => c.includes('rm -rf') && c.includes('relay-0.1.0+111111111111')
     )
+
     expect(v1RemoveCmds).toHaveLength(0)
 
     // (d) blanket isolation: every command that mentions v1hash MUST be a
@@ -197,6 +217,7 @@ describe('cross-version isolation', () => {
     // This prevents a future refactor that accidentally writes to the v1 dir
     // (e.g. shared install-complete, upload over symlink) from passing.
     const v1Refs = allCmds.filter((c) => c.includes('relay-0.1.0+111111111111'))
+
     for (const cmd of v1Refs) {
       const isReadOnlyProbe =
         /^\s*ls\b/.test(cmd) ||
@@ -205,6 +226,7 @@ describe('cross-version isolation', () => {
         /\btest -f\b/.test(cmd) ||
         /\btest -S\b/.test(cmd) ||
         /\bfor f in .*\.sock\b/.test(cmd)
+
       expect(isReadOnlyProbe, `unexpected v1 reference: ${cmd}`).toBe(true)
     }
   })

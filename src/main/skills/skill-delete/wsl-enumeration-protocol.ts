@@ -67,10 +67,12 @@ export class WslEnumerationProtocolError extends Error {
 
 function splitRecords(output: string): string[] {
   const fields = output.split('\0')
+
   // A trailing delimiter always leaves one empty field; anything else is data.
   if (fields.at(-1) === '') {
     fields.pop()
   }
+
   return fields
 }
 
@@ -91,34 +93,44 @@ export function parseWslListEntriesOutput(
   const listings = new Map<string, SkillDirectoryEntry[]>(
     directories.map((directory) => [directory, []])
   )
+
   const fields = splitRecords(output)
   let current: SkillDirectoryEntry[] | undefined
   let index = 0
+
   while (index < fields.length) {
     const record = fields[index++]
+
     if (record === 'D') {
       const directory = directories[Number.parseInt(fields[index++] ?? '', 10)]
+
       if (directory === undefined) {
         throw new WslEnumerationProtocolError()
         // `X`: the guest could not read the directory. Refusing the whole call is
         // the same contract as the native listEntries throwing on EACCES — only a
         // confirmed absence may read as an empty directory.
       }
+
       current = listings.get(directory)
       continue
     }
+
     if (record !== 'E') {
       throw new WslEnumerationProtocolError()
     }
+
     const name = fields[index++]
     const kind = fields[index++]
+
     // An `E` before any `D` would silently vanish, and a listing short of its
     // real contents reads to the planner as an empty directory it may remove.
     if (name === undefined || !isEntryKind(kind) || current === undefined) {
       throw new WslEnumerationProtocolError()
     }
+
     current.push({ name, kind })
   }
+
   return listings
 }
 
@@ -129,17 +141,21 @@ export function parseWslInspectPathsOutput(
   const inspections = new Map<string, SkillPathInspection>()
   const fields = splitRecords(output)
   let index = 0
+
   while (index < fields.length) {
     if (fields[index++] !== 'P') {
       throw new WslEnumerationProtocolError()
     }
+
     const path = paths[Number.parseInt(fields[index++] ?? '', 10)]
     const kind = fields[index++]
     const resolved = fields[index++]
     const updated = Number.parseInt(fields[index++] ?? '', 10)
+
     if (path === undefined || !isEntryKind(kind) || resolved === undefined) {
       throw new WslEnumerationProtocolError()
     }
+
     inspections.set(path, {
       kind,
       realpath: resolved === '' ? null : resolved,
@@ -147,5 +163,6 @@ export function parseWslInspectPathsOutput(
       mtimeMs: Number.isFinite(updated) ? updated * 1000 : null
     })
   }
+
   return inspections
 }

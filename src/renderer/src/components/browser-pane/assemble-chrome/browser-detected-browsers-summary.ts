@@ -13,12 +13,14 @@ function formatLabelList(prefix: string, labels: readonly string[], maxNamed: nu
   if (labels.length === 0) {
     return `${prefix} file.`
   }
+
   if (labels.length <= maxNamed) {
     return `${prefix}: ${labels.join(', ')}.`
   }
 
   const named = labels.slice(0, maxNamed)
   const remaining = labels.length - maxNamed
+
   return `${prefix}: ${named.join(', ')}, +${remaining} more.`
 }
 

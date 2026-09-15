@@ -32,6 +32,7 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
       }
     }
   ]
+
   if (args.hostCapabilities.includes(MOBILE_AI_VAULT_CAPABILITY)) {
     actions.push({
       label: 'Agent Session History',
@@ -46,5 +47,6 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
       }
     })
   }
+
   return actions
 }

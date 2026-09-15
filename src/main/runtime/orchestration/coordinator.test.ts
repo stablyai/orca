@@ -44,6 +44,7 @@ function createMockRuntime(): CoordinatorRuntime & {
     },
     async sendTerminalAgentPrompt(handle: string, prompt: string) {
       mock.sentMessages.push({ handle, text: prompt })
+
       return { handle, accepted: true, bytesWritten: 0 }
     },
     async listTerminals() {
@@ -54,6 +55,7 @@ function createMockRuntime(): CoordinatorRuntime & {
       mock.createdTerminals.push(handle)
       mock.createdTerminalOptions.push(opts ?? {})
       mock.terminals.push({ handle, worktreeId: 'wt1', connected: true, writable: true })
+
       return { handle, worktreeId: 'wt1', title: opts?.title ?? '' }
     },
     async waitForTerminal(handle: string) {
@@ -61,15 +63,18 @@ function createMockRuntime(): CoordinatorRuntime & {
     },
     async probeWorktreeDrift(worktreeSelector: string): Promise<DriftResult> {
       mock.probeDriftCalls.push(worktreeSelector)
+
       if (mock.throwProbeDrift) {
         throw mock.throwProbeDrift
       }
+
       return mock.probeDriftResult
     },
     getTerminalOrchestrationCliCommand() {
       return mock.cliCommand
     }
   }
+
   return mock
 }
 
@@ -86,9 +91,11 @@ function insertWorkerDone(
 ): void {
   const dispatch = db.getDispatchContext(params.taskId)
   const dispatchId = params.dispatchId ?? dispatch?.id
+
   if (!dispatchId) {
     throw new Error(`No dispatch for task ${params.taskId}`)
   }
+
   const from = params.from ?? dispatch?.assignee_handle ?? 'term_unknown'
   db.insertMessage({
     runId,
@@ -118,10 +125,12 @@ describe('Coordinator', () => {
   it('throws if no tasks exist', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
+
     const coordinator = new Coordinator(db, runtime, {
       spec: 'do stuff',
       coordinatorHandle: 'coord'
     })
+
     await expect(coordinator.run()).rejects.toThrow('No tasks found')
   })
 
@@ -165,6 +174,7 @@ describe('Coordinator', () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
     runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
+
     const withPaneLookup = Object.assign(runtime, {
       getTerminalPaneKey: (handle: string) => (handle === 'term_a' ? 'tab_a:leaf_a' : null)
     })
@@ -173,11 +183,13 @@ describe('Coordinator', () => {
       runId,
       spec: 'implement feature'
     })
+
     const coordinator = new Coordinator(db, withPaneLookup, {
       spec: 'build it',
       coordinatorHandle: 'coord',
       pollIntervalMs: 50
     })
+
     const runPromise = coordinator.run()
     await new Promise((r) => {
       setTimeout(r, 100)
@@ -194,6 +206,7 @@ describe('Coordinator', () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
     runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
+
     const withAuthority = Object.assign(runtime, {
       getOrchestrationDispatchAuthority: (handle: string) =>
         handle === 'term_a'
@@ -204,15 +217,18 @@ describe('Coordinator', () => {
             }
           : null
     })
+
     const task = db.createTask({
       runId,
       spec: 'implement feature'
     })
+
     const coordinator = new Coordinator(db, withAuthority, {
       spec: 'build it',
       coordinatorHandle: 'coord',
       pollIntervalMs: 50
     })
+
     const runPromise = coordinator.run()
     await new Promise((r) => {
       setTimeout(r, 100)
@@ -236,7 +252,9 @@ describe('Coordinator', () => {
       runId,
       spec: 'send-driven completion'
     })
+
     const dispatch = createRootDispatch(db, task.id, 'term_a')
+
     const msg = db.insertMessage({
       runId,
       from: 'term_a',
@@ -253,6 +271,7 @@ describe('Coordinator', () => {
       coordinatorHandle: 'coord',
       pollIntervalMs: 20
     })
+
     const result = await coordinator.run()
 
     expect(result.status).toBe('completed')
@@ -267,12 +286,15 @@ describe('Coordinator', () => {
       runId,
       spec: 'duplicate completion'
     })
+
     const dispatch = createRootDispatch(db, task.id, 'term_a')
+
     const payload = JSON.stringify({
       taskId: task.id,
       dispatchId: dispatch.id,
       outcome: 'succeeded'
     })
+
     const first = db.insertMessage({
       runId,
       from: 'term_a',
@@ -281,6 +303,7 @@ describe('Coordinator', () => {
       type: 'worker_done',
       payload
     })
+
     db.insertMessage({
       runId,
       from: 'term_a',
@@ -297,6 +320,7 @@ describe('Coordinator', () => {
       coordinatorHandle: 'coord',
       pollIntervalMs: 20
     })
+
     const result = await coordinator.run()
 
     expect(result.status).toBe('completed')
@@ -386,6 +410,7 @@ describe('Coordinator', () => {
       runId,
       spec: 'cannot dispatch'
     })
+
     const coordinator = new Coordinator(db, runtime, {
       spec: 'go',
       coordinatorHandle: 'coord',
@@ -471,6 +496,7 @@ describe('Coordinator', () => {
     runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
 
     const t1 = db.createTask({ runId, spec: 'first' })
+
     const t2 = db.createTask({
       runId,
       spec: 'second',
@@ -571,12 +597,14 @@ describe('Coordinator', () => {
     const sqlite = (
       db as unknown as { db: { prepare: (s: string) => { run: (...a: unknown[]) => void } } }
     ).db
+
     const iso = (ms: number) => new Date(Date.now() - ms).toISOString()
     sqlite
       .prepare('UPDATE dispatch_contexts SET dispatched_at = ?, last_heartbeat_at = ? WHERE id = ?')
       .run(iso(60 * 60 * 1000), iso(30 * 60 * 1000), ctx.id)
 
     const logs: string[] = []
+
     const coordinator = new Coordinator(db, runtime, {
       spec: 'go',
       coordinatorHandle: 'coord',
@@ -644,6 +672,7 @@ describe('Coordinator', () => {
       runId,
       spec: 'retry-sensitive work'
     })
+
     const staleCtx = createRootDispatch(db, task.id, 'term_old')
     db.failDispatch(staleCtx.id, 'retry elsewhere')
     const activeCtx = createRootDispatch(db, task.id, 'term_current')
@@ -667,6 +696,7 @@ describe('Coordinator', () => {
       pollIntervalMs: 20,
       onLog: (m) => logs.push(m)
     })
+
     const staleRun = staleCoordinator.run()
     await new Promise((r) => {
       setTimeout(r, 80)
@@ -684,11 +714,13 @@ describe('Coordinator', () => {
       from: 'term_current',
       dispatchId: activeCtx.id
     })
+
     const completionCoordinator = new Coordinator(db, runtime, {
       spec: 'go',
       coordinatorHandle: 'coord',
       pollIntervalMs: 20
     })
+
     const result = await completionCoordinator.run()
 
     expect(result.status).toBe('completed')
@@ -705,6 +737,7 @@ describe('Coordinator', () => {
       runId,
       spec: 'owned work'
     })
+
     const leafId = '11111111-1111-4111-8111-111111111111'
     const ctx = createRootDispatch(db, task.id, 'term_owner', `tab_before:${leafId}`)
 
@@ -724,6 +757,7 @@ describe('Coordinator', () => {
       pollIntervalMs: 20,
       onLog: (m) => logs.push(m)
     })
+
     const result = await coordinator.run()
 
     expect(result.status).toBe('completed')
@@ -847,6 +881,7 @@ describe('Coordinator', () => {
 
       const spec = `Investigate issue #42
 allow-stale-base: true`
+
       const task = db.createTask({ runId, spec })
 
       const coordinator = new Coordinator(db, runtime, {

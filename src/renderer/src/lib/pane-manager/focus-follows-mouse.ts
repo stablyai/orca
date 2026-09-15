@@ -19,12 +19,15 @@ export function shouldFollowMouseFocus(input: FocusFollowsMouseInput): boolean {
   if (!input.featureEnabled) {
     return false
   }
+
   if (input.managerDestroyed) {
     return false
   }
+
   if (input.activePaneId === input.hoveredPaneId) {
     return false
   }
+
   // Why mouseButtons !== 0: any held mouse button means a selection or
   // a drag is in progress. Switching focus mid-drag would break xterm.js
   // text selection and the pane drag-to-reorder flow. This single check
@@ -33,6 +36,7 @@ export function shouldFollowMouseFocus(input: FocusFollowsMouseInput): boolean {
   if (input.mouseButtons !== 0) {
     return false
   }
+
   // Why document.hasFocus: if Orca isn't the OS-focused window, the mouse
   // event is from the user passing through on their way to another app.
   // Also returns false when DevTools is focused (DevTools runs in a
@@ -41,5 +45,6 @@ export function shouldFollowMouseFocus(input: FocusFollowsMouseInput): boolean {
   if (!input.windowHasFocus) {
     return false
   }
+
   return true
 }

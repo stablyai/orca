@@ -12,6 +12,7 @@ describe('resolveSshHostRemoval', () => {
     { id: 'repo-b', connectionId: 'ssh-1' },
     { id: 'repo-local', connectionId: null }
   ]
+
   const worktrees = [
     { id: 'repo-a::/wt/main', repoId: 'repo-a', isMainWorktree: true },
     { id: 'repo-a::/wt/feature', repoId: 'repo-a', isMainWorktree: false },
@@ -26,6 +27,7 @@ describe('resolveSshHostRemoval', () => {
       worktrees,
       sshConnectionStates: new Map()
     })
+
     expect(result.workspaceWorktreeIds.sort()).toEqual(
       ['repo-a::/wt/feature', 'repo-b::/wt/x'].sort()
     )
@@ -42,6 +44,7 @@ describe('resolveSshHostRemoval', () => {
       worktrees,
       sshConnectionStates: new Map()
     })
+
     expect(result.workspaceWorktreeIds).not.toContain('repo-local::/wt/y')
     expect(result.hostRepoIds).not.toContain('repo-local')
   })
@@ -53,6 +56,7 @@ describe('resolveSshHostRemoval', () => {
       worktrees,
       sshConnectionStates: connected('ssh-1')
     })
+
     expect(result.isConnected).toBe(true)
   })
 
@@ -63,6 +67,7 @@ describe('resolveSshHostRemoval', () => {
       worktrees,
       sshConnectionStates: new Map()
     })
+
     expect(result.workspaceCount).toBe(0)
     expect(result.hostRepoIds).toEqual([])
   })
@@ -82,6 +87,7 @@ describe('resolveSshHostRemoval', () => {
       ],
       sshConnectionStates: new Map()
     })
+
     expect(result.hostRepoIds).toEqual(['repo-a'])
     expect(result.workspaceWorktreeIds).toEqual(['repo-a::/wt/x'])
     // 1 root repo + 1 unique child worktree.

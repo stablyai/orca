@@ -25,10 +25,13 @@ export function normalizeClaudeSubagentLifecycleEvent(
 ): ParsedAgentStatusPayload | null {
   const lifecycleField = eventName === 'TeammateIdle' ? 'teammate_name' : 'agent_id'
   const lifecycleId = readString(hookPayload, lifecycleField)
+
   if (!lifecycleId) {
     return null
   }
+
   const cachedLead = state.claudeLeadStateByPaneKey.get(paneKey)
+
   const ownsUnbackedWait =
     cachedLead?.state === 'waiting' &&
     cachedLead.stateBeforeWait === undefined &&
@@ -36,29 +39,36 @@ export function normalizeClaudeSubagentLifecycleEvent(
     (eventName === 'TeammateIdle'
       ? claudeTeammateIdMatchesName(cachedLead.waitingAgentId, lifecycleId)
       : cachedLead.waitingAgentId === lifecycleId)
+
   const hasCachedLeadEvidence = cachedLead !== undefined && !ownsUnbackedWait
   let roster = state.claudeSubagentRosterByPaneKey.get(paneKey)
   let endedChildWork = false
   let endedRuntimeChildWork = false
+
   if (eventName === 'TeammateIdle') {
     const teammateName = lifecycleId
+
     // Why: on claude 2.1.21x teammates are turn-based — TeammateIdle means "turn over, awaiting mail", not finished. The row parks as idle (confirmed teammate) instead of leaving, so the sidebar keeps showing resumable children.
     if (roster) {
       let wasWorking = false
+
       for (const [id, tracked] of roster) {
         if (tracked.state === 'working' && claudeTeammateIdMatchesName(id, teammateName)) {
           wasWorking = true
           endedRuntimeChildWork ||= tracked.restoredFromSnapshot !== true
         }
       }
+
       idleClaudeTeammateByName(roster, teammateName)
       endedChildWork = wasWorking
     }
+
     clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) =>
       claudeTeammateIdMatchesName(waitingAgentId, teammateName)
     )
   } else {
     const agentId = lifecycleId
+
     if (eventName === 'SubagentStart') {
       roster = getOrCreateClaudeSubagentRoster(state, paneKey)
       upsertWorkingClaudeSubagent(
@@ -76,22 +86,28 @@ export function normalizeClaudeSubagentLifecycleEvent(
         stopClaudeSubagent(roster, agentId)
         endedChildWork = wasWorking && roster.get(agentId)?.state !== 'working'
       }
+
       // Why: a blocked child that dies without another tool event would pin its permission/question wait on the pane forever — nothing else references that agent again.
       clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) => waitingAgentId === agentId)
     }
   }
+
   const workingChildEvidence = claudeRosterHasRuntimeWorkingSubagent(roster)
   const hasUnconfirmedChild = claudeRosterHasRestoredSnapshotSubagent(roster)
+
   const hasConfirmedDoneGate =
     cachedLead?.state === 'done' &&
     cachedLead.interrupted !== true &&
     (state.claudeRunningNonAgentTaskPaneKeys.has(paneKey) ||
       state.claudeActiveSessionCronPaneKeys.has(paneKey))
+
   const restoredOnlyDoneGate =
     cachedLead?.state === 'done' && !hasConfirmedDoneGate && hasUnconfirmedChild
+
   if (roster?.size === 0) {
     state.claudeSubagentRosterByPaneKey.delete(paneKey)
   }
+
   if (
     !workingChildEvidence &&
     (restoredOnlyDoneGate ||
@@ -100,12 +116,14 @@ export function normalizeClaudeSubagentLifecycleEvent(
     // Why: a restored-only ending proves no lead boundary, and an unmatched restored sibling proves no current liveness; persist the roster transition without publishing fresh work or completion.
     state.claudeUnconfirmedRestoredStatusPaneKeys.add(paneKey)
   }
+
   return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload, {
     workingChildEvidence,
     endedChildWork,
     endedRuntimeChildWork
   })
 }
+
 /** Re-emit the cached lead state without touching its tool/prompt caches; child churn and parallel completions must not dismiss live cards. */
 export function buildClaudeCachedLeadStatusPayload(
   state: HookListenerState,
@@ -120,6 +138,7 @@ export function buildClaudeCachedLeadStatusPayload(
 ): ParsedAgentStatusPayload | null {
   const lead = state.claudeLeadStateByPaneKey.get(paneKey)
   let leadState = lead?.state
+
   if (!leadState) {
     if (evidence.workingChildEvidence || evidence.endedRuntimeChildWork) {
       // Why: ending a current-runtime child wakes its parent; only a cached lead boundary can prove the whole pane completed.
@@ -131,6 +150,7 @@ export function buildClaudeCachedLeadStatusPayload(
       return null
     }
   }
+
   return buildClaudeStatusPayload(state, eventName, '', paneKey, hookPayload, {
     ...resolveClaudePaneStatus(state, paneKey, {
       state: leadState,

@@ -8,7 +8,9 @@ import type {
 } from './claude-usage-fetch-options'
 
 export type FetchClaudeRateLimitsOptions = ClaudeRateLimitFetchOptions
+
 export type FetchManagedAccountUsageOptions = ClaudeManagedAccountUsageOptions
+
 export type InactiveClaudeAccountInfo = InactiveClaudeAccount
 
 export async function fetchClaudeRateLimits(

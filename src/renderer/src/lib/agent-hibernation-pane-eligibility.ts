@@ -31,6 +31,7 @@ export function getEntryTabId(entry: AgentStatusEntry): string | null {
   if (entry.tabId) {
     return entry.tabId
   }
+
   return parsePaneKey(entry.paneKey)?.tabId ?? null
 }
 
@@ -39,10 +40,13 @@ function getPaneLivePtyId(
   layout: TerminalLayoutSnapshot | undefined
 ): { leafId: string; ptyId: string } | null {
   const parsed = parsePaneKey(entry.paneKey)
+
   if (!parsed || (entry.tabId && parsed.tabId !== entry.tabId)) {
     return null
   }
+
   const ptyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
+
   return ptyId ? { leafId: parsed.leafId, ptyId } : null
 }
 
@@ -78,7 +82,9 @@ export function getEligiblePane(args: {
     boundaryResolvedAtByPaneKey,
     mobileLockedPtyIds
   } = args
+
   const sleepingRecord = sleepingAgentSessionsByPaneKey[entry.paneKey]
+
   // Why: a completed turn leaves the TUI alive and resumable, so every resumable
   // agent keeps a live resume anchor (#10238). That anchor is not a sleep record —
   // treating it as one is what stopped non-Pi agents hibernating at all.
@@ -87,6 +93,7 @@ export function getEligiblePane(args: {
     sleepingRecord,
     tab.worktreeId
   )
+
   if (
     entry.state !== 'done' ||
     entry.interrupted === true ||
@@ -96,18 +103,22 @@ export function getEligiblePane(args: {
   ) {
     return null
   }
+
   if (
     getEntryTabId(entry) !== tab.id ||
     (entry.worktreeId && entry.worktreeId !== tab.worktreeId)
   ) {
     return null
   }
+
   if (!entry.agentType || !isResumableTuiAgent(entry.agentType) || !entry.providerSession) {
     return null
   }
+
   if (!getAgentResumeArgv(entry.agentType, entry.providerSession)) {
     return null
   }
+
   // Why: anchor on when `done` was first reported, not on the last status write —
   // OSC 9999 repaints and reconnect replays advance `updatedAt` and would restart
   // the countdown forever. Floors then restore the grace `updatedAt` gave by accident:
@@ -119,13 +130,17 @@ export function getEligiblePane(args: {
     ptyBindingFirstSeenAtByPaneKey[entry.paneKey],
     boundaryResolvedAtByPaneKey[entry.paneKey]
   ]
+
   const effectiveIdleStart = Math.max(
     ...floors.map((value) => (typeof value === 'number' && Number.isFinite(value) ? value : 0))
   )
+
   if (args.now - effectiveIdleStart < args.idleMs) {
     return null
   }
+
   const inputAt = lastTerminalInputAtByPaneKey[entry.paneKey]
+
   // Why: killing the PTY discards the TUI composer's draft and any queued
   // messages. The old input-after-done compare missed drafts typed while the
   // agent was still working — the class that lost a user's draft in prod.
@@ -136,15 +151,20 @@ export function getEligiblePane(args: {
   ) {
     return null
   }
+
   const livePane = getPaneLivePtyId(entry, layout)
+
   if (!livePane) {
     return null
   }
+
   const { leafId, ptyId } = livePane
   const runtimePtyId = toRuntimePtyId(ptyId)
+
   if (!livePtyIds.has(runtimePtyId) || mobileLockedPtyIds.has(runtimePtyId)) {
     return null
   }
+
   return {
     paneKey: entry.paneKey,
     tabId: tab.id,

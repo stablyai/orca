@@ -19,6 +19,7 @@ export function SkillShareReleaseNotesField({
   onSubmit: () => void
 }): React.JSX.Element {
   const isMac = navigator.userAgent.includes('Mac')
+
   return (
     <Collapsible defaultOpen={newVersion} className="space-y-2">
       <SkillDisclosureTrigger
@@ -46,6 +47,7 @@ export function SkillShareReleaseNotesField({
             if (event.nativeEvent.isComposing) {
               return
             }
+
             if (event.key === 'Enter' && (isMac ? event.metaKey : event.ctrlKey)) {
               event.preventDefault()
               onSubmit()

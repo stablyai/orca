@@ -8,6 +8,7 @@ import type { TerminalOutputBatcher } from './terminal-output-batcher'
 import type { TerminalStreamOpcode } from '../../../../../shared/terminal-stream-protocol'
 
 export type TerminalSubscribeParams = z.infer<typeof TerminalSubscribe>
+
 export type TerminalSubscriptionEmit = (result: unknown) => void
 
 export type TerminalSubscriptionArgs = {

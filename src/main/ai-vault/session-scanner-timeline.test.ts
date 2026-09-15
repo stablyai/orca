@@ -17,6 +17,7 @@ function accumulator() {
 describe('session timeline bounds', () => {
   it('retains earliest and latest timestamps despite duplicates and out-of-order records', () => {
     const state = accumulator()
+
     for (const timestamp of [
       '2026-01-03T01:00:00+01:00',
       '2026-01-01T00:00:00Z',
@@ -26,6 +27,7 @@ describe('session timeline bounds', () => {
     ]) {
       updateTimeline(state, timestamp)
     }
+
     expect(finalizeSession(state, 'linux')).toMatchObject({
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-04T00:00:00.000Z'
@@ -56,9 +58,11 @@ describe('session timeline bounds', () => {
 
   it('ignores invalid timestamps and retains the existing out-of-range error', () => {
     const state = accumulator()
+
     for (const timestamp of [null, undefined, '', 'bad-date', 0, -1, Number.NaN, Infinity]) {
       updateTimeline(state, timestamp)
     }
+
     expect(state.createdAt).toBeNull()
     expect(state.updatedAt).toBeNull()
     expect(() => updateTimeline(state, 8_640_000_000_000_001)).toThrow(RangeError)
@@ -82,14 +86,17 @@ describe('session timeline bounds', () => {
     const state = accumulator()
     const spy = vi.spyOn(Date, 'parse')
     let parseCalls: number
+
     try {
       for (let index = 0; index < 1000; index += 1) {
         updateTimeline(state, 1_700_000_000_000 + index)
       }
+
       parseCalls = spy.mock.calls.length
     } finally {
       spy.mockRestore()
     }
+
     expect(state.latestTimestampMs).toBe(1_700_000_000_999)
     expect(parseCalls).toBe(0)
   })

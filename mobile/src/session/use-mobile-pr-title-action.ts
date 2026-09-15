@@ -49,42 +49,54 @@ export function useMobilePrTitleAction(input: PrTitleActionInput) {
     () => input.mutations ?? (client ? realMutations(client, worktreeId) : null),
     [input.mutations, client, worktreeId]
   )
+
   const ready = mutations !== null && (input.mutations !== undefined || connState === 'connected')
 
   const setTitle = useCallback(
     async (draft: string, current: string): Promise<boolean> => {
       const params = buildUpdatePRTitleParams(prNumber, draft, current)
+
       // No-op when empty/unchanged: report success so the editor closes silently.
       if (!params) {
         return true
       }
+
       if (inFlightRef.current) {
         return false
       }
+
       // Why: surface an explicit error when offline/not-ready so Save doesn't
       // silently no-op (the editor stays open with a reason instead of nothing).
       if (!ready || !mutations) {
         setError('Not connected to desktop.')
+
         return false
       }
+
       inFlightRef.current = true
       setSaving(true)
       setError(null)
+
       try {
         const outcome = await mutations.updateTitle({ ...params, prRepo })
+
         if (outcome.ok) {
           triggerSuccess()
           await refetch()
+
           return true
         }
+
         triggerError()
         setError(outcome.error)
+
         return false
       } catch (err) {
         // Why: updateTitle/refetch can throw; without this the `void save()`
         // rejection is unhandled — set the error + error haptic and return false.
         triggerError()
         setError(err instanceof Error ? err.message : 'Failed to update title.')
+
         return false
       } finally {
         inFlightRef.current = false

@@ -25,6 +25,7 @@ function commandPlugin(
     contributes,
     capabilities: []
   })
+
   return {
     pluginKey: `orca-samples.${id}`,
     rootDir: `/plugins/${id}`,
@@ -43,27 +44,34 @@ describe('PluginCommandRegistry', () => {
       title: `Command ${index}`,
       action: 'view.tasks'
     }))
+
     const keys = Array.from(
       { length: 104 },
       (_, index) =>
         `Mod+${Math.floor(index / 26) & 1 ? 'Alt+' : ''}${Math.floor(index / 26) & 2 ? 'Shift+' : ''}${String.fromCharCode(65 + (index % 26))}`
     )
+
     // Distinct physical chords, with two bindings belonging to the same command.
     const uniqueKeys = [...new Set(keys)]
+
     const plugin = commandPlugin('many-commands', {
       commands,
       keybindings: uniqueKeys.map((key, index) => ({ command: `command-${index % 32}`, key }))
     })
+
     let reads = 0
+
     for (const binding of plugin.manifest.contributes.keybindings) {
       const command = binding.command
       Object.defineProperty(binding, 'command', {
         get: () => {
           reads++
+
           return command
         }
       })
     }
+
     const registry = new PluginCommandRegistry()
     registry.reconcile([plugin], () => false)
     const preview = registry.preview(plugin.pluginKey)
@@ -85,17 +93,20 @@ describe('PluginCommandRegistry', () => {
         keybindings: [{ command: 'tasks', key: 'Mod+Alt+T' }]
       })
     )
+
     const registry = new PluginCommandRegistry()
     const errors = (registry as unknown as { errors: Map<string, string> }).errors
     const writes = vi.spyOn(errors, 'set')
     registry.reconcile(plugins, () => true)
     expect(registry.list()).toEqual([])
+
     for (const plugin of plugins) {
       expect(registry.preview(plugin.pluginKey)).toHaveLength(1)
       expect(registry.error(plugin.pluginKey)).toBe(
         'plugin keybinding Mod+Alt+T conflicts with another plugin'
       )
     }
+
     expect(writes).toHaveBeenCalledTimes(plugins.length)
   })
 
@@ -106,6 +117,7 @@ describe('PluginCommandRegistry', () => {
         { id: 'two', title: 'Two', action: 'view.tasks', context: 'worktree' }
       ]
     })
+
     const registry = new PluginCommandRegistry()
     registry.reconcile(
       [plugin],
@@ -127,6 +139,7 @@ describe('PluginCommandRegistry', () => {
       commands: [{ id: 'tasks', title: 'Open Tasks', action: 'view.tasks' }],
       keybindings: [{ command: 'tasks', key: 'mod+alt+t' }]
     })
+
     const registry = new PluginCommandRegistry()
 
     registry.reconcile([plugin], () => false)
@@ -151,6 +164,7 @@ describe('PluginCommandRegistry', () => {
       commands: [{ id: 'create', title: 'Create Task', context: 'worktree' }],
       keybindings: [{ command: 'create', key: 'Mod+Shift+A' }]
     })
+
     const registry = new PluginCommandRegistry()
 
     registry.reconcile([plugin], () => true)
@@ -169,10 +183,12 @@ describe('PluginCommandRegistry', () => {
       commands: [{ id: 'tasks', title: 'Tasks', action: 'view.tasks' }],
       keybindings: [{ command: 'tasks', key: 'Mod+Alt+T', when: 'global' }]
     })
+
     const worktree = commandPlugin('worktree', {
       commands: [{ id: 'tasks', title: 'Tasks', context: 'worktree', action: 'view.tasks' }],
       keybindings: [{ command: 'tasks', key: 'Mod+Alt+T', when: 'worktree' }]
     })
+
     const registry = new PluginCommandRegistry()
 
     registry.reconcile([global, worktree], () => true)
@@ -187,10 +203,12 @@ describe('PluginCommandRegistry', () => {
       commands: [{ id: 'tasks', title: 'Tasks', action: 'view.tasks' }],
       keybindings: [{ command: 'tasks', key: 'Mod+Alt+T' }]
     })
+
     const second = commandPlugin('second', {
       commands: [{ id: 'tasks', title: 'Tasks', action: 'view.tasks' }],
       keybindings: [{ command: 'tasks', key: 'Mod+Alt+T' }]
     })
+
     const registry = new PluginCommandRegistry()
 
     registry.reconcile(
@@ -212,6 +230,7 @@ describe('PluginCommandRegistry', () => {
         { id: 'sidebar', title: 'Sidebar', action: 'sidebar.left.toggle' }
       ]
     })
+
     const registry = new PluginCommandRegistry()
 
     registry.reconcile(
@@ -233,10 +252,12 @@ describe('PluginCommandRegistry', () => {
       commands: [{ id: 'tasks', title: 'Tasks', action: 'view.tasks' }],
       keybindings: [{ command: 'tasks', key: 'Mod+Alt+T' }]
     })
+
     const physical = commandPlugin('physical', {
       commands: [{ id: 'tasks', title: 'Tasks', action: 'view.tasks' }],
       keybindings: [{ command: 'tasks', key: 'Ctrl+Alt+T' }]
     })
+
     const registry = new PluginCommandRegistry()
 
     registry.reconcile([portable, physical], () => true, {}, 'linux')
@@ -251,10 +272,12 @@ describe('PluginCommandRegistry', () => {
       commands: [{ id: 'tasks', title: 'Tasks', context: 'worktree', action: 'view.tasks' }],
       keybindings: [{ command: 'tasks', key: 'Mod+Alt+T' }]
     })
+
     const second = commandPlugin('second', {
       commands: [{ id: 'tasks', title: 'Tasks', context: 'worktree', action: 'view.tasks' }],
       keybindings: [{ command: 'tasks', key: 'Mod+Alt+T' }]
     })
+
     const registry = new PluginCommandRegistry()
 
     registry.reconcile([first, second], (plugin) => plugin === first)

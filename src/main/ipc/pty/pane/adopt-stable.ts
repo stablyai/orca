@@ -18,15 +18,19 @@ export async function adoptStablePane(
   const paneKey = makePaneKey(args.tabId, args.leafId)
   const ownerKey = makePaneSpawnReservationKey(args.worktreeId, args.connectionId, paneKey)
   const pendingAdoption = ownerKey ? stablePaneAdoptionsByOwnerKey.get(ownerKey) : undefined
+
   if (pendingAdoption) {
     return await pendingAdoption
   }
+
   const activePaneSpawn =
     ownerKey && !args.ownsPaneSpawnReservation
       ? paneSpawnReservationsByOwnerKey.get(ownerKey)
       : undefined
+
   if (activePaneSpawn) {
     const result = await activePaneSpawn.promise
+
     const owner = resolveStablePaneOwner(
       runtime,
       store,
@@ -34,6 +38,7 @@ export async function adoptStablePane(
       args.worktreeId,
       args.connectionId
     )
+
     if (
       !owner ||
       owner.ptyId !== result.id ||
@@ -43,6 +48,7 @@ export async function adoptStablePane(
     ) {
       throw new Error('terminal_pane_owner_changed')
     }
+
     return {
       result: {
         ...result,
@@ -53,10 +59,13 @@ export async function adoptStablePane(
       materialized: true as const
     }
   }
+
   const owner = resolveStablePaneOwner(runtime, store, paneKey, args.worktreeId, args.connectionId)
+
   if (!owner) {
     return null
   }
+
   const adoption = attachStablePaneOwner({
     runtime,
     store,
@@ -72,10 +81,13 @@ export async function adoptStablePane(
     resolveOwner: () =>
       resolveStablePaneOwner(runtime, store, paneKey, args.worktreeId, args.connectionId)
   })
+
   if (!ownerKey) {
     return await adoption
   }
+
   stablePaneAdoptionsByOwnerKey.set(ownerKey, adoption)
+
   try {
     return await adoption
   } finally {

@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { prepareCodexSessionResume } from './codex-session-resume-preparation'
 
 const SESSION_ID = '019f81b9-19a9-7651-a8d1-352d9420bd11'
+
 const ORIGIN_HOME = '/managed/origin/home'
+
 const ORIGIN_ROLLOUT = `${ORIGIN_HOME}/sessions/2026/07/20/rollout-2026-07-20T12-00-00-${SESSION_ID}.jsonl`
 
 // Why: these cases assert the resume/fresh outcome, never the legacy rescan's home ranking

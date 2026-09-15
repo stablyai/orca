@@ -15,30 +15,38 @@ export class SshGitProvider extends SshGitWorktreeProvider implements IGitProvid
     const branchPromise = this.exec(['branch', '--show-current'], worktreePath).catch(() => ({
       stdout: ''
     }))
+
     const [branchResult, summaryResult] = await Promise.all([
       branchPromise,
       this.exec(['diff', '--cached', '--name-status'], worktreePath)
     ])
+
     const stagedSummary = summaryResult.stdout.trim()
+
     if (!stagedSummary) {
       return null
     }
+
     let stagedPatch = ''
+
     try {
       const patchResult = await this.exec(
         ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
         worktreePath
       )
+
       stagedPatch = patchResult.stdout
     } catch (error) {
       if (!isMaxBufferOverflowError(error)) {
         throw error
       }
+
       console.warn(
         '[ssh-git] Staged patch too large to read; using file summary only:',
         describeMaxBufferOverflowError(error)
       )
     }
+
     return {
       branch: branchResult.stdout.trim() || null,
       stagedSummary,
@@ -55,9 +63,11 @@ export class SshGitProvider extends SshGitWorktreeProvider implements IGitProvid
       options
         ? requestGitStreamable(this.mux, 'git.exec', { args, cwd }, options)
         : requestGitStreamable(this.mux, 'git.exec', { args, cwd })
+
     const result = gitExecMutatesRepository(args)
       ? await this.runWithGitReadInvalidation(run)
       : await run()
+
     return result as { stdout: string; stderr: string }
   }
 
@@ -72,24 +82,29 @@ export class SshGitProvider extends SshGitWorktreeProvider implements IGitProvid
   ): Promise<{ stdout: string; stderr: string }> {
     return this.runWithGitReadInvalidation(async () => {
       const progressId = `clone-${Date.now()}-${Math.random().toString(36).slice(2)}`
+
       const unsubscribe = options?.onProgress
         ? this.mux.onNotificationByMethod('git.cloneProgress', (params) => {
             if (params.progressId !== progressId) {
               return
             }
+
             const phase = params.phase
             const percent = params.percent
+
             if (typeof phase === 'string' && typeof percent === 'number') {
               options.onProgress?.({ phase, percent })
             }
           })
         : undefined
+
       try {
         const result = await this.mux.request(
           'git.clone',
           { args, cwd, progressId },
           { signal: options?.signal, timeoutMs: options?.timeoutMs }
         )
+
         return result as { stdout: string; stderr: string }
       } catch (error) {
         if (isJsonRpcMethodNotFoundError(error)) {
@@ -97,6 +112,7 @@ export class SshGitProvider extends SshGitWorktreeProvider implements IGitProvid
             'SSH clone support is unavailable on this relay. Reconnect the SSH target to update Orca on the host, then try again.'
           )
         }
+
         throw error
       } finally {
         unsubscribe?.()
@@ -119,6 +135,7 @@ export class SshGitProvider extends SshGitWorktreeProvider implements IGitProvid
   private async readOriginRemoteUrl(worktreePath: string): Promise<string | null> {
     try {
       const result = await this.exec(['remote', 'get-url', 'origin'], worktreePath)
+
       return result.stdout.trim() || null
     } catch {
       return null
@@ -131,17 +148,21 @@ export class SshGitProvider extends SshGitWorktreeProvider implements IGitProvid
     line: number
   ): Promise<string | null> {
     const remoteUrl = await this.readOriginRemoteUrl(worktreePath)
+
     if (!remoteUrl) {
       return null
     }
 
     let defaultBranch = 'main'
+
     try {
       const refResult = await this.exec(
         ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
         worktreePath
       )
+
       const ref = refResult.stdout.trim()
+
       if (ref) {
         defaultBranch = ref.replace(/^refs\/remotes\/origin\//, '')
       }
@@ -154,9 +175,11 @@ export class SshGitProvider extends SshGitWorktreeProvider implements IGitProvid
 
   async getRemoteCommitUrl(worktreePath: string, sha: string): Promise<string | null> {
     const remoteUrl = await this.readOriginRemoteUrl(worktreePath)
+
     if (!remoteUrl) {
       return null
     }
+
     return buildHostedRemoteCommitUrl(remoteUrl, sha)
   }
 }

@@ -16,9 +16,11 @@ export function appendImeEngagementReceipt(
   trace: TerminalImeBoundaryTrace
 ): void {
   const receiptPath = process.env[IME_ENGAGEMENT_RECEIPT_ENV]
+
   if (!receiptPath) {
     return
   }
+
   const entry = {
     test: testTitle,
     compositionStart: trace.dom.filter((event) => event.type === 'compositionstart').length,
@@ -30,6 +32,7 @@ export function appendImeEngagementReceipt(
     ).length,
     onDataChunks: trace.onData.length
   }
+
   mkdirSync(path.dirname(receiptPath), { recursive: true })
   appendFileSync(receiptPath, `${JSON.stringify(entry)}\n`)
 }

@@ -7,8 +7,11 @@ import {
 } from './browser-reload-action'
 
 const idle = { loading: false, loadErrorCode: null }
+
 const loading = { loading: true, loadErrorCode: null }
+
 const failed = { loading: false, loadErrorCode: -105 }
+
 const guestFailed = { loading: false, loadErrorCode: BROWSER_GUEST_RECOVERY_ERROR_CODE }
 
 describe('resolveBrowserReloadIntent', () => {
@@ -79,6 +82,7 @@ describe('reloadBrowserPageWebview', () => {
         throw new Error('WebContents is destroyed')
       })
     })
+
     expect(reloadBrowserPageWebview(webview, { ignoreCache: false })).toBe('guest-missing')
     expect(webview.reload).not.toHaveBeenCalled()
   })
@@ -90,6 +94,7 @@ describe('reloadBrowserPageWebview', () => {
       .mockImplementation(() => {
         throw new Error('WebContents is destroyed')
       })
+
     const webview = createWebview({
       getWebContentsId,
       reload: vi.fn(() => {
@@ -108,6 +113,7 @@ describe('reloadBrowserPageWebview', () => {
         throw new Error('The WebView must be attached to the DOM')
       })
     })
+
     expect(reloadBrowserPageWebview(webview, { ignoreCache: false })).toBe('not-ready')
   })
 })

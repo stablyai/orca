@@ -50,21 +50,26 @@ export function createRuntimeFileCommands(options?: {
   const store = {
     getRepo: vi.fn((_repoId?: string) => undefined as { connectionId?: string } | undefined)
   }
+
   const path = options?.path ?? '/repo'
+
   const worktree = {
     id: 'wt-1',
     repoId: 'repo-1',
     path,
     ...(options?.hostId ? { hostId: options.hostId } : {})
   }
+
   // Mirrors the real resolver: the worktree's own host outranks the repo row.
   const runtimeFileTargetExecutionHostId = (): ExecutionHostId => {
     const connectionId = store.getRepo(worktree.repoId)?.connectionId
+
     return (
       normalizeExecutionHostId(options?.hostId) ??
       (connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID)
     )
   }
+
   const commands = new RuntimeFileCommands({
     getRuntimeId: () => 'runtime-1',
     requireStore: () => store,
@@ -96,5 +101,6 @@ export function createRuntimeFileCommands(options?: {
     openFile: options?.openFile ?? vi.fn(),
     ...(options?.openDiff ? { openDiff: options.openDiff } : {})
   } as never)
+
   return { commands, store }
 }

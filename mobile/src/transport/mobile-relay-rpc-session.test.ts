@@ -69,11 +69,13 @@ async function confirmResume() {
   expect(session.getState()).toBe('handshaking')
   fakes.linkOptions!.onAuthenticated()
   await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+
   const request = JSON.parse(fakes.sendText.mock.calls[0]![0] as string) as {
     id: string
     method: string
     params: unknown
   }
+
   fakes.linkOptions!.onText(
     JSON.stringify({
       id: request.id,
@@ -94,12 +96,14 @@ async function confirmResume() {
     })
   )
   await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
+
   const capabilityRequest = JSON.parse(fakes.sendText.mock.calls[1]![0] as string) as {
     id: string
     method: string
     deviceToken: string
     params: { clientCapabilities?: string[] }
   }
+
   return { session, confirmationRequest: request, capabilityRequest }
 }
 
@@ -125,6 +129,7 @@ async function authenticateSession(capabilitySupported = true) {
   )
   await vi.waitFor(() => expect(session.getState()).toBe('connected'))
   fakes.sendText.mockClear()
+
   return { session, confirmationRequest, capabilityRequest }
 }
 
@@ -258,9 +263,11 @@ describe('mobile relay RPC session', () => {
     const terminalListener = vi.fn()
     session.subscribe('terminal.subscribe', { terminal: 'term-1' }, terminalListener)
     await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+
     const terminalRequest = JSON.parse(fakes.sendText.mock.calls[0]![0] as string) as {
       id: string
     }
+
     fakes.linkOptions!.onText(
       JSON.stringify({
         id: terminalRequest.id,
@@ -326,6 +333,7 @@ describe('mobile relay RPC session', () => {
     const { session } = await authenticateSession()
     fakes.sendText.mockImplementationOnce(() => {
       fakes.linkOptions!.onError(new Error('relay outbound overflow'))
+
       return false
     })
 
@@ -350,12 +358,15 @@ describe('mobile relay RPC session', () => {
   it('marks a relay RPC timeout delivery-unknown', async () => {
     const { session } = await authenticateSession()
     vi.useFakeTimers()
+
     try {
       const pending = session.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+
       const outcome = pending.catch((error: unknown) => ({
         message: (error as Error).message,
         unknown: isRpcDeliveryUnknown(error)
       }))
+
       // Let sendRequest pass its connected-check microtask and register the timer.
       await vi.advanceTimersByTimeAsync(0)
       await vi.advanceTimersByTimeAsync(1_000)

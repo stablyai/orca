@@ -13,9 +13,11 @@ function findRefreshButton(node: unknown): ReactElementLike {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('refresh button not found')
   }
+
   return found
 }
 
@@ -26,9 +28,11 @@ function findCollapseAllButton(node: unknown): ReactElementLike {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('collapse all button not found')
   }
+
   return found
 }
 
@@ -39,9 +43,11 @@ function findMoreActionsButton(node: unknown): ReactElementLike {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('more explorer actions button not found')
   }
+
   return found
 }
 
@@ -52,6 +58,7 @@ function queryMoreActionsButton(node: unknown): ReactElementLike | null {
       found = entry
     }
   })
+
   return found
 }
 
@@ -65,9 +72,11 @@ function findGitIgnoredMenuItem(node: unknown): ReactElementLike {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('git ignored menu item not found')
   }
+
   return found
 }
 
@@ -78,9 +87,11 @@ function findDotfilesMenuItem(node: unknown): ReactElementLike {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('dotfiles menu item not found')
   }
+
   return found
 }
 
@@ -94,6 +105,7 @@ function queryGitIgnoredMenuItem(node: unknown): ReactElementLike | null {
       found = entry
     }
   })
+
   return found
 }
 
@@ -104,9 +116,11 @@ function findOpenInMenuItems(node: unknown): ReactElementLike {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('open in menu items not found')
   }
+
   return found
 }
 
@@ -117,9 +131,11 @@ function findRepoNameLabel(node: unknown, repoName: string): ReactElementLike {
       found = entry
     }
   })
+
   if (!found) {
     throw new Error('repo name label not found')
   }
+
   return found
 }
 
@@ -130,6 +146,7 @@ function getToolbarButtonLabels(node: unknown): unknown[] {
       labels.push(entry.props['aria-label'])
     }
   })
+
   return labels
 }
 
@@ -140,6 +157,7 @@ function hasIcon(node: unknown, icon: unknown): boolean {
       found = true
     }
   })
+
   return found
 }
 
@@ -182,6 +200,7 @@ describe('FileExplorerToolbar', () => {
     const element = makeToolbar({ refresh: makeRefreshState({ handleRefresh: onRefresh }) })
 
     const button = findRefreshButton(element)
+
     ;(button.props.onClick as () => void)()
 
     expect(onRefresh).toHaveBeenCalledTimes(1)
@@ -218,12 +237,14 @@ describe('FileExplorerToolbar', () => {
   it('keeps disabled refresh clicks from firing', () => {
     const onRefresh = vi.fn()
     const preventDefault = vi.fn()
+
     const element = makeToolbar({
       canRefresh: false,
       refresh: makeRefreshState({ handleRefresh: onRefresh })
     })
 
     const button = findRefreshButton(element)
+
     ;(button.props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
 
     expect(button.props.disabled).toBe(false)
@@ -234,12 +255,14 @@ describe('FileExplorerToolbar', () => {
 
   it('fires the collapse all action from the icon button', () => {
     const onCollapseAll = vi.fn()
+
     const element = makeToolbar({
       canCollapseAll: true,
       onCollapseAll
     })
 
     const button = findCollapseAllButton(element)
+
     ;(button.props.onClick as () => void)()
 
     expect(onCollapseAll).toHaveBeenCalledTimes(1)
@@ -266,6 +289,7 @@ describe('FileExplorerToolbar', () => {
     const element = makeToolbar({ canCollapseAll: false, onCollapseAll })
 
     const button = findCollapseAllButton(element)
+
     ;(button.props.onClick as (event: { preventDefault: () => void }) => void)({ preventDefault })
 
     expect(preventDefault).toHaveBeenCalledTimes(1)
@@ -277,7 +301,9 @@ describe('FileExplorerToolbar', () => {
     const element = makeToolbar({ onToggleGitIgnoredFiles })
 
     const button = findMoreActionsButton(element)
+
     const menuItem = findGitIgnoredMenuItem(element)
+
     ;(menuItem.props.onCheckedChange as () => void)()
 
     expect(onToggleGitIgnoredFiles).toHaveBeenCalledTimes(1)
@@ -290,6 +316,7 @@ describe('FileExplorerToolbar', () => {
     const element = makeToolbar({ onToggleDotfiles, showDotfiles: false })
 
     const menuItem = findDotfilesMenuItem(element)
+
     ;(menuItem.props.onCheckedChange as () => void)()
 
     expect(onToggleDotfiles).toHaveBeenCalledTimes(1)

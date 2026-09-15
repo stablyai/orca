@@ -13,6 +13,7 @@ function makeTempRoot(manifest) {
   mkdirSync(configDir, { recursive: true })
   writeFileSync(path.join(configDir, 'reliability-gates.jsonc'), manifest, 'utf8')
   writeFileSync(path.join(root, 'some.test.ts'), '', 'utf8')
+
   return root
 }
 
@@ -94,6 +95,7 @@ function validManifest(overrides = {}) {
 
 afterEach(() => {
   vi.restoreAllMocks()
+
   while (tempDirs.length > 0) {
     rmSync(tempDirs.pop(), { force: true, recursive: true })
   }
@@ -131,6 +133,7 @@ describe('check-reliability-gates', () => {
 
   it('rejects command-backed gates that select tests by title', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const root = makeTempRoot(
       validManifest({ maturity: 'experimental', commands: ['pnpm vitest -t flaky-title'] })
     )
@@ -155,6 +158,7 @@ describe('check-reliability-gates', () => {
 
   it('rejects commandless gates unless they declare protection none', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const root = makeTempRoot(
       validManifest({
         maturity: 'experimental',
@@ -204,6 +208,7 @@ describe('check-reliability-gates', () => {
 
   it('rejects evidence runs whose command is not declared by the gate', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const root = makeTempRoot(
       validManifest({
         maturity: 'experimental',
@@ -229,6 +234,7 @@ describe('check-reliability-gates', () => {
 
   it('rejects protection none gates with evidence runs', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const root = makeTempRoot(
       validManifest({
         maturity: 'experimental',
@@ -258,6 +264,7 @@ describe('check-reliability-gates', () => {
 
   it('rejects assertion refs outside declared test files', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const root = makeTempRoot(
       validManifest({
         maturity: 'experimental',
@@ -278,6 +285,7 @@ describe('check-reliability-gates', () => {
 
   it('rejects protection none gates with assertion refs', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const root = makeTempRoot(
       validManifest({
         maturity: 'experimental',
@@ -306,6 +314,7 @@ describe('check-reliability-gates', () => {
 
   it('rejects covered scope outside the risk scope', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const root = makeTempRoot(
       validManifest({
         maturity: 'experimental',
@@ -325,6 +334,7 @@ describe('check-reliability-gates', () => {
 
   it('requires coveredPlatforms to include passed evidence platforms', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const root = makeTempRoot(
       validManifest({
         maturity: 'experimental',
@@ -340,6 +350,7 @@ describe('check-reliability-gates', () => {
 
   it('rejects covered scope on protection none gates', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const root = makeTempRoot(
       validManifest({
         maturity: 'experimental',
@@ -362,6 +373,7 @@ describe('check-reliability-gates', () => {
 
   it('rejects declared test files that do not exist', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const root = makeTempRoot(
       validManifest({ maturity: 'experimental', testFiles: ['missing.test.ts'] })
     )
@@ -375,6 +387,7 @@ describe('check-reliability-gates', () => {
   it('rejects executable gates whose commands do not reference declared test files', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const command = 'pnpm exec vitest run'
+
     const root = makeTempRoot(
       validManifest({
         maturity: 'experimental',
@@ -401,6 +414,7 @@ describe('check-reliability-gates', () => {
 
   it('rejects soak gates without mature flake and red/green evidence', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const root = makeTempRoot(
       validManifest({
         flakeHistory: { status: 'unknown', evidence: 'No soak yet.' },

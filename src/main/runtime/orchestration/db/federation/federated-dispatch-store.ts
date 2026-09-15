@@ -19,6 +19,7 @@ export function listFederatedDispatchesByIds(
   if (dispatchIds.length === 0) {
     return []
   }
+
   return this.db
     .prepare(
       `SELECT * FROM federated_dispatches
@@ -102,12 +103,14 @@ export function updateFederatedDispatchResources(
     )
     .run(params.remoteRuntimeEpoch, params.worktreeId, params.terminalHandle, params.dispatchId)
   const row = this.getFederatedDispatch(params.dispatchId)
+
   if (!row) {
     throw new OrchestrationError(
       'dispatch_not_found',
       `Federated Dispatch ${params.dispatchId} was not found.`
     )
   }
+
   return row
 }
 

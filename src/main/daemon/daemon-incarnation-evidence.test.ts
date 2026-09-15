@@ -14,11 +14,13 @@ import {
 } from './daemon-audit-classifier'
 
 const endpoint = { socketPath: '/runtime/daemon.sock', tokenPath: '/runtime/daemon.token' }
+
 const exactIncarnation: ExactDaemonIncarnation = {
   identity: { pid: 42, startedAtMs: 1_700_000_000_000, launchNonce: 'launch-a' },
   linuxStartTicks: '4242',
   bootId: 'boot-a'
 }
+
 const auditClassifierDependencies = {
   probeProcessIdentity: async () => ({
     state: 'unknown',
@@ -159,6 +161,7 @@ describe('daemon process identity evidence', () => {
       platform: 'win32' as const,
       signalProcess: () => 'occupied' as const
     }
+
     await expect(
       probeDaemonProcessIdentity(exactIncarnation, endpoint, {
         ...base,
@@ -332,6 +335,7 @@ describe('daemon audit availability evidence', () => {
       endpoint: '\\\\?\\pipe\\orca-daemon',
       endpointKind: 'windows-named-pipe'
     }
+
     const observation = await classifyDaemonAuditFailure(
       windowsContext,
       'inventory_failed',
@@ -357,6 +361,7 @@ describe('daemon audit availability evidence', () => {
       endpoint: '\\\\?\\pipe\\orca-daemon',
       endpointKind: 'windows-named-pipe'
     }
+
     const dependencies = {
       ...auditClassifierDependencies,
       probeProcessIdentity: async () => ({

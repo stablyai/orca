@@ -57,7 +57,9 @@ export function normalizeWorkspaceSessionKeyToWorktreeId(value: string): string 
   if (isWorktreeHostIdentity(value)) {
     return getWorktreeIdFromHostIdentity(value)
   }
+
   const scope = parseWorkspaceKey(value)
+
   return scope?.type === 'worktree' ? scope.worktreeId : value
 }
 
@@ -66,13 +68,17 @@ function resolveClaimedHostId(
   repoHostById: ReadonlyMap<string, ExecutionHostId | null>
 ): ExecutionHostId | null {
   const runtimeOwner = worktree.runtimeOwnerEnvironmentId?.trim()
+
   if (runtimeOwner) {
     return toRuntimeExecutionHostId(runtimeOwner)
   }
+
   const parsed = parseExecutionHostId(worktree.hostId)
+
   if (parsed) {
     return parsed.id
   }
+
   // Why: an unqualified row is attributable only when its repo id names exactly one host —
   // guessing would invent a contest that is not there, or hide one that is.
   return repoHostById.get(worktree.repoId) ?? null
@@ -83,13 +89,17 @@ export function indexWorktreeHostClaims(
   repoHostById: ReadonlyMap<string, ExecutionHostId | null>
 ): WorktreeHostClaims {
   const claims = new Map<string, Set<ExecutionHostId>>()
+
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const worktree of worktrees) {
       const hostId = resolveClaimedHostId(worktree, repoHostById)
+
       if (!hostId) {
         continue
       }
+
       const existing = claims.get(worktree.id)
+
       if (existing) {
         existing.add(hostId)
       } else {
@@ -97,6 +107,7 @@ export function indexWorktreeHostClaims(
       }
     }
   }
+
   return claims
 }
 
@@ -117,6 +128,7 @@ export function contestedPartitionHosts(claimed: Iterable<ExecutionHostId>): Exe
  *  rows between partitions on every workspace switch. */
 export function pickPrimaryHostForClaims(hostIds: Iterable<ExecutionHostId>): ExecutionHostId {
   const sorted = [...hostIds].sort()
+
   return sorted.includes(LOCAL_EXECUTION_HOST_ID)
     ? LOCAL_EXECUTION_HOST_ID
     : (sorted[0] ?? LOCAL_EXECUTION_HOST_ID)
@@ -131,14 +143,18 @@ function indexHostIdsBySessionKey(
   hostIds: readonly ExecutionHostId[]
 ): Map<string, ExecutionHostId[]> {
   const hostIdsByKey = new Map<string, ExecutionHostId[]>()
+
   for (const hostId of hostIds) {
     for (const field of WORKTREE_KEYED_FIELDS) {
       const record = slices[hostId]?.[field]
+
       if (!isWorkspaceSessionRecord(record)) {
         continue
       }
+
       for (const key of Object.keys(record)) {
         const owners = hostIdsByKey.get(key)
+
         if (!owners) {
           hostIdsByKey.set(key, [hostId])
         } else if (!owners.includes(hostId)) {
@@ -147,6 +163,7 @@ function indexHostIdsBySessionKey(
       }
     }
   }
+
   return hostIdsByKey
 }
 
@@ -157,29 +174,37 @@ function shadowHostEntries(
 ): { slice: WorkspaceSessionState; shadow: WorkspaceSessionState | null } {
   let nextSlice: WorkspaceSessionState | null = null
   let shadow: WorkspaceSessionState | null = null
+
   for (const field of WORKTREE_KEYED_FIELDS) {
     const record = slice[field]
+
     if (!isWorkspaceSessionRecord(record)) {
       continue
     }
+
     const kept: WorkspaceSessionRecord = {}
     const parked: WorkspaceSessionRecord = {}
+
     for (const [key, entry] of Object.entries(record)) {
       const primary = primaryByKey.get(key)
+
       if (primary && primary !== hostId) {
         parked[key] = entry
       } else {
         kept[key] = entry
       }
     }
+
     if (Object.keys(parked).length === 0) {
       continue
     }
+
     nextSlice ??= { ...slice }
     shadow ??= {} as WorkspaceSessionState
     ;(nextSlice as WorkspaceSessionRecord)[field] = kept
     ;(shadow as WorkspaceSessionRecord)[field] = parked
   }
+
   return { slice: nextSlice ?? slice, shadow }
 }
 
@@ -198,33 +223,44 @@ export function extractContestedHostSessionEntries(slices: HostSessionSlices): {
   const hostIds = definedHostIds(slices)
   const hostIdsByKey = indexHostIdsBySessionKey(slices, hostIds)
   const primaryHostBySessionKey: Record<string, ExecutionHostId> = {}
+
   for (const [key, owners] of hostIdsByKey) {
     primaryHostBySessionKey[key] = pickPrimaryHostForClaims(owners)
   }
+
   if (hostIds.length < 2) {
     return { slices, shadow, primaryHostBySessionKey }
   }
+
   const primaryByKey = new Map<string, ExecutionHostId>()
+
   for (const [key, owners] of hostIdsByKey) {
     if (owners.length > 1) {
       primaryByKey.set(key, pickPrimaryHostForClaims(owners))
     }
   }
+
   if (primaryByKey.size === 0) {
     return { slices, shadow, primaryHostBySessionKey }
   }
+
   const next: HostSessionSlices = { ...slices }
+
   for (const hostId of hostIds) {
     const slice = slices[hostId]
+
     if (!slice) {
       continue
     }
+
     const result = shadowHostEntries(slice, hostId, primaryByKey)
     next[hostId] = result.slice
+
     if (result.shadow) {
       shadow[hostId] = result.shadow
     }
   }
+
   return { slices: next, shadow, primaryHostBySessionKey }
 }
 
@@ -235,6 +271,7 @@ export function mergeWorkspaceSessionsWithHostShadow(slices: HostSessionSlices):
   primaryHostBySessionKey: Record<string, ExecutionHostId>
 } {
   const extracted = extractContestedHostSessionEntries(slices)
+
   return {
     session: mergeWorkspaceSessionsFromHosts(extracted.slices),
     slices: extracted.slices,
@@ -249,6 +286,7 @@ function hostStillClaimsKey(
   hostId: ExecutionHostId
 ): boolean {
   const claimed = claims.get(normalizeWorkspaceSessionKeyToWorktreeId(key))
+
   // Why: a missing catalog row is not evidence the host lost the workspace — the catalog may not
   // have hydrated, or the key may be a folder workspace. Only a positive re-attribution drops a row.
   return !claimed || claimed.has(hostId)
@@ -268,33 +306,42 @@ export function attachHostSessionShadow(
   if (!shadow) {
     return
   }
+
   for (const [hostId, shadowSlice] of Object.entries(shadow) as [
     ExecutionHostId,
     WorkspaceSessionState | undefined
   ][]) {
     const slice = slices[hostId]
+
     if (!slice || !shadowSlice) {
       continue
     }
+
     for (const field of WORKTREE_KEYED_FIELDS) {
       const parked = shadowSlice[field]
+
       if (!isWorkspaceSessionRecord(parked)) {
         continue
       }
+
       let target = slice[field]
+
       if (!isWorkspaceSessionRecord(target)) {
         // Why the mode split: a patch that omits the field leaves the partition's own copy
         // untouched, but a full set erases omitted fields, so the parked rows must ride along.
         if (mode === 'patch') {
           continue
         }
+
         target = {}
         ;(slice as WorkspaceSessionRecord)[field] = target
       }
+
       for (const [key, entry] of Object.entries(parked)) {
         if (Object.hasOwn(target, key) || !hostStillClaimsKey(claims, key, hostId)) {
           continue
         }
+
         target[key] = entry
       }
     }

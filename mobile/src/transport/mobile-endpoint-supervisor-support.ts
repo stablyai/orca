@@ -51,6 +51,7 @@ export async function dialRelayThroughDirectorFallback(args: {
 }): Promise<RelayDialResult> {
   const first = await args.dial()
   const relay = args.relay()
+
   if (
     first.ok ||
     first.error instanceof RelayDialAbortedError ||
@@ -59,9 +60,11 @@ export async function dialRelayThroughDirectorFallback(args: {
   ) {
     return first
   }
+
   try {
     const resolved = await args.resolveRelay({ relay, resumeToken: args.resumeToken })
     await args.persistResolvedRelay(resolved)
+
     return await args.dial()
   } catch (error) {
     return { ok: false, error: toError(error) }
@@ -74,6 +77,7 @@ export function isDirectorResolutionFailure(error: Error): boolean {
   if (error instanceof ReplacementAuthenticationTimeoutError) {
     return error.stage === null || error.stage === 'opening'
   }
+
   return (
     !(error instanceof MobileE2EEAuthenticationError) &&
     (!(error instanceof RelayOuterError) || [4409, 4503, 1006].includes(error.code))
@@ -84,6 +88,7 @@ export function relayWebSocketUrl(relay: { cellUrl: string; relayHostId: string 
   const url = new URL(relay.cellUrl)
   url.protocol = 'wss:'
   url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
+
   return url.toString()
 }
 
@@ -95,17 +100,21 @@ export async function persistRelayHost(
   const endpoints = [
     ...(host.endpoints ?? [{ id: 'direct-primary', kind: 'lan' as const, url: host.endpoint }])
   ].filter(({ kind }) => kind !== 'relay')
+
   endpoints.push({ id: 'relay-primary', kind: 'relay', url: relayWebSocketUrl(relay) })
   const updated = { ...host, endpoints, relayHostId: relay.relayHostId, relay }
   await saveHost(updated)
+
   return updated
 }
 
 export function encodeBase64Url(value: Uint8Array): string {
   let binary = ''
+
   for (const byte of value) {
     binary += String.fromCharCode(byte)
   }
+
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 

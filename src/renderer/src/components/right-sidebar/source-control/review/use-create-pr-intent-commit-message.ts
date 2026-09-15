@@ -44,13 +44,17 @@ export function useSourceControlCreatePrIntentCommitMessage({
       ) {
         return { ok: false, reason: 'settings' }
       }
+
       if (isCustomAgentId(resolvedCommitMessageAi.value.params.agentId)) {
         const command = resolvedCommitMessageAi.value.params.customAgentCommand?.trim() ?? ''
+
         if (!command) {
           return { ok: false, reason: 'settings' }
         }
       }
+
       const target = getCreatePrIntentOperationTarget(token)
+
       if (generateInFlightRef.current[target.worktreeId]) {
         return { ok: false, reason: 'failed' }
       }
@@ -58,18 +62,23 @@ export function useSourceControlCreatePrIntentCommitMessage({
       generateInFlightRef.current[target.worktreeId] = true
       setGenerateInFlightByWorktree((prev) => ({ ...prev, [target.worktreeId]: true }))
       setGenerateErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
+
       try {
         const result = await generateRuntimeCommitMessage(target, {
           sourceControlAiResolvedParams: resolvedCommitMessageAi.value.params
         })
+
         if (!result.success) {
           if (!result.canceled) {
             setGenerateErrors((prev) => ({ ...prev, [target.worktreeId]: result.error }))
           }
+
           return { ok: false, reason: result.canceled ? 'canceled' : 'failed' }
         }
+
         useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
         setGenerateErrors((prev) => ({ ...prev, [target.worktreeId]: null }))
+
         return { ok: true, message: result.message }
       } catch (error) {
         setGenerateErrors((prev) => ({
@@ -77,6 +86,7 @@ export function useSourceControlCreatePrIntentCommitMessage({
           [target.worktreeId]:
             error instanceof Error ? error.message : 'Failed to generate commit message'
         }))
+
         return { ok: false, reason: 'failed' }
       } finally {
         setGenerateInFlightByWorktree((prev) => ({ ...prev, [target.worktreeId]: false }))

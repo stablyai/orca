@@ -7,11 +7,17 @@ import {
 import type { TerminalOrphanRecoveryState } from './web-session-terminal-orphan-recovery'
 
 const ENVIRONMENT_ID = 'remote-runtime'
+
 const WORKTREE_ID = 'repo::/worktree'
+
 const HOST_TAB_ID = 'host-tab'
+
 const MIRRORED_TAB_ID = `web-terminal-${HOST_TAB_ID}`
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const TERMINAL_HANDLE = 'term-live'
+
 const REMOTE_PTY_ID = toRemoteRuntimePtyId(TERMINAL_HANDLE, ENVIRONMENT_ID)
 
 function stateWithVerifiedBinding(): TerminalOrphanRecoveryState {
@@ -35,6 +41,7 @@ function stateWithVerifiedBinding(): TerminalOrphanRecoveryState {
 function stateWithEmptyBinding() {
   const state = stateWithVerifiedBinding()
   state.terminalLayoutsByTabId[MIRRORED_TAB_ID]!.ptyIdsByLeafId = {}
+
   return state
 }
 
@@ -114,10 +121,12 @@ describe('web session pending terminal handle recovery', () => {
         }
       ]
     }
+
     const call = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'session.tabs.list') {
         return { ok: true as const, result: readySnapshot }
       }
+
       if (method === 'terminal.resolvePane') {
         return {
           ok: true as const,
@@ -133,6 +142,7 @@ describe('web session pending terminal handle recovery', () => {
           }
         }
       }
+
       if (method === 'terminal.list') {
         return {
           ok: true as const,
@@ -152,6 +162,7 @@ describe('web session pending terminal handle recovery', () => {
           }
         }
       }
+
       return {
         ok: true as const,
         result: { adopted: true, topologyRevision: 5, snapshot: readySnapshot }
@@ -281,19 +292,24 @@ describe('web session pending terminal handle recovery', () => {
         }
       ]
     }
+
     let resolveAttempts = 0
+
     const call = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'session.tabs.list') {
         return { ok: true as const, result: readySnapshot }
       }
+
       if (method === 'terminal.resolvePane') {
         resolveAttempts += 1
+
         if (resolveAttempts === 1) {
           return {
             ok: false as const,
             error: { code: 'runtime_rpc_queue_overloaded', message: 'retry later' }
           }
         }
+
         return {
           ok: true as const,
           result: {
@@ -308,6 +324,7 @@ describe('web session pending terminal handle recovery', () => {
           }
         }
       }
+
       if (method === 'terminal.list') {
         return {
           ok: true as const,
@@ -327,6 +344,7 @@ describe('web session pending terminal handle recovery', () => {
           }
         }
       }
+
       return {
         ok: true as const,
         result: { adopted: true, topologyRevision: 5, snapshot: readySnapshot }
@@ -368,13 +386,17 @@ describe('web session pending terminal handle recovery', () => {
         }
       ]
     }
+
     let resolveAttempts = 0
+
     const call = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'session.tabs.list') {
         return { ok: true as const, result: readySnapshot }
       }
+
       if (method === 'terminal.resolvePane') {
         resolveAttempts += 1
+
         return {
           ok: true as const,
           result: {
@@ -389,6 +411,7 @@ describe('web session pending terminal handle recovery', () => {
           }
         }
       }
+
       if (method === 'terminal.list') {
         return {
           ok: true as const,
@@ -408,6 +431,7 @@ describe('web session pending terminal handle recovery', () => {
           }
         }
       }
+
       return {
         ok: true as const,
         result: { adopted: true, topologyRevision: 5, snapshot: readySnapshot }
@@ -498,6 +522,7 @@ describe('web session pending terminal handle recovery', () => {
         }
       ]
     }
+
     const call = vi.fn()
 
     await expect(
@@ -524,6 +549,7 @@ describe('web session pending terminal handle recovery', () => {
         }
       ]
     }
+
     const call = vi.fn(async ({ method }: { method: string }) =>
       method === 'terminal.list'
         ? {
@@ -586,6 +612,7 @@ describe('web session pending terminal handle recovery', () => {
   // frame. See web-session-terminal-orphan-recovery-inventory.ts.
   it('rebinds a cached handle the host now serves from a different PTY', async () => {
     const snapshot = pendingSnapshot()
+
     const call = vi.fn(async () => ({
       ok: true as const,
       result: {
@@ -627,6 +654,7 @@ describe('web session pending terminal handle recovery', () => {
   it('holds an old-host pending surface that omits its PTY identity', async () => {
     const snapshot = pendingSnapshot()
     Reflect.deleteProperty(snapshot.tabs[0]!, 'ptyId')
+
     const call = vi.fn(async () => ({
       ok: true as const,
       result: {
@@ -663,6 +691,7 @@ describe('web session pending terminal handle recovery', () => {
       activeTabType: null,
       tabs: []
     }
+
     const call = vi.fn(async () => ({
       ok: true as const,
       result: {
@@ -702,6 +731,7 @@ describe('web session pending terminal handle recovery', () => {
         }
       ]
     }
+
     const runtimeCall = vi.fn(async ({ method }: { method: string }) =>
       method === 'terminal.list'
         ? {
@@ -727,6 +757,7 @@ describe('web session pending terminal handle recovery', () => {
                 : { adopted: true, topologyRevision: 1, snapshot: readySnapshot }
           }
     )
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     await expect(

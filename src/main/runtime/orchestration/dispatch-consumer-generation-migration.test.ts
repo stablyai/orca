@@ -17,6 +17,7 @@ describe('OrchestrationDb v35 to v36 migration', () => {
   afterEach(() => {
     db?.close()
     db = undefined
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
       tempDir = undefined
@@ -28,11 +29,13 @@ describe('OrchestrationDb v35 to v36 migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-v36-'))
     const dbPath = join(tempDir, 'orchestration.db')
     const seed = new OrchestrationDb(dbPath)
+
     const run = seed.createRun({
       objective: 'pre-v36 run',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'
     })
+
     const task = seed.createTask({ spec: 'mail written before v36', runId: run.id })
     const dispatch = createRootDispatch(seed, task.id, 'term_worker')
     seed.insertMessage({
@@ -41,11 +44,13 @@ describe('OrchestrationDb v35 to v36 migration', () => {
       subject: 'still unread',
       runId: dispatch.run_id
     })
+
     const delivery = seed.getOrCreateMailboxDelivery({
       runId: dispatch.run_id,
       mailboxHandle: `dispatch:${dispatch.id}`,
       consumerGeneration: 0
     })
+
     seed.close()
 
     const raw = new Database(dbPath)
@@ -56,6 +61,7 @@ describe('OrchestrationDb v35 to v36 migration', () => {
     `)
     raw.pragma('user_version = 35')
     raw.close()
+
     return { path: dbPath, dispatchId: dispatch.id, deliveryId: delivery!.delivery.id }
   }
 
@@ -72,6 +78,7 @@ describe('OrchestrationDb v35 to v36 migration', () => {
       mailboxHandle: `dispatch:${v35.dispatchId}`,
       consumerGeneration: 0
     })
+
     expect(replayed?.delivery.id).toBe(v35.deliveryId)
     expect(replayed?.replayed).toBe(true)
     expect(replayed?.messages.map((message) => message.subject)).toEqual(['still unread'])
@@ -81,6 +88,7 @@ describe('OrchestrationDb v35 to v36 migration', () => {
     const v35 = createV35Database()
     const raw = new Database(v35.path)
     dropDerivedDeliverySchema(raw)
+
     try {
       expect(resolveOrchestrationMigrationStartVersion(raw, 35, SCHEMA_VERSION)).toBe(35)
     } finally {
@@ -93,6 +101,7 @@ describe('OrchestrationDb v35 to v36 migration', () => {
     const raw = new Database(v35.path)
     dropDerivedDeliverySchema(raw)
     raw.pragma('user_version = 36')
+
     try {
       // Why: the skew repair is the only thing that catches a partially-written v36.
       expect(resolveOrchestrationMigrationStartVersion(raw, 36, SCHEMA_VERSION)).toBe(6)

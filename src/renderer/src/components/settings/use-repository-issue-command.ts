@@ -27,6 +27,7 @@ export function useRepositoryIssueCommand({
   const [issueCommandSaveError, setIssueCommandSaveError] = useState<string | null>(null)
   const issueCommandDraftRef = useRef(issueCommandDraft)
   const lastCommittedIssueCommandRef = useRef('')
+
   const updateIssueCommandDraft = useCallback((value: string) => {
     issueCommandDraftRef.current = value
     setIssueCommandDraft(value)
@@ -42,6 +43,7 @@ export function useRepositoryIssueCommand({
         if (cancelled) {
           return
         }
+
         const localContent = result.localContent ?? ''
         updateIssueCommandDraft(localContent)
         setHasSharedIssueCommand(Boolean(result.sharedContent))
@@ -51,6 +53,7 @@ export function useRepositoryIssueCommand({
         if (cancelled) {
           return
         }
+
         updateIssueCommandDraft('')
         setHasSharedIssueCommand(false)
         lastCommittedIssueCommandRef.current = ''
@@ -59,6 +62,7 @@ export function useRepositoryIssueCommand({
     return () => {
       cancelled = true
       const draft = issueCommandDraftRef.current.trim()
+
       if (draft !== lastCommittedIssueCommandRef.current) {
         void writeRuntimeIssueCommand(hookRuntimeSettings, repoId, draft, selectedHostId).catch(
           (error) => {
@@ -75,14 +79,17 @@ export function useRepositoryIssueCommand({
   const commitIssueCommand = useCallback(async (): Promise<void> => {
     const trimmed = issueCommandDraft.trim()
     updateIssueCommandDraft(trimmed)
+
     try {
       await writeRuntimeIssueCommand(hookRuntimeSettings, repoId, trimmed, selectedHostId)
       lastCommittedIssueCommandRef.current = trimmed
       setIssueCommandSaveError(null)
     } catch (error) {
       console.error('[RepositoryHooksSection] Failed to write issue command:', error)
+
       const message =
         error instanceof Error ? error.message : 'Failed to save GitHub issue command.'
+
       setIssueCommandSaveError(message)
       toast.error(message)
     }

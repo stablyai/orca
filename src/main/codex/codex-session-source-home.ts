@@ -23,21 +23,26 @@ export function resolveWslCodexSessionSourceHome(
   distro: string
 ): string | undefined {
   const perDistro = settings.codexSessionSourceHome?.wsl
+
   if (!perDistro) {
     return undefined
   }
+
   // Why: distro keys are matched case-insensitively so "Ubuntu" and "ubuntu"
   // resolve the same override, mirroring how WSL treats distro names.
   const normalizedDistro = distro.trim().toLowerCase()
+
   for (const [key, value] of Object.entries(perDistro)) {
     if (key.trim().toLowerCase() === normalizedDistro) {
       return normalizeSourceHome(value)
     }
   }
+
   return undefined
 }
 
 function normalizeSourceHome(value: string | undefined): string | undefined {
   const trimmed = value?.trim()
+
   return trimmed ? trimmed : undefined
 }

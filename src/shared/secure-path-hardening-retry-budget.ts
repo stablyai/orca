@@ -26,6 +26,7 @@ type HardeningFailureRecord = { at: number; attempts: number }
  * re-probe is a backstop, not the recovery mechanism.
  */
 const HARDENING_RETRY_FLOOR_MS = 60_000
+
 const HARDENING_RETRY_CEILING_MS = 30 * 60_000
 
 /**
@@ -57,6 +58,7 @@ function failures(): SecurePathHardeningCache<HardeningFailureRecord> {
   hardeningFailures ??= new SecurePathHardeningCache<HardeningFailureRecord>(
     DEFAULT_HARDENING_CACHE_BOUNDS
   )
+
   return hardeningFailures
 }
 
@@ -67,17 +69,21 @@ export function configureHardeningRetryBudget(bounds: SecurePathHardeningCacheBo
 
 export function mayAttemptHardening(targetPath: string): boolean {
   const failure = failures().get(targetPath)
+
   if (!failure) {
     return true
   }
+
   // No cap: once the backoff elapses the path is re-probed, however long it has been failing.
   return monotonicNowMs() - failure.at >= hardeningRetryDelayMs(failure.attempts)
 }
 
 export function recordHardeningOutcome(targetPath: string, restricted: boolean): void {
   const previous = failures().get(targetPath)
+
   if (restricted) {
     failures().delete(targetPath)
+
     if (previous && previous.attempts >= HARDENING_THROTTLE_ANNOUNCE_AFTER) {
       reportSecurePathHardening(
         targetPath,
@@ -85,10 +91,13 @@ export function recordHardeningOutcome(targetPath: string, restricted: boolean):
         `hardening succeeded again after ${previous.attempts} consecutive failures`
       )
     }
+
     return
   }
+
   const attempts = (previous?.attempts ?? 0) + 1
   failures().set(targetPath, { at: monotonicNowMs(), attempts })
+
   // Fires exactly once: attempts only rises, and a success clears the record entirely.
   if (attempts === HARDENING_THROTTLE_ANNOUNCE_AFTER) {
     reportSecurePathHardening(

@@ -16,6 +16,7 @@ const {
   WorkspaceSpaceScanCancelledErrorMock
 } = vi.hoisted(() => {
   const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
+
   return {
     handlers,
     analyzeWorkspaceSpaceMock: vi.fn(),
@@ -88,9 +89,11 @@ describe('registerWorkspaceSpaceHandlers', () => {
   it('shares an in-flight analysis request', async () => {
     const store = createStore()
     let resolveFirstScan: (analysis: WorkspaceSpaceAnalysis) => void = () => {}
+
     const firstScan = new Promise<WorkspaceSpaceAnalysis>((resolve) => {
       resolveFirstScan = resolve
     })
+
     const secondScan = Promise.resolve(createAnalysis(2))
     analyzeWorkspaceSpaceMock.mockReturnValueOnce(firstScan).mockReturnValueOnce(secondScan)
 
@@ -128,6 +131,7 @@ describe('registerWorkspaceSpaceHandlers', () => {
     let onProgress: ((progress: WorkspaceSpaceScanProgress) => void) | undefined
     analyzeWorkspaceSpaceMock.mockImplementationOnce((_store, options) => {
       onProgress = options.onProgress
+
       return Promise.resolve(createAnalysis(1))
     })
 
@@ -135,6 +139,7 @@ describe('registerWorkspaceSpaceHandlers', () => {
     const event = createEvent()
     const handler = handlers.get('workspaceSpace:analyze')
     const promise = handler!(event)
+
     const progress: WorkspaceSpaceScanProgress = {
       scanId: 'scan-1',
       state: 'running',
@@ -147,6 +152,7 @@ describe('registerWorkspaceSpaceHandlers', () => {
       currentRepoDisplayName: 'orca',
       currentWorktreeDisplayName: 'feature'
     }
+
     onProgress?.(progress)
     await promise
 
@@ -159,6 +165,7 @@ describe('registerWorkspaceSpaceHandlers', () => {
     let resolveScan!: (analysis: WorkspaceSpaceAnalysis) => void
     analyzeWorkspaceSpaceMock.mockImplementationOnce((_store, options) => {
       onProgress = options.onProgress
+
       return new Promise<WorkspaceSpaceAnalysis>((resolve) => {
         resolveScan = resolve
       })
@@ -169,6 +176,7 @@ describe('registerWorkspaceSpaceHandlers', () => {
       registerWorkspaceSpaceHandlers(store)
       const event = createEvent()
       const promise = handlers.get('workspaceSpace:analyze')!(event)
+
       const base = {
         scanId: 'scan-1',
         state: 'running' as const,
@@ -180,6 +188,7 @@ describe('registerWorkspaceSpaceHandlers', () => {
         currentRepoDisplayName: 'orca',
         currentWorktreeDisplayName: 'feature'
       }
+
       onProgress?.({ ...base, scannedWorktreeCount: 0 })
       onProgress?.({
         ...base,
@@ -215,6 +224,7 @@ describe('registerWorkspaceSpaceHandlers', () => {
     let signal: AbortSignal | undefined
     analyzeWorkspaceSpaceMock.mockImplementationOnce((_store, options) => {
       signal = options.signal
+
       return new Promise<WorkspaceSpaceAnalysis>(() => {})
     })
 

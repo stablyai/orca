@@ -14,10 +14,13 @@ export async function readVisibleXtermContainerBox(
     .first()
     .evaluate((xterm) => {
       const container = xterm.closest('.xterm-container')
+
       if (!(container instanceof HTMLElement)) {
         throw new Error('No visible xterm container found')
       }
+
       const rect = container.getBoundingClientRect()
+
       return { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
     })
 }
@@ -34,8 +37,10 @@ export function expectTerminalToReserveTitleSpace(
 
 export async function readVisiblePaneContents(page: Page): Promise<string[]> {
   const snapshot = await waitForPaneIdentitySnapshot(page, 2)
+
   return page.evaluate((tabId) => {
     const manager = window.__paneManagers?.get(tabId)
+
     return (
       manager
         ?.getPanes()

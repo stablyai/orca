@@ -5,6 +5,7 @@ import { subscribeMobileTerminalSafely } from './mobile-terminal-stream-subscrib
 describe('subscribeMobileTerminalSafely', () => {
   it('reports a synchronous subscribe failure and returns a safe no-op cleanup', () => {
     const onSynchronousError = vi.fn()
+
     const client = {
       subscribe: vi.fn(() => {
         throw new Error('socket closed')

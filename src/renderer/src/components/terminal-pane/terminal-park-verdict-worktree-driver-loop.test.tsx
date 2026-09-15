@@ -28,6 +28,7 @@ const park = vi.hoisted(() => ({ worktreeId: 'repo::/wt-worktree-driver' }))
 
 vi.mock('../../store', async () => {
   const { create } = await import('zustand')
+
   const useAppStore = create(() => ({
     pendingStartupByTabId: {} as Record<string, unknown>,
     ptyIdsByTabId: {} as Record<string, string[]>,
@@ -37,6 +38,7 @@ vi.mock('../../store', async () => {
     runtimePaneTitlesByTabId: {} as Record<string, unknown>,
     tabsByWorktree: {} as Record<string, TerminalTab[]>
   }))
+
   return { useAppStore }
 })
 
@@ -56,11 +58,15 @@ import { TERMINAL_TAB_PARK_FLIP_BURST_LIMIT } from './terminal-park-verdict-flip
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
 
 const TAB_ID = 'tab-worktree-driven'
+
 /** Stops an unfixed loop from hanging the run if React ever raises its bail. */
 const RENDER_HARD_STOP = 400
+
 /** +1: the pin lands in the passive effect observing the burst flip. */
 const SETTLED_FLIP_BUDGET = TERMINAL_TAB_PARK_FLIP_BURST_LIMIT + 1
+
 const EMPTY_ASSIGNMENTS = new Map<string, { groupId: string; isActiveInGroup: boolean }>()
+
 const EMPTY_PORTALS: never[] = []
 
 type ParkingStoreState = { tabsByWorktree: Record<string, TerminalTab[]> }
@@ -70,8 +76,11 @@ const parkingStore = useAppStore as unknown as {
 }
 
 let hostRenderCount = 0
+
 let parkVerdictFlipCount = 0
+
 let lastParkVerdict = false
+
 let paneMountCount = 0
 
 /** The pane whose mount/unmount the park verdict authorizes. */
@@ -79,6 +88,7 @@ function TerminalPaneStandIn(): null {
   useEffect(() => {
     paneMountCount += 1
   }, [])
+
   return null
 }
 
@@ -97,15 +107,18 @@ function WorktreeParkVerdict({
   useEffect(() => {
     onVerdict(!parked)
   }, [parked, onVerdict])
+
   return null
 }
 
 function OverlayHost(): React.JSX.Element | null {
   hostRenderCount += 1
   const [coldParkTerminalPanes, setColdParkTerminalPanes] = useState(false)
+
   const terminalTabs = useAppStore(
     (state) => (state as ParkingStoreState).tabsByWorktree[park.worktreeId]
   ) as TerminalTab[]
+
   const parkedTerminalTabIds = useTerminalTabColdParking({
     worktreeId: park.worktreeId,
     terminalTabs,
@@ -117,14 +130,19 @@ function OverlayHost(): React.JSX.Element | null {
     activityTerminalPortals: EMPTY_PORTALS,
     activationDeferredMountTabIds: null
   })
+
   const parked = parkedTerminalTabIds.has(TAB_ID)
+
   if (parked !== lastParkVerdict) {
     parkVerdictFlipCount += 1
   }
+
   lastParkVerdict = parked
+
   if (hostRenderCount > RENDER_HARD_STOP) {
     return null
   }
+
   return (
     <>
       {parked ? null : <TerminalPaneStandIn />}
@@ -136,6 +154,7 @@ function OverlayHost(): React.JSX.Element | null {
 function renderOverlayHost(root: Root): unknown {
   const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
   let thrown: unknown = null
+
   try {
     act(() => {
       root.render(<OverlayHost />)
@@ -143,7 +162,9 @@ function renderOverlayHost(root: Root): unknown {
   } catch (error) {
     thrown = error
   }
+
   consoleError.mockRestore()
+
   return thrown
 }
 

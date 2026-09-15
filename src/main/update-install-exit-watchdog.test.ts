@@ -6,6 +6,7 @@ const { appMock, recordUpdaterLifecycleMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: appMock }))
+
 vi.mock('./updater-lifecycle-diagnostics', () => ({
   recordUpdaterLifecycle: recordUpdaterLifecycleMock
 }))

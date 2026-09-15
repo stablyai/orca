@@ -62,16 +62,21 @@ export function deriveBitbucketBuildStatus(
   if (statuses.length === 0) {
     return 'neutral'
   }
+
   const states = statuses.map((status) => status.state?.trim().toUpperCase() ?? '')
+
   if (states.some((state) => state === 'FAILED' || state === 'STOPPED' || state === 'ERROR')) {
     return 'failure'
   }
+
   if (states.some((state) => state === 'INPROGRESS' || state === 'PENDING')) {
     return 'pending'
   }
+
   if (states.every((state) => state === 'SUCCESSFUL')) {
     return 'success'
   }
+
   return 'neutral'
 }
 
@@ -82,7 +87,9 @@ export function mapBitbucketPullRequest(
   if (typeof raw.id !== 'number' || !raw.title || !raw.links?.html?.href) {
     return null
   }
+
   const headSha = raw.source?.commit?.hash?.trim()
+
   return {
     number: raw.id,
     title: raw.title,

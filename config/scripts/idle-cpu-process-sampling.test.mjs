@@ -4,16 +4,21 @@ import { sampleProcessTreeUntilWorkloadsComplete } from './idle-cpu-process-samp
 function createClock(workloadCompletesAt) {
   let currentMs = 0
   let resolveWorkload
+
   const workloadPromise = new Promise((resolve) => {
     resolveWorkload = resolve
   })
+
   const wait = async (durationMs) => {
     currentMs += durationMs
+
     if (currentMs >= workloadCompletesAt) {
       resolveWorkload('complete')
     }
+
     await Promise.resolve()
   }
+
   const readRows = () => [
     {
       pid: 10,
@@ -24,12 +29,14 @@ function createClock(workloadCompletesAt) {
       command: 'electron'
     }
   ]
+
   return { now: () => currentMs, readRows, wait, workloadPromise }
 }
 
 describe('idle CPU process sampling window', () => {
   it('extends through a slow workload and captures a final CPU delta', async () => {
     const clock = createClock(40)
+
     const result = await sampleProcessTreeUntilWorkloadsComplete({
       rootPid: 10,
       requestedDurationMs: 20,

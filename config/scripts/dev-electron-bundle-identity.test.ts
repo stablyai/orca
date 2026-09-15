@@ -27,6 +27,7 @@ function patchesUnder(dockTitle: string, branch: string) {
     ORCA_DEV_INSTANCE_LABEL: branch,
     ORCA_DEV_WORKTREE_NAME: branch
   })
+
   try {
     return [...getDevBundlePlistPatches(), ...getDevHelperPlistPatches()]
   } finally {
@@ -60,6 +61,7 @@ describe('dev-electron-bundle-identity', () => {
     const byKey = Object.fromEntries(
       getDevBundlePlistPatches().map((patch) => [patch.key, patch.value])
     )
+
     expect(byKey.CFBundleName).toBe(DEV_BUNDLE_DISPLAY_NAME)
     expect(byKey.CFBundleDisplayName).toBe(DEV_BUNDLE_DISPLAY_NAME)
     expect(DEV_BUNDLE_DISPLAY_NAME).not.toBe('Electron')
@@ -92,6 +94,7 @@ describe('dev-electron-bundle-identity', () => {
   it('leaks no branch, worktree, or title text into any patched value', () => {
     const branch = 'fix-login-crash'
     const worktree = 'Orca-safe-storage-lock'
+
     for (const patch of patchesUnder(`Orca: ${branch}`, branch)) {
       expect(patch.value).not.toContain(branch)
       expect(patch.value).not.toContain(worktree)

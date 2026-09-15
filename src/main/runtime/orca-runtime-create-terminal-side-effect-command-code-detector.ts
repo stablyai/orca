@@ -32,19 +32,24 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
     data: string
   ): { path: string; hostname: string } | null {
     const previousTail = this.osc7ScanTailByPtyId.get(ptyId)
+
     if (!previousTail && !data.includes('\x1b]7;')) {
       return null
     }
+
     const input = `${previousTail ?? ''}${data}`
     const scanTail = extractOscScanTail(input, 4096)
+
     if (scanTail.length > 0) {
       this.osc7ScanTailByPtyId.set(ptyId, scanTail)
     } else {
       this.osc7ScanTailByPtyId.delete(ptyId)
     }
+
     const uri = extractLastOsc7Uri(input)
     const pty = this.ptysById.get(ptyId)
     const pathFlavor = this.pathFlavorForPty(pty)
+
     return uri
       ? parseFileUriPathParts(uri, {
           pathFlavor,
@@ -62,11 +67,14 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
   ): { cwd: string | null; cwdChanged: boolean } {
     const osc7 = this.extractLastOsc7CwdForPty(ptyId, data)
     const cwd = osc7?.path ?? null
+
     const cwdChanged =
       cwd !== null && cwd.trim().length > 0 && this.terminalCwdByPtyId.get(ptyId) !== cwd
+
     if (cwdChanged) {
       this.terminalCwdByPtyId.set(ptyId, cwd)
     }
+
     if (osc7) {
       if (osc7.hostname) {
         this.terminalFileUriHostnameByPtyId.set(ptyId, osc7.hostname)
@@ -74,6 +82,7 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
         this.terminalFileUriHostnameByPtyId.delete(ptyId)
       }
     }
+
     return { cwd, cwdChanged }
   }
 
@@ -81,7 +90,9 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
     if (!pty?.connectionId) {
       return process.platform === 'win32' ? 'win32' : 'posix'
     }
+
     const worktreePath = splitWorktreeIdForFilesystem(pty.worktreeId)?.worktreePath
+
     return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'posix'
   }
 
@@ -89,6 +100,7 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
     if (chunk.payloads.length === 0) {
       return
     }
+
     const targets = new Map<
       string,
       {
@@ -100,8 +112,10 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
         terminalHandle?: string
       }
     >()
+
     const pty = this.ptysById.get(ptyId)
     const connectionId = pty?.connectionId ?? null
+
     for (const leaf of this.getLeavesForPty(ptyId)) {
       const paneKey = this.makeRuntimePaneKey(leaf)
       targets.set(paneKey, {
@@ -112,6 +126,7 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
         connectionId
       })
     }
+
     if (targets.size === 0 && pty?.paneKey) {
       targets.set(pty.paneKey, {
         source: 'pty-record',
@@ -121,16 +136,19 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
         connectionId
       })
     }
+
     // Why once per chunk and not per payload: the same lookup the renderer-facing IPC boundary
     // runs, and it is the pane's only durable join back to its terminal once the pane key moves.
     if (this.onTerminalAgentStatus) {
       for (const target of targets.values()) {
         const terminalHandle = this.getAgentStatusTerminalHandleForPaneKey(target.paneKey)
+
         if (terminalHandle) {
           target.terminalHandle = terminalHandle
         }
       }
     }
+
     for (const payload of chunk.payloads) {
       // Why not gated on a listener: the prompt lifecycle is main's own state, read by
       // terminal waits that run with no status consumer attached.
@@ -138,10 +156,12 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
         ptyId,
         mapExplicitAgentStateToRuntimeTerminalStatus(payload.state)
       )
+
       for (const target of targets.values()) {
         if (!this.onTerminalAgentStatus) {
           continue
         }
+
         try {
           this.onTerminalAgentStatus({
             ptyId,

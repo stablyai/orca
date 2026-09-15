@@ -23,6 +23,7 @@ import {
 } from './fs-list-files-scan-coordinator'
 
 const tempDirs: string[] = []
+
 const SHA1 = '0123456789abcdef0123456789abcdef01234567'
 
 function staged(mode: string, path: string): string {
@@ -31,6 +32,7 @@ function staged(mode: string, path: string): string {
 
 function createMockProcess(): ChildProcess {
   const p = new EventEmitter() as unknown as ChildProcess
+
   ;(p as unknown as Record<string, unknown>).stdout = new EventEmitter()
   ;(
     (p as unknown as Record<string, unknown>).stdout as EventEmitter & {
@@ -42,12 +44,14 @@ function createMockProcess(): ChildProcess {
   ;(p as unknown as Record<string, unknown>).exitCode = null
   ;(p as unknown as Record<string, unknown>).signalCode = null
   Object.defineProperty(p, 'pid', { configurable: true, value: 1 })
+
   return p
 }
 
 async function makeTempRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-relay-git-list-files-'))
   tempDirs.push(root)
+
   return root
 }
 
@@ -74,6 +78,7 @@ describe('relay quick open ignored file listing', () => {
       if (args.includes('--no-ignore-vcs')) {
         return ignoredProc
       }
+
       return primaryProc
     })
 
@@ -95,6 +100,7 @@ describe('relay quick open ignored file listing', () => {
     const ignoredArgs = spawnMock.mock.calls.find((call) =>
       (call[1] as string[]).includes('--no-ignore-vcs')
     )?.[1] as string[]
+
     expect(ignoredArgs).toBeDefined()
     expect(ignoredArgs).toContain('--no-ignore-vcs')
     expect(ignoredArgs).not.toContain('.env*')
@@ -111,6 +117,7 @@ describe('relay quick open ignored file listing', () => {
     spawnMock.mockImplementation(() => (++callIndex === 1 ? primaryProc : ignoredProc))
 
     const promise = listFilesWithRg('/remote/root', [], { maxResults: 2 })
+
     ;(primaryProc.stdout as unknown as EventEmitter).emit(
       'data',
       'src/one.ts\nsrc/two.ts\nsrc/three.ts\n'
@@ -125,6 +132,7 @@ describe('relay quick open ignored file listing', () => {
   it('searches the complete stream and retains only ranked fuzzy matches', async () => {
     const ignoredProc = createMockProcess()
     spawnMock.mockReturnValue(ignoredProc)
+
     const promise = listFilesWithRg('/remote/root', [], {
       maxResults: 2,
       searchQuery: 'sct'
@@ -155,6 +163,7 @@ describe('relay quick open ignored file listing', () => {
       maxResults: 32,
       searchQuery: 'target'
     })
+
     ;(failed.stdout as unknown as EventEmitter).emit('data', 'src/target.ts\n')
     failed.emit('error', Object.assign(new Error('spawn rg EAGAIN'), { code: 'EAGAIN' }))
 
@@ -179,6 +188,7 @@ describe('relay quick open ignored file listing', () => {
       maxResults: 32,
       searchQuery: 'target'
     })
+
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
     ;(succeeded.stdout as unknown as EventEmitter).emit('data', 'src/target.ts\n')
     succeeded.emit('close', 0, null)
@@ -220,6 +230,7 @@ describe('relay quick open ignored file listing', () => {
       const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
 
       const promise = listFilesWithRg(root)
+
       if (order === 'error-first') {
         expect(() => missing.emit('error', error)).not.toThrow()
       } else {
@@ -227,11 +238,13 @@ describe('relay quick open ignored file listing', () => {
       }
 
       await expect(promise).rejects.toBeInstanceOf(RipgrepUnavailableError)
+
       if (order === 'error-first') {
         missing.emit('close', -2, null)
       } else {
         expect(() => missing.emit('error', error)).not.toThrow()
       }
+
       expect(spawnMock).toHaveBeenCalledTimes(1)
       expect(missing.listenerCount('error')).toBe(0)
       expect(missing.listenerCount('close')).toBe(0)
@@ -265,11 +278,13 @@ describe('relay quick open ignored file listing', () => {
     Object.defineProperty(firstChild, 'pid', { value: undefined })
     spawnMock.mockReturnValue(firstChild)
     const coordinator = new ListFilesScanCoordinator()
+
     const first = coordinator.run({
       clientId: 1,
       key: 'first',
       start: (signal) => listFilesWithRg(root, [], { signal })
     })
+
     const firstOutcome = first.catch((error: unknown) => error)
 
     const second = coordinator.run({
@@ -295,6 +310,7 @@ describe('relay quick open ignored file listing', () => {
 
     spawnMock.mockImplementation(() => {
       callIndex++
+
       return callIndex === 1 ? primaryProc : ignoredProc
     })
 
@@ -342,6 +358,7 @@ describe('relay quick open ignored file listing', () => {
     spawnMock.mockImplementation(() => (++callIndex === 1 ? primaryProc : ignoredProc))
 
     const promise = listFilesWithGit('/remote/root', [], { maxResults: 2 })
+
     ;(primaryProc.stdout as unknown as EventEmitter).emit('data', 'src/one.ts\0src/two.ts')
     primaryProc.emit('close', 0, null)
     await expect(promise).resolves.toEqual(['src/one.ts', 'src/two.ts'])
@@ -355,6 +372,7 @@ describe('relay quick open ignored file listing', () => {
     spawnMock.mockReturnValue(primaryProc)
 
     const promise = listFilesWithGit('/remote/root', [], { maxResults: 1 })
+
     ;(primaryProc.stdout as unknown as EventEmitter).emit(
       'data',
       `discarded/\0${staged('100644', 'src/kept.ts')}\0`
@@ -379,6 +397,7 @@ describe('relay quick open ignored file listing', () => {
 
     spawnMock.mockImplementation(() => {
       callIndex++
+
       return callIndex === 1 ? primaryProc : ignoredProc
     })
 
@@ -402,6 +421,7 @@ describe('relay quick open ignored file listing', () => {
 
   it('git fallback keeps primary results when the ignored pass is killed', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const primaryProc = createMockProcess()
       const ignoredProc = createMockProcess()
@@ -409,6 +429,7 @@ describe('relay quick open ignored file listing', () => {
 
       spawnMock.mockImplementation(() => {
         callIndex++
+
         return callIndex === 1 ? primaryProc : ignoredProc
       })
 
@@ -432,6 +453,7 @@ describe('relay quick open ignored file listing', () => {
 
   it('git fallback keeps primary results when the ignored pass exits non-zero', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const primaryProc = createMockProcess()
       const ignoredProc = createMockProcess()
@@ -439,6 +461,7 @@ describe('relay quick open ignored file listing', () => {
 
       spawnMock.mockImplementation(() => {
         callIndex++
+
         return callIndex === 1 ? primaryProc : ignoredProc
       })
 
@@ -465,6 +488,7 @@ describe('relay quick open ignored file listing', () => {
 
     spawnMock.mockImplementation(() => {
       callIndex++
+
       return callIndex === 1 ? primaryProc : ignoredProc
     })
 
@@ -488,6 +512,7 @@ describe('relay quick open ignored file listing', () => {
 
     spawnMock.mockImplementation(() => {
       callIndex++
+
       return callIndex === 1 ? primaryProc : ignoredProc
     })
 
@@ -505,6 +530,7 @@ describe('relay quick open ignored file listing', () => {
 
   it('git fallback rejects when a timed-out child does not emit close', async () => {
     vi.useFakeTimers()
+
     try {
       const primaryProc = createMockProcess()
       const ignoredProc = createMockProcess()
@@ -512,10 +538,12 @@ describe('relay quick open ignored file listing', () => {
 
       spawnMock.mockImplementation(() => {
         callIndex++
+
         return callIndex === 1 ? primaryProc : ignoredProc
       })
 
       const promise = listFilesWithGit('/remote/root')
+
       const outcomePromise = promise.then(
         () => 'resolved',
         (err: Error) => `rejected:${err.message}`
@@ -542,6 +570,7 @@ describe('relay quick open ignored file listing', () => {
 
   it('rg file listing rejects and detaches when a timed-out child does not emit close', async () => {
     vi.useFakeTimers()
+
     try {
       const primaryProc = createMockProcess()
       const ignoredProc = createMockProcess()
@@ -549,10 +578,12 @@ describe('relay quick open ignored file listing', () => {
 
       spawnMock.mockImplementation(() => {
         callIndex++
+
         return callIndex === 1 ? primaryProc : ignoredProc
       })
 
       const promise = listFilesWithRg('/remote/root')
+
       const outcomePromise = promise.then(
         () => 'resolved',
         (err: Error) => `rejected:${err.message}`
@@ -579,11 +610,13 @@ describe('relay quick open ignored file listing', () => {
 
   it('rg search settles and detaches when a timed-out child does not emit close', async () => {
     vi.useFakeTimers()
+
     try {
       const proc = createMockProcess()
       spawnMock.mockReturnValue(proc)
 
       const promise = searchWithRg('/remote/root', 'ok', { maxResults: 100 })
+
       const outcomePromise = promise.then((result) =>
         result.truncated ? `truncated:${result.totalMatches}` : 'not-truncated'
       )
@@ -611,6 +644,7 @@ describe('relay quick open ignored file listing', () => {
       spawnMock.mockReturnValueOnce(missing)
       const unavailable = searchWithRg(root, 'ok', { maxResults: 100 })
       const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })
+
       if (order === 'error-first') {
         expect(() => missing.emit('error', error)).not.toThrow()
         missing.emit('close', -2, null)
@@ -674,9 +708,11 @@ describe('relay quick open ignored file listing', () => {
     await rm(missingRoot, { recursive: true, force: true })
     const first = createMockProcess()
     const probe = createMockProcess()
+
     for (const child of [first, probe]) {
       Object.defineProperty(child, 'pid', { value: undefined })
     }
+
     let callIndex = 0
     spawnMock.mockImplementation(() => [first, probe][callIndex++])
     const error = Object.assign(new Error('spawn rg ENOENT'), { code: 'ENOENT' })

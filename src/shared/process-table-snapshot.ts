@@ -59,9 +59,11 @@ export const SHELL_FOREGROUND_PS_ARGS = [
  */
 export function parseShellForegroundRows(stdout: string): ProcessTableRow[] {
   const rows: ProcessTableRow[] = []
+
   for (const rawLine of stdout.split(/\r?\n/)) {
     const match = rawLine.trim().match(/^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s+(.+)$/)
     const pid = match ? Number(match[1]) : 0
+
     if (match && Number.isSafeInteger(pid) && pid > 0) {
       rows.push({
         pid,
@@ -73,9 +75,11 @@ export function parseShellForegroundRows(stdout: string): ProcessTableRow[] {
       })
     }
   }
+
   if (rows.length === 0) {
     throw new ProcessTableCaptureError('empty_capture')
   }
+
   return rows
 }
 
@@ -96,15 +100,20 @@ export type CheapProcessTableRow = {
  */
 export function parseCheapProcessTableRows(stdout: string): CheapProcessTableRow[] {
   const rows: CheapProcessTableRow[] = []
+
   for (const rawLine of stdout.split(/\r?\n/)) {
     const match = rawLine.trim().match(/^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)(?:\s+(.+?))?$/)
+
     if (!match) {
       continue
     }
+
     const pid = Number(match[1])
+
     if (!Number.isSafeInteger(pid) || pid <= 0) {
       continue
     }
+
     rows.push({
       pid,
       ppid: Number(match[2]),
@@ -114,9 +123,11 @@ export function parseCheapProcessTableRows(stdout: string): CheapProcessTableRow
       ...(match[6] !== undefined ? { startTime: match[6] } : {})
     })
   }
+
   if (rows.length === 0) {
     throw new ProcessTableCaptureError('empty_capture')
   }
+
   return rows
 }
 
@@ -141,11 +152,14 @@ export const PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS = 500
  */
 export function parseProcessTableRows(stdout: string): ProcessTableRow[] {
   const rows: ProcessTableRow[] = []
+
   for (const line of stdout.split(/\r?\n/)) {
     const trimmed = line.trim()
+
     const macStartMatch = trimmed.match(
       /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s+(\S+)\s+(\S+\s+\S+\s+\d{1,2}\s+\S+\s+\d{4})\s+(.+)$/
     )
+
     if (macStartMatch) {
       rows.push({
         pid: Number(macStartMatch[1]),
@@ -159,9 +173,11 @@ export function parseProcessTableRows(stdout: string): ProcessTableRow[] {
       })
       continue
     }
+
     const evidenceMatch = trimmed.match(
       /^(\d+)\s+(\d+)\s+(?:(-?\d+)\s+(-?\d+)\s+)?(\S+)(?:\s+(\S+)\s+(\d+))?\s+(.+)$/
     )
+
     if (evidenceMatch) {
       rows.push({
         pid: Number(evidenceMatch[1]),
@@ -177,9 +193,11 @@ export function parseProcessTableRows(stdout: string): ProcessTableRow[] {
       } as ProcessTableRow)
       continue
     }
+
     const legacyMatch = trimmed.match(
       /^((?:\d+)\s+(?:\d+)\s+)(?:(-?\d+)\s+(-?\d+)\s+)?(\S+)\s+(.+)$/
     )
+
     if (legacyMatch) {
       rows.push({
         pid: Number(legacyMatch[1].trim().split(/\s+/)[0]),
@@ -192,6 +210,7 @@ export function parseProcessTableRows(stdout: string): ProcessTableRow[] {
       } as ProcessTableRow)
     }
   }
+
   return rows
 }
 
@@ -218,28 +237,36 @@ export class ProcessTableCaptureError extends Error {
  */
 export function parseStrictProcessTableRows(stdout: string): ProcessTableRow[] {
   const rows: ProcessTableRow[] = []
+
   for (const rawLine of stdout.split(/\r?\n/)) {
     const line = rawLine.trim()
+
     if (!line) {
       continue
     }
+
     if (/^PID\s+PPID\s+PGID\s+TPGID\s+STAT\s+COMMAND$/i.test(line)) {
       continue
     }
+
     const macStartMatch = line.match(
       /^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)\s+(\S+)\s+(\S+\s+\S+\s+\d{1,2}\s+\S+\s+\d{4})\s+(.+)$/
     )
+
     const numericMatch = macStartMatch
       ? null
       : line.match(/^(\d+)\s+(\d+)\s+(-?\d+)\s+(-?\d+)\s+(\S+)(?:\s+(\S+)\s+(\d+))?\s+(.+)$/)
+
     if (!numericMatch && !macStartMatch) {
       throw new ProcessTableCaptureError('malformed_row')
     }
+
     const match = numericMatch ?? macStartMatch!
     const pid = Number(match[1])
     const ppid = Number(match[2])
     const pgid = Number(match[3])
     const tpgid = Number(match[4])
+
     if (
       !Number.isSafeInteger(pid) ||
       pid <= 0 ||
@@ -253,6 +280,7 @@ export function parseStrictProcessTableRows(stdout: string): ProcessTableRow[] {
     ) {
       throw new ProcessTableCaptureError('invalid_numeric_field')
     }
+
     rows.push({
       pid,
       ppid,
@@ -267,9 +295,11 @@ export function parseStrictProcessTableRows(stdout: string): ProcessTableRow[] {
       command: numericMatch ? (match[8] ?? match[6]) : match[8]
     })
   }
+
   if (rows.length === 0) {
     throw new ProcessTableCaptureError('empty_capture')
   }
+
   return rows
 }
 

@@ -12,11 +12,14 @@ import type { ActivityPortalReadinessStatus } from './activity-portal-readiness-
 export type { ActivityGroupBy, ThreadReadFilter } from '../../../../shared/ui-chrome-types'
 
 export type ActivityEventState = AgentStatusState
+
 export type ActivityHookLiveAgentState = Extract<
   AgentStatusState,
   'working' | 'blocked' | 'waiting'
 >
+
 export type ActivityLiveAgentState = ActivityHookLiveAgentState | 'monitoring'
+
 export type ActivityEvent = {
   id: string
   state: ActivityEventState

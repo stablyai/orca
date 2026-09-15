@@ -24,6 +24,7 @@ export async function readStreamedSessionDocument<T>(args: {
     keepStack: false,
     stringBufferSize: 64 * 1024
   })
+
   const record: Record<string, unknown> = Object.create(null)
   const fields = new Set(args.fields)
   let depth = 0
@@ -33,12 +34,15 @@ export async function readStreamedSessionDocument<T>(args: {
       if (typeof value === 'string' && Object.hasOwn(args.objectFields ?? {}, value)) {
         record[value] = Object.create(null)
       }
+
       expectingRootKey = false
     }
+
     if (token === TokenType.LEFT_BRACE || token === TokenType.LEFT_BRACKET) {
       if (depth === 0 && token === TokenType.LEFT_BRACE) {
         expectingRootKey = true
       }
+
       depth++
     } else if (token === TokenType.RIGHT_BRACE || token === TokenType.RIGHT_BRACKET) {
       depth--
@@ -46,6 +50,7 @@ export async function readStreamedSessionDocument<T>(args: {
       expectingRootKey = true
     }
   }
+
   let state = args.create()
   let currentArray: unknown = null
   let consumeFailure: { error: unknown } | undefined
@@ -58,6 +63,7 @@ export async function readStreamedSessionDocument<T>(args: {
         consumeFailure = undefined
         currentArray = parent
       }
+
       if (!consumeFailure) {
         try {
           args.consume(state, value)
@@ -65,6 +71,7 @@ export async function readStreamedSessionDocument<T>(args: {
           consumeFailure = { error }
         }
       }
+
       // The parser's array cursor is independent of retained array slots.
       parent.pop()
     } else if (
@@ -76,6 +83,7 @@ export async function readStreamedSessionDocument<T>(args: {
     ) {
       const root = stack[1].key
       const projected = record[root]
+
       if (
         Object.hasOwn(args.objectFields ?? {}, root) &&
         args.objectFields?.[root]?.includes(key) &&
@@ -90,40 +98,53 @@ export async function readStreamedSessionDocument<T>(args: {
           state = args.create()
           consumeFailure = undefined
         }
+
         currentArray = null
       } else if (fields.has(key)) {
         record[key] = value
       }
+
       if (parent && typeof parent === 'object') {
         Reflect.deleteProperty(parent, key)
       }
     }
   }
+
   for await (const chunk of args.bytes) {
     throwIfAiVaultScanCancelled(args.signal)
+
     if (objectRoot === undefined) {
       const first = chunk.find((byte) => byte !== 32 && byte !== 9 && byte !== 10 && byte !== 13)
+
       if (first !== undefined) {
         objectRoot = first === 123
       }
     }
+
     parseJson(() => parser.write(decoder.write(chunk)))
     await yieldToEventLoop()
   }
+
   const tail = decoder.end()
+
   if (tail) {
     parseJson(() => parser.write(tail))
   }
+
   if (objectRoot === undefined) {
     throw new SyntaxError('Unexpected end of JSON input')
   }
+
   if (!parser.isEnded) {
     parseJson(() => parser.end(), true)
   }
+
   throwIfAiVaultScanCancelled(args.signal)
+
   if (consumeFailure) {
     throw consumeFailure.error
   }
+
   return objectRoot ? { record, state } : null
 }
 
@@ -138,6 +159,7 @@ function parseJson(run: () => void, ending = false): void {
     ) {
       throw new SyntaxError(error.message)
     }
+
     throw error
   }
 }

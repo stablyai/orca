@@ -16,14 +16,18 @@ vi.mock('@/runtime/runtime-file-client', async (importOriginal) => ({
 }))
 
 const SOURCE = 'repo-a::/repo-a'
+
 const TARGET = 'repo-b::/repo-b'
+
 const FILE_PATH = '/repo-b/file.md'
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
+
   const promise = new Promise<void>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
 
@@ -47,6 +51,7 @@ function seed(filePath = FILE_PATH): string {
     sshConnectionStates: new Map(),
     sshStateByEnvironment: new Map()
   } as unknown as Partial<AppState>)
+
   return useAppStore.getState().openFile(
     {
       filePath,
@@ -84,6 +89,7 @@ describe('restored editor owner save lifecycle', () => {
 
     const sourceSave = requestEditorFileSave({ fileId: oldId })
     await vi.waitFor(() => expect(mocks.writeRuntimeFile).toHaveBeenCalledTimes(1))
+
     const migration = migrateRestoredEditorFileOwner(
       oldId,
       {
@@ -93,6 +99,7 @@ describe('restored editor owner save lifecycle', () => {
       },
       null
     )
+
     await Promise.resolve()
     expect(useAppStore.getState().openFiles[0]?.pendingOwnerMigration).toBe(true)
     expect(useAppStore.getState().openFiles[0]?.worktreeId).toBe(SOURCE)
@@ -104,9 +111,11 @@ describe('restored editor owner save lifecycle', () => {
     await sourceSave
     const migrated = await migration
     expect(migrated.ok).toBe(true)
+
     if (!migrated.ok) {
       return
     }
+
     expect(mocks.writeRuntimeFile.mock.calls[0]?.[0]).toMatchObject({ worktreeId: SOURCE })
 
     useAppStore.getState().setEditorDraft(migrated.fileId, 'explicit destination save')
@@ -158,11 +167,13 @@ describe('restored editor owner save lifecycle', () => {
 
     const sourceSave = requestEditorFileSave({ fileId: oldId })
     await vi.waitFor(() => expect(mocks.writeRuntimeFile).toHaveBeenCalledTimes(1))
+
     const migration = migrateRestoredEditorFileOwner(
       oldId,
       { worktreeId: TARGET, relativePath: 'file.md', executionHostId: 'local' },
       null
     )
+
     await Promise.resolve()
     useAppStore.setState((state) => ({
       worktreesByRepo: { ...state.worktreesByRepo, 'repo-b': [] }
@@ -200,11 +211,13 @@ describe('restored editor owner save lifecycle', () => {
 
     const sourceSave = requestEditorFileSave({ fileId: oldId })
     await vi.waitFor(() => expect(mocks.writeRuntimeFile).toHaveBeenCalledTimes(1))
+
     const migration = migrateRestoredEditorFileOwner(
       oldId,
       { worktreeId: 'folder:notes', relativePath: 'todo.md', executionHostId: 'local' },
       null
     )
+
     await Promise.resolve()
     useAppStore.setState((state) => ({
       folderWorkspaces: state.folderWorkspaces.map((workspace) => ({
@@ -254,11 +267,13 @@ describe('restored editor owner save lifecycle', () => {
 
     const sourceSave = requestEditorFileSave({ fileId: oldId })
     await vi.waitFor(() => expect(mocks.writeRuntimeFile).toHaveBeenCalledTimes(1))
+
     const migration = migrateRestoredEditorFileOwner(
       oldId,
       { worktreeId: TARGET, relativePath: 'file.md', executionHostId: 'ssh:ssh-1' },
       null
     )
+
     await Promise.resolve()
     useAppStore.getState().setSshConnectionState('ssh-1', {
       targetId: 'ssh-1',

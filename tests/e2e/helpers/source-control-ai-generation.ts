@@ -3,6 +3,7 @@ import { expect } from '@stablyai/playwright-test'
 import { execFileSync } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import path from 'node:path'
+
 export async function openSourceControl(page: Page, worktreeId: string): Promise<void> {
   await page.evaluate((targetWorktreeId) => {
     const state = window.__store?.getState()
@@ -15,6 +16,7 @@ export async function openSourceControl(page: Page, worktreeId: string): Promise
       () =>
         page.evaluate((targetWorktreeId) => {
           const state = window.__store?.getState()
+
           return (
             state?.activeWorktreeId === targetWorktreeId &&
             state.rightSidebarOpen &&
@@ -37,6 +39,7 @@ export async function openChecks(page: Page, worktreeId: string): Promise<void> 
       () =>
         page.evaluate((targetWorktreeId) => {
           const state = window.__store?.getState()
+
           return state?.activeWorktreeId === targetWorktreeId && state.rightSidebarOpen
         }, worktreeId),
       { timeout: 5_000 }
@@ -53,6 +56,7 @@ export async function openChecks(page: Page, worktreeId: string): Promise<void> 
           // instead of hanging on a locator that stopped matching mid-action.
           await checksButton.click({ timeout: 2_000 }).catch(() => undefined)
         }
+
         return page.evaluate(() => window.__store?.getState().rightSidebarTab)
       },
       { timeout: 10_000 }
@@ -75,9 +79,11 @@ export async function seedCreatePrComposer(page: Page): Promise<{
 
     const state = store.getState()
     const worktrees = Object.values(state.worktreesByRepo).flat()
+
     const prWorktree = worktrees.find(
       (entry) => entry.branch.replace(/^refs\/heads\//, '') === 'e2e-secondary'
     )
+
     const primaryWorktree = prWorktree
       ? worktrees.find(
           (entry) =>
@@ -86,9 +92,11 @@ export async function seedCreatePrComposer(page: Page): Promise<{
             !entry.branch.replace(/^refs\/heads\//, '').startsWith('e2e-')
         )
       : undefined
+
     if (!primaryWorktree || !prWorktree) {
       throw new Error('E2E fixture did not expose the expected main + secondary worktrees')
     }
+
     const repo =
       state.repos.find((entry) => entry.id === prWorktree.repoId) ??
       (() => {
@@ -97,6 +105,7 @@ export async function seedCreatePrComposer(page: Page): Promise<{
 
     const branch = prWorktree.branch.replace(/^refs\/heads\//, '')
     const primaryBranch = primaryWorktree.branch.replace(/^refs\/heads\//, '')
+
     const eligibility = {
       provider: 'github' as const,
       review: null,
@@ -145,11 +154,13 @@ export async function seedCreatePrComposer(page: Page): Promise<{
       primaryBranch
     }
   })
+
   // Checks reads fresh Git state instead of the seeded store cache.
   execFileSync('git', ['branch', '--set-upstream-to', seeded.primaryBranch], {
     cwd: seeded.prWorktreePath,
     stdio: 'pipe'
   })
+
   return seeded
 }
 
@@ -167,9 +178,11 @@ export async function seedCommitMessageComposer(page: Page): Promise<{
 
     const state = store.getState()
     const worktrees = Object.values(state.worktreesByRepo).flat()
+
     const commitWorktree = worktrees.find(
       (entry) => entry.branch.replace(/^refs\/heads\//, '') === 'e2e-secondary'
     )
+
     const primaryWorktree = commitWorktree
       ? worktrees.find(
           (entry) =>
@@ -178,9 +191,11 @@ export async function seedCommitMessageComposer(page: Page): Promise<{
             !entry.branch.replace(/^refs\/heads\//, '').startsWith('e2e-')
         )
       : undefined
+
     if (!primaryWorktree || !commitWorktree) {
       throw new Error('E2E fixture did not expose the expected main + secondary worktrees')
     }
+
     const primaryBranch = primaryWorktree.branch.replace(/^refs\/heads\//, '')
 
     store.setState((current) => ({
@@ -249,9 +264,11 @@ export async function seedCleanBranchEmptyState(
 
     const state = store.getState()
     const worktrees = Object.values(state.worktreesByRepo).flat()
+
     const secondaryWorktree = worktrees.find(
       (entry) => entry.branch.replace(/^refs\/heads\//, '') === 'e2e-secondary'
     )
+
     const primaryWorktree = worktrees.find((entry) =>
       targetWorktreeId
         ? entry.id === targetWorktreeId
@@ -261,6 +278,7 @@ export async function seedCleanBranchEmptyState(
             !entry.branch.replace(/^refs\/heads\//, '').startsWith('e2e-')
           : entry.branch.replace(/^refs\/heads\//, '').match(/^(main|master)$/)
     )
+
     if (!primaryWorktree) {
       throw new Error('Primary worktree not found')
     }
@@ -295,6 +313,7 @@ export async function seedCleanBranchEmptyState(
         [primaryWorktree.id]: []
       }
     }))
+
     return primaryWorktree.id
   }, targetWorktreeId ?? null)
 }

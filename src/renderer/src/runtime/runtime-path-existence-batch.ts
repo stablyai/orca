@@ -21,9 +21,11 @@ export async function runtimePathsExist(
 ): Promise<PathExistenceResult[]> {
   const routes = paths.map((path) => getRemoteFileArgs(context, path))
   const first = routes[0]
+
   const expectedEnvironmentPairingRevision = first
     ? captureRuntimeEnvironmentRequestRevision(first.target.environmentId, expectedPairingRevision)
     : undefined
+
   const fallback = () =>
     Promise.all(
       paths.map((path) =>
@@ -32,17 +34,21 @@ export async function runtimePathsExist(
         )
       )
     )
+
   if (!first || routes.some((route) => !route)) {
     if (routes.every((route) => !route) && window.api.fs.pathsExist) {
       // Scalar routing performs the same ownership fence before local IPC.
       assertLocalFilesystemFallbackAllowed(context)
+
       return requirePathExistenceResults(
         await window.api.fs.pathsExist({ filePaths: paths, connectionId: context.connectionId }),
         paths.length
       )
     }
+
     return fallback()
   }
+
   try {
     if (
       !(await runtimeEnvironmentSupportsCapability(
@@ -53,6 +59,7 @@ export async function runtimePathsExist(
     ) {
       return fallback()
     }
+
     const result = requirePathExistenceResults(
       await callRuntimeRpc(
         first.target,
@@ -65,6 +72,7 @@ export async function runtimePathsExist(
       ),
       paths.length
     )
+
     // Preserve runtimePathExists's legacy missing-error interpretation.
     return result.map((row) =>
       'error' in row && isMissingRuntimePathError(row.error) ? { exists: false } : row
@@ -73,9 +81,11 @@ export async function runtimePathsExist(
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       return fallback()
     }
+
     if (isMissingRuntimePathError(error)) {
       return paths.map(() => ({ exists: false }))
     }
+
     throw error
   }
 }

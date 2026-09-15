@@ -7,6 +7,7 @@ describe('BrowserClientPageCommandExecutor authority fencing', () => {
   it('does not retain a page when close races its in-flight creation', async () => {
     const { dependencies, executor, order, route } = createHarness()
     let resolveRoute = (_route: typeof route): void => {}
+
     dependencies.retainNetworkRoute.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -125,6 +126,7 @@ describe('BrowserClientPageCommandExecutor authority fencing', () => {
   it('releases an in-flight old-authority create during transition', async () => {
     const { dependencies, executor, order, route } = createHarness()
     let resolveRoute = (_route: typeof route): void => {}
+
     dependencies.retainNetworkRoute.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -212,6 +214,7 @@ describe('BrowserClientPageCommandExecutor authority fencing', () => {
   it('prevents an in-flight creation from granting navigation after fencing', async () => {
     const { dependencies, executor, order, route } = createHarness()
     let resolveRoute = (_route: typeof route): void => {}
+
     dependencies.retainNetworkRoute.mockImplementationOnce(
       () =>
         new Promise((resolve) => {

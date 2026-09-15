@@ -23,6 +23,7 @@ export async function startBrowserScreencast(
 
   const dbg = webContents.debugger
   let debuggerLease: ElectronDebuggerLease | null = null
+
   try {
     debuggerLease = acquireElectronDebugger(webContents)
   } catch {
@@ -37,14 +38,17 @@ export async function startBrowserScreencast(
   let resolveDone!: () => void
   // Serializes viewport and frame-budget changes against the snapshot capture they trigger.
   let pendingUpdate = Promise.resolve()
+
   const done = new Promise<void>((resolve) => {
     resolveDone = resolve
   })
+
   const isClosed = (): boolean => closed
   const isStopping = (): boolean => stopping
 
   const deviceMetrics = createBrowserScreencastDeviceMetrics(webContents, dbg, options)
   const framePacer = createBrowserScreencastFramePacer({ dbg, options, isClosed, isStopping })
+
   const snapshotCapture = createBrowserScreencastSnapshotCapture({
     webContents,
     dbg,
@@ -55,6 +59,7 @@ export async function startBrowserScreencast(
     queueFrame: framePacer.queueFrame,
     applyDeviceMetricsOverride: deviceMetrics.apply
   })
+
   const handleMessage = createBrowserScreencastMessageHandler({
     dbg,
     options,
@@ -80,6 +85,7 @@ export async function startBrowserScreencast(
     if (closed) {
       return
     }
+
     closed = true
     snapshotCapture.clearNavigationCaptureTimer()
     framePacer.clearPending()
@@ -107,6 +113,7 @@ export async function startBrowserScreencast(
     if (deviceMetrics.isOverridden()) {
       await deviceMetrics.clear().catch(() => {})
     }
+
     finish()
     throw new BrowserError(
       'browser_error',
@@ -122,6 +129,7 @@ export async function startBrowserScreencast(
           if (closed || stopping) {
             return
           }
+
           Object.assign(options, viewport)
           snapshotCapture.bumpGeneration()
           snapshotCapture.clearNavigationCaptureTimer()
@@ -130,6 +138,7 @@ export async function startBrowserScreencast(
           // leave the old device metrics applied and the new subscriber frameless.
           await snapshotCapture.emitSnapshotFrame(false)
         })
+
       return pendingUpdate
     },
     updateFrameBudget: (budget: BrowserScreencastFrameBudget) => {
@@ -139,25 +148,30 @@ export async function startBrowserScreencast(
           if (closed || stopping) {
             return
           }
+
           Object.assign(options, budget)
           // Why: the pacer reads minFrameIntervalMs live off options, but Chromium only
           // picks up new frame caps when the screencast is restarted with them.
           await startScreencast()
         })
+
       return pendingUpdate
     },
     stop: () => {
       if (closed) {
         return
       }
+
       stopping = true
       snapshotCapture.bumpGeneration()
       snapshotCapture.clearNavigationCaptureTimer()
       framePacer.clearPending(true)
+
       try {
         void (async () => {
           await pendingUpdate.catch(() => {})
           await sendDebuggerCommand(dbg, 'Page.stopScreencast').catch(() => {})
+
           if (deviceMetrics.isOverridden()) {
             await deviceMetrics.clear().catch(() => {})
           }

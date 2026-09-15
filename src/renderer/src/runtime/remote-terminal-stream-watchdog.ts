@@ -1,4 +1,5 @@
 export const REMOTE_TERMINAL_COMMAND_RESPONSE_TIMEOUT_MS = 10_000
+
 export const REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS = 30_000
 
 export type RemoteTerminalStreamStall = {
@@ -37,44 +38,55 @@ export function createRemoteTerminalStreamWatchdog(
       responseTimer = null
     }
   }
+
   const clearDeliveryTimer = (): void => {
     if (deliveryTimer) {
       clearTimeout(deliveryTimer)
       deliveryTimer = null
     }
   }
+
   const trip = (reason: RemoteTerminalStreamStall['reason']): void => {
     if (disposed) {
       return
     }
+
     clearResponseTimer()
+
     if (reason === 'command-response-timeout') {
       commandResponseProbePending = true
     } else {
       disposed = true
       clearDeliveryTimer()
     }
+
     onStall({
       inactiveForMs: Math.max(0, Date.now() - lastInboundAtMs),
       outstandingDeliveryBytes,
       reason
     })
   }
+
   // Why anchored, never restarted: a deadline re-armed by sibling settles is postponed forever, and one cleared at zero parse credit can only re-arm from inbound output — which is what the stall stops.
   const syncDeliveryTimer = (): void => {
     if (disposed || outstandingDeliveryBytes + unacknowledgedBytes <= 0) {
       clearDeliveryTimer()
       deliveryPendingSinceMs = null
+
       return
     }
+
     deliveryPendingSinceMs ??= Date.now()
+
     if (deliveryTimer) {
       return
     }
+
     const remainingMs = Math.max(
       0,
       REMOTE_TERMINAL_DELIVERY_STALL_TIMEOUT_MS - (Date.now() - deliveryPendingSinceMs)
     )
+
     deliveryTimer = setTimeout(() => trip('delivery-credit-timeout'), remainingMs)
   }
 
@@ -84,10 +96,12 @@ export function createRemoteTerminalStreamWatchdog(
       unacknowledgedBytes += bytes
       syncDeliveryTimer()
       let settled = false
+
       return () => {
         if (settled || disposed) {
           return
         }
+
         settled = true
         outstandingDeliveryBytes = Math.max(0, outstandingDeliveryBytes - bytes)
         syncDeliveryTimer()
@@ -97,6 +111,7 @@ export function createRemoteTerminalStreamWatchdog(
       if (disposed) {
         return
       }
+
       unacknowledgedBytes = Math.max(0, unacknowledgedBytes - bytes)
       syncDeliveryTimer()
     },
@@ -107,6 +122,7 @@ export function createRemoteTerminalStreamWatchdog(
       if (disposed || commandResponseProbePending || responseTimer || !/[\r\n]/u.test(text)) {
         return
       }
+
       responseTimer = setTimeout(
         () => trip('command-response-timeout'),
         REMOTE_TERMINAL_COMMAND_RESPONSE_TIMEOUT_MS
@@ -114,6 +130,7 @@ export function createRemoteTerminalStreamWatchdog(
     },
     recordInbound(carriesOutput) {
       lastInboundAtMs = Date.now()
+
       if (carriesOutput) {
         clearResponseTimer()
       }

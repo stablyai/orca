@@ -24,6 +24,7 @@ function createTerminal(paused: boolean): {
     _needsFullRefresh: paused,
     refreshRows: vi.fn<RefreshFn>()
   }
+
   const terminal = {
     rows: 24,
     buffer: { active: { cursorY: 0, baseY: 0, viewportY: 0 } },
@@ -31,6 +32,7 @@ function createTerminal(paused: boolean): {
     refresh: vi.fn<(start: number, end: number) => void>(),
     write: (_data: string, callback?: () => void) => callback?.()
   }
+
   return { terminal, renderService }
 }
 

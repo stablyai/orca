@@ -81,6 +81,7 @@ describe('browser client-host reconciliation protocol', () => {
       hostCapabilities: z.array(z.string()),
       pageCommandProtocolVersion: z.literal(1).optional()
     })
+
     const legacyReady = z.object({
       type: z.literal('ready'),
       authorityEpoch: z.string(),
@@ -119,6 +120,7 @@ describe('browser client-host reconciliation protocol', () => {
       browserHostGeneration: 2,
       pageHostGeneration: 3
     }
+
     const reconciliationCommands = [
       {
         type: 'reclaimPage',
@@ -185,6 +187,7 @@ describe('browser client-host reconciliation protocol', () => {
         executionHostKey: 'native:runtime-a:1'
       })
     }
+
     delete (legacyCommand as { pageReconciliationProtocolVersion?: number })
       .pageReconciliationProtocolVersion
 

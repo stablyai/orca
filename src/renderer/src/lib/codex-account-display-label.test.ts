@@ -5,6 +5,7 @@ import {
 } from './codex-account-display-label'
 
 const email = 'same@example.com'
+
 const labels = (accounts: CodexDisplayAccount[]) =>
   accounts.map((account) => getCodexAccountDisplayLabel(account, accounts))
 
@@ -25,6 +26,7 @@ describe('Codex account display labels', () => {
         { id: '12345678-a', email, workspaceLabel },
         { id: '12345678-b', email, workspaceLabel }
       ]
+
       const result = labels(accounts)
       expect(new Set(result).size).toBe(2)
       expect(result[0]).toContain('12345678-a')
@@ -55,6 +57,7 @@ describe('Codex account display labels', () => {
       { id: '87654321-b', email },
       { id: 'abcdefgh-c', email, workspaceLabel: '12345678' }
     ])
+
     expect(new Set(result).size).toBe(3)
   })
 })

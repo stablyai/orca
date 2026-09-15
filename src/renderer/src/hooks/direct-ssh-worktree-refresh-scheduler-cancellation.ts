@@ -9,6 +9,7 @@ export function cancelDirectSshWorktreeRefreshAttempt(
 ): boolean {
   try {
     const outcome = attempt.cancel(reason)
+
     return outcome !== false && outcome !== 'retained' && outcome !== 'already-settled'
   } catch {
     return true

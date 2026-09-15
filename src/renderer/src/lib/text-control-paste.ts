@@ -27,6 +27,7 @@ export {
   TEXT_CONTROL_PASTE_MAX_BYTES,
   TEXT_CONTROL_PASTE_MEASURE_YIELD_CODE_UNITS
 } from './text-control-paste-model'
+
 export type {
   TextControlPasteByteLengthMeasurement,
   TextControlPasteOptions,
@@ -40,6 +41,7 @@ export function measureTextControlPasteByteLength(
   options: { stopAfterBytes?: number } = {}
 ): TextControlPasteByteLengthMeasurement {
   const { byteLength, exceededLimit } = measurePastePayloadMetadata(text, options)
+
   return { byteLength, exceededLimit }
 }
 
@@ -56,6 +58,7 @@ export async function measureTextControlPasteByteLengthWithYield(
     yieldAfterCodeUnits: options.yieldAfterCodeUnits ?? TEXT_CONTROL_PASTE_MEASURE_YIELD_CODE_UNITS,
     yieldToEventLoop: options.yieldToEventLoop
   })
+
   return { byteLength, exceededLimit }
 }
 
@@ -71,6 +74,7 @@ async function measureTextControlPasteForExecution(
   >
 ): Promise<TextControlPastePayloadMeasurement> {
   const maxBytes = options.maxBytes ?? TEXT_CONTROL_PASTE_MAX_BYTES
+
   if (options.measuredByteLength !== undefined) {
     return {
       byteLength: options.measuredByteLength,
@@ -80,9 +84,11 @@ async function measureTextControlPasteForExecution(
 
   const directMaxBytes = options.directMaxBytes ?? TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES
   const preflightLimit = Math.min(directMaxBytes, maxBytes)
+
   const preflightMeasurement = measurePastePayloadMetadata(text, {
     stopAfterBytes: preflightLimit
   })
+
   if (!preflightMeasurement.exceededLimit || preflightLimit === maxBytes) {
     return preflightMeasurement
   }
@@ -101,7 +107,9 @@ export function shouldHandleTextControlPaste(
   if (!text) {
     return false
   }
+
   const maxBytes = options.maxBytes ?? TEXT_CONTROL_PASTE_MAX_BYTES
+
   const measurement =
     options.measuredByteLength === undefined
       ? measureTextControlPasteByteLength(text, { stopAfterBytes: maxBytes })
@@ -109,7 +117,9 @@ export function shouldHandleTextControlPaste(
           byteLength: options.measuredByteLength,
           exceededLimit: options.measuredByteLength > maxBytes
         }
+
   const directMaxBytes = options.directMaxBytes ?? TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES
+
   return measurement.exceededLimit || measurement.byteLength > directMaxBytes
 }
 
@@ -127,6 +137,7 @@ function dispatchTextControlInputEvent(
           inputType
         })
       : new Event('input', { bubbles: true, cancelable: false })
+
   target.dispatchEvent(event)
 }
 
@@ -145,6 +156,7 @@ function getSelectionRange(target: HTMLInputElement | HTMLTextAreaElement): {
 } {
   const start = target.selectionStart ?? target.value.length
   const end = target.selectionEnd ?? start
+
   return {
     start: Math.min(start, end),
     end: Math.max(start, end)
@@ -166,6 +178,7 @@ export async function pasteTextIntoTextControl(
   const getDurationMs = (): number => Math.max(0, now() - startedAtMs)
   const maxBytes = options.maxBytes ?? TEXT_CONTROL_PASTE_MAX_BYTES
   const directMaxBytes = options.directMaxBytes ?? TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES
+
   const pastePayloadMeasurement = await measureTextControlPasteForExecution(text, {
     directMaxBytes,
     maxBytes,
@@ -173,7 +186,9 @@ export async function pasteTextIntoTextControl(
     measureYieldAfterCodeUnits: options.measureYieldAfterCodeUnits,
     yieldToEventLoop: options.yieldToEventLoop
   })
+
   const { byteLength } = pastePayloadMeasurement
+
   if (byteLength === 0) {
     return createTextControlRejectedResult(
       'empty',
@@ -212,6 +227,7 @@ export async function pasteTextIntoTextControl(
       const { start, end } = getSelectionRange(target)
       target.setRangeText(text, start, end, 'end')
       dispatchTextControlInputEvent(target, text, inputType)
+
       return createTextControlPastedResult({
         byteLength,
         chunksWritten: 1,
@@ -224,12 +240,14 @@ export async function pasteTextIntoTextControl(
     }
 
     const { start, end } = getSelectionRange(target)
+
     if (start !== end) {
       target.setRangeText('', start, end, 'end')
     }
 
     let chunksWritten = 0
     let textIndex = 0
+
     // Why: large text controls keep literal content; chunking only changes
     // delivery cadence so the renderer can yield between DOM mutations.
     while (textIndex < text.length) {
@@ -237,6 +255,7 @@ export async function pasteTextIntoTextControl(
         if (chunksWritten > 0 && target.isConnected) {
           dispatchTextControlInputEvent(target, null, inputType)
         }
+
         return createTextControlCancelledResult({
           byteLength,
           chunksWritten,
@@ -260,6 +279,7 @@ export async function pasteTextIntoTextControl(
     }
 
     dispatchTextControlInputEvent(target, null, inputType)
+
     return createTextControlPastedResult({
       byteLength,
       chunksWritten,

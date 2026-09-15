@@ -60,6 +60,7 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
   const advanceRequest = (): boolean => {
     const next = queuedRequests.shift() ?? null
     set({ runningTerminalCloseConfirm: next })
+
     return next !== null
   }
 
@@ -74,33 +75,43 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
 
     requestRunningTerminalCloseConfirm: (request) => {
       const visible = get().runningTerminalCloseConfirm
+
       // Why: the probe is async, so a second click on the same tab arrives before the
       // dialog opens. One prompt, but both closes still resolve.
       if (visible?.terminalTabId === request.terminalTabId) {
         set({ runningTerminalCloseConfirm: mergeRequests(visible, request) })
+
         return
       }
+
       const queuedIndex = queuedRequests.findIndex(
         (queued) => queued.terminalTabId === request.terminalTabId
       )
+
       if (queuedIndex !== -1) {
         queuedRequests[queuedIndex] = mergeRequests(queuedRequests[queuedIndex]!, request)
+
         return
       }
+
       if (visible) {
         // Why: closing two busy tabs in quick succession must not strand the second
         // tab's close callback behind a replaced request.
         queuedRequests.push(request)
+
         return
       }
+
       set({ runningTerminalCloseConfirm: request })
     },
 
     confirmRunningTerminalClose: () => {
       const request = get().runningTerminalCloseConfirm
+
       if (!request || Date.now() < nextRequestActionAllowedAt) {
         return
       }
+
       // Why: advance before running onConfirm so a re-entrant close queues behind the
       // next real request instead of seeing the stale one.
       guardNextAction(advanceRequest())
@@ -111,8 +122,10 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
       if (Date.now() < nextRequestActionAllowedAt) {
         return
       }
+
       const pending = [get().runningTerminalCloseConfirm, ...queuedRequests.splice(0)]
       set({ runningTerminalCloseConfirm: null })
+
       // No guard to arm: the queue is empty, so there is no next prompt to mis-click.
       for (const request of pending) {
         request?.onConfirm()
@@ -121,9 +134,11 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
 
     dismissRunningTerminalClose: () => {
       const request = get().runningTerminalCloseConfirm
+
       if (!request || Date.now() < nextRequestActionAllowedAt) {
         return
       }
+
       guardNextAction(advanceRequest())
       // Why: callers such as the tab-group model resume their own cleanup on cancel.
       request.onCancel?.()

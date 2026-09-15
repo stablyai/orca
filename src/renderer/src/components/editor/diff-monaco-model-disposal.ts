@@ -34,6 +34,7 @@ export function getDiffViewerMonacoModelPathPrefixes(
   modelKey: string
 ): DiffViewerModelPathPrefixes {
   const encodedOwnerKey = encodeDiffViewerModelKey(modelKey)
+
   return {
     originalModelPathPrefix: `diff:original:${encodedOwnerKey}`,
     modifiedModelPathPrefix: `diff:modified:${encodedOwnerKey}`
@@ -97,12 +98,14 @@ export function disposeUnattachedMonacoModelsByPathPrefixes(
   const ownedPrefixes = new Set(modelPathPrefixes)
   let shortestPrefixLength = Number.POSITIVE_INFINITY
   let longestPrefixLength = 0
+
   for (const prefix of ownedPrefixes) {
     shortestPrefixLength = Math.min(shortestPrefixLength, prefix.length)
     longestPrefixLength = Math.max(longestPrefixLength, prefix.length)
   }
 
   const bounds = { shortestPrefixLength, longestPrefixLength }
+
   for (const model of monacoRegistry.editor.getModels()) {
     // Why both forms: model URIs are built via `Uri.parse`, so a prefix can match the decoded or
     // the percent-encoded rendering depending on what characters the tab id carries.

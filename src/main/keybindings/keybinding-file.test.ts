@@ -164,6 +164,7 @@ describe('keybinding-file', () => {
       keybindings: Record<string, unknown>
       platforms: Record<string, Record<string, unknown>>
     }
+
     expect(written.keybindings['worktree.quickOpen']).toBe('Mod+Shift+P')
     expect(written.platforms.darwin['terminal.search']).toBe('Mod+F')
     expect(written.platforms.linux['terminal.search']).toEqual(['Ctrl+Shift+F'])
@@ -191,6 +192,7 @@ describe('keybinding-file', () => {
       platforms: Record<string, Record<string, unknown>>
       'worktree.quickOpen'?: unknown
     }
+
     expect(written['worktree.quickOpen']).toBeUndefined()
     expect(written.keybindings['worktree.quickOpen']).toEqual(['Mod+Shift+P'])
     expect(written.platforms.darwin['terminal.search']).toBe('Mod+F')
@@ -381,6 +383,7 @@ describe('keybinding-file', () => {
       'worktree.quickOpen'?: unknown
       'tab.nextSameType'?: unknown
     }
+
     expect(written['worktree.quickOpen']).toBeUndefined()
     expect(written['tab.nextSameType']).toBeUndefined()
     expect(written.keybindings).toMatchObject({

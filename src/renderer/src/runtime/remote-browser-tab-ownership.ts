@@ -20,14 +20,17 @@ export function getBrowserWorkspaceRemoteOwnerEnvironmentIds(
   workspaceId: string
 ): string[] {
   const environmentIds = new Set<string>()
+
   for (const page of state.browserPagesByWorkspace[workspaceId] ?? []) {
     const environmentId =
       state.remoteBrowserPageHandlesByPageId[page.id]?.environmentId?.trim() ||
       page.browserRuntimeEnvironmentId?.trim()
+
     if (environmentId) {
       environmentIds.add(environmentId)
     }
   }
+
   return [...environmentIds]
 }
 
@@ -36,12 +39,15 @@ export function getBrowserWorkspaceRemoteOwnership(
   workspaceId: string
 ): BrowserWorkspaceRemoteOwnership {
   const environmentIds = getBrowserWorkspaceRemoteOwnerEnvironmentIds(state, workspaceId)
+
   if (environmentIds.length === 0) {
     return { kind: 'none' }
   }
+
   if (environmentIds.length > 1) {
     return { kind: 'ambiguous', environmentIds }
   }
+
   return { kind: 'exact', environmentId: environmentIds[0]! }
 }
 
@@ -50,6 +56,7 @@ export function getBrowserWorkspaceRemoteOwnerEnvironmentId(
   workspaceId: string
 ): string | null {
   const ownership = getBrowserWorkspaceRemoteOwnership(state, workspaceId)
+
   return ownership.kind === 'exact' ? ownership.environmentId : null
 }
 
@@ -59,12 +66,16 @@ export function browserWorkspaceHasRemoteOwner(
   environmentId: string | null | undefined
 ): boolean {
   const ownerEnvironmentId = environmentId?.trim()
+
   if (!ownerEnvironmentId) {
     return false
   }
+
   const pages = state.browserPagesByWorkspace[workspaceId] ?? []
+
   return pages.some((page) => {
     const handle = state.remoteBrowserPageHandlesByPageId[page.id]
+
     return (
       handle?.environmentId === ownerEnvironmentId ||
       page.browserRuntimeEnvironmentId === ownerEnvironmentId

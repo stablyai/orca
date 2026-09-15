@@ -79,9 +79,11 @@ describe('OrcaRuntimeService', () => {
     expect(shown.ptyId).toBe('pty-1')
     const mobileTabs = await runtime.listMobileSessionTabs('branch:feature/foo')
     const mobileHandle = mobileTabs.tabs.find((tab) => tab.type === 'terminal')?.terminal
+
     if (!mobileHandle) {
       throw new Error('expected mobile terminal handle')
     }
+
     expect(mobileHandle).toBe(terminals.terminals[0].handle)
 
     const processLists = [[{ id: 'pty-1', cwd: '/tmp/worktree-a', title: 'Claude' }], []]
@@ -90,6 +92,7 @@ describe('OrcaRuntimeService', () => {
       kill: () => false,
       stopAndWait: async (ptyId) => {
         runtime.onPtyExit(ptyId, -1)
+
         return true
       },
       getForegroundProcess: async () => null,
@@ -113,6 +116,7 @@ describe('OrcaRuntimeService', () => {
     runtime.setNotifier({ nativeChatLaunchDraftResolved } as never)
     runtime.onClientEvent((event) => events.push(event))
     runtime.attachWindow(1)
+
     const graph: RuntimeSyncWindowGraph = {
       tabs: [
         {
@@ -155,12 +159,15 @@ describe('OrcaRuntimeService', () => {
         }
       ]
     }
+
     runtime.syncWindowGraph(1, graph)
     const listed = await runtime.listMobileSessionTabs('branch:feature/foo')
     const mobileTab = listed.tabs.find((tab) => tab.type === 'terminal')
+
     if (!mobileTab?.terminal) {
       throw new Error('expected mobile terminal handle')
     }
+
     expect(mobileTab).toMatchObject({ launchDraft: 'seed', launchDraftCreatedAt: 7 })
 
     runtime.notifyNativeChatLaunchDraftResolved(mobileTab.terminal, {
@@ -184,13 +191,16 @@ describe('OrcaRuntimeService', () => {
       text: 'seed',
       createdAt: 7
     })
+
     const retired = (await runtime.listMobileSessionTabs('branch:feature/foo')).tabs.find(
       (tab) => tab.type === 'terminal'
     )
+
     expect(retired).not.toHaveProperty('launchDraft')
     expect(retired).not.toHaveProperty('launchDraftCreatedAt')
 
     runtime.markRendererReloading(1)
+
     const replay = runtime.syncWindowGraph(1, {
       ...graph,
       mobileSessionTabs: graph.mobileSessionTabs?.map((snapshot) => ({
@@ -199,6 +209,7 @@ describe('OrcaRuntimeService', () => {
         snapshotVersion: 2
       }))
     })
+
     expect(replay.nativeChatLaunchDraftResolutions).toEqual([
       { tabId: 'tab-1', text: 'seed', createdAt: 7 }
     ])
@@ -218,10 +229,12 @@ describe('OrcaRuntimeService', () => {
           if (tab.type !== 'terminal') {
             return tab
           }
+
           return { ...tab, launchDraftCreatedAt: 8 }
         })
       }))
     })
+
     expect(reconciled.nativeChatLaunchDraftResolutions).toBeUndefined()
     expect(
       (await runtime.listMobileSessionTabs('branch:feature/foo')).tabs.find(
@@ -366,6 +379,7 @@ describe('OrcaRuntimeService', () => {
     })
     const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
     runtime.onPtyExit('pty-expired', 0)
+
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term-replacement',
       tabId,
@@ -397,6 +411,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     const tabId = 'tab-missing'
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
+
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term-created',
       tabId,
@@ -467,9 +482,11 @@ describe('OrcaRuntimeService', () => {
     const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
     runtime.onPtyExit('pty-expired', 0)
     let finishCreate!: (result: RuntimeTerminalCreate) => void
+
     const pendingCreate = new Promise<RuntimeTerminalCreate>((resolve) => {
       finishCreate = resolve
     })
+
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockReturnValue(pendingCreate)
 
     const first = runtime.recoverTerminalPane(paneKey, TEST_WORKTREE_ID, expiredHandle)
@@ -499,6 +516,7 @@ describe('OrcaRuntimeService', () => {
     })
     const expiredHandle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
     runtime.onPtyExit('pty-expired', 0)
+
     const createTerminal = vi
       .spyOn(runtime, 'createTerminal')
       .mockRejectedValueOnce(new Error('relay_reconnecting'))
@@ -557,6 +575,7 @@ describe('OrcaRuntimeService', () => {
     })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
     runtime.onPtyExit(appPtyId, 0)
+
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term-replacement',
       tabId,
@@ -585,9 +604,11 @@ describe('OrcaRuntimeService', () => {
     // this pane, so this id no longer routes to the shell the lease describes.
     const tabId = 'tab-superseded'
     const appPtyId = 'ssh:ssh-target@@pty-5'
+
     const runtime = createRuntimeWithSshLease(appPtyId, tabId, 'expired', {
       supersededBy: 'pty-6'
     })
+
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
     runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId,
@@ -606,9 +627,11 @@ describe('OrcaRuntimeService', () => {
   it('does not recover a pane whose expired lease had its relay id recycled', async () => {
     const tabId = 'tab-recycled'
     const appPtyId = 'ssh:ssh-target@@pty-7'
+
     const runtime = createRuntimeWithSshLease(appPtyId, tabId, 'expired', {
       relayIdRecycled: true
     })
+
     const paneKey = makePaneKey(tabId, HEADLESS_LEAF_ID)
     runtime.registerPty(appPtyId, TEST_WORKTREE_ID, 'ssh-target', {
       tabId,
@@ -644,6 +667,7 @@ describe('OrcaRuntimeService', () => {
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
     runtime.onPtyExit(ptyId, -1)
     expect(runtime.getPtyLivenessVerdict(ptyId)?.status).toBe('unverifiable')
+
     // Resolve rather than call through, so a regression shows up as "spawned a second shell"
     // rather than as whatever createTerminal happens to throw in the fixture.
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
@@ -675,6 +699,7 @@ describe('OrcaRuntimeService', () => {
     })
     const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
     runtime.onPtyExit(ptyId, -1, undefined, { hostExitConfirmed: true })
+
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term-replacement',
       tabId,

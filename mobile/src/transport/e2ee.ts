@@ -24,6 +24,7 @@ function u8(x: Uint8Array): Uint8Array {
 
 export function generateKeyPair(): { publicKey: Uint8Array; secretKey: Uint8Array } {
   const kp = nacl.box.keyPair()
+
   return { publicKey: u8(kp.publicKey), secretKey: u8(kp.secretKey) }
 }
 
@@ -33,28 +34,34 @@ export function deriveSharedKey(ourSecretKey: Uint8Array, peerPublicKey: Uint8Ar
 
 function uint8ToBase64(bytes: Uint8Array): string {
   let binary = ''
+
   for (let i = 0; i < bytes.length; i++) {
     binary += String.fromCharCode(bytes[i]!)
   }
+
   return btoa(binary)
 }
 
 function base64ToUint8(b64: string): Uint8Array {
   const binary = atob(b64)
   const bytes = new Uint8Array(binary.length)
+
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i)
   }
+
   return bytes
 }
 
 export function publicKeyFromBase64(b64: string): Uint8Array {
   const key = base64ToUint8(b64)
+
   if (key.length !== 32) {
     throw new Error(
       `Invalid public key: expected 32 bytes, got ${key.length} from "${b64.slice(0, 20)}..."`
     )
   }
+
   return key
 }
 
@@ -64,12 +71,14 @@ export function publicKeyToBase64(key: Uint8Array): string {
 
 export function encrypt(plaintext: string, sharedKey: Uint8Array): string {
   const messageBytes = u8(new TextEncoder().encode(plaintext))
+
   return uint8ToBase64(encryptBytes(messageBytes, sharedKey))
 }
 
 export function decrypt(encrypted: string, sharedKey: Uint8Array): string | null {
   const bundle = base64ToUint8(encrypted)
   const plaintext = decryptBytes(bundle, sharedKey)
+
   return plaintext ? new TextDecoder().decode(plaintext) : null
 }
 

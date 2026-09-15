@@ -14,7 +14,9 @@ vi.mock('../provider/registry', () => ({
 }))
 
 const realSetImmediate = globalThis.setImmediate
+
 const realReadmit = agentSessionPtyWriteGate.readmit.bind(agentSessionPtyWriteGate)
+
 const THREE_CHUNK_INPUT = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES * 2 + 8)
 
 const mainWindow = {
@@ -28,10 +30,13 @@ function afterImmediateTurns(turns: number): Promise<'stalled'> {
     const step = (remaining: number): void => {
       if (remaining === 0) {
         resolve('stalled')
+
         return
       }
+
       realSetImmediate(() => step(remaining - 1))
     }
+
     step(turns)
   })
 }
@@ -66,10 +71,12 @@ describe('chunked pty write yield', () => {
     })
     vi.spyOn(agentSessionPtyWriteGate, 'readmit').mockImplementation((...args) => {
       events.push('readmit')
+
       return realReadmit(...args)
     })
     vi.spyOn(globalThis, 'setImmediate').mockImplementation(((callback: () => void) => {
       events.push('yield')
+
       return realSetImmediate(callback)
     }) as typeof setImmediate)
 

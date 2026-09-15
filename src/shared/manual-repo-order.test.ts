@@ -19,8 +19,11 @@ function repo(id: string, hostId: Repo['executionHostId']): Repo {
 }
 
 const localAlpha = repo('alpha', 'local')
+
 const localBravo = repo('bravo', 'local')
+
 const remoteCharlie = repo('charlie', 'runtime:node-b')
+
 const remoteDelta = repo('delta', 'runtime:node-b')
 
 describe('manual repo order', () => {

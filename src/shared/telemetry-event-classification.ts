@@ -4,7 +4,9 @@ import { eventSchemas } from './telemetry-event-registry'
 import type { cohortSchema } from './telemetry-onboarding-foundation-schemas'
 
 export type EventMap = { [N in keyof typeof eventSchemas]: z.infer<(typeof eventSchemas)[N]> }
+
 export type EventName = keyof EventMap
+
 export type EventProps<N extends EventName> = EventMap[N]
 
 // Why: non-`ZodObject` schemas have no `.shape`; return null so `key in undefined` can't throw at module load.
@@ -14,10 +16,12 @@ function eventSchemaShape(schema: z.ZodTypeAny): z.ZodRawShape | null {
   }
 
   const shapeBearingSchema = schema as { shape?: unknown }
+
   // Why: refined object schemas may expose `.shape` even when refinement breaks `instanceof ZodObject`.
   if (shapeBearingSchema.shape && typeof shapeBearingSchema.shape === 'object') {
     return shapeBearingSchema.shape as z.ZodRawShape
   }
+
   return null
 }
 
@@ -26,6 +30,7 @@ function eventsWithShapeKey(key: string): ReadonlySet<EventName> {
     (Object.entries(eventSchemas) as [EventName, z.ZodTypeAny][])
       .filter(([, schema]) => {
         const shape = eventSchemaShape(schema)
+
         return shape !== null && key in shape
       })
       .map(([name]) => name)
@@ -60,17 +65,22 @@ type _CohortExtendedRoster =
   | 'orca_cli_feature_tip_setup_result'
   | 'cmd_j_palette_feature_tip_shown'
   | 'cmd_j_palette_feature_tip_acknowledged'
+
 // Why: strict empty payloads infer a string index signature; ignore index-only keys so they aren't pulled into keyed rosters.
 type _KnownPayloadKeys<T> = string extends keyof T ? never : keyof T
+
 type _DerivedCohortExtendedEvents = {
   [N in EventName]: 'nth_repo_added' extends _KnownPayloadKeys<EventMap[N]> ? N : never
 }[EventName]
+
 type _CohortExtendedRosterSync = _CohortExtendedRoster extends _DerivedCohortExtendedEvents
   ? _DerivedCohortExtendedEvents extends _CohortExtendedRoster
     ? true
     : never
   : never
+
 const _cohortExtendedRosterSyncCheck: _CohortExtendedRosterSync = true
+
 void _cohortExtendedRosterSyncCheck
 
 export function isCohortExtendedEvent(name: EventName): boolean {
@@ -79,6 +89,7 @@ export function isCohortExtendedEvent(name: EventName): boolean {
 
 // Events whose schema declares `cohort`: the IPC handler injects cohort only for these — a `.strict()` schema without it would reject the event.
 const ONBOARDING_COHORT_SET = eventsWithShapeKey('cohort')
+
 // `NonNullable` strips `undefined` introduced by `cohortSchema`'s `.optional()`.
 export type OnboardingCohort = NonNullable<z.infer<typeof cohortSchema>>
 
@@ -103,15 +114,19 @@ type _OnboardingCohortRoster =
   | 'onboarding_feature_setup_run'
   | 'onboarding_feature_setup_terminal_opened'
   | 'onboarding_feature_setup_terminal_interacted'
+
 type _DerivedOnboardingCohortEvents = {
   [N in EventName]: 'cohort' extends _KnownPayloadKeys<EventMap[N]> ? N : never
 }[EventName]
+
 type _OnboardingCohortRosterSync = _OnboardingCohortRoster extends _DerivedOnboardingCohortEvents
   ? _DerivedOnboardingCohortEvents extends _OnboardingCohortRoster
     ? true
     : never
   : never
+
 const _onboardingCohortRosterSyncCheck: _OnboardingCohortRosterSync = true
+
 void _onboardingCohortRosterSyncCheck
 
 export function isOnboardingEvent(name: EventName): boolean {
@@ -132,4 +147,5 @@ export const commonPropsSchema = z
     orca_channel: z.enum(['stable', 'rc'])
   })
   .strict()
+
 export type CommonProps = z.infer<typeof commonPropsSchema>

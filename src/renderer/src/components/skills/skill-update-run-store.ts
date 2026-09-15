@@ -10,8 +10,11 @@ import {
 // the status-bar segment needs the same snapshot. Keeping it outside React means
 // neither surface owns the lifecycle.
 let run: SkillUpdateRun = { state: 'idle' }
+
 const listeners = new Set<() => void>()
+
 let subscribed = false
+
 let successTimer: ReturnType<typeof setTimeout> | null = null
 
 /** How long a finished run keeps its green check in the status bar. */
@@ -38,9 +41,11 @@ function clearSuccessTimer(): void {
  */
 function scheduleSuccessLinger(): void {
   clearSuccessTimer()
+
   if (run.state !== 'success' || getSkillFreshnessUpdateDialogRequest()) {
     return
   }
+
   successTimer = setTimeout(() => {
     successTimer = null
     void acknowledgeSkillUpdateRun()
@@ -54,6 +59,7 @@ function setRun(next: SkillUpdateRun): void {
   const wasRunning = run.state === 'running'
   run = next
   scheduleSuccessLinger()
+
   // A run that stopped changes what's on disk — including a cancelled one, which
   // may have written several skills before the kill landed. Without this a Stop
   // leaves the rows and the count describing the pre-run scan, so the Update
@@ -61,6 +67,7 @@ function setRun(next: SkillUpdateRun): void {
   if (next.state === 'success' || next.state === 'error' || (wasRunning && next.state === 'idle')) {
     notifyInstalledAgentSkillsChanged()
   }
+
   emit()
 }
 
@@ -68,6 +75,7 @@ function ensureSubscribed(): void {
   if (subscribed) {
     return
   }
+
   subscribed = true
   window.api.skills.onUpdateRun(setRun)
   void window.api.skills.getUpdateRun().then((current) => {
@@ -81,6 +89,7 @@ function ensureSubscribed(): void {
 export function subscribeSkillUpdateRun(listener: () => void): () => void {
   ensureSubscribed()
   listeners.add(listener)
+
   return () => listeners.delete(listener)
 }
 
@@ -97,6 +106,7 @@ export function useSkillUpdateRun(): SkillUpdateRun {
 // unhandled rejection; the run state itself is pushed from main either way.
 export async function startSkillUpdateRun(names: readonly string[]): Promise<void> {
   ensureSubscribed()
+
   try {
     await window.api.skills.startUpdateRun([...names])
   } catch (error) {

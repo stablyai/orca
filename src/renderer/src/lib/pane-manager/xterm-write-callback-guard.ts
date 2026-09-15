@@ -9,6 +9,7 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 // (Discord #performance / issue #2836). Verified against the vendored xterm
 // 6.1.0-beta.287 in xterm-write-buffer-stall.repro.test.ts.
 const MAX_REPORTS_PER_CONTEXT = 5
+
 const reportCountsByContext = new Map<string, number>()
 
 /**
@@ -22,9 +23,11 @@ export function runGuardedWriteCompletionStep(context: string, step: () => void)
     step()
   } catch (error: unknown) {
     const reported = reportCountsByContext.get(context) ?? 0
+
     if (reported >= MAX_REPORTS_PER_CONTEXT) {
       return
     }
+
     reportCountsByContext.set(context, reported + 1)
     console.error(`[terminal] write-completion step "${context}" threw`, error)
     recordRendererCrashBreadcrumb('terminal_write_completion_error', {

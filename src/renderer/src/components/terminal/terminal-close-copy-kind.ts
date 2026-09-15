@@ -16,8 +16,10 @@ export function resolveLeafCloseCopyKind(
   if (!leafId || !isTerminalLeafId(leafId) || !tabId || tabId.includes(':')) {
     return 'command'
   }
+
   const agentStatusByPaneKey = useAppStore.getState().agentStatusByPaneKey ?? {}
   const agentType = agentStatusByPaneKey[makePaneKey(tabId, leafId)]?.agentType
+
   return agentType && agentType !== 'unknown' ? 'agent' : 'command'
 }
 
@@ -29,10 +31,12 @@ export function resolveBusyPtyCloseCopyKind(
 ): CloseTerminalDialogCopyKind {
   const ptyIdsByLeafId =
     useAppStore.getState().terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId ?? {}
+
   for (const [leafId, ptyId] of Object.entries(ptyIdsByLeafId)) {
     if (busyPtyIds.includes(ptyId) && resolveLeafCloseCopyKind(tabId, leafId) === 'agent') {
       return 'agent'
     }
   }
+
   return 'command'
 }

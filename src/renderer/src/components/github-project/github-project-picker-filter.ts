@@ -34,6 +34,7 @@ export function filterGitHubProjectPickerProjects({
   if (isGitHubProjectPickerQueryTooLarge(query)) {
     return []
   }
+
   const trimmedQuery = query.trim()
 
   const pinnedKeys = new Set(pinned.map(getProjectKey))
@@ -42,12 +43,15 @@ export function filterGitHubProjectPickerProjects({
 
   return projects.filter((project) => {
     const key = getProjectKey(project)
+
     if (pinnedKeys.has(key) || recentKeys.has(key)) {
       return false
     }
+
     if (!normalizedQuery) {
       return true
     }
+
     return (
       project.title.toLowerCase().includes(normalizedQuery) ||
       project.owner.toLowerCase().includes(normalizedQuery) ||

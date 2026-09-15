@@ -23,6 +23,7 @@ describe('resolveTerminalKeyboardPane', () => {
     const focused = pane(2)
     const input = document.createElement('textarea')
     focused.terminal.element.appendChild(input)
+
     const manager = {
       getActivePane: vi.fn(() => active),
       getPanes: vi.fn(() => [active, focused])
@@ -34,6 +35,7 @@ describe('resolveTerminalKeyboardPane', () => {
 
   it('falls back to the manager active pane for non-terminal shortcuts', () => {
     const active = pane(1)
+
     const manager = {
       getActivePane: vi.fn(() => active),
       getPanes: vi.fn(() => [active])
@@ -48,9 +50,11 @@ describe('resolveTerminalKeyboardPane', () => {
     const input = document.createElement('textarea')
     focused.terminal.element.appendChild(input)
     let activePane = active
+
     const setActivePane = vi.fn((id: number) => {
       activePane = id === focused.id ? focused : active
     })
+
     const manager = {
       getActivePane: vi.fn(() => activePane),
       getPanes: vi.fn(() => [active, focused]),

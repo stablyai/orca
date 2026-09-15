@@ -22,11 +22,13 @@ export async function readRelayWorktreeList(
     'worktree-list-z',
     async () => {
       const { stdout } = await git(['worktree', 'list', '--porcelain', '-z'], repoPath)
+
       return normalizeRelayWorktrees(parseWorktreeList(stdout, { nulDelimited: true }))
     },
     async () => {
       // Why: `-z` preserves newlines; fallback keeps Git <2.36 compatible.
       const { stdout } = await git(['worktree', 'list', '--porcelain'], repoPath)
+
       return normalizeRelayWorktrees(parseWorktreeList(stdout))
     },
     isUnsupportedWorktreeListZError
@@ -53,6 +55,7 @@ export async function annotatePrunableWorktreesByExistence(
       nextIndex += 1
       const worktree = worktrees[index]
       const worktreePath = worktree?.path ?? ''
+
       // Git only marks linked worktrees prunable, and never locked ones (a
       // lock shields the registration even when the directory is missing). The
       // `locked` annotation is only parsed on Git >=2.31, so on older Git a
@@ -67,6 +70,7 @@ export async function annotatePrunableWorktreesByExistence(
       ) {
         continue
       }
+
       try {
         await stat(worktreePath)
       } catch (err) {
@@ -79,6 +83,7 @@ export async function annotatePrunableWorktreesByExistence(
 
   const workerCount = Math.min(PRUNABLE_EXISTENCE_PROBE_CONCURRENCY, worktrees.length)
   await Promise.all(Array.from({ length: workerCount }, () => probeNext()))
+
   return annotated
 }
 

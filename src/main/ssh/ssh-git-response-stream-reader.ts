@@ -58,6 +58,7 @@ export function requestGitStreamable(
   // resolves; frames are queued until then and drained.
   const streamIdRef = { current: SENTINEL_STREAM_ID }
   const unsubscribers: (() => void)[] = []
+
   const cleanup = (): void => {
     while (unsubscribers.length > 0) {
       try {
@@ -80,20 +81,24 @@ export function requestGitStreamable(
 
     const inactivityMs = options?.inactivityTimeoutMs ?? STREAM_INACTIVITY_TIMEOUT_MS
     let inactivityTimer: ReturnType<typeof setTimeout> | null = null
+
     const clearInactivity = (): void => {
       if (inactivityTimer) {
         clearTimeout(inactivityTimer)
         inactivityTimer = null
       }
     }
+
     // Why: reset on every stream frame so a legitimately long stream is not
     // killed, but a wedged stream (no frames arriving) rejects instead of
     // hanging the caller forever.
     const armInactivity = (): void => {
       if (inactivityTimer) {
         inactivityTimer.refresh()
+
         return
       }
+
       inactivityTimer = setTimeout(() => {
         fail(
           new GitResponseStreamError(
@@ -113,20 +118,24 @@ export function requestGitStreamable(
         }
       }
     }
+
     const fail = (err: Error): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearInactivity()
       cancel()
       cleanup()
       reject(err)
     }
+
     const succeed = (value: unknown): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearInactivity()
       cleanup()
@@ -137,25 +146,32 @@ export function requestGitStreamable(
       if (settled || p.streamId !== streamIdRef.current) {
         return
       }
+
       const seq = p.seq as number
       const data = p.data as string
+
       if (typeof seq !== 'number' || typeof data !== 'string') {
         fail(new GitResponseStreamError(`Malformed chunk for git stream ${streamIdRef.current}`))
+
         return
       }
+
       if (seq !== expectedSeq) {
         fail(
           new GitResponseStreamError(
             `Out-of-order chunk for git stream ${streamIdRef.current}: expected ${expectedSeq}, got ${seq}`
           )
         )
+
         return
       }
+
       const decoded = Buffer.from(data, 'base64')
       parts.push(decoded)
       receivedBytes += decoded.length
       expectedSeq += 1
       armInactivity()
+
       // Why: credit-based flow control — the relay caps unacked chunks so a big
       // response cannot queue unbounded ahead of interactive pty.data frames.
       if (!mux.isDisposed()) {
@@ -171,14 +187,17 @@ export function requestGitStreamable(
       if (settled || p.streamId !== streamIdRef.current) {
         return
       }
+
       if (expectedSeq !== chunkCount || receivedBytes !== totalBytes) {
         fail(
           new GitResponseStreamError(
             `Git stream ${streamIdRef.current} incomplete: chunks ${expectedSeq}/${chunkCount}, bytes ${receivedBytes}/${totalBytes}`
           )
         )
+
         return
       }
+
       try {
         succeed(JSON.parse(Buffer.concat(parts).toString('utf-8')))
       } catch (err) {
@@ -194,12 +213,14 @@ export function requestGitStreamable(
       if (settled || p.streamId !== streamIdRef.current) {
         return
       }
+
       fail(new Error((p.message as string | undefined) ?? 'git response stream error'))
     }
 
     const drainPending = (): void => {
       while (!settled && pending.length > 0) {
         const frame = pending.shift()!
+
         if (frame.kind === 'chunk') {
           handleChunk(frame.params)
         } else if (frame.kind === 'end') {
@@ -217,6 +238,7 @@ export function requestGitStreamable(
     // than corrupting. The sentinel normally resolves long before this cap.
     const pushPending = (frame: PendingFrame): void => {
       pending.push(frame)
+
       if (pending.length > MAX_PENDING_FRAMES) {
         pending.shift()
       }
@@ -226,8 +248,10 @@ export function requestGitStreamable(
       mux.onNotificationByMethod('git.responseChunk', (p) => {
         if (!metadataReady) {
           pushPending({ kind: 'chunk', params: p })
+
           return
         }
+
         handleChunk(p)
       })
     )
@@ -235,8 +259,10 @@ export function requestGitStreamable(
       mux.onNotificationByMethod('git.responseEnd', (p) => {
         if (!metadataReady) {
           pushPending({ kind: 'end', params: p })
+
           return
         }
+
         handleEnd(p)
       })
     )
@@ -244,24 +270,31 @@ export function requestGitStreamable(
       mux.onNotificationByMethod('git.responseError', (p) => {
         if (!metadataReady) {
           pushPending({ kind: 'error', params: p })
+
           return
         }
+
         handleStreamError(p)
       })
     )
+
     if (options?.signal) {
       const signal = options.signal
+
       if (signal.aborted) {
         const err = new Error('Request was cancelled') as Error & { name: string }
         err.name = 'AbortError'
         fail(err)
+
         return
       }
+
       const onAbort = (): void => {
         const err = new Error('Request was cancelled') as Error & { name: string }
         err.name = 'AbortError'
         fail(err)
       }
+
       signal.addEventListener('abort', onAbort, { once: true })
       unsubscribers.push(() => signal.removeEventListener('abort', onAbort))
     }
@@ -275,23 +308,29 @@ export function requestGitStreamable(
     // mux.request keep the same call shape (and their tests). inactivityTimeoutMs
     // governs reassembly here, not the sentinel request.
     const streamParams = { ...params, __streamResponse: true }
+
     const requestOptions =
       options?.signal !== undefined || options?.timeoutMs !== undefined
         ? { signal: options.signal, timeoutMs: options.timeoutMs }
         : undefined
+
     const requestPromise = requestOptions
       ? mux.request(method, streamParams, requestOptions)
       : mux.request(method, streamParams)
+
     void requestPromise
       .then((result) => {
         if (settled) {
           return
         }
+
         // Old relay / small result: plain single-frame value, no stream follows.
         if (!isGitResponseStreamMarker(result)) {
           succeed(result)
+
           return
         }
+
         const marker = result.__orcaGitResponseStream
         totalBytes = marker.totalBytes
         chunkCount = marker.chunkCount

@@ -94,6 +94,7 @@ async function createRepoWithPrunableWorktree(): Promise<{
 function branchExists(repoPath: string, branchName: string): boolean {
   try {
     git(repoPath, ['show-ref', '--verify', '--quiet', `refs/heads/${branchName}`])
+
     return true
   } catch {
     return false
@@ -133,6 +134,7 @@ describe('git worktree paths', () => {
     const { repoPath, worktreePath } = await createRepoWithPrunableWorktree()
 
     const worktrees = await listWorktrees(repoPath)
+
     const stale = worktrees.find(
       (worktree) => worktree.path.replaceAll('\\', '/') === worktreePath.replaceAll('\\', '/')
     )

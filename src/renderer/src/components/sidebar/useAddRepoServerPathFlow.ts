@@ -86,22 +86,27 @@ export function useAddRepoServerPathFlow({
   const handleAddServerPath = useCallback(
     async (kind: 'git' | 'folder'): Promise<void> => {
       const path = serverPath.trim()
+
       if (!path) {
         return
       }
+
       const gen = ++serverAddGenRef.current
       setIsAddingServerPath(true)
       setAddProjectBusyLabel(kind === 'git' ? 'Scanning for repositories...' : 'Opening folder...')
+
       try {
         if (kind === 'git') {
           const attemptId = createNestedRepoTelemetryAttemptId()
           const runtimeKind = getNestedRepoRuntimeKind(null)
           const supportsStreamingScan = runtimeKind !== 'runtime'
           const scanId = supportsStreamingScan ? createNestedRepoScanId() : null
+
           if (scanId) {
             setActiveNestedScanId(scanId, activeRuntimeEnvironmentId)
             setNestedScanInProgress(true)
           }
+
           const scan = await scanNestedRepos(path, undefined, {
             runtimeEnvironmentId: activeRuntimeEnvironmentId,
             ...(scanId
@@ -115,6 +120,7 @@ export function useAddRepoServerPathFlow({
                     ) {
                       return
                     }
+
                     showNestedRepoReview({
                       scan: progressScan,
                       selectedPath: path,
@@ -129,9 +135,11 @@ export function useAddRepoServerPathFlow({
                 }
               : {})
           })
+
           if (gen !== serverAddGenRef.current) {
             return
           }
+
           setNestedScanInProgress(false)
           setActiveNestedScanId(null)
           track(
@@ -143,6 +151,7 @@ export function useAddRepoServerPathFlow({
               scan
             })
           )
+
           if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
             showNestedRepoReview({
               scan,
@@ -154,24 +163,31 @@ export function useAddRepoServerPathFlow({
               scanId,
               runtimeEnvironmentId: activeRuntimeEnvironmentId
             })
+
             return
           }
         }
+
         setAddProjectBusyLabel(kind === 'git' ? 'Opening project...' : 'Opening folder...')
+
         const repo = await addRepoPath(path, kind, {
           runtimeEnvironmentId: activeRuntimeEnvironmentId
         })
+
         if (gen !== serverAddGenRef.current) {
           return
         }
+
         if (repo && isGitRepoKind(repo)) {
           // Why: once the repo exists, a transient non-authoritative refresh
           // should fall through to project reveal instead of leaving the add flow open.
           const ownerOptions = worktreeRefreshOptions(activeRuntimeEnvironmentId ?? null)
           await fetchWorktrees(repo.id, ownerOptions)
+
           if (gen !== serverAddGenRef.current) {
             return
           }
+
           await onGitRepoReady(repo.id, 'runtime_server_path', ownerOptions.executionHostId)
         } else if (repo) {
           // Why: folder repos skip the Git default-checkout handoff; their synthetic

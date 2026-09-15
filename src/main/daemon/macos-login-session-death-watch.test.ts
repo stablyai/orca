@@ -8,7 +8,9 @@ import {
 import type { SystemResolverHealth } from './types'
 
 const ACCEPTED: LoginPreflightOutcome = { ok: true, conclusive: true, reason: 'accepted' }
+
 const REJECTED: LoginPreflightOutcome = { ok: false, conclusive: true, reason: 'rejected' }
+
 const INCONCLUSIVE: LoginPreflightOutcome = { ok: false, conclusive: false, reason: 'timeout' }
 
 type FakeTimer = { at: number; callback: () => void; cleared: boolean }
@@ -20,6 +22,7 @@ class FakeClock {
   setTimeout = (callback: () => void, delayMs: number): unknown => {
     const timer: FakeTimer = { at: this.nowMs + delayMs, callback, cleared: false }
     this.timers.push(timer)
+
     return timer
   }
 
@@ -31,19 +34,23 @@ class FakeClock {
 
   async advance(ms: number): Promise<void> {
     const target = this.nowMs + ms
+
     for (;;) {
       const due = this.timers
         .filter((t) => !t.cleared && t.at <= target)
         .sort((a, b) => a.at - b.at)[0]
+
       if (!due) {
         break
       }
+
       this.nowMs = Math.max(this.nowMs, due.at)
       due.cleared = true
       due.callback()
       // Why: probes are async; let their promise chains settle before firing the next timer.
       await drainMicrotasks()
     }
+
     this.nowMs = target
   }
 
@@ -79,6 +86,7 @@ function createWatch(
   // Why length-check, not `??`: an explicit null outcome (wrapper not applicable) must reach the watch.
   const probe = vi.fn(async () => (outcomes.length ? outcomes.shift()! : ACCEPTED))
   let resolverHealth: SystemResolverHealth = 'unhealthy'
+
   const watch = new MacosLoginSessionDeathWatch({
     probeLoginSession: overrides.probeLoginSession ?? probe,
     readResolverHealth: overrides.readResolverHealth ?? (async () => resolverHealth),
@@ -95,6 +103,7 @@ function createWatch(
       ...overrides.timing
     }
   })
+
   return {
     watch,
     clock,
@@ -111,6 +120,7 @@ describe('MacosLoginSessionDeathWatch', () => {
     const { watch, clock, onRetire } = createWatch({
       outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, REJECTED]
     })
+
     watch.start()
     await drainMicrotasks()
     expect(onRetire).not.toHaveBeenCalled()
@@ -130,10 +140,12 @@ describe('MacosLoginSessionDeathWatch', () => {
 
   it('preserves the daemon when a short PAM rejection burst recovers after wake', async () => {
     const readResolverHealth = vi.fn(async () => 'unhealthy' as const)
+
     const { watch, clock, onRetire, probe } = createWatch({
       outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, ACCEPTED],
       readResolverHealth
     })
+
     watch.start()
     await drainMicrotasks()
 
@@ -157,10 +169,12 @@ describe('MacosLoginSessionDeathWatch', () => {
 
   it('does not count a suspended timer gap as rejection evidence', async () => {
     const readResolverHealth = vi.fn(async () => 'unhealthy' as const)
+
     const { watch, clock, onRetire, probe } = createWatch({
       outcomes: [ACCEPTED, REJECTED, REJECTED, ACCEPTED],
       readResolverHealth
     })
+
     watch.start()
     await drainMicrotasks()
 
@@ -181,15 +195,18 @@ describe('MacosLoginSessionDeathWatch', () => {
 
   it('does not count suspension during an in-flight probe as rejection evidence', async () => {
     let resolveProbe!: (outcome: LoginPreflightOutcome) => void
+
     const deferredProbe = new Promise<LoginPreflightOutcome>((resolve) => {
       resolveProbe = resolve
     })
+
     const probe = vi
       .fn<MacosLoginSessionDeathWatchOptions['probeLoginSession']>()
       .mockResolvedValueOnce(ACCEPTED)
       .mockResolvedValueOnce(REJECTED)
       .mockReturnValueOnce(deferredProbe)
       .mockResolvedValueOnce(ACCEPTED)
+
     const readResolverHealth = vi.fn(async () => 'unhealthy' as const)
     const { watch, clock, onRetire } = createWatch({ probeLoginSession: probe, readResolverHealth })
     watch.start()
@@ -214,10 +231,12 @@ describe('MacosLoginSessionDeathWatch', () => {
 
   it('backs off repeated timer lateness to the periodic probe cadence', async () => {
     const readResolverHealth = vi.fn(async () => 'unhealthy' as const)
+
     const { watch, clock, onRetire, probe } = createWatch({
       outcomes: [ACCEPTED, ...Array.from({ length: 30 }, () => REJECTED)],
       readResolverHealth
     })
+
     watch.start()
     await drainMicrotasks()
     await clock.advance(120_000)
@@ -237,11 +256,14 @@ describe('MacosLoginSessionDeathWatch', () => {
     const { watch, clock, onRetire } = createWatch({
       outcomes: [REJECTED, REJECTED, REJECTED, REJECTED, REJECTED]
     })
+
     watch.start()
     await drainMicrotasks()
+
     for (let i = 0; i < 4; i++) {
       await clock.advance(120_000)
     }
+
     expect(onRetire).not.toHaveBeenCalled()
   })
 
@@ -249,6 +271,7 @@ describe('MacosLoginSessionDeathWatch', () => {
     const { watch, clock, onRetire } = createWatch({
       outcomes: [ACCEPTED, REJECTED, REJECTED, ACCEPTED, REJECTED, REJECTED]
     })
+
     watch.start()
     await drainMicrotasks()
     await clock.advance(120_000) // rejection 1
@@ -263,6 +286,7 @@ describe('MacosLoginSessionDeathWatch', () => {
     const { watch, clock, onRetire } = createWatch({
       outcomes: [ACCEPTED, REJECTED, INCONCLUSIVE, REJECTED, INCONCLUSIVE, REJECTED]
     })
+
     watch.start()
     await drainMicrotasks()
     await clock.advance(120_000) // rejection 1
@@ -277,15 +301,19 @@ describe('MacosLoginSessionDeathWatch', () => {
 
   it('keeps repeated inconclusive timeouts on the bounded periodic cadence', async () => {
     const readResolverHealth = vi.fn(async () => 'unhealthy' as const)
+
     const { watch, clock, onRetire, probe } = createWatch({
       outcomes: [ACCEPTED, ...Array.from({ length: 10 }, () => INCONCLUSIVE)],
       readResolverHealth
     })
+
     watch.start()
     await drainMicrotasks()
+
     for (let i = 0; i < 10; i++) {
       await clock.advance(120_000)
     }
+
     expect(probe).toHaveBeenCalledTimes(11)
     expect(readResolverHealth).not.toHaveBeenCalled()
     expect(onRetire).not.toHaveBeenCalled()
@@ -297,6 +325,7 @@ describe('MacosLoginSessionDeathWatch', () => {
       const { watch, clock, onRetire, probe, setResolverHealth } = createWatch({
         outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, REJECTED, REJECTED]
       })
+
       setResolverHealth(initialResolverHealth)
       watch.start()
       await drainMicrotasks()
@@ -335,6 +364,7 @@ describe('MacosLoginSessionDeathWatch', () => {
     const { watch, clock, probe } = createWatch({
       outcomes: [ACCEPTED, ACCEPTED, ACCEPTED]
     })
+
     watch.start()
     await drainMicrotasks()
     const after = probe.mock.calls.length
@@ -359,13 +389,16 @@ describe('MacosLoginSessionDeathWatch', () => {
 
   it('retains one follow-up when a logout signal arrives during a probe', async () => {
     let resolveStartup!: (outcome: LoginPreflightOutcome) => void
+
     const startup = new Promise<LoginPreflightOutcome>((resolve) => {
       resolveStartup = resolve
     })
+
     const probe = vi
       .fn<MacosLoginSessionDeathWatchOptions['probeLoginSession']>()
       .mockReturnValueOnce(startup)
       .mockResolvedValue(ACCEPTED)
+
     const { watch, clock } = createWatch({ probeLoginSession: probe })
     watch.start()
     watch.notifyPtyExit()
@@ -382,14 +415,17 @@ describe('MacosLoginSessionDeathWatch', () => {
 
   it('retains client activity that arrives during an armed periodic probe', async () => {
     let resolvePeriodic!: (outcome: LoginPreflightOutcome) => void
+
     const periodic = new Promise<LoginPreflightOutcome>((resolve) => {
       resolvePeriodic = resolve
     })
+
     const probe = vi
       .fn<MacosLoginSessionDeathWatchOptions['probeLoginSession']>()
       .mockResolvedValueOnce(ACCEPTED)
       .mockReturnValueOnce(periodic)
       .mockResolvedValue(ACCEPTED)
+
     const { watch, clock } = createWatch({ probeLoginSession: probe })
     watch.start()
     await drainMicrotasks()
@@ -427,10 +463,13 @@ describe('MacosLoginSessionDeathWatch', () => {
 
   it('stop() aborts an in-flight subprocess probe', async () => {
     let probeSignal: AbortSignal | undefined
+
     const probe = vi.fn((signal?: AbortSignal) => {
       probeSignal = signal
+
       return new Promise<LoginPreflightOutcome>(() => {})
     })
+
     const { watch } = createWatch({ probeLoginSession: probe })
     watch.start()
     expect(probeSignal?.aborted).toBe(false)
@@ -443,16 +482,20 @@ describe('MacosLoginSessionDeathWatch', () => {
   it('stop() prevents an in-flight resolver check from retiring the daemon', async () => {
     let resolveHealth!: (health: SystemResolverHealth) => void
     let resolverSignal: AbortSignal | undefined
+
     const resolverHealth = new Promise<SystemResolverHealth>((resolve) => {
       resolveHealth = resolve
     })
+
     const { watch, clock, onRetire } = createWatch({
       outcomes: [ACCEPTED, REJECTED, REJECTED, REJECTED, REJECTED],
       readResolverHealth: (signal) => {
         resolverSignal = signal
+
         return resolverHealth
       }
     })
+
     watch.start()
     await drainMicrotasks()
     await clock.advance(120_000)
@@ -476,6 +519,7 @@ describe('MacosLoginSessionDeathWatch', () => {
       },
       async () => ACCEPTED
     ]
+
     const probe = vi.fn(() => (outcomes.shift() ?? (async () => ACCEPTED))())
     const { watch, clock, onRetire } = createWatch({ probeLoginSession: probe })
     watch.start()

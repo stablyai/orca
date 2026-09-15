@@ -10,9 +10,13 @@ import { useTabGroupActivationCommands } from './useTabGroupActivationCommands'
 import { useTabGroupCreationCommands } from './useTabGroupCreationCommands'
 
 const EMPTY_GROUPS: readonly TabGroup[] = []
+
 const EMPTY_UNIFIED_TABS: readonly Tab[] = []
+
 const EMPTY_BROWSER_TABS: readonly BrowserTabState[] = []
+
 const EMPTY_TERMINAL_TABS: readonly TerminalTab[] = []
+
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: NonNullable<
   ReturnType<typeof useAppStore.getState>['terminalLayoutsByTabId']
 > = {}

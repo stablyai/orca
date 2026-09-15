@@ -53,8 +53,10 @@ async function closeServer(server: Server): Promise<void> {
     server.close((error) => {
       if (error) {
         reject(error)
+
         return
       }
+
       resolve()
     })
   })
@@ -63,19 +65,25 @@ async function closeServer(server: Server): Promise<void> {
 async function startPermissiveProbeServer(): Promise<ProbeServer> {
   const requests: string[] = []
   const gif = Buffer.from('R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=', 'base64')
+
   const server = createServer((request, response) => {
     requests.push(request.url ?? '/')
     response.setHeader('Access-Control-Allow-Origin', '*')
+
     if (request.url?.includes('beacon.gif')) {
       response.writeHead(200, { 'Content-Type': 'image/gif', 'Content-Length': gif.byteLength })
       response.end(gif)
+
       return
     }
+
     response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' })
     response.end('permissive probe response')
   })
+
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
   const port = (server.address() as AddressInfo).port
+
   return {
     origin: `http://127.0.0.1:${port}`,
     requests,
@@ -92,6 +100,7 @@ async function materializeHostilePlugin(origin: string): Promise<string> {
   const panelPath = join(pluginRoot, 'panel.html')
   const panelHtml = await readFile(panelPath, 'utf8')
   await writeFile(panelPath, panelHtml.replaceAll('https://example.com', origin))
+
   return pluginRoot
 }
 
@@ -101,24 +110,31 @@ async function installApprovedPanel(page: Page, sourcePath: string): Promise<Ins
     window.__store?.setState({ settings })
     await window.api.plugins.refresh()
     const installed = await window.api.plugins.install({ kind: 'local-path', path: pluginPath })
+
     if (!installed.ok) {
       throw new Error(installed.error)
     }
+
     const listed = await window.api.plugins.refresh()
     const plugin = listed.find((entry) => entry.pluginKey === installed.pluginKey)
+
     if (!plugin?.consentFingerprint || !plugin.panels[0]) {
       throw new Error(`installed plugin ${installed.pluginKey} has no reviewable panel`)
     }
+
     const approved = await window.api.plugins.consent({
       pluginKey: plugin.pluginKey,
       reviewedFingerprint: plugin.consentFingerprint,
       decision: 'approve'
     })
+
     const approvedPlugin = approved.find((entry) => entry.pluginKey === plugin.pluginKey)
     const panel = approvedPlugin?.panels[0]
+
     if (!panel) {
       throw new Error(`approved plugin ${plugin.pluginKey} has no panel`)
     }
+
     return { pluginKey: plugin.pluginKey, tabKey: panel.tabKey, title: panel.title }
   }, sourcePath)
 }
@@ -126,12 +142,15 @@ async function installApprovedPanel(page: Page, sourcePath: string): Promise<Ins
 async function openPanel(page: Page, panel: InstalledPanel): Promise<void> {
   await page.evaluate(async () => {
     const store = window.__store?.getState()
+
     if (!store) {
       throw new Error('window.__store is unavailable')
     }
+
     if (!store.rightSidebarOpen) {
       store.toggleRightSidebar()
     }
+
     // Refresh after the sidebar subscription exists so this isolated profile
     // cannot miss the install/consent change events emitted just before mount.
     await window.api.plugins.refresh()
@@ -166,20 +185,25 @@ async function inspectElectronFrameProcesses(
       BrowserWindow.getAllWindows().find(
         (candidate) => candidate.webContents.getURL() === expectedUrl
       ) ?? BrowserWindow.getAllWindows()[0]
+
     if (!browserWindow) {
       return []
     }
+
     return Promise.all(
       browserWindow.webContents.mainFrame.framesInSubtree.map(async (frame) => {
         let marker: string | null = null
+
         try {
           const value = await frame.executeJavaScript(
             "document.querySelector('h1')?.textContent ?? null"
           )
+
           marker = typeof value === 'string' ? value : null
         } catch {
           // A frame can detach while Chromium reports the live frame tree.
         }
+
         return {
           frameTreeNodeId: frame.frameTreeNodeId,
           parentFrameTreeNodeId: frame.parent?.frameTreeNodeId ?? null,
@@ -217,6 +241,7 @@ test('contains hostile panel network and navigation probes', async ({
   orcaPage.on('framenavigated', (frame) => {
     browserEvents.push(`framenavigated:${frame.url()}`)
   })
+
   try {
     const panel = await installApprovedPanel(orcaPage, pluginRoot)
     await openPanel(orcaPage, panel)
@@ -228,6 +253,7 @@ test('contains hostile panel network and navigation probes', async ({
       'content',
       /connect-src 'none'.*img-src data:/
     )
+
     const initialPanelDebug = await frame.locator('html').evaluate((element) => ({
       readyState: element.ownerDocument.readyState,
       scriptCount: element.ownerDocument.scripts.length,
@@ -235,6 +261,7 @@ test('contains hostile panel network and navigation probes', async ({
       bodyText: element.ownerDocument.body?.textContent ?? '',
       scriptText: Array.from(element.ownerDocument.scripts, (script) => script.textContent ?? '')
     }))
+
     await testInfo.attach('hostile-panel-initial-debug', {
       body: Buffer.from(JSON.stringify(initialPanelDebug, null, 2)),
       contentType: 'application/json'
@@ -253,8 +280,10 @@ test('contains hostile panel network and navigation probes', async ({
         new Promise<string>((resolve, reject) => {
           const requestId = 'small-invalid-probe'
           const timer = setTimeout(() => reject(new Error('host sent no bridge refusal')), 5_000)
+
           const onMessage = (event: MessageEvent): void => {
             const data = event.data
+
             if (
               event.source !== window.parent ||
               !data ||
@@ -263,10 +292,12 @@ test('contains hostile panel network and navigation probes', async ({
             ) {
               return
             }
+
             clearTimeout(timer)
             window.removeEventListener('message', onMessage)
             resolve(data.errorCode ?? 'missing_error_code')
           }
+
           window.addEventListener('message', onMessage)
           window.parent.postMessage(
             {
@@ -279,6 +310,7 @@ test('contains hostile panel network and navigation probes', async ({
           )
         })
     )
+
     expect(bridgeErrorCode).toBe('invalid_request')
 
     expect(server.requests).toEqual([])
@@ -289,6 +321,7 @@ test('contains hostile panel network and navigation probes', async ({
     navigationProbeStarted = true
     const initialDocument = await readPanelDocument(frame)
     panelDocuments.push(initialDocument)
+
     for (const navigation of [
       {
         button: 'Try top navigation',
@@ -318,9 +351,11 @@ test('contains hostile panel network and navigation probes', async ({
         const navigationButton = element as HTMLButtonElement
         navigationButton.click()
       }, sourceDocumentId)
+
       const outcome = await frame.locator('html').evaluate(
         (element, expected) => {
           const result = element.querySelector(`[data-probe="${expected.probe}"]`)
+
           return {
             contained: result?.getAttribute('data-contained') ?? null,
             invocationCount: element.querySelectorAll(
@@ -334,43 +369,54 @@ test('contains hostile panel network and navigation probes', async ({
           probe: navigation.probe
         }
       )
+
       expect(outcome.contained === null || outcome.contained === 'true').toBe(true)
+
       if (outcome.retained) {
         expect(outcome.invocationCount).toBe(1)
       } else {
         replacedNavigations.push(navigation)
       }
+
       const currentDocument = await readPanelDocument(frame)
       panelDocuments.push(currentDocument)
       expect(currentDocument.url).toBe(initialDocument.url)
       expect(currentDocument.html).toContain('Hostile panel fixture')
+
       if (outcome.retained && navigation.probe === 'anchor-form-navigation') {
         await expect(frame.locator(`a[href="${navigation.destinations[0]}"]`)).toHaveCount(1)
         await expect(frame.locator(`form[action="${navigation.destinations[1]}"]`)).toHaveCount(1)
       }
+
       if (outcome.retained && navigation.probe === 'meta-refresh-navigation') {
         await expect(frame.locator('meta[http-equiv="refresh"]')).toHaveAttribute(
           'content',
           `0;url=${navigation.destinations[0]}`
         )
       }
+
       expect(server.requests).toEqual([])
       expect(orcaPage.url()).toBe(appUrl)
     }
+
     const guardDestination = `${server.origin}/frame-guard-navigation`
     await iframe.evaluate((element, destination) => {
       const panelWindow = (element as HTMLIFrameElement).contentWindow
+
       if (!panelWindow) {
         throw new Error('plugin panel window unavailable')
       }
+
       panelWindow.location.href = destination
     }, guardDestination)
     await expect
       .poll(async () => {
         navigationObservation = await readPanelNavigationObserver(electronApp)
+
         const attempt = navigationObservation.willFrameNavigations.find(
           ({ url }) => url === guardDestination
         )
+
         return attempt?.defaultPrevented === true && attempt.isMainFrame === false
       })
       .toBe(true)
@@ -386,11 +432,14 @@ test('contains hostile panel network and navigation probes', async ({
     expect(orcaPage.url()).toBe(appUrl)
 
     navigationObservation = await readPanelNavigationObserver(electronApp)
+
     const attemptedProbeNavigations = navigationObservation.willFrameNavigations.filter(({ url }) =>
       url.startsWith(server.origin)
     )
+
     expect(attemptedProbeNavigations.length).toBeGreaterThan(0)
     expect(attemptedProbeNavigations.every(({ defaultPrevented }) => defaultPrevented)).toBe(true)
+
     for (const navigation of replacedNavigations) {
       expect(
         navigation.destinations.every((destination) =>
@@ -401,6 +450,7 @@ test('contains hostile panel network and navigation probes', async ({
         `${navigation.probe} replacement must follow an authoritative blocked navigation`
       ).toBe(true)
     }
+
     expect(
       navigationObservation.didFrameNavigations.filter(({ url }) => url.startsWith(server.origin))
     ).toEqual([])
@@ -440,6 +490,7 @@ test('detects and suspends a busy-looping panel in an isolated renderer', async 
   const tempRoot = join(pluginRoot, '..')
   const appUrl = orcaPage.url()
   let frameProcesses: ElectronFrameProcess[] = []
+
   try {
     const panel = await installApprovedPanel(orcaPage, pluginRoot)
     await openPanel(orcaPage, panel)
@@ -448,6 +499,7 @@ test('detects and suspends a busy-looping panel in an isolated renderer', async 
       .poll(
         async () => {
           frameProcesses = await inspectElectronFrameProcesses(electronApp, appUrl)
+
           return frameProcesses.some((frame) => frame.marker === 'Hostile panel fixture')
         },
         { timeout: 5_000, message: 'hostile panel should appear in Electron frame tree' }

@@ -11,7 +11,9 @@ export function acquireMobileNativeChatTerminalWrite(terminal: string): boolean 
   if (writeInFlightTerminals.has(terminal)) {
     return false
   }
+
   writeInFlightTerminals.add(terminal)
+
   return true
 }
 

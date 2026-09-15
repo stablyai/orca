@@ -38,6 +38,7 @@ export async function listQuickOpenFiles(
   maxSerializedBytes?: number
 ): Promise<string[]> {
   const authorizedRootPath = await resolveAuthorizedPath(rootPath, store)
+
   const localGitOptions = getLocalGitOptionsForRegisteredWorktree(
     store,
     rootPath,
@@ -60,6 +61,7 @@ export async function listQuickOpenFiles(
         signal,
         maxResults
       )
+
       return maxSerializedBytes === undefined
         ? files
         : limitQuickOpenFilesBySerializedBytes(files, maxSerializedBytes)
@@ -67,9 +69,11 @@ export async function listQuickOpenFiles(
       if (!isQuickOpenReaddirBudgetError(err)) {
         throw err
       }
+
       throw new Error(await buildInstallRgMessage(err))
     }
   }
+
   if (
     wslDistroForOutput &&
     !(await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro))
@@ -79,11 +83,13 @@ export async function listQuickOpenFiles(
 
   const files = new Set<string>()
   let serializedBytes = 2 // []
+
   const children: {
     child: ChildProcess
     isDone: () => boolean
     finish: () => void
   }[] = []
+
   // Why: WSL-routed rg can emit Linux-native absolute paths. UNC repos carry
   // their distro in the path; Windows-path repos carry it in project runtime.
   const rgArgs = buildRgArgsForQuickOpen({
@@ -96,6 +102,7 @@ export async function listQuickOpenFiles(
     // macOS/Linux for idempotence — it's a no-op there.
     forceSlashSeparator: sep === '\\'
   })
+
   const primary = rgArgs.primary
   const ignoredPass = rgArgs.ignoredPass
 
@@ -112,34 +119,46 @@ export async function listQuickOpenFiles(
           wslDistroForOutput && rawLine.startsWith('/')
             ? toWindowsWslPath(rawLine, wslDistroForOutput)
             : rawLine
+
         const relPath = normalizeQuickOpenRgLine(
           translated,
           getQuickOpenRgOutputMode(rawLine, translated, authorizedRootPath)
         )
+
         if (relPath === null) {
           return false
         }
+
         parseablePathCount++
+
         if (!shouldIncludeQuickOpenPath(relPath)) {
           return false
         }
+
         if (shouldExcludeQuickOpenRelPath(relPath, excludePathPrefixes)) {
           return false
         }
+
         if (files.has(relPath)) {
           return false
         }
+
         if (maxResults !== undefined && files.size >= maxResults) {
           return true
         }
+
         if (maxSerializedBytes !== undefined) {
           const nextBytes = serializedQuickOpenPathBytes(relPath) + (files.size === 0 ? 0 : 1)
+
           if (serializedBytes + nextBytes > maxSerializedBytes) {
             return true
           }
+
           serializedBytes += nextBytes
         }
+
         files.add(relPath)
+
         return maxResults !== undefined && files.size >= maxResults
       }
 
@@ -148,36 +167,48 @@ export async function listQuickOpenFiles(
         ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         stdio: ['ignore', 'pipe', 'pipe']
       })
+
       let timer: ReturnType<typeof setTimeout>
+
       const handleStdoutData = (chunk: string): void => {
         buf += chunk
         let start = 0
         let newlineIdx = buf.indexOf('\n', start)
+
         while (newlineIdx !== -1) {
           if (processLine(buf.substring(start, newlineIdx))) {
             buf = ''
             finishAtLimit()
+
             return
           }
+
           start = newlineIdx + 1
           newlineIdx = buf.indexOf('\n', start)
         }
+
         buf = start < buf.length ? buf.substring(start) : ''
       }
+
       const handleStderrData = (): void => {
         /* drain */
       }
+
       const handleError = (): void => {
         processErrorObserved = true
         // Why: treat spawn errors like an abnormal exit — discard residual
         // buffer so a truncated final byte sequence cannot leak as a path.
         buf = ''
+
         if (isRipgrepUnavailableExit(child, null, null)) {
           finish(new RipgrepUnavailableError())
+
           return
         }
+
         finish(new Error('rg failed to start'))
       }
+
       const handleClose = (code: number | null, signal: NodeJS.Signals | null): void => {
         if (
           isRipgrepUnavailableExit(child, code, signal, {
@@ -187,21 +218,27 @@ export async function listQuickOpenFiles(
           unavailableExitObserved = true
           buf = ''
           finish(new RipgrepUnavailableError())
+
           return
         }
+
         if (signal) {
           // Why: a signal exit means timeout/OOM/external kill. Returning the
           // already-streamed prefix would recreate the false-empty bug this
           // path is meant to avoid.
           buf = ''
           finish(new Error(`rg killed by ${signal}`))
+
           return
         }
+
         if (buf && processLine(buf)) {
           buf = ''
           finishAtLimit()
+
           return
         }
+
         if (code === 0 || code === 1) {
           finish()
         } else if (code === 2 && parseablePathCount > 0) {
@@ -212,10 +249,12 @@ export async function listQuickOpenFiles(
           finish(new Error(`rg exited with code ${code}`))
         }
       }
+
       const finish = (err?: Error): void => {
         if (done) {
           return
         }
+
         done = true
         clearTimeout(timer)
         // Why: child.kill() is advisory. If rg ignores it, detach our
@@ -229,12 +268,14 @@ export async function listQuickOpenFiles(
           errorObserved: processErrorObserved,
           unavailableExitObserved
         })
+
         if (err) {
           reject(err)
         } else {
           resolve()
         }
       }
+
       const handleAbort = (): void => {
         buf = ''
         killSpawnedRipgrepProcess(child)
@@ -256,6 +297,7 @@ export async function listQuickOpenFiles(
         finish(new Error('rg list timed out'))
       }, 10000)
       signal?.addEventListener('abort', handleAbort, { once: true })
+
       if (signal?.aborted) {
         handleAbort()
       }
@@ -270,7 +312,9 @@ export async function listQuickOpenFiles(
       if (entry.isDone()) {
         continue
       }
+
       entry.finish()
+
       if (entry.child.exitCode === null && entry.child.signalCode === null) {
         killSpawnedRipgrepProcess(entry.child)
       }
@@ -282,14 +326,18 @@ export async function listQuickOpenFiles(
       if (entry.isDone()) {
         continue
       }
+
       entry.finish()
+
       if (entry.child.exitCode === null && entry.child.signalCode === null) {
         killSpawnedRipgrepProcess(entry.child)
       }
     }
   }
+
   try {
     const primaryRun = runRg(primary)
+
     if (maxResults === undefined && maxSerializedBytes === undefined) {
       // Why: a pid-less primary proves launch failure; avoid doubling the failed spawn.
       await (children[0]?.child.pid === undefined
@@ -299,6 +347,7 @@ export async function listQuickOpenFiles(
       // Why: ignored-file output can be much larger and faster than the primary pass; let source
       // files claim every bounded autocomplete budget first, including the transport byte cap.
       await primaryRun
+
       if (
         (maxResults === undefined || files.size < maxResults) &&
         (maxSerializedBytes === undefined || serializedBytes < maxSerializedBytes)
@@ -308,12 +357,16 @@ export async function listQuickOpenFiles(
     }
   } catch (err) {
     killSurvivors()
+
     if (err instanceof RipgrepUnavailableError) {
       return listWithoutRipgrep()
     }
+
     throw err
   }
+
   const result = Array.from(files).slice(0, maxResults)
+
   return maxSerializedBytes === undefined
     ? result
     : limitQuickOpenFilesBySerializedBytes(result, maxSerializedBytes)
@@ -332,5 +385,6 @@ function getQuickOpenRgOutputMode(
   ) {
     return { kind: 'absolute', rootPath }
   }
+
   return { kind: 'cwd-relative' }
 }

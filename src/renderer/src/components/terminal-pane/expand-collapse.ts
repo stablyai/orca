@@ -23,6 +23,7 @@ function rememberPaneStyle(
   if (snapshots.has(el)) {
     return
   }
+
   snapshots.set(el, { display: el.style.display, flex: el.style.flex })
 }
 
@@ -33,6 +34,7 @@ export function restoreExpandedLayoutFrom(
     el.style.display = prev.display
     el.style.flex = prev.flex
   }
+
   snapshots.clear()
 }
 
@@ -42,15 +44,19 @@ export function applyExpandedLayoutTo(
 ): boolean {
   const manager = state.managerRef.current
   const root = state.containerRef.current
+
   if (!manager || !root) {
     return false
   }
 
   const panes = manager.getPanes()
+
   if (panes.length <= 1) {
     return false
   }
+
   const targetPane = panes.find((pane) => pane.id === paneId)
+
   if (!targetPane) {
     return false
   }
@@ -58,16 +64,21 @@ export function applyExpandedLayoutTo(
   restoreExpandedLayoutFrom(state.expandedStyleSnapshotRef.current)
   const snapshots = state.expandedStyleSnapshotRef.current
   let current: HTMLElement | null = targetPane.container
+
   while (current && current !== root) {
     const parent = current.parentElement
+
     if (!parent) {
       break
     }
+
     for (const child of Array.from(parent.children)) {
       if (!(child instanceof HTMLElement)) {
         continue
       }
+
       rememberPaneStyle(snapshots, child)
+
       if (child === current) {
         // Only update flex — do NOT reset display to '' because split
         // containers rely on inline `display: flex` (no CSS class rule
@@ -78,8 +89,10 @@ export function applyExpandedLayoutTo(
         child.style.display = 'none'
       }
     }
+
     current = parent
   }
+
   return true
 }
 
@@ -89,6 +102,7 @@ export function cancelPendingPaneSizeRefreshFrames(
   for (const frameId of state.pendingPaneSizeRefreshFrameIdsRef.current) {
     cancelAnimationFrame(frameId)
   }
+
   state.pendingPaneSizeRefreshFrameIdsRef.current = []
 }
 
@@ -100,14 +114,17 @@ function requestPaneSizeRefreshFrame(
   let frameId: number | undefined
   frameId = requestAnimationFrame((timestamp) => {
     completed = true
+
     if (frameId !== undefined) {
       state.pendingPaneSizeRefreshFrameIdsRef.current =
         state.pendingPaneSizeRefreshFrameIdsRef.current.filter(
           (pendingFrameId) => pendingFrameId !== frameId
         )
     }
+
     callback(timestamp)
   })
+
   if (!completed) {
     state.pendingPaneSizeRefreshFrameIdsRef.current.push(frameId)
   }
@@ -133,13 +150,17 @@ export function createExpandCollapseActions(state: ExpandCollapseState) {
   const refreshPaneSizes = (focusActive: boolean): void => {
     requestPaneSizeRefreshFrame(state, () => {
       const manager = state.managerRef.current
+
       if (!manager) {
         return
       }
+
       const panes = manager.getPanes()
+
       for (const p of panes) {
         safeFit(p)
       }
+
       if (focusActive) {
         const active = manager.getActivePane() ?? panes[0]
         active?.terminal.focus()
@@ -149,50 +170,65 @@ export function createExpandCollapseActions(state: ExpandCollapseState) {
 
   const syncExpandedLayout = (): void => {
     const paneId = state.expandedPaneIdRef.current
+
     if (paneId === null) {
       restoreExpandedLayout()
+
       return
     }
 
     const manager = state.managerRef.current
+
     if (!manager) {
       return
     }
+
     const panes = manager.getPanes()
+
     if (panes.length <= 1 || !panes.some((pane) => pane.id === paneId)) {
       setExpandedPane(null)
       restoreExpandedLayout()
+
       return
     }
+
     applyExpandedLayoutTo(paneId, state)
   }
 
   const toggleExpandPane = (paneId: number): void => {
     const manager = state.managerRef.current
+
     if (!manager) {
       return
     }
+
     const panes = manager.getPanes()
+
     if (panes.length <= 1) {
       return
     }
 
     const isAlreadyExpanded = state.expandedPaneIdRef.current === paneId
+
     if (isAlreadyExpanded) {
       setExpandedPane(null)
       restoreExpandedLayout()
       refreshPaneSizes(true)
       state.persistLayoutSnapshot()
+
       return
     }
 
     setExpandedPane(paneId)
+
     if (!applyExpandedLayoutTo(paneId, state)) {
       setExpandedPane(null)
       restoreExpandedLayout()
       state.persistLayoutSnapshot()
+
       return
     }
+
     manager.setActivePane(paneId, { focus: true })
     refreshPaneSizes(true)
     state.persistLayoutSnapshot()
@@ -221,6 +257,7 @@ export function useExpandCollapseActions(state: ExpandCollapseState) {
     tabId,
     persistLayoutSnapshot
   } = state
+
   return useMemo(
     () =>
       createExpandCollapseActions({

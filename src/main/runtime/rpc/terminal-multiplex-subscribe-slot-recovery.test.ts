@@ -15,20 +15,24 @@ describe('terminal multiplex RPC', () => {
   it('keeps view-subscriber releases balanced when a same-streamId subscribe overwrites a blocked one', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
     const handlers = new Map<
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
+
     const cleanups = new Map<string, () => void>()
     // Why: a leaked registration permanently suppresses the model query
     // responder (terminal-query-authority.md) — the count must return to 0.
     let viewSubscriberCount = 0
     let leafResolved = false
     let resolveFirstWait: (ptyId: string) => void = () => {}
+
     // Why: the multiplex subscribe path resolves via resolveLiveLeafForHandle
     // (#7718); null makes subscribe A block in waitForLeafPtyId until B resolves.
     const resolveLeaf = (): { ptyId: string | null } =>
       leafResolved ? { ptyId: 'pty-1' } : { ptyId: null }
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn(resolveLeaf),
       resolveLiveLeafForHandle: vi.fn(resolveLeaf),
@@ -41,6 +45,7 @@ describe('terminal multiplex RPC', () => {
       registerRemoteTerminalViewSubscriber: vi.fn(() => {
         viewSubscriberCount += 1
         let released = false
+
         return () => {
           if (!released) {
             released = true
@@ -62,6 +67,7 @@ describe('terminal multiplex RPC', () => {
       }),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(
@@ -74,13 +80,16 @@ describe('terminal multiplex RPC', () => {
         },
         registerBinaryStreamHandler: (streamId, handler) => {
           handlers.set(streamId, handler)
+
           return () => handlers.delete(streamId)
         }
       }
     )
+
     await vi.waitFor(() =>
       expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
     )
+
     const sendSubscribe = (): void => {
       handlers.get(0)?.(
         decodeTerminalStreamFrame(
@@ -138,16 +147,20 @@ describe('terminal multiplex RPC', () => {
   it('keeps an evicted subscribe error from detaching the successor stream', async () => {
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
     const handlers = new Map<
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
+
     const cleanups = new Map<string, () => void>()
     let viewSubscriberCount = 0
+
     const mobileSubscribeWaiters: {
       resolve: () => void
       reject: (error: Error) => void
     }[] = []
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       // Why: the multiplex subscribe path resolves the leaf via
@@ -156,6 +169,7 @@ describe('terminal multiplex RPC', () => {
       registerRemoteTerminalViewSubscriber: vi.fn(() => {
         viewSubscriberCount += 1
         let released = false
+
         return () => {
           if (!released) {
             released = true
@@ -182,6 +196,7 @@ describe('terminal multiplex RPC', () => {
       }),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(
@@ -194,13 +209,16 @@ describe('terminal multiplex RPC', () => {
         },
         registerBinaryStreamHandler: (streamId, handler) => {
           handlers.set(streamId, handler)
+
           return () => handlers.delete(streamId)
         }
       }
     )
+
     await vi.waitFor(() =>
       expect(messages.some((msg) => JSON.parse(msg).result?.type === 'ready')).toBe(true)
     )
+
     const sendSubscribe = (): void => {
       handlers.get(0)?.(
         decodeTerminalStreamFrame(
@@ -251,11 +269,14 @@ describe('terminal multiplex RPC', () => {
     // terminal_handle_stale by re-deriving the handle from the next snapshot.
     const messages: string[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
     const handlers = new Map<
       number,
       (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
     >()
+
     const cleanups = new Map<string, () => void>()
+
     const runtime = stubRuntime({
       resolveLiveLeafForHandle: vi.fn(() => {
         throw new Error('terminal_handle_stale')
@@ -265,6 +286,7 @@ describe('terminal multiplex RPC', () => {
         cleanups.set(id, cleanup)
       })
     })
+
     const dispatcher = new RpcDispatcher({
       runtime,
       methods: TERMINAL_METHODS
@@ -280,6 +302,7 @@ describe('terminal multiplex RPC', () => {
         },
         registerBinaryStreamHandler: (streamId, handler) => {
           handlers.set(streamId, handler)
+
           return () => handlers.delete(streamId)
         }
       }
@@ -310,9 +333,11 @@ describe('terminal multiplex RPC', () => {
           .some((result) => result?.type === 'end' && result.streamId === 9)
       ).toBe(true)
     )
+
     const errorFrame = binaryFrames
       .map((frame) => decodeTerminalStreamFrame(frame))
       .find((frame) => frame?.opcode === TerminalStreamOpcode.Error)
+
     expect(errorFrame && decodeTerminalStreamText(errorFrame.payload)).toBe('terminal_handle_stale')
     // The stream must never have bound to any PTY.
     expect(runtime.subscribeToTerminalData).not.toHaveBeenCalled()

@@ -11,16 +11,20 @@ import { mainProcessState as state } from './main-process-state'
 // launch module past its line budget for no gain.
 export function startDesktopPushService(runtimeRpc: OrcaRuntimeRpcServer): void {
   const runtime: OrcaRuntimeService | null = state.runtime
+
   if (!runtime) {
     console.warn('[push] Background push startup skipped: runtime not started')
+
     return
   }
+
   try {
     const pushService = DesktopPushService.create({
       runtime,
       runtimeRpc,
       gatewayUrl: getOrcaPushGatewayUrl()
     })
+
     pushService?.start()
     state.desktopPushService = pushService
   } catch (error) {

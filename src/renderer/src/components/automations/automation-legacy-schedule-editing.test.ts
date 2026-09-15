@@ -68,6 +68,7 @@ describe('editing an automation whose saved schedule predates the input gate', (
 
   it('still refuses a schedule the user actually changes', () => {
     const automation = makeAutomation()
+
     for (const edited of ['*/91 * * * *', '0 */25 * * *', 'nonsense']) {
       expect(
         acceptsAutomationDraftSchedule({
@@ -93,12 +94,14 @@ describe('editing an automation whose saved schedule predates the input gate', (
   // painted red with "fix this before saving" for a rule it only owes as new input.
   it('reports the saved schedule as valid in the editor cron status', () => {
     const draft = buildAutomationEditDraft(makeAutomation())
+
     const accepts = (schedule: string): boolean =>
       acceptsAutomationDraftSchedule({
         customSchedule: schedule,
         savedRrule: draft.savedSchedule,
         validate: isValidAutomationSchedule
       })
+
     expect(getCronScheduleStatusLabel(draft.customSchedule, accepts).kind).toBe('valid')
     // A different oversized step is new input, so it is still called out.
     expect(getCronScheduleStatusLabel('*/91 * * * *', accepts).kind).toBe('invalid')

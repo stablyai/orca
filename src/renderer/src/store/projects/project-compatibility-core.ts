@@ -13,6 +13,7 @@ export function projectCompatibilityFromRepos(
   repos: readonly Repo[]
 ): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
   const projection = projectHostSetupProjectionFromRepos(repos)
+
   return {
     projects: projection.projects,
     projectHostSetups: projection.setups
@@ -24,6 +25,7 @@ export function mergeProjectCompatibilityProject(base: Project, overlay: Project
     'localWindowsRuntimePreference' in overlay
       ? overlay.localWindowsRuntimePreference
       : base.localWindowsRuntimePreference
+
   const project: Project = {
     ...base,
     ...overlay,
@@ -34,11 +36,13 @@ export function mergeProjectCompatibilityProject(base: Project, overlay: Project
     createdAt: mergeCatalogCreatedAt(base.createdAt, overlay.createdAt),
     updatedAt: mergeCatalogUpdatedAt(base.updatedAt, overlay.updatedAt)
   }
+
   if (localWindowsRuntimePreference === undefined) {
     delete project.localWindowsRuntimePreference
   } else {
     project.localWindowsRuntimePreference = localWindowsRuntimePreference
   }
+
   return project
 }
 
@@ -48,8 +52,10 @@ export function mergeProjectCompatibilityProjects(
 ): Project[] {
   const merged = [...base]
   const indexById = new Map(merged.map((entry, index) => [entry.id, index]))
+
   for (const entry of overlay) {
     const index = indexById.get(entry.id)
+
     if (index === undefined) {
       indexById.set(entry.id, merged.length)
       merged.push(entry)
@@ -57,6 +63,7 @@ export function mergeProjectCompatibilityProjects(
       merged[index] = mergeProjectCompatibilityProject(merged[index]!, entry)
     }
   }
+
   return merged
 }
 
@@ -66,11 +73,13 @@ export function mergeUpdatedProjectCompatibilityProject(
   updates: ProjectUpdate
 ): Project {
   const project = mergeProjectCompatibilityProject(base, updated)
+
   if ('localWindowsRuntimePreference' in updates) {
     const localWindowsRuntimePreference =
       'localWindowsRuntimePreference' in updated
         ? updated.localWindowsRuntimePreference
         : updates.localWindowsRuntimePreference
+
     // Why: project.update returns one host's record, but preference clears must override the cross-host metadata-preservation merge.
     if (localWindowsRuntimePreference === undefined) {
       delete project.localWindowsRuntimePreference
@@ -78,6 +87,7 @@ export function mergeUpdatedProjectCompatibilityProject(
       project.localWindowsRuntimePreference = localWindowsRuntimePreference
     }
   }
+
   return project
 }
 
@@ -90,14 +100,17 @@ export function getCurrentSourceRepoIds(
 
 export function getReposById(repos: readonly Repo[]): Map<string, Repo[]> {
   const reposById = new Map<string, Repo[]>()
+
   for (const repo of repos) {
     const existing = reposById.get(repo.id)
+
     if (existing) {
       existing.push(repo)
     } else {
       reposById.set(repo.id, [repo])
     }
   }
+
   return reposById
 }
 
@@ -108,6 +121,7 @@ export function getSourceRepoIdsOutsideHost(
 ): string[] {
   return project.sourceRepoIds.filter((repoId) => {
     const repos = reposById.get(repoId) ?? []
+
     return repos.some((repo) => getRepoExecutionHostId(repo) !== hostId)
   })
 }
@@ -134,6 +148,7 @@ export function projectWithCurrentSourceRepoIds(
   currentRepoIds: ReadonlySet<string>
 ): Project {
   const sourceRepoIds = getCurrentSourceRepoIds(project, currentRepoIds)
+
   return sourceRepoIds.length === project.sourceRepoIds.length
     ? project
     : { ...project, sourceRepoIds }
@@ -150,6 +165,7 @@ export function getLocalHostRepoBadgeColor(
       }
     }
   }
+
   return null
 }
 
@@ -162,10 +178,12 @@ export function mergePreviousProjectMetadata(
   const project = mergeProjectCompatibilityProject(previous, current)
   const sourceRepoIds = getMergedSourceRepoIdsForHostRefresh(previous, current, reposById, hostId)
   const localBadgeColor = getLocalHostRepoBadgeColor({ ...project, sourceRepoIds }, reposById)
+
   if (localBadgeColor !== null) {
     // Why: badge color is per-host repo metadata; a remote host sharing the project must not repaint the color the user chose locally.
     project.badgeColor = localBadgeColor
   }
+
   if (hostId === LOCAL_EXECUTION_HOST_ID) {
     // Why: localWindowsRuntimePreference belongs to the local host; a local refresh that omits it is authoritative and clears stale renderer state.
     if ('localWindowsRuntimePreference' in current) {
@@ -181,6 +199,7 @@ export function mergePreviousProjectMetadata(
     // Why: a remote runtime's local Windows preference must not overwrite the client-local project runtime setting.
     project.localWindowsRuntimePreference = previous.localWindowsRuntimePreference
   }
+
   return {
     ...project,
     // Why: fetched project metadata can lag repo.list; track ownership to the reconciled repos so removed-host repos don't linger.
@@ -193,12 +212,15 @@ export function mergeProjectHostSetupCompatibility(
   fetched: ProjectHostSetupProjection
 ): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
   const fetchedRepoSetupKeys = new Set(fetched.setups.map(getRepoDerivedSetupKey))
+
   const derivedSetups = derived.projectHostSetups.filter(
     (setup) => !fetchedRepoSetupKeys.has(getRepoDerivedSetupKey(setup))
   )
+
   const projectHostSetups = mergeProjectHostSetupsByOwner(derivedSetups, fetched.setups)
   const setupProjectIds = new Set(projectHostSetups.map((setup) => setup.projectId))
   const fetchedProjectIds = new Set(fetched.projects.map((project) => project.id))
+
   return {
     projects: mergeProjectCompatibilityProjects(derived.projects, fetched.projects).filter(
       (project) => fetchedProjectIds.has(project.id) || setupProjectIds.has(project.id)
@@ -226,11 +248,14 @@ export function mergeProjectHostSetupsByOwner(
   overlay: readonly ProjectHostSetup[]
 ): ProjectHostSetup[] {
   const merged = [...base]
+
   const indexByOwner = new Map(
     merged.map((entry, index) => [getProjectHostSetupOwnerKey(entry), index])
   )
+
   for (const entry of overlay) {
     const index = indexByOwner.get(getProjectHostSetupOwnerKey(entry))
+
     if (index === undefined) {
       indexByOwner.set(getProjectHostSetupOwnerKey(entry), merged.length)
       merged.push(entry)
@@ -238,5 +263,6 @@ export function mergeProjectHostSetupsByOwner(
       merged[index] = entry
     }
   }
+
   return merged
 }

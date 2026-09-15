@@ -17,6 +17,7 @@ import {
 function withPlatform<T>(platform: NodeJS.Platform, fn: () => T): T {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return fn()
   } finally {
@@ -64,12 +65,14 @@ describe('getSpawnArgsForWindows', () => {
   it('routes .cmd through cmd.exe with /d /c on win32', () => {
     const originalComSpec = process.env.ComSpec
     process.env.ComSpec = 'C:\\Windows\\System32\\cmd.exe'
+
     try {
       withPlatform('win32', () => {
         const { spawnCmd, spawnArgs } = getSpawnArgsForWindows('C:\\tools\\codex.cmd', [
           'login',
           '--foo'
         ])
+
         expect(spawnCmd).toBe('C:\\Windows\\System32\\cmd.exe')
         // Why: /d disables AutoRun; /c runs the batch command and exits.
         // Separate argv entries avoid cmd.exe seeing Node-escaped quotes.
@@ -91,6 +94,7 @@ describe('getSpawnArgsForWindows', () => {
         ['C:\\workspaces\\orca'],
         { detachedGui: true }
       )
+
       expect(spawnCmd).toBe(getCmdExePath())
       // Why: `start` runs a batch target under a nested `cmd /K` that never
       // exits; the inner `cmd /d /c` is what keeps the hidden shell from leaking.
@@ -131,6 +135,7 @@ describe('getSpawnArgsForWindows', () => {
         'login',
         '--claudeai'
       ])
+
       expect(spawnCmd).toBe(getCmdExePath())
       expect(spawnArgs).toEqual([
         '/d',
@@ -168,6 +173,7 @@ describe('getSpawnArgsForWindows', () => {
         ['C:\\workspaces\\orca'],
         { detachedGui: true }
       )
+
       expect(spawnCmd).toBe('C:\\Program Files\\JetBrains\\IntelliJ IDEA\\bin\\idea64.exe')
       expect(spawnArgs).toEqual(['C:\\workspaces\\orca'])
     })
@@ -262,11 +268,13 @@ describe('getSpawnArgsForWindows', () => {
     withPlatform('win32', () => {
       const advertised = WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL.split(' ')
       expect(advertised.length).toBeGreaterThan(0)
+
       for (const character of advertised) {
         expect(() => getSpawnArgsForWindows('C:\\tools\\agent.cmd', [`a${character}b`])).toThrow(
           'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
         )
       }
+
       // Why: anything not advertised must pass, or the message misleads the user.
       for (const character of ['(', ')', ',', ';', '@', '#', '$', "'", '~', '=']) {
         expect(advertised).not.toContain(character)
@@ -281,6 +289,7 @@ describe('getSpawnArgsForWindows', () => {
 describe('resolveWindowsCommand', () => {
   it('finds package-manager .cmd shims on PATH before spawning fixed commands', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'orca-win-command-'))
+
     try {
       const pnpmShim = join(tempDir, 'pnpm.cmd')
       writeFileSync(pnpmShim, '@echo off\r\n')

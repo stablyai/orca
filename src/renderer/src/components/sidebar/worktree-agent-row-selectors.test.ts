@@ -21,6 +21,7 @@ import {
 } from './worktree-agent-row-selectors'
 
 const PANE_KEY_1 = makePaneKey('tab-1', '22222222-2222-4222-8222-222222222222')
+
 const PANE_KEY_2 = makePaneKey('tab-2', '33333333-3333-4333-8333-333333333333')
 
 function makeTab(id: string): TerminalTab {
@@ -77,6 +78,7 @@ describe('selectMigrationUnsupportedEntriesForWorktree', () => {
       source: 'local',
       updatedAt: 1000
     }
+
     const state = {
       tabsByWorktree: { 'wt-1': [makeTab('tab-1')] },
       agentStatusByPaneKey: {},
@@ -103,10 +105,12 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       state: 'working',
       prompt: 'first'
     })
+
     const wt2Entry = makeEntry(PANE_KEY_2, 1000, {
       state: 'working',
       prompt: 'first'
     })
+
     const state = {
       tabsByWorktree: {
         'wt-1': [makeTab('tab-1')],
@@ -122,6 +126,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
 
     const firstWt1 = selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')
     const firstWt2 = selectLiveAgentStatusEntriesForWorktree(state, 'wt-2')
+
     const nextState = {
       ...state,
       agentStatusByPaneKey: {
@@ -150,6 +155,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       worktreeId: 'wt-1',
       tabId: 'tab-1'
     })
+
     const state = {
       tabsByWorktree: {
         'wt-1': []
@@ -171,6 +177,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       worktreeId: 'wt-1',
       tabId: 'tab-1'
     })
+
     const structuredTab = {
       id: 'tab-1',
       worktreeId: 'wt-1',
@@ -185,6 +192,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       isPinned: false,
       agentSessionAgent: 'codex'
     } satisfies Tab
+
     const state = {
       tabsByWorktree: { 'wt-1': [] },
       unifiedTabsByWorktree: { 'wt-1': [structuredTab] },
@@ -207,10 +215,12 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       state: 'working',
       prompt: 'wt1 prompt'
     })
+
     const wt2Entry = makeEntry(PANE_KEY_2, 1000, {
       state: 'working',
       prompt: 'wt2 prompt'
     })
+
     const baseState = {
       tabsByWorktree: {
         'wt-1': [makeTab('tab-1')],
@@ -233,6 +243,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
     // a new entry object per ping, with only prompt/tool metadata changing.
     let state = baseState
     let latestWt2 = primedWt2
+
     for (let ping = 0; ping < 50; ping += 1) {
       state = {
         ...state,
@@ -255,6 +266,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       expect(latestWt2[0]?.prompt).toBe(`wt2 prompt ${ping}`)
       expect(latestWt2[0]?.toolInput).toBe(`cmd ${ping}`)
     }
+
     // The O(all live agents) rebuild body never ran for within-state pings.
     expect(getLiveEntriesFullRebuildCountForTests()).toBe(rebuildsAfterPrime)
     expect(latestWt2).not.toBe(primedWt2)
@@ -267,6 +279,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
         [PANE_KEY_1]: state.agentStatusByPaneKey[PANE_KEY_1]
       }
     }
+
     expect(selectLiveAgentStatusEntriesForWorktree(doneState, 'wt-2')).toEqual([])
     expect(selectLiveAgentStatusEntriesForWorktree(doneState, 'wt-1')).toEqual([wt1Entry])
     expect(getLiveEntriesFullRebuildCountForTests()).toBe(rebuildsAfterPrime + 1)
@@ -277,6 +290,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       state: 'working',
       worktreeId: 'wt-1'
     })
+
     const state = {
       // No tab membership: bucketing comes from entry.worktreeId attribution.
       tabsByWorktree: { 'wt-1': [], 'wt-2': [] },
@@ -284,13 +298,16 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       migrationUnsupportedByPtyId: {},
       retainedAgentsByPaneKey: {}
     }
+
     expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([entry])
 
     const moved = { ...entry, worktreeId: 'wt-2' }
+
     const nextState = {
       ...state,
       agentStatusByPaneKey: { [PANE_KEY_1]: moved }
     }
+
     expect(selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-1')).toEqual([])
     expect(selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-2')).toEqual([moved])
   })
@@ -300,20 +317,24 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       state: 'working',
       worktreeId: 'wt-1'
     })
+
     const state = {
       tabsByWorktree: { 'wt-1': [] },
       agentStatusByPaneKey: { [PANE_KEY_1]: entry },
       migrationUnsupportedByPtyId: {},
       retainedAgentsByPaneKey: {}
     }
+
     expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([entry])
 
     // done + tab absent must drop the row (bucket rule), not be patched in place.
     const done = { ...entry, state: 'done' as const }
+
     const nextState = {
       ...state,
       agentStatusByPaneKey: { [PANE_KEY_1]: done }
     }
+
     expect(selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-1')).toEqual([])
   })
 
@@ -324,6 +345,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       tabId: 'tab-1',
       agentType: 'pi'
     })
+
     const state = {
       tabsByWorktree: {
         'wt-1': [makeTab('tab-live')]
@@ -342,6 +364,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
 describe('selectRuntimeAgentOrchestrationForWorktree', () => {
   it('includes child orchestration metadata when only the parent tab is in the worktree', () => {
     const childPaneKey = makePaneKey('tab-child', '44444444-4444-4444-8444-444444444444')
+
     const state = {
       tabsByWorktree: {
         'wt-1': [makeTab('tab-1')]
@@ -364,9 +387,11 @@ describe('selectRuntimeAgentOrchestrationForWorktree', () => {
 
   it('includes child orchestration metadata for a worktree-attributed live row without tab membership', () => {
     const childPaneKey = makePaneKey('tab-child', '44444444-4444-4444-8444-444444444444')
+
     const childEntry = makeEntry(childPaneKey, 1000, {
       worktreeId: 'wt-1'
     })
+
     const state = {
       tabsByWorktree: {
         'wt-1': []
@@ -392,6 +417,7 @@ describe('selectRuntimeAgentOrchestrationForWorktree', () => {
   it('includes child orchestration metadata for a retained worktree row without tab membership', () => {
     const childPaneKey = makePaneKey('tab-child', '44444444-4444-4444-8444-444444444444')
     const retainedChild = makeRetained(childPaneKey, 'wt-1', 1000)
+
     const state = {
       tabsByWorktree: {
         'wt-1': []
@@ -419,6 +445,7 @@ describe('selectRetainedAgentEntriesForWorktree', () => {
   it('reuses unaffected worktree arrays when another worktree retained row changes', () => {
     const wt1Retained = makeRetained(PANE_KEY_1, 'wt-1', 1000)
     const wt2Retained = makeRetained(PANE_KEY_2, 'wt-2', 1000)
+
     const state = {
       tabsByWorktree: {},
       agentStatusByPaneKey: {},
@@ -431,6 +458,7 @@ describe('selectRetainedAgentEntriesForWorktree', () => {
 
     const firstWt1 = selectRetainedAgentEntriesForWorktree(state, 'wt-1')
     const firstWt2 = selectRetainedAgentEntriesForWorktree(state, 'wt-2')
+
     const nextState = {
       ...state,
       retainedAgentsByPaneKey: {
@@ -491,6 +519,7 @@ describe('inactive-card empty constants', () => {
     ]) {
       expect(Object.isFrozen(empty)).toBe(true)
     }
+
     expect(
       selectLiveAgentStatusEntriesForWorktree(
         {

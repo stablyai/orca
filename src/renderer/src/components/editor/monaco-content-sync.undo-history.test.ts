@@ -11,12 +11,14 @@ function createEditor(initialContent: string): {
 } {
   const model = monaco.editor.createModel(initialContent, 'plaintext')
   models.push(model)
+
   return {
     model,
     editorInstance: {
       getModel: () => model,
       pushUndoStop: () => {
         model.pushStackElement()
+
         return true
       }
     } as unknown as monaco.editor.IStandaloneCodeEditor

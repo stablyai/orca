@@ -91,6 +91,7 @@ describe('workspace kanban area selection auto-scroll', () => {
 describe('workspace kanban area selection scrolled content hit-testing', () => {
   it('keeps cards selected after lane scroll moves them above the viewport marquee', () => {
     const scrollContainer = {} as HTMLElement
+
     const cards: AreaSelectionCardRect[] = [
       {
         id: 'top-card',

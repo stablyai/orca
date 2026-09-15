@@ -23,18 +23,24 @@ function parseQuestionsShape(input: unknown): AskPrompt | null {
   if (!input || typeof input !== 'object') {
     return null
   }
+
   const rawQuestions = (input as { questions?: unknown }).questions
+
   if (!Array.isArray(rawQuestions) || rawQuestions.length === 0) {
     return null
   }
+
   const questions: AskQuestion[] = []
+
   for (const raw of rawQuestions) {
     if (!raw || typeof raw !== 'object') {
       continue
     }
+
     const question = raw as Record<string, unknown>
     const text = typeof question.question === 'string' ? question.question : ''
     const options = parseOptions(question.options)
+
     if (text || options.length > 0) {
       questions.push({
         question: text,
@@ -44,6 +50,7 @@ function parseQuestionsShape(input: unknown): AskPrompt | null {
       })
     }
   }
+
   return questions.length > 0 ? { questions } : null
 }
 
@@ -51,22 +58,26 @@ function parseOptions(raw: unknown): AskOption[] {
   if (!Array.isArray(raw)) {
     return []
   }
+
   return raw
     .map((option): AskOption | null => {
       if (typeof option === 'string') {
         return { label: option }
       }
+
       if (
         option &&
         typeof option === 'object' &&
         typeof (option as { label?: unknown }).label === 'string'
       ) {
         const value = option as { label: string; description?: unknown }
+
         return {
           label: value.label,
           description: typeof value.description === 'string' ? value.description : undefined
         }
       }
+
       return null
     })
     .filter((option): option is AskOption => option !== null)
@@ -78,6 +89,7 @@ for (const name of ['AskUserQuestion', 'ask_user_question', 'askUserQuestion']) 
 
 function parseToolInput(toolName: string | undefined, input: unknown): AskPrompt | null {
   const parser = toolName ? QUESTION_TOOL_PARSERS.get(toolName) : undefined
+
   return (parser ? parser(input) : null) ?? parseQuestionsShape(input)
 }
 
@@ -88,6 +100,7 @@ export function parseAskFromStatus(
   if (!interactivePrompt) {
     return null
   }
+
   try {
     return parseToolInput(toolName, JSON.parse(interactivePrompt))
   } catch {
@@ -105,6 +118,7 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
   // call that produced `pending` sits from the head, so nothing is retained per call.
   let outstanding = 0
   let pendingDepth = -1
+
   for (const message of messages) {
     // A new user turn (or an interrupt row) ends the turn that owns whatever
     // calls are still in flight: their results never arrive, and `tool_use_id`
@@ -117,16 +131,20 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
       pendingDepth = -1
       pending = null
     }
+
     for (const block of message.blocks) {
       if (block.type === 'tool-call') {
         const parsed = parseToolInput(block.name, block.input)
+
         if (parsed) {
           pending = parsed
           pendingDepth = outstanding
         }
+
         outstanding += 1
       } else if (block.type === 'tool-result' && outstanding > 0) {
         outstanding -= 1
+
         if (pendingDepth === 0) {
           pending = null
           pendingDepth = -1
@@ -136,6 +154,7 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
       }
     }
   }
+
   return pending
 }
 
@@ -169,7 +188,9 @@ function answerLabels(question: AskQuestion, sel: AskAnswerSelection | undefined
   const labels = (sel?.indices ?? [])
     .map((i) => question.options[i]?.label ?? '')
     .filter((l) => l.length > 0)
+
   const other = (sel?.other ?? '').trim()
+
   return other ? [...labels, other] : labels
 }
 
@@ -191,9 +212,13 @@ export function formatAskAnswer(prompt: AskPrompt, selections: AskAnswerSelectio
 // because a navigation keystroke batched with Enter commits before the selector
 // has applied it.
 const ASK_ENTER = '\r'
+
 const ASK_NEXT_TAB = '\x1b[C'
+
 const ASK_PREVIOUS_ROW = '\x1b[A'
+
 const ASK_NEXT_ROW = '\x1b[B'
+
 const ASK_NOTES = '\t'
 
 /** Build the ordered keystroke groups that answer a Claude Code AskUserQuestion.
@@ -226,9 +251,11 @@ export function buildAskAnswerKeys(
       for (const i of sel?.indices ?? []) {
         groups.push({ raw: String(i + 1) })
       }
+
       if (other) {
         groups.push({ raw: typeSomething }, { text: other }, { raw: ASK_ENTER })
       }
+
       // A multi-select never auto-advances; step to the next tab (the Submit tab
       // when this is the last question).
       groups.push({ raw: ASK_NEXT_TAB })
@@ -250,9 +277,11 @@ export function buildAskAnswerKeys(
 
   const endsOnSubmitTab =
     multiQuestion || (questions.length === 1 && questions[0]!.multiSelect === true)
+
   if (endsOnSubmitTab && groups.length > 0) {
     groups.push({ raw: ASK_ENTER })
   }
+
   return groups
 }
 
@@ -282,20 +311,25 @@ export function buildCodexAskAnswerKeys(
       const usePrevious = previousSteps < nextSteps
       const navigationKey = usePrevious ? ASK_PREVIOUS_ROW : ASK_NEXT_ROW
       const navigationSteps = usePrevious ? previousSteps : nextSteps
+
       for (let index = 0; index < navigationSteps; index += 1) {
         groups.push({ raw: navigationKey })
       }
+
       groups.push({ raw: ASK_NOTES }, { text: note }, { raw: ASK_ENTER })
+
       return
     }
 
     if (selectedIndex !== undefined) {
       groups.push({ raw: String(selectedIndex + 1) })
+
       return
     }
 
     hasUnanswered = true
     groups.push({ raw: '\x7f' })
+
     if (questionIndex < prompt.questions.length - 1) {
       groups.push({ raw: ASK_NEXT_TAB })
     } else {
@@ -308,6 +342,7 @@ export function buildCodexAskAnswerKeys(
   if (hasUnanswered) {
     groups.push({ raw: ASK_ENTER })
   }
+
   return groups
 }
 

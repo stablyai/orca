@@ -37,6 +37,7 @@ type SchedulerDebugWindow = Window & {
 }
 
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
+
 const TAB_COUNT = 5
 
 function tabLocator(page: Page, tabId: string) {
@@ -50,6 +51,7 @@ async function countRenderedTabs(page: Page): Promise<number> {
 async function getDomActiveTabId(page: Page): Promise<string | null> {
   return page.evaluate((selector) => {
     const match = document.querySelector(`${selector}[data-active="true"]`)
+
     return match?.getAttribute('data-tab-id') ?? null
   }, SORTABLE_TAB)
 }
@@ -68,14 +70,18 @@ async function createTerminalTab(page: Page): Promise<string> {
 
   const createdTabId = await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const state = store.getState()
     const worktreeId = state.activeWorktreeId
+
     if (!worktreeId) {
       throw new Error('createTerminalTab: active worktree id was unavailable')
     }
+
     // Why: this scheduler spec cares about mounted PTYs, not the tab menu.
     // Store creation avoids hiding xterm regressions behind menu hit-testing flakes.
     return state.createTab(worktreeId).id
@@ -93,6 +99,7 @@ async function createTerminalTab(page: Page): Promise<string> {
     .poll(
       async () => {
         tabId = await getActiveTabId(page)
+
         return tabId === createdTabId && tabId !== activeBefore
       },
       {
@@ -105,6 +112,7 @@ async function createTerminalTab(page: Page): Promise<string> {
   if (!tabId) {
     throw new Error('createTerminalTab: active tab id was unavailable after creating terminal')
   }
+
   return tabId
 }
 
@@ -116,8 +124,10 @@ async function waitForTabPtyId(page: Page, tabId: string): Promise<string> {
         ptyId = await page.evaluate((targetTabId) => {
           const manager = window.__paneManagers?.get(targetTabId)
           const pane = manager?.getPanes?.()[0] ?? null
+
           return pane?.container?.dataset?.ptyId ?? null
         }, tabId)
+
         return ptyId
       },
       {
@@ -130,15 +140,18 @@ async function waitForTabPtyId(page: Page, tabId: string): Promise<string> {
   if (!ptyId) {
     throw new Error(`waitForTabPtyId: tab ${tabId} has no PTY id`)
   }
+
   return ptyId
 }
 
 async function resetSchedulerDebug(page: Page): Promise<void> {
   await page.evaluate(() => {
     const debug = (window as SchedulerDebugWindow).__terminalOutputSchedulerDebug
+
     if (!debug) {
       throw new Error('terminal output scheduler debug API is unavailable')
     }
+
     debug.reset()
   })
 }
@@ -146,9 +159,11 @@ async function resetSchedulerDebug(page: Page): Promise<void> {
 async function getSchedulerDebug(page: Page): Promise<SchedulerDebugSnapshot> {
   return page.evaluate(() => {
     const debug = (window as SchedulerDebugWindow).__terminalOutputSchedulerDebug
+
     if (!debug) {
       throw new Error('terminal output scheduler debug API is unavailable')
     }
+
     return debug.snapshot()
   })
 }
@@ -170,6 +185,7 @@ async function mainSnapshotContains(page: Page, ptyId: string, text: string): Pr
       const snapshot = await window.api.pty.getMainBufferSnapshot(targetPtyId, {
         scrollbackRows: 200
       })
+
       return snapshot?.data.includes(expectedText) ?? false
     },
     { targetPtyId: ptyId, expectedText: text }
@@ -186,11 +202,13 @@ test.describe('Terminal output scheduler', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const firstTabId = await getActiveTabId(orcaPage)
+
     if (!firstTabId) {
       throw new Error('Expected an initial terminal tab')
     }
 
     const tabIds = [firstTabId]
+
     const ptyIdsByTabId: Record<string, string> = {
       [firstTabId]: await waitForTabPtyId(orcaPage, firstTabId)
     }
@@ -214,6 +232,7 @@ test.describe('Terminal output scheduler', () => {
 
     const runId = Date.now()
     const foregroundMarker = `FG_SCHED_${runId}`
+
     // Why: the marker is appended AFTER the burst payload so it survives
     // getTerminalContent's tail-only truncation (charLimit defaults to 4000).
     // A leading marker would be evicted by the 50000-char x-burst.
@@ -245,14 +264,17 @@ test.describe('Terminal output scheduler', () => {
       .poll(
         async () => {
           const debug = await getSchedulerDebug(orcaPage)
+
           if (debug.backgroundEnqueueCount >= backgroundCommands.length) {
             return true
           }
+
           const snapshots = await Promise.all(
             backgroundCommands.map(({ ptyId, marker }) =>
               mainSnapshotContains(orcaPage, ptyId, marker)
             )
           )
+
           return snapshots.every(Boolean)
         },
         {
@@ -266,6 +288,7 @@ test.describe('Terminal output scheduler', () => {
       .poll(
         async () => {
           const debug = await getSchedulerDebug(orcaPage)
+
           return debug.backgroundEnqueueCount > 0
             ? debug.backgroundWriteCount >= backgroundCommands.length
             : true
@@ -280,6 +303,7 @@ test.describe('Terminal output scheduler', () => {
     const debug = await getSchedulerDebug(orcaPage)
     expect(debug.foregroundWriteCount).toBeGreaterThan(0)
     expect(debug.drainHighPriority).toHaveLength(debug.drainWrites.length)
+
     for (const [index, writes] of debug.drainWrites.entries()) {
       expect(writes).toBeLessThanOrEqual(debug.drainHighPriority[index] ? 8 : 2)
     }
@@ -310,14 +334,17 @@ test.describe('Terminal output scheduler', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const activeTabId = await createTerminalTab(orcaPage)
+
     if (!activeTabId) {
       throw new Error('Expected a fresh terminal tab')
     }
+
     const ptyId = await waitForTabPtyId(orcaPage, activeTabId)
     await resetSchedulerDebug(orcaPage)
 
     const runId = Date.now()
     const marker = `VISIBLE_THROUGHPUT_${runId}`
+
     const floodCommand = nodeScriptCommand(
       `const marker='VISIBLE' + '_THROUGHPUT_' + '${runId}'; process.stdout.write('VISIBLE_FILL_${runId}\\n' + 'x'.repeat(700000) + '\\n' + marker + '\\n')`
     )
@@ -353,9 +380,11 @@ test.describe('Terminal output scheduler', () => {
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const foregroundTabId = await getActiveTabId(orcaPage)
+
     if (!foregroundTabId) {
       throw new Error('Expected an initial terminal tab')
     }
+
     const hiddenTabId = await createTerminalTab(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
     const hiddenPtyId = await waitForTabPtyId(orcaPage, hiddenTabId)
@@ -369,6 +398,7 @@ test.describe('Terminal output scheduler', () => {
       .toBe(foregroundTabId)
 
     const marker = `HIDDEN_RECOVERY_${Date.now()}`
+
     const floodCommand = nodeScriptCommand(
       `for (let i = 0; i < 55000; i++) console.log('RECOVER_FILL_' + i + '_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'); console.log('${marker}')`
     )

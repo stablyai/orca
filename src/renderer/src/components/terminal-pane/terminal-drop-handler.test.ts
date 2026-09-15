@@ -127,10 +127,12 @@ describe('handleTerminalFileDrop', () => {
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
     }
+
     const paneTransports = new Map([[1, createTerminalTransport(sendInput)]])
 
     await handleTerminalFileDrop({
@@ -168,6 +170,7 @@ describe('handleTerminalFileDrop', () => {
     let ptyId = 'pty-1'
     mocks.importExternalPathsToRuntime.mockImplementation(async () => {
       ptyId = 'pty-2'
+
       return {
         results: [
           {
@@ -183,10 +186,12 @@ describe('handleTerminalFileDrop', () => {
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
     }
+
     const transport = createTerminalTransport(sendInput)
     transport.getPtyId.mockImplementation(() => ptyId)
 
@@ -223,10 +228,12 @@ describe('handleTerminalFileDrop', () => {
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
     }
+
     const paneTransports = new Map([[1, createTerminalTransport(sendInput)]])
 
     await handleTerminalFileDrop({
@@ -280,10 +287,12 @@ describe('handleTerminalFileDrop', () => {
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
     }
+
     const paneTransports = new Map([[1, createTerminalTransport(sendInput)]])
 
     await handleTerminalFileDrop({
@@ -319,10 +328,12 @@ describe('handleTerminalFileDrop', () => {
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
     }
+
     const paneTransports = new Map([[1, createTerminalTransport(sendInput)]])
 
     await handleTerminalFileDrop({
@@ -360,10 +371,12 @@ describe('handleTerminalFileDrop', () => {
     }
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
+
     const manager = {
       getActivePane: () => ({ id: 1, leafId: 'leaf-1', terminal: { focus } }),
       getPanes: () => []
     }
+
     const paneTransports = new Map([[1, createTerminalTransport(sendInput)]])
 
     await handleTerminalFileDrop({
@@ -396,10 +409,12 @@ describe('handleTerminalFileDrop', () => {
     const sendInputAccepted = vi.fn(async () => true)
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
     }
+
     const paneTransports = new Map([
       [1, createTerminalTransport(sendInput, 'pty-1', sendInputAccepted)]
     ])
@@ -433,6 +448,7 @@ describe('handleTerminalFileDrop', () => {
     const targetFocus = vi.fn()
     const activePane = { id: 1, leafId: 'leaf-active', terminal: { focus: activeFocus } }
     const targetPane = { id: 2, leafId: 'leaf-target', terminal: { focus: targetFocus } }
+
     const manager = {
       getActivePane: () => activePane,
       getPanes: () => [activePane, targetPane]
@@ -479,10 +495,12 @@ describe('handleTerminalFileDrop', () => {
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
     }
+
     const paneTransports = new Map([[1, createTerminalTransport(sendInput)]])
 
     await handleTerminalFileDrop({
@@ -532,6 +550,7 @@ describe('handleTerminalFileDrop', () => {
     let ptyId = 'pty-1'
     mocks.resolveDroppedPathsForAgent.mockImplementation(async () => {
       ptyId = 'pty-2'
+
       return {
         failed: [],
         resolvedPaths: ['/mnt/c/Users/Name/My Project/file.txt'],
@@ -541,10 +560,12 @@ describe('handleTerminalFileDrop', () => {
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
     }
+
     const transport = createTerminalTransport(sendInput)
     transport.getPtyId.mockImplementation(() => ptyId)
 
@@ -586,6 +607,7 @@ describe('handleTerminalFileDrop', () => {
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]
@@ -670,6 +692,7 @@ describe('handleTerminalFileDrop', () => {
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
+
     const manager = {
       getActivePane: () => pane,
       getPanes: () => [pane]

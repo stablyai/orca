@@ -8,9 +8,11 @@ export function resolveWslExecutablePath(): string {
   if (cached !== undefined) {
     return cached
   }
+
   const systemRoot = process.env.SystemRoot || 'C:\\Windows'
   const absolute = pathWin32.join(systemRoot, 'System32', 'wsl.exe')
   // A host with WSL elsewhere still deserves a working call.
   cached = existsSync(absolute) ? absolute : 'wsl.exe'
+
   return cached
 }

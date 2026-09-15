@@ -32,6 +32,7 @@ describe('applyWorktreeUpdates', () => {
       repoId: 'repo-a',
       displayName: 'Project A'
     })
+
     const samePathDifferentProject = makeWorktree({
       id: 'repo-a::/Users/alice/project',
       repoId: 'repo-b',

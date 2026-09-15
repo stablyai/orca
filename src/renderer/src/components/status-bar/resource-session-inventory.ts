@@ -25,10 +25,13 @@ export function removeSessionsFromInventory(
   if (sessionIds.size === 0 || inventory.sessions.length === 0) {
     return inventory
   }
+
   const sessions = inventory.sessions.filter((session) => !sessionIds.has(session.id))
+
   if (sessions.length === inventory.sessions.length) {
     return inventory
   }
+
   return {
     sessions,
     count: sessions.length

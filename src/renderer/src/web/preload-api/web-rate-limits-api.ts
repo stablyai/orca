@@ -4,6 +4,7 @@ import { noopUnsubscribe } from './web-storage'
 
 export function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
   const empty = createEmptyRateLimitState()
+
   return {
     get: () => Promise.resolve(empty),
     refresh: () => Promise.resolve(empty),

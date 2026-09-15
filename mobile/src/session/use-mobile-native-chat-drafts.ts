@@ -27,6 +27,7 @@ import { MobileNativeChatDraftEditGenerations } from './mobile-native-chat-draft
 export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
 
 const NO_PENDING_MESSAGES: MobileNativeChatPendingMessage[] = []
+
 const NO_IMAGE_PREVIEWS: Record<string, string[]> = {}
 
 // Ack-lost sends wait for a transcript echo before surfacing as unconfirmed.
@@ -89,18 +90,23 @@ export function useMobileNativeChatDrafts(args: {
     transcriptLoading,
     transcriptSettled
   } = args
+
   const draftKey = mobileNativeChatScopeKey(hostId, worktreeId, tabId)
   const pendingKey = draftKey && sessionId ? `${draftKey}\0${sessionId}` : null
   const [drafts, setDrafts] = useState<Record<string, string>>({})
+
   const [pendingBySession, setPendingBySession] = useState<
     Record<string, MobileNativeChatPendingMessage[]>
   >({})
+
   const [pendingWaitingForSession, setPendingWaitingForSession] = useState<
     Record<string, MobileNativeChatPendingMessage[]>
   >({})
+
   const [imagePreviewsBySession, setImagePreviewsBySession] = useState<
     Record<string, Record<string, string[]>>
   >({})
+
   const pendingCounterRef = useRef(0)
   const draftEditGenerationsRef = useRef(new MobileNativeChatDraftEditGenerations())
   const messagesRef = useRef(messages)
@@ -126,21 +132,26 @@ export function useMobileNativeChatDrafts(args: {
       if (!draftKey) {
         return
       }
+
       draftEditGenerationsRef.current.advance(draftKey)
       setDrafts((previous) => {
         const current = previous[draftKey] ?? ''
         const next = typeof value === 'function' ? value(current) : value
+
         return next === current ? previous : { ...previous, [draftKey]: next }
       })
     },
     [draftKey]
   )
+
   const captureSendOrigin = useCallback(
     (text: string) => {
       if (!draftKey) {
         return null
       }
+
       const normalizedText = normalizeReconcileText(text)
+
       return {
         draftKey,
         draftEditGeneration: draftEditGenerationsRef.current.readDraft(draftKey),
@@ -184,9 +195,11 @@ export function useMobileNativeChatDrafts(args: {
       if (!origin.pendingKey && !images?.length) {
         return
       }
+
       pendingCounterRef.current += 1
       const id = `pending-${pendingCounterRef.current}`
       const key = origin.pendingKey
+
       if (key) {
         setPendingBySession((previous) =>
           appendMobileNativeChatPending(previous, key, id, origin, text, images)
@@ -206,14 +219,17 @@ export function useMobileNativeChatDrafts(args: {
   // lands, and surface the uncertainty if the deadline passes without one.
   // The composer was already cleared at send time, so this never touches drafts.
   const unconfirmedRef = useRef<UnconfirmedSend[]>([])
+
   const holdUnconfirmedSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, onUnconfirmed: () => void) => {
       if (!mountedRef.current) {
         return
       }
+
       const isActiveTranscript =
         activeDraftKeyRef.current === origin.draftKey &&
         (origin.pendingKey === null || activePendingKeyRef.current === origin.pendingKey)
+
       const entry: UnconfirmedSend = {
         draftKey: origin.draftKey,
         pendingKey: origin.pendingKey,
@@ -222,6 +238,7 @@ export function useMobileNativeChatDrafts(args: {
         baselineTailMessageId: origin.baselineTailMessageId,
         deadline: null
       }
+
       // Why: the transcript event can beat the lost RPC acknowledgement.
       if (
         isActiveTranscript &&
@@ -229,6 +246,7 @@ export function useMobileNativeChatDrafts(args: {
       ) {
         return
       }
+
       entry.deadline = setTimeout(() => {
         unconfirmedRef.current = unconfirmedRef.current.filter((held) => held !== entry)
         onUnconfirmed()
@@ -242,17 +260,22 @@ export function useMobileNativeChatDrafts(args: {
     if (!draftKey || unconfirmedRef.current.length === 0) {
       return
     }
+
     const relevant = unconfirmedRef.current.filter(
       (entry) =>
         entry.draftKey === draftKey &&
         (entry.pendingKey === null || entry.pendingKey === pendingKey)
     )
+
     const landed = findLandedUnconfirmedSends(messages, relevant)
+
     if (landed.length === 0) {
       return
     }
+
     const landedSet = new Set(landed)
     unconfirmedRef.current = unconfirmedRef.current.filter((entry) => !landedSet.has(entry))
+
     for (const entry of landed) {
       clearTimeout(entry.deadline ?? undefined)
     }
@@ -260,11 +283,14 @@ export function useMobileNativeChatDrafts(args: {
 
   useEffect(() => {
     mountedRef.current = true
+
     return () => {
       mountedRef.current = false
+
       for (const entry of unconfirmedRef.current) {
         clearTimeout(entry.deadline ?? undefined)
       }
+
       unconfirmedRef.current = []
     }
   }, [])
@@ -272,10 +298,12 @@ export function useMobileNativeChatDrafts(args: {
   const waitingForSession = draftKey
     ? (pendingWaitingForSession[draftKey] ?? NO_PENDING_MESSAGES)
     : NO_PENDING_MESSAGES
+
   useEffect(() => {
     if (!draftKey || !pendingKey || waitingForSession.length === 0) {
       return
     }
+
     const movedIds = new Set(waitingForSession.map((item) => item.id))
     setPendingBySession((state) => mergeWaitingSessionPending(state, pendingKey, waitingForSession))
     setPendingWaitingForSession((previous) =>
@@ -286,17 +314,21 @@ export function useMobileNativeChatDrafts(args: {
   const sessionPending = pendingKey
     ? (pendingBySession[pendingKey] ?? NO_PENDING_MESSAGES)
     : NO_PENDING_MESSAGES
+
   const pending = combineMobileNativeChatPending(sessionPending, waitingForSession)
   useEffect(() => {
     if (!pendingKey) {
       return
     }
+
     setImagePreviewsBySession((previous) =>
       migrateImagePreviewMessageIds(previous, pendingKey, messages)
     )
+
     if (pending.length === 0) {
       return
     }
+
     // Only judge a send against a read known to be this session's. Note this
     // does NOT give an image echo a boundary — the rebase deliberately leaves
     // those on whatever they captured — so a caption-less photo sent before any
@@ -307,28 +339,37 @@ export function useMobileNativeChatDrafts(args: {
       messages,
       pending.filter((item) => item.baselineResolved)
     )
+
     const landedImagePendingIds = new Set(landedImagePreviews.map((preview) => preview.pendingId))
+
     if (landedImagePreviews.length > 0) {
       setImagePreviewsBySession((previous) =>
         mergeLandedImagePreviewEchoes(previous, pendingKey, landedImagePreviews)
       )
     }
+
     setPendingBySession((previous) => {
       const current = previous[pendingKey] ?? []
+
       // Rebase before retiring: a send captured before the history was known has
       // to own a real boundary before any row can be judged against it.
       const rebased = transcriptSettled
         ? rebaseMobileNativeChatPendingBaselines(messages, current)
         : current
+
       const next = retireLandedMobileNativeChatPending(messages, rebased, landedImagePendingIds)
+
       if (next === current) {
         return previous
       }
+
       if (next.length > 0) {
         return { ...previous, [pendingKey]: next }
       }
+
       const remaining = { ...previous }
       delete remaining[pendingKey]
+
       return remaining
     })
   }, [messages, pending, pendingKey, transcriptSettled])

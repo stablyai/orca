@@ -40,7 +40,9 @@ export function useRichMarkdownReviewData({
         : getRelativePathInsideRoot(filePath, worktreeRoot),
     [filePath, markdownAnnotationFilePath, worktreeRoot]
   )
+
   const canAnnotateRichMarkdown = Boolean(markdownAnnotationsEnabled && sourceRelativePath !== null)
+
   const markdownComments = useMemo(
     () =>
       (allDiffComments ?? []).filter(
@@ -48,12 +50,15 @@ export function useRichMarkdownReviewData({
       ),
     [allDiffComments, sourceRelativePath]
   )
+
   const markdownReviewNotes = useMemo(
     () => sortMarkdownReviewNotes(markdownComments as MarkdownReviewNote[]),
     [markdownComments]
   )
+
   const unsentMarkdownReviewScope = useMemo<NotesSendMenuScope<MarkdownReviewNote>[]>(() => {
     const unsentNotes = markdownReviewNotes.filter((note) => !note.sentAt)
+
     return [
       {
         id: 'all',

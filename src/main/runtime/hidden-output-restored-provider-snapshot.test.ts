@@ -4,6 +4,7 @@ import { createRuntime, syncSinglePty } from './orca-runtime-test-fixtures.spec'
 describe('hidden-output recovery after provider reattach', () => {
   it('uses retained provider modes instead of the pre-attach redraw suffix', async () => {
     const runtime = createRuntime()
+
     const serializeProviderBuffer = vi.fn(async () => ({
       data: '\x1b[?1049hRetained TUI',
       cols: 100,
@@ -12,6 +13,7 @@ describe('hidden-output recovery after provider reattach', () => {
       source: 'headless' as const,
       alternateScreen: true
     }))
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -40,11 +42,13 @@ describe('hidden-output recovery after provider reattach', () => {
       value: 1000,
       generation: 'continued'
     })
+
     const serializeBuffer = vi.fn(async () => ({
       data: '\x1b[?1049hRenderer TUI',
       cols: 100,
       rows: 30
     }))
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,

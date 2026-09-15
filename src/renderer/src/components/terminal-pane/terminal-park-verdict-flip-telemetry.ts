@@ -14,13 +14,16 @@ import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { REACT_NESTED_UPDATE_LIMIT } from '../../../../shared/react-update-depth-attribution'
 
 export const TERMINAL_TAB_PARK_FLIP_WINDOW_MS = 60_000
+
 /** Flips per window that no sane park policy should reach. Breadcrumb only. */
 export const TERMINAL_TAB_PARK_FLIP_NOTICE_LIMIT = 12
 
 /** Measured upper bound after the passive-effect pin engages. */
 const PARK_PIN_SETTLE_COMMITS = 6
+
 /** Worst-case commits from pane, watcher, and store work per verdict flip. */
 export const TERMINAL_TAB_PARK_FLIP_COMMIT_COST = 12
+
 /** Pin threshold derived from React's remaining commit budget. */
 export const TERMINAL_TAB_PARK_FLIP_BURST_LIMIT = Math.max(
   2,
@@ -28,6 +31,7 @@ export const TERMINAL_TAB_PARK_FLIP_BURST_LIMIT = Math.max(
     (REACT_NESTED_UPDATE_LIMIT - PARK_PIN_SETTLE_COMMITS) / TERMINAL_TAB_PARK_FLIP_COMMIT_COST
   )
 )
+
 /** Honest cold parking cannot round-trip inside this horizon. */
 export const TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS = 1_000
 
@@ -66,14 +70,18 @@ export function getParkVerdictUnparkPinUntilMs(args: {
   nowMs: number
 }): number | null {
   const record = args.records.get(args.tabId)
+
   if (record?.pinnedUntilMs == null) {
     return null
   }
+
   if (!isParkVerdictPinLive(record, args.nowMs) || args.nowMs < record.windowStartMs) {
     resetFlipWindows(record, args.nowMs)
     record.pinnedUntilMs = null
+
     return null
   }
+
   return record.pinnedUntilMs
 }
 
@@ -121,6 +129,7 @@ export function recordParkVerdictFlips(args: {
       })
       continue
     }
+
     if (parked === record.parked) {
       continue
     }
@@ -128,10 +137,13 @@ export function recordParkVerdictFlips(args: {
     // Why: Date.now() jumps backwards on NTP/sleep-wake; treat any out-of-range
     // elapsed value as a fresh window rather than trusting the delta.
     const elapsedMs = nowMs - record.windowStartMs
+
     if (elapsedMs >= flipWindowMs || elapsedMs < 0) {
       resetFlipWindows(record, nowMs)
     }
+
     const burstElapsedMs = nowMs - record.burstStartMs
+
     if (burstElapsedMs >= burstWindowMs || burstElapsedMs < 0) {
       record.burstStartMs = nowMs
       record.burstFlips = 0
@@ -153,6 +165,7 @@ export function recordParkVerdictFlips(args: {
       })
       continue
     }
+
     // Why a live pin gates this: the burst crumb already reported the same
     // window, so a second crumb would only double the volume the notice limit
     // exists to keep down.
@@ -193,18 +206,22 @@ export function selectParkVerdictPinnedTabIds(args: {
 }): ParkVerdictPinSelection {
   const pinnedTabIds = new Set<string>()
   let earliestPinExpiryMs: number | null = null
+
   for (const tabId of args.tabIds) {
     const pinnedUntilMs = getParkVerdictUnparkPinUntilMs({
       records: args.records,
       tabId,
       nowMs: args.nowMs
     })
+
     if (pinnedUntilMs === null) {
       continue
     }
+
     pinnedTabIds.add(tabId)
     earliestPinExpiryMs =
       earliestPinExpiryMs === null ? pinnedUntilMs : Math.min(earliestPinExpiryMs, pinnedUntilMs)
   }
+
   return { pinnedTabIds, earliestPinExpiryMs }
 }

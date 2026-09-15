@@ -18,7 +18,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/runtime/runtime-git-client', () => ({
   getRuntimeGitBranchCompare: mocks.getRuntimeGitBranchCompare
 }))
+
 vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+
 vi.mock('@/store', () => {
   const state = {
     beginGitBranchCompareRequest: mocks.beginGitBranchCompareRequest,
@@ -28,8 +30,10 @@ vi.mock('@/store', () => {
       return mocks.gitBranchCompareSummaryByWorktree
     }
   }
+
   const useAppStore = <T,>(selector: (s: typeof state) => T): T => selector(state)
   useAppStore.getState = (): typeof state => state
+
   return { useAppStore }
 })
 
@@ -65,6 +69,7 @@ function Probe(props: {
     activeGitStatusHead: props.statusHead ?? null,
     remoteStatus: props.remoteStatus
   })
+
   return null
 }
 
@@ -113,6 +118,7 @@ describe('useSourceControlBranchCompare scheduler', () => {
     for (let i = 0; i < 5; i += 1) {
       void latest?.refreshBranchCompare()
     }
+
     await flush()
     expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(1)
 
@@ -356,6 +362,7 @@ describe('useSourceControlBranchCompare scheduler', () => {
       ahead: 0,
       behind: 0
     }
+
     const root = await mount({ isBranchVisible: true, statusHead: 'head-1', remoteStatus: remote })
     await flush()
     expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(1)
@@ -452,6 +459,7 @@ describe('branch comparison visibility recovery', () => {
     mocks.gitBranchCompareSummaryByWorktree = {
       A: { baseRef: 'origin/main', status: 'loading' }
     }
+
     for (let i = 0; i < 5; i++) {
       await act(async () => {
         root.render(<Probe isBranchVisible={false} statusHead="head-2" />)
@@ -460,6 +468,7 @@ describe('branch comparison visibility recovery', () => {
         root.render(<Probe isBranchVisible statusHead="head-2" />)
       })
     }
+
     expect(mocks.getRuntimeGitBranchCompare).toHaveBeenCalledTimes(1)
     await act(async () => {
       first.resolve(OK)

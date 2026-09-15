@@ -82,6 +82,7 @@ describe('openMobileNativeChatFileTap', () => {
         }
       })
     )
+
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({
@@ -148,6 +149,7 @@ describe('openMobileNativeChatFileTap', () => {
         isDirectory: false
       })
     )
+
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'gone/missing.ts' })
@@ -163,6 +165,7 @@ describe('openMobileNativeChatFileTap', () => {
     const sendRequest = vi.fn(async () => {
       throw new Error('Request timed out')
     })
+
     const options = baseOptions({ sendRequest })
 
     openMobileNativeChatFileTap({ ...options, pathText: 'src/app.ts' })
@@ -177,6 +180,7 @@ describe('openMobileNativeChatFileTap', () => {
     const sendRequest = vi.fn(async () => responses.shift())
     const openedTab = { id: 'tab-2', relativePath: 'src/app.ts' }
     const switchSessionTab = vi.fn()
+
     const options = {
       ...baseOptions({ sendRequest }),
       getSessionTabs: () => [openedTab],

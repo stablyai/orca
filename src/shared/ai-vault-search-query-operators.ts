@@ -21,13 +21,16 @@ export function splitAiVaultSearchQuery(query: string): AiVaultSearchQuerySplit 
   const repoTerms: string[] = []
   const pathTerms: string[] = []
   let index = 0
+
   while (index < query.length) {
     if (isBoundary(query[index])) {
       index += 1
       continue
     }
+
     OPERATOR.lastIndex = index
     const operator = OPERATOR.exec(query)
+
     if (operator) {
       const at = index + operator[0].length
       const quoted = readQuoted(query, at)
@@ -37,11 +40,14 @@ export function splitAiVaultSearchQuery(query: string): AiVaultSearchQuerySplit 
       // not a narrowing anyone typed on purpose, and an untrimmed one matches
       // no label at all, which silently empties the list.
       const operand = value.trim()
+
       if (operand) {
         ;(operator[1]!.toLowerCase() === 'repo' ? repoTerms : pathTerms).push(operand)
       }
+
       continue
     }
+
     const quoted = readQuoted(query, index)
     const value = quoted?.value ?? readBare(query, index)
     const end = quoted ? quoted.end : index + value.length
@@ -52,6 +58,7 @@ export function splitAiVaultSearchQuery(query: string): AiVaultSearchQuerySplit 
     terms.push(value.trim())
     index = end
   }
+
   return { text: spans.join(' '), terms, repoTerms, pathTerms }
 }
 
@@ -74,17 +81,22 @@ function isBoundary(char: string | undefined): boolean {
  */
 function readQuoted(query: string, at: number): { value: string; end: number } | null {
   const quote = query[at]
+
   if (quote !== '"' && quote !== "'") {
     return null
   }
+
   const close = query.indexOf(quote, at + 1)
+
   return close === -1 ? null : { value: query.slice(at + 1, close), end: close + 1 }
 }
 
 function readBare(query: string, at: number): string {
   let end = at
+
   while (end < query.length && !isBoundary(query[end])) {
     end += 1
   }
+
   return query.slice(at, end)
 }

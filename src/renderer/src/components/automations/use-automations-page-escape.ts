@@ -11,6 +11,7 @@ export function useAutomationsPageEscape({
   local: AutomationsPageLocalState
 }): void {
   const { activeModal, closeAutomationsPage } = store
+
   const {
     createOpen,
     deleteTarget,
@@ -26,6 +27,7 @@ export function useAutomationsPageEscape({
     setSelectedAutomationRunPageId,
     setSelectedExternalRunPage
   } = local
+
   useEffect(() => {
     if (createOpen || deleteTarget || externalDeleteTarget || activeModal !== 'none') {
       return
@@ -42,6 +44,7 @@ export function useAutomationsPageEscape({
       }
 
       const target = event.target
+
       if (target instanceof Element) {
         // Fields that clear their own value on Escape consume this press.
         if (target.getAttribute('data-escape-clears-value') === 'true') {
@@ -57,9 +60,11 @@ export function useAutomationsPageEscape({
           target.matches('[contenteditable="true"], [contenteditable=""]')
         ) {
           event.preventDefault()
+
           if (target instanceof HTMLElement) {
             target.blur()
           }
+
           return
         }
       }
@@ -70,27 +75,35 @@ export function useAutomationsPageEscape({
         setPageView(runPageOrigin === 'automation' ? 'automations' : 'runs')
         setIsDetailOpen(runPageOrigin === 'automation')
         setActivePaneTab(runPageOrigin === 'automation' ? 'runs' : 'overview')
+
         return
       }
 
       if (isDetailOpen) {
         event.preventDefault()
+
         if (selectedExternalRunPage) {
           setSelectedExternalRunPage(null)
+
           return
         }
+
         if (selectedAutomationRunPageId) {
           setSelectedAutomationRunPageId(null)
+
           return
         }
+
         setIsDetailOpen(false)
         setActivePaneTab('overview')
+
         return
       }
 
       if (pageView === 'runs') {
         event.preventDefault()
         setPageView('automations')
+
         return
       }
 
@@ -99,6 +112,7 @@ export function useAutomationsPageEscape({
     }
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
+
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [
     activeModal,

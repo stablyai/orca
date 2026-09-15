@@ -7,6 +7,7 @@ function trackedTab(id: string, onRead: () => void): { id: string } {
     enumerable: true,
     get() {
       onRead()
+
       return id
     }
   }) as { id: string }
@@ -15,21 +16,25 @@ function trackedTab(id: string, onRead: () => void): { id: string } {
 describe('terminal tab owner index', () => {
   it('updates added, removed, and moved buckets without inspecting an unchanged bucket', () => {
     const reads = { stable: 0, moving: 0, added: 0, removed: 0 }
+
     const stableBucket = [
       trackedTab('stable-tab', () => {
         reads.stable += 1
       })
     ]
+
     const sourceBucket = [
       trackedTab('moving-tab', () => {
         reads.moving += 1
       })
     ]
+
     const removedBucket = [
       trackedTab('removed-tab', () => {
         reads.removed += 1
       })
     ]
+
     const index = createTerminalTabOwnerIndex()
 
     index.getOwners({ stable: stableBucket, source: sourceBucket, removed: removedBucket })
@@ -63,19 +68,23 @@ describe('terminal tab owner index', () => {
   it('adopts a warm metadata-only replacement without fleet visits or owner-map allocation', () => {
     let outerKeyVisits = 0
     let bucketVisits = 0
+
     const observeOuterMap = <T extends Record<string, readonly { id: string }[]>>(value: T): T =>
       new Proxy(value, {
         ownKeys(target) {
           outerKeyVisits += 1
+
           return Reflect.ownKeys(target)
         },
         get(target, property, receiver) {
           if (typeof property === 'string' && property.startsWith('wt-')) {
             bucketVisits += 1
           }
+
           return Reflect.get(target, property, receiver)
         }
       })
+
     const initial = observeOuterMap(
       Object.fromEntries(
         Array.from({ length: 300 }, (_, index) => [
@@ -84,12 +93,15 @@ describe('terminal tab owner index', () => {
         ])
       )
     )
+
     const index = createTerminalTabOwnerIndex()
     const owners = index.getOwners(initial)
+
     const next = observeOuterMap({
       ...initial,
       'wt-299': [{ id: 'tab-299', title: 'Changed title' }]
     })
+
     index.adoptMetadataOnlyBucketReplacements(initial, next, ['wt-299'])
     outerKeyVisits = 0
     bucketVisits = 0
@@ -115,6 +127,7 @@ describe('terminal tab owner index', () => {
         { id: 'paired-runtime-tab' }
       ]
     }
+
     const owners = index.getOwners(hydrated)
 
     expect(Object.fromEntries(owners)).toEqual({
@@ -129,6 +142,7 @@ describe('terminal tab owner index', () => {
 
   it('preserves last-wins object order for duplicate ids when only outer keys reorder', () => {
     let idReads = 0
+
     const firstBucket = [
       trackedTab('duplicate-tab', () => {
         idReads += 1
@@ -137,11 +151,13 @@ describe('terminal tab owner index', () => {
         idReads += 1
       })
     ]
+
     const secondBucket = [
       trackedTab('duplicate-tab', () => {
         idReads += 1
       })
     ]
+
     const index = createTerminalTabOwnerIndex()
 
     expect(index.getOwner({ first: firstBucket, second: secondBucket }, 'duplicate-tab')).toBe(

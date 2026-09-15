@@ -28,6 +28,7 @@ export class CdpPageCommands extends CdpBridgeCommandModule {
       const result = await buildSnapshot(sender, state.iframeSessions, (sessionId) =>
         this.makeCdpSender(guest, sessionId)
       )
+
       state.snapshotResult = result
 
       const navId = await this.getNavigationId(sender)
@@ -74,6 +75,7 @@ export class CdpPageCommands extends CdpBridgeCommandModule {
       const expr = amount
         ? `window.scrollBy(0, ${direction === 'down' ? amount : -amount})`
         : `window.scrollBy(0, ${direction === 'down' ? 'window.innerHeight' : '-window.innerHeight'})`
+
       await sender('Runtime.evaluate', { expression: expr, returnByValue: true })
 
       return { scrolled: direction }
@@ -85,6 +87,7 @@ export class CdpPageCommands extends CdpBridgeCommandModule {
       const guest = this.getActiveGuest()
       await this.ensureDebuggerAttached(guest)
       await this.waitForNetworkIdle(guest, timeoutMs, 500)
+
       return { waited: true }
     })
   }
@@ -113,8 +116,10 @@ export class CdpPageCommands extends CdpBridgeCommandModule {
         cssContentSize?: { width: number; height: number }
         contentSize?: { width: number; height: number }
       }
+
       // Why: screenshot clip uses CSS pixels; on HiDPI, device-pixel contentSize tiles duplicates, so prefer cssContentSize.
       const contentSize = metrics.cssContentSize ?? metrics.contentSize
+
       if (!contentSize) {
         throw new BrowserError('browser_error', 'Unable to determine full-page screenshot bounds')
       }
@@ -202,11 +207,13 @@ export class CdpPageCommands extends CdpBridgeCommandModule {
 
       const valueStr =
         result.value !== undefined ? String(result.value) : (result.description ?? '')
+
       // Why: include origin to match agent-browser's BrowserEvalResult shape across both bridges.
       const { result: urlResult } = (await sender('Runtime.evaluate', {
         expression: 'location.origin',
         returnByValue: true
       })) as { result: { value: string } }
+
       return {
         result: valueStr,
         origin: urlResult.value

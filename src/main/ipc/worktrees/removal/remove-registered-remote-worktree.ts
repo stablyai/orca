@@ -35,22 +35,28 @@ export async function removeRegisteredRemoteWorktree(
 ): Promise<RemoveWorktreeResult> {
   const { mainWindow, store, runtime } = context
   const remoteConnectionId = repo.connectionId!
+
   // Why: SSH deletion mirrors the local flow — hooks run while the directory is intact, then the clean check guards removal.
   if (!args.force) {
     const { clean, stdout } = await provider!.worktreeIsClean(canonicalWorktreePath)
+
     if (!clean) {
       const error = new Error('Worktree has uncommitted or untracked changes.')
+
       ;(error as Error & { stdout?: string }).stdout = stdout
       throw error
     }
   }
 
   const remoteRemoveOptions = !deleteBranch ? { deleteBranch } : {}
+
   const removalGate = await withWorktreeRemoveStageSpan('watcher_gate', 'remote', async () =>
     runtime.acquireFileWatcherRemoval(canonicalWorktreePath, remoteConnectionId)
   )
+
   let rawRemovalResult: RemoveWorktreeResult | undefined
   let removalCompleted = false
+
   try {
     await withWorktreeRemoveStageSpan('pty_sweep', 'remote', async () => {
       await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
@@ -67,6 +73,7 @@ export async function removeRegisteredRemoteWorktree(
   } finally {
     await removalGate.finish(removalCompleted)
   }
+
   const removalResult = preserveBranchHeadFallback(rawRemovalResult, registeredWorktree.head)
   await cleanupUnusedWorktreePushTargetRemoteSsh(
     provider!,
@@ -93,5 +100,6 @@ export async function removeRegisteredRemoteWorktree(
     )
   })
   notifyWorktreesChanged(mainWindow, repoId)
+
   return removalResult ?? {}
 }

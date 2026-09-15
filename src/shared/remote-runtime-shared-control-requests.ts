@@ -30,11 +30,14 @@ export function requestSharedControl<TResult>(args: {
   refreshTimeoutOnKeepalive?: boolean
 }): Promise<RuntimeRpcResponse<TResult>> {
   const { ensureReady, pendingRequests, send } = args
+
   if (args.signal?.aborted) {
     return Promise.reject(abortSignalReason(args.signal))
   }
+
   const requestId = randomUUID()
   let preparedRequest: RemoteRuntimePreparedRequest
+
   try {
     preparedRequest = prepareRemoteRuntimeRequest(pendingRequests, () =>
       serializeRemoteRuntimeRpcRequest({
@@ -48,16 +51,20 @@ export function requestSharedControl<TResult>(args: {
   } catch (error) {
     return Promise.reject(error)
   }
+
   return new Promise<RuntimeRpcResponse<TResult>>((resolve, reject) => {
     const onAbort = (): void => {
       args.retireRequestId?.(requestId)
       rejectSharedControlPendingRequest(pendingRequests, requestId, abortSignalReason(args.signal!))
     }
+
     const timeout = setTimeout(() => {
       const pending = pendingRequests.get(requestId)
+
       if (!pending) {
         return
       }
+
       pendingRequests.delete(requestId)
       releaseRemoteRuntimePreparedRequest(pending)
       args.retireRequestId?.(requestId)
@@ -65,6 +72,7 @@ export function requestSharedControl<TResult>(args: {
       // socket liveness owns connection-wide teardown so other RPCs survive.
       pending.reject(remoteRuntimeTimeoutError())
     }, args.timeoutMs)
+
     pendingRequests.set(requestId, {
       method: args.method.slice(0, MAX_RETAINED_METHOD_CHARS),
       resolve: resolve as (response: RuntimeRpcResponse<unknown>) => void,
@@ -76,6 +84,7 @@ export function requestSharedControl<TResult>(args: {
     args.signal?.addEventListener('abort', onAbort, { once: true })
     const removeAbortListener = (): void => args.signal?.removeEventListener('abort', onAbort)
     const pending = pendingRequests.get(requestId)
+
     if (pending) {
       const resolvePending = pending.resolve
       const rejectPending = pending.reject
@@ -83,15 +92,19 @@ export function requestSharedControl<TResult>(args: {
         removeAbortListener()
         resolvePending(response)
       }
+
       pending.reject = (error) => {
         removeAbortListener()
         rejectPending(error)
       }
     }
+
     if (args.signal?.aborted) {
       onAbort()
+
       return
     }
+
     void ensureReady().then(
       () => send(requestId),
       (error) =>

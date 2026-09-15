@@ -20,9 +20,11 @@ export class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyC
     } = {}
   ): Promise<RuntimeTerminalSplit> {
     const livePty = this.getLivePtyForHandle(handle)
+
     if (livePty) {
       return await this.splitPtyBackedTerminal(livePty.pty, opts)
     }
+
     this.assertGraphReady()
     const { leaf } = this.getLiveLeafForHandle(handle)
     const direction = opts.direction ?? 'horizontal'
@@ -39,6 +41,7 @@ export class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyC
     })
 
     const newHandle = await this.waitForLeafInTab(leaf.tabId, newLeafId)
+
     return {
       handle: newHandle,
       tabId: leaf.tabId,

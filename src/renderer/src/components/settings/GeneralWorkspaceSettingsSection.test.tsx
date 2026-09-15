@@ -8,7 +8,9 @@ import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSecti
 import type { ReactNode } from 'react'
 
 vi.mock('./WorkspaceDirectorySetting', () => ({ WorkspaceDirectorySetting: () => null }))
+
 vi.mock('./OpenInMenuSetting', () => ({ OpenInMenuSetting: () => null }))
+
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -16,6 +18,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 }))
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -55,9 +58,11 @@ function getSegment(label: string, visibility: 'show' | 'hide' = 'show'): HTMLBu
   const control = container.querySelector<HTMLButtonElement>(
     `[aria-label="Visibility for ${label}"] [data-visibility="${visibility}"]`
   )
+
   if (!control) {
     throw new Error(`${visibility} segment not found: ${label}`)
   }
+
   return control
 }
 

@@ -27,6 +27,7 @@ export function TerminalWorkspaceDialogs({
     windowCloseDialogKind,
     windowCloseDialogOpen
   } = controller
+
   return (
     <>
       <Dialog

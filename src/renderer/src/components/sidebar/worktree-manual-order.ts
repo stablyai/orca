@@ -42,14 +42,18 @@ export function expandDraggedWorktreeIdsForVisibleLineage(
   const rowIdSet = new Set(rows.map((row) => row.worktreeId))
 
   let ancestorDepth: number | undefined
+
   for (const row of rows) {
     const depth = row.depth
+
     if (ancestorDepth !== undefined && depth <= ancestorDepth) {
       ancestorDepth = undefined
     }
+
     if (ancestorDepth !== undefined) {
       expandedSet.add(row.worktreeId)
     }
+
     // Nested selections are already covered; NaN preserves an unterminated legacy scan.
     if (draggedSet.has(row.worktreeId) && (ancestorDepth === undefined || Number.isNaN(depth))) {
       ancestorDepth = depth
@@ -57,17 +61,20 @@ export function expandDraggedWorktreeIdsForVisibleLineage(
   }
 
   const expandedIds: string[] = []
+
   for (const row of rows) {
     if (expandedSet.has(row.worktreeId)) {
       expandedIds.push(row.worktreeId)
     }
   }
+
   for (const id of draggedIds) {
     if (!rowIdSet.has(id)) {
       expandedIds.push(id)
       rowIdSet.add(id)
     }
   }
+
   return expandedIds
 }
 
@@ -83,25 +90,31 @@ export function moveWorktreeIdsWithinGroup(
   const groupIdSet = new Set(groupIds)
   const draggedSet = new Set<string>()
   const orderedDraggedIds: string[] = []
+
   for (const id of draggedIds) {
     if (!groupIdSet.has(id) || draggedSet.has(id)) {
       continue
     }
+
     draggedSet.add(id)
   }
+
   for (const id of groupIds) {
     if (draggedSet.has(id)) {
       orderedDraggedIds.push(id)
     }
   }
+
   if (orderedDraggedIds.length === 0) {
     return [...groupIds]
   }
 
   const boundedDropIndex = Math.max(0, Math.min(groupIds.length, dropIndex))
   let removedBeforeDrop = 0
+
   for (let i = 0; i < boundedDropIndex; i++) {
     const id = groupIds[i]
+
     if (id !== undefined && draggedSet.has(id)) {
       removedBeforeDrop++
     }
@@ -111,6 +124,7 @@ export function moveWorktreeIdsWithinGroup(
   const insertAt = Math.max(0, Math.min(remaining.length, boundedDropIndex - removedBeforeDrop))
   const next = remaining.slice()
   insertWorktreeIds(next, insertAt, orderedDraggedIds)
+
   return next
 }
 
@@ -135,9 +149,11 @@ export function buildManualOrderUpdatesForVisibleGroups(args: {
       group.key === args.sourceGroupKey
         ? moveWorktreeIdsWithinGroup(group.worktreeIds, args.draggedIds, args.dropIndex)
         : [...group.worktreeIds]
+
     if (group.key === args.sourceGroupKey && !arraysEqual(ids, group.worktreeIds)) {
       changed = true
     }
+
     appendWorktreeIds(orderedIds, ids)
   }
 
@@ -172,11 +188,13 @@ export function buildManualOrderUpdatesForGroupDrop(args: {
   updates: Map<string, WorktreeManualOrderUpdate>
 } {
   const draggedSet = new Set<string>()
+
   for (const id of args.draggedIds) {
     draggedSet.add(id)
   }
 
   const orderedDraggedIds: string[] = []
+
   for (const group of args.groups) {
     for (const id of group.worktreeIds) {
       if (draggedSet.has(id) && !orderedDraggedIds.includes(id)) {
@@ -184,6 +202,7 @@ export function buildManualOrderUpdatesForGroupDrop(args: {
       }
     }
   }
+
   if (orderedDraggedIds.length === 0) {
     return {
       changed: false,
@@ -194,17 +213,22 @@ export function buildManualOrderUpdatesForGroupDrop(args: {
 
   const orderedIds: string[] = []
   let changed = false
+
   for (const group of args.groups) {
     let ids: string[]
+
     if (group.key === args.targetGroupKey) {
       const boundedDropIndex = Math.max(0, Math.min(group.worktreeIds.length, args.dropIndex))
       let removedBeforeDrop = 0
+
       for (let index = 0; index < boundedDropIndex; index++) {
         const id = group.worktreeIds[index]
+
         if (id !== undefined && draggedSet.has(id)) {
           removedBeforeDrop++
         }
       }
+
       ids = group.worktreeIds.filter((id) => !draggedSet.has(id))
       insertWorktreeIds(
         ids,
@@ -218,12 +242,14 @@ export function buildManualOrderUpdatesForGroupDrop(args: {
     if (!arraysEqual(ids, group.worktreeIds)) {
       changed = true
     }
+
     appendWorktreeIds(orderedIds, ids)
   }
 
   if (!changed) {
     return { changed, orderedIds, updates: new Map() }
   }
+
   return {
     changed,
     orderedIds,
@@ -245,6 +271,7 @@ export function shouldWriteManualOrderForGroupDrop(args: {
   if (args.sortBy === 'manual') {
     return true
   }
+
   return (
     args.sourceGroupKeys.length > 0 &&
     args.sourceGroupKeys.every((sourceGroupKey) => sourceGroupKey === args.targetGroupKey)

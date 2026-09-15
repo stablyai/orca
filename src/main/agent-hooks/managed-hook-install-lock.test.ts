@@ -18,8 +18,11 @@ import * as ownerIdentity from './managed-hook-owner-identity'
 import { withManagedHookInstallLock } from './managed-hook-install-lock'
 
 const tempHomes: string[] = []
+
 const STALE_TOKEN = '00000000-0000-4000-8000-000000000000'
+
 const STALE_CLAIM_TOKEN = '11111111-1111-4111-8111-111111111111'
+
 const fsFailure = vi.hoisted(() => ({
   canonicalUnlinkPath: null as string | null,
   contendWithoutLock: null as (() => void) | null
@@ -27,6 +30,7 @@ const fsFailure = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const original = await importOriginal<{ link: typeof link; unlink: typeof unlink }>()
+
   return {
     ...original,
     link: async (...args: Parameters<typeof original.link>) => {
@@ -34,6 +38,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         fsFailure.contendWithoutLock()
         throw Object.assign(new Error('injected publication contention'), { code: 'EEXIST' })
       }
+
       await original.link(...args)
     },
     unlink: async (path: Parameters<typeof original.unlink>[0]) => {
@@ -41,6 +46,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         fsFailure.canonicalUnlinkPath = null
         throw Object.assign(new Error('injected unlink failure'), { code: 'EACCES' })
       }
+
       await original.unlink(path)
     }
   }
@@ -49,14 +55,17 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 async function createTempHome(): Promise<string> {
   const home = await mkdtemp(join(tmpdir(), 'orca-managed-hook-lock-'))
   tempHomes.push(home)
+
   return home
 }
 
 async function requireHostIdentity(): Promise<string> {
   const hostIdentity = await ownerIdentity.readManagedHookHostIdentity()
+
   if (!hostIdentity) {
     throw new Error('test host identity is unavailable')
   }
+
   return hostIdentity
 }
 
@@ -110,10 +119,13 @@ describe.skipIf(process.platform === 'win32')('withManagedHookInstallLock', () =
     let markFirstStarted!: () => void
     const firstStarted = new Promise<void>((resolve) => (markFirstStarted = resolve))
     const secondRun = vi.fn(async () => 'second')
+
     const first = withManagedHookInstallLock(home, undefined, () => {
       markFirstStarted()
+
       return new Promise<string>((resolve) => (releaseFirst = () => resolve('first')))
     })
+
     await firstStarted
     const second = withManagedHookInstallLock(home, undefined, secondRun)
 
@@ -135,16 +147,20 @@ describe.skipIf(process.platform === 'win32')('withManagedHookInstallLock', () =
       const ownerEntry = entries.find((entry) => entry.startsWith('managed-hook-install.owner-'))
       expect(entries).toHaveLength(2)
       expect(ownerEntry).toBeDefined()
+
       if (!ownerEntry) {
         throw new Error('owner entry was not published')
       }
+
       const ownerPath = join(lockParent, ownerEntry)
+
       const owner = JSON.parse(await readFile(lockPath, 'utf8')) as {
         token: string
         pid: number
         hostIdentity: string
         processIdentity: string
       }
+
       expect(owner).toMatchObject({ pid: process.pid })
       expect(owner.token).toMatch(/^[\da-f-]{36}$/)
       expect(owner.hostIdentity.length).toBeGreaterThan(0)
@@ -211,14 +227,18 @@ describe.skipIf(process.platform === 'win32')('withManagedHookInstallLock', () =
     let releaseFirst!: () => void
     let activeRuns = 0
     let maxActiveRuns = 0
+
     const run = vi.fn(async () => {
       activeRuns += 1
       maxActiveRuns = Math.max(maxActiveRuns, activeRuns)
+
       if (run.mock.calls.length === 1) {
         await new Promise<void>((resolve) => (releaseFirst = resolve))
       }
+
       activeRuns -= 1
     })
+
     const first = withManagedHookInstallLock(home, undefined, run)
     const second = withManagedHookInstallLock(home, undefined, run)
 
@@ -234,14 +254,17 @@ describe.skipIf(process.platform === 'win32')('withManagedHookInstallLock', () =
     const home = await createTempHome()
     const lockParent = join(home, '.orca')
     const ownerPath = join(lockParent, `managed-hook-install.owner-${STALE_TOKEN}.json`)
+
     const claimedOwnerPath = join(
       lockParent,
       `managed-hook-install.claimed-${STALE_TOKEN}-${STALE_CLAIM_TOKEN}.json`
     )
+
     const claimRecordPath = join(
       lockParent,
       `managed-hook-install.claim-${STALE_TOKEN}-${STALE_CLAIM_TOKEN}.json`
     )
+
     const hostIdentity = await requireHostIdentity()
     await createOwnedLock(home, 'stale-owner-incarnation', hostIdentity)
     await writeFile(
@@ -323,20 +346,26 @@ describe.skipIf(process.platform === 'win32')('withManagedHookInstallLock', () =
     let releaseFirst!: () => void
     let markFirstStarted!: () => void
     const firstStarted = new Promise<void>((resolve) => (markFirstStarted = resolve))
+
     const first = withManagedHookInstallLock(home, undefined, () => {
       markFirstStarted()
+
       return new Promise<void>((resolve) => (releaseFirst = resolve))
     })
+
     await firstStarted
     await rename(lockPath, `${lockPath}.displaced`)
 
     let releaseSecond!: () => void
     let markSecondStarted!: () => void
     const secondStarted = new Promise<void>((resolve) => (markSecondStarted = resolve))
+
     const second = withManagedHookInstallLock(home, undefined, () => {
       markSecondStarted()
+
       return new Promise<void>((resolve) => (releaseSecond = resolve))
     })
+
     await secondStarted
 
     releaseFirst()
@@ -377,10 +406,13 @@ describe.skipIf(process.platform === 'win32')('withManagedHookInstallLock', () =
     let releaseFirst!: () => void
     let markFirstStarted!: () => void
     const firstStarted = new Promise<void>((resolve) => (markFirstStarted = resolve))
+
     const first = withManagedHookInstallLock(home, undefined, () => {
       markFirstStarted()
+
       return new Promise<void>((resolve) => (releaseFirst = resolve))
     })
+
     await firstStarted
     const controller = new AbortController()
     const secondRun = vi.fn()

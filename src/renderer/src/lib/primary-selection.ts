@@ -1,12 +1,15 @@
 import type { ReadClipboardTextOptions } from '../../../shared/clipboard-text'
 
 export const PRIMARY_SELECTION_MAX_LENGTH = 65_536
+
 const PRIMARY_SELECTION_MAX_BYTES = PRIMARY_SELECTION_MAX_LENGTH * 4
 
 const PRIMARY_SELECTION_NATIVE_PASTE_SUPPRESSION_MS = 750
 
 let enabled = false
+
 let primarySelectionText = ''
+
 let nativePasteSuppressionUntil = 0
 
 type SelectionClipboardApi = {
@@ -26,13 +29,16 @@ function getSelectionClipboardApi(): SelectionClipboardApi | null {
   if (typeof window === 'undefined') {
     return null
   }
+
   const uiApi = window.api?.ui
+
   if (
     typeof uiApi?.readSelectionClipboardText !== 'function' ||
     typeof uiApi.writeSelectionClipboardText !== 'function'
   ) {
     return null
   }
+
   return uiApi
 }
 
@@ -46,6 +52,7 @@ function canStorePrimarySelectionText(text: string): boolean {
 
 export function setPrimarySelectionEnabled(nextEnabled: boolean): void {
   enabled = nextEnabled
+
   if (!enabled) {
     primarySelectionText = ''
     nativePasteSuppressionUntil = 0
@@ -60,6 +67,7 @@ export function armPrimarySelectionNativePasteSuppression(now: number = Date.now
   if (!enabled || !isLinuxUserAgent(getUserAgent())) {
     return
   }
+
   nativePasteSuppressionUntil = now + PRIMARY_SELECTION_NATIVE_PASTE_SUPPRESSION_MS
 }
 
@@ -69,7 +77,9 @@ export function consumePrimarySelectionNativePasteSuppression(now: number = Date
   if (!enabled || nativePasteSuppressionUntil === 0 || now > nativePasteSuppressionUntil) {
     return false
   }
+
   nativePasteSuppressionUntil = 0
+
   return true
 }
 
@@ -85,12 +95,16 @@ export function setPrimarySelectionText(text: string): boolean {
   if (!canStorePrimarySelectionText(text)) {
     return false
   }
+
   primarySelectionText = text
+
   const selectionClipboardApi = shouldUseSystemPrimarySelectionClipboard()
     ? getSelectionClipboardApi()
     : null
+
   if (selectionClipboardApi) {
     void selectionClipboardApi.writeSelectionClipboardText(text).catch(() => {})
+
     return true
   }
 
@@ -101,12 +115,15 @@ export async function readPrimarySelectionText(): Promise<string> {
   if (!enabled) {
     return ''
   }
+
   const selectionClipboardApi = shouldUseSystemPrimarySelectionClipboard()
     ? getSelectionClipboardApi()
     : null
+
   if (!selectionClipboardApi) {
     return primarySelectionText
   }
+
   try {
     return await selectionClipboardApi.readSelectionClipboardText({
       maxBytes: PRIMARY_SELECTION_MAX_BYTES

@@ -8,6 +8,7 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import type { GrokAccountStatus } from '../../../../shared/rate-limit-types'
 import { SearchableSetting } from './SearchableSetting'
+
 const GROK_CLI_DOCS_URL = 'https://docs.x.ai/build/overview'
 
 export function GrokAccountsSection(): React.JSX.Element {
@@ -42,6 +43,7 @@ export function GrokAccountsSection(): React.JSX.Element {
 
   const handleRefreshUsage = async (): Promise<void> => {
     setRefreshing(true)
+
     try {
       await refreshGrokRateLimits()
       await loadStatus()
@@ -56,6 +58,7 @@ export function GrokAccountsSection(): React.JSX.Element {
   // monthly included usage instead of hiding the usage row entirely.
   const usageIsWeekly = Boolean(grokUsage?.weekly)
   const usageWindow = grokUsage?.weekly ?? grokUsage?.monthly ?? null
+
   // Why: hiding the row entirely left signed-in users with no explanation when
   // Grok reports no percentage — never let unknown usage read as healthy (#15740).
   const unavailableReason =

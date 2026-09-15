@@ -31,8 +31,10 @@ function createHarness(socket: WebSocket): {
     heartbeatIntervalMs: 100,
     preAuthTimeoutMs: 1_000
   })
+
   const lifecycle = transport as unknown as TransportLifecycle
   lifecycle.wss = { clients: new Set([socket]) }
+
   return { lifecycle, transport }
 }
 

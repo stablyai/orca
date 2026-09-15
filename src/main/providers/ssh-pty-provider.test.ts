@@ -206,6 +206,7 @@ describe('SshPtyProvider', () => {
     // Why: freeze Date.now() so the leaf conversion deadline -> remaining relative
     // timeout is exact and the mux receives precisely the leftover budget.
     vi.useFakeTimers()
+
     try {
       await provider.shutdown(scopedPty1, { immediate: true, deadlineMs: Date.now() + 4321 })
       expectRequest(
@@ -262,6 +263,7 @@ describe('SshPtyProvider', () => {
       verdict: 'unverifiable' as const,
       reason: 'transport_loss' as const
     }
+
     mux.request.mockResolvedValue(inspection)
 
     await expect(provider.inspectProcess(scopedPty1)).resolves.toEqual(inspection)
@@ -274,6 +276,7 @@ describe('SshPtyProvider', () => {
       hasChildProcesses: true,
       foregroundProcessEvidence: { verdict: 'live' }
     }
+
     mux.request.mockResolvedValue(inspection)
 
     await expect(

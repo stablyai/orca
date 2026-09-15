@@ -44,6 +44,7 @@ function setState(overrides: Record<string, unknown> = {}): void {
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 function render(): void {

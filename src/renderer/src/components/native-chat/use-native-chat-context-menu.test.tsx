@@ -20,6 +20,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenuContent: ({ children }: { children?: ReactNode }) => children,
   DropdownMenuItem: (props: ItemProps) => {
     items.list.push(props)
+
     return props.children
   },
   DropdownMenuLabel: ({ children }: { children?: ReactNode }) => children,
@@ -33,6 +34,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 
 vi.mock('lucide-react', () => {
   const Icon = () => null
+
   return {
     Clipboard: Icon,
     Copy: Icon,
@@ -63,6 +65,7 @@ function childrenText(children: ReactNode): string {
       if (typeof child === 'string') {
         return child
       }
+
       return React.isValidElement<{ children?: ReactNode }>(child)
         ? childrenText(child.props.children)
         : ''
@@ -80,6 +83,7 @@ function Harness({
   enabled?: boolean
 }) {
   const rootRef = createRef<HTMLDivElement>()
+
   const { menu } = useNativeChatContextMenu({
     rootRef,
     enabled,
@@ -91,6 +95,7 @@ function Harness({
       onPaste: vi.fn()
     } satisfies NativeChatContextMenuActions
   })
+
   return menu
 }
 
@@ -113,9 +118,11 @@ describe('useNativeChatContextMenu', () => {
     const labels = items.list.map((candidate) => childrenText(candidate.children))
 
     expect(labels.some((label) => label.startsWith('Switch to terminal view'))).toBe(true)
+
     const item = items.list.find((candidate) =>
       childrenText(candidate.children).startsWith('Switch to terminal view')
     )
+
     expect(item).toBeDefined()
     item?.onSelect?.()
     expect(onSwitchToTerminal).toHaveBeenCalledTimes(1)

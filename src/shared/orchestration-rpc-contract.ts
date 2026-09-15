@@ -14,6 +14,7 @@ export const ORCHESTRATION_SKILL_COMMAND_ARGS = [
 ] as const
 
 export const ORCHESTRATION_LEGACY_RUN_ID = 'run_legacy_local'
+
 /** Files mail sent from a terminal in no Run. Distinct from the legacy Run on purpose: rows under
  *  the legacy id read as a pre-Runs database and trigger adoption on the next open. */
 export const ORCHESTRATION_UNBOUND_RUN_ID = 'run_unbound'
@@ -52,15 +53,19 @@ export function isOrchestrationMutation(method: string, params: unknown): boolea
   if (isRetiredOrchestrationMethod(method)) {
     return true
   }
+
   if (method === 'orchestration.check') {
     if (hasStringProperty(params, 'ack')) {
       return true
     }
+
     return !isExplicitReadOnlyCheck(params)
   }
+
   if (method === 'orchestration.dispatch') {
     return !hasTrueProperty(params, 'dryRun')
   }
+
   return ORCHESTRATION_MUTATION_METHODS.has(method)
 }
 
@@ -68,8 +73,10 @@ export function isTerminalPromptMutation(method: string, params: unknown): boole
   if (method !== 'terminal.send' || !params || typeof params !== 'object') {
     return false
   }
+
   const value = params as Record<string, unknown>
   const client = value.client as Record<string, unknown> | undefined
+
   return (
     value.agentPrompt === true &&
     typeof value.text === 'string' &&

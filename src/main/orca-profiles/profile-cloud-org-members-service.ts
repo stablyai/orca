@@ -57,14 +57,18 @@ async function runOrgMemberCall<T>(
           if (error instanceof OrcaCloudRequestError && error.statusCode !== 401) {
             return { ok: false as const, error }
           }
+
           throw error
         }
       }
     )
+
     if (operation.status !== 'ok') {
       return { status: 'reconnect-required' }
     }
+
     const outcome = operation.value
+
     return outcome.ok
       ? { status: 'ok', value: outcome.value }
       : { status: 'request-error', error: outcome.error }
@@ -113,16 +117,21 @@ export async function listOrcaProfileOrgMembers(
   orgId: string
 ): Promise<OrcaProfileOrgMembersListResult> {
   const active = ensureActiveOrcaProfile(userDataPath)
+
   if (isOrcaCloudDevAuthEnabled()) {
     return { status: 'ok', roster: listDevOrcaCloudOrgMembers(orgId) }
   }
+
   const configState = getOrcaCloudAuthConfig()
+
   if (!configState.configured) {
     return { status: 'unconfigured' }
   }
+
   const result = await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
     listOrcaCloudOrgMembers(configState.config, session, orgId)
   )
+
   switch (result.status) {
     case 'ok':
       return { status: 'ok', roster: result.value }
@@ -140,13 +149,17 @@ export async function inviteOrcaProfileOrgMember(
   args: OrcaProfileOrgMemberInviteArgs
 ): Promise<OrcaProfileOrgMemberMutationResult> {
   const active = ensureActiveOrcaProfile(userDataPath)
+
   if (isOrcaCloudDevAuthEnabled()) {
     return inviteDevOrcaCloudOrgMember(args)
   }
+
   const configState = getOrcaCloudAuthConfig()
+
   if (!configState.configured) {
     return { status: 'unconfigured' }
   }
+
   return mapMutationResult(
     await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
       inviteOrcaCloudOrgMember(configState.config, session, args)
@@ -159,13 +172,17 @@ export async function revokeOrcaProfileOrgInvite(
   args: OrcaProfileOrgInviteRevokeArgs
 ): Promise<OrcaProfileOrgMemberMutationResult> {
   const active = ensureActiveOrcaProfile(userDataPath)
+
   if (isOrcaCloudDevAuthEnabled()) {
     return revokeDevOrcaCloudOrgInvite(args)
   }
+
   const configState = getOrcaCloudAuthConfig()
+
   if (!configState.configured) {
     return { status: 'unconfigured' }
   }
+
   return mapMutationResult(
     await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
       revokeOrcaCloudOrgInvite(configState.config, session, args)
@@ -178,13 +195,17 @@ export async function changeOrcaProfileOrgMemberRole(
   args: OrcaProfileOrgMemberChangeRoleArgs
 ): Promise<OrcaProfileOrgMemberMutationResult> {
   const active = ensureActiveOrcaProfile(userDataPath)
+
   if (isOrcaCloudDevAuthEnabled()) {
     return changeDevOrcaCloudOrgMemberRole(args)
   }
+
   const configState = getOrcaCloudAuthConfig()
+
   if (!configState.configured) {
     return { status: 'unconfigured' }
   }
+
   return mapMutationResult(
     await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
       changeOrcaCloudOrgMemberRole(configState.config, session, args)
@@ -197,13 +218,17 @@ export async function removeOrcaProfileOrgMember(
   args: OrcaProfileOrgMemberRemoveArgs
 ): Promise<OrcaProfileOrgMemberMutationResult> {
   const active = ensureActiveOrcaProfile(userDataPath)
+
   if (isOrcaCloudDevAuthEnabled()) {
     return removeDevOrcaCloudOrgMember(args)
   }
+
   const configState = getOrcaCloudAuthConfig()
+
   if (!configState.configured) {
     return { status: 'unconfigured' }
   }
+
   return mapMutationResult(
     await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
       removeOrcaCloudOrgMember(configState.config, session, args)

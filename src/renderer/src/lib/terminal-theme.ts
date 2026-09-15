@@ -12,8 +12,11 @@ import {
 export const BUILTIN_TERMINAL_THEME_NAMES = getThemeNames()
 
 export const DEFAULT_TERMINAL_THEME_DARK = 'Ghostty Default Style Dark'
+
 export const DEFAULT_TERMINAL_THEME_LIGHT = 'Builtin Tango Light'
+
 export const DEFAULT_TERMINAL_DIVIDER_DARK = '#3f3f46'
+
 const DEFAULT_TERMINAL_DIVIDER_LIGHT = '#d4d4d8'
 
 export type EffectiveTerminalAppearance = {
@@ -38,6 +41,7 @@ export function getSystemPrefersDark(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return true
   }
+
   return window.matchMedia('(prefers-color-scheme: dark)').matches
 }
 
@@ -50,9 +54,11 @@ function findCustomTheme(
   selection: string
 ): TerminalCustomTheme | null {
   const customId = parseCustomTerminalThemeSelection(selection)
+
   if (!customId || !settings) {
     return null
   }
+
   return (
     normalizeTerminalCustomThemes(settings.terminalCustomThemes).find(
       (theme) => theme.id === customId
@@ -65,9 +71,11 @@ export function getTerminalTheme(
   selection: string
 ): ITheme | null {
   const customTheme = findCustomTheme(settings, selection)
+
   if (customTheme) {
     return terminalCustomThemeToXtermTheme(customTheme)
   }
+
   return getTheme(selection)
 }
 
@@ -77,9 +85,11 @@ export function getTerminalThemePreview(
   fallbackMode: 'dark' | 'light' = 'dark'
 ): ITheme | null {
   const theme = getTerminalTheme(settings, name)
+
   if (theme) {
     return theme
   }
+
   return getTheme(
     fallbackMode === 'light' ? DEFAULT_TERMINAL_THEME_LIGHT : DEFAULT_TERMINAL_THEME_DARK
   )
@@ -94,6 +104,7 @@ export function getAvailableTerminalThemeOptions(
     group: 'built-in' as const,
     previewTheme: getTheme(name)
   }))
+
   const customOptions = normalizeTerminalCustomThemes(settings.terminalCustomThemes).map(
     (theme) => ({
       value: makeCustomTerminalThemeSelection(theme.id),
@@ -105,6 +116,7 @@ export function getAvailableTerminalThemeOptions(
       previewTheme: terminalCustomThemeToXtermTheme(theme)
     })
   )
+
   return [...builtinOptions, ...customOptions]
 }
 
@@ -123,10 +135,13 @@ export function resolveEffectiveTerminalAppearance(
 ): EffectiveTerminalAppearance {
   const sourceTheme =
     settings.theme === 'system' ? (systemPrefersDark ? 'dark' : 'light') : settings.theme
+
   const useLightVariant = sourceTheme === 'light' && settings.terminalUseSeparateLightTheme
+
   const themeName = useLightVariant
     ? settings.terminalThemeLight || DEFAULT_TERMINAL_THEME_LIGHT
     : settings.terminalThemeDark || DEFAULT_TERMINAL_THEME_DARK
+
   const dividerColor = useLightVariant
     ? normalizeColor(settings.terminalDividerColorLight, DEFAULT_TERMINAL_DIVIDER_LIGHT)
     : normalizeColor(settings.terminalDividerColorDark, DEFAULT_TERMINAL_DIVIDER_DARK)
@@ -143,9 +158,11 @@ export function resolveEffectiveTerminalAppearance(
 
 export function normalizeColor(value: string | undefined, fallback: string): string {
   const trimmed = value?.trim()
+
   if (!trimmed) {
     return fallback
   }
+
   return trimmed
 }
 

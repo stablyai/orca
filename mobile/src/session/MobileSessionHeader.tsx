@@ -58,6 +58,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     handlePanelTap,
     showHeaderMoreButton
   } = controller
+
   return (
     <SafeAreaView style={styles.sessionChrome} edges={['top']}>
       <View style={styles.sessionTopBar}>
@@ -147,6 +148,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                 onLayout={(e) => {
                   const { x, width } = e.nativeEvent.layout
                   tabLayoutsRef.current.set(t.id, { x, width })
+
                   if (t.id === activeSessionTabIdRef.current) {
                     scrollActiveTabIntoView(t.id, false)
                   }
@@ -172,6 +174,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                   {t.type === 'terminal' &&
                     (() => {
                       const agentId = resolveMobileTerminalTabAgentId(t)
+
                       return agentId ? <MobileAgentIcon agentId={agentId} size={13} /> : null
                     })()}
                   <Text
@@ -207,8 +210,10 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             onPress={() => {
               if (quickCommandsSupported === true) {
                 setShowQuickCommands(true)
+
                 return
               }
+
               showToast(
                 quickCommandsSupported === false
                   ? 'Desktop update required for quick commands'

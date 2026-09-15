@@ -20,6 +20,7 @@ export {
   formatNodeHeadersDownloadError,
   isNodeHeadersDownloadFailure
 } from './build-toolchain-diagnosis'
+
 export type { BuildToolchainStatus } from './build-toolchain-diagnosis'
 
 // Best-effort: returns null on Windows hosts (node-pty ships win32 prebuilds, so
@@ -33,14 +34,17 @@ export async function probeBuildToolchain(
   if (isWindowsRemoteHost(hostPlatform)) {
     return null
   }
+
   try {
     const output = await execCommand(conn, buildToolchainProbeCommand(), {
       wrapCommand: true,
       signal
     })
+
     return parseBuildToolchainProbe(output)
   } catch {
     signal?.throwIfAborted()
+
     return null
   }
 }

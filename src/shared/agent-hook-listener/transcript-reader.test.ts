@@ -18,6 +18,7 @@ describe('backward transcript line extraction', () => {
       expect(
         findLastExtractedTranscriptLineText(text, (line) => {
           seen.push(line)
+
           return undefined
         })
       ).toBeUndefined()
@@ -28,19 +29,25 @@ describe('backward transcript line extraction', () => {
   it('preserves line order and early return across generated delimiters', () => {
     let seed = 29
     const fragments = ['a', '\n', '\r\n', ' ', '\t', '😀', '\u2028', '\0']
+
     for (let sample = 0; sample < 1000; sample++) {
       let text = ''
+
       for (let i = 0; i < sample % 100; i++) {
         seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
         text += fragments[seed % fragments.length]
       }
+
       const lines = expectedLines(text)
       const stop = sample % (lines.length + 1)
       const seen: string[] = []
+
       const result = findLastExtractedTranscriptLineText(text, (line) => {
         seen.push(line)
+
         return seen.length === stop + 1 ? line : undefined
       })
+
       expect(seen).toEqual(lines.slice(0, stop + 1))
       expect(result).toBe(lines[stop])
     }
@@ -62,6 +69,7 @@ describe('backward transcript line extraction', () => {
     expect(
       findLastExtractedTranscriptLineText('older\nlatest\n', (line) => {
         seen.push(line)
+
         return ''
       })
     ).toBe('')

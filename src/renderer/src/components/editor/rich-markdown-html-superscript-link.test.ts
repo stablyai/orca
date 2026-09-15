@@ -39,12 +39,14 @@ const TEST_KEY = '0123456789abcdef0123456789abcdef'
 
 function createEditor(content: string, key = TEST_KEY, element: HTMLElement | null = null): Editor {
   const codec = createRichMarkdownEditorCodec(key)
+
   const context = createRichMarkdownHtmlSuperscriptLinkContext({
     sourceFilePath: '/repo/README.md',
     worktreeId: 'worktree-1',
     worktreeRoot: '/repo',
     sourceOwner: { kind: 'local' }
   })
+
   return new Editor({
     element,
     extensions: createRichMarkdownExtensions({
@@ -64,6 +66,7 @@ function nodeNames(editor: Editor): string[] {
   editor.state.doc.descendants((node) => {
     names.push(node.type.name)
   })
+
   return names
 }
 
@@ -71,6 +74,7 @@ describe('rich Markdown HTML superscript links', () => {
   it('parses the reported fragment and preserves its exact source', () => {
     const source = '<sup><a href="https://example.com/source">[12]</a></sup>'
     const editor = createEditor(`研究结果${source}。`)
+
     try {
       expect(nodeNames(editor)).toContain('richMarkdownHtmlSuperscriptLink')
       expect(editor.getMarkdown()).toBe(`研究结果${source}。`)
@@ -89,8 +93,10 @@ describe('rich Markdown HTML superscript links', () => {
   it('retains casing, whitespace, quote style, entities, title, and adjacency', () => {
     const first =
       "<SUP ><A title='A &amp; B' href='https://example.com/?a=1&amp;b=2'>[&notit;]</A ></SUP >"
+
     const second = '<sup><a href=#section>[13]</a></sup>'
     const editor = createEditor(`${first}${second}`)
+
     try {
       expect(
         nodeNames(editor).filter((name) => name === 'richMarkdownHtmlSuperscriptLink')
@@ -116,10 +122,13 @@ describe('rich Markdown HTML superscript links', () => {
       '<sup><a href =\n "x">[12]</a></sup>',
       '<sup><a href="x">[12]</a\n></sup>'
     ]
+
     for (const source of rejected) {
       const editor = createEditor(source)
+
       try {
         expect(nodeNames(editor)).not.toContain('richMarkdownHtmlSuperscriptLink')
+
         if (!source.includes('\n')) {
           expect(editor.getMarkdown()).toBe(source)
         }
@@ -133,6 +142,7 @@ describe('rich Markdown HTML superscript links', () => {
     const source = '<sup><a href="https://example.com">[12]</a></sup>'
     const markdown = `\`${source}\`\n\n\`\`\`html\n${source}\n\`\`\``
     const editor = createEditor(markdown)
+
     try {
       expect(nodeNames(editor)).not.toContain('richMarkdownHtmlSuperscriptLink')
       expect(editor.getMarkdown()).toBe(markdown)
@@ -145,6 +155,7 @@ describe('rich Markdown HTML superscript links', () => {
     const transport = createRichMarkdownSourceTransport(TEST_KEY)
     const authored = `${transport.create('inline-html', '<b>authored</b>')} [[ORCA_RAW_HTML_INLINE:%3Ci%3Ex%3C%2Fi%3E]]`
     const editor = createEditor(authored)
+
     try {
       editor.commands.insertContentAt(editor.state.doc.content.size - 1, '!')
       expect(editor.getMarkdown()).toBe(`${authored}!`)
@@ -162,6 +173,7 @@ describe('rich Markdown HTML superscript links', () => {
     )
     const authoredFirstToken = first.transport.create('inline-html', '<b>K1</b>')
     const editor = createEditor(authoredFirstToken, second.transport.key)
+
     try {
       expect(editor.getMarkdown()).toBe(authoredFirstToken)
       expect(nodeNames(editor)).not.toContain('rawMarkdownHtmlInline')
@@ -174,11 +186,13 @@ describe('rich Markdown HTML superscript links', () => {
   it('keeps source matching linear across many rejected candidates', () => {
     const input = '<sup>'.repeat(2_000)
     let transitions = 0
+
     for (let index = 0; index < input.length; index += 5) {
       const stats = { transitions: 0 }
       expect(matchHtmlSuperscriptLinkSource(input, index, stats)).toBeNull()
       transitions += stats.transitions
     }
+
     expect(transitions).toBeLessThan(input.length * 4)
   })
 
@@ -205,12 +219,14 @@ describe('rich Markdown HTML superscript links', () => {
     document.body.appendChild(host)
     const source = '<sup><a href="https://example.com">[12]</a></sup>'
     const codec = createRichMarkdownEditorCodec(TEST_KEY)
+
     const context = createRichMarkdownHtmlSuperscriptLinkContext({
       sourceFilePath: '/repo/README.md',
       worktreeId: 'worktree-1',
       worktreeRoot: '/repo',
       sourceOwner: { kind: 'local' }
     })
+
     const editor = new Editor({
       element: host,
       extensions: createRichMarkdownExtensions({
@@ -223,10 +239,12 @@ describe('rich Markdown HTML superscript links', () => {
       }),
       contentType: 'markdown'
     })
+
     try {
       const liveLabel = host.querySelector<HTMLElement>(
         'sup[data-rich-markdown-html-superscript-link] > span'
       )
+
       expect(liveLabel?.textContent).toBe('[12]')
       expect(liveLabel?.getAttribute('role')).toBe('link')
       expect(host.querySelector('sup a')).toBeNull()
@@ -258,6 +276,7 @@ describe('rich Markdown HTML superscript links', () => {
       worktreeRoot: '/repo',
       sourceOwner: { kind: 'local' as const }
     }
+
     expect(classifyHtmlSuperscriptLinkAction('   ', local)).toBe(false)
     expect(classifyHtmlSuperscriptLinkAction('file:///etc/passwd', local)).toBe(true)
     expect(
@@ -285,14 +304,17 @@ describe('rich Markdown HTML superscript links', () => {
     const secondButton = document.createElement('button')
     secondBubble.appendChild(secondButton)
     document.body.append(firstBubble, secondBubble)
+
     try {
       editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, 1)))
+
       const event = {
         key: 'Tab',
         shiftKey: false,
         isComposing: false,
         preventDefault: () => {}
       } as KeyboardEvent
+
       expect(
         handleRichMarkdownCitationKey({
           editor,
@@ -313,6 +335,7 @@ describe('rich Markdown HTML superscript links', () => {
       folderWorkspaces: [{ id: 'folder-1', folderPath: '/workspace/platform' } as FolderWorkspace],
       worktreesByRepo: {}
     } as Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>
+
     expect(resolveRichMarkdownWorktreeRoot(state, folderWorkspaceKey('folder-1'))).toBe(
       '/workspace/platform'
     )
@@ -322,10 +345,12 @@ describe('rich Markdown HTML superscript links', () => {
     const source = '<sup><a title="Source" href="./guide.md">[12]</a></sup>'
     const host = document.createElement('div')
     const editor = createEditor(source, TEST_KEY, host)
+
     try {
       editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, 1)))
       const html = editor.view.serializeForClipboard(editor.state.selection.content()).dom.innerHTML
       const pasted = createEditor('')
+
       try {
         pasted.commands.setContent(html, { contentType: 'html' })
         expect(pasted.getMarkdown()).toBe(source)
@@ -336,11 +361,14 @@ describe('rich Markdown HTML superscript links', () => {
       const template = document.createElement('template')
       template.innerHTML = html
       const anchor = template.content.querySelector('a')
+
       if (!anchor) {
         throw new Error('expected serialized citation anchor')
       }
+
       anchor.textContent = '[99]'
       const forged = createEditor('')
+
       try {
         forged.commands.setContent(template.innerHTML, { contentType: 'html' })
         expect(nodeNames(forged)).not.toContain('richMarkdownHtmlSuperscriptLink')
@@ -352,6 +380,7 @@ describe('rich Markdown HTML superscript links', () => {
       anchor.textContent = '[12]'
       anchor.before('hidden sibling')
       const siblingForged = createEditor('')
+
       try {
         siblingForged.commands.setContent(template.innerHTML, { contentType: 'html' })
         expect(nodeNames(siblingForged)).not.toContain('richMarkdownHtmlSuperscriptLink')
@@ -369,6 +398,7 @@ describe('rich Markdown HTML superscript links', () => {
     const editor = createEditor('')
     const oversizedSource = 'x'.repeat(HTML_SUPERSCRIPT_LINK_SOURCE_LIMIT + 1)
     const encodeSpy = vi.spyOn(TextEncoder.prototype, 'encode')
+
     try {
       editor.commands.setContent(
         `<sup data-rich-markdown-html-superscript-link="1" data-orca-superscript-link-source="${oversizedSource}"><a>x</a></sup>`,
@@ -385,6 +415,7 @@ describe('rich Markdown HTML superscript links', () => {
   it('maps citation labels into search, review, and empty-selection Cut', () => {
     const source = 'Before <sup><a href="https://example.com">[12]</a></sup> after'
     const editor = createEditor(source)
+
     try {
       const matches = findRichMarkdownSearchMatches(editor.state.doc, 'e [12] a')
       expect(matches).toHaveLength(1)
@@ -395,10 +426,12 @@ describe('rich Markdown HTML superscript links', () => {
           citationPosition = pos
         }
       })
+
       const reviewRanges = findRichMarkdownSelectedTextRanges({
         editor,
         selectedText: 'Before [12] after'
       })
+
       expect(
         reviewRanges.some(
           (range) => range.from <= citationPosition && range.to >= citationPosition + 1
@@ -406,16 +439,19 @@ describe('rich Markdown HTML superscript links', () => {
       ).toBe(true)
 
       const citationHost = document.createElement('div')
+
       const citationOnly = createEditor(
         '<sup><a href="https://example.com">[12]</a></sup>',
         TEST_KEY,
         citationHost
       )
+
       try {
         citationOnly.view.dispatch(
           citationOnly.state.tr.setSelection(TextSelection.create(citationOnly.state.doc, 1))
         )
         const clipboard = new Map<string, string>()
+
         const event = {
           clipboardData: {
             setData: (type: string, value: string) => clipboard.set(type, value),
@@ -423,6 +459,7 @@ describe('rich Markdown HTML superscript links', () => {
           },
           preventDefault: () => {}
         } as unknown as ClipboardEvent
+
         expect(handleRichMarkdownCut(citationOnly.view, event)).toBe(true)
         expect(clipboard.get('text/plain')).toBe('[12]')
         expect(clipboard.get('text/html')).toContain('data-orca-superscript-link-source')
@@ -440,6 +477,7 @@ describe('rich Markdown HTML superscript links', () => {
     const citation = '<sup><a href="https://example.com">[1]</a></sup>'
     const exactText = 'a'.repeat(RICH_MARKDOWN_SOURCE_OWNING_PASTE_LIMIT - 3)
     const exact = createEditor(`${exactText}${citation}`)
+
     try {
       expect(
         inspectRichMarkdownSourceOwningSlice(exact.state.doc.slice(0, exact.state.doc.content.size))
@@ -449,6 +487,7 @@ describe('rich Markdown HTML superscript links', () => {
     }
 
     const over = createEditor(`${exactText}a${citation}`)
+
     try {
       expect(
         inspectRichMarkdownSourceOwningSlice(over.state.doc.slice(0, over.state.doc.content.size))
@@ -460,6 +499,7 @@ describe('rich Markdown HTML superscript links', () => {
     const astralOver = createEditor(
       `${'😀'.repeat(Math.floor(RICH_MARKDOWN_SOURCE_OWNING_PASTE_LIMIT / 4))}${citation}`
     )
+
     try {
       expect(
         inspectRichMarkdownSourceOwningSlice(
@@ -473,20 +513,24 @@ describe('rich Markdown HTML superscript links', () => {
 
   it('counts visible leaf serializers in source-owning slice bounds', () => {
     const editor = createEditor('')
+
     try {
       const schema = editor.state.schema
       const hardBreak = schema.nodes.hardBreak
       const docLink = schema.nodes.markdownDocLink
       const citation = schema.nodes.richMarkdownHtmlSuperscriptLink
+
       if (!hardBreak || !docLink || !citation) {
         throw new Error('Expected rich Markdown leaf node types')
       }
+
       const citationAttrs = {
         source: '<sup><a href="x">[1]</a></sup>',
         href: 'x',
         label: '[1]',
         title: null
       }
+
       const exactDoc = schema.node('doc', null, [
         schema.node('paragraph', null, [
           schema.text('a'.repeat(RICH_MARKDOWN_SOURCE_OWNING_PASTE_LIMIT - 4)),
@@ -494,9 +538,11 @@ describe('rich Markdown HTML superscript links', () => {
           citation.create(citationAttrs)
         ])
       ])
+
       expect(
         inspectRichMarkdownSourceOwningSlice(exactDoc.slice(0, exactDoc.content.size))
       ).toEqual({ containsSourceOwningNode: true, canPreserve: true })
+
       const overHardBreakDoc = schema.node('doc', null, [
         schema.node('paragraph', null, [
           schema.text('a'.repeat(RICH_MARKDOWN_SOURCE_OWNING_PASTE_LIMIT - 3)),
@@ -504,6 +550,7 @@ describe('rich Markdown HTML superscript links', () => {
           citation.create(citationAttrs)
         ])
       ])
+
       expect(
         inspectRichMarkdownSourceOwningSlice(
           overHardBreakDoc.slice(0, overHardBreakDoc.content.size)
@@ -516,6 +563,7 @@ describe('rich Markdown HTML superscript links', () => {
           citation.create(citationAttrs)
         ])
       ])
+
       expect(
         inspectRichMarkdownSourceOwningSlice(
           oversizedLeafDoc.slice(0, oversizedLeafDoc.content.size)
@@ -530,6 +578,7 @@ describe('rich Markdown HTML superscript links', () => {
     const editor = createEditor(
       '<sup><a href="https://one.example">[1]</a></sup><sup><a href="https://two.example">[2]</a></sup>'
     )
+
     try {
       const ranges = findRichMarkdownSelectedTextRanges({ editor, selectedText: '[1][2]' })
       expect(ranges).toHaveLength(1)
@@ -541,6 +590,7 @@ describe('rich Markdown HTML superscript links', () => {
 
   it('preserves block separators in visible text and review remapping', () => {
     const editor = createEditor('foo\n\nbar')
+
     try {
       expect(getRichMarkdownVisibleText(editor.state.doc)).toBe('foo\nbar')
       expect(findRichMarkdownSelectedTextRanges({ editor, selectedText: 'foo bar' })).toEqual([
@@ -555,6 +605,7 @@ describe('rich Markdown HTML superscript links', () => {
   it('maps dense search matches with a monotonic segment walk', () => {
     const citation = '<sup><a href="https://example.com">[1]</a></sup>'
     const editor = createEditor(`x${citation}`.repeat(200))
+
     try {
       const stats = { segmentVisits: 0 }
       expect(findRichMarkdownSearchMatches(editor.state.doc, 'x', undefined, stats)).toHaveLength(
@@ -568,6 +619,7 @@ describe('rich Markdown HTML superscript links', () => {
 
   it('does not let search bridge omitted atoms or block boundaries', () => {
     const docLink = createEditor('foo[[Guide]]bar')
+
     try {
       expect(findRichMarkdownSearchMatches(docLink.state.doc, 'foobar')).toEqual([])
       expect(
@@ -578,6 +630,7 @@ describe('rich Markdown HTML superscript links', () => {
     }
 
     const rawHtml = createEditor('foo<kbd>bar')
+
     try {
       expect(findRichMarkdownSearchMatches(rawHtml.state.doc, 'foobar')).toEqual([])
     } finally {
@@ -585,6 +638,7 @@ describe('rich Markdown HTML superscript links', () => {
     }
 
     const blocks = createEditor('foo\n\nbar')
+
     try {
       expect(findRichMarkdownSearchMatches(blocks.state.doc, 'foobar')).toEqual([])
     } finally {

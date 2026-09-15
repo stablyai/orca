@@ -134,6 +134,7 @@ describe('SourceControl pull request generation records', () => {
       status: 'failed',
       error: 'Model failed'
     })
+
     const canceled = runningRecord({
       status: 'canceled',
       error: null
@@ -156,6 +157,7 @@ describe('SourceControl pull request generation records', () => {
       record: failed,
       requestId: 3
     })
+
     expect(restored).toMatchObject({
       status: 'failed',
       hydrated: true
@@ -181,6 +183,7 @@ describe('SourceControl pull request generation records', () => {
       seed,
       fieldRevisions
     )
+
     const records: Record<string, PullRequestGenerationRecord> = {
       'wt-a': worktreeA
     }
@@ -196,6 +199,7 @@ describe('SourceControl pull request generation records', () => {
       body: 'Generated body',
       draft: false
     }
+
     const completedA = resolvePullRequestGenerationSuccess({
       record: records['wt-a'],
       requestId: 1,
@@ -216,13 +220,16 @@ describe('SourceControl pull request generation records', () => {
 
   it('keeps PR generation results in the store after the composer unmounts', () => {
     const store = createPullRequestGenerationTestStore()
+
     const key = getPullRequestGenerationRecordKey({
       worktreeId: 'wt-a',
       worktreePath: '/repo/a',
       repoId: 'repo-1',
       branch: 'feature-a'
     })
+
     expect(key).not.toBeNull()
+
     const record = createRunningPullRequestGenerationRecord(
       {
         worktreeId: 'wt-a',
@@ -236,6 +243,7 @@ describe('SourceControl pull request generation records', () => {
       seed,
       fieldRevisions
     )
+
     store.getState().setPullRequestGenerationRecord(key!, record)
 
     const generated = {
@@ -244,6 +252,7 @@ describe('SourceControl pull request generation records', () => {
       body: 'Generated body',
       draft: false
     }
+
     store.getState().updatePullRequestGenerationRecord(key!, (current) =>
       resolvePullRequestGenerationSuccess({
         record: current,
@@ -278,6 +287,7 @@ describe('SourceControl pull request generation records', () => {
       record,
       requestId: 1
     })
+
     expect(marked?.requiresPushBeforeCreate).toBe(true)
 
     const completed = resolvePullRequestGenerationSuccess({
@@ -290,6 +300,7 @@ describe('SourceControl pull request generation records', () => {
         draft: false
       }
     })
+
     expect(completed).toMatchObject({
       status: 'succeeded',
       requiresPushBeforeCreate: true
@@ -302,18 +313,21 @@ describe('SourceControl pull request generation records', () => {
 
   it('prunes PR generation records for removed worktrees', () => {
     const store = createPullRequestGenerationTestStore()
+
     const keyA = getPullRequestGenerationRecordKey({
       worktreeId: 'wt-a',
       worktreePath: '/repo/a',
       repoId: 'repo-1',
       branch: 'feature-a'
     })!
+
     const keyB = getPullRequestGenerationRecordKey({
       worktreeId: 'wt-b',
       worktreePath: '/repo/b',
       repoId: 'repo-1',
       branch: 'feature-b'
     })!
+
     store.getState().setPullRequestGenerationRecord(
       keyA,
       createRunningPullRequestGenerationRecord(
@@ -350,12 +364,14 @@ describe('SourceControl pull request generation records', () => {
 
   it('does not reuse PR generation request ids across composer remounts', () => {
     const store = createPullRequestGenerationTestStore()
+
     const key = getPullRequestGenerationRecordKey({
       worktreeId: 'wt-a',
       worktreePath: '/repo/a',
       repoId: 'repo-1',
       branch: 'feature-a'
     })
+
     expect(key).not.toBeNull()
     const firstRequestId = store.getState().allocatePullRequestGenerationRequestId()
     store.getState().setPullRequestGenerationRecord(
@@ -399,6 +415,7 @@ describe('SourceControl pull request generation records', () => {
       body: 'Stale body',
       draft: false
     }
+
     store.getState().updatePullRequestGenerationRecord(key!, (current) =>
       resolvePullRequestGenerationSuccess({
         record: current,

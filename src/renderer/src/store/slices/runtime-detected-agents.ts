@@ -25,6 +25,7 @@ export type RuntimeDetectedAgentsSlice = {
 // Why: these are module-scoped (not in the store) so we can deduplicate
 // concurrent callers without storing a Promise in Zustand state.
 const runtimeDetectPromises = new Map<string, Promise<TuiAgent[]>>()
+
 const runtimeRefreshPromises = new Map<string, Promise<TuiAgent[]>>()
 
 function isRuntimeMethodNotFoundError(error: unknown): boolean {
@@ -47,17 +48,22 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
 
   ensureRuntimeDetectedAgents: (environmentId: string) => {
     const inflightRefresh = runtimeRefreshPromises.get(environmentId)
+
     if (inflightRefresh) {
       return inflightRefresh
     }
+
     const existing = get().runtimeDetectedAgentIds[environmentId]
+
     // Why: an empty result ([]) is truthy, so a prior "no agents found" detection
     // must not be treated as cached — re-detect so a later install / PATH fix is
     // picked up without a reconnect. Non-empty results still short-circuit.
     if (existing?.length) {
       return Promise.resolve(existing)
     }
+
     const inflight = runtimeDetectPromises.get(environmentId)
+
     if (inflight) {
       return inflight
     }
@@ -72,6 +78,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
     )
       .then((ids) => {
         const typed = ids as TuiAgent[]
+
         // Why: skip committing if the environment was removed (retained out)
         // while the detect was in flight — otherwise it re-adds a stale entry
         // that retainRuntimeDetectedAgents just pruned.
@@ -81,6 +88,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
             isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: false }
           }))
         }
+
         return typed
       })
       .catch(() => {
@@ -95,6 +103,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
             isDetectingRuntimeAgents: { ...s.isDetectingRuntimeAgents, [environmentId]: false }
           }))
         }
+
         return [] as TuiAgent[]
       })
       .finally(() => {
@@ -104,11 +113,13 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
       })
 
     runtimeDetectPromises.set(environmentId, pending)
+
     return pending
   },
 
   refreshRuntimeDetectedAgents: (environmentId: string) => {
     const inflight = runtimeRefreshPromises.get(environmentId)
+
     if (inflight) {
       return inflight
     }
@@ -129,6 +140,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
         if (!isRuntimeMethodNotFoundError(error)) {
           throw error
         }
+
         // Why: only older servers need the fallback; retrying disconnects and
         // runtime failures doubles remote work without any chance of recovery.
         return callRuntimeRpc<TuiAgent[]>(
@@ -138,6 +150,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
       })
       .then((ids) => {
         const typed = ids as TuiAgent[]
+
         // Why: same guard as ensureRuntimeDetectedAgents — if the environment
         // was retained out mid-refresh, don't re-add a pruned entry.
         if (runtimeRefreshPromises.get(environmentId) === pending) {
@@ -150,6 +163,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
             isRefreshingRuntimeAgents: { ...s.isRefreshingRuntimeAgents, [environmentId]: false }
           }))
         }
+
         return typed
       })
       .catch(() => {
@@ -164,6 +178,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
             isRefreshingRuntimeAgents: { ...s.isRefreshingRuntimeAgents, [environmentId]: false }
           }))
         }
+
         return get().runtimeDetectedAgentIds[environmentId] ?? []
       })
       .finally(() => {
@@ -173,6 +188,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
       })
 
     runtimeRefreshPromises.set(environmentId, pending)
+
     return pending
   },
 
@@ -183,6 +199,7 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
       const { [environmentId]: _, ...restAgents } = s.runtimeDetectedAgentIds
       const { [environmentId]: __, ...restLoading } = s.isDetectingRuntimeAgents
       const { [environmentId]: ___, ...restRefreshing } = s.isRefreshingRuntimeAgents
+
       return {
         runtimeDetectedAgentIds: restAgents,
         isDetectingRuntimeAgents: restLoading,
@@ -193,39 +210,46 @@ export const createRuntimeDetectedAgentsSlice: StateCreator<
 
   retainRuntimeDetectedAgents: (environmentIds: Iterable<string>) => {
     const keep = new Set(environmentIds)
+
     for (const id of runtimeDetectPromises.keys()) {
       if (!keep.has(id)) {
         runtimeDetectPromises.delete(id)
       }
     }
+
     for (const id of runtimeRefreshPromises.keys()) {
       if (!keep.has(id)) {
         runtimeRefreshPromises.delete(id)
       }
     }
+
     set((s) => {
       let changed = false
       const nextAgents = { ...s.runtimeDetectedAgentIds }
       const nextLoading = { ...s.isDetectingRuntimeAgents }
       const nextRefreshing = { ...s.isRefreshingRuntimeAgents }
+
       for (const id of Object.keys(nextAgents)) {
         if (!keep.has(id)) {
           delete nextAgents[id]
           changed = true
         }
       }
+
       for (const id of Object.keys(nextLoading)) {
         if (!keep.has(id)) {
           delete nextLoading[id]
           changed = true
         }
       }
+
       for (const id of Object.keys(nextRefreshing)) {
         if (!keep.has(id)) {
           delete nextRefreshing[id]
           changed = true
         }
       }
+
       return changed
         ? {
             runtimeDetectedAgentIds: nextAgents,

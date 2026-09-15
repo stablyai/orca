@@ -31,6 +31,7 @@ export function launchDaemonHost(options) {
     ELECTRON_RUN_AS_NODE: '1',
     ORCA_USER_DATA_PATH: workDir
   }
+
   // The current branch's node-pty patch resolves natives relative to its own
   // dir, so this env var is inert there; set it anyway so the spike still works
   // if run against a build that carries the ORCA_NODE_PTY_NATIVE_DIR patch.
@@ -43,6 +44,7 @@ export function launchDaemonHost(options) {
   // file, which is the only window into ConPTY spawn failures that don't reach
   // stdout/stderr. daemon-entry parses it as an optional Phase 0 flag.
   const daemonArgs = [daemonEntryPath, '--socket', socketPath, '--token', tokenPath]
+
   if (logFilePath) {
     daemonArgs.push('--log-file', logFilePath)
   }
@@ -53,11 +55,13 @@ export function launchDaemonHost(options) {
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     env
   })
+
   child.stdout.pipe(stdoutLog)
   child.stderr.pipe(stderrLog)
 
   return new Promise((resolve, reject) => {
     let settled = false
+
     const timer = setTimeout(() => {
       finish(new Error(`daemon did not signal ready within ${readyTimeoutMs}ms`))
     }, readyTimeoutMs)
@@ -66,11 +70,13 @@ export function launchDaemonHost(options) {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timer)
       child.off('message', onMessage)
       child.off('error', onError)
       child.off('exit', onExit)
+
       if (err) {
         // Expose the still-running detached child so the caller can stop it;
         // otherwise a ready-timeout leaks the daemon with no handle to kill it.
@@ -80,14 +86,17 @@ export function launchDaemonHost(options) {
         resolve({ child, pid: child.pid })
       }
     }
+
     function onMessage(msg) {
       if (msg && typeof msg === 'object' && msg.type === 'ready') {
         finish(null)
       }
     }
+
     function onError(err) {
       finish(err)
     }
+
     function onExit(code, signal) {
       finish(new Error(`daemon exited before ready (code=${code}, signal=${signal})`))
     }

@@ -19,25 +19,31 @@ export function partitionJournalLifecycleMutations(
   if (mutations.length === 0) {
     return []
   }
+
   const chunks: JournalLifecycleMutationInput[][] = []
   const probeId = chunkSettlementId(settlementId, mutations.length - 1, mutations.length)
   let pending: JournalLifecycleMutationInput[] = []
+
   for (const mutation of mutations) {
     const candidate = [...pending, mutation]
+
     if (pending.length > 0 && !serializedLifecycleBatchFits(probeId, candidate)) {
       chunks.push(pending)
       pending = [mutation]
     } else {
       pending = candidate
     }
+
     if (pending.length === MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS) {
       chunks.push(pending)
       pending = []
     }
   }
+
   if (pending.length > 0) {
     chunks.push(pending)
   }
+
   return chunks.map((chunk, index) => ({
     settlementId:
       chunks.length === 1 ? settlementId : chunkSettlementId(settlementId, index, chunks.length),
@@ -65,6 +71,7 @@ function serializedLifecycleBatchFits(
     settlementId,
     mutations: mutations.map(lifecycleMutationRowShape)
   }
+
   return Buffer.byteLength(JSON.stringify(row), 'utf8') + 1 <= MAX_JOURNAL_LIFECYCLE_BATCH_BYTES
 }
 
@@ -72,6 +79,7 @@ function lifecycleMutationRowShape(
   mutation: JournalLifecycleMutationInput
 ): JournalLifecycleMutation {
   const itemId = agentJournalItemKey(mutation.identity)
+
   return mutation.kind === 'item'
     ? {
         kind: 'item',

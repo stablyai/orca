@@ -10,6 +10,7 @@ afterEach(cleanup)
 type TestStore = ReturnType<typeof createTestStore>
 
 const TAB_ID = 'tab-1'
+
 const NO_OP_WRITES = 25
 
 function recordPublishedMapKeys(store: TestStore): string[] {
@@ -18,21 +19,25 @@ function recordPublishedMapKeys(store: TestStore): string[] {
     if (next.expandedPaneByTabId !== previous.expandedPaneByTabId) {
       published.push('expandedPaneByTabId')
     }
+
     if (next.canExpandPaneByTabId !== previous.canExpandPaneByTabId) {
       published.push('canExpandPaneByTabId')
     }
   })
+
   return published
 }
 
 // Mirrors use-terminal-workspace-store-bindings.ts:17, which subscribes to the raw map.
 function ExpandedPaneSubscriber({ store }: { store: TestStore }): React.JSX.Element {
   const expandedPaneByTabId = store((s) => s.expandedPaneByTabId)
+
   return <span>{String(expandedPaneByTabId[TAB_ID] === true)}</span>
 }
 
 function CanExpandPaneSubscriber({ store }: { store: TestStore }): React.JSX.Element {
   const canExpandPaneByTabId = store((s) => s.canExpandPaneByTabId)
+
   return <span>{String(canExpandPaneByTabId[TAB_ID] === true)}</span>
 }
 
@@ -49,6 +54,7 @@ function renderCommitCounter(subscriber: React.JSX.Element): () => number {
     </Profiler>
   )
   const mountCommits = commits
+
   return () => commits - mountCommits
 }
 
@@ -93,6 +99,7 @@ describe('setTabPaneExpanded', () => {
         store.getState().setTabPaneExpanded(TAB_ID, false)
       })
     }
+
     expect(commitsSinceMount()).toBe(0)
 
     act(() => {
@@ -142,6 +149,7 @@ describe('setTabCanExpandPane', () => {
         store.getState().setTabCanExpandPane(TAB_ID, false)
       })
     }
+
     expect(commitsSinceMount()).toBe(0)
 
     act(() => {

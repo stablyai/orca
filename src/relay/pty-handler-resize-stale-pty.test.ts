@@ -34,6 +34,7 @@ import { beginPtyHandlerTest, endPtyHandlerTest, testPtyId } from './pty-handler
 import type { MockDispatcher } from './pty-handler-test-harness'
 
 const PTY_1 = testPtyId(1)
+
 const STALE_PID = 424_242
 
 /**
@@ -152,6 +153,7 @@ describe('PtyHandler.resize against a stale PTY handle', () => {
     const onExit = mockPtyInstance.onExit.mock.calls.at(-1)?.[0] as (e: {
       exitCode: number
     }) => void
+
     onExit({ exitCode: 7 })
     await vi.runAllTimersAsync()
     vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
@@ -161,6 +163,7 @@ describe('PtyHandler.resize against a stale PTY handle', () => {
     const exits = dispatcher._notifications.filter(
       (notification) => notification.method === 'pty.exit'
     )
+
     expect(exits).toHaveLength(1)
     expect(exits[0]?.params).toMatchObject({ id: PTY_1, code: 7 })
   })

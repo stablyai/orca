@@ -29,6 +29,7 @@ export function syncGuestAnnotationViewportBridge({
     rectPage: annotation.payload.target.rectPage,
     rectViewport: annotation.payload.target.rectViewport
   }))
+
   void window.api.browser
     .setAnnotationViewportBridge({
       browserPageId: toolTargetId,

@@ -19,9 +19,11 @@ describe('runtime RPC call queue', () => {
     const queue = new RuntimeRpcCallQueuePool(2, 1)
     const started: string[] = []
     const pending: ((value: string) => void)[] = []
+
     const enqueuePending = (method: string, label: string): Promise<string> =>
       queue.enqueue('web-runtime', method, async () => {
         started.push(label)
+
         return await new Promise<string>((resolve) => pending.push(resolve))
       })
 
@@ -31,8 +33,10 @@ describe('runtime RPC call queue', () => {
 
     const foreground = queue.enqueue('web-runtime', 'terminal.send', async () => {
       started.push('foreground')
+
       return 'foreground'
     })
+
     await expect(foreground).resolves.toBe('foreground')
     expect(started).toEqual(['background-1', 'foreground'])
 
@@ -46,6 +50,7 @@ describe('runtime RPC call queue', () => {
 
   it('frees the queue slot when a runtime call throws synchronously', async () => {
     const queue = new RuntimeRpcCallQueuePool(1, 1)
+
     const first = queue.enqueue('web-runtime', 'status.get', () => {
       throw new Error('invalid stored runtime pairing')
     })
@@ -59,11 +64,13 @@ describe('runtime RPC call queue', () => {
   it('removes an aborted call before it starts', async () => {
     const queue = new RuntimeRpcCallQueuePool(1, 1)
     let releaseFirst: () => void = () => {}
+
     const first = queue.enqueue('runtime-a', 'status.get', async () => {
       await new Promise<void>((resolve) => {
         releaseFirst = resolve
       })
     })
+
     const controller = new AbortController()
     const run = vi.fn(async () => 'cancelled')
     const cancelled = queue.enqueue('runtime-a', 'status.get', run, 1, controller.signal)
@@ -83,17 +90,21 @@ describe('runtime RPC call queue', () => {
     const queue = new RuntimeRpcCallQueuePool(1, 1)
     const started: number[] = []
     let releaseFirst: () => void = () => {}
+
     const first = queue.enqueue('web-runtime', 'github.prForBranch', async () => {
       started.push(0)
       await new Promise<void>((resolve) => {
         releaseFirst = resolve
       })
+
       return 0
     })
+
     const rest = Array.from({ length: 70 }, (_, index) =>
       queue.enqueue('web-runtime', 'github.prForBranch', async () => {
         const value = index + 1
         started.push(value)
+
         return value
       })
     )
@@ -110,12 +121,15 @@ describe('runtime RPC call queue', () => {
   it('rejects per-selector overload and accepts work after the queue drains', async () => {
     const queue = new RuntimeRpcCallQueuePool(1, 1, 2, 10)
     let releaseFirst: () => void = () => {}
+
     const first = queue.enqueue('runtime-a', 'status.get', async () => {
       await new Promise<void>((resolve) => {
         releaseFirst = resolve
       })
+
       return 'first'
     })
+
     const second = queue.enqueue('runtime-a', 'status.get', async () => 'second')
     const third = queue.enqueue('runtime-a', 'status.get', async () => 'third')
 
@@ -136,11 +150,13 @@ describe('runtime RPC call queue', () => {
   it('caps queued calls across selectors and recovers after draining', async () => {
     const queue = new RuntimeRpcCallQueuePool(1, 1, 10, 2)
     const releases: (() => void)[] = []
+
     const blockers = ['runtime-a', 'runtime-b'].map((selector) =>
       queue.enqueue(selector, 'status.get', async () => {
         await new Promise<void>((resolve) => releases.push(resolve))
       })
     )
+
     const queuedA = queue.enqueue('runtime-a', 'status.get', async () => 'queued-a')
     const queuedB = queue.enqueue('runtime-b', 'status.get', async () => 'queued-b')
 
@@ -163,7 +179,9 @@ describe('runtime RPC call queue', () => {
   it('caps retained call bytes across active and queued work, then recovers', async () => {
     const queue = new RuntimeRpcCallQueuePool(1, 1, 10, 10, 10)
     let releaseFirst: () => void = () => {}
+
     let firstStarted = false
+
     const first = queue.enqueue(
       'runtime-a',
       'status.get',
@@ -172,6 +190,7 @@ describe('runtime RPC call queue', () => {
         await new Promise<void>((resolve) => {
           releaseFirst = resolve
         })
+
         return 'first'
       },
       10

@@ -34,14 +34,17 @@ export function setupContextualCopy({
   const copyHintNode = document.createElement('div')
   copyHintNode.className =
     'pointer-events-none rounded-md border border-border/90 bg-background px-2.5 py-1 text-xs font-medium text-foreground shadow-[0_6px_18px_rgba(15,23,42,0.18)] backdrop-blur whitespace-nowrap'
+
   const updateCopyHintLabel = (): void => {
     copyHintNode.textContent = `Copy context ${formatShortcutLabel(
       'editor.copyContext',
       useAppStore.getState().keybindings
     )}`
   }
+
   updateCopyHintLabel()
   copyHintNode.style.display = 'none'
+
   const copyHintWidget: editor.IContentWidget = {
     allowEditorOverflow: true,
     suppressMouseDown: true,
@@ -49,22 +52,27 @@ export function setupContextualCopy({
     getDomNode: () => copyHintNode,
     getPosition: () => copyHintWidgetPosition
   }
+
   editorInstance.addContentWidget(copyHintWidget)
 
   const showCopyToast = (): void => {
     const selection = editorInstance.getSelection()
+
     if (!selection) {
       return
     }
+
     const visiblePosition = editorInstance.getScrolledVisiblePosition(selection.getEndPosition())
     const bounds = editorInstance.getContainerDomNode().getBoundingClientRect()
     setCopyToast({
       left: bounds.left + (visiblePosition?.left ?? bounds.width - 120),
       top: bounds.top + (visiblePosition?.top ?? 16) + (visiblePosition?.height ?? 20) + 8
     })
+
     if (copyToastTimeoutRef.current !== null) {
       window.clearTimeout(copyToastTimeoutRef.current)
     }
+
     copyToastTimeoutRef.current = window.setTimeout(() => {
       setCopyToast(null)
       copyToastTimeoutRef.current = null
@@ -73,6 +81,7 @@ export function setupContextualCopy({
 
   const getSelectionKey = (): string | null => {
     const selection = editorInstance.getSelection()
+
     if (!selection) {
       return null
     }
@@ -88,10 +97,12 @@ export function setupContextualCopy({
   const updateCopyHint = (): void => {
     updateCopyHintLabel()
     const contextualCopyText = getContextualCopyText()
+
     if (!contextualCopyText) {
       copyHintNode.style.display = 'none'
       copyHintWidgetPosition = null
       editorInstance.layoutContentWidget(copyHintWidget)
+
       return
     }
 
@@ -99,24 +110,30 @@ export function setupContextualCopy({
       copyHintNode.style.display = 'none'
       copyHintWidgetPosition = null
       editorInstance.layoutContentWidget(copyHintWidget)
+
       return
     }
 
     const model = editorInstance.getModel()
     const selection = editorInstance.getSelection()
+
     if (!model || !selection) {
       copyHintNode.style.display = 'none'
       copyHintWidgetPosition = null
       editorInstance.layoutContentWidget(copyHintWidget)
+
       return
     }
 
     const { startLine, endLine } = getContextualCopyLineRange(selection)
+
     const startVisiblePosition = editorInstance.getScrolledVisiblePosition(
       selection.getStartPosition()
     )
+
     const endColumn =
       selection.endLineNumber === endLine ? selection.endColumn : model.getLineMaxColumn(endLine)
+
     const endVisiblePosition = editorInstance.getScrolledVisiblePosition({
       lineNumber: endLine,
       column: endColumn
@@ -126,6 +143,7 @@ export function setupContextualCopy({
       copyHintNode.style.display = 'none'
       copyHintWidgetPosition = null
       editorInstance.layoutContentWidget(copyHintWidget)
+
       return
     }
 
@@ -138,6 +156,7 @@ export function setupContextualCopy({
     const spaceBelow = viewportHeight - selectionBottom
     const placeAbove = spaceAbove >= hintHeight + verticalGap || spaceAbove >= spaceBelow
     const anchorLineNumber = placeAbove ? startLine : endLine
+
     const anchorColumn = placeAbove
       ? model.getLineMaxColumn(startLine)
       : selection.endLineNumber !== endLine
@@ -166,8 +185,10 @@ export function setupContextualCopy({
     if (copyHintInterval !== null) {
       return
     }
+
     copyHintInterval = window.setInterval(() => {
       updateCopyHint()
+
       if (!isCopyHintVisible()) {
         stopCopyHintPolling()
       }
@@ -183,6 +204,7 @@ export function setupContextualCopy({
 
   const refreshCopyHintAndPolling = (): void => {
     updateCopyHint()
+
     if (editorInstance.hasTextFocus() && isCopyHintVisible()) {
       // Why: the interval only tracks a visible content widget. Keeping it
       // alive while the focused editor has no selection burns idle CPU.
@@ -195,6 +217,7 @@ export function setupContextualCopy({
   const getContextualCopyText = (): string | null => {
     const model = editorInstance.getModel()
     const selection = editorInstance.getSelection()
+
     if (!model || !selection || selection.isEmpty()) {
       return null
     }
@@ -210,6 +233,7 @@ export function setupContextualCopy({
   const updatePrimarySelectionBuffer = (): void => {
     const model = editorInstance.getModel()
     const selections = editorInstance.getSelections()
+
     if (!isPrimarySelectionEnabled() || !model || !selections?.length) {
       return
     }
@@ -218,15 +242,19 @@ export function setupContextualCopy({
       if (a.startLineNumber !== b.startLineNumber) {
         return a.startLineNumber - b.startLineNumber
       }
+
       return a.startColumn - b.startColumn
     })
 
     let totalLength = 0
+
     for (const selection of sortedSelections) {
       if (selection.isEmpty()) {
         return
       }
+
       totalLength += model.getValueLengthInRange(selection)
+
       if (totalLength > PRIMARY_SELECTION_MAX_LENGTH) {
         return
       }
@@ -241,6 +269,7 @@ export function setupContextualCopy({
     if (primarySelectionTimer !== null) {
       window.clearTimeout(primarySelectionTimer)
     }
+
     // Why: Monaco emits intermediate selection changes during drag; match the
     // editor selection clipboard debounce so we don't churn the clipboard.
     primarySelectionTimer = window.setTimeout(() => {
@@ -251,6 +280,7 @@ export function setupContextualCopy({
 
   const copySelectionWithContext = async (): Promise<boolean> => {
     const copiedText = getContextualCopyText()
+
     if (!copiedText) {
       return false
     }
@@ -267,6 +297,7 @@ export function setupContextualCopy({
     copyHintWidgetPosition = null
     editorInstance.layoutContentWidget(copyHintWidget)
     showCopyToast()
+
     return true
   }
 
@@ -274,17 +305,22 @@ export function setupContextualCopy({
     if (event.source !== 'restoreState') {
       schedulePrimarySelectionBufferUpdate()
     }
+
     if (getSelectionKey() !== lastCopiedSelectionKey) {
       lastCopiedSelectionKey = null
     }
+
     refreshCopyHintAndPolling()
   })
+
   const scrollListener = editorInstance.onDidScrollChange(() => {
     refreshCopyHintAndPolling()
   })
+
   const focusListener = editorInstance.onDidFocusEditorText(() => {
     refreshCopyHintAndPolling()
   })
+
   const blurListener = editorInstance.onDidBlurEditorText(() => {
     stopCopyHintPolling()
     copyHintNode.style.display = 'none'
@@ -293,6 +329,7 @@ export function setupContextualCopy({
   })
 
   const editorDomNode = editorInstance.getContainerDomNode()
+
   const handleKeyDown = (event: KeyboardEvent): void => {
     if (!editorShortcutMatches('editor.copyContext', event)) {
       return
@@ -305,6 +342,7 @@ export function setupContextualCopy({
     event.stopPropagation()
     void copySelectionWithContext()
   }
+
   editorDomNode.addEventListener('keydown', handleKeyDown, true)
   editorDomNode.addEventListener('mouseup', refreshCopyHintAndPolling, true)
   editorDomNode.addEventListener('keyup', refreshCopyHintAndPolling, true)
@@ -315,6 +353,7 @@ export function setupContextualCopy({
     scrollListener.dispose()
     focusListener.dispose()
     blurListener.dispose()
+
     // Why: the confirmation toast timeout belongs to the Monaco editor that
     // scheduled it, so editor disposal is the earliest reliable cleanup point.
     if (copyToastTimeoutRef.current !== null) {
@@ -322,16 +361,19 @@ export function setupContextualCopy({
       copyToastTimeoutRef.current = null
       setCopyToast(null)
     }
+
     if (primarySelectionTimer !== null) {
       window.clearTimeout(primarySelectionTimer)
       primarySelectionTimer = null
     }
+
     editorDomNode.removeEventListener('keydown', handleKeyDown, true)
     editorDomNode.removeEventListener('mouseup', refreshCopyHintAndPolling, true)
     editorDomNode.removeEventListener('keyup', refreshCopyHintAndPolling, true)
     stopCopyHintPolling()
     editorInstance.removeContentWidget(copyHintWidget)
   })
+
   if (editorInstance.hasTextFocus()) {
     refreshCopyHintAndPolling()
   } else {

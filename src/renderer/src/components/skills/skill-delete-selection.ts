@@ -25,6 +25,7 @@ export function isSkillDeleteEligible(skill: DiscoveredSkill): boolean {
  *  placement set and can refuse a row this reports as deletable. */
 export function skillDeleteEligibilityReason(skill: DiscoveredSkill): string | null {
   const eligibility = skillDeletionEligibility(skill)
+
   return eligibility.deletable ? null : skillDeleteBlockReasonLabel(eligibility.reason)
 }
 

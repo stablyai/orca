@@ -60,18 +60,25 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const isOpen = isEditMeta
 
   const worktreeId = typeof modalData.worktreeId === 'string' ? modalData.worktreeId : ''
+
   const executionHostId =
     typeof modalData.executionHostId === 'string'
       ? (parseExecutionHostId(modalData.executionHostId)?.id ?? undefined)
       : undefined
+
   const currentDisplayName =
     typeof modalData.currentDisplayName === 'string' ? modalData.currentDisplayName : ''
+
   const currentComment =
     typeof modalData.currentComment === 'string' ? modalData.currentComment : ''
+
   const focusField = typeof modalData.focus === 'string' ? modalData.focus : 'comment'
+
   const reviewProvider: WorktreeReviewProvider =
     modalData.reviewProvider === 'gitlab' ? 'gitlab' : 'github'
+
   const suppressHostedReviewRefresh = modalData.suppressHostedReviewRefresh === true
+
   const afterSave =
     typeof modalData.afterSave === 'function'
       ? (modalData.afterSave as (payload: WorktreeMetaSavedPayload) => void | Promise<void>)
@@ -80,6 +87,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   // Why: the opening row names its repo bucket for workspace IDs the owner index
   // reads as ambiguous across hosts.
   const ownerRepoId = typeof modalData.repoId === 'string' ? modalData.repoId : null
+
   const {
     worktree,
     linkedIssue,
@@ -89,6 +97,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     isFolderWorkspace,
     liveLinks
   } = useWorktreeMetaWorkspace({ worktreeId, ownerRepoId, executionHostId })
+
   // Why: ChecksPanel seeds the review it is looking at, which may not be linked yet.
   const currentReview =
     typeof modalData.currentReview === 'number'
@@ -112,6 +121,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<WorktreeMetaSnapshot>(EMPTY_SNAPSHOT)
   const [dialogElement, setDialogElement] = useState<HTMLElement | null>(null)
+
   const { canOpenIssue, openingIssue, openIssueFailed, handleOpenIssue, resetOpeningIssue } =
     useWorktreeIssueLink({
       worktreeId,
@@ -129,6 +139,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const prevIsOpenRef = useRef(false)
   const displayNameInputRef = useRef<HTMLInputElement>(null)
   const mountedRef = useMountedRef()
+
   if (isOpen && !prevIsOpenRef.current) {
     setDisplayNameInput(currentDisplayName)
     setIssueInput(currentIssue)
@@ -150,6 +161,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     setSaveError(null)
     resetOpeningIssue()
   }
+
   prevIsOpenRef.current = isOpen
 
   const draft = useMemo<WorktreeMetaDraft>(
@@ -164,6 +176,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     // Why: the same bound the save gate applies. Detection parses on every
     // keystroke, and the field accepts pasted URLs of any length.
     const detected = isWorkItemLinkQueryTooLarge(next) ? null : getIssueLinkProviderFromUrl(next)
+
     if (detected) {
       setIssueProvider(detected)
     }
@@ -172,6 +185,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const setCommentTextareaRef = useCallback(
     (textarea: HTMLTextAreaElement | null) => {
       textareaRef.current = textarea
+
       if (textarea && isEditMeta) {
         resizeCommentTextarea(textarea)
       }
@@ -189,9 +203,11 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   // pasted URLs and has no length cap of its own.
   const issueInvalid = useMemo(() => {
     const trimmed = issueInput.trim()
+
     if (trimmed === '' || isFolderWorkspace) {
       return false
     }
+
     return (
       isWorkItemLinkQueryTooLarge(trimmed) || parseIssueLinkInput(trimmed, issueProvider) === null
     )
@@ -201,7 +217,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     if (!worktreeId) {
       return false
     }
+
     const trimmedPR = reviewInput.trim()
+
     // Same quadratic-parse bound as the issue field — this runs on every keystroke.
     const prValid =
       trimmedPR === '' ||
@@ -209,6 +227,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         (reviewProvider === 'gitlab'
           ? parseGitLabMergeRequestNumberForMetaField(trimmedPR)
           : parseGitHubWorkItemNumberForMetaField(trimmedPR, 'pr')) !== null)
+
     return !issueInvalid && prValid
   }, [worktreeId, issueInvalid, reviewInput, reviewProvider])
 
@@ -237,10 +256,12 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     if (!canSave) {
       return
     }
+
     setSaving(true)
     // Why: a stale failure from the previous attempt must not sit under the
     // spinner for the whole in-flight save.
     setSaveError(null)
+
     try {
       const updates = buildWorktreeMetaUpdates(draft, snapshot, liveLinks, reviewProvider)
 
@@ -251,6 +272,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
               ...(suppressHostedReviewRefresh ? { suppressHostedReviewRefresh: true } : {})
             })
           : await updateWorktreeMeta(worktreeId, updates)
+
       // Why: a failed save refetches and reverts the optimistic write. Closing
       // here would report success for an edit that silently undid itself, and
       // would discard the name, comment and PR changes in the same payload.
@@ -258,9 +280,12 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         if (mountedRef.current) {
           setSaveError(result.error)
         }
+
         return
       }
+
       closeModal()
+
       // Why: follow-up refreshes should not turn a successful metadata save
       // into a failed dialog.
       try {
@@ -291,6 +316,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const handleCommentKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       const isPlainEnter = e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey
+
       if (isPlainEnter || isScreenSubmitShortcut(e)) {
         e.preventDefault()
         e.stopPropagation()
@@ -317,6 +343,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         className="max-w-md"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
+
           if (focusField === 'displayName') {
             displayNameInputRef.current?.focus()
           } else if (focusField === 'issue') {

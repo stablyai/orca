@@ -124,6 +124,7 @@ describe('mobileStructuredSendDelivery', () => {
       status: 'accepted',
       value: { clientMessageId: 'msg-1' }
     } as unknown as StructuredAgentSessionMutationCallResult<AgentSessionSendResult>
+
     expect(mobileStructuredSendDelivery(result)).toEqual({
       outcome: 'unknown',
       operationIdSpent: false,

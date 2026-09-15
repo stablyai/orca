@@ -42,6 +42,7 @@ vi.mock('./status', () => ({
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
+
   return { ...actual, stat: statMock, readFile: readFileMock }
 })
 
@@ -56,6 +57,7 @@ import {
 import { forceDeleteLocalBranch, removeWorktree } from './worktree'
 
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
+
 const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
 
 beforeEach(() => {

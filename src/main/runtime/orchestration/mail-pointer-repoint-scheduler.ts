@@ -9,13 +9,16 @@ export class MailPointerRepointScheduler {
     if (this.timersByHandle.has(handle)) {
       return
     }
+
     const timer = setTimeout(() => {
       if (this.timersByHandle.get(handle) !== timer) {
         return
       }
+
       this.timersByHandle.delete(handle)
       this.repoint(handle)
     }, MAIL_POINTER_REPOINT_DELAY_MS)
+
     timer.unref?.()
     this.timersByHandle.set(handle, timer)
   }
@@ -29,6 +32,7 @@ export class MailPointerRepointScheduler {
     for (const timer of this.timersByHandle.values()) {
       clearTimeout(timer)
     }
+
     this.timersByHandle.clear()
   }
 }

@@ -43,12 +43,16 @@ export async function terminateClaudeWindowsRoot(
 ): Promise<{ rootVerified: boolean }> {
   const { snapshot, exited, verifyRoot, terminateTree, killRoot } = input
   let rootVerified = false
+
   if (!exited() && snapshot) {
     rootVerified = await verifyRoot(snapshot.root).catch(() => false)
+
     if (rootVerified && !exited()) {
       await terminateTree(snapshot.root).catch(() => {})
     }
   }
+
   killRoot()
+
   return { rootVerified }
 }

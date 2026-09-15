@@ -36,15 +36,19 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
     const { worktree } = target
     const route = runtimeFileRouteForTarget(target)
     const connectionId = route.kind === 'ssh' ? route.connectionId : undefined
+
     // Why: mobile may attach after OSC7 cwd was emitted; the runtime still owns the terminal's latest cwd to resolve the tap.
     const normalizedTerminalHandle =
       terminalHandle && terminalHandle.trim().length > 0 ? terminalHandle.trim() : null
+
     const terminalCwd = normalizedTerminalHandle
       ? await this.host.resolveTerminalCwd?.(normalizedTerminalHandle)
       : null
+
     const terminalFileUriHostname = normalizedTerminalHandle
       ? await this.host.resolveTerminalFileUriHostname?.(normalizedTerminalHandle)
       : null
+
     const base = terminalCwd || (cwd && cwd.trim().length > 0 ? cwd : worktree.path)
 
     const empty: RuntimeTerminalPathResolution = {
@@ -57,10 +61,13 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
 
     // Why: SSH/WSL homes are unknown here; native-chat grants must not expand their ~/… paths against the local host home.
     const isTilde = pathText.startsWith('~/') || pathText.startsWith('~\\')
+
     if (isTilde && (connectionId || (nativeChatContext && parseWslPath(worktree.path)))) {
       return empty
     }
+
     const expanded = isTilde ? resolveRuntimePath(homedir(), pathText.slice(2)) : pathText
+
     const absolutePath = resolveTerminalAbsolutePath({
       base,
       expanded,
@@ -68,13 +75,16 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
       connectionId,
       terminalFileUriHostname
     })
+
     const relativePath = relativePathInsideRoot(worktree.path, absolutePath)
+
     // Why: clients that predate crossWorkspace reuse their own worktree id for the
     // follow-up files.open, so retargeting to a sibling workspace must be opt-in.
     const knownWorkspaceTarget =
       crossWorkspace && relativePath === null
         ? await this.host.resolveKnownWorkspaceFileTarget?.(absolutePath, target.executionHostId)
         : null
+
     const ownedWorktree = knownWorkspaceTarget?.worktree ?? worktree
     // Why: the owner's host replaces this target's outright. Coalescing an optional connection
     // instead let a sibling workspace resolved as `local` inherit this worktree's SSH target and
@@ -91,6 +101,7 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
           ownedRoute.kind === 'ssh'
             ? await this.statRemoteTerminalPath(absolutePath, ownedRoute.connectionId)
             : await stat(await resolveAuthorizedPath(absolutePath, store))
+
         return {
           worktree: ownedWorktree.id,
           relativePath: ownedRelativePath,
@@ -118,6 +129,7 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
         ))
       ) {
         const artifactPath = await this.resolveNativeChatArtifactPath(absolutePath, connectionId)
+
         return await this.resolveAbsoluteFileGrant({
           worktreeId: worktree.id,
           artifactPath,
@@ -132,7 +144,9 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
       if (!normalizedTerminalHandle || !terminalCwd) {
         return { ...empty, relativePath, absolutePath }
       }
+
       const terminalContext = this.host.resolveTerminalContext?.(normalizedTerminalHandle)
+
       if (
         !terminalContext ||
         terminalContext.worktreeId !== worktree.id ||
@@ -140,14 +154,17 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
       ) {
         return { ...empty, relativePath, absolutePath }
       }
+
       const artifactPath = await this.resolveAllowedTerminalArtifactPath({
         absolutePath,
         connectionId,
         worktreePath: worktree.path
       })
+
       if (!artifactPath) {
         return { ...empty, relativePath, absolutePath }
       }
+
       if (
         !(await this.host.hasRecentTerminalOutputPath?.(
           normalizedTerminalHandle,
@@ -157,6 +174,7 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
       ) {
         return { ...empty, relativePath, absolutePath }
       }
+
       return await this.resolveAbsoluteFileGrant({
         worktreeId: worktree.id,
         artifactPath,
@@ -177,6 +195,7 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
           absolutePath
         }
       }
+
       throw error
     }
   }
@@ -188,6 +207,7 @@ export class RuntimeFileCommandsWithResolveTerminalPath extends RuntimeFileComma
     connectionId: string
   ): Promise<RuntimeFileStatLike & { isDirectory: () => boolean }> {
     const stats = await requireSshFilesystemProvider(connectionId).stat(absolutePath)
+
     return { ...stats, isDirectory: () => stats.type === 'directory' }
   }
 }

@@ -45,6 +45,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
     showCreateTask,
     taskUiReady
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && showCreateTask}
@@ -76,6 +77,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
             if (!taskUiReady) {
               return
             }
+
             setShowCreateTargetPicker(true)
           }}
         >
@@ -114,10 +116,12 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
             <View style={styles.issueSourceSegment}>
               {(['upstream', 'origin'] as const).map((preference) => {
                 const selected = selectedCreateIssuePreference === preference
+
                 const slug =
                   preference === 'upstream'
                     ? issueSourceSlug(selectedCreateGitHubSources?.upstreamCandidate)
                     : issueSourceSlug(selectedCreateGitHubSources?.prs)
+
                 return (
                   <Pressable
                     key={preference}
@@ -201,6 +205,7 @@ export function renderMobileTasksCreateTargetPicker(model: ConnectionPresentatio
     showCreateTask,
     taskUiReady
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && showCreateTask && showCreateTargetPicker}
@@ -236,6 +241,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
     showLinearConnect,
     taskUiReady
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && showLinearConnect}
@@ -261,6 +267,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
           value={linearApiKeyDraft}
           onChangeText={(next) => {
             setLinearApiKeyDraft(next)
+
             if (linearConnectState === 'error') {
               setLinearConnectState('idle')
               setLinearConnectError('')
@@ -319,6 +326,7 @@ export function renderMobileTasksWorkspaceCreateTargetPicker(model: ConnectionPr
     workspaceRepoPickerItem,
     workspaceRepos
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && workspaceRepoPickerItem != null}
@@ -329,6 +337,7 @@ export function renderMobileTasksWorkspaceCreateTargetPicker(model: ConnectionPr
         if (workspaceRepoPickerItem) {
           openWorkspaceCreate(workspaceRepoPickerItem, repoId)
         }
+
         setWorkspaceRepoPickerItem(null)
       }}
       onClose={() => setWorkspaceRepoPickerItem(null)}

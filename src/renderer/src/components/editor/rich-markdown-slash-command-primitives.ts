@@ -84,6 +84,7 @@ export function insertTextWithSelection(
     }
 
     dispatch?.(tr.scrollIntoView())
+
     return true
   })
 }
@@ -91,14 +92,17 @@ export function insertTextWithSelection(
 export function insertCodeBlock(editor: Editor, language: string, text: string): void {
   editor.commands.command(({ state, dispatch }) => {
     const codeBlockType = state.schema.nodes.codeBlock
+
     if (!codeBlockType) {
       return false
     }
+
     const node = codeBlockType.create({ language }, text ? state.schema.text(text) : undefined)
     const tr = state.tr.replaceSelectionWith(node).scrollIntoView()
     const cursor = tr.selection.from + 1
     tr.setSelection(TextSelection.create(tr.doc, cursor, cursor))
     dispatch?.(tr)
+
     return true
   })
 }

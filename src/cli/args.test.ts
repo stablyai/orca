@@ -312,6 +312,7 @@ describe('validateCommandAndFlags', () => {
         allowedFlags: ['worktree', 'force', 'run-hooks']
       }
     ]
+
     const parsed = parseArgs(['worktree', 'rm', '--forcce'])
 
     try {
@@ -354,6 +355,7 @@ describe('validateCommandAndFlags', () => {
         allowedFlags: []
       }
     ]
+
     const parsed = parseArgs(['worktree', 'remov'])
 
     try {

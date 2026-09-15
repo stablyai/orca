@@ -11,6 +11,7 @@ export const sparsePresetsApi = {
   onChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) => callback(data)
     ipcRenderer.on('sparsePresets:changed', listener)
+
     return () => ipcRenderer.removeListener('sparsePresets:changed', listener)
   }
 } satisfies PreloadApi['sparsePresets']

@@ -366,6 +366,7 @@ describe('createGitHubSlice.fetchPRChecks', () => {
 
   it('isolates PR detail caches by Enterprise host', () => {
     const githubRepo = { owner: 'Acme', repo: 'Widgets', host: 'github.com' }
+
     const enterpriseRepo = {
       owner: 'Acme',
       repo: 'Widgets',
@@ -588,6 +589,7 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
 
   it('bounds the whole runtime check-detail load when compatibility probing stalls', async () => {
     vi.useFakeTimers()
+
     try {
       runtimeEnvironmentTransportCall.mockImplementation(() => new Promise(() => {}))
       const store = createTestStore()
@@ -610,6 +612,7 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
       const request = store
         .getState()
         .fetchPRCheckDetails(repoPath, { checkRunId: 123, checkName: 'build' }, { repoId })
+
       const rejection = expect(request).rejects.toThrow('Timed out loading check details.')
 
       await vi.advanceTimersByTimeAsync(30_000)
@@ -624,12 +627,15 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
 
   it('shares one timeout budget between runtime compatibility and check details', async () => {
     vi.useFakeTimers()
+
     try {
       runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
         const compatibility = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
         if (compatibility) {
           return new Promise((resolve) => setTimeout(() => resolve(compatibility), 20_000))
         }
+
         return runtimeEnvironmentCall(args)
       })
       runtimeEnvironmentCall.mockImplementation(() => new Promise(() => {}))
@@ -652,6 +658,7 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
       const request = store
         .getState()
         .fetchPRCheckDetails(repoPath, { checkRunId: 123, checkName: 'build' }, { repoId })
+
       let settled = false
       void request.then(
         () => {

@@ -14,6 +14,7 @@ export async function getOwnerRepo(
 ): Promise<OwnerRepo | null> {
   // Why: on a fork checkout PRs live on the upstream parent, not origin (#7331).
   const originPromise = getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
+
   if (await shouldProbeGitRemote(repoPath, 'upstream', connectionId, localGitOptions)) {
     const upstream = await getOwnerRepoForRemote(
       repoPath,
@@ -21,10 +22,12 @@ export async function getOwnerRepo(
       connectionId,
       localGitOptions
     )
+
     if (upstream) {
       return upstream
     }
   }
+
   return originPromise
 }
 
@@ -41,18 +44,21 @@ export async function resolvePRRepositoryCandidates(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRRepositoryCandidates> {
   const originPromise = getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
+
   const probeUpstream = await shouldProbeGitRemote(
     repoPath,
     'upstream',
     connectionId,
     localGitOptions
   )
+
   const [upstream, origin] = await Promise.all([
     probeUpstream
       ? getOwnerRepoForRemote(repoPath, 'upstream', connectionId, localGitOptions)
       : null,
     originPromise
   ])
+
   const seen = new Set<string>()
   const candidates: OwnerRepo[] = []
 
@@ -60,10 +66,13 @@ export async function resolvePRRepositoryCandidates(
     if (!candidate) {
       continue
     }
+
     const key = githubRepoIdentityKey(candidate)
+
     if (seen.has(key)) {
       continue
     }
+
     seen.add(key)
     candidates.push(candidate)
   }
@@ -90,18 +99,23 @@ export async function resolveIssueSource(
       connectionId,
       localGitOptions
     )
+
     if (upstream) {
       return { source: upstream, fellBack: false }
     }
+
     const origin = await getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions)
+
     return { source: origin, fellBack: origin !== null }
   }
+
   if (preference === 'origin') {
     return {
       source: await getOwnerRepoForRemote(repoPath, 'origin', connectionId, localGitOptions),
       fellBack: false
     }
   }
+
   return {
     source: await getIssueOwnerRepo(repoPath, connectionId, localGitOptions),
     fellBack: false

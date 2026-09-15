@@ -21,7 +21,9 @@ export {
   formatListApps,
   formatListWindows
 } from './computer-format'
+
 export type { ComputerActionFollowUpTarget } from './computer-format'
+
 export {
   formatProjectHostSetupCreateResult,
   formatProjectHostSetupDeleteResult,
@@ -30,6 +32,7 @@ export {
   formatProjectHostSetupUpdateResult,
   formatProjectList
 } from './project-format'
+
 export {
   formatTerminalClose,
   formatTerminalCreate,
@@ -43,6 +46,7 @@ export {
   formatTerminalWait,
   terminalSendWarnings
 } from './terminal-format'
+
 export {
   formatAutomationList,
   formatAutomationRemoved,
@@ -50,7 +54,9 @@ export {
   formatAutomationRuns,
   formatAutomationShow
 } from './automation-format'
+
 export type { AutomationListPayload, AutomationShowPayload } from './automation-format'
+
 export {
   formatEnvironment,
   formatEnvironmentList,
@@ -70,8 +76,10 @@ export function printResult<TResult>(
 ): void {
   if (json) {
     console.log(JSON.stringify(prepareComputerCliJsonResult(response), null, 2))
+
     return
   }
+
   console.log(formatter(response.result))
 }
 
@@ -93,6 +101,7 @@ export function formatHostList(result: { hosts: HostListEntry[] }): string {
     ssh: 'ssh target',
     environment: 'orca server'
   }
+
   return result.hosts
     .map(
       (host) =>
@@ -105,9 +114,11 @@ function formatHostConnection(host: HostListEntry): string {
   if (host.kind !== 'ssh') {
     return ''
   }
+
   if (host.connected === undefined) {
     return `connection unknown${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
   }
+
   return host.connected
     ? `connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`
     : `not connected${host.connectionStatus ? ` (${host.connectionStatus})` : ''}`

@@ -18,6 +18,7 @@ import {
 describe('OrcaRuntimeService', () => {
   it('emits one mobile session terminal tab per live PTY even if two tabs resolve to it', () => {
     const runtime = createRuntime()
+
     const internals = runtime as unknown as {
       recordPtyWorktree: (
         ptyId: string,
@@ -29,6 +30,7 @@ describe('OrcaRuntimeService', () => {
         tabs: { type: string; terminal?: string | null }[]
       }
     }
+
     // Two unclaimed live PTYs on the worktree; the worktree-only fallback binds either to a leafless tab that references it.
     internals.recordPtyWorktree('pty-shared', TEST_WORKTREE_ID, { connected: true })
     internals.recordPtyWorktree('pty-other', TEST_WORKTREE_ID, { connected: true })
@@ -77,6 +79,7 @@ describe('OrcaRuntimeService', () => {
     const tabId = 'projected-parent-tab'
     const leafId = 'projected-leaf'
     const ptyId = 'projected-pty'
+
     const internals = runtime as unknown as {
       mobileSessionTabsByWorktree: Map<string, unknown>
       resolveTerminalSplitSourceAuthority: (
@@ -86,6 +89,7 @@ describe('OrcaRuntimeService', () => {
         ptyId: string
       ) => { persisted: boolean; rendererMounted: boolean } | null
     }
+
     internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, {
       tabs: [
         {
@@ -224,6 +228,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(listWorktrees).mockRejectedValue(
       new Error('explicit-id fallback should not rescan worktrees')
     )
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => ({
@@ -236,6 +241,7 @@ describe('OrcaRuntimeService', () => {
           [nestedWorktreeId]: makeWorktreeMeta()
         })[worktreeId]
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -262,6 +268,7 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(listWorktrees).mockRejectedValue(
       new Error('explicit-id fallback should not rescan worktrees')
     )
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => ({
@@ -274,6 +281,7 @@ describe('OrcaRuntimeService', () => {
           [siblingWorktreeId]: makeWorktreeMeta()
         })[worktreeId]
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -390,9 +398,11 @@ describe('OrcaRuntimeService', () => {
       worktreeId: secondWorktreeId,
       worktreePath: TEST_FOLDER_WORKSPACE_PATH
     })
+
     const internals = runtime as unknown as {
       ptysById: Map<string, { worktreeId: string }>
     }
+
     expect(internals.ptysById.get('first-folder-pty')).toBeUndefined()
     expect(internals.ptysById.get('second-folder-pty')?.worktreeId).toBe(secondWorktreeId)
   })
@@ -401,6 +411,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     const liveLeafCount = 2773
     const targetIndex = liveLeafCount - 17
+
     const tabs = Array.from({ length: liveLeafCount }, (_, index) => ({
       tabId: `tab-${index}`,
       worktreeId: `repo-1::/tmp/worktree-${index}`,
@@ -408,6 +419,7 @@ describe('OrcaRuntimeService', () => {
       activeLeafId: 'pane:1',
       layout: null
     }))
+
     const leaves = Array.from({ length: liveLeafCount }, (_, index) => ({
       tabId: `tab-${index}`,
       worktreeId: `repo-1::/tmp/worktree-${index}`,
@@ -423,6 +435,7 @@ describe('OrcaRuntimeService', () => {
       leaves: Map<string, unknown>
       leavesByPtyId: Map<string, { preview?: string; lastOutputAt?: number | null }[]>
     }
+
     const originalLeaves = runtimePrivate.leaves
     runtimePrivate.leaves = new Proxy(originalLeaves, {
       get(target, prop) {
@@ -436,7 +449,9 @@ describe('OrcaRuntimeService', () => {
             throw new Error('onPtyData should use the PTY leaf index')
           }
         }
+
         const value = Reflect.get(target, prop, target)
+
         return typeof value === 'function' ? value.bind(target) : value
       }
     }) as Map<string, unknown>

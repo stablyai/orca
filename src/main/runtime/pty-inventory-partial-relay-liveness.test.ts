@@ -8,11 +8,17 @@ import { OrcaRuntimeService } from './orca-runtime'
 // under its own budget, and a pane the controller still vouches for must survive a listing
 // that did not mention it.
 const REPO_ID = 'repo-1'
+
 const REPO_PATH = '/tmp/relay-liveness'
+
 const WORKSPACE = `${REPO_ID}::${REPO_PATH}`
+
 const RETAINED_PTY = `${WORKSPACE}@@retained-pty`
+
 const TAB_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+
 const LEAF_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 
 // Mirrors the runtime's own list budget; the forwarded deadline has to land strictly inside it.
@@ -50,6 +56,7 @@ function createRuntime(options: { sessions?: unknown[]; vouchesForRetainedPty?: 
   calls: ListCall[]
 } {
   const meta: Record<string, Record<string, unknown>> = { [WORKSPACE]: { hostId: 'local' } }
+
   const store = {
     getRepos: () => [REPO],
     getRepo: (id: string) => (id === REPO_ID ? REPO : undefined),
@@ -57,12 +64,14 @@ function createRuntime(options: { sessions?: unknown[]; vouchesForRetainedPty?: 
     getWorktreeMeta: (worktreeId: string) => meta[worktreeId],
     setWorktreeMeta: (worktreeId: string, patch: Record<string, unknown>) => {
       meta[worktreeId] = { ...meta[worktreeId], ...patch }
+
       return meta[worktreeId]
     },
     getWorkspaceSession: () => getDefaultWorkspaceSession(),
     setWorkspaceSession: () => {},
     flushOrThrow: () => {}
   } as never
+
   const calls: ListCall[] = []
   const runtime = new OrcaRuntimeService(store)
   runtime.setPtyController({
@@ -75,9 +84,11 @@ function createRuntime(options: { sessions?: unknown[]; vouchesForRetainedPty?: 
       options.vouchesForRetainedPty && ptyId === RETAINED_PTY ? true : null,
     listProcesses: async (connectionId?: string | null, opts?: { deadlineMs?: number }) => {
       calls.push({ connectionId, deadlineMs: opts?.deadlineMs })
+
       return options.sessions ?? []
     }
   } as never)
+
   return { internals: runtime as unknown as RuntimeInternals, calls }
 }
 

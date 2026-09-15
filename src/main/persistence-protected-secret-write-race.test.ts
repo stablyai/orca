@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 const testState = { dir: '' }
+
 const cipherState = { available: true }
 
 const renameGate = vi.hoisted(() => ({
@@ -16,6 +17,7 @@ const renameGate = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
+
   return {
     ...actual,
     rename: async (source: string, destination: string) => {
@@ -25,6 +27,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
         renameGate.started?.()
         await release
       }
+
       return actual.rename(source, destination)
     }
   }
@@ -36,6 +39,7 @@ vi.mock('./ssh/ssh-config-parser', () => ({
 }))
 
 vi.mock('./telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('./telemetry/cohort-classifier', () => ({
   getCohortAtEmit: vi.fn().mockReturnValue({ nth_repo_added: 2 })
 }))
@@ -58,14 +62,17 @@ async function createStore() {
   // file's temp dir rather than the global fake's shared one, after resetModules.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
+
   return new Store()
 }
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
+
   const promise = new Promise<void>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 

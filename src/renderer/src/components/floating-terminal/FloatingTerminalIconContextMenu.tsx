@@ -49,6 +49,7 @@ export function FloatingTerminalIconContextMenu({
         location: 'status-bar' as const
       }
     }
+
     return {
       icon: <PanelTop className="size-3.5" />,
       label: translate(
@@ -73,9 +74,11 @@ export function FloatingTerminalIconContextMenu({
           event.stopPropagation()
           setMenuPoint({ x: event.clientX, y: event.clientY })
           setOpen(false)
+
           if (reopenFrameRef.current !== null) {
             window.cancelAnimationFrame(reopenFrameRef.current)
           }
+
           reopenFrameRef.current = window.requestAnimationFrame(() => {
             reopenFrameRef.current = null
             setOpen(true)

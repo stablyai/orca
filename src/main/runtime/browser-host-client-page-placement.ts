@@ -14,10 +14,12 @@ export function placeBrowserHostClientPage(options: {
   ): BrowserHostLease
 }): RuntimeBrowserPlacement {
   options.pagePlacements.assertPlacementAdmission(options.browserPageId)
+
   const lease = options.selectLease(options.browserHostClientId, [
     BROWSER_HOST_WEBVIEW_CAPABILITY,
     ...options.requiredCapabilities
   ])
+
   return options.pagePlacements.placeClientPage(options.browserPageId, {
     browserHostClientId: lease.browserHostClientId,
     browserHostGeneration: lease.browserHostGeneration

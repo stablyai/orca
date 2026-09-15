@@ -47,23 +47,29 @@ export default function CombinedDiffViewer({
   viewStateKey: string
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
+
   const gitStatusEntries = useAppStore(
     (s) => s.gitStatusByWorktree[file.worktreeId] ?? EMPTY_GIT_STATUS_ENTRIES
   )
+
   const liveBranchEntries = useAppStore(
     (s) => s.gitBranchChangesByWorktree[file.worktreeId] ?? EMPTY_GIT_BRANCH_ENTRIES
   )
+
   const branchSummary = useAppStore((s) => s.gitBranchCompareSummaryByWorktree[file.worktreeId])
   const openAllDiffs = useAppStore((s) => s.openAllDiffs)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
   const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const clearDiffComments = useAppStore((s) => s.clearDiffComments)
+
   const diffCommentsForWorktree = useAppStore((s) =>
     selectWorktreeDiffCommentsOrEmpty(s, file.worktreeId)
   )
+
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[file.worktreeId])
   const canOpenWorkspaceFileBrowserForPath = useWorkspaceFileBrowserActionPredicate(file.worktreeId)
+
   const isDark =
     settings?.theme === 'dark' ||
     (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -77,17 +83,20 @@ export default function CombinedDiffViewer({
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const registry = useCombinedDiffSectionLoadRegistry(sections)
+
   const entrySet = useCombinedDiffEntrySet({
     file,
     gitStatusEntries,
     liveBranchEntries,
     sectionsRef: registry.sectionsRef
   })
+
   const notes = useCombinedDiffNotesActions({
     clearDiffComments,
     diffCommentsForWorktree,
     worktreeId: file.worktreeId
   })
+
   const preferences = useCombinedDiffViewPreferences({
     combinedDiffFileTreeVisibleByDefault: settings?.combinedDiffFileTreeVisibleByDefault,
     diffDefaultView: settings?.diffDefaultView,
@@ -97,6 +106,7 @@ export default function CombinedDiffViewer({
     setSections,
     updateSettings
   })
+
   const restore = useCombinedDiffViewRestore({
     entrySet,
     gitStatusEntries,
@@ -107,6 +117,7 @@ export default function CombinedDiffViewer({
     setSideBySide: preferences.setSideBySide,
     viewStateKey
   })
+
   const { loadSection, loadDeferredSection } = useCombinedDiffSectionLoader({
     entrySet,
     file,
@@ -115,6 +126,7 @@ export default function CombinedDiffViewer({
     setSectionHeights,
     setSections
   })
+
   const { ensureSectionLoaded, requestSectionReload, retrySection } = useCombinedDiffSectionRetry({
     invalidateViewStateCache: restore.invalidateViewStateCache,
     registry,
@@ -125,13 +137,17 @@ export default function CombinedDiffViewer({
   // Why: one incremental scan of `sections` feeds the virtualizer keys, the restore signal and the
   // toolbar collapse state, instead of three independent full passes per loaded section.
   const sectionRowKeys = useCombinedDiffSectionRowKeys({ generation, sections })
+
   const sectionIndexByKey = useCombinedDiffSectionIndexMap({
     entrySignature: entrySet.entrySignature,
     sections
   })
+
   const { hasDirectScrollInput, markDirectScrollInput } = useCombinedDiffDirectScrollInput()
+
   const { cleanupActiveScrollbarDrag, handleScrollbarPointerDown, scrollThumb, updateScrollbar } =
     useCombinedDiffScrollbar({ markDirectScrollInput, scrollContainerRef })
+
   const virtualizer = useCombinedDiffVirtualizer({
     generation,
     programmaticScrollMarks,
@@ -143,6 +159,7 @@ export default function CombinedDiffViewer({
     sections,
     sideBySide: preferences.sideBySide
   })
+
   const anchors = useCombinedDiffScrollAnchors({
     clampRestoreCount,
     generation,
@@ -168,6 +185,7 @@ export default function CombinedDiffViewer({
       setSections((prev) =>
         prev.map((s, i) => (i === index ? { ...s, collapsed: !s.collapsed } : s))
       )
+
       if (shouldLoadAfterExpand) {
         registry.loadSchedulerRef.current.request(index)
       }
@@ -186,6 +204,7 @@ export default function CombinedDiffViewer({
     toggleSection,
     treeMode: entrySet.treeMode
   })
+
   const combinedGitStatusSignature = useCombinedDiffSectionRevalidation({
     file,
     gitStatusEntries,
@@ -196,6 +215,7 @@ export default function CombinedDiffViewer({
     shouldAutoReloadFromGitStatus: entrySet.shouldAutoReloadFromGitStatus,
     treeMode: entrySet.treeMode
   })
+
   const { handleSectionSaveRef, modifiedEditorsRef, openSection, openSectionPreview } =
     useCombinedDiffSectionActions({
       activeGroupId,
@@ -247,6 +267,7 @@ export default function CombinedDiffViewer({
 
     if (file.combinedAlternate.source === 'combined-all') {
       openAllDiffs(file.worktreeId, file.filePath)
+
       return
     }
 
@@ -258,20 +279,25 @@ export default function CombinedDiffViewer({
   }, [branchSummary, file, openAllDiffs, openBranchAllDiffs])
 
   const { setScrollSurfaceMounted } = notes
+
   const setScrollContainerRef = useCallback(
     (node: HTMLDivElement | null) => {
       scrollContainerRef.current = node
       setScrollSurfaceMounted(node !== null)
+
       if (node === null) {
         cleanupActiveScrollbarDrag()
+
         return
       }
+
       window.requestAnimationFrame(updateScrollbar)
     },
     [cleanupActiveScrollbarDrag, setScrollSurfaceMounted, updateScrollbar]
   )
 
   const skippedConflicts = file.skippedConflicts
+
   const reviewSkippedConflicts = useCallback(() => {
     openConflictReview(
       file.worktreeId,
@@ -310,6 +336,7 @@ export default function CombinedDiffViewer({
         skippedConflicts={skippedConflicts!}
       />
     ) : null
+
   const allSectionsCollapsed = sectionRowKeys.allSectionsCollapsed
 
   return (

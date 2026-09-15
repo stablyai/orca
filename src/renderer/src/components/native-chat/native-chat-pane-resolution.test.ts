@@ -81,6 +81,7 @@ describe('resolveNativeChatSession', () => {
   it('resolves two split leaves independently to their own values', () => {
     const leftKey = 'tab-1:11111111-1111-4111-8111-111111111111'
     const rightKey = 'tab-1:22222222-2222-4222-8222-222222222222'
+
     const left = resolveNativeChatSession({
       paneKey: leftKey,
       launchAgent: 'claude',
@@ -91,6 +92,7 @@ describe('resolveNativeChatSession', () => {
       }),
       ptyId: 'pty-left'
     })
+
     const right = resolveNativeChatSession({
       paneKey: rightKey,
       launchAgent: 'codex',
@@ -101,6 +103,7 @@ describe('resolveNativeChatSession', () => {
       }),
       ptyId: 'pty-right'
     })
+
     expect(left).toEqual({
       agent: 'claude',
       sessionId: 'left-sess',

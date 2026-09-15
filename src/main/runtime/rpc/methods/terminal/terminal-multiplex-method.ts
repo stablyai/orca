@@ -23,10 +23,13 @@ export const TERMINAL_MULTIPLEX_METHODS = [
       if (!sendBinary || !registerBinaryStreamHandler || !connectionId) {
         throw new Error('binary_terminal_stream_required')
       }
+
       let resolveMultiplex = (): void => {}
+
       const multiplexClosed = new Promise<void>((resolve) => {
         resolveMultiplex = resolve
       })
+
       // Installers only close over this per-connection state; none of it is module-global.
       const state: TerminalMultiplexConnectionBase = {
         runtime,

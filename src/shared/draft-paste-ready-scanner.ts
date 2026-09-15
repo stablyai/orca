@@ -4,7 +4,9 @@ import type { DraftPasteReadySignal } from './tui-agent-config'
 // actually mounted/focused. These markers let the scanner detect the real
 // "input is ready" moment per agent instead of guessing from output silence.
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
+
 const CODEX_COMPOSER_PROMPT = '›'
+
 // Why: opencode emits the DECTCEM show-cursor only once the composer row is
 // mounted and the text cursor is placed in it — a "composer ready" signal,
 // analogous to Codex's prompt glyph. It fires ~2s after bracketed paste is
@@ -12,6 +14,7 @@ const CODEX_COMPOSER_PROMPT = '›'
 // racing the composer mount under slow/noisy startup. mimo-code uses the same
 // signal by parity; the quiet-window fallback covers any agent that differs.
 const DECTCEM_SHOW_CURSOR = '\x1b[?25h'
+
 // Why: grok's composer prompt glyph (U+276F), rendered once the input box
 // mounts. It is also the default glyph of popular shell prompts (starship,
 // pure), so it is anchored on the alternate-screen switch below — the shell
@@ -19,7 +22,9 @@ const DECTCEM_SHOW_CURSOR = '\x1b[?25h'
 // grok swaps it for `> ` on legacy Windows consoles, which is too generic to
 // match; those fall back to the quiet window and the caller's hard timeout.
 const GROK_COMPOSER_PROMPT = '❯'
+
 const DECSET_ALT_SCREEN = '\x1b[?1049h'
+
 const DECRST_ALT_SCREEN = '\x1b[?1049l'
 
 type DraftPasteReadySignalSpec = {
@@ -144,30 +149,39 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
    */
   const scanRevocableAnchorSegments = (window: string, anchor: string, end: string): boolean => {
     let cursor = 0
+
     while (cursor < window.length) {
       if (!sawMarkerAnchor) {
         const enterIndex = window.indexOf(anchor, cursor)
+
         if (enterIndex === -1) {
           return false
         }
+
         sawMarkerAnchor = true
         postAnchorRecent = ''
         cursor = enterIndex + anchor.length
         continue
       }
+
       const leaveIndex = window.indexOf(end, cursor)
       const segment = leaveIndex === -1 ? window.slice(cursor) : window.slice(cursor, leaveIndex)
+
       if ((postAnchorRecent + segment).includes(signalMarker ?? '')) {
         return true
       }
+
       if (leaveIndex === -1) {
         postAnchorRecent = (postAnchorRecent + segment).slice(-512)
+
         return false
       }
+
       sawMarkerAnchor = false
       postAnchorRecent = ''
       cursor = leaveIndex + end.length
     }
+
     return false
   }
 
@@ -175,16 +189,20 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
     const window = codexCarry + data
     codexCarry = window.slice(-ANCHOR_CARRY_CHARS)
     let cursor = 0
+
     while (cursor < window.length) {
       const enterIndex = window.indexOf(DECSET_ALT_SCREEN, cursor)
       const leaveIndex = window.indexOf(DECRST_ALT_SCREEN, cursor)
       const promptIndex = window.indexOf(CODEX_COMPOSER_PROMPT, cursor)
+
       const nextIndex = Math.min(
         ...[enterIndex, leaveIndex, promptIndex].filter((index) => index !== -1)
       )
+
       if (!Number.isFinite(nextIndex)) {
         return
       }
+
       if (nextIndex === enterIndex) {
         codexAltScreen = true
         sawCodexPromptInAltScreen = false
@@ -197,6 +215,7 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
         if (codexAltScreen) {
           sawCodexPromptInAltScreen = true
         }
+
         cursor = nextIndex + CODEX_COMPOSER_PROMPT.length
       }
     }
@@ -206,41 +225,52 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
     observe(data: string): DraftPasteReadyScanResult {
       const combined = recent + data
       recent = combined.slice(-512)
+
       if (!sawQuietAnchor && quietAnchor !== null && combined.includes(quietAnchor)) {
         sawQuietAnchor = true
       }
+
       if (readySignal === 'codex-composer-prompt' && !sawMarkerAnchor) {
         scanCodexPreAnchorPrompt(data)
       }
+
       if (signalMarker !== null && markerAnchor !== null) {
         if (markerAnchorEnd !== null) {
           // Why: carry only the bytes an anchor could straddle, so already-scanned
           // output is never re-walked into a second enter/leave transition.
           const window = anchorCarry + data
           anchorCarry = window.slice(-ANCHOR_CARRY_CHARS)
+
           if (scanRevocableAnchorSegments(window, markerAnchor, markerAnchorEnd)) {
             return { ready: true, armQuietTimer: false }
           }
         } else if (!sawMarkerAnchor) {
           const anchorIndex = combined.indexOf(markerAnchor)
+
           if (anchorIndex !== -1) {
             sawMarkerAnchor = true
+
             if (readySignal === 'codex-composer-prompt' && sawCodexPromptInAltScreen) {
               return { ready: true, armQuietTimer: false }
             }
+
             const postAnchorChunk = combined.slice(anchorIndex + markerAnchor.length)
+
             if (postAnchorChunk.includes(signalMarker)) {
               return { ready: true, armQuietTimer: false }
             }
+
             postAnchorRecent = postAnchorChunk.slice(-512)
           }
         } else {
           if (data.includes(signalMarker) || (postAnchorRecent + data).includes(signalMarker)) {
             return { ready: true, armQuietTimer: false }
           }
+
           postAnchorRecent = (postAnchorRecent + data).slice(-512)
         }
       }
+
       // Why: the Codex glyph and opencode show-cursor signals must NOT arm the
       // quiet window (they carry no quiet anchor). opencode goes silent for
       // ~1.5-2s between enabling bracketed paste and mounting its composer, so a

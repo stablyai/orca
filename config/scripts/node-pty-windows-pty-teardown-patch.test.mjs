@@ -19,11 +19,14 @@ import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+
 const {
   assertPatchedNodePtyWindowsTeardown,
   patchNodePtyWindowsTeardown
 } = require('../relay-assets/node-pty-1.1.0-windows-pty-teardown-patch.cjs')
+
 const projectDir = resolve(import.meta.dirname, '..', '..')
+
 const cleanupDirs = []
 
 const PATCHED_FILES = ['windowsPtyAgent.js', 'windowsTerminal.js']
@@ -110,6 +113,7 @@ describe('Windows SSH relay node-pty ConPTY teardown patch', () => {
       patched.indexOf('if (!this._useConptyDll) {'),
       patched.indexOf('else {', patched.indexOf('if (!this._useConptyDll) {'))
     )
+
     expect(branch).toContain('this._inSocket.destroy();')
     expect(branch.indexOf('this._inSocket.destroy();')).toBeGreaterThan(
       branch.indexOf('this._conoutSocketWorker.dispose();')
@@ -127,9 +131,11 @@ describe('Windows SSH relay node-pty ConPTY teardown patch', () => {
 
     patchNodePtyWindowsTeardown(fixture.root)
     const once = PATCHED_FILES.map((file) => readFileSync(join(fixture.libDir, file), 'utf8'))
+
     for (const file of PATCHED_FILES) {
       expect(existsSync(`${join(fixture.libDir, file)}.orca-patch-${process.pid}`)).toBe(false)
     }
+
     expect(() => assertPatchedNodePtyWindowsTeardown(fixture.root)).not.toThrow()
 
     patchNodePtyWindowsTeardown(fixture.root)
@@ -168,13 +174,17 @@ function writeNodePtyFixture(version) {
   const libDir = join(root, 'node_modules', 'node-pty', 'lib')
   mkdirSync(libDir, { recursive: true })
   writeFileSync(join(root, 'node_modules', 'node-pty', 'package.json'), JSON.stringify({ version }))
+
   for (const file of PATCHED_FILES) {
     const desktop = readFileSync(desktopPath(file), 'utf8')
+
     for (const [marker] of DESKTOP_HUNKS[file]) {
       expect(desktop).toContain(marker)
     }
+
     writeFileSync(join(libDir, file), unapplyDesktopHunks(file, desktop))
   }
+
   return { root, libDir }
 }
 
@@ -189,35 +199,44 @@ function writeNodePtyFixture(version) {
 function unapplyDesktopHunks(file, desktop) {
   if (file === 'windowsPtyAgent.js') {
     let published = desktop
+
     for (const [patched, original] of DESKTOP_HUNKS[file]) {
       expect(published.split(patched).length - 1).toBe(1)
       published = published.replace(patched, original)
     }
+
     return published
   }
+
   const asset = readFileSync(
     join(projectDir, 'config', 'relay-assets', 'node-pty-1.1.0-windows-pty-teardown-patch.cjs'),
     'utf8'
   )
+
   const { PATCH_TARGETS } = loadPatchTargets(asset)
   const target = PATCH_TARGETS.find((entry) => entry.relativePath.at(-1) === file)
   expect(target).toBeDefined()
   let published = desktop
+
   for (const [from, to] of target.replacements.toReversed()) {
     expect(published.split(to).length - 1).toBe(1)
     published = published.replace(to, from)
   }
+
   return published
 }
 
 function loadPatchTargets(assetSource) {
   const module = { exports: {} }
+
   const factory = new Function(
     'module',
     'exports',
     'require',
     `${assetSource}\nmodule.exports.PATCH_TARGETS = PATCH_TARGETS`
   )
+
   factory(module, module.exports, require)
+
   return module.exports
 }

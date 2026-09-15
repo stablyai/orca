@@ -19,24 +19,31 @@ const TERSE_FOLLOW_UP_PATTERN =
 
 export function isTerseAgentFollowUpPrompt(prompt: string): boolean {
   const trimmed = prompt.trim()
+
   if (!trimmed) {
     return true
   }
+
   if (trimmed.length > 24) {
     return false
   }
+
   return TERSE_FOLLOW_UP_PATTERN.test(trimmed)
 }
 
 function taskTitleFromPrompt(prompt: string): string | null {
   if (isOrcaDispatchPrompt(prompt)) {
     const preview = getAgentRowPrimaryText({ prompt })
+
     return preview || null
   }
+
   const trimmed = prompt.trim()
+
   if (!trimmed || isTerseAgentFollowUpPrompt(trimmed)) {
     return null
   }
+
   return trimmed
 }
 
@@ -46,16 +53,20 @@ function bestTaskPromptFromHistory(history: readonly AgentStateHistoryEntry[]): 
   // than array position so out-of-order history still resolves the latest turn.
   let best: string | null = null
   let bestStartedAt = Number.NEGATIVE_INFINITY
+
   for (const historyEntry of history) {
     const candidate = taskTitleFromPrompt(historyEntry.prompt)
+
     if (!candidate) {
       continue
     }
+
     if (historyEntry.startedAt >= bestStartedAt) {
       best = candidate
       bestStartedAt = historyEntry.startedAt
     }
   }
+
   return best
 }
 
@@ -69,15 +80,19 @@ function orchestrationLabelForEntry(
 ): string | null {
   const label =
     entry.orchestration?.displayName?.trim() || entry.orchestration?.taskTitle?.trim() || ''
+
   if (!label) {
     return null
   }
+
   if (isOrcaDispatchPrompt(entry.prompt)) {
     return orchestrationLabelsMatchLiveDispatch(entry) ? label : null
   }
+
   if (taskTitleFromPrompt(entry.prompt)) {
     return null
   }
+
   return label
 }
 
@@ -87,9 +102,11 @@ export function getActivityThreadWorkspaceTitle(
 ): string {
   const displayName = worktree.displayName?.trim()
   const branch = worktree.branch?.trim()
+
   if (displayName) {
     return displayName
   }
+
   return branch || 'Workspace'
 }
 
@@ -100,11 +117,13 @@ export function getActivityThreadTaskTitle(args: {
   generatedTitlesEnabled: boolean
 }): string {
   const customTitle = args.tab.customTitle?.trim()
+
   if (customTitle) {
     return customTitle
   }
 
   const orchestrationLabel = orchestrationLabelForEntry(args.entry)
+
   if (orchestrationLabel) {
     return orchestrationLabel
   }
@@ -112,6 +131,7 @@ export function getActivityThreadTaskTitle(args: {
   // Why: respect the user's tabAutoGenerateTitle setting — a disabled generated
   // title must not resurface here (mirrors resolveTerminalTabTitle's gate).
   const generatedTitle = args.generatedTitlesEnabled ? args.tab.generatedTitle?.trim() : ''
+
   if (generatedTitle) {
     return generatedTitle
   }
@@ -120,36 +140,44 @@ export function getActivityThreadTaskTitle(args: {
   // title follows the active turn (see buildAgentPaneThreads). Only a terse
   // follow-up ("yes") falls through to the prior task recorded in history.
   const liveTitle = taskTitleFromPrompt(args.entry.prompt)
+
   if (liveTitle) {
     return liveTitle
   }
 
   const historical = bestTaskPromptFromHistory(args.entry.stateHistory)
+
   if (historical) {
     return historical
   }
 
   const liveTabTitle = args.tab.title?.trim()
   const defaultTabTitle = args.tab.defaultTitle?.trim()
+
   if (liveTabTitle && liveTabTitle !== defaultTabTitle) {
     return liveTabTitle
   }
+
   return defaultTabTitle || liveTabTitle || 'Terminal'
 }
 
 function isMislabeledUserPrompt(text: string, entry: Pick<AgentStatusEntry, 'prompt'>): boolean {
   const trimmed = text.trim()
+
   if (!trimmed) {
     return true
   }
+
   if (isTerseAgentFollowUpPrompt(trimmed)) {
     return true
   }
+
   // Why: some hooks echo the live user prompt into assistant preview fields
   // between turns; never surface that as the agent's latest reply.
   if (trimmed === entry.prompt.trim()) {
     return true
   }
+
   return false
 }
 
@@ -158,29 +186,38 @@ function isMislabeledUserPrompt(text: string, entry: Pick<AgentStatusEntry, 'pro
 // never reaches the actual reply. Match `worker_done sent` near the start
 // rather than a single dash shape — agents use em dashes, `--`, or markdown.
 const WORKER_DONE_SENT = /\bworker_done sent(?:\s+with outcome \w+)?/i
+
 const ORCHESTRATION_SUMMARY_PREFIX = /^(?:\*{0,2})summary of what happened:\s*/i
+
 const ORCHESTRATION_VERDICT_PREFIX = /^(?:\*{0,2})verdict:(?:\*{0,2})\s*/i
 
 function unwrapOrchestrationAssistantPreview(text: string): string {
   let next = text.trim()
   const workerDone = WORKER_DONE_SENT.exec(next)
+
   if (workerDone && workerDone.index < 96) {
     next = next.slice(workerDone.index + workerDone[0].length).replace(/^[.\s…*—–-]+/, '')
   }
+
   next = next.replace(ORCHESTRATION_SUMMARY_PREFIX, '').trim()
   next = next.replace(ORCHESTRATION_VERDICT_PREFIX, '').trim()
+
   return next
 }
 
 function usefulAssistantReply(text: string, entry: Pick<AgentStatusEntry, 'prompt'>): string {
   const trimmed = text.trim()
+
   if (!trimmed || isMislabeledUserPrompt(trimmed, entry)) {
     return ''
   }
+
   const unwrapped = unwrapOrchestrationAssistantPreview(trimmed)
+
   if (!unwrapped || /^[.\s…]+$/.test(unwrapped) || isMislabeledUserPrompt(unwrapped, entry)) {
     return ''
   }
+
   return unwrapped
 }
 
@@ -201,20 +238,26 @@ export function getActivityThreadStatusPreview(
   if (entry.interrupted === true) {
     return 'Interrupted by user'
   }
+
   const state = agentState ?? entry.state
   const toolPreview = formatAgentToolPreview(entry, state)
+
   if (toolPreview) {
     return toolPreview
   }
+
   const assistant = usefulAssistantReply(entry.lastAssistantMessage ?? '', entry)
+
   if (assistant) {
     return assistant
   }
+
   // Why: live working/waiting pings clear lastAssistantMessage; the completed-turn
   // snapshot is the last useful reply once the agent is no longer in-flight.
   if (state !== 'working' && state !== 'waiting') {
     return usefulAssistantReply(entry.lastCompletedAssistantMessage ?? '', entry)
   }
+
   return ''
 }
 
@@ -234,14 +277,17 @@ export function resolveActivityThreadStatusPreview(
   previousPreview?: string
 ): string {
   const next = getActivityThreadStatusPreview(entry, agentState)
+
   if (next) {
     return next
   }
+
   // Why: only bridge a transient empty/mislabeled ping within the SAME turn. A
   // substantive live prompt marks a new turn, so the prior turn's reply must not
   // linger as the current status (a fresh working turn shows no stale preview).
   if (!isTerseAgentFollowUpPrompt(entry.prompt)) {
     return ''
   }
+
   return usefulAssistantReply(previousPreview ?? '', entry)
 }

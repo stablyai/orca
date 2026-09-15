@@ -11,11 +11,16 @@ import {
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
 const root = path.resolve(import.meta.dirname, '..', '..')
+
 const oxlint = resolveOxlintInvocation(root)
+
 const rule = 'typescript(consistent-type-assertions)'
+
 const ruleName = 'typescript/consistent-type-assertions'
+
 // Built rather than written out so no line here is itself a casting directive the gate would scan.
 const directive = (reason) => `// oxlint-disable-next-line ${ruleName} -- ${reason}`
+
 const trailingDirective = (reason) => `// oxlint-disable-line ${ruleName} -- ${reason}`
 
 function lint(file, args = []) {
@@ -24,13 +29,16 @@ function lint(file, args = []) {
     [...oxlint.prefixArgs, ...args, '--format', 'json', file],
     { cwd: root, encoding: 'utf8', windowsHide: true }
   )
+
   expect(result.error).toBeUndefined()
+
   return { status: result.status, diagnostics: JSON.parse(result.stdout).diagnostics }
 }
 
 it.each(['config', 'mobile'])('enforces new casts without changing full lint in %s', (parent) => {
   const directory = mkdtempSync(path.join(root, parent, 'casting-lint-test-'))
   const file = path.join(directory, 'fixture.test.ts')
+
   try {
     writeFileSync(
       file,
@@ -58,9 +66,11 @@ it.each(['config', 'mobile'])('enforces new casts without changing full lint in 
 
     const relative = path.relative(root, file).split(path.sep).join('/')
     const changed = new Map([[relative, [{ start: 2, end: 2 }]]])
+
     const findings = casting.diagnostics.filter((diagnostic) =>
       diagnosticTouchesAddedLines(diagnostic, changed, root)
     )
+
     expect(findings).toHaveLength(2)
     expect(findings.every((diagnostic) => diagnostic.severity === 'error')).toBe(true)
 
@@ -75,6 +85,7 @@ it.each(['config', 'mobile'])('enforces new casts without changing full lint in 
 it("exempts the SAFETY: directive from the untyped scan's unused-directive warning", () => {
   const directory = mkdtempSync(path.join(root, 'config', 'casting-lint-test-'))
   const file = path.join(directory, 'fixture.test.ts')
+
   try {
     writeFileSync(
       file,
@@ -87,6 +98,7 @@ it("exempts the SAFETY: directive from the untyped scan's unused-directive warni
 
     const scan = OXLINT_SCANS.find((candidate) => candidate.label === 'code quality')
     const untyped = lint(file, scan.args)
+
     const unused = untyped.diagnostics.filter((diagnostic) =>
       diagnostic.message.startsWith('Unused oxlint-disable directive')
     )
@@ -103,6 +115,7 @@ it("exempts the SAFETY: directive from the untyped scan's unused-directive warni
 it('rejects a casting suppression on an added line that omits the SAFETY: rationale', () => {
   const directory = mkdtempSync(path.join(root, 'config', 'casting-lint-test-'))
   const file = path.join(directory, 'fixture.test.ts')
+
   try {
     writeFileSync(
       file,
@@ -116,6 +129,7 @@ it('rejects a casting suppression on an added line that omits the SAFETY: ration
     )
 
     const relative = path.relative(root, file).split(path.sep).join('/')
+
     const findings = findCastingDirectivesMissingSafety(
       root,
       new Map([[relative, [{ start: 1, end: 4 }]]])
@@ -137,10 +151,12 @@ it('rejects a casting suppression on an added line that omits the SAFETY: ration
 it('catches a trailing casting suppression that abuts a string literal', () => {
   const directory = mkdtempSync(path.join(root, 'config', 'casting-lint-test-'))
   const file = path.join(directory, 'fixture.test.ts')
+
   try {
     writeFileSync(file, `export const abutted = 'a'${trailingDirective('no required prefix')}\n`)
 
     const relative = path.relative(root, file).split(path.sep).join('/')
+
     const findings = findCastingDirectivesMissingSafety(
       root,
       new Map([[relative, [{ start: 1, end: 1 }]]])

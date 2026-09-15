@@ -8,5 +8,6 @@ export function useRepoOwnerVisibilityDefaults(
 ): WorktreeVisibilityDefaults | undefined {
   const settings = useAppStore((state) => state.settings)
   const defaultsByHost = useAppStore((state) => state.worktreeVisibilityDefaultsByHost)
+
   return repo ? getRepoOwnerWorktreeVisibilityDefaults(repo, settings, defaultsByHost) : undefined
 }

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { openMobileE2EEV2Frame, sealMobileE2EEV2Frame } from './mobile-e2ee-v2-framing'
 
 const key = new Uint8Array(32).fill(7)
+
 const sessionId = new Uint8Array(32).fill(8)
+
 const payload = new TextEncoder().encode('e2ee-auth')
 
 describe('mobile E2EE v2 framing', () => {
@@ -40,6 +42,7 @@ describe('mobile E2EE v2 framing', () => {
       payloadKind: 'binary',
       counter: 4n
     })
+
     const attempt = (overrides: Partial<Parameters<typeof openMobileE2EEV2Frame>[0]>) =>
       openMobileE2EEV2Frame({
         frame,
@@ -60,6 +63,7 @@ describe('mobile E2EE v2 framing', () => {
 
   it('uses one exact-next counter sequence across text and binary kinds', () => {
     const kinds = ['text', 'binary', 'text'] as const
+
     const frames = kinds.map((payloadKind, counter) =>
       sealMobileE2EEV2Frame({
         payload: new Uint8Array([counter]),

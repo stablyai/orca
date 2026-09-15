@@ -50,17 +50,23 @@ const OPTION_PATTERNS: { re: RegExp; token: number; label: number }[] = [
 
 function parseOptionLine(line: string): ParsedOption | null {
   const stripped = line.replace(POINTER_PREFIX, '$1')
+
   for (const { re, token, label } of OPTION_PATTERNS) {
     const m = stripped.match(re)
+
     if (!m) {
       continue
     }
+
     const text = m[label].trim()
+
     if (text.length === 0) {
       continue
     }
+
     return { label: text, token: token > 0 ? m[token] : null }
   }
+
   return null
 }
 
@@ -73,6 +79,7 @@ const QUESTION_LINE = /[?:]\s*$/
 // Drop a trailing ":" off a card title but keep a meaningful "?".
 function cleanQuestionText(raw: string): string {
   const trimmed = raw.trim()
+
   return trimmed.endsWith(':') ? trimmed.slice(0, -1).trim() : trimmed
 }
 
@@ -92,6 +99,7 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
 
   lines.forEach((line, index) => {
     const option = parseOptionLine(line)
+
     if (option) {
       parsed.push({ index, option })
     }
@@ -109,10 +117,12 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
   // first option.
   let question = ''
   let questionLooksLikePrompt = false
+
   for (let i = firstOptionIndex - 1; i >= 0; i--) {
     if (lines[i].trim().length === 0 || parseOptionLine(lines[i])) {
       continue
     }
+
     question = lines[i]
     questionLooksLikePrompt = QUESTION_LINE.test(lines[i])
     break
@@ -138,11 +148,15 @@ function formatQuestionOptionAtIndex(question: MobileChatQuestion, index: number
   if (!Number.isInteger(index) || index < 0 || index >= question.options.length) {
     return null
   }
+
   const label = question.options[index]
+
   if (label == null || label.trim().length === 0) {
     return null
   }
+
   const token = question.optionTokens[index]
+
   return token != null && token.length > 0 ? token : label
 }
 
@@ -160,6 +174,7 @@ export function formatQuestionAnswerByIndexes(
   selectedIndexes: number[]
 ): string {
   const parts = formatQuestionAnswerPartsByIndexes(question, selectedIndexes)
+
   return parts.join(question.multiSelect ? ', ' : ' ')
 }
 
@@ -170,9 +185,11 @@ export function formatQuestionAnswerWithOtherByIndexes(
 ): string {
   const parts = formatQuestionAnswerPartsByIndexes(question, selectedIndexes)
   const other = formatQuestionFreeTextAnswer(question, text)
+
   if (other.length > 0) {
     parts.push(other)
   }
+
   return parts.join(question.multiSelect ? ', ' : ' ')
 }
 
@@ -186,16 +203,19 @@ export function formatQuestionAnswerWithOtherByIndexes(
  */
 export function formatQuestionAnswer(question: MobileChatQuestion, selected: string[]): string {
   const labels = selected.map((s) => s.trim()).filter((s) => s.length > 0)
+
   if (labels.length === 0) {
     return ''
   }
 
   const parts = labels.map((label) => {
     const index = question.options.indexOf(label)
+
     if (index === -1) {
       // Free-text / unknown entry: pass the user's text straight through.
       return label
     }
+
     return formatQuestionOptionAtIndex(question, index) ?? label
   })
 
@@ -204,9 +224,11 @@ export function formatQuestionAnswer(question: MobileChatQuestion, selected: str
 
 export function formatQuestionFreeTextAnswer(question: MobileChatQuestion, text: string): string {
   const trimmed = text.trim()
+
   if (trimmed.length === 0) {
     return ''
   }
+
   return question.freeTextToken
     ? `${question.freeTextToken}:${encodeURIComponent(trimmed)}`
     : formatQuestionAnswer(question, [trimmed])

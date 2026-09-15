@@ -4,10 +4,12 @@
 // terminal at line 0. Callers bracket the rebuild and re-apply intent once
 // after parse (see terminal-scroll-intent.ts).
 const terminalScrollIntentRebuilds = new WeakMap<object, number>()
+
 const terminalScrollIntentRebuildCompletions = new WeakMap<
   object,
   Set<(completed: boolean) => void>
 >()
+
 const deferredTerminalGeometryMutations = new WeakMap<
   object,
   {
@@ -36,13 +38,16 @@ export function beginTerminalScrollIntentBufferRebuild(terminal: object): void {
 
 export function endTerminalScrollIntentBufferRebuild(terminal: object): void {
   const count = terminalScrollIntentRebuilds.get(terminal) ?? 0
+
   if (count <= 1) {
     terminalScrollIntentRebuilds.delete(terminal)
     const completions = terminalScrollIntentRebuildCompletions.get(terminal)
     terminalScrollIntentRebuildCompletions.delete(terminal)
     notifyRebuildCompletions(completions, true)
+
     return
   }
+
   terminalScrollIntentRebuilds.set(terminal, count - 1)
 }
 
@@ -56,16 +61,22 @@ export function onTerminalScrollIntentBufferRebuildComplete(
 ): () => void {
   if (!isTerminalScrollIntentRebuildInFlight(terminal)) {
     completion(true)
+
     return () => {}
   }
+
   let completions = terminalScrollIntentRebuildCompletions.get(terminal)
+
   if (!completions) {
     completions = new Set()
     terminalScrollIntentRebuildCompletions.set(terminal, completions)
   }
+
   completions.add(completion)
+
   return () => {
     completions?.delete(completion)
+
     if (completions?.size === 0) {
       terminalScrollIntentRebuildCompletions.delete(terminal)
     }
@@ -82,11 +93,15 @@ export function deferTerminalGeometryMutationDuringRebuild(
   if (!isTerminalScrollIntentRebuildInFlight(terminal)) {
     return false
   }
+
   const existing = deferredTerminalGeometryMutations.get(terminal)
+
   if (existing) {
     existing.mutations.set(operationKey, mutation)
+
     return true
   }
+
   const mutations = new Map([[operationKey, mutation]])
   const deferred = { mutations }
   deferredTerminalGeometryMutations.set(terminal, deferred)
@@ -94,19 +109,24 @@ export function deferTerminalGeometryMutationDuringRebuild(
     if (deferredTerminalGeometryMutations.get(terminal) !== deferred) {
       return
     }
+
     if (!completed) {
       deferredTerminalGeometryMutations.delete(terminal)
+
       return
     }
+
     // Why: rebuild completion listeners run before the coordinator restores
     // intent; the microtask makes every geometry mutation post-restore.
     queueMicrotask(() => {
       if (deferredTerminalGeometryMutations.get(terminal) !== deferred) {
         return
       }
+
       // Keep the entry cancellable until execution begins; disposal may land
       // after rebuild completion but before this post-restore microtask.
       deferredTerminalGeometryMutations.delete(terminal)
+
       for (const [key, pendingMutation] of mutations) {
         if (!deferTerminalGeometryMutationDuringRebuild(terminal, key, pendingMutation)) {
           pendingMutation()
@@ -114,6 +134,7 @@ export function deferTerminalGeometryMutationDuringRebuild(
       }
     })
   })
+
   return true
 }
 

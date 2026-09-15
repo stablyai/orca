@@ -7,8 +7,10 @@ export function requiresTerminalSettlement(body: AgentJournalItemBody): boolean 
   if (body.kind === 'tool-call') {
     return body.state === 'running'
   }
+
   if (body.kind === 'approval' || body.kind === 'question') {
     return body.resolution.state === 'pending'
   }
+
   return isRunningAgentJournalTurn(body)
 }

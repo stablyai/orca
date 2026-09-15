@@ -113,6 +113,7 @@ const gitLabForgeProvider = {
       forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
+
     return mr ? mapGitLabReview(mr) : null
   },
   async getReviewByNumber(input) {
@@ -122,6 +123,7 @@ const gitLabForgeProvider = {
       forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
+
     return mr ? mapGitLabReview(mr) : null
   },
   createReview: createGitLabMergeRequest
@@ -137,6 +139,7 @@ function unwrapGitHubPRForBranchOutcome(
   if (outcome.kind === 'upstream-error') {
     throw new Error(`GitHub PR lookup failed (${outcome.errorType}): ${outcome.message}`)
   }
+
   return outcome.kind === 'found' ? mapGitHubReview(outcome.pr) : null
 }
 
@@ -154,6 +157,7 @@ async function assertGitHubReviewRateLimitBudget(
     forgeConnectionId(input),
     getHostedReviewLocalGitOptions(input)
   )
+
   if (block) {
     throw new Error(
       `GitHub PR lookup failed (rate_limited): GitHub rate limit is low. Try again after ${new Date(
@@ -177,9 +181,12 @@ const gitHubForgeProvider = {
     ),
   async getReviewForBranch(input) {
     await assertGitHubReviewRateLimitBudget(input)
+
     const fallbackReviewNumber =
       input.linkedReviewNumber == null ? (input.fallbackReviewNumber ?? null) : null
+
     const executionArgs = hostedReviewExecutionArgs(input)
+
     const outcome = await getPRForBranchOutcome(
       input.repoPath,
       input.branch,
@@ -192,11 +199,13 @@ const gitHubForgeProvider = {
         currentHeadOid: input.githubCurrentHeadOid ?? null
       }
     )
+
     return unwrapGitHubPRForBranchOutcome(outcome)
   },
   async getReviewByNumber(input) {
     await assertGitHubReviewRateLimitBudget(input)
     const executionArgs = hostedReviewExecutionArgs(input)
+
     const outcome =
       executionArgs.length > 0
         ? await getPRForBranchOutcome(
@@ -208,6 +217,7 @@ const gitHubForgeProvider = {
             ...executionArgs
           )
         : await getPRForBranchOutcome(input.repoPath, '', input.number, forgeConnectionId(input))
+
     return unwrapGitHubPRForBranchOutcome(outcome)
   },
   createReview: createGitHubPullRequest
@@ -232,6 +242,7 @@ const bitbucketForgeProvider = {
       forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
+
     return pr ? mapBitbucketReview(pr) : null
   },
   async getReviewByNumber(input) {
@@ -241,6 +252,7 @@ const bitbucketForgeProvider = {
       forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
+
     return pr ? mapBitbucketReview(pr) : null
   },
   createReview: createBitbucketPullRequest
@@ -265,6 +277,7 @@ const azureDevOpsForgeProvider = {
       forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
+
     return pr ? mapAzureDevOpsReview(pr) : null
   },
   async getReviewByNumber(input) {
@@ -274,6 +287,7 @@ const azureDevOpsForgeProvider = {
       forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
+
     return pr ? mapAzureDevOpsReview(pr) : null
   },
   createReview: createAzureDevOpsPullRequest
@@ -298,6 +312,7 @@ const giteaForgeProvider = {
       forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
+
     return pr ? mapGiteaReview(pr) : null
   },
   async getReviewByNumber(input) {
@@ -307,6 +322,7 @@ const giteaForgeProvider = {
       forgeConnectionId(input),
       ...hostedReviewExecutionArgs(input)
     )
+
     return pr ? mapGiteaReview(pr) : null
   },
   createReview: createGiteaPullRequest
@@ -334,6 +350,7 @@ export async function getForgeProviderForRepository(
       return provider
     }
   }
+
   return null
 }
 

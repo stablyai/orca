@@ -35,20 +35,26 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
     TaskItem,
     { provider: 'linear' }
   > | null>(null)
+
   const [workspaceCreateDraft, setWorkspaceCreateDraft] = useState<WorkspaceCreateDraft | null>(
     null
   )
+
   const [workspaceNameDraft, setWorkspaceNameDraft] = useState('')
   const [workspaceLastAutoName, setWorkspaceLastAutoName] = useState('')
   const [workspaceBranchAutoName, setWorkspaceBranchAutoName] = useState('')
+
   const [workspaceBranchNameOverride, setWorkspaceBranchNameOverride] = useState<
     string | undefined
   >(undefined)
+
   const [workspaceBaseBranch, setWorkspaceBaseBranch] = useState<BaseRefSearchResult | null>(null)
   const [workspaceBaseBranchQuery, setWorkspaceBaseBranchQuery] = useState('')
+
   const [workspaceBaseBranchResults, setWorkspaceBaseBranchResults] = useState<
     BaseRefSearchResult[]
   >([])
+
   const [workspaceBaseBranchLoading, setWorkspaceBaseBranchLoading] = useState(false)
   const [workspaceBaseBranchError, setWorkspaceBaseBranchError] = useState('')
   const [workspaceSparsePresets, setWorkspaceSparsePresets] = useState<SparsePreset[]>([])
@@ -57,15 +63,19 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [_workspaceSparsePresetsError, setWorkspaceSparsePresetsError] = useState('')
   const [workspaceSparseReloadKey, setWorkspaceSparseReloadKey] = useState(0)
   const [workspaceSparsePresetId, setWorkspaceSparsePresetId] = useState<string | null>(null)
+
   const [workspaceSparseDraft, setWorkspaceSparseDraft] = useState<WorkspaceSparseDraft | null>(
     null
   )
+
   const [workspaceSparseSaving, setWorkspaceSparseSaving] = useState(false)
   const [workspaceAgent, setWorkspaceAgent] = useState<WorkspaceAgentChoice | null>(null)
   const [workspaceAgentOverridden, setWorkspaceAgentOverridden] = useState(false)
+
   const [workspaceDetectedAgentIds, setWorkspaceDetectedAgentIds] = useState<Set<string> | null>(
     null
   )
+
   const [workspaceSshState, setWorkspaceSshState] = useState<SshConnectionState | null>(null)
   const [workspaceSshConnecting, setWorkspaceSshConnecting] = useState(false)
   const [showWorkspaceAgentPicker, setShowWorkspaceAgentPicker] = useState(false)
@@ -73,10 +83,12 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [showWorkspaceAdvanced, setShowWorkspaceAdvanced] = useState(false)
   const [showWorkspaceBaseBranchPicker, setShowWorkspaceBaseBranchPicker] = useState(false)
   const [showWorkspaceSparsePicker, setShowWorkspaceSparsePicker] = useState(false)
+
   const [linearStatusPickerItem, setLinearStatusPickerItem] = useState<Extract<
     TaskItem,
     { provider: 'linear' }
   > | null>(null)
+
   const [setupPrompt, setSetupPrompt] = useState<SetupPrompt | null>(null)
   const [creatingKey, setCreatingKey] = useState<string | null>(null)
   const [mutatingStatus, setMutatingStatus] = useState(false)
@@ -88,39 +100,50 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [runtimeTaskSettings, setRuntimeTaskSettings] = useState<RuntimeTaskSettings>({})
   const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
   const [orcaYamlTrustPrompt, setOrcaYamlTrustPrompt] = useState<OrcaYamlTrustPrompt | null>(null)
+
   const [githubProjectSettings, setGithubProjectSettings] = useState<GitHubProjectSettings>(
     EMPTY_GITHUB_PROJECT_SETTINGS
   )
+
   const [githubProjects, setGithubProjects] = useState<GitHubProjectSummary[]>([])
   const [githubProjectViews, setGithubProjectViews] = useState<GitHubProjectViewSummary[]>([])
   const [githubProjectTable, setGithubProjectTable] = useState<GitHubProjectTable | null>(null)
   const [githubProjectLoading, setGithubProjectLoading] = useState(false)
   const [githubProjectError, setGithubProjectError] = useState('')
+
   const [githubProjectPartialFailures, setGithubProjectPartialFailures] = useState<
     GitHubProjectPartialFailure[]
   >([])
+
   const [githubProjectSearch, setGithubProjectSearch] = useState('')
   const [githubProjectPickerSearch, setGithubProjectPickerSearch] = useState('')
   const [githubProjectPasteInput, setGithubProjectPasteInput] = useState('')
   const [githubProjectPasteError, setGithubProjectPasteError] = useState('')
   const [githubProjectPasteBusy, setGithubProjectPasteBusy] = useState(false)
+
   const [appliedGithubProjectSearch, setAppliedGithubProjectSearch] = useState<string | undefined>(
     undefined
   )
+
   const [githubProjectSortOverride, setGithubProjectSortOverride] =
     useState<ProjectSortOverride | null>(null)
+
   const [githubProjectHiddenFieldIdsByView, setGithubProjectHiddenFieldIdsByView] = useState<
     Record<string, string[]>
   >({})
+
   const [collapsedGitHubProjectGroups, setCollapsedGitHubProjectGroups] = useState<Set<string>>(
     () => new Set()
   )
+
   const [showGitHubProjectPicker, setShowGitHubProjectPicker] = useState(false)
   const [showGitHubProjectViewPicker, setShowGitHubProjectViewPicker] = useState(false)
   const [showGitHubProjectSortPicker, setShowGitHubProjectSortPicker] = useState(false)
   const [showGitHubProjectFieldsPicker, setShowGitHubProjectFieldsPicker] = useState(false)
+
   const [pendingGitHubProjectViewSelection, setPendingGitHubProjectViewSelection] =
     useState<GitHubProjectRef | null>(null)
+
   const [projectRowItem, setProjectRowItem] = useState<GitHubProjectRow | null>(null)
   const [projectRowDetail, setProjectRowDetail] = useState<DetailPayload | null>(null)
   const [projectRowDetailLoading, setProjectRowDetailLoading] = useState(false)
@@ -143,8 +166,10 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [projectIssueTypesLoading, setProjectIssueTypesLoading] = useState(false)
   const [projectIssueTypesError, setProjectIssueTypesError] = useState('')
   const [projectMutating, setProjectMutating] = useState(false)
+
   const [projectRepoNotInOrca, setProjectRepoNotInOrca] =
     useState<ProjectRepoNotInOrcaPrompt | null>(null)
+
   return Object.assign(model, {
     workspaceRepoPickerItem,
     setWorkspaceRepoPickerItem,

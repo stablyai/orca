@@ -54,14 +54,17 @@ describe('DesktopScriptProviderClient cache lifecycle', () => {
         noScreenshot: true
       })
     ).rejects.toMatchObject({ code: 'element_not_found' })
+
     const cached = (client as unknown as { snapshots: Map<string, { windowId?: number | null }> })
       .snapshots
+
     expect(cached.get('session:agent-a:text editor#window-index:0')).toBeUndefined()
     expect(cached.get('session:agent-a:text editor')?.windowId).toBe(123)
   })
 
   it('bounds cached desktop snapshots while keeping recent aliases usable', async () => {
     const snapshotCount = 40
+
     for (let index = 0; index < snapshotCount; index++) {
       mockBridgeResponse({
         ok: true,
@@ -74,6 +77,7 @@ describe('DesktopScriptProviderClient cache lifecycle', () => {
         }
       })
     }
+
     mockBridgeResponse({
       ok: true,
       capabilities: sampleCapabilities()

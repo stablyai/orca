@@ -63,21 +63,25 @@ export function ChecksPanelReviewHeader({
   const reviewNumberLabel = review.provider === 'gitlab' ? `!${review.number}` : `#${review.number}`
   const ReviewIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const reviewHostLabel = review.provider === 'gitlab' ? 'GitLab' : 'GitHub'
+
   const moreActionsLabel =
     review.provider === 'gitlab'
       ? translate('auto.components.right.sidebar.ChecksPanel.gitlabMoreActions', 'More MR actions')
       : translate('auto.components.right.sidebar.ChecksPanel.653c105ecc', 'More PR actions')
+
   const openTitle = translate(
     'auto.components.right.sidebar.ChecksPanel.5c88c6db07',
     'Open on {{value0}}',
     { value0: reviewHostLabel }
   )
+
   const modifierHint =
     modifierHintDestination === 'system-browser'
       ? getTerminalUrlSystemBrowserHint()
       : modifierHintDestination === 'orca'
         ? getTerminalUrlOrcaBrowserHint()
         : null
+
   const title = modifierHint ? `${openTitle}. ${modifierHint}` : openTitle
 
   return (
@@ -159,28 +163,36 @@ export default function ChecksPanel(): React.JSX.Element {
   const pollingModel = Object.assign(composerModel, useChecksPanelPolling(composerModel))
   const dataModel = Object.assign(pollingModel, useChecksPanelReviewData(pollingModel))
   const refreshModel = Object.assign(dataModel, useChecksPanelManualRefresh(dataModel))
+
   const entryModel = Object.assign(
     refreshModel,
     useChecksPanelEntryRefreshAndTitleActions(refreshModel)
   )
+
   const resolutionModel = Object.assign(entryModel, useChecksPanelCommentResolution(entryModel))
+
   const mutationModel = Object.assign(
     resolutionModel,
     useChecksPanelCommentMutations(resolutionModel)
   )
+
   const queueModel = Object.assign(mutationModel, useChecksPanelAiQueue(mutationModel))
+
   const acknowledgementModel = Object.assign(
     queueModel,
     useChecksPanelAiAcknowledgement(queueModel)
   )
+
   const reviewActionsModel = Object.assign(
     acknowledgementModel,
     useChecksPanelCheckAndReviewActions(acknowledgementModel)
   )
+
   const branchActionsModel = Object.assign(
     reviewActionsModel,
     useChecksPanelBranchActions(reviewActionsModel)
   )
+
   const model = Object.assign(branchActionsModel, useChecksPanelCreateReview(branchActionsModel))
 
   if (!model.activeWorktree || model.isFolder || !model.activeReview) {

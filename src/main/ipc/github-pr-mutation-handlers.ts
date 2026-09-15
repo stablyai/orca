@@ -40,6 +40,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
       args: { repoPath: string; prNumber: number; title: string; prRepo?: GitHubOwnerRepo | null }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       const ok = await updatePRTitle(
         repo.path,
         args.prNumber,
@@ -48,7 +49,9 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
+
       broadcastSuccessfulPRMutation(ok, repo.path, repo.id, args.prNumber, event.sender.id)
+
       return ok
     }
   )
@@ -64,6 +67,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       const result = await mergePR(
         repo.path,
         args.prNumber,
@@ -72,7 +76,9 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
+
       broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)
+
       return result
     }
   )
@@ -89,6 +95,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       const result = await setPRAutoMerge(
         repo.path,
         args.prNumber,
@@ -98,7 +105,9 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
+
       broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)
+
       return result
     }
   )
@@ -114,6 +123,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       if (
         typeof args.prNumber !== 'number' ||
         !Number.isInteger(args.prNumber) ||
@@ -121,6 +131,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
       ) {
         return { ok: false, error: 'Invalid pull request number' }
       }
+
       const result = await updatePRState(
         repo.path,
         args.prNumber,
@@ -129,7 +140,9 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
+
       broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)
+
       return result
     }
   )
@@ -144,6 +157,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       if (
         typeof args.prNumber !== 'number' ||
         !Number.isInteger(args.prNumber) ||
@@ -151,6 +165,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
       ) {
         return { ok: false, error: 'Invalid pull request number' }
       }
+
       const result = await markPRReadyForReview(
         repo.path,
         args.prNumber,
@@ -158,7 +173,9 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
+
       broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)
+
       return result
     }
   )
@@ -175,6 +192,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       if (
         typeof args.prNumber !== 'number' ||
         !Number.isInteger(args.prNumber) ||
@@ -182,6 +200,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
       ) {
         return { ok: false, error: 'Invalid pull request number' }
       }
+
       return rerunPRChecks(
         repo.path,
         args.prNumber,
@@ -203,6 +222,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       const result = await requestPRReviewers(
         repo.path,
         args.prNumber,
@@ -211,7 +231,9 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
+
       broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)
+
       return result
     }
   )
@@ -227,6 +249,7 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
+
       const result = await removePRReviewers(
         repo.path,
         args.prNumber,
@@ -235,7 +258,9 @@ export function registerGitHubPRMutationHandlers(store: Store): void {
         args.prRepo ?? null,
         ...getGitHubLocalGitOptionArgs(store, repo)
       )
+
       broadcastSuccessfulPRMutation(result.ok, repo.path, repo.id, args.prNumber, event.sender.id)
+
       return result
     }
   )

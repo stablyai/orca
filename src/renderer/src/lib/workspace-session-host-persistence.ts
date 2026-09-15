@@ -71,6 +71,7 @@ function getRestoredRuntimeHostId(
   key: string
 ): ExecutionHostId | null {
   const hostId = owners?.[key]
+
   return hostId && parseExecutionHostId(hostId)?.kind === 'runtime' ? hostId : null
 }
 
@@ -79,26 +80,34 @@ function getFolderWorkspaceRuntimeHostId(
   key: string
 ): ExecutionHostId {
   const scope = parseWorkspaceKey(key)
+
   if (scope?.type !== 'folder') {
     return LOCAL_EXECUTION_HOST_ID
   }
+
   const workspace = state.folderWorkspaces?.find((entry) => entry.id === scope.folderWorkspaceId)
+
   const group = workspace
     ? state.projectGroups?.find((entry) => entry.id === workspace.projectGroupId)
     : null
+
   const parsed = parseExecutionHostId(workspace?.executionHostId ?? group?.executionHostId)
+
   if (parsed) {
     return parsed.kind === 'runtime' ? parsed.id : LOCAL_EXECUTION_HOST_ID
   }
+
   if (workspace && group) {
     // Why: once the folder and group catalogs are both known, a missing runtime
     // owner is authoritative local/SSH persistence, not a startup gap.
     return LOCAL_EXECUTION_HOST_ID
   }
+
   const restoredHostId = getRestoredRuntimeHostId(
     state.restoredRuntimeHostIdByWorkspaceSessionKey,
     key
   )
+
   return restoredHostId ?? LOCAL_EXECUTION_HOST_ID
 }
 
@@ -111,6 +120,7 @@ function buildRepoHostById(
   repos: HostPersistenceState['repos']
 ): Map<string, ExecutionHostId | null> {
   const repoHostById = new Map<string, ExecutionHostId | null>()
+
   for (const repo of repos) {
     const hostId = getRepoExecutionHostId(repo)
     const existing = repoHostById.get(repo.id)
@@ -118,6 +128,7 @@ function buildRepoHostById(
     // must not let a runtime placeholder steal local session state.
     repoHostById.set(repo.id, existing === undefined ? hostId : existing === hostId ? hostId : null)
   }
+
   return repoHostById
 }
 
@@ -137,6 +148,7 @@ function catalogReattributedAwayFrom(
   hostId: ExecutionHostId
 ): boolean {
   const claimed = claims.get(worktreeId)
+
   return Boolean(claimed) && !contestedPartitionHosts(claimed ?? []).includes(hostId)
 }
 
@@ -144,54 +156,70 @@ export function buildHostSessionRouting(state: HostPersistenceState): HostSessio
   const repoHostById = buildRepoHostById(state.repos)
   const claims = indexWorktreeHostClaims(state.worktreesByRepo, repoHostById)
   const restoredPrimaryByWorktreeId = new Map<string, ExecutionHostId>()
+
   for (const [key, hostId] of Object.entries(state.contestedPrimaryHostBySessionKey ?? {})) {
     restoredPrimaryByWorktreeId.set(normalizeWorkspaceSessionKeyToWorktreeId(key), hostId)
   }
+
   const { repoIdByWorktreeId, runtimeHostIdByWorktreeId } = indexWorkspaceRuntimeHostOwnership(
     state.worktreesByRepo
   )
 
   const hostIdByWorktreeId = (worktreeId: string): ExecutionHostId => {
     const workspaceScope = parseWorkspaceKey(worktreeId)
+
     if (workspaceScope?.type === 'folder') {
       return getFolderWorkspaceRuntimeHostId(state, worktreeId)
     }
+
     const rawWorktreeId =
       workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : worktreeId
+
     const restoredPrimary =
       state.contestedPrimaryHostBySessionKey?.[worktreeId] ??
       restoredPrimaryByWorktreeId.get(rawWorktreeId)
+
     if (restoredPrimary && !catalogReattributedAwayFrom(claims, rawWorktreeId, restoredPrimary)) {
       // Why first: the read already decided which partition each row came from. Re-deriving an
       // owner here is what let a write copy one host's workspace into another host's partition.
       return restoredPrimary
     }
+
     const claimed = claims.get(rawWorktreeId)
+
     if (claimed && claimed.size > 1) {
       // Why partitions, not claimants: 'local' and every ssh host share one blob, so a claimant set
       // that collapses to a single partition is not separable and keeps its normal routing.
       const partitions = contestedPartitionHosts(claimed)
+
       if (partitions.length > 1) {
         return pickPrimaryHostForClaims(partitions)
       }
     }
+
     const worktreeHostId = runtimeHostIdByWorktreeId.get(rawWorktreeId)
+
     if (runtimeHostIdByWorktreeId.has(rawWorktreeId) && !worktreeHostId) {
       // Why: a bare worktree id whose claimants the catalog cannot name apart stays local.
       return LOCAL_EXECUTION_HOST_ID
     }
+
     if (worktreeHostId) {
       return worktreeHostId
     }
+
     const repoId = repoIdByWorktreeId.get(rawWorktreeId) ?? getRepoIdFromWorktreeId(rawWorktreeId)
     const repoHostId = repoId ? repoHostById.get(repoId) : undefined
+
     if (!repoHostId) {
       return LOCAL_EXECUTION_HOST_ID
     }
+
     // Why: SSH-owned worktrees stay in the 'local' partition here while the runtime writes them to
     // `ssh:<targetId>`; the shared owner map records that divergence (#12723).
     return workspaceSessionPartitionHostId(repoHostId, 'local-partition')
   }
+
   return { hostIdByWorktreeId, claims }
 }
 
@@ -209,6 +237,7 @@ function splitWorkspaceSessionForWrite(
   const routing = buildHostSessionRouting(state)
   const slices = splitWorkspaceSessionByHost(payload, routing.hostIdByWorktreeId)
   attachHostSessionShadow(slices, state.contestedHostWorkspaceSessions, routing.claims, mode)
+
   return slices
 }
 
@@ -223,12 +252,14 @@ export function patchWorkspaceSessionByHost(
   const slices = splitWorkspaceSessionForWrite(patch as WorkspaceSessionState, state, 'patch')
   const local = (slices[LOCAL_EXECUTION_HOST_ID] ?? patch) as WorkspaceSessionPatch
   const localWrite = api.patch(local)
+
   for (const [hostId, slice] of nonLocalHostSessionEntries(slices)) {
     // Why: a failed runtime-partition write must not reject the local chain.
     void api.patch(slice as WorkspaceSessionPatch, hostId).catch((err) => {
       console.warn(`[session] host partition patch failed for ${hostId}:`, err)
     })
   }
+
   return localWrite
 }
 
@@ -244,9 +275,11 @@ export async function persistWorkspaceSessionByHost(
   // fields nothing else routed to this host.
   const slices = splitWorkspaceSessionForWrite(payload, state, 'replace')
   const writes: Promise<void>[] = [api.set(slices[LOCAL_EXECUTION_HOST_ID] ?? payload)]
+
   for (const [hostId, slice] of nonLocalHostSessionEntries(slices)) {
     writes.push(api.set(slice, hostId))
   }
+
   await Promise.all(writes)
   await api.flush()
 }
@@ -258,6 +291,7 @@ export function buildWorkspaceSessionHostSnapshots(
 ): WorkspaceSessionHostSnapshot[] {
   // Why 'replace': quit snapshots are applied as full partition sets.
   const slices = splitWorkspaceSessionForWrite(payload, state, 'replace')
+
   return [
     { state: slices[LOCAL_EXECUTION_HOST_ID] ?? payload },
     ...nonLocalHostSessionEntries(slices).map(([hostId, hostState]) => ({

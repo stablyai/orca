@@ -10,6 +10,7 @@ describe.skipIf(process.platform === 'win32')('orchestration database permission
 
   afterEach(() => {
     db?.close()
+
     if (directory) {
       rmSync(directory, { recursive: true, force: true })
     }

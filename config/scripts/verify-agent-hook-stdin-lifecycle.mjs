@@ -36,8 +36,10 @@ const REQUIRED_JSON_STDOUT = new Set(['antigravity-hook.sh', 'copilot-hook.sh', 
 
 function parseArgs(argv) {
   const result = { home: process.env.HOME ?? '', minMtime: 0 }
+
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index]
+
     if (value === '--home') {
       result.home = argv[index + 1] ?? ''
       index += 1
@@ -48,9 +50,11 @@ function parseArgs(argv) {
       throw new Error(['Unknown argument: ', value].join(''))
     }
   }
+
   if (!result.home) {
     throw new Error('Pass --home or set HOME to the isolated Electron home directory')
   }
+
   return result
 }
 
@@ -67,13 +71,16 @@ function runShell(command, payload, env) {
       env,
       stdio: ['pipe', 'pipe', 'pipe']
     })
+
     const stdout = []
     const stderr = []
     const stdinErrors = []
+
     const timeout = setTimeout(() => {
       child.kill('SIGKILL')
       reject(new Error(['Timed out running: ', command.slice(0, 120)].join('')))
     }, 10_000)
+
     child.stdout.on('data', (chunk) => stdout.push(chunk))
     child.stderr.on('data', (chunk) => stderr.push(chunk))
     child.stdin.on('error', (error) => stdinErrors.push(error))
@@ -100,6 +107,7 @@ function assertSuccessfulWrite(result, label) {
       [label, ' exited ', String(result.exitCode), ': ', result.stderr.slice(0, 500)].join('')
     )
   }
+
   if (result.stdinErrors.length > 0) {
     throw new Error(
       [
@@ -115,7 +123,9 @@ function assertProtocolStdout(fileName, stdout) {
   if (!REQUIRED_JSON_STDOUT.has(fileName)) {
     return
   }
+
   const firstLine = stdout.trim().split(/\r?\n/, 1)[0]
+
   try {
     JSON.parse(firstLine)
   } catch {
@@ -125,26 +135,33 @@ function assertProtocolStdout(fileName, stdout) {
 
 function readGeneratedScripts(home, minMtime) {
   const hooksDir = join(home, '.orca', 'agent-hooks')
+
   return MANAGED_SCRIPTS.map(([fileName, source]) => {
     const path = join(hooksDir, fileName)
     const stats = statSync(path)
+
     if (!stats.isFile()) {
       throw new Error([fileName, ' is not a regular file'].join(''))
     }
+
     try {
       accessSync(path, fsConstants.R_OK | fsConstants.X_OK)
     } catch {
       throw new Error([fileName, ' is not readable and executable'].join(''))
     }
+
     if (minMtime > 0 && stats.mtimeMs < minMtime) {
       throw new Error([fileName, ' predates the Electron launch'].join(''))
     }
+
     const body = readFileSync(path, 'utf8')
     const captureIndex = body.indexOf('payload=$(cat)')
     const firstExitIndex = body.indexOf('exit 0')
+
     if (captureIndex === -1 || firstExitIndex <= captureIndex) {
       throw new Error([fileName, ' can exit before capturing stdin'].join(''))
     }
+
     return { body, fileName, path, source }
   })
 }
@@ -152,19 +169,24 @@ function readGeneratedScripts(home, minMtime) {
 function findStrings(value, matches = []) {
   if (typeof value === 'string') {
     matches.push(value)
+
     return matches
   }
+
   if (Array.isArray(value)) {
     for (const child of value) {
       findStrings(child, matches)
     }
+
     return matches
   }
+
   if (value && typeof value === 'object') {
     for (const child of Object.values(value)) {
       findStrings(child, matches)
     }
   }
+
   return matches
 }
 
@@ -174,6 +196,7 @@ function nextRequest(server) {
       server.removeListener('request', onRequest)
       reject(new Error('Generated hook did not reach the loopback server'))
     }, 8_000)
+
     const onRequest = (request, response) => {
       const chunks = []
       request.on('data', (chunk) => chunks.push(chunk))
@@ -188,6 +211,7 @@ function nextRequest(server) {
         })
       })
     }
+
     server.once('request', onRequest)
   })
 }
@@ -195,12 +219,14 @@ function nextRequest(server) {
 async function verifyNoOpWrites(scripts, home, payload) {
   const commandCodeBin = mkdtempSync(join(tmpdir(), 'orca-hook-command-code-bin-'))
   symlinkSync('/bin/cat', join(commandCodeBin, 'cat'))
+
   try {
     for (const script of scripts) {
       const path =
         script.fileName === 'command-code-hook.sh'
           ? commandCodeBin
           : (process.env.PATH ?? '/usr/bin:/bin')
+
       const result = await runShell(
         ['/bin/sh ', JSON.stringify(script.path)].join(''),
         payload,
@@ -210,6 +236,7 @@ async function verifyNoOpWrites(scripts, home, payload) {
           ORCA_AGENT_HOOK_ENDPOINT: ''
         })
       )
+
       assertSuccessfulWrite(result, [script.fileName, ' no-op'].join(''))
       assertProtocolStdout(script.fileName, result.stdout)
     }
@@ -221,20 +248,25 @@ async function verifyNoOpWrites(scripts, home, payload) {
 async function verifyClaudeDevinSkip(scripts, home, payload) {
   const claude = scripts.find((script) => script.fileName === 'claude-hook.sh')
   let unexpectedRequests = 0
+
   const server = createServer((_request, response) => {
     unexpectedRequests += 1
     response.writeHead(200, { 'Content-Type': 'application/json' })
     response.end('{}')
   })
+
   await new Promise((resolve, reject) => {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', resolve)
   })
+
   try {
     const address = server.address()
+
     if (!address || typeof address === 'string') {
       throw new Error('Claude skip verifier did not receive a TCP port')
     }
+
     const result = await runShell(
       ['/bin/sh ', JSON.stringify(claude.path)].join(''),
       payload,
@@ -247,7 +279,9 @@ async function verifyClaudeDevinSkip(scripts, home, payload) {
         ORCA_PANE_KEY: 'electron-verification-pane'
       })
     )
+
     assertSuccessfulWrite(result, 'Claude Devin-import skip')
+
     if (unexpectedRequests !== 0) {
       throw new Error('Claude forwarded a hook imported by Devin')
     }
@@ -262,13 +296,17 @@ async function verifyForwarding(scripts, home, payload) {
     server.once('error', reject)
     server.listen(0, '127.0.0.1', resolve)
   })
+
   try {
     const address = server.address()
+
     if (!address || typeof address === 'string') {
       throw new Error('Loopback verifier did not receive a TCP port')
     }
+
     for (const script of scripts) {
       const requestPromise = nextRequest(server)
+
       const result = await runShell(
         ['/bin/sh ', JSON.stringify(script.path)].join(''),
         payload,
@@ -286,10 +324,12 @@ async function verifyForwarding(scripts, home, payload) {
           ORCA_COPILOT_HOOK_EVENT: 'PostToolUse'
         })
       )
+
       assertSuccessfulWrite(result, [script.fileName, ' forwarding'].join(''))
       assertProtocolStdout(script.fileName, result.stdout)
       const request = await requestPromise
       const form = new URLSearchParams(request.body)
+
       if (request.url !== ['/hook/', script.source].join('')) {
         throw new Error(
           [script.fileName, ' posted to ', String(request.url), ' instead of ', script.source].join(
@@ -297,12 +337,15 @@ async function verifyForwarding(scripts, home, payload) {
           )
         )
       }
+
       if (request.headers['x-orca-agent-hook-token'] !== 'electron-verification-token') {
         throw new Error([script.fileName, ' lost the hook token header'].join(''))
       }
+
       if (form.get('payload') !== payload) {
         throw new Error([script.fileName, ' changed the forwarded payload'].join(''))
       }
+
       if (form.get('paneKey') !== 'electron-verification-pane') {
         throw new Error([script.fileName, ' changed the forwarded pane key'].join(''))
       }
@@ -315,9 +358,11 @@ async function verifyForwarding(scripts, home, payload) {
 async function verifyInstalledLauncher(home, payload) {
   const settingsPath = join(home, '.claude', 'settings.json')
   const settings = JSON.parse(readFileSync(settingsPath, 'utf8'))
+
   const command = findStrings(settings).find(
     (value) => value.includes('claude-hook.sh') && value.includes('if [ -f ')
   )
+
   if (
     !command ||
     !command.includes('"${HOME-}/.orca/agent-hooks/claude-hook.sh"') ||
@@ -326,24 +371,29 @@ async function verifyInstalledLauncher(home, payload) {
   ) {
     throw new Error('Electron did not install the guarded Claude launcher')
   }
+
   const scratch = mkdtempSync(join(tmpdir(), 'orca-hook-launcher-'))
+
   try {
     const missingResult = await runShell(
       command,
       payload,
       withoutOrcaEnvironment({ HOME: scratch })
     )
+
     assertSuccessfulWrite(missingResult, 'installed missing-script launcher')
 
     const failingPath = join(scratch, '.orca', 'agent-hooks', 'claude-hook.sh')
     mkdirSync(join(scratch, '.orca', 'agent-hooks'), { recursive: true })
     writeFileSync(failingPath, '#!/bin/sh\ncat >/dev/null\nexit 7\n', 'utf8')
     chmodSync(failingPath, 0o755)
+
     const failingResult = await runShell(
       command,
       payload,
       withoutOrcaEnvironment({ HOME: scratch })
     )
+
     if (failingResult.exitCode !== 7 || failingResult.stdinErrors.length > 0) {
       throw new Error('Installed launcher did not preserve a running script failure')
     }
@@ -354,11 +404,13 @@ async function verifyInstalledLauncher(home, payload) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2))
+
   const payload = JSON.stringify({
     hook_event_name: 'PostToolUse',
     tool_name: 'shell',
     tool_output: 'x'.repeat(1_200_000)
   })
+
   const scripts = readGeneratedScripts(args.home, args.minMtime)
   await verifyNoOpWrites(scripts, args.home, payload)
   await verifyClaudeDevinSkip(scripts, args.home, payload)

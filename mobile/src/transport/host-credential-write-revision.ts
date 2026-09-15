@@ -1,4 +1,5 @@
 let nextRevision = 1
+
 const revisionByHostId = new Map<string, number>()
 
 export function getHostCredentialWriteRevision(hostId: string): number {

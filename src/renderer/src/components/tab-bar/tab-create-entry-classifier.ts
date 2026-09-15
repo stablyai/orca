@@ -98,6 +98,7 @@ function fileListStatusOption(fileList: RuntimeFileListState): TabEntryOption | 
       )
     )
   }
+
   return fileList.loadError ? blockedOption('load-error', fileList.loadError) : null
 }
 
@@ -116,9 +117,11 @@ function toOptions(
       id: tabEntryActionOptionId(classification),
       classification
     }))
+
   if (status) {
     options.push(status)
   }
+
   return options
 }
 
@@ -155,9 +158,11 @@ export function getTabEntryOptions(
   const trimmed = parsedSearch.query
   const engine = context.searchEngine ?? DEFAULT_SEARCH_ENGINE
   const search: TabEntryActionClassification = { kind: 'search', engine, query: trimmed }
+
   if (parsedSearch.forced) {
     return trimmed ? toOptions([search], limit) : [emptyOption()]
   }
+
   if (!trimmed) {
     return [emptyOption()]
   }
@@ -174,8 +179,10 @@ export function getTabEntryOptions(
         )
       ]
     }
+
     try {
       const filePath = validateNewTabEntryAbsolutePath(trimmed, context.localPlatform)
+
       return toOptions([{ kind: 'absolute-file', filePath }], limit)
     } catch (error) {
       return [blockedOption('invalid-absolute-path', errorMessage(error))]
@@ -183,6 +190,7 @@ export function getTabEntryOptions(
   }
 
   const explicitUrl = classifyExplicitUrl(trimmed)
+
   if (explicitUrl) {
     return explicitUrl.kind === 'blocked'
       ? [blockedOption('invalid-url', explicitUrl.message)]
@@ -192,6 +200,7 @@ export function getTabEntryOptions(
   const hostUrl = classifyHostUrl(trimmed)
   let newFile: TabEntryActionClassification | null = null
   let pathError: unknown = null
+
   try {
     newFile = { kind: 'new-file', relativePath: validateNewTabEntryRelativePath(trimmed) }
   } catch (error) {
@@ -199,48 +208,60 @@ export function getTabEntryOptions(
   }
 
   const fileStatus = fileListStatusOption(fileList)
+
   if (fileStatus) {
     if (hostUrl?.kind === 'blocked') {
       return [fileStatus]
     }
+
     if (hostUrl?.kind === 'host-url') {
       return toOptions([hostUrl], limit, fileStatus)
     }
+
     // Why: path-shaped text waits on the scan whether or not it is creatable, so
     // "src/" reports the scan instead of flashing a path error it will not keep.
     if (isLikelyNewFileIntent(trimmed)) {
       return [fileStatus]
     }
+
     if (pathError) {
       return [invalidPathOption(pathError)]
     }
+
     return toOptions([search], limit, fileStatus)
   }
 
   const actionLimit = clampActionLimit(limit)
+
   const existingFiles = findExistingFileMatches(
     trimmed,
     getPreparedQuickOpenFiles(fileList.files),
     Math.max(actionLimit, 1)
   )
+
   const exactExistingFiles = existingFiles.filter((file) => file.matchKind !== 'fuzzy')
   const fuzzyExistingFiles = existingFiles.filter((file) => file.matchKind === 'fuzzy')
 
   if (exactExistingFiles.length > 0) {
     const options: TabEntryActionClassification[] = [...exactExistingFiles]
+
     if (hostUrl?.kind === 'host-url') {
       options.push(hostUrl)
     } else if (!hostUrl && newFile) {
       options.push(search)
     }
+
     return toOptions(options, actionLimit)
   }
+
   if (hostUrl?.kind === 'blocked') {
     return [blockedOption('invalid-url', hostUrl.message)]
   }
+
   if (hostUrl?.kind === 'host-url') {
     return toOptions([hostUrl, ...fuzzyExistingFiles], actionLimit)
   }
+
   if (pathError || !newFile) {
     // Why: an unusable path is still a live quick-open prefix — "src/" cannot be
     // created, but it matches real files, and dropping them turns every typed
@@ -249,15 +270,18 @@ export function getTabEntryOptions(
       ? toOptions(fuzzyExistingFiles, actionLimit)
       : [invalidPathOption(pathError)]
   }
+
   if (isLikelyNewFileIntent(trimmed)) {
     return toOptions([newFile, search, ...fuzzyExistingFiles], actionLimit)
   }
+
   // Why no create row: a spaced, extension-less phrase is a web query, and a
   // stray arrow/click on "Create file" leaves an empty `release notes` on disk
   // that then outranks search as an exact match forever after.
   if (/\s/.test(trimmed)) {
     return toOptions([search, ...fuzzyExistingFiles], actionLimit)
   }
+
   // Why: a single token is still a quick-open attempt ("btn" → Button.tsx), so
   // only phrases promote web search over fuzzy matches. Fuzzy matching is a
   // subsequence scan that fills every slot in a real repo, so hold one back —

@@ -25,7 +25,9 @@ import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-bro
 import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hosted-browser-row-strip-placement'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
+
 const EMPTY_GROUPS: readonly TabGroup[] = []
+
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
 export default function TabGroupPanel({
@@ -64,6 +66,7 @@ export default function TabGroupPanel({
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
+
   const {
     activeTab,
     agentSessionItems,
@@ -73,6 +76,7 @@ export default function TabGroupPanel({
     tabBarOrder,
     terminalTabs
   } = model
+
   // Why: one strip owns the worktree's client-hosted rows, or every split repeats them.
   const ownsClientHostedRows = useAppStore(
     (state) =>
@@ -80,10 +84,13 @@ export default function TabGroupPanel({
         state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS
       ) === groupId
   )
+
   const worktreeClientHostedRows = useClientHostedBrowserRows(worktreeId)
+
   const clientHostedRows = ownsClientHostedRows
     ? worktreeClientHostedRows
     : EMPTY_CLIENT_HOSTED_ROWS
+
   const { setNodeRef: setBodyDropRef } = useDroppable({
     id: getTabPaneBodyDroppableId(groupId),
     data: {
@@ -93,8 +100,10 @@ export default function TabGroupPanel({
     },
     disabled: !isTabDragActive
   })
+
   // Why: per-group anchor-name lets the worktree-level overlay position panes via CSS anchor positioning, so moving a tab between groups re-targets the anchor instead of remounting xterm (loses alt-screen TUI state) or reloading `<webview>`.
   const bodyAnchorName = tabGroupBodyAnchorName(groupId)
+
   // Why: memoize so a fresh style object each render doesn't break downstream memoization keyed on referential equality.
   const bodyAnchorStyle = useMemo(
     () => ({ anchorName: bodyAnchorName }) as React.CSSProperties,
@@ -117,28 +126,34 @@ export default function TabGroupPanel({
       onActivate={commands.activateTerminal}
       onClose={(terminalId) => {
         const item = resolveGroupTabFromVisibleId(model.groupTabs, terminalId)
+
         if (item?.contentType === 'terminal' || item?.contentType === 'agent-session') {
           commands.closeItem(item.id)
+
           return
         }
+
         // Why: agent quick-launch can briefly desync unified/runtime tab ids before the host snapshot lands, so still route close through the shared helper.
         closeTerminalTab(terminalId)
       }}
       onCloseOthers={(visibleId) => {
         // Why: TabBar emits entityId for terminals/browsers but unifiedTabId for editors; match both so the menu works on every tab kind.
         const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
+
         if (item) {
           commands.closeOthers(item.id)
         }
       }}
       onCloseToRight={(visibleId) => {
         const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
+
         if (item) {
           commands.closeToRight(item.id)
         }
       }}
       onCloseToLeft={(visibleId) => {
         const item = resolveGroupTabFromVisibleId(model.groupTabs, visibleId)
+
         if (item) {
           commands.closeToLeft(item.id)
         }
@@ -186,6 +201,7 @@ export default function TabGroupPanel({
         const item = model.groupTabs.find(
           (candidate) => candidate.entityId === browserTabId && candidate.contentType === 'browser'
         )
+
         if (item) {
           commands.closeItem(item.id)
         }
@@ -196,20 +212,26 @@ export default function TabGroupPanel({
         if (!tabId) {
           return
         }
+
         const item = model.groupTabs.find((candidate) => candidate.id === tabId)
+
         if (!item) {
           return
         }
+
         commands.makePreviewFilePermanent(item.entityId, item.id)
       }}
       onPinFile={(_fileId, tabId) => {
         if (!tabId) {
           return
         }
+
         const item = model.groupTabs.find((candidate) => candidate.id === tabId)
+
         if (!item) {
           return
         }
+
         commands.pinFile(item.entityId, item.id)
       }}
       tabBarOrder={tabBarOrder}
@@ -219,10 +241,12 @@ export default function TabGroupPanel({
 
   const menuButtonClassName =
     'my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
+
   // Why: focused-only so quick commands and Close split pane stay with the active pane and unfocused strips stay compact.
   const focusedActionChromeClassName = `flex shrink-0 items-center gap-0.5 overflow-hidden transition-[opacity] duration-150 ${
     isFocused ? 'ml-1.5 pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 w-0'
   }`
+
   return (
     <div
       // Why: vertical borders stay `border-border` so the focus highlight (--accent ~#f5f5f5 in light) doesn't paint a near-white strip by the resize handle; only the bottom border changes on focus.

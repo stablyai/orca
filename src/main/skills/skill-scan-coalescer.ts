@@ -9,6 +9,7 @@ export type SkillScanRunOptions = {
 }
 
 type CacheEntry<T> = { value: T; expiresAt: number }
+
 type PendingEntry<T> = { promise: Promise<T>; startedAt: number; abort: AbortController }
 
 // Why: a root on a stalled network mount can leave a readdir that never settles.
@@ -91,16 +92,22 @@ export class SkillScanCoalescer<T> {
       // finish, and its callers still want an answer; the publish fence in
       // `start` already stops it writing a pre-mutation result.
       this.cache.delete(key)
+
       return { value: await this.start(key, options.ttlMs, task), cached: false }
     }
+
     const fresh = this.readFresh(key)
+
     if (fresh) {
       return { value: fresh.value, cached: true }
     }
+
     const inFlight = this.pending.get(key)
+
     if (inFlight && this.now() - inFlight.startedAt < MAX_JOINABLE_SCAN_AGE_MS) {
       return { value: await inFlight.promise, cached: true }
     }
+
     if (inFlight) {
       if (this.abandonedScans >= MAX_ABANDONED_SCANS) {
         // Why leave the stalled entry in `pending`: it is still the only scan that
@@ -108,6 +115,7 @@ export class SkillScanCoalescer<T> {
         // moment the mount responds, with no extra walk from us.
         throw new SkillScanShedError()
       }
+
       // Why: the replacement is what future callers read, so the walk this one
       // gives up on must stop issuing filesystem work rather than race it.
       this.abandonedScans += 1
@@ -118,6 +126,7 @@ export class SkillScanCoalescer<T> {
           this.abandonedScans -= 1
         })
     }
+
     return { value: await this.start(key, options.ttlMs, task), cached: false }
   }
 
@@ -129,6 +138,7 @@ export class SkillScanCoalescer<T> {
 
   private start(key: string, ttlMs: number, task: (signal: AbortSignal) => Promise<T>): Promise<T> {
     const abort = new AbortController()
+
     const promise = task(abort.signal)
       .then((value) => {
         // Why: owning the pending slot is what makes a scan publishable, and it is
@@ -141,6 +151,7 @@ export class SkillScanCoalescer<T> {
         if (ttlMs > 0 && this.pending.get(key)?.promise === promise) {
           this.write(key, value, ttlMs)
         }
+
         return value
       })
       .finally(() => {
@@ -150,36 +161,46 @@ export class SkillScanCoalescer<T> {
           this.pending.delete(key)
         }
       })
+
     // Why: rejections must not surface as an unhandled rejection on the shared
     // promise before the caller that started it awaits.
     promise.catch(() => undefined)
     this.pending.set(key, { promise, startedAt: this.now(), abort })
+
     return promise
   }
 
   private readFresh(key: string): CacheEntry<T> | null {
     const entry = this.cache.get(key)
+
     if (!entry) {
       return null
     }
+
     if (entry.expiresAt <= this.now()) {
       this.cache.delete(key)
+
       return null
     }
+
     // Refresh recency so a hot root outlives a one-off target under the bound.
     this.cache.delete(key)
     this.cache.set(key, entry)
+
     return entry
   }
 
   private write(key: string, value: T, ttlMs: number): void {
     this.cache.delete(key)
     this.cache.set(key, { value, expiresAt: this.now() + ttlMs })
+
     while (this.cache.size > this.maximumEntries) {
       const oldestKey = this.cache.keys().next().value
+
       if (oldestKey === undefined) {
         break
       }
+
       this.cache.delete(oldestKey)
     }
   }

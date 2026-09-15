@@ -32,16 +32,20 @@ export function clearTerminalTabsParkedOnUnresolvedHost(): void {
  */
 export function getTabIdsAwaitingHostHydrationRemount(state: ParkedPaneHostState): string[] {
   const remountable: string[] = []
+
   for (const [worktreeId, parkedTabIds] of parkedTabIdsByWorktreeId) {
     // Why: undefined means the owner is still unresolved, which is the state the
     // pane already parked on; remounting would just re-park it in a loop.
     if (getConnectionIdFromState(state, worktreeId) === undefined) {
       continue
     }
+
     const tabs = state.tabsByWorktree?.[worktreeId] ?? []
+
     for (const tabId of parkedTabIds) {
       const tab = tabs.find((candidate) => candidate.id === tabId)
       const hasLivePty = (state.ptyIdsByTabId?.[tabId]?.length ?? 0) > 0
+
       // Remount only a tab that still exists and still has no PTY. Either way the
       // entry is consumed below: a closed tab is gone, and one that acquired a PTY
       // by other means is no longer parked.
@@ -49,10 +53,12 @@ export function getTabIdsAwaitingHostHydrationRemount(state: ParkedPaneHostState
         remountable.push(tabId)
       }
     }
+
     // Why: consume every entry so a remount is attempted once per park. If the
     // retry parks again it re-registers, so this cannot spin on repeated
     // repos:changed events. Cleared after iterating to avoid mutating the live Set.
     parkedTabIdsByWorktreeId.delete(worktreeId)
   }
+
   return remountable
 }

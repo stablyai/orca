@@ -19,16 +19,22 @@ import {
 } from '../../src/shared/terminal-stream-protocol'
 
 const ENVIRONMENT_ID = 'env-1'
+
 const TERMINAL_HANDLE = 'terminal-1'
+
 const REMOTE_PTY_ID = `remote:${ENVIRONMENT_ID}@@${TERMINAL_HANDLE}`
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
 type StoreState = Record<string, unknown>
 
 let mockStoreState: StoreState
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
+
 /** The store action reports admission now, not a bare boolean. */
 const REMOUNTED = { remounted: true as const, generation: 1 }
+
 const remountTerminalTabForRecovery = vi.fn<(tabId: string, request?: unknown) => typeof REMOUNTED>(
   () => REMOUNTED
 )
@@ -38,6 +44,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -46,8 +53,11 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+
 vi.mock('sonner', () => ({ toast: { info: vi.fn() } }))
+
 vi.mock('@/lib/codex-stale-pane-sweep', () => ({ notifyCodexPaneBoundForStaleSweep: vi.fn() }))
+
 vi.mock('@/runtime/web-runtime-session', () => ({
   refreshWebRuntimeSessionTabsSnapshot: vi.fn(async () => {})
 }))
@@ -72,6 +82,7 @@ function startHost(): {
   const hostOpcodes: number[] = []
   // The host's whole reason to emit the opcode: the PTY refused the bytes.
   const sendTerminal = vi.fn().mockResolvedValue({ accepted: false })
+
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     registerRemoteTerminalViewSubscriber: () => () => {},
@@ -106,6 +117,7 @@ function startHost(): {
     cleanupSubscription: vi.fn(),
     waitForTerminal: vi.fn(() => new Promise<never>(() => {}))
   } as unknown as OrcaRuntimeService
+
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
   const bridge = {
@@ -121,6 +133,7 @@ function startHost(): {
         number,
         (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
       >()
+
       void dispatcher.dispatchStreaming(
         { id: 'req-1', authToken: 'tok', method: args.method, params: {} },
         (message) => callbacks.onResponse(JSON.parse(message)),
@@ -128,14 +141,18 @@ function startHost(): {
           connectionId: 'conn-e2e',
           sendBinary: (bytes) => {
             const opcode = decodeTerminalStreamFrame(bytes)?.opcode
+
             if (opcode !== undefined) {
               hostOpcodes.push(opcode)
             }
+
             callbacks.onBinary?.(bytes)
+
             return true
           },
           registerBinaryStreamHandler: (streamId, handler) => {
             handlers.set(streamId, handler)
+
             return () => {
               if (handlers.get(streamId) === handler) {
                 handlers.delete(streamId)
@@ -144,10 +161,12 @@ function startHost(): {
           }
         }
       )
+
       return {
         unsubscribe: vi.fn(),
         sendBinary: (bytes: Uint8Array) => {
           const frame = decodeTerminalStreamFrame(bytes)
+
           if (frame) {
             handlers.get(frame.streamId)?.(frame)
           }
@@ -158,6 +177,7 @@ function startHost(): {
       if (request.method === 'terminal.resolvePane') {
         const params = request.params as { paneKey: string; worktreeId: string }
         const separator = params.paneKey.indexOf(':')
+
         return {
           ok: true,
           result: {
@@ -170,9 +190,11 @@ function startHost(): {
           }
         }
       }
+
       return { ok: true, result: { terminal: { handle: TERMINAL_HANDLE } } }
     }
   }
+
   return { bridge, sendTerminal, hostOpcodes }
 }
 
@@ -180,6 +202,7 @@ function createPane() {
   const activeBuffer = { type: 'normal' as const, viewportY: 0, baseY: 0, cursorY: 0, cursorX: 0 }
   const container = new EventTarget() as HTMLElement
   Object.defineProperty(container, 'dataset', { configurable: true, value: {} })
+
   const terminal = {
     cols: 120,
     rows: 40,
@@ -208,11 +231,13 @@ function createPane() {
       registerOscHandler: vi.fn(() => ({ dispose: vi.fn() }))
     }
   }
+
   return { id: 1, leafId: LEAF_ID, stablePaneId: LEAF_ID, terminal, container }
 }
 
 function createManager() {
   const panes = [{ id: 1, leafId: LEAF_ID }]
+
   return {
     setPaneGpuRendering: vi.fn(),
     markPaneHasComplexScriptOutput: vi.fn(),
@@ -343,6 +368,7 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
     }
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       callback(0)
+
       return 1
     })
     globalThis.cancelAnimationFrame = vi.fn()
@@ -355,6 +381,7 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
   for (const [label, hasPty] of LIVENESS_ANSWERS) {
     it(`remounts the tab when the pane liveness probe returns ${label}`, async () => {
       const { bridge, sendTerminal, hostOpcodes } = startHost()
+
       ;(globalThis as unknown as { window: unknown }).window = {
         api: {
           runtimeEnvironments: { call: bridge.call, subscribe: bridge.subscribe },
@@ -404,8 +431,10 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
       }
 
       const { connectPanePty } = await import('@/components/terminal-pane/pty-connection')
+
       const { _resetTerminalPaneRecoveryForTests } =
         await import('@/components/terminal-pane/terminal-pane-recovery')
+
       _resetTerminalPaneRecoveryForTests()
 
       const pane = createPane()

@@ -27,21 +27,35 @@ const {
 )
 
 vi.mock('fs', () => moduleFactories.fs())
+
 vi.mock('child_process', async (importOriginal) =>
   moduleFactories.childProcess(await importOriginal<Record<string, unknown>>())
 )
+
 vi.mock('net', () => moduleFactories.net())
+
 vi.mock('./daemon-health', () => moduleFactories.daemonHealth())
+
 vi.mock('./daemon-pid-identity', () => moduleFactories.daemonPidIdentity())
+
 vi.mock('./daemon-tcc-attribution', () => moduleFactories.daemonTccAttribution())
+
 vi.mock('./daemon-bundle-staleness', () => moduleFactories.daemonBundleStaleness())
+
 vi.mock('./daemon-stale-kill', () => moduleFactories.daemonStaleKill())
+
 vi.mock('./daemon-process-start-time', () => moduleFactories.daemonProcessStartTime())
+
 vi.mock('./daemon-pid-file-parse', () => moduleFactories.daemonPidFileParse())
+
 vi.mock('./client', () => moduleFactories.client())
+
 vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent())
+
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
+
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
+
 vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
 
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
@@ -64,23 +78,28 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     forkMock.mockImplementationOnce(() => {
       const handlers: Record<string, ((arg?: unknown) => void)[]> = {
         message: [],
         error: [],
         exit: []
       }
+
       return {
         pid: 12345,
         on(event: string, cb: (arg?: unknown) => void) {
           handlers[event]?.push(cb)
+
           if (event === 'message') {
             queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
           }
+
           return this
         },
         off(event: string, cb: (arg?: unknown) => void) {
           handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+
           return this
         },
         disconnect: vi.fn(),
@@ -118,6 +137,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     forkMock.mockImplementationOnce(() => {
       throw new Error('stop after replacement decision')
     })
+
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string
@@ -149,6 +169,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       forkMock.mockImplementationOnce(() => {
         throw new Error('stop after replacement decision')
       })
+
       const launcher = spawnerInstances[0].launcher as (
         socketPath: string,
         tokenPath: string
@@ -190,6 +211,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     forkMock.mockImplementationOnce(() => {
       throw new Error('stop after replacement decision')
     })
+
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string
@@ -219,6 +241,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     forkMock.mockImplementationOnce(() => {
       throw new Error('stop after replacement decision')
     })
+
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string
@@ -256,16 +279,20 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         connect: [],
         error: []
       }
+
       return {
         on(event: string, cb: () => void) {
           handlers[event]?.push(cb)
+
           if (event === 'connect') {
             queueMicrotask(() => cb())
           }
+
           return this
         },
         removeListener(event: string, cb: () => void) {
           handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+
           return this
         },
         destroy() {}
@@ -274,6 +301,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     forkMock.mockImplementationOnce(() => {
       throw new Error('stop after replacement decision')
     })
+
     const launcher = spawnerInstances[0].launcher as (
       socketPath: string,
       tokenPath: string
@@ -311,6 +339,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         disconnect: vi.fn()
       }
     }
+
     daemonClientMock
       .mockImplementationOnce(unreachableClient)
       .mockImplementationOnce(unreachableClient)
@@ -319,6 +348,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
     probeSocketExistsMock.mockReturnValue(false)
     forkMock.mockImplementationOnce(() => ({
@@ -327,6 +357,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         if (event === 'message') {
           queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
         }
+
         return this
       },
       once() {
@@ -340,6 +371,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     }))
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       await launcher('/fake/socket', '/fake/token')
 

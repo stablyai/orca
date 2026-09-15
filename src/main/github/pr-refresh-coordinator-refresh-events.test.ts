@@ -2,15 +2,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./pr-refresh-coordinator-test-mocks')
+
   return { coordinatorMocks: moduleMocks.createPRRefreshCoordinatorMocks(), moduleMocks }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(coordinatorMocks))
+
 vi.mock('./client', () => moduleMocks.clientModuleMock(coordinatorMocks))
+
 vi.mock('./github-api-repository', () =>
   moduleMocks.githubApiRepositoryModuleMock(coordinatorMocks)
 )
+
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(coordinatorMocks))
+
 vi.mock('../ipc/ui', () => moduleMocks.ipcUiModuleMock(coordinatorMocks))
 
 import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
@@ -125,6 +130,7 @@ describe('pr-refresh-coordinator', () => {
     const outcomeEvent = sendMock.mock.calls
       .map(([, event]) => event)
       .find((event) => event.outcome)
+
     expect(outcomeEvent?.aliases[0]?.currentHeadOid).toBe('worktree-head-oid')
   })
 
@@ -150,12 +156,15 @@ describe('pr-refresh-coordinator', () => {
     const { refreshPRNow } = await import('./pr-refresh-coordinator')
     let resolveFirst!: (outcome: ReturnType<typeof makePR>) => void
     let resolveSecond!: (outcome: ReturnType<typeof makePR>) => void
+
     const first = new Promise<ReturnType<typeof makePR>>((resolve) => {
       resolveFirst = resolve
     })
+
     const second = new Promise<ReturnType<typeof makePR>>((resolve) => {
       resolveSecond = resolve
     })
+
     getPRForBranchOutcomeMock
       .mockImplementationOnce(async () => ({
         kind: 'found',

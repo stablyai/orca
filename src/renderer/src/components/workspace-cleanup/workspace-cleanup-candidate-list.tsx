@@ -9,10 +9,12 @@ type WorkspaceCleanupListRow = { worktreeId: string }
 // byte-for-byte unchanged. The O(N) stream-in churn and per-keystroke re-render
 // only bite at the hundreds-to-thousands a heavy multi-agent user accumulates.
 export const WORKSPACE_CLEANUP_VIRTUALIZE_MIN_ROWS = 40
+
 // Why: a collapsed row is a single metadata line (~48px with px-3 py-2.5);
 // expanded rows and failure banners are taller, so estimate the common height
 // and let measureElement correct the tall variants.
 const WORKSPACE_CLEANUP_ROW_ESTIMATE_PX = 48
+
 const WORKSPACE_CLEANUP_ROW_OVERSCAN = 8
 
 /**
@@ -52,6 +54,7 @@ export function WorkspaceCleanupCandidateList<Row extends WorkspaceCleanupListRo
     // scan refreshes instead of remounting the window on every streamed row.
     getItemKey: (index) => {
       const row = rows[index]
+
       return row === undefined ? index : getRowKey(row)
     }
   })
@@ -64,9 +67,11 @@ export function WorkspaceCleanupCandidateList<Row extends WorkspaceCleanupListRo
     <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
       {virtualizer.getVirtualItems().map((item) => {
         const candidate = rows[item.index]
+
         if (candidate === undefined) {
           return null
         }
+
         return (
           <div
             key={item.key}

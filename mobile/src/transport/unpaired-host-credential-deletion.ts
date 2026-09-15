@@ -25,10 +25,13 @@ export function createUnpairedHostCredentialDeletion(dependencies: DeletionDepen
 
   async function shouldSkip(hostId: string, writeRevision: number): Promise<boolean> {
     await dependencies.waitForHostMutations()
+
     if (await dependencies.hasStoredHost(hostId)) {
       return true
     }
+
     assertWriteRevisionUnchanged(hostId, writeRevision)
+
     return false
   }
 
@@ -36,21 +39,28 @@ export function createUnpairedHostCredentialDeletion(dependencies: DeletionDepen
     if (await shouldSkip(hostId, writeRevision)) {
       return
     }
+
     assertWriteRevisionUnchanged(hostId, writeRevision)
     await deleteHostDeviceToken(hostId)
+
     if (await shouldSkip(hostId, writeRevision)) {
       return
     }
+
     assertWriteRevisionUnchanged(hostId, writeRevision)
     await deleteMobileRelayCredentialBundle(hostId)
+
     if (await shouldSkip(hostId, writeRevision)) {
       return
     }
+
     assertWriteRevisionUnchanged(hostId, writeRevision)
     await deleteMobileRelayDirectUpgradeJournal(hostId)
+
     if (await shouldSkip(hostId, writeRevision)) {
       return
     }
+
     assertWriteRevisionUnchanged(hostId, writeRevision)
     clearHostCredentialWriteRevision(hostId)
     dependencies.onDeleted(hostId)

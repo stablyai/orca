@@ -43,6 +43,7 @@ export function useWorktreeJumpPaletteProjectTargets({
     () => buildCmdJSettingsResults(settingsSections),
     [settingsSections]
   )
+
   const actionResults = useMemo(
     () =>
       buildCmdJActionResults([
@@ -51,18 +52,22 @@ export function useWorktreeJumpPaletteProjectTargets({
       ]),
     [pluginCommands]
   )
+
   const renderableProjectRepoIds = useMemo(() => {
     const ids = new Set<string>()
+
     for (const worktree of allWorktrees) {
       if (!worktree.isArchived) {
         ids.add(worktree.repoId)
       }
     }
+
     for (const repo of repos) {
       if ((worktreesByRepo[repo.id]?.length ?? 0) === 0) {
         ids.add(repo.id)
       }
     }
+
     for (const repoId of buildImportedWorktreesCardCandidates({
       repos,
       detectedWorktreesByRepo,
@@ -70,9 +75,11 @@ export function useWorktreeJumpPaletteProjectTargets({
     }).keys()) {
       ids.add(repoId)
     }
+
     for (const creation of Object.values(pendingWorktreeCreations)) {
       ids.add(creation.request.repoId)
     }
+
     return ids
   }, [
     allWorktrees,
@@ -82,6 +89,7 @@ export function useWorktreeJumpPaletteProjectTargets({
     worktreeVisibilityDefaultsByHost,
     worktreesByRepo
   ])
+
   const hasAnyProjectSearchCandidates = useMemo(
     () =>
       hasCmdJProjectSearchCandidates({
@@ -93,6 +101,7 @@ export function useWorktreeJumpPaletteProjectTargets({
       }),
     [projectGroups, projectHostSetups, projects, renderableProjectRepoIds, repos]
   )
+
   const projectTargetItems = useMemo<ProjectTargetPaletteItem[]>(
     () =>
       hasQuery
@@ -108,6 +117,7 @@ export function useWorktreeJumpPaletteProjectTargets({
               if (!filterPredicate) {
                 return true
               }
+
               return result.kind === 'project'
                 ? filterPredicate.matchesProjectRowKey(result.rowKey)
                 : filterPredicate.matchesGroupHostId(
@@ -130,6 +140,7 @@ export function useWorktreeJumpPaletteProjectTargets({
       repos
     ]
   )
+
   return {
     settingsResults,
     actionResults,

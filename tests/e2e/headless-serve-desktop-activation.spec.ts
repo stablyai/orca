@@ -34,6 +34,7 @@ import { parsePaneKey } from '../../src/shared/stable-pane-id'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 
 const electronPackageDir = path.join(process.cwd(), 'node_modules', 'electron')
+
 const electronPath = path.join(
   electronPackageDir,
   'dist',
@@ -43,6 +44,7 @@ const electronPath = path.join(
 function createHeadlessLaunchIsolation(userDataDir: string): ElectronHomeIsolation {
   const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
   void _unused
+
   return createElectronHomeIsolation({
     inheritedEnv: cleanEnv,
     launchEnv: {
@@ -62,10 +64,13 @@ function readDaemonPid(userDataDir: string): number {
     path.join(userDataDir, 'daemon', `daemon-v${PROTOCOL_VERSION}.pid`),
     'utf8'
   )
+
   const parsed = JSON.parse(raw) as { pid?: unknown }
+
   if (typeof parsed.pid !== 'number') {
     throw new Error(`Daemon pid file did not contain a numeric pid: ${raw}`)
   }
+
   return parsed.pid
 }
 
@@ -87,11 +92,14 @@ function readPersistedPromotionBinding(
         terminalLayoutsByTabId?: Record<string, { ptyIdsByLeafId?: Record<string, string | null> }>
       }
     }
+
     const tab = persisted.workspaceSession?.tabsByWorktree?.[worktreeId]?.find(
       (candidate) => candidate.id === tabId
     )
+
     const ptyId =
       persisted.workspaceSession?.terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId?.[leafId]
+
     return tab && ptyId ? { tabId, leafId, ptyId } : null
   } catch {
     return null
@@ -102,15 +110,18 @@ async function waitForProcessExit(child: ChildProcess, timeoutMs: number): Promi
   if (child.exitCode !== null || child.signalCode !== null) {
     return true
   }
+
   return await new Promise((resolve) => {
     const onExit = (): void => {
       clearTimeout(timeout)
       resolve(true)
     }
+
     const timeout = setTimeout(() => {
       child.off('exit', onExit)
       resolve(false)
     }, timeoutMs)
+
     child.once('exit', onExit)
   })
 }
@@ -120,8 +131,10 @@ test.describe.configure({ mode: 'serial' })
 test('promotes the headless owner without replacing its daemon terminal', async (// oxlint-disable-next-line no-empty-pattern -- This lifecycle test owns both launches and intentionally opts out of the default app fixture.
 {}, testInfo) => {
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
+
   if (!repoPath || !existsSync(repoPath)) {
     test.skip(true, 'Global setup did not produce a seeded test repo')
+
     return
   }
 
@@ -158,6 +171,7 @@ test('promotes the headless owner without replacing its daemon terminal', async 
             if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
               return 'starting'
             }
+
             throw error
           }
         },
@@ -171,14 +185,17 @@ test('promotes the headless owner without replacing its daemon terminal', async 
     const beforeStatus = await client.call<RuntimeStatus>('status.get')
     const daemonPidBefore = readDaemonPid(userDataDir)
     await client.call('repo.add', { path: repoPath, kind: 'git' })
+
     const created = await client.call<{ terminal: RuntimeTerminalCreate }>('terminal.create', {
       worktree: `path:${repoPath}`,
       title: 'Serve promotion continuity'
     })
+
     const terminal = created.result.terminal
     const originalPtyId = terminal.ptyId
     const originalTabId = terminal.tabId
     const paneIdentity = terminal.paneKey ? parsePaneKey(terminal.paneKey) : null
+
     if (!originalPtyId || !originalTabId || !paneIdentity) {
       throw new Error('Headless terminal did not expose its durable pane and daemon PTY identity')
     }
@@ -196,6 +213,7 @@ test('promotes the headless owner without replacing its daemon terminal', async 
             terminal: terminal.handle,
             limit: 200
           })
+
           return response.result.terminal.tail.join('\n')
         },
         { timeout: 15_000 }
@@ -210,6 +228,7 @@ test('promotes the headless owner without replacing its daemon terminal', async 
     activatingProcess.on('error', (error) => {
       console.error('[e2e] activating process failed to spawn:', error)
     })
+
     if (forwardAppLogs) {
       const prefix = '[e2e] activating process'
       activatingProcess.stdout?.on('data', (chunk: Buffer) => {
@@ -272,9 +291,11 @@ test('promotes the headless owner without replacing its daemon terminal', async 
       activatingProcess.kill('SIGKILL')
       await waitForProcessExit(activatingProcess, 5_000)
     }
+
     if (serveApp) {
       await closeElectronAppForE2E(serveApp)
     }
+
     await cleanupE2EDaemons(userDataDir)
     rmSync(userDataDir, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 })
   }

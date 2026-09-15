@@ -14,8 +14,11 @@ type LogEntry = {
 }
 
 const pluginRoots: string[] = []
+
 const managers: PluginWorkerManager[] = []
+
 let bundleRoot = ''
+
 let hostEntryPath = ''
 
 function createStateNotifications(): {
@@ -23,6 +26,7 @@ function createStateNotifications(): {
   waitFor: (predicate: () => boolean, description: string, timeoutMs?: number) => Promise<void>
 } {
   const listeners = new Set<() => void>()
+
   return {
     notify: () => {
       for (const listener of listeners) {
@@ -33,19 +37,23 @@ function createStateNotifications(): {
       if (predicate()) {
         return Promise.resolve()
       }
+
       return new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
           listeners.delete(check)
           reject(new Error(`timed out waiting for ${description}`))
         }, timeoutMs)
+
         const check = (): void => {
           if (!predicate()) {
             return
           }
+
           clearTimeout(timeout)
           listeners.delete(check)
           resolve()
         }
+
         listeners.add(check)
       })
     }
@@ -84,6 +92,7 @@ async function createPluginSpec(
   const rootDir = await mkdtemp(join(tmpdir(), 'orca-plugin-supervision-'))
   pluginRoots.push(rootDir)
   await writeFile(join(rootDir, 'main.mjs'), source)
+
   return {
     pluginKey: 'orca-samples.supervision',
     rootDir,
@@ -103,7 +112,9 @@ describe('real plugin worker supervision', () => {
         })
       }
     `)
+
     const notifications = createStateNotifications()
+
     const manager = new PluginWorkerManager({
       entryPath: hostEntryPath,
       executeHostCall: async () => ({ ok: true, value: null }),
@@ -111,6 +122,7 @@ describe('real plugin worker supervision', () => {
       onWorkerStateChange: notifications.notify,
       onWorkerGone: vi.fn()
     })
+
     managers.push(manager)
 
     const worker = await manager.ensureActive(spec)
@@ -128,6 +140,7 @@ describe('real plugin worker supervision', () => {
     const spec = await createPluginSpec()
     const notifications = createStateNotifications()
     const logs: LogEntry[] = []
+
     const manager = new PluginWorkerManager({
       entryPath: hostEntryPath,
       executeHostCall: async () => ({ ok: true, value: null }),
@@ -135,6 +148,7 @@ describe('real plugin worker supervision', () => {
       onWorkerStateChange: notifications.notify,
       onWorkerGone: vi.fn()
     })
+
     managers.push(manager)
 
     let current: PluginWorkerHandle = await manager.ensureActive(spec)
@@ -150,9 +164,11 @@ describe('real plugin worker supervision', () => {
           manager.restartCount(spec.pluginKey) === index + 1,
         `restart ${index + 1} to enter backoff`
       )
+
       const restartLog = logs.find((entry) =>
         entry.line.includes(`restart ${index + 1} in ${delayMs}ms`)
       )
+
       expect(restartLog?.level).toBe('warn')
 
       current = await manager.ensureActive(spec)

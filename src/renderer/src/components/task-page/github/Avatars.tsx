@@ -3,6 +3,7 @@ import React from 'react'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import { Users } from 'lucide-react'
 import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+
 export function ReviewChipAvatar({
   reviewer,
   avatarHost
@@ -14,6 +15,7 @@ export function ReviewChipAvatar({
     // Why: review requests may contain only logins; use the PR host before falling back to initials.
     const avatarUrl =
       reviewer.avatarUrl || `https://${avatarHost ?? 'github.com'}/${reviewer.login}.png?size=40`
+
     return (
       <GitHubUserAvatar
         login={reviewer.login}
@@ -24,8 +26,10 @@ export function ReviewChipAvatar({
       />
     )
   }
+
   return <Users className="size-5 shrink-0" />
 }
+
 export function GitHubAssigneeAvatar({
   assignee
 }: {

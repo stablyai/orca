@@ -20,15 +20,19 @@ describe('uploadSkillPackageToSignedPolicy', () => {
     const archive = Buffer.alloc(3 * 64 * 1024, 0x61)
     await writeFile(archivePath, archive)
     let markStarted!: () => void
+
     const started = new Promise<void>((resolve) => {
       markStarted = resolve
     })
+
     let chunksSeen = 0
     const chunkWaiters = new Set<() => void>()
+
     const waitForChunk = async (count: number): Promise<void> => {
       if (chunksSeen >= count) {
         return
       }
+
       await new Promise<void>((resolve) => {
         const check = (): void => {
           if (chunksSeen >= count) {
@@ -36,20 +40,26 @@ describe('uploadSkillPackageToSignedPolicy', () => {
             resolve()
           }
         }
+
         chunkWaiters.add(check)
       })
     }
+
     const fetcher = vi.fn(async (_url: URL | RequestInfo, init?: RequestInit) => {
       markStarted()
       const body = init?.body as unknown as AsyncIterable<Buffer>
+
       for await (const _chunk of body) {
         chunksSeen += 1
         chunkWaiters.forEach((notify) => notify())
         await new Promise<void>((resolve) => setTimeout(resolve, 30_000))
       }
+
       return new Response(null, { status: 204 })
     })
+
     const progress = vi.fn()
+
     const upload = uploadSkillPackageToSignedPolicy({
       policy: {
         url: 'https://storage.googleapis.com/upload',
@@ -87,18 +97,23 @@ describe('uploadSkillPackageToSignedPolicy', () => {
     const archive = Buffer.from('private-package-bytes')
     await writeFile(archivePath, archive)
     let uploaded = Buffer.alloc(0)
+
     const fetcher = vi.fn(async (_url: URL | RequestInfo, init?: RequestInit) => {
       const chunks: Buffer[] = []
       const body = init?.body as unknown as AsyncIterable<Buffer>
+
       for await (const chunk of body) {
         chunks.push(Buffer.from(chunk))
       }
+
       uploaded = Buffer.concat(chunks)
       expect(Number(init?.headers && new Headers(init.headers).get('content-length'))).toBe(
         uploaded.length
       )
+
       return new Response(null, { status: 204 })
     }) as typeof fetch
+
     const progress = vi.fn()
 
     await uploadSkillPackageToSignedPolicy({
@@ -154,6 +169,7 @@ describe('uploadSkillPackageToSignedPolicy', () => {
     roots.push(root)
     const archivePath = join(root, 'package.tar.gz')
     await writeFile(archivePath, 'bytes')
+
     const fetcher = vi.fn(
       async (_url: URL | RequestInfo, init?: RequestInit) =>
         await new Promise<Response>((_resolve, reject) => {
@@ -168,6 +184,7 @@ describe('uploadSkillPackageToSignedPolicy', () => {
       fetcher,
       timeoutMs: 25
     })
+
     const startedAt = Date.now()
 
     await expect(upload).rejects.toThrow('skill-cloud-upload-timeout')

@@ -16,6 +16,7 @@ export function createTerminalTabActivationOrder(): TerminalTabActivationOrder {
         activationSeqByTabId.set(activeTabId, nextActivationSeq)
         nextActivationSeq += 1
       }
+
       previousActiveTabId = activeTabId
     },
     getActivationSeq(tabId) {
@@ -25,6 +26,7 @@ export function createTerminalTabActivationOrder(): TerminalTabActivationOrder {
       if (previousActiveTabId !== null && !liveTabIds.has(previousActiveTabId)) {
         previousActiveTabId = null
       }
+
       for (const tabId of Array.from(activationSeqByTabId.keys())) {
         if (!liveTabIds.has(tabId)) {
           activationSeqByTabId.delete(tabId)

@@ -17,6 +17,7 @@ import { translate } from '@/i18n/i18n'
 
 const PROJECT_FROZEN_COLUMN_SURFACE_CLASS =
   '[background:color-mix(in_srgb,var(--muted)_50%,var(--background))]'
+
 const PROJECT_FROZEN_COLUMN_HOVER_SURFACE_CLASS =
   'group-hover/project-row:[background:color-mix(in_srgb,var(--accent)_60%,var(--background))]'
 
@@ -56,6 +57,7 @@ export default function ProjectRow({
   sourceSettings
 }: Props): React.JSX.Element {
   const disabled = row.itemType === 'REDACTED'
+
   // Why: design doc §Row actions — draft-issue rows have no URL or number, so
   // the title is non-interactive. Surface the draft body in a hover card so
   // the user can still read context without round-tripping to GitHub.
@@ -63,6 +65,7 @@ export default function ProjectRow({
     row.itemType === 'DRAFT_ISSUE' && row.content.body && row.content.body.trim().length > 0
       ? row.content.body
       : null
+
   const rowInner = (
     <div
       className={cn(
@@ -74,6 +77,7 @@ export default function ProjectRow({
       {fields.map((f, idx) => {
         const next = fields[idx + 1]
         const frozen = idx < 2
+
         return (
           <div
             key={f.id}
@@ -177,5 +181,6 @@ export default function ProjectRow({
       </HoverCard>
     )
   }
+
   return rowInner
 }

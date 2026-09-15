@@ -29,6 +29,7 @@ const {
     getVersion: vi.fn(() => '1.0.51'),
     on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       appHandlers.set(event, [...(appHandlers.get(event) ?? []), handler])
+
       return appMock
     }),
     emit: (event: string, ...args: unknown[]) => emit(appHandlers, event, ...args),
@@ -46,6 +47,7 @@ const {
     setFeedURL: vi.fn(),
     on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       updaterHandlers.set(event, [...(updaterHandlers.get(event) ?? []), handler])
+
       return autoUpdaterMock
     }),
     emit: (event: string, ...args: unknown[]) => emit(updaterHandlers, event, ...args)
@@ -76,19 +78,26 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('electron-updater', () => ({ autoUpdater: autoUpdaterMock }))
+
 vi.mock('./electron-updater-loader', () => ({ loadElectronAutoUpdater: () => autoUpdaterMock }))
+
 vi.mock('./linux-update-package-type', () => ({
   getLinuxPackageType: () => 'non-root',
   getLinuxRootPackageType: () => null,
   isExternallyManagedLinuxInstall: () => false
 }))
+
 vi.mock('@electron-toolkit/utils', () => ({ is: { dev: false } }))
+
 vi.mock('./ipc/pty', () => ({ killAllPty: killAllPtyMock }))
+
 vi.mock('./updater-changelog', () => ({ fetchChangelog: vi.fn().mockResolvedValue(null) }))
+
 vi.mock('./updater-nudge', () => ({
   fetchNudge: vi.fn().mockResolvedValue(null),
   shouldApplyNudge: vi.fn().mockReturnValue(false)
 }))
+
 vi.mock('./updater-prerelease-feed', () => ({
   fetchNewerReleaseTagsWithReadiness: vi.fn().mockResolvedValue({
     tags: ['v1.0.61'],
@@ -96,13 +105,16 @@ vi.mock('./updater-prerelease-feed', () => ({
   }),
   getReleaseDownloadUrl: vi.fn()
 }))
+
 vi.mock('./update-install-exit-watchdog', () => ({
   armUpdateInstallExitWatchdog: vi.fn(),
   disarmUpdateInstallExitWatchdog: vi.fn()
 }))
+
 vi.mock('./updater-lifecycle-diagnostics', () => ({
   recordUpdaterLifecycle: recordUpdaterLifecycleMock
 }))
+
 vi.mock('./serve-update-handoff', () => ({
   failServeUpdateHandoff: failServeUpdateHandoffMock,
   getServeUpdateHandoffFailure: vi.fn(() => null),
@@ -140,6 +152,7 @@ describe('headless serve update install handoff', () => {
     const replacementOwner: { version: string; verified: boolean } | null = null
     const send = vi.fn()
     const beginSessionCleanup = vi.fn(() => lifecycle.push('session-cleanup'))
+
     const disconnectPairedClients = vi.fn(() => {
       lifecycle.push('paired-clients-disconnected')
       servingOwner.connectedClients = 0
@@ -152,6 +165,7 @@ describe('headless serve update install handoff', () => {
       queueMicrotask(() => {
         autoUpdaterMock.emit('update-available', { version: pendingInstaller.version })
       })
+
       return Promise.resolve(null)
     })
     autoUpdaterMock.quitAndInstall.mockImplementation(() => {
@@ -173,9 +187,11 @@ describe('headless serve update install handoff', () => {
     await vi.advanceTimersByTimeAsync(0)
     autoUpdaterMock.emit('download-progress', { percent: 100 })
     autoUpdaterMock.emit('update-downloaded', { version: pendingInstaller.version })
+
     const nativeReadyHandler = nativeUpdaterMock.on.mock.calls.find(
       ([event]) => event === 'update-downloaded'
     )?.[1] as (() => void) | undefined
+
     nativeReadyHandler?.()
     await vi.advanceTimersByTimeAsync(0)
 
@@ -193,6 +209,7 @@ describe('headless serve update install handoff', () => {
     const statuses = send.mock.calls
       .filter(([channel]) => channel === 'updater:status')
       .map(([, status]) => status)
+
     expect({
       nativeInstallCalls: autoUpdaterMock.quitAndInstall.mock.calls.length,
       pairedClientDisconnects: disconnectPairedClients.mock.calls.length,
@@ -232,6 +249,7 @@ describe('headless serve update install handoff', () => {
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+
       return Promise.resolve(null)
     })
 
@@ -278,11 +296,13 @@ describe('headless serve update install handoff', () => {
     appMock.on('will-quit', disconnectPairedClients)
     requestServeUpdateHandoffMock.mockImplementation(() => {
       lifecycle.push('handoff-persisted')
+
       return true
     })
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+
       return Promise.resolve(null)
     })
     autoUpdaterMock.quitAndInstall.mockImplementation(() => {
@@ -293,6 +313,7 @@ describe('headless serve update install handoff', () => {
 
     const { checkForUpdatesFromMenu, downloadUpdate, quitAndInstall, setupAutoUpdater } =
       await loadUpdaterModule()
+
     setupAutoUpdater({ webContents: { send } } as never, {
       getLastUpdateCheckAt: () => Date.now(),
       installMode: 'supervised-headless-serve',
@@ -304,9 +325,11 @@ describe('headless serve update install handoff', () => {
     await vi.advanceTimersByTimeAsync(0)
     downloadUpdate()
     autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+
     const nativeReadyHandler = nativeUpdaterMock.on.mock.calls.find(
       ([event]) => event === 'update-downloaded'
     )?.[1] as (() => void) | undefined
+
     nativeReadyHandler?.()
 
     quitAndInstall()
@@ -336,6 +359,7 @@ describe('headless serve update install handoff', () => {
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+
       return Promise.resolve(null)
     })
 
@@ -347,9 +371,11 @@ describe('headless serve update install handoff', () => {
     checkForUpdatesFromMenu()
     await vi.advanceTimersByTimeAsync(0)
     autoUpdaterMock.emit('update-downloaded', { version: '1.0.61' })
+
     const nativeReadyHandler = nativeUpdaterMock.on.mock.calls.find(
       ([event]) => event === 'update-downloaded'
     )?.[1] as (() => void) | undefined
+
     nativeReadyHandler?.()
 
     quitAndInstall()
@@ -374,6 +400,7 @@ describe('headless serve update install handoff', () => {
       autoUpdaterMock.checkForUpdates.mockImplementation(() => {
         autoUpdaterMock.emit('checking-for-update')
         queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+
         return Promise.resolve(null)
       })
 
@@ -395,9 +422,11 @@ describe('headless serve update install handoff', () => {
           send
         )
       ).toBe(true)
+
       const nativeReadyHandler = nativeUpdaterMock.on.mock.calls.find(
         ([event]) => event === 'update-downloaded'
       )?.[1] as (() => void) | undefined
+
       nativeReadyHandler?.()
       await vi.advanceTimersByTimeAsync(0)
 
@@ -422,6 +451,7 @@ describe('headless serve update install handoff', () => {
       autoUpdaterMock.checkForUpdates.mockImplementation(() => {
         autoUpdaterMock.emit('checking-for-update')
         queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+
         return Promise.resolve(null)
       })
 
@@ -451,11 +481,13 @@ describe('headless serve update install handoff', () => {
       autoUpdaterMock.checkForUpdates.mockImplementation(() => {
         autoUpdaterMock.emit('checking-for-update')
         queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+
         return Promise.resolve(null)
       })
 
       const { checkForUpdatesFromMenu, quitAndInstall, setupAutoUpdater } =
         await loadUpdaterModule()
+
       setupAutoUpdater({ webContents: { send } } as never, {
         getLastUpdateCheckAt: () => Date.now(),
         installMode: 'unsupported-headless-serve'
@@ -482,6 +514,7 @@ describe('headless serve update install handoff', () => {
     autoUpdaterMock.checkForUpdates.mockImplementation(() => {
       autoUpdaterMock.emit('checking-for-update')
       queueMicrotask(() => autoUpdaterMock.emit('update-available', { version: '1.0.61' }))
+
       return Promise.resolve(null)
     })
 
@@ -491,6 +524,7 @@ describe('headless serve update install handoff', () => {
       getRemoteServerUpdateSupport,
       setupAutoUpdater
     } = await loadUpdaterModule()
+
     setupAutoUpdater({ webContents: { send } } as never, {
       getLastUpdateCheckAt: () => Date.now(),
       installMode: 'interactive'
@@ -517,6 +551,7 @@ describe('headless serve update install handoff', () => {
   it('advertises remote update control only for safely restartable installs', async () => {
     const { checkForRemoteServerUpdate, getRemoteServerUpdateSupport, setupAutoUpdater } =
       await loadUpdaterModule()
+
     setupAutoUpdater({ webContents: { send: vi.fn() } } as never, {
       getLastUpdateCheckAt: () => Date.now(),
       installMode: 'unsupported-headless-serve'

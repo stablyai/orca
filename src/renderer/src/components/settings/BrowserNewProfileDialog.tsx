@@ -47,10 +47,13 @@ export function BrowserNewProfileDialog({
           onSubmit={async (e) => {
             e.preventDefault()
             const trimmed = newProfileName.trim()
+
             if (!trimmed) {
               return
             }
+
             setIsCreatingProfile(true)
+
             try {
               const profile = await useAppStore
                 .getState()
@@ -59,9 +62,11 @@ export function BrowserNewProfileDialog({
                   trimmed,
                   useNativeUserAgent ? { userAgentMode: 'native' } : undefined
                 )
+
               if (!mountedRef.current) {
                 return
               }
+
               if (profile) {
                 handleClose()
                 toast.success(

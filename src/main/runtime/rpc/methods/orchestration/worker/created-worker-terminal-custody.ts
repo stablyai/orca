@@ -20,6 +20,7 @@ export function recordCreatedWorkerTerminalCustody(
   if (!created) {
     return
   }
+
   const authority = requireWorkerAuthority(runtime, stage.terminalHandle)
   stage.db.recordCreatedWorkerTerminalCustody({
     dispatchId: stage.dispatchId,

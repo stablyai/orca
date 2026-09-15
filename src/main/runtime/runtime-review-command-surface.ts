@@ -6,14 +6,18 @@ import type { RuntimeGitLabMutationCommands } from './runtime-gitlab-mutation-co
 import type { RuntimeGitLabQueryCommands } from './runtime-gitlab-query-commands'
 
 type GitLabQueryName = Exclude<keyof RuntimeGitLabQueryCommands, 'constructor'>
+
 type GitLabMutationName = Exclude<keyof RuntimeGitLabMutationCommands, 'constructor'>
+
 type GitHubProjectName = Exclude<keyof RuntimeGitHubProjectCommands, 'constructor'>
+
 type GitHubReviewQueryName =
   | 'getRepoIssue'
   | 'getRepoPRChecks'
   | 'getRepoPRCheckDetails'
   | 'getRepoPRComments'
   | 'getRepoPRFileContents'
+
 type GitHubReviewMutationName =
   | 'rerunRepoPRChecks'
   | 'setRepoPRCommentReaction'
@@ -27,6 +31,7 @@ type GitHubReviewMutationName =
   | 'updateRepoPRState'
   | 'requestRepoPRReviewers'
   | 'removeRepoPRReviewers'
+
 type GitHubIssueCommentName =
   | 'createRepoIssue'
   | 'updateRepoIssue'

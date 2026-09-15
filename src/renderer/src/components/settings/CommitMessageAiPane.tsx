@@ -54,12 +54,15 @@ export function mergeDiscoveredModelsIntoCommitMessageConfig(
     selectedModelByAgent: config.selectedModelByAgent,
     selectedModelByAgentByHost: config.selectedModelByAgentByHost
   }
+
   const persisted = readSourceControlAiModelChoiceForHost(currentChoice, hostKey, agentId)
   const nextModelId = models.some((model) => model.id === persisted) ? persisted : defaultModelId
+
   const selectedModelChoice =
     nextModelId && nextModelId !== persisted
       ? selectSourceControlAiModelChoiceForHost(currentChoice, hostKey, agentId, nextModelId)
       : currentChoice
+
   return {
     ...config,
     discoveredModelsByAgent:
@@ -89,6 +92,7 @@ export function getCommitMessageSettingsPaneDiscoveryHostKey(
   const runtimeScope = hasActiveWorktree
     ? getRuntimeGitScope(settings, activeConnectionId)
     : activeConnectionId
+
   return getCommitMessageModelDiscoveryHostKeyForScope(runtimeScope)
 }
 
@@ -121,9 +125,12 @@ export function CommitMessageAiPane({
           }
         })
       })
+
     settingsWriteQueueRef.current = next
+
     return next
   }
+
   const writeConfig = writeSourceControlAiSettings ?? localWriteConfig
 
   const onToggleEnabled = (): void => {
@@ -147,6 +154,7 @@ export function CommitMessageAiPane({
   }
 
   const sections: React.ReactNode[] = []
+
   const customCommandInUse =
     isCustomAgentId(config.agentId) ||
     config.customAgentCommand.trim().length > 0 ||

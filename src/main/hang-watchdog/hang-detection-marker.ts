@@ -22,18 +22,22 @@ export function writeHangDetectionMarker(markerPath: string, marker: HangDetecti
 
 export function consumeHangDetectionMarker(markerPath: string): HangDetectionMarker | null {
   let raw: string
+
   try {
     raw = readFileSync(markerPath, 'utf8')
   } catch {
     return null
   }
+
   try {
     rmSync(markerPath, { force: true })
   } catch {
     // Why: a marker that cannot be deleted must not block startup; worst case is one duplicate breadcrumb.
   }
+
   try {
     const parsed = JSON.parse(raw) as Partial<HangDetectionMarker>
+
     if (
       typeof parsed.detectedAt !== 'number' ||
       typeof parsed.parentPid !== 'number' ||
@@ -41,6 +45,7 @@ export function consumeHangDetectionMarker(markerPath: string): HangDetectionMar
     ) {
       return null
     }
+
     return {
       detectedAt: parsed.detectedAt,
       parentPid: parsed.parentPid,

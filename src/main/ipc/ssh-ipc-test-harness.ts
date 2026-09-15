@@ -86,7 +86,9 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     mockNextConnectionManagers,
     mockNextPortForwardManagers
   } = mocks
+
   const relayBuildId = '0.1.0+ipc-test'
+
   const ipcTestSource = {
     relayPtyId: 'remote-pty',
     spanId: 'ipc-test-delivery:0:5',
@@ -96,7 +98,9 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     sourceStartSu: 0,
     sourceEndSu: 5
   } as const
+
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
+
   const mockStore = {
     getRepos: () => [],
     getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
@@ -116,14 +120,17 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     clearSshRemotePtyKillIntent: vi.fn(),
     noteSshRemotePtyKillReplayAttempt: vi.fn()
   }
+
   const mockWindow = {
     isDestroyed: () => false,
     webContents: { send: vi.fn() }
   }
+
   const createMockWindow = () => ({
     isDestroyed: () => false,
     webContents: { send: vi.fn() }
   })
+
   const createConnectionManagerMock = () => ({
     connect: vi.fn(),
     disconnect: vi.fn(),
@@ -135,6 +142,7 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     setCallbacks: vi.fn(),
     callbacksRef: { current: null as unknown }
   })
+
   const createPortForwardManagerMock = () => ({
     addForward: vi.fn(),
     updateForward: vi.fn(),
@@ -145,19 +153,24 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     setCallbacks: vi.fn(),
     callbacksRef: { current: null as unknown }
   })
+
   const relayReconnectDelaysMs = [500, 1000, 2000, 4000, 8000, 15_000] as const
   const relayLostStabilizedMs = 5_000
+
   const createRelayLaunchResult = () => ({
     transport: { write: vi.fn(), onData: vi.fn(), onClose: vi.fn() },
     platform: 'linux-x64',
     serverBuildId: relayBuildId
   })
+
   const getLatestRelayDisposeCallback = (): RelayDisposeCallback => {
     const calls = mockMux.onDispose.mock.calls
     const callback = calls.at(-1)?.[0] as RelayDisposeCallback | undefined
     expect(callback).toBeDefined()
+
     return callback!
   }
+
   const useSlowRelayLaunchOnce = (delayMs: number): void => {
     mockDeployAndLaunchRelay.mockImplementationOnce(
       () =>

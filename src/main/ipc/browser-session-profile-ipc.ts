@@ -29,6 +29,7 @@ export function registerBrowserSessionProfileHandlers(): void {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return []
     }
+
     return browserSessionRegistry.listProfiles()
   })
 
@@ -44,6 +45,7 @@ export function registerBrowserSessionProfileHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return null
       }
+
       return await browserSessionRegistry.createProfile(args.scope, args.label, {
         userAgentMode: args.userAgentMode
       })
@@ -56,6 +58,7 @@ export function registerBrowserSessionProfileHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return false
       }
+
       return browserSessionRegistry.deleteProfile(args.profileId)
     }
   )
@@ -66,25 +69,31 @@ export function registerBrowserSessionProfileHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return { ok: false, reason: 'Not authorized' }
       }
+
       const profile = browserSessionRegistry.getProfile(args.profileId)
+
       if (!profile) {
         return { ok: false, reason: 'Session profile not found.' }
       }
 
       const parent = BrowserWindow.fromWebContents(event.sender)
       const filePath = await pickCookieFile(parent)
+
       if (!filePath) {
         return { ok: false, reason: 'canceled' }
       }
 
       const result = await importCookiesFromFile(filePath, profile.partition)
+
       if (result.ok) {
         browserSessionRegistry.updateProfileSource(args.profileId, {
           browserFamily: 'manual',
           importedAt: Date.now()
         })
+
         return { ...result, profileId: args.profileId }
       }
+
       return result
     }
   )
@@ -95,6 +104,7 @@ export function registerBrowserSessionProfileHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return null
       }
+
       return browserSessionRegistry.resolvePartition(args.profileId)
     }
   )
@@ -105,6 +115,7 @@ export function registerBrowserSessionProfileHandlers(): void {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return false
     }
+
     return browserSessionRegistry.clearDefaultSessionCookies()
   })
 
@@ -129,6 +140,7 @@ export function registerBrowserSessionProfileHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return { ok: false, reason: 'Not authorized' }
       }
+
       return importCookiesIntoClientRoutePartition({
         environmentId: args.environmentId,
         browserProfileId: args.profileId,
@@ -148,6 +160,7 @@ export function registerBrowserSessionProfileHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender) || typeof args?.environmentId !== 'string') {
         return {}
       }
+
       return clientRouteCookieImportSources(args.environmentId)
     }
   )
@@ -156,6 +169,7 @@ export function registerBrowserSessionProfileHandlers(): void {
     if (!isTrustedBrowserRenderer(event.sender)) {
       return []
     }
+
     return detectedBrowserPickerEntries()
   })
 
@@ -167,9 +181,11 @@ export function registerBrowserSessionProfileHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return []
       }
+
       if (!getPairedRuntimeBrowserClientRouteIdentity(args.environmentId)) {
         return null
       }
+
       return detectedBrowserPickerEntries()
     }
   )
@@ -183,7 +199,9 @@ export function registerBrowserSessionProfileHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return { ok: false, reason: 'Not authorized' }
       }
+
       const profile = browserSessionRegistry.getProfile(args.profileId)
+
       if (!profile) {
         return { ok: false, reason: 'Session profile not found.' }
       }
@@ -200,6 +218,7 @@ export function registerBrowserSessionProfileHandlers(): void {
 
       const browsers = detectInstalledBrowsers()
       let browser = browsers.find((b) => b.family === args.browserFamily)
+
       if (!browser) {
         return { ok: false, reason: 'Browser not found on this system.' }
       }
@@ -208,27 +227,33 @@ export function registerBrowserSessionProfileHandlers(): void {
       // resolve the cookies path for that specific profile.
       if (args.browserProfile && args.browserProfile !== browser.selectedProfile) {
         const reselected = selectBrowserProfile(browser, args.browserProfile)
+
         if (!reselected) {
           return {
             ok: false,
             reason: `No cookies database found for profile "${args.browserProfile}".`
           }
         }
+
         browser = reselected
       }
 
       const result = await importCookiesFromBrowser(browser, profile.partition)
+
       if (result.ok) {
         const profileName =
           browser.profiles.find((p) => p.directory === browser.selectedProfile)?.name ??
           browser.selectedProfile
+
         browserSessionRegistry.updateProfileSource(args.profileId, {
           browserFamily: browser.family,
           profileName,
           importedAt: Date.now()
         })
+
         return { ...result, profileId: args.profileId }
       }
+
       return result
     }
   )

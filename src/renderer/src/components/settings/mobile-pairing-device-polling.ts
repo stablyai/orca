@@ -58,18 +58,24 @@ export function useMobilePairingDevicePolling({
 
     const scheduleNextPoll = (): void => {
       clearPendingPoll()
+
       if (stopped || !canPoll()) {
         return
       }
+
       timeoutId = window.setTimeout(() => {
         timeoutId = null
+
         if (stopped || !canPoll()) {
           return
         }
+
         if (pollInFlight) {
           scheduleNextPoll()
+
           return
         }
+
         pollInFlight = true
         // Why: wait for each IPC call to settle before scheduling the next
         // poll, avoiding overlapping device-list requests on a slow host.
@@ -83,11 +89,14 @@ export function useMobilePairingDevicePolling({
     const resumePolling = (): void => {
       if (!canPoll()) {
         clearPendingPoll()
+
         return
       }
+
       if (pollInFlight) {
         return
       }
+
       pollInFlight = true
       void loadDevices().finally(() => {
         pollInFlight = false
@@ -98,6 +107,7 @@ export function useMobilePairingDevicePolling({
     scheduleNextPoll()
     window.addEventListener('focus', resumePolling)
     document.addEventListener('visibilitychange', resumePolling)
+
     return () => {
       stopped = true
       clearPendingPoll()

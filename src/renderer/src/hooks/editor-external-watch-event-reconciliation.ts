@@ -48,6 +48,7 @@ export function buildEditorExternalWatchEventHandler(
   dispose: () => void
 } {
   const pendingDeletes = new Map<string, PendingDeleteTimer>()
+
   const pendingKey = (
     worktreeId: string,
     runtimeEnvironmentId: string | null,
@@ -59,9 +60,11 @@ export function buildEditorExternalWatchEventHandler(
     runtimeEnvironmentId: string | null = null
   ): void => {
     const target = findTarget(payload.worktreePath, runtimeEnvironmentId)
+
     if (!target) {
       return
     }
+
     // Why: this app-level hook owns watcher subscriptions; other consumers listen here so they don't fight over watch/unwatch ownership.
     if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
       window.dispatchEvent(
@@ -73,16 +76,20 @@ export function buildEditorExternalWatchEventHandler(
 
     // Why: one batch index keeps local WSL alias normalization out of event×tab loops.
     const openFilesAtStart = useAppStore.getState().openFiles
+
     const batchPaths = indexEditorExternalWatchBatchPaths(payload, openFilesAtStart, {
       worktreeId: target.worktreeId,
       worktreePath: target.worktreePath,
       runtimeEnvironmentId: target.runtimeEnvironmentId,
       ...getLocalWindowsWslAliasOption(target)
     })
+
     const createOrUpdatePaths = batchPaths.createOrUpdatePaths
+
     for (const createdPath of createOrUpdatePaths.keys()) {
       const key = pendingKey(target.worktreeId, target.runtimeEnvironmentId, createdPath)
       const existing = pendingDeletes.get(key)
+
       if (existing) {
         clearTimeout(existing.timer)
         pendingDeletes.delete(key)
@@ -90,6 +97,7 @@ export function buildEditorExternalWatchEventHandler(
     }
 
     const deletedOpenEditorsRaw = batchPaths.deletedOpenEditors
+
     // Only pay the per-id lookup to suppress a move's own source-delete while a move is live; otherwise the batch stays O(deletes).
     const deletedOpenEditors = hasActiveEditorPathMoves()
       ? deletedOpenEditorsRaw.filter(
@@ -97,13 +105,17 @@ export function buildEditorExternalWatchEventHandler(
             !isActiveMoveSourcePath(target.worktreeId, target.runtimeEnvironmentId, file.filePath)
         )
       : deletedOpenEditorsRaw
+
     const deletedOpenEditorIds = deletedOpenEditors.map(({ file }) => file.id)
+
     const hasPairedCreate =
       deletedOpenEditorIds.length > 0 &&
       hasRenameCorrelatedCreate(payload, target.worktreeId, deletedOpenEditorIds, openFilesAtStart)
+
     if (deletedOpenEditorIds.length > 0) {
       if (hasPairedCreate) {
         const setExternalMutation = useAppStore.getState().setExternalMutation
+
         for (const fileId of deletedOpenEditorIds) {
           setExternalMutation(fileId, 'renamed')
         }
@@ -114,22 +126,28 @@ export function buildEditorExternalWatchEventHandler(
             target.runtimeEnvironmentId,
             normalizedDeletePath
           )
+
           const existing = pendingDeletes.get(key)
+
           if (existing) {
             clearTimeout(existing.timer)
             pendingDeletes.delete(key)
           }
+
           const timer = setTimeout(() => {
             pendingDeletes.delete(key)
             // Why: the debounce window lets the tab close or leave edit mode, so re-check before writing to avoid tombstoning a stale tab.
             const state = useAppStore.getState()
+
             const stillEditing = state.openFiles.some(
               (candidate) => candidate.id === file.id && candidate.mode === 'edit'
             )
+
             if (stillEditing) {
               state.setExternalMutation(file.id, 'deleted')
             }
           }, EXTERNAL_MUTATION_DEBOUNCE_MS)
+
           pendingDeletes.set(key, { fileId: file.id, timer })
         }
       }
@@ -138,6 +156,7 @@ export function buildEditorExternalWatchEventHandler(
     // Why: a reappearing file clears deleted/renamed tombstones, but a changed mark resolves only through reload/save.
     if (createOrUpdatePaths.size > 0) {
       const state = useAppStore.getState()
+
       for (const file of state.openFiles) {
         if (
           file.worktreeId === target.worktreeId &&
@@ -156,19 +175,23 @@ export function buildEditorExternalWatchEventHandler(
       for (const notification of collectOverflowEditorExternalReloadTargets(target)) {
         scheduleDebouncedEditorExternalReload(notification)
       }
+
       return
     }
+
     if (batchPaths.changes.length === 0) {
       return
     }
 
     for (const change of batchPaths.changes) {
       const matching = batchPaths.matchingOpenFiles(change)
+
       // Why: most watched paths match no open file, and the notification below is only ever read
       // past this point — building it first allocates (and dictionary-modes) it for nothing.
       if (matching.length === 0 && !batchPaths.hasCombinedDiffConsumer) {
         continue
       }
+
       const notification: EditorExternalWatchNotification = {
         worktreeId: target.worktreeId,
         worktreePath: target.worktreePath,
@@ -176,21 +199,27 @@ export function buildEditorExternalWatchEventHandler(
         runtimeEnvironmentId: target.runtimeEnvironmentId,
         ...getLocalWindowsWslAliasOption(target)
       }
+
       Object.defineProperty(notification, 'indexedOpenFiles', {
         value: {
           matches: (openFiles: OpenFile[]) => batchPaths.matchingOpenFiles(change, openFiles)
         }
       })
+
       if (matching.length === 0) {
         scheduleDebouncedEditorExternalReload(notification)
         continue
       }
+
       const dirtyMatches = matching.filter((file) => file.isDirty)
+
       if (dirtyMatches.length > 0) {
         const dirtyIds = dirtyMatches
           .filter((file) => canAutoSaveOpenFile(file))
           .map((file) => file.id)
+
         let isSelfMoveEcho = false
+
         if (dirtyMatches.some((file) => file.pendingSelfMoveEcho)) {
           const normalizedAbsolutePath = normalizeRuntimePathForComparison(change.absolutePath)
           isSelfMoveEcho = dirtyMatches.some(
@@ -200,19 +229,24 @@ export function buildEditorExternalWatchEventHandler(
                 normalizedAbsolutePath
           )
         }
+
         if (isSelfMoveEcho) {
           scheduleEditorSelfMoveEchoVerification(target, dirtyIds, true)
         } else {
           scheduleEditorChangedOnDiskMark(target, notification, dirtyIds)
         }
+
         if (dirtyMatches.length === matching.length) {
           if (batchPaths.hasCombinedDiffConsumer) {
             scheduleDebouncedEditorExternalReload(notification)
           }
+
           continue
         }
       }
+
       const recentSelfWrite = getRecentSelfWrite(change.absolutePath, target.runtimeEnvironmentId)
+
       if (recentSelfWrite) {
         scheduleSelfWriteAwareEditorExternalReload(
           target,
@@ -222,6 +256,7 @@ export function buildEditorExternalWatchEventHandler(
         )
         continue
       }
+
       scheduleDebouncedEditorExternalReload(notification)
     }
   }
@@ -230,6 +265,7 @@ export function buildEditorExternalWatchEventHandler(
     for (const pending of pendingDeletes.values()) {
       clearTimeout(pending.timer)
     }
+
     pendingDeletes.clear()
   }
 
@@ -247,6 +283,7 @@ export function collectOverflowEditorExternalReloadTargets(
 ): EditorExternalWatchNotification[] {
   const state = useAppStore.getState()
   const notifications: EditorExternalWatchNotification[] = []
+
   for (const file of state.openFiles) {
     if (
       file.worktreeId !== target.worktreeId ||
@@ -256,9 +293,11 @@ export function collectOverflowEditorExternalReloadTargets(
     ) {
       continue
     }
+
     if (file.externalMutation) {
       state.setExternalMutation(file.id, null)
     }
+
     notifications.push({
       worktreeId: target.worktreeId,
       worktreePath: target.worktreePath,
@@ -267,6 +306,7 @@ export function collectOverflowEditorExternalReloadTargets(
       ...getLocalWindowsWslAliasOption(target)
     })
   }
+
   return notifications
 }
 
@@ -279,8 +319,10 @@ function hasRenameCorrelatedCreate(
   if (deletedOpenEditorIds.length === 0) {
     return false
   }
+
   const deletedIdSet = new Set(deletedOpenEditorIds)
   const deletedBasenames = new Set<string>()
+
   for (const file of openFiles) {
     if (
       file.worktreeId !== worktreeId ||
@@ -289,11 +331,14 @@ function hasRenameCorrelatedCreate(
     ) {
       continue
     }
+
     deletedBasenames.add(basename(file.filePath))
   }
+
   if (deletedBasenames.size === 0) {
     return false
   }
+
   return payload.events.some(
     (event) =>
       event.kind === 'create' &&

@@ -73,6 +73,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
 
   const isOpen = activeModal === 'worktree-visibility'
   const repoId = typeof modalData.repoId === 'string' ? modalData.repoId : ''
+
   const {
     detected,
     repo,
@@ -83,10 +84,13 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
     repoId,
     modalData.hostId
   )
+
   const currentMutationScopeRef = useRef(mutationScope)
   const activeMutation = getActiveVisibilityMutation(mutationScope)
+
   const effectiveBusyPath =
     busyPath ?? (activeMutation?.kind === 'row' ? activeMutation.path : null)
+
   const effectivelyToggling = isToggling || activeMutation?.kind === 'toggle'
   const visibilityDefaults = useRepoOwnerVisibilityDefaults(repo)
   const removableSourceIds = useMemo(() => getRepoCustomWorktreeVisibilitySourceIds(repo), [repo])
@@ -118,10 +122,12 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
     if (!isOpen || !repoId) {
       return
     }
+
     // Why: reopening mid-write must not start a scan that can absorb the mutation's confirmation refresh.
     if (getActiveVisibilityMutation(mutationScope)) {
       return
     }
+
     let cancelled = false
     setListState('checking')
     void refreshTargetRepo(repoId, { requireAuthoritative: true }).then((refreshed) => {
@@ -129,6 +135,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
         setListState(refreshed ? 'ready' : 'failed')
       }
     })
+
     return () => {
       cancelled = true
     }
@@ -138,8 +145,10 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
     if (!repoId) {
       return
     }
+
     setListState('checking')
     const refreshed = await refreshTargetRepo(repoId, { requireAuthoritative: true })
+
     if (currentMutationScopeRef.current === mutationScope) {
       setListState(refreshed ? 'ready' : 'failed')
     }
@@ -150,10 +159,12 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
       if (!repo) {
         return
       }
+
       const mutation: ActiveVisibilityMutation = { kind: 'row', path: worktreePath }
       const targetMutationScope = getRepoHostIdentity(repo)
       startVisibilityMutation(targetMutationScope, mutation)
       setBusyPath(worktreePath)
+
       try {
         await importNewExternalWorktreeInboxPaths({
           projectId: repo.id,
@@ -165,7 +176,9 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
             if (currentMutationScopeRef.current !== targetMutationScope) {
               return
             }
+
             setActionState(state)
+
             // Why: a null state is only reachable after a successful authoritative
             // refetch, which supersedes an earlier failed open-time scan.
             if (state === null) {
@@ -175,6 +188,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
         })
       } finally {
         finishVisibilityMutation(targetMutationScope, mutation)
+
         if (currentMutationScopeRef.current === targetMutationScope) {
           setBusyPath(null)
         }
@@ -191,13 +205,16 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
       if (!repoId) {
         return false
       }
+
       const mutation: ActiveVisibilityMutation = { kind: 'toggle' }
       startVisibilityMutation(mutationScope, mutation)
       setActionState(null)
       setIsToggling(true)
+
       try {
         const updated = await updateTargetRepo(repoId, updates)
         const latestRepo = getLatestRepoForVisibilityScope(mutationScope)
+
         if (!updated || !latestRepo || !isAccepted(latestRepo)) {
           if (currentMutationScopeRef.current === mutationScope) {
             setActionState({
@@ -209,15 +226,20 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
               )
             })
           }
+
           return false
         }
+
         const refreshed = await refreshTargetRepo(repoId, { requireAuthoritative: true })
+
         if (currentMutationScopeRef.current === mutationScope) {
           setListState(refreshed ? 'ready' : 'failed')
         }
+
         return true
       } finally {
         finishVisibilityMutation(mutationScope, mutation)
+
         if (currentMutationScopeRef.current === mutationScope) {
           setIsToggling(false)
         }
@@ -231,6 +253,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
       if (!repo) {
         return
       }
+
       const mutation = createWorktreeVisibilityUseGlobalMutation(repo, source, visibilityDefaults)
       await commitSourceUpdate(mutation.updates, mutation.isAccepted)
     },
@@ -242,7 +265,9 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
       if (!repo) {
         return
       }
+
       const visibility = checked ? 'show' : 'hide'
+
       if (
         shouldUseGlobalWorktreeVisibility(
           repo,
@@ -253,14 +278,17 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
         )
       ) {
         await handleUseDefault(source)
+
         return
       }
+
       const mutation = createWorktreeVisibilitySourceMutation(
         repo,
         source,
         visibility,
         visibilityDefaults
       )
+
       await commitSourceUpdate(mutation.updates, mutation.isAccepted)
     },
     [commitSourceUpdate, handleUseDefault, removableSourceIds, repo, visibilityDefaults]
@@ -271,24 +299,32 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
       if (!repo) {
         return 'save-failed'
       }
+
       const existing = normalizeCustomWorktreeVisibilitySources(
         repo.customWorktreeVisibilitySources
       )
+
       if ((existing?.length ?? 0) >= MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES) {
         return 'limit'
       }
+
       const id = crypto.randomUUID().replaceAll('-', '')
       const candidate = normalizeCustomWorktreeVisibilitySources([{ id, rootPath }])?.[0]
+
       if (!candidate) {
         return 'invalid-path'
       }
+
       if (isDuplicateWorktreeVisibilitySource(repo, visibilityDefaults, candidate)) {
         return 'duplicate-path'
       }
+
       const next = normalizeCustomWorktreeVisibilitySources([...(existing ?? []), candidate])
+
       if (!next || next.length !== (existing?.length ?? 0) + 1) {
         return 'duplicate-path'
       }
+
       const saved = await commitSourceUpdate(
         {
           customWorktreeVisibilitySources: next,
@@ -304,6 +340,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
           )?.some((source) => source.id === id) === true &&
           effectiveCustomWorktreeSourceVisibility(latestRepo, id, visibilityDefaults) === 'hide'
       )
+
       return saved ? 'added' : 'save-failed'
     },
     [commitSourceUpdate, repo, visibilityDefaults]
@@ -314,9 +351,11 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
       if (!repo) {
         return
       }
+
       const next = (
         normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []
       ).filter((candidate) => candidate.id !== source.id)
+
       await commitSourceUpdate(
         {
           customWorktreeVisibilitySources: next,

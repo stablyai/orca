@@ -27,6 +27,7 @@ vi.mock('./useLiveDashboardSnapshot', () => ({
 vi.mock('../dashboard-popout/AgentKanbanBoard', () => ({
   AgentKanbanBoard: (props: Record<string, unknown>) => {
     mocks.boardProps = props
+
     return mocks.blockingOverlay ? <section role="dialog" data-state="open" /> : null
   }
 }))

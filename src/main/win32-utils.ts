@@ -22,8 +22,10 @@ function execFileWithoutBlocking(
     execFile(command, args, options, (error, stdout) => {
       if (error) {
         reject(error)
+
         return
       }
+
       resolve(stdout)
     })
   })
@@ -46,6 +48,7 @@ export function getWhoamiExePath(): string {
 export function getRegExePath(env: NodeJS.ProcessEnv = process.env): string {
   const systemRoot = env.SystemRoot?.trim()
   const root = systemRoot && /^[a-z]:[\\/]/i.test(systemRoot) ? systemRoot : 'C:\\Windows'
+
   return win32.join(root, 'System32', 'reg.exe')
 }
 
@@ -56,11 +59,13 @@ export function resolveWindowsCommand(
   if (process.platform !== 'win32') {
     return command
   }
+
   if (/[\\/]/.test(command) || /\.[a-z0-9]+$/i.test(command)) {
     return command
   }
 
   const pathEnv = env.PATH ?? env.Path
+
   if (!pathEnv) {
     return command
   }
@@ -68,11 +73,13 @@ export function resolveWindowsCommand(
   for (const directory of pathEnv.split(delimiter).filter(Boolean)) {
     for (const name of [`${command}.cmd`, `${command}.exe`, `${command}.bat`, command]) {
       const candidate = join(directory, name)
+
       if (existsSync(candidate)) {
         return candidate
       }
     }
   }
+
   return command
 }
 
@@ -91,22 +98,27 @@ export function isPermissionError(error: unknown): boolean {
 // `whoami /user` (same strategy as runtime-metadata.ts), which is authoritative
 // and always available on Windows. Cached because it never changes in-process.
 let cachedIdentity: string | undefined
+
 let pendingIdentityResolution: Promise<string | null> | null = null
 
 function cachedOrEnvironmentIdentity(): string | undefined {
   if (cachedIdentity !== undefined) {
     return cachedIdentity
   }
+
   if (process.env.USERNAME) {
     cachedIdentity = process.env.USERNAME
+
     return cachedIdentity
   }
+
   return undefined
 }
 
 function identityFromWhoamiOutput(output: string): string | null {
   // CSV columns: "DOMAIN\\user","S-1-5-21-..."
   const sidMatch = /"(S-[\d-]+)"\s*$/.exec(output.trim())
+
   return sidMatch ? `*${sidMatch[1]}` : null
 }
 
@@ -116,9 +128,11 @@ export function resolveCurrentWindowsIdentity(): string | null {
 
 function resolveCurrentIdentity(): string | null {
   const knownIdentity = cachedOrEnvironmentIdentity()
+
   if (knownIdentity !== undefined) {
     return knownIdentity
   }
+
   try {
     const output = execFileSync(getWhoamiExePath(), ['/user', '/fo', 'csv', '/nh'], {
       encoding: 'utf-8',
@@ -126,10 +140,13 @@ function resolveCurrentIdentity(): string | null {
       windowsHide: true,
       timeout: 5000
     })
+
     const resolvedIdentity = identityFromWhoamiOutput(output)
+
     if (resolvedIdentity) {
       cachedIdentity = resolvedIdentity
     }
+
     return resolvedIdentity
   } catch {
     return null
@@ -138,9 +155,11 @@ function resolveCurrentIdentity(): string | null {
 
 async function resolveCurrentIdentityAsync(): Promise<string | null> {
   const knownIdentity = cachedOrEnvironmentIdentity()
+
   if (knownIdentity !== undefined) {
     return knownIdentity
   }
+
   if (!pendingIdentityResolution) {
     pendingIdentityResolution = (async () => {
       try {
@@ -153,12 +172,15 @@ async function resolveCurrentIdentityAsync(): Promise<string | null> {
             timeout: 5000
           }
         )
+
         // Why: a synchronous caller may resolve identity while async whoami
         // is in flight; its authoritative cached result must win the race.
         const resolvedIdentity = identityFromWhoamiOutput(stdout)
+
         if (cachedIdentity === undefined && resolvedIdentity) {
           cachedIdentity = resolvedIdentity
         }
+
         return cachedIdentity ?? resolvedIdentity
       } catch {
         // Why: transient service/PATH failures must not permanently disable
@@ -169,6 +191,7 @@ async function resolveCurrentIdentityAsync(): Promise<string | null> {
       pendingIdentityResolution = null
     })
   }
+
   return pendingIdentityResolution
 }
 
@@ -184,13 +207,17 @@ async function resolveCurrentIdentityAsync(): Promise<string | null> {
  */
 export function grantDirAcl(dirPath: string, options?: { recursive?: boolean }): void {
   const identity = resolveCurrentIdentity()
+
   if (!identity) {
     return
   }
+
   const args = [dirPath, '/grant:r', `${identity}:(OI)(CI)(F)`]
+
   if (options?.recursive) {
     args.push('/T', '/C')
   }
+
   // Why: /T walks the entire subtree; a 10s cap can starve on large userData
   // dirs (tens of thousands of cached chromium files), making the startup
   // grant silently fail. Give recursive calls a generous budget.
@@ -204,9 +231,11 @@ export function grantDirAcl(dirPath: string, options?: { recursive?: boolean }):
 
 export async function grantDirAclAsync(dirPath: string): Promise<void> {
   const identity = await resolveCurrentIdentityAsync()
+
   if (!identity) {
     return
   }
+
   // Why: crash recovery runs on Electron's main thread; an asynchronous
   // icacls child keeps its worst-case timeout from freezing every window.
   await execFileWithoutBlocking(

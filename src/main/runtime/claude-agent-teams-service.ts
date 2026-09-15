@@ -34,10 +34,13 @@ export class ClaudeAgentTeamsService {
     const leaderPane = '%1'
     // Why: Windows callers pass an env spelt `Path`; reading `PATH` there truncated the launch PATH to just the shim dir.
     const pathKey = resolvePathEnvKey(args.baseEnv, process.platform)
+
     const pathValue = [args.shimDir, args.baseEnv[pathKey]]
       .filter(Boolean)
       .join(process.platform === 'win32' ? ';' : ':')
+
     const tmuxValue = `/tmp/orca-claude-agent-teams/${teamId},0,1`
+
     const env: Record<string, string> = {
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
       [pathKey]: pathValue,
@@ -50,12 +53,15 @@ export class ClaudeAgentTeamsService {
       ORCA_AGENT_TEAMS_LEADER_PANE: leaderPane,
       ORCA_AGENT_TEAMS_SHIM_DIR: args.shimDir
     }
+
     if (args.shimBin) {
       env.ORCA_AGENT_TEAMS_SHIM_BIN = args.shimBin
     }
+
     if (args.baseEnv.ORCA_PAIRING_CODE) {
       env.ORCA_PAIRING_CODE = args.baseEnv.ORCA_PAIRING_CODE
     }
+
     if (args.baseEnv.ORCA_ENVIRONMENT) {
       env.ORCA_ENVIRONMENT = args.baseEnv.ORCA_ENVIRONMENT
     }
@@ -76,6 +82,7 @@ export class ClaudeAgentTeamsService {
       mainVertical: null,
       previouslyFocusedPane: null
     })
+
     return { teamId, token, leaderPane, env }
   }
 
@@ -99,21 +106,26 @@ export class ClaudeAgentTeamsService {
       const team = this.resolveTeam(request)
       const { command, args } = splitTmuxCommand(request.argv)
       const stdout = await this.dispatcher.dispatch(team, command, args, request.envPane, api)
+
       return { ok: true, stdout, stderr: '', exitCode: 0 }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
+
       return { ok: false, stdout: '', stderr: `tmux: ${message}\n`, exitCode: 1 }
     }
   }
 
   private resolveTeam(request: AgentTeamsTmuxCompatRequest): AgentTeam {
     const team = this.teams.get(request.teamId)
+
     if (!team || team.token !== request.token) {
       throw new Error('stale or unauthorized agent team')
     }
+
     if (!team.panes.has(request.envPane)) {
       throw new Error(`unknown pane: ${request.envPane}`)
     }
+
     return team
   }
 }

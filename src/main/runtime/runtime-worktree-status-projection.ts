@@ -56,8 +56,10 @@ export function getLeafWorktreeStatus(
     { title: leaf.lastOscTitle, updatedAt: leaf.lastOscTitleAt },
     { title: tabTitle, updatedAt: 0 }
   ]
+
   const latestTitle = getLatestAgentCandidateTitle(...titleCandidates)
   const detected = latestTitle ? detectAgentStatusFromTitle(latestTitle) : leaf.lastAgentStatus
+
   return getDetectedWorktreeStatus(detected, leaf.ptyId !== null)
 }
 
@@ -119,9 +121,11 @@ export function classifyAgentTitle(title: string | null): 'agent' | 'management'
   if (!title) {
     return 'neutral'
   }
+
   if (isClaudeManagementTitle(title)) {
     return 'management'
   }
+
   return detectAgentStatusFromTitle(title) !== null ? 'agent' : 'neutral'
 }
 
@@ -129,6 +133,7 @@ export function terminalTitleBlocksExplicitAgentStatus(title: string | null): bo
   if (!title) {
     return false
   }
+
   return isClaudeManagementTitle(title) || isShellProcess(title)
 }
 
@@ -142,16 +147,21 @@ export function getLatestAgentCandidateTitleInfo(
   ...titles: { title: string | null | undefined; updatedAt: number | null | undefined }[]
 ): { title: string; updatedAt: number } | null {
   let latest: { title: string; updatedAt: number } | null = null
+
   for (const candidate of titles) {
     const title = candidate.title?.trim()
+
     if (!title) {
       continue
     }
+
     const updatedAt = candidate.updatedAt ?? 0
+
     if (!latest || updatedAt > latest.updatedAt) {
       latest = { title, updatedAt }
     }
   }
+
   return latest
 }
 
@@ -166,9 +176,11 @@ export function getDetectedWorktreeStatus(
   if (detected === 'permission') {
     return 'permission'
   }
+
   if (detected === 'working') {
     return 'working'
   }
+
   return hasPty ? 'active' : 'inactive'
 }
 
@@ -200,15 +212,19 @@ export function mergeWorktreeSummaryStatus(
 ): void {
   const currentPriority = WORKTREE_STATUS_PRIORITY[summary.status]
   const nextPriority = WORKTREE_STATUS_PRIORITY[next]
+
   if (nextPriority > currentPriority) {
     summary.status = next
+
     if (next === 'working' && nextWorkingMode === 'monitoring') {
       summary.workingMode = 'monitoring'
     } else {
       delete summary.workingMode
     }
+
     return
   }
+
   if (nextPriority === currentPriority && next === 'working') {
     if (nextWorkingMode === 'monitoring') {
       summary.workingMode = 'monitoring'
@@ -222,9 +238,11 @@ export function maxTimestamp(left: number | null, right: number | null): number 
   if (left === null) {
     return right
   }
+
   if (right === null) {
     return left
   }
+
   return Math.max(left, right)
 }
 
@@ -236,20 +254,26 @@ export function compareWorktreePs(
   if (left.isPinned !== right.isPinned) {
     return left.isPinned ? -1 : 1
   }
+
   if (left.unread !== right.unread) {
     return left.unread ? -1 : 1
   }
+
   // Why: worktree.ps is truncated for mobile, so host-visible activity must sort above inactive rows.
   if (left.hasHostSidebarActivity !== right.hasHostSidebarActivity) {
     return left.hasHostSidebarActivity ? -1 : 1
   }
+
   const leftLast = left.lastOutputAt ?? -1
   const rightLast = right.lastOutputAt ?? -1
+
   if (leftLast !== rightLast) {
     return rightLast - leftLast
   }
+
   if (left.liveTerminalCount !== right.liveTerminalCount) {
     return right.liveTerminalCount - left.liveTerminalCount
   }
+
   return left.path.localeCompare(right.path)
 }

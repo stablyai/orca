@@ -14,21 +14,27 @@ export function useTaskPageLinearListPresentation(model: TaskPageLinearListProje
     linearTeamSelection,
     pagedLinearIssues
   } = model
+
   const selectedLinearTeamForExternalLink = useMemo(() => {
     if (linearTeamSelection.size !== 1) {
       return null
     }
+
     const [teamId] = linearTeamSelection
+
     return linearTeamOptions.find((team) => team.id === teamId && team.url) ?? null
   }, [linearTeamOptions, linearTeamSelection])
+
   const effectiveLinearDisplayProperties = useMemo(() => {
     const next = new Set(linearDisplayProperties)
+
     const groupedProperty =
       linearGroupBy === 'status'
         ? 'state'
         : linearGroupBy === 'assignee' || linearGroupBy === 'priority' || linearGroupBy === 'team'
           ? linearGroupBy
           : null
+
     if (groupedProperty) {
       next.delete(groupedProperty)
     }
@@ -39,12 +45,15 @@ export function useTaskPageLinearListPresentation(model: TaskPageLinearListProje
     } else if (linearTeamSelection.size > 1 && !linearTeamPropertyTouched) {
       next.add('team')
     }
+
     return next
   }, [linearDisplayProperties, linearGroupBy, linearTeamPropertyTouched, linearTeamSelection.size])
+
   const linearIssueGridTemplate = useMemo(
     () => getLinearIssueGridTemplate(effectiveLinearDisplayProperties),
     [effectiveLinearDisplayProperties]
   )
+
   const linearIssueGridStyle = useMemo(
     () =>
       ({
@@ -52,10 +61,12 @@ export function useTaskPageLinearListPresentation(model: TaskPageLinearListProje
       }) as React.CSSProperties,
     [linearIssueGridTemplate]
   )
+
   const linearIssueSections = useMemo(
     () => groupLinearIssues(pagedLinearIssues, linearGroupBy, linearOrderBy),
     [pagedLinearIssues, linearGroupBy, linearOrderBy]
   )
+
   const linearIssueListRows = useMemo<LinearIssueListRow[]>(
     () =>
       linearIssueSections.flatMap((section) => {
@@ -63,9 +74,11 @@ export function useTaskPageLinearListPresentation(model: TaskPageLinearListProje
           type: 'issue' as const,
           issue
         }))
+
         if (linearGroupBy === 'none') {
           return issueRows
         }
+
         return [
           {
             type: 'section' as const,
@@ -78,6 +91,7 @@ export function useTaskPageLinearListPresentation(model: TaskPageLinearListProje
       }),
     [linearGroupBy, linearIssueSections]
   )
+
   const nextModel = model as typeof model & {
     selectedLinearTeamForExternalLink: typeof selectedLinearTeamForExternalLink
     effectiveLinearDisplayProperties: typeof effectiveLinearDisplayProperties
@@ -86,12 +100,14 @@ export function useTaskPageLinearListPresentation(model: TaskPageLinearListProje
     linearIssueSections: typeof linearIssueSections
     linearIssueListRows: typeof linearIssueListRows
   }
+
   nextModel.selectedLinearTeamForExternalLink = selectedLinearTeamForExternalLink
   nextModel.effectiveLinearDisplayProperties = effectiveLinearDisplayProperties
   nextModel.linearIssueGridTemplate = linearIssueGridTemplate
   nextModel.linearIssueGridStyle = linearIssueGridStyle
   nextModel.linearIssueSections = linearIssueSections
   nextModel.linearIssueListRows = linearIssueListRows
+
   return nextModel
 }
 

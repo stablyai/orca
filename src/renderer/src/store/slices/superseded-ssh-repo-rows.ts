@@ -26,6 +26,7 @@ export function reconcileReadoptedSshRepoRows(
 ): SshRepoReconciliation {
   const prunedOwners = new Set<string>()
   const pendingReadoptions: SshRepoReadoption[] = []
+
   const directSshOwners = new Set(
     repos.flatMap((repo) =>
       repo.connectionId && repoBelongsToTarget(repo, repo.connectionId)
@@ -36,20 +37,25 @@ export function reconcileReadoptedSshRepoRows(
 
   for (const readoption of readoptions) {
     const pendingRepoIds: string[] = []
+
     for (const repoId of readoption.repoIds) {
       const newOwner = getRepoHostIdentityForParts(
         repoId,
         toSshExecutionHostId(readoption.newTargetId)
       )
+
       const hasNewRow = directSshOwners.has(newOwner)
+
       if (!hasNewRow) {
         pendingRepoIds.push(repoId)
         continue
       }
+
       prunedOwners.add(
         getRepoHostIdentityForParts(repoId, toSshExecutionHostId(readoption.oldTargetId))
       )
     }
+
     if (pendingRepoIds.length > 0) {
       pendingReadoptions.push({ ...readoption, repoIds: pendingRepoIds })
     }
@@ -60,6 +66,7 @@ export function reconcileReadoptedSshRepoRows(
   if (prunedOwners.size === 0) {
     return { repos, pendingReadoptions }
   }
+
   return {
     repos: repos.filter(
       (repo) =>
@@ -74,14 +81,17 @@ export function mergeSshRepoReadoptions(
   incoming: readonly SshRepoReadoption[]
 ): readonly SshRepoReadoption[] {
   const repoIdsByMigration = new Map<string, Set<string>>()
+
   for (const readoption of [...pending, ...incoming]) {
     const key = `${readoption.oldTargetId}\0${readoption.newTargetId}`
     const repoIds = repoIdsByMigration.get(key) ?? new Set<string>()
     readoption.repoIds.forEach((repoId) => repoIds.add(repoId))
     repoIdsByMigration.set(key, repoIds)
   }
+
   return [...repoIdsByMigration].map(([key, repoIds]) => {
     const [oldTargetId, newTargetId] = key.split('\0')
+
     return { oldTargetId, newTargetId, repoIds: [...repoIds] }
   })
 }

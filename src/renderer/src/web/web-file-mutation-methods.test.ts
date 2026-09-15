@@ -25,6 +25,7 @@ describe('paired web file mutation methods', () => {
   const assertMutationSupported = vi.fn(async () => {})
   const callRuntimeResult = vi.fn(async () => ({ ok: true }))
   const getSshState = vi.fn(async () => connectedSshState('hub-private-target', 17))
+
   const filesByPath = new Map([
     ['/hub/repo/readme.md', resolvedFile('wt-local', 'local', 'readme.md')],
     ['/hub/repo/new.md', resolvedFile('wt-local', 'local', 'new.md')],
@@ -35,13 +36,17 @@ describe('paired web file mutation methods', () => {
     ['/ssh/repo/copy.md', resolvedFile('wt-ssh', 'ssh:hub-private-target', 'copy.md')],
     ['/ssh/repo/dir', resolvedFile('wt-ssh', 'ssh:hub-private-target', 'dir')]
   ])
+
   const resolveFilePath = vi.fn(async (filePath: string) => {
     const file = filesByPath.get(filePath)
+
     if (!file) {
       throw new Error(`Unknown test path: ${filePath}`)
     }
+
     return file
   })
+
   const captureSession = vi.fn(() => ({
     assertMutationSupported,
     callRuntimeResult,
@@ -284,12 +289,14 @@ describe('paired web file mutation methods', () => {
 
   it('keeps path resolution, capability, and mutation on one captured pairing session', async () => {
     const replacementCall = vi.fn(async () => ({ ok: true }))
+
     const replacementSession = {
       assertMutationSupported: vi.fn(async () => {}),
       callRuntimeResult: replacementCall,
       getSshState,
       resolveFilePath
     }
+
     const capturedSession = {
       assertMutationSupported: vi.fn(async () => {
         captureSession.mockReturnValue(replacementSession)
@@ -298,6 +305,7 @@ describe('paired web file mutation methods', () => {
       getSshState,
       resolveFilePath
     }
+
     captureSession.mockReturnValueOnce(capturedSession)
     const methods = createWebFileMutationMethods({ captureSession })
 

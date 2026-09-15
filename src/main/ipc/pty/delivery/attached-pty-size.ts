@@ -37,6 +37,7 @@ export function resolveCommittedPtySize(args: {
   if (args.result.isReattach !== true) {
     return args.requested
   }
+
   return (
     positiveGrid(args.result.attachedGrid?.cols, args.result.attachedGrid?.rows) ??
     positiveGrid(args.result.snapshotCols, args.result.snapshotRows) ??
@@ -77,5 +78,6 @@ export function commitAttachedPtySize(args: {
   const committedSize = resolveCommittedPtySize(args)
   ptySizes.set(args.result.id, committedSize)
   reflowHeadlessTerminalToCommittedGrid({ ...args, committedSize })
+
   return committedSize
 }

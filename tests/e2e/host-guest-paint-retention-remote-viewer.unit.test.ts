@@ -44,6 +44,7 @@ function hostGuestIsPaintable(
     }))
   )
   hydrateBrowserRemoteViewerPages(runtime.getBrowserRemoteViewerPages())
+
   return isBrowserPagePanePaintable({
     isActive: hostIsLookingAtThisPage,
     // No agent command is in flight, so no automation bootstrap lease is held. That lease is what

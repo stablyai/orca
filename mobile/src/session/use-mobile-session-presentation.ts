@@ -29,7 +29,9 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     handleCreateTerminal,
     visibleTabs
   } = scope
+
   const showLoadingState = connState === 'connected' && !terminalsLoaded && visibleTabs.length === 0
+
   const showEmptyState =
     connState === 'connected' && terminalsLoaded && visibleTabs.length === 0 && !activeHandle
 
@@ -55,6 +57,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     lastConnectedAt,
     endpoint: hostEndpoint
   })
+
   const showConnectionRetry =
     connectionVerdict.kind === 'warning' || connectionVerdict.kind === 'unreachable'
 
@@ -76,15 +79,18 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
         ? Math.max(0, keyboardHeight - insets.bottom)
         : keyboardHeight
       : 0
+
   const activeTerminalKeyboardLift = computeActiveTerminalKeyboardLift({
     keyboardLift,
     metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
     terminalFrameHeight: terminalFrameHeightRef.current
   })
+
   const toastAnimatedStyle = {
     opacity: toastOpacityRef.current,
     transform: [{ translateY: -keyboardLift }]
   }
+
   return {
     showLoadingState,
     showEmptyState,

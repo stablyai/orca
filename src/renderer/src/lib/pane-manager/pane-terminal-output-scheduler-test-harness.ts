@@ -25,6 +25,7 @@ export type ForegroundSchedulerTestTerminal = {
 
 export function createTerminal(): SchedulerTestTerminal {
   const classes = new Set<string>()
+
   return {
     classes,
     element: {
@@ -63,5 +64,6 @@ export function createForegroundTerminal(): ForegroundSchedulerTestTerminal {
 
 export async function loadScheduler() {
   vi.resetModules()
+
   return import('./pane-terminal-output-scheduler')
 }

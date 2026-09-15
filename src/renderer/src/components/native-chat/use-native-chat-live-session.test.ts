@@ -16,7 +16,9 @@ const { transportFactory, getMockTransport, resetMockTransports } = vi.hoisted((
     unsubscribe: ReturnType<typeof vi.fn>
     emit: (frame: unknown) => void
   }
+
   const transports = new Map<string | null, MockTransport>()
+
   // autoSnapshot mirrors a watchable transcript's immediate first frame; pass
   // false to model a not-yet-flushed transcript whose server-side resolve poll
   // has nothing to emit yet (#8401) — only readSession drives the view then.
@@ -25,25 +27,31 @@ const { transportFactory, getMockTransport, resetMockTransports } = vi.hoisted((
     opts?: { autoSnapshot?: boolean }
   ): MockTransport => {
     let transport = transports.get(ownerId)
+
     if (!transport) {
       const unsubscribe = vi.fn()
       let listener: (frame: unknown) => void = () => {}
+
       transport = {
         unsubscribe,
         readSession: vi.fn().mockResolvedValue({ messages: [] }),
         subscribe: vi.fn((_args, onFrame) => {
           listener = onFrame
+
           if (opts?.autoSnapshot !== false) {
             onFrame({ type: 'snapshot', messages: [], hasMore: false })
           }
+
           return unsubscribe
         }),
         emit: (frame) => listener(frame)
       }
       transports.set(ownerId, transport)
     }
+
     return transport
   }
+
   return {
     getMockTransport,
     resetMockTransports: () => transports.clear(),
@@ -85,6 +93,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
 
   function Probe(props: UseNativeChatLiveSessionArgs): null {
     latest = useNativeChatLiveSession(props)
+
     return null
   }
 
@@ -103,6 +112,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
       root.render(createElement(Probe, props))
     })
     await flush()
+
     return root
   }
 
@@ -121,6 +131,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
     for (const root of roots.splice(0)) {
       act(() => root.unmount())
     }
+
     latest = null
     vi.clearAllMocks()
     resetMockTransports()
@@ -144,6 +155,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
       sessionId: SESSION,
       runtimeEnvironmentId: 'env-1'
     })
+
     const first = getMockTransport('env-1')
 
     await rerender(root, {
@@ -165,6 +177,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
       sessionId: SESSION,
       runtimeEnvironmentId: 'env-1'
     })
+
     const transport = getMockTransport('env-1')
 
     await act(async () => {
@@ -211,6 +224,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
       assistant(`m-${n}`, 't')
     )
+
     const first = getMockTransport('env-1')
 
     const root = await render({
@@ -219,11 +233,13 @@ describe('useNativeChatLiveSession — transport routing', () => {
       sessionId: SESSION,
       runtimeEnvironmentId: 'env-1'
     })
+
     await act(async () => {
       first.emit({ type: 'snapshot', messages: many, hasMore: true })
     })
     // Arm the pending read for load-earlier only; the initial seed already ran.
     let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
+
     first.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveEarlier = resolve))
     )
@@ -249,9 +265,11 @@ describe('useNativeChatLiveSession — transport routing', () => {
 
   it('discards a load-earlier resolve from before transcript replacement', async () => {
     const transport = getMockTransport('env-1')
+
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
       assistant(`old-${n}`, 'old')
     )
+
     await render({
       paneKey: PANE,
       agent: AGENT,
@@ -261,6 +279,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
     await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
     // Arm the pending read for load-earlier only; the initial seed already ran.
     let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
+
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveEarlier = resolve))
     )
@@ -283,9 +302,11 @@ describe('useNativeChatLiveSession — transport routing', () => {
 
   it('discards a load-earlier resolve from before a reconnect snapshot', async () => {
     const transport = getMockTransport('env-1')
+
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
       assistant(`old-${n}`, 'old')
     )
+
     await render({
       paneKey: PANE,
       agent: AGENT,
@@ -295,6 +316,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
     await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
     // Arm the pending read for load-earlier only; the initial seed already ran.
     let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
+
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveEarlier = resolve))
     )
@@ -317,9 +339,11 @@ describe('useNativeChatLiveSession — transport routing', () => {
 
   it('discards a load-earlier resolve from before a transcript-path rebind', async () => {
     const transport = getMockTransport('env-1')
+
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, n) =>
       assistant(`old-path-${n}`, 'old')
     )
+
     const root = await render({
       paneKey: PANE,
       agent: AGENT,
@@ -327,9 +351,11 @@ describe('useNativeChatLiveSession — transport routing', () => {
       transcriptPath: '/old/transcript',
       runtimeEnvironmentId: 'env-1'
     })
+
     await act(async () => transport.emit({ type: 'snapshot', messages: many, hasMore: true }))
     // Arm the pending read for load-earlier only; the initial seed already ran.
     let resolveEarlier: (result: { messages: NativeChatMessage[] }) => void = () => {}
+
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveEarlier = resolve))
     )
@@ -367,6 +393,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
     const transport = getMockTransport('env-1')
     // The seed resolves only after the authoritative snapshot has already landed.
     let resolveSeed: (result: { messages: NativeChatMessage[] }) => void = () => {}
+
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveSeed = resolve))
     )
@@ -501,9 +528,11 @@ describe('useNativeChatLiveSession — transport routing', () => {
       }
     })
     const transport = getMockTransport('env-1')
+
     const many = Array.from({ length: NATIVE_CHAT_INITIAL_LIMIT }, (_unused, index) =>
       assistant(`m-${index}`, 'working')
     )
+
     await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
     await act(async () =>
       transport.emit({
@@ -518,6 +547,7 @@ describe('useNativeChatLiveSession — transport routing', () => {
       messages: NativeChatMessage[]
       lifecycle: { state: 'working'; turnId: string; timestamp: number }
     }) => void = () => {}
+
     transport.readSession.mockImplementationOnce(
       () => new Promise((resolve) => (resolveEarlier = resolve))
     )
@@ -616,6 +646,7 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
 
   function Probe(props: UseNativeChatLiveSessionArgs): null {
     latest = useNativeChatLiveSession(props)
+
     return null
   }
 
@@ -628,6 +659,7 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
       await Promise.resolve()
       await Promise.resolve()
     })
+
     return root
   }
 
@@ -639,6 +671,7 @@ describe('useNativeChatLiveSession — notFound retry (#8401)', () => {
     for (const root of roots.splice(0)) {
       act(() => root.unmount())
     }
+
     latest = null
     vi.clearAllMocks()
     resetMockTransports()

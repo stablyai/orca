@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 const { lockMock, mkdirMock } = vi.hoisted(() => ({ lockMock: vi.fn(), mkdirMock: vi.fn() }))
 
 vi.mock('proper-lockfile', () => ({ lock: lockMock }))
+
 vi.mock('node:fs/promises', () => ({ mkdir: mkdirMock }))
 
 afterEach(() => {
@@ -11,6 +12,7 @@ afterEach(() => {
 
 async function load() {
   mkdirMock.mockReset().mockResolvedValue(undefined)
+
   return import('./appimage-registration-lock')
 }
 

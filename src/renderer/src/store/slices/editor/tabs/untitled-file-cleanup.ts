@@ -8,16 +8,19 @@ export function deleteUntouchedUntitledFile(state: AppState, file: OpenFile): vo
   const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
   const owningRuntimeEnvironmentId = file.runtimeEnvironmentId?.trim()
   let context: ReturnType<typeof getEditorFileOperationContext>
+
   try {
     context = getEditorFileOperationContext(state, file, worktree?.path ?? null)
   } catch {
     return
   }
+
   void deleteRuntimeRelativePath(context, file.relativePath)
     .then((deletedRemotely) => {
       if (!deletedRemotely && !owningRuntimeEnvironmentId) {
         return deleteRuntimePath(context, file.filePath)
       }
+
       return undefined
     })
     .catch(() => {})

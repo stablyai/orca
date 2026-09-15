@@ -66,6 +66,7 @@ function trimSurroundingSlashes(value) {
 export function normalizePnpmDiff(stdout, folderA, folderB) {
   const a = folderA.replace(/\\/g, '/')
   const b = folderB.replace(/\\/g, '/')
+
   return stdout
     .replace(new RegExp(`(a|b)(${escapeRegExp(`/${trimSurroundingSlashes(a)}/`)})`, 'g'), '$1/')
     .replace(new RegExp(`(a|b)${escapeRegExp(`/${trimSurroundingSlashes(b)}/`)}`, 'g'), '$1/')
@@ -84,9 +85,11 @@ export function splitPatchEntries(patchText) {
     .map((text) => {
       const header = text.slice(0, text.indexOf('\n'))
       const match = /^diff --git a\/(.+) b\/\1$/.exec(header)
+
       if (!match) {
         throw new Error(`Unsupported diff header (renames are not supported): ${header}`)
       }
+
       return { path: match[1], text }
     })
 }
@@ -111,9 +114,11 @@ export function sourceHunks(patchText) {
 export function assertSourceDerivationsAgree(checkoutSource, patchText) {
   const checkout = sourceHunks(checkoutSource)
   const emitted = sourceHunks(patchText)
+
   if (checkout === emitted) {
     return
   }
+
   throw new Error(
     [
       'The checkout diff and the emitted patch disagree on a source file.',
@@ -133,11 +138,13 @@ export function assertSourceDerivationsAgree(checkoutSource, patchText) {
 
 export function firstDifferenceIndex(left, right) {
   const limit = Math.min(left.length, right.length)
+
   for (let index = 0; index < limit; index += 1) {
     if (left[index] !== right[index]) {
       return index
     }
   }
+
   return left.length === right.length ? -1 : limit
 }
 
@@ -145,6 +152,7 @@ export function formatCheckFailure({ name, patchPath, committed, regenerated }) 
   const index = firstDifferenceIndex(committed, regenerated)
   const committedFiles = splitPatchEntries(committed).map((entry) => entry.path)
   const regeneratedFiles = splitPatchEntries(regenerated).map((entry) => entry.path)
+
   return [
     `${name}: ${patchPath} is not what the pinned upstream build produces.`,
     `  committed:   ${Buffer.byteLength(committed)} bytes, files [${committedFiles.join(', ')}]`,

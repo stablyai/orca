@@ -103,14 +103,17 @@ export function nativeChatToolCategory(
   mcpIdentity?: NativeChatMcpIdentity
 ): NativeChatToolCategory | null {
   const word = rowWord.trim().toLowerCase()
+
   if (word.startsWith(MCP_TOOL_PREFIX) || mcpToolIdentity(rowWord, mcpIdentity) !== null) {
     return 'mcpToolCall'
   }
+
   // Before the edit family: a command tool runs whatever it is handed, so a
   // patch in its input is not evidence the row is an edit.
   if (isCommandToolName(word)) {
     return 'unknown'
   }
+
   return CATEGORY_BY_ROW_WORD.get(word) ?? (EDIT_ROW_WORDS.has(word) ? 'fileChange' : null)
 }
 
@@ -131,13 +134,17 @@ export function nativeChatToolRunCategory(
   calls: readonly { name: string; mcpIdentity?: NativeChatMcpIdentity }[]
 ): NativeChatToolCategory | null {
   let shared: NativeChatToolCategory | null = null
+
   for (const call of calls) {
     const category = nativeChatToolCategory(call.name, call.mcpIdentity) ?? 'other'
+
     if (shared !== null && shared !== category) {
       return null
     }
+
     shared = category
   }
+
   return shared
 }
 
@@ -150,6 +157,7 @@ export function nativeChatToolRunIconName(
   if (calls.length === 0) {
     return null
   }
+
   return NATIVE_CHAT_TOOL_ICON_NAMES[nativeChatToolRunCategory(calls) ?? 'other']
 }
 

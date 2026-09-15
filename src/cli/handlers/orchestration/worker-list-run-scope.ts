@@ -17,14 +17,18 @@ export async function resolveWorkerListRunScope(
   client: RuntimeClient
 ): Promise<WorkerListRunScope> {
   const explicit = getOptionalStringFlag(flags, 'run')
+
   if (explicit) {
     return { run: explicit, source: 'flag' }
   }
+
   try {
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
+
     const current = await client.call<{ run: { id: string } | null }>('orchestration.runCurrent', {
       from: terminal
     })
+
     return current.result.run ? { run: current.result.run.id, source: 'bound' } : { source: 'all' }
   } catch {
     // No live terminal, no stable pane, or a runtime that predates runCurrent: the caller asked
@@ -37,5 +41,6 @@ export function formatWorkerListScope(scope: WorkerListRunScope): string {
   if (scope.source === 'all') {
     return 'Scope: all Runs (no Run is bound to this terminal; pass --run to narrow)'
   }
+
   return `Scope: Run ${scope.run} (${scope.source === 'bound' ? 'bound to this terminal' : '--run'})`
 }

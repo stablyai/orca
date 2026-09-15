@@ -39,18 +39,23 @@ export function resolveChecksPanelReviewEvidenceProvider(
   if (input.linkedGitHubPR !== null) {
     return 'github'
   }
+
   if (input.linkedGitLabMR !== null) {
     return 'gitlab'
   }
+
   if (input.linkedBitbucketPR !== null) {
     return 'bitbucket'
   }
+
   if (input.linkedAzureDevOpsPR !== null) {
     return 'azure-devops'
   }
+
   if (input.linkedGiteaPR !== null) {
     return 'gitea'
   }
+
   return input.eligibilityProvider ?? input.cachedProvider
 }
 
@@ -64,6 +69,7 @@ export function getChecksPanelForegroundReviewEvidenceKey(
   ) {
     return null
   }
+
   return `${input.refreshContextKey}::github::${input.reviewEvidenceIdentity}`
 }
 
@@ -75,6 +81,7 @@ export function resolveChecksPanelPRRefreshRequest(
     input.cachedFetchedAt !== null &&
     input.panelVisibleSince !== null &&
     input.cachedFetchedAt < input.panelVisibleSince
+
   const unresolvedEvidenceNeedsForeground =
     input.hasUnrenderedReviewEvidence && input.cachedHasPR !== true
 

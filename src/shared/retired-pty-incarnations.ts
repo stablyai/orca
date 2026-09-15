@@ -16,11 +16,14 @@ export function pruneRetiredPtyIncarnations(
       records.delete(id)
     }
   }
+
   while (records.size > MAX_RETIRED_PTY_INCARNATIONS) {
     const oldest = records.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     records.delete(oldest)
   }
 }

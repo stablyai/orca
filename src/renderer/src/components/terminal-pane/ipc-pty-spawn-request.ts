@@ -36,8 +36,10 @@ export async function spawnIpcPty(
     terminalColorQueryReplies,
     telemetry
   } = transportOptions
+
   const shouldSendLocalCwdFallback =
     cwdFallback === 'worktree' && !connectionId && !admittedSessionId
+
   return window.api.pty.spawn({
     cols: connectOptions.cols ?? 80,
     rows: connectOptions.rows ?? 24,

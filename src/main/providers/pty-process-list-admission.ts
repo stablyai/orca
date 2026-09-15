@@ -9,8 +9,11 @@ import {
 import type { PtyProcessInfo } from './types'
 
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES = 4096
+
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_BYTES = 32 * 1024 * 1024
+
 export const MAX_AGGREGATED_PTY_PROCESS_LIST_OWNERS = MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES
+
 export const PTY_PROCESS_LIST_PROVIDER_BATCH_SIZE = 4
 
 function retainedStringBytes(value: unknown): number | null {
@@ -25,6 +28,7 @@ function retainedOwnerBytes(owner: unknown, ptyId: string): number | null {
   if (!isAgentSessionOwnerBinding(owner) || owner.phase !== 'live' || owner.ptyId !== ptyId) {
     return null
   }
+
   return [
     owner.claim.keyId,
     owner.claim.identityDigest,
@@ -50,19 +54,23 @@ export class PtyProcessListAdmission {
     if (typeof value !== 'object' || value === null) {
       throw new Error('invalid_pty_process_list')
     }
+
     const idBytes = retainedStringBytes(value.id)
     const cwdBytes = retainedStringBytes(value.cwd)
     const titleBytes = retainedStringBytes(value.title)
     const worktreeIdBytes = retainedOptionalStringBytes(value.worktreeId)
     const terminalHandleBytes = retainedOptionalStringBytes(value.terminalHandle)
+
     const wslDistroBytes =
       value.wslDistro === null ? 0 : retainedOptionalStringBytes(value.wslDistro)
+
     const evidenceBytes =
       value.foregroundProcessEvidence === undefined
         ? 0
         : isForegroundProcessEvidence(value.foregroundProcessEvidence)
           ? Buffer.byteLength(JSON.stringify(value.foregroundProcessEvidence), 'utf8')
           : null
+
     if (
       idBytes === null ||
       cwdBytes === null ||
@@ -78,6 +86,7 @@ export class PtyProcessListAdmission {
     ) {
       throw new Error('invalid_pty_process_list')
     }
+
     if (
       (value.agentSessionOwners?.length ?? 0) >
       MAX_AGGREGATED_PTY_PROCESS_LIST_OWNERS - this.owners
@@ -86,16 +95,22 @@ export class PtyProcessListAdmission {
     }
 
     let ownerBytes = 0
+
     const normalizedOwners = value.agentSessionOwners?.map((owner) => {
       const bytes = retainedOwnerBytes(owner, value.id)
+
       if (bytes === null) {
         throw new Error('agent_session_ownership_unknown')
       }
+
       ownerBytes += bytes
+
       return cloneAgentSessionOwnerBinding(owner)
     })
+
     const nextEntries = this.entries + 1
     const nextOwners = this.owners + (normalizedOwners?.length ?? 0)
+
     const nextBytes =
       this.retainedBytes +
       idBytes +
@@ -106,6 +121,7 @@ export class PtyProcessListAdmission {
       wslDistroBytes +
       evidenceBytes +
       ownerBytes
+
     if (
       nextEntries > MAX_AGGREGATED_PTY_PROCESS_LIST_ENTRIES ||
       nextOwners > MAX_AGGREGATED_PTY_PROCESS_LIST_OWNERS ||
@@ -113,6 +129,7 @@ export class PtyProcessListAdmission {
     ) {
       throw new Error(this.capacityError)
     }
+
     this.entries = nextEntries
     this.owners = nextOwners
     this.retainedBytes = nextBytes
@@ -144,25 +161,33 @@ export async function visitPtyProcessListingsInBatches<T>(
   visit: (source: T, processes: readonly PtyProcessInfo[]) => void
 ): Promise<void> {
   let batch: T[] = []
+
   for (const source of sources) {
     batch.push(source)
+
     if (batch.length < PTY_PROCESS_LIST_PROVIDER_BATCH_SIZE) {
       continue
     }
+
     const listings = await Promise.all(
       batch.map(async (entry) => ({ entry, processes: await load(entry) }))
     )
+
     for (const listing of listings) {
       visit(listing.entry, listing.processes)
     }
+
     batch = []
   }
+
   if (batch.length === 0) {
     return
   }
+
   const listings = await Promise.all(
     batch.map(async (entry) => ({ entry, processes: await load(entry) }))
   )
+
   for (const listing of listings) {
     visit(listing.entry, listing.processes)
   }

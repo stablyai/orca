@@ -63,6 +63,7 @@ describe('registerHostedReviewHandlers', () => {
   const handlers: HandlerMap = {}
   const repoPath = '/remote/workspace/repo'
   const worktreePath = '/remote/workspace/feature-worktree'
+
   const repo: {
     id: string
     path: string
@@ -78,12 +79,14 @@ describe('registerHostedReviewHandlers', () => {
     addedAt: 0,
     connectionId: 'ssh-1'
   }
+
   const store = {
     getRepo: vi.fn((repoId: string) => (repoId === repo.id ? repo : null)),
     getRepos: vi.fn(() => [repo]),
     getProjects: vi.fn((): Record<string, unknown>[] => []),
     getSettings: vi.fn(() => ({ localWindowsRuntimeDefault: { kind: 'windows-host' } }))
   }
+
   const stats = {
     hasCountedPR: vi.fn(() => false),
     record: vi.fn()
@@ -104,9 +107,11 @@ describe('registerHostedReviewHandlers', () => {
     store.getSettings.mockReset()
     stats.hasCountedPR.mockClear()
     stats.record.mockClear()
+
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
+
     handleMock.mockImplementation((channel, handler) => {
       handlers[channel] = handler
     })
@@ -119,6 +124,7 @@ describe('registerHostedReviewHandlers', () => {
 
   it('routes local WSL project review creation through main-process runtime options', async () => {
     setPlatform('win32')
+
     const localRepo = {
       id: 'repo-local',
       path: '/workspace/repo',
@@ -126,6 +132,7 @@ describe('registerHostedReviewHandlers', () => {
       badgeColor: '#000',
       addedAt: 0
     }
+
     store.getRepo.mockImplementation((repoId: string) =>
       repoId === localRepo.id ? localRepo : null
     )
@@ -187,6 +194,7 @@ describe('registerHostedReviewHandlers', () => {
       addedAt: 0,
       symlinkPaths: ['node_modules']
     }
+
     store.getRepo.mockImplementation((repoId: string) =>
       repoId === localRepo.id ? localRepo : null
     )
@@ -251,6 +259,7 @@ describe('registerHostedReviewHandlers', () => {
 
   it('routes local WSL project review status through main-process runtime options', async () => {
     setPlatform('win32')
+
     const localRepo = {
       id: 'repo-local',
       path: '/workspace/repo',
@@ -258,6 +267,7 @@ describe('registerHostedReviewHandlers', () => {
       badgeColor: '#000',
       addedAt: 0
     }
+
     store.getRepo.mockImplementation((repoId: string) =>
       repoId === localRepo.id ? localRepo : null
     )

@@ -29,6 +29,7 @@ export function createTranscriptNativeWatcher(
     if (watcher !== candidate) {
       return
     }
+
     watcher = null
     rebindNeeded = true
     candidate.close()
@@ -39,34 +40,42 @@ export function createTranscriptNativeWatcher(
       if (disposed || watcher) {
         return watcher !== null
       }
+
       let nextWatcher: FSWatcher
+
       try {
         // Why: watching the parent survives target-file replacement on macOS.
         nextWatcher = watch(dirname(filePath), (event, changedName) => {
           if (changedName !== null && changedName.toString() !== watchedName) {
             return
           }
+
           // Why: a parent replacement may emit rename without a watcher error.
           if (event === 'rename') {
             invalidateCandidate(nextWatcher)
           }
+
           onEvent()
         })
       } catch {
         rebindNeeded = true
+
         return false
       }
+
       // Why: an active tail should not keep a headless runtime alive during shutdown.
       nextWatcher.unref?.()
       nextWatcher.on('error', () => {
         if (disposed || watcher !== nextWatcher) {
           return
         }
+
         invalidateCandidate(nextWatcher)
         onError()
       })
       watcher = nextWatcher
       rebindNeeded = false
+
       return true
     },
     invalidate(): void {

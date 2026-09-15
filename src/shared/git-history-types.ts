@@ -9,7 +9,9 @@ export type GitHistoryGraphColorId =
   | 'git-graph-lane-5'
 
 export const GIT_HISTORY_REF_COLOR: GitHistoryGraphColorId = 'git-graph-ref'
+
 export const GIT_HISTORY_REMOTE_REF_COLOR: GitHistoryGraphColorId = 'git-graph-remote-ref'
+
 export const GIT_HISTORY_BASE_REF_COLOR: GitHistoryGraphColorId = 'git-graph-base-ref'
 
 export const GIT_HISTORY_LANE_COLORS: readonly GitHistoryGraphColorId[] = [
@@ -21,6 +23,7 @@ export const GIT_HISTORY_LANE_COLORS: readonly GitHistoryGraphColorId[] = [
 ]
 
 export const GIT_HISTORY_DEFAULT_LIMIT = 50
+
 export const GIT_HISTORY_MAX_LIMIT = 200
 
 export type GitHistoryRefCategory = 'branches' | 'remote branches' | 'tags' | 'commits'

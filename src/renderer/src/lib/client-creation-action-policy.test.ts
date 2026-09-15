@@ -42,6 +42,7 @@ describe('resolveClientCreationActionPolicy', () => {
   it('selects the provider that the browser action path can actually consume', () => {
     const desktopHost = runtimeStatus(['browser.screencast.v1'])
     const npmHostWithoutDisplay = { ...runtimeStatus(), hostPlatform: 'linux' as const }
+
     const npmHostWithDisplay = {
       ...runtimeStatus(['browser.screencast.v1', 'browser.headless.v1']),
       hostPlatform: 'linux' as const
@@ -122,6 +123,7 @@ describe('resolveClientCreationActionPolicy', () => {
 describe('client creation action guards', () => {
   it('fails closed for an older paired runtime and rejects local browser materialization', () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+
     const state = {
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
       runtimeStatusByEnvironmentId: new Map([
@@ -142,11 +144,13 @@ describe('client creation action guards', () => {
 
   it('permits host-confirmed remote browser materialization in paired web', () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+
     const state = {
       runtimeStatusByEnvironmentId: new Map([
         ['runtime-1', { status: runtimeStatus(['browser.screencast.v1']), checkedAt: 1 }]
       ])
     }
+
     expect(() =>
       assertManagedBrowserMaterializationAllowed(state as never, 'runtime-1')
     ).not.toThrow()
@@ -154,6 +158,7 @@ describe('client creation action guards', () => {
 
   it('treats the floating workspace as local even with an active capable runtime', () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+
     const state = {
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
       runtimeStatusByEnvironmentId: new Map([
@@ -171,6 +176,7 @@ describe('client creation action guards', () => {
   it('uses folder and SSH workspace ownership instead of the focused runtime', () => {
     vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
     const capableStatus = runtimeStatus(['browser.screencast.v1'])
+
     const state = {
       settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
       folderWorkspaces: [

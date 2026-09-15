@@ -45,16 +45,21 @@ export function runRecoveryScript(options: {
   const destinationAuthPath = join(targetHome, 'auth.json')
   writeFileSync(sourceRecoveryPath, SOURCE_AUTH, { mode: 0o400 })
   writeFileSync(destinationAuthPath, TARGET_AUTH, { mode: 0o400 })
+
   if (options.destinationRecovery !== false) {
     linkSync(destinationAuthPath, destinationRecoveryPath)
   }
+
   if (options.pathMetadata !== false) {
     writeFileSync(destinationRecoveryTargetPath, `${destinationAuthPath}\0`, { mode: 0o600 })
   }
+
   if (options.markerPresent) {
     writeFileSync(markerPath, '{"completed":true}\n')
   }
+
   let status = 0
+
   try {
     execFileSync(
       '/bin/sh',
@@ -64,6 +69,7 @@ export function runRecoveryScript(options: {
   } catch (error) {
     status = (error as { status?: number }).status ?? -1
   }
+
   return {
     destinationMode: statSync(destinationAuthPath).mode & 0o777,
     destinationRecoveryExists: existsSync(destinationRecoveryPath),
@@ -87,15 +93,19 @@ export function runAbsentLegacyHomeScript(options: {
   const root = mkdtempSync(join(tmpdir(), 'orca-drain-absent-home-'))
   const legacyHome = join(root, 'legacy')
   const activeHome = join(root, 'absent-active-home')
+
   const markerPath = options.markerParentMissing
     ? join(root, 'marker-parent', 'drain-marker.json')
     : join(root, 'drain-marker.json')
+
   if (options.createLegacyHome) {
     const sessionHome = options.activeHomeOnly ? activeHome : legacyHome
     mkdirSync(join(sessionHome, ...RETIRED_SESSION_SEGMENTS.slice(0, -1)), { recursive: true })
     writeFileSync(join(sessionHome, ...RETIRED_SESSION_SEGMENTS), RETIRED_SESSION)
   }
+
   let status = 0
+
   try {
     execFileSync('/bin/sh', ['-c', options.script, 'sh', legacyHome, activeHome, markerPath], {
       encoding: 'utf8',
@@ -106,5 +116,6 @@ export function runAbsentLegacyHomeScript(options: {
   } catch (error) {
     status = (error as { status?: number }).status ?? -1
   }
+
   return { markerExists: existsSync(markerPath), status }
 }

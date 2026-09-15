@@ -8,6 +8,7 @@ import type { NativeChatComposerImageAttachment } from './NativeChatComposerFiel
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
+
 vi.mock('@/lib/worker-terminal-takeover-report', () => ({
   reportStructuredSessionUserInput: vi.fn()
 }))
@@ -32,6 +33,7 @@ function harness(agent: AgentType) {
     sessionId: 'session-test',
     runtimeEnvironmentId: null
   } as unknown as NativeChatStructuredComposerTransport
+
   const { result } = renderHook(() =>
     useNativeChatStructuredComposerSend({
       agent,
@@ -45,6 +47,7 @@ function harness(agent: AgentType) {
       setCaret: vi.fn()
     })
   )
+
   return { send: result.current, structuredTransport }
 }
 

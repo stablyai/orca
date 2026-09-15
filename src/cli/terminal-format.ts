@@ -23,18 +23,22 @@ export function formatTerminalList(
   result: WithAnnotatedHostScope<RuntimeTerminalListResult>
 ): string {
   const scope = formatListingHostScope(result.hostScope)
+
   if (result.terminals.length === 0) {
     return `No terminals listed.\n${scope}`
   }
+
   const body = result.terminals
     .map(
       (terminal) =>
         `${terminal.handle}  ${terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
     )
     .join('\n\n')
+
   const visualLayout = formatTerminalVisualLayouts(result.visualLayouts)
   const bodyWithLayout = visualLayout ? `${body}\n\nvisual layout:\n${visualLayout}` : body
   const bodyWithScope = `${bodyWithLayout}\n\n${scope}`
+
   return result.truncated
     ? `${bodyWithScope}\ntruncated: showing ${result.terminals.length} of ${result.totalCount}`
     : bodyWithScope
@@ -46,6 +50,7 @@ function formatTerminalVisualLayouts(
   if (!layouts || layouts.length === 0) {
     return null
   }
+
   return layouts
     .map((layout) =>
       [
@@ -58,6 +63,7 @@ function formatTerminalVisualLayouts(
 
 function formatVisualLayoutNode(node: RuntimeTerminalVisualLayoutNode, depth: number): string[] {
   const indent = '  '.repeat(depth)
+
   if (node.type === 'split') {
     return [
       `${indent}split ${node.direction}`,
@@ -65,6 +71,7 @@ function formatVisualLayoutNode(node: RuntimeTerminalVisualLayoutNode, depth: nu
       ...formatVisualLayoutNode(node.second, depth + 1)
     ]
   }
+
   return [
     `${indent}group ${node.groupId ?? '(default)'}`,
     ...node.tabs.flatMap((tab) => formatVisualTab(tab, depth + 1))
@@ -73,6 +80,7 @@ function formatVisualLayoutNode(node: RuntimeTerminalVisualLayoutNode, depth: nu
 
 function formatVisualTab(tab: RuntimeTerminalVisualTab, depth: number): string[] {
   const indent = '  '.repeat(depth)
+
   return [
     `${indent}tab ${tab.tabId}  ${tab.title ?? '(untitled)'}`,
     ...formatVisualPaneNode(tab.panes, depth + 1)
@@ -81,6 +89,7 @@ function formatVisualTab(tab: RuntimeTerminalVisualTab, depth: number): string[]
 
 function formatVisualPaneNode(node: RuntimeTerminalVisualPaneNode, depth: number): string[] {
   const indent = '  '.repeat(depth)
+
   if (node.type === 'pane-split') {
     return [
       `${indent}pane split ${node.direction}`,
@@ -88,7 +97,9 @@ function formatVisualPaneNode(node: RuntimeTerminalVisualPaneNode, depth: number
       ...formatVisualPaneNode(node.second, depth + 1)
     ]
   }
+
   const marker = node.active ? '* ' : '  '
+
   return [
     `${indent}${marker}${node.handle}  ${node.title ?? '(untitled)'}  tab=${node.tabId} leaf=${node.leafId}`
   ]
@@ -96,6 +107,7 @@ function formatVisualPaneNode(node: RuntimeTerminalVisualPaneNode, depth: number
 
 export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): string {
   const terminal = result.terminal
+
   return [
     `handle: ${terminal.handle}`,
     `title: ${terminal.title ?? '(untitled)'}`,
@@ -116,22 +128,29 @@ function formatAgentWait(agentWait: RuntimeTerminalShow['agentWait']): string {
   if (agentWait === undefined) {
     return 'unknown (not evaluated)'
   }
+
   if (!agentWait) {
     return 'none'
   }
+
   if (!agentWait.reason) {
     return `interactive prompt (via ${agentWait.source})`
   }
+
   return `${describeTerminalWaitBlockedReason(agentWait.reason)} (via ${agentWait.source})`
 }
 
 export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
   const terminal = result.terminal
+
   const oldestCursor =
     typeof terminal.oldestCursor === 'string' ? [`oldest cursor: ${terminal.oldestCursor}`] : []
+
   const latestCursor =
     typeof terminal.latestCursor === 'string' ? [`latest cursor: ${terminal.latestCursor}`] : []
+
   const limitedWarning = formatTerminalReadLimitedWarning(terminal)
+
   const header = [
     `handle: ${terminal.handle}`,
     `status: ${terminal.status}`,
@@ -150,6 +169,7 @@ export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): s
         ]
       : [])
   ]
+
   return [...header, '', ...terminal.tail].join('\n')
 }
 
@@ -157,6 +177,7 @@ function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string
   if (!terminal.limited) {
     return null
   }
+
   if (
     typeof terminal.nextCursor === 'string' &&
     typeof terminal.latestCursor === 'string' &&
@@ -164,6 +185,7 @@ function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string
   ) {
     return `warning: output limited; continue with --cursor ${terminal.nextCursor}`
   }
+
   if (
     typeof terminal.oldestCursor === 'string' &&
     typeof terminal.latestCursor === 'string' &&
@@ -172,24 +194,31 @@ function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string
     // A tail preview's next cursor is already latest, so oldestCursor is the retained history entry point.
     return `warning: output limited; page retained output with --cursor ${terminal.oldestCursor} --limit <count>`
   }
+
   return 'warning: output limited'
 }
 
 export function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {
   if (result.send.agentSessionRefusal) {
     const copy = structuredChatPtyWriteRefusalCopy(result.send.agentSessionRefusal, 'terminal-send')
+
     if (copy) {
       return copy
     }
   }
+
   if (!result.send.accepted) {
     const reason = result.send.refusedReason ? `: ${result.send.refusedReason}` : ''
+
     return `Input refused by ${result.send.handle}${reason}.`
   }
+
   const prompt = result.send.prompt
+
   if (!prompt) {
     return `Sent ${result.send.bytesWritten} bytes to ${result.send.handle}.`
   }
+
   return [
     `Prompt ${prompt.requestId} on ${result.send.handle}: ${prompt.stages.join(' -> ')}.`,
     `provider: ${prompt.provider}`,
@@ -201,6 +230,7 @@ export function formatTerminalSend(result: { send: RuntimeTerminalSend }): strin
 /** The same warnings the text formatter prints, so a --json caller sees them too. */
 export function terminalSendWarnings(send: RuntimeTerminalSend): string[] {
   const warning = send.accepted && send.prompt ? promptObservationWarning(send.prompt) : null
+
   return warning ? [warning] : []
 }
 
@@ -210,9 +240,11 @@ function promptObservationWarning(
   if (prompt.observation === 'permission') {
     return `delivery was not observed because the provider requires permission. Resolve the permission prompt in the terminal, then reissue the exact command with --retry-request ${prompt.requestId} and --wait-submit <seconds>.`
   }
+
   if (prompt.observation === 'incarnation_replaced') {
     return 'delivery was not observed because the terminal process was replaced. Inspect the current terminal before sending a new prompt; do not retry with this request ID.'
   }
+
   // Ordered before the unsupported arm: an agent provider that never reached turn_started
   // needs the swallowed-Enter recovery even if this host could not observe the submit.
   if (prompt.provider !== 'unsupported' && prompt.provider !== 'old-host') {
@@ -220,11 +252,13 @@ function promptObservationWarning(
       ? null
       : `input was accepted but no turn start was observed, so the Enter may have been swallowed. Confirm delivery by reissuing the exact command with --retry-request ${prompt.requestId} --wait-submit <seconds>; the same request ID replays the receipt instead of sending the prompt again.`
   }
+
   if (prompt.observation === 'unsupported') {
     return prompt.provider === 'old-host'
       ? 'this host predates durable prompt receipts. Update Orca on the execution host, and inspect the terminal before retrying an ambiguous send.'
       : 'input was accepted, but this provider cannot report delivery. Inspect the terminal before retrying.'
   }
+
   return null
 }
 
@@ -238,6 +272,7 @@ export function formatTerminalCreate(result: { terminal: RuntimeTerminalCreate }
   const titleNote = result.terminal.title ? ` (title: "${result.terminal.title}")` : ''
   const surfaceNote = result.terminal.surface ? ` [${result.terminal.surface}]` : ''
   const warningNote = result.terminal.warning ? `\nwarning: ${result.terminal.warning}` : ''
+
   return `Created terminal ${result.terminal.handle}${titleNote}${surfaceNote}${warningNote}`
 }
 
@@ -249,6 +284,7 @@ export function formatTerminalFocus(result: { focus: RuntimeTerminalFocus }): st
   if (result.focus.navigated === false) {
     return `Focus request for terminal ${result.focus.handle} was superseded or host navigation was skipped (tab ${result.focus.tabId}).`
   }
+
   return `Focused terminal ${result.focus.handle} (tab ${result.focus.tabId}).`
 }
 
@@ -257,12 +293,15 @@ function describePtyStop(close: RuntimeTerminalClose): string {
   if (close.ptyKilled) {
     return ' PTY killed.'
   }
+
   if (close.ptyStopVerdict === 'live') {
     return ` ${PTY_LIVE_NOTE}`
   }
+
   if (close.ptyStopVerdict === 'unverifiable') {
     return ` ${describeUnconfirmedStop(close.ptyStopReason ?? 'its host could not be reached')}`
   }
+
   return ''
 }
 
@@ -270,6 +309,7 @@ export function formatTerminalClose(result: { close: RuntimeTerminalClose }): st
   if (result.close.closeMode === 'tab') {
     return `Closed terminal tab ${result.close.tabId} (${result.close.handle}).`
   }
+
   return `Closed terminal ${result.close.handle}.${describePtyStop(result.close)}`
 }
 
@@ -281,8 +321,10 @@ export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): strin
     `status: ${result.wait.status}`,
     `exitCode: ${result.wait.exitCode ?? 'null'}`
   ]
+
   if (result.wait.blockedReason) {
     lines.push(`blockedReason: ${describeTerminalWaitBlockedReason(result.wait.blockedReason)}`)
   }
+
   return lines.join('\n')
 }

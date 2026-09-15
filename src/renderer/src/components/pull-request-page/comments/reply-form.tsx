@@ -36,9 +36,11 @@ export function CommentReplyForm({
 
   const submit = useCallback(async () => {
     const bodyState = getCommentBodySubmitState(body)
+
     if (bodyState.status === 'empty' || submitting) {
       return
     }
+
     if (bodyState.status === 'too-large-leading-whitespace') {
       toast.error(
         translate(
@@ -46,14 +48,19 @@ export function CommentReplyForm({
           'Comment is too large to submit safely.'
         )
       )
+
       return
     }
+
     setSubmitting(true)
+
     try {
       const ok = await onSubmit(bodyState.body)
+
       if (!mountedRef.current) {
         return
       }
+
       if (ok) {
         setBody('')
       }
@@ -71,6 +78,7 @@ export function CommentReplyForm({
       }
     }
   }, [body, mountedRef, onSubmit, submitting])
+
   const canSubmitReply = hasBoundedCommentBodyText(body)
 
   return (
@@ -83,8 +91,10 @@ export function CommentReplyForm({
           if (e.key === 'Escape') {
             e.preventDefault()
             onCancel()
+
             return
           }
+
           if (isScreenSubmitShortcut(e)) {
             e.preventDefault()
             void submit()

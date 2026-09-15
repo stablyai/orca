@@ -66,6 +66,7 @@ describe('groupLinearIssues', () => {
       'status',
       'identifier'
     )
+
     expect(sections.map((section) => section.key)).toEqual(['status:Todo', 'status:Done'])
   })
 })

@@ -40,6 +40,7 @@ export function syncSystemConfigIntoManagedCodexHome(
   // user made inside Orca-launched Codex (/model, /approvals) must be written
   // back to ~/.codex first or this very pass silently reverts them.
   const promotionPlan = promoteCodexRuntimeSettingsToSystem(homes)
+
   if (!promotionPlan) {
     // Why: mirroring after a failed write-back would erase the runtime change;
     // leave both runtime and its old baseline intact so the next launch retries.
@@ -50,12 +51,16 @@ export function syncSystemConfigIntoManagedCodexHome(
     // means no mirror ran, so clearing the latch here would claim a recovery
     // that did not happen and silence every later pass.
     const stalledStatus = getCodexConfigSyncStatus(homes)
+
     if (stalledStatus.state === 'stalled') {
       reportCodexConfigSyncOutcome(homes.runtimeHomePath, stalledStatus)
     }
+
     return
   }
+
   let mirrorResult: CodexConfigMirrorResult
+
   try {
     mirrorResult = syncSystemConfigIntoManagedCodexHomeUnsafe(homes, promotionPlan)
   } catch (error) {
@@ -64,8 +69,10 @@ export function syncSystemConfigIntoManagedCodexHome(
     // failure on every launch and quota poll while the surfaced reason never
     // reaches the user.
     reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes), error)
+
     return
   }
+
   if (mirrorResult.status === 'refused-indeterminate') {
     // Why: no mirror ran, so this must behave exactly like the throwing path
     // above — surface the reason and advance nothing. Advancing the baseline
@@ -75,11 +82,14 @@ export function syncSystemConfigIntoManagedCodexHome(
       getCodexConfigSyncStatus(homes),
       mirrorResult.error
     )
+
     return
   }
+
   // Why: report from the same pass that decided, so the surfaced status can
   // never disagree with what the mirror actually did.
   reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes))
+
   if (mirrorResult.status === 'skipped-missing-source') {
     // Why: advancing an existing baseline would mark the unmirrored runtime
     // change as promoted, so it could never retry once the source reappears.
@@ -89,8 +99,10 @@ export function syncSystemConfigIntoManagedCodexHome(
     if (!readCodexSettingsBaseline(homes.runtimeHomePath)) {
       snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath)
     }
+
     return
   }
+
   // Why: the baseline advances only after a successful mirror; recording an
   // unpromoted runtime change as Orca-written would strand it forever.
   snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath, {
@@ -119,11 +131,14 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
   const runtimeConfigPath = join(homes.runtimeHomePath, 'config.toml')
   recoverInterruptedGuardedFileOperation(runtimeConfigPath)
   const systemConfigObservation = observeAgentStateFile(systemConfigPath)
+
   if (systemConfigObservation.kind === 'indeterminate') {
     throw systemConfigObservation.error
   }
+
   const rawSystemConfig =
     systemConfigObservation.kind === 'present' ? systemConfigObservation.value : ''
+
   // Why: a missing cloud-synced source is not proof the user cleared config.
   if (rawSystemConfig.trim() === '') {
     return
@@ -131,11 +146,14 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
 
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(homes.systemHomePath)
   const runtimeConfigObservation = observeAgentStateFile(runtimeConfigPath)
+
   if (runtimeConfigObservation.kind === 'indeterminate') {
     throw runtimeConfigObservation.error
   }
+
   const runtimeConfigBeforeMirror =
     runtimeConfigObservation.kind === 'present' ? runtimeConfigObservation.value : null
+
   const nextRuntimeConfig =
     runtimeConfigBeforeMirror !== null
       ? mergeSystemCodexConfigIntoRuntime(
@@ -143,9 +161,11 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
           prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
         )
       : prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
+
   if (runtimeConfigBeforeMirror === nextRuntimeConfig) {
     return
   }
+
   // Why: stage first, then compare immediately before replace so a retained
   // Codex trust write during mirror preparation wins.
   writeFileAtomicallyIfUnchanged(runtimeConfigPath, runtimeConfigBeforeMirror, nextRuntimeConfig)
@@ -167,16 +187,22 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   // mirror after the path recovered. Neither side may be acted on unless it was
   // actually observed.
   const systemConfigObservation = observeAgentStateFile(systemConfigPath)
+
   if (systemConfigObservation.kind === 'indeterminate') {
     return { status: 'refused-indeterminate', error: systemConfigObservation.error }
   }
+
   const runtimeConfigObservation = observeAgentStateFile(runtimeConfigPath)
+
   if (runtimeConfigObservation.kind === 'indeterminate') {
     return { status: 'refused-indeterminate', error: runtimeConfigObservation.error }
   }
+
   const runtimeConfigExists = runtimeConfigObservation.kind === 'present'
+
   const rawSystemConfig =
     systemConfigObservation.kind === 'present' ? systemConfigObservation.value : ''
+
   // Why: a missing or blank source is not an authoritative empty config. Merging
   // it would erase every ordinary setting from an existing managed runtime, and
   // a 0-byte file is what a half-written or unhydrated cloud-synced home shows.
@@ -187,11 +213,13 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   }
 
   const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
+
   if (!runtimeConfigExists) {
     writeFileAtomically(
       runtimeConfigPath,
       prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
     )
+
     return { status: 'mirrored', preservedConflictKeys: new Set() }
   }
 
@@ -199,13 +227,16 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   // Why: reuse the bytes already observed above rather than re-reading. A second
   // read could succeed where the first failed and re-open the gap this closes.
   const runtimeConfig = runtimeConfigObservation.value
+
   const preserved = preserveRuntimeConflictValues(
     mergeSystemCodexConfigIntoRuntime(runtimeConfig, systemConfig),
     promotionPlan.runtimeValuesToPreserve
   )
+
   if (preserved.content !== runtimeConfig) {
     writeFileAtomically(runtimeConfigPath, preserved.content)
   }
+
   return { status: 'mirrored', preservedConflictKeys: preserved.keys }
 }
 
@@ -240,19 +271,23 @@ export function prepareSystemConfigForFreshRuntimeMirror(
 
 function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: string): string {
   const runtimeSections = deduplicateProjectTomlSections(getTomlSections(runtimeConfig))
+
   const runtimeProjectHeaders = new Set(
     runtimeSections
       .filter((section) => isRuntimeProjectTomlSection(section.header))
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
+
   const systemProjectSections = deduplicateProjectTomlSections(
     getTomlSections(systemConfig)
   ).filter((section) => isRuntimeProjectTomlSection(section.header))
+
   const systemUntrustedProjectHeaders = new Set(
     systemProjectSections
       .filter((section) => getProjectTrustLevel(section.block) === 'untrusted')
       .map((section) => getRevocationTomlSectionHeaderKey(section.header))
   )
+
   // Why: an exact-cased trusted entry in ~/.codex is the user's latest explicit
   // decision for that exact project; a loosely-matched (case-drifted) revocation
   // must not override it, or re-granting trust would be reverted every mirror.
@@ -261,6 +296,7 @@ function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: 
       .filter((section) => getProjectTrustLevel(section.block) === 'trusted')
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
+
   // Why: ordinary Codex settings should mirror ~/.codex exactly; runtime hook
   // trust and project trust are written under Orca's managed CODEX_HOME and
   // must survive the copy unless the user explicitly revoked project trust in

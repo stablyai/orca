@@ -37,8 +37,10 @@ describe('terminal Option kitty releases', () => {
   it('uses live keyup modifiers and current alternate-key flags', () => {
     const sendInput = vi.fn()
     const tracker = createTerminalOptionKittyReleaseTracker()
+
     const layout = (code: string, shifted: boolean): string | undefined =>
       code === 'Digit7' ? (shifted ? '/' : '7') : undefined
+
     tracker.arm(
       keyboardEvent({ key: '\\', code: 'Digit7', shiftKey: true, altKey: true }),
       { flags: 2 },
@@ -57,8 +59,10 @@ describe('terminal Option kitty releases', () => {
     const sendInput = vi.fn()
     const tracker = createTerminalOptionKittyReleaseTracker()
     let layoutAvailable = true
+
     const layout = (code: string): string | undefined =>
       layoutAvailable && code === 'KeyQ' ? 'a' : undefined
+
     tracker.arm(
       keyboardEvent({ key: '@', code: 'KeyQ', altKey: true }),
       { flags: 2 },

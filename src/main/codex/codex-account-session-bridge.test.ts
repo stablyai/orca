@@ -14,6 +14,7 @@ function writeRollout(homePath: string, relativePath: string, contents: string):
   const filePath = join(homePath, 'sessions', relativePath)
   mkdirSync(join(filePath, '..'), { recursive: true })
   writeFileSync(filePath, contents)
+
   return filePath
 }
 
@@ -22,6 +23,7 @@ function rolloutPath(homePath: string, relativePath: string): string {
 }
 
 const ROLLOUT_A = join('2026', '07', '20', 'rollout-2026-07-20T10-00-00-aaaa.jsonl')
+
 const ROLLOUT_B = join('2026', '07', '21', 'rollout-2026-07-21T10-00-00-bbbb.jsonl')
 
 beforeEach(() => {
@@ -114,6 +116,7 @@ describe('bridgeCodexSessionsIntoAccountHome', () => {
 
   it('skips a source home that has no sessions tree', async () => {
     const targetHome = join(workspaceRoot, 'account')
+
     const summary = await bridgeCodexSessionsIntoAccountHome({
       targetCodexHomePath: targetHome,
       sourceCodexHomePaths: [join(workspaceRoot, 'missing')]
@@ -133,12 +136,14 @@ describe('startCodexAccountSessionBridgeInBackground', () => {
       targetCodexHomePath: targetHome,
       sourceCodexHomePaths: [systemHome]
     })
+
     const second = startCodexAccountSessionBridgeInBackground({
       targetCodexHomePath: targetHome,
       sourceCodexHomePaths: [systemHome]
     })
 
     expect(second).toBe(first)
+
     return first
   })
 

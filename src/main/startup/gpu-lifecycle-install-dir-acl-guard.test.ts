@@ -26,6 +26,7 @@ vi.mock('electron', () => ({
   },
   dialog: { showMessageBox }
 }))
+
 vi.mock('@electron-toolkit/utils', () => ({
   is: { dev: false },
   optimizer: { watchWindowShortcuts: vi.fn() },
@@ -80,15 +81,18 @@ function recoveryOptions(userDataPath?: string): {
 /** icacls hangs until `finishRepair` — the in-flight window is when the GPU children die. */
 function reportProbePoisoned(): { finishRepair: () => Promise<void> } {
   let release = (): void => undefined
+
   const walkingTheTree = new Promise<void>((resolve) => {
     release = resolve
   })
+
   startWindowsInstallDirAclRepairIfPoisoned(
     { status: 'ok', matchesPoisonSignature: true, wellKnownNameCheckReliable: true },
     {
       ...recoveryOptions(),
       runProcessFn: (async () => {
         await walkingTheTree
+
         return {
           code: 0,
           signal: null,
@@ -99,9 +103,11 @@ function reportProbePoisoned(): { finishRepair: () => Promise<void> } {
       }) as unknown as (spec: ProcessSpec) => Promise<ProcessResult>
     }
   )
+
   return {
     finishRepair: async () => {
       release()
+
       for (let i = 0; i < 200 && isInstallDirAclRepairPending(); i += 1) {
         await new Promise((resolve) => setTimeout(resolve, 5))
       }
@@ -127,6 +133,7 @@ async function reportProbePoisonedWithSettledRepair(
       })) as unknown as (spec: ProcessSpec) => Promise<ProcessResult>
     }
   )
+
   for (let i = 0; i < 200 && isInstallDirAclRepairPending(); i += 1) {
     await new Promise((resolve) => setTimeout(resolve, 5))
   }
@@ -150,12 +157,14 @@ async function gateFindsRepairBudgetSpent(): Promise<void> {
     })
   )
   writeInstallDirAclPoisonMarker(options.userDataPath, INSTALL_DIR, options.appVersion)
+
   const mode = await repairKnownPoisonedInstallDirBeforeWindow({
     ...options,
     runProcessFn: (() => {
       throw new Error('the spent budget must not spawn icacls')
     }) as never
   })
+
   expect(mode).toBe('marker-hit')
 }
 
@@ -249,6 +258,7 @@ describe('handleGpuChildCrash vs the install-dir ACL verdict', () => {
   // then pins a userConfirmed marker no later repair may clear.
   it('withholds safe graphics between a gate repair claim and this launch probe reading', async () => {
     writeInstallDirAclPoisonMarker(userData.path, INSTALL_DIR, '1.4.184')
+
     const mode = await repairKnownPoisonedInstallDirBeforeWindow({
       ...recoveryOptions(userData.path),
       runProcessFn: (async () => ({
@@ -259,6 +269,7 @@ describe('handleGpuChildCrash vs the install-dir ACL verdict', () => {
         timedOut: false
       })) as unknown as (spec: ProcessSpec) => Promise<ProcessResult>
     })
+
     expect(mode).toBe('repaired')
     noteWindowsInstallDirAclProbePending()
 
@@ -380,6 +391,7 @@ describe('handleGpuChildCrash vs the install-dir ACL verdict', () => {
     for (let i = 1; i <= DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD; i += 1) {
       await handleGpuChildCrash('crashed', null, 10_000 + i * 200)
     }
+
     expect(showMessageBox).toHaveBeenCalledTimes(1)
   })
 })
@@ -389,6 +401,7 @@ describe('handleGpuChildCrash vs the install-dir ACL verdict', () => {
 // `userConfirmed: true` marker that pins software rendering on healthy hardware.
 describe('presentGpuFallbackRecoveredLaunchPrompt vs a marker retired since it was read', () => {
   const realPlatform = process.platform
+
   const window = { isDestroyed: () => false } as unknown as Parameters<
     typeof presentGpuFallbackRecoveredLaunchPrompt
   >[0]

@@ -13,6 +13,7 @@ type PendingPath = {
   reject: (error: unknown) => void
   promise: Promise<boolean>
 }
+
 type PathGroup = {
   context: RuntimeFileOperationArgs
   remote: boolean
@@ -28,12 +29,15 @@ export function createTerminalPathExistenceBatch(): (
 ) => Promise<boolean> {
   const groups = new Map<string, PathGroup>()
   let queued = false
+
   return (context, path, remote) => {
     const target = getActiveRuntimeTarget(context.settings)
+
     const pairingRevision =
       target.kind === 'environment'
         ? captureRuntimeEnvironmentRequestRevision(target.environmentId)
         : undefined
+
     const key = JSON.stringify([
       context.settings?.activeRuntimeEnvironmentId,
       context.worktreeId,
@@ -42,28 +46,37 @@ export function createTerminalPathExistenceBatch(): (
       pairingRevision,
       remote
     ])
+
     let group = groups.get(key)
+
     if (!group) {
       group = { context, remote, pairingRevision, paths: new Map() }
       groups.set(key, group)
     }
+
     const existing = group.paths.get(path)
+
     if (existing) {
       return existing.promise
     }
+
     let resolve!: (exists: boolean) => void
     let reject!: (error: unknown) => void
+
     const promise = new Promise<boolean>((yes, no) => {
       resolve = yes
       reject = no
     })
+
     group.paths.set(path, { path, resolve, reject, promise })
+
     if (!queued) {
       queued = true
       queueMicrotask(() => {
         void flush()
       })
     }
+
     return promise
   }
 
@@ -74,6 +87,7 @@ export function createTerminalPathExistenceBatch(): (
     await Promise.all(
       ready.flatMap((group) => {
         const pending = [...group.paths.values()]
+
         return Array.from(
           { length: Math.ceil(pending.length / PATH_EXISTENCE_BATCH_MAX) },
           (_, index) =>
@@ -88,21 +102,26 @@ export function createTerminalPathExistenceBatch(): (
       })
     )
   }
+
   async function run(group: PathGroup, pending: PendingPath[]): Promise<void> {
     try {
       const paths = pending.map((row) => row.path)
       let results: PathExistenceResult[]
+
       if (group.context.connectionId || group.remote) {
         results = await runtimePathsExist(group.context, paths, group.pairingRevision)
       } else {
         const values = window.api.shell.pathsExist
           ? await window.api.shell.pathsExist(paths)
           : await Promise.all(paths.map((path) => window.api.shell.pathExists(path)))
+
         if (values.length !== paths.length || values.some((value) => typeof value !== 'boolean')) {
           throw new Error('Invalid local path existence response')
         }
+
         results = values.map((exists) => ({ exists }))
       }
+
       results.forEach((result, index) => {
         if ('exists' in result) {
           pending[index].resolve(result.exists)

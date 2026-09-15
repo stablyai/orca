@@ -65,6 +65,7 @@ function renderDialog(
       {...overrides}
     />
   )
+
   return user
 }
 
@@ -169,6 +170,7 @@ describe('SetProjectLocationDialog', () => {
   it('does not retarget the composer when a slow clone lands after dismissal', async () => {
     // An SSH clone is unbounded and the dialog stays dismissable while it runs.
     let finishClone: (result: { setup: { id: string } }) => void = () => {}
+
     storeMocks.setupProjectClone.mockReturnValue(
       new Promise((resolve) => {
         finishClone = resolve
@@ -176,6 +178,7 @@ describe('SetProjectLocationDialog', () => {
     )
     const onReady = vi.fn()
     const onClose = vi.fn()
+
     const { rerender } = render(
       <SetProjectLocationDialog
         option={option}
@@ -186,6 +189,7 @@ describe('SetProjectLocationDialog', () => {
         onReady={onReady}
       />
     )
+
     const user = userEvent.setup()
 
     await user.click(screen.getByRole('button', { name: /Clone from URL/ }))

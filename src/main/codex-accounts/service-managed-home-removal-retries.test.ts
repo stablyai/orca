@@ -18,6 +18,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -39,10 +40,12 @@ describe('CodexAccountService config sync', () => {
       const managedHomePath = actualFs.realpathSync(
         createManagedHome(testState.userDataDir, 'account-1')
       )
+
       const store = createStore(createSettings())
       const rateLimits = createRateLimits()
       const runtimeHome = createRuntimeHome()
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,
@@ -72,15 +75,19 @@ describe('CodexAccountService config sync', () => {
     vi.resetModules()
     const actualFs = await vi.importActual<typeof import('node:fs')>('node:fs') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
     let managedHomePath = ''
+
     const lockedError = Object.assign(new Error('ENOTEMPTY: directory not empty'), {
       code: 'ENOTEMPTY'
     })
+
     const rmSyncSpy = vi.fn((target: Parameters<typeof actualFs.rmSync>[0], options) => {
       if (target === managedHomePath) {
         throw lockedError
       }
+
       actualFs.rmSync(target, options)
     })
+
     vi.doMock('node:fs', () => ({ ...actualFs, rmSync: rmSyncSpy }))
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -90,6 +97,7 @@ describe('CodexAccountService config sync', () => {
       const rateLimits = createRateLimits()
       const runtimeHome = createRuntimeHome()
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,

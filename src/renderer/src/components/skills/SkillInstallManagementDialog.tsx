@@ -45,31 +45,40 @@ export function SkillInstallManagementDialog({
   const detailGeneration = useRef(0)
 
   const groups = useMemo(() => groupManagedSkillInstalls(installs), [installs])
+
   const selected = useMemo(
     () => groups.find((group) => group.key === selectedKey) ?? null,
     [groups, selectedKey]
   )
+
   const selectedInstall = selected?.installs[0] ?? null
 
   const load = useCallback(async (): Promise<void> => {
     const generation = ++loadGeneration.current
     detailGeneration.current += 1
+
     if (!open) {
       return
     }
+
     setBusy(true)
     setError(null)
+
     try {
       const operation = await window.api.skills.listManagedInstalls(
         environmentId === 'local' ? undefined : environmentId
       )
+
       if (generation !== loadGeneration.current) {
         return
       }
+
       if (operation.status !== 'ok') {
         setError(operation.message)
+
         return
       }
+
       setInstalls(operation.value)
       setSelectedKey('')
       setDetails(null)
@@ -78,6 +87,7 @@ export function SkillInstallManagementDialog({
       if (generation !== loadGeneration.current) {
         return
       }
+
       console.warn('[skills] managed install listing failed:', cause)
       setError(
         translate(
@@ -106,11 +116,14 @@ export function SkillInstallManagementDialog({
     setResult(null)
     setBundleResult(null)
     setConfirmRemove(false)
+
     try {
       const operation = await window.api.skills.getPackage(group.packageId)
+
       if (generation !== detailGeneration.current) {
         return
       }
+
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
@@ -120,14 +133,17 @@ export function SkillInstallManagementDialog({
               )
             : operation.message
         )
+
         return
       }
+
       setDetails(operation.value)
       setVersionId(operation.value.versions[0]?.versionId ?? group.versionId)
     } catch (cause) {
       if (generation !== detailGeneration.current) {
         return
       }
+
       console.warn('[skills] package history failed:', cause)
       setError(
         translate(
@@ -155,20 +171,26 @@ export function SkillInstallManagementDialog({
     if (!selected || !selectedInstall || !versionId) {
       return
     }
+
     setBusy(true)
     setError(null)
     setNotice(null)
     const operationId = crypto.randomUUID()
     installProgress.begin(operationId)
+
     try {
       const version = details?.versions.find((candidate) => candidate.versionId === versionId)
+
       const bundleManifest =
         version?.manifest && 'skills' in version.manifest ? version.manifest : null
+
       if (bundleManifest) {
         const installedNames = new Set(selected.installs.map((install) => install.name))
+
         const selectedSkills = bundleManifest.skills.filter((skill) =>
           installedNames.has(skill.name)
         )
+
         if (selectedSkills.length === 0) {
           setError(
             translate(
@@ -176,8 +198,10 @@ export function SkillInstallManagementDialog({
               'This version does not contain any of the installed bundle skills.'
             )
           )
+
           return
         }
+
         const operation = await window.api.skills.installBundlePackageVersion({
           packageId: selected.packageId,
           versionId,
@@ -197,6 +221,7 @@ export function SkillInstallManagementDialog({
               }
             : {})
         })
+
         if (operation.status !== 'ok') {
           setError(
             operation.status === 'reconnect-required'
@@ -206,17 +231,23 @@ export function SkillInstallManagementDialog({
                 )
               : operation.message
           )
+
           return
         }
+
         setBundleResult(operation.value)
+
         if (!['failed', 'cancelled'].includes(operation.value.status)) {
           notifyInstalledAgentSkillsChanged()
+
           if (operation.value.status === 'complete') {
             await load()
           }
         }
+
         return
       }
+
       const operation = await window.api.skills.installPackageVersion({
         packageId: selected.packageId,
         versionId,
@@ -226,6 +257,7 @@ export function SkillInstallManagementDialog({
         ...(selectedInstall.providers ? { providers: selectedInstall.providers } : {}),
         ...(discardLocal ? { conflictResolution: 'replace-and-discard-local' } : {})
       })
+
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
@@ -235,11 +267,15 @@ export function SkillInstallManagementDialog({
               )
             : operation.message
         )
+
         return
       }
+
       setResult(operation.value)
+
       if (!['conflict', 'failed', 'cancelled'].includes(operation.value.status)) {
         notifyInstalledAgentSkillsChanged()
+
         if (operation.value.status !== 'partial') {
           await load()
         }
@@ -262,10 +298,12 @@ export function SkillInstallManagementDialog({
     if (!installProgress.activeOperationId) {
       return
     }
+
     const cancelled = await window.api.skills.cancelInstall({
       operationId: installProgress.activeOperationId,
       ...(environmentId === 'local' || environmentId.startsWith('ssh:') ? {} : { environmentId })
     })
+
     if (!cancelled.cancelled) {
       setError(
         translate(
@@ -280,15 +318,20 @@ export function SkillInstallManagementDialog({
     if (!selected) {
       return
     }
+
     if (!confirmRemove && !discardLocal) {
       setConfirmRemove(true)
+
       return
     }
+
     setBusy(true)
     setError(null)
     setNotice(null)
+
     try {
       const targets = selected.installs
+
       const operations = await Promise.all(
         targets.map((install) =>
           window.api.skills.removeInstall({
@@ -301,17 +344,23 @@ export function SkillInstallManagementDialog({
           })
         )
       )
+
       const unsupported = operations.find((operation) => operation.status !== 'ok')
+
       if (unsupported?.status === 'unsupported') {
         setError(unsupported.message)
+
         return
       }
+
       const summary = summarizeManagedSkillRemoval(operations, selected.installs.length)
       setResult(summary.lastResult)
       setNotice(summary.notice)
+
       if (summary.removed > 0) {
         notifyInstalledAgentSkillsChanged()
       }
+
       if (summary.complete) {
         await load()
       }

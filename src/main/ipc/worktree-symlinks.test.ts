@@ -26,7 +26,9 @@ import {
 } from './worktree-symlinks'
 
 type WorktreeLinkedPathOptionsForTest = NonNullable<Parameters<typeof createWorktreeLinkedPaths>[3]>
+
 type ApfsCloneDepsForTest = NonNullable<WorktreeLinkedPathOptionsForTest['apfsCloneDeps']>
+
 const posixIt = process.platform === 'win32' ? it.skip : it
 
 function createApfsCloneDeps(options: {
@@ -44,22 +46,29 @@ function createApfsCloneDeps(options: {
         stderr: ''
       }
     }
+
     if (file === '/usr/sbin/diskutil') {
       if (options.diskutilError) {
         throw options.diskutilError
       }
+
       options.onDiskutil?.()
+
       return {
         stdout: `<plist><dict><key>FilesystemName</key><string>APFS</string></dict></plist>`,
         stderr: ''
       }
     }
+
     if (file === '/bin/cp') {
       options.onCp?.(args)
+
       return { stdout: '', stderr: '' }
     }
+
     throw new Error(`Unexpected execFile command: ${file}`)
   })
+
   return {
     execFileAsync,
     randomUUID: () => options.uuid ?? 'test'
@@ -215,6 +224,7 @@ describe('createWorktreeSymlinks', () => {
 
   it('uses APFS clone-copy for configured paths on macOS', async () => {
     writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+
     const cloneWorktreePath = vi.fn(async (_source: string, target: string) => {
       writeFileSync(target, 'SECRET=1\n')
     })
@@ -236,13 +246,16 @@ describe('createWorktreeSymlinks', () => {
   it('does not overwrite a file target that appears before APFS clone-copy is published', async () => {
     writeFileSync(join(primary, '.env'), 'SECRET=1\n')
     const target = join(worktree, '.env')
+
     const deps = createApfsCloneDeps({
       uuid: 'file-race',
       onCp: (args) => {
         const tempTarget = args.at(-1)
+
         if (!tempTarget) {
           throw new Error('Missing APFS clone temp target')
         }
+
         writeFileSync(tempTarget, 'SECRET=1\n')
         writeFileSync(target, 'RACE=1\n')
       }
@@ -264,6 +277,7 @@ describe('createWorktreeSymlinks', () => {
     writeFileSync(join(primary, 'node_modules', 'primary-marker'), 'PRIMARY\n')
     const target = join(worktree, 'node_modules')
     let createdRacedTarget = false
+
     const deps = createApfsCloneDeps({
       onDiskutil: () => {
         if (!createdRacedTarget) {
@@ -295,6 +309,7 @@ describe('createWorktreeSymlinks', () => {
     writeFileSync(join(primary, 'node_modules', 'primary-marker'), 'PRIMARY\n')
     const target = join(worktree, 'node_modules')
     let cpArgs: readonly string[] | undefined
+
     const deps = createApfsCloneDeps({
       onCp: (args) => {
         cpArgs = args
@@ -325,6 +340,7 @@ describe('createWorktreeSymlinks', () => {
     mkdirSync(source)
     chmodSync(source, 0o700)
     const target = join(worktree, 'node_modules')
+
     const deps = createApfsCloneDeps({
       onCp: () => {
         writeFileSync(join(target, 'marker'), 'CLONED\n')
@@ -342,6 +358,7 @@ describe('createWorktreeSymlinks', () => {
 
   it('falls back to symlink when macOS clone-copy is unavailable', async () => {
     writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+
     const cloneWorktreePath = vi.fn(async () => {
       throw new Error('clonefile unsupported')
     })
@@ -361,6 +378,7 @@ describe('createWorktreeSymlinks', () => {
 
   it('does not delete a target that appears while APFS clone-copy is failing', async () => {
     writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+
     const cloneWorktreePath = vi.fn(async (_source: string, target: string) => {
       writeFileSync(target, 'RACE=1\n')
       throw new Error('clonefile failed after target appeared')
@@ -381,6 +399,7 @@ describe('createWorktreeSymlinks', () => {
   it('keeps symlink sources as symlinks instead of APFS clone-copying their targets', async () => {
     writeFileSync(join(primary, '.env.real'), 'SECRET=1\n')
     symlinkSync(join(primary, '.env.real'), join(primary, '.env'), 'file')
+
     const cloneWorktreePath = vi.fn(async () => {
       throw new Error('clone should not be called for symlink sources')
     })
@@ -592,6 +611,7 @@ describe('createWorktreeCopiedPaths', () => {
 
   it('falls back to a real copy, not a symlink, when macOS clone-copy is unavailable', async () => {
     writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+
     const cloneWorktreePath = vi.fn(async () => {
       throw new Error('clonefile unsupported')
     })
@@ -607,6 +627,7 @@ describe('createWorktreeCopiedPaths', () => {
 
   it('uses APFS clone-copy for configured paths on macOS', async () => {
     writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+
     const cloneWorktreePath = vi.fn(async (_source: string, target: string) => {
       writeFileSync(target, 'CLONED=1\n')
     })
@@ -630,6 +651,7 @@ describe('createWorktreeCopiedPaths', () => {
     for (const name of ['.env', '.env.local', 'config.json', 'secrets.json']) {
       writeFileSync(join(primary, name), `${name}\n`)
     }
+
     const deps = createApfsCloneDeps({ onCp: () => {} })
 
     await createWorktreeCopiedPaths(
@@ -641,9 +663,11 @@ describe('createWorktreeCopiedPaths', () => {
 
     const execFileAsyncMock = vi.mocked(deps.execFileAsync)
     const dfCalls = execFileAsyncMock.mock.calls.filter(([file]) => file === '/bin/df').length
+
     const diskutilCalls = execFileAsyncMock.mock.calls.filter(
       ([file]) => file === '/usr/sbin/diskutil'
     ).length
+
     // 4 paths would be 8 df + 8 diskutil un-cached; source+worktree share one
     // tmp volume, so caching collapses this to a single probe pair.
     expect(dfCalls).toBeLessThanOrEqual(2)

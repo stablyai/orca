@@ -19,21 +19,28 @@ export function useEditorPanelSave({
       if (!file) {
         return false
       }
+
       const saveTargetFile = getEditorSaveTargetFile(file, openFiles)
+
       if (!saveTargetFile) {
         return false
       }
+
       if (saveTargetFile.isUntitled) {
         requestRenameForFile(saveTargetFile.id)
+
         return false
       }
+
       return attemptEditorFileSave({ fileId: saveTargetFile.id, fallbackContent: content })
     },
     [openFiles, requestRenameForFile]
   )
+
   const handleSave = useCallback(
     (content: string): Promise<boolean> => handleSaveForFile(activeFile, content),
     [activeFile, handleSaveForFile]
   )
+
   return { handleSave, handleSaveForFile }
 }

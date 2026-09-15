@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 
 export function remoteServerUpdateErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
+
   switch (message) {
     case 'remote_update_manual_required':
       return translate(

@@ -7,12 +7,15 @@ const SESSION_TOKEN = 's'.repeat(43)
 
 function method(name: string): RpcMethod {
   const found = eraseRpcMethods(PLUGIN_METHODS).find((entry) => entry.name === name)
+
   if (!found) {
     throw new Error(`missing ${name}`)
   }
+
   if ('stream' in found) {
     throw new Error(`${name} is streaming`)
   }
+
   return found
 }
 
@@ -44,6 +47,7 @@ describe('plugin panel serve RPC identity', () => {
         revokeOwner: vi.fn()
       }
     } as unknown as PluginService
+
     setPluginServiceForRpc(service)
     const rpcContext = context('connection-one')
 

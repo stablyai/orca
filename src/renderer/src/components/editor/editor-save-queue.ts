@@ -44,10 +44,12 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
 
   const clearAutoSaveTimer = (fileId: string): void => {
     const timerId = autoSaveTimers.get(fileId)
+
     if (timerId !== undefined) {
       window.clearTimeout(timerId)
       autoSaveTimers.delete(fileId)
     }
+
     autoSaveScheduledContent.delete(fileId)
   }
 
@@ -64,6 +66,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     const queuedGeneration = saveGeneration.get(file.id) ?? 0
 
     const previousSave = saveQueue.get(file.id) ?? Promise.resolve()
+
     const queuedSave = previousSave
       .catch(() => undefined)
       .then(async () => {
@@ -73,6 +76,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
 
         const state = store.getState()
         const liveFile = state.openFiles.find((openFile) => openFile.id === file.id) ?? null
+
         if (!liveFile) {
           return
         }
@@ -86,6 +90,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
           if (trigger === 'autosave') {
             return
           }
+
           throw new Error('This file is still restoring its workspace owner. Try saving again.')
         }
 
@@ -95,9 +100,11 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         }
 
         const contentToSave = state.editorDrafts[file.id] ?? fallbackContent
+
         const worktree = liveFile.worktreeId
           ? findWorktreeById(state.worktreesByRepo ?? {}, liveFile.worktreeId)
           : null
+
         const fileContext = getEditorFileOperationContext(state, liveFile, worktree?.path ?? null)
         const connectionId = fileContext.connectionId
         // Why: stamp before writing so useEditorExternalWatch ignores our own fs:changed echo (editor-self-write-registry).
@@ -109,6 +116,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
             ? SELF_WRITE_REMOTE_TTL_MS
             : undefined
         )
+
         try {
           await writeRuntimeFile(fileContext, liveFile.filePath, contentToSave)
         } catch (error) {
@@ -125,14 +133,17 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         const currentDraft = nextState.editorDrafts[file.id]
         const stillDirty = currentDraft !== undefined && currentDraft !== contentToSave
         nextState.markFileDirty(file.id, stillDirty)
+
         if (!stillDirty) {
           nextState.clearEditorDraft(file.id)
         }
+
         // Why: disk now holds contentToSave — rebaseline so our own save isn't flagged external; drop pending verification.
         nextState.setLastKnownDiskSignature(file.id, getDiskBaselineSignature(contentToSave))
         nextState.clearPendingDiskBaselineVerification(file.id)
         // Why: the write made disk match the buffer, so clear any now-stale changed-on-disk conflict.
         const savedFile = nextState.openFiles.find((openFile) => openFile.id === file.id)
+
         if (savedFile?.externalMutation === 'changed') {
           trackExternalChangeConflictAction(savedFile, 'save_overwrite')
           nextState.setExternalMutation(file.id, null)
@@ -152,6 +163,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
       }
     })
     saveQueue.set(file.id, trackedSave)
+
     return trackedSave
   }
 
@@ -171,6 +183,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     for (const fileId of Array.from(autoSaveTimers.keys())) {
       const file = openFilesById.get(fileId)
       const draft = state.editorDrafts[fileId]
+
       const shouldKeepTimer =
         state.settings?.editorAutoSave &&
         file &&
@@ -179,6 +192,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
         // Why: suspension holds until the user picks a side via the banner (or saves manually).
         !isAutosaveSuspendedForFile(file) &&
         draft !== undefined
+
       if (!shouldKeepTimer) {
         clearAutoSaveTimer(fileId)
       }
@@ -189,8 +203,10 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     }
 
     const autoSaveDelayMs = normalizeAutoSaveDelayMs(state.settings.editorAutoSaveDelayMs)
+
     for (const file of state.openFiles) {
       const draft = state.editorDrafts[file.id]
+
       if (
         !file.isDirty ||
         draft === undefined ||
@@ -207,11 +223,13 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
 
       clearAutoSaveTimer(file.id)
       autoSaveScheduledContent.set(file.id, draft)
+
       const timerId = window.setTimeout(() => {
         autoSaveTimers.delete(file.id)
         autoSaveScheduledContent.delete(file.id)
         void queueSave(file, draft, 'autosave')
       }, autoSaveDelayMs)
+
       autoSaveTimers.set(file.id, timerId)
     }
   }
@@ -220,6 +238,7 @@ export function createEditorSaveQueue(store: AppStoreApi): EditorSaveQueue {
     for (const timerId of autoSaveTimers.values()) {
       window.clearTimeout(timerId)
     }
+
     autoSaveTimers.clear()
     autoSaveScheduledContent.clear()
     saveQueue.clear()

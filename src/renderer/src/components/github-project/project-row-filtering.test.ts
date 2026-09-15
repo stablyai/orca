@@ -75,6 +75,7 @@ function table(rows: GitHubProjectRow[]): GitHubProjectTable {
 describe('filterProjectTableRowsByOpenRepos', () => {
   it('keeps rows whose repository slug resolves to at least one live repo', () => {
     const rows = [row('visible', 'acme/orca'), row('missing', 'acme/removed')]
+
     const filtered = filterProjectTableRowsByOpenRepos(table(rows), (slug) =>
       slug?.toLowerCase() === 'acme/orca' ? [repo('repo-1')] : []
     )
@@ -85,6 +86,7 @@ describe('filterProjectTableRowsByOpenRepos', () => {
 
   it('keeps rows while any of multiple Orca repos map to the slug', () => {
     const rows = [row('visible', 'acme/orca')]
+
     const filtered = filterProjectTableRowsByOpenRepos(table(rows), () => [
       repo('repo-1'),
       repo('repo-2')
@@ -105,6 +107,7 @@ describe('filterProjectTableRowsByOpenRepos', () => {
 describe('filterProjectTableRowsBySelectedRepos', () => {
   it('keeps a row when at least one slug match is selected', () => {
     const rows = [row('visible', 'acme/orca'), row('hidden', 'acme/tool')]
+
     const filtered = filterProjectTableRowsBySelectedRepos(
       table(rows),
       (slug) =>
@@ -119,6 +122,7 @@ describe('filterProjectTableRowsBySelectedRepos', () => {
 
   it('filters a row when only unselected repos match', () => {
     const rows = [row('hidden', 'acme/orca')]
+
     const filtered = filterProjectTableRowsBySelectedRepos(
       table(rows),
       () => originOnly([repo('repo-2')]),
@@ -132,6 +136,7 @@ describe('filterProjectTableRowsBySelectedRepos', () => {
 
   it('keeps a row whose only selected match is a fork of the row s repo', () => {
     const rows = [row('fork-only', 'acme/orca')]
+
     const filtered = filterProjectTableRowsBySelectedRepos(
       table(rows),
       () => ({ origin: [], upstream: [repo('fork')] }),
@@ -145,6 +150,7 @@ describe('filterProjectTableRowsBySelectedRepos', () => {
 
   it('keeps a row with multiple selected matches for action ambiguity handling', () => {
     const rows = [row('ambiguous', 'acme/orca')]
+
     const filtered = filterProjectTableRowsBySelectedRepos(
       table(rows),
       () => originOnly([repo('repo-1'), repo('repo-2'), repo('repo-3')]),

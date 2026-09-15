@@ -10,6 +10,7 @@ export function isExecutionHostAliasForWorktree(
   worktree: Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'>
 ): boolean {
   const runtimeOwner = worktree.runtimeOwnerEnvironmentId?.trim()
+
   return (
     executionHostId === (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) ||
     Boolean(runtimeOwner && executionHostId === toRuntimeExecutionHostId(runtimeOwner))

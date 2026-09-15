@@ -13,7 +13,9 @@ import { ORCA_INTERNAL_FILE_DRAG_TYPE } from '../../../../shared/native-file-dro
 import { useFeedbackImageDrop } from './use-feedback-image-drop'
 
 let container: HTMLDivElement
+
 let root: Root
+
 let preloadDropSpy: ReturnType<typeof vi.fn<(event: Event) => void>>
 
 function preloadDropListener(event: Event): void {
@@ -49,6 +51,7 @@ function Harness({
   onAddFiles: (files: readonly File[]) => void
 }): React.JSX.Element {
   const { isDragActive, contentRef, dragHandlers } = useFeedbackImageDrop(open, onAddFiles)
+
   return (
     <div ref={contentRef} data-testid="dialog" data-drag-active={isDragActive} {...dragHandlers}>
       <span data-testid="child">child</span>
@@ -68,6 +71,7 @@ async function renderHarness(
 function dragEvent(type: string, files: File[], types: string[] = ['Files']): Event {
   const event = new Event(type, { bubbles: true, cancelable: true })
   Object.defineProperty(event, 'dataTransfer', { value: { files, types } })
+
   return event
 }
 
@@ -77,9 +81,11 @@ function pngFile(name = 'shot.png'): File {
 
 function dialogChild(): HTMLElement {
   const child = container.querySelector('[data-testid="child"]')
+
   if (!child) {
     throw new Error('harness child missing')
   }
+
   return child as HTMLElement
 }
 

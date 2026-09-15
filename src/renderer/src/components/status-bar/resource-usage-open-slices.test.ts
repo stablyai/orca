@@ -60,6 +60,7 @@ describe('resource usage open slices', () => {
   it('returns stable empty slices while the popover is closed', () => {
     const tabsByWorktree = { 'wt-1': [terminalTab('tab-1')] }
     const ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+
     const terminalLayoutsByTabId = {
       'tab-1': {
         root: { type: 'leaf' as const, leafId: 'leaf-1' },
@@ -67,6 +68,7 @@ describe('resource usage open slices', () => {
         expandedLeafId: null
       }
     }
+
     const runtimePaneTitlesByTabId = {
       'tab-1': { 'tab-1:0': 'Working' }
     } as AppState['runtimePaneTitlesByTabId']
@@ -74,6 +76,7 @@ describe('resource usage open slices', () => {
     const closedTabs = getResourceUsageTabsByWorktree({ tabsByWorktree }, false)
     const closedPtyIds = getResourceUsagePtyIdsByTabId({ ptyIdsByTabId }, false)
     const closedLayouts = getResourceUsageTerminalLayoutsByTabId({ terminalLayoutsByTabId }, false)
+
     const closedTitles = getResourceUsageRuntimePaneTitlesByTabId(
       { runtimePaneTitlesByTabId },
       false
@@ -88,10 +91,12 @@ describe('resource usage open slices', () => {
       getResourceUsageTerminalLayoutsByTabId({ terminalLayoutsByTabId: {} }, false)
     )
     const deferredSshSessionIdsByTabId = { 'tab-1': 'pty-deferred' }
+
     const closedDeferred = getResourceUsageDeferredSshSessionIdsByTabId(
       { deferredSshSessionIdsByTabId },
       false
     )
+
     expect(closedDeferred).toBe(
       getResourceUsageDeferredSshSessionIdsByTabId({ deferredSshSessionIdsByTabId: {} }, false)
     )
@@ -106,6 +111,7 @@ describe('resource usage open slices', () => {
   it('returns live slices while the popover is open', () => {
     const tabsByWorktree = { 'wt-1': [terminalTab('tab-1')] }
     const ptyIdsByTabId = { 'tab-1': ['pty-1'] }
+
     const terminalLayoutsByTabId = {
       'tab-1': {
         root: { type: 'leaf' as const, leafId: 'leaf-1' },
@@ -113,6 +119,7 @@ describe('resource usage open slices', () => {
         expandedLeafId: null
       }
     }
+
     const runtimePaneTitlesByTabId = {
       'tab-1': { 'tab-1:0': 'Working' }
     } as AppState['runtimePaneTitlesByTabId']
@@ -142,7 +149,9 @@ describe('resource usage open slices', () => {
         kind: 'git'
       }
     ] as AppState['repos']
+
     const row = worktree()
+
     const worktreesByRepo = {
       'repo-1': [row]
     }

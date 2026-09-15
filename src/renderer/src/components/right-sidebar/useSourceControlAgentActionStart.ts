@@ -96,6 +96,7 @@ export function useSourceControlAgentActionStart({
   const [deliveryPlan, setDeliveryPlan] = useState<SourceControlAgentActionDeliveryPlanState>({
     status: 'idle'
   })
+
   const [isStarting, setIsStarting] = useState(false)
   const isStartingRef = useRef(false)
   const resetDeliveryPlan = useCallback(() => setDeliveryPlan({ status: 'idle' }), [])
@@ -103,6 +104,7 @@ export function useSourceControlAgentActionStart({
   const buildPlan = useCallback(
     async (agentsOverride?: TuiAgent[]): Promise<SourceControlAgentActionDeliveryPlanState> => {
       const currentDetectedAgents = agentsOverride ?? (await refreshDetectedAgents())
+
       return buildSourceControlAgentDeliveryPlan({
         selectedAgent,
         commandInput,
@@ -134,19 +136,27 @@ export function useSourceControlAgentActionStart({
       if (!selectedAgent || isStartingRef.current) {
         return false
       }
+
       if (connectionUnavailable) {
         setDeliveryPlan(buildSourceControlAgentConnectionErrorPlan())
+
         return false
       }
+
       isStartingRef.current = true
       setIsStarting(true)
+
       try {
         const nextPlan = await buildPlan(nextAgents)
+
         if (nextPlan.status === 'error') {
           setDeliveryPlan(nextPlan)
+
           return false
         }
+
         setDeliveryPlan(nextPlan)
+
         return await runSourceControlAgentActionStart({
           selectedAgent,
           trimmedCommandInput,
@@ -209,6 +219,7 @@ export function useSourceControlAgentActionStart({
     if (!selectedAgent || isStartingRef.current) {
       return
     }
+
     // Why: manual starts intentionally re-check the current host, while the
     // saved-receipt bypass reuses the detection result that unlocked it.
     const nextAgents = await refreshDetectedAgents()

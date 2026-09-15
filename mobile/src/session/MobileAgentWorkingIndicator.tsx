@@ -21,7 +21,9 @@ export function MobileAgentWorkingIndicator(): React.JSX.Element {
         ])
       )
     )
+
     animations.forEach((a) => a.start())
+
     return () => animations.forEach((a) => a.stop())
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

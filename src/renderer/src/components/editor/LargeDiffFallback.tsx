@@ -25,7 +25,9 @@ function formatLineCount(
   if (!renderLimit.lineCounts) {
     return translate('auto.components.editor.LargeDiffFallback.7944ed9fb8', 'Not counted')
   }
+
   const suffix = renderLimit.lineCountsAreMinimum?.[side] ? '+' : ''
+
   return `${formatCount(renderLimit.lineCounts[side])}${suffix}`
 }
 

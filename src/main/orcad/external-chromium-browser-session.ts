@@ -7,7 +7,9 @@ import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../shared/runtime-types'
 import { runProcess } from '../../shared/child-process/run-process'
 
 const COMMAND_TIMEOUT_MS = 90_000
+
 const MAX_OUTPUT_BYTES = 50 * 1024 * 1024
+
 const CLOSE_TIMEOUT_MS = 5_000
 
 export type ExternalChromiumLaunch = {
@@ -22,8 +24,11 @@ const AgentBrowserTab = z.object({
   title: z.string(),
   url: z.string()
 })
+
 const AgentBrowserTabsResult = z.object({ tabs: z.array(AgentBrowserTab).optional() })
+
 const AgentBrowserScreenshotResult = z.object({ path: z.string().min(1) })
+
 const AgentBrowserEnvelope = z.object({
   success: z.boolean(),
   data: z.unknown().optional(),
@@ -36,18 +41,23 @@ function classifyAgentBrowserError(message: string): string {
   if (/unknown ref|ref not found|element not found: @e/i.test(message)) {
     return 'browser_stale_ref'
   }
+
   if (/evaluation error/i.test(message)) {
     return 'browser_eval_error'
   }
+
   if (/navigation|net::err/i.test(message)) {
     return 'browser_navigation_failed'
   }
+
   if (/timed out|timeout/i.test(message)) {
     return 'browser_timeout'
   }
+
   if (/tab.*not found|unknown tab/i.test(message)) {
     return 'browser_tab_not_found'
   }
+
   return 'browser_error'
 }
 
@@ -83,6 +93,7 @@ export class ExternalChromiumBrowserSession {
       .update(`${statePath}:${launch.provider}`)
       .digest('hex')
       .slice(0, 16)
+
     this.sessionName = `orca-orcad-${identity}`
     this.profilePath = join(statePath, `browser-${launch.provider}`)
   }
@@ -94,25 +105,30 @@ export class ExternalChromiumBrowserSession {
     // so nothing binds it to the old process — a surviving one is reusable as-is, and closing it
     // would take the remote user's browser and every tab with it (#16367).
     const reusable = await this.readActiveTabId()
+
     if (reusable) {
       return reusable
     }
+
     // Nothing answered, so anything under this name is wedged or half-dead; reclaim it.
     await this.stop()
     await this.run(['open', 'about:blank'])
     const opened = await this.readActiveTabId()
+
     if (!opened) {
       throw new BrowserError(
         BROWSER_UNAVAILABLE_ERROR_CODE,
         'The browser launched without an automation target.'
       )
     }
+
     return opened
   }
 
   private async readActiveTabId(): Promise<string | null> {
     try {
       const tabs = await this.readTabs()
+
       return (tabs.find((tab) => tab.active) ?? tabs[0])?.tabId ?? null
     } catch {
       return null
@@ -141,6 +157,7 @@ export class ExternalChromiumBrowserSession {
     const result = AgentBrowserScreenshotResult.parse(await this.run(command))
     const data = (await readFile(result.path)).toString('base64')
     await rm(result.path, { force: true }).catch(() => undefined)
+
     return { data, format }
   }
 
@@ -149,15 +166,19 @@ export class ExternalChromiumBrowserSession {
     await this.run(['pdf', outputPath])
     const data = (await readFile(outputPath)).toString('base64')
     await rm(outputPath, { force: true }).catch(() => undefined)
+
     return { data }
   }
 
   async run(command: readonly string[], timeoutMs = COMMAND_TIMEOUT_MS): Promise<unknown> {
     const args = ['--session', this.sessionName, '--profile', this.profilePath]
+
     if (this.launch.browserArgs?.length) {
       args.push('--args', this.launch.browserArgs.join('\n'))
     }
+
     args.push(...command, '--json')
+
     const env = externalChromiumAgentBrowserEnvironment({
       inheritedEnv: process.env,
       executablePath: this.launch.executablePath,
@@ -165,6 +186,7 @@ export class ExternalChromiumBrowserSession {
       sessionName: this.sessionName,
       browserArgs: this.launch.browserArgs
     })
+
     const result = await runProcess({
       program: this.agentBrowserPath,
       args,
@@ -172,20 +194,25 @@ export class ExternalChromiumBrowserSession {
       timeoutMs,
       maxOutputBytes: MAX_OUTPUT_BYTES
     })
+
     if (result.timedOut) {
       throw new BrowserError('browser_timeout', 'Browser command timed out.')
     }
+
     let envelope: z.infer<typeof AgentBrowserEnvelope>
+
     try {
       envelope = AgentBrowserEnvelope.parse(JSON.parse(result.stdout))
     } catch {
       const detail = result.stderr.trim() || `exit ${String(result.code)}`
       throw new BrowserError('browser_error', `Browser command failed: ${detail.slice(0, 1000)}`)
     }
+
     if (!envelope.success) {
       const message = envelope.error ?? (result.stderr.trim() || 'Unknown browser error.')
       throw new BrowserError(classifyAgentBrowserError(message), message)
     }
+
     return envelope.data
   }
 }

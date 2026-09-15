@@ -15,10 +15,13 @@ import { useRemoteRuntimeRecoveryTriggers } from './use-remote-runtime-recovery-
 describe('useRemoteRuntimeRecoveryTriggers', () => {
   let systemResumedCallback: (() => void) | null = null
   const unsubscribeSystemResumed = vi.fn()
+
   const onSystemResumed = vi.fn((callback: () => void) => {
     systemResumedCallback = callback
+
     return unsubscribeSystemResumed
   })
+
   const retryConnectionsNow = vi.fn(() => Promise.resolve())
 
   beforeEach(() => {

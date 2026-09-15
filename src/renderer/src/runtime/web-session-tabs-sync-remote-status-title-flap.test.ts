@@ -75,21 +75,33 @@ vi.mock('../store', () => ({
 }))
 
 const WT = 'repo1::/path/wt1'
+
 const ENV = 'web-env-1'
+
 const HOST_TAB_ID = 'host-tab-1'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const HOST_SURFACE_ID = `${HOST_TAB_ID}::${LEAF_ID}`
+
 const MIRROR_TAB_ID = toWebTerminalSurfaceTabId(HOST_TAB_ID)
+
 const MIRROR_PANE_KEY = makePaneKey(MIRROR_TAB_ID, LEAF_ID)
+
 const HOST_PANE_KEY = makePaneKey(HOST_TAB_ID, LEAF_ID)
+
 const T0 = 1_700_000_000_000
+
 const CYCLES = 3
+
 // The prompt Claude is running on the host (user screenshot: "Configurar y entender ...").
 const CLIENT_PROMPT = 'Configurar y entender los comprobantes electronicos del sistema'
+
 const EXPECTED_GENERATED_TITLE = deriveGeneratedTabTitle(CLIENT_PROMPT)!
 
 // Unrelated local pane that must survive every mirror cycle untouched.
 const LOCAL_WT = 'repo1::/path/local-wt'
+
 const LOCAL_PANE_KEY = makePaneKey('local-tab-1', LEAF_ID)
 
 type TestStore = ReturnType<typeof createTestStore>
@@ -177,6 +189,7 @@ function replayClientOscWorking(store: TestStore, clientNow: number): () => void
       undefined,
       { tabId: MIRROR_TAB_ID, worktreeId: WT }
     )
+
   return release
 }
 
@@ -194,6 +207,7 @@ function captureFrame(store: TestStore, source: string): Frame {
   const s = store.getState()
   const tab = (s.tabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
   const unified = (s.unifiedTabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
+
   return {
     source,
     statusState: s.agentStatusByPaneKey[MIRROR_PANE_KEY]?.state ?? null,
@@ -209,11 +223,13 @@ function captureFrame(store: TestStore, source: string): Frame {
 
 function countTransitions(values: (string | null)[]): number {
   let transitions = 0
+
   for (let i = 1; i < values.length; i += 1) {
     if (values[i] !== values[i - 1]) {
       transitions += 1
     }
   }
+
   return transitions
 }
 
@@ -232,6 +248,7 @@ function seedPairedClientStore(): TestStore {
     },
     activeWorktreeId: WT
   } as Partial<AppState>)
+
   return store
 }
 
@@ -247,6 +264,7 @@ function runDualPublicationCycles(store: TestStore, includeAgentStatus: boolean)
     T0
   )
   const frames: Frame[] = [captureFrame(store, 'host-snapshot-1')]
+
   for (let cycle = 1; cycle <= CYCLES; cycle += 1) {
     // Client OSC heartbeat: Claude is mid-turn per the client's byte stream.
     replayClientOscWorking(store, T0 + cycle * 1_000 - 500)
@@ -264,6 +282,7 @@ function runDualPublicationCycles(store: TestStore, includeAgentStatus: boolean)
     )
     frames.push(captureFrame(store, `host-snapshot-${1 + cycle}`))
   }
+
   return frames
 }
 
@@ -294,9 +313,11 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
       const statusTransitionsAfterDisagreement = countTransitions(
         frames.slice(1).map((f) => f.statusState)
       )
+
       const visibleLabelTransitionsAfterDisagreement = countTransitions(
         frames.slice(1).map((f) => f.visibleTabBarLabel)
       )
+
       expect(statusTransitionsAfterDisagreement, evidence).toBeLessThanOrEqual(1)
       expect(visibleLabelTransitionsAfterDisagreement, evidence).toBeLessThanOrEqual(1)
     })
@@ -362,6 +383,7 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
           unifiedLabel: 'Terminal'
         }
       ]
+
       for (let cycle = 1; cycle <= CYCLES; cycle += 1) {
         for (const source of [`client-osc-${cycle}`, `host-snapshot-${1 + cycle}`]) {
           expectedFrames.push({
@@ -374,6 +396,7 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
           })
         }
       }
+
       expect(frames.map(({ agentStatusEpoch: _epoch, ...frame }) => frame)).toEqual(expectedFrames)
       expect(countTransitions(frames.map((f) => f.statusState))).toBe(1)
       expect(countTransitions(frames.map((f) => f.visibleTabBarLabel))).toBe(1)

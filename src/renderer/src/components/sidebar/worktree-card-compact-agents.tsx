@@ -42,11 +42,13 @@ export function CompactAgentExpansion({
   children
 }: CompactAgentExpansionProps): React.JSX.Element {
   const hasRenderedChildrenRef = useRef(expanded)
+
   if (expanded) {
     // Why: keep already-opened content mounted for the collapse transition
     // without paying an extra Effect-driven render on first expansion.
     hasRenderedChildrenRef.current = true
   }
+
   const shouldRenderChildren = expanded || hasRenderedChildrenRef.current
 
   return (
@@ -83,13 +85,17 @@ export function CompactAgentSummaryButton({
   const summary = summarizeAgents(agents, subjectLabel)
   const groups = buildSummaryAgentGroups(agents)
   const visibleGroups = groups.slice(0, 3)
+
   const hiddenGroupAgentCount = groups
     .slice(visibleGroups.length)
     .reduce((count, group) => count + group.agents.length, 0)
+
   const agentIdentitySummary = summarizeAgentIdentities(agents)
+
   const stopPointerPropagation = useCallback((e: React.SyntheticEvent) => {
     e.stopPropagation()
   }, [])
+
   const handleToggle = useCallback(
     (e: React.MouseEvent<HTMLButtonElement>) => {
       e.preventDefault()
@@ -98,6 +104,7 @@ export function CompactAgentSummaryButton({
     },
     [onToggle]
   )
+
   return (
     <button
       type="button"
@@ -145,6 +152,7 @@ export function CompactAgentSummaryButton({
             {visibleGroups.map((group) => {
               const iconAgents = selectSummaryGroupIconAgents(group.agents, 3)
               const hiddenIconCount = Math.max(0, group.agents.length - iconAgents.length)
+
               return (
                 <span
                   key={group.state}

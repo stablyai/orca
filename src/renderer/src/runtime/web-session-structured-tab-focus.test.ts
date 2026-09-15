@@ -4,6 +4,7 @@ import type { Tab } from '../../../shared/tab-types'
 import { applyWebSessionTabsSnapshot, type WebSessionTabsSyncState } from './web-session-tabs-sync'
 
 const WORKTREE_ID = 'repo-1::/worktree'
+
 const GROUP_ID = 'group-1'
 
 function structuredTab(sessionId: string, sortOrder: number): Tab {
@@ -27,6 +28,7 @@ describe('web session structured tab focus', () => {
   it('keeps the exact active structured tab across a host snapshot', () => {
     const first = structuredTab('session-1', 0)
     const second = structuredTab('session-2', 1)
+
     const state = {
       activeBrowserTabId: null,
       activeBrowserTabIdByWorktree: {},
@@ -64,6 +66,7 @@ describe('web session structured tab focus', () => {
       unreadTerminalTabs: {},
       sortEpoch: 0
     } as WebSessionTabsSyncState
+
     const snapshot: RuntimeMobileSessionTabsResult = {
       worktree: WORKTREE_ID,
       publicationEpoch: 'epoch-1',

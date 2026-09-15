@@ -26,7 +26,9 @@ describe('RpcDispatcher streaming', () => {
       getEndpoints: vi.fn(),
       provisionRelay: vi.fn()
     }
+
     let receivedPairing: unknown
+
     const dispatcher = new RpcDispatcher({
       runtime: stubRuntime(),
       methods: [
@@ -47,6 +49,7 @@ describe('RpcDispatcher streaming', () => {
 
   it('sends initial scrollback via emit', async () => {
     const messages: string[] = []
+
     const dispatcher = new RpcDispatcher({
       runtime: stubRuntime({
         readTerminal: vi.fn().mockResolvedValue({ tail: 'hello\nworld\n', truncated: false }),
@@ -61,6 +64,7 @@ describe('RpcDispatcher streaming', () => {
             emit({ type: 'scrollback', lines: read.tail, truncated: read.truncated })
 
             const leaf = (runtime as OrcaRuntimeService).resolveLeafForHandle(params.terminal)
+
             if (!leaf?.ptyId) {
               emit({ type: 'end' })
             }
@@ -172,6 +176,7 @@ describe('RpcDispatcher streaming', () => {
           params: z.object({ subscriptionId: z.string() }),
           handler: async (params, { runtime }) => {
             ;(runtime as OrcaRuntimeService).cleanupSubscription(params.subscriptionId)
+
             return { unsubscribed: true }
           }
         })
@@ -212,6 +217,7 @@ describe('RpcDispatcher streaming', () => {
 
   it('falls back to one-shot dispatch for non-streaming methods via dispatchStreaming', async () => {
     const messages: string[] = []
+
     const dispatcher = new RpcDispatcher({
       runtime: stubRuntime(),
       methods: [
@@ -233,6 +239,7 @@ describe('RpcDispatcher streaming', () => {
 
   it('returns error for unknown method via dispatchStreaming', async () => {
     const messages: string[] = []
+
     const dispatcher = new RpcDispatcher({
       runtime: stubRuntime(),
       methods: []
@@ -271,6 +278,7 @@ describe('RpcDispatcher streaming', () => {
 
   it('captures handler errors in streaming dispatch', async () => {
     const messages: string[] = []
+
     const dispatcher = new RpcDispatcher({
       runtime: stubRuntime(),
       methods: [
@@ -297,6 +305,7 @@ describe('RpcDispatcher streaming', () => {
     const messages: string[] = []
     let resolveExit!: () => void
     const registry = createSubscriptionRegistryDouble()
+
     const runtime = stubRuntime({
       resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -314,9 +323,11 @@ describe('RpcDispatcher streaming', () => {
       ),
       subscribeToPtyExit: vi.fn((_ptyId: string, listener: () => void) => {
         resolveExit = listener
+
         return vi.fn()
       })
     })
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(

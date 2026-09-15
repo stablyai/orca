@@ -17,12 +17,15 @@ function clearPendingSplitScrollBufferDisposable(pane: ManagedPaneInternal): voi
 
 function cancelPendingSplitScrollHandles(pane: ManagedPaneInternal): void {
   clearPendingSplitScrollBufferDisposable(pane)
+
   if (typeof cancelAnimationFrame === 'function') {
     for (const rafId of pane.pendingSplitScrollRafIds ?? []) {
       cancelAnimationFrame(rafId)
     }
   }
+
   pane.pendingSplitScrollRafIds = []
+
   if (pane.pendingSplitScrollTimerId != null) {
     clearTimeout(pane.pendingSplitScrollTimerId)
     pane.pendingSplitScrollTimerId = null
@@ -31,6 +34,7 @@ function cancelPendingSplitScrollHandles(pane: ManagedPaneInternal): void {
 
 export function clearPendingSplitScrollRestore(pane: ManagedPaneInternal): void {
   cancelPendingSplitScrollHandles(pane)
+
   if (pane.pendingSplitScrollState) {
     releaseScrollStateMarker(pane.pendingSplitScrollState)
     pane.pendingSplitScrollState = null
@@ -50,15 +54,20 @@ function runAfterNormalBuffer(
     if (buffer.type === 'alternate') {
       return
     }
+
     if (pane.pendingSplitScrollBufferDisposable === disposable) {
       pane.pendingSplitScrollBufferDisposable = null
     }
+
     disposable?.dispose()
     disposable = null
+
     if (isDestroyed()) {
       return
     }
+
     const live = getPaneById(paneId)
+
     if (live) {
       callback(live)
     }
@@ -73,9 +82,11 @@ function restoreCapturedScrollState(
 ): void {
   clearPendingSplitScrollBufferDisposable(pane)
   pane.pendingSplitScrollState = null
+
   if (reattachWebgl) {
     reattachWebgl(pane)
   }
+
   restoreScrollState(pane.terminal, scrollState)
   refreshAfterReparent(pane)
 }
@@ -99,23 +110,29 @@ export function scheduleSplitScrollRestore(
   reattachWebgl?: (pane: ManagedPaneInternal) => void
 ): void {
   const scheduledPane = getPaneById(paneId)
+
   if (scheduledPane) {
     cancelPendingSplitScrollHandles(scheduledPane)
   }
 
   const firstRafId = requestAnimationFrame(() => {
     const liveAfterFirstFrame = getPaneById(paneId)
+
     const secondRafId = requestAnimationFrame(() => {
       const live = getPaneById(paneId)
+
       if (live) {
         live.pendingSplitScrollRafIds = []
       }
+
       if (isDestroyed()) {
         return
       }
+
       if (!live?.pendingSplitScrollState) {
         return
       }
+
       // Why: see the 200ms timer below — the alt-screen buffer belongs to a
       // TUI and restore-during-draw knocks its cursor one row off (#1298).
       if (
@@ -124,9 +141,11 @@ export function scheduleSplitScrollRestore(
       ) {
         return
       }
+
       restoreScrollState(live.terminal, scrollState)
       refreshAfterReparent(live)
     })
+
     if (liveAfterFirstFrame) {
       liveAfterFirstFrame.pendingSplitScrollRafIds = [
         ...(liveAfterFirstFrame.pendingSplitScrollRafIds ?? []),
@@ -134,22 +153,27 @@ export function scheduleSplitScrollRestore(
       ]
     }
   })
+
   if (scheduledPane) {
     scheduledPane.pendingSplitScrollRafIds = [firstRafId]
   }
 
   const settleTimerId = setTimeout(() => {
     const live = getPaneById(paneId)
+
     if (live?.pendingSplitScrollTimerId === settleTimerId) {
       live.pendingSplitScrollTimerId = null
       live.pendingSplitScrollRafIds = []
     }
+
     if (isDestroyed()) {
       return
     }
+
     if (!live) {
       return
     }
+
     // Why: the alt-screen buffer belongs to a full-screen TUI (Claude Code,
     // vim, less) that owns its cursor position. Re-running scroll restore
     // and a full refresh here clobbers an in-progress draw — refresh(0,
@@ -161,23 +185,31 @@ export function scheduleSplitScrollRestore(
     if (scrollState.bufferType === 'alternate') {
       clearPendingSplitScrollBufferDisposable(live)
       live.pendingSplitScrollState = null
+
       if (live.terminal.buffer.active.type === 'alternate' && reattachWebgl) {
         runAfterNormalBuffer(live, getPaneById, paneId, isDestroyed, reattachWebgl)
+
         return
       }
+
       if (reattachWebgl) {
         reattachWebgl(live)
       }
+
       return
     }
+
     if (live.terminal.buffer.active.type === 'alternate') {
       runAfterNormalBuffer(live, getPaneById, paneId, isDestroyed, (normalPane) => {
         restoreCapturedScrollState(normalPane, scrollState, reattachWebgl)
       })
+
       return
     }
+
     restoreCapturedScrollState(live, scrollState, reattachWebgl)
   }, 200)
+
   if (scheduledPane) {
     scheduledPane.pendingSplitScrollTimerId = settleTimerId
   }

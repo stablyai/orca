@@ -39,6 +39,7 @@ type CursorPayload = {
  */
 export function sessionSearchPageKey(request: SessionSearchRequest): string {
   const filters = request.filters ?? {}
+
   const identity = JSON.stringify([
     request.query,
     request.scope ?? 'all',
@@ -47,11 +48,13 @@ export function sessionSearchPageKey(request: SessionSearchRequest): string {
     [...(filters.agents ?? [])].sort(),
     [...(filters.scopePaths ?? [])].sort()
   ])
+
   return createHash('sha256').update(identity).digest('base64url').slice(0, 16)
 }
 
 export function encodeSessionSearchCursor(generation: number, offset: number, key: string): string {
   const payload: CursorPayload = { g: generation, o: offset, k: key }
+
   return Buffer.from(JSON.stringify(payload), 'utf-8').toString('base64url')
 }
 
@@ -65,11 +68,13 @@ export function encodeSessionSearchCursor(generation: number, offset: number, ke
  */
 export function decodeSessionSearchCursor(cursor: string, generation: number, key: string): number {
   let payload: CursorPayload
+
   try {
     payload = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf-8')) as CursorPayload
   } catch {
     throw new SessionSearchCursorError('malformed', generation)
   }
+
   // A generation that survived parsing is worth reporting even when the rest of
   // the payload is unusable: it is what tells the caller which snapshot the
   // cursor thought it was walking.
@@ -78,6 +83,7 @@ export function decodeSessionSearchCursor(cursor: string, generation: number, ke
     typeof payload?.g === 'number' && Number.isInteger(payload.g) && payload.g >= 0
       ? payload.g
       : undefined
+
   if (
     claimed === undefined ||
     !Number.isInteger(payload?.o) ||
@@ -86,14 +92,17 @@ export function decodeSessionSearchCursor(cursor: string, generation: number, ke
   ) {
     throw new SessionSearchCursorError('malformed', generation, claimed)
   }
+
   // Generation first: a caller who changed the query AND waited through a
   // publish should hear about the index moving, which is the condition it
   // cannot fix by paging again.
   if (claimed !== generation) {
     throw new SessionSearchCursorError('stale-generation', generation, claimed)
   }
+
   if (payload.k !== key) {
     throw new SessionSearchCursorError('different-query', generation, claimed)
   }
+
   return payload.o
 }

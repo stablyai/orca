@@ -1,4 +1,5 @@
 export type CommentCodeContextLineUpdate = number | ((current: number) => number)
+
 export type CommentCodeContextCommentId = string | number
 
 export type CommentCodeContextExpansionState = {
@@ -37,6 +38,7 @@ export function updateCommentCodeContextExpansionState(
   }
 ): CommentCodeContextExpansionState {
   const resolved = resolveCommentCodeContextExpansionState(state, commentId)
+
   return {
     ...resolved,
     contextBefore:

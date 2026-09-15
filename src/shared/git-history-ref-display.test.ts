@@ -43,6 +43,7 @@ describe('dedupeRemoteTrackingRefs', () => {
       localBranch('main'),
       { id: 'refs/tags/v1', name: 'v1', category: 'tags' }
     ]
+
     expect(dedupeRemoteTrackingRefs(refs)).toEqual(refs)
   })
 

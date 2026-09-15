@@ -16,17 +16,21 @@ type MenuState = {
 }
 
 const MENU_WIDTH = 144
+
 const MENU_HEIGHT = 36
+
 const MENU_MARGIN = 8
 
 function getSelectionTextInside(container: HTMLElement): string {
   const selection = window.getSelection()
+
   if (!selection || selection.rangeCount === 0) {
     return ''
   }
 
   const anchorNode = selection.anchorNode
   const focusNode = selection.focusNode
+
   if (!anchorNode || !focusNode) {
     return ''
   }
@@ -50,6 +54,7 @@ export function SelectedTextCopyMenu({
     }
 
     const close = (): void => setMenu(null)
+
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         close()
@@ -62,6 +67,7 @@ export function SelectedTextCopyMenu({
     // Why: a bare resize listener also fires on the main process's reveal reflow, which changes
     // no dimensions — the menu would close on every window restore.
     const removeViewportListener = addViewportSizeChangeListener(close)
+
     return () => {
       window.removeEventListener('pointerdown', close)
       window.removeEventListener('keydown', handleKeyDown, true)
@@ -72,6 +78,7 @@ export function SelectedTextCopyMenu({
 
   const handleContextMenu = React.useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     const selectedText = getSelectionTextInside(event.currentTarget)
+
     if (!selectedText) {
       return
     }
@@ -98,6 +105,7 @@ export function SelectedTextCopyMenu({
     if (!menu) {
       return
     }
+
     void window.api.ui.writeClipboardText(menu.text)
     setMenu(null)
   }, [menu])

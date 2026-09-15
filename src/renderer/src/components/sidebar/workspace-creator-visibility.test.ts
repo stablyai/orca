@@ -31,10 +31,12 @@ describe('filterFolderWorkspacesFromOtherDevices', () => {
       kind: 'paired-device',
       deviceId: 'device-a'
     })
+
     const other = makeFolderWorkspace('other', {
       kind: 'paired-device',
       deviceId: 'device-b'
     })
+
     const host = makeFolderWorkspace('host', { kind: 'host' })
     const legacy = makeFolderWorkspace('legacy', undefined)
 

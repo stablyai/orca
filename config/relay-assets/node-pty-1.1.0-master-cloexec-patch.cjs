@@ -36,7 +36,9 @@
  */
 
 const { spawnSync } = require('node:child_process')
+
 const { createHash } = require('node:crypto')
+
 const {
   existsSync,
   mkdirSync,
@@ -45,17 +47,24 @@ const {
   rmSync,
   writeFileSync
 } = require('node:fs')
+
 const { dirname, join, resolve } = require('node:path')
 
 const EXPECTED_NODE_PTY_VERSION = '1.1.0'
+
 const ORIGINAL_SOURCE_SHA256 = '5e1005d6bdcfbe97b486ee415419fe7adae99035047f07340fbad36419e0bae6'
+
 const PATCHED_SOURCE_SHA256 = '3e6bc1a688aae187d231687130cfc0a11781c672f5f616d73183d471ee8ee65c'
 
 const STATUS_PREFIX = 'ORCA-NPTY-CLOEXEC:'
+
 const SKIP_MARKER_FILENAME = '.node-pty-cloexec-skip'
+
 const BACKUP_DIRNAME = '.orca-cloexec-prepatch-release'
+
 // Under the caller's 240s SSH command timeout, so the rollback below still runs.
 const REBUILD_TIMEOUT_MS = 200000
+
 const VERIFY_TIMEOUT_MS = 15000
 
 const FORWARD_DECLARATION = [
@@ -178,14 +187,17 @@ function inspectNodePtyUnixSource(relayDir) {
   const ptyDir = nodePtyDir(relayDir)
   const sourcePath = join(ptyDir, 'src', 'unix', 'pty.cc')
   const version = JSON.parse(readFileSync(join(ptyDir, 'package.json'), 'utf8')).version
+
   if (version !== EXPECTED_NODE_PTY_VERSION) {
     throw new Error(`Refusing to patch node-pty ${version}; expected ${EXPECTED_NODE_PTY_VERSION}`)
   }
+
   return { ptyDir, sourcePath, source: readFileSync(sourcePath, 'utf8') }
 }
 
 function writeSourceAtomically(sourcePath, contents) {
   const temporaryPath = `${sourcePath}.orca-patch-${process.pid}`
+
   // Why: a terminated install must leave one of the two known source versions on disk.
   try {
     writeFileSync(temporaryPath, contents)
@@ -197,14 +209,18 @@ function writeSourceAtomically(sourcePath, contents) {
 
 function rewriteSource(source, reverse) {
   let rewritten = source
+
   for (const [original, patched] of REPLACEMENTS) {
     const from = reverse ? patched : original
     const to = reverse ? original : patched
+
     if (rewritten.split(from).length - 1 !== 1) {
       throw new Error('Refusing to rewrite unexpected node-pty pty.cc source')
     }
+
     rewritten = rewritten.replace(from, to)
   }
+
   return rewritten
 }
 
@@ -212,19 +228,24 @@ function rewriteSource(source, reverse) {
 function patchNodePtyMasterCloexecSource(relayDir = process.cwd()) {
   const inspected = inspectNodePtyUnixSource(relayDir)
   const hash = sourceSha256(inspected.source)
+
   if (hash === PATCHED_SOURCE_SHA256) {
     return false
   }
+
   if (hash !== ORIGINAL_SOURCE_SHA256) {
     throw new Error('Refusing to patch unexpected node-pty pty.cc source')
   }
+
   writeSourceAtomically(inspected.sourcePath, rewriteSource(inspected.source, false))
   assertPatchedNodePtyMasterCloexecSource(relayDir)
+
   return true
 }
 
 function assertPatchedNodePtyMasterCloexecSource(relayDir = process.cwd()) {
   const inspected = inspectNodePtyUnixSource(relayDir)
+
   if (sourceSha256(inspected.source) !== PATCHED_SOURCE_SHA256) {
     throw new Error('node-pty pty master close-on-exec patch is not installed')
   }
@@ -232,10 +253,13 @@ function assertPatchedNodePtyMasterCloexecSource(relayDir = process.cwd()) {
 
 function revertNodePtyMasterCloexecSource(relayDir = process.cwd()) {
   const inspected = inspectNodePtyUnixSource(relayDir)
+
   if (sourceSha256(inspected.source) === ORIGINAL_SOURCE_SHA256) {
     return false
   }
+
   writeSourceAtomically(inspected.sourcePath, rewriteSource(inspected.source, true))
+
   return true
 }
 
@@ -246,9 +270,11 @@ function rebuildNodePty(relayDir) {
     timeout: REBUILD_TIMEOUT_MS,
     windowsHide: true
   })
+
   if (result.error) {
     throw new Error(`npm rebuild node-pty failed: ${result.error.message}`)
   }
+
   if (result.status !== 0) {
     const tail = `${result.stdout || ''}${result.stderr || ''}`.trim().slice(-300)
     throw new Error(`npm rebuild node-pty exited ${result.status ?? result.signal}: ${tail}`)
@@ -301,22 +327,27 @@ const LEAK_MESSAGE = {
 /** 'isolated' when the platform's leak is gone, 'unverified' when the host cannot show it. */
 function verifyNoPtyFdLeak(relayDir, platform) {
   const script = platform === 'darwin' ? VERIFY_SELF_FDS_SCRIPT : VERIFY_INHERITANCE_SCRIPT
+
   const result = spawnSync(process.execPath, ['-e', script, nodePtyDir(relayDir)], {
     cwd: relayDir,
     encoding: 'utf8',
     timeout: VERIFY_TIMEOUT_MS,
     windowsHide: true
   })
+
   const output = `${result.stdout || ''}`
+
   if (result.status !== 0 || result.error) {
     const tail = `${output}${result.stderr || ''}`.trim().slice(-300)
     throw new Error(
       `rebuilt node-pty did not load: ${tail || result.error?.message || result.signal}`
     )
   }
+
   if (output.includes('LEAKED')) {
     throw new Error(LEAK_MESSAGE[platform] || LEAK_MESSAGE.linux)
   }
+
   return output.includes('ISOLATED') ? 'isolated' : 'unverified'
 }
 
@@ -334,8 +365,10 @@ function verifyNoPtyFdLeak(relayDir, platform) {
 function buildLayout(relayDir, platform, arch) {
   const ptyDir = nodePtyDir(relayDir)
   const compiledDir = join(ptyDir, 'build', 'Release')
+
   if (platform === 'darwin') {
     const prebuildsDir = join(ptyDir, 'prebuilds')
+
     return {
       compiledDir,
       movedDir: prebuildsDir,
@@ -343,6 +376,7 @@ function buildLayout(relayDir, platform, arch) {
       missingStatus: 'skipped:no-prebuild'
     }
   }
+
   return {
     compiledDir,
     movedDir: compiledDir,
@@ -353,11 +387,13 @@ function buildLayout(relayDir, platform, arch) {
 
 function rollback(relayDir, layout, backupDir) {
   rmSync(layout.compiledDir, { recursive: true, force: true })
+
   try {
     revertNodePtyMasterCloexecSource(relayDir)
   } catch {
     // The build that is about to be restored predates the patch either way.
   }
+
   if (existsSync(backupDir)) {
     mkdirSync(dirname(layout.movedDir), { recursive: true })
     renameSync(backupDir, layout.movedDir)
@@ -373,13 +409,17 @@ function applyNodePtyMasterCloexecPatch(relayDir = process.cwd(), options = {}) 
   const arch = options.arch || process.arch
   const rebuild = options.rebuild || rebuildNodePty
   const verify = options.verify || verifyNoPtyFdLeak
+
   if (platform !== 'linux' && platform !== 'darwin') {
     return 'skipped:unsupported-platform'
   }
+
   const skipMarkerPath = join(relayDir, SKIP_MARKER_FILENAME)
+
   if (existsSync(skipMarkerPath)) {
     return 'skipped:earlier-attempt-failed'
   }
+
   const layout = buildLayout(relayDir, platform, arch)
   const backupDir = join(nodePtyDir(relayDir), BACKUP_DIRNAME)
   // A backup stranded by a connection that died mid-rebuild is stale by definition:
@@ -387,18 +427,23 @@ function applyNodePtyMasterCloexecPatch(relayDir = process.cwd(), options = {}) 
   rmSync(backupDir, { recursive: true, force: true })
 
   let inspected
+
   try {
     inspected = inspectNodePtyUnixSource(relayDir)
   } catch (err) {
     return `skipped:${err.message}`
   }
+
   const hash = sourceSha256(inspected.source)
+
   if (hash === PATCHED_SOURCE_SHA256) {
     return 'already-patched'
   }
+
   if (hash !== ORIGINAL_SOURCE_SHA256) {
     return 'skipped:unexpected-source'
   }
+
   // Nothing to fall back on means the host runs neither a compile nor the prebuild
   // this platform expects; rebuilding could only take away the artifact the probe
   // just proved loadable.
@@ -411,6 +456,7 @@ function applyNodePtyMasterCloexecPatch(relayDir = process.cwd(), options = {}) 
   } catch (err) {
     return `skipped:${err.message}`
   }
+
   try {
     patchNodePtyMasterCloexecSource(relayDir)
     rebuild(relayDir)
@@ -418,15 +464,18 @@ function applyNodePtyMasterCloexecPatch(relayDir = process.cwd(), options = {}) 
     // Discarded, not restored: a tree that gets published must hold no unpatched binary the
     // loader could still fall back to. A later repair recompiles from the patched source.
     rmSync(backupDir, { recursive: true, force: true })
+
     return verdict === 'isolated' ? 'patched' : 'patched-unverified'
   } catch (err) {
     rollback(relayDir, layout, backupDir)
+
     // Bounded on purpose: one compile attempt per relay directory, never a retry loop.
     try {
       writeFileSync(skipMarkerPath, `${new Date().toISOString()} ${err.message}\n`)
     } catch {
       // A relay dir we cannot write to will fail the cheap checks above next time anyway.
     }
+
     return `failed:${err.message}`
   }
 }

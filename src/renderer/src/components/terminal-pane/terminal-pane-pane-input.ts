@@ -51,19 +51,25 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
     imeCompositionDisposablesRef,
     imeNativeTextForwarderDisposablesRef
   } = context
+
   let pendingTerminalInterruptKeyup = false
   let claimedNonLatinControlChordCode: string | null = null
   const pendingTerminalImeCandidateKeyReleases = createTerminalImePendingCandidateKeyReleases()
   const isMac = navigator.userAgent.includes('Mac')
+
   // Android/ChromeOS UAs also contain "Linux"; scope the candidate-key policy to desktop Linux.
   const isLinux =
     !isMac && navigator.userAgent.includes('Linux') && !/Android|CrOS/.test(navigator.userAgent)
+
   const isIosWeb = isCurrentPlatformIosWeb()
+
   const linuxImeCandidateState = isLinux
     ? installTerminalImeLinuxCandidateState(pane.terminal.element)
     : null
+
   const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
   const imeComposerPlaceholderMask = installTerminalImeComposerPlaceholderMask(pane.terminal)
+
   const iosHangulPreedit = isIosWeb
     ? installTerminalIosHangulPreedit({
         terminalElement: pane.terminal.element,
@@ -73,6 +79,7 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
         renderPreedit: createTerminalIosHangulPreeditRenderer(pane.terminal)
       })
     : null
+
   imeCompositionDisposablesRef.current.set(pane.id, {
     dispose: () => {
       imeComposerPlaceholderMask.dispose()
@@ -81,6 +88,7 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
       iosHangulPreedit?.dispose()
     }
   })
+
   const imeNativeTextForwarder =
     isMac && !isIosWeb
       ? installTerminalImeNativeTextForwarder({
@@ -90,21 +98,26 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
           getKittyKeyboardFlags: () => paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
         })
       : { claimKeyEvent: () => false, dispose: () => undefined }
+
   imeNativeTextForwarderDisposablesRef.current.set(pane.id, imeNativeTextForwarder)
 
   pane.terminal.attachCustomKeyEventHandler((event) => {
     const linuxCandidateClassification = linuxImeCandidateState?.classifyKeyboardEvent(event) ?? {
       candidateDigitGuardActive: false
     }
+
     const observeLinuxCandidateEvent = (): void => {
       linuxImeCandidateState?.observeKeyboardEvent(event, linuxCandidateClassification)
     }
+
     const now = Date.now()
+
     const pendingCandidateReleaseGuardActive = shouldApplyTerminalImePendingCandidateKeyRelease(
       event,
       pendingTerminalImeCandidateKeyReleases,
       now
     )
+
     const imeKeyboardOptions = {
       compositionActive: imeCompositionTracker.isActive(),
       candidateKeyGuardActive:
@@ -115,21 +128,29 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
       isMac,
       isLinux
     }
+
     if (shouldSuppressTerminalImeKeyboardEvent(event, imeKeyboardOptions)) {
       clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, event)
+
       if (shouldPreventDefaultTerminalImeCandidateKey(event, imeKeyboardOptions)) {
         event.preventDefault()
         armTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, event, now)
       }
+
       observeLinuxCandidateEvent()
+
       return false
     }
+
     clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, event)
+
     if (pendingTerminalInterruptKeyup && shouldSuppressTerminalInterruptKeyup(event)) {
       pendingTerminalInterruptKeyup = false
       observeLinuxCandidateEvent()
+
       return false
     }
+
     if (
       shouldHandleTerminalInterruptKeyboardEvent(event, {
         isMac,
@@ -143,40 +164,55 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
       } else {
         pendingTerminalInterruptKeyup = false
       }
+
       observeLinuxCandidateEvent()
+
       return false
     }
+
     if (isNonLatinControlChordKeyup(event, claimedNonLatinControlChordCode)) {
       claimedNonLatinControlChordCode = null
       observeLinuxCandidateEvent()
+
       return false
     }
+
     const nonLatinControlChord = resolveNonLatinControlChordInput(event)
+
     if (nonLatinControlChord) {
       claimedNonLatinControlChordCode = event.code
       pane.terminal.input(nonLatinControlChord)
       observeLinuxCandidateEvent()
+
       return false
     }
+
     if (shouldSuppressTerminalModifierKeyboardEvent(event)) {
       observeLinuxCandidateEvent()
+
       return false
     }
+
     const jisYenInput = resolveTerminalJisYenInput(event, {
       enabled: settingsRef.current?.terminalJISYenToBackslash === true,
       isMac
     })
+
     if (jisYenInput) {
       if (jisYenInput.type === 'input') {
         pane.terminal.input(jisYenInput.data)
       }
+
       observeLinuxCandidateEvent()
+
       return false
     }
+
     if (event.type === 'keydown') {
       const shouldSyncCurrentTerminal = (): boolean =>
         managerRef.current?.getPanes().some((candidate) => candidate.terminal === pane.terminal) ===
         true
+
       if (event.key === 'PageUp' || event.key === 'Home') {
         markTerminalPinnedViewport(pane.terminal)
         syncTerminalScrollIntentSoon(pane.terminal, {
@@ -187,17 +223,22 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
         syncTerminalScrollIntentSoon(pane.terminal, { shouldSync: shouldSyncCurrentTerminal })
       }
     }
+
     if (imeNativeTextForwarder.claimKeyEvent(event)) {
       observeLinuxCandidateEvent()
+
       return false
     }
+
     const shouldBypass = shouldBypassXtermKeyboardEvent(event, {
       isMac,
       isIosWeb,
       hasSelection: pane.terminal.hasSelection(),
       kittyKeyboardFlags: paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
     })
+
     observeLinuxCandidateEvent()
+
     return !shouldBypass
   })
 }

@@ -6,6 +6,7 @@ it('prunes deeply nested duplicate ownership without recursive stack growth', ()
   const leafCount = 12_000
   let root: TerminalPaneLayoutNode = { type: 'leaf', leafId: 'leaf-0' }
   const ptyIdsByLeafId: Record<string, string> = { 'leaf-0': 'pty-agent' }
+
   for (let index = 1; index < leafCount; index += 1) {
     const leafId = `leaf-${index}`
     root = {
@@ -18,6 +19,7 @@ it('prunes deeply nested duplicate ownership without recursive stack growth', ()
   }
 
   const retainedLeafId = `leaf-${leafCount - 1}`
+
   const normalized = normalizeTerminalLayoutPtyOwnership({
     root,
     activeLeafId: retainedLeafId,

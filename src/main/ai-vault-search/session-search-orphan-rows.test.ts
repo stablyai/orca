@@ -26,6 +26,7 @@ import { SessionSearchTypoRepair } from './session-search-typo-repair'
 // dictionary is the FTS b-tree and lists an orphan's terms like any other.
 
 const ORPHAN_SESSION_ROW = 99
+
 const ORPHAN_TEXT = 'orphaned marmoset secret'
 
 let harness: SessionSearchHarness | null = null
@@ -38,17 +39,20 @@ afterEach(async () => {
 /** Two rows in the FTS table and the vocabulary, and no session row for them. */
 function plantOrphans(db: SyncDatabase, text: string = ORPHAN_TEXT): number[] {
   const rowids: number[] = []
+
   for (let n = 0; n < 2; n++) {
     const rowid = Number(
       db
         .prepare("INSERT INTO messages(session_row_id,role,ts) VALUES (?,'user',?)")
         .run(ORPHAN_SESSION_ROW, '2026-09-10T00:00:00.000Z').lastInsertRowid
     )
+
     db.prepare(
       'INSERT INTO messages_fts(rowid,user_text,assistant_text,tool_text,identifiers) VALUES (?,?,?,?,?)'
     ).run(rowid, text, '', '', identifierShadowText(text))
     rowids.push(rowid)
   }
+
   return rowids
 }
 
@@ -65,6 +69,7 @@ async function withOrphans(): Promise<{ harness: SessionSearchHarness; rowids: n
   expect(
     harness.db.prepare("SELECT doc FROM messages_vocab WHERE term = 'marmoset'").get()
   ).toEqual({ doc: 2 })
+
   return { harness, rowids }
 }
 
@@ -77,6 +82,7 @@ it.each([
   ['operator only', 'repo:app']
 ])('returns no orphaned row on the %s route', async (_route, query) => {
   const { harness: open } = await withOrphans()
+
   for (const scope of ['all', 'conversation'] as const) {
     const hits = open.engine.search({ query, scope }).hits
     expect(hits.map((hit) => hit.sessionId)).not.toContain(String(ORPHAN_SESSION_ROW))
@@ -95,6 +101,7 @@ it('never repairs a term onto a spelling only orphaned rows carry', async () => 
 it('snippets nothing for an orphaned row, even asked for it by rowid', async () => {
   const { harness: open, rowids } = await withOrphans()
   const plan = planSessionSearchQuery('marmoset')
+
   for (const scope of ['all', 'conversation'] as const) {
     expect(sessionSearchSnippet(open.db, scope, rowids[0]!, plan)).toEqual({
       text: '',
@@ -121,6 +128,7 @@ describe('a purge reclaiming rows nothing can reach', () => {
     // Two live rows, which is what makes `marmoset` eligible as a repair at all.
     addSyntheticSession(harness.db, { id: 1, text: 'the marmoset lives here', rows: 2 })
     plantOrphans(harness.db)
+
     return harness
   }
 
@@ -154,6 +162,7 @@ describe('a purge reclaiming rows nothing can reach', () => {
     await open.store.purgeOlderThan(null)
 
     expect(readIndexGeneration(open.db)).toBeGreaterThan(before)
+
     try {
       open.engine.search({ query: 'marmoset', limit: 1, cursor: page.page.cursor! })
       expect.unreachable('a cursor must not span a purge')
@@ -168,12 +177,15 @@ describe('a purge reclaiming rows nothing can reach', () => {
     // already cut loose, so the drain swapped the repair under a live cursor.
     harness = await openSessionSearchHarness('ss-orphan-drain-tie')
     const db = harness.db
+
     for (let id = 1; id <= 4; id++) {
       addSyntheticSession(db, { id, text: `marmosetx session${id}` })
     }
+
     for (let id = 5; id <= 9; id++) {
       addSyntheticSession(db, { id, text: `marmosetq session${id}` })
     }
+
     plantOrphans(db, 'marmosetx')
 
     const before = harness.engine.search({ query: 'marmosett' })

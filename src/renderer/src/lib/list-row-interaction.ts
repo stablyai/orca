@@ -6,6 +6,7 @@ export function isPortaledRowMenuClick(event: {
   currentTarget: EventTarget
 }): boolean {
   const target = event.target
+
   return target instanceof Node && event.currentTarget instanceof Node
     ? !event.currentTarget.contains(target)
     : false
@@ -24,5 +25,6 @@ export function isRowActivationKey(event: {
   if (event.target !== event.currentTarget) {
     return false
   }
+
   return event.key === 'Enter' || event.key === ' '
 }

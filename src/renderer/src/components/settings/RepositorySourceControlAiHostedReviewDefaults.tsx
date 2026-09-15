@@ -71,6 +71,7 @@ export function RepositorySourceControlAiHostedReviewDefaults({
       <div className="space-y-2">
         {HOSTED_REVIEW_DEFAULT_ROWS.map((row) => {
           const inherited = source.prCreationDefaults?.[row.key] === true ? 'On' : 'Off'
+
           return (
             <div
               key={row.key}

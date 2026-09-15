@@ -10,6 +10,7 @@ export function isRendererDocumentNavigation(currentUrl: string, nextUrl: string
   try {
     const current = new URL(currentUrl)
     const next = new URL(nextUrl)
+
     if (current.protocol === 'file:') {
       return (
         next.protocol === 'file:' &&
@@ -17,6 +18,7 @@ export function isRendererDocumentNavigation(currentUrl: string, nextUrl: string
         next.pathname === current.pathname
       )
     }
+
     return (
       (current.protocol === 'http:' || current.protocol === 'https:') &&
       (next.protocol === 'http:' || next.protocol === 'https:') &&
@@ -35,6 +37,7 @@ export function registerRendererDocumentNavigation(
   let fenceGeneration = 0
   let fenceActive = false
   let cancelReload: (() => void) | null = null
+
   const restoreSurvivingDocument = (): void => {
     if (
       !fenceActive ||
@@ -43,11 +46,13 @@ export function registerRendererDocumentNavigation(
     ) {
       return
     }
+
     fenceActive = false
     const cancel = cancelReload
     cancelReload = null
     cancel?.()
   }
+
   // Why: did-start-loading also fires for blocked external links whose renderer document survives.
   webContents.on('did-start-navigation', (_event, url, isSameDocument, isMainFrame) => {
     if (isMainFrame && !isSameDocument && isRendererDocumentNavigation(webContents.getURL(), url)) {
@@ -64,6 +69,7 @@ export function registerRendererDocumentNavigation(
       if (!isMainFrame) {
         return
       }
+
       queueMicrotask(restoreSurvivingDocument)
     }
   )
@@ -71,6 +77,7 @@ export function registerRendererDocumentNavigation(
     if (!isMainFrame) {
       return
     }
+
     queueMicrotask(() => {
       if (event.defaultPrevented) {
         restoreSurvivingDocument()

@@ -14,45 +14,61 @@ import { join } from 'node:path'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -99,6 +115,7 @@ describe('registerPtyHandlers', () => {
       )
     } finally {
       warnSpy.mockRestore()
+
       if (originalShell === undefined) {
         delete process.env.SHELL
       } else {
@@ -108,10 +125,12 @@ describe('registerPtyHandlers', () => {
   })
   it('cleans up provider-specific PTY overlays when a PTY is killed', async () => {
     let exitCb: ((info: { exitCode: number }) => void) | undefined
+
     const proc = {
       onData: vi.fn(() => makeDisposable()),
       onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
         exitCb = cb
+
         return makeDisposable()
       }),
       write: vi.fn(),
@@ -123,9 +142,11 @@ describe('registerPtyHandlers', () => {
       process: 'zsh',
       pid: 12345
     }
+
     spawnMock.mockReturnValue(proc)
 
     registerPtyHandlers(mainWindow as never)
+
     const spawnResult = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24
@@ -142,10 +163,12 @@ describe('registerPtyHandlers', () => {
     let exitCb: ((info: { exitCode: number }) => void) | undefined
     // Why: hold a stable ref to the kill spy — destroyPtyProcess reassigns proc.kill to a no-op (docs/fix-pty-fd-leak.md), so reading proc.kill.mock later would crash.
     const killSpy = vi.fn()
+
     const proc = {
       onData: vi.fn(() => onDataDisposable),
       onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
         exitCb = cb
+
         return onExitDisposable
       }),
       write: vi.fn(),
@@ -154,9 +177,11 @@ describe('registerPtyHandlers', () => {
       process: 'zsh',
       pid: 12345
     }
+
     spawnMock.mockReturnValue(proc)
 
     registerPtyHandlers(mainWindow as never)
+
     const spawnResult = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24
@@ -179,10 +204,12 @@ describe('registerPtyHandlers', () => {
     const onExitDisposable = makeDisposable()
     let exitCb: ((info: { exitCode: number }) => void) | undefined
     const killSpy = vi.fn()
+
     const proc = {
       onData: vi.fn(() => onDataDisposable),
       onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
         exitCb = cb
+
         return onExitDisposable
       }),
       write: vi.fn(),
@@ -191,6 +218,7 @@ describe('registerPtyHandlers', () => {
       process: 'zsh',
       pid: 12345
     }
+
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
@@ -199,13 +227,16 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       preAllocateHandleForPty: vi.fn()
     }
+
     spawnMock.mockReturnValue(proc)
 
     registerPtyHandlers(mainWindow as never, runtime as never)
+
     const spawnResult = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24
     })) as { id: string }
+
     const runtimeController = runtime.setPtyController.mock.calls[0]?.[0] as {
       kill: (ptyId: string) => boolean
     }
@@ -224,10 +255,12 @@ describe('registerPtyHandlers', () => {
     const onExitDisposable = makeDisposable()
     let exitCb: ((info: { exitCode: number }) => void) | undefined
     const killSpy = vi.fn()
+
     const proc = {
       onData: vi.fn(() => onDataDisposable),
       onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
         exitCb = cb
+
         return onExitDisposable
       }),
       write: vi.fn(),
@@ -236,6 +269,7 @@ describe('registerPtyHandlers', () => {
       process: 'zsh',
       pid: 12345
     }
+
     const runtime = {
       setPtyController: vi.fn(),
       noteTerminalSpawnCommand: vi.fn(),
@@ -244,19 +278,24 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       preAllocateHandleForPty: vi.fn()
     }
+
     spawnMock.mockReturnValue(proc)
 
     registerPtyHandlers(mainWindow as never, runtime as never)
+
     // Why both: a reload fires the gate reset AND the orphan cleanup, so invoke every registered listener like a real did-finish-load.
     const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
       .filter(([eventName]) => eventName === 'did-finish-load')
       .map(([, handler]) => handler as () => void)
+
     expect(didFinishLoadHandlers.length).toBeGreaterThan(0)
+
     const didFinishLoad = (): void => {
       for (const handler of didFinishLoadHandlers) {
         handler()
       }
     }
+
     await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })
 
     // First load after spawn only advances generation; the second sees this PTY as from a prior load and kills it as orphaned.
@@ -283,6 +322,7 @@ describe('registerPtyHandlers', () => {
         removeListener: vi.fn()
       }
     }
+
     const secondWindow = {
       isDestroyed: () => false,
       isFocused: () => true,
@@ -296,10 +336,12 @@ describe('registerPtyHandlers', () => {
     }
 
     registerPtyHandlers(firstWindow as never)
+
     // Two listeners on the first (LocalPtyProvider) window: the renderer-gate reset and the orphan cleanup.
     const firstWindowLoadHandlers = firstWindow.webContents.on.mock.calls.filter(
       ([eventName]) => eventName === 'did-finish-load'
     )
+
     expect(firstWindowLoadHandlers).toHaveLength(2)
 
     setLocalPtyProvider({
@@ -322,6 +364,7 @@ describe('registerPtyHandlers', () => {
         handler
       )
     }
+
     // The non-Local provider keeps orphan cleanup off the second window — only the renderer-gate reset listener remains.
     expect(
       secondWindow.webContents.on.mock.calls.filter(
@@ -332,6 +375,7 @@ describe('registerPtyHandlers', () => {
   // Why (#5787): a recovery reload re-fires did-finish-load; suppress the orphan sweep so live LOCAL PTYs survive until session restore re-adopts them.
   it('does not sweep local PTYs during a recovery reload', async () => {
     const killSpy = vi.fn()
+
     const proc = {
       onData: vi.fn(() => makeDisposable()),
       onExit: vi.fn(() => makeDisposable()),
@@ -341,6 +385,7 @@ describe('registerPtyHandlers', () => {
       process: 'zsh',
       pid: 12345
     }
+
     const runtime = {
       setPtyController: vi.fn(),
       onPtySpawned: vi.fn(),
@@ -348,6 +393,7 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       preAllocateHandleForPty: vi.fn()
     }
+
     spawnMock.mockReturnValue(proc)
     const isRecoveryReloadInFlight = vi.fn(() => true)
     const markClaudePtyExitedSpy = vi.spyOn(livePtyGate, 'markClaudePtyExited')
@@ -361,10 +407,12 @@ describe('registerPtyHandlers', () => {
       undefined,
       { isRecoveryReloadInFlight }
     )
+
     // Fire both did-finish-load listeners as a real reload does, else the suppression assertion passes vacuously without reaching the sweep.
     const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
       .filter(([eventName]) => eventName === 'did-finish-load')
       .map(([, handler]) => handler as () => void)
+
     expect(didFinishLoadHandlers.length).toBeGreaterThan(0)
     const didFinishLoad = (): void => didFinishLoadHandlers.forEach((handler) => handler())
 
@@ -388,13 +436,16 @@ describe('registerPtyHandlers', () => {
   // Why: guard against over-suppression — with no recovery reload in flight the sweep MUST still reclaim genuinely orphaned local PTYs.
   it('still sweeps orphaned local PTYs when no recovery reload is in flight', async () => {
     let exitCb: ((info: { exitCode: number }) => void) | undefined
+
     const killSpy = vi.fn(() => {
       queueMicrotask(() => exitCb?.({ exitCode: -1 }))
     })
+
     const proc = {
       onData: vi.fn(() => makeDisposable()),
       onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
         exitCb = cb
+
         return makeDisposable()
       }),
       write: vi.fn(),
@@ -403,6 +454,7 @@ describe('registerPtyHandlers', () => {
       process: 'zsh',
       pid: 12345
     }
+
     const runtime = {
       setPtyController: vi.fn(),
       onPtySpawned: vi.fn(),
@@ -410,6 +462,7 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       preAllocateHandleForPty: vi.fn()
     }
+
     spawnMock.mockReturnValue(proc)
     const isRecoveryReloadInFlight = vi.fn(() => false)
 
@@ -422,10 +475,12 @@ describe('registerPtyHandlers', () => {
       undefined,
       { isRecoveryReloadInFlight }
     )
+
     // Fire both did-finish-load listeners (gate reset + orphan sweep) as a real reload does.
     const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
       .filter(([eventName]) => eventName === 'did-finish-load')
       .map(([, handler]) => handler as () => void)
+
     const didFinishLoad = (): void => didFinishLoadHandlers.forEach((handler) => handler())
 
     const spawnResult = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as {
@@ -450,6 +505,7 @@ describe('registerPtyHandlers', () => {
   it('keeps local PTYs from different generations alive across recovery reloads', async () => {
     const killSpyA = vi.fn()
     const killSpyB = vi.fn()
+
     const runtime = {
       setPtyController: vi.fn(),
       onPtySpawned: vi.fn(),
@@ -457,6 +513,7 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       preAllocateHandleForPty: vi.fn()
     }
+
     const isRecoveryReloadInFlight = vi.fn(() => true)
 
     registerPtyHandlers(
@@ -468,10 +525,12 @@ describe('registerPtyHandlers', () => {
       undefined,
       { isRecoveryReloadInFlight }
     )
+
     // Fire ALL did-finish-load listeners (gate reset + orphan sweep) as a real reload does; the sweep listener is under test.
     const didFinishLoadHandlers = mainWindow.webContents.on.mock.calls
       .filter(([eventName]) => eventName === 'did-finish-load')
       .map(([, handler]) => handler as () => void)
+
     const didFinishLoad = (): void => didFinishLoadHandlers.forEach((handler) => handler())
 
     spawnMock.mockReturnValue({
@@ -509,10 +568,12 @@ describe('registerPtyHandlers', () => {
   })
   it('retains PTY state when kill fails until physical exit arrives', async () => {
     let exitCb: ((info: { exitCode: number }) => void) | undefined
+
     const proc = {
       onData: vi.fn(() => makeDisposable()),
       onExit: vi.fn((cb: (info: { exitCode: number }) => void) => {
         exitCb = cb
+
         return makeDisposable()
       }),
       write: vi.fn(),
@@ -523,9 +584,11 @@ describe('registerPtyHandlers', () => {
       process: 'zsh',
       pid: 12345
     }
+
     spawnMock.mockReturnValue(proc)
 
     registerPtyHandlers(mainWindow as never)
+
     const spawnResult = (await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24

@@ -91,6 +91,7 @@ export function AccountRuntimeToggle<TGroup extends { key: string; label: string
       >
         {groups.map((group) => {
           const active = group.key === value
+
           return (
             <button
               key={group.key}

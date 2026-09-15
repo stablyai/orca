@@ -23,15 +23,19 @@ export {
   githubRepositorySlugArg,
   githubRepositoryWebHost
 } from './github-repository-host'
+
 export type GitHubApiRepository = GitHubOwnerRepo
+
 export type GitHubRepoExecOptions = ReturnType<typeof ghRepoExecOptions> & {
   host?: string
   env?: NodeJS.ProcessEnv
 }
+
 export type GitHubRepoExecution = {
   ownerRepo: GitHubApiRepository | null
   ghOptions: GitHubRepoExecOptions
 }
+
 export {
   _resetOriginGitHubApiRepositoryCache,
   getGitHubApiRepositoryForRemote,
@@ -53,16 +57,21 @@ export async function getIssueGitHubApiRepository(
     (value) => ({ status: 'fulfilled' as const, value }),
     (reason: unknown) => ({ status: 'rejected' as const, reason })
   )
+
   const upstream = (await shouldProbeGitRemote(repoPath, 'upstream', connectionId, localGitOptions))
     ? await getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions)
     : null
+
   if (upstream) {
     return upstream
   }
+
   const origin = await originPromise
+
   if (origin.status === 'rejected') {
     throw origin.reason
   }
+
   return origin.value
 }
 
@@ -89,12 +98,14 @@ export async function resolveGitHubApiRepositoryCandidates(
     (value) => ({ status: 'fulfilled' as const, value }),
     (reason: unknown) => ({ status: 'rejected' as const, reason })
   )
+
   const probeUpstream = await shouldProbeGitRemote(
     repoPath,
     'upstream',
     connectionId,
     localGitOptions
   )
+
   const [upstream, originResult] = await Promise.all([
     probeUpstream
       ? getGitHubApiRepositoryForRemote(repoPath, 'upstream', connectionId, localGitOptions, {
@@ -103,23 +114,30 @@ export async function resolveGitHubApiRepositoryCandidates(
       : null,
     originPromise
   ])
+
   if (originResult.status === 'rejected') {
     throw originResult.reason
   }
+
   const origin = originResult.value
   const seen = new Set<string>()
   const candidates: GitHubApiRepository[] = []
+
   for (const candidate of [upstream, origin]) {
     if (!candidate) {
       continue
     }
+
     const key = githubRepoIdentityKey(candidate)
+
     if (seen.has(key)) {
       continue
     }
+
     seen.add(key)
     candidates.push(candidate)
   }
+
   return { candidates, headRepo: origin }
 }
 
@@ -143,17 +161,21 @@ export async function resolveIssueGitHubApiRepositorySource(
       connectionId,
       localGitOptions
     )
+
     if (upstream) {
       return { source: upstream, fellBack: false }
     }
+
     const origin = await getGitHubApiRepositoryForRemote(
       repoPath,
       'origin',
       connectionId,
       localGitOptions
     )
+
     return { source: origin, fellBack: origin !== null }
   }
+
   if (preference === 'origin') {
     return {
       source: await getGitHubApiRepositoryForRemote(
@@ -165,6 +187,7 @@ export async function resolveIssueGitHubApiRepositorySource(
       fellBack: false
     }
   }
+
   return {
     source: await getIssueGitHubApiRepository(repoPath, connectionId, localGitOptions),
     fellBack: false
@@ -180,14 +203,18 @@ export async function resolveGitHubApiRepository(
   if (repository && !isValidGitHubApiRepository(repository)) {
     return null
   }
+
   if (repository?.host) {
     const host = repository.host.trim().toLowerCase()
+
     if (!host) {
       return null
     }
+
     if (isDefaultGitHubHost(host)) {
       return { ...repository, host }
     }
+
     // Why: client-supplied hosts must match gh's local auth inventory before
     // they can receive ambient Enterprise credentials from a host-pinned call.
     const authenticated = await isGitHubHostAuthenticated(
@@ -196,21 +223,26 @@ export async function resolveGitHubApiRepository(
       connectionId,
       localGitOptions
     )
+
     return authenticated ? { ...repository, host } : null
   }
+
   const originRepository = await getOriginGitHubApiRepository(
     repoPath,
     connectionId,
     localGitOptions
   )
+
   if (!repository) {
     return originRepository
   }
+
   // Why: older clients only send owner/repo. The origin still supplies the
   // execution host for fork-base slugs on the same GitHub Enterprise server.
   if (originRepository?.host) {
     return { ...repository, host: originRepository.host }
   }
+
   // Why: a host-less identity can honor ambient GH_HOST even with a local cwd.
   // Only a resolved origin may supply the execution host for legacy clients.
   return null
@@ -225,6 +257,7 @@ export async function resolveGitHubRepoExecution(
   // Why: issue-scoped paths retain their upstream-first resolver while sharing
   // the same repo-scoped and host-scoped gh execution option construction.
   const requestedRepository = typeof repository === 'function' ? await repository() : repository
+
   // Why: normalize host-less resolver results without replacing an
   // authoritative null with the generic origin fallback.
   const ownerRepo =
@@ -236,6 +269,7 @@ export async function resolveGitHubRepoExecution(
           connectionId,
           localGitOptions
         )
+
   return {
     ownerRepo,
     ghOptions: {

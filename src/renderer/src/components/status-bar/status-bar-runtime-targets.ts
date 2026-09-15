@@ -48,6 +48,7 @@ function getHostRuntimeLabel(): string {
 
 export function getCodexStatusWslKey(wslDistro: string | null | undefined): string {
   const trimmed = wslDistro?.trim()
+
   return trimmed ? trimmed : '__default__'
 }
 
@@ -58,6 +59,7 @@ export function getCodexStatusRuntimeLabel(
   if (target.runtime === 'host') {
     return hostLabel
   }
+
   return target.wslDistro ? `WSL ${target.wslDistro}` : 'WSL default'
 }
 
@@ -71,6 +73,7 @@ export function toCodexStatusRuntimeTarget(
   if (target?.runtime === 'wsl') {
     return { runtime: 'wsl', wslDistro: target.wslDistro }
   }
+
   return { runtime: 'host', wslDistro: null }
 }
 
@@ -81,10 +84,12 @@ export function getStatusBarPreferredWslDistro(
 ): string | null {
   if (settings) {
     const target = resolveLocalAccountRuntimeTarget(settings, platform)
+
     if (target.runtime === 'wsl' && target.wslDistro) {
       return target.wslDistro
     }
   }
+
   return wslDistros.length === 1 ? wslDistros[0] : null
 }
 
@@ -94,6 +99,7 @@ export function shouldIncludeSettingsWslRuntime(
   if (!settings) {
     return false
   }
+
   // Why: the fallback group must match the concrete runtime used for account polling.
   return resolveLocalAccountRuntimeTarget(settings, getRendererAppPlatform()).runtime === 'wsl'
 }

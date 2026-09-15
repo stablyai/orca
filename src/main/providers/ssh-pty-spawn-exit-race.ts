@@ -10,6 +10,7 @@ export class SshPtySpawnExitRaceTracker {
   begin(): PendingSshPtySpawn {
     const operation = { exits: [] }
     this.pending.add(operation)
+
     return operation
   }
 

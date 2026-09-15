@@ -91,12 +91,15 @@ function deathEvidenceFor(
   if (probe.outcome === 'exit-observed') {
     return { kind: 'exit-observed', detail: 'observed process exit', observedAt }
   }
+
   if (probe.outcome === 'pid-absent') {
     return { kind: 'pid-absent', detail: 'recorded pid absent on host', observedAt }
   }
+
   if (probe.outcome === 'identity-mismatch') {
     return { kind: 'identity-mismatch', detail: `mismatched ${probe.field}`, observedAt }
   }
+
   return null
 }
 
@@ -125,31 +128,39 @@ export function evaluateAgentSessionAcquisition(args: {
   probe: AgentSessionOwnerProbe
 }): AgentSessionAcquisitionDecision {
   const { lease, expectedFence, handoffOperationId, probe } = args
+
   if (lease.unreconciled) {
     return { decision: 'refused', code: 'execution_owner_reconciling' }
   }
+
   if (!isAgentSessionFenceCurrent(lease, expectedFence)) {
     return { decision: 'refused', code: 'agent_session_checkpoint_stale' }
   }
+
   if (lease.claimStatus === 'conflicted') {
     return { decision: 'refused', code: 'agent_session_conflict' }
   }
+
   if (lease.handoffStage === 'recovering' || lease.handoffStage === 'manual-recovery') {
     // Why: no stage expires into an owner; recovery is resolved by proof or by the user.
     return { decision: 'refused', code: 'agent_session_ownership_unknown' }
   }
+
   if (lease.handoffStage === 'preparing') {
     // Why: the old owner is quiesced but alive and still authoritative.
     return { decision: 'refused', code: 'agent_session_conflict' }
   }
+
   if (lease.handoffStage !== null && !STAGES_ADMITTING_NEW_OWNER.has(lease.handoffStage)) {
     return { decision: 'refused', code: 'agent_session_conflict' }
   }
+
   if (lease.handoffStage !== null && lease.handoffOperationId !== null) {
     if (handoffOperationId !== lease.handoffOperationId) {
       // Why: the retry key is operation id + fence + stage; a different id is a different intent.
       return { decision: 'refused', code: 'agent_session_operation_conflict' }
     }
+
     if (
       lease.ownerProcess === null &&
       STAGES_ADMITTING_NEW_OWNER.has(lease.handoffStage) &&
@@ -160,6 +171,7 @@ export function evaluateAgentSessionAcquisition(args: {
       return { decision: 'retry-reservation', fence: lease.runtimeFence }
     }
   }
+
   if (lease.ownerProcess !== null) {
     if (!isProvenDeadProbe(probe)) {
       // Why: a lapsed deadline means Orca stopped hearing from the owner, not that the child
@@ -171,13 +183,16 @@ export function evaluateAgentSessionAcquisition(args: {
           : 'agent_session_ownership_unknown'
       }
     }
+
     return { decision: 'granted', nextFence: nextAgentSessionFence(lease) }
   }
+
   if (lease.claimStatus === 'reserved' && probe.outcome !== 'reservation-unused') {
     // Why: a reservation with no proven process is not a free lease — the crash may have lost
     // the race with the spawn rather than beaten it.
     return { decision: 'refused', code: 'agent_session_ownership_unknown' }
   }
+
   return { decision: 'granted', nextFence: nextAgentSessionFence(lease) }
 }
 
@@ -191,9 +206,11 @@ export function adjudicateAgentSessionRestart(args: {
   observedAt: number
 }): AgentSessionRestartAdjudication {
   const { lease, probe, observedAt } = args
+
   if (lease.claimStatus === 'conflicted') {
     const conflictedOwnerDeath =
       lease.ownerProcess === null ? null : deathEvidenceFor(probe, observedAt)
+
     if (conflictedOwnerDeath) {
       // Why: the conflict names one specific process. Present-time proof that THAT process is gone
       // leaves no claimant to protect, and a conflict with no exit is a session the user can never
@@ -204,20 +221,24 @@ export function adjudicateAgentSessionRestart(args: {
         evidence: conflictedOwnerDeath
       }
     }
+
     return { disposition: 'conflicted', reason: 'claim conflicted before restart' }
   }
+
   if (lease.ownerProcess === null) {
     if (lease.settlementRetryRequired) {
       // A watched provider death can leave terminal rows unsettled. This latch is not owner
       // uncertainty and must survive restart until the journal settlement is durably accepted.
       return { disposition: 'settlement-pending' }
     }
+
     if (lease.reservedSpawnToken === null && lease.claimStatus !== 'reserved') {
       // Why: the spawn token is minted before the child and is the only thing a child could be
       // carrying. With no owner and no token nothing can hold this lease, so it is already free —
       // treating it as an unproven reservation is what re-latches every released record on restart.
       return { disposition: 'free', reason: 'lease has no owner and no reservation' }
     }
+
     if (probe.outcome === 'reservation-unused') {
       return {
         disposition: 'evicted',
@@ -225,12 +246,14 @@ export function adjudicateAgentSessionRestart(args: {
         evidence: { kind: 'pid-absent', detail: 'reservation never spawned', observedAt }
       }
     }
+
     return {
       disposition: 'recovering',
       stage: 'manual-recovery',
       reason: 'reservation with no proven process'
     }
   }
+
   if (isProvenAliveProbe(probe)) {
     if (lease.runtimeKind === 'native') {
       // Why: the surviving child's stdio died with the previous runtime, so readoption
@@ -241,13 +264,17 @@ export function adjudicateAgentSessionRestart(args: {
         reason: 'native owner outlived the runtime that held its transport'
       }
     }
+
     // Why: re-adoption is not a new generation, so the fence does not move.
     return { disposition: 'readopt' }
   }
+
   const evidence = deathEvidenceFor(probe, observedAt)
+
   if (evidence) {
     return { disposition: 'evicted', nextFence: nextAgentSessionFence(lease), evidence }
   }
+
   return {
     // Why: an exact recorded identity can still be probed later, so the system keeps
     // re-asking; only a record naming nobody (above) needs the user to decide.
@@ -271,5 +298,6 @@ export function classifyObservedAgentSessionSpawnToken(args: {
       lease.reservedSpawnToken === args.spawnToken ||
       lease.ownerProcess?.spawnToken === args.spawnToken
   )
+
   return owned ? 'owned' : 'orphan'
 }

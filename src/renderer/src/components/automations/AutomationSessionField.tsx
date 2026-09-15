@@ -55,6 +55,7 @@ export function AutomationSessionField({
           if (!value) {
             return
           }
+
           onDraftChange((current) => ({
             ...current,
             reuseSession: value === 'reuse',

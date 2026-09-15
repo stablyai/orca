@@ -48,6 +48,7 @@ const mocks = vi.hoisted(() => {
       }
     >
   }
+
   return { state }
 })
 
@@ -64,6 +65,7 @@ vi.mock('@/store/selectors', () => ({
   // host only has to agree when the row declares one.
   getWorktreeOnHostFromState: (_state: unknown, worktreeId: string, hostId?: string) => {
     const row = mocks.state.worktreeMap.get(worktreeId)
+
     return row && (!hostId || row.hostId === hostId) ? row : undefined
   }
 }))
@@ -321,6 +323,7 @@ describe('delete worktree flow', () => {
           canForceDelete: true,
           forceDeleteReason: 'dirty'
         }
+
         return { ok: false, error: 'changed files' }
       })
       .mockResolvedValueOnce({ ok: true })
@@ -381,6 +384,7 @@ describe('delete worktree flow', () => {
           forceDeleteReason: null,
           lockReason: 'active agent session'
         }
+
         return { ok: false, error: 'Worktree is locked by Git.' }
       })
       .mockResolvedValueOnce({ ok: true })
@@ -407,6 +411,7 @@ describe('delete worktree flow', () => {
         canForceDelete: true,
         forceDeleteReason: 'dirty'
       }
+
       return { ok: false, error: 'Worktree is locked by Git.' }
     })
     await runWorktreeDeleteWithToast({ id: 'wt-1', executionHostId: 'local' }, 'one')

@@ -7,8 +7,11 @@ import { useAppStore } from '@/store'
 export type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 const initialTabsByWorktree = useAppStore.getState().tabsByWorktree
+
 const initialWorktreesByRepo = useAppStore.getState().worktreesByRepo
+
 const initialGetKnownWorktreeById = useAppStore.getState().getKnownWorktreeById
+
 const initialPendingIssueCommandSplitByTabId =
   useAppStore.getState().pendingIssueCommandSplitByTabId
 

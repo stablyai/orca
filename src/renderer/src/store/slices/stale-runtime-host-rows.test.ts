@@ -15,6 +15,7 @@ import {
 } from './stale-runtime-host-rows'
 
 const runtimeA = toRuntimeExecutionHostId('env-a')
+
 const runtimeB = toRuntimeExecutionHostId('env-b')
 
 type Row = { id: string; hostId?: ExecutionHostId }
@@ -57,6 +58,7 @@ describe('dropWorktreeRowsForRemovedRuntimeEnvironments', () => {
     const rowsByRepo = {
       repo1: [row('w-local', 'local'), row('w-a', runtimeA)]
     }
+
     const result = dropWorktreeRowsForRemovedRuntimeEnvironments(rowsByRepo, new Set(['env-a']))
     expect(result.rowsByRepo.repo1).toEqual([row('w-local', 'local')])
     expect(result.removedWorktreeIds).toEqual(['w-a'])
@@ -103,6 +105,7 @@ describe('dropWorktreeRowsForRemovedRuntimeEnvironments', () => {
       removedRepo: [row('w-legacy')],
       ambiguousRepo: [row('w-ambiguous')]
     }
+
     const result = dropWorktreeRowsForRemovedRuntimeEnvironments(
       rowsByRepo,
       new Set(['env-a']),

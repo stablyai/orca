@@ -7,6 +7,7 @@ export function journalItemRevisionIsStale(
 ): boolean {
   const tombstoned = state.tombstones.get(itemId)
   const existing = state.items.get(itemId)
+
   return (
     (tombstoned !== undefined && revision <= tombstoned) ||
     (existing !== undefined && revision <= existing.revision)

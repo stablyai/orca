@@ -3,13 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
+
 vi.mock('@electron-toolkit/utils', async () =>
   (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
 )
+
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
+
 vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
@@ -28,6 +32,7 @@ describe('createMainWindow', () => {
 
   it('only intercepts the dictation chord when enabled toggle mode can handle it', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -41,6 +46,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -54,6 +60,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -63,6 +70,7 @@ describe('createMainWindow', () => {
       sttModel: '',
       dictationMode: 'toggle'
     }
+
     createMainWindow({
       getUI: () => ({}) as never,
       getSettings: () => ({ windowBackgroundBlur: false, voice }) as never,
@@ -70,6 +78,7 @@ describe('createMainWindow', () => {
     } as never)
 
     const isDarwin = process.platform === 'darwin'
+
     const dictationInput = {
       type: 'keyDown',
       code: 'KeyE',
@@ -120,6 +129,7 @@ describe('createMainWindow', () => {
 
   it('only intercepts double-tap dictation when enabled toggle mode can handle it', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -133,6 +143,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -146,6 +157,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -155,6 +167,7 @@ describe('createMainWindow', () => {
       sttModel: '',
       dictationMode: 'toggle'
     }
+
     createMainWindow(
       {
         getUI: () => ({}),
@@ -175,6 +188,7 @@ describe('createMainWindow', () => {
         control: false,
         alt: false
       }
+
       windowHandlers['before-input-event'](
         { preventDefault: vi.fn() } as never,
         { ...modifierInput, type: 'keyDown' } as never
@@ -192,6 +206,7 @@ describe('createMainWindow', () => {
         { preventDefault: vi.fn() } as never,
         { ...modifierInput, type: 'keyUp' } as never
       )
+
       return preventDefault
     }
 
@@ -214,6 +229,7 @@ describe('createMainWindow', () => {
 
   it('forwards ctrl/cmd+j to the worktree palette toggle event', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -227,6 +243,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -240,6 +257,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -247,6 +265,7 @@ describe('createMainWindow', () => {
     createMainWindow(null)
 
     const isDarwin = process.platform === 'darwin'
+
     for (const input of [
       {
         type: 'keyDown',
@@ -279,6 +298,7 @@ describe('createMainWindow', () => {
 
   it('suppresses auto-repeat quick-command menu toggles from before-input-event', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -292,6 +312,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -305,6 +326,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -316,6 +338,7 @@ describe('createMainWindow', () => {
     })
 
     const isDarwin = process.platform === 'darwin'
+
     const input = {
       type: 'keyDown',
       code: 'KeyQ',
@@ -325,6 +348,7 @@ describe('createMainWindow', () => {
       alt: false,
       shift: true
     }
+
     const firstPreventDefault = vi.fn()
     windowHandlers['before-input-event']({ preventDefault: firstPreventDefault } as never, input)
     expect(firstPreventDefault).toHaveBeenCalledTimes(1)
@@ -343,6 +367,7 @@ describe('createMainWindow', () => {
 
   it('suppresses auto-repeat workspace deletes from before-input-event', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -356,6 +381,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -369,6 +395,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -376,6 +403,7 @@ describe('createMainWindow', () => {
     createMainWindow(null)
 
     const isDarwin = process.platform === 'darwin'
+
     const input = {
       type: 'keyDown',
       code: 'Backspace',
@@ -385,6 +413,7 @@ describe('createMainWindow', () => {
       alt: false,
       shift: true
     }
+
     windowHandlers['before-input-event']({ preventDefault: vi.fn() } as never, input)
     expect(webContents.send).toHaveBeenCalledWith('ui:deleteCurrentWorkspace')
 
@@ -401,6 +430,7 @@ describe('createMainWindow', () => {
 
   it('lets Terminal-first pass risky app shortcuts through when terminal input is focused', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -414,6 +444,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -427,6 +458,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -439,6 +471,7 @@ describe('createMainWindow', () => {
     const setFocusedListener = vi
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
+
     expect(setFocusedListener).toBeTypeOf('function')
     setFocusedListener?.({ sender: webContents } as never, true)
 
@@ -463,6 +496,7 @@ describe('createMainWindow', () => {
 
   it('allows double-tap shortcuts while terminal input is focused with Terminal-first policy', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -476,6 +510,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -489,6 +524,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -506,6 +542,7 @@ describe('createMainWindow', () => {
     const setFocusedListener = vi
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
+
     expect(setFocusedListener).toBeTypeOf('function')
     setFocusedListener?.({ sender: webContents } as never, true)
 
@@ -517,6 +554,7 @@ describe('createMainWindow', () => {
       control: false,
       alt: false
     }
+
     const firstDownPreventDefault = vi.fn()
     windowHandlers['before-input-event'](
       { preventDefault: firstDownPreventDefault } as never,
@@ -542,6 +580,7 @@ describe('createMainWindow', () => {
 
   it('notifies before Orca-first captures a risky terminal-focused shortcut', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -555,6 +594,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -568,6 +608,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -580,6 +621,7 @@ describe('createMainWindow', () => {
     const setFocusedListener = vi
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
+
     expect(setFocusedListener).toBeTypeOf('function')
     setFocusedListener?.({ sender: webContents } as never, true)
 
@@ -607,6 +649,7 @@ describe('createMainWindow', () => {
 
   it('notifies before Orca-first captures a terminal-focused double-tap shortcut', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -620,6 +663,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -633,6 +677,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -650,6 +695,7 @@ describe('createMainWindow', () => {
     const setFocusedListener = vi
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
+
     expect(setFocusedListener).toBeTypeOf('function')
     setFocusedListener?.({ sender: webContents } as never, true)
 
@@ -661,6 +707,7 @@ describe('createMainWindow', () => {
       control: false,
       alt: false
     }
+
     windowHandlers['before-input-event'](
       { preventDefault: vi.fn() } as never,
       { ...modifierInput, type: 'keyDown' } as never
@@ -684,6 +731,7 @@ describe('createMainWindow', () => {
 
   it('forwards the default workspace delete shortcut while terminal input is focused', () => {
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -697,6 +745,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -710,6 +759,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })
@@ -727,6 +777,7 @@ describe('createMainWindow', () => {
     const setFocusedListener = vi
       .mocked(ipcMain.on)
       .mock.calls.find(([channel]) => channel === 'ui:setTerminalInputFocused')?.[1]
+
     expect(setFocusedListener).toBeTypeOf('function')
     setFocusedListener?.({ sender: webContents } as never, true)
 
@@ -754,6 +805,7 @@ describe('createMainWindow', () => {
     isMock.dev = true
 
     const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
     const webContents = {
       on: vi.fn((event, handler) => {
         windowHandlers[event] = handler
@@ -767,6 +819,7 @@ describe('createMainWindow', () => {
       openDevTools: vi.fn(),
       closeDevTools: vi.fn()
     }
+
     const browserWindowInstance = {
       webContents,
       on: vi.fn(),
@@ -780,6 +833,7 @@ describe('createMainWindow', () => {
       loadFile: vi.fn(() => Promise.resolve()),
       loadURL: vi.fn(() => Promise.resolve())
     }
+
     browserWindowMock.mockImplementation(function () {
       return browserWindowInstance
     })

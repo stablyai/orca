@@ -9,7 +9,9 @@ import {
 } from './agent-map-time-filter'
 
 const NOW = 2_000_000_000_000
+
 const MINUTE = 60_000
+
 const HOUR = 60 * MINUTE
 
 function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
@@ -41,6 +43,7 @@ describe('agent map time filtering', () => {
       card({ finishedAt: NOW - HOUR, startedAt: NOW - 3 * HOUR }),
       NOW
     )
+
     const running = agentMapDurations(card({ startedAt: NOW - 3 * HOUR }), NOW)
 
     expect(finished.lifespan).toBe(2 * HOUR)

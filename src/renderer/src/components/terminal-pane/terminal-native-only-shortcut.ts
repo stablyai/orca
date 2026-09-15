@@ -29,25 +29,31 @@ export type TerminalNativeOnlyShortcutTracker = {
  */
 export function getTerminalShortcutKeyIdentity(event: TerminalNativeOnlyShortcutKeyEvent): string {
   const code = event.code?.trim()
+
   if (code) {
     return code
   }
+
   // Why: Space is the reported input-source chord; bare " " must not diverge
   // from code-based identities used on keydown.
   if (event.key === ' ' || event.key === 'Spacebar' || event.key === 'Space') {
     return 'Space'
   }
+
   return event.key
 }
 
 function getCompanionKeyCandidates(event: TerminalNativeOnlyShortcutKeyEvent): Set<string> {
   const candidates = new Set<string>([getTerminalShortcutKeyIdentity(event)])
+
   if (event.code?.trim()) {
     candidates.add(event.code.trim())
   }
+
   if (event.key === ' ' || event.key === 'Spacebar' || event.key === 'Space') {
     candidates.add('Space')
   }
+
   return candidates
 }
 
@@ -58,26 +64,32 @@ function consumeCompanion(
   if (event.type !== 'keypress' && event.type !== 'keyup') {
     return false
   }
+
   // Why: match either normalized identity so keypress without `code` still
   // pairs with a keydown that used `code: "Space"`.
   const candidates = getCompanionKeyCandidates(event)
   let matched: string | null = null
+
   for (const candidate of candidates) {
     if (pendingKeys.has(candidate)) {
       matched = candidate
       break
     }
   }
+
   if (!matched) {
     return false
   }
+
   if (event.type === 'keyup') {
     pendingKeys.delete(matched)
+
     // Why: drop any alias forms for the same physical key after release.
     for (const candidate of candidates) {
       pendingKeys.delete(candidate)
     }
   }
+
   return true
 }
 
@@ -94,6 +106,7 @@ export function createTerminalNativeOnlyShortcutTracker(): TerminalNativeOnlySho
     if (event.inputType !== 'insertText' || event.isComposing) {
       return false
     }
+
     // Why: an input-source change can also commit IME text before keyup; cancel
     // only the printable text produced by a configured native-only chord.
     for (const key of pendingKeys.values()) {
@@ -101,6 +114,7 @@ export function createTerminalNativeOnlyShortcutTracker(): TerminalNativeOnlySho
         return true
       }
     }
+
     return false
   }
 

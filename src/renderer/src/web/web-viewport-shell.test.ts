@@ -8,6 +8,7 @@ function readSource(relativePath: string): string {
 
 function cssBlock(css: string, selector: string): string {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
   return css.match(new RegExp(`${escapedSelector}\\s*\\{(?<body>[^}]*)\\}`))?.groups?.body ?? ''
 }
 

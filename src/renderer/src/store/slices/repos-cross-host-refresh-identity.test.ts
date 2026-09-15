@@ -64,9 +64,13 @@ function setup(repoId: string, path: string): ProjectHostSetup {
 }
 
 const reposList = vi.fn()
+
 const projectsList = vi.fn()
+
 const listHostSetups = vi.fn()
+
 const runtimeEnvironmentsList = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 // Why: catalogs arrive over IPC, so every fetch must hand back freshly allocated rows —
@@ -79,12 +83,15 @@ function runtimeResult(method: string): unknown {
   if (method === 'repo.list') {
     return { repos: [clone(remoteRepo)] }
   }
+
   if (method === 'project.list') {
     return { projects: [clone(remoteProject)] }
   }
+
   if (method === 'projectHostSetup.list') {
     return { setups: [clone(setup('remote-repo', '/srv/orca'))] }
   }
+
   return {}
 }
 
@@ -102,9 +109,11 @@ beforeEach(() => {
   runtimeEnvironmentsList.mockResolvedValue([{ id: 'env-1', name: 'awin' }])
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     const compatible = createCompatibleRuntimeStatusResponseIfNeeded(args)
+
     if (compatible) {
       return compatible
     }
+
     return {
       id: `rpc-${args.method}`,
       ok: true,

@@ -22,6 +22,7 @@ const NO_ANDROID: BackendAvailability = {
 // passthroughs.
 function fakeBridge(overrides: FakeBridgeOverrides = {}): EmulatorBridge {
   const android = overrides.android ?? NO_ANDROID
+
   return {
     listBackends: () => [
       { kind: 'ios', isSupportedOnHost: () => overrides.supported ?? true },
@@ -55,6 +56,7 @@ describe('inspectEmulatorAvailability', () => {
     const result = await inspectEmulatorAvailability(
       fakeBridge({ supported: true, listSimulators: async () => [DEVICE] })
     )
+
     expect(result.available).toBe(true)
     expect(result.message).toBe('Ready')
     expect(result.devices).toEqual([DEVICE])
@@ -79,6 +81,7 @@ describe('inspectEmulatorAvailability', () => {
         }
       })
     )
+
     expect(result.available).toBe(true)
     expect(result.message).toBe('Ready')
     expect(result.devices).toEqual([
@@ -96,6 +99,7 @@ describe('inspectEmulatorAvailability', () => {
     const result = await inspectEmulatorAvailability(
       fakeBridge({ supported: true, listSimulators: async () => [] })
     )
+
     expect(result.available).toBe(false)
     expect(result.simctl.ok).toBe(false)
     expect(result.simctl.message).toMatch(/No iOS simulators/)
@@ -111,6 +115,7 @@ describe('inspectEmulatorAvailability', () => {
         }
       })
     )
+
     expect(result.available).toBe(false)
     expect(result.serveSim.ok).toBe(false)
     expect(result.serveSim.message).toBe('serve-sim missing')
@@ -125,6 +130,7 @@ describe('inspectEmulatorAvailability', () => {
         }
       })
     )
+
     expect(result.available).toBe(false)
     expect(result.simctl.ok).toBe(false)
     expect(result.simctl.message).toBe('xcrun exploded')

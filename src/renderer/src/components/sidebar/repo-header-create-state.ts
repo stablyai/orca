@@ -37,6 +37,7 @@ export function getRepoHeaderCreateState(input: {
     connectionId: input.repo.connectionId,
     status: input.repo.connectionId ? input.sshStatus : null
   })
+
   if (sshGate.selectedRepoRequiresConnection) {
     return {
       disabled: true,

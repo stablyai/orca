@@ -64,8 +64,10 @@ describe('useIpcEvents session tab close requests', () => {
         }
       })
     })
+
     const { withLocalSessionTabCloseOwner } =
       await import('@/runtime/local-session-tab-close-owner')
+
     await withLocalSessionTabCloseOwner('wt-1', 'chat-tab', async () => {
       listenerRef.current?.({ requestId: 'owned-close', worktreeId: 'wt-1', tabId: 'chat-tab' })
       expect(respondSessionTabClose).toHaveBeenCalledWith({ requestId: 'owned-close' })

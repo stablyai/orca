@@ -28,9 +28,13 @@ import {
 } from './web-session-focus-intent'
 
 const WORKTREE_ID = 'repo-1::worktree-1'
+
 const TERMINAL_ID = 'terminal-1'
+
 const STRUCTURED_ID = 'structured-agent-session-codex-1'
+
 const PRIMARY_GROUP = 'primary-group'
+
 const SECONDARY_GROUP = 'secondary-group'
 
 afterEach(() => {
@@ -72,6 +76,7 @@ function createSnapshot(): WebSessionTabsSyncState {
       createdAt: 2
     }
   ]
+
   return {
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
@@ -179,19 +184,24 @@ describe('local structured session tab projection', () => {
   it('reconnects after a streaming subscription reports an error', async () => {
     vi.useFakeTimers()
     const priorApi = window.api
+
     const callbacks: ((response: {
       ok: false
       error: { code: string; message: string }
     }) => void)[] = []
+
     const unsubscribes: ReturnType<typeof vi.fn>[] = []
+
     const subscribe = vi.fn(async (_args: unknown, callback: (response: unknown) => void) => {
       callbacks.push(
         callback as (response: { ok: false; error: { code: string; message: string } }) => void
       )
       const unsubscribe = vi.fn()
       unsubscribes.push(unsubscribe)
+
       return { unsubscribe, sendBinary: vi.fn() }
     })
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: {
@@ -207,6 +217,7 @@ describe('local structured session tab projection', () => {
         }
       }
     })
+
     try {
       await startLocalStructuredSessionTabsSync({
         isDisposed: () => false,
@@ -235,9 +246,11 @@ describe('local structured session tab projection', () => {
 
   it('ignores an in-flight inventory response after toggle-off clears the mirror', async () => {
     let resolveInventory: ((response: unknown) => void) | undefined
+
     const pendingInventory = new Promise((resolve) => {
       resolveInventory = resolve
     })
+
     const priorApi = window.api
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -247,6 +260,7 @@ describe('local structured session tab projection', () => {
         }
       }
     })
+
     try {
       const refresh = refreshLocalStructuredSessionTabs()
       clearLocalStructuredSessionTabs()
@@ -259,6 +273,7 @@ describe('local structured session tab projection', () => {
       const fresh = applyLocalStructuredSessionTabSnapshots(createSnapshot(), [
         structuredInventory('epoch-1', 1, 'fresh-session')
       ])
+
       expect(fresh.unifiedTabsByWorktree[WORKTREE_ID]).toEqual(
         expect.arrayContaining([expect.objectContaining({ entityId: 'fresh-session' })])
       )
@@ -280,12 +295,14 @@ describe('local structured session tab projection', () => {
           call: vi.fn().mockResolvedValue({ ok: true, result: { snapshots: [] } }),
           subscribe: vi.fn(async (_args: unknown, callback: (response: unknown) => void) => {
             callbacks.push(callback)
+
             return { unsubscribe: vi.fn() }
           })
         }
       }
     })
     let unsubscribe = (): void => {}
+
     try {
       await startLocalStructuredSessionTabsSync({
         isDisposed: () => false,
@@ -295,9 +312,11 @@ describe('local structured session tab projection', () => {
       })
       clearLocalStructuredSessionTabs()
       callbacks[0]?.({ ok: true, result: structuredInventory('epoch-1', 8, 'stale-session') })
+
       const fresh = applyLocalStructuredSessionTabSnapshots(createSnapshot(), [
         structuredInventory('epoch-1', 1, 'fresh-session')
       ])
+
       expect(fresh.unifiedTabsByWorktree[WORKTREE_ID]).toEqual(
         expect.arrayContaining([expect.objectContaining({ entityId: 'fresh-session' })])
       )
@@ -310,26 +329,35 @@ describe('local structured session tab projection', () => {
   it('starts the session-tabs inventory without waiting for the capability refresh', async () => {
     const priorApi = window.api
     let releaseStatus = (): void => undefined
+
     const statusGate = new Promise<void>((resolve) => {
       releaseStatus = resolve
     })
+
     const getStatus = vi.fn(async () => {
       await statusGate
+
       return { capabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY] }
     })
+
     const call = vi.fn().mockResolvedValue({ ok: true, result: { snapshots: [] } })
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { runtime: { getStatus, call } }
     })
+
     try {
       vi.resetModules()
+
       const { restoreLocalStructuredSessionTabsOnce } =
         await import('./local-structured-session-tabs-sync')
+
       let settled = false
+
       const restored = restoreLocalStructuredSessionTabsOnce().finally(() => {
         settled = true
       })
+
       expect(getStatus).toHaveBeenCalledOnce()
       // The inventory RPC must already be in flight while the capability refresh is pending.
       expect(call).toHaveBeenCalledWith({ method: 'session.tabs.listAll', params: {} })
@@ -346,6 +374,7 @@ describe('local structured session tab projection', () => {
 
   it('accepts a newer session after merged content returns to the base epoch', () => {
     const state = createSnapshot()
+
     const base = {
       ...({
         worktree: WORKTREE_ID,
@@ -357,6 +386,7 @@ describe('local structured session tab projection', () => {
         tabs: []
       } satisfies RuntimeMobileSessionTabsResult)
     }
+
     const withChat = {
       ...base,
       snapshotVersion: 5,
@@ -371,7 +401,9 @@ describe('local structured session tab projection', () => {
         }
       ]
     }
+
     const afterClose = { ...base, snapshotVersion: 6 }
+
     const next = applyLocalStructuredSessionTabSnapshots(
       state,
       [
@@ -382,6 +414,7 @@ describe('local structured session tab projection', () => {
       ],
       'local-structured-session'
     )
+
     expect(next.unifiedTabsByWorktree[WORKTREE_ID]).toEqual(
       expect.arrayContaining([expect.objectContaining({ contentType: 'agent-session' })])
     )
@@ -390,6 +423,7 @@ describe('local structured session tab projection', () => {
   it('survives repeated create-close cycles under one publisher generation', () => {
     let state = createSnapshot()
     let version = 10
+
     for (const sessionId of ['session-1', 'session-2', 'session-3']) {
       state = applyLocalStructuredSessionTabSnapshots(state, [
         structuredInventory('renderer:generation-1', version++, sessionId)
@@ -408,16 +442,19 @@ describe('local structured session tab projection', () => {
 
   it('forgets publisher versions when a worktree is removed', () => {
     type OwnerState = WebSessionTabsSyncState & WorktreeRuntimeOwnerState
+
     const owner = {
       id: WORKTREE_ID,
       repoId: 'repo-1',
       hostId: undefined,
       runtimeOwnerEnvironmentId: undefined
     }
+
     let state = {
       ...createSnapshot(),
       worktreesByRepo: { 'repo-1': [owner] }
     } as OwnerState
+
     state = applyLocalStructuredSessionTabSnapshots(state, [
       structuredInventory('epoch-1', 10, 'session-old')
     ])
@@ -436,18 +473,22 @@ describe('local structured session tab projection', () => {
 
   it('forgets publisher versions when a folder workspace is removed', () => {
     type OwnerState = WebSessionTabsSyncState & WorktreeRuntimeOwnerState
+
     const folderKey = 'folder:folder-1'
     const folder = { id: 'folder-1' } as NonNullable<OwnerState['folderWorkspaces']>[number]
+
     let state = {
       ...createSnapshot(),
       activeWorktreeId: folderKey,
       unifiedTabsByWorktree: { [folderKey]: [] },
       folderWorkspaces: [folder]
     } as OwnerState
+
     const folderSnapshot = (version: number, sessionId: string) => ({
       ...structuredInventory('epoch-1', version, sessionId),
       worktree: folderKey
     })
+
     state = applyLocalStructuredSessionTabSnapshots(state, [folderSnapshot(10, 'session-old')])
     state = applyLocalStructuredSessionTabSnapshots(
       { ...state, folderWorkspaces: [], unifiedTabsByWorktree: {} },
@@ -526,6 +567,7 @@ describe('local structured session tab projection', () => {
 
   it('preserves the exact local split through apply, persistence, and hydration', () => {
     const state = createSnapshot()
+
     const snapshot = {
       worktree: WORKTREE_ID,
       publicationEpoch: 'epoch-1',
@@ -566,6 +608,7 @@ describe('local structured session tab projection', () => {
     } satisfies RuntimeMobileSessionTabsResult
 
     const projected = projectLocalStructuredSessionTabs(snapshot)
+
     const patch = applyWebSessionTabsSnapshot(
       state,
       projected,
@@ -573,6 +616,7 @@ describe('local structured session tab projection', () => {
       1_700_000_000_000,
       { preserveLocalLayout: true }
     )
+
     const applied = { ...state, ...patch } as WebSessionTabsSyncState
 
     expectExactSplit(applied)
@@ -585,6 +629,7 @@ describe('local structured session tab projection', () => {
       terminalLayoutsByTabId: {},
       ...buildPersistedUnifiedTabSessionData(applied)
     }
+
     const hydrated = buildHydratedTabState(session, new Set([WORKTREE_ID]))
 
     expectExactSplit(hydrated)
@@ -592,6 +637,7 @@ describe('local structured session tab projection', () => {
 
   it('repairs stale legacy active pointers when restart republishes the native tab', () => {
     const state = createSnapshot()
+
     const restartedState: WebSessionTabsSyncState = {
       ...state,
       activeTabId: TERMINAL_ID,
@@ -600,6 +646,7 @@ describe('local structured session tab projection', () => {
       activeTabTypeByWorktree: { [WORKTREE_ID]: 'terminal' },
       activeGroupIdByWorktree: { [WORKTREE_ID]: SECONDARY_GROUP }
     }
+
     const snapshot = {
       worktree: WORKTREE_ID,
       publicationEpoch: 'structured:restart-1',
@@ -627,6 +674,7 @@ describe('local structured session tab projection', () => {
     } satisfies RuntimeMobileSessionTabsResult
 
     const projected = projectLocalStructuredSessionTabs(snapshot)
+
     const patch = applyWebSessionTabsSnapshot(
       restartedState,
       projected,
@@ -634,6 +682,7 @@ describe('local structured session tab projection', () => {
       1_700_000_000_000,
       { preserveLocalLayout: true }
     )
+
     const applied = { ...restartedState, ...patch } as WebSessionTabsSyncState
 
     expect(applied.activeTabTypeByWorktree[WORKTREE_ID]).toBe('agent-session')
@@ -642,6 +691,7 @@ describe('local structured session tab projection', () => {
 
   it('honors the focus intent for a newly published local structured tab', () => {
     const initial = createSnapshot()
+
     const state: WebSessionTabsSyncState = {
       ...initial,
       activeGroupIdByWorktree: { [WORKTREE_ID]: PRIMARY_GROUP },
@@ -655,6 +705,7 @@ describe('local structured session tab projection', () => {
         )
       }
     }
+
     const snapshot = {
       worktree: WORKTREE_ID,
       publicationEpoch: 'structured:epoch-1',
@@ -689,6 +740,7 @@ describe('local structured session tab projection', () => {
       undefined,
       TERMINAL_ID
     )
+
     const patch = applyWebSessionTabsSnapshot(
       state,
       snapshot,
@@ -696,6 +748,7 @@ describe('local structured session tab projection', () => {
       1_700_000_000_000,
       { preserveLocalLayout: true }
     )
+
     const applied = { ...state, ...patch } as WebSessionTabsSyncState
 
     expect(applied.activeTabIdByWorktree[WORKTREE_ID]).toBe(STRUCTURED_ID)
@@ -727,6 +780,7 @@ describe('local structured session tab projection', () => {
     const first = structuredInventory('epoch-a', 8, 'session-a')
     const afterFirst = applyLocalStructuredSessionTabSnapshots(createSnapshot(), [first])
     const replayed = applyLocalStructuredSessionTabSnapshots(afterFirst, [first])
+
     const restarted = applyLocalStructuredSessionTabSnapshots(replayed, [
       structuredInventory('epoch-b', 1, 'session-b')
     ])
@@ -742,9 +796,11 @@ describe('local structured session tab projection', () => {
     const initial = applyLocalStructuredSessionTabSnapshots(createSnapshot(), [
       structuredInventory('epoch-1', 5, 'session-one')
     ])
+
     const restarted = applyLocalStructuredSessionTabSnapshots(initial, [
       structuredInventory('epoch-2', 1, 'session-two')
     ])
+
     const delayed = applyLocalStructuredSessionTabSnapshots(restarted, [
       structuredInventory('epoch-1', 6, 'stale-session')
     ])

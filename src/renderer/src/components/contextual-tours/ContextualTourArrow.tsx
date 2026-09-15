@@ -6,6 +6,7 @@ import {
 } from './contextual-tour-floating-position'
 
 const ARROW_WIDTH = CONTEXTUAL_TOUR_ARROW_SIZE.width
+
 const ARROW_HEIGHT = CONTEXTUAL_TOUR_ARROW_SIZE.height
 
 // Why: CSS rotation pivots on the svg center, so horizontal placements must

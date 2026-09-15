@@ -12,12 +12,15 @@ export class OrcaRuntimeWithStructuredAgentSessionLaunchTui extends OrcaRuntimeW
   protected createStructuredAgentSessionLaunchTuiCallback() {
     return async ({ record, fence, spawnToken, onSpawned }) => {
       const head = record.providerHandleChain.at(-1)
+
       if (!head || (head.handle.provider !== 'codex' && head.handle.provider !== 'claude')) {
         throw new Error('agent_session_identity_required')
       }
+
       const provider = head.handle.provider
       const providerSessionId = provider === 'claude' ? head.handle.sessionId : head.handle.threadId
       const launchStartedAt = Date.now()
+
       const launched = await this.ensureAgentSession(
         {
           kind: 'explicit',
@@ -35,13 +38,16 @@ export class OrcaRuntimeWithStructuredAgentSessionLaunchTui extends OrcaRuntimeW
           ...(record.launchArgs !== undefined ? { launchArgs: record.launchArgs } : {})
         }
       )
+
       const terminal = launched.terminal
       let spawnedOwner: StructuredTuiOwner | null = null
       let ptyId: string | undefined
+
       try {
         if (!terminal.processId || !terminal.paneKey || !terminal.tabId || !terminal.ptyId) {
           throw new Error('The resumed terminal did not publish a process identity.')
         }
+
         ptyId = terminal.ptyId
         spawnedOwner = this.refreshStructuredTuiOwnerBinding({
           terminal: {
@@ -82,6 +88,7 @@ export class OrcaRuntimeWithStructuredAgentSessionLaunchTui extends OrcaRuntimeW
         })
         await onSpawned?.(spawnedOwner)
         await this.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 30000 })
+
         const proof =
           provider === 'codex'
             ? await this.waitForAdoptedStructuredTuiProof({
@@ -98,7 +105,9 @@ export class OrcaRuntimeWithStructuredAgentSessionLaunchTui extends OrcaRuntimeW
                 spawnToken,
                 minimumProviderSessionReceivedAt: launchStartedAt
               })
+
         const revealed = await this.focusTerminal(terminal.handle)
+
         return this.refreshStructuredTuiOwnerBinding({
           ...spawnedOwner,
           link:
@@ -123,11 +132,13 @@ export class OrcaRuntimeWithStructuredAgentSessionLaunchTui extends OrcaRuntimeW
         })
       } catch (error) {
         let closeError: unknown = null
+
         try {
           await this.closeTerminal(terminal.handle)
         } catch (cleanupFailure) {
           closeError = cleanupFailure
         }
+
         try {
           if (spawnedOwner) {
             await this.waitForStructuredTuiOwnerExit(spawnedOwner)
@@ -147,6 +158,7 @@ export class OrcaRuntimeWithStructuredAgentSessionLaunchTui extends OrcaRuntimeW
                 )
           )
         }
+
         throw error
       }
     }

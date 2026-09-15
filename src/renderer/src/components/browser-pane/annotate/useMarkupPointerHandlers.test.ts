@@ -75,6 +75,7 @@ describe('useMarkupPointerHandlers pointer up', () => {
   it('commits outside the setInProgress updater so a double-invoked updater cannot duplicate the shape', () => {
     const setInProgress = vi.fn()
     const setDoc = vi.fn()
+
     const { result } = renderHook(() =>
       useMarkupPointerHandlers(baseParams({ inProgress, setInProgress, setDoc }))
     )
@@ -89,6 +90,7 @@ describe('useMarkupPointerHandlers pointer up', () => {
   it('does not commit when no shape is in progress', () => {
     const setInProgress = vi.fn()
     const setDoc = vi.fn()
+
     const { result } = renderHook(() =>
       useMarkupPointerHandlers(baseParams({ inProgress: null, setInProgress, setDoc }))
     )

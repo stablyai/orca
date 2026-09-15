@@ -20,7 +20,9 @@ export async function isPrunableGitFileWorktree(
   ) {
     return false
   }
+
   const access = getLocalWorktreePathAccess(options)
+
   const entry = await access
     .statPath(toLocalWorktreeRuntimePath(worktree.path, options))
     .catch((error: unknown) => {
@@ -28,11 +30,14 @@ export async function isPrunableGitFileWorktree(
       if (isENOENT(error)) {
         return null
       }
+
       throw error
     })
+
   if (!entry || typeof entry !== 'object') {
     return false
   }
+
   // WSL returns the owning guest's lstat-equivalent type; native lstat rejects symlinks too.
   return (
     ('type' in entry && entry.type === 'file') ||

@@ -12,6 +12,7 @@ function createReadableRequest(): FakeIncomingMessage {
   const request = new EventEmitter() as FakeIncomingMessage
   request.headers = { 'content-type': 'application/json' }
   request.destroy = vi.fn(() => request.emit('close'))
+
   return request
 }
 
@@ -25,6 +26,7 @@ describe('agent hook request body retention', () => {
     for (let index = 0; index < body.length; index += 1) {
       request.emit('data', body.subarray(index, index + 1))
     }
+
     request.emit('end')
 
     await expect(reading).resolves.toEqual({ value })

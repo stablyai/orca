@@ -4,11 +4,15 @@ import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 import { hasWorkspaceDragData, readWorkspaceDragDataIds } from './workspace-status'
 
 const WORKSPACE_STATUS_DROP_TARGET = '[data-workspace-status-drop-target]'
+
 const WORKSPACE_PIN_DROP_TARGET = '[data-workspace-pin-drop-target]'
 
 type MoveWorktreeToStatus = (worktreeId: string, status: WorkspaceStatus) => void
+
 type MoveWorktreesToStatus = (worktreeIds: readonly string[], status: WorkspaceStatus) => void
+
 type PinWorktree = (worktreeId: string) => void
+
 type PinWorktrees = (worktreeIds: readonly string[]) => void
 
 type WorkspaceStatusDocumentDropOptions = {
@@ -38,11 +42,14 @@ export function commitWorkspaceStatusDocumentDrop(params: {
   if (isPinDrop) {
     if (onPinWorktrees) {
       onPinWorktrees(worktreeIds)
+
       return
     }
+
     for (const worktreeId of worktreeIds) {
       onPinWorktree(worktreeId)
     }
+
     return
   }
 
@@ -52,6 +59,7 @@ export function commitWorkspaceStatusDocumentDrop(params: {
 
   if (onMoveWorktreesToStatus) {
     onMoveWorktreesToStatus(worktreeIds, status)
+
     return
   }
 
@@ -77,6 +85,7 @@ export function useWorkspaceStatusDocumentDrop<T extends HTMLElement>(
 
     const handleDrop = (event: DragEvent): void => {
       const dataTransfer = event.dataTransfer
+
       if (!dataTransfer || !hasWorkspaceDragData(dataTransfer)) {
         return
       }
@@ -85,23 +94,27 @@ export function useWorkspaceStatusDocumentDrop<T extends HTMLElement>(
 
       const container = containerRef.current
       const target = event.target
+
       if (!container || !(target instanceof Element) || !container.contains(target)) {
         return
       }
 
       const pinTarget = target.closest<HTMLElement>(WORKSPACE_PIN_DROP_TARGET)
       const statusTarget = target.closest<HTMLElement>(WORKSPACE_STATUS_DROP_TARGET)
+
       const dropTarget =
         pinTarget && container.contains(pinTarget)
           ? pinTarget
           : statusTarget && container.contains(statusTarget)
             ? statusTarget
             : null
+
       if (!dropTarget) {
         return
       }
 
       const worktreeIds = readWorkspaceDragDataIds(dataTransfer)
+
       if (worktreeIds.length === 0) {
         return
       }
@@ -127,6 +140,7 @@ export function useWorkspaceStatusDocumentDrop<T extends HTMLElement>(
 
     document.addEventListener('drop', handleDrop, true)
     document.addEventListener('dragend', handleDragFinish, true)
+
     return () => {
       document.removeEventListener('drop', handleDrop, true)
       document.removeEventListener('dragend', handleDragFinish, true)

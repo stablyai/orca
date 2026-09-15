@@ -41,6 +41,7 @@ describe('Claude model confirmation', () => {
       initModel: 'claude-sonnet-5',
       routes: { list_models: () => CATALOG }
     })
+
     const adapter = await acquired(claude)
 
     await expect(adapter.readOptions({ sessionId: 'session-1', fence: 7 })).resolves.toMatchObject({
@@ -61,6 +62,7 @@ describe('Claude model confirmation', () => {
       initModel: 'claude-sonnet-5',
       routes: { list_models: () => CATALOG }
     })
+
     const adapter = await acquired(claude)
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
@@ -77,6 +79,7 @@ describe('Claude model confirmation', () => {
       initModel: 'claude-sonnet-5',
       routes: { list_models: () => CATALOG }
     })
+
     const adapter = await acquired(claude)
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
@@ -92,6 +95,7 @@ describe('Claude model confirmation', () => {
       initModel: 'claude-sonnet-5',
       routes: { list_models: () => CATALOG }
     })
+
     const adapter = await acquired(claude)
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
@@ -110,6 +114,7 @@ describe('Claude model confirmation', () => {
       initModel: 'claude-sonnet-5',
       routes: { list_models: () => CATALOG }
     })
+
     const adapter = await acquired(claude)
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
@@ -130,6 +135,7 @@ describe('Claude model confirmation', () => {
       initModel: 'claude-sonnet-5',
       routes: { list_models: () => CATALOG }
     })
+
     const adapter = await acquired(claude)
 
     await adapter.setOption({ sessionId: 'session-1', key: 'model', value: 'haiku', fence: 7 })
@@ -146,6 +152,7 @@ describe('Claude model confirmation', () => {
       initModel: 'claude-sonnet-5',
       routes: { list_models: () => CATALOG }
     })
+
     const adapter = await acquired(claude)
 
     await adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'high', fence: 7 })
@@ -176,6 +183,7 @@ describe('Claude effort the settings readback cannot report', () => {
         connection: {
           supportedModels: async () => {
             calls.push('list_models')
+
             return CATALOG
           },
           applyFlagSettings: async (settings: { effortLevel?: string }) => {
@@ -183,6 +191,7 @@ describe('Claude effort the settings readback cannot report', () => {
           },
           getSettings: async () => {
             calls.push('get_settings')
+
             return {
               applied: { effort: reported },
               effective: { effortLevel: reported },

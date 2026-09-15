@@ -19,6 +19,7 @@ export function resolveChecksPanelHostedReviewHttpOpenOptions(
   if (isChecksPanelHostedReviewSystemBrowserModifier(event, isMac)) {
     return { worktreeId, allowRemoteInApp: true, modifierHeld: true }
   }
+
   return { worktreeId, allowRemoteInApp: true }
 }
 
@@ -41,9 +42,11 @@ export function resolveChecksPanelHostedReviewModifierDestination(
   if (!hasWorktree) {
     return null
   }
+
   if (settings?.openLinksInApp === true) {
     return 'system-browser'
   }
+
   return settings?.openLinksInAppModifierInverts === true ? 'orca' : null
 }
 

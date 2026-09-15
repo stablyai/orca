@@ -31,11 +31,15 @@ export function parsePersistedAutomationHostFilter(value: unknown): AutomationHo
   if (!value || typeof value !== 'object') {
     return ALL_AUTOMATION_HOSTS_FILTER
   }
+
   const record = value as Partial<Record<'kind' | 'hostKey', unknown>>
+
   if (record.kind !== 'host' || typeof record.hostKey !== 'string') {
     return ALL_AUTOMATION_HOSTS_FILTER
   }
+
   const host = parseHostStableKey(record.hostKey)
+
   return host ? { kind: 'host', host } : ALL_AUTOMATION_HOSTS_FILTER
 }
 

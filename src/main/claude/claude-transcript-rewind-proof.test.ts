@@ -3,9 +3,12 @@ import { proveClaudeTranscriptBranchFromJsonl } from './claude-transcript-branch
 
 const row = (uuid: string, parentUuid: string | null, extra = {}) =>
   JSON.stringify({ type: 'assistant', sessionId: 'provider', uuid, parentUuid, ...extra })
+
 const marker = (leafUuid: string) =>
   JSON.stringify({ type: 'last-prompt', sessionId: 'provider', leafUuid })
+
 const graph = [row('root', null), row('kept', 'root'), row('old', 'kept')]
+
 const prove = (rows: string[], leaf: string, intentionalRewindUuid?: string) =>
   proveClaudeTranscriptBranchFromJsonl({
     contents: `${[...rows, marker(leaf)].join('\n')}\n`,

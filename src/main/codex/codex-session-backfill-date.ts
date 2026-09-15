@@ -8,10 +8,13 @@ import type {
 
 export function isCodexSessionRolloutPath(sessionsRoot: string, filePath: string): boolean {
   const pathParts = relative(sessionsRoot, filePath).split(sep)
+
   if (pathParts.length !== 4) {
     return false
   }
+
   const [year, month, day, fileName] = pathParts
+
   return isCodexSessionBackfillDate([year, month, day]) && /^rollout-.+\.jsonl$/.test(fileName)
 }
 
@@ -21,6 +24,7 @@ export async function* listCodexSessionBackfillFilesForDates(
   onDirectoryError: (directoryPath: string, error: unknown) => void | Promise<void>
 ): AsyncGenerator<string> {
   const scanRoots = resolveCodexSessionBackfillDateRoots(sessionsRoot, options.scanDates)
+
   for (const scanRoot of scanRoots) {
     yield* listCodexSessionJsonlFilesIncrementally(
       scanRoot,
@@ -41,6 +45,7 @@ function resolveCodexSessionBackfillDateRoots(
   if (!scanDates?.length) {
     return [sessionsRoot]
   }
+
   return scanDates
     .filter(isCodexSessionBackfillDate)
     .map(([year, month, day]) => join(sessionsRoot, year, month, day))

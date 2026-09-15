@@ -12,11 +12,13 @@ vi.mock('../artifacts/artifact-create-intent-store', async () => {
   const actual = await vi.importActual<typeof ArtifactCreateIntentStore>(
     '../artifacts/artifact-create-intent-store'
   )
+
   return { ...actual, clearArtifactCreateIntents: vi.fn(actual.clearArtifactCreateIntents) }
 })
 
 vi.mock('./profile-index-store', async () => {
   const actual = await vi.importActual<typeof ProfileIndexStore>('./profile-index-store')
+
   return { ...actual, writeProfileIndex: vi.fn(actual.writeProfileIndex) }
 })
 
@@ -24,6 +26,7 @@ vi.mock('./profile-artifact-cloud-cleanup', async () => {
   const actual = await vi.importActual<typeof ProfileArtifactCloudCleanup>(
     './profile-artifact-cloud-cleanup'
   )
+
   return {
     ...actual,
     commitArtifactCloudCleanup: vi.fn(actual.commitArtifactCloudCleanup)
@@ -52,6 +55,7 @@ import {
 } from './profile-index-store'
 
 const createdPaths: string[] = []
+
 const profileId = 'local-default'
 
 afterEach(async () => {
@@ -161,6 +165,7 @@ describe('profile artifact cloud cleanup', () => {
       () => linkOrcaProfileToCloud(orphanProfileId, cloud('org-b'), userDataPath),
       () => unlinkOrcaProfileFromCloud(orphanProfileId, userDataPath)
     ]
+
     for (const transition of transitions) {
       expect(transition).toThrow('unknown_orca_profile')
       expect(artifactCloudCleanupNeedsCommit(orphanProfileId, userDataPath, undefined)).toBe(true)
@@ -216,6 +221,7 @@ async function createLinkedProfile(cloudSummary: OrcaProfileCloudSummary): Promi
   loadOrCreateProfileIndex(userDataPath)
   linkOrcaProfileToCloud(profileId, cloudSummary, userDataPath)
   vi.clearAllMocks()
+
   return userDataPath
 }
 

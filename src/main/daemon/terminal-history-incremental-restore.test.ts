@@ -16,7 +16,9 @@ import type { PendingOutputRecord } from './types'
 const SESSION_ID = 'wt@@incremental-test'
 
 let dir: string
+
 let manager: HistoryManager
+
 let reader: HistoryReader
 
 beforeEach(async () => {
@@ -36,10 +38,12 @@ function sessionFile(name: string): string {
 
 function snapshotOf(writes: string[], cols = 80, rows = 24) {
   const emulator = new HeadlessEmulator({ cols, rows })
+
   try {
     for (const data of writes) {
       emulator.writeSync(data)
     }
+
     return emulator.getSnapshot()
   } finally {
     emulator.dispose()
@@ -217,6 +221,7 @@ describe('incremental terminal history restore', () => {
       kind: 'output',
       data: 'x'.repeat(2 * 1024 * 1024)
     }
+
     expect(await manager.appendIncrements(SESSION_ID, 1, [bigRecord])).toBe('ok')
     expect(await manager.appendIncrements(SESSION_ID, 2, [bigRecord])).toBe('ok')
     expect(await manager.appendIncrements(SESSION_ID, 3, [bigRecord])).toBe('needs-checkpoint')
@@ -260,6 +265,7 @@ describe('incremental terminal history restore', () => {
   it('bounds large single-batch replay slices and admits only one replay at a time', async () => {
     const secondSessionId = `${SESSION_ID}-second`
     await manager.openSession(secondSessionId, { cwd: '/home/user', cols: 80, rows: 24 })
+
     for (const sessionId of [SESSION_ID, secondSessionId]) {
       await manager.appendIncrements(sessionId, 1, [
         { kind: 'output', data: `${'x'.repeat(64 * 1024 - 1)}😀second\r\n` }
@@ -267,16 +273,19 @@ describe('incremental terminal history restore', () => {
     }
 
     const pendingYields: (() => void)[] = []
+
     const immediateSpy = vi.spyOn(globalThis, 'setImmediate').mockImplementation(((
       callback: (...args: unknown[]) => void,
       ...args: unknown[]
     ) => {
       pendingYields.push(() => callback(...args))
+
       return {} as NodeJS.Immediate
     }) as typeof setImmediate)
 
     const firstReplay = reader.detectColdRestore(SESSION_ID)
     const secondReplay = reader.detectColdRestore(secondSessionId)
+
     try {
       // Drain by yield because awaiting the session that loses the replay-slot race deadlocks.
       await vi.waitFor(() => expect(pendingYields).toHaveLength(1))
@@ -288,11 +297,13 @@ describe('incremental terminal history restore', () => {
       for (const restore of await Promise.all([firstReplay, secondReplay])) {
         expect(restore?.scrollbackAnsi).toContain('😀second')
       }
+
       expect(pendingYields).toHaveLength(0)
     } finally {
       for (const resume of pendingYields.splice(0)) {
         resume()
       }
+
       immediateSpy.mockRestore()
       await Promise.allSettled([firstReplay, secondReplay])
     }
@@ -307,15 +318,18 @@ describe('incremental terminal history restore', () => {
     ])
 
     const pendingYields: (() => void)[] = []
+
     const immediateSpy = vi.spyOn(globalThis, 'setImmediate').mockImplementation(((
       callback: (...args: unknown[]) => void,
       ...args: unknown[]
     ) => {
       pendingYields.push(() => callback(...args))
+
       return {} as NodeJS.Immediate
     }) as typeof setImmediate)
 
     const replay = reader.detectColdRestore(SESSION_ID)
+
     try {
       await vi.waitFor(() => expect(pendingYields).toHaveLength(1))
       const checkpointOnlyRestore = await reader.detectColdRestore(checkpointOnlySessionId)

@@ -23,15 +23,20 @@ export async function getRuntimeGitStatus(
   const target = getActiveRuntimeTarget(context.settings)
   const includeIgnoredArgs = options?.includeIgnored ? { includeIgnored: true } : {}
   const admissionTierArgs = options?.admissionTier ? { admissionTier: options.admissionTier } : {}
+
   const includeLineStatsArgs =
     options?.includeLineStats === false ? { includeLineStats: false } : {}
+
   const upstreamCacheBypassArgs = options?.bypassEffectiveUpstreamNegativeCache
     ? { bypassEffectiveUpstreamNegativeCache: true }
     : {}
+
   const lineStatsReuseArgs = options?.reuseLineStats ? { reuseLineStats: true } : {}
+
   const branchLineTotalArgs = options?.branchLineTotalMergeBase
     ? { branchLineTotalMergeBase: options.branchLineTotalMergeBase }
     : {}
+
   if (target.kind === 'local' || !context.worktreeId) {
     return callLocalGitStatus(
       {
@@ -47,6 +52,7 @@ export async function getRuntimeGitStatus(
       options?.signal
     )
   }
+
   return callRuntimeRpc<GitStatusResult>(
     target,
     'git.status',
@@ -72,9 +78,11 @@ export async function setRuntimeGitStatusUpstreamRefWatch(
   args: { executionHostId: string; branch?: string; upstreamName?: string }
 ): Promise<void> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind !== 'local' || !context.worktreeId) {
     return
   }
+
   await window.api.git.setStatusUpstreamRefWatch({
     worktreeId: context.worktreeId,
     worktreePath: resolveLocalWorktreePath(context),
@@ -90,6 +98,7 @@ let nextGitStatusRequestToken = 0
 function createGitStatusAbortError(): Error {
   const error = new Error('Git status request aborted')
   error.name = 'AbortError'
+
   return error
 }
 
@@ -100,20 +109,27 @@ async function callLocalGitStatus(
   if (!signal) {
     return window.api.git.status(args)
   }
+
   if (signal.aborted) {
     throw createGitStatusAbortError()
   }
+
   const requestToken = `git-status-${Date.now()}-${++nextGitStatusRequestToken}`
+
   const cancel = (): void => {
     void window.api.git.cancelStatus({ requestToken }).catch(() => {})
   }
+
   signal.addEventListener('abort', cancel, { once: true })
+
   try {
     const status = await window.api.git.status({ ...args, requestToken })
+
     // Why: best-effort cancellation must not publish a late result as fresh.
     if (signal.aborted) {
       throw createGitStatusAbortError()
     }
+
     return status
   } finally {
     signal.removeEventListener('abort', cancel)
@@ -126,6 +142,7 @@ export async function getRuntimeGitSubmoduleStatus(
   area: GitStagingArea = 'unstaged'
 ): Promise<GitStatusResult> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.submoduleStatus({
       worktreePath: resolveLocalWorktreePath(context),
@@ -134,6 +151,7 @@ export async function getRuntimeGitSubmoduleStatus(
       area
     })
   }
+
   return callRuntimeRpc<GitStatusResult>(
     target,
     'git.submoduleStatus',
@@ -147,9 +165,11 @@ export async function getRuntimeGitIgnoredPaths(
   paths: string[]
 ): Promise<string[]> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (paths.length === 0) {
     return []
   }
+
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.checkIgnored({
       worktreePath: resolveLocalWorktreePath(context),
@@ -157,6 +177,7 @@ export async function getRuntimeGitIgnoredPaths(
       paths
     })
   }
+
   return callRuntimeRpc<string[]>(
     target,
     'git.checkIgnored',
@@ -170,6 +191,7 @@ export async function getRuntimeGitHistory(
   options: GitHistoryOptions = {}
 ): Promise<GitHistoryResult> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.history({
       worktreePath: resolveLocalWorktreePath(context),
@@ -177,6 +199,7 @@ export async function getRuntimeGitHistory(
       ...options
     })
   }
+
   return callRuntimeRpc<GitHistoryResult>(
     target,
     'git.history',
@@ -189,12 +212,14 @@ export async function getRuntimeGitConflictOperation(
   context: RuntimeGitContext
 ): Promise<GitConflictOperation> {
   const target = getActiveRuntimeTarget(context.settings)
+
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.conflictOperation({
       worktreePath: resolveLocalWorktreePath(context),
       connectionId: context.connectionId
     })
   }
+
   return callRuntimeRpc<GitConflictOperation>(
     target,
     'git.conflictOperation',

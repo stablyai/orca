@@ -35,5 +35,6 @@ export const positionStableNodeViewUpdate: NodeViewUpdate = ({
   }
 
   updateProps()
+
   return true
 }

@@ -21,7 +21,9 @@ export function useNewWorkspaceAgentSelection(args: {
   const [selectedAgentState, setSelectedAgent] = useState<NewWorktreeAgentOption>(
     NEW_WORKTREE_AGENT_OPTIONS[0]!
   )
+
   const [agentOverriddenState, setAgentOverridden] = useState(false)
+
   const resolution = resolveNewWorktreeAgentSelection({
     visible: args.visible,
     selectedAgent: selectedAgentState,
@@ -29,6 +31,7 @@ export function useNewWorkspaceAgentSelection(args: {
     runtimeSettings: args.runtimeSettings,
     detectedAgentIds: args.detectedAgentIds
   })
+
   if (
     selectedAgentState.id !== resolution.selectedAgent.id ||
     agentOverriddenState !== resolution.agentOverridden
@@ -36,12 +39,14 @@ export function useNewWorkspaceAgentSelection(args: {
     setSelectedAgent(resolution.selectedAgent)
     setAgentOverridden(resolution.agentOverridden)
   }
+
   const visibleAgentOptions = NEW_WORKTREE_AGENT_OPTIONS.filter(
     (agent) =>
       agent.id !== '__blank__' &&
       (args.detectedAgentIds === null || args.detectedAgentIds.has(agent.id)) &&
       isMobileTuiAgentEnabled(agent.id, args.runtimeSettings?.disabledTuiAgents)
   )
+
   return {
     selectedAgent: resolution.selectedAgent,
     setSelectedAgent,

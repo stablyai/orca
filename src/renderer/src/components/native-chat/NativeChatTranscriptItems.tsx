@@ -24,9 +24,11 @@ export function NativeChatTranscriptItems({
     >
       {window.virtualItems.map((item) => {
         const slot = slots[item.index]
+
         if (!slot) {
           return null
         }
+
         return (
           <div
             key={item.key}

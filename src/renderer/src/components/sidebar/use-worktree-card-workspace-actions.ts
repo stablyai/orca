@@ -12,7 +12,9 @@ import type { useWorktreeCardLinkedDetails } from './use-worktree-card-linked-de
 import type { useWorktreeCardReviewDetails } from './use-worktree-card-review-details'
 
 type Foundation = ReturnType<typeof useWorktreeCardFoundation>
+
 type LinkedDetails = ReturnType<typeof useWorktreeCardLinkedDetails>
+
 type ReviewDetails = ReturnType<typeof useWorktreeCardReviewDetails>
 
 export function useWorktreeCardWorkspaceActions({
@@ -52,6 +54,7 @@ export function useWorktreeCardWorkspaceActions({
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
       event.stopPropagation()
+
       if (showDeleteQuickAction) {
         if (folderWorkspaceId) {
           void deleteFolderWorkspace(
@@ -67,8 +70,10 @@ export function useWorktreeCardWorkspaceActions({
               setActiveWorktree(null)
             }
           })
+
           return
         }
+
         // Why the host (STA-4343): this row is one of possibly two for the same
         // `repoId::path`, so it has to name its own or the delete lands on the other.
         runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
@@ -83,6 +88,7 @@ export function useWorktreeCardWorkspaceActions({
       worktree.id
     ]
   )
+
   const handleOpenRenameErrorDialog = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.preventDefault()
@@ -91,7 +97,9 @@ export function useWorktreeCardWorkspaceActions({
     },
     [setShowRenameErrorDialog]
   )
+
   const unreadTooltip = worktree.isUnread ? 'Mark read' : 'Mark unread'
+
   const lineageChildAriaLabel =
     lineageChildCount === 1
       ? lineageCollapsed
@@ -116,27 +124,34 @@ export function useWorktreeCardWorkspaceActions({
             'Hide {{value0}} child workspaces',
             { value0: lineageChildCount }
           )
+
   const childWorkspaceShortLabel = `${lineageChildCount} ${
     lineageChildCount === 1
       ? translate('auto.components.sidebar.WorktreeList.0c6ee14f23', 'child')
       : translate('auto.components.sidebar.WorktreeList.045a8aed48', 'children')
   }`
+
   const showLineageChildChip = lineageChildCount > 0 && onLineageToggle !== undefined
 
   const handleDragStart = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
       if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
         event.preventDefault()
+
         return
       }
+
       if (isDeleting) {
         event.preventDefault()
+
         return
       }
+
       const dragIds =
         isMultiSelected && selectedWorktrees && selectedWorktrees.length > 1
           ? selectedWorktrees.map((item) => item.id)
           : worktree.id
+
       writeWorkspaceDragData(event.dataTransfer, dragIds)
       onCardDragStart?.(event, worktree.id, Array.isArray(dragIds) ? dragIds : [dragIds])
     },
@@ -148,6 +163,7 @@ export function useWorktreeCardWorkspaceActions({
       if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
         return
       }
+
       onCardDragEnd?.(event)
     },
     [onCardDragEnd]

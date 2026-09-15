@@ -54,6 +54,7 @@ describe('getEditorCmdSaveFileId', () => {
       .fn<(worktreeId: string) => Tab | null>()
       .mockReturnValueOnce(makeTab('editor', 'floating-file'))
       .mockReturnValueOnce(makeTab('browser', 'floating-browser'))
+
     const state = {
       activeFileId: 'main-file',
       activeTabType: 'editor',

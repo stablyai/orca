@@ -23,9 +23,11 @@ describe('orchestration.send between terminals in no Run', () => {
     expect(result.message).toMatchObject({ run_id: 'run_unbound', to_handle: 'term_b' })
     expect(db.getRun('run_unbound')).toMatchObject({ legacy: 0 })
     expect(db.getUnreadMessages('term_b').map((row) => row.id)).toEqual([result.message.id])
+
     const checked = (await h.call('orchestration.check', { terminal: 'term_b' }, ctx)) as {
       messages: { id: string }[]
     }
+
     expect(checked.messages.map((row) => row.id)).toEqual([result.message.id])
   })
 })

@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, success: vi.fn() } }))
 
 const { createTestStore } = await import('@/store/slices/store-test-helpers')
+
 const store = createTestStore()
 
 vi.mock('@/store', () => ({ useAppStore: store }))
@@ -139,10 +140,12 @@ describe('Cmd/Ctrl+1-9 folder-workspace path gate (#10716)', () => {
       new URL('../hooks/ipc-events/workspace-shortcut-ipc-bridge.ts', import.meta.url),
       'utf8'
     )
+
     const handler = source.slice(
       source.indexOf('onJumpToWorktreeIndex('),
       source.indexOf('onJumpToTabIndex(')
     )
+
     expect(handler).toContain('activateAndRevealWorkspace(target.id')
     expect(handler).not.toContain('activateAndRevealWorktree(target.id')
   })

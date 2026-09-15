@@ -11,6 +11,7 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 
 const ACCOUNT_A = 'account-a@example.com'
+
 const ACCOUNT_B = 'account-b@example.com'
 
 /**
@@ -88,6 +89,7 @@ describe('spurious shell readings on Codex-launched panes', () => {
 
   afterEach(() => {
     useAppStore.setState({ settings: null as never })
+
     if (originalWindow) {
       ;(globalThis as { window: typeof window }).window = originalWindow
     } else {

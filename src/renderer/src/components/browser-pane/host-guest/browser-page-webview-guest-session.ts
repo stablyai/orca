@@ -80,16 +80,20 @@ export function createBrowserPageWebviewGuestSession({
     webContentsId: number
     promise: Promise<boolean | null>
   } | null = null
+
   const registerGuest = (): Promise<boolean | null> => {
     let webContentsId: number
+
     try {
       webContentsId = webview.getWebContentsId()
     } catch {
       return Promise.resolve(null)
     }
+
     if (registrationInFlight?.webContentsId === webContentsId) {
       return registrationInFlight.promise
     }
+
     const promise = window.api.browser
       .registerGuest({
         browserPageId: browserTabId,
@@ -101,8 +105,10 @@ export function createBrowserPageWebviewGuestSession({
       .then((registered) => {
         if (registered) {
           registeredWebContentsIds.set(browserTabId, webContentsId)
+
           return true
         }
+
         return null
       })
       // Why: registration rejection can be an attach-policy race; only validation of an identified guest proves loss.
@@ -112,7 +118,9 @@ export function createBrowserPageWebviewGuestSession({
           registrationInFlight = null
         }
       })
+
     registrationInFlight = { webContentsId, promise }
+
     return promise
   }
 
@@ -120,6 +128,7 @@ export function createBrowserPageWebviewGuestSession({
     if (activeLoadFailureRef.current?.code !== BROWSER_GUEST_RECOVERY_ERROR_CODE) {
       return
     }
+
     activeLoadFailureRef.current = null
     onUpdatePageStateRef.current(browserTabId, { loading: false, loadError: null })
   }
@@ -138,23 +147,29 @@ export function createBrowserPageWebviewGuestSession({
       if (!webview.isConnected) {
         return false
       }
+
       let webContentsId: number
+
       try {
         webContentsId = webview.getWebContentsId()
       } catch {
         // Why: a reused webview can remount before dom-ready; only an identified guest can be declared missing.
         return null
       }
+
       if (registeredWebContentsIds.get(browserTabId) !== webContentsId) {
         return registerGuest()
       }
+
       const registered = await window.api.browser.isGuestRegistered({
         browserPageId: browserTabId,
         webContentsId
       })
+
       if (registered) {
         return true
       }
+
       return window.api.browser.repairGuestRegistration({
         browserPageId: browserTabId,
         workspaceId,
@@ -176,6 +191,7 @@ export function createBrowserPageWebviewGuestSession({
           browserTabUrlRef.current || addressBarValueRef.current || 'about:blank'
         )
       }
+
       activeLoadFailureRef.current = loadError
       onUpdatePageStateRef.current(browserTabId, { loading: false, loadError })
     },
@@ -188,6 +204,7 @@ export function createBrowserPageWebviewGuestSession({
       if (registered === true) {
         guestRecovery.confirmRegistration()
       }
+
       syncBrowserAnnotationViewportBridge()
     })
   }
@@ -195,49 +212,64 @@ export function createBrowserPageWebviewGuestSession({
   const handleDomReady = (): void => {
     const validateRecoveryAfterNavigation =
       recoveryNavigationValidationRef.current?.committed === true
+
     if (validateRecoveryAfterNavigation) {
       recoveryNavigationValidationRef.current = null
     }
+
     let liveWebContentsId: number | null = null
+
     try {
       liveWebContentsId = webview.getWebContentsId()
     } catch {
       // Why: the guest can detach between dom-ready and registration.
     }
+
     const queuedAnnotationViewportBridgeSync =
       liveWebContentsId === null || registeredWebContentsIds.get(browserTabId) !== liveWebContentsId
+
     if (queuedAnnotationViewportBridgeSync) {
       void registerGuest().then((registered) => {
         const completedRecovery = guestRecovery.finish()
+
         if (registered === true) {
           guestRecovery.confirmRegistration()
           clearGuestRecoveryError()
         }
+
         if (registered === null || completedRecovery || validateRecoveryAfterNavigation) {
           guestRecovery.validateAfterResume()
         }
+
         syncBrowserAnnotationViewportBridge()
       })
     } else {
       const completedRecovery = guestRecovery.finish()
+
       if (completedRecovery || validateRecoveryAfterNavigation) {
         guestRecovery.validateAfterResume()
       }
     }
+
     syncNavigationState(webview)
+
     if (keepAddressBarFocusRef.current) {
       focusAddressBarNow()
     }
+
     if (!queuedAnnotationViewportBridgeSync) {
       syncBrowserAnnotationViewportBridge()
     }
+
     // Why: Chromium restores per-origin zoom on reload/navigation, so reassert THIS pane's level after
     // every guest load. Uses the pane-local level, not the shared setting, so reloading one tab never
     // adopts a zoom the user applied to a different tab.
     const appliedLevel = setBrowserPageZoomLevel(webview, paneZoomLevelRef.current)
+
     if (appliedLevel !== null) {
       setBrowserZoomPercent(browserPageZoomLevelToPercent(appliedLevel))
     }
+
     // Why: CDP viewport overrides are scoped to the debugger session and don't survive cross-origin nav, so reapply (idempotently) on dom-ready.
     const presetId = viewportPresetIdRef.current
     const preset = getBrowserViewportPreset(presetId)

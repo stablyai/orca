@@ -55,6 +55,7 @@ describe('deriveAiVaultWorkspaceScopePaths', () => {
     // Sessions are keyed by cwd alone, so claiming a path a live workspace
     // occupies would show that workspace's transcripts under this one.
     const claimant = makeWorktree({ id: 'repo-1::/repo/orca', path: '/repo/orca' })
+
     const active = makeWorktree({
       id: 'repo-1::/repo/orca-renamed',
       path: '/repo/orca-renamed',
@@ -80,6 +81,7 @@ describe('deriveAiVaultWorkspaceScopePaths', () => {
       path: '/repo/orca-renamed',
       priorWorktreeIds: ['repo-1::/repo/orca']
     })
+
     const claimant = makeWorktree({ id: 'repo-1::/repo/orca', path: '/repo/orca' })
     // The active workspace also listed at the prior path — the only shape where
     // a first-writer-wins map would name the active workspace the owner and so
@@ -102,9 +104,11 @@ describe('deriveAiVaultWorkspaceScopePaths', () => {
     // Separate from the session-scope guard: a quadratic dedupe reintroduced
     // only in the workspace pass would not surface there.
     const prefix = '/Users/dev/orca/workspaces/orca-monorepo/feature-'
+
     const worktrees = Array.from({ length: 1200 }, (_, i) =>
       makeWorktree({ id: `repo-1::${prefix}${i}`, path: `${prefix}${i}` })
     )
+
     const active = makeWorktree({
       id: `repo-1::${prefix}0`,
       path: `${prefix}0`,
@@ -136,6 +140,7 @@ describe('deriveAiVaultScopeSessionPaths', () => {
   it('covers the active workspace plus the rest of its repo', () => {
     const active = makeWorktree()
     const sibling = makeWorktree({ id: 'repo-1::/repo/feature', path: '/repo/feature' })
+
     const otherRepo = makeWorktree({
       id: 'repo-2::/repo/other',
       repoId: 'repo-2',
@@ -177,6 +182,7 @@ describe('deriveAiVaultScopeSessionPaths', () => {
     // so short synthetic paths would understate the old shape. ~50 chars
     // matches the real profile this was measured on.
     const prefix = '/Users/dev/orca/workspaces/orca-monorepo/feature-'
+
     const worktrees = Array.from({ length: 1200 }, (_, i) =>
       makeWorktree({ id: `repo-1::${prefix}${i}`, path: `${prefix}${i}` })
     )

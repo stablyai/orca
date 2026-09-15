@@ -31,6 +31,7 @@ export function comparePublishedFields(args: {
 }): PublishedFieldSkew {
   const older = new Set(args.older)
   const newer = new Set(args.newer)
+
   return {
     added: [...newer].filter((name) => !older.has(name)).sort(),
     removed: [...older].filter((name) => !newer.has(name)).sort()
@@ -50,9 +51,11 @@ export function comparePublishedFieldOccurrences(args: {
 
   return args.older.map((older, index) => {
     const newer = args.newer[index]
+
     if (!newer) {
       throw new Error(`Missing newer published frame occurrence ${index + 1}`)
     }
+
     return comparePublishedFields({
       older: publishedFieldNames(older),
       newer: publishedFieldNames(newer)

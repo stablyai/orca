@@ -24,6 +24,7 @@ import {
 // measured in `ch` rather than baked into a Tailwind `pr-*` step that a longer
 // translation would overlap.
 const ADORNMENT_RESERVE_PX = 70
+
 const MAX_RESERVE = '55%'
 
 /** Exported for test: happy-dom drops `min()`, so this cannot be read back off a style. */
@@ -93,6 +94,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
   const helperId = useId()
   const inputId = useId()
   const label = providerLabel(provider)
+
   const openIssueLabel = translate(
     'auto.components.sidebar.WorktreeIssueLinkField.161b2d053a',
     'Open linked issue'
@@ -114,6 +116,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
         "Issue links are set when a folder workspace is created and can't be changed here yet."
       )
     }
+
     if (isInvalid) {
       return provider === 'linear'
         ? translate(
@@ -125,6 +128,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
             'Not a GitHub issue number or issue URL.'
           )
     }
+
     // Why: ranked above displacement because it answers the click the user just
     // made, and it clears as soon as they edit the value that caused it.
     if (openIssueFailed) {
@@ -138,6 +142,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
             "Couldn't open that issue. Check the number and your GitHub connection."
           )
     }
+
     // Whole sentences per arity rather than a joined list: a translated " and "
     // fragment would not survive languages that order or punctuate lists differently.
     if (displacedLinkLabels && displacedLinkLabels.length > 1) {
@@ -147,6 +152,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
         { first: displacedLinkLabels[0], second: displacedLinkLabels[1] }
       )
     }
+
     if (displacedLinkLabels?.length) {
       return translate(
         'auto.components.sidebar.WorktreeIssueLinkField.2c245ac134',
@@ -154,6 +160,7 @@ export function WorktreeIssueLinkField(props: WorktreeIssueLinkFieldProps): Reac
         { link: displacedLinkLabels[0] }
       )
     }
+
     return translate(
       'auto.components.sidebar.WorktreeIssueLinkField.f047887705',
       'Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link.'

@@ -55,9 +55,11 @@ const FAST_OPTIONS_ON: AgentSessionOptionsResult = {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((accept) => {
     resolve = accept
   })
+
   return { promise, resolve }
 }
 
@@ -71,9 +73,11 @@ type SentRequest = { method: string; params: unknown }
  *  make the post-write refresh disagree with the first read. */
 function optionsClient(reads: () => Promise<AgentSessionOptionsResult>) {
   const sent: SentRequest[] = []
+
   const client: RpcClient = {
     sendRequest: async (method: string, params?: unknown) => {
       sent.push({ method, params })
+
       return rpcSuccess(method === 'agentSession.options' ? await reads() : {})
     },
     subscribe: () => () => {},
@@ -85,7 +89,9 @@ function optionsClient(reads: () => Promise<AgentSessionOptionsResult>) {
     notifyForeground: () => {},
     close: () => {}
   }
+
   const methods = (name: string) => sent.filter((entry) => entry.method === name)
+
   return { client, sent, methods, optionReads: () => methods('agentSession.options').length }
 }
 
@@ -93,6 +99,7 @@ function optionsClient(reads: () => Promise<AgentSessionOptionsResult>) {
  *  script still answers instead of hanging. */
 function queuedReads(...results: AgentSessionOptionsResult[]) {
   let index = 0
+
   return () => Promise.resolve(results[Math.min(index++, results.length - 1)]!)
 }
 
@@ -108,10 +115,12 @@ function recordingMutate(
   mock.mockImplementation(
     (method: string, _fingerprintMethod: string, fields: Record<string, unknown>) => {
       calls.push({ method, fields })
+
       return next(calls.length - 1)
     }
   )
   const mutate: StructuredAgentSessionMutate = mock
+
   return { calls, mutate }
 }
 
@@ -144,6 +153,7 @@ function Probe(props: ProbeProps): null {
       mutate: props.mutate
     })
   )
+
   return null
 }
 
@@ -156,20 +166,25 @@ async function settle() {
 
 async function mountOptions(props: Omit<ProbeProps, 'onRender'>) {
   let rendered: Controller | null = null
+
   const onRender = (controller: Controller) => {
     rendered = controller
   }
+
   let renderer: ReactTestRenderer | null = null
   await act(async () => {
     renderer = create(createElement(Probe, { ...props, onRender }))
   })
   await settle()
+
   const current = (): Controller => {
     if (!rendered) {
       throw new Error('probe never rendered')
     }
+
     return rendered
   }
+
   return {
     current,
     rerender: async (next: Partial<Omit<ProbeProps, 'onRender'>>) => {
@@ -193,6 +208,7 @@ function descriptorFor(
 
 function currentValueOf(snapshot: readonly SessionOptionDescriptor[], id: string) {
   const kind = descriptorFor(snapshot, id)?.kind
+
   return kind && 'currentValue' in kind ? kind.currentValue : undefined
 }
 
@@ -201,12 +217,14 @@ const BASE = { agent: 'codex', sessionId: 'session-1', fence: 1 } as const
 describe('useMobileStructuredAgentOptions fast mode', () => {
   it('round-trips a boolean fastMode pick as the wire string and remembers the decoded pick', async () => {
     const client = optionsClient(queuedReads(FAST_OPTIONS, FAST_OPTIONS_ON))
+
     const { calls, mutate } = recordingMutate(async () =>
       accepted(
         { key: 'fastMode', value: 'true', options: { model: 'gpt-live', fastMode: 'true' } },
         true
       )
     )
+
     const harness = await mountOptions({ ...BASE, client: client.client, mutate })
 
     expect(currentValueOf(harness.current().optionSnapshot, 'fastMode')).toBe(false)
@@ -237,9 +255,11 @@ describe('useMobileStructuredAgentOptions fast mode', () => {
 
   it('offers no Fast row when the provider catalog never claimed support', async () => {
     const client = optionsClient(queuedReads(OPTIONS))
+
     const { calls, mutate } = recordingMutate(async () =>
       accepted({ key: 'fastMode', value: 'true' }, true)
     )
+
     const harness = await mountOptions({ ...BASE, client: client.client, mutate })
 
     expect(descriptorFor(harness.current().optionSnapshot, 'model')).toBeDefined()
@@ -258,6 +278,7 @@ describe('useMobileStructuredAgentOptions fast mode', () => {
     const client = optionsClient(
       queuedReads({ ...FAST_OPTIONS, fastModeSupport: { supported: false, reason: 'account' } })
     )
+
     const { mutate } = recordingMutate(async () => ({ status: 'rejected' }))
     const harness = await mountOptions({ ...BASE, client: client.client, mutate })
 
@@ -273,6 +294,7 @@ describe('useMobileStructuredAgentOptions fast mode', () => {
         models: OPTIONS.models
       })
     )
+
     const { mutate } = recordingMutate(async () => ({ status: 'rejected' }))
     const harness = await mountOptions({ ...BASE, client: client.client, mutate })
 
@@ -284,10 +306,12 @@ describe('useMobileStructuredAgentOptions fast mode', () => {
 describe('useMobileStructuredAgentOptions post-write refresh', () => {
   it('reads options back after an accepted same-fence write and applies the refreshed value', async () => {
     const client = optionsClient(queuedReads(FAST_OPTIONS, FAST_OPTIONS_ON))
+
     // `options: {}` commits nothing optimistically, so only the refresh can move the value.
     const { mutate } = recordingMutate(async () =>
       accepted({ key: 'fastMode', value: 'true', options: {} }, true)
     )
+
     const harness = await mountOptions({ ...BASE, client: client.client, mutate })
 
     expect(client.optionReads()).toBe(1)
@@ -305,9 +329,11 @@ describe('useMobileStructuredAgentOptions post-write refresh', () => {
 
   it('skips the refresh when the write landed against a different fence', async () => {
     const client = optionsClient(queuedReads(FAST_OPTIONS, FAST_OPTIONS_ON))
+
     const { mutate } = recordingMutate(async () =>
       accepted({ key: 'fastMode', value: 'true', options: {} }, false)
     )
+
     const harness = await mountOptions({ ...BASE, client: client.client, mutate })
 
     await act(async () => {
@@ -358,9 +384,11 @@ describe('useMobileStructuredAgentOptions pending guard', () => {
   it('refuses an overlapping write and releases the guard once the first one settles', async () => {
     const client = optionsClient(queuedReads(FAST_OPTIONS, FAST_OPTIONS_ON))
     const inFlight = deferred<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+
     const { calls, mutate } = recordingMutate(async (call) =>
       call === 0 ? inFlight.promise : accepted({ key: 'fastMode', value: 'true' }, false)
     )
+
     const harness = await mountOptions({ ...BASE, client: client.client, mutate })
 
     let firstWrite: Promise<boolean> | null = null

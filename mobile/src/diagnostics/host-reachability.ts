@@ -7,10 +7,12 @@ const HOST_REACHABILITY_TIMEOUT_MS = 4000
 export async function testHostReachability(endpoint: string): Promise<boolean> {
   return new Promise((resolve) => {
     let ws: WebSocket
+
     try {
       ws = new WebSocket(endpoint)
     } catch {
       resolve(false)
+
       return
     }
 
@@ -21,11 +23,14 @@ export async function testHostReachability(endpoint: string): Promise<boolean> {
       if (settled) {
         return
       }
+
       settled = true
+
       if (timeout) {
         clearTimeout(timeout)
         timeout = null
       }
+
       if (closeSocket) {
         try {
           ws.close()
@@ -33,6 +38,7 @@ export async function testHostReachability(endpoint: string): Promise<boolean> {
           // The probe is already complete; close failures should not change the diagnostic result.
         }
       }
+
       resolve(reachable)
     }
 
@@ -53,6 +59,7 @@ export async function testHostReachability(endpoint: string): Promise<boolean> {
 export function formatEndpoint(endpoint: string): string {
   try {
     const url = new URL(endpoint)
+
     return url.host
   } catch {
     return 'invalid endpoint'
@@ -66,5 +73,6 @@ export function unreachableHostDetail(endpoint: string): string {
   if (isTailscaleEndpoint(endpoint)) {
     return `Cannot reach ${formatEndpoint(endpoint)} — check Tailscale`
   }
+
   return `Cannot reach ${formatEndpoint(endpoint)}`
 }

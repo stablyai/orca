@@ -47,10 +47,13 @@ done
 echo "$killed"
 `
   )
+
   const dropped = Number(output.trim().split('\n').at(-1))
+
   if (!Number.isInteger(dropped)) {
     throw new Error(`Unexpected transport-drop count from ${target.containerName}: ${output}`)
   }
+
   return dropped
 }
 
@@ -75,6 +78,7 @@ export async function withStalledDockerSshRelayTarget<T>(
   body: () => Promise<T>
 ): Promise<T> {
   stallDockerSshRelayTarget(target)
+
   try {
     return await body()
   } finally {
@@ -112,10 +116,13 @@ done
 echo "$killed"
 `
   )
+
   const killed = Number(output.trim().split('\n').at(-1))
+
   if (!Number.isInteger(killed)) {
     throw new Error(`Unexpected relay-kill count from ${target.containerName}: ${output}`)
   }
+
   return killed
 }
 
@@ -142,10 +149,13 @@ done
 echo "$signalled"
 `
   )
+
   const count = Number(output.trim().split('\n').at(-1))
+
   if (!Number.isInteger(count)) {
     throw new Error(`Unexpected relay-${signal} count from ${target.containerName}: ${output}`)
   }
+
   return count
 }
 
@@ -176,7 +186,9 @@ export function clearDockerSshRelayFaults(target: DockerSshRelayTarget | null): 
   if (!target) {
     return
   }
+
   tryRun(['unpause', target.containerName])
+
   try {
     continueDockerSshRelayProcesses(target)
   } catch {

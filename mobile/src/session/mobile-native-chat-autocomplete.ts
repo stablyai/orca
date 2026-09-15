@@ -29,27 +29,36 @@ export function detectAutocompleteTrigger(
   const pos = Math.max(0, Math.min(cursor, text.length))
   // Walk left from the cursor over non-whitespace token chars to find the trigger.
   let i = pos - 1
+
   while (i >= 0 && TOKEN_CHAR.test(text[i]!)) {
     i--
   }
+
   const triggerIndex = i + 1
   const triggerChar = text[triggerIndex]
+
   if (triggerChar !== '@' && triggerChar !== '/') {
     return null
   }
+
   const before = triggerIndex === 0 ? '' : text[triggerIndex - 1]!
+
   if (triggerChar === '/' && triggerIndex !== 0) {
     // Slash commands are only offered at the very start of the message.
     return null
   }
+
   if (triggerChar === '@' && triggerIndex !== 0 && !/\s/.test(before)) {
     return null
   }
+
   const query = text.slice(triggerIndex + 1, pos)
+
   // A space in the query means the token already closed.
   if (/\s/.test(query)) {
     return null
   }
+
   return {
     kind: triggerChar === '@' ? 'file' : 'slash',
     query,
@@ -67,6 +76,7 @@ export function applyAutocomplete(
 ): { text: string; cursor: number } {
   const inserted = `${value} `
   const next = text.slice(0, trigger.start) + inserted + text.slice(trigger.end)
+
   return { text: next, cursor: trigger.start + inserted.length }
 }
 
@@ -74,23 +84,29 @@ export function applyAutocomplete(
  *  substring matches, capped. Used for both file paths and command names. */
 export function rankSuggestions(candidates: readonly string[], query: string, limit = 8): string[] {
   const q = query.toLowerCase()
+
   if (q.length === 0) {
     return candidates.slice(0, limit)
   }
+
   const prefix: string[] = []
   const substring: string[] = []
+
   for (const candidate of candidates) {
     const lower = candidate.toLowerCase()
     const base = lower.slice(lower.lastIndexOf('/') + 1)
+
     if (lower.startsWith(q) || base.startsWith(q)) {
       prefix.push(candidate)
     } else if (substring.length < limit && lower.includes(q)) {
       substring.push(candidate)
     }
+
     if (prefix.length >= limit) {
       break
     }
   }
+
   return [...prefix, ...substring].slice(0, limit)
 }
 
@@ -103,21 +119,27 @@ export function rankSlashCommandSuggestions(
   limit = 50
 ): SlashCommandSuggestion[] {
   const q = query.toLowerCase()
+
   if (q.length === 0) {
     return commands.slice(0, limit)
   }
+
   const prefix: SlashCommandSuggestion[] = []
   const substring: SlashCommandSuggestion[] = []
+
   for (const command of commands) {
     const lower = command.name.toLowerCase()
+
     if (lower.startsWith(q)) {
       prefix.push(command)
     } else if (substring.length < limit && lower.includes(q)) {
       substring.push(command)
     }
+
     if (prefix.length >= limit) {
       break
     }
   }
+
   return [...prefix, ...substring].slice(0, limit)
 }

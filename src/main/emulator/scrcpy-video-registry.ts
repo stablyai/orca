@@ -41,10 +41,13 @@ class ScrcpyVideoRegistry {
 
   pushMeta(deviceId: string, meta: ScrcpyVideoMeta): void {
     const entry = this.entries.get(deviceId)
+
     if (!entry) {
       return
     }
+
     entry.meta = meta
+
     for (const subscriber of entry.subscribers) {
       subscriber({ type: 'meta', meta })
     }
@@ -52,9 +55,11 @@ class ScrcpyVideoRegistry {
 
   pushFrame(deviceId: string, frame: ScrcpyVideoFrameMessage): void {
     const entry = this.entries.get(deviceId)
+
     if (!entry) {
       return
     }
+
     if (frame.config) {
       entry.config = frame
     } else if (frame.keyFrame) {
@@ -65,11 +70,13 @@ class ScrcpyVideoRegistry {
       // Only buffer deltas once a keyframe anchors the GOP (a delta alone is
       // undecodable); deltas before the first keyframe are still sent live below.
       entry.gop.push(frame)
+
       // Drop the oldest delta (never index 0, the keyframe) so replay stays decodable.
       if (entry.gop.length > MAX_GOP_FRAMES) {
         entry.gop.splice(1, 1)
       }
     }
+
     for (const subscriber of entry.subscribers) {
       subscriber({ type: 'frame', frame })
     }
@@ -79,28 +86,36 @@ class ScrcpyVideoRegistry {
   // start without waiting for the next keyframe. Returns an unsubscribe fn.
   subscribe(deviceId: string, subscriber: ScrcpyVideoSubscriber): () => void {
     const entry = this.entries.get(deviceId)
+
     if (!entry) {
       return () => {}
     }
+
     if (entry.meta) {
       subscriber({ type: 'meta', meta: entry.meta })
     }
+
     if (entry.config) {
       subscriber({ type: 'frame', frame: entry.config })
     }
+
     // Replay the current GOP (keyframe + deltas) so the decoder starts now.
     for (const frame of entry.gop) {
       subscriber({ type: 'frame', frame })
     }
+
     entry.subscribers.add(subscriber)
+
     return () => entry.subscribers.delete(subscriber)
   }
 
   stop(deviceId: string): void {
     const entry = this.entries.get(deviceId)
+
     if (!entry) {
       return
     }
+
     entry.close()
     entry.subscribers.clear()
     this.entries.delete(deviceId)

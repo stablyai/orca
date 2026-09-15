@@ -76,6 +76,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
   const applyLinkedGitLabWorkItem = useCallback(
     (item: GitLabWorkItem): void => {
       smartGitHubPrStartPointSelectionRef.current = null
+
       if (item.type === 'issue') {
         setLinkedGitLabIssue(item.number)
         setLinkedGitLabMR(null)
@@ -83,6 +84,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
         setLinkedGitLabIssue(null)
         setLinkedGitLabMR(item.number)
       }
+
       setLinkedIssue('')
       setLinkedPR(null)
       setLinkedTaskSourceContext(null)
@@ -93,6 +95,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
         title: item.title,
         url: item.url
       })
+
       // Why: GitLabWorkItem.branchName lines up structurally with GitHubWorkItem's; cast to reuse the naming heuristic without forking it.
       const suggestedName = getLinkedWorkItemSuggestedName({
         type: item.type === 'mr' ? 'pr' : 'issue',
@@ -100,13 +103,16 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
         title: item.title,
         branchName: item.branchName
       } as unknown as GitHubWorkItem)
+
       const titleName = getLinkedWorkItemWorkspaceName({
         type: item.type,
         provider: 'gitlab',
         number: item.number,
         title: item.title
       })
+
       const nextName = titleName?.seedName ?? suggestedName
+
       if (
         nextName &&
         shouldApplyWorkspaceSourceAutoName({
@@ -117,6 +123,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
         setName(nextName)
         lastAutoNameRef.current = nextName
       }
+
       setBranchNameOverride(undefined)
       setBranchNameOverridePreservesNameEdits(false)
       branchAutoNameRef.current = ''
@@ -160,6 +167,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
   const handleLinkPopoverChange = useCallback(
     (open: boolean): void => {
       setLinkPopoverOpen(open)
+
       if (!open) {
         setLinkQuery('')
         setLinkDebouncedQuery('')
@@ -177,9 +185,11 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
     setLinkedIssue('')
     setLinkedPR(null)
     setForkPushWarning(null)
+
     if (name === lastAutoNameRef.current) {
       lastAutoNameRef.current = ''
     }
+
     if (removedLinearItem) {
       // Why: a Linear branch override belongs to its issue; unlinking must not leave it driving a later worktree create.
       setBranchNameOverride(undefined)
@@ -209,6 +219,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
       } else if (name !== lastAutoNameRef.current) {
         lastAutoNameRef.current = ''
       }
+
       if (
         branchNameOverride &&
         !branchNameOverridePreservesNameEdits &&
@@ -217,6 +228,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
         setBranchNameOverride(undefined)
         branchAutoNameRef.current = ''
       }
+
       setName(nextName)
       setCreateError(null)
     },
@@ -239,6 +251,7 @@ export function useSourceIdentityActions(input: SourceIdentityActionsInput) {
         pushTarget,
         forkPushWarning
       })
+
       setBranchNameOverride(next.branchNameOverride)
       setBranchNameOverridePreservesNameEdits(Boolean(next.branchNameOverride))
       setPushTarget(next.pushTarget)

@@ -15,24 +15,31 @@ import {
 export function getRecoveredHistorySeedSegments(restoreInfo: ColdRestoreInfo): readonly string[] {
   if (restoreInfo.modes.alternateScreen) {
     const normalBuffer = restoreInfo.scrollbackAnsi || restoreInfo.snapshotAnsi
+
     return normalBuffer
       ? [`${RESET_GRAPHIC_RENDITION}${normalBuffer}`, COLD_RESTORE_SEED_MODE_RESET]
       : []
   }
+
   const recovered = [restoreInfo.rehydrateSequences, restoreInfo.snapshotAnsi].filter(
     (segment) => segment.length > 0
   )
+
   const escapeTail = restoreInfo.pendingEscapeTailAnsi
+
   // Why: an empty list is daemon-pty-adapter's "nothing to recover" sentinel (it gates
   // the probe-race respawn and the history re-anchor), so the reset must never pad it.
   if (recovered.length === 0 && !escapeTail) {
     return []
   }
+
   // Why after the snapshot: it must undo the snapshot's own mode trailer, and
   // pendingEscapeTailAnsi is a torn escape that has to stay at the very end.
   const [firstRecovered, ...remainingRecovered] = recovered
+
   const groundedRecovered = firstRecovered
     ? [`${RESET_GRAPHIC_RENDITION}${firstRecovered}`, ...remainingRecovered]
     : []
+
   return [...groundedRecovered, COLD_RESTORE_SEED_MODE_RESET, ...(escapeTail ? [escapeTail] : [])]
 }

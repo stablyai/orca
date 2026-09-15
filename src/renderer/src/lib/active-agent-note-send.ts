@@ -29,11 +29,13 @@ export {
   probeActiveAgentNoteTarget,
   type ActiveTerminalNoteTarget
 } from './active-agent-note-target'
+
 export {
   activeAgentNotesSendFailureMessage,
   type ActiveAgentNotesSendResult,
   type ActiveAgentNotesSendStatus
 } from './active-agent-note-send-result'
+
 const ACTIVE_AGENT_SEND_TIMEOUT_MS = 8000
 
 export async function sendNotesToActiveAgentSession(args: {
@@ -51,6 +53,7 @@ export async function sendNotesToActiveAgentSession(args: {
     )
   }
 }
+
 async function sendNotesToActiveAgentSessionInternal({
   worktreeId,
   prompt,
@@ -63,39 +66,49 @@ async function sendNotesToActiveAgentSessionInternal({
   timeoutMs?: number
 }): Promise<ActiveAgentNotesSendResult> {
   const trimmedPrompt = prompt.trim()
+
   if (!trimmedPrompt) {
     return { status: 'empty', code: 'empty' }
   }
+
   const state = useAppStore.getState()
   const noteTarget = explicitNoteTarget ?? getActiveTerminalNoteTarget(state, worktreeId)
+
   if (!noteTarget) {
     return reportNoteSendFailure({ status: 'no-active-terminal', code: 'no-note-target' }, null)
   }
+
   const runtimeTarget = getActiveRuntimeTarget(
     getSettingsForWorktreeRuntimeOwner(state, worktreeId)
   )
+
   const terminal = await findActiveRuntimeTerminal(
     runtimeTarget,
     worktreeId,
     noteTarget,
     ACTIVE_AGENT_SEND_RPC_TIMEOUT_MS
   )
+
   if (!terminal) {
     return reportNoteSendFailure(
       { status: 'no-active-terminal', code: 'no-inventory-match' },
       noteTarget
     )
   }
+
   if (explicitNoteTarget) {
     return reportNoteSendFailure(
       await sendPromptToExplicitAgentTarget(runtimeTarget, terminal.handle, trimmedPrompt),
       noteTarget
     )
   }
+
   const effectiveTimeoutMs = timeoutMs ?? ACTIVE_AGENT_SEND_TIMEOUT_MS
+
   const initialAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminal.handle, {
     allowLegacyFallback: true
   })
+
   if (initialAgentStatus.status !== 'sendable') {
     return reportNoteSendFailure(
       {
@@ -105,6 +118,7 @@ async function sendNotesToActiveAgentSessionInternal({
       noteTarget
     )
   }
+
   try {
     const { wait } = await callRuntimeRpc<{ wait: RuntimeTerminalWait }>(
       runtimeTarget,
@@ -112,18 +126,21 @@ async function sendNotesToActiveAgentSessionInternal({
       { terminal: terminal.handle, for: 'tui-idle', timeoutMs: effectiveTimeoutMs },
       { timeoutMs: effectiveTimeoutMs + 5000 }
     )
+
     if (wait.status !== 'running') {
       return reportNoteSendFailure(
         { status: 'no-active-terminal', code: 'terminal_wait_not_running' },
         noteTarget
       )
     }
+
     if (wait.blockedReason) {
       return reportNoteSendFailure(
         { status: 'permission', code: 'terminal_wait_blocked' },
         noteTarget
       )
     }
+
     if (!wait.satisfied) {
       return reportNoteSendFailure(
         { status: 'not-ready', code: 'terminal_wait_unsatisfied' },
@@ -137,17 +154,21 @@ async function sendNotesToActiveAgentSessionInternal({
         noteTarget
       )
     }
+
     if (isRuntimeTimeout(error)) {
       return reportNoteSendFailure(
         { status: 'not-ready', code: 'terminal_wait_timeout' },
         noteTarget
       )
     }
+
     throw error
   }
+
   const finalAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminal.handle, {
     allowLegacyFallback: true
   })
+
   if (finalAgentStatus.status !== 'sendable') {
     return reportNoteSendFailure(
       {

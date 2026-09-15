@@ -7,6 +7,7 @@ import { parse } from 'yaml'
 import { findBrokenReadmeLinks, main } from './check-readme-local-links.mjs'
 
 const projectDir = path.resolve(import.meta.dirname, '../..')
+
 const tempDirs = []
 
 function git(cwd, args) {
@@ -31,6 +32,7 @@ function makeFixture(files, { untracked = {} } = {}) {
   git(root, ['add', '-A'])
   git(root, ['commit', '--quiet', '-m', 'fixture'])
   writeFiles(root, untracked)
+
   return root
 }
 
@@ -60,6 +62,7 @@ const validReadmes = {
 
 afterEach(() => {
   vi.restoreAllMocks()
+
   while (tempDirs.length > 0) {
     rmSync(tempDirs.pop(), { force: true, recursive: true })
   }

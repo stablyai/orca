@@ -23,6 +23,7 @@ export function GrokUsagePane(): React.JSX.Element {
     if (isRefreshing) {
       return
     }
+
     setIsRefreshing(true)
     void refreshGrokRateLimits().finally(() => setIsRefreshing(false))
   }
@@ -70,6 +71,7 @@ export function GrokUsagePane(): React.JSX.Element {
     grok?.weekly && typeof grok.weekly.usedPercent === 'number'
       ? Math.round(grok.weekly.usedPercent)
       : null
+
   const isFetching = isRefreshing || grok?.status === 'fetching'
 
   return (

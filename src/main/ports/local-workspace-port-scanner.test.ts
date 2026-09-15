@@ -107,12 +107,15 @@ describe('local workspace port scanner parsing', () => {
 
   it('parses Windows netstat rows without whitespace regex splitting', () => {
     const splitSpy = vi.spyOn(String.prototype, 'split')
+
     const ports = parseNetstatListeningOutput(
       'TCP    127.0.0.1:3000         0.0.0.0:0              LISTENING       4242'
     )
+
     const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
       ([separator]) => separator instanceof RegExp && separator.source.includes('\\s+')
     )
+
     splitSpy.mockRestore()
 
     expect(ports).toEqual([{ host: '127.0.0.1', port: 3000, pid: 4242 }])
@@ -132,15 +135,18 @@ describe('local workspace port scanner parsing', () => {
 
   it('parses Linux proc rows without whitespace regex splitting', () => {
     const splitSpy = vi.spyOn(String.prototype, 'split')
+
     const ports = parseProcNetTcp(
       [
         '  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode',
         '   0: 0100007F:0BB8 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000 0 12345'
       ].join('\n')
     )
+
     const usedWhitespaceFieldSplit = splitSpy.mock.calls.some(
       ([separator]) => separator instanceof RegExp && separator.source.includes('\\s+')
     )
+
     splitSpy.mockRestore()
 
     expect(ports).toEqual([{ host: '127.0.0.1', port: 3000, inode: 12345 }])
@@ -229,12 +235,14 @@ describe('scanWorkspacePorts attribution work', () => {
           spawnMs: 5
         }
       }
+
       if (command === 'lsof') {
         return {
           stdout: ['p123', 'n/repo/service', 'p124', 'n/repo/worktrees/feature/app'].join('\n'),
           spawnMs: 5
         }
       }
+
       if (command === 'ps') {
         return {
           stdout: [
@@ -244,18 +252,22 @@ describe('scanWorkspacePorts attribution work', () => {
           spawnMs: 5
         }
       }
+
       return { stdout: '', spawnMs: 5 }
     })
 
     const scan = await scanWorkspacePorts(worktrees, urlWatcherStub())
 
     expect(scan.ports.filter((port) => port.kind === 'workspace')).toHaveLength(2)
+
     const win32WorktreePathResolveCalls = win32ResolveSpy.mock.calls.filter(
       ([input]) => input === '/repo' || input === '/repo/worktrees/feature'
     )
+
     const posixWorktreePathResolveCalls = posixResolveSpy.mock.calls.filter(
       ([input]) => input === '/repo' || input === '/repo/worktrees/feature'
     )
+
     expect(win32WorktreePathResolveCalls).toHaveLength(0)
     expect(posixWorktreePathResolveCalls).toHaveLength(worktrees.length)
   })
@@ -374,9 +386,11 @@ describe('scanWorkspacePorts with delayed process creation', () => {
       if (command === 'lsof' && args.includes('-iTCP')) {
         return { stdout: LSOF_LISTEN_OUTPUT, spawnMs: 4_200 }
       }
+
       if (command === 'lsof') {
         return { stdout: ['p123', 'n/repo'].join('\n'), spawnMs: 4_200 }
       }
+
       return { stdout: '123 node /repo/server.js', spawnMs: 4_200 }
     })
     const watcher = urlWatcherStub()
@@ -422,11 +436,14 @@ describe('scanWorkspacePorts with delayed process creation', () => {
     runPortScanCommandMock.mockImplementation(async (command: string, args: string[]) => {
       if (command === 'lsof' && args.includes('-iTCP')) {
         listenerPid += 1
+
         return { stdout: `p${listenerPid}\ncnode\nn127.0.0.1:5173`, spawnMs: 4_200 }
       }
+
       if (command === 'lsof') {
         return { stdout: [`p${listenerPid}`, 'n/repo'].join('\n'), spawnMs: 4_200 }
       }
+
       return { stdout: `${listenerPid} node /repo/server.js`, spawnMs: 4_200 }
     })
 
@@ -444,9 +461,11 @@ describe('scanWorkspacePorts with delayed process creation', () => {
       if (command === 'lsof' && args.includes('-iTCP')) {
         return { stdout: LSOF_LISTEN_OUTPUT, spawnMs: 5 }
       }
+
       if (command === 'lsof') {
         return { stdout: ['p123', 'n/repo'].join('\n'), spawnMs: 5 }
       }
+
       return { stdout: '123 node /repo/server.js', spawnMs: 5 }
     })
 
@@ -480,9 +499,11 @@ describe('scanWorkspacePorts with delayed process creation', () => {
           spawnMs: 5
         }
       }
+
       if (command === 'lsof') {
         return { stdout: ['p123', `n${cwd}`].join('\n'), spawnMs: 5 }
       }
+
       return { stdout: `123 node ${cwd}/server.js`, spawnMs: 5 }
     })
 
@@ -505,9 +526,11 @@ describe('scanWorkspacePorts with delayed process creation', () => {
       if (command === 'lsof' && args.includes('-iTCP')) {
         return { stdout: LSOF_LISTEN_OUTPUT, spawnMs: 5 }
       }
+
       if (command === 'lsof') {
         return { stdout: ['p123', 'n/repo'].join('\n'), spawnMs: 5 }
       }
+
       return { stdout: '123 node /repo/server.js', spawnMs: 5 }
     })
 
@@ -530,9 +553,11 @@ describe('scanWorkspacePorts with delayed process creation', () => {
       if (command === 'lsof' && args.includes('-iTCP')) {
         return { stdout: `p123\nc${processName}\nn127.0.0.1:5173`, spawnMs: 5 }
       }
+
       if (command === 'lsof') {
         return { stdout: ['p123', 'n/repo'].join('\n'), spawnMs: 5 }
       }
+
       return { stdout: `123 ${processName} /repo/server.js`, spawnMs: 5 }
     })
 
@@ -553,9 +578,11 @@ describe('scanWorkspacePorts with delayed process creation', () => {
       if (command === 'lsof' && args.includes('-iTCP')) {
         return { stdout: `p123\ncnode\nf18\nd${socketId}\nn127.0.0.1:5173`, spawnMs: 5 }
       }
+
       if (command === 'lsof') {
         return { stdout: ['p123', 'n/repo'].join('\n'), spawnMs: 5 }
       }
+
       return { stdout: '123 node /repo/server.js', spawnMs: 5 }
     })
 
@@ -577,18 +604,22 @@ describe('scanWorkspacePorts with delayed process creation', () => {
       if (command === 'lsof' && args.includes('-iTCP')) {
         return { stdout: LSOF_LISTEN_OUTPUT, spawnMs: 5 }
       }
+
       if (command === 'lsof') {
         return { stdout: ['p123', `n${cwd}`].join('\n'), spawnMs: 5 }
       }
+
       return { stdout: '123 node server.js', spawnMs: 5 }
     })
 
     await scanWorkspacePorts(worktrees, urlWatcherStub())
     cwd = '/repo/worktrees/feature'
+
     for (let scan = 2; scan <= 10; scan += 1) {
       const cached = await scanWorkspacePorts(worktrees, urlWatcherStub())
       expect(cached.ports[0]).toMatchObject({ owner: { worktreeId: 'repo::/repo' } })
     }
+
     // 3 for the first scan, then one listening command per cached scan.
     expect(runPortScanCommandMock).toHaveBeenCalledTimes(12)
 
@@ -609,6 +640,7 @@ describe('scanWorkspacePorts with delayed process creation', () => {
       if (command === 'lsof' && args.includes('-iTCP')) {
         return { stdout: LSOF_LISTEN_OUTPUT, spawnMs: listenSpawnMs }
       }
+
       return { stdout: command === 'lsof' ? ['p123', 'n/repo'].join('\n') : '', spawnMs: 5 }
     })
 
@@ -628,6 +660,7 @@ describe('scanWorkspacePorts with delayed process creation', () => {
       if (command === 'lsof' && args.includes('-iTCP')) {
         return { stdout: listenOutput, spawnMs: listenSpawnMs }
       }
+
       return { stdout: command === 'lsof' ? ['p123', 'n/repo'].join('\n') : '', spawnMs: 5 }
     })
 
@@ -646,9 +679,11 @@ function mockStalledDarwinScan(): void {
     if (command === 'lsof' && args.includes('-iTCP')) {
       return { stdout: LSOF_LISTEN_OUTPUT, spawnMs: 4_200 }
     }
+
     if (command === 'lsof') {
       return { stdout: ['p123', 'n/repo'].join('\n'), spawnMs: 4_200 }
     }
+
     return { stdout: '123 node /repo/server.js', spawnMs: 4_200 }
   })
 }

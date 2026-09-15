@@ -21,21 +21,27 @@ export function createAgentStatusLaunchActions(
   | 'clearAgentLaunchConfig'
 > {
   const { get, set } = runtime
+
   return {
     registerAgentLaunchConfig: (paneKey, launchConfig, metadata) => {
       set((s) => {
         const copiedLaunchConfig = copyLaunchConfig(launchConfig)
+
         const nextRegistryEntry: AgentLaunchConfigRegistryEntry = {
           launchConfig: copiedLaunchConfig,
           registeredAt: Date.now(),
           identity: normalizeLaunchConfigRegistrationMetadata(paneKey, metadata)
         }
+
         const existingRegistryEntry = s.agentLaunchConfigByPaneKey[paneKey]
+
         const registryChanged = !launchConfigRegistryEntriesEqual(
           existingRegistryEntry,
           nextRegistryEntry
         )
+
         const existingEntry = s.agentStatusByPaneKey[paneKey]
+
         const entryMatchesRegistry = registryEntryMatchesStatus({
           entry: nextRegistryEntry,
           paneKey,
@@ -47,13 +53,16 @@ export function createAgentStatusLaunchActions(
           existingProviderSession: existingEntry?.providerSession,
           providerSessionChanged: false
         })
+
         const existingSleepingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
         let nextSleepingAgentSessions = s.sleepingAgentSessionsByPaneKey
+
         if (existingSleepingRecord && entryMatchesRegistry && existingEntry) {
           const worktreeId =
             existingEntry.worktreeId ??
             existingSleepingRecord.worktreeId ??
             findAgentPaneWorktreeId(s, paneKey)
+
           const refreshedRecord = worktreeId
             ? sleepingRecordFromEntry({
                 state: s,
@@ -64,6 +73,7 @@ export function createAgentStatusLaunchActions(
                 origin: existingSleepingRecord.origin
               })
             : null
+
           if (refreshedRecord) {
             nextSleepingAgentSessions = {
               ...s.sleepingAgentSessionsByPaneKey,
@@ -74,9 +84,11 @@ export function createAgentStatusLaunchActions(
             }
           }
         }
+
         if (!registryChanged && nextSleepingAgentSessions === s.sleepingAgentSessionsByPaneKey) {
           return s
         }
+
         return {
           ...(registryChanged
             ? {
@@ -101,8 +113,10 @@ export function createAgentStatusLaunchActions(
         if (!(paneKey in s.agentLaunchConfigByPaneKey)) {
           return s
         }
+
         const nextLaunchConfigs = { ...s.agentLaunchConfigByPaneKey }
         delete nextLaunchConfigs[paneKey]
+
         return { agentLaunchConfigByPaneKey: nextLaunchConfigs }
       })
     }

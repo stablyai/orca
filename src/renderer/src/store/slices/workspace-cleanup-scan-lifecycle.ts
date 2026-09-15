@@ -35,9 +35,11 @@ export async function scanWorkspaceCleanup(
 ): Promise<WorkspaceCleanupScanResult> {
   if (args?.worktreeId !== undefined || args?.worktreeIds !== undefined) {
     const scan = await window.api.workspaceCleanup.scan(args)
+
     const enriched = await enrichWorkspaceCleanupCandidates(scan.candidates, get(), {
       applyDismissals: false
     })
+
     return { ...scan, candidates: enriched }
   }
 
@@ -56,11 +58,14 @@ export async function scanWorkspaceCleanup(
     // are reserved for focused scans and can collide across refresh variants.
     scanId: crypto.randomUUID()
   }
+
   const scanKey = getWorkspaceCleanupScanKey(scanArgs)
 
   const existingInFlight = getInFlightWorkspaceCleanupScan(scanKey)
+
   if (existingInFlight) {
     set({ workspaceCleanupLoading: true, workspaceCleanupError: null })
+
     try {
       return await existingInFlight
     } finally {
@@ -84,20 +89,25 @@ export async function scanWorkspaceCleanup(
     workspaceCleanupError: null
   })
   const scanToken = beginWorkspaceCleanupScan()
+
   const promise = (async () => {
     try {
       const scan = await window.api.workspaceCleanup.scan(scanArgs, (progress) => {
         enqueueWorkspaceCleanupProgress(progress, scanToken, get, set)
       })
+
       throwIfWorkspaceCleanupScanSuperseded(scanArgs.scanId)
       await drainWorkspaceCleanupProgressQueue(scanToken)
+
       const enriched = await enrichWorkspaceCleanupCandidatesForScan(
         scan.candidates,
         get(),
         scanToken
       )
+
       throwIfWorkspaceCleanupScanSuperseded(scanArgs.scanId)
       const result = { ...scan, candidates: enriched }
+
       if (isLatestWorkspaceCleanupScan(scanToken)) {
         finalizeWorkspaceCleanupScan(scanToken)
         set({
@@ -113,20 +123,24 @@ export async function scanWorkspaceCleanup(
           workspaceCleanupLoading: false
         })
       }
+
       return result
     } catch (error) {
       throw normalizeWorkspaceCleanupScanError(scanArgs.scanId, error)
     }
   })()
+
   registerInFlightWorkspaceCleanupScan(scanKey, scanArgs.scanId, promise)
 
   try {
     return await promise
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+
     if (isLatestWorkspaceCleanupScan(scanToken)) {
       set({ workspaceCleanupError: message, workspaceCleanupLoading: false })
     }
+
     throw error
   } finally {
     releaseInFlightWorkspaceCleanupScan(scanKey, scanArgs.scanId, promise)

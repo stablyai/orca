@@ -12,9 +12,11 @@ export function maybeAutoRenameBranchOnFirstWorkFromHook(event: {
 }): void {
   const store = state.store
   const runtime = state.runtime
+
   if (!store || !runtime) {
     return
   }
+
   void maybeAutoRenameBranchOnFirstWork(
     {
       paneKey: event.paneKey,

@@ -8,6 +8,7 @@ export function isEditableKeyboardTarget(target: EventTarget | EditableTargetLik
     target && typeof target === 'object' && ('closest' in target || 'isContentEditable' in target)
       ? (target as EditableTargetLike)
       : null
+
   if (!element) {
     return false
   }
@@ -27,6 +28,7 @@ export function isEditableKeyboardTarget(target: EventTarget | EditableTargetLik
       '.rich-markdown-editor-shell'
     ].join(', ')
   )
+
   if (editableHost) {
     return true
   }

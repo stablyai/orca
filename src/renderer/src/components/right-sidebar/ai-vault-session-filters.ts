@@ -8,6 +8,7 @@ export type {
   AiVaultSessionFilterState,
   AiVaultSessionGroup
 } from '../../../../shared/ai-vault-session-filters'
+
 export {
   AI_VAULT_SESSION_FILTER_QUERY_MAX_BYTES,
   agentLabel,

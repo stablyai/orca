@@ -12,8 +12,10 @@ export function sessionSearchSqliteAvailable(): boolean {
   if (typeof process.getBuiltinModule !== 'function') {
     return false
   }
+
   try {
     const sqlite: unknown = process.getBuiltinModule('node:sqlite')
+
     return (
       typeof sqlite === 'object' &&
       sqlite !== null &&

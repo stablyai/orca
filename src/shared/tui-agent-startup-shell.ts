@@ -30,9 +30,11 @@ export type StartupCommandTokens =
  * delimiter — so cmd's word boundaries stop matching this tokenizer's. */
 function hasOddBackslashRun(value: string, quoteIndex: number): boolean {
   let backslashes = 0
+
   while (value[quoteIndex - 1 - backslashes] === '\\') {
     backslashes += 1
   }
+
   return backslashes % 2 === 1
 }
 
@@ -47,9 +49,11 @@ function tokenizeWindowsStartupCommand(
   let divergesFromShell = false
   let quote: "'" | '"' | null = null
   let tokenStarted = false
+
   for (let index = 0; index < value.length; index += 1) {
     const char = value[index]
     const escape = shell === 'cmd' ? '^' : '`'
+
     if (char === escape && index + 1 < value.length) {
       // Why: cmd strips `^` and hands the bare byte to the child's parser,
       // which re-splits on whitespace and reopens a quote, and keeps the caret
@@ -71,13 +75,16 @@ function tokenizeWindowsStartupCommand(
         // arguments, so the token value this branch builds is not argv's.
         (shell === 'powershell' && '0abefnrtuv'.includes(value[index + 1]))
       token += value[index + 1]
+
       if (!tokenStarted) {
         tokenStart = index
       }
+
       tokenStarted = true
       index += 1
       continue
     }
+
     if (quote) {
       // Why: see the posix tokenizer — a `"` inside $(…) re-opens a nested
       // quoting context that this tokenizer does not model.
@@ -86,8 +93,10 @@ function tokenizeWindowsStartupCommand(
         quote === '"' &&
         char === '$' &&
         (value[index + 1] === '(' || value[index + 1] === '{')
+
       if (char === quote) {
         divergesFromShell ||= shell === 'cmd' && char === '"' && hasOddBackslashRun(value, index)
+
         if (shell === 'powershell' && quote === "'" && value[index + 1] === "'") {
           token += "'"
           index += 1
@@ -97,9 +106,11 @@ function tokenizeWindowsStartupCommand(
       } else {
         token += char
       }
+
       tokenStarted = true
       continue
     }
+
     if (char === "'" || char === '"') {
       divergesFromShell ||= shell === 'cmd' && char === '"' && hasOddBackslashRun(value, index)
       quote = char
@@ -107,9 +118,11 @@ function tokenizeWindowsStartupCommand(
       // of a single-quoted region diverges from what cmd actually parses;
       // flag the token so consumers treat it as unmodelable.
       divergesFromShell ||= shell === 'cmd' && char === "'"
+
       if (!tokenStarted) {
         tokenStart = index
       }
+
       tokenStarted = true
     } else if (/\s/.test(char)) {
       if (tokenStarted) {
@@ -123,6 +136,7 @@ function tokenizeWindowsStartupCommand(
       if (!tokenStarted) {
         tokenStart = index
       }
+
       // Why: see the posix tokenizer — a trailing unpaired escape would
       // swallow the separator before anything appended to the base.
       divergesFromShell ||= char === escape && index + 1 >= value.length
@@ -138,13 +152,16 @@ function tokenizeWindowsStartupCommand(
       tokenStarted = true
     }
   }
+
   if (quote) {
     return { ok: false, error: 'Unclosed quote in command template.' }
   }
+
   if (tokenStarted) {
     tokens.push(token)
     spans.push({ start: tokenStart, end: value.length, divergesFromShell })
   }
+
   return { ok: true, tokens, spans }
 }
 
@@ -192,14 +209,17 @@ function quotePortableUnixArg(value: string): string {
   if (!value) {
     return "''"
   }
+
   const parts: string[] = []
   let literal = ''
+
   const flushLiteral = (): void => {
     if (literal) {
       parts.push(`'${literal}'`)
       literal = ''
     }
   }
+
   for (const char of value) {
     if (char === "'") {
       flushLiteral()
@@ -211,7 +231,9 @@ function quotePortableUnixArg(value: string): string {
       literal += char
     }
   }
+
   flushLiteral()
+
   return parts.join('')
 }
 
@@ -219,9 +241,11 @@ export function quoteStartupArg(value: string, shell: AgentStartupShell): string
   if (shell === 'powershell') {
     return `'${value.replace(/'/g, "''")}'`
   }
+
   if (shell === 'cmd') {
     return `"${value.replace(/([\^&|<>()%!"])/g, '^$1')}"`
   }
+
   return quotePortableUnixArg(value)
 }
 
@@ -230,9 +254,11 @@ export function buildShellCommandFromArgv(
   shell: AgentStartupShell
 ): string {
   const command = args.map((arg) => quoteStartupArg(arg, shell)).join(' ')
+
   if (shell === 'powershell' && command) {
     return `& ${command}`
   }
+
   return command
 }
 
@@ -304,6 +330,7 @@ export function clearEnvCommand(
   shell: AgentStartupShell
 ): string {
   const names = typeof name === 'string' ? [name] : [...name]
+
   // Why assert rather than escape: these names are interpolated straight into a
   // shell line, so anything but an identifier is both a command injection and —
   // in fish, where `-g` erases for real — a way to delete `PATH`/`HOME` out of
@@ -316,13 +343,17 @@ export function clearEnvCommand(
       )
     }
   }
+
   if (shell === 'powershell') {
     return names.map((each) => `Remove-Item Env:${each} -ErrorAction SilentlyContinue`).join('; ')
   }
+
   if (shell === 'cmd') {
     return names.map((each) => `set "${each}="`).join(' & ')
   }
+
   const joined = names.join(' ')
+
   return (
     `command test -n "$fish_pid" && set --erase -g ${joined}; ` +
     `command test -z "$fish_pid" && unset ${joined}; true`
@@ -348,11 +379,13 @@ export function withoutEnvCommand(
   if (names.length === 0) {
     return command
   }
+
   if (isWindowsStartupShell(shell)) {
     // Windows has no `env -u`; those shells clear in-place, and neither has a
     // nounset mode that could abort the line.
     return `${clearEnvCommand(names, shell)}${commandSeparator(shell)}${command}`
   }
+
   for (const name of names) {
     if (!ENV_VAR_NAME.test(name)) {
       throw new Error(
@@ -360,6 +393,7 @@ export function withoutEnvCommand(
       )
     }
   }
+
   return `env ${names.map((name) => `-u ${name}`).join(' ')} ${command}`
 }
 
@@ -374,13 +408,17 @@ export function planAgentCliArgsSuffix(
   shell: AgentStartupShell
 ): AgentCliArgsPlan {
   const trimmed = agentArgs?.trim()
+
   if (!trimmed) {
     return { ok: true, suffix: '' }
   }
+
   const tokenized = tokenizeStartupCommand(trimmed, shell)
+
   if (!tokenized.ok) {
     return { ok: false, error: `CLI arguments are invalid: ${tokenized.error}` }
   }
+
   return {
     ok: true,
     suffix: tokenized.tokens.map((token) => quoteStartupArg(token, shell)).join(' ')

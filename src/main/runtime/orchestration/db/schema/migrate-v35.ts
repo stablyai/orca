@@ -5,6 +5,7 @@ const ONE_OUTSTANDING_INDEX_SQL = `
   CREATE UNIQUE INDEX idx_deliveries_one_outstanding
     ON deliveries(mailbox_handle) WHERE status = 'outstanding' AND mailbox_handle != '';
 `
+
 const PENDING_POINTER_ENTER_INDEX_SQL = `
   CREATE INDEX idx_messages_pending_pointer_enter
     ON messages(to_handle, sequence)
@@ -30,6 +31,7 @@ export function migrateV35(this: OrchestrationDb, current: number): void {
   if (current >= 35) {
     return
   }
+
   // The write-only lifecycle ledger is gone. Old delete triggers still reference it, and
   // CREATE TRIGGER IF NOT EXISTS cannot replace a body, so drop all three and rebuild the two
   // that survive.
@@ -60,9 +62,11 @@ function rebuildDeliveriesWithMailboxDefault(this: OrchestrationDb): void {
   const mailboxColumn = (
     this.db.pragma('table_info(deliveries)') as { name: string; dflt_value: unknown }[]
   ).find((column) => column.name === 'mailbox_handle')
+
   if (!mailboxColumn || mailboxColumn.dflt_value !== null) {
     return
   }
+
   this.db.exec(`
     CREATE TABLE deliveries_v35 (
       id                    TEXT PRIMARY KEY,
@@ -101,9 +105,11 @@ function recreateIndexMissingPredicate(
   const stored = this.db
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?")
     .get(index) as { sql: string | null } | undefined
+
   if (stored?.sql?.includes(predicate)) {
     return
   }
+
   this.db.exec(`DROP INDEX IF EXISTS ${index};\n${createSql}`)
 }
 
@@ -113,6 +119,7 @@ function dropUnreadDispatchIdentityColumns(this: OrchestrationDb): void {
     DROP INDEX IF EXISTS idx_dispatch_retry_of;
     DROP INDEX IF EXISTS idx_dispatch_resource;
   `)
+
   for (const column of DROPPED_DISPATCH_IDENTITY_COLUMNS) {
     if (this.hasColumn('dispatch_contexts', column)) {
       this.db.exec(`ALTER TABLE dispatch_contexts DROP COLUMN ${column}`)

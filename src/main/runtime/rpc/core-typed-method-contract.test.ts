@@ -65,7 +65,9 @@ describe('defineMethod preserves the declared contract', () => {
 
   it('keeps a registered method addressable by its literal name', () => {
     type StatusGet = ByName<(typeof STATUS_METHODS)[number], 'status.get'>
+
     type ListDistros = ByName<(typeof HOST_CAPABILITY_METHODS)[number], 'host.wsl.listDistros'>
+
     expectTypeOf<StatusGet>().not.toBeNever()
     expectTypeOf<StatusGet['handler']>().returns.toExtend<{ runtimeId: string }>()
     expectTypeOf<ListDistros['handler']>().returns.toEqualTypeOf<Promise<string[]>>()

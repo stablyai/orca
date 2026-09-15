@@ -26,7 +26,9 @@ function message(buffer: Buffer): Record<string, unknown> | null {
   if (buffer[0] !== MessageType.Regular) {
     return null
   }
+
   const length = buffer.readUInt32BE(9)
+
   return JSON.parse(buffer.subarray(13, 13 + length).toString('utf8'))
 }
 
@@ -67,6 +69,7 @@ describe('relay PTY consumer owner displacement', () => {
       (data, settle) => {
         staleWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true, close: closeStaleTransport },
@@ -92,15 +95,18 @@ describe('relay PTY consumer owner displacement', () => {
     })
 
     const reconnectWrites: Buffer[] = []
+
     const reconnectClientId = dispatcher.attachClient(
       (data, settle) => {
         reconnectWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       reconnectClientId,
       requestFrame(
@@ -139,6 +145,7 @@ describe('relay PTY consumer owner displacement', () => {
       (data, settle) => {
         incumbentWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -161,15 +168,18 @@ describe('relay PTY consumer owner displacement', () => {
 
     const reconnectWrites: Buffer[] = []
     let grantSettlement: ((result: SinkWriteSettlement) => void) | undefined
+
     const reconnectClientId = dispatcher.attachClient(
       (data, settle) => {
         reconnectWrites.push(Buffer.from(data))
         grantSettlement = settle
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       reconnectClientId,
       requestFrame(
@@ -201,6 +211,7 @@ describe('relay PTY consumer owner displacement', () => {
       (data, settle) => {
         incumbentWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -216,16 +227,19 @@ describe('relay PTY consumer owner displacement', () => {
 
     const reconnectWrites: Buffer[] = []
     let grantSettlement: ((result: SinkWriteSettlement) => void) | undefined
+
     const reconnectClientId = dispatcher.attachClient(
       (data, settle) => {
         reconnectWrites.push(Buffer.from(data))
         // Why: the takeover must not commit until the replacement grant is on the wire.
         grantSettlement = settle
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       reconnectClientId,
       requestFrame(
@@ -248,15 +262,18 @@ describe('relay PTY consumer owner displacement', () => {
 
     // Why: the rolled-back attempt must leave the incumbent's lease reclaimable by the next reconnect.
     const retryWrites: Buffer[] = []
+
     const retryClientId = dispatcher.attachClient(
       (data, settle) => {
         retryWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       retryClientId,
       requestFrame(
@@ -285,6 +302,7 @@ describe('relay PTY consumer owner displacement', () => {
       (data, settle) => {
         incumbentWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -295,6 +313,7 @@ describe('relay PTY consumer owner displacement', () => {
     dispatcher.feed(requestFrame(1, 'pty.openClient', ownerHelloParams()))
     await flushRequests()
     const incumbentGrant = response(incumbentWrites, 1)!.result as Record<string, unknown>
+
     const resume = {
       ownerGeneration: incumbentGrant.ownerGeneration,
       ownerLease: incumbentGrant.ownerLease
@@ -302,16 +321,19 @@ describe('relay PTY consumer owner displacement', () => {
 
     let firstReconnectSettlement: ((result: SinkWriteSettlement) => void) | undefined
     const firstReconnectWrites: Buffer[] = []
+
     const firstReconnectClientId = dispatcher.attachClient(
       (data, settle) => {
         firstReconnectWrites.push(Buffer.from(data))
         // Why ??=: the test settles the grant response, not whatever frame the dispatcher wrote last.
         firstReconnectSettlement ??= settle
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       firstReconnectClientId,
       requestFrame(2, 'pty.openClient', ownerHelloParams(resume))
@@ -319,15 +341,18 @@ describe('relay PTY consumer owner displacement', () => {
     await flushRequests()
 
     const retryWrites: Buffer[] = []
+
     const retryClientId = dispatcher.attachClient(
       (data, settle) => {
         retryWrites.push(Buffer.from(data))
         settle({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher.feedClient(
       retryClientId,
       requestFrame(3, 'pty.openClient', ownerHelloParams(resume))

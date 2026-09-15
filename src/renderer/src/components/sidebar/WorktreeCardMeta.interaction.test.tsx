@@ -34,6 +34,7 @@ vi.mock('@/components/ui/hover-card', () => ({
   }) => {
     interactionMocks.hoverOpen = open ?? false
     interactionMocks.onHoverOpenChange = onOpenChange
+
     return <div data-hover-open={open ? 'true' : 'false'}>{children}</div>
   },
   HoverCardContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
@@ -60,6 +61,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }) => {
     interactionMocks.reviewMenuOpen = open ?? false
     interactionMocks.onReviewMenuOpenChange = onOpenChange
+
     return <div data-review-menu-open={open ? 'true' : 'false'}>{children}</div>
   },
   DropdownMenuTrigger: ({ children }: { children: ReactNode; asChild?: boolean }) => (
@@ -139,6 +141,7 @@ describe('WorktreeCardDetailsHover interactions', () => {
         </WorktreeCardDetailsHover>
       )
     })
+
     return onUnlinkReview
   }
 
@@ -159,6 +162,7 @@ describe('WorktreeCardDetailsHover interactions', () => {
         </WorktreeCardDetailsHover>
       )
     })
+
     return onRenameWorkspaceTitle
   }
 
@@ -323,6 +327,7 @@ describe('WorktreeCardDetailsHover interactions', () => {
     act(() => {
       interactionMocks.onReviewMenuOpenChange?.(true)
     })
+
     const browserButton = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('Open in Orca browser')
     )
@@ -386,6 +391,7 @@ describe('WorktreeCardDetailsHover interactions', () => {
       interactionMocks.onHoverOpenChange?.(true)
       interactionMocks.onReviewMenuOpenChange?.(true)
     })
+
     const browserButton = Array.from(container.querySelectorAll('button')).find((button) =>
       button.textContent?.includes('Open in Orca browser')
     )

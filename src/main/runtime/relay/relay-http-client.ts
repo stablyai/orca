@@ -17,6 +17,7 @@ import {
 } from './relay-region-correction-protocol'
 
 const RELAY_HTTP_REQUEST_DEADLINE_MS = 15_000
+
 const RELAY_RETRY_AFTER_MAX_MS = 5 * 60_000
 
 const RelayTokenResponseSchema = z
@@ -44,6 +45,7 @@ const AssignmentResponseSchema = z
   .strict()
 
 export type RelayAuthorization = z.infer<typeof RelayTokenResponseSchema>
+
 export type RelayAssignment = z.infer<typeof AssignmentResponseSchema>
 
 export class RelayHttpError extends Error {
@@ -75,9 +77,11 @@ export function shouldRetryRelayConnectionError(error: unknown): boolean {
   if (error instanceof RelayAssignAbortedError) {
     return false
   }
+
   if (!(error instanceof RelayHttpError)) {
     return true
   }
+
   return (
     error.statusCode >= 500 ||
     error.statusCode === 408 ||
@@ -93,8 +97,10 @@ export function deriveRelayHostId(publicKey: Uint8Array): string {
 function isAllowedRelayOrigin(value: string): boolean {
   try {
     const url = new URL(value)
+
     const loopback =
       url.hostname === '127.0.0.1' || url.hostname === 'localhost' || url.hostname === '[::1]'
+
     return (
       url.origin === value && (url.protocol === 'https:' || (url.protocol === 'http:' && loopback))
     )
@@ -111,6 +117,7 @@ export async function exchangeRelayAuthorization(input: {
   requestDeadlineMs?: number
 }): Promise<RelayAuthorization> {
   const relayHostId = deriveRelayHostId(input.keypair.publicKey)
+
   const response = await (input.fetch ?? globalThis.fetch)(input.endpoint, {
     method: 'POST',
     headers: {
@@ -121,15 +128,19 @@ export async function exchangeRelayAuthorization(input: {
     signal: AbortSignal.timeout(input.requestDeadlineMs ?? RELAY_HTTP_REQUEST_DEADLINE_MS),
     body: JSON.stringify({ relayHostId, hostPublicKeyB64: input.keypair.publicKeyB64 })
   })
+
   if (!response.ok) {
     const retryAfterMs = relayRetryAfterMs(response.headers.get('retry-after'))
     await cancelUnreadResponseBody(response)
     throw new RelayHttpError('token-exchange', response.status, retryAfterMs)
   }
+
   const parsed = RelayTokenResponseSchema.safeParse(await response.json())
+
   if (!parsed.success) {
     throw new RelayHttpError('token-exchange', 502)
   }
+
   return parsed.data
 }
 
@@ -153,8 +164,10 @@ export async function requestRelayAssignment(
   if (!isAllowedRelayOrigin(input.directorUrl)) {
     throw new RelayHttpError('assignment', 400)
   }
+
   const gate = input.assignRateGate ?? sharedRelayAssignRateGate
   const rateKey = relayAssignRateKey(input.directorUrl, input.relayHostId)
+
   try {
     await gate.reserve(rateKey, input.isCurrent)
   } catch (error) {
@@ -165,8 +178,10 @@ export async function requestRelayAssignment(
       // still in force — local booking alone never exceeds ~5.5s.
       throw new RelayAssignLocallyPacedError(error.retryAfterMs)
     }
+
     throw error
   }
+
   return await sendRelayAssignment(input, gate, rateKey)
 }
 
@@ -182,6 +197,7 @@ async function sendRelayAssignment(
   if (input.isCurrent && !input.isCurrent()) {
     throw new RelayAssignAbortedError()
   }
+
   const response = await (input.fetch ?? globalThis.fetch)(`${input.directorUrl}/v1/assign`, {
     method: 'POST',
     headers: {
@@ -199,29 +215,39 @@ async function sendRelayAssignment(
       ...(input.reconnect ? { reconnect: true } : {})
     })
   })
+
   if (!response.ok) {
     const retryAfterMs = relayRetryAfterMs(response.headers.get('retry-after'))
+
     if (retryAfterMs !== null) {
       gate.noteRetryAfter(rateKey, retryAfterMs)
     }
+
     await cancelUnreadResponseBody(response)
+
     if (input.regionCorrection && response.status === 400) {
       return await sendRelayAssignment({ ...input, regionCorrection: undefined }, gate, rateKey)
     }
+
     if (input.preferredRegion && response.status === 400) {
       // A rolled-back director rejects the regional hint; preserve the
       // reconnect lane while retrying without only that field.
       return await sendRelayAssignment({ ...input, preferredRegion: undefined }, gate, rateKey)
     }
+
     if (input.reconnect && response.status === 400) {
       // A rolled-back director rejects unknown fields; retry once unhinted.
       return await sendRelayAssignment({ ...input, reconnect: false }, gate, rateKey)
     }
+
     throw new RelayHttpError('assignment', response.status, retryAfterMs)
   }
+
   const parsed = AssignmentResponseSchema.safeParse(await response.json())
+
   if (!parsed.success || !isAllowedRelayOrigin(parsed.data.cellUrl)) {
     throw new RelayHttpError('assignment', 502)
   }
+
   return parsed.data
 }

@@ -23,11 +23,13 @@ describe('federated worker agent launch', () => {
     vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
       id: 'folder:remote-workspace'
     } as never)
+
     const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
       handle: 'term_remote_worker',
       worktreeId: 'folder:remote-workspace',
       title: 'worker'
     })
+
     vi.spyOn(runtime, 'waitForTerminal').mockResolvedValue({
       handle: 'term_remote_worker',
       condition: 'tui-idle',
@@ -47,9 +49,11 @@ describe('federated worker agent launch', () => {
       accepted: true,
       bytesWritten: 1
     })
+
     const method = ORCHESTRATION_METHODS.find(
       (candidate) => candidate.name === 'orchestration.federationAttachStart'
     )
+
     if (!method) {
       throw new Error('federationAttachStart method is not registered')
     }

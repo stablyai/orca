@@ -23,11 +23,13 @@ export function createRemoteWorkspaceSnapshotArrivalCoordinator(): RemoteWorkspa
     if (stopped) {
       return
     }
+
     const state = stateByTarget.get(targetId) ?? {
       arrival: 0,
       activeOperations: 0,
       controller: null
     }
+
     state.arrival += 1
     state.activeOperations += 1
     state.controller?.abort()
@@ -35,13 +37,16 @@ export function createRemoteWorkspaceSnapshotArrivalCoordinator(): RemoteWorkspa
     state.controller = controller
     stateByTarget.set(targetId, state)
     const arrival = state.arrival
+
     try {
       await operation(arrival, controller.signal)
     } finally {
       state.activeOperations -= 1
+
       if (state.controller === controller) {
         state.controller = null
       }
+
       if (state.activeOperations === 0 && stateByTarget.get(targetId) === state) {
         stateByTarget.delete(targetId)
       }
@@ -50,9 +55,11 @@ export function createRemoteWorkspaceSnapshotArrivalCoordinator(): RemoteWorkspa
 
   const stop = (): void => {
     stopped = true
+
     for (const state of stateByTarget.values()) {
       state.controller?.abort()
     }
+
     stateByTarget.clear()
   }
 

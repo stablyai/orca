@@ -16,6 +16,7 @@ function addTerm(db: SyncDatabase, sessionRowId: number, term: string): void {
   const rowid = db
     .prepare("INSERT INTO messages(session_row_id, role) VALUES (?, 'user')")
     .run(sessionRowId).lastInsertRowid
+
   db.prepare('INSERT INTO messages_fts(rowid, user_text) VALUES (?, ?)').run(Number(rowid), term)
 }
 
@@ -31,15 +32,19 @@ describe('typo repair policy', () => {
     'repairs $input to $expected with $copies postings (exact=$exact)',
     async ({ input, candidate, copies, exact, expected }) => {
       const index = await openSessionSearchIndexFile('ss-typo-policy')
+
       try {
         ensureSessionSearchQuerySchema(index.db)
         addSession(index.db, 1)
+
         for (let i = 0; i < copies; i++) {
           addTerm(index.db, 1, candidate)
         }
+
         if (exact) {
           addTerm(index.db, 1, input)
         }
+
         expect(new SessionSearchTypoRepair(index.db).correct(input, 'all')).toBe(expected)
       } finally {
         await index.close()
@@ -53,10 +58,12 @@ describe('typo repair policy', () => {
   // the index can already serve.
   it('falls through to the best candidate a reader can still reach', async () => {
     const index = await openSessionSearchIndexFile('ss-typo-orphaned')
+
     try {
       const { db } = index
       ensureSessionSearchQuerySchema(db)
       addSession(db, 1)
+
       // `coalesces` scores higher against `coalescs` than `coalesced` does, and
       // shares its prefix, so only the fall-through can reach the reachable one.
       // Session 2 is never created: these rows are what an unfinished purge
@@ -69,6 +76,7 @@ describe('typo repair policy', () => {
       ] as const) {
         addTerm(db, session, term)
       }
+
       expect(db.prepare("SELECT doc FROM messages_vocab WHERE term='coalesces'").get()).toEqual({
         doc: 2
       })

@@ -55,10 +55,13 @@ export function useFloatingTerminalPanelShortcuts({
 }: FloatingTerminalPanelShortcutsInput) {
   const closeActiveFloatingTerminalPane = useCallback(() => {
     const handle = activeTerminalId ? terminalPaneRegistry.getHandle(activeTerminalId) : null
+
     if (handle) {
       handle.closeActivePane()
+
       return
     }
+
     if (activeClosableTab) {
       closeFloatingItemConfirmed(activeClosableTab.id)
     }
@@ -70,27 +73,34 @@ export function useFloatingTerminalPanelShortcuts({
       const platform = getShortcutPlatform()
       const terminalShortcutPolicy = state.settings?.terminalShortcutPolicy
       const isFloatingTerminalInput = isFloatingWorkspaceTerminalInputTarget(input.target)
+
       const context: KeybindingContext = input.doubleTapModifier
         ? 'app'
         : isFloatingTerminalInput
           ? 'terminal'
           : 'app'
+
       const matchOptions: KeybindingMatchOptions = { context, terminalShortcutPolicy }
+
       const floatingChromeMatchOptions: KeybindingMatchOptions =
         isFloatingTerminalInput && terminalShortcutPolicy === 'terminal-first'
           ? { context: 'app', terminalShortcutPolicy }
           : matchOptions
+
       const ownedAction = matchFloatingWorkspacePanelOwnedAction(
         input,
         platform,
         state.keybindings,
         matchOptions
       )
+
       if (ownedAction !== null && ownedAction !== 'tab.close') {
         return { kind: 'create', action: ownedAction }
       }
+
       const focusedFloatingTerminal =
         isFloatingTerminalInput && activeTab?.contentType === 'terminal'
+
       if (
         ownedAction === 'tab.close' ||
         (focusedFloatingTerminal &&
@@ -98,6 +108,7 @@ export function useFloatingTerminalPanelShortcuts({
       ) {
         return { kind: 'close', focusedFloatingTerminal }
       }
+
       const panelShortcut = matchFloatingWorkspacePanelShortcut(
         input,
         platform,
@@ -105,9 +116,11 @@ export function useFloatingTerminalPanelShortcuts({
         matchOptions,
         floatingChromeMatchOptions
       )
+
       if (panelShortcut === null) {
         return null
       }
+
       return panelShortcut.kind === 'index'
         ? { kind: 'index', index: panelShortcut.index }
         : { kind: 'chrome', action: panelShortcut.action }
@@ -123,6 +136,7 @@ export function useFloatingTerminalPanelShortcuts({
     ): FloatingShortcutOutcome => {
       if (resolution.kind === 'create') {
         consume()
+
         if (resolution.action === 'tab.newTerminal') {
           createFloatingTerminalTab()
         } else if (resolution.action === 'tab.newBrowser') {
@@ -131,53 +145,70 @@ export function useFloatingTerminalPanelShortcuts({
           ) {
             return 'handled'
           }
+
           createFloatingBrowserTab()
         } else if (resolution.action === 'tab.newMarkdown') {
           createFloatingMarkdownTab()
         } else {
           openFloatingMarkdownTab()
         }
+
         return 'handled'
       }
+
       if (resolution.kind === 'close') {
         if (resolution.focusedFloatingTerminal) {
           if (input.doubleTapModifier) {
             consume()
             closeActiveFloatingTerminalPane()
+
             return 'handled'
           }
+
           return 'deferred'
         }
+
         consume()
+
         if (activeClosableTab) {
           closeFloatingItemConfirmed(activeClosableTab.id)
         } else {
           onOpenChange(false)
         }
+
         return 'handled'
       }
+
       if (resolution.kind === 'index') {
         consume()
         const visibleId = visibleFloatingTabOrder[resolution.index]
+
         if (visibleId) {
           activateFloatingItem(visibleId)
         }
+
         return 'handled'
       }
+
       if (resolution.action === 'tab.rename') {
         if (!activeTab) {
           return 'unmatched'
         }
+
         consume()
         requestTerminalTabRename(activeTab.id)
+
         return 'handled'
       }
+
       consume()
+
       if (resolution.action === 'floatingWorkspace.maximize') {
         toggleMaximized()
       } else {
         onOpenChange(false)
       }
+
       return 'handled'
     },
     [
@@ -199,6 +230,7 @@ export function useFloatingTerminalPanelShortcuts({
   const handleFloatingPanelShortcutAction = useCallback(
     (input: FloatingPanelShortcutInput, consume: () => void): FloatingShortcutOutcome => {
       const resolution = resolveFloatingPanelShortcut(input)
+
       return resolution === null
         ? 'unmatched'
         : applyFloatingPanelShortcut(resolution, input, consume)
@@ -212,6 +244,7 @@ export function useFloatingTerminalPanelShortcuts({
     handleFloatingPanelShortcutAction,
     visibleFloatingTabOrder
   })
+
   useEffect(() => {
     floatingShortcutListenersRef.current = {
       activateFloatingItem,
@@ -231,7 +264,9 @@ export function useFloatingTerminalPanelShortcuts({
       if (!open || event.defaultPrevented || event.repeat) {
         return
       }
+
       const target = event.target
+
       if (
         !(target instanceof HTMLElement) ||
         (target !== panelRef.current &&
@@ -239,11 +274,14 @@ export function useFloatingTerminalPanelShortcuts({
       ) {
         return
       }
+
       const nativeEvent = event.nativeEvent
       const resolution = resolveFloatingPanelShortcut(nativeEvent)
+
       if (resolution === null) {
         return
       }
+
       applyFloatingPanelShortcut(resolution, nativeEvent, () => event.preventDefault())
     },
     [applyFloatingPanelShortcut, open, panelRef, resolveFloatingPanelShortcut]

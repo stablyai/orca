@@ -23,12 +23,15 @@ const WORK_ITEM_PARTICIPANTS_QUERY = `query($owner: String!, $repo: String!, $nu
 
 function mergeGitHubUsers(users: GitHubAssignableUser[]): GitHubAssignableUser[] {
   const byLogin = new Map<string, GitHubAssignableUser>()
+
   for (const user of users) {
     if (!user.login) {
       continue
     }
+
     const key = user.login.toLowerCase()
     const existing = byLogin.get(key)
+
     if (existing) {
       byLogin.set(key, {
         login: existing.login,
@@ -37,12 +40,14 @@ function mergeGitHubUsers(users: GitHubAssignableUser[]): GitHubAssignableUser[]
       })
       continue
     }
+
     byLogin.set(key, {
       login: user.login,
       name: user.name ?? null,
       avatarUrl: user.avatarUrl ?? ''
     })
   }
+
   return Array.from(byLogin.values())
 }
 
@@ -56,15 +61,19 @@ export async function getWorkItemParticipants(
   if (!repository) {
     return []
   }
+
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(repository)
   }
+
   if (repositoryRateLimitGuard(repository, 'graphql', ghOptions).blocked) {
     return []
   }
+
   try {
     noteRepositoryRateLimitSpend(repository, 'graphql', 1, ghOptions)
+
     const { stdout } = await ghExecFileAsync(
       [
         'api',
@@ -82,6 +91,7 @@ export async function getWorkItemParticipants(
       ],
       ghOptions
     )
+
     const data = JSON.parse(stdout) as {
       data?: {
         repository?: {
@@ -90,10 +100,12 @@ export async function getWorkItemParticipants(
         }
       }
     }
+
     const nodes =
       data.data?.repository?.pullRequest?.participants?.nodes ??
       data.data?.repository?.issue?.participants?.nodes ??
       []
+
     return nodes
       .map((user) => ({
         login: user.login,
@@ -116,40 +128,50 @@ async function getGitHubUsersByLogin(
   if (!repository) {
     return []
   }
+
   const uniqueLogins = Array.from(
     new Set(logins.filter((login) => login && login !== 'ghost').map((login) => login.trim()))
   ).slice(0, 40)
+
   if (uniqueLogins.length === 0) {
     return []
   }
+
   const ghOptions = {
     ...ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions)),
     ...githubHostExecOptions(repository)
   }
+
   if (repositoryRateLimitGuard(repository, 'graphql', ghOptions).blocked) {
     console.warn(
       `getGitHubUsersByLogin skipped: GraphQL rate-limit budget exhausted (${uniqueLogins.length} logins unresolved)`
     )
+
     return []
   }
+
   const fields = uniqueLogins
     .map(
       (login, index) =>
         `u${index}: user(login: ${JSON.stringify(login)}) { login name avatarUrl(size: 48) }`
     )
     .join('\n')
+
   try {
     noteRepositoryRateLimitSpend(repository, 'graphql', 1, ghOptions)
+
     const { stdout } = await ghExecFileAsync(
       ['api', 'graphql', '-f', `query=query { ${fields} }`],
       ghOptions
     )
+
     const data = JSON.parse(stdout) as {
       data?: Record<
         string,
         { login?: string; name?: string | null; avatarUrl?: string | null } | null
       >
     }
+
     return Object.values(data.data ?? {})
       .filter((user): user is { login: string; name?: string | null; avatarUrl?: string | null } =>
         Boolean(user?.login)
@@ -183,6 +205,7 @@ export async function getMentionParticipants(
     ...(item.assignees ?? []).map((user) => user.login),
     ...comments.map((comment) => comment.author)
   ]
+
   const graphQlUsers = await getGitHubUsersByLogin(
     repoPath,
     visibleLogins,
@@ -190,6 +213,7 @@ export async function getMentionParticipants(
     connectionId,
     localGitOptions
   )
+
   return mergeGitHubUsers([...participants, ...graphQlUsers])
 }
 
@@ -198,18 +222,24 @@ export function enrichItemDisplayAvatars(
   knownUsers: GitHubAssignableUser[]
 ): Omit<GitHubWorkItem, 'repoId'> {
   const avatarByLogin = new Map<string, string>()
+
   for (const user of knownUsers) {
     if (user.login && user.avatarUrl) {
       avatarByLogin.set(user.login.toLowerCase(), user.avatarUrl)
     }
   }
+
   if (avatarByLogin.size === 0) {
     return item
   }
+
   const avatarFor = (login: string): string | undefined => avatarByLogin.get(login.toLowerCase())
+
   const resolvedAvatar = (login: string, existing?: string | null): string | undefined =>
     avatarFor(login) || existing || undefined
+
   const authorAvatarUrl = (item.author ? avatarFor(item.author) : undefined) || item.authorAvatarUrl
+
   return {
     ...item,
     ...(authorAvatarUrl ? { authorAvatarUrl } : {}),

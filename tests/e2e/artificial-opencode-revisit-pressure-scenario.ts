@@ -117,6 +117,7 @@ export async function runRendererBackpressureRevisitScenario<
   expect(Boolean(secondWorktreeId), 'renderer backpressure revisit needs a second worktree').toBe(
     true
   )
+
   if (!secondWorktreeId) {
     return
   }
@@ -148,6 +149,7 @@ export async function runRendererBackpressureRevisitScenario<
     orcaPage,
     loadPanes.map((pane) => pane.ptyId)
   )
+
   try {
     await startRealPtyPressureCommands({
       loadPanes,
@@ -161,12 +163,14 @@ export async function runRendererBackpressureRevisitScenario<
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
     await waitForTerminalPtyVisible(orcaPage, typingPtyId)
+
     const measurement = await deps.measureTypingDuringLoad(
       orcaPage,
       typingScriptPath,
       typingPtyId,
       runId
     )
+
     const duringPressure = await deps.readMainPtyPressureDebug(orcaPage)
     const ackGate = await deps.readTerminalAckGateDebug(orcaPage)
     const scheduler = await deps.readTerminalOutputSchedulerDebug(orcaPage)
@@ -270,12 +274,15 @@ async function waitForMarkerLatency(
   timeoutMs: number
 ): Promise<number> {
   const start = performance.now()
+
   while (performance.now() - start < timeoutMs) {
     if ((await getTerminalContent(page, 12_000)).includes(marker)) {
       return performance.now() - start
     }
+
     await page.waitForTimeout(5)
   }
+
   throw new Error(`Timed out waiting for terminal marker ${marker}`)
 }
 

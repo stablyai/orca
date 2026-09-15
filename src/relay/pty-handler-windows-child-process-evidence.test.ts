@@ -63,6 +63,7 @@ describe('PtyHandler Windows child-process evidence', () => {
   async function spawnThenBecomeWindows(): Promise<string> {
     const { id } = await spawnPty()
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
     return id
   }
 

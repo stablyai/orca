@@ -10,6 +10,7 @@ export function getLocalWorkspacePortSections(
   externalPorts: WorkspacePort[]
 } {
   const ports = scan?.ports ?? []
+
   return {
     activePorts: ports.filter(
       (port) =>
@@ -30,6 +31,7 @@ export function getLocalWorkspacePortSections(
       if (port.kind !== 'workspace') {
         return [port]
       }
+
       return port.owner.repoId === activeRepoId ? [] : [workspacePortAsExternal(port)]
     })
   }
@@ -48,6 +50,7 @@ export function shouldShowLocalWorkspacePortSections(
   if (!scan?.unavailableReason) {
     return true
   }
+
   return (
     sections.activePorts.length > 0 ||
     sections.otherWorkspacePorts.length > 0 ||

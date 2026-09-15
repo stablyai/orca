@@ -38,11 +38,13 @@ export function LinearIssueProjectSelector({
 
   useEffect(() => {
     const requestId = ++searchRequestIdRef.current
+
     if (!open || requestQuery === null) {
       return () => {
         searchRequestIdRef.current += 1
       }
     }
+
     const timeout = window.setTimeout(() => {
       setLoading(true)
       void linearListProjects(providerSettings, requestQuery, 20, issue.workspaceId)
@@ -69,6 +71,7 @@ export function LinearIssueProjectSelector({
           }
         })
     }, 150)
+
     return () => {
       searchRequestIdRef.current += 1
       window.clearTimeout(timeout)
@@ -78,6 +81,7 @@ export function LinearIssueProjectSelector({
   const handleSelectProject = useCallback(
     async (project: LinearProjectSummary) => {
       setSavingProjectId(project.id)
+
       try {
         const result = await linearUpdateIssue(
           providerSettings,
@@ -85,6 +89,7 @@ export function LinearIssueProjectSelector({
           { projectId: project.id },
           issue.workspaceId
         )
+
         if (result.ok) {
           onProjectChanged(project)
           patchLinearIssue(issue.id, { project }, { sourceContext })

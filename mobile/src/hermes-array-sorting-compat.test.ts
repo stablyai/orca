@@ -14,13 +14,16 @@ const SOURCE_ROOTS = [
   { label: 'mobile/app', path: resolve(import.meta.dirname, '../app') },
   { label: 'src/shared', path: resolve(import.meta.dirname, '../../src/shared') }
 ]
+
 const UNSUPPORTED_ARRAY_SORTING = /\.toSorted\s*\(/
 
 function usesUnsupportedArraySorting(source: string): boolean {
   if (!UNSUPPORTED_ARRAY_SORTING.test(source)) {
     return false
   }
+
   const decommented = stripComments(source)
+
   return (
     blankStringContentsDesynced(decommented) ||
     UNSUPPORTED_ARRAY_SORTING.test(blankStringContents(decommented))

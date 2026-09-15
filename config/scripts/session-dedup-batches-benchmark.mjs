@@ -14,27 +14,32 @@ const bundled = await build({
   format: 'esm',
   write: false
 })
+
 const production = await import(
   `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}`
 )
 
 function baseline(input) {
   const sessions = []
+
   for (let offset = 0; offset < input.length; offset += 8) {
     sessions.push(...input.slice(offset, offset + 8))
     const unique = production.dedupeCodexSessionsBySessionId(sessions)
     sessions.splice(0, sessions.length, ...unique)
   }
+
   return sessions
 }
 
 function incremental(input) {
   const sessions = new production.CodexSessionCollection()
+
   for (let offset = 0; offset < input.length; offset += 8) {
     for (const session of input.slice(offset, offset + 8)) {
       sessions.add(session)
     }
   }
+
   return [...sessions.values()]
 }
 
@@ -58,23 +63,29 @@ function checkIdentities(actual, expected) {
 }
 
 let seed = 90211
+
 function random(max) {
   seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+
   return Math.floor((seed / 0x100000000) * max)
 }
 
 if (production.CodexSessionCollection) {
   let batches = 0
+
   for (let trial = 0; trial < 2000; trial++) {
     const input = []
     const current = new production.CodexSessionCollection()
     let expected = []
+
     for (let batch = 0; batch < 20; batch++) {
       const added = Array.from({ length: 1 + random(8) }, () => {
         if (input.length && random(4) === 0) {
           return input[random(input.length)]
         }
+
         const index = random(12)
+
         const root = [
           '/home/ada/.codex',
           '/tmp/codex-runtime-home/home',
@@ -85,6 +96,7 @@ if (production.CodexSessionCollection) {
           '\\\\wsl$\\Debian\\home\\ada\\.codex',
           'C:\\Users\\Ada\\.codex'
         ][random(8)]
+
         return makeSession(index, {
           agent: random(6) ? 'codex' : 'claude',
           executionHostId: random(5) ? 'local' : 'ssh:dev',
@@ -95,6 +107,7 @@ if (production.CodexSessionCollection) {
           modifiedAt: random(4) ? '2026-09-11T10:00:00Z' : 'invalid'
         })
       })
+
       input.push(...added)
       expected = production.dedupeCodexSessionsBySessionId([...expected, ...added])
       added.forEach((session) => current.add(session))
@@ -103,13 +116,16 @@ if (production.CodexSessionCollection) {
       batches++
     }
   }
+
   console.log(JSON.stringify({ differentialBatches: batches }))
 }
 
 const workloads = []
+
 if (process.argv.includes('--verify-only')) {
   process.exit(0)
 }
+
 for (const count of [8, 100, 1000, 5000, 10000]) {
   workloads.push([`${count} unique Codex`, Array.from({ length: count }, (_, i) => makeSession(i))])
   workloads.push([
@@ -117,8 +133,10 @@ for (const count of [8, 100, 1000, 5000, 10000]) {
     Array.from({ length: count }, (_, i) => makeSession(i, { agent: 'claude' }))
   ])
 }
+
 for (const count of [1000, 5000]) {
   const input = Array.from({ length: count }, (_, i) => makeSession(i))
+
   const aliases = input.map((session) =>
     makeSession(0, {
       ...session,
@@ -126,6 +144,7 @@ for (const count of [1000, 5000]) {
       filePath: session.filePath.replace('/home/ada/.codex', '/tmp/custom')
     })
   )
+
   workloads.push([`${count} late preferred roots`, [...aliases, ...input]])
   workloads.push([`${count} late losing roots`, [...input, ...aliases]])
 }
@@ -133,34 +152,42 @@ for (const count of [1000, 5000]) {
 function median(samples) {
   const sorted = [...samples].sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)
+
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
 }
 
 console.log(
   JSON.stringify({ node: process.version, platform: process.platform, arch: process.arch })
 )
+
 for (const [name, input] of workloads) {
   const expected = baseline(input)
   const arms = { baseline, ...(production.CodexSessionCollection ? { incremental } : {}) }
   const repeats = Math.max(1, Math.floor(5000 / input.length))
   const samples = { baseline: [], incremental: [] }
+
   for (const run of Object.values(arms)) {
     checkIdentities(run(input), expected)
   }
+
   for (const pair of buildCounterbalancedSchedule(8, 'baseline', 'incremental')) {
     for (const arm of pair) {
       if (!arms[arm]) {
         continue
       }
+
       const start = performance.now()
       let result
+
       for (let repeat = 0; repeat < repeats; repeat++) {
         result = arms[arm](input)
       }
+
       samples[arm].push((performance.now() - start) / repeats)
       checkIdentities(result, expected)
     }
   }
+
   console.log(
     JSON.stringify({
       name,

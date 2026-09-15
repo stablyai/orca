@@ -53,7 +53,9 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
       if (!client) {
         return
       }
+
       let entry: DetailEntry
+
       try {
         const outcome = await fetchPRCheckDetails(client, worktreeId, {
           checkRunId: check.checkRunId,
@@ -62,6 +64,7 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
           url: check.url,
           prRepo
         })
+
         entry = outcome.ok
           ? { status: 'loaded', details: outcome.result }
           : { status: 'error', message: outcome.error }
@@ -73,6 +76,7 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
           message: err instanceof Error ? err.message : 'Failed to load check details'
         }
       }
+
       setDetailCache((prev) => ({ ...prev, [key]: entry }))
     },
     [client, worktreeId, prRepo]
@@ -85,7 +89,9 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
         if (prev[key] || !client) {
           return prev
         }
+
         void loadDetail(check, key)
+
         return { ...prev, [key]: { status: 'loading' } }
       })
     },
@@ -97,11 +103,15 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
       const key = prCheckKey(check)
       setExpanded((prev) => {
         const next = new Set(prev)
+
         if (next.has(key)) {
           next.delete(key)
+
           return next
         }
+
         next.add(key)
+
         return next
       })
       ensureDetail(check, key)
@@ -118,15 +128,20 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
     if (autoExpandedSignatureRef.current === sortedSignature) {
       return
     }
+
     autoExpandedSignatureRef.current = sortedSignature
     const key = firstFailingCheckKey(sorted)
+
     if (!key) {
       return
     }
+
     const failing = sorted.find((check) => prCheckKey(check) === key)
+
     if (!failing) {
       return
     }
+
     setExpanded((prev) => (prev.has(key) ? prev : new Set(prev).add(key)))
     ensureDetail(failing, key)
   }, [ensureDetail, sorted, sortedSignature])
@@ -198,6 +213,7 @@ export function PRChecksSection({ checks, client, worktreeId, prRepo, actions, t
         const token = checkOutcomeToken(checkOutcome(check))
         const Chevron = isOpen ? ChevronDown : ChevronRight
         const url = check.url
+
         return (
           <View key={key}>
             <Pressable

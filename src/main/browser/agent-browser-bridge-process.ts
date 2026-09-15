@@ -9,6 +9,7 @@ import { EMBEDDED_NAVIGATION_TIMEOUT_MS } from './agent-browser-bridge-types'
 
 export function agentBrowserNativeName(): string {
   const ext = process.platform === 'win32' ? '.exe' : ''
+
   return `agent-browser-${platform()}-${arch()}${ext}`
 }
 
@@ -19,7 +20,9 @@ export function resolveAgentBrowserBinary(): string {
     (process.platform === 'darwin'
       ? join(app.getPath('exe'), '..', '..', 'Resources')
       : join(app.getPath('exe'), '..', 'resources'))
+
   const bundled = join(bundledResourcesPath, agentBrowserNativeName())
+
   if (existsSync(bundled)) {
     return bundled
   }
@@ -32,6 +35,7 @@ export function resolveAgentBrowserBinary(): string {
     'bin',
     agentBrowserNativeName()
   )
+
   if (existsSync(nmBin)) {
     if (process.platform !== 'win32') {
       try {
@@ -40,6 +44,7 @@ export function resolveAgentBrowserBinary(): string {
         chmodSync(nmBin, 0o755)
       }
     }
+
     return nmBin
   }
 
@@ -56,6 +61,7 @@ export function parseShellArgs(input: string): string[] {
 
   for (let i = 0; i < input.length; i++) {
     const ch = input[i]
+
     if (ch === '"' && !inSingle) {
       inDouble = !inDouble
     } else if (ch === "'" && !inDouble) {
@@ -69,25 +75,32 @@ export function parseShellArgs(input: string): string[] {
       current += ch
     }
   }
+
   if (current) {
     args.push(current)
   }
+
   return args
 }
 
 export function stripAgentBrowserTargetArgs(args: string[]): string[] {
   const stripped: string[] = []
+
   for (let index = 0; index < args.length; index++) {
     const arg = args[index]
+
     if (arg === '--cdp' || arg === '--session') {
       index++
       continue
     }
+
     if (arg.startsWith('--cdp=') || arg.startsWith('--session=')) {
       continue
     }
+
     stripped.push(arg)
   }
+
   return stripped
 }
 
@@ -96,6 +109,7 @@ export function classifyErrorCode(message: string): string {
   if (/unknown ref|ref not found|element not found: @e/i.test(message)) {
     return 'browser_stale_ref'
   }
+
   return 'browser_error'
 }
 
@@ -103,7 +117,9 @@ export function isAbortedNavigationError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
     return false
   }
+
   const { code, errno } = error as { code?: unknown; errno?: unknown }
+
   return code === 'ERR_ABORTED' || errno === -3
 }
 
@@ -128,22 +144,27 @@ export function waitForAbortedNavigationReplacement(
   return new Promise((resolve, reject) => {
     let settled = false
     let timeout: ReturnType<typeof setTimeout> | null = null
+
     const finish = (error?: BrowserError): void => {
       if (settled) {
         return
       }
+
       settled = true
       wc.removeListener('did-stop-loading', onDidStopLoading)
       wc.removeListener('destroyed', onDestroyed)
+
       if (timeout) {
         clearTimeout(timeout)
       }
+
       if (error) {
         reject(error)
       } else {
         resolve()
       }
     }
+
     const onDidStopLoading = (): void => finish()
     const onDestroyed = (): void => finish()
 
@@ -177,6 +198,7 @@ export function isTabClosedTransportError(message: string): boolean {
 export function pageUnavailableMessageForSession(sessionName: string): string {
   const prefix = ORCA_TAB_SESSION_PREFIX
   const browserPageId = sessionName.startsWith(prefix) ? sessionName.slice(prefix.length) : null
+
   return browserPageId
     ? `Browser page ${browserPageId} is no longer available`
     : 'Browser tab is no longer available'

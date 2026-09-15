@@ -27,10 +27,13 @@ export function isWebOnlyMirroredTerminalTab(
   if (!isWebTerminalSurfaceTabId(tab.id)) {
     return false
   }
+
   const layoutPtyIds = Object.values(layout?.ptyIdsByLeafId ?? {})
+
   const ptyIds = [tab.ptyId, ...layoutPtyIds].filter(
     (ptyId): ptyId is string => typeof ptyId === 'string' && ptyId.length > 0
   )
+
   // Only-remote/no-PTY tabs are web mirrors; legacy local-PTY tabs still publish.
   return ptyIds.every(isRemoteRuntimePtyId)
 }
@@ -40,13 +43,17 @@ export function getRuntimeLeafIdsForTerminal(
   savedLayout: AppState['terminalLayoutsByTabId'][string] | undefined
 ): readonly string[] {
   const liveLeafIds = capture?.paneLeafIds ?? []
+
   if (liveLeafIds.length > 0) {
     return liveLeafIds
   }
+
   const persistedLeafIds = collectLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
+
   if (persistedLeafIds.length > 0) {
     return persistedLeafIds
   }
+
   // A new tab can predate TerminalPane mount; do not fabricate a stale pane:1.
   return []
 }
@@ -58,6 +65,7 @@ export function resolveMobileTabWideAgentHintLeafId(
   if (capture) {
     return capture.tabWideAgentHintLeafId
   }
+
   return isNativeChatTabWideFallbackSafe(savedLayout)
     ? resolveNativeChatActiveLayoutLeafId(savedLayout)
     : null

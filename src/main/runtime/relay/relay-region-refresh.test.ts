@@ -2,13 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RelayHttpError, type RelayAssignment } from './relay-http-client'
 import type * as RelayHttpClientModule from './relay-http-client'
 import type { RelayRegionWindow } from './relay-region-correction-protocol'
+
 const fake = vi.hoisted(() => ({ assign: vi.fn() }))
+
 vi.mock('./relay-http-client', async (original) => ({
   ...(await original<typeof RelayHttpClientModule>()),
   requestRelayAssignment: fake.assign
 }))
+
 import { RelayRegionRefresh } from './relay-region-refresh'
+
 const HOUR = 60 * 60_000
+
 const window: RelayRegionWindow = {
   generation: 1,
   assignmentEpoch: 1,
@@ -16,6 +21,7 @@ const window: RelayRegionWindow = {
   expiresAt: 24 * HOUR,
   policyVersion: 1
 }
+
 const assignment: RelayAssignment = {
   v: 1,
   cellUrl: 'https://source.example.test',
@@ -23,12 +29,15 @@ const assignment: RelayAssignment = {
   lease: 'test',
   regionCorrection: { v: 1, window }
 }
+
 let scheduler: RelayRegionRefresh
+
 function setup(random = 0.5) {
   const measure = vi.fn().mockResolvedValue({
     outcome: 'conclusive',
     measurements: { 'us-central1': 30, 'asia-east2': 200 }
   })
+
   const applyAssignment = vi.fn(() => true)
   const isOnline = vi.fn(() => true)
   scheduler = new RelayRegionRefresh({
@@ -43,8 +52,10 @@ function setup(random = 0.5) {
     random: () => random,
     now: () => Date.now()
   })
+
   return { measure, applyAssignment, isOnline }
 }
+
 describe('broker-owned region decision refresh', () => {
   beforeEach(() => {
     vi.useFakeTimers()

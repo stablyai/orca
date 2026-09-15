@@ -37,6 +37,7 @@ export function useWorkspaceStatusRowDrag(args: {
       if (!hasWorkspaceDragData(event.dataTransfer)) {
         return
       }
+
       event.preventDefault()
       event.dataTransfer.dropEffect = 'move'
       setDragOverStatus(status)
@@ -47,9 +48,11 @@ export function useWorkspaceStatusRowDrag(args: {
   const handleWorkspaceStatusDragLeave = useCallback(
     (event: React.DragEvent) => {
       const relatedTarget = event.relatedTarget
+
       if (relatedTarget instanceof Node && event.currentTarget.contains(relatedTarget)) {
         return
       }
+
       setDragOverStatus(null)
     },
     [setDragOverStatus]
@@ -60,6 +63,7 @@ export function useWorkspaceStatusRowDrag(args: {
       if (!hasWorkspaceDragData(event.dataTransfer)) {
         return
       }
+
       event.preventDefault()
       event.dataTransfer.dropEffect = 'move'
       setPinDragOver(true)
@@ -70,9 +74,11 @@ export function useWorkspaceStatusRowDrag(args: {
   const handleWorkspacePinDragLeave = useCallback(
     (event: React.DragEvent) => {
       const relatedTarget = event.relatedTarget
+
       if (relatedTarget instanceof Node && event.currentTarget.contains(relatedTarget)) {
         return
       }
+
       setPinDragOver(false)
     },
     [setPinDragOver]
@@ -86,11 +92,14 @@ export function useWorkspaceStatusRowDrag(args: {
   const handleWorkspaceStatusDrop = useCallback(
     (event: React.DragEvent, status: WorkspaceStatus) => {
       const worktreeIds = readWorkspaceDragDataIds(event.dataTransfer)
+
       if (worktreeIds.length === 0) {
         return
       }
+
       event.preventDefault()
       const dragSession = session.worktreeDragSessionRef.current
+
       const statusDrop = dragSession
         ? ctx.computeWorktreeStatusDrop({
             pointerY: event.clientY,
@@ -98,7 +107,9 @@ export function useWorkspaceStatusRowDrag(args: {
             draggedIds: dragSession.reorderDraggedIds
           })
         : null
+
       setDragOverStatus(null)
+
       if (dragSession && statusDrop) {
         event.stopPropagation()
         ctx.onMoveWorktreesToStatusAtIndex({
@@ -108,8 +119,10 @@ export function useWorkspaceStatusRowDrag(args: {
           groups: ctx.worktreeDragGroups
         })
         clearWorktreeDrag()
+
         return
       }
+
       // Match status-drop scope to drag-preview scope (#9083): session uses its expanded set, else expand dataTransfer ids live.
       ctx.onMoveWorktreesToStatus(
         dragSession ? dragSession.reorderDraggedIds : session.getReorderDraggedIds(worktreeIds),

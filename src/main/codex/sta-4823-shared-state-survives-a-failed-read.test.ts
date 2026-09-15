@@ -60,14 +60,18 @@ const denials = vi.hoisted(() => {
       if (typeof target !== 'string') {
         return
       }
+
       const readDenied =
         readOnly && (state.readOnlyPaths.has(target) || state.existenceDeniedPaths.has(target))
+
       if (!state.paths.has(target) && !readDenied) {
         return
       }
+
       const error: NodeJS.ErrnoException = new Error(
         `EPERM: operation not permitted, ${syscall} '${target}'`
       )
+
       error.code = 'EPERM'
       error.errno = -4048
       error.syscall = syscall
@@ -75,6 +79,7 @@ const denials = vi.hoisted(() => {
       throw error
     }
   }
+
   return state
 })
 
@@ -83,18 +88,24 @@ const denials = vi.hoisted(() => {
 // against code that still consults the one left healthy.
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   const guard = (fn: unknown, syscall: string): unknown => {
     const original = fn as (...args: unknown[]) => unknown
+
     const wrapped = (...args: unknown[]): unknown => {
       denials.check(args[0], syscall)
+
       return original(...args)
     }
+
     return Object.assign(wrapped, original)
   }
+
   const patched: Record<string, unknown> = {
     ...actual,
     readFileSync: Object.assign((...args: unknown[]): unknown => {
       denials.check(args[0], 'read', true)
+
       return (actual.readFileSync as (...a: unknown[]) => unknown)(...args)
     }, actual.readFileSync),
     // Why: the size-capped agent-state reader opens with `openSync`, so leaving
@@ -104,9 +115,11 @@ vi.mock('node:fs', async (importOriginal) => {
     openSync: Object.assign((...args: unknown[]): unknown => {
       const flags = args[1]
       const isRead = flags === undefined || (typeof flags === 'string' && flags.startsWith('r'))
+
       if (isRead) {
         denials.check(args[0], 'open', true)
       }
+
       return (actual.openSync as (...a: unknown[]) => unknown)(...args)
     }, actual.openSync),
     statSync: guard(actual.statSync, 'stat'),
@@ -120,6 +133,7 @@ vi.mock('node:fs', async (importOriginal) => {
       actual.existsSync
     )
   }
+
   return { ...patched, default: patched }
 })
 
@@ -132,6 +146,7 @@ vi.mock('electron', () => ({ app: { getPath: getPathMock } }))
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
+
   return { ...actual, homedir: homedirMock }
 })
 
@@ -139,24 +154,35 @@ const realFs = await vi.importActual<typeof NodeFs>('node:fs')
 
 const { upsertHookTrustEntries, upsertProjectTrustLevel, readHookTrustEntries } =
   await import('./config-toml-trust')
+
 const {
   writeCodexTrustGrantLedgerHome,
   readCodexTrustGrantLedgerHome,
   getCodexTrustGrantLedgerPath
 } = await import('./codex-trust-grant-ledger')
+
 const { readHooksJson } = await import('../agent-hooks/hooks-json-read')
+
 const { MAX_AGENT_STATE_FILE_BYTES } = await import('../agent-state-file-reader')
+
 const { observeCodexSettingsBaseline } = await import('./config-settings-baseline')
+
 const { snapshotCodexRuntimeSettingsBaseline } = await import('./config-settings-promotion')
+
 const { getCodexConfigSyncStatus } = await import('./config-sync-stall')
+
 const paneRegistry = await import('./codex-pane-account-registry')
 
 let fakeHomeDir: string
+
 let userDataDir: string
+
 let runtimeHomePath: string
+
 let previousUserDataPath: string | undefined
 
 const systemHome = (): string => join(fakeHomeDir, '.codex')
+
 const baselinePath = (): string => join(runtimeHomePath, '.orca-config-settings-baseline.json')
 
 beforeEach(() => {
@@ -171,6 +197,7 @@ beforeEach(() => {
     if (name === 'userData') {
       return userDataDir
     }
+
     throw new Error(`unexpected app.getPath(${name})`)
   })
   realFs.mkdirSync(runtimeHomePath, { recursive: true })
@@ -183,11 +210,13 @@ afterEach(() => {
   paneRegistry._internals.resetCache()
   realFs.rmSync(fakeHomeDir, { recursive: true, force: true })
   realFs.rmSync(userDataDir, { recursive: true, force: true })
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   vi.clearAllMocks()
 })
 
@@ -201,6 +230,7 @@ describe('STA-4823 D29 — an unreadable config.toml must not become a trust-onl
     'command = "run-me"',
     ''
   ].join('\n')
+
   const ENTRY = [
     {
       sourcePath: '/tmp/hooks.json',
@@ -266,6 +296,7 @@ describe('STA-4823 D30 — an unreadable trust-grant ledger must not be rewritte
       { entries: { 'a:b': { trustedHash: 'sha256:other' } } } as never,
       ledgerPath
     )
+
     return ledgerPath
   }
 
@@ -328,6 +359,7 @@ describe('STA-4823 D26 — an unreadable settings baseline must stall the mirror
       `${JSON.stringify({ version: 2, settings: { model: 'old-model' } })}\n`,
       'utf-8'
     )
+
     return realFs.readFileSync(baselinePath(), 'utf-8')
   }
 

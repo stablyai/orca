@@ -10,7 +10,9 @@ import { createSkillPackageArchive } from './skill-package-creation'
 import { createWslSkillInstallFilesystem } from './skill-wsl-install-filesystem'
 
 const execFileAsync = promisify(execFile)
+
 const DISTRO = process.env.ORCA_REAL_WSL_SKILL_DISTRO ?? 'Ubuntu-24.04'
+
 const RUN_REAL_WSL = process.platform === 'win32' && process.env.ORCA_REAL_WSL_SKILL_TEST === '1'
 
 async function runWsl(...args: string[]): Promise<string> {
@@ -19,6 +21,7 @@ async function runWsl(...args: string[]): Promise<string> {
     timeout: 30_000,
     windowsHide: true
   })
+
   return stdout.trim()
 }
 
@@ -28,14 +31,17 @@ function uncPath(guestPath: string): string {
 
 function interruptThirdRename(filesystem: SkillInstallFilesystem): SkillInstallFilesystem {
   let renameCount = 0
+
   return {
     prepareExtractedSkill: (path, manifest) => filesystem.prepareExtractedSkill(path, manifest),
     observeSkill: (path, files) => filesystem.observeSkill(path, files),
     rename: async (source, target) => {
       renameCount += 1
+
       if (renameCount === 3) {
         throw new Error('injected-wsl-commit-interruption')
       }
+
       await filesystem.rename(source, target)
     },
     remove: (path) => filesystem.remove(path),
@@ -55,9 +61,11 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
   beforeAll(async () => {
     localRoot = await mkdtemp(join(tmpdir(), 'orca-wsl-skill-integration-'))
     guestRoot = await runWsl('mktemp', '-d', '/tmp/orca-skill-integration.XXXXXX')
+
     if (!guestRoot.startsWith('/tmp/orca-skill-integration.')) {
       throw new Error('unexpected-wsl-integration-root')
     }
+
     await runWsl('mkdir', '-p', `${guestRoot}/home`, `${guestRoot}/workspace`)
     homeDirectory = uncPath(`${guestRoot}/home`)
     workspaceDirectory = uncPath(`${guestRoot}/workspace`)
@@ -65,6 +73,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
 
   afterAll(async () => {
     await rm(localRoot, { recursive: true, force: true })
+
     if (guestRoot.startsWith('/tmp/orca-skill-integration.')) {
       await runWsl('rm', '-rf', '--', guestRoot)
     }
@@ -77,6 +86,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
       join(source, 'SKILL.md'),
       `---\nname: real-wsl-skill\ndescription: Real WSL transaction\n---\n\n# ${heading}\n`
     )
+
     return createSkillPackageArchive({
       sourceDirectory: source,
       archivePath: join(localRoot, `${versionId}.tar.gz`),
@@ -142,6 +152,7 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
       detectedProviders: ['codex', 'claude'],
       filesystem
     }
+
     expect((await removeSharedSkill(removeInput)).conflict?.kind).toBe('modified')
     expect(
       (
@@ -158,11 +169,13 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
 
   it('installs and removes within a WSL folder workspace', async () => {
     const archive = await packageVersion('workspace-version', 'Workspace')
+
     const filesystem = createWslSkillInstallFilesystem({
       distro: DISTRO,
       homeDirectory,
       workspaceDirectory
     })
+
     const input = installInput(archive, 'workspace', filesystem)
 
     expect((await installSharedSkill(input)).status).toBe('installed')
@@ -192,11 +205,13 @@ describe.runIf(RUN_REAL_WSL)('real WSL skill install transactions', () => {
     const archive = await packageVersion('drvfs-version', 'DrvFS workspace')
     const windowsWorkspace = join(localRoot, 'windows-workspace')
     await mkdir(windowsWorkspace)
+
     const filesystem = createWslSkillInstallFilesystem({
       distro: DISTRO,
       homeDirectory,
       workspaceDirectory: windowsWorkspace
     })
+
     const input = {
       ...installInput(archive, 'workspace', filesystem),
       workspaceDirectory: windowsWorkspace,

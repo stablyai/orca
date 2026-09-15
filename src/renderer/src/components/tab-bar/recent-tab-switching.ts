@@ -47,6 +47,7 @@ function findActiveGroup(
   worktreeId: string
 ): TabGroup | null {
   const groupId = state.activeGroupIdByWorktree[worktreeId]
+
   return groupId
     ? ((state.groupsByWorktree[worktreeId] ?? []).find((group) => group.id === groupId) ?? null)
     : null
@@ -66,6 +67,7 @@ function getActiveVisibleTabKey(
   entries: readonly VisibleTabRef[]
 ): string | null {
   const group = findActiveGroup(state, worktreeId)
+
   if (group?.activeTabId && entries.some((entry) => entry.tabId === group.activeTabId)) {
     return group.activeTabId
   }
@@ -76,12 +78,14 @@ function getActiveVisibleTabKey(
     state.activeFileId,
     state.activeBrowserTabId
   )
+
   const activeEntry =
     activeEntityId == null
       ? null
       : (entries.find(
           (entry) => entry.type === state.activeTabType && entry.id === activeEntityId
         ) ?? null)
+
   return activeEntry ? getVisibleTabKey(activeEntry) : null
 }
 
@@ -100,6 +104,7 @@ function toSwitcherItem(
   generatedTitlesEnabled: boolean
 ): RecentTabSwitcherItem {
   const backingTab = entry.tabId ? tabById.get(entry.tabId) : undefined
+
   return {
     ...entry,
     key: getVisibleTabKey(entry),
@@ -122,23 +127,28 @@ function orderByMru(
 
   for (let i = recentTabIds.length - 1; i >= 0; i--) {
     const item = tabsByKey.get(recentTabIds[i])
+
     if (!item || seen.has(item.key)) {
       continue
     }
+
     ordered.push(item)
     seen.add(item.key)
   }
 
   for (const entry of entries) {
     const item = tabsByKey.get(getVisibleTabKey(entry))
+
     if (!item || seen.has(item.key)) {
       continue
     }
+
     ordered.push(item)
     seen.add(item.key)
   }
 
   const activeIndex = activeKey ? ordered.findIndex((item) => item.key === activeKey) : -1
+
   if (activeIndex > 0) {
     // Why: if persisted MRU data is stale, the active tab still belongs at
     // the top so the first Ctrl+Tab press quick-toggles to the previous tab.
@@ -155,6 +165,7 @@ export function buildRecentTabSwitcherModel(
   mode: CtrlTabOrderMode
 ): RecentTabSwitcherModel | null {
   const visibleEntries = getActiveTabNavOrder(state, worktreeId)
+
   if (visibleEntries.length <= 1) {
     return null
   }
@@ -162,26 +173,33 @@ export function buildRecentTabSwitcherModel(
   const tabById = new Map(
     (state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab])
   )
+
   const dirtyFileIds = new Set(
     state.openFiles
       .filter((file) => file.worktreeId === worktreeId && file.isDirty)
       .map((file) => file.id)
   )
+
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
+
   const itemByKey = new Map(
     visibleEntries.map((entry) => {
       const item = toSwitcherItem(entry, tabById, dirtyFileIds, generatedTitlesEnabled)
+
       return [item.key, item] as const
     })
   )
+
   const activeKey = getActiveVisibleTabKey(state, worktreeId, visibleEntries)
   const group = findActiveGroup(state, worktreeId)
+
   const orderedItems =
     mode === 'mru'
       ? orderByMru(visibleEntries, itemByKey, group, activeKey)
       : visibleEntries.map((entry) => itemByKey.get(getVisibleTabKey(entry))!).filter(Boolean)
 
   const activeIndex = activeKey ? orderedItems.findIndex((item) => item.key === activeKey) : -1
+
   return {
     items: orderedItems,
     activeIndex
@@ -196,8 +214,10 @@ export function getNextRecentTabSwitcherIndex(
   if (itemCount <= 0) {
     return -1
   }
+
   if (currentIndex < 0) {
     return direction > 0 ? 0 : itemCount - 1
   }
+
   return (currentIndex + direction + itemCount) % itemCount
 }

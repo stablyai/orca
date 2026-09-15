@@ -27,17 +27,22 @@ export const AREA_SELECTION_SCROLL_CONTAINER_SELECTOR = '[data-workspace-board-l
 export function getAreaSelectionCardRects(board: HTMLElement): AreaSelectionCardRect[] {
   const cardRects = new Map<string, AreaSelectionCardRect>()
   const scrollMetrics = new Map<HTMLElement, { containerTop: number; scrollTop: number }>()
+
   const scrollContainers = board.querySelectorAll<HTMLElement>(
     AREA_SELECTION_SCROLL_CONTAINER_SELECTOR
   )
+
   for (const scrollContainer of scrollContainers) {
     const virtualRects = getWorkspaceKanbanVirtualLaneItemRects(scrollContainer)
+
     if (!virtualRects) {
       continue
     }
+
     const containerTop = scrollContainer.getBoundingClientRect().top
     const scrollTop = scrollContainer.scrollTop
     scrollMetrics.set(scrollContainer, { containerTop, scrollTop })
+
     for (const virtualRect of virtualRects) {
       cardRects.set(virtualRect.id, {
         id: virtualRect.id,
@@ -60,14 +65,18 @@ export function getAreaSelectionCardRects(board: HTMLElement): AreaSelectionCard
   }
 
   const cards = board.querySelectorAll<HTMLElement>('[data-workspace-board-card-id]')
+
   for (const card of cards) {
     const id = card.dataset.workspaceBoardCardId
+
     if (!id) {
       continue
     }
+
     const rect = card.getBoundingClientRect()
     const scrollContainer = card.closest<HTMLElement>(AREA_SELECTION_SCROLL_CONTAINER_SELECTOR)
     let metrics = scrollContainer ? scrollMetrics.get(scrollContainer) : undefined
+
     if (scrollContainer && !metrics) {
       metrics = {
         containerTop: scrollContainer.getBoundingClientRect().top,
@@ -75,6 +84,7 @@ export function getAreaSelectionCardRects(board: HTMLElement): AreaSelectionCard
       }
       scrollMetrics.set(scrollContainer, metrics)
     }
+
     cardRects.set(id, {
       id,
       element: card,
@@ -95,5 +105,6 @@ export function getAreaSelectionCardRects(board: HTMLElement): AreaSelectionCard
         : null
     })
   }
+
   return Array.from(cardRects.values())
 }

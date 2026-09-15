@@ -12,6 +12,7 @@ const temporaryDirectories: string[] = []
 afterEach(() => {
   while (temporaryDirectories.length > 0) {
     const directory = temporaryDirectories.pop()
+
     if (directory) {
       rmSync(directory, { recursive: true, force: true })
     }

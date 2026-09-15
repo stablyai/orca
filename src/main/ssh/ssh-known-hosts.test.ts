@@ -13,15 +13,19 @@ import {
 } from './ssh-known-hosts'
 
 const ED_A = 'AAAAC3NzaC1lZDI1NTE5AAAAIKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq'
+
 const ED_B = 'AAAAC3NzaC1lZDI1NTE5AAAAILu7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7'
+
 const RSA_A =
   'AAAAB3NzaC1yc2EAAABAzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzA=='
 
 /** `ssh-keygen -H` output; the salt/hash pair is real, not synthesised here. */
 const HASHED_EXAMPLE_COM = '|1|qvIayk/BTpSrSmc/i3iM4cyYx+8=|6ysCq72Bg48mNavekN+FLrdPc/I='
+
 const HASHED_EXAMPLE_COM_2222 = '|1|qsCyiGgRmqnaNrHKZUgVKG57bnQ=|12y3NTllwASTDOM0EVoQZiVgg9U='
 
 const blob = (base64: string): Buffer => Buffer.from(base64, 'base64')
+
 const line = (hosts: string, key: string, type = 'ssh-ed25519'): string => `${hosts} ${type} ${key}`
 
 type Query = { host?: string; port?: number; key: string }
@@ -326,6 +330,7 @@ describe('lines ssh itself refuses to parse', () => {
       Buffer.from('ssh-ed25519'),
       Buffer.from([0, 0, 0, 99])
     ])
+
     expect(
       parseKnownHostsLine(`example.com ssh-ed25519 ${overrun.toString('base64')}`)
     ).toBeUndefined()

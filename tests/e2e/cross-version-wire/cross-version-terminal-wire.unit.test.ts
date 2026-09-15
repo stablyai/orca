@@ -17,6 +17,7 @@ import {
 
 // Why: a cold CI run extracts the baseline checkout before the first journey.
 const SUITE_TIMEOUT_MS = 180_000
+
 // Last stable release before SnapshotStart began publishing terminal mode metadata.
 const TERMINAL_MODE_METADATA_LEGACY_REF = 'v1.4.190'
 
@@ -43,24 +44,32 @@ const EXPECTED_JOURNEY_FRAMES = [
   'C>H Input',
   'C>H Unsubscribe'
 ]
+
 const SNAPSHOT_START_OCCURRENCES = ['initial', 'reveal', 'reconnect'] as const
 
 let baselineRef: string
+
 let current: TerminalWireBuild
+
 let baseline: TerminalWireBuild
+
 /** What a current host publishes to a client of its own version. */
 let currentReference: JourneyRecord
+
 /** What the baseline host publishes to a client of its own version. */
 let baselineReference: JourneyRecord
+
 let legacyTerminalModeMetadata: TerminalWireBuild
 
 beforeAll(async () => {
   baselineRef = resolveBaselineReleaseRef()
+
   const [workingTree, baselineRelease, legacyRelease] = await Promise.all([
     loadTerminalWireBuild(WORKING_TREE),
     loadTerminalWireBuild(baselineRef),
     loadTerminalWireBuild(TERMINAL_MODE_METADATA_LEGACY_REF)
   ])
+
   current = workingTree
   baseline = baselineRelease
   legacyTerminalModeMetadata = legacyRelease
@@ -90,6 +99,7 @@ function expectSnapshotStartFieldsRemainPublished(args: {
   newerLabel: string
 }): void {
   const skewByOccurrence = comparePublishedFieldOccurrences(args)
+
   for (const [index, skew] of skewByOccurrence.entries()) {
     const occurrence = SNAPSHOT_START_OCCURRENCES[index] ?? `occurrence ${index + 1}`
     expect(
@@ -122,6 +132,7 @@ function expectWireCompatible(record: JourneyRecord): void {
     `${JOURNEY_INPUTS.initialBuffer}${JOURNEY_INPUTS.output}`
   )
   expect(record.revealSnapshot).toMatchObject({ cols: 120, rows: 40 })
+
   for (const start of record.snapshotStarts) {
     expect(start).toMatchObject({ kind: 'scrollback', cols: 120, rows: 40, source: 'headless' })
   }
@@ -165,6 +176,7 @@ describe('cross-version remote terminal wire', () => {
     expect(baselineReference.clientRevision).toBe(baseline.revision)
     expectJourneyActuallyRan(baselineReference)
     expectWireCompatible(baselineReference)
+
     for (const start of baselineReference.snapshotStarts) {
       expect(publishedFieldNames(start).length).toBeGreaterThan(4)
     }
@@ -207,9 +219,11 @@ describe('cross-version remote terminal wire', () => {
     const mutated = currentReference.snapshotStarts.map((start) => ({ ...start }))
     const revealIndex = SNAPSHOT_START_OCCURRENCES.indexOf('reveal')
     const reveal = mutated[revealIndex]
+
     if (!reveal) {
       throw new Error('The terminal journey did not publish a reveal SnapshotStart')
     }
+
     expect(reveal).toHaveProperty('seq')
     delete reveal.seq
     expect(() =>
@@ -226,6 +240,7 @@ describe('cross-version remote terminal wire', () => {
     'still fails a pairing whose peer cannot decode an opcode the other side sends',
     async () => {
       const inputOpcode = Number(current.codec.TerminalStreamOpcode.Input)
+
       const stall = await runTerminalSkewJourney({
         hostBuild: withoutOpcodeSupport(current, 'Input'),
         clientBuild: current,
@@ -234,6 +249,7 @@ describe('cross-version remote terminal wire', () => {
         () => null,
         (error: unknown) => error
       )
+
       expect(stall).toBeInstanceOf(CrossVersionJourneyStall)
       const stalled = stall as CrossVersionJourneyStall
       expect(stalled.step).toBe('input-reaches-process')
@@ -253,9 +269,11 @@ describe('cross-version remote terminal wire', () => {
         hostBuild: legacyTerminalModeMetadata,
         clientBuild: current
       })
+
       expect(record.hostLabel).toBe(TERMINAL_MODE_METADATA_LEGACY_REF)
       expectJourneyActuallyRan(record)
       expectWireCompatible(record)
+
       for (const start of record.snapshotStarts) {
         expect(start).not.toHaveProperty('terminalOwner')
         expect(start).not.toHaveProperty('alternateScreen')

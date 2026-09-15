@@ -32,6 +32,7 @@ export {
   listRegisteredRemovedSshTargetLabels,
   listRegisteredSshTargets
 } from '../ssh/ssh-target-registry'
+
 import { registerSshBrowseHandler } from './ssh-browse'
 import { registerCredentialHandler } from './ssh-passphrase'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -105,6 +106,7 @@ export function getActiveSshAiVaultHostInfo(targetId: string): SshRelayAiVaultHo
   if (isRuntimeOwnedSshTargetId(targetId)) {
     return null
   }
+
   return activeSessions.get(targetId)?.getAiVaultHostInfo() ?? null
 }
 
@@ -113,7 +115,9 @@ export function getActiveSshAiVaultHostInfos(): SshRelayAiVaultHostInfo[] {
     if (isRuntimeOwnedSshTargetId(session.targetId)) {
       return []
     }
+
     const info = session.getAiVaultHostInfo()
+
     return info ? [info] : []
   })
 }
@@ -126,16 +130,21 @@ export async function requestActiveSshSessionSearch(
   if (isRuntimeOwnedSshTargetId(targetId)) {
     throw new Error('SSH target belongs to another runtime')
   }
+
   const session = activeSessions.get(targetId)
+
   if (!session) {
     throw new Error('SSH relay is not ready')
   }
+
   if (method === 'aiVault.searchSessions') {
     return session.requestSessionSearch(method, AiVaultSearchRequestSchema.parse(params))
   }
+
   if (method === 'aiVault.searchStatus') {
     return session.requestSessionSearch(method, AiVaultSearchStatusRequestSchema.parse(params))
   }
+
   throw new Error('Unknown session search method')
 }
 
@@ -147,10 +156,13 @@ export async function requestActiveSshAiVaultSessionList(
   if (isRuntimeOwnedSshTargetId(targetId)) {
     return null
   }
+
   const session = activeSessions.get(targetId)
+
   if (!session) {
     throw new Error('SSH relay is not ready')
   }
+
   return session.requestAiVaultSessionList(params, options)
 }
 
@@ -162,10 +174,13 @@ export async function requestActiveSshAiVaultSessionTitles(
   if (isRuntimeOwnedSshTargetId(targetId)) {
     return null
   }
+
   const session = activeSessions.get(targetId)
+
   if (!session) {
     throw new Error('SSH relay is not ready')
   }
+
   return session.requestAiVaultSessionTitles(params, options)
 }
 
@@ -175,6 +190,7 @@ export function registerSshHandlers(
   runtime?: OrcaRuntimeService
 ): { connectionManager: SshConnectionManager; sshStore: SshConnectionStore } {
   initializeSshConnectionGenerationSession()
+
   // Why: macOS re-activation re-calls this with a new BrowserWindow; ipcMain.handle() throws on a duplicate channel, so remove prior handlers first.
   for (const ch of SSH_IPC_CHANNELS) {
     ipcMain.removeHandler(ch)
@@ -189,11 +205,13 @@ export function registerSshHandlers(
   registerCredentialHandler()
 
   const callbacks = createSshConnectionCallbacks()
+
   if (connectionManager) {
     connectionManager.setCallbacks(callbacks)
   } else {
     setConnectionManager(new SshConnectionManager(callbacks))
   }
+
   setPortForwardManager(portForwardManager ?? new SshPortForwardManager())
   portForwardManager!.setCallbacks({
     onForwardClosed: (entry, reason) => {
@@ -204,6 +222,7 @@ export function registerSshHandlers(
           }`
         )
       }
+
       persistPortForwardsWithUnrestored(entry.connectionId)
       broadcastPortForwards(getCurrentMainWindow, entry.connectionId)
     }
@@ -226,9 +245,11 @@ export function registerSshHandlers(
 export async function resetSshHandlerStateForTests(): Promise<void> {
   unregisterAdvertisedUrlRefresh()
   unregisterPowerMonitorReconnect()
+
   for (const ch of SSH_IPC_CHANNELS) {
     ipcMain.removeHandler(ch)
   }
+
   ipcMain.removeHandler('ssh:submitCredential')
 
   // Why: allSettled — a rejected disposal write must not abort the rest of the reset and leak state into the next test.
@@ -236,9 +257,11 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
     [...activeSessions.values()].map((session) => session.disposeAndPersist())
   )
   activeSessions.clear()
+
   for (const targetId of relayLostBackoff.keys()) {
     clearRelayLostBackoff(targetId)
   }
+
   relayStateOverrides.clear()
   connectInFlight.clear()
   targetLifecycleInFlight.clear()

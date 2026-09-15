@@ -25,7 +25,9 @@ vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
+
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
+
 vi.mock('../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
 
 const REPOS = [
@@ -115,6 +117,7 @@ async function makeRuntime() {
       published.push(payload)
     }
   )
+
   return { store, runtime, published }
 }
 
@@ -188,11 +191,13 @@ describe('scoped automationsChanged publication', () => {
     vi.spyOn(store, 'automationChangeSelector').mockImplementation((id: string) =>
       updated ? null : selector(id)
     )
+
     const update = runtime.updateAutomation(
       'local-1',
       { enabled: false },
       { expectedOwner: { selector: { kind: 'self' } } }
     )
+
     updated = true
     await update
 

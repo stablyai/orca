@@ -52,6 +52,7 @@ export function useFileExplorerReveal({
       cancelAnimationFrame(revealScrollFrameRef.current)
       revealScrollFrameRef.current = null
     }
+
     if (revealScrollTimeoutRef.current !== null) {
       window.clearTimeout(revealScrollTimeoutRef.current)
       revealScrollTimeoutRef.current = null
@@ -60,6 +61,7 @@ export function useFileExplorerReveal({
 
   const cancelRevealTimers = useCallback((): void => {
     cancelRevealScroll()
+
     if (flashTimeoutRef.current !== null) {
       window.clearTimeout(flashTimeoutRef.current)
       flashTimeoutRef.current = null
@@ -86,6 +88,7 @@ export function useFileExplorerReveal({
 
     if (!pendingRevealAncestorDirs) {
       clearPendingExplorerReveal()
+
       return
     }
 
@@ -115,12 +118,14 @@ export function useFileExplorerReveal({
 
     void (async () => {
       const rootLoaded = await loadDir(worktreePath, -1)
+
       if (!rootLoaded) {
         return
       }
 
       for (let depth = 0; depth < pendingRevealAncestorDirs.length; depth += 1) {
         const ancestorLoaded = await loadDir(pendingRevealAncestorDirs[depth], depth)
+
         if (!ancestorLoaded) {
           return
         }
@@ -147,20 +152,27 @@ export function useFileExplorerReveal({
     }
 
     const targetPath = pendingExplorerReveal.filePath
+
     const parentDirPath =
       pendingRevealAncestorDirs.length > 0 ? pendingRevealAncestorDirs.at(-1)! : worktreePath
+
     const parentDirCache = dirCache[parentDirPath]
+
     const missingExpandedAncestor = pendingRevealAncestorDirs.find(
       (dirPath) => !expanded.has(dirPath)
     )
+
     const missingAncestor = pendingRevealAncestorDirs.find(
       (dirPath) => !rowProjection.hasPath(dirPath)
     )
+
     const rootStillLoading = !rootCache || loadingDirPaths.has(worktreePath)
+
     const parentDirStillLoading =
       parentDirPath === worktreePath
         ? rootStillLoading
         : !parentDirCache || loadingDirPaths.has(parentDirPath)
+
     const parentDirKnown = parentDirPath === worktreePath ? !!rootCache : !!parentDirCache
 
     if (
@@ -175,8 +187,10 @@ export function useFileExplorerReveal({
 
     const fallbackPath = rowProjection.hasPath(parentDirPath) ? parentDirPath : null
     const revealPath = rowProjection.hasPath(targetPath) ? targetPath : fallbackPath
+
     if (!revealPath) {
       clearPendingExplorerReveal()
+
       return
     }
 
@@ -187,9 +201,11 @@ export function useFileExplorerReveal({
     // Auto-reveals on tab switch skip the flash to avoid visual noise.
     if (pendingExplorerReveal.flash !== false) {
       setFlashingPath(revealPath)
+
       if (flashTimeoutRef.current !== null) {
         window.clearTimeout(flashTimeoutRef.current)
       }
+
       flashTimeoutRef.current = window.setTimeout(() => {
         setFlashingPath((current) => (current === revealPath ? null : current))
         flashTimeoutRef.current = null
@@ -202,6 +218,7 @@ export function useFileExplorerReveal({
       revealScrollTimeoutRef.current = window.setTimeout(() => {
         revealScrollTimeoutRef.current = null
         const targetIndex = rowProjection.getIndexByPath(revealPath)
+
         if (targetIndex !== null) {
           virtualizer.scrollToIndex(targetIndex, { align: 'center' })
         }

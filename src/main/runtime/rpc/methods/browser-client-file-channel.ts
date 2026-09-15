@@ -25,28 +25,35 @@ function requireFileChannelPage(
   >
 ) {
   const { runtime, pairedDeviceId, connectionId, clientKind, clientCapabilities } = context
+
   if (clientKind !== 'runtime' || !pairedDeviceId || !connectionId) {
     throw new Error('authenticated_browser_client_host_required')
   }
+
   if (!clientCapabilities?.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)) {
     throw new Error('browser_client_host_capability_required')
   }
+
   if (params.authorityRuntimeId !== runtime.getRuntimeId()) {
     throw new Error('browser_client_host_authority_mismatch')
   }
+
   const leases = getBrowserHostLeaseRegistry(runtime)
+
   const placement = {
     kind: 'client' as const,
     browserHostClientId: params.browserHostClientId,
     browserHostGeneration: params.browserHostGeneration,
     pageHostGeneration: params.pageHostGeneration
   }
+
   leases.requireClientPageConnection({
     browserPageId: params.browserPageId,
     placement,
     pairedDeviceId,
     connectionId
   })
+
   if (
     leases.requireLease({
       authorityEpoch: leases.authorityEpoch,
@@ -57,10 +64,13 @@ function requireFileChannelPage(
   ) {
     throw new Error('browser_client_file_channel_unsupported')
   }
+
   const page = getRuntimeBrowserPageRegistry(runtime).getPage(params.browserPageId)
+
   if (!page) {
     throw new Error('browser_runtime_page_required')
   }
+
   return page
 }
 
@@ -70,13 +80,16 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
     params: BrowserClientFileChannelReadParams,
     handler: async (params, context) => {
       const page = requireFileChannelPage(params, context)
+
       const chunk = await context.runtime.readFileExplorerChunk(
         page.workspaceId,
         params.workspaceRelativePath,
         params.offset,
         params.length
       )
+
       const totalBytes = params.offset + chunk.bytesRead
+
       return {
         contentBase64: chunk.contentBase64,
         bytesRead: chunk.bytesRead,
@@ -90,6 +103,7 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
     params: BrowserClientFileChannelWriteParams,
     handler: async (params, context) => {
       const page = requireFileChannelPage(params, context)
+
       const commit = await getBrowserClientDownloadTransferStore(context.runtime).accept({
         transferId: params.transferId,
         browserPageId: params.browserPageId,
@@ -101,6 +115,7 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
         final: params.final,
         platform: process.platform
       })
+
       return commit
         ? { accepted: true as const, workspaceRelativePath: commit.workspaceRelativePath }
         : { accepted: true as const }
@@ -111,10 +126,12 @@ export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
     params: BrowserClientFileChannelAbortParams,
     handler: async (params, context) => {
       requireFileChannelPage(params, context)
+
       const released = await getBrowserClientDownloadTransferStore(context.runtime).abort({
         transferId: params.transferId,
         browserPageId: params.browserPageId
       })
+
       return { released }
     }
   })

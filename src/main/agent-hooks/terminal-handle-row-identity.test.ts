@@ -5,7 +5,9 @@ import { selectFreshExplicitAgentStatus } from '../runtime/runtime-hook-agent-ro
 import { wslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
 
 const PANE_KEY = 'tab-handle:33333333-3333-4333-8333-333333333333'
+
 const HANDLE = 'term_identity'
+
 const NEW_PANE_KEY = 'tab-reminted:44444444-4444-4444-8444-444444444444'
 
 function ingest(server: AgentHookServer, overrides: Record<string, unknown> = {}): void {
@@ -66,9 +68,11 @@ describe('the terminal handle a status row is stamped with', () => {
   it('is never persisted, because it belongs to the runtime that issued it', () => {
     const server = new AgentHookServer()
     ingest(server)
+
     const serialized = (
       server as unknown as { serializeStatusFile(): string }
     ).serializeStatusFile()
+
     expect(serialized).toContain(PANE_KEY)
     expect(serialized).not.toContain(HANDLE)
   })
@@ -154,6 +158,7 @@ describe('the terminal handle a status row is stamped with', () => {
   it('renews duplicate OSC evidence without publishing another semantic row', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       const enriched = vi.fn()
@@ -205,12 +210,15 @@ describe('the terminal handle a status row is stamped with', () => {
     server.subscribeStatusRowMutations(mutations)
     const payload = { state: 'working' as const, prompt: 'ship it', agentType: 'claude' as const }
     ingest(server, { payload })
+
     const row = server._getStateForTests().lastStatusByPaneKey.get(PANE_KEY) as
       | { claudeLeadBoundaryChildOnly?: true }
       | undefined
+
     if (!row) {
       throw new Error('expected seeded status row')
     }
+
     row.claudeLeadBoundaryChildOnly = true
     enriched.mockClear()
     mutations.mockClear()

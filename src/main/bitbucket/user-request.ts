@@ -29,6 +29,7 @@ export async function fetchBitbucketUserResult(
   timeoutMs: number = USER_REQUEST_TIMEOUT_MS
 ): Promise<BitbucketUserResult> {
   let response: Response
+
   try {
     const base = config.baseUrl.replace(/\/+$/, '')
     response = await fetch(`${base}/user`, {
@@ -41,13 +42,16 @@ export async function fetchBitbucketUserResult(
   } catch {
     return { ok: false, reason: 'unreachable' }
   }
+
   if (!response.ok) {
     await cancelUnreadResponseBody(response)
     // Only the credential-bearing statuses are the credential's fault; 5xx and
     // the rest are the server or the path in between.
     const rejected = response.status === 401 || response.status === 403
+
     return { ok: false, reason: rejected ? 'rejected' : 'unreachable' }
   }
+
   try {
     return { ok: true, user: (await response.json()) as RawBitbucketUser }
   } catch {
@@ -61,5 +65,6 @@ export async function fetchBitbucketUser(
   timeoutMs: number = USER_REQUEST_TIMEOUT_MS
 ): Promise<RawBitbucketUser | null> {
   const result = await fetchBitbucketUserResult(config, timeoutMs)
+
   return result.ok ? result.user : null
 }

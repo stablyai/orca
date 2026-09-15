@@ -32,6 +32,7 @@ export async function syncPRFileViewedState(args: {
     viewed,
     setPendingViewedPaths
   } = args
+
   if (!canUseDetailsRepoContext || !pullRequestId || !workItem || workItem.type !== 'pr') {
     toast.error(
       translate(
@@ -39,13 +40,17 @@ export async function syncPRFileViewedState(args: {
         'Unable to sync viewed state for this pull request.'
       )
     )
+
     return false
   }
+
   setPendingViewedPaths((prev) => new Set(prev).add(path))
   const nextState: GitHubPRFileViewedState = viewed ? 'VIEWED' : 'UNVIEWED'
+
   const previousState = detailsCacheKey
     ? patchCachedPRFileViewedState(detailsCacheKey, path, nextState)
     : undefined
+
   try {
     const ok = await setPRFileViewedForRepo({
       repoId: workItem.repoId,
@@ -57,24 +62,29 @@ export async function syncPRFileViewedState(args: {
       path,
       viewed
     })
+
     if (!ok) {
       if (detailsCacheKey && previousState) {
         patchCachedPRFileViewedState(detailsCacheKey, path, previousState)
       }
+
       toast.error(
         translate(
           'auto.components.GitHubItemDialog.b7bf31b8de',
           'Failed to sync viewed state with GitHub.'
         )
       )
+
       return false
     }
+
     return true
   } catch (err) {
     // Why: an RPC timeout or IPC throw must roll the optimistic patch back, else the shared cache keeps claiming the file is viewed.
     if (detailsCacheKey && previousState) {
       patchCachedPRFileViewedState(detailsCacheKey, path, previousState)
     }
+
     toast.error(
       err instanceof Error
         ? err.message
@@ -83,11 +93,13 @@ export async function syncPRFileViewedState(args: {
             'Failed to sync viewed state with GitHub.'
           )
     )
+
     return false
   } finally {
     setPendingViewedPaths((prev) => {
       const next = new Set(prev)
       next.delete(path)
+
       return next
     })
   }

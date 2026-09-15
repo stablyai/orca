@@ -7,6 +7,7 @@ describe('computer command specs', () => {
     const listApps = COMPUTER_COMMAND_SPECS.find(
       (spec) => spec.path.join(' ') === 'computer list-apps'
     )
+
     const listWindows = COMPUTER_COMMAND_SPECS.find(
       (spec) => spec.path.join(' ') === 'computer list-windows'
     )
@@ -35,6 +36,7 @@ describe('computer command specs', () => {
     )
 
     expect(actionSpecs).not.toHaveLength(0)
+
     for (const spec of actionSpecs) {
       expect(spec.allowedFlags).toEqual(expect.arrayContaining(['window-id', 'window-index']))
     }

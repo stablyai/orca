@@ -46,13 +46,16 @@ function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSe
 describe('Claude structured option mutation fencing', () => {
   it('does not let a delayed earlier apply overwrite a later option', async () => {
     let releaseFirst!: () => void
+
     const firstApply = new Promise<void>((resolve) => {
       releaseFirst = resolve
     })
+
     const setModel = vi
       .fn<ClaudeSession['connection']['setModel']>()
       .mockReturnValueOnce(firstApply)
       .mockResolvedValue(undefined)
+
     const session = sessionFor(setModel)
 
     const first = setClaudeStructuredOption(session, { key: 'model', value: 'old' }, undefined)
@@ -68,11 +71,13 @@ describe('Claude structured option mutation fencing', () => {
 
 function fastModeSession(supportsFastMode: boolean | undefined) {
   let reportedFastMode = false
+
   const applyFlagSettings = vi.fn(async (settings: { fastMode?: boolean }) => {
     if (typeof settings.fastMode === 'boolean') {
       reportedFastMode = settings.fastMode
     }
   })
+
   const session = sessionFor(vi.fn(async () => undefined))
   session.options.set('model', 'opus')
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the literal supplies every connection member this fixture's code paths call, and the spread carries the rest from sessionFor.
@@ -89,6 +94,7 @@ function fastModeSession(supportsFastMode: boolean | undefined) {
     applyFlagSettings,
     getSettings: async () => ({ effective: { fastMode: reportedFastMode } })
   } as ClaudeSession['connection']
+
   return { session, applyFlagSettings }
 }
 
@@ -152,6 +158,7 @@ describe('Claude structured Fast mode', () => {
     let reads = 0
     session.connection.supportedModels = async (...args: Parameters<typeof listed>) => {
       reads += 1
+
       return listed(...args)
     }
 
@@ -320,6 +327,7 @@ describe('Claude structured Fast mode', () => {
     session.connection.supportedModels = async () => {
       throw new Error('catalog temporarily unavailable')
     }
+
     await setClaudeStructuredOption(session, { key: 'model', value: 'haiku' }, undefined)
     session.connection.supportedModels = async () => [
       { value: 'opus', displayName: 'Opus', supportsFastMode: true },
@@ -409,6 +417,7 @@ describe('Claude Fast mode reported by the session frame alone', () => {
     // Settings are silent on Fast, exactly as observed on a fresh session.
     session.connection.getSettings = async () => ({ effective: { effortLevel: 'high' } })
     observeClaudeFastModeFacts(session, { fast_mode_state: state })
+
     return session
   }
 

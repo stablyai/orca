@@ -60,7 +60,9 @@ function wslOnly(
   if (!resolution) {
     return undefined
   }
+
   const targetsWsl = resolution.status === 'repair-required' || resolution.runtime.kind === 'wsl'
+
   return targetsWsl ? resolution : undefined
 }
 
@@ -75,6 +77,7 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
       worktreesByRepo: state.worktreesByRepo
     }))
   )
+
   const currentPlatform = getCurrentPlatform()
   const windowsCapabilities = useWindowsTerminalCapabilities(currentPlatform === 'win32')
   const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
@@ -84,6 +87,7 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
       wslAvailable: windowsCapabilities.isLoading ? undefined : windowsCapabilities.wslAvailable,
       availableWslDistros: windowsCapabilities.isLoading ? null : windowsCapabilities.wslDistros
     }
+
     const projectRuntime =
       getLocalProjectExecutionRuntimeContext(
         runtimeState,
@@ -102,6 +106,7 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
             )
           )
         : undefined)
+
     if (!projectRuntime) {
       // Why: buildSkillCommandForRuntime still builds a Windows host command
       // without a project runtime, so the terminal has to match that shell.
@@ -112,14 +117,18 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
             undefined
           )
         : undefined
+
       const canUseLocalSkillFreshness = shouldUseLocalSkillFreshness(runtimeTarget)
+
       if (!terminalShellOverride && !canUseLocalSkillFreshness) {
         return EMPTY_ACTIVE_PROJECT_SKILL_RUNTIME
       }
+
       return { installDisabledReason: null, terminalShellOverride, canUseLocalSkillFreshness }
     }
 
     const agentRuntime = getProjectAgentSkillRuntime(projectRuntime, currentPlatform)
+
     return {
       projectRuntime,
       discoveryTarget: getProjectSkillDiscoveryTarget(projectRuntime),
@@ -139,25 +148,31 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
   const [stable, setStable] = useState(resolved)
   const stableIdentity = activeProjectSkillRuntimeIdentity(stable)
   const resolvedIdentity = activeProjectSkillRuntimeIdentity(resolved)
+
   if (stableIdentity !== resolvedIdentity) {
     setStable(resolved)
   }
+
   return stableIdentity === resolvedIdentity ? stable : resolved
 }
 
 function getCurrentPlatform(): NodeJS.Platform {
   const platform =
     typeof window === 'undefined' ? undefined : window.api?.platform?.get?.()?.platform
+
   if (platform) {
     return platform
   }
 
   const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+
   if (userAgent.includes('Windows')) {
     return 'win32'
   }
+
   if (userAgent.includes('Mac')) {
     return 'darwin'
   }
+
   return 'linux'
 }

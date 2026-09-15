@@ -43,22 +43,28 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
         startupCommandDelivery: opts.startupCommandDelivery
       }
     }
+
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
+
     const settings = this.store.getSettings()
+
     if (!isTuiAgentEnabled(opts.agent, settings.disabledTuiAgents)) {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }
+
     // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
     const platform = this.getAgentLaunchPlatformForWorkspace(workspace)
     // Why: SSH runs the CLI through the relay shim (plain `orca`), so the Linux-only `orca-ide` rename must not apply.
     const isRemote = Boolean(workspace.connectionId)
+
     const queuedShell = resolveLocalWindowsAgentStartupShell({
       platform,
       isRemote,
       terminalWindowsShell: settings.terminalWindowsShell
     })
+
     const startupPlan = buildAgentStartupPlan({
       agent: opts.agent,
       prompt: opts.agentPrompt ?? '',
@@ -70,13 +76,17 @@ export class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRunt
       isRemote,
       allowEmptyPromptLaunch: true
     })
+
     if (!startupPlan) {
       throw new Error(`Could not build launch command for ${opts.agent}.`)
     }
+
     if (opts.agentPrompt && startupPlan.followupPrompt) {
       throw new Error(`Agent ${opts.agent} does not support startup prompt quick commands.`)
     }
+
     await this.markWorkspaceTrustedForAgent(opts.agent, workspace.connectionId, workspace.path)
+
     return {
       command: startupPlan.launchCommand,
       env: startupPlan.env,

@@ -17,6 +17,7 @@ const quietByQueryKey = new Map<string, QuietRevalidateState>()
 
 export function getOrCreateQuietRevalidateState(queryKey: string): QuietRevalidateState {
   let state = quietByQueryKey.get(queryKey)
+
   if (!state) {
     state = {
       inFlight: false,
@@ -32,6 +33,7 @@ export function getOrCreateQuietRevalidateState(queryKey: string): QuietRevalida
     }
     quietByQueryKey.set(queryKey, state)
   }
+
   return state
 }
 
@@ -41,12 +43,15 @@ export function beginTaskPageQuietRevalidateRun(
 ): number | null {
   if (state.inFlight && state.runOwner === owner) {
     state.trailingQueued = true
+
     return null
   }
+
   state.inFlight = true
   state.trailingQueued = false
   state.runGeneration += 1
   state.runOwner = owner
+
   return state.runGeneration
 }
 
@@ -58,8 +63,10 @@ export function finishTaskPageQuietRevalidateRun(
   if (state.runOwner !== owner || state.runGeneration !== generation) {
     return false
   }
+
   state.inFlight = false
   state.runOwner = null
+
   return true
 }
 
@@ -76,6 +83,7 @@ export function markTaskPageGitHubFamiliesDirty(
   quiet.dirtyGeneration += 1
   quiet.lastConfirmAt = Date.now()
   quiet.networkFailureAttempts = 0
+
   for (const family of families) {
     const familyKey = taskPageGitHubFamilyDirtyKey(itemKey, family)
     quiet.familyDirtyAt.set(familyKey, quiet.dirtyGeneration)

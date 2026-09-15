@@ -18,6 +18,7 @@ import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol
 export const AI_VAULT_SERVICE_PROTOCOL_VERSION = 1
 
 export type AiVaultServiceLane = 'cache' | 'interactive'
+
 export type AiVaultServiceOperation =
   | 'scan'
   | 'titles'
@@ -125,6 +126,7 @@ export function isAiVaultServiceRequest(value: unknown): value is AiVaultService
   if (!value || typeof value !== 'object') {
     return false
   }
+
   return (
     'type' in value &&
     value.type === 'request' &&
@@ -140,16 +142,21 @@ export function isAiVaultServiceChildMessage(value: unknown): value is AiVaultSe
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const message = value as Record<string, unknown>
+
   if (message.type === 'ready') {
     return message.protocol === AI_VAULT_SERVICE_PROTOCOL_VERSION && Number.isInteger(message.pid)
   }
+
   if (message.type === 'sessionSearchRoots') {
     return Number.isSafeInteger(message.id)
   }
+
   if (message.type === 'invalidated') {
     return Number.isSafeInteger(message.generation)
   }
+
   return (message.type === 'result' || message.type === 'error') && Number.isSafeInteger(message.id)
 }
 
@@ -161,11 +168,14 @@ export function cacheServiceTitle(
   const key = `${title.agent}\0${title.sessionId}`
   titleIndex.delete(key)
   titleIndex.set(key, title)
+
   while (titleIndex.size > maxEntries) {
     const oldest = titleIndex.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     titleIndex.delete(oldest)
   }
 }

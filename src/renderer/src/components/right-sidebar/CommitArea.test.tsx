@@ -52,6 +52,7 @@ function buildInputs(overrides: Partial<PrimaryActionInputs> = {}): PrimaryActio
 
 function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
   const inputs = buildInputs(overrides)
+
   return {
     worktreeId: 'wt-1',
     groupId: 'group-1',
@@ -101,9 +102,11 @@ function buildPushRecovery(
     currentBranchName: 'main',
     currentSequence: 1
   })
+
   if (!recovery) {
     throw new Error('push recovery was not derived')
   }
+
   return recovery
 }
 
@@ -119,26 +122,32 @@ function firstButton(markup: string): string {
   const button = [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
     .map((match) => match[0])
     .find((entry) => entry.includes('data-slot="button"'))
+
   if (!button) {
     throw new Error('button not found')
   }
+
   return button
 }
 
 function buttonContaining(markup: string, label: string): string {
   const buttons = markup.match(/<button\b[\s\S]*?<\/button>/g) ?? []
   const button = buttons.find((candidate) => candidate.includes(label))
+
   if (!button) {
     throw new Error(`button not found: ${label}`)
   }
+
   return button
 }
 
 function textarea(markup: string): string {
   const match = markup.match(/<textarea\b[\s\S]*?<\/textarea>/)
+
   if (!match) {
     throw new Error('textarea not found')
   }
+
   return match[0]
 }
 
@@ -175,10 +184,12 @@ describe('CommitArea', () => {
   it('renders the Commit shortcut key indicator (⌘Enter) in primary button tooltip on macOS', () => {
     const props = baseProps()
     setUserAgent('Macintosh')
+
     const markupMac = renderCommitArea({
       ...props,
       primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' }
     })
+
     expect(markupMac).toContain('Commit changes')
     expect(markupMac).toContain('⌘')
     expect(markupMac).toContain('Enter')
@@ -187,10 +198,12 @@ describe('CommitArea', () => {
   it('renders the Commit shortcut key indicator (Ctrl+Enter) in primary button tooltip on Windows/Linux', () => {
     const props = baseProps()
     setUserAgent('Windows NT')
+
     const markupWin = renderCommitArea({
       ...props,
       primaryAction: { kind: 'commit', disabled: false, label: 'Commit', title: 'Commit changes' }
     })
+
     expect(markupWin).toContain('Commit changes')
     expect(markupWin).toContain('Ctrl')
     expect(markupWin).toContain('+')
@@ -200,10 +213,12 @@ describe('CommitArea', () => {
   it('only handles Cmd+Enter when focus is within the Source Control sidebar', () => {
     setUserAgent('Macintosh')
     const onPrimaryAction = vi.fn()
+
     const primaryAction = {
       kind: 'commit' as const,
       disabled: false
     }
+
     const { getByTestId } = render(
       <>
         <div
@@ -236,10 +251,12 @@ describe('CommitArea', () => {
   it('handles Ctrl+Enter, but not Cmd+Enter, inside the sidebar on Windows/Linux', () => {
     setUserAgent('Linux')
     const onPrimaryAction = vi.fn()
+
     const primaryAction = {
       kind: 'commit' as const,
       disabled: false
     }
+
     const { getByRole } = render(
       <button
         type="button"
@@ -250,6 +267,7 @@ describe('CommitArea', () => {
         Commit scope
       </button>
     )
+
     const target = getByRole('button', { name: 'Commit scope' })
 
     fireEvent.keyDown(target, { key: 'Enter', metaKey: true })
@@ -261,10 +279,12 @@ describe('CommitArea', () => {
 
   it('does not render the Commit shortcut keys inside the primary button tooltip when the action is not commit', () => {
     const props = baseProps()
+
     const markup = renderCommitArea({
       ...props,
       primaryAction: { kind: 'push', disabled: false, label: 'Push', title: 'Push changes' }
     })
+
     expect(markup).not.toContain('Enter')
   })
 
@@ -273,6 +293,7 @@ describe('CommitArea', () => {
       ...baseProps({ isCommitting: true }),
       isCommitting: true
     })
+
     expect(hasDisabledAttribute(textarea(markup))).toBe(true)
   })
 
@@ -306,6 +327,7 @@ describe('CommitArea', () => {
       ...baseProps(),
       commitError: 'pre-commit hook failed'
     })
+
     expect(textarea(markup)).toContain('feat: add commit area')
     expect(markup).toContain('Pre-commit hook failed.')
   })
@@ -388,6 +410,7 @@ describe('CommitArea', () => {
       ...baseProps(),
       remoteActionError: 'Fetch failed. network timeout'
     })
+
     expect(markup).toContain('Fetch failed. network timeout')
     expect(markup).toContain('commit-area-remote-error')
   })
@@ -395,6 +418,7 @@ describe('CommitArea', () => {
   it('shows a compact push hook summary and AI fix action when push fails on a hook', () => {
     const raw =
       "error: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1\neslint found 2 errors"
+
     const markup = renderCommitArea({
       ...baseProps(),
       pushRecovery: buildPushRecovery(raw)
@@ -440,6 +464,7 @@ describe('CommitArea', () => {
       ...baseProps(),
       generateError: 'No staged changes to summarize.'
     })
+
     expect(markup).toContain('No staged changes to summarize.')
     expect(markup).toContain('aria-describedby="commit-area-generate-error"')
   })
@@ -451,6 +476,7 @@ describe('CommitArea', () => {
       remoteActionError: 'Fetch failed.',
       generateError: 'No staged changes.'
     })
+
     expect(markup).toContain(
       'aria-describedby="commit-area-error commit-area-remote-error commit-area-generate-error"'
     )
@@ -464,6 +490,7 @@ describe('CommitArea', () => {
         upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
       })
     )
+
     expect(firstButton(markup)).toContain('Commit')
     expect(firstButton(markup)).not.toContain('Commit &amp; Push')
   })
@@ -478,6 +505,7 @@ describe('CommitArea', () => {
         isRemoteOperationActive: true
       })
     )
+
     expect(firstButton(markup)).not.toContain('animate-spin')
   })
 
@@ -488,6 +516,7 @@ describe('CommitArea', () => {
       upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
       isCommitting: true
     })
+
     expect(firstButton(renderCommitArea({ ...props, isCommitting: true }))).toContain(
       'animate-spin'
     )
@@ -503,6 +532,7 @@ describe('CommitArea', () => {
         inFlightRemoteOpKind: 'push'
       })
     )
+
     expect(firstButton(markup)).toContain('animate-spin')
   })
 
@@ -516,6 +546,7 @@ describe('CommitArea', () => {
         inFlightRemoteOpKind: 'sync'
       })
     )
+
     expect(firstButton(markup)).toContain('Sync')
     expect(firstButton(markup)).not.toContain('Push')
     expect(firstButton(markup)).toContain('animate-spin')
@@ -531,6 +562,7 @@ describe('CommitArea', () => {
         inFlightRemoteOpKind: 'fetch'
       })
     )
+
     expect(firstButton(markup)).toContain('Push')
     expect(hasDisabledAttribute(firstButton(markup))).toBe(true)
     expect(firstButton(markup)).not.toContain('animate-spin')
@@ -548,6 +580,7 @@ describe('CommitArea', () => {
         upstreamStatus: { hasUpstream: true, ahead: 1, behind: 0 }
       })
     )
+
     expect(firstButton(markup)).not.toContain('lucide-check')
   })
 
@@ -575,6 +608,7 @@ describe('CommitArea', () => {
         reviewLookupOutcome: 'not_found'
       }
     })
+
     const markup = renderCommitArea(baseProps(input))
 
     const stageAllButton = firstButton(markup)
@@ -609,6 +643,7 @@ describe('CommitArea', () => {
         reviewLookupOutcome: 'not_found'
       }
     })
+
     const markup = renderCommitArea(baseProps(input))
 
     const pushButton = firstButton(markup)
@@ -683,6 +718,7 @@ describe('ConflictSummaryCard', () => {
         onReview={vi.fn()}
       />
     )
+
     const rebaseMarkup = renderToStaticMarkup(
       <ConflictSummaryCard
         conflictOperation="rebase"
@@ -694,6 +730,7 @@ describe('ConflictSummaryCard', () => {
         onReview={vi.fn()}
       />
     )
+
     const cherryPickMarkup = renderToStaticMarkup(
       <ConflictSummaryCard
         conflictOperation="cherry-pick"
@@ -726,6 +763,7 @@ describe('ConflictSummaryCard', () => {
         onReview={vi.fn()}
       />
     )
+
     const rebaseMarkup = renderToStaticMarkup(
       <ConflictSummaryCard
         conflictOperation="rebase"
@@ -783,9 +821,11 @@ describe('OperationBanner', () => {
     const mergeMarkup = renderToStaticMarkup(
       <OperationBanner conflictOperation="merge" onAbortOperation={vi.fn()} />
     )
+
     const rebaseMarkup = renderToStaticMarkup(
       <OperationBanner conflictOperation="rebase" onAbortOperation={vi.fn()} />
     )
+
     const cherryPickMarkup = renderToStaticMarkup(
       <OperationBanner conflictOperation="cherry-pick" onAbortOperation={vi.fn()} />
     )
@@ -800,6 +840,7 @@ describe('OperationBanner', () => {
     const mergeMarkup = renderToStaticMarkup(
       <OperationBanner conflictOperation="merge" onAbortOperation={vi.fn()} />
     )
+
     const rebaseMarkup = renderToStaticMarkup(
       <OperationBanner conflictOperation="rebase" onAbortOperation={vi.fn()} />
     )

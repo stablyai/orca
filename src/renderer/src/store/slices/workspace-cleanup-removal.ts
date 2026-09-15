@@ -26,12 +26,14 @@ export type WorkspaceCleanupFailure = {
   message: string
   canDeleteAnyway?: boolean
 }
+
 export type WorkspaceCleanupRemoveResult = {
   removedIds: string[]
   removedIdentities: string[]
   failures: WorkspaceCleanupFailure[]
   preservedBranches?: PreservedBranchCleanup[]
 }
+
 export type WorkspaceCleanupRemoveOptions = {
   approvedCandidates?: readonly WorkspaceCleanupCandidate[]
   snapshotPruneBatchId?: string
@@ -61,12 +63,15 @@ export async function removeWorkspaceCleanupCandidates(
     get(),
     options?.approvedCandidates ? { approvedCandidates: options.approvedCandidates } : {}
   )
+
   const removableTargets: WorkspaceCleanupRemovalTarget[] = []
+
   for (const target of targets) {
     if (target.kind === 'unresolved') {
       failures.push(target.failure)
       continue
     }
+
     removableTargets.push(target)
   }
 
@@ -80,6 +85,7 @@ export async function removeWorkspaceCleanupCandidates(
       getConsentAttemptId: options?.getConsentAttemptId
     }
   )
+
   const targetsToRemove: {
     target: WorkspaceCleanupRemovalTarget
     candidate: WorkspaceCleanupCandidate
@@ -92,6 +98,7 @@ export async function removeWorkspaceCleanupCandidates(
       failures.push(preflight.failure)
       continue
     }
+
     targetsToRemove.push({
       target: preflight.target,
       candidate: preflight.candidate,
@@ -100,9 +107,11 @@ export async function removeWorkspaceCleanupCandidates(
         : {})
     })
   }
+
   const scheduledRemovalIdentities = new Set(
     targetsToRemove.map(({ candidate }) => getWorkspaceCleanupCandidateIdentity(candidate))
   )
+
   for (const pendingRemoval of targetsToRemove) {
     if (
       pendingRemoval.sameIdSurvivingHostId &&
@@ -141,9 +150,11 @@ export async function removeWorkspaceCleanupCandidates(
           : {})
       }
     )
+
     if (result.ok) {
       removedIds.push(candidate.worktreeId)
       removedIdentities.add(getWorkspaceCleanupCandidateIdentity(candidate))
+
       if (result.preservedBranch) {
         preservedBranches.push({
           worktreeId: candidate.worktreeId,
@@ -172,15 +183,18 @@ export async function removeWorkspaceCleanupCandidates(
       const remainingCandidates = state.workspaceCleanupScan?.candidates.filter(
         (candidate) => !removedIdentities.has(getWorkspaceCleanupCandidateIdentity(candidate))
       )
+
       // Why: a same-id row on another host survives this removal, and its
       // dismissal/viewed marks are keyed by worktree id alone — dropping them
       // would resurrect a row the user already ignored.
       const survivingWorktreeIds = new Set(
         (remainingCandidates ?? []).map((candidate) => candidate.worktreeId)
       )
+
       prunableWorktreeIds = new Set(
         removedIds.filter((worktreeId) => !survivingWorktreeIds.has(worktreeId))
       )
+
       return {
         workspaceCleanupLoading: false,
         workspaceCleanupScan:
@@ -199,6 +213,7 @@ export async function removeWorkspaceCleanupCandidates(
         )
       }
     })
+
     if (prunableWorktreeIds.size > 0) {
       void window.api.workspaceCleanup
         .dismiss({ dismissals: [], removedWorktreeIds: [...prunableWorktreeIds] })
@@ -223,6 +238,7 @@ function pruneWorkspaceCleanupDismissals(
   if (!Object.values(dismissals).some((dismissal) => removedIds.has(dismissal.worktreeId))) {
     return dismissals
   }
+
   return Object.fromEntries(
     Object.entries(dismissals).filter(([, dismissal]) => !removedIds.has(dismissal.worktreeId))
   )
@@ -235,5 +251,6 @@ function pruneWorkspaceCleanupRecord<T>(
   if (!Object.keys(record).some((id) => removedIds.has(id))) {
     return record
   }
+
   return Object.fromEntries(Object.entries(record).filter(([id]) => !removedIds.has(id)))
 }

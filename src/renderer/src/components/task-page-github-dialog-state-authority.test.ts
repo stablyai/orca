@@ -55,6 +55,7 @@ describe('dialog state authority (STA-3343)', () => {
       previousItems: [item({ state: 'closed' })],
       queryKey: 'q'
     })
+
     expect(materialized[0]?.state).toBe('open')
   })
 
@@ -65,11 +66,13 @@ describe('dialog state authority (STA-3343)', () => {
       itemId: 'issue:1',
       state: 'closed'
     })
+
     const materialized = materializeTaskPageItemList({
       networkItems: [item({ state: 'open' })],
       previousItems: [item({ state: 'closed' })],
       queryKey: 'q'
     })
+
     expect(materialized[0]?.state).toBe('closed')
   })
 
@@ -146,31 +149,37 @@ describe('dialog state authority (STA-3343)', () => {
 
   it('revert drops fresh authority and restores a pre-existing value', () => {
     setTaskPageGitHubMutationQueryKey('q')
+
     const fresh = assertTaskPageGitHubDialogStateAuthority({
       repoId: 'repo-1',
       itemId: 'issue:1',
       state: 'closed'
     })
+
     expect(fresh.revert()).toBe(true)
     expect(getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state')).toBeUndefined()
 
     setLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state', 'open')
+
     const layered = assertTaskPageGitHubDialogStateAuthority({
       repoId: 'repo-1',
       itemId: 'issue:1',
       state: 'closed'
     })
+
     expect(layered.revert()).toBe(true)
     expect(getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state')).toBe('open')
   })
 
   it('does not roll back authority released by search or superseded by a newer state', () => {
     setTaskPageGitHubMutationQueryKey('q')
+
     const released = assertTaskPageGitHubDialogStateAuthority({
       repoId: 'repo-1',
       itemId: 'issue:1',
       state: 'closed'
     })
+
     deleteLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state')
     expect(released.revert()).toBe(false)
     expect(getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state')).toBeUndefined()
@@ -180,6 +189,7 @@ describe('dialog state authority (STA-3343)', () => {
       itemId: 'issue:1',
       state: 'closed'
     })
+
     setLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state', 'merged')
     expect(superseded.revert()).toBe(false)
     expect(getLastConfirmedClientValue(null, 'repo-1', 'issue:1', 'state')).toBe('merged')

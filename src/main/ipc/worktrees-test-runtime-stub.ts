@@ -50,6 +50,7 @@ export function createWorktreeRuntimeStub(): WorktreeRuntimeStub {
     acquireFileWatcherRemoval: vi.fn(),
     hydrateInferredWorktreeLineage: vi.fn().mockResolvedValue(undefined)
   }
+
   runtimeStub.acquireFileWatcherRemoval.mockImplementation(
     async (worktreePath: string, connectionId?: string) => {
       await (
@@ -58,10 +59,12 @@ export function createWorktreeRuntimeStub(): WorktreeRuntimeStub {
           connectionId?: string
         ) => Promise<void>
       )(worktreePath, connectionId)
+
       return {
         finish: vi.fn().mockResolvedValue(undefined)
       }
     }
   )
+
   return runtimeStub
 }

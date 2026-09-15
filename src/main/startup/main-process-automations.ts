@@ -9,9 +9,11 @@ export function initializeMainProcessAutomations(): AutomationService {
   const runtime = state.runtime
   const claudeUsage = state.claudeUsage
   const codexUsage = state.codexUsage
+
   if (!store || !runtime || !claudeUsage || !codexUsage) {
     throw new Error('Runtime and usage stores must be initialized before automations')
   }
+
   const service = new AutomationService(store, {
     claudeUsage,
     codexUsage,
@@ -28,16 +30,19 @@ export function initializeMainProcessAutomations(): AutomationService {
           let terminalPtyId: string | null = null
           let workspaceId: string
           let workspaceDisplayName: string | null = null
+
           if (automation.workspaceMode === 'new_per_run') {
             const created = await runtime.createManagedWorktree(
               buildHeadlessAutomationWorktreeCreateArgs({ automation, run, repo: target.repo })
             )
+
             terminalHandle = created.startupTerminal?.handle ?? ''
             terminalSessionId = created.startupTerminal?.tabId ?? null
             terminalPaneKey = created.startupTerminal?.paneKey ?? null
             terminalPtyId = created.startupTerminal?.ptyId ?? null
             workspaceId = created.worktree.id
             workspaceDisplayName = created.worktree.displayName ?? null
+
             if (!terminalHandle) {
               throw new Error(
                 created.warning ||
@@ -48,11 +53,13 @@ export function initializeMainProcessAutomations(): AutomationService {
             if (!automation.workspaceId) {
               throw new Error('The target workspace is no longer available.')
             }
+
             const terminal = await runtime.launchAgentTerminal(`id:${automation.workspaceId}`, {
               agent: automation.agentId,
               prompt: automation.prompt,
               title: run.title
             })
+
             terminalHandle = terminal.handle
             terminalSessionId = terminal.tabId ?? null
             terminalPaneKey = terminal.paneKey ?? null
@@ -61,13 +68,17 @@ export function initializeMainProcessAutomations(): AutomationService {
             const worktree = await runtime.showManagedWorktree(`id:${workspaceId}`)
             workspaceDisplayName = worktree.displayName ?? null
           }
+
           const completion = (async () => {
             const wait = await runtime.waitForTerminal(terminalHandle, { condition: 'tui-idle' })
+
             const read = await runtime.readTerminal(terminalHandle, {
               limit: terminalSnapshotLimit
             })
+
             const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
             snapshotBuffer.append(read.tail.join('\n'))
+
             if (wait.satisfied) {
               return {
                 status: 'completed' as const,
@@ -75,6 +86,7 @@ export function initializeMainProcessAutomations(): AutomationService {
                 error: null
               }
             }
+
             return {
               status: 'dispatch_failed' as const,
               outputSnapshot: snapshotBuffer.snapshot(),
@@ -83,6 +95,7 @@ export function initializeMainProcessAutomations(): AutomationService {
                 : 'Automation agent did not report completion.'
             }
           })()
+
           return {
             workspaceId,
             workspaceDisplayName,
@@ -94,7 +107,9 @@ export function initializeMainProcessAutomations(): AutomationService {
         }
       : undefined
   })
+
   state.automations = service
   runtime.setAutomationService(service)
+
   return service
 }

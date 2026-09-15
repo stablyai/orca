@@ -23,9 +23,11 @@ export function hasCustomCodexHomeOverride(env: NodeJS.ProcessEnv = process.env)
   const codexHome = env.CODEX_HOME?.trim()
   const orcaCodexHome = env.ORCA_CODEX_HOME?.trim()
   const normalizedCodexHome = codexHome ? normalizePathForComparison(codexHome) : undefined
+
   const normalizedOrcaCodexHome = orcaCodexHome
     ? normalizePathForComparison(orcaCodexHome)
     : undefined
+
   // Why: phase 1 owns only ~/.codex and can clean that path on downgrade. A
   // custom home needs cross-home ownership tracking before Orca may mutate it.
   return Boolean(
@@ -48,21 +50,27 @@ export function getCustomCodexHomeOverrideForLaunch(
         ORCA_CODEX_HOME: getLaunchEnvValue(launchEnv, 'ORCA_CODEX_HOME')
       }
     : process.env
+
   if (hasCustomCodexHomeOverride(effectiveEnv)) {
     return {
       source: 'environment',
       context: { codexHome: effectiveEnv.CODEX_HOME!.trim() }
     }
   }
+
   const home = launchEnv ? getLaunchEnvValue(launchEnv, 'HOME') : process.env.HOME
   const shell = launchEnv ? getLaunchEnvValue(launchEnv, 'SHELL') : process.env.SHELL
+
   const configHome = launchEnv
     ? getLaunchEnvValue(launchEnv, 'XDG_CONFIG_HOME')
     : process.env.XDG_CONFIG_HOME
+
   const shellCodexHome = readShellStartupEnvVar('CODEX_HOME', home, shell, configHome)
+
   if (!home || !shellCodexHome || !hasCustomCodexHomeOverride({ CODEX_HOME: shellCodexHome })) {
     return null
   }
+
   return {
     source: 'shell-startup',
     context: {
@@ -88,12 +96,14 @@ export function shellStartupCodexHomeOverrideMatches(
   if (!shellStartupCodexHomeOverrideContextsEqual(context, currentContext)) {
     return false
   }
+
   const currentCodexHome = readShellStartupEnvVar(
     'CODEX_HOME',
     currentContext.home,
     currentContext.shell,
     currentContext.configHome
   )
+
   return Boolean(
     currentCodexHome &&
     hasCustomCodexHomeOverride({ CODEX_HOME: currentCodexHome }) &&
@@ -122,5 +132,6 @@ function getLaunchEnvValue(
 
 function normalizePathForComparison(value: string): string {
   const normalized = resolve(value)
+
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }

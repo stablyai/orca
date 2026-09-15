@@ -7,6 +7,7 @@ const { readdirMock, statMock } = vi.hoisted(() => ({
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const original = (await importOriginal()) as Record<string, unknown>
+
   return { ...original, readdir: readdirMock, stat: statMock }
 })
 
@@ -39,9 +40,11 @@ describe('readRelayDir', () => {
 
     const originalAll = Promise.all.bind(Promise)
     let promiseBearingEntries = -1
+
     const allSpy = vi.spyOn(Promise, 'all').mockImplementation(((values: Iterable<unknown>) => {
       const entries = Array.from(values)
       promiseBearingEntries = entries.filter((entry) => entry instanceof Promise).length
+
       return originalAll(entries)
     }) as typeof Promise.all)
 

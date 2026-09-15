@@ -50,15 +50,19 @@ describe('browser text insertion chunking', () => {
   it('does not scan the full payload before the first CDP insertion resolves', async () => {
     let releaseFirstChunk: (() => void) | undefined
     let callCount = 0
+
     const sender = vi.fn(() => {
       callCount += 1
+
       if (callCount === 1) {
         return new Promise<void>((resolve) => {
           releaseFirstChunk = resolve
         })
       }
+
       return Promise.resolve()
     })
+
     const codePointAt = vi.spyOn(String.prototype, 'codePointAt')
     const text = 'x'.repeat(128)
 
@@ -66,6 +70,7 @@ describe('browser text insertion chunking', () => {
       maxChunkBytes: 8,
       yieldBetweenChunks: false
     })
+
     await Promise.resolve()
 
     expect(sender).toHaveBeenCalledTimes(1)

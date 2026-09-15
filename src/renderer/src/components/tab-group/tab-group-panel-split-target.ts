@@ -32,12 +32,14 @@ function escapeCssAttrValue(value: string): string {
   if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') {
     return CSS.escape(value)
   }
+
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
 }
 
 function getTabGroupBodyElement(groupId: string, worktreeId: string): HTMLElement | null {
   const escapedGroupId = escapeCssAttrValue(groupId)
   const escapedWorktreeId = escapeCssAttrValue(worktreeId)
+
   return document.querySelector<HTMLElement>(
     `[data-tab-group-body-id="${escapedGroupId}"][data-worktree-id="${escapedWorktreeId}"]`
   )
@@ -55,16 +57,21 @@ export function captureTabGroupPanelGeometrySnapshot(
   worktreeId: string
 ): TabGroupPanelGeometrySnapshot {
   const escapedWorktreeId = escapeCssAttrValue(worktreeId)
+
   const bodies = document.querySelectorAll<HTMLElement>(
     `[data-tab-group-body-id][data-worktree-id="${escapedWorktreeId}"]`
   )
+
   const entries: TabGroupPanelGeometryEntry[] = []
+
   for (const body of bodies) {
     const groupId = body.dataset.tabGroupBodyId
     const panelElement = body.parentElement
+
     if (!groupId || !panelElement) {
       continue
     }
+
     entries.push({
       groupId,
       panelRect: panelElement.getBoundingClientRect(),
@@ -89,6 +96,7 @@ export function findTabGroupPanelUnderPointer(
   if (options.geometry) {
     for (const entry of options.geometry.entries) {
       const { panelRect } = entry
+
       if (
         pointer.x >= panelRect.left &&
         pointer.x <= panelRect.right &&
@@ -98,23 +106,30 @@ export function findTabGroupPanelUnderPointer(
         return { groupId: entry.groupId, panelRect }
       }
     }
+
     return null
   }
 
   const getPanelRect = options.getPanelRect ?? getTabGroupPanelRect
   const escapedWorktreeId = escapeCssAttrValue(worktreeId)
+
   const bodies = document.querySelectorAll<HTMLElement>(
     `[data-tab-group-body-id][data-worktree-id="${escapedWorktreeId}"]`
   )
+
   for (const body of bodies) {
     const groupId = body.dataset.tabGroupBodyId
+
     if (!groupId) {
       continue
     }
+
     const panelRect = getPanelRect(groupId, worktreeId)
+
     if (!panelRect) {
       continue
     }
+
     if (
       pointer.x >= panelRect.left &&
       pointer.x <= panelRect.right &&
@@ -124,6 +139,7 @@ export function findTabGroupPanelUnderPointer(
       return { groupId, panelRect }
     }
   }
+
   return null
 }
 
@@ -147,9 +163,11 @@ export function resolvePanelEdgePaneColumnSplit({
   bodyRect?: DOMRect | null
 }): PaneColumnSplitTarget | null {
   const panelRect = providedPanelRect ?? getTabGroupPanelRect(targetGroupId, worktreeId)
+
   if (!panelRect) {
     return null
   }
+
   // Why: dnd-kit can keep a closest-center `over` target after the pointer
   // leaves the pane; edge splits must only resolve inside the actual panel.
   if (
@@ -167,6 +185,7 @@ export function resolvePanelEdgePaneColumnSplit({
     bodyRect: bodyRect ?? null,
     tabStripHeightPx: TAB_GROUP_TAB_STRIP_HEIGHT_PX
   })
+
   if (!zone) {
     return null
   }
@@ -174,6 +193,7 @@ export function resolvePanelEdgePaneColumnSplit({
   const sourceGroup = (groupsByWorktree[worktreeId] ?? []).find(
     (group) => group.id === activeDrag.groupId
   )
+
   if (
     isPaneColumnSplitDropNoOp({
       sourceGroupId: activeDrag.groupId,
@@ -222,6 +242,7 @@ export function resolveActivePaneColumnSplitTarget({
 }): ActivePaneColumnSplitTarget | null {
   const activeData = event.active.data.current
   const pointer = getDragPointer(event)
+
   if (!isTabDragData(activeData) || !pointer) {
     return null
   }
@@ -248,8 +269,10 @@ export function resolveActivePaneColumnSplitTarget({
   }
 
   const targetGeometry = geometry?.byGroupId.get(targetGroupId)
+
   const panelRect =
     panelHit?.groupId === targetGroupId ? panelHit.panelRect : targetGeometry?.panelRect
+
   const splitTarget = resolvePanelEdgePaneColumnSplit({
     activeDrag: activeData,
     targetGroupId,
@@ -260,5 +283,6 @@ export function resolveActivePaneColumnSplitTarget({
     panelRect,
     bodyRect: targetGeometry?.bodyRect
   })
+
   return splitTarget ? { ...splitTarget, panelRect } : null
 }

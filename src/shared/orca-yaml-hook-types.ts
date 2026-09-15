@@ -1,5 +1,7 @@
 export type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
+
 export type SetupAgentStartupPolicy = 'start-immediately' | 'wait-for-setup'
+
 export type HookCommandSourcePolicy = 'shared-only' | 'local-only' | 'run-both'
 
 // ─── Hooks (orca.yaml) ──────────────────────────────────────────────

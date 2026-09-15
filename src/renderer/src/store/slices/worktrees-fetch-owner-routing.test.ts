@@ -47,12 +47,14 @@ describe('fetchWorktrees', () => {
 
   it('stamps ownerless worktrees from an older active remote runtime before repos hydrate', async () => {
     const store = createTestStore()
+
     const remote = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
       path: '/remote/wt1',
       branch: 'refs/heads/remote'
     })
+
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-1',
@@ -68,6 +70,7 @@ describe('fetchWorktrees', () => {
       hostId: 'runtime:env-1',
       runtimeOwnerEnvironmentId: 'env-1'
     }
+
     expect(store.getState().worktreesByRepo.repo1).toEqual([expected])
     expect(store.getState().detectedWorktreesByRepo.repo1?.worktrees).toEqual([
       expect.objectContaining(expected)
@@ -87,12 +90,14 @@ describe('fetchWorktrees', () => {
     // host, not the runtime — otherwise CLI-created local worktrees stay
     // invisible in the sidebar until an app restart.
     const store = createTestStore()
+
     const local = makeWorktree({
       id: 'repo1::/local/wt1',
       repoId: 'repo1',
       path: '/local/wt1',
       branch: 'refs/heads/local'
     })
+
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
     mockApi.worktrees.listDetected.mockResolvedValueOnce(makeDetectedResult('repo1', [local]))
 
@@ -105,18 +110,21 @@ describe('fetchWorktrees', () => {
 
   it('pins a duplicate repo id to its local owner without replacing runtime worktrees', async () => {
     const store = createTestStore()
+
     const local = makeWorktree({
       id: 'same-repo::/local/wt',
       repoId: 'same-repo',
       path: '/local/wt',
       hostId: 'local'
     })
+
     const remote = makeWorktree({
       id: 'same-repo::/remote/wt',
       repoId: 'same-repo',
       path: '/remote/wt',
       hostId: 'runtime:env-1'
     })
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [
@@ -164,12 +172,14 @@ describe('fetchWorktrees', () => {
 
   it('fetches SSH repo worktrees through local IPC even when a runtime is focused', async () => {
     const store = createTestStore()
+
     const sshWorktree = makeWorktree({
       id: 'repo-ssh::/home/orca/wt1',
       repoId: 'repo-ssh',
       path: '/home/orca/wt1',
       branch: 'refs/heads/ssh'
     })
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [
@@ -205,11 +215,13 @@ describe('fetchWorktrees', () => {
 
   it('fetches the requested host when duplicate repo ids exist', async () => {
     const store = createTestStore()
+
     const localWorktree = makeWorktree({
       id: 'same-repo::/local/wt',
       repoId: 'same-repo',
       path: '/local/wt'
     })
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
       repos: [
@@ -249,12 +261,14 @@ describe('fetchWorktrees', () => {
 
   it('honors an explicit runtime owner before the repo catalog is hydrated', async () => {
     const store = createTestStore()
+
     const remote = makeWorktree({
       id: 'repo-missing::/runtime/wt',
       repoId: 'repo-missing',
       path: '/runtime/wt',
       hostId: 'local'
     })
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: null } as never,
       repos: []
@@ -285,12 +299,14 @@ describe('fetchWorktrees', () => {
 
   it('honors an explicit SSH owner before the repo catalog is hydrated', async () => {
     const store = createTestStore()
+
     const remote = makeWorktree({
       id: 'repo-missing::/ssh/wt',
       repoId: 'repo-missing',
       path: '/ssh/wt',
       hostId: 'local'
     })
+
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-ambient' } as never,
       repos: []
@@ -319,12 +335,15 @@ describe('fetchWorktrees', () => {
 
   it('rejects a missing-owner SSH result after the repo catalog changes', async () => {
     const store = createTestStore()
+
     const remote = makeWorktree({
       id: 'repo-missing::/ssh/wt',
       repoId: 'repo-missing',
       path: '/ssh/wt'
     })
+
     let release!: () => void
+
     const started = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(
         async (args: ListDetectedWorktreesArgs) => {
@@ -332,6 +351,7 @@ describe('fetchWorktrees', () => {
           await new Promise<void>((resume) => {
             release = resume
           })
+
           return qualifyDetectedResult(args, makeDetectedResult('repo-missing', [remote]))
         }
       )
@@ -341,6 +361,7 @@ describe('fetchWorktrees', () => {
       executionHostId: 'ssh:ssh-1',
       requireAuthoritative: true
     })
+
     await started
     store.setState({ repos: [] })
     release()
@@ -351,12 +372,15 @@ describe('fetchWorktrees', () => {
 
   it('rejects a missing-owner SSH result after the provider reconnects', async () => {
     const store = createTestStore()
+
     const remote = makeWorktree({
       id: 'repo-missing::/ssh/wt',
       repoId: 'repo-missing',
       path: '/ssh/wt'
     })
+
     let release!: () => void
+
     const started = new Promise<void>((resolve) => {
       mockApi.worktrees.listDetected.mockImplementationOnce(
         async (args: ListDetectedWorktreesArgs) => {
@@ -364,6 +388,7 @@ describe('fetchWorktrees', () => {
           await new Promise<void>((resume) => {
             release = resume
           })
+
           return qualifyDetectedResult(args, makeDetectedResult('repo-missing', [remote]))
         }
       )
@@ -373,6 +398,7 @@ describe('fetchWorktrees', () => {
       executionHostId: 'ssh:ssh-1',
       requireAuthoritative: true
     })
+
     await started
     store.setState({
       sshConnectionStates: new Map([
@@ -397,6 +423,7 @@ describe('fetchWorktrees', () => {
 
   it('stamps remote runtime worktrees with the owning repo runtime host', async () => {
     const store = createTestStore()
+
     // Why: a remote runtime returns worktrees from its own perspective, so their hostId arrives as the default "local".
     const remote = makeWorktree({
       id: 'repo-remote::/remote/wt1',
@@ -405,6 +432,7 @@ describe('fetchWorktrees', () => {
       branch: 'refs/heads/remote',
       hostId: 'local'
     })
+
     store.setState({
       repos: [
         {
@@ -433,26 +461,32 @@ describe('fetchWorktrees', () => {
 
   it('rejects a pre-reconnect runtime listing after a newer generation publishes', async () => {
     const store = createTestStore()
+
     const stale = makeWorktree({
       id: 'repo-remote::/remote/stale',
       repoId: 'repo-remote',
       path: '/remote/stale',
       hostId: 'local'
     })
+
     const fresh = makeWorktree({
       id: 'repo-remote::/remote/fresh',
       repoId: 'repo-remote',
       path: '/remote/fresh',
       hostId: 'local'
     })
+
     let resolveStale!: (value: unknown) => void
     let resolveFresh!: (value: unknown) => void
+
     const staleResponse = new Promise((resolve) => {
       resolveStale = resolve
     })
+
     const freshResponse = new Promise((resolve) => {
       resolveFresh = resolve
     })
+
     runtimeEnvironmentCall.mockReturnValueOnce(staleResponse).mockReturnValueOnce(freshResponse)
     store.setState({
       repos: [
@@ -495,6 +529,7 @@ describe('fetchWorktrees', () => {
 
   it('stamps runtime worktrees with the owning project host setup', async () => {
     const store = createTestStore()
+
     const remote = makeWorktree({
       id: 'repo-remote::/vercel/sandbox/orca',
       repoId: 'repo-remote',
@@ -502,6 +537,7 @@ describe('fetchWorktrees', () => {
       branch: 'refs/heads/Jinwoo-H/vm-improve-2',
       hostId: 'local'
     })
+
     store.setState({
       repos: [
         {
@@ -559,12 +595,14 @@ describe('fetchWorktrees', () => {
 
   it('falls back to legacy remote worktree.list when detectedList is unavailable', async () => {
     const store = createTestStore()
+
     const remote = makeWorktree({
       id: 'repo1::/remote/wt1',
       repoId: 'repo1',
       path: '/remote/wt1',
       branch: 'refs/heads/remote'
     })
+
     store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
     runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) =>
       Promise.resolve(
@@ -653,6 +691,7 @@ describe('fetchWorktrees', () => {
     expect(store.getState().worktreesByRepo.repo1).toBeUndefined()
     // Why: per-repo failures must collapse to a single stable-id toast, not spam.
     expect(toast.error).toHaveBeenCalledTimes(3)
+
     for (const call of (toast.error as ReturnType<typeof vi.fn>).mock.calls) {
       expect(call[1]).toMatchObject({ id: 'runtime-scope-forbidden' })
     }

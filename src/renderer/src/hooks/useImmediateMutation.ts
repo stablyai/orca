@@ -27,11 +27,14 @@ export function useImmediateMutation() {
       if (pendingRef.current.has(key)) {
         return
       }
+
       setPendingKeys((prev) => new Set(prev).add(key))
       opts.onOptimistic?.()
+
       try {
         const result = await opts.mutate()
         const asResult = result as { ok?: boolean; error?: string }
+
         if (asResult && asResult.ok === false) {
           opts.onRevert?.()
           opts.onError?.(asResult.error ?? 'Update failed')
@@ -46,6 +49,7 @@ export function useImmediateMutation() {
           setPendingKeys((prev) => {
             const next = new Set(prev)
             next.delete(key)
+
             return next
           })
         }

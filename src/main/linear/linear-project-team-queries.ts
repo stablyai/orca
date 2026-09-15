@@ -13,21 +13,27 @@ export async function listProjectTeams(
   force = false
 ): Promise<NonNullable<LinearProjectSummary['teams']>> {
   const id = projectId.trim()
+
   if (!id) {
     throw new Error('Project ID is required')
   }
+
   const concreteWorkspaceId = normalizeConcreteWorkspaceId(workspaceId)
   const key = `listProjectTeams:${concreteWorkspaceId}:${id}`
+
   return coalesce(
     key,
     async () => {
       const entry = getClients(concreteWorkspaceId)[0]
+
       if (!entry) {
         return []
       }
+
       const teams: NonNullable<LinearProjectSummary['teams']> = []
       let after: string | undefined
       await acquire()
+
       try {
         while (true) {
           const result = await entry.client.client.rawRequest<
@@ -38,10 +44,13 @@ export async function listProjectTeams(
             first: 50,
             ...(after ? { after } : {})
           })
+
           const project = result.data?.project
+
           if (!project) {
             throw new Error('Project was not found')
           }
+
           const connection = project.teams
           const nodes = connection?.nodes ?? []
           teams.push(
@@ -52,6 +61,7 @@ export async function listProjectTeams(
             }))
           )
           const nextCursor = connection?.pageInfo?.endCursor ?? undefined
+
           if (
             !connection?.pageInfo?.hasNextPage ||
             !nextCursor ||
@@ -60,13 +70,16 @@ export async function listProjectTeams(
           ) {
             break
           }
+
           after = nextCursor
         }
+
         return teams
       } catch (error) {
         if (isAuthError(error)) {
           clearToken(entry.workspace.id)
         }
+
         throw error
       } finally {
         release()

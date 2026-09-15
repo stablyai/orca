@@ -11,7 +11,9 @@ import type {
 type PointerCoordinates = { x: number; y: number }
 
 const DEFAULT_COORDINATES: PointerCoordinates = { x: 0, y: 0 }
+
 const TAB_DRAG_EARLY_MOVE_CONFIRMATION_MS = 50
+
 const TAB_DRAG_CONFIRMED_DISTANCE_SAMPLE_COUNT = 2
 
 type ListenerEntry = {
@@ -33,6 +35,7 @@ class ListenerBag {
     if (!target) {
       return
     }
+
     const listener = handler as EventListener
     target.addEventListener(eventName, listener, options)
     this.listeners.push({ eventName, handler: listener, options, target })
@@ -42,6 +45,7 @@ class ListenerBag {
     for (const { eventName, handler, options, target } of this.listeners) {
       target.removeEventListener(eventName, handler, options)
     }
+
     this.listeners.length = 0
   }
 }
@@ -62,17 +66,21 @@ function getOwnerDocument(target: EventTarget | null): Document {
   if (target instanceof Document) {
     return target
   }
+
   if (target instanceof Node) {
     return target.ownerDocument ?? document
   }
+
   return document
 }
 
 function getPointerCoordinates(event: Event): PointerCoordinates | null {
   if ('clientX' in event && 'clientY' in event) {
     const pointerEvent = event as PointerEvent
+
     return { x: pointerEvent.clientX, y: pointerEvent.clientY }
   }
+
   return null
 }
 
@@ -93,15 +101,19 @@ function hasExceededDistance(delta: PointerCoordinates, measurement: DistanceMea
   if (typeof measurement === 'number') {
     return Math.hypot(dx, dy) > measurement
   }
+
   if ('x' in measurement && 'y' in measurement) {
     return dx > measurement.x && dy > measurement.y
   }
+
   if ('x' in measurement) {
     return dx > measurement.x
   }
+
   if ('y' in measurement) {
     return dy > measurement.y
   }
+
   return false
 }
 
@@ -131,7 +143,9 @@ export class TabDragPointerSensor implements SensorInstance {
         if (!event.isPrimary || event.button !== 0) {
           return false
         }
+
         onActivation?.({ event })
+
         return true
       }
     }
@@ -181,8 +195,10 @@ export class TabDragPointerSensor implements SensorInstance {
 
     if (!activationConstraint) {
       this.handleStart()
+
       return
     }
+
     if (
       bypassActivationConstraint?.({
         activeNode: this.props.activeNode,
@@ -191,13 +207,17 @@ export class TabDragPointerSensor implements SensorInstance {
       })
     ) {
       this.handleStart()
+
       return
     }
+
     if (isDelayConstraint(activationConstraint)) {
       this.timeoutId = window.setTimeout(this.handleStart, activationConstraint.delay)
       this.handlePending(activationConstraint)
+
       return
     }
+
     this.handlePending(activationConstraint)
   }
 
@@ -206,6 +226,7 @@ export class TabDragPointerSensor implements SensorInstance {
     this.pointerListeners.removeAll()
     this.windowListeners.removeAll()
     window.setTimeout(this.documentListeners.removeAll, 50)
+
     if (this.timeoutId !== null) {
       window.clearTimeout(this.timeoutId)
       this.timeoutId = null
@@ -223,6 +244,7 @@ export class TabDragPointerSensor implements SensorInstance {
     if (this.activated || this.ended) {
       return
     }
+
     this.activated = true
     this.documentListeners.add(this.document, 'click', stopPropagation, { capture: true })
     this.removeTextSelection()
@@ -234,11 +256,14 @@ export class TabDragPointerSensor implements SensorInstance {
     if (this.ended) {
       return
     }
+
     const coordinates = getPointerCoordinates(event)
     const { activationConstraint } = this.props.options
+
     if (!coordinates) {
       return
     }
+
     const delta = subtractCoordinates(this.initialCoordinates, coordinates)
 
     if (!this.activated && activationConstraint) {
@@ -248,10 +273,13 @@ export class TabDragPointerSensor implements SensorInstance {
           hasExceededDistance(delta, activationConstraint.tolerance)
         ) {
           this.handleCancel()
+
           return
         }
+
         if (hasExceededDistance(delta, activationConstraint.distance)) {
           this.overThresholdSampleCount += 1
+
           if (
             shouldActivateTabDragFromDistanceSample({
               elapsedMs: performance.now() - this.pointerDownTime,
@@ -259,26 +287,32 @@ export class TabDragPointerSensor implements SensorInstance {
             })
           ) {
             this.handleStart()
+
             return
           }
         } else {
           this.overThresholdSampleCount = 0
         }
       }
+
       if (
         isDelayConstraint(activationConstraint) &&
         hasExceededDistance(delta, activationConstraint.tolerance)
       ) {
         this.handleCancel()
+
         return
       }
+
       this.handlePending(activationConstraint, delta)
+
       return
     }
 
     if (event.cancelable) {
       event.preventDefault()
     }
+
     this.props.onMove(coordinates)
   }
 
@@ -286,10 +320,13 @@ export class TabDragPointerSensor implements SensorInstance {
     if (this.ended) {
       return
     }
+
     this.detach()
+
     if (!this.activated) {
       this.props.onAbort(this.props.active)
     }
+
     this.props.onEnd()
   }
 
@@ -297,10 +334,13 @@ export class TabDragPointerSensor implements SensorInstance {
     if (this.ended) {
       return
     }
+
     this.detach()
+
     if (!this.activated) {
       this.props.onAbort(this.props.active)
     }
+
     this.props.onCancel()
   }
 

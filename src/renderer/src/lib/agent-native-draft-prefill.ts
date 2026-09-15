@@ -12,6 +12,8 @@ export function agentDeliversDraftViaNativePrefill(
   if (forcePaste) {
     return false
   }
+
   const agentConfig = agent ? TUI_AGENT_CONFIG[agent] : null
+
   return Boolean(agentConfig?.draftPromptFlag || agentConfig?.draftPromptEnvVar)
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readMobileSessionRouteSource } from '../session/mobile-session-route-source-family.test-support'
 
 const commandDockSource = readMobileSessionRouteSource('../session/MobileSessionCommandDock.tsx')
+
 const sendActionsSource = readMobileSessionRouteSource(
   '../session/use-mobile-session-terminal-send-actions.ts'
 )

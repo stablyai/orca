@@ -26,6 +26,7 @@ describe('scanRemoteAiVaultSessions OMP subagent partitioning', () => {
       ]),
       70
     )
+
     for (const label of ['AuthAndPreflight', 'BitbucketDcApi']) {
       provider.addFile(
         `${workspaceDir}/${stem}/${label}.jsonl`,
@@ -39,6 +40,7 @@ describe('scanRemoteAiVaultSessions OMP subagent partitioning', () => {
         71
       )
     }
+
     // A grandchild belongs to its own parent: neither a row nor a count here.
     provider.addFile(
       `${workspaceDir}/${stem}/AuthAndPreflight/Nested.jsonl`,

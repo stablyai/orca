@@ -18,6 +18,7 @@ type LocalWorktreePathAccess = {
 }
 
 const WSL_FILE_OPERATION_TIMEOUT_MS = 30_000
+
 /** The stat probe's explicit "missing path" branch. */
 const WSL_MISSING_PATH_EXIT_CODE = 2
 
@@ -43,14 +44,17 @@ async function runWslCommand(distro: string, command: string): Promise<string> {
     cwd: resolveWslInteropSpawnCwd(),
     timeoutMs: WSL_FILE_OPERATION_TIMEOUT_MS
   })
+
   if (result.timedOut) {
     throw new Error(`WSL filesystem command timed out after ${WSL_FILE_OPERATION_TIMEOUT_MS}ms`)
   }
+
   if (result.code !== 0) {
     throw Object.assign(new Error(result.stderr.trim() || `wsl.exe exited ${result.code}`), {
       exitCode: result.code
     })
   }
+
   return result.stdout
 }
 
@@ -73,6 +77,7 @@ export function getLocalWorktreePathAccess(
   options: LocalWorktreeFilesystemOptions = {}
 ): LocalWorktreePathAccess {
   const distro = options.wslDistro?.trim()
+
   if (!shouldUseWslFilesystem(options) || !distro) {
     return {
       statPath: lstat,
@@ -83,6 +88,7 @@ export function getLocalWorktreePathAccess(
   return {
     statPath: async (path) => {
       const target = quotePosixShell(toLinuxPath(path))
+
       const stdout = await runWslCommand(
         distro,
         [
@@ -93,13 +99,16 @@ export function getLocalWorktreePathAccess(
         if (isWslMissingPathError(error)) {
           throw Object.assign(new Error(`missing ${path}`), { code: 'ENOENT' })
         }
+
         throw error
       })
+
       return { type: stdout.trim() }
     },
     readPath: async (path) => {
       const target = quotePosixShell(toLinuxPath(path))
       const stdout = await runWslCommand(distro, `cat -- ${target}`)
+
       return stdout
     }
   }
@@ -110,8 +119,10 @@ export async function removeLocalWorktreePath(
   options: LocalWorktreeFilesystemOptions = {}
 ): Promise<void> {
   const distro = options.wslDistro?.trim()
+
   if (!shouldUseWslFilesystem(options) || !distro) {
     await removeHostTree(targetPath)
+
     return
   }
 

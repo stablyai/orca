@@ -31,11 +31,13 @@ function collectTerminalOwnershipEvidence(
 
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree ?? {})) {
     let matches = 0
+
     for (const tab of tabs) {
       if (tab.id === tabId) {
         matches += 1
       }
     }
+
     if (matches > 0) {
       owners.add(worktreeId)
       ambiguous ||= matches > 1
@@ -44,11 +46,13 @@ function collectTerminalOwnershipEvidence(
 
   for (const [worktreeId, tabs] of Object.entries(unifiedTabsByWorktree ?? {})) {
     let matches = 0
+
     for (const tab of tabs) {
       if (tab.contentType === 'terminal' && (tab.entityId === tabId || tab.id === tabId)) {
         matches += 1
       }
     }
+
     if (matches > 0) {
       owners.add(worktreeId)
       ambiguous ||= matches > 1
@@ -60,34 +64,42 @@ function collectTerminalOwnershipEvidence(
 
 function resolveSplitTargetWorktreeId(request: RuntimeTerminalSplitRequest): string | null {
   const state = useAppStore.getState()
+
   const evidence = collectTerminalOwnershipEvidence(
     state.tabsByWorktree,
     state.unifiedTabsByWorktree,
     request.tabId
   )
+
   if (evidence.ambiguous) {
     return null
   }
+
   if (request.worktreeId) {
     if (evidence.owners.has(request.worktreeId)) {
       return request.worktreeId
     }
+
     // A tab seen under another owner makes the hint stale; do not cross-route it.
     if (evidence.owners.size > 0) {
       return null
     }
+
     // During startup the ownership rows can hydrate after this IPC event. Keep the
     // explicit host hint so the bounded replay queue can wake the right worktree.
     return request.worktreeId
   }
+
   return evidence.owners.size === 1 ? [...evidence.owners][0]! : null
 }
 
 export function routeRuntimeTerminalSplitRequest(request: RuntimeTerminalSplitRequest): void {
   const worktreeId = resolveSplitTargetWorktreeId(request)
+
   if (!worktreeId) {
     return
   }
+
   const detail: SplitTerminalPaneDetail = {
     tabId: request.tabId,
     worktreeId,
@@ -98,10 +110,13 @@ export function routeRuntimeTerminalSplitRequest(request: RuntimeTerminalSplitRe
     telemetrySource: request.telemetrySource,
     newLeafId: request.newLeafId
   }
+
   if (hasRegisteredRuntimeTerminalTab(request.tabId, worktreeId)) {
     dispatchTerminalPaneSplitRequest(detail)
+
     return
   }
+
   queueTerminalPaneSplitRequest(detail)
   requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [request.tabId] })
 }
@@ -129,6 +144,7 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         activateTerminalInitiatedWorktree(store, worktreeId)
         store.setActiveTab(tabId)
         store.revealWorktreeInSidebar(worktreeId)
+
         if (ackPaneKeyOnSuccess || flashFocusedPane || scrollToBottomIfOutputSinceLastView) {
           activateTabAndFocusPane(tabId, leafId ?? null, {
             ...(ackPaneKeyOnSuccess ? { ackPaneKeyOnSuccess } : {}),
@@ -137,8 +153,10 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
               ? { scrollToBottomIfOutputSinceLastView: true }
               : {})
           })
+
           return
         }
+
         focusTerminalInitiatedTab(tabId, leafId, worktreeId)
       }
     )
@@ -149,11 +167,13 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
       const store = useAppStore.getState()
       const tab = (store.unifiedTabsByWorktree[worktreeId] ?? []).find((item) => item.id === tabId)
       const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, tabId)
+
       // Why: chat-completion focus is a courtesy reveal, not navigation — never yank the user
       // back into a workspace they deliberately left.
       if (tab?.contentType === 'agent-session' && store.activeWorktreeId !== worktreeId) {
         return
       }
+
       if (!tab) {
         if (browserTarget) {
           // Why: older/mobile fallback snapshots identify browser tabs by workspace id when no unified tab wrapper exists.
@@ -164,13 +184,16 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
           store.setActiveTabType('browser')
           store.revealWorktreeInSidebar(worktreeId)
         }
+
         return
       }
+
       store.setActiveWorktree(worktreeId)
       store.markWorktreeVisited(worktreeId)
       store.setActiveView('terminal')
       store.focusGroup(worktreeId, tab.groupId)
       store.activateTab(tab.id)
+
       if (tab.contentType === 'agent-session') {
         store.setActiveTabType('agent-session')
       } else if (browserTarget) {
@@ -181,6 +204,7 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         store.setActiveFile(tab.entityId)
         store.setActiveTabType('editor')
       }
+
       store.revealWorktreeInSidebar(worktreeId)
     })
   )

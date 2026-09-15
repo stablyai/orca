@@ -73,6 +73,7 @@ describe('Last-status persistence', () => {
       env: 'production',
       userDataPath
     })
+
     try {
       const listener = vi.fn()
       server.setListener(listener)
@@ -110,6 +111,7 @@ describe('Last-status persistence', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       expect(server.getStatusSnapshot()).toEqual([])
       expect(warnSpy).toHaveBeenCalledWith(
@@ -144,6 +146,7 @@ describe('Last-status persistence', () => {
       env: 'production',
       userDataPath
     })
+
     try {
       const listener = vi.fn()
       server.setListener(listener)
@@ -193,6 +196,7 @@ describe('Last-status persistence', () => {
       env: 'production',
       userDataPath
     })
+
     try {
       const listener = vi.fn()
       server.setListener(listener)
@@ -241,6 +245,7 @@ describe('Last-status persistence', () => {
       env: 'production',
       userDataPath
     })
+
     try {
       const snapshot = server.getStatusSnapshot()
       expect(snapshot.map((e) => e.paneKey)).toEqual([FRESH_PANE])
@@ -275,6 +280,7 @@ describe('Last-status persistence', () => {
       env: 'production',
       userDataPath
     })
+
     try {
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({
@@ -319,6 +325,7 @@ describe('Last-status persistence', () => {
       env: 'production',
       userDataPath
     })
+
     try {
       expect(server.getStatusSnapshot()).toHaveLength(1)
 
@@ -379,6 +386,7 @@ describe('Last-status persistence', () => {
       env: 'production',
       userDataPath
     })
+
     try {
       expect(server.getStatusSnapshot()).toEqual([])
     } finally {
@@ -392,6 +400,7 @@ describe('Last-status persistence', () => {
       env: 'production',
       userDataPath
     })
+
     try {
       await postHookEvent(
         server,
@@ -416,6 +425,7 @@ describe('Last-status persistence', () => {
       env: 'production',
       userDataPath
     })
+
     try {
       await postHookEvent(
         server,
@@ -441,6 +451,7 @@ describe('Last-status persistence', () => {
       env: 'production',
       userDataPath
     })
+
     try {
       await postHookEvent(
         server,
@@ -450,6 +461,7 @@ describe('Last-status persistence', () => {
     } finally {
       server.stop()
     }
+
     // Why: stop() must synchronously drain the pending trailing-debounced timer even though we never explicitly flushed.
     expect(existsSync(lastStatusPath())).toBe(true)
     const parsed = JSON.parse(readFileSync(lastStatusPath(), 'utf8'))

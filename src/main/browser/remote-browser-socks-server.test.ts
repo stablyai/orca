@@ -14,21 +14,26 @@ async function connectClient(server: RemoteBrowserSocksServer): Promise<Socket> 
   const address = await server.listen()
   const socket = connect(address.port, address.host)
   await once(socket, 'connect')
+
   return socket
 }
 
 async function readExact(socket: Socket, size: number): Promise<Uint8Array> {
   const chunks: Buffer[] = []
   let total = 0
+
   while (total < size) {
     const [chunk] = (await once(socket, 'data')) as [Buffer]
     chunks.push(chunk)
     total += chunk.byteLength
   }
+
   const combined = Buffer.concat(chunks)
+
   if (combined.byteLength > size) {
     socket.unshift(combined.subarray(size))
   }
+
   return combined.subarray(0, size)
 }
 
@@ -44,6 +49,7 @@ function domainConnectRequest(host: string, port: number, command = 1): Uint8Arr
   request.set([5, command, 0, 3, name.byteLength], 0)
   request.set(name, 5)
   view.setUint16(5 + name.byteLength, port, false)
+
   return request
 }
 
@@ -100,6 +106,7 @@ describe('RemoteBrowserSocksServer', () => {
     const open = vi.fn(async () => {
       throw new Error('route offline')
     })
+
     const server = new RemoteBrowserSocksServer({ open })
     servers.push(server)
     const socket = await connectClient(server)
@@ -117,6 +124,7 @@ describe('RemoteBrowserSocksServer', () => {
         throw new Error('route failed synchronously')
       }
     })
+
     servers.push(failingServer)
     const failingSocket = await connectClient(failingServer)
     await greet(failingSocket)
@@ -124,12 +132,14 @@ describe('RemoteBrowserSocksServer', () => {
     expect(Array.from(await readExact(failingSocket, 10))).toEqual([5, 1, 0, 1, 0, 0, 0, 0, 0, 0])
 
     let resolveOpen: ((stream: PassThrough) => void) | undefined
+
     const open = vi.fn(
       () =>
         new Promise<PassThrough>((resolve) => {
           resolveOpen = resolve
         })
     )
+
     const server = new RemoteBrowserSocksServer({ open })
     servers.push(server)
     const socket = await connectClient(server)
@@ -147,6 +157,7 @@ describe('RemoteBrowserSocksServer', () => {
     const server = new RemoteBrowserSocksServer({
       open: async () => new PassThrough()
     })
+
     servers.push(server)
     const listening = server.listen()
     const closing = server.close()
@@ -159,6 +170,7 @@ describe('RemoteBrowserSocksServer', () => {
     const peerServer = new RemoteBrowserSocksServer({
       open: async () => new PassThrough()
     })
+
     servers.push(peerServer)
     const peerAddress = await peerServer.listen()
     const peer = connect({ ...peerAddress, allowHalfOpen: true })
@@ -177,12 +189,14 @@ describe('RemoteBrowserSocksServer', () => {
 
   it('cannot resolve a pending route after pipelined input exceeds its bound', async () => {
     let resolveOpen: ((stream: PassThrough) => void) | undefined
+
     const open = vi.fn(
       () =>
         new Promise<PassThrough>((resolve) => {
           resolveOpen = resolve
         })
     )
+
     const server = new RemoteBrowserSocksServer({ open })
     servers.push(server)
     const socket = await connectClient(server)

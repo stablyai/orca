@@ -12,21 +12,27 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const invalidatePreflightStatus = useAppStore((s) => s.invalidatePreflightStatus)
+
   const activeRuntimeState = useAppStore((s) => {
     const environmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
+
     if (!environmentId) {
       return 'local'
     }
+
     const runtimeStatus = s.runtimeStatusByEnvironmentId.get(environmentId)
+
     const reachability = runtimeStatus
       ? runtimeStatus.status === null
         ? 'unreachable'
         : 'reachable'
       : 'unknown'
+
     return `${environmentId}:${runtimeStatus?.connectionGeneration ?? 0}:${reachability}`
   })
 
   const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
+
   const preflightIssues = useMemo(
     () =>
       preflightStatus
@@ -40,17 +46,21 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
   useEffect(() => {
     if (activeRuntimeState !== 'local' && !activeRuntimeState.endsWith(':reachable')) {
       invalidatePreflightStatus()
+
       return
     }
 
     void refreshPreflightStatus()
+
     const handleWindowActive = (): void => {
       if (document.visibilityState === 'visible') {
         void refreshPreflightStatus({ force: true })
       }
     }
+
     document.addEventListener('visibilitychange', handleWindowActive)
     window.addEventListener('focus', handleWindowActive)
+
     return () => {
       document.removeEventListener('visibilitychange', handleWindowActive)
       window.removeEventListener('focus', handleWindowActive)
@@ -61,6 +71,7 @@ export function useLandingPreflightRuntime(): { preflightIssues: PreflightIssue[
     if (preflightIssues.length === 0) {
       return
     }
+
     // Why gated: the effect above already force-refreshes on visibilitychange
     // and focus, so a revealed window has fresh data without this poll firing
     // while hidden — hence the no-op `runOnVisible`.

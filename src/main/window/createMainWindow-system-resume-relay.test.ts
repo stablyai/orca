@@ -3,13 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', async () =>
   (await import('./createMainWindow-test-harness')).electronModuleMock()
 )
+
 vi.mock('@electron-toolkit/utils', async () =>
   (await import('./createMainWindow-test-harness')).electronToolkitUtilsMock()
 )
+
 vi.mock('./macos-tahoe-release', async () =>
   (await import('./createMainWindow-test-harness')).macosTahoeReleaseMock()
 )
+
 vi.mock('../app-icon', async () => (await import('./createMainWindow-test-harness')).appIconMock())
+
 vi.mock('../browser/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
@@ -33,6 +37,7 @@ describe('createMainWindow', () => {
   describe('system resume relay', () => {
     function setupResumeWindow() {
       const windowHandlers: Record<string, (...args: any[]) => void> = {}
+
       const webContents = {
         on: vi.fn(),
         setZoomLevel: vi.fn(),
@@ -43,6 +48,7 @@ describe('createMainWindow', () => {
         isDestroyed: vi.fn(() => false),
         id: 1
       }
+
       const instance = {
         webContents,
         on: vi.fn((event: string, handler: (...args: any[]) => void) => {
@@ -59,9 +65,11 @@ describe('createMainWindow', () => {
         loadFile: vi.fn(() => Promise.resolve()),
         loadURL: vi.fn(() => Promise.resolve())
       }
+
       browserWindowMock.mockImplementation(function () {
         return instance
       })
+
       return { windowHandlers, webContents, instance }
     }
 
@@ -69,9 +77,11 @@ describe('createMainWindow', () => {
       const resumeCall = powerMonitorOnMock.mock.calls.find(
         (call: unknown[]) => call[0] === 'resume'
       )
+
       if (!resumeCall) {
         throw new Error('missing powerMonitor resume listener')
       }
+
       return resumeCall[1] as () => void
     }
 

@@ -17,10 +17,12 @@ export function decodeIssueListCursor(
   if (!value.startsWith(ISSUE_LIST_CURSOR_PREFIX)) {
     return null
   }
+
   try {
     const parsed: unknown = JSON.parse(
       Buffer.from(value.slice(ISSUE_LIST_CURSOR_PREFIX.length), 'base64url').toString('utf8')
     )
+
     if (
       parsed &&
       typeof parsed === 'object' &&
@@ -39,6 +41,7 @@ export function decodeIssueListCursor(
   } catch {
     // Prefix matched but payload is not ours; treat as an invalid issued cursor.
   }
+
   return null
 }
 
@@ -47,16 +50,20 @@ export function resolveIssueListCursor(request: {
   workspaceId?: (string & {}) | 'all'
 }): { workspaceId?: (string & {}) | 'all'; linearCursor?: string } {
   const cursor = request.cursor
+
   if (!cursor) {
     return { workspaceId: request.workspaceId }
   }
+
   if (request.workspaceId === 'all') {
     throw cursorWorkspaceError(
       'Cursor pagination cannot use --workspace all.',
       'Pass a concrete --workspace or reuse an issued list-issues nextCursor without --workspace all.'
     )
   }
+
   const issued = decodeIssueListCursor(cursor)
+
   if (issued) {
     if (request.workspaceId && request.workspaceId !== issued.workspaceId) {
       throw cursorWorkspaceError(
@@ -64,14 +71,17 @@ export function resolveIssueListCursor(request: {
         `Use --workspace ${issued.workspaceId} or omit --workspace to reuse the issued cursor.`
       )
     }
+
     return { workspaceId: issued.workspaceId, linearCursor: issued.cursor }
   }
+
   if (cursor.startsWith(ISSUE_LIST_CURSOR_PREFIX)) {
     throw cursorWorkspaceError(
       'Cursor was issued by Orca but is malformed or truncated.',
       'Re-run list-issues without --cursor, then page with the nextCursor it returns.'
     )
   }
+
   if (!request.workspaceId) {
     throw cursorWorkspaceError(
       'Cursor pagination requires a concrete Linear workspace.',
@@ -79,6 +89,7 @@ export function resolveIssueListCursor(request: {
       'Or reuse nextCursor from a current list-issues page, which binds the workspace.'
     )
   }
+
   return { workspaceId: request.workspaceId, linearCursor: cursor }
 }
 

@@ -4,14 +4,17 @@ import type { GitHubPrMutationOutcome } from './github-pr-mutations'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((r) => {
     resolve = r
   })
+
   return { promise, resolve }
 }
 
 function makeEngine(mutations: Partial<PrActionMutations>) {
   const ok = async (): Promise<GitHubPrMutationOutcome> => ({ ok: true })
+
   return new PrActionsEngine({
     mutations: {
       mergePR: ok,
@@ -31,6 +34,7 @@ function makeEngine(mutations: Partial<PrActionMutations>) {
 describe('PrActionsEngine — scoped busy clear (overlapping actions)', () => {
   it('a late-resolving action does not clear a newer action busy state', async () => {
     const slow = deferred<GitHubPrMutationOutcome>()
+
     const engine = makeEngine({
       // merge resolves slowly; state resolves immediately.
       mergePR: () => slow.promise,
@@ -63,6 +67,7 @@ describe('PrActionsEngine — scoped busy clear (overlapping actions)', () => {
 describe('PrActionsEngine — transport-rejection-normalized outcomes settle cleanly', () => {
   it('routes a { ok:false } outcome to error and clears busy', async () => {
     const onChange = vi.fn()
+
     const engine = new PrActionsEngine({
       mutations: {
         mergePR: async () => ({ ok: false, error: 'socket hung up' }),
@@ -76,6 +81,7 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
       refetch: () => {},
       onChange
     })
+
     await engine.merge()
     expect(engine.error).toBe('socket hung up')
     expect(engine.busy).toBeNull()
@@ -97,6 +103,7 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
       },
       onChange: () => {}
     })
+
     await expect(engine.merge()).resolves.toBeUndefined()
     expect(engine.error).toBe('refresh failed')
     expect(engine.busy).toBeNull()
@@ -104,6 +111,7 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
 
   it('does not notify on no-op setError(null) at action start', async () => {
     const onChange = vi.fn()
+
     const engine = new PrActionsEngine({
       mutations: {
         mergePR: async () => ({ ok: true }),
@@ -117,6 +125,7 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
       refetch: () => {},
       onChange
     })
+
     // Idle: error is already null. Action start must only notify for busy, not a
     // redundant clearError path.
     onChange.mockClear()
@@ -130,6 +139,7 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
 describe('PrActionsEngine — PR identity changes', () => {
   it('clears optimistic state when the engine points at a different PR', async () => {
     const slow = deferred<GitHubPrMutationOutcome>()
+
     const mutations: PrActionMutations = {
       mergePR: async () => ({ ok: true }),
       setPRAutoMerge: async () => slow.promise,
@@ -138,8 +148,10 @@ describe('PrActionsEngine — PR identity changes', () => {
       removeReviewers: async () => ({ ok: true }),
       rerunChecks: async () => ({ ok: true })
     }
+
     const refetch = vi.fn()
     const onChange = vi.fn()
+
     const engine = new PrActionsEngine({
       mutations,
       prNumber: 1,
@@ -166,6 +178,7 @@ describe('PrActionsEngine — PR identity changes', () => {
 
   it('clears reviewer optimism when switching PR identity', async () => {
     const slow = deferred<GitHubPrMutationOutcome>()
+
     const mutations: PrActionMutations = {
       mergePR: async () => ({ ok: true }),
       setPRAutoMerge: async () => ({ ok: true }),
@@ -174,8 +187,10 @@ describe('PrActionsEngine — PR identity changes', () => {
       removeReviewers: async () => ({ ok: true }),
       rerunChecks: async () => ({ ok: true })
     }
+
     const refetch = vi.fn()
     const onChange = vi.fn()
+
     const engine = new PrActionsEngine({
       mutations,
       prNumber: 1,
@@ -201,6 +216,7 @@ describe('PrActionsEngine — PR identity changes', () => {
 
   it('clears in-flight state when only the GitHub host changes', async () => {
     const slow = deferred<GitHubPrMutationOutcome>()
+
     const mutations: PrActionMutations = {
       mergePR: async () => ({ ok: true }),
       setPRAutoMerge: async () => slow.promise,
@@ -209,14 +225,17 @@ describe('PrActionsEngine — PR identity changes', () => {
       removeReviewers: async () => ({ ok: true }),
       rerunChecks: async () => ({ ok: true })
     }
+
     const refetch = vi.fn()
     const onChange = vi.fn()
+
     const baseConfig = {
       mutations,
       prNumber: 1,
       refetch,
       onChange
     }
+
     const engine = new PrActionsEngine({
       ...baseConfig,
       prRepo: { owner: 'acme', repo: 'widgets' }

@@ -28,22 +28,29 @@ export function findAppProcesses() {
     `  [pscustomobject]@{ pid = $_.ProcessId; path = $_.ExecutablePath; commandLine = $_.CommandLine } })`,
     `ConvertTo-Json -InputObject @{ processes = $out } -Depth 4 -Compress`
   ].join('\n')
+
   // Fail closed: this guard protects the user's real processes, so a failed
   // query must abort the run rather than look like "no Orca is running".
   const { stdout, stderr, code, error } = runCommandSync(command)
+
   if (error) {
     throw new Error(`Failed to query Orca app processes: ${error.message}`)
   }
+
   if (code !== 0) {
     throw new Error(`Failed to query Orca app processes (exit ${code}): ${stderr || stdout}`)
   }
+
   const trimmed = stdout.trim()
+
   if (!trimmed) {
     return []
   }
+
   try {
     const parsed = JSON.parse(trimmed)
     const arr = parsed.processes
+
     return Array.isArray(arr) ? arr : arr ? [arr] : []
   } catch (parseError) {
     throw new Error(
@@ -59,10 +66,12 @@ function isPathUnder(childPath, parentDir) {
     .resolve(childPath)
     .replace(/[\\/]+$/, '')
     .toLowerCase()
+
   const parent = path
     .resolve(parentDir)
     .replace(/[\\/]+$/, '')
     .toLowerCase()
+
   return child === parent || child.startsWith(`${parent}\\`)
 }
 
@@ -91,8 +100,10 @@ export function preflight({ baselinePath, allowExistingInstall = false, installD
   }
 
   const appProcesses = findAppProcesses()
+
   if (isolated) {
     const inTarget = appProcesses.filter((p) => p.path && isPathUnder(p.path, installDir))
+
     if (inTarget.length > 0) {
       const listing = inTarget.map((p) => `  pid ${p.pid}: ${p.path}`).join('\n')
       throw new Error(
@@ -101,7 +112,9 @@ export function preflight({ baselinePath, allowExistingInstall = false, installD
           `first (this harness never kills pre-existing user processes):\n${listing}`
       )
     }
+
     const elsewhere = appProcesses.filter((p) => !(p.path && isPathUnder(p.path, installDir)))
+
     if (elsewhere.length > 0) {
       warnings.push(
         `${elsewhere.length} Orca app process(es) are running from outside the isolated ` +
@@ -121,6 +134,7 @@ export function preflight({ baselinePath, allowExistingInstall = false, installD
   // Scope the existing-install check to the target dir in isolated mode; an
   // install at the default location is left untouched and does not count.
   const existingInstall = isolated ? locateInstalledExe(installDir) : locateInstalledExe()
+
   if (existingInstall && !allowExistingInstall) {
     throw new Error(
       isolated
@@ -135,6 +149,7 @@ export function preflight({ baselinePath, allowExistingInstall = false, installD
             `machines (CI/VM) never hit this.`
     )
   }
+
   if (existingInstall && !isolated) {
     warnings.push(
       `--allow-existing-install set: the existing install at ${existingInstall} will be ` +
@@ -148,6 +163,7 @@ export function preflight({ baselinePath, allowExistingInstall = false, installD
   }
 
   const existingDaemons = findDaemonProcesses()
+
   if (existingDaemons.length > 0) {
     warnings.push(
       `${existingDaemons.length} pre-existing daemon process(es) found on this machine ` +
@@ -157,5 +173,6 @@ export function preflight({ baselinePath, allowExistingInstall = false, installD
   }
 
   const baseline = captureBaseline(baselinePath)
+
   return { baseline, warnings, existingInstall }
 }

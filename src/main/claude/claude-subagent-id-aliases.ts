@@ -13,6 +13,7 @@ import { isBoundedClaudeTaskId } from './claude-background-task-tracker'
 
 /** Both maps are event-accumulated and nothing prunes them, so both are bounded. */
 const MAX_TOOL_USE_ALIASES = 512
+
 const MAX_EXCLUDED_IDS = 512
 
 export class ClaudeSubagentIds {
@@ -28,12 +29,16 @@ export class ClaudeSubagentIds {
     if (!isBoundedClaudeTaskId(toolUseId) || !isBoundedClaudeTaskId(taskId)) {
       return
     }
+
     this.canonicalByToolUse.set(toolUseId, taskId)
+
     while (this.canonicalByToolUse.size > MAX_TOOL_USE_ALIASES) {
       const oldest = this.canonicalByToolUse.keys().next()
+
       if (oldest.done || oldest.value === toolUseId) {
         break
       }
+
       this.canonicalByToolUse.delete(oldest.value)
     }
   }
@@ -42,12 +47,16 @@ export class ClaudeSubagentIds {
     if (!isBoundedClaudeTaskId(id)) {
       return
     }
+
     this.excluded.add(id)
+
     while (this.excluded.size > MAX_EXCLUDED_IDS) {
       const oldest = this.excluded.values().next()
+
       if (oldest.done || oldest.value === id) {
         break
       }
+
       this.excluded.delete(oldest.value)
     }
   }

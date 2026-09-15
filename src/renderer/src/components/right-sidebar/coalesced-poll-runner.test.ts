@@ -7,11 +7,14 @@ function deferred(): {
   reject: (error: Error) => void
 } {
   let resolve: () => void = () => {}
+
   let reject: (error: Error) => void = () => {}
+
   const promise = new Promise<void>((r, j) => {
     resolve = r
     reject = j
   })
+
   return { promise, resolve, reject }
 }
 
@@ -23,11 +26,14 @@ async function flushMicrotasks(): Promise<void> {
 describe('createCoalescedPollRunner', () => {
   it('keeps one task in flight and runs one trailing task after skipped triggers', async () => {
     const calls: ReturnType<typeof deferred>[] = []
+
     const task = vi.fn(() => {
       const call = deferred()
       calls.push(call)
+
       return call.promise
     })
+
     const runner = createCoalescedPollRunner(task)
 
     runner.run()
@@ -62,11 +68,14 @@ describe('createCoalescedPollRunner', () => {
   it('enforces minIntervalMs delay between consecutive runs', async () => {
     vi.useFakeTimers()
     const calls: ReturnType<typeof deferred>[] = []
+
     const task = vi.fn(() => {
       const call = deferred()
       calls.push(call)
+
       return call.promise
     })
+
     const runner = createCoalescedPollRunner(task, { minIntervalMs: 1000 })
 
     runner.run()
@@ -100,15 +109,19 @@ describe('createCoalescedPollRunner', () => {
       calls: ReturnType<typeof deferred>[]
     } {
       const calls: ReturnType<typeof deferred>[] = []
+
       const task = vi.fn(() => {
         const call = deferred()
         calls.push(call)
+
         return call.promise
       })
+
       const runner = createCoalescedPollRunner(task, {
         minIntervalMs: 3000,
         slowTaskBackoff: BACKOFF
       })
+
       return { runner, task, calls }
     }
 
@@ -299,11 +312,14 @@ describe('createCoalescedPollRunner', () => {
   it('cancels scheduled deferred run on dispose', async () => {
     vi.useFakeTimers()
     const calls: ReturnType<typeof deferred>[] = []
+
     const task = vi.fn(() => {
       const call = deferred()
       calls.push(call)
+
       return call.promise
     })
+
     const runner = createCoalescedPollRunner(task, { minIntervalMs: 1000 })
 
     runner.run()

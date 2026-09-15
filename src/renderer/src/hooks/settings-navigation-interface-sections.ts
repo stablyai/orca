@@ -16,6 +16,7 @@ export function buildInterfaceSettingsSections({
   mobileEmulatorCreationEnabled
 }: SettingsNavigationBuildOptions): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
+
   return [
     {
       id: 'appearance',

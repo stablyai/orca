@@ -24,12 +24,16 @@ vi.mock('electron', () => ({
 }))
 
 const REPO_ID = 'repo-1'
+
 const WT_CLI = `${REPO_ID}::/tmp/wt-cli-agent`
+
 const WT_OTHER = `${REPO_ID}::/tmp/wt-other`
 
 // Daemon session id form: <worktreeId>@@<shortUuid>. NOT serve-/ssh-shaped.
 const CLI_PTY = `${WT_CLI}@@a1b2c3d4`
+
 const OTHER_PTY = `${WT_OTHER}@@e5f6a7b8`
+
 const PTY_ID_BY_WORKTREE: Record<string, string> = { [WT_CLI]: CLI_PTY, [WT_OTHER]: OTHER_PTY }
 
 type RuntimeInternals = {
@@ -51,6 +55,7 @@ function createHarness() {
   // Starts empty: only the create path may put this terminal in the session.
   let session: WorkspaceSessionState = { ...getDefaultWorkspaceSession() }
   const repo = makeRepo()
+
   const store = {
     getRepos: () => [repo],
     getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
@@ -64,6 +69,7 @@ function createHarness() {
     },
     flushOrThrow: () => {}
   }
+
   const runtime = new OrcaRuntimeService(store as never)
   runtime.setNotifier({
     closeTerminal: vi.fn(),
@@ -81,6 +87,7 @@ function createHarness() {
     'resolveTerminalWorkspaceLaunchScope'
   ).mockImplementation(async (selector: string) => {
     const worktreeId = selector.replace(/^id:/, '')
+
     return {
       id: worktreeId,
       path: worktreeId.split('::')[1],
@@ -129,6 +136,7 @@ function createHarness() {
   }
 
   const spawnedTabIdByWorktree = new Map<string, string>()
+
   const spawn = vi.fn(
     async (args: {
       worktreeId: string
@@ -138,14 +146,17 @@ function createHarness() {
     }) => {
       const ptyId = PTY_ID_BY_WORKTREE[args.worktreeId]!
       spawnedTabIdByWorktree.set(args.worktreeId, args.tabId)
+
       // Why: only the host binding contract decides this — the test must not
       // hand the runtime an ownership signal the create path did not produce.
       if (args.persistHostSessionBinding) {
         persistPtyBinding(args.worktreeId, args.tabId, args.leafId, ptyId)
       }
+
       return { id: ptyId }
     }
   )
+
   runtime.setPtyController({
     spawn,
     write: () => true,
@@ -163,6 +174,7 @@ function createHarness() {
   // (notifyMobileSessionTabsRemoved) — there is no separate listener.
   runtime.onMobileSessionTabsChanged((snapshot) => {
     events.push(snapshot)
+
     if ((snapshot as RuntimeMobileSessionTabsRemovedResult).removed) {
       removed.push(snapshot.worktree)
     }
@@ -173,10 +185,13 @@ function createHarness() {
     await runtime.createTerminal(`id:${worktreeId}`, { focus: false })
     const tabId = spawnedTabIdByWorktree.get(worktreeId)
     expect(tabId).toBeDefined()
+
     const pty = (runtime as unknown as RuntimeInternals).ptysById.get(
       PTY_ID_BY_WORKTREE[worktreeId]!
     )
+
     expect(pty?.connected).toBe(true)
+
     return tabId!
   }
 
@@ -184,6 +199,7 @@ function createHarness() {
    *  renderer currently has mounted. Any orca-cli dispatch triggers one.
    *  `version` must climb, or web clients drop the frame as stale. */
   let syncVersion = 0
+
   const syncRendererGraph = (worktreeIds: readonly string[]): void => {
     syncVersion += 1
     runtime.syncWindowGraph(1, {

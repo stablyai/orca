@@ -11,6 +11,7 @@ const roots: string[] = []
 async function tempRoot(prefix: string): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), prefix))
   roots.push(root)
+
   return root
 }
 
@@ -32,9 +33,11 @@ async function writeBundle(root: string, name = 'Skills'): Promise<{ path: strin
     })
   )
   const hashed = await hashPluginTree(pluginRoot)
+
   if (!hashed.ok) {
     throw new Error(hashed.error)
   }
+
   return { path, hash: hashed.hash }
 }
 

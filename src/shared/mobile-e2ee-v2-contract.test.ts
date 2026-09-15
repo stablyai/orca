@@ -76,6 +76,7 @@ describe('mobile E2EE v2 contract', () => {
       responder: 'desktop' as const,
       transport: 'direct' as const
     }
+
     expect(
       validateMobileE2EEV2Handshake(
         { ...hello, context: directContext },

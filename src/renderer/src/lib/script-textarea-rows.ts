@@ -6,6 +6,7 @@ export function getDetectedSetupScriptTextareaRows(setup: string): number {
 
 export function getRepositoryHookScriptTextareaRows(script: string): number {
   const lineCount = script.length === 0 ? 0 : countScriptTextareaLines(script, 13)
+
   return clampRows(lineCount + 1, 4, 14)
 }
 
@@ -16,15 +17,19 @@ function countScriptTextareaLines(text: string, maxLines: number): number {
 
   const scanLength = Math.min(text.length, SCRIPT_TEXTAREA_ROW_SCAN_CODE_UNITS)
   let lines = 1
+
   for (let index = 0; index < scanLength; index += 1) {
     if (text.charCodeAt(index) !== 10) {
       continue
     }
+
     lines += 1
+
     if (lines >= maxLines) {
       return lines
     }
   }
+
   return lines
 }
 

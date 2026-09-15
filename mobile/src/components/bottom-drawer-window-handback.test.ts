@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const withTimingCalls = vi.hoisted(() => [] as { to: number; duration: number | undefined }[])
+
 const sharedWrites = vi.hoisted(() => [] as { key: string; value: unknown }[])
 
 vi.mock('react-native', () => ({
@@ -23,11 +24,14 @@ vi.mock('react-native', () => ({
   View: 'View',
   useWindowDimensions: () => ({ width: 440, height: 956 })
 }))
+
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 62, bottom: 34, left: 0, right: 0 })
 }))
+
 vi.mock('react-native-gesture-handler', () => {
   const chain: Record<string, unknown> = {}
+
   for (const method of [
     'activeOffsetY',
     'simultaneousWithExternalGesture',
@@ -37,15 +41,18 @@ vi.mock('react-native-gesture-handler', () => {
   ]) {
     chain[method] = () => chain
   }
+
   return {
     Gesture: { Pan: () => chain, Native: () => chain },
     GestureDetector: 'GestureDetector',
     GestureHandlerRootView: 'GestureHandlerRootView'
   }
 })
+
 vi.mock('react-native-reanimated', () => {
   function makeShared(key: string, initial: number) {
     let value = initial
+
     return {
       get value() {
         return value
@@ -56,7 +63,9 @@ vi.mock('react-native-reanimated', () => {
       }
     }
   }
+
   let sharedIndex = 0
+
   return {
     default: { View: 'AnimatedView', ScrollView: 'AnimatedScrollView' },
     useSharedValue: (initial: number) => makeShared(`shared-${sharedIndex++}`, initial),
@@ -65,6 +74,7 @@ vi.mock('react-native-reanimated', () => {
     withSpring: (to: number) => to,
     withTiming: (to: number, config?: { duration?: number }) => {
       withTimingCalls.push({ to, duration: config?.duration })
+
       return to
     },
     runOnJS: (fn: () => void) => fn,
@@ -80,10 +90,12 @@ const noop = () => {}
 // Counts mounts of the sheet's CONTENT, so a test can tell an ordinary re-render
 // apart from the subtree rebuild the fix relies on to repaint a stale native view.
 const sheetBodyMounts = { count: 0 }
+
 function SheetBody() {
   useEffect(() => {
     sheetBodyMounts.count += 1
   }, [])
+
   return null
 }
 
@@ -100,6 +112,7 @@ function render(interactive: boolean): ReactTestRenderer {
   act(() => {
     renderer = create(drawer(interactive))
   })
+
   return renderer
 }
 

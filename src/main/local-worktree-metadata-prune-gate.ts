@@ -25,7 +25,9 @@
 
 /** Bumped by evidence that some row may have become removable; repos re-run the pass once each. */
 let pruneInputsGeneration = 0
+
 const observedGenerationByRepo = new Map<string, number>()
+
 const listingFingerprintByRepo = new Map<string, string>()
 
 /** True until the repo has run a pass against the current generation — so also on the first scan. */
@@ -67,10 +69,13 @@ export function recordLocalWorktreeListingForPruneGate(
 ): void {
   const fingerprint = [...worktreePaths].sort().join('\0')
   const previous = listingFingerprintByRepo.get(repoId)
+
   if (previous === fingerprint) {
     return
   }
+
   listingFingerprintByRepo.set(repoId, fingerprint)
+
   // Why not on the first listing: a repo we have never scanned is already due by default, and the
   // scan that produced this listing is the pass that covers it. Re-arming here would double it.
   if (previous !== undefined) {
@@ -99,5 +104,6 @@ export function retireLocalWorktreeMetadataPruneStateForRepo(
   if (hostId === null) {
     forgetLocalWorktreeMetadataPruneGate(repoId)
   }
+
   invalidateLocalWorktreeMetadataPruneInputs()
 }

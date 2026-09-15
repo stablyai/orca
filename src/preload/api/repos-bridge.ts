@@ -53,7 +53,9 @@ export const reposApi = {
       _event: Electron.IpcRendererEvent,
       data: { phase: string; percent: number }
     ) => callback(data)
+
     ipcRenderer.on('repos:clone-progress', listener)
+
     return () => ipcRenderer.removeListener('repos:clone-progress', listener)
   },
 
@@ -82,6 +84,7 @@ export const reposApi = {
   onChanged: (callback: () => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('repos:changed', listener)
+
     return () => ipcRenderer.removeListener('repos:changed', listener)
   }
 } satisfies PreloadApi['repos']

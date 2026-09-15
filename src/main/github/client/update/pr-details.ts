@@ -6,6 +6,7 @@ import {
   type LocalGitExecOptions
 } from '../../gh-utils'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
+
 /**
  * Update a PR's title.
  */
@@ -23,21 +24,28 @@ export async function updatePRTitle(
     connectionId,
     localGitOptions
   )
+
   if (!ownerRepo) {
     return false
   }
+
   await acquire()
+
   try {
     const args = ['pr', 'edit', String(prNumber), '--title', title]
+
     if (ownerRepo) {
       args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
     }
+
     await ghExecFileAsync(args, {
       ...ghOptions
     })
+
     return true
   } catch (err) {
     console.warn('updatePRTitle failed:', err)
+
     return false
   } finally {
     release()
@@ -58,26 +66,33 @@ export async function updatePRDetails(
     connectionId,
     localGitOptions
   )
+
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
 
   const fields: string[] = []
+
   if (updates.title !== undefined) {
     const title = updates.title.trim()
+
     if (!title) {
       return { ok: false, error: 'Title is required' }
     }
+
     fields.push(`title=${title}`)
   }
+
   if (updates.body !== undefined) {
     fields.push(`body=${updates.body}`)
   }
+
   if (fields.length === 0) {
     return { ok: true }
   }
 
   await acquire()
+
   try {
     await ghExecFileAsync(
       [
@@ -89,10 +104,12 @@ export async function updatePRDetails(
       ],
       ghOptions
     )
+
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
+
     return { ok: false, error: classifyPullRequestUpdateError(message).message }
   } finally {
     release()

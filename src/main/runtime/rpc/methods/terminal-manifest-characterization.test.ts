@@ -52,16 +52,21 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
 
 function schemaFor(name: string) {
   const method = eraseRpcMethods(TERMINAL_METHODS).find((candidate) => candidate.name === name)
+
   if (!method?.params) {
     throw new Error(`Missing terminal schema: ${name}`)
   }
+
   return method.params
 }
+
 async function invoke(name: string, params: unknown, runtime: Partial<OrcaRuntimeService>) {
   const method = eraseRpcMethods(TERMINAL_METHODS).find((candidate) => candidate.name === name)
+
   if (!method?.params || 'stream' in method) {
     throw new Error(`Missing unary terminal method: ${name}`)
   }
+
   return method.handler(method.params.parse(params), { runtime: runtime as OrcaRuntimeService })
 }
 
@@ -72,6 +77,7 @@ describe('terminal RPC manifest characterization', () => {
       METHOD_CASES.map(([name, _params, stream]) => [name, stream])
     )
     expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(35)
+
     for (const [name, params] of METHOD_CASES) {
       expect(() => schemaFor(name).parse(params), name).not.toThrow()
     }
@@ -135,21 +141,25 @@ describe('terminal RPC manifest characterization', () => {
       executionHostId: 'ssh-host',
       hostPlatform: 'win32'
     }
+
     const recovered = {
       handle: 'term-recovered',
       executionHostId: 'folder-host',
       hostPlatform: 'linux'
     }
+
     const shown = {
       handle: 'term-shown',
       executionHostId: 'ssh-host',
       hostPlatform: 'win32'
     }
+
     const split = {
       handle: 'term-split',
       executionHostId: 'folder-host',
       hostPlatform: 'linux'
     }
+
     const runtime = {
       resolveTerminalPane: vi.fn(() => pane),
       recoverTerminalPane: vi.fn(async () => recovered),
@@ -177,7 +187,9 @@ describe('terminal RPC manifest characterization', () => {
       executionHostId: 'ssh-host',
       hostPlatform: 'win32'
     }
+
     const createTerminal = vi.fn(async () => created)
+
     const runtime = {
       dedupeTerminalCreate: vi.fn(
         async (
@@ -190,6 +202,7 @@ describe('terminal RPC manifest characterization', () => {
       ),
       createTerminal
     } as unknown as Partial<OrcaRuntimeService>
+
     const selector = 'ssh://windows-host/C:/Users/dev/repo'
 
     await expect(

@@ -14,9 +14,13 @@ import {
 import { getTerminalContent, waitForActivePanePtyId } from './helpers/terminal'
 
 const MIN_EXHAUSTED_ACK_BYTES = 400 * 1024
+
 const PUBLICATION_DEADLINE_MS = 10_000
+
 const scratch = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-stalled-stream-'))
+
 const fixturePath = path.join(scratch, 'stalled-stream-terminal.mjs')
+
 writeFileSync(
   fixturePath,
   [
@@ -50,6 +54,7 @@ function shellQuote(value: string): string {
 
 function fixtureCommand(): string {
   const command = [process.execPath, fixturePath]
+
   return process.platform === 'win32'
     ? command.map((value) => `"${value.replaceAll('"', '""')}"`).join(' ')
     : command.map(shellQuote).join(' ')
@@ -59,9 +64,11 @@ async function callRuntime<TResult>(page: Page, method: string, params: unknown)
   return page.evaluate(
     async ({ method, params }) => {
       const response = await window.api.runtime.call({ method, params })
+
       if (!response.ok) {
         throw new Error(`${response.error.code}: ${response.error.message}`)
       }
+
       return response.result
     },
     { method, params }
@@ -82,6 +89,7 @@ async function getAppResourceProxies(
   return electronApp.evaluate(({ app }) => {
     const metrics = app.getAppMetrics()
     const gpu = metrics.find((metric) => metric.type === 'GPU')
+
     return {
       gpuCpuPercent: gpu?.cpu.percentCPUUsage ?? 0,
       gpuIdleWakeupsPerSecond: gpu?.cpu.idleWakeupsPerSecond ?? 0,
@@ -106,6 +114,7 @@ async function minimizeHeadedHost(electronApp: ElectronApplication, page: Page):
       }))
     )
     .toEqual({ backgroundThrottling: true, minimized: true })
+
   // Linux reports isVisible/document visibility differently; the window manager owns iconification.
   if (process.platform === 'linux') {
     const nativeId = await host.evaluate((window) => window.getNativeWindowHandle().readUInt32LE(0))
@@ -116,6 +125,7 @@ async function minimizeHeadedHost(electronApp: ElectronApplication, page: Page):
           args: ['-id', String(nativeId), '_NET_WM_STATE'],
           timeoutMs: 5_000
         })
+
         return result.stdout
       })
       .toContain('_NET_WM_STATE_HIDDEN')
@@ -158,10 +168,12 @@ async function showHeadedClient(electronApp: ElectronApplication, page: Page): P
 function countForegroundPixels(buffer: Buffer): number {
   const image = PNG.sync.read(buffer)
   const buckets = new Map<string, { count: number; red: number; green: number; blue: number }>()
+
   for (let offset = 0; offset < image.data.length; offset += 4) {
     if ((image.data[offset + 3] ?? 0) < 128) {
       continue
     }
+
     const red = image.data[offset] ?? 0
     const green = image.data[offset + 1] ?? 0
     const blue = image.data[offset + 2] ?? 0
@@ -170,33 +182,42 @@ function countForegroundPixels(buffer: Buffer): number {
     bucket.count += 1
     buckets.set(key, bucket)
   }
+
   const background = [...buckets.values()].sort((a, b) => b.count - a.count)[0]
+
   if (!background) {
     return 0
   }
+
   let foregroundPixels = 0
+
   for (let offset = 0; offset < image.data.length; offset += 4) {
     if ((image.data[offset + 3] ?? 0) < 128) {
       continue
     }
+
     const distance =
       Math.abs((image.data[offset] ?? 0) - background.red) +
       Math.abs((image.data[offset + 1] ?? 0) - background.green) +
       Math.abs((image.data[offset + 2] ?? 0) - background.blue)
+
     if (distance > 48) {
       foregroundPixels += 1
     }
   }
+
   return foregroundPixels
 }
 
 function countVisualMarkerPixels(buffer: Buffer): number {
   const image = PNG.sync.read(buffer)
   let count = 0
+
   for (let offset = 0; offset < image.data.length; offset += 4) {
     const red = image.data[offset] ?? 0
     const green = image.data[offset + 1] ?? 0
     const blue = image.data[offset + 2] ?? 0
+
     if (
       (image.data[offset + 3] ?? 0) >= 245 &&
       blue >= 100 &&
@@ -207,6 +228,7 @@ function countVisualMarkerPixels(buffer: Buffer): number {
       count += 1
     }
   }
+
   return count
 }
 
@@ -223,21 +245,26 @@ async function findHostPaneWithMarker(
             for (const pane of manager.getPanes?.() ?? []) {
               const content = pane.serializeAddon?.serialize?.() ?? ''
               const ptyId = pane.container?.dataset?.ptyId
+
               if (content.includes(expectedMarker) && ptyId) {
                 return { paneId: pane.id, ptyId, tabId }
               }
             }
           }
+
           return null
         }, marker)
+
         return target !== null
       },
       { timeout: 30_000, message: 'host renderer never mirrored the paired terminal marker' }
     )
     .toBe(true)
+
   if (!target) {
     throw new Error('Host terminal marker target disappeared')
   }
+
   return target
 }
 
@@ -247,23 +274,30 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
 }, testInfo) => {
   test.setTimeout(150_000)
   const liveMarker = `PAIRED_STALL_RECOVERED_${Date.now()}`
+
   const worktree = await orcaPage.evaluate(() => {
     const state = window.__store?.getState()
     const id = state?.activeWorktreeId
     const active = state?.allWorktrees().find((candidate) => candidate.id === id)
+
     if (!active) {
       throw new Error('Headed host did not select its seeded worktree')
     }
+
     return { id: active.id }
   })
+
   const noClientResources = await getAppResourceProxies(electronApp)
   const offer = await createRuntimeDesktopPairingOffer(orcaPage)
+
   const client = await launchPairedWebClient(electronApp, offer, {
     disableRemoteTerminalStallRecovery:
       process.env.ORCA_E2E_DISABLE_REMOTE_TERMINAL_STALL_RECOVERY === '1'
   })
+
   let observer: Awaited<ReturnType<typeof launchPairedWebClient>> | null = null
   let terminal: string | null = null
+
   try {
     await expect
       .poll(
@@ -300,6 +334,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
     const connectedIdleResources = await getAppResourceProxies(electronApp)
     await minimizeHeadedHost(electronApp, orcaPage)
     const createStartedAt = performance.now()
+
     const created = await callRuntime<{
       tab: { id: string; parentTabId: string; terminal: string | null }
     }>(client.page, 'session.tabs.createTerminal', {
@@ -309,12 +344,15 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
       select: false,
       navigation: 'caller'
     })
+
     const createLatencyMs = performance.now() - createStartedAt
     expect(createLatencyMs).toBeLessThan(PUBLICATION_DEADLINE_MS)
     terminal = created.tab.terminal
+
     if (!terminal) {
       throw new Error('Paired runtime did not publish the stalled-stream fixture')
     }
+
     const webTabId = toWebTerminalSurfaceTabId(created.tab.parentTabId)
     await expect
       .poll(
@@ -380,9 +418,11 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
       (worktreeId) => window.__store?.getState().setActiveWorktree(worktreeId),
       worktree.id
     )
+
     const observerTab = observer.page.locator(
       `[data-testid="sortable-tab"][data-tab-id="${webTabId}"]`
     )
+
     await expect(observerTab).toBeVisible({ timeout: 30_000 })
     await observerTab.click()
     const observerOriginalPtyId = await waitForActivePanePtyId(observer.page, 30_000)
@@ -397,9 +437,11 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
           __remoteTerminalMultiplexAckGate?: { hold: (terminals: string[]) => void }
         }
       ).__remoteTerminalMultiplexAckGate
+
       if (!gate) {
         throw new Error('Remote terminal multiplex ACK gate is unavailable')
       }
+
       gate.hold([target])
     }, terminal)
     const textarea = client.page.locator('.xterm-helper-textarea:visible').first()
@@ -418,6 +460,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
                 }
               }
             ).__remoteTerminalMultiplexAckGate
+
             return gate?.snapshot().heldAckChars ?? 0
           }),
         { timeout: 30_000 }
@@ -431,6 +474,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
             'terminal.read',
             { terminal }
           )
+
           return result.terminal.tail.join('\n').includes('HOST_FLOOD_COMPLETE')
         },
         { timeout: 30_000 }
@@ -442,12 +486,14 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
       'terminal.read',
       { terminal }
     )
+
     const sent = await callRuntime<{ send: { accepted: boolean } }>(client.page, 'terminal.send', {
       terminal,
       text: liveMarker,
       enter: true,
       client: { id: 'paired-stalled-stream-e2e', type: 'desktop' }
     })
+
     expect(sent.send.accepted).toBe(true)
     await expect
       .poll(
@@ -457,6 +503,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
             'terminal.read',
             { terminal }
           )
+
           return Number(result.terminal.latestCursor)
         },
         { timeout: 30_000 }
@@ -473,6 +520,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
               }
             }
           ).__remoteTerminalMultiplexAckGate
+
           return gate?.sendInput(target, text) ?? 0
         },
         { target: terminal, text: '\r' }
@@ -504,9 +552,11 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
       (worktreeId) => window.__store?.getState().setActiveWorktree(worktreeId),
       worktree.id
     )
+
     const hostTab = orcaPage.locator(
       `[data-testid="sortable-tab"][data-tab-id="${created.tab.parentTabId}"]`
     )
+
     await expect(hostTab).toBeVisible({ timeout: 30_000 })
     await hostTab.click()
     const hostPane = await findHostPaneWithMarker(orcaPage, `LIVE:${liveMarker}`)
@@ -518,11 +568,13 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
     await expect
       .poll(() => getTerminalContent(orcaPage), { timeout: 30_000 })
       .toContain(`LIVE:${liveMarker}`)
+
     const restoredTerminalScreenshot = await orcaPage
       .locator(
         `[data-terminal-tab-id="${hostPane.tabId}"] .pane[data-pane-id="${hostPane.paneId}"] .xterm-screen`
       )
       .screenshot({ animations: 'disabled' })
+
     await testInfo.attach('host-terminal-after-create-restore', {
       body: restoredTerminalScreenshot,
       contentType: 'image/png'
@@ -548,9 +600,11 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
     const authoritativeInventory = await callRuntime<{
       tabs: { id: string; parentTabId?: string; terminal?: string | null }[]
     }>(client.page, 'session.tabs.list', { worktree: `id:${worktree.id}` })
+
     const authoritativeTab = authoritativeInventory.tabs.find(
       (candidate) => candidate.terminal === terminal
     )
+
     if (!authoritativeTab) {
       throw new Error(
         `Paired terminal was absent from authoritative inventory before close: ${JSON.stringify(
@@ -562,6 +616,7 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
         )}`
       )
     }
+
     const closeStartedAt = performance.now()
     await callRuntime(client.page, 'session.tabs.close', {
       worktree: `id:${worktree.id}`,
@@ -646,9 +701,11 @@ test('restarts one ACK-starved paired terminal stream without replacing its PTY 
       })
       .catch(() => undefined)
     await observer?.dispose()
+
     if (terminal) {
       await callRuntime(client.page, 'terminal.closeTab', { terminal }).catch(() => undefined)
     }
+
     await client.dispose()
   }
 })

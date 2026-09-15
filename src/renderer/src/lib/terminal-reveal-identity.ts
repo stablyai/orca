@@ -15,9 +15,12 @@ export function verifyTerminalRevealIdentity(
   const ownsTab = state.tabsByWorktree[expected.worktreeId]?.some(
     (tab) => tab.id === expected.tabId
   )
+
   const boundPtyId = state.terminalLayoutsByTabId[expected.tabId]?.ptyIdsByLeafId?.[expected.leafId]
+
   if (!ownsTab || boundPtyId !== expected.ptyId) {
     throw new Error('terminal_reveal_identity_mismatch')
   }
+
   return expected
 }

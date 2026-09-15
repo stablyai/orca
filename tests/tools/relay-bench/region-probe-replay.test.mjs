@@ -16,12 +16,15 @@ afterEach(async () => {
 /** A real listener, so "no request reached it" is observed rather than assumed. */
 async function loopbackListener() {
   const received = []
+
   const server = createServer((req, res) => {
     received.push(req.url)
     res.end('ok')
   })
+
   servers.push(server)
   await new Promise((res) => server.listen(0, '127.0.0.1', res))
+
   return { port: server.address().port, received }
 }
 
@@ -38,16 +41,19 @@ describe('vetProbeOrigins', () => {
         'https://10.0.0.4'
       ]
     })
+
     expect(allowed).toEqual([])
     expect(refused).toHaveLength(6)
   })
 
   it('keeps a public https origin and consults DNS for a name', async () => {
     const lookup = vi.fn().mockResolvedValue([{ address: '8.8.8.8', family: 4 }])
+
     const { allowed, refused } = await vetProbeOrigins(
       { region: 'test', probeOrigins: ['https://relay.example/health'] },
       { lookup }
     )
+
     expect(allowed).toEqual(['https://relay.example'])
     expect(refused).toEqual([])
     expect(lookup).toHaveBeenCalledWith('relay.example', { all: true })
@@ -55,10 +61,12 @@ describe('vetProbeOrigins', () => {
 
   it('refuses a public-looking name that resolves into the operator network', async () => {
     const lookup = vi.fn().mockResolvedValue([{ address: '127.0.0.1', family: 4 }])
+
     const { allowed } = await vetProbeOrigins(
       { region: 'test', probeOrigins: ['https://rebound.example'] },
       { lookup }
     )
+
     expect(allowed).toEqual([])
   })
 
@@ -70,10 +78,12 @@ describe('vetProbeOrigins', () => {
 describe('sampleRegion', () => {
   it('sends no request to a loopback listener the director named', async () => {
     const listener = await loopbackListener()
+
     const result = await sampleRegion({
       region: 'evil',
       probeOrigins: [`http://127.0.0.1:${listener.port}`, `https://127.0.0.1:${listener.port}`]
     })
+
     expect(listener.received).toEqual([])
     expect(result.verdict).toBe('REFUSED (no allowed probe origin)')
     expect(result.median).toBeNull()
@@ -82,10 +92,12 @@ describe('sampleRegion', () => {
   it('reports unreachable instead of ok when every probe fails', async () => {
     const lookup = vi.fn().mockResolvedValue([{ address: '8.8.8.8', family: 4 }])
     const probe = vi.fn().mockResolvedValue(null)
+
     const result = await sampleRegion(
       { region: 'far', probeOrigins: ['https://relay.example'] },
       { lookup, probe }
     )
+
     expect(result.verdict).toBe('UNREACHABLE (every probe failed)')
     expect(result.median).toBeNull()
     expect(result.spread).toBeNull()
@@ -96,10 +108,12 @@ describe('sampleRegion', () => {
     const lookup = vi.fn().mockResolvedValue([{ address: '8.8.8.8', family: 4 }])
     const latencies = [30, 31, 32]
     const probe = vi.fn(() => Promise.resolve(latencies.shift()))
+
     const result = await sampleRegion(
       { region: 'near', probeOrigins: ['https://relay.example'] },
       { lookup, probe }
     )
+
     expect(result).toMatchObject({
       region: 'near',
       samples: [30, 31, 32],
@@ -113,10 +127,12 @@ describe('sampleRegion', () => {
     const lookup = vi.fn().mockResolvedValue([{ address: '8.8.8.8', family: 4 }])
     const latencies = [10, 500, 12]
     const probe = vi.fn(() => Promise.resolve(latencies.shift()))
+
     const result = await sampleRegion(
       { region: 'jittery', probeOrigins: ['https://relay.example'] },
       { lookup, probe }
     )
+
     expect(result.verdict).toBe('REJECTED (spread)')
   })
 })

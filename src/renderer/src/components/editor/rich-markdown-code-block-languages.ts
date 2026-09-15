@@ -40,13 +40,16 @@ const LANGUAGE_ENTRIES: readonly LanguageEntry[] = [
 ]
 
 let cachedLocale: string | null = null
+
 let cachedResourceBundle: unknown = null
+
 let cachedLanguages: CodeBlockLanguage[] = []
 
 /** Why: labels were getters that re-translated on every property read, so one
  *  render of a code-block-heavy document cost thousands of i18next lookups. */
 export function getCodeBlockLanguages(): CodeBlockLanguage[] {
   const resourceBundle = i18n.getResourceBundle(i18n.language, 'translation')
+
   if (cachedLocale !== i18n.language || cachedResourceBundle !== resourceBundle) {
     cachedLocale = i18n.language
     cachedResourceBundle = resourceBundle
@@ -55,6 +58,7 @@ export function getCodeBlockLanguages(): CodeBlockLanguage[] {
       label: key === null ? label : translate(key, label)
     }))
   }
+
   return cachedLanguages
 }
 

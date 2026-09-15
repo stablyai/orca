@@ -32,10 +32,13 @@ function readCopiedResourceSourcePath(managedHomePath: string, entryName: string
     const parsed: unknown = JSON.parse(
       readFileSync(getResourceCopyMarkerPath(managedHomePath, entryName), 'utf-8')
     )
+
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return null
     }
+
     const sourcePath = 'sourcePath' in parsed ? parsed.sourcePath : null
+
     return typeof sourcePath === 'string' ? sourcePath : null
   } catch {
     return null
@@ -60,6 +63,7 @@ export function targetIsOwnedFallbackCopy(
   if (readCopiedResourceSourcePath(managedHomePath, entryName) !== sourcePath) {
     return false
   }
+
   try {
     return existsSync(targetPath) && !lstatSync(targetPath).isSymbolicLink()
   } catch {

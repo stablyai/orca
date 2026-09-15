@@ -21,9 +21,13 @@ import {
 } from './helpers/docker-ssh-relay-connection'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const KEY_LATENCY_SAMPLES = 'abcdefghij'
+
 const MAX_MEDIAN_KEY_LATENCY_MS = 500
+
 const MAX_WORST_KEY_LATENCY_MS = 2_000
+
 const MIN_HELD_SSH_ACK_CHARS = 256 * 1024
 
 type TypingMeasurement = {
@@ -52,6 +56,7 @@ function shellQuote(value: string): string {
 
 function encodedRemoteNodeCommand(script: string): string {
   const encoded = Buffer.from(script, 'utf8').toString('base64')
+
   return `node -e ${shellQuote(`eval(Buffer.from('${encoded}', 'base64').toString('utf8'))`)}`
 }
 
@@ -94,6 +99,7 @@ function remoteBackgroundFloodScript(runId: string): string {
 
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b)
+
   return sorted[Math.floor(sorted.length / 2)] ?? 0
 }
 
@@ -103,6 +109,7 @@ async function measureRemoteTyping(
   runId: string
 ): Promise<TypingMeasurement> {
   const latencies: number[] = []
+
   for (let index = 0; index < KEY_LATENCY_SAMPLES.length; index += 1) {
     const char = KEY_LATENCY_SAMPLES[index]
     const marker = `REMOTE_KEY_${runId}_${index + 1}_${char}`
@@ -111,6 +118,7 @@ async function measureRemoteTyping(
     await waitForTerminalOutput(page, marker, 10_000, 80_000)
     latencies.push(performance.now() - started)
   }
+
   return {
     latencies,
     medianLatencyMs: median(latencies),
@@ -121,9 +129,11 @@ async function measureRemoteTyping(
 async function holdSshPtyAckGate(page: Page, ptyIds: string[]): Promise<void> {
   await page.evaluate((heldPtyIds) => {
     const gate = (window as SshPtyAckGateWindow).__terminalPtyAckGate
+
     if (!gate) {
       throw new Error('terminal PTY ACK gate is unavailable')
     }
+
     gate.hold(heldPtyIds)
   }, ptyIds)
 }
@@ -153,6 +163,7 @@ test.describe('Docker SSH relay perf', () => {
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
@@ -166,11 +177,13 @@ test.describe('Docker SSH relay perf', () => {
       await execInTerminal(orcaPage, ptyId, `node -e ${shellQuote(remoteTypingLoadScript(runId))}`)
       await waitForTerminalOutput(orcaPage, `REMOTE_TUI_READY_${runId}`, 30_000, 80_000)
       const measurement = await measureRemoteTyping(orcaPage, ptyId, runId)
+
       const summary = `median=${measurement.medianLatencyMs.toFixed(
         1
       )}ms worst=${measurement.worstLatencyMs.toFixed(1)}ms samples=${measurement.latencies
         .map((value) => value.toFixed(1))
         .join(',')}`
+
       console.log(`[docker-ssh-relay-perf] ${summary}`)
       testInfo.annotations.push({
         type: 'docker-ssh-relay-typing',
@@ -191,6 +204,7 @@ test.describe('Docker SSH relay perf', () => {
     let target: DockerSshRelayTarget | null = null
     let backgroundPtyId: string | null = null
     let activePtyId: string | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
@@ -222,6 +236,7 @@ test.describe('Docker SSH relay perf', () => {
         `node -e ${shellQuote(remoteTypingLoadScript(activeRunId))}`
       )
       await waitForTerminalOutput(orcaPage, `REMOTE_TUI_READY_${activeRunId}`, 30_000, 80_000)
+
       const heldAckPressure = expect.poll(
         async () => (await readSshPtyAckGate(orcaPage))?.heldAckChars ?? 0,
         {
@@ -229,10 +244,12 @@ test.describe('Docker SSH relay perf', () => {
           message: 'remote background SSH PTY stream did not build held ACK pressure'
         }
       )
+
       await heldAckPressure.toBe(MIN_HELD_SSH_ACK_CHARS)
 
       const measurement = await measureRemoteTyping(orcaPage, activePtyId, activeRunId)
       const ackGate = await readSshPtyAckGate(orcaPage)
+
       const summary = `median=${measurement.medianLatencyMs.toFixed(
         1
       )}ms worst=${measurement.worstLatencyMs.toFixed(1)}ms heldAckChars=${
@@ -240,6 +257,7 @@ test.describe('Docker SSH relay perf', () => {
       } heldPtys=${ackGate?.heldAckCount ?? 0} samples=${measurement.latencies
         .map((value) => value.toFixed(1))
         .join(',')}`
+
       console.log(`[docker-ssh-relay-pty-ack-pressure] ${summary}`)
       testInfo.annotations.push({
         type: 'docker-ssh-relay-pty-ack-pressure',
@@ -254,12 +272,15 @@ test.describe('Docker SSH relay perf', () => {
       expect(releasedAckGate?.heldAckChars ?? 0).toBe(0)
     } finally {
       await releaseSshPtyAckGate(orcaPage).catch(() => undefined)
+
       if (activePtyId) {
         await stopRemoteLoad(orcaPage, activePtyId).catch(() => undefined)
       }
+
       if (backgroundPtyId) {
         await stopRemoteLoad(orcaPage, backgroundPtyId).catch(() => undefined)
       }
+
       cleanupDockerSshRelayTarget(target)
     }
   })
@@ -269,6 +290,7 @@ test.describe('Docker SSH relay perf', () => {
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
@@ -299,7 +321,9 @@ test.describe('Docker SSH relay perf', () => {
       await orcaPage.evaluate(
         ({ targetId, files, repoPath }) => {
           const state = { stopped: false, reads: 0, errors: [] as string[] }
+
           ;(window as unknown as { __sshRelayLoad: typeof state }).__sshRelayLoad = state
+
           const loop = async (run: () => Promise<unknown>): Promise<void> => {
             while (!state.stopped) {
               try {
@@ -311,9 +335,11 @@ test.describe('Docker SSH relay perf', () => {
               }
             }
           }
+
           for (const filePath of files) {
             void loop(() => window.api.fs.readFile({ filePath, connectionId: targetId }))
           }
+
           void loop(() => window.api.git.status({ worktreePath: repoPath, connectionId: targetId }))
         },
         {
@@ -326,13 +352,16 @@ test.describe('Docker SSH relay perf', () => {
       await orcaPage.waitForTimeout(1_000)
 
       const measurement = await measureRemoteTyping(orcaPage, ptyId, runId)
+
       const load = await orcaPage.evaluate(() => {
         const state = (
           window as unknown as {
             __sshRelayLoad: { stopped: boolean; reads: number; errors: string[] }
           }
         ).__sshRelayLoad
+
         state.stopped = true
+
         return { reads: state.reads, errors: state.errors.slice(0, 3) }
       })
 
@@ -341,6 +370,7 @@ test.describe('Docker SSH relay perf', () => {
         `worst=${measurement.worstLatencyMs.toFixed(1)}ms ` +
         `bulkReads=${load.reads} ` +
         `samples=${measurement.latencies.map((value) => value.toFixed(1)).join(',')}`
+
       console.log(`[docker-ssh-relay-perf:busy] ${summary}`)
       testInfo.annotations.push({
         type: 'docker-ssh-relay-typing-busy',
@@ -364,6 +394,7 @@ test.describe('Docker SSH relay perf', () => {
   }, testInfo) => {
     test.slow()
     let target: DockerSshRelayTarget | null = null
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       await waitForSessionReady(orcaPage)
@@ -379,6 +410,7 @@ test.describe('Docker SSH relay perf', () => {
       await waitForTerminalOutput(orcaPage, beforeMarker, 20_000, 60_000)
       const recoveryStartedMarker = `SSH_RECONNECT_RECOVERY_STARTED_${Date.now()}`
       const recoveryMarker = `SSH_RECONNECT_RECOVERY_${Date.now()}`
+
       const recoveryScript = [
         'let frame = 0',
         "const chunk = 'Q'.repeat(4096)",
@@ -389,6 +421,7 @@ test.describe('Docker SSH relay perf', () => {
         `if (frame === 256) { clearInterval(timer); process.stdout.write('${recoveryMarker}\\n') }`,
         '}, 10)'
       ].join(';')
+
       const recoveryCommand = encodedRemoteNodeCommand(recoveryScript)
       expect(recoveryCommand).not.toContain(recoveryStartedMarker)
       expect(recoveryCommand).not.toContain(recoveryMarker)
@@ -402,6 +435,7 @@ test.describe('Docker SSH relay perf', () => {
       await waitForTerminalOutput(orcaPage, recoveryMarker, 30_000, 80_000)
       const afterMarker = `SSH_RECONNECT_AFTER_${Date.now()}`
       const remoteProofPath = `/tmp/${afterMarker}`
+
       const afterCommand = encodedRemoteNodeCommand(
         [
           "const fs = require('node:fs')",
@@ -410,6 +444,7 @@ test.describe('Docker SSH relay perf', () => {
           "process.stdout.write(marker + '\\n')"
         ].join(';')
       )
+
       expect(afterCommand).not.toContain(afterMarker)
       await execInTerminal(orcaPage, afterPtyId, afterCommand)
       await waitForTerminalOutput(orcaPage, afterMarker, 20_000, 60_000)

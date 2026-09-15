@@ -17,6 +17,7 @@ const EXPLICIT_NONE = 'none'
 /** Used when `ssh -G` told us nothing — never "no trust source". */
 export function defaultKnownHostsFiles(): string[] {
   const home = homedir()
+
   return [join(home, '.ssh', 'known_hosts'), join(home, '.ssh', 'known_hosts2')]
 }
 
@@ -31,11 +32,13 @@ export async function resolveKnownHostsFiles(
   const reported = resolved
     ? [...resolved.userKnownHostsFiles, ...resolved.globalKnownHostsFiles]
     : []
+
   // No `ssh`, a non-zero exit or a timeout must not turn a host the user already verified into
   // first contact, so an empty report falls back rather than reading nothing.
   if (reported.length === 0) {
     return defaultKnownHostsFiles()
   }
+
   return [
     ...new Set(await rejoinSpaceSplitPaths(reported.filter((path) => path !== EXPLICIT_NONE)))
   ]
@@ -61,27 +64,34 @@ async function rejoinSpaceSplitPaths(paths: readonly string[]): Promise<string[]
   if (paths.length < 2) {
     return [...paths]
   }
+
   const rejoined: string[] = []
   let index = 0
+
   while (index < paths.length) {
     // Longest run first, so a spaced path wins over its own first fragment when both happen to
     // exist. Falls back to the single token when no run resolves, which leaves a genuinely absent
     // path reported as-is rather than inventing one.
     let consumed = 0
+
     for (let end = paths.length; end > index; end -= 1) {
       const candidate = paths.slice(index, end).join(' ')
+
       if (await exists(candidate)) {
         rejoined.push(candidate)
         consumed = end - index
         break
       }
     }
+
     if (consumed === 0) {
       rejoined.push(paths[index])
       consumed = 1
     }
+
     index += consumed
   }
+
   return rejoined
 }
 
@@ -123,10 +133,12 @@ export async function loadKnownHostsEvidence(
         return { entries: parseKnownHosts(await readFile(path, 'utf8')), unreadable: false }
       } catch (err) {
         const absent = (err as NodeJS.ErrnoException).code === 'ENOENT'
+
         return { entries: [] as KnownHostsEntry[], unreadable: !absent }
       }
     })
   )
+
   return {
     entries: perFile.flatMap((file) => file.entries),
     unreadableFileCount: perFile.filter((file) => file.unreadable).length
@@ -148,6 +160,7 @@ export function resolveKnownHostsLookupHost(
   // host reads as first contact. `dialedHost` is what ssh2 actually connects to, with HostName
   // resolution already applied by buildConnectConfig.
   const alias = resolved?.hostKeyAlias
+
   // The flag matters as much as the name: ssh looks an alias up WITHOUT the port, so bracketing it
   // would consult a form ssh never writes and, worse, let a stale `[alias]:port` line stop the bare
   // lookup that ssh actually performs.

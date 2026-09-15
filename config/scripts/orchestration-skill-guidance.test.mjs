@@ -3,8 +3,11 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const guidePath = join(projectDir, 'skill-guides', 'orchestration.md')
+
 const referenceRoot = join(projectDir, 'skill-guides', 'orchestration', 'references')
+
 const stubPath = join(projectDir, 'skills', 'orchestration', 'SKILL.md')
 
 function readKernel() {
@@ -66,6 +69,7 @@ describe('orchestration skill routing', () => {
 describe('orchestration kernel', () => {
   it('keeps the always-loaded guide compact and ordered around the normal protocol', () => {
     const kernel = readKernel()
+
     const headings = [
       '## Outcome',
       '## Classify the role',
@@ -79,9 +83,11 @@ describe('orchestration kernel', () => {
 
     // Why: 202 is the budget after the anti-loop nextAction rule; the kernel is always in context.
     expect(kernel.split('\n').length).toBeLessThanOrEqual(202)
+
     for (let index = 1; index < headings.length; index += 1) {
       expect(kernel.indexOf(headings[index])).toBeGreaterThan(kernel.indexOf(headings[index - 1]))
     }
+
     expect(kernel).not.toContain('## Contract Migration')
     expect(kernel).not.toContain('## Full Handoffs')
     expect(kernel).not.toContain('## Worker Terminals')
@@ -251,6 +257,7 @@ describe('orchestration kernel', () => {
     ]) {
       expect(kernel).toContain(field)
     }
+
     expect(kernel).toContain('successful `orchestration send` proves durable enqueue')
     expect(kernel).toContain('best-effort attention only')
     expect(squash(kernel)).toContain('does not prove the recipient read or accepted it')
@@ -261,6 +268,7 @@ describe('owned orchestration references', () => {
   it('routes every conditional read to exactly one shipped reference', () => {
     const kernel = readKernel()
     const routed = [...kernel.matchAll(/`references\/([^`]+\.md)`/gu)].map((match) => match[1])
+
     const shipped = readdirSync(referenceRoot)
       .filter((name) => name.endsWith('.md'))
       .sort()
@@ -332,6 +340,7 @@ describe('owned orchestration references', () => {
       expect(recipe).toContain('--dispatch-capability <capability>')
       expect(recipe).toContain('--task-id <task_id> --dispatch-id <dispatch_id>')
     }
+
     expect(workerDone).not.toContain('--files-modified')
     expect(workerDone).not.toContain('--report-path')
     expect(squash(reference)).toContain('only when applicable, using actual paths')
@@ -377,9 +386,11 @@ describe('owned orchestration references', () => {
       'A Delivery therefore always carries the whole FIFO batch whatever its types, and a `check` without `--wait` hands that batch over unfiltered'
     )
     expect(reference).toContain('send --to dispatch:<dispatch_id>')
+
     for (const group of ['@all', '@grok', '@cursor', '@worktree:<id>']) {
       expect(reference).toContain(group)
     }
+
     expect(reference).toContain('Dispatch lifecycle messages never target groups')
     expect(squash(reference)).toContain("means the live Dispatches of the sender's own Run.")
     expect(squash(reference)).toContain('A sender bound to no Run is refused')

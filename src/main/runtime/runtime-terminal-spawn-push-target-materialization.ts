@@ -24,7 +24,9 @@ export function triggerTerminalSpawnPushTargetMaterialization(
   if (!pushTarget?.remoteUrl || pushTarget.remoteCreated) {
     return
   }
+
   const connectionId = repo?.connectionId ?? undefined
+
   const materialized = connectionId
     ? materializeOverSsh(connectionId, worktreePath, pushTarget, store, worktreeId)
     : materializeWorktreePushTargetRemote(
@@ -35,6 +37,7 @@ export function triggerTerminalSpawnPushTargetMaterialization(
         localGitOptionsForTerminalSpawn(store, repo),
         worktreeId
       )
+
   materialized.catch((error: unknown) => {
     console.warn(
       `[terminal-spawn] failed to materialize push target remote for ${worktreePath}:`,
@@ -51,10 +54,12 @@ function materializeOverSsh(
   worktreeId: string | undefined
 ): Promise<GitPushTarget> {
   const provider = getSshGitProvider(connectionId)
+
   if (!provider) {
     // Why: connection dropped -- the next Orca-driven sync action will retry via its own dispatch.
     return Promise.resolve(pushTarget)
   }
+
   return materializeWorktreePushTargetRemoteSsh(
     provider,
     worktreePath,
@@ -72,6 +77,7 @@ function localGitOptionsForTerminalSpawn(
   if (!store || !repo) {
     return {}
   }
+
   try {
     // Why: a WSL-hosted repo's remote add/fetch must run under the same distro as
     // the terminal, or it can target the wrong git binary entirely (repair-required
@@ -79,6 +85,7 @@ function localGitOptionsForTerminalSpawn(
     return getLocalProjectWorktreeGitOptions(store, repo)
   } catch (error) {
     console.warn(`[terminal-spawn] failed to resolve local git options for ${repo.path}:`, error)
+
     return {}
   }
 }

@@ -24,6 +24,7 @@ function createMockSubprocess(): SubprocessHandle & {
 } {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
+
   return {
     pid: 55555,
     getForegroundProcess: vi.fn(() => null),
@@ -99,6 +100,7 @@ describe('DaemonServer', () => {
   async function connectClient(): Promise<DaemonClient> {
     client = new DaemonClient({ socketPath, tokenPath })
     await client.ensureConnected()
+
     return client
   }
 
@@ -119,30 +121,39 @@ describe('DaemonServer', () => {
         socket.off('data', onData)
         socket.off('error', onError)
       }
+
       const onData = (data: Buffer): void => {
         cleanup()
         const parsed = JSON.parse(data.toString().trim()) as { ok?: boolean; error?: string }
+
         if (parsed.ok) {
           resolve()
+
           return
         }
+
         reject(new Error(parsed.error ?? 'hello rejected'))
       }
+
       const onError = (error: Error): void => {
         cleanup()
         reject(error)
       }
+
       socket.on('data', onData)
       socket.on('error', onError)
     })
+
     return socket
   }
 
   async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
     const startedAt = Date.now()
+
     while (!predicate() && Date.now() - startedAt < timeoutMs) {
       await new Promise((resolve) => setTimeout(resolve, 20))
     }
+
     expect(predicate()).toBe(true)
   }
 
@@ -183,9 +194,11 @@ describe('DaemonServer', () => {
 
     it('keeps RPC responsive and creates one subprocess while spawn preparation is pending', async () => {
       let finishPreparation!: () => void
+
       const preparation = new Promise<void>((resolve) => {
         finishPreparation = resolve
       })
+
       const preparePtySpawn = vi.fn(() => preparation)
       const spawnSubprocess = vi.fn(() => createMockSubprocess())
       server = new DaemonServer({
@@ -202,11 +215,13 @@ describe('DaemonServer', () => {
         cols: 80,
         rows: 24
       })
+
       const concurrentCreate = c.request<{ isNew: boolean }>('createOrAttach', {
         sessionId: 'prepared-session',
         cols: 80,
         rows: 24
       })
+
       await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledTimes(2))
 
       // The old spawnSync probe blocked this ping and all live PTY traffic.
@@ -223,9 +238,11 @@ describe('DaemonServer', () => {
       'prevents a pending subprocess after %s and permits later session reuse',
       async (requestType) => {
         let finishPreparation!: () => void
+
         const preparation = new Promise<void>((resolve) => {
           finishPreparation = resolve
         })
+
         const preparePtySpawn = vi.fn(() => preparation)
         const spawnSubprocess = vi.fn(() => createMockSubprocess())
         server = new DaemonServer({
@@ -249,17 +266,20 @@ describe('DaemonServer', () => {
             rows: 24
           })
         ]
+
         const canceledCreates = Promise.all(
           creates.map((create) =>
             expect(create).rejects.toThrow('Attach canceled for session canceled-preparation')
           )
         )
+
         await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledTimes(2))
 
         const cancelRequest =
           requestType === 'kill'
             ? c.request('kill', { sessionId: 'canceled-preparation', immediate: true })
             : c.request('cancelCreateOrAttach', { sessionId: 'canceled-preparation' })
+
         await expect(cancelRequest).resolves.toEqual(
           requestType === 'kill' ? {} : { canceled: true }
         )
@@ -280,9 +300,11 @@ describe('DaemonServer', () => {
 
     it('cancels pending subprocess preparation during daemon shutdown', async () => {
       let finishPreparation!: () => void
+
       const preparation = new Promise<void>((resolve) => {
         finishPreparation = resolve
       })
+
       const preparePtySpawn = vi.fn(() => preparation)
       const spawnSubprocess = vi.fn(() => createMockSubprocess())
       server = new DaemonServer({
@@ -299,9 +321,11 @@ describe('DaemonServer', () => {
         cols: 80,
         rows: 24
       })
+
       const canceledCreate = expect(create).rejects.toThrow(
         'Attach canceled for session shutdown-pending'
       )
+
       await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledOnce())
 
       const shutdown = server.shutdown()
@@ -313,9 +337,11 @@ describe('DaemonServer', () => {
 
     it('cancels a disconnecting client’s pending preparation to avoid an orphan PTY (F4)', async () => {
       let finishPreparation!: () => void
+
       const preparation = new Promise<void>((resolve) => {
         finishPreparation = resolve
       })
+
       const preparePtySpawn = vi.fn(() => preparation)
       const spawnSubprocess = vi.fn(() => createMockSubprocess())
       server = new DaemonServer({
@@ -371,6 +397,7 @@ describe('DaemonServer', () => {
         rows: 24,
         launchAgent: 'droid'
       })
+
       expect(first).toMatchObject({ isNew: true, launchAgent: 'droid' })
 
       const second = await c.request('createOrAttach', {
@@ -378,6 +405,7 @@ describe('DaemonServer', () => {
         cols: 80,
         rows: 24
       })
+
       expect(second).toMatchObject({ isNew: false, launchAgent: 'droid' })
 
       const unknown = await c.request('createOrAttach', {
@@ -386,6 +414,7 @@ describe('DaemonServer', () => {
         rows: 24,
         launchAgent: 'not-an-agent'
       } as never)
+
       expect(unknown).not.toHaveProperty('launchAgent')
     })
 
@@ -476,12 +505,15 @@ describe('DaemonServer', () => {
       await startServer()
       const daemon = server as unknown as DaemonServerPrivate
       let finishKill!: () => void
+
       const teardown = new Promise<void>((resolve) => {
         finishKill = resolve
       })
+
       const kill = vi.spyOn(daemon.host, 'kill').mockReturnValue(teardown)
 
       let acknowledged = false
+
       const routed = daemon.requestRouter
         .route('client-1', {
           id: 'kill-1',
@@ -490,6 +522,7 @@ describe('DaemonServer', () => {
         })
         .then((result) => {
           acknowledged = true
+
           return result
         })
 
@@ -566,6 +599,7 @@ describe('DaemonServer', () => {
 
     it('bypasses daemon stream batching for output after input', async () => {
       vi.useFakeTimers()
+
       try {
         let subprocess: ReturnType<typeof createMockSubprocess>
         server = new DaemonServer({
@@ -573,11 +607,13 @@ describe('DaemonServer', () => {
           tokenPath,
           spawnSubprocess: () => {
             subprocess = createMockSubprocess()
+
             return subprocess
           }
         })
         const daemon = server as unknown as DaemonServerPrivate
         const controlSocket = { destroy: vi.fn() } as unknown as Socket
+
         const streamSocket = {
           destroyed: false,
           destroy: vi.fn(),
@@ -623,6 +659,7 @@ describe('DaemonServer', () => {
 
     it('flushes pending batched stream output before the exit event', async () => {
       vi.useFakeTimers()
+
       try {
         let subprocess: ReturnType<typeof createMockSubprocess>
         server = new DaemonServer({
@@ -630,11 +667,13 @@ describe('DaemonServer', () => {
           tokenPath,
           spawnSubprocess: () => {
             subprocess = createMockSubprocess()
+
             return subprocess
           }
         })
         const daemon = server as unknown as DaemonServerPrivate
         const controlSocket = { destroy: vi.fn() } as unknown as Socket
+
         const streamSocket = {
           destroyed: false,
           destroy: vi.fn(),
@@ -671,6 +710,7 @@ describe('DaemonServer', () => {
 
     it('keeps exit behind final output held by the shallow socket gate', async () => {
       vi.useFakeTimers()
+
       try {
         let subprocess: ReturnType<typeof createMockSubprocess>
         server = new DaemonServer({
@@ -678,12 +718,14 @@ describe('DaemonServer', () => {
           tokenPath,
           spawnSubprocess: () => {
             subprocess = createMockSubprocess()
+
             return subprocess
           }
         })
         const daemon = server as unknown as DaemonServerPrivate
         const refillCallbacks: (() => void)[] = []
         const controlSocket = { destroy: vi.fn() } as unknown as Socket
+
         const streamSocket = {
           destroyed: false,
           destroy: vi.fn(),
@@ -692,6 +734,7 @@ describe('DaemonServer', () => {
             if (callback) {
               refillCallbacks.push(callback)
             }
+
             return true
           })
         } as unknown as Socket & {
@@ -724,11 +767,13 @@ describe('DaemonServer', () => {
 
         streamSocket.writableLength = 0
         refillCallbacks[0]()
+
         const delivered = streamSocket.write.mock.calls
           .map(
             ([line]) => JSON.parse(String(line)) as { event: string; payload: { data?: string } }
           )
           .filter((message) => message.payload.data !== '')
+
         expect(delivered.map((message) => message.event)).toEqual(['data', 'exit'])
         expect(delivered[0]?.payload.data).toBe(finalOutput)
       } finally {
@@ -839,9 +884,11 @@ describe('DaemonServer', () => {
       const onRpcShutdown = vi.fn()
       await startServer(undefined, onRpcShutdown)
       const c = await connectClient()
+
       const daemon = server as unknown as DaemonServerPrivate & {
         host: { dispose: () => Promise<void> }
       }
+
       const controlSocket = [...daemon.connections.clients.values()][0].controlSocket
       const originalWrite = controlSocket.write.bind(controlSocket)
       let replyFlushed: (() => void) | undefined
@@ -850,6 +897,7 @@ describe('DaemonServer', () => {
         ...args: unknown[]
       ) => {
         replyFlushed = args.find((arg) => typeof arg === 'function') as (() => void) | undefined
+
         return originalWrite(chunk)
       }) as unknown as Socket['write'])
       const dispose = vi.spyOn(daemon.host, 'dispose')
@@ -912,9 +960,11 @@ describe('DaemonServer', () => {
     // Runs everywhere: a closed Windows pipe classifies as missing, not connected.
     it('still terminates via the shutdown RPC when disposal cannot prove physical exit', async () => {
       await startServer()
+
       const daemon = server as unknown as DaemonServerPrivate & {
         host: { dispose: () => Promise<void> }
       }
+
       // Why: an unreapable child rejects dispose after its exit deadline; the
       // daemon must exit anyway or its replacement flow strands it as an orphan.
       daemon.host.dispose = vi.fn(() =>

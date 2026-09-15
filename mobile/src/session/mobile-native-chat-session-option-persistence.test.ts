@@ -9,15 +9,20 @@ import { persistMobileStructuredOptionPicks } from './mobile-native-chat-session
 
 function hostClient(initial?: PersistedNativeChatSessionOptions) {
   let stored = initial
+
   const sendRequest = vi.fn(async (method: string, params?: unknown) => {
     expect(method).toBe('settings.mutateNativeChatSessionOptions')
+
     const next = applyNativeChatSessionOptionSettingsMutation(
       stored,
       params as Parameters<typeof applyNativeChatSessionOptionSettingsMutation>[1]
     )
+
     stored = next ?? stored
+
     return { id: '2', ok: true as const, result: null, _meta: { runtimeId: 'host' } }
   })
+
   return { client: { sendRequest } as unknown as RpcClient, sendRequest, read: () => stored }
 }
 
@@ -39,6 +44,7 @@ describe('persistMobileStructuredOptionPicks', () => {
     const host = hostClient({
       claude: { model: 'opus', valuesByModel: { opus: { effort: 'high' } } }
     })
+
     await persistMobileStructuredOptionPicks({
       client: host.client,
       agent: 'codex',
@@ -52,16 +58,19 @@ describe('persistMobileStructuredOptionPicks', () => {
 
   it('sends concurrent deltas that preserve both picks on the host', async () => {
     const host = hostClient()
+
     const first = persistMobileStructuredOptionPicks({
       client: host.client,
       agent: 'codex',
       picks: [{ modelId: 'gpt-fast', optionId: 'effort', value: 'low' }]
     })
+
     const second = persistMobileStructuredOptionPicks({
       client: host.client,
       agent: 'claude',
       picks: [{ modelId: 'opus', optionId: 'effort', value: 'high' }]
     })
+
     await Promise.all([first, second])
     expect(resolveStructuredLaunchSeedOptions(host.read(), 'codex')).toEqual({
       model: 'gpt-fast',

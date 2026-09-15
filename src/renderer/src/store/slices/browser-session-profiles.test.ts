@@ -9,7 +9,9 @@ import {
 } from './browser-slice-test-harness'
 
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 vi.mock('@/runtime/web-runtime-session', () => ({
@@ -88,6 +90,7 @@ describe('createBrowserSlice runtime guard', () => {
 
   it('forwards profile UA options to the active runtime environment', async () => {
     const store = createTestStore()
+
     const profile = {
       id: 'remote-google',
       scope: 'isolated' as const,
@@ -96,6 +99,7 @@ describe('createBrowserSlice runtime guard', () => {
       source: null,
       userAgentMode: 'native' as const
     }
+
     runtimeEnvironmentCall.mockResolvedValueOnce({
       id: 'rpc-create',
       ok: true,
@@ -339,6 +343,7 @@ describe('createBrowserSlice runtime guard', () => {
 
   it('forwards profile UA options to local browser IPC', async () => {
     const store = createTestStore()
+
     const profile = {
       id: 'local-google',
       scope: 'isolated' as const,
@@ -347,6 +352,7 @@ describe('createBrowserSlice runtime guard', () => {
       source: null,
       userAgentMode: 'native' as const
     }
+
     mockApi.browser.sessionCreateProfile.mockResolvedValueOnce(profile)
 
     await expect(

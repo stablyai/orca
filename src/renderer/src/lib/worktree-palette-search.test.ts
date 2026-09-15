@@ -249,6 +249,7 @@ describe('worktree-palette-search', () => {
     const titleResults = searchWorktrees([worktree], 'checks tab', repoMap, {
       checksReviewByWorktree
     })
+
     const numberResults = searchWorktrees([worktree], '!17', repoMap, { checksReviewByWorktree })
 
     expect(titleResults[0].supportingText).toEqual({
@@ -270,6 +271,7 @@ describe('worktree-palette-search', () => {
 
   it('matches a review number only exactly, not as an incidental substring', () => {
     const worktree = makeWorktree()
+
     const checksReviewByWorktree = new Map([
       [worktree, gitLabReview({ number: 4123, title: 'Fix reconnect' })]
     ])
@@ -285,9 +287,11 @@ describe('worktree-palette-search', () => {
       branch: 'refs/heads/feature/palette-refresh',
       linkedPR: 99
     })
+
     const checksReviewByWorktree = new Map([
       [staleWorktree, gitLabReview({ title: 'Current merge request' })]
     ])
+
     const prCache = {
       '/repo/orca::feature/palette-refresh': { data: { number: 99, title: 'Stale GitHub title' } }
     }
@@ -305,11 +309,13 @@ describe('worktree-palette-search', () => {
     const prCache = {
       '/repo/orca::feature/palette-refresh': { data: { number: 99, title: 'Stale GitHub title' } }
     }
+
     const staleWorktree = makeWorktree({
       branch: 'refs/heads/feature/palette-refresh',
       linkedPR: 99,
       linkedGitLabMR: 17
     })
+
     const checksReviewByWorktree = new Map<Worktree, HostedReviewInfo | null>([
       [staleWorktree, null]
     ])
@@ -340,12 +346,14 @@ describe('worktree-palette-search', () => {
 
   it('scopes PR and MR number sigils to their providers', () => {
     const gitHubWorktree = makeWorktree()
+
     const gitHubReview = gitLabReview({
       provider: 'github',
       number: 42,
       title: 'GitHub pull request',
       url: 'https://github.com/acme/orca/pull/42'
     })
+
     const gitLabWorktree = makeWorktree()
 
     expect(

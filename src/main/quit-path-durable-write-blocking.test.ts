@@ -38,30 +38,39 @@ const fsCalls = vi.hoisted(() => {
       }
     }
   }
+
   return calls
 })
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
   const patched: Record<string, unknown> = { ...actual }
+
   for (const name of Object.keys(actual)) {
     const original = (actual as unknown as Record<string, unknown>)[name]
+
     if (!name.endsWith('Sync') || typeof original !== 'function') {
       continue
     }
+
     const fn = original as (...args: unknown[]) => unknown
+
     const wrapper = (...args: unknown[]): unknown => {
       fsCalls.recordSync(name, args[0])
+
       return fn(...args)
     }
+
     patched[name] = Object.assign(wrapper, fn)
   }
+
   return { ...patched, default: patched }
 })
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
   const patched: Record<string, unknown> = { ...actual }
+
   for (const name of [
     'stat',
     'access',
@@ -79,12 +88,15 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       if (fsCalls.inScope(args[0]) && fsCalls.holdAsync) {
         await fsCalls.holdAsync
       }
+
       if (fsCalls.inScope(args[0]) && typeof args[0] === 'string') {
         await fsCalls.waitAsync?.(name, args[0])
       }
+
       return fn(...args)
     }
   }
+
   return { ...patched, default: patched }
 })
 
@@ -130,6 +142,7 @@ async function createStore(dir: string): Promise<TestStore> {
   // Why: userData resolves through AppEnvironment; point it at this file's temp dir.
   installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
+
   return new Store() as unknown as TestStore
 }
 
@@ -138,11 +151,14 @@ async function createStatsCollector(dir: string): Promise<TestStatsCollector> {
   vi.resetModules()
   const { StatsCollector, initStatsPath } = await import('./stats/collector')
   initStatsPath()
+
   return new StatsCollector() as unknown as TestStatsCollector
 }
 
 const dataFile = (dir: string): string => join(dir, 'orca-data.json')
+
 const statsFile = (dir: string): string => join(dir, 'orca-stats.json')
+
 const activeViewFile = (dir: string): string => join(dir, 'active-view.json')
 
 /** Resolves once the macrotask queue turns over — false if the main thread is parked. */
@@ -156,6 +172,7 @@ describe('quit-path durable writes never park the main thread', () => {
   function makeDir(): string {
     const dir = mkdtempSync(join(tmpdir(), 'orca-quit-path-'))
     dirs.push(dir)
+
     return dir
   }
 
@@ -167,6 +184,7 @@ describe('quit-path durable writes never park the main thread', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+
     for (const dir of dirs.splice(0)) {
       rmSync(dir, { recursive: true, force: true })
     }
@@ -222,8 +240,10 @@ describe('quit-path durable writes never park the main thread', () => {
 
     expect(fsCalls.syncCalls).toEqual([])
     await store.flushAsync()
+
     const layout = JSON.parse(readFileSync(dataFile(dir), 'utf-8')).workspaceSession
       .terminalLayoutsByTabId['remote-tab']
+
     const ref = layout.scrollbackRefsByLeafId[leafId]
     expect(layout.buffersByLeafId).toBeUndefined()
     expect(readFileSync(join(dir, 'terminal-scrollback', `${ref}.bin`), 'utf-8')).toBe(
@@ -273,6 +293,7 @@ describe('quit-path durable writes never park the main thread', () => {
     vi.resetModules()
     const { GrokHookService } = await import('./grok/hook-service')
     const service = new GrokHookService()
+
     try {
       const configPath = join(dir, 'hooks', 'orca-status.json')
       const configDir = join(dir, 'hooks')
@@ -297,6 +318,7 @@ describe('quit-path durable writes never park the main thread', () => {
       expect(existsSync(configPath)).toBe(false)
     } finally {
       fsCalls.recording = false
+
       if (previousGrokHome === undefined) {
         delete process.env.GROK_HOME
       } else {
@@ -390,13 +412,17 @@ describe('quit-path durable writes never park the main thread', () => {
     const dir = makeDir()
     const store = await createStore(dir)
     let releaseWrite!: () => void
+
     const writeRelease = new Promise<void>((resolve) => {
       releaseWrite = resolve
     })
+
     let signalWrite!: () => void
+
     const writeStarted = new Promise<void>((resolve) => {
       signalWrite = resolve
     })
+
     let held = false
     fsCalls.dirPrefix = dir
     fsCalls.recording = true
@@ -404,8 +430,10 @@ describe('quit-path durable writes never park the main thread', () => {
       if (held || fn !== 'writeFile' || !target.includes('orca-github-cache.json')) {
         return null
       }
+
       held = true
       signalWrite()
+
       return writeRelease
     }
 
@@ -432,6 +460,7 @@ describe('quit-path durable writes never park the main thread', () => {
     const inflight = (stats as unknown as { enqueueWrite(): Promise<void> }).enqueueWrite.call(
       stats
     )
+
     await stats.flushAsync()
     await inflight
 

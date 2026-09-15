@@ -12,13 +12,16 @@ type ExplorerOp = {
 }
 
 const past: ExplorerOp[] = []
+
 const future: ExplorerOp[] = []
 
 export function commitFileExplorerOp(op: ExplorerOp): void {
   past.push(op)
+
   if (past.length > MAX_STEPS) {
     past.shift()
   }
+
   future.length = 0
 }
 
@@ -29,21 +32,27 @@ export function clearFileExplorerUndoHistory(): void {
 
 export async function undoFileExplorer(): Promise<boolean> {
   const op = past.pop()
+
   if (!op) {
     return false
   }
+
   await op.undo()
   future.push(op)
+
   return true
 }
 
 export async function redoFileExplorer(): Promise<boolean> {
   const op = future.pop()
+
   if (!op) {
     return false
   }
+
   await op.redo()
   past.push(op)
+
   return true
 }
 

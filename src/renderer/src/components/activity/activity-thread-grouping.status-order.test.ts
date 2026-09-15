@@ -20,6 +20,7 @@ function makeStatusThreads(fixtures: StatusFixture[]): AgentPaneThread[] {
   const repo = makeRepo()
   const worktree = makeWorktree()
   const tabs = fixtures.map((_fixture, index) => makeTabWithIds(`tab-${index + 1}`, worktree.id))
+
   const agentStatusByPaneKey = Object.fromEntries(
     fixtures.map((fixture) => [
       fixture.paneKey,
@@ -35,6 +36,7 @@ function makeStatusThreads(fixtures: StatusFixture[]): AgentPaneThread[] {
       } satisfies AgentStatusEntry
     ])
   )
+
   return makeThreads(
     buildActivityEvents({
       agentStatusByPaneKey,
@@ -54,6 +56,7 @@ describe('status group order', () => {
       { paneKey: PANE_KEY, state: 'working', at: 1_000 },
       { paneKey: PANE_KEY_2, state: 'done', at: 5_000 }
     ])
+
     expect(threads.map((thread) => thread.paneKey)).toEqual([PANE_KEY_2, PANE_KEY])
 
     const groups = buildActivityThreadGroups(threads, 'status')
@@ -69,6 +72,7 @@ describe('status group order', () => {
       ]),
       'status'
     )
+
     const newerWaiting = buildActivityThreadGroups(
       makeStatusThreads([
         { paneKey: PANE_KEY, state: 'waiting', at: 5_000 },
@@ -106,6 +110,7 @@ describe('status group order', () => {
     )
 
     expect(groups.map((group) => group.state)).toEqual(['blocked', 'working', 'done'])
+
     for (const group of groups) {
       for (const thread of group.threads) {
         expect(threadAgentState(thread)).toBe(group.state)

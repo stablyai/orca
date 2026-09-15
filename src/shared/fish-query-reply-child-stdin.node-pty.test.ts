@@ -24,6 +24,7 @@ import { PtyStartupIngress } from './pty-startup-ingress'
 
 // Why fish 4: the DA1-sentinel handoff this measures lives in the 4.0 Rust tty_handoff.
 const FISH = resolveFishBinary(4)
+
 const itWithFish = FISH.available ? it : it.skip
 
 const PROMPT_MARK = 'ORCA13892> '
@@ -43,6 +44,7 @@ const QUERY_GRAMMARS = [
   { re: /^\x1b\[>0?q/, reply: () => '\x1bP>|Orca\x1b\\' },
   { re: /^\x1b\[\?u/, reply: () => '\x1b[?0u' }
 ] as const
+
 /** Still accumulating: no CSI final byte and no OSC/DCS terminator yet. */
 const PARTIAL_QUERY_RE =
   /^(?:\x1b|\x1b\[[?>=]?[0-9;]*|\x1b\][0-9]*(?:;[^\x07\x1b]*)?\x1b?|\x1bP[^\x1b]*\x1b?)$/
@@ -52,12 +54,15 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 async function waitUntil(predicate: () => boolean, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline) {
     if (predicate()) {
       return true
     }
+
     await sleep(10)
   }
+
   return false
 }
 
@@ -106,6 +111,7 @@ describe('a held query reply never reaches the next child process (#13892)', () 
       )
 
       const nodePty = await import('node-pty')
+
       const term = nodePty.spawn(FISH.path as string, ['-l', '-i'], {
         name: 'xterm-256color',
         cols: 120,
@@ -125,6 +131,7 @@ describe('a held query reply never reaches the next child process (#13892)', () 
       })
 
       let rendered = ''
+
       const ingress = new PtyStartupIngress({
         ownerBackend: 'posix-pty',
         write: (data) => term.write(data),
@@ -140,37 +147,48 @@ describe('a held query reply never reaches the next child process (#13892)', () 
         if (ingress.answerLiveQueryReply(data)) {
           return
         }
+
         term.write(data)
       }
 
       let tail = ''
       let oscQueryCount = 0
+
       function answerQueriesInOrder(chunk: string): void {
         let buffer = tail + chunk
         tail = ''
         let index = 0
+
         while (index < buffer.length) {
           const at = buffer.indexOf('\x1b', index)
+
           if (at === -1) {
             return
           }
+
           const rest = buffer.slice(at)
+
           const grammar = QUERY_GRAMMARS.map((candidate) => ({
             candidate,
             match: candidate.re.exec(rest)
           })).find((entry) => entry.match)
+
           if (grammar?.match) {
             if (grammar.candidate === QUERY_GRAMMARS[0]) {
               oscQueryCount += 1
             }
+
             hostWrite(grammar.candidate.reply(grammar.match))
             index = at + grammar.match[0].length
             continue
           }
+
           if (PARTIAL_QUERY_RE.test(rest)) {
             tail = rest
+
             return
           }
+
           index = at + 1
         }
       }
@@ -206,6 +224,7 @@ describe('a held query reply never reaches the next child process (#13892)', () 
 
         const childRead =
           rendered.slice(renderedBeforeChildInput).match(/CHILD-READ:[^\r\n]*/)?.[0] ?? ''
+
         // The merge-blocking assertion: the child's first LINE is what the user typed,
         // with no escape byte in front of it. Pre-fix this reads
         // `\u001b]11;rgb:1e1e/1e1e/1e1e\u001b\\hello\n`.
@@ -213,6 +232,7 @@ describe('a held query reply never reaches the next child process (#13892)', () 
       } finally {
         term.write('exit\r')
         await waitUntil(() => exited, 3_000)
+
         try {
           term.kill()
         } catch {

@@ -16,10 +16,12 @@ export function relayEndpointForHost(
   if (!isWindowsRemoteHost(hostPlatform)) {
     return joinRemotePath(hostPlatform, remoteDir, sockName)
   }
+
   const endpointHash = createHash('sha256')
     .update(`${remoteDir}\0${sockName}`)
     .digest('hex')
     .slice(0, 20)
+
   return `\\\\.\\pipe\\orca-relay-${endpointHash}`
 }
 

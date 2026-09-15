@@ -7,7 +7,9 @@ import {
 } from './managed-toml-ownership'
 
 const START = '# >>> start >>>'
+
 const END = '# <<< end <<<'
+
 const MARKERS: ManagedTomlMarkers = { startMarker: START, endMarker: END }
 
 // Recognizes an `[owned]` table plus its `k = ...` lines; anything else is user text.
@@ -18,10 +20,13 @@ const recognizeOwned = (
   if (lines[index].trim() !== '[owned]') {
     return null
   }
+
   let cursor = index + 1
+
   while (cursor < lines.length && /^k\d* = /.test(lines[cursor].trim())) {
     cursor++
   }
+
   return { lineCount: cursor - index, value: lines[index].trim() }
 }
 
@@ -78,6 +83,7 @@ describe('managed TOML marker blocks', () => {
       `${END} (end of example)`,
       'b = 2'
     ].join('\n')
+
     expect(findManagedTomlBlocks(text, MARKERS)).toEqual([])
     expect(strip(text)).toBe(text)
   })
@@ -135,10 +141,12 @@ describe('recognized managed tables', () => {
 describe('splicing owned regions', () => {
   it('merges a recognized table nested inside a marker block', () => {
     const text = `a = 1\n${START}\n[owned]\nk = 1\n${END}\nb = 2\n`
+
     const regions = [
       ...findManagedTomlBlocks(text, MARKERS),
       ...findRecognizedManagedTables(text, recognizeOwned)
     ]
+
     expect(regions).toHaveLength(2)
     expect(stripManagedTomlRegions(text, regions).text).toBe('a = 1\nb = 2\n')
   })

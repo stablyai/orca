@@ -31,10 +31,12 @@ export function classifyDaemonAdoptionOrigin(
     : pidRecord.appVersion === getAppEnvironment().getVersion()
       ? 'same'
       : 'different'
+
   const spawnerPathClass: DaemonSpawnerPathClass = classifyDaemonSpawnerPath(
     pidRecord?.spawnerExecPath ?? null,
     existsSync
   )
+
   return { app_version_match: appVersionMatch, spawner_path_class: spawnerPathClass }
 }
 
@@ -68,6 +70,7 @@ export function trackDaemonPtyCwdDeniedIfDiverged(
     if (process.platform !== 'darwin' || !cwd || cwdReadableByDaemon !== false) {
       return
     }
+
     accessSync(cwd, fsConstants.R_OK | fsConstants.X_OK)
     // Why read now, not the adapter's startup snapshot: a respawn swaps the daemon under a
     // long-lived adapter, and the denial must be attributed to the daemon that just spawned.

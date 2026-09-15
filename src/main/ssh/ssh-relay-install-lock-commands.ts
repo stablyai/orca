@@ -11,6 +11,7 @@ export function acquireInstallLockParentCommand(
   if (!isWindowsRemoteHost(host)) {
     return `mkdir -p ${shellEscape(remoteRelayDir)}`
   }
+
   return powerShellCommand(
     `$null = New-Item -ItemType Directory -Force -Path ${powerShellLiteral(remoteRelayDir)}`
   )
@@ -26,6 +27,7 @@ export function tryCreateInstallLockCommand(host: RemoteHostPlatform, lockDir: s
       'else echo BUSY; fi'
     ].join(' ')
   }
+
   // Why: old Orca clients recognize only a directory at `.install-lock`, while
   // concurrent New-Item calls can both report success in PowerShell 5.1. Keep
   // that directory marker and arbitrate ownership with an atomic child file.
@@ -51,6 +53,7 @@ export function probeInstallLockExistsCommand(host: RemoteHostPlatform, lockPath
   if (!isWindowsRemoteHost(host)) {
     return `test -e ${shellEscape(lockPath)} && echo LOCKED || echo OPEN`
   }
+
   // Why: one prerelease briefly wrote file locks; accept both shapes so those
   // hosts remain recoverable after upgrading to directory-plus-owner locks.
   return powerShellCommand(
@@ -62,6 +65,7 @@ export function lockAgeSecondsCommand(host: RemoteHostPlatform, lockDir: string)
   if (!isWindowsRemoteHost(host)) {
     return `${posixLockAgeSecondsAssignment(lockDir)} && echo "$age" || echo`
   }
+
   return powerShellCommand(
     [
       `$item = Get-Item -LiteralPath ${powerShellLiteral(lockDir)} -ErrorAction Stop`,
@@ -80,6 +84,7 @@ export function tryStealInstallLockCommand(
   if (!isWindowsRemoteHost(host)) {
     return posixStealInstallLockCommand(host, lockDir, staleAfterSeconds)
   }
+
   return windowsStealInstallLockCommand(lockDir, staleAfterSeconds)
 }
 
@@ -90,6 +95,7 @@ function posixStealInstallLockCommand(
 ): string {
   const escapedLockDir = shellEscape(lockDir)
   const escapedStealLockPrefix = shellEscape(`${lockDir}.steal`)
+
   return [
     posixCurrentBootIdentityAssignment(host, 'current_boot_id'),
     `${posixReadBootIdentity(lockDir, 'recorded_boot_id')}`,
@@ -198,6 +204,7 @@ function posixCurrentBootIdentityAssignment(
   if (host.os === 'darwin') {
     return `${variableName}=$(sysctl -n kern.boottime 2>/dev/null | sed -n 's/^.*{ sec = \\([0-9][0-9]*\\),.*$/darwin:\\1/p');`
   }
+
   return [
     `${variableName}=;`,
     'kernel_boot_id=$(cat /proc/sys/kernel/random/boot_id 2>/dev/null) || kernel_boot_id=;',
@@ -208,6 +215,7 @@ function posixCurrentBootIdentityAssignment(
 
 function posixReadBootIdentity(lockDir: string, variableName: string): string {
   const markerPath = shellEscape(`${lockDir}/${INSTALL_LOCK_BOOT_ID_NAME}`)
+
   return [
     `${variableName}=$(head -c 128 ${markerPath} 2>/dev/null | tr -d '\\r\\n') || ${variableName}=;`,
     `if ! printf '%s\\n' "$${variableName}" | grep -Eq '^(linux:[0-9a-fA-F-]{1,64}:[0-9]{1,32}|darwin:[0-9]{1,32})$'; then ${variableName}=; fi;`
@@ -217,6 +225,7 @@ function posixReadBootIdentity(lockDir: string, variableName: string): string {
 function posixWriteBootIdentity(lockDir: string, variableName: string): string {
   const markerPath = shellEscape(`${lockDir}/${INSTALL_LOCK_BOOT_ID_NAME}`)
   const markerTempPrefix = shellEscape(`${lockDir}/${INSTALL_LOCK_BOOT_ID_NAME}.tmp`)
+
   return [
     `if [ -n "$${variableName}" ]; then`,
     `boot_marker_tmp=${markerTempPrefix}.$$;`,
@@ -265,10 +274,12 @@ function posixLockAgeSecondsAssignment(lockDir: string): string {
 
 function posixLockIdentityAssignment(lockDir: string, variableName: string): string {
   const escapedLockDir = shellEscape(lockDir)
+
   return `${variableName}=$(stat -c %Y:%i ${escapedLockDir} 2>/dev/null || stat -f %m:%i ${escapedLockDir} 2>/dev/null)`
 }
 
 function posixLockMtimeSecondsAssignment(lockDir: string, variableName: string): string {
   const escapedLockDir = shellEscape(lockDir)
+
   return `${variableName}=$(stat -c %Y ${escapedLockDir} 2>/dev/null || stat -f %m ${escapedLockDir} 2>/dev/null)`
 }

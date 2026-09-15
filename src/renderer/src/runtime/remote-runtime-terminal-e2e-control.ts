@@ -42,15 +42,25 @@ export type RemoteRuntimeTerminalMultiplexerE2eAccess = {
 }
 
 const e2eHeldRemoteAckTerminals = new Set<string>()
+
 const e2eHeldRemoteEndTerminals = new Set<string>()
+
 const e2eDroppedOutputStreams = new Set<RemoteRuntimeMultiplexedTerminalState>()
+
 let e2eDroppedOutputBytes = 0
+
 let e2eDroppedOutputFrames = 0
+
 let e2eReleasedRemoteAckChars = 0
+
 let e2eStreamSubscribeCount = 0
+
 let e2eStreamUnsubscribeCount = 0
+
 let e2eInitialSnapshotTruncatedCount = 0
+
 let e2eTransportSubscribeCount = 0
+
 let e2eTransportUnsubscribeCount = 0
 
 export function shouldHoldE2eRemoteTerminalAck(terminal: string): boolean {
@@ -67,15 +77,18 @@ function getE2eRemoteAckSnapshot(
   const activeStreams: E2eRemoteTerminalMultiplexAckGateSnapshot['activeStreams'] = []
   let heldStreamCount = 0
   let heldAckChars = 0
+
   for (const [environmentId, multiplexer] of multiplexers) {
     for (const stream of multiplexer.getStreamsForE2e()) {
       activeStreams.push({ environmentId, streamId: stream.streamId, terminal: stream.terminal })
+
       if (stream.heldAckBytes > 0) {
         heldStreamCount += 1
         heldAckChars += stream.heldAckBytes
       }
     }
   }
+
   return {
     activeStreams,
     droppedOutputBytes: e2eDroppedOutputBytes,
@@ -110,6 +123,7 @@ export function unsubscribeRuntimeEnvironmentForE2e(
   if (e2eConfig.exposeStore) {
     e2eTransportUnsubscribeCount += 1
   }
+
   subscription.unsubscribe()
 }
 
@@ -117,6 +131,7 @@ export function recordE2eRemoteStreamFrame(opcode: TerminalStreamOpcode): void {
   if (!e2eConfig.exposeStore) {
     return
   }
+
   if (opcode === TerminalStreamOpcode.Subscribe) {
     e2eStreamSubscribeCount += 1
   } else if (opcode === TerminalStreamOpcode.Unsubscribe) {
@@ -130,6 +145,7 @@ function releaseE2eRemoteTerminalAcks(
   for (const multiplexer of multiplexers.values()) {
     e2eReleasedRemoteAckChars += multiplexer.releaseHeldAcksForE2e()
   }
+
   e2eHeldRemoteAckTerminals.clear()
 }
 
@@ -146,8 +162,10 @@ export function shouldDropE2eRemoteTerminalOutput(
   if (!e2eConfig.exposeStore || !e2eDroppedOutputStreams.has(stream)) {
     return false
   }
+
   e2eDroppedOutputBytes += bytes
   e2eDroppedOutputFrames += 1
+
   return true
 }
 
@@ -157,11 +175,13 @@ export function exposeE2eRemoteTerminalMultiplexAckGate(
   if (!e2eConfig.exposeStore || typeof window === 'undefined') {
     return
   }
+
   const target = window as E2eRemoteTerminalMultiplexAckGateWindow
   target.__remoteTerminalMultiplexAckGate ??= {
     dropOutputUntilResubscribe: (terminals) => {
       resetE2eDroppedRemoteOutput()
       const targets = new Set(terminals)
+
       for (const multiplexer of multiplexers.values()) {
         for (const stream of multiplexer.getStreamsForE2e()) {
           if (targets.has(stream.terminal)) {
@@ -169,24 +189,29 @@ export function exposeE2eRemoteTerminalMultiplexAckGate(
           }
         }
       }
+
       return e2eDroppedOutputStreams.size
     },
     forceError: (terminals, message) => {
       let dispatched = 0
       const targets = new Set(terminals)
+
       for (const multiplexer of multiplexers.values()) {
         dispatched += multiplexer.forceErrorForE2e(targets, message)
       }
+
       return dispatched
     },
     hold: (terminals) => {
       releaseE2eRemoteTerminalAcks(multiplexers)
+
       for (const terminal of terminals) {
         e2eHeldRemoteAckTerminals.add(terminal)
       }
     },
     holdEnd: (terminals) => {
       e2eHeldRemoteEndTerminals.clear()
+
       for (const terminal of terminals) {
         e2eHeldRemoteEndTerminals.add(terminal)
       }
@@ -198,9 +223,11 @@ export function exposeE2eRemoteTerminalMultiplexAckGate(
     },
     sendInput: (terminal, value) => {
       let sent = 0
+
       for (const multiplexer of multiplexers.values()) {
         sent += multiplexer.sendInputForE2e(terminal, value)
       }
+
       return sent
     },
     snapshot: () => getE2eRemoteAckSnapshot(multiplexers)

@@ -8,6 +8,7 @@ export function normalizeJiraSiteUrl(siteUrl: string): string {
   url.pathname = url.pathname.replace(/\/+$/, '')
   url.search = ''
   url.hash = ''
+
   return url.toString().replace(/\/$/, '')
 }
 
@@ -20,6 +21,7 @@ export function getSiteId(siteUrl: string, email: string): string {
 
 export function toViewer(data: Record<string, unknown>, fallbackEmail: string): JiraViewer {
   const avatarUrls = data.avatarUrls as Record<string, unknown> | undefined
+
   // Server/DC /myself has no accountId; its stable identifiers are name/key.
   const accountId =
     typeof data.accountId === 'string'
@@ -29,6 +31,7 @@ export function toViewer(data: Record<string, unknown>, fallbackEmail: string): 
         : typeof data.key === 'string'
           ? data.key
           : ''
+
   return {
     accountId,
     displayName: typeof data.displayName === 'string' ? data.displayName : fallbackEmail,
@@ -46,6 +49,7 @@ export function siteToViewer(site: JiraSite | null): JiraViewer | null {
   if (!site) {
     return null
   }
+
   return {
     accountId: site.accountId,
     displayName: site.displayName,

@@ -8,6 +8,7 @@ import {
 } from './ssh-connection-generation'
 
 const SESSION_COUNTER_STRIDE = 2 ** 13
+
 const MAX_SESSION_SCOPE = 2 ** 40 - 1
 
 describe('SSH connection generation session scope', () => {

@@ -9,6 +9,7 @@ describe('classifyConnection auth-failed verdict', () => {
       lastConnectedAt: null,
       nowMs: 1_000_000
     })
+
     expect(verdict.kind).toBe('auth-failed')
     expect(verdictDisplayLabel(verdict)).toBe('Pairing invalid — re-pair with your desktop')
   })
@@ -24,6 +25,7 @@ describe('classifyConnection pairing-rejected verdict', () => {
       pairingRejected: true,
       nowMs: 1_000_000
     })
+
     expect(verdict.kind).toBe('auth-failed')
     expect(verdictDisplayLabel(verdict)).toBe('Pairing invalid — re-pair with your desktop')
   })
@@ -36,6 +38,7 @@ describe('classifyConnection pairing-rejected verdict', () => {
       pairingRejected: true,
       nowMs: 1_000_000
     })
+
     expect(verdict).toEqual({ kind: 'normal', label: 'Connected' })
   })
 })
@@ -54,6 +57,7 @@ describe('classifyConnection Tailscale hint', () => {
       endpoint: 'ws://100.65.9.106:6768',
       pendingPath: null
     })
+
     expect(verdict).toMatchObject({ kind: 'warning', hint: 'check Tailscale' })
   })
 
@@ -63,6 +67,7 @@ describe('classifyConnection Tailscale hint', () => {
       reconnectAttempts: 12,
       endpoint: 'ws://my-desktop.tailnet-1234.ts.net:6768'
     })
+
     expect(verdict).toMatchObject({
       kind: 'unreachable',
       reason: 'never-connected',
@@ -76,6 +81,7 @@ describe('classifyConnection Tailscale hint', () => {
       reconnectAttempts: 3,
       endpoint: 'ws://192.168.1.50:6768'
     })
+
     expect(warning.kind).toBe('warning')
     expect('hint' in warning && warning.hint).toBeFalsy()
   })
@@ -94,6 +100,7 @@ describe('classifyConnection Tailscale hint', () => {
       endpoint: 'ws://100.65.9.106:6768',
       nowMs: 1_000_000
     })
+
     expect(verdict).toEqual({ kind: 'normal', label: 'Connected' })
   })
 
@@ -166,6 +173,7 @@ describe('classifyConnection while dialing (issue #10119)', () => {
       lastConnectedAt: 900_000,
       nowMs: 1_000_000
     })
+
     expect(verdict).toMatchObject({ kind: 'unreachable', reason: 'stale' })
   })
 

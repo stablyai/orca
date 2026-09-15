@@ -47,13 +47,16 @@ function isInstallJournal(value: unknown, canonicalPath: string): value is Skill
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const journal = value as Partial<SkillInstallJournalV1>
   const parent = dirname(resolve(canonicalPath))
   const name = basename(canonicalPath)
+
   const ownedPath = (path: unknown, prefix: string): path is string =>
     typeof path === 'string' &&
     dirname(resolve(path)) === parent &&
     basename(path).startsWith(prefix)
+
   return (
     journal.schemaVersion === 1 &&
     journal.operation === 'install' &&
@@ -91,14 +94,17 @@ export async function readSkillInstallRecoveryJournal(
         )
       ).buffer.toString('utf8')
     )
+
     if (!isInstallJournal(value, canonicalPath)) {
       throw new Error('skill-install-journal-invalid')
     }
+
     return value
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return null
     }
+
     throw error
   }
 }
@@ -144,12 +150,14 @@ async function removeJournalOwnedSkill(
   if (!(await skillInstallPathExists(path))) {
     return
   }
+
   if (
     !expectedDigest ||
     !(await skillInstallDestinationMatches(path, expectedDigest, filesystem, files))
   ) {
     throw new Error('skill-install-recovery-conflict')
   }
+
   await filesystem.remove(path)
 }
 
@@ -159,11 +167,14 @@ export async function recoverSkillInstallTransaction(
   filesystem: SkillInstallFilesystem = nativeSkillInstallFilesystem
 ): Promise<void> {
   const journal = await readSkillInstallRecoveryJournal(stateDirectory, canonicalPath)
+
   if (!journal) {
     return
   }
+
   const destinationExists = await skillInstallPathExists(canonicalPath)
   const backupExists = await skillInstallPathExists(journal.backupPath)
+
   const destinationIsRequested =
     destinationExists &&
     (await skillInstallDestinationMatches(
@@ -177,8 +188,10 @@ export async function recoverSkillInstallTransaction(
     await writeSkillInstallReceipt(stateDirectory, journal.receipt)
     await cleanSkillInstallJournalFiles(journal, filesystem)
     await rm(skillInstallJournalPath(stateDirectory, canonicalPath), { force: true })
+
     return
   }
+
   if (!destinationExists && backupExists) {
     if (
       !journal.backupDigest ||
@@ -191,16 +204,21 @@ export async function recoverSkillInstallTransaction(
     ) {
       throw new Error('skill-install-recovery-conflict')
     }
+
     await filesystem.rename(journal.backupPath, canonicalPath)
     await filesystem.remove(journal.extractionPath)
     await filesystem.remove(journal.stagingPath)
     await rm(skillInstallJournalPath(stateDirectory, canonicalPath), { force: true })
+
     return
   }
+
   if (journal.phase === 'prepared' && !backupExists) {
     await cleanSkillInstallJournalFiles(journal, filesystem)
     await rm(skillInstallJournalPath(stateDirectory, canonicalPath), { force: true })
+
     return
   }
+
   throw new Error('skill-install-recovery-conflict')
 }

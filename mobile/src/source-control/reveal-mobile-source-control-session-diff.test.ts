@@ -101,6 +101,7 @@ describe('revealMobileSourceControlSessionDiff', () => {
 
   it('waits for the requested diff source instead of activating the other one', async () => {
     vi.useFakeTimers()
+
     const sendRequest = vi
       .fn<RpcClient['sendRequest']>()
       .mockResolvedValueOnce(
@@ -175,6 +176,7 @@ describe('revealMobileSourceControlSessionDiff', () => {
 
   it('retries until the opened diff appears in the session snapshot', async () => {
     vi.useFakeTimers()
+
     const sendRequest = vi
       .fn<RpcClient['sendRequest']>()
       .mockResolvedValueOnce(success({ tabs: [{ id: 'agent-tab', type: 'terminal' }] }))
@@ -217,8 +219,10 @@ describe('revealMobileSourceControlSessionDiff', () => {
 
   it('cancels route-owned polling after the source-control screen unmounts', async () => {
     let current = true
+
     const sendRequest = vi.fn<RpcClient['sendRequest']>().mockImplementation(async () => {
       current = false
+
       return success({ tabs: [] })
     })
 

@@ -29,6 +29,7 @@ describe('mergeNativeChatLiveSession', () => {
       agent: 'claude',
       hookState: 'working'
     })
+
     expect(session.status).toBe('working')
     expect(session.messages).toHaveLength(1)
   })
@@ -40,6 +41,7 @@ describe('mergeNativeChatLiveSession', () => {
       agent: 'claude',
       hookState: 'working'
     })
+
     expect(session.status).toBe('working')
   })
 
@@ -52,6 +54,7 @@ describe('mergeNativeChatLiveSession', () => {
       stateStartedAt: 1,
       transcriptLifecycle: { state: 'working', turnId: 'u-1', timestamp: 1 }
     })
+
     expect(session.status).toBe('working')
   })
 
@@ -63,6 +66,7 @@ describe('mergeNativeChatLiveSession', () => {
       hookState: 'working',
       stateStartedAt: 1
     })
+
     expect(session.status).toBe('ready')
   })
 
@@ -75,6 +79,7 @@ describe('mergeNativeChatLiveSession', () => {
       stateStartedAt: 1,
       transcriptLifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 }
     })
+
     expect(session.status).toBe('ready')
   })
 
@@ -87,6 +92,7 @@ describe('mergeNativeChatLiveSession', () => {
       stateStartedAt: 1,
       transcriptLifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: 2 }
     })
+
     expect(session.status).toBe('ready')
   })
 
@@ -99,6 +105,7 @@ describe('mergeNativeChatLiveSession', () => {
       stateStartedAt: 5,
       transcriptLifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 }
     })
+
     expect(session.status).toBe('working')
   })
 
@@ -111,6 +118,7 @@ describe('mergeNativeChatLiveSession', () => {
       stateStartedAt: 5,
       transcriptLifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: 2 }
     })
+
     expect(session.status).toBe('working')
   })
 
@@ -123,11 +131,13 @@ describe('mergeNativeChatLiveSession', () => {
       stateStartedAt: 5,
       transcriptLifecycle: { state: 'completed', turnId: 'turn-1', timestamp: null }
     })
+
     expect(session.status).toBe('ready')
   })
 
   it('settles a completion slightly before hook receipt within clock-skew slack', () => {
     const hookStartedAt = 1_700_000_000_000
+
     const session = mergeNativeChatLiveSession({
       messages: [assistant('a-1', 'done')],
       sessionId: 'sess',
@@ -140,6 +150,7 @@ describe('mergeNativeChatLiveSession', () => {
         timestamp: hookStartedAt - 500
       }
     })
+
     expect(session.status).toBe('ready')
   })
 
@@ -151,6 +162,7 @@ describe('mergeNativeChatLiveSession', () => {
       hookState: 'working',
       stateStartedAt: 1
     })
+
     expect(session.status).toBe('ready')
   })
 
@@ -164,6 +176,7 @@ describe('mergeNativeChatLiveSession', () => {
       transcriptLifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 },
       hookHasWorkingSubagents: true
     })
+
     expect(session.status).toBe('working')
   })
 
@@ -177,6 +190,7 @@ describe('mergeNativeChatLiveSession', () => {
       transcriptLifecycle: { state: 'interrupted', turnId: 'turn-1', timestamp: 2 },
       hookHasWorkingSubagents: true
     })
+
     expect(session.status).toBe('ready')
   })
 
@@ -187,6 +201,7 @@ describe('mergeNativeChatLiveSession', () => {
       agent: 'claude',
       hookState: 'done'
     })
+
     expect(session.status).toBe('ready')
   })
 
@@ -233,6 +248,7 @@ describe('mergeNativeChatLiveSession', () => {
       hookState: null,
       error: 'unreadable'
     })
+
     expect(errored.status).toBe('error')
     expect(errored.error).toBe('unreadable')
   })
@@ -244,6 +260,7 @@ describe('mergeNativeChatLiveSession', () => {
       agent: 'claude',
       hookState: null
     })
+
     expect(session.status).toBe('empty')
   })
 
@@ -258,6 +275,7 @@ describe('mergeNativeChatLiveSession', () => {
       hookState: 'working',
       loading: true
     })
+
     const viewState = selectNativeChatViewState(session)
     const isConversation = viewState.kind === 'ready'
 

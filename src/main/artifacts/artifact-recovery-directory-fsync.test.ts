@@ -11,6 +11,7 @@ const fsyncMockState = vi.hoisted(() => ({
 
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
   return {
     ...actual,
     closeSync: (descriptor: number) => {
@@ -24,6 +25,7 @@ vi.mock('node:fs', async () => {
           code: fsyncMockState.directoryErrorCode
         })
       }
+
       return actual.fsyncSync(descriptor)
     },
     openSync: (path: string, flags: string | number) =>
@@ -43,6 +45,7 @@ const createdPaths: string[] = []
 
 afterEach(() => {
   fsyncMockState.directoryErrorCode = 'EINVAL'
+
   for (const path of createdPaths.splice(0)) {
     rmSync(path, { recursive: true, force: true })
   }
@@ -54,6 +57,7 @@ it('skips directory fsync on Windows and propagates I/O failures elsewhere', () 
   fsyncMockState.directoryErrorCode = 'EIO'
 
   const fsyncDirectory = (): void => bestEffortFsyncDirectorySync(directory)
+
   if (process.platform === 'win32') {
     expect(fsyncDirectory).not.toThrow()
   } else {

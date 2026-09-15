@@ -36,33 +36,40 @@ export function sessionRowFilter(
   cutoffMs: number | null = null
 ): SessionRowFilter {
   const filter: SessionRowFilter = { conditions: [], values: [] }
+
   if (cutoffMs !== null) {
     filter.conditions.push('id IN (SELECT session_row_id FROM files WHERE mtime_ms >= ?)')
     filter.values.push(cutoffMs)
   }
+
   if (filters.agents && filters.agents.length > 0) {
     filter.conditions.push(`agent IN (${filters.agents.map(() => '?').join(',')})`)
     filter.values.push(...filters.agents)
   }
+
   if (filters.since) {
     filter.conditions.push('updated_at >= ?')
     filter.values.push(filters.since)
   }
+
   if (filters.scopePaths && filters.scopePaths.length > 0) {
     // Several scopes mean any of them; every other narrowing is ANDed on.
     const present = filters.scopePaths
       .map((scope) => scopeCondition(filter, scope))
       .filter((condition) => condition !== null)
+
     // Every scope unkeyable still means a scope, so it narrows to nothing;
     // pushing no condition would widen the search to every session instead.
     filter.conditions.push(present.length > 0 ? `(${present.join(' OR ')})` : '0 = 1')
   }
+
   return filter
 }
 
 /** A scope the caller could not key is a scope nothing is inside of. */
 function scopeCondition(filter: SessionRowFilter, scope: string): string | null {
   const key = cwdKey(scope)
+
   return key === null ? null : insideCondition(filter, key)
 }
 
@@ -81,6 +88,7 @@ function scopeCondition(filter: SessionRowFilter, scope: string): string | null 
 function insideCondition(filter: SessionRowFilter, key: string): string {
   const children = key.endsWith('/') ? key : `${key}/`
   filter.values.push(key, children, nextAfterPrefix(children))
+
   return `(${CWD} = ? OR (${CWD} >= ? AND ${CWD} < ?))`
 }
 

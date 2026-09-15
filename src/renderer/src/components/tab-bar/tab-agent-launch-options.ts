@@ -27,12 +27,15 @@ export function orderTabLaunchAgents(
   disabled?: Iterable<unknown> | null
 ): TuiAgent[] {
   const enabledDetected = filterEnabledTuiAgents(detected, disabled)
+
   const inCatalogOrder = getAgentCatalog()
     .filter((entry) => enabledDetected.includes(entry.id))
     .map((entry) => entry.id)
+
   if (!defaultAgent || defaultAgent === 'blank' || !inCatalogOrder.includes(defaultAgent)) {
     return inCatalogOrder
   }
+
   return [defaultAgent, ...inCatalogOrder.filter((id) => id !== defaultAgent)]
 }
 
@@ -43,21 +46,26 @@ export function buildTabAgentLaunchOptions(
   return agents.map((agent) => {
     const entry = getCatalogEntry(agent)
     const label = entry?.label ?? agent
+
     const aliases = new Set<string>([
       normalizeAgentAlias(agent),
       normalizeAgentAlias(label),
       compactAgentAlias(agent),
       compactAgentAlias(label)
     ])
+
     if (entry?.cmd) {
       aliases.add(normalizeAgentAlias(entry.cmd))
       aliases.add(compactAgentAlias(entry.cmd))
     }
+
     const commandOverride = commandOverrides[agent]?.trim()
+
     if (commandOverride) {
       aliases.add(normalizeAgentAlias(commandOverride))
       aliases.add(compactAgentAlias(commandOverride))
     }
+
     return { agent, aliases: [...aliases], label }
   })
 }
@@ -74,14 +82,19 @@ function scoreAgentLaunchOption(
   if (option.aliases.includes(normalizedQuery) || option.aliases.includes(compactQuery)) {
     return 1000
   }
+
   const candidateTokens = option.aliases.flatMap(tokenizeMatchValue)
   const queryTokens = tokenizeMatchValue(normalizedQuery)
+
   if (queryTokens.length === 0 || candidateTokens.length === 0) {
     return 0
   }
+
   let score = 0
+
   for (const queryToken of queryTokens) {
     let best = 0
+
     for (const candidateToken of candidateTokens) {
       if (candidateToken === queryToken) {
         best = Math.max(best, 3)
@@ -92,11 +105,14 @@ function scoreAgentLaunchOption(
         best = Math.max(best, 2)
       }
     }
+
     if (best === 0) {
       return 0
     }
+
     score += best
   }
+
   return score
 }
 
@@ -105,10 +121,13 @@ export function findMatchingTabAgentLaunchOptions(
   agents: readonly TabAgentLaunchOption[]
 ): TabAgentLaunchOption[] {
   const normalizedQuery = normalizeMatchQuery(query)
+
   if (!normalizedQuery) {
     return []
   }
+
   const compactQuery = compactAgentAlias(query)
+
   return agents
     .map((option, index) => ({
       index,

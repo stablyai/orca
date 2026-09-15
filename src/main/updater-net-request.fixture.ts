@@ -13,6 +13,7 @@ export function installNetRequestFetchAdapter(netRequestMock: Mock, netFetchMock
         abort: Mock
         end: Mock
       }
+
       request.abort = vi.fn()
       request.end = vi.fn(() => {
         Promise.resolve(
@@ -20,6 +21,7 @@ export function installNetRequestFetchAdapter(netRequestMock: Mock, netFetchMock
         ).then(
           (response: NetFetchResponse) => {
             const status = response.status ?? (response.ok ? 200 : 503)
+
             if (options.redirect === 'manual' && status >= 300 && status < 400) {
               request.emit('redirect', status, options.method ?? 'GET', 'https://redirect.test', {})
               // Why: Electron cancels an unfollowed manual redirect and then emits 'error'.
@@ -30,8 +32,10 @@ export function installNetRequestFetchAdapter(netRequestMock: Mock, netFetchMock
           },
           (error) => request.emit('error', error)
         )
+
         return request
       })
+
       return request
     }
   )

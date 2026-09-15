@@ -118,6 +118,7 @@ describe('reduceNativeChatTurnTiming', () => {
       {},
       { activeTurnKey: 'u1', validTurnKeys, isWorking: true, now: 1_000 }
     )
+
     expect(next).toEqual({ u1: { startedAt: 1_000, workedSeconds: null } })
   })
 
@@ -126,12 +127,14 @@ describe('reduceNativeChatTurnTiming', () => {
       {},
       { activeTurnKey: 'u1', validTurnKeys, isWorking: true, now: 1_000 }
     )
+
     const second = reduceNativeChatTurnTiming(first, {
       activeTurnKey: 'u1',
       validTurnKeys,
       isWorking: true,
       now: 9_000
     })
+
     expect(second).toBe(first)
   })
 
@@ -146,6 +149,7 @@ describe('reduceNativeChatTurnTiming', () => {
         now: 1_000
       }
     )
+
     expect(next.u1?.startedAt).toBe(500)
   })
 
@@ -154,12 +158,14 @@ describe('reduceNativeChatTurnTiming', () => {
       {},
       { activeTurnKey: 'u1', validTurnKeys, isWorking: true, now: 1_000 }
     )
+
     const settled = reduceNativeChatTurnTiming(working, {
       activeTurnKey: 'u1',
       validTurnKeys,
       isWorking: false,
       now: 13_400
     })
+
     expect(settled.u1).toEqual({ startedAt: 1_000, workedSeconds: 12 })
   })
 
@@ -197,7 +203,9 @@ describe('reduceNativeChatTurnTiming', () => {
         now: 1_000
       }
     )
+
     expect(working['pending-1']?.startedAt).toBe(1_000)
+
     const swapped = reduceNativeChatTurnTiming(working, {
       activeTurnKey: 'u9',
       previousActiveTurnKey: 'pending-1',
@@ -205,6 +213,7 @@ describe('reduceNativeChatTurnTiming', () => {
       isWorking: true,
       now: 9_000
     })
+
     expect(swapped.u9).toEqual({ startedAt: 1_000, workedSeconds: null })
     expect(swapped['pending-1']).toBeUndefined()
   })
@@ -215,6 +224,7 @@ describe('reduceNativeChatTurnTiming', () => {
     const settled: NativeChatTurnTimingByTurn = {
       'pending-1': { startedAt: 1_000, workedSeconds: 12 }
     }
+
     const swapped = reduceNativeChatTurnTiming(settled, {
       activeTurnKey: 'u9',
       previousActiveTurnKey: 'pending-1',
@@ -222,6 +232,7 @@ describe('reduceNativeChatTurnTiming', () => {
       isWorking: false,
       now: 20_000
     })
+
     expect(swapped.u9).toEqual({ startedAt: 1_000, workedSeconds: 12 })
     expect(swapped['pending-1']).toBeUndefined()
   })
@@ -231,6 +242,7 @@ describe('reduceNativeChatTurnTiming', () => {
       {},
       { activeTurnKey: 'pending-1', validTurnKeys: new Set<string>(), isWorking: true, now: 1_000 }
     )
+
     const settled = reduceNativeChatTurnTiming(working, {
       activeTurnKey: 'u9',
       previousActiveTurnKey: 'pending-1',
@@ -238,6 +250,7 @@ describe('reduceNativeChatTurnTiming', () => {
       isWorking: false,
       now: 13_400
     })
+
     expect(settled.u9).toEqual({ startedAt: 1_000, workedSeconds: 12 })
   })
 
@@ -248,6 +261,7 @@ describe('reduceNativeChatTurnTiming', () => {
       {},
       { activeTurnKey: 'u1', validTurnKeys: new Set(['u1']), isWorking: true, now: 1_000 }
     )
+
     const next = reduceNativeChatTurnTiming(working, {
       activeTurnKey: 'u2',
       previousActiveTurnKey: 'u1',
@@ -255,6 +269,7 @@ describe('reduceNativeChatTurnTiming', () => {
       isWorking: true,
       now: 9_000
     })
+
     expect(next.u2?.startedAt).toBe(9_000)
   })
 
@@ -262,6 +277,7 @@ describe('reduceNativeChatTurnTiming', () => {
     const settled: NativeChatTurnTimingByTurn = {
       'pending-1': { startedAt: 1_000, workedSeconds: 5 }
     }
+
     const next = reduceNativeChatTurnTiming(settled, {
       activeTurnKey: 'u9',
       previousActiveTurnKey: 'pending-1',
@@ -269,6 +285,7 @@ describe('reduceNativeChatTurnTiming', () => {
       isWorking: true,
       now: 9_000
     })
+
     expect(next.u9?.startedAt).toBe(9_000)
   })
 
@@ -277,12 +294,14 @@ describe('reduceNativeChatTurnTiming', () => {
       gone: { startedAt: 1, workedSeconds: 2 },
       u1: { startedAt: 1_000, workedSeconds: 12 }
     }
+
     const next = reduceNativeChatTurnTiming(current, {
       activeTurnKey: 'u1',
       validTurnKeys,
       isWorking: false,
       now: 2_000
     })
+
     expect(Object.keys(next)).toEqual(['u1'])
   })
 })
@@ -293,6 +312,7 @@ describe('selectNativeChatTurnStatuses', () => {
       { u1: { startedAt: 1_000, workedSeconds: null } },
       { activeTurnKey: 'u1', isWorking: true, thinking: true }
     )
+
     expect(active).toEqual({ startedAt: 1_000, thinking: true, workedSeconds: null })
   })
 
@@ -301,6 +321,7 @@ describe('selectNativeChatTurnStatuses', () => {
       { u1: { startedAt: 1_000, workedSeconds: null } },
       { activeTurnKey: 'u1', isWorking: true, thinking: false }
     )
+
     expect(active?.thinking).toBe(false)
   })
 
@@ -309,6 +330,7 @@ describe('selectNativeChatTurnStatuses', () => {
       { u1: { startedAt: 1_000, workedSeconds: 12 } },
       { activeTurnKey: 'u1', isWorking: false, thinking: false }
     )
+
     expect(completedByTurn.u1).toEqual({ startedAt: 1_000, thinking: false, workedSeconds: 12 })
     expect(active).toEqual(completedByTurn.u1)
   })
@@ -318,6 +340,7 @@ describe('selectNativeChatTurnStatuses', () => {
       { u1: { startedAt: 1_000, workedSeconds: null } },
       { activeTurnKey: 'u1', isWorking: true, thinking: false }
     )
+
     expect(completedByTurn).toEqual({})
   })
 })

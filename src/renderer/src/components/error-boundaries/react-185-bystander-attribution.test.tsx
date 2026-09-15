@@ -18,6 +18,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const REACT_185_PRODUCTION =
   'Minified React error #185; visit https://react.dev/errors/185 for the full message.'
+
 const UNRELATED_RENDER_ERROR =
   'Minified React error #310; visit https://react.dev/errors/310 for the full message.'
 
@@ -69,6 +70,7 @@ describe('React #185 bystander attribution', () => {
     if (root) {
       act(() => root?.unmount())
     }
+
     container?.remove()
     root = null
     container = null

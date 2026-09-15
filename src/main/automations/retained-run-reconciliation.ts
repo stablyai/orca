@@ -2,6 +2,7 @@ import type { AutomationRun } from '../../shared/automations-types'
 
 /** Cadence for re-checking a retained run whose pane has not remounted yet. */
 const RETRY_INTERVAL_MS = 2_000
+
 /** Grace after the terminal surface reports ready before an unresolvable run is
  *  called lost. Covers restored-pane remount and SSH/WSL reattach, and matches
  *  the run observer's agent-start deadline. */
@@ -39,11 +40,13 @@ export class RetainedRunReconciler {
     if (this.disposed) {
       return
     }
+
     for (const run of runs) {
       if (!this.deps.attach(run)) {
         this.pending.set(run.id, run)
       }
     }
+
     this.sweep()
   }
 
@@ -52,6 +55,7 @@ export class RetainedRunReconciler {
     if (this.disposed) {
       return
     }
+
     this.surfaceReadyAt ??= Date.now()
     this.sweep()
   }
@@ -64,6 +68,7 @@ export class RetainedRunReconciler {
 
   private sweep(): void {
     const strandAt = this.surfaceReadyAt === null ? null : this.surfaceReadyAt + SURFACE_SETTLE_MS
+
     // Deleting the current entry mid-iteration is defined for Map; nothing here
     // re-enters the reconciler, so no snapshot is needed.
     for (const [runId, run] of this.pending) {
@@ -71,15 +76,19 @@ export class RetainedRunReconciler {
         this.pending.delete(runId)
         continue
       }
+
       if (strandAt !== null && Date.now() >= strandAt) {
         this.pending.delete(runId)
         this.deps.strand(run)
       }
     }
+
     if (this.pending.size === 0) {
       this.disarm()
+
       return
     }
+
     this.arm()
   }
 
@@ -87,7 +96,9 @@ export class RetainedRunReconciler {
     if (this.timer || this.disposed) {
       return
     }
+
     const timer = setInterval(() => this.sweep(), RETRY_INTERVAL_MS)
+
     // Why: a pending retry must never be the reason a process stays alive.
     ;(timer as { unref?: () => void }).unref?.()
     this.timer = timer
@@ -97,6 +108,7 @@ export class RetainedRunReconciler {
     if (!this.timer) {
       return
     }
+
     clearInterval(this.timer)
     this.timer = null
   }

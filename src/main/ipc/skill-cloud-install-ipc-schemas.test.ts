@@ -7,6 +7,7 @@ import {
 } from './skill-cloud-install-ipc-schemas'
 
 const destination = { scope: 'global' as const }
+
 const providers = ['codex', 'claude']
 
 describe('skill cloud install IPC schemas', () => {

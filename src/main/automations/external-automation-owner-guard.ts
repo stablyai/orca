@@ -46,17 +46,22 @@ function resolveSshScope(
   registry: DesktopSshTargetRegistry
 ): SshTarget {
   const target = registry.getSshTargets().find((entry) => entry.id === targetId)
+
   if (!target) {
     throw externalAutomationTargetRemovedError()
   }
+
   // Why: checked before the generation compare so a hidden target reveals nothing about its registration.
   if (isRuntimeOwnedSshTarget(target)) {
     throw new ExternalAutomationScopeError(EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden)
   }
+
   const current = sanitizeSshTargetGeneration(target.generation)
+
   if (current === undefined || current !== capturedGeneration) {
     throw externalAutomationHostChangedError()
   }
+
   return target
 }
 
@@ -71,17 +76,22 @@ export function resolveExternalAutomationScope(
   if (!isExternalAutomationProvider(request.provider)) {
     throw new ExternalAutomationScopeError(EXTERNAL_AUTOMATION_SCOPE_CODES.providerNotAllowed)
   }
+
   const { owner } = request
+
   if (owner.authority.kind !== 'desktop') {
     throw new ExternalAutomationScopeError(EXTERNAL_AUTOMATION_SCOPE_CODES.authorityNotSupported)
   }
+
   if (owner.selector.kind !== 'self' && owner.selector.kind !== 'ssh') {
     throw new ExternalAutomationScopeError(EXTERNAL_AUTOMATION_SCOPE_CODES.authorityNotSupported)
   }
+
   const sshTarget =
     owner.selector.kind === 'ssh'
       ? resolveSshScope(owner.selector.targetId, owner.selector.targetGeneration, registry)
       : null
+
   return {
     provider: request.provider,
     target: externalAutomationTargetForOwner(owner),

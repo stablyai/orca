@@ -51,6 +51,7 @@ const sshRecord = automation({
 
 /** A `local` record its folder workspace pins to SSH: SSH-owned by projection, not by storage. */
 const pinnedLocalRecord = automation({ workspaceId: 'folder:fw-1' })
+
 const pinnedContext: AutomationProjectionContext = {
   ...context,
   workspaceHost: () => ({ kind: 'ssh', targetId: 'ssh-1' })
@@ -119,6 +120,7 @@ describe('assertAutomationOwnerFence', () => {
       executionTargetId: 'ssh-1',
       projectId: 'repo-ssh'
     })
+
     expect(() =>
       assertAutomationOwnerFence({ automation: legacySshRecord, operation: 'mutate', context })
     ).not.toThrow()
@@ -196,6 +198,7 @@ describe('assertAutomationOwnerFence', () => {
       executionTargetId: 'ssh-gone',
       executionTargetGeneration: 4
     })
+
     expect(() =>
       assertAutomationOwnerFence({
         automation: orphan,

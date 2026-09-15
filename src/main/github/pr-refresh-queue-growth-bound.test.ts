@@ -3,21 +3,28 @@ import type { GitHubPRRefreshCandidate } from '../../shared/github/pull-request-
 
 const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./pr-refresh-coordinator-test-mocks')
+
   return { coordinatorMocks: moduleMocks.createPRRefreshCoordinatorMocks(), moduleMocks }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(coordinatorMocks))
+
 vi.mock('./client', () => moduleMocks.clientModuleMock(coordinatorMocks))
+
 vi.mock('./github-api-repository', () =>
   moduleMocks.githubApiRepositoryModuleMock(coordinatorMocks)
 )
+
 vi.mock('./rate-limit', () => moduleMocks.rateLimitModuleMock(coordinatorMocks))
+
 vi.mock('../ipc/ui', () => moduleMocks.ipcUiModuleMock(coordinatorMocks))
 
 import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
 
 const { getPRForBranchOutcomeMock } = coordinatorMocks
+
 const WORKTREES = 20
+
 const LINKED_PR_KEY = 'local::runtime:host::/repo::pr::42'
 
 function visibleCandidates(): GitHubPRRefreshCandidate[] {
@@ -53,6 +60,7 @@ describe('pr-refresh queue growth bounds', () => {
       reportVisiblePRRefreshCandidates(visibleCandidates(), cycle + 1, 1)
       await vi.advanceTimersByTimeAsync(30_000)
     }
+
     // 200 report cycles * 20 candidates = 4000 enqueues; the queue coalesces to one entry per key.
     expect(_getPRRefreshQueueSizeForTests()).toBeLessThanOrEqual(WORKTREES)
   })
@@ -78,6 +86,7 @@ describe('pr-refresh queue growth bounds', () => {
       reportVisiblePRRefreshCandidates(visibleCandidates(), 1, windowId)
       await vi.advanceTimersByTimeAsync(60_000)
     }
+
     expect(_getVisiblePRRefreshWindowCountForTests()).toBeLessThanOrEqual(1)
     expect(_getPRRefreshErrorBackoffCountForTests()).toBeLessThanOrEqual(WORKTREES)
   })
@@ -113,9 +122,11 @@ describe('pr-refresh queue growth bounds', () => {
 
     expect(_getPRRefreshQueueSizeForTests()).toBe(1)
     expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(1)
+
     const broadcastAliasCounts = coordinatorMocks.sendMock.mock.calls
       .filter((call) => call[0] === 'gh:prRefreshEvent')
       .map((call) => (call[1] as { aliases: unknown[] }).aliases.length)
+
     expect(Math.max(...broadcastAliasCounts)).toBe(1)
   })
 
@@ -140,6 +151,7 @@ describe('pr-refresh queue growth bounds', () => {
         // entry the in-flight request's stale follow-up aliases merge back into.
         reportVisiblePRRefreshCandidates([churnCandidate(2)], 2, 1)
       }
+
       return {
         kind: 'found' as const,
         pr: makePR({ checksStatus: 'pending' as const }),
@@ -151,15 +163,18 @@ describe('pr-refresh queue growth bounds', () => {
     await vi.advanceTimersByTimeAsync(120_000)
 
     expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(1)
+
     const broadcasts = coordinatorMocks.sendMock.mock.calls.filter(
       (call) => call[0] === 'gh:prRefreshEvent'
     ) as [string, { aliases: { cacheKey: string }[] }][]
+
     const lastBroadcast = broadcasts.at(-1)
     expect(lastBroadcast?.[1].aliases.map((alias) => alias.cacheKey)).toEqual(['/repo::churn/2'])
   })
 
   it('does not restore an older candidate over a fresher branch switch', async () => {
     const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
+
     const first = makeCandidate({
       cacheKey: '/repo::churn/1',
       branch: 'churn/1',
@@ -167,6 +182,7 @@ describe('pr-refresh queue growth bounds', () => {
       linkedPRNumber: 42,
       cachedFetchedAt: null
     })
+
     const switched = makeCandidate({
       cacheKey: '/repo::churn/2',
       branch: 'churn/2',
@@ -184,6 +200,7 @@ describe('pr-refresh queue growth bounds', () => {
         didSwitch = true
         reportVisiblePRRefreshCandidates([switched], 2, 1)
       }
+
       return {
         kind: 'found' as const,
         pr: makePR({ checksStatus: 'pending' as const }),
@@ -220,6 +237,7 @@ describe('pr-refresh queue growth bounds', () => {
         1
       )
     }
+
     expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(4)
   })
 
@@ -243,13 +261,16 @@ describe('pr-refresh queue growth bounds', () => {
         1
       )
     }
+
     expect(_getPRRefreshQueueSizeForTests()).toBe(1)
     expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(1)
 
     await vi.advanceTimersByTimeAsync(60_000)
+
     const outcomeAliases = coordinatorMocks.sendMock.mock.calls
       .filter((call) => call[0] === 'gh:prRefreshEvent')
       .map((call) => (call[1] as { aliases: { cacheKey: string }[] }).aliases)
+
     expect(outcomeAliases.every((aliases) => aliases.length === 1)).toBe(true)
     expect(outcomeAliases.at(-1)?.[0].cacheKey).toBe('/repo::churn/199')
   })
@@ -271,6 +292,7 @@ describe('pr-refresh queue growth bounds', () => {
     // writes that map back, so the coalescing bound has to hold on re-entry too.
     reportVisiblePRRefreshCandidates([churnCandidate(0)], 1, 1)
     await vi.advanceTimersByTimeAsync(1_000)
+
     for (let i = 1; i <= 30; i += 1) {
       await refreshPRNow(churnCandidate(i))
       await vi.advanceTimersByTimeAsync(1)

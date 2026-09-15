@@ -27,6 +27,7 @@ function createHarness(
   const exits: string[] = []
   const releaseExit = vi.fn()
   const cancellation = vi.fn(cancelSourceDelivery)
+
   const dependencies: SshPtyOutputIntakeDependencies = {
     getModelSequence: () => 0,
     acceptModel: (event) => ({ sequence: event.rawLength, completion: Promise.resolve() }),
@@ -38,6 +39,7 @@ function createHarness(
     closeProvider: vi.fn(),
     cancelSourceDelivery: cancellation
   }
+
   return {
     intake: new SshPtyOutputIntake(dependencies, {
       exitBarrierMs: 10,
@@ -53,6 +55,7 @@ function createHarness(
 async function publishSource(harness: ExitDeadlineHarness): Promise<SshPtyOutputReceipt> {
   const remote = harness.intake.getRemoteSourceRangeConsumerHooks()
   expect(remote.attach(stream)).toBe(true)
+
   const receipt = await harness.intake.acceptData({
     id: 'pty-1',
     data: 'aaaa',
@@ -69,7 +72,9 @@ async function publishSource(harness: ExitDeadlineHarness): Promise<SshPtyOutput
       sourceEndSu: 4
     }
   })
+
   harness.intake.publishProjectionPrefix([receipt.projection.identity.projectionSemanticsId], 4, 4)
+
   return receipt
 }
 
@@ -85,9 +90,11 @@ function acceptExit(harness: ExitDeadlineHarness) {
 describe('SshPtyOutputExitDeadline', () => {
   it('transfers published projections before cancellation proof reclaims their spans', async () => {
     vi.useFakeTimers()
+
     try {
       const harness = createHarness(async () => ({ sentEndSu: 4, creditedEndSu: 0 }))
       const receipt = await publishSource(harness)
+
       const exitResult = acceptExit(harness).then(
         () => ({ ok: true as const }),
         (error: Error) => ({ ok: false as const, error })
@@ -120,17 +127,22 @@ describe('SshPtyOutputExitDeadline', () => {
 
   it('generation close fences a pending cancellation proof from final exit', async () => {
     vi.useFakeTimers()
+
     try {
       let resolveCancellation!: (proof: SshPtySourceCancellationProof) => void
+
       const cancellation = new Promise<SshPtySourceCancellationProof>((resolve) => {
         resolveCancellation = resolve
       })
+
       const harness = createHarness(() => cancellation)
       await publishSource(harness)
+
       const exitResult = acceptExit(harness).then(
         () => ({ ok: true as const }),
         (error: Error) => ({ ok: false as const, error })
       )
+
       await vi.advanceTimersByTimeAsync(10)
       expect(harness.cancelSourceDelivery).toHaveBeenCalledOnce()
 

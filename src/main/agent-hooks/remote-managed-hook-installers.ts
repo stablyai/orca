@@ -89,20 +89,26 @@ export async function installRemoteManagedAgentHooks(
   // Why: omit/empty allowlist must never mean "install every agent" — that
   // recreates config homes for CLIs the user never installed (issue #11641).
   const allowedAgents = new Set(options?.agents ?? [])
+
   if (allowedAgents.size === 0) {
     return []
   }
+
   const results: AgentHookInstallStatus[] = []
+
   for (const [agent, install] of REMOTE_MANAGED_HOOK_INSTALLERS) {
     if (!allowedAgents.has(agent)) {
       continue
     }
+
     // Why: relay requests can disappear during reconnect; do not start more
     // user-config mutations after their client has gone away.
     options?.signal?.throwIfAborted()
+
     try {
       const result = await install(sftp, remoteHome, options)
       results.push(result)
+
       if (result.state === 'error') {
         console.warn(
           `[agent-hooks] Remote ${agent} managed hook install failed for ${result.configPath}: ${
@@ -125,5 +131,6 @@ export async function installRemoteManagedAgentHooks(
       })
     }
   }
+
   return results
 }

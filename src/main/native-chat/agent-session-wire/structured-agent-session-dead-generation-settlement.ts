@@ -30,6 +30,7 @@ export function unexpectedProviderExitOutcome(reason?: string): string {
     ?.slice(0, MAX_UNEXPECTED_EXIT_REASON_CHARS)
     .trim()
     .replace(/[.\s]+$/, '')
+
   return detail
     ? `The provider stopped while this response was in progress: ${detail}. You can continue in this conversation.`
     : UNEXPECTED_PROVIDER_EXIT_OUTCOME
@@ -64,6 +65,7 @@ export function captureUnfinishedStructuredAgentSessionWork(
 
 function hasUnfinishedStructuredAgentSessionWork(journal: DeadGenerationJournal): boolean {
   const work = captureUnfinishedStructuredAgentSessionWork(journal)
+
   return work.hadUnsettledSubmissions || work.items.length > 0
 }
 
@@ -73,26 +75,35 @@ export function unfinishedStructuredAgentSessionWorkWasInterrupted(
   observedExitAt: number
 ): boolean {
   const currentSnapshot = journal.snapshot()
+
   if (hasUnsettledSubmission(journal) || currentSnapshot.items.some(isInProgressItem)) {
     return true
   }
+
   if (
     currentSnapshot.items.some((item) => {
       const turn = readAgentJournalTurn(item.body)
+
       return turn?.state === 'interrupted' && turn.completedAt === observedExitAt
     })
   ) {
     return true
   }
+
   const inProgressBefore = before.items.filter(isInProgressItem)
+
   if (inProgressBefore.length === 0) {
     return false
   }
+
   const currentItems = new Map(currentSnapshot.items.map((item) => [item.itemId, item]))
+
   const runningTurns = inProgressBefore.filter(
     (item) => readAgentJournalTurn(item.body)?.state === 'running'
   )
+
   const outcomeItems = runningTurns.length > 0 ? runningTurns : inProgressBefore
+
   return outcomeItems.some((item) => !isCleanlySettled(currentItems.get(item.itemId)))
 }
 
@@ -111,12 +122,15 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
   try {
     const hasUnfinishedWork = hasUnfinishedStructuredAgentSessionWork(input.journal)
     const showUnexpectedExitOutcome = input.showUnexpectedExitOutcome ?? hasUnfinishedWork
+
     if (!showUnexpectedExitOutcome && !hasUnfinishedWork) {
       return true
     }
+
     await input.journal.markPendingSubmissionsUnknown(input.fence, input.pendingSubmissionReason)
     const items = input.journal.snapshot().items
     const mutations: JournalLifecycleMutationInput[] = []
+
     if (showUnexpectedExitOutcome) {
       mutations.push({
         kind: 'item',
@@ -127,15 +141,19 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
         }
       })
     }
+
     for (const item of items) {
       const identity = parseAgentJournalItemKey(item.itemId)
       const body = terminalDeadGenerationBody(item)
+
       if (identity && body) {
         mutations.push({ kind: 'item', identity, body })
       }
     }
+
     mutations.push(...runningTurnLifecycleRevisions(items, input.verdict))
     const batchId = `dead-generation:${input.settlementId}`
+
     for (const chunk of partitionJournalLifecycleMutations(batchId, mutations)) {
       await input.journal.appendLifecycleBatch({
         settlementId: chunk.settlementId,
@@ -144,9 +162,11 @@ export async function settleStructuredAgentSessionDeadGeneration(input: {
         mutations: chunk.mutations
       })
     }
+
     return true
   } catch (error) {
     input.onError?.(input.sessionId, error)
+
     return false
   }
 }
@@ -155,9 +175,11 @@ function terminalDeadGenerationBody(item: AgentJournalRenderItem): AgentJournalI
   if (item.body.kind === 'tool-call' && item.body.state === 'running') {
     return { ...item.body, state: 'failed' }
   }
+
   if (item.body.kind === 'approval' || item.body.kind === 'question') {
     return item.body.resolution.state === 'pending' ? cancelledJournalPromptBody(item.body) : null
   }
+
   return null
 }
 
@@ -180,20 +202,25 @@ function isInProgressItem(item: AgentJournalRenderItem): boolean {
 
 function isCleanlySettled(item: AgentJournalRenderItem | undefined): boolean {
   const turn = readAgentJournalTurn(item?.body)
+
   if (turn) {
     return turn.state === 'completed'
   }
+
   if (item?.body.kind === 'tool-call') {
     return item.body.state === 'completed'
   }
+
   if (item?.body.kind === 'approval' || item?.body.kind === 'question') {
     return item.body.resolution.state === 'resolved'
   }
+
   return false
 }
 
 function hasUnsettledSubmission(journal: DeadGenerationJournal): boolean {
   const submissions = journal.submissions?.()
+
   return submissions
     ? submissions.some(
         (submission) =>

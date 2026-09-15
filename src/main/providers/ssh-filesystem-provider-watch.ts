@@ -21,6 +21,7 @@ export type WatchRegistration = {
 function createWatchAbortError(): Error {
   const error = new Error('Request "fs.watch" was cancelled') as Error & { name: string }
   error.name = 'AbortError'
+
   return error
 }
 
@@ -46,23 +47,28 @@ export async function registerSshFilesystemWatch(args: {
   if (args.disposed()) {
     throw new Error('SSH filesystem provider disposed')
   }
+
   if (args.signal?.aborted) {
     throw createWatchAbortError()
   }
 
   const rootKey = sshFilesystemWatchKey(args.rootPath)
   let registration = args.registrations.get(rootKey)
+
   if (registration) {
     if (registration.stopping) {
       throw createWatchAbortError()
     }
+
     registration.callbacks.add(args.callback)
     registration.terminalCallbacks.set(args.callback, args.onTerminalError ?? (() => undefined))
+
     try {
       // Why: each caller may leave a shared setup independently; registration
       // ownership decides whether the physical relay request should stop.
       await awaitSetupWithOptionalAbort(registration.setupWaiters, args.signal)
       assertActiveWatch(args, registration)
+
       return createSshFilesystemWatchUnsubscribe(args, registration)
     } catch (error) {
       releaseSshFilesystemWatchCallback(args, registration)
@@ -73,9 +79,11 @@ export async function registerSshFilesystemWatch(args: {
   const callbacks = new Set<(events: FsChangeEvent[]) => void>([args.callback])
   const setupAbortController = new AbortController()
   const remoteWatchId = nextRemoteWatchId++
+
   if (!Number.isSafeInteger(nextRemoteWatchId)) {
     nextRemoteWatchId = 1
   }
+
   registration = {
     rootPath: args.rootPath,
     callbacks,
@@ -88,6 +96,7 @@ export async function registerSshFilesystemWatch(args: {
     setupWaiters: new PromiseSettlementWaiters(Promise.resolve())
   }
   const createdRegistration = registration
+
   // Why: the shared registration, not its first caller, owns relay setup.
   // This keeps a same-root joiner alive when the original caller disconnects.
   const setupPromise = args.mux
@@ -99,6 +108,7 @@ export async function registerSshFilesystemWatch(args: {
     .then(
       () => {
         createdRegistration.ready = true
+
         if (
           createdRegistration.stopping ||
           createdRegistration.callbacks.size === 0 ||
@@ -108,6 +118,7 @@ export async function registerSshFilesystemWatch(args: {
           if (args.registrations.get(rootKey) === createdRegistration) {
             args.registrations.delete(rootKey)
           }
+
           sendSshFilesystemUnwatchOnce(args.mux, createdRegistration)
         }
       },
@@ -115,14 +126,18 @@ export async function registerSshFilesystemWatch(args: {
         if (args.registrations.get(rootKey) === createdRegistration) {
           args.registrations.delete(rootKey)
         }
+
         throw error
       }
     )
+
   registration.setupWaiters = new PromiseSettlementWaiters(setupPromise)
   args.registrations.set(rootKey, registration)
+
   try {
     await awaitSetupWithOptionalAbort(registration.setupWaiters, args.signal)
     assertActiveWatch(args, registration)
+
     return createSshFilesystemWatchUnsubscribe(args, registration)
   } catch (error) {
     releaseSshFilesystemWatchCallback(args, registration)
@@ -142,14 +157,17 @@ export async function closeSshFilesystemWatch(
   rootPath: string
 ): Promise<void> {
   const rootKey = sshFilesystemWatchKey(rootPath)
+
   try {
     await mux.request('fs.unwatchAndWait', { rootPath })
   } catch (error) {
     if (!isMethodNotFoundError(error)) {
       throw error
     }
+
     throw new Error('Remote watcher teardown is unavailable. Reconnect the SSH target and retry.')
   }
+
   registrations.get(rootKey)?.callbacks.clear()
   registrations.get(rootKey)?.terminalCallbacks.clear()
   registrations.delete(rootKey)
@@ -163,15 +181,18 @@ export function failSshFilesystemWatchRegistration(
 ): void {
   const rootKey = sshFilesystemWatchKey(rootPath)
   const registration = registrations.get(rootKey)
+
   if (!registration || registration.remoteWatchId !== remoteWatchId) {
     return
   }
+
   registrations.delete(rootKey)
   registration.stopping = true
   registration.unwatchSent = true
   const terminalCallbacks = Array.from(registration.terminalCallbacks.values())
   registration.callbacks.clear()
   registration.terminalCallbacks.clear()
+
   for (const onTerminalError of terminalCallbacks) {
     try {
       onTerminalError(error)
@@ -223,10 +244,13 @@ function releaseSshFilesystemWatchCallback(
   registration.callbacks.delete(args.callback)
   registration.terminalCallbacks.delete(args.callback)
   const rootKey = sshFilesystemWatchKey(args.rootPath)
+
   if (registration.callbacks.size > 0 || args.registrations.get(rootKey) !== registration) {
     return
   }
+
   registration.stopping = true
+
   if (registration.ready) {
     args.registrations.delete(rootKey)
     sendSshFilesystemUnwatchOnce(args.mux, registration)
@@ -253,6 +277,7 @@ function sendSshFilesystemUnwatchOnce(
   if (registration.unwatchSent) {
     return
   }
+
   registration.unwatchSent = true
   notifySshFilesystemUnwatch(mux, registration.rootPath)
 }

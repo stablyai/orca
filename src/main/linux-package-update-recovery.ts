@@ -11,6 +11,7 @@ import { getLinuxRootPackageType } from './linux-update-package-type'
 import { buildLinuxPackageInstallCommand } from './linux-package-install-command'
 
 const SHA512_BYTE_LENGTH = 64
+
 // electron-updater downloads into <cacheRoot>/<updaterCacheDirName>/pending; nothing else is trusted.
 const PENDING_DIRECTORY_NAME = 'pending'
 
@@ -43,6 +44,7 @@ type ValidationResult =
   | { ok: false; reason: 'missing' | 'not-regular' | 'hash-mismatch' | 'read-failed' }
 
 let trackedArtifact: LinuxPackageArtifact | null = null
+
 // Why: the renderer debounces clicks, but the IPC boundary must not allow parallel hashing of a 160 MB package.
 const inFlightValidations = new WeakMap<LinuxPackageArtifact, Promise<ValidationResult>>()
 
@@ -59,13 +61,16 @@ export function clearTrackedLinuxPackageArtifactForOtherVersion(version: unknown
   if (!trackedArtifact) {
     return
   }
+
   // Why: an unknown/empty version is not evidence of another cycle and must not destroy recovery.
   if (typeof version !== 'string' || version.length === 0) {
     return
   }
+
   if (version === trackedArtifact.version) {
     return
   }
+
   trackedArtifact = null
 }
 
@@ -83,35 +88,47 @@ function resolveExpectedSha512(
   if (!Array.isArray(files)) {
     return null
   }
+
   const targetName = path.basename(downloadedFile)
   const extension = `.${packageType}`
   let resolved: string | null = null
+
   for (const entry of files) {
     const url = (entry as { url?: unknown })?.url
+
     if (typeof url !== 'string' || url.length === 0) {
       continue
     }
+
     let pathname: string
+
     try {
       pathname = decodeURIComponent(new URL(url, 'http://update-file-name.invalid/').pathname)
     } catch {
       return null
     }
+
     if (!pathname.toLowerCase().endsWith(extension)) {
       continue
     }
+
     if (path.posix.basename(pathname) !== targetName) {
       continue
     }
+
     const sha512 = (entry as { sha512?: unknown })?.sha512
+
     if (typeof sha512 !== 'string' || sha512.length === 0) {
       return null
     }
+
     if (resolved !== null && resolved !== sha512) {
       return null
     }
+
     resolved = sha512
   }
+
   return resolved
 }
 
@@ -121,25 +138,32 @@ function resolveExpectedSha512(
  */
 export function captureLinuxPackageArtifact(event: unknown): LinuxPackageArtifact | null {
   const packageType = getLinuxRootPackageType()
+
   if (!packageType) {
     return null
   }
+
   const downloadedFile = (event as { downloadedFile?: unknown })?.downloadedFile
   const version = (event as { version?: unknown })?.version
+
   if (typeof downloadedFile !== 'string' || !path.isAbsolute(downloadedFile)) {
     return null
   }
+
   if (!downloadedFile.toLowerCase().endsWith(`.${packageType}`)) {
     return null
   }
+
   if (typeof version !== 'string' || version.length === 0) {
     return null
   }
+
   const sha512 = resolveExpectedSha512(
     (event as { files?: unknown })?.files,
     downloadedFile,
     packageType
   )
+
   // Why: a malformed digest can never validate. Arming recovery on it would send the user to the
   // alarming "no longer matches the verified release" path for what is a release-metadata problem.
   if (!sha512 || !decodeExpectedDigest(sha512)) {
@@ -148,13 +172,16 @@ export function captureLinuxPackageArtifact(event: unknown): LinuxPackageArtifac
     // needless 160 MB redownload of a file that is still on disk and still verifiable.
     return null
   }
+
   const artifact = { packageType, version, path: downloadedFile, sha512 }
   trackedArtifact = artifact
+
   return artifact
 }
 
 function isInsideDirectory(root: string, target: string): boolean {
   const relative = path.relative(root, target)
+
   return relative.length > 0 && !relative.startsWith('..') && !path.isAbsolute(relative)
 }
 
@@ -181,17 +208,22 @@ function getUpdaterCacheRoot(): string {
  */
 async function isContainedInCache(filePath: string): Promise<boolean> {
   const cacheRoot = path.resolve(getUpdaterCacheRoot())
+
   if (!isInsideDirectory(cacheRoot, path.resolve(filePath))) {
     return false
   }
+
   const realCacheRoot = path.resolve(await fsp.realpath(cacheRoot))
   const realParent = path.resolve(await fsp.realpath(path.dirname(filePath)))
+
   if (!isInsideDirectory(realCacheRoot, path.join(realParent, path.basename(filePath)))) {
     return false
   }
+
   if (path.basename(realParent) !== PENDING_DIRECTORY_NAME) {
     return false
   }
+
   // The updater cache directory sits directly under the cache root, so `pending` is exactly two down.
   return path.dirname(path.dirname(realParent)) === realCacheRoot
 }
@@ -199,9 +231,11 @@ async function isContainedInCache(filePath: string): Promise<boolean> {
 function decodeExpectedDigest(sha512: string): Buffer | null {
   const trimmed = sha512.trim()
   const decoded = Buffer.from(trimmed, 'base64')
+
   if (decoded.byteLength !== SHA512_BYTE_LENGTH) {
     return null
   }
+
   // Why: Buffer.from silently drops invalid base64 characters; round-tripping rejects malformed input.
   // The round-trip emits standard base64, so a URL-safe digest would be rejected — electron-updater's
   // latest-linux.yml is standard base64, and failing closed on an unrecognized encoding is correct.
@@ -220,27 +254,35 @@ function streamSha512(filePath: string): Promise<Buffer> {
 
 async function validateArtifact(artifact: LinuxPackageArtifact): Promise<ValidationResult> {
   const expectedDigest = decodeExpectedDigest(artifact.sha512)
+
   if (!expectedDigest) {
     return { ok: false, reason: 'hash-mismatch' }
   }
+
   try {
     if (!(await isContainedInCache(artifact.path))) {
       return { ok: false, reason: 'not-regular' }
     }
+
     const stats = await fsp.lstat(artifact.path)
+
     if (stats.isSymbolicLink() || !stats.isFile()) {
       return { ok: false, reason: 'not-regular' }
     }
+
     const actualDigest = await streamSha512(artifact.path)
+
     if (
       actualDigest.byteLength !== expectedDigest.byteLength ||
       !timingSafeEqual(actualDigest, expectedDigest)
     ) {
       return { ok: false, reason: 'hash-mismatch' }
     }
+
     return { ok: true, artifact }
   } catch (error) {
     const code = (error as NodeJS.ErrnoException)?.code
+
     return { ok: false, reason: code === 'ENOENT' ? 'missing' : 'read-failed' }
   }
 }
@@ -248,15 +290,19 @@ async function validateArtifact(artifact: LinuxPackageArtifact): Promise<Validat
 /** Hashes the exact captured artifact, joining only that capture's in-flight proof. */
 function runValidation(artifact: LinuxPackageArtifact): Promise<ValidationResult> {
   const inFlight = inFlightValidations.get(artifact)
+
   if (inFlight) {
     return inFlight
   }
+
   const promise: Promise<ValidationResult> = validateArtifact(artifact).finally(() => {
     if (inFlightValidations.get(artifact) === promise) {
       inFlightValidations.delete(artifact)
     }
   })
+
   inFlightValidations.set(artifact, promise)
+
   return promise
 }
 
@@ -269,6 +315,7 @@ async function validateTrackedArtifact(
   recovery: LinuxPackageInstallRecovery
 ): Promise<ValidationResult> {
   const artifact = trackedArtifact
+
   if (
     !artifact ||
     artifact.version !== recovery.version ||
@@ -276,6 +323,7 @@ async function validateTrackedArtifact(
   ) {
     return { ok: false, reason: 'missing' }
   }
+
   return runValidation(artifact)
 }
 
@@ -283,14 +331,18 @@ export async function resolveLinuxPackageInstallInstructions(
   recovery: LinuxPackageInstallRecovery
 ): Promise<LinuxPackageInstructionsResult> {
   const validation = await validateTrackedArtifact(recovery)
+
   if (!validation.ok) {
     return validation
   }
+
   const { artifact } = validation
   const command = buildLinuxPackageInstallCommand(artifact.packageType, artifact.path)
+
   if (!command.ok) {
     return command
   }
+
   return {
     ok: true,
     command: command.command,
@@ -302,8 +354,10 @@ export async function resolveLinuxPackageRevealTarget(
   recovery: LinuxPackageInstallRecovery
 ): Promise<LinuxPackageRevealResult> {
   const validation = await validateTrackedArtifact(recovery)
+
   if (!validation.ok) {
     return validation
   }
+
   return { ok: true, path: validation.artifact.path }
 }

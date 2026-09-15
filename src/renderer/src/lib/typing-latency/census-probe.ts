@@ -23,17 +23,21 @@ export function readProbeStoreState(): (ProbeStoreState & Record<string, unknown
 
 function focusedProbePane(panes: readonly ProbePane[]): ProbePane | null {
   const focused = typeof document === 'undefined' ? null : document.activeElement
+
   const matched = focused
     ? panes.find((pane) => paneRootElement(pane)?.contains(focused) === true)
     : undefined
+
   return matched ?? panes[0] ?? null
 }
 
 export function readFocusedPaneCensus(): FocusedPaneCensus | null {
   const pane = focusedProbePane(listProbePanes())
+
   if (!pane) {
     return null
   }
+
   const state = readProbeStoreState()
   const leafId = pane.leafId ?? pane.container?.dataset.leafId ?? null
   const tabId = state?.activeTabId ?? null
@@ -41,6 +45,7 @@ export function readFocusedPaneCensus(): FocusedPaneCensus | null {
   const foreground = paneKey ? state?.paneForegroundAgentByPaneKey?.[paneKey] : undefined
   const status = paneKey ? state?.agentStatusByPaneKey?.[paneKey] : undefined
   const bufferType = pane.terminal?.buffer?.active?.type
+
   return {
     paneId: pane.id ?? null,
     leafId,
@@ -58,6 +63,7 @@ export function countMountedAgentRows(): number | null {
   if (typeof document === 'undefined') {
     return null
   }
+
   try {
     return document.querySelectorAll('[data-agent-send-target]').length
   } catch {

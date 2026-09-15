@@ -184,5 +184,6 @@ function createInjectedPathMatcher(): InjectedPathMatcher {
   new Script(
     `${TERMINAL_PATH_TAP_JS}\nthis.__matchFilePathAtColumn = matchFilePathAtColumn;`
   ).runInContext(context)
+
   return (context as { __matchFilePathAtColumn: InjectedPathMatcher }).__matchFilePathAtColumn
 }

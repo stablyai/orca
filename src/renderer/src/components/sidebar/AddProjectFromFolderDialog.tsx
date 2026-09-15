@@ -39,11 +39,13 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
   const [previousOpen, setPreviousOpen] = useState(isOpen)
   const folderPath = typeof modalData.folderPath === 'string' ? modalData.folderPath : ''
   const connectionId = typeof modalData.connectionId === 'string' ? modalData.connectionId : ''
+
   const runtimeEnvironmentId =
     typeof modalData.runtimeEnvironmentId === 'string' ? modalData.runtimeEnvironmentId : null
 
   if (isOpen !== previousOpen) {
     setPreviousOpen(isOpen)
+
     if (!isOpen) {
       // Why: closed modal state is fully local; clear it before commit so the
       // next open never paints stale progress or errors.
@@ -68,29 +70,38 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
     if (!folderPath || isAdding) {
       return
     }
+
     const gen = ++addGenRef.current
     setIsAdding(true)
     setError(null)
+
     try {
       let repo: Repo | null
+
       if (connectionId) {
         const result = await window.api.repos.addRemote({
           connectionId,
           remotePath: folderPath
         })
+
         if ('error' in result) {
           throw new Error(result.error)
         }
+
         const upserted = upsertAddedRepoWithProjectHostSetup(result.repo, {
           sshConnectionId: connectionId
         })
+
         repo = upserted.repo
+
         if (upserted.alreadyPresent) {
           useAppStore.getState().clearOrcaHookTrustForRepo(repo.id)
         }
+
         if (!mountedRef.current || gen !== addGenRef.current) {
           return
         }
+
         toast.success(
           translate(
             'auto.components.sidebar.AddProjectFromFolderDialog.e643b30398',
@@ -105,20 +116,26 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
       if (!mountedRef.current || gen !== addGenRef.current) {
         return
       }
+
       if (!repo) {
         return
       }
+
       if (!isGitRepoKind(repo)) {
         openNonGitConfirmation()
+
         return
       }
+
       // Why: after the repo is already added, a non-authoritative refresh
       // should still close onto the project row instead of trapping the user.
       const ownerOptions = worktreeRefreshOptions(runtimeEnvironmentId, connectionId)
       await fetchWorktrees(repo.id, ownerOptions)
+
       if (!mountedRef.current || gen !== addGenRef.current) {
         return
       }
+
       await finishProjectAddWithDefaultCheckout({
         repoId: repo.id,
         source: connectionId
@@ -133,12 +150,15 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
+
       if (message.includes(NON_GIT_REPO_ERROR)) {
         if (mountedRef.current && gen === addGenRef.current) {
           openNonGitConfirmation()
         }
+
         return
       }
+
       if (mountedRef.current && gen === addGenRef.current) {
         setError(message)
       }

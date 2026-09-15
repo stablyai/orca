@@ -39,6 +39,7 @@ export {
   isRuntimeServerTransportConnected,
   isRuntimeEnvironmentRemovalBlocked
 } from './runtime-environment-host-details'
+
 export type { RuntimeHostDetails } from './runtime-environment-host-details'
 
 type RuntimeEnvironmentsPaneProps = {
@@ -66,10 +67,13 @@ export function RuntimeEnvironmentsPane({
   const remoteServerUpdatesChecking = useAppStore((state) => state.remoteServerUpdatesChecking)
   const remoteServerUpdatesRunning = useAppStore((state) => state.remoteServerUpdatesRunning)
   const refreshRemoteServerUpdates = useAppStore((state) => state.refreshRemoteServerUpdates)
+
   const setRemoteServerUpdateDialogOpen = useAppStore(
     (state) => state.setRemoteServerUpdateDialogOpen
   )
+
   const consumedAddServerIntentSignalRef = useRef(0)
+
   const {
     environments,
     isLoading,
@@ -83,11 +87,14 @@ export function RuntimeEnvironmentsPane({
     if (value === LOCAL_RUNTIME_VALUE) {
       return 'Local desktop'
     }
+
     if (value === NO_RUNTIME_VALUE) {
       return 'No server connected'
     }
+
     return environments.find((environment) => environment.id === value)?.name ?? 'remote server'
   }
+
   const {
     connectingId,
     switchingValue,
@@ -104,6 +111,7 @@ export function RuntimeEnvironmentsPane({
     setActiveRuntimeEnvironmentPreference,
     getEnvironmentLabel
   })
+
   const {
     isSaving,
     removingId,
@@ -139,6 +147,7 @@ export function RuntimeEnvironmentsPane({
     ) {
       return
     }
+
     consumedAddServerIntentSignalRef.current = addServerIntentSignal
     // Why: composer deep-links should land on the existing pairing form, not just
     // the server list.
@@ -148,40 +157,50 @@ export function RuntimeEnvironmentsPane({
   const activeValue =
     settings.activeRuntimeEnvironmentId ??
     (allowLocalRuntime ? LOCAL_RUNTIME_VALUE : NO_RUNTIME_VALUE)
+
   const isBusy =
     isSaving ||
     connectingId !== null ||
     switchingValue !== null ||
     removingId !== null ||
     disconnectingId !== null
+
   const removingActiveServer = pendingRemove
     ? isRuntimeEnvironmentRemovalBlocked(settings.activeRuntimeEnvironmentId, pendingRemove.id)
     : false
+
   const searchEntry = canGeneratePairingUrl
     ? getRuntimeEnvironmentsSearchEntry()
     : getWebRuntimeEnvironmentsSearchEntry()
+
   const visibleWorkflow: RemoteServerWorkflow = addServerFormOpen ? 'connect' : workflow
 
   const openRemoveDialog = (environment: PublicKnownRuntimeEnvironment): void => {
     setRemoveError(null)
     setPendingRemove(environment)
   }
+
   const confirmSwitch = (): void => {
     const value = pendingSwitchValue
+
     if (!value) {
       return
     }
+
     void switchToValue(value).then((switched) => {
       if (switched && mountedRef.current) {
         setPendingSwitchValue(null)
       }
     })
   }
+
   const confirmRemove = (): void => {
     const environment = pendingRemove
+
     if (!environment) {
       return
     }
+
     void removeEnvironment(environment).then((removed) => {
       if (removed && mountedRef.current) {
         setPendingRemove(null)

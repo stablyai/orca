@@ -79,9 +79,11 @@ describe('generateBranchNameFromContext', () => {
     )
 
     expect(result.success).toBe(false)
+
     if (result.success) {
       throw new Error('expected a failure result')
     }
+
     expect(result.failureOutput).toEqual({
       label: 'Pi',
       exitCode: 1,
@@ -166,6 +168,7 @@ describe('generateBranchNameFromContext', () => {
         missingBinaryLocation: 'remote PATH',
         execute: async (plan) => {
           prompt = plan.stdinPayload ?? ''
+
           return {
             stdout: 'fix-login-flow\n',
             stderr: '',

@@ -7,7 +7,9 @@ import {
 } from './crash-breadcrumb-store'
 
 const COALESCE_WINDOW_MS = 30_000
+
 const MAX_COALESCE_KEYS = 128
+
 const ORPHAN_KEY = 'terminal_safe_fit_retry_exhausted'
 
 function recordOrphanCandidate(livePanes: number): void {
@@ -38,6 +40,7 @@ function orphanFromRing(): void {
   for (let index = 0; index < 30; index += 1) {
     recordCrashBreadcrumb(`renderer_error_${index}`, { index })
   }
+
   getCrashBreadcrumbSnapshot()
 }
 
@@ -48,9 +51,11 @@ function orphanFromSnapshotBudget(): void {
       thresholdPct: 80
     })
   }
+
   for (let index = 0; index < 29; index += 1) {
     recordCrashBreadcrumb(`renderer_error_${index}`, { index })
   }
+
   getCrashBreadcrumbSnapshot()
 }
 
@@ -79,6 +84,7 @@ function expectSuppressedBurstPreserved(): void {
   const recovered = getCrashBreadcrumbSnapshot().find(
     (breadcrumb) => breadcrumb.name === ORPHAN_KEY && breadcrumb.data?.suppressedSinceLast === 2
   )
+
   expect(recovered?.data).toEqual({ livePanes: 3, suppressedSinceLast: 2 })
 }
 
@@ -110,6 +116,7 @@ describe('orphaned coalesced breadcrumb cleanup', () => {
         minIntervalMs: COALESCE_WINDOW_MS
       })
     }
+
     orphanFromRing()
 
     expireWithUnrelatedKey()
@@ -117,6 +124,7 @@ describe('orphaned coalesced breadcrumb cleanup', () => {
     const recovered = getCrashBreadcrumbSnapshot().find(
       (breadcrumb) => breadcrumb.name === ORPHAN_KEY
     )
+
     expect(recovered?.data).toEqual({ suppressedSinceLast: 2 })
   })
 
@@ -158,9 +166,11 @@ describe('orphaned coalesced breadcrumb cleanup', () => {
     expireWithUnrelatedKey()
 
     expect(firstSnapshot[0]?.data).toEqual({ livePanes: 2, suppressedSinceLast: 1 })
+
     const recovered = getCrashBreadcrumbSnapshot().find(
       (breadcrumb) => breadcrumb.name === ORPHAN_KEY
     )
+
     expect(recovered?.data).toEqual({ livePanes: 4, suppressedSinceLast: 2 })
     expect(resumeOrphanCandidate(5)).toEqual({ suppressedSinceLast: 0 })
   })

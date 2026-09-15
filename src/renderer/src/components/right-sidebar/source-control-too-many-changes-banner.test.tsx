@@ -19,6 +19,7 @@ describe('TooManyChangesBanner', () => {
 
   it('aborts stale retry work when the banner unmounts', async () => {
     let retrySignal: AbortSignal | undefined
+
     const onRetry = vi.fn(
       (signal: AbortSignal) =>
         new Promise<void>((_resolve, reject) => {
@@ -26,6 +27,7 @@ describe('TooManyChangesBanner', () => {
           signal.addEventListener('abort', () => reject(signal.reason), { once: true })
         })
     )
+
     const view = render(<TooManyChangesBanner limit={1_000} onRetry={onRetry} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
@@ -40,12 +42,14 @@ describe('TooManyChangesBanner', () => {
 
   it('bounds a hung retry and restores the action', async () => {
     vi.useFakeTimers()
+
     const onRetry = vi.fn(
       (signal: AbortSignal) =>
         new Promise<void>((_resolve, reject) => {
           signal.addEventListener('abort', () => reject(signal.reason), { once: true })
         })
     )
+
     render(<TooManyChangesBanner limit={1_000} onRetry={onRetry} />)
 
     const retryButton = screen.getByRole('button', { name: 'Retry' })

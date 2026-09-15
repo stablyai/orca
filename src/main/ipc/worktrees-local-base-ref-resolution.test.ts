@@ -13,83 +13,107 @@ import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
+
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )
+
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
 vi.mock('../git/git-username', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
     .resolveLocalGitUsernameMock
 }))
+
 vi.mock('../github/client', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
+
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
+
 vi.mock('../providers/ssh-git-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
 )
+
 vi.mock('../providers/ssh-filesystem-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
+
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
+
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+
 vi.mock('../ssh/ssh-target-registry', async () =>
   (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
+
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
+
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../worktree-runner-script', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../effective-hook-config', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../setup-hook-env-vars', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('./worktree-logic', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
+
 vi.mock('../ports/advertised-url-watcher', async () =>
   (await import('./worktrees-test-module-mocks')).advertisedUrlWatcherModuleMock()
 )
+
 vi.mock('../workspace-cleanup-scan-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupScanSnapshotModuleMock()
 )
+
 vi.mock('../workspace-space-analysis-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceSpaceAnalysisSnapshotModuleMock()
 )
+
 vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
+
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
+
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
 describe('registerWorktreeHandlers', () => {
@@ -106,10 +130,13 @@ describe('registerWorktreeHandlers', () => {
       ref: 'refs/remotes/origin/main',
       base: 'origin/main'
     }
+
     let resolveFetch!: () => void
+
     const pendingFetch = new Promise<{ ok: true }>((resolve) => {
       resolveFetch = () => resolve({ ok: true })
     })
+
     runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
     runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
     runtimeStub.getOrStartRemoteTrackingBaseRefresh.mockReturnValue(pendingFetch)
@@ -130,6 +157,7 @@ describe('registerWorktreeHandlers', () => {
       ) {
         throw new Error('missing ref')
       }
+
       return { stdout: 'created-sha\n', stderr: '' }
     })
 
@@ -142,6 +170,7 @@ describe('registerWorktreeHandlers', () => {
       createPromise.then(() => 'resolved'),
       new Promise((resolve) => setTimeout(() => resolve('pending'), 0))
     ])
+
     expect(earlyResult).toBe('pending')
     expect(addWorktreeMock).not.toHaveBeenCalled()
 
@@ -168,6 +197,7 @@ describe('registerWorktreeHandlers', () => {
       ref: 'refs/remotes/origin/main',
       base: 'origin/main'
     }
+
     store.getRepo.mockReturnValue({
       id: 'repo-1',
       path: '/workspace/repo',
@@ -201,6 +231,7 @@ describe('registerWorktreeHandlers', () => {
       ) {
         throw new Error('missing ref')
       }
+
       return { stdout: 'created-sha\n', stderr: '' }
     })
 
@@ -252,9 +283,11 @@ describe('registerWorktreeHandlers', () => {
       if (args[0] === 'rev-parse' && args.includes('refs/heads/develop^{commit}')) {
         return { stdout: 'develop-sha\n', stderr: '' }
       }
+
       if (args[0] === 'fetch') {
         throw new Error('network unavailable')
       }
+
       return { stdout: 'created-sha\n', stderr: '' }
     })
 
@@ -281,6 +314,7 @@ describe('registerWorktreeHandlers', () => {
       ref: 'refs/remotes/team/feature',
       base: 'team/feature'
     }
+
     store.getRepo.mockReturnValue({
       id: 'repo-1',
       path: '/workspace/repo',
@@ -306,12 +340,15 @@ describe('registerWorktreeHandlers', () => {
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/team/feature^{commit}')) {
         throw new Error('missing remote-tracking ref')
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/heads/team/feature^{commit}')) {
         return { stdout: 'team-feature-sha\n', stderr: '' }
       }
+
       if (args[0] === 'fetch') {
         throw new Error('network unavailable')
       }
+
       return { stdout: 'created-sha\n', stderr: '' }
     })
 
@@ -342,6 +379,7 @@ describe('registerWorktreeHandlers', () => {
       ref: 'refs/remotes/origin/main',
       base: 'origin/main'
     }
+
     runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
     runtimeStub.hasRemoteTrackingRef.mockResolvedValue(false)
     listWorktreesMock.mockResolvedValue([
@@ -357,12 +395,15 @@ describe('registerWorktreeHandlers', () => {
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
         throw new Error('missing remote-tracking ref')
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/heads/main^{commit}')) {
         return { stdout: 'main-sha\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse') {
         return { stdout: '', stderr: '' }
       }
+
       return { stdout: 'created-sha\n', stderr: '' }
     })
 
@@ -394,6 +435,7 @@ describe('registerWorktreeHandlers', () => {
       ref: 'refs/remotes/origin/master',
       base: 'origin/master'
     }
+
     runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
     runtimeStub.hasRemoteTrackingRef.mockResolvedValue(false)
     runtimeStub.getOrStartRemoteTrackingBaseRefresh.mockResolvedValue({
@@ -430,6 +472,7 @@ describe('registerWorktreeHandlers', () => {
       ref: 'refs/remotes/origin/main',
       base: 'origin/main'
     }
+
     runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
     runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
     listWorktreesMock.mockResolvedValue([
@@ -466,6 +509,7 @@ describe('registerWorktreeHandlers', () => {
       ref: 'refs/remotes/origin/main',
       base: 'origin/main'
     }
+
     runtimeStub.resolveRemoteTrackingBase.mockResolvedValue(remoteBase)
     runtimeStub.hasRemoteTrackingRef.mockResolvedValue(true)
     addWorktreeMock.mockResolvedValue({

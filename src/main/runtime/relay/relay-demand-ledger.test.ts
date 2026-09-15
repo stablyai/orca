@@ -7,18 +7,21 @@ import { RelayDemandLedger } from './relay-demand-ledger'
 import { RelayRevokeOutbox, type RelayDeviceBinding } from './relay-revoke-outbox'
 
 const ownerIdentityKey = 'user-1\0profile-1\0org-1'
+
 const relayHostId = 'relay-host-1'
 
 function fixture(now: number) {
   const userDataPath = mkdtempSync(join(tmpdir(), 'orca-relay-demand-'))
   const deviceRegistry = new DeviceRegistry(userDataPath)
   const revokeOutbox = new RelayRevokeOutbox(userDataPath)
+
   const ledger = new RelayDemandLedger({
     deviceRegistry,
     revokeOutbox,
     relayHostId,
     now: () => now
   })
+
   return { userDataPath, deviceRegistry, revokeOutbox, ledger }
 }
 
@@ -45,12 +48,14 @@ describe('RelayDemandLedger', () => {
     deviceRegistry.setRelayBinding(pending.deviceId, binding(pending.deviceId, 2_000))
     expect(ledger.hasDemand(ownerIdentityKey)).toBe(true)
     expect(ledger.nextPendingExpiry()).toBe(2_000)
+
     const restarted = new RelayDemandLedger({
       deviceRegistry: new DeviceRegistry(userDataPath),
       revokeOutbox: new RelayRevokeOutbox(userDataPath),
       relayHostId,
       now: () => 1_500
     })
+
     expect(restarted.hasDemand(ownerIdentityKey)).toBe(true)
 
     const expiredFixture = fixture(3_000)

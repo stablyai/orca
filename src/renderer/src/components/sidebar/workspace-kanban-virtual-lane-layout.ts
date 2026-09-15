@@ -39,7 +39,9 @@ export function registerWorkspaceKanbanVirtualLaneLayout(args: {
     getWorktreeIds: args.getWorktreeIds,
     getMeasurements: args.getMeasurements
   }
+
   virtualLaneLayouts.set(args.scrollElement, registration)
+
   return () => {
     if (virtualLaneLayouts.get(args.scrollElement) === registration) {
       virtualLaneLayouts.delete(args.scrollElement)
@@ -55,6 +57,7 @@ export function getWorkspaceKanbanVirtualLaneItemIds(
   scrollElement: HTMLElement
 ): readonly string[] | null {
   const registration = virtualLaneLayouts.get(scrollElement)
+
   return registration?.getWorktreeIds?.() ?? registration?.getItemIds() ?? null
 }
 
@@ -62,6 +65,7 @@ export function getWorkspaceKanbanVirtualLaneItemRects(
   scrollElement: HTMLElement
 ): WorkspaceKanbanVirtualLaneItemRect[] | null {
   const snapshot = getVirtualLaneLayoutSnapshot(scrollElement)
+
   if (!snapshot) {
     return null
   }
@@ -70,11 +74,14 @@ export function getWorkspaceKanbanVirtualLaneItemRects(
   const containerRect = scrollElement.getBoundingClientRect()
   const contentOffset = spacerRect.top - containerRect.top + scrollElement.scrollTop
   const rects: WorkspaceKanbanVirtualLaneItemRect[] = []
+
   for (let index = 0; index < snapshot.itemIds.length; index++) {
     const measurement = snapshot.measurements[index]
+
     if (!isValidMeasurement(measurement, index)) {
       return null
     }
+
     rects.push({
       id: snapshot.itemIds[index]!,
       index,
@@ -86,6 +93,7 @@ export function getWorkspaceKanbanVirtualLaneItemRects(
       contentBottom: contentOffset + measurement.end
     })
   }
+
   return rects
 }
 
@@ -94,6 +102,7 @@ export function resolveWorkspaceKanbanVirtualLaneDropIndex(
   pointerY: number
 ): number | null {
   const snapshot = getVirtualLaneLayoutSnapshot(scrollElement)
+
   if (!snapshot) {
     return null
   }
@@ -101,18 +110,22 @@ export function resolveWorkspaceKanbanVirtualLaneDropIndex(
   const spacerTop = snapshot.registration.spacerElement.getBoundingClientRect().top
   let low = 0
   let high = snapshot.itemIds.length
+
   while (low < high) {
     const middle = Math.floor((low + high) / 2)
     const measurement = snapshot.measurements[middle]
+
     if (!isValidMeasurement(measurement, middle)) {
       return null
     }
+
     if (pointerY < spacerTop + (measurement.start + measurement.end) / 2) {
       high = middle
     } else {
       low = middle + 1
     }
   }
+
   return low
 }
 
@@ -121,29 +134,38 @@ export function resolveWorkspaceKanbanVirtualLaneDropIndicatorY(
   dropIndex: number
 ): number | null {
   const snapshot = getVirtualLaneLayoutSnapshot(scrollElement)
+
   if (!snapshot) {
     return null
   }
+
   if (snapshot.itemIds.length === 0) {
     return scrollElement.getBoundingClientRect().top + 14
   }
 
   const spacerTop = snapshot.registration.spacerElement.getBoundingClientRect().top
   const boundedIndex = Math.max(0, Math.min(snapshot.itemIds.length, dropIndex))
+
   if (boundedIndex === 0) {
     const first = snapshot.measurements[0]
+
     return isValidMeasurement(first, 0) ? spacerTop + first.start - 5 : null
   }
+
   if (boundedIndex === snapshot.itemIds.length) {
     const lastIndex = snapshot.itemIds.length - 1
     const last = snapshot.measurements[lastIndex]
+
     return isValidMeasurement(last, lastIndex) ? spacerTop + last.end + 5 : null
   }
+
   const previous = snapshot.measurements[boundedIndex - 1]
   const next = snapshot.measurements[boundedIndex]
+
   if (!isValidMeasurement(previous, boundedIndex - 1) || !isValidMeasurement(next, boundedIndex)) {
     return null
   }
+
   return spacerTop + (previous.end + next.start) / 2
 }
 
@@ -151,11 +173,14 @@ function getVirtualLaneLayoutSnapshot(
   scrollElement: HTMLElement
 ): VirtualLaneLayoutSnapshot | null {
   const registration = virtualLaneLayouts.get(scrollElement)
+
   if (!registration) {
     return null
   }
+
   const itemIds = registration.getItemIds()
   const measurements = registration.getMeasurements()
+
   return measurements.length >= itemIds.length ? { registration, itemIds, measurements } : null
 }
 

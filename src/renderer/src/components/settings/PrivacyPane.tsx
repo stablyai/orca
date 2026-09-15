@@ -11,6 +11,7 @@ import { PrivacyDiagnosticsSection } from './PrivacyDiagnosticsSection'
 import { translate } from '@/i18n/i18n'
 
 export type EnvBlockedReason = 'do_not_track' | 'orca_disabled' | 'ci'
+
 export type BlockedReason = { kind: 'env'; reason: EnvBlockedReason }
 
 type PrivacyPaneProps = {
@@ -35,9 +36,11 @@ export function envVarNameForReason(reason: EnvBlockedReason): string {
   if (reason === 'do_not_track') {
     return 'DO_NOT_TRACK'
   }
+
   if (reason === 'orca_disabled') {
     return 'ORCA_TELEMETRY_DISABLED'
   }
+
   return 'CI'
 }
 
@@ -45,6 +48,7 @@ export function computeBlockedReason(consent: TelemetryConsentState | null): Blo
   if (isEnvBlocked(consent)) {
     return { kind: 'env', reason: consent.reason }
   }
+
   return null
 }
 
@@ -61,6 +65,7 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
         setConsent(state)
       }
     })
+
     return () => {
       stale = true
     }
@@ -73,7 +78,9 @@ export function PrivacyPane({ settings }: PrivacyPaneProps): React.JSX.Element {
     if (blocked || inFlight) {
       return
     }
+
     setInFlight(true)
+
     try {
       await telemetrySetOptIn(!toggleChecked)
       await fetchSettings()

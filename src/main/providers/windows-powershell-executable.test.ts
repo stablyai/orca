@@ -14,11 +14,15 @@ const WIN_ENV: NodeJS.ProcessEnv = {
 }
 
 const PWSH7 = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
+
 const PATH_PWSH7 = 'D:\\Tools\\PowerShell\\7\\pwsh.exe'
+
 const WINDOWS_POWERSHELL = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+
 // The Microsoft Store App Execution Alias stub for pwsh — a zero-byte reparse
 // point under WindowsApps that ConPTY's CreateProcessW rejects with error 5.
 const PWSH_STORE_ALIAS = 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe'
+
 const PWSH_STORE_EXE =
   'C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.6.3.0_x64__8wekyb3d8bbwe\\pwsh.exe'
 
@@ -78,6 +82,7 @@ describe('resolveWindowsPowerShellExecutablePath', () => {
       env: WIN_ENV,
       isRealExecutable: (p) => p === PWSH_STORE_ALIAS
     })
+
     expect(resolved).toBeNull()
     expect(resolved).not.toBe(PWSH_STORE_ALIAS)
   })
@@ -92,6 +97,7 @@ describe('resolveWindowsPowerShellExecutablePath', () => {
       isRealExecutable: (p) => p === PWSH_STORE_EXE,
       resolveAppExecutionAlias: (p) => (p === PWSH_STORE_ALIAS ? PWSH_STORE_EXE : null)
     })
+
     expect(resolved).toBe(PWSH_STORE_EXE)
   })
 
@@ -107,6 +113,7 @@ describe('resolveWindowsPowerShellExecutablePath', () => {
         isRealExecutable: (p) => p === target,
         resolveAppExecutionAlias: (p) => (p === PWSH_STORE_ALIAS ? target : null)
       })
+
       expect(resolved).toBeNull()
     }
   )
@@ -129,6 +136,7 @@ describe('resolveWindowsPowerShellSpawnChain', () => {
       env: WIN_ENV,
       isRealExecutable: (p) => p === PWSH7 || p === WINDOWS_POWERSHELL
     })
+
     expect(chain).toEqual([PWSH7, WINDOWS_POWERSHELL, WIN_ENV.ComSpec])
   })
 
@@ -139,6 +147,7 @@ describe('resolveWindowsPowerShellSpawnChain', () => {
       // pwsh exists only as the alias stub (rejected); Windows PowerShell is real.
       isRealExecutable: (p) => p === PWSH_STORE_ALIAS || p === WINDOWS_POWERSHELL
     })
+
     expect(chain).toEqual([WINDOWS_POWERSHELL, WIN_ENV.ComSpec])
     expect(chain).not.toContain(PWSH_STORE_ALIAS)
   })
@@ -153,6 +162,7 @@ describe('resolveWindowsPowerShellSpawnChain', () => {
       isRealExecutable: (p) => p === PWSH_STORE_EXE || p === WINDOWS_POWERSHELL,
       resolveAppExecutionAlias: (p) => (p === PWSH_STORE_ALIAS ? PWSH_STORE_EXE : null)
     })
+
     expect(chain).toEqual([PWSH_STORE_EXE, WINDOWS_POWERSHELL, WIN_ENV.ComSpec])
   })
 
@@ -165,6 +175,7 @@ describe('resolveWindowsPowerShellSpawnChain', () => {
       },
       isRealExecutable: (p) => p === PATH_PWSH7 || p === WINDOWS_POWERSHELL
     })
+
     expect(chain).toEqual([PATH_PWSH7, WINDOWS_POWERSHELL, WIN_ENV.ComSpec])
   })
 
@@ -174,6 +185,7 @@ describe('resolveWindowsPowerShellSpawnChain', () => {
       env: WIN_ENV,
       isRealExecutable: () => false
     })
+
     expect(chain).toEqual([WIN_ENV.ComSpec])
   })
 
@@ -183,6 +195,7 @@ describe('resolveWindowsPowerShellSpawnChain', () => {
       env: { SystemRoot: 'C:\\Windows' },
       isRealExecutable: () => false
     })
+
     expect(chain).toEqual(['C:\\Windows\\System32\\cmd.exe'])
   })
 })

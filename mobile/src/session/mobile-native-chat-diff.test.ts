@@ -8,6 +8,7 @@ describe('diffFromToolCall', () => {
       old_string: 'const a = 1\nconst b = 2',
       new_string: 'const a = 10'
     })
+
     expect(lines).toEqual([
       { kind: 'meta', text: 'src/a.ts' },
       { kind: 'del', text: 'const a = 1' },
@@ -51,6 +52,7 @@ describe('diffFromText', () => {
       { length: 1_000 },
       (_unused, index) => `${index % 2 === 0 ? '+' : '-'}line-${index}`
     ).join('\n')
+
     const lines = diffFromText(text)
 
     expect(lines).toHaveLength(120)

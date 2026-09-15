@@ -1,49 +1,74 @@
 const { chmodSync, existsSync, readdirSync, readFileSync, writeFileSync } = require('node:fs')
+
 const { execFileSync } = require('node:child_process')
+
 const { join, resolve } = require('node:path')
+
 const electronBuilderNativeRebuild = require('./scripts/electron-builder-native-rebuild.cjs')
+
 const {
   assertPackagedDaemonEntryExists,
   verifyPackagedDaemonEntryBoots
 } = require('./scripts/verify-packaged-daemon-entry.cjs')
+
 const {
   assertPackagedNativeVariantsInstalled,
   createPackagedRuntimeNodeModuleResources,
   prunePackagedRuntimeNodeModules,
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
+
 const { verifyLinuxGlibcFloor } = require('./scripts/verify-linux-glibc-floor.cjs')
+
 const { writeMacBuildCompatibility } = require('./scripts/mac-build-compatibility.cjs')
+
 const { verifyPackagedPluginResources } = require('./scripts/verify-packaged-plugin-resources.cjs')
+
 const {
   verifyPackagedNodePtyJobOwnership
 } = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
+
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
+
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
+
 const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
 // swap them over an installed Orca and macOS treats each build as a new app.
 const isMacHourly = process.env.ORCA_MAC_HOURLY === '1'
+
 const isMacDaily = process.env.ORCA_MAC_DAILY === '1'
+
 const isMacAdhoc = process.env.ORCA_MAC_ADHOC === '1'
+
 // Why a second set of variables rather than making the mac ones platform-neutral:
 // the mac ones gate `isMacRelease` below, which turns on hardened runtime,
 // notarization, and root-level `forceCodeSigning`. A Windows dev build that
 // reused them would fail packaging outright for want of a cert it is
 // deliberately not using.
 const isWinHourly = process.env.ORCA_WIN_HOURLY === '1'
+
 const isWinDaily = process.env.ORCA_WIN_DAILY === '1'
+
 const isWinAdhoc = process.env.ORCA_WIN_ADHOC === '1'
+
 const isWinDevChannel = isWinHourly || isWinDaily || isWinAdhoc
+
 const isMacRelease = process.env.ORCA_MAC_RELEASE === '1' || isMacHourly || isMacDaily || isMacAdhoc
+
 const isLinuxArm64Release = process.env.ORCA_LINUX_ARM64_RELEASE === '1'
+
 const localBuildVersion =
   isMacRelease || isWinDevChannel ? undefined : process.env.ORCA_LOCAL_BUILD_VERSION
+
 const isHourlyChannel = isMacHourly || isWinHourly
+
 const isDailyChannel = isMacDaily || isWinDaily
+
 const isAdhocChannel = isMacAdhoc || isWinAdhoc
+
 const devChannelBuildVersion = isHourlyChannel
   ? process.env.ORCA_HOURLY_BUILD_VERSION
   : isDailyChannel
@@ -51,6 +76,7 @@ const devChannelBuildVersion = isHourlyChannel
     : isAdhocChannel
       ? process.env.ORCA_ADHOC_BUILD_VERSION
       : undefined
+
 // Why each dev channel gets its own repo rather than tagging into the main one:
 // the releases atom feed exposes only the 10 newest entries, so 24 hourly tags a
 // day would evict every stable/RC entry and strand users on a feed with nothing
@@ -64,17 +90,21 @@ const devChannelRepo = isHourlyChannel
     : isAdhocChannel
       ? 'orca-adhoc'
       : null
+
 const appId = 'com.stablyai.orca'
+
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
 }
+
 // Why: freshness detection needs immutable identity metadata from this exact
 // app build, but never needs the skill package bytes or a runtime network read.
 const skillFreshnessResources = {
   from: 'resources/skills',
   to: 'skills'
 }
+
 // Why: SSH relay deploy resolves bundles from process.resourcesPath in packaged
 // apps. Keeping relay assets as extraResources makes them real directories
 // instead of paths hidden inside app.asar.
@@ -82,12 +112,14 @@ const relayExtraResource = {
   from: 'out/relay',
   to: 'relay'
 }
+
 // Why: bundled plugins are immutable install inputs and must remain ordinary
 // directories so the startup bootstrap can verify and publish exact bytes.
 const bundledPluginResources = {
   from: 'resources/plugins/launch',
   to: 'plugins/launch'
 }
+
 // Why: the main bundle, packaged CLI, SSH paths, and speech worker all execute
 // from package directories where pnpm's symlink farm is absent. Copy the exact
 // runtime dependency closure to Resources/node_modules so bare require() calls
@@ -99,26 +131,31 @@ const emojiShortcodeDatasetResource = {
   from: 'node_modules/emojibase-data/en/shortcodes/emojibase.json',
   to: 'node_modules/emojibase-data/en/shortcodes/emojibase.json'
 }
+
 const commonExtraResources = [
   relayExtraResource,
   bundledPluginResources,
   skillFreshnessResources,
   emojiShortcodeDatasetResource
 ]
+
 // Why: native speech addons must be real files outside app.asar; copy only the
 // package matching the artifact target instead of every optional variant.
 const macSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-darwin-${arch}',
   to: 'node_modules/sherpa-onnx-darwin-${arch}'
 }
+
 const linuxSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-linux-${arch}',
   to: 'node_modules/sherpa-onnx-linux-${arch}'
 }
+
 const winSpeechNativeResource = {
   from: 'node_modules/sherpa-onnx-win-x64',
   to: 'node_modules/sherpa-onnx-win-x64'
 }
+
 // electron-builder replaces these defaults when `depends` is configured; retain
 // Electron's loader requirements alongside Orca's headless-host dependencies.
 const debElectronRuntimeDependencies = [
@@ -132,6 +169,7 @@ const debElectronRuntimeDependencies = [
   'libuuid1',
   'libsecret-1-0'
 ]
+
 const rpmElectronRuntimeDependencies = [
   'gtk3',
   'libnotify',
@@ -302,21 +340,27 @@ module.exports = {
             'Resources'
           )
         : join(context.appOutDir, 'resources')
+
     if (!existsSync(resourcesDir)) {
       throw new Error(`Missing packaged resources directory: ${resourcesDir}`)
     }
+
     // FpmTarget replaces this with deb/rpm while building those artifacts from the shared app tree.
     if (context.electronPlatformName === 'linux') {
       writeFileSync(join(resourcesDir, 'package-type'), 'AppImage')
     }
+
     if (context.electronPlatformName === 'darwin') {
       const architectureByEnum = { 1: 'x64', 3: 'arm64' }
       const architecture = architectureByEnum[context.arch]
+
       if (!architecture) {
         throw new Error(`Unsupported local-build compatibility architecture: ${context.arch}`)
       }
+
       const version = context.packager.appInfo.version
       let commit = process.env.ORCA_BUILD_COMMIT || process.env.GITHUB_SHA || 'unknown'
+
       if (commit === 'unknown') {
         try {
           commit = execFileSync('git', ['rev-parse', '--short=12', 'HEAD'], {
@@ -326,10 +370,13 @@ module.exports = {
           // Source archives can still produce a signed build with an explicit version.
         }
       }
+
       writeMacBuildCompatibility(resourcesDir, { version, commit, architecture })
     }
+
     stampPackagedCliVersion(resourcesDir, context.packager.appInfo.version)
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
+
     // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
     // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
     // Fail packaging if any bundled native binary exceeds the supported floor.
@@ -343,6 +390,7 @@ module.exports = {
         targetArch: { 1: 'x64', 3: 'arm64' }[context.arch]
       })
     }
+
     verifyPackagedMainRuntimeDeps(resourcesDir)
     // Why: boot the packaged daemon-entry under plain Node, but only for the
     // slice matching the packaging host's arch — daemon-entry.js is JS, yet it
@@ -352,6 +400,7 @@ module.exports = {
     const archEnumByNodeArch = { ia32: 0, x64: 1, armv7l: 2, arm64: 3 }
     const hostArchEnum = archEnumByNodeArch[process.arch]
     const canExecuteTargetArch = context.arch === hostArchEnum || context.arch === 4
+
     if (context.electronPlatformName === 'win32') {
       if (process.platform === 'win32' && canExecuteTargetArch) {
         verifyPackagedNodePtyJobOwnership(resourcesDir)
@@ -359,14 +408,17 @@ module.exports = {
         console.log('[verify-packaged-node-pty] skipped cross-platform or cross-arch package')
       }
     }
+
     verifySkillsCliRuntime(join(resourcesDir, 'app.asar.unpacked', 'out'), resourcesDir, {
       executeCommands: canExecuteTargetArch
     })
+
     if (!canExecuteTargetArch) {
       console.log(
         `[verify-skills-cli-runtime] skipped command probes on cross-arch slice (target ${context.arch}, host ${process.arch})`
       )
     }
+
     if (canExecuteTargetArch) {
       verifyPackagedDaemonEntryBoots(resourcesDir)
     } else {
@@ -378,20 +430,24 @@ module.exports = {
         `[verify-packaged-daemon-entry] skipped boot on cross-arch slice (target ${context.arch}, host ${process.arch})`
       )
     }
+
     // Why: inspect electron-builder's real output so a broken extraResources
     // mapping fails packaging before bundled content reaches users.
     verifyPackagedPluginResources(resourcesDir)
     chmodUnixCliLaunchers(resourcesDir, context.electronPlatformName)
     chmodMacServeSimHelpers(resourcesDir, context.electronPlatformName)
+
     for (const filename of readdirSync(resourcesDir)) {
       if (!filename.startsWith('agent-browser-')) {
         continue
       }
+
       // Why: the upstream package has inconsistent executable bits across
       // platform binaries (notably darwin-x64). child_process.execFile needs
       // the copied binary to be executable in packaged apps.
       chmodSync(join(resourcesDir, filename), 0o755)
     }
+
     if (context.electronPlatformName === 'darwin') {
       await signMacComputerUseHelper(join(resourcesDir, 'Orca Computer Use.app'), context.packager)
       await signMacStandaloneHelper(
@@ -666,9 +722,11 @@ module.exports = {
 // Stamp the effective channel version where node-mode CLI code can read it.
 function stampPackagedCliVersion(resourcesDir, version) {
   const packageJsonPath = join(resourcesDir, 'app.asar.unpacked', 'out', 'package.json')
+
   if (!existsSync(packageJsonPath)) {
     throw new Error(`Missing unpacked CLI package boundary: ${packageJsonPath}`)
   }
+
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'))
   writeFileSync(packageJsonPath, `${JSON.stringify({ ...packageJson, version }, null, 2)}\n`)
 }
@@ -677,11 +735,14 @@ function chmodUnixCliLaunchers(resourcesDir, electronPlatformName) {
   if (electronPlatformName === 'win32') {
     return
   }
+
   for (const launcherName of ['orca', 'orca-ide']) {
     const launcherPath = join(resourcesDir, 'bin', launcherName)
+
     if (!existsSync(launcherPath)) {
       continue
     }
+
     // Why: packaged Unix installs expose these extraResources as public shell
     // commands, and source/packager mode drift must not ship a non-executable CLI.
     chmodSync(launcherPath, 0o755)
@@ -692,12 +753,14 @@ function chmodMacServeSimHelpers(resourcesDir, electronPlatformName) {
   if (electronPlatformName !== 'darwin') {
     return
   }
+
   const helperPaths = [
     join(resourcesDir, 'serve-sim', 'bin', 'serve-sim-bin'),
     join(resourcesDir, 'serve-sim', 'dist', 'simcam', 'serve-sim-camera-helper'),
     join(resourcesDir, 'node_modules', 'serve-sim', 'bin', 'serve-sim-bin'),
     join(resourcesDir, 'node_modules', 'serve-sim', 'dist', 'simcam', 'serve-sim-camera-helper')
   ]
+
   for (const helperPath of helperPaths) {
     if (existsSync(helperPath)) {
       chmodSync(helperPath, 0o755)
@@ -710,20 +773,25 @@ async function signMacComputerUseHelper(helperAppPath, packager) {
     if (isMacRelease) {
       throw new Error(`Missing Orca Computer Use helper app at ${helperAppPath}`)
     }
+
     return
   }
+
   const codeSigningInfo =
     isMacRelease && process.env.CSC_LINK && packager?.codeSigningInfo?.value
       ? await packager.codeSigningInfo.value
       : null
+
   const identity =
     process.env.ORCA_COMPUTER_MACOS_SIGN_IDENTITY ??
     process.env.CSC_NAME ??
     findInstalledMacSigningIdentity(codeSigningInfo?.keychainFile) ??
     (isMacRelease ? null : '-')
+
   if (!identity) {
     throw new Error('Missing signing identity for Orca Computer Use helper app')
   }
+
   // Why: TCC grants attach to this nested app's code identity. Sign it before
   // the outer Orca.app is sealed so production builds preserve that identity.
   execFileSync('codesign', codesignArgs(identity, helperAppPath), { stdio: 'inherit' })
@@ -737,24 +805,31 @@ async function signMacStandaloneHelper(helperPath, helperName, packager) {
     if (isMacRelease) {
       throw new Error(`Missing ${helperName} helper at ${helperPath}`)
     }
+
     return
   }
+
   const codeSigningInfo =
     isMacRelease && process.env.CSC_LINK && packager?.codeSigningInfo?.value
       ? await packager.codeSigningInfo.value
       : null
+
   const identity =
     process.env.CSC_NAME ??
     findInstalledMacSigningIdentity(codeSigningInfo?.keychainFile) ??
     (isMacRelease ? null : '-')
+
   if (!identity) {
     throw new Error(`Missing signing identity for ${helperName} helper`)
   }
+
   // Why: nested executables must be signed before the outer app bundle is sealed.
   const args = ['--force', '--sign', identity]
+
   if (isMacRelease) {
     args.push('--options', 'runtime', '--timestamp')
   }
+
   args.push(helperPath)
   execFileSync('codesign', args, { stdio: 'inherit' })
   execFileSync('codesign', ['--verify', '--strict', helperPath], { stdio: 'inherit' })
@@ -762,6 +837,7 @@ async function signMacStandaloneHelper(helperPath, helperName, packager) {
 
 function codesignArgs(identity, targetPath) {
   const args = ['--force', '--deep', '--sign', identity]
+
   if (isMacRelease) {
     args.push(
       '--options',
@@ -771,7 +847,9 @@ function codesignArgs(identity, targetPath) {
       resolve(__dirname, '../resources/build/entitlements.computer-use.mac.plist')
     )
   }
+
   args.push(targetPath)
+
   return args
 }
 
@@ -784,15 +862,19 @@ function findInstalledMacSigningIdentity(keychainFile) {
         encoding: 'utf8'
       }
     )
+
     const releaseMatch =
       output.match(/"([^"]*Developer ID Application:[^"]+)"/) ??
       output.match(/"([^"]*Apple Distribution:[^"]+)"/)
+
     if (releaseMatch?.[1]) {
       return releaseMatch[1]
     }
+
     if (!isMacRelease) {
       return output.match(/"([^"]*Apple Development:[^"]+)"/)?.[1] ?? null
     }
   } catch {}
+
   return null
 }

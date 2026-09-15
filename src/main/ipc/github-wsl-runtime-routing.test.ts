@@ -2,15 +2,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = await vi.hoisted(async () => {
   const { createGitHubIpcMocks } = await import('./github-ipc-module-mocks')
+
   return createGitHubIpcMocks()
 })
 
 vi.mock('electron', () => mocks.electron)
+
 vi.mock('../github/client', () => mocks.client)
+
 vi.mock('../github/work-item-details', () => mocks.workItemDetails)
+
 vi.mock('../github/pr-refresh-coordinator', () => mocks.prRefresh)
+
 vi.mock('../telemetry/client', () => mocks.telemetry)
+
 vi.mock('../telemetry/cohort-classifier', () => mocks.cohort)
+
 vi.mock('./ui', () => mocks.ui)
 
 import { registerGitHubHandlers } from './github'
@@ -46,8 +53,10 @@ const {
   requestPRReviewers: requestPRReviewersMock,
   removePRReviewers: removePRReviewersMock
 } = mocks.client
+
 const { getWorkItemDetails: getWorkItemDetailsMock, getPRFileContents: getPRFileContentsMock } =
   mocks.workItemDetails
+
 const { reportVisiblePRRefreshCandidates: reportVisiblePRRefreshCandidatesMock } = mocks.prRefresh
 
 describe('registerGitHubHandlers', () => {

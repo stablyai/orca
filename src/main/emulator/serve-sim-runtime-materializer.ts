@@ -18,6 +18,7 @@ function defaultClearQuarantine(dir: string): void {
   if (process.platform !== 'darwin') {
     return
   }
+
   // Why: a downloaded/updated .app carries com.apple.quarantine, and cpSync
   // clones it onto the copy. serve-sim DYLD-injects libSimCameraInjector.dylib
   // (an iOS-simulator binary Apple never Gatekeeper-tickets) into a simulator
@@ -30,15 +31,18 @@ function defaultClearQuarantine(dir: string): void {
 
 function pruneStaleServeSimRuntimes(targetRootDir: string, keepVersion: string): void {
   let entries: string[]
+
   try {
     entries = readdirSync(targetRootDir)
   } catch {
     return
   }
+
   for (const entryName of entries) {
     if (entryName === keepVersion) {
       continue
     }
+
     try {
       rmSync(join(targetRootDir, entryName), { recursive: true, force: true })
     } catch {
@@ -60,23 +64,30 @@ export function materializeServeSimRuntime(
   const clearQuarantine = options.clearQuarantine ?? defaultClearQuarantine
   const targetDir = join(targetRootDir, version)
   const entryPath = join(targetDir, 'dist', 'serve-sim.js')
+
   if (existsSync(entryPath)) {
     return targetDir
   }
+
   const stagingDir = join(targetRootDir, `.staging-${version}-${process.pid}`)
+
   try {
     mkdirSync(targetRootDir, { recursive: true })
     pruneStaleServeSimRuntimes(targetRootDir, version)
     rmSync(stagingDir, { recursive: true, force: true })
     rmSync(targetDir, { recursive: true, force: true })
     cpSync(bundledPackageDir, stagingDir, { recursive: true })
+
     for (const relativePath of EXECUTABLE_RELATIVE_PATHS) {
       const executablePath = join(stagingDir, relativePath)
+
       if (existsSync(executablePath)) {
         chmodSync(executablePath, 0o755)
       }
     }
+
     clearQuarantine(stagingDir)
+
     try {
       renameSync(stagingDir, targetDir)
     } catch (error) {
@@ -85,6 +96,7 @@ export function materializeServeSimRuntime(
         throw error
       }
     }
+
     return existsSync(entryPath) ? targetDir : null
   } catch {
     return null

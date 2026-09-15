@@ -11,6 +11,7 @@
  */
 
 const BARE_TOKEN = /^[A-Za-z0-9_.:+-]+$/
+
 const BARE_OBJECT_ENTRY = /^([A-Za-z0-9_.+-]+):([A-Za-z0-9_.+-]+)$/
 
 function splitEntries(body: string): string[] {
@@ -20,22 +21,29 @@ function splitEntries(body: string): string[] {
 /** Whether `raw` looks like JSON whose quotes a native argv boundary stripped. */
 export function looksQuoteStripped(raw: string): boolean {
   const trimmed = raw.trim()
+
   if (trimmed.includes('"')) {
     return false
   }
+
   const isArray = trimmed.startsWith('[') && trimmed.endsWith(']')
   const isObject = trimmed.startsWith('{') && trimmed.endsWith('}')
+
   if (!isArray && !isObject) {
     return false
   }
+
   try {
     JSON.parse(trimmed)
+
     return false
   } catch {
     const body = trimmed.slice(1, -1).trim()
+
     if (body.length === 0) {
       return false
     }
+
     // Why: only claim mangling when re-quoting every entry would actually produce valid JSON.
     // An object needs a `key:value` pair per entry; `{a,b}` is not a stripped object.
     return isObject
@@ -54,6 +62,7 @@ export function describeQuoteStrippedJsonFlag(flagName: string, raw: string): st
   if (!looksQuoteStripped(raw)) {
     return null
   }
+
   // Why conditional wording: this inspects only the value's shape, so it also fires when someone
   // types an unquoted `[a,b]` on macOS or Linux, where PowerShell is not involved.
   return (

@@ -15,19 +15,24 @@ export class PendingTerminalHandleRecoveryBudget {
     if (contextKey === this.contextKey) {
       return
     }
+
     this.contextKey = contextKey
     this.remaining = PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS
   }
 
   take(contextKey: string | null): PendingTerminalHandleRecoveryAttempt {
     this.observeContext(contextKey)
+
     if (contextKey === null) {
       return { allowed: false, parked: false }
     }
+
     if (this.remaining === 0) {
       return { allowed: false, parked: true }
     }
+
     this.remaining -= 1
+
     return { allowed: true, parked: false }
   }
 
@@ -47,10 +52,12 @@ export class PendingTerminalHandleRecoveryContextCache {
     if (this.initialized && tabs === this.tabs && activeTabId === this.activeTabId) {
       return this.contextKey
     }
+
     this.initialized = true
     this.tabs = tabs
     this.activeTabId = activeTabId
     this.contextKey = getPendingTerminalHandleRecoveryContextKey(tabs, activeTabId)
+
     return this.contextKey
   }
 }
@@ -62,10 +69,13 @@ export function getPendingTerminalHandleRecoveryContextKey(
   if (activeTabId === null) {
     return null
   }
+
   const active = tabs.find((tab) => tab.id === activeTabId)
+
   if (active?.type !== 'terminal' || typeof active.terminal === 'string') {
     return null
   }
+
   return JSON.stringify([active.id, active.parentTabId, active.leafId ?? null])
 }
 

@@ -17,6 +17,7 @@ export function cancelPendingEditorLineRevealFrames(): void {
       cancelAnimationFrame(frameId)
     }
   }
+
   pendingEditorLineRevealFrameIds.clear()
 }
 
@@ -29,11 +30,14 @@ function requestTrackedEditorLineRevealFrame(callback: FrameRequestCallback): vo
   let frameId: number | undefined
   frameId = requestAnimationFrame((timestamp) => {
     completed = true
+
     if (frameId !== undefined) {
       pendingEditorLineRevealFrameIds.delete(frameId)
     }
+
     callback(timestamp)
   })
+
   if (!completed) {
     trackEditorLineRevealFrameId(frameId)
   }

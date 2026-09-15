@@ -40,6 +40,7 @@ describe('buildCodexResetCreditExpectedScope', () => {
       account,
       limits
     })
+
     const second = buildCodexResetCreditExpectedScope({
       target: { runtime: 'host', wslDistro: null },
       account,
@@ -85,6 +86,7 @@ describe('buildCodexResetCreditExpectedScope', () => {
       account,
       limits
     })
+
     const refreshed = buildCodexResetCreditExpectedScope({
       target: { runtime: 'host', wslDistro: null },
       account,

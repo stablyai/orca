@@ -17,6 +17,7 @@ export class StructuredAgentSessionHandoffState {
 
   status = (sessionId: string): AgentSessionHandoffStatus => {
     const value = this.statuses.get(sessionId)
+
     return value ?? idleStructuredHandoffStatus(this.deps.requireRecord(sessionId))
   }
 

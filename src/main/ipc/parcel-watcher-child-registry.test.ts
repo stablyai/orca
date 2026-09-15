@@ -9,9 +9,11 @@ import {
 function fillWatcherChildCapacity(): (() => void)[] {
   return Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN }, () => {
     const release = reserveWatcherChild()
+
     if (!release) {
       throw new Error('expected watcher child reservation')
     }
+
     return release
   })
 }
@@ -60,12 +62,15 @@ describe('parcel watcher child registry capacity notifications', () => {
     const releases = fillWatcherChildCapacity()
     let firstReservation: (() => void) | null = null
     let secondReservation: (() => void) | null = null
+
     const first = vi.fn(() => {
       firstReservation = reserveWatcherChild()
     })
+
     const second = vi.fn(() => {
       secondReservation = reserveWatcherChild()
     })
+
     onWatcherChildCapacityAvailable(first)
     onWatcherChildCapacityAvailable(second)
 

@@ -5,17 +5,22 @@ import { getBranchConflictKindViaExec } from './repo-branch-conflict'
 describe('getBranchConflictKindViaExec', () => {
   it('probes exact configured remote refs instead of enumerating the remote namespace', async () => {
     const calls: string[][] = []
+
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
+
       if (argv[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
+
       if (argv[0] === 'remote') {
         return { stdout: 'origin\nfoo/bar\n' }
       }
+
       if (argv[0] === 'show-ref') {
         return { stdout: 'abc refs/remotes/foo/bar/feature/fix\n' }
       }
+
       throw new Error(`unexpected git command: ${argv.join(' ')}`)
     }
 
@@ -30,11 +35,14 @@ describe('getBranchConflictKindViaExec', () => {
 
   it('does not run a ref query when the only candidate is the allowed base', async () => {
     const calls: string[][] = []
+
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
+
       if (argv[0] === 'remote') {
         return { stdout: 'origin\n' }
       }
+
       throw new Error('the local branch and remote ref are absent')
     }
 
@@ -49,17 +57,22 @@ describe('getBranchConflictKindViaExec', () => {
 
   it('keeps longest configured remote-name matching semantics', async () => {
     const calls: string[][] = []
+
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
+
       if (argv[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
+
       if (argv[0] === 'remote') {
         return { stdout: 'foo\nfoo/bar\n' }
       }
+
       if (argv[0] === 'show-ref') {
         return { stdout: 'abc refs/remotes/foo/bar/bar/feature\n' }
       }
+
       throw new Error(`unexpected git command: ${argv.join(' ')}`)
     }
 
@@ -75,18 +88,23 @@ describe('getBranchConflictKindViaExec', () => {
 
   it('does not treat a nested branch ref as an exact conflict', async () => {
     const calls: string[][] = []
+
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
+
       if (argv[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
+
       if (argv[0] === 'remote') {
         return { stdout: 'origin\n' }
       }
+
       if (argv[0] === 'show-ref') {
         // The exact ref is absent even though a descendant exists.
         throw new Error('missing exact ref')
       }
+
       throw new Error(`unexpected git command: ${argv.join(' ')}`)
     }
 
@@ -105,13 +123,16 @@ describe('getBranchConflictKindViaExec', () => {
     let probeCount = 0
     let activeProbes = 0
     let maxActiveProbes = 0
+
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       if (argv[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
+
       if (argv[0] === 'remote') {
         return { stdout: `${remoteNames.join('\n')}\n` }
       }
+
       if (argv[0] === 'show-ref') {
         probeCount += 1
         activeProbes += 1
@@ -120,6 +141,7 @@ describe('getBranchConflictKindViaExec', () => {
         activeProbes -= 1
         throw Object.assign(new Error('missing exact ref'), { code: 1 })
       }
+
       throw new Error(`unexpected git command: ${argv.join(' ')}`)
     }
 
@@ -146,12 +168,15 @@ describe('getBranchConflictKindViaExec batched remote probe', () => {
   function baseExec(calls: string[][]): (argv: string[]) => Promise<{ stdout: string }> {
     return async (argv) => {
       calls.push(argv)
+
       if (argv[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
+
       if (argv[0] === 'remote') {
         return { stdout: remoteNames(3) }
       }
+
       throw new Error(`unexpected git command: ${argv.join(' ')}`)
     }
   }
@@ -160,12 +185,14 @@ describe('getBranchConflictKindViaExec batched remote probe', () => {
     const calls: string[][] = []
     const stdinPayloads: (string | undefined)[] = []
     const exec = baseExec(calls)
+
     const batched = async (
       argv: string[],
       options: { stdin: string }
     ): Promise<{ stdout: string }> => {
       calls.push(argv)
       stdinPayloads.push(options.stdin)
+
       return {
         stdout: [
           'refs/remotes/remote0/feature missing',
@@ -191,6 +218,7 @@ describe('getBranchConflictKindViaExec batched remote probe', () => {
   it('reports a remote conflict from the batched answer', async () => {
     const calls: string[][] = []
     const exec = baseExec(calls)
+
     const batched = async (): Promise<{ stdout: string }> => ({
       stdout: [
         'refs/remotes/remote0/feature missing',
@@ -206,22 +234,29 @@ describe('getBranchConflictKindViaExec batched remote probe', () => {
 
   it('falls back to per-ref probes when the batch cannot answer', async () => {
     const calls: string[][] = []
+
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
+
       if (argv[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
+
       if (argv[0] === 'remote') {
         return { stdout: remoteNames(3) }
       }
+
       if (argv[0] === 'show-ref') {
         if (argv[4] === 'refs/remotes/remote1/feature') {
           return { stdout: 'abc refs/remotes/remote1/feature\n' }
         }
+
         throw Object.assign(new Error('missing'), { code: 1, stderr: '' })
       }
+
       throw new Error(`unexpected git command: ${argv.join(' ')}`)
     }
+
     const batched = async (): Promise<{ stdout: string }> => {
       throw new Error('cat-file is unavailable')
     }
@@ -234,19 +269,25 @@ describe('getBranchConflictKindViaExec batched remote probe', () => {
 
   it('treats a short batch read as undecided rather than as absence', async () => {
     const calls: string[][] = []
+
     const exec = async (argv: string[]): Promise<{ stdout: string }> => {
       calls.push(argv)
+
       if (argv[0] === 'rev-parse') {
         throw new Error('local branch is absent')
       }
+
       if (argv[0] === 'remote') {
         return { stdout: remoteNames(3) }
       }
+
       if (argv[0] === 'show-ref') {
         throw Object.assign(new Error('missing'), { code: 1, stderr: '' })
       }
+
       throw new Error(`unexpected git command: ${argv.join(' ')}`)
     }
+
     const batched = async (): Promise<{ stdout: string }> => ({
       stdout: 'refs/remotes/remote0/feature missing'
     })
@@ -266,8 +307,10 @@ describe('branch conflict with existing-branch adoption', () => {
       if (argv[0] === 'rev-parse') {
         throw absent()
       }
+
       return { stdout: '' }
     })
+
     const adopt = vi.fn(async () => false)
     await expect(
       getBranchConflictKindViaExec(exec, 'new', undefined, {}, undefined, adopt)
@@ -303,6 +346,7 @@ describe('branch conflict with existing-branch adoption', () => {
     const exec = vi.fn(async () => {
       throw error
     })
+
     const adopt = vi.fn(async () => true)
     await expect(
       getBranchConflictKindViaExec(exec, 'existing', undefined, {}, undefined, adopt)
@@ -316,6 +360,7 @@ describe('branch conflict with existing-branch adoption', () => {
       .mockResolvedValueOnce({ stdout: 'a'.repeat(40) })
       .mockRejectedValueOnce(absent())
       .mockResolvedValueOnce({ stdout: '' })
+
     await expect(
       getBranchConflictKindViaExec(exec, 'removed', undefined, {}, undefined, async () => false)
     ).resolves.toBeNull()

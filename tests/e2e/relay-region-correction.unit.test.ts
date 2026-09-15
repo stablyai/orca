@@ -34,8 +34,10 @@ vi.mock('../../cloud/apps/relay/src/admin-token-verifier', async (importOriginal
 }))
 
 const cleanups: (() => Promise<void>)[] = []
+
 afterEach(async () => {
   const failures: unknown[] = []
+
   for (const cleanup of cleanups.splice(0).toReversed()) {
     try {
       await cleanup()
@@ -43,7 +45,9 @@ afterEach(async () => {
       failures.push(error)
     }
   }
+
   vi.restoreAllMocks()
+
   if (failures.length > 0) {
     throw new AggregateError(failures, 'relay topology cleanup failed')
   }
@@ -59,6 +63,7 @@ async function topology() {
   const keypair = nacl.box.keyPair()
   const hostId = createHash('sha256').update(keypair.publicKey).digest('base64url').slice(0, 16)
   const identity = { userId: 'transport-test-user', relayHostId: hostId }
+
   const cells = [
     {
       id: 'transport-us',
@@ -73,12 +78,15 @@ async function topology() {
       capacityRequests: 100
     }
   ]
+
   const incarnations = [
     '11111111-1111-4111-8111-111111111111',
     '22222222-2222-4222-8222-222222222222'
   ]
+
   const endpoints = new Map<string, string>()
   const sockets = new Set<WebSocket>()
+
   const servers = cells.map((cell, index) =>
     createRelayServer(
       {
@@ -113,10 +121,12 @@ async function topology() {
       { now: () => clock, random: () => 0.5, cellIncarnation: incarnations[index] }
     )
   )
+
   cleanups.push(async () => {
     for (const socket of sockets) {
       socket.terminate()
     }
+
     for (const relay of servers) {
       relay.sessions.drain(0)
       await new Promise<void>((resolve) => relay.server.close(() => resolve()))
@@ -137,6 +147,7 @@ async function topology() {
   })
   await source.assignments.reconcileCells(cells)
   const startedAt = clock - 1_000
+
   const safety = () => ({
     observedAt: clock,
     sqlFailures: 0,
@@ -146,6 +157,7 @@ async function topology() {
     databasePoolWaitersMax: 0,
     databasePoolWaitMsMax: 0
   })
+
   const heartbeat = async () => {
     for (const [index, cell] of cells.entries()) {
       const relay = servers[index]!
@@ -178,22 +190,29 @@ async function topology() {
       })
     }
   }
+
   await heartbeat()
+
   for (const [index, relay] of servers.entries()) {
     relay.server.listen(0, '127.0.0.1')
     await once(relay.server, 'listening')
     const address = relay.server.address()
+
     if (!address || typeof address === 'string') {
       throw new Error('missing local address')
     }
+
     endpoints.set(new URL(cells[index]!.url).host, `ws://127.0.0.1:${address.port}`)
   }
+
   const connect = (url: string, headers?: Record<string, string>) => {
     const parsed = new URL(url)
     const socket = new WebSocket(`${endpoints.get(parsed.host)}${parsed.pathname}`, { headers })
     sockets.add(socket)
+
     return socket
   }
+
   let failCorroboration = 0
   let pauseCorroboration = false
   let corroborationFailures = 0
@@ -202,6 +221,7 @@ async function topology() {
   const executionErrors: unknown[] = []
   let delayedReply: (() => void) | null = null
   const received: string[] = []
+
   const pool = new RelayOriginPool({
     directorUrl: 'https://director.example.test',
     relayHostId: hostId,
@@ -227,6 +247,7 @@ async function topology() {
             })
             .catch((error) => executionErrors.push(error))
         })
+
         return () => {}
       }
     } as never,
@@ -235,10 +256,12 @@ async function topology() {
         targetControlFailures++
         throw new Error('simulated_target_unavailable')
       }
+
       const socket = connect(url, {
         authorization: `Bearer ${token}`,
         ...RELAY_HOST_CAPABILITY_HEADERS
       })
+
       if (process.env.ORCA_RELAY_TRANSPORT_DIAGNOSTICS === '1') {
         const cell = new URL(url).host
         console.info('transport-control-created', {
@@ -247,6 +270,7 @@ async function topology() {
         })
         socket.on('message', (raw) => {
           const message = JSON.parse(raw.toString())
+
           if (['region-restored', 'host-hello-ack', 'drain'].includes(message.type)) {
             console.info('transport-control-message', {
               cell,
@@ -258,6 +282,7 @@ async function topology() {
         })
         socket.on('close', (code) => console.info('transport-control-close', { cell, code }))
       }
+
       return socket
     },
     createDataSocket: (url) => connect(url),
@@ -265,12 +290,16 @@ async function topology() {
       if (failCorroboration > 0 || pauseCorroboration) {
         failCorroboration = Math.max(0, failCorroboration - 1)
         corroborationFailures++
+
         return Response.json({ error: 'temporary_director_failure' }, { status: 503 })
       }
+
       const assignment = await source.assignments.resolve(identity)
+
       if (!assignment) {
         return Response.json({ error: 'assignment_not_found' }, { status: 409 })
       }
+
       return Response.json({
         v: 1,
         cellUrl: assignment.cellUrl,
@@ -279,6 +308,7 @@ async function topology() {
       })
     }) as typeof fetch
   })
+
   cleanups.push(async () => {
     pool.closeNow()
   })
@@ -292,6 +322,7 @@ async function topology() {
     },
     hostId
   )
+
   const attachPhone = async (cellIndex: number, device: string) => {
     const invite = await source.store.createInvite(identity, device)
     const socket = connect(`${cells[cellIndex]!.url}/v1/connect/${hostId}`)
@@ -302,15 +333,19 @@ async function topology() {
     )
     const [raw] = await hello
     expect(JSON.parse(raw.toString())).toMatchObject({ type: 'relay-hello', ok: true })
+
     return socket
   }
+
   let candidate: (IdleRegionalRehomeRequest & { sourceCellUrl: string }) | undefined
+
   const prepareMove = async () => {
     const issued = await source.assignments.exchangeRegionCorrection(
       identity,
       { v: 1, action: 'issue-window' },
       assignment.assignmentEpoch
     )
+
     await source.assignments.exchangeRegionCorrection(
       identity,
       {
@@ -326,23 +361,30 @@ async function topology() {
     )
     candidate = (await source.assignments.selectIdleRegionalRehomeCandidates(safety()))[0]
     expect(candidate).toBeDefined()
+
     return candidate!
   }
+
   const move = async () => {
     if (!candidate) {
       await prepareMove()
     }
+
     const { sourceCellUrl, ...request } = candidate!
     const address = endpoints.get(new URL(sourceCellUrl).host)!.replace('ws:', 'http:')
+
     const response = await fetch(`${address}/v1/admin/host-idle-rehome`, {
       method: 'POST',
       headers: { authorization: 'Bearer test-director-token', 'content-type': 'application/json' },
       body: JSON.stringify({ ...request, cohortPercent: 100, directorSafety: safety() })
     })
+
     const body = (await response.json()) as { v: number; outcome: string }
     expect(response.status, JSON.stringify(body)).toBe(200)
+
     return { outcome: body.outcome }
   }
+
   return {
     source,
     target,
@@ -371,6 +413,7 @@ async function topology() {
     failTarget: () => {
       rejectTargetControls = true
       const session = target.sessions.get(identity)
+
       if (session?.socket) {
         session.socket.terminate()
       }
@@ -382,6 +425,7 @@ async function topology() {
       if (!delayedReply) {
         throw new Error('no delayed mutation')
       }
+
       delayedReply()
     }
   }
@@ -437,12 +481,15 @@ describe('idle region correction across real relay and desktop WebSockets', () =
     const original = context.source.sessions.get(context.identity)!
     let entered!: () => void
     let release!: () => void
+
     const committing = new Promise<void>((resolve) => {
       entered = resolve
     })
+
     const gate = new Promise<void>((resolve) => {
       release = resolve
     })
+
     vi.spyOn(context.source.assignments, 'commitIdleRegionalRehome').mockImplementationOnce(
       async () => {
         entered()
@@ -452,6 +499,7 @@ describe('idle region correction across real relay and desktop WebSockets', () =
     )
     const move = context.move()
     await committing
+
     try {
       const invite = await context.source.store.createInvite(context.identity, 'racing-phone')
       const arriving = context.connectDevice()
@@ -471,6 +519,7 @@ describe('idle region correction across real relay and desktop WebSockets', () =
       release()
       await move
     }
+
     expect(await move).toEqual({ outcome: 'deferred' })
     expect(context.source.sessions.get(context.identity)).toBe(original)
     const returning = await context.attachPhone(0, 'retrying-phone')

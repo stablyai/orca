@@ -29,6 +29,7 @@ export function useWorktreeMetaWorkspace(args: {
 } {
   const { worktreeId, ownerRepoId, executionHostId } = args
   const workspaceScope = useMemo(() => parseWorkspaceKey(worktreeId), [worktreeId])
+
   const indexedWorktree = useAppStore((s) => {
     // Why: the same workspace ID can exist under two hosts, which the owner index
     // reports as ambiguous rather than guessing. The row that opened the dialog
@@ -38,14 +39,18 @@ export function useWorktreeMetaWorkspace(args: {
           (item) => item.id === worktreeId && (!executionHostId || item.hostId === executionHostId)
         )
       : undefined
+
     if (scoped) {
       return scoped
     }
+
     const owner = findIndexedWorktreeOwner(s.worktreesByRepo, worktreeId)
+
     return owner
       ? s.worktreesByRepo[owner.repoId]?.find((item) => item.id === worktreeId)
       : undefined
   })
+
   // Why: folder workspaces are absent from worktreesByRepo, so the lookup above
   // returns undefined and the row renders blank for them. The selector returns
   // the stored record — a stable reference — and the projection happens outside
@@ -56,22 +61,27 @@ export function useWorktreeMetaWorkspace(args: {
       ? (s.folderWorkspaces.find((item) => item.id === workspaceScope.folderWorkspaceId) ?? null)
       : null
   )
+
   const worktree = useMemo(
     () => (folderWorkspace ? folderWorkspaceToWorktree(folderWorkspace) : indexedWorktree),
     [folderWorkspace, indexedWorktree]
   )
+
   const linkedIssue = worktree?.linkedIssue ?? null
   const linkedLinearIssue = worktree?.linkedLinearIssue ?? null
+
   // Why: `typeof` rather than a null check — an unhydrated projection can leave
   // linkedIssue undefined, which `!== null` would read as a GitHub link.
   const currentProvider: IssueLinkProvider =
     typeof linkedIssue === 'number' ? 'github' : linkedLinearIssue ? 'linear' : 'github'
+
   const currentIssue =
     currentProvider === 'linear'
       ? (linkedLinearIssue ?? '')
       : typeof linkedIssue === 'number'
         ? String(linkedIssue)
         : ''
+
   // Why: displacement is decided against live state, not the frozen snapshot —
   // the dialog's warning reads the same values, so a link added by the CLI while
   // the dialog was open cannot outlive a save that promised to displace it.

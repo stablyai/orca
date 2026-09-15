@@ -128,6 +128,7 @@ describe('settings-search', () => {
 
   it('rejects oversized pasted searches before reading settings entries', () => {
     const oversizedQuery = 'secret-settings-search'.repeat(SETTINGS_SEARCH_QUERY_MAX_BYTES)
+
     const entry = {
       get title(): string {
         throw new Error('oversized settings searches must not scan titles')

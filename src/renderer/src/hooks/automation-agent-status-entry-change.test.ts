@@ -20,17 +20,22 @@ describe('selectAutomationAgentStatusEntryChange', () => {
   it('reads only the target and skips an unchanged entry', () => {
     const targetPaneKey = 'target-tab:leaf'
     const targetEntry = makeEntry(targetPaneKey)
+
     const entries = Object.fromEntries(
       Array.from({ length: 499 }, (_, index) => {
         const paneKey = `other-tab:${index}`
+
         return [paneKey, makeEntry(paneKey)]
       })
     )
+
     entries[targetPaneKey] = targetEntry
     let enumerations = 0
+
     const measuredEntries = new Proxy(entries, {
       ownKeys: (target) => {
         enumerations += 1
+
         return Reflect.ownKeys(target)
       }
     })
@@ -47,10 +52,12 @@ describe('selectAutomationAgentStatusEntryChange', () => {
   it('reports removal and ignores inherited or non-enumerable entries', () => {
     const targetPaneKey = 'target-tab:leaf'
     const previousEntry = makeEntry(targetPaneKey)
+
     const inheritedEntries = Object.create({ [targetPaneKey]: previousEntry }) as Record<
       string,
       AgentStatusEntry
     >
+
     const nonEnumerableEntries = Object.defineProperty({}, targetPaneKey, {
       value: previousEntry
     }) as Record<string, AgentStatusEntry>

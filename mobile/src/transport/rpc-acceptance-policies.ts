@@ -10,6 +10,7 @@ export function requireRpcResultOrThrowCodedError(response: RpcResponse): unknow
   if (!response.ok) {
     throw new Error(`${response.error.code}: ${response.error.message}`)
   }
+
   return response.result
 }
 
@@ -18,6 +19,7 @@ export function rpcObjectResultOrNull(response: RpcResponse): Record<string, unk
   if (!response.ok || typeof response.result !== 'object' || response.result === null) {
     return null
   }
+
   return response.result as Record<string, unknown>
 }
 
@@ -37,6 +39,7 @@ export function requireRpcResultOrThrowMessage(response: RpcResponse): unknown {
   if (!response.ok) {
     throw new Error(response.error.message)
   }
+
   return response.result
 }
 

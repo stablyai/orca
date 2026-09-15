@@ -58,15 +58,19 @@ export function isNativeWindowsLocalPtySpawn(opts: {
   if ((opts.platform ?? process.platform) !== 'win32') {
     return false
   }
+
   if (opts.connectionId) {
     return false
   }
+
   if (isWslUncPath(opts.cwd ?? '')) {
     return false
   }
+
   if (/(?:^|[/\\])wsl(?:\.exe)?$/i.test(opts.shellOverride ?? '')) {
     return false
   }
+
   return true
 }
 
@@ -81,6 +85,7 @@ const nativeWindowsConptyPtys = new Set<string>()
 // first. The runtime registers an installer so marking retrofits the DA1
 // override onto an existing emulator; installation is idempotent emulator-side.
 type ConptyDa1OverrideInstaller = (ptyId: string) => void
+
 const conptyDa1OverrideInstallers = new Set<ConptyDa1OverrideInstaller>()
 
 export function registerConptyDa1OverrideInstaller(installer: ConptyDa1OverrideInstaller): void {
@@ -89,6 +94,7 @@ export function registerConptyDa1OverrideInstaller(installer: ConptyDa1OverrideI
 
 export function markNativeWindowsConptyPty(id: string): void {
   nativeWindowsConptyPtys.add(id)
+
   for (const installer of conptyDa1OverrideInstallers) {
     installer(id)
   }

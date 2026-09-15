@@ -62,6 +62,7 @@ export function useWorktreeJumpPaletteSections({
     if (!hasQuery) {
       return true
     }
+
     return shouldOpenTabsLeadPaletteSections({
       bestWorktreeQualityRank: bestPaletteQualityRank(
         worktreeItems.map((item) => item.match.qualityClass)
@@ -76,6 +77,7 @@ export function useWorktreeJumpPaletteSections({
     if (!hasQuery) {
       return false
     }
+
     const bestEntityQualityRank = Math.min(
       worktreeItems.length
         ? bestPaletteQualityRank(worktreeItems.map((item) => item.match.qualityClass))
@@ -84,6 +86,7 @@ export function useWorktreeJumpPaletteSections({
         ? bestPaletteQualityRank(openTabItems.map((item) => item.result.qualityClass))
         : NO_PALETTE_QUALITY_RANK
     )
+
     return shouldIntentSectionLeadPaletteSections({
       bestEntityQualityRank,
       bestIntentQualityRank: bestPaletteQualityRank([
@@ -105,18 +108,22 @@ export function useWorktreeJumpPaletteSections({
 
   const openTabsCap = PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps['open-tabs'] ?? 0)
   const typedWorktreeCap = PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps.worktrees ?? 0)
+
   const openTabIndexById = useMemo(
     () => new Map(openTabItems.map((item, index) => [item.id, index])),
     [openTabItems]
   )
+
   const worktreeIndexById = useMemo(
     () => new Map(worktreeItems.map((item, index) => [item.id, index])),
     [worktreeItems]
   )
+
   const retainedOpenTabId =
     hasQuery && (openTabIndexById.get(selectedItemId ?? '') ?? -1) >= openTabsCap
       ? selectedItemId
       : null
+
   const retainedWorktreeId =
     hasQuery && (worktreeIndexById.get(selectedItemId ?? '') ?? -1) >= typedWorktreeCap
       ? selectedItemId
@@ -125,39 +132,48 @@ export function useWorktreeJumpPaletteSections({
   const paletteSections = useMemo(() => {
     const retainOpenTab = (item: { id: string }): boolean => item.id === retainedOpenTabId
     const retainWorktree = (item: { id: string }): boolean => item.id === retainedWorktreeId
+
     // Why: "See more" drops the above-the-fold trim outright instead of stepping 20 at a time, so one
     // click reveals the whole recent history the shared render cap allows.
     const recentTabsCap = expandedSectionCaps['open-tabs']
       ? openTabsCap
       : EMPTY_QUERY_RECENT_TAB_CAP
+
     const openTabs = hasQuery
       ? capPaletteSection(openTabItems, openTabsCap, retainOpenTab)
       : capPaletteSection(recentTabItems, recentTabsCap)
+
     const baseWorktreeCap = hasQuery
       ? Infinity
       : Math.min(
           openTabs.visible.length === 0 ? EMPTY_QUERY_ROW_BUDGET : EMPTY_QUERY_WORKTREE_CAP,
           Math.max(1, EMPTY_QUERY_ROW_BUDGET - openTabs.visible.length)
         )
+
     const worktreeCap = hasQuery
       ? typedWorktreeCap
       : baseWorktreeCap + (expandedSectionCaps.worktrees ?? 0)
+
     const worktrees = hasQuery
       ? capPaletteSection(worktreeItems, worktreeCap, retainWorktree)
       : {
           visible: worktreeItems.slice(0, worktreeCap),
           overflowCount: Math.max(0, worktreeItems.length - worktreeCap)
         }
+
     const projectTargets = capPaletteSection(
       hasQuery ? projectTargetItems : [],
       PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps.projects ?? 0)
     )
+
     const middle = capPaletteSection(
       hasQuery ? middleItems : [],
       PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps.middle ?? 0)
     )
+
     const multiPrimaryFirstScreen =
       hasQuery && openTabs.visible.length > 0 && worktrees.visible.length > 0
+
     const multiPrimaryLayout = multiPrimaryFirstScreen
       ? layoutMultiPrimaryPaletteSections<WorktreePaletteItem | OpenTabPaletteItem>({
           leadingItems: openTabsLeadSections ? openTabItems : worktreeItems,
@@ -171,6 +187,7 @@ export function useWorktreeJumpPaletteSections({
           trailingRetain: openTabsLeadSections ? retainWorktree : retainOpenTab
         })
       : null
+
     return {
       visibleWorktreeItems: worktrees.visible as PaletteItem[],
       worktreeOverflowCount: worktrees.overflowCount,
@@ -211,6 +228,7 @@ export function useWorktreeJumpPaletteSections({
       ),
     [hasQuery, paletteSections]
   )
+
   const recentTabShortcutIndexById = useMemo(
     () =>
       new Map(
@@ -222,6 +240,7 @@ export function useWorktreeJumpPaletteSections({
       ),
     [hasQuery, paletteSections]
   )
+
   const digitShortcutModifiers =
     useShortcutKeyComboDetails(DIGIT_INDEX_ACTION_ID)[0]?.keys.slice(0, -1) ?? []
 

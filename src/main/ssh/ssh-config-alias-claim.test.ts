@@ -13,6 +13,7 @@ Host *
   ProxyCommand nc -X connect -x proxy:8080 %h %p
   ForwardAgent yes
 `
+
     expect(mayClaim(config, 'prod')).toBe(false)
   })
 
@@ -23,6 +24,7 @@ Host *
 Host prod
   HostName prod.internal
 `
+
     expect(mayClaim(config, 'prod')).toBe(true)
   })
 
@@ -32,6 +34,7 @@ Host prod
 Host prod-*
   HostName prod.internal
 `
+
     expect(mayClaim(config, 'prod-web')).toBe(true)
     expect(mayClaim(config, 'stage-web')).toBe(false)
   })
@@ -48,6 +51,7 @@ Host *
 Match host prod
   User ops
 `
+
     expect(mayClaim(config, 'prod')).toBe(true)
   })
 

@@ -7,9 +7,11 @@ export function attachDomRendererFocusClassSync(
 
   const sync = (): void => {
     const rows = terminalElement.querySelector<HTMLElement>('.xterm-rows')
+
     if (!rows) {
       return
     }
+
     // Why: xterm 6 can leave the root focused while the DOM renderer rows miss
     // xterm-focus; its cursor blink CSS keys off the rows class.
     rows.classList.toggle('xterm-focus', terminalElement.classList.contains('focus'))

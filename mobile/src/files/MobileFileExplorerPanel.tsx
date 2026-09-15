@@ -70,9 +70,11 @@ export function MobileFileExplorerPanel(props: {
       if (!client || connState !== 'connected') {
         const message =
           connState === 'connected' ? 'Connecting to desktop...' : 'Waiting for desktop...'
+
         if (rootLoad) {
           const hasLoadedRoot =
             (getDirectoryCacheState(directoryCacheRef.current, '')?.entries.length ?? 0) > 0
+
           setLoading(false)
           // Why: transient reconnects should not blank an already browsable tree.
           setError(hasLoadedRoot ? null : message)
@@ -85,19 +87,23 @@ export function MobileFileExplorerPanel(props: {
             }
           }))
         }
+
         return
       }
 
       const hadLoadedRoot =
         rootLoad && (getDirectoryCacheState(directoryCacheRef.current, '')?.entries.length ?? 0) > 0
+
       if (rootLoad) {
         // Why: a reconnect refresh must not blank an already browsable tree —
         // the full-screen spinner unmounts the list and resets scroll.
         if (!hadLoadedRoot) {
           setLoading(true)
         }
+
         setError(null)
       }
+
       setDirectoryCache((prev) => ({
         ...prev,
         [relativePath]: {
@@ -111,6 +117,7 @@ export function MobileFileExplorerPanel(props: {
           worktree: `id:${worktreeId}`,
           relativePath
         })
+
         if (!response.ok) {
           // Why: desktops that predate the files.readDir mobile allowlist
           // entry still serve the capped files.list; fall back so the Files
@@ -122,6 +129,7 @@ export function MobileFileExplorerPanel(props: {
             const legacy = await client.sendRequest('files.list', {
               worktree: `id:${worktreeId}`
             })
+
             if (legacy.ok) {
               if (
                 !isCurrentDirectoryLoad(
@@ -132,28 +140,36 @@ export function MobileFileExplorerPanel(props: {
               ) {
                 return
               }
+
               const legacyResult = (legacy as RpcSuccess).result as LegacyFilesListResult
               setDirectoryCache(directoryCacheFromFileList(legacyResult.files))
               // Why: the capped list silently omits files past the cap — keep
               // the legacy explorer's "Showing first 5000" note.
               setLegacyListTruncated(legacyResult.truncated)
+
               return
             }
+
             throw new Error(
               legacy.error?.message || response.error?.message || 'Unable to load files'
             )
           }
+
           throw new Error(response.error?.message || 'Unable to load files')
         }
+
         if (
           !isCurrentDirectoryLoad(directoryLoadRevisionsRef.current, scopeRef.current, loadToken)
         ) {
           return
         }
+
         const entries = (response as RpcSuccess).result as MobileDirEntry[]
+
         if (rootLoad) {
           setLegacyListTruncated(false)
         }
+
         setDirectoryCache((prev) => ({
           ...prev,
           [relativePath]: { entries }
@@ -164,7 +180,9 @@ export function MobileFileExplorerPanel(props: {
         ) {
           return
         }
+
         const message = err instanceof Error ? err.message : 'Unable to load files'
+
         if (rootLoad) {
           // Why: a failed background refresh keeps the cached tree browsable;
           // only a cold load surfaces the full-screen error.
@@ -214,8 +232,10 @@ export function MobileFileExplorerPanel(props: {
     if (connState !== 'connected' || pendingDirectoryRetriesRef.current.size === 0) {
       return
     }
+
     const pending = [...pendingDirectoryRetriesRef.current]
     pendingDirectoryRetriesRef.current.clear()
+
     for (const relativePath of pending) {
       void loadDirectory(relativePath)
     }
@@ -230,14 +250,17 @@ export function MobileFileExplorerPanel(props: {
     (relativePath: string) => {
       setExpanded((prev) => {
         const next = new Set(prev)
+
         if (next.has(relativePath)) {
           next.delete(relativePath)
         } else {
           next.add(relativePath)
         }
+
         return next
       })
       const state = getDirectoryCacheState(directoryCache, relativePath)
+
       if (!expanded.has(relativePath) && !state?.loading && (!state?.entries || state.error)) {
         void loadDirectory(relativePath)
       }
@@ -250,8 +273,10 @@ export function MobileFileExplorerPanel(props: {
       if (connState !== 'connected' && hostId) {
         pendingDirectoryRetriesRef.current.add(relativePath)
         void forceReconnect(hostId)
+
         return
       }
+
       void loadDirectory(relativePath)
     },
     [connState, forceReconnect, hostId, loadDirectory]

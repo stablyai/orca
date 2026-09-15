@@ -92,32 +92,43 @@ export function useFileExplorerKeys(opts: {
     // wrapper without a real TreeNode, so it falls back to the row above.
     const findFocusedIndex = (): number | null => {
       const el = document.activeElement as HTMLElement | null
+
       if (!el || !opts.containerRef.current?.contains(el)) {
         return null
       }
+
       const wrapper = el.closest<HTMLElement>('[data-index]')
+
       if (!wrapper) {
         return null
       }
+
       const raw = wrapper.dataset.index
+
       if (raw === undefined) {
         return null
       }
+
       const idx = Number(raw)
+
       if (rowProjectionRef.current.getRowAtIndex(idx) === null) {
         return idx > 0 ? idx - 1 : null
       }
+
       return idx
     }
 
     const focusInExplorer = (): boolean => {
       const el = document.activeElement
+
       if (!el || !opts.containerRef.current) {
         return false
       }
+
       if (opts.containerRef.current.contains(el)) {
         return true
       }
+
       // Fallback: Radix portaled nodes or timing quirks — shell is marked explicitly.
       return (
         el instanceof Element &&
@@ -129,6 +140,7 @@ export function useFileExplorerKeys(opts: {
       const wrapper = opts.containerRef.current?.querySelector<HTMLElement>(
         `[data-index="${index}"]`
       )
+
       const button = wrapper?.querySelector<HTMLButtonElement>('button')
       button?.focus()
     }
@@ -145,9 +157,11 @@ export function useFileExplorerKeys(opts: {
       ) {
         return
       }
+
       if (inlineInputRef.current) {
         return
       }
+
       if (shouldIgnoreFileExplorerKeyTarget(e.target)) {
         return
       }
@@ -157,12 +171,15 @@ export function useFileExplorerKeys(opts: {
       // the viewport — Radix renders the scrollbar as a sibling of the viewport).
       const inExplorer = focusInExplorer()
       const platform = getShortcutPlatform()
+
       const wantUndo =
         keybindingMatchesAction('fileExplorer.undo', e, platform, keybindings) &&
         fileExplorerHasUndo()
+
       const wantRedo =
         keybindingMatchesAction('fileExplorer.redo', e, platform, keybindings) &&
         fileExplorerHasRedo()
+
       if (inExplorer && (wantUndo || wantRedo)) {
         e.preventDefault()
         const run = wantRedo ? redoFileExplorer() : undoFileExplorer()
@@ -176,6 +193,7 @@ export function useFileExplorerKeys(opts: {
                 )
           )
         })
+
         return
       }
 
@@ -206,36 +224,45 @@ export function useFileExplorerKeys(opts: {
         // ── Space activates the focused row (open file / toggle folder). ──
         if (e.key === ' ' && !e.shiftKey) {
           const focused = findFocusedIndex()
+
           const node =
             (focused !== null ? rowProjectionRef.current.getRowAtIndex(focused) : null) ??
             selectedNodeRef.current
+
           if (node) {
             e.preventDefault()
             activateNodeRef.current(node)
+
             return
           }
         }
 
         const focused = findFocusedIndex()
+
         const node =
           (focused !== null ? rowProjectionRef.current.getRowAtIndex(focused) : null) ??
           selectedNodeRef.current
+
         if (node) {
           if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
             e.preventDefault()
             startRenameRef.current(node)
+
             return
           }
+
           const wantsDelete = keybindingMatchesAction(
             'fileExplorer.delete',
             e,
             platform,
             keybindings
           )
+
           if (wantsDelete) {
             e.preventDefault()
             const selectedNodes = rowProjectionRef.current.getRowsByPaths(selectedPathsRef.current)
             requestDeleteAllRef.current(selectedNodes.length > 1 ? selectedNodes : [node])
+
             return
           }
         }
@@ -246,39 +273,48 @@ export function useFileExplorerKeys(opts: {
       if (!focusInExplorer()) {
         return
       }
+
       const wantsCopyRelativePath = keybindingMatchesAction(
         'fileExplorer.copyRelativePath',
         e,
         platform,
         keybindings
       )
+
       const wantsCopyPath = keybindingMatchesAction(
         'fileExplorer.copyPath',
         e,
         platform,
         keybindings
       )
+
       if (!wantsCopyRelativePath && !wantsCopyPath) {
         return
       }
 
       const focused = findFocusedIndex()
+
       const node =
         (focused !== null ? rowProjectionRef.current.getRowAtIndex(focused) : null) ??
         selectedNodeRef.current
+
       const selectedNodes = rowProjectionRef.current.getRowsByPaths(selectedPathsRef.current)
       const fallbackNodes = selectedNodes.length > 0 ? selectedNodes : node ? [node] : []
+
       if (fallbackNodes.length === 0) {
         return
       }
+
       // ⌥⇧⌘C (Mac) / Ctrl+Shift+Alt+C (Win) — Copy Relative Path
       if (wantsCopyRelativePath) {
         e.preventDefault()
         window.api.ui.writeClipboardText(
           formatFileExplorerPathsForClipboard(fallbackNodes, 'relative')
         )
+
         return
       }
+
       // ⌥⌘C (Mac) / Shift+Alt+C (Win) — Copy Path
       if (wantsCopyPath) {
         e.preventDefault()
@@ -289,6 +325,7 @@ export function useFileExplorerKeys(opts: {
     }
 
     window.addEventListener('keydown', onKeyDown, { capture: true })
+
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
   }, [keybindings, rightSidebarExplorerView, rightSidebarOpen, rightSidebarTab, opts.containerRef])
 }

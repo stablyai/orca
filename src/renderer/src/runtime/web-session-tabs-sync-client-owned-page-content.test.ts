@@ -25,13 +25,19 @@ vi.mock('../store', () => ({
 }))
 
 const REMOTE_PAGE = 'host-browser-page'
+
 const HOST_TAB = 'host-browser-unified'
+
 const LOCAL_WORKSPACE = 'local-browser-workspace'
+
 const LOCAL_PAGE = 'local-browser-page'
+
 const LOCAL_UNIFIED_TAB = 'local-browser-unified'
+
 const GROUP = 'host-group-1'
 
 const THIS_CLIENT = 'browser-host-a'
+
 const OTHER_CLIENT = 'browser-host-b'
 
 const CLIENT_PLACEMENT: RuntimeBrowserClientPlacement = {
@@ -55,13 +61,19 @@ function hostingNothingOnWeb(): void {
 
 /** Where the local guest actually is after the user navigated it. */
 const GUEST_URL = 'https://www.google.com/maps/@37.7,-122.4,12z'
+
 const GUEST_TITLE = 'Google Maps'
+
 /** What the host still believes: the create-time url, and the registry's untouched title default. */
 const HOST_STALE_URL = 'https://maps.google.com/'
+
 const HOST_FALLBACK_TITLE = 'Browser'
+
 /** Where the guest goes next, while the host keeps republishing the same stale row. */
 const MOVED_GUEST_URL = 'https://www.google.com/maps/place/Ferry+Building'
+
 const MOVED_GUEST_TITLE = 'Ferry Building'
+
 /** Submitted against a page the host had not minted yet, so the row moved before the guest did. */
 const DEFERRED_URL = 'https://example.internal/deferred'
 
@@ -122,6 +134,7 @@ function localUnifiedTab(page: BrowserPage): Tab {
 function stateWithLocalRow(page: BrowserPage = localPage()): WebSessionTabsSyncState {
   const workspace = localWorkspace(page)
   const unifiedTab = localUnifiedTab(page)
+
   return makeState({
     browserTabsByWorktree: { [WT]: [workspace] },
     browserPagesByWorkspace: { [workspace.id]: [page] },
@@ -210,9 +223,11 @@ function guestNavigated(
   title: string
 ): WebSessionTabsSyncState {
   const page = state.browserPagesByWorkspace[LOCAL_WORKSPACE]?.[0]
+
   if (!page) {
     throw new Error('guestNavigated needs a local row')
   }
+
   return {
     ...state,
     browserPagesByWorkspace: { [LOCAL_WORKSPACE]: [{ ...page, url, title }] }
@@ -280,6 +295,7 @@ describe('browser rows this client hosts own their page content', () => {
   // non-fallback string, which the staged-title hold would have accepted. Ownership, not staleness.
   it('keeps the local title even when the host publishes a real but older title', () => {
     const state = stateWithLocalRow()
+
     const patch = applyStaleSnapshot(
       state,
       staleHostSnapshot({ title: 'Google Maps — Directions', url: GUEST_URL })
@@ -303,6 +319,7 @@ describe('browser rows this client hosts own their page content', () => {
 
   it('takes host content for a streamed page even when a local row exists', () => {
     const state = stateWithLocalRow()
+
     const patch = applyStaleSnapshot(
       state,
       staleHostSnapshot({ placement: undefined, title: 'Example Domain' })
@@ -353,6 +370,7 @@ describe('browser rows this client hosts own their page content', () => {
     const first = stateWithLocalRow()
     const afterFirst = mergePatch(first, applyStaleSnapshot(first))
     const navigated = guestNavigated(afterFirst, MOVED_GUEST_URL, MOVED_GUEST_TITLE)
+
     const afterSecond = mergePatch(
       navigated,
       applyStaleSnapshot(navigated, staleHostSnapshot({}, { snapshotVersion: 2 }))
@@ -370,6 +388,7 @@ describe('browser rows this client hosts own their page content', () => {
     hostingClient(OTHER_CLIENT)
     const first = makeState()
     const afterFirst = mergePatch(first, applyStaleSnapshot(first, movedHostSnapshot()))
+
     const afterSecond = mergePatch(
       afterFirst,
       applyStaleSnapshot(afterFirst, staleHostSnapshot({ url: GUEST_URL }, { snapshotVersion: 3 }))
@@ -388,6 +407,7 @@ describe('browser rows this client hosts own their page content', () => {
   ])('takes host content for a client placement carrying %s', (_label, browserHostClientId) => {
     hostingClient(null)
     const state = stateWithLocalRow()
+
     const patch = applyStaleSnapshot(
       state,
       staleHostSnapshot({
@@ -426,6 +446,7 @@ describe('browser rows this client hosts own their page content', () => {
   // user submitted while the page was still staged — so the staged-title hold cannot cover it.
   it('owns the row from the snapshot that adopts it, before any guest has attached', () => {
     const staged = localPage({ url: DEFERRED_URL, title: DEFERRED_URL })
+
     const state = makeState({
       browserTabsByWorktree: { [WT]: [localWorkspace(staged)] },
       browserPagesByWorkspace: { [LOCAL_WORKSPACE]: [staged] },
@@ -460,6 +481,7 @@ describe('browser rows this client hosts own their page content', () => {
   // The staged-title hold still owns the pre-adoption window and every non-client placement.
   it('still holds the local title for a streamed page parked at the same url', () => {
     const state = stateWithLocalRow()
+
     const patch = applyStaleSnapshot(
       state,
       staleHostSnapshot({ placement: undefined, title: HOST_FALLBACK_TITLE, url: GUEST_URL })

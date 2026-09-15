@@ -20,11 +20,14 @@ const PATCH_PATH = resolve(
 function patchedFile(patch: string, path: string): string {
   const lines = patch.split('\n')
   const start = lines.findIndex((line) => line.startsWith(`diff --git a/${path} `))
+
   if (start === -1) {
     throw new Error(`${path} is not in the patch`)
   }
+
   const rest = lines.slice(start + 1)
   const end = rest.findIndex((line) => line.startsWith('diff --git '))
+
   return (
     (end === -1 ? rest : rest.slice(0, end))
       // A context line for an empty source line is a bare space, and unified
@@ -37,7 +40,9 @@ function patchedFile(patch: string, path: string): string {
 }
 
 const patch = readFileSync(PATCH_PATH, 'utf8')
+
 const commandLineSource = patchedFile(patch, 'src/process_commandline.cc')
+
 const processSource = patchedFile(patch, 'src/process.cc')
 
 describe('windows-process-tree command line patch', () => {
@@ -93,6 +98,7 @@ describe('windows-process-tree command line patch', () => {
       expect(source).not.toMatch(/OpenProcess\([^)]*PROCESS_VM_READ/)
       expect(source).not.toMatch(/ReadProcessMemory\(/)
     }
+
     // Memory and CPU counters kept VM_READ and never read an address space.
     // Three sites now: those two plus GetProcessCreationTime, which needs the
     // same limited handle for GetProcessTimes.
@@ -116,6 +122,7 @@ const addonRequire = createRequire(import.meta.url)
 
 function loadAddon(): Addon {
   const packageEntry = addonRequire.resolve('@vscode/windows-process-tree')
+
   return addonRequire(
     join(packageEntry, '..', '..', 'build', 'Release', 'windows_process_tree.node')
   ) as Addon
@@ -156,19 +163,23 @@ describe.runIf(process.platform === 'win32')('windows-process-tree command line 
     // absent from its import table. This is the only check that tells the two
     // binaries apart -- a bare require() cannot.
     const packageEntry = addonRequire.resolve('@vscode/windows-process-tree')
+
     const binary = readFileSync(
       join(packageEntry, '..', '..', 'build', 'Release', 'windows_process_tree.node')
     )
+
     expect(binary.includes('ReadProcessMemory')).toBe(false)
   })
 
   it('recovers command lines byte-for-byte, quoting and trailing spaces included', async () => {
     const marker = `orca-cmdline-${Date.now()}`
+
     // Quotes and trailing whitespace are exactly what a re-quoting bug eats.
     const child = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 20000)', `"${marker}"  `], {
       windowsHide: true,
       stdio: 'ignore'
     })
+
     children.push(child)
     await new Promise((r) => setTimeout(r, 400))
 

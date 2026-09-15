@@ -9,13 +9,17 @@ export function insertUnifiedTabAfterAnchor(
   if (tabId === anchorTabId) {
     return
   }
+
   const state = useAppStore.getState()
+
   const group = (state.groupsByWorktree[worktreeId] ?? []).find(
     (candidate) => candidate.tabOrder.includes(tabId) && candidate.tabOrder.includes(anchorTabId)
   )
+
   if (!group) {
     return
   }
+
   const order = group.tabOrder.filter((id) => id !== tabId)
   order.splice(order.indexOf(anchorTabId) + 1, 0, tabId)
   state.reorderUnifiedTabs(group.id, order, { recordInteraction: false })

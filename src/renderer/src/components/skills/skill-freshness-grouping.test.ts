@@ -52,6 +52,7 @@ describe('groupSkillFreshness', () => {
       ],
       []
     )
+
     expect(groups).toEqual([])
   })
 
@@ -62,6 +63,7 @@ describe('groupSkillFreshness', () => {
       [placement('dataviz', { status: 'unrecognized', topology: 'plugin-cache' })],
       []
     )
+
     expect(groups).toEqual([])
   })
 
@@ -75,6 +77,7 @@ describe('groupSkillFreshness', () => {
       ],
       []
     )
+
     expect(groups).toEqual([
       {
         name: 'dataviz',
@@ -131,6 +134,7 @@ describe('groupSkillFreshness', () => {
       ],
       []
     )
+
     expect(groups).toHaveLength(1)
     expect(groups[0]?.status).toBe('cannot-update')
     // Why: the out-of-date main copy is bare; only the poisoning copy carries a chip.
@@ -164,6 +168,7 @@ describe('groupSkillFreshness', () => {
       ],
       []
     )
+
     expect(groups).toHaveLength(1)
     expect(groups[0]?.status).toBe('cannot-update')
     expect(groups[0]?.locations).toEqual([
@@ -188,10 +193,12 @@ describe('groupSkillFreshness', () => {
         [placement('s', { status: 'outdated' }), placement('s', overrides)],
         ['s']
       )[0]?.locations.find((location) => location.path.includes('culprit'))?.chip ?? null
+
     const at = (path: string, rest: Partial<SkillFreshnessInstallation>) => ({
       unresolvedPath: `/culprit/${path}`,
       ...rest
     })
+
     expect(chipFor(at('a', { status: 'unrecognized', topology: 'independent-copy' }))).toBe(
       'unrecognized'
     )

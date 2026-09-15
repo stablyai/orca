@@ -44,6 +44,7 @@ describe('countActivityUnread session-boundary rows (STA-3386)', () => {
         stateHistory: [{ state: 'done', prompt: 'fix bug', startedAt: 1_000 }]
       })
     )
+
     expect(countActivityUnread(source)).toBe(1)
   })
 
@@ -55,6 +56,7 @@ describe('countActivityUnread session-boundary rows (STA-3386)', () => {
       }),
       1_500
     )
+
     expect(countActivityUnread(source)).toBe(0)
   })
 
@@ -74,6 +76,7 @@ describe('countActivityUnread with Clear completed cutoffs', () => {
       ),
       activityClearedAtByPaneKey: { [PANE]: 2_000 }
     }
+
     // Both the history event (1_000) and the live done (2_000) are at or before the cutoff.
     expect(countActivityUnread(source)).toBe(0)
   })
@@ -88,6 +91,7 @@ describe('countActivityUnread with Clear completed cutoffs', () => {
       ),
       activityClearedAtByPaneKey: { [PANE]: 2_000 }
     }
+
     expect(countActivityUnread(source)).toBe(1)
   })
 })
@@ -95,6 +99,7 @@ describe('countActivityUnread with Clear completed cutoffs', () => {
 describe('countActivityUnread source overlap', () => {
   it('counts an overlapping live and retained pane only once', () => {
     const entry = makeEntry({})
+
     const source = {
       acknowledgedAgentsByPaneKey: { [PANE]: 0 },
       agentStatusByPaneKey: { [PANE]: entry },
@@ -109,6 +114,7 @@ describe('countActivityUnread source overlap', () => {
       },
       migrationUnsupportedByPtyId: {}
     }
+
     expect(countActivityUnread(source)).toBe(1)
   })
 })
@@ -119,6 +125,7 @@ describe('countActivityUnread working turns', () => {
       state: 'working',
       stateHistory: [{ state: 'working', prompt: 'old', startedAt: 1_000 }]
     })
+
     expect(countActivityUnread(makeSource(entry), 2_000)).toBe(1)
     // Monitoring emits no unread event in the list (4b2e3dded0), so the badge must not count it.
     expect(countActivityUnread(makeSource({ ...entry, workingMode: 'monitoring' }), 2_000)).toBe(0)

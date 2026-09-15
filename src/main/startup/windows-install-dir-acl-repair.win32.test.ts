@@ -31,10 +31,12 @@ const describeOnWindows = process.platform === 'win32' ? describe : describe.ski
 /** An unresolvable AppContainer SID, the shape the field hosts carry. */
 const ORPHAN_SID =
   '*S-1-15-2-1111111111-2222222222-3333333333-4444444444-5555555555-6666666666-7777777777'
+
 const RESTRICTED_PACKAGES_NAME = /ALL RESTRICTED APPLICATION PACKAGES/i
 
 async function icacls(...args: string[]): Promise<{ code: number | null; out: string }> {
   const result = await runProcess({ program: getIcaclsExePath(), args, timeoutMs: 30_000 })
+
   return { code: result.code, out: `${result.stdout}\n${result.stderr}` }
 }
 
@@ -74,6 +76,7 @@ describeOnWindows('install-dir package ACL repair against the real icacls', () =
 
   function probeVerdict(): Promise<Record<string, unknown>> {
     resetWindowsInstallDirAclProbeForTest()
+
     return new Promise((resolve) => {
       probeWindowsInstallDirAcl({
         installDir,
@@ -101,12 +104,14 @@ describeOnWindows('install-dir package ACL repair against the real icacls', () =
     writeInstallDirAclPoisonMarker(userDataPath, installDir, '1.4.196')
 
     const startedAt = Date.now()
+
     const mode = await repairKnownPoisonedInstallDirBeforeWindow({
       installDir,
       userDataPath,
       appVersion: '1.4.196',
       recordBreadcrumb: () => undefined
     })
+
     console.log(`[live-acl] blocking repair ${mode} in ${Date.now() - startedAt}ms`)
     expect(mode).toBe('repaired')
 

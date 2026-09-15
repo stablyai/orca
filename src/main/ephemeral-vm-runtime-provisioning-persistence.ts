@@ -24,17 +24,21 @@ export function prepareEphemeralVmCompatibilityPersistence(
   if (!args.recipe.checkoutMode) {
     return null
   }
+
   listEphemeralVmRuntimes(args.userDataPath)
+
   const compatibility = {
     instanceId: `orca-${randomUUID()}`,
     createdAt: args.now ?? Date.now()
   }
+
   assertEphemeralVmRuntimeCheckoutModeCanPersist(args.userDataPath, {
     id: compatibility.instanceId,
     recipeId: args.recipe.id,
     createdAt: compatibility.createdAt,
     checkoutMode: args.recipe.checkoutMode
   })
+
   return compatibility
 }
 
@@ -45,6 +49,7 @@ export async function persistProvisionedEphemeralVmRuntime(
 ): Promise<EphemeralVmRuntimeRecord> {
   const now = compatibility?.createdAt ?? args.now ?? Date.now()
   const connection = getEphemeralVmRecipeResultConnection(start.result)
+
   try {
     return upsertEphemeralVmRuntime(args.userDataPath, {
       id: start.context.instanceId ?? start.context.recipeId,
@@ -68,6 +73,7 @@ export async function persistProvisionedEphemeralVmRuntime(
         context: start.context,
         recipeResult: start.result
       })
+
       if (
         cleaned &&
         listEphemeralVmRuntimes(args.userDataPath).some(
@@ -77,6 +83,7 @@ export async function persistProvisionedEphemeralVmRuntime(
         removeEphemeralVmRuntime(args.userDataPath, compatibility.instanceId)
       }
     }
+
     throw error
   }
 }

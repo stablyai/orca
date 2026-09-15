@@ -6,6 +6,7 @@ import type { AgentStatusRuntime } from './agent-status-runtime'
 import { createAgentStatusLiveActions } from './agent-status-live-actions'
 
 const NOW = new Date('2026-04-09T12:00:00.000Z').getTime()
+
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
 
 function existingEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
@@ -27,7 +28,9 @@ function setup(existing: AgentStatusEntry) {
     recentlyRetiredAgentStatusPaneKeys: {},
     recentlyClosedAgentStatusTabIds: {}
   } as unknown as AppState
+
   const requestFreshness = vi.fn()
+
   const runtime = {
     get: () => state,
     set: vi.fn((update) => {
@@ -39,6 +42,7 @@ function setup(existing: AgentStatusEntry) {
     requestFreshness,
     transactAgentStatuses: vi.fn()
   } as unknown as AgentStatusRuntime
+
   return { requestFreshness, actions: createAgentStatusLiveActions(runtime) }
 }
 

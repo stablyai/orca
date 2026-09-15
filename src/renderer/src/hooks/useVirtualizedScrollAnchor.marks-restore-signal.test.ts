@@ -3,10 +3,12 @@ import { createProgrammaticScrollMarks } from './programmatic-scroll-marks'
 
 function createReactHookHarness() {
   const refs: { current: unknown }[] = []
+
   const effects: {
     deps: readonly unknown[] | undefined
     effect: () => void | (() => void)
   }[] = []
+
   let refIndex = 0
 
   return {
@@ -25,6 +27,7 @@ function createReactHookHarness() {
         const index = refIndex
         refIndex += 1
         refs[index] ??= { current: initialValue }
+
         return refs[index] as { current: T }
       }
     }
@@ -44,6 +47,7 @@ function createScrollElement({
   scrollTop = 0
 }) {
   const scrollHandlers: ((event: Event) => void)[] = []
+
   const el = {
     addEventListener: vi.fn((eventName: string, handler: (event: Event) => void) => {
       if (eventName === 'scroll') {
@@ -57,6 +61,7 @@ function createScrollElement({
     scrollHeight,
     scrollTop
   }
+
   return {
     el,
     emitScroll: (top: number): void => {
@@ -83,6 +88,7 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     const harness = createReactHookHarness()
     vi.doMock('react', () => harness.react)
     const { useVirtualizedScrollAnchor } = await import('./useVirtualizedScrollAnchor')
+
     return { harness, useVirtualizedScrollAnchor }
   }
 
@@ -97,11 +103,13 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
 
   it('does not re-attempt restore on measurement churn when the signal is unchanged', async () => {
     const { harness, useVirtualizedScrollAnchor } = await loadHook()
+
     // Row-1 already sits exactly at the anchored offset, so the first run confirms.
     const { el } = createScrollElement({
       rowElements: [anchoredRowElement('row-1', -3_358)],
       scrollTop: 746
     })
+
     const anchorRef = { current: { key: 'row-1', offset: 3_358, scrollTop: 746 } }
     const virtualizer = virtualizerWithRow1()
 
@@ -138,6 +146,7 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
   it('keeps retrying a restore that is still converging when layout moves the viewport', async () => {
     const { harness, useVirtualizedScrollAnchor } = await loadHook()
     let rowTop = -3_000
+
     const rowElement: FakeRowElement = {
       getBoundingClientRect: () => ({
         bottom: rowTop + 4_000,
@@ -147,10 +156,12 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
       isConnected: true,
       key: 'row-1'
     }
+
     const { el } = createScrollElement({
       rowElements: [rowElement],
       scrollTop: 746
     })
+
     const anchorRef = { current: { key: 'row-1', offset: 3_358, scrollTop: 746 } }
     const virtualizer = virtualizerWithRow1()
     // Stable across rerenders, like the real caller: fresh objects would reset
@@ -199,10 +210,12 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
 
   it('lets an unmarked user scroll disarm a restore that is still converging', async () => {
     const { harness, useVirtualizedScrollAnchor } = await loadHook()
+
     const { el, emitScroll } = createScrollElement({
       rowElements: [anchoredRowElement('row-1', -3_000)],
       scrollTop: 746
     })
+
     const anchorRef = { current: { key: 'row-1', offset: 3_358, scrollTop: 746 } }
     const programmaticScrollMarks = createProgrammaticScrollMarks()
     const scrollElementRef = { current: el }
@@ -244,11 +257,13 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
 
   it('lets the user position win when the viewport moved after the anchor was recorded', async () => {
     const { harness, useVirtualizedScrollAnchor } = await loadHook()
+
     const { el } = createScrollElement({
       rowElements: [anchoredRowElement('row-1', -3_358)],
       // The user (or compositor) scrolled beyond where the anchor was recorded.
       scrollTop: 906
     })
+
     const anchorRef = { current: { key: 'row-1', offset: 3_358, scrollTop: 746 } }
     const virtualizer = virtualizerWithRow1()
 
@@ -277,6 +292,7 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
 
   it('still restores when a browser clamp explains the divergence', async () => {
     const { harness, useVirtualizedScrollAnchor } = await loadHook()
+
     // Content above shrank: the anchor points past the new max and the browser
     // clamped the viewport to the bottom.
     const { el } = createScrollElement({
@@ -284,6 +300,7 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
       scrollHeight: 2_000,
       scrollTop: 1_120
     })
+
     const anchorRef = { current: { key: 'row-1', offset: 3_358, scrollTop: 5_000 } }
     const virtualizer = virtualizerWithRow1()
 
@@ -341,10 +358,12 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
     const { harness, useVirtualizedScrollAnchor } = await loadHook()
     const marks = createProgrammaticScrollMarks()
     const rowElement = anchoredRowElement('row-1', -3_358)
+
     const { el, emitScroll } = createScrollElement({
       rowElements: [rowElement],
       scrollTop: 746
     })
+
     const anchorRef = { current: { key: 'row-1', offset: 3_358, scrollTop: 746 } }
     const scrollOffsetRef = { current: 746 }
     const virtualizer = virtualizerWithRow1()
@@ -387,10 +406,12 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
 
   it('retries a signal-change restore that was skipped during direct input', async () => {
     const { harness, useVirtualizedScrollAnchor } = await loadHook()
+
     const { el } = createScrollElement({
       rowElements: [anchoredRowElement('row-1', -3_358)],
       scrollTop: 746
     })
+
     const anchorRef = { current: { key: 'row-1', offset: 3_358, scrollTop: 746 } }
     const virtualizer = virtualizerWithRow1()
     let directInput = true
@@ -429,10 +450,12 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
 
   it('does not stay armed when the anchor row and all fallbacks are gone', async () => {
     const { harness, useVirtualizedScrollAnchor } = await loadHook()
+
     const { el } = createScrollElement({
       rowElements: [anchoredRowElement('row-1', -3_358)],
       scrollTop: 746
     })
+
     const anchorRef = { current: { key: 'row-gone', offset: 3_358, scrollTop: 746 } }
     const virtualizer = virtualizerWithRow1()
 
@@ -552,6 +575,7 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
         anchorRef,
         getRowKey: (row: string) => {
           getRowKeyCalls += 1
+
           return row
         },
         programmaticScrollMarks: createProgrammaticScrollMarks(),
@@ -565,10 +589,12 @@ describe('useVirtualizedScrollAnchor with marks + restoreSignal', () => {
         virtualizer: virtualizerWithRow1()
       } as never)
       harness.effects[1]?.effect()
+
       return { getRowKeyCalls, scrollTop: el.scrollTop }
     }
 
     const builtInternally = await runRestore()
+
     const supplied = await runRestore(
       new Map([
         ['row-0', 0],

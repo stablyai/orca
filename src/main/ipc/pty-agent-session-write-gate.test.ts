@@ -73,16 +73,20 @@ import { setPtyHostBindings } from './pty-host-bindings'
 // both are proved to consult the lease, and both are proved to leave an unbound PTY alone.
 
 const CONNECTION_ID = 'conn-lease'
+
 const PTY_ID = 'ssh:conn-lease@@pty-1'
+
 const SESSION_ID = 'session-alpha-1'
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>()
+
 const records = new Map<string, AgentSessionRecord>()
 
 const mainWindow = {
   isDestroyed: () => false,
   webContents: { on: vi.fn(), send: vi.fn(), removeListener: vi.fn() }
 }
+
 const mainWindowIpcEvent = { sender: mainWindow.webContents }
 
 let ptyController: { write: (ptyId: string, data: string) => boolean } | null = null
@@ -144,6 +148,7 @@ function lastRefusal(): { id: string; agentSessionRefusal?: { code: string } } |
   const call = mainWindow.webContents.send.mock.calls.findLast(
     ([channel]) => channel === 'pty:writeUnavailable'
   )
+
   return (call?.[1] as { id: string; agentSessionRefusal?: { code: string } }) ?? null
 }
 
@@ -168,12 +173,14 @@ beforeEach(() => {
       removeAllListeners: removeAllListenersMock
     } as never
   })
+
   const runtime = {
     setPtyController: (controller: { write: (ptyId: string, data: string) => boolean }) => {
       ptyController = controller
     },
     getDriver: () => ({ kind: 'desktop' })
   }
+
   registerPtyHandlers(mainWindow as never, runtime as never)
   provider = createMockProvider()
   registerSshPtyProvider(CONNECTION_ID, provider)

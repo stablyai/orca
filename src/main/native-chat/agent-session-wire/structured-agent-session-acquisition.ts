@@ -19,9 +19,11 @@ export async function acquireOwner(
   const { store, rewind, now } = input
   const fence = record.lease.runtimeFence
   const spawnToken = record.lease.reservedSpawnToken
+
   if (!spawnToken) {
     throw new Error('agent_session_ownership_unknown')
   }
+
   // Pre-spawn proof is single-use: this retry may create a child after the durable clear.
   try {
     try {
@@ -36,6 +38,7 @@ export async function acquireOwner(
     } catch (error) {
       throw new AgentSessionPreSpawnError(error)
     }
+
     const acquired = await input.adapter.acquire({
       identity: journalIdentityFor(record, input.params),
       ...claudeRewindAcquisitionProofs({ store, record, rewind, now }),
@@ -45,12 +48,14 @@ export async function acquireOwner(
       ...(record.options ? { options: record.options } : {}),
       ...(input.eventSink ? { events: input.eventSink } : {})
     })
+
     const options = await readNativeSessionOptions({
       adapter: input.adapter,
       sessionId: record.sessionId,
       fence,
       ...(record.options ? { priorOptions: record.options } : {})
     })
+
     if (record.lease.ownerProcess === null) {
       await input.store.commitProcessIdentity({
         sessionId: record.sessionId,
@@ -61,6 +66,7 @@ export async function acquireOwner(
     } else if (!isDeepStrictEqual(record.lease.ownerProcess, acquired.process)) {
       throw new Error('agent_session_ownership_unknown')
     }
+
     const proved = await input.store.proveOwner({
       sessionId: record.sessionId,
       fence,
@@ -68,6 +74,7 @@ export async function acquireOwner(
       now: input.now(),
       ...(options ? { options } : {})
     })
+
     return {
       record: proved,
       acquisitionGeneration: acquired.acquisitionGeneration ?? null
@@ -76,6 +83,7 @@ export async function acquireOwner(
     if (isAgentSessionPreSpawnError(error)) {
       throw error
     }
+
     return rethrowAfterAgentSessionAcquisitionCleanup(input.adapter, record.sessionId, error)
   }
 }

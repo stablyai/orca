@@ -30,13 +30,16 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       const db = runtime.getOrchestrationDb()
       const dispatch = db.getDispatchContextById(params.dispatch)
       let worker = db.getWorkerDispatch(params.dispatch)
+
       if (!dispatch) {
         throw new OrchestrationError(
           'dispatch_not_found',
           `Worker Dispatch ${params.dispatch} was not found.`
         )
       }
+
       const federated = db.getFederatedDispatch(params.dispatch)
+
       if (federated) {
         return showFederatedWorker({
           runtime,
@@ -46,9 +49,11 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           federated
         })
       }
+
       if (!worker) {
         return showContextOnlyWorker(runtime, db, dispatch)
       }
+
       if (worker.runtime_epoch && worker.runtime_epoch !== runtime.getRuntimeId()) {
         if (worker.state === 'starting') {
           worker = db.markWorkerStartUnknown(
@@ -63,8 +68,10 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           )
         }
       }
+
       const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
       const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
+
       return {
         dispatch: exposeDispatchContext(dispatch),
         worker: exposeWorker(worker),
@@ -82,8 +89,10 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const federated = db.getFederatedDispatch(params.dispatch)
+
       if (federated) {
         const server = resolvePinnedFederatedServer(runtime, federated)
+
         return readFederatedWorkerOutput({
           runtime,
           db,
@@ -95,26 +104,32 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           limit: params.limit
         })
       }
+
       const dispatch = db.getDispatchContextById(params.dispatch)
       const worker = db.getWorkerDispatch(params.dispatch)
       const terminalHandle = worker?.agent_terminal_handle ?? dispatch?.assignee_handle
+
       if (!dispatch) {
         throw new OrchestrationError(
           'dispatch_not_found',
           `Dispatch ${params.dispatch} was not found.`
         )
       }
+
       if (!terminalHandle) {
         throw new OrchestrationError(
           'dispatch_not_found',
           `Worker Dispatch ${params.dispatch} has no agent terminal.`
         )
       }
+
       const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
+
       if (resource && ['releasing', 'unknown', 'released'].includes(resource.release_state)) {
         // Archive capture is not close evidence; recheck the execution host while releasing.
         let liveness: 'live' | 'unverifiable' | 'exited' =
           resource.release_state === 'released' ? 'exited' : 'unverifiable'
+
         if (resource.release_state === 'releasing') {
           const observed = await inspectWorkerTerminal(runtime, db, params.dispatch)
           liveness =
@@ -124,6 +139,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
                 ? 'exited'
                 : 'unverifiable'
         }
+
         const archived = await readArchivedWorkerOutput({
           db,
           dispatchId: params.dispatch,
@@ -134,15 +150,19 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           limit: params.limit,
           liveness
         })
+
         return { ...archived, projection: projectFleetWorker(runtime, db, params.dispatch) }
       }
+
       const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
+
       if (!observation.exact) {
         throw new OrchestrationError(
           'worker_identity_changed',
           `Worker Dispatch ${params.dispatch} no longer resolves to its exact process.`
         )
       }
+
       const structured = readStructuredWorkerOutput({
         db,
         dispatchId: params.dispatch,
@@ -157,9 +177,11 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         cursor: params.cursor,
         limit: params.limit
       })
+
       if (structured) {
         return structured
       }
+
       const output = await readExactWorkerOutput({
         runtime,
         dispatchId: params.dispatch,
@@ -182,13 +204,16 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         cursor: params.cursor,
         limit: params.limit
       })
+
       const afterRead = await inspectWorkerTerminal(runtime, db, params.dispatch)
+
       if (!afterRead.exact) {
         throw new OrchestrationError(
           'worker_identity_changed',
           `Worker Dispatch ${params.dispatch} changed process while output was read.`
         )
       }
+
       // Two verdicts: status.liveness is the PTY's, the projection is the agent's.
       return { ...output, projection: projectFleetWorker(runtime, db, params.dispatch) }
     }
@@ -198,6 +223,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
     params: WorkerDispatchParams,
     handler: (params, { runtime }) => {
       const abandoned = runtime.getOrchestrationDb().abandonWorkerDispatch(params.dispatch)
+
       if (abandoned.disposition === 'context_only') {
         if (!abandoned.alreadySettled) {
           // Abandon settles the Dispatch, so it owes the same hold release stop and release do.
@@ -206,6 +232,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           releaseStructuredWorkerSession(params.dispatch, runtime)
           runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
         }
+
         return {
           dispatchId: params.dispatch,
           state: abandoned.state,
@@ -216,11 +243,14 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           residualResources: []
         }
       }
+
       const worker = abandoned.worker
+
       if (abandoned.disposition === 'abandoned') {
         releaseStructuredWorkerSession(params.dispatch, runtime)
         runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
       }
+
       return {
         dispatchId: params.dispatch,
         state: worker.state,

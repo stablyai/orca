@@ -31,6 +31,7 @@ function getGuiExecutableName(launcherBaseName: string): string | null {
   if (JETBRAINS_WINDOWS_GUI_NAMES.has(launcherBaseName)) {
     return launcherBaseName
   }
+
   return JETBRAINS_WINDOWS_CONSOLE_TO_GUI[launcherBaseName] ?? null
 }
 
@@ -55,6 +56,7 @@ export function resolveColocatedJetBrainsGuiExecutable(
   const baseName = getLauncherBaseName(unquoted)
   const isBatch = /\.(?:cmd|bat)$/i.test(unquoted)
   const isExe = /\.exe$/i.test(unquoted)
+
   if (!isBatch && !isExe) {
     return null
   }
@@ -62,19 +64,25 @@ export function resolveColocatedJetBrainsGuiExecutable(
   // .exe: only short console names (idea.exe), never the GUI binary itself.
   if (isExe) {
     const guiName = JETBRAINS_WINDOWS_CONSOLE_TO_GUI[baseName]
+
     if (!guiName) {
       return null
     }
+
     const candidate = win32.join(win32.dirname(unquoted), `${guiName}.exe`)
+
     return fileExists(candidate) ? candidate : null
   }
 
   // .cmd/.bat: idea.cmd and idea64.cmd both prefer idea64.exe when colocated.
   const guiName = getGuiExecutableName(baseName)
+
   if (!guiName) {
     return null
   }
+
   const candidate = win32.join(win32.dirname(unquoted), `${guiName}.exe`)
+
   return fileExists(candidate) ? candidate : null
 }
 

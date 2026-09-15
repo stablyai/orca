@@ -50,11 +50,13 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore } = createStaleRuntimeWorktreeStore(TEST_WORKTREE_ID, {
       hostId: 'runtime:env-1'
     })
+
     const orphanStore = {
       ...runtimeStore,
       getRepos: () => [],
       getRepo: () => undefined
     }
+
     const runtime = createWorktreeRemovalRuntime(orphanStore)
 
     const result = await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
@@ -69,20 +71,25 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore } = createStaleRuntimeWorktreeStore(TEST_WORKTREE_ID, {
       hostId: 'ssh:ssh-1'
     })
+
     const orphanStore = {
       ...runtimeStore,
       getRepos: () => [],
       getRepo: () => undefined
     }
+
     const localProvider = {
       listProcesses: vi.fn(async () => []),
       shutdown: vi.fn(async () => {})
     }
+
     const sshProvider = {
       listProcesses: vi.fn(async () => []),
       shutdown: vi.fn(async () => {})
     }
+
     const getSshProvider = vi.fn(() => sshProvider as never)
+
     const runtime = new OrcaRuntimeService(orphanStore as never, undefined, {
       getLocalProvider: () => localProvider as never,
       getSshProvider
@@ -152,9 +159,11 @@ describe('OrcaRuntimeService', () => {
   it('waits for every watcher layer to settle before restoring after teardown failure', async () => {
     const runtime = createRuntime()
     let finishRuntimeClose: () => void = () => {}
+
     const runtimeClose = new Promise<void>((resolve) => {
       finishRuntimeClose = resolve
     })
+
     const fileCommands = (
       runtime as unknown as {
         fileCommands: {
@@ -163,10 +172,13 @@ describe('OrcaRuntimeService', () => {
         }
       }
     ).fileCommands
+
     vi.spyOn(fileCommands, 'closeFileExplorerWatchersForPath').mockReturnValueOnce(runtimeClose)
+
     const restoreRuntime = vi
       .spyOn(fileCommands, 'restoreFileExplorerWatchersAfterFailedRemoval')
       .mockResolvedValue(undefined)
+
     closeLocalWatcherForWorktreePathMock.mockRejectedValueOnce(
       new Error('desktop watcher close failed')
     )
@@ -224,14 +236,18 @@ describe('OrcaRuntimeService', () => {
     // Held across the whole acquire and never released — models a native subscribe that ignores abort
     // and never settles. The removal must abandon the fence slot rather than leak it into later suites.
     beginWatcherInstall(TEST_WORKTREE_PATH)
+
     try {
       const runtime = createRuntime()
 
       let acquired = false
+
       const acquiring = runtime.acquireFileWatcherRemoval(TEST_WORKTREE_PATH).then((gate) => {
         acquired = true
+
         return gate
       })
+
       await vi.advanceTimersByTimeAsync(WATCHER_REMOVAL_DRAIN_BUDGET_MS - 1)
       expect(acquired).toBe(false)
 
@@ -252,6 +268,7 @@ describe('OrcaRuntimeService', () => {
   it('does not re-spend the drain budget on a removal after a wedged install was abandoned', async () => {
     vi.useFakeTimers()
     beginWatcherInstall(TEST_WORKTREE_PATH)
+
     try {
       const runtime = createRuntime()
 
@@ -260,10 +277,13 @@ describe('OrcaRuntimeService', () => {
       await (await firstAcquiring).finish(true)
 
       let secondAcquired = false
+
       const secondAcquiring = runtime.acquireFileWatcherRemoval(TEST_WORKTREE_PATH).then((gate) => {
         secondAcquired = true
+
         return gate
       })
+
       await vi.advanceTimersByTimeAsync(1)
 
       expect(secondAcquired).toBe(true)
@@ -278,10 +298,12 @@ describe('OrcaRuntimeService', () => {
     const runtime = createWorktreeRemovalRuntime()
     await mkdir(TEST_WORKTREE_PATH, { recursive: true })
     await writeFile(join(TEST_WORKTREE_PATH, 'scratch.txt'), 'delete me')
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
       stdout: '',
       stderr: ''
     })
+
     vi.mocked(getEffectiveHooks).mockReturnValue({
       scripts: {
         archive: 'pnpm worktree:archive'
@@ -307,9 +329,11 @@ describe('OrcaRuntimeService', () => {
       expect(gitSpy).toHaveBeenCalledWith(['worktree', 'prune'], {
         cwd: TEST_REPO_PATH
       })
+
       if (ORIGINAL_PLATFORM === 'win32') {
         await expect(lstat(TEST_WORKTREE_PATH)).rejects.toMatchObject({ code: 'ENOENT' })
       }
+
       expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(TEST_WORKTREE_ID)
     } finally {
       gitSpy.mockRestore()
@@ -320,18 +344,23 @@ describe('OrcaRuntimeService', () => {
   it('refuses runtime Windows recovery while Git still reports the row and keeps metadata', async () => {
     setPlatform('win32')
     const removeWorktreeMeta = vi.fn()
+
     const runtimeStore = {
       ...store,
       removeWorktreeMeta
     }
+
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
       stdout: '',
       stderr: ''
     })
+
     const removePathSpy = vi
       .spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath')
       .mockResolvedValue(undefined)
+
     vi.mocked(getEffectiveHooks).mockReturnValue(null)
     vi.mocked(removeWorktree).mockRejectedValue(
       Object.assign(new Error('git worktree remove failed'), {
@@ -358,6 +387,7 @@ describe('OrcaRuntimeService', () => {
     const worktreeId = `${TEST_REPO_ID}::${missingWorktreePath}`
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
+
     const registeredWorktrees = [
       {
         path: TEST_REPO_PATH,
@@ -374,10 +404,12 @@ describe('OrcaRuntimeService', () => {
         isMainWorktree: false
       }
     ]
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockResolvedValue({
       stdout: '',
       stderr: ''
     })
+
     vi.mocked(listWorktrees).mockResolvedValue(registeredWorktrees)
     vi.mocked(listWorktreesStrict).mockResolvedValueOnce(registeredWorktrees).mockResolvedValue([])
     vi.mocked(getEffectiveHooks).mockReturnValue({
@@ -411,6 +443,7 @@ describe('OrcaRuntimeService', () => {
     const worktreeId = `${TEST_REPO_ID}::${missingWorktreePath}`
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
+
     const registeredWorktrees = [
       {
         path: missingWorktreePath,
@@ -422,6 +455,7 @@ describe('OrcaRuntimeService', () => {
         lockReason: 'active agent session'
       }
     ]
+
     vi.mocked(listWorktreesStrict).mockResolvedValue(registeredWorktrees)
     vi.mocked(removeWorktree).mockResolvedValue({})
 
@@ -435,6 +469,7 @@ describe('OrcaRuntimeService', () => {
 
   it('routes runtime worktree removal through the selected WSL project runtime', async () => {
     setPlatform('win32')
+
     const runtimeStore = {
       ...store,
       getProjects: () => [
@@ -453,6 +488,7 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
+
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
     vi.mocked(getEffectiveHooks).mockReturnValue(null)
     vi.mocked(removeWorktree).mockResolvedValue({})
@@ -470,6 +506,7 @@ describe('OrcaRuntimeService', () => {
 
   it('deletes a Windows runtime worktree using the canonical registered path', async () => {
     setPlatform('win32')
+
     const repo = {
       id: TEST_REPO_ID,
       path: 'C:\\repo',
@@ -477,7 +514,9 @@ describe('OrcaRuntimeService', () => {
       badgeColor: 'blue',
       addedAt: 1
     }
+
     const requestedWorktreeId = `${TEST_REPO_ID}::C:/workspaces/improve-dashboard`
+
     const registeredWorktree = {
       path: 'c:\\workspaces\\Improve-Dashboard',
       head: 'feature-head',
@@ -485,6 +524,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [repo],
@@ -510,6 +550,7 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
+
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
     vi.mocked(getEffectiveHooks).mockReturnValue(null)
     vi.mocked(listWorktrees).mockResolvedValue([
@@ -549,6 +590,7 @@ describe('OrcaRuntimeService', () => {
 
   it('surfaces selected-runtime list failures during runtime worktree removal', async () => {
     setPlatform('win32')
+
     const runtimeStore = {
       ...store,
       getProjects: () => [
@@ -567,6 +609,7 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
+
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
     vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
     vi.mocked(listWorktreesStrict).mockRejectedValue(new Error('wsl git list failed'))
@@ -588,6 +631,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
     const result = await runtime.forceDeletePreservedBranch(
       TEST_WORKTREE_ID,
       'feature/test',
@@ -608,6 +652,7 @@ describe('OrcaRuntimeService', () => {
       path: '/remote/repo',
       connectionId: 'ssh-1'
     }
+
     const remoteWorktree = {
       path: '/remote/feature-wt',
       head: 'def456',
@@ -615,10 +660,13 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     const remoteWorktreeId = `${remoteRepo.id}::${remoteWorktree.path}`
+
     const metaById: Record<string, WorktreeMeta> = {
       [remoteWorktreeId]: makeWorktreeMeta()
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
@@ -627,12 +675,14 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
         return metaById[worktreeId]
       },
       removeWorktreeMeta: (worktreeId: string) => {
         delete metaById[worktreeId]
       }
     }
+
     const provider = {
       exec: vi.fn().mockResolvedValue({ stdout: '', stderr: '' }),
       forceDeletePreservedBranch: vi.fn().mockResolvedValue(undefined),
@@ -650,11 +700,13 @@ describe('OrcaRuntimeService', () => {
         preservedBranch: { branchName: 'feature/test', head: 'def456' }
       })
     }
+
     registerSshGitProvider('ssh-1', provider as never)
     const runtime = createWorktreeRemovalRuntime(runtimeStore)
 
     try {
       await runtime.removeManagedWorktree(remoteWorktreeId)
+
       const result = await runtime.forceDeletePreservedBranch(
         remoteWorktreeId,
         'feature/test',

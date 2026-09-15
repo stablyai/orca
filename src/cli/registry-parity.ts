@@ -14,6 +14,7 @@ export function findRegistryParityGaps(
   // Why: aliases resolve before dispatch and deliberately have no handler key.
   const canonical = new Set(specs.map((spec) => spec.path.join(' ')))
   const handlers = new Set(handlerKeys)
+
   return {
     handlersWithoutSpec: [...handlers].filter((key) => !canonical.has(key)),
     specsWithoutHandler: [...canonical].filter((key) => !handlers.has(key))

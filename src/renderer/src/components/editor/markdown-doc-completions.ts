@@ -22,6 +22,7 @@ export function getMarkdownDocCompletionContext(
   linePrefix: string
 ): MarkdownDocCompletionContext | null {
   const start = linePrefix.lastIndexOf('[[')
+
   if (start === -1) {
     return null
   }
@@ -31,9 +32,11 @@ export function getMarkdownDocCompletionContext(
   }
 
   const partial = linePrefix.slice(start + 2)
+
   if (isMarkdownDocCompletionQueryTooLarge(partial)) {
     return null
   }
+
   if (partial.includes('[') || partial.includes(']') || partial.includes('|')) {
     return null
   }
@@ -50,11 +53,13 @@ export function getMarkdownDocCompletionDocuments(
   }
 
   const normalizedPartial = normalizeCompletionText(partial)
+
   return documents
     .filter((document) => {
       if (!normalizedPartial) {
         return true
       }
+
       return (
         normalizeCompletionText(document.name).startsWith(normalizedPartial) ||
         normalizeCompletionText(document.relativePath).startsWith(normalizedPartial)

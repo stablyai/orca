@@ -22,6 +22,7 @@ export type ExternalAutomationManagerCacheEntry = {
 }
 
 const DEFAULT_CACHE_TTL_MS = 30_000
+
 const MAX_CACHED_ERROR_LENGTH = 300
 
 /**
@@ -31,9 +32,11 @@ const MAX_CACHED_ERROR_LENGTH = 300
  */
 export function describeExternalManagerFailure(error: unknown): string {
   const message = error instanceof Error ? error.message.trim() : ''
+
   if (!message) {
     return 'External automation manager could not be read.'
   }
+
   return message.length > MAX_CACHED_ERROR_LENGTH
     ? `${message.slice(0, MAX_CACHED_ERROR_LENGTH)}…`
     : message
@@ -62,9 +65,11 @@ export class ExternalAutomationManagerCache {
   read(key: ExternalAutomationManagerCacheKey): ExternalAutomationManagerCacheEntry | null {
     this.pruneExpired()
     const entry = this.entries.get(externalAutomationManagerCacheKey(key))
+
     if (!entry) {
       return null
     }
+
     return this.now() - entry.updatedAt <= this.ttlMs ? entry : null
   }
 
@@ -114,16 +119,19 @@ export class ExternalAutomationManagerCache {
   ): Promise<ExternalAutomationManagerCacheEntry> {
     if (!options?.refresh) {
       const cached = this.read(key)
+
       if (cached) {
         return cached
       }
     }
+
     try {
       return this.write(key, await load())
     } catch (error) {
       if (isExternalAutomationProbeCancelled(error)) {
         throw error
       }
+
       return this.writeFailure(key, error)
     }
   }
@@ -134,11 +142,13 @@ export class ExternalAutomationManagerCache {
   ): ExternalAutomationManagerCacheEntry {
     this.pruneExpired()
     this.entries.set(externalAutomationManagerCacheKey(key), entry)
+
     return entry
   }
 
   private pruneExpired(): void {
     const now = this.now()
+
     for (const [key, entry] of this.entries) {
       if (now - entry.updatedAt > this.ttlMs) {
         this.entries.delete(key)

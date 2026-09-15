@@ -77,10 +77,13 @@ export type ObservabilityConsent = {
 
 function envOn(name: string): boolean {
   const v = process.env[name]
+
   if (!v) {
     return false
   }
+
   const norm = v.trim().toLowerCase()
+
   return norm === '1' || norm === 'true'
 }
 
@@ -105,6 +108,7 @@ export function resolveObservabilityConsent(): ObservabilityConsent {
       disabledReason: 'ci'
     }
   }
+
   if (diagnosticsDisabled) {
     return {
       localFileEnabled: false,
@@ -112,6 +116,7 @@ export function resolveObservabilityConsent(): ObservabilityConsent {
       disabledReason: 'orca_diagnostics_disabled'
     }
   }
+
   if (dnt || orcaDisabled) {
     // Local file remains active — DNT is a *network* signal, and the local
     // file never leaves the machine.
@@ -135,6 +140,7 @@ export { getTraceFilePath } from './logs-directory'
 // ── Module-level state ───────────────────────────────────────────────────
 
 let sink: LocalFileSink | null = null
+
 let consent: ObservabilityConsent | null = null
 
 /** Create the local file sink, install it as the active tracer sink, and
@@ -148,13 +154,16 @@ function installLocalSink(): void {
 export function initObservability(): ObservabilityConsent {
   const c = resolveObservabilityConsent()
   consent = c
+
   if (!c.localFileEnabled) {
     // Disabled at the CI / ORCA_DIAGNOSTICS_DISABLED level — leave the
     // tracer's active sink unset, so all spans are no-ops.
     return c
   }
+
   installLocalSink()
   installSecurePathHardeningReporter()
+
   return c
 }
 
@@ -173,11 +182,14 @@ function installSecurePathHardeningReporter(): void {
     const span = startSpan('secure-path.windows-acl', {
       attributes: { targetPath: entry.targetPath, stage: entry.stage, detail: entry.detail }
     })
+
     if (entry.stage === 'recovered') {
       span.end()
       console.info('[secure-path.windows-acl] path hardening recovered', entry)
+
       return
     }
+
     span.fail(entry.detail)
     console.warn('[secure-path.windows-acl] failed to restrict path', entry)
   })
@@ -188,10 +200,12 @@ export async function shutdownObservability(): Promise<void> {
   // Order matters: tracer first so no new pushes arrive while the local sink
   // is closing and flushing buffered lines.
   setActiveSink(null)
+
   if (sink) {
     sink.close()
     sink = null
   }
+
   consent = null
 }
 
@@ -209,6 +223,7 @@ export function getDiagnosticsStatus(): DiagnosticsStatus {
   const c = consent ?? resolveObservabilityConsent()
   const traceFilePath = getTraceFilePath()
   const traceFamilySize = c.localFileEnabled ? getRotatedFamilySize(traceFilePath) : 0
+
   return {
     localFileEnabled: c.localFileEnabled,
     bundleEnabled: c.bundleEnabled,
@@ -236,6 +251,7 @@ export function collectDiagnosticBundle(
   if (sink) {
     sink.flush()
   }
+
   return _collectBundle({
     traceFilePath: getTraceFilePath(),
     maxFiles: DEFAULT_MAX_FILES,

@@ -36,6 +36,7 @@ export function buildShortcutDefinitionCatalog(options: {
   const definitionsByAction = new Map(definitions.map((definition) => [definition.id, definition]))
   const ignoredConflictActionIds = disabledAgentTabActionIds(options.disabledTuiAgents)
   const conflictByAction = new Map<KeybindingActionId, string[]>()
+
   const conflicts = findKeybindingConflictsForDefinitions(
     definitions,
     options.platform,
@@ -47,10 +48,12 @@ export function buildShortcutDefinitionCatalog(options: {
       relevantActionIds: pluginDefinitions.map((definition) => definition.id)
     }
   )
+
   for (const conflict of conflicts) {
     const labels = conflict.actionIds
       .map((id) => definitionsByAction.get(id)?.title ?? id)
       .join(', ')
+
     for (const actionId of conflict.actionIds) {
       conflictByAction.set(actionId, [
         ...(conflictByAction.get(actionId) ?? []),
@@ -58,21 +61,25 @@ export function buildShortcutDefinitionCatalog(options: {
       ])
     }
   }
+
   const systemConflicts = findMacSystemHotkeyConflicts(
     definitions,
     options.platform,
     options.keybindings,
     options.macCapturedDigitChords ?? []
   )
+
   for (const conflict of systemConflicts) {
     if (ignoredConflictActionIds.includes(conflict.actionId)) {
       continue
     }
+
     conflictByAction.set(conflict.actionId, [
       ...(conflictByAction.get(conflict.actionId) ?? []),
       options.missionControlConflictMessage
     ])
   }
+
   return {
     groups,
     definitions,

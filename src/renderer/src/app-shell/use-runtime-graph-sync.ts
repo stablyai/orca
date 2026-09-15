@@ -16,6 +16,7 @@ export function useRuntimeGraphSync(): void {
 
   useEffect(() => {
     setRuntimeGraphStoreStateGetter(useAppStore.getState)
+
     return () => {
       setRuntimeGraphStoreStateGetter(null)
     }
@@ -23,9 +24,11 @@ export function useRuntimeGraphSync(): void {
 
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
+
     return useAppStore.subscribe((state, previousState) => {
       // Why: this fires on every store mutation; read the cached prefers-dark snapshot instead of allocating a throwaway MediaQueryList via matchMedia each tick.
       const systemPrefersDark = getSystemPrefersDarkSnapshot()
+
       // Why: skip the key build when every input is reference-unchanged; the gate mirrors every field getRuntimeMobileSessionSyncKey uses.
       if (
         canSkipRuntimeMobileSessionSyncKeyBuild(
@@ -37,15 +40,18 @@ export function useRuntimeGraphSync(): void {
       ) {
         return
       }
+
       const nextKey = getRuntimeMobileSessionSyncKey(
         state,
         previousState,
         previousKey,
         systemPrefersDark
       )
+
       if (runtimeMobileSessionSyncKeysEqual(nextKey, previousKey)) {
         return
       }
+
       previousKey = nextKey
       scheduleRuntimeGraphSync()
     })
@@ -53,6 +59,7 @@ export function useRuntimeGraphSync(): void {
 
   useEffect(() => {
     setRuntimeGraphSyncEnabled(workspaceSessionReady)
+
     return () => {
       setRuntimeGraphSyncEnabled(false)
     }

@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: never[]) => unknown>(fn: T) => fn,
@@ -33,14 +34,17 @@ vi.mock('react', async (importOriginal) => {
     useRef: <T>(value: T) => ({ current: value }),
     useState: <T>(initial: T | (() => T)) => {
       const index = mocks.stateIndex++
+
       const value =
         index in mocks.stateValues
           ? mocks.stateValues[index]
           : typeof initial === 'function'
             ? (initial as () => T)()
             : initial
+
       const setter = vi.fn()
       mocks.stateSetters[index] = setter
+
       return [value as T, setter]
     }
   }
@@ -60,6 +64,7 @@ vi.mock('@/store', () => {
       }
     }
   )
+
   return { useAppStore }
 })
 
@@ -128,6 +133,7 @@ describe('useRemoteRepo default-checkout handoff', () => {
       mocks.onGitRepoReady,
       vi.fn().mockResolvedValue(null)
     )
+
     await result.handleAddRemoteRepo()
 
     expect(mocks.addRemote).toHaveBeenCalledWith({
@@ -164,6 +170,7 @@ describe('useRemoteRepo default-checkout handoff', () => {
       mocks.onGitRepoReady,
       vi.fn().mockResolvedValue(null)
     )
+
     await result.handleAddRemoteRepo()
 
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
@@ -187,6 +194,7 @@ describe('useRemoteRepo default-checkout handoff', () => {
       mocks.onGitRepoReady,
       vi.fn().mockResolvedValue(null)
     )
+
     await result.handleOpenRemoteStep('ssh-2')
 
     expect(mocks.listTargets).toHaveBeenCalled()
@@ -208,6 +216,7 @@ describe('useRemoteRepo default-checkout handoff', () => {
       mocks.onGitRepoReady,
       scanNestedRepos
     )
+
     await result.handleAddRemoteRepo()
 
     expect(scanNestedRepos).toHaveBeenCalledWith(

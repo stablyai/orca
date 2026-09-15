@@ -20,6 +20,7 @@ import {
 describe('terminal multiplex RPC', () => {
   it('keeps layout versions out of the output sequence domain', async () => {
     let dataListener: ((data: string, meta?: RuntimeTerminalDataMeta) => void) | undefined
+
     const harness = startDesktopMultiplexSubscribe({
       getLayout: vi.fn().mockReturnValue({ seq: 675 }),
       serializeTerminalBuffer: vi.fn().mockResolvedValue({
@@ -30,9 +31,11 @@ describe('terminal multiplex RPC', () => {
       }),
       subscribeToTerminalData: vi.fn((_ptyId, listener) => {
         dataListener = listener
+
         return vi.fn()
       })
     })
+
     await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
     sendDesktopMultiplexSubscribe(harness.handlers)
     await vi.waitFor(() =>
@@ -44,13 +47,17 @@ describe('terminal multiplex RPC', () => {
     const subscribed = harness.messages
       .map((message) => JSON.parse(message).result)
       .find((event) => event?.type === 'subscribed')
+
     const snapshotStart = harness.binaryFrames
       .map(decodeTerminalStreamFrame)
       .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)
+
     expect(subscribed.seq).toBe(675)
+
     if (!snapshotStart) {
       throw new Error('Missing multiplex snapshot start frame')
     }
+
     const snapshotPayload = decodeTerminalStreamJson(snapshotStart.payload)
     expect(snapshotPayload).toMatchObject({ kind: 'scrollback' })
     expect(snapshotPayload).not.toHaveProperty('seq')
@@ -61,6 +68,7 @@ describe('terminal multiplex RPC', () => {
       expect(
         harness.binaryFrames.some((bytes) => {
           const frame = decodeTerminalStreamFrame(bytes)
+
           return frame?.opcode === TerminalStreamOpcode.Output && frame.seq === 4
         })
       ).toBe(true)
@@ -72,14 +80,18 @@ describe('terminal multiplex RPC', () => {
 
   it('flushes output buffered during initial multiplex snapshot once', async () => {
     vi.useFakeTimers()
+
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
       const registry = createSubscriptionRegistryDouble()
+
       const dataListenerRef: {
         current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
       } = {}
+
       let resolveSnapshot: (value: { data: string; cols: number; rows: number }) => void = () => {}
+
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -94,6 +106,7 @@ describe('terminal multiplex RPC', () => {
         getLayout: vi.fn().mockReturnValue({ seq: 1 }),
         subscribeToTerminalData: vi.fn((_: string, listener) => {
           dataListenerRef.current = listener
+
           return vi.fn()
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
@@ -106,6 +119,7 @@ describe('terminal multiplex RPC', () => {
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateDesktopViewport: vi.fn().mockResolvedValue(true)
       })
+
       const dispatcher = new RpcDispatcher({
         runtime,
         methods: TERMINAL_METHODS
@@ -143,6 +157,7 @@ describe('terminal multiplex RPC', () => {
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
         .join('')
+
       expect(output).toBe('starting shell\r\n')
 
       runtime.cleanupSubscription('terminal-1:desktop-1')
@@ -154,19 +169,23 @@ describe('terminal multiplex RPC', () => {
 
   it('drops buffered multiplex output already covered by the initial snapshot seq', async () => {
     vi.useFakeTimers()
+
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
       const registry = createSubscriptionRegistryDouble()
+
       const dataListenerRef: {
         current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
       } = {}
+
       let resolveSnapshot: (value: {
         data: string
         cols: number
         rows: number
         seq: number
       }) => void = () => {}
+
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -186,6 +205,7 @@ describe('terminal multiplex RPC', () => {
         getLayout: vi.fn().mockReturnValue({ seq: 1 }),
         subscribeToTerminalData: vi.fn((_: string, listener) => {
           dataListenerRef.current = listener
+
           return vi.fn()
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
@@ -198,6 +218,7 @@ describe('terminal multiplex RPC', () => {
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateDesktopViewport: vi.fn().mockResolvedValue(true)
       })
+
       const dispatcher = new RpcDispatcher({
         runtime,
         methods: TERMINAL_METHODS
@@ -239,9 +260,11 @@ describe('terminal multiplex RPC', () => {
       const outputFrames = binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+
       const snapshotStart = binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
         .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)
+
       expect(snapshotStart && decodeTerminalStreamJson(snapshotStart.payload)).toMatchObject({
         seq: startupLine.length
       })
@@ -256,19 +279,23 @@ describe('terminal multiplex RPC', () => {
 
   it('replays only buffered multiplex output not covered by the initial snapshot seq', async () => {
     vi.useFakeTimers()
+
     try {
       const messages: string[] = []
       const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
       const registry = createSubscriptionRegistryDouble()
+
       const dataListenerRef: {
         current?: (data: string, meta?: { seq?: number; rawLength?: number }) => void
       } = {}
+
       let resolveSnapshot: (value: {
         data: string
         cols: number
         rows: number
         seq: number
       }) => void = () => {}
+
       const runtime = stubRuntime({
         resolveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
@@ -288,6 +315,7 @@ describe('terminal multiplex RPC', () => {
         getLayout: vi.fn().mockReturnValue({ seq: 1 }),
         subscribeToTerminalData: vi.fn((_: string, listener) => {
           dataListenerRef.current = listener
+
           return vi.fn()
         }),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
@@ -300,6 +328,7 @@ describe('terminal multiplex RPC', () => {
         sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
         updateDesktopViewport: vi.fn().mockResolvedValue(true)
       })
+
       const dispatcher = new RpcDispatcher({
         runtime,
         methods: TERMINAL_METHODS
@@ -343,6 +372,7 @@ describe('terminal multiplex RPC', () => {
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
         .join('')
+
       expect(output).toBe(' world')
 
       runtime.cleanupSubscription('terminal-1:desktop-1')

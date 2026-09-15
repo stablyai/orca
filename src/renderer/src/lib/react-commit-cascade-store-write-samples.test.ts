@@ -16,17 +16,22 @@ type ErrorWithCapture = {
   captureStackTrace?: (target: object, constructorOpt?: unknown) => void
   stackTraceLimit?: number
 }
+
 const errorWithCapture = Error as unknown as ErrorWithCapture
+
 const originalCapture = errorWithCapture.captureStackTrace
+
 const originalLimit = errorWithCapture.stackTraceLimit
 
 /** Stands in for the zustand slice action that calls `set`. */
 function storeAction(): void {
   noteReactCommitCascadeStoreWrite(storeAction, { ticks: 1 })
 }
+
 function runawayEffect(): void {
   storeAction()
 }
+
 function paneRender(): void {
   runawayEffect()
 }
@@ -75,6 +80,7 @@ describe('capture failures', () => {
     errorWithCapture.captureStackTrace = () => {
       throw new Error('capture refused')
     }
+
     armReactCommitCascadeWriteSampling()
 
     expect(() => storeAction()).not.toThrow()
@@ -88,9 +94,11 @@ describe('capture failures', () => {
   it('stops collecting after the sample cap when captureStackTrace is unavailable', () => {
     delete errorWithCapture.captureStackTrace
     armReactCommitCascadeWriteSampling()
+
     for (let write = 0; write < 100; write += 1) {
       noteReactCommitCascadeStoreWrite(storeAction, { [`key${write}`]: write })
     }
+
     // Restored before asserting: vitest builds its own failure stacks with it.
     errorWithCapture.captureStackTrace = originalCapture
 
@@ -109,6 +117,7 @@ describe('capture failures', () => {
     const wide = Object.fromEntries(
       Array.from({ length: 40 }, (_, index) => [`key${index}`, index])
     )
+
     armReactCommitCascadeWriteSampling()
     noteReactCommitCascadeStoreWrite(storeAction, wide)
 
@@ -127,6 +136,7 @@ describe('disarmed cost', () => {
     const useFloodStore = create<{ ticks: number }>()(
       withReactCommitCascadeWriteProbe(() => ({ ticks: 0 }))
     )
+
     let captures = 0
     errorWithCapture.captureStackTrace = (target, boundary) => {
       captures += 1

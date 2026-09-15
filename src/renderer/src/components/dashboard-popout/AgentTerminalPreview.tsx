@@ -31,11 +31,15 @@ import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
 
 const PREVIEW_SCROLLBACK_ROWS = 24
+
 // Why: main only ever serializes PREVIEW_SCROLLBACK_ROWS of history into this
 // terminal, so the pane's user-configured scrollback would only cost memory.
 const PREVIEW_SCROLLBACK_BUFFER_ROWS = 1000
+
 const FALLBACK_COLS = 80
+
 const FALLBACK_ROWS = 24
+
 const RESYNC_RETRY_DELAY_MS = 150
 
 function clamp(value: number, min: number, max: number): number {
@@ -71,17 +75,22 @@ export function AgentTerminalPreview({
   const settingsRef = useRef(settings)
   const macOptionAsAltRef = useRef(macOptionAsAlt)
   const terminalInputRef = useRef(terminalInput)
+
   const { terminalTheme, terminalMode } = useMemo(() => {
     if (!settings) {
       return { terminalTheme: null, terminalMode: 'dark' as const }
     }
+
     const appearance = resolveEffectiveTerminalAppearance(settings, systemPrefersDark)
+
     const theme = composeActiveTerminalTheme(
       appearance.theme ?? getBuiltinTheme(appearance.themeName),
       settings
     )
+
     return { terminalTheme: theme, terminalMode: appearance.mode }
   }, [settings, systemPrefersDark])
+
   // A null snapshot means no serializer knows this pty (it died or was never
   // spawned this session) — say so instead of painting a silent blank terminal.
   const [ptyGone, setPtyGone] = useState(false)
@@ -99,9 +108,11 @@ export function AgentTerminalPreview({
   useEffect(() => {
     setPtyGone(false)
     const container = containerRef.current
+
     if (!container) {
       return
     }
+
     let disposed = false
     let terminal: Terminal | null = null
     let offData: (() => void) | null = null
@@ -126,6 +137,7 @@ export function AgentTerminalPreview({
       container,
       getTerminal: () => terminal
     })
+
     // Box growth/shrink (window resize) changes the reachable grid.
     const boxResizeObserver =
       typeof ResizeObserver === 'undefined'
@@ -134,12 +146,15 @@ export function AgentTerminalPreview({
             scheduleFit()
             gridClaim.schedule()
           })
+
     if (container.parentElement) {
       boxResizeObserver?.observe(container.parentElement)
     }
+
     boxResizeObserver?.observe(container)
 
     let replayDepth = 0
+
     const writeReplayed = (chunk: string, onDone?: () => void, live = false): void => {
       // Why: a redelivered snapshot repeats the TUI's one-time kitty push, so
       // replayed bytes must apply as idempotent sets (see the tracker's docs).
@@ -148,6 +163,7 @@ export function AgentTerminalPreview({
       } else {
         kittyKeyboardModes.scanReplay(chunk)
       }
+
       replayDepth++
       terminal?.write(chunk, () => {
         replayDepth--
@@ -159,8 +175,10 @@ export function AgentTerminalPreview({
     const writeLive = (payload: Extract<TerminalPreviewDataPayload, { type: 'data' }>): void => {
       if (!terminal) {
         pendingLivePayloads.push(payload)
+
         return
       }
+
       writeReplayed(
         payload.data,
         () => {
@@ -199,6 +217,7 @@ export function AgentTerminalPreview({
       if (!terminal) {
         return
       }
+
       disposeKeyHandler = installPreviewTerminalKeyHandler({
         terminal,
         claimImeKeyEvent: (event) => imeBridge?.claimKeyEvent(event) ?? false,
@@ -221,6 +240,7 @@ export function AgentTerminalPreview({
       if (!terminal) {
         return
       }
+
       disposeNativeCopyGutterTrim = installTerminalNativeCopyGutterTrim(terminal).dispose
     }
 
@@ -228,6 +248,7 @@ export function AgentTerminalPreview({
       if (!terminal) {
         return
       }
+
       disposeTerminalCompatibility = installPreviewTerminalCompatibility(terminal, {
         getSettings: () => settingsRef.current
       })
@@ -237,19 +258,23 @@ export function AgentTerminalPreview({
       if (!terminal) {
         return
       }
+
       let pendingUserInputSignals = 0
       userInputDisposable = subscribeToTerminalUserInput(terminal, () => {
         pendingUserInputSignals = Math.min(32, pendingUserInputSignals + 1)
       })
       terminal.onData((data) => {
         const signaledUserInput = pendingUserInputSignals > 0
+
         if (signaledUserInput) {
           pendingUserInputSignals--
         }
+
         // Why: core's signal distinguishes real input from parser replies, so typing survives live replay without forwarding synthetic CPR/DA bytes.
         if (userInputDisposable ? !signaledUserInput : replayDepth > 0) {
           return
         }
+
         void window.api.terminalPreview.input(ptyId, data)
       })
     }
@@ -260,6 +285,7 @@ export function AgentTerminalPreview({
       requestRefresh: () => void
     ): void => {
       const snap = connection.snapshot!
+
       if (!terminal) {
         terminal = new Terminal(
           buildPreviewTerminalOptions({
@@ -273,13 +299,16 @@ export function AgentTerminalPreview({
             scrollback: PREVIEW_SCROLLBACK_BUFFER_ROWS
           })
         )
+
         try {
           terminal.open(container)
         } catch {
           terminal.dispose()
           terminal = null
+
           return
         }
+
         terminalRef.current = terminal
         installTerminalCompatibility()
         installNativeCopyGutterTrim()
@@ -294,15 +323,18 @@ export function AgentTerminalPreview({
         )
         terminal.reset()
       }
+
       replayPreviewConnectionSnapshot({
         snapshot: snap,
         replay: connection.replay,
         kittyKeyboardModes,
         write: (chunk, live) => writeReplayed(chunk, undefined, live)
       })
+
       for (const payload of pendingLivePayloads.splice(0)) {
         writeLive(payload)
       }
+
       if (connection.resyncRequired) {
         refreshAgain = false
         // Why: sustained output can overflow every capture; delay retries so recovery cannot spin two serializations per event-loop turn.
@@ -310,6 +342,7 @@ export function AgentTerminalPreview({
           if (disposed || retryTimer) {
             return
           }
+
           retryTimer = setTimeout(() => {
             retryTimer = null
             requestRefresh()
@@ -320,6 +353,7 @@ export function AgentTerminalPreview({
         // Queue behind every replay write so replacement never clears a half-parsed frame.
         writeReplayed('', requestRefresh)
       }
+
       scheduleFit()
       gridClaim.schedule()
       terminal.focus()
@@ -328,16 +362,22 @@ export function AgentTerminalPreview({
     const setup = async (replaceExisting = false): Promise<void> => {
       if (refreshInFlight) {
         refreshAgain = true
+
         return
       }
+
       refreshInFlight = true
+
       const connection = await window.api.terminalPreview.connect(ptyId, {
         scrollbackRows: PREVIEW_SCROLLBACK_ROWS
       })
+
       if (disposed) {
         return
       }
+
       const snap = connection.snapshot
+
       if (!snap) {
         refreshInFlight = false
         setPtyGone(true)
@@ -356,13 +396,17 @@ export function AgentTerminalPreview({
         terminal = null
         terminalRef.current = null
         void window.api.terminalPreview.unsubscribe(ptyId)
+
         return
       }
+
       refreshInFlight = false
+
       if (!connection.resyncRequired && retryTimer) {
         clearTimeout(retryTimer)
         retryTimer = null
       }
+
       replayConnection(connection, replaceExisting, () => void setup(true))
     }
 
@@ -371,6 +415,7 @@ export function AgentTerminalPreview({
       getTerminal: () => terminal,
       pasteClipboardText: (activeElement, source) => void pasteClipboardText(activeElement, source)
     })
+
     const disposeRightClickPaste = installPreviewTerminalRightClickPaste({
       container,
       getTerminal: () => terminal,
@@ -384,10 +429,13 @@ export function AgentTerminalPreview({
       if (payload.ptyId !== ptyId) {
         return
       }
+
       if (payload.type === 'resync') {
         void setup(true)
+
         return
       }
+
       writeLive(payload)
     })
 
@@ -395,9 +443,11 @@ export function AgentTerminalPreview({
 
     return () => {
       disposed = true
+
       if (retryTimer) {
         clearTimeout(retryTimer)
       }
+
       gridClaim.dispose()
       boxResizeObserver?.disconnect()
       disposeAppMenuClipboard()
@@ -419,9 +469,11 @@ export function AgentTerminalPreview({
   // would reconnect the pty and repaint the agent's screen from a new snapshot.
   useEffect(() => {
     const terminal = terminalRef.current
+
     if (!terminal) {
       return
     }
+
     Object.assign(
       terminal.options,
       buildPreviewAppearanceOptions(settings, macOptionAsAlt === 'true')

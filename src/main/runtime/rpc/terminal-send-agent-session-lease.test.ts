@@ -38,6 +38,7 @@ function makeRequest(params: unknown): RpcRequest {
 
 async function send(runtime: OrcaRuntimeService, client: { id: string; type: string }) {
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
   return await dispatcher.dispatch(makeRequest({ terminal: 'terminal-1', text: 'hello', client }))
 }
 
@@ -50,9 +51,11 @@ describe('terminal.send under a refusing lease', () => {
     const response = await send(runtime, { id: 'desktop-1', type: 'desktop' })
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     expect(response.result).toEqual({
       send: {
         handle: 'terminal-1',
@@ -71,9 +74,11 @@ describe('terminal.send under a refusing lease', () => {
     const response = await send(runtime, { id: 'desktop-1', type: 'desktop' })
 
     expect(response.ok).toBe(true)
+
     if (!response.ok) {
       throw new Error(response.error.message)
     }
+
     const result = response.result as { send: { accepted: boolean; refusedReason?: string } }
     expect(result.send.accepted).toBe(false)
     // A new `refusedReason` value would reach old clients as an unknown enum member.
@@ -82,6 +87,7 @@ describe('terminal.send under a refusing lease', () => {
 
   it('releases the mobile input floor a refused send never used', async () => {
     rollback.mockClear()
+
     const runtime = stubRuntime({
       sendTerminal: vi.fn().mockImplementation(async (_handle, _action, options) => {
         options?.reserveWrite?.('pty-1')

@@ -31,7 +31,9 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
       rendererOwnerAgentType: session.getPaneScopedRendererOwner(),
       userGpuMode: useAppStore.getState().settings?.terminalGpuAcceleration ?? 'auto'
     })
+
     const paneTitle = decision.displayTitle
+
     if (
       shouldSuppressCodexAutoApprovalSyntheticTitle(paneTitle, {
         paneKey: session.cacheKey,
@@ -41,20 +43,24 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     ) {
       return
     }
+
     session.manager.setPaneGpuRendering(session.pane.id, decision.rendererPolicy.gpuEnabled)
     session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, paneTitle)
+
     // Why: a stale-derived cleared title comes from main's unthrottled 3s
     // timer, not agent output. It must update the visible title but never
     // feed completion tracking — observeTitle would classify the cleared
     // title as idle and mint a task-complete for a merely-paused agent.
     if (!meta?.staleWorkingTitleClear && session.syncAgentTaskCompleteTrackingEnabled()) {
       const activeHookStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+
       if (!session.shouldSuppressTitleCompletionForFreshHook(decision.rawTitle, activeHookStatus)) {
         // Why: display titles still update while hooks are active, but a stale
         // idle frame must not complete the coordinator turn before hook `done`.
         session.agentCompletionCoordinator.observeTitle(decision.rawTitle)
       }
     }
+
     // Why: only the focused pane should drive the tab title — otherwise two
     // agents in split panes cause rapid title flickering as each emits OSC
     // sequences. Only the active split's title propagates to the tab. When
@@ -67,6 +73,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     if (!session.hasConsideredInitialCacheTimerSeed) {
       session.hasConsideredInitialCacheTimerSeed = true
       const state = useAppStore.getState()
+
       if (
         shouldSeedCacheTimerOnInitialTitle({
           rawTitle,
@@ -83,9 +90,11 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
   session.applyInitialAgentStatus = (terminalTitle?: string): void => {
     const initialStatus = session.paneStartup?.initialAgentStatus
     const routing = session.resolveCurrentAgentStatusRouting()
+
     if (!initialStatus || !routing) {
       return
     }
+
     const statusPayload = {
       state: 'working' as const,
       prompt: initialStatus.prompt,
@@ -99,6 +108,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
         kind: 'transition'
       })
     }
+
     if (session.paneStartup.launchConfig) {
       useAppStore
         .getState()
@@ -106,8 +116,10 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
           launchConfig: session.paneStartup.launchConfig,
           ...(session.launchToken ? { launchToken: session.launchToken } : {})
         })
+
       return
     }
+
     useAppStore
       .getState()
       .setAgentStatus(session.cacheKey, statusPayload, terminalTitle, undefined, routing)
@@ -116,6 +128,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
   session.canApplyCommandCodeOutputStatus = (): boolean => {
     const state = useAppStore.getState()
     const foreground = state.paneForegroundAgentByPaneKey[session.cacheKey]
+
     return canCommandCodeOutputOwnPane({
       foregroundAgent: foreground?.agent,
       shellForeground: foreground?.shellForeground,
@@ -128,16 +141,22 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     if (!session.canApplyCommandCodeOutputStatus()) {
       return
     }
+
     session.clearCommandCodeOutputDoneTimer()
     const routing = session.resolveCurrentAgentStatusRouting()
+
     if (!routing) {
       return
     }
+
     const currentState = useAppStore.getState()
     const currentEntry = currentState.agentStatusByPaneKey[session.cacheKey]
+
     const currentTitle =
       currentState.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
+
     const normalizedPrompt = prompt.trim()
+
     if (
       currentEntry?.agentType === 'command-code' &&
       currentEntry.state === 'done' &&
@@ -145,6 +164,7 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     ) {
       return
     }
+
     currentState.setAgentStatus(
       session.cacheKey,
       {
@@ -172,20 +192,27 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     session.cacheKey,
     (normalizedPrompt) => {
       const routing = session.resolveCurrentAgentStatusRouting()
+
       if (!routing) {
         return
       }
+
       const currentState = useAppStore.getState()
       const currentEntry = currentState.agentStatusByPaneKey[session.cacheKey]
+
       if (currentEntry?.agentType !== 'command-code' || currentEntry.state !== 'working') {
         return
       }
+
       const currentPrompt = currentEntry.prompt.trim()
+
       if (currentPrompt && currentPrompt !== normalizedPrompt) {
         return
       }
+
       const currentTitle =
         currentState.runtimePaneTitlesByTabId?.[session.deps.tabId]?.[session.pane.id]
+
       currentState.setAgentStatus(
         session.cacheKey,
         {
@@ -210,11 +237,15 @@ export function installTitleSpawnBell(session: ConnectPanePtySession): void {
     if (!session.canApplyCommandCodeOutputStatus()) {
       return
     }
+
     const normalizedPrompt = prompt.trim()
+
     if (!normalizedPrompt) {
       cancelCommandCodeDoneSettle(session.cacheKey)
+
       return
     }
+
     // Why: Command Code keeps rendering the composer while tools run. Only
     // complete the row if no active status repaint arrives during this window.
     openCommandCodeDoneSettle(session.cacheKey, normalizedPrompt)

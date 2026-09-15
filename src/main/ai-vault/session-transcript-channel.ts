@@ -28,13 +28,16 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
   beginRead(start: TranscriptReadStart): void {
     this.muted = false
     this.readers = []
+
     // Keeps a scan with no consumers allocation-free on its hottest path.
     if (!hasTranscriptConsumers()) {
       return
     }
+
     for (const consumer of transcriptConsumers()) {
       try {
         const reader = consumer.beginRead(start)
+
         if (reader) {
           this.readers.push(reader)
         }
@@ -48,10 +51,12 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
     if (this.muted || this.readers.length === 0) {
       return
     }
+
     // A throwing consumer is dropped for the rest of the read rather than
     // failing the parse; it then gets no `finish`, so it never records a cursor
     // for a stream it did not see in full.
     let index = 0
+
     while (index < this.readers.length) {
       try {
         this.readers[index].message(message)
@@ -70,6 +75,7 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
   mute<T>(fn: () => T): T {
     const previous = this.muted
     this.muted = true
+
     try {
       return fn()
     } finally {
@@ -81,6 +87,7 @@ export class TranscriptMessageChannel implements TranscriptMessageSink {
     const readers = this.readers
     this.readers = []
     this.muted = false
+
     for (const reader of readers) {
       try {
         reader.finish(outcome)

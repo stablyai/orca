@@ -14,6 +14,7 @@ export function migrateV39(this: OrchestrationDb, current: number): void {
   if (current >= 39) {
     return
   }
+
   this.db.exec(`
       CREATE TABLE IF NOT EXISTS worker_terminal_archives_v39 (
         dispatch_id   TEXT PRIMARY KEY,

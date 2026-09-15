@@ -7,10 +7,13 @@ export function getDeleteStateForWorktreeHost(
   states: Readonly<Record<string, WorktreeDeleteState | undefined>>
 ): WorktreeDeleteState | undefined {
   const qualifiedState = worktree.hostId ? states[getWorktreeHostIdentity(worktree)] : undefined
+
   if (qualifiedState) {
     return qualifiedState
   }
+
   const legacyState = states[worktree.id]
+
   return legacyState?.executionHostId &&
     worktree.hostId &&
     legacyState.executionHostId !== worktree.hostId

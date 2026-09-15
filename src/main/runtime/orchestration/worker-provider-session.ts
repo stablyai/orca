@@ -26,10 +26,13 @@ export function selectExactWorkerProviderSession(args: {
         entry.receivedAt >= args.observedAfter
     )
     .sort((left, right) => right.receivedAt - left.receivedAt)[0]
+
   if (!status?.providerSession || !status.agentType) {
     return null
   }
+
   const wslDistro = attestedWslDistro(status.connectionId, args.wslDistro)
+
   const selected: ExactWorkerProviderSession = {
     paneKey: args.paneKey,
     processIncarnation: args.processIncarnation,
@@ -39,6 +42,7 @@ export function selectExactWorkerProviderSession(args: {
     providerSession: { ...status.providerSession },
     observedAt: status.receivedAt
   }
+
   return selected
 }
 
@@ -47,6 +51,7 @@ function attestedWslDistro(
   expectedDistro: string | null | undefined
 ): string | undefined {
   const distro = expectedDistro?.trim()
+
   return distro && connectionId === wslHookRelayConnectionId(distro) ? distro : undefined
 }
 
@@ -58,6 +63,7 @@ function connectionMatches(
   if (expectedConnectionId === undefined || entryConnectionId === expectedConnectionId) {
     return true
   }
+
   // WSL hook relays stamp their distro on the event, while the host PTY stays
   // local (connectionId null). Require the PTY's known distro to avoid mixing
   // same-pane events from another WSL transport.

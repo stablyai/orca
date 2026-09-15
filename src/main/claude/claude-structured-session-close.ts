@@ -24,9 +24,11 @@ export function claudeAcquisitionCleanupError(
   cause: unknown
 ): Error {
   const verdict = connection?.exitVerdict
+
   if (verdict?.root === 'processless') {
     return new AgentSessionPreSpawnError(cause)
   }
+
   return verdict?.root === 'exited' && verdict.tree === 'unverifiable'
     ? new AgentSessionAcquisitionRootExitObservedError(cause)
     : new AgentSessionAcquisitionExitUnprovenError(cause)
@@ -41,18 +43,23 @@ export async function resolveClaudeAcquisitionError(input: {
   prompts: ClaudePromptRegistry
 }): Promise<unknown> {
   let acquisitionError = input.error
+
   if (input.sessions.get(input.sessionId)?.connection !== input.attempt.connection) {
     input.translator?.dispose()
+
     for (const prompt of input.prompts.clear()) {
       prompt.settle(null)
     }
+
     const closed = (await input.attempt.connection?.close()) ?? true
+
     if (input.attempt.connection?.exitVerdict.root === 'processless') {
       acquisitionError = new AgentSessionPreSpawnError(input.error)
     } else if (!closed) {
       acquisitionError = claudeAcquisitionCleanupError(input.attempt.connection, input.error)
     }
   }
+
   return acquisitionError
 }
 
@@ -60,9 +67,11 @@ export function settleClaudeExitedSession(session: ClaudeSession): void {
   // The child is gone, so no replay can start these turns. Nothing else ends a
   // waiter's life now that no deadline does.
   retireClaudeDispatchWaiters(session)
+
   for (const prompt of session.prompts.clear()) {
     prompt.settle(null)
   }
+
   session.translator?.dispose()
 }
 
@@ -92,17 +101,21 @@ async function finalizeClaudePublishedSession(
   session: ClaudeSession
 ): Promise<boolean> {
   retireClaudeDispatchWaiters(session)
+
   // Settle every in-flight permission callback so closing leaves no dangling promise; `null`
   // writes no response, and the SDK ignores any post-cleanup answer regardless.
   for (const prompt of session.prompts.clear()) {
     prompt.settle(null)
   }
+
   if ((await session.connection.close()) !== true) {
     return false
   }
+
   if (session.backgroundTasks.clear()) {
     input.onBackgroundTasksChanged?.(input.sessionId, null)
   }
+
   try {
     const transcriptLeaf = input.readTranscriptLeaf
       ? await readClaudeTranscriptLeafWithReproof({
@@ -112,6 +125,7 @@ async function finalizeClaudePublishedSession(
           claudeConfigDir: session.claudeConfigDir
         })
       : null
+
     if (transcriptLeaf) {
       session.leafUuid = transcriptLeaf
     }
@@ -119,6 +133,7 @@ async function finalizeClaudePublishedSession(
     // Keep the last observed main-transcript frame when the durable tail is
     // unavailable or proves a stale/divergent branch.
   }
+
   const persistence =
     session.closePersistence ??
     (session.closePersistence = (async () => {
@@ -129,14 +144,17 @@ async function finalizeClaudePublishedSession(
         fence: session.fence
       })
     })())
+
   const ended = {
     type: 'ended',
     sessionId: input.sessionId,
     reason: 'claude session closed',
     observedAt: Date.now()
   } as const
+
   let callbackError: unknown
   let callbackThrew = false
+
   const deliver = (event: ClaudeStructuredSessionEvent): void => {
     try {
       input.onEvent?.(event)
@@ -145,7 +163,9 @@ async function finalizeClaudePublishedSession(
       callbackError ??= error
     }
   }
+
   let persistenceError: unknown
+
   try {
     await persistence
     session.closeFinalized = true
@@ -163,13 +183,16 @@ async function finalizeClaudePublishedSession(
     if (session.closePersistence === persistence) {
       session.closePersistence = undefined
     }
+
     persistenceError = error
   }
+
   // The connection already proved the child dead, so the session has ended
   // whatever the durable write did: withholding it would strand the renderer on
   // a session nothing re-drives. Emitted once, so a retry only re-persists.
   if (!session.closeEnded) {
     session.closeEnded = true
+
     try {
       try {
         session.translator?.handle(ended)
@@ -177,17 +200,21 @@ async function finalizeClaudePublishedSession(
         callbackThrew = true
         callbackError ??= error
       }
+
       deliver(ended)
     } finally {
       session.translator?.dispose()
     }
   }
+
   if (persistenceError) {
     throw persistenceError
   }
+
   if (callbackThrew) {
     throw callbackError
   }
+
   return true
 }
 
@@ -195,17 +222,22 @@ export async function closeClaudePublishedSession(
   input: CloseClaudePublishedSessionInput
 ): Promise<boolean> {
   const session = input.sessions.get(input.sessionId)
+
   if (!session) {
     return true
   }
+
   if (session.closeFinalized) {
     return true
   }
+
   if (session.closeFinalization) {
     return session.closeFinalization
   }
+
   const finalization = finalizeClaudePublishedSession(input, session)
   session.closeFinalization = finalization
+
   try {
     return await finalization
   } finally {
@@ -262,12 +294,15 @@ export async function closeClaudeSession(input: {
   }) => Promise<string | null>
 }): Promise<boolean> {
   const attempt = input.acquisitions.get(input.sessionId)
+
   if (!(await cancelClaudeAcquisitionAttempt(attempt))) {
     return false
   }
+
   if (attempt) {
     input.acquisitions.deleteIfCurrent(input.sessionId, attempt)
   }
+
   return closeClaudePublishedSession(input)
 }
 

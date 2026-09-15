@@ -14,6 +14,7 @@ const pairing = {
 describe('browser client host attach request', () => {
   it('omits unencodable inventory without changing legacy page-command negotiation', () => {
     const onPageCommand = vi.fn(() => ({ status: 'completed' as const }))
+
     const attach = createBrowserClientHostAttachRequest({
       pairing,
       authorityRuntimeId: 'runtime-a',

@@ -59,6 +59,7 @@ vi.mock('../ai-vault/session-delete', () => ({
 // host-routing/caching tests below stay exercising real behavior.
 vi.mock('../ai-vault/cached-session-list', async (importOriginal) => {
   const actual = await importOriginal<typeof CachedSessionListModule>()
+
   return {
     ...actual,
     invalidateAiVaultSessionListCache: mocks.invalidateAiVaultSessionListCache
@@ -67,6 +68,7 @@ vi.mock('../ai-vault/cached-session-list', async (importOriginal) => {
 
 vi.mock('../ai-vault/session-scanner-parse-cache', async (importOriginal) => {
   const actual = await importOriginal<typeof SessionParseCacheModule>()
+
   return {
     ...actual,
     invalidateSessionParseCacheEntry: mocks.invalidateSessionParseCacheEntry
@@ -93,7 +95,9 @@ vi.mock('./ssh', () => ({
 }))
 
 const { OMP_SESSIONS_DIR } = await import('../ai-vault/session-scanner-roots')
+
 const { _internals, registerAiVaultHandlers } = await import('./ai-vault')
+
 const { deleteAiVaultSession: deleteAiVaultSessionWithDeps } = await import('./ai-vault-delete')
 
 const provider = {} as IFilesystemProvider
@@ -489,10 +493,12 @@ describe('listAiVaultSessions host routing', () => {
     )
     registerAiVaultHandlers()
     const event = { sender: { id: 7 } }
+
     const pending = getIpcHandler('aiVault:listSessions')(event, {
       executionHostScope: 'ssh:dev-box',
       requestToken: 'scan-1'
     })
+
     await vi.waitFor(() => expect(relaySignal).toBeDefined())
 
     await getIpcHandler('aiVault:cancelListSessions')(event, {
@@ -510,6 +516,7 @@ describe('resolveAiVaultSessionTitles host routing', () => {
   const requests = [
     { agent: 'codex' as const, sessionId: 'session-1', transcriptPath: '/tmp/session.jsonl' }
   ]
+
   const titles = {
     titles: [{ agent: 'codex' as const, sessionId: 'session-1', title: 'Exact title' }]
   }
@@ -580,12 +587,15 @@ describe('prepareSessionResume IPC', () => {
   it('awaits the host-local targeted resume preparation', async () => {
     const prepareSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
     registerAiVaultHandlers({ prepareSessionResume })
+
     const registration = mocks.ipcHandle.mock.calls.find(
       ([channel]) => channel === 'aiVault:prepareSessionResume'
     )
+
     const handler = registration?.[1] as
       | ((_event: unknown, args: unknown) => Promise<unknown>)
       | undefined
+
     const args = {
       agent: 'codex',
       filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
@@ -601,6 +611,7 @@ describe('prepareSessionResume IPC', () => {
     const prepareSessionResume = vi.fn()
     const prepareRuntimeSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
     registerAiVaultHandlers({ prepareSessionResume, prepareRuntimeSessionResume })
+
     const args = {
       agent: 'codex' as const,
       filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
@@ -643,17 +654,21 @@ function getPrepareSessionResumeHandler(): (
   const registration = mocks.ipcHandle.mock.calls.find(
     ([channel]) => channel === 'aiVault:prepareSessionResume'
   )
+
   if (!registration) {
     throw new Error('aiVault:prepareSessionResume was not registered')
   }
+
   return registration[1]
 }
 
 function getIpcHandler(channel: string): (...args: unknown[]) => unknown {
   const registration = mocks.ipcHandle.mock.calls.find(([registered]) => registered === channel)
+
   if (!registration) {
     throw new Error(`${channel} was not registered`)
   }
+
   return registration[1]
 }
 
@@ -710,6 +725,7 @@ describe('listAiVaultSubagentSessions gating', () => {
 
   it('resolves empty for malformed IPC payloads instead of throwing', async () => {
     const missing = await _internals.listAiVaultSubagentSessions(undefined)
+
     const badPath = await _internals.listAiVaultSubagentSessions({
       agent: 'claude',
       parentFilePath: 42 as unknown as string,
@@ -769,6 +785,7 @@ describe('listAiVaultSubagentSessions gating', () => {
       parentFilePath: join(claudeRoot, 'proj', 'sess.jsonl'),
       executionHostId: 'local'
     })
+
     const traversal = await _internals.listAiVaultSubagentSessions({
       agent: 'omp',
       // Built with sep (not join) so the `..` segments survive into the arg.
@@ -890,6 +907,7 @@ describe('deleteAiVaultSession', () => {
   // write its pre-delete result back into the multi-host cache.
   it('does not let an in-flight multi-host scan repopulate the cache after a delete', async () => {
     let resolveScan: (value: AiVaultListResult) => void = () => {}
+
     mocks.scanRemoteAiVaultSessions.mockReturnValueOnce(
       new Promise<AiVaultListResult>((resolve) => {
         resolveScan = resolve

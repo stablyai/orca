@@ -46,6 +46,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
   it('includes assistant preview provenance in the mobile status projection', () => {
     const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
     const base = makeAgentStatusEntry({ paneKey, lastAssistantMessage: 'tool output' })
+
     const flagged = makeAgentStatusEntry({
       paneKey,
       lastAssistantMessage: 'tool output',
@@ -73,6 +74,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     })
 
     const cleanKey = getRuntimeMobileSessionSyncKey(base)
+
     const dirtyKey = getRuntimeMobileSessionSyncKey(
       makeState({
         ...base,
@@ -80,6 +82,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
         editorDrafts: { '/repo/README.md': '# draft' }
       })
     )
+
     const activatedKey = getRuntimeMobileSessionSyncKey(
       makeState({ ...base, activeFileId: '/repo/README.md' })
     )
@@ -107,13 +110,16 @@ describe('getRuntimeMobileSessionSyncKey', () => {
 
   it('changes when generated terminal title metadata changes', () => {
     const shared = makeSharedOverrides()
+
     const base = makeState({
       ...shared,
       tabsByWorktree: {
         'wt-1': [{ id: 'term-1', title: 'Codex working', customTitle: null, ptyId: 'pty-1' }]
       } as unknown as AppState['tabsByWorktree']
     })
+
     const before = getRuntimeMobileSessionSyncKey(base)
+
     const after = getRuntimeMobileSessionSyncKey(
       makeState({
         ...base,
@@ -138,13 +144,16 @@ describe('getRuntimeMobileSessionSyncKey', () => {
 
   it('changes when quick command terminal label metadata changes', () => {
     const shared = makeSharedOverrides()
+
     const base = makeState({
       ...shared,
       tabsByWorktree: {
         'wt-1': [{ id: 'term-1', title: 'pnpm test', customTitle: null, ptyId: 'pty-1' }]
       } as unknown as AppState['tabsByWorktree']
     })
+
     const before = getRuntimeMobileSessionSyncKey(base)
+
     const after = getRuntimeMobileSessionSyncKey(
       makeState({
         ...base,
@@ -169,6 +178,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
 
   it('changes when generated terminal titles are toggled', () => {
     const shared = makeSharedOverrides()
+
     const tabsByWorktree = {
       'wt-1': [
         {
@@ -180,12 +190,15 @@ describe('getRuntimeMobileSessionSyncKey', () => {
         }
       ]
     } as unknown as AppState['tabsByWorktree']
+
     const base = makeState({
       ...shared,
       tabsByWorktree,
       settings: { ...getDefaultSettings('/tmp'), tabAutoGenerateTitle: false }
     })
+
     const before = getRuntimeMobileSessionSyncKey(base)
+
     const after = getRuntimeMobileSessionSyncKey(
       makeState({
         ...base,
@@ -262,6 +275,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
         'term-1': { 1: 'pane title' }
       } as unknown as AppState['runtimePaneTitlesByTabId']
     }
+
     const stateA = makeState(sharedOverrides)
     const stateB = makeState(sharedOverrides)
 
@@ -288,6 +302,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     // assertion would still pass under a deep-equal regression because the
     // defaults from two `makeState({})` calls diverge by reference anyway.
     const sharedOverrides = makeSharedOverrides()
+
     const mapA = {
       'term-1': {
         root: { type: 'leaf' as const, leafId: 'pane:1' },
@@ -295,6 +310,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
         expandedLeafId: null
       }
     } as unknown as AppState['terminalLayoutsByTabId']
+
     const mapB = { ...mapA } as AppState['terminalLayoutsByTabId']
 
     const stateA = makeState({ ...sharedOverrides, terminalLayoutsByTabId: mapA })
@@ -324,6 +340,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
         } as unknown as AppState['tabsByWorktree']
       })
     )
+
     const after = getRuntimeMobileSessionSyncKey(
       makeState({
         ...sharedOverrides,
@@ -347,6 +364,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
         } as unknown as AppState['tabsByWorktree']
       })
     )
+
     const after = getRuntimeMobileSessionSyncKey(
       makeState({
         ...sharedOverrides,
@@ -361,6 +379,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
 
   it('changes when a native-chat launch draft is seeded or cleared', () => {
     const sharedOverrides = makeSharedOverrides()
+
     const launchDraft = {
       tabId: 'term-1',
       agent: 'claude' as const,
@@ -371,6 +390,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     const before = getRuntimeMobileSessionSyncKey(
       makeState({ ...sharedOverrides, nativeChatLaunchDraftByTabId: {} })
     )
+
     const after = getRuntimeMobileSessionSyncKey(
       makeState({
         ...sharedOverrides,
@@ -386,6 +406,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     // case above cannot catch a regression here.
     const sharedOverrides = makeSharedOverrides()
     const before = makeState({ ...sharedOverrides, nativeChatLaunchDraftByTabId: {} })
+
     const after = makeState({
       ...sharedOverrides,
       nativeChatLaunchDraftByTabId: {
@@ -403,13 +424,16 @@ describe('getRuntimeMobileSessionSyncKey', () => {
 
   it('changes and does not skip when a folder workspace is removed', () => {
     const sharedOverrides = makeSharedOverrides()
+
     const folderWorkspace = {
       id: 'folder-1'
     } as AppState['folderWorkspaces'][number]
+
     const before = makeState({
       ...sharedOverrides,
       folderWorkspaces: [folderWorkspace]
     })
+
     const after = makeState({
       ...sharedOverrides,
       folderWorkspaces: []
@@ -426,6 +450,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
 
   it('changes when explicit agent status epoch changes', () => {
     const sharedOverrides = makeSharedOverrides()
+
     const before = getRuntimeMobileSessionSyncKey(
       makeState({
         ...sharedOverrides,
@@ -433,6 +458,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
         agentStatusEpoch: 0
       })
     )
+
     const after = getRuntimeMobileSessionSyncKey(
       makeState({
         ...sharedOverrides,
@@ -447,9 +473,11 @@ describe('getRuntimeMobileSessionSyncKey', () => {
   it('changes for same-state agent detail updates with the same epoch', () => {
     const sharedOverrides = makeSharedOverrides()
     const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
+
     const beforeAgentStatusByPaneKey = {
       [paneKey]: makeAgentStatusEntry({ paneKey, prompt: 'fix parity' })
     }
+
     const afterAgentStatusByPaneKey = {
       [paneKey]: makeAgentStatusEntry({ paneKey, prompt: 'continue parity' })
     }
@@ -461,6 +489,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
         agentStatusEpoch: 1
       })
     )
+
     const after = getRuntimeMobileSessionSyncKey(
       makeState({
         ...sharedOverrides,
@@ -475,6 +504,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
   it('coalesces timestamp-only agent heartbeats inside the same freshness bucket', () => {
     const sharedOverrides = makeSharedOverrides()
     const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
+
     const before = getRuntimeMobileSessionSyncKey(
       makeState({
         ...sharedOverrides,
@@ -484,6 +514,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
         agentStatusEpoch: 1
       })
     )
+
     const after = getRuntimeMobileSessionSyncKey(
       makeState({
         ...sharedOverrides,
@@ -500,6 +531,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
   it('changes for timestamp-only agent heartbeats in a later freshness bucket', () => {
     const sharedOverrides = makeSharedOverrides()
     const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
+
     const before = getRuntimeMobileSessionSyncKey(
       makeState({
         ...sharedOverrides,
@@ -509,6 +541,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
         agentStatusEpoch: 1
       })
     )
+
     const after = getRuntimeMobileSessionSyncKey(
       makeState({
         ...sharedOverrides,
@@ -525,6 +558,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
   it('does not skip the App subscriber gate for same-epoch agent detail updates', () => {
     const sharedOverrides = makeSharedOverrides()
     const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
+
     const before = makeState({
       ...sharedOverrides,
       agentStatusByPaneKey: {
@@ -532,6 +566,7 @@ describe('getRuntimeMobileSessionSyncKey', () => {
       },
       agentStatusEpoch: 1
     })
+
     const after = makeState({
       ...sharedOverrides,
       agentStatusByPaneKey: {
@@ -553,15 +588,18 @@ describe('getRuntimeMobileSessionSyncKey', () => {
 
   it('changes and does not skip when terminal theme settings change', () => {
     const sharedOverrides = makeSharedOverrides()
+
     const beforeSettings = {
       ...getDefaultSettings('/tmp'),
       theme: 'dark' as const,
       terminalColorOverrides: { foreground: '#eeeeee' }
     }
+
     const afterSettings = {
       ...beforeSettings,
       terminalColorOverrides: { foreground: '#111111' }
     }
+
     const before = makeState({ ...sharedOverrides, settings: beforeSettings })
     const beforeKey = getRuntimeMobileSessionSyncKey(before)
     const after = makeState({ ...sharedOverrides, settings: afterSettings })
@@ -573,11 +611,13 @@ describe('getRuntimeMobileSessionSyncKey', () => {
 
   it('changes and does not skip when system terminal appearance changes', () => {
     const sharedOverrides = makeSharedOverrides()
+
     const settings = {
       ...getDefaultSettings('/tmp'),
       theme: 'system' as const,
       terminalUseSeparateLightTheme: true
     }
+
     const before = makeState({ ...sharedOverrides, settings })
     const beforeKey = getRuntimeMobileSessionSyncKey(before, undefined, undefined, false)
     const after = makeState({ ...sharedOverrides, settings })

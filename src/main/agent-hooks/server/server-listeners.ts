@@ -30,9 +30,11 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
 
   setListener(listener: ((payload: EnrichedAgentHookEventPayload) => void) | null): void {
     this.onAgentStatus = listener
+
     if (!listener) {
       return
     }
+
     // Why: replay is best-effort per pane so one throwing listener can't starve the rest.
     for (const payload of this.state.lastStatusByPaneKey.values()) {
       try {
@@ -53,6 +55,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
 
   subscribeStatusChanges(listener: (statuses: AgentHookStatusChangeEntry[]) => void): () => void {
     this.statusChangeListeners.add(listener)
+
     return () => {
       this.statusChangeListeners.delete(listener)
     }
@@ -63,6 +66,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     listener: (status: AgentHookStatusFreshnessObservation) => void
   ): () => void {
     this.statusFreshnessListeners.add(listener)
+
     return () => {
       this.statusFreshnessListeners.delete(listener)
     }
@@ -82,6 +86,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     listener: (providerSessions: AgentHookProviderSessionIdentity[]) => void
   ): () => void {
     this.providerSessionChangeListeners.add(listener)
+
     return () => {
       this.providerSessionChangeListeners.delete(listener)
     }
@@ -92,6 +97,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
    * cleanup (synthetic spinners) still has to retire with the row it was driving. */
   subscribeStatusDrop(listener: StatusDropListener): () => void {
     this.statusDropListeners.add(listener)
+
     return () => {
       this.statusDropListeners.delete(listener)
     }
@@ -111,6 +117,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   /** Multi-subscriber tap on every enriched status change (no replay). */
   subscribeEnrichedStatus(listener: (payload: EnrichedAgentHookEventPayload) => void): () => void {
     this.enrichedStatusListeners.add(listener)
+
     return () => {
       this.enrichedStatusListeners.delete(listener)
     }
@@ -132,6 +139,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
    *  teardown and exists at all under headless serve, which never opens one. */
   subscribePaneStatusClear(listener: (clear: AgentStatusClearIpcPayload) => void): () => void {
     this.paneStatusClearListeners.add(listener)
+
     return () => {
       this.paneStatusClearListeners.delete(listener)
     }
@@ -139,6 +147,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
 
   protected emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void {
     this.onPaneStatusCleared?.(clear)
+
     for (const listener of this.paneStatusClearListeners) {
       // Why: callers are pane/connection teardown paths; one throwing subscriber must
       // not strand the rest, matching every other fan-out here.
@@ -165,6 +174,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
 
   getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
     const entry = this.state.lastStatusByPaneKey.get(paneKey)
+
     return entry ? [toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)] : []
   }
 
@@ -184,8 +194,10 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   } {
     const statuses: AgentHookStatusChangeEntry[] = []
     const providerSessions: AgentHookProviderSessionIdentity[] = []
+
     for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
       const enriched = entry as EnrichedAgentHookEventPayload
+
       if (enriched.providerSession) {
         providerSessions.push({
           paneKey,
@@ -196,6 +208,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
           ...(enriched.worktreeId ? { worktreeId: enriched.worktreeId } : {})
         })
       }
+
       if (!enriched.providerSessionOnly) {
         statuses.push({
           paneKey,
@@ -205,6 +218,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
         })
       }
     }
+
     return { statuses, providerSessions }
   }
 
@@ -212,7 +226,9 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
     if (this.statusChangeListeners.size === 0 && this.providerSessionChangeListeners.size === 0) {
       return
     }
+
     const { statuses, providerSessions } = this.buildStatusChangeNotification()
+
     for (const listener of this.statusChangeListeners) {
       try {
         listener(statuses)
@@ -220,6 +236,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
         console.error('[agent-hooks] status-change listener threw', err)
       }
     }
+
     for (const listener of this.providerSessionChangeListeners) {
       try {
         listener(providerSessions)

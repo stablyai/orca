@@ -35,8 +35,11 @@ import {
 } from './structured-agent-session-runtime'
 
 const SESSION = 'claude-integration-1'
+
 const PROVIDER_SESSION = claudeSessionIdForOrcaSession(SESSION)
+
 const WORKSPACE = 'workspace-claude'
+
 // Why 'runtime': this file exercises the Claude structured integration over agentSession.*, not the
 // mobile surface — nothing here asserts anything mobile-specific, and its sibling integration
 // suites use 'runtime' too. Mobile additionally requires the experimental structured-chat setting,
@@ -68,9 +71,11 @@ type FakeClaudeConnection = Omit<ClaudeStreamJsonConnection, 'closed' | 'exitVer
 function fakeClaude() {
   const connections: FakeClaudeConnection[] = []
   let initializeAccount: unknown
+
   /** A child that dies during start, with the close verdict its ladder observed. */
   let selfExit: { message: string; exitVerdict: ClaudeStreamJsonConnection['exitVerdict'] } | null =
     null
+
   const openConnection = (async (launch, handlers = {}) => {
     const connection: FakeClaudeConnection = {
       launch,
@@ -81,10 +86,13 @@ function fakeClaude() {
       closed: false,
       initializationResult: async () => {
         connection.calls.push({ subtype: 'initialize' })
+
         if (selfExit) {
           handlers.onExit?.(new Error(selfExit.message))
+
           return { models: [] }
         }
+
         handlers.onMessage?.({
           type: 'system',
           subtype: 'init',
@@ -93,6 +101,7 @@ function fakeClaude() {
           model: 'claude-sonnet-5',
           apiKeySource: 'none'
         })
+
         return {
           models: [{ value: 'sonnet', displayName: 'Sonnet' }],
           ...(initializeAccount === undefined ? {} : { account: initializeAccount })
@@ -100,10 +109,12 @@ function fakeClaude() {
       },
       getSettings: async () => {
         connection.calls.push({ subtype: 'get_settings' })
+
         return { env: {} }
       },
       supportedModels: async () => {
         connection.calls.push({ subtype: 'list_models' })
+
         return [{ value: 'sonnet', displayName: 'Sonnet' }]
       },
       setModel: async (model) => {
@@ -117,6 +128,7 @@ function fakeClaude() {
       },
       interrupt: async () => {
         connection.calls.push({ subtype: 'interrupt', params: {} })
+
         return undefined
       },
       cancelAsyncMessage: async () => {},
@@ -125,6 +137,7 @@ function fakeClaude() {
       },
       send: async (message) => {
         connection.sent.push(message)
+
         if (message.type === 'user') {
           handlers.onMessage?.({ ...message, uuid: 'user-1' })
         }
@@ -132,19 +145,26 @@ function fakeClaude() {
       exitVerdict: selfExit?.exitVerdict ?? { root: 'live', tree: 'unverifiable' },
       close: async () => {
         connection.closed = true
+
         return selfExit === null
       }
     }
+
     connections.push(connection)
+
     return connection
   }) as typeof openClaudeStreamJsonConnection
+
   const live = (): FakeClaudeConnection => {
     const connection = connections.at(-1)
+
     if (!connection) {
       throw new Error('no Claude connection')
     }
+
     return connection
   }
+
   return {
     connections,
     openConnection,
@@ -159,11 +179,13 @@ function fakeClaude() {
 }
 
 let operations = 0
+
 // Keep IDs unique without making each assertion depend on a wall-clock tick.
 const TEST_OPERATION_TIMESTAMP = Date.now().toString()
 
 function operationId(): string {
   operations += 1
+
   return `${TEST_OPERATION_TIMESTAMP}-${operations.toString(16).padStart(32, '0')}`
 }
 
@@ -183,6 +205,7 @@ function envelope(method: string, fields: Record<string, unknown>, fence: number
 function createIntentParams() {
   const worktree = `id:${WORKSPACE}`
   const fields = { worktree, agent: 'claude' }
+
   return { envelope: envelope('agentSession.create', fields, null), ...fields }
 }
 
@@ -204,12 +227,14 @@ function ensureParams(fence: number) {
       leafUuid: 'assistant-leaf'
     }
   }
+
   const base = {
     sessionId: SESSION,
     clientOperationId: operationId(),
     expectedRuntimeFence: fence,
     payloadFingerprint: ''
   }
+
   return {
     ...params,
     envelope: {
@@ -232,11 +257,13 @@ function leaseOf(sessionId: string): {
   const host = getStructuredAgentSessionHost() as unknown as {
     deps: { store: { getRecord: (id: string) => { lease: ReturnType<typeof leaseOf> } } }
   }
+
   return host.deps.store.getRecord(sessionId).lease
 }
 
 function handoffParams(direction: 'to-native' | 'to-tui', fence: number) {
   const fields = { direction, mode: 'now' as const, action: 'start' as const }
+
   return {
     envelope: envelope('agentSession.requestHandoff', fields, fence),
     ...fields
@@ -244,22 +271,31 @@ function handoffParams(direction: 'to-native' | 'to-tui', fence: number) {
 }
 
 let claude: ReturnType<typeof fakeClaude>
+
 let root: string
+
 let dispatcher: RpcDispatcher
+
 let cleanups: Map<string, () => void>
+
 let tuiOwner: StructuredTuiOwner | null
+
 let transcriptPath: string
+
 /** Managed-account state and configured overlay this host installs, per test. */
 let claudeAuthPolicy: ClaudeStructuredAuthPolicy
+
 let claudeLaunchEnv: Record<string, string>
 
 async function call(method: string, params: unknown): Promise<RpcResponse> {
   const replies: RpcResponse[] = []
   const request: RpcRequest = { id: `req-${operations}`, authToken: 'token', method, params }
   await dispatcher.dispatchStreaming(request, (raw) => replies.push(JSON.parse(raw)), CLIENT)
+
   if (!replies[0]) {
     throw new Error(`no reply for ${method}`)
   }
+
   return replies[0]
 }
 
@@ -268,6 +304,7 @@ async function ok<T>(method: string, params: unknown): Promise<T> {
   expect(response, JSON.stringify(response)).toMatchObject({ ok: true })
   const result = (response as { result: { ok: boolean; value?: T } }).result
   expect(result).toMatchObject({ ok: true })
+
   return result.value as T
 }
 
@@ -282,17 +319,20 @@ async function subscribe(): Promise<AgentSessionSubscribeEvent[]> {
     },
     (raw) => {
       const response = JSON.parse(raw) as { ok: boolean; result?: AgentSessionSubscribeEvent }
+
       if (response.ok && response.result) {
         frames.push(response.result)
       }
     },
     CLIENT
   )
+
   return frames
 }
 
 function itemsOf(frames: AgentSessionSubscribeEvent[]): AgentJournalRenderItem[] {
   const items = new Map<string, AgentJournalRenderItem>()
+
   for (const frame of frames) {
     const rows =
       frame.type === 'snapshot' || frame.type === 'reset'
@@ -300,10 +340,12 @@ function itemsOf(frames: AgentSessionSubscribeEvent[]): AgentJournalRenderItem[]
         : frame.type === 'batch'
           ? frame.batch.items
           : []
+
     for (const row of rows) {
       items.set(row.itemId, row)
     }
   }
+
   return [...items.values()]
 }
 
@@ -334,6 +376,7 @@ beforeEach(async () => {
   claude = fakeClaude()
   tuiOwner = null
   cleanups = new Map()
+
   const handoffTransport: StructuredAgentSessionHandoffTransport = {
     hostLabel: 'Scripted Claude host',
     launchTui: async ({ record, fence, spawnToken }) => {
@@ -360,12 +403,14 @@ beforeEach(async () => {
         }),
         transcriptPath
       }
+
       return tuiOwner
     },
     reproveTuiOwner: async ({ owner }) => {
       if (owner.link.handle.provider !== 'claude' || !owner.transcriptPath) {
         return owner
       }
+
       return {
         ...owner,
         link: claudeProviderHandleLink({
@@ -381,6 +426,7 @@ beforeEach(async () => {
       if (!tuiOwner) {
         throw new Error('scripted TUI owner missing')
       }
+
       return tuiOwner
     },
     stopRecoveredOwner: async () => {},
@@ -389,6 +435,7 @@ beforeEach(async () => {
     tuiStatus: () => 'idle',
     stopFailedTuiLaunch: async () => {}
   }
+
   const runtime = {
     getRuntimeId: () => 'runtime-1',
     getClientSettings: () => ({ experimentalStructuredNativeChat: true }),
@@ -417,6 +464,7 @@ beforeEach(async () => {
     cleanupSubscription: (id: string) => cleanups.get(id)?.(),
     cleanupSubscriptionsByPrefix: () => {}
   }
+
   dispatcher = new RpcDispatcher({
     runtime: runtime as unknown as OrcaRuntimeService,
     methods: STRUCTURED_AGENT_SESSION_METHODS
@@ -547,11 +595,13 @@ describe('a structured Claude session over agentSession.*', () => {
     // terminal path, and the configured overlay still wins over it.
     expect(claude.live().launch.env).toMatchObject({ ANTHROPIC_API_KEY: 'sk-ant-SHELL-LEAK' })
     expect(claude.live().launch.env?.PATH ?? claude.live().launch.env?.Path).toBeTruthy()
+
     const history = await call('agentSession.history', {
       sessionId: SESSION,
       direction: 'tail',
       limit: 1
     })
+
     expect(history).toMatchObject({
       ok: true,
       result: { providerSession: { key: 'session_id', id: PROVIDER_SESSION } }
@@ -559,12 +609,14 @@ describe('a structured Claude session over agentSession.*', () => {
     const stream = await subscribe()
 
     const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'List files' }] }
+
     const sent = await ok<{
       submission: { dispatchState: string; providerItemId: string | null }
     }>('agentSession.send', {
       envelope: envelope('agentSession.send', { body }, created.fence),
       body
     })
+
     expect(sent.submission).toMatchObject({
       dispatchState: 'accepted',
       providerItemId: `claude:${PROVIDER_SESSION}:user-1`
@@ -611,11 +663,13 @@ describe('a structured Claude session over agentSession.*', () => {
       ]
     })
     const itemsBeforeTaskStop = itemsOf(stream)
+
     const targetedStopFields = {
       turnId: 'background-tasks',
       scope: 'background-tasks',
       taskId: 'task-two'
     }
+
     await expect(
       ok('agentSession.cancel', {
         envelope: envelope('agentSession.cancel', targetedStopFields, created.fence),
@@ -632,6 +686,7 @@ describe('a structured Claude session over agentSession.*', () => {
       scope: 'background-tasks',
       taskId: 'task-stale'
     }
+
     await expect(
       ok('agentSession.cancel', {
         envelope: envelope('agentSession.cancel', staleStopFields, created.fence),
@@ -647,6 +702,7 @@ describe('a structured Claude session over agentSession.*', () => {
         signal: new AbortController().signal
       } as never)
     )
+
     await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
     const approval = itemsOf(stream).find((item) => item.body?.kind === 'approval')
     expect(approval?.body).toMatchObject({ title: 'Allow Bash?', detail: '{"command":"ls"}' })
@@ -687,6 +743,7 @@ describe('a structured Claude session over agentSession.*', () => {
         }
       }
     }
+
     expect(host.deps.store.getRecord(SESSION).providerHandleChain.at(-1)?.handle).toMatchObject({
       provider: 'claude',
       leafUuid: null
@@ -756,6 +813,7 @@ describe('a structured Claude session over agentSession.*', () => {
         deps: { store: { getRecord: (id: string) => { lease: { runtimeFence: number } } } }
       }
     ).deps.store.getRecord(SESSION).lease.runtimeFence
+
     readClaudeTranscriptLeafUuid.mockResolvedValueOnce('tui-assistant')
     await ok('agentSession.requestHandoff', handoffParams('to-native', tuiFence))
     expect(await host.handoffStatus(SESSION)).toMatchObject({ owner: 'native', phase: 'idle' })
@@ -768,6 +826,7 @@ describe('a structured Claude session over agentSession.*', () => {
     expect(new Set(texts).size).toBe(texts.length)
     expect(claude.connections).toHaveLength(2)
     expect(claude.live().launch.options).toMatchObject({ resume: PROVIDER_SESSION })
+
     const record = (
       host as unknown as {
         deps: {
@@ -779,6 +838,7 @@ describe('a structured Claude session over agentSession.*', () => {
         }
       }
     ).deps.store.getRecord(SESSION)
+
     expect(record.providerHandleChain.at(-1)?.handle).toMatchObject({
       provider: 'claude',
       leafUuid: 'tui-assistant'

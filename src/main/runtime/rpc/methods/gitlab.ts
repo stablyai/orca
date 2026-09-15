@@ -53,6 +53,7 @@ export const GITLAB_METHODS = [
     params: IssuesList,
     handler: async (params, { runtime }) => {
       const normalized = normalizeGitLabIssueListArgs(params)
+
       return runtime.listGitLabRepoIssues(
         params.repo,
         normalized.state,
@@ -133,6 +134,7 @@ export const GITLAB_METHODS = [
         params.jobId,
         params.projectRef
       )
+
       return params.logExcerpt ? toGitLabJobLogExcerptResult(result) : result
     }
   }),

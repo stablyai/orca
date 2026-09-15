@@ -26,6 +26,7 @@ function getHostStatusDetail(host: SidebarHostOption): string {
   if (host.compatibility?.kind === 'blocked') {
     return describeRuntimeCompatBlock(host.compatibility)
   }
+
   return `${getSidebarHostHealthLabel(host.health)}${host.detail ? ` - ${host.detail}` : ''}`
 }
 
@@ -41,14 +42,17 @@ export function AddRepoHostSelector({
 }: AddRepoHostSelectorProps): React.JSX.Element | null {
   const [addHostOpen, setAddHostOpen] = useState(false)
   const showHostSetupActions = Boolean(onAddSshHost || onAddRemoteServer)
+
   if (!shouldShowHostScopeControls(hosts) && !showHostSetupActions) {
     return null
   }
 
   const selectedHost = hosts.find((host) => host.id === selectedHostId) ?? hosts[0]
+
   if (!selectedHost) {
     return null
   }
+
   return (
     <div className="flex items-center gap-2 text-xs">
       <span className="font-medium text-muted-foreground">
@@ -166,6 +170,7 @@ export function AddRepoHostSelector({
                 const disabled = !canSelectAddRepoHost(host)
                 const canConnect = canConnectAddRepoHost(host)
                 const isConnecting = host.health === 'connecting'
+
                 return (
                   <CommandItem
                     key={host.id}
@@ -176,6 +181,7 @@ export function AddRepoHostSelector({
                       if (disabled) {
                         return
                       }
+
                       onSelectHost(host.id)
                       onOpenChange(false)
                     }}

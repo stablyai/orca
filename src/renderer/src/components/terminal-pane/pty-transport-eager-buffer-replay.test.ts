@@ -8,6 +8,7 @@ import {
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onData: ((payload: { id: string; data: string }) => void) | null = null
+
   let onExit:
     | ((payload: { id: string; code: number; preserveRendererBinding?: boolean }) => void)
     | null = null
@@ -88,6 +89,7 @@ describe('createIpcPtyTransport', () => {
   it('keeps exit sidecars after eager-buffered PTYs attach to a terminal', async () => {
     const { createIpcPtyTransport, registerEagerPtyBuffer, subscribeToPtyExit } =
       await import('./pty-transport')
+
     const eagerExit = vi.fn()
     const sidecarExit = vi.fn()
 
@@ -113,6 +115,7 @@ describe('createIpcPtyTransport', () => {
     for (let i = 0; i < 8; i += 1) {
       onData?.({ id: 'pty-restored', data: String.fromCharCode(65 + i).repeat(100 * 1024) })
     }
+
     onData?.({ id: 'pty-restored', data: 'PROMPT$' })
 
     const flushed = handle.flush()
@@ -191,6 +194,7 @@ describe('createIpcPtyTransport', () => {
           throw new Error('Array.shift should not be used by the eager buffer')
         }
       })
+
       for (let i = 0; i < 2048; i += 1) {
         onData?.({ id: 'pty-restored', data: 'x'.repeat(1024) })
       }

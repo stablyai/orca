@@ -36,6 +36,7 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     setProjectTitleDraft,
     tasksSupported
   } = model
+
   useEffect(() => {
     if (!projectRowItem) {
       setProjectRowDetail(null)
@@ -52,6 +53,7 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
       setPrFileLoadingPath(null)
       setPrFileCommentDrafts({})
       setProjectFieldDrafts({})
+
       return
     }
 
@@ -80,6 +82,7 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
 
     if (!tasksSupported || !client || !type || !slug || !projectRowItem.content.number) {
       setProjectRowDetailLoading(false)
+
       return
     }
 
@@ -102,9 +105,11 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
         if (stale) {
           return
         }
+
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
+
         const result = response.result as
           | {
               ok: true
@@ -134,9 +139,11 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
               }
             }
           | { ok: false; error: { message: string } }
+
         if (!result.ok) {
           throw new Error(result.error.message)
         }
+
         setProjectRowDetail({
           provider: 'github',
           body: result.details.body ?? '',
@@ -175,6 +182,7 @@ export function useMobileTasksProjectDetailLoading(model: ItemDetailLoadingModel
     projectRowItem,
     tasksSupported
   ])
+
   return model
 }
 

@@ -20,6 +20,7 @@ describe('resolveOxlintInvocation', () => {
 
   it('spawns without a shell and produces Oxlint JSON', () => {
     const { command, prefixArgs } = resolveOxlintInvocation(repoRoot)
+
     const result = spawnSync(
       command,
       [...prefixArgs, '--help'],

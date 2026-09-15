@@ -16,6 +16,7 @@ describe('sendEmulatorGestureSequence', () => {
           : Buffer.isBuffer(raw)
             ? raw
             : Buffer.from(raw)
+
         expect(buffer[0]).toBe(0x03)
         messages.push(JSON.parse(buffer.subarray(1).toString('utf8')))
       })

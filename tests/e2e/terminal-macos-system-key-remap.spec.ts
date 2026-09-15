@@ -116,6 +116,7 @@ test.describe('Terminal macOS system key remap', () => {
         const arena = await openTerminalImePaneArena(orcaPage)
         const reader = createTerminalImeByteReader(testRepoPath, 1)
         let completed = false
+
         try {
           await startTerminalImeByteReader(orcaPage, arena.ptyId, reader)
           await arm.dispatch(arena.session, layoutKey, committed)
@@ -129,13 +130,16 @@ test.describe('Terminal macOS system key remap', () => {
           const compositionEvents = trace.dom
             .map((event) => event.type)
             .filter((type) => type.startsWith('composition'))
+
           expect(compositionEvents).toEqual([])
+
           // Pins the producer: the physical backquote position, carrying the layout's character.
           // What was committed is asserted on the wire below rather than on the DOM, because the
           // commit's `input` event is consumed before this probe sees it once a forwarder owns it.
           const keydowns = trace.dom.filter(
             (event) => event.type === 'keydown' && event.code === 'Backquote'
           )
+
           expect(keydowns).toHaveLength(1)
           expect(keydowns[0].key).toBe(layout.character)
 

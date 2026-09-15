@@ -19,6 +19,7 @@ export async function completeWorktreeCreation(args: {
   const { request } = args
   // Why: clearing synchronously after activation lets React commit the panel-to-terminal swap in one frame.
   useAppStore.getState().removePendingWorktreeCreation(args.creationId, { cleanupVm: false })
+
   if (!args.structuredLaunchAccepted) {
     seedAgentTabStateAfterWorktreeCreate({
       request,
@@ -28,6 +29,7 @@ export async function completeWorktreeCreation(args: {
       backendSpawned: args.backendSpawned
     })
   }
+
   if (!args.structuredLaunchAccepted && request.startupPlan && !args.backendSpawned) {
     void ensureAgentStartupInTerminal({
       worktreeId: args.worktreeId,
@@ -35,6 +37,7 @@ export async function completeWorktreeCreation(args: {
       startup: request.startupPlan
     })
   }
+
   if (
     !args.structuredLaunchAccepted &&
     !request.suppressTerminalFocusOnCompletion &&

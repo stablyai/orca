@@ -11,7 +11,9 @@ import { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
 
 const execFileAsync = promisify(execFile)
+
 const temporaryRoots: string[] = []
+
 const savedEnvironment = {
   GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND,
   GIT_SSH_VARIANT: process.env.GIT_SSH_VARIANT,
@@ -29,11 +31,13 @@ async function createGitRepository(
 ): Promise<string> {
   const repository = join(root, name)
   await mkdir(repository, { recursive: true })
+
   for (const [relativePath, contents] of Object.entries(files)) {
     const path = join(repository, relativePath)
     await mkdir(join(path, '..'), { recursive: true })
     await writeFile(path, contents, 'utf8')
   }
+
   await runGit(repository, ['init', '--quiet'])
   await runGit(repository, ['checkout', '--quiet', '-b', 'main'])
   await runGit(repository, ['add', '--all'])
@@ -47,6 +51,7 @@ async function createGitRepository(
     '-m',
     'fixture'
   ])
+
   return repository
 }
 
@@ -62,6 +67,7 @@ afterEach(async () => {
       process.env[key] = value
     }
   }
+
   await Promise.all(
     temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true }))
   )
@@ -74,6 +80,7 @@ describe('private Git marketplace integration', () => {
     const pluginKey = 'private.private-locale'
     const pluginUrl = 'ssh://git@example.invalid/private/locale.git'
     const marketplaceUrl = 'ssh://git@example.invalid/private/marketplace.git'
+
     const pluginRepository = await createGitRepository(root, 'locale-source', {
       'orca-plugin.json': JSON.stringify({
         manifestVersion: 1,
@@ -92,6 +99,7 @@ describe('private Git marketplace integration', () => {
         settings: { title: 'Ajustes' }
       })
     })
+
     const marketplaceRepository = await createGitRepository(root, 'marketplace-source', {
       'orca-marketplace.json': JSON.stringify({
         name: 'Private Team Plugins',
@@ -105,6 +113,7 @@ describe('private Git marketplace integration', () => {
         ]
       })
     })
+
     const sshShim = join(root, 'git-ssh-shim.cjs')
     await writeFile(
       sshShim,
@@ -119,15 +128,19 @@ describe('private Git marketplace integration', () => {
     })
 
     const userDataPath = join(root, 'user-data')
+
     const marketplace = new PluginMarketplaceService({
       pluginsDataDir: join(userDataPath, 'plugins-data')
     })
+
     const source: PluginMarketplaceGitSource = {
       kind: 'git',
       url: marketplaceUrl,
       ref: 'main'
     }
+
     const registered = await marketplace.addSource(source)
+
     const installer = new PluginMarketplaceInstaller({
       marketplace,
       userDataPath,

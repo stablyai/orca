@@ -19,6 +19,7 @@ export function watchForSettingsDeepLinkTarget(args: {
   onTargetPresent: () => void
 }): SettingsDeepLinkTargetWatch {
   const root = args.root ?? (typeof document === 'undefined' ? null : document.body)
+
   if (!root || typeof MutationObserver === 'undefined') {
     return { cancel: () => {} }
   }
@@ -31,9 +32,11 @@ export function watchForSettingsDeepLinkTarget(args: {
     if (settled) {
       return
     }
+
     settled = true
     observer?.disconnect()
     observer = null
+
     if (timeout !== null) {
       window.clearTimeout(timeout)
       timeout = null
@@ -44,6 +47,7 @@ export function watchForSettingsDeepLinkTarget(args: {
     if (settled || !args.isTargetPresent()) {
       return
     }
+
     finish()
     args.onTargetPresent()
   })

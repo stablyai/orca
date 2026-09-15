@@ -32,17 +32,22 @@ function coverAllTokens(text: string, tokens: readonly PaletteQueryToken[]): Mat
   const folded = lowered.length === text.length ? null : normalizePaletteText(text)
   const haystack = folded ? folded.normalized : lowered
   const ranges: MatchRange[] = []
+
   for (const token of tokens) {
     if (token.isPunctuationOnly) {
       return null
     }
+
     const index = haystack.indexOf(token.text)
+
     if (index === -1) {
       return null
     }
+
     const end = index + token.text.length
     ranges.push(folded ? mapNormalizedRange(folded, index, end) : { start: index, end })
   }
+
   return mergeMatchRanges(ranges)
 }
 
@@ -54,11 +59,13 @@ export function matchWorkspaceTabAgentSnippet(
     for (const metadata of agentMetadata) {
       for (const text of metadata[source]) {
         const ranges = coverAllTokens(text, query.tokens)
+
         if (ranges) {
           return { text, ranges, rank: AGENT_SNIPPET_RANK }
         }
       }
     }
   }
+
   return null
 }

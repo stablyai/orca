@@ -42,38 +42,53 @@ vi.mock('@/store', () => {
     (selector: (s: typeof storeState) => unknown) => selector(storeState),
     { getState: () => storeState }
   )
+
   return { useAppStore }
 })
+
 vi.mock('@/store/slices/worktree-helpers', () => ({ findWorktreeById: () => null }))
+
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   settingsForRuntimeOwner: (settings: unknown) => settings
 }))
+
 vi.mock('@/runtime/runtime-file-client', () => ({
   statRuntimePath: vi.fn(async () => ({ isDirectory: false }))
 }))
+
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => null }))
+
 vi.mock('@/lib/connection-owner-resolution', () => ({
   createConnectionIdForFileSelector: () => () => null
 }))
+
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+
 vi.mock('./useLocalImageSrc', () => ({ useLocalImageSrc: (src?: string) => src }))
+
 vi.mock('./MermaidBlock', () => ({ default: () => null }))
+
 vi.mock('./CodeBlockCopyButton', () => ({
   default: ({ children }: { children: React.ReactNode }) => children
 }))
+
 vi.mock('../diff-comments/DiffCommentCard', () => ({ DiffCommentCard: () => null }))
+
 vi.mock('./NotesSendMenu', () => ({ NotesSendMenu: () => null }))
+
 // Render the items the gate produced so the test can read the outline from the DOM.
 vi.mock('./MarkdownTableOfContentsPanel', () => ({
   MarkdownTableOfContentsPanel: ({ items }: { items: MarkdownTocItem[] }) => (
     <nav aria-label="toc-spy">{items.map((item) => item.title).join('|')}</nav>
   )
 }))
+
 // Spy on the expensive parse without changing its behavior, so the test can
 // assert it is never invoked while the panel is closed.
 vi.mock('./markdown-table-of-contents', async (importOriginal) => {
   const actual = await importOriginal<typeof MarkdownTableOfContentsModule>()
   buildMarkdownTableOfContentsSpy.mockImplementation(actual.buildMarkdownTableOfContents)
+
   return { ...actual, buildMarkdownTableOfContents: buildMarkdownTableOfContentsSpy }
 })
 

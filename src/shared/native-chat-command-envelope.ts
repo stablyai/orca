@@ -8,6 +8,7 @@
 import { isTextBlock, type NativeChatMessage } from './native-chat-types'
 
 const COMMAND_NAME = /<command-name>([\s\S]*?)<\/command-name>/
+
 const COMMAND_ARGS = /<command-args>([\s\S]*?)<\/command-args>/
 
 export type NativeChatCommandEnvelope = { name: string; args: string }
@@ -16,13 +17,17 @@ export type NativeChatCommandEnvelope = { name: string; args: string }
  *  that does not lead with an envelope tag (ordinary prompts, XML pastes). */
 export function parseNativeChatCommandEnvelope(text: string): NativeChatCommandEnvelope | null {
   const trimmed = text.trimStart()
+
   if (!trimmed.toLowerCase().startsWith('<command-')) {
     return null
   }
+
   const name = COMMAND_NAME.exec(trimmed)?.[1]?.trim()
+
   if (!name) {
     return null
   }
+
   return { name, args: COMMAND_ARGS.exec(trimmed)?.[1]?.trim() ?? '' }
 }
 
@@ -37,16 +42,20 @@ export function surfaceSkillInvocationUserTurns(
   catalogCommandNames: ReadonlySet<string>
 ): NativeChatMessage[] {
   let changed = false
+
   const out = messages.map((message) => {
     if (message.role !== 'user' || !message.blocks.every(isTextBlock)) {
       return message
     }
+
     const envelope = parseNativeChatCommandEnvelope(
       message.blocks.map((block) => block.text).join('\n')
     )
+
     if (!envelope || catalogCommandNames.has(envelope.name.replace(/^\//, ''))) {
       return message
     }
+
     // Why: the harness canonicalizes a plugin skill to `/plugin:name`, but the
     // user (and the picker) sent the short frontmatter name. Render the short
     // token so the bubble shows what was typed and the optimistic echo prunes
@@ -54,10 +63,12 @@ export function surfaceSkillInvocationUserTurns(
     const shortName = envelope.name.replace(/^\//, '').split(':').at(-1) ?? ''
     const token = `/${shortName}`
     changed = true
+
     return {
       ...message,
       blocks: [{ type: 'text' as const, text: envelope.args ? `${token} ${envelope.args}` : token }]
     }
   })
+
   return changed ? out : (messages as NativeChatMessage[])
 }

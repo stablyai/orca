@@ -30,9 +30,11 @@ const EMPTY_REPOS: Repo[] = []
 
 function getProjectGroupExecutionHostId(projectGroup: ProjectGroup): ExecutionHostId {
   const executionHostId = normalizeExecutionHostId(projectGroup.executionHostId)
+
   if (executionHostId) {
     return executionHostId
   }
+
   return projectGroup.connectionId
     ? toSshExecutionHostId(projectGroup.connectionId)
     : LOCAL_EXECUTION_HOST_ID
@@ -46,9 +48,11 @@ export function getFolderSourceRepos(
   if (!projectGroup?.parentPath) {
     return EMPTY_REPOS
   }
+
   const folderPath = projectGroup.parentPath
   const groupIds = getProjectGroupSubtreeIds(projectGroups, projectGroup.id)
   const projectGroupHostId = getProjectGroupExecutionHostId(projectGroup)
+
   return repos.filter(
     (repo) =>
       isGitRepoKind(repo) &&
@@ -64,7 +68,9 @@ export function toFolderWorkspaceLinkedTask(
   if (!item) {
     return null
   }
+
   const provider = getWorkspaceSourceProvider(item)
+
   return {
     provider,
     type: item.type,

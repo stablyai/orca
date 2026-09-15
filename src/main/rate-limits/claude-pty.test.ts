@@ -33,13 +33,16 @@ function makeMockTerm(): MockTerm & {
 } {
   let dataHandler: ((data: string) => void) | null = null
   let exitHandler: (() => void) | null = null
+
   return {
     onData: vi.fn((handler: (data: string) => void) => {
       dataHandler = handler
+
       return makeDisposable()
     }),
     onExit: vi.fn((handler: () => void) => {
       exitHandler = handler
+
       return makeDisposable()
     }),
     write: vi.fn(),
@@ -87,6 +90,7 @@ describe('fetchViaPty', () => {
     const resultPromise = fetchViaPty({
       networkProxySettings: { httpProxyUrl: 'http://127.0.0.1:7890' }
     })
+
     await vi.advanceTimersByTimeAsync(0)
 
     expect(spawnMock).toHaveBeenCalled()
@@ -147,6 +151,7 @@ describe('fetchViaPty', () => {
         provenance: 'system'
       }
     })
+
     await vi.advanceTimersByTimeAsync(0)
 
     const [spawnFile, spawnArgs] = spawnMock.mock.calls[0] as [string, string[]]

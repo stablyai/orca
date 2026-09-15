@@ -40,20 +40,24 @@ describe('composeActiveTerminalTheme', () => {
 
   it('layers terminalColorOverrides on top of the base theme', () => {
     const base = { background: '#101010', foreground: '#fafafa' }
+
     const result = composeActiveTerminalTheme(
       base,
       settingsWith({ terminalColorOverrides: { foreground: '#00ff00' } })
     )
+
     expect(result!.foreground).toBe('#00ff00')
     expect(result!.background).toBe('#101010')
   })
 
   it('applies background opacity by converting the hex background to rgba', () => {
     const base = { background: '#112233' }
+
     const result = composeActiveTerminalTheme(
       base,
       settingsWith({ terminalBackgroundOpacity: 0.5 })
     )
+
     expect(result!.background).toBe('rgba(17, 34, 51, 0.5)')
   })
 

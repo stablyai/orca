@@ -35,22 +35,28 @@ export function applyDetectedWorktreeUpdates(
 
   for (const [repoId, result] of Object.entries(detectedWorktreesByRepo)) {
     let repoChanged = false
+
     const nextWorktrees = result.worktrees.map((worktree) => {
       if (worktree.id !== worktreeId || !worktreeRowMatchesMetaHost(worktree, executionHostId)) {
         return worktree
       }
+
       repoChanged = true
       changed = true
       const next = { ...worktree, ...updates }
+
       if (updates.displayNameIsPinned !== undefined) {
         next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
+
         if (updates.displayNameIsPinned === false && !updates.displayName?.trim()) {
           const automaticName = branchName(next.branch)
           next.displayName = automaticName || worktree.displayName
         }
       }
+
       return next
     })
+
     nextByRepo[repoId] = repoChanged ? { ...result, worktrees: nextWorktrees } : result
   }
 
@@ -75,23 +81,30 @@ export function findKnownWorktreeById(
   executionHostId?: ExecutionHostId
 ): Worktree | DetectedWorktreeListResult['worktrees'][number] | undefined {
   const workspaceScope = parseWorkspaceKey(worktreeId)
+
   if (workspaceScope?.type === 'folder') {
     const folderWorkspace = state.folderWorkspaces.find(
       (workspace) =>
         workspace.id === workspaceScope.folderWorkspaceId &&
         (!executionHostId || folderWorkspaceMatchesHost(workspace, executionHostId))
     )
+
     if (!folderWorkspace) {
       return undefined
     }
+
     const cached = folderWorkspaceWorktreeCache.get(folderWorkspace)
+
     if (cached) {
       return cached
     }
+
     const worktree = folderWorkspaceToWorktree(folderWorkspace)
     folderWorkspaceWorktreeCache.set(folderWorkspace, worktree)
+
     return worktree
   }
+
   const visible = executionHostId
     ? (findIndexedWorktreeOwnerForHost(
         state.worktreesByRepo,
@@ -99,9 +112,11 @@ export function findKnownWorktreeById(
         executionHostId
       ) as Worktree | null)
     : findWorktreeById(state.worktreesByRepo, worktreeId)
+
   if (visible) {
     return visible
   }
+
   // Why the index: this miss path runs per activity row for exactly the worktrees the
   // feature targets (retained agents on deleted worktrees); the cached index replaces a
   // full scan of every repo's detected worktrees. The index holds the same row objects,
@@ -110,6 +125,7 @@ export function findKnownWorktreeById(
     state.detectedWorktreesByRepo,
     worktreeId
   ) as DetectedWorktreeListResult['worktrees']
+
   for (const detected of detectedCandidates) {
     if (
       !executionHostId ||
@@ -120,6 +136,7 @@ export function findKnownWorktreeById(
       return detected
     }
   }
+
   return undefined
 }
 
@@ -161,47 +178,61 @@ export function getFolderWorkspaceMetaUpdates(
       | 'diffComments'
     >
   > = {}
+
   if (updates.displayName !== undefined) {
     next.name = updates.displayName
     next.pendingFirstAgentMessageRename = false
     next.firstAgentMessageRenameError = null
   }
+
   if (updates.comment !== undefined) {
     next.comment = updates.comment
     next.lastActivityAt = Date.now()
   }
+
   if (updates.isArchived !== undefined) {
     next.isArchived = updates.isArchived
   }
+
   if (updates.isUnread !== undefined) {
     next.isUnread = updates.isUnread
   }
+
   if (updates.isPinned !== undefined) {
     next.isPinned = updates.isPinned
   }
+
   if (updates.sortOrder !== undefined) {
     next.sortOrder = updates.sortOrder
   }
+
   if (updates.manualOrder !== undefined) {
     next.manualOrder = updates.manualOrder
   }
+
   if (updates.lastActivityAt !== undefined) {
     next.lastActivityAt = updates.lastActivityAt
   }
+
   if (updates.workspaceStatus !== undefined) {
     next.workspaceStatus = updates.workspaceStatus
   }
+
   if (updates.createdWithAgent !== undefined) {
     next.createdWithAgent = updates.createdWithAgent
   }
+
   if (updates.pendingFirstAgentMessageRename !== undefined) {
     next.pendingFirstAgentMessageRename = updates.pendingFirstAgentMessageRename
   }
+
   if (updates.firstAgentMessageRenameError !== undefined) {
     next.firstAgentMessageRenameError = updates.firstAgentMessageRenameError
   }
+
   if (updates.diffComments !== undefined) {
     next.diffComments = updates.diffComments
   }
+
   return next
 }

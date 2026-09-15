@@ -15,10 +15,13 @@ export function parseBoundedSmartWorkspaceLinearIssueInput(
   if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
     return null
   }
+
   const parsed = parseLinearIssueInput(value)
+
   if (!parsed?.organizationUrlKey) {
     return parsed
   }
+
   return parseLinearIssueUrlIntent(value)
 }
 
@@ -30,6 +33,7 @@ export function parseBoundedSmartWorkspaceLinearIssueUrlIntent(
 
 export function getSmartWorkspaceLinearSearchQuery(value: string): string {
   const trimmed = value.trim()
+
   return parseBoundedSmartWorkspaceLinearIssueInput(trimmed)?.identifier ?? trimmed
 }
 
@@ -40,10 +44,13 @@ export function isSmartWorkspaceLinearIssueIntentMatch(
   if (issue.identifier.toUpperCase() !== intent.identifier.toUpperCase()) {
     return false
   }
+
   if (!intent.organizationUrlKey) {
     return true
   }
+
   const issueInput = parseLinearIssueUrlIntent(issue.url)
+
   return issueInput?.organizationUrlKey?.toLowerCase() === intent.organizationUrlKey.toLowerCase()
 }
 
@@ -52,9 +59,11 @@ export function prioritizeSmartWorkspaceLinearIssueResults(
   issues: readonly LinearIssue[]
 ): LinearIssue[] {
   const intent = parseBoundedSmartWorkspaceLinearIssueInput(value)
+
   if (!intent) {
     return issues.slice()
   }
+
   return [
     ...issues.filter((issue) => isSmartWorkspaceLinearIssueIntentMatch(intent, issue)),
     ...issues.filter((issue) => !isSmartWorkspaceLinearIssueIntentMatch(intent, issue))
@@ -65,5 +74,6 @@ export function isBlockingLinearUrlIntent(mode: SmartWorkspaceLinearMode, value:
   if (mode !== 'smart' && mode !== 'linear') {
     return false
   }
+
   return parseBoundedSmartWorkspaceLinearIssueUrlIntent(value) !== null
 }

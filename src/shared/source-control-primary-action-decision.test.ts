@@ -31,6 +31,7 @@ describe('source-control primary action decision', () => {
         upstreamStatus: { hasUpstream: true, ahead: 0, behind: 4 }
       })
     )
+
     expect(result.kind).toBe('stage')
     expect(result.titleIntent).toBe('stage_all_changes')
     expect(result.disabled).toBe(false)
@@ -40,6 +41,7 @@ describe('source-control primary action decision', () => {
     const result = resolveSourceControlCommitAreaPrimaryActionDecision(
       inputs({ stagedCount: 2, hasMessage: true })
     )
+
     expect(result).toMatchObject({
       kind: 'commit',
       titleIntent: 'commit_staged_changes',
@@ -51,6 +53,7 @@ describe('source-control primary action decision', () => {
     const result = resolveSourceControlCommitAreaPrimaryActionDecision(
       inputs({ stagedCount: 1, hasMessage: true, hasUnresolvedConflicts: true })
     )
+
     expect(result).toMatchObject({
       kind: 'commit',
       titleIntent: 'resolve_conflicts_before_commit',
@@ -83,6 +86,7 @@ describe('source-control primary action decision', () => {
         hasCurrentBranch: true
       })
     )
+
     expect(result).toMatchObject({
       kind: 'publish',
       titleIntent: 'publish_branch',
@@ -97,6 +101,7 @@ describe('source-control primary action decision', () => {
         hasCurrentBranch: false
       })
     )
+
     expect(result).toMatchObject({
       kind: 'commit',
       titleIntent: 'checkout_branch_before_publish',
@@ -112,6 +117,7 @@ describe('source-control primary action decision', () => {
         upstreamStatus: { hasUpstream: true, ahead: 3, behind: 0 }
       })
     )
+
     expect(result).toMatchObject({
       kind: 'pull',
       labelIntent: 'pull',
@@ -133,6 +139,7 @@ describe('source-control primary action decision', () => {
         }
       })
     )
+
     expect(result).toMatchObject({
       kind: 'push',
       labelIntent: 'force_push',
@@ -155,6 +162,7 @@ describe('source-control primary action decision', () => {
         reviewLookupOutcome: 'not_found'
       }
     })
+
     expect(resolveSourceControlPrimaryActionDecision(input).kind).toBe('create_pr')
     expect(resolveSourceControlCommitAreaPrimaryActionDecision(input).kind).toBe('commit')
   })
@@ -178,6 +186,7 @@ describe('source-control primary action decision', () => {
       },
       isHostedReviewCreationLoading: true
     })
+
     expect(resolveSourceControlPrimaryActionDecision(input)).toMatchObject({
       kind: 'create_pr',
       titleIntent: 'checking_review_creation',

@@ -81,6 +81,7 @@ describe('orchestration worker launch preferences', () => {
     }
   ])('enforces the Codex effort ceiling for $model', ({ model, accepted, rejected }) => {
     const catalog = getAgentSessionOptionCatalog('codex')!
+
     const effort =
       catalog.models
         .find((candidate) => candidate.id === model)
@@ -97,6 +98,7 @@ describe('orchestration worker launch preferences', () => {
         resolveWorkerLaunchPreferences({ agent: 'codex', model, effort: effortValue }).preferences
       ).toEqual({ model, effort: effortValue })
     }
+
     for (const effortValue of rejected) {
       expect(() =>
         resolveWorkerLaunchPreferences({ agent: 'codex', model, effort: effortValue })
@@ -161,6 +163,7 @@ describe('orchestration worker launch preferences', () => {
       agent: 'claude',
       from: 'term_coord'
     })
+
     expect(parsed.success).toBe(false)
     expect(parsed.error?.issues.map((issue) => issue.message)).toContain(
       '--retry-of needs --task <task_id> naming the failed Task; --spec creates a new one'

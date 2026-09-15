@@ -42,13 +42,17 @@ export const speechApi = {
   onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: SpeechTranscriptEvent): void =>
       callback(data)
+
     ipcRenderer.on('speech:partial', listener)
+
     return () => ipcRenderer.removeListener('speech:partial', listener)
   },
   onFinalTranscript: (callback: (data: SpeechTranscriptEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: SpeechTranscriptEvent): void =>
       callback(data)
+
     ipcRenderer.on('speech:final', listener)
+
     return () => ipcRenderer.removeListener('speech:final', listener)
   },
   onDownloadProgress: (
@@ -58,25 +62,33 @@ export const speechApi = {
       _event: Electron.IpcRendererEvent,
       data: { modelId: string; progress: number }
     ): void => callback(data)
+
     ipcRenderer.on('speech:downloadProgress', listener)
+
     return () => ipcRenderer.removeListener('speech:downloadProgress', listener)
   },
   onReady: (callback: (data: SpeechLifecycleEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: SpeechLifecycleEvent): void =>
       callback(data)
+
     ipcRenderer.on('speech:ready', listener)
+
     return () => ipcRenderer.removeListener('speech:ready', listener)
   },
   onStopped: (callback: (data: SpeechLifecycleEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: SpeechLifecycleEvent): void =>
       callback(data)
+
     ipcRenderer.on('speech:stopped', listener)
+
     return () => ipcRenderer.removeListener('speech:stopped', listener)
   },
   onError: (callback: (data: SpeechErrorEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: SpeechErrorEvent): void =>
       callback(data)
+
     ipcRenderer.on('speech:error', listener)
+
     return () => ipcRenderer.removeListener('speech:error', listener)
   }
 } satisfies PreloadApi['speech']

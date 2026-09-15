@@ -27,6 +27,7 @@ const storeMocks = vi.hoisted(() => ({
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useCallback<T extends (...args: never[]) => unknown>(callback: T): T {
@@ -34,6 +35,7 @@ vi.mock('react', async () => {
     },
     useEffect(effect: () => void | (() => void)): void {
       const cleanup = effect()
+
       if (typeof cleanup === 'function') {
         hookRuntime.cleanups.push(cleanup)
       }
@@ -43,16 +45,19 @@ vi.mock('react', async () => {
     },
     useState<T>(initial: T | (() => T)) {
       const stateIndex = hookRuntime.index++
+
       if (!(stateIndex in hookRuntime.states)) {
         hookRuntime.states[stateIndex] =
           typeof initial === 'function' ? (initial as () => T)() : initial
       }
+
       const setState = (next: T | ((previous: T) => T)): void => {
         hookRuntime.states[stateIndex] =
           typeof next === 'function'
             ? (next as (previous: T) => T)(hookRuntime.states[stateIndex] as T)
             : next
       }
+
       return [hookRuntime.states[stateIndex] as T, setState] as const
     }
   }
@@ -157,12 +162,15 @@ function expand(node: unknown): unknown {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return node
   }
+
   if (Array.isArray(node)) {
     return node.map((entry) => expand(entry))
   }
+
   if (!React.isValidElement(node)) {
     if (typeof node === 'object' && 'props' in node) {
       const element = node as ReactElementLike
+
       return {
         ...element,
         props: {
@@ -171,13 +179,18 @@ function expand(node: unknown): unknown {
         }
       }
     }
+
     return node
   }
+
   const element = node as React.ReactElement<Record<string, unknown>>
+
   if (typeof element.type === 'function') {
     const Component = element.type as (props: Record<string, unknown>) => unknown
+
     return expand(Component(element.props))
   }
+
   return {
     type: element.type,
     props: {
@@ -191,12 +204,16 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return
   }
+
   if (Array.isArray(node)) {
     node.forEach((entry) => visit(entry, cb))
+
     return
   }
+
   const element = node as ReactElementLike
   cb(element)
+
   if (element.props?.children) {
     visit(element.props.children, cb)
   }
@@ -209,14 +226,17 @@ function findAllByType(node: unknown, type: unknown): ReactElementLike[] {
       found.push(entry)
     }
   })
+
   return found
 }
 
 function findByType(node: unknown, type: unknown): ReactElementLike {
   const found = findAllByType(node, type)[0]
+
   if (!found) {
     throw new Error(`element not found: ${String(type)}`)
   }
+
   return found
 }
 
@@ -224,6 +244,7 @@ function renderMenu(
   overrides: Partial<React.ComponentProps<typeof NotesSendMenu<TestNote>>> = {}
 ): unknown {
   hookRuntime.index = 0
+
   return expand(
     <NotesSendMenu<TestNote>
       worktreeId="wt-1"
@@ -299,6 +320,7 @@ describe('NotesSendMenu', () => {
     const onDelivered = vi.fn()
     const tree = renderMenu({ onDelivered })
     expect(findByType(tree, 'button').props.title).toBe('Send notes to an agent')
+
     const dropdown = findByType(tree, 'DropdownMenu')
 
     ;(dropdown.props.onOpenChange as (open: boolean) => void)(true)
@@ -316,6 +338,7 @@ describe('NotesSendMenu', () => {
 
     const delivered = storeMocks.openAgentSendPopoverTargetMode.mock.calls[0][0]
       .onPromptDelivered as () => void
+
     delivered()
     expect(onDelivered).toHaveBeenCalledWith([{ id: 'note-1' }])
 
@@ -345,6 +368,7 @@ describe('NotesSendMenu', () => {
         { id: 'all', label: 'All unsent notes', notes: [{ id: 'all-note' }], prompt: 'prompt-all' }
       ]
     })
+
     const [fileTrigger, allTrigger] = findAllByType(tree, 'DropdownMenuSubTrigger')
 
     ;(fileTrigger.props.onFocus as () => void)()
@@ -386,6 +410,7 @@ describe('NotesSendMenu', () => {
     const onOpenRequestHandled = vi.fn()
     vi.useFakeTimers()
     vi.setSystemTime(600_000)
+
     try {
       // Issued 10 minutes ago and never consumed: clear it, do not pop the menu.
       renderMenu({ openRequestNonce: 1, openRequestExpiresAt: 5_000, onOpenRequestHandled })
@@ -401,6 +426,7 @@ describe('NotesSendMenu', () => {
     const onOpenRequestHandled = vi.fn()
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       renderMenu({ openRequestNonce: 1, openRequestExpiresAt: 6_000, onOpenRequestHandled })
     } finally {
@@ -429,9 +455,11 @@ describe('NotesSendMenu', () => {
 
     expect(hookRuntime.states[0]).toBe(false)
     expect(findByType(tree, 'DropdownMenu').props.open).toBe(false)
+
     for (const cleanup of hookRuntime.cleanups) {
       cleanup()
     }
+
     expect(storeMocks.closeAgentSendPopoverTargetMode).toHaveBeenCalledWith(
       buildNotesSendTargetModeId(['markdown-notes', 'wt-1', 'README.md', 'rail'])
     )

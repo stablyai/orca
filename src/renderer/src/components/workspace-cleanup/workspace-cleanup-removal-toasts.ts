@@ -13,9 +13,11 @@ export function showWorkspaceCleanupRemovalResultToasts(
   if (result.preservedBranches && result.preservedBranches.length > 0) {
     showPreservedBranchBatchToast(result.removedIds.length, result.preservedBranches)
   }
+
   const definitiveFailures = pendingSettlementFailures
     ? result.failures.filter((failure) => !pendingSettlementFailures.has(failure))
     : result.failures
+
   if (definitiveFailures.length > 0) {
     toast.error(
       translate(
@@ -26,7 +28,9 @@ export function showWorkspaceCleanupRemovalResultToasts(
       { description: definitiveFailures.map((failure) => failure.message).join('; ') }
     )
   }
+
   const stillRemovingCount = result.failures.length - definitiveFailures.length
+
   if (stillRemovingCount > 0) {
     // Why: rows past the deadline are still removing; an error toast here would
     // contradict the authoritative outcome reported when they settle.

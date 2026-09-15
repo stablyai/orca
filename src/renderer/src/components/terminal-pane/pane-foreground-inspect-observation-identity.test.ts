@@ -11,8 +11,11 @@ import { describe, expect, it } from 'vitest'
 import { createPaneForegroundProcessReader } from './pane-foreground-process-reader'
 
 const CONNECTION_ID = 'conn-1'
+
 const RELAY_PTY_ID = 'pty-1'
+
 const APP_PTY_ID = `ssh:${CONNECTION_ID}@@${RELAY_PTY_ID}`
+
 const INCARNATION_ID = 'inc-1'
 
 /** One host scan per request => one epoch per request. */
@@ -43,6 +46,7 @@ function createOverlappingReader(replies: { shared: boolean }): {
   settle: (index: number) => void
 } {
   const resolvers: ((value: unknown) => void)[] = []
+
   return {
     // One reader instance per pane, exactly as the foreground tracker holds it.
     readProcess: createPaneForegroundProcessReader({

@@ -23,19 +23,23 @@ describe('plugin worker shutdown', () => {
 
   it('awaits an optional deactivate export before exiting', async () => {
     let finishDeactivate!: () => void
+
     const deactivate = vi.fn(
       () =>
         new Promise<void>((resolve) => {
           finishDeactivate = resolve
         })
     )
+
     const send = vi.fn()
     const exit = vi.fn()
+
     const runtime = createPluginWorkerRuntime({
       send,
       exit,
       importModule: async () => ({ default: vi.fn(), deactivate })
     })
+
     await runtime.handleMessage({
       type: 'init',
       pluginId: 'orca-samples.demo',
@@ -56,11 +60,13 @@ describe('plugin worker shutdown', () => {
 
   it('exits immediately when the plugin has no deactivate export', async () => {
     const exit = vi.fn()
+
     const runtime = createPluginWorkerRuntime({
       send: vi.fn(),
       exit,
       importModule: async () => ({ default: vi.fn() })
     })
+
     await runtime.handleMessage({
       type: 'init',
       pluginId: 'orca-samples.demo',

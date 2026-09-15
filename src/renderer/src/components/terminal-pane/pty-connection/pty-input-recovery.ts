@@ -29,6 +29,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     session.markTerminalInputSent()
     session.recordTerminalInputForHibernationFallback()
   }
+
   session.terminalTheme = session.pane.terminal.options.theme
   session.terminalColorQueryReplies = session.terminalTheme
     ? { foreground: session.terminalTheme.foreground, background: session.terminalTheme.background }
@@ -125,11 +126,13 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       ? { onAgentStatus: session.handleRendererOwnedAgentStatus }
       : {})
   }
+
   if (session.connectionOwnerHydrating) {
     // Why: this pane holds an inert transport until its host resolves; register it so
     // the repos:changed handler remounts it instead of leaving the terminal blank.
     recordTerminalTabParkedOnUnresolvedHost(session.deps.worktreeId, session.deps.tabId)
   }
+
   session.transport =
     session.terminalOwnerUnresolved || session.connectionOwnerHydrating
       ? createUnresolvedOwnerPtyTransport(
@@ -142,8 +145,10 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
         : createIpcPtyTransport(session.transportOptions)
   session.canSendDesktopQueryReply = (): boolean => {
     const ptyId = session.transport.getPtyId()
+
     return !ptyId || !isPtyLocked(ptyId)
   }
+
   // Why: parser/capability handlers bypass the ordinary onData guard. Keep
   // desktop silent while the elected mobile xterm owns query replies.
   session.sendDesktopQueryReplyImmediate = (data: string): boolean =>
@@ -154,18 +159,22 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
   // Record-only: a subscribe is not a query (see session.observeLiveMode2031Chunk, #9993).
   session.handleHiddenMode2031SubscribeFact = (): void => {
     const ptyId = session.transport.getPtyId()
+
     if (
       session.disposed ||
       (!session.isHiddenDeliveryGateManagedPty(ptyId) && session.remoteOutputGatedPtyId !== ptyId)
     ) {
       return
     }
+
     const mode = resolveTerminalColorSchemeMode(
       useAppStore.getState().settings,
       getSystemPrefersDark()
     )
+
     session.deps.recordPaneMode2031Subscription?.(session.pane.id, mode)
   }
+
   // Why (gate mode only): the counterpart to the subscribe fact. These panes never
   // receive the withdrawal bytes — main drops them before delivery — and the chunk
   // scanner is disabled for them, so this fact is the ONLY observer that can retire
@@ -174,15 +183,18 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
   // (#9993 via maybePushMode2031Flip).
   session.handleHiddenMode2031UnsubscribeFact = (): void => {
     const ptyId = session.transport.getPtyId()
+
     if (
       session.disposed ||
       (!session.isHiddenDeliveryGateManagedPty(ptyId) && session.remoteOutputGatedPtyId !== ptyId)
     ) {
       return
     }
+
     session.deps.paneMode2031Ref.current.delete(session.pane.id)
     session.deps.paneLastThemeModeRef.current.delete(session.pane.id)
   }
+
   session.deps.paneTransportsRef.current.set(session.pane.id, session.transport)
   session.terminalCapabilityRepliesDisposable = installTerminalCapabilityReplyHandlers({
     terminal: session.pane.terminal,
@@ -201,23 +213,29 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
 
   session.claimViewportForUserActivity = (): void => {
     const currentPtyId = session.transport.getPtyId()
+
     if (!currentPtyId || getFitOverrideForPty(currentPtyId)?.mode !== 'remote-desktop-fit') {
       return
     }
+
     let proposed: { cols: number; rows: number } | undefined
+
     try {
       proposed = session.pane.fitAddon.proposeDimensions()
     } catch {
       proposed = undefined
     }
+
     const cols = proposed?.cols ?? session.pane.terminal.cols
     const rows = proposed?.rows ?? session.pane.terminal.rows
+
     if (cols > 0 && rows > 0) {
       // Why: queuing a claim is not convergence. Keep the pane parked until the
       // runtime confirms desktop-fit so a transient resize failure retries.
       session.transport.claimViewport?.(cols, rows)
     }
   }
+
   session.claimPendingVisibleRemoteViewport = (): void => {
     if (
       !session.pendingVisibleRemoteViewportClaim ||
@@ -229,15 +247,20 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     ) {
       return
     }
+
     session.claimViewportForUserActivity()
   }
+
   session.armVisibleRemoteViewportClaim = (): void => {
     const ptyId = session.transport.getPtyId()
+
     if (!ptyId || !isRemoteRuntimePtyId(ptyId)) {
       session.visibleRemoteViewportClaimPtyId = null
       session.pendingVisibleRemoteViewportClaim = false
+
       return
     }
+
     if (
       session.visibleRemoteViewportClaimPtyId !== ptyId ||
       session.pendingVisibleRemoteViewportClaim ||
@@ -247,15 +270,19 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       session.pendingVisibleRemoteViewportClaim = true
     }
   }
+
   session.unsubscribeRemoteDesktopActivationClaim = onOverrideChange((event) => {
     if (event.ptyId !== session.transport.getPtyId() || !isRemoteRuntimePtyId(event.ptyId)) {
       return
     }
+
     if (event.mode === 'desktop-fit') {
       session.visibleRemoteViewportClaimPtyId = event.ptyId
       session.pendingVisibleRemoteViewportClaim = false
+
       return
     }
+
     if (event.mode === 'remote-desktop-fit') {
       if (
         session.deps.isVisibleRef.current &&
@@ -264,6 +291,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
         session.visibleRemoteViewportClaimPtyId = event.ptyId
         session.pendingVisibleRemoteViewportClaim = true
       }
+
       session.claimPendingVisibleRemoteViewport()
     }
   })
@@ -282,6 +310,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     ) {
       return
     }
+
     // Why: input rejected while a connect/reattach is still settling is "not
     // deliverable YET", not a dead binding. Remounting here destroys the
     // unbound transport, and pty-transport's destroyed check then kills the
@@ -292,9 +321,11 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     const connectStillSettling =
       session.transportConnectInFlightSince !== null &&
       Date.now() - session.transportConnectInFlightSince < TRANSPORT_CONNECT_SETTLE_GRACE_MS
+
     if (connectStillSettling || session.disposed) {
       return
     }
+
     const storePtyId = useAppStore.getState().ptyIdsByTabId?.[session.deps.tabId]?.[0] ?? null
     const undeliverablePtyId = session.transport.getPtyId() ?? storePtyId
     // Why the split: for a local (daemon/app-SSH) id main's registry can answer,
@@ -321,6 +352,7 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       endpointReplaced: providerRejected
     })
   }
+
   // Why: the write-pipeline health watch (scheduler stall probe, replay-guard
   // wedge certification) detects a dead xterm pipeline; route its verdict to
   // the same tab remount. Registered per xterm instance — recovery replaces

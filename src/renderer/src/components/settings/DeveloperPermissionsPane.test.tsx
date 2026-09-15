@@ -18,6 +18,7 @@ vi.mock('sonner', () => ({
 }))
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -63,9 +64,11 @@ it('requests Local Network access without claiming a permission verdict', async 
   const row = container.querySelector<HTMLElement>(
     '[data-settings-section="developer-permissions-local-network"]'
   )
+
   const [requestButton, settingsButton] = Array.from(
     row?.querySelectorAll<HTMLButtonElement>('button') ?? []
   )
+
   expect(row?.textContent).toContain('Managed by macOS')
   expect(row?.textContent).toContain("macOS does not report this permission's current status")
   expect(requestButton?.textContent).toContain('Request Access')
@@ -102,6 +105,7 @@ it('highlights the Full Disk Access row for a targeted Settings navigation', asy
   const row = container.querySelector<HTMLElement>(
     `[data-settings-section="${FULL_DISK_ACCESS_SETTINGS_TARGET_ID}"]`
   )
+
   expect(row?.dataset.highlighted).toBe('true')
   expect(row?.className).toContain('data-[highlighted=true]:bg-accent')
   expect(row?.className).toContain('data-[highlighted=true]:ring-ring/50')

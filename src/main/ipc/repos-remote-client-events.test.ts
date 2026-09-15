@@ -36,12 +36,15 @@ vi.mock('../git/repo', () => ({
 }))
 
 vi.mock('./registered-worktree-roots-cache', () => ({ invalidateAuthorizedRootsCache: vi.fn() }))
+
 vi.mock('../providers/ssh-git-dispatch', () => ({ getSshGitProvider: vi.fn() }))
+
 vi.mock('./ssh', () => ({ getActiveMultiplexer: vi.fn() }))
 
 type HandlerMap = Map<string, (_event: unknown, args: unknown) => unknown>
 
 const handlers: HandlerMap = new Map()
+
 const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } }
 
 /** Fresh module instance per test so the module-scoped notifier holder starts unset. */
@@ -49,6 +52,7 @@ async function registerHandlersWithoutNotifier(): Promise<typeof ReposChangedNot
   vi.resetModules()
   const repos = await import('./repos')
   repos.registerRepoHandlers(mainWindow as never, mockStore as never, {} as never)
+
   return import('./repos/repos-changed-notification')
 }
 

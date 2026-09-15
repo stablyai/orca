@@ -21,8 +21,10 @@ export async function completeNestedFolderOpen(args: {
 }): Promise<void> {
   trackNestedFolderOpen(args)
   args.setIsAdding(true)
+
   try {
     const state = useAppStore.getState()
+
     if (args.connectionId) {
       args.closeModal()
       state.openModal('confirm-non-git-folder', {
@@ -31,15 +33,19 @@ export async function completeNestedFolderOpen(args: {
         runtimeEnvironmentId: args.owner,
         ...(args.displayName ? { displayName: args.displayName } : {})
       })
+
       return
     }
+
     const repo = await state.addNonGitFolder(args.scan.selectedPath, {
       runtimeEnvironmentId: args.owner ?? null,
       ...(args.displayName ? { displayName: args.displayName } : {})
     })
+
     if (args.generation !== args.currentGeneration()) {
       return
     }
+
     if (repo) {
       args.closeModal()
     }

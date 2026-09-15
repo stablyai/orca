@@ -24,20 +24,24 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: never[]) => unknown>(fn: T) => fn,
     useRef: <T>(value: T) => ({ current: value }),
     useState: <T>(initial: T | (() => T)) => {
       const index = mocks.stateIndex++
+
       const value =
         index in mocks.stateValues
           ? mocks.stateValues[index]
           : typeof initial === 'function'
             ? (initial as () => T)()
             : initial
+
       const setter = vi.fn()
       mocks.stateSetters[index] = setter
+
       return [value as T, setter]
     }
   }
@@ -65,6 +69,7 @@ vi.mock('@/store', () => {
       }
     }
   )
+
   return { useAppStore }
 })
 
@@ -82,8 +87,11 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 }))
 
 const STATE_NAME = 0
+
 const STATE_PARENT_PATH = 1
+
 const STATE_ERROR_MESSAGE = 2
+
 const STATE_IS_CREATING = 3
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
@@ -169,6 +177,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady, {
       runtimeEnvironmentId: 'env-1'
     })
+
     await expect(result.handlePickParent()).resolves.toBeNull()
 
     expect(window.api.repos.pickDirectory).not.toHaveBeenCalled()
@@ -200,6 +209,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     mocks.createRepo.mockResolvedValue({ repo })
     mocks.fetchWorktrees.mockImplementation(async (repoId: string) => {
       mocks.storeState.worktreesByRepo = { [repoId]: [worktree] }
+
       return true
     })
     const { useCreateRepo } = await import('./useCreateRepo')
@@ -230,6 +240,7 @@ describe('useCreateRepo default-checkout handoff', () => {
     const result = useCreateRepo(mocks.fetchWorktrees, vi.fn(), mocks.onGitRepoReady, {
       sshTargetId: 'ssh-1'
     })
+
     await result.handleCreate()
 
     expect(mocks.createRemoteRepo).toHaveBeenCalledWith({
@@ -260,6 +271,7 @@ describe('useCreateRepo default-checkout handoff', () => {
       hostId: 'runtime:env-1',
       runtimeEnvironmentId: 'env-1'
     })
+
     await result.handleCreate()
 
     expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(

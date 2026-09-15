@@ -38,6 +38,7 @@ vi.mock('./AgentKanbanCard', () => ({
     </div>
   )
 }))
+
 vi.mock('./AgentTerminalDialog', () => ({
   AgentTerminalDialog: ({
     card,
@@ -165,6 +166,7 @@ describe('AgentKanbanBoard', () => {
 
   it('leaves every column border neutral now that cards carry the state color', () => {
     renderBoard([card({ bucket: 'attention' })])
+
     for (const column of document.querySelectorAll('section')) {
       expect(column.className).toContain('border-border/60')
       expect(column.className).not.toContain('amber')
@@ -290,9 +292,11 @@ describe('AgentKanbanBoard', () => {
 
   it('keeps the terminal dialog open across bucket moves and card removal', () => {
     const agent = card({ paneKey: 'pk-1', bucket: 'done', worktreeName: 'wt1' })
+
     const { rerender } = render(
       <AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent], showIdle: true }} />
     )
+
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('false')
 
     fireEvent.click(screen.getByTestId('card'))

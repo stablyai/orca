@@ -13,11 +13,14 @@ export function canOpenDiffSectionPreviewToSide(params: {
   if (!params.canOpenWorkspaceFileBrowser) {
     return false
   }
+
   if (params.isCommitSurface) {
     return false
   }
+
   if (params.status === 'deleted') {
     return false
   }
+
   return canPreviewLanguage(detectLanguage(params.path))
 }

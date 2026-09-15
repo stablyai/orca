@@ -46,6 +46,7 @@ function describeFrame(
   codec: TerminalWireBuild['codec']
 ): ObservedFrame {
   const json = codec.decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
+
   return {
     direction,
     opcode: frame.opcode,
@@ -89,6 +90,7 @@ export function createTerminalWireLink(args: {
       onClose?: () => void
     }
   }
+
   let live: LiveConnection | null = null
   const closeHostSideByConnection = new Map<string, () => void>()
 
@@ -104,16 +106,20 @@ export function createTerminalWireLink(args: {
     connections.push(record)
     live = connection
     const abort = new AbortController()
+
     const closeHostSide = (): void => {
       record.alive = false
+
       if (live === connection) {
         live = null
       }
+
       abort.abort()
       // The socket layer runs the host's registered teardown on close; without it
       // the multiplex handler never settles and the harness would hang, not fail.
       hostStub.closeConnection(connectionId)
     }
+
     closeHostSideByConnection.set(connectionId, closeHostSide)
 
     const dispatch = new hostBuild.host.RpcDispatcher({
@@ -130,11 +136,14 @@ export function createTerminalWireLink(args: {
         if (!record.alive) {
           return
         }
+
         const envelope = JSON.parse(message) as Record<string, unknown>
         const result = envelope.result
+
         if (result && typeof result === 'object') {
           record.events.push(result as Record<string, unknown>)
         }
+
         clientCallbacks.onResponse(envelope)
       },
       {
@@ -143,7 +152,9 @@ export function createTerminalWireLink(args: {
           if (!record.alive) {
             return false
           }
+
           const asClientSees = clientBuild.codec.decodeTerminalStreamFrame(bytes)
+
           if (!asClientSees) {
             rejected.push({
               direction: 'host-to-client',
@@ -153,12 +164,15 @@ export function createTerminalWireLink(args: {
           } else {
             observed.push(describeFrame('host-to-client', asClientSees, clientBuild.codec))
           }
+
           // Bytes always go out; only the receiving decoder decides survival.
           clientCallbacks.onBinary(bytes)
+
           return true
         },
         registerBinaryStreamHandler: (streamId, handler) => {
           handlers.set(streamId, handler)
+
           return () => {
             if (handlers.get(streamId) === handler) {
               handlers.delete(streamId)
@@ -168,6 +182,7 @@ export function createTerminalWireLink(args: {
         signal: abort.signal
       }
     )
+
     dispatchPromises.push(dispatch.catch(() => {}))
 
     return {
@@ -176,15 +191,19 @@ export function createTerminalWireLink(args: {
         if (!record.alive) {
           return
         }
+
         const frame = hostBuild.codec.decodeTerminalStreamFrame(bytes)
+
         if (!frame) {
           rejected.push({
             direction: 'client-to-host',
             rawOpcode: rawOpcodeOf(bytes),
             byteLength: bytes.byteLength
           })
+
           return
         }
+
         observed.push(describeFrame('client-to-host', frame, hostBuild.codec))
         handlers.get(frame.streamId)?.(frame)
       }
@@ -206,9 +225,11 @@ export function createTerminalWireLink(args: {
     connections,
     disconnect: () => {
       const connection = live
+
       if (!connection) {
         return
       }
+
       closeHostSideByConnection.get(connection.record.connectionId)?.()
       connection.clientCallbacks.onClose?.()
     },
@@ -216,6 +237,7 @@ export function createTerminalWireLink(args: {
       for (const record of connections) {
         closeHostSideByConnection.get(record.connectionId)?.()
       }
+
       live = null
       clientBuild.client.resetRemoteRuntimeTerminalMultiplexersForTests()
       vi.unstubAllGlobals()

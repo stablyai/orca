@@ -48,6 +48,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
     workspaceDetectedAgentIds,
     workspaceLastAutoName
   } = model
+
   const createWorkspace = useCallback(
     async (
       item: ActionableTaskItem,
@@ -64,10 +65,13 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
       if (!client || !tasksSupported || !taskStateHydrated) {
         return
       }
+
       setCreatingKey(item.key)
       setError('')
+
       try {
         const targetRepo = getWorkspaceTargetRepo(item, repoIdOverride)
+
         if (!targetRepo) {
           throw new Error(
             item.provider === 'linear'
@@ -75,11 +79,14 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               : 'Repository not found.'
           )
         }
+
         await ensureWorkspaceSshReady(targetRepo)
         let latestRuntimeTaskSettings = runtimeTaskSettings
+
         try {
           const settingsReply = await settingsRead.request(client)
           const settingsResult = settingsRead.interpret(settingsReply)
+
           if (settingsResult.accepted) {
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
             latestRuntimeTaskSettings = (settingsResult.value ?? {}) as RuntimeTaskSettings
@@ -88,12 +95,14 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         } catch {
           // Best-effort refresh; the runtime still validates agent availability before spawning.
         }
+
         const selectedAgent =
           agentOverride &&
           (agentOverride === 'blank' ||
             isWorkspaceAgentEnabled(agentOverride, latestRuntimeTaskSettings.disabledTuiAgents))
             ? agentOverride
             : pickWorkspaceAgent(latestRuntimeTaskSettings, workspaceDetectedAgentIds)
+
         if (
           agentOverride &&
           agentOverride !== 'blank' &&
@@ -103,8 +112,10 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
           setWorkspaceAgentOverridden(false)
           throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
         }
+
         const setupResolution = await resolveCreateSetupDecision(targetRepo, setupOverride)
         const comment = noteOverride?.trim()
+
         if (setupResolution.kind === 'prompt') {
           // Why: desktop does not silently create when a repo policy says setup
           // requires a per-workspace decision. Mobile must ask before create too.
@@ -121,9 +132,12 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             command: setupResolution.command,
             source: setupResolution.source
           })
+
           return
         }
+
         const setupDecision = setupResolution.decision
+
         if (
           setupDecision === 'run' &&
           setupResolution.setupTrust &&
@@ -154,15 +168,21 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             contentHash: setupResolution.setupTrust.contentHash,
             previouslyApproved: wasSetupHookPreviouslyApproved(trustedOrcaHooks, targetRepo.id)
           })
+
           return
         }
+
         const trimmedWorkspaceName = workspaceNameOverride?.trim() ?? ''
+
         const nameIsAutoManaged =
           !trimmedWorkspaceName || trimmedWorkspaceName === workspaceLastAutoName
+
         let params: WorkspaceCreateParams
+
         if (item.provider === 'github') {
           const source = item.source
           let prStartPoint: { baseBranch: string; pushTarget?: GitPushTarget } | undefined
+
           if (
             shouldResolveHostedReviewStartPoint({
               type: source.type,
@@ -181,15 +201,19 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               },
               { timeoutMs: 30_000 }
             )
+
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
             const result = worktreePrBaseResolve.interpret(reply) as
               | { baseBranch: string; pushTarget?: GitPushTarget }
               | { error: string }
+
             if ('error' in result) {
               throw new Error(result.error)
             }
+
             prStartPoint = result
           }
+
           params = buildTaskWorkspaceCreateParams({
             item,
             targetRepoId: targetRepo.id,
@@ -206,6 +230,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         } else if (item.provider === 'gitlab') {
           const source = item.source
           let mrStartPoint: { baseBranch: string; pushTarget?: GitPushTarget } | undefined
+
           if (
             shouldResolveHostedReviewStartPoint({
               type: source.type,
@@ -224,15 +249,19 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
               },
               { timeoutMs: 30_000 }
             )
+
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
             const result = worktreeMrBaseResolve.interpret(reply) as
               | { baseBranch: string; pushTarget?: GitPushTarget }
               | { error: string }
+
             if ('error' in result) {
               throw new Error(result.error)
             }
+
             mrStartPoint = result
           }
+
           params = buildTaskWorkspaceCreateParams({
             item,
             targetRepoId: targetRepo.id,
@@ -260,22 +289,27 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             nameIsAutoManaged
           })
         }
+
         const createReply = await worktreeCreateRun.request(client, params, {
           timeoutMs: WORKTREE_CREATE_TIMEOUT_MS
         })
+
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
         const result = worktreeCreateRun.interpret(createReply) as {
           worktree: { id: string; displayName?: string }
           warning?: string
         }
+
         setActionItem(null)
         setWorkspaceCreateDraft(null)
         setSetupPrompt(null)
         const name = result.worktree.displayName ?? item.title
         const queryParams = new URLSearchParams({ name, created: '1' })
+
         if (result.warning) {
           queryParams.set('warning', result.warning)
         }
+
         router.push(
           `/h/${hostId}/session/${encodeURIComponent(result.worktree.id)}?${queryParams.toString()}`
         )
@@ -300,6 +334,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
       workspaceLastAutoName
     ]
   )
+
   return Object.assign(model, { createWorkspace })
 }
 

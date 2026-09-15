@@ -70,6 +70,7 @@ function loadedHistory() {
       page: page(Array.from({ length: 64 }, (_, index) => index + 193))
     }
   })
+
   for (const first of [129, 65, 1]) {
     state = reduceStructuredAgentSession(state, {
       type: 'older-page',
@@ -77,6 +78,7 @@ function loadedHistory() {
       page: page(Array.from({ length: 64 }, (_, index) => index + first))
     })
   }
+
   return state
 }
 
@@ -87,6 +89,7 @@ describe('durable turn attribution across paginated history', () => {
       requestedCursor: { epoch: 'epoch', sequence: Number.MAX_SAFE_INTEGER },
       page: page([0])
     })
+
     expect(
       selectStructuredAgentSettledTurns(state.items, state.submissions).get('orca:user-0')
     ).toEqual({ startedAt: 1_000, workedSeconds: 7 })
@@ -105,7 +108,9 @@ describe('durable turn attribution across paginated history', () => {
         }
       }
     })
+
     expect(selectStructuredAgentSettledTurns(next.items, next.submissions).size).toBe(258)
+
     const streamed = reduceStructuredAgentSession(next, {
       type: 'event',
       event: {
@@ -119,6 +124,7 @@ describe('durable turn attribution across paginated history', () => {
         }
       }
     })
+
     expect(streamed.submissions).toBe(next.submissions)
   })
 
@@ -128,6 +134,7 @@ describe('durable turn attribution across paginated history', () => {
       requestedCursor: { epoch: 'epoch', sequence: Number.MAX_SAFE_INTEGER },
       page: page([0])
     })
+
     const removed = reduceStructuredAgentSession(loaded, {
       type: 'event',
       event: {
@@ -141,6 +148,7 @@ describe('durable turn attribution across paginated history', () => {
         }
       }
     })
+
     expect(removed.submissions).toHaveLength(256)
     expect(removed.submissions.some((entry) => entry.clientMessageId === 'user-0')).toBe(false)
 
@@ -154,6 +162,7 @@ describe('durable turn attribution across paginated history', () => {
         reset: 'epoch_changed'
       }
     })
+
     expect(reset.submissions).toEqual([submission(256)])
     expect(selectStructuredAgentSettledTurns(reset.items, reset.submissions).size).toBe(1)
   })

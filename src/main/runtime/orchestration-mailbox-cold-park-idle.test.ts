@@ -27,6 +27,7 @@ vi.mock('electron', () => ({
 describe('orchestration mailbox cold-park idle continuation', () => {
   afterEach(() => {
     vi.useRealTimers()
+
     for (const directory of temporaryDirectories.splice(0)) {
       rmSync(directory, { recursive: true, force: true })
     }
@@ -65,6 +66,7 @@ describe('orchestration mailbox cold-park idle continuation', () => {
       write: recordWrite,
       writeWithSettlement: vi.fn((ptyId: string, data: string) => {
         recordWrite(ptyId, data)
+
         return isMailboxPointer(data)
           ? new Promise<WriteSettlement>((resolve) => {
               settlePointerWrite = resolve
@@ -106,9 +108,11 @@ describe('orchestration mailbox cold-park idle continuation', () => {
       write: recordWrite,
       writeWithSettlement: vi.fn((ptyId: string, data: string) => {
         recordWrite(ptyId, data)
+
         if (!isMailboxPointer(data) || ++pointerWrites > 1) {
           return Promise.resolve(stubWriteSettlement(true))
         }
+
         return new Promise<WriteSettlement>((resolve) => {
           settleFirstPointerWrite = resolve
         })

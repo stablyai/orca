@@ -33,7 +33,9 @@ export function resolveSshHostRemoval(args: {
         .map((repo) => repo.id)
     )
   ]
+
   const hostRepoIdSet = new Set(hostRepoIds)
+
   // Why: dedupe by id — the store can transiently hold duplicate worktree rows
   // (e.g. mid host merge), and a doubled row must not inflate the count shown to
   // the user or cause a worktree to be removed twice.
@@ -44,7 +46,9 @@ export function resolveSshHostRemoval(args: {
         .map((worktree) => worktree.id)
     )
   ]
+
   const isConnected = args.sshConnectionStates.get(args.targetId)?.status === 'connected'
+
   return {
     targetId: args.targetId,
     workspaceWorktreeIds,

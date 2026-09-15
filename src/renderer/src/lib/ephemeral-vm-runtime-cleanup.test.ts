@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const listRuntimes = vi.fn()
+
 const cleanup = vi.fn().mockResolvedValue({ status: 'cleaned' })
 
 // @ts-expect-error -- test shim for the preload bridge

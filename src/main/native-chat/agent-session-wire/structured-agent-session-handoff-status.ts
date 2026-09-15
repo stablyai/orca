@@ -24,8 +24,10 @@ export function idleStructuredHandoffStatus(record: AgentSessionRecord): AgentSe
   ) {
     return persistedFailedStructuredHandoffStatus(record)
   }
+
   if (record.lease.handoffStage === 'manual-recovery') {
     const canRetryProof = structuredTuiRecoveryProofIsAdmissible(record)
+
     return {
       owner: 'none',
       direction: record.lease.runtimeKind === 'tui' ? 'to-tui' : 'to-native',
@@ -39,6 +41,7 @@ export function idleStructuredHandoffStatus(record: AgentSessionRecord): AgentSe
       }
     }
   }
+
   if (record.lease.handoffStage) {
     const direction =
       record.lease.handoffStage === 'preparing'
@@ -48,6 +51,7 @@ export function idleStructuredHandoffStatus(record: AgentSessionRecord): AgentSe
         : record.lease.runtimeKind === 'tui'
           ? 'to-tui'
           : 'to-native'
+
     return {
       owner:
         record.lease.claimStatus === 'live' && record.lease.ownerProcess
@@ -59,6 +63,7 @@ export function idleStructuredHandoffStatus(record: AgentSessionRecord): AgentSe
       operationId: record.lease.handoffOperationId
     }
   }
+
   return {
     owner: record.lease.claimStatus === 'live' ? record.lease.runtimeKind : 'none',
     direction: null,
@@ -73,6 +78,7 @@ function persistedFailedStructuredHandoffStatus(
 ): AgentSessionHandoffStatus {
   const recoverableOwner = record.lease.runtimeKind
   const direction = recoverableOwner === 'native' ? 'to-tui' : 'to-native'
+
   return {
     owner: recoverableOwner,
     direction,
@@ -130,7 +136,9 @@ export function failedStructuredHandoffStatus(
           : params.direction === 'to-tui' && record.lease.runtimeKind === 'native'
             ? 'native'
             : 'none'
+
   const canRetryProof = structuredTuiRecoveryProofIsAdmissible(record)
+
   return {
     owner: recoverableOwner,
     direction: params.direction,

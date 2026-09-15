@@ -8,18 +8,23 @@ export async function readNativeHandoffSessionOptions(input: {
   priorOptions?: Readonly<Record<string, string>>
 }): Promise<Readonly<Record<string, string>> | undefined> {
   const { adapter, sessionId, fence, priorOptions } = input
+
   const reported = await adapter.readOptions?.({
     sessionId,
     fence
   })
+
   if (!reported) {
     return undefined
   }
+
   const { model: _model, effort: _effort, fastMode: _fastMode, ...restored } = priorOptions ?? {}
+
   const fastMode =
     reported.current.fastMode === undefined
       ? undefined
       : encodeStructuredAgentSessionOptionValue('fastMode', reported.current.fastMode)
+
   return {
     ...restored,
     model: reported.current.model,

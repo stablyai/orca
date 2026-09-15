@@ -19,9 +19,11 @@ export function isDuplicateSshTargetAlias({
     normalizeSshConfigAlias(configHost) ||
     normalizeSshConfigAlias(label) ||
     normalizeSshConfigAlias(host)
+
   if (!alias) {
     return false
   }
+
   return existingTargets.some((target) => getOccupiedAliases(target).includes(alias))
 }
 
@@ -29,5 +31,6 @@ export function isDuplicateSshTargetAlias({
  *  otherwise an alias it greys out as "In Orca" is still savable as a second target. */
 function getOccupiedAliases(target: Pick<SshTarget, 'configHost' | 'label' | 'host'>): string[] {
   const occupied = [target.configHost, target.label].map(normalizeSshConfigAlias).filter(Boolean)
+
   return occupied.length > 0 ? occupied : [normalizeSshConfigAlias(target.host)].filter(Boolean)
 }

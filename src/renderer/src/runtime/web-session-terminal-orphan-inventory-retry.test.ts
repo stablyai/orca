@@ -18,8 +18,11 @@ import {
 } from './web-session-tabs-sync-test-harness'
 
 const TAB_ID = 'host-tab'
+
 const LEAF_ID = 'leaf-1'
+
 const HANDLE = 'term-live'
+
 const PTY_ID = 'pty-live'
 
 function listedTerminal(orphaned: boolean): Record<string, unknown> {
@@ -57,6 +60,7 @@ describe('web session terminal orphan inventory retries', () => {
     const worktree = `repo::inventory-retry-${incoming}-${firstInventory.length}`
     const leaves = [{ leafId: LEAF_ID, handle: HANDLE }]
     const recoveryState = makeState(worktree, leaves)
+
     const state: WebSessionTabsSyncState = makeTabsSyncState({
       activeWorktreeId: worktree,
       tabsByWorktree: recoveryState.tabsByWorktree,
@@ -72,25 +76,31 @@ describe('web session terminal orphan inventory retries', () => {
         ])
       )
     })
+
     const snapshot: RuntimeMobileSessionTabsResult = {
       ...makeSnapshot(worktree, 'unchanged-inventory', leaves),
       tabs: incoming === 'pending' ? [pendingSurface(TAB_ID, LEAF_ID, PTY_ID)] : []
     }
+
     const adoptedSnapshot: RuntimeMobileSessionTabsResult = {
       ...snapshot,
       publicationEpoch: 'adopted',
       snapshotVersion: snapshot.snapshotVersion + 1,
       tabs: [pendingSurface(TAB_ID, LEAF_ID, PTY_ID, HANDLE)]
     }
+
     let listAttempts = 0
+
     const call = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'terminal.list') {
         listAttempts += 1
+
         return {
           ok: true as const,
           result: listResult(worktree, listAttempts === 1 ? firstInventory : [listedTerminal(true)])
         }
       }
+
       return {
         ok: true as const,
         result:
@@ -106,9 +116,11 @@ describe('web session terminal orphan inventory retries', () => {
       ENVIRONMENT_ID,
       { call: call as never }
     )
+
     const firstPatch = applyWebSessionTabsSnapshot(state, first!, ENVIRONMENT_ID)
     const appliedState = firstPatch === state ? state : { ...state, ...firstPatch }
     const localTabId = recoveryState.tabsByWorktree[worktree]![0]!.id
+
     const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
       appliedState,
       snapshot,
@@ -137,14 +149,17 @@ describe('web session terminal orphan inventory retries', () => {
     const worktree = 'repo::inventory-ready-reset'
     const leaves = [{ leafId: LEAF_ID, handle: HANDLE }]
     const state = makeState(worktree, leaves)
+
     const missingSnapshot: RuntimeMobileSessionTabsResult = {
       ...makeSnapshot(worktree, 'stable-publication', leaves),
       tabs: []
     }
+
     const readySnapshot: RuntimeMobileSessionTabsResult = {
       ...missingSnapshot,
       tabs: [pendingSurface(TAB_ID, LEAF_ID, PTY_ID, HANDLE)]
     }
+
     const call = vi.fn(async () => ({
       ok: true as const,
       result: listResult(worktree, [])
@@ -156,18 +171,21 @@ describe('web session terminal orphan inventory retries', () => {
       ENVIRONMENT_ID,
       { call: call as never }
     )
+
     const observedReady = await recoverWebSessionTerminalOrphansBeforeApply(
       state,
       readySnapshot,
       ENVIRONMENT_ID,
       { call: call as never }
     )
+
     const missAfterReady = await recoverWebSessionTerminalOrphansBeforeApply(
       state,
       missingSnapshot,
       ENVIRONMENT_ID,
       { call: call as never }
     )
+
     const confirmedMiss = await recoverWebSessionTerminalOrphansBeforeApply(
       state,
       missingSnapshot,
@@ -190,6 +208,7 @@ describe('web session terminal orphan inventory retries', () => {
     const worktree = 'repo::explicit-retirement'
     const leaves = [{ leafId: LEAF_ID, handle: HANDLE }]
     const state = makeState(worktree, leaves)
+
     const snapshot: RuntimeMobileSessionTabsResult = {
       ...makeSnapshot(worktree, 'retired-surface', leaves),
       retiredTerminalSurfaces: [
@@ -203,6 +222,7 @@ describe('web session terminal orphan inventory retries', () => {
       ],
       tabs: []
     }
+
     const call = vi.fn()
 
     const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
@@ -221,6 +241,7 @@ describe('web session terminal orphan inventory retries', () => {
     const worktree = 'repo::pending-replacement'
     const leaves = [{ leafId: LEAF_ID, handle: HANDLE }]
     const state = makeState(worktree, leaves)
+
     const snapshot: RuntimeMobileSessionTabsResult = {
       ...makeSnapshot(worktree, 'pending-replacement', leaves),
       retiredTerminalSurfaces: [
@@ -234,6 +255,7 @@ describe('web session terminal orphan inventory retries', () => {
       ],
       tabs: [pendingSurface(TAB_ID, LEAF_ID, PTY_ID)]
     }
+
     const call = vi.fn(async () => ({
       ok: true as const,
       result: listResult(worktree, [])

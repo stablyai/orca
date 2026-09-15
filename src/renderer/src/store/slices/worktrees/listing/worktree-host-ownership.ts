@@ -24,17 +24,22 @@ export function withRepoHostOwnership<
   }
 >(worktree: T, hostId: ExecutionHostId, setup?: ProjectHostSetup): T {
   const parsedOwner = parseExecutionHostId(hostId)
+
   const runtimeOwnerEnvironmentId =
     parsedOwner?.kind === 'runtime' ? parsedOwner.environmentId : undefined
+
   const worktreeHost = parseExecutionHostId(worktree.hostId)
+
   // Why: an SSH worktree reached through a paired HUB has two owners; retain the SSH execution host and stamp the HUB transport separately.
   const nextHostId =
     hostId === LOCAL_EXECUTION_HOST_ID ||
     (runtimeOwnerEnvironmentId !== undefined && worktreeHost?.kind === 'ssh')
       ? worktree.hostId
       : hostId
+
   const projectId = worktree.projectId ?? setup?.projectId
   const projectHostSetupId = worktree.projectHostSetupId ?? setup?.id
+
   if (
     nextHostId === worktree.hostId &&
     runtimeOwnerEnvironmentId === worktree.runtimeOwnerEnvironmentId &&
@@ -43,6 +48,7 @@ export function withRepoHostOwnership<
   ) {
     return worktree
   }
+
   return {
     ...worktree,
     ...(nextHostId ? { hostId: nextHostId } : {}),
@@ -58,9 +64,11 @@ export function repoHostId(
   hostId?: ExecutionHostId | null
 ): ExecutionHostId {
   const repo = findRepoForHost(state.repos, repoId, { hostId, settings: state.settings })
+
   if (repo) {
     return getRepoExecutionHostId(repo)
   }
+
   return hostId && parseExecutionHostId(hostId)
     ? hostId
     : getSettingsFocusedExecutionHostId(state.settings)
@@ -73,29 +81,38 @@ export function repoHasExactlyOneExecutionHostOwner(
   ownerWasMissingAtStart: boolean
 ): boolean {
   const repoOwners = state.repos.filter((repo) => repo.id === repoId)
+
   if (repoOwners.length === 0) {
     return ownerWasMissingAtStart
   }
+
   const ownerHostIds = repoOwners.map((repo) => {
     const hasExplicitHost = repo.executionHostId !== null && repo.executionHostId !== undefined
     const explicitHost = hasExplicitHost ? parseExecutionHostId(repo.executionHostId) : null
+
     if (hasExplicitHost && !explicitHost) {
       return null
     }
+
     const rawConnectionId = repo.connectionId
     const hasConnection = rawConnectionId !== null && rawConnectionId !== undefined
     const connectionId = hasConnection ? rawConnectionId.trim() : null
+
     if (hasConnection && !connectionId) {
       return null
     }
+
     if (!connectionId || explicitHost?.kind === 'runtime') {
       return explicitHost?.id ?? LOCAL_EXECUTION_HOST_ID
     }
+
     if (explicitHost && explicitHost.id !== toSshExecutionHostId(connectionId)) {
       return null
     }
+
     return explicitHost?.id ?? toSshExecutionHostId(connectionId)
   })
+
   return (
     ownerHostIds.every((ownerHostId) => ownerHostId !== null) &&
     ownerHostIds.filter((ownerHostId) => ownerHostId === hostId).length === 1
@@ -134,20 +151,25 @@ export const repoHostSummariesByRepos = new WeakMap<
 
 export function getRepoHostSummaries(repos: AppState['repos']): Map<string, RepoHostSummary> {
   const cached = repoHostSummariesByRepos.get(repos)
+
   if (cached) {
     return cached
   }
 
   const summaries = new Map<string, RepoHostSummary>()
+
   for (const repo of repos) {
     const current = summaries.get(repo.id)
+
     if (current) {
       summaries.set(repo.id, { count: current.count + 1 })
     } else {
       summaries.set(repo.id, { count: 1, onlyHostId: getRepoExecutionHostId(repo) })
     }
   }
+
   repoHostSummariesByRepos.set(repos, summaries)
+
   return summaries
 }
 
@@ -161,6 +183,7 @@ export function unhostedWorktreesMatchRefreshHost(
   }
 
   const summary = getRepoHostSummaries(state.repos).get(repoId)
+
   return summary?.count === 1 && summary.onlyHostId === hostId
 }
 
@@ -181,21 +204,27 @@ export function worktreeMatchesHost(
   options: WorktreeHostMatchOptions = {}
 ): boolean {
   const parsedRefreshHost = parseExecutionHostId(hostId)
+
   if (parsedRefreshHost?.kind === 'runtime') {
     if (worktree.runtimeOwnerEnvironmentId) {
       return worktree.runtimeOwnerEnvironmentId === parsedRefreshHost.environmentId
     }
+
     if (worktree.hostId) {
       return worktree.hostId === hostId
     }
+
     return options.unhostedWorktreesMatchHost ?? false
   }
+
   if (worktree.runtimeOwnerEnvironmentId) {
     return false
   }
+
   if (worktree.hostId) {
     return worktree.hostId === hostId
   }
+
   return options.unhostedWorktreesMatchHost ?? hostId === LOCAL_EXECUTION_HOST_ID
 }
 
@@ -209,10 +238,12 @@ export function mergeWorktreesForHost<
 ): T[] {
   // Why: host-scoped refreshes replace that host in place so alternating local/runtime refreshes don't churn sibling row order or sortEpoch.
   const existing = current ?? []
+
   const reconciled = reuseEqualCatalogRows(
     existing.filter((worktree) => worktreeMatchesHost(worktree, hostId, options)),
     refreshed
   )
+
   const next: T[] = []
   let inserted = false
 
@@ -222,14 +253,17 @@ export function mergeWorktreesForHost<
         next.push(...reconciled)
         inserted = true
       }
+
       continue
     }
+
     next.push(worktree)
   }
 
   if (!inserted) {
     next.push(...reconciled)
   }
+
   return existing.length === next.length && existing.every((row, index) => row === next[index])
     ? (existing as T[])
     : next
@@ -243,6 +277,7 @@ export function getKnownWorktreeIdsForPurge(
   const detected = state.detectedWorktreesByRepo[repoId]
   const knownIds = new Set<string>()
   const matchOptions = worktreeHostMatchOptions(state, repoId, hostId)
+
   if (detected?.authoritative === true) {
     for (const worktree of detected.worktrees) {
       if (worktreeMatchesHost(worktree, hostId, matchOptions)) {
@@ -256,12 +291,14 @@ export function getKnownWorktreeIdsForPurge(
       }
     }
   }
+
   if (!state.hasHydratedWorktreePurge && matchOptions.unhostedWorktreesMatchHost === true) {
     // Why (#1158): hydration can preserve tab keys before worktree metadata exists; the first authoritative scan must still reap deleted session-only keys.
     for (const id of getHydratedSessionWorktreeIdsForRepo(state, repoId)) {
       knownIds.add(id)
     }
   }
+
   return [...knownIds]
 }
 
@@ -274,7 +311,9 @@ export function getRemovedWorktreeIdsAfterAuthoritativeScan(
   if (!detected.authoritative) {
     return []
   }
+
   const detectedIds = new Set(detected.worktrees.map((worktree) => worktree.id))
+
   return getKnownWorktreeIdsForPurge(state, repoId, hostId).filter((id) => !detectedIds.has(id))
 }
 

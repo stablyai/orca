@@ -23,6 +23,7 @@ export function useSidebarHostScopeOptions(): {
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
 
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
+
   const hostOptions = useMemo(
     () =>
       buildSidebarHostOptions({
@@ -44,6 +45,7 @@ export function useSidebarHostScopeOptions(): {
       hostLabelOverrides
     ]
   )
+
   const hostScopeOptions = useMemo(() => buildSidebarHostScopeOptions(hostOptions), [hostOptions])
 
   return { hostOptions, hostScopeOptions }

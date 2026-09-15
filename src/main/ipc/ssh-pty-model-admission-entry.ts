@@ -44,7 +44,9 @@ export function canReserveAdmission(args: {
   if (args.closingGenerations.has(args.key.providerGeneration)) {
     return false
   }
+
   const usage = args.usageByPty.get(admissionKeyId(args.key))
+
   return (
     (usage?.sourceUnits ?? 0) + args.charge.sourceUnits <= args.limits.perPtyHighSourceUnits &&
     (usage?.bytes ?? 0) + args.charge.bytes <= args.limits.perPtyHighBytes &&
@@ -58,6 +60,7 @@ export function pressureHasAdmissionKey(
   key: SshPtyModelAdmissionKey
 ): boolean {
   const id = admissionKeyId(key)
+
   return entries.some((entry) => admissionKeyId(entry.key) === id)
 }
 
@@ -66,11 +69,13 @@ export function takePressureEntriesForGeneration(
   providerGeneration: number
 ): AdmissionEntry[] {
   const removed: AdmissionEntry[] = []
+
   for (let index = entries.length - 1; index >= 0; index--) {
     if (entries[index]!.key.providerGeneration === providerGeneration) {
       removed.unshift(entries.splice(index, 1)[0]!)
     }
   }
+
   return removed
 }
 
@@ -83,35 +88,44 @@ export function cancelAdmissionGeneration(args: {
   release: (key: SshPtyModelAdmissionKey, charge: AdmissionCharge) => void
 }): number {
   let pressureBytes = 0
+
   for (const entry of takePressureEntriesForGeneration(args.pressure, args.providerGeneration)) {
     pressureBytes += entry.charge.bytes
     entry.state = 'settled'
     entry.reject(args.error)
   }
+
   for (const [id, usage] of args.usageByPty) {
     const canceled = usage.queued.filter(
       (entry) => entry.key.providerGeneration === args.providerGeneration
     )
+
     usage.queued = usage.queued.filter(
       (entry) => entry.key.providerGeneration !== args.providerGeneration
     )
+
     if (usage.running?.key.providerGeneration === args.providerGeneration) {
       canceled.push(usage.running)
       usage.running = null
     }
+
     for (const entry of canceled) {
       if (entry.state === 'settled') {
         continue
       }
+
       entry.state = 'settled'
       args.release(entry.key, entry.charge)
       entry.reject(args.error)
     }
+
     if (!usage.running && usage.queued.length === 0 && usage.sourceUnits === 0) {
       args.usageByPty.delete(id)
     }
+
     resolveAdmissionIdleWaiters(args.usageByPty, args.pressure, args.idleWaiters, id)
   }
+
   return pressureBytes
 }
 
@@ -120,12 +134,14 @@ export function takePausedGeneration(
   providerGeneration: number
 ): SshPtyModelAdmissionKey[] {
   const removed: SshPtyModelAdmissionKey[] = []
+
   for (const [id, key] of paused) {
     if (key.providerGeneration === providerGeneration) {
       paused.delete(id)
       removed.push(key)
     }
   }
+
   return removed
 }
 
@@ -137,14 +153,19 @@ export function resolveAdmissionIdleWaiters(
 ): void {
   const usage = usageByPty.get(id)
   const stillPressured = pressure.some((entry) => admissionKeyId(entry.key) === id)
+
   if (usage?.running || (usage?.queued.length ?? 0) > 0 || stillPressured) {
     return
   }
+
   const waiters = waitersById.get(id)
+
   if (!waiters) {
     return
   }
+
   waitersById.delete(id)
+
   for (const resolve of waiters) {
     resolve()
   }

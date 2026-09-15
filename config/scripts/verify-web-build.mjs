@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 
 const indexPath = resolve('out/web/web-index.html')
+
 const html = await readFile(indexPath, 'utf8')
 
 const absoluteAssetReference = /\b(?:src|href)=["']\/assets\//.exec(html)

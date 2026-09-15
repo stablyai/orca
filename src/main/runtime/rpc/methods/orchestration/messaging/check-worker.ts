@@ -9,7 +9,9 @@ import type { CheckParams } from '../schemas'
 import type { z } from 'zod'
 
 type CheckParamsInput = z.infer<typeof CheckParams>
+
 type ActiveDispatch = NonNullable<ReturnType<OrchestrationDb['getActiveDispatchForIdentity']>>
+
 type RemoteAttachment = NonNullable<
   ReturnType<OrchestrationDb['findActiveRemoteAttachmentForPane']>
 >
@@ -36,6 +38,7 @@ export async function checkWorkerMailbox(args: {
     activeDispatch,
     remoteAttachment
   } = args
+
   const workerMailbox = activeDispatch
     ? {
         dispatchId: activeDispatch.id,
@@ -49,40 +52,49 @@ export async function checkWorkerMailbox(args: {
           generation: remoteAttachment.consumer_generation
         }
       : undefined
+
   if (!workerMailbox) {
     return undefined
   }
+
   const deliveryRunId = workerMailbox.runId
   db.requireRun(deliveryRunId)
   const address = `dispatch:${workerMailbox.dispatchId}`
+
   // Why: a federated worker host has no dispatch_contexts row, so its generation lives on the
   // remote_dispatch_attachments row instead.
   const readCurrentGeneration = (): number | undefined =>
     activeDispatch
       ? db.getDispatchContextById(workerMailbox.dispatchId)?.consumer_generation
       : db.getRemoteDispatchAttachment(workerMailbox.dispatchId)?.consumer_generation
+
   const routeDirectSnapshot = async (
     runId: string,
     directHandle: string,
     routePage: (throughSequence: number) => { routedCount: number; hasMore: boolean }
   ): Promise<void> => {
     const throughSequence = db.getLatestUnreadDirectMessageSequenceForRun(runId, directHandle)
+
     if (throughSequence !== undefined) {
       await routeAllMailboxPages(() => routePage(throughSequence), signal)
     }
   }
+
   const revalidateWorkerMailbox = async (): Promise<void> => {
     if (activeDispatch) {
       const current = db.getActiveDispatchForIdentity(handle, paneKey)
+
       if (current?.id === activeDispatch.id) {
         // Why: a re-attach landing on the awaits above keeps the id but re-points the pane.
         if (callerHoldsDispatchPane(current, paneKey)) {
           return
         }
+
         throw dispatchFenced()
       }
     } else if (remoteAttachment && paneKey) {
       const current = db.findActiveRemoteAttachmentForPane(paneKey)
+
       if (
         current?.dispatch_id === remoteAttachment.dispatch_id &&
         db.isRemoteAttachmentProcessCurrent({
@@ -94,37 +106,47 @@ export async function checkWorkerMailbox(args: {
         return
       }
     }
+
     const latestDispatch = db.getDispatchContextById(workerMailbox.dispatchId)
     const owningRunId = latestDispatch?.run_id ?? activeDispatch?.run_id ?? workerMailbox.runId
+
     if (
       owningRunId &&
       (!latestDispatch ||
         (latestDispatch.status !== 'pending' && latestDispatch.status !== 'dispatched'))
     ) {
       const throughSequence = db.getLatestUnreadMessageSequence(address)
+
       if (throughSequence !== undefined) {
         const routedTypes = new Set<MessageType>()
+
         const routePage = (): { routedCount: number; hasMore: boolean } => {
           const routed = db.routeUnreadDispatchMailboxToRunMailbox(
             workerMailbox.dispatchId,
             owningRunId,
             throughSequence
           )
+
           for (const routedType of routed.types) {
             routedTypes.add(routedType)
           }
+
           return routed
         }
+
         const notifyRoutedTypes = (): void => {
           for (const routedType of routedTypes) {
             runtime.notifyMessageArrived(`run:${owningRunId}`, routedType)
           }
+
           routedTypes.clear()
         }
+
         try {
           await routeAllMailboxPages(routePage, signal)
         } catch (error) {
           notifyRoutedTypes()
+
           if (error instanceof OrchestrationError && error.code === 'request_aborted') {
             setImmediate(() => {
               void routeAllMailboxPages(routePage)
@@ -132,11 +154,14 @@ export async function checkWorkerMailbox(args: {
                 .finally(notifyRoutedTypes)
             })
           }
+
           throw error
         }
+
         notifyRoutedTypes()
       }
     }
+
     throw new OrchestrationError(
       'dispatch_inactive',
       `Dispatch ${workerMailbox.dispatchId} is no longer assigned to this worker.`
@@ -153,6 +178,7 @@ export async function checkWorkerMailbox(args: {
       )
     )
     const assigneeHandle = activeDispatch.assignee_handle
+
     if (assigneeHandle && assigneeHandle !== handle) {
       await routeDirectSnapshot(activeDispatch.run_id, assigneeHandle, (throughSequence) =>
         db.routeUnreadDirectMessagesToDispatchMailbox(
@@ -164,8 +190,10 @@ export async function checkWorkerMailbox(args: {
       )
     }
   }
+
   await revalidateWorkerMailbox()
   let acknowledged
+
   try {
     acknowledged = params.ack
       ? db.acknowledgeMailboxDelivery({
@@ -179,8 +207,10 @@ export async function checkWorkerMailbox(args: {
   } catch (error) {
     throw asDispatchFence(error)
   }
+
   const showAll = params.all === true || (params.unread === false && params.peek !== true)
   const readPeek = () => db.getUnreadMessages(address, typeFilter)
+
   const readDelivery = (wakeTypes?: MessageType[]) => {
     try {
       return db.getOrCreateMailboxDelivery({
@@ -194,8 +224,10 @@ export async function checkWorkerMailbox(args: {
       throw asDispatchFence(error)
     }
   }
+
   if (showAll) {
     const messages = db.getAllMessagesForHandle(address, 100, typeFilter)
+
     return {
       ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
       dispatchId: workerMailbox.dispatchId,
@@ -207,8 +239,10 @@ export async function checkWorkerMailbox(args: {
         : {})
     }
   }
+
   if (params.peek) {
     const messages = readPeek()
+
     if (messages.length > 0 || !params.wait) {
       return {
         ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
@@ -223,6 +257,7 @@ export async function checkWorkerMailbox(args: {
     }
   } else {
     const current = readDelivery(params.wait ? typeFilter : undefined)
+
     if (current || !params.wait) {
       return {
         ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
@@ -241,15 +276,19 @@ export async function checkWorkerMailbox(args: {
       }
     }
   }
+
   const waitResult = await runtime.waitForMessage(address, {
     typeFilter: typeFilter as string[] | undefined,
     timeoutMs: params.timeoutMs ?? undefined,
     signal
   })
+
   await revalidateWorkerMailbox()
+
   if (readCurrentGeneration() !== workerMailbox.generation) {
     throw dispatchFenced()
   }
+
   if (waitResult === 'timed_out' || waitResult === 'cancelled') {
     return {
       ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
@@ -262,8 +301,10 @@ export async function checkWorkerMailbox(args: {
       connectionLost: waitResult === 'cancelled' && signal?.aborted === true
     }
   }
+
   if (params.peek) {
     const arrived = readPeek()
+
     return {
       ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
       dispatchId: workerMailbox.dispatchId,
@@ -275,7 +316,9 @@ export async function checkWorkerMailbox(args: {
         : {})
     }
   }
+
   const arrived = readDelivery(typeFilter)
+
   return {
     ...(workerMailbox.runId ? { runId: workerMailbox.runId } : {}),
     dispatchId: workerMailbox.dispatchId,

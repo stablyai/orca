@@ -17,6 +17,7 @@ import {
 describe('createToolInputDisplay', () => {
   it('builds the shared row model from one JSON-string parse', () => {
     const parse = vi.spyOn(JSON, 'parse')
+
     const display = createToolInputDisplay(
       '{"file_path":"src/index.ts","description":"Read the entry point"}'
     )
@@ -331,6 +332,7 @@ describe('summarizeToolRun', () => {
       { type: 'tool-call', name: 'Edit', input: { file_path: 'b.ts' } },
       { type: 'tool-call', name: 'Write', input: { file_path: 'c.ts' } }
     ]
+
     const summary = summarizeToolRun(blocks)
     expect(summary).toBe('Bash ls  ·  Read a.ts  ·  Edit b.ts')
   })

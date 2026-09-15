@@ -19,6 +19,7 @@ describe('pane manager registry', () => {
     const manager = { resetWebglTextureAtlases: vi.fn<() => void>() }
     registerLivePaneManager(manager)
     registeredManagers.push(manager)
+
     return manager
   }
 
@@ -39,14 +40,17 @@ describe('pane manager registry', () => {
 
   it('refreshes managers after all atlas resets complete', () => {
     const order: string[] = []
+
     const first = {
       resetWebglTextureAtlases: vi.fn<() => void>(() => order.push('first-reset')),
       refreshAllPanes: vi.fn<() => void>(() => order.push('first-refresh'))
     }
+
     const second = {
       resetWebglTextureAtlases: vi.fn<() => void>(() => order.push('second-reset')),
       refreshAllPanes: vi.fn<() => void>(() => order.push('second-refresh'))
     }
+
     registerLivePaneManager(first)
     registeredManagers.push(first)
     registerLivePaneManager(second)
@@ -63,6 +67,7 @@ describe('pane manager registry', () => {
     // then keeps pre-hide footer pixels. Wipe first, present once the generation
     // is final.
     const order: string[] = []
+
     const first = {
       resetWebglTextureAtlases: vi.fn<() => void>(() => order.push('first-reset')),
       clearWebglTextureAtlases: vi.fn<() => void>(() => order.push('first-clear')),
@@ -70,6 +75,7 @@ describe('pane manager registry', () => {
       refreshAllPanes: vi.fn<() => void>(() => order.push('first-refresh')),
       isVisibleForAtlasRecovery: () => true
     }
+
     const second = {
       resetWebglTextureAtlases: vi.fn<() => void>(() => order.push('second-reset')),
       clearWebglTextureAtlases: vi.fn<() => void>(() => order.push('second-clear')),
@@ -77,6 +83,7 @@ describe('pane manager registry', () => {
       refreshAllPanes: vi.fn<() => void>(() => order.push('second-refresh')),
       isVisibleForAtlasRecovery: () => true
     }
+
     registerLivePaneManager(first)
     registeredManagers.push(first)
     registerLivePaneManager(second)
@@ -97,8 +104,10 @@ describe('pane manager registry', () => {
       refreshAllPanes: vi.fn<() => void>(),
       isVisibleForAtlasRecovery: () => true
     }
+
     registerLivePaneManager(visible)
     registeredManagers.push(visible)
+
     const hidden = Array.from({ length: 64 }, () => ({
       resetWebglTextureAtlases: vi.fn<() => void>(),
       clearWebglTextureAtlases: vi.fn<() => void>(),
@@ -106,6 +115,7 @@ describe('pane manager registry', () => {
       refreshAllPanes: vi.fn<() => void>(),
       isVisibleForAtlasRecovery: () => false
     }))
+
     for (const manager of hidden) {
       registerLivePaneManager(manager)
       registeredManagers.push(manager)
@@ -130,12 +140,15 @@ describe('pane manager registry', () => {
       }),
       refreshAllPanes: vi.fn<() => void>()
     }
+
     registerLivePaneManager(broken)
     registeredManagers.push(broken)
+
     const healthy = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
       refreshAllPanes: vi.fn<() => void>()
     }
+
     registerLivePaneManager(healthy)
     registeredManagers.push(healthy)
 
@@ -153,11 +166,13 @@ describe('pane manager registry', () => {
       fitAllPanes: vi.fn<() => void>(),
       refreshAllPanes: vi.fn<() => void>()
     }
+
     const second = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
       fitAllPanes: vi.fn<() => void>(),
       refreshAllPanes: vi.fn<() => void>()
     }
+
     registerLivePaneManager(first)
     registeredManagers.push(first)
     registerLivePaneManager(second)
@@ -179,13 +194,16 @@ describe('pane manager registry', () => {
       }),
       refreshAllPanes: vi.fn<() => void>()
     }
+
     registerLivePaneManager(broken)
     registeredManagers.push(broken)
+
     const healthy = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
       fitAllPanes: vi.fn<() => void>(),
       refreshAllPanes: vi.fn<() => void>()
     }
+
     registerLivePaneManager(healthy)
     registeredManagers.push(healthy)
 
@@ -202,10 +220,12 @@ describe('pane manager registry', () => {
       resetWebglTextureAtlases: vi.fn<() => void>(),
       getPanes: () => [{ id: 1, terminal: {} }]
     }
+
     const second = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
       getPanes: () => [{ id: 1, terminal: {} }]
     }
+
     registerLivePaneManager(first)
     registeredManagers.push(first)
     registerLivePaneManager(second)
@@ -231,10 +251,12 @@ describe('pane manager registry', () => {
         { id: 2, terminal: {} }
       ]
     }
+
     const onePane = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
       getPanes: () => [{ id: 1, terminal: {} }]
     }
+
     registerLivePaneManager(twoPanes)
     registeredManagers.push(twoPanes)
     registerLivePaneManager(onePane)
@@ -252,6 +274,7 @@ describe('pane manager registry', () => {
       getPaneCount: () => 4,
       getPanes: vi.fn(() => [{ id: 1, terminal: {} }])
     }
+
     registerLivePaneManager(counted)
     registeredManagers.push(counted)
 
@@ -266,10 +289,12 @@ describe('pane manager registry', () => {
         throw new Error('disposed')
       }
     }
+
     const healthy = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
       getPanes: () => [{ id: 1, terminal: {} }]
     }
+
     registerLivePaneManager(broken)
     registeredManagers.push(broken)
     registerLivePaneManager(healthy)
@@ -287,6 +312,7 @@ describe('pane manager registry', () => {
         { id: 2, terminal: {} }
       ]
     }
+
     registerLivePaneManager(buffered)
     registeredManagers.push(buffered)
 
@@ -299,18 +325,21 @@ describe('pane manager registry', () => {
 
   it('bounds manager and pane sampling while extrapolating totals', () => {
     let sampledPaneWrappers = 0
+
     const managers = Array.from({ length: 100 }, () => ({
       resetWebglTextureAtlases: vi.fn<() => void>(),
       getPaneCount: vi.fn(() => 100),
       getPanes: vi.fn((limit = 100) => {
         const count = Math.min(limit, 100)
         sampledPaneWrappers += count
+
         return Array.from({ length: count }, (_, id) => ({
           id,
           terminal: { cols: 100, buffer: { active: { length: 64 } } }
         }))
       })
     }))
+
     for (const manager of managers) {
       registerLivePaneManager(manager)
       registeredManagers.push(manager)
@@ -337,6 +366,7 @@ describe('pane manager registry', () => {
       resetWebglTextureAtlases: vi.fn<() => void>(),
       getPanes: () => [{ id: 1, terminal: { cols: 100, buffer: { active: { length: 64 } } } }]
     }
+
     registerLivePaneManager(manager)
     registeredManagers.push(manager)
 

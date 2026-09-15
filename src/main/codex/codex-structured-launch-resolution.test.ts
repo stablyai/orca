@@ -5,6 +5,7 @@ import type { AgentSessionRecordStore } from '../runtime/agent-session-record-st
 import { createCodexStructuredLaunchResolver } from './codex-structured-launch-resolution'
 
 const SESSION_ID = 'session-1'
+
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
   ReturnType<typeof createCodexStructuredLaunchResolver>
 >[0]['identity']
@@ -12,6 +13,7 @@ const IDENTITY = { sessionId: SESSION_ID } as Parameters<
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return await run()
   } finally {
@@ -83,6 +85,7 @@ describe('codex structured launch resolution', () => {
   it('fails closed before resolving a Windows launch without creation-time proof', async () => {
     await withPlatform('win32', async () => {
       const resolveWorkspacePath = vi.fn(async () => String.raw`C:\workspaces\orca`)
+
       const resolveLaunch = createCodexStructuredLaunchResolver({
         store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
         resolveWorkspacePath,
@@ -125,6 +128,7 @@ describe('codex structured launch resolution', () => {
 
   it('pins resume to the rollout file that proved the durable thread', async () => {
     const resolveRollout = vi.fn(async () => '/home/work/.codex/sessions/rollout.jsonl')
+
     const launch = await resolverFor(
       record({
         providerHandleChain: [

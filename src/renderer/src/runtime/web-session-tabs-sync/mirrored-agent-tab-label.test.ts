@@ -4,6 +4,7 @@ import type { Tab } from '../../../../shared/tab-types'
 import { buildMirroredAgentTabs } from './terminal-surfaces'
 
 const WORKTREE = 'repo-1::worktree-1'
+
 const GROUP = 'group-1'
 
 function snapshotWith(agent: 'claude' | 'codex', title: string): RuntimeMobileSessionTabsResult {
@@ -39,6 +40,7 @@ function build(
     currentUnifiedTabs,
     1_000
   )
+
   return mirrored.unifiedTab
 }
 
@@ -69,6 +71,7 @@ describe('buildMirroredAgentTabs', () => {
 
   it('degrades to the placeholder when the host violates the string contract', () => {
     const snapshot = snapshotWith('claude', 'Named')
+
     // The wire type says `string`, but a host clearing a name can send null.
     ;(snapshot.tabs[0] as { title: unknown }).title = null
     expect(() => build(snapshot)).not.toThrow()
@@ -77,6 +80,7 @@ describe('buildMirroredAgentTabs', () => {
 
   it('names an agent this build does not know after itself, not Codex', () => {
     const snapshot = snapshotWith('codex', '')
+
     // Cast: the wire union is claude|codex today, but Tab.agentSessionAgent is
     // the open AgentType, so a future agent can reach this label.
     ;(snapshot.tabs[0] as { agent: string }).agent = 'gemini'

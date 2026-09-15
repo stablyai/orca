@@ -42,10 +42,13 @@ export function useMarkupPointerHandlers(params: MarkupPointerParams) {
   const pointFromEvent = useCallback(
     (event: { clientX: number; clientY: number }): MarkupPoint => {
       const canvas = canvasRef.current
+
       if (!canvas) {
         return { x: 0, y: 0 }
       }
+
       const rect = canvas.getBoundingClientRect()
+
       return { x: event.clientX - rect.left, y: event.clientY - rect.top }
     },
     [canvasRef]
@@ -56,20 +59,26 @@ export function useMarkupPointerHandlers(params: MarkupPointerParams) {
       if (busy || event.button !== 0) {
         return
       }
+
       const point = pointFromEvent(event)
+
       if (tool === 'text') {
         // Why: a box is already open — this click's job is only to commit it (the
         // input's blur fires), not to open a second box at the click point.
         if (pendingText) {
           return
         }
+
         // Why: keep focus off the canvas so the mounting text input keeps it.
         event.preventDefault()
         setPendingText({ x: point.x, y: point.y, initial: '' })
+
         return
       }
+
       event.currentTarget.setPointerCapture(event.pointerId)
       const id = createBrowserUuid()
+
       if (tool === 'pen' || tool === 'highlight') {
         setInProgress({ id, kind: tool, color, width, points: [point] })
       } else {
@@ -85,13 +94,17 @@ export function useMarkupPointerHandlers(params: MarkupPointerParams) {
         if (!current) {
           return current
         }
+
         const point = pointFromEvent(event)
+
         if (current.kind === 'pen' || current.kind === 'highlight') {
           return { ...current, points: [...current.points, point] }
         }
+
         if (current.kind === 'text') {
           return current
         }
+
         return { ...current, to: point }
       })
     },
@@ -104,6 +117,7 @@ export function useMarkupPointerHandlers(params: MarkupPointerParams) {
     if (inProgress) {
       setDoc((document) => commitShape(document, inProgress))
     }
+
     setInProgress(null)
   }, [inProgress, setDoc, setInProgress])
 

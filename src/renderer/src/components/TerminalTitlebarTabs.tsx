@@ -12,6 +12,7 @@ function LiveTerminalTabBar(
   props: Omit<React.ComponentProps<typeof TabBar>, 'tabs'>
 ): React.JSX.Element {
   const tabs = useAppStore((state) => state.tabsByWorktree[props.worktreeId] ?? EMPTY_TERMINAL_TABS)
+
   return <TabBar {...props} tabs={tabs} />
 }
 
@@ -58,9 +59,11 @@ export function TerminalTitlebarTabs({
     worktreeClientHostedBrowserRows,
     worktreeFiles
   } = controller
+
   if (!renderedActiveWorktreeId || effectiveActiveLayout || !titlebarTabsTarget) {
     return null
   }
+
   return createPortal(
     <LiveTerminalTabBar
       activeTabId={activeTabId}
@@ -94,12 +97,16 @@ export function TerminalTitlebarTabs({
       onActivateFile={(fileId) => {
         const unifiedTabs =
           useAppStore.getState().unifiedTabsByWorktree[renderedActiveWorktreeId ?? ''] ?? []
+
         const unifiedTab = unifiedTabs.find((tab) => tab.id === fileId)
+
         if (unifiedTab?.contentType === 'simulator') {
           setActiveTab(fileId)
           setActiveTabType('simulator')
+
           return
         }
+
         setActiveFile(fileId)
         setActiveTabType('editor')
       }}

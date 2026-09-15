@@ -20,20 +20,24 @@ export function DocPreviewDocumentChip({
 }): React.JSX.Element {
   const { copyText, status } = useClipboardTextCopyFeedback(identity.absolutePath)
   const copied = status === 'copied'
+
   const editLabel = translate(
     'auto.components.editor.HtmlDocPreview.editAddressControl',
     'Edit address'
   )
+
   const copyLabel = translate(
     'auto.components.editor.HtmlDocPreview.copyDocumentPathControl',
     'Copy file path'
   )
+
   // Why the label swaps: the icon change is the only other feedback, and an icon says nothing to
   // a screen reader — the same trade TerminalLinkActionPopover makes.
   const copiedLabel = translate(
     'auto.components.editor.HtmlDocPreview.documentPathCopied',
     'Copied'
   )
+
   const label = onBeginEdit ? editLabel : copied ? copiedLabel : copyLabel
 
   return (

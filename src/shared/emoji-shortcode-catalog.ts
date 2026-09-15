@@ -36,15 +36,19 @@ function loadCatalog(): EmojiShortcodeCatalog {
   if (catalog) {
     return catalog
   }
+
   if (!loadDataset) {
     throw new Error('Emoji shortcode dataset loader was never registered')
   }
+
   const grouped = Object.entries(loadDataset()).flatMap(([hexcode, value]) => {
     const shortcodes = (typeof value === 'string' ? [value] : value).filter(
       (shortcode) => !SKIN_TONE_SHORTCODE.test(shortcode)
     )
+
     return shortcodes.length > 0 ? [{ emoji: hexcodeToEmoji(hexcode), shortcodes }] : []
   })
+
   catalog = {
     entries: grouped.flatMap(({ emoji, shortcodes }) =>
       shortcodes.map((shortcode) => ({ emoji, shortcode }))
@@ -57,6 +61,7 @@ function loadCatalog(): EmojiShortcodeCatalog {
     ),
     segmenter: new Intl.Segmenter('en', { granularity: 'grapheme' })
   }
+
   return catalog
 }
 
@@ -76,6 +81,7 @@ export function isEmojiShortcodeCatalogBuiltForTest(): boolean {
  */
 function primaryShortcode(shortcodes: readonly string[]): string {
   const named = shortcodes.filter((candidate) => /^[a-z]/i.test(candidate))
+
   return (
     named.find((candidate) => candidate.length >= 3 && !candidate.startsWith('flag_')) ??
     named.find((candidate) => candidate.length >= 3) ??
@@ -86,8 +92,10 @@ function primaryShortcode(shortcodes: readonly string[]): string {
 
 export function replaceKnownEmojiWithShortcodes(input: string): string {
   const { primaryShortcodeByEmoji, segmenter } = loadCatalog()
+
   return Array.from(segmenter.segment(input), ({ segment }) => {
     const shortcode = primaryShortcodeByEmoji.get(normalizeEmojiLookup(segment))
+
     return shortcode ? ` ${shortcode.replaceAll('_', '-')} ` : segment
   }).join('')
 }
@@ -96,6 +104,7 @@ function normalizeEmojiLookup(emoji: string): string {
   return Array.from(emoji)
     .filter((character) => {
       const codepoint = character.codePointAt(0)
+
       return (
         character !== '\ufe0f' &&
         (codepoint === undefined || codepoint < 0x1f3fb || codepoint > 0x1f3ff)

@@ -33,6 +33,7 @@ vi.mock('electron', () => ({
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof Os>()
+
   return {
     ...actual,
     homedir: homedirMock
@@ -46,7 +47,9 @@ import {
 import { CodexHookService } from './hook-service'
 
 let tmpHome: string
+
 let userDataDir: string
+
 let previousUserDataPath: string | undefined
 
 beforeEach(() => {
@@ -60,6 +63,7 @@ beforeEach(() => {
     if (name === 'userData') {
       return userDataDir
     }
+
     throw new Error(`unexpected app.getPath(${name})`)
   })
 })
@@ -68,11 +72,13 @@ afterEach(() => {
   restoreCodexTrustSessionsForTests()
   rmSync(tmpHome, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   vi.clearAllMocks()
 })
 
@@ -132,6 +138,7 @@ function systemUserStopEntry(groupIndex = 0): CodexTrustEntry {
 
 function readSystemToml(): string {
   const tomlPath = join(systemCodexDir(), 'config.toml')
+
   return existsSync(tomlPath) ? readFileSync(tomlPath, 'utf-8') : ''
 }
 
@@ -173,10 +180,12 @@ describe('codex hook trust write-back promotion', () => {
 
     // Approval survives the relaunch instead of being wiped as stale…
     expect(readHookTrustEntries(runtimeTomlPath).get(approvalKey)?.trustedHash).toBe(approvedHash)
+
     // …and is promoted into the user's real config keyed to their hooks.json.
     const systemState = readHookTrustEntries(join(systemCodexDir(), 'config.toml')).get(
       computeTrustKey(systemUserStopEntry())
     )
+
     expect(systemState?.trustedHash).toBe(approvedHash)
     expect(systemState?.enabled).not.toBe(false)
 
@@ -196,11 +205,13 @@ describe('codex hook trust write-back promotion', () => {
     // Simulate Codex rewriting the managed Stop hook's trust entry (as an
     // approval after hash drift would).
     const runtimeHooksPath = join(runtimeHomeDir(), 'hooks.json')
+
     const managedCommand = (
       JSON.parse(readFileSync(runtimeHooksPath, 'utf-8')) as {
         hooks: { Stop: { hooks: { command: string }[] }[] }
       }
     ).hooks.Stop[0]!.hooks[0]!.command
+
     simulateCodexApproval(
       {
         sourcePath: runtimeHooksPath,
@@ -262,6 +273,7 @@ describe('codex hook trust write-back promotion', () => {
     const systemState = readHookTrustEntries(systemTomlPath).get(
       computeTrustKey(systemUserStopEntry())
     )
+
     expect(systemState?.enabled).toBe(false)
     // The mirrored runtime entry reflects the disable on the next launch too.
     expect(readHookTrustEntries(runtimeTomlPath).get(approvalKey)?.enabled).toBe(false)
@@ -414,6 +426,7 @@ describe('codex hook trust write-back promotion', () => {
       ...runtimeUserStopEntry(),
       groupIndex: 0
     }
+
     simulateCodexApproval(refreshedRuntimeEntry)
     const approvedHash = computeTrustedHash(refreshedRuntimeEntry)
 

@@ -15,8 +15,10 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
   'orchestration worker-start': async ({ flags, client, cwd, json }) => {
     const model = getOptionalStringFlag(flags, 'model')
     const effort = getOptionalStringFlag(flags, 'effort')
+
     if (model || effort) {
       const status = await client.call<RuntimeStatus>('status.get')
+
       if (
         !status.result.capabilities?.includes(
           ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
@@ -28,11 +30,13 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
         )
       }
     }
+
     const task = getOptionalStringFlag(flags, 'task')
     const spec = getOptionalStringFlag(flags, 'spec')
     const taskTitle = getOptionalStringFlag(flags, 'task-title')
     const deps = getOptionalStringFlag(flags, 'deps')
     const parent = getOptionalStringFlag(flags, 'parent')
+
     const result = await callOrchestrationMutation<{
       runId: string
       taskId: string
@@ -69,9 +73,11 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
       devMode: isDevCliInvocation()
     })
+
     if (result.result.state !== 'ready') {
       process.exitCode = 1
     }
+
     const renderedResult = result.result.nextCommands
       ? {
           ...result,
@@ -83,6 +89,7 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
           }
         }
       : result
+
     printResult(renderedResult, json, formatWorkerStart)
   }
 }

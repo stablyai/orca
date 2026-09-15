@@ -28,6 +28,7 @@ export function getDiffSectionLoadErrorMessage(error: unknown): string {
   if (error instanceof CombinedDiffSectionLoadTimeoutError) {
     return 'Diff did not finish loading.'
   }
+
   return error instanceof Error && error.message.trim().length > 0
     ? error.message
     : 'Unable to load diff.'

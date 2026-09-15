@@ -18,6 +18,7 @@ describe('linear RPC methods', () => {
       linearSelectWorkspace: vi.fn().mockResolvedValue({ connected: true, viewer: null }),
       linearDisconnect: vi.fn().mockResolvedValue({ ok: true })
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_METHODS })
 
     await dispatcher.dispatch(makeRequest('linear.status'))
@@ -45,6 +46,7 @@ describe('linear RPC methods', () => {
       linearAddIssueComment: vi.fn().mockResolvedValue({ ok: true, id: 'comment-1' }),
       linearIssueComments: vi.fn().mockResolvedValue([{ id: 'comment-2' }])
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_METHODS })
 
     await dispatcher.dispatch(
@@ -206,6 +208,7 @@ describe('linear RPC methods', () => {
       linearTeamLabels: vi.fn().mockResolvedValue([{ id: 'label-1' }]),
       linearTeamMembers: vi.fn().mockResolvedValue([{ id: 'member-1' }])
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: LINEAR_METHODS })
 
     await dispatcher.dispatch(makeRequest('linear.listTeams', { workspaceId: 'all' }))

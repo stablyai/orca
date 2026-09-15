@@ -31,7 +31,9 @@ import { pairScanStyles as styles } from '../src/pair-scan-styles'
 // route surfaces as a real error with the log visible instead of a
 // silent infinite spinner.
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
+
 const SCAN_RETICLE_SCALE = 0.62
+
 const SCAN_RETICLE_MAX_SIZE = 360
 
 function Step({ number, text }: { number: number; text: string }) {
@@ -63,8 +65,10 @@ export default function PairScanScreen() {
   const setPairScanRootRef = useCallback((node: View | null): void => {
     if (node !== null) {
       mountedRef.current = true
+
       return
     }
+
     // Why: pairing attempts can outlive the visible route; dispose them when
     // the scan screen detaches without a passive cleanup-only Effect.
     mountedRef.current = false
@@ -77,13 +81,16 @@ export default function PairScanScreen() {
       if (processingRef.current) {
         return
       }
+
       processingRef.current = true
 
       const offer = decodePairingUrl(data)
+
       if (!offer) {
         setStatus('error')
         setErrorMessage('Not a valid Orca QR code')
         processingRef.current = false
+
         return
       }
 
@@ -94,16 +101,20 @@ export default function PairScanScreen() {
 
   const handlePasteSubmit = useCallback((input: string) => {
     setPasteVisible(false)
+
     if (processingRef.current) {
       return
     }
+
     processingRef.current = true
 
     const offer = parsePairingCode(input)
+
     if (!offer) {
       setStatus('error')
       setErrorMessage('Not a valid pairing code — copy it from your computer and paste again')
       processingRef.current = false
+
       return
     }
 
@@ -112,10 +123,12 @@ export default function PairScanScreen() {
 
   const handleCameraLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout
+
     const nextBounds = {
       width: Math.round(width),
       height: Math.round(height)
     }
+
     setCameraBounds((currentBounds) =>
       currentBounds.width === nextBounds.width && currentBounds.height === nextBounds.height
         ? currentBounds
@@ -137,42 +150,53 @@ export default function PairScanScreen() {
           if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
             return
           }
+
           logsRef.current = [...logsRef.current, entry]
           setLogs(logsRef.current)
         }
       }
     })
+
     activePairingAttemptRef.current = attempt
+
     try {
       const { hostId } = await attempt.result
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
       attempt.dispose()
+
       if (activePairingAttemptRef.current === attempt) {
         activePairingAttemptRef.current = null
       }
+
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
+
       // Why: re-pairing the same desktop now reuses its existing host id
       // (STA-1840 dedup), so a client cached under that id from an earlier
       // pairing would keep the stale endpoint/relay. Close it so the
       // Refresh any cached client from the newly persisted pairing profile.
       refreshHostClient(hostId)
       const onboardingSteps = await loadMobileOnboardingSteps()
+
       if (!mountedRef.current) {
         return
       }
+
       router.replace(mobileOnboardingDestination(onboardingSteps, hostId))
     } catch (err) {
       const timedOut = attempt.timedOut
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
       attempt.dispose()
+
       if (activePairingAttemptRef.current === attempt) {
         activePairingAttemptRef.current = null
       }
+
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
+
       console.warn('[pair] connect failed', err)
       setStatus('error')
       setErrorMessage(
@@ -199,6 +223,7 @@ export default function PairScanScreen() {
     paddingTop: insets.top + spacing.sm,
     paddingBottom: insets.bottom + spacing.sm
   }
+
   // Why: iPad camera previews are often rectangular, but QR guides should
   // stay square so the corners still describe the code shape.
   const reticleSize = Math.min(
@@ -216,6 +241,7 @@ export default function PairScanScreen() {
 
   if (!permission.granted) {
     const canAskAgain = permission.canAskAgain !== false
+
     return (
       <View ref={setPairScanRootRef} style={[styles.container, containerPadding]}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>

@@ -18,9 +18,13 @@ import {
 import { renderLinearItemDrawerSheet } from '@/components/linear-item-drawer-sheet'
 
 export { LinearIssueEditSection } from '@/components/linear-item-drawer-edit-section'
+
 export { LinearIssueCommentFooter } from '@/components/linear-item-drawer-comment-footer'
+
 export { formatLinearEstimateLabel } from '@/components/linear-item-drawer-edit-controls'
+
 export { initLinearIssueEditState } from '@/components/linear-item-drawer-types'
+
 export type { LinearEditState, LinearLocalComment } from '@/components/linear-item-drawer-types'
 
 export default function LinearItemDrawer({
@@ -40,6 +44,7 @@ export default function LinearItemDrawer({
   const providerSettings = sourceContext ?? settings
   const allWorktrees = useAllWorktrees()
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
+
   const attachmentWorkspaces = useMemo(
     () => [...allWorktrees, ...folderWorkspaces.map(folderWorkspaceToWorktree)],
     [allWorktrees, folderWorkspaces]
@@ -67,8 +72,10 @@ export default function LinearItemDrawer({
       setComments([])
       setEditState(null)
       hasEditedRef.current = false
+
       return
     }
+
     hasEditedRef.current = false
     optimisticCommentsRef.current = []
     setComments([])
@@ -85,9 +92,11 @@ export default function LinearItemDrawer({
         if (requestId !== requestIdRef.current) {
           return
         }
+
         if (issueResult) {
           const fetched = issueResult as LinearIssue
           setFullIssue(fetched)
+
           // Why: skip if the user already made optimistic edits — the fetch
           // carries pre-edit data that would clobber in-flight changes.
           if (!hasEditedRef.current) {
@@ -102,17 +111,21 @@ export default function LinearItemDrawer({
         if (requestId !== requestIdRef.current) {
           return
         }
+
         // Why: merge any comments the user posted optimistically while the
         // fetch was in-flight, using id to avoid duplicates.
         let fetched = commentsResult as LinearComment[]
         const opt = optimisticCommentsRef.current
+
         if (opt.length > 0) {
           const fetchedIds = new Set(fetched.map((c) => c.id))
           const missing = opt.filter((c) => !fetchedIds.has(c.id))
+
           if (missing.length > 0) {
             fetched = [...fetched, ...missing]
           }
         }
+
         setComments(fetched)
       })
       .catch(() => {})
@@ -131,24 +144,32 @@ export default function LinearItemDrawer({
     if (!issue?.id) {
       return
     }
+
     let cancelled = false
     let count = 0
     let frameId: number | null = null
+
     const tick = (): void => {
       frameId = null
+
       if (cancelled) {
         return
       }
+
       if (document.body.style.pointerEvents === 'none') {
         document.body.style.pointerEvents = ''
       }
+
       if (count++ < 5) {
         frameId = requestAnimationFrame(tick)
       }
     }
+
     tick()
+
     return () => {
       cancelled = true
+
       if (frameId !== null) {
         cancelAnimationFrame(frameId)
       }
@@ -162,15 +183,18 @@ export default function LinearItemDrawer({
       createdAt: comment.createdAt,
       user: { displayName: 'You' }
     }
+
     optimisticCommentsRef.current.push(newComment)
     setComments((prev) => [...prev, newComment])
   }, [])
 
   const displayed = fullIssue ?? issue
+
   const attachedWorkspace = useMemo(
     () => (displayed ? findLinearIssueWorkspaceAttachment(attachmentWorkspaces, displayed) : null),
     [attachmentWorkspaces, displayed]
   )
+
   const attachedWorkspaceLabel = attachedWorkspace
     ? getWorktreeAttachmentLabel(attachedWorkspace)
     : null
@@ -179,6 +203,7 @@ export default function LinearItemDrawer({
     if (!displayed) {
       return
     }
+
     openLinearIssueWorkspaceOrStart(displayed, () => onUse(displayed))
   }, [displayed, onUse])
 

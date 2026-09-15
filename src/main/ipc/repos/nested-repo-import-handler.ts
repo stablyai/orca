@@ -26,6 +26,7 @@ import { getCompletedNestedRepoScan, scanNestedReposForIpc } from './nested-repo
 
 function sanitizeNestedRepoImportError(context: string, error: unknown): string {
   console.warn(`[project-groups] ${context}`, error)
+
   return 'Repository could not be imported'
 }
 
@@ -38,8 +39,10 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
         rawArgs,
         'invalid_project_group_import_nested_args'
       )
+
       const requestedPaths = args.projectPaths
       const completedScan = getCompletedNestedRepoScan(args)
+
       const scan =
         completedScan ??
         (await scanNestedReposForIpc({
@@ -47,7 +50,9 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           connectionId: args.connectionId,
           options: { timeoutMs: 15_000 }
         }))
+
       const selection = resolveNestedRepoSelection({ scan, projectPaths: requestedPaths })
+
       const groupResolver = createNestedProjectGroupResolver({
         parentPath: scan.selectedPath,
         groupName: args.groupName ?? '',
@@ -56,6 +61,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
         repoPaths: selection.selectedPaths,
         createGroup: (input) => store.createProjectGroup(input)
       })
+
       const results: ProjectGroupImportResult['projects'] = selection.rejectedPaths.map(
         (repoPath) => ({
           path: repoPath,
@@ -63,15 +69,18 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
           error: 'Repository was not found in the nested repo scan result'
         })
       )
+
       const importedProjectIdsByRepoPath = new Map<string, string>()
       const importTargetResolver = createNestedRepoImportTargetResolver()
 
       for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
         try {
           let importRepoPath = repoPath
+
           if (args.connectionId) {
             const gitProvider = getSshGitProvider(args.connectionId)
             const check = gitProvider ? await gitProvider.isGitRepoAsync(repoPath) : null
+
             if (!gitProvider || !check?.isRepo) {
               results.push({
                 path: repoPath,
@@ -80,9 +89,11 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
               })
               continue
             }
+
             importRepoPath = await importTargetResolver.resolveSsh(repoPath, gitProvider)
           } else {
             await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
+
             if (!isGitRepo(repoPath)) {
               results.push({
                 path: repoPath,
@@ -91,11 +102,15 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
               })
               continue
             }
+
             importRepoPath = await importTargetResolver.resolveLocal(repoPath)
           }
+
           const normalizedImportRepoPath = normalizeRuntimePathForComparison(importRepoPath)
+
           const alreadyImportedProjectId =
             importedProjectIdsByRepoPath.get(normalizedImportRepoPath)
+
           if (alreadyImportedProjectId) {
             results.push({
               path: repoPath,
@@ -104,6 +119,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
             })
             continue
           }
+
           const existing = store
             .getRepos()
             .find(
@@ -111,15 +127,19 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
                 (repo.connectionId ?? null) === (args.connectionId ?? null) &&
                 normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath
             )
+
           const group = groupResolver.getGroupForRepo(repoPath)
+
           if (existing) {
             if (group) {
               store.moveProjectToGroup(existing.id, group.id, projectGroupOrder)
             }
+
             importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
             results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
             continue
           }
+
           const detected = await detectRepoIconAndUpstream({
             repoPath: importRepoPath,
             kind: 'git',
@@ -127,6 +147,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
               ? toSshExecutionHostId(args.connectionId)
               : LOCAL_EXECUTION_HOST_ID
           })
+
           const repo: Repo = {
             id: randomUUID(),
             path: importRepoPath,
@@ -145,13 +166,16 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
                 }
               : {})
           }
+
           store.addRepo(repo)
           await prepareLocalWorktreeRootForRepo(store, repo)
+
           if (args.connectionId) {
             getActiveMultiplexer(args.connectionId)?.notify('session.registerRoot', {
               rootPath: importRepoPath
             })
           }
+
           importedProjectIdsByRepoPath.set(normalizedImportRepoPath, repo.id)
           results.push({ path: repoPath, projectId: repo.id, status: 'imported' })
           // Why: reaches here only after the isGitRepo guard above confirmed a git repo, so always true.
@@ -168,14 +192,17 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
       const importedCount = results.filter((entry) => entry.status === 'imported').length
       const alreadyKnownCount = results.filter((entry) => entry.status === 'already-known').length
       const failedCount = results.filter((entry) => entry.status === 'failed').length
+
       if (importedCount + alreadyKnownCount === 0) {
         for (const group of groupResolver.getCreatedGroups().toReversed()) {
           store.deleteProjectGroup(group.id)
         }
       }
+
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
       const rootGroup = groupResolver.getRootGroup()
+
       return {
         ...(rootGroup && importedCount + alreadyKnownCount > 0 ? { group: rootGroup } : {}),
         projects: results,

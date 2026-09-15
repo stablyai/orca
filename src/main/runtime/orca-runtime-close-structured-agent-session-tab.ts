@@ -18,13 +18,16 @@ import { retireStructuredAgentSessionTabFrom } from './structured-agent-session-
 export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWithCloseMobileSessionTab {
   protected async closeStructuredAgentSessionTab(tab: RuntimeMobileSessionAgentTab): Promise<void> {
     const host = getStructuredAgentSessionHost()
+
     if (host) {
       if (typeof host.setSessionTabVisibility === 'function') {
         await host.setSessionTabVisibility(tab.sessionId, false)
       }
     }
+
     // Retire durable visibility and the runtime snapshot before stopping the provider.
     this.retireStructuredAgentSessionTabFromSnapshot(tab.sessionId)
+
     if (typeof host?.close === 'function') {
       await host.close(tab.sessionId)
     }
@@ -45,13 +48,17 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
   retireStructuredAgentSessionTabFromSnapshot(sessionId: string): boolean {
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       const nextSnapshot = retireStructuredAgentSessionTabFrom(snapshot, sessionId)
+
       if (!nextSnapshot) {
         continue
       }
+
       this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
       this.emitMobileSessionTabsSnapshot(nextSnapshot)
+
       return true
     }
+
     return false
   }
 
@@ -60,12 +67,14 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
   // that dedupe by snapshotVersion re-add and re-attach the still-live tab.
   protected republishMobileSessionTabsSnapshot(worktreeId: string): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+
     if (snapshot) {
       this.storeMobileSessionSnapshot(worktreeId, {
         ...snapshot,
         snapshotVersion: snapshot.snapshotVersion + 1
       })
     }
+
     this.notifyMobileSessionTabsChanged(worktreeId)
   }
 
@@ -74,9 +83,11 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
     tab: RuntimeMobileSessionTerminalTab
   ): string | null {
     const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
+
     if (!pty) {
       return null
     }
+
     return this.handleByPtyId.get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
   }
 
@@ -86,18 +97,23 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
     authorizedPty?: RuntimePtyWorktreeRecord
   ): RuntimeMobileSessionRetiredTerminalSurface | null {
     const pty = this.findPtyForMobileTerminalTab(worktreeId, tab) ?? authorizedPty ?? null
+
     if (!pty || !this.getMobileTerminalLeafPtyIds(tab).includes(pty.ptyId)) {
       return null
     }
+
     const terminal = this.handleByPtyId.get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
+
     if (!terminal) {
       return null
     }
+
     const incarnationId =
       pty.incarnationId ??
       this.getWorkspaceSessionForWorktree(worktreeId)?.terminalPtyIncarnationsByPaneKey?.[
         this.getMobileTerminalPaneKey(tab)
       ]
+
     return {
       parentTabId: tab.parentTabId,
       leafId: tab.leafId,
@@ -127,10 +143,13 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
     if (!this.offscreenBrowserBackend || !tab.browserPageId) {
       return false
     }
+
     if (this.isHeadlessBuiltMobileSessionPublicationBase(snapshot.publicationEpoch)) {
       return true
     }
+
     const accepted = this.acceptedRendererMobileSnapshotByWorktree.get(snapshot.worktree)
+
     return (
       snapshot.publicationEpoch.includes(':headless-merge:') &&
       accepted !== undefined &&
@@ -148,18 +167,23 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
     this.clientHostedBrowserRows.publish(worktreeId)
     this.persistClientHostedBrowserPagesForWorktree(worktreeId)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+
     if (!snapshot) {
       return false
     }
+
     const retiredTab = snapshot.tabs.find(
       (candidate): candidate is RuntimeMobileSessionBrowserTab =>
         candidate.type === 'browser' && candidate.browserPageId === browserPageId
     )
+
     if (!retiredTab) {
       return false
     }
+
     const nextTabs = snapshot.tabs.filter((candidate) => candidate.id !== retiredTab.id)
     const active = nextTabs.find((candidate) => candidate.isActive) ?? nextTabs[0] ?? null
+
     const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
       ...snapshot,
       publicationEpoch: `headless:${Date.now().toString(36)}`,
@@ -173,8 +197,10 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
       })),
       tabs: nextTabs
     }
+
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
+
     return true
   }
 
@@ -186,7 +212,9 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
     if (!worktreeId) {
       return
     }
+
     const { targetGroupId, focusesHost } = options
+
     // Why: client-placed pages publish through the page registry and need no offscreen backing.
     if (
       !this.offscreenBrowserBackend &&
@@ -194,16 +222,20 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
     ) {
       return
     }
+
     // Hydrate first so the freshly created browser tab is present in the snapshot.
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+
     const tab = snapshot?.tabs.find(
       (candidate): candidate is RuntimeMobileSessionBrowserTab =>
         candidate.type === 'browser' && candidate.browserPageId === browserPageId
     )
+
     if (!snapshot || !tab) {
       return
     }
+
     const {
       snapshot: nextSnapshot,
       groups: nextGroups,
@@ -214,13 +246,17 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
       ...(targetGroupId !== undefined ? { targetGroupId } : {}),
       focusesHost
     })
+
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
+
     // Why: browser group membership is otherwise live-only; persist it so a
     // later rebuild keeps the browser in its group instead of coalescing left.
     if (placedInTargetGroup && nextSnapshot.tabGroupLayout) {
       this.persistHeadlessTabGroups(worktreeId, nextGroups, nextSnapshot.tabGroupLayout)
     }
+
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
+
     if (options.caller) {
       // Why: the originating device still lands on the tab it just created; only the shared
       // snapshot stayed put. Local creates keep the pre-navigation shape by having no caller.

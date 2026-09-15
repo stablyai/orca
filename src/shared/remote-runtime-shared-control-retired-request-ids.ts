@@ -1,4 +1,5 @@
 const DEFAULT_MAX_RETIRED_REQUEST_IDS = 2_048
+
 const DEFAULT_RETIRED_REQUEST_ID_TTL_MS = 60_000
 
 export class SharedControlRetiredRequestIds {
@@ -24,22 +25,27 @@ export class SharedControlRetiredRequestIds {
     this.pruneExpired(now)
     this.ids.delete(requestId)
     this.ids.set(requestId, now + this.ttlMs)
+
     while (this.ids.size > this.maxIds) {
       const oldestId = this.ids.keys().next().value
+
       if (oldestId === undefined) {
         return
       }
+
       this.ids.delete(oldestId)
     }
   }
 
   has(requestId: string): boolean {
     this.pruneExpired(this.now())
+
     return this.ids.has(requestId)
   }
 
   get size(): number {
     this.pruneExpired(this.now())
+
     return this.ids.size
   }
 

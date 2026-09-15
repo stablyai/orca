@@ -64,17 +64,21 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     ) => {
       const manager = managerRef.current
       const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
+
       if (!manager || !pane) {
         return
       }
+
       const transport = paneTransportsRef.current.get(paneId)
       const panePtyBinding = panePtyBindingsRef.current.get(paneId)
       const existingPtyId = transport?.getPtyId()
+
       if (existingPtyId) {
         suppressPtyExit(existingPtyId)
         clearCodexRestartNotice(existingPtyId)
         clearTabPtyId(tabId, existingPtyId)
       }
+
       panePtyBinding?.dispose()
       panePtyBindingsRef.current.delete(paneId)
       syncPanePtyLayoutBinding(paneId, null)
@@ -83,6 +87,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
       setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
       setTerminalError(null)
       setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
+
       const newPaneBinding = connectPanePty(pane, manager, {
         tabId,
         worktreeId,
@@ -121,6 +126,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         syncPanePtyLayoutBinding,
         clearExitedPanePtyLayoutBinding
       })
+
       panePtyBindingsRef.current.set(paneId, newPaneBinding)
       manager.setActivePane(paneId, { focus: true })
     },
@@ -172,8 +178,10 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         if (current[paneId] === undefined) {
           return current
         }
+
         const next = { ...current }
         delete next[paneId]
+
         return next
       })
     },
@@ -202,6 +210,7 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
   const panePtyLayoutBindings = savedLayout.ptyIdsByLeafId
   useLayoutEffect(() => {
     const manager = managerRef.current
+
     if (!manager) {
       return
     }
@@ -211,16 +220,21 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
     // catch up, but never let a live mismatched transport overwrite its owner.
     for (const pane of manager.getPanes()) {
       const expectedPtyId = panePtyLayoutBindings?.[pane.leafId]
+
       if (!expectedPtyId) {
         continue
       }
+
       const transport = paneTransportsRef.current.get(pane.id)
+
       if (transport && transport.getPtyId() && transport.getPtyId() !== expectedPtyId) {
         continue
       }
+
       if (pane.container.dataset.ptyId === expectedPtyId) {
         continue
       }
+
       bindPanePtyId(pane.id, expectedPtyId, tabId)
       pane.container.dataset.ptyId = expectedPtyId
     }
@@ -228,14 +242,18 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
 
   useEffect(() => {
     const manager = managerRef.current
+
     if (!manager) {
       return
     }
+
     for (const pane of manager.getPanes()) {
       const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
+
       if (!ptyId || !pendingCodexPaneRestartIds[ptyId]) {
         continue
       }
+
       if (consumePendingCodexPaneRestart(ptyId)) {
         handleRestartCodexPane(pane.id)
       }

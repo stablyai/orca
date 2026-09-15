@@ -1,10 +1,12 @@
 import type { Notification } from 'electron'
 
 const NOTIFICATION_DISPLAY_CONFIRMATION_TIMEOUT_MS = 2500
+
 const NOTIFICATION_RELEASE_FALLBACK_MS = 5 * 60 * 1000
 
 // Why: keep a strong reference so GC can't collect notifications (and their click handlers) before the user interacts with them.
 export const activeNotifications = new Set<Notification>()
+
 export const activeNotificationsById = new Map<
   string,
   { notification: Notification; release: () => void }
@@ -22,18 +24,22 @@ export function retainNotificationUntilRelease(
     if (released) {
       return
     }
+
     released = true
     activeNotifications.delete(notification)
     notification.removeListener('close', release)
+
     if (releaseTimer) {
       clearTimeout(releaseTimer)
       releaseTimer = null
     }
+
     onRelease?.()
   }
 
   notification.on('close', release)
   releaseTimer = setTimeout(release, NOTIFICATION_RELEASE_FALLBACK_MS)
+
   if (typeof releaseTimer.unref === 'function') {
     releaseTimer.unref()
   }
@@ -49,6 +55,7 @@ export function waitForNotificationDisplay(notification: Notification): Promise<
     function cleanup(): void {
       notification.removeListener('show', onShow)
       notification.removeListener('failed', onFailed)
+
       if (timer) {
         clearTimeout(timer)
         timer = null
@@ -59,6 +66,7 @@ export function waitForNotificationDisplay(notification: Notification): Promise<
       if (settled) {
         return
       }
+
       settled = true
       cleanup()
       resolve(displayed)

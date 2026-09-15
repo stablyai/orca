@@ -22,6 +22,7 @@ import {
 describe('OrcaRuntimeService', () => {
   it('durably closes every terminal in one workspace without touching a sibling', async () => {
     const otherWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-b`
+
     const session = makeWorkspaceSessionWithHeadlessTerminal({
       tabsByWorktree: {
         [TEST_WORKTREE_ID]: [
@@ -95,14 +96,18 @@ describe('OrcaRuntimeService', () => {
         'other-tab:other': 'incarnation-other'
       }
     })
+
     const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+
     const stopAndWait = vi.fn(async (ptyId: string) => {
       runtime.onPtyExit(ptyId, 0)
+
       return true
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -172,6 +177,7 @@ describe('OrcaRuntimeService', () => {
     const targetConnectionId = 'conn-target'
     const targetHostId = `ssh:${targetConnectionId}`
     const targetPtyId = `${targetHostId}@@pty-target`
+
     const session = makeWorkspaceSessionWithHeadlessTerminal({
       tabsByWorktree: {
         [TEST_WORKTREE_ID]: [
@@ -191,6 +197,7 @@ describe('OrcaRuntimeService', () => {
         'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: targetPtyId })
       }
     })
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
     const repo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'conn-stale' }
     runtimeStore.getRepos = () => [repo]
@@ -221,10 +228,12 @@ describe('OrcaRuntimeService', () => {
 
   it('reports disconnected SSH PTYs as unverifiable during workspace close', async () => {
     const ptyId = 'ssh:conn-1@@disconnected'
+
     const session = makeWorkspaceSessionWithHeadlessTerminal({
       tabsByWorktree: { [TEST_WORKTREE_ID]: [] },
       terminalLayoutsByTabId: {}
     })
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(session)
     const repo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'conn-1' }
     runtimeStore.getRepos = () => [repo]
@@ -274,6 +283,7 @@ describe('OrcaRuntimeService', () => {
       write: () => true,
       kill: () => {
         killed = true
+
         return true
       },
       getForegroundProcess: async () => null
@@ -401,10 +411,13 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     const physicalStop = makeDeferred()
     const kill = vi.fn(() => true)
+
     const stopAndWait = vi.fn(async () => {
       await physicalStop.promise
+
       return true
     })
+
     runtime.setPtyController({
       write: () => true,
       kill,
@@ -412,6 +425,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     syncSinglePty(runtime)
+
     const stopPty = vi.fn(async (_ptyId: string, stop: () => Promise<boolean>) => ({
       stopped: await stop(),
       owner: true
@@ -441,6 +455,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     syncSinglePty(runtime)
+
     const stopPty = vi.fn(async (_ptyId: string, stop: () => Promise<boolean>) => ({
       stopped: await stop(),
       owner: true
@@ -454,10 +469,12 @@ describe('OrcaRuntimeService', () => {
     ).resolves.toEqual({ stopped: 1 })
 
     expect(stopAndWait).toHaveBeenCalledTimes(1)
+
     const [ptyId, opts] = stopAndWait.mock.calls[0] as unknown as [
       string,
       { deadlineMs?: number } | undefined
     ]
+
     expect(ptyId).toBe('pty-1')
     // Pin the margin: RPCs must settle WORKTREE_TEARDOWN_RPC_MARGIN_MS before the
     // sweep deadline so the accurate stop failure outruns the sweep-timeout error.
@@ -490,6 +507,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     let releaseListWorktrees = () => {}
+
     vi.mocked(listWorktrees).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -511,6 +529,7 @@ describe('OrcaRuntimeService', () => {
       write: () => true,
       kill: () => {
         killed = true
+
         return true
       },
       getForegroundProcess: async () => null
@@ -539,6 +558,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     let releaseListWorktrees = () => {}
+
     vi.mocked(listWorktrees).mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -556,6 +576,7 @@ describe('OrcaRuntimeService', () => {
 
   it('does not stop a reused PTY after the teardown deadline passes', async () => {
     vi.useFakeTimers()
+
     try {
       const runtime = new OrcaRuntimeService(store)
       const killed = vi.fn(() => true)
@@ -587,12 +608,14 @@ describe('OrcaRuntimeService', () => {
       })
 
       let releaseListWorktrees = () => {}
+
       vi.mocked(listWorktrees).mockImplementationOnce(
         () =>
           new Promise((resolve) => {
             releaseListWorktrees = () => resolve(MOCK_GIT_WORKTREES)
           })
       )
+
       const stopPromise = runtime.stopTerminalsForWorktree('branch:feature/foo', {
         deadline: Date.now() + 25
       })
@@ -610,6 +633,7 @@ describe('OrcaRuntimeService', () => {
   it('sleeps every freshly discovered worktree PTY without a hydrated renderer graph', async () => {
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []
+
     const processLists = [
       [
         { id: 'pty-1', cwd: TEST_WORKTREE_PATH, title: 'Claude' },
@@ -617,6 +641,7 @@ describe('OrcaRuntimeService', () => {
       ],
       []
     ]
+
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -626,6 +651,7 @@ describe('OrcaRuntimeService', () => {
           expect.objectContaining({ keepHistory: true, deadlineMs: expect.any(Number) })
         )
         runtime.onPtyExit(ptyId, -1)
+
         return true
       },
       getForegroundProcess: async () => null,
@@ -643,10 +669,13 @@ describe('OrcaRuntimeService', () => {
 
   it('uses provider-owned worktree identity when a PTY cwd has drifted', async () => {
     const runtime = new OrcaRuntimeService(store)
+
     const stopAndWait = vi.fn(async (ptyId: string) => {
       runtime.onPtyExit(ptyId, -1)
+
       return true
     })
+
     const processLists = [
       [
         {
@@ -658,6 +687,7 @@ describe('OrcaRuntimeService', () => {
       ],
       []
     ]
+
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -689,6 +719,7 @@ describe('OrcaRuntimeService', () => {
       }
     ])
     const runtime = new OrcaRuntimeService(store)
+
     const processLists = [
       [
         {
@@ -700,10 +731,13 @@ describe('OrcaRuntimeService', () => {
       ],
       []
     ]
+
     const stopAndWait = vi.fn(async (ptyId: string) => {
       runtime.onPtyExit(ptyId, -1)
+
       return true
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -725,13 +759,16 @@ describe('OrcaRuntimeService', () => {
     const priorWorktreeId = `${TEST_REPO_ID}::/tmp/worktree-before-rename`
     const migratedPtyId = `${priorWorktreeId}@@daemon-controller-pty`
     const session = makeWorkspaceSessionWithHeadlessTerminal()
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...session,
       terminalLayoutsByTabId: {
         'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: migratedPtyId })
       }
     })
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
+
     const processLists = [
       [
         {
@@ -743,10 +780,13 @@ describe('OrcaRuntimeService', () => {
       ],
       []
     ]
+
     const stopAndWait = vi.fn(async (ptyId: string) => {
       runtime.onPtyExit(ptyId, -1)
+
       return true
     })
+
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
@@ -835,16 +875,19 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
     const stopped: string[] = []
     const otherPty = { id: 'pty-other', cwd: otherWorktreePath, title: 'Other' }
+
     const processLists = [
       [{ id: 'pty-target', cwd: TEST_WORKTREE_PATH, title: 'Target' }, otherPty],
       [otherPty]
     ]
+
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
       stopAndWait: async (ptyId) => {
         stopped.push(ptyId)
         runtime.onPtyExit(ptyId, -1)
+
         return true
       },
       getForegroundProcess: async () => null,

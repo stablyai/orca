@@ -74,11 +74,13 @@ export function ShortcutCommandBlock({
   const canEnable = isDisabled && previousBindings.length > 0
 
   const doubleTapHint = platform === 'darwin' ? '⇧⇧' : 'Shift Shift'
+
   const recordingMessage = translate(
     'auto.components.settings.ShortcutCommandBlock.eb72c52c28',
     'Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.',
     { value0: doubleTapHint }
   )
+
   // Errors win, then the live recording hint, then a standing conflict warning.
   const helperMessage = error
     ? error
@@ -87,6 +89,7 @@ export function ShortcutCommandBlock({
       : warnings.length > 0
         ? warnings.join(' ')
         : ''
+
   const helperTone = error || (!isRecording && warnings.length > 0) ? 'error' : 'muted'
 
   const recorderFor = (binding: string | null, index: number): React.JSX.Element => (
@@ -322,6 +325,7 @@ export function ShortcutCommandBlock({
       {isMulti
         ? effective.slice(1).map((binding, offset) => {
             const index = offset + 1
+
             return (
               <ShortcutBindingSubRow
                 // Key by slot index, not the chord: editing a binding in place

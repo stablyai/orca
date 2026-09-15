@@ -28,11 +28,14 @@ export function captureTerminalShutdownBuffersBestEffort(
   options?: ShutdownBufferCaptureOptions
 ): { requested: number; captured: number } {
   let captured = 0
+
   for (const tabId of tabIds) {
     const capture = shutdownBufferCaptures.get(tabId)
+
     if (!capture) {
       continue
     }
+
     try {
       capture(options)
       captured += 1
@@ -40,5 +43,6 @@ export function captureTerminalShutdownBuffersBestEffort(
       // Buffer capture is optional recovery evidence; parking must still commit.
     }
   }
+
   return { requested: tabIds.length, captured }
 }

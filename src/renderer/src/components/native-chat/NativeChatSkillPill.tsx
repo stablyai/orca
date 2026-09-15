@@ -13,6 +13,7 @@ function skillLabel(token: string): string {
 
 export function NativeChatSkillPill({ node, selected }: NodeViewProps): React.JSX.Element {
   const token = String(node.attrs.token)
+
   return (
     <NodeViewWrapper as="span" className="inline" contentEditable={false}>
       <Badge

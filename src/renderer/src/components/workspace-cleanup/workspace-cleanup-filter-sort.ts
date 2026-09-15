@@ -59,14 +59,17 @@ export function filterWorkspaceCleanupCandidates(
   now: number = Date.now()
 ): WorkspaceCleanupCandidate[] {
   const normalizedQuery = filters.query.trim().toLowerCase()
+
   return candidates.filter((candidate) => {
     const reviewInfo = reviewInfoByWorktreeId.get(candidate.worktreeId) ?? EMPTY_REVIEW_INFO
+
     if (
       normalizedQuery &&
       !getWorkspaceCleanupSearchText(candidate, reviewInfo).includes(normalizedQuery)
     ) {
       return false
     }
+
     return (
       matchesTimeFilter(candidate, filters.time, now) &&
       matchesReviewFilter(reviewInfo, filters.review) &&
@@ -83,9 +86,11 @@ export function sortWorkspaceCleanupCandidates(
   reviewInfoByWorktreeId: ReadonlyMap<string, WorkspaceCleanupReviewInfo> = EMPTY_REVIEW_INFO_MAP
 ): WorkspaceCleanupCandidate[] {
   const multiplier = direction === 'asc' ? 1 : -1
+
   return [...candidates].sort((left, right) => {
     const primary =
       compareWorkspaceCleanupCandidates(left, right, sortKey, reviewInfoByWorktreeId) * multiplier
+
     return (
       primary ||
       left.lastActivityAt - right.lastActivityAt ||
@@ -113,12 +118,15 @@ export function getWorkspaceCleanupGitState(
   if (hasUnpushedCommits(candidate)) {
     return 'unpushed'
   }
+
   if (isGitStatusUnknown(candidate)) {
     return 'unknown'
   }
+
   if (candidate.git.clean === true) {
     return 'clean'
   }
+
   return candidate.git.clean === false ? 'dirty' : 'unknown'
 }
 
@@ -232,12 +240,15 @@ function getReviewSortRank(reviewInfo: WorkspaceCleanupReviewInfo): number {
   if (!reviewInfo.hasReview) {
     return 0
   }
+
   if (reviewInfo.state === 'open' || reviewInfo.state === 'draft') {
     return 3
   }
+
   if (reviewInfo.state === 'unknown') {
     return 2
   }
+
   return 1
 }
 
@@ -245,12 +256,15 @@ function getGitSortRank(candidate: WorkspaceCleanupCandidate): number {
   if (hasUnpushedCommits(candidate)) {
     return 4
   }
+
   if (candidate.git.clean === false) {
     return 3
   }
+
   if (isGitStatusUnknown(candidate)) {
     return 2
   }
+
   return 1
 }
 

@@ -13,6 +13,7 @@ export function isSetupHookTrusted(
   contentHash: string
 ): boolean {
   const repoTrust = trust[repoId]
+
   return Boolean(repoTrust?.all || repoTrust?.setup?.contentHash === contentHash)
 }
 
@@ -32,9 +33,11 @@ export function trustedOrcaHooksWithSetupApproval(args: {
 }): PersistedTrustedOrcaHooks {
   const approvedAt = args.approvedAt ?? Date.now()
   const existing = args.trust[args.repoId]
+
   const nextRepo = args.alwaysTrust
     ? { ...existing, all: { approvedAt } }
     : { ...existing, setup: { contentHash: args.contentHash, approvedAt } }
+
   return { ...args.trust, [args.repoId]: nextRepo }
 }
 
@@ -49,6 +52,7 @@ export async function persistSetupHookTrustApproval(args: {
   taskUiStateWrite.interpret(
     await taskUiStateWrite.request(args.client, { trustedOrcaHooks: next })
   )
+
   return next
 }
 
@@ -58,5 +62,6 @@ export function normalizeSetupHookTrust(
   if (!setupTrust?.contentHash || !setupTrust.scriptContent) {
     return null
   }
+
   return setupTrust
 }

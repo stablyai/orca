@@ -60,6 +60,7 @@ export function applyStructuredSessionTabSnapshots(
     (state) => applyLocalStructuredSessionTabSnapshots(state, snapshots, owner, undefined, options),
     { frames: [] }
   )
+
   settleStructuredSessionMirror()
 }
 
@@ -77,10 +78,12 @@ export function removeLocalStructuredSessionTabs<
 export function clearLocalStructuredSessionTabs(): void {
   // Fence responses from the previous enabled instance before clearing its mirror.
   supersedeLocalStructuredSessionGeneration()
+
   const settleStructuredSessionClear = applyWebSessionTabsStorePatch(
     (state) => removeLocalStructuredSessionTabs(state),
     { frames: [] }
   )
+
   settleStructuredSessionClear()
   dropLocalStructuredSessionRestoreLatch()
   forgetLocalStructuredSessionPublicationCursors()
@@ -96,11 +99,13 @@ export function applyLocalStructuredSessionTabSnapshots<
   options: StructuredSessionSnapshotApplyOptions = {}
 ): State {
   let next = state
+
   for (const snapshot of snapshots) {
     // Why: the execution host owns its tabs; local inventory must not rewrite paired or SSH panes.
     if (getExecutionHostIdForWorktree(next, snapshot.worktree) !== 'local') {
       continue
     }
+
     // "Ask me later", not an answer: a worktree the host holds no entry for still answers a forced
     // inventory, with `none` at version 0. Absence there proves nothing, so it neither applies nor
     // records — recording it would retire the epoch below. Its cursor is left alone, so a genuinely
@@ -108,11 +113,15 @@ export function applyLocalStructuredSessionTabSnapshots<
     if (!hostSnapshotAffirmsWorktreeContents(snapshot)) {
       continue
     }
+
     const prior = localStructuredSessionVersionByWorktree.get(snapshot.worktree)
+
     const sharesLineage = Boolean(
       prior && sameSessionTabsPublicationLineage(prior.publicationEpoch, snapshot.publicationEpoch)
     )
+
     const epochHistory = localStructuredSessionEpochHistoryByWorktree.get(snapshot.worktree)
+
     // Why not just drop: an epoch is retired whenever another publisher takes over the worktree,
     // but a live publisher can return after transient interlopers (a `removed:` retraction, then a
     // headless rebuild), and the structured publish inherits the worktree's existing epoch rather
@@ -123,11 +132,14 @@ export function applyLocalStructuredSessionTabSnapshots<
         options.onRetiredEpochDrop?.(snapshot.worktree, snapshot.publicationEpoch)
         continue
       }
+
       reviveRetiredValue(epochHistory, snapshot.publicationEpoch)
     }
+
     if (prior && sharesLineage && snapshot.snapshotVersion <= prior.snapshotVersion) {
       continue
     }
+
     const patch = applyWebSessionTabsSnapshot(
       next,
       projectLocalStructuredSessionTabs(snapshot),
@@ -139,7 +151,9 @@ export function applyLocalStructuredSessionTabSnapshots<
         terminalPtyMode: 'local'
       }
     )
+
     next = patch === next ? next : ({ ...next, ...patch } as State)
+
     if (isWorktreeRetraction(snapshot)) {
       // A retraction was applied above — the mirrored rows must go — but it is not a publication
       // to fence later frames against. Recording it would retire the renderer's own epoch, which
@@ -158,14 +172,17 @@ export function applyLocalStructuredSessionTabSnapshots<
       // because the version cursor only fences within a lineage. Dropping `current` alone does
       // neither: `noteRetiredValue` retires nothing when there is nothing current.
       const history = localStructuredSessionEpochHistoryByWorktree.get(snapshot.worktree)
+
       if (history) {
         localStructuredSessionEpochHistoryByWorktree.set(snapshot.worktree, {
           current: null,
           retired: history.retired
         })
       }
+
       continue
     }
+
     localStructuredSessionVersionByWorktree.set(snapshot.worktree, {
       publicationEpoch: snapshot.publicationEpoch,
       snapshotVersion: snapshot.snapshotVersion
@@ -175,15 +192,19 @@ export function applyLocalStructuredSessionTabSnapshots<
       noteRetiredValue(epochHistory, snapshot.publicationEpoch, 8)
     )
   }
+
   // Drop publisher cursors for worktrees that no longer exist. Without this,
   // every deleted worktree leaves an entry for the lifetime of the renderer.
   const knownWorktreeIds = knownStructuredSessionWorktreeIds(next)
+
   for (const worktreeId of localStructuredSessionVersionByWorktree.keys()) {
     if (!knownWorktreeIds.has(worktreeId)) {
       localStructuredSessionVersionByWorktree.delete(worktreeId)
       localStructuredSessionEpochHistoryByWorktree.delete(worktreeId)
     }
   }
+
   forgetRetiredEpochRepairsOutside(knownWorktreeIds)
+
   return next
 }

@@ -15,31 +15,39 @@ import {
 } from './orca-runtime-files-terminal-artifact-fixtures'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
+
 vi.mock('fs/promises', async () =>
   (await import('./orca-runtime-files-mock-registry')).fsPromisesModuleMock()
 )
+
 vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
+
 vi.mock('../ipc/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
+
 vi.mock(
   '../ipc/rg-availability',
   async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
 )
+
 vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
 )
+
 vi.mock(
   '../ipc/filesystem-search-git',
   async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
 )
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
@@ -82,6 +90,7 @@ describe('RuntimeFileCommands', () => {
     it('keeps old-client behavior without native-chat provenance', async () => {
       const artifactPath = await tempFile('result.json', '{}')
       const hasRecentNativeChatOutputPath = vi.fn(() => true)
+
       const { commands } = createRuntimeFileCommands({
         path: '/repo',
         hasRecentNativeChatOutputPath
@@ -102,6 +111,7 @@ describe('RuntimeFileCommands', () => {
     it('mints an exact-path grant for an out-of-worktree path cited by native chat', async () => {
       const artifactPath = await tempFile('chat-result.html', '<h1>Result</h1>')
       const hasRecentNativeChatOutputPath = vi.fn(() => true)
+
       const { commands } = createRuntimeFileCommands({
         path: '/repo',
         hasRecentNativeChatOutputPath
@@ -154,6 +164,7 @@ describe('RuntimeFileCommands', () => {
       const citedPath = join(artifactPath, '..', 'chat-citation.html')
       await symlink(artifactPath, citedPath)
       const hasRecentNativeChatOutputPath = vi.fn(() => true)
+
       const { commands } = createRuntimeFileCommands({
         path: '/repo',
         hasRecentNativeChatOutputPath
@@ -189,6 +200,7 @@ describe('RuntimeFileCommands', () => {
     it('refuses an out-of-worktree chat path without transcript provenance', async () => {
       const artifactPath = await tempFile('uncited-result.html', '<h1>Secret</h1>')
       const hasRecentNativeChatOutputPath = vi.fn(() => false)
+
       const { commands } = createRuntimeFileCommands({
         path: '/repo',
         hasRecentNativeChatOutputPath
@@ -212,6 +224,7 @@ describe('RuntimeFileCommands', () => {
     it('refuses native-chat tilde paths when the workspace runs in WSL', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const hasRecentNativeChatOutputPath = vi.fn(() => true)
+
       const { commands } = createRuntimeFileCommands({
         path: String.raw`\\wsl.localhost\Ubuntu\work\repo`,
         hasRecentNativeChatOutputPath
@@ -233,9 +246,11 @@ describe('RuntimeFileCommands', () => {
 
     it('does not mint an absolute terminal artifact grant for an unobserved path', async () => {
       const artifactPath = await tempFile('result.json', '{}')
+
       const hasRecentTerminalOutputPath = vi.fn(
         (_terminalHandle: string, _pathText: string, _absolutePath: string) => false
       )
+
       const { commands } = createRuntimeFileCommands({
         path: '/repo',
         hasRecentTerminalOutputPath
@@ -263,14 +278,17 @@ describe('RuntimeFileCommands', () => {
       tempDirs.push(dir)
       const artifactPath = join(dir, 'result.json')
       await writeFile(artifactPath, '{}')
+
       const hasRecentTerminalOutputPath = vi.fn(
         (_terminalHandle: string, pathText: string, _absolutePath: string) =>
           pathText === 'result.json'
       )
+
       const { commands } = createRuntimeFileCommands({
         path: '/repo',
         hasRecentTerminalOutputPath
       })
+
       resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
       statMock.mockRejectedValue(enoent())
 
@@ -287,6 +305,7 @@ describe('RuntimeFileCommands', () => {
 
     it('does not mint an artifact grant from a terminal attached to a different worktree', async () => {
       const artifactPath = await tempFile('result.json', '{}')
+
       const { commands } = createRuntimeFileCommands({
         path: '/repo',
         resolveTerminalContext: vi.fn(() => ({ worktreeId: 'other-wt', connectionId: null }))
@@ -305,6 +324,7 @@ describe('RuntimeFileCommands', () => {
 
     it('does not mint a local artifact grant from an SSH terminal handle', async () => {
       const artifactPath = await tempFile('result.json', '{}')
+
       const { commands } = createRuntimeFileCommands({
         path: '/repo',
         resolveTerminalContext: vi.fn(() => ({ worktreeId: 'wt-1', connectionId: 'ssh-1' }))
@@ -388,9 +408,11 @@ describe('RuntimeFileCommands', () => {
       const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
       const stat = vi.fn().mockResolvedValue({ type: 'file', size: 2, mtime: 3 })
+
       const realpath = vi.fn(async (p: string) =>
         p === '/tmp/link-result.json' ? '/tmp/result.json' : p
       )
+
       vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat, realpath } as never)
 
       const result = await resolveTerminalArtifactPath(commands, '/tmp/link-result.json')
@@ -451,9 +473,11 @@ describe('RuntimeFileCommands', () => {
       const { commands, store } = createRuntimeFileCommands({ path: '/repo' })
       store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
       const stat = vi.fn()
+
       const realpath = vi.fn(async (p: string) =>
         p === '/tmp/link-result.json' ? '/home/me/.ssh/config' : p
       )
+
       vi.mocked(getSshFilesystemProvider).mockReturnValue({ stat, realpath } as never)
 
       const result = await commands.resolveTerminalPath(

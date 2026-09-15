@@ -16,10 +16,12 @@ export function settleWorkItemDetailsFetch(args: {
     .then((result) => {
       const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
       const prev = workItemDetailsCache.get(detailsCacheKey)
+
       if (invalidatedMidFlight && prev?.pending !== inflight) {
         // Why: entry was deliberately dropped (or later repopulated) — don't recreate or touch it.
         return
       }
+
       // Why: null means unavailable/not found, not loaded empty content.
       if (result === null && prev?.details) {
         touchWorkItemDetailsCache(detailsCacheKey, {
@@ -45,9 +47,11 @@ export function settleWorkItemDetailsFetch(args: {
       const message = err instanceof Error ? err.message : 'Failed to load details'
       const invalidatedMidFlight = workItemDetailsCacheGeneration !== launchedAtGeneration
       const prev = workItemDetailsCache.get(detailsCacheKey)
+
       if (invalidatedMidFlight && prev?.pending !== inflight) {
         return
       }
+
       // Why: stale-on-error — keep cached data, drop the pending promise so next open retries; show the error only when nothing is cached.
       touchWorkItemDetailsCache(detailsCacheKey, {
         details: prev?.details ?? null,

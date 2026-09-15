@@ -48,6 +48,7 @@ export function CommentReactions({
   const mutationPendingRef = React.useRef(false)
   const [open, setOpen] = React.useState(false)
   const [pendingContent, setPendingContent] = React.useState<GitHubReactionContent | null>(null)
+
   if (visibleReactions.length === 0 && !onReactionChange) {
     return null
   }
@@ -61,13 +62,17 @@ export function CommentReactions({
     if (!onReactionChange || mutationPendingRef.current) {
       return
     }
+
     mutationPendingRef.current = true
     setPendingContent(content)
+
     if (focusTriggerAfterChange) {
       addReactionButtonRef.current?.focus()
     }
+
     try {
       const changed = await onReactionChange(content, reacted)
+
       if (changed && closePicker) {
         setOpen(false)
       }
@@ -179,6 +184,7 @@ export function CommentReactions({
               {GITHUB_REACTION_ORDER.map((content) => {
                 const reaction = reactions?.find((candidate) => candidate.content === content)
                 const reacted = Boolean(reaction?.viewerHasReacted)
+
                 return (
                   <Button
                     key={content}

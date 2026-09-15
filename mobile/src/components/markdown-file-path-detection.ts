@@ -113,9 +113,11 @@ export function splitFilePathLineSuffix(pathText: string): {
   column: number | null
 } {
   const parsed = parseFileLinkLocation(pathText)
+
   if (!parsed || (parsed.line === null && parsed.column === null)) {
     return { path: pathText, line: null, column: null }
   }
+
   return {
     path: parsed.pathText,
     line: parsed.line,
@@ -126,31 +128,39 @@ export function splitFilePathLineSuffix(pathText: string): {
 function isOpenablePath(pathText: string): boolean {
   // A :line(:col) tail is part of the citation, not the file name.
   const { path: candidate } = splitFilePathLineSuffix(pathText)
+
   // Reject anything URL-ish or scheme-bearing — those are handled as web links.
   if (candidate.includes('://') || hasMidTokenAt(candidate)) {
     return false
   }
+
   // Must contain a separator (a bare "file.ts" is too ambiguous in prose).
   if (!/[\\/]/.test(candidate)) {
     return false
   }
+
   const lastSeparator = Math.max(candidate.lastIndexOf('/'), candidate.lastIndexOf('\\'))
   const lastSegment = candidate.slice(lastSeparator + 1)
   const dot = lastSegment.lastIndexOf('.')
+
   // A leading-dot dotfile in the final segment (e.g. ".env") has no extension to
   // anchor on; require a real name.ext shape.
   if (dot <= 0) {
     return false
   }
+
   const ext = lastSegment.slice(dot + 1).toLowerCase()
+
   if (!EXTENSION_SET.has(ext)) {
     return false
   }
+
   // Guard against version-number-ish tails ("1.2.3" style) where the "extension"
   // is purely numeric — those aren't files.
   if (/^\d+$/.test(ext)) {
     return false
   }
+
   return true
 }
 
@@ -172,6 +182,7 @@ export function detectFilePathSegments(text: string): FilePathSegment[] {
   if (text.length > MAX_DETECTION_LENGTH || !text.includes('.')) {
     return [{ type: 'text', value: text }]
   }
+
   const segments: FilePathSegment[] = []
   let lastIndex = 0
   let match: RegExpExecArray | null
@@ -183,15 +194,19 @@ export function detectFilePathSegments(text: string): FilePathSegment[] {
     // a preceding slash (the leading slash of an absolute path is part of the
     // match itself, so prev '/' means a '://' or '//' remainder, not a path).
     const prev = match.index > 0 ? text[match.index - 1]! : ''
+
     if (prev === ':' || prev === '/' || prev === '\\' || /[\w.@]/.test(prev)) {
       continue
     }
+
     if (!isOpenablePath(candidate)) {
       continue
     }
+
     if (match.index > lastIndex) {
       segments.push({ type: 'text', value: text.slice(lastIndex, match.index) })
     }
+
     segments.push({ type: 'file', value: candidate, path: normalizeFilePath(candidate) })
     lastIndex = match.index + candidate.length
   }
@@ -199,10 +214,12 @@ export function detectFilePathSegments(text: string): FilePathSegment[] {
   if (lastIndex < text.length) {
     segments.push({ type: 'text', value: text.slice(lastIndex) })
   }
+
   // Collapse to a single text segment for the common no-match case.
   if (segments.length === 0) {
     return [{ type: 'text', value: text }]
   }
+
   return segments
 }
 
@@ -213,29 +230,39 @@ export function detectFilePathSegments(text: string): FilePathSegment[] {
  */
 export function isFilePathCodeSpan(code: string): boolean {
   const trimmed = code.trim()
+
   if (!trimmed || /\s/.test(trimmed)) {
     return false
   }
+
   if (trimmed.includes('://') || hasMidTokenAt(trimmed)) {
     return false
   }
+
   if (isOpenablePath(trimmed)) {
     return true
   }
+
   // Separator-less code span: accept a clean name.ext (with an optional
   // :line(:col) citation tail) and a known extension.
   const { path } = splitFilePathLineSuffix(trimmed)
+
   if (/[\\/]/.test(path)) {
     return false
   }
+
   const dot = path.lastIndexOf('.')
+
   if (dot <= 0) {
     return false
   }
+
   const name = path.slice(0, dot)
   const ext = path.slice(dot + 1).toLowerCase()
+
   if (/[^\w.@+-]/.test(name)) {
     return false
   }
+
   return EXTENSION_SET.has(ext)
 }

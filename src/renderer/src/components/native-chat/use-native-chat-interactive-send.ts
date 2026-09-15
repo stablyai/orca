@@ -60,10 +60,12 @@ export function useNativeChatInteractiveSend(
   // unmount so a detached setTimeout chain can't keep writing PTY bytes after
   // the view is gone / the user switched away.
   const inFlightRef = useRef<NativeChatSendHandle | null>(null)
+
   const cancelInFlight = useCallback(() => {
     inFlightRef.current?.cancel()
     inFlightRef.current = null
   }, [])
+
   // Why: a split can be rebound without unmounting this view. Cancel during
   // commit so no delayed answer write can race the replacement PTY.
   useLayoutEffect(
@@ -76,6 +78,7 @@ export function useNativeChatInteractiveSend(
       if (!targetPtyId) {
         return
       }
+
       sendRuntimePtyInput(getSettingsForAgentTabRuntimeOwner(terminalTabId), targetPtyId, raw)
     },
     [terminalTabId, targetPtyId]
@@ -90,6 +93,7 @@ export function useNativeChatInteractiveSend(
       if (!targetPtyId || !hasAskAnswer(prompt, selections)) {
         return { settleAfterMs: 0, waitsForVerifiedDelivery: false }
       }
+
       // Cancel any prior in-flight answer before starting a new one.
       cancelInFlight()
       const settings = getSettingsForAgentTabRuntimeOwner(terminalTabId)
@@ -97,6 +101,7 @@ export function useNativeChatInteractiveSend(
       // machines; Grok commits pasted text. OpenClaude follows Claude's path.
       const stepsAnswer = shouldStepNativeChatAskAnswer(agent)
       const buildsCodexAnswer = resolveNativeChatTranscriptAgent(agent) === 'codex'
+
       // Why: pin the answered question's baseline BEFORE delivery. A late settle
       // callback (paced writes + remote acceptance can span seconds on SSH) must
       // not read the live status and mint a fresh baseline for a replacement
@@ -106,7 +111,9 @@ export function useNativeChatInteractiveSend(
       const questionStatusBaseline = stepsAnswer
         ? useAppStore.getState().agentStatusByPaneKey[paneKey]
         : undefined
+
       let settledHandle: NativeChatSendHandle | null = null
+
       const onSettled = stepsAnswer
         ? (delivered: boolean): void => {
             if (settledHandle && inFlightRef.current === settledHandle) {
@@ -114,6 +121,7 @@ export function useNativeChatInteractiveSend(
               // promises, and prompt callback until the next send or unmount.
               inFlightRef.current = null
             }
+
             if (delivered) {
               inferQuestionAnsweredFromCurrentStatus({
                 paneKey,
@@ -121,13 +129,16 @@ export function useNativeChatInteractiveSend(
                 inferQuestionAnswered: (request) =>
                   window.api.agentStatus.inferQuestionAnswered(request).catch((err) => {
                     console.warn('[agent-question] native-chat inference failed:', err)
+
                     return false
                   })
               })
             }
+
             onDeliverySettled?.(delivered)
           }
         : undefined
+
       const handle: NativeChatSendHandle = stepsAnswer
         ? sendNativeChatAskAnswer(
             settings,
@@ -138,11 +149,13 @@ export function useNativeChatInteractiveSend(
             onSettled
           )
         : sendNativeChatMessage(settings, targetPtyId, formatAskAnswer(prompt, selections))
+
       // Why: native-chat answer writes bypass xterm.onData. Infer only after
       // every paced selector write has fired, so an early digit in a multi-step
       // answer cannot dismiss the wait or cancel the remaining writes.
       settledHandle = handle
       inFlightRef.current = handle
+
       return {
         settleAfterMs: handle.settleAfterMs,
         waitsForVerifiedDelivery: onSettled !== undefined

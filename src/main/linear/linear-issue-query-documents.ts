@@ -56,13 +56,16 @@ export type LinearIssueConnection = {
 }
 
 export type LinearRawVariables = Record<string, unknown>
+
 export type LinearIssuePageRequest = {
   first: number
   after?: string
 }
+
 export type LinearIssueConnectionLoader = (
   page: LinearIssuePageRequest
 ) => Promise<LinearIssueConnection | null | undefined>
+
 export const LINEAR_ISSUE_NODE_FIELDS = `
   id
   identifier

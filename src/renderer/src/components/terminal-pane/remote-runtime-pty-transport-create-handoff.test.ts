@@ -5,6 +5,7 @@ import {
 } from './remote-runtime-pty-transport-test-harness'
 
 let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
+
 let resolvedPaneHandle = 'terminal-1'
 
 const { runtimeCall, refreshSessionTabsSnapshot, resetRemoteRuntimeTransport } =
@@ -26,15 +27,18 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('closes a remote terminal created after the pane was destroyed', async () => {
     let resolveCreate: (value: unknown) => void = () => {}
+
     runtimeCall.mockImplementation((args) => {
       if (args.method === 'terminal.create') {
         return new Promise((resolve) => {
           resolveCreate = resolve
         })
       }
+
       return Promise.resolve({ ok: true, result: {} })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -56,16 +60,19 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('cannot let a stale create completion replace a newer attached terminal', async () => {
     let resolveCreate: (value: unknown) => void = () => {}
+
     runtimeCall.mockImplementation((args) => {
       if (args.method === 'terminal.create') {
         return new Promise((resolve) => {
           resolveCreate = resolve
         })
       }
+
       return Promise.resolve({ ok: true, result: {} })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onPtySpawn = vi.fn()
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       onPtySpawn
@@ -89,6 +96,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('does not close a live owner adopted after provisional pane handoff', async () => {
     let resolveEnsure: (value: unknown) => void = () => {}
+
     runtimeCall.mockImplementation((args) => {
       if (args.method === 'status.get') {
         return Promise.resolve({
@@ -100,14 +108,17 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         })
       }
+
       if (args.method === 'terminal.ensureAgentSession') {
         return new Promise((resolve) => {
           resolveEnsure = resolve
         })
       }
+
       return Promise.resolve({ ok: true, result: {} })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -139,6 +150,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('does not close a structured create after provisional pane handoff', async () => {
     let resolveCreate: (value: unknown) => void = () => {}
+
     runtimeCall.mockImplementation((args) => {
       if (args.method === 'status.get') {
         return Promise.resolve({
@@ -150,14 +162,17 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
         })
       }
+
       if (args.method === 'terminal.createAgentSession') {
         return new Promise((resolve) => {
           resolveCreate = resolve
         })
       }
+
       return Promise.resolve({ ok: true, result: {} })
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'provisional-tab',
@@ -192,6 +207,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('passes activation intent when creating the remote runtime terminal', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -219,7 +235,9 @@ describe('createRemoteRuntimePtyTransport', () => {
   it('scopes ephemeral setup terminals to the floating-terminal selector (#6789)', async () => {
     const { brandEphemeralSetupTerminalWorktreeId } =
       await import('../../../../shared/ephemeral-setup-terminal-worktree-id')
+
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: brandEphemeralSetupTerminalWorktreeId(
         'feature-wall-orchestration-skill-terminal'
@@ -243,6 +261,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
   it('passes startup command delivery when creating the remote runtime terminal', async () => {
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -283,6 +302,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         : { ok: true, result: { terminal: { handle: 'terminal-1' } } }
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
@@ -357,8 +377,10 @@ describe('createRemoteRuntimePtyTransport', () => {
           }
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const { resolveWebAgentSessionHandoff } =
       await import('../../runtime/web-agent-session-handoff')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'provisional-tab',
@@ -399,6 +421,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         : { ok: true, result: { terminal: { handle: 'terminal-legacy' } } }
     )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',

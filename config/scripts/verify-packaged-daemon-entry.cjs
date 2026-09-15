@@ -1,5 +1,7 @@
 const { existsSync } = require('node:fs')
+
 const { spawnSync } = require('node:child_process')
+
 const { join } = require('node:path')
 
 // Why: `asarUnpack` in config/electron-builder.config.cjs lists
@@ -10,6 +12,7 @@ const { join } = require('node:path')
 // this gate exists to catch.
 function assertPackagedDaemonEntryExists(resourcesDir) {
   const entryPath = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js')
+
   if (!existsSync(entryPath)) {
     throw new Error(
       `[verify-packaged-daemon-entry] missing unpacked daemon entry at ${entryPath} — ` +
@@ -17,6 +20,7 @@ function assertPackagedDaemonEntryExists(resourcesDir) {
         `daemon cannot be forked from this layout`
     )
   }
+
   return entryPath
 }
 
@@ -35,23 +39,28 @@ function verifyPackagedDaemonEntryBoots(resourcesDir, options = {}) {
   const entryPath = assertPackagedDaemonEntryExists(resourcesDir)
 
   const result = spawnSync(execPath, [entryPath], { encoding: 'utf8', timeout: 10_000 })
+
   if (result.error) {
     throw new Error(
       `[verify-packaged-daemon-entry] could not launch daemon-entry.js: ${result.error.message}`
     )
   }
+
   const stderr = result.stderr || ''
+
   if (/Cannot find module|MODULE_NOT_FOUND/.test(stderr)) {
     throw new Error(
       `[verify-packaged-daemon-entry] packaged daemon-entry.js failed to load under plain Node:\n${stderr}`
     )
   }
+
   if (!stderr.includes('Usage: daemon-entry')) {
     throw new Error(
       `[verify-packaged-daemon-entry] packaged daemon-entry.js did not reach argv parsing ` +
         `(expected the "Usage: daemon-entry" error). stderr:\n${stderr}`
     )
   }
+
   console.log('[verify-packaged-daemon-entry] OK — packaged daemon-entry loads under plain Node')
 }
 

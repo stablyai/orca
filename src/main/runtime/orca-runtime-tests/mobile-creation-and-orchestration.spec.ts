@@ -11,9 +11,11 @@ import { createMobileCreateTestNotifier } from '../orca-runtime-test-scenario-bu
 describe('OrcaRuntimeService', () => {
   it('does not re-deliver the agent launch command when the adopted renderer PTY spawned with one', async () => {
     vi.useFakeTimers()
+
     try {
       const leafId = '88888888-8888-4888-8888-888888888888'
       const write = vi.fn((_ptyId: string, _data: string) => true)
+
       const runtime = new OrcaRuntimeService({
         ...store,
         getSettings: () => ({
@@ -22,6 +24,7 @@ describe('OrcaRuntimeService', () => {
           agentCmdOverrides: {}
         })
       } as never)
+
       runtime.setPtyController({
         spawn: vi.fn(),
         write,
@@ -30,6 +33,7 @@ describe('OrcaRuntimeService', () => {
       })
       runtime.setNotifier(createMobileCreateTestNotifier(vi.fn()))
       const webContents = { send: vi.fn() }
+
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         // Why: mirrors the spawn IPC handler — a command-carrying spawn records
         // its launch command right after registering the PTY.
@@ -41,6 +45,7 @@ describe('OrcaRuntimeService', () => {
           { requestId: payload.requestId, tabId: 'tab-carried', title: 'Terminal' }
         )
       })
+
       webContents.send = send
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -53,6 +58,7 @@ describe('OrcaRuntimeService', () => {
         agent: 'codex',
         activate: true
       })
+
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
       await vi.advanceTimersByTimeAsync(50)
       const result = await create
@@ -66,12 +72,14 @@ describe('OrcaRuntimeService', () => {
 
   it('keeps a mobile-created terminal alive when the renderer snapshot is rejected by the version guard', async () => {
     vi.useFakeTimers()
+
     try {
       const leafId = '66666666-6666-4666-8666-666666666666'
       const closeTerminal = vi.fn()
       const runtime = new OrcaRuntimeService(store)
       runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
       const webContents = { send: vi.fn() }
+
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
           'terminal:tabCreateReply',
@@ -79,6 +87,7 @@ describe('OrcaRuntimeService', () => {
           { requestId: payload.requestId, tabId: 'tab-guard', title: 'Terminal' }
         )
       })
+
       webContents.send = send
       runtime.attachWindow(1)
       electronMocks.BrowserWindow.fromId.mockReturnValue({
@@ -105,10 +114,13 @@ describe('OrcaRuntimeService', () => {
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
         activate: true
       })
+
       let settled = false
+
       const settledCreate = create.finally(() => {
         settled = true
       })
+
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
       // Renderer republishes with a stale (lower) version under the same epoch, so syncMobileSessionTabs rejects it — the reporter's stall variant (#7587).
@@ -169,6 +181,7 @@ describe('OrcaRuntimeService', () => {
 
   it('keeps a mobile-created terminal alive at the surface timeout when only a leaf-synced PTY backs the tab', async () => {
     vi.useFakeTimers()
+
     try {
       const leafId = '77777777-7777-4777-8777-777777777777'
       const closeTerminal = vi.fn()
@@ -176,6 +189,7 @@ describe('OrcaRuntimeService', () => {
       runtime.setNotifier(createMobileCreateTestNotifier(closeTerminal))
       // Why (#7587): leaf graph-sync lands identity without registerPty, so only the catch-path rescue saves the stalled live session.
       const webContents = { send: vi.fn() }
+
       const send = vi.fn((_channel: string, payload: { requestId: string }) => {
         ipcMain.emit(
           'terminal:tabCreateReply',
@@ -183,6 +197,7 @@ describe('OrcaRuntimeService', () => {
           { requestId: payload.requestId, tabId: 'tab-catch', title: 'Terminal' }
         )
       })
+
       webContents.send = send
       runtime.attachWindow(1)
       runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
@@ -194,10 +209,13 @@ describe('OrcaRuntimeService', () => {
       const create = runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
         activate: true
       })
+
       let settled = false
+
       const settledCreate = create.finally(() => {
         settled = true
       })
+
       await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
       // Let the create clear its pre-wait check and park in waitForMobileTerminalSurface before any identity arrives.
@@ -264,18 +282,21 @@ describe('OrcaRuntimeService', () => {
 
   it('cancels an in-flight same-connection browser screencast before replacing it', async () => {
     const runtime = createRuntime()
+
     const firstStart = deferred<{
       subscriptionId: string
       ready: never
       flushPendingFrame: () => void
       session: { stop: () => void; done: Promise<void> }
     }>()
+
     const firstDone = deferred<void>()
     const secondDone = deferred<void>()
     const thirdDone = deferred<void>()
     const firstStop = vi.fn(() => firstDone.resolve())
     const secondStop = vi.fn(() => secondDone.resolve())
     const thirdStop = vi.fn(() => thirdDone.resolve())
+
     const browserScreencast = vi
       .fn()
       .mockImplementationOnce(() => firstStart.promise)
@@ -322,21 +343,26 @@ describe('OrcaRuntimeService', () => {
 
     const firstEmit = vi.fn()
     const secondEmit = vi.fn()
+
     const first = runtime.browserScreencast(
       { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
       { connectionId: 'conn-1', sendBinary: vi.fn(), emit: firstEmit }
     )
+
     await Promise.resolve()
 
     const second = runtime.browserScreencast(
       { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
       { connectionId: 'conn-1', sendBinary: vi.fn(), emit: secondEmit }
     )
+
     const thirdEmit = vi.fn()
+
     const third = runtime.browserScreencast(
       { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
       { connectionId: 'conn-1', sendBinary: vi.fn(), emit: thirdEmit }
     )
+
     await Promise.resolve()
 
     expect(browserScreencast).toHaveBeenCalledTimes(1)
@@ -375,6 +401,7 @@ describe('OrcaRuntimeService', () => {
     const secondDone = deferred<void>()
     const firstStop = vi.fn(() => firstDone.resolve())
     const secondStop = vi.fn(() => secondDone.resolve())
+
     const ready = (subscriptionId: string) => ({
       type: 'ready' as const,
       subscriptionId,
@@ -388,6 +415,7 @@ describe('OrcaRuntimeService', () => {
         active: true
       }
     })
+
     const browserScreencast = vi
       .fn()
       .mockResolvedValueOnce({
@@ -408,10 +436,12 @@ describe('OrcaRuntimeService', () => {
     ).browserCommands = { browserScreencast }
 
     const firstEmit = vi.fn()
+
     const first = runtime.browserScreencast(
       { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
       { connectionId: 'conn-1', sendBinary: vi.fn(), emit: firstEmit }
     )
+
     await vi.waitFor(() =>
       expect(firstEmit).toHaveBeenCalledWith(
         expect.objectContaining({ subscriptionId: 'browser-screencast:page-1:first' })
@@ -419,6 +449,7 @@ describe('OrcaRuntimeService', () => {
     )
 
     const secondEmit = vi.fn()
+
     const second = runtime.browserScreencast(
       { worktree: `id:${TEST_WORKTREE_ID}`, page: 'page-1', format: 'jpeg' },
       { connectionId: 'conn-2', sendBinary: vi.fn(), emit: secondEmit }
@@ -445,10 +476,12 @@ describe('OrcaRuntimeService', () => {
     const runtime = createRuntime()
     const cleanupError = new Error('physical teardown incomplete')
     const firstCleanup = deferred<void>()
+
     const cleanup = vi
       .fn()
       .mockReturnValueOnce(firstCleanup.promise)
       .mockRejectedValue(cleanupError)
+
     runtime.registerSubscriptionCleanup('files-watch-1', cleanup, 'conn-1')
 
     const first = runtime.cleanupSubscriptionAndWait('files-watch-1')
@@ -594,6 +627,7 @@ describe('OrcaRuntimeService', () => {
     void runtime.handleMobileSubscribe('pty-lease', 'phone-1', undefined).then(() => {
       settled = true
     })
+
     // Drain microtasks only: any real await on this path leaves this unsettled.
     for (let i = 0; i < 50; i += 1) {
       await Promise.resolve()
@@ -622,15 +656,19 @@ describe('OrcaRuntimeService', () => {
     const emit = vi.fn()
     let pendingFrame: Uint8Array | null = null
     let gatedSend!: (bytes: Uint8Array) => boolean | void
+
     const browserScreencast = vi.fn(
       async (_params: unknown, stream: { sendBinary: typeof sendBinary }) => {
         gatedSend = stream.sendBinary
+
         // Why: a joining subscriber's viewport snapshot is captured here, before the caller
         // has emitted ready, so the fan-out retains what the gate refuses.
         if (gatedSend(startupFrame) === false) {
           pendingFrame = startupFrame
         }
+
         expect(sendBinary).not.toHaveBeenCalled()
+
         return {
           subscriptionId: 'browser-screencast:page-1:first',
           ready: {
@@ -649,6 +687,7 @@ describe('OrcaRuntimeService', () => {
           flushPendingFrame: () => {
             const bytes = pendingFrame
             pendingFrame = null
+
             if (bytes) {
               gatedSend(bytes)
             }

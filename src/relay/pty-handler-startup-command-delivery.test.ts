@@ -102,6 +102,7 @@ describe('PtyHandler', () => {
 
       process.env.SHELL = '/bin/bash'
       process.env.HOME = homeDir
+
       try {
         await dispatcher.callRequest('pty.spawn', {
           env: { HOME: homeDir },
@@ -114,17 +115,20 @@ describe('PtyHandler', () => {
         } else {
           process.env.SHELL = oldShell
         }
+
         if (oldHome === undefined) {
           delete process.env.HOME
         } else {
           process.env.HOME = oldHome
         }
+
         rmSync(homeDir, { recursive: true, force: true })
       }
 
       const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
         | { env?: Record<string, string> }
         | undefined
+
       expect(spawnOptions?.env?.ORCA_SHELL_FEATURES).toContain('ready')
       expect(handler.retainedStartupCommandCount).toBe(1)
       expect(handler.retainedStartupCommandBytes).toBe(0)
@@ -142,6 +146,7 @@ describe('PtyHandler', () => {
 
       process.env.SHELL = '/bin/bash'
       process.env.HOME = homeDir
+
       try {
         // No prefill flag and no shell-ready hint: the host decides from its own
         // shell, because the client cannot see it (#18767).
@@ -149,6 +154,7 @@ describe('PtyHandler', () => {
           env: { HOME: homeDir },
           command: 'codex'
         })
+
         expect(reply).toMatchObject({ shellReadyArmed: true })
       } finally {
         if (oldShell === undefined) {
@@ -156,17 +162,20 @@ describe('PtyHandler', () => {
         } else {
           process.env.SHELL = oldShell
         }
+
         if (oldHome === undefined) {
           delete process.env.HOME
         } else {
           process.env.HOME = oldHome
         }
+
         rmSync(homeDir, { recursive: true, force: true })
       }
 
       const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
         | { env?: Record<string, string> }
         | undefined
+
       expect(spawnOptions?.env?.ORCA_SHELL_FEATURES).toContain('ready')
       vi.advanceTimersByTime(15_000)
       expect(handler.retainedStartupCommandCount).toBe(0)
@@ -180,11 +189,13 @@ describe('PtyHandler', () => {
       const homeDir = mkdtempSync(join(tmpdir(), 'relay-plain-codex-fish-spawn-'))
 
       process.env.HOME = homeDir
+
       try {
         const reply = await dispatcher.callRequest('pty.spawn', {
           env: { HOME: homeDir, SHELL: '/usr/bin/fish' },
           command: 'codex'
         })
+
         // Why the reply carries it: the client cannot see this shell, and without
         // the verdict it waits the full fallback for a marker fish never emits.
         expect(reply).toMatchObject({ shellReadyArmed: false })
@@ -194,12 +205,14 @@ describe('PtyHandler', () => {
         } else {
           process.env.HOME = oldHome
         }
+
         rmSync(homeDir, { recursive: true, force: true })
       }
 
       const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
         | { env?: Record<string, string> }
         | undefined
+
       expect(spawnOptions?.env?.ORCA_SHELL_FEATURES ?? '').not.toContain('ready')
     }
   )
@@ -213,6 +226,7 @@ describe('PtyHandler', () => {
 
       process.env.SHELL = '/bin/bash'
       process.env.HOME = homeDir
+
       try {
         await dispatcher.callRequest('pty.spawn', {
           env: { HOME: homeDir },
@@ -224,17 +238,20 @@ describe('PtyHandler', () => {
         } else {
           process.env.SHELL = oldShell
         }
+
         if (oldHome === undefined) {
           delete process.env.HOME
         } else {
           process.env.HOME = oldHome
         }
+
         rmSync(homeDir, { recursive: true, force: true })
       }
 
       const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
         | { env?: Record<string, string> }
         | undefined
+
       expect(spawnOptions?.env?.ORCA_SHELL_FEATURES).toContain('ready')
       expect(handler.retainedStartupCommandCount).toBe(1)
     }
@@ -249,6 +266,7 @@ describe('PtyHandler', () => {
 
       process.env.SHELL = '/bin/bash'
       process.env.HOME = homeDir
+
       try {
         await dispatcher.callRequest('pty.spawn', {
           env: { HOME: homeDir },
@@ -262,17 +280,20 @@ describe('PtyHandler', () => {
         } else {
           process.env.SHELL = oldShell
         }
+
         if (oldHome === undefined) {
           delete process.env.HOME
         } else {
           process.env.HOME = oldHome
         }
+
         rmSync(homeDir, { recursive: true, force: true })
       }
 
       const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
         | { env?: Record<string, string> }
         | undefined
+
       expect(spawnOptions?.env?.ORCA_SHELL_FEATURES).toContain('ready')
     }
   )
@@ -286,6 +307,7 @@ describe('PtyHandler', () => {
 
       process.env.SHELL = '/bin/bash'
       process.env.HOME = homeDir
+
       try {
         await dispatcher.callRequest('pty.spawn', {
           env: {
@@ -301,17 +323,20 @@ describe('PtyHandler', () => {
         } else {
           process.env.SHELL = oldShell
         }
+
         if (oldHome === undefined) {
           delete process.env.HOME
         } else {
           process.env.HOME = oldHome
         }
+
         rmSync(homeDir, { recursive: true, force: true })
       }
 
       const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
         | { env?: Record<string, string> }
         | undefined
+
       expect(spawnOptions?.env?.ORCA_SHELL_FEATURES).toContain('ready')
     }
   )
@@ -320,6 +345,7 @@ describe('PtyHandler', () => {
     'waits for the shell-ready marker before provider-delivered startup commands',
     async () => {
       let dataCallback: ((data: string) => void) | undefined
+
       const term = {
         ...mockPtyInstance,
         onData: vi.fn((cb: (data: string) => void) => {
@@ -327,6 +353,7 @@ describe('PtyHandler', () => {
         }),
         onExit: vi.fn()
       }
+
       mockPtySpawn.mockReturnValue(term)
       const oldShell = process.env.SHELL
       const oldHome = process.env.HOME
@@ -334,6 +361,7 @@ describe('PtyHandler', () => {
 
       process.env.SHELL = '/bin/bash'
       process.env.HOME = homeDir
+
       try {
         await dispatcher.callRequest('pty.spawn', {
           env: { HOME: homeDir },
@@ -347,11 +375,13 @@ describe('PtyHandler', () => {
         } else {
           process.env.SHELL = oldShell
         }
+
         if (oldHome === undefined) {
           delete process.env.HOME
         } else {
           process.env.HOME = oldHome
         }
+
         rmSync(homeDir, { recursive: true, force: true })
       }
 
@@ -377,6 +407,7 @@ describe('PtyHandler', () => {
     'recovers provider delivery when startup exec replaces the relay wrapper',
     async () => {
       let dataCallback: ((data: string) => void) | undefined
+
       const term = {
         ...mockPtyInstance,
         onData: vi.fn((cb: (data: string) => void) => {
@@ -384,10 +415,12 @@ describe('PtyHandler', () => {
         }),
         onExit: vi.fn()
       }
+
       mockPtySpawn.mockReturnValue(term)
       const homeDir = mkdtempSync(join(tmpdir(), 'relay-provider-exec-spawn-'))
       const oldShell = process.env.SHELL
       process.env.SHELL = '/bin/bash'
+
       try {
         await dispatcher.callRequest('pty.spawn', {
           env: { HOME: homeDir },
@@ -401,6 +434,7 @@ describe('PtyHandler', () => {
         } else {
           process.env.SHELL = oldShell
         }
+
         rmSync(homeDir, { recursive: true, force: true })
       }
 
@@ -410,6 +444,7 @@ describe('PtyHandler', () => {
       const promptOptions = mockCreateShellPromptReadinessProbe.mock.calls[0]?.[0] as {
         onPromptReady: () => void
       }
+
       expect(
         mockCreateShellPromptReadinessProbe.mock.results[0]?.value.notifyOutput
       ).toHaveBeenCalledWith('\x1b[?2004hremote $ ')
@@ -429,6 +464,7 @@ describe('PtyHandler', () => {
     'signals renderer delivery when startup exec replaces the relay wrapper',
     async () => {
       let dataCallback: ((data: string) => void) | undefined
+
       const term = {
         ...mockPtyInstance,
         onData: vi.fn((cb: (data: string) => void) => {
@@ -436,10 +472,12 @@ describe('PtyHandler', () => {
         }),
         onExit: vi.fn()
       }
+
       mockPtySpawn.mockReturnValue(term)
       const homeDir = mkdtempSync(join(tmpdir(), 'relay-renderer-exec-spawn-'))
       const oldShell = process.env.SHELL
       process.env.SHELL = '/bin/bash'
+
       try {
         await dispatcher.callRequest('pty.spawn', {
           env: { HOME: homeDir },
@@ -452,6 +490,7 @@ describe('PtyHandler', () => {
         } else {
           process.env.SHELL = oldShell
         }
+
         rmSync(homeDir, { recursive: true, force: true })
       }
 
@@ -465,6 +504,7 @@ describe('PtyHandler', () => {
       const promptOptions = mockCreateShellPromptReadinessProbe.mock.calls[0]?.[0] as {
         onPromptReady: () => void
       }
+
       promptOptions.onPromptReady()
       await vi.advanceTimersByTimeAsync(8)
 
@@ -481,6 +521,7 @@ describe('PtyHandler', () => {
     'forwards the supported ready marker to renderer delivery',
     async () => {
       let dataCallback: ((data: string) => void) | undefined
+
       const term = {
         ...mockPtyInstance,
         onData: vi.fn((cb: (data: string) => void) => {
@@ -488,10 +529,12 @@ describe('PtyHandler', () => {
         }),
         onExit: vi.fn()
       }
+
       mockPtySpawn.mockReturnValue(term)
       const homeDir = mkdtempSync(join(tmpdir(), 'relay-renderer-ready-spawn-'))
       const oldShell = process.env.SHELL
       process.env.SHELL = '/bin/bash'
+
       try {
         await dispatcher.callRequest('pty.spawn', {
           env: { HOME: homeDir },
@@ -504,6 +547,7 @@ describe('PtyHandler', () => {
         } else {
           process.env.SHELL = oldShell
         }
+
         rmSync(homeDir, { recursive: true, force: true })
       }
 
@@ -524,6 +568,7 @@ describe('PtyHandler', () => {
     'releases split renderer readiness through one completed path',
     async () => {
       let dataCallback: ((data: string) => void) | undefined
+
       const term = {
         ...mockPtyInstance,
         onData: vi.fn((cb: (data: string) => void) => {
@@ -531,10 +576,12 @@ describe('PtyHandler', () => {
         }),
         onExit: vi.fn()
       }
+
       mockPtySpawn.mockReturnValue(term)
       const homeDir = mkdtempSync(join(tmpdir(), 'relay-renderer-split-ready-spawn-'))
       const oldShell = process.env.SHELL
       process.env.SHELL = '/bin/bash'
+
       try {
         await dispatcher.callRequest('pty.spawn', {
           env: { HOME: homeDir },
@@ -547,6 +594,7 @@ describe('PtyHandler', () => {
         } else {
           process.env.SHELL = oldShell
         }
+
         rmSync(homeDir, { recursive: true, force: true })
       }
 
@@ -570,6 +618,7 @@ describe('PtyHandler', () => {
     async () => {
       const oldShell = process.env.SHELL
       process.env.SHELL = '/bin/sh'
+
       try {
         await dispatcher.callRequest('pty.spawn', {
           command: 'x'.repeat(256 * 1024),
@@ -586,6 +635,7 @@ describe('PtyHandler', () => {
       const spawnOptions = mockPtySpawn.mock.calls[0]?.[2] as
         | { env?: Record<string, string> }
         | undefined
+
       expect(spawnOptions?.env?.ORCA_SHELL_FEATURES).toBe('')
       expect(handler.retainedStartupCommandCount).toBe(0)
     }
@@ -595,6 +645,7 @@ describe('PtyHandler', () => {
     'flushes held shell-ready marker bytes when provider delivery falls back',
     async () => {
       let dataCallback: ((data: string) => void) | undefined
+
       const term = {
         ...mockPtyInstance,
         onData: vi.fn((cb: (data: string) => void) => {
@@ -602,6 +653,7 @@ describe('PtyHandler', () => {
         }),
         onExit: vi.fn()
       }
+
       mockPtySpawn.mockReturnValue(term)
       const oldShell = process.env.SHELL
       const oldHome = process.env.HOME
@@ -610,6 +662,7 @@ describe('PtyHandler', () => {
       process.env.SHELL = '/bin/bash'
       process.env.HOME = homeDir
       let spawn!: { id: string; incarnationId: string }
+
       try {
         spawn = await spawnPty({
           env: { HOME: homeDir },
@@ -623,11 +676,13 @@ describe('PtyHandler', () => {
         } else {
           process.env.SHELL = oldShell
         }
+
         if (oldHome === undefined) {
           delete process.env.HOME
         } else {
           process.env.HOME = oldHome
         }
+
         rmSync(homeDir, { recursive: true, force: true })
       }
 
@@ -645,6 +700,7 @@ describe('PtyHandler', () => {
         id: PTY_1,
         suppressReplayNotification: true
       })
+
       expect(result).toEqual({
         incarnationId: spawn.incarnationId,
         replay: '\x1b]777;orca-shell-ready'
@@ -660,6 +716,7 @@ describe('PtyHandler', () => {
       const homeDir = mkdtempSync(join(tmpdir(), 'relay-dead-shell-ready-spawn-'))
       process.env.SHELL = '/bin/bash'
       process.env.HOME = homeDir
+
       try {
         await dispatcher.callRequest('pty.spawn', {
           env: { HOME: homeDir },
@@ -672,16 +729,20 @@ describe('PtyHandler', () => {
         } else {
           process.env.SHELL = oldShell
         }
+
         if (oldHome === undefined) {
           delete process.env.HOME
         } else {
           process.env.HOME = oldHome
         }
+
         rmSync(homeDir, { recursive: true, force: true })
       }
+
       expect(handler.retainedStartupCommandCount).toBe(1)
 
       const aliveSpy = vi.spyOn(ptyShellUtils, 'isProcessAlive').mockReturnValue(false)
+
       try {
         await expect(dispatcher.callRequest('pty.attach', { id: PTY_1 })).rejects.toThrow(
           `PTY "${PTY_1}" not found`
@@ -716,6 +777,7 @@ describe('PtyHandler', () => {
   it('releases pending provider-delivered commands on shutdown before delivery', async () => {
     let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     const killSpy = vi.fn()
+
     const term = {
       ...mockPtyInstance,
       kill: killSpy,
@@ -724,6 +786,7 @@ describe('PtyHandler', () => {
         onExitCb = cb
       })
     }
+
     mockPtySpawn.mockReturnValue(term)
 
     await dispatcher.callRequest('pty.spawn', {

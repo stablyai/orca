@@ -27,11 +27,13 @@ describe('scheduleMobileClaudeAnswer', () => {
 
   it('writes each question body then its Enter, paced per step, one Enter per line', () => {
     const events: string[] = []
+
     const timers = scheduleMobileClaudeAnswer(
       ['', 'b', 'c'], // blank middle answer must still get its own body + Enter
       (line) => events.push(`body:${line}`),
       () => events.push('enter')
     )
+
     expect(timers).toHaveLength(6)
 
     vi.advanceTimersByTime(0)
@@ -47,14 +49,17 @@ describe('scheduleMobileClaudeAnswer', () => {
 
   it('cancelling the returned timers stops all pending writes', () => {
     const events: string[] = []
+
     const timers = scheduleMobileClaudeAnswer(
       ['a', 'b'],
       (line) => events.push(`body:${line}`),
       () => events.push('enter')
     )
+
     for (const timer of timers) {
       clearTimeout(timer)
     }
+
     vi.runAllTimers()
     expect(events).toEqual([])
   })

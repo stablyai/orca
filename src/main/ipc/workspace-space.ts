@@ -34,6 +34,7 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
     if (!inFlightScan) {
       const controller = new AbortController()
       const scanId = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
       let latestProgress: WorkspaceSpaceScanProgress = {
         scanId,
         state: 'running',
@@ -46,20 +47,25 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
         currentRepoDisplayName: null,
         currentWorktreeDisplayName: null
       }
+
       let lastProgressSentAt = 0
       let pendingMeasurements: WorkspaceSpaceWorktreeMeasurement[] = []
+
       const sendProgress = (progress: WorkspaceSpaceScanProgress): void => {
         if (progress.completedMeasurements?.length) {
           pendingMeasurements.push(...progress.completedMeasurements)
         }
+
         // Why: large fleets can report one progress event per worktree; keep
         // the UI responsive without repainting the full Space page for each row.
         const now = Date.now()
         const isFirstProgress = lastProgressSentAt === 0
+
         const isTerminalProgress =
           progress.state !== 'running' ||
           (progress.totalWorktreeCount > 0 &&
             progress.scannedWorktreeCount >= progress.totalWorktreeCount)
+
         if (
           !isFirstProgress &&
           !isTerminalProgress &&
@@ -67,7 +73,9 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
         ) {
           return
         }
+
         lastProgressSentAt = now
+
         if (!event.sender.isDestroyed()) {
           const completedMeasurements = pendingMeasurements
           pendingMeasurements = []
@@ -77,6 +85,7 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
           })
         }
       }
+
       // Why: large worktree fleets require real disk traversal; duplicate
       // requests should share that IO instead of starting competing scans.
       const scan: InFlightWorkspaceSpaceScan = {
@@ -85,6 +94,7 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
         progress: latestProgress,
         promise: Promise.resolve(null as never)
       }
+
       inFlightScan = scan
       scan.promise = analyzeWorkspaceSpace(store, {
         scanId,
@@ -99,18 +109,21 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
           // Fire-and-forget: a ~6-minute cold analysis must survive reload/restart, but
           // persistence must never delay or fail the reply.
           void persistWorkspaceSpaceAnalysisSnapshot(snapshotDirectory, analysis)
+
           return { ok: true, analysis }
         })
         .catch((error: unknown): WorkspaceSpaceAnalyzeResult => {
           if (error instanceof WorkspaceSpaceScanCancelledError) {
             return { ok: false, cancelled: true }
           }
+
           throw error
         })
         .finally(() => {
           inFlightScan = null
         })
     }
+
     return inFlightScan.promise
   })
 
@@ -122,12 +135,14 @@ export function registerWorkspaceSpaceHandlers(store: Store): void {
     if (!inFlightScan || inFlightScan.controller.signal.aborted) {
       return false
     }
+
     inFlightScan.controller.abort()
     inFlightScan.progress = {
       ...inFlightScan.progress,
       state: 'cancelling',
       updatedAt: Date.now()
     }
+
     return true
   })
 }

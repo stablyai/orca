@@ -17,13 +17,18 @@ import * as path from 'node:path'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export const COLLIDING_WORKTREE_ID = 'repo1::/shared/workspace/path'
+
 export const COLLIDING_WORKTREE_PATH = '/shared/workspace/path'
+
 export const LOCAL_HOST: ExecutionHostId = 'local'
+
 export const SSH_HOST: ExecutionHostId = 'ssh:ssh-1'
+
 export const RELAY_HOST: ExecutionHostId = 'runtime:env-1'
 
 export const HOST_COLLISION_MESSAGE =
   'Error: this workspace exists on multiple hosts at the same path'
+
 export const HOST_UNRESOLVED_MESSAGE =
   'Orca cannot tell which host owns this workspace. Refresh projects and review it again.'
 
@@ -37,6 +42,7 @@ export function createHostCheckout(hostId: ExecutionHostId): HostCheckout {
   hostDirCleanup.push(() => fs.rmSync(root, { recursive: true, force: true }))
   const markerPath = path.join(root, 'UNCOMMITTED_WORK')
   fs.writeFileSync(markerPath, `uncommitted work on ${hostId}`)
+
   return { root, markerPath }
 }
 
@@ -69,12 +75,15 @@ export function installRemovalTransports(
   const deleteOnHost = (hostId: string | undefined): void => {
     routedHostIds.push(hostId ?? '<missing>')
     const root = hostId ? rootsByHostId[hostId as ExecutionHostId] : undefined
+
     if (root) {
       fs.rmSync(root, { recursive: true, force: true })
     }
   }
+
   transports.remove.mockImplementation(async (args: { hostId?: string }) => {
     deleteOnHost(args.hostId)
+
     return {}
   })
   transports.runtimeCall.mockImplementation(
@@ -83,6 +92,7 @@ export function installRemovalTransports(
       if (args.method === 'worktree.rm') {
         deleteOnHost(args.params?.hostId)
       }
+
       return { id: 'rpc-rm', ok: true, result: {}, _meta: { runtimeId: 'runtime-remote' } }
     }
   )

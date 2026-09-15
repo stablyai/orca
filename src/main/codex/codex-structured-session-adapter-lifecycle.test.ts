@@ -57,6 +57,7 @@ function fakeCodex(routes: Record<string, Route> = {}): {
   routes: Record<string, Route>
 } {
   const connections: FakeConnection[] = []
+
   const openConnection = (async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
@@ -69,6 +70,7 @@ function fakeCodex(routes: Record<string, Route> = {}): {
       request: async (method, params) => {
         connection.calls.push({ method, params })
         const route = routes[method]
+
         return route ? route(params) : {}
       },
       notify: () => {},
@@ -77,12 +79,16 @@ function fakeCodex(routes: Record<string, Route> = {}): {
       close: async () => {
         connection.closeCount += 1
         connection.closed = true
+
         return true
       }
     }
+
     connections.push(connection)
+
     return connection
   }) as typeof openCodexAppServerConnection
+
   routes['thread/start'] ??= () => ({
     thread: { id: THREAD_ID, path: '/rollouts/abc.jsonl' },
     model: 'gpt-live',
@@ -93,6 +99,7 @@ function fakeCodex(routes: Record<string, Route> = {}): {
     model: 'gpt-live',
     reasoningEffort: 'medium'
   })
+
   return { connections, openConnection, routes }
 }
 
@@ -105,6 +112,7 @@ function adapterFor(
   > = {}
 ): CodexStructuredSessionAdapter {
   let acquisitionGeneration = 0
+
   return new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
       command: 'codex',
@@ -132,6 +140,7 @@ async function acquired(
 ): Promise<CodexStructuredSessionAdapter> {
   const adapter = adapterFor(codex, launch, events)
   await adapter.acquire({ identity: identityFor('session-1'), fence: 7, spawnToken: 'spawn-9' })
+
   return adapter
 }
 
@@ -173,8 +182,10 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
     const connection = codex.connections[0]
     connection.close = async () => {
       connection.closeCount += 1
+
       return false
     }
+
     connection.handlers.onExit?.(new Error('codex app-server connection ended'))
 
     expect(events.at(-1)).toEqual({
@@ -237,6 +248,7 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
     const bodies: AgentJournalMessageItem[] = []
     const lifecycles: unknown[] = []
     const tombstones: unknown[] = []
+
     const sink: StructuredAgentSessionEventSink = {
       appendItem: (identity, body) => {
         if (body.kind === 'message') {
@@ -250,6 +262,7 @@ describe('CodexStructuredSessionAdapter lifecycle', () => {
       },
       publish: () => {}
     }
+
     const adapter = adapterFor(codex)
     await adapter.acquire({
       identity: identityFor('session-1'),

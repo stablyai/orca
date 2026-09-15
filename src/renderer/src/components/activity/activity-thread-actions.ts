@@ -29,6 +29,7 @@ type ActivityThreadWorkspaceCatalog = Pick<
 
 function readActivityThreadWorkspaceCatalog(): ActivityThreadWorkspaceCatalog {
   const state = useAppStore.getState()
+
   return { ...state, defaultHostId: getSettingsFocusedExecutionHostId(state.settings) }
 }
 
@@ -79,6 +80,7 @@ export function createActivityThreadActions({
       thread,
       getSettingsFocusedExecutionHostId(useAppStore.getState().settings)
     )
+
     // Why the full sequence (not bare setActiveWorktree): a cold-parked thread — the normal
     // state of an SSH session that was never revived — has no resident tab until
     // resumeSleepingAgentSessionsForWorktree/ensureWorktreeHasInitialTerminal run inside here.
@@ -92,19 +94,23 @@ export function createActivityThreadActions({
     ) {
       return
     }
+
     if (
       activateStructuredAgentSessionTab({ worktreeId: thread.worktree.id, tabId: thread.tab.id })
     ) {
       return
     }
+
     // Read post-activation: the tab this thread points at may have only just been revived.
     const activated = useAppStore.getState()
     const liveTabs = activated.tabsByWorktree[thread.worktree.id] ?? []
+
     if (!liveTabs.some((tab) => tab.id === thread.tab.id)) {
       // Retained threads outlive their tab; the workspace is still activated, but there is
       // no pane to focus and focusing a sibling would be worse than focusing nothing.
       return
     }
+
     activated.setActiveTabType('terminal')
     const parsed = parsePaneKey(thread.paneKey)
     activateTabAndFocusPane(
@@ -121,9 +127,11 @@ export function createActivityThreadActions({
 
   const jumpToWorkspace = (thread: AgentPaneThread): void => {
     const catalog = readActivityThreadWorkspaceCatalog()
+
     if (!hasActivityThreadWorkspace(thread, catalog)) {
       return
     }
+
     markThreadRead(thread)
     jumpToWorktreeFromSidebar(thread.worktree.id, {
       executionHostId: getActivityThreadExecutionHostId(thread, catalog.defaultHostId)
@@ -134,9 +142,11 @@ export function createActivityThreadActions({
     const unreadKeys = getMarkAllReadThreads()
       .filter((t) => t.unread)
       .map((t) => t.paneKey)
+
     if (unreadKeys.length === 0) {
       return
     }
+
     acknowledgeAgents(unreadKeys)
   }
 

@@ -22,6 +22,7 @@ export type MarkdownDocumentDiscoveryOptions = {
 
 export function isMarkdownDocumentPath(path: string): boolean {
   const lowerPath = path.toLowerCase()
+
   return lowerPath.endsWith('.md') || lowerPath.endsWith('.mdx') || lowerPath.endsWith('.markdown')
 }
 
@@ -41,32 +42,40 @@ export async function discoverMarkdownRelativePaths(
   ): Promise<void> => {
     throwIfAborted(options.signal)
     let directory: Dir | AsyncIterable<Dirent>
+
     try {
       directory = await readDirectory(absoluteDirectoryPath)
     } catch (error) {
       if (depth > 0 && options.ignoreNestedDirectoryErrors) {
         return
       }
+
       throw error
     }
 
     for await (const entry of directory) {
       throwIfAborted(options.signal)
+
       const relativePath = relativeDirectoryPath
         ? `${relativeDirectoryPath}/${entry.name}`
         : entry.name
+
       const nextDepth = depth + 1
       const shouldDescend = entry.isDirectory() && options.shouldDescend(relativePath, entry.name)
       visitMarkdownDocumentListingEntry(budget, relativePath, shouldDescend ? nextDepth : depth)
+
       if (entry.isSymbolicLink()) {
         continue
       }
+
       if (entry.isDirectory()) {
         if (shouldDescend) {
           await visitDirectory(join(absoluteDirectoryPath, entry.name), relativePath, nextDepth)
         }
+
         continue
       }
+
       if (entry.isFile() && isMarkdownDocumentPath(entry.name)) {
         retainMarkdownRelativePath(budget, rootPath, relativePath)
         documents.push(relativePath)
@@ -75,6 +84,7 @@ export async function discoverMarkdownRelativePaths(
   }
 
   await visitDirectory(rootPath, '', 0)
+
   return documents
 }
 
@@ -82,5 +92,6 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
   if (!signal?.aborted) {
     return
   }
+
   throw signal.reason instanceof Error ? signal.reason : new MarkdownDocumentListingCapacityError()
 }

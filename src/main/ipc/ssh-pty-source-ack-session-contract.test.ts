@@ -12,15 +12,19 @@ describe('SSH PTY intake to relay ACK contract', () => {
   it('publishes one cumulative relay-ID ACK only after model and desktop settlement', async () => {
     vi.useFakeTimers()
     const batches: PtySourceCreditAckBatch[] = []
+
     const cleanup = installSshPtySourceAckPublisher(7, (batch, onSettled) => {
       batches.push(batch)
       onSettled({ ok: true })
     })
+
     let sequence = 0
+
     const intake = new SshPtyOutputIntake({
       getModelSequence: () => sequence,
       acceptModel: (event) => {
         sequence += event.rawLength
+
         return { sequence, completion: Promise.resolve() }
       },
       project: () => {},
@@ -47,6 +51,7 @@ describe('SSH PTY intake to relay ACK contract', () => {
           sourceEndSu: 4
         }
       })
+
       await vi.advanceTimersByTimeAsync(8)
       expect(batches).toHaveLength(0)
 

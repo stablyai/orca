@@ -23,7 +23,9 @@ export const runtimeEnvironmentsApi = {
       _event: Electron.IpcRendererEvent,
       snapshot: RuntimeHostStatusSnapshot
     ): void => callback(snapshot)
+
     ipcRenderer.on(RUNTIME_HOST_STATUS_CHANNEL, listener)
+
     return () => ipcRenderer.removeListener(RUNTIME_HOST_STATUS_CHANNEL, listener)
   },
   list: (): Promise<PublicKnownRuntimeEnvironment[]> =>
@@ -75,7 +77,9 @@ export const runtimeEnvironmentsApi = {
         diagnostics: RemoteRuntimeSharedConnectionDiagnostics
       }
     ): void => callback(data)
+
     ipcRenderer.on(RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL, listener)
+
     return () => ipcRenderer.removeListener(RUNTIME_ENVIRONMENT_DIAGNOSTICS_CHANNEL, listener)
   },
   prepareBrowserClientHostPlacement: (args) =>

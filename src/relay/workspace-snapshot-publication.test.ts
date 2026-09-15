@@ -22,6 +22,7 @@ function decodeNotifications(
     .filter((buf) => buf[0] === MessageType.Regular)
     .map((buf) => {
       const len = buf.readUInt32BE(9)
+
       return JSON.parse(buf.subarray(13, 13 + len).toString('utf-8')) as {
         method?: string
         params?: Record<string, unknown>
@@ -38,6 +39,7 @@ function decodeNotifications(
 function oversizedSession(worktrees: number, tabsPerWorktree: number): Record<string, unknown> {
   const tabsByWorktreePath: Record<string, unknown[]> = {}
   const terminalLayoutsByTabId: Record<string, unknown> = {}
+
   for (let w = 0; w < worktrees; w++) {
     const worktreePath = `/home/dev/orca/workspaces/project/feature-branch-${w}`
     tabsByWorktreePath[worktreePath] = Array.from({ length: tabsPerWorktree }, (_, t) => ({
@@ -48,6 +50,7 @@ function oversizedSession(worktrees: number, tabsPerWorktree: number): Record<st
       startupCommand: 'claude --dangerously-skip-permissions',
       cwd: worktreePath
     }))
+
     for (let t = 0; t < tabsPerWorktree; t++) {
       terminalLayoutsByTabId[`tab-${w}-${t}-1f7a4c2e-9b0d-4e51-8a63-2c9f0d1e4b7a`] = {
         direction: 'row',
@@ -58,6 +61,7 @@ function oversizedSession(worktrees: number, tabsPerWorktree: number): Record<st
       }
     }
   }
+
   return {
     activeWorktreePath: '/home/dev/orca/workspaces/project/feature-branch-0',
     activeTabId: 'tab-0-0-1f7a4c2e-9b0d-4e51-8a63-2c9f0d1e4b7a',
@@ -77,6 +81,7 @@ describe('workspace snapshot publication over a bounded producer frame', () => {
     dispatcher = new RelayDispatcher(
       (data) => {
         written.push(Buffer.from(data))
+
         return true
       },
       {
@@ -105,6 +110,7 @@ describe('workspace snapshot publication over a bounded producer frame', () => {
         patch: { kind: 'replace-session', session }
       }
     }
+
     dispatcher.feed(encodeJsonRpcFrame(req, id, 0))
     await Promise.resolve()
     await Promise.resolve()

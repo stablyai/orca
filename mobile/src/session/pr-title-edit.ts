@@ -15,6 +15,7 @@ export function canEditPRTitle(state: PRState | null | undefined): boolean {
 // the current title (the host rejects empty titles; an unchanged title is a no-op).
 export function isSubmittablePRTitle(draft: string, current: string): boolean {
   const next = draft.trim()
+
   return next.length > 0 && next !== current.trim()
 }
 
@@ -31,5 +32,6 @@ export function buildUpdatePRTitleParams(
   if (!isSubmittablePRTitle(draft, current)) {
     return null
   }
+
   return { prNumber, title: draft.trim() }
 }

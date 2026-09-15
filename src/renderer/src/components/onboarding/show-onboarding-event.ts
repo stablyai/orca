@@ -11,6 +11,7 @@ export async function showOnboardingFromRenderer(): Promise<void> {
     // user's activation history. Only clear the dismissed UI flag.
     checklist: { dismissed: false }
   })
+
   window.dispatchEvent(
     new CustomEvent<OnboardingState>(ONBOARDING_REOPENED_EVENT, { detail: nextOnboarding })
   )
@@ -20,6 +21,8 @@ export function onOnboardingReopened(callback: (state: OnboardingState) => void)
   const listener = (event: Event): void => {
     callback((event as CustomEvent<OnboardingState>).detail)
   }
+
   window.addEventListener(ONBOARDING_REOPENED_EVENT, listener)
+
   return () => window.removeEventListener(ONBOARDING_REOPENED_EVENT, listener)
 }

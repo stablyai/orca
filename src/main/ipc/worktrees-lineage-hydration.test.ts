@@ -11,83 +11,107 @@ import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
 )
+
 vi.mock('../git/worktree', async () =>
   (await import('./worktrees-test-module-mocks')).gitWorktreeModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./worktrees-test-module-mocks')).gitRunnerModuleMock()
 )
+
 vi.mock('../git/repo', async () =>
   (await import('./worktrees-test-module-mocks')).gitRepoModuleMock()
 )
+
 vi.mock('../git/git-username', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
     .resolveLocalGitUsernameMock
 }))
+
 vi.mock('../github/client', async () =>
   (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
 )
+
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
+
 vi.mock('../providers/ssh-git-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshGitDispatchModuleMock()
 )
+
 vi.mock('../providers/ssh-filesystem-dispatch', async () =>
   (await import('./worktrees-test-module-mocks')).sshFilesystemDispatchModuleMock()
 )
+
 vi.mock('./worktree-symlinks', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeSymlinksModuleMock()
 )
+
 vi.mock('./ssh', async () => (await import('./worktrees-test-module-mocks')).sshModuleMock())
+
 vi.mock('../ssh/ssh-target-registry', async () =>
   (await import('./worktrees-test-module-mocks')).sshTargetRegistryModuleMock()
 )
+
 vi.mock('../hooks', async () => (await import('./worktrees-test-module-mocks')).hooksModuleMock())
+
 vi.mock('../setup-runner-script-text', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupRunnerScriptTextModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../worktree-runner-script', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeRunnerScriptModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../effective-hook-config', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).effectiveHookConfigModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../setup-hook-env-vars', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).setupHookEnvVarsModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('./worktree-logic', async (importOriginal) =>
   (await import('./worktrees-test-module-mocks')).worktreeLogicModuleMock(
     (await importOriginal()) as Record<string, unknown>
   )
 )
+
 vi.mock('../terminal-history-deletion', async () =>
   (await import('./worktrees-test-module-mocks')).terminalHistoryDeletionModuleMock()
 )
+
 vi.mock('../ports/advertised-url-watcher', async () =>
   (await import('./worktrees-test-module-mocks')).advertisedUrlWatcherModuleMock()
 )
+
 vi.mock('../workspace-cleanup-scan-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupScanSnapshotModuleMock()
 )
+
 vi.mock('../workspace-space-analysis-snapshot', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceSpaceAnalysisSnapshotModuleMock()
 )
+
 vi.mock('../workspace-cleanup-removal-snapshot-prune', async () =>
   (await import('./worktrees-test-module-mocks')).workspaceCleanupRemovalSnapshotPruneModuleMock()
 )
+
 vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
+
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
 
 describe('registerWorktreeHandlers', () => {
@@ -118,12 +142,14 @@ describe('registerWorktreeHandlers', () => {
         projectGroupId: 'group-b'
       }
     ]
+
     const aParent = 'duplicate::/a/repo'
     const aChild = 'duplicate::/a/child'
     const bParent = 'duplicate::/b/repo'
     const bChild = 'duplicate::/b/child'
     const runtimeParent = 'duplicate::/runtime/parent'
     const runtimeChild = 'duplicate::/runtime/child'
+
     const worktreeLineage = {
       [aChild]: {
         worktreeId: aChild,
@@ -153,6 +179,7 @@ describe('registerWorktreeHandlers', () => {
         createdAt: 3
       }
     }
+
     const folderLineage = {
       'folder:folder-a-child': {
         childWorkspaceKey: 'folder:folder-a-child',
@@ -169,6 +196,7 @@ describe('registerWorktreeHandlers', () => {
         createdAt: 4
       }
     }
+
     store.getRepos.mockReturnValue(repos)
     store.getWorktreeMeta.mockImplementation((id: string) =>
       id.includes('/runtime/')
@@ -239,6 +267,7 @@ describe('registerWorktreeHandlers', () => {
       { length: 101 },
       (_, index) => `repo-1::/workspace/repo-${index}`
     )
+
     const lineage = Object.fromEntries(
       worktreeIds.slice(1).map((worktreeId, index) => [
         worktreeId,
@@ -253,6 +282,7 @@ describe('registerWorktreeHandlers', () => {
         }
       ])
     )
+
     store.getAllWorktreeLineage.mockReturnValue(lineage)
     store.getRepos.mockClear()
     store.getFolderWorkspaces.mockClear()
@@ -324,6 +354,7 @@ describe('registerWorktreeHandlers', () => {
     expect(runtimeStub.hydrateInferredWorktreeLineage).not.toHaveBeenCalled()
 
     let finishHydration: () => void = () => {}
+
     runtimeStub.hydrateInferredWorktreeLineage.mockImplementation(
       () =>
         new Promise<void>((resolve) => {
@@ -332,10 +363,12 @@ describe('registerWorktreeHandlers', () => {
     )
     getSshGitProviderMock.mockReturnValue({ listWorktrees: vi.fn() })
     const authority = getSshProviderAuthority('target-a')
+
     const pending = handlers['worktrees:listLineageForHost'](ipcEvent, {
       executionHostId: toSshExecutionHostId('target-a'),
       expectedAuthority: authority
     })
+
     await Promise.resolve()
     rotateSshProviderAuthority('target-a')
     finishHydration()
@@ -346,14 +379,17 @@ describe('registerWorktreeHandlers', () => {
 
   it('bounds noncooperative lineage hydration and permits a later same-authority read', async () => {
     vi.useFakeTimers()
+
     try {
       runtimeStub.hydrateInferredWorktreeLineage.mockReturnValue(new Promise<void>(() => {}))
       getSshGitProviderMock.mockReturnValue({ listWorktrees: vi.fn() })
       const authority = getSshProviderAuthority('target-a')
+
       const pending = handlers['worktrees:listLineageForHost'](ipcEvent, {
         executionHostId: toSshExecutionHostId('target-a'),
         expectedAuthority: authority
       })
+
       await vi.advanceTimersByTimeAsync(LINEAGE_HYDRATION_TIMEOUT_MS - 1)
       let settled = false
       void Promise.resolve(pending).finally(() => {
@@ -385,10 +421,12 @@ describe('registerWorktreeHandlers', () => {
     const childPath = '/workspace/issue-9276-nested-ssh-runtime-routing'
     const parentId = `repo-1::${parentPath}`
     const childId = `repo-1::${childPath}`
+
     const metaById: Record<string, { instanceId: string }> = {
       [parentId]: { instanceId: 'parent-instance' },
       [childId]: { instanceId: 'child-instance' }
     }
+
     store.getWorktreeMeta.mockImplementation((id: string) => metaById[id])
     store.setWorktreeMeta.mockImplementation((id: string, updates: object) => ({
       ...metaById[id],
@@ -450,8 +488,10 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       kind: 'folder' as const
     }
+
     const parentId = `${folderRepo.id}::${folderRepo.path}`
     const childId = `${parentId}::workspace:child-instance`
+
     const metaById: Record<string, Record<string, unknown>> = {
       [parentId]: makeWorktreeMeta({
         instanceId: 'parent-instance',
@@ -466,6 +506,7 @@ describe('registerWorktreeHandlers', () => {
         projectHostSetupId: 'repo-1'
       })
     }
+
     store.getRepos.mockReturnValue([folderRepo])
     store.getRepo.mockReturnValue(folderRepo)
     store.getAllWorktreeMeta.mockReturnValue(metaById)
@@ -531,6 +572,7 @@ describe('registerWorktreeHandlers', () => {
     const detected = (await handlers['worktrees:listDetected'](null, {
       repoId: 'repo-1'
     })) as { worktrees: (Worktree & { ownership: string; visible: boolean })[] }
+
     const visible = (await handlers['worktrees:list'](null, { repoId: 'repo-1' })) as Worktree[]
 
     expect(detected.worktrees.find((worktree) => worktree.path === scratchPath)).toMatchObject({
@@ -552,6 +594,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'conn-1'
     }
+
     const provider = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -570,6 +613,7 @@ describe('registerWorktreeHandlers', () => {
         }
       ])
     }
+
     store.getRepos.mockReturnValue([repo])
     store.getRepo.mockReturnValue(repo)
     getSshGitProviderMock.mockReturnValue(provider)
@@ -611,6 +655,7 @@ describe('registerWorktreeHandlers', () => {
       addedAt: 0,
       connectionId: 'conn-1'
     }
+
     const provider = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -622,6 +667,7 @@ describe('registerWorktreeHandlers', () => {
         }
       ])
     }
+
     store.getRepos.mockReturnValue([repo])
     store.getRepo.mockReturnValue(repo)
     getSshGitProviderMock.mockReturnValue(provider)

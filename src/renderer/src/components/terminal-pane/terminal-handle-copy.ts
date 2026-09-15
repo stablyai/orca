@@ -18,18 +18,24 @@ export async function copyTerminalHandleForPane({
   writeClipboardText
 }: CopyTerminalHandleDeps): Promise<string> {
   const paneKey = makePaneKey(tabId, leafId)
+
   const response = await callRuntime({
     method: 'terminal.resolvePane',
     params: { paneKey }
   })
+
   if (!response.ok) {
     throw new Error(response.error.message)
   }
+
   const handle = readResolvedTerminalHandle(response.result)
+
   if (!handle) {
     throw new Error('Terminal ID unavailable')
   }
+
   await writeClipboardText(handle)
+
   return handle
 }
 
@@ -37,6 +43,7 @@ function readResolvedTerminalHandle(result: unknown): string | null {
   if (!isRecord(result) || !isRecord(result.terminal)) {
     return null
   }
+
   return typeof result.terminal.handle === 'string' ? result.terminal.handle : null
 }
 

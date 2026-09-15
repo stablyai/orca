@@ -7,8 +7,10 @@ export async function supportsForegroundProcessEvidenceFromRuntimeController(
   if (connectionId === null) {
     return true
   }
+
   if (connectionId === undefined) {
     const providers = registeredPtyProviders()
+
     const supported = await Promise.all(
       providers.map(async ({ provider, connectionId: providerConnectionId }) =>
         providerConnectionId === null
@@ -16,8 +18,10 @@ export async function supportsForegroundProcessEvidenceFromRuntimeController(
           : ((await provider.supportsForegroundProcessEvidence?.()) ?? false)
       )
     )
+
     return supported.every(Boolean)
   }
+
   try {
     return (await getProvider(connectionId).supportsForegroundProcessEvidence?.()) ?? false
   } catch {

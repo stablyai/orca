@@ -26,6 +26,7 @@ function createPairedClientLocalMutationCanary(
   mkdirSync(path.dirname(childPath), { recursive: true })
   writeFileSync(sourcePath, contents)
   writeFileSync(childPath, contents)
+
   return {
     assertUntouched: () => {
       expect(readFileSync(sourcePath, 'utf8')).toBe(contents)
@@ -55,11 +56,13 @@ export async function assertNestedFilesystemRoute(
   if (!route.runtimeOwnerEnvironmentId) {
     throw new Error(`Worktree ${route.worktreeId} has no runtime transport owner`)
   }
+
   const suffix = `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`
   const directory = `orca-nested-route-${suffix}`
   const sourceName = 'source.txt'
   const renamedName = 'renamed.txt'
   const marker = `nested-files-seeded-${suffix}`
+
   const localCanary = createPairedClientLocalMutationCanary(
     route.worktreePath,
     directory,
@@ -83,8 +86,10 @@ export async function assertNestedFilesystemRoute(
     })
     const explorer = client.page.locator('[data-orca-explorer-shell]')
     await expect(explorer).toBeVisible({ timeout: 15_000 })
+
     const row = (name: string) =>
       explorer.locator('[data-file-explorer-row]').filter({ hasText: name }).first()
+
     await explorer.getByRole('button', { name: 'Refresh Explorer' }).click()
     await expect(row(directory)).toBeVisible({ timeout: 30_000 })
     await row(directory).click()
@@ -130,10 +135,12 @@ export async function assertNestedFilesystemRoute(
     await row(directory).click()
     await client.page.keyboard.press('Delete')
     const directoryDeleteDialog = client.page.locator('[role="dialog"]:visible').last()
+
     const directoryDeleteButton = directoryDeleteDialog.getByRole('button', {
       name: 'Delete',
       exact: true
     })
+
     await expect(directoryDeleteButton).toBeEnabled()
     await directoryDeleteButton.click({ force: true })
     await expect(directoryDeleteDialog).toBeHidden()

@@ -18,6 +18,7 @@ const tempDirs: string[] = []
 async function makeTempRepoDir(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'orca-repo-icon-'))
   tempDirs.push(dir)
+
   return dir
 }
 
@@ -29,15 +30,19 @@ function registerHomepageHost(connectionId: string, homepage: string) {
     if (!filePath.endsWith('/package.json')) {
       throw new Error('ENOENT')
     }
+
     return { type: 'file', size: 64, mtime: 0 }
   })
+
   const readFile = vi.fn(async () => ({
     content: JSON.stringify({ homepage }),
     isBinary: false,
     mimeType: 'application/json'
   }))
+
   registerSshFilesystemProvider(connectionId, { stat, readFile } as unknown as IFilesystemProvider)
   registeredHosts.push(connectionId)
+
   return { stat, readFile }
 }
 
@@ -45,6 +50,7 @@ afterEach(async () => {
   for (const connectionId of registeredHosts.splice(0)) {
     unregisterSshFilesystemProvider(connectionId)
   }
+
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })))
 })
 

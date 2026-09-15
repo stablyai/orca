@@ -22,6 +22,7 @@ import {
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
+
   return {
     ...actual,
     useTranslation: () => ({
@@ -61,12 +62,14 @@ vi.mock('@/components/cmd-j/palette-host-badge', () => ({
 const { activateWorkspaceTabPaletteResult } = vi.hoisted(() => ({
   activateWorkspaceTabPaletteResult: vi.fn((_result: unknown) => ({ status: 'activated' }) as const)
 }))
+
 vi.mock('@/lib/workspace-tab-palette-activation', () => ({
   activateWorkspaceTabPaletteResult: (result: unknown) => activateWorkspaceTabPaletteResult(result)
 }))
 
 vi.mock('@/components/ui/command', async () => {
   const React = await import('react')
+
   return {
     Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     CommandGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -97,6 +100,7 @@ vi.mock('@/components/ui/command', async () => {
       placeholder?: string
     }) => {
       setCommandQuery = onValueChange ?? null
+
       return (
         <input
           data-command-input="true"
@@ -136,8 +140,11 @@ vi.mock('@/components/ui/command', async () => {
 })
 
 const initialAppState = useAppStore.getInitialState()
+
 let testRoot: Root
+
 let testContainer: HTMLDivElement
+
 let setCommandQuery: ((next: string) => void) | null = null
 
 async function flushEffects(): Promise<void> {
@@ -215,6 +222,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
 
   it('excludes the current editor tab — no agent ladder can lift it out of "you are here"', async () => {
     const fileId = '/repo/wt-alpha/notes.ts'
+
     const state = makeRecentTabState({
       activeWorktreeId: 'wt-alpha',
       activeTabType: 'editor',
@@ -233,6 +241,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
         }
       ]
     })
+
     await renderPalette({
       ...state,
       unifiedTabsByWorktree: {
@@ -430,9 +439,11 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
 
     // Why: require the setter so this cannot silently exercise the empty-query section.
     const applyQuery = setCommandQuery
+
     if (!applyQuery) {
       throw new Error('CommandInput never installed a query setter')
     }
+
     await act(async () => {
       applyQuery('Alpha')
     })
@@ -441,9 +452,11 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     // Why: searching for a tab is exactly when its status matters — the pip must survive the query.
     expect(getTabRowIds()).toContain('tab-alpha')
     expect(getTabRowIds()).not.toContain('tab-beta')
+
     const alphaRow = testContainer.querySelector<HTMLElement>(
       `[data-command-item="${encodePaletteIdentity(['workspace-tab', '', 'wt-alpha', 'tab-alpha'])}"]`
     )
+
     expect(alphaRow?.querySelector('[data-slot=tooltip-trigger]')?.textContent).toContain('Working')
   })
 

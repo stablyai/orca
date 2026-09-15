@@ -12,6 +12,7 @@ class PendingSetupPool {
   async subscribe(): Promise<WatcherProcessSubscription> {
     const subscription = { unsubscribe: vi.fn(async () => undefined) }
     this.installed.push(subscription)
+
     return subscription
   }
 }
@@ -23,16 +24,19 @@ function context(clientId: number, signal?: AbortSignal): RequestContext {
 describe('RelayFilesystemWatchRegistry pending setup waiters', () => {
   it('removes ten thousand aborted callers queued behind one teardown anchor', async () => {
     const pool = new PendingSetupPool()
+
     const dispatcher = {
       notify: vi.fn(),
       onClientDetached: vi.fn(),
       broadcastProducerFrameCapacity: vi.fn(() => Number.MAX_SAFE_INTEGER),
       notificationFrameBytes: vi.fn(() => 64)
     }
+
     const registry = new RelayFilesystemWatchRegistry(
       dispatcher as unknown as RelayDispatcher,
       pool
     )
+
     await registry.watch('/repo', context(1))
     let releaseTeardown: () => void = () => undefined
     pool.installed[0].unsubscribe = vi.fn(
@@ -46,6 +50,7 @@ describe('RelayFilesystemWatchRegistry pending setup waiters', () => {
     const anchorController = new AbortController()
     const anchor = registry.watch('/repo', context(3, anchorController.signal))
     const controllers = Array.from({ length: 10_000 }, () => new AbortController())
+
     const cancelled = controllers.map((controller, index) =>
       registry.watch('/repo', context(index + 4, controller.signal))
     )
@@ -53,11 +58,13 @@ describe('RelayFilesystemWatchRegistry pending setup waiters', () => {
     for (const controller of controllers) {
       controller.abort()
     }
+
     await Promise.all(cancelled)
 
     const pendingSetups = (
       registry as unknown as { pendingSetups: Map<string, PromiseSettlementWaiters<void>> }
     ).pendingSetups
+
     expect(pendingSetups.values().next().value?.waiterCount).toBe(1)
     expect(pool.installed).toHaveLength(1)
     releaseTeardown()

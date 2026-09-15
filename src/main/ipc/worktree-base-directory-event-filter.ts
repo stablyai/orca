@@ -52,9 +52,11 @@ export function pathRelativeToWorktreeWatchRoot(
   candidatePath: string
 ): string[] | null {
   const relativePath = relativePathInsideRoot(rootPath, candidatePath)
+
   if (relativePath === null) {
     return null
   }
+
   return relativePath.split(/[\\/]+/).filter(Boolean)
 }
 
@@ -66,6 +68,7 @@ function isRootCompletionEvent(parts: string[], config: WorktreeBaseRepoWatchCon
         normalizeRuntimePathForComparison(config.repoName)
     )
   }
+
   return parts.length === 1
 }
 
@@ -80,6 +83,7 @@ function isGitMarkerCompletionEvent(parts: string[], config: WorktreeBaseRepoWat
       parts[2] === '.git'
     )
   }
+
   return parts.length === 2 && parts[1] === '.git'
 }
 
@@ -90,6 +94,7 @@ function matchingBaseRepoIds(
 ): string[] {
   const repoIds: string[] = []
   const parts = pathRelativeToWorktreeWatchRoot(target.path, eventPath)
+
   if (!parts) {
     return repoIds
   }
@@ -102,6 +107,7 @@ function matchingBaseRepoIds(
       repoIds.push(config.repoId)
     }
   }
+
   return repoIds
 }
 
@@ -120,15 +126,19 @@ const GIT_COMMON_PRIMARY_STRUCTURAL_SCOPES = new Map<string, WorktreeHeadIdentit
   ['packed-refs', FULL_HEAD_IDENTITY_SCOPE],
   ['config.worktree', EMPTY_HEAD_IDENTITY_SCOPE]
 ])
+
 // `config` is status-tier: an external `git push -u` writes only
 // branch.<name>.remote/merge there, and a config write can move neither HEAD
 // nor the worktree listing.
 const GIT_COMMON_PRIMARY_STATUS_FILES = new Set(['index', 'config'])
+
 const GIT_COMMON_LINKED_STRUCTURAL_FILES = new Set(['HEAD', 'gitdir', 'locked', 'config.worktree'])
+
 // `HEAD` carries the branch and `gitdir` the checkout path; `locked` and
 // `config.worktree` are written by `git worktree lock` / sparse toggles, neither
 // of which can move a head.
 const GIT_COMMON_LINKED_HEAD_SOURCE_FILES = new Set(['HEAD', 'gitdir'])
+
 const GIT_COMMON_LINKED_STATUS_FILES = new Set(['index'])
 
 // `logs/HEAD` is the head-identity trigger for head moves that rewrite no
@@ -148,7 +158,9 @@ function isBoundUpstreamRef(
   if (parts.length < 2 || parts[0] !== 'refs' || parts.at(-1)?.endsWith('.lock')) {
     return false
   }
+
   const eventKey = normalizeRuntimePathForComparison(eventPath)
+
   return [...(target.gitStatusRefPaths ?? [])].some(
     (path) => normalizeRuntimePathForComparison(path) === eventKey
   )
@@ -205,34 +217,45 @@ function classifyGitCommonEvent(
   event: WorktreeBaseWatcherEvent
 ): WorktreeBaseChangeClass {
   const parts = pathRelativeToWorktreeWatchRoot(target.path, event.path)
+
   if (!parts) {
     return NO_CHANGE
   }
+
   const repoIds = allRepoIds(target)
+
   if (parts.length === 1) {
     if (parts[0] === 'worktrees') {
       // The admin root itself appearing, vanishing, or being swapped means the
       // watcher's view of every entry is suspect.
       return structuralChange(repoIds, FULL_HEAD_IDENTITY_SCOPE)
     }
+
     const primaryScope = GIT_COMMON_PRIMARY_STRUCTURAL_SCOPES.get(parts[0])
+
     if (primaryScope) {
       return structuralChange(repoIds, primaryScope)
     }
+
     if (GIT_COMMON_PRIMARY_STATUS_FILES.has(parts[0])) {
       return gitStatusChange(repoIds)
     }
+
     return NO_CHANGE
   }
+
   if (parts[0] !== 'worktrees') {
     if (isHeadLogParts(parts, 0)) {
       return headIdentityChange(repoIds, PRIMARY_HEAD_IDENTITY_SCOPE)
     }
+
     if (isBoundUpstreamRef(target, event.path, parts)) {
       return gitStatusChange(repoIds)
     }
+
     return NO_CHANGE
   }
+
   if (parts.length === 2) {
     // Name the entry as well as the listing: a remove+add reusing one admin dir
     // name coalesces into a single refresh, and the listing alone would keep
@@ -244,6 +267,7 @@ function classifyGitCommonEvent(
           mergeHeadIdentityScopes(LISTING_HEAD_IDENTITY_SCOPE, headIdentityScopeForEntry(parts[1]))
         )
   }
+
   if (parts.length === 3) {
     if (GIT_COMMON_LINKED_STRUCTURAL_FILES.has(parts[2])) {
       return structuralChange(
@@ -253,13 +277,16 @@ function classifyGitCommonEvent(
           : EMPTY_HEAD_IDENTITY_SCOPE
       )
     }
+
     if (GIT_COMMON_LINKED_STATUS_FILES.has(parts[2])) {
       return gitStatusChange(repoIds)
     }
   }
+
   if (isHeadLogParts(parts, 2)) {
     return headIdentityChange(repoIds, headIdentityScopeForEntry(parts[1]))
   }
+
   return NO_CHANGE
 }
 

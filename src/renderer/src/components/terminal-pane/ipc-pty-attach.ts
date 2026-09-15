@@ -22,6 +22,7 @@ type IpcPtyAttachContext = {
 export function attachIpcPty(options: PtyAttachOptions, context: IpcPtyAttachContext): void {
   context.setCallbacks(options.callbacks)
   ensurePtyDispatcher()
+
   if (context.isDestroyed()) {
     return
   }
@@ -30,33 +31,42 @@ export function attachIpcPty(options: PtyAttachOptions, context: IpcPtyAttachCon
   context.bind(id)
   context.handlers.registerData(id)
   context.handlers.registerExit(id)
+
   if (!context.isCurrent(id)) {
     return
   }
 
   replayEagerPtyBuffer(options, context)
+
   if (options.cols && options.rows) {
     window.api.pty.resize(id, options.cols, options.rows)
   }
+
   options.callbacks.onConnect?.()
   options.callbacks.onStatus?.('shell')
 }
 
 function replayEagerPtyBuffer(options: PtyAttachOptions, context: IpcPtyAttachContext): void {
   const bufferHandle = getEagerPtyBufferHandle(options.existingPtyId)
+
   if (!bufferHandle) {
     return
   }
+
   const buffered = bufferHandle.flush()
+
   if (buffered) {
     const replayData = trimIncompleteTerminalControlTail(buffered)
+
     const shouldClearBeforeReplay =
       !options.isAlternateScreen && hasTerminalDisplayContent(replayData)
+
     if (shouldClearBeforeReplay && !options.callbacks.onReplayData) {
       options.callbacks.onData?.('\x1b[2J\x1b[3J\x1b[H')
     }
 
     context.setSuppressAttentionEvents(true)
+
     try {
       context.outputProcessor.processData(replayData, options.callbacks, {
         replayingBufferedData: true,
@@ -70,5 +80,6 @@ function replayEagerPtyBuffer(options: PtyAttachOptions, context: IpcPtyAttachCo
       context.outputProcessor.resetBellDetector()
     }
   }
+
   bufferHandle.dispose()
 }

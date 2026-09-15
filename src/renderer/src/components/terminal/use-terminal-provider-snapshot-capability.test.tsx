@@ -61,9 +61,11 @@ describe('useTerminalProviderSnapshotCapability', () => {
     storeState.terminalLayoutsByTabId = {
       'tab-1': { ptyIdsByLeafId: { leaf: 'ssh:target@@split' } }
     }
+
     const startupResolver = vi.fn(async (ids: string[]) =>
       ids.map((id) => ({ id, authoritative: true }))
     )
+
     await synchronizeTerminalProviderSnapshotCapabilities(
       collectTerminalProviderSnapshotPtyIds(storeState),
       startupResolver
@@ -77,6 +79,7 @@ describe('useTerminalProviderSnapshotCapability', () => {
     for (const ptyId of ['ssh:target@@pty-1', 'ssh:target@@split', 'ssh:target@@restored']) {
       expect(terminalProviderHasAuthoritativeSnapshot(ptyId)).toBe(true)
     }
+
     hook.unmount()
   })
 
@@ -201,6 +204,7 @@ describe('useTerminalProviderSnapshotCapability', () => {
       join(__dirname, '../use-terminal-workspace-projection.ts'),
       'utf8'
     )
+
     const parkingSource = readFileSync(join(__dirname, '../use-terminal-parking-pass.ts'), 'utf8')
 
     expect(projectionSource).toContain(

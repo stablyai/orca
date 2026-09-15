@@ -84,6 +84,7 @@ export function browserRouteRegistrationMatchesGuest(
 ): boolean {
   try {
     const guest = state.guest
+
     return (
       !guest.isDestroyed() &&
       guest.getType() === 'webview' &&

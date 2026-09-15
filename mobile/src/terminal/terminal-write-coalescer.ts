@@ -23,9 +23,11 @@ export function createTerminalWriteCoalescer(deliver: (data: string) => void) {
 
   const flushNow = () => {
     cancelTimer()
+
     if (pendingChunks.length === 0) {
       return
     }
+
     const data = pendingChunks.join('')
     pendingChunks = []
     pendingUnits = 0
@@ -37,19 +39,26 @@ export function createTerminalWriteCoalescer(deliver: (data: string) => void) {
     if (data === '') {
       return
     }
+
     const now = Date.now()
+
     // Leading edge: an idle terminal delivers immediately (keystroke echo adds 0ms).
     if (pendingChunks.length === 0 && now - lastFlushAt >= TERMINAL_WRITE_FLUSH_WINDOW_MS) {
       lastFlushAt = now
       deliver(data)
+
       return
     }
+
     pendingChunks.push(data)
     pendingUnits += data.length
+
     if (pendingUnits > TERMINAL_WRITE_MAX_PENDING_UNITS) {
       flushNow()
+
       return
     }
+
     if (flushTimer === null) {
       // One trailing timer per window: the stream flushes at most once per 48ms.
       // Why: Date.now() is not monotonic — a backwards NTP/timezone jump would
@@ -58,6 +67,7 @@ export function createTerminalWriteCoalescer(deliver: (data: string) => void) {
         TERMINAL_WRITE_FLUSH_WINDOW_MS,
         Math.max(0, TERMINAL_WRITE_FLUSH_WINDOW_MS - (now - lastFlushAt))
       )
+
       flushTimer = setTimeout(flushNow, remainderMs)
     }
   }

@@ -23,14 +23,18 @@ export function mergeExternalWorktreeInboxPaths(
 ): string[] {
   const seen = new Set((existing ?? []).map((path) => normalizeExternalWorktreeInboxPath(path)))
   const merged = [...(existing ?? [])]
+
   for (const path of additions) {
     const normalized = normalizeExternalWorktreeInboxPath(path)
+
     if (!normalized || seen.has(normalized)) {
       continue
     }
+
     seen.add(normalized)
     merged.push(path)
   }
+
   return merged
 }
 
@@ -40,6 +44,7 @@ export function getHiddenExternalWorktrees(
   if (detected?.authoritative !== true) {
     return []
   }
+
   return detected.worktrees.filter(
     (worktree) => !worktree.visible && isUserFacingExternalWorktree(worktree)
   )
@@ -51,6 +56,7 @@ export function getVisibleExternalWorktrees(
   if (detected?.authoritative !== true) {
     return []
   }
+
   return detected.worktrees.filter(
     (worktree) => worktree.visible && isUserFacingExternalWorktree(worktree)
   )
@@ -76,6 +82,7 @@ export function getHiddenImportableExternalWorktrees(
   if (detected?.authoritative !== true) {
     return []
   }
+
   return detected.worktrees.filter(
     (worktree) => !worktree.visible && isImportableExternalWorktree(worktree)
   )
@@ -87,6 +94,7 @@ export function getVisibleNonOrcaWorktrees(
   if (detected?.authoritative !== true) {
     return []
   }
+
   return detected.worktrees.filter(
     (worktree) =>
       worktree.visible && !worktree.selectedCheckout && worktree.ownership !== 'orca-managed'
@@ -112,9 +120,11 @@ export function shouldOfferNewExternalWorktreeInbox(
   if (isExternalWorktreeDiscoverySuppressed(repo)) {
     return false
   }
+
   if (!hasCompletedInitialExternalWorktreeImportPrompt(repo)) {
     return false
   }
+
   return (
     effectiveExternalWorktreeVisibility(
       repo,
@@ -132,11 +142,13 @@ export function getNewExternalWorktreeInboxWorktrees(
   if (!shouldOfferNewExternalWorktreeInbox(repo, defaults)) {
     return []
   }
+
   const baseline = new Set(
     (repo.externalWorktreeInboxBaselinePaths ?? []).map((path) =>
       normalizeExternalWorktreeInboxPath(path)
     )
   )
+
   return getHiddenExternalWorktrees(detected).filter(
     (worktree) => !baseline.has(normalizeExternalWorktreeInboxPath(worktree.path))
   )

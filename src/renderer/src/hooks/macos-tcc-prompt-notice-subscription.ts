@@ -28,28 +28,35 @@ export function subscribeToMacosTccPromptNotice(
     if (!api?.consumePending) {
       return Promise.resolve(null)
     }
+
     try {
       return api.consumePending()
     } catch (error) {
       return Promise.reject(error)
     }
   }
+
   const releaseClaim = async (claimId: number): Promise<boolean> => {
     if (!api?.releasePending) {
       return false
     }
+
     try {
       await api.releasePending(claimId)
+
       return true
     } catch {
       return false
     }
   }
+
   const acknowledgeClaim = (claimId: number): void => {
     if (!api?.acknowledgePending) {
       void releaseClaim(claimId)
+
       return
     }
+
     try {
       void api.acknowledgePending(claimId).catch(() => {
         void releaseClaim(claimId)
@@ -58,36 +65,46 @@ export function subscribeToMacosTccPromptNotice(
       void releaseClaim(claimId)
     }
   }
+
   const showNotice = (payload: TccPromptNoticePayload, acknowledge: () => void): boolean => {
     try {
       onNotice(payload, acknowledge)
+
       return true
     } catch (error) {
       console.error('[macos-tcc-prompts] Failed to show notice:', error)
+
       return false
     }
   }
+
   // Why: one retry recovers transient toast setup without spinning on a persistent renderer fault.
   let displayRetryAvailable = true
+
   const consume = (fallback?: TccPromptNoticePayload): void => {
     if (!api?.consumePending) {
       if (fallback) {
         showNotice(fallback, () => {})
       }
+
       return
     }
+
     void pullPending().then(
       (pending) => {
         if (pending) {
           const claimId = pending.claimId
           let acknowledged = false
+
           const acknowledge = (): void => {
             if (acknowledged || typeof claimId !== 'number') {
               return
             }
+
             acknowledged = true
             acknowledgeClaim(claimId)
           }
+
           if (!showNotice({ promptCount: pending.promptCount }, acknowledge)) {
             if (typeof claimId === 'number') {
               const shouldRetry = displayRetryAvailable
@@ -112,6 +129,7 @@ export function subscribeToMacosTccPromptNotice(
   const unsubscribe = api?.onThreshold?.((payload) => consume(payload)) ?? (() => {})
   // Why: the threshold can land before React subscribes or while the main window is closed.
   consume()
+
   // Why: StrictMode cleanup must not abandon a claim before it is acknowledged or released.
   return unsubscribe
 }

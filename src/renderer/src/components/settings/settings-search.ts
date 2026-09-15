@@ -9,7 +9,9 @@ export type SettingsSearchEntry = {
 }
 
 export const SETTINGS_SEARCH_QUERY_MAX_BYTES = 2 * 1024
+
 const SETTINGS_SEARCH_NO_MATCH_SCORE = 0
+
 const SETTINGS_SEARCH_EMPTY_QUERY_SCORE = 1
 
 type SettingsSearchScoreTier = {
@@ -72,16 +74,21 @@ function scoreSettingsSearchText(
   if (!value) {
     return SETTINGS_SEARCH_NO_MATCH_SCORE
   }
+
   const normalizedValue = value.toLowerCase()
+
   if (normalizedValue === normalizedQuery) {
     return tier.exact
   }
+
   if (normalizedValue.startsWith(normalizedQuery)) {
     return tier.prefix
   }
+
   if (normalizedValue.includes(normalizedQuery)) {
     return tier.substring
   }
+
   return SETTINGS_SEARCH_NO_MATCH_SCORE
 }
 
@@ -103,16 +110,20 @@ export function scoreSettingsSearch(
   if (isSettingsSearchQueryTooLarge(query)) {
     return SETTINGS_SEARCH_NO_MATCH_SCORE
   }
+
   const normalizedQuery = normalizeSettingsSearchQuery(query)
+
   if (!normalizedQuery) {
     return SETTINGS_SEARCH_EMPTY_QUERY_SCORE
   }
 
   const values = Array.isArray(entries) ? entries : [entries]
+
   return values.reduce((score, entry, index) => {
     // Why: Settings passes the pane entry first so pane-title hits outrank
     // lower-level setting titles without adding a second search-entry shape.
     const titleScore = index === 0 ? PANE_TITLE_SCORE : ENTRY_TITLE_SCORE
+
     return Math.max(
       score,
       scoreSettingsSearchText(normalizedQuery, entry.title, titleScore),
@@ -140,6 +151,7 @@ export function rankSettingsSearchItems<T>(
   if (isSettingsSearchQueryTooLarge(query)) {
     return []
   }
+
   if (!normalizeSettingsSearchQuery(query)) {
     return items.map((item) => ({ item, score: SETTINGS_SEARCH_EMPTY_QUERY_SCORE }))
   }

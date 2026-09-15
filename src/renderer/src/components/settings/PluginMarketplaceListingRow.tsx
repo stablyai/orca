@@ -25,6 +25,7 @@ export function PluginMarketplaceListingRow({
   const blocked = listing.blockedByKillList
   const canCheckUpdate = installed?.source?.kind === 'marketplace'
   const name = pluginDisplayNameFromKey(listing.pluginKey)
+
   return (
     <article
       className="flex min-h-36 flex-col rounded-xl border border-border/80 bg-card p-4 text-card-foreground shadow-xs transition-colors hover:border-border"

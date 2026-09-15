@@ -13,6 +13,7 @@ import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activi
 import { collectChildAgentPaneKeys } from './activity-thread-child-agent'
 
 const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
+
 import { filterThreadsByActivityScope, resolveActivityScopeRepoIds } from './activity-scope-filter'
 import {
   activityThreadMatchesSearchQuery,
@@ -77,12 +78,14 @@ export function useAgentPaneThreads(args: {
   const { query, readFilter, groupBy, selectedPaneKey, showChildAgents = false } = args
   const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
   const agentsFilterRepoIds = useAppStore((s) => s.agentsFilterRepoIds)
+
   // Why project: the unified tab map is rewritten on every tab focus; the projection keeps
   // its identity (and each tab's) unless a field this pipeline reads actually changed.
   const tabProjectionRef = useRef<{
     raw: AppState['unifiedTabsByWorktree'] | null
     projected: ActivityTabProjection | null
   }>({ raw: null, projected: null })
+
   const storeData = useAppStore(
     useShallow((s) => ({
       agentStatusByPaneKey: s.agentStatusByPaneKey,
@@ -92,11 +95,14 @@ export function useAgentPaneThreads(args: {
       tabsByWorktree: s.tabsByWorktree,
       activityTabs: (() => {
         const cache = tabProjectionRef.current
+
         if (cache.raw === s.unifiedTabsByWorktree && cache.projected) {
           return cache.projected
         }
+
         const projected = projectActivityTabs(s.unifiedTabsByWorktree, cache.projected)
         tabProjectionRef.current = { raw: s.unifiedTabsByWorktree, projected }
+
         return projected
       })(),
       repos: s.repos,
@@ -114,6 +120,7 @@ export function useAgentPaneThreads(args: {
       defaultHostId: getSettingsFocusedExecutionHostId(s.settings)
     }))
   )
+
   // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
 
@@ -166,6 +173,7 @@ export function useAgentPaneThreads(args: {
 
   const selectedPaneKeyIsLive =
     selectedPaneKey === null || allThreads.some((thread) => thread.paneKey === selectedPaneKey)
+
   const effectiveSelectedPaneKey = selectedPaneKeyIsLive ? selectedPaneKey : null
 
   // Why scope runs before the per-view filters: host/project scope must stay separate
@@ -203,10 +211,12 @@ export function useAgentPaneThreads(args: {
   // Why deferred: filtering hundreds of threads is interruptible background work; the input
   // echoes the keystroke at full priority while the list catches up on the deferred value.
   const deferredQuery = useDeferredValue(query)
+
   const visibleThreads = useMemo(() => {
     const normalizedQuery = isActivitySearchQueryTooLarge(deferredQuery)
       ? null
       : deferredQuery.trim().toLowerCase()
+
     return scopeVisibleThreads.filter((thread) => {
       // Why: keep the just-selected thread visible after auto-mark-read flips it to read, else unread-only mode makes the clicked row vanish from the list.
       if (
@@ -216,6 +226,7 @@ export function useAgentPaneThreads(args: {
       ) {
         return false
       }
+
       // Why: child agents (e.g. dispatched orchestration workers) are hidden by default to keep top-level agent views focused on root tasks.
       if (
         !showChildAgents &&
@@ -224,9 +235,11 @@ export function useAgentPaneThreads(args: {
       ) {
         return false
       }
+
       if (normalizedQuery === null) {
         return false
       }
+
       return activityThreadMatchesSearchQuery({ thread, searchQuery: normalizedQuery })
     })
   }, [

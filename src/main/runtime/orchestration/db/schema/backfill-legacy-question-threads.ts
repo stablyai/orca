@@ -19,9 +19,11 @@ export function backfillLegacyQuestionThreads(this: OrchestrationDb): void {
     created_at: string
     sequence: number
   }[]
+
   const getDispatch = this.db.prepare(
     'SELECT id, run_id, task_id FROM dispatch_contexts WHERE id = ? AND contract_version = ?'
   )
+
   const getDispatchesForLegacyQuestion = this.db.prepare(
     `SELECT id, run_id, task_id
      FROM dispatch_contexts
@@ -32,6 +34,7 @@ export function backfillLegacyQuestionThreads(this: OrchestrationDb): void {
      ORDER BY rowid
      LIMIT 2`
   )
+
   const getAnswer = this.db.prepare(
     `SELECT id, body, created_at
      FROM messages
@@ -44,14 +47,17 @@ export function backfillLegacyQuestionThreads(this: OrchestrationDb): void {
      ORDER BY sequence
      LIMIT 1`
   )
+
   const insert = this.db.prepare(
     `INSERT OR IGNORE INTO question_threads (
        message_id, run_id, dispatch_id, asker_handle, status,
        answer_message_id, answer_body, created_at, answered_at
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   )
+
   for (const message of messages) {
     let payload: { taskId?: unknown; dispatchId?: unknown }
+
     try {
       payload = JSON.parse(message.payload ?? '{}') as {
         taskId?: unknown
@@ -60,6 +66,7 @@ export function backfillLegacyQuestionThreads(this: OrchestrationDb): void {
     } catch {
       continue
     }
+
     const inferredDispatches =
       typeof payload.dispatchId === 'string'
         ? []
@@ -71,6 +78,7 @@ export function backfillLegacyQuestionThreads(this: OrchestrationDb): void {
             message.created_at,
             message.created_at
           ) as { id: string; run_id: string; task_id: string }[])
+
     const dispatch =
       typeof payload.dispatchId === 'string'
         ? (getDispatch.get(payload.dispatchId, LEGACY_CONTRACT_VERSION) as
@@ -79,6 +87,7 @@ export function backfillLegacyQuestionThreads(this: OrchestrationDb): void {
         : inferredDispatches.length === 1
           ? inferredDispatches[0]
           : undefined
+
     if (
       !dispatch ||
       (typeof payload.taskId === 'string' && payload.taskId !== dispatch.task_id) ||
@@ -86,6 +95,7 @@ export function backfillLegacyQuestionThreads(this: OrchestrationDb): void {
     ) {
       continue
     }
+
     const answer = getAnswer.get(
       message.run_id,
       message.id,
@@ -94,6 +104,7 @@ export function backfillLegacyQuestionThreads(this: OrchestrationDb): void {
       `dispatch:${dispatch.id}`,
       message.sequence
     ) as { id: string; body: string; created_at: string } | undefined
+
     insert.run(
       message.id,
       dispatch.run_id,
@@ -106,10 +117,13 @@ export function backfillLegacyQuestionThreads(this: OrchestrationDb): void {
       answer?.created_at ?? null
     )
   }
+
   const adoption = this.getLegacyAdoption()
+
   const coordinator = adoption
     ? this.getLegacyCoordinatorPrincipal(adoption.adopted_run_id)
     : undefined
+
   if (adoption && coordinator?.status === 'revoked') {
     this.promoteLegacyCoordinatorMailForTakeover(
       adoption.adopted_run_id,

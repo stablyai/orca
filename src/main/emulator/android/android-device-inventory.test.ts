@@ -25,11 +25,13 @@ function runner(handler: (binary: string, joinedArgs: string) => string): Androi
 describe('mergeAndroidDevices', () => {
   it('labels running emulators by AVD name and lists unbooted AVDs as shutdown', () => {
     const running = parseAdbDevices('List of devices attached\nemulator-5554\tdevice model:Pixel_7')
+
     const devices = mergeAndroidDevices(
       running,
       ['Pixel_7', 'Pixel_Tablet'],
       new Map([['emulator-5554', 'Pixel_7']])
     )
+
     expect(devices).toEqual([
       {
         backend: 'android',
@@ -64,15 +66,19 @@ describe('listAndroidDevices', () => {
         if (binary === SDK.adb && a === 'devices -l') {
           return 'List of devices attached\nemulator-5554\tdevice'
         }
+
         if (binary === SDK.emulator && a === '-list-avds') {
           return 'Pixel_7'
         }
+
         if (binary === SDK.adb && a === '-s emulator-5554 emu avd name') {
           return 'Pixel_7\nOK'
         }
+
         return ''
       })
     )
+
     const devices = await listAndroidDevices(fake as unknown as AndroidCommandRunner, SDK)
     expect(devices).toHaveLength(1)
     expect(devices[0]).toMatchObject({ id: 'emulator-5554', name: 'Pixel_7', state: 'booted' })
@@ -84,6 +90,7 @@ describe('findRunningAvdSerial', () => {
     const fake = runner((binary, a) =>
       binary === SDK.adb && a === '-s emulator-5554 emu avd name' ? 'Pixel_7\nOK' : ''
     )
+
     const running = parseAdbDevices('List of devices attached\nemulator-5554\tdevice')
     expect(await findRunningAvdSerial(fake, SDK, 'Pixel_7', running)).toBe('emulator-5554')
     expect(await findRunningAvdSerial(fake, SDK, 'Other', running)).toBeNull()

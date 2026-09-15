@@ -10,8 +10,11 @@ import {
 } from './structured-agent-session-recovery-resolution'
 
 const NOW = 1_800_000_000_000
+
 const SESSION = 'session-recovery'
+
 const roots: string[] = []
+
 let operations = 0
 
 afterEach(async () => {
@@ -21,11 +24,13 @@ afterEach(async () => {
 async function openStore(): Promise<AgentSessionRecordStore> {
   const root = await mkdtemp(join(tmpdir(), 'orca-recovery-resolution-'))
   roots.push(root)
+
   return AgentSessionRecordStore.open({ directory: root, hostId: 'local' })
 }
 
 async function reserve(store: AgentSessionRecordStore, runtimeKind: 'native' | 'tui' = 'native') {
   operations += 1
+
   return store.reserveOwner({
     sessionId: SESSION,
     location: {
@@ -65,6 +70,7 @@ async function liveOwner(store: AgentSessionRecordStore, runtimeKind: 'native' |
     },
     now: NOW
   })
+
   return store.proveOwner({
     sessionId: SESSION,
     fence,
@@ -92,10 +98,12 @@ function deps(
   overrides: Partial<StructuredSessionRecoveryResolutionDeps> = {}
 ): StructuredSessionRecoveryResolutionDeps & { probes: () => number } {
   let calls = 0
+
   return {
     store,
     probeRecord: async () => {
       calls += 1
+
       return probe(calls)
     },
     now: () => NOW + 10_000,
@@ -151,6 +159,7 @@ describe('structured session recovery resolution', () => {
     await liveOwner(store)
     await latch(store, 'recovering')
     let alive = true
+
     const stopOwnerProcess = vi.fn(() => {
       alive = false
     })

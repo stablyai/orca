@@ -16,13 +16,19 @@ import {
 } from './pty-pre-handler-buffer'
 
 const RESCAN_PTY_ID = 'pty-pre-handler-rescan'
+
 const TRIM_PTY_ID = 'pty-pre-handler-trim'
+
 const EXIT_PTY_ID = 'pty-pre-handler-exit'
+
 const CAPPED_EXIT_PTY_IDS = Array.from({ length: 65 }, (_, index) => `pty-capped-exit-${index}`)
+
 const RECYCLED_PTY_ID = 'ssh:target@@pty-2'
+
 // Two lifetimes of the same relay-renumbered id: the shell that died while the transport was down,
 // and the one the fresh spawn just got handed.
 const PRIOR_INCARNATION_ID = 'incarnation-before-the-relay-restarted'
+
 const FRESH_INCARNATION_ID = 'incarnation-of-the-shell-now-attaching'
 
 describe('pre-handler PTY buffer', () => {
@@ -30,9 +36,11 @@ describe('pre-handler PTY buffer', () => {
     clearPreHandlerPtyState(RESCAN_PTY_ID)
     clearPreHandlerPtyState(TRIM_PTY_ID)
     clearPreHandlerPtyState(EXIT_PTY_ID)
+
     for (const ptyId of CAPPED_EXIT_PTY_IDS) {
       clearPreHandlerPtyState(ptyId)
     }
+
     clearPreHandlerPtyState(RECYCLED_PTY_ID)
   })
 
@@ -47,6 +55,7 @@ describe('pre-handler PTY buffer', () => {
           throw new Error('Array.reduce should not be used by the pre-handler PTY buffer')
         }
       })
+
       for (let index = 0; index < 4_096; index += 1) {
         bufferPreHandlerPtyData(RESCAN_PTY_ID, 'x')
       }
@@ -85,6 +94,7 @@ describe('pre-handler PTY buffer', () => {
 
     try {
       console.warn = () => {}
+
       Object.defineProperty(Array.prototype, 'shift', {
         configurable: true,
         writable: true,
@@ -92,6 +102,7 @@ describe('pre-handler PTY buffer', () => {
           throw new Error('Array.shift should not be used by the pre-handler PTY buffer')
         }
       })
+
       for (let index = 0; index < 2_048; index += 1) {
         bufferPreHandlerPtyData(TRIM_PTY_ID, 'x'.repeat(1_024))
       }
@@ -189,9 +200,11 @@ describe('pre-handler PTY buffer', () => {
     }
 
     const exits: number[] = []
+
     for (const ptyId of CAPPED_EXIT_PTY_IDS) {
       drainPreHandlerPtyExit(ptyId, (code) => exits.push(code))
     }
+
     expect(exits).toHaveLength(64)
     expect(exits).not.toContain(0)
     expect(exits).toContain(64)

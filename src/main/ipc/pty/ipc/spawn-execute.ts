@@ -18,11 +18,14 @@ import type { PtyIpcSpawnState } from './spawn-state'
 
 export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
+
   try {
     if (ctx.preAllocatedHandle) {
       ctx.deps.trustedTerminalHandleEnv.add(ctx.preAllocatedHandle)
     }
+
     ctx.spawnTiming.mark('options')
+
     const stablePaneOwnerCandidate = resolveStablePaneOwner(
       ctx.deps.runtime,
       ctx.deps.store,
@@ -30,12 +33,15 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
       args.worktreeId,
       args.connectionId
     )
+
     const expectedPtyId =
       stablePaneOwnerCandidate?.ptyId ?? ctx.effectiveSessionAppId ?? ctx.effectiveSessionId
+
     if (expectedPtyId) {
       ctx.deps.runtime?.beginPtyRegistration?.(expectedPtyId)
       ctx.pendingRegistrationPtyId = expectedPtyId
     }
+
     if (ctx.isDaemonHostSpawn && expectedPtyId) {
       ctx.preparedProvisionalExecutionContext =
         ctx.deps.runtime?.preparePtyExecutionContext?.(expectedPtyId, ctx.expectedWslDistro, {
@@ -43,9 +49,11 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
           preserveExisting: !ctx.isMintedSessionId || Boolean(stablePaneOwnerCandidate)
         }) ?? false
     }
+
     const sequenceBeforeProviderSpawn = expectedPtyId
       ? (ctx.deps.runtime?.getPtyOutputSequence?.(expectedPtyId) ?? 0)
       : 0
+
     const stablePaneSpawn = ctx.preAdoptedStablePane
       ? ctx.preAdoptedStablePane
       : await spawnForStablePane({
@@ -65,8 +73,10 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
               args.connectionId
             )
         })
+
     ctx.result = stablePaneSpawn.result
     ctx.stablePaneOwner = stablePaneSpawn.owner
+
     if (
       ctx.stablePaneOwner &&
       ctx.isMintedSessionId &&
@@ -75,19 +85,25 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
     ) {
       clearProviderPtyState(ctx.effectiveSessionAppId)
     }
+
     ctx.rejectedRegistrationCandidate = ctx.result
+
     if (ctx.pendingRegistrationPtyId !== ctx.result.id) {
       if (ctx.pendingRegistrationPtyId) {
         ctx.deps.runtime?.cancelPendingPtyRegistration?.(ctx.pendingRegistrationPtyId)
       }
+
       ctx.deps.runtime?.beginPtyRegistration?.(ctx.result.id, ctx.result.incarnationId)
       ctx.pendingRegistrationPtyId = ctx.result.id
     }
+
     assertSpawnReplyWasLive(ctx.result)
     ctx.deps.runtime?.assertPtyRegistrationAllowed?.(ctx.result.id, ctx.result.incarnationId)
+
     if (ctx.result.providerSequence) {
       const runtimeSequenceBeforeReconcile =
         ctx.deps.runtime?.getPtyOutputSequence?.(ctx.result.id) ?? 0
+
       // Why kept: this is the reattach boundary in the RENDERER's sequence
       // domain, and the daemon snapshot's kitty flags mean nothing without
       // the boundary they were proven at.
@@ -97,10 +113,12 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
           ctx.result.providerSequence,
           sequenceBeforeProviderSpawn
         ) ?? null
+
       if (runtimeSequenceBeforeReconcile > sequenceBeforeProviderSpawn) {
         ctx.snapshotKittyFlagsCoverReconciledSeq = false
       }
     }
+
     ensureWslHookRelayForReattach(ctx.result, args.connectionId)
     ctx.deps.runtime?.preparePtyExecutionContext?.(
       ctx.result.id,
@@ -120,17 +138,21 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
         resetIncarnation: true
       })
     }
+
     // Why: a stale hidden mark on this session id would gate a later visible attach that reuses it.
     if (ctx.preSpawnHiddenMarkId !== null) {
       ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
     }
+
     const rawMessage = err instanceof Error ? err.message : String(err)
+
     if (rawMessage === 'agent_session_exited_during_start' && ctx.rejectedRegistrationCandidate) {
       ctx.deps.runtime?.releaseRejectedPtyRegistrationFence?.(
         ctx.rejectedRegistrationCandidate.id,
         ctx.rejectedRegistrationCandidate.incarnationId
       )
     }
+
     if (ctx.pendingRegistrationPtyId) {
       ctx.deps.runtime?.cancelPendingPtyRegistration?.(
         ctx.pendingRegistrationPtyId,
@@ -138,13 +160,17 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
       )
       ctx.pendingRegistrationPtyId = null
     }
+
     const spawnError = normalizeNodePtySpawnError(err)
+
     const isIdentityMismatch =
       isSshPtyIdentityMismatchError(spawnError) || isSshPtyIdentityMismatchError(rawMessage)
+
     const isExpiredSshSession =
       Boolean(args.connectionId) &&
       (spawnError.message.includes(SSH_SESSION_EXPIRED_ERROR) ||
         rawMessage.includes(SSH_SESSION_EXPIRED_ERROR))
+
     // The message alone cannot carry this decision. All three reattach refusals are minted with the
     // same `SSH_SESSION_EXPIRED` text, and only one of them observed the process: `restoreRequired`
     // means the PTY is LIVE and only its source stream needs rebuilding, which
@@ -154,8 +180,10 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
     // may reach that bookkeeping; being too strict here merely leaves a dead lease for the next
     // reattach to retire on real host evidence.
     const relayReportedSessionAbsent = isExpiredSshSession && isSshPtyAbsentFromRelayError(err)
+
     const exitedBeforeSpawnReply =
       ctx.rejectedRegistrationCandidate?.exitedBeforeSpawnReply === true
+
     if (ctx.effectiveSessionAppId !== undefined) {
       if (
         ctx.hadSessionSizeBeforeAttach &&
@@ -167,6 +195,7 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
         ptySizes.delete(ctx.effectiveSessionAppId)
       }
     }
+
     if (
       args.connectionId &&
       ctx.effectiveSessionRelayId !== undefined &&
@@ -177,6 +206,7 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
         clearProviderPtyState(ctx.effectiveSessionAppId)
         deletePtyOwnership(ctx.effectiveSessionAppId)
       }
+
       if (!isIdentityMismatch) {
         ctx.deps.store?.markSshRemotePtyLease(
           args.connectionId,
@@ -185,20 +215,24 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
         )
       }
     }
+
     // Why: provider state buildPtyHostEnv materialized for this minted id leaks if spawn failed.
     if (ctx.isMintedSessionId && ctx.effectiveSessionId !== undefined) {
       clearProviderPtyState(ctx.effectiveSessionId)
     }
+
     // Why: telemetry-plan.md§agent_error — attribute the error to the renderer-threaded agent_kind, else sniff the command for `claude`; raw messages are dropped at the validator boundary.
     const rendererAgentKindParse =
       args.telemetry?.agent_kind !== undefined
         ? agentKindSchema.safeParse(args.telemetry.agent_kind)
         : null
+
     const errorAgentKind = rendererAgentKindParse?.success
       ? rendererAgentKindParse.data
       : ctx.isClaudeLaunch
         ? ('claude-code' as const)
         : null
+
     if (errorAgentKind) {
       const classified = classifyError(spawnError)
       track('agent_error', {
@@ -207,6 +241,7 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
         ...getCohortAtEmit()
       })
     }
+
     throw spawnError
   } finally {
     if (ctx.preAllocatedHandle) {

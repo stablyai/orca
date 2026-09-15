@@ -35,6 +35,7 @@ function finishFastLane(): void {
     savePending: false,
     generationGap: 0
   })
+
   span.setEligibility({ eligible: true, misses: [] })
   span.finish('fast_lane')
 }
@@ -53,6 +54,7 @@ describe('persistence.pty-binding span', () => {
       savePending: true,
       generationGap: 2
     })
+
     span.setEligibility({ eligible: false, misses: ['tab_pty', 'not_durable'] })
     span.finish('flushed')
 
@@ -78,6 +80,7 @@ describe('persistence.pty-binding span', () => {
       savePending: false,
       generationGap: 0
     })
+
     span.finish('threw', new Error('disk full'))
 
     expect(records[0]).toHaveProperty('exit._tag', 'Failure')
@@ -88,6 +91,7 @@ describe('persistence.pty-binding span', () => {
     for (let i = 0; i < PTY_BINDING_FAST_LANE_SPAN_BUDGET_PER_WINDOW + 5; i++) {
       finishFastLane()
     }
+
     expect(records).toHaveLength(PTY_BINDING_FAST_LANE_SPAN_BUDGET_PER_WINDOW)
 
     // Flushed spans are never dropped, even inside a saturated window.
@@ -97,6 +101,7 @@ describe('persistence.pty-binding span', () => {
       savePending: false,
       generationGap: 0
     })
+
     span.finish('flushed')
     expect(records).toHaveLength(PTY_BINDING_FAST_LANE_SPAN_BUDGET_PER_WINDOW + 1)
 

@@ -17,25 +17,31 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: { on: vi.fn() }, ipcMain: { handle: mocks.ipcHandle } }))
+
 vi.mock('../ai-vault/session-scanner-worker-spawn', () => ({
   scanAiVaultSessionsInWorker: mocks.scanAiVaultSessionsInWorker,
   resolveAiVaultSessionTitlesInWorker: mocks.resolveAiVaultSessionTitlesInWorker,
   resetAiVaultScannerWorkerForTests: vi.fn()
 }))
+
 vi.mock('../ai-vault/remote-session-scanner', () => ({
   scanRemoteAiVaultSessions: mocks.scanRemoteAiVaultSessions
 }))
+
 vi.mock('../wsl', () => ({
   listRunningWslHomeDirsAsync: vi.fn().mockResolvedValue([]),
   hasCachedWslDistros: vi.fn(() => false)
 }))
+
 vi.mock('../wsl-running-path-filter', () => ({
   filterPathsToRunningWslDistrosAsync: vi.fn(async (paths: readonly string[]) => [...paths])
 }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE: 'SSH unavailable',
   getSshFilesystemProvider: mocks.getSshFilesystemProvider
 }))
+
 vi.mock('./ssh', () => ({
   getActiveSshAiVaultHostInfo: mocks.getActiveSshAiVaultHostInfo,
   getActiveSshAiVaultHostInfos: mocks.getActiveSshAiVaultHostInfos,
@@ -44,6 +50,7 @@ vi.mock('./ssh', () => ({
 }))
 
 const { _internals, registerAiVaultHandlers } = await import('./ai-vault')
+
 const EMPTY_RESULT: AiVaultListResult = {
   sessions: [],
   issues: [],
@@ -78,10 +85,12 @@ describe('Agent Session History scan coalescing', () => {
     )
     registerRuntimeHost()
     const firstController = new AbortController()
+
     const first = _internals.listAiVaultSessions(
       { executionHostScope: scope },
       { signal: firstController.signal }
     )
+
     const second = _internals.listAiVaultSessions({ executionHostScope: scope })
     await vi.waitFor(() => expect(resolveScan).toBeDefined())
 
@@ -108,6 +117,7 @@ describe('Agent Session History scan coalescing', () => {
       { executionHostScope: 'all' },
       { signal: controller.signal }
     )
+
     const firstRejection = expect(first).rejects.toMatchObject({ name: 'AbortError' })
     const second = _internals.listAiVaultSessions({ executionHostScope: 'all' })
     await vi.waitFor(() => expect(resolveRuntime).toBeDefined())
@@ -134,14 +144,17 @@ describe('Agent Session History scan coalescing', () => {
     const cancel = ipcHandler('aiVault:cancelListSessions')
     const firstEvent = { sender: { id: 1 } }
     const secondEvent = { sender: { id: 2 } }
+
     const first = list(firstEvent, {
       executionHostScope: 'ssh:dev-box',
       requestToken: 'scan'
     }) as Promise<AiVaultListResult>
+
     const second = list(secondEvent, {
       executionHostScope: 'ssh:dev-box',
       requestToken: 'scan'
     }) as Promise<AiVaultListResult>
+
     await vi.waitFor(() => expect(resolveRelay).toBeDefined())
 
     cancel(firstEvent, { requestToken: 'scan' })
@@ -165,6 +178,7 @@ describe('Agent Session History scan coalescing', () => {
       { sender: { id: 1 } },
       { executionHostScope: 'ssh:dev-box', requestToken: 'scan' }
     )
+
     expect(result).toMatchObject({
       sessions: [],
       issues: [expect.objectContaining({ message: 'relay socket closed', kind: 'host' })]
@@ -183,6 +197,7 @@ describe('Agent Session History scan coalescing', () => {
       { sender: { id: 1 } },
       { executionHostScope: 'local', requestToken: 'scan' }
     )
+
     expect(result).toMatchObject({
       sessions: [],
       issues: [expect.objectContaining({ message: 'transcript root is unreadable', kind: 'host' })]
@@ -196,6 +211,7 @@ describe('Agent Session History scan coalescing', () => {
     mocks.requestActiveSshAiVaultSessionList.mockImplementation(
       (_targetId, _params, options: { signal: AbortSignal }) => {
         signals.push(options.signal)
+
         return new Promise((resolve) => {
           if (signals.length === 1) {
             options.signal.addEventListener('abort', () => resolve(EMPTY_RESULT), { once: true })
@@ -212,6 +228,7 @@ describe('Agent Session History scan coalescing', () => {
       executionHostScope: 'ssh:dev-box',
       force: true
     })
+
     await vi.waitFor(() => expect(signals).toHaveLength(2))
 
     expect(signals[0]?.aborted).toBe(true)
@@ -241,8 +258,10 @@ function hostInfo() {
 
 function ipcHandler(channel: string): (...args: unknown[]) => unknown {
   const registration = mocks.ipcHandle.mock.calls.find(([registered]) => registered === channel)
+
   if (!registration) {
     throw new Error(`${channel} was not registered`)
   }
+
   return registration[1]
 }

@@ -63,6 +63,7 @@ export function createFileExplorerWatchRefreshScheduler({
     clearTimer()
     timer = schedule(() => {
       timer = null
+
       // Why: a run started here would race the in-flight one; the settle
       // handler re-arms instead, so nothing pending is dropped.
       if (inFlight === null) {
@@ -89,6 +90,7 @@ export function createFileExplorerWatchRefreshScheduler({
       // tree refresh was never re-read and must keep its pending refresh.
       const covered = full ? new Set(dirs.filter(isCoveredByFullRefresh)) : null
       const outcome = full && !disposed ? await refreshTree() : null
+
       // Why: refreshTree bails without touching the expanded dirs when its root load is
       // superseded, so trusting `covered` there would drop those refreshes for good — nothing
       // marks an expanded dir stale, so a later re-expansion won't re-read it either.
@@ -101,6 +103,7 @@ export function createFileExplorerWatchRefreshScheduler({
           : covered && outcome === 'refreshed'
             ? dirs.filter((dirPath) => !covered.has(dirPath))
             : dirs
+
       // Why: forEachWithConcurrency has no cancel hook, and the bound refreshDir
       // is a live ref — a queued path would otherwise be read against the next
       // worktree's binding after a switch.
@@ -108,6 +111,7 @@ export function createFileExplorerWatchRefreshScheduler({
         disposed ? Promise.resolve() : refreshDir(dirPath)
       )
     })()
+
     inFlight = started
     void started
       .catch(() => {
@@ -117,6 +121,7 @@ export function createFileExplorerWatchRefreshScheduler({
         if (inFlight === started) {
           inFlight = null
         }
+
         if (!disposed && (pendingFull || pendingDirs.size > 0)) {
           arm(trailingMs)
         }
@@ -128,6 +133,7 @@ export function createFileExplorerWatchRefreshScheduler({
       if (disposed) {
         return
       }
+
       // Why: pendingDirs is deliberately NOT cleared. toggleDir drops a dir from
       // expandedDirs without purging dirCache, so cache keys are a strict
       // superset of what refreshTree re-reads; subsuming them would strand a
@@ -139,17 +145,20 @@ export function createFileExplorerWatchRefreshScheduler({
       if (disposed) {
         return
       }
+
       pendingDirs.set(normalizeRuntimePathForComparison(dirPath), dirPath)
       armForRequest()
     },
     cancel: () => {
       const discardedWork =
         pendingFull || pendingDirs.size > 0 || timer !== null || inFlight !== null
+
       disposed = true
       clearTimer()
       pendingFull = false
       pendingDirs.clear()
       firstRequestAt = null
+
       return discardedWork
     }
   }

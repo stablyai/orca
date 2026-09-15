@@ -13,5 +13,6 @@ export function DashboardPopoutRoot(): React.JSX.Element {
   useAppMenuPaste()
   useAppMenuSelectionActions()
   const snapshot = useDashboardSnapshot()
+
   return <AgentKanbanBoard snapshot={snapshot} />
 }

@@ -11,13 +11,16 @@ describe('startLocalBuildFeed', () => {
     const artifactPath = join(directory, 'orca-macos-arm64.zip')
     await writeFile(artifactPath, 'zip')
     const artifactFile = await open(artifactPath, 'r')
+
     const candidate = {
       version: '1.2.3-local.1',
       manifestContent: 'version: 1.2.3-local.1\n',
       artifacts: new Map([['orca-macos-arm64.zip', { file: artifactFile, size: 3 }]]),
       close: () => artifactFile.close()
     } as LocalBuildCandidate
+
     const feed = await startLocalBuildFeed(candidate)
+
     try {
       await expect(
         fetch(`${feed.url}latest-mac.yml`).then((response) => response.text())

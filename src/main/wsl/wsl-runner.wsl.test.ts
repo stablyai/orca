@@ -13,7 +13,9 @@ import { resolveWslExecutablePath } from './wsl-executable-path'
  *   ORCA_REAL_WSL_RUNNER_TEST=1 pnpm vitest run src/main/wsl/wsl-runner.wsl.test.ts
  */
 const DISTRO = process.env.ORCA_WSL_TEST_DISTRO ?? 'Ubuntu-24.04'
+
 const enabled = process.platform === 'win32' && process.env.ORCA_REAL_WSL_RUNNER_TEST === '1'
+
 const describeOnWsl = enabled ? describe : describe.skip
 
 const PROFILE = '/tmp/orca-wsl-runner-profile.bak'
@@ -24,6 +26,7 @@ async function guest(script: string): Promise<string> {
     args: ['-d', DISTRO, '--exec', 'sh', '-c', script],
     timeoutMs: 30_000
   })
+
   return result.stdout.trim()
 }
 
@@ -48,6 +51,7 @@ describeOnWsl('runWslProcess against a real distro', () => {
     // 60s stall. This is #14288 against a real distro, and it relies on a
     // failed probe being non-fatal.
     const started = Date.now()
+
     const result = await runWslProcess({
       loginPath: 'preferred',
       distro: DISTRO,
@@ -55,6 +59,7 @@ describeOnWsl('runWslProcess against a real distro', () => {
       args: ['orca-probe-ok'],
       timeoutMs: 15_000
     })
+
     const elapsed = Date.now() - started
     expect(result.stdout.trim()).toContain('orca-probe-ok')
     expect(elapsed).toBeLessThan(20_000)
@@ -81,6 +86,7 @@ describeOnWsl('runWslProcess against a real distro', () => {
       args: ['ORCA_PAYLOAD'],
       timeoutMs: 60_000
     })
+
     expect(result.stdout.trim()).toBe('ORCA_PAYLOAD')
   }, 90_000)
 
@@ -92,6 +98,7 @@ describeOnWsl('runWslProcess against a real distro', () => {
       `echo 'it'\\''s fine'`,
       `echo "x" | awk '{print $1}'`
     ].join('\n')
+
     const result = await runWslProcess({
       loginPath: 'preferred',
       distro: DISTRO,
@@ -99,6 +106,7 @@ describeOnWsl('runWslProcess against a real distro', () => {
       args: ['ORCA_ARG'],
       timeoutMs: 30_000
     })
+
     expect(
       result.stdout
         .split('\n')
@@ -115,6 +123,7 @@ describeOnWsl('runWslProcess against a real distro', () => {
       env: { ORCA_WSLENV_PROBE: 'crossed' },
       timeoutMs: 30_000
     })
+
     expect(result.stdout.trim()).toBe('crossed')
   }, 60_000)
 
@@ -126,6 +135,7 @@ describeOnWsl('runWslProcess against a real distro', () => {
       cwd: '/tmp',
       timeoutMs: 30_000
     })
+
     expect(result.stdout.trim()).toBe('/tmp')
   }, 60_000)
 })

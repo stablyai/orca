@@ -7,7 +7,9 @@
 
 /** Guest-side install dir for the relay bundle, relative to `$HOME`. */
 export const WSL_HOOK_RELAY_DIR = '.orca-wsl/hook-relay'
+
 export const WSL_HOOK_RELAY_BUNDLE_NAME = 'wsl-agent-hook-relay.js'
+
 export const WSL_HOOK_RELAY_VERSION_FILE = '.version'
 
 /** Host-expected bundle version, crossed into the guest launch script via
@@ -26,6 +28,7 @@ export const WSL_HOOK_RELAY_INSTANCE_ENV = 'ORCA_WSL_HOOK_INSTANCE'
 /** Launch-script exit codes. 42 mirrors the SSH relay's handshake-mismatch
  *  convention: the host reinstalls the bundle and relaunches once. */
 export const WSL_HOOK_RELAY_STALE_EXIT_CODE = 42
+
 export const WSL_HOOK_RELAY_NO_NODE_EXIT_CODE = 43
 
 /** JSON-RPC methods for the relay's home-scoped fs bridge. The host runs the
@@ -53,6 +56,7 @@ export type WslFsFailure = {
   message: string
   fileCapacity?: { observedBytes: number; maxBytes: number }
 }
+
 export type WslFsResult<T extends object = object> = ({ ok: true } & T) | WslFsFailure
 
 /** Where the guest relay publishes its endpoint file. Keyed by the stable
@@ -61,12 +65,14 @@ export type WslFsResult<T extends object = object> = ({ ok: true } & T) | WslFsF
  *  that rewrite is what re-coordinates them onto fresh port/token. */
 export function wslHookRelayEndpointDir(guestHome: string, instanceKey: string): string {
   const home = guestHome.endsWith('/') ? guestHome.slice(0, -1) : guestHome
+
   return `${home}/.orca-wsl/agent-hooks/instance-${instanceKey}`
 }
 
 /** Keep instance keys shell/path-inert on both sides of the boundary. */
 export function sanitizeWslHookInstanceKey(value: string | undefined): string | null {
   const trimmed = value?.trim().toLowerCase() ?? ''
+
   return /^[a-z0-9][a-z0-9-]{0,63}$/.test(trimmed) ? trimmed : null
 }
 

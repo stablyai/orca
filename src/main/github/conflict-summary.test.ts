@@ -15,6 +15,7 @@ import { CONFLICT_SUMMARY_BASE_FETCH_WINDOW_MS } from './conflict-summary-cache'
 import { __resetPRConflictSummaryCachesForTests, getPRConflictSummary } from './conflict-summary'
 
 type GitResult = { stdout: string }
+
 type GitHandler = (argv: string[]) => Promise<GitResult>
 
 const defaultHandlers: Record<string, GitHandler> = {
@@ -28,18 +29,22 @@ const defaultHandlers: Record<string, GitHandler> = {
 function mockGitDispatch(overrides: Record<string, GitHandler> = {}): void {
   gitExecFileAsyncMock.mockImplementation((argv: string[]) => {
     const handler = overrides[argv[0]] ?? defaultHandlers[argv[0]]
+
     if (!handler) {
       return Promise.reject(new Error(`unexpected git command: ${argv.join(' ')}`))
     }
+
     return handler(argv)
   })
 }
 
 function spawnCount(command?: string): number {
   const calls = gitExecFileAsyncMock.mock.calls
+
   if (!command) {
     return calls.length
   }
+
   return calls.filter(([argv]) => Array.isArray(argv) && argv[0] === command).length
 }
 
@@ -170,6 +175,7 @@ describe('getPRConflictSummary caching', () => {
       'head-oid-1',
       {}
     )
+
     const manualRefresh = getPRConflictSummary(
       '/repo-root',
       'main',
@@ -177,6 +183,7 @@ describe('getPRConflictSummary caching', () => {
       'head-oid-1',
       {}
     )
+
     releaseFetch?.({ stdout: '' })
     const [backgroundSummary, manualSummary] = await Promise.all([backgroundRefresh, manualRefresh])
 
@@ -307,6 +314,7 @@ describe('getPRConflictSummary caching', () => {
     })
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(5)
+
     for (const [, options] of gitExecFileAsyncMock.mock.calls) {
       expect(options).toEqual(
         expect.objectContaining({

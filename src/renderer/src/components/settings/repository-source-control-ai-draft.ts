@@ -26,9 +26,11 @@ export function triStateValue(value: boolean | null | undefined): 'inherit' | 'o
   if (value === true) {
     return 'on'
   }
+
   if (value === false) {
     return 'off'
   }
+
   return 'inherit'
 }
 
@@ -45,8 +47,10 @@ export function dropRepoLegacyInstructionForAction(
   if (!SOURCE_CONTROL_TEXT_ACTION_ID_SET.has(actionId) || !value.instructionsByOperation) {
     return value
   }
+
   const instructionsByOperation = { ...value.instructionsByOperation }
   delete instructionsByOperation[actionId as keyof typeof instructionsByOperation]
+
   return {
     ...value,
     instructionsByOperation:
@@ -64,6 +68,7 @@ export function readCompleteRecipeForDraft(
     repo: { sourceControlAi: current },
     actionId
   })
+
   return completeRepoActionRecipe(recipe, actionId)
 }
 
@@ -89,11 +94,13 @@ export function withRepoAiEnabled(
   enabled: boolean | undefined
 ): RepoSourceControlAiOverrides {
   const next = { ...base }
+
   if (enabled === undefined) {
     delete next.enabled
   } else {
     next.enabled = enabled
   }
+
   return normalizeRepoAiDraft(next)
 }
 
@@ -102,11 +109,13 @@ export function withRepoAiCustomCommand(
   customAgentCommand: string | undefined
 ): RepoSourceControlAiOverrides {
   const next = { ...base }
+
   if (customAgentCommand === undefined || customAgentCommand.trim().length === 0) {
     delete next.customAgentCommand
   } else {
     next.customAgentCommand = customAgentCommand
   }
+
   return normalizeRepoAiDraft(next)
 }
 
@@ -116,11 +125,13 @@ export function withRepoAiHostedReviewDefault(
   value: 'inherit' | 'on' | 'off'
 ): RepoSourceControlAiOverrides {
   const nextDefaults = { ...base.prCreationDefaults }
+
   if (value === 'inherit') {
     delete nextDefaults[key]
   } else {
     nextDefaults[key] = value === 'on'
   }
+
   return normalizeRepoAiDraft({
     ...base,
     prCreationDefaults: Object.keys(nextDefaults).length > 0 ? nextDefaults : undefined
@@ -134,8 +145,10 @@ export function withRepoAiActionMode(
   mode: 'inherit' | 'override'
 ): RepoSourceControlAiOverrides {
   const nextActionOverrides = { ...base.actionOverrides }
+
   if (mode === 'inherit') {
     delete nextActionOverrides[actionId]
+
     return normalizeRepoAiDraft(
       dropRepoLegacyInstructionForAction(
         {
@@ -147,9 +160,11 @@ export function withRepoAiActionMode(
       )
     )
   }
+
   if (!hasOwnActionOverride(nextActionOverrides, actionId)) {
     nextActionOverrides[actionId] = readCompleteRecipeForDraft(base, settings, actionId)
   }
+
   return normalizeRepoAiDraft(
     dropRepoLegacyInstructionForAction({ ...base, actionOverrides: nextActionOverrides }, actionId)
   )
@@ -163,6 +178,7 @@ export function withRepoAiActionAgent(
 ): RepoSourceControlAiOverrides {
   const currentRecipe =
     base.actionOverrides?.[actionId] ?? readCompleteRecipeForDraft(base, settings, actionId)
+
   return normalizeRepoAiDraft(
     setActionOverride(base, actionId, {
       ...currentRecipe,
@@ -179,6 +195,7 @@ export function withRepoAiActionRecipeText(
 ): RepoSourceControlAiOverrides {
   const currentRecipe =
     base.actionOverrides?.[actionId] ?? readCompleteRecipeForDraft(base, settings, actionId)
+
   return normalizeRepoAiDraft(
     setActionOverride(base, actionId, {
       ...currentRecipe,
@@ -198,6 +215,7 @@ export function readActionRecipeTextDraft(
   actionId: SourceControlActionId
 ): ActionRecipeTextDraft {
   const recipe = value.actionOverrides?.[actionId]
+
   return {
     commandInputTemplate:
       typeof recipe?.commandInputTemplate === 'string' ? recipe.commandInputTemplate : '',
@@ -213,12 +231,15 @@ export function composeDisplayRepoAi(
 ): RepoSourceControlAiOverrides {
   let next =
     customCommandDraft === null ? immediate : withRepoAiCustomCommand(immediate, customCommandDraft)
+
   for (const actionId of SOURCE_CONTROL_ACTION_IDS) {
     const draft = actionTextDrafts[actionId]
     const currentRecipe = next.actionOverrides?.[actionId]
+
     if (!draft || !hasOwnActionOverride(next.actionOverrides, actionId) || !currentRecipe) {
       continue
     }
+
     next = {
       ...next,
       actionOverrides: {
@@ -231,6 +252,7 @@ export function composeDisplayRepoAi(
       }
     }
   }
+
   return next
 }
 
@@ -245,11 +267,14 @@ export function computeActionDirtyById(
       if (!hasOwnActionOverride(immediate.actionOverrides, actionId)) {
         return [actionId, false]
       }
+
       const draft = actionTextDrafts[actionId] ?? readActionRecipeTextDraft(immediate, actionId)
+
       // Prefer persisted text as the base; if the override is only optimistic, compare against immediate.
       const compareBase = hasOwnActionOverride(persisted.actionOverrides, actionId)
         ? readActionRecipeTextDraft(persisted, actionId)
         : readActionRecipeTextDraft(immediate, actionId)
+
       return [
         actionId,
         draft.commandInputTemplate !== compareBase.commandInputTemplate ||
@@ -265,12 +290,16 @@ export function retainDivergentActionTextDrafts(
   persisted: RepoSourceControlAiOverrides
 ): Partial<Record<SourceControlActionId, ActionRecipeTextDraft>> {
   const next: Partial<Record<SourceControlActionId, ActionRecipeTextDraft>> = {}
+
   for (const actionId of SOURCE_CONTROL_ACTION_IDS) {
     const draft = current[actionId]
+
     if (!draft || !hasOwnActionOverride(persisted.actionOverrides, actionId)) {
       continue
     }
+
     const persistedText = readActionRecipeTextDraft(persisted, actionId)
+
     if (
       draft.commandInputTemplate !== persistedText.commandInputTemplate ||
       draft.agentArgs !== persistedText.agentArgs
@@ -278,6 +307,7 @@ export function retainDivergentActionTextDrafts(
       next[actionId] = draft
     }
   }
+
   return next
 }
 
@@ -296,6 +326,7 @@ export function clearActionTextDraftIfUnchanged(
   saved: ActionRecipeTextDraft
 ): Partial<Record<SourceControlActionId, ActionRecipeTextDraft>> {
   const latest = current[actionId]
+
   if (
     latest &&
     (latest.commandInputTemplate !== saved.commandInputTemplate ||
@@ -303,7 +334,9 @@ export function clearActionTextDraftIfUnchanged(
   ) {
     return current
   }
+
   const { [actionId]: _removed, ...rest } = current
+
   return rest
 }
 

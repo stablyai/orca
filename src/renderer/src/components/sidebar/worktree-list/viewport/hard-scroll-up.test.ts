@@ -30,6 +30,7 @@ describe('normalizeWheelDeltaY', () => {
 describe('reduceHardScrollUpOnWheel', () => {
   it('stays hidden for short lists and near-top viewports', () => {
     let state = createHardScrollUpDetectorState()
+
     for (let i = 0; i < 10; i += 1) {
       state = reduceHardScrollUpOnWheel(state, {
         ...SHORT_LIST,
@@ -37,9 +38,11 @@ describe('reduceHardScrollUpOnWheel', () => {
         deltaY: -120
       })
     }
+
     expect(state.visible).toBe(false)
 
     state = createHardScrollUpDetectorState()
+
     for (let i = 0; i < 10; i += 1) {
       state = reduceHardScrollUpOnWheel(state, {
         scrollTop: 20,
@@ -48,11 +51,13 @@ describe('reduceHardScrollUpOnWheel', () => {
         deltaY: -120
       })
     }
+
     expect(state.visible).toBe(false)
   })
 
   it('does not show on gentle upward scrolling', () => {
     let state = createHardScrollUpDetectorState()
+
     // Small trackpad ticks — effort exists but is not "hard".
     for (let i = 0; i < 8; i += 1) {
       state = reduceHardScrollUpOnWheel(state, {
@@ -61,11 +66,13 @@ describe('reduceHardScrollUpOnWheel', () => {
         deltaY: -18
       })
     }
+
     expect(state.visible).toBe(false)
   })
 
   it('shows after a sustained hard upward wheel burst', () => {
     let state = createHardScrollUpDetectorState()
+
     // ~5 hard ticks in < window: 5 * 160 = 800 >= hardTotalDeltaPx
     for (let i = 0; i < 5; i += 1) {
       state = reduceHardScrollUpOnWheel(state, {
@@ -75,6 +82,7 @@ describe('reduceHardScrollUpOnWheel', () => {
         deltaY: -160
       })
     }
+
     expect(state.visible).toBe(true)
     expect(state.lastIntentAt).toBe(1000 + 4 * 40)
   })
@@ -94,6 +102,7 @@ describe('reduceHardScrollUpOnWheel', () => {
 
   it('hides on significant downward scroll', () => {
     let state = createHardScrollUpDetectorState()
+
     for (let i = 0; i < 5; i += 1) {
       state = reduceHardScrollUpOnWheel(state, {
         ...DEEP,
@@ -101,6 +110,7 @@ describe('reduceHardScrollUpOnWheel', () => {
         deltaY: -160
       })
     }
+
     expect(state.visible).toBe(true)
 
     state = reduceHardScrollUpOnWheel(state, {
@@ -115,6 +125,7 @@ describe('reduceHardScrollUpOnWheel', () => {
 
   it('hides after cumulative small downward wheel events', () => {
     let state = createHardScrollUpDetectorState()
+
     for (let i = 0; i < 5; i += 1) {
       state = reduceHardScrollUpOnWheel(state, {
         ...DEEP,
@@ -134,6 +145,7 @@ describe('reduceHardScrollUpOnWheel', () => {
 
   it('clears when the user reaches the top', () => {
     let state = createHardScrollUpDetectorState()
+
     for (let i = 0; i < 5; i += 1) {
       state = reduceHardScrollUpOnWheel(state, {
         ...DEEP,
@@ -141,6 +153,7 @@ describe('reduceHardScrollUpOnWheel', () => {
         deltaY: -160
       })
     }
+
     expect(state.visible).toBe(true)
 
     state = reduceHardScrollUpOnWheel(state, {
@@ -204,6 +217,7 @@ describe('reduceHardScrollUpOnScroll', () => {
 describe('reduceHardScrollUpOnIdle / dismiss', () => {
   it('auto-hides after idle while still deep', () => {
     let state = createHardScrollUpDetectorState()
+
     for (let i = 0; i < 5; i += 1) {
       state = reduceHardScrollUpOnWheel(state, {
         ...DEEP,
@@ -211,6 +225,7 @@ describe('reduceHardScrollUpOnIdle / dismiss', () => {
         deltaY: -160
       })
     }
+
     expect(state.visible).toBe(true)
 
     state = reduceHardScrollUpOnIdle(state, {
@@ -228,6 +243,7 @@ describe('reduceHardScrollUpOnIdle / dismiss', () => {
 
   it('hides on later non-intent scroll after the idle deadline (scroll spam must not extend)', () => {
     let state = createHardScrollUpDetectorState()
+
     for (let i = 0; i < 5; i += 1) {
       state = reduceHardScrollUpOnWheel(state, {
         ...DEEP,
@@ -235,6 +251,7 @@ describe('reduceHardScrollUpOnIdle / dismiss', () => {
         deltaY: -160
       })
     }
+
     const intentAt = state.lastIntentAt
     expect(state.visible).toBe(true)
 
@@ -249,6 +266,7 @@ describe('reduceHardScrollUpOnIdle / dismiss', () => {
 
   it('dismiss resets state', () => {
     let state = createHardScrollUpDetectorState()
+
     for (let i = 0; i < 5; i += 1) {
       state = reduceHardScrollUpOnWheel(state, {
         ...DEEP,
@@ -256,6 +274,7 @@ describe('reduceHardScrollUpOnIdle / dismiss', () => {
         deltaY: -160
       })
     }
+
     state = reduceHardScrollUpOnDismiss(state)
     expect(state).toEqual(createHardScrollUpDetectorState())
   })

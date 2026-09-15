@@ -28,9 +28,11 @@ export class OrcaRuntimeWithResolveWaiter extends OrcaRuntimeWithDeliverPendingM
 
   protected getAuthoritativeWindow(): BrowserWindow {
     const win = this.getAvailableAuthoritativeWindow()
+
     if (!win || win.isDestroyed()) {
       throw new Error('No renderer window available')
     }
+
     return win
   }
 
@@ -38,7 +40,9 @@ export class OrcaRuntimeWithResolveWaiter extends OrcaRuntimeWithDeliverPendingM
     if (this.authoritativeWindowId === null) {
       return null
     }
+
     const win = getRuntimeDesktopSurface().findWindowById(this.authoritativeWindowId)
+
     return win && !win.isDestroyed() ? win : null
   }
 }

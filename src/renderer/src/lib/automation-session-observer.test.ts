@@ -3,8 +3,11 @@ import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { UNVERIFIED_PROCESS_EXIT_CODE } from '../../../shared/terminal-exit-cause'
 
 const mockSubscribeToPtyData = vi.fn()
+
 const mockSubscribeToPtyExit = vi.fn()
+
 const mockSubscribeTerminal = vi.fn()
+
 const mockCallRuntimeRpc = vi.fn()
 
 const state = {
@@ -46,7 +49,9 @@ vi.mock('@/runtime/remote-runtime-terminal-multiplexer', () => ({
 }))
 
 const DONE_STATUS_OSC = '\x1b]9999;{"state":"done","prompt":"ok","agentType":"codex"}\x07'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const PANE_KEY = `tab-1:${LEAF_ID}`
 
 describe('observeExistingAutomationSession', () => {
@@ -139,9 +144,11 @@ describe('observeExistingAutomationSession', () => {
     })
 
     expect(mockSubscribeTerminal).toHaveBeenCalledTimes(1)
+
     const callbacks = mockSubscribeTerminal.mock.calls[0]?.[0]?.callbacks as {
       onData: (data: string) => void
     }
+
     callbacks.onData(DONE_STATUS_OSC)
 
     expect(state.setAgentStatus).toHaveBeenCalledWith(

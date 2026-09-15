@@ -31,6 +31,7 @@ export function getKimiRuntimeTarget(
   if (platform !== 'win32') {
     return { runtime: 'host', wslDistro: null }
   }
+
   return resolveLocalAccountRuntimeTarget(settings, platform)
 }
 
@@ -46,11 +47,15 @@ export async function resolveKimiHome(
   if (target.runtime !== 'wsl' || platform !== 'win32') {
     return { runtime: 'host', wslDistro: null, path: getHostKimiHome() }
   }
+
   const distro = target.wslDistro?.trim() || (await defaultWslDistro())
+
   if (!distro) {
     return { runtime: 'wsl', wslDistro: null, path: null }
   }
+
   const home = await getWslHomeAsync(distro)
+
   // KIMI_CODE_HOME describes the Windows host process, never the distro's home.
   return { runtime: 'wsl', wslDistro: distro, path: home ? joinKimiHome(home) : null }
 }

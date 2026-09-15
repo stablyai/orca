@@ -27,6 +27,7 @@ export function useTabStripDragScrollHandlers(
   const startDragScroll = useCallback(
     (direction: 'start' | 'end'): void => {
       stopDragScroll()
+
       if (!isTabDragActive) {
         return
       }
@@ -41,10 +42,13 @@ export function useTabStripDragScrollHandlers(
       const tick = (): void => {
         if (!canScrollInDirection()) {
           stopDragScroll()
+
           return
         }
+
         scrollTabStrip(direction, 'auto')
       }
+
       tick()
       intervalRef.current = window.setInterval(tick, TAB_STRIP_DRAG_SCROLL_INTERVAL_MS)
     },

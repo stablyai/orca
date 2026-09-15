@@ -6,6 +6,7 @@ import {
   isGitLabIssueFilter,
   isGitLabMRFilter
 } from './task-page-source-context'
+
 export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
   const {
     selectedRepos,
@@ -21,39 +22,50 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
     setGitlabTodosLoading,
     activeGitlabFilter
   } = model
+
   // Why: fetch GitLab Issues and MRs separately so errors stay isolated per tab (mirrors GitHub's split endpoints).
   useEffect(() => {
     if (taskSource !== 'gitlab') {
       return
     }
+
     if (gitlabView === 'todos') {
       return
     }
+
     const activeIssueFilter =
       gitlabView === 'issues' && isGitLabIssueFilter(activeGitlabFilter) ? activeGitlabFilter : null
+
     const activeMRFilter =
       gitlabView === 'mrs' && isGitLabMRFilter(activeGitlabFilter) ? activeGitlabFilter : null
+
     if (
       (gitlabView === 'issues' && !activeIssueFilter) ||
       (gitlabView === 'mrs' && !activeMRFilter)
     ) {
       return
     }
+
     // Why: folder-mode repos lack remotes to derive a GitLab project from; SSH-backed repos use the same provider-aware IPC path.
     const eligibleRepos = selectedRepos
+
     if (eligibleRepos.length === 0) {
       setGitlabItems([])
       setGitlabLoading(false)
       setGitlabError(null)
+
       return
     }
+
     let stale = false
     setGitlabLoading(true)
     setGitlabError(null)
+
     const fetchItems =
       gitlabView === 'issues'
         ? (repo: (typeof eligibleRepos)[0]) => {
             const isAssignedToMe = activeIssueFilter === 'assigned-to-me'
+
             return window.api.gl
               .listIssues({
                 repoPath: repo.path,
@@ -71,8 +83,10 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
                     message: string
                   }
                 }
+
                 // Why: not_found just means the repo isn't a GitLab project (mixed selection); drop it so the list shows no false errors.
                 const error = typed.error?.type === 'not_found' ? undefined : typed.error
+
                 return {
                   repoId: repo.id,
                   items: typed.items,
@@ -98,37 +112,46 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
                     message: string
                   }
                 }
+
                 const error = typed.error?.type === 'not_found' ? undefined : typed.error
+
                 return {
                   repoId: repo.id,
                   items: typed.items,
                   error
                 }
               })
+
     void Promise.allSettled(eligibleRepos.map(fetchItems))
       .then((results) => {
         if (stale) {
           return
         }
+
         const merged: GitLabWorkItem[] = []
         const errs: string[] = []
+
         for (const r of results) {
           if (r.status !== 'fulfilled') {
             errs.push(r.reason instanceof Error ? r.reason.message : String(r.reason))
             continue
           }
+
           for (const item of r.value.items) {
             merged.push({
               ...item,
               repoId: r.value.repoId
             })
           }
+
           if (r.value.error) {
             errs.push(r.value.error.message)
           }
         }
+
         merged.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
         setGitlabItems(merged)
+
         // Why: only banner when every eligible repo failed; a partial one would hide working rows in a mixed (non-GitLab) selection.
         if (errs.length > 0 && merged.length === 0) {
           setGitlabError(errs[0])
@@ -139,6 +162,7 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
           setGitlabLoading(false)
         }
       })
+
     return () => {
       stale = true
     }
@@ -150,11 +174,14 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
     if (taskSource !== 'gitlab' || gitlabView !== 'todos') {
       return
     }
+
     if (!primaryRepo?.path) {
       setGitlabTodos([])
       setGitlabTodosLoading(false)
+
       return
     }
+
     let stale = false
     setGitlabTodosLoading(true)
     void window.api.gl
@@ -178,6 +205,7 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
           setGitlabTodosLoading(false)
         }
       })
+
     return () => {
       stale = true
     }
@@ -189,6 +217,8 @@ export function useTaskPageGitLabLoading(model: TaskPageProviderMetadataModel) {
     setGitlabTodosLoading,
     setGitlabTodos
   ])
+
   return model
 }
+
 export type TaskPageGitLabLoadingModel = ReturnType<typeof useTaskPageGitLabLoading>

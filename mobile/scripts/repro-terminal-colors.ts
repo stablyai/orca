@@ -19,10 +19,15 @@ import {
 } from './repro-terminal-color-output'
 
 const WS_URL = process.env.ORCA_MOBILE_WS_URL ?? 'ws://127.0.0.1:6768'
+
 const token = process.argv[2]
+
 const serverPublicKeyB64 = process.argv[3]
+
 const worktreeSelector = process.argv[4]
+
 const explicitHandleA = process.argv[5]
+
 const explicitHandleB = process.argv[6]
 
 type RpcResponse = {
@@ -47,14 +52,20 @@ if (!token || !serverPublicKeyB64 || !worktreeSelector) {
 }
 
 let reqId = 0
+
 const pending = new Map<string, PendingRequest>()
+
 const streamListeners = new Map<string, (result: Record<string, unknown>) => void>()
+
 const clientKeys = nacl.box.keyPair()
+
 const serverPublicKey = Buffer.from(serverPublicKeyB64, 'base64')
+
 const sharedKey = nacl.box.before(new Uint8Array(serverPublicKey), clientKeys.secretKey)
 
 function nextId(): string {
   reqId += 1
+
   return `color-repro-${reqId}`
 }
 
@@ -73,6 +84,7 @@ function encrypt(plaintext: string): string {
   const bundle = new Uint8Array(nonce.length + ciphertext.length)
   bundle.set(nonce)
   bundle.set(ciphertext, nonce.length)
+
   return toBase64(bundle)
 }
 
@@ -81,6 +93,7 @@ function decrypt(payload: string): string | null {
   const nonce = bundle.subarray(0, nacl.box.nonceLength)
   const ciphertext = bundle.subarray(nacl.box.nonceLength)
   const plaintext = nacl.box.open.after(ciphertext, nonce, sharedKey)
+
   return plaintext ? new TextDecoder().decode(plaintext) : null
 }
 
@@ -91,12 +104,14 @@ function sendRaw(ws: WebSocket, payload: unknown): void {
 function send(ws: WebSocket, method: string, params?: unknown): Promise<RpcResponse> {
   const id = nextId()
   sendRaw(ws, { id, deviceToken: token, method, params })
+
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       pending.delete(id)
       streamListeners.delete(id)
       reject(new Error(`Timed out waiting for ${method}`))
     }, 10_000)
+
     pending.set(id, {
       method,
       resolve: (response) => {
@@ -119,9 +134,11 @@ async function listHandles(
   ws: WebSocket
 ): Promise<Array<{ handle: string; title: string | null }>> {
   const response = await send(ws, 'terminal.list', { worktree: worktreeSelector })
+
   if (!response.ok) {
     throw new Error(`terminal.list failed: ${formatError(response)}`)
   }
+
   return (
     (response.result?.terminals ?? []) as Array<{ handle: string; title?: string | null }>
   ).map((terminal) => ({
@@ -133,6 +150,7 @@ async function listHandles(
 async function ensureSecondHandle(ws: WebSocket, handleA: string): Promise<string> {
   const terminals = await listHandles(ws)
   const existing = terminals.find((terminal) => terminal.handle !== handleA)
+
   if (existing) {
     return existing.handle
   }
@@ -141,13 +159,17 @@ async function ensureSecondHandle(ws: WebSocket, handleA: string): Promise<strin
     worktree: worktreeSelector,
     title: 'color-repro-switch-target'
   })
+
   if (!created.ok) {
     throw new Error(`terminal.create failed: ${formatError(created)}`)
   }
+
   const handle = (created.result?.terminal as { handle?: string } | undefined)?.handle
+
   if (!handle) {
     throw new Error(`terminal.create returned no handle: ${formatError(created)}`)
   }
+
   return handle
 }
 
@@ -157,6 +179,7 @@ async function captureSnapshot(
   handle: string
 ): Promise<TerminalColorSnapshot> {
   const id = nextId()
+
   const snapshot = await new Promise<TerminalColorSnapshot>((resolve, reject) => {
     const timeout = setTimeout(() => {
       pending.delete(id)
@@ -176,6 +199,7 @@ async function captureSnapshot(
       if (result.type !== 'scrollback') {
         return
       }
+
       clearTimeout(timeout)
       pending.delete(id)
       streamListeners.delete(id)
@@ -201,6 +225,7 @@ async function captureSnapshot(
   })
 
   await send(ws, 'terminal.unsubscribe', { subscriptionId: handle }).catch(() => null)
+
   return snapshot
 }
 
@@ -217,10 +242,13 @@ async function run(ws: WebSocket): Promise<void> {
     ws.once('message', (data) => {
       clearTimeout(timeout)
       const msg = JSON.parse(data.toString()) as { type?: string }
+
       if (msg.type !== 'e2ee_ready') {
         reject(new Error(`Unexpected handshake response: ${data.toString()}`))
+
         return
       }
+
       resolve()
     })
   })
@@ -231,19 +259,24 @@ async function run(ws: WebSocket): Promise<void> {
       () => reject(new Error('Timed out waiting for e2ee_authenticated')),
       5000
     )
+
     ws.once('message', (data) => {
       clearTimeout(timeout)
       const plaintext = decrypt(data.toString())
       const msg = plaintext ? (JSON.parse(plaintext) as { type?: string }) : null
+
       if (msg?.type !== 'e2ee_authenticated') {
         reject(new Error(`Unexpected auth response: ${data.toString()}`))
+
         return
       }
+
       resolve()
     })
   })
 
   const terminals = await listHandles(ws)
+
   if (terminals.length === 0 && !explicitHandleA) {
     throw new Error('No terminals found. Open a Claude Code terminal first, then rerun.')
   }
@@ -262,6 +295,7 @@ async function run(ws: WebSocket): Promise<void> {
 
   console.table(snapshots.map(summarizeTerminalColorSnapshot))
   console.log(`saved: ${dir}`)
+
   if (
     summarizeTerminalColorSnapshot(firstA).sgrColor !==
     summarizeTerminalColorSnapshot(secondA).sgrColor
@@ -291,10 +325,13 @@ ws.on('open', () => {
 
 ws.on('message', (data) => {
   const raw = data.toString()
+
   if (raw.startsWith('{')) {
     return
   }
+
   const plaintext = decrypt(raw)
+
   if (!plaintext) {
     return
   }
@@ -302,15 +339,19 @@ ws.on('message', (data) => {
   const response = JSON.parse(plaintext) as RpcResponse
   const result = response.result
   const streamListener = streamListeners.get(response.id)
+
   if (streamListener && response.ok && (response.streaming || result?.type === 'scrollback')) {
     streamListener(result ?? {})
+
     return
   }
 
   const request = pending.get(response.id)
+
   if (!request || request.method === 'terminal.subscribe') {
     return
   }
+
   pending.delete(response.id)
   request.resolve(response)
 })
@@ -319,6 +360,7 @@ ws.on('close', () => {
   for (const request of pending.values()) {
     request.reject(new Error('WebSocket closed'))
   }
+
   pending.clear()
 })
 

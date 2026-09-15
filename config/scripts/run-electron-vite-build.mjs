@@ -6,7 +6,9 @@ import { appendBuildOldSpaceOption } from './node-old-space-limit.mjs'
 import { RENDERER_BUILD_DIR, verifyRendererBootGraph } from './renderer-boot-graph.mjs'
 
 const require = createRequire(import.meta.url)
+
 const electronVitePackageJson = require.resolve('electron-vite/package.json')
+
 const electronViteCli = path.join(path.dirname(electronVitePackageJson), 'bin', 'electron-vite.js')
 
 // Release builds have started OOMing on GitHub's macOS runners during the
@@ -24,6 +26,7 @@ const child = spawn(process.execPath, [electronViteCli, 'build', ...process.argv
 child.on('exit', (code, signal) => {
   if (signal) {
     process.kill(process.pid, signal)
+
     return
   }
 
@@ -36,7 +39,9 @@ child.on('exit', (code, signal) => {
   // target gate keeps the parallel runner's concurrent main/preload builds from
   // reading out/renderer while the renderer target is still writing it.
   const target = process.env.ORCA_ELECTRON_VITE_TARGET
+
   const builtRenderer =
     (!target || target === 'renderer') && fs.existsSync(path.join(RENDERER_BUILD_DIR, 'index.html'))
+
   process.exit(builtRenderer ? verifyRendererBootGraph() : 0)
 })

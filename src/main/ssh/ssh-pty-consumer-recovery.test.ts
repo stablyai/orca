@@ -12,6 +12,7 @@ describe('SSH PTY consumer recovery', () => {
     // The id the host attests on every PTY it holds for us. Minting a new one is fail-safe — it
     // can only under-sweep — but it makes the reaper silently stop working, so it must be visible.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const store = {
       getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
       upsertSshPtyConsumerRecovery: vi.fn()
@@ -25,15 +26,19 @@ describe('SSH PTY consumer recovery', () => {
 
   it('keeps a detached identity when a concurrent open finishes late', async () => {
     const targetId = 'remember-detach-race'
+
     const store = {
       getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
       upsertSshPtyConsumerRecovery: vi.fn()
     } as unknown as Store
+
     const claimed = claimSshPtyConsumerRecovery(targetId, store)
     let finishOpen!: (owner: SshPtyConsumerOwnerState) => void
+
     const opened = new Promise<SshPtyConsumerOwnerState>((resolve) => {
       finishOpen = resolve
     })
+
     const remembering = opened.then((owner) =>
       rememberSshPtyConsumerRecovery({
         targetId,

@@ -22,6 +22,7 @@ describe('evaluateCompat', () => {
       desktopProtocolVersion: undefined,
       desktopMinCompatibleMobileVersion: undefined
     })
+
     expect(verdict).toEqual({ kind: 'ok' })
   })
 
@@ -32,6 +33,7 @@ describe('evaluateCompat', () => {
       desktopProtocolVersion: MOBILE_V,
       desktopMinCompatibleMobileVersion: 0
     })
+
     expect(verdict).toEqual({ kind: 'ok' })
   })
 
@@ -42,6 +44,7 @@ describe('evaluateCompat', () => {
       desktopProtocolVersion: MOBILE_V + 5,
       desktopMinCompatibleMobileVersion: 0
     })
+
     expect(verdict).toEqual({ kind: 'ok' })
   })
 
@@ -74,6 +77,7 @@ describe('evaluateCompat', () => {
       desktopProtocolVersion: 5,
       desktopMinCompatibleMobileVersion: MOBILE_V + 1
     })
+
     expect(verdict).toEqual({
       kind: 'blocked',
       reason: 'mobile-too-old',
@@ -89,6 +93,7 @@ describe('evaluateCompat', () => {
       desktopProtocolVersion: undefined,
       desktopMinCompatibleMobileVersion: MOBILE_V + 1
     })
+
     expect(verdict).toMatchObject({
       kind: 'blocked',
       reason: 'mobile-too-old',
@@ -103,6 +108,7 @@ describe('evaluateCompat', () => {
       desktopProtocolVersion: 3,
       desktopMinCompatibleMobileVersion: 0
     })
+
     expect(verdict).toEqual({
       kind: 'blocked',
       reason: 'desktop-too-old',
@@ -121,6 +127,7 @@ describe('evaluateCompat', () => {
       desktopProtocolVersion: -1,
       desktopMinCompatibleMobileVersion: MOBILE_V + 1
     })
+
     expect(verdict.kind).toBe('blocked')
     expect((verdict as { reason: string }).reason).toBe('mobile-too-old')
   })

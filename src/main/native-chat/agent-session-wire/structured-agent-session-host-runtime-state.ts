@@ -44,6 +44,7 @@ export class StructuredAgentSessionHostRuntimeState {
 
   eventSinkFor(sessionId: string): DeferredStructuredAgentSessionEventSink {
     const existing = this.eventSinks.get(sessionId)
+
     if (existing) {
       // A sink failure is terminal for that sink instance. Reusing it on a
       // recovery attach makes `drained()` return the old error forever and
@@ -56,13 +57,16 @@ export class StructuredAgentSessionHostRuntimeState {
         return existing
       }
     }
+
     const created = createDeferredStructuredAgentSessionEventSink({
       onError: (error) => {
         this.deps.onEventSinkError?.({ sessionId, error })
         this.onEventSinkFailure?.(sessionId, error)
       }
     })
+
     this.eventSinks.set(sessionId, created)
+
     return created
   }
 
@@ -90,6 +94,7 @@ export class StructuredAgentSessionHostRuntimeState {
     barrier: Promise<StructuredAgentSessionSinkBarrier>
   ): Promise<void> {
     const result = await barrier
+
     if (!result.ok) {
       throw result.error
     }
@@ -110,6 +115,7 @@ export class StructuredAgentSessionHostRuntimeState {
 
   probeOwner(sessionId: string): Promise<AgentSessionOwnerProbe> {
     const record = this.deps.store.getRecord(sessionId)
+
     if (
       !record ||
       (record.lease.ownerProcess === null && record.lease.claimStatus !== 'reserved')
@@ -117,6 +123,7 @@ export class StructuredAgentSessionHostRuntimeState {
       // Acquisition only consults the probe against a recorded owner or a live reservation.
       return Promise.resolve({ outcome: 'reservation-unused' })
     }
+
     // A live reservation goes through the strict probe: calling it unused without its
     // processless proof is the answer that mints a second writer.
     return this.probeRecord(record)

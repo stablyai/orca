@@ -33,15 +33,18 @@ async function setupMultiplexStream(): Promise<{
 }> {
   const messages: string[] = []
   const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+
   const handlers = new Map<
     number,
     (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
   >()
+
   const cleanups = new Map<string, () => void>()
   let emitOutput: ((data: string, meta?: OutputMeta) => void) | null = null
   let snapshot: { data: string; seq?: number } = { data: 'INITIAL', seq: 0 }
   let deferSerialize = false
   let releaseDeferredSerialize: (() => void) | null = null
+
   const serializeSnapshot = vi.fn(async () => {
     if (deferSerialize) {
       deferSerialize = false
@@ -49,6 +52,7 @@ async function setupMultiplexStream(): Promise<{
         releaseDeferredSerialize = resolve
       })
     }
+
     return { data: snapshot.data, cols: 80, rows: 24, seq: snapshot.seq }
   })
 
@@ -65,6 +69,7 @@ async function setupMultiplexStream(): Promise<{
     subscribeToTerminalData: vi.fn(
       (_ptyId: string, cb: (data: string, meta?: OutputMeta) => void) => {
         emitOutput = cb
+
         return vi.fn()
       }
     ),
@@ -84,6 +89,7 @@ async function setupMultiplexStream(): Promise<{
     waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
     updateDesktopViewport: vi.fn().mockResolvedValue(true)
   } as unknown as OrcaRuntimeService
+
   const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
   const request: RpcRequest = {
@@ -92,6 +98,7 @@ async function setupMultiplexStream(): Promise<{
     method: 'terminal.multiplex',
     params: {}
   }
+
   const dispatchPromise = dispatcher.dispatchStreaming(request, (msg) => messages.push(msg), {
     connectionId: 'conn-1',
     sendBinary: (bytes) => {
@@ -99,6 +106,7 @@ async function setupMultiplexStream(): Promise<{
     },
     registerBinaryStreamHandler: (streamId, handler) => {
       handlers.set(streamId, handler)
+
       return () => handlers.delete(streamId)
     }
   })
@@ -120,9 +128,11 @@ async function setupMultiplexStream(): Promise<{
       })
     )!
   )
+
   for (let i = 0; i < 5; i += 1) {
     await vi.runOnlyPendingTimersAsync()
   }
+
   expect(emitOutput).not.toBeNull()
 
   return {
@@ -144,6 +154,7 @@ async function setupMultiplexStream(): Promise<{
     releaseSerialize: async () => {
       releaseDeferredSerialize?.()
       releaseDeferredSerialize = null
+
       for (let i = 0; i < 5; i += 1) {
         await vi.runOnlyPendingTimersAsync()
       }
@@ -157,17 +168,21 @@ async function setupMultiplexStream(): Promise<{
 
 function outputTextsAfterLastSnapshotEnd(frames: Uint8Array<ArrayBufferLike>[]): string[] {
   const decoded = frames.map((frame) => decodeTerminalStreamFrame(frame))
+
   const lastEnd = decoded.reduce(
     (last, frame, index) => (frame?.opcode === TerminalStreamOpcode.SnapshotEnd ? index : last),
     -1
   )
+
   return decoded.slice(lastEnd + 1).flatMap((frame) => {
     if (frame?.opcode === TerminalStreamOpcode.Output) {
       return [decodeTerminalStreamText(frame.payload)]
     }
+
     if (frame?.opcode === TerminalStreamOpcode.OutputSpan) {
       return [decodeTerminalStreamJson<{ data?: string }>(frame.payload)?.data ?? '']
     }
+
     return []
   })
 }
@@ -175,6 +190,7 @@ function outputTextsAfterLastSnapshotEnd(frames: Uint8Array<ArrayBufferLike>[]):
 describe('terminal.multiplex requested-snapshot replay trim', () => {
   it('drops snapshot-covered buffered output after an untagged resync reply', async () => {
     vi.useFakeTimers()
+
     try {
       const harness = await setupMultiplexStream()
 
@@ -190,6 +206,7 @@ describe('terminal.multiplex requested-snapshot replay trim', () => {
       const snapshotStart = harness.binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
         .findLast((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)!
+
       expect(decodeTerminalStreamJson(snapshotStart.payload)).toMatchObject({ seq: 12 })
       expect(outputTextsAfterLastSnapshotEnd(harness.binaryFrames).join('')).toBe('ccc')
 
@@ -201,6 +218,7 @@ describe('terminal.multiplex requested-snapshot replay trim', () => {
 
   it('replays all buffered output untouched after a tagged snapshot reply', async () => {
     vi.useFakeTimers()
+
     try {
       const harness = await setupMultiplexStream()
 
@@ -217,6 +235,7 @@ describe('terminal.multiplex requested-snapshot replay trim', () => {
       const snapshotStart = harness.binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
         .findLast((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)!
+
       expect(decodeTerminalStreamJson(snapshotStart.payload)).toMatchObject({ requestId: 7 })
       expect(outputTextsAfterLastSnapshotEnd(harness.binaryFrames).join('')).toBe('xxxbbbccc')
 

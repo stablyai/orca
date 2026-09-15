@@ -73,12 +73,14 @@ export function useSourceControlHostedReviewCreation({
       if (!hostedReviewCreation.canCreate) {
         // Why: blocked Create Review clicks are intentional; the inline notice tells the user which prerequisite to clear.
         const message = resolveBlockedCreateReviewNoticeMessage(hostedReviewCreation)
+
         if (message) {
           setCreatePrIntentNoticeForWorktree(activeWorktreeId, {
             tone: 'destructive',
             message
           })
         }
+
         return
       }
 
@@ -94,6 +96,7 @@ export function useSourceControlHostedReviewCreation({
             { value0: hostedReviewCreateCopy.reviewLabel }
           )
         })
+
         return
       }
 
@@ -106,12 +109,14 @@ export function useSourceControlHostedReviewCreation({
             { value0: hostedReviewCreateCopy.reviewLabel }
           )
         })
+
         return
       }
 
       createPrInFlightRef.current[activeWorktreeId] = true
       setCreatePrInFlightByWorktree((prev) => ({ ...prev, [activeWorktreeId]: true }))
       setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
+
       try {
         const createInput = {
           repoId: activeRepo.id,
@@ -124,6 +129,7 @@ export function useSourceControlHostedReviewCreation({
           worktreePath,
           useTemplate: resolvedPrCreationDefaults.useTemplate
         }
+
         const result = stacked
           ? await createStackedHostedReview(activeRepo.path, createInput)
           : await createHostedReview(activeRepo.path, createInput)
@@ -135,9 +141,11 @@ export function useSourceControlHostedReviewCreation({
             number: result.number,
             url: result.url
           })
+
           if (resolvedPrCreationDefaults.openAfterCreate) {
             window.api.shell.openUrl(result.url)
           }
+
           return
         }
 
@@ -166,6 +174,7 @@ export function useSourceControlHostedReviewCreation({
               }
             }
           )
+
           if (number) {
             setCreatePrIntentNoticeForWorktree(activeWorktreeId, null)
             await handlePullRequestCreated({
@@ -173,6 +182,7 @@ export function useSourceControlHostedReviewCreation({
               number,
               url: result.existingReview.url
             })
+
             return
           }
         }
@@ -182,6 +192,7 @@ export function useSourceControlHostedReviewCreation({
         // the workspace stays unaware of a PR the user can already see on GitHub.
         if ('createdReview' in result && result.createdReview?.url) {
           const { number, url } = result.createdReview
+
           if (number) {
             await handlePullRequestCreated({
               provider: hostedReviewCreateProvider,

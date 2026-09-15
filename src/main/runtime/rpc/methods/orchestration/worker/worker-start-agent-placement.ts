@@ -33,6 +33,7 @@ import { createWorkerWorktree } from './worker-worktree-creation'
 /** Only what the placement itself reads. The runtime's own worktree accessors are untyped, so
  *  naming the two fields keeps `any` out of this module's unions. */
 type PlacedWorktree = { id: string; repoId: string }
+
 type WorkerStructuredSession = Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>>
 
 export type WorkerAgentPlacement = {
@@ -81,7 +82,9 @@ export async function placeWorkerAgent(
   if (args.creationWorktree) {
     return placeInCreatedWorktree(args, args.creationWorktree)
   }
+
   const worktree = requireWorktree(args.resolvedWorktree)
+
   if (args.params.terminal) {
     args.effects.push({
       kind: 'terminal',
@@ -89,6 +92,7 @@ export async function placeWorkerAgent(
       action: 'reused',
       id: args.params.terminal
     })
+
     return {
       mode: args.mode,
       worktree,
@@ -97,6 +101,7 @@ export async function placeWorkerAgent(
       setupReceipt: EXISTING_WORKTREE_SETUP
     }
   }
+
   return {
     mode: args.mode,
     worktree,
@@ -110,6 +115,7 @@ async function placeInCreatedWorktree(
   coordinatorWorktree: PlacedWorktree
 ): Promise<WorkerAgentPlacement> {
   args.onStage('worktree_create')
+
   const created = await createWorkerWorktree({
     runtime: args.runtime,
     db: args.db,
@@ -122,7 +128,9 @@ async function placeInCreatedWorktree(
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
     effects: args.effects
   })
+
   const worktree = requireWorktree(created.worktree)
+
   if (args.mode.mode !== 'structured') {
     return {
       mode: args.mode,
@@ -132,8 +140,10 @@ async function placeInCreatedWorktree(
       setupReceipt: created.setupReceipt
     }
   }
+
   args.onStage('terminal_create')
   const mode = await resolveWorkerStartModeOnHost(args.runtime, args.mode, worktree.id, args.agent)
+
   return {
     mode,
     worktree,
@@ -154,6 +164,7 @@ async function createWorkerAgentSurface(
     worktreeId,
     effects: args.effects
   })
+
   if (mode.mode === 'structured') {
     const structuredSession = await createStructuredWorkerSessionForWorktree({
       runtime: args.runtime,
@@ -163,8 +174,10 @@ async function createWorkerAgentSurface(
       ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
       effects: args.effects
     })
+
     return { terminalHandle: structuredSession.identity.handle, structuredSession }
   }
+
   const terminal = await createExistingWorktreeWorkerTerminal({
     runtime: args.runtime,
     worktreeId,
@@ -173,6 +186,7 @@ async function createWorkerAgentSurface(
     taskId: args.taskId,
     effects: args.effects
   })
+
   return {
     terminalHandle: terminal.handle,
     structuredSession: null,
@@ -184,6 +198,7 @@ function requireWorktree(worktree: PlacedWorktree | undefined): PlacedWorktree {
   if (!worktree) {
     throw new Error('Worker topology did not resolve a worktree.')
   }
+
   return worktree
 }
 
@@ -191,5 +206,6 @@ function requireTerminal(terminalHandle: string | undefined): string {
   if (!terminalHandle) {
     throw new Error('Worker topology did not resolve an agent terminal.')
   }
+
   return terminalHandle
 }

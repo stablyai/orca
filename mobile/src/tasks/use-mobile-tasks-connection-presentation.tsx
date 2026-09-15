@@ -11,12 +11,14 @@ export function useMobileTasksConnectionPresentation(model: ProviderViewProjecti
     reconnectAttempts,
     relayRecovery
   } = model
+
   const headerVerdict = classifyConnection({
     state: connState,
     reconnectAttempts,
     lastConnectedAt,
     ...relayRecovery
   })
+
   const emptyLabel =
     connState !== 'connected'
       ? 'Connect to a host to load tasks'
@@ -27,7 +29,9 @@ export function useMobileTasksConnectionPresentation(model: ProviderViewProjecti
           : provider === 'gitlab'
             ? 'No GitLab tasks'
             : 'No Linear tasks'
+
   const isGithubProjectSearch = provider === 'github' && githubMode === 'project'
+
   return Object.assign(model, { headerVerdict, emptyLabel, isGithubProjectSearch })
 }
 

@@ -231,6 +231,7 @@ describe('release channel', () => {
       'orca-macos-arm64.dmg',
       'orca-linux.AppImage'
     ]
+
     expect(findInstallerAssetName('win32', assets)).toBe('orca-windows-setup.exe')
     expect(findInstallerAssetName('darwin', assets)).toBe('orca-macos-arm64.dmg')
     expect(findInstallerAssetName('linux', assets)).toBe('orca-linux.AppImage')
@@ -267,11 +268,13 @@ describe('release channel', () => {
       releaseUrl: `https://github.com/stablyai/orca-hourly/releases/tag/v${version}`,
       installerUrl: null
     })
+
     const sorted = sortReleaseBuildsNewestFirst([
       build('1.4.160-hourly.202607280900'),
       build('1.4.160-hourly.202607281400'),
       build('1.4.160-hourly.202607281000')
     ])
+
     expect(sorted.map((entry) => entry.version)).toEqual([
       '1.4.160-hourly.202607281400',
       '1.4.160-hourly.202607281000',
@@ -313,11 +316,13 @@ describe('release channel', () => {
       releaseUrl: `https://github.com/stablyai/orca-adhoc/releases/tag/v${version}`,
       installerUrl: null
     })
+
     const sorted = sortReleaseBuildsNewestFirst([
       build('1.4.160-adhoc.20260728140502'),
       build('1.4.160-adhoc.20260728140541'),
       build('1.4.160-adhoc.20260728090000')
     ])
+
     expect(sorted.map((entry) => entry.version)).toEqual([
       '1.4.160-adhoc.20260728140541',
       '1.4.160-adhoc.20260728140502',

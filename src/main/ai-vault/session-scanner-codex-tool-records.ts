@@ -29,6 +29,7 @@ export function publishCodexResponseTool(
   if (!accumulator.messages.active || !CODEX_TOOL_RESPONSE_TYPES.has(String(payload.type))) {
     return
   }
+
   if (payload.type === 'function_call_output' || payload.type === 'custom_tool_call_output') {
     const output = asRecord(payload.output)
     publishToolContent(
@@ -36,14 +37,18 @@ export function publishCodexResponseTool(
       [{ type: 'tool_result', content: output?.content ?? output?.output ?? payload.output }],
       timestamp
     )
+
     return
   }
+
   const input = payload.arguments ?? payload.input ?? payload.action
   const action = asRecord(input)
+
   const normalizedInput =
     action && Array.isArray(action.command)
       ? { ...action, command: action.command.filter((part) => typeof part === 'string').join(' ') }
       : input
+
   publishToolContent(
     accumulator,
     [
@@ -65,11 +70,14 @@ export function publishCodexCompletedTool(
   if (!accumulator.messages.active) {
     return
   }
+
   const item = asRecord(payload.item)
+
   if (item?.type === 'CommandExecution' || item?.type === 'command_execution') {
     const command = Array.isArray(item.command)
       ? item.command.filter((part) => typeof part === 'string').join(' ')
       : item.command
+
     publishToolContent(
       accumulator,
       [
@@ -80,6 +88,7 @@ export function publishCodexCompletedTool(
     )
   } else if (item?.type === 'FileChange' || item?.type === 'file_change') {
     const changes = asRecord(item.changes) ?? {}
+
     for (const [path, value] of Object.entries(changes)) {
       const change = asRecord(value)
       publishToolContent(

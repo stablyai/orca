@@ -7,7 +7,9 @@ import { ptyOwnership } from './ownership-state'
 // Routes PTY operations by connectionId (null = local provider).
 
 export let localProvider: IPtyProvider = new LocalPtyProvider()
+
 export const sshProviders = new Map<string, IPtyProvider>()
+
 export const sshProvidersByGeneration = new Map<number, IPtyProvider>()
 
 export type RegisteredPtyProvider = {
@@ -26,7 +28,9 @@ export function getProvider(connectionId: string | null | undefined): IPtyProvid
   if (!connectionId) {
     return localProvider
   }
+
   const provider = sshProviders.get(connectionId)
+
   if (!provider) {
     // Why the suffix: this surfaces verbatim in `terminal create` on a reconnecting SSH host; the
     // bare id told the caller nothing about what to do. Keep the prefix — the renderer matches it.
@@ -35,30 +39,38 @@ export function getProvider(connectionId: string | null | undefined): IPtyProvid
         '(reconnecting or disconnected). Wait for the host to reconnect, or use Reconnect on the SSH target.'
     )
   }
+
   return provider
 }
 
 export function getProviderForPty(ptyId: string): IPtyProvider {
   const connectionId = ptyOwnership.get(ptyId)
+
   if (connectionId === undefined) {
     const parsedSshId = parseAppSshPtyId(ptyId)
+
     if (parsedSshId) {
       // Why: disconnected SSH PTYs retain their encoded owner and must never fall through to the HUB-local provider.
       return getProvider(parsedSshId.connectionId)
     }
+
     return localProvider
   }
+
   return getProvider(connectionId)
 }
 
 export function hasPtyProviderForInspection(ptyId: string): boolean {
   // Why: process inspection is background polling; disconnected SSH hosts should read as idle, not raise repeated IPC errors.
   const connectionId = ptyOwnership.get(ptyId)
+
   if (connectionId === undefined) {
     // Why: mirror getProviderForPty — an unowned id still routes by its encoded SSH owner.
     const parsedSshId = parseAppSshPtyId(ptyId)
+
     return !parsedSshId || sshProviders.has(parsedSshId.connectionId)
   }
+
   return connectionId === null || sshProviders.has(connectionId)
 }
 
@@ -91,6 +103,7 @@ export function closeStartupQueryAuthorityForPty(ptyId: string): void {
 export function tryGetProviderForAgentSessionOwner(ptyId: string): IPtyProvider | undefined {
   const ownedConnectionId = ptyOwnership.get(ptyId)
   const parsedSshId = ownedConnectionId === undefined ? parseAppSshPtyId(ptyId) : null
+
   try {
     return getProvider(parsedSshId?.connectionId ?? ownedConnectionId)
   } catch {
@@ -102,6 +115,7 @@ export function tryGetProviderForAgentSessionOwner(ptyId: string): IPtyProvider 
 export function registerSshPtyProvider(connectionId: string, provider: IPtyProvider): void {
   sshProviders.set(connectionId, provider)
   const generation = (provider as { providerGeneration?: number }).providerGeneration
+
   if (Number.isSafeInteger(generation) && generation! > 0) {
     sshProvidersByGeneration.set(generation!, provider)
   }
@@ -111,9 +125,11 @@ export function registerSshPtyProvider(connectionId: string, provider: IPtyProvi
 export function unregisterSshPtyProvider(connectionId: string): void {
   const provider = sshProviders.get(connectionId)
   const generation = (provider as { providerGeneration?: number } | undefined)?.providerGeneration
+
   if (generation !== undefined && sshProvidersByGeneration.get(generation) === provider) {
     sshProvidersByGeneration.delete(generation)
   }
+
   sshProviders.delete(connectionId)
 }
 

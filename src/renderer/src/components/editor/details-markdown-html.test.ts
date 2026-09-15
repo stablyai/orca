@@ -10,14 +10,17 @@ import {
 
 function nestedToggles(depth: number): string {
   let html = '<details class="orca-details" open>\n<summary>leaf</summary>\n\nBody\n\n</details>'
+
   for (let level = depth - 1; level > 0; level -= 1) {
     html = `<details class="orca-details" open>\n<summary>level ${level}</summary>\n\n${html}\n\n</details>`
   }
+
   return html
 }
 
 function isEditableHtml(html: string): boolean {
   const block = matchDetailsHtmlBlock(html, 0)
+
   return block !== null && isEditableDetailsHtmlBlock(block)
 }
 
@@ -34,17 +37,20 @@ describe('details markdown html', () => {
 
     expect(summary?.content).toContain('Heading line')
     expect(summary?.rawLength).toBe(inner.indexOf('<p>Body</p>'))
+
     const usedSummaryCapture = matchSpy.mock.calls.some(
       ([pattern]) =>
         pattern instanceof RegExp &&
         pattern.source.startsWith('^\\s*<summary') &&
         pattern.source.includes('[\\s\\S]')
     )
+
     expect(usedSummaryCapture).toBe(false)
   })
 
   it('accepts editable details blocks with newline-heavy summaries without summary matching', () => {
     const matchSpy = vi.spyOn(String.prototype, 'match')
+
     const block: DetailsHtmlBlock = {
       raw: '',
       openingAttributes: '',
@@ -52,12 +58,14 @@ describe('details markdown html', () => {
     }
 
     expect(isEditableDetailsHtmlBlock(block)).toBe(true)
+
     const usedSummaryCapture = matchSpy.mock.calls.some(
       ([pattern]) =>
         pattern instanceof RegExp &&
         pattern.source.startsWith('^\\s*<summary') &&
         pattern.source.includes('[\\s\\S]')
     )
+
     expect(usedSummaryCapture).toBe(false)
   })
 
@@ -76,6 +84,7 @@ describe('details markdown html', () => {
       openingAttributes: ' data-orca-toggle="heading-5"',
       inner: '<summary>Toggle</summary><p>Body</p>'
     }
+
     const unsupportedHeading6: DetailsHtmlBlock = {
       raw: '',
       openingAttributes: ' data-orca-toggle="heading-6"',
@@ -98,6 +107,7 @@ describe('details markdown html', () => {
         (_, index) =>
           `<details class="orca-details"${extra}>\n<summary>sibling ${index}</summary>\n\nBody\n\n</details>`
       ).join('\n\n')
+
     const wrap = (body: string): string =>
       `<details class="orca-details">\n<summary>Outer</summary>\n\n${body}\n\n</details>`
 
@@ -128,6 +138,7 @@ describe('details markdown html', () => {
       openingAttributes: '',
       inner: '<summary>Outer</summary><details><summary>Inner</summary>'
     }
+
     const lookalike: DetailsHtmlBlock = {
       raw: '',
       openingAttributes: '',

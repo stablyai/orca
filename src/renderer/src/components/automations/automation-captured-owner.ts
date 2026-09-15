@@ -88,14 +88,17 @@ export function automationActionAvailability(
       precondition: ownerPrecondition(captured.owner)
     }
   }
+
   if (!captured.selector) {
     return { kind: 'uncaptured' }
   }
+
   if (captured.selector.kind === 'orphan') {
     return ORPHAN_ACTIONS.has(action)
       ? { kind: 'orphan-fenced', precondition: ORPHAN_OWNER_PRECONDITION }
       : { kind: 'blocked', block: orphanBlock() }
   }
+
   // A qualified selector with no owner is a legacy row: no generation was ever captured.
   return { kind: 'blocked', block: unfencedBlock() }
 }
@@ -130,9 +133,11 @@ export function captureAutomationOwners(
   rows: Iterable<AutomationCapturedRow>
 ): Map<string, AutomationCapturedOwner> {
   const captured = new Map<string, AutomationCapturedOwner>()
+
   for (const { rowKey, row } of rows) {
     captured.set(rowKey, { owner: row.owner, selector: row.selector })
   }
+
   return captured
 }
 
@@ -145,6 +150,7 @@ export function capturedAutomationOwnerKey(captured: AutomationCapturedOwner): s
   if (captured.owner) {
     return ownerKey(captured.owner)
   }
+
   return captured.selector ? `selector:${captured.selector.kind}` : 'uncaptured'
 }
 

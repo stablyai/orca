@@ -6,17 +6,21 @@ const fixture = vi.hoisted((): { sessions: AiVaultSession[]; visits: number } =>
   sessions: [],
   visits: 0
 }))
+
 vi.mock('./session-scanner-source-discovery', () => ({
   discoverAiVaultSessionSources: async () => [],
   DEFAULT_CODEX_HOME_DIR: '/fixture'
 }))
+
 vi.mock('./session-scanner-candidates', () => ({
   sessionCandidatesFromDiscoveries: async () => candidates()
 }))
+
 vi.mock('./session-parse-cache-persistence', () => ({
   ensureSessionParseCacheLoaded: async () => {},
   scheduleSessionParseCachePersist: () => {}
 }))
+
 vi.mock('./session-scanner-parse-cache', () => ({
   createSessionParseStats: () => ({
     reused: 0,
@@ -27,21 +31,27 @@ vi.mock('./session-scanner-parse-cache', () => ({
   }),
   parseAgentSessionFileCached: async (candidate: { session: AiVaultSession }) => candidate.session
 }))
+
 vi.mock('./remote-session-scanner-sources', () => ({ remoteSessionSources: () => [{}] }))
+
 vi.mock('./remote-session-scanner-discovery', () => ({
   discoverRemoteSourceCandidates: async () => candidates()
 }))
+
 vi.mock('./remote-session-parse-cache', () => ({
   remoteSessionParseHostKey: () => 'fixture',
   parseRemoteSessionFileCached: async ({ candidate }: { candidate: { session: AiVaultSession } }) =>
     candidate.session
 }))
+
 vi.mock('./codex-session-root-dedup', async (original) => {
   const actual = await original<typeof CodexDedup>()
+
   return {
     ...actual,
     dedupeCodexSessionsBySessionId: (sessions: AiVaultSession[]) => {
       fixture.visits += sessions.length
+
       return actual.dedupeCodexSessionsBySessionId(sessions)
     }
   }
@@ -152,6 +162,7 @@ it('incremental canonical selection preserves winner occurrence order, ties and 
   const collection = new CodexSessionCollection()
   const same = session(0)
   const rows: AiVaultSession[] = []
+
   const variants: AiVaultSession[] = [
     same,
     same,
@@ -163,7 +174,9 @@ it('incremental canonical selection preserves winner occurrence order, ties and 
     { ...same, filePath: '/fixture/rollout-0-fork.jsonl', modifiedAt: 'invalid' },
     session(1)
   ]
+
   let seed = 42
+
   for (let index = 0; index < 2000; index++) {
     seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
     const row = variants[seed % variants.length]!
@@ -175,6 +188,7 @@ it('incremental canonical selection preserves winner occurrence order, ties and 
 
 it('retains only canonical rows during duplicate-heavy load-all scans', () => {
   const collection = new CodexSessionCollection()
+
   for (let index = 0; index < 10000; index++) {
     const row = session(index % 100)
     collection.add({
@@ -184,9 +198,11 @@ it('retains only canonical rows during duplicate-heavy load-all scans', () => {
     })
     expect(collection.size).toBeLessThanOrEqual(100)
   }
+
   for (let index = 0; index < 100; index++) {
     collection.add(session(index))
   }
+
   expect(collection.size).toBe(100)
   expect([...collection.values()].every((row) => row.codexHome === null)).toBe(true)
 })
@@ -195,31 +211,39 @@ it('admits rows sharing one session id across rollout names without rescanning',
   const count = 4000
   let pathReads = 0
   const collection = new CodexSessionCollection()
+
   for (let index = 0; index < count; index++) {
     const row = { ...session(index), sessionId: 'shared' }
     collection.add({
       ...row,
       get filePath() {
         pathReads++
+
         return row.filePath
       }
     })
   }
+
   expect(collection.size).toBe(count)
   expect(pathReads).toBeLessThanOrEqual(count * 4)
 })
 
 it('bounds per-session bookkeeping for a large mostly-unique load-all corpus', () => {
   const gc = globalThis.gc
+
   if (!gc) {
     throw new Error('Retention test requires --expose-gc (config/vitest.config.ts)')
   }
+
   const heapUsed = () => {
     gc()
     gc()
+
     return process.memoryUsage().heapUsed
   }
+
   const count = 50000
+
   // Why pre-build: the corpus itself must not count against the collection.
   const corpus = Array.from({ length: count }, (_, index) =>
     index % 100 === 99
@@ -230,12 +254,15 @@ it('bounds per-session bookkeeping for a large mostly-unique load-all corpus', (
         }
       : session(index)
   )
+
   const expected = dedupeCodexSessionsBySessionId(corpus)
   const before = heapUsed()
   const collection = new CodexSessionCollection()
+
   for (const row of corpus) {
     collection.add(row)
   }
+
   const retained = heapUsed() - before
 
   expect([...collection.values()]).toEqual(expected)

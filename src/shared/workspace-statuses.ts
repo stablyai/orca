@@ -8,18 +8,26 @@ import {
 export { DEFAULT_WORKSPACE_STATUSES } from './workspace-status-defaults'
 
 const WORKSPACE_STATUS_GROUP_PREFIX = 'workspace-status:'
+
 const MAX_STATUS_LABEL_LENGTH = 32
+
 type WorkspaceStatusNormalizationOptions = {
   migrateDefaultWorkflowStatuses?: boolean
   migrateLegacyDefaultStatusVisuals?: boolean
 }
 
 export const DEFAULT_WORKSPACE_STATUS_ID: WorkspaceStatus = 'in-progress'
+
 export const DEFAULT_WORKSPACE_STATUS_COLOR_ID = 'neutral'
+
 export const DEFAULT_WORKSPACE_STATUS_ICON_ID = 'circle-dot'
+
 export const WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT = 308
+
 export const WORKSPACE_BOARD_COLUMN_WIDTH_MIN = 220
+
 export const WORKSPACE_BOARD_COLUMN_WIDTH_MAX = 520
+
 export const WORKSPACE_BOARD_COLUMN_WIDTH_STEP = 20
 
 export const WORKSPACE_STATUS_COLOR_IDS = [
@@ -63,7 +71,9 @@ function sanitizeWorkspaceStatusLabel(value: unknown, fallback: string): string 
   if (typeof value !== 'string') {
     return fallback
   }
+
   const trimmed = value.trim().replace(/\s+/g, ' ')
+
   return trimmed ? trimmed.slice(0, MAX_STATUS_LABEL_LENGTH) : fallback
 }
 
@@ -73,6 +83,7 @@ function slugWorkspaceStatusLabel(label: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
+
   return slug || 'status'
 }
 
@@ -80,10 +91,13 @@ function sanitizeWorkspaceStatusId(value: unknown, fallbackLabel: string): Works
   if (typeof value !== 'string') {
     return slugWorkspaceStatusLabel(fallbackLabel)
   }
+
   const trimmed = value.trim().toLowerCase()
+
   if (!trimmed) {
     return slugWorkspaceStatusLabel(fallbackLabel)
   }
+
   return trimmed.replace(/[^a-z0-9_-]+/g, '-').replace(/^-+|-+$/g, '') || 'status'
 }
 
@@ -105,13 +119,17 @@ function sanitizeWorkspaceStatusColor(
   ) {
     return DEFAULT_STATUS_VISUALS[statusId]?.color ?? DEFAULT_WORKSPACE_STATUS_COLOR_ID
   }
+
   if (typeof value === 'string' && WORKSPACE_STATUS_COLOR_IDS.some((id) => id === value)) {
     return value
   }
+
   const defaultVisual = DEFAULT_STATUS_VISUALS[statusId]
+
   if (defaultVisual) {
     return defaultVisual.color
   }
+
   return WORKSPACE_STATUS_COLOR_IDS[index % WORKSPACE_STATUS_COLOR_IDS.length]
 }
 
@@ -134,9 +152,11 @@ function sanitizeWorkspaceStatusIcon(
   ) {
     return DEFAULT_STATUS_VISUALS[statusId]?.icon ?? DEFAULT_WORKSPACE_STATUS_ICON_ID
   }
+
   if (typeof value === 'string' && WORKSPACE_STATUS_ICON_IDS.some((id) => id === value)) {
     return value
   }
+
   return DEFAULT_STATUS_VISUALS[statusId]?.icon ?? DEFAULT_WORKSPACE_STATUS_ICON_ID
 }
 
@@ -146,15 +166,19 @@ export function makeWorkspaceStatusId(
 ): WorkspaceStatus {
   const base = slugWorkspaceStatusLabel(label)
   const existingIds = new Set(existingStatuses.map((status) => status.id))
+
   if (!existingIds.has(base)) {
     return base
   }
+
   for (let index = 2; index < 100; index += 1) {
     const candidate = `${base}-${index}`
+
     if (!existingIds.has(candidate)) {
       return candidate
     }
   }
+
   return `status-${Date.now().toString(36)}`
 }
 
@@ -168,17 +192,21 @@ function normalizeWorkspaceStatusesInternal(
 
   const statuses: WorkspaceStatusDefinition[] = []
   const usedIds = new Set<string>()
+
   for (const rawStatus of value) {
     if (!rawStatus || typeof rawStatus !== 'object' || Array.isArray(rawStatus)) {
       continue
     }
+
     const raw = rawStatus as Record<string, unknown>
     const fallbackLabel = `Status ${statuses.length + 1}`
     const label = sanitizeWorkspaceStatusLabel(raw.label, fallbackLabel)
     let id = sanitizeWorkspaceStatusId(raw.id, label)
+
     if (usedIds.has(id)) {
       id = makeWorkspaceStatusId(label, statuses)
     }
+
     usedIds.add(id)
     statuses.push({
       id,
@@ -213,6 +241,7 @@ export function normalizePersistedWorkspaceStatuses(
   ) {
     return cloneDefaultWorkspaceStatuses()
   }
+
   // Why: a previous build briefly wrote the default columns in reverse order.
   // The repair is one-shot and checks the raw payload, because normalized
   // IDs/labels are indistinguishable from a user-authored column reorder.
@@ -222,6 +251,7 @@ export function normalizePersistedWorkspaceStatuses(
   ) {
     return cloneDefaultWorkspaceStatuses()
   }
+
   return normalizeWorkspaceStatusesInternal(value, {
     migrateLegacyDefaultStatusVisuals: options.migrateLegacyDefaultStatusVisuals
   })
@@ -231,6 +261,7 @@ export function clampWorkspaceBoardOpacity(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return 1
   }
+
   return Math.min(1, Math.max(0.2, Math.round(value * 100) / 100))
 }
 
@@ -238,6 +269,7 @@ export function clampWorkspaceBoardColumnWidth(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
     return WORKSPACE_BOARD_COLUMN_WIDTH_DEFAULT
   }
+
   return Math.min(
     WORKSPACE_BOARD_COLUMN_WIDTH_MAX,
     Math.max(WORKSPACE_BOARD_COLUMN_WIDTH_MIN, Math.round(value))
@@ -279,8 +311,10 @@ export function getWorkspaceStatusFromGroupKey(
   if (!groupKey.startsWith(WORKSPACE_STATUS_GROUP_PREFIX)) {
     return null
   }
+
   try {
     const status = decodeURIComponent(groupKey.slice(WORKSPACE_STATUS_GROUP_PREFIX.length))
+
     return isWorkspaceStatusId(status, statuses) ? status : null
   } catch {
     return null

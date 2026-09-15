@@ -31,13 +31,17 @@ export const browserPageInteractionAndSessionsApi = {
         canGoForward: boolean
       }
     ) => callback(data)
+
     ipcRenderer.on('browser:context-menu-requested', listener)
+
     return () => ipcRenderer.removeListener('browser:context-menu-requested', listener)
   },
   onContextMenuDismissed: (callback: (event: { browserPageId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { browserPageId: string }) =>
       callback(data)
+
     ipcRenderer.on('browser:context-menu-dismissed', listener)
+
     return () => ipcRenderer.removeListener('browser:context-menu-dismissed', listener)
   },
   onNavigationUpdate: (
@@ -47,7 +51,9 @@ export const browserPageInteractionAndSessionsApi = {
       _event: Electron.IpcRendererEvent,
       data: { browserPageId: string; url: string; title: string }
     ) => callback(data)
+
     ipcRenderer.on('browser:navigation-update', listener)
+
     return () => ipcRenderer.removeListener('browser:navigation-update', listener)
   },
   onActivateView: (
@@ -57,7 +63,9 @@ export const browserPageInteractionAndSessionsApi = {
       _event: Electron.IpcRendererEvent,
       data: { worktreeId?: string; browserPageId?: string }
     ) => callback(data)
+
     ipcRenderer.on('browser:activateView', listener)
+
     return () => ipcRenderer.removeListener('browser:activateView', listener)
   },
   onPaneFocus: (
@@ -67,7 +75,9 @@ export const browserPageInteractionAndSessionsApi = {
       _event: Electron.IpcRendererEvent,
       data: { worktreeId: string | null; browserPageId: string }
     ) => callback(data)
+
     ipcRenderer.on('browser:pane-focus', listener)
+
     return () => ipcRenderer.removeListener('browser:pane-focus', listener)
   },
   onOpenLinkInOrcaTab: (
@@ -77,7 +87,9 @@ export const browserPageInteractionAndSessionsApi = {
       _event: Electron.IpcRendererEvent,
       data: { browserPageId: string; url: string; activate?: boolean }
     ) => callback(data)
+
     ipcRenderer.on('browser:open-link-in-orca-tab', listener)
+
     return () => ipcRenderer.removeListener('browser:open-link-in-orca-tab', listener)
   },
   cancelDownload: (args: { downloadId: string }): Promise<boolean> =>
@@ -97,7 +109,9 @@ export const browserPageInteractionAndSessionsApi = {
   onGrabModeToggle: (callback: (browserPageId: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, browserPageId: string) =>
       callback(browserPageId)
+
     ipcRenderer.on('browser:grabModeToggle', listener)
+
     return () => ipcRenderer.removeListener('browser:grabModeToggle', listener)
   },
   onGrabActionShortcut: (
@@ -107,7 +121,9 @@ export const browserPageInteractionAndSessionsApi = {
       _event: Electron.IpcRendererEvent,
       data: { browserPageId: string; key: 'c' | 's' }
     ) => callback(data)
+
     ipcRenderer.on('browser:grabActionShortcut', listener)
+
     return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
   },
   sessionListProfiles: () => ipcRenderer.invoke('browser:session:listProfiles'),

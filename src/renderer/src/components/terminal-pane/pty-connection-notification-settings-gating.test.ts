@@ -36,8 +36,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -58,6 +61,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -67,6 +71,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -87,6 +92,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -97,9 +103,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -109,9 +117,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -120,6 +130,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -153,9 +164,11 @@ describe('connectPanePty', () => {
 
   it('lets concurrent agent-complete notifications win over terminal bell notifications', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { useNotificationDispatch } = await vi.importActual<typeof UseNotificationDispatchModule>(
       './use-notification-dispatch'
     )
+
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
 
@@ -181,9 +194,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     if (!bellHandler || !idleHandler) {
       throw new Error('Expected bell and idle handlers to be registered')
     }
@@ -227,9 +242,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     if (!bellHandler || !idleHandler) {
       throw new Error('Expected bell and idle handlers to be registered')
     }
@@ -275,6 +292,7 @@ describe('connectPanePty', () => {
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     if (!idleHandler) {
       throw new Error('Expected idle handler to be registered')
     }
@@ -295,16 +313,19 @@ describe('connectPanePty', () => {
     transportFactoryQueue.push(createMockTransport('pty-1'), createMockTransport('pty-2'))
 
     vi.useFakeTimers()
+
     const firstBinding = connectPanePty(
       createPane(1) as never,
       createManager(1) as never,
       createDeps() as never
     )
+
     const secondBinding = connectPanePty(
       createPane(2) as never,
       createManager(1) as never,
       createDeps() as never
     )
+
     await flushAsyncTicks()
 
     expect(storeSubscribers).toHaveLength(1)
@@ -331,11 +352,13 @@ describe('connectPanePty', () => {
         customSoundPath: null
       }
     }
+
     const api = (
       globalThis as unknown as {
         window: { api: { pty: { getForegroundProcess: ReturnType<typeof vi.fn> } } }
       }
     ).window.api
+
     api.pty.getForegroundProcess.mockResolvedValue('codex')
     const pane = createPane(1)
     const manager = createManager(1)
@@ -346,6 +369,7 @@ describe('connectPanePty', () => {
     const titleHandler = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!titleHandler) {
       throw new Error('Expected onTitleChange to be registered')
     }
@@ -377,11 +401,13 @@ describe('connectPanePty', () => {
       }
     }
     const inspection = createDeferred<string | null>()
+
     const api = (
       globalThis as unknown as {
         window: { api: { pty: { getForegroundProcess: ReturnType<typeof vi.fn> } } }
       }
     ).window.api
+
     api.pty.getForegroundProcess.mockReturnValue(inspection.promise)
     const pane = createPane(1)
     const manager = createManager(1)
@@ -392,6 +418,7 @@ describe('connectPanePty', () => {
     const titleHandler = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!titleHandler) {
       throw new Error('Expected onTitleChange to be registered')
     }
@@ -439,6 +466,7 @@ describe('connectPanePty', () => {
     const titleHandler = createdTransportOptions[0]?.onTitleChange as
       | ((title: string, rawTitle: string) => void)
       | undefined
+
     if (!titleHandler) {
       throw new Error('Expected onTitleChange to be registered')
     }
@@ -494,6 +522,7 @@ describe('connectPanePty', () => {
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     if (!idleHandler) {
       throw new Error('Expected onAgentBecameIdle to be registered')
     }
@@ -545,9 +574,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     const bellHandler = createdTransportOptions[0]?.onBell as (() => void) | undefined
+
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     if (!bellHandler || !idleHandler) {
       throw new Error('Expected bell and idle handlers to be registered')
     }
@@ -599,9 +630,11 @@ describe('connectPanePty', () => {
     const workingHandler = createdTransportOptions[0]?.onAgentBecameWorking as
       | (() => void)
       | undefined
+
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     if (!workingHandler || !idleHandler) {
       throw new Error('Expected working and idle handlers to be registered')
     }
@@ -656,9 +689,11 @@ describe('connectPanePty', () => {
     const workingHandler = createdTransportOptions[0]?.onAgentBecameWorking as
       | (() => void)
       | undefined
+
     const idleHandler = createdTransportOptions[0]?.onAgentBecameIdle as
       | ((title: string) => void)
       | undefined
+
     if (!workingHandler || !idleHandler) {
       throw new Error('Expected working and idle handlers to be registered')
     }

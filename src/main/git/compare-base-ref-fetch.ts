@@ -24,19 +24,23 @@ export async function fetchCompareBaseRefWithLocalFallback(options: {
   if (!options.compareBaseRef) {
     return false
   }
+
   try {
     await options.fetchCompareBaseRef(options.compareBaseRef)
+
     return true
   } catch (error) {
     const localBaseResolved = await compareBaseRefResolvesLocally(
       options.gitExec,
       options.compareBaseRef
     )
+
     console.warn(`${options.logLabel} optional compare-base fetch failed`, {
       ...options.logContext,
       localBaseResolved,
       error: error instanceof Error ? error.message.split('\n')[0] : String(error)
     })
+
     return localBaseResolved
   }
 }
@@ -47,6 +51,7 @@ async function compareBaseRefResolvesLocally(
 ): Promise<boolean> {
   try {
     const { stdout } = await gitExec(['rev-parse', '--verify', `${compareBaseRef}^{commit}`])
+
     return stdout.trim().length > 0
   } catch {
     return false

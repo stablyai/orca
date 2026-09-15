@@ -24,6 +24,7 @@ export type CreateCloudLinkedOrcaProfileRecordResult = OrcaProfileListState & {
 
 function sanitizeProfileName(value: unknown, fallback: string): string {
   const trimmed = typeof value === 'string' ? value.trim() : ''
+
   return (trimmed || fallback).slice(0, 80)
 }
 
@@ -47,6 +48,7 @@ function toCloudLinkedProfile(
 
 function toLocalProfile(profile: OrcaProfileSummary, now: number): OrcaProfileSummary {
   const { cloud: _cloud, ...localProfile } = profile
+
   return {
     ...localProfile,
     kind: 'local',
@@ -61,9 +63,11 @@ function reconcileCurrentArtifactCloudCleanup(
   currentCloud: OrcaProfileCloudSummary | undefined
 ): void {
   completeArtifactCloudCleanupIfCommitted(profileId, userDataPath, currentCloud)
+
   if (!artifactCloudCleanupNeedsCommit(profileId, userDataPath, currentCloud)) {
     return
   }
+
   commitArtifactCloudCleanup(profileId, userDataPath, currentCloud)
   completeArtifactCloudCleanupIfCommitted(profileId, userDataPath, currentCloud)
 }
@@ -77,6 +81,7 @@ export function createCloudLinkedOrcaProfileRecord(
   const now = Date.now()
   const fallbackName = cloud.activeOrgName ?? cloud.displayName ?? cloud.email
   const name = sanitizeProfileName(args.name, fallbackName)
+
   const profile: OrcaProfileSummary = {
     id: `cloud-${randomUUID()}`,
     name,
@@ -91,12 +96,15 @@ export function createCloudLinkedOrcaProfileRecord(
     lastOpenedAt: now,
     cloud
   }
+
   const nextIndex = {
     ...index,
     profiles: [...index.profiles, profile]
   }
+
   mkdirSync(getOrcaProfileDirectory(profile.id, userDataPath), { recursive: true })
   writeProfileIndex(getOrcaProfileIndexPath(userDataPath), nextIndex)
+
   return {
     activeProfileId: nextIndex.activeProfileId,
     profiles: nextIndex.profiles,
@@ -111,18 +119,22 @@ export function linkOrcaProfileToCloud(
 ): OrcaProfileListState {
   const index = loadOrCreateProfileIndex(userDataPath)
   const currentProfile = index.profiles.find((profile) => profile.id === profileId)
+
   if (!currentProfile) {
     throw new Error('unknown_orca_profile')
   }
+
   reconcileCurrentArtifactCloudCleanup(profileId, userDataPath, currentProfile.cloud)
   const cleanupNeedsCommit = artifactCloudCleanupNeedsCommit(profileId, userDataPath, cloud)
   const now = Date.now()
   let found = false
   let cloudIdentityChanged = false
+
   const profiles = index.profiles.map((profile) => {
     if (profile.id !== profileId) {
       return profile
     }
+
     found = true
     cloudIdentityChanged = Boolean(
       profile.cloud &&
@@ -130,23 +142,30 @@ export function linkOrcaProfileToCloud(
         profile.cloud.cloudProfileId !== cloud.cloudProfileId ||
         (profile.cloud.activeOrgId ?? '') !== (cloud.activeOrgId ?? ''))
     )
+
     return toCloudLinkedProfile(profile, cloud, now)
   })
+
   if (!found) {
     throw new Error('unknown_orca_profile')
   }
+
   if (cloudIdentityChanged || cleanupNeedsCommit) {
     prepareArtifactCloudCleanup(profileId, userDataPath, cloud)
   }
+
   const nextIndex = {
     ...index,
     profiles
   }
+
   writeProfileIndex(getOrcaProfileIndexPath(userDataPath), nextIndex)
+
   if (cloudIdentityChanged || cleanupNeedsCommit) {
     commitArtifactCloudCleanup(profileId, userDataPath, cloud)
     completeArtifactCloudCleanupIfCommitted(profileId, userDataPath, cloud)
   }
+
   return {
     activeProfileId: nextIndex.activeProfileId,
     profiles: nextIndex.profiles
@@ -159,30 +178,40 @@ export function unlinkOrcaProfileFromCloud(
 ): OrcaProfileListState {
   const index = loadOrCreateProfileIndex(userDataPath)
   const currentProfile = index.profiles.find((profile) => profile.id === profileId)
+
   if (!currentProfile) {
     throw new Error('unknown_orca_profile')
   }
+
   reconcileCurrentArtifactCloudCleanup(profileId, userDataPath, currentProfile.cloud)
   const now = Date.now()
   let found = false
+
   const profiles = index.profiles.map((profile) => {
     if (profile.id !== profileId) {
       return profile
     }
+
     found = true
+
     return toLocalProfile(profile, now)
   })
+
   if (!found) {
     throw new Error('unknown_orca_profile')
   }
+
   prepareArtifactCloudCleanup(profileId, userDataPath, undefined)
+
   const nextIndex = {
     ...index,
     profiles
   }
+
   writeProfileIndex(getOrcaProfileIndexPath(userDataPath), nextIndex)
   commitArtifactCloudCleanup(profileId, userDataPath, undefined)
   completeArtifactCloudCleanupIfCommitted(profileId, userDataPath, undefined)
+
   return {
     activeProfileId: nextIndex.activeProfileId,
     profiles: nextIndex.profiles

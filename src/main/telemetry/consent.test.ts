@@ -29,10 +29,12 @@ describe('resolveConsent', () => {
 
   beforeEach(() => {
     savedEnv = {}
+
     for (const k of ENV_KEYS_UNDER_TEST) {
       savedEnv[k] = process.env[k]
       delete process.env[k]
     }
+
     _resetMisconfigWarnCacheForTests()
   })
 
@@ -153,6 +155,7 @@ describe('resolveConsent', () => {
 
   it('warns to stderr once for misconfigured env var values like "yes" / "on" / "FALSE"', () => {
     const spy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       process.env.DO_NOT_TRACK = 'yes'
       // Two resolves, only one warning written.

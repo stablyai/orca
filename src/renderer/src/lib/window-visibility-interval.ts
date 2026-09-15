@@ -1,4 +1,5 @@
 export type WindowVisibilityIntervalTimer = ReturnType<typeof setInterval>
+
 export type WindowVisibilityJitterTimer = ReturnType<typeof setTimeout>
 
 const MAX_VISIBILITY_JITTER_MS = 400
@@ -27,10 +28,13 @@ export function installWindowVisibilityInterval(args: {
     args.setIntervalFn ??
     ((callback: () => void, intervalMs: number): WindowVisibilityIntervalTimer =>
       setInterval(callback, intervalMs))
+
   const clearIntervalFn =
     args.clearIntervalFn ?? ((handle: WindowVisibilityIntervalTimer): void => clearInterval(handle))
+
   let intervalId: WindowVisibilityIntervalTimer | null = null
   let visibilityJitterId: WindowVisibilityJitterTimer | null = null
+
   const visibilityJitterMs = args.jitterOnVisible
     ? Math.max(
         0,
@@ -46,19 +50,24 @@ export function installWindowVisibilityInterval(args: {
       clearTimeout(visibilityJitterId)
       visibilityJitterId = null
     }
+
     if (intervalId !== null) {
       clearIntervalFn(intervalId)
       intervalId = null
     }
   }
+
   const start = (jitterVisibleRun: boolean): void => {
     if (intervalId !== null || !isWindowVisible()) {
       return
     }
+
     const visibleRun = args.runOnVisible ?? args.run
+
     if (jitterVisibleRun) {
       visibilityJitterId = setTimeout(() => {
         visibilityJitterId = null
+
         if (isWindowVisible()) {
           visibleRun()
         }
@@ -66,11 +75,13 @@ export function installWindowVisibilityInterval(args: {
     } else {
       visibleRun()
     }
+
     // Why: many callers shell out or cross IPC. Keep their interval alive only
     // while Orca can present the refreshed data, but still refresh a visible
     // unfocused window so status UI does not go stale on a second display.
     intervalId = setIntervalFn(args.run, args.intervalMs)
   }
+
   const reconcile = (): void => {
     if (isWindowVisible()) {
       start(args.jitterOnVisible === true)
@@ -80,11 +91,14 @@ export function installWindowVisibilityInterval(args: {
   }
 
   start(false)
+
   if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
     document.addEventListener('visibilitychange', reconcile)
   }
+
   return () => {
     stop()
+
     if (typeof document !== 'undefined' && typeof document.removeEventListener === 'function') {
       document.removeEventListener('visibilitychange', reconcile)
     }

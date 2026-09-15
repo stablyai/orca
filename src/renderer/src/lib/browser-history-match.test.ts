@@ -7,6 +7,7 @@ import {
 } from './browser-history-match'
 
 const NOW = Date.UTC(2026, 7, 27, 12)
+
 const HOUR = 60 * 60 * 1000
 
 function entry(overrides: Partial<BrowserHistoryEntry> & { url: string }): BrowserHistoryEntry {
@@ -117,6 +118,7 @@ describe('browser history match', () => {
       entry({ url: 'https://acme.dev/a', visitCount: 1, lastVisitedAt: NOW - 200 * HOUR }),
       entry({ url: 'https://acme.dev/b', visitCount: 1, lastVisitedAt: NOW - 100 * HOUR })
     ]
+
     const first = match(tied, 'acme')
 
     expect(first.map((row) => row.url)).toEqual(['https://acme.dev/b', 'https://acme.dev/a'])
@@ -194,8 +196,10 @@ describe('browser history match', () => {
         visitCount: index % 120
       })
     )
+
     for (const query of ['host-3', 'topic 4', 'seg2', 'example.dev', 'zzz']) {
       const lower = query.toLowerCase()
+
       const reference = corpus
         .filter(
           (item) =>

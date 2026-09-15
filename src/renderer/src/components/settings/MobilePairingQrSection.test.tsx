@@ -51,6 +51,7 @@ describe('MobilePairingQrSection', () => {
       onCodeCopiedChange: vi.fn(),
       onClearCodeCopiedTimer: vi.fn()
     }
+
     const { rerender } = render(<MobilePairingQrSection {...props} />)
 
     rerender(
@@ -76,12 +77,14 @@ describe('MobilePairingQrSection', () => {
       onCodeCopiedChange: vi.fn(),
       onClearCodeCopiedTimer: vi.fn()
     }
+
     const { rerender } = render(
       <>
         <button type="button">Persistent action</button>
         <MobilePairingQrSection {...props} />
       </>
     )
+
     const persistentAction = screen.getByRole('button', { name: 'Persistent action' })
     persistentAction.focus()
 
@@ -118,6 +121,7 @@ describe('MobilePairingQrSection', () => {
     const images = Array.from(
       document.querySelectorAll<HTMLImageElement>('img[alt="QR Code for mobile pairing"]')
     )
+
     expect(images.map((image) => image.style.width).sort()).toEqual(['218px', '436px'])
     expect(images.map((image) => image.style.height).sort()).toEqual(['218px', '436px'])
     expect(images.every((image) => image.style.imageRendering === 'pixelated')).toBe(true)

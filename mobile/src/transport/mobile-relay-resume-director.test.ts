@@ -51,6 +51,7 @@ describe('mobile relay resume director', () => {
           })
         )
     )
+
     await expect(
       resolveMobileRelayEndpoint({ relay, resumeToken: 'A'.repeat(43), fetchImpl: badTarget })
     ).rejects.toThrow()
@@ -59,6 +60,7 @@ describe('mobile relay resume director', () => {
       async () =>
         new Response('x'.repeat(16 * 1024 + 1), { headers: { 'content-length': '16385' } })
     )
+
     await expect(
       resolveMobileRelayEndpoint({ relay, resumeToken: 'A'.repeat(43), fetchImpl: oversized })
     ).rejects.toThrow(/too large/)

@@ -23,8 +23,11 @@ import {
 
 /** Bounded so a publisher that keeps re-sending a retired epoch cannot drive an endless refetch. */
 const MAX_REPAIR_ATTEMPTS = 3
+
 const BASE_REPAIR_DELAY_MS = 250
+
 const MAX_REPAIR_DELAY_MS = 5000
+
 /**
  * The cap decays rather than latching. A run of transient RPC failures must not hide a chat tab for
  * the renderer's lifetime; once a worktree has been quiet this long, a fresh drop is a fresh
@@ -44,14 +47,18 @@ const repairsByWorktree = new Map<string, RepairState>()
 
 function repairState(worktreeId: string, now: number): RepairState {
   const existing = repairsByWorktree.get(worktreeId)
+
   if (!existing) {
     const created: RepairState = { attempts: 0, lastAttemptAt: now, timer: null }
     repairsByWorktree.set(worktreeId, created)
+
     return created
   }
+
   if (now - existing.lastAttemptAt >= REPAIR_ATTEMPT_DECAY_MS) {
     existing.attempts = 0
   }
+
   return existing
 }
 
@@ -66,9 +73,11 @@ export function scheduleRetiredEpochRepair(
 ): void {
   const now = Date.now()
   const state = repairState(worktreeId, now)
+
   if (state.timer !== null) {
     return
   }
+
   if (state.attempts >= MAX_REPAIR_ATTEMPTS) {
     console.warn('[structured-session-tabs] retired publication epoch still unrepaired', {
       worktree: worktreeId,
@@ -76,18 +85,23 @@ export function scheduleRetiredEpochRepair(
       attempts: state.attempts,
       retryAfterMs: Math.max(0, REPAIR_ATTEMPT_DECAY_MS - (now - state.lastAttemptAt))
     })
+
     return
   }
+
   const generation = localStructuredSessionGeneration()
   const delay = Math.min(BASE_REPAIR_DELAY_MS * 2 ** state.attempts, MAX_REPAIR_DELAY_MS)
   state.attempts += 1
   state.lastAttemptAt = now
   state.timer = setTimeout(() => {
     state.timer = null
+
     if (!isCurrentLocalStructuredSessionGeneration(generation)) {
       repairsByWorktree.delete(worktreeId)
+
       return
     }
+
     void runRepair(generation)
       .then(() => {
         // Why re-check rather than trust the call: a refresh that succeeds without reviving the
@@ -96,6 +110,7 @@ export function scheduleRetiredEpochRepair(
           localStructuredSessionEpochHistoryByWorktree
             .get(worktreeId)
             ?.retired.includes(publicationEpoch) ?? false
+
         if (!stillRetired) {
           repairsByWorktree.delete(worktreeId)
         }
@@ -116,6 +131,7 @@ export function forgetRetiredEpochRepairsOutside(knownWorktreeIds: ReadonlySet<s
       if (state.timer !== null) {
         clearTimeout(state.timer)
       }
+
       repairsByWorktree.delete(worktreeId)
     }
   }
@@ -127,5 +143,6 @@ export function resetRetiredEpochRepairsForTests(): void {
       clearTimeout(state.timer)
     }
   }
+
   repairsByWorktree.clear()
 }

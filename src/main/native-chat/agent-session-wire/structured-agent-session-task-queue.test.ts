@@ -34,11 +34,13 @@ describe('StructuredAgentSessionTaskQueue', () => {
     const firstGate = Promise.withResolvers<void>()
     const secondGate = Promise.withResolvers<void>()
     const order: string[] = []
+
     const first = queue.serialize('session-1', async () => {
       order.push('first-start')
       await firstGate.promise
       order.push('first-end')
     })
+
     const second = queue.serialize('session-1', async () => {
       order.push('second-start')
       await secondGate.promise

@@ -19,6 +19,8 @@ export function getAutomationCreateRepos(
       (repo) => parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'runtime'
     )
   }
+
   const hostId = toRuntimeExecutionHostId(target.environmentId)
+
   return repos.filter((repo) => getRepoExecutionHostId(repo) === hostId)
 }

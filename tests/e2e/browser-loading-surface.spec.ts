@@ -10,6 +10,7 @@ test('browser host follows the theme before content and preserves the webpage ca
   await waitForSessionReady(orcaPage)
   await ensureTerminalVisible(orcaPage)
   await waitForActiveWorktree(orcaPage)
+
   const observations = await observeBrowserLoadingSurface(
     orcaPage,
     (name) => testInfo.outputPath(name),
@@ -17,5 +18,6 @@ test('browser host follows the theme before content and preserves the webpage ca
       await crashGuestRenderer(electronApp, id)
     }
   )
+
   expect(observations.filter((entry) => !entry.pass)).toEqual([])
 })

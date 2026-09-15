@@ -26,6 +26,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
+
   return {
     ...actual,
     homedir: homedirMock
@@ -40,8 +41,11 @@ import {
 import { scanCodexUsageFiles } from './scanner'
 
 const originalCodexHome = process.env.CODEX_HOME
+
 let fakeHomeDir: string
+
 let userDataDir: string
+
 let previousUserDataPath: string | undefined
 
 function usageRecord(
@@ -106,6 +110,7 @@ beforeEach(() => {
     if (name === 'userData') {
       return userDataDir
     }
+
     throw new Error(`unexpected app.getPath(${name})`)
   })
 })
@@ -113,16 +118,19 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(fakeHomeDir, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
+
   if (originalCodexHome === undefined) {
     delete process.env.CODEX_HOME
   } else {
     process.env.CODEX_HOME = originalCodexHome
   }
+
   if (previousUserDataPath === undefined) {
     delete process.env.ORCA_USER_DATA_PATH
   } else {
     process.env.ORCA_USER_DATA_PATH = previousUserDataPath
   }
+
   vi.clearAllMocks()
 })
 
@@ -250,12 +258,14 @@ describe('listCodexSessionFiles', () => {
 
   it('does not scan both sides of a diverged legacy copied session bridge', async () => {
     const runtimeSessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
+
     const runtimeBridgeMarkerDir = join(
       userDataDir,
       'codex-runtime-home',
       'home',
       '.orca-session-copies'
     )
+
     const systemSessionsDir = join(fakeHomeDir, '.codex', 'sessions')
     mkdirSync(runtimeSessionsDir, { recursive: true })
     mkdirSync(runtimeBridgeMarkerDir, { recursive: true })
@@ -288,12 +298,14 @@ describe('listCodexSessionFiles', () => {
 
   it('keeps both sides of a legacy copied session bridge after both sides diverge', async () => {
     const runtimeSessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
+
     const runtimeBridgeMarkerDir = join(
       userDataDir,
       'codex-runtime-home',
       'home',
       '.orca-session-copies'
     )
+
     const systemSessionsDir = join(fakeHomeDir, '.codex', 'sessions')
     mkdirSync(runtimeSessionsDir, { recursive: true })
     mkdirSync(runtimeBridgeMarkerDir, { recursive: true })
@@ -327,18 +339,21 @@ describe('listCodexSessionFiles', () => {
 
   it('parses only source-side suffix after both sides of a legacy copy diverge', async () => {
     const runtimeSessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
+
     const runtimeBridgeMarkerDir = join(
       userDataDir,
       'codex-runtime-home',
       'home',
       '.orca-session-copies'
     )
+
     const systemSessionsDir = join(fakeHomeDir, '.codex', 'sessions')
     mkdirSync(runtimeSessionsDir, { recursive: true })
     mkdirSync(runtimeBridgeMarkerDir, { recursive: true })
     mkdirSync(systemSessionsDir, { recursive: true })
     const systemSessionPath = join(systemSessionsDir, 'system.jsonl')
     const runtimeSessionPath = join(runtimeSessionsDir, 'system.jsonl')
+
     const copiedPrefix = [
       `${JSON.stringify({
         type: 'session_meta',
@@ -346,6 +361,7 @@ describe('listCodexSessionFiles', () => {
       })}\n`,
       usageRecord('2026-05-26T12:00:00.000Z', 10)
     ].join('')
+
     writeFileSync(systemSessionPath, copiedPrefix, 'utf-8')
     writeFileSync(runtimeSessionPath, copiedPrefix, 'utf-8')
     const sourceStat = lstatSync(systemSessionPath)
@@ -389,6 +405,7 @@ describe('listCodexSessionFiles', () => {
     mkdirSync(sessionsDir, { recursive: true })
     const originalPath = join(sessionsDir, 'aaaa-original.jsonl')
     const forkPath = join(sessionsDir, 'bbbb-fork.jsonl')
+
     const copiedPrefix = [
       `${JSON.stringify({
         type: 'session_meta',
@@ -397,6 +414,7 @@ describe('listCodexSessionFiles', () => {
       usageRecord('2026-05-26T12:00:00.000Z', 10),
       usageRecord('2026-05-26T12:01:00.000Z', 5, 15)
     ].join('')
+
     writeFileSync(originalPath, copiedPrefix, 'utf-8')
     writeFileSync(forkPath, `${copiedPrefix}${usageRecord('2026-05-26T12:02:00.000Z', 7, 22)}`)
 
@@ -417,6 +435,7 @@ describe('listCodexSessionFiles', () => {
     mkdirSync(sessionsDir, { recursive: true })
     const originalPath = join(sessionsDir, 'aaaa-original.jsonl')
     const forkPath = join(sessionsDir, 'bbbb-fork.jsonl')
+
     const originalPrefix = [
       `${JSON.stringify({
         type: 'session_meta',
@@ -425,6 +444,7 @@ describe('listCodexSessionFiles', () => {
       usageRecord('2026-05-26T12:00:00.000Z', 10),
       usageRecord('2026-05-26T12:01:00.000Z', 5, 15)
     ].join('')
+
     // Same token_count records, different session_meta id (real resume/fork shape).
     const forkBody = [
       `${JSON.stringify({
@@ -435,6 +455,7 @@ describe('listCodexSessionFiles', () => {
       usageRecord('2026-05-26T12:01:00.000Z', 5, 15),
       usageRecord('2026-05-26T12:02:00.000Z', 7, 22)
     ].join('')
+
     writeFileSync(originalPath, originalPrefix, 'utf-8')
     writeFileSync(forkPath, forkBody)
 
@@ -452,6 +473,7 @@ describe('listCodexSessionFiles', () => {
     mkdirSync(sessionsDir, { recursive: true })
     const originalPath = join(sessionsDir, 'aaaa-original.jsonl')
     const forkPath = join(sessionsDir, 'bbbb-fork.jsonl')
+
     const copiedPrefix = [
       `${JSON.stringify({
         type: 'session_meta',
@@ -460,6 +482,7 @@ describe('listCodexSessionFiles', () => {
       totalOnlyUsageRecord('2026-05-26T12:00:00.000Z', 10),
       totalOnlyUsageRecord('2026-05-26T12:01:00.000Z', 15)
     ].join('')
+
     writeFileSync(originalPath, copiedPrefix, 'utf-8')
     // Without cross-file ownership the fork's first copied total-only record
     // re-counts the entire cumulative session (10) as a fresh delta.
@@ -483,6 +506,7 @@ describe('listCodexSessionFiles', () => {
     mkdirSync(sessionsDir, { recursive: true })
     const originalPath = join(sessionsDir, 'aaaa-original.jsonl')
     const forkPath = join(sessionsDir, 'zzzz-fork.jsonl')
+
     const copiedPrefix = [
       `${JSON.stringify({
         type: 'session_meta',
@@ -491,6 +515,7 @@ describe('listCodexSessionFiles', () => {
       usageRecord('2026-05-26T12:00:00.000Z', 10),
       usageRecord('2026-05-26T12:01:00.000Z', 5, 15)
     ].join('')
+
     writeFileSync(originalPath, copiedPrefix, 'utf-8')
 
     const first = await scanCodexUsageFiles([], [])
@@ -520,6 +545,7 @@ describe('listCodexSessionFiles', () => {
     mkdirSync(sessionsDir, { recursive: true })
     const originalPath = join(sessionsDir, 'aaaa-original.jsonl')
     const forkPath = join(sessionsDir, 'bbbb-fork.jsonl')
+
     const copiedPrefix = [
       `${JSON.stringify({
         type: 'session_meta',
@@ -528,6 +554,7 @@ describe('listCodexSessionFiles', () => {
       usageRecord('2026-05-26T12:00:00.000Z', 10),
       usageRecord('2026-05-26T12:01:00.000Z', 5, 15)
     ].join('')
+
     writeFileSync(originalPath, copiedPrefix, 'utf-8')
     writeFileSync(forkPath, `${copiedPrefix}${usageRecord('2026-05-26T12:02:00.000Z', 7, 22)}`)
 
@@ -558,6 +585,7 @@ describe('listCodexSessionFiles', () => {
     const originalPath = join(sessionsDir, 'aaaa-original.jsonl')
     const forkPath = join(sessionsDir, 'bbbb-fork.jsonl')
     const unrelatedPath = join(sessionsDir, 'cccc-unrelated.jsonl')
+
     const copiedPrefix = [
       `${JSON.stringify({
         type: 'session_meta',
@@ -566,6 +594,7 @@ describe('listCodexSessionFiles', () => {
       usageRecord('2026-05-26T12:00:00.000Z', 10),
       usageRecord('2026-05-26T12:01:00.000Z', 5, 15)
     ].join('')
+
     writeFileSync(originalPath, copiedPrefix, 'utf-8')
     writeFileSync(forkPath, `${copiedPrefix}${usageRecord('2026-05-26T12:02:00.000Z', 7, 22)}`)
     writeFileSync(
@@ -596,18 +625,21 @@ describe('listCodexSessionFiles', () => {
 
   it('treats a leading total-only source suffix record as baseline', async () => {
     const runtimeSessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
+
     const runtimeBridgeMarkerDir = join(
       userDataDir,
       'codex-runtime-home',
       'home',
       '.orca-session-copies'
     )
+
     const systemSessionsDir = join(fakeHomeDir, '.codex', 'sessions')
     mkdirSync(runtimeSessionsDir, { recursive: true })
     mkdirSync(runtimeBridgeMarkerDir, { recursive: true })
     mkdirSync(systemSessionsDir, { recursive: true })
     const systemSessionPath = join(systemSessionsDir, 'system.jsonl')
     const runtimeSessionPath = join(runtimeSessionsDir, 'system.jsonl')
+
     const copiedPrefix = [
       `${JSON.stringify({
         type: 'session_meta',
@@ -615,6 +647,7 @@ describe('listCodexSessionFiles', () => {
       })}\n`,
       usageRecord('2026-05-26T12:00:00.000Z', 10)
     ].join('')
+
     writeFileSync(systemSessionPath, copiedPrefix, 'utf-8')
     writeFileSync(runtimeSessionPath, copiedPrefix, 'utf-8')
     const sourceStat = lstatSync(systemSessionPath)

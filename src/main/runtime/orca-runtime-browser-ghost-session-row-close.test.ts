@@ -31,6 +31,7 @@ describe('browserTabClose on a session row with no runtime page', () => {
 
   it('still fails closed when no session row names that page either', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+
     const commands = new RuntimeBrowserCommands(
       createHost({ retireRuntimeOwnedBrowserSessionTab: vi.fn(() => false) })
     )
@@ -43,6 +44,7 @@ describe('browserTabClose on a session row with no runtime page', () => {
   it('retires the row even on a runtime with no browser session at all', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     const retireRuntimeOwnedBrowserSessionTab = vi.fn(() => true)
+
     const commands = new RuntimeBrowserCommands(
       createHost({
         getAgentBrowserBridge: () => null as unknown as AgentBrowserBridge,
@@ -71,6 +73,7 @@ describe('browserTabClose on a session row with no runtime page', () => {
       active: false
     })
     const retireRuntimeOwnedBrowserSessionTab = vi.fn(() => true)
+
     const commands = new RuntimeBrowserCommands(
       createHost({
         getRuntimeBrowserPageRegistry: () => pages,
@@ -91,6 +94,7 @@ describe('browserTabClose on a session row with no runtime page', () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     const retireRuntimeOwnedBrowserSessionTab = vi.fn(() => true)
     const closeTab = vi.fn(async () => {})
+
     const commands = new RuntimeBrowserCommands(
       createHost({
         getOffscreenBrowserBackend: vi.fn(() => ({ createTab: vi.fn(), closeTab })),
@@ -108,6 +112,7 @@ describe('browserTabClose on a session row with no runtime page', () => {
 
 function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): RuntimeBrowserCommandHost {
   const runtimeBrowserPages = new RuntimeBrowserPageRegistry()
+
   const bridge =
     'getAgentBrowserBridge' in overrides
       ? overrides.getAgentBrowserBridge!()
@@ -117,6 +122,7 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
           getActiveWebContentsId: vi.fn(() => 100),
           tabList: vi.fn(() => ({ tabs: [] }))
         } as unknown as AgentBrowserBridge)
+
   return {
     resolveWorktreeSelector: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),

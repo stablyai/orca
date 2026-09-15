@@ -2,8 +2,10 @@ export function isSshSessionLimitError(err: unknown): boolean {
   if (!(err instanceof Error)) {
     return false
   }
+
   const reason = (err as { reason?: unknown }).reason
   const message = err.message.toLowerCase()
+
   // Why: OpenSSH rejects session channels over MaxSessions with
   // SSH2_OPEN_CONNECT_FAILED (2) and the literal description "open failed";
   // reason 4 (resource shortage) covers other server implementations.
@@ -13,6 +15,7 @@ export function isSshSessionLimitError(err: unknown): boolean {
   ) {
     return true
   }
+
   return (
     message.includes('no free channels available') ||
     message.includes('maxsessions') ||

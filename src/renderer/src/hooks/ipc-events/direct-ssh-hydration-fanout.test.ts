@@ -49,6 +49,7 @@ describe('direct SSH hydration fanout', () => {
     for (const unsub of unsubs.splice(0)) {
       unsub()
     }
+
     vi.unstubAllGlobals()
     vi.restoreAllMocks()
   })
@@ -69,6 +70,7 @@ describe('direct SSH hydration fanout', () => {
           // A wedged relay answers nothing until the 30s RPC timeout fires.
           getState: ({ targetId }: { targetId: string }) => {
             dispatched.push(targetId)
+
             return targetId === 'ssh-wedged'
               ? new Promise<SshConnectionState | null>(() => {})
               : Promise.resolve(connectingState(targetId))

@@ -40,6 +40,7 @@ export function MobileSourceControlBranchCard({
   onOpenPr
 }: Props) {
   const showConflict = conflictOperation !== null && conflictOperation !== 'unknown'
+
   return (
     <View style={styles.summaryCard}>
       <View style={styles.summaryHeader}>

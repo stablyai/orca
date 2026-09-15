@@ -30,11 +30,14 @@ export async function probeMacosFullDiskAccess({
     'com.apple.TCC',
     'TCC.db'
   )
+
   try {
     await readProbe(databasePath)
+
     return 'granted'
   } catch (error) {
     const code = errorCode(error)
+
     return code === 'EACCES' || code === 'EPERM' ? 'denied' : 'unknown'
   }
 }

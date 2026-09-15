@@ -14,14 +14,18 @@ export function parseAnsiControlSequence(
   | null {
   // charCodeAt, not value[i]: indexing mints a one-char string on every escape.
   const introducer = classifyTerminalEscapeIntroducer(value.charCodeAt(escapeIndex + 1))
+
   if (introducer === 'csi') {
     for (let index = escapeIndex + 2; index < value.length; index += 1) {
       const code = value.charCodeAt(index)
+
       if (code < 0x40 || code > 0x7e) {
         continue
       }
+
       const params = value.slice(escapeIndex + 2, index)
       const firstParamMatch = /^(\d+)/.exec(params)
+
       return {
         kind: 'csi',
         final: value[index] ?? '',
@@ -30,27 +34,34 @@ export function parseAnsiControlSequence(
         endIndex: index
       }
     }
+
     return null
   }
+
   if (introducer === 'osc') {
     for (let index = escapeIndex + 2; index < value.length; index += 1) {
       if (value[index] === '\u0007') {
         return { kind: 'other', endIndex: index }
       }
+
       if (value[index] === '\u001b' && value[index + 1] === '\\') {
         return { kind: 'other', endIndex: index + 1 }
       }
     }
+
     return null
   }
+
   if (introducer === 'string') {
     for (let index = escapeIndex + 2; index < value.length; index += 1) {
       if (value[index] === '\u001b' && value[index + 1] === '\\') {
         return { kind: 'other', endIndex: index + 1 }
       }
     }
+
     return null
   }
+
   return { kind: 'other', endIndex: escapeIndex + 1 }
 }
 
@@ -62,10 +73,13 @@ export function containsTerminalVerticalLineControl(value: string): boolean {
   // Only ESC can introduce a vertical control; ordinary output needs no code-unit walk.
   for (let index = value.indexOf('\x1b'); index !== -1; index = value.indexOf('\x1b', index + 1)) {
     const parsed = parseAnsiControlSequence(value, index)
+
     if (!parsed) {
       return false
     }
+
     index = parsed.endIndex
+
     if (
       parsed.kind === 'csi' &&
       parsed.final === 'A' &&
@@ -74,6 +88,7 @@ export function containsTerminalVerticalLineControl(value: string): boolean {
       return true
     }
   }
+
   return false
 }
 
@@ -85,17 +100,23 @@ export function normalizeTerminalChunk(
   if (pendingAnsi.length === 0 && !terminalChunkNeedsNormalization(chunk)) {
     return { text: chunk, pendingAnsi: '' }
   }
+
   const combined = `${pendingAnsi}${chunk}`
   const parts: string[] = []
   let textStart = 0
+
   for (let index = 0; index < combined.length; index += 1) {
     const char = combined[index]
+
     if (char === '\x1b') {
       appendTerminalNormalizedSpan(parts, combined, textStart, index)
+
       if (index + 1 >= combined.length) {
         return { text: parts.join(''), pendingAnsi: combined.slice(index) }
       }
+
       const parsed = parseAnsiControlSequence(combined, index)
+
       if (!parsed) {
         return {
           text: parts.join(''),
@@ -103,14 +124,17 @@ export function normalizeTerminalChunk(
           pendingAnsi: ownRetainedString(trimPendingAnsiControl(combined.slice(index)))
         }
       }
+
       if (parsed.kind === 'csi' && isTerminalPreviewLineControl(parsed)) {
         // Why: Codex redraws status text with ANSI controls but no CR; keep them so the tail overwrites the prior frame.
         parts.push(combined.slice(index, parsed.endIndex + 1))
       }
+
       index = parsed.endIndex
       textStart = index + 1
       continue
     }
+
     if (char === '\r' && combined[index + 1] === '\n') {
       appendTerminalNormalizedSpan(parts, combined, textStart, index)
       parts.push('\n')
@@ -118,7 +142,9 @@ export function normalizeTerminalChunk(
       textStart = index + 1
       continue
     }
+
     const code = combined.charCodeAt(index)
+
     if (code === 0x08 || code === 0x09 || code === 0x0a || code === 0x0d) {
       appendTerminalNormalizedSpan(parts, combined, textStart, index)
       parts.push(char)
@@ -128,7 +154,9 @@ export function normalizeTerminalChunk(
       textStart = index + 1
     }
   }
+
   appendTerminalNormalizedSpan(parts, combined, textStart, combined.length)
+
   return { text: parts.join(''), pendingAnsi: '' }
 }
 
@@ -150,6 +178,7 @@ function isTerminalPreviewPrintableCodeUnit(code: number): boolean {
 function terminalChunkNeedsNormalization(chunk: string): boolean {
   for (let index = 0; index < chunk.length; index++) {
     const code = chunk.charCodeAt(index)
+
     if (
       code === 0x1b ||
       code === 0x7f ||
@@ -161,6 +190,7 @@ function terminalChunkNeedsNormalization(chunk: string): boolean {
       return true
     }
   }
+
   return false
 }
 
@@ -168,8 +198,10 @@ function trimPendingAnsiControl(value: string): string {
   if (value.length <= MAX_TAIL_PENDING_ANSI_CHARS) {
     return value
   }
+
   const introducer = value.slice(0, Math.min(2, value.length))
   const suffixBudget = Math.max(0, MAX_TAIL_PENDING_ANSI_CHARS - introducer.length)
+
   return `${introducer}${value.slice(-suffixBudget)}`
 }
 
@@ -181,10 +213,13 @@ function isTerminalPreviewLineControl(parsed: {
   if (!hasCanonicalNumericCsiParams(parsed.params)) {
     return false
   }
+
   if (parsed.final === 'K') {
     const mode = parsed.firstParam ?? 0
+
     return mode === 0 || mode === 1 || mode === 2
   }
+
   return (
     parsed.final === 'A' ||
     parsed.final === 'G' ||

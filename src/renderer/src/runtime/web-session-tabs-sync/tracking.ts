@@ -52,6 +52,7 @@ export function getTrackedWebSessionTabsWorktrees(
     (worktree) => {
       const key = sessionTabsFreshnessKey(environmentId, worktree)
       const freshness = latestSessionTabsSnapshotByWorktree.get(key)
+
       return freshness
         ? [
             {
@@ -72,10 +73,13 @@ export function trackWebSessionTabsWorktree(environmentId: string, worktreeId: s
 
 export function untrackWebSessionTabsWorktree(environmentId: string, worktreeId: string): void {
   const worktrees = trackedSessionTabsWorktreeIdsByEnvironment.get(environmentId)
+
   if (!worktrees) {
     return
   }
+
   worktrees.delete(worktreeId)
+
   if (worktrees.size === 0) {
     trackedSessionTabsWorktreeIdsByEnvironment.delete(environmentId)
   }
@@ -91,25 +95,31 @@ export function recordReceivedWebSessionTabsSnapshot(
   const frame = receivedFrame ?? nextReceivedSessionTabsFrame()
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   const current = latestReceivedSessionTabsSnapshotByWorktree.get(key)
+
   // A bootstrap listAll reserves its frame before the request starts. If a
   // stream frame for this worktree arrived meanwhile, the late list is stale
   // evidence and must not advance epoch history.
   if (source === 'bootstrap' && current && frame < current.receivedFrame) {
     return frame
   }
+
   if (runtimeId && !acceptSessionTabsRuntimeId(environmentId, runtimeId, frame)) {
     return frame
   }
+
   recordReceivedWebSessionTabsEnvironmentFrame(environmentId, frame)
   const publicationEpoch = snapshot.publicationEpoch
   const history = sessionTabsPublicationEpochHistoryByWorktree.get(key)
   const isRetired = history?.retired.includes(publicationEpoch) ?? false
+
   if (isRetired) {
     return frame
   }
+
   if (!history || history.current !== publicationEpoch) {
     noteSessionTabsPublicationEpoch(key, publicationEpoch)
   }
+
   // Stream delivery order is the freshest evidence even when a host's version
   // counter briefly moves backwards (for example across a visibility resume).
   // Bootstrap listAll responses retain version/epoch ordering so a late
@@ -127,10 +137,12 @@ export function recordReceivedWebSessionTabsSnapshot(
       snapshotVersion: snapshot.snapshotVersion,
       ...(runtimeId ? { runtimeId } : {})
     })
+
     if ((snapshot as { removed?: unknown }).removed === true) {
       recordReceivedWebSessionTabsRemoval(environmentId, snapshot.worktree, frame)
     }
   }
+
   return frame
 }
 
@@ -138,6 +150,7 @@ export function recordReceivedWebSessionTabsInventory(environmentId: string): nu
   const receivedFrame = nextReceivedSessionTabsFrame()
   recordReceivedWebSessionTabsEnvironmentFrame(environmentId, receivedFrame)
   latestReceivedSessionTabsInventoryFrameByEnvironment.set(environmentId, receivedFrame)
+
   return receivedFrame
 }
 
@@ -151,24 +164,30 @@ export function beginWebSessionTabsSnapshotRecovery(
   recoveryState.pendingCount += 1
   sessionTabsRecoveryStateByWorktree.set(key, recoveryState)
   let settled = false
+
   return () => {
     if (settled) {
       return
     }
+
     settled = true
     recoveryState.pendingCount -= 1
+
     if (
       recoveryState.pendingCount === 0 &&
       sessionTabsRecoveryStateByWorktree.get(key) === recoveryState
     ) {
       sessionTabsRecoveryStateByWorktree.delete(key)
     }
+
     const removalFence = latestSessionTabsRemovalFenceByWorktree.get(key)
+
     if (
       removalFence?.recoveryState === recoveryState &&
       receivedFrame < removalFence.receivedFrame
     ) {
       removalFence.pendingCount -= 1
+
       if (removalFence.pendingCount === 0) {
         latestSessionTabsRemovalFenceByWorktree.delete(key)
       }
@@ -183,14 +202,19 @@ export function recordReceivedWebSessionTabsRemoval(
 ): void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   const current = latestSessionTabsRemovalFenceByWorktree.get(key)
+
   if (current && current.receivedFrame >= receivedFrame) {
     return
   }
+
   const recoveryState = sessionTabsRecoveryStateByWorktree.get(key)
+
   if (!recoveryState || recoveryState.pendingCount === 0) {
     latestSessionTabsRemovalFenceByWorktree.delete(key)
+
     return
   }
+
   latestSessionTabsRemovalFenceByWorktree.set(key, {
     receivedFrame,
     recoveryState,
@@ -215,21 +239,29 @@ export function shouldApplyRecoveredWebSessionTabsSnapshot(
   ) {
     return false
   }
+
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
+
   if (isRetiredSessionTabsPublicationEpoch(key, snapshot.publicationEpoch)) {
     return false
   }
+
   const removalFrame = latestSessionTabsRemovalFenceByWorktree.get(key)?.receivedFrame
+
   if (removalFrame !== undefined && receivedFrame < removalFrame) {
     return false
   }
+
   const latest = latestReceivedSessionTabsSnapshotByWorktree.get(key)
+
   if (!latest || latest.receivedFrame === receivedFrame) {
     return latest !== undefined
   }
+
   if (latest.publicationEpoch !== snapshot.publicationEpoch) {
     return receivedFrame > latest.receivedFrame
   }
+
   return snapshot.snapshotVersion >= latest.snapshotVersion
 }
 
@@ -238,11 +270,13 @@ export function recordAcceptedWebSessionTabsEnvironment(
   snapshot: RuntimeMobileSessionTabsResult
 ): void {
   const environments = new Set(sessionTabsEnvironmentsByWorktree.get(snapshot.worktree) ?? [])
+
   if (snapshot.tabs.length > 0) {
     environments.add(environmentId)
   } else {
     environments.delete(environmentId)
   }
+
   if (environments.size > 0) {
     sessionTabsEnvironmentsByWorktree.set(snapshot.worktree, environments)
   } else {
@@ -253,6 +287,7 @@ export function recordAcceptedWebSessionTabsEnvironment(
 export function removeWebSessionTabsEnvironment(environmentId: string, worktreeId: string): void {
   const environments = new Set(sessionTabsEnvironmentsByWorktree.get(worktreeId) ?? [])
   environments.delete(environmentId)
+
   if (environments.size > 0) {
     sessionTabsEnvironmentsByWorktree.set(worktreeId, environments)
   } else {

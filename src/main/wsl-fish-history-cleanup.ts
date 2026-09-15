@@ -31,15 +31,20 @@ export function deleteWslFishHistoryFile(
   if (!distro.trim() || !isSafeFishHistorySession(session)) {
     return Promise.resolve()
   }
+
   const key = `${distro}\0${session}`
   const existing = cleanupsInFlight.get(key)
+
   if (existing) {
     return existing
   }
+
   const cleanup = runCleanup(distro, session, run).finally(() => {
     cleanupsInFlight.delete(key)
   })
+
   cleanupsInFlight.set(key, cleanup)
+
   return cleanup
 }
 
@@ -60,6 +65,7 @@ async function runCleanup(
     args: ['--command', fishCleanupScript(session)],
     timeoutMs: 5_000
   })
+
   if (result.code !== 0 || result.timedOut) {
     throw new Error(
       `wsl fish history cleanup failed for ${distro}: code=${result.code} timedOut=${result.timedOut}`
@@ -80,10 +86,12 @@ export function __resetWslFishHistoryCleanups(): void {
 export async function flushWslFishHistoryCleanups(): Promise<void> {
   const awaited = new Set<Promise<void>>()
   let pending = [...cleanupsInFlight.values()]
+
   while (pending.length > 0) {
     for (const cleanup of pending) {
       awaited.add(cleanup)
     }
+
     await Promise.allSettled(pending)
     pending = [...cleanupsInFlight.values()].filter((cleanup) => !awaited.has(cleanup))
   }

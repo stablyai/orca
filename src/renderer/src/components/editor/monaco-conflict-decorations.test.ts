@@ -54,6 +54,7 @@ describe('findGitConflictBlocks', () => {
 
   it('parses CRLF conflict blocks without allocating a full line array', () => {
     const split = vi.spyOn(String.prototype, 'split')
+
     const content = [
       'before',
       '<<<<<<< HEAD',
@@ -75,6 +76,7 @@ describe('findGitConflictBlocks', () => {
 
   it('keeps non-ASCII line content aligned while scanning conflict markers', () => {
     const split = vi.spyOn(String.prototype, 'split')
+
     const content = [
       '概要 😀',
       '<<<<<<< HEAD',
@@ -141,6 +143,7 @@ describe('buildGitConflictDecorations', () => {
 
   it('builds decorations for large conflict bodies without splitting the full payload', () => {
     const split = vi.spyOn(String.prototype, 'split')
+
     const content = [
       '<<<<<<< HEAD',
       'current',

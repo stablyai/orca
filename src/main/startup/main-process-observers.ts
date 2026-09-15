@@ -22,9 +22,11 @@ import { mainProcessState as state } from './main-process-state'
 
 export function initializeMainProcessObservers(): void {
   const store = state.store
+
   if (!store) {
     throw new Error('Store must be initialized before observers')
   }
+
   state.unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
   state.agentAwakeService = new AgentAwakeService()
   state.agentAwakeService.setMode(
@@ -39,23 +41,29 @@ export function initializeMainProcessObservers(): void {
     isQuitting: () => state.isQuitting,
     getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0
   })
+
   const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
     state.agentAwakeService?.setStatuses(statuses)
   })
+
   const unsubscribeStatusFreshness = agentHookServer.subscribeStatusFreshness((status) => {
     state.agentAwakeService?.observeStatusFreshness(status)
   })
+
   const uninstallHookStatusRepublish = installHookStatusSessionTabsRepublish(
     agentHookServer,
     () => state.runtime
   )
+
   state.unsubscribeAgentAwakeStatusChanges = () => {
     unsubscribeStatusChanges()
     unsubscribeStatusFreshness()
     uninstallHookStatusRepublish()
   }
+
   // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
   initTelemetry(store)
+
   // Why: the breadcrumb alone never leaves the machine — it rides crash reports, and a hang is not
   // a crash (the app is force-quit, so no report is ever generated). Without this the incidence
   // number the watchdog exists to produce would sit unread on the user's disk. Must run after
@@ -66,6 +74,7 @@ export function initializeMainProcessObservers(): void {
       self_recovered: state.hangDetection.selfRecovered
     })
   }
+
   // Why: the trust-grant module is bundled into plain-node CLI entries where
   // the telemetry client cannot load, so the tracker is injected here instead
   // of imported there.
@@ -101,6 +110,7 @@ export function initializeMainProcessObservers(): void {
         failures: { code: string }[]
         truncated: boolean
       }
+
       if (result.scanned || result.failures.length || result.truncated) {
         console.info('[skills] startup transaction recovery:', {
           scanned: result.scanned,

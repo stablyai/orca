@@ -37,6 +37,7 @@ export async function resolveDirectSetupDecision(
   settings: PreflightSettings
 ): Promise<{ kind: 'decided'; decision: SetupDecision } | { kind: 'needs-modal' }> {
   let yamlHooks: OrcaHooks | null = null
+
   try {
     // Why: route the hooks probe by the repo's owner host (passed in) so preflight
     // and the subsequent owner-routed createWorktree hit the same host.
@@ -45,16 +46,21 @@ export async function resolveDirectSetupDecision(
   } catch {
     yamlHooks = null
   }
+
   const setupConfig = getSetupConfig(repo, yamlHooks)
+
   if (!setupConfig) {
     // Why: no setup script configured, so this path should behave like callers
     // that omit a setup decision entirely.
     return { kind: 'decided', decision: 'inherit' }
   }
+
   const policy = repo.hookSettings?.setupRunPolicy ?? 'run-by-default'
+
   if (policy === 'ask') {
     return { kind: 'needs-modal' }
   }
+
   return {
     kind: 'decided',
     decision: policy === 'run-by-default' ? 'run' : 'skip'

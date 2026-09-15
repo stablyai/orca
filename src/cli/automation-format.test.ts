@@ -41,6 +41,7 @@ describe('formatAutomationShow reports the host the authority projects', () => {
       automation: automation(),
       owner: { selector: { kind: 'ssh', targetId: 'box-1', targetGeneration: 4 } }
     })
+
     const replaced = formatAutomationShow({
       automation: automation(),
       owner: { selector: { kind: 'ssh', targetId: 'box-1', targetGeneration: 9 } }

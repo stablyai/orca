@@ -76,6 +76,7 @@ describe('OrchestrationDb bounded mutation receipts', () => {
     const count = sqliteFor(db)
       .prepare('SELECT COUNT(*) AS count FROM mutation_receipts')
       .get() as { count: number }
+
     expect(count.count).toBeLessThanOrEqual(MUTATION_RECEIPT_MAX_ROWS)
     expect(db.getMutationReceipt('caller', 'request_00001')).toBeUndefined()
     expect(db.getMutationReceipt('caller', 'request_10000')).toMatchObject({ state: 'completed' })
@@ -120,6 +121,7 @@ describe('OrchestrationDb bounded mutation receipts', () => {
     const count = sqliteFor(db)
       .prepare('SELECT COUNT(*) AS count FROM mutation_receipts')
       .get() as { count: number }
+
     expect(count.count).toBeLessThanOrEqual(MUTATION_RECEIPT_MAX_ROWS)
     expect(db.getMutationReceipt('caller', 'request_00001')).toBeUndefined()
     expect(db.getMutationReceipt('caller', 'remote_pruned')).toMatchObject({ state: 'pending' })
@@ -183,12 +185,14 @@ describe('OrchestrationDb Run pagination', () => {
   it('returns stable bounded pages without skipping Runs sharing a timestamp', () => {
     db = new OrchestrationDb(':memory:')
     const createdIds = Array.from({ length: 5 }, (_, index) => `run_page_${index}`)
+
     const insertRun = sqliteFor(db).prepare(
       `INSERT INTO runs (
          id, objective, coordinator_handle, coordinator_pane_key,
          consumer_generation, legacy, created_at
        ) VALUES (?, ?, ?, ?, 1, 0, '2025-01-01 00:00:00')`
     )
+
     for (const [index, id] of createdIds.entries()) {
       insertRun.run(
         id,
@@ -197,6 +201,7 @@ describe('OrchestrationDb Run pagination', () => {
         `tab_coord_${index}:11111111-1111-4111-8111-111111111111`
       )
     }
+
     const seen: string[] = []
     let cursor: string | undefined
 
@@ -219,6 +224,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
   afterEach(() => {
     db?.close()
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
     }
@@ -228,10 +234,12 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-dispatch-index-migration-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
+
     const task = db.createTask({
       runId: 'run_legacy_local',
       spec: 'indexed lookup'
     })
+
     const dispatch = createRootDispatch(db, task.id, 'term_worker')
     db.close()
     db = undefined
@@ -263,6 +271,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
         .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
         .get('idx_dispatch_assignee_handle')
     ).toBeDefined()
+
     const plan = sqlite
       .prepare(
         `EXPLAIN QUERY PLAN
@@ -270,6 +279,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
          WHERE assignee_handle = ? AND status IN ('pending', 'dispatched') LIMIT 1`
       )
       .all('term_worker') as { detail: string }[]
+
     expect(plan.map((row) => row.detail).join('\n')).toContain(
       'USING INDEX idx_dispatch_active_assignee_handle'
     )
@@ -296,11 +306,13 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-active-dispatch-index-migration-'))
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
+
     const run = db.createRun({
       objective: 'retained v24 authority',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
+
     const task = db.createTask({
       spec: 'indexed lookup',
       runId: run.id,
@@ -309,6 +321,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
       createdByProcessIncarnation: 'pty_creator:incarnation-a',
       createdByRunGeneration: run.consumer_generation
     })
+
     const dispatch = createRootDispatch(db, task.id, 'term_worker')
     db.close()
     db = undefined

@@ -14,24 +14,28 @@ export function skillDeleteBlockReasonLabel(reason: SkillDeleteBlockReason): str
         'Bundled with Orca — it would be restored'
       )
     }
+
     case 'plugin': {
       return translate(
         'auto.components.skills.SkillDelete.reasonPlugin',
         'Installed by a plugin — remove the plugin instead'
       )
     }
+
     case 'unowned': {
       return translate(
         'auto.components.skills.SkillDelete.reasonUnowned',
         'This skill lives outside Orca’s skill folders — delete it where it is stored'
       )
     }
+
     case 'missing': {
       return translate(
         'auto.components.skills.SkillDelete.reasonMissing',
         'This skill is no longer on disk'
       )
     }
+
     case 'stale': {
       return translate(
         'auto.components.skills.SkillDelete.reasonStale',
@@ -65,18 +69,23 @@ function linksLabel(count: number): string {
  *  halves are dropped: a link-only delete must not read "0 folders and 1 links". */
 export function skillDeletePlacementSummary(plan: SkillDeletePlan): string | null {
   const placements = plan.skills.flatMap((skill) => skill.placements)
+
   if (placements.length === 0) {
     return null
   }
+
   const folders = placements.filter((placement) => placement.kind === 'canonical').length
   const links = placements.length - folders
+
   const parts = [
     folders > 0 ? foldersLabel(folders) : null,
     links > 0 ? linksLabel(links) : null
   ].filter((part): part is string => part !== null)
+
   const roots = [...new Set(placements.map((placement) => placement.rootLabel))].sort(
     compareBaseSensitivityLocaleText
   )
+
   return translate(
     'auto.components.skills.SkillDelete.placementSummaryParts',
     'Removes {{parts}} across {{roots}}.',
@@ -94,10 +103,13 @@ export function skillDeletePlacementSummary(plan: SkillDeletePlan): string | nul
  */
 function parentDirectory(path: string): string {
   const index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
+
   if (index < 0) {
     return path
   }
+
   const isDriveRoot = index === 2 && path[1] === ':'
+
   return index === 0 || isDriveRoot ? path.slice(0, index + 1) : path.slice(0, index)
 }
 
@@ -139,11 +151,13 @@ export function skillDeleteNothingToDoLabel(count: number): string {
  *  already carries a typed reason per skill, so the dialog groups by it. */
 export function skillDeleteBlockedLines(plan: SkillDeletePlan): string[] {
   const counts = new Map<SkillDeleteBlockReason, number>()
+
   for (const skill of plan.skills) {
     if (skill.blocked) {
       counts.set(skill.blocked, (counts.get(skill.blocked) ?? 0) + 1)
     }
   }
+
   return [...counts].map(([reason, count]) =>
     translate('auto.components.skills.SkillDelete.blockedLine', '{{count}} × {{reason}}', {
       count,
@@ -160,18 +174,22 @@ export function skillDeleteResultLines(
   skills: readonly SkillDeleteResultEntry[]
 ): SkillDeleteResultLine[] {
   const grouped = new Map<string, { count: number; label: string }>()
+
   for (const skill of skills) {
     if (skill.status === 'deleted') {
       continue
     }
+
     const key =
       skill.status === 'skipped' && skill.blocked ? `skipped:${skill.blocked}` : skill.status
+
     const existing = grouped.get(key)
     grouped.set(key, {
       count: (existing?.count ?? 0) + 1,
       label: existing?.label ?? statusLabel(skill)
     })
   }
+
   return [...grouped].map(([key, value]) => ({
     key,
     label: translate('auto.components.skills.SkillDelete.resultLine', '{{count}} × {{label}}', {
@@ -188,24 +206,28 @@ function statusLabel(skill: SkillDeleteResultEntry): string {
         ? skillDeleteBlockReasonLabel(skill.blocked)
         : translate('auto.components.skills.SkillDelete.statusSkipped', 'Skipped')
     }
+
     case 'busy': {
       return translate(
         'auto.components.skills.SkillDelete.statusBusy',
         'Busy — another skill operation is in progress'
       )
     }
+
     case 'partial': {
       return translate(
         'auto.components.skills.SkillDelete.statusPartial',
         'Partly removed — some files are still on disk under a hidden name'
       )
     }
+
     case 'failed': {
       return translate(
         'auto.components.skills.SkillDelete.statusFailed',
         'Failed — nothing changed'
       )
     }
+
     case 'deleted': {
       return translate('auto.components.skills.SkillDelete.statusDeleted', 'Deleted')
     }

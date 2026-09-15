@@ -45,6 +45,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 /** Single-line row: text-sm leading (20px) over py-2. Set as the row's explicit height. */
 const NO_PARENT_ROW_HEIGHT = 36
+
 const NO_PARENT_ROW_KEY = 'no-parent'
 
 type ComposerParentWorktreePickerProps = {
@@ -95,7 +96,9 @@ function ComposerParentWorktreePickerImpl({
     if (!value) {
       return null
     }
+
     const parent = getIndexedWorktreeById(s.worktreesByRepo, value)
+
     return parent && !parent.isArchived ? parent.displayName : null
   })
 
@@ -147,6 +150,7 @@ function ComposerParentWorktreePickerImpl({
           onOpenAutoFocus={(event) => {
             event.preventDefault()
             const content = event.currentTarget
+
             if (content instanceof HTMLElement) {
               content.querySelector<HTMLInputElement>('[data-slot="command-input"]')?.focus()
             }
@@ -181,19 +185,23 @@ function getFolderWorkspaceSubtreeIds(
 ): Set<string> {
   const folderKey = folderWorkspaceKey(folderWorkspaceId)
   const rootIds = new Set<string>()
+
   for (const lineage of Object.values(workspaceLineageByChildKey)) {
     if (lineage.parentWorkspaceKey !== folderKey) {
       continue
     }
+
     // Why: the folder view drops archived and instance-stale rows, so accepting them here
     // would offer a parent whose whole branch the folder never actually shows.
     const rootWorktree = getLineageChildWorktree(lineage, worktreeById)
+
     if (rootWorktree) {
       rootIds.add(rootWorktree.id)
     }
   }
 
   const subtreeIds = new Set(rootIds)
+
   for (const children of getLineageChildrenByParentId(
     worktreeLineageById,
     worktreeById,
@@ -203,6 +211,7 @@ function getFolderWorkspaceSubtreeIds(
       subtreeIds.add(child.id)
     }
   }
+
   return subtreeIds
 }
 
@@ -233,8 +242,10 @@ function ParentWorktreeCandidateList({
       hostId: executionHostId ?? undefined,
       projectId: projectId ?? undefined
     }
+
     const worktreeMap = getIndexedWorktreeMap(worktreesByRepo)
     const cyclicLineageIds = getCyclicProjectedWorktreeLineageIds(worktreeLineageById, worktreeMap)
+
     const folderSubtreeIds = activeFolderWorkspaceId
       ? getFolderWorkspaceSubtreeIds(
           activeFolderWorkspaceId,
@@ -243,6 +254,7 @@ function ParentWorktreeCandidateList({
           worktreeMap
         )
       : null
+
     return getIndexedAllWorktrees(worktreesByRepo)
       .filter(
         (candidate) =>
@@ -267,6 +279,7 @@ function ParentWorktreeCandidateList({
     () => filterWorktreeParentCandidates(candidates, search),
     [candidates, search]
   )
+
   // Index 0 is the pinned "No parent" row; candidates start at 1.
   const activeIndex = clampWorktreeParentPickerIndex(highlightedIndex, filtered.length + 1)
 
@@ -312,11 +325,13 @@ function ParentWorktreeCandidateList({
       if (imeEnter.ownsKeyDown(event) || isImeCompositionKeyDown(event)) {
         return
       }
+
       const navigate = (nextIndex: number): void => {
         event.preventDefault()
         event.stopPropagation()
         moveHighlight(clampWorktreeParentPickerIndex(nextIndex, filtered.length + 1))
       }
+
       if (event.key === 'ArrowDown') {
         navigate(activeIndex + 1)
       } else if (event.key === 'ArrowUp') {
@@ -327,6 +342,7 @@ function ParentWorktreeCandidateList({
         navigate(filtered.length)
       } else if (event.key === 'Enter') {
         const candidate = activeIndex === 0 ? null : filtered[activeIndex - 1]
+
         if (activeIndex === 0 || candidate) {
           event.preventDefault()
           event.stopPropagation()
@@ -366,10 +382,13 @@ function ParentWorktreeCandidateList({
           {virtualRows.map((virtualRow) => {
             const rowIndex = virtualRow.index
             const candidate = rowIndex === 0 ? null : filtered[rowIndex - 1]
+
             if (rowIndex !== 0 && !candidate) {
               return null
             }
+
             const isHighlighted = rowIndex === activeIndex
+
             return (
               <div
                 key={virtualRow.key}

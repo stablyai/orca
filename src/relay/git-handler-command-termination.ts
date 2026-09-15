@@ -1,6 +1,7 @@
 import { runProcess } from '../shared/child-process/run-process'
 
 export const MAX_GIT_BUFFER = 10 * 1024 * 1024
+
 const GIT_REBASE_PROCESS_FALLBACK_TIMEOUT_MS = 2_147_000_000
 
 type GitTerminationOptions = {
@@ -30,9 +31,11 @@ export async function runGitToTermination(
     terminationBarrier: true,
     ...(stdin === undefined ? {} : { input: stdin })
   })
+
   if (result.code === 0 && !result.timedOut && !options.signal?.aborted) {
     return { stdout: result.stdout, stderr: result.stderr }
   }
+
   const error = new Error(
     result.timedOut
       ? `git ${args[0] ?? 'command'} timed out.`
@@ -40,9 +43,11 @@ export async function runGitToTermination(
         ? 'The operation was aborted.'
         : result.stderr.trim() || `git ${args[0] ?? 'command'} failed.`
   )
+
   if (options.signal?.aborted) {
     error.name = 'AbortError'
   }
+
   throw Object.assign(error, {
     code: result.code,
     killed: result.timedOut || result.signal !== null || options.signal?.aborted === true,

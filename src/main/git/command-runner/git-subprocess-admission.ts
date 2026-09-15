@@ -20,6 +20,7 @@ export type {
   GitAdmissionGrant,
   GitAdmissionRequest
 } from './git-admission-state'
+
 export {
   GENERAL_CAP,
   GENERAL_HEADROOM,
@@ -37,6 +38,7 @@ function commandClass(args: readonly string[]): AdmissionClass {
 
 function routeKey(request: GitAdmissionRequest): string | null {
   const distro = request.wslDistro?.trim().toLowerCase()
+
   return distro ? `wsl:${distro}` : uncRouteKey(request.cwd)
 }
 
@@ -56,8 +58,10 @@ export class GitAdmissionScheduler {
     if (request.signal?.aborted) {
       return Promise.reject(createAbortError())
     }
+
     const enqueuedAt = this.config.now()
     const { admissionClass, route, budgetKeys } = this.resolveBudgets(request)
+
     return new Promise<GitAdmissionGrant>((resolve, reject) => {
       const waiter: AdmissionWaiter = {
         id: this.nextWaiterId++,
@@ -73,13 +77,17 @@ export class GitAdmissionScheduler {
         reject,
         onAbort: () => this.abort(waiter)
       }
+
       this.waiters.enqueue(waiter)
       this.refreshRouteEligibility(admissionClass, route)
       request.signal?.addEventListener('abort', waiter.onAbort, { once: true })
+
       if (request.signal?.aborted) {
         this.abort(waiter)
+
         return
       }
+
       // Adding a blocked waiter cannot make an older waiter runnable. Avoid a
       // queue scan for every arrival while the fixed-size budget is saturated.
       if (this.slotKindFor(waiter)) {
@@ -95,6 +103,7 @@ export class GitAdmissionScheduler {
     candidateCount: number
   } {
     const queuedWaiters = this.waiters.snapshot()
+
     return {
       queued: this.waiters.count,
       queuedWaiters: queuedWaiters.map(({ id, args, tier }) => ({ id, args, tier })),
@@ -116,20 +125,25 @@ export class GitAdmissionScheduler {
     const admissionClass = commandClass(request.args)
     const route = routeKey(request)
     const keys: string[] = [admissionClass]
+
     if (route) {
       keys.push(`route:${admissionClass}:${route}`)
     }
+
     for (const key of keys) {
       this.ensureBudget(key)
     }
+
     return { admissionClass, route, budgetKeys: keys }
   }
 
   private ensureBudget(key: string): AdmissionBudget {
     let budget = this.budgets.get(key)
+
     if (budget) {
       return budget
     }
+
     const isRoute = key.startsWith('route:')
     const isNetwork = key === 'network'
     budget = {
@@ -147,17 +161,20 @@ export class GitAdmissionScheduler {
       headroomUsed: 0
     }
     this.budgets.set(key, budget)
+
     return budget
   }
 
   private effectiveTier(waiter: AdmissionWaiter, now: number): number {
     const promotions = Math.floor((now - waiter.enqueuedAt) / this.config.agingMs)
+
     return Math.max(0, ADMISSION_TIER_VALUE[waiter.tier] - promotions)
   }
 
   private fits(waiter: AdmissionWaiter, slotKind: AdmissionSlotKind): boolean {
     return waiter.budgetKeys.every((key) => {
       const budget = this.ensureBudget(key)
+
       return slotKind === 'base'
         ? budget.baseUsed < budget.baseCapacity
         : budget.headroomUsed < budget.headroomCapacity
@@ -176,6 +193,7 @@ export class GitAdmissionScheduler {
     while (true) {
       const now = this.config.now()
       const globalBudget = this.ensureBudget(admissionClass)
+
       const selected = this.waiters.nextFitting(
         admissionClass,
         (waiter) => this.effectiveTier(waiter, now),
@@ -183,9 +201,11 @@ export class GitAdmissionScheduler {
         globalBudget.headroomUsed < globalBudget.headroomCapacity,
         (waiter) => this.abort(waiter)
       )
+
       if (!selected) {
         return
       }
+
       this.grant(selected.waiter, selected.slotKind, now)
     }
   }
@@ -193,14 +213,17 @@ export class GitAdmissionScheduler {
   private grant(waiter: AdmissionWaiter, slotKind: AdmissionSlotKind, now: number): void {
     waiter.state = 'granted'
     waiter.slotKind = slotKind
+
     for (const key of waiter.budgetKeys) {
       const budget = this.ensureBudget(key)
+
       if (slotKind === 'base') {
         budget.baseUsed += 1
       } else {
         budget.headroomUsed += 1
       }
     }
+
     this.refreshRouteEligibility(waiter.admissionClass, waiter.route)
     this.waiters.dequeue(waiter)
     const queueWaitMs = Math.max(0, now - waiter.enqueuedAt)
@@ -209,6 +232,7 @@ export class GitAdmissionScheduler {
       if (waiter.state !== 'granted') {
         return
       }
+
       waiter.state = 'settled'
       waiter.signal?.removeEventListener('abort', waiter.onAbort)
       waiter.resolve({
@@ -224,19 +248,24 @@ export class GitAdmissionScheduler {
     queueWaitMs: number
   ): () => void {
     let released = false
+
     return () => {
       if (released) {
         return
       }
+
       released = true
+
       for (const key of waiter.budgetKeys) {
         const budget = this.ensureBudget(key)
+
         if (slotKind === 'base') {
           budget.baseUsed -= 1
         } else {
           budget.headroomUsed -= 1
         }
       }
+
       this.refreshRouteEligibility(waiter.admissionClass, waiter.route)
       this.publishEvent(waiter, slotKind, 'release', queueWaitMs)
       this.pruneRouteBudgets(waiter.budgetKeys)
@@ -248,6 +277,7 @@ export class GitAdmissionScheduler {
     if (waiter.state === 'settled') {
       return
     }
+
     if (waiter.state === 'granted' && waiter.slotKind) {
       this.releaseOnce(
         waiter,
@@ -255,13 +285,16 @@ export class GitAdmissionScheduler {
         Math.max(0, this.config.now() - waiter.enqueuedAt)
       )()
     }
+
     const wasQueued = waiter.state === 'queued'
     waiter.state = 'settled'
     waiter.signal?.removeEventListener('abort', waiter.onAbort)
+
     if (wasQueued) {
       this.waiters.dequeue(waiter)
       this.pruneRouteBudgets(waiter.budgetKeys)
     }
+
     waiter.reject(createAbortError())
   }
 
@@ -284,6 +317,7 @@ export class GitAdmissionScheduler {
   private pruneRouteBudgets(keys: readonly string[]): void {
     for (const key of keys) {
       const budget = this.budgets.get(key)
+
       if (
         budget &&
         key.startsWith('route:') &&
@@ -313,6 +347,7 @@ export function acquireGitAdmission(request: GitAdmissionRequest): Promise<GitAd
   if (process.env.ORCA_GIT_ADMISSION_DISABLED === '1') {
     return Promise.resolve({ queueWaitMs: 0, release: () => {} })
   }
+
   return scheduler.acquire(request)
 }
 

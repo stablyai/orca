@@ -15,6 +15,7 @@ async function pluginWithCatalog(catalog: unknown): Promise<ValidDiscoveredPlugi
   roots.push(rootDir)
   await mkdir(join(rootDir, 'locales'))
   await writeFile(join(rootDir, 'locales', 'pt-BR.json'), JSON.stringify(catalog))
+
   const manifest = pluginManifestSchema.parse({
     manifestVersion: 1,
     id: 'portuguese',
@@ -28,6 +29,7 @@ async function pluginWithCatalog(catalog: unknown): Promise<ValidDiscoveredPlugi
     },
     capabilities: []
   })
+
   return {
     pluginKey: 'orca-samples.portuguese',
     rootDir,
@@ -66,6 +68,7 @@ describe('PluginLanguagePackRegistry', () => {
     const plugin = await pluginWithCatalog({
       auto: { components: { settings: { PluginConsentDialog: { disclaimer: 'Safe' } } } }
     })
+
     const registry = new PluginLanguagePackRegistry(new PluginContentVerifier())
 
     await registry.reconcile([plugin], () => true)

@@ -70,6 +70,7 @@ describe.each([
         expect(measurement.error).toBeUndefined()
         expect(measurement.maxNestedDepth).toBeLessThanOrEqual(EMBED_ENTRY_REST_OF_LINE_BUDGET)
       }
+
       // Depth must stop tracking the occurrence count, not merely grow slower.
       expect(Math.max(...depths.map((measurement) => measurement.maxNestedDepth))).toBeLessThan(
         ramp.at(-1) as number
@@ -115,6 +116,7 @@ describe.each([
 
   it('keeps tokenizing after an over-budget line and re-embeds on the next one', () => {
     const overBudget = `<div class="${'x'.repeat(EMBED_ENTRY_REST_OF_LINE_BUDGET)}">{value}</div>`
+
     const measurement = measureNestedDepth(createMonarchTokenizer(languageId, language), [
       overBudget,
       '<p>{value}</p>'
@@ -161,6 +163,7 @@ describe('vue embed-entry recursion', () => {
     const ramp = [50, 200, 1000, 2500, 3900].filter(
       (count) => templateLine(count).length < MAX_TOKENIZATION_LINE_LENGTH
     )
+
     expect(ramp.length).toBeGreaterThanOrEqual(3)
 
     const depths = ramp.map((count) =>
@@ -171,6 +174,7 @@ describe('vue embed-entry recursion', () => {
       expect(measurement.error).toBeUndefined()
       expect(measurement.maxNestedDepth).toBeLessThanOrEqual(EMBED_ENTRY_REST_OF_LINE_BUDGET)
     }
+
     expect(Math.max(...depths.map((measurement) => measurement.maxNestedDepth))).toBeLessThan(
       ramp.at(-1) as number
     )

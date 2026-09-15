@@ -25,13 +25,16 @@ function canonicalPayload(value: unknown): string {
   if (Array.isArray(value)) {
     return `[${value.map(canonicalPayload).join(',')}]`
   }
+
   if (value && typeof value === 'object') {
     const record = value as Record<string, unknown>
+
     return `{${Object.keys(record)
       .sort()
       .map((key) => `${JSON.stringify(key)}:${canonicalPayload(record[key])}`)
       .join(',')}}`
   }
+
   // JSON has no representation for undefined; preserve valid replayable JSON.
   return value === undefined ? 'null' : JSON.stringify(value)
 }
@@ -73,12 +76,14 @@ function validateInput(input: AttemptObservationFactInput): void {
   if (!input.id || !input.dispatchId || !input.authorityId) {
     throw new OrchestrationError('invalid_observation', 'Observation identity fields are required.')
   }
+
   if (!Number.isSafeInteger(input.sequence) || input.sequence < 0) {
     throw new OrchestrationError(
       'invalid_observation',
       'Observation sequence must be a non-negative integer.'
     )
   }
+
   for (const value of [input.sourceObservedAt, input.executionReceivedAt, input.homeReceivedAt]) {
     if (value !== undefined && value !== null && (!Number.isFinite(value) || value < 0)) {
       throw new OrchestrationError(
@@ -94,9 +99,11 @@ export function recordAttemptObservation(
   input: AttemptObservationFactInput
 ): { fact: AttemptObservationFact; duplicate: boolean } {
   validateInput(input)
+
   const existing = this.db
     .prepare('SELECT * FROM attempt_observation_facts WHERE id = ?')
     .get(input.id) as AttemptObservationStorageRow | undefined
+
   if (existing) {
     if (!sameFact(existing, input)) {
       throw new OrchestrationError(
@@ -104,24 +111,30 @@ export function recordAttemptObservation(
         `Observation ${input.id} was replayed with different content.`
       )
     }
+
     return { fact: exposeAttemptObservationFact(existing), duplicate: true }
   }
+
   const dispatch = this.getDispatchContextById(input.dispatchId)
+
   if (!dispatch) {
     throw new OrchestrationError(
       'dispatch_not_found',
       `Dispatch ${input.dispatchId} was not found.`
     )
   }
+
   const occupied = this.db
     .prepare('SELECT id FROM attempt_observation_facts WHERE dispatch_id = ? AND sequence = ?')
     .get(input.dispatchId, input.sequence) as { id: string } | undefined
+
   if (occupied) {
     throw new OrchestrationError(
       'observation_order_conflict',
       `Dispatch ${input.dispatchId} observation sequence ${input.sequence} is already ${occupied.id}.`
     )
   }
+
   this.db
     .prepare(
       `INSERT INTO attempt_observation_facts (
@@ -142,9 +155,11 @@ export function recordAttemptObservation(
       input.executionReceivedAt ?? null,
       input.homeReceivedAt
     )
+
   const row = this.db
     .prepare('SELECT * FROM attempt_observation_facts WHERE id = ?')
     .get(input.id) as AttemptObservationStorageRow
+
   return { fact: exposeAttemptObservationFact(row), duplicate: false }
 }
 

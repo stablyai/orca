@@ -7,6 +7,7 @@ import { resolveMarkdownLinkTarget } from './markdown-internal-links'
 // Most tests avoid case-differences so they pass on either host.
 
 const SOURCE = '/repo/docs/note.md'
+
 const ROOT = '/repo'
 
 describe('resolveMarkdownLinkTarget', () => {
@@ -25,6 +26,7 @@ describe('resolveMarkdownLinkTarget', () => {
       '\\\\server\\share\\repo\\docs\\note.md',
       '\\\\server\\share\\repo'
     )
+
     expect(r).toEqual({
       kind: 'markdown',
       absolutePath: '//server/share/repo/docs/guide.md',
@@ -48,6 +50,7 @@ describe('resolveMarkdownLinkTarget', () => {
       'C:\\repo\\docs\\note.md',
       'C:\\repo'
     )
+
     expect(r).toEqual({
       kind: 'markdown',
       absolutePath: 'C:/repo/docs/guide.md',
@@ -61,6 +64,7 @@ describe('resolveMarkdownLinkTarget', () => {
       'C:\\repo\\docs\\note.md',
       'C:\\repo'
     )
+
     expect(r).toMatchObject({
       kind: 'markdown',
       absolutePath: 'C:/repo/docs/guide.md',
@@ -146,6 +150,7 @@ describe('resolveMarkdownLinkTarget', () => {
       '\\\\server\\share\\repo\\docs\\note.md',
       '\\\\server\\share\\repo'
     )
+
     expect(r).toMatchObject({
       kind: 'file',
       uri: 'file://server/share/repo/docs/image.png',

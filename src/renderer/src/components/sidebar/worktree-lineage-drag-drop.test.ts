@@ -98,6 +98,7 @@ describe('getWorktreeLineageDropTargetId', () => {
         top: 100,
         bottom: insideParentContent ? 300 : 200
       })
+
       const child = makeTarget({ worktreeId: 'child', top: 220, bottom: 300 })
       const parentContent = target.closest('[data-worktree-card-parent-content]')!
       const children = document.createElement('div')
@@ -140,10 +141,12 @@ describe('getReorderedWorktreeIdsToUnnest', () => {
     const child = makeWorktree('child')
     const root = makeWorktree('root')
     const grandchild = makeWorktree('grandchild')
+
     const lineageById = {
       [child.id]: makeLineage(child, parent),
       [grandchild.id]: makeLineage(grandchild, child)
     }
+
     const worktreeMap = new Map([parent, child, root, grandchild].map((item) => [item.id, item]))
 
     expect(
@@ -161,10 +164,12 @@ describe('getReorderedWorktreeIdsToUnnest', () => {
     const parent = makeWorktree('parent')
     const sourceChild = makeWorktree('source-child')
     const otherChild = makeWorktree('other-child')
+
     const lineageById = {
       [sourceChild.id]: makeLineage(sourceChild, parent),
       [otherChild.id]: makeLineage(otherChild, parent)
     }
+
     const worktreeMap = new Map([parent, sourceChild, otherChild].map((item) => [item.id, item]))
 
     expect(
@@ -199,9 +204,11 @@ describe('getReorderedWorktreeIdsToUnnest', () => {
     const parent = makeWorktree('parent')
     const child = makeWorktree('child')
     const inlineChild = { ...child, lineage: makeLineage(child, parent) } as Worktree
+
     const lineageById = {
       [child.id]: { ...makeLineage(child, parent), parentWorktreeInstanceId: 'stale-parent' }
     }
+
     const worktreeMap = new Map([parent, inlineChild].map((item) => [item.id, item]))
 
     expect(
@@ -278,8 +285,10 @@ function makeTarget(args: {
   const targetByRole = { status, identity, agent }
   const target = targetByRole[args.targetRole ?? 'identity']
   const contained = args.contained ?? true
+
   if (!contained) {
     container.removeChild(row)
   }
+
   return { container, target }
 }

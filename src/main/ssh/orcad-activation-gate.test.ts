@@ -67,6 +67,7 @@ describe('evaluateOrcadActivation', () => {
       readiness({ health: health({ buildHash: '0000000000000000' }) }),
       EXPECTED
     )
+
     expect(verdict).toMatchObject({ decision: 'reject', code: 'orcad_activation_build_mismatch' })
   })
 
@@ -83,6 +84,7 @@ describe('evaluateOrcadActivation', () => {
       }),
       EXPECTED
     )
+
     expect(verdict).toMatchObject({ decision: 'reject', code: 'orcad_activation_daemon_absent' })
   })
 
@@ -93,6 +95,7 @@ describe('evaluateOrcadActivation', () => {
       }),
       EXPECTED
     )
+
     expect(verdict).toMatchObject({ decision: 'reject', code: 'orcad_activation_daemon_degraded' })
   })
 
@@ -112,6 +115,7 @@ describe('evaluateOrcadActivation', () => {
       }),
       EXPECTED
     )
+
     expect(verdict).toMatchObject({
       decision: 'reject',
       code: 'orcad_activation_pty_self_test_failed'
@@ -123,6 +127,7 @@ describe('evaluateOrcadActivation', () => {
       readiness({ health: health({ terminalDaemon: daemon({ ownsFreshSessions: false }) }) }),
       EXPECTED
     )
+
     expect(verdict).toMatchObject({
       decision: 'reject',
       code: 'orcad_activation_no_persistent_terminals'
@@ -146,6 +151,7 @@ describe('evaluateOrcadActivation', () => {
       }),
       EXPECTED
     )
+
     expect(verdict).toMatchObject({ decision: 'activate', coverage: 'handshake' })
     expect(verdict.decision === 'activate' && verdict.warnings[0]).toContain(
       'covered the daemon handshake only'
@@ -159,6 +165,7 @@ describe('evaluateOrcadActivation', () => {
       }),
       EXPECTED
     )
+
     expect(verdict).toMatchObject({ code: 'orcad_activation_build_mismatch' })
   })
 })

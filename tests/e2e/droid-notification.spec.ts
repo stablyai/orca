@@ -43,14 +43,17 @@ async function installMainProcessNotificationDispatchSpy(app: ElectronApplicatio
       __notificationDispatchLog?: NotificationDispatch[]
       __notificationDispatchSpyInstalled?: boolean
     }
+
     if (g.__notificationDispatchSpyInstalled) {
       return
     }
+
     g.__notificationDispatchLog = []
     g.__notificationDispatchSpyInstalled = true
     ipcMain.removeHandler('notifications:dispatch')
     ipcMain.handle('notifications:dispatch', (_event: unknown, args: NotificationDispatch) => {
       g.__notificationDispatchLog!.push(args)
+
       return { delivered: true }
     })
   })
@@ -61,6 +64,7 @@ async function getNotificationDispatches(
 ): Promise<NotificationDispatch[]> {
   return app.evaluate(() => {
     const g = globalThis as unknown as { __notificationDispatchLog?: NotificationDispatch[] }
+
     return g.__notificationDispatchLog ?? []
   })
 }
@@ -68,20 +72,26 @@ async function getNotificationDispatches(
 async function switchToOtherExistingWorktree(page: Page): Promise<string> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('Store unavailable')
     }
+
     const state = store.getState()
     const activeWorktreeId = state.activeWorktreeId
+
     if (!activeWorktreeId) {
       throw new Error('No active worktree')
     }
+
     const activeWorktree = Object.values(state.worktreesByRepo)
       .flat()
       .find((worktree) => worktree.id === activeWorktreeId)
+
     if (!activeWorktree) {
       throw new Error(`Active worktree ${activeWorktreeId} not found`)
     }
+
     const otherWorktree =
       Object.values(state.worktreesByRepo)
         .flat()
@@ -97,10 +107,13 @@ async function switchToOtherExistingWorktree(page: Page): Promise<string> {
           (worktree) =>
             worktree.repoId === activeWorktree.repoId && worktree.id !== activeWorktreeId
         )
+
     if (!otherWorktree) {
       throw new Error(`No inactive worktree found for repo ${activeWorktree.repoId}`)
     }
+
     state.setActiveWorktree(otherWorktree.id)
+
     return otherWorktree.id
   })
 }
@@ -108,9 +121,11 @@ async function switchToOtherExistingWorktree(page: Page): Promise<string> {
 async function getAgentStatuses(page: Page): Promise<AgentStatusSummary[]> {
   return page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       return []
     }
+
     return Object.values(store.getState().agentStatusByPaneKey ?? {}).map((entry) => ({
       paneKey: entry.paneKey,
       state: entry.state,
@@ -124,6 +139,7 @@ async function getAgentStatuses(page: Page): Promise<AgentStatusSummary[]> {
 async function getCachedAgentStatuses(page: Page): Promise<AgentStatusSummary[]> {
   return page.evaluate(async () => {
     const snapshot = await window.api.agentStatus.getSnapshot()
+
     return snapshot.map((entry) => ({
       paneKey: entry.paneKey,
       state: entry.state,
@@ -139,15 +155,18 @@ async function getRendererOrCachedAgentStatuses(page: Page): Promise<AgentStatus
     getAgentStatuses(page),
     getCachedAgentStatuses(page)
   ])
+
   return [...rendererStatuses, ...cachedStatuses]
 }
 
 async function isWorktreeUnread(page: Page, worktreeId: string): Promise<boolean> {
   return page.evaluate((targetWorktreeId) => {
     const store = window.__store
+
     if (!store) {
       return false
     }
+
     return (
       Object.values(store.getState().worktreesByRepo)
         .flat()
@@ -230,6 +249,7 @@ test.describe('Droid notifications', () => {
       .poll(
         async () => {
           const dispatches = await getNotificationDispatches(electronApp)
+
           return dispatches.filter((dispatch) => dispatch.source === 'agent-task-complete')
         },
         {
@@ -394,6 +414,7 @@ test.describe('Droid notifications', () => {
       .poll(
         async () => {
           const dispatches = await getNotificationDispatches(electronApp)
+
           return dispatches.filter((dispatch) => dispatch.source === 'agent-task-complete')
         },
         {

@@ -31,12 +31,14 @@ describe('buildHeadlessTerminalSplitLayout (headless split persistence)', () => 
       expandedLeafId: null,
       ptyIdsByLeafId: { 'leaf-a': 'pty-a' }
     }
+
     const next = buildHeadlessTerminalSplitLayout(existing, {
       leafId: 'leaf-b',
       ptyId: 'pty-b',
       splitFromLeafId: 'leaf-a',
       direction: 'vertical'
     })
+
     expect(countTerminalLayoutLeaves(next.root)).toBe(2)
     expect(next.root).toEqual({
       type: 'split',
@@ -60,12 +62,14 @@ describe('buildHeadlessTerminalSplitLayout (headless split persistence)', () => 
       expandedLeafId: null,
       ptyIdsByLeafId: { 'leaf-a': 'pty-a', 'leaf-b': 'pty-b' }
     }
+
     const next = buildHeadlessTerminalSplitLayout(existing, {
       leafId: 'leaf-c',
       ptyId: 'pty-c',
       splitFromLeafId: 'leaf-b',
       direction: 'horizontal'
     })
+
     // 3 leaves total; the split happened at leaf-b, leaf-a untouched.
     expect(countTerminalLayoutLeaves(next.root)).toBe(3)
     expect(next.root).toEqual({
@@ -93,6 +97,7 @@ describe('buildHeadlessTerminalSplitLayout (headless split persistence)', () => 
       splitFromLeafId: 'leaf-a',
       direction: 'horizontal'
     })
+
     expect(countTerminalLayoutLeaves(next.root)).toBe(2)
     expect(next.root).toEqual({
       type: 'split',
@@ -172,6 +177,7 @@ describe('buildHeadlessTerminalSplitLayout (headless split persistence)', () => 
       },
       { leafId: 'leaf-b', ptyId: 'pty-b', splitFromLeafId: 'leaf-a', direction: 'vertical' }
     )
+
     expect(countTerminalLayoutLeaves(afterSplit.root)).toBeGreaterThan(1)
   })
 })

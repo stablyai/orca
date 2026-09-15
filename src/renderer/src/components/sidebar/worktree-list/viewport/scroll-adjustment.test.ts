@@ -208,6 +208,7 @@ describe('estimateRenderRowSize', () => {
     const firstHeaderIndex = 0
     const secondaryHeaderIndex = 1
     const inactiveSize = estimateRenderRowSize(rows, secondaryHeaderIndex, firstHeaderIndex, null)
+
     const activeSize = estimateRenderRowSize(
       rows,
       secondaryHeaderIndex,

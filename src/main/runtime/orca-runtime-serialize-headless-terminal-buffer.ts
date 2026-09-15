@@ -28,9 +28,11 @@ export class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeW
     pendingEscapeTailAnsi?: string
   } | null> {
     const state = this.headlessTerminals.get(ptyId)
+
     if (!state) {
       return null
     }
+
     await state.writeChain
     await state.ownership.settle()
     // Why: normal history is separated from an active alternate frame, so the
@@ -39,6 +41,7 @@ export class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeW
     const snapshot = state.emulator.getSnapshot({ scrollbackRows })
     const terminalOwner = state.ownership.owner
     const data = snapshot.rehydrateSequences + snapshot.snapshotAnsi
+
     return data.length > 0 || opts.includeEmpty === true
       ? this.preferTrackedLastTitle(ptyId, {
           data,
@@ -76,9 +79,11 @@ export class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeW
   protected disposeHeadlessTerminal(ptyId: string): void {
     this.headlessHydrationState.delete(ptyId)
     const state = this.headlessTerminals.get(ptyId)
+
     if (!state) {
       return
     }
+
     this.headlessTerminals.delete(ptyId)
     // Why: queued chain links still parse below before the emulator disposes;
     // sever the reply sink now so they cannot write to a respawned PTY that
@@ -90,16 +95,21 @@ export class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeW
 
   resolveLeafForHandle(handle: string): { ptyId: string | null } | null {
     const record = this.handles.get(handle)
+
     if (!record) {
       return null
     }
+
     if (record.tabId.startsWith('pty:')) {
       return { ptyId: record.ptyId }
     }
+
     const leaf = this.leaves.get(this.getLeafKey(record.tabId, record.leafId))
+
     if (!leaf) {
       return null
     }
+
     return { ptyId: leaf.ptyId }
   }
 
@@ -113,22 +123,28 @@ export class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeW
     // reload cleared, so the lookup below sees it; without it a phone's held handle inspects nothing.
     this.getLivePtyForHandle(handle)
     const record = this.handles.get(handle)
+
     if (!record) {
       return null
     }
+
     if (record.tabId.startsWith('pty:')) {
       return { ptyId: record.ptyId }
     }
+
     const leaf = this.leaves.get(this.getLeafKey(record.tabId, record.leafId))
+
     if (!leaf) {
       return null
     }
+
     if (
       record.ptyId !== null &&
       (leaf.ptyId !== record.ptyId || leaf.ptyGeneration !== record.ptyGeneration)
     ) {
       throw new Error('terminal_handle_stale')
     }
+
     return { ptyId: leaf.ptyId }
   }
 
@@ -146,7 +162,9 @@ export class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeW
       connectionIncarnation,
       attachmentId: randomUUID()
     })
+
     this.orchestrationCompatibilitySshAttachments.set(authority.attachmentId, authority)
+
     return authority
   }
 

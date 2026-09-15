@@ -39,6 +39,7 @@ function createHarness(): {
 } {
   const state: PortScanDebounceState = new Map()
   let publishedScans: Record<string, WorkspacePortScanResult> = {}
+
   return {
     apply: (results) => {
       const reconciled = reconcileTransientPortScanFailures(
@@ -47,7 +48,9 @@ function createHarness(): {
         state,
         FAILURE_THRESHOLD
       )
+
       publishedScans = Object.fromEntries(reconciled.map(({ key, result }) => [key, result]))
+
       return reconciled
     },
     publish: (key, result) => {
@@ -109,6 +112,7 @@ describe('reconcileTransientPortScanFailures', () => {
       { key: 'local:all', result: good(['tcp:3000']) },
       { key: 'remote:all', result: unavailable() }
     ])
+
     expect(next.find((r) => r.key === 'local:all')?.result.ports).toHaveLength(1)
     expect(next.find((r) => r.key === 'remote:all')?.result.ports).toHaveLength(1)
   })

@@ -41,10 +41,13 @@ export async function createLinearIssueRelation(
       { input }
     )
   )
+
   const created = raw.data?.issueRelationCreate
+
   if (created?.success !== true || !created.issueRelation) {
     throw new LinearWriteFailure('failed', 'Linear relation creation failed')
   }
+
   return created.issueRelation
 }
 
@@ -58,6 +61,7 @@ export async function deleteLinearIssueRelation(
       { id: relationId }
     )
   )
+
   if (raw.data?.issueRelationDelete?.success !== true) {
     throw new LinearWriteFailure('failed', 'Linear relation removal failed')
   }
@@ -70,7 +74,9 @@ async function runRelationMutation<T>(mutation: () => Promise<T>): Promise<T> {
     if (isAuthError(error)) {
       throw error
     }
+
     const failure = classifyLinearWriteFailure(error)
+
     if (failure.kind === 'duplicate_id') {
       // Why: relation creates have no caller-supplied id, so a duplicate can be a concurrent add.
       throw new LinearWriteFailure(
@@ -79,6 +85,7 @@ async function runRelationMutation<T>(mutation: () => Promise<T>): Promise<T> {
         error
       )
     }
+
     throw failure
   }
 }

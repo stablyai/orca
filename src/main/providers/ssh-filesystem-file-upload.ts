@@ -21,10 +21,13 @@ export async function openSshFileUploadSession(
   if (rawTransfer?.openFileUploadSession) {
     return rawTransfer.openFileUploadSession()
   }
+
   if (!createSftp) {
     throw new Error('Remote file upload is unavailable. Reconnect the SSH target and retry.')
   }
+
   const sftp = await createSftp()
+
   return {
     // Why: one session covers the whole import so normal SSH keeps its prior
     // channel count even when a directory contains many files.

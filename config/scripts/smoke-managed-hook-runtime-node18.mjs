@@ -16,17 +16,25 @@ const PLATFORMS = [
   'win32-x64',
   'win32-arm64'
 ]
+
 const ROOT = fileURLToPath(new URL('../..', import.meta.url))
+
 const require = createRequire(import.meta.url)
 
 assert.match(process.versions.node, /^18\./, 'This smoke test must run under Node 18')
 
 const home = await mkdtemp(join(tmpdir(), 'orca-managed-hook-node18-'))
+
 const originalHome = process.env.HOME
+
 const originalUserProfile = process.env.USERPROFILE
+
 const originalGetuid = process.getuid
+
 process.env.HOME = home
+
 process.env.USERPROFILE = home
+
 process.getuid = undefined
 
 try {
@@ -34,6 +42,7 @@ try {
     const artifact = join(ROOT, 'out', 'relay', platform, 'managed-hook-runtime.js')
     const runtime = require(artifact)
     assert.equal(typeof runtime.installManagedHooks, 'function', `${platform} installer export`)
+
     return runtime
   })
 
@@ -52,11 +61,13 @@ try {
   } else {
     process.env.HOME = originalHome
   }
+
   if (originalUserProfile === undefined) {
     delete process.env.USERPROFILE
   } else {
     process.env.USERPROFILE = originalUserProfile
   }
+
   process.getuid = originalGetuid
   await rm(home, { recursive: true, force: true })
 }

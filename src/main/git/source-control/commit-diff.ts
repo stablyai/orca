@@ -42,6 +42,7 @@ async function loadCommitDiff(
 ): Promise<GitDiffResult> {
   try {
     const leftPath = args.oldPath ?? args.filePath
+
     // Why concurrent: the two sides are independent `git show` spawns. A root
     // commit has no parent to read, so that side resolves without a spawn.
     const [leftBlob, rightBlob] = await Promise.all([

@@ -6,12 +6,15 @@ export function runTargetLifecycle(
   operation: () => Promise<void>
 ): Promise<void> {
   const prior = targetLifecycleInFlight.get(targetId)
+
   const operationPromise = (async () => {
     if (prior) {
       await prior.catch(() => undefined)
     }
+
     await operation()
   })()
+
   let trackedPromise!: Promise<void>
   trackedPromise = operationPromise.finally(() => {
     if (targetLifecycleInFlight.get(targetId) === trackedPromise) {
@@ -19,15 +22,18 @@ export function runTargetLifecycle(
     }
   })
   targetLifecycleInFlight.set(targetId, trackedPromise)
+
   return trackedPromise
 }
 
 export async function awaitTargetLifecycle(targetId: string): Promise<void> {
   while (true) {
     const lifecycle = targetLifecycleInFlight.get(targetId)
+
     if (!lifecycle) {
       return
     }
+
     await lifecycle.catch(() => undefined)
   }
 }

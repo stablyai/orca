@@ -12,15 +12,19 @@ const { forkMock, releaseReservationMock, signalPhysicalExitMock, writeFileSyncM
 )
 
 vi.mock('node:child_process', () => ({ fork: forkMock }))
+
 vi.mock('node:fs', () => ({ writeFileSync: writeFileSyncMock }))
+
 vi.mock('./parcel-watcher-canary-directory', () => ({
   createWatcherCanaryDirectory: vi.fn(() => null),
   removeWatcherCanaryDirectory: vi.fn()
 }))
+
 vi.mock('./parcel-watcher-child-registry', async (importOriginal) => ({
   ...(await importOriginal<typeof WatcherChildRegistry>()),
   reserveWatcherChild: vi.fn(() => releaseReservationMock)
 }))
+
 vi.mock('./parcel-watcher-child-termination', () => ({
   registerWatcherChildPhysicalExit: vi.fn(() => signalPhysicalExitMock)
 }))

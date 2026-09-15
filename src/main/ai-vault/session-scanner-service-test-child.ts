@@ -16,16 +16,19 @@ export class AiVaultServiceTestChild extends EventEmitter {
   send(message: unknown, callback?: (error: Error | null) => void): boolean {
     this.sent.push(message)
     callback?.(null)
+
     return true
   }
 
   kill(): boolean {
     this.killed = true
+
     return true
   }
 
   unref(): this {
     this.unrefed = true
+
     return this
   }
 
@@ -45,8 +48,10 @@ export function aiVaultServiceRequestId(child: AiVaultServiceTestChild, operatio
       message !== null &&
       (message as { operation?: string }).operation === operation
   ) as { id?: number } | undefined
+
   if (request?.id === undefined) {
     throw new Error(`No ${operation} request was sent.`)
   }
+
   return request.id
 }

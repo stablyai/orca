@@ -28,6 +28,7 @@ export async function linearListTeams(
   workspaceId?: LinearWorkspaceSelection | null
 ): Promise<LinearTeam[]> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearTeam[]>(
         target,
@@ -48,7 +49,9 @@ export async function linearListProjects(
   if (!isRuntimeProviderSearchQueryWithinLimit(query)) {
     return { items: [] }
   }
+
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCollectionResult<LinearProjectSummary>>(
         target,
@@ -83,6 +86,7 @@ export async function linearCreateProject(
   }
 ): Promise<LinearCreateProjectResult> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCreateProjectResult>(target, 'linear.createProject', args, {
         timeoutMs: 30_000
@@ -97,6 +101,7 @@ export async function linearGetProject(
   options?: LinearReadOptions
 ): Promise<LinearProjectDetail | null> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearProjectDetail | null>(
         target,
@@ -115,6 +120,7 @@ export async function linearListProjectIssues(
   options?: LinearReadOptions
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCollectionResult<LinearIssue>>(
         target,
@@ -138,6 +144,7 @@ export async function linearListCustomViews(
   options?: LinearReadOptions
 ): Promise<LinearCollectionResult<LinearCustomViewSummary>> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCollectionResult<LinearCustomViewSummary>>(
         target,
@@ -161,6 +168,7 @@ export async function linearGetCustomView(
   options?: LinearReadOptions
 ): Promise<LinearCustomViewSummary | null> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCustomViewSummary | null>(
         target,
@@ -179,6 +187,7 @@ export async function linearListCustomViewIssues(
   options?: LinearReadOptions
 ): Promise<LinearCollectionResult<LinearIssue>> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCollectionResult<LinearIssue>>(
         target,
@@ -202,6 +211,7 @@ export async function linearListCustomViewProjects(
   options?: LinearReadOptions
 ): Promise<LinearCollectionResult<LinearProjectSummary>> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearCollectionResult<LinearProjectSummary>>(
         target,
@@ -223,6 +233,7 @@ export async function linearTeamStates(
   workspaceId?: string | null
 ): Promise<LinearWorkflowState[]> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearWorkflowState[]>(
         target,
@@ -239,6 +250,7 @@ export async function linearTeamLabels(
   workspaceId?: string | null
 ): Promise<LinearLabel[]> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearLabel[]>(
         target,
@@ -255,6 +267,7 @@ export async function linearTeamMembers(
   workspaceId?: string | null
 ): Promise<LinearMember[]> {
   const target = getLinearRuntimeTarget(settings)
+
   return target.kind === 'environment'
     ? callRuntimeRpc<LinearMember[]>(
         target,

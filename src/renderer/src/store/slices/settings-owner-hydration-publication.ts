@@ -5,10 +5,15 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { hydrateOwnerWorktreeVisibilityDefaults } from './worktree-visibility-owner-settings'
 
 export type SettingsStateSetter = Parameters<StateCreator<AppState, [], []>>[0]
+
 type SettingsStateGetter = Parameters<StateCreator<AppState, [], []>>[1]
+
 const completedOwnerVisibilityDefaultsHydration = Promise.resolve()
+
 const ownerVisibilityDefaultsHydrationByStore = new WeakMap<SettingsStateGetter, Promise<void>>()
+
 let settingsPublicationGeneration = 0
+
 let ownerSettingsHydrationGeneration = 0
 
 function mergeOwnerDefaultsIntoCurrentSettings(
@@ -18,8 +23,10 @@ function mergeOwnerDefaultsIntoCurrentSettings(
   if (!current) {
     return hydrated
   }
+
   const { worktreeVisibilityDefaults } = hydrated
   const { worktreeVisibilityDefaults: _currentDefaults, ...currentWithoutDefaults } = current
+
   return worktreeVisibilityDefaults
     ? { ...current, worktreeVisibilityDefaults }
     : (currentWithoutDefaults as GlobalSettings)
@@ -31,14 +38,17 @@ export type FetchSettingsOptions = {
 
 export function createSettingsPublicationFence(invalidateOwnerHydration = false): () => boolean {
   const generation = ++settingsPublicationGeneration
+
   if (invalidateOwnerHydration) {
     ownerSettingsHydrationGeneration += 1
   }
+
   return () => generation === settingsPublicationGeneration
 }
 
 export function createOwnerSettingsHydrationFence(): () => boolean {
   const generation = ++ownerSettingsHydrationGeneration
+
   return () => generation === ownerSettingsHydrationGeneration
 }
 
@@ -49,6 +59,7 @@ export function registerPendingOwnerWorktreeVisibilityDefaultsHydration(
   let settle!: () => void
   const hydration = new Promise<void>((resolve) => (settle = resolve))
   ownerVisibilityDefaultsHydrationByStore.set(get, hydration)
+
   return (restorePrevious = false) => {
     // Why: a fenced local read never reached the point where it superseded the prior owner hydration.
     if (
@@ -58,6 +69,7 @@ export function registerPendingOwnerWorktreeVisibilityDefaultsHydration(
     ) {
       ownerVisibilityDefaultsHydrationByStore.set(get, previousHydration)
     }
+
     settle()
   }
 }
@@ -70,11 +82,14 @@ export async function fetchSettingsWithOwnerHydration(args: {
   const shouldPublishSettings = createSettingsPublicationFence()
   const settleOwnerHydration = registerPendingOwnerWorktreeVisibilityDefaultsHydration(args.get)
   let ownerHydrationStarted = false
+
   try {
     const localSettings = (await window.api.settings.get()) as GlobalSettings
+
     if (!shouldPublishSettings()) {
       return
     }
+
     const ownerVisibilityDefaultsHydration = startOwnerWorktreeVisibilityDefaultsHydration({
       settings: localSettings,
       deferPublication: args.options?.deferOwnerWorktreeVisibilityDefaults === true,
@@ -82,11 +97,13 @@ export async function fetchSettingsWithOwnerHydration(args: {
       set: args.set,
       get: args.get
     })
+
     ownerHydrationStarted = true
     void ownerVisibilityDefaultsHydration.then(
       () => settleOwnerHydration(),
       () => settleOwnerHydration()
     )
+
     if (!args.options?.deferOwnerWorktreeVisibilityDefaults) {
       await ownerVisibilityDefaultsHydration
     }
@@ -117,7 +134,9 @@ export function startOwnerWorktreeVisibilityDefaultsHydration(args: {
         : state.worktreeVisibilityDefaultsByHost
     }))
   }
+
   const settingsAtHydrationStart = args.get().settings
+
   const hydration = hydrateOwnerWorktreeVisibilityDefaults(
     args.settings,
     args.get().worktreeVisibilityDefaultsByHost
@@ -126,6 +145,7 @@ export function startOwnerWorktreeVisibilityDefaultsHydration(args: {
       if (!args.shouldPublish()) {
         return
       }
+
       args.set((state) => ({
         settings:
           state.settings === settingsAtHydrationStart
@@ -142,6 +162,7 @@ export function startOwnerWorktreeVisibilityDefaultsHydration(args: {
       }))
     })
     .catch((err) => console.error('Failed to fetch settings:', err))
+
   return hydration
 }
 
@@ -151,14 +172,18 @@ export function awaitOwnerWorktreeVisibilityDefaultsHydration(
   return (async () => {
     let hydration =
       ownerVisibilityDefaultsHydrationByStore.get(get) ?? completedOwnerVisibilityDefaultsHydration
+
     while (true) {
       await hydration
+
       const latest =
         ownerVisibilityDefaultsHydrationByStore.get(get) ??
         completedOwnerVisibilityDefaultsHydration
+
       if (latest === hydration) {
         return
       }
+
       hydration = latest
     }
   })()

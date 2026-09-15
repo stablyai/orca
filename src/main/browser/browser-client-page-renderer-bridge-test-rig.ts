@@ -26,6 +26,7 @@ export function createRendererBridgeTestRig(options?: {
 }) {
   let listener: ((event: BrowserClientPageRendererReplyEvent, reply: unknown) => void) | null = null
   let requestSequence = 0
+
   const transport = {
     onReply: vi.fn(
       (candidate: (event: BrowserClientPageRendererReplyEvent, reply: unknown) => void) => {
@@ -40,13 +41,16 @@ export function createRendererBridgeTestRig(options?: {
       }
     )
   }
+
   const registry = new BrowserClientPageRendererBridgeRegistry({
     transport,
     createRequestId: options?.createRequestId ?? (() => `request-${++requestSequence}`),
     timeoutMs: options?.timeoutMs ?? 1_000,
     maxPending: options?.maxPending
   })
+
   const endpoint = createRendererEndpoint(41)
+
   return {
     endpoint,
     registry,

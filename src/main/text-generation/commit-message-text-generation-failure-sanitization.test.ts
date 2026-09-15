@@ -380,9 +380,11 @@ describe('generateCommitMessageFromContext', () => {
     )
 
     expect(result.success).toBe(false)
+
     if (result.success) {
       throw new Error('expected a failure result')
     }
+
     expect(result.error.startsWith('Pi CLI command failed with code 1: 400 {"type":"error"')).toBe(
       true
     )

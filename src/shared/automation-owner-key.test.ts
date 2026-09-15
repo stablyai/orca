@@ -36,10 +36,12 @@ describe('automation owner key injectivity', () => {
       authority: { kind: 'runtime', environmentId: 'a:ssh' },
       selector: { kind: 'self' }
     }
+
     const targetIdCarriesSelector: StableAutomationCatalogRef = {
       authority: { kind: 'runtime', environmentId: 'a' },
       selector: { kind: 'ssh', targetId: 'self' }
     }
+
     expect(hostStableKey(environmentIdCarriesSelector)).not.toBe(
       hostStableKey(targetIdCarriesSelector)
     )

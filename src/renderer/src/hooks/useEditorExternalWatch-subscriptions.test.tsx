@@ -21,9 +21,11 @@ const subscriptionState = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) => selector({})
 }))
+
 vi.mock('@/runtime/runtime-file-client', () => ({
   subscribeRuntimeFileChanges: subscriptionState.subscribeRuntimeFileChanges
 }))
+
 vi.mock('./editor-external-watch-targets', () => ({
   selectEditorExternalWatchTargets: () => subscriptionState.snapshot,
   getEditorExternalWatchTargetKey: (target: TestWatchTarget) =>
@@ -35,6 +37,7 @@ vi.mock('./editor-external-watch-targets', () => ({
       target.allowLocalWindowsWslAliases ? 'wsl-aliases' : 'literal'
     ].join('::')
 }))
+
 vi.mock('./editor-external-watch-event-reconciliation', () => ({
   buildEditorExternalWatchEventHandler: vi.fn(() => ({
     handleFsChanged: vi.fn(),
@@ -42,6 +45,7 @@ vi.mock('./editor-external-watch-event-reconciliation', () => ({
   })),
   collectOverflowEditorExternalReloadTargets: vi.fn()
 }))
+
 vi.mock('./editor-external-watch-disk-verification', () => ({
   verifyLatchedEditorMoveDestinations: vi.fn()
 }))
@@ -50,6 +54,7 @@ import { useEditorExternalWatch } from './useEditorExternalWatch'
 
 function WatchProbe(): null {
   useEditorExternalWatch()
+
   return null
 }
 
@@ -67,9 +72,11 @@ function deferredRuntimeSubscription(): {
   resolve: (unsubscribe: () => void) => void
 } {
   let resolve!: (unsubscribe: () => void) => void
+
   const promise = new Promise<() => void>((settle) => {
     resolve = settle
   })
+
   return { promise, resolve }
 }
 

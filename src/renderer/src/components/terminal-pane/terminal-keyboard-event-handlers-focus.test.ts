@@ -16,10 +16,13 @@ describe('terminal keyboard pane ownership', () => {
     const first = { id: 1, leafId: 'leaf-1', terminal: { element: firstElement } }
     const focused = { id: 2, leafId: 'leaf-2', terminal: { element: focusedElement } }
     let active = first
+
     const setActivePane = vi.fn((paneId: number) => {
       active = paneId === focused.id ? focused : first
     })
+
     const sendFocused = vi.fn()
+
     const handlers = createTerminalKeyboardEventHandlers({
       isMac: false,
       isWindows: false,
@@ -84,6 +87,7 @@ describe('terminal keyboard pane ownership', () => {
       cancelable: true,
       key: 'Enter'
     })
+
     Object.defineProperty(event, 'keyCode', { value: 13 })
     focusedInput.dispatchEvent(event)
     handlers.onKeyDown(event)

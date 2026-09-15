@@ -6,6 +6,7 @@
 // First page mirrors the desktop default window (300 most-recent turns) so the
 // initial paint matches the prior behavior; each load-earlier grows by a page.
 export const NATIVE_CHAT_INITIAL_LIMIT = 300
+
 export const NATIVE_CHAT_PAGE = 200
 
 /** The limit to request for the next older page. */

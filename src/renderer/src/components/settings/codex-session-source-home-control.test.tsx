@@ -14,6 +14,7 @@ function settingsWith(
 describe('buildCodexSessionSourceHomeControl', () => {
   it('reads and writes the host override on the host runtime', () => {
     const updateSettings = vi.fn()
+
     const control = buildCodexSessionSourceHomeControl(
       settingsWith({ codexSessionSourceHome: { host: '/custom/codex' } }),
       updateSettings
@@ -30,6 +31,7 @@ describe('buildCodexSessionSourceHomeControl', () => {
 
   it('scopes to the selected WSL distro', () => {
     const updateSettings = vi.fn()
+
     const control = buildCodexSessionSourceHomeControl(
       settingsWith({
         codexSessionSourceHome: { wsl: { Ubuntu: '/home/me/.codex' } },
@@ -61,6 +63,7 @@ describe('buildCodexSessionSourceHomeControl', () => {
 
   it('updates the existing WSL key in place instead of creating a duplicate casing', () => {
     const updateSettings = vi.fn()
+
     const control = buildCodexSessionSourceHomeControl(
       settingsWith({
         codexSessionSourceHome: { wsl: { Ubuntu: '/home/me/.codex' } },
@@ -78,6 +81,7 @@ describe('buildCodexSessionSourceHomeControl', () => {
 
   it('clears the matching WSL key regardless of casing when reset', () => {
     const updateSettings = vi.fn()
+
     const control = buildCodexSessionSourceHomeControl(
       settingsWith({
         codexSessionSourceHome: { wsl: { Ubuntu: '/home/me/.codex' } },

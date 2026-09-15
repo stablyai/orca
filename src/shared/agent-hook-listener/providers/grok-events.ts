@@ -23,9 +23,11 @@ function aliasedField(
   if (Object.hasOwn(payload, primary)) {
     return { present: true, value: payload[primary] }
   }
+
   if (Object.hasOwn(payload, alias)) {
     return { present: true, value: payload[alias] }
   }
+
   return { present: false }
 }
 
@@ -39,6 +41,7 @@ function grokIdentityField(
   alias: string
 ): string | undefined {
   const value = readString(hookPayload, primary) ?? readString(hookPayload, alias)
+
   return value && value.length <= 512 ? value : undefined
 }
 
@@ -73,17 +76,23 @@ function grokTurnEndApplies(
   hookPayload: Record<string, unknown>
 ): boolean {
   const promptId = grokPromptId(hookPayload)
+
   if (!promptId) {
     return true
   }
+
   const active = state.grokActiveTurnByPaneKey.get(paneKey)
+
   if (!active) {
     return true
   }
+
   if (!active.promptId) {
     return false
   }
+
   const sessionId = grokIdentityField(hookPayload, 'sessionId', 'session_id')
+
   return (
     active.promptId === promptId &&
     (!active.sessionId || !sessionId || active.sessionId === sessionId)
@@ -92,19 +101,23 @@ function grokTurnEndApplies(
 
 function grokHasRunningFiniteTask(hookPayload: Record<string, unknown>): boolean {
   const backgroundTasks = aliasedField(hookPayload, 'backgroundTasks', 'background_tasks')
+
   if (!backgroundTasks.present || !Array.isArray(backgroundTasks.value)) {
     return false
   }
+
   return backgroundTasks.value.some((task) => {
     if (!isRecord(task)) {
       return false
     }
+
     return task.type === 'shell' || task.type === 'subagent'
   })
 }
 
 function grokStopKeepsWorking(hookPayload: Record<string, unknown>): boolean {
   const stopHookActive = aliasedField(hookPayload, 'stopHookActive', 'stop_hook_active')
+
   return stopHookActive.value === true || grokHasRunningFiniteTask(hookPayload)
 }
 
@@ -112,7 +125,9 @@ function isGrokSessionBoundary(eventName: unknown, hookPayload: Record<string, u
   if (isGrokEvent(eventName, 'session_end')) {
     return true
   }
+
   const reason = readString(hookPayload, 'reason')
+
   return isGrokEvent(eventName, 'stop') && (reason === 'shutdown' || reason === 'channel_closed')
 }
 
@@ -128,9 +143,11 @@ export function normalizeGrokEvent(
   if (isGrokSubagentEvent(hookPayload)) {
     return null
   }
+
   if (isGrokEvent(eventName, 'session_start')) {
     // Why: SessionStart resets stale per-turn state but must not create a working row before any prompt/tool event.
     clearPaneTurnCacheState(state, paneKey)
+
     return null
   }
 
@@ -141,22 +158,29 @@ export function normalizeGrokEvent(
   const notificationMessage = readString(hookPayload, 'message')
   const notificationType = getGrokNotificationType(hookPayload)
   const notificationLevel = readString(hookPayload, 'level')
+
   const preToolName =
     readString(hookPayload, 'toolName') ??
     readString(hookPayload, 'tool_name') ??
     readString(hookPayload, 'name')
+
   // Why: Grok's ask_user_question is auto-allowed, so it fires PreToolUse while blocked on a human answer; map to waiting.
   const isUserInputPreTool =
     isGrokEvent(eventName, 'pre_tool_use') && isAskUserQuestionTool(preToolName)
 
   const isTurnEnd = isGrokEvent(eventName, 'stop', 'stop_failure', 'stop_cancelled')
+
   const isIdlePrompt =
     isGrokEvent(eventName, 'notification') && isGrokEvent(notificationType, 'idle_prompt')
+
   const sessionBoundary = isGrokSessionBoundary(eventName, hookPayload)
+
   if (isTurnEnd && !grokTurnEndApplies(state, paneKey, hookPayload)) {
     return null
   }
+
   let stateName: 'working' | 'waiting' | 'done' | null = null
+
   if (
     isGrokEvent(eventName, 'user_prompt_submit', 'post_tool_use', 'post_tool_use_failure') ||
     (isGrokEvent(eventName, 'pre_tool_use') && !isUserInputPreTool)
@@ -193,6 +217,7 @@ export function normalizeGrokEvent(
   ) {
     stateName = 'waiting'
   }
+
   if (!stateName) {
     return null
   }

@@ -20,12 +20,14 @@ type BoundedClient = {
 
 function makeBoundedClient(highWaterMark: number): BoundedClient {
   const drainListeners = new Set<() => void>()
+
   const client: BoundedClient = {
     frames: [],
     closes: 0,
     blocked: false,
     write: (data: Buffer) => {
       client.frames.push(Buffer.from(data))
+
       return !client.blocked
     },
     drain: () => {
@@ -39,6 +41,7 @@ function makeBoundedClient(highWaterMark: number): BoundedClient {
       writableLength: () => 0,
       waitWriteDrain: (callback: () => void) => {
         drainListeners.add(callback)
+
         return () => drainListeners.delete(callback)
       },
       close: () => {
@@ -46,20 +49,24 @@ function makeBoundedClient(highWaterMark: number): BoundedClient {
       }
     }
   }
+
   return client
 }
 
 /** Fills the producer queue so the next publish is rejected for backpressure, not for frame size. */
 function saturateProducerQueue(dispatcher: RelayDispatcher, client: BoundedClient): void {
   client.blocked = true
+
   // Shrinking chunks close the headroom a rejected 8 KB frame leaves behind, so even a small
   // hook envelope is refused.
   for (const size of [8_000, 512, 16]) {
     const data = 'x'.repeat(size)
     let filled = false
+
     for (let attempt = 0; attempt < 5_000 && !filled; attempt++) {
       filled = !dispatcher.tryNotifyPtyData({ id: 'pty-1', data })
     }
+
     if (!filled) {
       throw new Error('producer queue never filled')
     }
@@ -68,6 +75,7 @@ function saturateProducerQueue(dispatcher: RelayDispatcher, client: BoundedClien
 
 function decodePayload(frame: Buffer): Record<string, unknown> {
   const length = frame.readUInt32BE(9)
+
   return JSON.parse(frame.subarray(13, 13 + length).toString('utf-8'))
 }
 
@@ -134,6 +142,7 @@ describe('publishAgentHookEnvelope', () => {
   it('publishes an in-capacity envelope untouched', () => {
     const primary = makeBoundedClient(65536)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const envelope = makeEnvelope({ lastAssistantMessage: 128, interactivePrompt: 64 })
       publishAgentHookEnvelope(dispatcher, envelope)
@@ -150,6 +159,7 @@ describe('publishAgentHookEnvelope', () => {
   it('sheds lastAssistantMessage first and stops as soon as the frame fits', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       // Only lastAssistantMessage pushes this past the 12288-byte producer cap.
       publishAgentHookEnvelope(
@@ -175,6 +185,7 @@ describe('publishAgentHookEnvelope', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       publishAgentHookEnvelope(dispatcher, makeEnvelope({ lastAssistantMessage: 20_000 }))
       expect(decodeEnvelopes(primary)).toHaveLength(1)
@@ -194,6 +205,7 @@ describe('publishAgentHookEnvelope', () => {
   it('sheds subagents next when dropping the assistant message is not enough', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       publishAgentHookEnvelope(
         dispatcher,
@@ -214,6 +226,7 @@ describe('publishAgentHookEnvelope', () => {
   it('keeps the blocking question card when a waiting envelope has to shed', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       // A blocked pane is only answerable from web/mobile if interactivePrompt survives the ladder.
       const envelope = makeEnvelope({
@@ -221,6 +234,7 @@ describe('publishAgentHookEnvelope', () => {
         interactivePrompt: 4_000,
         subagents: 40
       })
+
       envelope.payload.state = 'waiting'
       publishAgentHookEnvelope(dispatcher, envelope)
 
@@ -239,6 +253,7 @@ describe('publishAgentHookEnvelope', () => {
   it('sheds interactivePrompt last and still delivers the status', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       publishAgentHookEnvelope(
         dispatcher,
@@ -261,11 +276,13 @@ describe('publishAgentHookEnvelope', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       const envelope = makeEnvelope({
         lastAssistantMessage: 6_000,
         subagents: 2
       })
+
       envelope.payload.state = 'waiting'
       envelope.payload.interactivePrompt = JSON.stringify({
         questions: [
@@ -280,9 +297,11 @@ describe('publishAgentHookEnvelope', () => {
       const published = decodeEnvelopes(primary)
       expect(published).toHaveLength(1)
       expect(published[0].payload.state).toBe('waiting')
+
       const card = JSON.parse(published[0].payload.interactivePrompt!) as {
         questions: { question: string; options: { label: string }[] }[]
       }
+
       expect(card.questions[0].question.length).toBeLessThan(13_000)
       expect(card.questions[0].options).toEqual([{ label: 'Keep' }, { label: 'Discard' }])
       expect(stderr).not.toHaveBeenCalled()
@@ -297,6 +316,7 @@ describe('publishAgentHookEnvelope', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       const envelope = makeEnvelope({})
       envelope.payload.state = 'waiting'
@@ -319,6 +339,7 @@ describe('publishAgentHookEnvelope', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
     const probe = vi.spyOn(dispatcher, 'producerEnvelopeBudget')
+
     try {
       // One sink writes nothing when it rejects, so the publish attempt is itself the measurement.
       publishAgentHookEnvelope(dispatcher, makeEnvelope({ lastAssistantMessage: 128 }))
@@ -339,11 +360,13 @@ describe('publishAgentHookEnvelope', () => {
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
     const secondary = makeBoundedClient(16384)
     const probe = vi.spyOn(dispatcher, 'producerEnvelopeBudget')
+
     try {
       dispatcher.attachClient(secondary.write, secondary.options)
       publishAgentHookEnvelope(dispatcher, makeEnvelope({ lastAssistantMessage: 20_000 }))
       // Probing first is what keeps the larger sink from being written a frame we then have to shed.
       expect(probe).toHaveBeenCalledTimes(2)
+
       for (const client of [primary, secondary]) {
         expect(decodeEnvelopes(client)).toHaveLength(1)
       }
@@ -356,6 +379,7 @@ describe('publishAgentHookEnvelope', () => {
   it('skips absent fields instead of consuming a shed step on them', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       // No lastAssistantMessage at all: the ladder must move on to interactivePrompt.
       publishAgentHookEnvelope(dispatcher, makeEnvelope({ interactivePrompt: 20_000 }))
@@ -372,6 +396,7 @@ describe('publishAgentHookEnvelope', () => {
   it('publishes without closing the client when even the fully shed envelope is oversized', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const envelope = makeEnvelope({})
       envelope.payload.prompt = 'p'.repeat(40_000)
@@ -391,12 +416,14 @@ describe('publishAgentHookEnvelope', () => {
   it('does not mutate the caller envelope, so the hook-server replay cache stays intact', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const envelope = makeEnvelope({
         lastAssistantMessage: 6_000,
         interactivePrompt: 6_000,
         subagents: 40
       })
+
       const before = structuredClone(envelope)
 
       publishAgentHookEnvelope(dispatcher, envelope)
@@ -413,6 +440,7 @@ describe('publishAgentHookEnvelope', () => {
     const primary = makeBoundedClient(65536)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
     const secondary = makeBoundedClient(16384)
+
     try {
       dispatcher.attachClient(secondary.write, secondary.options)
       publishAgentHookEnvelope(dispatcher, makeEnvelope({ lastAssistantMessage: 20_000 }))
@@ -433,6 +461,7 @@ describe('publishAgentHookEnvelope', () => {
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
     const secondary = makeBoundedClient(16384)
     const stderr = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
+
     try {
       dispatcher.attachClient(secondary.write, secondary.options)
       const envelope = makeEnvelope({})
@@ -455,6 +484,7 @@ describe('publishAgentHookEnvelope shed marker', () => {
   it('names every shed field so a consumer can tell a shed roster from an absent one', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       publishAgentHookEnvelope(
         dispatcher,
@@ -479,6 +509,7 @@ describe('publishAgentHookEnvelope shed marker', () => {
   it('omits the marker when nothing was shed and never stamps the caller envelope', () => {
     const primary = makeBoundedClient(65536)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const envelope = makeEnvelope({ lastAssistantMessage: 128, subagents: 2 })
       publishAgentHookEnvelope(dispatcher, envelope)
@@ -507,6 +538,7 @@ describe('publishAgentHookEnvelope redelivery', () => {
   it('redelivers a backpressure-rejected envelope once the producer queue drains', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       saturateProducerQueue(dispatcher, primary)
       const envelope = makeEnvelope({})
@@ -534,8 +566,10 @@ describe('publishAgentHookEnvelope redelivery', () => {
   it('keeps only the newest snapshot per pane instead of queueing every drop', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       saturateProducerQueue(dispatcher, primary)
+
       for (const state of ['working', 'waiting', 'done'] as const) {
         const envelope = makeEnvelope({})
         envelope.payload.state = state
@@ -557,6 +591,7 @@ describe('publishAgentHookEnvelope redelivery', () => {
   it('makes one final retry when capacity returns after the timer budget is exhausted', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const idleTimers = vi.getTimerCount()
       saturateProducerQueue(dispatcher, primary)
@@ -581,8 +616,10 @@ describe('publishAgentHookEnvelope redelivery', () => {
   it('evicts the longest-idle pane once the pending map is full, keeping the newest', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       saturateProducerQueue(dispatcher, primary)
+
       // 65 panes against a 64-pane cap: the first must be evicted, the last must survive.
       for (let pane = 0; pane < 65; pane++) {
         const envelope = makeEnvelope({})
@@ -621,6 +658,7 @@ describe('publishAgentHookEnvelope redelivery', () => {
   it('cancels the retry when a later snapshot for the same pane gets through', () => {
     const primary = makeBoundedClient(16384)
     const dispatcher = new RelayDispatcher(primary.write, primary.options)
+
     try {
       const idleTimers = vi.getTimerCount()
       saturateProducerQueue(dispatcher, primary)

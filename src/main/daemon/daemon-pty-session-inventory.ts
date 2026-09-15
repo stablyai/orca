@@ -20,6 +20,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
     // Why: snapshotted before the request so ids spawned mid-flight can never
     // be reconciled away below.
     const preRequestActiveIds = new Set(this.activeSessionIds)
+
     try {
       // Why retry: this inventory is what destructive teardown consults, and a
       // dead host pipe surfaced as `connect ENOENT \\?\\pipe\\orca-terminal-host-...`
@@ -36,19 +37,23 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
       // wedged handshake cannot burn the whole teardown budget before the list issues.
       const result = await this.withDaemonRetry(async () => {
         await this.ensureConnected(opts?.deadlineMs)
+
         return this.client.request<ListSessionsResult>(
           'listSessions',
           undefined,
           remainingDaemonRequestTimeoutMs(opts?.deadlineMs)
         )
       })
+
       const admission = new PtyProcessListAdmission()
       const processes: PtyProcessInfo[] = []
       const aliveSessionIds = new Set<string>()
+
       for (const session of result.sessions) {
         if (!session.isAlive) {
           continue
         }
+
         aliveSessionIds.add(session.sessionId)
         const { worktreeId } = parsePtySessionId(session.sessionId)
         processes.push(
@@ -66,6 +71,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
           })
         )
       }
+
       // Why: hasPty reads activeSessionIds, and an exit missed while the socket
       // was disconnected otherwise survives an authoritative inventory forever —
       // defeating every absence proof built on the cache.
@@ -74,9 +80,11 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
           this.activeSessionIds.delete(id)
         }
       }
+
       this.publishAuditObservation(
         recordAuthenticatedInventory(this.auditContext, this.exactDaemonIncarnation)
       )
+
       return processes
     } catch (error) {
       const missingAuthenticatedToken = this.isRetiredEndpointTokenMissing()
@@ -102,6 +110,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
     if (owners === undefined) {
       return {}
     }
+
     if (
       !Array.isArray(owners) ||
       owners.length > MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES ||
@@ -109,6 +118,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
     ) {
       throw new Error('agent_session_ownership_unknown')
     }
+
     return owners.length > 0
       ? { agentSessionOwners: owners.map(cloneAgentSessionOwnerBinding) }
       : {}
@@ -121,6 +131,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
   async listSessions(): Promise<SessionInfo[]> {
     await this.ensureConnected()
     const result = await this.client.request<ListSessionsResult>('listSessions', undefined)
+
     return result.sessions
       .filter((s) => s.isAlive)
       .map((session) => ({
@@ -151,8 +162,10 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
     this.pausedProducerSessionIds.clear()
     this.producerResumesOwedOnReconnect.clear()
     this.stopCheckpointTimer()
+
     for (const id of ids) {
       this.coldRestoreCache.delete(id)
+
       // Why: don't catch listener throws — matches the natural onExit fanout so synthetic exits keep the same error semantics.
       // oxlint-disable-next-line unicorn/no-useless-spread -- copy-safe: listeners may unsubscribe during iteration
       for (const listener of [...this.exitListeners]) {
@@ -164,6 +177,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
             : {})
         })
       }
+
       this.sessionIncarnations.delete(id)
     }
   }
@@ -172,6 +186,7 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
     if (process.platform === 'win32') {
       return process.env.COMSPEC || 'powershell.exe'
     }
+
     return process.env.SHELL || '/bin/zsh'
   }
 
@@ -182,7 +197,9 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
         { name: 'Command Prompt', path: 'cmd.exe' }
       ]
     }
+
     const shells = ['/bin/zsh', '/bin/bash', '/bin/sh']
+
     return shells.filter((s) => existsSync(s)).map((s) => ({ name: basename(s), path: s }))
   }
 }

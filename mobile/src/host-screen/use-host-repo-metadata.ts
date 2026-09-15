@@ -30,9 +30,11 @@ async function requestMetadataResponse(
 
 function readSshTargets(result: unknown): SshTargetSummaryRow[] {
   const targets = (result as { targets?: unknown } | null)?.targets
+
   if (!Array.isArray(targets)) {
     return []
   }
+
   return targets.filter(
     (target): target is SshTargetSummaryRow =>
       typeof target === 'object' &&
@@ -44,6 +46,7 @@ function readSshTargets(result: unknown): SshTargetSummaryRow[] {
 
 function readHostPlatform(result: unknown): NodeJS.Platform | null {
   const platform = (result as { platform?: unknown } | null)?.platform
+
   return typeof platform === 'string' && platform ? (platform as NodeJS.Platform) : null
 }
 
@@ -59,6 +62,7 @@ export function useHostRepoMetadata(args: {
   state: HostScreenState
 }) {
   const { client, connState, hostId, state } = args
+
   const {
     clientRef,
     fetchRepoMetadataInFlightRef,
@@ -77,23 +81,31 @@ export function useHostRepoMetadata(args: {
       if (!client || connState !== 'connected' || !hostId) {
         return
       }
+
       if (fetchRepoMetadataInFlightRef.current.has(client)) {
         if (options.queueIfInFlight) {
           fetchRepoMetadataPendingRef.current.add(client)
         }
+
         return
       }
+
       const now = Date.now()
+
       if (!options.force && now - repoMetadataFetchedAtRef.current < REPO_METADATA_REFRESH_MS) {
         return
       }
+
       fetchRepoMetadataInFlightRef.current.add(client)
+
       const requestClient = client,
         requestHostId = hostId
+
       try {
         do {
           fetchRepoMetadataPendingRef.current.delete(requestClient)
           const repoResponse = await requestMetadataResponse(requestClient, 'repo.list')
+
           if (
             clientRef.current !== requestClient ||
             hostId !== requestHostId ||
@@ -101,6 +113,7 @@ export function useHostRepoMetadata(args: {
           ) {
             return
           }
+
           const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
           repoMetadataFetchedAtRef.current = Date.now()
           setCachedRepos(requestHostId, repoResult.repos)
@@ -125,18 +138,22 @@ export function useHostRepoMetadata(args: {
           // catalog never pays for the label lookups. Counted over repos, not the id-keyed
           // map: one repo id registered on two hosts is two hosts.
           const hostIds = new Set(repoResult.repos.map((repo) => getRepoExecutionHostId(repo)))
+
           if (hostIds.size > 1) {
             const [sshTargets, hostSettings, hostPlatform] = await Promise.all([
               requestMetadataResponse(requestClient, 'ssh.listTargetSummaries'),
               optionalSettingsRead.request(requestClient).catch(() => null),
               requestMetadataResponse(requestClient, 'host.platform')
             ])
+
             if (clientRef.current !== requestClient || hostId !== requestHostId) {
               return
             }
+
             const hostSettingsResult = hostSettings
               ? optionalSettingsRead.interpret(hostSettings)
               : null
+
             setHostLabelById(
               buildHostLabelById({
                 sshTargets: readSshTargets(sshTargets?.ok ? sshTargets.result : null),

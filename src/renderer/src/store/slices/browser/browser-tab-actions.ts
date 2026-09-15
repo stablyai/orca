@@ -33,6 +33,7 @@ export function createBrowserTabActions(
       assertManagedBrowserMaterializationAllowed(get(), options?.browserRuntimeEnvironmentId)
       const workspaceId = createBrowserUuid()
       const browserPageId = options?.browserPageId
+
       if (
         browserPageId &&
         (findWorkspace(get().browserTabsByWorktree, browserPageId) ||
@@ -40,6 +41,7 @@ export function createBrowserTabActions(
       ) {
         throw new Error(`Browser page ${browserPageId} already exists`)
       }
+
       const page = buildBrowserPage(
         workspaceId,
         worktreeId,
@@ -49,9 +51,11 @@ export function createBrowserTabActions(
         browserPageId,
         options?.docLocation
       )
+
       if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
         admitBrowserPageMount(page.id)
       }
+
       // Why: with no explicit profile, inherit the user's default so a Settings preference applies to new tabs.
       const sessionProfileId =
         options?.sessionProfileId !== undefined
@@ -63,6 +67,7 @@ export function createBrowserTabActions(
                 options?.browserRuntimeEnvironmentId
               )
             ] ?? get().defaultBrowserSessionProfileId)
+
       const browserTab = buildWorkspaceFromPage(
         workspaceId,
         worktreeId,
@@ -74,30 +79,38 @@ export function createBrowserTabActions(
 
       set((s) => {
         const existingTabs = s.browserTabsByWorktree[worktreeId] ?? []
+
         const nextTabBarOrder = (() => {
           const currentOrder = s.tabBarOrderByWorktree[worktreeId] ?? []
           const terminalIds = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id)
+
           const editorIds = s.openFiles
             .filter((file) => file.worktreeId === worktreeId)
             .map((file) => file.id)
+
           const browserIds = existingTabs.map((tab) => tab.id)
           const allExistingIds = new Set([...terminalIds, ...editorIds, ...browserIds])
           const base = currentOrder.filter((entryId) => allExistingIds.has(entryId))
           const inBase = new Set(base)
+
           for (const entryId of [...terminalIds, ...editorIds, ...browserIds]) {
             if (!inBase.has(entryId)) {
               base.push(entryId)
               inBase.add(entryId)
             }
           }
+
           base.push(workspaceId)
+
           return base
         })()
 
         const shouldActivate = options?.activate ?? true
         const shouldUpdateGlobalActiveSurface = shouldActivate && s.activeWorktreeId === worktreeId
+
         const shouldFocusFloatingTab =
           shouldActivate && worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+
         const shouldFocusAddressBar =
           (shouldUpdateGlobalActiveSurface || shouldFocusFloatingTab) &&
           // Why the doc check and not just the url: a document page is blank by construction, and
@@ -147,9 +160,11 @@ export function createBrowserTabActions(
       })
 
       const state = get()
+
       const alreadyHasUnifiedTab = (state.unifiedTabsByWorktree[worktreeId] ?? []).some(
         (t) => t.contentType === 'browser' && t.entityId === workspaceId
       )
+
       if (!alreadyHasUnifiedTab) {
         state.createUnifiedTab(worktreeId, 'browser', {
           entityId: workspaceId,
@@ -158,28 +173,36 @@ export function createBrowserTabActions(
           activate: options?.activate ?? true
         })
       }
+
       return browserTab
     },
 
     openNewBrowserTabInActiveWorkspace: async (groupId) => {
       const state = get()
       const worktreeId = state.activeWorktreeId
+
       if (!worktreeId) {
         return
       }
+
       const browserAvailability = getClientCreationActionPolicy(state, worktreeId)[
         'managed-browser'
       ]
+
       if (browserAvailability.state !== 'enabled') {
         throw new Error(browserAvailability.reason)
       }
+
       const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+
       if (browserAvailability.provider === 'paired-runtime') {
         if (!runtimeEnvironmentId) {
           throw new Error('The paired runtime browser provider is unavailable.')
         }
+
         const { createWebRuntimeSessionBrowserTab } = await import('@/runtime/web-runtime-session')
+
         try {
           const created = await createWebRuntimeSessionBrowserTab({
             worktreeId,
@@ -190,8 +213,10 @@ export function createBrowserTabActions(
             targetGroupId: groupId,
             clientTargetGroupId: groupId
           })
+
           if (created) {
             get().recordFeatureInteraction('browser-tab-created')
+
             return
           }
         } catch (error) {
@@ -202,8 +227,10 @@ export function createBrowserTabActions(
           )
           throw error
         }
+
         throw new Error('The paired runtime could not create a managed browser tab.')
       }
+
       get().createBrowserTab(worktreeId, defaultUrl, {
         title: translate('auto.store.slices.browser.d175274b6d', 'New Browser Tab'),
         focusAddressBar: true,
@@ -216,21 +243,28 @@ export function createBrowserTabActions(
     openBrowserProfileTabInActiveWorkspace: async (url, profileId) => {
       const state = get()
       const worktreeId = state.activeWorktreeId
+
       if (!worktreeId) {
         return false
       }
+
       const browserAvailability = getClientCreationActionPolicy(state, worktreeId)[
         'managed-browser'
       ]
+
       if (browserAvailability.state !== 'enabled') {
         return false
       }
+
       const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+
       if (browserAvailability.provider === 'paired-runtime') {
         if (!runtimeEnvironmentId) {
           return false
         }
+
         const { createWebRuntimeSessionBrowserTab } = await import('@/runtime/web-runtime-session')
+
         try {
           return await createWebRuntimeSessionBrowserTab({
             worktreeId,
@@ -243,14 +277,17 @@ export function createBrowserTabActions(
             '[browser] remote profile tab creation failed:',
             error instanceof Error ? error.message : String(error)
           )
+
           return false
         }
       }
+
       get().createBrowserTab(worktreeId, url, {
         activate: true,
         sessionProfileId: profileId,
         ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {})
       })
+
       return true
     }
   }

@@ -13,6 +13,7 @@ export function createCdpDebuggerMessageListener(
       state.snapshotResult = null
       state.navigationId = null
     }
+
     // Why: an unhandled JS dialog blocks all subsequent CDP commands; auto-dismiss to avoid hanging.
     if (method === 'Page.javascriptDialogOpening') {
       const dialog = params as { type: string; message: string } | undefined
@@ -22,6 +23,7 @@ export function createCdpDebuggerMessageListener(
         })
         .catch(() => {})
     }
+
     // Why: track iframe sessions so CDP commands and AX queries route to the correct session.
     if (method === 'Target.attachedToTarget') {
       const p = params as
@@ -30,6 +32,7 @@ export function createCdpDebuggerMessageListener(
             targetInfo?: { type?: string; targetId?: string }
           }
         | undefined
+
       if (p?.sessionId && p.targetInfo?.type === 'iframe' && p.targetInfo.targetId) {
         state.iframeSessions.set(p.targetInfo.targetId, p.sessionId)
         // Why: no Runtime.enable here. Cross-origin iframes include challenge widgets
@@ -39,8 +42,10 @@ export function createCdpDebuggerMessageListener(
         guest.debugger.sendCommand('Accessibility.enable', {}, p.sessionId).catch(() => {})
       }
     }
+
     if (method === 'Target.detachedFromTarget') {
       const p = params as { sessionId?: string } | undefined
+
       if (p?.sessionId) {
         for (const [frameId, sid] of state.iframeSessions) {
           if (sid === p.sessionId) {
@@ -50,6 +55,7 @@ export function createCdpDebuggerMessageListener(
         }
       }
     }
+
     // Why: buffer console/network events per-tab so the agent can retrieve them on demand.
     if (state.capturing) {
       if (method === 'Runtime.consoleAPICalled') {
@@ -61,6 +67,7 @@ export function createCdpDebuggerMessageListener(
               stackTrace?: { callFrames?: { url?: string; lineNumber?: number }[] }
             }
           | undefined
+
         if (p) {
           const text = (p.args ?? []).map((a) => a.value ?? a.description ?? '').join(' ')
           state.consoleLog.push({
@@ -70,11 +77,13 @@ export function createCdpDebuggerMessageListener(
             url: p.stackTrace?.callFrames?.[0]?.url,
             line: p.stackTrace?.callFrames?.[0]?.lineNumber
           })
+
           if (state.consoleLog.length > CAPTURE_LOG_LIMIT) {
             state.consoleLog.shift()
           }
         }
       }
+
       if (method === 'Network.responseReceived') {
         const p = params as
           | {
@@ -89,6 +98,7 @@ export function createCdpDebuggerMessageListener(
               timestamp?: number
             }
           | undefined
+
         if (p?.response) {
           const entry: BrowserNetworkEntry = {
             url: p.response.url ?? '',
@@ -98,13 +108,17 @@ export function createCdpDebuggerMessageListener(
             size: 0,
             timestamp: p.timestamp ?? Date.now()
           }
+
           state.networkLog.push(entry)
+
           // Why: map requestId→entry so loadingFinished attributes size to the right response, not the latest one.
           if (p.requestId) {
             state.networkRequestMap.set(p.requestId, entry)
           }
+
           if (state.networkLog.length > CAPTURE_LOG_LIMIT) {
             const evicted = state.networkLog.shift()
+
             if (evicted) {
               for (const [requestId, requestEntry] of state.networkRequestMap) {
                 if (requestEntry === evicted) {
@@ -116,17 +130,22 @@ export function createCdpDebuggerMessageListener(
           }
         }
       }
+
       if (method === 'Network.loadingFinished' || method === 'Network.loadingFailed') {
         const p = params as { requestId?: string; encodedDataLength?: number } | undefined
+
         if (p?.requestId) {
           const entry = state.networkRequestMap.get(p.requestId)
+
           if (entry && method === 'Network.loadingFinished' && p.encodedDataLength) {
             entry.size = p.encodedDataLength
           }
+
           state.networkRequestMap.delete(p.requestId)
         }
       }
     }
+
     // Why: buffer paused requests so the agent can later inspect and continue or block them.
     if (state.intercepting && method === 'Fetch.requestPaused') {
       const p = params as
@@ -136,6 +155,7 @@ export function createCdpDebuggerMessageListener(
             resourceType?: string
           }
         | undefined
+
       if (p?.requestId && p.request) {
         state.pausedRequests.set(p.requestId, {
           id: p.requestId,

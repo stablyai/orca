@@ -374,6 +374,7 @@ describe('pane terminal output scheduler', () => {
         holdForeground: true
       })
     }
+
     // Codex shows the cursor before the end marker, so this never hits the immediate-drain escape.
     const writeFrameClose = (): void => {
       writeTerminalOutput(terminal, '\x1b[10;8H\x1b[?25h\x1b[?2026l', {

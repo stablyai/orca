@@ -11,12 +11,16 @@ import {
 } from '../../../shared/execution-host'
 
 type WorktreeOwnerRecord = Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
+
 type DetectedWorktreeListing = { worktrees: readonly WorktreeOwnerRecord[] }
+
 type RepoOwnerRecord = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
+
 type FolderWorkspaceOwnerRecord = Pick<
   FolderWorkspace,
   'id' | 'projectGroupId' | 'connectionId' | 'executionHostId' | 'diffComments'
 >
+
 type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
 
 // Why: owner resolution runs inside retained selectors and interaction paths;
@@ -25,18 +29,22 @@ const worktreeOwnerIndexCache = new WeakMap<
   Record<string, readonly WorktreeOwnerRecord[]>,
   ReadonlyMap<string, IndexedWorktreeOwnerResolution>
 >()
+
 const repoOwnerIndexCache = new WeakMap<
   readonly RepoOwnerRecord[],
   ReadonlyMap<string, IndexedRepoOwnerResolution>
 >()
+
 const folderWorkspaceOwnerIndexCache = new WeakMap<
   readonly FolderWorkspaceOwnerRecord[],
   ReadonlyMap<string, IndexedFolderWorkspaceOwnerResolution>
 >()
+
 const projectGroupOwnerIndexCache = new WeakMap<
   readonly ProjectGroupOwnerRecord[],
   ReadonlyMap<string, IndexedProjectGroupOwnerResolution>
 >()
+
 const detectedWorktreeIndexCache = new WeakMap<
   Record<string, DetectedWorktreeListing>,
   ReadonlyMap<string, readonly WorktreeOwnerRecord[]>
@@ -59,10 +67,13 @@ export function getCatalogOwnerHostId(owner: {
   executionHostId?: string | null
 }): ExecutionHostId {
   const explicitHost = parseExecutionHostId(owner.executionHostId)
+
   if (explicitHost) {
     return explicitHost.id
   }
+
   const connectionId = owner.connectionId?.trim()
+
   return connectionId ? toSshExecutionHostId(connectionId) : 'local'
 }
 
@@ -72,20 +83,24 @@ function buildCatalogOwnerIndex<
   records: readonly T[]
 ): ReadonlyMap<string, { kind: 'resolved'; owner: T } | { kind: 'ambiguous' }> {
   const next = new Map<string, { kind: 'resolved'; owner: T } | { kind: 'ambiguous' }>()
+
   for (const record of records) {
     const id = record.id
     const hostId = getCatalogOwnerHostId(record)
     const current = next.get(id)
+
     if (!current) {
       next.set(id, { kind: 'resolved', owner: record })
     } else if (current.kind === 'resolved' && getCatalogOwnerHostId(current.owner) !== hostId) {
       next.set(id, { kind: 'ambiguous' })
     }
+
     next.set(`${id}\0${hostId}`, {
       kind: 'resolved',
       owner: record
     })
   }
+
   return next
 }
 
@@ -94,6 +109,7 @@ export function findIndexedWorktreeOwner(
   worktreeId: string
 ): WorktreeOwnerRecord | null {
   const resolution = resolveIndexedWorktreeOwner(worktreesByRepo, worktreeId)
+
   return resolution.kind === 'resolved' ? resolution.owner : null
 }
 
@@ -105,10 +121,13 @@ export function findIndexedWorktreeOwnerForHost(
   if (!worktreesByRepo) {
     return null
   }
+
   resolveIndexedWorktreeOwner(worktreesByRepo, worktreeId)
+
   const resolution = worktreeOwnerIndexCache
     .get(worktreesByRepo)
     ?.get(`${worktreeId}\0${executionHostId}`)
+
   return resolution?.kind === 'resolved' ? resolution.owner : null
 }
 
@@ -128,12 +147,16 @@ export function resolveIndexedRepoOwner(
   if (!repos) {
     return { kind: 'missing' }
   }
+
   let index = repoOwnerIndexCache.get(repos)
+
   if (!index) {
     const next = new Map<string, IndexedRepoOwnerResolution>()
+
     for (const repo of repos) {
       const repoId = repo.id
       const current = next.get(repoId)
+
       if (!current) {
         next.set(repoId, { kind: 'resolved', owner: repo })
       } else if (
@@ -142,14 +165,17 @@ export function resolveIndexedRepoOwner(
       ) {
         next.set(repoId, { kind: 'ambiguous' })
       }
+
       next.set(`${repoId}\0${getRepoExecutionHostId(repo)}`, {
         kind: 'resolved',
         owner: repo
       })
     }
+
     index = next
     repoOwnerIndexCache.set(repos, index)
   }
+
   return index.get(repoId) ?? { kind: 'missing' }
 }
 
@@ -172,6 +198,7 @@ function addWorktreeOwnerIndexEntry(
   owner: WorktreeOwnerRecord
 ): void {
   const current = index.get(key)
+
   if (!current) {
     index.set(key, { kind: 'resolved', owner })
   } else if (
@@ -185,10 +212,13 @@ function addWorktreeOwnerIndexEntry(
 function worktreeOwnerHostIds(owner: WorktreeOwnerRecord): ExecutionHostId[] {
   const physicalHostId = parseExecutionHostId(owner.hostId)?.id
   const runtimeEnvironmentId = owner.runtimeOwnerEnvironmentId?.trim()
+
   if (!runtimeEnvironmentId) {
     return [physicalHostId ?? 'local']
   }
+
   const runtimeHostId = toRuntimeExecutionHostId(runtimeEnvironmentId)
+
   // Why: paired HUB worktrees need logical-runtime lookup without losing their physical SSH route.
   return physicalHostId && physicalHostId !== runtimeHostId
     ? [physicalHostId, runtimeHostId]
@@ -202,21 +232,27 @@ export function resolveIndexedWorktreeOwner(
   if (!worktreesByRepo) {
     return { kind: 'missing' }
   }
+
   let index = worktreeOwnerIndexCache.get(worktreesByRepo)
+
   if (!index) {
     const next = new Map<string, IndexedWorktreeOwnerResolution>()
+
     for (const worktrees of Object.values(worktreesByRepo)) {
       for (const worktree of worktrees) {
         const id = worktree.id
         addWorktreeOwnerIndexEntry(next, id, worktree)
+
         for (const hostId of worktreeOwnerHostIds(worktree)) {
           addWorktreeOwnerIndexEntry(next, `${id}\0${hostId}`, worktree)
         }
       }
     }
+
     index = next
     worktreeOwnerIndexCache.set(worktreesByRepo, index)
   }
+
   return index.get(worktreeId) ?? { kind: 'missing' }
 }
 
@@ -231,12 +267,16 @@ export function findIndexedDetectedWorktrees(
   if (!detectedWorktreesByRepo) {
     return NO_DETECTED_WORKTREES
   }
+
   let index = detectedWorktreeIndexCache.get(detectedWorktreesByRepo)
+
   if (!index) {
     const next = new Map<string, WorktreeOwnerRecord[]>()
+
     for (const listing of Object.values(detectedWorktreesByRepo)) {
       for (const worktree of listing.worktrees) {
         const matches = next.get(worktree.id)
+
         if (matches) {
           matches.push(worktree)
         } else {
@@ -244,9 +284,11 @@ export function findIndexedDetectedWorktrees(
         }
       }
     }
+
     index = next
     detectedWorktreeIndexCache.set(detectedWorktreesByRepo, index)
   }
+
   return index.get(worktreeId) ?? NO_DETECTED_WORKTREES
 }
 
@@ -262,6 +304,7 @@ export function findIndexedRepoOwner(
   repoId: string
 ): RepoOwnerRecord | null {
   const resolution = resolveIndexedRepoOwner(repos, repoId)
+
   return resolution.kind === 'resolved' ? resolution.owner : null
 }
 
@@ -273,8 +316,10 @@ export function findIndexedRepoOwnerForHost<T extends RepoOwnerRecord>(
   if (!repos) {
     return null
   }
+
   resolveIndexedRepoOwner(repos, repoId)
   const resolution = repoOwnerIndexCache.get(repos)?.get(`${repoId}\0${executionHostId}`)
+
   // The cache is keyed by this exact array, so its owner retains the caller's row type.
   return resolution?.kind === 'resolved' ? (resolution.owner as T) : null
 }
@@ -287,14 +332,18 @@ export function findIndexedFolderWorkspaceOwner(
   if (!folderWorkspaces) {
     return null
   }
+
   let index = folderWorkspaceOwnerIndexCache.get(folderWorkspaces)
+
   if (!index) {
     index = buildCatalogOwnerIndex(folderWorkspaces)
     folderWorkspaceOwnerIndexCache.set(folderWorkspaces, index)
   }
+
   const resolution = index.get(
     executionHostId ? `${folderWorkspaceId}\0${executionHostId}` : folderWorkspaceId
   )
+
   return resolution?.kind === 'resolved' ? resolution.owner : null
 }
 
@@ -306,13 +355,17 @@ export function findIndexedProjectGroupOwner(
   if (!projectGroups) {
     return null
   }
+
   let index = projectGroupOwnerIndexCache.get(projectGroups)
+
   if (!index) {
     index = buildCatalogOwnerIndex(projectGroups)
     projectGroupOwnerIndexCache.set(projectGroups, index)
   }
+
   const resolution = index.get(
     executionHostId ? `${projectGroupId}\0${executionHostId}` : projectGroupId
   )
+
   return resolution?.kind === 'resolved' ? resolution.owner : null
 }

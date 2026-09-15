@@ -32,17 +32,21 @@ export function getDisplacedLinkLabels(args: {
   linkedLinearIssue: string | null
 }): string[] | null {
   const { draft, snapshot, isFolderWorkspace, linkedIssue, linkedLinearIssue } = args
+
   if (isFolderWorkspace || !isIssueFieldDirty(draft, snapshot)) {
     return null
   }
 
   const keeping = draft.issueInput.trim() === '' ? null : draft.issueProvider
   const displaced: string[] = []
+
   if (keeping !== 'linear' && linkedLinearIssue) {
     displaced.push(formatLinkLabel('linear', linkedLinearIssue))
   }
+
   if (keeping !== 'github' && typeof linkedIssue === 'number') {
     displaced.push(formatLinkLabel('github', String(linkedIssue)))
   }
+
   return displaced.length > 0 ? displaced : null
 }

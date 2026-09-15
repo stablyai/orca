@@ -36,7 +36,9 @@ import {
 } from './worktree-jump-palette-open-tab-items'
 
 const EMPTY_BROWSER_PAGE_ENTRIES: SearchableBrowserPage[] = []
+
 const EMPTY_SIMULATOR_TAB_ENTRIES: SearchableSimulatorTab[] = []
+
 const EMPTY_WORKSPACE_TAB_ENTRIES: SearchableWorkspaceTab[] = []
 
 type WorktreeJumpPaletteOpenTabsInput = WorktreeJumpPaletteStoreState &
@@ -85,6 +87,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     if (!paletteStatusInputsActive) {
       return EMPTY_BROWSER_PAGE_ENTRIES
     }
+
     return buildSearchableBrowserPages({
       worktrees: browserSortedWorktrees,
       ownershipWorktrees: allWorktrees,
@@ -114,6 +117,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     unifiedTabsByWorktree,
     worktreeOrder
   ])
+
   const browserMatches = useMemo(
     () =>
       searchBrowserPages(browserPageEntries, deferredQuery.trim(), {
@@ -121,10 +125,12 @@ export function useWorktreeJumpPaletteOpenTabs({
       }),
     [browserPageEntries, deferredQuery, paletteSearchContext]
   )
+
   const simulatorTabEntries = useMemo<SearchableSimulatorTab[]>(() => {
     if (!paletteStatusInputsActive) {
       return EMPTY_SIMULATOR_TAB_ENTRIES
     }
+
     return buildSearchableSimulatorTabs({
       worktrees: browserSortedWorktrees,
       ownershipWorktrees: allWorktrees,
@@ -152,6 +158,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     unifiedTabsByWorktree,
     worktreeOrder
   ])
+
   const simulatorMatches = useMemo(
     () =>
       searchSimulatorTabs(simulatorTabEntries, deferredQuery.trim(), {
@@ -159,10 +166,12 @@ export function useWorktreeJumpPaletteOpenTabs({
       }),
     [simulatorTabEntries, deferredQuery, paletteSearchContext]
   )
+
   const workspaceTabEntries = useMemo<SearchableWorkspaceTab[]>(() => {
     if (!paletteStatusInputsActive) {
       return EMPTY_WORKSPACE_TAB_ENTRIES
     }
+
     return buildSearchableWorkspaceTabs({
       worktrees: browserSortedWorktrees,
       ownershipWorktrees: allWorktrees,
@@ -216,6 +225,7 @@ export function useWorktreeJumpPaletteOpenTabs({
     unifiedTabsByWorktree,
     worktreeOrder
   ])
+
   const workspaceTabMatches = useMemo(
     () =>
       searchWorkspaceTabs(workspaceTabEntries, deferredQuery.trim(), {
@@ -223,10 +233,12 @@ export function useWorktreeJumpPaletteOpenTabs({
       }),
     [workspaceTabEntries, deferredQuery, paletteSearchContext]
   )
+
   const worktreeItems = useMemo<WorktreePaletteItem[]>(() => {
     const items = worktreeMatches
       .map((match) => {
         const worktree = resolveWorktree(match.worktreeId, match.worktreeHostId)
+
         return worktree
           ? {
               id: encodePaletteIdentity(['worktree', getPaletteWorktreeIdentity(worktree)]),
@@ -237,12 +249,15 @@ export function useWorktreeJumpPaletteOpenTabs({
           : null
       })
       .filter((item): item is WorktreePaletteItem => item !== null)
+
     if (!hasQuery) {
       return items
     }
+
     const orderByIdentity = new Map(
       items.map((item, index) => [getPaletteWorktreeIdentity(item.worktree), index])
     )
+
     return items.sort((left, right) =>
       comparePaletteRankedItems(
         {
@@ -260,18 +275,22 @@ export function useWorktreeJumpPaletteOpenTabs({
       )
     )
   }, [hasQuery, resolveWorktree, worktreeMatches])
+
   const browserItems = useMemo<BrowserPaletteItem[]>(
     () => buildBrowserPaletteItems(browserMatches),
     [browserMatches]
   )
+
   const simulatorItems = useMemo<SimulatorPaletteItem[]>(
     () => buildSimulatorPaletteItems(simulatorMatches),
     [simulatorMatches]
   )
+
   const workspaceTabItems = useMemo<WorkspaceTabPaletteItem[]>(
     () => buildWorkspaceTabPaletteItems(workspaceTabMatches),
     [workspaceTabMatches]
   )
+
   const openTabItems = useMemo<OpenTabPaletteItem[]>(
     () => buildOpenTabPaletteItems({ browserItems, simulatorItems, workspaceTabItems }),
     [browserItems, simulatorItems, workspaceTabItems]

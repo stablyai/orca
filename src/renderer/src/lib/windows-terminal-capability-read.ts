@@ -13,6 +13,7 @@ async function reconcileWslAvailability(
   if (available || distros.length === 0) {
     return available
   }
+
   return probe().catch(() => false)
 }
 
@@ -32,6 +33,7 @@ export async function readWindowsTerminalCapabilities(
         : window.api.preflight.detectRemoteWindowsTerminalCapabilities({
             connectionId: sshConnectionId
           })
+
     return remoteCapabilityPromise
       .then((capabilities) => ({
         ...capabilities,
@@ -57,9 +59,11 @@ export async function readWindowsTerminalCapabilities(
         window.api.gitBash.isAvailable().catch(() => false),
         window.api.runtime.getStatus().catch(() => null)
       ])
+
     const reconciledWslAvailable = await reconcileWslAvailability(wslAvailable, wslDistros, () =>
       window.api.wsl.isAvailable()
     )
+
     return {
       wslAvailable: reconciledWslAvailable,
       wslDistros,
@@ -91,11 +95,13 @@ export async function readWindowsTerminalCapabilities(
         .then((status) => status.hostPlatform ?? null)
         .catch(() => null)
     ])
+
   const reconciledWslAvailable = await reconcileWslAvailability(wslAvailable, wslDistros, () =>
     callRuntimeRpc<boolean>(target, 'host.wsl.isAvailable', undefined, {
       timeoutMs: 15_000
     })
   )
+
   return {
     wslAvailable: reconciledWslAvailable,
     wslDistros,

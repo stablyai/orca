@@ -9,13 +9,18 @@ const { handleMock, getSshFilesystemProviderMock, providerRegistrationListeners 
 )
 
 vi.mock('electron', () => ({ ipcMain: { handle: handleMock } }))
+
 vi.mock('fs/promises', () => ({ stat: vi.fn() }))
+
 vi.mock('@parcel/watcher', () => ({ subscribe: vi.fn() }))
+
 vi.mock('./filesystem-watcher-wsl', () => ({ createWslWatcher: vi.fn() }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   getSshFilesystemProvider: getSshFilesystemProviderMock,
   onSshFilesystemProviderRegistered: (listener: (connectionId: string) => void) => {
     providerRegistrationListeners.add(listener)
+
     return () => providerRegistrationListeners.delete(listener)
   }
 }))
@@ -25,12 +30,16 @@ import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesyste
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
 const WORKTREE_PATH = '/home/me/repo'
+
 const ARGS = { worktreePath: WORKTREE_PATH, connectionId: 'conn-1' }
+
 const OVERFLOW_PAYLOAD = {
   worktreePath: WORKTREE_PATH,
   events: [{ kind: 'overflow', absolutePath: WORKTREE_PATH }]
 }
+
 const RETRY_GIVE_UP_MS = 61_000
+
 const DORMANT_FIRST_MS = 60_000
 
 function createSender(id: number): {
@@ -54,9 +63,11 @@ describe('remote filesystem watcher dormant re-arm', () => {
     vi.useRealTimers()
     handleMock.mockReset()
     getSshFilesystemProviderMock.mockReset()
+
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
+
     handleMock.mockImplementation((channel, handler) => {
       handlers[channel] = handler
     })
@@ -71,9 +82,11 @@ describe('remote filesystem watcher dormant re-arm', () => {
     watchAfterDeath: ReturnType<typeof vi.fn>
   ): Promise<void> {
     let onTerminalError: (error: Error) => void = () => {}
+
     getSshFilesystemProviderMock.mockReturnValue({
       watch: vi.fn().mockImplementation((_path, _callback, options) => {
         onTerminalError = options.onTerminalError
+
         return Promise.resolve(vi.fn())
       })
     })
@@ -158,6 +171,7 @@ describe('remote filesystem watcher dormant re-arm', () => {
     for (const listener of providerRegistrationListeners) {
       listener('conn-1')
     }
+
     await vi.advanceTimersByTimeAsync(0)
 
     expect(recoveredWatch).toHaveBeenCalledTimes(1)

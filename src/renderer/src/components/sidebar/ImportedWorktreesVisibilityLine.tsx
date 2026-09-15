@@ -35,7 +35,9 @@ type ImportedWorktreesVisibilityLineProps = {
 }
 
 const PREVIEW_LIMIT = 3
+
 const KEEP_HIDDEN_LABEL = 'Keep hidden - recover from the project menu'
+
 const GROUP_LIMIT = 5
 
 type ImportedWorktreePathGroup = {
@@ -64,17 +66,21 @@ export function groupWorktreesByParentPath(
 ): ImportedWorktreePathGroup[] {
   const groups: ImportedWorktreePathGroup[] = []
   const groupByPath = new Map<string, ImportedWorktreePathGroup>()
+
   for (const worktree of worktrees) {
     const path = getParentPath(worktree.path)
     const existing = groupByPath.get(path)
+
     if (existing) {
       existing.worktrees.push(worktree)
       continue
     }
+
     const group = { path, worktrees: [worktree] }
     groupByPath.set(path, group)
     groups.push(group)
   }
+
   return groups
 }
 
@@ -97,10 +103,12 @@ export default function ImportedWorktreesVisibilityLine({
   const worktreeGroups = groupWorktreesByParentPath(hiddenWorktrees)
   const visibleWorktreeGroups = worktreeGroups.slice(0, GROUP_LIMIT)
   const remainingGroupCount = Math.max(0, worktreeGroups.length - visibleWorktreeGroups.length)
+
   // Why: two hosts checking out one project render two identical lines.
   const repoScopeLabel = hostContextLabel
     ? `${repoDisplayName} on ${hostContextLabel}`
     : repoDisplayName
+
   const keepHiddenAriaLabel = `Keep ${hiddenCount} discovered ${worktreeNoun} hidden for ${repoScopeLabel}; recover from the project menu`
 
   if (hiddenCount === 0) {
@@ -116,11 +124,13 @@ export default function ImportedWorktreesVisibilityLine({
     const key = normalizeRuntimePathForComparison(path)
     setExpandedGroupPathKeys((previous) => {
       const next = new Set(previous)
+
       if (next.has(key)) {
         next.delete(key)
       } else {
         next.add(key)
       }
+
       return next
     })
   }

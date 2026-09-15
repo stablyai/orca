@@ -18,6 +18,7 @@ describe('getUsageWorktreeFingerprint', () => {
       ],
       ['repo-a', [worktree('repo-a::/repo/a', '/repo/a', 'A')]]
     ])
+
     const reordered = new Map<string, UsageWorktreeRef[]>([
       ['repo-a', [worktree('repo-a::/repo/a', '/repo/a', 'A')]],
       [
@@ -28,6 +29,7 @@ describe('getUsageWorktreeFingerprint', () => {
         ]
       ]
     ])
+
     const renamed = new Map(reordered)
     renamed.set('repo-a', [worktree('repo-a::/repo/a', '/repo/a', 'Renamed A')])
 

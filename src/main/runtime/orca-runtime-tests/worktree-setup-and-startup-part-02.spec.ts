@@ -23,18 +23,22 @@ describe('OrcaRuntimeService', () => {
         scripts: { setup: '', archive: '' }
       }
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [waitRepo],
       getRepo: (id: string) => (id === 'repo-1' ? waitRepo : undefined)
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const createTerminal = vi.spyOn(runtime, 'createTerminal')
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-headless-startup' })
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-headless-startup' })
       .mockResolvedValueOnce({ id: 'pty-headless-setup' })
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -98,10 +102,12 @@ describe('OrcaRuntimeService', () => {
     )
     // Why: setup is provisioned fire-and-forget; the wait-for-setup guarantee comes from the shell nonce/marker, not JS spawn ordering.
     await vi.waitFor(() => expect(spawn).toHaveBeenCalledTimes(2))
+
     const startup = spawn.mock.calls[0]![0] as {
       command: string
       env: Record<string, string>
     }
+
     const startupCommand = startup.command
     const startupScript = startup.env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]!
     const setupCommand = (spawn.mock.calls[1]![0] as { command: string }).command
@@ -119,10 +125,12 @@ describe('OrcaRuntimeService', () => {
   it('starts setup and startup side by side by default for local headless worktree creates', async () => {
     const runtime = new OrcaRuntimeService(store)
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-headless-parallel' })
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-headless-parallel-startup' })
       .mockResolvedValueOnce({ id: 'pty-headless-parallel-setup' })
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -196,10 +204,12 @@ describe('OrcaRuntimeService', () => {
   it('observes setup completion through the launch shell the runner was written for', async () => {
     const runtime = new OrcaRuntimeService(store)
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-observed-wsl-shell' })
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-observed-wsl-startup' })
       .mockResolvedValueOnce({ id: 'pty-observed-wsl-setup' })
+
     runtime.setPtyController({
       spawn,
       write: () => true,
@@ -315,12 +325,16 @@ describe('OrcaRuntimeService', () => {
         preAllocatedHandle: expect.stringMatching(/^term_/)
       })
     )
+
     const initialSpawnEnv =
       (spawn.mock.calls[0]?.[0] as { env?: Record<string, string> } | undefined)?.env ?? {}
+
     expectStablePaneKeyEnv(initialSpawnEnv)
+
     const initialLeafId = initialSpawnEnv.ORCA_PANE_KEY.slice(
       `${initialSpawnEnv.ORCA_TAB_ID}:`.length
     )
+
     // Why: the renderer treats a missing surfaceOwner as "reveal the owner", which
     // scrolled the sidebar to background CLI creates.
     expect(revealTerminalSession).toHaveBeenCalledWith(result.worktree.id, {
@@ -445,6 +459,7 @@ describe('OrcaRuntimeService', () => {
     const revealPayload = revealTerminalSession.mock.calls[0]?.[1] as
       | { surfaceOwner?: boolean }
       | undefined
+
     expect(revealTerminalSession).toHaveBeenCalledWith(
       result.worktree.id,
       expect.objectContaining({ ptyId: 'pty-activated-agent' })
@@ -502,6 +517,7 @@ describe('OrcaRuntimeService', () => {
     const revealPayload = revealTerminalSession.mock.calls[0]?.[1] as
       | { surfaceOwner?: boolean }
       | undefined
+
     expect(revealTerminalSession).toHaveBeenCalledWith(
       result.worktree.id,
       expect.objectContaining({ ptyId: 'pty-hooks-agent' })
@@ -517,13 +533,16 @@ describe('OrcaRuntimeService', () => {
         setupScriptLaunchMode: 'split-vertical' as const
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const activateWorktree = vi.fn()
     const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-cli-setup-split' })
+
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ id: 'pty-cli-setup-main' })
       .mockResolvedValueOnce({ id: 'pty-cli-setup-setup' })
+
     runtime.setPtyController({
       spawn,
       write: () => true,

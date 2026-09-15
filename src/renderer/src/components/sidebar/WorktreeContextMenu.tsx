@@ -9,10 +9,12 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu(
   props: WorktreeContextMenuProps
 ) {
   const model = useWorktreeContextMenuModel(props)
+
   return <WorktreeContextMenuView model={model} />
 })
 
 export default WorktreeContextMenu
+
 export {
   CLOSE_ALL_CONTEXT_MENUS_EVENT,
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR,

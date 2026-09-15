@@ -24,6 +24,7 @@ describe('paired runtime browser network tunnel', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-command-'))
     resources.push(() => rmSync(userDataPath, { recursive: true, force: true }))
     const runtime = new OrcaRuntimeService({} as never)
+
     const rpc = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
@@ -31,19 +32,25 @@ describe('paired runtime browser network tunnel', () => {
       wsPort: 0,
       methods: ALL_RPC_METHODS
     })
+
     await rpc.start()
     resources.push(() => rpc.stop())
 
     const offer = rpc.createPairingOffer({ name: 'browser-command', scope: 'runtime' })
+
     if (!offer.available) {
       throw new Error('Runtime pairing is unavailable')
     }
+
     const pairing = parsePairingCode(offer.pairingUrl)
+
     if (!pairing?.pairedDeviceId) {
       throw new Error('Runtime pairing identity is unavailable')
     }
+
     const errors: Error[] = []
     const onPageCommand = vi.fn(() => Promise.resolve({ status: 'completed' as const }))
+
     const hostLease = new PairedRuntimeBrowserHostLease({
       pairing,
       authorityRuntimeId: runtime.getRuntimeId(),
@@ -53,12 +60,14 @@ describe('paired runtime browser network tunnel', () => {
       onPageCommand,
       onError: (error) => errors.push(error)
     })
+
     await hostLease.start()
     resources.push(() => hostLease.close())
 
     const registry = getBrowserHostLeaseRegistry(runtime)
     const attached = registry.select('integration-browser-host')
     const settle = vi.spyOn(registry, 'settleClientPageCommand')
+
     const grant = registry.grantExecutionHost(
       {
         authorityEpoch: attached.authorityEpoch,
@@ -68,11 +77,14 @@ describe('paired runtime browser network tunnel', () => {
       },
       'native:integration'
     )
+
     resources.push(grant.release)
     const placement = registry.placeClientPage('page-a', attached.browserHostClientId)
+
     if (placement.kind !== 'client') {
       throw new Error('Expected client browser placement')
     }
+
     const issued = registry.issueClientPageCommand(
       {
         authorityRuntimeId: attached.authorityRuntimeId,
@@ -105,6 +117,7 @@ describe('paired runtime browser network tunnel', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-reconciliation-'))
     resources.push(() => rmSync(userDataPath, { recursive: true, force: true }))
     const runtime = new OrcaRuntimeService({} as never)
+
     const rpc = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
@@ -112,17 +125,22 @@ describe('paired runtime browser network tunnel', () => {
       wsPort: 0,
       methods: ALL_RPC_METHODS
     })
+
     await rpc.start()
     resources.push(() => rpc.stop())
 
     const offer = rpc.createPairingOffer({ name: 'browser-reconciliation', scope: 'runtime' })
+
     if (!offer.available) {
       throw new Error('Runtime pairing is unavailable')
     }
+
     const pairing = parsePairingCode(offer.pairingUrl)
+
     if (!pairing?.pairedDeviceId) {
       throw new Error('Runtime pairing identity is unavailable')
     }
+
     const oldPage = {
       authorityRuntimeId: runtime.getRuntimeId(),
       authorityEpoch: 'epoch-old',
@@ -135,7 +153,9 @@ describe('paired runtime browser network tunnel', () => {
       state: 'active' as const,
       currentUrl: 'https://remote.internal/'
     }
+
     const onPageCommand = vi.fn(() => Promise.resolve({ status: 'completed' as const }))
+
     const hostLease = new PairedRuntimeBrowserHostLease({
       pairing,
       authorityRuntimeId: runtime.getRuntimeId(),
@@ -147,19 +167,23 @@ describe('paired runtime browser network tunnel', () => {
       getPageInventory: () => [oldPage],
       onPageCommand
     })
+
     await hostLease.start()
     resources.push(() => hostLease.close())
 
     const registry = getBrowserHostLeaseRegistry(runtime)
     const attached = registry.select('integration-browser-host')
+
     const identity = {
       authorityEpoch: attached.authorityEpoch,
       browserHostClientId: attached.browserHostClientId,
       browserHostGeneration: attached.browserHostGeneration,
       pairedDeviceId: attached.pairedDeviceId
     }
+
     const grant = registry.grantExecutionHost(identity, 'native:integration')
     resources.push(grant.release)
+
     const adopted = await registry.adoptClientPages(identity, [
       {
         authorityRuntimeId: attached.authorityRuntimeId,
@@ -186,6 +210,7 @@ describe('paired runtime browser network tunnel', () => {
 
   it('loads an execution-host HTTP target through SOCKS and the dedicated E2EE socket', async () => {
     const destinationSockets = new Set<Socket>()
+
     const destination = createServer((socket) => {
       destinationSockets.add(socket)
       socket.once('close', () => destinationSockets.delete(socket))
@@ -195,12 +220,14 @@ describe('paired runtime browser network tunnel', () => {
         )
       })
     })
+
     const destinationAddress = await listen(destination)
     resources.push(() => closeServer(destination))
 
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-browser-tunnel-'))
     resources.push(() => rmSync(userDataPath, { recursive: true, force: true }))
     const runtime = new OrcaRuntimeService({} as never)
+
     const rpc = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
@@ -208,19 +235,24 @@ describe('paired runtime browser network tunnel', () => {
       wsPort: 0,
       methods: ALL_RPC_METHODS
     })
+
     await rpc.start()
     resources.push(() => rpc.stop())
 
     const offer = rpc.createPairingOffer({ name: 'browser-tunnel', scope: 'runtime' })
+
     if (!offer.available) {
       throw new Error('Runtime pairing is unavailable')
     }
+
     const pairing = parsePairingCode(offer.pairingUrl)
+
     if (!pairing?.pairedDeviceId) {
       throw new Error('Runtime pairing identity is unavailable')
     }
 
     const errors: Error[] = []
+
     const hostLease = new PairedRuntimeBrowserHostLease({
       pairing,
       authorityRuntimeId: runtime.getRuntimeId(),
@@ -228,14 +260,17 @@ describe('paired runtime browser network tunnel', () => {
       hostCapabilities: ['webview'],
       onError: (error) => errors.push(error)
     })
+
     const lease = await hostLease.start()
     resources.push(() => hostLease.close())
+
     const route = new PairedRuntimeBrowserNetworkRoute({
       pairing,
       lease,
       executionHostRevision: runtime.getStartedAt(),
       onError: (error) => errors.push(error)
     })
+
     const socksAddress = await route.start()
     resources.push(() => route.close())
 
@@ -275,9 +310,11 @@ async function listen(server: Server): Promise<{ host: string; port: number }> {
     server.listen(0, '127.0.0.1', resolve)
   })
   const address = server.address()
+
   if (!address || typeof address === 'string') {
     throw new Error('Test server did not bind a TCP port')
   }
+
   return { host: '127.0.0.1', port: address.port }
 }
 
@@ -285,6 +322,7 @@ async function closeServer(server: Server): Promise<void> {
   if (!server.listening) {
     return
   }
+
   await new Promise<void>((resolve, reject) =>
     server.close((error) => (error ? reject(error) : resolve()))
   )
@@ -293,5 +331,6 @@ async function closeServer(server: Server): Promise<void> {
 function collectSocketBytes(socket: Socket): { bytes: () => Buffer } {
   const chunks: Buffer[] = []
   socket.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)))
+
   return { bytes: () => Buffer.concat(chunks) }
 }

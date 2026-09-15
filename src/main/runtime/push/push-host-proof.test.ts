@@ -8,7 +8,9 @@ import {
 import { answerPushHostChallenge, type PushHostProofContext } from './push-host-proof'
 
 const GATEWAY_ORIGIN = 'https://push.onorca.dev'
+
 const HOST_FINGERPRINT = 'abcdef0123456789'
+
 const ISSUED_AT = 1_770_000_000_000
 
 function fixture(
@@ -30,6 +32,7 @@ function fixture(
     transcript: overrides.transcript,
     challenge: overrides.challenge
   })
+
   return {
     challenge: built.challenge,
     context: { ...built.context, now: () => ISSUED_AT + 1_000, ...overrides.context },
@@ -65,10 +68,12 @@ describe('answerPushHostChallenge', () => {
     ['issuedAt', { issuedAt: ISSUED_AT + 120_000 }]
   ] as const)('refuses a transcript whose %s does not match the challenge', (_name, transcript) => {
     const invalid: string[] = []
+
     const { challenge, context } = fixture({
       transcript,
       context: { onInvalid: (reason) => invalid.push(reason) }
     })
+
     expect(answerPushHostChallenge(challenge, context)).toBeNull()
     expect(invalid.join(',')).toContain('transcript')
   })
@@ -77,6 +82,7 @@ describe('answerPushHostChallenge', () => {
     const { challenge, context } = fixture({
       transcript: { gatewayKey: nacl.box.keyPair().publicKey }
     })
+
     expect(answerPushHostChallenge(challenge, context)).toBeNull()
   })
 
@@ -84,6 +90,7 @@ describe('answerPushHostChallenge', () => {
     const { challenge, context } = fixture({
       context: { now: () => ISSUED_AT + 10_000 + 30_001 }
     })
+
     expect(answerPushHostChallenge(challenge, context)).toBeNull()
   })
 

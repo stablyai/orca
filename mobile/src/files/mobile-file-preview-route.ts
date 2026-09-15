@@ -62,13 +62,16 @@ export function normalizeMobileFilePreviewRouteParams(
   const source = singleParam(params.source)
   const absolutePath = singleParam(params.absolutePath)
   const grantId = singleParam(params.grantId)
+
   if (!hostId || !worktreeId) {
     return { ok: false, message: 'Unable to load preview' }
   }
+
   if (source === 'terminalArtifact') {
     if (!absolutePath || !grantId) {
       return { ok: false, message: 'Unable to load preview' }
     }
+
     return {
       ok: true,
       params: {
@@ -89,9 +92,11 @@ export function normalizeMobileFilePreviewRouteParams(
       }
     }
   }
+
   if (!relativePath) {
     return { ok: false, message: 'Unable to load preview' }
   }
+
   return {
     ok: true,
     params: {

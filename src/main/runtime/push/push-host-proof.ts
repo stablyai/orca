@@ -12,9 +12,13 @@ import {
 } from '../host-challenge-envelope'
 
 const PUSH_HOST_PROOF_TRANSCRIPT_DOMAIN = 'orca-push-host-proof/v1'
+
 const PUSH_HOST_CHALLENGE_PLAINTEXT_DOMAIN = 'orca-push-host-challenge/v1'
+
 const PUSH_HOST_PROOF_CLOCK_SKEW_MS = 30_000
+
 const MAX_PUSH_HOST_PROOF_CHALLENGE_WINDOW_MS = 10_000
+
 const PUSH_HOST_PROOF_TRANSCRIPT_FIELD_COUNT = 10
 
 export type PushHostChallenge = {
@@ -43,13 +47,17 @@ function validateTranscript(
   nonce: Uint8Array
 ): boolean {
   const fields = parseHostChallengeTranscript(transcript)
+
   if (!fields || fields.size !== PUSH_HOST_PROOF_TRANSCRIPT_FIELD_COUNT) {
     context.onInvalid?.('transcript-structure')
+
     return false
   }
+
   const now = (context.now ?? Date.now)()
   const issuedAt = readTranscriptUint64(fields.get('issuedAt'))
   const expiresAt = readTranscriptUint64(fields.get('expiresAt'))
+
   const checks: [string, boolean][] = [
     ['issuedAt-readable', issuedAt !== null],
     ['issuedAt-not-future', issuedAt === null || issuedAt - PUSH_HOST_PROOF_CLOCK_SKEW_MS <= now],
@@ -72,11 +80,15 @@ function validateTranscript(
     ],
     ['hostPublicKey', equalBytes(fields.get('hostPublicKey'), context.hostPublicKey)]
   ]
+
   const failed = checks.filter(([, ok]) => !ok).map(([name]) => name)
+
   if (failed.length > 0) {
     context.onInvalid?.(`transcript:${failed.join('+')}`)
+
     return false
   }
+
   return true
 }
 
@@ -93,6 +105,7 @@ export function answerPushHostChallenge(
     plaintextDomain: PUSH_HOST_CHALLENGE_PLAINTEXT_DOMAIN,
     onInvalid: context.onInvalid
   })
+
   if (
     !envelope ||
     !validateTranscript(
@@ -105,6 +118,7 @@ export function answerPushHostChallenge(
   ) {
     return null
   }
+
   return hostChallengeAckProof({
     secret: envelope.secret,
     transcript: envelope.transcript,

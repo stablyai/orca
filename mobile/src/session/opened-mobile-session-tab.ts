@@ -34,9 +34,11 @@ export async function refreshOpenedMobileSessionTabs(
   options: RefreshOpenedMobileSessionTabsOptions
 ): Promise<void> {
   const currentRefresh = options.getCurrentRefresh()
+
   if (currentRefresh) {
     await currentRefresh
   }
+
   await options.refreshSessionTabs()
 }
 
@@ -48,12 +50,15 @@ export function findOpenedMobileSessionTab<T extends OpenedMobileSessionTabCandi
   const matches = tabs.filter(
     (tab) => tab.type !== 'browser' && tab.type !== 'terminal' && tab.relativePath === relativePath
   )
+
   if (matches.length === 0) {
     return null
   }
+
   if (options.preferMode === 'diff') {
     return matches.find((tab) => tab.mode === 'diff') ?? matches[0] ?? null
   }
+
   return matches.find((tab) => tab.mode !== 'diff') ?? matches[0] ?? null
 }
 
@@ -83,33 +88,44 @@ export async function activateOpenedSourceControlDiffTab<T extends OpenedMobileS
 ): Promise<boolean> {
   const isSuperseded = (): boolean => {
     const state = options.getActivationState()
+
     return state.activated || state.activationSeq !== state.latestActivationSeq
   }
+
   if (isSuperseded()) {
     return false
   }
+
   await options.fetchSessionTabs()
+
   if (isSuperseded()) {
     return false
   }
+
   const opened = findOpenedMobileSessionTab(options.getTabs(), options.relativePath, {
     preferMode: 'diff'
   })
+
   if (!opened) {
     return false
   }
+
   const activeTabId = options.getActiveTabId()
+
   // The post-open snapshot may already show the opened diff as active; that is
   // success, not a focus steal, so settle without re-activating.
   if (activeTabId === opened.id) {
     return true
   }
+
   // No focus steal: if the user moved to a different tab after the tap, leave
   // them there instead of yanking focus back to the diff.
   if (activeTabId !== options.activeTabIdAtTap) {
     return false
   }
+
   options.switchSessionTab(opened)
+
   return true
 }
 
@@ -124,6 +140,7 @@ export function shouldActivateOpenedMobileSessionTab(
       : state.activeTabType === 'terminal' &&
         state.sourceTerminalHandle !== null &&
         state.activeTerminalHandle === state.sourceTerminalHandle
+
   return !state.activated && state.activationSeq === state.latestActivationSeq && sourceStillActive
 }
 
@@ -133,16 +150,22 @@ export async function activateOpenedMobileSessionTab<T extends OpenedMobileSessi
   if (!shouldActivateOpenedMobileSessionTab(options.getActivationState())) {
     return false
   }
+
   await options.fetchSessionTabs()
+
   if (!shouldActivateOpenedMobileSessionTab(options.getActivationState())) {
     return false
   }
+
   const opened = findOpenedMobileSessionTab(options.getTabs(), options.relativePath)
+
   if (!opened) {
     return false
   }
+
   if (options.getActiveTabId() === opened.id) {
     return true
   }
+
   return options.switchSessionTab(opened)
 }

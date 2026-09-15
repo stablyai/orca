@@ -21,6 +21,7 @@ export function boundedPtyRecoveryEnd(
   snapshot: Pick<PtySourceDeliverySnapshot, 'receivedEndSu' | 'creditedEndSu' | 'windowSu'>
 ): number {
   const { receivedEndSu, creditedEndSu, windowSu } = snapshot
+
   // Oversized quarantine cannot earn credit; fence at the checkpoint and drain it live.
   return receivedEndSu - creditedEndSu > windowSu ? creditedEndSu : receivedEndSu
 }
@@ -55,13 +56,16 @@ export function registerPtySourceActivationSettlement(options: {
     if (deliveries.get(id) !== record || !record.activating) {
       return
     }
+
     if (!result.ok) {
       if (!record.activationRecoveryRequest) {
         session.cancelDelivery(record.identity, 'activation-publication-failed')
         deliveries.delete(id)
       }
+
       return
     }
+
     record.activating = false
     sender.completeRecoveryIfReady(record)
     sender.pump(record)
@@ -81,6 +85,7 @@ export function registerCanceledPtySourceRetirement(
     if (deliveries.get(record.identity.id) !== record) {
       return
     }
+
     deliveries.delete(record.identity.id)
     onCapacity(record.identity.id)
   })
@@ -92,6 +97,7 @@ export function pendingPtySourceRecoveryResult(
   if (record.recoveryCheckpointSourceEndSu === null || record.recoveryEndSu === null) {
     return Object.freeze({ status: 'restoreRequired', reason: 'checkpointUnavailable' })
   }
+
   return Object.freeze({
     status: 'pending',
     clientGeneration: record.identity.clientGeneration,

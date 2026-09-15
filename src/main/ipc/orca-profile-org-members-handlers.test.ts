@@ -40,9 +40,11 @@ import { registerOrcaProfileOrgMemberHandlers } from './orca-profile-org-members
 
 function invoke(channel: string, args?: unknown): unknown {
   const handler = handlers.get(channel)
+
   if (!handler) {
     throw new Error(`No handler for ${channel}`)
   }
+
   return handler({}, args)
 }
 

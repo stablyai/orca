@@ -47,13 +47,16 @@ export function useMobileStructuredAgentOptions(args: {
   mutate: StructuredAgentSessionMutate
 }): StructuredOptionsController {
   const { agent, client, enabled, fence, mutate, sessionId } = args
+
   const [optionState, setOptionState] = useState(() =>
     createStructuredAgentSessionOptionState(agent ?? 'codex')
   )
+
   const optionStateRef = useRef(optionState)
   const activeOptionRecordRef = useRef(optionState.record)
   const pendingOptionRef = useRef<string | null>(null)
   const optionMutationGeneration = useRef(0)
+
   const updateOptionState = useCallback(
     (update: (current: StructuredAgentSessionOptionState) => StructuredAgentSessionOptionState) => {
       const next = update(optionStateRef.current)
@@ -62,14 +65,17 @@ export function useMobileStructuredAgentOptions(args: {
     },
     []
   )
+
   const [optionPickerRequest, setOptionPickerRequest] = useState<{
     id: string
     sequence: number
   } | null>(null)
+
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
   } | null>(null)
+
   const optionCatalog = useMemo(
     () => (agent === 'claude' || agent === 'codex' ? getAgentSessionOptionCatalog(agent) : null),
     [agent]
@@ -88,6 +94,7 @@ export function useMobileStructuredAgentOptions(args: {
     if (!client || !sessionId || !enabled || !optionCatalog) {
       return
     }
+
     let stale = false
     const readGeneration = optionMutationGeneration.current
     void callAgentSession<AgentSessionOptionsResult>(client, 'agentSession.options', { sessionId })
@@ -102,6 +109,7 @@ export function useMobileStructuredAgentOptions(args: {
         }
       })
       .catch(() => undefined)
+
     return () => {
       stale = true
     }
@@ -116,6 +124,7 @@ export function useMobileStructuredAgentOptions(args: {
     async (id: string, value: SessionOptionValue): Promise<boolean> => {
       const currentState = optionStateRef.current
       const encoded = encodeStructuredAgentSessionOptionValue(id, value)
+
       if (
         pendingOptionRef.current !== null ||
         !client ||
@@ -126,22 +135,26 @@ export function useMobileStructuredAgentOptions(args: {
       ) {
         return false
       }
+
       const targetRecord = currentState.record
       const mutationGeneration = ++optionMutationGeneration.current
       pendingOptionRef.current = id
       updateOptionState((current) => ({ ...current, pendingId: id }))
+
       try {
         const result = await mutate<AgentSessionOptionResult>(
           'agentSession.setOption',
           'agentSession.setOption',
           { key: id, value: encoded }
         )
+
         if (
           activeOptionRecordRef.current !== targetRecord ||
           optionMutationGeneration.current !== mutationGeneration
         ) {
           return result.status !== 'rejected'
         }
+
         if (result.status === 'accepted') {
           const committed = result.value.options ?? { [id]: encoded }
           updateOptionState((current) =>
@@ -149,6 +162,7 @@ export function useMobileStructuredAgentOptions(args: {
               ? commitStructuredAgentSessionOptionValues(current, committed)
               : current
           )
+
           // Only an accepted pick: an `unknown` outcome commits optimistically to the
           // visible record, and remembering one the provider refused would seed a
           // launch the user never chose.
@@ -159,6 +173,7 @@ export function useMobileStructuredAgentOptions(args: {
               picks: structuredAgentSessionOptionPicks(currentState, committed)
             })
           }
+
           if (result.sameFence) {
             void callAgentSession<AgentSessionOptionsResult>(client, 'agentSession.options', {
               sessionId
@@ -177,16 +192,20 @@ export function useMobileStructuredAgentOptions(args: {
               })
               .catch(() => undefined)
           }
+
           return true
         }
+
         if (result.status === 'unknown') {
           updateOptionState((current) =>
             current.record === targetRecord
               ? commitStructuredAgentSessionOption(current, id, encoded)
               : current
           )
+
           return true
         }
+
         return false
       } finally {
         if (
@@ -210,7 +229,9 @@ export function useMobileStructuredAgentOptions(args: {
       if (!optionSnapshot.some((entry) => entry.id === id)) {
         return false
       }
+
       setOptionPickerRequest((current) => ({ id, sequence: (current?.sequence ?? 0) + 1 }))
+
       return true
     },
     [optionSnapshot]
@@ -219,6 +240,7 @@ export function useMobileStructuredAgentOptions(args: {
   const setOption = useCallback(
     async (id: string, value: SessionOptionValue) => {
       await setStructuredOption(id, value)
+
       return { snapshot: structuredAgentSessionOptionSnapshot(optionStateRef.current) }
     },
     [setStructuredOption]

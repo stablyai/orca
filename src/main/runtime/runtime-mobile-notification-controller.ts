@@ -89,6 +89,7 @@ export class RuntimeMobileNotificationController {
 
   onDispatched(listener: (event: MobileNotificationEvent) => void): () => void {
     this.listeners.add(listener)
+
     return () => this.listeners.delete(listener)
   }
 
@@ -107,13 +108,16 @@ export class RuntimeMobileNotificationController {
             event.worktreeId ?? 'global',
             event.emittedAt
           ))
+
       event = {
         ...event,
         legacySocketAllowed,
         desktopAway: getRuntimeDesktopSurface().isAwayForMobileNotifications?.()
       }
     }
+
     const seq = this.replay.record(event)
+
     try {
       this.dismissalStore?.record({
         ...event,
@@ -123,6 +127,7 @@ export class RuntimeMobileNotificationController {
     } catch {
       console.warn('[notifications] Could not persist dismissal recovery state')
     }
+
     notifyRuntimeListeners(
       this.listeners,
       (listener) =>
@@ -155,12 +160,15 @@ export class RuntimeMobileNotificationController {
     const title = `${input.pluginId}: ${input.title}`
     const body = input.body ?? ''
     let delivered = false
+
     try {
       delivered = getRuntimeDesktopSurface().showNotification({ title, body })
     } catch {
       // Headless runtimes still relay the notification to mobile clients.
     }
+
     this.dispatch({ type: 'notification', source: 'plugin', title, body })
+
     return { delivered }
   }
 }

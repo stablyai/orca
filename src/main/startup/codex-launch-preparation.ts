@@ -14,9 +14,11 @@ export async function prepareCodexRuntimeHomeForLaunch(
   launchContext?: CodexHomeLaunchContext
 ): Promise<string | null> {
   const runtimeHome = state.codexRuntimeHome
+
   if (!runtimeHome) {
     throw new Error('Codex runtime home service is not initialized')
   }
+
   if (
     target?.runtime !== 'wsl' &&
     launchContext?.launchAgent === 'codex' &&
@@ -29,10 +31,12 @@ export async function prepareCodexRuntimeHomeForLaunch(
       console.warn('[codex-project-trust] failed to pre-mark launch workspace:', error)
     }
   }
+
   const ensureRealHomeHooksIfSelected = async (): Promise<boolean> => {
     if (target?.runtime === 'wsl' || !runtimeHome.isHostSystemDefaultRealHomeSelected(launchEnv)) {
       return false
     }
+
     // Why (flag ON, system default): the hook entry must exist — appended last
     // and trusted by codex's own app-server grant — in the real ~/.codex before
     // the pane spawns. An incapable grant flips the lane gate so the launch
@@ -41,36 +45,45 @@ export async function prepareCodexRuntimeHomeForLaunch(
       hooksEnabled: isAgentStatusHooksEnabled(state.store?.getSettings()),
       userDataPath: app.getPath('userData')
     })
+
     return true
   }
+
   let realHomeHooksPrepared = await ensureRealHomeHooksIfSelected()
+
   // Why: a ManagedCodexHomeTemporarilyUnavailableError must escape uncaught —
   // the fallbacks below all key off `null`, which means "system default", so
   // swallowing the refusal would launch the wrong account (#STA-4422).
   let runtimeHomePath = await runtimeHome.prepareForCodexLaunchAsync(target, launchEnv, {
     unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
   })
+
   if (runtimeHomePath === null && !realHomeHooksPrepared) {
     // Why: launch prep can reject an untrusted managed home and clear its
     // selection. Establish hook capability for that newly selected lane, then
     // re-resolve if the capability gate rejects it.
     realHomeHooksPrepared = await ensureRealHomeHooksIfSelected()
+
     if (realHomeHooksPrepared) {
       runtimeHomePath = await runtimeHome.prepareForCodexLaunchAsync(target, launchEnv, {
         unavailableManagedHomePath: launchContext?.unavailableManagedHomePath
       })
     }
   }
+
   if (runtimeHomePath === null && target?.runtime !== 'wsl') {
     // Why: Codex runs on the user's real ~/.codex; the managed-home hook
     // install below would target a home Codex never reads on this lane.
     return null
   }
+
   const hookTarget =
     target?.runtime === 'wsl'
       ? { runtime: 'wsl' as const, wslDistro: target.wslDistro?.trim() || getDefaultWslDistro() }
       : target
+
   const hooksEnabled = isAgentStatusHooksEnabled(state.store?.getSettings())
+
   try {
     // Why: honor the persisted off switch so post-startup launches can't reinstall removed hooks.
     const status = await codexHookService.prepareRuntimeHomeForLaunch(
@@ -78,6 +91,7 @@ export async function prepareCodexRuntimeHomeForLaunch(
       hookTarget,
       hooksEnabled
     )
+
     if (status.state === 'error') {
       console.warn(
         `[codex-hook-service] failed to ${hooksEnabled ? 'refresh' : 'refresh user'} runtime hooks before launch`,
@@ -91,5 +105,6 @@ export async function prepareCodexRuntimeHomeForLaunch(
       error
     )
   }
+
   return runtimeHomePath
 }

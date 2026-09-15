@@ -17,6 +17,7 @@ export async function unnestWorktrees(
   if (worktreeIds.length === 0) {
     return
   }
+
   try {
     await Promise.all(worktreeIds.map((id) => updateWorktreeLineage(id, { noParent: true })))
   } catch (err) {

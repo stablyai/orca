@@ -63,23 +63,30 @@ export function buildNativeChatTranscriptSlots(
     isWorking,
     lifecycleWorking
   } = input
+
   const slots: NativeChatTranscriptSlot[] = []
+
   for (const [index, message] of messages.entries()) {
     const turnKey = turnKeys[index]
     const receipt = receipts.get(message.id)
+
     const candidateStatus =
       index === latestUserIndex
         ? turnStatuses.active
         : message.role === 'user' && turnKey
           ? turnStatuses.completedByTurn[turnKey]
           : undefined
+
     const status =
       showTurnStatus && candidateStatus?.workedSeconds != null ? candidateStatus : undefined
+
     const turnDiff = turnKey && turnKeys[index + 1] !== turnKey ? turnDiffs.get(turnKey) : undefined
     const drawsRow = receipt !== undefined || nativeChatRowRendersContent(message.blocks)
+
     if (!drawsRow && status === undefined && turnDiff === undefined) {
       continue
     }
+
     slots.push({
       message,
       turnKey,
@@ -97,6 +104,7 @@ export function buildNativeChatTranscriptSlots(
       })
     })
   }
+
   return slots
 }
 
@@ -109,5 +117,6 @@ export function nativeChatSlotIndexOf(
   if (messageId === undefined) {
     return -1
   }
+
   return slots.findIndex((slot) => slot.message.id === messageId)
 }

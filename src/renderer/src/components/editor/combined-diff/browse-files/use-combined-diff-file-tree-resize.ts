@@ -22,6 +22,7 @@ export function useCombinedDiffFileTreeResize(collapsed: boolean): {
   // Why: the container clamp is render-only — a pane that is hidden (0px) or temporarily
   // narrowed must never write back and shrink the width the user chose.
   const width = clampCombinedDiffFileTreeWidth(storedWidth, containerWidth ?? undefined)
+
   const { containerRef, onResizeStart } = useSidebarResize<HTMLElement>({
     // Why: the tree unmounts while collapsed but this hook does not, so the toggle has to
     // invalidate useSidebarResize's layout effect or the re-expanded aside keeps no width.
@@ -35,16 +36,20 @@ export function useCombinedDiffFileTreeResize(collapsed: boolean): {
 
   useEffect(() => {
     const container = containerRef.current?.parentElement
+
     if (collapsed || !container) {
       return
     }
+
     // Why: clientWidth ignores ancestor transforms, so a dialog's open animation can't mis-measure.
     const measure = (): void => {
       setContainerWidth(container.clientWidth)
     }
+
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(container)
+
     return () => observer.disconnect()
   }, [collapsed, containerRef])
 
@@ -53,6 +58,7 @@ export function useCombinedDiffFileTreeResize(collapsed: boolean): {
       if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       const direction = event.key === 'ArrowLeft' ? -1 : 1

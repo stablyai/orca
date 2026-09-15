@@ -15,18 +15,22 @@ export function applyCreatedWorktree(
   // Why: worktrees.onChanged can add this worktree before this callback runs; appending blindly would duplicate it (React key clash).
   set((s) => {
     const hostId = repoHostId(s, repoId)
+
     const createdWorktree = withRepoHostOwnership(
       result.worktree,
       hostId,
       getProjectHostSetupForRepoHost(s, repoId, hostId)
     )
+
     const current = s.worktreesByRepo[repoId] ?? []
     const alreadyPresent = current.some((w) => w.id === createdWorktree.id)
+
     const nextWorktrees = alreadyPresent
       ? current.map((worktree) =>
           worktree.id === createdWorktree.id ? { ...worktree, ...createdWorktree } : worktree
         )
       : [...current, createdWorktree]
+
     return {
       worktreesByRepo: {
         ...s.worktreesByRepo,

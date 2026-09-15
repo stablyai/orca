@@ -37,6 +37,7 @@ export type WorktreeCreateRoute =
 
 export function resolveWorktreeCreateRoute(repo: Repo): WorktreeCreateRoute {
   const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+
   switch (route.kind) {
     case 'local':
       return { kind: 'local', hostId: route.hostId }
@@ -62,8 +63,10 @@ export function requireWorktreeCreateRoute(
   repo: Repo
 ): Exclude<WorktreeCreateRoute, { kind: 'runtime' }> {
   const route = resolveWorktreeCreateRoute(repo)
+
   if (route.kind === 'runtime') {
     throw new ExecutionHostNotDispatchableError(route.hostId)
   }
+
   return route
 }

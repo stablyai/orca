@@ -39,15 +39,20 @@ import { platform as osPlatform } from 'node:os'
 import { join, resolve } from 'node:path'
 
 const projectDir = process.cwd()
+
 let cliOptions
+
 try {
   cliOptions = readCliOptions(process.argv.slice(2))
 } catch (error) {
   console.error(`[rebuild] ${formatError(error)}`)
   process.exit(2)
 }
+
 const rebuildPlatform = cliOptions.platform ?? osPlatform()
+
 const rebuildArch = cliOptions.arch ?? process.arch
+
 // Why: resolve the Electron download target once so the child installer and the
 // usability check can never disagree about which binary should be on disk.
 const electronInstallPlatform =
@@ -55,14 +60,18 @@ const electronInstallPlatform =
   process.env.ELECTRON_INSTALL_PLATFORM ||
   process.env.npm_config_platform ||
   rebuildPlatform
+
 const electronInstallArch =
   cliOptions.arch || process.env.ELECTRON_INSTALL_ARCH || process.env.npm_config_arch || rebuildArch
+
 const electronPackageDir = resolve(projectDir, 'node_modules/electron')
+
 const electronVersion = JSON.parse(
   readFileSync(resolve(electronPackageDir, 'package.json'), 'utf8')
 ).version
 
 const ignoreModules = ['cpu-features']
+
 const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 
 if (ignoreModules.length > 0) {
@@ -78,15 +87,19 @@ const NATIVE_MODULES = [
   'cpu-features',
   ...(rebuildPlatform === 'win32' ? ['@orca/windows-registry', '@vscode/windows-process-tree'] : [])
 ]
+
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
+
 const forceRebuild =
   process.env.ORCA_FORCE_NATIVE_REBUILD === '1' ||
   cliOptions.force ||
   rebuildPlatform !== osPlatform() ||
   rebuildArch !== process.arch
+
 let modulesToRebuild = onlyModules
 
 ensureElectronPackageInstalled()
+
 restoreNodePtyWindowsConptyRuntime()
 
 const patchedNodePtyRebuildReason = forceRebuild ? null : getPatchedNodePtyRebuildReason()
@@ -99,12 +112,16 @@ if (patchedNodePtyRebuildReason) {
     moduleName,
     result: probeElectronNativeModules([moduleName])
   }))
+
   modulesToRebuild = probes.filter(({ result }) => !result.ok).map(({ moduleName }) => moduleName)
+
   if (modulesToRebuild.length === 0) {
     console.log('[rebuild] Native modules already load in Electron; skipping rebuild.')
     process.exit(0)
   }
+
   console.log(`[rebuild] Rebuilding failed native modules: ${modulesToRebuild.join(', ')}`)
+
   for (const { result } of probes) {
     if (!result.ok && result.stderr.trim()) {
       console.log(result.stderr.trim())
@@ -124,17 +141,21 @@ if (!ignoreModules.includes('cpu-features')) {
   const cpuFeatureDirs = globSync('node_modules/.pnpm/cpu-features@*/node_modules/cpu-features', {
     cwd: projectDir
   })
+
   for (const relDir of cpuFeatureDirs) {
     const dir = resolve(projectDir, relDir)
     const gypiPath = resolve(dir, 'buildcheck.gypi')
+
     if (existsSync(gypiPath)) {
       continue
     }
+
     try {
       const out = execFileSync(process.execPath, ['buildcheck.js'], {
         cwd: dir,
         encoding: 'utf8'
       })
+
       writeFileSync(gypiPath, out)
       console.log(`[rebuild] Generated ${relDir}/buildcheck.gypi`)
     } catch (/** @type {any} */ err) {
@@ -155,10 +176,12 @@ try {
     existsSync(join(projectDir, 'node_modules', '@vscode', 'windows-process-tree', 'package.json'))
   ) {
     stageWindowsProcessTreeNodeAddonApiHeaders()
+
     if (ensureWindowsProcessTreeCommandLinePatch()) {
       console.warn('[rebuild] Repaired the un-applied windows-process-tree command-line patch.')
     }
   }
+
   await rebuild({
     buildPath: projectDir,
     electronVersion,
@@ -177,12 +200,14 @@ try {
   assertWindowsProcessTreeAddonIsPatched()
 } catch (/** @type {any} */ err) {
   console.error('[rebuild] Native module rebuild failed:', err?.message ?? err)
+
   if (isWindowsNativeLockError(err)) {
     console.error(
       '[rebuild] A Windows process appears to be using a native .node file. ' +
         'Close running Orca/Electron/dev processes for this worktree, then rerun `pnpm install` ' +
         'or `pnpm run rebuild:electron`.'
     )
+
     if (isPostinstall() && process.env.ORCA_STRICT_NATIVE_REBUILD !== '1') {
       console.error(
         '[rebuild] Continuing postinstall because the failure is a Windows file lock. ' +
@@ -191,6 +216,7 @@ try {
       process.exit(0)
     }
   }
+
   process.exit(1)
 }
 
@@ -213,11 +239,14 @@ function assertWindowsProcessTreeAddonIsPatched() {
   ) {
     return
   }
+
   const addonPath = windowsProcessTreeAddonPath()
   const state = inspectWindowsProcessTreeAddon(addonPath)
+
   if (state === 'clean') {
     return
   }
+
   throw new Error(
     state === 'missing'
       ? `the rebuild reported success but ${addonPath} is not there, so the packaged app would ` +
@@ -234,33 +263,42 @@ function restoreNodePtyWindowsConptyRuntime() {
   }
 
   const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
+
   if (!existsSync(join(nodePtyDir, 'build', 'Release', 'conpty.node'))) {
     return
   }
+
   const conptyRoot = join(nodePtyDir, 'third_party', 'conpty')
+
   const sourceDir = readdirSync(conptyRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => join(conptyRoot, entry.name, `win10-${rebuildArch}`))
     .find((candidate) => existsSync(candidate))
+
   if (!sourceDir) {
     throw new Error(`node-pty has no ConPTY runtime payload for win10-${rebuildArch}`)
   }
 
   const runtimeDir = join(nodePtyDir, 'build', 'Release', 'conpty')
   mkdirSync(runtimeDir, { recursive: true })
+
   for (const filename of NODE_PTY_CONPTY_RUNTIME_FILES) {
     const sourceFile = join(sourceDir, filename)
+
     if (!existsSync(sourceFile)) {
       throw new Error(`node-pty is missing ${sourceFile}`)
     }
+
     copyFileSync(sourceFile, join(runtimeDir, filename))
   }
+
   // Why: @electron/rebuild bypasses node-pty's postinstall step that normally copies these DLLs.
   console.log(`[rebuild] Restored node-pty ConPTY runtime files for win10-${rebuildArch}.`)
 }
 
 function ensureElectronPackageInstalled() {
   repairElectronPathFile()
+
   if (electronPackageIsUsable()) {
     return
   }
@@ -269,23 +307,29 @@ function ensureElectronPackageInstalled() {
   // writing path.txt. Electron 42's lazy require() would run install.js here,
   // so inspect dist/ directly and keep using our strict partial-extract checks.
   console.log('[rebuild] Electron package binary is missing; installing Electron package binary.')
+
   try {
     runElectronPackageBinaryInstall()
   } catch (/** @type {any} */ err) {
     console.error('[rebuild] Electron install retry failed:', err?.message ?? err)
     logElectronInstallDiagnostics()
+
     if (continuePostinstallWithoutElectron()) {
       process.exit(0)
     }
+
     process.exit(1)
   }
 
   repairElectronPathFile()
+
   if (!electronPackageIsUsable()) {
     logElectronInstallDiagnostics()
+
     if (continuePostinstallWithoutElectron()) {
       process.exit(0)
     }
+
     console.error('[rebuild] Electron package is still unavailable after retry.')
     process.exit(1)
   }
@@ -294,6 +338,7 @@ function ensureElectronPackageInstalled() {
 function electronPackageIsUsable() {
   try {
     const installedPlatformPath = readFileSync(resolve(electronPackageDir, 'path.txt'), 'utf8')
+
     return (
       electronDistMatchesPackage(getElectronExecutablePath()) &&
       installedPlatformPath === getElectronPlatformPath()
@@ -308,6 +353,7 @@ function electronDistMatchesPackage(electronExecutable) {
     const installedVersion = readFileSync(resolve(electronPackageDir, 'dist', 'version'), 'utf8')
       .trim()
       .replace(/^v/, '')
+
     return installedVersion === electronVersion && existsSync(electronExecutable)
   } catch {
     return false
@@ -320,6 +366,7 @@ function runElectronPackageBinaryInstall() {
     ELECTRON_INSTALL_PLATFORM: electronInstallPlatform,
     ELECTRON_INSTALL_ARCH: electronInstallArch
   }
+
   delete env.ELECTRON_SKIP_BINARY_DOWNLOAD
   delete env.npm_config_electron_skip_binary_download
 
@@ -336,6 +383,7 @@ function runElectronPackageBinaryInstall() {
   if (result.error) {
     throw result.error
   }
+
   if (result.status !== 0) {
     throw new Error(
       `config/scripts/install-electron-package-binary.mjs exited with status ${result.status}`
@@ -347,28 +395,33 @@ function continuePostinstallWithoutElectron() {
   if (!isPostinstall() || process.env.ORCA_STRICT_ELECTRON_INSTALL === '1') {
     return false
   }
+
   console.error(
     '[rebuild] Continuing postinstall because Electron binary installation failed. ' +
       'Electron-consuming package scripts and release jobs run ' +
       'config/scripts/ensure-native-runtime.mjs --runtime=electron before launching Electron.'
   )
+
   return true
 }
 
 function repairElectronPathFile() {
   const platformPath = getElectronPlatformPath()
   const electronExecutable = resolve(electronPackageDir, 'dist', platformPath)
+
   if (!electronDistMatchesPackage(electronExecutable)) {
     return
   }
 
   const pathFile = resolve(electronPackageDir, 'path.txt')
   let currentPath = ''
+
   try {
     currentPath = readFileSync(pathFile, 'utf8')
   } catch {
     // Missing path.txt is the common CI failure this script repairs.
   }
+
   if (currentPath !== platformPath) {
     writeFileSync(pathFile, platformPath)
     console.log(`[rebuild] Repaired Electron path.txt -> ${platformPath}`)
@@ -382,6 +435,7 @@ function logElectronInstallDiagnostics() {
   console.error(`  packageDir=${electronPackageDir} exists=${existsSync(electronPackageDir)}`)
   console.error(`  distDir=${electronDistDir} exists=${existsSync(electronDistDir)}`)
   console.error(`  pathFile=${pathFile} exists=${existsSync(pathFile)}`)
+
   if (existsSync(electronDistDir)) {
     console.error(`  distEntries=${safeReaddir(electronDistDir).join(', ')}`)
   }
@@ -413,51 +467,64 @@ function getElectronPlatformPath() {
 
 function readCliOptions(args) {
   const options = { force: false }
+
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index]
+
     if (arg === '--force') {
       options.force = true
       continue
     }
+
     if (arg === '--platform') {
       options.platform = readRequiredArgValue(args, (index += 1), '--platform')
       continue
     }
+
     if (arg.startsWith('--platform=')) {
       options.platform = readInlineArgValue(arg, '--platform')
       continue
     }
+
     if (arg === '--arch') {
       options.arch = readRequiredArgValue(args, (index += 1), '--arch')
       continue
     }
+
     if (arg.startsWith('--arch=')) {
       options.arch = readInlineArgValue(arg, '--arch')
       continue
     }
+
     throw new Error(`Unknown argument: ${arg}`)
   }
+
   return options
 }
 
 function readRequiredArgValue(args, index, flag) {
   const value = args[index]
+
   if (!value || value.startsWith('--')) {
     throw new Error(`Missing value for ${flag}`)
   }
+
   return value
 }
 
 function readInlineArgValue(arg, flag) {
   const value = arg.slice(`${flag}=`.length)
+
   if (!value) {
     throw new Error(`Missing value for ${flag}`)
   }
+
   return value
 }
 
 function getElectronExecutablePath() {
   const platformPath = getElectronPlatformPath()
+
   return process.env.ELECTRON_OVERRIDE_DIST_PATH
     ? resolve(process.env.ELECTRON_OVERRIDE_DIST_PATH, platformPath)
     : resolve(electronPackageDir, 'dist', platformPath)
@@ -471,6 +538,7 @@ function getPatchedNodePtyRebuildReason() {
   // Why: Orca patches node-pty's native Unix spawn path and Windows job-object
   // exports; upstream prebuilds can load while missing those patches.
   const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
+
   const artifactPaths =
     rebuildPlatform === 'win32'
       ? [
@@ -485,6 +553,7 @@ function getPatchedNodePtyRebuildReason() {
             ? [resolve(nodePtyDir, 'build', 'Release', 'spawn-helper')]
             : [])
         ]
+
   const missingArtifact = artifactPaths.find((artifactPath) => !existsSync(artifactPath))
 
   if (!missingArtifact) {
@@ -498,11 +567,13 @@ function requiresPatchedNodePtySourceBuild() {
   if (!onlyModules.includes('node-pty')) {
     return false
   }
+
   if (rebuildPlatform !== osPlatform() || rebuildArch !== process.arch) {
     return false
   }
 
   const nodePtyPatchPath = resolve(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch')
+
   if (!existsSync(nodePtyPatchPath)) {
     return false
   }
@@ -514,6 +585,7 @@ function probeElectronNativeModules(moduleNames) {
   if (!electronPackageIsUsable()) {
     return { ok: false, status: null, stderr: 'Electron package binary is unavailable.' }
   }
+
   const electronExecutable = getElectronExecutablePath()
 
   const probeSource = `
@@ -638,9 +710,11 @@ function isWindowsNativeLockError(error) {
   if (process.platform !== 'win32') {
     return false
   }
+
   const text = [error?.message, error?.stack, error?.stdout, error?.stderr]
     .filter(Boolean)
     .join('\n')
+
   return /(?:EPERM|operation not permitted)[\s\S]*(?:unlink|\.node|conpty\.node|pty\.node)/i.test(
     text
   )

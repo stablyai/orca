@@ -69,6 +69,7 @@ export function SourceControlAgentActionDialog(
     startLabel = 'Start agent',
     onSaveAgentDefault
   } = props
+
   const {
     handleOpenChange,
     shouldRenderDialog,

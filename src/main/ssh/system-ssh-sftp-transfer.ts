@@ -56,19 +56,23 @@ function systemSftpCandidates(sshPath: string | null, platform: NodeJS.Platform)
   const pathApi = platform === 'win32' ? win32 : posix
   const executable = platform === 'win32' ? 'sftp.exe' : 'sftp'
   const candidates: string[] = []
+
   // Why the ssh binary's own directory first: a host with two OpenSSH installs must pair the sftp
   // client with the ssh that `buildSshArgs` was built for, not whichever one PATH happens to reach.
   if (sshPath) {
     candidates.push(pathApi.join(pathApi.dirname(sshPath), executable))
   }
+
   if (platform === 'win32') {
     const systemRoot = process.env.SystemRoot || process.env.WINDIR
+
     if (systemRoot) {
       candidates.push(win32.join(systemRoot, 'System32', 'OpenSSH', executable))
     }
   } else {
     candidates.push('/usr/bin/sftp', '/usr/local/bin/sftp', '/opt/homebrew/bin/sftp')
   }
+
   return candidates
 }
 
@@ -77,40 +81,52 @@ export function findSystemSftp(): string | null {
   if (process.env.ORCA_SYSTEM_SFTP_PATH) {
     return process.env.ORCA_SYSTEM_SFTP_PATH
   }
+
   const sshPath = findSystemSsh()
+
   for (const candidate of systemSftpCandidates(sshPath, process.platform)) {
     try {
       if (!statSync(candidate).isFile()) {
         continue
       }
+
       if (process.platform !== 'win32') {
         accessSync(candidate, constants.X_OK)
       }
+
       return candidate
     } catch {
       continue
     }
   }
+
   return findSftpOnPath()
 }
 
 function findSftpOnPath(): string | null {
   const pathValue = process.env.PATH
+
   if (!pathValue) {
     return null
   }
+
   const pathApi = process.platform === 'win32' ? win32 : posix
   const executable = process.platform === 'win32' ? 'sftp.exe' : 'sftp'
+
   for (const entry of pathValue.split(pathApi.delimiter)) {
     const directory = entry.trim().replace(/^"|"$/g, '')
+
     if (!directory) {
       continue
     }
+
     const candidate = pathApi.join(directory, executable)
+
     if (existsSync(candidate)) {
       return candidate
     }
   }
+
   return null
 }
 
@@ -135,11 +151,14 @@ export async function runSftpBatch(
 ): Promise<void> {
   throwIfAborted(options?.signal)
   const sftpPath = findSystemSftp()
+
   if (!sftpPath) {
     throw new SftpSubsystemUnavailableError('no sftp client binary found alongside ssh')
   }
+
   const args = withSftpKeepalive(translateSshArgsToSftpArgs(buildSshArgs(target, options)))
   let result
+
   try {
     result = await runProcess({
       program: sftpPath,
@@ -159,14 +178,18 @@ export async function runSftpBatch(
       `sftp client at ${sftpPath} could not be started: ${error instanceof Error ? error.message : String(error)}`
     )
   }
+
   if (result.code === 0) {
     return
   }
+
   throwIfAborted(options?.signal)
   const detail = result.stderr.trim()
+
   if (SUBSYSTEM_REFUSED_PATTERN.test(detail)) {
     throw new SftpSubsystemUnavailableError(detail)
   }
+
   throw new Error(`sftp batch failed (exit ${result.code}): ${detail}`)
 }
 
@@ -184,8 +207,10 @@ export function makeDirectoriesViaSftp(
   const commands = remoteDirectories.map(
     (directory) => `-mkdir ${quoteSftpBatchArgument(toSftpRemotePath(directory))}`
   )
+
   if (commands.length === 0) {
     return Promise.resolve()
   }
+
   return runSftpBatch(target, commands, options)
 }

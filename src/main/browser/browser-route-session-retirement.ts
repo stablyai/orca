@@ -7,9 +7,12 @@ export function retireBrowserRouteSessionPage(
   settle: (state: PreparedBrowserRoutePartition, page: BrowserRoutePageAuthority) => void
 ): boolean {
   const state = live.get(input.partition)
+
   if (!state || !state.pages.beginRetirement(input)) {
     return false
   }
+
   settle(state, input)
+
   return true
 }

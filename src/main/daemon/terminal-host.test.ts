@@ -9,6 +9,7 @@ import { TerminalHost } from './terminal-host'
 import type { TuiAgent } from '../../shared/tui-agent'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
+
 vi.mock('../pty-descendant-termination', () => ({
   killWithDescendantSweep: killWithDescendantSweepMock
 }))
@@ -18,6 +19,7 @@ function createMockSubprocess(
 ): SubprocessHandle {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
+
   return {
     pid: 99999,
     ...(options.startupCommandDeliveredInShellArgs
@@ -63,10 +65,12 @@ type MockSpawnFn = (opts: {
 describe('TerminalHost', () => {
   let host: TerminalHost
   let spawnFn: MockSpawnFn
+
   let lastSubprocess: ReturnType<typeof createMockSubprocess> & {
     _onDataCb: ((data: string) => void) | null
     _onExitCb: ((code: number) => void) | null
   }
+
   let platformDescriptor: PropertyDescriptor | undefined
 
   beforeEach(() => {
@@ -80,7 +84,9 @@ describe('TerminalHost', () => {
         _onDataCb: ((data: string) => void) | null
         _onExitCb: ((code: number) => void) | null
       }
+
       lastSubprocess = sub
+
       return sub
     })
     host = new TerminalHost({ spawnSubprocess: spawnFn as MockSpawnFn })
@@ -88,6 +94,7 @@ describe('TerminalHost', () => {
 
   afterEach(async () => {
     await host.dispose()
+
     if (platformDescriptor) {
       Object.defineProperty(process, 'platform', platformDescriptor)
     }
@@ -198,6 +205,7 @@ describe('TerminalHost', () => {
 
     it('uses the short daemon settle path when marker and prompt arrive together', async () => {
       vi.useFakeTimers()
+
       try {
         await host.createOrAttach({
           sessionId: 'session-1',
@@ -229,7 +237,9 @@ describe('TerminalHost', () => {
           _onDataCb: ((data: string) => void) | null
           _onExitCb: ((code: number) => void) | null
         }
+
         lastSubprocess = sub
+
         return sub
       })
       await host.dispose()
@@ -257,7 +267,9 @@ describe('TerminalHost', () => {
           _onDataCb: ((data: string) => void) | null
           _onExitCb: ((code: number) => void) | null
         }
+
         lastSubprocess = sub
+
         return sub
       })
       await host.dispose()
@@ -285,7 +297,9 @@ describe('TerminalHost', () => {
           _onDataCb: ((data: string) => void) | null
           _onExitCb: ((code: number) => void) | null
         }
+
         lastSubprocess = sub
+
         return sub
       })
       await host.dispose()
@@ -311,7 +325,9 @@ describe('TerminalHost', () => {
           _onDataCb: ((data: string) => void) | null
           _onExitCb: ((code: number) => void) | null
         }
+
         lastSubprocess = sub
+
         return sub
       })
       await host.dispose()
@@ -456,6 +472,7 @@ describe('TerminalHost', () => {
 
     it('retains an immediate-kill session when physical exit times out', async () => {
       vi.useFakeTimers()
+
       try {
         await host.createOrAttach({
           sessionId: 'session-1',
@@ -473,6 +490,7 @@ describe('TerminalHost', () => {
         expect(lastSubprocess.forceKill).toHaveBeenCalledTimes(1)
         expect(lastSubprocess.dispose).not.toHaveBeenCalled()
         expect(host.listSessions()).toHaveLength(1)
+
         // An unkillable child never releases the id: the create waits out its own budget and
         // then reports absence rather than publishing a session teardown still owns.
         const recreate = host.createOrAttach({
@@ -481,6 +499,7 @@ describe('TerminalHost', () => {
           rows: 24,
           streamClient: { onData: vi.fn(), onExit: vi.fn() }
         })
+
         const refused = expect(recreate).rejects.toThrow('Session not found')
         await vi.advanceTimersByTimeAsync(IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS)
         await refused
@@ -550,6 +569,7 @@ describe('TerminalHost', () => {
       const retiredSubprocess = lastSubprocess
       const killing = host.kill('agent-reattach', { immediate: true })
       let respawned = false
+
       const respawn = host
         .createOrAttach({
           sessionId: 'agent-reattach',
@@ -560,8 +580,10 @@ describe('TerminalHost', () => {
         })
         .then((result) => {
           respawned = true
+
           return result
         })
+
       await Promise.resolve()
       await Promise.resolve()
 
@@ -623,6 +645,7 @@ describe('TerminalHost', () => {
       const killing = host.kill('agent-natural-exit', { immediate: true })
       retiredSubprocess._onExitCb?.(0)
       let respawned = false
+
       const respawn = host
         .createOrAttach({
           sessionId: 'agent-natural-exit',
@@ -633,8 +656,10 @@ describe('TerminalHost', () => {
         })
         .then((result) => {
           respawned = true
+
           return result
         })
+
       await Promise.resolve()
       await Promise.resolve()
 
@@ -772,6 +797,7 @@ describe('TerminalHost', () => {
   describe('detach', () => {
     it('detaches a client from a session', async () => {
       const onData = vi.fn()
+
       const result = await host.createOrAttach({
         sessionId: 'session-1',
         cols: 80,
@@ -851,6 +877,7 @@ describe('TerminalHost', () => {
 
     it('fences creation and retries a rejected force kill before dropping ownership', async () => {
       vi.useFakeTimers()
+
       try {
         await host.createOrAttach({
           sessionId: 'session-1',
@@ -859,13 +886,17 @@ describe('TerminalHost', () => {
           streamClient: { onData: vi.fn(), onExit: vi.fn() }
         })
         let attempts = 0
+
         const forceKill = vi.fn(() => {
           attempts++
+
           if (attempts === 1) {
             throw new Error('transient daemon dispose kill failure')
           }
+
           lastSubprocess._onExitCb?.(137)
         })
+
         lastSubprocess.forceKill = forceKill
 
         const dispose = host.dispose()

@@ -20,13 +20,18 @@ import type { PtyTransport } from './pty-transport-types'
 
 // opencode/OpenTUI's unconditional startup burst (BEL-terminated, not ST).
 const OPENCODE_STARTUP_QUERY_BURST = '\x1b]10;?\x07\x1b]11;?\x07\x1b]4;0;?\x07'
+
 // Orca's One Dark terminal theme — the values that appear in the leaked text.
 const ORCA_TERMINAL_THEME = { foreground: '#ffffff', background: '#282c34' }
+
 const OSC10_REPLY = '\x1b]10;rgb:ffff/ffff/ffff\x1b\\'
+
 const OSC11_REPLY = '\x1b]11;rgb:2828/2c2c/3434\x1b\\'
+
 const LEAKED_COLOR_REPLY_TEXT = /\d\d;rgb:[0-9a-f]{4}\//
 
 const PTY_ID = 'pty-12112'
+
 let dispatchPtyData: (payload: { id: string; data: string }) => void = () => {}
 
 /**
@@ -60,12 +65,15 @@ function createStartupTty(): StartupTty {
   let raw = false
   let received = ''
   let sink: (data: string) => void = () => {}
+
   return {
     writeToPty: (data) => {
       if (raw) {
         received += data
+
         return
       }
+
       // A cooked-mode master write is BOTH echoed and delivered: ECHO copies the bytes
       // to the master without consuming them from the slave's input queue, so a program
       // arming raw mode with TCSANOW/TCSADRAIN (libuv's setRawMode, hence every Node
@@ -101,6 +109,7 @@ function stubPtyApi(tty: StartupTty): void {
         claimViewport: vi.fn(),
         onData: (cb: (payload: { id: string; data: string }) => void) => {
           dispatchPtyData = cb
+
           return () => {}
         },
         onReplay: () => () => {},
@@ -143,9 +152,11 @@ async function createRendererPane(): Promise<RendererPane> {
     deliver: (data) => dispatchPtyData({ id: PTY_ID, data }),
     renderedText: () => {
       const lines: string[] = []
+
       for (let row = 0; row < terminal.rows; row += 1) {
         lines.push(terminal.buffer.active.getLine(row)?.translateToString(true) ?? '')
       }
+
       return lines.join('\n').trim()
     },
     dispose: () => {
@@ -157,9 +168,11 @@ async function createRendererPane(): Promise<RendererPane> {
 
 async function settleUntil(condition: () => boolean, timeoutMs = 500): Promise<void> {
   const deadline = Date.now() + timeoutMs
+
   while (!condition() && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 1))
   }
+
   expect(condition()).toBe(true)
 }
 
@@ -199,12 +212,14 @@ describe('#12112 opencode startup OSC 10/11 replies on the local path', () => {
     // opencode is a TUI agent, so main arms spawnOptions.startupIngress for this
     // pane and only this pane (pty.ts:4024, terminal-startup-color-query-replies.ts).
     expect(isTuiAgent('opencode')).toBe(true)
+
     const ingress = new PtyStartupIngress({
       intent: { colors: ORCA_TERMINAL_THEME, deadlineMs: 5_000 },
       ownerBackend: 'posix-pty',
       write: (data) => tty.writeToPty(data),
       onEmission: (emission) => pane.deliver(emission.data)
     })
+
     tty.onPtyOutput((data) => ingress.accept(data))
 
     try {
@@ -226,6 +241,7 @@ describe('#12112 opencode startup OSC 10/11 replies on the local path', () => {
     // own echo and the agent's first frame. It is never at the head of a chunk, and a
     // read carrying no echo at all comes first.
     vi.useFakeTimers()
+
     const echoLayouts = [
       (replies: readonly string[]) =>
         `opencode\r\n\x1b[2Jloading${replies.map(readlineEchoOf).join('')}\r\n$ `,
@@ -237,12 +253,14 @@ describe('#12112 opencode startup OSC 10/11 replies on the local path', () => {
     for (const [index, layout] of echoLayouts.entries()) {
       const emitted: string[] = []
       const writes: string[] = []
+
       const ingress = new PtyStartupIngress({
         intent: { colors: ORCA_TERMINAL_THEME, deadlineMs: 5_000 },
         ownerBackend: 'posix-pty',
         write: (data) => writes.push(data),
         onEmission: (emission) => emitted.push(emission.data)
       })
+
       ingress.accept(OPENCODE_STARTUP_QUERY_BURST)
       vi.advanceTimersByTime(0)
       expect(writes, `layout ${index}`).toEqual([OSC10_REPLY, OSC11_REPLY])
@@ -258,13 +276,16 @@ describe('#12112 opencode startup OSC 10/11 replies on the local path', () => {
     // No xterm, no transport: the asymmetry alone, with each backend's observed
     // cooked echo handed straight back the way its line discipline would.
     vi.useFakeTimers()
+
     const forward = (ownerBackend: 'posix-pty' | 'windows-conpty') => {
       const echoOf =
         ownerBackend === 'windows-conpty'
           ? (reply: string): string => reply.replaceAll('\x1b', '')
           : readlineEchoOf
+
       const emitted: string[] = []
       const writes: string[] = []
+
       const ingress = new PtyStartupIngress({
         intent: { colors: ORCA_TERMINAL_THEME, deadlineMs: 5_000 },
         ownerBackend,
@@ -274,11 +295,13 @@ describe('#12112 opencode startup OSC 10/11 replies on the local path', () => {
         },
         onEmission: (emission) => emitted.push(emission.data)
       })
+
       ingress.accept(OPENCODE_STARTUP_QUERY_BURST)
       // Why: the posix write is deferred, so draining first would make this arm
       // assert on a stream where no reply was ever sent.
       vi.advanceTimersByTime(0)
       ingress.drainAndClose()
+
       return { visible: emitted.join(''), writes }
     }
 

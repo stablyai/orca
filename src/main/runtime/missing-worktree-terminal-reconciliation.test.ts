@@ -31,10 +31,12 @@ describe('stopMissingWorktreeTerminals', () => {
   it('stops only locally owned worktrees absent from the authoritative scan', async () => {
     const deletedId = 'repo-1::/workspace/deleted'
     const survivingId = 'repo-1::/workspace/surviving'
+
     const provider = createProvider([
       `${deletedId}@@deleted-session`,
       `${survivingId}@@surviving-session`
     ])
+
     const runtime = createRuntime()
 
     const result = await stopMissingWorktreeTerminals(
@@ -143,12 +145,14 @@ describe('stopMissingWorktreeTerminals', () => {
       }
       async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
         this.listCalls += 1
+
         return this.sessions
       }
       async shutdown(sessionId: string): Promise<void> {
         this.shutdownCalls.push(sessionId)
       }
     }
+
     const ids = ['repo-1::/workspace/a', 'repo-1::/workspace/b', 'repo-1::/workspace/c']
     const provider = new PrototypeProvider(ids.map((id) => `${id}@@session`))
 
@@ -177,6 +181,7 @@ describe('stopMissingWorktreeTerminals', () => {
       constructor(private readonly sessions: { id: string; cwd: string; title: string }[]) {}
       async listProcesses(): Promise<{ id: string; cwd: string; title: string }[]> {
         this.listCalls += 1
+
         return this.sessions
       }
       async shutdown(): Promise<void> {
@@ -184,7 +189,9 @@ describe('stopMissingWorktreeTerminals', () => {
         await this.listProcesses()
       }
     }
+
     const ids = ['repo-1::/workspace/a', 'repo-1::/workspace/b']
+
     const provider = new SelfListingProvider(
       ids.map((id) => ({ id: `${id}@@session`, cwd: '/workspace', title: 'shell' }))
     )
@@ -203,10 +210,12 @@ describe('stopMissingWorktreeTerminals', () => {
   // teardown for every remaining worktree in the sweep.
   it('does not reuse a failed process scan', async () => {
     const ids = ['repo-1::/workspace/a', 'repo-1::/workspace/b']
+
     const listProcesses = vi
       .fn()
       .mockRejectedValueOnce(new Error('relay dropped'))
       .mockResolvedValue([{ id: `${ids[1]}@@session`, cwd: '/workspace', title: 'shell' }])
+
     const provider = { listProcesses, shutdown: vi.fn(async () => {}) } as unknown as IPtyProvider
 
     await stopMissingWorktreeTerminals({ ...localRepo, connectionId: 'ssh-1' }, ids, [], {

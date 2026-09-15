@@ -8,22 +8,30 @@ export class RendererPublicationThrottle {
 
   acquire(target: RendererPublicationThrottleTarget): () => void {
     const leaseCount = this.leasesByTarget.get(target) ?? 0
+
     if (leaseCount === 0) {
       target.setBackgroundThrottling(false)
     }
+
     this.leasesByTarget.set(target, leaseCount + 1)
     let released = false
+
     return () => {
       if (released) {
         return
       }
+
       released = true
       const remaining = (this.leasesByTarget.get(target) ?? 1) - 1
+
       if (remaining > 0) {
         this.leasesByTarget.set(target, remaining)
+
         return
       }
+
       this.leasesByTarget.delete(target)
+
       if (target.isDestroyed?.() !== true) {
         target.setBackgroundThrottling(true)
       }

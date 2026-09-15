@@ -1,9 +1,11 @@
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: vi.fn(async () => null) }
 }))
+
 vi.mock('./desktop-notification-channel', () => ({
   ensureDesktopNotificationChannel: vi.fn(async () => {})
 }))
+
 import { AppState } from 'react-native'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
@@ -64,21 +66,27 @@ function makeClient(capabilities: readonly string[]): {
   sent: SentRequest[]
 } {
   const sent: SentRequest[] = []
+
   const client = {
     sendRequest: vi.fn(async (method: string, params?: unknown, options?: SendRequestOptions) => {
       sent.push({ method, params, options })
+
       if (method === 'status.get') {
         return ok({ capabilities: [...capabilities] })
       }
+
       if (method === 'notifications.registerPush') {
         return ok({ registered: true, registrationId: 'registration-1' })
       }
+
       if (method === 'notifications.unregisterPush') {
         return ok({ unregistered: true })
       }
+
       return ok(null)
     })
   }
+
   return { client, sent }
 }
 
@@ -87,6 +95,7 @@ function methodsIn(sent: SentRequest[]): string[] {
 }
 
 let enabled = false
+
 let stored: RemotePushHostRegistrations
 
 beforeEach(() => {
@@ -185,18 +194,23 @@ describe('push registration capability gating', () => {
     vi.useFakeTimers()
     const sent: string[] = []
     let probeFails = true
+
     const client = {
       sendRequest: vi.fn(async (method: string) => {
         sent.push(method)
+
         if (method === 'status.get') {
           if (probeFails) {
             throw new Error('request timed out')
           }
+
           return ok({ capabilities: [NOTIFICATIONS_REMOTE_PUSH_CAPABILITY] })
         }
+
         return ok({ registered: true, registrationId: 'registration-1' })
       })
     }
+
     await setRemotePushEnabled(true)
     attachPushRegistration('host-1', client)
     await vi.advanceTimersByTimeAsync(0)
@@ -233,6 +247,7 @@ describe('push registration token changes', () => {
     let onTokenChange: ((token: MobilePushToken) => void) | null = null
     vi.mocked(addPushTokenListener).mockImplementation((listener) => {
       onTokenChange = listener
+
       return () => {}
     })
     const { client, sent } = makeClient([NOTIFICATIONS_REMOTE_PUSH_CAPABILITY])
@@ -317,6 +332,7 @@ describe('push unregistration', () => {
 
   it('keeps the pending intent when the retry itself fails', async () => {
     stored = { registeredHostIds: ['host-1'], pendingUnregisterHostIds: ['host-1'] }
+
     const client = {
       sendRequest: vi.fn(async (method: string) =>
         method === 'status.get'
@@ -355,12 +371,15 @@ describe('push unregistration', () => {
   it('unregisters a pending host even when its capability probe never answers', async () => {
     stored = { registeredHostIds: ['host-1'], pendingUnregisterHostIds: ['host-1'] }
     const sent: string[] = []
+
     const client = {
       sendRequest: vi.fn(async (method: string) => {
         sent.push(method)
+
         if (method === 'status.get') {
           throw new Error('request timed out')
         }
+
         return ok({ unregistered: true })
       })
     }
@@ -376,21 +395,27 @@ describe('push unregistration', () => {
   it('re-arms the unregister when the switch goes off while a register is in flight', async () => {
     const sent: string[] = []
     let releaseRegister: (() => void) | null = null
+
     const client = {
       sendRequest: vi.fn(async (method: string) => {
         sent.push(method)
+
         if (method === 'status.get') {
           return ok({ capabilities: [NOTIFICATIONS_REMOTE_PUSH_CAPABILITY] })
         }
+
         if (method === 'notifications.registerPush') {
           await new Promise<void>((resolve) => {
             releaseRegister = resolve
           })
+
           return ok({ registered: true, registrationId: 'registration-1' })
         }
+
         return ok({ unregistered: true })
       })
     }
+
     await setRemotePushEnabled(true)
     attachPushRegistration('host-1', client)
     await flush()

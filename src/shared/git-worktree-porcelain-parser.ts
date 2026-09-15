@@ -89,6 +89,7 @@ function splitNulWorktreeList(output: string): string[][] {
       currentBlock.push(field)
       continue
     }
+
     if (currentBlock.length > 0) {
       blocks.push(currentBlock)
       currentBlock = []

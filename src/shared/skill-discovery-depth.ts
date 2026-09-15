@@ -7,6 +7,7 @@
  * directory bound from it keeps native, WSL, and the delete guard on one number.
  */
 export const SKILL_FILE_MAX_DEPTH = 5
+
 export const PLUGIN_SKILL_FILE_MAX_DEPTH = 10
 
 export function skillFileMaxDepth(sourceKind: 'home' | 'repo' | 'bundled' | 'plugin'): number {

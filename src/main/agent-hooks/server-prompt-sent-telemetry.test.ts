@@ -30,8 +30,10 @@ describe('AgentHookServer prompt-sent telemetry', () => {
   it('tracks a live local hook explicit prompt with conservative attribution', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/claude`, {
         method: 'POST',
         headers: {
@@ -83,6 +85,7 @@ describe('AgentHookServer prompt-sent telemetry', () => {
   it('dedupes adjacent same-turn reports without considering hook state', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -122,6 +125,7 @@ describe('AgentHookServer prompt-sent telemetry', () => {
   it('tracks the same prompt again after a completed turn starts over', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -368,6 +372,7 @@ describe('AgentHookServer prompt-sent telemetry', () => {
   it('dedupes the same prompt until a completed turn boundary is observed', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
+
     try {
       const server = new AgentHookServer()
       server.ingestRemote(
@@ -466,8 +471,10 @@ describe('AgentHookServer prompt-sent telemetry', () => {
   it('tracks OpenCode user MessagePart hooks once per message id', async () => {
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/opencode`, {
         method: 'POST',
         headers: {
@@ -483,6 +490,7 @@ describe('AgentHookServer prompt-sent telemetry', () => {
           })
         )
       })
+
       const updatedResponse = await fetch(
         `http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/opencode`,
         {

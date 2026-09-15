@@ -29,20 +29,24 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
   params: WorkerListParams,
   handler: async (params, { runtime }) => {
     const db = runtime.getOrchestrationDb()
+
     const paginationRequested =
       params.paginate === true || params.limit !== undefined || params.cursor !== undefined
+
     if (!paginationRequested) {
       const rows = db.listWorkerTerminalResources({
         runId: params.run,
         terminalState: params.terminalState,
         limit: ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS + 1
       })
+
       if (rows.length > ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS) {
         throw new OrchestrationError(
           'worker_list_snapshot_too_large',
           `Legacy worker-list results support at most ${ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS} rows; update the client to use pagination.`
         )
       }
+
       return projectWorkerListPage({
         runtime,
         params,
@@ -52,19 +56,25 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
         completeProjection: true
       })
     }
+
     const limit = params.limit ?? ORCHESTRATION_FLEET_PAGE_MAX
+
     let cursor: WorkerListCursor | null = params.cursor
       ? decodeWorkerListCursor(params.cursor)
       : null
+
     if (params.cursor && !cursor) {
       const legacyKey = db.getWorkerTerminalOrderingKey(params.cursor)
+
       if (!legacyKey) {
         throw new OrchestrationError(
           'invalid_argument',
           `Unknown worker-list cursor ${params.cursor}.`
         )
       }
+
       const snapshot = db.getWorkerTerminalListingSnapshot(params.run)
+
       if (!snapshot) {
         return {
           workers: [],
@@ -72,8 +82,10 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
           page: { limit, total: 0, hasMore: false, nextCursor: null }
         }
       }
+
       cursor = { version: 2, snapshot, after: legacyKey }
     }
+
     if (cursor?.version === 3) {
       return projectWorkerListPage({
         runtime,
@@ -83,7 +95,9 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
         snapshotCursor: cursor
       })
     }
+
     const snapshot = cursor?.snapshot ?? db.getWorkerTerminalListingSnapshot(params.run)
+
     if (!snapshot) {
       return {
         workers: [],
@@ -91,6 +105,7 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
         page: { limit, total: 0, hasMore: false, nextCursor: null }
       }
     }
+
     const rows = db.listWorkerTerminalResources({
       runId: params.run,
       terminalState: params.terminalState,
@@ -101,6 +116,7 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
           ? ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS + 1
           : limit + 1
     })
+
     if (!cursor && params.terminalState && 'databaseId' in snapshot) {
       if (rows.length > ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS) {
         throw new OrchestrationError(
@@ -108,6 +124,7 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
           `Filtered worker-list snapshots support at most ${ORCHESTRATION_WORKER_LIST_SNAPSHOT_MAX_ROWS} rows.`
         )
       }
+
       if (rows.length <= limit) {
         return projectWorkerListPage({
           runtime,
@@ -118,12 +135,14 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
           snapshot
         })
       }
+
       const snapshotId = createWorkerListSnapshot(runtime, {
         runId: params.run,
         terminalState: params.terminalState,
         databaseId: snapshot.databaseId,
         dispatchIds: rows.map((row) => row.dispatchId)
       })
+
       return projectWorkerListPage({
         runtime,
         params,
@@ -132,6 +151,7 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineMethod({
         snapshotCursor: { version: 3, snapshot: { id: snapshotId }, offset: 0 }
       })
     }
+
     return projectWorkerListPage({ runtime, params, limit, rows, snapshotCursor: cursor, snapshot })
   }
 })
@@ -147,14 +167,17 @@ function readSnapshotRows(
     runId: params.run,
     terminalState: params.terminalState
   })
+
   const dispatchIds = stored.dispatchIds.slice(cursor.offset, cursor.offset + limit + 1)
   const rows = db.listWorkerTerminalResources({ dispatchIds })
+
   if (
     rows.length !== dispatchIds.length ||
     rows.some((row, index) => row.dispatchId !== dispatchIds[index])
   ) {
     throw new OrchestrationError('worker_list_cursor_expired', WORKER_LIST_CURSOR_EXPIRED_MESSAGE)
   }
+
   return rows
 }
 
@@ -174,6 +197,7 @@ async function projectWorkerListPage(args: {
           terminalState: args.params.terminalState
         })
       : null
+
   try {
     return await projectWorkerListPageWithFilteredSnapshot(args, pinnedSnapshot?.snapshot ?? null)
   } finally {
@@ -198,11 +222,14 @@ async function projectWorkerListPageWithFilteredSnapshot(
   const hasMore = rows.length > limit
   const pageRows = hasMore ? rows.slice(0, limit) : rows
   const authorityNow = Date.now()
+
   const attentionFacts = db.getWorkerAttentionFactsForDispatches(
     pageRows.map((row) => row.dispatchId),
     authorityNow
   )
+
   const statuses = runtime.getOrchestrationFleetAgentStatusSnapshot()
+
   const fleet = projectWorkerFleet({
     rows: pageRows,
     attentionFacts,
@@ -211,6 +238,7 @@ async function projectWorkerListPageWithFilteredSnapshot(
     now: authorityNow,
     completeProjection: args.completeProjection
   })
+
   const federated = params.includeRemote
     ? await readFederatedFleetSnapshots({
         runtime,
@@ -218,13 +246,16 @@ async function projectWorkerListPageWithFilteredSnapshot(
         dispatchIds: pageRows.map((row) => row.dispatchId)
       })
     : null
+
   if (federated) {
     applyFederatedFleetObservations(fleet, federated, fleet.durable)
   }
+
   // Total and counts must come out of one row set. A pinned filtered cursor's row set is its
   // membership; deriving the total from that and the counts from a live scan of the extent
   // reported a total no count could reach once a pinned row left the filter.
   const pinnedCount = filteredSnapshot?.dispatchIds.length
+
   const inventory =
     pinnedCount !== undefined && params.terminalState
       ? { total: pinnedCount, counts: { [params.terminalState]: pinnedCount } }
@@ -233,6 +264,7 @@ async function projectWorkerListPageWithFilteredSnapshot(
           terminalState: params.terminalState,
           snapshot: args.snapshot
         })
+
   const nextRow = pageRows.at(-1)
   fleet.page = {
     limit,
@@ -269,8 +301,10 @@ async function projectWorkerListPageWithFilteredSnapshot(
         : null
   }
   const rowsByDispatchId = new Map(pageRows.map((row) => [row.dispatchId, row]))
+
   const workers = fleet.workers.map((projection) => {
     const row = rowsByDispatchId.get(projection.dispatchId)!
+
     return {
       dispatchId: row.dispatchId,
       taskId: row.taskId,
@@ -291,11 +325,13 @@ async function projectWorkerListPageWithFilteredSnapshot(
       }
     }
   })
+
   const counts = Object.fromEntries(
     WORKER_TERMINAL_LIST_STATES.flatMap((state) =>
       inventory.counts[state] ? [[state, inventory.counts[state]]] : []
     )
   ) as Partial<Record<WorkerTerminalListState, number>>
+
   return {
     workers,
     counts,

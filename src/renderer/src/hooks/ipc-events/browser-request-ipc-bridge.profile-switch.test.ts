@@ -19,12 +19,15 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/components/browser-pane/host-guest/webview-registry', () => ({
   destroyPersistentWebview: mocks.destroyPersistentWebview
 }))
+
 vi.mock('../../store', () => ({
   useAppStore: { getState: mocks.getState }
 }))
+
 vi.mock('./browser-automation-bootstrap-lease', () => ({
   acquireBrowserAutomationBootstrapLease: vi.fn()
 }))
+
 vi.mock('../../store/pinned-tab-close-guard', () => ({
   guardPinnedTabClose: vi.fn(),
   isUnifiedTabPinned: vi.fn(),
@@ -64,6 +67,7 @@ describe('browser profile request teardown', () => {
           replyTabCreate: vi.fn(),
           onRequestTabSetProfile: (listener: typeof mocks.profileListener) => {
             mocks.profileListener = listener
+
             return () => {}
           },
           replyTabSetProfile: mocks.replyTabSetProfile,

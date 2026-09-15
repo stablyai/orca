@@ -19,16 +19,20 @@ describe('orchestration worker release inventory', () => {
     expect(h.db.getWorkerTerminalResourceByOwner(first.dispatchId)).toBeUndefined()
 
     h.inspectProcessLiveness.mockResolvedValueOnce('exited')
+
     const oldRelease = (await h.call('orchestration.workerRelease', {
       dispatch: first.dispatchId
     })) as { state: string; reason?: string }
+
     expect(oldRelease).toMatchObject({ state: 'retained', reason: 'ownership_transferred' })
     expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
 
     h.settle(second.taskId, second.dispatchId, 'succeeded')
+
     const newRelease = (await h.call('orchestration.workerRelease', {
       dispatch: second.dispatchId
     })) as { state: string }
+
     expect(newRelease.state).toBe('released')
     expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1)
     expect(h.runtime.closeTerminal).toHaveBeenCalledWith('term_reminted')
@@ -82,9 +86,11 @@ describe('orchestration worker release inventory', () => {
   it('retains when persisted state has another resource for the exact terminal identity', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
+
     const raw = (
       h.db as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } }
     ).db
+
     raw
       .prepare(
         `INSERT INTO worker_terminal_resources (
@@ -110,16 +116,19 @@ describe('orchestration worker release inventory', () => {
   it('worker-retain records a durable user exception that release can later replace', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
+
     const retained = (await h.call('orchestration.workerRetain', { dispatch: dispatchId })) as {
       state: string
       reason?: string
     }
+
     expect(retained).toMatchObject({ state: 'retained', reason: 'user_requested' })
     expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('retained')
 
     const release = (await h.call('orchestration.workerRelease', { dispatch: dispatchId })) as {
       state: string
     }
+
     expect(release.state).toBe('released')
   })
 
@@ -128,10 +137,12 @@ describe('orchestration worker release inventory', () => {
     const active = await h.startWorker()
     const perWorkerLookup = vi.spyOn(h.db, 'getWorkerTerminalResourceByOwner')
     perWorkerLookup.mockClear()
+
     const result1 = (await h.call('orchestration.workerList', { run: h.activeRunId })) as {
       workers: { dispatchId: string; terminalState: string | null; workerState: string }[]
       counts: Record<string, number>
     }
+
     expect(result1.workers).toHaveLength(1)
     expect(result1.workers[0]).toMatchObject({
       dispatchId: active.dispatchId,
@@ -141,17 +152,21 @@ describe('orchestration worker release inventory', () => {
     expect(perWorkerLookup).not.toHaveBeenCalled()
 
     h.settle(active.taskId, active.dispatchId, 'succeeded')
+
     const result2 = (await h.call('orchestration.workerList', {
       run: h.activeRunId,
       terminalState: 'reclaimable'
     })) as { workers: { dispatchId: string }[]; counts: Record<string, number> }
+
     expect(result2.workers.map((worker) => worker.dispatchId)).toEqual([active.dispatchId])
     expect(result2.counts).toMatchObject({ reclaimable: 1 })
 
     await h.call('orchestration.workerRelease', { dispatch: active.dispatchId })
+
     const result3 = (await h.call('orchestration.workerList', { run: h.activeRunId })) as {
       workers: { terminalState: string | null; workerState: string }[]
     }
+
     expect(result3.workers[0]).toMatchObject({
       terminalState: 'released',
       workerState: 'succeeded'
@@ -183,9 +198,11 @@ describe('orchestration worker release inventory', () => {
   it('worker-show exposes the terminal resource', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
+
     const shown = (await h.call('orchestration.workerShow', { dispatch: dispatchId })) as {
       terminalResource: { ownershipState: string; releaseState: string } | null
     }
+
     expect(shown.terminalResource).toMatchObject({
       ownershipState: 'owned',
       releaseState: 'not_requested'

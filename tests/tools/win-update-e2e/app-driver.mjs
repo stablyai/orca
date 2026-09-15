@@ -22,14 +22,21 @@ import path from 'node:path'
 import { seedFreshProfile } from './onboarding-profile.mjs'
 
 const NEW_TAB_BUTTON = { role: 'button', name: 'New tab' }
+
 const NEW_TERMINAL_ITEM = /New Terminal/i
+
 const NEW_WORKSPACE_BUTTON = { role: 'button', name: 'New workspace' }
+
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
+
 // Why: the layout mounts hidden duplicate panes; only the visible one is the
 // live terminal, so target `:visible` to avoid focusing/measuring a hidden copy.
 const TERMINAL_SURFACE_VISIBLE = '[data-terminal-tab-id]:visible'
+
 const XTERM_CONTAINER_VISIBLE = '.xterm:visible'
+
 const XTERM_INPUT = '.xterm-helper-textarea'
+
 const RESTRICTED_E2E_ENV_KEYS = new Set([
   'HOME',
   'USERPROFILE',
@@ -59,19 +66,25 @@ export async function launchInstalledApp({
     ORCA_CODEX_HOME: _orcaCodexHome,
     ...cleanEnv
   } = process.env
+
   void _drop
   void _codexHome
   void _orcaCodexHome
+
   const restrictedExtraEnvKey = Object.keys(extraEnv).find((key) =>
     RESTRICTED_E2E_ENV_KEYS.has(key.toUpperCase())
   )
+
   if (restrictedExtraEnvKey) {
     throw new Error(`extraEnv.${restrictedExtraEnvKey} cannot override E2E home isolation`)
   }
+
   mkdirSync(userDataDir, { recursive: true })
+
   if (seedProfile) {
     seedFreshProfile(userDataDir, seedProfile)
   }
+
   // Why: userData relocation does not change Node's home; the packaged E2E
   // must not resolve the default Codex account against the runner's profile.
   const requestedIsolatedHome = path.join(userDataDir, 'home')
@@ -80,6 +93,7 @@ export async function launchInstalledApp({
   // worktree paths, so a non-canonical HOME makes created worktrees invisible
   // to the app's listing comparisons.
   const isolatedHome = realpathSync.native(requestedIsolatedHome)
+
   const app = await electron.launch({
     executablePath: exePath,
     args: [],
@@ -96,15 +110,18 @@ export async function launchInstalledApp({
       ORCA_E2E_HOME_DIR: isolatedHome
     }
   })
+
   // If firstWindow times out (the launched main never shows a window), the
   // Electron process is still running — force-kill its tree before rethrowing so
   // a driving failure never leaks an orphaned main to the CI job timeout.
   let page
+
   try {
     page = await app.firstWindow({ timeout: 120_000 })
     await page.waitForLoadState('domcontentloaded')
   } catch (err) {
     const pid = await resolveElectronMainPid(app)
+
     if (pid) {
       try {
         execFileSync('taskkill', ['/pid', String(pid), '/T', '/F'], { stdio: 'ignore' })
@@ -112,8 +129,10 @@ export async function launchInstalledApp({
         /* already gone */
       }
     }
+
     throw err
   }
+
   return { app, page }
 }
 
@@ -123,6 +142,7 @@ export async function resolveElectronMainPid(
   { allowLauncherFallback = true, timeoutMs = 5_000 } = {}
 ) {
   let timeout
+
   try {
     // Why: packaged launchers can re-exec, leaving app.process() pointing at a
     // dead stub while evaluate runs in the authoritative Electron main.
@@ -135,6 +155,7 @@ export async function resolveElectronMainPid(
         timeout.unref?.()
       })
     ])
+
     if (Number.isInteger(pid) && pid > 0) {
       return pid
     }
@@ -143,12 +164,15 @@ export async function resolveElectronMainPid(
   } finally {
     clearTimeout(timeout)
   }
+
   // Why: crash proofs must fail closed rather than kill a packaged launcher stub
   // and mistake its death for the authoritative Electron main crashing.
   if (!allowLauncherFallback) {
     return null
   }
+
   const fallbackPid = app.process()?.pid
+
   return Number.isInteger(fallbackPid) && fallbackPid > 0 ? fallbackPid : null
 }
 
@@ -160,11 +184,13 @@ export async function resolveElectronMainPid(
  */
 export async function captureFailureDiagnostics(page, dir, label) {
   const out = {}
+
   try {
     mkdirSync(dir, { recursive: true })
   } catch {
     return out
   }
+
   try {
     await page.screenshot({
       path: path.join(dir, `${label}.png`),
@@ -175,6 +201,7 @@ export async function captureFailureDiagnostics(page, dir, label) {
   } catch {
     /* renderer may be unresponsive */
   }
+
   try {
     const info = await page.evaluate(() => ({
       hasStore: typeof window.__store,
@@ -205,11 +232,13 @@ export async function captureFailureDiagnostics(page, dir, label) {
           }
         : null
     }))
+
     writeFileSync(path.join(dir, `${label}.json`), JSON.stringify(info, null, 2))
     out.info = info
   } catch {
     /* renderer may be unresponsive */
   }
+
   return out
 }
 
@@ -219,6 +248,7 @@ export async function waitForTerminalReady(page, timeoutMs = 60_000, terminalTab
   const selector = terminalTabId
     ? `[data-terminal-tab-id="${String(terminalTabId)}"]:visible`
     : TERMINAL_SURFACE_VISIBLE
+
   const surface = page.locator(selector).first()
   await surface.waitFor({ state: 'visible', timeout: timeoutMs })
   await surface.locator(XTERM_CONTAINER_VISIBLE).first().waitFor({
@@ -242,21 +272,29 @@ export async function ensureTerminal(page, { allowCreate = true, timeoutMs = 60_
   // Escape-free dismissal so we never inject a keypress into a restored terminal.
   await dismissKnownOverlays(page)
   const visibleTerminal = page.locator(TERMINAL_SURFACE_VISIBLE).first()
+
   if (await visibleTerminal.isVisible().catch(() => false)) {
     await waitForTerminalReady(page, timeoutMs)
+
     return
   }
+
   if (!allowCreate) {
     // Wait for the restored terminal to appear; a timeout here is a real
     // (asserted) failure of session restore, not a driving gap.
     await waitForTerminalReady(page, timeoutMs)
+
     return
   }
+
   const newTab = page.getByRole(NEW_TAB_BUTTON.role, { name: NEW_TAB_BUTTON.name }).first()
+
   if (await newTab.isVisible().catch(() => false)) {
     await createTerminalTab(page)
+
     return
   }
+
   await createWorkspaceFromSeededRepo(page, timeoutMs)
   await waitForTerminalReady(page, timeoutMs)
 }
@@ -271,16 +309,20 @@ async function createWorkspaceFromSeededRepo(page, timeoutMs) {
   // One shared deadline so the whole create path stays within the caller's
   // budget instead of granting each later step a fresh fixed window.
   const deadline = Date.now() + timeoutMs
+
   const newWorkspace = page
     .getByRole(NEW_WORKSPACE_BUTTON.role, { name: NEW_WORKSPACE_BUTTON.name })
     .first()
+
   if (!(await tryClickWithKnownOverlayRetry(page, newWorkspace, deadline - Date.now()))) {
     // Preserve Playwright's locator diagnostics without exceeding the caller's
     // timeout by another full click attempt.
     await newWorkspace.click({ timeout: 1 })
   }
+
   const composer = page.getByRole('dialog', { name: 'Create worktree' }).last()
   await composer.waitFor({ state: 'visible', timeout: Math.max(1, deadline - Date.now()) })
+
   // Submit. The create button's accessible name carries the shortcut hint
   // ("Create worktreeCtrl"), so match by prefix; fall back to the documented
   // Ctrl+Enter shortcut if the button is not directly clickable.
@@ -289,58 +331,73 @@ async function createWorkspaceFromSeededRepo(page, timeoutMs) {
     composer.getByRole('button', { name: /^Create worktree/ }).last(),
     Math.max(0, deadline - Date.now())
   )
+
   if (!created) {
     await page.keyboard.press('Control+Enter')
   }
 }
 
 const OVERLAY_DISMISS_LABELS = ['Got it', 'Dismiss setup scripts', 'Dismiss tip', 'Dismiss update']
+
 const CLI_FEATURE_TIP_TITLE = 'Let agents drive Orca with the Orca CLI'
 
 async function dismissKnownOverlays(page) {
   let acted = false
   const cliFeatureTip = page.getByRole('dialog', { name: CLI_FEATURE_TIP_TITLE }).first()
+
   if (await cliFeatureTip.isVisible().catch(() => false)) {
     // Why: a global "Close" role also matches the Windows/Linux title-bar button.
     const dialogClose = cliFeatureTip.locator('[data-slot="dialog-close"]').first()
+
     if (await dialogClose.isVisible().catch(() => false)) {
       const clicked = await dialogClose
         .click({ timeout: 3_000 })
         .then(() => true)
         .catch(() => false)
+
       acted ||= clicked
     }
   }
+
   for (const name of OVERLAY_DISMISS_LABELS) {
     const btn = page.getByRole('button', { name }).first()
+
     if (await btn.isVisible().catch(() => false)) {
       const clicked = await btn
         .click({ timeout: 3_000 })
         .then(() => true)
         .catch(() => false)
+
       acted ||= clicked
     }
   }
+
   return acted
 }
 
 async function tryClickWithKnownOverlayRetry(page, locator, timeoutMs) {
   const deadline = Date.now() + timeoutMs
+
   do {
     const remainingMs = deadline - Date.now()
+
     if (remainingMs <= 0) {
       return false
     }
+
     try {
       await locator.click({ timeout: Math.min(5_000, remainingMs) })
+
       return true
     } catch (error) {
       if (page.isClosed()) {
         throw error
       }
+
       await dismissKnownOverlays(page)
     }
   } while (Date.now() < deadline)
+
   return false
 }
 
@@ -354,9 +411,11 @@ export async function dismissOverlays(page, rounds = 3) {
   for (let i = 0; i < rounds; i++) {
     const acted = await dismissKnownOverlays(page)
     await page.keyboard.press('Escape').catch(() => {})
+
     if (!acted) {
       return
     }
+
     await page.waitForTimeout(400)
   }
 }
@@ -376,6 +435,7 @@ export async function createTerminalTab(page) {
     { timeout: 10_000 }
   )
   await waitForTerminalReady(page)
+
   return page.locator(SORTABLE_TAB).count()
 }
 
@@ -398,9 +458,11 @@ export async function focusActiveTerminal(page, terminalTabId = null) {
   // A feature-tip modal can appear late and swallow keystrokes; clear any before
   // focusing so typed commands actually reach the shell.
   await dismissKnownOverlays(page)
+
   const selector = terminalTabId
     ? `[data-terminal-tab-id="${String(terminalTabId)}"]:visible`
     : TERMINAL_SURFACE_VISIBLE
+
   const surface = page.locator(selector).first()
   const click = surface.click({ position: { x: 24, y: 24 }, timeout: 15_000 })
   // Why: an exact-tab proof must fail closed if that restored surface vanishes;
@@ -411,6 +473,7 @@ export async function focusActiveTerminal(page, terminalTabId = null) {
   const input = surface.locator(XTERM_INPUT).last()
   const focus = input.focus()
   await (terminalTabId ? focus : focus.catch(() => {}))
+
   return input
 }
 
@@ -452,7 +515,9 @@ export async function startMarker(page, { canary, pidFile, heartbeatFile }) {
     `Set-Content -LiteralPath '${pidFile}' -Value $PID`,
     `while($true){ [System.IO.File]::WriteAllText('${heartbeatFile}',(Get-Date).ToString('o')); Start-Sleep -Milliseconds 500 }`
   ].join('; ')
+
   await runShellCommand(page, script)
+
   return script
 }
 
@@ -465,19 +530,23 @@ export async function startMarker(page, { canary, pidFile, heartbeatFile }) {
 export async function readTerminalTextBestEffort(page) {
   return page.evaluate(() => {
     const managers = window.__paneManagers
+
     if (managers && typeof managers.forEach === 'function') {
       let out = ''
       managers.forEach((m) => {
         const pane = m.getActivePane?.() ?? m.getPanes?.()[0]
         const text = pane?.serializeAddon?.serialize?.()
+
         if (text) {
           out += text
         }
       })
+
       if (out) {
         return out
       }
     }
+
     return Array.from(document.querySelectorAll('.xterm-rows'))
       .map((el) => el.textContent ?? '')
       .join('\n')
@@ -494,8 +563,10 @@ export async function closeApp(app, timeoutMs = 10_000) {
   if (!app) {
     return
   }
+
   const mainPid = await resolveElectronMainPid(app)
   let closeTimeout
+
   try {
     await Promise.race([
       app.close(),

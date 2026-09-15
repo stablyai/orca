@@ -20,10 +20,13 @@ function createStartHarness(options: StartHarnessOptions = {}) {
   const release = vi.fn().mockResolvedValue(undefined)
   const commitRecordingStart = vi.fn(options.commitRecordingStart ?? (() => true))
   const rollbackRecordingStart = vi.fn()
+
   const sendRequest = vi.fn(
     options.sendRequest ?? (async () => OK_RESPONSE)
   ) as unknown as RpcClient['sendRequest']
+
   const client = { sendRequest } as RpcClient
+
   const keepAwakeOwner = {
     acquire: vi.fn(options.acquire ?? (async () => undefined)),
     release
@@ -66,9 +69,11 @@ function createStartHarness(options: StartHarnessOptions = {}) {
 describe('startMobileDictationDesktopSession', () => {
   it('does not reset UI state when a newer start supersedes keep-awake acquisition', async () => {
     let setNewerStart = () => undefined
+
     const harness = createStartHarness({
       acquire: async () => setNewerStart()
     })
+
     setNewerStart = harness.setNewerStart
 
     await expect(startMobileDictationDesktopSession(harness.options)).resolves.toBe(false)
@@ -81,14 +86,18 @@ describe('startMobileDictationDesktopSession', () => {
 
   it('sends desktop cancellation without waiting for a hung keep-awake release', async () => {
     vi.useFakeTimers()
+
     try {
       let goStale = () => undefined
+
       const harness = createStartHarness({
         acquire: () => {
           goStale()
+
           return new Promise<void>(() => undefined)
         }
       })
+
       goStale = harness.setNewerStart
       // Release queues behind the still-running acquisition, so it never settles.
       harness.release.mockReturnValue(new Promise<void>(() => undefined))
@@ -111,9 +120,11 @@ describe('startMobileDictationDesktopSession', () => {
 
   it('returns to idle when disable makes keep-awake acquisition stale', async () => {
     let setDisabled = () => undefined
+
     const harness = createStartHarness({
       acquire: async () => setDisabled()
     })
+
     setDisabled = harness.setDisabled
 
     await expect(startMobileDictationDesktopSession(harness.options)).resolves.toBe(false)
@@ -126,6 +137,7 @@ describe('startMobileDictationDesktopSession', () => {
 
   it('does not hold recording start on a hung keep-awake acquisition', async () => {
     vi.useFakeTimers()
+
     try {
       const harness = createStartHarness({
         acquire: () => new Promise<void>(() => undefined)
@@ -144,6 +156,7 @@ describe('startMobileDictationDesktopSession', () => {
 
   it('continues dictation when keep-awake acquisition fails', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
     const harness = createStartHarness({
       acquire: async () => {
         throw new Error('Unable to activate keep awake')
@@ -166,15 +179,18 @@ describe('startMobileDictationDesktopSession', () => {
 
   it('does not surface a desktop-start failure after the start became stale', async () => {
     let setNewerStart = () => undefined
+
     const harness = createStartHarness({
       sendRequest: async (method) => {
         if (method === 'speech.dictation.start') {
           setNewerStart()
           throw new Error('Desktop start failed')
         }
+
         return OK_RESPONSE
       }
     })
+
     setNewerStart = harness.setNewerStart
 
     await expect(startMobileDictationDesktopSession(harness.options)).resolves.toBe(false)

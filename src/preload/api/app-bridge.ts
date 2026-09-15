@@ -36,6 +36,7 @@ export const appApi = {
     ),
   stageBeforeUnloadSync: (args: Parameters<PreloadApi['app']['stageBeforeUnloadSync']>[0]) => {
     const result = ipcRenderer.sendSync('app:stage-before-unload-sync', args) as { ok?: unknown }
+
     if (result?.ok !== true) {
       throw new Error('Failed to stage renderer state before unload.')
     }
@@ -61,7 +62,9 @@ export const appApi = {
   onKeyboardLayoutChanged: (callback: (event: KeyboardLayoutChangeEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, event: KeyboardLayoutChangeEvent): void =>
       callback(event)
+
     ipcRenderer.on(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
+
     return () => ipcRenderer.removeListener(KEYBOARD_LAYOUT_CHANGED_CHANNEL, listener)
   },
   setUnreadDockBadgeCount: (count: number): Promise<void> =>

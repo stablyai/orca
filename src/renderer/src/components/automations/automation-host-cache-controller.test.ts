@@ -28,13 +28,18 @@ import type { AutomationHostSchedulerTransport } from './automation-host-schedul
 import type { ScopedAutomationList } from './automation-scoped-list-client'
 
 const DESKTOP: StableAutomationAuthorityRef = { kind: 'desktop' }
+
 const RUNTIME: StableAutomationAuthorityRef = { kind: 'runtime', environmentId: 'env-1' }
+
 const DESKTOP_SELF: StableAutomationCatalogRef = { authority: DESKTOP, selector: { kind: 'self' } }
+
 const RUNTIME_SELF: StableAutomationCatalogRef = { authority: RUNTIME, selector: { kind: 'self' } }
+
 const RUNTIME_SSH: StableAutomationCatalogRef = {
   authority: RUNTIME,
   selector: { kind: 'ssh', targetId: 'target-1' }
 }
+
 const DESKTOP_SSH: StableAutomationCatalogRef = {
   authority: DESKTOP,
   selector: { kind: 'ssh', targetId: 'target-1' }
@@ -109,6 +114,7 @@ function createController(listScoped: AutomationHostSchedulerTransport['listScop
     catalogGeneration: () => 0,
     connectionGeneration: () => 0
   })
+
   const controller = createAutomationHostQueryController({
     cache,
     legacyPartitionContext: () => ({ repoConnectionId: () => null, projectsAuthoritative: true }),
@@ -116,12 +122,14 @@ function createController(listScoped: AutomationHostSchedulerTransport['listScop
     schedule: (flush) => flush(),
     transport: { listScoped }
   })
+
   return { cache, controller }
 }
 
 /** Reads the module-level generation registry, which is the fence the renderer really runs. */
 function createFencedController(listScoped: AutomationHostSchedulerTransport['listScoped']) {
   const cache = createAutomationHostCache({ connectionGeneration: () => 0 })
+
   const controller = createAutomationHostQueryController({
     cache,
     legacyPartitionContext: () => ({ repoConnectionId: () => null, projectsAuthoritative: true }),
@@ -129,6 +137,7 @@ function createFencedController(listScoped: AutomationHostSchedulerTransport['li
     schedule: (flush) => flush(),
     transport: { listScoped }
   })
+
   return { cache, controller }
 }
 
@@ -177,14 +186,19 @@ describe('automation host query controller', () => {
     const gates: ((value: ScopedAutomationList) => void)[] = []
     const queried: string[] = []
     let blocking = true
+
     const listScoped = vi.fn((_authority, selector) => {
       queried.push(selector.kind === 'ssh' ? selector.targetId : selector.kind)
+
       if (!blocking) {
         return Promise.resolve(emptyList())
       }
+
       return new Promise<ScopedAutomationList>((resolve) => gates.push(resolve))
     })
+
     const { controller } = createController(listScoped)
+
     const catalog = catalogOf(
       Array.from({ length: 10 }, (_, index) =>
         entry({ authority: RUNTIME, selector: { kind: 'ssh', targetId: `target-${index}` } })
@@ -197,9 +211,11 @@ describe('automation host query controller', () => {
 
     const second = controller.applyCatalog(catalog)
     blocking = false
+
     for (const resolve of gates) {
       resolve(emptyList())
     }
+
     await Promise.all([first, second])
 
     expect(new Set(queried).size).toBe(10)
@@ -232,6 +248,7 @@ describe('automation host query controller', () => {
         ])
       )
     )
+
     const { cache, controller } = createFencedController(listScoped)
 
     await controller.applyCatalog(catalogOf([entry(DESKTOP_SSH, { targetGeneration: 4 })]))
@@ -262,6 +279,7 @@ describe('automation host query controller', () => {
     const listScoped = vi.fn(() =>
       Promise.resolve({ automations: [], items: [], orphanCount: 3, invalidRows: 0 })
     )
+
     const { controller } = createController(listScoped)
     expect(controller.authorityOrphanCount(RUNTIME)).toBeNull()
 
@@ -292,13 +310,16 @@ describe('automation host query controller', () => {
       catalogGeneration: () => 0,
       connectionGeneration: () => 0
     })
+
     const listLegacy = vi.fn(() => Promise.resolve([]))
+
     const controller = createAutomationHostQueryController({
       cache,
       legacyPartitionContext: () => ({ repoConnectionId: () => null, projectsAuthoritative: true }),
       isVisible: () => true,
       transport: { listLegacy }
     })
+
     const legacy = { querySupport: 'legacy-unscoped' as const }
     await controller.applyCatalog(
       catalogOf([entry(RUNTIME_SELF, legacy), entry(RUNTIME_SSH, legacy)])

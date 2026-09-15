@@ -16,7 +16,9 @@ export type CachedCombinedDiffViewState = {
 }
 
 export const combinedDiffViewStateCache = new Map<string, CachedCombinedDiffViewState>()
+
 export const combinedDiffScrollTopCache = new Map<string, number>()
+
 export const combinedDiffScrollAnchorCache = new Map<string, VirtualizedScrollAnchor>()
 
 // Why: session-scoped toolbar choices outlive the unmount, so they are module state rather than component state.
@@ -37,6 +39,7 @@ function invalidateCombinedDiffCachesForRelativePath(relativePath: string): void
 if (typeof window !== 'undefined') {
   window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, (event) => {
     const detail = (event as CustomEvent<EditorPathMutationTarget>).detail
+
     if (detail?.relativePath) {
       // Why: inactive combined-diff tabs are unmounted, so only a module-level cache bust stops a remount replaying stale bodies.
       invalidateCombinedDiffCachesForRelativePath(detail.relativePath)

@@ -62,6 +62,7 @@ function dedupeClaudeUsageTurns(
   for (const turn of turns) {
     if (turn.dedupeKey) {
       const existingIndex = dedupeIndexByKey.get(turn.dedupeKey)
+
       if (existingIndex !== undefined) {
         const existing = deduped[existingIndex]
         // Why: Claude Code streams repeated assistant rows with the same
@@ -76,6 +77,7 @@ function dedupeClaudeUsageTurns(
     }
 
     deduped.push({ ...turn })
+
     if (turn.dedupeKey) {
       dedupeIndexByKey.set(turn.dedupeKey, deduped.length - 1)
     }
@@ -108,7 +110,9 @@ function parseClaudeUsageSourceRecord(
   if (!mayEncodeAssistantType(line)) {
     return null
   }
+
   let parsed: ClaudeUsageSourceRecord
+
   try {
     parsed = JSON.parse(line) as ClaudeUsageSourceRecord
   } catch {
@@ -118,7 +122,9 @@ function parseClaudeUsageSourceRecord(
   if (parsed.type !== 'assistant') {
     return null
   }
+
   const sessionId = parsed.sessionId ?? fallbackSessionId
+
   if (!sessionId || !parsed.timestamp) {
     return null
   }
@@ -128,6 +134,7 @@ function parseClaudeUsageSourceRecord(
   const outputTokens = usage?.output_tokens ?? 0
   const cacheReadTokens = usage?.cache_read_input_tokens ?? 0
   const cacheWriteTokens = usage?.cache_creation_input_tokens ?? 0
+
   // Why: clamp so the implied 5m remainder can never go negative on a partial row.
   const cacheWrite1hTokens = Math.min(
     usage?.cache_creation?.ephemeral_1h_input_tokens ?? 0,
@@ -159,27 +166,34 @@ function parseClaudeUsageSourceRecord(
 function buildClaudeUsageDedupeKey(parsed: ClaudeUsageSourceRecord): string | null {
   const messageId = parsed.message?.id?.trim()
   const requestId = parsed.requestId?.trim()
+
   if (messageId && requestId) {
     return `${messageId}:${requestId}`
   }
+
   if (messageId) {
     return `msg:${messageId}`
   }
+
   const uuid = parsed.uuid?.trim()
+
   if (uuid) {
     return `uuid:${uuid}`
   }
+
   return null
 }
 
 export function parseClaudeUsageRecord(line: string): ClaudeUsageParsedTurn | null {
   const parsed = parseClaudeUsageSourceRecord(line)
+
   return parsed ? stripClaudeSourceMetadata(parsed) : null
 }
 
 export async function parseClaudeUsageFile(filePath: string): Promise<ClaudeUsageParsedTurn[]> {
   const turns: ClaudeUsageParsedSourceTurn[] = []
   const fallbackSessionId = basename(filePath, '.jsonl')
+
   const lines = createInterface({
     input: createReadStream(filePath, { encoding: 'utf-8' }),
     crlfDelay: Infinity
@@ -187,6 +201,7 @@ export async function parseClaudeUsageFile(filePath: string): Promise<ClaudeUsag
 
   for await (const line of lines) {
     const parsed = parseClaudeUsageSourceRecord(line, fallbackSessionId)
+
     if (parsed) {
       turns.push(parsed)
     }
@@ -203,6 +218,7 @@ export async function readClaudeUsageScanFile(filePath: string): Promise<{
   let lineCount = 0
   const turns: ClaudeUsageParsedSourceTurn[] = []
   const fallbackSessionId = basename(filePath, '.jsonl')
+
   const lines = createInterface({
     input: createReadStream(filePath, { encoding: 'utf-8' }),
     crlfDelay: Infinity
@@ -211,6 +227,7 @@ export async function readClaudeUsageScanFile(filePath: string): Promise<{
   for await (const line of lines) {
     lineCount++
     const parsed = parseClaudeUsageSourceRecord(line, fallbackSessionId)
+
     if (parsed) {
       turns.push(parsed)
     }

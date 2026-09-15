@@ -59,13 +59,16 @@ export function useRemoteBrowserPageContextMenu({
     if (!contextMenu) {
       return
     }
+
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.preventDefault()
         setContextMenu(null)
       }
     }
+
     window.addEventListener('keydown', handleKeyDown, true)
+
     return () => window.removeEventListener('keydown', handleKeyDown, true)
   }, [contextMenu])
 
@@ -73,12 +76,15 @@ export function useRemoteBrowserPageContextMenu({
     if (busy) {
       return
     }
+
     const target = runtimeTarget()
     const pageId = lifecycle.tokens.remotePage
     const point = getRemoteImagePoint(event)
+
     if (!target || !pageId || !point) {
       return
     }
+
     event.preventDefault()
     imageRef.current?.focus()
     setPaneNotice(null)
@@ -92,9 +98,11 @@ export function useRemoteBrowserPageContextMenu({
     })
     enqueueRemoteInput(async () => {
       const operationToken = createRemoteOperationToken(pageId)
+
       if (!operationToken || !isCurrentRemoteOperationToken(operationToken)) {
         return
       }
+
       try {
         const result = await callRuntimeRpc(
           target,
@@ -106,7 +114,9 @@ export function useRemoteBrowserPageContextMenu({
           },
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
+
         const parsed = readRemoteContextMenuResult(result)
+
         if (parsed && mountedRef.current && isCurrentRemoteOperationToken(operationToken)) {
           setContextMenu((current) =>
             current
@@ -149,9 +159,11 @@ export function RemoteBrowserPageContextMenu({
 
   useLayoutEffect(() => {
     const el = contextMenuRef.current
+
     if (!el) {
       return
     }
+
     el.style.left = `${contextMenu.x}px`
     el.style.top = `${contextMenu.y}px`
     const rect = el.getBoundingClientRect()
@@ -159,12 +171,15 @@ export function RemoteBrowserPageContextMenu({
     const offsetY = contextMenu.y - rect.top
     let renderX = contextMenu.x
     let renderY = contextMenu.y
+
     if (rect.right > window.innerWidth) {
       renderX = contextMenu.x - rect.width
     }
+
     if (rect.bottom > window.innerHeight) {
       renderY = contextMenu.y - rect.height
     }
+
     el.style.left = `${Math.max(0, renderX) + offsetX}px`
     el.style.top = `${Math.max(0, renderY) + offsetY}px`
   }, [contextMenu])
@@ -196,9 +211,11 @@ export function RemoteBrowserPageContextMenu({
               className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
               onClick={() => {
                 const targetUrl = normalizeExternalBrowserUrl(contextMenu.linkUrl!)
+
                 if (targetUrl) {
                   void window.api.shell.openUrl(targetUrl)
                 }
+
                 onDismiss()
               }}
             >
@@ -265,9 +282,11 @@ export function RemoteBrowserPageContextMenu({
           className="relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 dark:hover:bg-white/14"
           onClick={() => {
             const targetUrl = normalizeExternalBrowserUrl(contextMenu.pageUrl)
+
             if (targetUrl) {
               void window.api.shell.openUrl(targetUrl)
             }
+
             onDismiss()
           }}
         >

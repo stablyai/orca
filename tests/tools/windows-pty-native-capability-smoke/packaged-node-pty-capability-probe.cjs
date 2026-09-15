@@ -1,15 +1,20 @@
 const { randomBytes } = require('node:crypto')
+
 const { writeSync } = require('node:fs')
+
 const net = require('node:net')
+
 const path = require('node:path')
 
 const EVIDENCE_PREFIX = 'ORCA_NODE_PTY_CAPABILITY_EVIDENCE='
+
 const EXPECTED_ROLES = new Set([
   'target-shell',
   'target-launcher-exited',
   'target-grandchild',
   'canary-shell'
 ])
+
 const ONE_SHOT_MODES = new Set(['--exercise', '--exit-contract-fixture'])
 
 function isOneShotMode(mode) {
@@ -44,6 +49,7 @@ function connectFixture(channel, fixtureToken, role, extra = {}) {
     process.stderr.write(`${error.stack || error.message}\n`)
     process.exitCode = 1
   })
+
   return socket
 }
 
@@ -77,22 +83,29 @@ function startGrandchildAfterLauncherExit(channel, fixtureToken, resourcesDir) {
   const { spawnProcess } = require(
     path.join(resourcesDir, 'app.asar.unpacked', 'out', 'shared', 'child-process', 'run-process.js')
   )
+
   const launch = buildGrandchildLaunch(channel, fixtureToken)
+
   const child = spawnProcess({
     ...launch,
     env: process.env
   })
+
   for (const stream of [child.stdin, child.stdout, child.stderr]) {
     stream?.on('error', () => {})
   }
+
   child.stdin?.end()
+
   return new Promise((resolve, reject) => {
     child.once('error', reject)
     child.once('exit', (code) => {
       if (code !== 0) {
         reject(new Error(`grandchild launcher exited ${code}`))
+
         return
       }
+
       reportFixtureObservation(channel, fixtureToken, 'target-launcher-exited', {
         pid: child.pid
       }).then(() => resolve(child.pid), reject)
@@ -102,6 +115,7 @@ function startGrandchildAfterLauncherExit(channel, fixtureToken, resourcesDir) {
 
 async function runPtyShell(channel, fixtureToken, role, resourcesDir) {
   const socket = connectFixture(channel, fixtureToken, `${role}-shell`)
+
   try {
     if (role === 'target') {
       await startGrandchildAfterLauncherExit(channel, fixtureToken, resourcesDir)
@@ -122,23 +136,30 @@ function createFixtureServer(channel, fixtureToken) {
 
   function closureFor(role) {
     const existing = closures.get(role)
+
     if (existing) {
       return existing
     }
+
     let resolve
+
     const promise = new Promise((done) => {
       resolve = done
     })
+
     const closure = { promise, resolve }
     closures.set(role, closure)
+
     return closure
   }
 
   function waitForRole(role) {
     const existing = observations.get(role)
+
     if (existing) {
       return Promise.resolve(existing)
     }
+
     return new Promise((resolve) => pending.set(role, resolve))
   }
 
@@ -150,10 +171,13 @@ function createFixtureServer(channel, fixtureToken) {
     socket.on('data', (chunk) => {
       input += String(chunk)
       const newline = input.indexOf('\n')
+
       if (newline === -1) {
         return
       }
+
       const observation = JSON.parse(input.slice(0, newline))
+
       if (
         observation.fixtureToken !== fixtureToken ||
         observation.channel !== channel ||
@@ -161,6 +185,7 @@ function createFixtureServer(channel, fixtureToken) {
       ) {
         throw new Error('fixture observation did not match its unique token, channel, and role')
       }
+
       observations.set(observation.role, observation)
       sockets.set(observation.role, socket)
       pending.get(observation.role)?.(observation)
@@ -179,11 +204,14 @@ function createFixtureServer(channel, fixtureToken) {
     server.once('error', reject)
     server.listen(channel, resolve)
   })
+
   const close = () => {
     if (serverClosed) {
       return Promise.resolve()
     }
+
     serverClosed = true
+
     return new Promise((resolve, reject) => {
       server.close((error) => (error ? reject(error) : resolve()))
     })
@@ -198,6 +226,7 @@ function createFixtureServer(channel, fixtureToken) {
       for (const socket of acceptedSockets) {
         socket.destroy()
       }
+
       server.closeAllConnections?.()
       server.unref()
     },
@@ -211,6 +240,7 @@ function terminalHandle(pty) {
 
 function exitEvent(pty) {
   const handle = terminalHandle(pty)
+
   return new Promise((resolve) =>
     pty.onExit((event) => resolve({ terminalHandle: handle, ...event }))
   )
@@ -218,12 +248,14 @@ function exitEvent(pty) {
 
 function waitForBarrier(promise, label, timeoutMs = 30_000) {
   let timer
+
   const deadline = new Promise((_, reject) => {
     timer = setTimeout(
       () => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
       timeoutMs
     )
   })
+
   return Promise.race([promise, deadline]).finally(() => clearTimeout(timer))
 }
 
@@ -231,19 +263,24 @@ async function exercise(resourcesDir, fixtureExecutable) {
   const nodePtyDir = path.join(resourcesDir, 'node_modules', 'node-pty')
   stage('addon-load:start')
   const nodePty = require(nodePtyDir)
+
   const { module: native } = require(path.join(nodePtyDir, 'lib', 'utils.js')).loadNativeModule(
     'conpty'
   )
+
   stage('addon-load:done')
   const patchedExports = ['assignCurrentProcessToJob', 'listJobProcessIds', 'terminateJob']
+
   for (const name of patchedExports) {
     if (typeof native[name] !== 'function') {
       throw new Error(`packaged node-pty is missing ${name}`)
     }
   }
+
   stage('host-job-assign:start')
   const hostJobAssigned = native.assignCurrentProcessToJob()
   stage('host-job-assign:done')
+
   if (!hostJobAssigned) {
     throw new Error('packaged probe could not establish host job ownership')
   }
@@ -254,6 +291,7 @@ async function exercise(resourcesDir, fixtureExecutable) {
   stage('fixture-listen:start')
   await waitForBarrier(fixtures.listening, 'fixture server listen')
   stage('fixture-listen:done')
+
   const options = {
     name: 'xterm-256color',
     cols: 80,
@@ -262,6 +300,7 @@ async function exercise(resourcesDir, fixtureExecutable) {
     env: process.env,
     useConptyDll: true
   }
+
   const created = []
   const closed = new Set()
   const exitPromises = []
@@ -269,21 +308,25 @@ async function exercise(resourcesDir, fixtureExecutable) {
 
   try {
     stage('target-spawn:start')
+
     const target = nodePty.spawn(
       fixtureExecutable,
       [__filename, '--pty-shell', channel, fixtureToken, 'target', resourcesDir],
       options
     )
+
     stage('target-spawn:done')
     created.push(target)
     const targetExited = exitEvent(target)
     exitPromises.push(targetExited)
     stage('canary-spawn:start')
+
     const canary = nodePty.spawn(
       fixtureExecutable,
       [__filename, '--pty-shell', channel, fixtureToken, 'canary', resourcesDir],
       options
     )
+
     stage('canary-spawn:done')
     created.push(canary)
     const canaryHandle = terminalHandle(canary)
@@ -291,12 +334,14 @@ async function exercise(resourcesDir, fixtureExecutable) {
     exitPromises.push(canaryExited)
 
     stage('fixture-readiness:start')
+
     const [shell, launcherExited, grandchild, canaryProcess] = await Promise.all([
       waitForBarrier(fixtures.waitForRole('target-shell'), 'target shell readiness'),
       waitForBarrier(fixtures.waitForRole('target-launcher-exited'), 'grandchild launcher exit'),
       waitForBarrier(fixtures.waitForRole('target-grandchild'), 'target grandchild readiness'),
       waitForBarrier(fixtures.waitForRole('canary-shell'), 'canary shell readiness')
     ])
+
     stage('fixture-readiness:done')
     stage('target-job-list:start')
     const targetJobProcessIds = native.listJobProcessIds(target._pty, target.pid)
@@ -305,11 +350,14 @@ async function exercise(resourcesDir, fixtureExecutable) {
     stage('target-job-terminate:start')
     const targetTerminated = native.terminateJob(target._pty, target.pid)
     stage('target-job-terminate:done')
+
     if (!targetTerminated) {
       throw new Error('exact target job termination was refused')
     }
+
     closed.add(target)
     stage('target-exit-barriers:start')
+
     const [targetExit, targetShellClosed, targetGrandchildClosed] = await Promise.all([
       waitForBarrier(targetExited, 'target PTY exit'),
       waitForBarrier(fixtures.waitForClose('target-shell'), 'target shell connection close'),
@@ -318,6 +366,7 @@ async function exercise(resourcesDir, fixtureExecutable) {
         'target grandchild connection close'
       )
     ])
+
     stage('target-exit-barriers:done')
 
     stage('canary-job-list:start')
@@ -328,15 +377,19 @@ async function exercise(resourcesDir, fixtureExecutable) {
     stage('canary-job-terminate:start')
     const canaryTerminated = native.terminateJob(canary._pty, canary.pid)
     stage('canary-job-terminate:done')
+
     if (!canaryTerminated) {
       throw new Error('exact canary job termination was refused')
     }
+
     closed.add(canary)
     stage('canary-exit-barriers:start')
+
     const [canaryExit, canaryClosed] = await Promise.all([
       waitForBarrier(canaryExited, 'canary PTY exit'),
       waitForBarrier(fixtures.waitForClose('canary-shell'), 'canary shell connection close')
     ])
+
     stage('canary-exit-barriers:done')
 
     const evidence = {
@@ -367,6 +420,7 @@ async function exercise(resourcesDir, fixtureExecutable) {
         targetGrandchildClosed
       }
     }
+
     stage('fixture-close:start')
     await waitForBarrier(fixtures.close(), 'fixture server close')
     stage('fixture-close:done')
@@ -384,11 +438,13 @@ async function exercise(resourcesDir, fixtureExecutable) {
         stage('cleanup-job-terminate:done')
       }
     }
+
     if (!completed) {
       await Promise.allSettled(
         exitPromises.map((exit) => waitForBarrier(exit, 'cleanup PTY exit', 5_000))
       )
       fixtures.destroySockets()
+
       try {
         await waitForBarrier(fixtures.close(), 'fixture server cleanup', 5_000)
       } catch (error) {
@@ -402,26 +458,36 @@ async function exercise(resourcesDir, fixtureExecutable) {
 
 async function main() {
   const [mode, ...args] = process.argv.slice(2)
+
   if (mode === '--pty-shell') {
     await runPtyShell(args[0], args[1], args[2], args[3])
+
     return
   }
+
   if (mode === '--grandchild-member') {
     connectFixture(args[0], args[1], args[2])
+
     return
   }
+
   if (mode === '--exercise') {
     if (!args[1]) {
       throw new Error('exercise mode requires a fixture Node executable')
     }
+
     await exercise(args[0], args[1])
+
     return
   }
+
   if (mode === '--exit-contract-fixture') {
     process.stdout.write('ORCA_ONE_SHOT_EVIDENCE=flushed\n')
     setInterval(() => {}, 60_000)
+
     return
   }
+
   throw new Error(`unknown packaged node-pty capability probe mode: ${mode}`)
 }
 
@@ -438,6 +504,7 @@ if (require.main === module) {
     () => (isOneShotMode(mode) ? exitOneShot(0) : undefined),
     async (error) => {
       await writeStream(process.stderr, `${error.stack || error.message}\n`)
+
       if (isOneShotMode(mode)) {
         await exitOneShot(1)
       } else {

@@ -55,6 +55,7 @@ export function buildRuntimeSessionMirrorEnvironmentKey(
 export function useRuntimeSessionMirrorEnvironmentKey(): string {
   // Why: agent/tab writes are hot; scan host ownership only when one of its sources changes.
   const inputs = useAppStore(useShallow(selectRuntimeSessionMirrorTargetInputs))
+
   const {
     activeRuntimeEnvironmentId,
     repos,
@@ -65,6 +66,7 @@ export function useRuntimeSessionMirrorEnvironmentKey(): string {
     runtimeEnvironments,
     runtimeStatusByEnvironmentId
   } = inputs
+
   return useMemo(
     () =>
       buildRuntimeSessionMirrorEnvironmentKey({

@@ -25,21 +25,35 @@ const {
 )
 
 vi.mock('fs', () => moduleFactories.fs())
+
 vi.mock('child_process', async (importOriginal) =>
   moduleFactories.childProcess(await importOriginal<Record<string, unknown>>())
 )
+
 vi.mock('net', () => moduleFactories.net())
+
 vi.mock('./daemon-health', () => moduleFactories.daemonHealth())
+
 vi.mock('./daemon-pid-identity', () => moduleFactories.daemonPidIdentity())
+
 vi.mock('./daemon-tcc-attribution', () => moduleFactories.daemonTccAttribution())
+
 vi.mock('./daemon-bundle-staleness', () => moduleFactories.daemonBundleStaleness())
+
 vi.mock('./daemon-stale-kill', () => moduleFactories.daemonStaleKill())
+
 vi.mock('./daemon-process-start-time', () => moduleFactories.daemonProcessStartTime())
+
 vi.mock('./daemon-pid-file-parse', () => moduleFactories.daemonPidFileParse())
+
 vi.mock('./client', () => moduleFactories.client())
+
 vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent())
+
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
+
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
+
 vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
 
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
@@ -54,16 +68,20 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   // Why: net.connect stub whose 'connect' fires, so probeSocket() reports the pipe alive on every grace re-check.
   function stubAliveSocketConnect() {
     const handlers: Record<string, (() => void)[]> = { connect: [], error: [] }
+
     return {
       on(event: string, cb: () => void) {
         handlers[event]?.push(cb)
+
         if (event === 'connect') {
           queueMicrotask(() => cb())
         }
+
         return this
       },
       removeListener(event: string, cb: () => void) {
         handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+
         return this
       },
       destroy() {}
@@ -84,6 +102,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
   const POST_RECOVERY_KILL_MS = 3_000 + 3_000 + 3_000 + 1_000 + 500
   const POST_RECOVERY_FORK_MS = 10_000
   const POST_RECOVERY_LEASE_MS = 5_000
+
   const POST_RECOVERY_RELAUNCH_MS =
     POST_RECOVERY_KILL_MS + POST_RECOVERY_FORK_MS + POST_RECOVERY_LEASE_MS
 
@@ -112,16 +131,19 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         clock.now += timeoutMs
         throw new Error(message)
       }
+
       clock.now = Math.max(clock.now, drainsAtMs)
       wedge.active = false
       wedge.drained = true
     }
+
     daemonClientMock.mockImplementation(function MockDaemonClient() {
       const connect = async (timeoutMs = CLIENT_CONNECT_TIMEOUT_MS): Promise<void> => {
         if (wedge.active && wedgeAt === 'handshake') {
           await stall(timeoutMs, 'Hello response timed out')
         }
       }
+
       return {
         ensureConnected: vi.fn(() => connect()),
         ensureConnectedWithin: vi.fn(connect),
@@ -130,6 +152,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           if (wedge.active && wedgeAt === 'listSessions') {
             await stall(timeoutMs ?? CLIENT_REQUEST_TIMEOUT_MS, 'Request timed out')
           }
+
           // A daemon that drained still owns the sessions this grace exists to preserve.
           return { sessions: wedge.drained ? [{ sessionId: 'wt-1@@live', isAlive: true }] : [] }
         }),
@@ -138,11 +161,13 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     })
     checkDaemonHealthMock.mockImplementationOnce(async () => {
       clock.now += HEALTH_CHECK_TIMEOUT_MS
+
       return 'unreachable'
     })
     // Ending the wedge on the kill keeps the replacement daemon answering its adoption lease.
     killStaleDaemonMock.mockImplementationOnce(async () => {
       wedge.active = false
+
       return { killed: true, liveOwnerSurvived: false }
     })
     probeSocketExistsMock.mockReturnValue(true)
@@ -153,6 +178,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         if (event === 'message') {
           queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
         }
+
         return this
       },
       off() {
@@ -167,6 +193,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     try {
       await launcher('/fake/socket', '/fake/token')
     } finally {
@@ -181,6 +208,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         }
       })
     }
+
     // Nothing after the adopt-or-replace decision advances the simulated clock, so this is it.
     return clock.now - startedAtMs
   }
@@ -218,6 +246,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
     probeSocketExistsMock.mockReturnValue(true)
     netConnectMock.mockImplementation(stubAliveSocketConnect)
@@ -241,10 +270,12 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         disconnect: vi.fn()
       }
     }
+
     // Permanent wedge: every probe times out, then the freshly spawned daemon accepts the temporary adoption lease.
     let daemonClientConstructionCount = 0
     daemonClientMock.mockImplementation(function MockDaemonClient() {
       daemonClientConstructionCount++
+
       return {
         ensureConnected: vi.fn(async () => {
           if (daemonClientConstructionCount <= 2 + WEDGED_DAEMON_GRACE_RETRIES) {
@@ -266,6 +297,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
     probeSocketExistsMock.mockReturnValue(true)
     netConnectMock.mockImplementation(stubAliveSocketConnect)
@@ -275,6 +307,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         if (event === 'message') {
           queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
         }
+
         return this
       },
       off() {
@@ -402,6 +435,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       socketPath: string,
       tokenPath: string
     ) => Promise<{ shutdown(): Promise<void> }>
+
     checkDaemonHealthMock.mockResolvedValueOnce('rejected')
     probeSocketExistsMock.mockReturnValue(true)
     netConnectMock.mockImplementation(stubAliveSocketConnect)
@@ -411,6 +445,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         if (event === 'message') {
           queueMicrotask(() => cb({ type: 'ready', startedAtMs: 1_000_000 }))
         }
+
         return this
       },
       off() {

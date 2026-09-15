@@ -14,6 +14,7 @@ export type HostedReviewCacheEntry<T> = {
   linkedReviewHintKey?: string
   branchLookupGitHubPRNumber?: number
 }
+
 export type HostedReviewCache = Record<string, HostedReviewCacheEntry<HostedReviewInfo>>
 
 export type HostedReviewFetchOptions = {
@@ -29,13 +30,17 @@ export type HostedReviewFetchOptions = {
   active?: boolean
   repoOwnerExecutionHostId?: string
 }
+
 export type CreateHostedReviewStoreInput = CreateHostedReviewInput & { repoId?: string | null }
+
 export type CreateStackedHostedReviewStoreInput = CreateStackedHostedReviewInput & {
   repoId?: string | null
 }
 
 const CACHE_TTL_MS = 60_000
+
 const HOSTED_REVIEW_CACHE_MAX = 500
+
 // Why: the runtime path is bounded by callRuntimeRpc's own timeout; the local
 // Electron path had none, so a hung git/gh subprocess (e.g. a stalled Windows
 // credential probe) could leave the Create PR header stuck in its "Checking…"
@@ -58,6 +63,7 @@ export function withCreationEligibilityTimeout(
     const timer = setTimeout(() => {
       reject(new HostedReviewCreationEligibilityTimeoutError(timeoutMs))
     }, timeoutMs)
+
     promise.then(
       (value) => {
         clearTimeout(timer)
@@ -88,11 +94,13 @@ export function findHostedReviewRepoByPath(
       (repoId ? candidate.id === repoId : candidate.path === repoPath) &&
       (!repoOwnerExecutionHostId || candidate.path === repoPath)
   )
+
   if (repoOwnerExecutionHostId) {
     return matches?.find(
       (candidate) => getRepoExecutionHostId(candidate) === repoOwnerExecutionHostId
     )
   }
+
   return matches?.[0]
 }
 
@@ -107,6 +115,7 @@ export function findHostedReviewRepoForFetch(
     options?.repoId,
     options?.repoOwnerExecutionHostId
   )
+
   return options?.repoOwnerExecutionHostId && !repo ? null : repo
 }
 
@@ -155,10 +164,13 @@ export function isStaleMergedGitHubReviewForHead(
   // branch-scoped, so a worktree that advanced off the merged line of work
   // must not reuse (or, on failure, preserve) the now-stale merged review.
   const head = typeof currentHeadOid === 'string' ? currentHeadOid.trim() : ''
+
   if (head.length === 0) {
     return false
   }
+
   const data = cached?.data
+
   return (
     data?.provider === 'github' &&
     data.state === 'merged' &&
@@ -178,6 +190,7 @@ export function hasNewerHostedReviewCacheEntry(
   // Why: GitHub refresh events can update this shared cache while a branch
   // lookup is in flight; older lookups must not resurrect stale results.
   const entry = cache[cacheKey]
+
   return (
     entry !== undefined &&
     (entry.fetchedAt > requestStartedAt ||
@@ -192,9 +205,11 @@ export function withHostedReviewCacheEntry(
 ): HostedReviewCache {
   const next = { ...cache, [cacheKey]: entry }
   const keys = Object.keys(next)
+
   if (keys.length <= HOSTED_REVIEW_CACHE_MAX) {
     return next
   }
+
   const keep = new Set(
     keys
       .map((key) => ({ key, fetchedAt: next[key].fetchedAt }))
@@ -202,10 +217,13 @@ export function withHostedReviewCacheEntry(
       .slice(0, HOSTED_REVIEW_CACHE_MAX)
       .map((item) => item.key)
   )
+
   const pruned: HostedReviewCache = {}
+
   for (const key of keep) {
     pruned[key] = next[key]
   }
+
   return pruned
 }
 
@@ -216,12 +234,15 @@ export function settingsForHostedReviewRepoOwner(
   if (!repo) {
     return settings
   }
+
   const parsed = parseExecutionHostId(getRepoExecutionHostId(repo))
+
   if (parsed?.kind === 'runtime') {
     return settings
       ? { ...settings, activeRuntimeEnvironmentId: parsed.environmentId }
       : ({ activeRuntimeEnvironmentId: parsed.environmentId } as AppState['settings'])
   }
+
   // Why: local and SSH-owned reviews are served by the desktop client's local
   // IPC path, even when the sidebar is focused on a runtime host.
   return settings
@@ -236,5 +257,6 @@ export function settingsForHostedReviewActionOwner(
   if (!repo?.executionHostId && !repo?.connectionId) {
     return settings
   }
+
   return settingsForHostedReviewRepoOwner(settings, repo)
 }

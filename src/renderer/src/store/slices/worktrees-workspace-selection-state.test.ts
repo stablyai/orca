@@ -68,9 +68,11 @@ describe('setActiveWorktree focus handling', () => {
     const current = makeWorktree({ id: 'repo1::/path/current', repoId: 'repo1' })
     const next = makeWorktree({ id: 'repo1::/path/next', repoId: 'repo1' })
     const webview = createWebview()
+
     const focusRenderer = vi.fn(() => {
       expect(store.getState().activeWorktreeId).toBe(current.id)
     })
+
     const previousDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
     const testWindow = globalThis.window as unknown as { focus?: () => void }
     const previousFocus = testWindow.focus
@@ -100,11 +102,13 @@ describe('setActiveWorktree focus handling', () => {
       expect(store.getState().activeWorktreeId).toBe(next.id)
     } finally {
       unregisterPersistentWebview('page-1')
+
       if (previousDocument) {
         Object.defineProperty(globalThis, 'document', previousDocument)
       } else {
         delete (globalThis as unknown as { document?: unknown }).document
       }
+
       if (previousFocus) {
         testWindow.focus = previousFocus
       } else {
@@ -430,17 +434,20 @@ describe('setWorktreesPinnedAndReveal', () => {
     'reveals the focused descendant when changing its unfocused ancestor from $previousPinned to $nextPinned',
     ({ previousPinned, nextPinned }) => {
       const store = createTestStore()
+
       const parent = makeWorktree({
         id: 'repo1::/parent',
         instanceId: 'parent-instance',
         repoId: 'repo1',
         isPinned: previousPinned
       })
+
       const child = makeWorktree({
         id: 'repo1::/child',
         instanceId: 'child-instance',
         repoId: 'repo1'
       })
+
       const reveal = vi.fn()
       store.setState({
         worktreesByRepo: { repo1: [parent, child] },
@@ -459,11 +466,13 @@ describe('setWorktreesPinnedAndReveal', () => {
 
   it('reveals the focused descendant from embedded legacy lineage', () => {
     const store = createTestStore()
+
     const parent = makeWorktree({
       id: 'repo1::/parent',
       instanceId: 'parent-instance',
       repoId: 'repo1'
     })
+
     const child = {
       ...makeWorktree({
         id: 'repo1::/child',
@@ -472,6 +481,7 @@ describe('setWorktreesPinnedAndReveal', () => {
       }),
       lineage: makeLineage({ worktreeId: 'repo1::/child', parentWorktreeId: parent.id })
     }
+
     const reveal = vi.fn()
     store.setState({
       worktreesByRepo: { repo1: [parent, child] },
@@ -486,16 +496,19 @@ describe('setWorktreesPinnedAndReveal', () => {
 
   it('does not reveal through cyclic lineage rejected by rendering', () => {
     const store = createTestStore()
+
     const first = makeWorktree({
       id: 'repo1::/first',
       instanceId: 'first-instance',
       repoId: 'repo1'
     })
+
     const second = makeWorktree({
       id: 'repo1::/second',
       instanceId: 'second-instance',
       repoId: 'repo1'
     })
+
     const reveal = vi.fn()
     store.setState({
       worktreesByRepo: { repo1: [first, second] },
@@ -524,16 +537,19 @@ describe('setWorktreesPinnedAndReveal', () => {
 
   it('does not reveal a focused descendant for duplicate pinned rows', () => {
     const store = createTestStore()
+
     const parent = makeWorktree({
       id: 'repo1::/parent',
       instanceId: 'parent-instance',
       repoId: 'repo1'
     })
+
     const child = makeWorktree({
       id: 'repo1::/child',
       instanceId: 'child-instance',
       repoId: 'repo1'
     })
+
     const reveal = vi.fn()
     store.setState({
       worktreesByRepo: { repo1: [parent, child] },
@@ -552,16 +568,19 @@ describe('setWorktreesPinnedAndReveal', () => {
 
   it('does not reveal through stale lineage', () => {
     const store = createTestStore()
+
     const parent = makeWorktree({
       id: 'repo1::/parent',
       instanceId: 'replacement-parent-instance',
       repoId: 'repo1'
     })
+
     const child = makeWorktree({
       id: 'repo1::/child',
       instanceId: 'child-instance',
       repoId: 'repo1'
     })
+
     const reveal = vi.fn()
     store.setState({
       worktreesByRepo: { repo1: [parent, child] },
@@ -622,12 +641,14 @@ describe('setWorktreesPinnedAndReveal', () => {
 
   it('pins several at once and reveals the focused row even when it is not first', () => {
     const store = createTestStore()
+
     const alreadyPinned = makeWorktree({
       id: 'repo1::/a',
       repoId: 'repo1',
       path: '/a',
       isPinned: true
     })
+
     const first = makeWorktree({ id: 'repo1::/b', repoId: 'repo1', path: '/b', isPinned: false })
     const focused = makeWorktree({ id: 'repo1::/c', repoId: 'repo1', path: '/c', isPinned: false })
     const reveal = vi.fn()
@@ -652,12 +673,14 @@ describe('setWorktreesPinnedAndReveal', () => {
     const store = createTestStore()
     const first = makeWorktree({ id: 'repo1::/b', repoId: 'repo1', path: '/b', isPinned: false })
     const second = makeWorktree({ id: 'repo1::/c', repoId: 'repo1', path: '/c', isPinned: false })
+
     const elsewhere = makeWorktree({
       id: 'repo1::/z',
       repoId: 'repo1',
       path: '/z',
       isPinned: false
     })
+
     const reveal = vi.fn()
     store.setState({
       worktreesByRepo: { repo1: [first, second, elsewhere] },

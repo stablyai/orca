@@ -60,12 +60,14 @@ export type DetectedWorktreeScanResult = {
 }
 
 export const detectedWorktreeScanCache = new Map<string, DetectedWorktreeScanCacheEntry>()
+
 export const detectedWorktreeScanInFlight = new Map<string, DetectedWorktreeScan>()
 
 export function invalidateDetectedWorktreeScanCache(repoId: string): void {
   bumpLocalWorktreeScanGeneration(repoId)
   requireLocalWorktreeMetadataPrune(repoId)
   const keyPrefix = `${repoId}\0`
+
   for (const key of new Set([
     ...detectedWorktreeScanCache.keys(),
     ...detectedWorktreeScanInFlight.keys()
@@ -73,8 +75,10 @@ export function invalidateDetectedWorktreeScanCache(repoId: string): void {
     if (!key.startsWith(keyPrefix)) {
       continue
     }
+
     detectedWorktreeScanCache.delete(key)
     const inFlight = detectedWorktreeScanInFlight.get(key)
+
     if (inFlight) {
       // Why: the detached scan keeps this token so later scans settle without making an older result fresh again.
       inFlight.invalidated = true
@@ -88,6 +92,7 @@ export function __resetDetectedWorktreeScanCacheForTests(): void {
   for (const scan of detectedWorktreeScanInFlight.values()) {
     scan.invalidated = true
   }
+
   detectedWorktreeScanCache.clear()
   detectedWorktreeScanInFlight.clear()
   resetLocalWorktreeScanGenerationsForTests()
@@ -109,6 +114,7 @@ export async function listDetectedGitWorktrees(
   repo: Repo
 ): Promise<DetectedWorktreeScanResult> {
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+
   if (repo.connectionId || isFolderRepo(repo)) {
     return {
       gitWorktrees: await listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions),
@@ -118,11 +124,13 @@ export async function listDetectedGitWorktrees(
 
   const cacheKey = getDetectedWorktreeScanCacheKey(repo.id, localWorktreeGitOptions)
   const cached = detectedWorktreeScanCache.get(cacheKey)
+
   if (cached && cached.expiresAt > Date.now()) {
     return { gitWorktrees: cached.worktrees, fresh: false }
   }
 
   const inFlight = detectedWorktreeScanInFlight.get(cacheKey)
+
   if (inFlight) {
     return { gitWorktrees: await inFlight.promise, fresh: false }
   }
@@ -135,13 +143,16 @@ export async function listDetectedGitWorktrees(
   // Why: capturing the expectation walks the repo's whole metadata table and the prune that follows
   // stats every path-missing row, so both run only against evidence that the answer changed (#17775).
   const hygieneDue = isLocalWorktreeMetadataPruneDue(repo.id)
+
   if (hygieneDue) {
     markLocalWorktreeMetadataPruneStarted(repo.id)
   }
+
   const metadataPruneExpectation =
     hygieneDue && !localWorktreeGitOptions.wslDistro
       ? store.captureNativeLocalWorktreeMetadataScanExpectation(repo)
       : undefined
+
   const scan: DetectedWorktreeScan = {
     invalidated: false,
     promise: listRepoWorktreesForDetectedScan(repo, localWorktreeGitOptions),
@@ -155,7 +166,9 @@ export async function listDetectedGitWorktrees(
         }
       : {})
   }
+
   detectedWorktreeScanInFlight.set(cacheKey, scan)
+
   try {
     const gitWorktrees = await scan.promise
     // Why: the backstop signal. A listing that no longer matches the one the last pass ran against
@@ -164,18 +177,23 @@ export async function listDetectedGitWorktrees(
       repo.id,
       gitWorktrees.map((worktree) => worktree.path)
     )
+
     const routingUnchanged =
       getDetectedWorktreeScanCacheKey(repo.id, getLocalProjectWorktreeGitOptions(store, repo)) ===
       cacheKey
+
     // Why: a create/remove notification can invalidate mid-scan; don't let that stale scan repopulate the cache afterward.
     const generationCurrent = isLocalWorktreeScanGenerationCurrent(repo.id, generation)
+
     if (!scan.invalidated && routingUnchanged && generationCurrent) {
       detectedWorktreeScanCache.set(cacheKey, {
         worktrees: gitWorktrees,
         expiresAt: Date.now() + DETECTED_WORKTREE_SCAN_CACHE_TTL_MS
       })
     }
+
     const fresh = !scan.invalidated && routingUnchanged && generationCurrent
+
     return {
       gitWorktrees,
       fresh,
@@ -203,17 +221,22 @@ export async function applyFreshDetectedWorktreeScanSideEffects(
   } = {}
 ): Promise<boolean> {
   const { isCurrent = () => true, sideEffectToken, signal, hygieneDue = true } = options
+
   const generationCurrent = () =>
     sideEffectToken === undefined ||
     isLocalWorktreeScanGenerationCurrent(repo.id, sideEffectToken.generation)
+
   if (!generationCurrent() || !isCurrent()) {
     return false
   }
+
   let preservedMetadataCandidateIds: ReadonlySet<string> | undefined
+
   if (metadataPrune) {
     if (!sideEffectToken) {
       return false
     }
+
     const pruneResult = await pruneMetadataMissingFromAuthoritativeLocalScan({
       store,
       repo,
@@ -223,11 +246,14 @@ export async function applyFreshDetectedWorktreeScanSideEffects(
       isCallerCurrent: isCurrent,
       signal
     })
+
     if (!pruneResult.scanGenerationCurrent || !generationCurrent() || !isCurrent()) {
       return false
     }
+
     preservedMetadataCandidateIds = pruneResult.preservedMetadataCandidateIds
   }
+
   if (!generationCurrent() || !isCurrent()) {
     return false
   }
@@ -238,7 +264,9 @@ export async function applyFreshDetectedWorktreeScanSideEffects(
   ) {
     return false
   }
+
   rememberLocalWorktreeRoots(store, repo, gitWorktrees)
+
   // Why: lineage retention is decided against the metadata rows the prune preserved, so running it
   // without that pass would drop lineage for rows the pass would have kept. Both halves share the
   // hygiene cadence instead.
@@ -250,6 +278,7 @@ export async function applyFreshDetectedWorktreeScanSideEffects(
       preservedMetadataCandidateIds ? { preservedMetadataCandidateIds } : undefined
     )
   }
+
   return true
 }
 
@@ -268,6 +297,7 @@ export function rememberLocalWorktreeRoots(
   if (repo.connectionId) {
     return
   }
+
   // Why: reuse the `git worktree list` result so later git/file IPC validation skips a second scan that can trigger macOS folder-permission prompts.
   registerWorktreeRootsForRepo(store, repo.id, [
     repo.path,

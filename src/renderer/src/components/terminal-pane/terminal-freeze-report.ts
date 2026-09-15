@@ -27,11 +27,13 @@ export type TerminalFreezeReport = {
 
 export async function buildTerminalFreezeReport(): Promise<TerminalFreezeReport> {
   const hasDocument = typeof document !== 'undefined'
+
   // The main section must never sink the whole report — a dead invoke channel
   // is itself a diagnostic worth capturing.
   const main = await window.api?.pty
     ?.getRendererDeliveryDebugSnapshot?.()
     .catch((error: unknown) => ({ snapshotError: String(error) }))
+
   return {
     capturedAt: new Date().toISOString(),
     renderer: {
@@ -55,5 +57,6 @@ export function installTerminalFreezeReport(): void {
   if (typeof window === 'undefined') {
     return
   }
+
   ;(window as TerminalFreezeReportWindow).__orcaTerminalFreezeReport = buildTerminalFreezeReport
 }

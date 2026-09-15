@@ -10,8 +10,10 @@ function crossBrowserPageConversion(
 ): void {
   if (origin.kind === 'workspace-doc') {
     convertBrowserPageToWorkspaceDoc(pageId, origin.docLocation, { leg })
+
     return
   }
+
   useAppStore.getState().convertBrowserPage(
     pageId,
     {

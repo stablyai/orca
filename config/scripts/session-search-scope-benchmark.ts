@@ -57,11 +57,14 @@ async function indexCorpus(
   corpus: ToolHeavyCorpus
 ): Promise<{ db: SyncDatabase; release: () => void }> {
   resetSessionParseCacheForTests()
+
   const store = new SessionSearchStore(join(corpus.root, 'index.sqlite'), (error) => {
     throw error
   })
+
   const unregister = registerSessionSearchIndexConsumer(store)
   const stats = createSessionParseStats()
+
   for (const path of corpus.files) {
     await parseAgentSessionFileCached(
       await sessionCandidate('claude', path),
@@ -69,6 +72,7 @@ async function indexCorpus(
       stats
     )
   }
+
   return {
     // The store's own handle, which is what a composed reader gets: every
     // retrieval is one synchronous statement, so nothing pins a WAL snapshot.
@@ -86,10 +90,13 @@ type Timing = { p50: number; p95: number }
 
 function timing(samples: readonly number[]): Timing {
   const sorted = [...samples].sort((left, right) => left - right)
+
   const at = (fraction: number): number => {
     const index = Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))
+
     return Math.round((sorted[index] ?? 0) * 100) / 100
   }
+
   return { p50: at(0.5), p95: at(0.95) }
 }
 
@@ -104,6 +111,7 @@ function timing(samples: readonly number[]): Timing {
 function queries(): string[] {
   const run = (index: number, length: number): string =>
     Array.from({ length }, (_unused, step) => QUERIES[(index + step) % QUERIES.length]).join(' ')
+
   return [
     // Two terms, unquoted: not literal, so straight to OR.
     ...QUERIES,
@@ -128,6 +136,7 @@ function scopeReport(db: SyncDatabase): Record<string, unknown> {
   const scopes: SessionSearchScope[] = ['all', 'conversation']
   const requests: SessionSearchRequest[] = queries().map((query) => ({ query }))
   const buckets = new Map<string, Bucket>()
+
   for (let run = 0; run < WARMUP; run++) {
     for (const scope of scopes) {
       for (const request of requests) {
@@ -135,6 +144,7 @@ function scopeReport(db: SyncDatabase): Record<string, unknown> {
       }
     }
   }
+
   for (const request of requests) {
     for (const scope of scopes) {
       const started = performance.now()
@@ -147,10 +157,13 @@ function scopeReport(db: SyncDatabase): Record<string, unknown> {
       buckets.set(key, bucket)
     }
   }
+
   const report: Record<string, unknown> = {}
+
   for (const [key, bucket] of [...buckets].sort(([left], [right]) => left.localeCompare(right))) {
     report[key] = { ...timing(bucket.samples), samples: bucket.samples.length, hits: bucket.hits }
   }
+
   return report
 }
 
@@ -165,6 +178,7 @@ function indexBytes(db: SyncDatabase): Record<string, number> | { unavailable: s
             .get(...values) as { bytes: number }
         ).bytes
       )
+
     return { total: sum(''), messagesFts: sum('WHERE name LIKE ?', 'messages_fts%') }
   } catch {
     // dbstat is a compile-time option; the latency numbers stand without it.
@@ -176,8 +190,11 @@ const corpus = await writeToolHeavyCorpus({
   targetBytes: Number(process.env.CORPUS_MB ?? 100) * 1024 * 1024,
   toolShare: Number(process.env.TOOL_SHARE ?? 0.9)
 })
+
 let report: string
+
 const indexed = await indexCorpus(corpus)
+
 try {
   report = JSON.stringify(
     {
@@ -199,7 +216,9 @@ try {
 }
 
 const out = process.env.BENCH_OUT
+
 if (out) {
   await writeFile(out, `${report}\n`)
 }
+
 console.log(report)

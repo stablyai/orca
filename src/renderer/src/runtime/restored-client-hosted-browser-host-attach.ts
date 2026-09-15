@@ -9,6 +9,7 @@ type RestoredBrowserHandleSource = {
 // and that attempt has to be retryable. What stops the retries is the restored marker itself --
 // adoption spends it the moment the host republishes the page.
 const preparingEnvironmentIds = new Set<string>()
+
 // Coalescing an ordinary retry is fine, but a restart must not be swallowed by a preparation still
 // aimed at the runtime that just died -- that request can hang until its RPC times out, and dropping
 // the one signal that the authority changed is exactly how the rows get lost.
@@ -45,6 +46,7 @@ export async function ensureBrowserClientHostForRestartedRuntime(
   if (!hasLiveClientHostedPage(state, environmentId)) {
     return
   }
+
   await prepareBrowserClientHost(environmentId, true)
 }
 
@@ -56,9 +58,12 @@ async function prepareBrowserClientHost(
     if (repreparesWhenBusy) {
       environmentIdsAwaitingRepreparation.add(environmentId)
     }
+
     return
   }
+
   preparingEnvironmentIds.add(environmentId)
+
   try {
     // Idempotent per environment: the registry returns the live lease when one is already up, and
     // reserves no per-page state, so this only claims hosting duty.
@@ -66,6 +71,7 @@ async function prepareBrowserClientHost(
       selector: environmentId,
       preference: 'auto'
     })
+
     if (placement.kind !== 'client') {
       // Why still worth a line: preparation stopped throwing when the probe cannot answer, so
       // without this a relaunch that never recovers the retained pages says nothing at all.
@@ -88,6 +94,7 @@ async function prepareBrowserClientHost(
   } finally {
     preparingEnvironmentIds.delete(environmentId)
   }
+
   if (environmentIdsAwaitingRepreparation.delete(environmentId)) {
     await prepareBrowserClientHost(environmentId)
   }
@@ -108,11 +115,13 @@ function hasLiveClientHostedPage(
 
 function restoredClientHostEnvironmentIds(state: RestoredBrowserHandleSource): string[] {
   const environmentIds = new Set<string>()
+
   for (const handle of Object.values(state.remoteBrowserPageHandlesByPageId ?? {})) {
     if (handle.restoredClientHosted === true) {
       environmentIds.add(handle.environmentId)
     }
   }
+
   return [...environmentIds]
 }
 

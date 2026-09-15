@@ -71,6 +71,7 @@ function seedDuplicatePtyOwnership(userDataDir: string): void {
   const layout = tabId ? session?.terminalLayoutsByTabId?.[tabId] : undefined
   const retainedLeafId = layout?.activeLeafId
   const ptyId = retainedLeafId ? layout?.ptyIdsByLeafId?.[retainedLeafId] : undefined
+
   if (!session?.terminalLayoutsByTabId || !tabId || !layout || !retainedLeafId || !ptyId) {
     throw new Error('Persisted terminal ownership was unavailable for duplicate-layout seeding')
   }
@@ -101,9 +102,11 @@ async function waitForRestoredTerminal(page: Page, worktreeId: string): Promise<
   await waitForActiveTerminalManager(page, 30_000)
   await waitForPaneCount(page, 1, 30_000)
   const tabId = await getActiveTabId(page)
+
   if (!tabId) {
     throw new Error('Restored terminal tab was unavailable')
   }
+
   return tabId
 }
 
@@ -114,12 +117,16 @@ async function readRendererOwnership(
   return page.evaluate((tabId) => {
     const layout = window.__store?.getState().terminalLayoutsByTabId[tabId]
     const manager = window.__paneManagers?.get(tabId)
+
     const surface = document.querySelector(
       `[data-terminal-tab-id="${CSS.escape(tabId)}"][data-terminal-layout-leaf-ids]`
     )
+
     const countLeaves = (node: TerminalLayoutSnapshot['root']): number =>
       !node ? 0 : node.type === 'leaf' ? 1 : countLeaves(node.first) + countLeaves(node.second)
+
     const ptyIds = Object.values(layout?.ptyIdsByLeafId ?? {})
+
     return {
       paneCount: manager?.getPanes?.().length ?? 0,
       xtermCount: surface?.querySelectorAll('.xterm').length ?? 0,
@@ -138,8 +145,10 @@ async function readMainStreamingFrame(
 ): Promise<number | null> {
   const content = await page.evaluate(async (ptyId) => {
     const snapshot = await window.api.pty.getMainBufferSnapshot(ptyId, { scrollbackRows: 0 })
+
     return snapshot?.data ?? null
   }, ptyId)
+
   return findMarkerFrame(content ?? '', marker)
 }
 
@@ -161,18 +170,23 @@ async function readRevealFrameDiagnostics(
   marker: string
 ): Promise<RevealFrameDiagnostics> {
   const screen = await readActiveScreen(page, tabId)
+
   const serialized =
     (await page.evaluate((tabId) => {
       // Same pane resolution as readActiveScreen, so both halves describe one pane.
       const manager = window.__paneManagers?.get(tabId)
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+
       return pane?.serializeAddon?.serialize?.() ?? null
     }, tabId)) ?? ''
+
   const prefix = `${marker} frame `
   const markerOffsets: number[] = []
+
   for (let at = serialized.indexOf(prefix); at >= 0; at = serialized.indexOf(prefix, at + 1)) {
     markerOffsets.push(at)
   }
+
   return {
     bufferType: screen?.bufferType ?? null,
     screenFrame: screen ? findMarkerFrame(screen.rows.join('\n'), marker) : null,
@@ -188,6 +202,7 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
     : ''
+
   test.skip(!repoPath || !existsSync(repoPath), 'Seeded E2E repository is unavailable')
 
   const session = createRestartSession(testInfo)
@@ -217,17 +232,21 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
     const restoredTabId = await waitForRestoredTerminal(secondLaunch.page, worktreeId)
     await waitForTerminalOutput(secondLaunch.page, marker, 20_000)
     const frameBeforeHide = await readMainStreamingFrame(secondLaunch.page, firstPtyId, marker)
+
     if (frameBeforeHide === null) {
       throw new Error('Authoritative TUI frame was unavailable before hiding the restored tab')
     }
 
     const siblingTabId = await secondLaunch.page.evaluate((worktreeId) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Renderer store unavailable')
       }
+
       return store.getState().createTab(worktreeId, undefined, undefined, { activate: false }).id
     }, worktreeId)
+
     await secondLaunch.page.evaluate(
       (tabId) => window.__store?.getState().setActiveTab(tabId),
       siblingTabId
@@ -235,9 +254,11 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
     await expect
       .poll(() => getActiveTabId(secondLaunch.page), { timeout: 10_000 })
       .toBe(siblingTabId)
+
     const restoredSurface = secondLaunch.page.locator(
       `[data-terminal-tab-id=${JSON.stringify(restoredTabId)}]`
     )
+
     await expect(restoredSurface).toBeHidden()
     await expect
       .poll(() => readMainStreamingFrame(secondLaunch.page, firstPtyId, marker), {
@@ -246,9 +267,11 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
       })
       .toBeGreaterThan(frameBeforeHide)
     const hiddenFrame = await readMainStreamingFrame(secondLaunch.page, firstPtyId, marker)
+
     if (hiddenFrame === null || hiddenFrame <= frameBeforeHide) {
       throw new Error('Authoritative TUI output did not remain advanced while the tab was hidden')
     }
+
     await secondLaunch.page.evaluate(
       (tabId) => window.__store?.getState().setActiveTab(tabId),
       restoredTabId
@@ -268,6 +291,7 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
         uniquePtyCount: 1
       })
     let revealFailure: unknown = null
+
     try {
       await expect
         .poll(() => readRenderedAltScreenFrame(secondLaunch.page, restoredTabId, marker), {
@@ -286,35 +310,43 @@ test('repairs duplicate persisted PTY renderers before streaming tab reveal', as
       // Diagnostics are more page reads, so a dead page has to degrade to a note in the
       // attachment rather than replacing the failure the attachment exists to explain.
       revealFailure = error
+
       const diagnostics = await readRevealFrameDiagnostics(
         secondLaunch.page,
         restoredTabId,
         marker
       ).catch((diagnosticsError: unknown) => ({ diagnosticsError: String(diagnosticsError) }))
+
       await testInfo.attach('duplicate-pty-reveal-frame-diagnostics.json', {
         body: JSON.stringify(diagnostics, null, 2),
         contentType: 'application/json'
       })
     }
+
     // Evidence for both outcomes; a capture that fails must not become the verdict.
     const screenshot = await secondLaunch.page.screenshot().catch(() => null)
+
     if (screenshot) {
       await testInfo.attach('duplicate-pty-renderer-after-reveal.png', {
         body: screenshot,
         contentType: 'image/png'
       })
     }
+
     if (revealFailure) {
       throw revealFailure
     }
   } finally {
     tui.cleanup()
+
     if (secondApp) {
       await session.close(secondApp)
     }
+
     if (firstApp) {
       await session.close(firstApp)
     }
+
     await session.dispose()
   }
 })

@@ -94,6 +94,7 @@ describe('Session terminal control', () => {
   function withPlatform(platform: NodeJS.Platform, run: () => void): void {
     const original = process.platform
     Object.defineProperty(process, 'platform', { value: platform })
+
     try {
       run()
     } finally {

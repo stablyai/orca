@@ -51,6 +51,7 @@ describe('session tabs retirement proof delta', () => {
     const project = createSessionTabsRetirementProofDelta([
       SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
     ])
+
     expect(project(frame(1, [proof(1)]))).toEqual(frame(1, [proof(1)]))
     expect(project(frame(2, [proof(1)]))).toEqual(frame(2, []))
     expect(project(frame(3, [proof(1), proof(2)]))).toEqual(frame(3, [proof(2)]))
@@ -61,6 +62,7 @@ describe('session tabs retirement proof delta', () => {
     const project = createSessionTabsRetirementProofDelta([
       SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
     ])
+
     project(frame(1, [proof(1)]))
     // Surface revived: the host dropped the proof and publishes an empty list.
     expect(project(frame(2, []))).toEqual(frame(2, []))
@@ -71,6 +73,7 @@ describe('session tabs retirement proof delta', () => {
     const project = createSessionTabsRetirementProofDelta([
       SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
     ])
+
     project(frame(1, [proof(1)]))
     project({ ...frame(2), removed: true } as RuntimeMobileSessionTabsResult)
     expect(project(frame(3, [proof(1)]))).toEqual(frame(3, [proof(1)]))
@@ -85,6 +88,7 @@ describe('session.tabs.subscribe retirement proof payload', () => {
   // Real identities are UUID-sized: tab/leaf/pty ids and `term_<uuid>` handles.
   const uuid = (index: number): string =>
     `${index.toString(16).padStart(8, '0')}-4a1b-4c2d-8e3f-000000000000`
+
   const proofs = Array.from({ length: 64 }, (_, index) => ({
     parentTabId: `terminal-${uuid(index)}`,
     leafId: uuid(index + 1000),
@@ -98,6 +102,7 @@ describe('session.tabs.subscribe retirement proof payload', () => {
     tick: string
   }> {
     let listener: ((snapshot: RuntimeMobileSessionTabsResult) => void) | undefined
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getClientSettings: () => ({}),
@@ -106,10 +111,12 @@ describe('session.tabs.subscribe retirement proof payload', () => {
       onMobileSessionTabsChanged: vi.fn(
         (next: (snapshot: RuntimeMobileSessionTabsResult) => void) => {
           listener = next
+
           return () => {}
         }
       )
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
     const messages: string[] = []
     await dispatcher.dispatchStreaming(
@@ -124,6 +131,7 @@ describe('session.tabs.subscribe retirement proof payload', () => {
     )
     // An OSC title change bumps the version and republishes the same 64 proofs.
     listener!(frame(2, proofs))
+
     return { initial: messages[0]!, tick: messages[1]! }
   }
 
@@ -131,9 +139,11 @@ describe('session.tabs.subscribe retirement proof payload', () => {
   // resets on its new connection generation — so the first frame must carry the full set.
   it('resends the full proof set on the first frame of a fresh stream', async () => {
     const first = await subscribeAndTick([SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY])
+
     const reconnected = await subscribeAndTick([
       SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
     ])
+
     expect(JSON.parse(first.initial).result.retiredTerminalSurfaces).toEqual(proofs)
     expect(JSON.parse(reconnected.initial).result.retiredTerminalSurfaces).toEqual(proofs)
   })

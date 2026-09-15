@@ -9,6 +9,7 @@ import {
 
 function settings(): GlobalSettings {
   const base = getDefaultSettings('/tmp')
+
   return {
     ...base,
     sourceControlAi: {

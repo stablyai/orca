@@ -28,7 +28,9 @@ function readRepoInstructionOverride(
   if (!Object.hasOwn(instructions ?? {}, operation)) {
     return undefined
   }
+
   const instruction = instructions?.[operation]
+
   return typeof instruction === 'string' ? instruction : undefined
 }
 
@@ -42,13 +44,17 @@ export function resolveInstructionsFromNormalized(
     repoOverrides?.instructionsByOperation,
     operation
   )
+
   if (repoInstruction !== undefined) {
     return repoInstruction.trim()
   }
+
   const globalInstruction = source.instructionsByOperation[operation]
+
   if (typeof globalInstruction === 'string') {
     return globalInstruction.trim()
   }
+
   return operation === 'commitMessage' ? (legacyCustomPrompt ?? '').trim() : ''
 }
 
@@ -61,6 +67,7 @@ export function resolveSourceControlAiInstructions(args: {
     args.settings.sourceControlAi,
     args.settings.commitMessageAi
   )
+
   return resolveInstructionsFromNormalized(
     source,
     normalizeRepoSourceControlAiOverrides(args.repo?.sourceControlAi),
@@ -78,6 +85,7 @@ export function hasConfiguredSourceControlAiInstructions(args: {
     normalizeRepoSourceControlAiOverrides(args.repo?.sourceControlAi)?.instructionsByOperation,
     args.operation
   )
+
   return repoInstruction !== undefined || resolveSourceControlAiInstructions(args).length > 0
 }
 
@@ -91,7 +99,9 @@ export function resolvePrCreationDefaults(
     ...productDefaults,
     ...source.prCreationDefaults
   }
+
   const repoDefaults = repoOverrides?.prCreationDefaults
+
   return repoDefaults
     ? {
         draft: repoDefaults.draft ?? base.draft,
@@ -109,24 +119,29 @@ export function resolveActionRecipeForTextOperation(
 ): { agentId?: TuiAgent | CustomAgentId | null; commandInputTemplate: string; agentArgs?: string } {
   const globalRecipe = readSourceControlActionDefault(source.actions, operation)
   const repoRecipe = repoOverrides?.actionOverrides?.[operation]
+
   const repoInstruction = readRepoInstructionOverride(
     repoOverrides?.instructionsByOperation,
     operation
   )
+
   const fallbackTemplate =
     repoInstruction !== undefined
       ? commandTemplateFromOperationInstruction(operation, repoInstruction)
       : resolveSourceControlActionCommandTemplate(source.actions, operation)
+
   const repoTemplate =
     typeof repoRecipe?.commandInputTemplate === 'string'
       ? repoRecipe.commandInputTemplate.trim()
       : undefined
+
   const repoAgentArgs =
     typeof repoRecipe?.agentArgs === 'string'
       ? repoRecipe.agentArgs.trim()
       : repoRecipe?.agentArgs === null
         ? ''
         : undefined
+
   return {
     ...(repoRecipe?.agentId !== undefined
       ? { agentId: repoRecipe.agentId }
@@ -156,6 +171,7 @@ export function resolveSourceControlAiPrCreationDefaults(input: {
     input.settings.sourceControlAi,
     input.settings.commitMessageAi
   )
+
   return resolvePrCreationDefaults(
     source,
     normalizeRepoSourceControlAiOverrides(input.repo?.sourceControlAi),
@@ -171,6 +187,7 @@ export function resolveSourceControlAiEnabled(input: {
     input.settings?.sourceControlAi,
     input.settings?.commitMessageAi
   )
+
   return (
     normalizeRepoSourceControlAiOverrides(input.repo?.sourceControlAi)?.enabled ?? source.enabled
   )
@@ -185,13 +202,17 @@ export function resolveSourceControlActionRecipe(input: {
     input.settings?.sourceControlAi,
     input.settings?.commitMessageAi
   )
+
   const globalRecipe = readSourceControlActionDefault(source.actions, input.actionId)
+
   const repoRecipe = normalizeRepoSourceControlAiOverrides(input.repo?.sourceControlAi)
     ?.actionOverrides?.[input.actionId]
+
   const commandInputTemplate = resolveSourceControlActionCommandTemplate(
     source.actions,
     input.actionId
   )
+
   return repoRecipe
     ? {
         ...globalRecipe,

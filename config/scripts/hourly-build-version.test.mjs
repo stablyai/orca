@@ -140,6 +140,7 @@ describe('getHourlyBuildIdentity', () => {
         '1.4.203 • 04 • Sep 13, 9:17PM • 2ce252f'
       ]
     })
+
     expect(identity.version).toBe('1.4.203-hourly.202609142000')
     expect(identity.buildNumber).toBe(5)
   })

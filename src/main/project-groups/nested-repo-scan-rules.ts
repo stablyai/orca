@@ -37,6 +37,7 @@ export type NormalizedNestedRepoScanOptions = {
 }
 
 const DEFAULT_MAX_DEPTH = 3
+
 const DEFAULT_MAX_REPOS = 100
 
 const SKIPPED_DIRS = new Set([
@@ -55,6 +56,7 @@ const VCS_METADATA_DIRS = new Set(['.git', '.svn', '.hg', '.jj', '.sl', '.repo',
 
 export function normalizeNestedRepoScanOptions(options: unknown): NormalizedNestedRepoScanOptions {
   const raw = options && typeof options === 'object' ? (options as NestedRepoScanOptions) : {}
+
   return {
     maxDepth:
       typeof raw.maxDepth === 'number' && Number.isFinite(raw.maxDepth)
@@ -77,9 +79,11 @@ function shouldSkipDirectory(name: string, depth: number): boolean {
   if (VCS_METADATA_DIRS.has(name)) {
     return true
   }
+
   if (SKIPPED_DIRS.has(name)) {
     return true
   }
+
   return depth > 0 && name.startsWith('.')
 }
 
@@ -87,7 +91,9 @@ function compileGlobSegment(pattern: string): string | RegExp {
   if (!pattern.includes('*') && !pattern.includes('?')) {
     return pattern
   }
+
   const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+
   return new RegExp(`^${escaped.replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]')}$`)
 }
 
@@ -103,19 +109,23 @@ function pathSegmentsMatch(
     if (patternIndex >= patternSegments.length) {
       return candidateIndex >= candidateSegments.length
     }
+
     const pattern = patternSegments[patternIndex]
+
     if (pattern === '**') {
       return (
         matchFrom(patternIndex + 1, candidateIndex) ||
         (candidateIndex < candidateSegments.length && matchFrom(patternIndex, candidateIndex + 1))
       )
     }
+
     return (
       candidateIndex < candidateSegments.length &&
       globSegmentMatches(pattern, candidateSegments[candidateIndex] ?? '') &&
       matchFrom(patternIndex + 1, candidateIndex + 1)
     )
   }
+
   return matchFrom(0, 0)
 }
 
@@ -130,6 +140,7 @@ function parseGitignoreRules(content: string, baseSegments: string[]): IgnoreRul
       const anchored = unprefixed.startsWith('/')
       const pattern = unprefixed.replace(/^\/+/, '').replace(/\/+$/, '')
       const basenameOnly = !anchored && !pattern.includes('/')
+
       return {
         pattern,
         segmentPatterns: basenameOnly
@@ -151,18 +162,23 @@ export function isIgnoredNestedRepoDirectory(
   rules: IgnoreRule[]
 ): boolean {
   let ignored = false
+
   for (const rule of rules) {
     if (segments.length <= rule.baseSegments.length) {
       continue
     }
+
     const relativeSegments = segments.slice(rule.baseSegments.length)
+
     const matches = rule.basenameOnly
       ? relativeSegments.some((segment) => globSegmentMatches(rule.segmentPatterns[0], segment))
       : pathSegmentsMatch(rule.segmentPatterns, relativeSegments)
+
     if (matches) {
       ignored = !rule.negate
     }
   }
+
   return ignored || shouldSkipDirectory(name, segments.length - 1)
 }
 
@@ -175,10 +191,12 @@ export async function readNestedRepoGitignoreRules(args: {
   if (!args.filesystem.readTextFile || !args.entries.some((entry) => entry.name === '.gitignore')) {
     return []
   }
+
   try {
     const content = await args.filesystem.readTextFile(
       args.filesystem.joinPath(args.folderPath, '.gitignore')
     )
+
     return parseGitignoreRules(content, args.baseSegments)
   } catch {
     return []

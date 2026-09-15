@@ -15,24 +15,28 @@ function accountStatusCopy(
   if (state === 'connected') {
     return email ?? translate('auto.components.settings.orcaAccount.connected', 'Connected')
   }
+
   if (state === 'reconnect-required') {
     return translate(
       'auto.components.settings.orcaAccount.reconnectRequired',
       'Your session expired. Sign in again to use cloud features.'
     )
   }
+
   if (state === 'unconfigured') {
     return translate(
       'auto.components.settings.orcaAccount.unavailable',
       'Orca sign-in is unavailable in this build.'
     )
   }
+
   if (state === 'local') {
     return translate(
       'auto.components.settings.orcaAccount.signedOut',
       'Sign in to extend Orca with cloud features, including Artifacts and Orca Relay.'
     )
   }
+
   return translate('auto.components.settings.orcaAccount.checking', 'Checking account status…')
 }
 
@@ -74,9 +78,11 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
     if (signingOut) {
       return
     }
+
     setSigningOut(true)
     const result = await signOut()
     setSigningOut(false)
+
     if (result) {
       setSignOutOpen(false)
     }

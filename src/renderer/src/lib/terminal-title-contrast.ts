@@ -12,6 +12,7 @@ const NAMED_TERMINAL_BACKGROUND_COLORS: Record<string, RgbaColor> = {
 }
 
 const LIGHT_SURFACE_CONTRAST_REFERENCE = { r: 0, g: 0, b: 0 }
+
 const DARK_SURFACE_CONTRAST_REFERENCE = { r: 255, g: 255, b: 255 }
 
 export function isTerminalBackgroundLight(
@@ -19,6 +20,7 @@ export function isTerminalBackgroundLight(
   options: { backgroundOpacity?: number; appSurface?: 'dark' | 'light' } = {}
 ): boolean {
   const composited = compositeTerminalBackground(background, options)
+
   if (!composited) {
     return false
   }
@@ -34,6 +36,7 @@ export function resolveOpaqueTerminalBackground(
   options: { backgroundOpacity?: number; appSurface?: 'dark' | 'light' } = {}
 ): string | null {
   const composited = compositeTerminalBackground(background, options)
+
   return composited ? `rgb(${composited.r} ${composited.g} ${composited.b})` : null
 }
 
@@ -42,6 +45,7 @@ function compositeTerminalBackground(
   options: { backgroundOpacity?: number; appSurface?: 'dark' | 'light' } = {}
 ): RgbaColor | null {
   const color = parseCssRgbColor(background)
+
   if (!color) {
     return null
   }
@@ -50,23 +54,28 @@ function compositeTerminalBackground(
   // so title UI must use the composited color rather than the raw alpha color.
   const alpha = clampNumber(color.a * (options.backgroundOpacity ?? 1), 0, 1)
   const appSurface = APP_SURFACE_COLORS[options.appSurface ?? 'dark']
+
   return alpha < 1 ? compositeRgb(color, appSurface, alpha) : { ...color, a: 1 }
 }
 
 function parseCssRgbColor(color: string | undefined): RgbaColor | null {
   const value = color?.trim().toLowerCase()
+
   if (!value) {
     return null
   }
 
   const named = NAMED_TERMINAL_BACKGROUND_COLORS[value]
+
   if (named) {
     return named
   }
 
   const hexMatch = value.match(/^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i)
+
   if (hexMatch) {
     const hex = hexMatch[1]
+
     const channels =
       hex.length === 3 || hex.length === 4
         ? hex
@@ -76,6 +85,7 @@ function parseCssRgbColor(color: string | undefined): RgbaColor | null {
         : [hex.slice(0, 2), hex.slice(2, 4), hex.slice(4, 6), hex.slice(6, 8)]
             .filter((part) => part.length > 0)
             .map((part) => Number.parseInt(part, 16))
+
     return {
       r: channels[0],
       g: channels[1],
@@ -85,6 +95,7 @@ function parseCssRgbColor(color: string | undefined): RgbaColor | null {
   }
 
   const rgbMatch = value.match(/^rgba?\((.+)\)$/)
+
   if (!rgbMatch) {
     return null
   }
@@ -92,17 +103,23 @@ function parseCssRgbColor(color: string | undefined): RgbaColor | null {
   const parts = rgbMatch[1].includes(',')
     ? rgbMatch[1].split(',').map((part) => part.trim())
     : getCssRgbFunctionWhitespaceParts(rgbMatch[1], 4)
+
   if (parts.length < 3) {
     return null
   }
+
   const channels = parts.slice(0, 3).map(parseCssRgbChannel)
+
   if (channels.some((channel) => channel === null)) {
     return null
   }
+
   const alpha = parts[3] === undefined ? 1 : parseCssAlpha(parts[3])
+
   if (alpha === null) {
     return null
   }
+
   return { r: channels[0]!, g: channels[1]!, b: channels[2]!, a: alpha }
 }
 
@@ -114,15 +131,19 @@ function getCssRgbFunctionWhitespaceParts(body: string, maxParts: number): strin
 
   for (let index = 0; index <= body.length; index += 1) {
     const isEnd = index === body.length
+
     if (!isEnd && !isCssRgbFunctionWhitespaceSeparator(body.charCodeAt(index))) {
       if (tokenStart === -1) {
         tokenStart = index
       }
+
       continue
     }
+
     if (tokenStart !== -1) {
       parts.push(body.slice(tokenStart, index))
       tokenStart = -1
+
       if (parts.length >= maxParts) {
         break
       }
@@ -151,23 +172,29 @@ function isCssRgbFunctionWhitespaceSeparator(code: number): boolean {
 
 function parseCssRgbChannel(channel: string): number | null {
   const trimmed = channel.trim()
+
   const value = trimmed.endsWith('%')
     ? (Number.parseFloat(trimmed.slice(0, -1)) / 100) * 255
     : Number.parseFloat(trimmed)
+
   if (!Number.isFinite(value)) {
     return null
   }
+
   return Math.min(255, Math.max(0, Math.round(value)))
 }
 
 function parseCssAlpha(alpha: string): number | null {
   const trimmed = alpha.trim()
+
   const value = trimmed.endsWith('%')
     ? Number.parseFloat(trimmed.slice(0, -1)) / 100
     : Number.parseFloat(trimmed)
+
   if (!Number.isFinite(value)) {
     return null
   }
+
   return clampNumber(value, 0, 1)
 }
 
@@ -183,8 +210,10 @@ function compositeRgb(foreground: RgbaColor, background: RgbaColor, alpha: numbe
 function relativeLuminance(rgb: Pick<RgbaColor, 'r' | 'g' | 'b'>): number {
   const toLinear = (channel: number): number => {
     const normalized = channel / 255
+
     return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4
   }
+
   return 0.2126 * toLinear(rgb.r) + 0.7152 * toLinear(rgb.g) + 0.0722 * toLinear(rgb.b)
 }
 
@@ -196,6 +225,7 @@ function contrastRatio(
   const backgroundLuminance = relativeLuminance(background)
   const lighter = Math.max(foregroundLuminance, backgroundLuminance)
   const darker = Math.min(foregroundLuminance, backgroundLuminance)
+
   return (lighter + 0.05) / (darker + 0.05)
 }
 

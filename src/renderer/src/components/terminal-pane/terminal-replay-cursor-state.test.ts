@@ -43,11 +43,13 @@ type XtermWithCoreService = Terminal & {
 function readDecPrivateCursorState(term: Terminal): DecPrivateCursorState {
   const core = (term as XtermWithCoreService)._core
   const cursorState = core?.coreService?.decPrivateModes ?? core?._coreService?.decPrivateModes
+
   return cursorState ? { ...cursorState } : {}
 }
 
 function readCursorHidden(term: Terminal): boolean | undefined {
   const core = (term as XtermWithCoreService)._core
+
   return core?.coreService?.isCursorHidden ?? core?._coreService?.isCursorHidden
 }
 
@@ -58,6 +60,7 @@ function readSendFocus(term: Terminal): boolean | undefined {
 function readKittyKeyboardState(term: Terminal): KittyKeyboardState | null {
   const core = (term as XtermWithCoreService)._core
   const keyboardState = core?.coreService?.kittyKeyboard ?? core?._coreService?.kittyKeyboard
+
   return keyboardState
     ? {
         flags: keyboardState.flags,
@@ -218,6 +221,7 @@ describe('terminal replay state reset', () => {
       rows: 24,
       allowProposedApi: true
     })
+
     try {
       await writeTerminal(term, '\x1b[?1004h')
       expect(readSendFocus(term)).toBe(true)
@@ -258,6 +262,7 @@ describe('terminal replay state reset', () => {
       rows: 24,
       allowProposedApi: true
     })
+
     try {
       await writeTerminal(term, '\x1b[?1004h')
       expect(readSendFocus(term)).toBe(true)
@@ -314,6 +319,7 @@ describe('terminal replay state reset', () => {
 
   it('disarms mouse input when a hidden replay lands on the normal shell buffer', async () => {
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+
     try {
       await writeTerminal(term, '\x1b[?1003h\x1b[?1006h\x1b[?1049hTUI FRAME\x1b[?1049lSHELL MARKER')
       expect(term.buffer.active.type).toBe('normal')
@@ -331,6 +337,7 @@ describe('terminal replay state reset', () => {
 
   it('preserves mouse input for a live alternate-screen replay', async () => {
     const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+
     try {
       await writeTerminal(term, '\x1b[?1003h\x1b[?1006h\x1b[?1049hLIVE TUI')
       await writeTerminal(term, POST_REPLAY_LIVE_SNAPSHOT_RESET)

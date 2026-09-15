@@ -18,7 +18,9 @@ import {
 export const LOCAL_RUNTIME_TARGET: RuntimeClientTarget = { kind: 'local' }
 
 let discoveryGeneration = 0
+
 let pendingDiscoveryByTarget = new Map<string, Promise<SkillDiscoveryResult>>()
+
 let pendingDiscoverySatisfiesForcedRefreshByTarget = new Map<string, boolean>()
 
 /** Last completed scan for a runtime-scoped key, for a synchronous first render. */
@@ -29,6 +31,7 @@ export function getCachedSkillDiscovery(key: string): SkillDiscoveryResult | nul
 /** Invalidate every cached scan and tell mounted hooks to re-scan (e.g. after an install). */
 export function notifyInstalledAgentSkillsChanged(): void {
   invalidateInstalledAgentSkillDiscovery()
+
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent(INSTALLED_AGENT_SKILLS_CHANGED_EVENT))
   }
@@ -49,9 +52,12 @@ export function evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(
   for (const environmentId of environmentIds) {
     const key = getRuntimeScopedSkillDiscoveryKey({ kind: 'environment', environmentId }, undefined)
     const filteredPrefix = `[${JSON.stringify(key)},`
+
     const belongsToRuntime = (candidate: string): boolean =>
       candidate === key || candidate.startsWith(filteredPrefix)
+
     deleteInstalledAgentSkillDiscoveryCache(belongsToRuntime)
+
     for (const pendingKey of pendingDiscoveryByTarget.keys()) {
       if (belongsToRuntime(pendingKey)) {
         pendingDiscoveryByTarget.delete(pendingKey)
@@ -76,18 +82,23 @@ function normalizeSkillDiscoveryTarget(
   const requestedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean) ?? []
   const targetNames = target?.names?.map((name) => name.trim().toLowerCase()).filter(Boolean) ?? []
   const effectiveNames = [...new Set(requestedNames.length > 0 ? requestedNames : targetNames)]
+
   const effectiveSourceKinds = [
     ...new Set(sourceKinds?.length ? sourceKinds : (target?.sourceKinds ?? []))
   ]
+
   const filters = {
     ...(effectiveNames?.length ? { names: [...effectiveNames] } : {}),
     ...(effectiveSourceKinds?.length ? { sourceKinds: [...effectiveSourceKinds] } : {})
   }
+
   const projectRuntime = target?.projectRuntime
+
   if (projectRuntime) {
     if (projectRuntime.status === 'repair-required') {
       return { projectRuntime, ...filters }
     }
+
     if (projectRuntime.runtime.kind === 'wsl') {
       return {
         runtime: 'wsl',
@@ -96,6 +107,7 @@ function normalizeSkillDiscoveryTarget(
         ...filters
       }
     }
+
     return {
       runtime: 'host',
       projectRuntime,
@@ -106,6 +118,7 @@ function normalizeSkillDiscoveryTarget(
   if (target?.runtime !== 'wsl') {
     return Object.keys(filters).length > 0 ? filters : undefined
   }
+
   return { runtime: 'wsl', wslDistro: target.wslDistro?.trim() || null, ...filters }
 }
 
@@ -128,6 +141,7 @@ function getNormalizedSkillDiscoveryRuntimeKey(target: SkillDiscoveryTarget | un
       ? target.projectRuntime.runtime.cacheKey
       : target.projectRuntime.repair.cacheKey
   }
+
   return target?.runtime === 'wsl' ? `wsl:${target.wslDistro ?? ''}` : 'host'
 }
 
@@ -137,6 +151,7 @@ export function getSkillDiscoveryTargetKey(
   sourceKinds?: readonly SkillSourceKind[]
 ): string {
   const normalizedTarget = normalizeSkillDiscoveryTarget(target, names, sourceKinds)
+
   return appendSkillDiscoveryFiltersToKey(
     getNormalizedSkillDiscoveryRuntimeKey(normalizedTarget),
     normalizedTarget
@@ -155,10 +170,12 @@ export function getRuntimeScopedSkillDiscoveryKey(
   sourceKinds?: readonly SkillSourceKind[]
 ): string {
   const normalizedTarget = normalizeSkillDiscoveryTarget(target, names, sourceKinds)
+
   const runtimeKey =
     runtimeTarget.kind === 'environment'
       ? `runtime:${runtimeTarget.environmentId}`
       : getNormalizedSkillDiscoveryRuntimeKey(normalizedTarget)
+
   return appendSkillDiscoveryFiltersToKey(runtimeKey, normalizedTarget)
 }
 
@@ -175,11 +192,13 @@ function startInstalledAgentSkillDiscovery(
   // Why: a forced caller knows disk changed (install finished, explicit recheck),
   // so it must also bypass the host's shared scans — not just this window's cache.
   const requestTarget = force ? { ...normalizedTarget, refresh: true } : normalizedTarget
+
   const discovery = discoverSkillsForRuntimeTarget(runtimeTarget, requestTarget)
     .then((result) => {
       if (generation === discoveryGeneration && pendingDiscoveryByTarget.get(key) === discovery) {
         writeInstalledAgentSkillDiscoveryCache(key, result)
       }
+
       return result
     })
     .finally(() => {
@@ -188,8 +207,10 @@ function startInstalledAgentSkillDiscovery(
         pendingDiscoverySatisfiesForcedRefreshByTarget.delete(key)
       }
     })
+
   pendingDiscoveryByTarget.set(key, discovery)
   pendingDiscoverySatisfiesForcedRefreshByTarget.set(key, force)
+
   return discovery
 }
 
@@ -205,27 +226,33 @@ export async function discoverInstalledAgentSkills(
   sourceKinds?: readonly SkillSourceKind[]
 ): Promise<SkillDiscoveryResult> {
   const key = getRuntimeScopedSkillDiscoveryKey(runtimeTarget, target, names, sourceKinds)
+
   if (!force) {
     // Why: only a cache-serving read should refresh recency — a forced refresh
     // discards the entry it would otherwise promote.
     const cachedDiscovery = readInstalledAgentSkillDiscoveryCache(key)
+
     if (cachedDiscovery) {
       return cachedDiscovery
     }
   }
 
   const inFlightDiscovery = pendingDiscoveryByTarget.get(key)
+
   if (inFlightDiscovery) {
     if (!force || pendingDiscoverySatisfiesForcedRefreshByTarget.get(key)) {
       return inFlightDiscovery
     }
+
     try {
       await inFlightDiscovery
     } catch {
       // Why: an explicit re-check should still read current disk state even if
       // the older background scan failed.
     }
+
     const nextPendingDiscovery = pendingDiscoveryByTarget.get(key)
+
     if (nextPendingDiscovery && nextPendingDiscovery !== inFlightDiscovery) {
       return nextPendingDiscovery
     }

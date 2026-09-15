@@ -37,6 +37,7 @@ export async function prepareBrowserClientHostPlacement(
   const initialEnvironment = options.resolveEnvironment(options.selector)
   const pairingRevision = requireCurrentPairing(initialEnvironment, options.expectedPairingRevision)
   const response = await options.getStatus(initialEnvironment.id)
+
   if (!response.ok) {
     // Why server instead of a throw: an unanswered probe never told us whether this host can
     // client-host, and every create probes now that the renderer no longer gates on cached
@@ -45,12 +46,16 @@ export async function prepareBrowserClientHostPlacement(
     // this rides the same link and reports a genuinely dead connection itself.
     return SERVER_PLACEMENT
   }
+
   const status = response.result
+
   if (status.runtimeId !== response._meta.runtimeId) {
     throw new Error('browser_client_host_runtime_identity_changed')
   }
+
   const environment = options.resolveEnvironment(initialEnvironment.id)
   requireCurrentPairing(environment, pairingRevision)
+
   if (
     !expectsBrowserClientHosting({
       enabled: options.enabled,
@@ -61,6 +66,7 @@ export async function prepareBrowserClientHostPlacement(
   ) {
     return SERVER_PLACEMENT
   }
+
   if (status.graphStatus !== 'ready') {
     throw new Error('browser_client_host_runtime_not_ready')
   }
@@ -69,9 +75,12 @@ export async function prepareBrowserClientHostPlacement(
     environment,
     authorityRuntimeId: status.runtimeId
   })
+
   const currentEnvironment = options.resolveEnvironment(initialEnvironment.id)
+
   try {
     requireCurrentPairing(currentEnvironment, pairingRevision)
+
     if (authority.authorityRuntimeId !== status.runtimeId) {
       throw new Error('browser_client_host_runtime_identity_changed')
     }
@@ -80,6 +89,7 @@ export async function prepareBrowserClientHostPlacement(
     await options.closeHost(initialEnvironment.id, reason).catch(() => false)
     throw reason
   }
+
   return Object.freeze({
     kind: 'client',
     browserHostClientId: authority.browserHostClientId
@@ -91,8 +101,10 @@ function requireCurrentPairing(
   expectedRevision: number | undefined
 ): number {
   const revision = environment.pairingRevision ?? environment.createdAt
+
   if (expectedRevision !== undefined && revision !== expectedRevision) {
     throw new Error('browser_client_host_pairing_changed')
   }
+
   return revision
 }

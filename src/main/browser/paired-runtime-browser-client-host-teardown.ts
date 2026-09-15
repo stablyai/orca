@@ -34,11 +34,13 @@ export async function closeBrowserClientHostComposition(
 ): Promise<boolean> {
   const failures: unknown[] = []
   let handlersSettled = false
+
   try {
     handlersSettled = await input.host.close(input.error)
   } catch (hostError) {
     failures.push(hostError)
   }
+
   if (handlersSettled) {
     try {
       await input.executor.close()
@@ -52,14 +54,17 @@ export async function closeBrowserClientHostComposition(
       input.reportCleanupError(asCompositionError(cleanupError))
     )
   }
+
   try {
     await input.routeSets.close(input.error)
   } catch (routeError) {
     failures.push(routeError)
   }
+
   if (failures.length > 0) {
     throw new AggregateError(failures, 'Browser client host composition cleanup failed')
   }
+
   return handlersSettled
 }
 

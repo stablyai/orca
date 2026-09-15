@@ -13,9 +13,11 @@ import {
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -43,8 +45,10 @@ describe('useMobileDefaultSessionViewPreference', () => {
   async function mount(): Promise<void> {
     function Harness(): null {
       preference = useMobileDefaultSessionViewPreference()
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
       await Promise.resolve()

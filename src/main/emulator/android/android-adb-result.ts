@@ -10,5 +10,6 @@ export function ensureAdbOk(result: AndroidCommandResult, label: string): Androi
       `${label} failed: ${(result.stderr || result.stdout).trim() || 'unknown error'}`
     )
   }
+
   return result
 }

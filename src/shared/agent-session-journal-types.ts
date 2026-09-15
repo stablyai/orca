@@ -18,7 +18,9 @@ export { type AgentType }
  *  an older host keeps reading it; the first v3 row latches that host read-only
  *  instead of truncating the epoch. */
 export const AGENT_SESSION_JOURNAL_SCHEMA_VERSION = 3
+
 export const AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION = 3
+
 const AGENT_SESSION_JOURNAL_PRE_TURN_SCHEMA_VERSION = 2
 
 export function journalRowSchemaVersion(bodies: readonly { kind: string }[]): number {
@@ -110,6 +112,7 @@ export type AgentJournalDiffItem = {
 }
 
 export const AGENT_JOURNAL_RESOLUTION_STATES = ['pending', 'resolved', 'cancelled'] as const
+
 export type AgentJournalResolutionState = (typeof AGENT_JOURNAL_RESOLUTION_STATES)[number]
 
 /** Approvals and questions are durable items with explicit resolution state, so
@@ -164,6 +167,7 @@ export const AGENT_JOURNAL_TURN_LIFECYCLE_STATES = [
   'interrupted',
   'unverifiable'
 ] as const
+
 export type AgentJournalTurnLifecycleState = (typeof AGENT_JOURNAL_TURN_LIFECYCLE_STATES)[number]
 
 export type AgentJournalTurnLifecycle = {
@@ -231,6 +235,7 @@ export type AgentJournalRenderItem = {
 // ─── Submissions ────────────────────────────────────────────────────────────
 
 export const AGENT_JOURNAL_DISPATCH_STATES = ['pending', 'accepted', 'rejected', 'unknown'] as const
+
 export type AgentJournalDispatchState = (typeof AGENT_JOURNAL_DISPATCH_STATES)[number]
 
 /** The write-ahead submission row, projected. `unknown` is a displayed state:
@@ -279,4 +284,5 @@ export const AGENT_JOURNAL_RESET_REASONS = [
   'journal_gap',
   'schema_unreadable'
 ] as const
+
 export type AgentJournalResetReason = (typeof AGENT_JOURNAL_RESET_REASONS)[number]

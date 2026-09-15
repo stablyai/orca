@@ -6,6 +6,7 @@ import { getPersistedWorkspaceCleanupActivityAt } from '../../shared/workspace-c
 import type { WorkspaceCleanupGitRoute } from './workspace-cleanup-git-route'
 
 type StatPath = (targetPath: string) => Promise<{ mtimeMs: number }>
+
 type ReadTextFile = (targetPath: string, options?: { tailBytes?: number }) => Promise<string>
 
 // Why: only the newest reflog entry matters; a long-lived main worktree's full
@@ -14,9 +15,11 @@ const REFLOG_TAIL_BYTES = 8192
 
 export function resolvePersistedWorkspaceCleanupActivityWorktree(worktree: Worktree): Worktree {
   const persistedActivityAt = getPersistedWorkspaceCleanupActivityAt(worktree)
+
   if (persistedActivityAt <= worktree.lastActivityAt) {
     return worktree
   }
+
   return { ...worktree, lastActivityAt: persistedActivityAt }
 }
 
@@ -38,14 +41,17 @@ export async function resolveWorkspaceCleanupActivityWorktree(
     readTextFile,
     fsActivityCache
   )
+
   if (activityAt <= worktree.lastActivityAt) {
     return worktree
   }
+
   return { ...worktree, lastActivityAt: activityAt }
 }
 
 async function statLocalPath(targetPath: string): Promise<{ mtimeMs: number }> {
   const stats = await lstat(targetPath)
+
   return { mtimeMs: Number(stats.mtimeMs) }
 }
 
@@ -56,17 +62,22 @@ async function readLocalTextFile(
   if (options?.tailBytes === undefined) {
     return readFile(targetPath, 'utf8')
   }
+
   const handle = await open(targetPath, 'r')
+
   try {
     const { size } = await handle.stat()
     const length = Math.min(options.tailBytes, size)
+
     if (length === 0) {
       return ''
     }
+
     const { buffer, bytesRead } = await handle.read({
       buffer: Buffer.alloc(length),
       position: size - length
     })
+
     return buffer.toString('utf8', 0, bytesRead)
   } finally {
     await handle.close()
@@ -81,6 +92,7 @@ async function resolveWorkspaceCleanupActivityAt(
   fsActivityCache?: WorkspaceCleanupFsActivityCache
 ): Promise<number> {
   const persistedActivityAt = getPersistedWorkspaceCleanupActivityAt(worktree)
+
   // Why: the probes below are local filesystem reads. Statting a remote path here answers
   // about whatever this machine happens to have at that path, or nothing at all.
   if (route.kind !== 'local') {
@@ -88,10 +100,12 @@ async function resolveWorkspaceCleanupActivityAt(
   }
 
   let filesystemActivity = fsActivityCache?.get(worktree.path)
+
   if (!filesystemActivity) {
     filesystemActivity = getNewestLocalWorktreeActivityAt(worktree.path, statPath, readTextFile)
     fsActivityCache?.set(worktree.path, filesystemActivity)
   }
+
   return Math.max(persistedActivityAt, await filesystemActivity)
 }
 
@@ -105,6 +119,7 @@ async function getNewestLocalWorktreeActivityAt(
 ): Promise<number> {
   const gitPath = path.join(worktreePath, '.git')
   const gitDirPath = await readLocalWorktreeGitDir(worktreePath, gitPath, readTextFile)
+
   // Why: every entry here must move only on a user action. Excluded on purpose:
   // the gitdir directory and logs/HEAD (restamped for every linked worktree at
   // once by `git gc` / `git reflog expire`, which made one maintenance run look
@@ -118,11 +133,13 @@ async function getNewestLocalWorktreeActivityAt(
         readNewestReflogEntryAt(path.join(gitDirPath, 'logs', 'HEAD'), readTextFile)
       ]
     : []
+
   const timestamps = await Promise.all([
     readMtime(worktreePath, statPath),
     readMtime(gitPath, statPath),
     ...gitDirProbes
   ])
+
   return Math.max(0, ...timestamps)
 }
 
@@ -138,9 +155,11 @@ async function readNewestReflogEntryAt(
     // entry tolerates that.
     const tail = await readTextFile(reflogPath, { tailBytes: REFLOG_TAIL_BYTES })
     const newestFromTail = parseNewestReflogEntryAt(tail)
+
     if (newestFromTail !== 0 || tail.length === 0) {
       return newestFromTail
     }
+
     // Why: a single record longer than the tail window keeps its timestamp
     // before the window starts; fall back to the full read in that rare case.
     return parseNewestReflogEntryAt(await readTextFile(reflogPath))
@@ -151,13 +170,16 @@ async function readNewestReflogEntryAt(
 
 function parseNewestReflogEntryAt(reflog: string): number {
   const lines = reflog.split('\n')
+
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     // The trailing timezone + tab anchors the capture, so no digit-count floor is needed.
     const seconds = /\s(\d{1,11})\s[-+]\d{4}\t/.exec(lines[index] ?? '')?.[1]
+
     if (seconds) {
       return Number(seconds) * 1000
     }
   }
+
   return 0
 }
 
@@ -169,13 +191,17 @@ async function readLocalWorktreeGitDir(
   try {
     const contents = await readTextFile(gitPath)
     const match = /^gitdir:\s*(.+)\s*$/im.exec(contents)
+
     if (!match) {
       return null
     }
+
     const gitDir = match[1]?.trim()
+
     if (!gitDir) {
       return null
     }
+
     // Why: linked worktrees keep mutable git state outside the worktree; the
     // pointer file mtime alone can miss recent external commits. The pointer is
     // written in the namespace of the git that wrote it, which on Windows may
@@ -189,6 +215,7 @@ async function readLocalWorktreeGitDir(
 async function readMtime(targetPath: string, statPath: StatPath): Promise<number> {
   try {
     const stats = await statPath(targetPath)
+
     return Number.isFinite(stats.mtimeMs) ? stats.mtimeMs : 0
   } catch {
     return 0

@@ -91,6 +91,7 @@ afterEach(() => {
   for (const root of tempRoots) {
     rmSync(root, { recursive: true, force: true })
   }
+
   tempRoots = []
 })
 
@@ -120,12 +121,14 @@ function createHealRig(options: {
   const systemSessionsRoot = join(root, 'real-home', 'sessions')
   const stateDir = join(root, 'state')
   mkdirSync(stateDir, { recursive: true })
+
   const paths: CodexSessionIndexHealPaths = {
     auditLogPath: join(stateDir, 'audit.jsonl'),
     systemSessionsRoot,
     healLedgerPath: join(stateDir, 'index-heal-ledger.jsonl'),
     healMarkerPath: join(stateDir, 'index-heal-complete.json')
   }
+
   for (const [index, audited] of (options.auditedThreads ?? []).entries()) {
     appendFileSync(
       paths.auditLogPath,
@@ -138,10 +141,12 @@ function createHealRig(options: {
       })}\n`
     )
   }
+
   const stubPath = join(root, 'stub-app-server.cjs')
   writeFileSync(stubPath, STUB_SERVER_SOURCE)
   const readLogFile = join(root, 'reads.jsonl')
   writeFileSync(readLogFile, '')
+
   return {
     paths,
     readLogFile,
@@ -169,6 +174,7 @@ function createHealRig(options: {
           (line) =>
             JSON.parse(line) as { serverStart?: boolean; threadId?: string; maxInFlight?: number }
         )
+
       return {
         serverStarts: lines.filter((line) => line.serverStart).length,
         threadIds: lines.map((line) => line.threadId).filter((id): id is string => Boolean(id)),
@@ -180,12 +186,15 @@ function createHealRig(options: {
 
 function readLedgerOutcomes(paths: CodexSessionIndexHealPaths): Record<string, string> {
   let contents = ''
+
   try {
     contents = readFileSync(paths.healLedgerPath, 'utf-8')
   } catch {
     return {}
   }
+
   const outcomes: Record<string, string> = {}
+
   for (const line of contents.split('\n').filter(Boolean)) {
     try {
       const record = JSON.parse(line) as { threadId: string; outcome: string }
@@ -194,6 +203,7 @@ function readLedgerOutcomes(paths: CodexSessionIndexHealPaths): Record<string, s
       // Torn tails are quarantined by the next append and ignored by readers.
     }
   }
+
   return outcomes
 }
 
@@ -225,10 +235,12 @@ describe('runCodexSessionIndexHeal', () => {
       [threadId('2')]: 'healed',
       [threadId('3')]: 'healed'
     })
+
     const marker = JSON.parse(readFileSync(rig.paths.healMarkerPath, 'utf-8')) as {
       systemSessionsRoot: string
       healedThreads: number
     }
+
     expect(marker.systemSessionsRoot).toBe(rig.paths.systemSessionsRoot)
     expect(marker.healedThreads).toBe(3)
   })
@@ -237,19 +249,24 @@ describe('runCodexSessionIndexHeal', () => {
     const rig = createHealRig({
       auditedThreads: [{ stamp: '2026-07-01T10-00-00', id: threadId('1') }]
     })
+
     const first = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(first.outcome).toBe('completed')
+
     const second = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     const third = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(second.outcome).toBe('up-to-date')
     expect(third.outcome).toBe('up-to-date')
     // One spawn from the first run only — no-op runs must not hit the CLI.
@@ -269,6 +286,7 @@ describe('runCodexSessionIndexHeal', () => {
       action: 'existing',
       target: rolloutTarget(rig.paths.systemSessionsRoot, stamp, id)
     })
+
     const repeated = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
@@ -282,6 +300,7 @@ describe('runCodexSessionIndexHeal', () => {
     const rig = createHealRig({
       auditedThreads: [{ stamp: '2026-07-01T10-00-00', id: threadId('1') }]
     })
+
     await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
@@ -335,16 +354,20 @@ describe('runCodexSessionIndexHeal', () => {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(again.outcome).toBe('up-to-date')
 
     const marker = JSON.parse(readFileSync(rig.paths.healMarkerPath, 'utf-8')) as {
       retryableFailureAt: number
     }
+
     marker.retryableFailureAt = 0
     writeFileSync(rig.paths.healMarkerPath, `${JSON.stringify(marker)}\n`, 'utf-8')
+
     const retried = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: (home, timeoutMs) => {
         const invocation = rig.buildInvocation(home, timeoutMs)
+
         return {
           ...invocation,
           env: {
@@ -359,6 +382,7 @@ describe('runCodexSessionIndexHeal', () => {
       },
       interBatchDelayMs: 0
     })
+
     expect(retried).toMatchObject({ outcome: 'completed', pendingThreads: 1, healedThreads: 1 })
     expect(rig.readLog().threadIds.at(-1)).toBe(threadId('1'))
     expect(readLedgerOutcomes(rig.paths)[threadId('1')]).toBe('healed')
@@ -366,6 +390,7 @@ describe('runCodexSessionIndexHeal', () => {
 
   it('retries a missing thread when a later backfill republishes its rollout', async () => {
     const id = threadId('1')
+
     const rig = createHealRig({
       auditedThreads: [{ stamp: '2026-07-01T10-00-00', id }],
       missingThreadIds: [id]
@@ -375,15 +400,18 @@ describe('runCodexSessionIndexHeal', () => {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(missing).toMatchObject({ outcome: 'completed', missingThreads: 1 })
 
     await createCodexSessionBackfillAuditWriter(rig.paths.auditLogPath)({
       action: 'existing',
       target: rolloutTarget(rig.paths.systemSessionsRoot, '2026-07-01T10-00-00', id)
     })
+
     const healed = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: (home, timeoutMs) => {
         const invocation = rig.buildInvocation(home, timeoutMs)
+
         return {
           ...invocation,
           env: {
@@ -405,22 +433,27 @@ describe('runCodexSessionIndexHeal', () => {
 
   it('keeps a processed outcome readable after a torn heal-ledger tail', async () => {
     const id = threadId('1')
+
     const rig = createHealRig({
       auditedThreads: [{ stamp: '2026-07-01T10-00-00', id }]
     })
+
     writeFileSync(rig.paths.healLedgerPath, '{"torn":', 'utf-8')
 
     const first = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(first).toMatchObject({ outcome: 'completed', healedThreads: 1 })
 
     rmSync(rig.paths.healMarkerPath)
+
     const resumed = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(resumed).toMatchObject({ outcome: 'completed', pendingThreads: 0 })
     expect(rig.readLog().serverStarts).toBe(1)
   })
@@ -472,13 +505,16 @@ describe('runCodexSessionIndexHeal', () => {
         id: threadId(String(index + 1))
       }))
     })
+
     let reads = 0
+
     const summary = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       readsPerServerSession: 1,
       interBatchDelayMs: 0,
       shouldStop: () => reads++ >= 2
     })
+
     expect(summary.outcome).toBe('stopped')
     expect(summary.healedThreads).toBeLessThan(4)
 
@@ -486,6 +522,7 @@ describe('runCodexSessionIndexHeal', () => {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(resumed.outcome).toBe('completed')
     expect(resumed.healedThreads + summary.healedThreads).toBe(4)
   })
@@ -497,6 +534,7 @@ describe('runCodexSessionIndexHeal', () => {
         { stamp: '2026-07-01T10-00-00', id: threadId('1') }
       ]
     })
+
     let stopChecks = 0
 
     const summary = await runCodexSessionIndexHeal(rig.paths, {
@@ -522,6 +560,7 @@ describe('runCodexSessionIndexHeal', () => {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(summary.outcome).toBe('unsupported')
     expect(summary.healedThreads).toBe(0)
     expect(readLedgerOutcomes(rig.paths)).toEqual({})
@@ -531,17 +570,21 @@ describe('runCodexSessionIndexHeal', () => {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(again.outcome).toBe('up-to-date')
     expect(rig.readLog().serverStarts).toBe(1)
 
     const marker = JSON.parse(readFileSync(rig.paths.healMarkerPath, 'utf-8')) as {
       unsupportedAt: number
     }
+
     marker.unsupportedAt = 0
     writeFileSync(rig.paths.healMarkerPath, `${JSON.stringify(marker)}\n`, 'utf-8')
+
     const retried = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: (home, timeoutMs) => {
         const invocation = rig.buildInvocation(home, timeoutMs)
+
         return {
           ...invocation,
           env: {
@@ -556,6 +599,7 @@ describe('runCodexSessionIndexHeal', () => {
       },
       interBatchDelayMs: 0
     })
+
     expect(retried).toMatchObject({ outcome: 'completed', healedThreads: 1 })
   })
 
@@ -564,10 +608,12 @@ describe('runCodexSessionIndexHeal', () => {
       scenario: 'no-subcommand',
       auditedThreads: [{ stamp: '2026-07-01T10-00-00', id: threadId('1') }]
     })
+
     const summary = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(summary.outcome).toBe('unsupported')
   })
 
@@ -586,12 +632,14 @@ describe('runCodexSessionIndexHeal', () => {
       readConcurrency: 1,
       interBatchDelayMs: 0
     })
+
     expect(summary.outcome).toBe('aborted')
     expect(readLedgerOutcomes(rig.paths)[threadId('1')]).toBeUndefined()
 
     const retried = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: (home, timeoutMs) => {
         const invocation = rig.buildInvocation(home, timeoutMs)
+
         return {
           ...invocation,
           env: {
@@ -606,6 +654,7 @@ describe('runCodexSessionIndexHeal', () => {
       },
       interBatchDelayMs: 0
     })
+
     expect(retried.outcome).toBe('completed')
     expect(retried.healedThreads).toBe(2)
   })
@@ -615,16 +664,19 @@ describe('runCodexSessionIndexHeal', () => {
       auditedThreads: [{ stamp: '2026-07-01T10-00-00', id: threadId('1') }],
       busyThreadIds: [threadId('1')]
     })
+
     const summary = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(summary.outcome).toBe('aborted')
     expect(readLedgerOutcomes(rig.paths)).toEqual({})
 
     const retried = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: (home, timeoutMs) => {
         const invocation = rig.buildInvocation(home, timeoutMs)
+
         return {
           ...invocation,
           env: {
@@ -640,15 +692,18 @@ describe('runCodexSessionIndexHeal', () => {
       },
       interBatchDelayMs: 0
     })
+
     expect(retried).toMatchObject({ outcome: 'completed', healedThreads: 1 })
   })
 
   it('completes immediately with no server spawn when there is nothing to heal', async () => {
     const rig = createHealRig({ auditedThreads: [] })
+
     const summary = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(summary).toMatchObject({ outcome: 'completed', pendingThreads: 0 })
     expect(rig.readLog().serverStarts).toBe(0)
   })
@@ -668,10 +723,12 @@ describe('runCodexSessionIndexHeal', () => {
         ''
       ].join('\n')}\n`
     )
+
     const summary = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(summary).toMatchObject({ outcome: 'completed', pendingThreads: 0 })
     expect(rig.readLog().serverStarts).toBe(0)
   })
@@ -679,9 +736,11 @@ describe('runCodexSessionIndexHeal', () => {
   it('scopes audit and processed ledger records to the current Codex home', async () => {
     const currentId = threadId('1')
     const foreignId = threadId('2')
+
     const rig = createHealRig({
       auditedThreads: [{ stamp: '2026-07-01T10-00-00', id: currentId }]
     })
+
     const foreignRoot = `${rig.paths.systemSessionsRoot}-other`
     appendFileSync(
       rig.paths.auditLogPath,
@@ -726,9 +785,11 @@ describe('runCodexSessionIndexHeal', () => {
 
   it('does not mark the heal complete when a processed outcome cannot be persisted', async () => {
     const id = threadId('1')
+
     const rig = createHealRig({
       auditedThreads: [{ stamp: '2026-07-01T10-00-00', id }]
     })
+
     const healLedgerPath = rig.paths.healLedgerPath
     rig.paths.healLedgerPath = dirname(healLedgerPath)
 
@@ -741,19 +802,23 @@ describe('runCodexSessionIndexHeal', () => {
     expect(existsSync(rig.paths.healMarkerPath)).toBe(false)
 
     rig.paths.healLedgerPath = healLedgerPath
+
     const retried = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(retried).toMatchObject({ outcome: 'completed', healedThreads: 1 })
     expect(rig.readLog().threadIds).toEqual([id, id])
   })
 
   it('rebuilds a failed completion marker without repeating processed reads', async () => {
     const id = threadId('1')
+
     const rig = createHealRig({
       auditedThreads: [{ stamp: '2026-07-01T10-00-00', id }]
     })
+
     mkdirSync(rig.paths.healMarkerPath, { recursive: true })
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -761,13 +826,16 @@ describe('runCodexSessionIndexHeal', () => {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(first).toMatchObject({ outcome: 'completed', healedThreads: 1 })
 
     rmSync(rig.paths.healMarkerPath, { recursive: true })
+
     const resumed = await runCodexSessionIndexHeal(rig.paths, {
       buildInvocation: rig.buildInvocation,
       interBatchDelayMs: 0
     })
+
     expect(resumed).toMatchObject({ outcome: 'completed', pendingThreads: 0 })
     expect(rig.readLog().threadIds).toEqual([id])
     expect(JSON.parse(readFileSync(rig.paths.healMarkerPath, 'utf-8'))).toMatchObject({

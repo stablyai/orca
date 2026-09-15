@@ -51,11 +51,14 @@ export function createRemoteRefProbeCache<Ref>(
       value,
       expiresAt: value === null ? Date.now() + NEGATIVE_ENTRY_TTL_MS : Number.POSITIVE_INFINITY
     })
+
     while (repoRefCache.size > REPO_REF_CACHE_MAX_ENTRIES) {
       const oldestKey = repoRefCache.keys().next().value
+
       if (oldestKey === undefined) {
         return
       }
+
       repoRefCache.delete(oldestKey)
     }
   }
@@ -76,6 +79,7 @@ export function createRemoteRefProbeCache<Ref>(
         remember(cacheKey, value)
       }
     }
+
     try {
       const stdout = await readRemoteUrl(
         {
@@ -86,6 +90,7 @@ export function createRemoteRefProbeCache<Ref>(
         },
         remoteName
       )
+
       // Why: null is the SSH runtime being disconnected, not an answer about the
       // remote — and it costs no `git`, so there is nothing here to spare. It is
       // deliberately the one negative with no TTL floor: flooring it would make a
@@ -93,8 +98,10 @@ export function createRemoteRefProbeCache<Ref>(
       if (stdout === null) {
         return null
       }
+
       const result = parseRemoteUrl(stdout)
       publish(result)
+
       return result
     } catch (error) {
       // Why: a probe killed on its deadline says nothing about the remote, and an
@@ -104,10 +111,13 @@ export function createRemoteRefProbeCache<Ref>(
       if (isTransientGitProbeError(error)) {
         return null
       }
+
       if (connectionId && !isStableMissingGitRemoteError(error)) {
         return null
       }
+
       publish(null)
+
       return null
     }
   }
@@ -120,14 +130,18 @@ export function createRemoteRefProbeCache<Ref>(
       const runtimeKey = connectionId
         ? `${connectionId}:${getSshGitProviderGeneration(connectionId)}`
         : `local:${localGitOptions.wslDistro ?? 'host'}`
+
       const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}`
       const cached = repoRefCache.get(cacheKey)
+
       if (cached) {
         if (cached.expiresAt > Date.now()) {
           return cached.value
         }
+
         repoRefCache.delete(cacheKey)
       }
+
       // Why: every branch of a repo resolves its forge through this probe, so a
       // poll of the worktree list arrives as a burst of identical lookups. One
       // young probe answers all of them instead of spawning a `git` per branch.

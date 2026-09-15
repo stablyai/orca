@@ -27,18 +27,24 @@ export default function AgentSettingsDialog({
 }: AgentSettingsDialogProps): React.JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
+
   const isWindowsRenderer =
     typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
+
   const isWebClient = isWebClientLocation()
+
   const runtimeCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
+
   const localCapabilityOwnerKey = isWebClient ? runtimeCapabilityOwnerKey : 'local'
+
   const localWindowsTerminalCapabilities = useLocalWindowsTerminalCapabilities(
     open && (isWindowsRenderer || isWebClient),
     false,
     localCapabilityOwnerKey
   )
+
   const wslSupportedPlatform = isWindowsTerminalCapabilityHost({
     isWindowsRenderer,
     isWebClient,

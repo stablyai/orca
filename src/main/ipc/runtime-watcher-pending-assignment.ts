@@ -42,6 +42,7 @@ export class RuntimeWatcherPendingAssignment<T> {
     if (this.settledNotified) {
       return
     }
+
     this.settledNotified = true
     this.onSettled()
   }

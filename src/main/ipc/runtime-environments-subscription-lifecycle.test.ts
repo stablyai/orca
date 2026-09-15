@@ -56,6 +56,7 @@ vi.mock('../../shared/remote-runtime-client', () => ({
 
 vi.mock('./runtime-environment-request-connections', async () => {
   const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+
   return withRuntimeStatusOwners({
     sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
     sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
@@ -83,6 +84,7 @@ const handler = channelHandlerLookup(handleMock)
 describe('registerRuntimeEnvironmentHandlers', () => {
   let userDataPath: string
   let activeRuntimeEnvironmentId: string | null
+
   let store: {
     getSettings: () => { activeRuntimeEnvironmentId: string | null }
     updateSettings: ReturnType<typeof vi.fn>
@@ -140,6 +142,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
           _meta: { runtimeId: 'runtime-remote' }
         })
         callbacks.onBinary(new Uint8Array([1, 2, 3]))
+
         return { requestId: 'stream-1', close, sendBinary }
       }
     )
@@ -148,10 +151,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const sent: unknown[] = []
     const destroyedListenerRemoved = vi.fn()
+
     const subscribe = handler<
       {
         selector: string
@@ -162,6 +167,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
+
     const result = await subscribe(
       {
         sender: {
@@ -201,6 +207,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const binaryListener = onMock.mock.calls.find(
       (call) => call[0] === 'runtimeEnvironments:subscriptionBinary'
     )?.[1] as (_event: unknown, args: unknown) => void
+
     const bytes = new Uint8Array([9, 8, 7])
     binaryListener({ sender: { id: 1 } }, { subscriptionId: result.subscriptionId, bytes })
     expect(sendBinary).toHaveBeenCalledWith(bytes)
@@ -208,6 +215,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
       'runtimeEnvironments:unsubscribe'
     )
+
     expect(
       await unsubscribe({ sender: { id: 1 } }, { subscriptionId: result.subscriptionId })
     ).toEqual({
@@ -232,6 +240,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const subscribe = handler<
@@ -243,6 +252,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
+
     const result = await subscribe(
       {
         sender: {
@@ -264,6 +274,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const binaryListener = onMock.mock.calls.find(
       (call) => call[0] === 'runtimeEnvironments:subscriptionBinary'
     )?.[1] as (_event: unknown, args: unknown) => void
+
     binaryListener(
       { sender: { id: 2 } },
       { subscriptionId: result.subscriptionId, bytes: new Uint8Array([1]) }
@@ -273,6 +284,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
       'runtimeEnvironments:unsubscribe'
     )
+
     expect(
       await unsubscribe({ sender: { id: 2 } }, { subscriptionId: result.subscriptionId })
     ).toEqual({
@@ -291,11 +303,13 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   it('closes a streaming subscription that resolves after the sender is destroyed', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()
+
     let resolveSubscribe: (value: {
       requestId: string
       close: () => void
       sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
     }) => void = () => {}
+
     subscribeRemoteRuntimeRequestMock.mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -307,11 +321,13 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     let destroyed = false
     let destroyedHandler: unknown = null
     const destroyedListenerRemoved = vi.fn()
+
     const subscribe = handler<
       {
         selector: string
@@ -321,6 +337,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       },
       { subscriptionId: string; requestId: string }
     >('runtimeEnvironments:subscribe')
+
     const resultPromise = subscribe(
       {
         sender: {
@@ -361,6 +378,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     const unsubscribe = handler<{ subscriptionId: string }, { unsubscribed: boolean }>(
       'runtimeEnvironments:unsubscribe'
     )
+
     expect(await unsubscribe({ sender: { id: 1 } }, { subscriptionId: 'late-sub' })).toEqual({
       unsubscribed: false
     })
@@ -378,14 +396,17 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       const close = vi.fn()
       const sendBinary = vi.fn(() => true)
       let emitRemoteBinary: (bytes: Uint8Array<ArrayBufferLike>) => void = () => {}
+
       let resolveSubscribe: (value: {
         requestId: string
         close: () => void
         sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
       }) => void = () => {}
+
       subscribeRemoteRuntimeRequestMock.mockImplementation(
         (_pairing, _method, _params, _timeoutMs, callbacks) => {
           emitRemoteBinary = callbacks.onBinary
+
           return new Promise((resolve) => {
             resolveSubscribe = resolve
           })
@@ -396,13 +417,17 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         { name: string; pairingCode: string },
         { environment: { id: string; name: string } }
       >('runtimeEnvironments:addFromPairingCode')
+
       const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
       const savedEnvironment = environmentStore.resolveEnvironment(
         userDataPath,
         added.environment.id
       )
+
       const pairingRevision = savedEnvironment.pairingRevision ?? savedEnvironment.createdAt
       const senderSend = vi.fn()
+
       const subscribe = handler<
         {
           selector: string
@@ -413,6 +438,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
         },
         { subscriptionId: string; requestId: string }
       >('runtimeEnvironments:subscribe')
+
       const resultPromise = subscribe(
         {
           sender: {
@@ -452,6 +478,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       const binaryListener = onMock.mock.calls.find(
         (call) => call[0] === 'runtimeEnvironments:subscriptionBinary'
       )?.[1] as (_event: unknown, args: unknown) => void
+
       binaryListener(
         { sender: { id: 1 } },
         {
@@ -471,9 +498,11 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { name: string; pairingCode: string },
       { environment: { id: string; name: string } }
     >('runtimeEnvironments:addFromPairingCode')
+
     await add(null, { name: 'desk', pairingCode: pairingCode() })
 
     const destroyedListenerRemoved = vi.fn()
+
     const subscribe = handler<
       {
         selector: string

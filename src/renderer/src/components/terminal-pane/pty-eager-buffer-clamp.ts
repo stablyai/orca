@@ -7,5 +7,6 @@ export type EagerBufferChunk = {
 
 export function clampUtf8Tail(data: string, maxBytes: number): EagerBufferChunk {
   const tail = clampUtf8TextTail(data, maxBytes)
+
   return { data: tail.text, bytes: tail.bytes }
 }

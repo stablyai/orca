@@ -21,6 +21,7 @@ import { isAppBoundEncryptedCookie as isAppBoundCookie } from './browser-cookie-
 import { summarizeCookieImportError as summarizeError } from './browser-cookie-import-diagnostics'
 
 export type { BrowserProfile, DetectedBrowser, CookieImportOptions, ChromiumCookieColumnInfo }
+
 export { summarizeError as summarizeCookieImportError }
 
 export function detectInstalledBrowsers(): DetectedBrowser[] {
@@ -65,8 +66,10 @@ export async function importCookiesFromBrowser(
   if (browser.family === 'firefox') {
     return importCookiesFromFirefox(browser, targetPartition, options)
   }
+
   if (browser.family === 'safari') {
     return importCookiesFromSafari(browser, targetPartition)
   }
+
   return importChromiumCookies(browser, targetPartition, options)
 }

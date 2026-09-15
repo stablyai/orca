@@ -44,6 +44,7 @@ export function findTerminalTabWorktreeId(
       return worktreeId
     }
   }
+
   return null
 }
 
@@ -56,6 +57,7 @@ function findStructuredTabWorktreeId(
       return worktreeId
     }
   }
+
   return null
 }
 
@@ -65,10 +67,12 @@ function findWorktreeFallback(
 ): Pick<Worktree, 'id' | 'path'> | null {
   for (const worktrees of Object.values(worktreesByRepo)) {
     const worktree = worktrees.find((entry) => entry.id === worktreeId)
+
     if (worktree) {
       return worktree
     }
   }
+
   return null
 }
 
@@ -79,15 +83,19 @@ export function resolveNativeChatFileLinkContext(
   const worktreeId =
     findTerminalTabWorktreeId(state.tabsByWorktree, terminalTabId) ??
     findStructuredTabWorktreeId(state.unifiedTabsByWorktree, terminalTabId)
+
   if (!worktreeId) {
     return null
   }
 
   const knownWorktree = state.getKnownWorktreeById(worktreeId)
+
   const worktree = knownWorktree?.path
     ? knownWorktree
     : findWorktreeFallback(state.worktreesByRepo, worktreeId)
+
   const workspaceScope = parseWorkspaceKey(worktreeId)
+
   const worktreePath =
     worktree?.path ??
     (workspaceScope?.type === 'folder'
@@ -95,6 +103,7 @@ export function resolveNativeChatFileLinkContext(
           (workspace) => workspace.id === workspaceScope.folderWorkspaceId
         )?.folderPath ?? null)
       : null)
+
   if (!worktreePath) {
     return null
   }
@@ -112,15 +121,19 @@ function resolvePathText(
   context: NativeChatFileLinkContext
 ): NativeChatResolvedFileLink | null {
   const parsed = parseExplicitFileLinkTarget(pathText, { allowRelativeDirectoryPath: true })
+
   if (!parsed) {
     return null
   }
+
   // Native chat hrefs are explicit agent-authored links, so avoid the terminal
   // detector's conservative extension/filename filters.
   const resolved = resolveExplicitFileLinkTarget(parsed, context.worktreePath)
+
   if (!resolved) {
     return null
   }
+
   return {
     absolutePath: resolved.absolutePath,
     line: resolved.line ?? fallbackLine,
@@ -135,9 +148,12 @@ export function resolveNativeChatFileLink(
   if (!context) {
     return null
   }
+
   const route = routeNativeChatHref(href)
+
   if (route.kind !== 'file') {
     return null
   }
+
   return resolvePathText(route.pathText, route.line, context)
 }

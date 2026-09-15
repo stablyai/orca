@@ -24,7 +24,9 @@ describe('OrcaRuntimeService', () => {
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: false })
     }
+
     const resumeSleepingAgents = vi.fn()
+
     const getWorkspaceSession = vi.fn(() => ({
       ...getDefaultWorkspaceSession(),
       sleepingAgentSessionsByPaneKey: {
@@ -42,12 +44,14 @@ describe('OrcaRuntimeService', () => {
         }
       }
     }))
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       getWorkspaceSession
     } as never)
+
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
       reposChanged: vi.fn(),
@@ -98,12 +102,15 @@ describe('OrcaRuntimeService', () => {
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: false })
     }
+
     const resumeSleepingAgents = vi.fn()
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId]
     } as never)
+
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
       reposChanged: vi.fn(),
@@ -138,17 +145,22 @@ describe('OrcaRuntimeService', () => {
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: false, instanceId: 'wt-instance' })
     }
+
     const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
       metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
       return metaById[worktreeId]
     })
+
     const worktreesChanged = vi.fn()
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta
     } as never)
+
     runtime.setNotifier({
       worktreesChanged,
       reposChanged: vi.fn(),
@@ -189,16 +201,20 @@ describe('OrcaRuntimeService', () => {
     const metaById: Record<string, WorktreeMeta> = {
       [TEST_WORKTREE_ID]: makeWorktreeMeta({ isUnread: true })
     }
+
     const setWorktreeMeta = vi.fn((worktreeId: string, meta: Partial<WorktreeMeta>) => {
       metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+
       return metaById[worktreeId]
     })
+
     const runtime = new OrcaRuntimeService({
       ...store,
       getAllWorktreeMeta: () => metaById,
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta
     } as never)
+
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
       reposChanged: vi.fn(),
@@ -235,6 +251,7 @@ describe('OrcaRuntimeService', () => {
     const persistedPtyId = `${TEST_WORKTREE_ID}@@mobile-only-pty`
     const spawn = vi.fn().mockResolvedValue({ id: persistedPtyId })
     const focusTerminal = vi.fn()
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
@@ -256,6 +273,7 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
@@ -309,6 +327,7 @@ describe('OrcaRuntimeService', () => {
   it('materializes phone-local pending terminal tabs without stored PTY bindings', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'fresh-mobile-pty' })
     const focusTerminal = vi.fn()
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
@@ -330,6 +349,7 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
@@ -382,6 +402,7 @@ describe('OrcaRuntimeService', () => {
   it('keeps the target group active when phone-local activation materializes a tab', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'group-target-pty' })
     const focusTerminal = vi.fn()
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         activeTabIdByWorktree: { [TEST_WORKTREE_ID]: 'host-tab' },
@@ -431,6 +452,7 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.setNotifier({
       worktreesChanged: vi.fn(),
@@ -474,6 +496,7 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: stalePtyId })
     const listProcesses = vi.fn(async () => [])
     const focusTerminal = vi.fn()
+
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal({
         tabsByWorktree: {
@@ -495,6 +518,7 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     runtime.registerPty(stalePtyId, TEST_WORKTREE_ID)
     runtime.setNotifier({

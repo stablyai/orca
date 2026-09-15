@@ -9,6 +9,7 @@ function freezeTabs(tabsByWorktree: AppState['tabsByWorktree']): AppState['tabsB
     tabs.forEach(Object.freeze)
     Object.freeze(tabs)
   }
+
   return Object.freeze(tabsByWorktree)
 }
 
@@ -18,6 +19,7 @@ describe('SSH target cleanup tab map', () => {
       Object.fromEntries(
         Array.from({ length: 100 }, (_, index) => {
           const worktreeId = `folder:${index}`
+
           return [
             worktreeId,
             [
@@ -33,6 +35,7 @@ describe('SSH target cleanup tab map', () => {
         })
       )
     )
+
     const state = Object.freeze({ ...createTestStore().getState(), tabsByWorktree })
     const patch = buildRemovedSshTargetCleanupPatch(state, 'removed')!
     expect(patch.tabsByWorktree).not.toBe(tabsByWorktree)
@@ -42,6 +45,7 @@ describe('SSH target cleanup tab map', () => {
       expect(nextTabs[1]).toBe(tabs[1])
       expect(tabs[0].pendingActivationSpawn).toBe(true)
       expect(tabs[0].ptyId).not.toBeNull()
+
       if (index % stride === 0) {
         expect(nextTabs).not.toBe(tabs)
         expect(nextTabs[0]).not.toBe(tabs[0])
@@ -56,11 +60,13 @@ describe('SSH target cleanup tab map', () => {
 
   it('clears folder tabs matched only by split or last-known PTYs', () => {
     const removedPtyId = toAppSshPtyId('removed', 'pty')
+
     const tabsByWorktree = freezeTabs({
       'folder:split': [makeTab({ id: 'split', worktreeId: 'folder:split' })],
       'folder:last': [makeTab({ id: 'last', worktreeId: 'folder:last' })],
       'folder:empty': [makeTab({ id: 'empty', worktreeId: 'folder:empty' })]
     })
+
     const state = Object.freeze({
       ...createTestStore().getState(),
       tabsByWorktree,
@@ -71,6 +77,7 @@ describe('SSH target cleanup tab map', () => {
         [removedPtyId]: { previousAccountLabel: 'old', nextAccountLabel: 'new' }
       })
     })
+
     const patch = buildRemovedSshTargetCleanupPatch(state, 'removed')!
     expect(patch.tabsByWorktree!['folder:split']).not.toBe(tabsByWorktree['folder:split'])
     expect(patch.tabsByWorktree!['folder:last']).not.toBe(tabsByWorktree['folder:last'])
@@ -83,22 +90,28 @@ describe('SSH target cleanup tab map', () => {
 
   it.each([false, true])('preserves own special keys with null prototype = %s', (nullPrototype) => {
     const keys = ['__proto__', 'constructor', 'toString', 'folder:normal']
+
     const tabsByWorktree = Object.fromEntries(
       keys.map((worktreeId) => [
         worktreeId,
         [makeTab({ id: `tab-${worktreeId}`, worktreeId, ptyId: toAppSshPtyId('removed', 'pty') })]
       ])
     )
+
     if (nullPrototype) {
       Object.setPrototypeOf(tabsByWorktree, null)
     }
+
     freezeTabs(tabsByWorktree)
+
     const patch = buildRemovedSshTargetCleanupPatch(
       Object.freeze({ ...createTestStore().getState(), tabsByWorktree }),
       'removed'
     )!
+
     expect(Object.getPrototypeOf(patch.tabsByWorktree)).toBe(Object.prototype)
     expect(Object.keys(patch.tabsByWorktree!)).toEqual(keys)
+
     for (const key of keys) {
       expect(Object.hasOwn(patch.tabsByWorktree!, key)).toBe(true)
       expect(patch.tabsByWorktree![key][0].ptyId).toBeNull()
@@ -108,6 +121,7 @@ describe('SSH target cleanup tab map', () => {
 
   it('does not publish or replace the tab map when only target metadata changes', () => {
     const store = createTestStore()
+
     const tabsByWorktree = freezeTabs({
       'folder:other': [
         makeTab({
@@ -117,6 +131,7 @@ describe('SSH target cleanup tab map', () => {
         })
       ]
     })
+
     store.setState({ tabsByWorktree })
     const before = store.getState()
     store.getState().clearRemovedSshTargetState('removed')

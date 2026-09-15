@@ -12,7 +12,9 @@ import {
 } from '../../shared/wsl-browser-network-relay-contract'
 
 const STARTUP_TIMEOUT_MS = 10_000
+
 const INSTALL_TIMEOUT_MS = 30_000
+
 const MAX_STDERR_BYTES = 32 * 1024
 
 /**
@@ -29,13 +31,16 @@ type WslBrowserNetworkRelayBundle = { jsPath: string; version: string }
 
 export function resolveWslBrowserNetworkRelayBundle(): WslBrowserNetworkRelayBundle | null {
   const candidates: string[] = []
+
   if (process.env.ORCA_RELAY_PATH) {
     candidates.push(join(process.env.ORCA_RELAY_PATH, 'wsl'))
   }
+
   if (process.resourcesPath) {
     candidates.push(join(process.resourcesPath, 'relay', 'wsl'))
     candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'out', 'relay', 'wsl'))
   }
+
   try {
     const appPath = getAppEnvironment().getAppPath()
     candidates.push(join(appPath, 'resources', 'relay', 'wsl'))
@@ -43,17 +48,22 @@ export function resolveWslBrowserNetworkRelayBundle(): WslBrowserNetworkRelayBun
   } catch {
     // Tests, early startup and plain-Node hosts have no app path — env/resources candidates suffice.
   }
+
   for (const dir of candidates) {
     const jsPath = join(dir, WSL_BROWSER_NETWORK_RELAY_BUNDLE_NAME)
     const versionPath = join(dir, WSL_BROWSER_NETWORK_RELAY_VERSION_FILE)
+
     if (!existsSync(jsPath) || !existsSync(versionPath)) {
       continue
     }
+
     const version = readFileSync(versionPath, 'utf8').trim()
+
     if (/^[A-Za-z0-9+.-]+$/.test(version)) {
       return { jsPath, version }
     }
   }
+
   return null
 }
 
@@ -61,11 +71,13 @@ function guestRelayDir(version: string): string {
   if (!/^[A-Za-z0-9+.-]+$/.test(version)) {
     throw new Error('browser_tunnel_execution_host_unavailable')
   }
+
   return `$HOME/${WSL_BROWSER_NETWORK_RELAY_DIR}/${version}`
 }
 
 export function buildWslBrowserNetworkGuestLaunchScript(version: string): string {
   const dir = guestRelayDir(version)
+
   return [
     '#!/bin/sh',
     `d="${dir}"`,
@@ -90,6 +102,7 @@ export function buildWslBrowserNetworkGuestInstallScript(bundle: Buffer, version
     .toString('base64')
     .replace(/(.{1,120})/g, '$1\n')
     .trimEnd()
+
   return [
     'set -e',
     'umask 077',
@@ -114,23 +127,31 @@ export async function launchWslBrowserNetworkRelay(
   signal: AbortSignal
 ): Promise<WslBrowserNetworkRelayChild> {
   const bundle = resolveWslBrowserNetworkRelayBundle()
+
   if (!bundle || signal.aborted) {
     throw new Error('browser_tunnel_execution_host_unavailable')
   }
+
   let installTried = false
+
   for (;;) {
     const attempt = await startWslBrowserNetworkRelay(distro, bundle.version, signal)
+
     if (attempt.child) {
       return attempt.child
     }
+
     if (signal.aborted || attempt.code === WSL_BROWSER_NETWORK_RELAY_NO_NODE_EXIT_CODE) {
       throw new Error('browser_tunnel_execution_host_unavailable')
     }
+
     if (installTried) {
       throw new Error('browser_tunnel_execution_host_unavailable')
     }
+
     installTried = true
     const installed = await installWslBrowserNetworkRelay(distro, bundle, signal)
+
     if (!installed) {
       throw new Error('browser_tunnel_execution_host_unavailable')
     }
@@ -143,31 +164,38 @@ async function startWslBrowserNetworkRelay(
   signal: AbortSignal
 ): Promise<{ child?: WslBrowserNetworkRelayChild; code?: number | null }> {
   const command = `exec sh "${guestRelayDir(version)}/launch.sh"`
+
   const child = spawnProcess({
     program: 'wsl.exe',
     args: ['-d', distro, '--exec', 'sh', '-c', command],
     env: { ...process.env, WSL_UTF8: '1' }
   }) as WslBrowserNetworkRelayChild
+
   return new Promise((resolve) => {
     let settled = false
     let stderr = ''
+
     const settle = (result: { child?: WslBrowserNetworkRelayChild; code?: number | null }) => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timeout)
       signal.removeEventListener('abort', abort)
       resolve(result)
     }
+
     const abort = (): void => {
       child.kill()
       settle({ code: null })
     }
+
     const timeout = setTimeout(abort, STARTUP_TIMEOUT_MS)
     signal.addEventListener('abort', abort, { once: true })
     child.stderr.on('data', (bytes: Buffer) => {
       stderr = (stderr + bytes.toString('utf8')).slice(-MAX_STDERR_BYTES)
+
       if (stderr.includes(WSL_BROWSER_NETWORK_RELAY_SENTINEL)) {
         settle({ child })
       }
@@ -187,21 +215,26 @@ function installWslBrowserNetworkRelay(
     args: ['-d', distro, '--exec', 'sh', '-s'],
     env: { ...process.env, WSL_UTF8: '1' }
   }) as WslBrowserNetworkRelayChild
+
   return new Promise((resolve) => {
     let settled = false
+
     const settle = (installed: boolean): void => {
       if (settled) {
         return
       }
+
       settled = true
       clearTimeout(timeout)
       signal.removeEventListener('abort', abort)
       resolve(installed)
     }
+
     const abort = (): void => {
       child.kill()
       settle(false)
     }
+
     const timeout = setTimeout(abort, INSTALL_TIMEOUT_MS)
     signal.addEventListener('abort', abort, { once: true })
     child.stderr.resume()

@@ -25,8 +25,10 @@ function authority(): DirectSshAuthority {
 describe('runtime and direct SSH wake isolation', () => {
   const retryConnectionsNow = vi.fn(() => Promise.resolve())
   const resumeCallbacks = new Set<() => void>()
+
   const onSystemResumed = vi.fn((callback: () => void) => {
     resumeCallbacks.add(callback)
+
     return () => resumeCallbacks.delete(callback)
   })
 
@@ -152,6 +154,7 @@ describe('runtime and direct SSH wake isolation', () => {
     })
     const wakePreparation = vi.fn()
     const correctedCounts: number[] = []
+
     const unregisterDirectWake = registerDirectSshWakeRouting({
       getConnectionStates: () => store.getState().sshConnectionStates,
       wakeAuthority: (nextAuthority) => {
@@ -160,6 +163,7 @@ describe('runtime and direct SSH wake isolation', () => {
       },
       onSystemResumed
     })
+
     const { unmount } = renderHook(() => useRemoteRuntimeRecoveryTriggers())
 
     window.dispatchEvent(new Event('online'))

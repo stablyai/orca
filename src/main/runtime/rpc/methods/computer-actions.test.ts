@@ -271,15 +271,18 @@ describe('computer action RPC methods', () => {
 
 function findMethod(name: string) {
   const method = eraseRpcMethods(COMPUTER_METHODS).find((candidate) => candidate.name === name)
+
   if (!method) {
     throw new Error(`missing method ${name}`)
   }
+
   return method
 }
 
 async function call(name: string, params: Record<string, unknown>) {
   const method = findMethod(name)
   const parsed = method.params ? method.params.parse(params) : undefined
+
   return await method.handler(parsed, {
     runtime: { getRuntimeId: () => 'runtime-1' } as never
   })

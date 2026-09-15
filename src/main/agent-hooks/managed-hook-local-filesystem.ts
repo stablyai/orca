@@ -7,14 +7,17 @@ function asSftpError(error: NodeJS.ErrnoException): Error & { code: number } {
   const translated = new Error(error.message, { cause: error }) as Error & { code: number }
   translated.code =
     error.code === 'ENOENT' ? 2 : error.code === 'ENOSYS' || error.code === 'ENOTSUP' ? 8 : 4
+
   return translated
 }
 
 function finish<T>(callback: Callback<T>, error: NodeJS.ErrnoException | null, value?: T): void {
   if (error) {
     callback(asSftpError(error))
+
     return
   }
+
   callback(null, value)
 }
 
@@ -57,5 +60,6 @@ export function createManagedHookLocalFilesystem(): SFTPWrapper {
       chmod(path, mode, (error) => finish(callback, error))
     }
   }
+
   return adapter as unknown as SFTPWrapper
 }

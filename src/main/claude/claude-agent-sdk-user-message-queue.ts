@@ -51,10 +51,12 @@ export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
   let wake: (() => void) | null = null
   let ended = false
   let failure: Error | null = null
+
   const notify = (): void => {
     wake?.()
     wake = null
   }
+
   const rejectInFlight = (error: Error): void => {
     const abandoned = inFlight
     inFlight = null
@@ -64,9 +66,11 @@ export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
   async function* drain(): AsyncGenerator<SDKUserMessage> {
     for (;;) {
       const next = queued.shift()
+
       if (next) {
         inFlight = next
         let written = false
+
         try {
           yield next.message
           written = true
@@ -86,11 +90,14 @@ export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
             )
           }
         }
+
         continue
       }
+
       if (ended || failure) {
         return
       }
+
       await new Promise<void>((resolve) => {
         wake = resolve
       })
@@ -103,16 +110,20 @@ export function createClaudeUserMessageQueue(): ClaudeUserMessageQueue {
       new Promise<void>((resolve, reject) => {
         if (failure) {
           reject(claudeUnwrittenUserMessageError(failure))
+
           return
         }
+
         queued.push({ message, resolve, reject })
         notify()
       }),
     fail: (error) => {
       failure ??= error
+
       for (const entry of queued.splice(0)) {
         entry.reject(claudeUnwrittenUserMessageError(error))
       }
+
       // A pump that never resumes cannot run the generator's cleanup, so the
       // exit path has to reach the in-flight frame itself.
       rejectInFlight(claudeAmbiguousUserMessageError(error))

@@ -70,19 +70,23 @@ describe('prunePendingSends', () => {
 
   it('drops a pending send once the transcript advances beyond its user turn', () => {
     const pending = [pendingOf('p1', 'fix the bug')]
+
     const next = prunePendingSends(pending, [
       userMessage('m1', 'fix the bug'),
       assistantMessage('m2', 'working on it')
     ])
+
     expect(next).toEqual([])
   })
 
   it('matches advanced turns ignoring surrounding/collapsed whitespace', () => {
     const pending = [pendingOf('p1', '  do   the   thing ')]
+
     const next = prunePendingSends(pending, [
       userMessage('m1', 'do the thing'),
       assistantMessage('m2', 'done')
     ])
+
     expect(next).toEqual([])
   })
 
@@ -90,10 +94,12 @@ describe('prunePendingSends', () => {
     const pending = [
       { ...pendingOf('p1', 'what do you see'), imagePaths: ['/Users/me/Downloads/3d.png'] }
     ]
+
     const next = prunePendingSends(pending, [
       userMessage('m1', '[Image #1] what do you see'),
       assistantMessage('m2', 'an image')
     ])
+
     expect(next).toEqual([])
   })
 
@@ -101,10 +107,12 @@ describe('prunePendingSends', () => {
     const pending = [
       { ...pendingOf('p1', 'what do you see'), imagePaths: ['/Users/me/Downloads/3d.png'] }
     ]
+
     const next = prunePendingSends(pending, [
       userMessage('m1', 'what do you see[Image #1]'),
       assistantMessage('m2', 'an image')
     ])
+
     expect(next).toEqual([])
   })
 
@@ -117,6 +125,7 @@ describe('prunePendingSends', () => {
         { type: 'text', text: '[Image #1] you see' }
       ]
     }
+
     const next = prunePendingSends(
       [pendingOf('p1', 'what do you see')],
       [prompt, assistantMessage('m2', 'an image')]
@@ -127,6 +136,7 @@ describe('prunePendingSends', () => {
 
   it('drops an attachment-only pending send once its image turn advances', () => {
     const pending = [{ ...pendingOf('p1', ''), imagePaths: ['/tmp/first.png', '/tmp/second.png'] }]
+
     const transcript = [
       imageMessage('m1', '/tmp/first.png', '/tmp/second.png'),
       assistantMessage('m2', 'two images')
@@ -149,10 +159,12 @@ describe('prunePendingSends', () => {
 
   it('prunes only the matched entry, keeping others', () => {
     const pending = [pendingOf('p1', 'first'), pendingOf('p2', 'second')]
+
     const next = prunePendingSends(pending, [
       userMessage('m1', 'first'),
       assistantMessage('m2', 'first answer')
     ])
+
     expect(next).toEqual([pendingOf('p2', 'second')])
   })
 
@@ -166,6 +178,7 @@ describe('prunePendingSends', () => {
 
   it('prunes a first send against a timestampless transcript turn (grok)', () => {
     const pending = [{ ...pendingOf('p1', 'rename it'), afterMessageId: null }]
+
     const transcript = [
       { ...userMessage('u1', 'rename it'), timestamp: null },
       { ...assistantMessage('a1', 'done'), timestamp: null }
@@ -196,6 +209,7 @@ describe('prunePendingSends', () => {
 // fixture here puts the transcript row past `sentAt`. Matching an earlier row is
 // the failure mode these tests exist to pin down.
 const GLUE_BOUNDARY = assistantMessage('glue-boundary', 'ready', 1000)
+
 const GLUE_SENT_AT = 5000
 
 function gluePending(id: string, text: string): NativeChatPendingSend {
@@ -324,6 +338,7 @@ describe('glued rapid sends', () => {
 
   it('keeps a re-sent pair even with no recorded message boundary', () => {
     const history = [userMessage('u1', 'fix the bug', 1000), assistantMessage('a1', 'fixed', 1100)]
+
     const pending = [
       { id: 'p3', text: 'fix the', sentAt: GLUE_SENT_AT },
       { id: 'p4', text: 'bug', sentAt: GLUE_SENT_AT }
@@ -337,6 +352,7 @@ describe('glued rapid sends', () => {
   // echo — for EVERY queued send, not just the oldest one the glue run starts at.
   const mixedAgeGlue = (): { messages: NativeChatMessage[]; pending: NativeChatPendingSend[] } => {
     const gluedRow = userMessage('glue-row', 'fix the bug', 6000)
+
     return {
       messages: [
         GLUE_BOUNDARY,
@@ -378,6 +394,7 @@ describe('glued rapid sends', () => {
   it('never glues across a send the row cannot represent (STA-4477)', () => {
     const gluedRow = userMessage('glue-row', 'alpha gamma', 6000)
     const messages = [GLUE_BOUNDARY, gluedRow, assistantMessage('glue-answer', 'ok', 6100)]
+
     const pending = [
       gluePending('p1', 'alpha'),
       // Queued after the row landed, so the row is not its echo...
@@ -399,6 +416,7 @@ describe('glued rapid sends', () => {
   it('still retires the leading run the glued row did land after (STA-4477)', () => {
     const gluedRow = userMessage('glue-row', 'first second', 6000)
     const messages = [GLUE_BOUNDARY, gluedRow, assistantMessage('glue-answer', 'done', 6100)]
+
     const third = {
       id: 'p3',
       text: 'third',
@@ -406,6 +424,7 @@ describe('glued rapid sends', () => {
       afterMessageId: 'glue-row',
       afterMessageTimestamp: gluedRow.timestamp
     }
+
     const pending = [gluePending('p1', 'first'), gluePending('p2', 'second'), third]
 
     expect(prunePendingSends(pending, messages)).toEqual([third])
@@ -415,6 +434,7 @@ describe('glued rapid sends', () => {
 describe('pendingSendsAsMessages', () => {
   it('returns the empty input without reading existing history', () => {
     const pending: NativeChatPendingSend[] = []
+
     const unreadableHistory = new Proxy([] as NativeChatMessage[], {
       get: () => {
         throw new Error('existing history was read')
@@ -441,6 +461,7 @@ describe('pendingSendsAsMessages', () => {
     const messages = pendingSendsAsMessages([
       { id: 'p1', text: 'what do you see?', imagePaths: ['/tmp/shot.png'], sentAt: 42 }
     ])
+
     expect(messages[0]?.blocks).toEqual([
       { type: 'image-ref', path: '/tmp/shot.png' },
       { type: 'text', text: 'what do you see?' }
@@ -474,6 +495,7 @@ describe('pendingSendsAsMessages', () => {
       { ...userMessage('old-user', 'run tests'), timestamp: 10 },
       { ...assistantMessage('old-answer', 'passed'), timestamp: 20 }
     ]
+
     const pending = [{ ...pendingOf('new-send', 'run tests'), sentAt: 100, afterMessageId: null }]
 
     expect(pendingSendsAsMessages(pending, history).map((message) => message.id)).toEqual([
@@ -491,6 +513,7 @@ describe('pendingSendsAsMessages', () => {
         afterMessageTimestamp: 20
       }
     ]
+
     const remoteTranscript = [
       { ...userMessage('new-user', 'run tests'), timestamp: 30 },
       { ...assistantMessage('new-answer', 'passed'), timestamp: 40 }
@@ -557,6 +580,7 @@ describe('launchPromptAsMessage', () => {
       '- lint failed',
       '  fix spacing'
     ].join('\n')
+
     const transcript = [
       {
         ...userMessage(
@@ -607,6 +631,7 @@ describe('launchPromptAsMessage', () => {
   // tail forever, reading as the conversation reordering.
   it('hides and prunes the launch prompt against a timestampless transcript (grok)', () => {
     const entry = { tabId: 'tab-1', agent: 'grok' as const, text: 'rename it', createdAt: 42 }
+
     const transcript = [
       { ...userMessage('u1', 'rename it'), timestamp: null },
       { ...assistantMessage('a1', 'done'), timestamp: null }
@@ -623,6 +648,7 @@ describe('launchPromptAsMessage', () => {
       text: 'run tests',
       createdAt: 100
     }
+
     const oldHistory = [
       { ...userMessage('old-user', 'run tests'), timestamp: 10 },
       { ...assistantMessage('old-answer', 'passed'), timestamp: 20 }
@@ -778,12 +804,14 @@ describe('scope-cache key counts stay bounded (memory-leak regression)', () => {
 
   it('appendCommandMarkerCache evicts the oldest scope key past the cap', () => {
     clearCommandMarkerCacheForTests()
+
     for (let i = 0; i < CAP + 5; i++) {
       appendCommandMarkerCache(
         { paneKey: 'tab:leaf', agent: 'claude', sessionId: `s${i}` },
         '/clear'
       )
     }
+
     // Oldest sessions evicted; the most-recent CAP survive.
     expect(
       readCommandMarkerCache({ paneKey: 'tab:leaf', agent: 'claude', sessionId: 's0' })
@@ -799,9 +827,11 @@ describe('scope-cache key counts stay bounded (memory-leak regression)', () => {
   it('writePendingSendCache evicts the oldest scope key past the cap', () => {
     clearPendingSendCacheForTests()
     const send = (id: string): NativeChatPendingSend => ({ id, text: id, sentAt: 1 })
+
     for (let i = 0; i < CAP + 5; i++) {
       writePendingSendCache({ paneKey: `tab-${i}:leaf`, agent: 'claude' }, [send(`m${i}`)])
     }
+
     expect(readPendingSendCache({ paneKey: 'tab-0:leaf', agent: 'claude' })).toEqual([])
     expect(readPendingSendCache({ paneKey: `tab-${CAP + 4}:leaf`, agent: 'claude' })).toHaveLength(
       1

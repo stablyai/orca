@@ -45,14 +45,19 @@ export function createTerminalStreamFixtures(bindings: {
     const frames = bindings.sendBinary.mock.calls
       .map((call) => decodeTerminalStreamFrame(call[0]))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.Subscribe)
+
     const frame = frames.at(-1)
+
     if (!frame) {
       throw new Error('missing terminal subscribe frame')
     }
+
     const payload = decodeTerminalStreamJson<SubscribePayload>(frame.payload)
+
     if (!payload) {
       throw new Error('invalid terminal subscribe payload')
     }
+
     return payload
   }
 
@@ -63,7 +68,9 @@ export function createTerminalStreamFixtures(bindings: {
         if (frame?.opcode !== TerminalStreamOpcode.Subscribe) {
           return []
         }
+
         const payload = decodeTerminalStreamJson<{ terminal: string }>(frame.payload)
+
         return payload ? [payload.terminal] : []
       })
   }

@@ -30,6 +30,7 @@ vi.mock('@/store', () => ({
     if (!mocks.store.current) {
       throw new Error('Store state was not installed')
     }
+
     return selector(mocks.store.current)
   }
 }))
@@ -43,6 +44,7 @@ vi.mock('@/components/jira-connect-dialog', () => ({
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function installStore(settings: StoreState['settings']): StoreState {
@@ -67,7 +69,9 @@ function installStore(settings: StoreState['settings']): StoreState {
     openSettingsPage: vi.fn(),
     openSettingsTarget: vi.fn()
   }
+
   mocks.store.current = state
+
   return state
 }
 
@@ -78,6 +82,7 @@ async function renderCard(): Promise<HTMLDivElement> {
   await act(async () => {
     root?.render(<JiraIntegrationCard />)
   })
+
   return container
 }
 
@@ -88,6 +93,7 @@ describe('JiraIntegrationCard account scope', () => {
         root?.unmount()
       })
     }
+
     root = null
     container?.remove()
     container = null

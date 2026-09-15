@@ -18,12 +18,14 @@ function displayHost(url: string): string {
 async function openConfirmedExternalLink(url: string): Promise<void> {
   try {
     const opened = await useAppStore.getState().openBrowserProfileTabInActiveWorkspace(url, null)
+
     if (opened) {
       return
     }
   } catch {
     // The same reader-facing result covers refusal and rejection.
   }
+
   toast.error(
     translate(
       'auto.hooks.ipc.events.browserStateIpcBridge.docPreviewLinkFailed',
@@ -38,7 +40,9 @@ export function subscribeDocPreviewExternalLinkConfirmation(
   if (typeof window.api.docPreview?.onExternalLink !== 'function') {
     return () => {}
   }
+
   let active = true
+
   const unsubscribe = window.api.docPreview.onExternalLink(({ url }) => {
     void confirm({
       title: translate(
@@ -62,6 +66,7 @@ export function subscribeDocPreviewExternalLinkConfirmation(
       }
     })
   })
+
   return () => {
     active = false
     unsubscribe()
@@ -71,5 +76,6 @@ export function subscribeDocPreviewExternalLinkConfirmation(
 export function DocPreviewExternalLinkConfirmation(): null {
   const confirm = useConfirmationDialog()
   useEffect(() => subscribeDocPreviewExternalLinkConfirmation(confirm), [confirm])
+
   return null
 }

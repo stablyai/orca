@@ -14,6 +14,7 @@ export function buildDiffResult(
     const mimeType = filePath
       ? PREVIEWABLE_BINARY_MIME_TYPES[path.extname(filePath).toLowerCase()]
       : undefined
+
     return {
       kind: 'binary',
       originalContent,
@@ -27,6 +28,7 @@ export function buildDiffResult(
 
   // Why: over the render limit, return metadata instead of huge text so the renderer can show fallback UI.
   const largeDiffRenderLimit = getLargeDiffRenderLimit({ originalContent, modifiedContent })
+
   if (largeDiffRenderLimit.limited) {
     return {
       kind: 'text',

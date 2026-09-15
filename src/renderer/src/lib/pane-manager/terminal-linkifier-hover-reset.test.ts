@@ -9,6 +9,7 @@ type FakeLinkifier = { _lastBufferCell?: unknown; _activeLine?: number; _current
 
 function createTerminal(linkifier: FakeLinkifier | null | undefined, hasCore = true): Terminal {
   const core = hasCore ? { linkifier: linkifier ?? undefined } : undefined
+
   return { _core: core } as unknown as Terminal
 }
 

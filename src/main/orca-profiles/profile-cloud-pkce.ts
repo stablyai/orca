@@ -56,6 +56,7 @@ export function beginOrcaCloudPkceFlow(
       if (settled) {
         return
       }
+
       settled = true
       reject(error)
       closeServer(server)
@@ -65,6 +66,7 @@ export function beginOrcaCloudPkceFlow(
       if (settled) {
         return
       }
+
       settled = true
       resolve({
         code,
@@ -84,18 +86,24 @@ export function beginOrcaCloudPkceFlow(
     const server = createServer((request, response) => {
       try {
         const url = new URL(request.url ?? '/', 'http://127.0.0.1')
+
         if (url.pathname !== '/auth/callback') {
           response.writeHead(404)
           response.end('Not found')
+
           return
         }
+
         const code = url.searchParams.get('code')
         const returnedState = url.searchParams.get('state')
+
         if (returnedState !== state) {
           // Why: stray loopback probes must not be able to cancel the user's login.
           writeInvalidCallback(response)
+
           return
         }
+
         if (url.searchParams.has('error')) {
           const cancelled = url.searchParams.get('error') === 'access_denied'
           response.writeHead(400)
@@ -107,12 +115,16 @@ export function beginOrcaCloudPkceFlow(
           rejectFlow(
             new Error(cancelled ? 'orca_cloud_auth_denied' : 'orca_cloud_auth_callback_failed')
           )
+
           return
         }
+
         if (!code) {
           writeInvalidCallback(response)
+
           return
         }
+
         response.writeHead(200, ORCA_CLOUD_CALLBACK_RESPONSE_HEADERS)
         response.end(ORCA_CLOUD_CALLBACK_SUCCESS_PAGE)
         resolveFlow(code)
@@ -124,14 +136,18 @@ export function beginOrcaCloudPkceFlow(
     const timeout = setTimeout(() => {
       rejectFlow(new Error('orca_cloud_auth_timeout'))
     }, AUTH_TIMEOUT_MS)
+
     server.once('close', () => clearTimeout(timeout))
     server.once('error', rejectFlow)
     server.listen(0, '127.0.0.1', () => {
       const address = server.address()
+
       if (!address || typeof address === 'string') {
         rejectFlow(new Error('orca_cloud_auth_loopback_unavailable'))
+
         return
       }
+
       redirectUri = `http://127.0.0.1:${address.port}/auth/callback`
       const authorizeUrl = new URL(config.authorizeEndpoint)
       authorizeUrl.searchParams.set('client_id', config.clientId)

@@ -9,24 +9,30 @@ function spinnerChunk(index: number, chunkChars: number): string {
   const parts: string[] = []
   let length = 0
   let frame = 0
+
   while (length < chunkChars - 64) {
     const piece = `\r${SPINNER[frame % SPINNER.length]} Thinking... (${frame}s) esc to interrupt`
     parts.push(piece)
     length += piece.length
     frame += 1
   }
+
   parts.push(`\rstep ${index} done\n`)
+
   return parts.join('')
 }
 
 function collectHeap(): number {
   const gc = (globalThis as { gc?: () => void }).gc
+
   if (!gc) {
     throw new Error('global.gc unavailable - config/vitest.config.ts must pass --expose-gc')
   }
+
   void /reset/.test('reset')
   gc()
   gc()
+
   return process.memoryUsage().heapUsed
 }
 
@@ -34,6 +40,7 @@ describe('retained terminal tail row storage', () => {
   it('does not pin one chunk per retained row across a spinner workload', () => {
     let lines: string[] = []
     let partialLine = ''
+
     for (let index = 0; index < 4; index += 1) {
       const warm = appendNormalizedToTailBuffer(lines, partialLine, spinnerChunk(index, 4096))
       lines = warm.lines
@@ -45,12 +52,14 @@ describe('retained terminal tail row storage', () => {
     const chunkChars = 64 * 1024
     const chunkCount = 200
     const before = collectHeap()
+
     // Why build each chunk inside the loop: a pre-built array would pin every chunk itself.
     for (let index = 0; index < chunkCount; index += 1) {
       const next = appendNormalizedToTailBuffer(lines, partialLine, spinnerChunk(index, chunkChars))
       lines = next.lines
       partialLine = next.partialLine
     }
+
     const retained = collectHeap() - before
 
     expect(lines).toHaveLength(chunkCount)
@@ -63,6 +72,7 @@ describe('retained terminal tail row storage', () => {
 
   it('routes every retained row and partial line through ownRetainedString', () => {
     const own = vi.spyOn(ownership, 'ownRetainedString')
+
     try {
       const chunk = `${'x'.repeat(16 * 1024)}\nsecond line\ntrailing partial`
       const result = appendNormalizedToTailBuffer([], '', chunk)
@@ -81,9 +91,11 @@ describe('retained terminal tail row storage', () => {
 
   it('owns the redraw partial line without re-owning carried rows', () => {
     const own = vi.spyOn(ownership, 'ownRetainedString')
+
     try {
       const seeded = appendNormalizedToTailBuffer([], '', 'row one\nrow two\nrow three\n')
       own.mockClear()
+
       // \x1b[2A drives the multiline redraw builder rather than the plain path.
       const redrawn = appendNormalizedToTailBuffer(
         seeded.lines,

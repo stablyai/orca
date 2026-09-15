@@ -7,8 +7,11 @@ type TerminalPaneAttentionListener = () => void
 type TerminalPaneAttentionState = ReturnType<typeof useAppStore.getState>
 
 const listenersByTabId = new Map<string, Set<TerminalPaneAttentionListener>>()
+
 let unsubscribeStore: (() => void) | null = null
+
 let previousUnreadTerminalPanes: TerminalPaneAttentionState['unreadTerminalPanes'] | null = null
+
 let previousAttentionEnabled = false
 
 function isTerminalAttentionEnabled(state: TerminalPaneAttentionState): boolean {
@@ -17,17 +20,21 @@ function isTerminalAttentionEnabled(state: TerminalPaneAttentionState): boolean 
 
 function tabIdFromPaneKey(paneKey: string): string | null {
   const delimiter = paneKey.indexOf(':')
+
   if (delimiter <= 0) {
     return null
   }
+
   return paneKey.slice(0, delimiter)
 }
 
 function notifyTab(tabId: string): void {
   const listeners = listenersByTabId.get(tabId)
+
   if (!listeners) {
     return
   }
+
   for (const listener of Array.from(listeners)) {
     listener()
   }
@@ -44,22 +51,27 @@ function collectChangedTabs(
   next: TerminalPaneAttentionState['unreadTerminalPanes']
 ): Set<string> {
   const changed = new Set<string>()
+
   for (const paneKey of Object.keys(previous)) {
     if (!next[paneKey]) {
       const tabId = tabIdFromPaneKey(paneKey)
+
       if (tabId) {
         changed.add(tabId)
       }
     }
   }
+
   for (const paneKey of Object.keys(next)) {
     if (!previous[paneKey]) {
       const tabId = tabIdFromPaneKey(paneKey)
+
       if (tabId) {
         changed.add(tabId)
       }
     }
   }
+
   return changed
 }
 
@@ -67,6 +79,7 @@ function ensureStoreSubscription(): void {
   if (unsubscribeStore !== null) {
     return
   }
+
   const initial = useAppStore.getState()
   previousUnreadTerminalPanes = initial.unreadTerminalPanes
   previousAttentionEnabled = isTerminalAttentionEnabled(initial)
@@ -75,6 +88,7 @@ function ensureStoreSubscription(): void {
     const nextAttentionEnabled = isTerminalAttentionEnabled(state)
     const attentionChanged = nextAttentionEnabled !== previousAttentionEnabled
     const unreadChanged = nextUnreadTerminalPanes !== previousUnreadTerminalPanes
+
     if (!attentionChanged && !unreadChanged) {
       return
     }
@@ -89,11 +103,14 @@ function ensureStoreSubscription(): void {
 
     if (attentionChanged) {
       notifyAllTabs()
+
       return
     }
+
     if (!nextAttentionEnabled) {
       return
     }
+
     for (const tabId of changedTabs) {
       notifyTab(tabId)
     }
@@ -106,20 +123,27 @@ export function subscribeTerminalPaneAttention(
 ): () => void {
   ensureStoreSubscription()
   let listeners = listenersByTabId.get(tabId)
+
   if (!listeners) {
     listeners = new Set()
     listenersByTabId.set(tabId, listeners)
   }
+
   listeners.add(listener)
+
   return () => {
     const current = listenersByTabId.get(tabId)
+
     if (!current) {
       return
     }
+
     current.delete(listener)
+
     if (current.size === 0) {
       listenersByTabId.delete(tabId)
     }
+
     if (listenersByTabId.size === 0 && unsubscribeStore !== null) {
       unsubscribeStore()
       unsubscribeStore = null
@@ -133,8 +157,10 @@ export function applyTerminalPaneAttentionToManager(manager: PaneManager, tabId:
   const state = useAppStore.getState()
   const enabled = isTerminalAttentionEnabled(state)
   const unreadTerminalPanes = state.unreadTerminalPanes
+
   for (const pane of manager.getPanes()) {
     const paneKey = makePaneKey(tabId, pane.leafId)
+
     if (enabled && unreadTerminalPanes[paneKey]) {
       pane.container.setAttribute('data-terminal-attention', '')
     } else {

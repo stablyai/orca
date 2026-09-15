@@ -14,6 +14,7 @@ type OscTerminator = {
 }
 
 const OSC_133_PREFIX = '\x1b]133;'
+
 const MAX_OSC_CARRY_LENGTH = 4096
 
 function findOscTerminator(data: string, startIndex: number): OscTerminator | null {
@@ -23,9 +24,11 @@ function findOscTerminator(data: string, startIndex: number): OscTerminator | nu
   if (bel === -1 && st === -1) {
     return null
   }
+
   if (bel !== -1 && (st === -1 || bel < st)) {
     return { index: bel, length: 1 }
   }
+
   return { index: st, length: 2 }
 }
 
@@ -33,18 +36,23 @@ function parseBestEffortExitCode(value: string | undefined): number | null {
   if (!value) {
     return null
   }
+
   const parsed = Number.parseInt(value, 10)
+
   return Number.isNaN(parsed) ? null : parsed
 }
 
 function findPrefixCarry(data: string): string {
   const maxCarryLength = Math.min(data.length, OSC_133_PREFIX.length - 1)
+
   for (let length = maxCarryLength; length > 0; length -= 1) {
     const suffix = data.slice(data.length - length)
+
     if (OSC_133_PREFIX.startsWith(suffix)) {
       return suffix
     }
   }
+
   return ''
 }
 
@@ -64,10 +72,13 @@ export function createOsc133CommandFinishedScanner(
 
   const handleOsc133 = (payload: string): void => {
     const [sequence, exitCode] = payload.split(';')
+
     if (sequence === 'C') {
       onCommandStarted?.()
+
       return
     }
+
     if (sequence === 'D') {
       onCommandFinished(parseBestEffortExitCode(exitCode))
     }
@@ -79,18 +90,23 @@ export function createOsc133CommandFinishedScanner(
 
     while (combined.length > 0) {
       const start = combined.indexOf(OSC_133_PREFIX)
+
       if (start === -1) {
         carry = findPrefixCarry(combined)
+
         return
       }
 
       const payloadStart = start + OSC_133_PREFIX.length
       const terminator = findOscTerminator(combined, payloadStart)
+
       if (!terminator) {
         carry = combined.slice(start)
+
         if (carry.length > MAX_OSC_CARRY_LENGTH) {
           carry = carry.slice(carry.length - MAX_OSC_CARRY_LENGTH)
         }
+
         return
       }
 

@@ -130,6 +130,7 @@ function repinnedWorkspaceState(connectionId: string): {
   projectGroups: ProjectGroup[]
 } {
   const state = pinnedWorkspaceState()
+
   return {
     ...state,
     folderWorkspaces: state.folderWorkspaces.map((workspace) => ({ ...workspace, connectionId }))
@@ -156,6 +157,7 @@ describe('migrateAutomationOwners', () => {
       ],
       sshTargets: [makeTarget()]
     })
+
     expect(result.changed).toBe(true)
     expect(result.sshTargets[0].generation).toBe(1)
     expect(result.automations[0].executionTargetGeneration).toBe(1)
@@ -176,12 +178,14 @@ describe('migrateAutomationOwners', () => {
       sshTargets: [makeTarget()],
       repos: [makeRepo()]
     })
+
     const second = migrateAutomationOwners({
       automations: first.automations,
       sshTargets: first.sshTargets,
       repos: [makeRepo()],
       sshTargetGenerationCounter: first.sshTargetGenerationCounter
     })
+
     expect(second.changed).toBe(false)
     expect(second.automations).toEqual(first.automations)
     expect(second.sshTargets).toEqual(first.sshTargets)
@@ -195,10 +199,12 @@ describe('migrateAutomationOwners', () => {
       executionTargetId: 'ssh-gone',
       schedulerOwner: 'ssh_bridge'
     })
+
     const result = migrate({
       automations: [automation],
       repos: [makeRepo({ connectionId: 'ssh-gone' })]
     })
+
     const migrated = result.automations[0]
     expect(migrated).toEqual(automation)
     expect(migrated.executionTargetGeneration).toBeUndefined()
@@ -253,6 +259,7 @@ describe('migrateAutomationOwners', () => {
       repos: [makeRepo()],
       storageAuthority: 'runtime'
     })
+
     const migrated = result.automations[0]
     expect(migrated.enabled).toBe(true)
     expect(
@@ -277,6 +284,7 @@ describe('migrateAutomationOwners', () => {
       sshTargets: [makeTarget({ generation: 9 })],
       sshTargetGenerationCounter: 9
     })
+
     const migrated = result.automations[0]
     expect(migrated.executionTargetGeneration).toBe(4)
     expect(migrated.enabled).toBe(true)
@@ -299,11 +307,14 @@ describe('migrateAutomationOwners', () => {
       ...makeAutomation({ executionTargetType: 'ssh', executionTargetId: 'ssh-1' }),
       futureField: 'keep'
     }
+
     const target = { ...makeTarget(), futureTargetField: 'keep' }
+
     const result = migrate({
       automations: [automation as Automation],
       sshTargets: [target as SshTarget]
     })
+
     expect(result.automations[0]).toMatchObject({ futureField: 'keep' })
     expect(result.sshTargets[0]).toMatchObject({ futureTargetField: 'keep' })
   })
@@ -315,6 +326,7 @@ describe('migrateAutomationOwners', () => {
       sshTargetGenerationCounter: 4,
       ...pinnedWorkspaceState()
     })
+
     expect(result.changed).toBe(true)
     expect(result.automations[0].executionTargetType).toBe('local')
     expect(result.automations[0].executionTargetGeneration).toBe(4)
@@ -322,12 +334,14 @@ describe('migrateAutomationOwners', () => {
 
   it('never overwrites a differing capture on a pinned record, so it stays a replaced orphan', () => {
     const workspace = pinnedWorkspaceState()
+
     const result = migrate({
       automations: [pinnedLocalAutomation({ executionTargetGeneration: 4 })],
       sshTargets: [makeTarget({ generation: 9 })],
       sshTargetGenerationCounter: 9,
       ...workspace
     })
+
     const migrated = result.automations[0]
     expect(migrated.executionTargetGeneration).toBe(4)
     expect(migrated.enabled).toBe(true)
@@ -342,12 +356,14 @@ describe('migrateAutomationOwners', () => {
 
   it('is idempotent for pinned records', () => {
     const workspace = pinnedWorkspaceState()
+
     const first = migrate({
       automations: [pinnedLocalAutomation()],
       sshTargets: [makeTarget({ generation: 4 })],
       sshTargetGenerationCounter: 4,
       ...workspace
     })
+
     const second = migrateAutomationOwners({
       automations: first.automations,
       sshTargets: first.sshTargets,
@@ -355,6 +371,7 @@ describe('migrateAutomationOwners', () => {
       ...workspace,
       sshTargetGenerationCounter: first.sshTargetGenerationCounter
     })
+
     expect(second.changed).toBe(false)
     expect(second.automations).toEqual(first.automations)
   })
@@ -366,6 +383,7 @@ describe('migrateAutomationOwners', () => {
       sshTargetGenerationCounter: 4,
       ...pinnedWorkspaceState()
     })
+
     expect(result.automations[0].executionTargetGeneration).toBeUndefined()
   })
 
@@ -377,6 +395,7 @@ describe('migrateAutomationOwners', () => {
       sshTargets: [],
       ...pinnedWorkspaceState()
     })
+
     const migrated = result.automations[0]
     expect(migrated.enabled).toBe(true)
     expect(migrated.executionTargetGeneration).toBeUndefined()
@@ -398,6 +417,7 @@ describe('migrateAutomationOwners', () => {
       sshTargetGenerationCounter: 9,
       ...repinnedWorkspaceState('ssh-2')
     })
+
     const migrated = result.automations[0]
     expect(migrated.executionTargetGeneration).toBe(9)
     expect(migrated.enabled).toBe(true)
@@ -422,6 +442,7 @@ describe('migrateAutomationOwners', () => {
       sshTargets: [makeTarget({ id: 'ssh-new' })],
       sshTargetGenerationCounter: 2
     })
+
     expect(result.sshTargets[0].generation).toBe(10)
     expect(result.sshTargetGenerationCounter).toBe(10)
   })

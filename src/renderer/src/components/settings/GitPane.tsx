@@ -28,6 +28,7 @@ export { getGitPaneSearchEntries }
 
 const KEEP_LOCAL_MAIN_UP_TO_DATE_DESCRIPTION =
   'When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as main or master. This keeps commands like git diff main...HEAD from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.'
+
 const KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS = [
   'main',
   'master',
@@ -42,6 +43,7 @@ const KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS = [
   'safely',
   'worktree'
 ]
+
 const SOURCE_CONTROL_GROUP_ORDER_KEYWORDS = [
   'group order',
   'changes first',
@@ -80,10 +82,12 @@ export function SourceControlGroupOrderSetting({
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }): React.JSX.Element {
   const value = settings.sourceControlGroupOrder ?? DEFAULT_SOURCE_CONTROL_GROUP_ORDER
+
   const title = translate(
     'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
     'Source Control Group Order'
   )
+
   const description = translate(
     'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
     'Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.'
@@ -163,6 +167,7 @@ export function GitPane({
       setCustomPrefixDraft(settings.branchPrefixCustom)
     }
   }, [settings.branchPrefixCustom])
+
   const branchPrefixInputValue =
     settings.branchPrefix === 'git-username' ? displayedGitUsername : customPrefixDraft
 

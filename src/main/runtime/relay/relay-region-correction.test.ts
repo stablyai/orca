@@ -8,9 +8,13 @@ import { requestRelayAssignment } from './relay-http-client'
 import type { RelayRegionWindow } from './relay-region-correction-protocol'
 
 const paths: string[] = []
+
 const US = 'https://us.director.example.test'
+
 const ASIA = 'https://asia.director.example.test'
+
 const DIRECTOR = 'https://director.example.test'
+
 const window: RelayRegionWindow = {
   generation: 1,
   assignmentEpoch: 5,
@@ -18,15 +22,18 @@ const window: RelayRegionWindow = {
   expiresAt: 1_000_000,
   policyVersion: 1
 }
+
 afterEach(() => {
   for (const path of paths.splice(0)) {
     rmSync(path, { recursive: true, force: true })
   }
 })
+
 function resolver(us: number | null, asia: number | null, override?: string) {
   const path = mkdtempSync(join(tmpdir(), 'relay-decision-'))
   paths.push(path)
   const probe = vi.fn(async (origin: string) => (origin === US ? us : asia))
+
   const fetch = vi.fn<typeof globalThis.fetch>(async () =>
     Response.json({
       v: 1,
@@ -36,6 +43,7 @@ function resolver(us: number | null, asia: number | null, override?: string) {
       ]
     })
   )
+
   return {
     path,
     probe,
@@ -49,6 +57,7 @@ function resolver(us: number | null, asia: number | null, override?: string) {
     })
   }
 }
+
 describe('window-bound region decisions', () => {
   it('compares against the actual incumbent despite a previous US placement cache', async () => {
     const { instance, path, probe } = resolver(50, 100)
@@ -110,6 +119,7 @@ describe('window-bound region decisions', () => {
       .mockResolvedValueOnce(
         Response.json({ v: 1, cellUrl: ASIA, assignmentEpoch: 1, lease: 'synthetic' })
       )
+
     const result = await requestRelayAssignment({
       directorUrl: DIRECTOR,
       relayHostId: 'synthetic-host',
@@ -120,6 +130,7 @@ describe('window-bound region decisions', () => {
       fetch,
       assignRateGate: new RelayAssignRateGate()
     })
+
     expect(result.cellUrl).toBe(ASIA)
     expect(JSON.parse(String(fetch.mock.calls[1]![1]?.body))).toEqual({
       v: 1,

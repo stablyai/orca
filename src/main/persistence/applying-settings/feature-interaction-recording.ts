@@ -22,15 +22,18 @@ export function recordFeatureInteraction(
   id: FeatureInteractionId
 ): PersistedState['ui'] {
   const featureInteractions = normalizeFeatureInteractions(operations.state.ui?.featureInteractions)
+
   const telemetryBuckets = normalizeFeatureInteractionTelemetryBuckets(
     operations.state.featureInteractionTelemetryBuckets
   )
+
   const existing = featureInteractions[id]
   const previousCount = existing?.interactionCount ?? 0
   const nextCount = previousCount + 1
   const previousBucket = getFeatureInteractionUsageBucket(previousCount)
   const nextBucket = getFeatureInteractionUsageBucket(nextCount)
   const lastEmittedBucket = telemetryBuckets[id] ?? null
+
   const shouldEmit =
     nextBucket !== null &&
     (lastEmittedBucket === null ||
@@ -50,6 +53,7 @@ export function recordFeatureInteraction(
     ? { ...telemetryBuckets, [id]: nextBucket }
     : telemetryBuckets
   operations.scheduleSave()
+
   // Why: live UI only consumes the seen transition; count-only telemetry must not re-hydrate the renderer.
   if (!existing) {
     operations.notifyUIChanged()
@@ -67,5 +71,6 @@ export function recordFeatureInteraction(
       ...getCohortAtEmit()
     })
   }
+
   return operations.getUI()
 }

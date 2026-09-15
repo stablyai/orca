@@ -33,6 +33,7 @@ type CoordinatorState = {
 }
 
 const DEFAULT_POLL_MS = 2000
+
 const MAX_CONCURRENT_DEFAULT = 4
 
 export class Coordinator {
@@ -77,6 +78,7 @@ export class Coordinator {
       coordinatorHandle: this.opts.coordinatorHandle,
       pollIntervalMs: this.opts.pollIntervalMs
     })
+
     return this.executeLoop(run.id)
   }
 
@@ -106,23 +108,28 @@ export class Coordinator {
 
       while (!this.stopped) {
         const converged = await this.tick()
+
         if (converged) {
           break
         }
+
         await this.sleep(this.opts.pollIntervalMs)
       }
 
       // Why: an early stop leaves tasks incomplete, so the run counts as failed.
       const tasks = this.db.listTasks()
       const allDone = tasks.every((t) => t.status === 'completed' || t.status === 'failed')
+
       const failedTasks = [
         ...new Set([
           ...this.state.failedTasks,
           ...tasks.filter((task) => task.status === 'failed').map((task) => task.id)
         ])
       ]
+
       const finalStatus =
         this.stopped || failedTasks.length > 0 || !allDone ? 'failed' : 'completed'
+
       this.db.updateCoordinatorRun(runId, finalStatus)
       this.opts.onLog(`Coordinator run ${runId} ${finalStatus}`)
 
@@ -147,11 +154,13 @@ export class Coordinator {
   private async decompose(): Promise<void> {
     this.state.phase = 'decomposing'
     const existing = this.db.listTasks()
+
     if (existing.length === 0) {
       throw new Error(
         'No tasks found. Create tasks with orchestration.taskCreate before running the coordinator.'
       )
     }
+
     this.opts.onLog(`Found ${existing.length} tasks in DAG`)
     this.state.phase = 'dispatching'
   }
@@ -162,11 +171,13 @@ export class Coordinator {
     reblockTasksWithPendingGates(this.db)
     warnStaleDispatches(this.db, this.opts.onLog)
     await this.dispatchReadyTasks()
+
     return this.checkConvergence()
   }
 
   private processMessages(): void {
     const messages = this.db.getUnreadMessages(this.opts.coordinatorHandle)
+
     if (messages.length === 0) {
       return
     }
@@ -201,12 +212,15 @@ export class Coordinator {
 
   private handleLifecycleMessage(msg: MessageRow): void {
     const result = reconcileLifecycleMessage(this.db, msg, this.opts.onLog)
+
     if (result.action === 'completed') {
       if (!this.state.completedTasks.includes(result.taskId)) {
         this.state.completedTasks.push(result.taskId)
       }
+
       return
     }
+
     if (result.action === 'failed' && !this.state.failedTasks.includes(result.taskId)) {
       this.state.failedTasks.push(result.taskId)
     }
@@ -217,6 +231,7 @@ export class Coordinator {
     this.state.escalations.push(msg)
 
     const circuitBrokenTaskId = applyEscalationToDispatch(this.db, msg, this.opts.onLog)
+
     if (circuitBrokenTaskId) {
       this.state.failedTasks.push(circuitBrokenTaskId)
     }
@@ -229,12 +244,14 @@ export class Coordinator {
   private async dispatchReadyTasks(): Promise<void> {
     this.state.phase = 'dispatching'
     const readyTasks = this.db.listTasks({ ready: true })
+
     if (readyTasks.length === 0) {
       return
     }
 
     const dispatched = this.db.listTasks({ status: 'dispatched' })
     let slotsAvailable = this.opts.maxConcurrent - dispatched.length
+
     if (slotsAvailable <= 0) {
       return
     }
@@ -245,16 +262,19 @@ export class Coordinator {
       this.opts.coordinatorHandle,
       this.opts.worktree
     )
+
     if (terminals.length === 0 && slotsAvailable > 0) {
       // Why: create at most one terminal per tick to avoid spawning many at once.
       try {
         const created = await this.runtime.createTerminal(this.opts.worktree, {
           title: `Worker: ${readyTasks[0].spec.slice(0, 40)}`
         })
+
         terminals.push(created.handle)
         this.opts.onLog(`Created worker terminal ${created.handle}`)
       } catch (err) {
         this.opts.onLog(`Failed to create terminal: ${String(err)}`)
+
         return
       }
     }
@@ -263,6 +283,7 @@ export class Coordinator {
     const baseDrift: WorktreeDrift = this.opts.worktree
       ? await this.runtime.probeWorktreeDrift(this.opts.worktree).catch((err) => {
           this.opts.onLog(`probeWorktreeDrift failed for ${this.opts.worktree}: ${err}`)
+
           return null
         })
       : null
@@ -289,6 +310,7 @@ export class Coordinator {
           onLog: this.opts.onLog,
           onCircuitBroken: (taskId) => this.state.failedTasks.push(taskId)
         })
+
         if (result === 'stale-base-refused') {
           terminals.unshift(targetHandle)
           slotsAvailable++
@@ -303,9 +325,11 @@ export class Coordinator {
 
   private checkConvergence(): boolean {
     const convergence = evaluateDagConvergence(this.db, this.opts.onLog)
+
     if (convergence === 'all-done') {
       this.state.phase = 'done'
     }
+
     return convergence !== 'active'
   }
 

@@ -9,6 +9,7 @@ export type CodexGoalJournalState = {
 }
 
 const GOAL_IDENTITY_PREFIX = 'codex-goal'
+
 const DIGEST_PATTERN = /^[0-9a-f]{64}$/
 
 export function codexGoalJournalDigest(value: string): string {
@@ -29,10 +30,13 @@ export function codexGoalJournalIdentity(
 /** Recognizes only the host-owned rows used to record Codex goal lifecycle state. */
 export function parseCodexGoalJournalItemId(itemId: string): CodexGoalJournalState | null {
   const identity = parseAgentJournalItemKey(itemId)
+
   if (identity?.provider !== 'orca') {
     return null
   }
+
   const [prefix, thread, signature, occurrence, ...rest] = identity.clientMessageId.split(':')
+
   return prefix === GOAL_IDENTITY_PREFIX &&
     DIGEST_PATTERN.test(thread ?? '') &&
     DIGEST_PATTERN.test(signature ?? '') &&

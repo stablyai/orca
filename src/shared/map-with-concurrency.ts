@@ -5,12 +5,14 @@ export function mapWithConcurrency<T, R>(
   fn: (item: T, index: number) => Promise<R>
 ): Promise<R[]> {
   const workerCount = concurrencyWorkerCount(limit, items.length)
+
   if (items.length <= workerCount) {
     return Promise.all(items.map(fn))
   }
 
   const results: R[] = []
   let nextIndex = 0
+
   return Promise.all(
     Array.from({ length: workerCount }, async () => {
       while (nextIndex < items.length) {
@@ -42,11 +44,13 @@ export function forEachWithConcurrency<T>(
   fn: (item: T, index: number) => Promise<void>
 ): Promise<void> {
   const workerCount = concurrencyWorkerCount(limit, items.length)
+
   if (items.length <= workerCount) {
     return Promise.all(items.map(fn)).then(() => undefined)
   }
 
   let nextIndex = 0
+
   return Promise.all(
     Array.from({ length: workerCount }, async () => {
       while (nextIndex < items.length) {
@@ -61,5 +65,6 @@ export function forEachWithConcurrency<T>(
 function concurrencyWorkerCount(limit: number, itemCount: number): number {
   const normalizedLimit =
     limit === Number.POSITIVE_INFINITY ? itemCount : Number.isFinite(limit) ? Math.floor(limit) : 1
+
   return Math.max(1, Math.min(normalizedLimit, itemCount))
 }

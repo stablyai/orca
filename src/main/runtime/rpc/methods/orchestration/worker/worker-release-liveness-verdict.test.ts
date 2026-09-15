@@ -24,6 +24,7 @@ describe('orchestration worker release liveness verdict', () => {
     }
   ])('does not release a worker after $name', async ({ close, detail }) => {
     const reason = 'its SSH provider is no longer registered'
+
     const resource = {
       id: 'resource-1',
       terminal_handle: 'term_worker',
@@ -33,6 +34,7 @@ describe('orchestration worker release liveness verdict', () => {
       ownership_state: 'owned',
       release_state: 'requested'
     } as WorkerTerminalResourceRow
+
     const runtime = {
       showTerminal: vi.fn(async () => ({ handle: 'term_worker', connected: false })),
       getTerminalPaneKey: vi.fn(() => 'tab-worker:leaf-worker'),
@@ -44,11 +46,13 @@ describe('orchestration worker release liveness verdict', () => {
       closeTerminal: vi.fn(async () => close),
       notifyMessageArrived: vi.fn()
     } as unknown as OrcaRuntimeService
+
     const markWorkerTerminalReleaseUnknown = vi.fn((_resourceId: string, releaseError: string) => ({
       ...resource,
       release_state: 'unknown',
       release_error: releaseError
     }))
+
     const db = {
       getWorkerDispatch: vi.fn(() => ({
         agent_terminal_handle: 'term_worker',
@@ -98,6 +102,7 @@ describe('orchestration worker release liveness verdict', () => {
         ownership_state: 'owned',
         release_state: 'requested'
       } as WorkerTerminalResourceRow
+
       const runtime = {
         showTerminal: vi.fn(async () => ({ handle: 'term_worker', connected: false })),
         getTerminalPaneKey: vi.fn(() => 'tab-worker:leaf-worker'),
@@ -111,6 +116,7 @@ describe('orchestration worker release liveness verdict', () => {
         }),
         notifyMessageArrived: vi.fn()
       } as unknown as OrcaRuntimeService
+
       const db = {
         getWorkerDispatch: vi.fn(() => ({
           agent_terminal_handle: 'term_worker',

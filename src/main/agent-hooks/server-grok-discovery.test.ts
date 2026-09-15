@@ -40,9 +40,11 @@ async function postGrokHook(
 describe('AgentHookServer Grok discovery retries', () => {
   it('waits for delayed discovery beyond the transcript retry window', async () => {
     let releaseDiscovery!: () => void
+
     const discovery = new Promise<void>((resolve) => {
       releaseDiscovery = resolve
     })
+
     vi.spyOn(agentHookListener, 'preparePendingGrokResultDiscovery').mockReturnValue(discovery)
     const server = new AgentHookServer()
     const root = mkdtempSync(join(tmpdir(), 'orca-grok-delayed-discovery-'))
@@ -55,6 +57,7 @@ describe('AgentHookServer Grok discovery retries', () => {
     vi.stubEnv('HOME', root)
     vi.stubEnv('USERPROFILE', root)
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
       const endpoint = { port: env.ORCA_AGENT_HOOK_PORT, token: env.ORCA_AGENT_HOOK_TOKEN }
@@ -85,15 +88,18 @@ describe('AgentHookServer Grok discovery retries', () => {
 
   it('does not overwrite a newer same-text prompt when delayed discovery completes', async () => {
     let releaseDiscovery!: () => void
+
     const discovery = new Promise<void>((resolve) => {
       releaseDiscovery = resolve
     })
+
     vi.spyOn(agentHookListener, 'preparePendingGrokResultDiscovery').mockReturnValue(discovery)
     const server = new AgentHookServer()
     const root = mkdtempSync(join(tmpdir(), 'orca-grok-stale-discovery-'))
     vi.stubEnv('HOME', root)
     vi.stubEnv('USERPROFILE', root)
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
       const endpoint = { port: env.ORCA_AGENT_HOOK_PORT, token: env.ORCA_AGENT_HOOK_TOKEN }

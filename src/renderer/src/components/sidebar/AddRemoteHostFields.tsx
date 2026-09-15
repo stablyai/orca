@@ -30,6 +30,7 @@ export function SshHostFields({
   onSubmit: () => void
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(preferAdvancedOpen)
+
   return (
     <form
       className="grid gap-3 sm:grid-cols-2"
@@ -161,13 +162,16 @@ export function RemoteServerFields({
   onSubmit: () => void
 }) {
   const inputError = pairingCode.trim() !== '' && !parsedLink.ok
+
   const loopbackBlocked =
     parsedLink.ok && parsedLink.value.endpointKind === 'loopback' && !allowLoopback
+
   const pairingCodeDescriptionId = inputError
     ? 'add-server-pairing-code-error'
     : loopbackBlocked
       ? 'add-server-loopback-blocked'
       : 'add-server-pairing-code-help'
+
   return (
     <form
       className="space-y-3"

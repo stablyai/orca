@@ -69,13 +69,16 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       const uninstallE2EProbe = installMonacoE2EProbe(editorInstance, filePath)
       let autoHeightSub: { dispose: () => void } | null = null
       let autoHeightFrame: number | null = null
+
       const updateAutoHeight = (): void => {
         if (!autoHeight) {
           return
         }
+
         if (autoHeightFrame !== null) {
           return
         }
+
         autoHeightFrame = window.requestAnimationFrame(() => {
           autoHeightFrame = null
           setAutoHeightContentHeight(
@@ -86,10 +89,12 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
           )
         })
       }
+
       if (autoHeight) {
         updateAutoHeight()
         autoHeightSub = editorInstance.onDidContentSizeChange(updateAutoHeight)
       }
+
       markdownDocLinkDecorationsRef.current = createMarkdownDocLinkDecorationController(
         editorInstance,
         () => languageRef.current
@@ -100,12 +105,14 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       // Why: see contentRef — reconcile the retained model to the current prop before user interaction (surfaces edits made while unmounted).
       beginProgrammaticContentSync(filePath)
       isApplyingProgrammaticContentRef.current = true
+
       try {
         const didSyncOnMount = syncContentOnMount(
           editorInstance,
           contentRef.current,
           contentSyncModeRef.current
         )
+
         if (didSyncOnMount) {
           lastSyncedContentRef.current = contentRef.current
         }
@@ -120,11 +127,14 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         if (!editorInstance.hasTextFocus()) {
           return null
         }
+
         const model = editorInstance.getModel()
         const selection = editorInstance.getSelection()
+
         if (!model || !selection || selection.isEmpty()) {
           return null
         }
+
         // Why: Monaco selections live in its text model, not the DOM selection API that app shortcuts read.
         return model.getValueInRange(selection)
       })
@@ -173,10 +183,12 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         gutterMouseDownSub.dispose()
         disposeInputBindings()
         autoHeightSub?.dispose()
+
         if (autoHeightFrame !== null) {
           window.cancelAnimationFrame(autoHeightFrame)
           autoHeightFrame = null
         }
+
         conflictDecorationsRef.current?.clear()
         conflictDecorationsRef.current = null
         uninstallE2EProbe()
@@ -187,10 +199,12 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
 
       // If there's a pending reveal at mount time, execute it now
       const reveal = useAppStore.getState().pendingEditorReveal
+
       // Why: scope reveal consumption to the destination file, or the previously mounted editor clears it before openFile switches tabs.
       const revealMatchesEditor = reveal?.fileId
         ? reveal.fileId === fileId
         : reveal?.filePath === filePath
+
       if (reveal && revealMatchesEditor) {
         queueReveal(editorInstance, reveal.line, reveal.column, reveal.matchLength, () => {
           useAppStore.getState().setPendingEditorReveal(null)
@@ -202,6 +216,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       // Why: every mount path above focuses, so an explicit open handoff is already satisfied here.
       // Retiring it stops a later rich-mode remount of this same pane from stealing focus back.
       const focusRequest = useAppStore.getState().pendingEditorFocusRequest
+
       if (
         focusRequest &&
         matchesPendingEditorFocusRequest(focusRequest, { fileId, worktreeId, viewStateId })

@@ -25,6 +25,7 @@ export function useChecksPanelReviewLinkActions(
     suppressedGitHubPR,
     updateWorktreeMeta
   } = model
+
   const reviewLinkScopeKey = JSON.stringify([
     repo?.id ?? null,
     repo?.path ?? null,
@@ -37,6 +38,7 @@ export function useChecksPanelReviewLinkActions(
     runtimeEnvironmentId,
     localExecutionScope
   ])
+
   const reviewLinkScopeKeyRef = useRef(reviewLinkScopeKey)
   const reviewLinkActionGenerationRef = useRef(0)
   useLayoutEffect(() => {
@@ -55,14 +57,19 @@ export function useChecksPanelReviewLinkActions(
     if (!activeWorktreeId || !activeWorktree || !activeReview) {
       return
     }
+
     reviewLinkActionGenerationRef.current += 1
+
     if (activeReview.provider === 'github') {
       void unlinkGitHubPullRequest()
+
       return
     }
+
     if (linkedGitLabMR === null) {
       return
     }
+
     void updateWorktreeMeta(
       activeWorktreeId,
       { linkedGitLabMR: null },
@@ -82,6 +89,7 @@ export function useChecksPanelReviewLinkActions(
       if (!activeWorktreeId || !activeWorktree) {
         return
       }
+
       const openedScopeKey = reviewLinkScopeKey
       openGitHubPRLinkModal({
         openModal,
@@ -92,12 +100,14 @@ export function useChecksPanelReviewLinkActions(
         afterLinked: async (linkedPRNumber) => {
           const actionGeneration = reviewLinkActionGenerationRef.current + 1
           reviewLinkActionGenerationRef.current = actionGeneration
+
           if (
             reviewLinkScopeKeyRef.current !== openedScopeKey ||
             reviewLinkActionGenerationRef.current !== actionGeneration
           ) {
             return
           }
+
           await refreshLinkedGitHubPullRequest(linkedPRNumber)
         }
       })
@@ -115,10 +125,13 @@ export function useChecksPanelReviewLinkActions(
     if (!activeWorktreeId || !activeWorktree || !activeReview || !repo || !branch) {
       return
     }
+
     if (activeReview.provider === 'github') {
       openLinkPullRequestModal(activeWorktree.linkedPR ?? activeReview.number)
+
       return
     }
+
     const openedScopeKey = reviewLinkScopeKey
     openModal('edit-meta', {
       worktreeId: activeWorktreeId,
@@ -139,16 +152,21 @@ export function useChecksPanelReviewLinkActions(
       }) => {
         const actionGeneration = reviewLinkActionGenerationRef.current + 1
         reviewLinkActionGenerationRef.current = actionGeneration
+
         const isActionCurrent = (): boolean =>
           reviewLinkScopeKeyRef.current === openedScopeKey &&
           reviewLinkActionGenerationRef.current === actionGeneration
+
         if (!isActionCurrent()) {
           return
         }
+
         const nextMR = updates?.linkedGitLabMR
+
         if (typeof nextMR !== 'number') {
           return
         }
+
         await fetchHostedReviewForBranch(repo.path, branch, {
           repoId: repo.id,
           repoOwnerExecutionHostId: activeWorktree.hostId,
@@ -176,6 +194,7 @@ export function useChecksPanelReviewLinkActions(
     if (linkedPR !== null || typeof suppressedGitHubPR !== 'number') {
       return
     }
+
     openLinkPullRequestModal(suppressedGitHubPR)
   }, [linkedPR, openLinkPullRequestModal, suppressedGitHubPR])
 

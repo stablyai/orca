@@ -6,6 +6,7 @@ export function exposeUtcTimestamp(timestamp: string | null): string | null {
   if (!timestamp || !SQLITE_UTC_TIMESTAMP_RE.test(timestamp)) {
     return timestamp
   }
+
   return `${timestamp.replace(' ', 'T')}Z`
 }
 

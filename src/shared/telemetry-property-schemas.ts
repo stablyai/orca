@@ -46,15 +46,19 @@ export const AGENT_KIND_VALUES = [
   'trae',
   'other'
 ] as const
+
 export const agentKindSchema = z.enum(AGENT_KIND_VALUES)
+
 export type AgentKind = z.infer<typeof agentKindSchema>
 
 // Small set: only failures Orca's PTY-typed-command launch can observe (`binary_not_found` = shell ENOENT, `paste_readiness_timeout`, `unknown`).
 // Provider-side errors (auth/rate-limit/network) happen inside the agent CLI subprocess and are invisible to Orca. See telemetry-plan.md §Defer per-incident error fields.
 export const errorClassSchema = z.enum(['binary_not_found', 'paste_readiness_timeout', 'unknown'])
+
 export type ErrorClass = z.infer<typeof errorClassSchema>
 
 export const repoMethodSchema = z.enum(['folder_picker', 'clone_url', 'drag_drop'])
+
 export type RepoMethod = z.infer<typeof repoMethodSchema>
 
 // Historical setup-step choices (current flows skip that screen); kept for pre-rollout rows and compatibility.
@@ -74,7 +78,9 @@ export const addRepoExistingWorkspaceSourceSchema = z.enum([
   'clone_url',
   'create_project'
 ])
+
 export type AddRepoExistingWorkspaceSource = z.infer<typeof addRepoExistingWorkspaceSourceSchema>
+
 export const addRepoDefaultCheckoutHandoffSourceSchema = z.enum([
   'local_folder_picker',
   'runtime_server_path',
@@ -85,13 +91,16 @@ export const addRepoDefaultCheckoutHandoffSourceSchema = z.enum([
   'onboarding_clone_url',
   'project_added_compat'
 ])
+
 export type AddRepoDefaultCheckoutHandoffSource = z.infer<
   typeof addRepoDefaultCheckoutHandoffSourceSchema
 >
+
 export const addRepoDefaultCheckoutHandoffResultSchema = z.enum([
   'opened_default_checkout',
   'revealed_project'
 ])
+
 export const addRepoDefaultCheckoutHandoffReasonSchema = z.enum([
   'loaded_default_checkout',
   'detected_default_checkout',
@@ -114,9 +123,11 @@ export const workspaceCreateErrorClassSchema = z.enum([
   'base_ref_missing',
   'unknown'
 ])
+
 export type WorkspaceCreateErrorClass = z.infer<typeof workspaceCreateErrorClassSchema>
 
 export const workspaceSourceSchema = z.enum(WORKSPACE_SOURCE_VALUES)
+
 export type { WorkspaceSource }
 
 export const launchSourceSchema = z.enum([
@@ -136,9 +147,11 @@ export const launchSourceSchema = z.enum([
   'terminal_context_menu',
   'unknown'
 ])
+
 export type LaunchSource = z.infer<typeof launchSourceSchema>
 
 export const requestKindSchema = z.enum(['new', 'resume', 'followup'])
+
 export type RequestKind = z.infer<typeof requestKindSchema>
 
 export const featureWallTileIdSchema = z.enum([
@@ -157,6 +170,7 @@ export const featureWallTileIdSchema = z.enum([
 ])
 
 export const featureWallOpenSourceSchema = z.enum(['help_menu', 'popup', 'onboarding', 'unknown'])
+
 export type FeatureWallOpenSourceTelemetry = z.infer<typeof featureWallOpenSourceSchema>
 
 export const featureWallWorkflowIdSchema = z.enum([
@@ -174,6 +188,7 @@ export const featureWallExitActionSchema = z.enum(FEATURE_WALL_EXIT_ACTIONS)
 // `env_var` absent — env-var/CI paths override consent at runtime only, never firing an opt-in/out event.
 // `first_launch_notice` absent — the new-user cohort has no first-launch surface; those opt-outs come via `'settings'`.
 export const optInViaSchema = z.enum(['first_launch_banner', 'settings'])
+
 export type OptInVia = z.infer<typeof optInViaSchema>
 
 // Whitelist of settings emittable on `settings_changed`. `orca_channel` (build-time, not user-togglable) is absent.
@@ -182,6 +197,7 @@ export type BooleanGlobalSettingsKey = {
   // Why: new toggles may be optional for legacy-settings compat but are still boolean once defaulted.
   [Key in keyof GlobalSettings]-?: NonNullable<GlobalSettings[Key]> extends boolean ? Key : never
 }[keyof GlobalSettings]
+
 export const SETTINGS_CHANGED_WHITELIST = [
   'editorAutoSave',
   'openLinksInApp',
@@ -199,5 +215,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'geminiCliOAuthEnabled',
   'openAgentTabsInChatByDefault'
 ] as const satisfies readonly BooleanGlobalSettingsKey[]
+
 export const settingsChangedKeySchema = z.enum(SETTINGS_CHANGED_WHITELIST)
+
 export type SettingsChangedKey = z.infer<typeof settingsChangedKeySchema>

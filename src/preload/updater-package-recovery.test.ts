@@ -43,6 +43,7 @@ describe('native preload linux package recovery methods', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+
     if (originalContextIsolated) {
       Object.defineProperty(process, 'contextIsolated', originalContextIsolated)
     } else {
@@ -52,6 +53,7 @@ describe('native preload linux package recovery methods', () => {
 
   const loadApi = async (): Promise<PreloadApi> => {
     await import('./index')
+
     return exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
   }
 

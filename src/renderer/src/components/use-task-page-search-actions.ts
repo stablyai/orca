@@ -12,6 +12,7 @@ import { translate } from '@/i18n/i18n'
 import type { GitHubTaskKind } from '@/components/task-page-localized-options'
 import { getTaskPresetQuery } from '../../../shared/task-preset-query'
 import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+
 export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel) {
   const {
     setTaskResumeState,
@@ -33,31 +34,40 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     activeGithubTaskKind,
     newJiraIssueOpen
   } = model
+
   const applyPRFilterChange = useCallback(
     (change: PRFilterChange): void => {
       let next = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
+
       // Why: withQualifier round-trips through parseTaskQuery so each dropdown's patch preserves prior filters and free-text.
       if ('author' in change) {
         next = withQualifier(next, 'author', change.author ?? null)
       }
+
       if ('assignee' in change) {
         next = withQualifier(next, 'assignee', change.assignee ?? null)
       }
+
       if ('labels' in change) {
         next = withQualifier(next, 'labels', change.labels ?? [])
       }
+
       if ('state' in change && change.state) {
         next = withQualifier(next, 'state', change.state)
+
         if (change.state !== 'open') {
           next = withQualifier(next, 'draft', null)
         }
       }
+
       if ('draft' in change) {
         next = withQualifier(next, 'draft', change.draft ? 'true' : 'false')
       }
+
       if ('reviewer' in change) {
         // Why: the two reviewer qualifiers are mutually exclusive — clear the other whenever one is set so the chip matches the query.
         const reviewer = change.reviewer ?? null
+
         if (reviewer === null) {
           next = withQualifier(next, 'reviewRequested', null)
           next = withQualifier(next, 'reviewedBy', null)
@@ -69,6 +79,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
           next = withQualifier(next, 'reviewedBy', reviewer.login)
         }
       }
+
       setTaskSearchInput(next)
       setAppliedTaskSearch(next)
       setActiveTaskPreset(null)
@@ -91,6 +102,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
       setAppliedTaskSearch
     ]
   )
+
   const handleApplyTaskSearch = useCallback((): void => {
     const scoped = scopeGitHubTaskSearch(taskSearchInput, activeGithubTaskKind)
     setTaskSearchInput(scoped)
@@ -112,6 +124,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     setAppliedTaskSearch,
     setActiveTaskPreset
   ])
+
   const handleTaskSearchChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>): void => {
       const next = event.target.value
@@ -120,6 +133,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     },
     [setTaskSearchInput, setActiveTaskPreset]
   )
+
   const handleSetDefaultTaskPreset = useCallback(
     (presetId: TaskViewPresetId): void => {
       // Why: the default task view is a durable preference, so persist it instead of only changing page state.
@@ -133,6 +147,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     },
     [updateSettings]
   )
+
   const handleSelectGithubTaskKind = useCallback(
     (kind: GitHubTaskKind): void => {
       const preset = getDefaultPresetForGitHubTaskKind(kind)
@@ -156,9 +171,11 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
       setAppliedTaskSearch
     ]
   )
+
   const handleResetGithubTaskSearch = useCallback((): void => {
     handleSelectGithubTaskKind(activeGithubTaskKind)
   }, [activeGithubTaskKind, handleSelectGithubTaskKind])
+
   const handleTaskSearchKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>): void => {
       if (event.key === 'Enter') {
@@ -174,12 +191,14 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
         ) {
           return
         }
+
         event.preventDefault()
         handleApplyTaskSearch()
       }
     },
     [handleApplyTaskSearch]
   )
+
   useEffect(() => {
     if (
       taskSource !== 'github' ||
@@ -193,17 +212,23 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     ) {
       return
     }
+
     const onKeyDown = (event: KeyboardEvent): void => {
       const isMac = navigator.userAgent.includes('Mac')
       const modifierPressed = isMac ? event.metaKey : event.ctrlKey
+
       if (!modifierPressed || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') {
         return
       }
+
       const input = taskSearchInputRef.current
+
       if (!input) {
         return
       }
+
       const target = event.target
+
       if (
         target instanceof HTMLElement &&
         target !== input &&
@@ -213,14 +238,17 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
       ) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       input.focus()
       input.select()
     }
+
     window.addEventListener('keydown', onKeyDown, {
       capture: true
     })
+
     return () =>
       window.removeEventListener('keydown', onKeyDown, {
         capture: true
@@ -236,6 +264,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     taskSource,
     taskSearchInputRef
   ])
+
   const nextModel = model as typeof model & {
     applyPRFilterChange: typeof applyPRFilterChange
     handleApplyTaskSearch: typeof handleApplyTaskSearch
@@ -245,6 +274,7 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
     handleResetGithubTaskSearch: typeof handleResetGithubTaskSearch
     handleTaskSearchKeyDown: typeof handleTaskSearchKeyDown
   }
+
   nextModel.applyPRFilterChange = applyPRFilterChange
   nextModel.handleApplyTaskSearch = handleApplyTaskSearch
   nextModel.handleTaskSearchChange = handleTaskSearchChange
@@ -252,6 +282,8 @@ export function useTaskPageSearchActions(model: TaskPageGitHubQuietRefreshModel)
   nextModel.handleSelectGithubTaskKind = handleSelectGithubTaskKind
   nextModel.handleResetGithubTaskSearch = handleResetGithubTaskSearch
   nextModel.handleTaskSearchKeyDown = handleTaskSearchKeyDown
+
   return nextModel
 }
+
 export type TaskPageSearchActionsModel = ReturnType<typeof useTaskPageSearchActions>

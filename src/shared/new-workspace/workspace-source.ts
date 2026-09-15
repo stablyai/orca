@@ -69,6 +69,7 @@ export function isGitLabIssueUrl(url: string): boolean {
 function isJiraIssueUrl(url: string): boolean {
   try {
     const parsed = new URL(url)
+
     return (
       /\.atlassian\.net$/i.test(parsed.hostname) ||
       /\/browse\/[A-Z][A-Z0-9]+-\d+/i.test(parsed.pathname)
@@ -82,18 +83,23 @@ export function getWorkspaceSourceProvider(item: WorkspaceSourceItemLike): Works
   if (item.provider) {
     return item.provider
   }
+
   if (item.linearIdentifier) {
     return 'linear'
   }
+
   if (item.jiraIdentifier || isJiraIssueUrl(item.url)) {
     return 'jira'
   }
+
   if (item.type === 'mr' || isGitLabIssueUrl(item.url)) {
     return 'gitlab'
   }
+
   if (item.number === 0 && !item.url.includes('github.com')) {
     return 'linear'
   }
+
   return 'github'
 }
 
@@ -130,6 +136,7 @@ export function buildLinearWorkspaceSource(
 ): LinearWorkspaceSource {
   const organizationUrlKey = getLinearOrganizationUrlKeyFromIssueUrl(issue.url)
   const branchName = getUsableLinearBranchName(issue.branchName)
+
   return {
     provider: 'linear',
     type: 'issue',
@@ -178,6 +185,7 @@ export function getWorkspaceSourceName(item: WorkspaceSourceItemLike): {
 } {
   const normalized = toWorkspaceIntentItem(item)
   const resolved = getLinkedWorkItemWorkspaceName(normalized)
+
   return {
     seedName: resolved?.seedName ?? getLinkedWorkItemSuggestedName(normalized),
     displayName: resolved?.displayName ?? item.title.trim()
@@ -189,10 +197,13 @@ export function buildWorkspaceSourceSelection(args: {
   baseBranch?: string
 }): WorkspaceSourceSelection | null {
   const { linkedWorkItem, baseBranch } = args
+
   if (!linkedWorkItem) {
     return baseBranch ? { kind: 'branch', label: baseBranch } : null
   }
+
   const provider = getWorkspaceSourceProvider(linkedWorkItem)
+
   const kind: WorkspaceSourceSelectionKind =
     provider === 'linear'
       ? 'linear'
@@ -205,6 +216,7 @@ export function buildWorkspaceSourceSelection(args: {
           : linkedWorkItem.type === 'pr'
             ? 'github-pr'
             : 'github-issue'
+
   return {
     kind,
     label:
@@ -221,6 +233,8 @@ export function shouldPreserveWorkspaceSourceOnRepoChange(
   if (!item) {
     return false
   }
+
   const provider = getWorkspaceSourceProvider(item)
+
   return provider === 'linear' || provider === 'jira'
 }

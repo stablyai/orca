@@ -70,6 +70,7 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI removal', () => {
       const extractedRoot = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
       expect(await readlink(commandPath)).toBe(installed.launcherPath)
       expect(existsSync(extractedRoot.rootPath)).toBe(true)
+
       if (removeCommandFirst) {
         await unlink(commandPath)
       }
@@ -100,6 +101,7 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI removal', () => {
       writeFile(firstAppImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 }),
       writeFile(secondAppImagePath, '#!/usr/bin/env bash\n# nightly\n', { mode: 0o755 })
     ])
+
     const installerOptions = (appImagePath: string, content: string): CliInstallerOptions => ({
       platform: 'linux',
       isPackaged: true,
@@ -118,6 +120,7 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI removal', () => {
         await writeFile(join(payloadDirectory, 'orca-ide'), content, { mode: 0o755 })
       }
     })
+
     class HookedInstaller extends CliInstaller {
       afterNextStatus: (() => Promise<void>) | null = null
 
@@ -126,29 +129,38 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI removal', () => {
         const hook = this.afterNextStatus
         this.afterNextStatus = null
         await hook?.()
+
         return status
       }
     }
+
     let siblingStatusReads = 0
     let rejectSiblingStatusRead = false
+
     class TrackingInstaller extends CliInstaller {
       override async getStatus() {
         if (rejectSiblingStatusRead) {
           throw new Error('sibling status read before registration lock release')
         }
+
         siblingStatusReads += 1
+
         return super.getStatus()
       }
     }
+
     const firstInstaller = new HookedInstaller(installerOptions(firstAppImagePath, 'stable'))
     const secondInstaller = new TrackingInstaller(installerOptions(secondAppImagePath, 'nightly'))
 
     await firstInstaller.install()
+
     const firstRoot = resolveAppImageExtractedRoot({
       appImagePath: firstAppImagePath,
       cacheRootPath
     })!
+
     await secondInstaller.install()
+
     const secondRoot = resolveAppImageExtractedRoot({
       appImagePath: secondAppImagePath,
       cacheRootPath
@@ -177,6 +189,7 @@ describe.skipIf(process.platform === 'win32')('AppImage CLI removal', () => {
       rejectSiblingStatusRead = true
       siblingInstall = secondInstaller.install()
     }
+
     await firstInstaller.remove()
     rejectSiblingStatusRead = false
     expect(siblingInstall).not.toBeNull()

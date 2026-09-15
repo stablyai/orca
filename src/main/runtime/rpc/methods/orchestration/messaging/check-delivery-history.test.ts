@@ -18,10 +18,12 @@ describe('Run delivery history', () => {
       count: 1
     })
     expect(db.hasOutstandingRunDelivery(activeRunId!)).toBe(false)
+
     const delivery = db.getOrCreateRunDelivery({
       runId: activeRunId!,
       consumerGeneration: db.getRun(activeRunId!)!.consumer_generation
     })!
+
     db.insertMessage({
       from: 'worker',
       to: `run:${activeRunId}`,
@@ -29,6 +31,7 @@ describe('Run delivery history', () => {
       subject: 'later completion',
       type: 'worker_done'
     })
+
     const history = await h.call(
       'orchestration.check',
       {
@@ -38,6 +41,7 @@ describe('Run delivery history', () => {
       },
       ctx
     )
+
     expect(history).toMatchObject({ count: 1, messages: [{ subject: 'later completion' }] })
     expect(history).not.toHaveProperty('deliveryId')
     expect(db.hasOutstandingRunDelivery(activeRunId!)).toBe(true)

@@ -22,12 +22,14 @@ const {
 }))
 
 vi.mock('../../../pwsh', () => ({ isPwshAvailable, isPwshAvailableAsync }))
+
 vi.mock('../../../wsl', () => ({
   isWslAvailable,
   isWslAvailableAsync,
   listWslDistros,
   listWslDistrosAsync
 }))
+
 vi.mock('../../../git-bash', () => ({ isGitBashAvailable }))
 
 import { HOST_CAPABILITY_METHODS } from './host-capabilities'

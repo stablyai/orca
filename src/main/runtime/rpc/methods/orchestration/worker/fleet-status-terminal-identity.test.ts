@@ -8,11 +8,16 @@ import type { AgentStatusOrchestrationContext } from '../../../../../../shared/a
 import { projectFleetWorkerPage } from './worker-observation'
 
 const PANE_KEY = 'tab-fleet:leaf-fleet'
+
 /** The pane key a remint moves the agent to; the durable worker still names `PANE_KEY`. */
 const REMINTED_PANE_KEY = 'tab-fleet:leaf-reminted'
+
 const TERMINAL_HANDLE = 'term_fleet'
+
 const DISPATCH_ID = 'disp-fleet'
+
 const PROCESS_INCARNATION = 'pty-fleet:inc-1'
+
 /** `projectFleetWorkerPage` stamps `Date.now()` itself, so the fixture must ride the wall clock. */
 const observedAt = (): number => Date.now() - 1_000
 
@@ -37,6 +42,7 @@ function createRuntime(args: {
   rowPaneKey?: string
 }): OrcaRuntimeService {
   const rowPaneKey = args.rowPaneKey ?? PANE_KEY
+
   const host = {
     getAgentStatusSnapshotFn: () => [hookRowAsPublished(rowPaneKey)],
     getAgentStatusTerminalHandleForPaneKey: (paneKey: string) =>
@@ -48,6 +54,7 @@ function createRuntime(args: {
     // These cases drive the current-identity resolution; ingest-time capture has its own suite.
     readObservedAgentStatusPaneIdentityFn: () => ({ kind: 'unobserved' }) as const
   }
+
   return {
     // Drive the shipping accessor, not a copy of it: the identity loss was in this method.
     getOrchestrationFleetAgentStatusSnapshot: () =>

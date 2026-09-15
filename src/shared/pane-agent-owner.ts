@@ -69,10 +69,12 @@ export function resolvePaneAgentOwnerRecord(
 ): ResolvedPaneAgentOwner | null {
   for (const { key, ownerIsLaunch } of PANE_OWNER_RANK) {
     const agent = signals[key]
+
     if (agent) {
       return { agent, ownerIsLaunch }
     }
   }
+
   return null
 }
 

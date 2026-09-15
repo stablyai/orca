@@ -20,6 +20,7 @@ describe('getEffectiveLayoutForWorktree', () => {
       { 'wt-1': [makeGroup('g1', 'wt-1'), makeGroup('g2', 'wt-1')] },
       { 'wt-1': 'g2' }
     )
+
     expect(result).toEqual({ type: 'leaf', groupId: 'g2' })
   })
 
@@ -30,6 +31,7 @@ describe('getEffectiveLayoutForWorktree', () => {
       { 'wt-1': [makeGroup('g1', 'wt-1')] },
       {}
     )
+
     expect(result).toEqual({ type: 'leaf', groupId: 'g1' })
   })
 
@@ -50,6 +52,7 @@ describe('anyMountedWorktreeHasLayout', () => {
       {},
       {}
     )
+
     expect(result).toBe(true)
   })
 
@@ -62,6 +65,7 @@ describe('anyMountedWorktreeHasLayout', () => {
       {},
       {}
     )
+
     expect(result).toBe(true)
   })
 
@@ -73,6 +77,7 @@ describe('anyMountedWorktreeHasLayout', () => {
       {},
       {}
     )
+
     expect(result).toBe(false)
   })
 
@@ -84,6 +89,7 @@ describe('anyMountedWorktreeHasLayout', () => {
       {},
       {}
     )
+
     expect(result).toBe(false)
   })
 
@@ -95,6 +101,7 @@ describe('anyMountedWorktreeHasLayout', () => {
       { 'wt-1': [makeGroup('g1', 'wt-1')] },
       {}
     )
+
     expect(result).toBe(true)
   })
 })

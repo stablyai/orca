@@ -30,14 +30,17 @@ function makeTempDir(): string {
 
 async function listen(socketPath: string): Promise<Listener> {
   let connectionCount = 0
+
   const server = createServer((socket) => {
     connectionCount += 1
     socket.end()
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(socketPath, resolve)
   })
+
   return { server, connections: () => connectionCount }
 }
 
@@ -45,6 +48,7 @@ async function close(server: Server): Promise<void> {
   if (!server.listening) {
     return
   }
+
   await new Promise<void>((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()))
   })
@@ -78,6 +82,7 @@ describe('publishDaemonEndpoint', () => {
     const canonicalPath = join(directory, 'd')
     const boundPath = getDaemonSocketBindPath(canonicalPath)
     const newcomer = await listen(boundPath)
+
     try {
       const outcome = await publishDaemonEndpoint(boundPath, canonicalPath, probeSocketConnect)
 
@@ -97,6 +102,7 @@ describe('publishDaemonEndpoint', () => {
     const newcomerPath = getDaemonSocketBindPath(canonicalPath)
     const incumbent = await listen(incumbentPath)
     const newcomer = await listen(newcomerPath)
+
     try {
       await publishListener(incumbentPath, canonicalPath)
 
@@ -119,6 +125,7 @@ describe('publishDaemonEndpoint', () => {
     const newcomerPath = getDaemonSocketBindPath(canonicalPath)
     const incumbent = await listen(incumbentPath)
     const newcomer = await listen(newcomerPath)
+
     try {
       await publishListener(incumbentPath, canonicalPath)
       await close(incumbent.server)
@@ -148,6 +155,7 @@ describe('publishDaemonEndpoint', () => {
       const stale = await listen(stalePath)
       const winner = await listen(winnerPath)
       const latecomer = await listen(latecomerPath)
+
       try {
         // A dead entry both publishers will legitimately prove dead.
         await publishListener(stalePath, canonicalPath)
@@ -157,14 +165,18 @@ describe('publishDaemonEndpoint', () => {
         // the first probe: the retry must see a live incumbent, which is the point.
         const winnerIdentity = readDaemonSocketIdentity(winnerPath)
         let raced = false
+
         const probe = async (path: string) => {
           const outcome = await probeSocketConnect(path)
+
           if (!raced) {
             raced = true
             renameSync(winnerPath, canonicalPath)
           }
+
           return outcome
         }
+
         const outcome = await publishDaemonEndpoint(latecomerPath, canonicalPath, probe)
 
         // The latecomer must back off, and the winner must still own a reachable endpoint.
@@ -188,6 +200,7 @@ describe('publishDaemonEndpoint', () => {
     const newcomerPath = getDaemonSocketBindPath(canonicalPath)
     const incumbent = await listen(incumbentPath)
     const newcomer = await listen(newcomerPath)
+
     try {
       await publishListener(incumbentPath, canonicalPath)
       const before = statSync(canonicalPath, { bigint: true })
@@ -213,6 +226,7 @@ describe('publishDaemonEndpoint', () => {
     const canonicalPath = join(directory, 'd')
     const boundPath = getDaemonSocketBindPath(canonicalPath)
     const newcomer = await listen(boundPath)
+
     try {
       writeFileSync(canonicalPath, 'stale')
 
@@ -232,6 +246,7 @@ describe('publishDaemonEndpoint', () => {
     const canonicalPath = join(directory, 'd')
     const boundPath = getDaemonSocketBindPath(canonicalPath)
     const newcomer = await listen(boundPath)
+
     try {
       symlinkSync(join(directory, 'x'), canonicalPath)
 
@@ -255,9 +270,11 @@ describe('publishDaemonEndpoint', () => {
     const newcomerPath = getDaemonSocketBindPath(canonicalPath)
     const incumbent = await listen(incumbentPath)
     const newcomer = await listen(newcomerPath)
+
     try {
       await publishListener(incumbentPath, canonicalPath)
       const before = readDaemonSocketIdentity(canonicalPath)
+
       const probe = vi.fn(async () => {
         throw new Error('probe blew up')
       })
@@ -283,9 +300,11 @@ describe('publishDaemonEndpoint', () => {
     const canonicalPath = join(directory, 'd')
     const boundPath = getDaemonSocketBindPath(canonicalPath)
     const newcomer = await listen(boundPath)
+
     try {
       vi.doMock('node:fs', async () => {
         const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
         return {
           ...actual,
           linkSync: () => {
@@ -294,6 +313,7 @@ describe('publishDaemonEndpoint', () => {
         }
       })
       vi.resetModules()
+
       const { publishDaemonEndpoint: publishWithoutLinks } =
         await import('./daemon-endpoint-ownership')
 
@@ -315,9 +335,11 @@ describe('publishDaemonEndpoint', () => {
     const canonicalPath = join(directory, 'd')
     const boundPath = getDaemonSocketBindPath(canonicalPath)
     const newcomer = await listen(boundPath)
+
     try {
       vi.doMock('node:fs', async () => {
         const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
         return {
           ...actual,
           linkSync: () => {
@@ -326,6 +348,7 @@ describe('publishDaemonEndpoint', () => {
         }
       })
       vi.resetModules()
+
       const { publishDaemonEndpoint: publishWithBrokenLink } =
         await import('./daemon-endpoint-ownership')
 
@@ -349,6 +372,7 @@ describe('publishDaemonEndpoint', () => {
     const newcomerPath = getDaemonSocketBindPath(canonicalPath)
     const dead = await listen(deadBind)
     const newcomer = await listen(newcomerPath)
+
     try {
       await publishListener(deadBind, canonicalPath)
       await close(dead.server)
@@ -356,12 +380,14 @@ describe('publishDaemonEndpoint', () => {
 
       vi.doMock('node:fs', async () => {
         const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
         return {
           ...actual,
           lstatSync: (target: string, options?: { bigint?: boolean }) => {
             if (target === canonicalPath) {
               throw Object.assign(new Error('injected EIO'), { code: 'EIO' })
             }
+
             return actual.lstatSync(target, options as never)
           }
         }
@@ -392,15 +418,18 @@ describe('publishDaemonEndpoint', () => {
     const canonicalPath = join(directory, 'd')
     const boundPath = getDaemonSocketBindPath(canonicalPath)
     const newcomer = await listen(boundPath)
+
     try {
       vi.doMock('node:fs', async () => {
         const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
         // What a host whose birth time is really the ctime reports.
         const asCtimeBirthtime = (stats: { ctimeMs: number; ctimeNs?: bigint }) => ({
           ...stats,
           birthtimeMs: stats.ctimeMs,
           ...(stats.ctimeNs === undefined ? {} : { birthtimeNs: stats.ctimeNs })
         })
+
         return {
           ...actual,
           statSync: (target: string, options?: { bigint?: boolean }) =>
@@ -410,6 +439,7 @@ describe('publishDaemonEndpoint', () => {
         }
       })
       vi.resetModules()
+
       const { publishDaemonEndpoint: publishOnCtimeFs, readDaemonEndpointOwnershipState } =
         await import('./daemon-endpoint-ownership')
 
@@ -440,6 +470,7 @@ describe('publishDaemonEndpoint', () => {
     const dead = await listen(deadBind)
     const live = await listen(livePath)
     const latecomer = await listen(latecomerPath)
+
     try {
       await publishListener(deadBind, canonicalPath)
       await close(dead.server)
@@ -447,6 +478,7 @@ describe('publishDaemonEndpoint', () => {
 
       vi.doMock('node:fs', async () => {
         const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
         return {
           ...actual,
           lstatSync: (target: string, options?: { bigint?: boolean }) =>
@@ -454,17 +486,21 @@ describe('publishDaemonEndpoint', () => {
         }
       })
       vi.resetModules()
+
       const { publishDaemonEndpoint: publishAgainstRecycled } =
         await import('./daemon-endpoint-ownership')
 
       let swapped = false
+
       const probe = async (path: string) => {
         const outcome = await probeSocketConnect(path)
+
         if (!swapped) {
           swapped = true
           unlinkSync(canonicalPath)
           linkSync(livePath, canonicalPath)
         }
+
         return outcome
       }
 
@@ -490,6 +526,7 @@ describe('publishDaemonEndpoint', () => {
     const newcomerPath = getDaemonSocketBindPath(canonicalPath)
     const dead = await listen(deadBind)
     const newcomer = await listen(newcomerPath)
+
     try {
       await publishListener(deadBind, canonicalPath)
       await close(dead.server)
@@ -497,8 +534,10 @@ describe('publishDaemonEndpoint', () => {
 
       // Dead on the first ask, unclassifiable on the second.
       let asked = 0
+
       const probe = async () => {
         asked += 1
+
         return asked === 1 ? ('refused' as const) : ('unknown' as const)
       }
 
@@ -524,6 +563,7 @@ describe('publishDaemonEndpoint', () => {
     const newcomerPath = getDaemonSocketBindPath(canonicalPath)
     const dead = await listen(deadBind)
     const newcomer = await listen(newcomerPath)
+
     try {
       await publishListener(deadBind, canonicalPath)
       await close(dead.server)
@@ -531,8 +571,10 @@ describe('publishDaemonEndpoint', () => {
 
       // Unclassifiable first, decisively dead second.
       let asked = 0
+
       const probe = async () => {
         asked += 1
+
         return asked === 1 ? ('unknown' as const) : ('refused' as const)
       }
 
@@ -551,6 +593,7 @@ describe('publishDaemonEndpoint', () => {
     // Why: without the bound identity we can neither verify the publish nor arm the ownership
     // watchdog, so we would serve a name we could never check. Startup has nothing to protect.
     const directory = makeTempDir()
+
     try {
       await expect(
         publishDaemonEndpoint(
@@ -570,13 +613,16 @@ describe('publishDaemonEndpoint', () => {
     const canonicalPath = join(directory, 'd')
     const boundPath = getDaemonSocketBindPath(canonicalPath)
     const newcomer = await listen(boundPath)
+
     try {
       vi.doMock('node:fs', async () => {
         const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
         return {
           ...actual,
           unlinkSync: (target: string) => {
             actual.unlinkSync(target)
+
             if (target === boundPath) {
               actual.unlinkSync(canonicalPath)
             }
@@ -584,6 +630,7 @@ describe('publishDaemonEndpoint', () => {
         }
       })
       vi.resetModules()
+
       const { publishDaemonEndpoint: publishWithRemover } =
         await import('./daemon-endpoint-ownership')
 
@@ -603,6 +650,7 @@ describe('publishDaemonEndpoint', () => {
     const canonicalPath = join(directory, 'd')
     const boundPath = getDaemonSocketBindPath(canonicalPath)
     const newcomer = await listen(boundPath)
+
     try {
       // Why inject the failure directly rather than dropping directory permissions: a
       // permission-based setup induces nothing when the suite runs as root, and the test would
@@ -610,10 +658,12 @@ describe('publishDaemonEndpoint', () => {
       vi.doMock('node:fs', async () => {
         const actual = await vi.importActual<typeof NodeFs>('node:fs')
         let published = false
+
         return {
           ...actual,
           unlinkSync: (target: string) => {
             actual.unlinkSync(target)
+
             if (target === boundPath) {
               published = true
             }
@@ -622,11 +672,13 @@ describe('publishDaemonEndpoint', () => {
             if (published && target === canonicalPath) {
               throw Object.assign(new Error('injected EACCES'), { code: 'EACCES' })
             }
+
             return actual.statSync(target, options as never)
           }
         }
       })
       vi.resetModules()
+
       const { publishDaemonEndpoint: publishWithBlockedStat } =
         await import('./daemon-endpoint-ownership')
 
@@ -647,14 +699,17 @@ describe('publishDaemonEndpoint', () => {
     const competitorLink = join(directory, '.r')
     const newcomer = await listen(boundPath)
     const competitor = await listen(competitorPath)
+
     try {
       writeFileSync(canonicalPath, 'stale')
       vi.doMock('node:fs', async () => {
         const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
         return {
           ...actual,
           renameSync: (source: string, destination: string) => {
             actual.renameSync(source, destination)
+
             if (source === boundPath && destination === canonicalPath) {
               actual.renameSync(competitorLink, canonicalPath)
             }
@@ -662,18 +717,22 @@ describe('publishDaemonEndpoint', () => {
         }
       })
       vi.resetModules()
+
       const { publishDaemonEndpoint: publishWithRacer } =
         await import('./daemon-endpoint-ownership')
+
       // Why the competitor only takes the name from inside our own rename: publishing during
       // the probe is caught earlier now, by the pre-rename evidence check. 'lost' is
       // specifically the window between taking the name and verifying we still hold it.
       // Idempotent: the protocol probes again immediately before replacing, so this runs twice.
       let linked = false
+
       const probe = async () => {
         if (!linked) {
           linked = true
           linkSync(competitorPath, competitorLink)
         }
+
         return 'refused' as const
       }
 
@@ -694,6 +753,7 @@ describe('publishDaemonEndpoint', () => {
     const boundPath = join(directory, '.b')
     const canonicalPath = join(directory, 'x', 'd')
     const newcomer = await listen(boundPath)
+
     try {
       const probe = vi.fn(async () => 'missing' as const)
 
@@ -720,12 +780,14 @@ describe('publishDaemonEndpoint', () => {
     const replacementPath = getDaemonSocketBindPath(canonicalPath)
     const incumbent = await listen(incumbentPath)
     const replacement = await listen(replacementPath)
+
     try {
       const published = await publishDaemonEndpoint(
         incumbentPath,
         canonicalPath,
         probeSocketConnect
       )
+
       expect(published).toMatchObject({ status: 'published' })
 
       await close(incumbent.server)
@@ -739,6 +801,7 @@ describe('publishDaemonEndpoint', () => {
         canonicalPath,
         probeSocketConnect
       )
+
       expect(outcome).toMatchObject({ status: 'published' })
       await expectReachable(canonicalPath)
       expect(replacement.connections()).toBe(1)
@@ -755,6 +818,7 @@ describe('publishDaemonEndpoint', () => {
     const canonicalPath = join(directory, 'd')
     const boundPath = getDaemonSocketBindPath(canonicalPath)
     const newcomer = await listen(boundPath)
+
     try {
       const outcome = await publishDaemonEndpoint(boundPath, canonicalPath, probeSocketConnect)
 

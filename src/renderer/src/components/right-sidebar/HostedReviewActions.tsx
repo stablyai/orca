@@ -54,17 +54,21 @@ export default function HostedReviewActions({
   const isDeletingWorktree = useAppStore(
     (s) => getDeleteStateForWorktreeHost(worktree, s.deleteStateByWorktreeId)?.isDeleting ?? false
   )
+
   const isGitLab = review.provider === 'gitlab'
   const shortLabel = isGitLab ? 'MR' : 'PR'
   const reviewLabel = isGitLab ? 'merge request' : 'pull request'
+
   const stackMergeScope = useMemo(
     () => (githubPR?.stack ? getGitHubPRStackMergeScope(githubPR.stack, review.number) : null),
     [githubPR?.stack, review.number]
   )
+
   const stackUsesMergeQueue = isGitHubPRStackMergeQueueRequired(
     review.mergeQueueRequired,
     githubPR?.mergeQueueRequired
   )
+
   const stackMergeLabel =
     stackMergeScope && stackUsesMergeQueue
       ? stackMergeScope.count === 1
@@ -79,10 +83,12 @@ export default function HostedReviewActions({
             { pr: review.number, count: stackMergeScope.count }
           )
       : stackMergeScope?.label
+
   const mergePresentation = useMemo(() => {
     if (isGitLab) {
       return { ...presentGitLabMRMergeState(review), autoMergeAction: null }
     }
+
     const presentation = presentGitHubPRMergeState({
       ...githubPR,
       state: review.state,
@@ -94,10 +100,13 @@ export default function HostedReviewActions({
       autoMergeAllowed: review.autoMergeAllowed,
       mergeQueueRequired: review.mergeQueueRequired
     })
+
     if (!githubPR?.stack || !stackMergeScope) {
       return presentation
     }
+
     const stackBlocker = getGitHubPRStackMergeBlocker(stackMergeScope)
+
     return {
       ...presentation,
       label: stackMergeLabel ?? stackMergeScope.label,
@@ -118,10 +127,12 @@ export default function HostedReviewActions({
       autoMergeAction: null
     }
   }, [githubPR, isGitLab, review, stackMergeLabel, stackMergeScope, stackUsesMergeQueue])
+
   const mergeMethods = useMemo(
     () => resolveGitHubPRMergeMethods(isGitLab ? null : (githubPR?.mergeMethodSettings ?? null)),
     [githubPR?.mergeMethodSettings, isGitLab]
   )
+
   const {
     merging,
     readying,
@@ -143,13 +154,17 @@ export default function HostedReviewActions({
     autoMergeAction: mergePresentation.autoMergeAction,
     onRefreshReview
   })
+
   const isUpdatingReviewState = stateUpdating !== null
+
   const primaryMergeDisabled =
     merging ||
     isUpdatingReviewState ||
     (!mergePresentation.directMergeAvailable && !mergePresentation.autoMergeAction)
+
   const directMergeDisabled =
     merging || isUpdatingReviewState || !mergePresentation.directMergeAvailable
+
   const menuDisabled = merging || isUpdatingReviewState
 
   const handleDeleteWorktree = useCallback(() => {
@@ -322,6 +337,7 @@ export default function HostedReviewActions({
       />
     )
   }
+
   if (review.state === 'merged') {
     return (
       <MergedReviewActions

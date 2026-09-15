@@ -29,9 +29,11 @@ export default function BrowserFind({
   const safeFindInPage = useCallback(
     (text: string, opts?: Electron.FindInPageOptions): void => {
       const webview = webviewRef.current
+
       if (!webview || !text) {
         return
       }
+
       try {
         webview.findInPage(text, opts)
       } catch {
@@ -44,9 +46,11 @@ export default function BrowserFind({
 
   const safeStopFindInPage = useCallback((): void => {
     const webview = webviewRef.current
+
     if (!webview) {
       return
     }
+
     try {
       webview.stopFindInPage('clearSelection')
     } catch {
@@ -84,13 +88,17 @@ export default function BrowserFind({
   useEffect(() => {
     const wasOpen = wasOpenRef.current
     wasOpenRef.current = isOpen
+
     if (!isOpen) {
       activeFindQueryRef.current = null
+
       return
     }
+
     if (!requestQuery) {
       activeFindQueryRef.current = null
       safeStopFindInPage()
+
       return
     }
 
@@ -99,17 +107,22 @@ export default function BrowserFind({
       if (activeFindQueryRef.current === requestQuery) {
         return
       }
+
       safeFindInPage(requestQuery, { findNext: true })
       activeFindQueryRef.current = requestQuery
     }
+
     if (!wasOpen) {
       runFind()
+
       return
     }
+
     // Why: findInPage re-highlights the active match on every call, which can
     // flash while typing. Debounce typing changes, while reopen and Enter
     // navigation still use the live query immediately.
     const id = window.setTimeout(runFind, 200)
+
     return () => window.clearTimeout(id)
   }, [isOpen, requestQuery, safeFindInPage, safeStopFindInPage])
 
@@ -120,15 +133,19 @@ export default function BrowserFind({
   // restart without either happening.
   useEffect(() => {
     const webview = webviewRef.current
+
     if (!webview || !isOpen) {
       return
     }
+
     const handleFoundInPage = (event: Electron.FoundInPageEvent): void => {
       const { activeMatchOrdinal, matches } = event.result
       setActiveMatch(activeMatchOrdinal)
       setTotalMatches(matches)
     }
+
     webview.addEventListener('found-in-page', handleFoundInPage)
+
     return () => {
       try {
         webview.removeEventListener('found-in-page', handleFoundInPage)

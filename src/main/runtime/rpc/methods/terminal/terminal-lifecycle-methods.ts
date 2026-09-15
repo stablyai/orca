@@ -42,8 +42,10 @@ export const TERMINAL_LIFECYCLE_METHODS = [
       const pairedViewer = clientKind !== undefined
       const focus = pairedViewer ? false : params.focus === true
       const activate = pairedViewer ? false : params.activate === true
+
       const presentation =
         pairedViewer && params.presentation === 'focused' ? 'background' : params.presentation
+
       return {
         terminal: await runtime.dedupeTerminalCreate(
           pairedDeviceId ?? clientId ?? 'local',
@@ -120,9 +122,11 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     handler: async (params, { runtime }) => {
       // Why: a stale handle must fail with terminal_handle_stale, not resize the wrong PTY (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
+
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
       }
+
       const result = await runtime.resizeForClient(
         leaf.ptyId,
         params.mode,
@@ -130,6 +134,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
         params.mode === 'mobile-fit' ? params.cols : undefined,
         params.mode === 'mobile-fit' ? params.rows : undefined
       )
+
       return {
         terminal: {
           handle: params.terminal,

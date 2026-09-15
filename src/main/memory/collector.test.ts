@@ -49,6 +49,7 @@ async function loadCollector() {
   vi.resetModules()
   const { setAppEnvironment: setResetAppEnvironment } = await import('../../shared/app-environment')
   setResetAppEnvironment(appEnvironment())
+
   return await import('./collector')
 }
 
@@ -113,6 +114,7 @@ describe('parsePsOutput', () => {
         (typeof separator === 'string' && separator === '\n') ||
         (separator instanceof RegExp && separator.source.includes('\\s+'))
     )
+
     splitSpy.mockRestore()
     expect(rows).toEqual([
       { pid: 10, ppid: 1, cpu: 0.5, memory: 256 * 1024 },
@@ -126,20 +128,24 @@ describe('collectSubtree', () => {
   function makeIndex(rows: { pid: number; ppid: number }[]) {
     const byPid = new Map<number, { pid: number; ppid: number; cpu: number; memory: number }>()
     const childrenOf = new Map<number, number[]>()
+
     for (const r of rows) {
       byPid.set(r.pid, { ...r, cpu: 0, memory: 0 })
       const kids = childrenOf.get(r.ppid)
+
       if (kids) {
         kids.push(r.pid)
       } else {
         childrenOf.set(r.ppid, [r.pid])
       }
     }
+
     return { byPid, childrenOf, hasPrivateMemory: false }
   }
 
   it('walks every descendant of the root inclusive', async () => {
     const { collectSubtree } = await loadCollector()
+
     const index = makeIndex([
       { pid: 1, ppid: 0 },
       { pid: 2, ppid: 1 },
@@ -155,6 +161,7 @@ describe('collectSubtree', () => {
 
   it('does not revisit pids when cycles are present', async () => {
     const { collectSubtree } = await loadCollector()
+
     // Why: the ppid graph is untrusted — a buggy `ps` snapshot (or a
     // wrapped/reparented process) could present a cycle. collectSubtree
     // must terminate and not double-count the same pid.
@@ -170,6 +177,7 @@ describe('collectSubtree', () => {
 
   it('returns only pids that exist in byPid', async () => {
     const { collectSubtree } = await loadCollector()
+
     // Why: childrenOf may reference a pid that no longer has a row (it
     // exited between sampling its parent and sampling itself). We list
     // those as "walked" but do not fabricate a row for them.
@@ -184,19 +192,23 @@ describe('collectSubtree', () => {
 
   it('does not descend into a subtree already attributed to another PTY', async () => {
     const { collectSubtree } = await loadCollector()
+
     class CountingChildrenMap extends Map<number, number[]> {
       lookups = 0
 
       override get(key: number): number[] | undefined {
         this.lookups += 1
+
         return super.get(key)
       }
     }
+
     const childrenOf = new CountingChildrenMap([
       [1, [2, 4]],
       [2, [3]],
       [3, [5]]
     ])
+
     const byPid = new Map([1, 2, 3, 4, 5].map((pid) => [pid, { pid, ppid: 0, cpu: 0, memory: 0 }]))
     const index = { byPid, childrenOf, hasPrivateMemory: false }
 
@@ -245,6 +257,7 @@ describe('collectMemorySnapshot', () => {
       .map((line) => {
         const [pid, ppid, _cpu, rssKb] = line.split(/\s+/, 4)
         const memory = Number.parseInt(rssKb ?? '', 10)
+
         return [
           pid ?? '',
           ppid ?? '',
@@ -265,6 +278,7 @@ describe('collectMemorySnapshot', () => {
       .map((line, index) => {
         const [pid, ppid, _cpu, rssKb] = line.split(/\s+/, 4)
         const memoryKb = Number.parseInt(rssKb ?? '', 10)
+
         return {
           instance: `fixture${index}`,
           pid: pid ?? '',
@@ -272,8 +286,10 @@ describe('collectMemorySnapshot', () => {
           memory: Number.isFinite(memoryKb) && memoryKb > 0 ? memoryKb * 1024 : 0
         }
       })
+
     const counterColumns = (counter: string): string[] =>
       rows.map((row) => `"\\\\HOST\\Process(${row.instance})\\${counter}"`)
+
     const valueColumns = (field: 'pid' | 'ppid' | 'memory'): string[] =>
       rows.map((row) => `"${row[field]}"`)
 
@@ -293,8 +309,10 @@ describe('collectMemorySnapshot', () => {
   function expectProcessSweepCount(count: number): void {
     if (os.platform() === 'win32') {
       expect(runProcessMock).toHaveBeenCalledTimes(count)
+
       return
     }
+
     expect(execMock).toHaveBeenCalledTimes(count)
   }
 

@@ -31,15 +31,19 @@ async function fetchEnvironmentSshTargets(environmentId: string): Promise<SshTar
     undefined,
     { timeoutMs: SSH_RPC_TIMEOUT_MS }
   )
+
   if (!Array.isArray(targets)) {
     throw new Error('Remote SSH target metadata is invalid')
   }
+
   return targets.map((target) => {
     if (typeof target.id !== 'string' || typeof target.label !== 'string') {
       throw new Error('Remote SSH target metadata is invalid')
     }
+
     // Why: an old server omits `generation`; a malformed one is dropped rather than trusted as a fence value.
     const generation = sanitizeSshTargetGeneration(target.generation)
+
     return {
       id: target.id,
       label: target.label,
@@ -56,11 +60,14 @@ async function syncEnvironmentSshTargetMetadata(
   generation: number
 ): Promise<SshTargetSummary[]> {
   const targets = await fetchEnvironmentSshTargets(environmentId)
+
   if (generation !== getEnvironmentSshStateGeneration(environmentId)) {
     return []
   }
+
   useAppStore.getState().setEnvironmentSshTargetsMetadata(environmentId, targets, generation)
   await syncEnvironmentRemovedSshTargetLabels(environmentId, generation)
+
   return generation === getEnvironmentSshStateGeneration(environmentId) ? targets : []
 }
 
@@ -75,6 +82,7 @@ async function syncEnvironmentRemovedSshTargetLabels(
       undefined,
       { timeoutMs: SSH_RPC_TIMEOUT_MS }
     )
+
     useAppStore.getState().setEnvironmentRemovedSshTargetLabels(environmentId, labels, generation)
   } catch {
     // Best-effort — a missing map just falls back to the raw target id.
@@ -90,6 +98,7 @@ async function fetchEnvironmentSshConnectionStates(
     if (generation !== getEnvironmentSshStateGeneration(environmentId)) {
       return
     }
+
     try {
       const { state } = await callRuntimeRpc<{ state: SshConnectionState | null }>(
         environmentTarget(environmentId),
@@ -97,7 +106,9 @@ async function fetchEnvironmentSshConnectionStates(
         { targetId: target.id },
         { timeoutMs: SSH_RPC_TIMEOUT_MS }
       )
+
       const admittedState = state ? admitSshConnectionState(state, target.id) : null
+
       if (admittedState) {
         useAppStore
           .getState()
@@ -110,12 +121,14 @@ async function fetchEnvironmentSshConnectionStates(
 }
 
 type SshRefreshKind = 'metadata' | 'full'
+
 type SshRefreshEntry = {
   promise: Promise<void>
   generation: number
   kind: SshRefreshKind
   rerunKind: SshRefreshKind | null
 }
+
 const sshRefreshesInFlight = new Map<string, SshRefreshEntry>()
 
 function mergeSshRefreshKind(
@@ -135,31 +148,40 @@ async function runEnvironmentSshTargetMetadataRefresh(environmentId: string): Pr
   const generation = getEnvironmentSshStateGeneration(environmentId)
   const bucket = useAppStore.getState().sshStateByEnvironment.get(environmentId)
   const targets = await fetchEnvironmentSshTargets(environmentId)
+
   if (generation !== getEnvironmentSshStateGeneration(environmentId)) {
     return
   }
+
   const priorTargetGenerations = bucket?.targetGenerations ?? new Map<string, number>()
   const nextTargetGenerations = collectSshTargetGenerations(targets)
+
   const metadataChanged =
     !bucket?.targetsHydrated ||
     !sshTargetLabelsEqual(bucket.targetLabels, targets) ||
     !sshTargetGenerationsEqual(priorTargetGenerations, nextTargetGenerations)
+
   useAppStore.getState().setEnvironmentSshTargetsMetadata(environmentId, targets, generation)
   const priorTargetIds = new Set(bucket?.targetLabels.keys() ?? [])
+
   // Why: read states after the write — a resync racing this fetch can label a target that never had one read.
   const knownStates = useAppStore
     .getState()
     .sshStateByEnvironment.get(environmentId)?.connectionStates
+
   const needStateRead = targets.filter(
     (target) =>
       !priorTargetIds.has(target.id) ||
       !knownStates?.has(target.id) ||
       priorTargetGenerations.get(target.id) !== nextTargetGenerations.get(target.id)
   )
+
   if (!metadataChanged) {
     await fetchEnvironmentSshConnectionStates(environmentId, needStateRead, generation)
+
     return
   }
+
   await syncEnvironmentRemovedSshTargetLabels(environmentId, generation)
   await fetchEnvironmentSshConnectionStates(environmentId, needStateRead, generation)
 }
@@ -178,14 +200,17 @@ function startEnvironmentSshRefresh(
     kind: initialKind,
     rerunKind: null
   }
+
   entry.promise = (async () => {
     let nextKind: SshRefreshKind | null = initialKind
     let lastError: unknown = null
+
     try {
       while (nextKind) {
         entry.kind = nextKind
         entry.generation = getEnvironmentSshStateGeneration(environmentId)
         entry.rerunKind = null
+
         try {
           await (entry.kind === 'full'
             ? runEnvironmentSshHydration(environmentId)
@@ -193,12 +218,15 @@ function startEnvironmentSshRefresh(
           lastError = null
         } catch (error) {
           lastError = error
+
           if (entry.rerunKind) {
             entry.rerunKind = mergeSshRefreshKind(entry.rerunKind, entry.kind)
           }
         }
+
         nextKind = entry.rerunKind
       }
+
       if (lastError) {
         throw lastError
       }
@@ -209,6 +237,7 @@ function startEnvironmentSshRefresh(
     }
   })()
   sshRefreshesInFlight.set(environmentId, entry)
+
   return entry.promise
 }
 
@@ -228,16 +257,21 @@ export async function hydrateRuntimeEnvironmentSshState(
 ): Promise<void> {
   const generation = getEnvironmentSshStateGeneration(environmentId)
   const inFlight = sshRefreshesInFlight.get(environmentId)
+
   if (inFlight) {
     if (options.force || inFlight.generation !== generation) {
       requestSshRefreshRerun(inFlight, 'full')
     }
+
     return inFlight.promise
   }
+
   const bucket = useAppStore.getState().sshStateByEnvironment.get(environmentId)
+
   if (!options.force && bucket?.targetsHydrated) {
     return
   }
+
   return startEnvironmentSshRefresh(environmentId, 'full')
 }
 
@@ -247,11 +281,15 @@ export async function refreshRuntimeEnvironmentSshTargetMetadata(
 ): Promise<void> {
   const generation = getEnvironmentSshStateGeneration(environmentId)
   const inFlight = sshRefreshesInFlight.get(environmentId)
+
   if (inFlight) {
     requestSshRefreshRerun(inFlight, inFlight.generation === generation ? 'metadata' : 'full')
+
     return inFlight.promise
   }
+
   const bucket = useAppStore.getState().sshStateByEnvironment.get(environmentId)
+
   return startEnvironmentSshRefresh(environmentId, bucket?.targetsHydrated ? 'metadata' : 'full')
 }
 
@@ -272,16 +310,22 @@ export function applyRuntimeEnvironmentSshStateChanged(
   if (generation !== getEnvironmentSshStateGeneration(environmentId)) {
     return
   }
+
   const admittedState = admitSshConnectionState(state, targetId)
+
   if (!admittedState) {
     return
   }
+
   const store = useAppStore.getState()
   const bucket = store.sshStateByEnvironment.get(environmentId)
+
   if (bucket?.targetsHydrated && bucket.targetLabels.has(targetId)) {
     store.setEnvironmentSshConnectionState(environmentId, targetId, admittedState, generation)
+
     return
   }
+
   void hydrateRuntimeEnvironmentSshState(environmentId, { force: true }).catch(() => {})
 }
 
@@ -293,18 +337,22 @@ export async function connectRuntimeEnvironmentSshTarget(
   targetId: string
 ): Promise<SshConnectionState | null> {
   const generation = getEnvironmentSshStateGeneration(environmentId)
+
   const { state } = await callRuntimeRpc<{ state: SshConnectionState | null }>(
     environmentTarget(environmentId),
     'ssh.connect',
     { targetId },
     { timeoutMs: 60_000 }
   )
+
   const admittedState = state ? admitSshConnectionState(state, targetId) : null
+
   if (admittedState) {
     useAppStore
       .getState()
       .setEnvironmentSshConnectionState(environmentId, targetId, admittedState, generation)
   }
+
   return admittedState
 }
 

@@ -48,6 +48,7 @@ export function replaySharedControlSubscriptions(args: {
   tagReplayedResponses: boolean
 }): boolean {
   sharedControlSubscriptions.replaySharedControlSubscriptions(args)
+
   return true
 }
 

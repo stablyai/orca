@@ -19,6 +19,7 @@ export const EMPTY_GITHUB_ISSUE_TIMELINE_ITEMS: GitHubIssueTimelineItem[] = []
 
 function getTimelineSortValue(createdAt: string): number {
   const value = new Date(createdAt).getTime()
+
   return Number.isFinite(value) ? value : 0
 }
 
@@ -43,6 +44,7 @@ export function getIssueConversationEntries(
     }))
   ].sort((a, b) => {
     const diff = getTimelineSortValue(a.createdAt) - getTimelineSortValue(b.createdAt)
+
     return diff === 0 ? a.index - b.index : diff
   })
 }
@@ -50,6 +52,7 @@ export function getIssueConversationEntries(
 export function getTimelineTargetLabel(target: GitHubIssueTimelineTarget): string {
   const prefix = target.type === 'pr' ? 'PR' : 'issue'
   const title = target.title ? ` ${target.title}` : ''
+
   return `${prefix} #${target.number}${title}`
 }
 
@@ -57,8 +60,10 @@ export function getTimelineStateReasonLabel(reason: string | null | undefined): 
   if (reason === 'completed') {
     return translate('auto.components.GitHubItemDialog.timeline.completed', 'as completed')
   }
+
   if (reason === 'not_planned') {
     return translate('auto.components.GitHubItemDialog.timeline.notPlanned', 'as not planned')
   }
+
   return null
 }

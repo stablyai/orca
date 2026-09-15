@@ -33,12 +33,14 @@ export class FakeSessionSearchClock implements SessionSearchClock {
     const at = this.time
     this.time += this.costPerNowMs
     this.onNow?.(++this.nowCalls)
+
     return at
   }
 
   setTimeout(callback: () => void, ms: number): SessionSearchTimerHandle {
     const id = this.nextId++
     this.timers.set(id, { at: this.time + ms, callback })
+
     return id
   }
 
@@ -49,6 +51,7 @@ export class FakeSessionSearchClock implements SessionSearchClock {
   /** Moves time forward and fires every timer that came due, in order. */
   advance(ms: number): void {
     this.time += ms
+
     for (const [id, timer] of [...this.timers].sort((left, right) => left[1].at - right[1].at)) {
       if (timer.at <= this.time) {
         this.timers.delete(id)
@@ -80,6 +83,7 @@ export async function openSessionSearchIndexerHarness(
   const root = await mkdtemp(join(tmpdir(), `${name}-`))
   const roots = isolatedScanRoots(root)
   const databasePath = join(root, 'index', 'index.sqlite')
+
   return {
     root,
     databasePath,
@@ -97,6 +101,7 @@ function withConnection<T>(
   query: (db: SyncDatabase) => T
 ): T {
   const db = new SyncDatabase(path, { readonly: readonlyConnection })
+
   try {
     return query(db)
   } finally {
@@ -152,6 +157,7 @@ export async function writeMessageGraphTranscript(
   turns: readonly string[]
 ): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
+
   const lines = turns.flatMap((turn, index) => [
     JSON.stringify({
       type: 'message',
@@ -164,5 +170,6 @@ export async function writeMessageGraphTranscript(
       message: { role: 'assistant', content: `noted: ${turn}` }
     })
   ])
+
   await writeFile(path, `${lines.join('\n')}\n`)
 }

@@ -18,6 +18,7 @@ import {
 } from './codex-structured-session-adapter'
 
 const THREAD_ID = 'thread-abc'
+
 const USER_MESSAGE: AgentJournalMessageItem = {
   kind: 'message',
   role: 'user',
@@ -25,6 +26,7 @@ const USER_MESSAGE: AgentJournalMessageItem = {
 }
 
 type Route = (params: Record<string, unknown> | undefined) => unknown
+
 type FakeConnection = Omit<CodexAppServerConnection, 'closed'> & {
   closed: boolean
   launch: CodexAppServerLaunch
@@ -48,9 +50,11 @@ function fakeCodex(): {
   routes: Record<string, Route>
 } {
   const connections: FakeConnection[] = []
+
   const routes: Record<string, Route> = {
     'thread/resume': () => ({ thread: { id: THREAD_ID } })
   }
+
   const openConnection = (async (launch, handlers = {}) => {
     const connection: FakeConnection = {
       launch,
@@ -60,6 +64,7 @@ function fakeCodex(): {
       closed: false,
       request: async (method, params) => {
         connection.calls.push({ method, params })
+
         return routes[method]?.(params) ?? {}
       },
       notify: () => {},
@@ -67,12 +72,16 @@ function fakeCodex(): {
       respondWithError: () => {},
       close: async () => {
         connection.closed = true
+
         return true
       }
     }
+
     connections.push(connection)
+
     return connection
   }) as typeof openCodexAppServerConnection
+
   return { connections, openConnection, routes }
 }
 
@@ -101,7 +110,9 @@ async function acquired(
     terminateTurnProcesses: async () => true,
     ...processControl
   })
+
   await adapter.acquire({ identity: identity(), fence: 7, spawnToken: 'spawn-9' })
+
   return adapter
 }
 
@@ -131,6 +142,7 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
     declined.routes['turn/interrupt'] = () => {
       throw new CodexAppServerRequestError('turn/interrupt', -32602, 'no such turn')
     }
+
     const absent = fakeCodex()
     absent.routes['turn/interrupt'] = () => {
       throw new CodexAppServerUnsupportedError('no turn/interrupt')
@@ -170,17 +182,22 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
   it('publishes terminal state only after streaming interruption is physically settled', async () => {
     const events: CodexStructuredSessionEvent[] = []
     let finishTermination!: (terminated: boolean) => void
+
     const termination = new Promise<boolean>((resolve) => {
       finishTermination = resolve
     })
+
     const codex = fakeCodex()
     codex.routes['turn/interrupt'] = () => {
       completeTurn(codex)
+
       return {}
     }
+
     const adapter = await acquired(codex, events, {
       terminateTurnProcesses: async () => termination
     })
+
     codex.connections[0].handlers.onNotification?.('item/agentMessage/delta', {
       threadId: THREAD_ID,
       turnId: 'turn-1',
@@ -200,9 +217,11 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
 
   it('starts physical termination without waiting for the interrupt receipt', async () => {
     let finishInterrupt!: () => void
+
     const interruptReceipt = new Promise<void>((resolve) => {
       finishInterrupt = resolve
     })
+
     const terminateTurnProcesses = vi.fn(async () => true)
     const codex = fakeCodex()
     codex.routes['turn/interrupt'] = () => interruptReceipt
@@ -220,8 +239,10 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
     const codex = fakeCodex()
     codex.routes['turn/interrupt'] = () => {
       completeTurn(codex)
+
       return {}
     }
+
     const adapter = await acquired(codex, events, {
       terminateTurnProcesses: async () => false
     })
@@ -238,8 +259,10 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
     codex.routes['turn/start'] = () => ({ turn: { id: `turn-${++nextTurn}` } })
     codex.routes['turn/interrupt'] = () => {
       completeTurn(codex)
+
       return {}
     }
+
     const adapter = await acquired(codex)
 
     await adapter.dispatch({
@@ -266,14 +289,18 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
     const events: CodexStructuredSessionEvent[] = []
     let clock = 5_000
     let finishTermination!: (terminated: boolean) => void
+
     const termination = new Promise<boolean>((resolve) => {
       finishTermination = resolve
     })
+
     const codex = fakeCodex()
     codex.routes['turn/interrupt'] = () => {
       completeTurn(codex)
+
       return {}
     }
+
     const adapter = await acquired(codex, events, {
       terminateTurnProcesses: async () => termination,
       now: () => clock
@@ -295,6 +322,7 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
       completeTurn(codex)
       throw new Error('interrupt receipt lost')
     }
+
     const adapter = await acquired(codex, events, {
       terminateTurnProcesses: async () => true
     })

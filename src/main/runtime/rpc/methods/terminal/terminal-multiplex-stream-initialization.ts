@@ -24,11 +24,14 @@ export async function initializeMultiplexStream(
   const isMobile = request.client?.type === 'mobile'
   const remoteDesktopSubscriptionKey = `multiplex:${connectionId}:${request.streamId}`
   const streamGeneration = randomUUID()
+
   const requestedSourceRangeConsumer =
     request.capabilities?.ackOutput === 1 && request.capabilities?.ackOutputSourceRanges === 1
+
   const sourceRangeLedger = requestedSourceRangeConsumer
     ? sourceRangeRegistry.open(streamGeneration)
     : null
+
   const sourceRangeConsumerAttached =
     sourceRangeLedger !== null &&
     runtime.attachRemoteTerminalSourceRangeConsumer({
@@ -36,9 +39,11 @@ export async function initializeMultiplexStream(
       consumerId: remoteDesktopSubscriptionKey,
       streamGeneration
     })
+
   if (!sourceRangeConsumerAttached) {
     sourceRangeLedger?.close()
   }
+
   const stream: TerminalMultiplexStream = {
     streamId: request.streamId,
     terminal: request.terminal,
@@ -81,6 +86,7 @@ export async function initializeMultiplexStream(
           meta.seq
         )
       }
+
       for (const chunk of iterateTerminalOutputFrameChunks(data, meta)) {
         state.queueOrSendOutput(stream, chunk)
       }
@@ -92,6 +98,7 @@ export async function initializeMultiplexStream(
     unregisterBinaryHandler: () => {},
     exitWaiterAbort: new AbortController()
   }
+
   streams.set(request.streamId, stream)
   stream.unregisterBinaryHandler = registerBinaryStreamHandler(request.streamId, (frame) =>
     state.handleSlotFrame(stream, frame)
@@ -102,15 +109,20 @@ export async function initializeMultiplexStream(
     if (state.closed || streams.get(request.streamId) !== stream) {
       return
     }
+
     if (stream.outputPaused) {
       return
     }
+
     if (stream.buffering) {
       appendPendingMultiplexOutput(stream, data, meta)
+
       return
     }
+
     stream.outputBatcher.push(data, meta)
   })
+
   // Why: a multiplexed stream feeds a remote xterm view with query authority, so the main model responder yields while attached (terminal-query-authority.md).
   const releaseViewSubscriber = runtime.registerRemoteTerminalViewSubscriber(ptyId)
   stream.unsubscribeData = () => {
@@ -125,6 +137,7 @@ export async function initializeMultiplexStream(
     stream.registeredRemoteDesktopDriver = true
     stream.pendingRemoteDesktopViewport = request.viewport
   }
+
   if (
     !isMobile &&
     request.client?.id &&
@@ -144,8 +157,10 @@ export async function initializeMultiplexStream(
       !stream.supportsDesktopViewportClaims
     )
   }
+
   if (state.closed || streams.get(request.streamId) !== stream) {
     return null
   }
+
   return stream
 }

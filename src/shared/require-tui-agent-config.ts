@@ -11,5 +11,6 @@ export function requireTuiAgentConfig(agent: TuiAgent): TuiAgentConfig {
       `Unknown agent "${String(agent)}". This version of Orca has no such agent — pick a different agent and try again.`
     )
   }
+
   return TUI_AGENT_CONFIG[agent]
 }

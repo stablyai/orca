@@ -44,9 +44,11 @@ function textMatchesSessionPrompt(sessionText: string, candidateText: string): b
   if (!sessionText || !candidateText) {
     return false
   }
+
   if (sessionText === candidateText) {
     return true
   }
+
   return (
     longEnoughForPrefixMatch(sessionText) &&
     longEnoughForPrefixMatch(candidateText) &&
@@ -57,18 +59,23 @@ function textMatchesSessionPrompt(sessionText: string, candidateText: string): b
 function sessionPromptCandidates(session: AiVaultSession): string[] {
   const candidates = new Set<string>()
   const title = normalizeMatchText(session.title)
+
   if (title) {
     candidates.add(title)
   }
+
   for (const message of session.previewMessages) {
     if (message.role !== 'user') {
       continue
     }
+
     const text = normalizeMatchText(message.text)
+
     if (text) {
       candidates.add(text)
     }
   }
+
   return [...candidates]
 }
 
@@ -78,15 +85,19 @@ function entryPromptCandidates(entry: {
 }): string[] {
   const candidates = new Set<string>()
   const prompt = normalizeMatchText(entry.prompt)
+
   if (prompt) {
     candidates.add(prompt)
   }
+
   for (const historyEntry of entry.stateHistory ?? []) {
     const text = normalizeMatchText(historyEntry.prompt)
+
     if (text) {
       candidates.add(text)
     }
   }
+
   return [...candidates]
 }
 
@@ -95,10 +106,13 @@ export function promptsMatchSession(
   entry: Parameters<typeof entryPromptCandidates>[0]
 ): boolean {
   const sessionCandidates = sessionPromptCandidates(session)
+
   if (sessionCandidates.length === 0) {
     return false
   }
+
   const entryCandidates = entryPromptCandidates(entry)
+
   return sessionCandidates.some((sessionText) =>
     entryCandidates.some((entryText) => textMatchesSessionPrompt(sessionText, entryText))
   )
@@ -108,9 +122,11 @@ function layoutHasLeaf(node: TerminalPaneLayoutNode | null | undefined, leafId: 
   if (!node) {
     return false
   }
+
   if (node.type === 'leaf') {
     return node.leafId === leafId
   }
+
   return layoutHasLeaf(node.first, leafId) || layoutHasLeaf(node.second, leafId)
 }
 
@@ -129,11 +145,13 @@ function getTabOwnerWorktreeId(
   ) {
     return worktreeIdHint
   }
+
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     if (tabs.some((tab) => tab.id === tabId)) {
       return worktreeId
     }
   }
+
   return null
 }
 
@@ -145,33 +163,43 @@ export function resolveOriginalPaneTarget(args: {
 }): AiVaultOriginalPaneTarget | null {
   const { state, paneKey, worktreeIdHint, tabIdHint } = args
   const stable = parsePaneKey(paneKey)
+
   if (stable) {
     if (tabIdHint && tabIdHint !== stable.tabId) {
       return null
     }
+
     const worktreeId = getTabOwnerWorktreeId(state, stable.tabId, worktreeIdHint)
+
     if (
       !worktreeId ||
       !hasAvailableLeaf(state.terminalLayoutsByTabId[stable.tabId], stable.leafId)
     ) {
       return null
     }
+
     return { paneKey, worktreeId, tabId: stable.tabId, leafId: stable.leafId }
   }
 
   const legacy = parseLegacyNumericPaneKey(paneKey)
+
   if (!legacy || (tabIdHint && tabIdHint !== legacy.tabId)) {
     return null
   }
+
   const worktreeId = getTabOwnerWorktreeId(state, legacy.tabId, worktreeIdHint)
+
   if (!worktreeId) {
     return null
   }
+
   const layout = state.terminalLayoutsByTabId[legacy.tabId]
   const leafId = resolveRuntimePaneTitleLeafId(layout, legacy.numericPaneId)
+
   if (!leafId || !hasAvailableLeaf(layout, leafId)) {
     return null
   }
+
   return { paneKey, worktreeId, tabId: legacy.tabId, leafId }
 }
 
@@ -190,9 +218,11 @@ export function findAiVaultSessionLiveState(
     if (!agentMatches(session, entry.agentType)) {
       continue
     }
+
     if (providerSessionMatches(session, entry.providerSession?.id)) {
       return entry.state
     }
+
     if (entry.providerSession === undefined && promptsMatchSession(session, entry)) {
       promptMatchedStates.push(entry.state)
     }
@@ -218,10 +248,12 @@ export function findOriginalAiVaultSessionPane(
         worktreeIdHint: entry.worktreeId,
         tabIdHint: entry.tabId
       })
+
       if (target) {
         return target
       }
     }
+
     if (
       agentMatches(session, entry.agentType) &&
       entry.providerSession === undefined &&
@@ -233,6 +265,7 @@ export function findOriginalAiVaultSessionPane(
         worktreeIdHint: entry.worktreeId,
         tabIdHint: entry.tabId
       })
+
       if (target) {
         promptMatchedTargets.push(target)
       }
@@ -250,10 +283,12 @@ export function findOriginalAiVaultSessionPane(
         worktreeIdHint: retained.worktreeId,
         tabIdHint: retained.entry.tabId ?? retained.tab.id
       })
+
       if (target) {
         return target
       }
     }
+
     if (
       agentMatches(session, retained.agentType) &&
       retained.entry.providerSession === undefined &&
@@ -265,6 +300,7 @@ export function findOriginalAiVaultSessionPane(
         worktreeIdHint: retained.worktreeId,
         tabIdHint: retained.entry.tabId ?? retained.tab.id
       })
+
       if (target) {
         promptMatchedTargets.push(target)
       }
@@ -282,6 +318,7 @@ export function findOriginalAiVaultSessionPane(
         worktreeIdHint: record.worktreeId,
         tabIdHint: record.tabId
       })
+
       if (target) {
         return target
       }

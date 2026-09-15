@@ -6,6 +6,7 @@ import { useTaskPageRepoSelection } from './use-task-page-repo-selection'
 
 function resolveSelection(repos: Repo[], persisted: string[], preferred?: string) {
   let selected: readonly string[] = []
+
   function Probe() {
     const model = {
       repos,
@@ -15,23 +16,29 @@ function resolveSelection(repos: Repo[], persisted: string[], preferred?: string
       jiraStatus: {},
       preflightStatus: null
     } as unknown as TaskPageStoreBindingsModel
+
     useTaskPageRepoSelection(model)
     selected = [
       ...(model as TaskPageStoreBindingsModel & { resolvedInitialSelection: ReadonlySet<string> })
         .resolvedInitialSelection
     ]
+
     return null
   }
+
   renderToString(<Probe />)
+
   return selected
 }
 
 describe('task page initial repo selection', () => {
   it('normalizes persisted selections without a repository scan for every stored ID', () => {
     let reads = 0
+
     const repos: Repo[] = Array.from({ length: 1000 }, (_, index) => ({
       get id() {
         reads++
+
         return `repo-${index}`
       },
       path: `/repos/${index}`,
@@ -40,6 +47,7 @@ describe('task page initial repo selection', () => {
       addedAt: index,
       kind: 'git'
     }))
+
     const persisted = Array.from({ length: 1000 }, (_, index) => `repo-${index}`)
     expect(resolveSelection(repos, persisted)).toEqual(persisted)
     expect(reads).toBeLessThan(40_000)
@@ -54,6 +62,7 @@ describe('task page initial repo selection', () => {
       addedAt: 0,
       kind: 'git'
     }))
+
     expect(resolveSelection(repos, ['b'], 'a')).toEqual(['a'])
     expect(resolveSelection(repos, ['missing'])).toEqual(['a', 'b'])
     expect(resolveSelection(repos, [])).toEqual(['a', 'b'])

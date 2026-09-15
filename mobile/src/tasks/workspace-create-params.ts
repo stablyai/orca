@@ -10,7 +10,9 @@ import { resolveMobileWorkspaceCreateName } from './mobile-workspace-name'
 import type { WorkspaceAgentChoice } from './workspace-agent-selection'
 
 export type WorkspaceCreateSetupDecision = SetupDecision
+
 export type WorkspaceCreateSparseCheckout = CreateSparseCheckoutRequest
+
 export type WorkspaceCreateGitPushTarget = GitPushTarget
 
 export type WorkspaceCreateHostedStartPoint = {
@@ -72,6 +74,7 @@ export function agentLaunchCreateFields(agentId: TuiAgent | undefined): {
   if (!agentId) {
     return {}
   }
+
   return { startupAgent: agentId, createdWithAgent: agentId }
 }
 
@@ -105,11 +108,13 @@ export function buildTaskWorkspaceCreateParams(args: {
     hostedStartPoint,
     nameIsAutoManaged = true
   } = args
+
   const shouldLaunchAgent = agent !== 'blank'
   const createdWithAgent = shouldLaunchAgent ? (agent as TuiAgent) : undefined
   const comment = note?.trim()
   const selectedBaseBranch = baseBranch || hostedStartPoint?.baseBranch
   const selectedPushTarget = pushTarget ?? hostedStartPoint?.pushTarget
+
   // Preserve provenance so the host can distinguish an intentional label from a generated title.
   const sourceName =
     item.provider === 'linear'
@@ -122,11 +127,13 @@ export function buildTaskWorkspaceCreateParams(args: {
           linearIdentifier: item.source.identifier
         })
       : getWorkspaceSourceName({ provider: item.provider, ...item.source })
+
   const displayName = nameIsAutoManaged
     ? { displayName: sourceName.displayName, displayNameKind: 'generated' as const }
     : workspaceName?.trim()
       ? { displayName: workspaceName, displayNameKind: 'user' as const }
       : {}
+
   const common = {
     setupDecision,
     activate: true,
@@ -142,6 +149,7 @@ export function buildTaskWorkspaceCreateParams(args: {
 
   if (item.provider === 'github') {
     const fallback = `${item.source.type}-${item.source.number}`
+
     return {
       repo: `id:${item.source.repoId}`,
       name: resolveMobileWorkspaceCreateName({ draft: workspaceName, fallback }),
@@ -155,6 +163,7 @@ export function buildTaskWorkspaceCreateParams(args: {
 
   if (item.provider === 'gitlab') {
     const fallback = `${item.source.type}-${item.source.number}`
+
     return {
       repo: `id:${item.source.repoId}`,
       name: resolveMobileWorkspaceCreateName({ draft: workspaceName, fallback }),

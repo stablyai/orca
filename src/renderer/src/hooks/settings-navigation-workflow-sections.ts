@@ -30,6 +30,7 @@ export function buildWorkflowSettingsSections(
   terminalPaneSearchEntries: SettingsNavSection['searchEntries']
 ): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
+
   return [
     {
       id: 'automations',

@@ -24,6 +24,7 @@ describe('resolvePasteIntent', () => {
   it('classifies a GitLab MR URL as a gitlab-link', () => {
     const intent = resolvePasteIntent('https://gitlab.com/group/proj/-/merge_requests/8')
     expect(intent?.kind).toBe('gitlab-link')
+
     if (intent?.kind === 'gitlab-link') {
       expect(intent.link).toMatchObject({ number: 8, type: 'mr' })
     }
@@ -99,10 +100,12 @@ describe('findRepoMatchingSlug', () => {
 
   it('falls back to the host-aware repo slug RPC for SSH and enterprise repos', async () => {
     const calls: string[] = []
+
     const client = {
       sendRequest: async (_method: string, params: unknown) => {
         const repo = (params as { repo: string }).repo
         calls.push(repo)
+
         return {
           ok: true,
           result:
@@ -112,6 +115,7 @@ describe('findRepoMatchingSlug', () => {
         }
       }
     } as unknown as RpcClient
+
     await expect(
       findRepoMatchingSlugForPaste(
         client,
@@ -125,15 +129,18 @@ describe('findRepoMatchingSlug', () => {
 
   it('keeps local matching usable when an older desktop lacks the repo slug RPC', async () => {
     let calls = 0
+
     const client = {
       sendRequest: async () => {
         calls += 1
+
         return {
           ok: false,
           error: { code: 'method_not_found', message: 'Unknown method: github.repoSlug' }
         }
       }
     } as unknown as RpcClient
+
     const cache = new Map<string, { owner: string; repo: string } | null>()
 
     await expect(

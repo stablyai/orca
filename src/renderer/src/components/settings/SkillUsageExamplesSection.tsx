@@ -31,6 +31,7 @@ export function SkillUsageExamplesSection({
       <div className="grid gap-2 sm:grid-cols-2">
         {examples.map((example) => {
           const Icon = resolveIcon(example)
+
           return (
             <Button
               key={example.id}

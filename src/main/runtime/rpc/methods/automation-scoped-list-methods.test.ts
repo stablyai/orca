@@ -12,9 +12,11 @@ import { AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY } from '../../../../shared/
 
 function method(name: string) {
   const found = eraseRpcMethods(AUTOMATION_METHODS).find((entry) => entry.name === name)
+
   if (!found?.params) {
     throw new Error(`missing method ${name}`)
   }
+
   return found
 }
 
@@ -55,9 +57,11 @@ async function invoke(
   const target = method(name)
   // Why: mirrors the dispatcher, which turns omitted params into an empty object before parsing.
   const parsed = target.params?.safeParse(params ?? {})
+
   if (!parsed?.success) {
     throw parsed?.error
   }
+
   return await target.handler(parsed.data, {
     runtime: runtime as unknown as OrcaRuntimeService,
     ...context
@@ -108,10 +112,12 @@ describe('automation.list', () => {
 describe('automation.list from a client that sends literal null params', () => {
   it('answers with the complete authority list, not an invalid-argument error', async () => {
     const runtime = runtimeStub()
+
     const dispatcher = new RpcDispatcher({
       runtime: { ...runtime, getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService,
       methods: AUTOMATION_METHODS
     })
+
     const request: RpcRequest = {
       id: 'req-1',
       authToken: 'tok',

@@ -9,6 +9,7 @@ export type SourcePartitionRead =
   | { status: 'unreadable'; reason: string }
 
 const CHROMIUM_PARTITION_SITE_COLUMN = 'top_frame_site_key'
+
 const CHROMIUM_CROSS_SITE_ANCESTOR_COLUMN = 'has_cross_site_ancestor'
 
 const UNPARTITIONED: SourcePartitionRead = { status: 'unpartitioned' }
@@ -17,18 +18,22 @@ function readSqliteFlag(raw: unknown): boolean | null {
   if (typeof raw === 'boolean') {
     return raw
   }
+
   if (typeof raw === 'bigint') {
     return raw === 0n ? false : raw === 1n ? true : null
   }
+
   if (typeof raw === 'number') {
     return raw === 0 ? false : raw === 1 ? true : null
   }
+
   return null
 }
 
 export function normalizeCookiePartitionSite(raw: string): string | null {
   try {
     const site = new URL(raw)
+
     if (
       (site.protocol !== 'http:' && site.protocol !== 'https:') ||
       !site.hostname ||
@@ -41,6 +46,7 @@ export function normalizeCookiePartitionSite(raw: string): string | null {
     ) {
       return null
     }
+
     return site.origin
   } catch {
     return null
@@ -66,13 +72,17 @@ export function readChromiumRowPartition(
   }
 
   const rawSite = sourceRow[CHROMIUM_PARTITION_SITE_COLUMN]
+
   if (rawSite === '') {
     return UNPARTITIONED
   }
+
   if (typeof rawSite !== 'string') {
     return { status: 'unreadable', reason: 'partition site column was not text' }
   }
+
   const topLevelSite = normalizeCookiePartitionSite(rawSite)
+
   if (!topLevelSite) {
     return { status: 'unreadable', reason: 'partition site column was not a valid schemeful site' }
   }
@@ -83,7 +93,9 @@ export function readChromiumRowPartition(
       reason: 'source schema has no cross-site-ancestor column for a partitioned cookie'
     }
   }
+
   const hasCrossSiteAncestor = readSqliteFlag(sourceRow[CHROMIUM_CROSS_SITE_ANCESTOR_COLUMN])
+
   if (hasCrossSiteAncestor === null) {
     return { status: 'unreadable', reason: 'cross-site-ancestor column was not an integer flag' }
   }
@@ -106,13 +118,17 @@ export function readFirefoxRowPartition(
   if (!sourceColumns.has(FIREFOX_PARTITIONED_ATTRIBUTE_COLUMN)) {
     return UNPARTITIONED
   }
+
   const partitionedAttribute = readSqliteFlag(sourceRow[FIREFOX_PARTITIONED_ATTRIBUTE_COLUMN])
+
   if (partitionedAttribute === false) {
     return UNPARTITIONED
   }
+
   if (partitionedAttribute === null) {
     return { status: 'unreadable', reason: 'partitioned-attribute column was not an integer flag' }
   }
+
   return {
     status: 'unreadable',
     reason: 'Firefox partitioned-attribute cookie has no cross-site-ancestor bit to read'
@@ -134,27 +150,34 @@ export function readJsonCookiePartition(
   if (partitionKeyOpaque === true) {
     return { status: 'unreadable', reason: 'partition key was opaque' }
   }
+
   if (partitionKeyOpaque !== undefined && typeof partitionKeyOpaque !== 'boolean') {
     return { status: 'unreadable', reason: 'partitionKeyOpaque was not a boolean' }
   }
+
   if (raw === undefined) {
     return UNPARTITIONED
   }
+
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     return { status: 'unreadable', reason: 'partitionKey was not an object with both fields' }
   }
 
   const { topLevelSite, hasCrossSiteAncestor } = raw as Record<string, unknown>
+
   if (typeof topLevelSite !== 'string' || topLevelSite.length === 0) {
     return { status: 'unreadable', reason: 'partitionKey.topLevelSite was missing or not text' }
   }
+
   const normalizedTopLevelSite = normalizeCookiePartitionSite(topLevelSite)
+
   if (!normalizedTopLevelSite) {
     return {
       status: 'unreadable',
       reason: 'partitionKey.topLevelSite was not a valid schemeful site'
     }
   }
+
   if (typeof hasCrossSiteAncestor !== 'boolean') {
     return {
       status: 'unreadable',

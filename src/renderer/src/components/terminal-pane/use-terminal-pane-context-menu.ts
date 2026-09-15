@@ -102,14 +102,19 @@ export function useTerminalPaneContextMenu({
 
   const resolveMenuPane = useCallback((): ManagedPane | null => {
     const manager = managerRef.current
+
     if (!manager) {
       return null
     }
+
     const panes = manager.getPanes()
+
     if (contextPaneIdRef.current !== null) {
       const clickedPane = panes.find((pane) => pane.id === contextPaneIdRef.current) ?? null
+
       return clickedPane
     }
+
     return manager.getActivePane() ?? panes[0] ?? null
   }, [managerRef])
 
@@ -163,6 +168,7 @@ export function useTerminalPaneContextMenu({
 
   const onSelectAll = (): void => {
     const pane = resolveMenuPane()
+
     if (pane) {
       pane.terminal.selectAll()
       pane.terminal.focus()
@@ -177,9 +183,11 @@ export function useTerminalPaneContextMenu({
 
   const onCopyAgentSessionId = async (): Promise<void> => {
     const pane = resolveMenuPane()
+
     const sessionId = pane
       ? resolvePaneAgentSessionId(useAppStore.getState(), makePaneKey(tabId, pane.leafId))
       : null
+
     return copyTerminalPaneMenuAgentSessionId(pane, sessionId)
   }
 
@@ -188,15 +196,18 @@ export function useTerminalPaneContextMenu({
   const onEqualizePaneSizes = (): void => {
     const pane = resolveMenuPane()
     const manager = managerRef.current
+
     if (!pane || !manager) {
       return
     }
+
     manager.equalizePaneSizes()
     pane.terminal.focus()
   }
 
   const onClosePane = (): void => {
     const pane = resolveMenuPane()
+
     if (pane && (managerRef.current?.getPanes().length ?? 0) > 1) {
       onRequestClosePane(pane.id)
     }
@@ -204,6 +215,7 @@ export function useTerminalPaneContextMenu({
 
   const onClearScreen = (): void => {
     const pane = resolveMenuPane()
+
     if (pane) {
       onClearPaneScrollback(pane)
     }
@@ -221,13 +233,16 @@ export function useTerminalPaneContextMenu({
   const onQuickCommand = (command: TerminalQuickCommand, historyId: string): void => {
     if (isTerminalAgentQuickCommand(command)) {
       runQuickCommandInNewTab({ command, worktreeId, groupId, historyId })
+
       return
     }
 
     const pane = resolveMenuPane()
+
     if (!pane) {
       return
     }
+
     sendTerminalQuickCommandToPane({
       command,
       pane,
@@ -238,6 +253,7 @@ export function useTerminalPaneContextMenu({
 
   const onToggleExpand = (): void => {
     const pane = resolveMenuPane()
+
     if (pane) {
       toggleExpandPane(pane.id)
     }
@@ -246,6 +262,7 @@ export function useTerminalPaneContextMenu({
   /** Routes title edits through the resolved menu pane instead of active pane. */
   const handleSetTitle = (): void => {
     const pane = resolveMenuPane()
+
     if (pane) {
       onSetTitle(pane.id)
     }
@@ -254,6 +271,7 @@ export function useTerminalPaneContextMenu({
   /** Clears the title for the pane that opened the context menu. */
   const handleClearPaneTitle = (): void => {
     const pane = resolveMenuPane()
+
     if (pane) {
       onClearPaneTitle(pane.id)
     }
@@ -262,6 +280,7 @@ export function useTerminalPaneContextMenu({
   const runForPane = <Result>(paneId: number, action: () => Result): Result => {
     const previousPaneId = contextPaneIdRef.current
     contextPaneIdRef.current = paneId
+
     try {
       return action()
     } finally {

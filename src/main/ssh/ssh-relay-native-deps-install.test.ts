@@ -95,6 +95,7 @@ import {
 
 describe('installNativeDeps (via deployAndLaunchRelay)', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>
+
   const sftpCapture: SftpWriteCapture = {
     paths: [],
     contents: {},
@@ -107,12 +108,15 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     vi.mocked(uploadDirectory).mockResolvedValue(undefined)
     sftpCapture.paths.length = 0
+
     for (const k of Object.keys(sftpCapture.contents)) {
       delete sftpCapture.contents[k]
     }
+
     for (const k of Object.keys(sftpCapture.execCallCountAtWrite)) {
       delete sftpCapture.execCallCountAtWrite[k]
     }
+
     // Re-prime as defense-in-depth: factory mocks survive clearAllMocks but a test's own resetAllMocks would drop them.
     vi.mocked(parseUnameToRelayPlatform).mockReturnValue('linux-x64')
     vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(false)
@@ -125,6 +129,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
   function feed(execResponses: ExecResponse[]): void {
     const mockExec = vi.mocked(execCommand)
+
     for (const r of execResponses) {
       if (typeof r === 'string') {
         mockExec.mockResolvedValueOnce(r)
@@ -324,9 +329,11 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
     const failedProbeIdx = execCalls.findIndex((c) => c.includes('require("node-pty")'))
     const rebuildIdx = execCalls.findIndex((c) => c.includes('npm rebuild'))
+
     const repairedProbeIdx = execCalls.findIndex(
       (c, index) => index > rebuildIdx && c.includes('require("node-pty")')
     )
+
     expect(rebuildIdx).toBeGreaterThan(failedProbeIdx)
     expect(execCalls[rebuildIdx]).toContain('--ignore-scripts=false')
     expect(repairedProbeIdx).toBeGreaterThan(rebuildIdx)
@@ -362,6 +369,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
   it('aborts an in-progress native install and releases its lock at deploy timeout', async () => {
     vi.useFakeTimers()
+
     try {
       const conn = makeMockConnection(sftpCapture)
       feed(makeStagedFirstInstallExecPrefix())
@@ -369,6 +377,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       vi.mocked(execCommand).mockImplementationOnce((_conn, command, options) => {
         expect(command).toContain('npm install')
         installSignal = options?.signal
+
         return new Promise<string>((_resolve, reject) => {
           installSignal?.addEventListener('abort', () => reject(installSignal?.reason), {
             once: true
@@ -433,9 +442,11 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     // Pin the rejection to the PROBE call so slot-ordering drift can't pass this test via a different failure path.
     const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
     const probeCallIdx = execCalls.findIndex((c) => c.includes('require("node-pty")'))
+
     const npmInstallIdx = execCalls.findIndex(
       (c) => c.includes('npm install') && c.includes('node-pty') && c.includes('@parcel/watcher')
     )
+
     expect(probeCallIdx, 'probe must have been invoked').toBeGreaterThanOrEqual(0)
     // Probe must come strictly after npm install, else it probes an empty dir and doesn't represent the real-world race.
     expect(probeCallIdx).toBeGreaterThan(npmInstallIdx)
@@ -462,9 +473,11 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     // Pin the rejection to the probe slot so a refactor moving probe before npm install can't pass this test for the wrong reason.
     const execCalls = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
     const probeIdx = execCalls.findIndex((c) => c.includes('require("node-pty")'))
+
     const npmInstallIdx = execCalls.findIndex(
       (c) => c.includes('npm install') && c.includes('node-pty') && c.includes('@parcel/watcher')
     )
+
     expect(probeIdx).toBeGreaterThan(npmInstallIdx)
 
     const warnMessages = warnSpy.mock.calls.map((args) => String(args[0] ?? ''))
@@ -491,12 +504,15 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
     // Pin order npm install → chmod prebuilds → probe: chmod-after-probe breaks spawn-helper bits; probe-before-install tests an empty dir.
     const all = vi.mocked(execCommand).mock.calls.map(([, c]) => c)
+
     const npmIdx = all.findIndex(
       (c) => c.includes('npm install') && c.includes('node-pty') && c.includes('@parcel/watcher')
     )
+
     const chmodPrebuildsIdx = all.findIndex(
       (c) => c.includes('spawn-helper') && c.includes('chmod +x')
     )
+
     const probeIdx = all.findIndex((c) => c.includes('require("node-pty")'))
     expect(npmIdx).toBeGreaterThanOrEqual(0)
     expect(chmodPrebuildsIdx).toBeGreaterThan(npmIdx)
@@ -574,6 +590,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
         .mock.calls.map(([, c]) => c)
         .find((command) => decodePowerShellCommand(command)?.includes('require(\\"node-pty\\")')) ??
       ''
+
     const probeScript = decodePowerShellCommand(probeCommand) ?? ''
     expect(probeScript).toContain('$LASTEXITCODE -ne 0')
     expect(probeScript).toContain("'MISSING'")
@@ -583,6 +600,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       .mocked(execCommand)
       .mock.calls.map(([, command]) => decodePowerShellCommand(command) ?? '')
       .filter((script) => script.includes('npm install') || script.includes('npm rebuild'))
+
     expect(npmScripts).toHaveLength(2)
     expect(npmScripts.every((script) => script.includes('--ignore-scripts=false'))).toBe(true)
     expect(
@@ -607,9 +625,11 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
     const conn = makeMockConnection(sftpCapture)
     feed(makeExecResponses({ npmInstall: 'ok', probe: 'missing' }))
     await deployAndLaunchRelay(conn)
+
     const missingMsgs = warnSpy.mock.calls
       .map((args) => String(args[0] ?? ''))
       .filter((m) => m.includes('[ssh-relay][NPTY-MISSING]'))
+
     expect(missingMsgs.length).toBeGreaterThan(0)
     expect(missingMsgs[0]).toContain('linux-x64')
   })
@@ -624,12 +644,15 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
     // Reset capture, run again as if it were a fresh install of the same dir.
     sftpCapture.paths.length = 0
+
     for (const k of Object.keys(sftpCapture.contents)) {
       delete sftpCapture.contents[k]
     }
+
     for (const k of Object.keys(sftpCapture.execCallCountAtWrite)) {
       delete sftpCapture.execCallCountAtWrite[k]
     }
+
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
 
     const conn2 = makeMockConnection(sftpCapture)
@@ -747,6 +770,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
   it('retains the first-install lock when an aborted npm install has unconfirmed teardown', async () => {
     vi.useFakeTimers()
+
     try {
       const conn = makeMockConnection(sftpCapture)
       feed(makeStagedFirstInstallExecPrefix())
@@ -754,6 +778,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       vi.mocked(execCommand).mockImplementationOnce((_conn, command, options) => {
         expect(command).toContain('npm install')
         installSignal = options?.signal
+
         return new Promise<string>((_resolve, reject) => {
           installSignal?.addEventListener(
             'abort',
@@ -813,6 +838,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
 
   it('retains the first-install lock when an aborted rebuild has unconfirmed teardown', async () => {
     vi.useFakeTimers()
+
     try {
       const conn = makeMockConnection(sftpCapture)
       feed([
@@ -827,6 +853,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       vi.mocked(execCommand).mockImplementationOnce((_conn, command, options) => {
         expect(command).toContain('npm rebuild')
         rebuildSignal = options?.signal
+
         return new Promise<string>((_resolve, reject) => {
           rebuildSignal?.addEventListener(
             'abort',
@@ -902,6 +929,7 @@ describe('installNativeDeps (via deployAndLaunchRelay)', () => {
       .mocked(execCommand)
       .mock.calls.map(([, c]) => c)
       .find((c) => c.includes('ORCA-NATIVE-DEPS-OK'))
+
     expect(healthProbe).toContain('require("node-pty")')
     expect(healthProbe).toContain('loadNativeModule')
     expect(healthProbe).toContain('require("@parcel/watcher")')

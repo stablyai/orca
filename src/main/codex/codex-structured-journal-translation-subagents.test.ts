@@ -11,7 +11,9 @@ import { createCodexJournalTranslator } from './codex-structured-journal-transla
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 
 const SESSION_ID = 'session-1'
+
 const THREAD_ID = 'thread-abc'
+
 const TURN_ID = 'turn-1'
 
 type Row = { key: string; body: AgentJournalItemBody }
@@ -19,6 +21,7 @@ type Row = { key: string; body: AgentJournalItemBody }
 function harness() {
   const rows: Row[] = []
   const activities: (AgentSessionTurnActivity | null)[] = []
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity: AgentJournalItemIdentity, body) =>
       rows.push({ key: agentJournalItemKey(identity), body }),
@@ -26,14 +29,17 @@ function harness() {
     publish: () => {},
     setActivity: (activity) => activities.push(activity)
   }
+
   const translator = createCodexJournalTranslator({
     sink,
     primaryThreadId: () => THREAD_ID,
     schedule: (run: () => void) => {
       run()
+
       return () => {}
     }
   })
+
   return { translator, rows, activities }
 }
 
@@ -60,6 +66,7 @@ function deliverActivity(
   params: unknown
 ): void {
   const item = (params as { item: { kind: string; agentThreadId: string } }).item
+
   if (item.kind === 'started' || item.kind === 'completed') {
     translator.handle({
       type: 'notification',
@@ -75,15 +82,18 @@ function deliverActivity(
       }
     })
   }
+
   translator.handle(notification('item/started', params))
   translator.handle(notification('item/completed', params))
 }
 
 function rosterAgents(rows: Row[]): { id: string; state: string; tokens?: number }[] {
   const body = rows.findLast((row) => row.key.startsWith('orca:codex-subagents'))?.body
+
   if (!body || body.kind !== 'message') {
     return []
   }
+
   return body.blocks.find(isSubagentGroupBlock)?.agents ?? []
 }
 
@@ -98,11 +108,13 @@ describe('codex journal translation — subagents', () => {
     expect(rosterAgents(rows)).toMatchObject([
       { id: 'child-1', label: 'list_directory', state: 'working' }
     ])
+
     // Four wire deliveries (two items, each sent twice) collapse to ONE roster
     // row, and none of the gray `codex · item:subAgentActivity` rows survive.
     const providerFrameKinds = rows.flatMap((row) =>
       row.body.kind === 'status' && row.body.providerFrame ? [row.body.providerFrame.kind] : []
     )
+
     expect(providerFrameKinds).toEqual([])
     expect(rows.filter((row) => row.key.startsWith('orca:codex-subagents'))).toHaveLength(1)
   })

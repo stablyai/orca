@@ -17,16 +17,21 @@ export const BROWSER_ENV_HANDLERS: Record<string, CommandHandler> = {
     const height = getRequiredPositiveNumber(flags, 'height')
     const params: Record<string, unknown> = { width, height }
     const scale = getOptionalStringFlag(flags, 'scale')
+
     if (scale) {
       const n = Number(scale)
+
       if (!Number.isFinite(n) || n <= 0) {
         throw new RuntimeClientError('invalid_argument', '--scale must be a positive number')
       }
+
       params.deviceScaleFactor = n
     }
+
     if (flags.has('mobile')) {
       params.mobile = true
     }
+
     Object.assign(params, await getBrowserCommandTarget(flags, cwd, client))
     const result = await client.call<BrowserViewportResult>('browser.viewport', params)
     printResult(
@@ -40,13 +45,17 @@ export const BROWSER_ENV_HANDLERS: Record<string, CommandHandler> = {
     const longitude = getRequiredFiniteNumber(flags, 'longitude')
     const params: Record<string, unknown> = { latitude, longitude }
     const accuracy = getOptionalStringFlag(flags, 'accuracy')
+
     if (accuracy) {
       const n = Number(accuracy)
+
       if (!Number.isFinite(n) || n <= 0) {
         throw new RuntimeClientError('invalid_argument', '--accuracy must be a positive number')
       }
+
       params.accuracy = n
     }
+
     Object.assign(params, await getBrowserCommandTarget(flags, cwd, client))
     const result = await client.call<BrowserGeolocationResult>('browser.geolocation', params)
     printResult(result, json, (v) => `Geolocation set to ${v.latitude}, ${v.longitude}`)
@@ -74,22 +83,26 @@ export const BROWSER_ENV_HANDLERS: Record<string, CommandHandler> = {
     // SetCredentials.pass accepts '' (empty passwords are legal in HTTP basic auth).
     const pass = getRequiredStringFlagAllowingEmpty(flags, 'pass')
     const target = await getBrowserCommandTarget(flags, cwd, client)
+
     const result = await client.call<unknown>('browser.setCredentials', {
       user,
       pass,
       ...target
     })
+
     printResult(result, json, () => `HTTP auth credentials set for ${user}`)
   },
   'set media': async ({ flags, client, cwd, json }) => {
     const colorScheme = getOptionalStringFlag(flags, 'color-scheme')
     const reducedMotion = getOptionalStringFlag(flags, 'reduced-motion')
     const target = await getBrowserCommandTarget(flags, cwd, client)
+
     const result = await client.call<unknown>('browser.setMedia', {
       colorScheme,
       reducedMotion,
       ...target
     })
+
     printResult(result, json, () => 'Media preferences set')
   },
   'clipboard read': async ({ flags, client, cwd, json }) => {

@@ -27,6 +27,7 @@ const YIELD_EVERY_FILES = 10
 
 export async function getProcessedFileInfo(filePath: string): Promise<CodexUsageProcessedFile> {
   const fileStat = await stat(filePath)
+
   return {
     path: filePath,
     mtimeMs: fileStat.mtimeMs,
@@ -70,6 +71,7 @@ export async function parseCodexUsageFile(
   options: { skipInitialBytes?: number; claimEventKey?: (eventKey: string) => boolean } = {}
 ): Promise<CodexUsagePersistedFile> {
   const processedFile = await getProcessedFileInfo(filePath)
+
   const lines = createInterface({
     input: createReadStream(filePath, {
       encoding: 'utf-8',
@@ -77,7 +79,9 @@ export async function parseCodexUsageFile(
     }),
     crlfDelay: Infinity
   })
+
   const events: CodexUsageAttributedEvent[] = []
+
   const context: CodexUsageParseContext = {
     sessionId: basename(filePath, '.jsonl'),
     sessionCwd: null,
@@ -91,11 +95,14 @@ export async function parseCodexUsageFile(
 
   const ownedEventKeys = new Set<string>()
   let hasDeferredClaims = false
+
   for await (const line of lines) {
     const parsed = parseCodexUsageRecord(line, context)
+
     if (!parsed) {
       continue
     }
+
     // Why: fork/resume rollouts start with a copied prefix of the parent file.
     // Events another file already owns are dropped here, but the record still
     // advanced context.previousTotals above, so later deltas stay correct.
@@ -103,8 +110,10 @@ export async function parseCodexUsageFile(
       hasDeferredClaims = true
       continue
     }
+
     ownedEventKeys.add(parsed.eventKey)
     const attributed = await attributeCodexUsageEvent(parsed, worktrees)
+
     if (attributed) {
       events.push(attributed)
     }
@@ -132,6 +141,7 @@ export async function scanCodexUsageFiles(
   const legacySourceSkipBytesByPath = getLegacySourceSkipBytesByPath(files)
 
   const currentPaths = new Set(files)
+
   // Why: when a rollout that owned event keys is deleted, remaining forks still
   // contain those records but their caches record them as unowned. Only files
   // that previously deferred claims can reclaim, so invalidate those — not the
@@ -145,12 +155,14 @@ export async function scanCodexUsageFiles(
 
   const reusedByPath = new Map<string, CodexUsagePersistedFile>()
   const pathsToParse: string[] = []
+
   for (const [index, filePath] of files.entries()) {
     const legacySourceSkipBytes = legacySourceSkipBytesByPath.get(filePath) ?? 0
     const fileInfo = await getProcessedFileInfo(filePath)
     const previous = previousByPath.get(filePath)
     // When an owner disappears, only deferred-claim files need reparse.
     const mustReclaimDeferred = lostOwnerPath && previous?.hasDeferredClaims !== false
+
     const canReuse =
       !mustReclaimDeferred &&
       legacySourceSkipBytes === 0 &&
@@ -159,11 +171,13 @@ export async function scanCodexUsageFiles(
       previous.size === fileInfo.size &&
       Array.isArray(previous.ownedEventKeys) &&
       typeof previous.hasDeferredClaims === 'boolean'
+
     if (canReuse) {
       reusedByPath.set(filePath, previous)
     } else {
       pathsToParse.push(filePath)
     }
+
     if ((index + 1) % YIELD_EVERY_FILES === 0) {
       await yieldToEventLoop()
     }
@@ -176,6 +190,7 @@ export async function scanCodexUsageFiles(
   // they persisted, and new files claim in sorted-path order so rescans stay
   // deterministic.
   const eventOwnerByKey = new Map<string, string>()
+
   for (const [filePath, previous] of reusedByPath) {
     for (const eventKey of previous.ownedEventKeys) {
       // First cached claim wins so conflicting projections stay deterministic.
@@ -186,18 +201,23 @@ export async function scanCodexUsageFiles(
   }
 
   const parsedByPath = new Map<string, CodexUsagePersistedFile>()
+
   for (const [index, filePath] of pathsToParse.entries()) {
     const processed = await parseCodexUsageFile(filePath, worktreesWithCanonicalPaths, {
       skipInitialBytes: legacySourceSkipBytesByPath.get(filePath) ?? 0,
       claimEventKey: (eventKey) => {
         const owner = eventOwnerByKey.get(eventKey)
+
         if (owner !== undefined && owner !== filePath) {
           return false
         }
+
         eventOwnerByKey.set(eventKey, filePath)
+
         return true
       }
     })
+
     parsedByPath.set(filePath, processed)
 
     // Why: Codex session history can grow large, and scans run on the Electron
@@ -211,11 +231,14 @@ export async function scanCodexUsageFiles(
   const processedFiles: CodexUsagePersistedFile[] = []
   const sessionsById = new Map<string, CodexUsageSession>()
   const dailyByKey = new Map<string, CodexUsageDailyAggregate>()
+
   for (const filePath of files) {
     const processed = reusedByPath.get(filePath) ?? parsedByPath.get(filePath)
+
     if (!processed) {
       continue
     }
+
     processedFiles.push(processed)
     mergeSessions(sessionsById, processed.sessions)
     mergeDailyAggregates(dailyByKey, processed.dailyAggregates)

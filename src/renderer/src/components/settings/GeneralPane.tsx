@@ -30,6 +30,7 @@ export {
   updateAutoSaveDelayDraftState,
   type AutoSaveDelayDraftState
 } from './auto-save-delay-draft'
+
 export { shouldCommitOpenInApplicationsDraft } from './OpenInMenuSetting'
 
 type GeneralSearchEntry = ReturnType<typeof getGeneralNavigationSearchEntries>[number]
@@ -38,9 +39,11 @@ export function getDesktopPlatformFromUserAgent(userAgent: string): 'darwin' | '
   if (userAgent.includes('Mac')) {
     return 'darwin'
   }
+
   if (userAgent.includes('Windows')) {
     return 'win32'
   }
+
   return 'other'
 }
 
@@ -66,6 +69,7 @@ export function getTabOrderControlSearchKeywords(
   navigationEntries: GeneralSearchEntry[] = getGeneralNavigationSearchEntries()
 ): string[] {
   const tabOrderSearchEntry = navigationEntries[0]
+
   return tabOrderSearchEntry
     ? [
         tabOrderSearchEntry.title,
@@ -101,22 +105,29 @@ export function GeneralPane({
   wslCapabilitiesLoading
 }: GeneralPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+
   const sourceDefaultsSupportedRuntimeEnvironmentId = useAppStore(
     (s) => s.worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId
   )
+
   const defaultsSupportedRuntimeEnvironmentId = useAppStore(
     (s) => s.worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId
   )
+
   const activeRuntimeTarget = getActiveRuntimeTarget(settings)
+
   const defaultsSupported =
     activeRuntimeTarget.kind === 'local' ||
     activeRuntimeTarget.environmentId === defaultsSupportedRuntimeEnvironmentId
+
   const sourceDefaultsSupported =
     defaultsSupported &&
     (activeRuntimeTarget.kind === 'local' ||
       activeRuntimeTarget.environmentId === sourceDefaultsSupportedRuntimeEnvironmentId)
+
   const generalNavigationSearchEntries = getGeneralNavigationSearchEntries()
   const tabOrderKeywords = getTabOrderControlSearchKeywords(generalNavigationSearchEntries)
+
   const projectRuntimeSearchEntries = wslSupportedPlatform
     ? getGeneralProjectRuntimeSearchEntries()
     : []

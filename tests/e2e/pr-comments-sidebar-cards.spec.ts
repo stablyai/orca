@@ -7,24 +7,31 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 async function visibleTextX(card: Locator, text: string): Promise<number> {
   const textBox = await card.evaluate((element, targetText) => {
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+
     while (walker.nextNode()) {
       const node = walker.currentNode
       const value = node.textContent ?? ''
       const index = value.indexOf(targetText)
+
       if (index === -1) {
         continue
       }
+
       const range = document.createRange()
       range.setStart(node, index)
       range.setEnd(node, index + targetText.length)
       const rect = range.getBoundingClientRect()
+
       return { x: rect.x }
     }
+
     return null
   }, text)
+
   if (!textBox) {
     throw new Error(`visible text not found: ${text}`)
   }
+
   return textBox.x
 }
 
@@ -37,6 +44,7 @@ async function expectOpenTextNotShiftedLeft(
   const delta =
     (await visibleTextX(openCard, openText)) -
     (await visibleTextX(conversationCard, conversationText))
+
   // Why: the open rail is a real border, but focused row actions must not scroll content left.
   expect(delta).toBeGreaterThanOrEqual(0)
   expect(delta).toBeLessThanOrEqual(3)
@@ -63,9 +71,11 @@ test.describe('PR comments sidebar cards view', () => {
     const openThreadCard = orcaPage.getByTestId('pr-comment-group').filter({
       hasText: 'Please update this handler before merge.'
     })
+
     const conversationCard = orcaPage.getByTestId('pr-comment-group').filter({
       hasText: 'LGTM on the overall approach.'
     })
+
     await expect(openThreadCard).toBeVisible()
     await expect(conversationCard).toBeVisible()
     await expect(openThreadCard).toHaveClass(/shadow-xs/)
@@ -110,12 +120,15 @@ test.describe('PR comments sidebar cards view', () => {
       orcaPage.getByText('Please update this handler before merge.'),
       orcaPage.getByText('LGTM on the overall approach.')
     ]
+
     const positions = await Promise.all(
       comments.map(async (comment) => {
         const box = await comment.boundingBox()
+
         if (!box) {
           throw new Error(`Comment not visible: ${await comment.textContent()}`)
         }
+
         return box.y
       })
     )
@@ -134,6 +147,7 @@ test.describe('PR comments sidebar cards view', () => {
     const reviewThreadCard = orcaPage.getByTestId('pr-comment-group').filter({
       hasText: 'Please update this handler before merge.'
     })
+
     const threadReactionButton = reviewThreadCard.getByRole('button', { name: 'Add reaction' })
     await orcaPage.screenshot({ path: testInfo.outputPath('reaction-before.png') })
     await threadReactionButton.click()
@@ -160,14 +174,18 @@ test.describe('PR comments sidebar cards view', () => {
     const conversationCard = orcaPage.getByTestId('pr-comment-group').filter({
       hasText: 'LGTM on the overall approach.'
     })
+
     const conversationReactionButton = conversationCard.getByRole('button', {
       name: 'Add reaction'
     })
+
     await conversationReactionButton.click()
     const conversationPicker = orcaPage.getByRole('group', { name: 'Add reaction' }).last()
+
     const heartReactionButton = conversationPicker.getByRole('button', {
       name: 'Add heart reaction'
     })
+
     await expect(heartReactionButton).toBeVisible()
     await heartReactionButton.evaluate((element) => (element as HTMLElement).click())
     await expect(
@@ -184,6 +202,7 @@ test.describe('PR comments sidebar cards view', () => {
       window.__store?.setState({
         setPRCommentReaction: async () => {
           await new Promise((resolve) => window.setTimeout(resolve, 300))
+
           return false
         }
       })
@@ -192,6 +211,7 @@ test.describe('PR comments sidebar cards view', () => {
     const reviewThreadCard = orcaPage.getByTestId('pr-comment-group').filter({
       hasText: 'Please update this handler before merge.'
     })
+
     const addReaction = reviewThreadCard.getByRole('button', { name: 'Add reaction' })
     await addReaction.focus()
     await addReaction.press('Enter')
@@ -218,6 +238,7 @@ test.describe('PR comments sidebar cards view', () => {
       window.__store?.setState({
         setPRCommentReaction: async () => {
           await new Promise((resolve) => window.setTimeout(resolve, 300))
+
           return false
         }
       })
@@ -243,6 +264,7 @@ test.describe('PR comments sidebar cards view', () => {
     const openThreadCard = orcaPage.getByTestId('pr-comment-group').filter({
       hasText: 'Please update this handler before merge.'
     })
+
     await openThreadCard.hover()
     const visibleQueueButton = openThreadCard.getByRole('button', { name: 'Queue for agent' })
     await expect(visibleQueueButton).toBeVisible()
@@ -275,14 +297,18 @@ test.describe('PR comments sidebar cards view', () => {
     const queuedCard = orcaPage.getByTestId('pr-comment-group').filter({
       hasText: 'Please update this handler before merge.'
     })
+
     const queuedCardBox = await queuedCard.boundingBox()
+
     const checkboxBox = await orcaPage
       .getByRole('checkbox', { name: 'Select comment' })
       .first()
       .boundingBox()
+
     if (!queuedCardBox || !checkboxBox) {
       throw new Error('queued card and checkbox must be measurable')
     }
+
     expect(checkboxBox.x - queuedCardBox.x).toBeGreaterThanOrEqual(8)
   })
 
@@ -291,9 +317,11 @@ test.describe('PR comments sidebar cards view', () => {
     await openChecks(orcaPage, worktreeId)
 
     await expect(orcaPage.getByText('Needs review · 1')).toBeVisible({ timeout: 10_000 })
+
     const openThreadCard = orcaPage.getByTestId('pr-comment-group').filter({
       hasText: 'Please update this handler before merge.'
     })
+
     const conversationCard = orcaPage.getByTestId('pr-comment-group').filter({
       hasText: 'LGTM on the overall approach.'
     })

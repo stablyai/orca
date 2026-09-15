@@ -11,7 +11,9 @@ import {
 } from './trim-windows-icon-source.mjs'
 
 const scriptDir = import.meta.dirname
+
 const projectDir = dirname(dirname(scriptDir))
+
 const buildDir = join(projectDir, 'resources', 'build')
 
 // Why: Windows scales the largest ICO frame down for the taskbar/"Open with"
@@ -22,37 +24,48 @@ const MIN_GLYPH_FILL_FRACTION = 0.92
 function largestIcoFrame(icoBuffer) {
   const count = icoBuffer.readUInt16LE(4)
   let best = null
+
   for (let i = 0; i < count; i++) {
     const entry = 6 + i * 16
     let width = icoBuffer.readUInt8(entry)
+
     if (width === 0) {
       width = 256
     }
+
     const byteLength = icoBuffer.readUInt32LE(entry + 8)
     const imageOffset = icoBuffer.readUInt32LE(entry + 12)
+
     if (!best || width > best.width) {
       best = { width, byteLength, imageOffset }
     }
   }
+
   return best
 }
 
 function decodeIcoFrame(icoBuffer, frame) {
   const payload = icoBuffer.subarray(frame.imageOffset, frame.imageOffset + frame.byteLength)
+
   const isPng =
     payload[0] === 0x89 && payload[1] === 0x50 && payload[2] === 0x4e && payload[3] === 0x47
+
   if (!isPng) {
     throw new Error('Expected PNG-compressed ICO frame')
   }
+
   const png = PNG.sync.read(Buffer.from(payload))
+
   return { width: png.width, height: png.height, data: png.data }
 }
 
 function glyphFillFraction(image) {
   const bounds = findOpaqueBounds(image)
+
   if (!bounds) {
     return 0
   }
+
   return Math.max(bounds.width, bounds.height) / Math.max(image.width, image.height)
 }
 
@@ -75,6 +88,7 @@ describe('trim pipeline', () => {
   function solidSquareWithInset(canvas, glyph) {
     const data = Buffer.alloc(canvas * canvas * 4)
     const offset = Math.floor((canvas - glyph) / 2)
+
     for (let y = 0; y < glyph; y++) {
       for (let x = 0; x < glyph; x++) {
         const idx = ((offset + y) * canvas + (offset + x)) * 4
@@ -84,6 +98,7 @@ describe('trim pipeline', () => {
         data[idx + 3] = 255
       }
     }
+
     return { width: canvas, height: canvas, data }
   }
 

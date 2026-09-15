@@ -41,9 +41,11 @@ function HostHeaderHealthIcon({
   if (health === 'connecting') {
     return <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
   }
+
   if (health === 'blocked' || health === 'error') {
     return <AlertTriangle className="size-3 shrink-0 text-destructive" />
   }
+
   return null
 }
 
@@ -55,6 +57,7 @@ function getHostHeaderDetail(row: HostHeaderRow): { text: string; isWarning: boo
       isWarning: true
     }
   }
+
   // Why: auth-failed needs a worded status; the health icon alone doesn't tell the user to re-auth.
   if (row.connectionStatus === 'auth-failed') {
     return {
@@ -65,16 +68,19 @@ function getHostHeaderDetail(row: HostHeaderRow): { text: string; isWarning: boo
       isWarning: true
     }
   }
+
   if (row.health === 'disconnected') {
     return {
       text: translate('auto.components.sidebar.WorktreeList.hostDisconnected', 'Disconnected'),
       isWarning: false
     }
   }
+
   // Why: show the transport detail only for remote hosts; it's noise under the local label.
   if (row.kind !== 'local') {
     return { text: row.detail, isWarning: false }
   }
+
   return null
 }
 
@@ -92,6 +98,7 @@ export function HostSectionHeader({
   const isBlocked = row.health === 'blocked'
   const isDisconnected = row.health === 'disconnected'
   const detail = getHostHeaderDetail(row)
+
   return (
     <div className="px-2 pt-1">
       {/* Why: outlined card + server glyph marks hosts as machines, not mere groups. */}

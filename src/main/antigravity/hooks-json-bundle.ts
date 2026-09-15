@@ -20,6 +20,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function getBundle(config: HooksConfig): Record<string, unknown> {
   const existing = config[ANTIGRAVITY_HOOK_BUNDLE_NAME]
+
   return isRecord(existing) ? { ...existing } : {}
 }
 
@@ -35,6 +36,7 @@ export function createAntigravityManagedCommandMatcher(): (command: string | und
   const matchers = ANTIGRAVITY_MANAGED_SCRIPT_FILE_NAMES.map((scriptFileName) =>
     createManagedCommandMatcher(scriptFileName)
   )
+
   return (command) => matchers.some((matcher) => matcher(command))
 }
 
@@ -47,16 +49,19 @@ export function bundleHasStaleManagedCommand(
     if (!Array.isArray(definitions)) {
       continue
     }
+
     for (const definition of definitions as HookDefinition[]) {
       if (!hookDefinitionHasManagedCommand(definition, isManagedCommand)) {
         continue
       }
+
       const commands = [
         definition.command,
         definition.bash,
         definition.powershell,
         ...(Array.isArray(definition.hooks) ? definition.hooks.map((hook) => hook.command) : [])
       ]
+
       if (
         commands.some(
           (command) =>
@@ -67,6 +72,7 @@ export function bundleHasStaleManagedCommand(
       }
     }
   }
+
   return false
 }
 
@@ -77,6 +83,7 @@ function buildEventDefinition(event: AntigravityEvent, command: string): HookDef
       hooks: [buildManagedCommandHook(command)]
     }
   }
+
   // Antigravity's direct-command event schema carries the command on the
   // definition; add the host-level timeout backstop alongside it.
   return { type: 'command', command, timeout: MANAGED_HOOK_TIMEOUT_SECONDS }
@@ -87,17 +94,21 @@ function removeManagedCommandsFromBundle(
   isManagedCommand: (command: string | undefined) => boolean
 ): Record<string, unknown> {
   const next = { ...bundle }
+
   for (const [eventName, definitions] of Object.entries(next)) {
     if (!Array.isArray(definitions)) {
       continue
     }
+
     const cleaned = removeManagedCommands(definitions as HookDefinition[], isManagedCommand)
+
     if (cleaned.length === 0) {
       delete next[eventName]
     } else {
       next[eventName] = cleaned
     }
   }
+
   return next
 }
 
@@ -112,6 +123,7 @@ export function buildInstalledConfig(
     const current = Array.isArray(bundle[event.eventName])
       ? (bundle[event.eventName] as HookDefinition[])
       : []
+
     const cleaned = removeManagedCommands(current, isManagedCommand)
     bundle[event.eventName] = [...cleaned, buildEventDefinition(event, commandForEvent(event))]
   }
@@ -122,9 +134,12 @@ export function buildInstalledConfig(
 export function removeInstalledConfig(config: HooksConfig): void {
   const isManagedCommand = createAntigravityManagedCommandMatcher()
   const bundle = removeManagedCommandsFromBundle(getBundle(config), isManagedCommand)
+
   if (Object.keys(bundle).length === 0) {
     delete config[ANTIGRAVITY_HOOK_BUNDLE_NAME]
+
     return
   }
+
   config[ANTIGRAVITY_HOOK_BUNDLE_NAME] = bundle
 }

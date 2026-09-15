@@ -12,8 +12,11 @@ import {
 } from './issue-attribute-filter'
 
 export const LINEAR_VIEW_MODES = ['list', 'board'] as const
+
 export const LINEAR_GROUP_BY_OPTIONS = ['none', 'status', 'assignee', 'priority', 'team'] as const
+
 export const LINEAR_ORDER_BY_OPTIONS = ['priority', 'updated', 'identifier'] as const
+
 export const LINEAR_DISPLAY_PROPERTIES = [
   'state',
   'priority',
@@ -24,12 +27,17 @@ export const LINEAR_DISPLAY_PROPERTIES = [
 ] as const
 
 export type LinearViewMode = (typeof LINEAR_VIEW_MODES)[number]
+
 export type LinearGroupBy = (typeof LINEAR_GROUP_BY_OPTIONS)[number]
+
 export type LinearOrderBy = (typeof LINEAR_ORDER_BY_OPTIONS)[number]
+
 export type LinearDisplayProperty = (typeof LINEAR_DISPLAY_PROPERTIES)[number]
 
 export const DEFAULT_LINEAR_VIEW_MODE: LinearViewMode = 'list'
+
 export const DEFAULT_LINEAR_GROUP_BY: LinearGroupBy = 'none'
+
 export const DEFAULT_LINEAR_ORDER_BY: LinearOrderBy = 'priority'
 
 export type LinearIssueViewResumeState = {
@@ -76,22 +84,29 @@ function normalizeFiltersByWorkspaceId(value: unknown): Record<string, LinearIss
   if (!isPlainObject(value)) {
     return {}
   }
+
   const next: Record<string, LinearIssueAttributeFilter> = {}
+
   for (const [workspaceId, filter] of Object.entries(value)) {
     if (!isSafeWorkspaceKey(workspaceId)) {
       continue
     }
+
     let parsed: LinearIssueAttributeFilter
+
     try {
       parsed = parseLinearIssueAttributeFilter(filter)
     } catch {
       continue
     }
+
     if (isEmptyLinearIssueAttributeFilter(parsed)) {
       continue
     }
+
     next[workspaceId] = parsed
   }
+
   return next
 }
 
@@ -101,26 +116,35 @@ export function normalizeLinearIssueViewResumeState(
   if (!isPlainObject(value)) {
     return undefined
   }
+
   const next = defaultLinearIssueViewResumeState()
+
   if (isMember(LINEAR_VIEW_MODES, value.viewMode)) {
     next.viewMode = value.viewMode
   }
+
   if (isMember(LINEAR_GROUP_BY_OPTIONS, value.groupBy)) {
     next.groupBy = value.groupBy
   }
+
   if (isMember(LINEAR_ORDER_BY_OPTIONS, value.orderBy)) {
     next.orderBy = value.orderBy
   }
+
   const displayProperties: unknown = value.displayProperties
+
   if (Array.isArray(displayProperties)) {
     next.displayProperties = LINEAR_DISPLAY_PROPERTIES.filter((property) =>
       displayProperties.includes(property)
     )
   }
+
   if (typeof value.teamPropertyTouched === 'boolean') {
     next.teamPropertyTouched = value.teamPropertyTouched
   }
+
   next.filtersByWorkspaceId = normalizeFiltersByWorkspaceId(value.filtersByWorkspaceId)
+
   return isDefaultLinearIssueViewResumeState(next) ? undefined : next
 }
 
@@ -143,17 +167,23 @@ export function serializeLinearIssueViewResumeState(
   view: LinearIssueViewSelection
 ): LinearIssueViewResumeState {
   const filtersByWorkspaceId: Record<string, LinearIssueAttributeFilter> = {}
+
   for (const [workspaceId, filter] of Object.entries(view.filtersByWorkspaceId)) {
     if (!isSafeWorkspaceKey(workspaceId) || isEmptyLinearIssueAttributeFilter(filter)) {
       continue
     }
+
     const bounded = boundLinearIssueAttributeFilter(canonicalizeLinearIssueAttributeFilter(filter))
+
     if (isEmptyLinearIssueAttributeFilter(bounded)) {
       continue
     }
+
     filtersByWorkspaceId[workspaceId] = bounded
   }
+
   const selectedDisplayProperties = new Set(view.displayProperties)
+
   return {
     viewMode: view.viewMode,
     groupBy: view.groupBy,
@@ -173,7 +203,9 @@ export function selectLinearWorkspaceIssueFilter(
   if (!workspaceId) {
     return emptyLinearIssueAttributeFilter()
   }
+
   const filter = Object.hasOwn(filters, workspaceId) ? filters[workspaceId] : undefined
+
   return filter ? canonicalizeLinearIssueAttributeFilter(filter) : emptyLinearIssueAttributeFilter()
 }
 
@@ -185,17 +217,23 @@ export function setLinearWorkspaceIssueFilter(
   if (!isSafeWorkspaceKey(workspaceId)) {
     return filters
   }
+
   const current = selectLinearWorkspaceIssueFilter(filters, workspaceId)
+
   if (
     linearIssueAttributeFilterSignature(current) === linearIssueAttributeFilterSignature(filter)
   ) {
     return filters
   }
+
   const next = { ...filters }
   delete next[workspaceId]
+
   if (isEmptyLinearIssueAttributeFilter(filter)) {
     return next
   }
+
   next[workspaceId] = canonicalizeLinearIssueAttributeFilter(filter)
+
   return next
 }

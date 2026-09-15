@@ -50,14 +50,18 @@ export function isLazyChunkLoadError(error: unknown): error is LazyChunkLoadErro
 // The session guard survives a landed reload to prevent loops, but a surviving
 // document clears its own token so a later failure can retry recovery.
 const RELOAD_GUARD_KEY = 'orca:lazy-chunk-reload-attempted'
+
 // Reloading reevaluates this fallback, giving the new document a different token.
 const FALLBACK_RELOAD_TOKEN = `doc-${Math.random().toString(36).slice(2)}`
+
 const DEFAULT_RETRIES = 2
+
 const DEFAULT_BASE_DELAY_MS = 250
 
 // A matching token proves this document requested a reload that never landed.
 function currentDocumentReloadToken(): string {
   const timeOrigin = typeof performance === 'undefined' ? Number.NaN : performance.timeOrigin
+
   return Number.isFinite(timeOrigin) && timeOrigin > 0 ? String(timeOrigin) : FALLBACK_RELOAD_TOKEN
 }
 
@@ -65,11 +69,14 @@ function readChunkReloadGuardState(): ReloadGuardState {
   if (typeof window === 'undefined') {
     return 'unavailable'
   }
+
   try {
     const stored = window.sessionStorage.getItem(RELOAD_GUARD_KEY)
+
     if (stored === null) {
       return 'not-attempted'
     }
+
     return stored === currentDocumentReloadToken() ? 'reload-not-landed' : 'reload-landed'
   } catch {
     // Why: when storage is blocked we cannot prove a reload happened, but still
@@ -81,6 +88,7 @@ function readChunkReloadGuardState(): ReloadGuardState {
 function markChunkReloadAttempted(): boolean {
   try {
     window.sessionStorage.setItem(RELOAD_GUARD_KEY, currentDocumentReloadToken())
+
     return true
   } catch {
     // A reload without a durable guard can loop, so treat write failure as unavailable.
@@ -98,7 +106,9 @@ function clearChunkReloadGuard(): void {
 
 // A per-document cap prevents repeated vetoes from creating a reload loop.
 const MAX_RELOAD_REQUESTS_PER_DOCUMENT = 2
+
 let reloadRequestsThisDocument = 0
+
 let reloadRequestInFlight = false
 
 export function resetLazyChunkReloadRequestsForTest(): void {
@@ -178,11 +188,13 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
   const baseDelayMs = options.baseDelayMs ?? DEFAULT_BASE_DELAY_MS
 
   let lastError: unknown
+
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
       return await factory()
     } catch (error) {
       lastError = error
+
       if (attempt < retries) {
         // Exponential backoff absorbs transient fetch hiccups (HTTP / relay / SSH).
         await wait(baseDelayMs * 2 ** attempt)
@@ -203,10 +215,12 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
       // No recovery was attempted, so keep normal reporting rather than containing.
       throw lastError
     }
+
     reloadRequestsThisDocument += 1
     reloadRequestInFlight = true
     recordReloadBreadcrumb('lazy_chunk_reload', reloadKey, failureMessage)
     let outcome: LazyChunkRecoveryReloadOutcome = 'request-failed'
+
     try {
       // A landed reload tears down this document before the promise settles.
       outcome = await requestLazyChunkRecoveryReload(window)
@@ -215,6 +229,7 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
       clearChunkReloadGuard()
       recordReloadBreadcrumb('lazy_chunk_reload_vetoed', reloadKey, failureMessage, outcome)
     }
+
     // The reload was this document's last recovery step for this chunk, whether it
     // was refused outright or simply never navigated.
     throw containedChunkFailure(lastError, reloadKey)
@@ -237,6 +252,7 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
         'guard-not-landed'
       )
     }
+
     throw containedChunkFailure(lastError, reloadKey)
   }
 

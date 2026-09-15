@@ -20,10 +20,12 @@ class FakeSession implements RpcClient {
   getLastConnectedAt = () => null
   onStateChange = (listener: (state: ConnectionState) => void) => {
     this.listeners.add(listener)
+
     return () => this.listeners.delete(listener)
   }
   setState(state: ConnectionState): void {
     this.state = state
+
     for (const listener of this.listeners) {
       listener(state)
     }
@@ -47,6 +49,7 @@ async function settle<T>(
   )
   await Promise.resolve()
   await Promise.resolve()
+
   return outcome
 }
 

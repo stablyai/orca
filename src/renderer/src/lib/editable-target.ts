@@ -18,6 +18,7 @@ export function isEditableTarget(target: EventTarget | null): boolean {
   if (target.isContentEditable) {
     return true
   }
+
   return (
     target.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]') !==
     null
@@ -30,7 +31,9 @@ export function isSelectAllShortcut(
   if (event.key.toLowerCase() !== 'a' || event.altKey || event.shiftKey) {
     return false
   }
+
   const platform = getShortcutPlatform()
+
   return platform === 'darwin'
     ? Boolean(event.metaKey) && !event.ctrlKey
     : Boolean(event.ctrlKey) && !event.metaKey

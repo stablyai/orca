@@ -221,6 +221,7 @@ export function registerVueLanguage(monaco: MonacoModule): void {
   const vueAlreadyRegistered = monaco.languages
     .getLanguages()
     .some((language) => language.id === 'vue')
+
   if (vueAlreadyRegistered) {
     return
   }

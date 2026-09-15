@@ -31,6 +31,7 @@ import {
 } from '../listing/worktree-owner-settings'
 
 import { findRepoForHost } from '../../repo-host-identity'
+
 export function createUpdateWorktreeMeta(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
@@ -39,19 +40,25 @@ export function createUpdateWorktreeMeta(
     const shouldApplyUpdate = options?.shouldApply
     const requestedHostId = options?.executionHostId
     const existingWorktree = findKnownWorktreeById(get(), worktreeId, requestedHostId)
+
     const executionHostId =
       requestedHostId ??
       existingWorktree?.hostId ??
       (get().settings?.activeRuntimeEnvironmentId ? undefined : 'local')
+
     if (shouldApplyUpdate && !shouldApplyUpdate(existingWorktree)) {
       return { ok: true }
     }
+
     const workspaceScope = parseWorkspaceKey(worktreeId)
+
     if (workspaceScope?.type === 'folder') {
       const folderUpdates = getFolderWorkspaceMetaUpdates(updates)
+
       if (Object.keys(folderUpdates).length === 0) {
         return { ok: true }
       }
+
       try {
         // Why: a rejected folder update reconciles the optimistic write away, so
         // reporting ok would show the dialog a save that silently undid itself.
@@ -59,6 +66,7 @@ export function createUpdateWorktreeMeta(
           workspaceScope.folderWorkspaceId,
           folderUpdates
         )
+
         return updated
           ? { ok: true }
           : {
@@ -70,14 +78,18 @@ export function createUpdateWorktreeMeta(
             }
       } catch (err) {
         console.error('Failed to update folder workspace meta:', err)
+
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }
     }
+
     const normalizedUpdates = normalizeHostedReviewLinkReplacementUpdates(updates, existingWorktree)
+
     // Why: manual PR linking supplies only the number; resolve the head branch so Push targets the review branch.
     const linkedPrForPushTarget = isPositiveHostedReviewNumber(normalizedUpdates.linkedPR)
       ? normalizedUpdates.linkedPR
       : null
+
     // Why: an ambiguous owner must not throw past this update's { ok, error } contract — skip the lookup instead.
     const pushTargetOwnerSettings =
       linkedPrForPushTarget !== null &&
@@ -86,6 +98,7 @@ export function createUpdateWorktreeMeta(
       !existingWorktree.pushTarget
         ? trySettingsForWorktreeOwner(get(), worktreeId, executionHostId)
         : null
+
     const resolvedPushTarget =
       pushTargetOwnerSettings && existingWorktree && linkedPrForPushTarget !== null
         ? await resolveGitHubReviewPushTarget(
@@ -94,12 +107,15 @@ export function createUpdateWorktreeMeta(
             linkedPrForPushTarget
           )
         : undefined
+
     const existingHostedReviewPushTargetLookup = existingWorktree
       ? getHostedReviewPushTargetLookup(existingWorktree)
       : null
+
     const nextHostedReviewPushTargetLookup = existingWorktree
       ? getHostedReviewPushTargetLookup({ ...existingWorktree, ...normalizedUpdates })
       : null
+
     // Why: a pushTarget derived from a linked review must not keep steering pushes after it's unlinked or replaced.
     const shouldClearStaleHostedReviewPushTarget =
       Boolean(existingWorktree?.pushTarget) &&
@@ -107,19 +123,24 @@ export function createUpdateWorktreeMeta(
       resolvedPushTarget === undefined &&
       existingHostedReviewPushTargetLookup !== null &&
       existingHostedReviewPushTargetLookup.key !== nextHostedReviewPushTargetLookup?.key
+
     const worktreeForUpdate = get().getKnownWorktreeById(worktreeId, executionHostId)
+
     if (shouldApplyUpdate && !shouldApplyUpdate(worktreeForUpdate)) {
       return { ok: true }
     }
+
     const shouldRefreshHostedReview = Boolean(
       worktreeForUpdate && hasChangedHostedReviewLinkUpdates(normalizedUpdates, worktreeForUpdate)
     )
+
     const reviewRepo = shouldRefreshHostedReview
       ? (findRepoForHost(get().repos, worktreeForUpdate?.repoId ?? '', {
           hostId: executionHostId,
           settings: get().settings
         }) ?? undefined)
       : undefined
+
     const reviewBranch = worktreeForUpdate?.branch.replace(/^refs\/heads\//, '')
 
     // Why: bump lastActivityAt on comment edits so the time-decay sort doesn't drop a just-touched worktree.
@@ -127,11 +148,13 @@ export function createUpdateWorktreeMeta(
       'displayName' in normalizedUpdates
         ? { displayNameIsPinned: displayNameUpdatePinsLabel(normalizedUpdates.displayName) }
         : {}
+
     const targetEnriched = resolvedPushTarget
       ? { ...normalizedUpdates, ...displayNameProvenance, pushTarget: resolvedPushTarget }
       : shouldClearStaleHostedReviewPushTarget
         ? { ...normalizedUpdates, ...displayNameProvenance, pushTarget: undefined }
         : { ...normalizedUpdates, ...displayNameProvenance }
+
     const renameCleared =
       'displayName' in targetEnriched
         ? {
@@ -140,6 +163,7 @@ export function createUpdateWorktreeMeta(
             firstAgentMessageRenameError: null
           }
         : targetEnriched
+
     const enriched =
       'comment' in renameCleared ? { ...renameCleared, lastActivityAt: Date.now() } : renameCleared
 
@@ -151,19 +175,23 @@ export function createUpdateWorktreeMeta(
       ) {
         return s
       }
+
       didApply = true
+
       const nextWorktrees = applyWorktreeUpdates(
         s.worktreesByRepo,
         worktreeId,
         enriched,
         executionHostId
       )
+
       const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
         s.detectedWorktreesByRepo,
         worktreeId,
         enriched,
         executionHostId
       )
+
       const cacheKey =
         reviewRepo && reviewBranch
           ? getHostedReviewCacheKey(
@@ -176,6 +204,7 @@ export function createUpdateWorktreeMeta(
               true
             )
           : null
+
       const prCacheKey =
         reviewRepo && reviewBranch
           ? getGitHubPRCacheKey(
@@ -188,6 +217,7 @@ export function createUpdateWorktreeMeta(
               true
             )
           : null
+
       const prCacheKeys =
         reviewRepo && reviewBranch
           ? [
@@ -196,8 +226,10 @@ export function createUpdateWorktreeMeta(
               getLegacyGitHubPRCacheKey(reviewRepo.path, undefined, reviewBranch)
             ].filter((key): key is string => Boolean(key))
           : []
+
       const hostedReviewCache = s.hostedReviewCache ?? {}
       const prCache = s.prCache ?? {}
+
       if (
         nextWorktrees === s.worktreesByRepo &&
         nextDetectedWorktrees === s.detectedWorktreesByRepo &&
@@ -212,15 +244,19 @@ export function createUpdateWorktreeMeta(
           ? (() => {
               const next = { ...hostedReviewCache }
               delete next[cacheKey]
+
               return next
             })()
           : hostedReviewCache
+
       const nextPRCache = prCacheKeys.some((key) => prCache[key])
         ? (() => {
             const next = { ...prCache }
+
             for (const key of prCacheKeys) {
               delete next[key]
             }
+
             return next
           })()
         : prCache
@@ -238,9 +274,11 @@ export function createUpdateWorktreeMeta(
         ...(nextPRCache !== prCache ? { prCache: nextPRCache } : {})
       }
     })
+
     if (shouldApplyUpdate && !didApply) {
       return { ok: true }
     }
+
     if (hasHostedReviewLinkUpdates(enriched)) {
       bumpHostedReviewLinkMutationGeneration(worktreeId)
     }
@@ -253,6 +291,7 @@ export function createUpdateWorktreeMeta(
         executionHostId ?? existingWorktree?.hostId,
         worktreeForUpdate?.identity?.key
       )
+
       if (
         !options?.suppressHostedReviewRefresh &&
         reviewRepo &&
@@ -294,6 +333,7 @@ export function createUpdateWorktreeMeta(
     } catch (err) {
       if (isRuntimeSelectorNotFoundError(err)) {
         void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+
         return {
           ok: false,
           error: translate(
@@ -302,12 +342,15 @@ export function createUpdateWorktreeMeta(
           )
         }
       }
+
       console.error('Failed to update worktree meta:', err)
       void get().fetchWorktrees(getRepoIdFromWorktreeId(worktreeId))
+
       // Why: the refetch above reverts the optimistic write, so a caller that
       // closes its surface on this path shows the user a save that undid itself.
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
     }
+
     return { ok: true }
   }
 }

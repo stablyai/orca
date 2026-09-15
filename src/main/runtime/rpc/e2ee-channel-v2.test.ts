@@ -16,10 +16,12 @@ import { E2EEChannel } from './e2ee-channel'
 import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
 
 const server = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
+
 const client = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
 
 function createMockWs() {
   const sent: { data: string | Buffer; options?: { binary?: boolean } }[] = []
+
   return {
     OPEN: 1 as const,
     readyState: 1,
@@ -52,11 +54,13 @@ function setup() {
   const ws = createMockWs()
   const onReady = vi.fn()
   const onError = vi.fn()
+
   const resolveAuthenticatedDevice = vi.fn((token: string) =>
     token === 'valid-token'
       ? { deviceId: 'device-1', deviceToken: token, scope: 'mobile' as const }
       : null
   )
+
   const channel = new E2EEChannel(ws as unknown as WebSocket, {
     serverSecretKey: server.secretKey,
     resolveAuthenticatedDevice,
@@ -65,6 +69,7 @@ function setup() {
     transportContext: { transport: 'relay', relayHostId: 'AbCdEf0123_-xyZ9' },
     requireV2: true
   })
+
   return { ws, channel, onReady, onError, resolveAuthenticatedDevice }
 }
 
@@ -73,12 +78,14 @@ function startV2(ctx: ReturnType<typeof setup>) {
   ctx.channel.handleRawMessage(JSON.stringify(clientHello))
   const ready = JSON.parse(ctx.ws.sent[0]!.data.toString()) as MobileE2EEV2Ready
   const handshake = validateMobileE2EEV2Handshake(clientHello, ready)!
+
   const schedule = deriveMobileE2EEV2KeySchedule({
     sharedSecret: deriveSharedKey(client.secretKey, server.publicKey),
     transcript: encodeMobileE2EEV2Transcript(handshake),
     clientNonce: handshake.clientNonce,
     desktopNonce: handshake.desktopNonce
   })
+
   return { ready, schedule }
 }
 
@@ -95,6 +102,7 @@ function clientText(
     payloadKind: 'text',
     counter
   })
+
   return Buffer.from(frame).toString('base64')
 }
 
@@ -168,6 +176,7 @@ describe('E2EEChannel v2', () => {
       v: 1,
       clientCapabilities: ['agent-session.structured.v1']
     })
+
     ctx.channel.handleRawMessage(clientText(capabilityFrame, schedule, 1n))
 
     expect(ctx.channel.clientCapabilities).toEqual([])
@@ -205,6 +214,7 @@ describe('E2EEChannel v2', () => {
   it('rejects a captured auth frame replayed onto a fresh desktop nonce', () => {
     const first = setup()
     const firstHandshake = startV2(first)
+
     const capturedAuth = clientText(
       JSON.stringify({
         type: 'e2ee_auth',
@@ -228,16 +238,19 @@ describe('E2EEChannel v2', () => {
     const first = setup()
     const firstHandshake = startV2(first)
     const transcriptHashB64 = Buffer.from(firstHandshake.schedule.transcriptHash).toString('base64')
+
     const capturedAuth = clientText(
       JSON.stringify({ type: 'e2ee_auth', v: 2, transcriptHashB64, deviceToken: 'valid-token' }),
       firstHandshake.schedule,
       0n
     )
+
     const capturedMutation = clientText(
       JSON.stringify({ method: 'device.remove', params: { deviceId: 'device-1' } }),
       firstHandshake.schedule,
       1n
     )
+
     const firstMutation = vi.fn()
     first.channel.onMessage(firstMutation)
     first.channel.handleRawMessage(capturedAuth)

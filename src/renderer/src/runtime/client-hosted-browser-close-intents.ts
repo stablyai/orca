@@ -53,12 +53,15 @@ export function collectPendingClientHostedBrowserCloses(
   args: { workspaceId: string; worktreeId: string; environmentIds: readonly string[] }
 ): PendingClientHostedBrowserClose[] {
   const environmentIds = new Set(args.environmentIds.filter((id) => id.length > 0))
+
   if (environmentIds.size === 0) {
     return []
   }
+
   return (state.browserPagesByWorkspace[args.workspaceId] ?? []).flatMap((page) => {
     const handle = state.remoteBrowserPageHandlesByPageId[page.id]
     const environmentId = handle?.environmentId?.trim()
+
     if (
       !handle ||
       !environmentId ||
@@ -67,6 +70,7 @@ export function collectPendingClientHostedBrowserCloses(
     ) {
       return []
     }
+
     return [{ environmentId, browserPageId: handle.remotePageId, worktreeId: args.worktreeId }]
   })
 }
@@ -80,19 +84,24 @@ export function recordClientHostedBrowserCloseIntents(
   if (closes.length === 0) {
     return null
   }
+
   const next = { ...current }
   let changed = false
+
   for (const close of closes) {
     const existing = next[close.environmentId] ?? []
+
     if (existing.some((intent) => intent.browserPageId === close.browserPageId)) {
       continue
     }
+
     next[close.environmentId] = [
       ...existing,
       { browserPageId: close.browserPageId, worktreeId: close.worktreeId, closedAt: now }
     ].slice(-MAX_CLIENT_HOSTED_BROWSER_CLOSE_INTENTS)
     changed = true
   }
+
   return changed ? next : null
 }
 
@@ -102,24 +111,31 @@ export function clearClientHostedBrowserCloseIntents(
   args: { environmentId: string; browserPageIds: readonly string[]; now: number }
 ): ClientHostedBrowserCloseIntentsByEnvironment | null {
   const existing = current[args.environmentId]
+
   if (!existing) {
     return null
   }
+
   const cleared = new Set(args.browserPageIds)
+
   const remaining = existing.filter(
     (intent) =>
       !cleared.has(intent.browserPageId) &&
       args.now - intent.closedAt <= CLIENT_HOSTED_BROWSER_CLOSE_INTENT_MAX_AGE_MS
   )
+
   if (remaining.length === existing.length) {
     return null
   }
+
   const next = { ...current }
+
   if (remaining.length === 0) {
     delete next[args.environmentId]
   } else {
     next[args.environmentId] = remaining
   }
+
   return next
 }
 

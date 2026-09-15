@@ -24,6 +24,7 @@ export function createMultiSelectDragGhost(paths: string[], rowW: number): HTMLD
     name.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'
     name.textContent = label
     row.appendChild(name)
+
     return row
   }
 
@@ -34,6 +35,7 @@ export function createMultiSelectDragGhost(paths: string[], rowW: number): HTMLD
   for (const p of paths.slice(0, MAX_SHOWN)) {
     ghost.appendChild(makeRow(basename(p)))
   }
+
   if (paths.length > MAX_SHOWN) {
     ghost.appendChild(makeRow(`+${paths.length - MAX_SHOWN} more`, true))
   }

@@ -16,9 +16,11 @@ function makeSender(nodes: AXNode[]): CdpCommandSender {
     if (method === 'Accessibility.enable') {
       return {}
     }
+
     if (method === 'Accessibility.getFullAXTree') {
       return { nodes }
     }
+
     throw new Error(`Unexpected CDP method: ${method}`)
   })
 }
@@ -59,6 +61,7 @@ describe('buildSnapshot', () => {
       node('2', 'button', 'Submit', { backendDOMNodeId: 10 }),
       node('3', 'link', 'Home', { backendDOMNodeId: 11 })
     ]
+
     const result = await buildSnapshot(makeSender(nodes))
 
     expect(result.refs).toHaveLength(2)
@@ -73,6 +76,7 @@ describe('buildSnapshot', () => {
       node('1', 'WebArea', 'page', { childIds: ['2'] }),
       node('2', 'textbox', 'Email', { backendDOMNodeId: 10 })
     ]
+
     const result = await buildSnapshot(makeSender(nodes))
     expect(result.snapshot).toContain('text input "Email"')
   })
@@ -83,6 +87,7 @@ describe('buildSnapshot', () => {
       node('2', 'navigation', 'Main Nav', { childIds: ['3'] }),
       node('3', 'link', 'About', { backendDOMNodeId: 10 })
     ]
+
     const result = await buildSnapshot(makeSender(nodes))
 
     expect(result.snapshot).toContain('[Main Nav]')
@@ -95,6 +100,7 @@ describe('buildSnapshot', () => {
       node('1', 'WebArea', 'page', { childIds: ['2'] }),
       node('2', 'heading', 'Welcome')
     ]
+
     const result = await buildSnapshot(makeSender(nodes))
     expect(result.snapshot).toContain('heading "Welcome"')
     expect(result.refs).toHaveLength(0)
@@ -105,6 +111,7 @@ describe('buildSnapshot', () => {
       node('1', 'WebArea', 'page', { childIds: ['2'] }),
       node('2', 'staticText', 'Hello world')
     ]
+
     const result = await buildSnapshot(makeSender(nodes))
     expect(result.snapshot).toContain('text "Hello world"')
     expect(result.refs).toHaveLength(0)
@@ -116,6 +123,7 @@ describe('buildSnapshot', () => {
       node('2', 'generic', '', { childIds: ['3'] }),
       node('3', 'button', 'OK', { backendDOMNodeId: 10 })
     ]
+
     const result = await buildSnapshot(makeSender(nodes))
     expect(result.refs).toHaveLength(1)
     expect(result.refs[0].name).toBe('OK')
@@ -128,6 +136,7 @@ describe('buildSnapshot', () => {
       node('2', 'group', 'ignored group', { childIds: ['3'], ignored: true }),
       node('3', 'button', 'Deep', { backendDOMNodeId: 10 })
     ]
+
     const result = await buildSnapshot(makeSender(nodes))
     expect(result.refs).toHaveLength(1)
     expect(result.refs[0].name).toBe('Deep')
@@ -139,6 +148,7 @@ describe('buildSnapshot', () => {
       node('2', 'button', '', { backendDOMNodeId: 10 }),
       node('3', 'button', 'Labeled', { backendDOMNodeId: 11 })
     ]
+
     const result = await buildSnapshot(makeSender(nodes))
     expect(result.refs).toHaveLength(1)
     expect(result.refs[0].name).toBe('Labeled')
@@ -149,6 +159,7 @@ describe('buildSnapshot', () => {
       node('1', 'WebArea', 'page', { childIds: ['2'] }),
       node('2', 'checkbox', 'Agree', { backendDOMNodeId: 42 })
     ]
+
     const result = await buildSnapshot(makeSender(nodes))
     const entry = result.refMap.get('@e1')
     expect(entry).toBeDefined()
@@ -163,6 +174,7 @@ describe('buildSnapshot', () => {
       node('2', 'main', '', { childIds: ['3'] }),
       node('3', 'button', 'Action', { backendDOMNodeId: 10 })
     ]
+
     const result = await buildSnapshot(makeSender(nodes))
     const lines = result.snapshot.split('\n')
     const mainLine = lines.find((l) => l.includes('[Main Content]'))
@@ -183,6 +195,7 @@ describe('buildSnapshot', () => {
       node('7', 'textbox', 'Search', { backendDOMNodeId: 20 }),
       node('8', 'button', 'Go', { backendDOMNodeId: 21 })
     ]
+
     const result = await buildSnapshot(makeSender(nodes))
 
     expect(result.refs).toHaveLength(3)

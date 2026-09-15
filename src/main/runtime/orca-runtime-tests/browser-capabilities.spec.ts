@@ -213,13 +213,16 @@ describe('OrcaRuntimeService', () => {
   it('preserves a live client page across headed renderer graph updates and prunes it after retirement', async () => {
     const runtime = createRuntime()
     const pages = getRuntimeBrowserPageRegistry(runtime)
+
     const placement = {
       kind: 'client' as const,
       browserHostClientId: 'host-a',
       browserHostGeneration: 3,
       pageHostGeneration: 9
     }
+
     runtime.attachWindow(1)
+
     const rendererSnapshot = (snapshotVersion: number) => ({
       worktree: TEST_WORKTREE_ID,
       publicationEpoch: 'renderer:client-page-preservation',
@@ -230,6 +233,7 @@ describe('OrcaRuntimeService', () => {
       tabGroups: [{ id: 'group-1', activeTabId: null, tabOrder: [] }],
       tabs: []
     })
+
     runtime.syncWindowGraph(1, {
       tabs: [],
       leaves: [],
@@ -291,11 +295,13 @@ describe('OrcaRuntimeService', () => {
       canGoForward: false,
       isActive: true
     }
+
     const err = {
       code: -202,
       description: 'ERR_CERT_AUTHORITY_INVALID',
       validatedUrl: 'https://localhost:3443/'
     }
+
     const certificateFailure = {
       challengeId: 'challenge-1',
       browserPageId: 'page-1',
@@ -306,6 +312,7 @@ describe('OrcaRuntimeService', () => {
       canProceed: true,
       observedAt: 123
     }
+
     const unchanged = (a: unknown[], b: unknown[]): boolean =>
       headlessBrowserTabsUnchanged(a as never, b as never)
 
@@ -366,10 +373,13 @@ describe('OrcaRuntimeService', () => {
           'Browser automation is unavailable on this host, and the cause could not be determined.'
       }
     ])
+
     const browserCalls = Object.entries(runtime).filter(
       ([name, value]) => /^browser[A-Z]/.test(name) && typeof value === 'function'
     )
+
     expect(browserCalls.length).toBeGreaterThan(50)
+
     for (const [name, call] of browserCalls) {
       const invoke =
         name === 'browserScreencast'
@@ -379,6 +389,7 @@ describe('OrcaRuntimeService', () => {
                 { sendBinary: () => true, emit: () => undefined }
               )
           : () => (call as CallableFunction)({})
+
       await expect(Promise.resolve().then(invoke)).rejects.toMatchObject({
         code: 'browser_unavailable'
       })
@@ -508,9 +519,11 @@ describe('OrcaRuntimeService', () => {
       tabId: 'tab-deleted-worktree',
       leafId: 'leaf-deleted-worktree'
     })
+
     const internals = runtime as unknown as {
       pairedRendererSessionOwnedPtyIds: Set<string>
     }
+
     internals.pairedRendererSessionOwnedPtyIds.add(ptyId)
 
     runtime['removeWorktreeMetadataAndHistory'](store as never, TEST_WORKTREE_ID)
@@ -522,6 +535,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = createRuntime()
     const host = attachClientBrowserHost(runtime)
     const removed = await publishClientHostedPage(runtime, host, 'page-removed', TEST_WORKTREE_ID)
+
     const survivor = await publishClientHostedPage(
       runtime,
       host,
@@ -596,6 +610,7 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: () => ({ ...store.getWorktreeMeta(TEST_WORKTREE_ID), hostId: 'local' }),
       removeWorktreeMeta: vi.fn()
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const host = attachClientBrowserHost(runtime)
     const placement = await publishClientHostedPage(runtime, host, 'page-kept', TEST_WORKTREE_ID)
@@ -614,12 +629,15 @@ describe('OrcaRuntimeService', () => {
 
   it('preserves bare-id runtime state when removing a different qualified owner', () => {
     const removeWorktreeMeta = vi.fn()
+
     const runtimeStore = {
       ...store,
       getWorktreeMeta: () => ({ ...store.getWorktreeMeta(TEST_WORKTREE_ID), hostId: 'local' }),
       removeWorktreeMeta
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
+
     const internals = runtime as unknown as {
       mobileSessionTabsByWorktree: Map<string, unknown>
       removeWorktreeMetadataAndHistory: (
@@ -628,6 +646,7 @@ describe('OrcaRuntimeService', () => {
         hostId: string
       ) => void
     }
+
     const localSession = { tabs: [{ id: 'local-tab' }] }
     internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, localSession)
 
@@ -645,13 +664,16 @@ describe('OrcaRuntimeService', () => {
     const localRepo = store.getRepo(TEST_REPO_ID)!
     const remoteRepo = { ...localRepo, connectionId: 'ssh-1' }
     const removeWorktreeMeta = vi.fn()
+
     const runtimeStore = {
       ...store,
       getRepos: () => [localRepo, remoteRepo],
       getWorktreeMeta: () => ({ ...store.getWorktreeMeta(TEST_WORKTREE_ID), hostId: 'ssh:ssh-1' }),
       removeWorktreeMeta
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
+
     const internals = runtime as unknown as {
       mobileSessionTabsByWorktree: Map<string, unknown>
       removeWorktreeMetadataAndHistory: (
@@ -660,6 +682,7 @@ describe('OrcaRuntimeService', () => {
         hostId: string
       ) => void
     }
+
     const survivingSession = { tabs: [{ id: 'same-id-local-tab' }] }
     internals.mobileSessionTabsByWorktree.set(TEST_WORKTREE_ID, survivingSession)
     deleteWorktreeHistoryDirMock.mockClear()

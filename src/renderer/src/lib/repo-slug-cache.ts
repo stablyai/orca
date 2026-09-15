@@ -30,9 +30,11 @@ export function repoUpstreamIdentityKey(
   originIdentityKey: string | null | undefined
 ): string | null {
   const upstream = repo.upstream
+
   if (!upstream?.owner || !upstream.repo || !originIdentityKey) {
     return null
   }
+
   return githubRepoIdentityKey({
     ...upstream,
     host: upstream.host ?? githubHostFromIdentityKey(originIdentityKey)
@@ -43,7 +45,9 @@ export function repoUpstreamIdentityKey(
  *  failed resolution is recorded as `null` briefly so it is not retried on every
  *  cell mount, while still recovering after an external GHES auth login. */
 export const slugByRepoId = new Map<string, string | null>()
+
 const slugFailureExpiresAtByRepoId = new Map<string, number>()
+
 export const REPO_SLUG_FAILURE_TTL_MS = 60_000
 
 export function readRepoSlugCache(
@@ -53,18 +57,23 @@ export function readRepoSlugCache(
   if (!slugByRepoId.has(cacheKey)) {
     return { hit: false }
   }
+
   const value = slugByRepoId.get(cacheKey) ?? null
   const failureExpiry = slugFailureExpiresAtByRepoId.get(cacheKey)
+
   if (value !== null || failureExpiry === undefined || failureExpiry > now) {
     return { hit: true, value }
   }
+
   slugByRepoId.delete(cacheKey)
   slugFailureExpiresAtByRepoId.delete(cacheKey)
+
   return { hit: false }
 }
 
 export function rememberRepoSlug(cacheKey: string, value: string | null, now = Date.now()): void {
   slugByRepoId.set(cacheKey, value)
+
   if (value === null) {
     slugFailureExpiresAtByRepoId.set(cacheKey, now + REPO_SLUG_FAILURE_TTL_MS)
   } else {
@@ -87,15 +96,19 @@ export function nextRepoSlugFailureRetryDelay(
   now = Date.now()
 ): number | null {
   let earliestExpiry = Number.POSITIVE_INFINITY
+
   for (const cacheKey of cacheKeys) {
     if (slugByRepoId.get(cacheKey) !== null) {
       continue
     }
+
     const expiresAt = slugFailureExpiresAtByRepoId.get(cacheKey)
+
     if (expiresAt !== undefined) {
       earliestExpiry = Math.min(earliestExpiry, expiresAt)
     }
   }
+
   return Number.isFinite(earliestExpiry) ? Math.max(0, earliestExpiry - now) : null
 }
 
@@ -104,6 +117,7 @@ export function slugCacheKey(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): string {
   const target = getActiveRuntimeTarget(settings)
+
   return `${target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'}:${repoId}`
 }
 
@@ -126,20 +140,25 @@ export function lookupReposBySlugFromCache(
   host?: string
 ): Repo[] {
   const [owner, repo] = slug?.split('/') ?? []
+
   if (!owner || !repo) {
     return []
   }
+
   const target = githubRepoIdentityKey({ owner, repo, host })
   const matched: Repo[] = []
   const upstreamMatched: Repo[] = []
+
   for (const repo of repos) {
     const cacheKey = slugCacheKey(repo.id, settingsForRepoOwner(repo, settings))
     const originKey = slugByRepoId.get(cacheKey)
+
     if (originKey === target) {
       matched.push(repo)
     } else if (repoUpstreamIdentityKey(repo, originKey) === target) {
       upstreamMatched.push(repo)
     }
   }
+
   return matched.length > 0 ? matched : upstreamMatched
 }

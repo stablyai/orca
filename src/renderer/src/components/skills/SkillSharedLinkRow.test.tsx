@@ -37,6 +37,7 @@ function renderRow(onDeleted = vi.fn()): { onDeleted: ReturnType<typeof vi.fn> }
       </ul>
     </TooltipProvider>
   )
+
   return { onDeleted }
 }
 
@@ -68,6 +69,7 @@ describe('SkillSharedLinkRow', () => {
     const deletePackage = vi
       .fn()
       .mockResolvedValue({ status: 'unsupported', message: 'Deletion is unavailable.' })
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { skills: { deletePackage }, ui: { writeClipboardText: vi.fn() } }

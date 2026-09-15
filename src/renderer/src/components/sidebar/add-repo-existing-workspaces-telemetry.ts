@@ -29,6 +29,7 @@ function pathBasename(pathValue: string): string {
 function isCustomDisplayName(worktree: Worktree): boolean {
   const branchName = branchDisplayName(worktree)
   const pathName = pathBasename(worktree.path)
+
   return Boolean(
     worktree.displayName && worktree.displayName !== branchName && worktree.displayName !== pathName
   )
@@ -43,9 +44,11 @@ export function buildAddRepoExistingWorkspacesTelemetry(
   }
 
   const mainWorkspaceCount = worktrees.filter((worktree) => worktree.isMainWorktree).length
+
   const branchNamedWorkspaceCount = worktrees.filter((worktree) =>
     Boolean(branchDisplayName(worktree))
   ).length
+
   const sparseWorkspaceCount = worktrees.filter((worktree) => worktree.isSparse === true).length
 
   return {
@@ -68,9 +71,12 @@ export function buildAddRepoExistingWorkspacesDetectedEvent(
     if (a.lastActivityAt !== b.lastActivityAt) {
       return b.lastActivityAt - a.lastActivityAt
     }
+
     return compareWorktreeDisplayName(a, b)
   })
+
   const payload = buildAddRepoExistingWorkspacesTelemetry(source, sortedWorktrees)
+
   return payload && shouldTrackAddRepoExistingWorkspacesDetected(payload) ? payload : null
 }
 

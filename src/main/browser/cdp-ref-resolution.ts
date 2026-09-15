@@ -29,6 +29,7 @@ export class CdpRefResolution {
     }
 
     const entry = state.snapshotResult.refMap.get(ref)
+
     if (!entry) {
       throw new BrowserError(
         'browser_ref_not_found',
@@ -39,6 +40,7 @@ export class CdpRefResolution {
     // Why: iframe refs use a child session with independent nav history, so a parent-navId check would falsely reject them.
     if (!entry.sessionId) {
       const currentNavId = await this.getNavigationId(sender)
+
       if (state.navigationId && currentNavId !== state.navigationId) {
         state.snapshotResult = null
         state.navigationId = null
@@ -50,16 +52,21 @@ export class CdpRefResolution {
     }
 
     const refSender = entry.sessionId ? this.makeCdpSender(guest, entry.sessionId) : sender
+
     try {
       await refSender('DOM.describeNode', { backendNodeId: entry.backendDOMNodeId })
+
       return entry
     } catch {
       // Why: dynamic pages re-render nodes, detaching snapshot refs; re-query the AX tree by role+name for the fresh node.
       const recovered = await this.tryRecoverRef(refSender, entry)
+
       if (recovered) {
         entry.backendDOMNodeId = recovered
+
         return entry
       }
+
       state.snapshotResult = null
       throw new BrowserError(
         'browser_stale_ref',
@@ -70,9 +77,11 @@ export class CdpRefResolution {
 
   async scrollIntoView(sender: CdpCommandSender, backendNodeId: number): Promise<void> {
     const { nodeId } = (await sender('DOM.requestNode', { backendNodeId })) as { nodeId: number }
+
     const { object } = (await sender('DOM.resolveNode', { nodeId })) as {
       object: { objectId: string }
     }
+
     await sender('Runtime.callFunctionOn', {
       objectId: object.objectId,
       functionDeclaration: `function() { this.scrollIntoView({ block: 'center', inline: 'center' }); }`
@@ -86,7 +95,9 @@ export class CdpRefResolution {
     const { model } = (await sender('DOM.getBoxModel', { backendNodeId })) as {
       model: { content: number[] }
     }
+
     const [x1, y1, , , x3, y3] = model.content
+
     return { cx: (x1 + x3) / 2, cy: (y1 + y3) / 2 }
   }
 
@@ -131,9 +142,11 @@ export class CdpRefResolution {
                 return { offsetX: rect.x, offsetY: rect.y }
               }
             }
+
             // Why: iframe may redirect after load so src differs from target URL; match by origin as a fallback.
             try {
               const targetOrigin = new URL(targetUrl).origin
+
               for (const rect of rects) {
                 if (rect.src && new URL(rect.src).origin === targetOrigin) {
                   return { offsetX: rect.x, offsetY: rect.y }
@@ -151,6 +164,7 @@ export class CdpRefResolution {
         } catch {
           // Can't determine offset, return zero (best effort)
         }
+
         break
       }
     }
@@ -168,7 +182,9 @@ export class CdpRefResolution {
     if (!refEntry.sessionId) {
       return { cx: localCx, cy: localCy }
     }
+
     const { offsetX, offsetY } = await this.getIframeOffset(guest, refEntry.sessionId)
+
     return { cx: localCx + offsetX, cy: localCy + offsetY }
   }
 
@@ -178,7 +194,9 @@ export class CdpRefResolution {
       const { nodes } = (await sender('Accessibility.getFullAXTree')) as {
         nodes: { role?: { value: string }; name?: { value: string }; backendDOMNodeId?: number }[]
       }
+
       const matches: number[] = []
+
       for (const node of nodes) {
         if (
           node.role?.value === entry.role &&
@@ -195,6 +213,7 @@ export class CdpRefResolution {
       for (const backendNodeId of candidates) {
         try {
           await sender('DOM.describeNode', { backendNodeId })
+
           return backendNodeId
         } catch {
           continue
@@ -203,6 +222,7 @@ export class CdpRefResolution {
     } catch {
       // AX tree unavailable — can't recover
     }
+
     return null
   }
 

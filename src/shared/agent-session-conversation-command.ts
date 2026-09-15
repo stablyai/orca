@@ -20,7 +20,9 @@ export function isAgentSessionConversationCommandResult(
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const row = value as AgentSessionConversationCommandResult
+
   return (
     (row.command === 'clear' || row.command === 'compact') &&
     (row.state === 'completed' || row.state === 'unknown') &&
@@ -37,7 +39,9 @@ export function isAgentSessionConversationCommandRecord(
   if (!isAgentSessionConversationCommandResult(value)) {
     return false
   }
+
   const row = value as AgentSessionConversationCommandRecord
+
   return (
     (row.phase === 'prepared' || row.phase === 'committed') &&
     (row.runtimeFence === undefined ||

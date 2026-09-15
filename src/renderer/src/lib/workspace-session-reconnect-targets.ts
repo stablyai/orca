@@ -34,10 +34,13 @@ export function buildActiveConnectionIdsAtShutdown(
   // renderer-driven ssh.connect would dispose the runtime's live relay session.
   for (const sessionId of Object.values(remoteSessionIdsByTabId ?? {})) {
     const connectionId = parseAppSshPtyId(sessionId)?.connectionId
+
     if (!connectionId || isRuntimeOwnedSshTargetId(connectionId)) {
       continue
     }
+
     const status = snapshot.sshConnectionStates.get(connectionId)?.status
+
     if (status && status !== 'disconnected' && status !== 'auth-failed') {
       targetIds.add(connectionId)
     }

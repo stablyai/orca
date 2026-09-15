@@ -48,9 +48,11 @@ function fillPanelShell(html: string): string {
 function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const panels = usePluginPanels()
   const setPanelHealth = usePluginPanelsStore((state) => state.setPanelHealth)
+
   const panel = isPluginPanelTabKey(tabKey)
     ? (panels.find((entry) => entry.tabKey === tabKey) ?? null)
     : null
+
   const [entryState, setEntryState] = useState<PluginPanelEntryState>({ status: 'loading' })
   const [sessionToken, setSessionToken] = useState<string | null>(null)
   const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null)
@@ -61,12 +63,14 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
   const panelId = panel?.id ?? null
   const panelShell = entryState.status === 'ready' ? entryState.shellHtml : null
   const panelDocument = panelShell ? fillPanelShell(panelShell) : null
+
   // Why: the shell bakes Orca's color scheme + design tokens into srcdoc, so the
   // frame must be rebuilt when the app theme changes, not only when the document does.
   const panelFrameKey =
     entryState.status === 'ready'
       ? `${tabKey}:${entryState.documentRevision}:${themeRevision}`
       : null
+
   const watchdog = useMemo(
     () =>
       createPanelWatchdog({
@@ -84,7 +88,9 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     if (!sessionToken || !panelDocument) {
       return
     }
+
     let active = true
+
     const handler = createPanelBridgeMessageHandler({
       sessionToken,
       getPanelWindow: () => iframeRef.current?.contentWindow ?? null,
@@ -92,7 +98,9 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
       isActive: () => active,
       onPong: (pingId) => watchdog.handlePong(pingId)
     })
+
     window.addEventListener('message', handler)
+
     return () => {
       active = false
       window.removeEventListener('message', handler)
@@ -103,9 +111,11 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     if (!panelFrameKey || loadedFrameKey !== panelFrameKey) {
       return
     }
+
     // The srcdoc prelude must install its pong listener before the first ping;
     // otherwise a healthy panel can lose the startup ping and be suspended.
     watchdog.start()
+
     return () => watchdog.stop()
   }, [loadedFrameKey, panelFrameKey, watchdog])
 
@@ -113,18 +123,23 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
     if (!pluginKey || !panelId) {
       return
     }
+
     let cancelled = false
     let currentHtml: string | null = null
     let documentRevision = 0
     setEntryState({ status: 'loading' })
     setSessionToken(null)
     const pluginsApi = window.api?.plugins
+
     if (!pluginsApi) {
       setPanelHealth(tabKey, 'error')
       setEntryState({ status: 'error' })
+
       return
     }
+
     let loadGeneration = 0
+
     const load = (): void => {
       const generation = ++loadGeneration
       pluginsApi
@@ -133,17 +148,21 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
           if (cancelled || generation !== loadGeneration) {
             return
           }
+
           if (!entry) {
             currentHtml = null
             setSessionToken(null)
             setPanelHealth(tabKey, 'error')
             setEntryState({ status: 'error' })
+
             return
           }
+
           // Session rotation rebinds authority without replacing an unchanged
           // document or restarting its watchdog.
           setSessionToken(entry.sessionToken)
           setPanelHealth(tabKey, 'healthy')
+
           if (entry.html !== currentHtml) {
             currentHtml = entry.html
             documentRevision += 1
@@ -164,8 +183,10 @@ function PluginPanel({ tabKey }: PluginPanelProps): React.JSX.Element {
           }
         })
     }
+
     load()
     const unsubscribe = pluginsApi.onChanged ? pluginsApi.onChanged(load) : null
+
     return () => {
       cancelled = true
       loadGeneration += 1

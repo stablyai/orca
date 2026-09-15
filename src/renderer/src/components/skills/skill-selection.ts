@@ -20,12 +20,15 @@ function collisionKeys(
   policy: SkillSelectionPolicy
 ): Set<string> {
   const keys = new Set<string>()
+
   for (const skill of skills) {
     const key = selectedIds.has(skill.id) ? policy.collisionKey(skill) : null
+
     if (key !== null) {
       keys.add(key)
     }
   }
+
   return keys
 }
 
@@ -36,18 +39,24 @@ export function eligibleSkillSelectionCount(
 ): number {
   const keys = new Set<string>()
   let uncollapsed = 0
+
   for (const skill of results) {
     if (!policy.isEligible(skill)) {
       continue
     }
+
     const key = policy.collisionKey(skill)
+
     if (key === null) {
       uncollapsed += 1
       continue
     }
+
     keys.add(key)
   }
+
   const count = keys.size + uncollapsed
+
   return policy.maxSelection === undefined ? count : Math.min(count, policy.maxSelection)
 }
 
@@ -60,22 +69,29 @@ export function addSelectableSkillResults(
 ): Set<string> {
   const next = new Set(current)
   const taken = collisionKeys(skills, current, policy)
+
   for (const skill of results) {
     if (policy.maxSelection !== undefined && next.size >= policy.maxSelection) {
       break
     }
+
     if (!policy.isEligible(skill)) {
       continue
     }
+
     const key = policy.collisionKey(skill)
+
     if (key !== null && taken.has(key)) {
       continue
     }
+
     next.add(skill.id)
+
     if (key !== null) {
       taken.add(key)
     }
   }
+
   return next
 }
 
@@ -88,15 +104,20 @@ export function retainedSkillSelection(
 ): Set<string> {
   const next = new Set<string>()
   const taken = new Set<string>()
+
   for (const skill of skills) {
     const key = policy.collisionKey(skill)
+
     if (!current.has(skill.id) || !policy.isEligible(skill) || (key !== null && taken.has(key))) {
       continue
     }
+
     next.add(skill.id)
+
     if (key !== null) {
       taken.add(key)
     }
   }
+
   return next.size === current.size ? current : next
 }

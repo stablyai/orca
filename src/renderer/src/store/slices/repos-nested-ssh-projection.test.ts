@@ -27,6 +27,7 @@ it('preserves distinct SSH execution setups behind the same runtime owner', asyn
     createdAt: 1,
     updatedAt: 1
   }
+
   const setup = (id: string, executionHostId: `ssh:${string}`): ProjectHostSetup => ({
     id,
     projectId: project.id,
@@ -40,6 +41,7 @@ it('preserves distinct SSH execution setups behind the same runtime owner', asyn
     createdAt: 1,
     updatedAt: 1
   })
+
   runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
     if (method === 'repo.list') {
       return Promise.resolve({
@@ -49,6 +51,7 @@ it('preserves distinct SSH execution setups behind the same runtime owner', asyn
         _meta: { runtimeId: 'runtime-remote' }
       })
     }
+
     if (method === 'project.list') {
       return Promise.resolve({
         id: 'project-list',
@@ -57,6 +60,7 @@ it('preserves distinct SSH execution setups behind the same runtime owner', asyn
         _meta: { runtimeId: 'runtime-remote' }
       })
     }
+
     if (method === 'projectHostSetup.list') {
       return Promise.resolve({
         id: 'setup-list',
@@ -67,6 +71,7 @@ it('preserves distinct SSH execution setups behind the same runtime owner', asyn
         _meta: { runtimeId: 'runtime-remote' }
       })
     }
+
     throw new Error(`Unexpected method ${method}`)
   })
   const store = createTestStore()
@@ -103,6 +108,7 @@ it('prefers an authoritative paired-runtime setup over its repo-derived fallback
     createdAt: 1,
     updatedAt: 1
   }
+
   const setup: ProjectHostSetup = {
     id: remoteRepo.id,
     projectId: project.id,
@@ -115,6 +121,7 @@ it('prefers an authoritative paired-runtime setup over its repo-derived fallback
     createdAt: 1,
     updatedAt: 1
   }
+
   runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
     if (method === 'repo.list') {
       return Promise.resolve({
@@ -124,6 +131,7 @@ it('prefers an authoritative paired-runtime setup over its repo-derived fallback
         _meta: { runtimeId: 'runtime-remote' }
       })
     }
+
     if (method === 'project.list') {
       return Promise.resolve({
         id: 'project-list',
@@ -132,6 +140,7 @@ it('prefers an authoritative paired-runtime setup over its repo-derived fallback
         _meta: { runtimeId: 'runtime-remote' }
       })
     }
+
     if (method === 'projectHostSetup.list') {
       return Promise.resolve({
         id: 'setup-list',
@@ -140,6 +149,7 @@ it('prefers an authoritative paired-runtime setup over its repo-derived fallback
         _meta: { runtimeId: 'runtime-remote' }
       })
     }
+
     throw new Error(`Unexpected method ${method}`)
   })
   const store = createTestStore()

@@ -19,16 +19,23 @@ import {
 } from './helpers/terminal'
 
 const tempRoots: string[] = []
+
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
+
 const TASK_SOURCES_HEADING = /Set up GitHub tasks|Connect your task sources/i
+
 const WINDOWS_TERMINAL_HEADING = /Set Windows terminal defaults/i
+
 const ONBOARDING_ADVANCE_LABEL = /^Continue\b|^Add your first project\b/
+
 test.describe.configure({ mode: 'serial' })
+
 test.afterAll(() => {
   for (const root of tempRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
 })
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -55,6 +62,7 @@ async function createGitRepo(prefix: string, name: string): Promise<string> {
   execFileSync('git', ['add', 'README.md'], { cwd: repoPath, stdio: 'pipe' })
   execFileSync('git', ['commit', '-m', 'Initial commit'], { cwd: repoPath, stdio: 'pipe' })
   execFileSync('git', ['branch', '-M', 'main'], { cwd: repoPath, stdio: 'pipe' })
+
   return repoPath
 }
 
@@ -71,6 +79,7 @@ async function chooseFolderInNativeDialog(
           bookmarks: []
         })
       }, folderPath)
+
       return
     } catch (error) {
       if (
@@ -80,10 +89,12 @@ async function chooseFolderInNativeDialog(
       ) {
         throw error
       }
+
       await new Promise((resolve) => setTimeout(resolve, 250))
     }
   }
 }
+
 function onboardingFooter(page: Page) {
   return page
     .locator('footer')
@@ -99,14 +110,17 @@ async function continueOnboarding(page: Page): Promise<void> {
 
 async function selectCodexAgent(page: Page): Promise<void> {
   const codexButton = page.getByRole('button', { name: /^Codex\s/ })
+
   const codexVisible = await codexButton
     .first()
     .waitFor({ state: 'visible', timeout: 1_000 })
     .then(() => true)
     .catch(() => false)
+
   if (!codexVisible) {
     await page.getByText(/Show \d+ more agents/).click()
   }
+
   await codexButton.first().click()
   await expect(codexButton.first()).toHaveAttribute('aria-pressed', 'true')
 }
@@ -117,9 +131,11 @@ async function chooseOppositeTheme(page: Page): Promise<void> {
       document.documentElement.classList.contains('dark') ||
       document.documentElement.classList.contains('light')
   )
+
   const startingTheme = await page.evaluate(() =>
     document.documentElement.classList.contains('dark') ? 'dark' : 'light'
   )
+
   const nextTheme = startingTheme === 'dark' ? 'light' : 'dark'
   const tileName = nextTheme === 'light' ? /Bright & crisp/ : /Easy on the eyes/
   await page.getByRole('button', { name: tileName }).click()
@@ -150,38 +166,47 @@ async function continueThroughOptionalSetupToNotifications(page: Page): Promise<
     .waitFor({ state: 'visible', timeout: 1_000 })
     .then(() => true)
     .catch(() => false)
+
   if (taskSourcesVisible) {
     await continueOnboarding(page)
   }
+
   const windowsTerminalVisible = await page
     .getByRole('heading', { name: WINDOWS_TERMINAL_HEADING })
     .waitFor({ state: 'visible', timeout: 1_000 })
     .then(() => true)
     .catch(() => false)
+
   if (windowsTerminalVisible) {
     await continueOnboarding(page)
   }
+
   await expect(page.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
 }
 
 async function continueFromNotificationsToAddProject(page: Page): Promise<void> {
   await continueOnboarding(page)
+
   const taskSourcesVisible = await page
     .getByRole('heading', { name: TASK_SOURCES_HEADING })
     .waitFor({ state: 'visible', timeout: 1_000 })
     .then(() => true)
     .catch(() => false)
+
   if (taskSourcesVisible) {
     await continueOnboarding(page)
   }
+
   const windowsTerminalVisible = await page
     .getByRole('heading', { name: WINDOWS_TERMINAL_HEADING })
     .waitFor({ state: 'visible', timeout: 1_000 })
     .then(() => true)
     .catch(() => false)
+
   if (windowsTerminalVisible) {
     await continueOnboarding(page)
   }
+
   await expect(page.getByRole('dialog', { name: /Add a project/i })).toBeVisible({
     timeout: 15_000
   })
@@ -194,9 +219,11 @@ async function waitForRepoLoaded(page: Page, repoPath: string): Promise<void> {
         page.evaluate((targetPath) => {
           const state = window.__store?.getState()
           const repo = state?.repos.find((candidate) => candidate.path === targetPath)
+
           if (!state || !repo) {
             return false
           }
+
           return (state.worktreesByRepo[repo.id] ?? []).length > 0
         }, repoPath),
       { timeout: 30_000, message: `repo did not load: ${repoPath}` }
@@ -221,10 +248,12 @@ async function addProjectFromSidebar(
   await addDialog.getByRole('button', { name: /Browse folder/i }).click()
 
   const confirmDialog = page.getByRole('dialog', { name: /^Add Project$/i })
+
   const needsConfirmation = await confirmDialog
     .waitFor({ state: 'visible', timeout: 2_000 })
     .then(() => true)
     .catch(() => false)
+
   if (needsConfirmation) {
     await confirmDialog.getByRole('button', { name: /^Add Project$/ }).click()
   }
@@ -257,16 +286,21 @@ async function expectActiveWorkspaceBelongsToRepo(
         page.evaluate(
           ({ targetRepoPath, targetWorkspaceName }) => {
             const state = window.__store?.getState()
+
             if (!state?.activeWorktreeId) {
               return null
             }
+
             const repo = state.repos.find((candidate) => candidate.path === targetRepoPath)
+
             if (!repo) {
               return null
             }
+
             const activeWorktree = (state.worktreesByRepo[repo.id] ?? []).find(
               (worktree) => worktree.id === state.activeWorktreeId
             )
+
             return activeWorktree?.displayName === targetWorkspaceName
           },
           { targetRepoPath: repoPath, targetWorkspaceName: workspaceName }
@@ -281,6 +315,7 @@ async function expectActiveWorkspaceVisible(page: Page, workspaceName: string): 
     .locator('[role="option"][aria-current="page"]')
     .filter({ hasText: new RegExp(escapeRegExp(workspaceName)) })
     .first()
+
   await expect(activeWorkspace).toBeVisible({ timeout: 20_000 })
 }
 
@@ -292,6 +327,7 @@ async function renderedTabIds(page: Page): Promise<string[]> {
   return page.locator(SORTABLE_TAB).evaluateAll((tabs) =>
     tabs.flatMap((tab) => {
       const tabId = tab.getAttribute('data-tab-id')
+
       return tabId ? [tabId] : []
     })
   )
@@ -316,9 +352,11 @@ async function createTerminalTabThroughMenu(page: Page): Promise<void> {
   const newTerminalMenuItem = page.getByRole('menuitem', { name: /New Terminal/i }).first()
   await newTerminalMenuItem.click({ force: true })
   await expect.poll(() => countRenderedTabs(page), { timeout: 5_000 }).toBe(tabIdsBefore.length + 1)
+
   const createdTabIds = (await renderedTabIds(page)).filter(
     (tabId) => !tabIdsBefore.includes(tabId)
   )
+
   expect(createdTabIds, 'new terminal tab should render exactly one new tab').toHaveLength(1)
   const createdTab = page.locator(`${SORTABLE_TAB}[data-tab-id="${createdTabIds[0]}"]`).first()
   await expect(createdTab).toHaveAttribute('data-tab-title', /.+/)
@@ -339,10 +377,13 @@ async function requestAgentSessionsTour(page: Page): Promise<void> {
       () =>
         page.evaluate(() => {
           const state = window.__store?.getState()
+
           const splitTarget = document.querySelector(
             '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]'
           )
+
           const rect = splitTarget?.getBoundingClientRect()
+
           return {
             ready: state?.persistedUIReady === true,
             onboardingHidden: state?.contextualToursOnboardingVisible === false,
@@ -379,9 +420,11 @@ async function completeWorkspaceCreationTour(page: Page, workspaceName: string):
   await page.keyboard.press('Enter')
   const nameStep = page.getByRole('dialog', { name: /Name it, or start from existing work/i })
   await expect(nameStep).toBeVisible()
+
   const autoNameSwitch = nameStep.getByRole('switch', {
     name: /Auto-name workspace from first agent message/i
   })
+
   const checkedBefore = await autoNameSwitch.getAttribute('aria-checked')
   await autoNameSwitch.click()
   await expect(autoNameSwitch).toHaveAttribute(
@@ -467,9 +510,11 @@ test.describe('New-user golden core flow', () => {
     await expect(
       orcaPage.getByRole('dialog', { name: /Start another task in parallel/i })
     ).toBeVisible()
+
     const createControl = orcaPage
       .locator('[data-contextual-tour-target="workspace-create-control"]')
       .first()
+
     await expect(createControl).toBeVisible()
     await expect(createControl).toHaveAttribute('aria-label', 'New workspace')
     const createControlBox = await createControl.boundingBox()

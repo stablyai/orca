@@ -95,11 +95,14 @@ export function PendingBrowserAnnotationCard({
               event.preventDefault()
               event.stopPropagation()
               onCancel()
+
               return
             }
+
             if (isScreenSubmitShortcut(event)) {
               event.preventDefault()
               event.stopPropagation()
+
               if (trimmed) {
                 onAdd(trimmed, intent)
               }
@@ -128,6 +131,7 @@ export function PendingBrowserAnnotationCard({
           >
             {BROWSER_ANNOTATION_INTENT_OPTIONS.map((option) => {
               const Icon = option.icon
+
               return (
                 <ToggleGroupItem
                   key={option.value}

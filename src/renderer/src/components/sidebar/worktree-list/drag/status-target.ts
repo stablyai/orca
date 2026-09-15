@@ -13,19 +13,25 @@ export function getPointerDropStatusTarget(args: {
   y: number
 }): WorktreeSidebarLineageDropTarget {
   const target = document.elementFromPoint(args.x, args.y)
+
   if (!(target instanceof Element) || !args.container.contains(target)) {
     return NO_WORKTREE_SIDEBAR_DROP_TARGET
   }
+
   const pinTarget = target.closest<HTMLElement>('[data-workspace-pin-drop-target]')
+
   if (pinTarget && args.container.contains(pinTarget)) {
     return { status: null, isPinDrop: true, lineageParentId: null }
   }
+
   const lineageParentId = getWorktreeLineageDropTargetId({
     container: args.container,
     target,
     pointerY: args.y
   })
+
   const statusTarget = target.closest<HTMLElement>('[data-workspace-status-drop-target]')
+
   return {
     status:
       statusTarget && args.container.contains(statusTarget)
@@ -44,10 +50,13 @@ export function shouldPreferSidebarStatusDropTarget(args: {
   if (args.target.isPinDrop) {
     return true
   }
+
   if (!args.target.status) {
     return false
   }
+
   const sourceStatus = getWorkspaceStatusFromGroupKey(args.sourceGroupKey, args.workspaceStatuses)
+
   // Why: overlapping edge zones — the section under the pointer must win so guide and drop agree.
   return sourceStatus !== null && args.target.status !== sourceStatus
 }

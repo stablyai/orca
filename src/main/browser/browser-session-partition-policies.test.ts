@@ -29,6 +29,7 @@ const sessionsByPartition = new Map<string, FakeSession>()
 
 function fakeSession(): FakeSession {
   const listeners: WillDownloadListener[] = []
+
   return {
     listeners,
     on: vi.fn((event: string, listener: WillDownloadListener) => {
@@ -40,7 +41,9 @@ function fakeSession(): FakeSession {
       if (event !== 'will-download') {
         return
       }
+
       const index = listeners.indexOf(listener)
+
       if (index !== -1) {
         listeners.splice(index, 1)
       }
@@ -57,15 +60,19 @@ vi.mock('electron', () => ({
   session: {
     fromPartition: (partition: string) => {
       const existing = sessionsByPartition.get(partition)
+
       if (existing) {
         return existing
       }
+
       const created = fakeSession()
       sessionsByPartition.set(partition, created)
+
       return created
     }
   }
 }))
+
 vi.mock('./browser-manager', () => ({
   browserManager: {
     handleGuestWillDownload: mocks.handleGuestWillDownload,
@@ -74,20 +81,25 @@ vi.mock('./browser-manager', () => ({
     notifyPermissionDenied: vi.fn()
   }
 }))
+
 vi.mock('./doc-preview-download-block-notice', () => ({
   noticeDocPreviewDownloadBlocked: mocks.noticeDocPreviewDownloadBlocked
 }))
+
 vi.mock('./browser-media-access', () => ({
   hasSystemMediaAccess: () => false,
   requestSystemMediaAccess: async () => false
 }))
+
 vi.mock('./browser-session-ua', () => ({
   cleanElectronUserAgent: (userAgent: string) => userAgent,
   setupGoogleAuthUserAgentOverride: vi.fn()
 }))
+
 vi.mock('./browser-session-user-agent-mode', () => ({
   setBrowserSessionUserAgentMode: vi.fn()
 }))
+
 vi.mock('./browser-webauthn-access', () => ({
   allowsBrowserWebAuthnPermission: () => false,
   clearBrowserWebAuthnAccessHandlers: mocks.clearBrowserWebAuthnAccessHandlers,
@@ -104,6 +116,7 @@ type PartitionPolicyInstaller = (
 // no-op and leave it reading the first test's listener.
 async function loadInstaller(): Promise<PartitionPolicyInstaller> {
   const module = await import('./browser-session-partition-policies')
+
   return module.installBrowserSessionPartitionPolicies
 }
 
@@ -121,11 +134,14 @@ function profileFor(partition: string): BrowserSessionProfile {
 /** Fires the partition's real `will-download` listener and reports what it decided. */
 function fireWillDownload(partition: string): { cancelled: boolean } {
   const sess = sessionsByPartition.get(partition)
+
   if (!sess || sess.listeners.length !== 1) {
     throw new Error(`expected exactly one will-download listener on ${partition}`)
   }
+
   let cancelled = false
   sess.listeners[0]({ preventDefault: () => (cancelled = true) }, { id: 'item-1' }, { id: 42 })
+
   return { cancelled }
 }
 
@@ -201,18 +217,22 @@ describe('partition permission policy', () => {
     const install = await loadInstaller()
     install(profileFor('orca-doc-preview'), { permissions: 'deny' })
     const sess = sessionsByPartition.get('orca-doc-preview')
+
     if (!sess) {
       throw new Error('Expected the preview session')
     }
+
     const requestHandler = sess.setPermissionRequestHandler.mock.calls[0]?.[0] as (
       webContents: Electron.WebContents,
       permission: string,
       callback: (allowed: boolean) => void
     ) => void
+
     const checkHandler = sess.setPermissionCheckHandler.mock.calls[0]?.[0] as (
       webContents: Electron.WebContents,
       permission: string
     ) => boolean
+
     const displayMediaHandler = sess.setDisplayMediaRequestHandler.mock.calls[0]?.[0] as (
       request: Electron.DisplayMediaRequestHandlerHandlerRequest,
       callback: (streams: { video?: Electron.WebFrameMain; audio?: 'loopback' }) => void
@@ -224,6 +244,7 @@ describe('partition permission policy', () => {
       expect(decision).toBe(false)
       expect(checkHandler({} as Electron.WebContents, permission)).toBe(false)
     }
+
     expect(mocks.installBrowserWebAuthnAccessHandlers).not.toHaveBeenCalled()
     expect(mocks.clearBrowserWebAuthnAccessHandlers).toHaveBeenCalledWith(sess)
     let displayMediaDecision: { video?: Electron.WebFrameMain; audio?: 'loopback' } | null = null

@@ -40,6 +40,7 @@ export function resolveProtectedMultilinePasteOptionsForPane({
   leafId: string
 }): TerminalPasteTextOptions | undefined {
   let paneKey: string
+
   try {
     paneKey = makePaneKey(tabId, leafId)
   } catch {
@@ -49,6 +50,7 @@ export function resolveProtectedMultilinePasteOptionsForPane({
     // the paste would be a silent no-op with no error surface.
     return isWindowsClient ? { forceBracketedPasteForMultiline: true } : undefined
   }
+
   return resolveProtectedMultilinePasteOptionsForAgentEvidence({
     isWindowsClient,
     hostPlatform,
@@ -75,6 +77,7 @@ export function resolveProtectedMultilinePasteOptionsForAgentEvidence({
     : entry?.restoredUnconfirmed !== true && isTuiAgent(entry?.agentType)
       ? entry.agentType
       : null
+
   // Why NOT vetoed on shellForeground: that flag is republished only at OSC 133
   // boundaries, so a shell without 133 integration leaves it latched true while an
   // agent owns the foreground. Vetoing on it silently reinstates the submit bug —
@@ -84,10 +87,12 @@ export function resolveProtectedMultilinePasteOptionsForAgentEvidence({
   const windowsInputRecordPasteNewline = agent
     ? TUI_AGENT_CONFIG[agent].windowsInputRecordPasteNewline
     : undefined
+
   if (hostPlatform === 'win32' && windowsInputRecordPasteNewline) {
     return {
       windowsInputRecordNewline: windowsInputRecordPasteNewline
     }
   }
+
   return isWindowsClient || agent ? { forceBracketedPasteForMultiline: true } : undefined
 }

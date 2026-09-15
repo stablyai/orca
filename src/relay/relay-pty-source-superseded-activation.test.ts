@@ -24,8 +24,10 @@ function responseResult(buffer: Buffer): Record<string, unknown> | null {
   if (buffer[0] !== MessageType.Regular) {
     return null
   }
+
   const length = buffer.readUInt32BE(9)
   const message = JSON.parse(buffer.subarray(13, 13 + length).toString('utf8'))
+
   return message.id === undefined ? null : (message.result ?? null)
 }
 
@@ -47,15 +49,18 @@ describe('PTY source activation from a superseded owner', () => {
       (data, onSettled) => {
         writes.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
     let publication: RelayPtySourcePublication
+
     const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a', undefined, (id) =>
       publication.onCreditAvailable(id)
     )
+
     publication = new RelayPtySourcePublication(dispatcher, adapter, () => {})
     dispatcher.feed(
       requestFrame(1, 'pty.openClient', {
@@ -66,6 +71,7 @@ describe('PTY source activation from a superseded owner', () => {
       })
     )
     await flushRequests()
+
     return { adapter, publication, writes }
   }
 
@@ -100,15 +106,18 @@ describe('PTY source activation from a superseded owner', () => {
     await expect(publication.waitForPendingSend('pty-1')).resolves.toBe(true)
 
     const replacementWrites: Buffer[] = []
+
     const replacementClientId = dispatcher!.attachClient(
       (data, onSettled) => {
         replacementWrites.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
       endpointIdentity
     )
+
     dispatcher!.feedClient(
       replacementClientId,
       requestFrame(2, 'pty.openClient', {
@@ -125,6 +134,7 @@ describe('PTY source activation from a superseded owner', () => {
     await flushRequests()
 
     const replacementSettlements: ((result: SinkWriteSettlement) => void)[] = []
+
     const recovery = {
       status: 'checkpoint' as const,
       clientGeneration: activation.clientGeneration,
@@ -133,6 +143,7 @@ describe('PTY source activation from a superseded owner', () => {
       deliveryToken: activation.deliveryToken,
       acceptedSourceEndSu: 0
     }
+
     expect(
       publication.activate(
         'pty-1',

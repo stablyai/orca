@@ -70,6 +70,7 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
     // limit; pasted payloads must never fan out to provider CLIs or SSH hosts.
     return { ...EMPTY, needsGitHubRemote: false, error: '' }
   }
+
   const {
     client,
     mode,
@@ -80,7 +81,9 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
     linearAvailable,
     mrStateFilter
   } = args
+
   const isSmart = mode === 'smart'
+
   const tasks = {
     github:
       shouldSearchGitHub(mode, githubAvailable) && repoId
@@ -96,6 +99,7 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
     branches:
       shouldSearchBranches(mode, query) && repoId ? searchBranches(client, repoId, query) : null
   }
+
   const [github, gitlab, linear, branches] = await Promise.allSettled([
     tasks.github ?? Promise.resolve<GitHubWorkItem[]>([]),
     tasks.gitlab ?? Promise.resolve<GitLabWorkItem[]>([]),
@@ -105,11 +109,13 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
 
   let needsGitHubRemote = false
   let error = ''
+
   const fail = (reason: unknown) => {
     if (!isSmart) {
       error = reason instanceof Error ? reason.message : 'Search failed'
     }
   }
+
   if (github.status === 'rejected') {
     if (isGitHubWorkItemsSshRemoteRequiredError(github.reason)) {
       needsGitHubRemote = true
@@ -117,12 +123,15 @@ export async function fanOutSmartSearch(args: FanOutArgs): Promise<SmartFanOutRe
       fail(github.reason)
     }
   }
+
   if (gitlab.status === 'rejected') {
     fail(gitlab.reason)
   }
+
   if (linear.status === 'rejected') {
     fail(linear.reason)
   }
+
   if (branches.status === 'rejected') {
     fail(branches.reason)
   }

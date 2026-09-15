@@ -41,6 +41,7 @@ async function render(overrides: Partial<Automation>): Promise<HTMLDivElement> {
       </TooltipProvider>
     )
   })
+
   return container
 }
 

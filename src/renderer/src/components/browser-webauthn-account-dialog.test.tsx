@@ -12,6 +12,7 @@ const { respondMock, setBlockingSurfaceMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
     selector({ setContextualToursBlockingSurfaceVisible: setBlockingSurfaceMock })
@@ -34,10 +35,12 @@ describe('BrowserWebAuthnAccountDialog', () => {
         browser: {
           onWebAuthnAccountRequest: vi.fn((callback) => {
             requestListener = callback
+
             return vi.fn()
           }),
           onWebAuthnAccountRequestClosed: vi.fn((callback) => {
             closedListener = callback
+
             return vi.fn()
           }),
           respondWebAuthnAccount: respondMock

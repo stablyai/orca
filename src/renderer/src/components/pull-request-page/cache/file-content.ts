@@ -18,11 +18,14 @@ import {
 
 // Why: bounded LRU so a session of opening many PR files can't grow this module map without bound.
 const PR_FILE_CONTENT_CACHE_MAX = 64
+
 type PRFileContentCacheEntry = {
   value: Promise<GitHubPRFileContents> | GitHubPRFileContents
   byteCount: number
 }
+
 const prFileContentCache = new Map<string, PRFileContentCacheEntry>()
+
 let prFileContentCacheBytes = 0
 
 type PRFileContentRequestArgs = {
@@ -41,10 +44,12 @@ function touchPRFileContentCache(
   value: Promise<GitHubPRFileContents> | GitHubPRFileContents
 ): void {
   const retainedByteCount = value instanceof Promise ? 0 : getRetainedPRFileContentsByteCount(value)
+
   if (retainedByteCount === null) {
     const existing = prFileContentCache.get(key)
     prFileContentCacheBytes -= existing?.byteCount ?? 0
     prFileContentCache.delete(key)
+
     return
   }
 
@@ -55,14 +60,17 @@ function touchPRFileContentCache(
   const byteCount = retainedByteCount
   prFileContentCache.set(key, { value, byteCount })
   prFileContentCacheBytes += byteCount
+
   while (
     prFileContentCache.size > PR_FILE_CONTENT_CACHE_MAX ||
     prFileContentCacheBytes > PR_FILE_CONTENT_CACHE_MAX_BYTES
   ) {
     const oldest = prFileContentCache.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     const evicted = prFileContentCache.get(oldest)
     prFileContentCacheBytes -= evicted?.byteCount ?? 0
     prFileContentCache.delete(oldest)
@@ -71,10 +79,12 @@ function touchPRFileContentCache(
 
 export function getPRFileContentCacheKey(args: PRFileContentRequestArgs): string {
   const repositoryKey = args.repoId ? `repo:${args.repoId}` : `path:${args.repoPath}`
+
   const sourceKey =
     args.sourceContext?.provider === 'github'
       ? `source:${getTaskSourceCacheScope(args.sourceContext)}`
       : 'source:local'
+
   return [
     repositoryKey,
     sourceKey,
@@ -94,9 +104,11 @@ export function evictPRFileContentRequest(
 ): void {
   const cacheKey = getPRFileContentCacheKey(args)
   const cachedRequest = prFileContentCache.get(cacheKey)
+
   if (cachedRequest?.value !== request) {
     return
   }
+
   prFileContentCacheBytes -= cachedRequest.byteCount
   prFileContentCache.delete(cacheKey)
 }
@@ -104,10 +116,13 @@ export function evictPRFileContentRequest(
 export function loadPRFileContents(args: PRFileContentRequestArgs): Promise<GitHubPRFileContents> {
   const cacheKey = getPRFileContentCacheKey(args)
   const cached = prFileContentCache.get(cacheKey)
+
   if (cached) {
     touchPRFileContentCache(cacheKey, cached.value)
+
     return Promise.resolve(cached.value)
   }
+
   let request: Promise<GitHubPRFileContents>
   const runtimeHost = getGitHubSourceRuntimeHost(args.sourceContext)
   request = (
@@ -144,6 +159,7 @@ export function loadPRFileContents(args: PRFileContentRequestArgs): Promise<GitH
       if (prFileContentCache.get(cacheKey)?.value === request) {
         touchPRFileContentCache(cacheKey, contents)
       }
+
       return contents
     })
     .catch((err) => {
@@ -151,5 +167,6 @@ export function loadPRFileContents(args: PRFileContentRequestArgs): Promise<GitH
       throw err
     })
   touchPRFileContentCache(cacheKey, request)
+
   return request
 }

@@ -63,14 +63,17 @@ function TabBarCreateEntrySession({
   const [error, setError] = useState<string | null>(null)
   const [switchError, setSwitchError] = useState<string | null>(null)
   const [selectionGuidance, setSelectionGuidance] = useState<string | null>(null)
+
   // One hook per structured provider: the launch registry is keyed by agent, and hooks cannot run
   // inside the option render loop.
   const structuredLaunchStatusByAgent = {
     claude: useStructuredAgentLaunchStatus(worktreeId, 'claude'),
     codex: useStructuredAgentLaunchStatus(worktreeId, 'codex')
   }
+
   const isStructuredLaunchPending = (agent: TuiAgent): boolean =>
     isAgentSessionHandleProvider(agent) && structuredLaunchStatusByAgent[agent] === 'pending'
+
   // null = follow ranking (deferred tabs can prepend); set on arrow keys only.
   const [pinnedOptionId, setPinnedOptionId] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -85,14 +88,17 @@ function TabBarCreateEntrySession({
   const rawQueryOversized = isQuickOpenQueryTooLarge(query)
   const forcedSearch = parseForcedSearchQuery(query)
   const terminalQueryMode = rawQueryOversized || forcedSearch.forced
+
   const tabResults = useTabCreateEntrySearchResults({
     enabled: menuOpen && !terminalQueryMode,
     query,
     worktreeId,
     retainedResultId: pinnedOptionId
   })
+
   const shouldResolveAbsolutePaths =
     menuOpen && !terminalQueryMode && isTabEntryAbsolutePathLike(query.trim())
+
   const allowAbsolutePathsSelector = useMemo(
     () =>
       createTabEntryAllowAbsolutePathsSelector(worktreeId, {
@@ -100,13 +106,17 @@ function TabBarCreateEntrySession({
       }),
     [shouldResolveAbsolutePaths, worktreeId]
   )
+
   const allowAbsolutePaths = useAppStore(allowAbsolutePathsSelector)
+
   // Why the worktree path: editor↔file dedupe folds case by the worktree's
   // filesystem, which a Windows client's own platform does not describe.
   const worktreePath = useAppStore((state) =>
     menuOpen ? (state.getKnownWorktreeById(worktreeId)?.path ?? null) : null
   )
+
   const localPlatform = getRendererAppPlatform() === 'win32' ? 'windows' : 'posix'
+
   const searchEngine = useAppStore(
     (state) => state.browserDefaultSearchEngine ?? DEFAULT_SEARCH_ENGINE
   )
@@ -117,7 +127,9 @@ function TabBarCreateEntrySession({
     if (!menuOpen) {
       return
     }
+
     const focusFrame = requestAnimationFrame(() => inputRef.current?.focus())
+
     return () => cancelAnimationFrame(focusFrame)
   }, [menuOpen])
 
@@ -126,6 +138,7 @@ function TabBarCreateEntrySession({
       terminalQueryMode ? EMPTY_MENU_OPTIONS : findMatchingTabCreateMenuOptions(query, menuOptions),
     [menuOptions, query, terminalQueryMode]
   )
+
   const options = useMemo(() => {
     const entryOptions = dropFileEntriesCoveredByTabResults(
       getTabEntryOptions(query, fileList, 4, {
@@ -136,9 +149,11 @@ function TabBarCreateEntrySession({
       tabResults,
       worktreePath
     )
+
     if (matchingMenuOptions.length === 0) {
       return entryOptions
     }
+
     // Why: a matched create-menu action should win over a generic new-file fallback.
     return entryOptions.filter((option) => option.classification.kind !== 'new-file')
   }, [
@@ -151,11 +166,13 @@ function TabBarCreateEntrySession({
     tabResults,
     worktreePath
   ])
+
   const historyRows = useOmniboxBrowserHistory({
     enabled: menuOpen && !terminalQueryMode,
     query,
     tabResults
   })
+
   const matchingAgentOptions = useMemo(
     () =>
       terminalQueryMode
@@ -166,6 +183,7 @@ function TabBarCreateEntrySession({
 
   const disabled = !onOpenEntry
   const hasQuery = query.trim().length > 0
+
   const activeOptions: ActiveOption[] = [
     ...tabResults.map((option) => ({
       kind: 'tab' as const,
@@ -181,6 +199,7 @@ function TabBarCreateEntrySession({
     })),
     ...insertHistoryRowsBelowFileMatches(options, historyRows)
   ]
+
   const { activeSelectedIndex, selectedActiveOption } = useNetworkSafeTabEntrySelection({
     activeOptions,
     fileIndexFailed: Boolean(fileList.loadError),
@@ -190,9 +209,11 @@ function TabBarCreateEntrySession({
     pinnedOptionId,
     query
   })
+
   const statusOption = options.find(
     (option) => option.classification.kind === 'empty' || option.classification.kind === 'blocked'
   )
+
   const statusMessage =
     statusOption != null &&
     (statusOption.classification.kind === 'empty' || statusOption.classification.kind === 'blocked')
@@ -203,55 +224,75 @@ function TabBarCreateEntrySession({
     if (disabled || pending) {
       return
     }
+
     const selectedOption = option ?? selectedActiveOption ?? null
+
     if (!selectedOption) {
       if (!hasQuery && onOpenDefaultTerminal) {
         onOpenDefaultTerminal()
         onDidOpenEntry?.()
+
         return
       }
+
       if (activeOptions.length > 0) {
         setSelectionGuidance(getTabEntryChooseActionMessage())
+
         return
       }
+
       // Why: an 'empty' status is the placeholder prompt, not a failure — showing
       // it as an error turns a bare "?" into a red row that reads like a bug.
       if (statusOption?.classification.kind !== 'empty') {
         setError(statusMessage)
       }
+
       return
     }
+
     if (selectedOption.kind === 'tab') {
       const outcome = activateOpenTabSearchResult(selectedOption.option)
+
       if (outcome.status === 'failed') {
         setSwitchError(outcome.message)
+
         return
       }
+
       if (outcome.focus) {
         onQueueSwitchFocus?.(outcome.focus)
       }
+
       onDidOpenEntry?.()
+
       return
     }
+
     if (selectedOption.kind === 'menu') {
       onSelectMenuOption?.(selectedOption.option)
       onDidOpenEntry?.()
+
       return
     }
+
     if (selectedOption.kind === 'agent') {
       if (isStructuredLaunchPending(selectedOption.option.agent)) {
         return
       }
+
       onLaunchAgent?.(selectedOption.option.agent)
       onDidOpenEntry?.()
+
       return
     }
+
     // A history row is a navigation, so it rides the entry-open path the typed-URL
     // row already uses — routing, worktree targeting and SSH resolution included.
     const classification: TabEntryActionClassification =
       selectedOption.kind === 'history'
         ? { kind: 'explicit-url', url: selectedOption.option.entry.url }
         : selectedOption.option.classification
+
     setPending(true)
     setError(null)
     const submissionId = ++submissionIdRef.current
@@ -286,16 +327,20 @@ function TabBarCreateEntrySession({
             event.preventDefault()
             event.stopPropagation()
             const delta = event.key === 'ArrowDown' ? 1 : -1
+
             const nextIndex =
               activeSelectedIndex === null
                 ? event.key === 'ArrowDown'
                   ? 0
                   : activeOptions.length - 1
                 : (activeSelectedIndex + delta + activeOptions.length) % activeOptions.length
+
             setPinnedOptionId(getActiveOptionId(activeOptions[nextIndex]))
             setSelectionGuidance(null)
+
             return
           }
+
           // Why: with no result rows the static create/agent items render below;
           // move focus into that Radix menu list so it stays keyboard-navigable
           // from the search box instead of trapping focus in the input.
@@ -307,9 +352,11 @@ function TabBarCreateEntrySession({
           ) {
             event.preventDefault()
             event.stopPropagation()
+
             return
           }
         }
+
         if (event.key !== 'Escape') {
           event.stopPropagation()
         }

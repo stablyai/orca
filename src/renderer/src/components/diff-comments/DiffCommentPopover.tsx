@@ -70,10 +70,13 @@ export function DiffCommentPopover({
   const measureResolvedTop = useCallback((): void => {
     const popover = popoverRef.current
     const container = popover?.parentElement
+
     if (!popover || !container) {
       setResolvedTop(topRef.current)
+
       return
     }
+
     setResolvedTop(
       resolveDiffCommentPopoverTop({
         belowTop: topRef.current,
@@ -93,12 +96,15 @@ export function DiffCommentPopover({
   useEffect(() => {
     const popover = popoverRef.current
     const container = popover?.parentElement
+
     if (!popover || !container || typeof ResizeObserver === 'undefined') {
       return
     }
+
     const observer = new ResizeObserver(() => measureResolvedTop())
     observer.observe(popover)
     observer.observe(container)
+
     return () => observer.disconnect()
   }, [measureResolvedTop])
 
@@ -110,9 +116,11 @@ export function DiffCommentPopover({
   // Why: consume the add-review-note chord on the popover subtree, not window, so a repeat chord doesn't remount the draft.
   useEffect(() => {
     const popover = popoverRef.current
+
     if (!popover) {
       return
     }
+
     return installOpenDraftAddReviewNoteGuard(popover)
   }, [])
 
@@ -122,17 +130,22 @@ export function DiffCommentPopover({
       if (!popoverRef.current) {
         return
       }
+
       if (popoverRef.current.contains(ev.target as Node)) {
         return
       }
+
       // Why: soft dismiss — keep any non-whitespace draft even when submit's bounded scanner would reject it as too large.
       if (hasDraftText(bodyRef.current)) {
         return
       }
+
       // Why: read the latest onCancel from the ref so the listener isn't re-registered on every parent render (see onCancelRef above).
       onCancelRef.current()
     }
+
     document.addEventListener('mousedown', onDocumentMouseDown)
+
     return () => {
       document.removeEventListener('mousedown', onDocumentMouseDown)
     }
@@ -147,10 +160,13 @@ export function DiffCommentPopover({
     if (submitting) {
       return
     }
+
     const bodyState = getCommentBodySubmitState(body)
+
     if (bodyState.status === 'empty') {
       return
     }
+
     if (bodyState.status === 'too-large-leading-whitespace') {
       toast.error(
         translate(
@@ -158,9 +174,12 @@ export function DiffCommentPopover({
           'Comment is too large to submit safely.'
         )
       )
+
       return
     }
+
     setSubmitting(true)
+
     try {
       await onSubmit(bodyState.body)
     } finally {
@@ -169,6 +188,7 @@ export function DiffCommentPopover({
       }
     }
   }
+
   const canSubmitComment = hasBoundedCommentBodyText(body)
 
   return (
@@ -211,14 +231,18 @@ export function DiffCommentPopover({
             if (e.key === 'Escape') {
               e.preventDefault()
               onCancel()
+
               return
             }
+
             // Why: Shift+Enter inserts a newline; skip isComposing so IME composition Enter doesn't submit a half-typed CJK note.
             if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) {
               e.preventDefault()
+
               if (submitting) {
                 return
               }
+
               void handleSubmit()
             }
           }}

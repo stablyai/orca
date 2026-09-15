@@ -9,22 +9,27 @@ afterEach(() => {
 
 function fixture(canSelectLocal: boolean) {
   let selected: string | null = 'old-hub'
+
   const remove = vi.fn(async () => {
     if (selected !== null) {
       throw new Error('Cannot remove the selected runtime')
     }
   })
+
   const state = {
     setActiveRuntimeEnvironmentPreference: vi.fn(async (id: string | null) => {
       if (id === null && !canSelectLocal) {
         return false
       }
+
       selected = id
+
       return true
     }),
     setRuntimeEnvironments: vi.fn(),
     refreshRuntimeEnvironmentStatus: vi.fn(async () => true)
   }
+
   vi.stubGlobal('window', {
     __store: { getState: () => state },
     api: {
@@ -37,6 +42,7 @@ function fixture(canSelectLocal: boolean) {
   })
   const nativeEvaluate = vi.fn()
   const reload = vi.fn(async () => undefined)
+
   const client = {
     environmentId: 'old-hub',
     captureDirectSshAttempts: vi.fn(async () => undefined),
@@ -48,6 +54,7 @@ function fixture(canSelectLocal: boolean) {
       waitForFunction: vi.fn(async () => undefined)
     }
   } as unknown as PairedElectronClient
+
   return { client, remove, reload, nativeEvaluate }
 }
 

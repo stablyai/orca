@@ -28,7 +28,9 @@ async function isGitHubAuthenticated(
   if (await getEnterpriseGitHubRepoSlug(repoPath, connectionId, options)) {
     return true
   }
+
   await acquire()
+
   try {
     // Why: `host` scopes any rate-limit breaker trip to github.com — the host
     // this probe actually targets — instead of a GH_HOST-derived scope.
@@ -38,6 +40,7 @@ async function isGitHubAuthenticated(
         ? { host: 'github.com' }
         : { cwd: repoPath, ...getHostedReviewLocalGitOptions(options), host: 'github.com' }
     )
+
     return true
   } catch {
     return false
@@ -52,15 +55,19 @@ async function isGitLabAuthenticated(
   options: HostedReviewExecutionOptions = {}
 ): Promise<boolean> {
   const projectRef = await getProjectSlug(repoPath, connectionId, options)
+
   if (!projectRef) {
     return false
   }
+
   await acquireGlab()
+
   try {
     await glabExecFileAsync(['auth', 'status', '--hostname', projectRef.host], {
       ...glabRepoExecOptions(repoPath, connectionId),
       ...(connectionId ? {} : getHostedReviewLocalGitOptions(options))
     })
+
     return true
   } catch {
     return false
@@ -83,6 +90,7 @@ export function reviewCopy(provider: HostedReviewProvider): {
       authInstruction: 'Run glab auth login'
     }
   }
+
   if (provider === 'azure-devops') {
     return {
       shortLabel: 'PR',
@@ -91,6 +99,7 @@ export function reviewCopy(provider: HostedReviewProvider): {
       authInstruction: 'Set ORCA_AZURE_DEVOPS_TOKEN'
     }
   }
+
   if (provider === 'gitea') {
     return {
       shortLabel: 'PR',
@@ -99,6 +108,7 @@ export function reviewCopy(provider: HostedReviewProvider): {
       authInstruction: 'Set ORCA_GITEA_TOKEN'
     }
   }
+
   if (provider === 'bitbucket') {
     return {
       shortLabel: 'PR',
@@ -107,6 +117,7 @@ export function reviewCopy(provider: HostedReviewProvider): {
       authInstruction: 'Connect Bitbucket in Settings > Integrations'
     }
   }
+
   return {
     shortLabel: 'PR',
     reviewLabel: 'pull request',
@@ -124,19 +135,24 @@ export async function isProviderAuthenticated(
   if (provider === 'azure-devops') {
     return isAzureDevOpsReviewCreationAuthenticated()
   }
+
   if (provider === 'gitea') {
     return isGiteaReviewCreationAuthenticated()
   }
+
   if (provider === 'bitbucket') {
     // Why: falling through to the GitHub check made Create PR unusable for
     // anyone with Bitbucket connected but no `gh auth login`.
     return isBitbucketReviewCreationAuthenticated()
   }
+
   // Only the CLI-backed probes read a host: `gh` and `glab` run here, and the SSH target only
   // routes the git reads under them. The token-backed forges never touch the repository at all.
   const connectionId = hostedReviewSshConnectionId(executionHostId)
+
   if (provider === 'gitlab') {
     return isGitLabAuthenticated(repoPath, connectionId, options)
   }
+
   return isGitHubAuthenticated(repoPath, connectionId, options)
 }

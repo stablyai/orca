@@ -15,10 +15,12 @@ function clientWith(responses: RpcResponse[]): Pick<RpcClient, 'sendRequest'> & 
   calls: Array<{ method: string; params: unknown }>
 } {
   const calls: Array<{ method: string; params: unknown }> = []
+
   return {
     calls,
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
       calls.push({ method, params })
+
       return responses.shift() ?? fail('unexpected')
     })
   }
@@ -30,6 +32,7 @@ describe('createMobilePr', () => {
       ok({ ok: true, number: 42, url: 'https://github.com/o/r/pull/42' }),
       ok({ worktree: { linkedPR: 42 } })
     ])
+
     await expect(
       createMobilePr(client, 'repo-1::/tmp/wt', {
         provider: 'github',
@@ -73,6 +76,7 @@ describe('createMobilePr', () => {
       ok({ ok: true, number: 7, url: 'https://gitlab.com/o/r/-/merge_requests/7' }),
       ok({ worktree: { linkedGitLabMR: 7 } })
     ])
+
     await expect(
       createMobilePr(client, 'repo-1::/tmp/wt', {
         provider: 'gitlab',
@@ -251,6 +255,7 @@ describe('createMobilePr', () => {
 
   it('maps an RPC transport failure to { ok:false }', async () => {
     const client = clientWith([fail('disconnected')])
+
     const result = await createMobilePr(client, 'repo-1::/tmp/wt', {
       provider: 'github',
       base: 'main',
@@ -258,6 +263,7 @@ describe('createMobilePr', () => {
       body: '',
       draft: false
     })
+
     expect(result).toEqual({ ok: false, error: 'disconnected' })
   })
 
@@ -267,6 +273,7 @@ describe('createMobilePr', () => {
         throw new Error('socket hung up')
       })
     } as unknown as Pick<RpcClient, 'sendRequest'>
+
     await expect(
       createMobilePr(client, 'repo-1::/tmp/wt', {
         provider: 'github',

@@ -192,6 +192,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     // Echo-window: client just toggled to chat; a host snapshot carrying the
     // pre-toggle 'terminal' value must not revert it (mirrors color/pin rule).
     const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
+
     const existingTab: TerminalTab = {
       id: mirroredId,
       ptyId: 'remote:web-env-1@@terminal-1',
@@ -280,6 +281,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       sortOrder: 0,
       createdAt: NOW - 1
     }
+
     const patch = applyWebSessionTabsSnapshot(
       makeState({
         tabsByWorktree: { [WT]: [localTab] },
@@ -400,6 +402,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       activeLeafId: SECOND_LEAF_ID,
       expandedLeafId: null
     }
+
     const patch = applyWebSessionTabsSnapshot(
       makeState(),
       makeSnapshot([
@@ -504,6 +507,7 @@ describe('applyWebSessionTabsSnapshot', () => {
 
   it('mirrors pending terminal handles without attaching a stale PTY', () => {
     const state = makeState()
+
     const patch = applyWebSessionTabsSnapshot(
       state,
       makeSnapshot([
@@ -544,6 +548,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   it('retains a known title while a pending surface reports its placeholder', () => {
     const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
     const priorPtyId = 'remote:web-env-1@@terminal-1'
+
     const existingTab: TerminalTab = {
       id: mirroredId,
       ptyId: priorPtyId,
@@ -583,6 +588,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   it('adopts a real title after a pending surface becomes ready', () => {
     const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
     const priorPtyId = 'remote:web-env-1@@terminal-1'
+
     const existingTab: TerminalTab = {
       id: mirroredId,
       ptyId: priorPtyId,
@@ -626,6 +632,7 @@ describe('applyWebSessionTabsSnapshot', () => {
   ])('retains a known pending binding after host finalization ($name)', ({ retiredHandle }) => {
     const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
     const priorPtyId = 'remote:web-env-1@@terminal-1'
+
     const existingTab: TerminalTab = {
       id: mirroredId,
       ptyId: priorPtyId,
@@ -650,6 +657,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         }
       }
     })
+
     const snapshot = finalizeHostTerminalSnapshot(
       makeSnapshot(
         [
@@ -679,6 +687,7 @@ describe('applyWebSessionTabsSnapshot', () => {
         }
       )
     )
+
     expect(snapshot.retiredTerminalSurfaces).toEqual(retiredHandle ? [] : undefined)
     expect(snapshot.tabs[0]).toMatchObject({ status: 'pending-handle', terminal: null })
 
@@ -700,6 +709,7 @@ describe('applyWebSessionTabsSnapshot', () => {
     const mirroredId = toWebTerminalSurfaceTabId('host-tab-1')
     const matchingPtyId = 'remote:web-env-1@@terminal-1'
     const foreignPtyId = 'remote:web-env-2@@terminal-2'
+
     const existingTab: TerminalTab = {
       id: mirroredId,
       ptyId: matchingPtyId,

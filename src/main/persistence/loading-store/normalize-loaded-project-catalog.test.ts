@@ -9,6 +9,7 @@ function corrupt<T extends object>(row: T, overrides: Record<string, unknown>): 
   for (const [key, value] of Object.entries(overrides)) {
     Reflect.set(row, key, value)
   }
+
   return row
 }
 
@@ -32,6 +33,7 @@ function makeBadSetup(): ProjectHostSetup {
     createdAt: 1,
     updatedAt: 1
   }
+
   return corrupt(setup, { repoId: null, path: null })
 }
 

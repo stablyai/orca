@@ -5,6 +5,7 @@ import { createRuntimePtySpawnState, type RuntimePtySpawnArgs } from './spawn-st
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 
 const PTY_ID = 'orca-pty-adopted'
+
 const LIVE_GRID = { cols: 211, rows: 57 }
 
 function makeRuntime() {
@@ -41,6 +42,7 @@ describe('runtime spawn commit: adopted agent-session claim', () => {
         }
       }
     } as unknown as typeof ctx.result
+
     return { runtime, ctx }
   }
 

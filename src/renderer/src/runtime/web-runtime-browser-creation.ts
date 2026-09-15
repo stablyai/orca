@@ -38,14 +38,18 @@ export async function createWebRuntimeSessionBrowserTab(
     args.environmentId?.trim() ??
     useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
     null
+
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
+
   const context = createWebRuntimeBrowserCreationContext(args, environmentId)
+
   try {
     stageWebRuntimeBrowserCreation(context)
     const placementPreference = args.placementPreference ?? 'auto'
     let placement: BrowserPageCreationPlacement = { kind: 'server' }
+
     // Why no cached-capability gate here: the renderer's runtime status can hold a pre-upgrade
     // "cannot client-host" verdict for a whole catalog TTL, and skipping the preparation on it
     // pinned a capable pair to server placement for that long. The preparation reads live status
@@ -72,10 +76,13 @@ export async function createWebRuntimeSessionBrowserTab(
         )
       }
     }
+
     restageWebRuntimeBrowserCreation(context, placement.kind === 'client')
     context.createAttempted = true
+
     const navigateAfterCreate =
       args.waitForRegistration === true && args.url && args.url !== 'about:blank'
+
     const created = unwrapRuntimeRpcResult(
       (await context.callEnvironment({
         method: 'browser.tabCreate',
@@ -98,7 +105,9 @@ export async function createWebRuntimeSessionBrowserTab(
         timeoutMs: 15_000
       })) as RuntimeRpcResponse<BrowserTabCreateResult>
     )
+
     context.createdPageId = created.browserPageId
+
     if (navigateAfterCreate) {
       void context
         .callEnvironment({
@@ -118,7 +127,9 @@ export async function createWebRuntimeSessionBrowserTab(
           )
         })
     }
+
     await pauseAfterE2eWebRuntimeBrowserCreate(created.browserPageId)
+
     // Why: the strip's X on a staged tab only unwinds this client's rows — it cannot close a host
     // page whose id did not exist when the user clicked. Hand the cancel to the cleanup path in the
     // catch below, which already owns retiring an unreconciled host page.
@@ -128,9 +139,11 @@ export async function createWebRuntimeSessionBrowserTab(
     if (context.staged && !isStagedWebRuntimeBrowserTabLive(context.staged, args.worktreeId)) {
       throw new StagedWebRuntimeBrowserTabCancelledError()
     }
+
     if (created.browserPageId !== context.provisionalPageId) {
       rehomeWebRuntimeBrowserCreation(context, created.browserPageId)
     }
+
     try {
       await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
         expectedEnvironmentPairingRevision: context.intentOwner.pairingRevision,
@@ -151,12 +164,14 @@ export async function createWebRuntimeSessionBrowserTab(
         throw error
       }
     }
+
     const expectedGroupId =
       (context.staged
         ? resolveStagedWebRuntimeBrowserTabGroupId(context.staged, args.worktreeId)
         : undefined) ??
       args.clientTargetGroupId ??
       args.targetGroupId
+
     let materialized = hasMaterializedWebRuntimeBrowserPage(
       useAppStore.getState(),
       environmentId,
@@ -164,6 +179,7 @@ export async function createWebRuntimeSessionBrowserTab(
       created.browserPageId,
       expectedGroupId
     )
+
     if (!materialized) {
       materialized = await waitForWebRuntimeBrowserPageMaterialization({
         environmentId,
@@ -172,6 +188,7 @@ export async function createWebRuntimeSessionBrowserTab(
         ...(expectedGroupId ? { expectedGroupId } : {})
       })
     }
+
     if (!materialized && expectedGroupId) {
       // Why: an older runtime can honor creation but not group targeting; a live tab in
       // the wrong split beats destroying what the user just made.
@@ -181,6 +198,7 @@ export async function createWebRuntimeSessionBrowserTab(
         args.worktreeId,
         created.browserPageId
       )
+
       if (materialized) {
         console.warn(
           '[web-runtime-session] created browser tab landed outside the requested group:',
@@ -188,9 +206,11 @@ export async function createWebRuntimeSessionBrowserTab(
         )
       }
     }
+
     if (!materialized) {
       throw new Error('The created browser tab did not materialize in the client.')
     }
+
     // Why: materialization only proves *some* workspace in this worktree carries the page — when the
     // host mirrors it under its own id, the predicate goes true even though the staged row the user
     // X-ed is gone. The whole materialization wait above is a live window for that X, so re-check the
@@ -199,11 +219,13 @@ export async function createWebRuntimeSessionBrowserTab(
     if (context.staged && !isStagedWebRuntimeBrowserTabLive(context.staged, args.worktreeId)) {
       throw new StagedWebRuntimeBrowserTabCancelledError()
     }
+
     // Why: materialization means the snapshot has taken ownership of these rows, so nothing
     // downstream may still unwind them as an optimistic stage.
     return completeWebRuntimeBrowserCreation(context)
   } catch (error) {
     const failure = prepareWebRuntimeBrowserCreationFailure(context, error)
+
     if (failure.cleanupPageId) {
       try {
         const closeResult = unwrapRuntimeRpcResult(
@@ -216,14 +238,17 @@ export async function createWebRuntimeSessionBrowserTab(
             timeoutMs: 15_000
           })) as RuntimeRpcResponse<{ closed: boolean }>
         )
+
         if (!closeResult.closed) {
           throw new Error('The paired runtime did not close the unreconciled browser tab.')
         }
+
         await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
           expectedEnvironmentPairingRevision: context.intentOwner.pairingRevision,
           afterCurrentInFlight: true,
           errorMode: 'throw'
         })
+
         if (
           hasMaterializedWebRuntimeBrowserPage(
             useAppStore.getState(),
@@ -250,6 +275,7 @@ export async function createWebRuntimeSessionBrowserTab(
         }
       }
     }
+
     return finishWebRuntimeBrowserCreationFailure(context, failure, error)
   }
 }

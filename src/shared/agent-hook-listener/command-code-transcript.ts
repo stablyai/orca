@@ -12,15 +12,19 @@ import {
 
 export function extractCommandCodeUserPromptFromLine(line: string): string | undefined {
   let entry: unknown
+
   try {
     entry = parseAgentHookJson(line)
   } catch {
     return undefined
   }
+
   if (typeof entry !== 'object' || entry === null) {
     return undefined
   }
+
   const record = entry as Record<string, unknown>
+
   return record.role === 'user' ? extractAssistantContentText(record.content) : undefined
 }
 
@@ -35,21 +39,27 @@ export function findLastCommandCodePromptInRegion(
   region: Buffer
 ): { prompt: string; byteOffset: number } | undefined {
   let lineEnd = region.length
+
   for (let index = region.length - 1; index >= -1; index--) {
     if (index >= 0 && region[index] !== 0x0a) {
       continue
     }
+
     const lineStart = index + 1
+
     if (lineEnd > lineStart) {
       const prompt = extractCommandCodeUserPromptFromLine(
         region.subarray(lineStart, lineEnd).toString('utf8').trim()
       )
+
       if (prompt !== undefined) {
         return { prompt, byteOffset: lineStart }
       }
     }
+
     lineEnd = index
   }
+
   return undefined
 }
 
@@ -59,13 +69,17 @@ export function readLastCommandCodeUserPromptEntryFromTranscript(
   if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
     return undefined
   }
+
   try {
     const stats = statSync(transcriptPath)
     const size = stats.size
+
     if (size <= 0) {
       return undefined
     }
+
     const fd = openSync(transcriptPath, 'r')
+
     try {
       // Why scan backward: the answer is the LAST user line, so walking up from
       // EOF returns on the first hit instead of parsing every line of a
@@ -75,27 +89,34 @@ export function readLastCommandCodeUserPromptEntryFromTranscript(
       let carryChunks: Buffer[] = []
       let bytesRead = 0
       let scanEnd = size
+
       while (scanEnd > 0 && bytesRead < TRANSCRIPT_MAX_SCAN_BYTES) {
         const chunkSize = Math.min(
           scanEnd,
           TRANSCRIPT_CHUNK_BYTES,
           TRANSCRIPT_MAX_SCAN_BYTES - bytesRead
         )
+
         const position = scanEnd - chunkSize
         const buffer = Buffer.alloc(chunkSize)
         let filled = 0
+
         while (filled < chunkSize) {
           const n = readSync(fd, buffer, filled, chunkSize - filled, position + filled)
+
           if (n === 0) {
             break
           }
+
           filled += n
         }
+
         // Why bail on a short read: the file shrank under us, so the bytes above
         // this block no longer line up and any stitched offset would be wrong.
         if (filled < chunkSize) {
           break
         }
+
         bytesRead += filled
         scanEnd = position
         // Why search only the new block: carry is always the run before a newline,
@@ -106,6 +127,7 @@ export function readLastCommandCodeUserPromptEntryFromTranscript(
         const atStart = position === 0
         let completeRegion: Buffer
         let regionPosition: number
+
         if (atStart) {
           completeRegion =
             carryChunks.length === 0 ? buffer : Buffer.concat([buffer, ...carryChunks])
@@ -122,8 +144,10 @@ export function readLastCommandCodeUserPromptEntryFromTranscript(
           regionPosition = position + firstNewline + 1
           carryChunks = [buffer.subarray(0, firstNewline)]
         }
+
         if (completeRegion.length > 0) {
           const found = findLastCommandCodePromptInRegion(completeRegion)
+
           if (found) {
             return {
               text: found.prompt,
@@ -137,6 +161,7 @@ export function readLastCommandCodeUserPromptEntryFromTranscript(
           }
         }
       }
+
       return undefined
     } finally {
       closeSync(fd)
@@ -148,22 +173,29 @@ export function readLastCommandCodeUserPromptEntryFromTranscript(
 
 export function extractCommandCodeAssistantTextFromLine(line: string): string | undefined {
   let entry: unknown
+
   try {
     entry = parseAgentHookJson(line)
   } catch {
     return undefined
   }
+
   if (typeof entry !== 'object' || entry === null) {
     return undefined
   }
+
   const record = entry as Record<string, unknown>
+
   if (record.role !== 'assistant') {
     return undefined
   }
+
   const content = record.content
+
   if (typeof content === 'string' && content.trim().length > 0) {
     return content
   }
+
   if (Array.isArray(content)) {
     const textPart = content.find(
       (part) =>
@@ -173,10 +205,12 @@ export function extractCommandCodeAssistantTextFromLine(line: string): string | 
         typeof (part as Record<string, unknown>).text === 'string' &&
         ((part as Record<string, unknown>).text as string).trim().length > 0
     ) as Record<string, unknown> | undefined
+
     if (typeof textPart?.text === 'string') {
       return textPart.text
     }
   }
+
   return extractAssistantContentText(content)
 }
 
@@ -186,5 +220,6 @@ export function readLastCommandCodeAssistantFromTranscript(
   if (typeof transcriptPath !== 'string' || transcriptPath.length === 0) {
     return undefined
   }
+
   return readLastTextFromTranscriptOnce(transcriptPath, extractCommandCodeAssistantTextFromLine)
 }

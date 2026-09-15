@@ -13,11 +13,13 @@ export function WindowControls(): React.JSX.Element {
       }
     })
     const unsubscribe = window.api.ui.onMaximizeChanged(setMaximized)
+
     return () => {
       cancelled = true
       unsubscribe()
     }
   }, [])
+
   return (
     <div className="window-controls">
       <button

@@ -33,7 +33,9 @@ function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
   if (partition !== DOC_PREVIEW_PARTITION) {
     return false
   }
+
   const target = parseDocPreviewUrl(src)
+
   return target !== null && getDocPreviewGrant(target.grantId) !== null
 }
 
@@ -83,6 +85,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
         (isRoutePartition && normalizedSrc !== ORCA_BROWSER_BLANK_URL))
     ) {
       event.preventDefault()
+
       return
     }
 
@@ -119,8 +122,10 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
         profile: 'workspace-doc',
         host: mainWindow.webContents
       })
+
       return
     }
+
     // Why: attach guest popup/nav policy at creation; waiting for renderer registration races target=_blank/early redirects past it.
     browserManager.attachGuestPolicies(guest)
     // Why: route guests override the generic popup fallback and stay blank until exact main-owned registration.

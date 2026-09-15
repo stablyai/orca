@@ -31,11 +31,13 @@ describe('window-close-request-coordinator', () => {
   beforeEach(() => {
     confirmWindowClose.mockClear()
     vi.mocked(toast.error).mockClear()
+
     // Why: dispatch falls back to the preload bridge when no rich handler is
     // registered; stub just the surface it touches.
     const windowTarget = new EventTarget() as EventTarget & {
       api: { ui: { confirmWindowClose: () => void } }
     }
+
     windowTarget.api = { ui: { confirmWindowClose } }
     ;(globalThis as unknown as { window: typeof windowTarget }).window = windowTarget
   })
@@ -76,6 +78,7 @@ describe('window-close-request-coordinator', () => {
       expect(isWindowCloseCheckpointInProgress()).toBe(true)
       event.preventDefault()
     })
+
     window.addEventListener('beforeunload', beforeUnload, { once: true })
 
     await dispatchWindowCloseRequest({ isQuitting: true })
@@ -109,9 +112,11 @@ describe('window-close-request-coordinator', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const error = new Error('placeholder')
     error.message = ''
+
     const guard = createShutdownCheckpointGuard(() => {
       throw error
     })
+
     window.addEventListener('beforeunload', createShutdownCheckpointBeforeUnloadHandler(guard), {
       once: true
     })
@@ -171,12 +176,14 @@ describe('window-close-request-coordinator', () => {
 
   it('ignores a re-entrant close request while a guard is still pending', async () => {
     let resolveGuard: (value: boolean) => void = () => {}
+
     const guard = vi.fn(
       () =>
         new Promise<boolean>((resolve) => {
           resolveGuard = resolve
         })
     )
+
     addGuard(guard)
 
     const first = dispatchWindowCloseRequest({ isQuitting: true })

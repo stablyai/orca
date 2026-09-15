@@ -35,8 +35,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -57,6 +60,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -66,6 +70,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -86,6 +91,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -96,9 +102,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -108,9 +116,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -119,6 +129,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -189,6 +200,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(2)
     const manager = createManager(2)
+
     const deps = createDeps({
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: {}
@@ -234,6 +246,7 @@ describe('connectPanePty', () => {
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
       | ((ptyId: string) => void)
       | undefined
+
     onPtySpawn?.('fresh-pty')
     expect(deps.syncPanePtyLayoutBinding).toHaveBeenCalledWith(2, 'fresh-pty')
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', 'fresh-pty')
@@ -294,6 +307,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(2)
     const manager = createManager(2)
+
     const deps = createDeps({
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: {}
@@ -324,12 +338,14 @@ describe('connectPanePty', () => {
       // The wake respawn is the one main declines; the first spawn is an ordinary resume.
       const spawnedPtyId = connectCount === 1 ? 'fresh-pty' : 'woken-pty'
       transport.getPtyId.mockReturnValue(spawnedPtyId)
+
       return connectCount === 1
         ? spawnedPtyId
         : { id: spawnedPtyId, agentResumeUnavailable: true as const }
     })
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_2)
+
     const sleepingRecord = {
       paneKey,
       tabId: 'tab-1',
@@ -342,6 +358,7 @@ describe('connectPanePty', () => {
       updatedAt: 1,
       origin: 'worktree-sleep' as const
     }
+
     mockStoreState = {
       ...mockStoreState,
       tabsByWorktree: {
@@ -364,6 +381,7 @@ describe('connectPanePty', () => {
 
     const pane = createPane(2)
     const manager = createManager(2)
+
     const deps = createDeps({
       restoredLeafId: LEAF_2,
       restoredPtyIdByLeafId: {},
@@ -374,6 +392,7 @@ describe('connectPanePty', () => {
     const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
       noteVisibilityResume: () => void
     }
+
     await flushAsyncTicks(10)
 
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
@@ -463,9 +482,11 @@ describe('connectPanePty', () => {
       }) as never
     )
     await flushAsyncTicks(10)
+
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
       | ((ptyId: string) => void)
       | undefined
+
     onPtySpawn?.('pty-1')
     await new Promise((resolve) => setTimeout(resolve, 70))
 

@@ -19,23 +19,30 @@ import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } fro
 // daemon checkpoint serialization (every 5s) lands inside the sampling window
 // exactly as it does in real agent sessions.
 const KEY_LATENCY_SAMPLES = 'abcdefghijklmnop'
+
 const MAX_MEDIAN_KEY_LATENCY_MS = 250
+
 const MAX_WORST_KEY_LATENCY_MS = 1_000
+
 const FILL_DONE_TIMEOUT_MS = 240_000
+
 const FILL_PHASES = [10_000, 40_000] as const
 
 async function readActiveTerminalBufferRows(page: Page): Promise<number> {
   return page.evaluate(() => {
     const state = window.__store?.getState()
     const worktreeId = state?.activeWorktreeId
+
     const tabId =
       state?.activeTabType === 'terminal'
         ? state.activeTabId
         : worktreeId
           ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
           : null
+
     const manager = tabId ? window.__paneManagers?.get(tabId) : null
     const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
     return pane?.terminal.buffer.active.length ?? -1
   })
 }
@@ -110,25 +117,32 @@ async function recentTerminalTextIncludes(page: Page, marker: string): Promise<b
     ({ marker, trailingRows }) => {
       const state = window.__store?.getState()
       const worktreeId = state?.activeWorktreeId
+
       const tabId =
         state?.activeTabType === 'terminal'
           ? state.activeTabId
           : worktreeId
             ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
             : null
+
       const manager = tabId ? window.__paneManagers?.get(tabId) : null
       const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+
       if (!pane) {
         return false
       }
+
       const buffer = pane.terminal.buffer.active
       const start = Math.max(0, buffer.length - trailingRows)
+
       for (let row = buffer.length - 1; row >= start; row -= 1) {
         const line = buffer.getLine(row)?.translateToString(true) ?? ''
+
         if (line.includes(marker)) {
           return true
         }
       }
+
       return false
     },
     { marker, trailingRows: MARKER_SCAN_TRAILING_ROWS }
@@ -141,12 +155,15 @@ async function waitForMarkerLatency(
   timeoutMs: number
 ): Promise<number> {
   const start = performance.now()
+
   while (performance.now() - start < timeoutMs) {
     if (await recentTerminalTextIncludes(page, marker)) {
       return performance.now() - start
     }
+
     await page.waitForTimeout(5)
   }
+
   throw new Error(`Timed out waiting for terminal marker ${marker}`)
 }
 
@@ -160,12 +177,14 @@ async function waitForRecentTerminalMarker(
 
 function median(values: number[]): number {
   const sorted = [...values].sort((a, b) => a - b)
+
   return sorted[Math.floor(sorted.length / 2)] ?? 0
 }
 
 function percentile(values: number[], fraction: number): number {
   const sorted = [...values].sort((a, b) => a - b)
   const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil(fraction * sorted.length) - 1))
+
   return sorted[index] ?? 0
 }
 
@@ -185,6 +204,7 @@ async function measureTypingLatency(
 ): Promise<{ phase: PhaseLatency; nextSeq: number }> {
   const latencies: number[] = []
   let seq = startSeq
+
   for (const char of KEY_LATENCY_SAMPLES) {
     seq += 1
     const marker = `HIST_KEY_${runId}_${seq}`
@@ -193,6 +213,7 @@ async function measureTypingLatency(
     await waitForMarkerLatency(page, marker, MAX_WORST_KEY_LATENCY_MS * 5)
     latencies.push(performance.now() - start)
   }
+
   return {
     phase: {
       label,
@@ -221,6 +242,7 @@ test.describe('Terminal typing latency vs scrollback history size', () => {
     const scriptPath = path.join(testRepoPath, `.orca-history-benchmark-${runId}.mjs`)
     writeFileSync(scriptPath, historyEchoScript(runId))
     let commandSent = false
+
     try {
       await sendToTerminal(orcaPage, ptyId, `node ${JSON.stringify(scriptPath)}\r`)
       commandSent = true
@@ -245,16 +267,19 @@ test.describe('Terminal typing latency vs scrollback history size', () => {
         // tick land before sampling, mirroring steady-state agent sessions.
         await orcaPage.waitForTimeout(2_000)
         await focusActiveTerminalInput(orcaPage)
+
         const cumulativeRows = FILL_PHASES.slice(0, phaseIndex + 1).reduce(
           (total, rows) => total + rows,
           0
         )
+
         const measured = await measureTypingLatency(
           orcaPage,
           runId,
           `after ${cumulativeRows} history rows`,
           seq
         )
+
         phases.push(measured.phase)
         seq = measured.nextSeq
       }
@@ -271,6 +296,7 @@ test.describe('Terminal typing latency vs scrollback history size', () => {
           }))
         )}\n`
       )
+
       for (const phase of phases) {
         testInfo.annotations.push({
           type: 'terminal-history-typing-latency',
@@ -299,6 +325,7 @@ test.describe('Terminal typing latency vs scrollback history size', () => {
       if (commandSent) {
         await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })

@@ -38,9 +38,11 @@ export function useWorkspaceSpaceManagerBindings() {
   const linearIssueCache = useAppStore((state) => state.linearIssueCache)
   const settings = useAppStore((state) => state.settings)
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
+
   const activeWorkspaceExecutionHostId = useAppStore(
     (state) => state.activeWorkspaceExecutionHostId
   )
+
   const setGitStatus = useAppStore((state) => state.setGitStatus)
   const updateWorktreeGitIdentity = useAppStore((state) => state.updateWorktreeGitIdentity)
   const setUpstreamStatus = useAppStore((state) => state.setUpstreamStatus)
@@ -52,12 +54,15 @@ export function useWorkspaceSpaceManagerBindings() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
   const [inspectedWorktreeId, setInspectedWorktreeId] = useState<string | null>(null)
   const [treemapZoomWorktreeId, setTreemapZoomWorktreeId] = useState<string | null>(null)
+
   const [gitRefreshStateByWorktreeId, setGitRefreshStateByWorktreeId] = useState<
     Record<string, WorkspaceGitRefreshState>
   >({})
+
   const [gitStatusByWorktreeIdentity, setGitStatusByWorktreeIdentity] = useState<
     Map<string, GitStatusResult['entries']>
   >(() => new Map())
+
   const gitStatusScanGenerationRef = useRef<number | null>(analysis?.scannedAt ?? null)
   const gitStatusByWorktreeIdentityRef = useRef(gitStatusByWorktreeIdentity)
   const inFlightGitStatusRefreshes = useRef<Set<string>>(new Set())

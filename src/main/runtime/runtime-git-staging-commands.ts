@@ -20,14 +20,18 @@ export class RuntimeGitStagingCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       await provider.stageFile(target.worktree.path, relativePath)
+
       return { ok: true }
     }
+
     await stageFile(target.worktree.path, relativePath, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+
     return { ok: true }
   }
 
@@ -35,14 +39,18 @@ export class RuntimeGitStagingCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       await provider.unstageFile(target.worktree.path, relativePath)
+
       return { ok: true }
     }
+
     await unstageFile(target.worktree.path, relativePath, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+
     return { ok: true }
   }
 
@@ -53,14 +61,18 @@ export class RuntimeGitStagingCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       await provider.bulkStageFiles(target.worktree.path, relativePaths)
+
       return { ok: true }
     }
+
     await bulkStageFiles(target.worktree.path, relativePaths, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+
     return { ok: true }
   }
 
@@ -71,14 +83,18 @@ export class RuntimeGitStagingCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       await provider.bulkUnstageFiles(target.worktree.path, relativePaths)
+
       return { ok: true }
     }
+
     await bulkUnstageFiles(target.worktree.path, relativePaths, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+
     return { ok: true }
   }
 
@@ -89,14 +105,18 @@ export class RuntimeGitStagingCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePaths = filePaths.map((path) => normalizeRuntimeGitRelativePath(path))
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       await provider.bulkDiscardChanges(target.worktree.path, relativePaths)
+
       return { ok: true }
     }
+
     await bulkDiscardChanges(target.worktree.path, relativePaths, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+
     return { ok: true }
   }
 
@@ -104,14 +124,18 @@ export class RuntimeGitStagingCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       await provider.discardChanges(target.worktree.path, relativePath)
+
       return { ok: true }
     }
+
     await discardChanges(target.worktree.path, relativePath, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
     })
+
     return { ok: true }
   }
 }

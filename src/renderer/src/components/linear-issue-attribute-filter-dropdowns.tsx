@@ -122,6 +122,7 @@ export default function LinearIssueAttributeFilterDropdowns({
   const statusTruncated = isLinearMetadataTruncated(stateIdsTruncation, value.stateIds)
   const labelsTruncated = isLinearMetadataTruncated(labelIdsTruncation, value.labelIds)
   const activeCount = countLinearIssueAttributeFilters(value)
+
   const metadataNeeded =
     popoverOpen ||
     value.stateIds.length > 0 ||
@@ -136,6 +137,7 @@ export default function LinearIssueAttributeFilterDropdowns({
     if (!metadataNeeded || !scopedWorkspaceId) {
       return [] as string[]
     }
+
     return resolveLinearIssueAttributeFilterTeamIds({
       selectedTeamIds,
       availableTeams,
@@ -157,29 +159,37 @@ export default function LinearIssueAttributeFilterDropdowns({
     if (activeTeamIds.length === 0 || !concreteWorkspaceId) {
       return
     }
+
     // Why: restored filters make this run at startup, when availableTeams may still be
     // the issue-scraped subset. Metadata complete for a partial team set looks valid,
     // so pruning there would permanently delete facets from another team (R12).
     if (!teamsSettled) {
       return
     }
+
     if (states.loading || labels.loading || members.loading) {
       return
     }
+
     if (states.error || labels.error || members.error) {
       return
     }
+
     if (states.data.length === 0 && labels.data.length === 0 && members.data.length === 0) {
       return
     }
+
     const pruneKey = `${concreteWorkspaceId}::${activeTeamIds.join(',')}`
+
     if (pruneTeamKeyRef.current === pruneKey) {
       return
     }
+
     pruneTeamKeyRef.current = pruneKey
     const stateIds = new Set(states.data.map((s) => s.id))
     const labelIds = new Set(labels.data.map((l) => l.id))
     const memberIds = new Set(members.data.map((m) => m.id))
+
     const next: LinearIssueAttributeFilter = {
       ...value,
       stateIds: value.stateIds.filter((id) => stateIds.has(id)),
@@ -187,8 +197,10 @@ export default function LinearIssueAttributeFilterDropdowns({
       assignee:
         value.assignee?.kind === 'user' && !memberIds.has(value.assignee.id) ? null : value.assignee
     }
+
     const canonicalNext = canonicalizeLinearIssueAttributeFilter(next)
     const canonicalValue = canonicalizeLinearIssueAttributeFilter(value)
+
     if (JSON.stringify(canonicalNext) !== JSON.stringify(canonicalValue)) {
       onChange(canonicalNext)
     }
@@ -220,6 +232,7 @@ export default function LinearIssueAttributeFilterDropdowns({
       })),
     [states.data]
   )
+
   const labelOptions = useMemo(
     () =>
       groupLinearMetadataByName(labels.data).map((group) => ({
@@ -229,6 +242,7 @@ export default function LinearIssueAttributeFilterDropdowns({
       })),
     [labels.data]
   )
+
   const assigneeOptions = useMemo(
     () =>
       members.data.map((member) => ({
@@ -242,10 +256,12 @@ export default function LinearIssueAttributeFilterDropdowns({
     () => new Map(states.data.map((state) => [state.id, state.name] as const)),
     [states.data]
   )
+
   const labelNamesById = useMemo(
     () => new Map(labels.data.map((label) => [label.id, label.name] as const)),
     [labels.data]
   )
+
   const memberNamesById = useMemo(
     () =>
       new Map(members.data.map((member) => [member.id, member.displayName || member.id] as const)),
@@ -282,6 +298,7 @@ export default function LinearIssueAttributeFilterDropdowns({
         )
       })
     )
+
     // Why: only here are the pre-cap expansion and the survivors both in hand. Re-capping an
     // untouched facet (a priority click) is a no-op, so keep a record that still matches.
     setStateIdsTruncation(
@@ -310,6 +327,7 @@ export default function LinearIssueAttributeFilterDropdowns({
         open={popoverOpen}
         onOpenChange={(open) => {
           setPopoverOpen(open)
+
           if (!open) {
             setOpenSection(null)
           }

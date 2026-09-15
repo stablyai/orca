@@ -21,27 +21,37 @@ function mergeRowsByPid<Row extends { pid: number }>(
 ): { rows: Row[]; capturedAtMsByPid?: Readonly<Record<string, number>> } | null {
   const merged = new Map<number, Row>()
   const capturedAtMsByPid: Record<string, number> = {}
+
   for (const row of previous) {
     const prior = merged.get(row.pid)
+
     if (prior && !sameIdentity(prior, row)) {
       return null
     }
+
     merged.set(row.pid, row)
     capturedAtMsByPid[String(row.pid)] = previousBoundary(row)
   }
+
   for (const row of next) {
     const prior = merged.get(row.pid)
+
     if (prior && !sameIdentity(prior, row)) {
       return null
     }
+
     if (!prior) {
       capturedAtMsByPid[String(row.pid)] = nextBoundary(row)
     }
+
     merged.set(row.pid, row)
   }
+
   const boundaries = Object.values(capturedAtMsByPid)
+
   const needsBoundaryMap =
     new Set(boundaries).size > 1 || boundaries.some((boundary) => boundary !== refreshBoundary)
+
   return {
     rows: [...merged.values()],
     ...(needsBoundaryMap ? { capturedAtMsByPid } : {})
@@ -55,21 +65,25 @@ export function mergeClaudeCapturedTrees(
   if (previous.platform !== next.platform) {
     return null
   }
+
   if (previous.platform === 'posix' && next.platform === 'posix') {
     if (previous.tree.rootPgid !== next.tree.rootPgid) {
       return null
     }
+
     // A refresh cannot repair an earlier capture that lacked root identity;
     // retaining those rows would permit a later numeric-pid kill without proof.
     if (!previous.tree.root || !next.tree.root) {
       return null
     }
+
     if (
       previous.tree.root.pid !== next.tree.root.pid ||
       previous.tree.root.startedAt !== next.tree.root.startedAt
     ) {
       return null
     }
+
     const descendants = mergeRowsByPid(
       previous.tree.descendants,
       next.tree.descendants,
@@ -78,9 +92,11 @@ export function mergeClaudeCapturedTrees(
       (row) => next.tree.capturedAtMsByPid?.[String(row.pid)] ?? next.tree.capturedAtMs,
       next.tree.capturedAtMs
     )
+
     if (!descendants) {
       return null
     }
+
     return {
       platform: 'posix',
       tree: {
@@ -94,6 +110,7 @@ export function mergeClaudeCapturedTrees(
       }
     }
   }
+
   if (previous.platform === 'win32' && next.platform === 'win32') {
     if (
       previous.tree.root.pid !== next.tree.root.pid ||
@@ -101,6 +118,7 @@ export function mergeClaudeCapturedTrees(
     ) {
       return null
     }
+
     const descendants = mergeRowsByPid(
       previous.tree.descendants,
       next.tree.descendants,
@@ -109,9 +127,11 @@ export function mergeClaudeCapturedTrees(
       (row) => next.tree.capturedAtMsByPid?.[String(row.pid)] ?? next.tree.capturedAtMs,
       next.tree.capturedAtMs
     )
+
     if (!descendants) {
       return null
     }
+
     return {
       platform: 'win32',
       tree: {
@@ -124,5 +144,6 @@ export function mergeClaudeCapturedTrees(
       }
     }
   }
+
   return null
 }

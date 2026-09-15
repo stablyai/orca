@@ -9,6 +9,7 @@ import {
 } from './worktree-operation-route'
 
 const WORKTREE_ID = 'repo::/worktree'
+
 const LOCAL_ROUTE: WorktreeOperationRoute = {
   executionHostId: 'local',
   runtimeEnvironmentId: null
@@ -22,6 +23,7 @@ describe('worktree operation generation', () => {
         repo: [{ id: WORKTREE_ID, repoId: 'repo', hostId: 'local' as const }]
       }
     }
+
     expect(resolveWorktreeOperationRoute(state, WORKTREE_ID)).toEqual(LOCAL_ROUTE)
 
     expect(() =>

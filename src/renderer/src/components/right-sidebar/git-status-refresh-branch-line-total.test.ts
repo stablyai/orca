@@ -28,6 +28,7 @@ function stubGitStatus(): ReturnType<typeof vi.fn> {
     conflictOperation: 'unknown',
     upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 }
   }
+
   const gitStatus = vi.fn().mockResolvedValue(status)
   vi.stubGlobal('window', {
     api: {
@@ -38,6 +39,7 @@ function stubGitStatus(): ReturnType<typeof vi.fn> {
       }
     }
   })
+
   return gitStatus
 }
 

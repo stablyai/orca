@@ -88,6 +88,7 @@ export type ResolvedWorktreeCardProps = Omit<WorktreeCardProps, DefaultedWorktre
 }
 
 export const EMPTY_WORKSPACE_PORTS = []
+
 export const HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS = 60_000
 
 export function shouldBeginWorktreeRename(
@@ -103,6 +104,7 @@ export function shouldBeginWorktreeRename(
 
 export function formatSparseDirectoryPreview(directories: string[]): string {
   const preview = directories.slice(0, 4).join(', ')
+
   return directories.length <= 4 ? preview : `${preview}, +${directories.length - 4} more`
 }
 
@@ -113,5 +115,6 @@ export function isWebClient(): boolean {
 export function getDirectoryName(folderPath: string): string {
   const normalized = folderPath.replace(/[\\/]+$/, '')
   const parts = normalized.split(/[\\/]+/)
+
   return parts.at(-1) || normalized || folderPath
 }

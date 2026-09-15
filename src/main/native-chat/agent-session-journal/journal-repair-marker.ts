@@ -17,10 +17,12 @@ import type Database from '../../sqlite/sync-database'
 import { deleteJournalRowSuffix } from './journal-row-table'
 
 const SELECT_REPAIR = 'SELECT epoch, content_from FROM journal_repairs WHERE session_id = ?'
+
 const UPSERT_REPAIR = `INSERT INTO journal_repairs (session_id, epoch, content_from, repaired_at)
 VALUES (?, ?, ?, ?)
 ON CONFLICT(session_id) DO UPDATE SET
   epoch = excluded.epoch, content_from = excluded.content_from, repaired_at = excluded.repaired_at`
+
 const DELETE_REPAIR = 'DELETE FROM journal_repairs WHERE session_id = ?'
 
 /**
@@ -36,6 +38,7 @@ export function pendingJournalRepairSequence(
   const row = db.prepare(SELECT_REPAIR).get(sessionId) as
     | { epoch?: string; content_from?: number }
     | undefined
+
   return row?.epoch === epoch ? (row.content_from ?? null) : null
 }
 
@@ -57,10 +60,12 @@ export function deleteJournalRepairedSuffix(input: {
   now: number
 }): number {
   input.db.exec('BEGIN IMMEDIATE')
+
   try {
     const deleted = deleteJournalRowSuffix(input.db, input.sessionId, input.epoch, input.fromSeq)
     input.db.prepare(UPSERT_REPAIR).run(input.sessionId, input.epoch, input.contentFrom, input.now)
     input.db.exec('COMMIT')
+
     return deleted
   } catch (error) {
     input.db.exec('ROLLBACK')

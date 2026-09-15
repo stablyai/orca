@@ -6,6 +6,7 @@ import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { CodexSubagentExecutions } from './codex-subagent-executions'
 
 const PRIMARY = 'primary'
+
 const CHILD = 'child'
 
 function turn(
@@ -48,6 +49,7 @@ function harness() {
   const tracker = new CodexBackgroundTaskTracker(PRIMARY, executions)
   const rows = new Map<string, AgentJournalItemBody>()
   let refused = false
+
   const translator = createCodexJournalTranslator({
     primaryThreadId: () => PRIMARY,
     subagentExecutions: executions,
@@ -59,35 +61,45 @@ function harness() {
         if (refused) {
           return { accepted: false, reason: 'backpressure' }
         }
+
         rows.set(JSON.stringify(identity), body)
+
         return { accepted: true }
       }
     },
     schedule: (run) => {
       run()
+
       return () => {}
     }
   })
+
   function send(event: CodexStructuredSessionEvent) {
     const admission = translator.handle(event)
+
     if (admission.accepted && event.type === 'notification') {
       tracker.observe(event)
     }
+
     return admission
   }
+
   function state(parentTurn: string): string | undefined {
     for (const body of rows.values()) {
       if (body.kind !== 'message') {
         continue
       }
+
       for (const block of body.blocks) {
         if (block.type === 'subagent-group' && block.groupId === `${PRIMARY}:${parentTurn}`) {
           return block.agents[0]?.state
         }
       }
     }
+
     return undefined
   }
+
   return {
     send,
     tracker,
@@ -122,10 +134,12 @@ describe('shared child execution projection', () => {
     (parent) => {
       const h = harness()
       firstRun(h)
+
       if (parent === 'parent-2') {
         h.send(turn('turn/completed', PRIMARY, 'parent-1'))
         h.send(turn('turn/started', PRIMARY, parent))
       }
+
       h.send(activity(parent, 'interacted'))
       expect(h.tracker.state).toBeNull()
       h.send(turn('turn/started', CHILD, 'child-2'))
@@ -137,9 +151,11 @@ describe('shared child execution projection', () => {
       h.send(activity('parent-1', 'completed'))
       expect(h.state(parent)).toBe('working')
       expect(h.tracker.state?.tasks).toHaveLength(1)
+
       if (parent === 'parent-2') {
         expect(h.state('parent-1')).toBe('completed')
       }
+
       h.send(turn('turn/completed', CHILD, 'child-2'))
       expect(h.state(parent)).toBe('completed')
       expect(h.tracker.state).toBeNull()

@@ -37,8 +37,10 @@ async function splitRemoteBranchNameByKnownRemote(
   try {
     const { stdout } = await runGit(['remote'])
     let bestRemoteName: string | null = null
+
     for (const rawLine of iterateProcessOutputLines(stdout)) {
       const remoteName = rawLine.trim()
+
       // Why: preserve longest-remote matching for remote names that contain slashes.
       if (
         !remoteName ||
@@ -48,12 +50,16 @@ async function splitRemoteBranchNameByKnownRemote(
       ) {
         continue
       }
+
       bestRemoteName = remoteName
     }
+
     if (!bestRemoteName) {
       return null
     }
+
     const branchName = refName.slice(bestRemoteName.length + 1)
+
     return branchName ? { remoteName: bestRemoteName, branchName } : null
   } catch {
     return null
@@ -64,6 +70,7 @@ async function getCurrentBranchName(runGit: GitCommandRunner): Promise<string | 
   try {
     const { stdout } = await runGit(['symbolic-ref', '--quiet', '--short', 'HEAD'])
     const branchName = stdout.trim()
+
     return branchName || null
   } catch {
     return null
@@ -76,10 +83,13 @@ async function getConfiguredUpstream(
   try {
     const { stdout } = await runGit(['rev-parse', '--abbrev-ref', 'HEAD@{u}'])
     const upstreamName = stdout.trim()
+
     if (!upstreamName) {
       return null
     }
+
     const parsed = splitRemoteBranchName(upstreamName)
+
     if (!parsed) {
       return {
         upstreamName,
@@ -88,6 +98,7 @@ async function getConfiguredUpstream(
         isConfiguredUpstream: true
       }
     }
+
     return {
       upstreamName,
       remoteName: parsed.remoteName,
@@ -98,6 +109,7 @@ async function getConfiguredUpstream(
     if (isNoUpstreamError(error)) {
       return null
     }
+
     throw error
   }
 }
@@ -109,6 +121,7 @@ async function remoteTrackingRefExists(
 ): Promise<boolean> {
   try {
     await runGit(['rev-parse', '--verify', '--quiet', `refs/remotes/${remoteName}/${branchName}`])
+
     return true
   } catch {
     return false
@@ -129,6 +142,7 @@ async function resolveEffectiveGitUpstreamForBranch(
       hasMultipleSlashSegments(configured.upstreamName)
     ) {
       const parsed = await splitRemoteBranchNameByKnownRemote(runGit, configured.upstreamName)
+
       if (parsed) {
         configured = { ...configured, ...parsed }
       }
@@ -163,6 +177,7 @@ async function resolveEffectiveGitUpstreamForBranch(
       currentBranchName,
       (remoteName, branchName) => remoteTrackingRefExists(runGit, remoteName, branchName)
     )
+
     if (branchRemoteUpstream) {
       // Why: Git cannot resolve HEAD@{u} when branch.<name>.remote is a URL,
       // but older fork-review worktrees still carry the usable merge target.
@@ -194,10 +209,12 @@ export async function getEffectiveGitUpstreamStatus(
 ): Promise<GitUpstreamStatus> {
   const currentBranchName = await getCurrentBranchName(runGit)
   const upstream = await resolveEffectiveGitUpstreamForBranch(runGit, currentBranchName)
+
   if (!upstream) {
     const hasConfiguredPushTarget = currentBranchName
       ? await hasConfiguredBranchPushTarget(runGit, currentBranchName)
       : false
+
     return {
       hasUpstream: false,
       ahead: 0,
@@ -226,9 +243,11 @@ export async function getGitUpstreamStatusForUpstreamName(
 ): Promise<GitUpstreamStatus> {
   const { stdout } = await runGit(['rev-list', '--left-right', '--count', `HEAD...${upstreamName}`])
   const counts = parseGitRevListAheadBehindCounts(stdout)
+
   if (counts.status === 'unexpected-field-count') {
     throw new Error(`Unexpected git rev-list output: ${JSON.stringify(stdout)}`)
   }
+
   if (counts.status === 'unparseable-counts') {
     throw new Error(`Unparseable git rev-list counts: ${JSON.stringify(stdout)}`)
   }

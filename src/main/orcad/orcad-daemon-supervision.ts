@@ -42,16 +42,20 @@ export async function startOrcadDaemon(): Promise<OrcadDaemonStartup> {
       `[orcad] The terminal daemon did not start: ${reason}\n` +
         '[orcad] Terminals will run in-process and WILL NOT survive an orcad restart.'
     )
+
     return { state: 'unavailable', reason }
   }
+
   if (!daemonOwnsFreshPersistentPtys()) {
     const reason = 'daemon adopted in degraded mode; fresh terminals run on the local provider'
     console.warn(
       `[orcad] ${reason}. Existing daemon sessions keep working, but new terminals will not ` +
         'survive an orcad restart until the daemon is restarted.'
     )
+
     return { state: 'degraded', reason }
   }
+
   return { state: 'live', pid: readDaemonPidRecord()?.pid ?? null }
 }
 

@@ -151,6 +151,7 @@ export function SetupScriptPromptBody({
       </>
     )
   }
+
   if (sharedSetupIgnored) {
     return (
       <>
@@ -168,6 +169,7 @@ export function SetupScriptPromptBody({
       </>
     )
   }
+
   if (isPackageManagerSuggestion) {
     return (
       <>
@@ -178,6 +180,7 @@ export function SetupScriptPromptBody({
       </>
     )
   }
+
   if (candidateSource) {
     return (
       <>
@@ -193,6 +196,7 @@ export function SetupScriptPromptBody({
       </>
     )
   }
+
   return (
     <>
       {translate(

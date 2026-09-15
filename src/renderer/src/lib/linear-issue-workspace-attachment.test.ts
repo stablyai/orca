@@ -49,6 +49,7 @@ describe('Linear issue workspace attachment', () => {
       linkedLinearIssueWorkspaceId: 'ws-a',
       lastActivityAt: 10
     })
+
     const newer = worktree({
       id: 'newer',
       linkedLinearIssue: 'STA-2716',
@@ -108,6 +109,7 @@ describe('Linear issue workspace attachment', () => {
       linkedLinearIssue: 'STA-2716',
       linkedLinearIssueWorkspaceId: null
     })
+
     const scoped = worktree({
       id: 'scoped',
       linkedLinearIssue: 'STA-2716',
@@ -129,6 +131,7 @@ describe('Linear issue workspace attachment', () => {
 
   it('prefers an exact workspace match over an earlier unscoped legacy link', () => {
     const legacy = worktree({ linkedLinearIssue: 'STA-2716', linkedLinearIssueWorkspaceId: null })
+
     const exact = worktree({
       id: 'exact',
       linkedLinearIssue: 'STA-2716',
@@ -168,7 +171,9 @@ describe('Linear issue workspace attachment', () => {
       worktree({ id: 'match', linkedLinearIssue: 'sta-2716' }),
       worktree({ id: 'unrelated', linkedLinearIssue: 'STA-1' })
     ]
+
     const index = buildLinearIssueWorkspaceAttachmentIndex(worktrees)
+
     const issue = {
       identifier: 'STA-2716',
       url: 'https://linear.app/stably/issue/STA-2716/title'

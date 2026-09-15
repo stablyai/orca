@@ -40,6 +40,7 @@ function StateBadge({ state }: { state: SkillRowState }): React.JSX.Element | nu
       </Badge>
     )
   }
+
   if (state === 'available') {
     return (
       <Badge variant="secondary" className="shrink-0">
@@ -50,6 +51,7 @@ function StateBadge({ state }: { state: SkillRowState }): React.JSX.Element | nu
       </Badge>
     )
   }
+
   // Why: once a run owns the row the leading glyph carries the state. A stale
   // "Update available" beside a green check would contradict it.
   return null
@@ -72,6 +74,7 @@ export function SkillUpdateRow({
   state: SkillRowState
 }): React.JSX.Element {
   const locationCount = group.locations.length
+
   return (
     <Collapsible
       data-skill-row={group.name}

@@ -11,6 +11,7 @@ export type DashboardClientHost = {
 
 export function readDashboardClientHost(): DashboardClientHost {
   const userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
+
   return {
     platform: userAgent.includes('Mac')
       ? 'darwin'

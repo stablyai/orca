@@ -30,6 +30,7 @@ export function applyWorktreeRecordUpdates(context: WorktreeRecordContext) {
     sameTerminalTabs,
     batchContext
   )
+
   const nextBrowserTabsByWorktree = withWorktreeEntry(
     state,
     'browserTabsByWorktree',
@@ -44,22 +45,30 @@ export function applyWorktreeRecordUpdates(context: WorktreeRecordContext) {
     if (!clientOwnedPlacement?.groups || !nextUnifiedTabs) {
       return nextUnifiedTabs
     }
+
     const groupIdByTabId = new Map(
       clientOwnedPlacement.groups.flatMap((group) =>
         group.tabOrder.map((tabId) => [tabId, group.id] as const)
       )
     )
+
     let changed = false
+
     const placed = nextUnifiedTabs.map((tab) => {
       const groupId = groupIdByTabId.get(tab.id)
+
       if (!groupId || groupId === tab.groupId) {
         return tab
       }
+
       changed = true
+
       return { ...tab, groupId }
     })
+
     return changed ? placed : nextUnifiedTabs
   })()
+
   const nextUnifiedTabsByWorktree = withWorktreeEntry(
     state,
     'unifiedTabsByWorktree',
@@ -68,6 +77,7 @@ export function applyWorktreeRecordUpdates(context: WorktreeRecordContext) {
     sameUnifiedTabs,
     batchContext
   )
+
   const nextGroupsByWorktree = withWorktreeEntry(
     state,
     'groupsByWorktree',

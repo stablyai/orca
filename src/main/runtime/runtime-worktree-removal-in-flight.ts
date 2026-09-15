@@ -10,12 +10,15 @@ export class RuntimeWorktreeRemovalInFlight {
 
   get(scopeKey: string, worktreeId: string, optionsKey: string): Promise<RemovalResult> | null {
     const removal = this.removals.get(scopeKey)
+
     if (!removal) {
       return null
     }
+
     if (removal.optionsKey === optionsKey) {
       return removal.promise
     }
+
     throw new Error(`Worktree deletion already in progress: ${worktreeId}`)
   }
 

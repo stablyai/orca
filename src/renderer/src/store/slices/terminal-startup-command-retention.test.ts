@@ -9,6 +9,7 @@ function seedWorktreeWithTab(store: ReturnType<typeof createTestStore>): string 
       repo1: [makeWorktree({ id: WORKTREE_ID, repoId: 'repo1', path: '/path/wt1' })]
     }
   })
+
   return store.getState().createTab(WORKTREE_ID).id
 }
 

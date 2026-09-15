@@ -31,7 +31,9 @@ export function applyWebSessionTabsSnapshotWithContext(
   ) {
     return state
   }
+
   const worktreeId = rawSnapshot.worktree
+
   const base = prepareWebSessionTabsSnapshotBase(
     state,
     rawSnapshot,
@@ -41,6 +43,7 @@ export function applyWebSessionTabsSnapshotWithContext(
     batchContext,
     options
   )
+
   const browser = prepareWebSessionTabsSnapshotBrowser(base)
   const unified = prepareWebSessionTabsSnapshotUnified(browser)
   const groups = prepareWebSessionTabsSnapshotGroups(unified)
@@ -48,5 +51,6 @@ export function applyWebSessionTabsSnapshotWithContext(
   const browserRecords = applyBrowserRecordUpdates(terminalRecords)
   const worktreeRecords = applyWorktreeRecordUpdates(browserRecords)
   const activeState = applyActiveStateUpdates(worktreeRecords)
+
   return buildWebSessionTabsFinalPatch(activeState)
 }

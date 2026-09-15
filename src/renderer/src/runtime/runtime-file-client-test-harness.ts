@@ -34,30 +34,55 @@ export type RuntimeSubscribeStub = Mock<
 >
 
 export const fsReadFile: PreloadStub = vi.fn()
+
 export const fsWriteFile: PreloadStub = vi.fn()
+
 export const fsOnChanged: PreloadStub = vi.fn()
+
 export const fsCopy: PreloadStub = vi.fn()
+
 export const fsCreateDir: PreloadStub = vi.fn()
+
 export const fsCreateFile: PreloadStub = vi.fn()
+
 export const fsRename: PreloadStub = vi.fn()
+
 export const fsDeletePath: PreloadStub = vi.fn()
+
 export const fsStat: PreloadStub = vi.fn()
+
 export const fsPathExists: PreloadStub = vi.fn()
+
 export const fsSearch: PreloadStub = vi.fn()
+
 export const fsListFiles: PreloadStub = vi.fn()
+
 export const fsCancelListFiles: PreloadStub = vi.fn()
+
 export const fsDownloadFile: PreloadStub = vi.fn()
+
 export const fsSaveDownloadedFile: PreloadStub = vi.fn()
+
 export const fsStartDownloadedFile: PreloadStub = vi.fn()
+
 export const fsAppendDownloadedFileChunk: PreloadStub = vi.fn()
+
 export const fsFinishDownloadedFile: PreloadStub = vi.fn()
+
 export const fsCancelDownloadedFile: PreloadStub = vi.fn()
+
 export const fsImportExternalPaths: PreloadStub = vi.fn()
+
 export const fsStageExternalPathsForRuntimeUpload: PreloadStub = vi.fn()
+
 export const fsUploadExternalFileToRuntime: PreloadStub = vi.fn()
+
 export const runtimeEnvironmentCall: RuntimeRpcStub = vi.fn()
+
 export const runtimeEnvironmentTransportCall: RuntimeRpcStub = vi.fn()
+
 export const runtimeEnvironmentSubscribe: RuntimeSubscribeStub = vi.fn()
+
 export const runtimeCall: PreloadStub = vi.fn()
 
 /** Registers the stubbed window.api fs/runtime surface shared by the runtime file client suites. */
@@ -109,6 +134,7 @@ export function installRuntimeFileClientEnvironment(): void {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return runtimeEnvironmentCall(args)
     })
     vi.stubGlobal('window', {

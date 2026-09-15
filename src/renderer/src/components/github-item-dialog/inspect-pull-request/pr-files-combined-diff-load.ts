@@ -54,16 +54,21 @@ export function loadPRFilesCombinedDiffSection({
   setSections
 }: LoadSectionArgs): void {
   const section = sectionsRef.current[index]
+
   if (!section || section.collapsed) {
     return
   }
+
   if (loadedIndicesRef.current.has(index) || loadingIndicesRef.current.has(index)) {
     return
   }
+
   const file = fileByPath.get(section.path)
+
   if (!file) {
     return
   }
+
   loadingIndicesRef.current.add(index)
 
   const load = async (): Promise<{
@@ -82,6 +87,7 @@ export function loadPRFilesCombinedDiffSection({
         }
       }
     }
+
     if (!headSha || !baseSha) {
       return {
         result: {
@@ -97,6 +103,7 @@ export function loadPRFilesCombinedDiffSection({
         )
       }
     }
+
     const contents = await loadPRFileContents({
       repoPath,
       repoId,
@@ -107,6 +114,7 @@ export function loadPRFilesCombinedDiffSection({
       headSha,
       baseSha
     })
+
     return { result: getPRFileDiffResult(contents), resultContents: contents }
   }
 
@@ -127,10 +135,12 @@ export function loadPRFilesCombinedDiffSection({
     }))
     .then(({ result, resultContents, error }) => {
       loadingIndicesRef.current.delete(index)
+
       const largeDiffRenderLimit =
         !error && result.kind === 'text' && resultContents
           ? getPRFileContentsRenderLimit(resultContents)
           : null
+
       const storedContent = getStoredTextDiffContent(result, largeDiffRenderLimit)
       const storedResult = getStoredTextDiffResult(result, largeDiffRenderLimit)
       loadedIndicesRef.current.add(index)
@@ -205,6 +215,7 @@ export function togglePRFilesCombinedDiffSection({
       sectionIndex === index ? { ...section, collapsed: !section.collapsed } : section
     )
   )
+
   if (shouldLoadAfterExpand) {
     window.requestAnimationFrame(() => loadSection(index))
   }
@@ -222,6 +233,7 @@ export function setAllPRFilesCombinedDiffSectionsCollapsed({
   loadSection: (index: number) => void
 }): void {
   setSections((prev) => prev.map((section) => ({ ...section, collapsed })))
+
   if (!collapsed) {
     window.requestAnimationFrame(() => {
       sectionsRef.current.forEach((_, index) => loadSection(index))
@@ -261,8 +273,10 @@ export async function addPRFilesCombinedDiffLineComment({
         'Unable to comment without the PR head SHA.'
       )
     )
+
     return false
   }
+
   const result = await addPRReviewCommentForRepo({
     repoPath,
     repoId,
@@ -275,14 +289,18 @@ export async function addPRFilesCombinedDiffLineComment({
     startLine,
     body
   })
+
   if (!result.ok) {
     toast.error(
       result.error ||
         translate('auto.components.GitHubItemDialog.b0b09778c8', 'Failed to add review comment.')
     )
+
     return false
   }
+
   onCommentAdded(result.comment)
   toast.success(translate('auto.components.GitHubItemDialog.a341343303', 'Review comment added.'))
+
   return true
 }

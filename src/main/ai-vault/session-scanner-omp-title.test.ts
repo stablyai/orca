@@ -5,9 +5,13 @@ import {
 } from './session-scanner-graph-parsers'
 
 const file = { path: '/tmp/omp-title.jsonl', mtimeMs: 1, modifiedAt: '2026-09-14T00:00:00.000Z' }
+
 const prompt = { type: 'message', message: { role: 'user', content: 'First prompt' } }
+
 const header = { type: 'session', id: 'session-id', cwd: '/folder workspace' }
+
 const line = (record: unknown) => JSON.stringify(record)
+
 async function parse(records: unknown[], agent: 'omp' | 'pi' = 'omp') {
   return parseMessageGraphSessionContent(
     agent,
@@ -77,6 +81,7 @@ describe('OMP stored history names', () => {
         timestamp: '2026-09-14T01:00:00Z'
       }
     ]
+
     expect((await parse(records))?.title).toBe('Current slot')
     expect(
       (
@@ -112,6 +117,7 @@ describe('OMP stored history names', () => {
 
   it('clones title authority for append parsing without mutating previous snapshots', async () => {
     const state = createMessageGraphSessionResumeState('omp', file)
+
     for (const record of [
       header,
       prompt,
@@ -119,6 +125,7 @@ describe('OMP stored history names', () => {
     ]) {
       state.consumeLine(line(record))
     }
+
     const previous = await state.finalize('darwin')
     const next = state.clone()
     next.consumeLine(line({ type: 'title_change', title: 'Auto name', source: 'auto' }))

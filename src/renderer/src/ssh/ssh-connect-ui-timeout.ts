@@ -16,6 +16,7 @@ export async function withUiConnectTimeout<T>(
   timeoutMs: number = SSH_CONNECT_UI_TIMEOUT_MS
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
+
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(() => {
       reject(
@@ -30,6 +31,7 @@ export async function withUiConnectTimeout<T>(
       )
     }, timeoutMs)
   })
+
   try {
     return await Promise.race([promise, timeout])
   } finally {

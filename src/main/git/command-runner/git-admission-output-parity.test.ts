@@ -9,6 +9,7 @@ import { gitExecFileAsync, gitExecFileAsyncBuffer } from './git-exec-file'
 import { _resetGitAdmissionForTests } from './git-subprocess-admission'
 
 const tempRoots: string[] = []
+
 const originalAdmissionDisabled = process.env.ORCA_GIT_ADMISSION_DISABLED
 
 afterEach(async () => {
@@ -17,6 +18,7 @@ afterEach(async () => {
   } else {
     process.env.ORCA_GIT_ADMISSION_DISABLED = originalAdmissionDisabled
   }
+
   _resetGitAdmissionForTests()
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
@@ -43,6 +45,7 @@ it('keeps real git output byte-identical with admission on and bypassed', async 
 
   const runBattery = async (disabled: boolean): Promise<(string | Buffer)[]> => {
     setAdmissionDisabled(disabled)
+
     return [
       (await gitExecFileAsync(['status', '--porcelain=v2'], { cwd: root })).stdout,
       (await gitExecFileAsync(['diff', '--numstat'], { cwd: root })).stdout,

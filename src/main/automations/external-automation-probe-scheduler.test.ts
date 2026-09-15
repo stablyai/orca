@@ -7,9 +7,11 @@ import {
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((res) => {
     resolve = res
   })
+
   return { promise, resolve }
 }
 
@@ -25,6 +27,7 @@ describe('ExternalAutomationProbeScheduler', () => {
         scopeKey: 'owner:desktop:self',
         run: () => {
           started.push(`probe-${index}`)
+
           return gate.promise
         }
       })
@@ -82,11 +85,13 @@ describe('ExternalAutomationProbeScheduler', () => {
       scopeKey: 'owner:desktop:ssh:target-a:3',
       run: () => never.promise
     })
+
     const queued = scheduler.schedule({
       key: 'openclaw@ssh',
       scopeKey: 'owner:desktop:ssh:target-a:3',
       run: queuedRun
     })
+
     const kept = scheduler.schedule({
       key: 'hermes@self',
       scopeKey: 'owner:desktop:self',
@@ -109,6 +114,7 @@ describe('ExternalAutomationProbeScheduler', () => {
   it('cancels everything on demand', async () => {
     const scheduler = new ExternalAutomationProbeScheduler({ concurrency: 1 })
     const never = deferred<string>()
+
     const probe = scheduler.schedule({
       key: 'hermes@self',
       scopeKey: 'owner:desktop:self',

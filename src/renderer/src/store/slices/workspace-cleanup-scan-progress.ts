@@ -12,13 +12,17 @@ import {
 } from './workspace-cleanup-candidate-enrichment'
 
 let latestWorkspaceCleanupScanToken = 0
+
 let finalizedWorkspaceCleanupScanToken = 0
+
 let workspaceCleanupProgressQueue: { scanToken: number; promise: Promise<void> } | null = null
+
 let workspaceCleanupEnrichmentCache: {
   scanToken: number
   localToken: readonly unknown[] | null
   entries: Map<string, WorkspaceCleanupEnrichmentCacheEntry>
 } | null = null
+
 let workspaceCleanupProgressCandidateIndex: {
   scanToken: number
   scanId: string
@@ -32,6 +36,7 @@ export function beginWorkspaceCleanupScan(): number {
   workspaceCleanupProgressQueue = null
   workspaceCleanupEnrichmentCache = { scanToken, localToken: null, entries: new Map() }
   workspaceCleanupProgressCandidateIndex = null
+
   return scanToken
 }
 
@@ -69,16 +74,19 @@ export function enqueueWorkspaceCleanupProgress(
   ) {
     return
   }
+
   const previous =
     workspaceCleanupProgressQueue?.scanToken === scanToken
       ? workspaceCleanupProgressQueue.promise
       : Promise.resolve()
+
   const promise = previous
     .catch(() => undefined)
     .then(() => applyWorkspaceCleanupProgress(progress, scanToken, getState, setState))
     .catch((error: unknown) => {
       console.error('Workspace cleanup progress update failed', error)
     })
+
   workspaceCleanupProgressQueue = { scanToken, promise }
 }
 
@@ -87,6 +95,7 @@ export async function drainWorkspaceCleanupProgressQueue(scanToken: number): Pro
   while (workspaceCleanupProgressQueue?.scanToken === scanToken) {
     const queuedProgress = workspaceCleanupProgressQueue.promise
     await queuedProgress
+
     if (workspaceCleanupProgressQueue?.promise === queuedProgress) {
       return
     }
@@ -108,7 +117,9 @@ async function applyWorkspaceCleanupProgress(
   ) {
     return
   }
+
   const state = getState()
+
   // Why: a cached snapshot (or the previous settled scan) may already fill the
   // list; streamed rows reconcile into it by worktreeId so a refresh never
   // clears and rebuilds what the user is reading.
@@ -116,30 +127,36 @@ async function applyWorkspaceCleanupProgress(
     state.workspaceCleanupProgress?.scanId === progress.scanId
       ? state.workspaceCleanupProgress.candidates
       : (state.workspaceCleanupScan?.candidates ?? [])
+
   const enrichedProgressCandidates = await enrichWorkspaceCleanupCandidatesForScan(
     progress.candidates,
     state,
     scanToken
   )
+
   if (
     scanToken !== latestWorkspaceCleanupScanToken ||
     scanToken === finalizedWorkspaceCleanupScanToken
   ) {
     return
   }
+
   const candidates = mergeWorkspaceCleanupProgressCandidates({
     previousCandidates,
     nextCandidates: enrichedProgressCandidates,
     progress,
     scanToken
   })
+
   if (
     scanToken !== latestWorkspaceCleanupScanToken ||
     scanToken === finalizedWorkspaceCleanupScanToken
   ) {
     workspaceCleanupProgressCandidateIndex = null
+
     return
   }
+
   const dismissalsAtEnrichment = state.workspaceCleanupDismissals
   setState((state) => {
     if (
@@ -150,6 +167,7 @@ async function applyWorkspaceCleanupProgress(
       // sweep every subscriber.
       return state
     }
+
     // Why: a dismissal committed while this frame's enrichment awaited must
     // not be clobbered by candidates derived from the pre-await snapshot.
     const finalCandidates =
@@ -158,6 +176,7 @@ async function applyWorkspaceCleanupProgress(
         : candidates.map((candidate) =>
             applyWorkspaceCleanupDismissal(candidate, state.workspaceCleanupDismissals)
           )
+
     return {
       workspaceCleanupScan: {
         // Why: mid-refresh the list still mixes in rows from the previous
@@ -180,13 +199,17 @@ export async function enrichWorkspaceCleanupCandidatesForScan(
   if (workspaceCleanupEnrichmentCache?.scanToken !== scanToken) {
     workspaceCleanupEnrichmentCache = { scanToken, localToken: null, entries: new Map() }
   }
+
   const cache = workspaceCleanupEnrichmentCache
   const localToken = buildWorkspaceCleanupLocalStateToken(state)
+
   const localStateUnchanged =
     cache.localToken !== null &&
     cache.localToken.length === localToken.length &&
     cache.localToken.every((value, index) => value === localToken[index])
+
   cache.localToken = localToken
+
   return enrichWorkspaceCleanupCandidatesWithCache(candidates, state, cache.entries, {
     localStateUnchanged
   })
@@ -237,25 +260,31 @@ function mergeWorkspaceCleanupProgressCandidates({
     progress.scanId,
     scanToken
   )
+
   const merged = [...indexCache.candidates]
+
   for (const candidate of nextCandidates) {
     // Why (STA-4343): two hosts publish the same `repoId::path` id; keying the
     // merge on the id alone made one host's row overwrite the other's.
     const identity = getWorkspaceCleanupCandidateIdentity(candidate)
     const existingIndex = indexCache.indexesByIdentity.get(identity)
+
     if (existingIndex === undefined) {
       indexCache.indexesByIdentity.set(identity, merged.length)
       merged.push(candidate)
       continue
     }
+
     merged[existingIndex] = candidate
   }
+
   workspaceCleanupProgressCandidateIndex = {
     scanToken,
     scanId: progress.scanId,
     candidates: merged,
     indexesByIdentity: indexCache.indexesByIdentity
   }
+
   return merged
 }
 

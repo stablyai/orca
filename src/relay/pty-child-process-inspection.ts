@@ -47,18 +47,22 @@ export async function inspectPtyChildProcesses(
     // 500ms TTL a fresh read would be refreshing, so a "fresh" answer is not meaningfully fresher
     // while N sequential ones are an N x 1.36s stall.
     const inventory = await queryWindowsPaneProcessInventory(pid)
+
     if (inventory) {
       return inventory.candidates.length > 0 ? 'children' : 'no-children'
     }
+
     // A null inventory is an unreadable table OR a snapshot that never showed the root, and
     // neither of those looked at the pane. The one answer available without the table is a root
     // the kernel says is gone: nothing runs under a shell that does not exist.
     return isProcessAlive(pid) ? 'unverifiable' : 'no-children'
   }
+
   try {
     const rows = options?.fresh
       ? await getFreshProcessTableSnapshot()
       : await getProcessTableSnapshot()
+
     return (getProcessTableIndex(rows).childrenByPpid.get(pid)?.length ?? 0) > 0
       ? 'children'
       : 'no-children'

@@ -36,10 +36,13 @@ export async function insertRichMarkdownImageFromPath({
     const worktreePath = getWorktreePath(worktreeId)
     const parsedWorkspace = worktreeId ? parseWorkspaceKey(worktreeId) : null
     const resolvedConnectionId = getConnectionId(worktreeId)
+
     if (parsedWorkspace?.type === 'folder' && resolvedConnectionId === undefined) {
       throw new Error("Couldn't verify which host owns this file. Reopen the file and try again.")
     }
+
     const connectionId = resolvedConnectionId ?? undefined
+
     const fileContext =
       worktreeId && parsedWorkspace?.type !== 'folder'
         ? getEditorFileOperationContext(state, { worktreeId, runtimeEnvironmentId }, worktreePath)
@@ -55,7 +58,9 @@ export async function insertRichMarkdownImageFromPath({
               ? captureDirectSshMutationExpectation(state, connectionId, runtimeEnvironmentId)
               : {})
           }
+
     const settings = fileContext.settings
+
     if (settings?.activeRuntimeEnvironmentId?.trim() && !worktreePath) {
       toast.error(
         translate(
@@ -63,6 +68,7 @@ export async function insertRichMarkdownImageFromPath({
           'Worktree path not available.'
         )
       )
+
       return
     }
 
@@ -73,11 +79,14 @@ export async function insertRichMarkdownImageFromPath({
       [sourcePath],
       dirname(filePath)
     )
+
     const imported = results.find((result) => result.status === 'imported')
+
     if (!imported) {
       toast.error(
         translate('auto.components.editor.useLocalImagePick.175cb8b8ce', 'Failed to insert image.')
       )
+
       return
     }
 
@@ -86,6 +95,7 @@ export async function insertRichMarkdownImageFromPath({
     }
 
     const imageSrc = encodeMarkdownImageBasename(imported.destPath)
+
     const inserted = editor
       .chain()
       .focus()
@@ -94,6 +104,7 @@ export async function insertRichMarkdownImageFromPath({
         buildRichMarkdownImageInsertContent(editor, insertPos, { src: imageSrc })
       )
       .run()
+
     if (!inserted) {
       toast.error(
         translate('auto.components.editor.useLocalImagePick.175cb8b8ce', 'Failed to insert image.')
@@ -114,8 +125,10 @@ function getWorktreePath(worktreeId: string | null): string | null {
   if (!worktreeId) {
     return null
   }
+
   const state = useAppStore.getState()
   const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
+
   if (parsedWorkspaceKey?.type === 'folder') {
     return (
       state.folderWorkspaces.find(
@@ -123,6 +136,8 @@ function getWorktreePath(worktreeId: string | null): string | null {
       )?.folderPath ?? null
     )
   }
+
   const worktrees = Object.values(state.worktreesByRepo ?? {}).flat()
+
   return worktrees.find((worktree) => worktree.id === worktreeId)?.path ?? null
 }

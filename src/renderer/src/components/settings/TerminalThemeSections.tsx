@@ -35,6 +35,7 @@ export function resetTerminalThemeTargetMemoryForTests(): void {
 
 function isCustomizedTheme(themeName: string, defaultThemeName: string): boolean {
   const trimmed = themeName.trim()
+
   return trimmed.length > 0 && trimmed !== defaultThemeName
 }
 
@@ -46,17 +47,22 @@ function getInitialTerminalThemeTarget(
   if (preferredTarget) {
     return preferredTarget
   }
+
   if (lastEditedTerminalThemeTarget) {
     return lastEditedTerminalThemeTarget
   }
+
   const customizedDark = isCustomizedTheme(settings.terminalThemeDark, DEFAULT_TERMINAL_THEME_DARK)
+
   const customizedLight = isCustomizedTheme(
     settings.terminalThemeLight,
     DEFAULT_TERMINAL_THEME_LIGHT
   )
+
   if (customizedDark !== customizedLight) {
     return customizedDark ? 'dark' : 'light'
   }
+
   // Why: the picker edits mode-specific slots. Defaulting to the active
   // terminal mode makes the selected theme apply immediately in system-light.
   return resolveEffectiveTerminalAppearance(settings, systemPrefersDark).mode
@@ -92,19 +98,23 @@ export function TerminalThemeCatalogSection({
   const [target, setTargetState] = useState<TerminalThemeTarget>(() =>
     getInitialTerminalThemeTarget(settings, systemPrefersDark, preferredTarget)
   )
+
   const setTarget = (nextTarget: TerminalThemeTarget): void => {
     rememberTerminalThemeTarget(nextTarget)
     setTargetState(nextTarget)
   }
+
   const themeOptions = getAvailableTerminalThemeOptions(settings)
   const isLightTarget = target === 'light'
   const matchDarkMode = !settings.terminalUseSeparateLightTheme
   const lightModeMatchesDark = isLightTarget && matchDarkMode
   const showCustomControls = !lightModeMatchesDark
   const selectedTheme = isLightTarget ? settings.terminalThemeLight : settings.terminalThemeDark
+
   const pickerTitle = isLightTarget
     ? translate('auto.components.settings.TerminalThemeSections.8273bc75d7', 'Light Theme')
     : translate('auto.components.settings.TerminalThemeSections.9499ad1dc4', 'Dark Theme')
+
   const pickerDescription = isLightTarget
     ? translate(
         'auto.components.settings.TerminalThemeSections.d56af60e6f',
@@ -114,9 +124,11 @@ export function TerminalThemeCatalogSection({
         'auto.components.settings.TerminalThemeSections.7add204bd5',
         'Choose the terminal theme used in dark mode.'
       )
+
   const dividerTitle = isLightTarget
     ? translate('auto.components.settings.TerminalThemeSections.ec2e33ad80', 'Light Divider Color')
     : translate('auto.components.settings.TerminalThemeSections.b739d2abfe', 'Dark Divider Color')
+
   const dividerDescription = isLightTarget
     ? translate(
         'auto.components.settings.TerminalThemeSections.5e0c24b5c8',

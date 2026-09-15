@@ -50,6 +50,7 @@ describe('pairing deep links', () => {
       if (input.length % 4 !== 0) {
         throw new Error('Invalid base64 length')
       }
+
       return realAtob(input)
     })
 
@@ -68,6 +69,7 @@ describe('pairing deep links', () => {
       ...offer,
       endpoint: 'wss://proxy.example:443/orca/runtime'
     }
+
     const code = encodeOffer(proxiedOffer)
 
     expect(parsePairingCode(code)).toEqual(proxiedOffer)

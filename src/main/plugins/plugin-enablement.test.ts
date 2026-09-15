@@ -9,6 +9,7 @@ import type { ValidDiscoveredPlugin } from './plugin-discovery'
 import type { PluginService } from './plugin-service'
 
 const pluginKey = 'orca-samples.demo'
+
 const manifest = pluginManifestSchema.parse({
   manifestVersion: 1,
   id: 'demo',
@@ -27,9 +28,11 @@ function createStore(): {
   updateSettings: ReturnType<typeof vi.fn>
 } {
   let settings = getDefaultSettings(tmpdir())
+
   const updateSettings = vi.fn((updates: Partial<GlobalSettings>) => {
     settings = { ...settings, ...updates }
   })
+
   return {
     store: { getSettings: () => settings, updateSettings } as unknown as Store,
     getSettings: () => settings,

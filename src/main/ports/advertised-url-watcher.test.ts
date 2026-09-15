@@ -3,11 +3,13 @@ import { AdvertisedUrlWatcher } from './advertised-url-watcher'
 import { classifyHost, extractUrlCandidates, stripTerminalControls } from './advertised-url-parsing'
 
 const WORKTREE = 'repo::/repo'
+
 const PTY = 'pty-1'
 
 function bindFresh(now = 1_000): AdvertisedUrlWatcher {
   const watcher = new AdvertisedUrlWatcher({ now: () => now })
   watcher.bindPty(PTY, WORKTREE)
+
   return watcher
 }
 
@@ -81,6 +83,7 @@ describe('extractUrlCandidates', () => {
     const urls = extractUrlCandidates(
       'Local: http://localhost:3001/  Network: https://custom:3001/'
     )
+
     expect(urls.map((u) => u.hostname).sort()).toEqual(['custom', 'localhost'])
   })
 })
@@ -179,6 +182,7 @@ describe('AdvertisedUrlWatcher.ingest', () => {
 
   it('rejects finalized lines missing any character required by an HTTP URL', () => {
     const watcher = bindFresh()
+
     for (const line of [
       'ttp://example.com:3001/\n',
       'hhp://example.com:3001/\n',
@@ -188,6 +192,7 @@ describe('AdvertisedUrlWatcher.ingest', () => {
     ]) {
       watcher.ingest(PTY, line)
     }
+
     expect(watcher.lookup(WORKTREE, 3001)).toBeUndefined()
   })
 
@@ -263,6 +268,7 @@ describe('AdvertisedUrlWatcher.ingest', () => {
     const originalSet = internals.ptyToWorktree.set
     const setSpy = vi.fn(originalSet.bind(internals.ptyToWorktree))
     internals.ptyToWorktree.set = setSpy
+
     try {
       watcher.bindPty(PTY, WORKTREE)
     } finally {
@@ -304,6 +310,7 @@ describe('AdvertisedUrlWatcher.ingest', () => {
       ptyToWorktree: Map<string, string>
       scanSnapshots: Map<string, Map<number, number | undefined>>
     }
+
     expect(watcher.lookup(WORKTREE, 3001)).toBeUndefined()
     expect(internals.buffers.has(PTY)).toBe(false)
     expect(internals.ptyToWorktree.has(PTY)).toBe(false)
@@ -370,10 +377,12 @@ describe('AdvertisedUrlWatcher.ingest', () => {
 
   it('caps the pre-bind pending buffer at 32 distinct PTY IDs', () => {
     const watcher = new AdvertisedUrlWatcher({ now: () => 1_000 })
+
     // 33 distinct unbound IDs; the first should be evicted before bind.
     for (let i = 0; i < 33; i++) {
       watcher.ingest(`pty-${i}`, `https://h${i}.example.com:300${i % 10}/\n`)
     }
+
     // Bind the first ID now; if it was evicted (LRU), no URL should appear.
     watcher.bindPty('pty-0', WORKTREE)
     expect(watcher.lookup(WORKTREE, 3000)).toBeUndefined()

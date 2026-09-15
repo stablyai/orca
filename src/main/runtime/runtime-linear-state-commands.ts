@@ -22,11 +22,14 @@ export class RuntimeLinearStateCommands extends RuntimeLinearSaveCommands {
   }): Promise<LinearStatusSetResult> {
     const target = await this.resolveLinearAgentWriteTarget(params)
     const teamId = target.issue.team?.id
+
     if (!teamId) {
       throw linearError('linear_invalid_state', 'The Linear issue does not have a team.')
     }
+
     const states = await this.getLinearTeamStatesForWrite(teamId, target.workspaceId)
     const state = this.resolveLinearAgentState(params.to, states)
+
     if (!state) {
       throw linearError(
         'linear_invalid_state',
@@ -42,7 +45,9 @@ export class RuntimeLinearStateCommands extends RuntimeLinearSaveCommands {
       target.issue.state?.id && target.issue.state.name
         ? { id: target.issue.state.id, name: target.issue.state.name }
         : null
+
     const alreadyInState = target.issue.state?.id === state.id
+
     if (!alreadyInState) {
       await this.runLinearAgentWrite(
         async (signal) => {
@@ -54,12 +59,14 @@ export class RuntimeLinearStateCommands extends RuntimeLinearSaveCommands {
               signal
             }
           )
+
           if (updated.state?.id !== state.id) {
             throw new LinearWriteFailure(
               'unconfirmed',
               'Linear state update could not be confirmed.'
             )
           }
+
           return updated
         },
         (cause) =>
@@ -75,7 +82,9 @@ export class RuntimeLinearStateCommands extends RuntimeLinearSaveCommands {
           )
       )
     }
+
     await this.notifyLinearLinkedIssueUpdated(target.workspaceId, target.issue.identifier)
+
     return {
       issue: this.linearWriteIssueRef(target.issue),
       state: { id: state.id, name: state.name, type: state.type },
@@ -88,14 +97,17 @@ export class RuntimeLinearStateCommands extends RuntimeLinearSaveCommands {
     params: LinearIssueRelationWriteRequest
   ): Promise<LinearIssueRelationWriteResult> {
     const target = await this.resolveLinearAgentWriteTarget(params)
+
     const related = await this.resolveLinearAgentWriteTarget({
       input: params.relatedInput,
       workspaceId: target.workspaceId,
       context: params.context
     })
+
     if (target.issue.id === related.issue.id) {
       throw linearError('linear_write_failed', 'An issue cannot be related to itself.')
     }
+
     try {
       const result = await this.runLinearAgentWrite(
         (signal) =>
@@ -122,10 +134,12 @@ export class RuntimeLinearStateCommands extends RuntimeLinearSaveCommands {
             }
           )
       )
+
       await this.notifyLinearLinkedIssueUpdated(target.workspaceId, [
         target.issue.identifier,
         related.issue.identifier
       ])
+
       return result
     } catch (error) {
       throw this.mapLinearReadFailure(error)

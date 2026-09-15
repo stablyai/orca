@@ -15,6 +15,7 @@ export function buildTerminalWaitText(
     .map((line) => line.trim())
     .filter(Boolean)
     .join('\n')
+
   // Why: the preview is intentionally short, but wait readiness needs the retained tail so ready headers aren't truncated away.
   return waitText.length > 0 ? waitText : preview
 }
@@ -33,6 +34,7 @@ export function computeTerminalTailWaitState(
   preview: string
 ): TerminalTailWaitState {
   const tailShape = inspectTerminalWaitTail(lines, partialLine)
+
   if (!tailShape.fromTail) {
     return {
       waitText: preview,
@@ -40,16 +42,20 @@ export function computeTerminalTailWaitState(
       fromTail: false
     }
   }
+
   if (!tailShape.mayContainBlockedSignal) {
     // Why: reads waitText only when a signal exists; avoid retaining a rebuilt 256 KiB string in the common case.
     return { waitText: '', signal: null, fromTail: true }
   }
+
   const tailText = buildTailLines(lines, partialLine)
     .map((line) => line.trim())
     .filter(Boolean)
     .join('\n')
+
   const fromTail = tailText.length > 0
   const waitText = fromTail ? tailText : preview
+
   return {
     waitText,
     signal: findActionableTerminalWaitBlockedSignal(waitText.toLowerCase()),
@@ -76,6 +82,7 @@ function hasVisibleTailLine(lines: string[]): boolean {
       return true
     }
   }
+
   return false
 }
 
@@ -88,12 +95,15 @@ export function tailGainedNewerBlockedReason(
   if (next.signal === null) {
     return false
   }
+
   // Why: permission prompts can split across PTY chunks; stamp when the tail first becomes blocked, or a later prompt follows stale blocked text.
   if (previous.signal === null) {
     return true
   }
+
   const appendCandidateSignal = findActionableTerminalWaitBlockedSignal(
     `${previous.waitText}${appendedText}`.toLowerCase()
   )
+
   return appendCandidateSignal !== null && appendCandidateSignal.index > previous.signal.index
 }

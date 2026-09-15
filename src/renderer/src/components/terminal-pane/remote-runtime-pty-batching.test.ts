@@ -9,8 +9,10 @@ import {
 describe('createRemoteRuntimePtyTextBatcher', () => {
   it('coalesces small input until the debounce flush', async () => {
     vi.useFakeTimers()
+
     try {
       const flushes: string[] = []
+
       const batcher = createRemoteRuntimePtyTextBatcher(10, (text) => flushes.push(text), {
         maxPendingBytes: 8
       })
@@ -29,6 +31,7 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
 
   it('flushes before pending input exceeds the byte ceiling', () => {
     const flushes: string[] = []
+
     const batcher = createRemoteRuntimePtyTextBatcher(10, (text) => flushes.push(text), {
       maxPendingBytes: 4
     })
@@ -46,6 +49,7 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
 
   it('splits one large UTF-8 input without splitting a code point', () => {
     const flushes: string[] = []
+
     const batcher = createRemoteRuntimePtyTextBatcher(10, (text) => flushes.push(text), {
       maxPendingBytes: 4
     })
@@ -59,6 +63,7 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
 
   it('rejects oversized input without flushing clipboard content', () => {
     const flushes: string[] = []
+
     const batcher = createRemoteRuntimePtyTextBatcher(10, (text) => flushes.push(text), {
       maxBytes: 4,
       maxPendingBytes: 4
@@ -72,9 +77,11 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
 
   it('yields while validating large accepted input before debounce flushing', async () => {
     vi.useFakeTimers()
+
     try {
       const flushes: string[] = []
       const text = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+
       const batcher = createRemoteRuntimePtyTextBatcher(10, (value) => flushes.push(value), {
         maxPendingBytes: text.length + 1
       })
@@ -98,9 +105,11 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
 
   it('keeps input queued after deferred validation in byte order', async () => {
     vi.useFakeTimers()
+
     try {
       const flushes: string[] = []
       const text = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+
       const batcher = createRemoteRuntimePtyTextBatcher(1_000, (value) => flushes.push(value), {
         maxPendingBytes: text.length + 10
       })
@@ -121,9 +130,11 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
 
   it('runs a validation barrier before input queued after it', async () => {
     vi.useFakeTimers()
+
     try {
       const events: string[] = []
       const text = 'x'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+
       const batcher = createRemoteRuntimePtyTextBatcher(1_000, (value) => events.push(value), {
         maxPendingBytes: text.length + 10
       })
@@ -131,9 +142,11 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
       expect(batcher.push(text)).toBe(true)
       batcher.enqueueAfterValidation(() => {
         const pending = batcher.takePending()
+
         if (pending) {
           events.push(pending)
         }
+
         events.push('reply')
       })
       expect(batcher.push('tail')).toBe(true)
@@ -151,9 +164,11 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
 
   it('drops asynchronously oversized input without flushing clipboard content', async () => {
     vi.useFakeTimers()
+
     try {
       const flushes: string[] = []
       const text = '😀'.repeat(Math.floor(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS / 2) + 1)
+
       const batcher = createRemoteRuntimePtyTextBatcher(10, (value) => flushes.push(value), {
         maxBytes: text.length + 1,
         maxPendingBytes: text.length + 1
@@ -176,8 +191,10 @@ describe('createRemoteRuntimePtyTextBatcher', () => {
 describe('createRemoteRuntimeViewportBatcher', () => {
   it('drops the queued viewport on clear so a later flush emits nothing', () => {
     vi.useFakeTimers()
+
     try {
       const resizes: { cols: number; rows: number }[] = []
+
       const batcher = createRemoteRuntimeViewportBatcher(33, (cols, rows) => {
         resizes.push({ cols, rows })
       })
@@ -195,8 +212,10 @@ describe('createRemoteRuntimeViewportBatcher', () => {
 
   it('does not emit a cleared viewport when the debounce timer would have fired', () => {
     vi.useFakeTimers()
+
     try {
       const resizes: { cols: number; rows: number }[] = []
+
       const batcher = createRemoteRuntimeViewportBatcher(33, (cols, rows) => {
         resizes.push({ cols, rows })
       })

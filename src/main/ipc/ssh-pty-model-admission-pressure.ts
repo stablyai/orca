@@ -56,9 +56,11 @@ export class SshPtyModelAdmissionPressure {
   admit(entry: AdmissionEntry): boolean {
     const id = admissionKeyId(entry.key)
     const paused = this.pausedKeys.has(id) || this.options.pauseProvider(entry.key)
+
     if (paused) {
       this.pausedKeys.set(id, entry.key)
     }
+
     if (
       !paused ||
       this.entries.length >= this.options.limits.pressureMaxFrames ||
@@ -66,9 +68,11 @@ export class SshPtyModelAdmissionPressure {
     ) {
       return false
     }
+
     entry.state = 'pressure'
     this.entries.push(entry)
     this.retainedBytes += entry.charge.bytes
+
     return true
   }
 
@@ -77,6 +81,7 @@ export class SshPtyModelAdmissionPressure {
     cancelPressureAndReserved: (entries: AdmissionEntry[]) => number
   ): void {
     this.retainedBytes -= cancelPressureAndReserved(this.entries)
+
     for (const key of takePausedGeneration(this.pausedKeys, providerGeneration)) {
       this.resume(key)
     }
@@ -90,13 +95,16 @@ export class SshPtyModelAdmissionPressure {
   cancelQueuedPty(key: SshPtyModelAdmissionKey, error: Error): void {
     const id = admissionKeyId(key)
     const canceled: AdmissionEntry[] = []
+
     for (let index = this.entries.length - 1; index >= 0; index--) {
       if (admissionKeyId(this.entries[index]!.key) === id) {
         canceled.push(this.entries.splice(index, 1)[0]!)
       }
     }
+
     this.rejectPressureEntries(canceled, error)
     const paused = this.pausedKeys.get(id)
+
     if (paused) {
       this.pausedKeys.delete(id)
       this.resume(paused)
@@ -107,24 +115,31 @@ export class SshPtyModelAdmissionPressure {
     if (options.disposed) {
       return
     }
+
     for (let index = 0; index < this.entries.length;) {
       const entry = this.entries[index]!
+
       const hasEarlierEntryForPty = this.entries
         .slice(0, index)
         .some((earlier) => admissionKeyId(earlier.key) === admissionKeyId(entry.key))
+
       if (hasEarlierEntryForPty || !options.canReserve(entry)) {
         index++
         continue
       }
+
       this.entries.splice(index, 1)
       this.retainedBytes -= entry.charge.bytes
       options.reserve(entry)
     }
+
     if (!options.isBelowGlobalLowWatermark()) {
       return
     }
+
     for (const [id, key] of this.pausedKeys) {
       const usage = options.usageByPty.get(id)
+
       if (
         this.has(key) ||
         (usage?.sourceUnits ?? 0) > this.options.limits.perPtyLowSourceUnits ||
@@ -132,6 +147,7 @@ export class SshPtyModelAdmissionPressure {
       ) {
         continue
       }
+
       this.pausedKeys.delete(id)
       this.resume(key)
     }

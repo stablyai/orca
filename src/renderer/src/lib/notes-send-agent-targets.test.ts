@@ -12,12 +12,19 @@ import {
 } from './notes-send-agent-targets'
 
 const WORKTREE_ID = 'wt-1'
+
 const STATUS_TAB_ID = 'tab-status'
+
 const LAUNCH_TAB_ID = 'tab-launch'
+
 const MANUAL_TAB_ID = 'tab-manual'
+
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
+
 const NOW = 10_000
+
 const OLD_STATUS_UPDATED_AT = NOW - AGENT_STATUS_STALE_AFTER_MS - 1
 
 function tab(id: string, overrides: Partial<TerminalTab> = {}): TerminalTab {
@@ -88,6 +95,7 @@ function state(
   }> = {}
 ): NotesSendAgentTargetState {
   const terminalLayoutsByTabId = overrides.terminalLayoutsByTabId ?? {}
+
   return {
     agentStatusByPaneKey: {},
     tabsByWorktree: { [WORKTREE_ID]: [] },
@@ -112,6 +120,7 @@ function deriveLivePtyIdsByTabId(
 describe('notes send agent targets', () => {
   it('maps status-backed targets with their agent type and tab title', () => {
     const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
+
     const targets = deriveNotesSendAgentTargets(
       state({
         agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'done') },
@@ -136,6 +145,7 @@ describe('notes send agent targets', () => {
 
   it('keeps permission status-backed targets visible but disabled', () => {
     const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
+
     const targets = deriveNotesSendAgentTargets(
       state({
         agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'waiting') },
@@ -157,6 +167,7 @@ describe('notes send agent targets', () => {
 
   it('keeps status-backed working targets disabled when a live pane title needs permission', () => {
     const paneKey = makePaneKey(STATUS_TAB_ID, LEAF_A)
+
     const targets = deriveNotesSendAgentTargets(
       state({
         agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'working') },
@@ -393,6 +404,7 @@ describe('notes send agent targets', () => {
 
   it('does not emit a launch hint for a tab already covered by a live status entry', () => {
     const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_A)
+
     const targets = deriveNotesSendAgentTargets(
       state({
         agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'working') },
@@ -418,6 +430,7 @@ describe('notes send agent targets', () => {
 
   it('does not duplicate a status-backed tab with a manual title fallback', () => {
     const paneKey = makePaneKey(MANUAL_TAB_ID, LEAF_A)
+
     const targets = deriveNotesSendAgentTargets(
       state({
         agentStatusByPaneKey: { [paneKey]: entry(paneKey, 'working') },
@@ -443,6 +456,7 @@ describe('notes send agent targets', () => {
 
   it('promotes a stale status-backed launch-agent pane when live title and PTY prove it is sendable', () => {
     const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+
     const targets = deriveNotesSendAgentTargets(
       state({
         agentStatusByPaneKey: {
@@ -474,6 +488,7 @@ describe('notes send agent targets', () => {
 
   it('uses launch ownership when promoting a stale unknown status-backed pane', () => {
     const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+
     const targets = deriveNotesSendAgentTargets(
       state({
         agentStatusByPaneKey: {
@@ -502,6 +517,7 @@ describe('notes send agent targets', () => {
 
   it('keeps a stale status-backed launch-agent pane disabled with only a bare agent title', () => {
     const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+
     const targets = deriveNotesSendAgentTargets(
       state({
         agentStatusByPaneKey: {
@@ -527,6 +543,7 @@ describe('notes send agent targets', () => {
 
   it('keeps a stale status-backed launch-agent pane disabled when the live title needs permission', () => {
     const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+
     const targets = deriveNotesSendAgentTargets(
       state({
         agentStatusByPaneKey: {
@@ -554,6 +571,7 @@ describe('notes send agent targets', () => {
   it('does not let a stale status-backed split pane hide a different live active launch-agent pane', () => {
     const stalePaneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_A)
     const livePaneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_B)
+
     const targets = deriveNotesSendAgentTargets(
       state({
         agentStatusByPaneKey: {
@@ -586,6 +604,7 @@ describe('notes send agent targets', () => {
 
   it('does not borrow a stale tab title for an active split pane after another pane has title evidence', () => {
     const stalePaneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_A)
+
     const targets = deriveNotesSendAgentTargets(
       state({
         agentStatusByPaneKey: {
@@ -681,6 +700,7 @@ describe('notes send agent targets', () => {
 
   it('promotes a stale OpenCode status row from the native title hint', () => {
     const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_A)
+
     const targets = deriveNotesSendAgentTargets(
       state({
         agentStatusByPaneKey: {

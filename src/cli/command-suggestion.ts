@@ -6,6 +6,7 @@ export { levenshtein } from '../shared/edit-distance'
 // Why: rank the live registry so typo recovery cannot drift from accepted paths.
 
 const SUGGESTION_THRESHOLD = 3
+
 const MAX_SUGGESTIONS = 3
 
 // Why: a close typo of a destructive verb (`remov`→`remove`) still signals that
@@ -22,6 +23,7 @@ function finalToken(path: string[]): string {
 // tracks the registry instead of a hand-maintained list.
 function destructiveVerbs(specs: CommandSpec[]): Set<string> {
   const verbs = new Set<string>()
+
   for (const spec of specs) {
     if (spec.destructive) {
       for (const path of specPaths(spec)) {
@@ -29,6 +31,7 @@ function destructiveVerbs(specs: CommandSpec[]): Set<string> {
       }
     }
   }
+
   return verbs
 }
 
@@ -44,6 +47,7 @@ function intendsDestruction(inputToken: string, verbs: Set<string>): boolean {
       return true
     }
   }
+
   return false
 }
 
@@ -69,38 +73,49 @@ export function suggestCommands(specs: CommandSpec[], commandPath: string[]): st
   const allowDestructive = intendsDestruction(finalToken(commandPath), destructiveVerbs(specs))
   const seen = new Set<string>()
   const scored: { label: string; distance: number }[] = []
+
   for (const spec of specs) {
     if (spec.hidden) {
       continue
     }
+
     if (spec.destructive && !allowDestructive) {
       continue
     }
+
     const candidates = specPaths(spec).map((path) =>
       commandPath.length === 1 ? path.slice(0, 1) : path
     )
+
     for (const candidate of candidates) {
       if (candidate.length !== commandPath.length) {
         continue
       }
+
       const joined = candidate.join(' ')
+
       if (seen.has(joined)) {
         continue
       }
+
       seen.add(joined)
+
       if (Math.abs(input.length - joined.length) <= SUGGESTION_THRESHOLD) {
         scored.push({ label: joined, distance: levenshtein(input, joined) })
       }
     }
   }
+
   return rankByDistance(scored)
 }
 
 export function unknownCommandData(specs: CommandSpec[], commandPath: string[]): CommandErrorData {
   const suggestions = suggestCommands(specs, commandPath)
+
   const nextSteps = suggestions.length
     ? [`Did you mean: ${suggestions.map((path) => `orca ${path}`).join(', ')}`]
     : []
+
   return { suggestions, nextSteps }
 }
 
@@ -119,12 +134,15 @@ const FLAG_SYNONYMS: Readonly<Record<string, string>> = { from: 'terminal' }
 function suggestFlags(flag: string, validFlags: string[]): string[] {
   const synonym = FLAG_SYNONYMS[flag]
   const scored: { label: string; distance: number }[] = []
+
   for (const candidate of validFlags) {
     if (Math.abs(flag.length - candidate.length) <= SUGGESTION_THRESHOLD) {
       scored.push({ label: candidate, distance: levenshtein(flag, candidate) })
     }
   }
+
   const ranked = rankByDistance(scored)
+
   return synonym && validFlags.includes(synonym)
     ? [synonym, ...ranked.filter((name) => name !== synonym)].slice(0, MAX_SUGGESTIONS)
     : ranked
@@ -135,9 +153,12 @@ export function unknownFlagData(flag: string, validFlags: string[]): FlagErrorDa
   const sortedValid = [...validFlags].sort((a, b) => a.localeCompare(b))
   const suggestions = suggestFlags(flag, sortedValid)
   const nextSteps: string[] = []
+
   if (suggestions.length > 0) {
     nextSteps.push(`Did you mean: ${suggestions.map((name) => `--${name}`).join(', ')}`)
   }
+
   nextSteps.push(`Valid flags: ${sortedValid.map((name) => `--${name}`).join(', ')}`)
+
   return { validFlags: sortedValid, suggestions, nextSteps }
 }

@@ -45,12 +45,14 @@ function catalogRefFor(event: AutomationAuthorityChangeEvent): StableAutomationC
   if (!event.selector) {
     return null
   }
+
   if (event.selector.kind === 'ssh') {
     return {
       authority: event.authority,
       selector: { kind: 'ssh', targetId: event.selector.targetId }
     }
   }
+
   return event.selector.kind === 'orphan'
     ? { authority: event.authority, selector: { kind: 'orphan' } }
     : { authority: event.authority, selector: { kind: 'self' } }
@@ -67,29 +69,38 @@ export function createAutomationHostInvalidation(
 
   const flush = (): void => {
     scheduled = false
+
     if (disposed) {
       return
     }
+
     const invalidated = new Set<string>()
+
     for (const authority of authorities.values()) {
       for (const key of options.cache.invalidateAuthority(authority)) {
         invalidated.add(key)
       }
     }
+
     authorities.clear()
+
     for (const key of scopedKeys) {
       if (invalidated.has(key)) {
         continue
       }
+
       // A key with no entry has nothing stale to discard, but a create lands on
       // exactly such a host — dropping it here is how a new row never appears.
       // Report it either way and let the catalog decide whether it is fetchable.
       if (options.cache.getByKey(key)) {
         options.cache.invalidateKey(key)
       }
+
       invalidated.add(key)
     }
+
     scopedKeys.clear()
+
     if (invalidated.size > 0) {
       options.onInvalidated?.([...invalidated])
     }
@@ -100,12 +111,15 @@ export function createAutomationHostInvalidation(
       if (disposed) {
         return
       }
+
       const ref = catalogRefFor(event)
+
       if (ref) {
         scopedKeys.add(hostStableKey(ref))
       } else {
         authorities.set(automationAuthorityCatalogKey(event.authority), event.authority)
       }
+
       if (!scheduled) {
         scheduled = true
         schedule(flush)

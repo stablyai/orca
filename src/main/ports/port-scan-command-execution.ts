@@ -37,17 +37,22 @@ export async function runPortScanCommandInProcess(
       if (settled) {
         return
       }
+
       settled = true
+
       if (timer) {
         clearTimeout(timer)
       }
+
       if (child) {
         activeChildren.delete(child)
       }
+
       callback()
     }
 
     const startedAt = Date.now()
+
     try {
       child = execFile(
         command,
@@ -71,13 +76,16 @@ export async function runPortScanCommandInProcess(
                   : error
               )
             )
+
             return
           }
+
           settle(() => resolve({ stdout: String(stdout), spawnMs }))
         }
       )
     } catch (error) {
       settle(() => reject(error))
+
       return
     }
 
@@ -85,9 +93,11 @@ export async function runPortScanCommandInProcess(
     // for the whole of process creation. Arming the watchdog earlier would
     // charge the spawn stall against the command's budget and fire immediately.
     spawnMs = Date.now() - startedAt
+
     if (settled || !child) {
       return
     }
+
     activeChildren.add(child)
     timer = setTimeout(() => {
       settle(() => {
@@ -111,5 +121,6 @@ export function killActivePortScanCommands(): void {
       // Already exited; nothing to reap.
     }
   }
+
   activeChildren.clear()
 }

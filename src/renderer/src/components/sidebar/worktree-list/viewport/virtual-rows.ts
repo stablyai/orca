@@ -5,11 +5,17 @@ import { getRenderRowKey } from '../listing/render-row'
 import type { RenderRow } from '../listing/render-row'
 
 export const GROUP_HEADER_ROW_HEIGHT = 28
+
 export const HOST_HEADER_ROW_HEIGHT = 32
+
 export const WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP = 6
+
 const SECONDARY_GROUP_HEADER_TOP_MARGIN = 4
+
 const IMPORTED_WORKTREES_LINE_ROW_HEIGHT = 36
+
 const PENDING_CREATION_ROW_HEIGHT = 56
+
 const FOLDER_WORKSPACE_ROW_HEIGHT = 64
 
 /**
@@ -22,17 +28,22 @@ const FOLDER_WORKSPACE_ROW_HEIGHT = 64
  */
 export function buildLineageRowRekeyMap(rows: readonly RenderRow[]): ReadonlyMap<string, string> {
   const rekeyed = new Map<string, string>()
+
   for (const row of rows) {
     if (row.type === 'lineage-group') {
       const groupKey = getRenderRowKey(row)
+
       for (const member of row.rows) {
         rekeyed.set(`wt:${member.rowKey}`, groupKey)
       }
+
       continue
     }
+
     if (row.type !== 'item') {
       continue
     }
+
     // Why: deliberately unguarded by lineageChildCount — the dissolve case (last
     // child deleted) is exactly when the count is already 0 but an anchor still
     // holds the group key.
@@ -41,6 +52,7 @@ export function buildLineageRowRekeyMap(rows: readonly RenderRow[]): ReadonlyMap
       getRenderRowKey(row)
     )
   }
+
   return rekeyed
 }
 
@@ -50,8 +62,10 @@ export function shouldUseHeaderTopSpacing(args: {
   firstHeaderIndex: number
 }): boolean {
   const previousRenderRow = args.rows[args.index - 1]
+
   const followsCollapsedPinnedHeader =
     previousRenderRow?.type === 'header' && previousRenderRow.key === PINNED_GROUP_KEY
+
   return args.index !== args.firstHeaderIndex && !followsCollapsedPinnedHeader
 }
 
@@ -62,6 +76,7 @@ export function estimateRenderRowSize(
   _activeStickyHeaderIndex: number | null
 ): number {
   const row = rows[index]
+
   if (row?.type === 'host-header') {
     return (
       HOST_HEADER_ROW_HEIGHT +
@@ -74,6 +89,7 @@ export function estimateRenderRowSize(
         : 0)
     )
   }
+
   if (row?.type === 'header') {
     return (
       GROUP_HEADER_ROW_HEIGHT +
@@ -86,18 +102,23 @@ export function estimateRenderRowSize(
         : 0)
     )
   }
+
   if (row?.type === 'lineage-group') {
     return 100 + Math.max(0, row.rows.length - 1) * 96
   }
+
   if (row?.type === 'imported-worktrees-card' || row?.type === 'new-external-worktrees-inbox') {
     return IMPORTED_WORKTREES_LINE_ROW_HEIGHT
   }
+
   if (row?.type === 'pending-creation') {
     return PENDING_CREATION_ROW_HEIGHT
   }
+
   if (row?.type === 'folder-workspace') {
     return FOLDER_WORKSPACE_ROW_HEIGHT
   }
+
   return 116
 }
 
@@ -107,6 +128,7 @@ export function getVirtualRowTransform(start: number): string {
 
 export function getVirtualRowIndex(element: Element): number | null {
   const index = Number.parseInt(element.getAttribute('data-index') ?? '', 10)
+
   return Number.isNaN(index) ? null : index
 }
 
@@ -116,6 +138,7 @@ export function getVirtualRowKey(element: Element): string | null {
 
 export function getWorktreeVirtualRowTransform(start: number, previewOffset: number): string {
   const base = getVirtualRowTransform(start)
+
   return previewOffset === 0 ? base : `${base} translateY(${previewOffset}px)`
 }
 
@@ -132,11 +155,14 @@ export function pruneStaleVirtualRowElementCache<TElement extends Element>({
   virtualizer: VirtualRowElementCache<TElement>
 }): void {
   virtualizer.measureElement(null)
+
   for (const [key, element] of virtualizer.elementsCache) {
     const rowKey = String(key)
+
     if (activeRowKeys.has(rowKey) || element.isConnected) {
       continue
     }
+
     // Why: measured row nodes retain their React fiber tree. Once TanStack's
     // public null-measure cleanup has run, drop any disconnected stale key left
     // behind so old WorktreeCard scopes do not survive runtime-host row churn.
@@ -156,6 +182,7 @@ export function getStickyHeaderIndexes(rows: readonly RenderRow[]): number[] {
       indexes.push(index)
     }
   })
+
   return indexes
 }
 
@@ -193,33 +220,43 @@ export function getActiveStickyIndexesForScroll(args: {
     fallbackToCandidate: boolean
   ): number | null => {
     const candidateIndex = getActiveStickyHeaderIndex(candidates, args.rangeStartIndex)
+
     if (candidateIndex === null) {
       return null
     }
+
     const candidate = args.virtualItems.find((item) => item.index === candidateIndex)
+
     if (!candidate) {
       // Why: scrollToIndex/reveal can advance rangeStartIndex before TanStack
       // mounts the candidate row. Pinning without geometry lets a Project
       // sticky paint over the Host card (#10088). Prefer a previous mounted
       // sticky; group tier waits for geometry, host tier may keep the id.
       const previous = getPreviousStickyHeaderIndex(candidates, candidateIndex)
+
       if (previous !== null) {
         const previousItem = args.virtualItems.find((item) => item.index === previous)
+
         if (previousItem) {
           return previous
         }
       }
+
       return fallbackToCandidate ? candidateIndex : null
     }
+
     // Why: hand off the moment the incoming header reaches its pinned slot
     // (top of the viewport, or the bottom edge of the pinned host card).
     if (args.scrollOffset + pinnedOffset >= candidate.start) {
       return candidateIndex
     }
+
     const previous = getPreviousStickyHeaderIndex(candidates, candidateIndex)
+
     if (previous !== null) {
       return previous
     }
+
     // Why: a host section's first group is still in flow below the pinned
     // host card until it reaches the slot — pinning it early would double
     // it up. The host tier keeps the legacy fallback.
@@ -229,19 +266,24 @@ export function getActiveStickyIndexesForScroll(args: {
   const hostIndex = resolveWithHandoff(hostIndexes, 0, true)
 
   const hostPosition = hostIndex === null ? -1 : hostIndexes.indexOf(hostIndex)
+
   const nextHostIndex =
     hostPosition >= 0 ? (hostIndexes[hostPosition + 1] ?? Number.POSITIVE_INFINITY) : null
+
   const groupIndexes = args.stickyHeaderIndexes.filter((index) => {
     if (args.rows[index]?.type !== 'header') {
       return false
     }
+
     // Why: a group from the previous host must never pin beneath the next
     // host's card — only groups inside the pinned host's section qualify.
     if (hostIndex !== null) {
       return index > hostIndex && index < (nextHostIndex ?? Number.POSITIVE_INFINITY)
     }
+
     return true
   })
+
   const groupIndex = resolveWithHandoff(
     groupIndexes,
     hostIndex !== null ? HOST_STICKY_PINNED_HEIGHT : 0,
@@ -257,10 +299,12 @@ export function getActiveStickyHeaderIndex(
 ): number | null {
   for (let index = stickyHeaderIndexes.length - 1; index >= 0; index--) {
     const headerIndex = stickyHeaderIndexes[index]
+
     if (headerIndex <= rangeStartIndex) {
       return headerIndex
     }
   }
+
   return null
 }
 
@@ -269,9 +313,11 @@ export function getPreviousStickyHeaderIndex(
   headerIndex: number
 ): number | null {
   const currentPosition = stickyHeaderIndexes.indexOf(headerIndex)
+
   if (currentPosition <= 0) {
     return null
   }
+
   return stickyHeaderIndexes[currentPosition - 1] ?? null
 }
 
@@ -284,6 +330,7 @@ export function extractWorktreeVirtualRowIndexes(args: {
     args.stickyHeaderIndexes,
     args.range.startIndex
   )
+
   if (activeStickyHeaderIndex === null) {
     return defaultRangeExtractor(args.range)
   }
@@ -292,10 +339,12 @@ export function extractWorktreeVirtualRowIndexes(args: {
     args.stickyHeaderIndexes,
     activeStickyHeaderIndex
   )
+
   // Why: the pinned host card (tier 1) can be far above the visible range
   // while group headers hand off beneath it — keep it mounted regardless.
   const hostIndexes = args.rows ? getHostStickyIndexes(args.rows, args.stickyHeaderIndexes) : []
   const activeHostIndex = getActiveStickyHeaderIndex(hostIndexes, args.range.startIndex)
+
   return Array.from(
     new Set([
       activeStickyHeaderIndex,
@@ -313,11 +362,13 @@ export function getActiveStickyHeaderIndexForScroll(args: {
   virtualItems: readonly VirtualItem[]
 }): number | null {
   const candidateIndex = getActiveStickyHeaderIndex(args.stickyHeaderIndexes, args.rangeStartIndex)
+
   if (candidateIndex === null) {
     return null
   }
 
   const candidate = args.virtualItems.find((item) => item.index === candidateIndex)
+
   if (!candidate) {
     return candidateIndex
   }

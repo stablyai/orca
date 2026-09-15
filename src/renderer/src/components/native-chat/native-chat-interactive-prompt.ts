@@ -49,24 +49,33 @@ export function parseApprovalFromStatus(
   if (!interactivePrompt) {
     return null
   }
+
   let parsed: unknown
+
   try {
     parsed = JSON.parse(interactivePrompt)
   } catch {
     return null
   }
+
   if (!parsed || typeof parsed !== 'object') {
     return null
   }
+
   const approval = (parsed as { approval?: unknown }).approval
+
   if (!approval || typeof approval !== 'object') {
     return null
   }
+
   const tool = (approval as { tool?: unknown }).tool
+
   if (typeof tool !== 'string' || tool.length === 0) {
     return null
   }
+
   const summary = (approval as { summary?: unknown }).summary
+
   return {
     title: translate('components.native-chat.approval.title', 'Allow {{value0}}?', {
       value0: tool
@@ -84,9 +93,12 @@ export function parseInteractivePrompt(
   toolName?: string
 ): InteractivePromptCard {
   const prompt = parseAskFromStatus(interactivePrompt, toolName)
+
   if (prompt) {
     return { kind: 'question', prompt }
   }
+
   const approval = parseApprovalFromStatus(interactivePrompt)
+
   return approval ? { kind: 'approval', approval } : null
 }

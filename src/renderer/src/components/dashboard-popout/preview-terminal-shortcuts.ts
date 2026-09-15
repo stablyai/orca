@@ -38,6 +38,7 @@ export function resolvePreviewShortcutAction(
 ): TerminalShortcutAction | null {
   const isMac = context.clientPlatform === 'darwin'
   const hostPlatform = context.terminalInput?.hostPlatform ?? context.clientPlatform
+
   return resolveTerminalShortcutAction(
     event,
     isMac,

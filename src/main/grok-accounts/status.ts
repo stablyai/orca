@@ -3,6 +3,7 @@ import { isGrokAccessTokenFresh, readGrokAuthSession } from '../rate-limits/grok
 
 export function getGrokAccountStatus(): GrokAccountStatus {
   const readResult = readGrokAuthSession()
+
   if (readResult.status === 'missing') {
     return {
       signedIn: false,
@@ -12,6 +13,7 @@ export function getGrokAccountStatus(): GrokAccountStatus {
       error: null
     }
   }
+
   if (readResult.status === 'error') {
     return {
       signedIn: false,
@@ -21,7 +23,9 @@ export function getGrokAccountStatus(): GrokAccountStatus {
       error: readResult.error
     }
   }
+
   const session = readResult.session
+
   return {
     signedIn: true,
     email: session.email,

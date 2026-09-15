@@ -10,6 +10,7 @@ const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, s
   }))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
+
 vi.mock('fs', () => ({
   existsSync: existsSyncMock,
   readFileSync: readFileSyncMock,
@@ -17,15 +18,19 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
+
 vi.mock('os', () => ({ platform: () => 'darwin', arch: () => 'arm64' }))
+
 vi.mock('electron', () => {
   return {
     app: { getPath: vi.fn(() => '/app'), getAppPath: vi.fn(() => '/project'), isPackaged: false },
     webContents: { fromId: webContentsFromIdMock }
   }
 })
+
 const { CdpWsProxyMock } = vi.hoisted(() => {
   const instances: unknown[] = []
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const MockClass = vi.fn().mockImplementation(function (this: any, _wc: unknown) {
     this._wc = _wc
@@ -34,12 +39,14 @@ const { CdpWsProxyMock } = vi.hoisted(() => {
     this.getPort = vi.fn(() => 9222)
     instances.push(this)
   })
+
   return { CdpWsProxyMock: Object.assign(MockClass, { instances }) }
 })
 
 vi.mock('./cdp-ws-proxy', () => ({
   CdpWsProxy: CdpWsProxyMock
 }))
+
 vi.mock('./cdp-bridge', () => ({
   BrowserError: class BrowserError extends Error {
     code: string
@@ -81,14 +88,17 @@ describe('AgentBrowserBridge', () => {
 
   it('clears reload fallback timer after the load event settles', async () => {
     vi.useFakeTimers()
+
     try {
       succeedWith(null)
+
       const wc = {
         ...mockWebContents(100, 'https://reloaded.example', 'Reloaded'),
         reload: vi.fn(),
         on: vi.fn(),
         removeListener: vi.fn()
       }
+
       webContentsFromIdMock.mockReturnValue(wc)
 
       const result = bridge.reload()
@@ -100,9 +110,11 @@ describe('AgentBrowserBridge', () => {
       const finishListener = wc.on.mock.calls.find(
         ([event]) => event === 'did-finish-load'
       )?.[1] as (() => void) | undefined
+
       const failListener = wc.on.mock.calls.find(([event]) => event === 'did-fail-load')?.[1] as
         | (() => void)
         | undefined
+
       expect(finishListener).toBeDefined()
       expect(failListener).toBeDefined()
       expect(vi.getTimerCount()).toBe(1)
@@ -165,16 +177,19 @@ describe('AgentBrowserBridge', () => {
 
   it('fails closed and releases the command queue when direct navigation never settles', async () => {
     vi.useFakeTimers()
+
     try {
       const wc = mockWebContents(100)
       wc.loadURL.mockReturnValue(new Promise<void>(() => {}))
       webContentsFromIdMock.mockReturnValue(wc)
 
       const navigation = bridge.goto('https://example.com/hangs')
+
       const rejection = expect(navigation).rejects.toMatchObject({
         code: 'browser_error',
         message: 'Failed to navigate browser page tab-1: Browser navigation timed out after 30000ms'
       })
+
       await vi.advanceTimersByTimeAsync(30_000)
 
       await rejection
@@ -241,6 +256,7 @@ describe('AgentBrowserBridge', () => {
       const preventUnload = wc.on.mock.calls.find(
         ([event]) => event === 'will-prevent-unload'
       )?.[1] as ((event: { defaultPrevented: boolean }) => void) | undefined
+
       preventUnload!({ defaultPrevented: false })
       throw Object.assign(new Error('ERR_ABORTED (-3)'), { code: 'ERR_ABORTED', errno: -3 })
     })
@@ -261,16 +277,19 @@ describe('AgentBrowserBridge', () => {
       Object.assign(new Error('ERR_ABORTED (-3)'), { code: 'ERR_ABORTED', errno: -3 })
     )
     webContentsFromIdMock.mockReturnValue(wc)
+
     const getBrowserPageLoadError = vi.fn(() => ({
       code: -105,
       description: 'Name not resolved',
       validatedUrl: 'https://nxdomain.example/'
     }))
+
     const b = new AgentBrowserBridge(
       mockBrowserManager(new Map([['tab-1', 100]]), undefined, {
         getBrowserPageLoadError
       })
     )
+
     b.setActiveTab(100)
 
     await expect(b.goto('https://example.com/redirect')).rejects.toMatchObject({
@@ -282,6 +301,7 @@ describe('AgentBrowserBridge', () => {
 
   it('bounds and cleans up a superseding navigation that never settles', async () => {
     vi.useFakeTimers()
+
     try {
       const wc = mockWebContents(100, 'https://example.com/current', 'Example')
       wc.isLoading.mockReturnValue(true)
@@ -291,10 +311,12 @@ describe('AgentBrowserBridge', () => {
       webContentsFromIdMock.mockReturnValue(wc)
 
       const navigation = bridge.goto('https://example.com/redirect')
+
       const rejection = expect(navigation).rejects.toMatchObject({
         code: 'browser_error',
         message: 'Failed to navigate browser page tab-1: Browser navigation timed out after 30000ms'
       })
+
       await vi.advanceTimersByTimeAsync(30_000)
 
       await rejection
@@ -313,6 +335,7 @@ describe('AgentBrowserBridge', () => {
 
   it('cleans up when the guest is destroyed while attaching the replacement wait', async () => {
     vi.useFakeTimers()
+
     try {
       const wc = mockWebContents(100, 'https://example.com/current', 'Example')
       let destroyed = false
@@ -400,6 +423,7 @@ describe('AgentBrowserBridge', () => {
             if (helperSessionIsStale && !args.includes('--cdp')) {
               wrongOwnerCalls.push(args)
             }
+
             cb(
               null,
               JSON.stringify({
@@ -409,6 +433,7 @@ describe('AgentBrowserBridge', () => {
               ''
             )
           }
+
           return { kill: vi.fn() }
         }
       )
@@ -421,6 +446,7 @@ describe('AgentBrowserBridge', () => {
       expect(
         execFileMock.mock.calls.some((call) => (call[1] as string[]).includes(helperArg))
       ).toBe(false)
+
       if (directMethod === 'loadURL') {
         expect(wc.loadURL).toHaveBeenCalledWith('https://embedded.example/next')
       } else {
@@ -494,9 +520,11 @@ describe('AgentBrowserBridge', () => {
     wc.isDestroyed = () => true
     webContentsFromIdMock.mockReturnValue(wc)
     const unregisterGuest = vi.fn()
+
     const b = new AgentBrowserBridge(
       mockBrowserManager(new Map([['tab-1', 100]]), new Map(), { unregisterGuest })
     )
+
     b.setActiveTab(100)
 
     await expect(run(b)).rejects.toMatchObject({

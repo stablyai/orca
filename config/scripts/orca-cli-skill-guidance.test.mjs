@@ -3,11 +3,14 @@ import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 // Why: orca-cli now ships a hybrid discovery stub, so its version-sensitive command
 // guidance lives in the authoritative guide source — assert that content there. The
 // installable stub projection is checked separately below.
 const guidePath = join(projectDir, 'skill-guides', 'orca-cli.md')
+
 const stubPath = join(projectDir, 'skills', 'orca-cli', 'SKILL.md')
+
 // Why: orchestration and orca-emulator also ship hybrid stubs now, so their version-sensitive
 // command guidance lives in the guide sources — read the cross-guide worktree-id contract there.
 // Why: the worktree-selector rule lives in the orchestration placement reference, not the kernel.
@@ -18,6 +21,7 @@ const orchestrationPlacementPath = join(
   'references',
   'placement-and-remote.md'
 )
+
 const emulatorSkillPath = join(projectDir, 'skill-guides', 'orca-emulator.md')
 
 function readSkill(path = guidePath) {
@@ -93,6 +97,7 @@ describe('orca CLI skill guidance', () => {
     expect(skill).toContain(
       'If the CLI rejects `--reference`, run `ORCA skills get orca-cli --full`'
     )
+
     for (const reference of [
       'references/browser.md',
       'references/automations.md',
@@ -101,6 +106,7 @@ describe('orca CLI skill guidance', () => {
       expect(skill).toContain(reference)
       expect(readSkill(join(projectDir, 'skill-guides', 'orca-cli', reference)).trim()).not.toBe('')
     }
+
     expect(skill).not.toContain('ORCA automations create')
     expect(skill).not.toContain('ORCA artifacts share <file>')
     expect(skill).not.toContain('ORCA goto --url')
@@ -137,6 +143,7 @@ describe('orca CLI skill guidance', () => {
       expect(skill).toContain('<repo-id>::<path>')
       expect(skill).toContain('bare repo id')
     }
+
     expect(cliSkill).toContain('id:<repoId>::<worktreePath>')
     expect(cliSkill).toContain('two-part address')
     expect(orchestrationSkill).toContain('id:<newFullWorktreeId>')

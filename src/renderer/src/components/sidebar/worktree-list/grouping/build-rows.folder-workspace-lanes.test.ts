@@ -52,6 +52,7 @@ function buildSidebarRows(options: {
   collapsedGroups?: Set<string>
 }): Row[] {
   const worktrees = options.worktrees ?? [worktree]
+
   return buildRows(
     options.groupBy,
     worktrees,
@@ -122,9 +123,11 @@ describe('lane assignment', () => {
       'pr-status',
       []
     )
+
     const noPrWorktreeLane = getPRLaneKey(
       getPRGroupKey(worktree, new Map([[GROUPED_REPO.id, GROUPED_REPO]]), null)
     )
+
     expect(laneKey).toBe(noPrWorktreeLane)
   })
 })
@@ -150,6 +153,7 @@ describe('ordering', () => {
           makeFolderWorkspace({ id: 'fw-high', name: 'High', sortOrder: 1, manualOrder: 9 })
         ]
       })
+
       expect(folderRows(rows).map((row) => row.folderWorkspace.id)).toEqual(['fw-high', 'fw-low'])
     })
   }
@@ -170,9 +174,11 @@ describe('membership is decided once, not per mode', () => {
 
   it('keeps archived folder workspaces behaving identically in every mode', () => {
     const archived = [makeFolderWorkspace({ isArchived: true })]
+
     const counts = ALL_GROUP_BY.map(
       (groupBy) => folderRows(buildSidebarRows({ groupBy, folderWorkspaces: archived })).length
     )
+
     // Parity with today's behaviour: nothing filters folder workspaces by
     // isArchived, so a mode must not be the thing that hides one.
     expect(counts).toEqual([1, 1, 1, 1])
@@ -184,6 +190,7 @@ describe('host bookkeeping for lanes containing folder workspaces', () => {
 
   it('scopes a collapsed folder-only lane header to its host', () => {
     const sshGroup: ProjectGroup = { ...GROUP, connectionId: 'target-1' }
+
     const rows = buildRows(
       'workspace-status',
       [],
@@ -205,6 +212,7 @@ describe('host bookkeeping for lanes containing folder workspaces', () => {
       undefined,
       [makeFolderWorkspace()]
     )
+
     const header = rows.find((row) => row.type === 'header')
     expect(header).toBeDefined()
     const counts = header && 'hostWorktreeCounts' in header ? header.hostWorktreeCounts : undefined
@@ -215,6 +223,7 @@ describe('host bookkeeping for lanes containing folder workspaces', () => {
 
   it('gives a folder-only host an explicit empty id array', () => {
     const sshGroup: ProjectGroup = { ...GROUP, connectionId: 'target-1' }
+
     const rows = buildRows(
       'workspace-status',
       [],
@@ -236,6 +245,7 @@ describe('host bookkeeping for lanes containing folder workspaces', () => {
       undefined,
       [makeFolderWorkspace()]
     )
+
     const header = rows.find((row) => row.type === 'header')
     const ids = header && 'hostWorktreeIds' in header ? header.hostWorktreeIds : undefined
     // The key must exist even though folder workspaces contribute no worktree

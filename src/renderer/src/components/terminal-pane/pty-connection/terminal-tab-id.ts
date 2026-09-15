@@ -12,7 +12,9 @@ export function resolveTerminalTabId(state: TerminalTabLookup, tabId: string): s
   if (state.hasTerminalTab?.(tabId)) {
     return tabId
   }
+
   const unifiedTab = state.getTab?.(tabId)
+
   return unifiedTab?.contentType === 'terminal' ? unifiedTab.entityId : tabId
 }
 
@@ -24,6 +26,7 @@ type TerminalTabRecord = {
   generation?: number
   recovery?: TerminalTab['recovery']
 }
+
 type TerminalTabState = {
   getTab?: (
     tabId: string
@@ -43,13 +46,16 @@ export function findTerminalTabForPane(
   tabId: string
 ): TerminalTabRecord | null {
   const unifiedTab = state.getTab?.(tabId)
+
   const initialOwnerWorktreeId =
     state.getTerminalTabOwnerWorktreeId?.(tabId) ??
     (unifiedTab?.contentType === 'terminal'
       ? state.getTerminalTabOwnerWorktreeId?.(unifiedTab.entityId)
       : null)
+
   const hasTabIn = (id: string | null | undefined, candidateId: string): boolean =>
     Boolean(id && state.tabsByWorktree[id]?.some((candidate) => candidate.id === candidateId))
+
   const terminalTabId = resolveTerminalTabId(
     {
       getTab: state.getTab,
@@ -58,10 +64,13 @@ export function findTerminalTabForPane(
     },
     tabId
   )
+
   const ownerWorktreeId =
     state.getTerminalTabOwnerWorktreeId?.(terminalTabId) ?? initialOwnerWorktreeId
+
   const byId = (id: string | null | undefined): TerminalTabRecord | undefined =>
     id ? state.tabsByWorktree[id]?.find((candidate) => candidate.id === terminalTabId) : undefined
+
   return (
     byId(worktreeId) ??
     byId(ownerWorktreeId) ??

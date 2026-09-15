@@ -10,6 +10,7 @@ export function resolveBrowserSessionTabTarget(
   tabId: string
 ): BrowserSessionTabTarget | null {
   const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find((item) => item.id === tabId)
+
   if (tab?.contentType === 'browser') {
     return {
       kind: 'unified-browser',
@@ -18,8 +19,10 @@ export function resolveBrowserSessionTabTarget(
       groupId: tab.groupId
     }
   }
+
   const fallbackBrowser = (state.browserTabsByWorktree[worktreeId] ?? []).find(
     (workspace) => workspace.id === tabId
   )
+
   return fallbackBrowser ? { kind: 'fallback-browser', workspaceId: fallbackBrowser.id } : null
 }

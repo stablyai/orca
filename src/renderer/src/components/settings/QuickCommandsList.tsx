@@ -25,7 +25,9 @@ function getScopeLabel(
   if (scope.type === 'global') {
     return 'Global'
   }
+
   const repo = repoById.get(scope.repoId)
+
   return repo ? getQuickCommandRepoLabel(repo) : 'Missing project'
 }
 
@@ -33,6 +35,7 @@ function getRunModeLabel(command: TerminalQuickCommand): string {
   if (isTerminalAgentQuickCommand(command)) {
     return translate('auto.components.settings.QuickCommandsPane.4ccc63da87', 'Agent')
   }
+
   return command.appendEnter
     ? translate('auto.components.settings.QuickCommandsPane.9b3e338d62', 'Enter')
     : translate('auto.components.settings.QuickCommandsPane.9fcfc29519', 'Insert')
@@ -64,6 +67,7 @@ function QuickCommandRow({
               value0: commandName
             })
           : translate('auto.components.settings.QuickCommandsPane.69a1441a21', 'Nothing to copy')
+
   const editLabel = translate(
     'auto.components.settings.QuickCommandsPane.7d90fd5299',
     'Edit {{value0}}',
@@ -177,6 +181,7 @@ function QuickCommandsEmptyState({
       </div>
     )
   }
+
   // Why no action here: the toolbar's Add Command sits directly above.
   return (
     <div className="flex flex-col items-center gap-3 px-2 py-10 text-center">
@@ -217,6 +222,7 @@ export function QuickCommandsList({
   if (visibleCommands.length === 0) {
     return <QuickCommandsEmptyState hasCommands={commands.length > 0} hasQuery={hasQuery} />
   }
+
   return (
     <div className="-mx-2 divide-y divide-border/50">
       {visibleCommands.map((command) => (

@@ -26,21 +26,28 @@ export function buildMobileTerminalSurfaceTabs(
   unifiedTabId?: string
 ): RuntimeMobileSessionSnapshotTab[] {
   const capture = inputs.mountedSurfaceCaptureByTabId.get(terminal.id)
+
   const isDesktopTabActive = unifiedTabId
     ? isUnifiedTabActiveInActiveGroup(inputs, unifiedTabId)
     : inputs.activeTerminalTabId === terminal.id
+
   const savedLayout = inputs.terminalLayoutByTabId.get(terminal.id)
   const leafIds = getRuntimeLeafIdsForTerminal(capture, savedLayout)
   const launchAgentLeafId = resolveMobileTabWideAgentHintLeafId(capture, savedLayout)
+
   const activeLeafId = capture?.hasLiveActivePane
     ? capture.liveActiveLeafId
     : (savedLayout?.activeLeafId ?? leafIds[0] ?? null)
+
   const paneTitles = inputs.paneTitlesByTabId.get(terminal.id) ?? {}
+
   const sanitizedSavedLayout = savedLayout
     ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminal)
     : undefined
+
   const savedPtyIdsByLeafId = sanitizedSavedLayout?.ptyIdsByLeafId ?? {}
   const liveLayoutRoot = capture?.liveLayoutRoot ?? null
+
   const parentLayout = normalizeTerminalLayoutSnapshot({
     // Live DOM is authoritative when mounted; use saved tree otherwise.
     root: resolveTerminalLayoutRoot({
@@ -62,21 +69,27 @@ export function buildMobileTerminalSurfaceTabs(
 
   return leafIds.map((leafId) => {
     const numericPaneId = capture?.numericPaneIdByLeafId.get(leafId) ?? null
+
     const ptyId =
       numericPaneId === null
         ? (savedPtyIdsByLeafId[leafId] ?? (leafIds.length === 1 ? terminal.ptyId : null))
         : (capture?.ptyIdByNumericPaneId.get(numericPaneId) ?? savedPtyIdsByLeafId[leafId] ?? null)
+
     const legacyPaneId = numericPaneId === null ? /^pane:(\d+)$/.exec(leafId)?.[1] : null
+
     const paneTitle =
       numericPaneId !== null
         ? paneTitles[numericPaneId]
         : legacyPaneId
           ? paneTitles[Number(legacyPaneId)]
           : undefined
+
     const leafTitle = paneTitle?.trim() || sanitizedSavedLayout?.titlesByLeafId?.[leafId]?.trim()
     const paneKey = isTerminalLeafId(leafId) ? makePaneKey(terminal.id, leafId) : null
+
     const tabWideFallbackSafe =
       isNativeChatTabWideFallbackSafe(parentLayout) && launchAgentLeafId === leafId
+
     const title = tabWideFallbackSafe
       ? resolveRuntimeTerminalTitle(
           terminal,
@@ -84,22 +97,28 @@ export function buildMobileTerminalSurfaceTabs(
           leafTitle ?? terminal.title ?? 'Terminal'
         )
       : (leafTitle ?? 'Terminal')
+
     const agentStatusTitle = leafTitle ?? (tabWideFallbackSafe ? terminal.title : '') ?? ''
+
     const agentStatus =
       paneKey && !isClaudeManagementTitle(agentStatusTitle)
         ? inputs.agentStatusByPaneKey.get(paneKey)
         : undefined
+
     const launchAgent = nativeChatLaunchAgentForLeaf({
       launchAgent: terminal.launchAgent,
       launchAgentLeafId,
       leafId,
       leafIds
     })
+
     const launchDraft = paneKey ? inputs.launchDraftByPaneKey.get(paneKey) : undefined
+
     const publishedLaunchDraft =
       launchDraft && launchDraft.agent === launchAgent && launchDraft.text.trim()
         ? launchDraft
         : null
+
     return {
       type: 'terminal' as const,
       id: mobileTerminalSurfaceId(terminal.id, leafId),

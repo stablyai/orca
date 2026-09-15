@@ -42,6 +42,7 @@ describe('tab-bar activation census', () => {
     const activations = source.match(/onActivate=\{[^}]*\}/g) ?? []
 
     expect(activations.length).toBeGreaterThan(0)
+
     for (const activation of activations) {
       expect(activation, 'a row kind activates without retiring the placeholder').toContain(
         'activateRealTab('

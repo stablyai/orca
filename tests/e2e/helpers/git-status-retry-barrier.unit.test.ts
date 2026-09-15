@@ -10,11 +10,14 @@ describe('Git status retry barrier', () => {
   it('holds the target interactive request and restores the real handler on cleanup', async () => {
     const original = vi.fn(async (_event: unknown, args: unknown) => args)
     const handlers = new Map([['git:status', original]])
+
     const app = {
       evaluate: (callback: (electron: unknown, arg?: unknown) => unknown, arg?: unknown) =>
         Promise.resolve(callback({ ipcMain: { _invokeHandlers: handlers } }, arg))
     } as unknown as ElectronApplication
+
     await installGitStatusRetryBarrier(app, 'target-repo')
+
     try {
       const handler = handlers.get('git:status')!
       const background = { worktreePath: 'target-repo', admissionTier: 'background' }

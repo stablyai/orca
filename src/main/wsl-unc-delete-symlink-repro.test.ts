@@ -7,9 +7,13 @@ vi.mock('node:child_process', () => ({ execFile: execFileMock }))
 import { tryDeleteWslUncPath } from './wsl-unc-delete'
 
 const DISTRO = 'Ubuntu'
+
 const FIXTURE_ROOT = '/tmp/orca-wsl-vault-delete-repro/vault'
+
 const OUTSIDE_ROOT = '/tmp/orca-wsl-vault-delete-repro/outside'
+
 const SENTINEL = `${OUTSIDE_ROOT}/unrelated-sentinel`
+
 const LINK = `${FIXTURE_ROOT}/linked-project`
 
 function unc(linuxPath: string): string {
@@ -19,6 +23,7 @@ function unc(linuxPath: string): string {
 function withWindows<T>(run: () => Promise<T>): Promise<T> {
   const original = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
   return run().finally(() => {
     if (original) {
       Object.defineProperty(process, 'platform', original)
@@ -41,9 +46,11 @@ describe('WSL vault intermediate-symlink reproduction', () => {
     execFileMock.mockImplementation((_binary, args: string[], _options, callback) => {
       const separator = args.findIndex((arg) => arg === '--' || arg === '--exec')
       const command = args.slice(separator + 1)
+
       if (command[0] === 'rm') {
         removalReached = true
         callback(null, '', '')
+
         return
       }
 

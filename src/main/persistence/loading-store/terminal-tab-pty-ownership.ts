@@ -18,8 +18,10 @@ export function tabRowPtyIdAfterLeafBinding(
   ptyId: string
 ): string {
   const current = tab.ptyId
+
   if (current === null || current === ptyIdsByLeafId?.[leafId]) {
     return ptyId
   }
+
   return current
 }

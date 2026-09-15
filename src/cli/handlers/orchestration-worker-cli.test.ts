@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.fn()
+
 const originalExitCode = process.exitCode
+
 const originalCliCommand = process.env.ORCA_CLI_COMMAND
 
 type RecoveryWorkerStartResult = {
@@ -14,6 +16,7 @@ type RecoveryWorkerStartResult = {
 }
 
 vi.mock('../format', () => ({ printResult: vi.fn() }))
+
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
@@ -33,6 +36,7 @@ describe('orchestration worker-start CLI contract', () => {
 
   afterEach(() => {
     process.exitCode = originalExitCode
+
     if (originalCliCommand === undefined) {
       delete process.env.ORCA_CLI_COMMAND
     } else {
@@ -116,6 +120,7 @@ describe('orchestration worker-start CLI contract', () => {
         effects: [],
         residualResources: []
       }
+
       callMock.mockResolvedValue({ result: receipt })
       await invokeWorkerStart(
         new Map([
@@ -263,10 +268,12 @@ describe('orchestration worker-start CLI contract', () => {
         boolean,
         (result: RecoveryWorkerStartResult) => string
       ]
+
       expect(response.result.nextCommands).toEqual([
         `${executable} orchestration worker-show --dispatch ctx_unknown --json`,
         `${executable} orchestration worker-abandon --dispatch ctx_unknown --json`
       ])
+
       if (!json) {
         expect(formatter(response.result)).toContain(
           `Next command: ${executable} orchestration worker-show --dispatch ctx_unknown --json`
@@ -309,6 +316,7 @@ describe('orchestration worker-start CLI contract', () => {
           lastError?: string
         }) => string)
       | undefined
+
     expect(
       formatter?.({
         taskId: 'task_1',
@@ -352,6 +360,7 @@ describe('orchestration worker-start CLI contract', () => {
           warning?: string
         }) => string)
       | undefined
+
     expect(
       formatter?.({
         taskId: 'task_1',
@@ -399,6 +408,7 @@ describe('orchestration worker-start CLI contract', () => {
           mode?: { mode: string; preferred: string; reason: string; detail: string }
         }) => string)
       | undefined
+
     expect(
       formatter?.({
         taskId: 'task_1',
@@ -440,6 +450,7 @@ describe('orchestration worker-start CLI contract', () => {
           warning?: string
         }) => string)
       | undefined
+
     expect(
       formatter?.({
         dispatchId: 'ctx_manual',
@@ -536,6 +547,7 @@ describe('orchestration worker-start CLI contract', () => {
     const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
       | ((result: { workers: unknown[]; counts: Record<string, number> }) => string)
       | undefined
+
     expect(
       formatter?.({
         workers: [
@@ -627,6 +639,7 @@ describe('orchestration worker-start CLI contract', () => {
         page: { total: 2, hasMore: false, nextCursor: null }
       }
     }
+
     callMock.mockResolvedValue(response)
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
@@ -639,6 +652,7 @@ describe('orchestration worker-start CLI contract', () => {
     const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
       | ((result: (typeof response)['result']) => string)
       | undefined
+
     const output = formatter?.(response.result)
     expect(output).toContain(
       'ctx_live task=task_live [running/working] attention=settled liveness=live provider=claude/opus host=local workspace=ws_1 terminal=active next=orchestration worker-release --dispatch ctx_live'
@@ -675,6 +689,7 @@ describe('orchestration worker-start CLI contract', () => {
         ]
       }
     }
+
     callMock.mockResolvedValue(response)
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
@@ -687,6 +702,7 @@ describe('orchestration worker-start CLI contract', () => {
     const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
       | ((result: (typeof response)['result']) => string)
       | undefined
+
     const output = formatter?.(response.result)
     expect(output).toContain('ctx_remote task=task_remote [running] terminal=active')
     expect(output).toContain(
@@ -710,6 +726,7 @@ describe('orchestration worker-start CLI contract', () => {
         ]
       }
     }
+
     callMock.mockResolvedValue(response)
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
@@ -722,6 +739,7 @@ describe('orchestration worker-start CLI contract', () => {
     const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
       | ((result: (typeof response)['result']) => string)
       | undefined
+
     expect(formatter?.(response.result)).toBe(
       'No workers found.\nScope: all Runs (no Run is bound to this terminal; pass --run to narrow)' +
         '\nWarning: worker observations from Linux host (environment_linux) are incomplete: capability_unsupported; dispatches=none'
@@ -744,6 +762,7 @@ describe('orchestration worker-start CLI contract', () => {
         ]
       }
     }
+
     callMock.mockResolvedValue(response)
 
     await ORCHESTRATION_HANDLERS['orchestration worker-list']({
@@ -764,6 +783,7 @@ describe('orchestration worker-start CLI contract', () => {
     const listSpec = ORCHESTRATION_WORKER_COMMAND_SPECS.find(
       (spec) => spec.path.join(' ') === 'orchestration worker-list'
     )
+
     expect(BOOLEAN_FLAGS).toContain('include-remote')
     expect(
       parseArgs(['orchestration', 'worker-list', '--include-remote']).flags.get('include-remote')
@@ -798,9 +818,11 @@ describe('orchestration worker-start CLI contract', () => {
       cwd: '/tmp/repo',
       json: true
     } as never)
+
     const listParams = callMock.mock.calls.find(
       ([method]) => method === 'orchestration.workerList'
     )?.[1]
+
     expect(listParams).toHaveProperty('paginate', true)
     expect(listParams).not.toHaveProperty('includeRemote')
   })
@@ -809,6 +831,7 @@ describe('orchestration worker-start CLI contract', () => {
     const retainSpec = ORCHESTRATION_WORKER_COMMAND_SPECS.find(
       (spec) => spec.path.join(' ') === 'orchestration worker-retain'
     )
+
     expect(
       ORCHESTRATION_WORKER_COMMAND_SPECS.some(
         (spec) => spec.path.join(' ') === 'orchestration worker-cleanup'

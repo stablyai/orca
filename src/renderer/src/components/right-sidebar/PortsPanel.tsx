@@ -4,6 +4,7 @@ import { LocalWorkspacePortsPanel } from './local-workspace-ports-panel'
 import { SshPortsPanel } from './ssh-ports-panel'
 
 export { getLocalWorkspacePortSections } from './local-workspace-port-sections'
+
 export {
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,

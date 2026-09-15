@@ -39,6 +39,7 @@ export function useSourceControlEntryMutations({
       if (!worktreePath) {
         return
       }
+
       try {
         const connectionId = getConnectionId(activeWorktreeId ?? null) ?? undefined
         await mutate(
@@ -63,8 +64,10 @@ export function useSourceControlEntryMutations({
             void runEntryMutation(operation, filePath, mutate)
           }
         })
+
         return
       }
+
       // Why: the mutation landed, so clear any failure this worktree's attempts left in the slot —
       // a failure another worktree raised meanwhile is not ours to dismiss.
       dismissSourceControlEntryFailureToast(activeWorktreeId)
@@ -91,8 +94,10 @@ export function useSourceControlEntryMutations({
       if (!worktreePath || !activeWorktreeId) {
         return
       }
+
       const runtimeEnvironmentId =
         useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
+
       // Why: quiesce pending editor autosaves first so a delayed save can't recreate the discarded edits after git restores the file.
       await requestEditorSaveQuiesce({
         worktreeId: activeWorktreeId,
@@ -126,8 +131,10 @@ export function useSourceControlEntryMutations({
       if (!worktreePath || !activeWorktreeId) {
         return
       }
+
       const runtimeEnvironmentId =
         useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() || null
+
       // Why: quiesce matching editor autosaves first so a delayed save can't recreate edits after git mutates the files.
       await Promise.all(
         filePaths.map((relativePath) =>
@@ -150,6 +157,7 @@ export function useSourceControlEntryMutations({
         },
         filePaths
       )
+
       for (const relativePath of filePaths) {
         notifyEditorExternalFileChange({
           worktreeId: activeWorktreeId,

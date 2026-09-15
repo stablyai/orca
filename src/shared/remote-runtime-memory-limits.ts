@@ -6,17 +6,28 @@ import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import type { RuntimeOrchestrationEnvelope } from './runtime-rpc-envelope'
 
 export const REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES = 4 * 1024 * 1024
+
 export const REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES = 8 * 1024 * 1024 + 64
+
 export const REMOTE_RUNTIME_MAX_SUBSCRIPTIONS = 256
+
 export const REMOTE_RUNTIME_MAX_SUBSCRIPTION_PARAM_BYTES = 1024 * 1024
+
 export const REMOTE_RUNTIME_MAX_RETAINED_SUBSCRIPTION_BYTES = 16 * 1024 * 1024
+
 export const REMOTE_RUNTIME_MAX_PENDING_REQUESTS = 256
+
 export const REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES = 32 * 1024 * 1024
+
 export const REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES = REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES
+
 export const REMOTE_RUNTIME_MAX_PROCESS_PENDING_REQUESTS = REMOTE_RUNTIME_MAX_PENDING_REQUESTS * 2
+
 export const REMOTE_RUNTIME_MAX_PROCESS_PENDING_RPC_BYTES = REMOTE_RUNTIME_MAX_PENDING_RPC_BYTES * 2
+
 export const REMOTE_RUNTIME_MAX_READY_WAITERS =
   REMOTE_RUNTIME_MAX_PENDING_REQUESTS + REMOTE_RUNTIME_MAX_SUBSCRIPTIONS
+
 export const REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES = 8 * 1024 * 1024
 
 export function serializeRemoteRuntimePayload(value: unknown): string {
@@ -29,6 +40,7 @@ export function serializeRemoteRuntimePayload(value: unknown): string {
         `Remote runtime JSON payload exceeds ${REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES} bytes.`
       )
     }
+
     const message = error instanceof Error ? error.message : String(error)
     throw new RemoteRuntimeClientError(
       'invalid_argument',
@@ -41,6 +53,7 @@ export function measureRemoteRuntimeSubscriptionParams(params: unknown): number 
   if (params === undefined) {
     return 0
   }
+
   try {
     return stringifyJsonWithinByteLimit(params, REMOTE_RUNTIME_MAX_SUBSCRIPTION_PARAM_BYTES)
       .byteLength
@@ -51,6 +64,7 @@ export function measureRemoteRuntimeSubscriptionParams(params: unknown): number 
         `Remote runtime subscription parameters exceed ${REMOTE_RUNTIME_MAX_SUBSCRIPTION_PARAM_BYTES} bytes.`
       )
     }
+
     const message = error instanceof Error ? error.message : String(error)
     throw new RemoteRuntimeClientError(
       'invalid_argument',

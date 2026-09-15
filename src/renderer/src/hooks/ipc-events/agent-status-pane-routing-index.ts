@@ -56,9 +56,13 @@ export function resetAgentStatusPaneRoutingIndexCounters(): void {
 // Why: layout roots are immutable snapshots, so leaf membership keyed on the root node stays
 // correct across commits and never has to be rewalked once seen.
 const leafIdsByRoot = new WeakMap<TerminalPaneLayoutNode, Set<string>>()
+
 const tabsByIdCache = new WeakMap<AppState['tabsByWorktree'], Map<string, IndexedAgentStatusTab>>()
+
 const unifiedLabelIndexCache = new WeakMap<object, Map<string, Map<string, string | undefined>>>()
+
 const routingIndexCache = new WeakMap<AppState['tabsByWorktree'], AgentStatusPaneRoutingIndex>()
+
 const NO_UNIFIED_TABS = {}
 
 function createUnifiedTerminalLabelIndex(
@@ -66,13 +70,16 @@ function createUnifiedTerminalLabelIndex(
 ): Map<string, string | undefined> {
   agentStatusPaneRoutingIndexCounters.unifiedLabelIndexBuilds += 1
   const labelsByTabId = new Map<string, string | undefined>()
+
   for (const entry of entries ?? []) {
     if (entry.contentType !== 'terminal' || labelsByTabId.has(entry.entityId)) {
       continue
     }
+
     const rawLabel = entry.label?.trim()
     labelsByTabId.set(entry.entityId, rawLabel && rawLabel.length > 0 ? rawLabel : undefined)
   }
+
   return labelsByTabId
 }
 
@@ -80,23 +87,29 @@ function getIndexedTabs(
   tabsByWorktree: AppState['tabsByWorktree']
 ): Map<string, IndexedAgentStatusTab> {
   const cached = tabsByIdCache.get(tabsByWorktree)
+
   if (cached) {
     return cached
   }
+
   agentStatusPaneRoutingIndexCounters.tabIndexBuilds += 1
   const tabsById = new Map<string, IndexedAgentStatusTab>()
+
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     for (const tab of tabs) {
       agentStatusPaneRoutingIndexCounters.tabVisits += 1
       // Read the id once: retained selectors assert one read per row, and it is a getter on some snapshots.
       const tabId = tab.id
+
       // First wins: the standalone resolver stops at the first worktree owning this tab id.
       if (!tabsById.has(tabId)) {
         tabsById.set(tabId, { title: tab.title, owningWorktreeId: worktreeId })
       }
     }
   }
+
   tabsByIdCache.set(tabsByWorktree, tabsById)
+
   return tabsById
 }
 
@@ -105,11 +118,14 @@ function getUnifiedLabelIndex(
 ): Map<string, Map<string, string | undefined>> {
   const cacheKey = unifiedTabsByWorktree ?? NO_UNIFIED_TABS
   const cached = unifiedLabelIndexCache.get(cacheKey)
+
   if (cached) {
     return cached
   }
+
   const labelsByWorktreeId = new Map<string, Map<string, string | undefined>>()
   unifiedLabelIndexCache.set(cacheKey, labelsByWorktreeId)
+
   return labelsByWorktreeId
 }
 
@@ -119,10 +135,12 @@ function resolveUnifiedLabel(
   tabId: string
 ): string | undefined {
   let labelsByTabId = index.unifiedLabelsByWorktreeId.get(worktreeId)
+
   if (!labelsByTabId) {
     labelsByTabId = createUnifiedTerminalLabelIndex(index.unifiedTabsByWorktree?.[worktreeId])
     index.unifiedLabelsByWorktreeId.set(worktreeId, labelsByTabId)
   }
+
   return labelsByTabId.get(tabId)
 }
 
@@ -135,6 +153,7 @@ export function createAgentStatusPaneRoutingIndex(store: AppState): AgentStatusP
   const worktreesById = getWorktreeMapFromState(store)
   const reposById = getRepoMapFromState(store)
   const cached = routingIndexCache.get(store.tabsByWorktree)
+
   if (
     cached &&
     cached.unifiedTabsByWorktree === store.unifiedTabsByWorktree &&
@@ -144,7 +163,9 @@ export function createAgentStatusPaneRoutingIndex(store: AppState): AgentStatusP
   ) {
     return cached
   }
+
   agentStatusPaneRoutingIndexCounters.indexBuilds += 1
+
   const index: AgentStatusPaneRoutingIndex = {
     tabsById: getIndexedTabs(store.tabsByWorktree),
     unifiedTabsByWorktree: store.unifiedTabsByWorktree,
@@ -154,7 +175,9 @@ export function createAgentStatusPaneRoutingIndex(store: AppState): AgentStatusP
     worktreesById,
     reposById
   }
+
   routingIndexCache.set(store.tabsByWorktree, index)
+
   return index
 }
 
@@ -163,10 +186,13 @@ export function resolveWorktreeConnectionFromRoutingIndex(
   worktreeId: string
 ): AgentStatusWorktreeConnectionResolution {
   const worktree = index.worktreesById.get(worktreeId)
+
   if (!worktree) {
     return { worktreeExists: false, repoConnectionId: null, repoConnectionResolved: false }
   }
+
   const repo = index.reposById.get(worktree.repoId)
+
   return {
     worktreeExists: true,
     repoConnectionId: repo?.connectionId ?? null,
@@ -179,6 +205,7 @@ export function resolvePaneKeyFromRoutingIndex(
   paneKey: string
 ): AgentStatusPaneResolution {
   const parsed = parsePaneKey(paneKey)
+
   if (!parsed) {
     return {
       exists: false,
@@ -191,8 +218,10 @@ export function resolvePaneKeyFromRoutingIndex(
       tabTitle: undefined
     }
   }
+
   const { tabId, leafId } = parsed
   const tab = index.tabsById.get(tabId)
+
   if (!tab) {
     return {
       exists: false,
@@ -205,15 +234,19 @@ export function resolvePaneKeyFromRoutingIndex(
       tabTitle: undefined
     }
   }
+
   const connection = resolveWorktreeConnectionFromRoutingIndex(index, tab.owningWorktreeId)
   const layout = index.layoutsByTabId?.[tabId]
+
   if (layout?.root) {
     let leafIds = index.leafIdsByRoot.get(layout.root)
+
     if (!leafIds) {
       agentStatusPaneRoutingIndexCounters.leafSetBuilds += 1
       leafIds = new Set(collectLeafIdsInOrder(layout.root))
       index.leafIdsByRoot.set(layout.root, leafIds)
     }
+
     if (!leafIds.has(leafId)) {
       return {
         exists: false,
@@ -227,8 +260,10 @@ export function resolvePaneKeyFromRoutingIndex(
       }
     }
   }
+
   const rawPaneTitle = layout?.titlesByLeafId?.[leafId]
   const paneTitle = rawPaneTitle && rawPaneTitle.length > 0 ? rawPaneTitle : undefined
+
   return {
     exists: true,
     title: paneTitle ?? tab.title,

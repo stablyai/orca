@@ -34,6 +34,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
       // Why: a live runtime handle is authoritative; pane metadata is only the restart fallback.
       const paneKey = runtime.getTerminalPaneKey(handle) ?? params.terminalPaneKey
       const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
+
       if (params.run || boundRun) {
         return checkRunMailbox({
           params,
@@ -51,12 +52,15 @@ export const ORCHESTRATION_CHECK_METHODS = [
       }
 
       const activeDispatch = db.getActiveDispatchForIdentity(handle, paneKey)
+
       // Why: reading another pane's Dispatch mail is wrong in every mode, so peek is fenced too.
       if (activeDispatch && !callerHoldsDispatchPane(activeDispatch, paneKey)) {
         throw dispatchFenced()
       }
+
       const remoteAttachment =
         !activeDispatch && paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
+
       if (
         remoteAttachment &&
         !db.isRemoteAttachmentProcessCurrent({
@@ -70,6 +74,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
           `Dispatch ${remoteAttachment.dispatch_id} is no longer attached to this worker process.`
         )
       }
+
       if (activeDispatch || remoteAttachment) {
         return checkWorkerMailbox({
           params,
@@ -83,14 +88,17 @@ export const ORCHESTRATION_CHECK_METHODS = [
           remoteAttachment
         })
       }
+
       const consumingCheck = params.peek !== true && params.all !== true && params.unread !== false
       // Why: an empty consuming check is the worker contract's "checkpoint, not a failure", so a
       // caller whose Attempt moved on has to be told rather than handed an empty direct mailbox.
       // This outranks the pane guard: a paneless loser cannot run-use anyway, it has to stop.
       const settledDispatch = consumingCheck ? db.getLatestDispatchForTerminal(handle) : undefined
+
       if (settledDispatch && isSupersededDispatch(settledDispatch)) {
         throw dispatchFenced()
       }
+
       // Why: a consuming check on a handle with no live pane and no Dispatch can never see
       // Run mail, so an empty inbox would read as "nothing yet" instead of a stale caller.
       if (!paneKey && consumingCheck) {
@@ -100,6 +108,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
           orchestrationSkillRecoveryData()
         )
       }
+
       return checkDirectMailbox({ params, runtime, db, handle, typeFilter, signal })
     }
   })

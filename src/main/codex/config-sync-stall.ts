@@ -35,9 +35,11 @@ export function getCodexConfigSyncStatus(
   // report `synced` while the mirror refused its content read — telling the
   // user their edits had been applied when nothing had run.
   const runtimeConfigObservation = observeAgentStateFile(runtimeConfigPath)
+
   if (runtimeConfigObservation.kind === 'absent') {
     return { state: 'synced', reason: null, systemConfigPath }
   }
+
   if (runtimeConfigObservation.kind === 'indeterminate') {
     // Why: the managed home is what could not be read, so say that rather than
     // borrowing a source-side reason and blaming the wrong path.
@@ -48,7 +50,9 @@ export function getCodexConfigSyncStatus(
       managedStatePath: runtimeConfigPath
     }
   }
+
   const baselineObservation = observeCodexSettingsBaseline(homes.runtimeHomePath)
+
   if (baselineObservation.kind === 'indeterminate') {
     return {
       state: 'stalled',
@@ -57,19 +61,25 @@ export function getCodexConfigSyncStatus(
       managedStatePath: getCodexSettingsBaselinePath(homes.runtimeHomePath)
     }
   }
+
   const systemConfigObservation = observeAgentStateFile(systemConfigPath)
+
   if (systemConfigObservation.kind === 'absent') {
     return { state: 'stalled', reason: 'missing-source', systemConfigPath }
   }
+
   if (systemConfigObservation.kind === 'indeterminate') {
     // Why: the mirror aborts on an unreadable source too, so report the stall
     // rather than claiming a sync that cannot happen.
     return { state: 'stalled', reason: 'unreadable-source', systemConfigPath }
   }
+
   const rawSystemConfig = systemConfigObservation.value
+
   if (rawSystemConfig.trim() === '') {
     return { state: 'stalled', reason: 'blank-source', systemConfigPath }
   }
+
   return { state: 'synced', reason: null, systemConfigPath }
 }
 
@@ -92,6 +102,7 @@ export function reportCodexConfigSyncOutcome(
   mirrorError?: unknown
 ): void {
   const previousReason = stalledHomes.get(runtimeHomePath)
+
   if (status.state === 'synced') {
     if (previousReason) {
       stalledHomes.delete(runtimeHomePath)
@@ -101,24 +112,31 @@ export function reportCodexConfigSyncOutcome(
         `[codex-config] Config sync stall cleared for ${runtimeHomePath} (was ${previousReason}).`
       )
     }
+
     if (mirrorError) {
       // Why: the mirror still failed for some reason the stall check cannot
       // name, so surface it rather than swallowing it behind a clean status.
       console.warn('[codex-config] Failed to mirror system Codex config:', mirrorError)
     }
+
     return
   }
+
   if (previousReason === status.reason) {
     return
   }
+
   stalledHomes.set(runtimeHomePath, status.reason)
+
   if (status.reason === 'managed-home-unavailable') {
     const managedStatePath = status.managedStatePath ?? join(runtimeHomePath, 'config.toml')
     console.warn(
       `[codex-config] Config sync stalled (${status.reason}): ${managedStatePath} is unusable, so ${runtimeHomePath} keeps its last synced settings. The managed state must be readable before settings can sync.`
     )
+
     return
   }
+
   console.warn(
     `[codex-config] Config sync stalled (${status.reason}): ${status.systemConfigPath} is unusable, so ${runtimeHomePath} keeps its last synced settings. Edits to the source will not apply until it is readable.`
   )

@@ -19,8 +19,10 @@ import * as mobileSessionTerminalProjection from './mobile-session-terminal-proj
 // frame whose version is not strictly newer is dropped by web clients.
 function makeWebClientFreshnessGate(): (frame: RuntimeMobileSessionTabsResult) => boolean {
   const latestByWorktree = new Map<string, { publicationEpoch: string; snapshotVersion: number }>()
+
   return (frame) => {
     const current = latestByWorktree.get(frame.worktree)
+
     if (
       current &&
       current.publicationEpoch === frame.publicationEpoch &&
@@ -28,15 +30,18 @@ function makeWebClientFreshnessGate(): (frame: RuntimeMobileSessionTabsResult) =
     ) {
       return false
     }
+
     latestByWorktree.set(frame.worktree, {
       publicationEpoch: frame.publicationEpoch,
       snapshotVersion: frame.snapshotVersion
     })
+
     return true
   }
 }
 
 const WT = 'repo-1::/tmp/worktree-a'
+
 const WT_B = 'repo-1::/tmp/worktree-b'
 
 const storeBase = {
@@ -93,6 +98,7 @@ function makeTerminalTab(id: string, ptyId: string | null) {
 
 function createRuntime(initialSession: WorkspaceSessionState) {
   let session = initialSession
+
   const runtime = new OrcaRuntimeService({
     ...storeBase,
     getWorkspaceSession: () => session,
@@ -100,11 +106,14 @@ function createRuntime(initialSession: WorkspaceSessionState) {
       session = next
     }
   })
+
   const events: RuntimeMobileSessionTabsResult[] = []
   const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
+
   const setSession = (next: WorkspaceSessionState): void => {
     session = next
   }
+
   const sync = (
     mobileSessionTabs?: RuntimeMobileSessionTabsSnapshot[],
     graph: { tabs?: unknown[]; leaves?: unknown[] } = {}
@@ -115,6 +124,7 @@ function createRuntime(initialSession: WorkspaceSessionState) {
       mobileSessionTabs
     })
   }
+
   return { runtime, events, sync, setSession, unsubscribe }
 }
 
@@ -126,6 +136,7 @@ function makeRendererSnapshot(args: {
   ptyId?: string
 }): RuntimeMobileSessionTabsSnapshot {
   const worktree = args.worktree ?? WT
+
   return {
     worktree,
     publicationEpoch: args.epoch ?? 'renderer:test-epoch',
@@ -215,6 +226,7 @@ describe('graph-sync mobile snapshot gating', () => {
         tabsByWorktree: { [WT]: [makeTerminalTab('plain-tab', 'repo-1::wt@@abc')] }
       })
     )
+
     const buildSpy = vi.spyOn(
       mobileSessionTerminalProjection,
       'buildHeadlessMobileSessionTerminalTabs'
@@ -230,9 +242,11 @@ describe('graph-sync mobile snapshot gating', () => {
     // (same epoch + version = the renderer's unchanged-content resend): zero
     // emits, even though object identity never survives IPC.
     events.length = 0
+
     for (let i = 0; i < 5; i++) {
       sync([structuredClone(snapshot)])
     }
+
     vi.advanceTimersByTime(500)
     expect(events).toHaveLength(0)
     expect(buildSpy).not.toHaveBeenCalled()
@@ -271,6 +285,7 @@ describe('graph-sync mobile snapshot gating', () => {
         tabsByWorktree: { [WT]: [makeTerminalTab('plain-tab', 'repo-1::wt@@abc')] }
       })
     )
+
     const internals = runtime as unknown as RuntimeInternals
     internals.offscreenBrowserBackend = { closeTab: vi.fn() }
     internals.agentBrowserBridge = {
@@ -360,10 +375,12 @@ describe('graph-sync mobile snapshot gating', () => {
     // Re-schedule every 20ms: the 50ms trailing edge never settles, so the
     // 250ms cap must force the emit (the schedule at t>=250 fires inline).
     let version = 2
+
     for (let elapsed = 0; elapsed <= 300; elapsed += 20) {
       sync([makeRendererSnapshot({ version: version++, title: `spin-${version}` })])
       vi.advanceTimersByTime(20)
     }
+
     expect(events.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -373,6 +390,7 @@ describe('graph-sync mobile snapshot gating', () => {
     // Renderer restore: the saved layout ptyId is in the snapshot, but the
     // graph leaf has not re-bound yet (null ptyId) — client sees pending-handle.
     const snapshot = makeRendererSnapshot({ version: 1, ptyId: 'pty-restored' })
+
     const nullLeaf = {
       tabId: 'tab-1',
       worktreeId: WT,
@@ -380,6 +398,7 @@ describe('graph-sync mobile snapshot gating', () => {
       paneRuntimeId: 1,
       ptyId: null
     }
+
     sync([structuredClone(snapshot)], { leaves: [nullLeaf] })
     vi.advanceTimersByTime(300)
     expect(events).toHaveLength(1)
@@ -421,9 +440,11 @@ describe('graph-sync mobile snapshot gating', () => {
     const internals = runtime as unknown as RuntimeInternals & {
       touchMobileSessionSnapshotsForPty: (ptyId: string) => void
     }
+
     for (let i = 0; i < 5; i++) {
       internals.touchMobileSessionSnapshotsForPty('pty-live')
     }
+
     vi.advanceTimersByTime(300)
     expect(internals.mobileSessionTabsByWorktree.get(WT)?.snapshotVersion).toBe(6)
     events.length = 0
@@ -441,9 +462,11 @@ describe('graph-sync mobile snapshot gating', () => {
     // and never resurrect the pre-rename content.
     events.length = 0
     const emittedVersion = internals.mobileSessionTabsByWorktree.get(WT)?.snapshotVersion
+
     for (let i = 0; i < 3; i++) {
       sync([makeRendererSnapshot({ version: 2, ptyId: 'pty-live', title: 'Renamed tab' })])
     }
+
     vi.advanceTimersByTime(500)
     expect(events).toHaveLength(0)
     expect(internals.mobileSessionTabsByWorktree.get(WT)?.snapshotVersion).toBe(emittedVersion)
@@ -456,6 +479,7 @@ describe('graph-sync mobile snapshot gating', () => {
         tabsByWorktree: { [WT]: [makeTerminalTab('serve-tab', 'serve-pty-1')] }
       })
     )
+
     sync([])
     vi.advanceTimersByTime(300)
     expect(events).toHaveLength(1)
@@ -466,9 +490,11 @@ describe('graph-sync mobile snapshot gating', () => {
     // but must retain the existing snapshot object/epoch/version, so the
     // identity-based no-op gating emits nothing.
     events.length = 0
+
     for (let i = 0; i < 5; i++) {
       sync([])
     }
+
     vi.advanceTimersByTime(500)
     expect(events).toHaveLength(0)
     expect(internals.mobileSessionTabsByWorktree.get(WT)).toBe(stored)
@@ -480,6 +506,7 @@ describe('graph-sync mobile snapshot gating', () => {
         tabsByWorktree: { [WT]: [makeTerminalTab('plain-tab', 'repo-1::wt@@abc')] }
       })
     )
+
     const internals = runtime as unknown as RuntimeInternals
     internals.offscreenBrowserBackend = { closeTab: vi.fn() }
     internals.agentBrowserBridge = {
@@ -496,9 +523,11 @@ describe('graph-sync mobile snapshot gating', () => {
     const stored = internals.mobileSessionTabsByWorktree.get(WT)
 
     events.length = 0
+
     for (let i = 0; i < 5; i++) {
       sync([])
     }
+
     vi.advanceTimersByTime(500)
     expect(events).toHaveLength(0)
     expect(internals.mobileSessionTabsByWorktree.get(WT)).toBe(stored)
@@ -603,6 +632,7 @@ describe('graph-sync mobile snapshot gating', () => {
         tabsByWorktree: { [WT]: [makeTerminalTab('serve-tab', 'serve-pty-1')] }
       })
     )
+
     const webClientAccepts = makeWebClientFreshnessGate()
 
     // Phone accepts the renderer+serve merged frame.
@@ -631,9 +661,11 @@ describe('graph-sync mobile snapshot gating', () => {
     // Recomputing the preservation on further omitted syncs is a genuine
     // no-op: the preservedIsNoOp identity gate keeps the entry, zero fanout.
     events.length = 0
+
     for (let i = 0; i < 3; i++) {
       sync([])
     }
+
     vi.advanceTimersByTime(500)
     expect(events).toHaveLength(0)
   })
@@ -682,23 +714,28 @@ describe('graph-sync mobile snapshot gating', () => {
 
     // Further byte-identical resends of the accepted revision stay suppressed.
     events.length = 0
+
     for (let i = 0; i < 3; i++) {
       sync([makeRendererSnapshot({ version: 1 })])
     }
+
     vi.advanceTimersByTime(500)
     expect(events).toHaveLength(0)
   })
 
   it('drops a de-persisted SSH tab when the renderer resends the unchanged accepted revision', () => {
     const sshPtyId = 'ssh:conn-1@@pty-7'
+
     const { runtime, sync, setSession } = createRuntime(
       makeSession({
         tabsByWorktree: { [WT]: [makeTerminalTab('ssh-tab', sshPtyId)] }
       })
     )
+
     const internals = runtime as unknown as RuntimeInternals & {
       hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (worktreeId?: string) => Set<string>
     }
+
     internals.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(WT)
 
     // Renderer attaches: the SSH tab merges into the accepted renderer revision.
@@ -730,6 +767,7 @@ describe('graph-sync mobile snapshot gating', () => {
         tabsByWorktree: { [WT]: [makeTerminalTab('serve-tab', 'serve-pty-1')] }
       })
     )
+
     const internals = runtime as unknown as RuntimeInternals
 
     // Headless-built snapshot (serve hydrate, no renderer publication yet).
@@ -754,14 +792,17 @@ describe('graph-sync mobile snapshot gating', () => {
 
   it('preserves a runtime-owned SSH terminal across successive renderer revisions', () => {
     const sshPtyId = 'ssh:conn-1@@pty-7'
+
     const { runtime, sync, setSession } = createRuntime(
       makeSession({
         tabsByWorktree: { [WT]: [makeTerminalTab('ssh-tab', sshPtyId)] }
       })
     )
+
     const internals = runtime as unknown as RuntimeInternals & {
       hydrateHeadlessMobileSessionTabsFromWorkspaceSession: (worktreeId?: string) => Set<string>
     }
+
     // Full headless hydrate (SSH tabs never come from the serve-only path)
     // builds the SSH tab into a headless-built snapshot.
     internals.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(WT)
@@ -808,7 +849,9 @@ describe('graph-sync mobile snapshot gating', () => {
         tabsByWorktree: { [WT]: [makeTerminalTab('serve-tab', 'serve-pty-1')] }
       })
     )
+
     const internals = runtime as unknown as RuntimeInternals
+
     const splitLayout = {
       type: 'split' as const,
       direction: 'horizontal' as const,
@@ -816,6 +859,7 @@ describe('graph-sync mobile snapshot gating', () => {
       second: { type: 'leaf' as const, groupId: 'group-2' },
       ratio: 0.4
     }
+
     const makeSplitRendererSnapshot = (): RuntimeMobileSessionTabsSnapshot => ({
       worktree: WT,
       publicationEpoch: 'renderer:test-epoch',

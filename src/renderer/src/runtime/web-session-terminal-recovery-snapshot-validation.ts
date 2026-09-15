@@ -7,7 +7,9 @@ import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 // pins only the fields recovery and the mirror's coordinate logic read. Labels such as tab kinds,
 // agent names, and status enums stay open; additive fields at every depth pass through untouched.
 const identity = z.string().regex(/\S/)
+
 const nullableString = z.string().nullable()
+
 const version = z.number().int().nonnegative()
 
 const paneLayout: z.ZodType<TerminalPaneLayoutNode> = z.lazy(() =>
@@ -16,6 +18,7 @@ const paneLayout: z.ZodType<TerminalPaneLayoutNode> = z.lazy(() =>
     z.object({ type: z.literal('split'), first: paneLayout, second: paneLayout })
   ])
 ) as z.ZodType<TerminalPaneLayoutNode>
+
 const groupLayout: z.ZodType<TabGroupLayoutNode> = z.lazy(() =>
   z.union([
     z.object({ type: z.literal('leaf'), groupId: identity }),
@@ -24,6 +27,7 @@ const groupLayout: z.ZodType<TabGroupLayoutNode> = z.lazy(() =>
 ) as z.ZodType<TabGroupLayoutNode>
 
 const tabRowFields = { id: identity, title: z.string(), isActive: z.boolean() }
+
 const terminalRow = z.object({
   ...tabRowFields,
   type: z.literal('terminal'),
@@ -40,10 +44,12 @@ const terminalRow = z.object({
     })
     .optional()
 })
+
 const terminalRows = z.union([
   terminalRow.extend({ status: z.literal('pending-handle'), terminal: z.null() }),
   terminalRow.extend({ status: z.literal('ready'), terminal: identity })
 ])
+
 // Non-terminal rows only need the identity the mirror keys on; their kind may postdate this client.
 const otherRow = z.object({
   ...tabRowFields,

@@ -23,11 +23,14 @@ export async function getRepoSlugCached(
   const cacheKey = sourceContext
     ? `${getTaskSourceCacheScope(sourceContext)}\0${repo.path}`
     : `local:${repo.id}\0${repo.path}`
+
   if (cache.has(cacheKey)) {
     return cache.get(cacheKey) ?? null
   }
+
   try {
     const target = getGitHubSourceRuntimeTarget(sourceContext)
+
     const slug =
       target.kind === 'environment'
         ? await callRuntimeRpc<RepoSlug | null>(
@@ -37,9 +40,11 @@ export async function getRepoSlugCached(
             { timeoutMs: 30_000 }
           )
         : await window.api.gh.repoSlug({ repoPath: repo.path, repoId: repo.id })
+
     if (slug) {
       cache.set(cacheKey, slug)
     }
+
     return slug
   } catch {
     return null
@@ -53,9 +58,11 @@ export async function findMatchingRepoForSlug(
 ): Promise<RepoSlugTarget | null> {
   for (const target of targets) {
     const candidate = await getRepoSlugCached(target.repo, target.sourceContext, cache)
+
     if (candidate && sameSlug(candidate, slug)) {
       return target
     }
   }
+
   return null
 }

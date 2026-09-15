@@ -27,6 +27,7 @@ describe('pr comment groups', () => {
       comment({ id: 3, threadId: 'thread-a' }),
       comment({ id: 4 })
     ]
+
     const groups = groupPRComments(comments)
 
     expect(groups.map(getPRCommentGroupId)).toEqual(['comment:1', 'thread:thread-a', 'comment:4'])

@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const terminalCss = fs.readFileSync(new URL('./terminal.css', import.meta.url), 'utf8')
+
 const mainCss = fs.readFileSync(new URL('./main.css', import.meta.url), 'utf8')
 
 describe('terminal scrollbar styling', () => {

@@ -4,6 +4,7 @@ import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 describe('runtime browser page registry', () => {
   it('publishes an immutable client placement with its logical workspace identity', () => {
     const pages = new RuntimeBrowserPageRegistry()
+
     const placement = {
       kind: 'client' as const,
       browserHostClientId: 'host-a',
@@ -21,6 +22,7 @@ describe('runtime browser page registry', () => {
       loading: false,
       active: true
     })
+
     placement.pageHostGeneration = 9
 
     expect(page).toMatchObject({
@@ -126,10 +128,12 @@ describe('runtime browser page registry', () => {
 
   it('keeps one global active client page without changing scoped workspace actives', () => {
     const pages = new RuntimeBrowserPageRegistry()
+
     const worktree = pages.publishClientPage({
       ...clientPage('page-worktree', 'worktree-a'),
       active: true
     })
+
     pages.publishClientPage({ ...clientPage('page-folder', 'folder:folder-a'), active: true })
 
     expect(pages.listPages()).toMatchObject([

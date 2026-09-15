@@ -8,6 +8,7 @@ import {
 } from '../../worktree-sidebar-reveal-scroll-settle'
 
 export const USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 500
+
 export const EXPANDING_CARD_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS = 300
 
 export function shouldAdjustWorktreeSidebarMeasuredRowScroll(args: {
@@ -35,29 +36,36 @@ export function useWorktreeSidebarScrollSuppression(
     suppressMeasurementAdjustmentUntilRef.current =
       window.performance.now() + USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS
   }, [])
+
   const markDirectScrollInput = useCallback(() => {
     const suppressUntil = window.performance.now() + USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS
     suppressMeasurementAdjustmentUntilRef.current = suppressUntil
     directScrollInputUntilRef.current = suppressUntil
   }, [])
+
   const hasDirectScrollInput = useCallback(
     () => window.performance.now() < directScrollInputUntilRef.current,
     []
   )
+
   const markRevealScroll = useCallback((targetTop: number) => {
     pendingRevealScrollRef.current = createPendingRevealScroll(targetTop, window.performance.now())
   }, [])
+
   const isRevealScrollSettlingNow = useCallback(() => {
     const settling = isRevealScrollSettling({
       now: window.performance.now(),
       pending: pendingRevealScrollRef.current,
       scrollTop: scrollRef.current?.scrollTop ?? 0
     })
+
     if (!settling) {
       pendingRevealScrollRef.current = null
     }
+
     return settling
   }, [scrollRef])
+
   // Why: programmatic scrolls keep measurement correction quiet, but only direct input blocks anchor-restore retries.
   // A reveal's smooth scroll is the exception: restoring the anchor mid-animation cancels it a few pixels in.
   const shouldSkipScrollAnchorRestore = useCallback(
@@ -72,7 +80,9 @@ export function useWorktreeSidebarScrollSuppression(
       suppressMeasurementAdjustmentUntilRef.current =
         window.performance.now() + EXPANDING_CARD_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS
     }
+
     window.addEventListener(SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT, handleSuppress)
+
     return () => {
       window.removeEventListener(SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT, handleSuppress)
     }

@@ -177,6 +177,7 @@ describe('WorktreeCardSshHostControl', () => {
       reconnectAttempt: 0,
       remotePlatform: 'linux'
     }
+
     const connect = vi.fn().mockResolvedValue(connectedState)
     installSshApi(connect)
     const user = userEvent.setup()
@@ -216,14 +217,17 @@ describe('WorktreeCardSshHostControl', () => {
 
   it('reports connect failures and resyncs target metadata so a ghost host converges', async () => {
     const connect = vi.fn().mockRejectedValue(new Error('SSH target "ssh-target-1" not found'))
+
     const listTargets = vi
       .fn()
       .mockResolvedValue([
         { id: 'ssh-live', label: 'devbox', host: 'devbox', port: 22, username: 'me' }
       ])
+
     const listRemovedTargetLabels = vi
       .fn()
       .mockResolvedValue({ 'ssh-target-1': 'devbox (removed)' })
+
     installSshApi(connect, { listTargets, listRemovedTargetLabels })
     const user = userEvent.setup()
     renderControl()
@@ -345,6 +349,7 @@ describe('WorktreeCardSshHostControl', () => {
   // Why: the title row hosts sibling h-4 pills; a taller state would shift every card on the host.
   it('carries one height class across every actionable state', () => {
     const heights = new Set<string>()
+
     for (const status of [
       'disconnected',
       'error',

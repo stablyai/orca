@@ -21,14 +21,17 @@ vi.mock('../store', () => ({
     getState: () => mocks.state
   })
 }))
+
 vi.mock('./tab-bar/TabBar', () => ({
   default: (props: Record<string, unknown>) => {
     mocks.tabBarProps.push(props)
+
     return null
   }
 }))
 
 const WORKTREE_ID = 'repo-1::/repo/worktree'
+
 const ROW: ClientHostedBrowserRow = {
   browserPageId: 'page-1',
   title: 'Client page',
@@ -36,6 +39,7 @@ const ROW: ClientHostedBrowserRow = {
 } as ClientHostedBrowserRow
 
 let titlebarTarget: HTMLElement
+
 let container: HTMLElement
 
 function renderTitlebarTabs(): void {
@@ -78,6 +82,7 @@ function renderTitlebarTabs(): void {
     worktreeClientHostedBrowserRows: getClientHostedBrowserRows(WORKTREE_ID),
     worktreeFiles: []
   } as unknown as TerminalController
+
   const root = createRoot(container)
   act(() => root.render(<TerminalTitlebarTabs controller={controller} />))
   act(() => root.unmount())

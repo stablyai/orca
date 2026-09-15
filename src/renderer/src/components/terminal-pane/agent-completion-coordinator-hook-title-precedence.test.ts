@@ -14,6 +14,7 @@ describe('agent completion coordinator', () => {
 
   it('suppresses same-turn title completion after a hook completion already notified', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -52,6 +53,7 @@ describe('agent completion coordinator', () => {
 
   it('ignores stale working title state after a hook completion already notified', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -75,6 +77,7 @@ describe('agent completion coordinator', () => {
 
   it('suppresses delayed title completion after process inspection changes sessions', async () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -101,6 +104,7 @@ describe('agent completion coordinator', () => {
   it('suppresses late process-exit backstop after process inspection follows hook completion', async () => {
     let foregroundProcess: string | null = 'codex'
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -129,6 +133,7 @@ describe('agent completion coordinator', () => {
   it('suppresses process-exit in another coordinator after a hook completion notified', async () => {
     const paneKey = 'tab-1:leaf-1'
     const dispatchCompletion = vi.fn()
+
     const hookCoordinator = createAgentCompletionCoordinator({
       paneKey,
       getPtyId: () => 'pty-1',
@@ -154,6 +159,7 @@ describe('agent completion coordinator', () => {
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
 
     let result = processResult('codex')
+
     const processCoordinator = createAgentCompletionCoordinator({
       paneKey,
       getPtyId: () => 'pty-1',
@@ -190,6 +196,7 @@ describe('agent completion coordinator', () => {
   it('keeps duplicate done-only hooks inside replay guard suppressed after process inspection', async () => {
     const inspection = createDeferred<RuntimeTerminalProcessInspection>()
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -220,6 +227,7 @@ describe('agent completion coordinator', () => {
 
   it('can require a fresh working signal after completion state reset', () => {
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -261,6 +269,7 @@ describe('agent completion coordinator', () => {
   it('ignores process inspections that resolve after completion state reset', async () => {
     const inspection = createDeferred<RuntimeTerminalProcessInspection>()
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',
@@ -284,11 +293,14 @@ describe('agent completion coordinator', () => {
   it('starts a fresh pending-title inspection after stale inspection resolves', async () => {
     const firstInspection = createDeferred<RuntimeTerminalProcessInspection>()
     const secondInspection = createDeferred<RuntimeTerminalProcessInspection>()
+
     const inspectProcess = vi
       .fn()
       .mockReturnValueOnce(firstInspection.promise)
       .mockReturnValueOnce(secondInspection.promise)
+
     const dispatchCompletion = vi.fn()
+
     const coordinator = createAgentCompletionCoordinator({
       paneKey: 'tab-1:leaf-1',
       getPtyId: () => 'pty-1',

@@ -11,6 +11,7 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endPattern, start + startPattern.length)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 
@@ -40,6 +41,7 @@ describe('GitHub Enterprise slug routing boundaries', () => {
     const source = componentSource(
       'right-sidebar/checks-panel/use-checks-panel-comment-mutations.tsx'
     )
+
     const conversationSection = sourceBetween(
       source,
       'const handleEditComment = useCallback',

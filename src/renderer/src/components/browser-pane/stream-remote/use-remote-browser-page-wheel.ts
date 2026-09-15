@@ -55,12 +55,15 @@ export function useRemoteBrowserPageWheel({
     if (remoteWheelFrameRef.current !== null || remoteWheelInFlightRef.current) {
       return
     }
+
     remoteWheelFrameRef.current = window.requestAnimationFrame(() => {
       remoteWheelFrameRef.current = null
       const pending = pendingRemoteWheelRef.current
+
       if (!pending || remoteWheelInFlightRef.current) {
         return
       }
+
       pendingRemoteWheelRef.current = null
       remoteWheelInFlightRef.current = true
       const { target, pageId, operationToken, point, dx, dy } = pending
@@ -69,6 +72,7 @@ export function useRemoteBrowserPageWheel({
         if (!isCurrentRemoteOperationToken(operationToken)) {
           return
         }
+
         try {
           await callRuntimeRpc(
             target,
@@ -91,8 +95,10 @@ export function useRemoteBrowserPageWheel({
           if (isCurrentRemoteOperationToken(operationToken)) {
             if (isRemoteBrowserPageMissingError(error)) {
               closeMissingRemotePage(pageId)
+
               return
             }
+
             setPaneNotice({
               kind: 'consequence',
               text: error instanceof Error ? error.message : 'Remote scroll failed.'
@@ -101,6 +107,7 @@ export function useRemoteBrowserPageWheel({
         }
       }).finally(() => {
         remoteWheelInFlightRef.current = false
+
         if (pendingRemoteWheelRef.current) {
           schedulePendingRemoteWheel()
         }
@@ -122,33 +129,43 @@ export function useRemoteBrowserPageWheel({
     (event: WheelEvent): void => {
       if (busy) {
         event.preventDefault()
+
         return
       }
+
       const target = runtimeTarget()
       const pageId = lifecycle.tokens.remotePage
       const operationToken = pageId ? createRemoteOperationToken(pageId) : null
       const point = getRemoteImagePoint(event)
+
       if (!target || !pageId || !operationToken || !point) {
         return
       }
+
       event.preventDefault()
       setPaneNotice(null)
+
       const deltaMultiplier =
         event.deltaMode === WHEEL_DELTA_LINE
           ? 16
           : event.deltaMode === WHEEL_DELTA_PAGE
             ? (remoteViewportRef.current?.clientHeight ?? 800)
             : 1
+
       const dx = Math.round(event.deltaX * deltaMultiplier)
       const dy = Math.round(event.deltaY * deltaMultiplier)
+
       if (dx === 0 && dy === 0) {
         return
       }
+
       const current = pendingRemoteWheelRef.current
+
       const sameTarget =
         current?.target.environmentId === target.environmentId &&
         current.pageId === pageId &&
         current.operationToken.generation === operationToken.generation
+
       pendingRemoteWheelRef.current = sameTarget
         ? {
             ...current,
@@ -181,11 +198,14 @@ export function useRemoteBrowserPageWheel({
 
   useEffect(() => {
     const image = imageRef.current
+
     if (!image || !frameUrl) {
       return
     }
+
     // Why: React binds wheel listeners passively in Chromium, so bind natively non-passive to preventDefault scroll.
     image.addEventListener('wheel', handleRemoteScreenshotWheel, { passive: false })
+
     return () => image.removeEventListener('wheel', handleRemoteScreenshotWheel)
   }, [frameUrl, handleRemoteScreenshotWheel, imageRef])
 }

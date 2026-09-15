@@ -36,11 +36,14 @@ import type { AutomationHostSchedulerTransport } from './automation-host-schedul
 import type { ScopedAutomationList } from './automation-scoped-list-client'
 
 const RUNTIME: StableAutomationAuthorityRef = { kind: 'runtime', environmentId: 'env-1' }
+
 const RUNTIME_ORPHAN: StableAutomationCatalogRef = {
   authority: RUNTIME,
   selector: { kind: 'orphan' }
 }
+
 const RUNTIME_ORPHAN_KEY = hostStableKey(RUNTIME_ORPHAN)
+
 const RUNTIME_AUTHORITY_KEY = automationAuthorityCatalogKey(RUNTIME)
 
 const EMPTY_SSH: AutomationCatalogSshMirrorInput = {
@@ -81,9 +84,11 @@ function unverifiedAutomation(id: string): Automation {
 /** Goes through the real validator so an omitted `orphanCount` is omitted the way a host omits it. */
 function scopedAnswer(raw: Record<string, unknown>): ScopedAutomationList {
   const validation = validateAutomationListResponse(raw, { kind: 'self' })
+
   if (!validation.ok) {
     throw new Error(validation.error.message)
   }
+
   return { ...validation.result, invalidRows: validation.invalidRows }
 }
 
@@ -92,6 +97,7 @@ function createController(transport: Partial<AutomationHostSchedulerTransport>) 
     catalogGeneration: () => 0,
     connectionGeneration: () => 0
   })
+
   const controller = createAutomationHostQueryController({
     cache,
     // A runtime whose repos this client has not mirrored: every project lookup misses.
@@ -103,6 +109,7 @@ function createController(transport: Partial<AutomationHostSchedulerTransport>) 
     schedule: (flush) => flush(),
     transport
   })
+
   return { cache, controller }
 }
 
@@ -116,6 +123,7 @@ describe('an authority that reports no orphan count', () => {
       { automations: [{ id: 'a1' }], items: [{ automationId: 'a1', selector: { kind: 'self' } }] },
       { kind: 'self' }
     )
+
     expect(
       validation.ok && validation.result.orphanCount,
       'an omitted orphanCount was committed as an authoritative zero'
@@ -160,9 +168,11 @@ describe('an authority that reports no orphan count', () => {
 describe('an old runtime answering with one unscoped list', () => {
   it('bootstraps the orphan entry from projectUnverified rows it never requested', async () => {
     const listScoped = vi.fn(() => Promise.resolve(scopedAnswer({ automations: [], items: [] })))
+
     const listLegacy = vi.fn(() =>
       Promise.resolve([unverifiedAutomation('a1'), unverifiedAutomation('a2')])
     )
+
     const { cache, controller } = createController({ listScoped, listLegacy })
 
     // The catalog cannot contain an orphan entry yet: nothing has reported one.
@@ -206,6 +216,7 @@ describe('an old runtime answering with one unscoped list', () => {
     const catalog = catalogWith(controller.authorityOrphanCount(RUNTIME), 'legacy-unscoped', [
       RUNTIME_ORPHAN_KEY
     ])
+
     const resolution = resolveAutomationHostFilter({ filter, catalog })
     expect(
       resolution.status,

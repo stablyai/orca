@@ -14,6 +14,7 @@ type AttachmentInputLeaseGateArgs = {
 // Poll cadence + ceiling for riding out a terminal resubscribe (WS reconnect or
 // return-to-terminal) during which the input lease is briefly not ready.
 const LEASE_READY_POLL_MS = 100
+
 const LEASE_READY_TIMEOUT_MS = 3000
 
 /** Gates an image attachment's terminal.send on a ready input lease. Flushes any
@@ -33,6 +34,7 @@ export function useMobileAttachmentInputLeaseGate({
   return useCallback(
     async (targetHandle: string): Promise<boolean> => {
       const flushedPendingInput = await flushPendingLiveInputBeforeExternalSend(targetHandle)
+
       // Why: image picking/upload and IME flushing can outlive the original tab.
       if (
         !flushedPendingInput ||
@@ -42,10 +44,13 @@ export function useMobileAttachmentInputLeaseGate({
       ) {
         return false
       }
+
       const deadline = Date.now() + LEASE_READY_TIMEOUT_MS
+
       while (!nativeChatInputLeaseReadyRef.current && Date.now() < deadline) {
         await new Promise((resolve) => setTimeout(resolve, LEASE_READY_POLL_MS))
       }
+
       // Why: the wait can outlive the target too — re-check so a tab/host switch
       // or disconnect mid-wait doesn't send into the wrong (or dead) terminal.
       // A moved-away target drops silently like the pre-wait guard; only a lease
@@ -57,10 +62,13 @@ export function useMobileAttachmentInputLeaseGate({
       ) {
         return false
       }
+
       if (nativeChatInputLeaseReadyRef.current) {
         return true
       }
+
       showToast('Attach failed (reconnecting)', 1500)
+
       return false
     },
     [

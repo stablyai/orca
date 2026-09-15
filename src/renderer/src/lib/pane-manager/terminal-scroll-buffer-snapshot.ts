@@ -22,9 +22,11 @@ export function readTerminalScrollBufferSnapshot(
   const buffer = terminal.buffer?.active
   const viewportY = buffer?.viewportY
   const baseY = buffer?.baseY
+
   if (typeof viewportY !== 'number' || typeof baseY !== 'number') {
     return null
   }
+
   return {
     bufferType: buffer?.type === 'alternate' ? 'alternate' : 'normal',
     viewportY,
@@ -43,11 +45,13 @@ export function clampTerminalViewportY(viewportY: number, baseY: number): number
 export function safeTerminalScrollCall(scroll: () => void): boolean {
   try {
     scroll()
+
     return true
   } catch (err) {
     if (err instanceof TypeError && /dimensions/.test(err.message)) {
       return false
     }
+
     throw err
   }
 }

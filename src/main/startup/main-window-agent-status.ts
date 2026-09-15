@@ -49,11 +49,13 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       if (state.mainWindow?.isDestroyed()) {
         return
       }
+
       // Why: the renderer still derives structured rows from its own feed subscription; forwarding
       // these too would give one pane key two writers until that bridge is retired.
       if (structuredHost) {
         return
       }
+
       if (providerSessionOnly) {
         // Why: session_start just refreshes durable resume identity while Pi is idle; forward it without titles, telemetry, or status UI.
         state.mainWindow?.webContents.send('agentStatus:set', {
@@ -70,14 +72,18 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
           ...(observation ? { observation } : {}),
           providerSessionOnly: true
         })
+
         return
       }
+
       if (!restoredUnconfirmed) {
         options.maybeAutoRenameBranchOnFirstWork({ paneKey, tabId, worktreeId, payload, isReplay })
       }
+
       const runtime = state.runtime
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
+
       const suppressSyntheticCodexAutoApprovalTitle =
         payload.agentType === 'codex' &&
         (payload.state === 'waiting' || payload.state === 'blocked')
@@ -87,6 +93,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
               launchConfig: runtime?.getAgentStatusLaunchConfigForPaneKey(paneKey, { launchToken })
             })
           : false
+
       const statusEvent = {
         ...payload,
         paneKey,
@@ -104,13 +111,17 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(observation ? { observation } : {}),
         ...(orchestration ? { orchestration } : {})
       }
+
       state.mainWindow?.webContents.send('agentStatus:set', statusEvent)
+
       if (!suppressSyntheticCodexAutoApprovalTitle || isAskUserQuestionTool(payload.toolName)) {
         getDashboardPopoutWindow()?.webContents.send('agentStatus:set', statusEvent)
       }
+
       options.onRecordAgentState(payload.agentType ?? 'unknown', payload.state)
       // Why: native OSC titles miss some idle/permission frames, so inject hook-derived ones to keep the renderer title tracker in sync.
       const profile = getSyntheticAgentTitleProfile(payload.agentType)
+
       if (
         profile &&
         shouldDriveSyntheticAgentTitleFromHook(payload.agentType, payload.state) &&
@@ -124,6 +135,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
     if (state.mainWindow?.isDestroyed()) {
       return
     }
+
     state.mainWindow?.webContents.send('agentStatus:clear', clear)
     getDashboardPopoutWindow()?.webContents.send('agentStatus:clear', clear)
   })
@@ -131,6 +143,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
     if (state.mainWindow?.isDestroyed()) {
       return
     }
+
     if (event.type === 'set') {
       state.mainWindow?.webContents.send('agentStatus:migrationUnsupported', event.entry)
     } else {

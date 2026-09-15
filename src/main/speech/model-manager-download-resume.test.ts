@@ -58,39 +58,48 @@ function scriptRequest(factory: ScriptedResponseFactory): {
 } {
   const sentHeaders: Record<string, string> = {}
   const listeners = new Map<string, Set<(...args: unknown[]) => void>>()
+
   const addListener = (event: string, cb: (...args: unknown[]) => void): void => {
     const set = listeners.get(event) ?? new Set()
     set.add(cb)
     listeners.set(event, set)
   }
+
   const abortMock = vi.fn(() => request)
+
   const request = {
     setHeader: vi.fn((name: string, value: string) => {
       sentHeaders[name.toLowerCase()] = value
     }),
     on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
       addListener(event, cb)
+
       return request
     }),
     off: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
       listeners.get(event)?.delete(cb)
+
       return request
     }),
     abort: abortMock,
     end: vi.fn(() => {
       queueMicrotask(() => {
         const spec = factory(sentHeaders)
+
         const response = Object.assign(new Readable({ read() {} }), {
           statusCode: spec.statusCode,
           headers: spec.headers ?? {}
         })
+
         for (const cb of listeners.get('response') ?? []) {
           cb(response)
         }
+
         setTimeout(() => {
           for (const chunk of spec.chunks ?? []) {
             response.push(chunk)
           }
+
           // Why: fail on a later tick so pushed chunks flush to the file
           // stream first, mirroring a transfer that dies mid-body.
           setTimeout(() => {
@@ -102,10 +111,13 @@ function scriptRequest(factory: ScriptedResponseFactory): {
           }, 20)
         }, 20)
       })
+
       return request
     })
   }
+
   netRequestMock.mockImplementationOnce(() => request)
+
   return { sentHeaders, abortMock }
 }
 
@@ -123,6 +135,7 @@ describe('ModelManager download resume', () => {
 
   it('resumes an interrupted download with a Range request and assembles the full file', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       scriptRequest(() => ({
         statusCode: 200,
@@ -130,8 +143,10 @@ describe('ModelManager download resume', () => {
         chunks: [PAYLOAD.subarray(0, 10)],
         failWith: 'net::ERR_CONTENT_LENGTH_MISMATCH'
       }))
+
       const second = scriptRequest((sentHeaders) => {
         expect(sentHeaders.range).toBe('bytes=10-')
+
         return {
           statusCode: 206,
           headers: {
@@ -141,6 +156,7 @@ describe('ModelManager download resume', () => {
           chunks: [PAYLOAD.subarray(10)]
         }
       })
+
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
       const filePath = join(dir, 'model.bin')
 
@@ -163,6 +179,7 @@ describe('ModelManager download resume', () => {
 
   it('uses a complete file after a late transport failure without requesting past EOF', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       scriptRequest(() => ({
         statusCode: 200,
@@ -191,9 +208,11 @@ describe('ModelManager download resume', () => {
 
   it('requests the remaining bytes when a clean range response ends before the file total', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       const first = scriptRequest((sentHeaders) => {
         expect(sentHeaders.range).toBe('bytes=10-')
+
         return {
           statusCode: 206,
           headers: {
@@ -203,8 +222,10 @@ describe('ModelManager download resume', () => {
           chunks: [PAYLOAD.subarray(10, 15)]
         }
       })
+
       const second = scriptRequest((sentHeaders) => {
         expect(sentHeaders.range).toBe('bytes=15-')
+
         return {
           statusCode: 206,
           headers: {
@@ -214,6 +235,7 @@ describe('ModelManager download resume', () => {
           chunks: [PAYLOAD.subarray(15)]
         }
       })
+
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
       const filePath = join(dir, 'model.bin')
       writeFileSync(filePath, PAYLOAD.subarray(0, 10))
@@ -238,10 +260,12 @@ describe('ModelManager download resume', () => {
 
   it('continues through more than eight advancing range segments', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       for (let offset = 1; offset <= 9; offset += 1) {
         scriptRequest((sentHeaders) => {
           expect(sentHeaders.range).toBe(`bytes=${offset}-`)
+
           return {
             statusCode: 206,
             headers: {
@@ -252,8 +276,10 @@ describe('ModelManager download resume', () => {
           }
         })
       }
+
       scriptRequest((sentHeaders) => {
         expect(sentHeaders.range).toBe('bytes=10-')
+
         return {
           statusCode: 206,
           headers: {
@@ -285,6 +311,7 @@ describe('ModelManager download resume', () => {
 
   it('bounds a server that advances by pathologically tiny segments forever', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
       const filePath = join(dir, 'model.bin')
@@ -292,10 +319,12 @@ describe('ModelManager download resume', () => {
       // Why: the ceiling costs 4096 iterations, so read progress from memory —
       // real per-iteration file I/O stalls this test under parallel load.
       vi.spyOn(manager, 'getPartialDownloadBytes').mockImplementation(() => bytesWritten)
+
       // Advances one byte per request against a total larger than the request
       // ceiling, so it makes forward progress forever without ever completing.
       const downloadFileMock = vi.spyOn(manager, 'downloadFile').mockImplementation(() => {
         bytesWritten += 1
+
         return Promise.resolve()
       })
 
@@ -320,6 +349,7 @@ describe('ModelManager download resume', () => {
   it('keeps resuming a download that advances across many mid-stream drops', async () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       // Every attempt delivers a small slice then drops mid-stream — the
       // classic "dies partway, resumes" pattern. Because each attempt makes
@@ -330,9 +360,11 @@ describe('ModelManager download resume', () => {
       const filePath = join(dir, 'model.bin')
       const SLICE = 2
       let delivered = 0
+
       const downloadFileMock = vi.spyOn(manager, 'downloadFile').mockImplementation(() => {
         delivered = Math.min(delivered + SLICE, PAYLOAD.length)
         writeFileSync(filePath, PAYLOAD.subarray(0, delivered))
+
         return Promise.reject(new Error('net::ERR_CONNECTION_RESET'))
       })
 
@@ -344,10 +376,12 @@ describe('ModelManager download resume', () => {
         () => false,
         new AbortController().signal
       )
+
       const outcome = download.then(
         () => 'resolved',
         (error: unknown) => (error instanceof Error ? error.message : String(error))
       )
+
       // Drive the per-attempt backoff (1s each, since progress resets the
       // stall counter) well past the ten attempts this needs.
       await vi.advanceTimersByTimeAsync(30_000)
@@ -363,9 +397,11 @@ describe('ModelManager download resume', () => {
 
   it('keeps the known file total when Content-Range omits it', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       scriptRequest((sentHeaders) => {
         expect(sentHeaders.range).toBe('bytes=10-')
+
         return {
           statusCode: 206,
           headers: {
@@ -377,6 +413,7 @@ describe('ModelManager download resume', () => {
       })
       scriptRequest((sentHeaders) => {
         expect(sentHeaders.range).toBe('bytes=15-')
+
         return {
           statusCode: 206,
           headers: {
@@ -408,6 +445,7 @@ describe('ModelManager download resume', () => {
 
   it('rejects and discards a partial when Content-Range does not match the offset', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       const mismatched = scriptRequest(() => ({
         statusCode: 206,
@@ -417,6 +455,7 @@ describe('ModelManager download resume', () => {
         },
         chunks: [PAYLOAD.subarray(0, 10)]
       }))
+
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
       const filePath = join(dir, 'model.bin')
       writeFileSync(filePath, PAYLOAD.subarray(0, 10))
@@ -447,6 +486,7 @@ describe('ModelManager download resume', () => {
 
   it('restarts from scratch when the server ignores the Range request', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       scriptRequest(() => ({
         statusCode: 200,
@@ -480,6 +520,7 @@ describe('ModelManager download resume', () => {
 
   it('does not retry non-transient failures', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       scriptRequest(() => ({ statusCode: 404 }))
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
@@ -503,11 +544,13 @@ describe('ModelManager download resume', () => {
 
   it('aborts an HTTP error response instead of draining it after rejection', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       const scripted = scriptRequest(() => ({
         statusCode: 429,
         headers: { 'retry-after': '3' }
       }))
+
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
 
       const error = await manager
@@ -530,20 +573,25 @@ describe('ModelManager download resume', () => {
   it('honors Retry-After before issuing another request', async () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
       const filePath = join(dir, 'model.bin')
+
       const rateLimitError = Object.assign(new Error('HTTP 429'), {
         httpStatusCode: 429,
         retryAfterMs: 3_000
       })
+
       const downloadFileMock = vi
         .spyOn(manager, 'downloadFile')
         .mockRejectedValueOnce(rateLimitError)
         .mockImplementationOnce(() => {
           writeFileSync(filePath, PAYLOAD)
+
           return Promise.resolve()
         })
+
       const download = manager.downloadFileWithRetry(
         'https://example.com/model.bin',
         filePath,
@@ -566,12 +614,15 @@ describe('ModelManager download resume', () => {
 
   it('does not retry before an excessively long Retry-After window', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+
       const rateLimitError = Object.assign(new Error('HTTP 429'), {
         httpStatusCode: 429,
         retryAfterMs: 300_000
       })
+
       const downloadFileMock = vi.spyOn(manager, 'downloadFile').mockRejectedValue(rateLimitError)
 
       await expect(
@@ -594,8 +645,10 @@ describe('ModelManager download resume', () => {
   it('gives up after repeated zero-progress failures with a diagnosable error', async () => {
     vi.useFakeTimers()
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
+
       const downloadFileMock = vi
         .spyOn(manager, 'downloadFile')
         .mockRejectedValue(new Error('net::ERR_CONNECTION_RESET'))
@@ -608,10 +661,12 @@ describe('ModelManager download resume', () => {
         () => false,
         new AbortController().signal
       )
+
       const outcome = download.then(
         () => 'resolved',
         (error: unknown) => (error instanceof Error ? error.message : String(error))
       )
+
       // Let the first rejection schedule its backoff before advancing timers;
       // this avoids racing fake time against stream/file I/O under full-suite load.
       await vi.advanceTimersByTimeAsync(0)
@@ -639,6 +694,7 @@ describe('ModelManager download resume', () => {
 
   it('stops retrying once the download is aborted', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'orca-model-resume-'))
+
     try {
       scriptRequest(() => ({
         statusCode: 200,
@@ -656,10 +712,12 @@ describe('ModelManager download resume', () => {
         () => false,
         controller.signal
       )
+
       const outcome = download.then(
         () => 'resolved',
         (error: unknown) => (error instanceof Error ? error.message : String(error))
       )
+
       // Abort after the transfer failure enters backoff; the next attempt must
       // settle as Aborted without issuing another request.
       setTimeout(() => controller.abort(), 100)

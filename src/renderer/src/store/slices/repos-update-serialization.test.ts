@@ -23,10 +23,12 @@ const reposUpdate = vi.fn()
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
   let reject!: (reason?: unknown) => void
+
   const promise = new Promise<T>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 
@@ -45,18 +47,21 @@ describe('repo update serialization', () => {
   it('serializes local repo updates for the same repo before applying state', async () => {
     const firstUpdate = deferred<void>()
     const secondUpdate = deferred<void>()
+
     const firstHookSettings: NonNullable<Repo['hookSettings']> = {
       mode: 'override',
       setupRunPolicy: 'ask',
       commandSourcePolicy: 'local-only',
       scripts: { setup: 'first setup', archive: '' }
     }
+
     const secondHookSettings: NonNullable<Repo['hookSettings']> = {
       mode: 'override',
       setupRunPolicy: 'skip-by-default',
       commandSourcePolicy: 'run-both',
       scripts: { setup: 'second setup', archive: 'second archive' }
     }
+
     reposUpdate.mockImplementationOnce(() => firstUpdate.promise)
     reposUpdate.mockImplementationOnce(() => secondUpdate.promise)
     const store = createTestStore()
@@ -112,18 +117,21 @@ describe('repo update serialization', () => {
     const slowLocalUpdate = deferred<void>()
     reposUpdate.mockImplementationOnce(() => slowLocalUpdate.promise)
     reposUpdate.mockResolvedValueOnce(undefined)
+
     const sshRepo: Repo = {
       ...localRepo,
       path: '/ssh/repo',
       displayName: 'SSH',
       executionHostId: 'ssh:connection-1'
     }
+
     const store = createTestStore()
     store.setState({ repos: [localRepo, sshRepo] })
 
     const local = store
       .getState()
       .updateRepo(localRepo.id, { displayName: 'Local slow' }, { hostId: 'local' })
+
     const ssh = store
       .getState()
       .updateRepo(sshRepo.id, { displayName: 'SSH fast' }, { hostId: 'ssh:connection-1' })
@@ -152,6 +160,7 @@ describe('repo update serialization', () => {
 
   it('continues a repo update chain after a failed update', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
     try {
       reposUpdate.mockRejectedValueOnce(new Error('update failed'))
       reposUpdate.mockResolvedValueOnce(undefined)
@@ -172,6 +181,7 @@ describe('repo update serialization', () => {
 
   it('clears nullable fallback fields when local IPC returns no authoritative repo', async () => {
     reposUpdate.mockResolvedValueOnce(undefined)
+
     const repo: Repo = {
       ...localRepo,
       externalWorktreeVisibility: 'show',
@@ -179,6 +189,7 @@ describe('repo update serialization', () => {
       sourceControlAi: {},
       externalWorktreeDiscoverySuppressedAt: 123
     }
+
     const store = createTestStore()
     store.setState({ repos: [repo] })
 

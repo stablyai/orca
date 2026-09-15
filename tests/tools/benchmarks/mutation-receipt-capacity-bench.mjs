@@ -6,12 +6,15 @@ import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 
 const ROW_LIMIT = 10_000
+
 const PRUNE_BATCH_SIZE = 64
 
 function parseArgs(argv) {
   const options = { iterations: 32, payloadBytes: 9_500 }
+
   for (let index = 2; index < argv.length; index += 1) {
     const value = argv[index + 1]
+
     if (argv[index] === '--iterations') {
       options.iterations = Number(value)
     } else if (argv[index] === '--payload-bytes') {
@@ -19,14 +22,18 @@ function parseArgs(argv) {
     } else {
       throw new Error(`Unknown argument: ${argv[index]}`)
     }
+
     index += 1
   }
+
   if (!Number.isSafeInteger(options.iterations) || options.iterations < 1) {
     throw new Error('--iterations must be a positive integer')
   }
+
   if (!Number.isSafeInteger(options.payloadBytes) || options.payloadBytes < 0) {
     throw new Error('--payload-bytes must be a non-negative integer')
   }
+
   return options
 }
 
@@ -58,6 +65,7 @@ function createFixture(path, payloadBytes, optimized) {
            printf('hash_%05d', value), 'completed', zeroblob(${payloadBytes})
     FROM receipt_numbers;
   `)
+
   if (optimized) {
     db.exec(`
       CREATE INDEX idx_mutation_receipts_completed_updated
@@ -77,7 +85,9 @@ function createFixture(path, payloadBytes, optimized) {
       END;
     `)
   }
+
   db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+
   return db
 }
 
@@ -89,6 +99,7 @@ function runLegacyMutation(db, iteration) {
   ).run()
   const { count } = db.prepare('SELECT COUNT(*) AS count FROM mutation_receipts').get()
   const completedToRemove = count - ROW_LIMIT + 1
+
   if (completedToRemove > 0) {
     db.prepare(
       `DELETE FROM mutation_receipts WHERE rowid IN (
@@ -97,6 +108,7 @@ function runLegacyMutation(db, iteration) {
        )`
     ).run(completedToRemove)
   }
+
   db.prepare('SELECT COUNT(*) AS count FROM mutation_receipts').get()
   insertReceipt(db, iteration)
   db.exec('COMMIT')
@@ -108,9 +120,11 @@ function runOptimizedMutation(db, iteration) {
     `DELETE FROM mutation_receipts
      WHERE state = 'completed' AND updated_at < datetime('now', '-30 days')`
   ).run()
+
   const { receipt_count: count } = db
     .prepare('SELECT receipt_count FROM mutation_receipt_ledger WHERE singleton = 1')
     .get()
+
   if (count >= ROW_LIMIT) {
     db.prepare(
       `DELETE FROM mutation_receipts WHERE rowid IN (
@@ -119,6 +133,7 @@ function runOptimizedMutation(db, iteration) {
        )`
     ).run(count - ROW_LIMIT + PRUNE_BATCH_SIZE)
   }
+
   db.prepare('SELECT receipt_count FROM mutation_receipt_ledger WHERE singleton = 1').get()
   insertReceipt(db, iteration)
   db.exec('COMMIT')
@@ -138,12 +153,15 @@ function percentile(sorted, fraction) {
 
 function measure(db, iterations, mutation) {
   const samplesMs = []
+
   for (let index = 0; index < iterations; index += 1) {
     const startedAt = performance.now()
     mutation(db, index)
     samplesMs.push(performance.now() - startedAt)
   }
+
   const sorted = samplesMs.toSorted((left, right) => left - right)
+
   return {
     firstMs: samplesMs[0],
     medianMs: percentile(sorted, 0.5),
@@ -154,7 +172,9 @@ function measure(db, iterations, mutation) {
 }
 
 const options = parseArgs(process.argv)
+
 const fixtureDir = mkdtempSync(join(tmpdir(), 'orca-mutation-receipt-bench-'))
+
 try {
   const legacyPath = join(fixtureDir, 'legacy.db')
   const optimizedPath = join(fixtureDir, 'optimized.db')

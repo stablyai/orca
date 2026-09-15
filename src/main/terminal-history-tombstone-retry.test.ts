@@ -119,6 +119,7 @@ describe('tombstoned history removal retries', () => {
     for (let index = 0; index < 1_000; index++) {
       deleteWorktreeHistoryDir(`repo-1::/path/wsl-${index}`)
     }
+
     await vi.advanceTimersByTimeAsync(0)
     expect(removeHostTreeMock).toHaveBeenCalledTimes(64)
     expect(deleteWslFishHistoryFileMock).toHaveBeenCalledTimes(64)
@@ -128,6 +129,7 @@ describe('tombstoned history removal retries', () => {
       releases.splice(0).forEach((release) => release())
       await vi.advanceTimersByTimeAsync(0)
     }
+
     expect(removeHostTreeMock).toHaveBeenCalledTimes(1_000)
     expect(deleteWslFishHistoryFileMock).toHaveBeenCalledTimes(1_000)
   })
@@ -139,6 +141,7 @@ describe('tombstoned history removal retries', () => {
     // longer blocks tree removal (most distros have no fish), so the tree
     // removal itself has to be the thing that fails to exercise the cap.
     removeHostTreeMock.mockRejectedValue(new Error('EBUSY'))
+
     for (let index = 0; index < 1_000; index++) {
       const worktreeId = `repo-1::/path/fail-${index}`
       const dir = join(distroRoot, hashWorktreeId(worktreeId))
@@ -152,6 +155,7 @@ describe('tombstoned history removal retries', () => {
       )
       deleteWorktreeHistoryDir(worktreeId)
     }
+
     await vi.advanceTimersByTimeAsync(0)
     expect(vi.getTimerCount()).toBe(64)
     expect(readdirSync(join(distroRoot, '.pending-delete'))).toHaveLength(1_000)
@@ -160,6 +164,7 @@ describe('tombstoned history removal retries', () => {
       await vi.advanceTimersByTimeAsync(delay)
       expect(vi.getTimerCount()).toBeLessThanOrEqual(64)
     }
+
     await vi.advanceTimersByTimeAsync(0)
     removeHostTreeMock.mockReset()
     removeHostTreeMock.mockImplementation(async (dir) => {

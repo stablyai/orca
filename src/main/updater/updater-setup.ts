@@ -120,6 +120,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     this.lastInstallDeferralVersion = { download: null, install: null }
 
     const serveHandoffFailure = getServeUpdateHandoffFailure()
+
     if (serveHandoffFailure) {
       recordUpdaterLifecycle(
         'headless_serve_handoff_failed',
@@ -132,16 +133,19 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     if (!app.isPackaged && !is.dev) {
       return
     }
+
     if (is.dev) {
       return
     }
 
     const autoUpdater = this.getAutoUpdater()
     autoUpdater.autoDownload = false
+
     if (this.activeUpdateSource === 'release') {
       autoUpdater.allowDowngrade = false
       autoUpdater.disableDifferentialDownload = false
     }
+
     // Why: supervised serve installs require an explicit handoff; ordinary service quits must never install implicitly.
     // Only an explicit AppImage/non-root marker may opt into electron-updater's implicit quit install.
     autoUpdater.autoInstallOnAppQuit =
@@ -158,9 +162,11 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
         url: 'https://github.com/stablyai/orca/releases/latest/download'
       })
     }
+
     if (this.autoUpdaterInitialized) {
       return
     }
+
     this.autoUpdaterInitialized = true
 
     registerAutoUpdaterHandlers({
@@ -221,6 +227,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
 
     const checkDailyOnWake = () => {
       void this.checkForUpdateNudge()
+
       if (
         this.backgroundCheckLaunchPending ||
         this.currentStatus.state === 'checking' ||
@@ -228,19 +235,24 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
       ) {
         return
       }
+
       const lastCheck = this._getLastUpdateCheckAt?.() ?? null
       const msSince = lastCheck === null ? Number.POSITIVE_INFINITY : Date.now() - lastCheck
+
       if (msSince >= AUTO_UPDATE_CHECK_INTERVAL_MS) {
         this.runBackgroundUpdateCheck()
         this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
       }
     }
+
     powerMonitor.on('resume', checkDailyOnWake)
     app.on('browser-window-focus', checkDailyOnWake)
 
     const lastUpdateCheckAt = opts?.getLastUpdateCheckAt?.() ?? null
+
     const msSinceLastCheck =
       lastUpdateCheckAt === null ? Number.POSITIVE_INFINITY : Date.now() - lastUpdateCheckAt
+
     if (msSinceLastCheck >= AUTO_UPDATE_CHECK_INTERVAL_MS) {
       this.runBackgroundUpdateCheck()
       this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)

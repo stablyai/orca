@@ -47,6 +47,7 @@ describe('buildOrchestrationTaskDisplayMetadata', () => {
     const metadata = buildOrchestrationTaskDisplayMetadata({
       spec: `x${'😀'.repeat(ORCHESTRATION_TASK_TITLE_MAX_LENGTH)}`
     })
+
     const last = metadata.taskTitle.charCodeAt(metadata.taskTitle.length - 1)
 
     expect(metadata.taskTitle.length).toBeLessThanOrEqual(ORCHESTRATION_TASK_TITLE_MAX_LENGTH)

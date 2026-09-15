@@ -36,9 +36,11 @@ export class MobileE2EEV2ClientSession {
   }): MobileE2EEV2ClientSession {
     const keyPair = args.clientKeyPair ?? generateKeyPair()
     const clientNonce = args.clientNonce ?? ExpoCrypto.getRandomBytes(32)
+
     if (clientNonce.length !== 32) {
       throw new Error(`Invalid client nonce length: ${clientNonce.length}`)
     }
+
     return new MobileE2EEV2ClientSession(
       keyPair.secretKey,
       publicKeyFromBase64(args.desktopPublicKeyB64),
@@ -61,9 +63,11 @@ export class MobileE2EEV2ClientSession {
 
   acceptReady(ready: unknown): boolean {
     const handshake = validateMobileE2EEV2Handshake(this.hello, ready)
+
     if (!handshake || !equalBytes(handshake.desktopPublicKey, this.pinnedDesktopPublicKey)) {
       return false
     }
+
     this.schedule = deriveMobileE2EEV2KeySchedule({
       sharedSecret: deriveSharedKey(this.clientSecretKey, this.pinnedDesktopPublicKey),
       transcript: encodeMobileE2EEV2Transcript(handshake),
@@ -71,6 +75,7 @@ export class MobileE2EEV2ClientSession {
       desktopNonce: handshake.desktopNonce
     })
     this.transcriptHashB64Value = encodeBase64(this.schedule.transcriptHash)
+
     return true
   }
 
@@ -78,15 +83,19 @@ export class MobileE2EEV2ClientSession {
     if (!this.transcriptHashB64Value) {
       throw new Error('E2EE v2 ready has not been accepted')
     }
+
     return this.transcriptHashB64Value
   }
 
   openText(frameB64: string): string | null {
     const frame = decodeCanonicalBase64(frameB64)
+
     if (!frame) {
       return null
     }
+
     const plaintext = this.open(frame, 'text')
+
     return plaintext ? new TextDecoder().decode(plaintext) : null
   }
 
@@ -106,6 +115,7 @@ export class MobileE2EEV2ClientSession {
     if (!this.schedule) {
       return null
     }
+
     const plaintext = openMobileE2EEV2Frame({
       frame,
       key: this.schedule.desktopToMobileKey,
@@ -114,9 +124,11 @@ export class MobileE2EEV2ClientSession {
       payloadKind,
       expectedCounter: this.inboundCounter
     })
+
     if (plaintext) {
       this.inboundCounter++
     }
+
     return plaintext
   }
 
@@ -124,6 +136,7 @@ export class MobileE2EEV2ClientSession {
     if (!this.schedule) {
       throw new Error('E2EE v2 ready has not been accepted')
     }
+
     const frame = sealMobileE2EEV2Frame({
       payload: plaintext,
       key: this.schedule.mobileToDesktopKey,
@@ -132,16 +145,20 @@ export class MobileE2EEV2ClientSession {
       payloadKind,
       counter: this.outboundCounter
     })
+
     this.outboundCounter++
+
     return frame
   }
 }
 
 function encodeBase64(bytes: Uint8Array): string {
   let binary = ''
+
   for (const byte of bytes) {
     binary += String.fromCharCode(byte)
   }
+
   return btoa(binary)
 }
 
@@ -149,6 +166,7 @@ function decodeCanonicalBase64(value: string): Uint8Array | null {
   try {
     const binary = atob(value)
     const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+
     return encodeBase64(bytes) === value ? bytes : null
   } catch {
     return null
@@ -159,9 +177,12 @@ function equalBytes(left: Uint8Array, right: Uint8Array): boolean {
   if (left.length !== right.length) {
     return false
   }
+
   let difference = 0
+
   for (let index = 0; index < left.length; index++) {
     difference |= left[index]! ^ right[index]!
   }
+
   return difference === 0
 }

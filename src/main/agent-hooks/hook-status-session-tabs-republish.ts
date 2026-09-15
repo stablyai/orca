@@ -33,33 +33,44 @@ export function installHookStatusSessionTabsRepublish(
 
   const unsubscribeMutations = statusStore.subscribeStatusRowMutations((mutation) => {
     const runtime = getRuntime()
+
     if (!runtime) {
       return
     }
+
     const worktreeIds = new Set<string>()
+
     for (const identity of [mutation.before, mutation.after]) {
       if (!identity) {
         continue
       }
+
       const worktreeId = resolveWorktreeId(identity, runtime)
+
       if (worktreeId) {
         worktreeIds.add(worktreeId)
       }
     }
+
     for (const worktreeId of worktreeIds) {
       runtime.touchMobileSessionTabsForWorktree(worktreeId)
     }
   })
+
   const unsubscribeFreshness = statusStore.subscribeStatusFreshness((status) => {
     const runtime = getRuntime()
+
     if (!runtime) {
       return
     }
+
     const worktreeId = resolveWorktreeId(status, runtime)
+
     if (worktreeId) {
       runtime.scheduleMobileSessionTabsAgentStatusHeartbeatForWorktree(worktreeId)
     }
   })
+
   return () => {
     unsubscribeMutations()
     unsubscribeFreshness()

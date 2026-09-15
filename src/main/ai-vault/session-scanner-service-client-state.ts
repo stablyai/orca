@@ -10,13 +10,19 @@ import {
 } from './session-scanner-service-protocol'
 
 export const AI_VAULT_SERVICE_READY_TIMEOUT_MS = 5_000
+
 export const AI_VAULT_SERVICE_SCAN_TIMEOUT_MS = 130_000
+
 export const AI_VAULT_SERVICE_INTERACTIVE_TIMEOUT_MS = 15_000
+
 export const AI_VAULT_SERVICE_MAX_CALLS = 16
+
 export const AI_VAULT_SERVICE_IDLE_TIMEOUT_MS = 10 * 60_000
+
 export const AI_VAULT_SERVICE_SHUTDOWN_TIMEOUT_MS = 2_000
 
 export type AiVaultServiceProcessFactory = () => ChildProcess
+
 export type AiVaultServiceClientOptions = {
   processFactory: AiVaultServiceProcessFactory
   /** Resolved per spawn: a respawned child must see current consent, not the first frame's. */
@@ -46,6 +52,7 @@ export class AiVaultServiceInvalidations {
     send: (generation: number) => void
   ): Promise<void> {
     const generation = ++this.generation
+
     return new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => onTimeout(generation), timeoutMs)
       timer.unref?.()
@@ -79,12 +86,15 @@ export class AiVaultServiceInvalidations {
 
   settle(generation: number): boolean {
     const entry = this.pending.get(generation)
+
     if (!entry) {
       return false
     }
+
     clearTimeout(entry.timer)
     this.pending.delete(generation)
     entry.resolve()
+
     return true
   }
 
@@ -93,6 +103,7 @@ export class AiVaultServiceInvalidations {
       clearTimeout(entry.timer)
       entry.reject(error)
     }
+
     this.pending.clear()
   }
 }
@@ -103,12 +114,15 @@ export function createAiVaultServiceReadyWaiter(
 ): AiVaultServiceReadyWaiter {
   let resolve!: (child: ChildProcess) => void
   let reject!: (error: Error) => void
+
   const promise = new Promise<ChildProcess>((resolveReady, rejectReady) => {
     resolve = resolveReady
     reject = rejectReady
   })
+
   const timer = setTimeout(onTimeout, timeoutMs)
   timer.unref?.()
+
   return { promise, resolve, reject, timer }
 }
 
@@ -131,6 +145,7 @@ function armAiVaultServiceCancellationTimeout(
   if (call.timer) {
     clearTimeout(call.timer)
   }
+
   call.timer = setTimeout(onExpired, AI_VAULT_SERVICE_SHUTDOWN_TIMEOUT_MS)
   call.timer.unref?.()
 }
@@ -149,26 +164,33 @@ export function cancelAiVaultServiceCall(
   if (call.cancelled) {
     return
   }
+
   call.cancelled = true
   call.reject(createAiVaultScanCancelledError())
   const queuedIndex = lanes.queue.indexOf(call)
+
   if (queuedIndex !== -1) {
     lanes.queue.splice(queuedIndex, 1)
     clearAiVaultServiceCall(call)
     lanes.pump()
+
     return
   }
+
   if (lanes.active.get(call.lane) !== call) {
     return
   }
+
   // Why: a call cancelled before it reached the child gets no acknowledgement,
   // so waiting on one would kill a healthy service and stall the lane.
   if (!call.sent) {
     lanes.active.delete(call.lane)
     clearAiVaultServiceCall(call)
     lanes.pump()
+
     return
   }
+
   lanes.child?.send({ type: 'cancel', id: call.request.id })
   armAiVaultServiceCancellationTimeout(call, () =>
     lanes.onFault(new Error('AI Vault service did not cancel within 2000ms.'))
@@ -209,8 +231,10 @@ export function requeueOrRejectAiVaultServiceStart(
 ): void {
   if (!respawning || call.sent || call.cancelled || call.startRetried) {
     rejectAiVaultServiceCall(call, error)
+
     return
   }
+
   call.startRetried = true
   queue.unshift(call)
 }
@@ -224,6 +248,7 @@ export function clearAiVaultServiceCall(call: AiVaultServicePendingCall): void {
     clearTimeout(call.timer)
     call.timer = null
   }
+
   if (call.signal && call.onAbort) {
     call.signal.removeEventListener('abort', call.onAbort)
     call.onAbort = null
@@ -232,6 +257,7 @@ export function clearAiVaultServiceCall(call: AiVaultServicePendingCall): void {
 
 export function rejectAiVaultServiceCall(call: AiVaultServicePendingCall, error: Error): void {
   clearAiVaultServiceCall(call)
+
   if (!call.cancelled) {
     call.reject(error)
   }
@@ -272,6 +298,7 @@ export class AiVaultServiceIdleRetirement {
     if (busy || this.timer) {
       return
     }
+
     this.timer = setTimeout(() => {
       this.timer = null
       retire()
@@ -303,6 +330,7 @@ export class AiVaultServiceSessionSearchHold {
   record(init: AiVaultSessionSearchInit, child: ChildProcess | null): boolean {
     this.enabled = init.settings.enabled
     child?.send({ type: 'sessionSearch', init })
+
     return this.enabled
   }
 }
@@ -317,10 +345,12 @@ export function sendAiVaultServiceCall(
   if (call.cancelled || !isActive()) {
     return
   }
+
   const timeoutMs =
     call.request.operation === 'scan'
       ? AI_VAULT_SERVICE_SCAN_TIMEOUT_MS
       : AI_VAULT_SERVICE_INTERACTIVE_TIMEOUT_MS
+
   call.timer = setTimeout(() => {
     onFault(new Error(`AI Vault service timed out after ${timeoutMs}ms.`))
   }, timeoutMs)

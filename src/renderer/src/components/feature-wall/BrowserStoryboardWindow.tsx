@@ -23,26 +23,33 @@ export function BrowserStoryboardWindow(props: {
 }): JSX.Element {
   const { state, targets } = props
   const { phase } = state
+
   const isIntroPhase =
     phase === 'idle' ||
     phase === 'newtab-approach' ||
     phase === 'newtab-click' ||
     phase === 'newtab-row-approach' ||
     phase === 'newtab-row-click'
+
   const browserChromeVisible = !isIntroPhase
   const newtabActive = phase === 'newtab-click' || phase === 'newtab-row-approach'
   const newtabRowActive = phase === 'newtab-row-approach'
+
   const dropdownVisible =
     phase === 'newtab-click' || phase === 'newtab-row-approach' || phase === 'newtab-row-click'
+
   const cursorVisible = (phase !== 'idle' && phase !== 'navigated') || state.clickRingVisible
+
   const ringStarter =
     phase === 'inspect' ||
     phase === 'annotate' ||
     phase === 'send-approach' ||
     phase === 'send-click' ||
     phase === 'handoff'
+
   const annotateOpen = phase === 'annotate' || phase === 'send-approach' || phase === 'send-click'
   const isSplit = isBrowserSplitPhase(phase)
+
   const showSignup =
     phase === 'navigated' ||
     phase === 'screenshot-line' ||

@@ -159,9 +159,11 @@ describe('plugin language-pack artifacts', () => {
 
   it('rejects excessive nesting without recursive validation', () => {
     let catalog: Record<string, unknown> = { value: 'deep' }
+
     for (let index = 0; index <= PLUGIN_LANGUAGE_CATALOG_MAX_DEPTH; index += 1) {
       catalog = { nested: catalog }
     }
+
     expect(parsePluginLanguagePackArtifact(JSON.stringify(catalog))).toMatchObject({
       ok: false,
       error: expect.stringContaining('depth')
@@ -194,8 +196,10 @@ describe('plugin language-pack artifacts', () => {
         'value'
       ])
     )
+
     const packs = Array.from({ length: 16 }, (_, index) => {
       const id = `plugin:maximum-${index}` as const
+
       return {
         id,
         resourceLanguage: pluginLanguageResourceId(id),

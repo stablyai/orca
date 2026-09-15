@@ -32,8 +32,10 @@ describe('native-chat draft cache', () => {
     writeNativeChatDraftCache('keep', 'hot')
 
     const total = NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX + 40
+
     for (let i = 0; i < total; i += 1) {
       writeNativeChatDraftCache(`scope-${i}`, `draft-${i}`)
+
       if (i % 20 === 0) {
         writeNativeChatDraftCache('keep', 'hot')
       }

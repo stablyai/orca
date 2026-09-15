@@ -15,24 +15,30 @@ export async function waitForActivePaneHookDescriptor(
     .poll(
       async () => {
         const tabId = await resolveActiveTabId(page)
+
         if (!tabId) {
           descriptor = null
+
           return false
         }
+
         descriptor = await page.evaluate((tabId) => {
           const layoutHasLeaf = (node: unknown, targetLeafId: string): boolean => {
             if (!node || typeof node !== 'object') {
               return false
             }
+
             const record = node as {
               type?: unknown
               leafId?: unknown
               first?: unknown
               second?: unknown
             }
+
             if (record.type === 'leaf') {
               return record.leafId === targetLeafId
             }
+
             return (
               layoutHasLeaf(record.first, targetLeafId) ||
               layoutHasLeaf(record.second, targetLeafId)
@@ -41,11 +47,14 @@ export async function waitForActivePaneHookDescriptor(
 
           const store = window.__store
           const manager = window.__paneManagers?.get(tabId)
+
           if (!store || !manager) {
             return null
           }
+
           const state = store.getState()
           const worktreeId = state.activeWorktreeId
+
           if (
             !worktreeId ||
             !(state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)
@@ -56,6 +65,7 @@ export async function waitForActivePaneHookDescriptor(
           const activePane = manager.getActivePane?.() ?? manager.getPanes?.()[0]
           const leafId = activePane?.leafId ?? null
           const layout = state.terminalLayoutsByTabId[tabId]
+
           if (
             !leafId ||
             !layoutHasLeaf(layout?.root, leafId) ||
@@ -63,8 +73,10 @@ export async function waitForActivePaneHookDescriptor(
           ) {
             return null
           }
+
           return { paneKey: `${tabId}:${leafId}`, worktreeId }
         }, tabId)
+
         return descriptor !== null
       },
       {
@@ -79,6 +91,7 @@ export async function waitForActivePaneHookDescriptor(
   if (!descriptor) {
     throw new Error('Active terminal pane descriptor disappeared after routing wait')
   }
+
   return descriptor
 }
 
@@ -89,14 +102,18 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
 
   const readCandidateIds = async (): Promise<string[]> => {
     const tabId = await resolveActiveTabId(page)
+
     if (!tabId) {
       return []
     }
+
     return page.evaluate((tabId) => {
       const store = window.__store
+
       if (!store) {
         return []
       }
+
       return store.getState().ptyIdsByTabId[tabId] ?? []
     }, tabId)
   }
@@ -140,11 +157,14 @@ export async function discoverActivePtyId(page: Page): Promise<string> {
         const content = await getTerminalContent(page)
         const markerRe = new RegExp(`${marker}_(\\d+)`, 'g')
         const matches = [...content.matchAll(markerRe)]
+
         if (matches.length > 0) {
           const index = Number(matches.at(-1)?.[1] ?? Number.NaN)
           foundPtyId = Number.isInteger(index) ? (candidateIds[index] ?? null) : null
+
           return true
         }
+
         return false
       },
       { timeout: 10_000, message: 'PTY marker did not appear in terminal buffer' }

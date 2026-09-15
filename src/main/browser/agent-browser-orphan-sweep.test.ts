@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const runProcessMock = vi.fn()
+
 vi.mock('../../shared/child-process/run-process', () => ({
   runProcess: (spec: unknown) => runProcessMock(spec)
 }))
@@ -10,6 +11,7 @@ import { sweepOrphanedAgentBrowserSessions } from './agent-browser-orphan-sweep'
 type Spec = { args?: readonly string[] }
 
 const BIN = '/opt/orca/agent-browser'
+
 const SCOPED = {
   env: { AGENT_BROWSER_SOCKET_DIR: '/tmp/orca-ab-0123456789abcdef' },
   ownsSocketDirectory: true
@@ -26,6 +28,7 @@ function respond(sessions: string[]): void {
         timedOut: false
       })
     }
+
     return Promise.resolve({ code: 0, signal: null, stdout: '', stderr: '', timedOut: false })
   })
 }
@@ -125,9 +128,11 @@ describe('agent-browser orphan sweep', () => {
           timedOut: false
         })
       }
+
       if (spec.args?.[1] === 'orca-tab-aaa') {
         return Promise.reject(new Error('spawn failed'))
       }
+
       return Promise.resolve({ code: 0, signal: null, stdout: '', stderr: '', timedOut: false })
     })
 

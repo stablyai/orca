@@ -27,6 +27,7 @@ function formatDiffValue(value: unknown): string {
       .map(([k, v]) => `${k}: ${String(v)}`)
       .join(', ')
   }
+
   return String(value)
 }
 
@@ -40,6 +41,7 @@ export function GhosttyImportModal({
   applyError = null
 }: GhosttyImportModalProps): React.JSX.Element {
   const hasChanges = preview?.found === true && Object.keys(preview.diff).length > 0
+
   const configPaths =
     preview?.configPaths ?? (preview?.configPath !== undefined ? [preview.configPath] : [])
 

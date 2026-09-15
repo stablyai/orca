@@ -7,5 +7,6 @@ export function normalizeAiVaultResumeFilePath(
   if (!filePath || platform !== 'linux') {
     return filePath
   }
+
   return parseWslUncPath(filePath)?.linuxPath ?? filePath
 }

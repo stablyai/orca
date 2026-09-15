@@ -13,9 +13,11 @@ export async function readCurrentDaemonReadyIdentity(
   if (process.platform !== 'linux') {
     return { startedAtMs }
   }
+
   try {
     const linuxStartTicks = parseLinuxStartTicks(readFileSync('/proc/self/stat', 'utf8'))
     const bootId = await readBootIdentity()
+
     return linuxStartTicks && bootId ? { startedAtMs, linuxStartTicks, bootId } : { startedAtMs }
   } catch {
     return { startedAtMs }
@@ -34,9 +36,11 @@ export async function readDaemonProcessIncarnation(
   if (process.platform !== 'linux') {
     return null
   }
+
   try {
     const linuxStartTicks = parseLinuxStartTicks(readFileSync(`/proc/${pid}/stat`, 'utf8'))
     const bootId = await readBootIdentity()
+
     return linuxStartTicks && bootId ? { linuxStartTicks, bootId } : null
   } catch {
     return null
@@ -47,11 +51,13 @@ export function parseDaemonReadyIdentity(message: unknown): DaemonReadyIdentity 
   if (!message || typeof message !== 'object') {
     return null
   }
+
   const value = message as {
     startedAtMs?: unknown
     linuxStartTicks?: unknown
     bootId?: unknown
   }
+
   if (
     typeof value.startedAtMs !== 'number' ||
     !Number.isFinite(value.startedAtMs) ||
@@ -59,14 +65,18 @@ export function parseDaemonReadyIdentity(message: unknown): DaemonReadyIdentity 
   ) {
     return null
   }
+
   const hasLinuxStartTicks = value.linuxStartTicks !== undefined
   const hasBootId = value.bootId !== undefined
+
   if (hasLinuxStartTicks !== hasBootId) {
     return null
   }
+
   if (!hasLinuxStartTicks) {
     return { startedAtMs: value.startedAtMs }
   }
+
   if (
     typeof value.linuxStartTicks !== 'string' ||
     value.linuxStartTicks.length === 0 ||
@@ -75,6 +85,7 @@ export function parseDaemonReadyIdentity(message: unknown): DaemonReadyIdentity 
   ) {
     return null
   }
+
   return {
     startedAtMs: value.startedAtMs,
     linuxStartTicks: value.linuxStartTicks,

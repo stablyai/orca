@@ -14,6 +14,7 @@ export function attachClaudeChildOnlyBoundary(
     next.payload.state === 'working' &&
     next.payload.subagents?.some((subagent) => subagent.state === 'working') === true &&
     next.claudeRunningNonAgentTask === false
+
   const carriesBoundary =
     previous?.claudeLeadBoundaryChildOnly === true &&
     next.payload.agentType === 'claude' &&
@@ -22,6 +23,7 @@ export function attachClaudeChildOnlyBoundary(
       next.hookEventName === 'SubagentStart' ||
       next.hookEventName === 'SubagentStop' ||
       next.hookEventName === 'TeammateIdle')
+
   return establishesBoundary || carriesBoundary
     ? { ...next, claudeLeadBoundaryChildOnly: true }
     : next
@@ -37,7 +39,9 @@ export function invalidateClaudeChildOnlyBoundary(
   ) {
     return previous
   }
+
   const { claudeLeadBoundaryChildOnly: _boundary, ...withoutBoundary } = previous
+
   return withoutBoundary
 }
 
@@ -48,6 +52,7 @@ export function shouldKeepClaudePermissionVisible(
   if (previous?.restoredUnconfirmed) {
     return false
   }
+
   if (
     previous?.payload.agentType !== 'claude' ||
     previous.payload.state !== 'waiting' ||
@@ -57,19 +62,24 @@ export function shouldKeepClaudePermissionVisible(
   ) {
     return false
   }
+
   if (next.hasExplicitPrompt === true) {
     return false
   }
+
   if (isClaudePermissionOwningChildEnding(previous, next)) {
     return false
   }
+
   if (isClaudePermissionResumingApprovedTool(previous, next)) {
     return false
   }
+
   // Why: only real permission requests stay sticky; newer Claude reports AskUserQuestion as a PermissionRequest, so tool name (not event) decides.
   if (isAskUserQuestionTool(previous.payload.toolName)) {
     return false
   }
+
   return true
 }
 
@@ -78,12 +88,15 @@ function isClaudePermissionOwningChildEnding(
   next: AgentHookEventPayload
 ): boolean {
   const ownerId = previous.toolAgentId?.trim()
+
   if (!ownerId) {
     return false
   }
+
   if (next.hookEventName === 'SubagentStop') {
     return ownerId === next.toolAgentId?.trim()
   }
+
   return (
     next.hookEventName === 'TeammateIdle' &&
     next.teammateName !== undefined &&
@@ -102,25 +115,33 @@ function isClaudePermissionResumingApprovedTool(
   const hasAgentId = previousAgentId !== undefined || nextAgentId !== undefined
   const previousAgentType = previous.toolAgentType?.trim() || undefined
   const nextAgentType = next.toolAgentType?.trim() || undefined
+
   const hasMatchingConcreteAgentId =
     previousAgentId !== undefined && previousAgentId === nextAgentId
+
   const hasSameExplicitAgentType =
     !hasAgentId && previousAgentType !== undefined && previousAgentType === nextAgentType
+
   const sameToolName =
     previous.payload.toolName !== undefined && previous.payload.toolName === next.payload.toolName
+
   const sameKnownToolInput =
     previous.payload.toolInput !== undefined &&
     previous.payload.toolInput === next.payload.toolInput
+
   const sameUnknownInputFromConcreteAgent =
     hasMatchingConcreteAgentId &&
     previous.payload.toolInput === undefined &&
     next.payload.toolInput === undefined
+
   const hasMatchingToolUseId =
     previousToolUseId !== undefined && previousToolUseId === nextToolUseId
+
   const hasConflictingToolUseId =
     previousToolUseId !== undefined &&
     nextToolUseId !== undefined &&
     previousToolUseId !== nextToolUseId
+
   const sameUnknownInputFromToolUseId =
     hasMatchingToolUseId &&
     previous.payload.toolInput === undefined &&
@@ -155,11 +176,14 @@ export function shouldInheritClaudeToolUseIdForPermission(
   ) {
     return false
   }
+
   const sameKnownToolInput =
     previous.payload.toolInput !== undefined &&
     previous.payload.toolInput === next.payload.toolInput
+
   const sameUnknownToolInput =
     previous.payload.toolInput === undefined && next.payload.toolInput === undefined
+
   if (
     previous.toolAgentId !== next.toolAgentId ||
     previous.toolAgentType !== next.toolAgentType ||
@@ -169,6 +193,7 @@ export function shouldInheritClaudeToolUseIdForPermission(
   ) {
     return false
   }
+
   return true
 }
 
@@ -177,12 +202,14 @@ export function attachClaudePermissionToolUseId(
   next: AgentHookEventPayload
 ): AgentHookEventPayload {
   const inheritedToolUseId = previous?.toolUseId
+
   if (
     !shouldInheritClaudeToolUseIdForPermission(previous, next) ||
     typeof inheritedToolUseId !== 'string'
   ) {
     return next
   }
+
   return {
     ...next,
     // Why: Claude emits PermissionRequest without tool_use_id, then PostToolUse carries the original PreToolUse id.

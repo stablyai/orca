@@ -42,7 +42,9 @@ function buildProjectGridTemplate(
       ? `${resolveWidth(field, widths)}px`
       : `minmax(${MIN_COLUMN_WIDTH}px, ${resolveWidth(field, widths)}fr)`
   )
+
   cols.push(`${ACTION_COLUMN_WIDTH}px`)
+
   return cols.join(' ')
 }
 
@@ -82,38 +84,48 @@ export default function ProjectViewList({
   // Why: include project id so the same view id colliding across projects
   // doesn't cross-pollute hidden-column preferences.
   const scopeKey = `${table.project.id}:${table.selectedView.id}`
+
   const availableFields = useMemo(
     () => getAvailableColumns(table.selectedView),
     [table.selectedView]
   )
+
   // Why: switching project views should not paint one commit with the
   // previous view's local column preferences before an Effect catches up.
   const persistedHidden = useMemo(() => loadHiddenColumns(scopeKey), [scopeKey])
+
   const [hiddenByScope, setHiddenByScope] = useState<
     Readonly<Record<string, ReadonlySet<string> | undefined>>
   >({})
+
   const hidden = hiddenByScope[scopeKey] ?? persistedHidden
+
   const fields = useMemo(
     () => availableFields.filter((f) => !hidden.has(f.id)),
     [availableFields, hidden]
   )
 
   const persistedWidths = useMemo(() => loadColumnWidths(scopeKey), [scopeKey])
+
   const [widthsByScope, setWidthsByScope] = useState<
     Readonly<Record<string, Readonly<Record<string, number>> | undefined>>
   >({})
+
   const widths = widthsByScope[scopeKey] ?? persistedWidths
 
   const setColumnPair = useCallback(
     (fieldId: string, width: number, nextFieldId: string, nextWidth: number): void => {
       setWidthsByScope((prev) => {
         const currentWidths = prev[scopeKey] ?? persistedWidths
+
         const updated = {
           ...currentWidths,
           [fieldId]: Math.max(MIN_COLUMN_WIDTH, Math.round(width)),
           [nextFieldId]: Math.max(MIN_COLUMN_WIDTH, Math.round(nextWidth))
         }
+
         saveColumnWidths(scopeKey, updated)
+
         return { ...prev, [scopeKey]: updated }
       })
     },
@@ -134,12 +146,15 @@ export default function ProjectViewList({
   const toggleColumn = (fieldId: string): void => {
     setHiddenByScope((prev) => {
       const next = new Set(prev[scopeKey] ?? persistedHidden)
+
       if (next.has(fieldId)) {
         next.delete(fieldId)
       } else {
         next.add(fieldId)
       }
+
       saveHiddenColumns(scopeKey, next)
+
       return { ...prev, [scopeKey]: next }
     })
   }
@@ -148,10 +163,13 @@ export default function ProjectViewList({
     if (!sortOverride) {
       return table
     }
+
     const field = fields.find((f) => f.id === sortOverride.fieldId)
+
     if (!field) {
       return table
     }
+
     return {
       ...table,
       selectedView: {
@@ -166,6 +184,7 @@ export default function ProjectViewList({
     // each group honor the view's sortByFields too — groupRows preserves input
     // order within each bucket.
     const sorted = sortRows(effectiveTable, effectiveTable.rows)
+
     return groupRows(effectiveTable, sorted)
   }, [effectiveTable])
 
@@ -174,9 +193,11 @@ export default function ProjectViewList({
       if (!prev || prev.fieldId !== fieldId) {
         return { fieldId, direction: 'ASC' }
       }
+
       if (prev.direction === 'ASC') {
         return { fieldId, direction: 'DESC' }
       }
+
       return null
     })
   }
@@ -216,6 +237,7 @@ export default function ProjectViewList({
       />
       {groups.map((g) => {
         const expanded = !collapsed.has(g.key)
+
         return (
           <div key={g.key}>
             {table.selectedView.groupByFields[0] ? (
@@ -225,11 +247,13 @@ export default function ProjectViewList({
                 onToggle={() => {
                   setCollapsed((prev) => {
                     const next = new Set(prev)
+
                     if (next.has(g.key)) {
                       next.delete(g.key)
                     } else {
                       next.add(g.key)
                     }
+
                     return next
                   })
                 }}
@@ -303,6 +327,7 @@ function ProjectHeaderRow({
         // table width invariant.
         const next = fields[idx + 1]
         const frozen = idx < 2
+
         return (
           <div
             key={f.id}
@@ -377,6 +402,7 @@ function ProjectHeaderRow({
               // with a row of metadata they can't open.
               const locked = f.dataType === 'TITLE'
               const visible = !hidden.has(f.id)
+
               return (
                 <label
                   key={f.id}

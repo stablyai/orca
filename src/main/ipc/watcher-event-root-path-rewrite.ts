@@ -42,6 +42,7 @@ function isWindowsStyleRoot(rootPath: string, platform: NodeJS.Platform): boolea
 // treat it as a separator.
 function splitRootSegments(value: string, windowsStyle: boolean): string[] {
   const parts = windowsStyle ? value.split(/[\\/]+/) : value.split('/')
+
   return parts.filter((part) => part.length > 0)
 }
 
@@ -53,6 +54,7 @@ type RootPath = {
 
 function describeRootPath(value: string, windowsStyle: boolean): RootPath {
   const separator: '/' | '\\' = windowsStyle && !value.includes('/') ? '\\' : '/'
+
   return {
     value,
     prefix: value.endsWith(separator) ? value : `${value}${separator}`,
@@ -67,13 +69,17 @@ function matchingSuffix(
   foldSegment: (segment: string) => string
 ): string[] | null {
   const candidateSegments = splitRootSegments(candidate, windowsStyle)
+
   if (candidateSegments.length < rootSegments.length) {
     return null
   }
+
   const matches = rootSegments.every((rootSegment, index) => {
     const candidateSegment = candidateSegments[index]
+
     return candidateSegment !== undefined && foldSegment(candidateSegment) === rootSegment
   })
+
   return matches ? candidateSegments.slice(rootSegments.length) : null
 }
 
@@ -86,17 +92,22 @@ export function createRootPathRewriter(
   const requested = describeRootPath(requestedRoot, windowsStyle)
   const canonical = describeRootPath(canonicalRoot, windowsStyle)
   const canonicalSegments = splitRootSegments(canonicalRoot, windowsStyle)
+
   if (canonicalSegments.length === 0) {
     return identityWatcherEventPathRewriter
   }
+
   const caseInsensitive = CASE_INSENSITIVE_PLATFORMS.has(platform)
+
   // Why: fold per segment rather than over the whole path — NFC and case
   // folding both change length, so a folded-prefix length would slice the raw
   // event path mid-character and fabricate a path. Segment counts survive both.
   const foldSegment = (segment: string): string => {
     const normalized = segment.normalize('NFC')
+
     return caseInsensitive ? normalized.toLowerCase() : normalized
   }
+
   const foldedCanonicalSegments = canonicalSegments.map(foldSegment)
 
   return (eventPath) => {
@@ -104,15 +115,19 @@ export function createRootPathRewriter(
     if (eventPath === requested.value || eventPath.startsWith(requested.prefix)) {
       return eventPath
     }
+
     // A plain symlinked root differs only by prefix; splice it byte-exact so the
     // per-segment fold below is reached only for casing/Unicode differences.
     if (eventPath.startsWith(canonical.prefix)) {
       return `${requested.prefix}${eventPath.slice(canonical.prefix.length)}`
     }
+
     const suffix = matchingSuffix(foldedCanonicalSegments, eventPath, windowsStyle, foldSegment)
+
     if (suffix === null) {
       return eventPath
     }
+
     return suffix.length === 0
       ? requested.value
       : `${requested.prefix}${suffix.join(requested.separator)}`
@@ -142,6 +157,7 @@ export function resolveWatcherRootPaths(
   } = {}
 ): WatcherRootPaths {
   let watchRoot = requestedRoot
+
   try {
     watchRoot = (deps.realpath ?? realpathSync.native)(requestedRoot)
   } catch {
@@ -150,6 +166,7 @@ export function resolveWatcherRootPaths(
     // than fail here. Resolving the binding inside the try also keeps suites
     // that mock a partial node:fs from failing every watcher install.
   }
+
   return {
     watchRoot,
     rewriteEventPath: createRootPathRewriter(requestedRoot, watchRoot, deps.platform)
@@ -165,14 +182,18 @@ export function rewriteWatcherEvents<T extends { path: string }>(
   rewrite: WatcherEventPathRewriter
 ): T[] {
   let rewritten: T[] | null = null
+
   for (const [index, event] of events.entries()) {
     const path = rewrite(event.path)
+
     if (path === event.path) {
       rewritten?.push(event)
       continue
     }
+
     rewritten ??= events.slice(0, index)
     rewritten.push({ ...event, path })
   }
+
   return rewritten ?? events
 }

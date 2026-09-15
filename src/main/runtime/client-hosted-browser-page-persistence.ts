@@ -72,28 +72,36 @@ export function persistClientHostedBrowserPages(
     registry.listPages(worktreeId),
     host.now?.() ?? Date.now()
   )
+
   let session: WorkspaceSessionState | null
+
   try {
     session = host.getWorkspaceSession(worktreeId)
   } catch {
     return false
   }
+
   if (!session) {
     return false
   }
+
   const existing = session.clientHostedBrowserPagesByWorktree ?? {}
+
   if (
     samePersistedClientHostedBrowserPages(existing[worktreeId], rows) &&
     !needsAgeRefresh(existing[worktreeId], rows[0]?.savedAt ?? 0)
   ) {
     return false
   }
+
   const next = { ...existing }
+
   if (rows.length === 0) {
     delete next[worktreeId]
   } else {
     next[worktreeId] = rows
   }
+
   try {
     host.setWorkspaceSession(worktreeId, {
       ...session,
@@ -104,6 +112,7 @@ export function persistClientHostedBrowserPages(
     // would have carried is one rehydration already refuses to restore.
     return false
   }
+
   return true
 }
 
@@ -151,6 +160,7 @@ export function rehydrateClientHostedBrowserPages(
 ): readonly string[] {
   const now = source.now?.() ?? Date.now()
   const restored: string[] = []
+
   for (const session of source.listWorkspaceSessions()) {
     for (const [worktreeId, rows] of Object.entries(
       session.clientHostedBrowserPagesByWorktree ?? {}
@@ -158,6 +168,7 @@ export function rehydrateClientHostedBrowserPages(
       if (!Array.isArray(rows) || !source.isKnownWorktree(worktreeId)) {
         continue
       }
+
       for (const row of rows) {
         if (
           row.workspaceId !== worktreeId ||
@@ -166,6 +177,7 @@ export function rehydrateClientHostedBrowserPages(
         ) {
           continue
         }
+
         try {
           registry.publishClientPage({
             browserPageId: row.browserPageId,
@@ -193,6 +205,7 @@ export function rehydrateClientHostedBrowserPages(
       }
     }
   }
+
   return restored
 }
 
@@ -218,8 +231,10 @@ function samePersistedClientHostedBrowserPages(
   if ((left?.length ?? 0) !== right.length) {
     return false
   }
+
   return (left ?? []).every((row, index) => {
     const next = right[index]
+
     return (
       next !== undefined &&
       row.browserPageId === next.browserPageId &&

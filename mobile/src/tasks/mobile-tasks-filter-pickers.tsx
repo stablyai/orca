@@ -26,6 +26,7 @@ export function renderMobileTasksGitHubProjectFieldsPicker(model: ConnectionPres
     taskUiReady,
     toggleGitHubProjectFieldVisibility
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && showGitHubProjectFieldsPicker}
@@ -41,6 +42,7 @@ export function renderMobileTasksGitHubProjectFieldsPicker(model: ConnectionPres
         ) : (
           githubProjectAvailableSummaryFields.map((field, index) => {
             const visible = !githubProjectHiddenFieldIds.has(field.id)
+
             return (
               <View key={field.id}>
                 {index > 0 ? <View style={styles.actionSeparator} /> : null}
@@ -77,6 +79,7 @@ export function renderMobileTasksGitLabViewPicker(model: ConnectionPresentationM
     showGitLabViewPicker,
     taskUiReady
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && showGitLabViewPicker}
@@ -85,6 +88,7 @@ export function renderMobileTasksGitLabViewPicker(model: ConnectionPresentationM
       selected={gitlabView}
       onSelect={(view) => {
         setGitlabView(view)
+
         if (view === 'todos') {
           // Why: GitLab Todos is a server-side pending-todos stream; the
           // runtime method has no search query, so clear item-search state
@@ -106,6 +110,7 @@ export function renderMobileTasksGitLabFilterPicker(model: ConnectionPresentatio
     showGitLabFilterPicker,
     taskUiReady
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && showGitLabFilterPicker}
@@ -129,6 +134,7 @@ export function renderMobileTasksLinearFilterPicker(model: ConnectionPresentatio
     showLinearFilterPicker,
     taskUiReady
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && showLinearFilterPicker}
@@ -159,6 +165,7 @@ export function renderMobileTasksLinearWorkspacePicker(model: ConnectionPresenta
     showLinearWorkspacePicker,
     taskUiReady
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && showLinearWorkspacePicker}
@@ -168,6 +175,7 @@ export function renderMobileTasksLinearWorkspacePicker(model: ConnectionPresenta
       onSelect={(workspaceId) => {
         setSelectedLinearWorkspaceId(workspaceId)
         setSelectedLinearTeamIds(new Set())
+
         if (client) {
           void client
             .sendRequest('linear.selectWorkspace', { workspaceId })
@@ -192,6 +200,7 @@ export function renderMobileTasksLinearTeamPicker(model: ConnectionPresentationM
     showLinearTeamPicker,
     taskUiReady
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && showLinearTeamPicker}
@@ -220,6 +229,7 @@ export function renderMobileTasksLinearTeamPicker(model: ConnectionPresentationM
         </Pressable>
         {linearTeams.map((team) => {
           const selected = selectedLinearTeamIds.has(team.id)
+
           return (
             <View key={team.id}>
               <View style={styles.actionSeparator} />
@@ -227,15 +237,18 @@ export function renderMobileTasksLinearTeamPicker(model: ConnectionPresentationM
                 style={styles.repoPickerRow}
                 onPress={() => {
                   const next = new Set(selectedLinearTeamIds)
+
                   if (next.has(team.id)) {
                     next.delete(team.id)
                   } else {
                     next.add(team.id)
                   }
+
                   const normalized =
                     next.size === 0 || next.size === linearTeams.length
                       ? new Set(linearTeams.map((entry) => entry.id))
                       : next
+
                   setSelectedLinearTeamIds(normalized)
                   persistLinearTeamSelection(normalized, linearTeams)
                 }}
@@ -268,6 +281,7 @@ export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentatio
     setLinearStatusPickerItem,
     taskUiReady
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && linearStatusPickerItem !== null}
@@ -293,6 +307,7 @@ export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentatio
             const selected =
               state.name === linearStatusPickerItem?.source.state.name &&
               state.type === linearStatusPickerItem?.source.state.type
+
             return (
               <View key={state.id}>
                 {index > 0 ? <View style={styles.actionSeparator} /> : null}
@@ -303,6 +318,7 @@ export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentatio
                     if (!linearStatusPickerItem) {
                       return
                     }
+
                     void setLinearStatus(linearStatusPickerItem, state, {
                       closeDetail: false
                     }).then(() => setLinearStatusPickerItem(null))

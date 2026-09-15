@@ -17,8 +17,11 @@ import {
 } from './web-session-reorder-intent'
 
 const WORKTREE_ID = 'repo::/worktree'
+
 const OWNER_A = { environmentId: 'env-a', pairingRevision: 1 }
+
 const OWNER_A_REPAIRED = { environmentId: 'env-a', pairingRevision: 2 }
+
 const OWNER_B = { environmentId: 'env-b', pairingRevision: 1 }
 
 afterEach(() => {

@@ -45,6 +45,7 @@ export function normalizeShortcutLocalSearchQuery(query: string): string | null 
   if (isShortcutLocalSearchQueryTooLarge(query)) {
     return null
   }
+
   return query.trim().toLowerCase()
 }
 
@@ -68,6 +69,7 @@ export function buildShortcutGlobalSearchMatcher(
 ): (row: ShortcutRowModel) => boolean {
   const rowMatches = (row: ShortcutRowModel): boolean =>
     matchesSettingsSearch(searchQuery, getShortcutSearchEntry(row))
+
   return rows.some(rowMatches) ? rowMatches : () => true
 }
 
@@ -92,9 +94,11 @@ export function matchesShortcutLocalSearch(
   if (!query) {
     return true
   }
+
   if (isShortcutLocalSearchQueryTooLarge(query)) {
     return false
   }
+
   const searchableText = [
     row.item.title,
     row.item.id,
@@ -102,6 +106,7 @@ export function matchesShortcutLocalSearch(
     ...row.item.searchKeywords,
     formatKeybindingList(row.effective, platform)
   ]
+
   return searchableText.some((value) => value.toLowerCase().includes(query))
 }
 

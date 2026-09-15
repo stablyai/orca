@@ -43,6 +43,7 @@ function warnOnceMisconfigured(name: string, raw: string): void {
   if (warnedMisconfigured.has(name)) {
     return
   }
+
   warnedMisconfigured.add(name)
   // Stderr, not stdout — consent misconfiguration is an operator signal, not
   // user-facing output. Mirrors the skills.sh-style bug note in the plan doc:
@@ -56,14 +57,19 @@ function warnOnceMisconfigured(name: string, raw: string): void {
 
 function isEnvVarTruthy(name: string): boolean {
   const v = process.env[name]
+
   if (!v) {
     return false
   }
+
   const normalized = v.trim().toLowerCase()
+
   if (normalized === '1' || normalized === 'true') {
     return true
   }
+
   warnOnceMisconfigured(name, v)
+
   return false
 }
 
@@ -78,10 +84,12 @@ export function resolveConsent(settings: GlobalSettings): ConsentState {
   if (isEnvVarTruthy('DO_NOT_TRACK')) {
     return { effective: 'disabled', reason: 'do_not_track' }
   }
+
   // Precedence 2: product-specific kill switch.
   if (isEnvVarTruthy('ORCA_TELEMETRY_DISABLED')) {
     return { effective: 'disabled', reason: 'orca_disabled' }
   }
+
   // Precedence 3: CI detection. Any presence (not just truthy) counts — many
   // CI systems set `CI=true` but some legacy ones just set it to an empty
   // string or a build ID, and none of those are human intent to opt in.
@@ -90,6 +98,7 @@ export function resolveConsent(settings: GlobalSettings): ConsentState {
   }
 
   const t = settings.telemetry
+
   // Defensive: after the PR 1 migration in `Store.load()`, every settings
   // object has `telemetry` populated. If we somehow read a settings object
   // that predates migration, fail closed to `pending_banner` (no transmit)
@@ -101,6 +110,7 @@ export function resolveConsent(settings: GlobalSettings): ConsentState {
   if (t.optedIn === true) {
     return { effective: 'enabled' }
   }
+
   if (t.optedIn === false) {
     return { effective: 'disabled', reason: 'user_opt_out' }
   }

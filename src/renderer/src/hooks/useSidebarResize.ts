@@ -45,6 +45,7 @@ export function getNextSidebarResizeWidth({
   maxWidth: number
 }): number {
   const delta = (clientX - startX) * deltaSign
+
   return clampSidebarResizeWidth(startWidth + delta, minWidth, maxWidth)
 }
 
@@ -69,9 +70,11 @@ export function useSidebarResize<T extends HTMLElement>({
 
   const removeDragOverlay = useCallback(() => {
     const overlay = overlayRef.current
+
     if (overlay && overlay.parentNode) {
       overlay.parentNode.removeChild(overlay)
     }
+
     overlayRef.current = null
   }, [])
 
@@ -84,6 +87,7 @@ export function useSidebarResize<T extends HTMLElement>({
   const applyRenderedWidth = useCallback(
     (nextWidth: number) => {
       const container = containerRef.current
+
       if (!container) {
         return
       }
@@ -125,6 +129,7 @@ export function useSidebarResize<T extends HTMLElement>({
     const finalWidth = draftWidthRef.current
     applyRenderedWidth(finalWidth)
     onDraftWidthChange?.(finalWidth)
+
     if (finalWidth !== width) {
       setWidth(finalWidth)
     }
@@ -144,11 +149,13 @@ export function useSidebarResize<T extends HTMLElement>({
         minWidth,
         maxWidth
       })
+
       if (nextWidth === draftWidthRef.current) {
         return
       }
 
       draftWidthRef.current = nextWidth
+
       if (frameRef.current !== null) {
         return
       }

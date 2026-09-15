@@ -215,6 +215,7 @@ describe('cross-platform path containment', () => {
     // a path — callers rejoin this suffix and hit the filesystem with it.
     const nfc = '/Users/ada/프로젝트'
     const nfd = nfc.normalize('NFD')
+
     for (const root of [nfc, nfd]) {
       for (const candidate of [nfc, nfd]) {
         expect(relativePathInsideRoot(root, `${candidate}/src/index.ts`)).toBe('src/index.ts')

@@ -19,11 +19,17 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const detectLocalAgents = vi.fn()
+
 const detectRemoteAgents = vi.fn()
+
 const refreshLocalAgents = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const initialAppState = useAppStore.getInitialState()
+
 const roots: Root[] = []
+
 let latestHookResult: UseDetectedAgentsResult | null = null
 
 function HookProbe({
@@ -35,6 +41,7 @@ function HookProbe({
 }): null {
   latestHookResult = useDetectedAgents(target)
   onResult?.(latestHookResult)
+
   return null
 }
 
@@ -57,6 +64,7 @@ async function renderProbe(
     root.render(createElement(HookProbe, { target, onResult }))
   })
   await flushEffects()
+
   return root
 }
 
@@ -91,6 +99,7 @@ beforeEach(() => {
             minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
           }
         : []
+
     return Promise.resolve({
       id: method,
       ok: true,
@@ -199,6 +208,7 @@ afterEach(async () => {
       root.unmount()
     })
   }
+
   roots.length = 0
 })
 
@@ -292,6 +302,7 @@ describe('useDetectedAgents (runtime call site)', () => {
     let refreshCalls = 0
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       let result: unknown
+
       if (method === 'status.get') {
         result = {
           runtimeId: 'remote-runtime',
@@ -316,6 +327,7 @@ describe('useDetectedAgents (runtime call site)', () => {
         detectCalls += 1
         result = ['claude']
       }
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -340,6 +352,7 @@ describe('useDetectedAgents (runtime call site)', () => {
     let detectCalls = 0
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       let result: unknown
+
       if (method === 'status.get') {
         result = {
           runtimeId: 'remote-runtime',
@@ -355,6 +368,7 @@ describe('useDetectedAgents (runtime call site)', () => {
         detectCalls += 1
         result = detectCalls === 1 ? [] : ['kilo']
       }
+
       return Promise.resolve({
         id: method,
         ok: true,

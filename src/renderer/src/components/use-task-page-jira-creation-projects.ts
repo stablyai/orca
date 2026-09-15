@@ -27,7 +27,9 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
     setNewJiraIssueProjectQuery,
     setNewJiraIssueTypeId
   } = model
+
   const includeJiraSiteNameInProjectLabel = selectedJiraSiteId === 'all'
+
   const sortedAvailableJiraProjects = useMemo(
     () =>
       [...availableJiraProjects].sort((a, b) =>
@@ -35,6 +37,7 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
       ),
     [availableJiraProjects, includeJiraSiteNameInProjectLabel]
   )
+
   const filteredNewJiraIssueProjects = useMemo(() => {
     return filterJiraProjectPickerProjects({
       projects: sortedAvailableJiraProjects,
@@ -42,6 +45,7 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
       includeSiteName: includeJiraSiteNameInProjectLabel
     })
   }, [includeJiraSiteNameInProjectLabel, newJiraIssueProjectQuery, sortedAvailableJiraProjects])
+
   const newJiraIssueTargetProject = useMemo(
     () =>
       sortedAvailableJiraProjects.find(
@@ -51,9 +55,11 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
       null,
     [newJiraIssueProjectId, sortedAvailableJiraProjects]
   )
+
   const newJiraIssueTargetProjectSelectionKey = newJiraIssueTargetProject
     ? getJiraProjectSelectionKey(newJiraIssueTargetProject)
     : ''
+
   const newJiraIssueTargetType = useMemo(
     () =>
       availableJiraIssueTypes.find((issueType) => issueType.id === newJiraIssueTypeId) ??
@@ -61,10 +67,12 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
       null,
     [availableJiraIssueTypes, newJiraIssueTypeId]
   )
+
   const visibleJiraCreateFields = useMemo(
     () => jiraCreateFields.filter(isVisibleJiraCreateField),
     [jiraCreateFields]
   )
+
   const hasMissingJiraCreateField = useMemo(
     () =>
       visibleJiraCreateFields.some(
@@ -72,28 +80,37 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
       ),
     [newJiraIssueCustomFieldValues, visibleJiraCreateFields]
   )
+
   useEffect(() => {
     if (!newJiraIssueProjectComboboxOpen) {
       return
     }
+
     const frame = requestAnimationFrame(() => {
       const input = newJiraIssueProjectSearchInputRef.current
+
       if (!input) {
         return
       }
+
       input.focus()
       const end = input.value.length
       input.setSelectionRange(end, end)
     })
+
     return () => cancelAnimationFrame(frame)
   }, [newJiraIssueProjectComboboxOpen, newJiraIssueProjectSearchInputRef])
+
   const handleNewJiraIssueProjectComboboxOpenChange = useCallback(
     (open: boolean) => {
       setNewJiraIssueProjectComboboxOpen(open)
+
       if (open) {
         setNewJiraIssueProjectCommandValue(newJiraIssueTargetProjectSelectionKey)
+
         return
       }
+
       setNewJiraIssueProjectQuery('')
     },
     [
@@ -103,6 +120,7 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
       setNewJiraIssueProjectQuery
     ]
   )
+
   const handleNewJiraIssueProjectSelect = useCallback(
     (selectionKey: string) => {
       setNewJiraIssueProjectId(selectionKey)
@@ -119,20 +137,25 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
       setNewJiraIssueTypeId
     ]
   )
+
   const handleNewJiraIssueProjectTriggerKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>) => {
       if (newJiraIssueProjectComboboxOpen) {
         return
       }
+
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
         setNewJiraIssueProjectCommandValue(newJiraIssueTargetProjectSelectionKey)
         setNewJiraIssueProjectComboboxOpen(true)
+
         return
       }
+
       if (event.metaKey || event.ctrlKey || event.altKey) {
         return
       }
+
       if (event.key.length === 1 && /\S/.test(event.key)) {
         event.preventDefault()
         setNewJiraIssueProjectCommandValue(newJiraIssueTargetProjectSelectionKey)
@@ -148,6 +171,7 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
       setNewJiraIssueProjectQuery
     ]
   )
+
   const nextModel = model as typeof model & {
     includeJiraSiteNameInProjectLabel: typeof includeJiraSiteNameInProjectLabel
     sortedAvailableJiraProjects: typeof sortedAvailableJiraProjects
@@ -161,6 +185,7 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
     handleNewJiraIssueProjectSelect: typeof handleNewJiraIssueProjectSelect
     handleNewJiraIssueProjectTriggerKeyDown: typeof handleNewJiraIssueProjectTriggerKeyDown
   }
+
   nextModel.includeJiraSiteNameInProjectLabel = includeJiraSiteNameInProjectLabel
   nextModel.sortedAvailableJiraProjects = sortedAvailableJiraProjects
   nextModel.filteredNewJiraIssueProjects = filteredNewJiraIssueProjects
@@ -173,6 +198,7 @@ export function useTaskPageJiraCreationProjects(model: TaskPageJiraCreationState
     handleNewJiraIssueProjectComboboxOpenChange
   nextModel.handleNewJiraIssueProjectSelect = handleNewJiraIssueProjectSelect
   nextModel.handleNewJiraIssueProjectTriggerKeyDown = handleNewJiraIssueProjectTriggerKeyDown
+
   return nextModel
 }
 

@@ -7,6 +7,7 @@ export function buildCombinedGitStatusSignature(
 ): string {
   const sectionPaths = new Set(sections.map((section) => section.path))
   const matching = gitStatusEntries.filter((entry) => sectionPaths.has(entry.path))
+
   return JSON.stringify(
     matching.map((entry) => ({
       path: entry.path,

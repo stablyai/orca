@@ -14,6 +14,7 @@ export function useNativeChatRetainedSession(
   args: UseNativeChatLiveSessionArgs
 ): NativeChatLiveSession {
   const session = useNativeChatLiveSession(args)
+
   const identity = encodeNativeChatTranscriptIdentity([
     args.paneKey,
     args.runtimeEnvironmentId ?? null,
@@ -21,6 +22,7 @@ export function useNativeChatRetainedSession(
     args.sessionId,
     args.transcriptPath ?? null
   ])
+
   const activeIdentityRef = useRef(identity)
   const retentionRef = useRef<ReturnType<typeof createNativeChatTranscriptRetention>>(undefined!)
   retentionRef.current ??= createNativeChatTranscriptRetention()
@@ -41,15 +43,19 @@ export function useNativeChatRetainedSession(
     messages: session.messages,
     settled: readPhase === 'ready'
   })
+
   if (messages === session.messages && readPhase === session.readPhase) {
     return session
   }
+
   if (!sessionMatchesIdentity) {
     return { ...session, messages, readPhase, status: 'loading', error: undefined }
   }
+
   // Retained history beats the full-pane error: a reveal-time read/stream failure is usually transient.
   if (session.status === 'error' && messages.length > 0) {
     return { ...session, messages, readPhase, status: 'ready', error: undefined }
   }
+
   return { ...session, messages, readPhase }
 }

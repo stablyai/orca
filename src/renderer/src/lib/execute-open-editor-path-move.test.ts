@@ -3,12 +3,16 @@ import type * as RuntimeFileClient from '@/runtime/runtime-file-client'
 import type * as EditorAutosave from '@/components/editor/editor-autosave'
 
 const mocks = vi.hoisted(() => ({ renameRuntimePath: vi.fn() }))
+
 vi.mock('@/runtime/runtime-file-client', async (importOriginal) => {
   const actual = await importOriginal<typeof RuntimeFileClient>()
+
   return { ...actual, renameRuntimePath: mocks.renameRuntimePath }
 })
+
 vi.mock('@/components/editor/editor-autosave', async (importOriginal) => {
   const actual = await importOriginal<typeof EditorAutosave>()
+
   return { ...actual, requestEditorSaveQuiesce: vi.fn().mockResolvedValue(undefined) }
 })
 
@@ -42,6 +46,7 @@ function openDirtyTab(): string {
   state.setEditorDraft(id, 'unsaved work')
   state.markFileDirty(id, true)
   state.setLastKnownDiskSignature(id, 'sig-a')
+
   return id
 }
 
@@ -141,6 +146,7 @@ describe('executeOpenEditorPathMove', () => {
           }
         : undefined
     )
+
     handleFsChanged({
       worktreePath: '/repo',
       events: [{ kind: 'update', absolutePath: '/repo/sub/a.md' }]

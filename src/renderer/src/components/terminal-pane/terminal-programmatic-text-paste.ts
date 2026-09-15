@@ -28,18 +28,24 @@ export function handleTerminalProgrammaticTextPaste({
   if (!detail?.tabId || detail.tabId !== tabId || !detail.text) {
     return
   }
+
   const manager = getManager()
+
   if (!manager) {
     return
   }
+
   const panes = manager.getPanes()
+
   const pane =
     typeof detail.paneId === 'number'
       ? (panes.find((candidate) => candidate.id === detail.paneId) ?? null)
       : (manager.getActivePane() ?? panes[0])
+
   if (!pane) {
     return
   }
+
   const paneTransports = getPaneTransports()
   const transport = paneTransports.get(pane.id)
   const ptyId = transport?.getPtyId() ?? null
@@ -91,6 +97,7 @@ export function handleTerminalProgrammaticTextPaste({
       if (result.status !== 'pasted') {
         return
       }
+
       recordTerminalUserInputForLeaf(tabId, pane.leafId)
       pane.terminal.focus()
     })
@@ -100,5 +107,6 @@ function getShortcutPlatform(userAgent = globalThis.navigator?.userAgent ?? ''):
   if (userAgent.includes('Mac')) {
     return 'darwin'
   }
+
   return userAgent.includes('Windows') ? 'win32' : 'linux'
 }

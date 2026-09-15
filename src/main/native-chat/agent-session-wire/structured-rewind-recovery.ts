@@ -21,6 +21,7 @@ export function persistRewindRecord(
     if (record.lease.runtimeFence !== fence) {
       throw new Error('agent_session_checkpoint_stale')
     }
+
     return { ...record, rewind }
   })
 }
@@ -35,16 +36,20 @@ export async function recoverStructuredRewind(
   now: () => number = Date.now
 ): Promise<void> {
   let rewind = store.getRecord(sessionId)?.rewind
+
   if (rewind?.phase !== 'provider-succeeded' && rewind?.phase !== 'prepared') {
     return
   }
+
   const target = parseAgentJournalItemKey(rewind.providerItemId ?? rewind.itemId)
+
   if (target?.provider === 'codex' && !rewind.hydrationVerified) {
     const recovered = await adapter?.recoverRewind?.({
       sessionId,
       fence,
       beforeTurnId: target.turnId
     })
+
     if (!recovered?.ok) {
       if (
         recovered?.reason === 'provider-refused' &&
@@ -57,21 +62,28 @@ export async function recoverStructuredRewind(
           reason: recovered.reason,
           retained: []
         })
+
         return
       }
+
       throw new Error(`agent_session_rewind:${recovered?.reason ?? 'outcome-unknown'}`)
     }
+
     const expectedItems = new Set(
       rewind.retained
         .filter((item) => {
           const identity = parseAgentJournalItemKey(item.itemId)
+
           return identity?.provider === 'codex' && identity.threadId === target.threadId
         })
         .map((item) => item.itemId)
     )
+
     const observedItems = new Set<string>()
+
     for (const { identity } of recovered.items) {
       const itemId = agentJournalItemKey(identity)
+
       if (
         identity.provider !== 'codex' ||
         identity.threadId !== target.threadId ||
@@ -79,11 +91,14 @@ export async function recoverStructuredRewind(
       ) {
         throw new Error('agent_session_rewind:proof-mismatch')
       }
+
       observedItems.add(itemId)
     }
+
     if (observedItems.size !== expectedItems.size) {
       throw new Error('agent_session_rewind:proof-mismatch')
     }
+
     const retained = mergeRetainedHostLifecycleRows(
       rewind.retained,
       recovered.items.map(({ identity, body }) => ({
@@ -92,27 +107,35 @@ export async function recoverStructuredRewind(
         observedAt: now()
       }))
     )
+
     if (
       retained.length > 10_000 ||
       Buffer.byteLength(JSON.stringify(retained), 'utf8') > AGENT_SESSION_HISTORY_MAX_PAGE_BYTES
     ) {
       throw new Error('agent_session_rewind:history-limit')
     }
+
     rewind = { ...rewind, retained, phase: 'provider-succeeded', hydrationVerified: true }
     await persistRewindRecord(store, sessionId, fence, rewind)
   }
+
   if (rewind.phase !== 'provider-succeeded') {
     return
   }
+
   const replacement = rewind.retained.map((item) => {
     const identity = parseAgentJournalItemKey(item.itemId)
+
     if (!identity) {
       throw new Error('agent_session_rewind:invalid-retained-identity')
     }
+
     return { identity, body: restoreRewindJournalBody(item.body), observedAt: item.observedAt }
   })
+
   // A crash after the journal transaction must settle its existing epoch, not replace it twice.
   const alreadyReplaced = journal.cursor().epoch !== rewind.expectedEpoch
+
   if (
     alreadyReplaced &&
     !isDeepStrictEqual(
@@ -122,9 +145,11 @@ export async function recoverStructuredRewind(
   ) {
     throw new Error('agent_session_rewind:stale-epoch')
   }
+
   const cursor = alreadyReplaced
     ? journal.cursor()
     : await journal.replaceEpochItems('handle_forked', fence, replacement)
+
   await persistRewindRecord(store, sessionId, fence, {
     ...rewind,
     phase: 'completed',

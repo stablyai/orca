@@ -93,9 +93,11 @@ import { RelayHttpError } from './relay-http-client'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
@@ -146,6 +148,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     const statuses: string[] = []
     const keypair = nacl.box.keyPair()
     const detachTransport = vi.fn()
+
     const connecting = RelaySessionBroker.connect({
       authConfig: {
         relayTokenEndpoint: 'https://auth.example.test/v1/relay-token',
@@ -163,6 +166,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       refreshAccessToken: async () => null,
       onStatus: (status) => statuses.push(status)
     })
+
     await vi.waitFor(() => expect(fakes.controls).toHaveLength(1))
     const transportStopped = deferred<void>()
     fakes.transports[0]!.stop.mockReturnValue(transportStopped.promise)
@@ -192,6 +196,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     // publish this control as active.
     fakes.controlConnect.mockImplementationOnce(async () => {
       fakes.controls[0]!.options.onClose(1006)
+
       return {
         type: 'host-hello-ack',
         v: 1,
@@ -223,6 +228,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       activeConnIds: [],
       pendingConns: []
     }
+
     fakes.controlConnect.mockResolvedValueOnce(firstAck).mockResolvedValueOnce({
       ...firstAck,
       generation: 2,
@@ -239,16 +245,19 @@ describe('RelaySessionBroker lifecycle ownership', () => {
         assignmentEpoch: 2,
         leaseExpiresAt: 2_000_000
       })
+
     const resolvePreferredRegion = vi
       .fn()
       .mockResolvedValueOnce('asia-east2')
       .mockResolvedValueOnce('us-central1')
+
     const broker = await RelaySessionBroker.connect(
       brokerOptions({
         onStatus: vi.fn(),
         resolvePreferredRegion
       })
     )
+
     expect(fakes.assign).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -259,8 +268,10 @@ describe('RelaySessionBroker lifecycle ownership', () => {
         isCurrent: expect.any(Function)
       })
     )
+
     const wiredIsCurrent = (fakes.assign.mock.calls[0]![0] as { isCurrent: () => boolean })
       .isCurrent
+
     expect(wiredIsCurrent()).toBe(true)
     fakes.controls[0]!.options.onConnectionOpen({
       connId: 'old-basis',
@@ -308,6 +319,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       activeConnIds: ['existing-basis'],
       pendingConns: []
     }
+
     fakes.controlConnect.mockResolvedValueOnce(ack).mockResolvedValueOnce({
       ...ack,
       leaseExpiresAt: 2_000_000
@@ -384,6 +396,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       activeConnIds: [],
       pendingConns: []
     }
+
     fakes.controlConnect.mockResolvedValueOnce(ack).mockResolvedValueOnce({
       ...ack,
       leaseExpiresAt: 2_000_000,
@@ -438,6 +451,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
       activeConnIds: [],
       pendingConns: []
     }
+
     fakes.controlConnect
       .mockResolvedValueOnce(ack)
       .mockRejectedValueOnce(new Error('relay_control_closed_4401'))
@@ -477,6 +491,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
 
   it('backs off drain resolution failures without duplicate retries or post-close work', async () => {
     vi.useFakeTimers()
+
     try {
       const ack: RelayHostHelloAckMessage = {
         type: 'host-hello-ack',
@@ -487,6 +502,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
         activeConnIds: [],
         pendingConns: []
       }
+
       fakes.controlConnect.mockResolvedValue(ack)
       fakes.assign
         .mockResolvedValueOnce({
@@ -496,6 +512,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
         })
         .mockRejectedValue(new Error('director_unavailable'))
       const broker = await RelaySessionBroker.connect(brokerOptions({ random: () => 0.5 }))
+
       const drain = {
         type: 'drain' as const,
         graceMs: 5_000,
@@ -525,6 +542,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
 
   it('does not retry drain resolution before the director Retry-After window', async () => {
     vi.useFakeTimers()
+
     try {
       const ack: RelayHostHelloAckMessage = {
         type: 'host-hello-ack',
@@ -535,6 +553,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
         activeConnIds: [],
         pendingConns: []
       }
+
       fakes.controlConnect.mockResolvedValue(ack)
       fakes.assign
         .mockResolvedValueOnce({
@@ -562,6 +581,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
 
   it('recovers through a new origin after the director failure clears', async () => {
     vi.useFakeTimers()
+
     try {
       const ack: RelayHostHelloAckMessage = {
         type: 'host-hello-ack',
@@ -572,6 +592,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
         activeConnIds: [],
         pendingConns: []
       }
+
       fakes.controlConnect.mockResolvedValue(ack)
       fakes.assign
         .mockResolvedValueOnce({
@@ -606,6 +627,7 @@ describe('RelaySessionBroker lifecycle ownership', () => {
 
 function brokerBasisIds(broker: RelaySessionBroker): string[] {
   const pool = (broker as unknown as { originPool: unknown }).originPool
+
   return [...(pool as { basisOrigins: Map<string, unknown> }).basisOrigins.keys()]
 }
 
@@ -613,6 +635,7 @@ function brokerOptions(
   overrides: Partial<Parameters<typeof RelaySessionBroker.connect>[0]> = {}
 ): Parameters<typeof RelaySessionBroker.connect>[0] {
   const keypair = nacl.box.keyPair()
+
   return {
     authConfig: {
       relayTokenEndpoint: 'https://auth.example.test/v1/relay-token',

@@ -170,18 +170,22 @@ export abstract class DaemonPtyRuntimeState {
     expectedIncarnationId?: string
   ): void {
     const currentIncarnationId = this.sessionIncarnations.get(sessionId)
+
     if (currentIncarnationId !== undefined && expectedIncarnationId !== currentIncarnationId) {
       return
     }
+
     this.activeSessionIds.delete(sessionId)
     this.clearSessionAwaitingDaemonRecovery(sessionId)
     this.dirtySessionVersions.delete(sessionId)
     this.pausedProducerSessionIds.delete(sessionId)
     this.producerResumesOwedOnReconnect.delete(sessionId)
     this.backgroundedSessionIds.delete(sessionId)
+
     if (!this.sleepRestoreSessionIds.has(sessionId)) {
       this.coldRestoreCache.delete(sessionId)
     }
+
     this.sessionsNeedingFullCheckpoint.delete(sessionId)
     this.sessionsNeedingLiveCheckpoint.delete(sessionId)
     this.sessionsNeedingContinuityCheckpoint.delete(sessionId)
@@ -190,11 +194,13 @@ export abstract class DaemonPtyRuntimeState {
     this.nonFinalAdmissionDeniedSessionIds.delete(sessionId)
     this.lastFullCheckpointAt.delete(sessionId)
     this.stopCheckpointTimerIfIdle()
+
     if (this.historyManager) {
       void this.historyManager
         .closeSession(sessionId, exitCode)
         .catch((error) => console.warn('[history] closeSession failed:', sessionId, error))
     }
+
     this.initialCwds.delete(sessionId)
     this.wslDistrosBySessionId.delete(sessionId)
     this.sessionIncarnations.delete(sessionId)
@@ -233,13 +239,16 @@ export abstract class DaemonPtyRuntimeState {
     this.client.onDisconnected(() => {
       if (!this.respawnAdoptionClosed) {
         this.writeRecoveryAttempted = false
+
         for (const id of this.activeSessionIds) {
           this.sessionsAwaitingDaemonRecovery.add(id)
         }
       }
+
       for (const id of this.pausedProducerSessionIds) {
         this.producerResumesOwedOnReconnect.add(id)
       }
+
       this.pausedProducerSessionIds.clear()
       this.observeAuditFailure('transport_closed')
     })
@@ -274,6 +283,7 @@ export abstract class DaemonPtyRuntimeState {
 
   onDaemonIdentityChanged(listener: (event: DaemonIdentityChangeEvent) => void): () => void {
     this.identityChangeListeners.push(listener)
+
     return () => removeDaemonListener(this.identityChangeListeners, listener)
   }
 
@@ -281,6 +291,7 @@ export abstract class DaemonPtyRuntimeState {
     listener: (observation: DaemonAuditObservation) => void
   ): () => void {
     this.auditObservationListeners.push(listener)
+
     return () => removeDaemonListener(this.auditObservationListeners, listener)
   }
 

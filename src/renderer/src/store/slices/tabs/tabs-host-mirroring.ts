@@ -17,11 +17,14 @@ export function patchTerminalTabRow(
   patch: Partial<Pick<TerminalTab, 'isPinned' | 'viewMode'>>
 ): Partial<Pick<AppState, 'tabsByWorktree'>> {
   const location = locateTerminalTab(tabsByWorktree, tabId)
+
   if (!location) {
     return {}
   }
+
   const nextTabs = tabsByWorktree[location.worktreeId].slice()
   nextTabs[location.index] = { ...location.tab, ...patch }
+
   return { tabsByWorktree: { ...tabsByWorktree, [location.worktreeId]: nextTabs } }
 }
 
@@ -29,6 +32,7 @@ export function patchTerminalTabRow(
 // Dynamic import keeps this store slice off the runtime layer.
 export function mirrorTabPinnedToHost(state: AppState, tabId: string, isPinned: boolean): void {
   const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+
   // Why: only terminal tab pins are persisted host-side today (browser/editor in #5729); skip the RPC for other types.
   if (
     !found ||
@@ -37,6 +41,7 @@ export function mirrorTabPinnedToHost(state: AppState, tabId: string, isPinned: 
   ) {
     return
   }
+
   const worktreeId = found.worktreeId
   void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
     setWebRuntimeTabProps({ worktreeId, tabId, isPinned })
@@ -51,6 +56,7 @@ export function mirrorTabViewModeToHost(
   viewMode: 'terminal' | 'chat'
 ): void {
   const found = findTabAndWorktree(state.unifiedTabsByWorktree, tabId)
+
   // Why: only terminal tab viewMode is persisted host-side; skip the RPC for other types instead of a no-op round trip.
   if (
     !found ||
@@ -59,6 +65,7 @@ export function mirrorTabViewModeToHost(
   ) {
     return
   }
+
   const worktreeId = found.worktreeId
   void import('@/runtime/web-runtime-session').then(({ setWebRuntimeTabProps }) =>
     setWebRuntimeTabProps({ worktreeId, tabId, viewMode })

@@ -24,6 +24,7 @@ export type BrowserAnnotationViewportBridgeOptions = {
 }
 
 export const BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID = 1207
+
 export const BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX = '__orca_annotation_viewport__:'
 
 export function isValidBrowserAnnotationViewportBridgeToken(value: unknown): value is string {
@@ -34,7 +35,9 @@ function isValidBrowserGrabRect(value: unknown): value is BrowserGrabRect {
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const rect = value as Record<string, unknown>
+
   return (
     typeof rect.x === 'number' &&
     Number.isFinite(rect.x) &&
@@ -59,7 +62,9 @@ export function isValidBrowserAnnotationViewportBridgeMarkers(
       if (!marker || typeof marker !== 'object') {
         return false
       }
+
       const candidate = marker as Record<string, unknown>
+
       return (
         typeof candidate.id === 'string' &&
         candidate.id.length > 0 &&

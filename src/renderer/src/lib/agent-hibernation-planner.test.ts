@@ -11,8 +11,11 @@ import {
 } from './agent-hibernation-planner'
 
 const NOW = 2_000_000
+
 const OLD = NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 1
+
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const OTHER_LEAF = '22222222-2222-4222-8222-222222222222'
 
 function tab(id = 'tab-1', worktreeId = 'wt-bg'): TerminalTab {
@@ -39,6 +42,7 @@ function layout(leafId = LEAF, ptyId = 'pty-1'): TerminalLayoutSnapshot {
 
 function entry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
   const paneKey = overrides.paneKey ?? `tab-1:${LEAF}`
+
   return {
     state: 'done',
     prompt: 'make it so',
@@ -58,6 +62,7 @@ function snapshot(
   overrides: Partial<AgentHibernationPlannerSnapshot> = {}
 ): AgentHibernationPlannerSnapshot {
   const agentEntry = entry()
+
   return {
     settings: {
       experimentalAgentHibernation: true,
@@ -106,6 +111,7 @@ describe('agent sleep planner', () => {
       const e = entry({ state })
       expect(plannedWorktrees(snapshot({ agentStatusByPaneKey: { [e.paneKey]: e } }))).toEqual([])
     }
+
     const interrupted = entry({ interrupted: true })
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [interrupted.paneKey]: interrupted } }))
@@ -118,10 +124,12 @@ describe('agent sleep planner', () => {
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [ephemeralPi.paneKey]: ephemeralPi } }))
     ).toEqual([])
+
     const piWithoutTranscript = entry({
       agentType: 'pi',
       providerSession: { key: 'session_id', id: 'pi-session-1' }
     })
+
     expect(
       plannedWorktrees(
         snapshot({ agentStatusByPaneKey: { [piWithoutTranscript.paneKey]: piWithoutTranscript } })
@@ -138,6 +146,7 @@ describe('agent sleep planner', () => {
       agentType: 'copilot',
       providerSession: { key: 'session_id', id: '940237d9-c712-48e8-bca1-fd75fc4a8d4b' }
     })
+
     expect(
       plannedPaneKeys(snapshot({ agentStatusByPaneKey: { [copilot.paneKey]: copilot } }))
     ).toEqual([copilot.paneKey])
@@ -154,6 +163,7 @@ describe('agent sleep planner', () => {
         }
       ]
     })
+
     expect(
       plannedPaneKeys(
         snapshot({ agentStatusByPaneKey: { [withIdleTeammate.paneKey]: withIdleTeammate } })
@@ -227,9 +237,11 @@ describe('agent sleep planner', () => {
     // the done timestamp, so the old input-after-done compare was blind to it
     // and the hibernation kill discarded the TUI composer's contents.
     const turnStartedAt = OLD - 60_000
+
     const withTurn = entry({
       stateHistory: [{ state: 'working', prompt: 'make it so', startedAt: turnStartedAt }]
     })
+
     expect(
       plannedWorktrees(
         snapshot({
@@ -272,6 +284,7 @@ describe('agent sleep planner', () => {
         { state: 'working', prompt: 'make it so', startedAt: OLD - 30_000 }
       ]
     })
+
     // Draft typed during the first working segment: blocked.
     expect(
       plannedWorktrees(
@@ -290,6 +303,7 @@ describe('agent sleep planner', () => {
         })
       )
     ).toEqual(['wt-bg'])
+
     // A submission typed in a PREVIOUS done segment that already transitioned
     // onward was consumed and must not block the next completion.
     const resubmitted = entry({
@@ -298,6 +312,7 @@ describe('agent sleep planner', () => {
         { state: 'working', prompt: 'make it so', startedAt: OLD - 30_000 }
       ]
     })
+
     expect(
       plannedWorktrees(
         snapshot({
@@ -399,9 +414,11 @@ describe('agent sleep planner', () => {
       updatedAt: NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 10_000,
       stateStartedAt: NOW - DEFAULT_AGENT_HIBERNATION_IDLE_MS - 10_000
     })
+
     const [withoutVisit] = planAgentHibernationCandidates(
       snapshot({ agentStatusByPaneKey: { [oldEntry.paneKey]: oldEntry } })
     )
+
     const [withVisit] = planAgentHibernationCandidates(
       snapshot({
         agentStatusByPaneKey: { [oldEntry.paneKey]: oldEntry },
@@ -617,10 +634,12 @@ describe('agent sleep planner', () => {
 
   it('selects each eligible done agent pane independently', () => {
     expect(plannedWorktrees(snapshot())).toEqual(['wt-bg'])
+
     const second = entry({
       paneKey: `tab-1:${OTHER_LEAF}`,
       providerSession: { key: 'session_id', id: 'session-2' }
     })
+
     expect(
       plannedPaneKeys(
         snapshot({
@@ -651,6 +670,7 @@ describe('agent sleep planner', () => {
       state: 'working',
       subagents: [{ id: 'areview-loop-c237a4c577493352', state: 'working', startedAt: 1 }]
     })
+
     expect(plannedPaneKeys(snapshot({ agentStatusByPaneKey: { [gated.paneKey]: gated } }))).toEqual(
       []
     )
@@ -740,6 +760,7 @@ describe('live resume anchors do not block hibernation (#10238 regression)', () 
       agent === 'antigravity'
         ? ({ key: 'conversation_id', id: `${agent}-conversation-1` } as const)
         : ({ key: 'session_id', id: `${agent}-session-1` } as const)
+
     const agentEntry = entry({ agentType: agent, providerSession })
     expect(
       plannedPaneKeys(
@@ -773,6 +794,7 @@ describe('idle clock anchors on stateStartedAt, not updatedAt', () => {
   it('keeps the signature stable across such a repaint so confirmation can match', () => {
     const before = entry({ stateStartedAt: OLD, updatedAt: OLD })
     const after = entry({ stateStartedAt: OLD, updatedAt: NOW - 1 })
+
     const sigFor = (e: AgentStatusEntry): string =>
       planAgentHibernationCandidates(
         snapshot({
@@ -780,11 +802,13 @@ describe('idle clock anchors on stateStartedAt, not updatedAt', () => {
           ptyBindingFirstSeenAtByPaneKey: { [e.paneKey]: OLD }
         })
       )[0]!.signature
+
     expect(sigFor(after)).toBe(sigFor(before))
   })
 
   it('invalidates the signature when agent kind or resume identity changes', () => {
     const base = entry({ stateStartedAt: OLD, updatedAt: OLD })
+
     const sigFor = (e: AgentStatusEntry): string =>
       planAgentHibernationCandidates(
         snapshot({
@@ -792,6 +816,7 @@ describe('idle clock anchors on stateStartedAt, not updatedAt', () => {
           ptyBindingFirstSeenAtByPaneKey: { [e.paneKey]: OLD }
         })
       )[0]!.signature
+
     const baseline = sigFor(base)
     // updatedAt held constant throughout, so today's signature would NOT change.
     expect(sigFor(entry({ stateStartedAt: OLD, updatedAt: OLD, agentType: 'codex' }))).not.toBe(

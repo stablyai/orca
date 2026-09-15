@@ -23,6 +23,7 @@ const fixtures = vi.hoisted(() => {
     connectionId: null,
     executionHostId: null
   }
+
   const worktree: Worktree = {
     id: 'repo-1::/tmp/repo/feature',
     repoId: 'repo-1',
@@ -42,6 +43,7 @@ const fixtures = vi.hoisted(() => {
     sortOrder: 0,
     lastActivityAt: 0
   }
+
   const pr: PRInfo = {
     number: 42,
     title: 'Fix CI',
@@ -51,6 +53,7 @@ const fixtures = vi.hoisted(() => {
     updatedAt: '2026-06-16T00:00:00Z',
     mergeable: 'MERGEABLE'
   }
+
   const failingCheck: PRCheckDetail = {
     name: 'verify',
     status: 'completed',
@@ -58,6 +61,7 @@ const fixtures = vi.hoisted(() => {
     url: null,
     checkRunId: 42
   }
+
   const checkDetails: PRCheckRunDetails = {
     name: 'verify',
     status: 'completed',
@@ -84,7 +88,9 @@ const fixtures = vi.hoisted(() => {
       }
     ]
   }
+
   const prCacheKey = 'repo-1::feature'
+
   return { repo, worktree, pr, failingCheck, checkDetails, prCacheKey }
 })
 
@@ -146,11 +152,13 @@ describe('check-run-details-fix-with-ai', () => {
 
   it('prefers loaded details conclusion over the list-level check', () => {
     const listFailure = fixtures.failingCheck
+
     const passingDetails: PRCheckRunDetails = {
       ...fixtures.checkDetails,
       conclusion: 'success',
       status: 'completed'
     }
+
     expect(isCheckRunDetailsFixCandidate(listFailure, passingDetails)).toBe(false)
     expect(
       resolveCheckRunDetailsFixCheck(

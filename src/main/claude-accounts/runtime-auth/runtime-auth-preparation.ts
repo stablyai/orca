@@ -16,11 +16,14 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
   protected getPreparation(target?: ClaudeAccountSelectionTarget): ClaudeRuntimeAuthPreparation {
     const settings = this.store.getSettings()
     const paths = this.pathResolver.getRuntimePaths()
+
     const normalizedTarget = this.resolveWslDefaultTarget(
       target ?? this.getDefaultAccountSelectionTarget(settings)
     )
+
     const activeAccountId = getSelectedClaudeAccountIdForTarget(settings, normalizedTarget)
     const activeAccount = this.getActiveAccount(settings.claudeManagedAccounts, activeAccountId)
+
     if (
       normalizeClaudeAccountSelectionTarget(normalizedTarget).runtime === 'wsl' &&
       activeAccount?.managedAuthRuntime === 'wsl' &&
@@ -36,14 +39,18 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
         provenance: `managed:${activeAccount.id}:wsl:${activeAccount.wslDistro ?? ''}`
       }
     }
+
     if (normalizeClaudeAccountSelectionTarget(normalizedTarget).runtime === 'wsl') {
       const distro =
         normalizeClaudeAccountSelectionTarget(normalizedTarget).wslDistro ?? getDefaultWslDistro()
+
       const wslHome = distro ? getWslHome(distro) : null
       const wslHomeInfo = wslHome ? parseWslUncPath(wslHome) : null
+
       if (distro && wslHome && wslHomeInfo) {
         const windowsConfigDir = join(wslHome, '.claude')
         const linuxConfigDir = `${wslHomeInfo.linuxPath.replace(/\/$/, '')}/.claude`
+
         return {
           configDir: windowsConfigDir,
           runtime: 'wsl',
@@ -54,6 +61,7 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
           provenance: `wsl:${distro}:system`
         }
       }
+
       return {
         configDir: paths.configDir,
         runtime: 'wsl',
@@ -64,6 +72,7 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
         provenance: `wsl:${normalizeClaudeAccountSelectionTarget(normalizedTarget).wslDistro ?? '__default__'}:system`
       }
     }
+
     return {
       configDir: paths.configDir,
       runtime: 'host',
@@ -93,6 +102,7 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
     if (!activeAccountId) {
       return null
     }
+
     return accounts.find((account) => account.id === activeAccountId) ?? null
   }
 
@@ -101,9 +111,11 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
   ): ClaudeAccountSelectionTarget {
     // Why: Windows auth follows the resolved account runtime; stale cross-platform WSL pins must stay local-host.
     const resolved = resolveLocalAccountRuntimeTarget(settings)
+
     if (process.platform === 'win32' && resolved.runtime === 'wsl') {
       return { runtime: 'wsl', wslDistro: resolved.wslDistro }
     }
+
     return { runtime: 'host' }
   }
 
@@ -113,7 +125,9 @@ export class ClaudeRuntimeAuthPreparationService extends ClaudeRuntimeAuthSnapsh
     if (target?.runtime !== 'wsl' || target.wslDistro?.trim()) {
       return target ?? { runtime: 'host' }
     }
+
     const defaultDistro = getDefaultWslDistro()
+
     return defaultDistro ? { runtime: 'wsl', wslDistro: defaultDistro } : target
   }
 }

@@ -18,6 +18,7 @@ describe('AgentHookServer /statusline/claude', () => {
 
   function post(body: string, token?: string): Promise<Response> {
     const env = server.buildPtyEnv()
+
     return fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/statusline/claude`, {
       method: 'POST',
       headers: {
@@ -40,6 +41,7 @@ describe('AgentHookServer /statusline/claude', () => {
         seven_day: { used_percentage: 40, resets_at: 1712059200 }
       }
     })
+
     const body = new URLSearchParams({
       paneKey: 'pane-1',
       configDir: '/home/dev/managed',
@@ -68,6 +70,7 @@ describe('AgentHookServer /statusline/claude', () => {
       paneKey: 'pane-1',
       payload: JSON.stringify({ context_window: { used_percentage: 8 } })
     }).toString()
+
     await expect(post(noLimits)).resolves.toMatchObject({ status: 204 })
 
     await expect(post('payload=not-json')).resolves.toMatchObject({ status: 204 })

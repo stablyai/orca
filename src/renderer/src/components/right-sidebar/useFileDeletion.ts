@@ -63,6 +63,7 @@ export function useFileDeletion({
       if (inFlightRef.current.has(node.path)) {
         return false
       }
+
       inFlightRef.current.add(node.path)
 
       const operationOwner = node.operationOwner ?? { kind: 'unresolved' as const }
@@ -76,6 +77,7 @@ export function useFileDeletion({
           activeWorktreeId,
           node.operationOwner
         )
+
         // Why: remote deletes bypass OS Trash, and undo cannot recover
         // directories or unreadable files. Batch deletes confirm once up
         // front instead, so they skip the per-node prompt.
@@ -101,6 +103,7 @@ export function useFileDeletion({
             ),
             confirmVariant: 'destructive'
           })
+
           if (!confirmed) {
             return false
           }
@@ -109,6 +112,7 @@ export function useFileDeletion({
         const filesToClose = openFiles.filter((file) =>
           isPathEqualOrDescendant(file.filePath, node.path)
         )
+
         // Why: force-save any dirty buffers before trashing so the undo snapshot
         // reads the user's latest edits from disk — not an older version that
         // predates debounced autosave or a buffer with autosave disabled.
@@ -125,6 +129,7 @@ export function useFileDeletion({
         const operationRoute = operationGuard.assertCurrent()
         const state = useAppStore.getState()
         const worktree = activeWorktreeId ? state.getKnownWorktreeById(activeWorktreeId) : null
+
         const fileContext = {
           settings: operationRoute.settings,
           worktreeId: activeWorktreeId,
@@ -140,6 +145,7 @@ export function useFileDeletion({
         // We capture content first but only commit the undo entry after the
         // delete succeeds — otherwise a failed delete would poison the stack.
         let undoContent: string | undefined
+
         if (!node.isDirectory) {
           try {
             const rf = await readRuntimeFileContent({
@@ -149,6 +155,7 @@ export function useFileDeletion({
               worktreeId: activeWorktreeId ?? undefined,
               connectionId: operationRoute.connectionId
             })
+
             if (!rf.isBinary) {
               undoContent = rf.content
             }
@@ -199,6 +206,7 @@ export function useFileDeletion({
         if (activeWorktreeId) {
           useAppStore.setState((state) => {
             const currentExpanded = state.expandedDirs[activeWorktreeId] ?? new Set<string>()
+
             const nextExpanded = new Set(
               Array.from(currentExpanded).filter(
                 (dirPath) => !isPathEqualOrDescendant(dirPath, node.path)
@@ -236,6 +244,7 @@ export function useFileDeletion({
                 { value0: action, value1: node.name }
               )
         )
+
         return false
       } finally {
         inFlightRef.current.delete(node.path)
@@ -261,10 +270,13 @@ export function useFileDeletion({
       if (nodes.length === 0) {
         return
       }
+
       if (nodes.length === 1) {
         requestDelete(nodes[0])
+
         return
       }
+
       const roots = selectDeletionRoots(nodes)
       // Why: the batch confirms whenever any root is a permanent remote delete,
       // but the selection can also include local roots that only go to the
@@ -314,9 +326,11 @@ export function useFileDeletion({
             }),
           deleteNode: (node) => runDelete(node, { skipConfirmation: true })
         })
+
         if (deletedRoots === null || deletedRoots.length === 0) {
           return
         }
+
         setSelectedPaths(
           new Set(
             nodes

@@ -25,21 +25,35 @@ const {
 )
 
 vi.mock('fs', () => moduleFactories.fs())
+
 vi.mock('child_process', async (importOriginal) =>
   moduleFactories.childProcess(await importOriginal<Record<string, unknown>>())
 )
+
 vi.mock('net', () => moduleFactories.net())
+
 vi.mock('./daemon-health', () => moduleFactories.daemonHealth())
+
 vi.mock('./daemon-pid-identity', () => moduleFactories.daemonPidIdentity())
+
 vi.mock('./daemon-tcc-attribution', () => moduleFactories.daemonTccAttribution())
+
 vi.mock('./daemon-bundle-staleness', () => moduleFactories.daemonBundleStaleness())
+
 vi.mock('./daemon-stale-kill', () => moduleFactories.daemonStaleKill())
+
 vi.mock('./daemon-process-start-time', () => moduleFactories.daemonProcessStartTime())
+
 vi.mock('./daemon-pid-file-parse', () => moduleFactories.daemonPidFileParse())
+
 vi.mock('./client', () => moduleFactories.client())
+
 vi.mock('./daemon-lifecycle-event', () => moduleFactories.daemonLifecycleEvent())
+
 vi.mock('./daemon-spawner', () => moduleFactories.daemonSpawner())
+
 vi.mock('./daemon-pty-adapter', () => moduleFactories.daemonPtyAdapter())
+
 vi.mock('../ipc/pty', () => moduleFactories.ipcPty())
 
 describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
@@ -227,6 +241,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     ensureRunningOverrides.push(async () => {
       await outgoingRespawn?.('daemon_died')
       respawnedMidRestart = true
+
       return {
         socketPath: '/fake/restarted-socket',
         tokenPath: '/fake/restarted-token'
@@ -251,6 +266,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     ensureRunningOverrides.push(async () => {
       await restartedRespawn?.('daemon_died')
       respawnedMidSecondRestart = true
+
       return {
         socketPath: '/fake/restarted-socket-2',
         tokenPath: '/fake/restarted-token-2'
@@ -272,15 +288,18 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const { DaemonPtyRouter } = await import('./daemon-pty-router')
     const { DaemonPtyAdapter } = await import('./daemon-pty-adapter')
     const currentAtConstruction = adapterInstances[0]
+
     const legacyAdapter = new DaemonPtyAdapter({
       socketPath: '/fake/legacy.sock',
       tokenPath: '/fake/legacy.token',
       protocolVersion: 3
     })
+
     const routerWithLegacy = new DaemonPtyRouter({
       current: currentAtConstruction as unknown as InstanceType<typeof DaemonPtyAdapter>,
       legacy: [legacyAdapter as unknown as InstanceType<typeof DaemonPtyAdapter>]
     })
+
     // Why: spy on the outgoing router's disposeRouterOnly — adapter survival alone wouldn't catch a no-op that leaks listeners.
     const disposeRouterOnlySpy = vi.spyOn(routerWithLegacy, 'disposeRouterOnly')
     const oldRouterDispose = vi.spyOn(routerWithLegacy, 'dispose')
@@ -350,6 +369,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const originalEnsureRunning = originalSpawner.ensureRunning
     originalSpawner.ensureRunning.mockImplementation(async () => {
       trace.push('ensureRunning')
+
       return {
         socketPath: '/fake/socket-2',
         tokenPath: '/fake/token-2'
@@ -387,9 +407,11 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       if (method === 'listSessions') {
         return { sessions: [{ sessionId: 'live-1', isAlive: true }] }
       }
+
       // `shutdown` RPC — daemon exits before reply lands; return undefined.
       return undefined
     })
+
     const ensureConnectedMock = vi.fn(async () => {})
     const disconnectMock = vi.fn()
     const mod = await importFresh()
@@ -409,16 +431,20 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
         connect: [],
         error: []
       }
+
       return {
         on(event: string, cb: () => void) {
           handlers[event]?.push(cb)
+
           if (event === 'connect') {
             queueMicrotask(() => cb())
           }
+
           return this
         },
         removeListener(event: string, cb: () => void) {
           handlers[event] = handlers[event]?.filter((handler) => handler !== cb) ?? []
+
           return this
         },
         destroy() {}
@@ -438,18 +464,22 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
   it('cleans up daemon socket probe listeners when the probe times out', async () => {
     vi.useFakeTimers()
+
     try {
       const handlers: Record<string, Set<() => void>> = {
         connect: new Set(),
         error: new Set()
       }
+
       const socket = {
         on(event: string, cb: () => void) {
           handlers[event]?.add(cb)
+
           return this
         },
         removeListener(event: string, cb: () => void) {
           handlers[event]?.delete(cb)
+
           return this
         },
         destroy: vi.fn(),
@@ -457,6 +487,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
           return handlers[event]?.size ?? 0
         }
       }
+
       probeSocketExistsMock.mockReturnValue(true)
       netConnectMock.mockReturnValueOnce(socket)
       const mod = await importFresh()
@@ -489,16 +520,21 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
     // Why: the deferred gate holds the first restart inside ensureRunning so the second call provably enters while the first is mid-flight.
     let markEnsureRunningEntered: (() => void) | undefined
+
     const ensureRunningEntered = new Promise<void>((resolve) => {
       markEnsureRunningEntered = resolve
     })
+
     let releaseEnsureRunning: (() => void) | undefined
+
     const ensureRunningBarrier = new Promise<void>((resolve) => {
       releaseEnsureRunning = resolve
     })
+
     originalSpawner.ensureRunning.mockImplementationOnce(async () => {
       markEnsureRunningEntered?.()
       await ensureRunningBarrier
+
       return { socketPath: '/fake/socket-2', tokenPath: '/fake/token-2' }
     })
 

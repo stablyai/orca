@@ -14,15 +14,20 @@ export function selectPaletteTypeAliasMatch(
   if (!lowercasedQuery) {
     return null
   }
+
   let best: PaletteTypeAliasMatch | null = null
+
   for (const alias of aliases) {
     const start = alias.toLowerCase().indexOf(lowercasedQuery)
+
     if (start === -1) {
       continue
     }
+
     if (!best || start < best.range.start) {
       best = { text: alias, range: { start, end: start + lowercasedQuery.length } }
     }
   }
+
   return best
 }

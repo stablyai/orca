@@ -28,6 +28,7 @@ export async function runPairedTerminalColdActivationOracle(
   const createdWorktreeIds: string[] = []
   let fallbackWorktreeId: string | null = null
   let worktreeId: string | null = null
+
   try {
     await expect
       .poll(
@@ -35,6 +36,7 @@ export async function runPairedTerminalColdActivationOracle(
           page.evaluate((capability) => {
             const state = window.__store?.getState()
             const statuses = Array.from(state?.runtimeStatusByEnvironmentId.entries() ?? [])
+
             return JSON.stringify({
               capable: statuses.some(([, entry]) =>
                 entry.status?.capabilities?.includes(capability)
@@ -63,11 +65,14 @@ export async function runPairedTerminalColdActivationOracle(
       noParent: true,
       startupCommand: fixture.command('PAIR_COLD_FALLBACK')
     })
+
     fallbackWorktreeId = fallback.worktree.id
     createdWorktreeIds.push(fallbackWorktreeId)
+
     if (!fallback.startupTerminal?.handle || !fallback.startupTerminal.tabId) {
       throw new Error('Paired cold-activation fallback terminal was not created')
     }
+
     handles.push(fallback.startupTerminal.handle)
     const fallbackTabId = toWebTerminalSurfaceTabId(fallback.startupTerminal.tabId)
     await page.evaluate(
@@ -85,6 +90,7 @@ export async function runPairedTerminalColdActivationOracle(
     await expect(fallbackTab).toHaveAttribute('data-active', 'true')
 
     const firstMarker = 'PAIR_COLD_ACTIVATION_0'
+
     const created = await callColdActivationRuntime<{
       startupTerminal?: { handle?: string; tabId?: string }
       worktree: { id: string }
@@ -96,12 +102,16 @@ export async function runPairedTerminalColdActivationOracle(
       noParent: true,
       startupCommand: fixture.command(firstMarker)
     })
+
     worktreeId = created.worktree.id
     createdWorktreeIds.push(worktreeId)
+
     if (!created.startupTerminal?.handle || !created.startupTerminal.tabId) {
       throw new Error('Paired cold-activation startup terminal was not created')
     }
+
     handles.push(created.startupTerminal.handle)
+
     const pendingTabs = [
       {
         marker: firstMarker,
@@ -112,6 +122,7 @@ export async function runPairedTerminalColdActivationOracle(
 
     while (pendingTabs.length < TARGET_TAB_COUNT) {
       const marker = `PAIR_COLD_ACTIVATION_${pendingTabs.length}`
+
       const result = await callColdActivationRuntime<{
         tab: { parentTabId: string; terminal: string | null }
       }>(page, 'session.tabs.createTerminal', {
@@ -121,9 +132,11 @@ export async function runPairedTerminalColdActivationOracle(
         select: false,
         navigation: 'caller'
       })
+
       if (!result.tab.terminal) {
         throw new Error(`Paired cold-activation terminal ${pendingTabs.length} was not created`)
       }
+
       handles.push(result.tab.terminal)
       pendingTabs.push({
         marker,
@@ -141,6 +154,7 @@ export async function runPairedTerminalColdActivationOracle(
               const tabs = window.__store?.getState().tabsByWorktree[targetWorktreeId] ?? []
               const byId = new Map(tabs.map((tab) => [tab.id, tab.ptyId]))
               const ids = tabIds.map((id) => byId.get(id) ?? null)
+
               return ids.every((id): id is string => typeof id === 'string') ? ids : null
             },
             {
@@ -148,18 +162,22 @@ export async function runPairedTerminalColdActivationOracle(
               targetWorktreeId: worktreeId
             }
           )
+
           return originalPtyIds
         },
         { timeout: 30_000 }
       )
       .not.toBeNull()
+
     if (originalPtyIds === null) {
       throw new Error('Paired cold-activation PTY ids were not captured')
     }
+
     const tabs: ColdTab[] = pendingTabs.map((tab, index) => ({
       ...tab,
       originalPtyId: originalPtyIds[index]!
     }))
+
     const tabIds = tabs.map((tab) => tab.tabId)
     expect(await readColdActivationMountState(page, tabIds)).toEqual({ mounted: 0, parked: 0 })
 
@@ -189,9 +207,11 @@ export async function runPairedTerminalColdActivationOracle(
       mounted: TARGET_TAB_COUNT,
       parked: 0
     })
+
     const deferredTab = page.locator(
       `[data-testid="sortable-tab"][data-tab-id="${deferred.tabId}"]`
     )
+
     await deferredTab.click()
     await expect(deferredTab).toHaveAttribute('data-active', 'true')
     expect(await waitForActivePanePtyId(page, 30_000)).toBe(deferred.originalPtyId)
@@ -247,6 +267,7 @@ export async function runPairedTerminalColdActivationOracle(
     })
 
     const deferredMarker = `PAIR_COLD_DEFERRED_${Date.now()}`
+
     const sent = await callColdActivationRuntime<{ send: { accepted: boolean } }>(
       page,
       'terminal.send',
@@ -256,6 +277,7 @@ export async function runPairedTerminalColdActivationOracle(
         enter: true
       }
     )
+
     expect(sent.send.accepted).toBe(true)
 
     await deferredTab.click()
@@ -277,9 +299,11 @@ export async function runPairedTerminalColdActivationOracle(
         () => undefined
       )
     }
+
     await page
       .evaluate(() => window.__store?.getState().setActiveWorktree(null))
       .catch(() => undefined)
+
     for (const createdWorktreeId of createdWorktreeIds.toReversed()) {
       await callColdActivationRuntime(page, 'worktree.rm', {
         worktree: `id:${createdWorktreeId}`,
@@ -287,6 +311,7 @@ export async function runPairedTerminalColdActivationOracle(
         runHooks: false
       }).catch(() => undefined)
     }
+
     fixture.dispose()
   }
 }

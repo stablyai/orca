@@ -12,6 +12,7 @@ vi.mock('../platform/haptics', () => ({
 
 function clientReturning(...responses: unknown[]): RpcClient {
   let responseIndex = 0
+
   return {
     sendRequest: vi.fn(async () => responses[responseIndex++])
   } as unknown as RpcClient
@@ -79,12 +80,16 @@ describe('mobile + Codex tab creation routing', () => {
         }
       }
     )
+
     const scope = createScope(client)
     let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+
     function Harness() {
       actions = useMobileSessionTerminalCreateActions(scope as never)
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
     })
@@ -116,12 +121,16 @@ describe('mobile + Codex tab creation routing', () => {
       { ok: false, error: { code: 'structured_agent_session_unsupported', message: 'off' } },
       terminalCreateResponse()
     )
+
     const scope = createScope(client)
     let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+
     function Harness() {
       actions = useMobileSessionTerminalCreateActions(scope as never)
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
     })
@@ -152,12 +161,16 @@ describe('mobile + Codex tab creation routing', () => {
       },
       terminalCreateResponse()
     )
+
     const scope = createScope(client)
     let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+
     function Harness() {
       actions = useMobileSessionTerminalCreateActions(scope as never)
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
     })
@@ -178,12 +191,16 @@ describe('mobile + Codex tab creation routing', () => {
       ok: true,
       result: { send: { accepted: true } }
     })
+
     const scope = createScope(client)
     let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+
     function Harness() {
       actions = useMobileSessionTerminalCreateActions(scope as never)
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
     })
@@ -212,10 +229,13 @@ describe('mobile + Codex tab creation routing', () => {
     sendRequest.mockRejectedValueOnce(markRpcDeliveryUnknown(new Error('still unknown')))
     const scope = createScope(client)
     let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+
     function Harness() {
       actions = useMobileSessionTerminalCreateActions(scope as never)
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
     })
@@ -239,12 +259,16 @@ describe('mobile + Codex tab creation routing', () => {
         { ok: true, result: { supported: true } },
         { ok: false, error: { code, message: 'create outcome ambiguous' } }
       )
+
       const scope = createScope(client)
       let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+
       function Harness() {
         actions = useMobileSessionTerminalCreateActions(scope as never)
+
         return null
       }
+
       await act(async () => {
         renderer = create(createElement(Harness))
       })
@@ -271,12 +295,16 @@ describe('mobile + Codex tab creation routing', () => {
         message: 'Your system cannot allocate any more pty devices.'
       }
     })
+
     const scope = createScope(client)
     let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+
     function Harness() {
       actions = useMobileSessionTerminalCreateActions(scope as never)
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
     })
@@ -293,10 +321,13 @@ describe('mobile + Codex tab creation routing', () => {
     const client = clientReturning({ ok: false, error: { code: 'runtime_error', message: '' } })
     const scope = createScope(client)
     let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+
     function Harness() {
       actions = useMobileSessionTerminalCreateActions(scope as never)
+
       return null
     }
+
     await act(async () => {
       renderer = create(createElement(Harness))
     })

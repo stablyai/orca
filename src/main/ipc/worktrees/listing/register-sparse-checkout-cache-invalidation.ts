@@ -20,20 +20,24 @@ export function registerSparseCheckoutCacheInvalidation(
 ): () => void {
   const unregisterInvalidator = registerWorktreeChangeInvalidator((repoId) => {
     const repoPath = store.getRepo(repoId)?.path
+
     if (repoPath) {
       clearSparseCheckoutStateCacheForRepo(repoPath)
     } else {
       clearSparseCheckoutStateCache()
     }
   })
+
   onSparseCheckoutStateChanged((repoPath) => {
     const repo = store
       .getRepos()
       .find((candidate) => areWorktreePathsEqual(candidate.path, repoPath))
+
     if (repo) {
       notifyWorktreesChanged(mainWindow, repo.id)
     }
   })
+
   return () => {
     unregisterInvalidator()
     onSparseCheckoutStateChanged(undefined)

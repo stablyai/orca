@@ -28,7 +28,9 @@ export const NOTIFICATIONS_REMOTE_PUSH_CAPABILITY = NOTIFICATIONS_REMOTE_PUSH_RU
 type PushClient = Pick<RpcClient, 'sendRequest'>
 
 const REQUEST_TIMEOUT_MS = 5_000
+
 const REMOVAL_TIMEOUT_MS = 2_000
+
 const TOKEN_TIMEOUT_MS = 2_000
 
 type HostPushState = {
@@ -42,13 +44,17 @@ type HostPushState = {
 type RegistrationRecords = { registered: Set<string>; pending: Set<string> }
 
 const hostsById = new Map<string, HostPushState>()
+
 let registrationRecords: RegistrationRecords | null = null
+
 let tokenPromise: Promise<MobilePushToken | null> | null = null
+
 // A late registration must not overwrite a newer preference or consent choice.
 let consentGeneration = 0
 
 function hostState(hostId: string): HostPushState {
   let state = hostsById.get(hostId)
+
   if (!state) {
     state = {
       connection: { client: null },
@@ -58,6 +64,7 @@ function hostState(hostId: string): HostPushState {
     }
     hostsById.set(hostId, state)
   }
+
   return state
 }
 
@@ -69,6 +76,7 @@ async function readRecords(): Promise<RegistrationRecords> {
       pending: new Set(stored.pendingUnregisterHostIds)
     }
   }
+
   return registrationRecords
 }
 
@@ -84,15 +92,19 @@ async function mutateRecords(mutate: (value: RegistrationRecords) => void): Prom
 // A missing token is retried: APNs registration may still be in flight.
 async function currentToken(): Promise<MobilePushToken | null> {
   await ensureDesktopNotificationChannel()
+
   if (!tokenPromise) {
     const pending: Promise<MobilePushToken | null> = getDevicePushToken().then((token) => {
       if (!token && tokenPromise === pending) {
         tokenPromise = null
       }
+
       return token
     })
+
     tokenPromise = pending
   }
+
   return tokenPromise
 }
 
@@ -107,15 +119,18 @@ async function sendRegister(
     ...(token.apnsEnvironment ? { apnsEnvironment: token.apnsEnvironment } : {}),
     filter
   }
+
   const response = await client
     .sendRequest('notifications.registerPush', params, {
       timeoutMs: REQUEST_TIMEOUT_MS,
       failWhenDisconnected: true
     })
     .catch(() => null)
+
   if (!response?.ok) {
     return false
   }
+
   return (response.result as MobilePushRegisterResult | null)?.registered === true
 }
 
@@ -126,48 +141,60 @@ async function sendUnregister(client: PushClient, timeoutMs: number): Promise<bo
       failWhenDisconnected: true
     })
     .catch(() => null)
+
   return response?.ok === true
 }
 
 async function reconcileHost(hostId: string): Promise<void> {
   const state = hostsById.get(hostId)
   const client = state?.connection.client
+
   if (!state || !client) {
     return
   }
+
   const generation = consentGeneration
   const isCurrent = () => hostsById.get(hostId) === state && state.connection.client === client
   const value = await readRecords()
+
   // Unregister intent takes priority even before the capability probe answers.
   if (value.pending.has(hostId)) {
     if (state.supported === false || !(await sendUnregister(client, REQUEST_TIMEOUT_MS))) {
       return
     }
+
     await mutateRecords((current) => {
       current.pending.delete(hostId)
       current.registered.delete(hostId)
     })
+
     // A preference change can invalidate a register without disabling push.
     if (!(await loadPushNotificationsEnabled())) {
       return
     }
   }
+
   if (state.supported == null) {
     if (!isCurrent()) {
       return
     }
+
     state.capabilityProbeStop ??= startRuntimeCapabilityProbe(client, (capabilities) => {
       if (!isCurrent()) {
         return
       }
+
       state.supported = capabilities.includes(NOTIFICATIONS_REMOTE_PUSH_CAPABILITY)
       void enqueueReconcile(hostId)
     })
+
     return
   }
+
   if (!state.supported || !isCurrent()) {
     return
   }
+
   if (!(await loadPushNotificationsEnabled())) {
     // Saved consent recovers a disable even if its pending-record write failed.
     if (await sendUnregister(client, REQUEST_TIMEOUT_MS)) {
@@ -176,19 +203,25 @@ async function reconcileHost(hostId: string): Promise<void> {
         current.registered.delete(hostId)
       })
     }
+
     return
   }
+
   if (AppState.currentState !== 'active') {
     return
   }
+
   let timer: ReturnType<typeof setTimeout> | undefined
+
   const token = await Promise.race([
     currentToken(),
     new Promise<null>((resolve) => {
       timer = setTimeout(() => resolve(null), TOKEN_TIMEOUT_MS)
     })
   ]).finally(() => clearTimeout(timer))
+
   const filter = notificationPreferencesFilter(await loadNotificationDeliveryPreferences())
+
   if (
     !token ||
     !isCurrent() ||
@@ -197,25 +230,32 @@ async function reconcileHost(hostId: string): Promise<void> {
   ) {
     return
   }
+
   if (!(await sendRegister(client, token, filter)) || hostsById.get(hostId) !== state) {
     return
   }
+
   if (generation !== consentGeneration) {
     await mutateRecords((current) => current.pending.add(hostId))
     void enqueueReconcile(hostId)
+
     return
   }
+
   await mutateRecords((current) => current.registered.add(hostId))
 }
 
 function enqueueReconcile(hostId: string): Promise<void> {
   const state = hostState(hostId)
+
   const run = state.chain
     .then(() => (hostsById.get(hostId) === state ? reconcileHost(hostId) : undefined))
     .catch(() => {
       console.warn('[push] Failed to reconcile notification registration')
     })
+
   state.chain = run
+
   return run
 }
 
@@ -230,14 +270,17 @@ async function reconcileAllHosts(): Promise<void> {
  */
 export function attachPushRegistration(hostId: string, client: PushClient): () => void {
   const state = hostState(hostId)
+
   if (state.connection.client !== client) {
     state.capabilityProbeStop?.()
     state.capabilityProbeStop = null
     state.connection.client = client
     state.supported = null
   }
+
   void enqueueReconcile(hostId)
   const connection = state.connection
+
   return () => {
     if (connection.client === client) {
       connection.client = null
@@ -245,6 +288,7 @@ export function attachPushRegistration(hostId: string, client: PushClient): () =
       state.capabilityProbeStop = null
       state.supported = null
       const current = hostsById.get(hostId)
+
       if (current && current !== state) {
         current.capabilityProbeStop?.()
         current.capabilityProbeStop = null
@@ -258,14 +302,17 @@ export function attachPushRegistration(hostId: string, client: PushClient): () =
 export async function setRemotePushEnabled(enabled: boolean): Promise<void> {
   consentGeneration++
   await savePushNotificationsEnabled(enabled)
+
   try {
     await mutateRecords((current) => {
       if (!enabled) {
         for (const hostId of current.registered) {
           current.pending.add(hostId)
         }
+
         return
       }
+
       current.pending.clear()
     })
   } finally {
@@ -287,17 +334,22 @@ export async function unregisterPushForRemovedHost(hostId: string): Promise<() =
   // Retire ownership before waiting for earlier RPCs to settle.
   hostsById.delete(hostId)
   state?.capabilityProbeStop?.()
+
   if (state) {
     state.capabilityProbeStop = null
   }
+
   await state?.chain
+
   if (state?.connection.client && state.supported !== false) {
     await sendUnregister(state.connection.client, REMOVAL_TIMEOUT_MS)
   }
+
   await mutateRecords((current) => {
     current.registered.delete(hostId)
     current.pending.delete(hostId)
   }).catch(() => {})
+
   return () => {
     if (state && !hostsById.has(hostId)) {
       // Preserve disconnect ownership without reviving stale registration work.
@@ -310,10 +362,12 @@ export async function unregisterPushForRemovedHost(hostId: string): Promise<() =
 /** A rolled token stops delivering, so re-register every connected host at once. */
 export function startPushTokenSync(): () => void {
   const stopLease = startMobilePushLeaseRenewal(reconcileAllHosts)
+
   const stopToken = addPushTokenListener((token) => {
     tokenPromise = Promise.resolve(token)
     void reconcileAllHosts()
   })
+
   return () => {
     stopLease()
     stopToken()

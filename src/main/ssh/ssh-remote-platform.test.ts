@@ -16,6 +16,7 @@ const conn = {} as SshConnection
 
 function decodePowerShellCommand(command: string): string {
   const match = command.match(/-EncodedCommand\s+([A-Za-z0-9+/=]+)/)
+
   return match ? Buffer.from(match[1], 'base64').toString('utf16le') : ''
 }
 

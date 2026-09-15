@@ -156,6 +156,7 @@ export type LinearSearchResult = {
     workspaceErrors: LinearWorkspaceReadError[]
   }
 }
+
 export type LinearWorkspaceCandidate = {
   id: string
   name: string

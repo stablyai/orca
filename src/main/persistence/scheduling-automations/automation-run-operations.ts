@@ -36,6 +36,7 @@ function touchAutomation(state: PersistedState, automationId: string, now: numbe
   if (!state.automations.some((entry) => entry.id === automationId)) {
     return
   }
+
   state.automations = state.automations.map((entry) =>
     entry.id === automationId ? { ...entry, lastRunAt: now, updatedAt: now } : entry
   )
@@ -43,6 +44,7 @@ function touchAutomation(state: PersistedState, automationId: string, now: numbe
 
 function sortedAutomationRuns(state: PersistedState, automationId?: string): AutomationRun[] {
   const runs = state.automationRuns ?? []
+
   return [...(automationId ? runs.filter((run) => run.automationId === automationId) : runs)]
     .map((run) => ({
       ...run,
@@ -73,14 +75,18 @@ export function createAutomationRun(
   const existing = (operations.state.automationRuns ?? []).find(
     (run) => run.automationId === automation.id && run.scheduledFor === scheduledFor
   )
+
   if (existing) {
     return existing
   }
+
   const now = Date.now()
+
   // Why: retention prunes old runs, so the retained count isn't the ordinal — carry the number forward from the newest survivor.
   const runNumber = nextAutomationRunNumber(
     (operations.state.automationRuns ?? []).filter((run) => run.automationId === automation.id)
   )
+
   const run: AutomationRun = {
     id: randomUUID(),
     automationId: automation.id,
@@ -106,14 +112,18 @@ export function createAutomationRun(
     dispatchedAt: null,
     createdAt: now
   }
+
   operations.state.automationRuns = pruneAutomationRuns([
     ...(operations.state.automationRuns ?? []),
     run
   ])
+
   if (trigger === 'manual') {
     operations.recordManualRun()
   }
+
   operations.flush()
+
   return run
 }
 
@@ -124,12 +134,14 @@ export function recordRepeatedAutomationSkip(
   scheduledFor: number
 ): AutomationRun | null {
   const runs = operations.state.automationRuns ?? []
+
   const latest = runs
     .filter((run) => run.automationId === automationId)
     .reduce<AutomationRun | null>(
       (newest, run) => (!newest || run.createdAt > newest.createdAt ? run : newest),
       null
     )
+
   if (
     !latest ||
     latest.status !== 'skipped_unavailable' ||
@@ -138,19 +150,24 @@ export function recordRepeatedAutomationSkip(
   ) {
     return null
   }
+
   if ((latest.lastOccurrenceAt ?? latest.scheduledFor) === scheduledFor) {
     return latest
   }
+
   const now = Date.now()
+
   const updated: AutomationRun = {
     ...latest,
     occurrenceCount: (latest.occurrenceCount ?? 1) + 1,
     lastOccurrenceAt: scheduledFor
   }
+
   // Replaced, not patched in place: the list projection caches on array identity.
   operations.state.automationRuns = runs.map((run) => (run.id === latest.id ? updated : run))
   touchAutomation(operations.state, automationId, now)
   operations.flush()
+
   return updated
 }
 
@@ -161,15 +178,19 @@ export function updateAutomationRun(
   const index = (operations.state.automationRuns ?? []).findIndex(
     (entry) => entry.id === result.runId
   )
+
   if (index === -1) {
     throw new Error('Automation run not found.')
   }
+
   const now = Date.now()
   const current = operations.state.automationRuns[index]
   const workspaceId = result.workspaceId ?? current.workspaceId
+
   const workspaceDisplayName = Object.hasOwn(result, 'workspaceDisplayName')
     ? normalizeAutomationRunWorkspaceDisplayName(result.workspaceDisplayName ?? null)
     : null
+
   const updated: AutomationRun = {
     ...current,
     status: result.status,
@@ -198,16 +219,20 @@ export function updateAutomationRun(
     startedAt: current.startedAt ?? now,
     dispatchedAt: result.status === 'dispatched' ? now : current.dispatchedAt
   }
+
   // Replaced, not patched in place: the list projection caches on array identity.
   operations.state.automationRuns = operations.state.automationRuns.map((run) =>
     run.id === result.runId ? updated : run
   )
+
   if (!isFinalAutomationRunStatus(current.status) && isFinalAutomationRunStatus(updated.status)) {
     // Why: only a non-final run pins its workspace, so finishing releases the claim (#17775).
     invalidateLocalWorktreeMetadataPruneInputs()
   }
+
   touchAutomation(operations.state, updated.automationId, now)
   operations.flush()
+
   return updated
 }
 
@@ -217,19 +242,25 @@ export function snapshotAutomationRunWorkspaceDisplayName(
   displayName: string
 ): number {
   const normalizedDisplayName = normalizeAutomationRunWorkspaceDisplayName(displayName)
+
   if (!normalizedDisplayName) {
     return 0
   }
+
   let updatedCount = 0
   operations.state.automationRuns = (operations.state.automationRuns ?? []).map((run) => {
     if (run.workspaceId !== workspaceId || run.workspaceDisplayName === normalizedDisplayName) {
       return run
     }
+
     updatedCount += 1
+
     return { ...run, workspaceDisplayName: normalizedDisplayName }
   })
+
   if (updatedCount > 0) {
     operations.flush()
   }
+
   return updatedCount
 }

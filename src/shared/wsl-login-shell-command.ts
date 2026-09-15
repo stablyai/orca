@@ -21,6 +21,7 @@ export function buildWslExecArgs(
 
 export function buildWslLoginShellCommand(command: string): string {
   const quotedCommand = quotePosixShell(command)
+
   return [
     '_orca_wsl_shell=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)',
     'if [ -z "$_orca_wsl_shell" ] || [ ! -x "$_orca_wsl_shell" ]; then',
@@ -74,6 +75,7 @@ export function buildWslCapturedLoginShellCommand(
 ): WslCapturedLoginShellCommand {
   const begin = `__ORCA_WSL_CAPTURE_BEGIN_${nonce}__`
   const end = `__ORCA_WSL_CAPTURE_END_${nonce}__`
+
   return {
     beginMarker: begin,
     endMarker: end,
@@ -92,11 +94,14 @@ export function buildWslCapturedLoginShellCommand(
       // The real payload always follows the last one. The nonce keeps a payload
       // that happens to quote a marker from colliding.
       const beginIndex = stdout.lastIndexOf(begin)
+
       if (beginIndex === -1) {
         return null
       }
+
       const payloadStart = beginIndex + begin.length
       const endIndex = stdout.indexOf(end, payloadStart)
+
       // A payload that exited early never prints the closing fence; the rest of
       // the stream is still its output, and login shells run exit hooks after it.
       return endIndex === -1 ? stdout.slice(payloadStart) : stdout.slice(payloadStart, endIndex)

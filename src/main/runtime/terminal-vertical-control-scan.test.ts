@@ -14,6 +14,7 @@ describe('terminal vertical-control scanning', () => {
     const charCodeAt = vi.spyOn(String.prototype, 'charCodeAt')
     let actual: boolean
     let inspections: number
+
     try {
       actual = containsTerminalVerticalLineControl(input)
       inspections = charCodeAt.mock.calls.length
@@ -72,6 +73,7 @@ describe('terminal vertical-control scanning', () => {
   it('preserves tail rows when ordinary output is followed by a cursor-up redraw', () => {
     const first = appendNormalizedToTailBuffer([], '', 'first\nold\n')
     const normalized = normalizeTerminalChunk('\x1b[1A\x1b[2K\x1b[32mnew\x1b[0m\n')
+
     const next = appendNormalizedToTailBuffer(
       first.lines,
       first.partialLine,

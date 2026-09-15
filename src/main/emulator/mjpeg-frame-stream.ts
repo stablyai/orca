@@ -3,8 +3,11 @@ import { request as httpsRequest } from 'node:https'
 import { extractJpegFrames } from './mjpeg-frame-parser'
 
 const RECONNECT_DELAY_MS = 1_000
+
 const REQUEST_TIMEOUT_MS = 10_000
+
 const MAX_FPS = 30
+
 const MIN_FRAME_INTERVAL_MS = Math.floor(1_000 / MAX_FPS)
 
 export type MjpegFrameStreamCallbacks = {
@@ -14,16 +17,21 @@ export type MjpegFrameStreamCallbacks = {
 
 function normalizeStreamUrl(streamUrl: string, streamKey?: string): URL {
   const url = new URL(streamUrl)
+
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw new Error('Simulator stream must use http or https.')
   }
+
   if (!url.pathname.endsWith('/stream.mjpeg')) {
     throw new Error('Simulator stream must target stream.mjpeg.')
   }
+
   url.searchParams.set('raw', '1')
+
   if (streamKey) {
     url.searchParams.set('_orca', streamKey)
   }
+
   return url
 }
 
@@ -61,10 +69,12 @@ export class MjpegFrameStream {
 
   stop(): void {
     this.stopped = true
+
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
+
     this.request?.destroy()
     this.request = null
     this.pending = Buffer.alloc(0)
@@ -74,6 +84,7 @@ export class MjpegFrameStream {
     if (this.stopped || this.reconnectTimer) {
       return
     }
+
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       this.openRequest()
@@ -90,6 +101,7 @@ export class MjpegFrameStream {
         this.callbacks.onError(`Simulator stream returned HTTP ${res.statusCode}.`)
         res.resume()
         this.scheduleReconnect()
+
         return
       }
 
@@ -107,6 +119,7 @@ export class MjpegFrameStream {
       if (this.stopped) {
         return
       }
+
       this.callbacks.onError(error.message)
       this.scheduleReconnect()
     })
@@ -116,11 +129,14 @@ export class MjpegFrameStream {
   private handleChunk(chunk: Buffer<ArrayBufferLike>): void {
     const result = extractJpegFrames(this.pending, chunk)
     this.pending = result.pending
+
     for (const frame of result.frames) {
       const now = Date.now()
+
       if (this.lastFrameAt > 0 && now - this.lastFrameAt < MIN_FRAME_INTERVAL_MS) {
         continue
       }
+
       this.lastFrameAt = now
       this.callbacks.onFrame(frame)
     }

@@ -26,6 +26,7 @@ export function getSshPtyConsumerRecovery(
   const record = (operations.state.sshPtyConsumerRecoveries ?? []).find(
     (candidate) => candidate.targetId === targetId
   )
+
   if (
     record &&
     operations.protectedSecrets.isSealed(
@@ -35,6 +36,7 @@ export function getSshPtyConsumerRecovery(
   ) {
     return null
   }
+
   return record ? structuredClone(record) : null
 }
 
@@ -43,9 +45,11 @@ export async function upsertSshPtyConsumerRecovery(
   record: SshPtyConsumerRecovery
 ): Promise<void> {
   const normalized = normalizeSshPtyConsumerRecovery(record)
+
   if (!normalized) {
     throw new Error('Invalid SSH PTY consumer recovery record')
   }
+
   const recoveries = operations.state.sshPtyConsumerRecoveries ?? []
   operations.state.sshPtyConsumerRecoveries = [
     ...recoveries.filter((candidate) => candidate.targetId !== normalized.targetId),
@@ -60,9 +64,11 @@ export async function removeSshPtyConsumerRecovery(
 ): Promise<void> {
   const recoveries = operations.state.sshPtyConsumerRecoveries ?? []
   const next = recoveries.filter((record) => record.targetId !== targetId)
+
   if (next.length === recoveries.length) {
     return
   }
+
   operations.state.sshPtyConsumerRecoveries = next
   operations.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(targetId))
   await flushSshPtyConsumerRecovery(operations)

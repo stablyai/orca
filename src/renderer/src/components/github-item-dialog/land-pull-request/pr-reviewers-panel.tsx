@@ -42,23 +42,30 @@ export function PRReviewersPanel({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [reviewerInput, setReviewerInput] = useState('')
+
   const [activeReviewerCursor, setActiveReviewerCursor] = useState({
     resetKey: '',
     index: 0
   })
+
   const [submitting, setSubmitting] = useState(false)
+
   const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
     () => item.reviewRequests ?? []
   )
+
   const [reviewRequestsSource, setReviewRequestsSource] = useState(() => ({
     itemId: item.id,
     repoId: item.repoId,
     reviewRequests: item.reviewRequests
   }))
+
   const patchWorkItem = useAppStore((s) => s.patchWorkItem)
+
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, item.repoId ?? null))
   )
+
   const sourceSettings = useMemo(
     () =>
       sourceContext?.provider === 'github'
@@ -69,6 +76,7 @@ export function PRReviewersPanel({
         : repoOwnerSettings,
     [repoOwnerSettings, sourceContext]
   )
+
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
   const reviewerPanelMountedRef = useRef(true)
@@ -84,6 +92,7 @@ export function PRReviewersPanel({
     if (!reviewerPanelMountedRef.current) {
       return
     }
+
     cancelReviewerInputFocusFrame()
     reviewerInputFocusFrameRef.current = requestAnimationFrame(() => {
       reviewerInputFocusFrameRef.current = null
@@ -93,6 +102,7 @@ export function PRReviewersPanel({
 
   useEffect(() => {
     reviewerPanelMountedRef.current = true
+
     return () => {
       reviewerPanelMountedRef.current = false
       cancelReviewerInputFocusFrame()
@@ -115,15 +125,19 @@ export function PRReviewersPanel({
 
   const reviewerSeedUsers = useMemo<GitHubAssignableUser[]>(() => {
     const byLogin = new Map<string, GitHubAssignableUser>()
+
     const add = (user: GitHubAssignableUser): void => {
       if (!user.login) {
         return
       }
+
       byLogin.set(user.login.toLowerCase(), user)
     }
+
     for (const user of localReviewRequests) {
       add(user)
     }
+
     for (const review of item.latestReviews ?? []) {
       add({
         login: review.login,
@@ -131,9 +145,11 @@ export function PRReviewersPanel({
         avatarUrl: review.avatarUrl ?? ''
       })
     }
+
     if (item.author) {
       add({ login: item.author, name: null, avatarUrl: '' })
     }
+
     return Array.from(byLogin.values())
   }, [item.author, item.latestReviews, localReviewRequests])
 
@@ -141,6 +157,7 @@ export function PRReviewersPanel({
     () => resolvePullRequestRepo(item, projectOrigin),
     [item, projectOrigin]
   )
+
   const reviewerMetadataBySlug = useRepoAssigneesBySlug(
     open && reviewRepo ? reviewRepo.owner : null,
     open && reviewRepo ? reviewRepo.repo : null,
@@ -148,15 +165,18 @@ export function PRReviewersPanel({
     sourceSettings,
     reviewRepo?.host
   )
+
   const reviewerMetadataByPath = useRepoAssignees(
     open && !reviewRepo ? repoPath : null,
     open && !reviewRepo ? item.repoId : null,
     sourceSettings
   )
+
   const reviewerMetadata = reviewRepo ? reviewerMetadataBySlug : reviewerMetadataByPath
   const displayItem = { ...item, reviewRequests: localReviewRequests }
   const reviewers = getGitHubPRReviewerRows(displayItem)
   const authorLogin = item.author?.toLowerCase() ?? null
+
   const reviewerCandidates = useMemo(
     () =>
       mergeReviewerSuggestions(reviewerMetadata.data, reviewerSeedUsers).filter(
@@ -164,10 +184,12 @@ export function PRReviewersPanel({
       ),
     [authorLogin, reviewerMetadata.data, reviewerSeedUsers]
   )
+
   const reviewerCandidatesByLogin = useMemo(
     () => new Map(reviewerCandidates.map((user) => [user.login.toLowerCase(), user])),
     [reviewerCandidates]
   )
+
   const selectedReviewerLogins = useMemo(
     () =>
       new Set(
@@ -175,11 +197,14 @@ export function PRReviewersPanel({
       ),
     [localReviewRequests]
   )
+
   const reviewerQueryState = useMemo(
     () => getGitHubPRReviewerQueryState(reviewerInput),
     [reviewerInput]
   )
+
   const reviewerQuery = reviewerQueryState.query
+
   const filteredReviewerCandidates = useMemo(
     () =>
       filterGitHubPRReviewerCandidates({
@@ -188,6 +213,7 @@ export function PRReviewersPanel({
       }),
     [reviewerCandidates, reviewerQueryState]
   )
+
   const suggestedReviewerRows = useMemo(
     () =>
       reviewerQuery.length === 0 && !reviewerQueryState.isTooLarge
@@ -206,27 +232,34 @@ export function PRReviewersPanel({
       selectedReviewerLogins
     ]
   )
+
   const everyoneElseReviewerRows = useMemo(() => {
     const suggestedLogins = new Set(suggestedReviewerRows.map((user) => user.login.toLowerCase()))
+
     return filteredReviewerCandidates.filter(
       (user) => !suggestedLogins.has(user.login.toLowerCase())
     )
   }, [filteredReviewerCandidates, suggestedReviewerRows])
+
   const actionableReviewerRows = useMemo(
     () => [...suggestedReviewerRows, ...everyoneElseReviewerRows],
     [everyoneElseReviewerRows, suggestedReviewerRows]
   )
 
   const reviewerCursorResetKey = `${reviewerQuery}\u0000${actionableReviewerRows.length}`
+
   if (activeReviewerCursor.resetKey !== reviewerCursorResetKey) {
     setActiveReviewerCursor({ resetKey: reviewerCursorResetKey, index: 0 })
   }
+
   const activeReviewerIndex =
     activeReviewerCursor.resetKey === reviewerCursorResetKey ? activeReviewerCursor.index : 0
+
   const setActiveReviewerIndex = useCallback(
     (nextIndex: number | ((current: number) => number)): void => {
       setActiveReviewerCursor((current) => {
         const currentIndex = current.resetKey === reviewerCursorResetKey ? current.index : 0
+
         return {
           resetKey: reviewerCursorResetKey,
           index: typeof nextIndex === 'function' ? nextIndex(currentIndex) : nextIndex
@@ -241,6 +274,7 @@ export function PRReviewersPanel({
     localReviewRequests.length > 0 ||
     item.reviewRequests !== undefined ||
     item.latestReviews !== undefined
+
   const canRequestReview =
     !!repoPath || getActiveRuntimeTarget(sourceSettings).kind === 'environment'
 
@@ -279,10 +313,13 @@ export function PRReviewersPanel({
 
   const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
     setOpen(nextOpen)
+
     if (nextOpen) {
       scheduleReviewerInputFocus()
+
       return
     }
+
     setReviewerInput('')
   }
 
@@ -334,8 +371,10 @@ export function PRReviewersPanel({
                     setActiveReviewerIndex(
                       (current) => (current + 1) % actionableReviewerRows.length
                     )
+
                     return
                   }
+
                   if (event.key === 'ArrowUp' && actionableReviewerRows.length > 0) {
                     event.preventDefault()
                     setActiveReviewerIndex(
@@ -343,18 +382,25 @@ export function PRReviewersPanel({
                         (current - 1 + actionableReviewerRows.length) %
                         actionableReviewerRows.length
                     )
+
                     return
                   }
+
                   if (event.key === 'Enter') {
                     event.preventDefault()
                     const activeReviewer = actionableReviewerRows[activeReviewerIndex]
+
                     if (activeReviewer) {
                       void requestReviewer(activeReviewer)
+
                       return
                     }
+
                     void handleRequestReview()
+
                     return
                   }
+
                   if (event.key === 'Escape') {
                     event.preventDefault()
                     handleReviewerPickerOpenChange(false)

@@ -79,9 +79,11 @@ describe('AutomationsPage list rendering', () => {
     // Before Step 7b this was pinned as *unhandled*: refresh() was try/finally
     // with no catch and was called as `void refresh()`.
     const unhandled: unknown[] = []
+
     const capture = (reason: unknown): void => {
       unhandled.push(reason)
     }
+
     process.on('unhandledRejection', capture)
     api.automations.list.mockRejectedValue(new Error('offline'))
     scopedList([makeAutomation({ id: 'a-1', name: 'Nightly' })])
@@ -148,6 +150,7 @@ describe('AutomationsPage list rendering', () => {
 
     await renderPage()
     const entry = listedExternalEntries()[0]
+
     if (!entry) {
       throw new Error('no external entry to edit')
     }
@@ -178,9 +181,11 @@ describe('AutomationsPage list rendering', () => {
 
     await renderPage()
     const entry = listedExternalEntries()[0]
+
     if (!entry) {
       throw new Error('no external entry to act on')
     }
+
     // The second authority a multi-host build will list: same provider, same
     // `hermes:local` manager ID, different machine. The desktop fixture is the
     // only host that actually answers, so a scope recovered from the manager ID
@@ -203,6 +208,7 @@ describe('AutomationsPage list rendering', () => {
     const owners = api.automations.runExternalActionForOwner.mock.calls.map(
       (call) => (call[0] as { owner: unknown }).owner
     )
+
     expect(owners).toEqual([entry.scope.owner, runtimeScope.owner])
   })
 
@@ -218,9 +224,11 @@ describe('AutomationsPage list rendering', () => {
 
     const { container } = await renderPage()
     const entry = listedExternalEntries()[0]
+
     if (!entry) {
       throw new Error('no external entry to read runs for')
     }
+
     const runtimeScope = {
       ...entry.scope,
       owner: {
@@ -305,6 +313,7 @@ describe('AutomationsPage run navigation', () => {
         if (args.automationId === 'a-2' && args.expectedOwner) {
           throw new Error('web-01 is not connected')
         }
+
         return []
       }
     )

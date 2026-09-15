@@ -3,6 +3,7 @@ import { makePaneKey } from './stable-pane-id'
 import { canRegisterPaneKeyAlias, isOpaqueRemintedPaneKey } from './pane-key-alias'
 
 const CANONICAL = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+
 const REMINTED = '$$MFRGGZDFMY:L$$'
 
 describe('opaque reminted pane keys', () => {

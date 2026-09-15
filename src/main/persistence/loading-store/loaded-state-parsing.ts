@@ -51,6 +51,7 @@ function logPersistenceStartupMilestone(
   if (!isStartupDiagnosticsEnabled()) {
     return
   }
+
   // Why: snapshot `t` before resolving lazy details — otherwise an expensive details closure is billed to the milestone it measures.
   const t = Math.round(performance.now())
   const resolvedDetails = typeof details === 'function' ? details() : details
@@ -87,6 +88,7 @@ export class LoadedStateParsingOperations {
     })
 
     let result: PersistedState | null = null
+
     try {
       if (fileExistedOnLoad) {
         const readStartedAt = performance.now()
@@ -107,12 +109,14 @@ export class LoadedStateParsingOperations {
             isLegacyOpenCodeSessionCookie
           )
         }
+
         if (parsed.settings?.httpProxyUrl) {
           const decryptedProxy = this.runtime.protectedSecrets.decryptWithStatus(
             PROTECTED_SECRET_SLOT.httpProxyUrl,
             parsed.settings.httpProxyUrl,
             (value) => normalizeProxyUrl(value).ok
           )
+
           // Why (STA-3442): after a keychain reset decrypt returns raw ciphertext; a non-URL
           // value must not masquerade as a configured proxy (silent DIRECT fallback) or
           // re-persist as garbage. Plaintext URLs still pass, preserving the upgrade path.
@@ -132,6 +136,7 @@ export class LoadedStateParsingOperations {
             this.runtime.loadNeedsSave = true
           }
         }
+
         if (parsed.ui?.browserKagiSessionLink) {
           parsed.ui.browserKagiSessionLink = this.runtime.protectedSecrets.decrypt(
             PROTECTED_SECRET_SLOT.browserKagiSessionLink,
@@ -139,6 +144,7 @@ export class LoadedStateParsingOperations {
             (value) => normalizeKagiSessionLink(value) !== null
           )
         }
+
         parsed.sshPtyConsumerRecoveries = (
           Array.isArray(parsed.sshPtyConsumerRecoveries) ? parsed.sshPtyConsumerRecoveries : []
         )
@@ -148,19 +154,23 @@ export class LoadedStateParsingOperations {
           .filter((record): record is SshPtyConsumerRecovery => record !== null)
           .map((record) => {
             const slot = sshPtyOwnerLeaseSecretSlot(record.targetId)
+
             const decrypted = this.runtime.protectedSecrets.decryptWithStatus(
               slot,
               record.ownerLease,
               isLegacySshPtyOwnerLease
             )
+
             const normalized =
               decrypted.status === 'unavailable' ||
               (decrypted.status === 'failed' && !decrypted.plaintext)
                 ? record
                 : normalizeSshPtyConsumerRecovery({ ...record, ownerLease: decrypted.plaintext })
+
             if (!normalized) {
               this.runtime.protectedSecrets.removeRetainedBlob(slot)
             }
+
             return normalized
           })
           .filter((record): record is SshPtyConsumerRecovery => record !== null)
@@ -168,6 +178,7 @@ export class LoadedStateParsingOperations {
         const terminalSettings = prepareLoadedTerminalSettings(parsed, () => {
           this.runtime.loadNeedsSave = true
         })
+
         const profileSettings = prepareLoadedProfileSettings(
           parsed,
           terminalSettings.defaults,
@@ -175,6 +186,7 @@ export class LoadedStateParsingOperations {
             this.runtime.loadNeedsSave = true
           }
         )
+
         result = normalizeLoadedProfileState(parsed, terminalSettings, profileSettings, () => {
           this.runtime.loadNeedsSave = true
         })
@@ -186,10 +198,12 @@ export class LoadedStateParsingOperations {
     // Corrupt-file and no-file paths converge here; a corrupted install counts as existing, so it sees the opt-in banner.
     if (result === null && allowBackupRecovery) {
       const hasBackup = hasStateBackup(dataFile)
+
       if (fileExistedOnLoad || hasBackup) {
         if (this.backups.restoreFromBackup(dataFile)) {
           return this.load(false)
         }
+
         console.error('[persistence] No usable state file or backup found, using defaults')
       }
     }
@@ -201,16 +215,19 @@ export class LoadedStateParsingOperations {
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
       pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
     )
+
     const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
       workspaceSession,
       this.runtime.terminalScrollbackSnapshotStorage
     )
+
     if (migratedScrollback.changed) {
       this.runtime.loadNeedsSave = true
     }
 
     const repos = clearMissingProjectGroupMemberships(result.repos, result.projectGroups ?? [])
     const projectHostSetupCompatibility = mergeProjectHostSetupCompatibilityState(result, repos)
+
     if (!projectHostSetupCompatibilityStateEqual(result, projectHostSetupCompatibility)) {
       this.runtime.loadNeedsSave = true
     }
@@ -220,9 +237,11 @@ export class LoadedStateParsingOperations {
       repos,
       ...projectHostSetupCompatibility
     })
+
     if (automationContextMigration.changed) {
       this.runtime.loadNeedsSave = true
     }
+
     result = {
       ...result,
       automations: automationContextMigration.state.automations,
@@ -238,9 +257,11 @@ export class LoadedStateParsingOperations {
       sshTargetGenerationCounter: result.sshTargetGenerationCounter,
       storageAuthority: this.runtime.storageAuthority
     })
+
     if (automationOwnerMigration.changed) {
       this.runtime.loadNeedsSave = true
     }
+
     result = {
       ...result,
       automations: automationOwnerMigration.automations,
@@ -254,9 +275,11 @@ export class LoadedStateParsingOperations {
       ...projectHostSetupCompatibility,
       workspaceSession: migratedScrollback.session
     })
+
     if (folderScopeConnectionMigration.changed) {
       this.runtime.loadNeedsSave = true
     }
+
     result = folderScopeConnectionMigration.state
 
     if (normalizeWorktreeLinkedItemMetadata(result)) {
@@ -274,9 +297,11 @@ export class LoadedStateParsingOperations {
 
     // githubCache is a sidecar file now (see getGithubCacheFile); legacy in-file caches seed the session, then get stripped.
     const legacyCache = migrated.githubCache
+
     const hasLegacyCache =
       Object.keys(legacyCache?.pr ?? {}).length > 0 ||
       Object.keys(legacyCache?.issue ?? {}).length > 0
+
     if (hasLegacyCache) {
       this.runtime.loadNeedsSave = true
       // Why: mark dirty so the first flush writes the sidecar even without a poll refresh this session, preserving the seed.
@@ -289,6 +314,7 @@ export class LoadedStateParsingOperations {
       repos: migrated.repos.length,
       workspaceSessionBytes: Buffer.byteLength(JSON.stringify(migrated.workspaceSession))
     }))
+
     return migrated
   }
 }

@@ -6,6 +6,7 @@ import {
 import { isXtermMouseReport } from './terminal-pointer-input-sequences'
 
 const CAPTURE_LISTENER_OPTIONS = { capture: true } as const
+
 const MAX_DEFERRED_PTY_INPUT_FRAMES = 64
 
 type DeferredPtyInput = {
@@ -37,52 +38,64 @@ export function installTerminalLinkPtyMouseSuppression(
 
   const restore = (): void => {
     restoreQueued = false
+
     if (previousMouseEventsRequireAlt === null) {
       return
     }
+
     terminal.options.mouseEventsRequireAlt = previousMouseEventsRequireAlt
     previousMouseEventsRequireAlt = null
     ownerDocument?.removeEventListener('mouseup', queueRestore)
     ownerWindow?.removeEventListener('blur', restore)
   }
+
   const queueRestore = (): void => {
     if (restoreQueued || previousMouseEventsRequireAlt === null) {
       return
     }
+
     restoreQueued = true
     queueMicrotask(restore)
   }
+
   const finishDeferredInput = (): void => {
     if (deferredInputFallbackTimer !== null) {
       ownerWindow?.clearTimeout(deferredInputFallbackTimer)
       deferredInputFallbackTimer = null
     }
+
     const deferred = deferredPtyInput
     const shouldForward = deferred !== null && !actionClaimed
     deferredPtyInput = null
     capturesPtyInput = false
     actionClaimed = false
     removeDeferredListeners()
+
     if (shouldForward) {
       for (const input of deferred) {
         input.forward(input.data)
       }
     }
   }
+
   const captureCurrentMouseEvent = (): void => {
     capturesPtyInput = true
   }
+
   const handleMouseDown = (event: MouseEvent): void => {
     if (isTerminalLinkActionActivation(event) && shouldDeferPlainMouseEvent(event)) {
       finishDeferredInput()
       deferredPtyInput = []
       addDeferredListeners()
       captureCurrentMouseEvent()
+
       return
     }
+
     if (!isTerminalLinkDirectActivation(event) || !shouldSuppressMouseEvent(event)) {
       return
     }
+
     restore()
     previousMouseEventsRequireAlt = Boolean(terminal.options.mouseEventsRequireAlt)
     // Why: an Orca-owned link gesture must not also reach a mouse-aware child TUI.
@@ -90,35 +103,43 @@ export function installTerminalLinkPtyMouseSuppression(
     ownerDocument?.addEventListener('mouseup', queueRestore)
     ownerWindow?.addEventListener('blur', restore)
   }
+
   const handleDeferredMouseEvent = (): void => {
     if (deferredPtyInput !== null) {
       captureCurrentMouseEvent()
     }
   }
+
   const releaseIneligibleDrag = (event: MouseEvent): void => {
     if (deferredPtyInput !== null && !shouldContinueDeferring(event)) {
       finishDeferredInput()
     }
   }
+
   const releaseCurrentMouseEvent = (): void => {
     capturesPtyInput = false
   }
+
   const queueDeferredInputFallback = (): void => {
     if (deferredPtyInput !== null) {
       if (deferredInputFallbackTimer !== null) {
         ownerWindow?.clearTimeout(deferredInputFallbackTimer)
       }
+
       deferredInputFallbackTimer = ownerWindow?.setTimeout(finishDeferredInput, 0) ?? null
     }
   }
+
   const handleBlur = (): void => {
     finishDeferredInput()
     restore()
   }
+
   const addDeferredListeners = (): void => {
     if (deferredListenersInstalled) {
       return
     }
+
     deferredListenersInstalled = true
     ownerDocument?.addEventListener('mousemove', handleDeferredMouseEvent, CAPTURE_LISTENER_OPTIONS)
     ownerDocument?.addEventListener('mousemove', releaseIneligibleDrag)
@@ -131,10 +152,12 @@ export function installTerminalLinkPtyMouseSuppression(
     ownerWindow?.addEventListener('click', queueDeferredInputFallback)
     ownerWindow?.addEventListener('blur', handleBlur)
   }
+
   const removeDeferredListeners = (): void => {
     if (!deferredListenersInstalled) {
       return
     }
+
     deferredListenersInstalled = false
     ownerDocument?.removeEventListener(
       'mousemove',
@@ -158,12 +181,15 @@ export function installTerminalLinkPtyMouseSuppression(
 
   terminalElement?.addEventListener('mousedown', handleMouseDown, CAPTURE_LISTENER_OPTIONS)
   terminalElement?.addEventListener('mouseup', queueRestore, CAPTURE_LISTENER_OPTIONS)
+
   return {
     claimAction: () => {
       if (deferredPtyInput === null) {
         return false
       }
+
       actionClaimed = true
+
       return true
     },
     handlePtyInput: (data, forward) => {
@@ -171,11 +197,15 @@ export function installTerminalLinkPtyMouseSuppression(
         if (deferredPtyInput.length >= MAX_DEFERRED_PTY_INPUT_FRAMES) {
           finishDeferredInput()
           forward(data)
+
           return
         }
+
         deferredPtyInput.push({ data, forward })
+
         return
       }
+
       forward(data)
     },
     dispose: () => {

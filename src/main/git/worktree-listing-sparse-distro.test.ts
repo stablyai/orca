@@ -12,6 +12,7 @@ vi.mock('./worktree-sparse-state', () => ({
   detectSparseCheckout: detectSparseCheckoutMock,
   resolveGitCommonDir: vi.fn()
 }))
+
 vi.mock('./worktree-list-reader', () => ({
   readCheckedOutBranchRef: vi.fn(),
   readRepoCommonDirFromGit: vi.fn(),

@@ -15,13 +15,17 @@ import { TUI_IDLE_QUIESCENCE_MS } from './orca-runtime-postlude'
 export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected resolveExitWaiters(leaf: RuntimeLeafRecord): void {
     const handle = this.issueHandle(leaf)
+
     if (!handle) {
       return
     }
+
     const waiters = this.terminalWaiters.get(handle)
+
     if (!waiters || waiters.size === 0) {
       return
     }
+
     for (const waiter of [...waiters]) {
       if (waiter.condition === 'exit') {
         this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'exit', leaf))
@@ -35,26 +39,32 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
 
   protected resolveTuiIdleWaiters(leaf: RuntimeLeafRecord): void {
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+
     const candidateHandle =
       this.handleByLeafKey.get(leafKey) ??
       (leaf.ptyId
         ? (this.handleByPtyId.get(leaf.ptyId) ??
           this.handleByPtyIncarnation.get(leaf.ptyId)?.handle)
         : undefined)
+
     if (!candidateHandle || !this.terminalWaiters.get(candidateHandle)?.size) {
       return
     }
+
     const handle = candidateHandle
     const waiters = this.terminalWaiters.get(handle)
+
     if (!waiters || waiters.size === 0) {
       return
     }
+
     // Why re-rank rather than resolve outright: the transition that brought us here is
     // only a title sample, and a name-only title arriving mid-turn is the weakest tier
     // there is (#6011). Leave such a waiter on its poll to be corroborated instead.
     if (!this.isTuiIdleSatisfiedForLeaf(leaf)) {
       return
     }
+
     for (const waiter of [...waiters]) {
       if (waiter.condition === 'tui-idle') {
         this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
@@ -64,13 +74,17 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
 
   protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
     const handle = this.handleByPtyId.get(ptyId)
+
     if (!handle) {
       return
     }
+
     const waiters = this.terminalWaiters.get(handle)
+
     if (!waiters || waiters.size === 0) {
       return
     }
+
     for (const waiter of [...waiters]) {
       if (waiter.condition === 'exit') {
         this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'exit', pty))
@@ -83,17 +97,22 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
 
   protected resolvePtyTuiIdleWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
     const handle = this.handleByPtyId.get(ptyId)
+
     if (!handle) {
       return
     }
+
     const waiters = this.terminalWaiters.get(handle)
+
     if (!waiters || waiters.size === 0) {
       return
     }
+
     // Why: same re-ranking as resolveTuiIdleWaiters above.
     if (!this.isTuiIdleSatisfiedForPty(pty)) {
       return
     }
+
     for (const waiter of [...waiters]) {
       if (waiter.condition === 'tui-idle') {
         this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'tui-idle', pty))
@@ -130,16 +149,21 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
    */
   protected checkDeliverySettledAndArmRecheck(leaf: { tabId: string; leafId: string }): boolean {
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
+
     if (this.isAgentSettledForDelivery(leaf)) {
       this.clearDeliveryRecheck(leafKey)
+
       return true
     }
+
     this.armDeliveryRecheck(leafKey)
+
     return false
   }
 
   protected clearDeliveryRecheck(leafKey: string): void {
     const timer = this.deliveryRecheckTimersByLeafKey.get(leafKey)
+
     if (timer) {
       clearTimeout(timer)
       this.deliveryRecheckTimersByLeafKey.delete(leafKey)
@@ -150,18 +174,22 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
     if (this.deliveryRecheckTimersByLeafKey.has(leafKey)) {
       return
     }
+
     const live = this.leaves.get(leafKey)
     // Why this delay: the only refusal that time alone can lift is tier 3 waiting on the
     // stream to go quiet, so wake just after the window could have elapsed. A pane that is
     // still producing output re-arms from its own fresher timestamp rather than spinning.
     const elapsed = live?.lastOutputAt ? Date.now() - live.lastOutputAt : 0
     const delay = Math.max(TUI_IDLE_QUIESCENCE_MS - elapsed, 0) + 50
+
     const timer = setTimeout(() => {
       this.deliveryRecheckTimersByLeafKey.delete(leafKey)
       const current = this.leaves.get(leafKey)
+
       if (!current) {
         return
       }
+
       // Why the gate again here: delivery sites gate at the CALL, not inside
       // deliverPendingMessagesForLeaf, so firing straight into it would hand the retry the
       // very injection the gate exists to prevent. A pane that went busy again re-arms.
@@ -169,6 +197,7 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
         this.deliverPendingMessagesForLeaf(current)
       }
     }, delay)
+
     timer.unref?.()
     this.deliveryRecheckTimersByLeafKey.set(leafKey, timer)
   }
@@ -184,6 +213,7 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
    */
   protected isAgentSettledForDelivery(leaf: { tabId: string; leafId: string }): boolean {
     const live = this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+
     return live ? this.isTuiIdleSatisfiedForLeaf(live) : false
   }
 
@@ -203,6 +233,7 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
 
   protected getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {
     const title = this.getAdoptedPtyTitle(pty)
+
     return title ? detectExplicitIdleStatusFromTitle(title) : null
   }
 
@@ -211,12 +242,16 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
       if (leaf.ptyId !== pty.ptyId) {
         continue
       }
+
       const title = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
+
       if (!title) {
         continue
       }
+
       return title
     }
+
     return null
   }
 
@@ -227,12 +262,16 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
     if (this.messageDeliveryFlightsByPtyId.get(ptyId) !== flight) {
       return
     }
+
     this.messageDeliveryFlightsByPtyId.delete(ptyId)
     const parked = this.parkedMessageRedeliveriesByPtyId.get(ptyId)
+
     if (!parked) {
       return
     }
+
     this.parkedMessageRedeliveriesByPtyId.delete(ptyId)
+
     for (const [mailboxHandle, delivery] of parked) {
       this.deliverPendingMessages(delivery.leaf, {
         mailboxHandle,

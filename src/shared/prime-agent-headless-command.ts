@@ -9,14 +9,17 @@ export function isPrimeAgentHeadlessOneShotCommand(tokens: readonly string[]): b
   if (isPrintModeHeadlessOneShotCommand(tokens)) {
     return true
   }
+
   for (let index = 1; index < tokens.length; index += 1) {
     // Why: `--` ends option parsing, so a prompt that reads like `--mode` is still a prompt.
     if (tokens[index] === '--') {
       return false
     }
+
     if (tokens[index] === '--mode' && NON_INTERACTIVE_MODES.has(tokens[index + 1] ?? '')) {
       return true
     }
   }
+
   return false
 }

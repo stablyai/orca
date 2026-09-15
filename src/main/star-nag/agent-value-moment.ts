@@ -30,7 +30,9 @@ export class StarNagAgentValueMoment {
     if (this.wasConsumed() || this.deps.isEvaluating()) {
       return { status: 'skipped' }
     }
+
     const ui = this.deps.store.getUI()
+
     if (
       ui.starNagCompleted ||
       this.deps.isCooldownActive(ui.starNagDeferredUntil) ||
@@ -39,27 +41,37 @@ export class StarNagAgentValueMoment {
       // Why: each app version gets at most one completion-moment attempt, even if
       // an existing prompt/cooldown blocks the extra agent-finished trigger.
       this.consumeVersion()
+
       return { status: 'skipped' }
     }
+
     this.deps.setEvaluating(true)
+
     try {
       const starred = await checkOrcaStarred()
+
       if (this.deps.store.getUI().starNagCompleted) {
         return { status: 'skipped' }
       }
+
       if (starred === null) {
         this.pendingMode = 'web'
+
         return { status: 'ready', mode: 'web' }
       }
+
       if (starred) {
         this.deps.trackAlreadyStarredSuppressed()
         this.deps.markCompleted()
         // Why: already-starred users should not be rechecked on every agent
         // completion after this version has been resolved.
         this.consumeVersion()
+
         return { status: 'skipped' }
       }
+
       this.pendingMode = 'gh'
+
       return { status: 'ready', mode: 'gh' }
     } finally {
       this.deps.setEvaluating(false)
@@ -68,10 +80,13 @@ export class StarNagAgentValueMoment {
 
   showPrepared(): void {
     const mode = this.pendingMode
+
     if (!mode || this.wasConsumed()) {
       return
     }
+
     const ui = this.deps.store.getUI()
+
     if (
       ui.starNagCompleted ||
       this.deps.isCooldownActive(ui.starNagDeferredUntil) ||
@@ -82,14 +97,18 @@ export class StarNagAgentValueMoment {
       // repeated prompts from the same app-version completion moment.
       this.consumeVersion()
       this.pendingMode = null
+
       return
     }
+
     const delivered = this.deps.broadcastShow(mode)
+
     if (delivered || this.deps.store.getUI().starNagCompleted) {
       // Why: once a prompt is delivered or completion wins the race, this app
       // version's agent-value moment has been spent.
       this.consumeVersion()
     }
+
     if (delivered) {
       this.pendingMode = null
     }

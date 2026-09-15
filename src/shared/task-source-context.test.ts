@@ -85,6 +85,7 @@ describe('task source context', () => {
       repoId: 'repo-1',
       providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
     })
+
     const ssh = getTaskSourceCacheScope({
       provider: 'github',
       projectId: 'project-1',
@@ -92,6 +93,7 @@ describe('task source context', () => {
       repoId: 'repo-1',
       providerIdentity: { provider: 'github', owner: 'stablyai', repo: 'orca' }
     })
+
     const differentRepo = getTaskSourceCacheScope({
       provider: 'github',
       projectId: 'project-1',
@@ -99,6 +101,7 @@ describe('task source context', () => {
       repoId: 'repo-1',
       providerIdentity: { provider: 'github', owner: 'other', repo: 'orca' }
     })
+
     const enterpriseRepo = getTaskSourceCacheScope({
       provider: 'github',
       projectId: 'project-1',
@@ -174,6 +177,7 @@ describe('task source context', () => {
         projectKey: 'OPS'
       }
     }
+
     for (const malformed of [
       { ...valid, accountLabel: 44 },
       { ...valid, hostId: { runtime: 'env-1' } },
@@ -270,6 +274,7 @@ describe('areTaskSourceContextsEqual', () => {
       provider: 'github',
       providerIdentity: { provider: 'github', owner: 'acme', repo: 'orca' }
     }
+
     expect(areTaskSourceContextsEqual(github, { ...github, provider: 'gitlab' })).toBe(false)
   })
 })

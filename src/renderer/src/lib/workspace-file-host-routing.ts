@@ -13,6 +13,7 @@ export function buildWorkspaceFileContext(
   runtimeEnvironmentId?: string | null
 ): RuntimeFileOperationArgs {
   const settings = useAppStore.getState().settings
+
   return {
     settings: settingsForRuntimeOwner(settings, runtimeEnvironmentId),
     worktreeId: worktreeId || null,

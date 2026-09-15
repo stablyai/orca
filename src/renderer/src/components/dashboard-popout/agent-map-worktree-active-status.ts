@@ -15,11 +15,14 @@ export function agentMapWorktreeActiveStatus(
   if (counts.blocked > 0) {
     return 'blocked'
   }
+
   if (counts.waiting > 0) {
     return 'waiting'
   }
+
   if (counts.working > 0) {
     return 'working'
   }
+
   return counts.done > 0 ? 'done' : null
 }

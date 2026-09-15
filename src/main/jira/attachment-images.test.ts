@@ -40,12 +40,14 @@ describe('attachment image helpers', () => {
 
   it('extracts attachment content ids from rendered HTML in order', async () => {
     const { extractAttachmentContentIdsFromHtml } = await import('./attachment-discovery')
+
     const ids = extractAttachmentContentIdsFromHtml(`
       <p>intro</p>
       <img src="https://example.atlassian.net/rest/api/3/attachment/content/101" />
       <img src="https://example.atlassian.net/secure/attachment/202/shot.png" />
       <img src="https://example.atlassian.net/rest/api/3/attachment/content/101" />
     `)
+
     expect(ids).toEqual(['101', '202'])
   })
 
@@ -109,6 +111,7 @@ describe('attachment image helpers', () => {
 
   it('pairs shared alt filenames to distinct attachments then falls through', async () => {
     const { createMediaMarkdownResolver } = await import('./attachment-images')
+
     const images = [
       {
         id: '1',
@@ -125,6 +128,7 @@ describe('attachment image helpers', () => {
         dataUrl: 'data:image/png;base64,BB=='
       }
     ]
+
     const resolve = createMediaMarkdownResolver(images, ['1', '2'])
     expect(resolve({ id: 'm1', alt: 'image.png' })).toBe('![image.png](data:image/png;base64,AA==)')
     // Exhausted filename match must not re-emit image 1
@@ -133,6 +137,7 @@ describe('attachment image helpers', () => {
 
   it('does not re-emit an already consumed attachment for a third shared-alt node', async () => {
     const { createMediaMarkdownResolver } = await import('./attachment-images')
+
     const images = [
       {
         id: '1',
@@ -149,6 +154,7 @@ describe('attachment image helpers', () => {
         dataUrl: 'data:image/png;base64,BB=='
       }
     ]
+
     const resolve = createMediaMarkdownResolver(images, ['1', '2'])
     expect(resolve({ id: 'm1', alt: 'image.png' })).toContain('AA==')
     expect(resolve({ id: 'm2', alt: 'image.png' })).toContain('BB==')
@@ -176,16 +182,19 @@ describe('attachment image helpers', () => {
 
   it('selects preferred ids via Option A filename fallback without sweeping all attachments', async () => {
     const { selectPreferredAttachmentIds } = await import('./attachment-discovery')
+
     const attachments = [
       { id: '1', filename: 'a.png', mimeType: 'image/png', size: 1 },
       { id: '2', filename: 'b.png', mimeType: 'image/png', size: 1 },
       { id: '3', filename: 'unrelated.png', mimeType: 'image/png', size: 1 }
     ]
+
     const selection = selectPreferredAttachmentIds({
       renderedHtmlIds: [],
       attachmentField: attachments,
       mediaAttrs: [{ alt: 'a.png' }, { alt: 'b.png' }]
     })
+
     expect(selection.preferredIds).toEqual(['1', '2'])
     expect(selection.fallbackRan).toBe(true)
     expect(selection.needCount).toBe(2)
@@ -195,21 +204,25 @@ describe('attachment image helpers', () => {
       attachmentField: attachments,
       mediaAttrs: []
     })
+
     expect(noMedia.preferredIds).toEqual([])
     expect(noMedia.needCount).toBe(0)
   })
 
   it('Option A unions multiple same-filename attachments for repeated alts', async () => {
     const { selectPreferredAttachmentIds } = await import('./attachment-discovery')
+
     const attachments = [
       { id: '1', filename: 'image.png', mimeType: 'image/png', size: 1 },
       { id: '2', filename: 'image.png', mimeType: 'image/png', size: 1 }
     ]
+
     const zeroHtml = selectPreferredAttachmentIds({
       renderedHtmlIds: [],
       attachmentField: attachments,
       mediaAttrs: [{ alt: 'image.png' }, { alt: 'image.png' }]
     })
+
     expect(zeroHtml.preferredIds).toEqual(['1', '2'])
     expect(zeroHtml.fallbackRan).toBe(true)
 
@@ -218,6 +231,7 @@ describe('attachment image helpers', () => {
       attachmentField: attachments,
       mediaAttrs: [{ alt: 'image.png' }, { alt: 'image.png' }]
     })
+
     expect(partialHtml.preferredIds).toEqual(['1', '2'])
   })
 
@@ -227,6 +241,7 @@ describe('attachment image helpers', () => {
       contentType: 'image/png'
     })
     const { loadIssueImageAttachments } = await import('./attachment-images')
+
     const attachments = Array.from({ length: 13 }, (_, index) => ({
       id: String(index + 1),
       filename: `${index + 1}.png`,
@@ -316,6 +331,7 @@ describe('attachment image helpers', () => {
 
   it('singleflights concurrent cold misses for the same attachment', async () => {
     let resolveDownload: (value: { data: ArrayBuffer; contentType: string }) => void = () => {}
+
     jiraRequestBinaryMock.mockImplementation(
       () =>
         new Promise((resolve) => {

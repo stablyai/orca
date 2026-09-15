@@ -1,13 +1,23 @@
 export const LINEAR_SEARCH_DEFAULT_LIMIT = 20
+
 export const LINEAR_SEARCH_MAX_LIMIT = 50
+
 export const LINEAR_COMMENTS_CAP = 500
+
 export const LINEAR_COMMENT_BODY_CAP = 20_000
+
 export const LINEAR_CHILDREN_DEFAULT_DEPTH = 2
+
 export const LINEAR_CHILDREN_MAX_DEPTH = 5
+
 export const LINEAR_CHILDREN_NODE_CAP = 200
+
 export const LINEAR_ATTACHMENTS_CAP = 100
+
 export const LINEAR_RELATIONS_CAP = 100
+
 export const LINEAR_ACTIVITY_CAP = 250
+
 export const LINEAR_WRITE_BODY_CAP = 65_000
 
 export const LINEAR_ERROR_CODES = [
@@ -93,9 +103,13 @@ export type {
   LinearIssueTaskUpdateResult,
   LinearSaveIssueResult
 } from './agent-result-types'
+
 export type { LinearIssueActivityEntry, LinearIssueActivityValue } from './issue-activity'
+
 export type { LinearInlineMedia } from './inline-media'
+
 export type { LinearMcpIssueListRequest, LinearMcpIssueListResult } from './mcp-issue-list'
+
 export type {
   LinearIssueRelationship,
   LinearIssueRelationWriteRequest,
@@ -189,9 +203,11 @@ export function clampLinearSearchLimit(limit: number | undefined): number {
   if (limit === undefined) {
     return LINEAR_SEARCH_DEFAULT_LIMIT
   }
+
   if (!Number.isFinite(limit)) {
     return LINEAR_SEARCH_DEFAULT_LIMIT
   }
+
   return Math.min(Math.max(1, Math.floor(limit)), LINEAR_SEARCH_MAX_LIMIT)
 }
 
@@ -199,8 +215,10 @@ export function clampLinearIssueDepth(depth: number | undefined): number {
   if (depth === undefined) {
     return LINEAR_CHILDREN_DEFAULT_DEPTH
   }
+
   if (!Number.isFinite(depth)) {
     return LINEAR_CHILDREN_DEFAULT_DEPTH
   }
+
   return Math.min(Math.max(0, Math.floor(depth)), LINEAR_CHILDREN_MAX_DEPTH)
 }

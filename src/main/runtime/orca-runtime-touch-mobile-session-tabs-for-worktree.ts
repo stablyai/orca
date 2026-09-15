@@ -18,20 +18,25 @@ export class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntim
     options: { immediate?: boolean } = {}
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+
     if (!snapshot) {
       return
     }
+
     this.mobileSessionTabsAgentStatusHeartbeat.observeWorktreeRefresh(worktreeId)
     this.storeMobileSessionSnapshot(worktreeId, {
       ...snapshot,
       snapshotVersion: snapshot.snapshotVersion + 1
     })
+
     if (options.immediate) {
       // Why: readiness/lifecycle changes are structural and must not wait
       // behind the title/status coalescing window.
       this.notifyMobileSessionTabsChanged(worktreeId)
+
       return
     }
+
     // Why: title/status flips several times a second under spinner-in-title
     // agents. Coalesce the emit instead of fanning out every version.
     this.scheduleMobileSessionTabsChanged(worktreeId)
@@ -41,6 +46,7 @@ export class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntim
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }
+
     this.mobileSessionTabsAgentStatusHeartbeat.scheduleWorktreeHeartbeat(worktreeId)
   }
 
@@ -48,9 +54,11 @@ export class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntim
    *  Hook rows feed the headless `agentStatus` projection, which nothing else touches. */
   touchMobileSessionTabsForPane(paneKey: string, worktreeId?: string | null): void {
     const resolved = worktreeId ?? this.getTerminalWorktreeIdForPaneKey(paneKey)
+
     if (!resolved) {
       return
     }
+
     this.touchMobileSessionTabsForWorktree(resolved)
   }
 
@@ -79,20 +87,25 @@ export class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntim
     // so a partition miss must read as absent and not as a distinct null value.
     const session = this.getWorkspaceSessionForWorktree(worktreeId) ?? undefined
     const repoId = getRepoIdFromWorktreeId(worktreeId)
+
     if (
       !hasHostAuthoritativeTerminalMembership(session, worktreeId) &&
       (session !== undefined || !this.terminalTopologyRevisionByRepoId.has(repoId))
     ) {
       return true
     }
+
     if (this.mobileSessionSnapshotHasSurface(worktreeId, parentTabId, leafId)) {
       return true
     }
+
     if (!candidatePtyId) {
       return false
     }
+
     const pty = this.ptysById.get(candidatePtyId)
     const pane = parsePaneKey(pty?.paneKey ?? '')
+
     return Boolean(
       pty?.connected &&
       pty.worktreeId === worktreeId &&
@@ -118,6 +131,7 @@ export class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntim
     snapshot: RuntimeMobileSessionTabsSnapshot
   ): RuntimeMobileSessionTabsSnapshot {
     let next = snapshot
+
     for (const tab of snapshot.tabs) {
       if (
         tab.type !== 'terminal' ||
@@ -130,16 +144,19 @@ export class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntim
       ) {
         continue
       }
+
       const retired = retireTerminalSurfacesFromSnapshot({
         snapshot: next,
         ptyId: tab.ptyId ?? '',
         exactSurfaces: [{ parentTabId: tab.parentTabId, leafId: tab.leafId }],
         exactOnly: true
       })
+
       if (retired) {
         next = retired.snapshot
       }
     }
+
     return next
   }
 }

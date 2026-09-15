@@ -100,7 +100,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     worktree,
     workspaceStatuses
   } = model
+
   const deleteShortcut = useOptionalShortcutLabel('workspace.delete')
+
   return (
     <div
       ref={scopeRef}
@@ -110,12 +112,15 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
         if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
           return
         }
+
         if (shouldUseNativeContextMenu(event.target)) {
           return
         }
+
         if (shouldIgnoreNestedWorktreeContextMenuScope(event.currentTarget, event.target)) {
           return
         }
+
         event.preventDefault()
         contextMenuOpenedAtRef.current = Date.now()
         window.dispatchEvent(new Event(CLOSE_ALL_CONTEXT_MENUS_EVENT))

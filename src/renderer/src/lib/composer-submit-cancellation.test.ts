@@ -5,9 +5,11 @@ describe('settleComposerSubmit', () => {
   it('drops a resolved preflight result after cancellation', async () => {
     let cancelled = false
     let resolvePreflight: (value: string) => void = () => undefined
+
     const preflight = new Promise<string>((resolve) => {
       resolvePreflight = resolve
     })
+
     const settlement = settleComposerSubmit(preflight, () => cancelled)
 
     cancelled = true
@@ -19,9 +21,11 @@ describe('settleComposerSubmit', () => {
   it('suppresses a rejected preflight after cancellation', async () => {
     let cancelled = false
     let rejectPreflight: (error: Error) => void = () => undefined
+
     const preflight = new Promise<string>((_resolve, reject) => {
       rejectPreflight = reject
     })
+
     const settlement = settleComposerSubmit(preflight, () => cancelled)
 
     cancelled = true

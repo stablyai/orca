@@ -15,6 +15,7 @@ import { renderMobileTasksSearchControl } from './mobile-tasks-search-control'
 
 export function renderMobileTasksChrome(model: ConnectionPresentationModel) {
   const { setTaskCopyFeedbackRootRef } = model
+
   return (
     <View ref={setTaskCopyFeedbackRootRef} style={styles.topChrome}>
       {renderMobileTasksStatusBar(model)}
@@ -49,6 +50,7 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
     showHeaderCreateTask,
     taskUiReady
   } = model
+
   return (
     <View style={styles.statusBar}>
       <Pressable style={styles.backButton} onPress={() => router.back()}>
@@ -65,10 +67,13 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
           if (!taskUiReady) {
             return
           }
+
           if (provider === 'github' && githubMode === 'project') {
             refreshGitHubProject()
+
             return
           }
+
           refreshTasks()
         }}
       >
@@ -82,13 +87,16 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
             if (!taskUiReady) {
               return
             }
+
             if (provider === 'linear' && !linearConnected) {
               setLinearApiKeyDraft('')
               setLinearConnectState('idle')
               setLinearConnectError('')
               setShowLinearConnect(true)
+
               return
             }
+
             setCreateTitle('')
             setCreateBody('')
             setShowCreateTask(true)

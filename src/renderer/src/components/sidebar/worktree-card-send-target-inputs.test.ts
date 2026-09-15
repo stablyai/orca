@@ -47,6 +47,7 @@ describe('selectSendTargetInputs', () => {
       runtimePaneTitlesByTabId: { 'tab-1': 'claude' },
       agentStatusByPaneKey: { 'tab-1:leaf-1': {} as never }
     }
+
     const afterChurn = selectSendTargetInputs(churned, 'wt-A')
     expect(afterChurn).toBe(EMPTY_SEND_TARGET_INPUTS)
     expect(shallow(inactive, afterChurn)).toBe(true)
@@ -59,11 +60,13 @@ describe('selectSendTargetInputs', () => {
 
   it('exposes the live maps when the popover targets this worktree', () => {
     const titles = { 'tab-1': 'claude' }
+
     const s: SendTargetInputsState = {
       ...BASE,
       agentSendPopoverTargetMode: makeMode('wt-A'),
       runtimePaneTitlesByTabId: titles
     }
+
     const active = selectSendTargetInputs(s, 'wt-A')
     // Live map references pass straight through so eligibility derives correctly.
     expect(active.runtimePaneTitlesByTabId).toBe(titles)
@@ -72,11 +75,13 @@ describe('selectSendTargetInputs', () => {
 
   it('shallow-changes only when a subscribed map reference actually changes while active', () => {
     const titles = { 'tab-1': 'claude' }
+
     const s1: SendTargetInputsState = {
       ...BASE,
       agentSendPopoverTargetMode: makeMode('wt-A'),
       runtimePaneTitlesByTabId: titles
     }
+
     const r1 = selectSendTargetInputs(s1, 'wt-A')
 
     // Same underlying map refs -> shallow-equal -> no re-render.
@@ -95,6 +100,7 @@ describe('selectSendTargetControlInputs', () => {
       { agentSendPopoverTargetMode: null, agentStatusEpoch: 1 },
       'wt-A'
     )
+
     const afterEpoch = selectSendTargetControlInputs(
       { agentSendPopoverTargetMode: null, agentStatusEpoch: 2 },
       'wt-A'
@@ -116,10 +122,12 @@ describe('selectSendTargetControlInputs', () => {
 
   it('tracks the mode and freshness epoch only for the targeted worktree', () => {
     const mode = makeMode('wt-A')
+
     const first = selectSendTargetControlInputs(
       { agentSendPopoverTargetMode: mode, agentStatusEpoch: 4 },
       'wt-A'
     )
+
     const afterEpoch = selectSendTargetControlInputs(
       { agentSendPopoverTargetMode: mode, agentStatusEpoch: 5 },
       'wt-A'

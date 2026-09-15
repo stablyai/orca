@@ -32,6 +32,7 @@ export function handleRuntimeControlTextFrame(args: {
   if (!args.isCurrent(args.socketGeneration)) {
     return
   }
+
   handleSharedControlTextFrame({
     frame: args.frame,
     state: args.getState(),

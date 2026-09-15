@@ -79,7 +79,9 @@ type ProbeState = {
 }
 
 let active: ProbeState | null = null
+
 let lastState: ProbeState | null = null
+
 let cachedAppVersion: string | null = null
 
 export type TypingLatencyReport = {
@@ -189,6 +191,7 @@ function recordObservation(state: ProbeState, observation: EchoObservation): voi
     appendTypingLatencySample(state.ambiguous.outputBytes, observation.outputBatchBytes)
     appendTypingLatencySample(state.ambiguous.outputWrites, observation.outputBatchWrites)
   }
+
   state.byInputSource.addObservation(observation)
 }
 
@@ -205,6 +208,7 @@ function startProbe(): string {
   if (active) {
     return 'Typing diagnostic already running. Type for ~20s, then run __orcaTypingDiagnostic.report().'
   }
+
   cacheAppVersion()
 
   const state: ProbeState = {
@@ -231,6 +235,7 @@ function startProbe(): string {
     detachInputEvents: () => undefined,
     byInputSource: createInputSourceTally()
   }
+
   state.panes = listProbePanes().map((pane) =>
     instrumentPaneEcho(pane, (observation) => recordObservation(state, observation))
   )
@@ -239,19 +244,24 @@ function startProbe(): string {
   state.detachInputEvents = installTypingLatencyInputEvents(window, (signal) => {
     const eventTarget = signal.event.target instanceof Node ? signal.event.target : null
     const target = findPaneOwningNode(state.panes, eventTarget) ?? findPaneOwningFocus(state.panes)
+
     if (!target) {
       state.keystrokesWithoutTerminalFocus += 1
+
       return undefined
     }
+
     const recordedAt = performance.now()
     const recorded = recordKeystroke(target, recordedAt, signal.source, signal.text)
     state.unmatchedKeystrokes += recorded.unmatched
+
     if (signal.source === 'ime') {
       return {
         settleAfterPropagation: (defaultPrevented) => {
           const discardResult = defaultPrevented
             ? discardUndispatchedKeystroke(target, recorded.candidate)
             : null
+
           if (discardResult === null) {
             state.byInputSource.recordInput(signal.source, signal.text)
           } else if (discardResult === 'counted-unmatched') {
@@ -260,41 +270,52 @@ function startProbe(): string {
         }
       }
     }
+
     state.byInputSource.recordInput(signal.source, signal.text)
+
     return undefined
   })
 
   active = state
   lastState = state
+
   return `Typing diagnostic started on ${state.panes.length} pane(s). Click into the agent terminal, type normally for ~20 seconds, then run __orcaTypingDiagnostic.report().`
 }
 
 function stopProbe(): string {
   const state = active
+
   if (!state) {
     return 'Typing diagnostic was not running.'
   }
+
   active = null
   state.stoppedAt = performance.now()
   state.instrumentedPaneCount = state.panes.length
   state.detachInputEvents()
   state.detachInputEvents = () => undefined
+
   for (const entry of state.panes) {
     state.unmatchedKeystrokes += detachPaneEcho(entry)
   }
+
   state.panes = []
+
   return 'Typing diagnostic stopped. Run __orcaTypingDiagnostic.report() to read the last samples.'
 }
 
 function reportProbe(): TypingLatencyReport {
   if (active) {
     const now = performance.now()
+
     for (const entry of active.panes) {
       active.unmatchedKeystrokes += drainTimedOutEchoCandidates(entry, now)
     }
   }
+
   const report = buildReport(active ?? lastState, active !== null)
   console.log('[orca] typing latency diagnostic', report)
+
   return report
 }
 
@@ -310,9 +331,12 @@ export function installTypingLatencyDiagnostic(): void {
   if (typeof window === 'undefined') {
     return
   }
+
   const target = window as TypingDiagnosticWindow
+
   if (target.__orcaTypingDiagnostic) {
     return
   }
+
   target.__orcaTypingDiagnostic = { start: startProbe, stop: stopProbe, report: reportProbe }
 }

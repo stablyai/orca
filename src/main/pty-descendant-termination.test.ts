@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const execFileMock = vi.hoisted(() => vi.fn())
+
 vi.mock('node:child_process', () => ({ execFile: execFileMock }))
 
 import {
@@ -45,9 +46,11 @@ function tableCapture(rows: ProcessTableRow[], capturedAtMs = CAPTURED_AT_MS): P
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((res) => {
     resolve = res
   })
+
   return { promise, resolve }
 }
 
@@ -76,6 +79,7 @@ describe('parseProcessTable', () => {
         'not a process line'
       ].join('\n')
     )
+
     expect(rows).toEqual([
       { pid: 101, ppid: 1, pgid: 101, startedAt: 'Mon Jul 13 12:54:47 2026' },
       { pid: 42017, ppid: 101, pgid: 42017, startedAt: 'Tue Jul 14 01:02:03 2026' }
@@ -95,6 +99,7 @@ describe('collectDescendantRows', () => {
       row(20, 31, 20), // PID reuse can make a non-atomic ps read look cyclic.
       row(99, 1, 99)
     ]
+
     const snapshot = collectDescendantRows(10, table, CAPTURED_AT_MS)
     expect(snapshot.rootPgid).toBe(10)
     expect(snapshot.descendants.map((r) => r.pid)).toEqual([20, 30, 31])
@@ -133,10 +138,12 @@ describe('captureDescendantSnapshot', () => {
 
   it('resolves the descendant tree on POSIX', async () => {
     const readTable = vi.fn().mockResolvedValue(tableCapture([row(10, 1, 10), row(20, 10, 20)]))
+
     const result = await captureDescendantSnapshot(10, {
       readTable,
       platform: 'darwin'
     })
+
     expect(result).toEqual(snapshot([row(20, 10, 20)]))
     expect(vi.getTimerCount()).toBe(0)
   })
@@ -148,6 +155,7 @@ describe('captureDescendantSnapshot', () => {
     const readTable = vi
       .fn()
       .mockResolvedValue(tableCapture([row(501, 500, 500), row(502, 500, 500), row(503, 500, 500)]))
+
     const result = await captureDescendantSnapshot(500, { readTable, platform: 'darwin' })
     expect(result?.descendants).toEqual([])
     const sendSignal = vi.fn()
@@ -171,16 +179,19 @@ describe('captureDescendantSnapshot', () => {
     const readTable = vi.fn(() => {
       throw new Error('reader exploded')
     })
+
     expect(await captureDescendantSnapshot(10, { readTable, platform: 'linux' })).toBeNull()
   })
 
   it('degrades to null when ps hangs past the timeout instead of blocking teardown', async () => {
     const readTable = vi.fn().mockReturnValue(new Promise<ProcessTableCapture>(() => {}))
+
     const pending = captureDescendantSnapshot(10, {
       readTable,
       platform: 'darwin',
       timeoutMs: 1_000
     })
+
     await vi.advanceTimersByTimeAsync(1_000)
     expect(await pending).toBeNull()
   })
@@ -190,6 +201,7 @@ describe('captureDescendantSnapshot', () => {
       platform: 'darwin',
       timeoutMs: 321
     })
+
     expect(result).not.toBeNull()
     expect(execFileMock).toHaveBeenCalledWith(
       'ps',
@@ -247,6 +259,7 @@ describe('terminateDescendantSnapshot', () => {
     const recycled = row(40, 30, 40)
     const ambiguous = row(50, 30, 50)
     const sendSignal = vi.fn()
+
     // At escalation time: 30 survives unchanged, 20 is gone, 40's pid now
     // belongs to a different (recycled) process with a different start time.
     const readTable = vi
@@ -259,6 +272,7 @@ describe('terminateDescendantSnapshot', () => {
           { ...ambiguous, startedAt: 'Tue Jul 14 10:00:00 2026' }
         ])
       )
+
     terminateDescendantSnapshot(snapshot([exited, survivor, recycled, ambiguous]), {
       sendSignal,
       readTable
@@ -347,6 +361,7 @@ describe('terminateDescendantSnapshotAndWait', () => {
   it('escalates an identity-matched survivor and verifies its exit', async () => {
     const survivor = row(20, 10, 20)
     const sendSignal = vi.fn()
+
     const readTable = vi
       .fn()
       .mockResolvedValueOnce(tableCapture([survivor]))
@@ -358,6 +373,7 @@ describe('terminateDescendantSnapshotAndWait', () => {
       graceMs: 0,
       verifyMs: 200
     })
+
     await vi.advanceTimersByTimeAsync(50)
 
     await expect(pending).resolves.toBe(true)
@@ -369,11 +385,13 @@ describe('terminateDescendantSnapshotAndWait', () => {
 
   it('does not claim exit when the verification table is unavailable', async () => {
     const sendSignal = vi.fn()
+
     const pending = terminateDescendantSnapshotAndWait(snapshot([row(20, 10, 20)]), {
       sendSignal,
       readTable: vi.fn().mockRejectedValue(new Error('ps exploded')),
       verifyMs: 200
     })
+
     await vi.advanceTimersByTimeAsync(400)
 
     await expect(pending).resolves.toBe(false)
@@ -382,12 +400,14 @@ describe('terminateDescendantSnapshotAndWait', () => {
 
   it('keeps polling past a read that missed its deadline rather than surrendering', async () => {
     const survivor = row(20, 10, 20)
+
     const readTable = vi
       .fn()
       // A loaded host can miss one read's deadline with the window still open.
       .mockRejectedValueOnce(new Error('ps timed out'))
       .mockResolvedValueOnce(tableCapture([survivor]))
       .mockResolvedValueOnce(tableCapture([]))
+
     const sendSignal = vi.fn()
 
     const pending = terminateDescendantSnapshotWithVerdict(snapshot([survivor]), {
@@ -396,6 +416,7 @@ describe('terminateDescendantSnapshotAndWait', () => {
       graceMs: 0,
       verifyMs: 2_000
     })
+
     await vi.advanceTimersByTimeAsync(500)
 
     await expect(pending).resolves.toBe('exited')
@@ -407,12 +428,14 @@ describe('terminateDescendantSnapshotAndWait', () => {
 
   it('names a survivor seen at the deadline live, never unverifiable', async () => {
     const survivor = row(20, 10, 20)
+
     const pending = terminateDescendantSnapshotWithVerdict(snapshot([survivor]), {
       sendSignal: vi.fn(),
       readTable: vi.fn().mockResolvedValue(tableCapture([survivor])),
       graceMs: 0,
       verifyMs: 100
     })
+
     await vi.advanceTimersByTimeAsync(200)
 
     await expect(pending).resolves.toBe('live')
@@ -424,6 +447,7 @@ describe('terminateDescendantSnapshotAndWait', () => {
       readTable: vi.fn().mockRejectedValue(new Error('ps exploded')),
       verifyMs: 200
     })
+
     await vi.advanceTimersByTimeAsync(400)
 
     await expect(pending).resolves.toBe('unverifiable')
@@ -432,6 +456,7 @@ describe('terminateDescendantSnapshotAndWait', () => {
   it('does not signal a recycled descendant when identity validation is required', async () => {
     const sendSignal = vi.fn()
     const recycled = row(20, 10, 20, 'Tue Jul 14 13:00:00 2026')
+
     const pending = terminateDescendantSnapshotWithVerdict(
       snapshot([row(20, 10, 20, 'Tue Jul 14 12:00:00 2026')]),
       {
@@ -453,6 +478,7 @@ describe('terminateDescendantSnapshotAndWait', () => {
     const retained = row(20, 10, 20, 'Tue Jul 14 12:00:00 2026')
     const fresh = row(30, 10, 30, 'Tue Jul 14 12:00:01 2026')
     const sendSignal = vi.fn()
+
     const pending = terminateDescendantSnapshotWithVerdict(
       {
         ...snapshot([retained, fresh], 10, refreshBoundary),
@@ -468,6 +494,7 @@ describe('terminateDescendantSnapshotAndWait', () => {
         verifyMs: 100
       }
     )
+
     await vi.advanceTimersByTimeAsync(200)
 
     await expect(pending).resolves.toBe('live')
@@ -496,10 +523,12 @@ describe('createProcessTableSnapshotReader', () => {
   it('queues a post-request scan when another scan has already started', async () => {
     const firstGate = deferred<ProcessTableCapture>()
     const secondGate = deferred<ProcessTableCapture>()
+
     const readFresh = vi
       .fn()
       .mockReturnValueOnce(firstGate.promise)
       .mockReturnValueOnce(secondGate.promise)
+
     const readTable = createProcessTableSnapshotReader(readFresh)
 
     const first = readTable()
@@ -525,6 +554,7 @@ describe('createProcessTableSnapshotReader', () => {
       .fn()
       .mockRejectedValueOnce(new Error('ps failed'))
       .mockResolvedValueOnce(tableCapture([]))
+
     const readTable = createProcessTableSnapshotReader(readFresh)
     await expect(readTable()).rejects.toThrow('ps failed')
     await expect(readTable()).resolves.toEqual(tableCapture([]))
@@ -545,11 +575,13 @@ describe('killWithDescendantSweep', () => {
     const sendSignal = vi.fn(() => events.push('descendant-term'))
     const readTable = vi.fn().mockResolvedValue(tableCapture([row(10, 1, 10), row(20, 10, 20)]))
     const killRoot = vi.fn(() => events.push('root-kill'))
+
     const pending = killWithDescendantSweep(10, killRoot, {
       readTable,
       sendSignal,
       platform: 'darwin'
     })
+
     expect(killRoot).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(0)
     await pending
@@ -562,11 +594,13 @@ describe('killWithDescendantSweep', () => {
     const sendSignal = vi.fn()
     const readTable = vi.fn().mockRejectedValue(new Error('ps exploded'))
     const killRoot = vi.fn()
+
     const pending = killWithDescendantSweep(10, killRoot, {
       readTable,
       sendSignal,
       platform: 'darwin'
     })
+
     await vi.advanceTimersByTimeAsync(0)
     await pending
     expect(killRoot).toHaveBeenCalledOnce()
@@ -577,10 +611,13 @@ describe('killWithDescendantSweep', () => {
     // The job names the tree Orca created, so there is nothing to prove: no
     // process-table scrape, no parent-pid walk, no pid-recycle guess.
     const events: string[] = []
+
     const terminateOwnedTree = vi.fn(() => {
       events.push('job-kill')
+
       return 'terminated' as const
     })
+
     const killWindowsTree = vi.fn(async () => {})
     const verifyTreeKillTarget = vi.fn(async () => 'own' as const)
     const killRoot = vi.fn(() => events.push('root-kill'))
@@ -619,9 +656,11 @@ describe('killWithDescendantSweep', () => {
 
   it('on Windows taskkills the process tree before killRoot (#10004)', async () => {
     const events: string[] = []
+
     const killWindowsTree = vi.fn(async () => {
       events.push('tree-kill')
     })
+
     const killRoot = vi.fn(() => events.push('root-kill'))
     const sendSignal = vi.fn()
     const readTable = vi.fn()
@@ -645,6 +684,7 @@ describe('killWithDescendantSweep', () => {
     const killWindowsTree = vi.fn(async () => {
       throw new Error('should not run')
     })
+
     const killRoot = vi.fn()
     await killWithDescendantSweep(4242, killRoot, {
       platform: 'win32',
@@ -727,6 +767,7 @@ describe('killWithDescendantSweep', () => {
       ownsRoot: () => alive,
       verifyTreeKillTarget: async () => {
         alive = false
+
         return 'own'
       }
     })
@@ -751,6 +792,7 @@ describe('killWithDescendantSweep', () => {
     const killWindowsTree = vi.fn(async () => {
       throw new Error('taskkill failed')
     })
+
     const killRoot = vi.fn()
     await expect(
       killWithDescendantSweep(99, killRoot, {

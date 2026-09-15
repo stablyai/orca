@@ -25,6 +25,7 @@ export function useSettingsNavigationModel(
   // Why: recompute scrollback mode only when the row value changes, not on every settings mutation.
   if (model.settings?.terminalScrollbackRows !== model.prevScrollbackRows) {
     model.setPrevScrollbackRows(model.settings?.terminalScrollbackRows)
+
     if (model.settings) {
       model.setScrollbackMode(
         SCROLLBACK_PRESETS_ROWS.includes(
@@ -42,19 +43,24 @@ export function useSettingsNavigationModel(
 
   const displayedGitUsername = model.repos[0]?.gitUsername ?? ''
   const baseNavSections = useSettingsNavigationMetadata()
+
   const { installed: orchestrationSkillInstalled, loading: orchestrationSkillLoading } =
     model.orchestrationSkill
+
   const {
     installed: linearSkillInstalled,
     loading: linearSkillLoading,
     skills: linearSkills
   } = model.linearSkill
+
   const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
     model.computerUseSkill
+
   const capabilityInstallStatusBySectionId = useMemo(() => {
     const applicableFreshnessInventory = model.skillFreshnessApplies
       ? model.skillFreshnessInventory
       : null
+
     const next = new Map<string, SettingsNavInstallStatus>([
       [
         'orchestration',
@@ -66,6 +72,7 @@ export function useSettingsNavigationModel(
         })
       ]
     ])
+
     if (model.linearConnected) {
       next.set(
         'linear',
@@ -77,6 +84,7 @@ export function useSettingsNavigationModel(
         })
       )
     }
+
     if (model.showDesktopOnlySettings) {
       next.set(
         'computer-use',
@@ -87,6 +95,7 @@ export function useSettingsNavigationModel(
           inventory: applicableFreshnessInventory
         })
       )
+
       if (model.settings) {
         next.set(
           'voice',
@@ -98,6 +107,7 @@ export function useSettingsNavigationModel(
         )
       }
     }
+
     return next
   }, [
     computerUseSkillInstalled,
@@ -115,20 +125,25 @@ export function useSettingsNavigationModel(
     orchestrationSkillInstalled,
     orchestrationSkillLoading
   ])
+
   const navSections = useMemo(
     () =>
       baseNavSections.map((section) => {
         const installStatus = capabilityInstallStatusBySectionId.get(section.id)
+
         return installStatus ? { ...section, installStatus } : section
       }),
     [baseNavSections, capabilityInstallStatusBySectionId]
   )
+
   const navSectionById = useMemo(
     () => new Map(navSections.map((section) => [section.id, section] as const)),
     [navSections]
   )
+
   const getSectionSearchEntries = (sectionId: string) => {
     const section = navSectionById.get(sectionId)
+
     return section ? getSettingsSectionSearchEntries(section) : []
   }
 
@@ -138,13 +153,16 @@ export function useSettingsNavigationModel(
       navSections,
       getSettingsSectionSearchEntries
     ).map(({ item }) => item)
+
     if (
       !interactions.hasUnsavedSourceControlAiPromptChanges ||
       rankedSections.some((section) => section.id === 'git')
     ) {
       return rankedSections
     }
+
     const gitSection = navSectionById.get('git')
+
     return gitSection ? [...rankedSections, gitSection] : rankedSections
   }, [
     interactions.hasUnsavedSourceControlAiPromptChanges,
@@ -152,26 +170,33 @@ export function useSettingsNavigationModel(
     navSections,
     model.settingsSearchQuery
   ])
+
   const visibleSectionIds = useMemo(
     () => new Set(visibleNavSections.map((section) => section.id)),
     [visibleNavSections]
   )
+
   const projectByRepoId = useMemo(() => {
     const projection = getProjectHostSetupProjectionFromState({
       repos: model.repos,
       projects: model.projects,
       projectHostSetups: model.projectHostSetups
     })
+
     const projectById = new Map(projection.projects.map((project) => [project.id, project]))
     const nextProjectByRepoId = new Map<string, (typeof projection.projects)[number]>()
+
     for (const setup of projection.setups) {
       const project = projectById.get(setup.projectId)
+
       if (project && setup.repoId.trim()) {
         nextProjectByRepoId.set(setup.repoId, project)
       }
     }
+
     return nextProjectByRepoId
   }, [model.projectHostSetups, model.projects, model.repos])
+
   const neededSectionIds = useMemo(
     () =>
       deriveNeededSectionIds({

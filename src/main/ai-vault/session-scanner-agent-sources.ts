@@ -18,30 +18,40 @@ import type { AiVaultScanOptions } from './session-scanner-types'
 import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './session-scanner-values'
 
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
+
 const CODEX_SESSIONS_DIR = join(
   resolveAbsoluteDirOverride(process.env.CODEX_HOME, DEFAULT_CODEX_HOME_DIR),
   'sessions'
 )
+
 const GEMINI_SESSIONS_DIR = join(homedir(), '.gemini', 'tmp')
+
 const COPILOT_SESSIONS_DIR = join(
   resolveAbsoluteDirOverride(process.env.COPILOT_HOME, join(homedir(), '.copilot')),
   'session-state'
 )
+
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
+
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
+
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
+
 const OPENCLAW_STATE_DIR = resolveAbsoluteDirOverride(
   process.env.OPENCLAW_STATE_DIR,
   join(homedir(), '.openclaw')
 )
+
 const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
   process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
   '.pi'
 )
+
 // Why: Prime Agent brands Pi's env contract with its own prefix and adds a
 // dedicated sessions-root override, so resolution differs from Pi/OMP in shape
 // as well as in variable name.
 const PRIME_AGENT_SESSIONS_DIR = primeAgentSessionsDirFromEnv()
+
 // Why: Devin ATIF transcripts are stored under <DEVIN_HOME>/transcripts.
 const DEVIN_TRANSCRIPTS_DIR = join(
   resolveAbsoluteDirOverride(
@@ -50,8 +60,11 @@ const DEVIN_TRANSCRIPTS_DIR = join(
   ),
   'transcripts'
 )
+
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
+
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
+
 const CLINE_SESSIONS_DIR =
   process.env.CLINE_SESSION_DATA_DIR?.trim() || join(homedir(), '.cline', 'data', 'sessions')
 
@@ -280,13 +293,17 @@ export function isDiscoverableSessionFile(
   if (!source.extensions.includes(extname(filePath).toLowerCase())) {
     return false
   }
+
   if (source.filePredicate && !source.filePredicate(filePath)) {
     return false
   }
+
   const { directoryPredicate } = source
+
   if (!directoryPredicate) {
     return true
   }
+
   // Indexed like walkSessionFiles: depth 0 is a child of rootDir.
   return pathSegments(relative(rootDir, dirname(filePath)))
     .filter(Boolean)

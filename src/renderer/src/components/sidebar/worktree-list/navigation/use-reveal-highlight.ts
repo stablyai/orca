@@ -13,27 +13,33 @@ export function useSidebarRevealHighlight() {
     for (const frameId of pendingRevealFrameIdsRef.current) {
       window.cancelAnimationFrame(frameId)
     }
+
     pendingRevealFrameIdsRef.current.clear()
   }, [])
+
   const schedulePendingRevealFrame = useCallback((callback: FrameRequestCallback) => {
     const frameId = window.requestAnimationFrame((time) => {
       pendingRevealFrameIdsRef.current.delete(frameId)
       callback(time)
     })
+
     pendingRevealFrameIdsRef.current.add(frameId)
   }, [])
+
   const clearRevealHighlightFrame = useCallback(() => {
     if (revealHighlightFrameIdRef.current !== null) {
       window.cancelAnimationFrame(revealHighlightFrameIdRef.current)
       revealHighlightFrameIdRef.current = null
     }
   }, [])
+
   const clearRevealHighlightTimeout = useCallback(() => {
     if (revealHighlightTimeoutRef.current !== null) {
       window.clearTimeout(revealHighlightTimeoutRef.current)
       revealHighlightTimeoutRef.current = null
     }
   }, [])
+
   const flashRevealedRow = useCallback(
     (rowKey: string) => {
       clearRevealHighlightTimeout()

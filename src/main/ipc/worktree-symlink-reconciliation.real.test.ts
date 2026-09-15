@@ -60,18 +60,22 @@ describe('native worktree symlink reconciliation (real Git)', () => {
 
     const listedRows = parseListedWorktrees(git(repoPath, ['worktree', 'list', '--porcelain']))
     const listed = listedRows.find((worktree) => worktree.branch === 'refs/heads/feature')
+
     if (!listed) {
       throw new Error('Created worktree missing from Git listing')
     }
+
     const staleIndex = listedRows.findIndex((worktree) => worktree.branch === 'refs/heads/stale')
     const createdIndex = listedRows.indexOf(listed)
     expect(staleIndex).toBeGreaterThanOrEqual(0)
     expect(createdIndex).toBeGreaterThan(staleIndex)
     expect(await realpath(listed.path)).toBe(await realpath(requestedPath))
+
     if (process.platform !== 'win32') {
       expect(listed.path).toBe(join(await realpath(canonicalRoot), 'feature'))
       expect(areWorktreePathsEqual(listed.path, requestedPath)).toBe(false)
     }
+
     expect(findCreatedWorktree(listedRows, requestedPath, 'feature')).toBe(listed)
   })
 })
@@ -87,9 +91,11 @@ function parseListedWorktrees(output: string): ListedWorktree[] {
     .map((block) => {
       const pathLine = block.split('\n').find((line) => line.startsWith('worktree '))
       const branchLine = block.split('\n').find((line) => line.startsWith('branch '))
+
       if (!pathLine) {
         throw new Error(`Malformed Git worktree listing:\n${output}`)
       }
+
       return {
         path: pathLine.slice('worktree '.length),
         ...(branchLine ? { branch: branchLine.slice('branch '.length) } : {})

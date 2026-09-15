@@ -70,4 +70,5 @@ export type ProcessResult = {
 }
 
 export const DEFAULT_PROCESS_TIMEOUT_MS = 30_000
+
 export const DEFAULT_MAX_OUTPUT_BYTES = 8 * 1024 * 1024

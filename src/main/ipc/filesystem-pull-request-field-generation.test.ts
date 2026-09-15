@@ -15,48 +15,61 @@ import {
 } from './filesystem-test-harness'
 
 vi.mock('electron', async () => (await import('./filesystem-test-harness')).electronMock)
+
 vi.mock('fs/promises', async () => (await import('./filesystem-test-harness')).fsPromisesMock)
+
 vi.mock(
   '../wsl-unc-delete',
   async () => (await import('./filesystem-test-harness')).wslUncDeleteMock
 )
+
 vi.mock(
   '../crash-reporting/crash-breadcrumb-store',
   async () => (await import('./filesystem-test-harness')).crashBreadcrumbMock
 )
+
 vi.mock(
   '../local-downloaded-folder-promotion',
   async () => (await import('./filesystem-test-harness')).folderPromotionMock
 )
+
 vi.mock(
   '../git/status',
   async () => (await import('./filesystem-test-harness')).gitStatusModuleMock
 )
+
 vi.mock(
   '../git/check-ignored-paths',
   async () => (await import('./filesystem-test-harness')).gitIgnoredPathsMock
 )
+
 vi.mock('../git/worktree', async () => (await import('./filesystem-test-harness')).gitWorktreeMock)
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./filesystem-test-harness')).sshFilesystemDispatchMock
 )
+
 vi.mock(
   '../providers/ssh-git-dispatch',
   async () => (await import('./filesystem-test-harness')).sshGitDispatchMock
 )
+
 vi.mock(
   '../text-generation/commit-message-text-generation',
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
 )
+
 vi.mock(
   '../text-generation/pull-request-context',
   async () => (await import('./filesystem-test-harness')).pullRequestContextMock
 )
+
 vi.mock(
   '../source-control/pull-request-template',
   async () => (await import('./filesystem-test-harness')).pullRequestTemplateMock
 )
+
 vi.mock(
   '../source-control/pull-request-linked-issue',
   async () => (await import('./filesystem-test-harness')).pullRequestLinkedIssueMock
@@ -85,6 +98,7 @@ describe('registerFilesystemHandlers', () => {
       currentBody: '',
       currentDraft: false
     }
+
     const PULL_REQUEST_ARGS = { base: 'main', title: '', body: '', draft: false }
     const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
 
@@ -97,13 +111,16 @@ describe('registerFilesystemHandlers', () => {
 
     it('enriches the local pull-request context with a validated worktree linked issue', async () => {
       const worktreeId = `repo-1::${WORKTREE_FEATURE_PATH}`
+
       const linkedIssueDetails = {
         provider: 'github',
         number: 123,
         title: 'Improve PR generation',
         description: 'Include issue context.'
       }
+
       loadPullRequestLinkedIssueMock.mockResolvedValue(linkedIssueDetails)
+
       const linkedStore = {
         ...store,
         getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 123 } : undefined)
@@ -136,6 +153,7 @@ describe('registerFilesystemHandlers', () => {
         exec: vi.fn(),
         executeCommitMessagePlan: vi.fn()
       })
+
       const linkedStore = {
         ...store,
         getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 77 } : undefined)
@@ -181,6 +199,7 @@ describe('registerFilesystemHandlers', () => {
       const localGitExec = vi
         .spyOn(gitRunner, 'gitExecFileAsync')
         .mockResolvedValue({ stdout: '', stderr: '' })
+
       const sshExec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
       getSshGitProviderMock.mockReturnValue({
         exec: sshExec,
@@ -189,6 +208,7 @@ describe('registerFilesystemHandlers', () => {
       getPullRequestDraftContextMock.mockImplementation(async (execute) => {
         await execute(['show-ref', '--verify'], { maxBuffer: 123, timeoutMs: 456 })
         await execute(['legacy-probe'], { timeout: 789 })
+
         return PULL_REQUEST_CONTEXT
       })
 

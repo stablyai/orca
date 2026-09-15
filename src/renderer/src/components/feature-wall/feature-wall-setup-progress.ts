@@ -50,6 +50,7 @@ export function getFeatureWallSetupProgress(
     input.computerUseSkillInstalled &&
     (input.computerUsePermissionsReady || input.computerUseUnavailable === true) &&
     input.orchestrationSkillInstalled
+
   const stepDone: Record<FeatureWallSetupStepId, boolean> = {
     'default-agent':
       Boolean(input.settings?.defaultTuiAgent) && input.settings?.defaultTuiAgent !== 'blank',
@@ -65,6 +66,7 @@ export function getFeatureWallSetupProgress(
     'agent-capabilities': agentCapabilitiesDone,
     'setup-script': input.hasSetupScript
   }
+
   return {
     ready: input.ready ?? true,
     stepDone,

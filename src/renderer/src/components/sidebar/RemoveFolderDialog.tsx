@@ -41,10 +41,12 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
         .find((repo) => repo.id === repoId && (!hostId || getRepoExecutionHostId(repo) === hostId))
         ?.connectionId?.trim() ?? null
   )
+
   const sshHostLabel = useAppStore((s) => {
     if (!sshConnectionId) {
       return null
     }
+
     return (
       s.sshTargetLabels.get(sshConnectionId) ??
       s.removedSshTargetLabels.get(sshConnectionId) ??
@@ -72,6 +74,7 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
           'This only removes {{name}} from Orca. It is still on your disk.',
           { name: NAME_TOKEN }
         )
+
   const [descriptionBeforeName, descriptionAfterName] = description.split(NAME_TOKEN)
 
   const handleConfirm = useCallback(() => {
@@ -81,6 +84,7 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
         errorFeedback: 'toast'
       })
     }
+
     closeModal()
   }, [closeModal, hostId, removeProject, repoId])
 

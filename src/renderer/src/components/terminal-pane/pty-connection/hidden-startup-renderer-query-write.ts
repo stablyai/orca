@@ -27,6 +27,7 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
   } {
     const pending = session.hiddenStartupRendererQueryPending
     session.hiddenStartupRendererQueryPending = ''
+
     if (!pending) {
       return {
         statelessQueryData: '',
@@ -43,22 +44,27 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
     let oscColorQueryData = ''
     let consumedInputChars = pending.length
     let nextPending = ''
+
     if (input.startsWith('\x1b[')) {
       const finalByteIndex = findCsiFinalByteIndex(input, 2)
+
       if (finalByteIndex === -1) {
         nextPending = input.slice(0, HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS)
         consumedInputChars = input.length
       } else {
         const sequence = input.slice(0, finalByteIndex + 1)
+
         if (isStatelessRendererReplyCsiQuery(sequence)) {
           statelessQueryData = sequence
         } else if (isStatefulRendererReplyCsiQuery(sequence)) {
           statefulQueryData = sequence
         }
+
         consumedInputChars = finalByteIndex + 1
       }
     } else if (input.startsWith('\x1b]')) {
       const query = parseTerminalOscColorQuery(input, 0)
+
       if (query.kind === 'partial') {
         nextPending = input.slice(0, HIDDEN_STARTUP_RENDERER_QUERY_PENDING_CHARS)
         consumedInputChars = input.length
@@ -77,6 +83,7 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
 
     session.hiddenStartupRendererQueryPending = nextPending
     const consumedCurrentChars = Math.max(0, consumedInputChars - pending.length)
+
     return {
       statelessQueryData,
       statefulQueryData,
@@ -93,6 +100,7 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
     if (consumedCurrentChars === 0 || typeof meta?.rawLength !== 'number') {
       return meta
     }
+
     return {
       ...meta,
       rawLength: Math.max(0, meta.rawLength - consumedCurrentChars)
@@ -103,9 +111,11 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
     session.writeHiddenStartupRendererQueries(data)
     session.markHiddenOutputRestoreNeeded()
     session.hiddenRendererStateDirty = true
+
     if (session.hiddenOutputRestoreInFlight) {
       session.hiddenOutputRestoreFreshSnapshotNeeded = true
     }
+
     recordHiddenRendererSkip(data.length)
   }
 
@@ -114,7 +124,9 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
     if (!data || !data.includes('\x1b')) {
       return
     }
+
     const extracted = extractHiddenStartupRendererQueryData(data, '')
+
     if (extracted.oscColorQueryData) {
       sendTerminalOscColorQueryReplies(
         extracted.oscColorQueryData,
@@ -122,7 +134,9 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
         session.sendDesktopQueryReplyImmediate
       )
     }
+
     let unansweredQueryData = ''
+
     for (const sequence of splitCsiSequences(
       extracted.statefulQueryData + extracted.statelessQueryData
     )) {
@@ -138,6 +152,7 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
         unansweredQueryData += sequence
       }
     }
+
     if (unansweredQueryData) {
       // Best-effort for rarer queries (DECRQM, DA2, XTVERSION): replay into xterm so its handlers answer when no replay is active.
       session.writePtyOutputToXterm(unansweredQueryData, true, { hiddenStartupRendererQuery: true })
@@ -147,14 +162,18 @@ export function bindHiddenStartupRendererQueryWrite(session: ConnectPanePtySessi
   function splitCsiSequences(queryData: string): string[] {
     const sequences: string[] = []
     let offset = queryData.indexOf('\x1b[')
+
     while (offset !== -1) {
       const finalByteIndex = findCsiFinalByteIndex(queryData, offset + 2)
+
       if (finalByteIndex === -1) {
         break
       }
+
       sequences.push(queryData.slice(offset, finalByteIndex + 1))
       offset = queryData.indexOf('\x1b[', finalByteIndex + 1)
     }
+
     return sequences
   }
 }

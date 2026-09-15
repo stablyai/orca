@@ -13,13 +13,18 @@ const entry = fileURLToPath(
     import.meta.url
   )
 )
+
 const source = await readFile(entry, 'utf8')
+
 const current = `${String.raw`/\s*(?:`}\`\`\`|~~~)/y`
+
 const replacement = `${String.raw`/[^\S\n]*(?:`}\`\`\`|~~~)/y`
+
 assert.ok(
   source.includes(replacement),
   'Production fence regex changed; re-review benchmark candidate'
 )
+
 async function load(candidate) {
   const result = await build({
     entryPoints: [entry],
@@ -44,14 +49,18 @@ async function load(candidate) {
         ]
       : []
   })
+
   return (
     await import(
       `data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`
     )
   ).getMarkdownDocLinkDecorationRanges
 }
+
 const baseline = await load(true)
+
 const candidate = await load(false)
+
 const corpus = [
   '',
   '\n```\n[[hidden.md]]\n```\n[[shown.md]]',
@@ -59,9 +68,11 @@ const corpus = [
   '\u00a0\u2028```\n[[hidden.md]]\n```\n[[shown.md]]',
   '`code` [[shown.md]]'
 ]
+
 for (const content of corpus) {
   assert.deepEqual(candidate(content), baseline(content))
 }
+
 const scenarios = [
   ['ordinary-100k-lines', 'ordinary prose\n'.repeat(100_000)],
   ['blank-10k-lines', '\n'.repeat(10_000)],
@@ -69,10 +80,12 @@ const scenarios = [
   ['blank-100k-lines', '\n'.repeat(100_000)],
   ['indented-blank-10k-lines', `${' '.repeat(80)}\n`.repeat(10_000)]
 ]
+
 for (const [name, content] of scenarios) {
   const samples = { baseline: [], candidate: [] }
   const scanners = { baseline, candidate }
   let expected
+
   for (const arms of buildCounterbalancedSchedule(2, 'baseline', 'candidate')) {
     for (const arm of arms) {
       const started = performance.now()
@@ -82,6 +95,7 @@ for (const [name, content] of scenarios) {
       assert.deepEqual(ranges, expected)
     }
   }
+
   console.log(
     JSON.stringify({
       name,

@@ -33,6 +33,7 @@ export function WorktreeJumpPaletteEntry({
       </div>
     )
   }
+
   if (entry.type === 'hint') {
     return (
       <CommandItem
@@ -40,12 +41,15 @@ export function WorktreeJumpPaletteEntry({
         onSelect={() => {
           const previousIndex = controller.selectionItemIds.indexOf(renderKey)
           flushSync(() => entry.onSeeMore?.())
+
           const expandedItemId = Array.from(
             controller.listRef.current?.querySelectorAll<HTMLElement>('[cmdk-item]') ?? []
           )[previousIndex]?.getAttribute('data-value')
+
           if (expandedItemId) {
             controller.setSelectedItemId(expandedItemId)
           }
+
           controller.inputRef.current?.focus()
         }}
         className={cn(
@@ -62,8 +66,10 @@ export function WorktreeJumpPaletteEntry({
       </CommandItem>
     )
   }
+
   if (entry.type === 'create-worktree') {
     const linearPreview = controller.currentLinearIssuePreview
+
     return (
       <PaletteCreateWorktreeRow
         className="group mx-0.5 mt-1 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-1.5 text-left outline-none transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground"
@@ -77,21 +83,25 @@ export function WorktreeJumpPaletteEntry({
       />
     )
   }
+
   if (entry.type === 'worktree') {
     return (
       <WorktreeJumpPaletteWorktreeRow entry={entry} renderKey={renderKey} controller={controller} />
     )
   }
+
   if (entry.type === 'project-target') {
     return (
       <WorktreeJumpPaletteProjectRow entry={entry} renderKey={renderKey} controller={controller} />
     )
   }
+
   if (entry.type === 'settings' || entry.type === 'quick-action') {
     return (
       <WorktreeJumpPaletteActionRow entry={entry} renderKey={renderKey} controller={controller} />
     )
   }
+
   if (entry.type === 'workspace-tab') {
     return (
       <WorktreeJumpPaletteWorkspaceTabRow
@@ -101,6 +111,7 @@ export function WorktreeJumpPaletteEntry({
       />
     )
   }
+
   if (entry.type === 'simulator-tab') {
     return (
       <WorktreeJumpPaletteSimulatorRow
@@ -110,6 +121,7 @@ export function WorktreeJumpPaletteEntry({
       />
     )
   }
+
   return (
     <WorktreeJumpPaletteBrowserRow entry={entry} renderKey={renderKey} controller={controller} />
   )

@@ -43,6 +43,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       createdAt: NOW,
       launchAgent: 'claude'
     }
+
     const staleUnifiedTab: Tab = {
       id: 'local-agent-tab',
       entityId: 'local-agent-tab',
@@ -110,6 +111,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       createdAt: NOW,
       launchAgent: 'claude'
     })
+
     recordWebAgentSessionHandoff({
       environmentId: ENV,
       worktreeId: WT,
@@ -159,6 +161,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       createdAt: NOW,
       launchAgent: 'claude'
     })
+
     recordWebAgentSessionHandoff({
       environmentId: ENV,
       worktreeId: WT,
@@ -179,11 +182,14 @@ describe('applyWebSessionTabsSnapshot', () => {
         [WT]: [provisional('provisional-unrelated'), provisional('provisional-exited')]
       }
     })
+
     const possiblyPreCreate = applyWebSessionTabsSnapshot(state, makeSnapshot([]), ENV, NOW)
+
     const possiblyPreCreateState = {
       ...state,
       ...(possiblyPreCreate as Partial<WebSessionTabsSyncState>)
     }
+
     expect(possiblyPreCreateState.tabsByWorktree[WT]?.map((tab) => tab.id)).toEqual([
       'provisional-unrelated',
       'provisional-exited'
@@ -196,6 +202,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       hostTabId: 'host-tab-exited',
       hostTerminalHandle: 'term_host-exited'
     })
+
     const postCreate = applyWebSessionTabsSnapshot(
       state,
       makeSnapshot([]),
@@ -219,6 +226,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       createdAt: NOW,
       launchAgent: 'codex'
     }
+
     recordWebAgentSessionHandoff({
       environmentId: ENV,
       worktreeId: WT,

@@ -13,12 +13,14 @@ describe('coordinator escalation authority', () => {
   it('rejects an escalation targeting another active Dispatch', () => {
     db = new OrchestrationDb(':memory:')
     const attackerTask = db.createTask({ runId: 'run_legacy_local', spec: 'attacker assignment' })
+
     const attacker = createRootDispatch(
       db,
       attackerTask.id,
       'term_attacker',
       'tab_attacker:leaf_attacker'
     )
+
     const victimTask = db.createTask({ runId: 'run_legacy_local', spec: 'victim assignment' })
     const victim = createRootDispatch(db, victimTask.id, 'term_victim')
     const logs: string[] = []

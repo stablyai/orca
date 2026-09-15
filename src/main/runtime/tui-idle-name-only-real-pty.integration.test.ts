@@ -13,9 +13,13 @@ import { getForegroundProcessName } from '../../relay/pty-shell-utils'
 // because the bug was a wait that returned satisfied in ~0s, so timing IS the proof.
 
 const FIXTURE = fileURLToPath(new URL('./tui-idle-agent-fixture.mjs', import.meta.url))
+
 const WORKTREE_ID = 'repo-1::/tmp/tui-idle-real-pty'
+
 const TAB_ID = '55555555-5555-4555-8555-555555555555'
+
 const LEAF_ID = '66666666-6666-4666-8666-666666666666'
+
 const PTY_ID = 'pty-tui-idle-real'
 
 const waitMethod = TERMINAL_LIFECYCLE_METHODS.find((method) => method.name === 'terminal.wait')!
@@ -39,6 +43,7 @@ async function startRealAgentPane(mode: 'explicit-idle' | 'quiet', workMs: numbe
     rows: 30,
     cwd: '/tmp'
   })
+
   running.push(child)
 
   // Real foreground read against the real pty: the same helper the relay serves
@@ -47,7 +52,9 @@ async function startRealAgentPane(mode: 'explicit-idle' | 'quiet', workMs: numbe
     repoPath: '/tmp/tui-idle-real-pty',
     getForegroundProcess: () => getForegroundProcessName(child.pid, child.process || null)
   })
+
   runtime.attachWindow(1)
+
   const graph: RuntimeSyncWindowGraph = {
     tabs: [
       {
@@ -70,6 +77,7 @@ async function startRealAgentPane(mode: 'explicit-idle' | 'quiet', workMs: numbe
       }
     ]
   }
+
   runtime.syncWindowGraph(1, graph)
 
   const transcript: string[] = []
@@ -79,6 +87,7 @@ async function startRealAgentPane(mode: 'explicit-idle' | 'quiet', workMs: numbe
   })
 
   const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+
   return { runtime, transcript, handle: terminals[0].handle }
 }
 
@@ -89,12 +98,14 @@ async function terminalWait(
   timeoutMs: number
 ): Promise<{ satisfied: boolean; elapsedMs: number }> {
   const startedAt = Date.now()
+
   try {
     const result = await waitMethod.handler(
       { terminal, for: 'tui-idle', timeoutMs },
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: terminal.wait reads only `runtime` off its context; the rest is request plumbing this fixture has no use for.
       { runtime } as Parameters<typeof waitMethod.handler>[1]
     )
+
     return { satisfied: result.wait.satisfied === true, elapsedMs: Date.now() - startedAt }
   } catch (error) {
     // Why only `timeout`: an unsatisfied wait is the outcome under test, but any other
@@ -102,6 +113,7 @@ async function terminalWait(
     if ((error instanceof Error ? error.message : String(error)) !== 'timeout') {
       throw error
     }
+
     return { satisfied: false, elapsedMs: Date.now() - startedAt }
   }
 }

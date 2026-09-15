@@ -47,6 +47,7 @@ vi.mock('../store', async () => {
   useAppStore.getState = () => storeRef.current.getState()
   useAppStore.setState = (partial: never) => storeRef.current.setState(partial)
   useAppStore.subscribe = (listener: never) => storeRef.current.subscribe(listener)
+
   return { useAppStore }
 })
 
@@ -55,6 +56,7 @@ function createAuthority() {
   const state = { ui: { ...getDefaultUIState() } } as PersistedState
   let activeView: PersistedState['ui']['activeView'] = 'terminal'
   const listeners = new Set<(ui: PersistedUIState) => void>()
+
   const operations: UIUpdateOperations = {
     state,
     removeRetainedBlob: () => {},
@@ -62,18 +64,22 @@ function createAuthority() {
       if (next === undefined || next === activeView) {
         return false
       }
+
       activeView = next
+
       return true
     },
     getUI: () => getPersistedUI(state, activeView),
     scheduleSave: () => {},
     notifyUIChanged: () => {
       const ui = getPersistedUI(state, activeView)
+
       for (const listener of listeners) {
         listener(ui)
       }
     }
   }
+
   return {
     set: (updates: Partial<PersistedUIState>) => updatePersistedUI(operations, updates),
     get: () => getPersistedUI(state, activeView),
@@ -106,24 +112,31 @@ function patchOnlyUpdate(
   next: MobileViewState
 ): Partial<PersistedUIState> {
   const update: Partial<PersistedUIState> = {}
+
   if ('groupMode' in patch) {
     update.groupBy = next.groupMode === 'workspaceStatus' ? 'workspace-status' : 'repo'
   }
+
   if ('sortMode' in patch) {
     update.sortBy = next.sortMode
   }
+
   if ('hideSleeping' in patch) {
     update.hideSleepingWorkspaces = next.hideSleeping
   }
+
   if ('hideDefaultBranch' in patch) {
     update.hideDefaultBranchWorkspace = next.hideDefaultBranch
   }
+
   if ('filterRepoIds' in patch) {
     update.filterRepoIds = next.filterRepoIds
   }
+
   if ('collapsedGroups' in patch) {
     update.collapsedGroups = next.collapsedGroups
   }
+
   return update
 }
 
@@ -150,6 +163,7 @@ function createMobileClient(authority: Authority) {
     filterRepoIds: [],
     collapsedGroups: []
   }
+
   return {
     get view() {
       return view
@@ -171,9 +185,11 @@ function createMobileClient(authority: Authority) {
     /** A user tap: apply locally, then push through the shipping payload shape. */
     tap(patch: Partial<MobileViewState>) {
       view = { ...view, ...patch }
+
       const payload = mobileHasPatchOnlyBuilder()
         ? patchOnlyUpdate(patch, view)
         : legacyWholeSnapshotUpdate(view)
+
       authority.set(omitPairingLocalUiFields(payload) as Partial<PersistedUIState>)
     }
   }
@@ -211,6 +227,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
       for (const resolve of pendingAcks.splice(0)) {
         resolve()
       }
+
       await Promise.resolve()
     })
   }
@@ -218,6 +235,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
   function deliverBroadcasts() {
     // Models the async ui:stateChanged IPC delivery to the desktop renderer.
     const queued = pendingBroadcasts.splice(0)
+
     for (const ui of queued) {
       act(() => {
         store.getState().hydratePersistedUI(ui, 'sync')
@@ -228,8 +246,10 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
   function mountDesktopWriter() {
     function Probe() {
       usePersistedUIWriter()
+
       return null
     }
+
     // StrictMode, like the real renderer (main.tsx): the writer effect must
     // stay correct under double-invoked mount/cleanup cycles.
     act(() => {
@@ -263,20 +283,26 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
       ui: {
         set: (updates: Partial<PersistedUIState>) => {
           setCallCount += 1
+
           // rejectSets models transport failure: nothing reaches the host.
           if (rejectSets) {
             return Promise.reject(new Error('transport failure'))
           }
+
           if (rejectNextSet) {
             rejectNextSet = false
+
             return new Promise<void>((_, reject) => pendingRejects.push(reject))
           }
+
           // Like the real IPC: main applies the update before the renderer's
           // promise resolves; holdAcks models the in-flight round-trip window.
           authority.set(updates)
+
           if (!holdAcks) {
             return Promise.resolve()
           }
+
           return new Promise<void>((resolve) => pendingAcks.push(resolve))
         }
       }
@@ -657,11 +683,13 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     const api = (
       window as unknown as { api: { ui: { set: (u: Partial<PersistedUIState>) => Promise<void> } } }
     ).api.ui
+
     const workingSet = api.set
     api.set = () => {
       setCallCount += 1
       throw new Error('non-cloneable argument')
     }
+
     act(() => {
       store.getState().setHideDefaultBranchWorkspace(true)
     })
@@ -713,10 +741,12 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
 
   it('pins the modeled mobile ui.set payload to the shipping source', async () => {
     const source = readMobileViewSettingsHookSource()
+
     if (mobileHasPatchOnlyBuilder()) {
       // Candidate: the persistence hook must push through the patch-only builder this model uses.
       expect(source).toContain('buildWorkspaceViewSettingsUpdate(patch, next)')
       const builderSource = readMobileViewSettingsSource()
+
       for (const guard of [
         "if ('groupMode' in patch)",
         "if ('sortMode' in patch)",

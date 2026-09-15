@@ -58,6 +58,7 @@ export function mergeNativeChatLiveSession(input: NativeChatLiveMergeInput): Nat
     loading,
     error
   } = input
+
   if (error) {
     return { messages, status: 'error', sessionId, agent, error }
   }
@@ -69,6 +70,7 @@ export function mergeNativeChatLiveSession(input: NativeChatLiveMergeInput): Nat
     transcriptLifecycle,
     hookHasWorkingSubagents ?? false
   )
+
   // Why live work still wins: 'working' is what drives Stop-vs-Send, the typing
   // indicator and the streaming preview, so forcing 'loading' over it renders an
   // idle pane while the agent works. A known session with nothing to show yet is
@@ -76,6 +78,7 @@ export function mergeNativeChatLiveSession(input: NativeChatLiveMergeInput): Nat
   if (loading && status !== 'working') {
     return { messages, status: 'loading', sessionId, agent }
   }
+
   return {
     messages,
     status: status ?? (messages.length === 0 ? 'empty' : 'ready'),
@@ -99,21 +102,26 @@ function liveStatusOverride(
   if (hookState !== 'working') {
     return undefined
   }
+
   const terminatesCurrentTurn = lifecycleTerminatesCurrentTurn(transcriptLifecycle, stateStartedAt)
+
   // Why: an explicit interruption ends the whole turn, children included, so it
   // settles the session even while a stale child status still reads working.
   if (terminatesCurrentTurn && transcriptLifecycle?.state === 'interrupted') {
     return undefined
   }
+
   // Why: a lead completion does not end Claude's aggregate turn while a
   // background child still runs; callers must already scope the roster to the
   // current working epoch so prior-turn children cannot veto forever.
   if (hookHasWorkingSubagents) {
     return 'working'
   }
+
   if (terminatesCurrentTurn) {
     return undefined
   }
+
   // Why: prose recovery stays available whenever the latest lifecycle is not an
   // explicit in-progress generation. That covers incapable hosts and capable
   // hosts whose transcript never emitted a terminal marker for this window.
@@ -125,6 +133,7 @@ function liveStatusOverride(
   ) {
     return undefined
   }
+
   return 'working'
 }
 
@@ -135,21 +144,25 @@ function lifecycleTerminatesCurrentTurn(
   if (lifecycle?.state !== 'completed' && lifecycle?.state !== 'interrupted') {
     return false
   }
+
   // Why: omit/null timestamps are valid on the wire. Prefer the terminal marker
   // over a stuck spinner — the latest lifecycle is already last-wins from the
   // watcher, so a newer user generation would have replaced it with working.
   if (stateStartedAt == null || lifecycle.timestamp == null) {
     return true
   }
+
   if (lifecycle.timestamp >= stateStartedAt) {
     return true
   }
+
   // Why: transcript clocks and hook receipt times can skew over SSH/runtime.
   // Only apply slack to real epoch timestamps so small logical clocks used in
   // tests (and any non-wall-clock ids) keep strict ordering.
   if (lifecycle.timestamp > 1e11 && stateStartedAt > 1e11) {
     return lifecycle.timestamp + LIFECYCLE_CLOCK_SKEW_SLACK_MS >= stateStartedAt
   }
+
   return false
 }
 
@@ -160,6 +173,7 @@ function trailingAssistantPostDates(
   if (stateStartedAt == null) {
     return false
   }
+
   return (
     message?.role === 'assistant' &&
     message.timestamp != null &&

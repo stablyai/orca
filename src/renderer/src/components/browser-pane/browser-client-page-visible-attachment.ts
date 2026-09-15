@@ -19,16 +19,20 @@ export function attachBrowserClientRetainedPage(
   if (!page || page.status !== 'attached') {
     throw new Error('browser_client_page_renderer_visible_page_unavailable')
   }
+
   if (page.visibleAttachment) {
     throw new Error('browser_client_page_renderer_visible_page_claimed')
   }
+
   if (!page.host.parentElement) {
     throw new Error('browser_client_page_renderer_retained_host_unavailable')
   }
+
   const stopTrackingViewport = showRetainedHost(page.host, container)
   const attachment = { container, stopTrackingViewport }
   page.visibleAttachment = attachment
   let detached = false
+
   return {
     webview: page.webview,
     nextMetadataRevision: () => {
@@ -40,18 +44,23 @@ export function attachBrowserClientRetainedPage(
       ) {
         throw new Error('browser_client_page_renderer_visible_page_detached')
       }
+
       if (page.metadataRevision >= Number.MAX_SAFE_INTEGER) {
         throw new Error('browser_client_page_metadata_revision_exhausted')
       }
+
       page.metadataRevision += 1
+
       return page.metadataRevision
     },
     detach: () => {
       if (detached) {
         return
       }
+
       detached = true
       stopTrackingViewport()
+
       if (
         pages.get(page.key) === page &&
         page.status === 'attached' &&
@@ -89,12 +98,15 @@ function showRetainedHost(host: HTMLDivElement, container: HTMLElement): () => v
   host.removeAttribute('aria-hidden')
   applyRetainedHostPointerEvents(host, true, isWebviewDragPassthroughActive())
   let appliedBounds = ''
+
   const syncViewport = (): void => {
     const bounds = container.getBoundingClientRect()
     const next = `${bounds.left}|${bounds.top}|${bounds.width}|${bounds.height}`
+
     if (next === appliedBounds) {
       return
     }
+
     appliedBounds = next
     Object.assign(host.style, {
       left: `${bounds.left}px`,
@@ -103,6 +115,7 @@ function showRetainedHost(host: HTMLDivElement, container: HTMLElement): () => v
       height: `${bounds.height}px`
     })
   }
+
   const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(syncViewport)
   observer?.observe(container)
   window.addEventListener('resize', syncViewport)
@@ -114,10 +127,12 @@ function showRetainedHost(host: HTMLDivElement, container: HTMLElement): () => v
   syncViewport()
   // Idempotent: the registry releases a page it tears down, and the pane's own detach follows.
   let stopped = false
+
   return () => {
     if (stopped) {
       return
     }
+
     stopped = true
     releasePositionSync()
     observer?.disconnect()

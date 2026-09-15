@@ -19,6 +19,7 @@ vi.mock('@/lib/worktree-activation', () => ({ activateAndRevealWorktree }))
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
+
   return {
     ...actual,
     useTranslation: () => ({
@@ -58,12 +59,14 @@ vi.mock('@/components/cmd-j/palette-host-badge', () => ({
 const { activateWorkspaceTabPaletteResult } = vi.hoisted(() => ({
   activateWorkspaceTabPaletteResult: vi.fn((_result: unknown) => ({ status: 'activated' }) as const)
 }))
+
 vi.mock('@/lib/workspace-tab-palette-activation', () => ({
   activateWorkspaceTabPaletteResult: (result: unknown) => activateWorkspaceTabPaletteResult(result)
 }))
 
 vi.mock('@/components/ui/command', async () => {
   const React = await import('react')
+
   return {
     // Why the commandProps passthrough: cmdk resolves Enter against its `value`, so the controlled
     // value is the only honest stand-in for "what would Enter activate" without mounting real cmdk.
@@ -103,6 +106,7 @@ vi.mock('@/components/ui/command', async () => {
       ref: React.ForwardedRef<HTMLInputElement>
     ) {
       setCommandQuery = onValueChange ?? null
+
       return (
         <input
           ref={ref}
@@ -146,8 +150,11 @@ vi.mock('@/components/ui/command', async () => {
 })
 
 const initialAppState = useAppStore.getInitialState()
+
 let testRoot: Root
+
 let testContainer: HTMLDivElement
+
 let setCommandQuery: ((next: string) => void) | null = null
 
 async function flushEffects(): Promise<void> {
@@ -213,9 +220,11 @@ describe('WorktreeJumpPalette', () => {
       isMainWorktree: true,
       branch: 'refs/heads/main'
     })
+
     const feature = makeWorktree('feature', 'Feature workspace', {
       branch: 'refs/heads/feature'
     })
+
     const folderMain = makeWorktree('folder-main', 'Folder workspace', {
       isMainWorktree: true,
       branch: ''
@@ -253,9 +262,11 @@ describe('WorktreeJumpPalette', () => {
       isMainWorktree: true,
       branch: 'refs/heads/main'
     })
+
     const feature = makeWorktree('feature', 'Feature workspace', {
       branch: 'refs/heads/feature'
     })
+
     const folderMain = makeWorktree('folder-main', 'Folder workspace', {
       isMainWorktree: true,
       branch: ''
@@ -293,6 +304,7 @@ describe('WorktreeJumpPalette', () => {
       isMainWorktree: true,
       branch: 'refs/heads/main'
     })
+
     const feature = makeWorktree('feature', 'Feature workspace', {
       branch: 'refs/heads/feature'
     })
@@ -313,9 +325,11 @@ describe('WorktreeJumpPalette', () => {
       isMainWorktree: true,
       branch: 'refs/heads/main'
     })
+
     const feature = makeWorktree('feature', 'Feature workspace', {
       branch: 'refs/heads/feature'
     })
+
     const folderMain = makeWorktree('folder-main', 'Folder workspace', {
       isMainWorktree: true,
       branch: ''
@@ -343,6 +357,7 @@ describe('WorktreeJumpPalette', () => {
       isMainWorktree: true,
       branch: 'refs/heads/main'
     })
+
     const feature = makeWorktree('feature', 'Feature workspace', {
       branch: 'refs/heads/feature'
     })
@@ -371,6 +386,7 @@ describe('WorktreeJumpPalette', () => {
       path: '/repos/repo-2',
       displayName: 'Repo 2'
     }
+
     const first = makeWorktree('first', 'First repository workspace')
     const second = makeWorktree('second', 'Second repository workspace', { repoId: 'repo-2' })
 
@@ -401,6 +417,7 @@ describe('WorktreeJumpPalette', () => {
   it('routes activation to each row own host when two same-id rows collide', async () => {
     const local = makeWorktree('shared', 'Local workspace', { hostId: 'local' })
     const ssh = makeWorktree('shared', 'SSH workspace', { hostId: 'ssh:box' })
+
     const state = {
       worktreesByRepo: { 'repo-1': [local, ssh] },
       showSleepingWorkspaces: true
@@ -412,6 +429,7 @@ describe('WorktreeJumpPalette', () => {
     const rows = testContainer.querySelectorAll<HTMLButtonElement>(
       `[data-command-item^="${encodePaletteIdentity(['worktree'])}"]`
     )
+
     expect(rows).toHaveLength(2)
     expect([...rows].map((candidate) => candidate.getAttribute('data-command-item'))).toEqual([
       encodePaletteIdentity(['worktree', 'local|shared']),
@@ -439,6 +457,7 @@ describe('WorktreeJumpPalette', () => {
     const rows = testContainer.querySelectorAll<HTMLButtonElement>(
       `[data-command-item^="${encodePaletteIdentity(['worktree'])}"]`
     )
+
     expect(rows).toHaveLength(2)
 
     await act(async () => fireEvent.click(rows[1]!))
@@ -464,6 +483,7 @@ describe('WorktreeJumpPalette', () => {
       hostId: 'ssh:same-private-target',
       runtimeOwnerEnvironmentId: 'hub-a'
     })
+
     const hubB = makeWorktree('shared-runtime', 'Hub B workspace', {
       hostId: 'ssh:same-private-target',
       runtimeOwnerEnvironmentId: 'hub-b'
@@ -479,9 +499,11 @@ describe('WorktreeJumpPalette', () => {
     const hubARow = testContainer.querySelector<HTMLButtonElement>(
       `[data-command-item="${encodePaletteIdentity(['worktree', 'runtime:hub-a|shared-runtime'])}"]`
     )
+
     const hubBRow = testContainer.querySelector(
       `[data-command-item="${encodePaletteIdentity(['worktree', 'runtime:hub-b|shared-runtime'])}"]`
     )
+
     expect(hubARow).not.toBeNull()
     expect(hubBRow).not.toBeNull()
 
@@ -506,6 +528,7 @@ describe('WorktreeJumpPalette', () => {
     const row = testContainer.querySelector(
       `[data-command-item="${encodePaletteIdentity(['worktree', 'runtime:missing-runtime|runtime-repo'])}"]`
     )
+
     expect(row?.textContent).toContain('Runtime workspace')
     expect(row?.textContent).not.toContain('Physical SSH repo')
   })
@@ -524,9 +547,11 @@ describe('WorktreeJumpPalette', () => {
 
   it('renders last active timestamp when worktree has lastActivityAt', async () => {
     const twentyThreeDaysAgo = Date.now() - 23 * 24 * 60 * 60 * 1000
+
     const activeWorktree = makeWorktree('active-wt', 'Active workspace', {
       lastActivityAt: twentyThreeDaysAgo
     })
+
     const noActivityWorktree = makeWorktree('no-activity-wt', 'No activity workspace', {
       lastActivityAt: 0
     })
@@ -539,6 +564,7 @@ describe('WorktreeJumpPalette', () => {
     const activeRow = testContainer.querySelector(
       `[data-command-item="${encodePaletteIdentity(['worktree', '|active-wt'])}"]`
     )
+
     expect(activeRow?.textContent).toContain('23d')
     const activeSpan = activeRow?.querySelector('span[aria-label="Last active 23d ago"]')
     expect(activeSpan).not.toBeNull()
@@ -547,6 +573,7 @@ describe('WorktreeJumpPalette', () => {
     const noActivityRow = testContainer.querySelector(
       `[data-command-item="${encodePaletteIdentity(['worktree', '|no-activity-wt'])}"]`
     )
+
     expect(noActivityRow?.querySelector('span[aria-label*="Last active"]')).toBeNull()
   })
 })

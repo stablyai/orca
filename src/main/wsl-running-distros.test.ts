@@ -22,6 +22,7 @@ import {
 async function withPlatform<T>(value: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value })
+
   try {
     return await fn()
   } finally {
@@ -95,6 +96,7 @@ describe('running WSL distro discovery', () => {
         listRunningWslDistrosAsync(),
         listRunningWslDistrosAsync()
       ]
+
       expect(execFileMock).toHaveBeenCalledTimes(1)
       finishProbe?.('Ubuntu\n')
       await expect(Promise.all(concurrent)).resolves.toEqual([['Ubuntu'], ['Ubuntu'], ['Ubuntu']])
@@ -124,6 +126,7 @@ describe('running WSL distro discovery', () => {
         listRunningWslHomeDirsAsync(),
         listRunningWslHomeDirsAsync()
       ]
+
       finishList?.('Ubuntu\n')
       await vi.waitFor(() => expect(execFileMock).toHaveBeenCalledTimes(2))
       finishHome?.('/home/ada\n')
@@ -184,6 +187,7 @@ describe('running WSL distro discovery', () => {
 
       vi.useFakeTimers()
       const observedStates: boolean[] = []
+
       const stop = observeWslTranscriptRunningState(
         '\\\\wsl.localhost\\Ubuntu\\home\\ada\\a.jsonl',
         () => {

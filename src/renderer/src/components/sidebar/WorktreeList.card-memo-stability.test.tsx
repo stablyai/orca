@@ -24,6 +24,7 @@ const mockStore = vi.hoisted(() => ({
 // (React.memo shallow-equal props) does NOT invoke it — which is the claim
 // under test: order-preserving epoch bumps must not re-render cards.
 const cardRenderSpy = vi.hoisted(() => vi.fn())
+
 const trackSpy = vi.hoisted(() => vi.fn())
 
 type WorktreeListComponent = React.ComponentType<{
@@ -40,7 +41,9 @@ vi.mock('@/store', () => {
   ) => unknown) & {
     getState: () => Record<string, unknown>
   }
+
   useAppStore.getState = () => mockStore.state
+
   return { useAppStore }
 })
 
@@ -122,14 +125,17 @@ vi.mock('./WorktreeCardAgents', () => ({
 
 vi.mock('./WorktreeCard', async () => {
   const ReactModule = await import('react')
+
   const MockWorktreeCard = ReactModule.memo(function WorktreeCard({
     worktree
   }: {
     worktree: Worktree
   }) {
     cardRenderSpy(worktree.id)
+
     return <div data-mock-worktree-card={worktree.id} />
   })
+
   return { default: MockWorktreeCard }
 })
 
@@ -178,10 +184,12 @@ function makeFolderWorkspacePathStatusState(): Record<string, unknown> {
 
 function setFlatWorktreeState(): void {
   const repo = makeRepo()
+
   const worktrees = [
     makeWorktree({ id: 'wt-a', displayName: 'alpha', sortOrder: 20 }),
     makeWorktree({ id: 'wt-b', displayName: 'beta', sortOrder: 10 })
   ]
+
   mockStore.state = {
     ...makeFolderWorkspacePathStatusState(),
     activeModal: '',
@@ -339,15 +347,18 @@ describe('WorktreeCard memo bail-out across epoch bumps', () => {
     mountedRoots.push(root)
 
     await renderList(root)
+
     const renderedOrder = (): (string | null)[] =>
       [...container.querySelectorAll('[data-mock-worktree-card]')].map((card) =>
         card.getAttribute('data-mock-worktree-card')
       )
+
     expect(renderedOrder()).toEqual(['wt-a', 'wt-b'])
     expect(trackSpy).not.toHaveBeenCalledWith('smart_sort_class_distribution', expect.anything())
 
     const now = Date.now()
     const paneKey = 'tab-a:11111111-1111-4111-8111-111111111111'
+
     const working: AgentStatusEntry = {
       state: 'working',
       prompt: '',
@@ -358,6 +369,7 @@ describe('WorktreeCard memo bail-out across epoch bumps', () => {
       worktreeId: 'wt-a',
       stateHistory: []
     }
+
     mockStore.state = {
       ...mockStore.state,
       agentStatusByPaneKey: { [paneKey]: working },

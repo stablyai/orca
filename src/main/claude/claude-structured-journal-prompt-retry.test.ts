@@ -40,15 +40,19 @@ function transientBackpressureSink(
   let lifecycleAppendAttempts = 0
   let lifecyclePublishAttempts = 0
   let released = false
+
   const persist = (): void => {
     durable.clear()
+
     for (const [key, body] of staged) {
       durable.set(key, body)
     }
   }
+
   const applyItem = (identity: AgentJournalItemIdentity, body: AgentJournalItemBody): void => {
     staged.set(agentJournalItemKey(identity), body)
   }
+
   return {
     sink: {
       appendItem: applyItem,
@@ -56,9 +60,11 @@ function transientBackpressureSink(
       publish: persist,
       tryAppendLifecycleBatch: (settlementId, mutations) => {
         lifecycleAppendAttempts += 1
+
         if (refusedAt === 'append' && (persistent ? !released : lifecycleAppendAttempts === 1)) {
           return { accepted: false, reason: 'backpressure' }
         }
+
         if (!appliedSettlements.has(settlementId)) {
           for (const mutation of mutations) {
             if (mutation.kind === 'item') {
@@ -67,16 +73,21 @@ function transientBackpressureSink(
               staged.delete(agentJournalItemKey(mutation.identity))
             }
           }
+
           appliedSettlements.add(settlementId)
         }
+
         return { accepted: true }
       },
       tryPublish: () => {
         lifecyclePublishAttempts += 1
+
         if (refusedAt === 'publish' && (persistent ? !released : lifecyclePublishAttempts === 1)) {
           return { accepted: false, reason: 'backpressure' }
         }
+
         persist()
+
         return { accepted: true }
       }
     },
@@ -168,6 +179,7 @@ describe('Claude journal prompt cancellation retry', () => {
     for (let index = 0; index < 100; index += 1) {
       translator.handle(streamDelta(index))
     }
+
     expect(state.appendAttempts()).toBe(1)
 
     state.release()

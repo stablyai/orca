@@ -41,6 +41,7 @@ export function EmulatorPaneToolbar({
   // lower-level CoreSimulator boot state.
   const statusLabel = isLive ? 'Connected' : loading ? 'Working…' : 'Not connected'
   const subtleStatus = isLive || loading
+
   const statusClassName = subtleStatus
     ? 'text-muted-foreground'
     : 'border-border bg-muted text-muted-foreground'

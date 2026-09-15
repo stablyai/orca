@@ -7,6 +7,7 @@ import {
 } from '../../shared/wsl-login-shell-command'
 
 export const WSL_CODEX_AVAILABILITY_TIMEOUT_MS = 5_000
+
 export const WSL_CODEX_NOT_FOUND_MESSAGE = 'Codex CLI not found in the WSL login-shell PATH.'
 
 /** Exits 0 only when `codex` resolves on the login PATH the runner supplies. */
@@ -39,7 +40,9 @@ export function buildWslCodexIdentityProbe(distro: string): WslCodexIdentityProb
     'printf \'%s\\n\' "$resolved"',
     'exec "$resolved" --version'
   ].join('\n')
+
   const captured = buildWslCapturedLoginShellCommand(command)
+
   return {
     args: buildWslExecArgs(distro, ['sh', '-c', captured.command]),
     readStdout: captured.readStdout
@@ -60,6 +63,7 @@ export function buildWslCodexAppServerArgs(
     `export CODEX_HOME=${quotePosixShell(linuxHomePath)}`,
     `exec "$resolved" ${appServerArgs.map(quotePosixShell).join(' ')}`
   ].join('\n')
+
   return buildWslCodexShellArgs(distro, command)
 }
 
@@ -73,6 +77,7 @@ export function buildWslCodexLoginArgs(distro: string, linuxHomePath: string): s
     `export CODEX_HOME=${quotePosixShell(linuxHomePath)}`,
     'exec "$resolved" login'
   ].join('\n')
+
   return buildWslCodexShellArgs(distro, command)
 }
 

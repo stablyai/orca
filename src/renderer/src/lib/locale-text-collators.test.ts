@@ -11,6 +11,7 @@ function expectComparatorParity(
       expect(Math.sign(current(a, b))).toBe(Math.sign(legacy(a, b)))
     }
   }
+
   expect([...values].sort(current)).toEqual([...values].sort(legacy))
 }
 
@@ -31,6 +32,7 @@ describe('locale text collators', () => {
       'Ångström',
       'alpha'
     ]
+
     const legacy = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' })
 
     expectComparatorParity(values, legacy, compareBaseSensitivityLocaleText)
@@ -48,6 +50,7 @@ describe('locale text collators', () => {
       'task-2',
       'TASK-2'
     ]
+
     const legacy = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true })
 
     expectComparatorParity(values, legacy, compareNumericLocaleText)
@@ -56,11 +59,13 @@ describe('locale text collators', () => {
   it('constructs each collator only when its comparison mode is first used', async () => {
     vi.resetModules()
     const NativeCollator = Intl.Collator
+
     const collatorSpy = vi
       .spyOn(Intl, 'Collator')
       .mockImplementation(function Collator(locales, options) {
         return new NativeCollator(locales, options)
       })
+
     try {
       const comparison = await import('./locale-text-collators')
       expect(collatorSpy).not.toHaveBeenCalled()

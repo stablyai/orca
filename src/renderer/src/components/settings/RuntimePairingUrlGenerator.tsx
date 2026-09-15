@@ -25,20 +25,26 @@ export function RuntimePairingUrlGenerator({
   const [networkInterfaces, setNetworkInterfaces] = useState<{ name: string; address: string }[]>(
     []
   )
+
   const [selectedAddress, setSelectedAddress] = useState(runtimePairingLinkCache.selectedAddress)
   const [intent, setIntent] = useState<RuntimePairingIntent>(runtimePairingLinkCache.intent)
+
   const [generatedAddress, setGeneratedAddress] = useState<string | null>(
     runtimePairingLinkCache.generatedAddress
   )
+
   const [runtimePairingUrl, setRuntimePairingUrl] = useState<string | null>(
     runtimePairingLinkCache.runtimePairingUrl
   )
+
   const [webClientUrl, setWebClientUrl] = useState<string | null>(
     runtimePairingLinkCache.webClientUrl
   )
+
   const [runtimePairingDeviceId, setRuntimePairingDeviceId] = useState<string | null>(
     runtimePairingLinkCache.runtimePairingDeviceId
   )
+
   const [runtimeAccessGrants, setRuntimeAccessGrants] = useState<RuntimeAccessGrant[]>([])
   const [isLoadingAccessGrants, setIsLoadingAccessGrants] = useState(false)
   const [refreshingNetworkInterfaces, setRefreshingNetworkInterfaces] = useState(false)
@@ -54,6 +60,7 @@ export function RuntimePairingUrlGenerator({
     if (copiedTargetResetTimerRef.current === null) {
       return
     }
+
     window.clearTimeout(copiedTargetResetTimerRef.current)
     copiedTargetResetTimerRef.current = null
   }, [])
@@ -73,11 +80,14 @@ export function RuntimePairingUrlGenerator({
     async (options: { showToastOnError?: boolean } = {}): Promise<void> => {
       const loadId = accessGrantLoadIdRef.current + 1
       accessGrantLoadIdRef.current = loadId
+
       if (mountedRef.current) {
         setIsLoadingAccessGrants(true)
       }
+
       try {
         const result = await window.api.mobile.listRuntimeAccessGrants()
+
         if (mountedRef.current && loadId === accessGrantLoadIdRef.current) {
           setRuntimeAccessGrants(result.grants)
         }
@@ -109,11 +119,14 @@ export function RuntimePairingUrlGenerator({
     async (options: { showToastOnError?: boolean } = {}): Promise<void> => {
       const loadId = networkInterfaceLoadIdRef.current + 1
       networkInterfaceLoadIdRef.current = loadId
+
       if (mountedRef.current) {
         setRefreshingNetworkInterfaces(true)
       }
+
       try {
         const result = await window.api.mobile.listNetworkInterfaces()
+
         if (mountedRef.current && loadId === networkInterfaceLoadIdRef.current) {
           setNetworkInterfaces(result.interfaces)
         }
@@ -141,6 +154,7 @@ export function RuntimePairingUrlGenerator({
 
   useEffect(() => {
     void loadNetworkInterfaces()
+
     return () => {
       networkInterfaceLoadIdRef.current += 1
     }
@@ -150,9 +164,11 @@ export function RuntimePairingUrlGenerator({
     if (intent !== 'another' || networkInterfaces.length === 0) {
       return
     }
+
     const addressStillAvailable = networkInterfaces.some(
       (networkInterface) => networkInterface.address === selectedAddress
     )
+
     if (!addressStillAvailable) {
       const nextAddress = networkInterfaces[0]?.address ?? ''
       runtimePairingLinkCache.selectedAddress = nextAddress
@@ -162,6 +178,7 @@ export function RuntimePairingUrlGenerator({
 
   useEffect(() => {
     void loadRuntimeAccessGrants()
+
     return () => {
       accessGrantLoadIdRef.current += 1
     }
@@ -169,6 +186,7 @@ export function RuntimePairingUrlGenerator({
 
   const clearGeneratedUrls = (): void => {
     clearGeneratedRuntimePairingLink()
+
     if (mountedRef.current) {
       setRuntimePairingUrl(null)
       setWebClientUrl(null)
@@ -181,10 +199,13 @@ export function RuntimePairingUrlGenerator({
     const address = selectedAddress.trim()
     runtimePairingLinkCache.selectedAddress = address
     setSelectedAddress(address)
+
     if (intent === 'custom') {
       runtimePairingLinkCache.customAddress = address
     }
+
     setIsGeneratingPairing(true)
+
     try {
       const result = await window.api.mobile.getRuntimePairingUrl({
         address,
@@ -193,8 +214,10 @@ export function RuntimePairingUrlGenerator({
         // address — the address alone cannot tell "This computer only" from a loopback tunnel front-end.
         reach: runtimePairingReachForIntent(intent)
       })
+
       if (!result.available) {
         clearGeneratedUrls()
+
         if (mountedRef.current) {
           // Why: STA-2370 — surface the specific network-exposure guidance when the widen failed; fall back
           // to the generic message for other unavailable cases (e.g. no reachable address).
@@ -206,21 +229,26 @@ export function RuntimePairingUrlGenerator({
               )
           )
         }
+
         return
       }
+
       cacheGeneratedRuntimePairingLink({
         address,
         pairingUrl: result.pairingUrl,
         webClientUrl: result.webClientUrl,
         deviceId: result.deviceId
       })
+
       if (mountedRef.current) {
         setRuntimePairingUrl(result.pairingUrl)
         setWebClientUrl(result.webClientUrl)
         setRuntimePairingDeviceId(result.deviceId)
         setGeneratedAddress(address)
       }
+
       await loadRuntimeAccessGrants()
+
       if (mountedRef.current) {
         toast.success(
           result.webClientUrl
@@ -254,8 +282,10 @@ export function RuntimePairingUrlGenerator({
 
   const revokeRuntimeAccess = async (grant: RuntimeAccessGrant): Promise<void> => {
     setRevokingGrantId(grant.deviceId)
+
     try {
       const result = await window.api.mobile.revokeRuntimeAccess({ deviceId: grant.deviceId })
+
       if (!result.revoked) {
         if (mountedRef.current) {
           toast.error(
@@ -265,17 +295,22 @@ export function RuntimePairingUrlGenerator({
             )
           )
         }
+
         await loadRuntimeAccessGrants()
+
         return
       }
+
       if (mountedRef.current) {
         setRuntimeAccessGrants((current) =>
           current.filter((entry) => entry.deviceId !== grant.deviceId)
         )
       }
+
       if (runtimePairingDeviceId === grant.deviceId) {
         clearGeneratedUrls()
       }
+
       if (mountedRef.current) {
         toast.success(
           translate(
@@ -305,11 +340,13 @@ export function RuntimePairingUrlGenerator({
   const copyGeneratedUrl = async (target: 'web' | 'pairing', value: string): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(value)
+
       if (mountedRef.current) {
         clearCopiedTargetResetTimer()
         setCopiedTarget(target)
         copiedTargetResetTimerRef.current = window.setTimeout(() => {
           copiedTargetResetTimerRef.current = null
+
           if (mountedRef.current) {
             setCopiedTarget((current) => (current === target ? null : current))
           }
@@ -343,11 +380,13 @@ export function RuntimePairingUrlGenerator({
   const containerClassName = framed
     ? 'space-y-3 rounded-lg border border-border/50 bg-muted/25 p-3'
     : 'space-y-4'
+
   const sharedAccessClassName = showGeneratorForm ? 'border-t border-border/40 pt-3' : ''
 
   const updateSelectedAddress = (address: string): void => {
     runtimePairingLinkCache.selectedAddress = address
     setSelectedAddress(address)
+
     if (
       intent === 'another' &&
       !networkInterfaces.some((networkInterface) => networkInterface.address === address)

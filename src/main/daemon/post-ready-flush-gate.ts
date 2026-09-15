@@ -1,6 +1,7 @@
 // Bash's prompt and zsh's line-init marker are ready for input immediately.
 // Other shells retain the existing settling delay.
 export const POST_READY_FLUSH_DELAY_MS = 30
+
 export const POST_READY_FLUSH_FALLBACK_MS = 200
 
 export class PostReadyFlushGate {
@@ -25,13 +26,18 @@ export class PostReadyFlushGate {
   arm(postMarkerBytesObserved = false): void {
     if (this.markerIsLineEditorReady) {
       this.onFlush()
+
       return
     }
+
     this.awaitingPromptDraw = true
+
     if (postMarkerBytesObserved) {
       this.notifyData()
+
       return
     }
+
     this.fallbackTimer = setTimeout(() => {
       this.fallbackTimer = null
       this.awaitingPromptDraw = false
@@ -46,11 +52,14 @@ export class PostReadyFlushGate {
     if (!this.awaitingPromptDraw) {
       return
     }
+
     this.awaitingPromptDraw = false
+
     if (this.fallbackTimer) {
       clearTimeout(this.fallbackTimer)
       this.fallbackTimer = null
     }
+
     if (this.postDataTimer === null) {
       this.postDataTimer = setTimeout(() => {
         this.postDataTimer = null
@@ -62,10 +71,12 @@ export class PostReadyFlushGate {
   /** Cancel any pending flush. Call on session teardown. */
   clear(): void {
     this.awaitingPromptDraw = false
+
     if (this.postDataTimer) {
       clearTimeout(this.postDataTimer)
       this.postDataTimer = null
     }
+
     if (this.fallbackTimer) {
       clearTimeout(this.fallbackTimer)
       this.fallbackTimer = null

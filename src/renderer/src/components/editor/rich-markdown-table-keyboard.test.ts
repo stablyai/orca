@@ -36,6 +36,7 @@ function countRows(editor: Editor): number {
       count += 1
     }
   })
+
   return count
 }
 
@@ -45,8 +46,10 @@ function hasTable(editor: Editor): boolean {
     if (node.type.name === 'table') {
       found = true
     }
+
     return !found
   })
+
   return found
 }
 
@@ -57,12 +60,16 @@ function caretAtText(editor: Editor, text: string): number {
     if (!node.isText || node.text !== text) {
       return true
     }
+
     position = pos
+
     return false
   })
+
   if (position === null) {
     throw new Error(`Expected cell text: ${text}`)
   }
+
   return position
 }
 
@@ -77,17 +84,23 @@ function caretInRow(
     if (node.type.name !== 'tableRow' || !predicate(node.textContent)) {
       return true
     }
+
     let offset = pos + 1
+
     for (let index = 0; index < cellIndex; index += 1) {
       offset += node.child(index).nodeSize
     }
+
     // cell open + paragraph open
     position = offset + 2
+
     return false
   })
+
   if (position === null) {
     throw new Error('Expected a matching table row')
   }
+
   return position
 }
 
@@ -97,6 +110,7 @@ function selectionText(editor: Editor): string {
 
 function withEditor(content: string, run: (editor: Editor) => void): void {
   const editor = createEditor(content)
+
   try {
     run(editor)
   } finally {

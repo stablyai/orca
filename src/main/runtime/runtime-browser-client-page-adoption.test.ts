@@ -11,10 +11,15 @@ import {
 } from './runtime-browser-client-page-adoption'
 
 const AUTHORITY_RUNTIME_ID = 'runtime-new'
+
 const AUTHORITY_EPOCH = 'epoch-new'
+
 const PREDECESSOR_RUNTIME_ID = 'runtime-old'
+
 const HOST_CLIENT_ID = 'host-a'
+
 const WORKSPACE_ID = 'workspace-a'
+
 const EXECUTION_HOST_KEY = 'native:runtime-new:1'
 
 const resolved: BrowserExecutionHostKeyResolution = {
@@ -60,7 +65,9 @@ function attach(
       authorityRuntimeId: AUTHORITY_RUNTIME_ID,
       authorityEpoch: AUTHORITY_EPOCH
     })
+
   const connectionId = options.connectionId ?? 'connection-a'
+
   const host = leases.attach({
     browserHostClientId: HOST_CLIENT_ID,
     connectionId,
@@ -72,12 +79,14 @@ function attach(
     pageReconciliationProtocolVersion: 1,
     leaseReconnectProtocolVersion: 1
   })
+
   const identity = {
     authorityEpoch: host.lease.authorityEpoch,
     browserHostClientId: host.lease.browserHostClientId,
     browserHostGeneration: host.lease.browserHostGeneration,
     pairedDeviceId: host.lease.pairedDeviceId
   }
+
   const commands: BrowserClientHostCommandEvent[] = []
   leases.attachCommandDelivery(identity, (event) => {
     commands.push(event)
@@ -91,6 +100,7 @@ function attach(
   const pages = options.pages ?? new RuntimeBrowserPageRegistry()
   const publishClientPage = vi.spyOn(pages, 'publishClientPage')
   const notifyWorkspace = vi.fn()
+
   return {
     leases,
     pages,
@@ -188,10 +198,12 @@ describe('adoptRuntimeBrowserClientPagesFromInventory', () => {
 
   it('leaves a page adopted on an earlier attach untouched when the host reconnects', async () => {
     const pages = new RuntimeBrowserPageRegistry()
+
     const leases = new BrowserHostLeaseRegistry({
       authorityRuntimeId: AUTHORITY_RUNTIME_ID,
       authorityEpoch: AUTHORITY_EPOCH
     })
+
     const inventory = [orphanedPage()]
     await attach(inventory, { pages, leases }).adopt()
     const adoptedPlacement = leases.getPlacement('page-a')
@@ -250,6 +262,7 @@ describe('adoptRuntimeBrowserClientPagesFromInventory', () => {
       authorityRuntimeId: AUTHORITY_RUNTIME_ID,
       authorityEpoch: AUTHORITY_EPOCH
     })
+
     const host = leases.attach({
       browserHostClientId: HOST_CLIENT_ID,
       connectionId: 'connection-a',

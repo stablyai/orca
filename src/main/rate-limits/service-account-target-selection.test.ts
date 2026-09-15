@@ -55,13 +55,17 @@ describe('RateLimitService', () => {
 
   it('passes the selected WSL Codex home into active account rate-limit fetches', async () => {
     const service = new RateLimitService()
+
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
+
     const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
+
     const resolver = vi.fn((target) => ({
       kind: 'ready' as const,
       codexHomePath: target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome
     }))
+
     service.setCodexHomePathResolver(resolver)
 
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
@@ -95,10 +99,12 @@ describe('RateLimitService', () => {
 
   it('settles without applying a result when the managed home becomes unavailable mid-fetch', async () => {
     const service = new RateLimitService()
+
     const resolver = vi
       .fn()
       .mockReturnValueOnce({ kind: 'ready', codexHomePath: '/tmp/codex-home' })
       .mockReturnValue({ kind: 'skip' })
+
     service.setCodexHomePathResolver(resolver)
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
 
@@ -160,11 +166,13 @@ describe('RateLimitService', () => {
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 0, Date.now()))
 
     service.setCodexHomePathResolver(() => ({ kind: 'ready', codexHomePath: '/tmp/new-selection' }))
+
     const pending = service.consumeCodexRateLimitResetCredit({
       idempotencyKey,
       target: { runtime: 'host', wslDistro: null },
       codexHomePath: '/tmp/approved-selection'
     })
+
     await vi.waitFor(() => expect(consume).toHaveBeenCalledOnce())
     service.setCodexFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
     resolveConsume?.('reset')
@@ -208,6 +216,7 @@ describe('RateLimitService', () => {
       target: { runtime: 'host', wslDistro: null },
       codexHomePath: '/tmp/approved-selection'
     })
+
     await vi.waitFor(() => expect(fetchCodexRateLimits).toHaveBeenCalledOnce())
 
     await service.refreshCodexForTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
@@ -257,13 +266,17 @@ describe('RateLimitService', () => {
 
   it('uses the initialized WSL target for active Codex rate-limit fetches', async () => {
     const service = new RateLimitService()
+
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
+
     const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
+
     const resolver = vi.fn((target) => ({
       kind: 'ready' as const,
       codexHomePath: target?.runtime === 'wsl' ? wslCodexHome : hostCodexHome
     }))
+
     service.setCodexHomePathResolver(resolver)
     service.setCodexFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
 
@@ -299,6 +312,7 @@ describe('RateLimitService', () => {
 
   it('uses the initialized WSL target for active Claude rate-limit fetches', async () => {
     const service = new RateLimitService()
+
     const resolver = vi.fn(async (target) => ({
       configDir:
         target?.runtime === 'wsl'
@@ -311,6 +325,7 @@ describe('RateLimitService', () => {
       stripAuthEnv: target?.runtime === 'wsl',
       provenance: target?.runtime === 'wsl' ? 'managed:wsl-account:wsl:Ubuntu' : 'system'
     }))
+
     service.setClaudeAuthPreparationResolver(resolver)
     service.setClaudeFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
 
@@ -411,8 +426,10 @@ describe('RateLimitService', () => {
 
   it('does not cache host Codex usage under an outgoing WSL account', async () => {
     const service = new RateLimitService()
+
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
+
     const hostCodexHome = 'C:\\Users\\jin\\.orca\\codex-accounts\\host\\home'
     service.setCodexHomePathResolver((target) => ({
       kind: 'ready',
@@ -449,6 +466,7 @@ describe('RateLimitService', () => {
       error: null,
       status: 'ok'
     }
+
     vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
     vi.mocked(fetchCodexRateLimits)
       .mockResolvedValueOnce(weeklyOnly)

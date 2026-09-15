@@ -52,13 +52,16 @@ test.describe('Tab visibility with closed sidebar', () => {
         async () =>
           orcaPage.evaluate(() => {
             const store = window.__store
+
             if (!store) {
               // Why: match helpers/store.ts — a missing store in dev means
               // the test harness is misconfigured. Throwing here keeps the
               // failure mode legible instead of timing out on toEqual.
               throw new Error('window.__store is not available — is the app in dev mode?')
             }
+
             const state = store.getState()
+
             return { activeView: state.activeView, sidebarOpen: state.sidebarOpen }
           }),
         {
@@ -78,6 +81,7 @@ test.describe('Tab visibility with closed sidebar', () => {
     // the chord reaches the toggleSidebar branch.
     await orcaPage.evaluate(() => {
       const active = document.activeElement
+
       if (active instanceof HTMLElement && !active.classList.contains('xterm-helper-textarea')) {
         active.blur()
       }
@@ -97,9 +101,11 @@ test.describe('Tab visibility with closed sidebar', () => {
         async () =>
           orcaPage.evaluate(() => {
             const store = window.__store
+
             if (!store) {
               throw new Error('window.__store is not available — is the app in dev mode?')
             }
+
             return store.getState().sidebarOpen
           }),
         {
@@ -118,6 +124,7 @@ test.describe('Tab visibility with closed sidebar', () => {
     } | null> =>
       orcaPage.evaluate(() => {
         const titlebarLeft = document.querySelector<HTMLElement>('.titlebar-left')
+
         // Why: split tab groups render multiple sortable-tab elements, and
         // DOM order is not guaranteed to match visual order. The tab the
         // floating titlebar can occlude is the leftmost one on screen, so
@@ -125,9 +132,11 @@ test.describe('Tab visibility with closed sidebar', () => {
         const allTabs = Array.from(
           document.querySelectorAll<HTMLElement>('[data-testid="sortable-tab"]')
         )
+
         if (!titlebarLeft || allTabs.length === 0) {
           return null
         }
+
         // Why: `.titlebar-left` exists in both the sidebar-open (flex-flow)
         // and sidebar-collapsed (`position: absolute`) branches — see
         // App.tsx around line 1000. Only the collapsed branch can produce
@@ -137,11 +146,13 @@ test.describe('Tab visibility with closed sidebar', () => {
         if (getComputedStyle(titlebarLeft).position !== 'absolute') {
           return null
         }
+
         const firstTab = allTabs.reduce((leftmost, candidate) =>
           candidate.getBoundingClientRect().left < leftmost.getBoundingClientRect().left
             ? candidate
             : leftmost
         )
+
         const tlRect = titlebarLeft.getBoundingClientRect()
         const tabRect = firstTab.getBoundingClientRect()
         // Why: the user-observable invariant is "a click on the first tab
@@ -152,6 +163,7 @@ test.describe('Tab visibility with closed sidebar', () => {
         const centerX = tabRect.left + tabRect.width / 2
         const centerY = tabRect.top + tabRect.height / 2
         const elAtCenter = document.elementFromPoint(centerX, centerY)
+
         return {
           titlebarRight: tlRect.right,
           titlebarWidth: tlRect.width,
@@ -174,13 +186,16 @@ test.describe('Tab visibility with closed sidebar', () => {
       firstTabWidth: number
       centerIsTabOrDescendant: boolean
     } | null = null
+
     await expect
       .poll(
         async () => {
           geometry = await measureLayout()
+
           if (!geometry) {
             return false
           }
+
           return geometry.titlebarWidth > 0 && geometry.firstTabWidth > 0
         },
         {
@@ -214,6 +229,7 @@ test.describe('Tab visibility with closed sidebar', () => {
       // with a Windows UA makes App.tsx take that renderer branch on any CI host.
       const userAgent =
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/146 Safari/537.36'
+
       Object.defineProperty(navigator, 'userAgent', {
         get: () => userAgent,
         configurable: true
@@ -243,9 +259,11 @@ test.describe('Tab visibility with closed sidebar', () => {
 
     await orcaPage.evaluate(() => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available — is the app in dev mode?')
       }
+
       store.getState().setSidebarOpen(true)
     })
 
@@ -254,10 +272,13 @@ test.describe('Tab visibility with closed sidebar', () => {
         async () =>
           orcaPage.evaluate(() => {
             const store = window.__store
+
             if (!store) {
               throw new Error('window.__store is not available — is the app in dev mode?')
             }
+
             const state = store.getState()
+
             return { activeView: state.activeView, sidebarOpen: state.sidebarOpen }
           }),
         {
@@ -269,9 +290,11 @@ test.describe('Tab visibility with closed sidebar', () => {
 
     await orcaPage.evaluate(() => {
       const store = window.__store
+
       if (!store) {
         throw new Error('window.__store is not available — is the app in dev mode?')
       }
+
       // Why: CI runs Electron hidden, where Playwright can wait forever for
       // a titlebar button to be "stable". The regression is the collapsed
       // geometry and hit target, so drive that state directly.
@@ -283,9 +306,11 @@ test.describe('Tab visibility with closed sidebar', () => {
         async () =>
           orcaPage.evaluate(() => {
             const store = window.__store
+
             if (!store) {
               throw new Error('window.__store is not available — is the app in dev mode?')
             }
+
             return store.getState().sidebarOpen
           }),
         {
@@ -303,21 +328,26 @@ test.describe('Tab visibility with closed sidebar', () => {
     } | null> =>
       orcaPage.evaluate(() => {
         const titlebarLeft = document.querySelector<HTMLElement>('.titlebar-left')
+
         const sidebarToggle = titlebarLeft?.querySelector<HTMLButtonElement>(
           'button[aria-label="Toggle sidebar"]'
         )
+
         const backButton = titlebarLeft?.querySelector<HTMLButtonElement>(
           'button[aria-label="Go back"]'
         )
+
         if (!titlebarLeft || !sidebarToggle || !backButton) {
           return null
         }
+
         const titlebarIsCollapsed = getComputedStyle(titlebarLeft).position === 'absolute'
         const toggleRect = sidebarToggle.getBoundingClientRect()
         const backRect = backButton.getBoundingClientRect()
         const backCenterX = backRect.left + backRect.width / 2
         const backCenterY = backRect.top + backRect.height / 2
         const elementAtBackCenter = document.elementFromPoint(backCenterX, backCenterY)
+
         return {
           titlebarIsCollapsed,
           toggleRight: toggleRect.right,
@@ -333,10 +363,12 @@ test.describe('Tab visibility with closed sidebar', () => {
       backLeft: number
       backCenterHitsBack: boolean
     } | null = null
+
     await expect
       .poll(
         async () => {
           controls = await measureControls()
+
           return controls?.titlebarIsCollapsed === true
         },
         {

@@ -41,10 +41,12 @@ export function WorktreeCardIssueDetailSection({
   }
 
   const issueLabels = issue.labels ?? []
+
   const moreActionsLabel = translate(
     'auto.components.sidebar.WorktreeCardMeta.moreIssueActions',
     'More issue actions'
   )
+
   const moreActionsTrigger = (
     <DropdownMenuTrigger asChild>
       <Button

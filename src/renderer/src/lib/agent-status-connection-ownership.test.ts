@@ -8,6 +8,7 @@ import {
 } from './agent-status-connection-ownership'
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
+
 const PANE = makePaneKey('tab-1', LEAF)
 
 describe('agent status connection ownership', () => {
@@ -63,6 +64,7 @@ describe('agent status connection ownership', () => {
 
   it('requires one exact live pane binding', () => {
     const ptyId = toAppSshPtyId('ssh-a', 'pty-1')
+
     const state = {
       terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { [LEAF]: ptyId } } },
       ptyIdsByTabId: { 'tab-1': [ptyId] },
@@ -79,6 +81,7 @@ describe('agent status connection ownership', () => {
 
   it('rejects stale SSH routing after clear and throughout transient reconnect', () => {
     const ptyId = toAppSshPtyId('ssh-a', 'pty-1')
+
     const state = {
       terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { [LEAF]: ptyId } } },
       ptyIdsByTabId: { 'tab-1': [ptyId] },

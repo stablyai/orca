@@ -25,6 +25,7 @@ afterEach(() => {
 function tempConfigPath(): string {
   const root = mkdtempSync(join(tmpdir(), 'orca-codex-rollback-'))
   roots.push(root)
+
   return join(root, 'config.toml')
 }
 
@@ -76,6 +77,7 @@ describe('Codex trust config rollback', () => {
     restoreCodexTrustConfig(configPath, snapshot)
 
     expect(readFileSync(configPath)).toEqual(original)
+
     if (process.platform !== 'win32') {
       expect(statSync(configPath).mode & 0o777).toBe(0o640)
     }

@@ -30,18 +30,22 @@ export function createFetchWorktreeLineage(
     try {
       // Why: lineage is a focused-host refresh; host-merge so other hosts' fetched lineage is preserved.
       const ownerSettings = get().settings
+
       const parsedHost = options?.executionHostId
         ? parseExecutionHostId(options.executionHostId)
         : null
+
       const activeRuntimeEnvironmentId =
         parsedHost?.kind === 'runtime'
           ? parsedHost.environmentId
           : parsedHost || options?.forceLocalOwner
             ? null
             : ownerSettings?.activeRuntimeEnvironmentId
+
       const settings = ownerSettings
         ? { ...ownerSettings, activeRuntimeEnvironmentId }
         : ({ activeRuntimeEnvironmentId } as AppState['settings'])
+
       await refreshWorktreeLineageForSettings(settings, set, get, {
         reuseRecentCompatibilityFailure: true
       })
@@ -59,6 +63,7 @@ export function createUpdateWorktreeLineage(
     // Why: an unresolvable owner route (ambiguous or missing) rejects rather than skipping — this is a
     // user-initiated action, and both callers toast the failure. Don't swallow it into a silent no-op.
     const ownerSettings = settingsForWorktreeOwner(get(), worktreeId)
+
     try {
       applyWorktreeLineageUpdate(
         set,
@@ -79,6 +84,7 @@ export function createAssignWorktreeParent(
 ): WorktreeSlice['assignWorktreeParent'] {
   return async (worktreeId, args) => {
     const ownerSettings = settingsForWorktreeOwner(get(), worktreeId)
+
     try {
       applyWorktreeLineageUpdate(
         set,

@@ -15,11 +15,14 @@ export type GitStatusSourceControlTreeNode = SourceControlTreeNode<
   GitStatusEntry,
   SourceControlSectionArea
 >
+
 export type SourceControlTreeDirectoryNode = Extract<
   GitStatusSourceControlTreeNode,
   { type: 'directory' }
 >
+
 export type BranchSourceControlTreeNode = SourceControlTreeNode<GitBranchChangeEntry, 'branch'>
+
 export type BranchSourceControlTreeDirectoryNode = Extract<
   BranchSourceControlTreeNode,
   { type: 'directory' }
@@ -35,6 +38,7 @@ export function getSourceControlDirectoryActionPaths(
   node: SourceControlTreeDirectoryNode
 ): SourceControlDirectoryActionPaths {
   const entries = collectSourceControlTreeFileEntries(node)
+
   return {
     stagePaths: entries.filter(isStageableStatusEntry).map((entry) => entry.path),
     unstagePaths: getUnstageAllPaths(entries),

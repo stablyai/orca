@@ -39,6 +39,7 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
     setProjectRepoNotInOrca,
     taskUiReady
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && projectRepoNotInOrca != null}
@@ -115,6 +116,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
     setProjectRowItem,
     taskUiReady
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && projectRowItem != null}
@@ -195,6 +197,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                   <View style={styles.chipRow}>
                     {projectIssueTypes.map((issueType) => {
                       const selected = projectRowItem.content.issueType?.id === issueType.id
+
                       return (
                         <Pressable
                           key={issueType.id}
@@ -299,14 +302,17 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                   disabled={projectMutating}
                   onPress={() => {
                     const nextState = projectRowItem.content.state === 'CLOSED' ? 'open' : 'closed'
+
                     if (projectRowItem.itemType === 'PULL_REQUEST') {
                       setPendingHostedStateChange({
                         source: 'project',
                         row: projectRowItem,
                         nextState
                       })
+
                       return
                     }
+
                     setPendingHostedStateChange({
                       source: 'project',
                       row: projectRowItem,

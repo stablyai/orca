@@ -14,10 +14,13 @@ import {
 
 export function activateAiVaultResumeWorkspace(workspaceId: string): void {
   const workspaceScope = parseWorkspaceKey(workspaceId)
+
   if (workspaceScope?.type === 'folder') {
     activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId)
+
     return
   }
+
   activateAndRevealWorktree(workspaceId)
 }
 
@@ -34,20 +37,25 @@ export async function resumeAiVaultSessionInNewChat(
     // Codex rows can live under a shared legacy home; the same preparation the terminal resume
     // runs re-pins them, and its result is what names the conversation the host will look for.
     const preparedSession = await prepareAiVaultSessionForResume(session)
+
     const settlement = await adoptAgentSessionLaunchVerdict({
       route: 'structured-native-chat',
       agent,
       worktreeId,
       resumeFrom: { providerSessionId: preparedSession.sessionId }
     }).launch({})
+
     if (settlement?.kind === 'failed') {
       notifyAiVaultSessionResumeInChatFailure(settlement.error)
+
       return
     }
+
     // Why: an unknown outcome is not a failure; the launch layer reconciles it on the next attempt.
     if (settlement?.kind !== 'structured') {
       return
     }
+
     if (useAppStore.getState().activeWorktreeId !== worktreeId) {
       activateAiVaultResumeWorkspace(worktreeId)
     }
@@ -67,8 +75,10 @@ function notifyAiVaultSessionResumeInChatFailure(error: unknown): void {
         'Another chat is already holding this conversation.'
       )
     )
+
     return
   }
+
   if (hasRuntimeRpcErrorCode(error, 'agent_session_identity_required')) {
     toast.error(
       translate(
@@ -76,8 +86,10 @@ function notifyAiVaultSessionResumeInChatFailure(error: unknown): void {
         "This conversation's history could not be loaded, so it cannot be resumed in chat."
       )
     )
+
     return
   }
+
   toast.error(
     translate(
       'auto.components.right.sidebar.AiVaultPanel.resumeInChatFailed',

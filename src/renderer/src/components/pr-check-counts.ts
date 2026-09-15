@@ -14,6 +14,7 @@ export function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDet
   if (check.conclusion) {
     return check.conclusion
   }
+
   return check.status === 'completed' ? 'neutral' : 'pending'
 }
 
@@ -26,9 +27,11 @@ export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts 
   // disagree with the checks pill. action_required is the one split back out: it blocks merge like
   // a failure but reads amber, not red.
   const summary = summarizeProviderChecks(checks)
+
   const needsAction = checks.filter(
     (check) => getCheckConclusion(check) === 'action_required'
   ).length
+
   return {
     passing: summary.passed,
     failing: summary.failed - needsAction,
@@ -51,6 +54,7 @@ export type PRCheckCountChip = {
  */
 export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
   const chips: PRCheckCountChip[] = []
+
   if (counts.passing > 0) {
     chips.push({
       tone: 'success',
@@ -59,6 +63,7 @@ export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
       })
     })
   }
+
   if (counts.failing > 0) {
     chips.push({
       tone: 'failure',
@@ -67,6 +72,7 @@ export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
       })
     })
   }
+
   if (counts.needsAction > 0) {
     chips.push({
       tone: 'action_required',
@@ -77,6 +83,7 @@ export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
       )
     })
   }
+
   if (counts.pending > 0) {
     chips.push({
       tone: 'pending',
@@ -85,6 +92,7 @@ export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
       })
     })
   }
+
   if (counts.neutral > 0) {
     chips.push({
       tone: 'neutral',
@@ -93,26 +101,33 @@ export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
       })
     })
   }
+
   return chips
 }
 
 export function getChecksSummaryLabel(checks: readonly PRCheckDetail[]): string {
   const counts = getCheckCounts(checks)
+
   if (checks.length === 0) {
     return 'No checks found'
   }
+
   if (counts.failing > 0) {
     return `${counts.failing} ${counts.failing === 1 ? 'check' : 'checks'} failing`
   }
+
   // Why: action_required (e.g. workflow awaiting approval) blocks merge but isn't a failure, so surface it distinctly.
   if (counts.needsAction > 0) {
     return `${counts.needsAction} ${counts.needsAction === 1 ? 'check needs' : 'checks need'} action`
   }
+
   if (counts.pending > 0) {
     return `${counts.pending} ${counts.pending === 1 ? 'check' : 'checks'} pending`
   }
+
   if (counts.passing === checks.length) {
     return 'All checks passing'
   }
+
   return `${counts.passing} of ${checks.length} checks passing`
 }

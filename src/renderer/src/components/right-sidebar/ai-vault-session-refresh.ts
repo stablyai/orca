@@ -24,6 +24,7 @@ import {
 // In-app session creation bypasses the cache so the new session appears promptly.
 // Keep the budget at module scope so tab remounts cannot amplify full scans.
 const FORCED_RESCAN_MIN_INTERVAL_MS = 30_000
+
 let lastForcedRescanAt = 0
 
 export function resetAiVaultForcedRescanThrottleForTest(): void {
@@ -59,18 +60,24 @@ function getAgentSessionIdsKey(
   if (!agentStatusByPaneKey) {
     return ''
   }
+
   const cached = agentSessionIdsKeyBySnapshot.get(agentStatusByPaneKey)
+
   if (cached !== undefined) {
     return cached
   }
+
   const ids: string[] = []
+
   for (const entry of Object.values(agentStatusByPaneKey)) {
     if (entry.providerSession?.id) {
       ids.push(entry.providerSession.id)
     }
   }
+
   const key = ids.sort().join('\n')
   agentSessionIdsKeyBySnapshot.set(agentStatusByPaneKey, key)
+
   return key
 }
 
@@ -110,6 +117,7 @@ export function useAiVaultSessionRefresh(
   useLayoutEffect(() => {
     sessionLimitRef.current = sessionLimit
   }, [sessionLimit])
+
   const currentScanScopeKey = useCallback(
     () =>
       `${aiVaultSessionResultCacheKey(
@@ -124,6 +132,7 @@ export function useAiVaultSessionRefresh(
       const hostScope = executionHostScopeRef.current
       const selectedLimit = sessionLimitRef.current
       const baseKey = aiVaultSessionResultCacheKey(hostScope, scopePathsRef.current)
+
       const cachedResult =
         args.reuseLoadedDepth === true
           ? readCachedAiVaultSessionResult({
@@ -132,6 +141,7 @@ export function useAiVaultSessionRefresh(
               scopePaths: scopePathsRef.current
             })
           : null
+
       if (cachedResult) {
         const scanKey = `${baseKey}\n${selectedLimit}`
         lastAppliedScanRef.current = { scopeKey: scanKey, scannedAt: cachedResult.scannedAt }
@@ -140,34 +150,41 @@ export function useAiVaultSessionRefresh(
           applyPublishedAiVaultList(published, setScanResult)
         })
         setLoading(false)
+
         return
       }
+
       // A scope change during an in-flight scan must not be dropped; queue one more
       // scan so the current scoped view is refreshed after the older scan settles.
       if (refreshInFlightRef.current) {
         pendingRefreshRef.current = true
         pendingForceRef.current ||= args.force === true
         pendingBackgroundRef.current &&= args.background === true
+
         return
       }
 
       refreshInFlightRef.current = true
       const refreshId = refreshIdRef.current + 1
       refreshIdRef.current = refreshId
+
       // A manual force scan counts against the throttle so an auto rescan right
       // after the button press doesn't trigger a second full scan.
       if (args.force === true) {
         lastForcedRescanAt = Date.now()
       }
+
       // Background (refocus) refreshes usually resolve from the main-process
       // cache; suppressing the loading flag avoids a spinner flash on every
       // return to the app.
       if (args.background !== true) {
         setLoading(true)
       }
+
       setError(null)
       const limit = selectedLimit === 'unlimited' ? undefined : selectedLimit
       const scanKey = `${baseKey}\n${selectedLimit}`
+
       try {
         const result = await window.api.aiVault.listSessions({
           limit,
@@ -177,16 +194,19 @@ export function useAiVaultSessionRefresh(
           force: args.force,
           requestToken: requestTokenRef.current
         })
+
         // A superseded scan resolves cancelled rather than rejecting, so the
         // main-process log stays clean; its empty body must not be painted.
         if (result.cancelled || !mountedRef.current || refreshIdRef.current !== refreshId) {
           return
         }
+
         // Why: host/scope changes queue a follow-up scan, but the older result
         // may resolve first and must not briefly paint the wrong history list.
         if (scanKey !== currentScanScopeKey()) {
           return
         }
+
         // A cache hit returns the snapshot already on screen; skip the state
         // updates so refocus flips don't force pointless re-renders.
         // Single-host results carry one scanner's stamp minted when that scan
@@ -201,6 +221,7 @@ export function useAiVaultSessionRefresh(
         ) {
           return
         }
+
         lastAppliedScanRef.current = { scopeKey: scanKey, scannedAt: result.scannedAt }
         cacheAiVaultSessionResult({
           key: baseKey,
@@ -228,9 +249,11 @@ export function useAiVaultSessionRefresh(
         }
       } finally {
         refreshInFlightRef.current = false
+
         if (mountedRef.current && refreshIdRef.current === refreshId) {
           setLoading(false)
         }
+
         if (pendingRefreshRef.current && mountedRef.current) {
           pendingRefreshRef.current = false
           const force = pendingForceRef.current
@@ -252,16 +275,21 @@ export function useAiVaultSessionRefresh(
   // up — dropping the event would leave a just-started session invisible
   // until some unrelated later trigger.
   const forcedRescanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const requestForcedRescan = useCallback(() => {
     const waitMs = lastForcedRescanAt + FORCED_RESCAN_MIN_INTERVAL_MS - Date.now()
+
     if (waitMs <= 0) {
       lastForcedRescanAt = Date.now()
       void refresh({ background: true, force: true })
+
       return
     }
+
     if (forcedRescanTimerRef.current !== null) {
       return
     }
+
     forcedRescanTimerRef.current = setTimeout(() => {
       forcedRescanTimerRef.current = null
       requestForcedRescan()
@@ -272,6 +300,7 @@ export function useAiVaultSessionRefresh(
     mountedRef.current = true
     const requestToken = requestTokenRef.current
     const publicationGate = publicationGateRef.current
+
     return () => {
       mountedRef.current = false
       publicationGate.cancel()
@@ -280,6 +309,7 @@ export function useAiVaultSessionRefresh(
       void window.api.aiVault.cancelListSessions({
         requestToken
       })
+
       if (forcedRescanTimerRef.current !== null) {
         clearTimeout(forcedRescanTimerRef.current)
         forcedRescanTimerRef.current = null
@@ -290,11 +320,13 @@ export function useAiVaultSessionRefresh(
   // Panel entry reuses the renderer result first, then the host scan cache.
   useEffect(() => {
     publicationGateRef.current.cancel()
+
     if (refreshInFlightRef.current) {
       void window.api.aiVault.cancelListSessions({
         requestToken: requestTokenRef.current
       })
     }
+
     void refresh({ force: false, reuseLoadedDepth: true })
   }, [executionHostScope, refresh, scanScopeKey])
 
@@ -313,7 +345,9 @@ export function useAiVaultSessionRefresh(
     if (sshConnectedGeneration <= sshGenerationRef.current) {
       return
     }
+
     sshGenerationRef.current = sshConnectedGeneration
+
     if (error !== null) {
       void refresh({ background: true, force: false })
     }
@@ -325,10 +359,13 @@ export function useAiVaultSessionRefresh(
       if (document.visibilityState !== 'visible') {
         return
       }
+
       void refresh({ background: true, force: false })
     }
+
     const unsubscribeWindowFocus = window.api.aiVault.onWindowFocused?.(onRefocus)
     document.addEventListener('visibilitychange', onRefocus)
+
     return () => {
       unsubscribeWindowFocus?.()
       document.removeEventListener('visibilitychange', onRefocus)
@@ -343,19 +380,25 @@ export function useAiVaultSessionRefresh(
   const seenAgentSessionIdsRef = useRef<Set<string> | null>(null)
   useEffect(() => {
     const ids = agentSessionIdsKey === '' ? [] : agentSessionIdsKey.split('\n')
+
     // The mount refresh already covers sessions live at mount time.
     if (seenAgentSessionIdsRef.current === null) {
       seenAgentSessionIdsRef.current = new Set(ids)
+
       return
     }
+
     const seen = seenAgentSessionIdsRef.current
     const freshIds = ids.filter((id) => !seen.has(id))
+
     if (freshIds.length === 0) {
       return
     }
+
     for (const id of freshIds) {
       seen.add(id)
     }
+
     requestForcedRescan()
   }, [agentSessionIdsKey, requestForcedRescan])
 

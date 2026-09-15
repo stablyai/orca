@@ -10,7 +10,9 @@ import {
 import { WslSkillInstallFilesystem } from './skill-wsl-install-filesystem'
 
 const MAX_PENDING_EXTRACTIONS = 64
+
 const MAX_EXTRACTION_JOURNAL_BYTES = 64 * 1024
+
 const OWNER_TOKEN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
 
 export type SkillExtractionJournalV1 = {
@@ -35,6 +37,7 @@ function journalPath(stateDirectory: string, ownerToken: string): string {
 
 function normalized(path: string): string {
   const value = resolve(path)
+
   return process.platform === 'win32' ? value.toLocaleLowerCase('en-US') : value
 }
 
@@ -42,7 +45,9 @@ function isJournal(value: unknown, ownerToken: string): value is SkillExtraction
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const journal = value as Partial<SkillExtractionJournalV1>
+
   return (
     journal.schemaVersion === 1 &&
     journal.operation === 'extract' &&
@@ -65,9 +70,11 @@ function filesystemFor(journal: SkillExtractionJournalV1): SkillInstallFilesyste
   if (!journal.wslDistro) {
     return nativeSkillInstallFilesystem
   }
+
   if (process.platform !== 'win32') {
     throw new Error('skill-transaction-wsl-recovery-unavailable')
   }
+
   return new WslSkillInstallFilesystem(journal.wslDistro, [journal.destinationRoot])
 }
 
@@ -77,6 +84,7 @@ export async function beginSkillExtractionRecovery(
   wslDistro?: string
 ): Promise<SkillExtractionJournalV1> {
   const ownerToken = randomUUID()
+
   const journal: SkillExtractionJournalV1 = {
     schemaVersion: 1,
     operation: 'extract',
@@ -85,7 +93,9 @@ export async function beginSkillExtractionRecovery(
     extractionPath: join(destinationRoot, `.orca-skill-extract-${ownerToken}`),
     ...(wslDistro ? { wslDistro } : {})
   }
+
   await writeSkillStateFile(journalPath(stateDirectory, ownerToken), journal)
+
   return journal
 }
 
@@ -102,33 +112,41 @@ export async function recoverPendingSkillExtractions(
   stateDirectory: string
 ): Promise<SkillExtractionRecoveryReport> {
   const directory = join(stateDirectory, 'extraction-journals')
+
   const entries = await readdir(directory, { withFileTypes: true }).catch((error) => {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return []
     }
+
     throw error
   })
+
   const files = entries
     .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
     .sort((left, right) => left.name.localeCompare(right.name))
+
   const report: SkillExtractionRecoveryReport = {
     scanned: 0,
     recovered: 0,
     failures: [],
     truncated: files.length > MAX_PENDING_EXTRACTIONS
   }
+
   for (const entry of files.slice(0, MAX_PENDING_EXTRACTIONS)) {
     const journalKey = entry.name.slice(0, -'.json'.length)
     report.scanned += 1
+
     try {
       const parsed: unknown = JSON.parse(
         (
           await readNodeFileWithinLimit(join(directory, entry.name), MAX_EXTRACTION_JOURNAL_BYTES)
         ).buffer.toString('utf8')
       )
+
       if (!isJournal(parsed, journalKey)) {
         throw new Error('skill-extraction-journal-invalid')
       }
+
       await finishSkillExtractionRecovery(stateDirectory, parsed, filesystemFor(parsed))
       report.recovered += 1
     } catch (error) {
@@ -141,5 +159,6 @@ export async function recoverPendingSkillExtractions(
       })
     }
   }
+
   return report
 }

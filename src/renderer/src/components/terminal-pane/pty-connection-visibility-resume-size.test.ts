@@ -34,8 +34,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -56,6 +59,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -65,6 +69,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -85,6 +90,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -95,9 +101,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -107,9 +115,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -118,6 +128,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -155,15 +166,19 @@ describe('connectPanePty', () => {
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) },
         ...depsOverrides
       })
+
       const pane = createPane(2)
+
       const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
         noteVisibilityResume: () => void
       }
+
       return { binding, transport, deps, pane }
     }
 
@@ -175,7 +190,9 @@ describe('connectPanePty', () => {
       const originalElement = globalThis.Element
       const hadResizeObserver = 'ResizeObserver' in globalThis
       const hadElement = 'Element' in globalThis
+
       type ResizeObserverCallbackLike = ConstructorParameters<typeof ResizeObserver>[0]
+
       class MockElement extends EventTarget {
         dataset: Record<string, string> = {}
         classList = { contains: (className: string) => className === 'pane' }
@@ -184,6 +201,7 @@ describe('connectPanePty', () => {
           return []
         }
       }
+
       class MockResizeObserver {
         static instances: MockResizeObserver[] = []
         observe = vi.fn()
@@ -210,6 +228,7 @@ describe('connectPanePty', () => {
           } else {
             Reflect.deleteProperty(globalThis, 'ResizeObserver')
           }
+
           if (hadElement) {
             globalThis.Element = originalElement
           } else {
@@ -234,10 +253,12 @@ describe('connectPanePty', () => {
     it('does not fit during visibility-resume reassertion', async () => {
       vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 80, rows: 24 })
       const { binding, transport, pane } = await connectResumablePane()
+
       const fit = vi.fn(() => {
         pane.terminal.cols = 132
         pane.terminal.rows = 40
       })
+
       pane.fitAddon = {
         ...pane.fitAddon,
         fit,
@@ -259,16 +280,19 @@ describe('connectPanePty', () => {
     it('re-asserts after observed pane geometry changes while visible', async () => {
       const pane = createPane(2)
       const observer = installObservedPane(pane)
+
       try {
         vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 200, rows: 40 })
         const { connectPanePty } = await import('./pty-connection')
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
+
         const deps = createDeps({
           restoredLeafId: LEAF_2,
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
+
         pane.terminal.cols = 82
         pane.terminal.rows = 40
 
@@ -294,15 +318,18 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-pane-2'
         }
       )
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
       })
+
       const pane = createPane(2)
       let proposedGrid = { cols: 62, rows: 63 }
       pane.terminal.cols = 62
@@ -341,15 +368,18 @@ describe('connectPanePty', () => {
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-pane-2'
         }
       )
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
       })
+
       const pane = createPane(2)
       let proposedGrid = { cols: 62, rows: 63 }
       pane.terminal.cols = 62
@@ -388,15 +418,18 @@ describe('connectPanePty', () => {
       const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
       const pane = createPane(2)
       const observer = installObservedPane(pane)
+
       try {
         const { connectPanePty } = await import('./pty-connection')
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
+
         const deps = createDeps({
           restoredLeafId: LEAF_2,
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
+
         pane.fitAddon = {
           ...pane.fitAddon,
           proposeDimensions: vi.fn(() => ({ cols: 101, rows: 33 }))
@@ -423,26 +456,31 @@ describe('connectPanePty', () => {
 
     it('updates the claiming desktop xterm before forwarding an observed viewport claim', async () => {
       const originalDocument = globalThis.document
+
       ;(globalThis as { document?: Document }).document = {
         visibilityState: 'visible',
         hasFocus: vi.fn(() => true)
       } as unknown as Document
       globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
         queueMicrotask(() => callback(0))
+
         return 1
       })
       const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
       const pane = createPane(2)
       const observer = installObservedPane(pane)
+
       try {
         const { connectPanePty } = await import('./pty-connection')
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
+
         const deps = createDeps({
           restoredLeafId: LEAF_2,
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
+
         let proposedGrid = { cols: 120, rows: 40 }
         pane.fitAddon = {
           ...pane.fitAddon,
@@ -473,28 +511,35 @@ describe('connectPanePty', () => {
 
     it('defers a remote-desktop viewport claim until structural replay completes', async () => {
       const originalDocument = globalThis.document
+
       ;(globalThis as { document?: Document }).document = {
         visibilityState: 'visible',
         hasFocus: vi.fn(() => true)
       } as unknown as Document
       globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
         queueMicrotask(() => callback(0))
+
         return 1
       })
       const { setFitOverride } = await import('@/lib/pane-manager/mobile-fit-overrides')
+
       const { beginTerminalScrollIntentBufferRebuild, endTerminalScrollIntentBufferRebuild } =
         await import('@/lib/pane-manager/terminal-scroll-intent-rebuild')
+
       const pane = createPane(2)
       const observer = installObservedPane(pane)
+
       try {
         const { connectPanePty } = await import('./pty-connection')
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
+
         const deps = createDeps({
           restoredLeafId: LEAF_2,
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
+
         let proposedGrid = { cols: 120, rows: 40 }
         pane.fitAddon = {
           ...pane.fitAddon,
@@ -530,15 +575,18 @@ describe('connectPanePty', () => {
       const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
       const pane = createPane(2)
       const observer = installObservedPane(pane)
+
       try {
         const { connectPanePty } = await import('./pty-connection')
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
+
         const deps = createDeps({
           restoredLeafId: LEAF_2,
           paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
         })
+
         const fit = vi.fn()
         pane.fitAddon = {
           ...pane.fitAddon,
@@ -591,6 +639,7 @@ describe('connectPanePty', () => {
 
     it('queues re-asserted resizes while pane resize holds are active', async () => {
       const originalCustomEvent = globalThis.CustomEvent
+
       class MockCustomEvent<T> extends Event {
         detail: T
 
@@ -599,10 +648,13 @@ describe('connectPanePty', () => {
           this.detail = init.detail
         }
       }
+
       globalThis.CustomEvent = MockCustomEvent as unknown as typeof CustomEvent
+
       try {
         const { holdPtyResizesForPaneSubtrees, queuePanePtyResizeIfHeld } =
           await import('@/lib/pane-manager/pane-pty-resize-hold')
+
         vi.mocked(window.api.pty.getSize).mockResolvedValue({ cols: 80, rows: 24 })
         const { binding, transport, pane } = await connectResumablePane()
         await flushAsyncTicks()
@@ -641,14 +693,18 @@ describe('connectPanePty', () => {
       transport.getConnectionId.mockReturnValue(null)
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
       })
+
       const pane = createPane(2)
+
       const binding = connectPanePty(pane as never, manager as never, deps as never) as unknown as {
         noteVisibilityResume: () => void
       }
+
       transport.resize.mockClear()
 
       binding.noteVisibilityResume()
@@ -661,6 +717,7 @@ describe('connectPanePty', () => {
 
     it('claims a focused visible remote mirror once when its passive fit hold arrives', async () => {
       let documentFocused = true
+
       ;(globalThis as { document?: Document }).document = {
         visibilityState: 'visible',
         hasFocus: vi.fn(() => documentFocused)
@@ -670,11 +727,13 @@ describe('connectPanePty', () => {
       const ptyId = 'remote:env-1@@terminal-visible'
       const transport = createMockTransport(ptyId)
       transportFactoryQueue.push(transport)
+
       const deps = createDeps({
         restoredLeafId: LEAF_2,
         restoredPtyIdByLeafId: { [LEAF_2]: ptyId },
         paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
       })
+
       const pane = createPane(2)
       pane.fitAddon = {
         ...pane.fitAddon,
@@ -743,6 +802,7 @@ describe('connectPanePty', () => {
     it('does NOT forward when the pane is hidden again before getSize resolves (stale hop)', async () => {
       // Stale getSize resolving after re-hide must not emit a hidden-tab SIGWINCH (which resets alt-screen TUIs).
       let resolveSize: (v: { cols: number; rows: number } | null) => void = () => {}
+
       vi.mocked(window.api.pty.getSize).mockImplementation(
         () =>
           new Promise((resolve) => {
@@ -765,6 +825,7 @@ describe('connectPanePty', () => {
       const getSize = vi.mocked(window.api.pty.getSize)
       getSize.mockClear()
       let resolveSize: (v: { cols: number; rows: number } | null) => void = () => {}
+
       getSize.mockImplementation(
         () =>
           new Promise((resolve) => {

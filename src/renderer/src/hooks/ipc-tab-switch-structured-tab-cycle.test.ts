@@ -15,8 +15,11 @@ vi.mock('../store', () => ({
 import { handleSwitchTerminalTab } from './ipc-tab-switch'
 
 const WORKTREE_ID = 'wt-1'
+
 const GROUP_ID = 'group-1'
+
 const SESSION_ID = 'sess-1'
+
 const CHAT_UNIFIED_ID = `structured-agent-session-${SESSION_ID}`
 
 function unifiedTab(overrides: Partial<Tab> & Pick<Tab, 'id' | 'entityId' | 'contentType'>): Tab {
@@ -49,11 +52,13 @@ function storeWithStructuredTabActive({
   const terminalTabs = terminalIds.map((id) =>
     unifiedTab({ id: `unified-${id}`, entityId: id, contentType: 'terminal' })
   )
+
   const chatTab = unifiedTab({
     id: CHAT_UNIFIED_ID,
     entityId: SESSION_ID,
     contentType: 'agent-session'
   })
+
   const groups: TabGroup[] = [
     {
       id: GROUP_ID,
@@ -62,6 +67,7 @@ function storeWithStructuredTabActive({
       tabOrder: [...terminalTabs.map((tab) => tab.id), chatTab.id]
     }
   ]
+
   const rawState = {
     activeBrowserTabIdByWorktree: {},
     activeFileIdByWorktree: {},
@@ -84,12 +90,15 @@ function storeWithStructuredTabActive({
     setActiveFile: vi.fn(),
     setActiveBrowserTab: vi.fn()
   } as unknown as AppState
+
   const store = {
     ...rawState,
     ...buildActiveSurfacePatch(rawState, WORKTREE_ID)
   } as AppState
+
   const noopSet = (() => {}) as unknown as TabsSliceSet
   store.getActiveTab = createTabsFocusActions(noopSet, (() => store) as TabsSliceGet).getActiveTab
+
   return store
 }
 

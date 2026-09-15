@@ -8,12 +8,15 @@ import {
 
 it('retries an unadmitted recovery completion once capacity returns', () => {
   let capacityListener = () => {}
+
   let listenerRemoved = false
   let admissions = 0
   const completionSettlements: ((result: SinkWriteSettlement) => void)[] = []
+
   const dispatcher = {
     onLegacyPtyCapacity(listener: () => void) {
       capacityListener = listener
+
       return () => {
         listenerRemoved = true
       }
@@ -25,20 +28,25 @@ it('retries an unadmitted recovery completion once capacity returns', () => {
       onSettled: (result: SinkWriteSettlement) => void
     ) {
       admissions++
+
       if (admissions === 1) {
         return false
       }
+
       completionSettlements.push(onSettled)
+
       return true
     },
     producerDataBudget: () => 1024,
     tryNotifyPtyDataToClient: () => false
   } as unknown as RelayDispatcher
+
   const session = {
     sourceDeliverySnapshot: () => ({ sentEndSu: 4, state: 'active' }),
     reserveSourceSend: () => null,
     cancelDelivery: () => {}
   } as unknown as SshPtyConsumerSessionAdapter
+
   const record: RelayPtySourceDeliveryRecord = {
     clientId: 1,
     identity: {
@@ -75,8 +83,10 @@ it('retries an unadmitted recovery completion once capacity returns', () => {
     restoreRequired: false,
     rotationPending: false
   }
+
   const deliveries = new Map([['pty-1', record]])
   let capacityCalls = 0
+
   const scheduler = new RelayPtySourceSendScheduler(
     dispatcher,
     session,

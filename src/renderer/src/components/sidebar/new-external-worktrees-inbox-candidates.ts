@@ -21,18 +21,23 @@ export function buildNewExternalWorktreesInboxCandidates(args: {
   const visibleRepoIds = args.visibleWorktrees
     ? new Set(args.visibleWorktrees.map((worktree) => worktree.repoId))
     : null
+
   const filterRepoIds = args.filterRepoIds?.length ? new Set(args.filterRepoIds) : null
   const candidates = new Map<string, NewExternalWorktreesInboxCandidate>()
+
   for (const repo of args.repos) {
     if (filterRepoIds && !filterRepoIds.has(repo.id)) {
       continue
     }
+
     if (visibleRepoIds && !visibleRepoIds.has(repo.id)) {
       continue
     }
+
     if (!isGitRepoKind(repo)) {
       continue
     }
+
     const inboxWorktrees = getNewExternalWorktreeInboxWorktrees(
       args.detectedWorktreesByRepo[repo.id],
       repo,
@@ -42,9 +47,11 @@ export function buildNewExternalWorktreesInboxCandidates(args: {
         args.visibilityDefaultsByHost ?? {}
       )
     )
+
     if (inboxWorktrees.length > 0) {
       candidates.set(repo.id, { repo, inboxWorktrees })
     }
   }
+
   return candidates
 }

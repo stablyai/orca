@@ -5,8 +5,11 @@ import path from 'node:path'
 import process from 'node:process'
 
 const mobileRoot = path.resolve(import.meta.dirname, '..')
+
 const appConfigPath = process.env.MOBILE_APP_CONFIG_PATH || path.join(mobileRoot, 'app.json')
+
 const androidTagRefPrefix = 'refs/tags/mobile-android-v'
+
 const semverPattern = /^\d+\.\d+\.\d+$/
 
 function input(name) {
@@ -30,6 +33,7 @@ function validateSemver(version, name) {
 
 function writeOutput(name, value) {
   const outputPath = process.env.GITHUB_OUTPUT
+
   if (!outputPath) {
     return
   }
@@ -38,21 +42,29 @@ function writeOutput(name, value) {
 }
 
 const config = JSON.parse(fs.readFileSync(appConfigPath, 'utf8'))
+
 const expo = config.expo || fail('app.json is missing expo config')
+
 const android = expo.android || fail('app.json is missing expo.android config')
+
 const currentVersion = String(expo.version || '').trim()
+
 validateSemver(currentVersion, 'Current mobile version')
 
 const currentVersionCode = Number(android.versionCode)
+
 if (!Number.isSafeInteger(currentVersionCode) || currentVersionCode <= 0) {
   fail('Current Android versionCode must be a positive integer')
 }
 
 const githubRef = input('GITHUB_REF')
+
 const tagVersion = githubRef.startsWith(androidTagRefPrefix)
   ? githubRef.slice(androidTagRefPrefix.length)
   : ''
+
 const requestedVersion = input('MOBILE_ANDROID_RELEASE_VERSION')
+
 const bumpPatch = truthy(input('MOBILE_ANDROID_BUMP_PATCH_VERSION'))
 
 if (tagVersion) {
@@ -76,6 +88,7 @@ if (requestedVersion && requestedVersion !== currentVersion) {
 }
 
 const requestedVersionCode = input('MOBILE_ANDROID_VERSION_CODE')
+
 const bumpVersionCode = truthy(input('MOBILE_ANDROID_BUMP_VERSION_CODE'))
 
 if (requestedVersionCode || bumpVersionCode) {
@@ -85,14 +98,20 @@ if (requestedVersionCode || bumpVersionCode) {
 }
 
 const tag = `mobile-android-v${currentVersion}`
+
 const publishRelease =
   githubRef.startsWith(androidTagRefPrefix) || truthy(input('MOBILE_ANDROID_PUBLISH_RELEASE'))
 
 writeOutput('version', currentVersion)
+
 writeOutput('android_version_code', String(currentVersionCode))
+
 writeOutput('tag', tag)
+
 writeOutput('publish_release', publishRelease ? 'true' : 'false')
 
 console.log(`Prepared Orca Mobile Android ${currentVersion} (${currentVersionCode})`)
+
 console.log(`Release tag: ${tag}`)
+
 console.log(`Publish GitHub Release: ${publishRelease ? 'yes' : 'no'}`)

@@ -5,6 +5,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 
 export function runResetTransaction(this: OrchestrationDb, statements: string): void {
   this.db.exec('BEGIN IMMEDIATE')
+
   try {
     this.db.exec(statements)
     this.db.exec('COMMIT')
@@ -14,6 +15,7 @@ export function runResetTransaction(this: OrchestrationDb, statements: string): 
     } catch {
       // Why: a failed COMMIT may already have rolled back; that ROLLBACK error must not mask the real failure.
     }
+
     throw error
   }
 }

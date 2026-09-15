@@ -23,6 +23,7 @@ export function registerRepoCatalogHandlers(mainWindow: BrowserWindow, store: St
     enrichMissingRepoGitRemoteIdentities(store, { onChanged: broadcastReposChanged })
     // Why: username resolution spawns git/gh, so keep it off this sync handler (issue #7225); it re-lists when values land.
     enrichRepoGitUsernames(store, { onChanged: broadcastReposChanged })
+
     return store.getRepos()
   })
 
@@ -34,6 +35,7 @@ export function registerRepoCatalogHandlers(mainWindow: BrowserWindow, store: St
 
   ipcMain.handle('projects:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, { onChanged: broadcastReposChanged })
+
     return store.getProjects()
   })
 
@@ -43,11 +45,13 @@ export function registerRepoCatalogHandlers(mainWindow: BrowserWindow, store: St
       rawArgs,
       'project_update_invalid_args'
     )
+
     return store.updateProject(args.projectId, args.updates)
   })
 
   ipcMain.handle('projectHostSetups:list', () => {
     enrichMissingRepoGitRemoteIdentities(store, { onChanged: broadcastReposChanged })
+
     return store.getProjectHostSetups()
   })
 
@@ -57,10 +61,13 @@ export function registerRepoCatalogHandlers(mainWindow: BrowserWindow, store: St
       // Why: a permutation mismatch means the renderer's drag was stale vs a concurrent add/remove; reject so it can resync.
       const ids = Array.isArray(args?.orderedIds) ? args.orderedIds : []
       const applied = store.reorderRepos(ids)
+
       if (applied) {
         notifyReposChanged(mainWindow)
+
         return { status: 'applied' }
       }
+
       return { status: 'rejected' }
     }
   )
@@ -72,15 +79,20 @@ export function registerRepoCatalogHandlers(mainWindow: BrowserWindow, store: St
       args: { orderedIds: string[]; hostId: string }
     ): { status: 'applied' | 'rejected' } => {
       const hostId = normalizeExecutionHostId(args?.hostId)
+
       if (!hostId) {
         return { status: 'rejected' }
       }
+
       const ids = Array.isArray(args?.orderedIds) ? args.orderedIds : []
       const applied = store.reorderReposForHost(ids, hostId)
+
       if (applied) {
         notifyReposChanged(mainWindow)
+
         return { status: 'applied' }
       }
+
       return { status: 'rejected' }
     }
   )
@@ -96,9 +108,11 @@ export function registerRepoCatalogHandlers(mainWindow: BrowserWindow, store: St
     'repos:removeForHost',
     async (_event, args: { repoId: string; hostId: string }) => {
       const hostId = normalizeExecutionHostId(args.hostId)
+
       if (!hostId) {
         throw new Error(`Invalid host ID: ${args.hostId}`)
       }
+
       store.removeProjectForHost(args.repoId, hostId)
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)

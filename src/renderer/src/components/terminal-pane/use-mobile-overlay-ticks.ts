@@ -23,6 +23,7 @@ function isPtyMountedInTab(
       return true
     }
   }
+
   return false
 }
 
@@ -49,6 +50,7 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
         pendingFitFrames.delete(frameId)
         callback()
       })
+
       pendingFitFrames.add(frameId)
     }
 
@@ -57,6 +59,7 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
         pendingFallbackTimers.delete(timerId)
         callback()
       }, 100)
+
       pendingFallbackTimers.add(timerId)
     }
 
@@ -64,11 +67,14 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
       if (!isPtyMountedInTab(paneTransportsRef.current, event.ptyId)) {
         return
       }
+
       setOverrideTick((n) => n + 1)
       const manager = managerRef.current
+
       if (!manager) {
         return
       }
+
       // Why: pane IDs are per-tab, so resolve the affected PTY through this tab's live transport bindings, not global pane IDs.
       const getAffectedPanes = (): ManagedPane[] =>
         getOverrideAffectedPanes(
@@ -76,6 +82,7 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
           (paneId) => paneTransportsRef.current.get(paneId)?.getPtyId(),
           event.ptyId
         )
+
       if (event.mode === 'mobile-fit' || event.mode === 'remote-desktop-fit') {
         // Why: when mobile drives, xterm must shrink to phone dims or the wide desktop grid garbles the phone-wrapped stream.
         // Why: skip the rAF unless this tab actually has a mis-parked pane.
@@ -84,9 +91,11 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
           event.cols,
           event.rows
         )
+
         if (panesNeedingFit.length === 0) {
           return
         }
+
         scheduleFitFrame(() => {
           for (const pane of getPanesNeedingOverrideFit(
             getAffectedPanes(),
@@ -96,8 +105,10 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
             safeFit(pane)
           }
         })
+
         return
       }
+
       if (event.mode === 'desktop-fit') {
         // Why: fitAddon.fit() measures the DOM, so run under rAF after layout settles; the timeout is a safety net if fit silently threw.
         const fitAffectedPanes = (): void => {
@@ -105,15 +116,18 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
             safeFit(pane)
           }
         }
+
         scheduleFitFrame(fitAffectedPanes)
         // Why: direct-resize fallback if safeFit no-op'd, only while xterm is still at the prior mobile-fit dims; else event.cols/rows is a stale baseline that clobbers the fit.
         scheduleFallbackTimer(() => {
           for (const pane of getAffectedPanes()) {
             // Why: skip 0×0 hidden panes; forcing desktop dims with no DOM geometry leaves a mismatched grid (fallback is only for the visible pane that failed to refit).
             const rect = pane.container.getBoundingClientRect()
+
             if (rect.width === 0 || rect.height === 0) {
               continue
             }
+
             applyDesktopFitFallbackAfterReplay(pane, {
               ...event,
               // Why: the timeout/replay queue can outlive this pane binding; never apply old server dims to a replacement PTY.
@@ -126,13 +140,17 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
 
     return () => {
       unsubscribe()
+
       for (const frameId of pendingFitFrames) {
         window.cancelAnimationFrame(frameId)
       }
+
       pendingFitFrames.clear()
+
       for (const timerId of pendingFallbackTimers) {
         window.clearTimeout(timerId)
       }
+
       pendingFallbackTimers.clear()
     }
   }, [managerRef, paneTransportsRef])
@@ -145,6 +163,7 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
         if (!isPtyMountedInTab(paneTransportsRef.current, event.ptyId)) {
           return
         }
+
         setDriverTick((n) => n + 1)
       }),
     [paneTransportsRef]
@@ -155,5 +174,6 @@ export function useMobileOverlayTicks({ managerRef, paneTransportsRef }: MobileO
   const refreshMobileOverlays = useCallback((): void => {
     setOverrideTick((n) => n + 1)
   }, [])
+
   return { refreshMobileOverlays }
 }

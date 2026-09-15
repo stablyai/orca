@@ -33,9 +33,11 @@ function mockClaudeChild(): { once: (event: string, cb: (...args: unknown[]) => 
       if (event === 'exit') {
         queueMicrotask(() => cb(0, null))
       }
+
       return child
     }
   }
+
   return child
 }
 
@@ -56,6 +58,7 @@ describe('orca claude-teams CLI handler', () => {
       json: false,
       rawArgs: []
     }
+
     return CORE_HANDLERS['claude-teams'](ctx)
   }
 
@@ -83,11 +86,13 @@ describe('orca claude-teams CLI handler', () => {
     } else {
       process.env.ELECTRON_RUN_AS_NODE = previousRunAsNode
     }
+
     if (previousPaneKey === undefined) {
       delete process.env.ORCA_PANE_KEY
     } else {
       process.env.ORCA_PANE_KEY = previousPaneKey
     }
+
     process.exitCode = previousExitCode
   })
 
@@ -114,6 +119,7 @@ describe('orca claude-teams CLI handler', () => {
     async () => {
       const previousMarker = process.env.ORCA_TEST_MARKER
       process.env.ORCA_TEST_MARKER = 'keep-me'
+
       try {
         await runClaudeTeams()
       } finally {

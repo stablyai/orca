@@ -28,13 +28,16 @@ function oracleAnyTabAgent(
 ): TuiAgent | null {
   for (const [paneKey, entry] of Object.entries(map)) {
     const parsed = parsePaneKey(paneKey)
+
     if (parsed?.tabId === tabId && parsed.leafId !== excludedLeafId) {
       const agent = entry.state === 'done' ? null : agentTypeToIconAgent(entry.agentType)
+
       if (agent) {
         return agent
       }
     }
   }
+
   return null
 }
 
@@ -45,13 +48,16 @@ function oracleAnyCompletedTabAgent(
 ): TuiAgent | null {
   for (const [paneKey, entry] of Object.entries(map)) {
     const parsed = parsePaneKey(paneKey)
+
     if (parsed?.tabId === tabId && parsed.leafId !== excludedLeafId) {
       const agent = entry.state === 'done' ? agentTypeToIconAgent(entry.agentType) : null
+
       if (agent) {
         return agent
       }
     }
   }
+
   return null
 }
 
@@ -62,18 +68,22 @@ function oracleAnyRetainedTabAgent(
 ): TuiAgent | null {
   for (const [paneKey, retained] of Object.entries(map)) {
     const parsed = parsePaneKey(paneKey)
+
     if (parsed?.tabId === tabId && parsed.leafId !== excludedLeafId) {
       const agent = agentTypeToIconAgent(retained.agentType)
+
       if (agent) {
         return agent
       }
     }
   }
+
   return null
 }
 
 function activeLeafOf(layout: TerminalLayoutSnapshot | undefined): string | null {
   const activeLeafId = layout?.activeLeafId
+
   return activeLeafId && isTerminalLeafId(activeLeafId) ? activeLeafId : null
 }
 
@@ -84,10 +94,13 @@ const ORACLES = {
     tabId: string
   ): TuiAgent | null => {
     const activeLeafId = activeLeafOf(layout)
+
     if (activeLeafId) {
       const entry = map[`${tabId}:${activeLeafId}`]
+
       return !entry || entry.state === 'done' ? null : agentTypeToIconAgent(entry.agentType)
     }
+
     return oracleAnyTabAgent(map, tabId)
   },
   sibling: (
@@ -96,6 +109,7 @@ const ORACLES = {
     tabId: string
   ): TuiAgent | null => {
     const activeLeafId = activeLeafOf(layout)
+
     return activeLeafId ? oracleAnyTabAgent(map, tabId, activeLeafId) : null
   },
   focusedCompleted: (
@@ -104,10 +118,13 @@ const ORACLES = {
     tabId: string
   ): TuiAgent | null => {
     const activeLeafId = activeLeafOf(layout)
+
     if (activeLeafId) {
       const entry = map[`${tabId}:${activeLeafId}`]
+
       return !entry || entry.state !== 'done' ? null : agentTypeToIconAgent(entry.agentType)
     }
+
     return oracleAnyCompletedTabAgent(map, tabId)
   },
   siblingCompleted: (
@@ -116,6 +133,7 @@ const ORACLES = {
     tabId: string
   ): TuiAgent | null => {
     const activeLeafId = activeLeafOf(layout)
+
     return activeLeafId ? oracleAnyCompletedTabAgent(map, tabId, activeLeafId) : null
   },
   focusedRetained: (
@@ -124,9 +142,11 @@ const ORACLES = {
     tabId: string
   ): TuiAgent | null => {
     const activeLeafId = activeLeafOf(layout)
+
     if (activeLeafId) {
       return agentTypeToIconAgent(map[`${tabId}:${activeLeafId}`]?.agentType)
     }
+
     return oracleAnyRetainedTabAgent(map, tabId)
   },
   siblingRetained: (
@@ -135,6 +155,7 @@ const ORACLES = {
     tabId: string
   ): TuiAgent | null => {
     const activeLeafId = activeLeafOf(layout)
+
     return activeLeafId ? oracleAnyRetainedTabAgent(map, tabId, activeLeafId) : null
   }
 }
@@ -143,20 +164,24 @@ const ORACLES = {
 
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0
+
   return () => {
     a = (a + 0x6d2b79f5) >>> 0
     let t = Math.imul(a ^ (a >>> 15), 1 | a)
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
 
 function leafId(n: number): string {
   const hex = n.toString(16).padStart(12, '0')
+
   return `11111111-1111-4111-8111-${hex}`
 }
 
 const STATES: readonly AgentStatusState[] = ['working', 'blocked', 'waiting', 'done']
+
 // Mixes iconable agents with ones agentTypeToIconAgent rejects.
 const AGENT_TYPES: readonly (AgentType | undefined)[] = [
   'claude',
@@ -187,6 +212,7 @@ function statusEntry(
 
 function retainedEntry(paneKey: string, agentType: AgentType): RetainedAgentEntry {
   const tabId = paneKey.slice(0, paneKey.indexOf(':'))
+
   const tab: TerminalTab = {
     id: tabId,
     ptyId: null,
@@ -197,6 +223,7 @@ function retainedEntry(paneKey: string, agentType: AgentType): RetainedAgentEntr
     sortOrder: 0,
     createdAt: 0
   }
+
   return {
     entry: { ...statusEntry(paneKey, 'done', agentType), state: 'done' },
     worktreeId: tab.worktreeId,
@@ -212,10 +239,12 @@ function layoutOf(activeLeafId: string | null): TerminalLayoutSnapshot {
 
 function countEntryScans<T extends object>(source: T): { source: T; scans: () => number } {
   let scanCount = 0
+
   return {
     source: new Proxy(source, {
       ownKeys: (target) => {
         scanCount += 1
+
         return Reflect.ownKeys(target)
       }
     }),
@@ -233,21 +262,27 @@ function generateCase(random: () => number): RandomCase {
   const tabCount = 1 + Math.floor(random() * 6)
   const tabIds = Array.from({ length: tabCount }, (_, i) => `tab-${i}`)
   const paneKeys: string[] = []
+
   for (const tabId of tabIds) {
     const leafCount = 1 + Math.floor(random() * 4)
+
     for (let leaf = 0; leaf < leafCount; leaf += 1) {
       paneKeys.push(`${tabId}:${leafId(leaf)}`)
     }
   }
+
   // Malformed keys the resolvers must skip, plus a shuffle so insertion order varies.
   paneKeys.push('tab-0:not-a-uuid', 'no-colon-key', `:${leafId(0)}`, `tab-0:${leafId(0)}:extra`)
+
   for (let i = paneKeys.length - 1; i > 0; i -= 1) {
     const j = Math.floor(random() * (i + 1))
+
     ;[paneKeys[i], paneKeys[j]] = [paneKeys[j]!, paneKeys[i]!]
   }
 
   const statusMap: Record<string, AgentStatusEntry> = {}
   const retainedMap: Record<string, RetainedAgentEntry> = {}
+
   for (const paneKey of paneKeys) {
     if (random() < 0.8) {
       const state = STATES[Math.floor(random() * STATES.length)]!
@@ -257,6 +292,7 @@ function generateCase(random: () => number): RandomCase {
         AGENT_TYPES[Math.floor(random() * AGENT_TYPES.length)]
       )
     }
+
     if (random() < 0.5) {
       const agentType = AGENT_TYPES[Math.floor(random() * AGENT_TYPES.length)] ?? 'claude'
       retainedMap[paneKey] = retainedEntry(paneKey, agentType)
@@ -265,6 +301,7 @@ function generateCase(random: () => number): RandomCase {
 
   const probes = tabIds.concat('tab-absent').map((tabId) => {
     const roll = random()
+
     const layout =
       roll < 0.2
         ? undefined
@@ -273,8 +310,10 @@ function generateCase(random: () => number): RandomCase {
           : roll < 0.45
             ? layoutOf('not-a-uuid')
             : layoutOf(leafId(Math.floor(random() * 5)))
+
     return { tabId, layout }
   })
+
   return { statusMap, retainedMap, probes }
 }
 
@@ -305,6 +344,7 @@ function expectParity(testCase: RandomCase): void {
 describe('tab agent status index parity with the pre-index full-map scan', () => {
   it('matches the oracle across 250 randomized status maps', () => {
     const random = mulberry32(0xc0ffee)
+
     for (let caseIndex = 0; caseIndex < 250; caseIndex += 1) {
       expectParity(generateCase(random))
     }
@@ -316,6 +356,7 @@ describe('tab agent status index parity with the pre-index full-map scan', () =>
       [`tab-1:${leafId(1)}`]: statusEntry(`tab-1:${leafId(1)}`, 'done', 'claude'),
       [`tab-1:${leafId(2)}`]: statusEntry(`tab-1:${leafId(2)}`, 'done', 'gemini')
     }
+
     expect(resolveSiblingCompletedTabAgent(map, layoutOf(leafId(2)), 'tab-1')).toBe('codex')
     expect(resolveSiblingCompletedTabAgent(map, layoutOf(leafId(0)), 'tab-1')).toBe('claude')
     // Fresh identity, reversed insertion order → first match flips.
@@ -329,6 +370,7 @@ describe('tab agent status index parity with the pre-index full-map scan', () =>
       [`tab-1:${leafId(1)}`]: statusEntry(`tab-1:${leafId(1)}`, 'done', 'claude'),
       [`tab-2:${leafId(2)}`]: statusEntry(`tab-2:${leafId(2)}`, 'done', 'codex')
     }
+
     expect(resolveSiblingCompletedTabAgent(map, layoutOf(leafId(1)), 'tab-1')).toBeNull()
     expect(resolveSiblingCompletedTabAgent(map, layoutOf(leafId(0)), 'tab-1')).toBe('claude')
   })
@@ -339,6 +381,7 @@ describe('tab agent status index parity with the pre-index full-map scan', () =>
       'tab-1': statusEntry('tab-1', 'done', 'claude'),
       [`:${leafId(0)}`]: statusEntry(`:${leafId(0)}`, 'done', 'claude')
     }
+
     expect(resolveFocusedCompletedTabAgent(malformed, undefined, 'tab-1')).toBeNull()
     expect(resolveSiblingCompletedTabAgent(malformed, layoutOf(leafId(9)), 'tab-1')).toBeNull()
     expect(resolveFocusedCompletedTabAgent({}, undefined, 'tab-1')).toBeNull()
@@ -357,10 +400,12 @@ describe('tab agent status index parity with the pre-index full-map scan', () =>
   it('scans each source identity once across tabs and resolver variants', () => {
     const firstPaneKey = `tab-1:${leafId(0)}`
     const secondPaneKey = `tab-2:${leafId(1)}`
+
     const status = countEntryScans({
       [firstPaneKey]: statusEntry(firstPaneKey, 'working', 'claude'),
       [secondPaneKey]: statusEntry(secondPaneKey, 'done', 'codex')
     })
+
     const retained = countEntryScans({
       [firstPaneKey]: retainedEntry(firstPaneKey, 'claude'),
       [secondPaneKey]: retainedEntry(secondPaneKey, 'codex')

@@ -67,6 +67,7 @@ describe('terminal PTY identity replacement', () => {
       }
     })
     const observed: { tabPtyId: string | null; panePtyId: string | null }[] = []
+
     const unsubscribe = store.subscribe((state) => {
       observed.push({
         tabPtyId: state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.ptyId ?? null,

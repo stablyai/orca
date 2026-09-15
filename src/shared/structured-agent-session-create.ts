@@ -52,6 +52,7 @@ export function structuredAgentSessionCreateParams(args: {
     agent: args.agent,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
   }
+
   return {
     envelope: {
       sessionId: args.sessionId,

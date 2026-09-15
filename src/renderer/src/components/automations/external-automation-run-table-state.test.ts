@@ -60,6 +60,7 @@ describe('external automation run table state', () => {
   it('resets when the same job receives a new fallback run list', () => {
     const firstRuns = [run('run-1')]
     const nextRuns = [run('run-2')]
+
     const current = {
       ...createExternalAutomationRunTableState(job('job-1', firstRuns)),
       selectedRunId: 'run-1'

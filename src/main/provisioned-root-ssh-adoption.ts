@@ -42,13 +42,17 @@ export async function adoptProvisionedRootSshCheckout(args: {
   isRepoCurrent: () => boolean
 }): Promise<CreateWorktreeResult> {
   const { request, repo, store } = args
+
   if (request.sparseCheckout) {
     throw new Error('Provisioned-root recipes do not support sparse checkout.')
   }
+
   const connectionId = repo.connectionId
+
   if (!connectionId || !isRuntimeOwnedSshTargetId(connectionId)) {
     throw new Error('Provisioned-root adoption requires a runtime-owned SSH target.')
   }
+
   if (request.executionHostId !== toSshExecutionHostId(connectionId)) {
     throw new Error('Provisioned-root workspace host does not match its SSH target.')
   }
@@ -58,20 +62,26 @@ export async function adoptProvisionedRootSshCheckout(args: {
     request.runtimeId,
     connectionId
   )
+
   const projectRoot = getEphemeralVmRecipeResultProjectRoot(runtime.recipeResult)
+
   if (!pathsEqual(request.expectedPath, projectRoot) || !pathsEqual(repo.path, projectRoot)) {
     throw new Error('The recipe projectRoot does not match the imported Git checkout root.')
   }
 
   const provider = getSshGitProvider(connectionId)
+
   if (!provider) {
     throw new Error('The recipe-created SSH connection is no longer available.')
   }
+
   const authority = { ...getSshProviderAuthority(connectionId) }
+
   const [worktrees, sparseCheckoutEnabled] = await Promise.all([
     provider.listWorktrees(repo.path),
     isSparseCheckoutEnabled(provider, projectRoot)
   ])
+
   if (
     getSshGitProvider(connectionId) !== provider ||
     !isCurrentSshProviderAuthority(authority) ||
@@ -79,29 +89,39 @@ export async function adoptProvisionedRootSshCheckout(args: {
   ) {
     throw new Error('The recipe-created SSH connection changed during checkout verification.')
   }
+
   requireOwnedProvisionedRootRuntime(args.userDataPath, request.runtimeId, connectionId)
 
   const matches = worktrees.filter((worktree) => pathsEqual(worktree.path, projectRoot))
+
   if (matches.length !== 1) {
     throw new Error('The recipe projectRoot is not a unique Git checkout root.')
   }
+
   const gitWorktree = matches[0]
+
   if (!gitWorktree.isMainWorktree) {
     throw new Error('The recipe projectRoot must be the repository primary checkout.')
   }
+
   if (gitWorktree.isBare) {
     throw new Error('Provisioned-root recipes cannot adopt a bare repository.')
   }
+
   if (gitWorktree.isSparse || sparseCheckoutEnabled) {
     throw new Error('Provisioned-root recipes cannot adopt a sparse checkout.')
   }
+
   const requestedBranch = request.branchNameOverride ?? request.name
+
   if (gitWorktree.branch !== `refs/heads/${requestedBranch}`) {
     throw new Error("The recipe projectRoot is not checked out on Orca's requested branch.")
   }
+
   if (request.baseBranch && !request.expectedRefHead) {
     throw new Error('The requested provisioned-root ref identity is missing.')
   }
+
   if (request.expectedRefHead && gitWorktree.head !== request.expectedRefHead) {
     throw new Error("The recipe projectRoot was not created from Orca's requested ref.")
   }
@@ -113,6 +133,7 @@ export async function adoptProvisionedRootSshCheckout(args: {
     workspaceId: worktreeId
   })
   const now = Date.now()
+
   const meta = store.setWorktreeMeta(
     worktreeId,
     buildProvisionedRootMeta(
@@ -123,6 +144,7 @@ export async function adoptProvisionedRootSshCheckout(args: {
       now
     )
   )
+
   return { worktree: mergeWorktree(repo.id, gitWorktree, meta) }
 }
 
@@ -134,6 +156,7 @@ async function isSparseCheckoutEnabled(
     ['config', '--bool', '--get', '--default=false', 'core.sparseCheckout'],
     projectRoot
   )
+
   return stdout.trim() === 'true'
 }
 
@@ -143,9 +166,11 @@ function requireOwnedProvisionedRootRuntime(
   connectionId: string
 ): EphemeralVmRuntimeRecord {
   const runtime = listEphemeralVmRuntimes(userDataPath).find((entry) => entry.id === runtimeId)
+
   if (!runtime) {
     throw new Error(`Unknown ephemeral VM runtime: ${runtimeId}`)
   }
+
   if (
     runtime.connectionMode !== 'ssh' ||
     runtime.sshTargetId !== connectionId ||
@@ -155,6 +180,7 @@ function requireOwnedProvisionedRootRuntime(
   ) {
     throw new Error('The ephemeral VM runtime does not own this provisioned SSH checkout.')
   }
+
   return runtime
 }
 
@@ -176,12 +202,14 @@ function buildProvisionedRootMeta(
     false,
     args.nameWasGenerated === true
   )
+
   const displayNameMeta = resolveWorktreeCreateDisplayNameMeta(
     displayNameRequest.value,
     branchName,
     displayNameRequest.kind,
     { requestedName: args.name, sanitizedName: args.name }
   )
+
   return {
     instanceId: randomUUID(),
     ...(store.getProjectHostSetups

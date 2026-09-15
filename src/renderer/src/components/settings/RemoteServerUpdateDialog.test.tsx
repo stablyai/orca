@@ -94,6 +94,7 @@ describe('RemoteServerUpdateDialog', () => {
       environmentId: 'server-b',
       name: 'Test server B'
     }
+
     storeMock.state.remoteServerUpdates = new Map([
       [
         currentEntry.environmentId,

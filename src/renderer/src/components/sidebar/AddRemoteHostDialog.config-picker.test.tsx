@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshConfigHostResolution } from '../../../../shared/ssh-types'
 
 const toastMocks = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
+
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), toastMocks) }))
 
 const storeActions = vi.hoisted(() => ({
@@ -14,6 +15,7 @@ const storeActions = vi.hoisted(() => ({
   setRuntimeEnvironmentStatus: vi.fn(),
   recordFeatureInteraction: vi.fn()
 }))
+
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) => selector(storeActions)
 }))
@@ -22,9 +24,11 @@ import { AddRemoteHostDialog } from './AddRemoteHostDialog'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((settle) => {
     resolve = settle
   })
+
   return { promise, resolve }
 }
 
@@ -42,8 +46,11 @@ function resolution(alias: string, hostname: string): SshConfigHostResolution {
 }
 
 const listConfigHosts = vi.fn()
+
 const resolveConfigHost = vi.fn()
+
 const importConfig = vi.fn()
+
 const listTargets = vi.fn()
 
 function configHost(
@@ -86,6 +93,7 @@ async function openPicker(): Promise<ReturnType<typeof userEvent.setup>> {
   render(<AddRemoteHostDialog mode="ssh" onOpenChange={vi.fn()} />)
   await user.click(screen.getByRole('button', { name: /Fill from/ }))
   await screen.findByRole('button', { name: /alpha/ })
+
   return user
 }
 

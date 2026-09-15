@@ -13,6 +13,7 @@ afterEach(() => {
   vi.doUnmock('path')
   vi.restoreAllMocks()
   vi.resetModules()
+
   for (const root of tempRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -68,6 +69,7 @@ describe('safeRemoveOverlay', () => {
       isSymbolicLink: () => false,
       isDirectory: () => false
     }))
+
     const unlinkSyncMock = vi.fn()
     vi.doMock('fs', () => ({
       cpSync: vi.fn(),
@@ -80,6 +82,7 @@ describe('safeRemoveOverlay', () => {
     }))
     vi.doMock('path', async () => {
       const path = await vi.importActual<typeof NodePath>('node:path')
+
       return {
         ...path.win32,
         default: path.win32

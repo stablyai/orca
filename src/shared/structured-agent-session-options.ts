@@ -26,6 +26,7 @@ function effortOption(model: AgentSessionOptionsResult['models'][number]): Catal
   if (model.efforts.length <= 1) {
     return null
   }
+
   return {
     id: 'effort',
     label: 'Reasoning effort',
@@ -54,6 +55,7 @@ function discoveredModel(
   sessionSupportsFastMode: boolean
 ): CatalogModel {
   const effort = effortOption(model)
+
   return {
     id: model.id,
     label: model.label,
@@ -73,6 +75,7 @@ export function structuredAgentSessionOptionCatalog(
   const models: CatalogModel[] = result.models.map((model) =>
     discoveredModel(model, result.fastModeSupport?.supported === true)
   )
+
   if (!models.some((model) => model.id === result.current.model)) {
     models.push({
       id: result.current.model,
@@ -80,6 +83,7 @@ export function structuredAgentSessionOptionCatalog(
       options: seed.unknownModelOptions ?? []
     })
   }
+
   return { ...seed, models, defaultModelIsCliDefault: true }
 }
 
@@ -103,6 +107,7 @@ export function applyStructuredAgentSessionOptions(
   if (result.current.fastMode === undefined) {
     clearTrackedSessionOption(state.record, result.current.model, 'fastMode')
   }
+
   applyNativeChatReportedSessionOptions(
     state.record,
     {
@@ -112,6 +117,7 @@ export function applyStructuredAgentSessionOptions(
     },
     result.current.confirmed ?? []
   )
+
   return { ...state, catalog: structuredAgentSessionOptionCatalog(seed, result) }
 }
 
@@ -121,6 +127,7 @@ export function structuredAgentSessionOptionSnapshot(
   if (!state.catalog) {
     return []
   }
+
   return buildNativeChatSessionOptionSnapshot({
     catalog: state.catalog,
     models: state.catalog.models,
@@ -137,6 +144,7 @@ export function canSetStructuredAgentSessionOption(
   value: SessionOptionValue
 ): boolean {
   const descriptor = structuredAgentSessionOptionSnapshot(state).find((entry) => entry.id === id)
+
   return Boolean(
     state.catalog &&
     state.pendingId === null &&
@@ -155,16 +163,21 @@ export function commitStructuredAgentSessionOption(
   if (!state.catalog) {
     return state
   }
+
   const effectiveModel = resolveEffectiveNativeChatModelId(
     state.catalog,
     state.catalog.models,
     state.record
   )
+
   const decoded = decodeStructuredAgentSessionOptionValue(id, value)
+
   if (decoded === null) {
     return { ...state, pendingId: null }
   }
+
   setTrackedSessionOption(state.record, id, decoded, 'dispatched', effectiveModel)
+
   return { ...state, pendingId: null }
 }
 
@@ -173,12 +186,15 @@ export function commitStructuredAgentSessionOptionValues(
   values: Readonly<Record<string, string>>
 ): StructuredAgentSessionOptionState {
   let next = state
+
   for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
     const value = values[id]
+
     if (value !== undefined) {
       next = commitStructuredAgentSessionOption(next, id, value)
     }
   }
+
   return next
 }
 
@@ -209,20 +225,27 @@ export function structuredAgentSessionOptionPicks(
   if (!state.catalog) {
     return []
   }
+
   const committedModel = committed.model
+
   const modelId =
     typeof committedModel === 'string' && committedModel.trim()
       ? committedModel
       : resolveEffectiveNativeChatModelId(state.catalog, state.catalog.models, state.record)
+
   if (!modelId) {
     return []
   }
+
   return STRUCTURED_LAUNCH_SEED_OPTION_IDS.flatMap((optionId) => {
     const value = committed[optionId]
+
     if (value === undefined) {
       return []
     }
+
     const decoded = decodeStructuredAgentSessionOptionValue(optionId, value)
+
     return decoded === null ||
       (typeof decoded === 'string' && !decoded.trim()) ||
       encodeStructuredAgentSessionOptionValue(optionId, decoded) === null

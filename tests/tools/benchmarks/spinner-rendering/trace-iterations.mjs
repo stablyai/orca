@@ -10,10 +10,12 @@ export async function traceIterations(cdp, outputPath, durationMs = 2200) {
   await cdp.send('Tracing.end')
   const { stream } = await completion
   let json = ''
+
   try {
     while (true) {
       const part = await cdp.send('IO.read', { handle: stream })
       json += part.data
+
       if (part.eof) {
         break
       }
@@ -21,8 +23,10 @@ export async function traceIterations(cdp, outputPath, durationMs = 2200) {
   } finally {
     await cdp.send('IO.close', { handle: stream })
   }
+
   writeFileSync(outputPath, json)
   const events = JSON.parse(json).traceEvents
+
   return {
     durationMs,
     iterationEvents: events.filter(

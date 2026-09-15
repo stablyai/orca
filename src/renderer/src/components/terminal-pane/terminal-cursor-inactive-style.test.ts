@@ -9,17 +9,21 @@ describe('terminal inactive cursor style', () => {
       cursorStyle: 'block' as const,
       cursorInactiveStyle: 'outline' as const
     }
+
     const terminal = {
       options,
       cols: 80,
       rows: 24
     } as unknown as ManagedPane['terminal']
+
     const pane = { id: 1, terminal } as ManagedPane
+
     const manager = {
       getPanes: () => [pane],
       setPaneLigaturesEnabled: vi.fn(),
       setPaneStyleOptions: vi.fn()
     } as unknown as PaneManager
+
     const settings = {
       ...getDefaultSettings('/tmp'),
       terminalCursorStyle: 'bar' as const

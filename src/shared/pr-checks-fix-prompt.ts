@@ -1,6 +1,7 @@
 import type { PRCheckDetail, PRCheckRunDetails } from './github/check-types'
 
 export const PROMPT_LOG_TAIL_LINES = 150
+
 export const PROMPT_LOG_TAIL_SCAN_CODE_UNITS = 256 * 1024
 
 function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
@@ -9,30 +10,39 @@ function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['co
 
 function getCheckStatusLabel(check: PRCheckDetail): string {
   const conclusion = getCheckConclusion(check)
+
   if (conclusion === 'success') {
     return 'Successful'
   }
+
   if (conclusion === 'failure') {
     return 'Failed'
   }
+
   if (conclusion === 'cancelled') {
     return 'Cancelled'
   }
+
   if (conclusion === 'timed_out') {
     return 'Timed out'
   }
+
   if (conclusion === 'neutral') {
     return 'Neutral'
   }
+
   if (conclusion === 'skipped') {
     return 'Skipped'
   }
+
   if (check.status === 'queued') {
     return 'Queued'
   }
+
   if (check.status === 'in_progress') {
     return 'In progress'
   }
+
   return 'Pending'
 }
 
@@ -44,6 +54,7 @@ export function getBrokenChecks(checks: PRCheckDetail[]): PRCheckDetail[] {
 
 export function truncateLogTailForPrompt(logTail: string): string {
   const start = findPromptLogTailStart(logTail)
+
   return logTail.slice(start).replace(/\r\n/g, '\n')
 }
 
@@ -52,15 +63,19 @@ function findPromptLogTailStart(logTail: string): number {
   // only the prompt suffix should not allocate one array entry per log line.
   const scanStart = Math.max(0, logTail.length - PROMPT_LOG_TAIL_SCAN_CODE_UNITS)
   let lineBreakCount = 0
+
   for (let index = logTail.length - 1; index >= scanStart; index -= 1) {
     if (logTail.charCodeAt(index) !== 10) {
       continue
     }
+
     lineBreakCount += 1
+
     if (lineBreakCount >= PROMPT_LOG_TAIL_LINES) {
       return index + 1
     }
   }
+
   return scanStart
 }
 
@@ -69,9 +84,11 @@ function getLogTailForCheck(details: PRCheckRunDetails | undefined): string | un
     details?.jobs
       .map((job) => job.logTail)
       .filter((logTail): logTail is string => Boolean(logTail)) ?? []
+
   if (logTails.length === 0) {
     return undefined
   }
+
   return truncateLogTailForPrompt(logTails.join('\n\n'))
 }
 
@@ -79,17 +96,21 @@ export function getCheckDetailsPromptKey(check: PRCheckDetail, index: number): s
   if (check.checkRunId) {
     return `check-run:${check.checkRunId}`
   }
+
   if (check.workflowRunId) {
     return `workflow-run:${check.workflowRunId}:${check.name}`
   }
+
   // Keep in step with getCheckIdentityKey / getCheckRunTabIdentity: a GitLab job
   // without a web_url would otherwise key on its index and miss its loaded log.
   if (check.gitlabJobId) {
     return `gitlab-job:${check.gitlabJobId}:${check.name}`
   }
+
   if (check.url) {
     return `url:${check.url}:${check.name}`
   }
+
   return `index:${index}:${check.name}`
 }
 
@@ -111,6 +132,7 @@ export function buildFixBrokenChecksPrompt({
   const brokenChecks = getBrokenChecks(checks)
   const reviewName = reviewKind === 'MR' ? 'merge request' : 'pull request'
   const reviewNumberPrefix = reviewKind === 'MR' ? '!' : '#'
+
   const checkData =
     brokenChecks.length > 0
       ? brokenChecks.map((check, index) => ({

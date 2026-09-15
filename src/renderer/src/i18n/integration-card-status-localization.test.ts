@@ -15,6 +15,7 @@ function lookup(key: string): string | undefined {
         node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined,
       en as unknown
     )
+
   return typeof value === 'string' ? value : undefined
 }
 

@@ -22,11 +22,14 @@ function orgMembersScopedArgs(args: unknown): { orgId: string; record: Record<st
   if (!args || typeof args !== 'object') {
     throw new Error('invalid_orca_profile_org_selection')
   }
+
   const record = args as Record<string, unknown>
   const orgId = typeof record.orgId === 'string' ? record.orgId.trim() : ''
+
   if (!orgId) {
     throw new Error('invalid_orca_profile_org_selection')
   }
+
   return { orgId, record }
 }
 
@@ -34,37 +37,45 @@ function orgRoleFromUnknown(value: unknown): OrcaOrgRole {
   if (value === 'owner' || value === 'admin' || value === 'member') {
     return value
   }
+
   throw new Error('invalid_orca_org_role')
 }
 
 function orgEmailFromUnknown(value: unknown): string {
   const email = typeof value === 'string' ? value.trim() : ''
+
   if (!email) {
     throw new Error('invalid_orca_org_member_email')
   }
+
   return email
 }
 
 function orgUserIdFromUnknown(value: unknown): string {
   const userId = typeof value === 'string' ? value.trim() : ''
+
   if (!userId) {
     throw new Error('invalid_orca_org_member_user')
   }
+
   return userId
 }
 
 function orgMemberInviteArgsFromUnknown(args: unknown): OrcaProfileOrgMemberInviteArgs {
   const { orgId, record } = orgMembersScopedArgs(args)
+
   return { orgId, email: orgEmailFromUnknown(record.email), role: orgRoleFromUnknown(record.role) }
 }
 
 function orgInviteRevokeArgsFromUnknown(args: unknown): OrcaProfileOrgInviteRevokeArgs {
   const { orgId, record } = orgMembersScopedArgs(args)
+
   return { orgId, email: orgEmailFromUnknown(record.email) }
 }
 
 function orgMemberChangeRoleArgsFromUnknown(args: unknown): OrcaProfileOrgMemberChangeRoleArgs {
   const { orgId, record } = orgMembersScopedArgs(args)
+
   return {
     orgId,
     userId: orgUserIdFromUnknown(record.userId),
@@ -74,6 +85,7 @@ function orgMemberChangeRoleArgsFromUnknown(args: unknown): OrcaProfileOrgMember
 
 function orgMemberRemoveArgsFromUnknown(args: unknown): OrcaProfileOrgMemberRemoveArgs {
   const { orgId, record } = orgMembersScopedArgs(args)
+
   return { orgId, userId: orgUserIdFromUnknown(record.userId) }
 }
 

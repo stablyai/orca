@@ -10,6 +10,7 @@ vi.mock('./worktree-activation', () => ({ activateAndRevealWorktree: () => true 
 import { activateWorkspaceTabPaletteResult } from './workspace-tab-palette-activation'
 
 const initialState = useAppStore.getInitialState()
+
 afterEach(() => useAppStore.setState(initialState, true))
 
 it('keeps the selected diff active when an editor for the same file shares its group', () => {
@@ -32,6 +33,7 @@ it('keeps the selected diff active when an editor for the same file shares its g
     sortOrder: 0,
     lastActivityAt: 0
   }
+
   const editor: Tab = {
     id: 'editor',
     entityId: 'file',
@@ -44,6 +46,7 @@ it('keeps the selected diff active when an editor for the same file shares its g
     sortOrder: 0,
     createdAt: 0
   }
+
   useAppStore.setState(
     {
       ...initialState,
@@ -122,6 +125,7 @@ it('refuses a hostless tab for a remote target whose worktree ID also exists loc
     sortOrder: 0,
     createdAt: 0
   }
+
   useAppStore.setState(
     {
       ...initialState,
@@ -168,6 +172,7 @@ it('refuses a hostless backing file for a remote target whose worktree ID also e
     sortOrder: 0,
     createdAt: 0
   }
+
   useAppStore.setState(
     {
       ...initialState,

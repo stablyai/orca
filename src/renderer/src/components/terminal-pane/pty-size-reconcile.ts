@@ -33,10 +33,12 @@ export type PtySizeReconcileHandle = { cancel: () => void }
 // Hand off once the grid holds steady for SETTLE_FRAMES observed *while authoritative* — hidden frames don't count, since the reconcile is the sole corrector then.
 // MAX_FRAMES (~3s at 60fps) guarantees termination for a pane that never becomes authoritative or never stabilizes.
 const POST_SPAWN_RECONCILE_SETTLE_FRAMES = 8
+
 const POST_SPAWN_RECONCILE_MAX_FRAMES = 180
 
 // Fallback grid when a visible pane never measures and the PTY is stuck at 0×0 (blank/white pane); 80×24 is the terminal default.
 const POST_SPAWN_RECONCILE_FALLBACK_COLS = 80
+
 const POST_SPAWN_RECONCILE_FALLBACK_ROWS = 24
 
 export function reconcilePtySizeAcrossFrames(
@@ -55,12 +57,16 @@ export function reconcilePtySizeAcrossFrames(
 
   const tick = (): void => {
     pendingFrame = null
+
     if (cancelled || !options.isAlive()) {
       return
     }
+
     frame += 1
+
     if (!options.isParked()) {
       const measured = options.measure()
+
       if (measured && measured.cols > 0 && measured.rows > 0) {
         if (measured.cols !== lastSentCols || measured.rows !== lastSentRows) {
           // Authoritative spawn-time correction: bypasses the visibility gate; a real change resets the stability window.
@@ -76,7 +82,9 @@ export function reconcilePtySizeAcrossFrames(
       }
       // A null/zero measurement makes no stability progress: layout isn't ready.
     }
+
     const gridStable = authoritativeStableFrames >= POST_SPAWN_RECONCILE_SETTLE_FRAMES
+
     // Grid-stable proves what we SENT held, not what the PTY APPLIED (remote resize is fire-and-forget); verify once, skip parked.
     if (
       gridStable &&
@@ -92,10 +100,12 @@ export function reconcilePtySizeAcrossFrames(
           if (cancelled || !options.isAlive()) {
             return
           }
+
           // Re-check parked: a mobile client can take the PTY mid-read; the sync guard above only gated issuing the read, not this resolution.
           if (options.isParked()) {
             return
           }
+
           if (applied && (applied.cols !== lastSentCols || applied.rows !== lastSentRows)) {
             // The PTY never took our size — re-forward and keep the loop running.
             options.resize(lastSentCols, lastSentRows)
@@ -113,11 +123,15 @@ export function reconcilePtySizeAcrossFrames(
           verifyInFlight = false
         })
     }
+
     const settled = gridStable && appliedVerified
+
     if (!settled && frame < POST_SPAWN_RECONCILE_MAX_FRAMES) {
       pendingFrame = options.requestFrame(tick)
+
       return
     }
+
     // Last resort: a visible pane still pinned at 0×0 renders blank (split-right white-screen report); forward a safe default.
     if (
       !settled &&
@@ -137,6 +151,7 @@ export function reconcilePtySizeAcrossFrames(
   return {
     cancel: () => {
       cancelled = true
+
       if (pendingFrame !== null) {
         options.cancelFrame(pendingFrame)
         pendingFrame = null

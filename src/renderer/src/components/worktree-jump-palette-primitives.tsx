@@ -20,6 +20,7 @@ export function PaletteRowShortcutBadge({
   if (index === undefined || modifierKeys.length === 0) {
     return null
   }
+
   return (
     <ShortcutKeyCombo
       keys={[...modifierKeys, String(index + 1)]}
@@ -42,17 +43,22 @@ export function HighlightedText({
   const ranges = (matchRanges ?? []).filter(
     (range) => range.start < range.end && range.start < text.length
   )
+
   if (ranges.length === 0) {
     return <>{text}</>
   }
+
   const parts: React.ReactNode[] = []
   let cursor = 0
+
   for (const range of ranges) {
     const start = Math.max(cursor, range.start)
     const end = Math.min(text.length, Math.max(start, range.end))
+
     if (start > cursor) {
       parts.push(text.slice(cursor, start))
     }
+
     if (end > start) {
       parts.push(
         <span className={highlightClassName} key={`${start}-${end}`}>
@@ -62,9 +68,11 @@ export function HighlightedText({
       cursor = end
     }
   }
+
   if (cursor < text.length) {
     parts.push(text.slice(cursor))
   }
+
   return <>{parts}</>
 }
 
@@ -78,6 +86,7 @@ function PaletteOpenTabSecondaryText({
   elidePathHead: boolean
 }): React.JSX.Element {
   const split = elidePathHead ? splitPathHeadForElision(text, ranges) : null
+
   const content = split ? (
     <span
       data-slot="palette-open-tab-secondary"
@@ -96,6 +105,7 @@ function PaletteOpenTabSecondaryText({
       <HighlightedText text={text} matchRanges={ranges} />
     </span>
   )
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>{content}</TooltipTrigger>
@@ -126,6 +136,7 @@ export function PaletteOpenTabPrimaryLine({
   leadingBadges?: React.ReactNode
 }): React.JSX.Element {
   const showSecondary = secondaryText.trim().length > 0
+
   const additionalSecondaryMatches = secondaryMatches.filter(
     (match) => match.text && match.text !== secondaryText
   )
@@ -214,15 +225,19 @@ export function PaletteLocationChip({
   const showRepo = repoName.trim().length > 0
   const repeatedName = showRepo && worktreeName === repoName
   const showWorktree = worktreeName.trim().length > 0 && !repeatedName
+
   if (!showRepo && !showWorktree) {
     return null
   }
+
   const repoMatchRanges = repeatedName
     ? [...repoRanges, ...worktreeRanges].sort((left, right) => left.start - right.start)
     : repoRanges
+
   const label = [showRepo ? repoName : '', showWorktree ? worktreeName : '']
     .filter(Boolean)
     .join(' · ')
+
   const chip = (
     <span
       data-slot="palette-location-chip"
@@ -257,6 +272,7 @@ export function PaletteLocationChip({
       ) : null}
     </span>
   )
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>{chip}</TooltipTrigger>
@@ -298,6 +314,7 @@ export function PaletteHostBadgeChip({
   if (!badge) {
     return null
   }
+
   return (
     <span
       aria-label={translate(

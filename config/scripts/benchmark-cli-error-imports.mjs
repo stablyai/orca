@@ -6,16 +6,20 @@ import { delimiter, join, resolve } from 'node:path'
 // Emit each revision with tsc -p config/tsconfig.cli.json --outDir <dir> --composite false --incremental false.
 // Run: node config/scripts/benchmark-cli-error-imports.mjs <before-dir> <after-dir>
 const [beforeDir, afterDir] = process.argv.slice(2)
+
 assert.ok(beforeDir && afterDir, 'Pass distinct before and after TypeScript output directories.')
+
 assert.notEqual(
   realpathSync(beforeDir),
   realpathSync(afterDir),
   'Do not compare a build to itself.'
 )
+
 const entries = {
   before: join(resolve(beforeDir), 'cli', 'index.js'),
   after: join(resolve(afterDir), 'cli', 'index.js')
 }
+
 for (const entry of Object.values(entries)) {
   assert.ok(existsSync(entry), `Missing emitted CLI: ${entry}`)
 }
@@ -48,6 +52,7 @@ const child = String.raw`
     process.exitCode = 0
   }).catch((error) => { writeSync(2, String(error)); process.exitCode = 1 })
 `
+
 const cases = [
   ['--help'],
   ['help', 'terminal', 'read'],
@@ -55,16 +60,21 @@ const cases = [
   ['computer', 'click', '--does-not-exist'],
   ['does-not-exist', '--json']
 ]
+
 const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)]
+
 const summarize = (samples) => ({
   importMs: median(samples.map((sample) => sample.importMs)),
   totalMs: median(samples.map((sample) => sample.totalMs)),
   modules: samples[0].modules
 })
+
 const rows = []
+
 for (const args of cases) {
   const samples = { before: [], after: [] }
   let expected
+
   for (let run = 0; run < 22; run++) {
     for (const variant of run % 2 ? ['after', 'before'] : ['before', 'after']) {
       const result = runProcessSync({
@@ -78,12 +88,14 @@ for (const args of cases) {
             .join(delimiter)
         }
       })
+
       assert.equal(result.timedOut, false, 'CLI child timed out.')
       assert.equal(result.code, 0, result.stderr)
       const sample = JSON.parse(result.stdout)
       const output = { stdout: sample.stdout, stderr: sample.stderr, exitCode: sample.exitCode }
       expected ??= output
       assert.deepEqual(output, expected, `${variant} output changed for ${args.join(' ')}`)
+
       if (variant === 'after') {
         assert.deepEqual(
           sample.featureFormatters,
@@ -91,11 +103,13 @@ for (const args of cases) {
           'Help and syntax errors must skip feature formatters.'
         )
       }
+
       if (run >= 2) {
         samples[variant].push(sample)
       }
     }
   }
+
   assert.ok(samples.after[0].modules < samples.before[0].modules, 'Expected fewer loaded modules.')
   rows.push({
     args,
@@ -105,6 +119,7 @@ for (const args of cases) {
     samples
   })
 }
+
 console.log(
   JSON.stringify(
     {

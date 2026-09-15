@@ -45,6 +45,7 @@ async function runCreateAttempt(
   target: RuntimeTarget
 ): Promise<CreateAttemptOutcome> {
   const provisionedRoot = request.options?.provisionedRoot
+
   const create = async (
     parentWorkspace: WorktreeCreateAttempt['parentWorkspace']
   ): Promise<CreateWorktreeResult> =>
@@ -64,12 +65,14 @@ async function runCreateAttempt(
             buildRuntimeWorktreeCreateParams(request, { ...attempt, parentWorkspace }),
             { timeoutMs: 10 * 60_000 }
           )
+
   try {
     return { result: await create(attempt.parentWorkspace), droppedParent: false }
   } catch (error) {
     if (!attempt.parentWorkspace || !isRuntimeLineageParentMissingError(error)) {
       throw error
     }
+
     return { result: await create(undefined), droppedParent: true }
   }
 }
@@ -83,9 +86,11 @@ function lostRequestedParent(
   if (outcome.droppedParent) {
     return true
   }
+
   if (parent.pickedParentWorktreeId) {
     return !outcome.result.lineage
   }
+
   // Why local-only: older hosts predate the top-level workspace lineage field, so its absence
   // over RPC would warn about a nesting that actually landed.
   return (
@@ -153,23 +158,29 @@ export function createCreateWorktree(
       compareBaseRef,
       options
     }
+
     try {
       // Why outside the retry loop: a branch-name conflict retry must not re-warn about the same dropped pick.
       const parent = resolveWorktreeCreateParent(get(), repoId, options?.parentWorktreeId)
       let warnedParentDropped = false
+
       const warnParentDroppedOnce = (): void => {
         if (warnedParentDropped) {
           return
         }
+
         warnedParentDropped = true
         notifyWorktreeParentDropped(get(), parent)
       }
+
       if (parent.staleBeforeCreate) {
         warnParentDroppedOnce()
       }
+
       // Why: manual sort is user-authored order; stamp new workspaces at the top rather than relying on sortOrder fallback.
       const manualOrder = get().sortBy === 'manual' ? Date.now() : undefined
       const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), repoId))
+
       if (
         target.kind === 'environment' &&
         (options?.linkedWorkItem?.provider === 'jira' ||
@@ -181,9 +192,11 @@ export function createCreateWorktree(
           'Update the remote runtime to link Jira'
         )
       }
+
       if (options?.provisionedRoot && target.kind !== 'local') {
         throw new Error('Provisioned-root recipes currently require a direct SSH connection.')
       }
+
       for (let attempt = 0; attempt < CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS; attempt += 1) {
         try {
           const outcome = await runCreateAttempt(
@@ -201,25 +214,31 @@ export function createCreateWorktree(
             },
             target
           )
+
           if (lostRequestedParent(outcome, parent, target)) {
             warnParentDroppedOnce()
           }
+
           applyCreatedWorktree(set, repoId, outcome.result)
           const { result } = outcome
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree)
+
           if (result.baseFallback) {
             requestWorktreeBaseFallbackNotice(result.baseFallback)
           }
+
           showLocalBaseRefUpdateSuggestionToast(result.localBaseRefUpdateSuggestion, {
             updateSettings: get().updateSettings,
             getSettings: () => get().settings,
             openSettingsPage: get().openSettingsPage,
             openSettingsTarget: get().openSettingsTarget
           })
+
           return result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           const shouldRetry = isRetryableWorktreeCreateConflict(message)
+
           if (!shouldRetry || attempt === CLIENT_WORKTREE_CREATE_MAX_ATTEMPTS - 1) {
             throw error
           }

@@ -35,8 +35,10 @@ export class RpcStreamingDispatcher {
   ): Promise<void> {
     const { runtime, registry, orchestrationMutations, legacyOrchestration, meta } =
       this.dependencies
+
     const envelopeMeta = meta()
     const method = registry.get(request.method)
+
     if (!method) {
       reply(
         JSON.stringify(
@@ -48,18 +50,23 @@ export class RpcStreamingDispatcher {
           )
         )
       )
+
       return
     }
 
     const migrationFence = orchestrationMigrationFence(request, envelopeMeta)
+
     if (migrationFence) {
       reply(JSON.stringify(migrationFence))
+
       return
     }
 
     const parsedParams = parseRpcRequestParams(request, method, envelopeMeta)
+
     if (parsedParams.error) {
       reply(JSON.stringify(parsedParams.error))
+
       return
     }
 
@@ -70,6 +77,7 @@ export class RpcStreamingDispatcher {
           request.method,
           parsedParams.value
         )
+
         if (clientHostedBrowser.handled) {
           recordRuntimeFeatureInteraction(
             runtime,
@@ -81,29 +89,38 @@ export class RpcStreamingDispatcher {
           reply(
             JSON.stringify(successResponse(request.id, envelopeMeta, clientHostedBrowser.result))
           )
+
           return
         }
+
         const compatibility = await legacyOrchestration.tryHandle(
           request,
           parsedParams.value,
           options?.signal
         )
+
         if (compatibility.handled) {
           reply(JSON.stringify(successResponse(request.id, envelopeMeta, compatibility.result)))
+
           return
         }
+
         const effectiveParams = compatibility.params ?? parsedParams.value
+
         const legacyCoordinator = legacyOrchestration.createCoordinatorInvocation(
           request,
           compatibility.legacyCoordinatorAuthority
         )
+
         const authenticatedCallerFingerprint =
           options?.authenticatedCallerFingerprint ??
           (needsLocalCallerFingerprint(request, effectiveParams)
             ? orchestrationMutations.getLocalAuthenticatedCallerFingerprint()
             : undefined)
+
         const invoke = (mutation?: DurableMutationInvocation) => {
           const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
+
           return method.handler(effectiveParams, {
             runtime,
             signal: options?.signal,
@@ -133,17 +150,20 @@ export class RpcStreamingDispatcher {
             orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
           })
         }
+
         const result = await orchestrationMutations.run(
           request,
           effectiveParams,
           invoke,
           legacyCoordinator?.mutationCallerFingerprint ?? authenticatedCallerFingerprint
         )
+
         recordRuntimeFeatureInteraction(runtime, request.method, result, undefined, request.params)
         reply(JSON.stringify(successResponse(request.id, envelopeMeta, result)))
       } catch (error) {
         reply(JSON.stringify(mapDispatcherError(request, envelopeMeta, error)))
       }
+
       return
     }
 
@@ -175,6 +195,7 @@ export class RpcStreamingDispatcher {
         },
         emit
       )
+
       recordRuntimeFeatureInteraction(
         runtime,
         request.method,

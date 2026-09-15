@@ -30,6 +30,7 @@ export function EventTime({
   // only this leaf (memo'd rows stay bailed out). 30s cadence matches WorktreeCardAgents.
   const now = useNow(30_000)
   const absolute = formatAbsoluteDate(timestamp)
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -56,6 +57,7 @@ export function ActivityProjectLabel({ repo }: { repo: Repo | null }): React.JSX
   const label =
     repo?.displayName?.trim() ||
     translate('auto.components.activity.ActivityPrototypePage.5651b216c6', 'Unknown project')
+
   return (
     <div className="flex min-w-0 items-center gap-1.5">
       {repo ? <RepoBadgeMark color={repo.badgeColor} /> : null}
@@ -73,6 +75,7 @@ export function EventRepoBadge({ repo }: { repo: Repo | null }): React.JSX.Eleme
   if (!repo) {
     return null
   }
+
   return (
     <div className="flex min-w-0 shrink-0 items-center gap-1.5 rounded-[4px] border border-border bg-accent px-1.5 py-0.5 dark:border-border/60 dark:bg-accent/50">
       <RepoBadgeMark color={repo.badgeColor} />
@@ -90,6 +93,7 @@ export function ThreadAgentStateIndicator({
 }): React.JSX.Element {
   const state = threadAgentState(thread)
   const label = threadAgentStateLabel(thread)
+
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -116,6 +120,7 @@ export function ActivityStatusGroupHeader({
   className?: string
 }): React.JSX.Element {
   const isInteractive = Boolean(onToggle)
+
   return (
     <div
       role={isInteractive ? 'button' : undefined}

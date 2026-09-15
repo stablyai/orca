@@ -106,6 +106,7 @@ const ABI_MISMATCH: TerminalUnavailableCause = {
 // Stdout of the relay-side pty-master cloexec patch, which runs on Linux hosts once a
 // freshly installed node-pty loads (#17915).
 const NPTY_CLOEXEC_PATCHED = 'ORCA-NPTY-CLOEXEC:patched\n'
+
 const NODE_PTY_BROKEN = 'ORCA-NATIVE-DEPS-MISSING:node-pty\nMISSING'
 
 function repairSucceedsResponses(): ExecResponse[] {
@@ -137,6 +138,7 @@ function lockUnavailableResponses(): ExecResponse[] {
 
 describe('spawn-time node-pty repair through the locked deploy path', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>
+
   const sftpCapture: SftpWriteCapture = {
     paths: [],
     contents: {},
@@ -147,12 +149,15 @@ describe('spawn-time node-pty repair through the locked deploy path', () => {
     vi.clearAllMocks()
     vi.mocked(execCommand).mockReset().mockResolvedValue('')
     sftpCapture.paths.length = 0
+
     for (const key of Object.keys(sftpCapture.contents)) {
       delete sftpCapture.contents[key]
     }
+
     for (const key of Object.keys(sftpCapture.execCallCountAtWrite)) {
       delete sftpCapture.execCallCountAtWrite[key]
     }
+
     vi.mocked(parseUnameToRelayPlatform).mockReturnValue('linux-x64')
     vi.mocked(isRelayAlreadyInstalled).mockResolvedValue(true)
     vi.mocked(tryAcquireRelayRepairLock).mockResolvedValue('acquired')
@@ -167,6 +172,7 @@ describe('spawn-time node-pty repair through the locked deploy path', () => {
 
   function feed(responses: ExecResponse[]): void {
     const mockExec = vi.mocked(execCommand)
+
     for (const response of responses) {
       if (typeof response === 'string') {
         mockExec.mockResolvedValueOnce(response)

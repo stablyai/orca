@@ -24,9 +24,13 @@ import {
 import { appendImeEngagementReceipt } from './terminal-ime-engagement-receipt'
 
 const DEFAULT_REPETITIONS = 30
+
 const MAX_REPETITIONS = 30
+
 const DEFAULT_KEY_DELAY_MS = 1
+
 const MAX_KEY_DELAY_MS = 100
+
 const NATIVE_COMMAND_TIMEOUT_MS = 10_000
 
 test.use({
@@ -40,6 +44,7 @@ test.use({
 
 function nativeRepetitions(): number {
   const parsed = Number(process.env.ORCA_E2E_NATIVE_IBUS_REPETITIONS ?? DEFAULT_REPETITIONS)
+
   return Number.isInteger(parsed) && parsed > 0
     ? Math.min(parsed, MAX_REPETITIONS)
     : DEFAULT_REPETITIONS
@@ -47,6 +52,7 @@ function nativeRepetitions(): number {
 
 function nativeKeyDelayMs(): number {
   const parsed = Number(process.env.ORCA_E2E_NATIVE_IBUS_KEY_DELAY_MS ?? DEFAULT_KEY_DELAY_MS)
+
   return Number.isInteger(parsed) && parsed >= 0
     ? Math.min(parsed, MAX_KEY_DELAY_MS)
     : DEFAULT_KEY_DELAY_MS
@@ -69,16 +75,20 @@ async function focusNativeTerminalWindow(page: Page): Promise<string> {
     stdio: 'pipe',
     timeout: NATIVE_COMMAND_TIMEOUT_MS
   })
+
   const engine = execFileSync('ibus', ['engine'], {
     encoding: 'utf8',
     timeout: NATIVE_COMMAND_TIMEOUT_MS
   }).trim()
+
   expect(engine).toBe('hangul')
+
   return title
 }
 
 function typeExactByteSequence(repetitions: number): void {
   const delay = String(nativeKeyDelayMs())
+
   for (let index = 0; index < repetitions; index += 1) {
     runXdotool('type', '--delay', delay, '--clearmodifiers', 'gks')
     runXdotool('key', 'Hangul')
@@ -91,6 +101,7 @@ function typeExactByteSequence(repetitions: number): void {
 
 function typeSentenceSequence(repetitions: number): void {
   const delay = String(nativeKeyDelayMs())
+
   for (let index = 0; index < repetitions; index += 1) {
     runXdotool(
       'type',
@@ -120,6 +131,7 @@ async function runNativeIbusScenario(
   const reader = createTerminalImeByteReader(testRepoPath, repetitions)
   let completed = false
   let receivedBytes: string[] = []
+
   try {
     await startTerminalImeByteReader(page, ptyId, reader)
     await focusNativeTerminalWindow(page)
@@ -155,9 +167,11 @@ async function runNativeIbusScenario(
       repetitions
     }).catch(() => undefined)
     await disposeTerminalImeBoundaryProbe(page).catch(() => undefined)
+
     if (!completed) {
       await sendToTerminal(page, ptyId, '\x03').catch(() => undefined)
     }
+
     removeTerminalImeByteReader(reader)
   }
 }

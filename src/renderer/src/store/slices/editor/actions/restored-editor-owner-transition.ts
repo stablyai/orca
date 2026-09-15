@@ -21,37 +21,50 @@ export function buildRestoredEditorOwnerTransition(
 ): ActiveWorktreeStateTransition {
   return (s) => {
     const destination = resolveRestoredEditorOwnerDestination(s, args)
+
     if (!destination.ok) {
       assignResult({ ok: false, reason: destination.reason })
+
       return destination.reason === 'stale'
         ? { patch: {}, activate: false }
         : { patch: destination.patch, activate: false }
     }
+
     const { source, newFileId, previewIdMigrations, operationProvenance } = destination
     const parsedHost = parseExecutionHostId(args.targetExecutionHostId)
+
     const externalSshTargetId =
       parsedHost?.kind === 'ssh' && args.targetRuntimeEnvironmentId === null
         ? parsedHost.targetId
         : undefined
+
     const migrations = new Map([[source.id, newFileId], ...previewIdMigrations])
     const movedFileIds = new Set(migrations.keys())
     const sourceWorktreeId = source.worktreeId
     const targetWorktreeId = args.targetWorktreeId
+
     const movedTabs = (s.unifiedTabsByWorktree[sourceWorktreeId] ?? []).filter((tab) =>
       movedFileIds.has(tab.entityId)
     )
+
     const movedTabIds = new Set(movedTabs.map((tab) => tab.id))
+
     const tabIdMigration = new Map(
       movedTabs.map((tab) => [tab.id, migrations.get(tab.id) ?? tab.id])
     )
+
     const mappedMovedTabIds = movedTabs.map((tab) => tabIdMigration.get(tab.id) ?? tab.id)
     const mappedMovedTabIdSet = new Set(mappedMovedTabIds)
+
     const mappedMovedTabBarIds = movedTabs.map(
       (tab) => migrations.get(tab.entityId) ?? tab.entityId
     )
+
     const targetGroups = s.groupsByWorktree[targetWorktreeId] ?? []
+
     const targetGroupId =
       s.activeGroupIdByWorktree[targetWorktreeId] ?? targetGroups[0]?.id ?? createBrowserUuid()
+
     const targetGroup = targetGroups.find((group) => group.id === targetGroupId) ?? {
       id: targetGroupId,
       worktreeId: targetWorktreeId,
@@ -60,12 +73,15 @@ export function buildRestoredEditorOwnerTransition(
     }
 
     const previousSourceGroups = s.groupsByWorktree[sourceWorktreeId] ?? []
+
     const updatedSourceGroups = previousSourceGroups.map((group) => {
       const tabOrder = group.tabOrder.filter((id) => !movedTabIds.has(id))
+
       const activeTabId =
         group.activeTabId && movedTabIds.has(group.activeTabId)
           ? nextActiveIdAfterRemoval(group.tabOrder, group.recentTabIds, movedTabIds)
           : group.activeTabId
+
       return {
         ...group,
         activeTabId,
@@ -76,16 +92,19 @@ export function buildRestoredEditorOwnerTransition(
         )
       }
     })
+
     const sourceGroupState = removeEmptyEditorGroups(
       previousSourceGroups,
       updatedSourceGroups,
       movedTabIds,
       s.layoutByWorktree[sourceWorktreeId]
     )
+
     const destinationOrder = [
       ...targetGroup.tabOrder.filter((id) => !mappedMovedTabIds.includes(id)),
       ...mappedMovedTabIds
     ]
+
     const updatedTargetGroup: TabGroup = {
       ...targetGroup,
       activeTabId: mappedMovedTabIds.at(-1) ?? targetGroup.activeTabId,
@@ -95,6 +114,7 @@ export function buildRestoredEditorOwnerTransition(
         destinationOrder
       )
     }
+
     // Why: the migrated ids land in targetGroup only, so any sibling group holding the same id is left dangling.
     const nextTargetGroups = targetGroups.some((group) => group.id === targetGroupId)
       ? targetGroups.map((group) =>
@@ -129,24 +149,29 @@ export function buildRestoredEditorOwnerTransition(
       [sourceWorktreeId]: sourceGroupState.groups,
       [targetWorktreeId]: nextTargetGroups
     }
+
     const nextLayoutByWorktree = { ...s.layoutByWorktree }
+
     if (sourceGroupState.layout) {
       nextLayoutByWorktree[sourceWorktreeId] = sourceGroupState.layout
     } else {
       delete nextLayoutByWorktree[sourceWorktreeId]
     }
+
     if (targetGroups.length === 0 || !nextLayoutByWorktree[targetWorktreeId]) {
       nextLayoutByWorktree[targetWorktreeId] = { type: 'leaf', groupId: targetGroupId }
     }
 
     const nextActiveFileIdByWorktree = { ...s.activeFileIdByWorktree }
     const sourceActiveFileId = nextActiveFileIdByWorktree[sourceWorktreeId]
+
     if (sourceActiveFileId && movedFileIds.has(sourceActiveFileId)) {
       nextActiveFileIdByWorktree[sourceWorktreeId] =
         s.openFiles.find(
           (file) => !movedFileIds.has(file.id) && file.worktreeId === sourceWorktreeId
         )?.id ?? null
     }
+
     nextActiveFileIdByWorktree[targetWorktreeId] = newFileId
     const nextTabBarOrderByWorktree = { ...s.tabBarOrderByWorktree }
     nextTabBarOrderByWorktree[sourceWorktreeId] = (
@@ -159,6 +184,7 @@ export function buildRestoredEditorOwnerTransition(
       ...mappedMovedTabBarIds
     ]
     const nextActiveGroupIdByWorktree = { ...s.activeGroupIdByWorktree }
+
     if (sourceGroupState.groups.length > 0) {
       const previousActiveGroupId = nextActiveGroupIdByWorktree[sourceWorktreeId]
       nextActiveGroupIdByWorktree[sourceWorktreeId] = sourceGroupState.groups.some(
@@ -169,9 +195,11 @@ export function buildRestoredEditorOwnerTransition(
     } else {
       delete nextActiveGroupIdByWorktree[sourceWorktreeId]
     }
+
     nextActiveGroupIdByWorktree[targetWorktreeId] = targetGroupId
 
     assignResult({ ok: true, fileId: newFileId })
+
     return {
       patch: {
         openFiles: s.openFiles.map((file) =>

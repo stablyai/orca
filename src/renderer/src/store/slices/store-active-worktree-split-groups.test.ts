@@ -14,6 +14,7 @@ import { buildOrphanTerminalCleanupPatch } from './terminal-orphan-helpers'
 import { createStoreCascadesMockApi } from './store-cascades-test-harness'
 
 const mockUnregisterPtyDataHandlers = vi.hoisted(() => vi.fn<() => unknown[]>(() => []))
+
 const mockRestorePtyDataHandlersAfterFailedShutdown = vi.hoisted(() => vi.fn())
 
 // Mock sonner (imported by repos.ts)
@@ -29,6 +30,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -57,6 +59,7 @@ describe('setActiveWorktree', () => {
     })
 
     const snapshots: { terminalCount: number; unifiedCount: number; groupCount: number }[] = []
+
     const unsubscribe = store.subscribe((state) => {
       snapshots.push({
         terminalCount: state.tabsByWorktree[wt]?.length ?? 0,
@@ -359,6 +362,7 @@ describe('setActiveWorktree', () => {
 
     const state = store.getState()
     const patch = buildOrphanTerminalCleanupPatch(state, wt, new Set())
+
     const referenceKeys = [
       'tabsByWorktree',
       'ptyIdsByTabId',
@@ -379,6 +383,7 @@ describe('setActiveWorktree', () => {
     for (const key of referenceKeys) {
       expect(patch[key]).toBe(state[key])
     }
+
     expect(patch.activeTabId).toBe(state.activeTabId)
   })
 

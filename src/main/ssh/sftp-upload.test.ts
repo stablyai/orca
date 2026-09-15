@@ -103,6 +103,7 @@ describe('sftp-upload', () => {
     const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
     const targetPath = join(localDir, process.platform === 'win32' ? 'target-dir' : 'target.txt')
     const linkPath = join(localDir, process.platform === 'win32' ? 'link-dir' : 'link.txt')
+
     if (process.platform === 'win32') {
       await mkdir(targetPath)
       // Why: file symlinks often require Developer Mode/admin on Windows, while
@@ -112,6 +113,7 @@ describe('sftp-upload', () => {
       await writeFile(targetPath, 'secret')
       await symlink(targetPath, linkPath)
     }
+
     const sftp = createSftpMock()
 
     await expect(uploadFile(sftp, linkPath, '/remote/link.txt')).rejects.toThrow()
@@ -123,27 +125,34 @@ describe('sftp-upload', () => {
     const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-abort-'))
     const localPath = join(localDir, 'relay.js')
     const controller = new AbortController()
+
     const blockedWrite = new Writable({
       write() {}
     })
+
     const sftp = createSftpMock()
     vi.mocked(sftp.createWriteStream).mockReturnValue(blockedWrite as never)
+
     try {
       await writeFile(localPath, Buffer.alloc(1024 * 1024, 7))
+
       const upload = uploadFile(sftp, localPath, '/remote/relay.js', {
         signal: controller.signal
       })
+
       await vi.waitFor(() => expect(sftp.createWriteStream).toHaveBeenCalledTimes(1))
 
       controller.abort()
 
       await expect(upload).rejects.toMatchObject({ name: 'AbortError' })
+
       if (process.platform !== 'win32') {
         const descriptorProbe = spawnSync(
           'lsof',
           ['-a', '-p', String(process.pid), '--', localPath],
           { encoding: 'utf8' }
         )
+
         if (!descriptorProbe.error) {
           expect(descriptorProbe.stdout).not.toContain(localPath)
         }
@@ -164,6 +173,7 @@ describe('sftp-upload', () => {
         }
       }) as never
     )
+
     try {
       await writeFile(localPath, Buffer.alloc(1024 * 1024, 7))
 
@@ -179,6 +189,7 @@ describe('sftp-upload', () => {
     const sftp = createSftpMock()
     vi.mocked(sftp.readdir).mockImplementation((remotePath, cb) => {
       const pathString = String(remotePath)
+
       if (pathString === '/remote/assets') {
         cb(undefined, [
           { filename: '.', attrs: { isDirectory: () => true } },
@@ -186,12 +197,16 @@ describe('sftp-upload', () => {
           { filename: 'nested', attrs: { isDirectory: () => true } },
           { filename: 'logo.png', attrs: { isDirectory: () => false } }
         ] as never)
+
         return
       }
+
       if (pathString === '/remote/assets/nested') {
         cb(undefined, [{ filename: 'copy.txt', attrs: { isDirectory: () => false } }] as never)
+
         return
       }
+
       cb(new Error(`unexpected readdir: ${pathString}`), [] as never)
     })
 

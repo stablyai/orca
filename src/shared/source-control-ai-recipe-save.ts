@@ -54,11 +54,13 @@ function normalizeStringRecord<T extends string>(
   value: Partial<Record<T, string | null | undefined>> | undefined
 ): Partial<Record<T, string>> | undefined {
   const normalized: Partial<Record<T, string>> = {}
+
   for (const [key, item] of Object.entries(value ?? {}) as [T, string | null | undefined][]) {
     if (typeof item === 'string') {
       normalized[key] = item
     }
   }
+
   return hasEntries(normalized) ? normalized : undefined
 }
 
@@ -66,11 +68,13 @@ function normalizeBooleanRecord<T extends string>(
   value: Partial<Record<T, boolean | null | undefined>> | undefined
 ): Partial<Record<T, boolean>> | undefined {
   const normalized: Partial<Record<T, boolean>> = {}
+
   for (const [key, item] of Object.entries(value ?? {}) as [T, boolean | null | undefined][]) {
     if (typeof item === 'boolean') {
       normalized[key] = item
     }
   }
+
   return hasEntries(normalized) ? normalized : undefined
 }
 
@@ -81,12 +85,15 @@ function normalizeCompleteRecipe(
   if (!recipe) {
     return undefined
   }
+
   const commandInputTemplate =
     typeof recipe.commandInputTemplate === 'string'
       ? recipe.commandInputTemplate
       : DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId]
+
   const rawAgentArgs = recipe.agentArgs
   const agentArgs = typeof rawAgentArgs === 'string' ? rawAgentArgs.trim() : undefined
+
   return {
     agentId: recipe.agentId ?? null,
     commandInputTemplate,
@@ -98,12 +105,15 @@ function normalizeActionOverrides(
   overrides: RepoSourceControlAiOverrides['actionOverrides']
 ): WritableRepoSourceControlAiOverrides['actionOverrides'] {
   const normalized: WritableRepoSourceControlAiOverrides['actionOverrides'] = {}
+
   for (const actionId of SOURCE_CONTROL_ACTION_IDS) {
     const recipe = normalizeCompleteRecipe(actionId, overrides?.[actionId])
+
     if (recipe) {
       normalized[actionId] = recipe
     }
   }
+
   return hasEntries(normalized) ? normalized : undefined
 }
 
@@ -111,34 +121,47 @@ export function normalizeWritableRepoSourceControlAiOverrides(
   value: RepoSourceControlAiOverrides | null | undefined
 ): WritableRepoSourceControlAiOverrides | undefined {
   const readCompatible = normalizeRepoSourceControlAiOverrides(value)
+
   if (!readCompatible) {
     return undefined
   }
+
   const writable: WritableRepoSourceControlAiOverrides = {}
+
   if (typeof readCompatible.enabled === 'boolean') {
     writable.enabled = readCompatible.enabled
   }
+
   if (typeof readCompatible.customAgentCommand === 'string') {
     const customAgentCommand = readCompatible.customAgentCommand.trim()
+
     if (customAgentCommand) {
       writable.customAgentCommand = customAgentCommand
     }
   }
+
   if (readCompatible.modelOverridesByOperation) {
     writable.modelOverridesByOperation = readCompatible.modelOverridesByOperation
   }
+
   const instructionsByOperation = normalizeStringRecord(readCompatible.instructionsByOperation)
+
   if (instructionsByOperation) {
     writable.instructionsByOperation = instructionsByOperation
   }
+
   const actionOverrides = normalizeActionOverrides(readCompatible.actionOverrides)
+
   if (actionOverrides) {
     writable.actionOverrides = actionOverrides
   }
+
   const prCreationDefaults = normalizeBooleanRecord(readCompatible.prCreationDefaults)
+
   if (prCreationDefaults) {
     writable.prCreationDefaults = prCreationDefaults
   }
+
   return Object.keys(writable).length > 0 ? writable : undefined
 }
 
@@ -146,6 +169,7 @@ export function toSourceControlAiRepoUpdate(
   value: RepoSourceControlAiOverrides | null | undefined
 ): SourceControlAiRepoUpdate {
   const sourceControlAi = normalizeWritableRepoSourceControlAiOverrides(value)
+
   return sourceControlAi ? { sourceControlAi } : { sourceControlAi: null }
 }
 
@@ -156,8 +180,10 @@ function dropLegacyInstructionForAction(
   if (!TEXT_ACTION_ID_SET.has(actionId) || !value.instructionsByOperation) {
     return value
   }
+
   const instructionsByOperation = { ...value.instructionsByOperation }
   delete instructionsByOperation[actionId as SourceControlAiOperation]
+
   return {
     ...value,
     instructionsByOperation: hasEntries(instructionsByOperation)
@@ -182,11 +208,13 @@ export function saveSourceControlActionRecipe(
   input: SaveSourceControlActionRecipeInput
 ): SourceControlActionRecipeSaveResult {
   const savedRecipe = normalizeRecipeForSave(input.actionId, input.recipe)
+
   if (input.target.type === 'global') {
     const current = normalizeSourceControlAiSettings(
       input.settings.sourceControlAi,
       input.settings.commitMessageAi
     )
+
     return {
       target: { type: 'global' },
       sourceControlAi: {
@@ -203,6 +231,7 @@ export function saveSourceControlActionRecipe(
   }
 
   const currentRepoAi = normalizeWritableRepoSourceControlAiOverrides(input.repo?.sourceControlAi)
+
   const next = dropLegacyInstructionForAction(
     {
       ...currentRepoAi,
@@ -216,6 +245,7 @@ export function saveSourceControlActionRecipe(
     },
     input.actionId
   )
+
   return {
     target: input.target,
     update: toSourceControlAiRepoUpdate(next)

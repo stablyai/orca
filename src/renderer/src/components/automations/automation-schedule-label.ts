@@ -20,12 +20,14 @@ export function formatUiAutomationScheduleDescriptor(
       'Invalid schedule'
     )
   }
+
   if (descriptor.kind === 'custom') {
     return translate(
       'auto.components.automations.automation.schedule.label.ba20c92073',
       'Custom schedule'
     )
   }
+
   if (descriptor.kind === 'hourly') {
     return translate(
       'auto.components.automations.automation.schedule.label.a95afb7483',
@@ -33,7 +35,9 @@ export function formatUiAutomationScheduleDescriptor(
       { minute: String(descriptor.minute).padStart(2, '0') }
     )
   }
+
   const time = formatAutomationScheduleTime(descriptor.hour, descriptor.minute)
+
   if (descriptor.kind === 'daily') {
     return translate(
       'auto.components.automations.automation.schedule.label.280ccd2701',
@@ -41,6 +45,7 @@ export function formatUiAutomationScheduleDescriptor(
       { time }
     )
   }
+
   if (descriptor.kind === 'weekdays') {
     return translate(
       'auto.components.automations.automation.schedule.label.3f1422adc1',
@@ -48,6 +53,7 @@ export function formatUiAutomationScheduleDescriptor(
       { time }
     )
   }
+
   return translate(
     'auto.components.automations.automation.schedule.label.cc71e252ba',
     '{{day}}s at {{time}}',

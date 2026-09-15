@@ -49,9 +49,11 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
     setLinearCommentDraft,
     setLinearSubIssueTitle
   } = model
+
   if (!actionItem) {
     return null
   }
+
   return detailLoading ? (
     <View style={styles.detailLoading}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -184,6 +186,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
           ) : (
             detailPayload.pipelineJobs.map((job) => {
               const duration = formatDurationSeconds(job.duration)
+
               return (
                 <Pressable
                   key={`${job.id ?? job.stage}:${job.name}`}

@@ -35,6 +35,7 @@ const progress: FeatureWallSetupProgress = {
 
 vi.mock('./use-setup-guide-progress', async () => {
   const React = await import('react')
+
   return {
     useSetupGuideProgress: (shouldRefreshCoreState: boolean) => {
       contentProbe.renders()
@@ -43,11 +44,13 @@ vi.mock('./use-setup-guide-progress', async () => {
       React.useEffect(() => {
         contentProbe.subscriptions()
         const unsubscribe = useAppStore.subscribe(() => contentProbe.storeNotifications())
+
         return () => {
           contentProbe.unsubscriptions()
           unsubscribe()
         }
       }, [])
+
       return progress
     }
   }
@@ -82,7 +85,9 @@ vi.mock('@/components/ui/dialog', () => ({
 }))
 
 const initialAppState = useAppStore.getInitialState()
+
 let testContainer: HTMLDivElement
+
 let testRoot: Root
 
 async function flushEffects(): Promise<void> {

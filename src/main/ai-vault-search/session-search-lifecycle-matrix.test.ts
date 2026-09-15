@@ -44,7 +44,9 @@ import {
  */
 
 const CAN_DENY_READ = process.platform !== 'win32' && process.getuid?.() !== 0
+
 const INTERVAL_MS = 20_000
+
 const SESSIONS = ['aaaaaaaa', 'bbbbbbbb', 'cccccccc']
 
 type RootShape = {
@@ -218,7 +220,9 @@ function fullSessionId(prefix: string): string {
 }
 
 let harness: SessionSearchIndexerHarness
+
 let clock: FakeSessionSearchClock
+
 let indexer: SessionSearchIndexer | null
 
 beforeEach(async () => {
@@ -245,6 +249,7 @@ function open(overrides: Partial<SessionSearchIndexerOptions> = {}): SessionSear
     reconcileIntervalMs: INTERVAL_MS,
     ...overrides
   })
+
   return indexer
 }
 
@@ -254,13 +259,16 @@ function open(overrides: Partial<SessionSearchIndexerOptions> = {}): SessionSear
  */
 async function driveUntilIndexed(maxCycles: number): Promise<void> {
   let held = indexedSessions().length
+
   for (let cycle = 0; cycle < maxCycles; cycle++) {
     clock.advance(INTERVAL_MS)
     await indexer?.settled()
     const now = indexedSessions().length
+
     if (now === held) {
       return
     }
+
     held = now
   }
 }
@@ -286,10 +294,12 @@ for (const roots of ROOT_SHAPES) {
             const detachedRoot = roots.detachedRoot(harness)
             const detachedPaths = SESSIONS.map((session) => roots.detachedFile(harness, session))
             const healthyPaths = SESSIONS.map((session) => roots.healthyFile(harness, session))
+
             for (const [index, session] of SESSIONS.entries()) {
               await roots.writeDetached(detachedPaths[index] ?? '', session)
               await roots.writeHealthy(healthyPaths[index] ?? '', session)
             }
+
             const transcriptDir = dirname(detachedPaths[0] ?? '')
             const parked = join(harness.root, 'parked-root')
 
@@ -297,11 +307,13 @@ for (const roots of ROOT_SHAPES) {
             // A deadline that expires on the first file reads one transcript a
             // pass, so the setup drives passes until the index has caught up.
             await driveUntilIndexed(SESSIONS.length * 2)
+
             const detachedIds = detachedPaths.map((_path, index) =>
               roots === ROOT_SHAPES[0]
                 ? fullSessionId(SESSIONS[index] ?? '')
                 : (SESSIONS[index] ?? '')
             )
+
             const healthyIds = SESSIONS.map((session) => session)
             expect(indexedSessions()).toEqual([...detachedIds, ...healthyIds].sort())
             // One cycle so the watch set holds the recency window, which is the
@@ -310,24 +322,31 @@ for (const roots of ROOT_SHAPES) {
             await indexer?.settled()
 
             await unreachable.detach(detachedRoot, transcriptDir, parked)
+
             try {
               const kept = SESSIONS.filter((session) => !operation.deletes?.includes(session))
+
               for (const session of operation.deletes ?? []) {
                 await rm(healthyPaths[SESSIONS.indexOf(session)] ?? '')
               }
+
               await operation.run({
                 indexer: () => indexer as SessionSearchIndexer,
                 reopen: async (args = {}) => {
                   indexer?.close()
                   resetTranscriptConsumersForTests()
                   resetSessionParseCacheForTests()
+
                   if (args.removeDatabase === true) {
                     removeSessionSearchDatabase(harness.databasePath)
                   }
+
                   const overrides = { ...operation.options }
+
                   if ('historyDays' in args) {
                     overrides.historyDays = args.historyDays
                   }
+
                   await open(overrides).start()
                   await driveUntilIndexed(SESSIONS.length * 2)
                 },
@@ -345,6 +364,7 @@ for (const roots of ROOT_SHAPES) {
 
               const status = indexer?.status()
               const degraded = status?.degradedRoots.map((root) => root.root) ?? []
+
               // With no rows under it, the only thing a pass can go on is
               // whether the root itself refuses to list.
               if (operation.clearsIndex && !unreachable.visibleWithNoRows) {

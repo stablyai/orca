@@ -5,7 +5,9 @@ import { createTestStore, makeWorktree, seedStore } from './store-test-helpers'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/runtime/sync-runtime-graph', () => ({ scheduleRuntimeGraphSync: vi.fn() }))
+
 vi.mock('@/components/terminal-pane/pty-transport', () => ({
   registerEagerPtyBuffer: vi.fn(),
   ensurePtyDispatcher: vi.fn()

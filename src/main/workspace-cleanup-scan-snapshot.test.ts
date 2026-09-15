@@ -14,10 +14,12 @@ const { snapshotWriteSpy, userDataDirHolder } = vi.hoisted(() => ({
 
 vi.mock('./sidecar-snapshot-file', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   const writeSidecarSnapshot = actual.writeSidecarSnapshot as (
     file: string,
     payload: unknown
   ) => Promise<void>
+
   return {
     ...actual,
     writeSidecarSnapshot: async (file: string, payload: unknown) => {
@@ -38,6 +40,7 @@ import {
 } from './workspace-cleanup-scan-snapshot'
 
 const SNAPSHOT_FILE = 'orca-workspace-cleanup-scan.json'
+
 const NOW = 1_700_000_000_000
 
 function makeCandidate(
@@ -95,6 +98,7 @@ describe('workspace cleanup scan snapshot', () => {
       blockers: ['ssh-disconnected'],
       git: { clean: null, upstreamAhead: null, upstreamBehind: null, checkedAt: null }
     })
+
     const result = makeBroadResult([makeCandidate(), sshCandidate])
 
     await persistWorkspaceCleanupScanResult(
@@ -112,6 +116,7 @@ describe('workspace cleanup scan snapshot', () => {
       candidates: [makeCandidate({ displayName: 'Newer' })],
       errors: []
     }
+
     await persistWorkspaceCleanupScanResult(
       userDataDirHolder.dir,
       { includeAllWorkspaces: true },
@@ -175,11 +180,13 @@ describe('workspace cleanup scan snapshot', () => {
 
   it('patches targeted rescans into the snapshot without touching other rows', async () => {
     const stale = makeCandidate({ git: { ...makeCandidate().git, clean: null, checkedAt: null } })
+
     const other = makeCandidate({
       worktreeId: 'repo-1::/repo-other',
       path: '/repo-other',
       branch: 'other'
     })
+
     await persistWorkspaceCleanupScanResult(
       userDataDirHolder.dir,
       { includeAllWorkspaces: true },
@@ -238,6 +245,7 @@ describe('workspace cleanup scan snapshot', () => {
       makeCandidate(),
       makeCandidate({ worktreeId: 'repo-1::/b', path: '/b' })
     ])
+
     await persistWorkspaceCleanupScanResult(
       userDataDirHolder.dir,
       { includeAllWorkspaces: true },
@@ -280,20 +288,24 @@ describe('workspace cleanup scan snapshot', () => {
 
   it('coalesces host-scoped local and remote prunes into one write', async () => {
     const localCollision = makeCandidate()
+
     const remoteCollision = makeCandidate({
       connectionId: 'ssh-1',
       executionHostId: 'ssh:ssh-1'
     })
+
     const localRemoved = makeCandidate({
       worktreeId: 'repo-1::/local-removed',
       path: '/local-removed'
     })
+
     const remoteRemoved = makeCandidate({
       worktreeId: 'repo-1::/remote-removed',
       connectionId: 'ssh-1',
       executionHostId: 'ssh:ssh-1',
       path: '/remote-removed'
     })
+
     const kept = makeCandidate({ worktreeId: 'repo-1::/kept', path: '/kept' })
     await persistWorkspaceCleanupScanResult(
       userDataDirHolder.dir,
@@ -329,6 +341,7 @@ describe('workspace cleanup scan snapshot', () => {
 
   it('keeps profile snapshots isolated', async () => {
     const otherProfile = await mkdtemp(join(tmpdir(), 'orca-cleanup-snapshot-other-'))
+
     try {
       await persistWorkspaceCleanupScanResult(
         userDataDirHolder.dir,
@@ -344,16 +357,19 @@ describe('workspace cleanup scan snapshot', () => {
 
   it('does not let a scan started before a bulk removal restore pruned rows', async () => {
     const local = makeCandidate()
+
     const remote = makeCandidate({
       worktreeId: 'repo-1::/remote-feature',
       connectionId: 'ssh-1',
       executionHostId: 'ssh:ssh-1',
       path: '/remote-feature'
     })
+
     const staleResult = {
       ...makeBroadResult([local, remote]),
       scannedAt: Date.now() - 1
     }
+
     await pruneWorkspaceCleanupScanSnapshots(userDataDirHolder.dir, [
       { worktreeId: local.worktreeId, executionHostId: 'local' },
       { worktreeId: remote.worktreeId, executionHostId: 'ssh:ssh-1' }
@@ -416,11 +432,13 @@ describe('workspace cleanup scan snapshot', () => {
 
   it('patches and prunes host-colliding workspace ids independently', async () => {
     const local = makeCandidate()
+
     const remote = makeCandidate({
       connectionId: 'ssh-1',
       executionHostId: 'ssh:ssh-1',
       repoName: 'Remote repo'
     })
+
     await persistWorkspaceCleanupScanResult(
       userDataDirHolder.dir,
       { includeAllWorkspaces: true },
@@ -432,6 +450,7 @@ describe('workspace cleanup scan snapshot', () => {
       tier: 'protected',
       blockers: ['dirty-files']
     })
+
     await persistWorkspaceCleanupScanResult(
       userDataDirHolder.dir,
       { worktreeId: remote.worktreeId },

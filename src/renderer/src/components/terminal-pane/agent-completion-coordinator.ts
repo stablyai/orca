@@ -29,6 +29,7 @@ export function createAgentCompletionCoordinator(
   let agentIdentityEstablished = false
   let hasAgentRunEvidence = false
   let lastTitleStatus: AgentStatus | null = null
+
   const completionState = {
     currentTurn: 0,
     workingStatusObserved: false,
@@ -44,6 +45,7 @@ export function createAgentCompletionCoordinator(
     pendingHookDonePayload: null as AgentCompletionStatusSnapshot | null,
     pendingCodexAttentionTimer: null as ReturnType<typeof setTimeout> | null
   }
+
   // Why: output/title activity can arrive before async PTY bind; only re-arm cadence after bind starts process tracking.
   const processState = {
     disposed: false,
@@ -59,6 +61,7 @@ export function createAgentCompletionCoordinator(
     lastForegroundAgent: null as RecognizedAgentProcess | null,
     processSession: 0
   }
+
   let processMonitor!: ReturnType<typeof createAgentCompletionProcessMonitor>
   let pendingTitle!: ReturnType<typeof createPendingTitleController>
   let notification!: ReturnType<typeof createAgentCompletionNotificationController>
@@ -104,10 +107,13 @@ export function createAgentCompletionCoordinator(
 
   const completionIdentityFor = (state: string, agentType: string | undefined, timestamp: number) =>
     notification.completionIdentityFor(state, agentType, timestamp)
+
   const hookCompletionIdentity = (payload: AgentCompletionStatusSnapshot) =>
     notification.hookCompletionIdentity(payload)
+
   const hookCompletionAgentIdentity = (payload: AgentCompletionStatusSnapshot) =>
     notification.hookCompletionAgentIdentity(payload)
+
   const doneShouldUseQuietWindow = (payload: AgentCompletionStatusSnapshot) =>
     notification.doneShouldUseQuietWindow(payload)
 
@@ -201,6 +207,7 @@ export function createAgentCompletionCoordinator(
 
   function dispatchPendingTitleIfEligible(): void {
     const currentPendingTitle = pendingTitle.get()
+
     if (
       !currentPendingTitle ||
       !currentPendingTitle.validatedByFreshInspection ||
@@ -209,6 +216,7 @@ export function createAgentCompletionCoordinator(
     ) {
       return
     }
+
     const title = currentPendingTitle.title
     dropPendingTitle()
     markTitleCompletionNotified(title)
@@ -236,21 +244,26 @@ export function createAgentCompletionCoordinator(
   function recordTitleWorking(): boolean {
     // Why: hooks can report `done` before title tracking notices the next milestone, so the working title must cancel that provisional done.
     clearPendingHookDone()
+
     if (
       completionState.lastCompletionSource === 'hook' &&
       Date.now() - completionState.lastCompletionAt < COMPLETION_REPLAY_GUARD_MS
     ) {
       return false
     }
+
     // Why: cancel debounced attention when a Codex resume surfaces as a working title (else false banner #8387); placed after the replay guard so a stale post-completion replay can't drop it.
     clearPendingCodexAttention()
     completionState.workingStatusObserved = true
     completionState.requiresFreshWorking = false
+
     if (!hasUnconsumedStampedTail()) {
       identityScope.deleteLast()
     }
+
     completionState.currentTurn += 1
     dropPendingTitle()
+
     return true
   }
 

@@ -31,12 +31,15 @@ const skillsApi = {
   getUpdateRun: vi.fn(async (): Promise<SkillUpdateRun> => ({ state: 'idle' })),
   onUpdateRun: vi.fn((callback: (run: SkillUpdateRun) => void) => {
     pushRun = callback
+
     return () => {}
   })
 }
+
 let pushRun: ((run: SkillUpdateRun) => void) | null = null
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 async function render(): Promise<void> {
@@ -68,6 +71,7 @@ describe('SkillUpdateStatusSegment', () => {
     if (root) {
       await act(async () => root?.unmount())
     }
+
     root = null
     container?.remove()
     container = null

@@ -10,6 +10,7 @@ export class SharedControlSocketGeneration {
 
   begin(): number {
     this.current += 1
+
     return this.current
   }
 
@@ -27,9 +28,11 @@ export class SharedControlSocketGeneration {
     if (!this.isCurrent(args.generation)) {
       return false
     }
+
     // Why: error, close, and liveness callbacks can race for one socket; only its first callback owns recovery.
     this.current += 1
     args.closeSocket()
+
     if (args.everReady) {
       for (const subscription of Array.from(args.subscriptions.values())) {
         try {
@@ -39,6 +42,7 @@ export class SharedControlSocketGeneration {
         }
       }
     }
+
     return true
   }
 }

@@ -24,6 +24,7 @@ describe('workspace cleanup removal verification and consent', () => {
           checkedAt
         }
       })
+
       installWorkspaceCleanupApi(
         vi.fn().mockResolvedValue({
           scannedAt: NOW,
@@ -51,10 +52,12 @@ describe('workspace cleanup removal verification and consent', () => {
 
   it('scopes repo-level scan failures to their execution host', async () => {
     const local = makeCandidate({ executionHostId: 'local' })
+
     const remote = makeCandidate({
       executionHostId: 'ssh:remote',
       displayName: 'remote'
     })
+
     installWorkspaceCleanupApi(
       vi.fn().mockResolvedValue({
         scannedAt: NOW,
@@ -90,10 +93,12 @@ describe('workspace cleanup removal verification and consent', () => {
 
   it('fails every same-repo host when an older peer omits the error host', async () => {
     const local = makeCandidate({ executionHostId: 'local' })
+
     const remote = makeCandidate({
       executionHostId: 'ssh:remote',
       displayName: 'remote'
     })
+
     installWorkspaceCleanupApi(
       vi.fn().mockResolvedValue({
         scannedAt: NOW,
@@ -134,6 +139,7 @@ describe('workspace cleanup removal verification and consent', () => {
         checkedAt: null
       }
     })
+
     installWorkspaceCleanupApi(
       vi.fn().mockResolvedValue({
         scannedAt: NOW,
@@ -152,6 +158,7 @@ describe('workspace cleanup removal verification and consent', () => {
       approvedCandidates: [candidate],
       unverifiedRemovalConsent: { identity, attemptId: attemptId! }
     })
+
     const replay = await store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID], {
       approvedCandidates: [candidate],
       unverifiedRemovalConsent: { identity, attemptId: attemptId! }
@@ -174,6 +181,7 @@ describe('workspace cleanup removal verification and consent', () => {
         checkedAt: null
       }
     })
+
     const second = makeCandidate({
       worktreeId: 'repo1::/tmp/second',
       path: '/tmp/second',
@@ -187,6 +195,7 @@ describe('workspace cleanup removal verification and consent', () => {
         checkedAt: null
       }
     })
+
     installWorkspaceCleanupApi(
       vi.fn(async (args: { worktreeIds?: string[] }) => ({
         scannedAt: NOW,
@@ -221,6 +230,7 @@ describe('workspace cleanup removal verification and consent', () => {
         checkedAt: null
       }
     })
+
     const moved = makeCandidate({ ...approved, executionHostId: 'ssh:remote' })
     installWorkspaceCleanupApi(
       vi.fn().mockResolvedValue({ scannedAt: NOW, candidates: [moved], errors: [] })
@@ -252,12 +262,14 @@ describe('workspace cleanup removal verification and consent', () => {
         checkedAt: null
       }
     })
+
     const scan = deferred<WorkspaceCleanupScanResult>()
     installWorkspaceCleanupApi(vi.fn(() => scan.promise))
     const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
     const store = createCleanupTestStore(removeWorktree)
     const identity = getWorkspaceCleanupCandidateIdentity(candidate)
     const attemptId = store.getState().beginUnverifiedRemovalConsent(identity)!
+
     const removal = store.getState().removeWorkspaceCleanupCandidates([WORKTREE_ID], {
       approvedCandidates: [candidate],
       unverifiedRemovalConsent: { identity, attemptId }
@@ -283,6 +295,7 @@ describe('workspace cleanup removal verification and consent', () => {
         checkedAt: null
       }
     })
+
     installWorkspaceCleanupApi(
       vi.fn().mockResolvedValue({
         scannedAt: NOW,
@@ -329,6 +342,7 @@ describe('workspace cleanup removal verification and consent', () => {
         }
       })
     ]
+
     installWorkspaceCleanupApi(
       vi.fn(async (args: { worktreeIds?: string[] }) => ({
         scannedAt: NOW,
@@ -340,8 +354,10 @@ describe('workspace cleanup removal verification and consent', () => {
     )
     const removeWorktree = vi.fn().mockResolvedValue({ ok: true })
     const store = createCleanupTestStore(removeWorktree)
+
     const consents = candidates.map((candidate) => {
       const identity = getWorkspaceCleanupCandidateIdentity(candidate)
+
       return {
         identity,
         attemptId: store.getState().beginUnverifiedRemovalConsent(identity)!
@@ -368,6 +384,7 @@ describe('workspace cleanup removal verification and consent', () => {
       blockers: ['unknown-base'],
       git: { clean: true, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW }
     })
+
     installWorkspaceCleanupApi(
       vi.fn().mockResolvedValue({
         scannedAt: NOW,
@@ -396,6 +413,7 @@ describe('workspace cleanup removal verification and consent', () => {
       ...approvedCandidate,
       blockers: approvedCandidate.blockers.filter((blocker) => blocker !== 'dismissed')
     })
+
     installWorkspaceCleanupApi(
       vi.fn().mockResolvedValue({
         scannedAt: NOW,

@@ -7,6 +7,7 @@ import { join } from 'node:path'
 import { PROTOCOL_VERSION } from './daemon-protocol-version'
 
 const PS_START = 'Thu Aug 13 12:34:56 2026'
+
 const PS_STARTED_AT_MS = Date.parse(PS_START)
 
 const { execFileMock, execFileSyncMock, psCommandLine, psError } = vi.hoisted(() => ({
@@ -31,19 +32,23 @@ vi.mock('node:child_process', async (importOriginal) => ({
 
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof FsModule>()
+
   return {
     ...actual,
     readFileSync: ((path, options) => {
       if (String(path) === `/proc/${process.pid}/cmdline`) {
         throw new Error('procfs unavailable on macOS')
       }
+
       return actual.readFileSync(path, options)
     }) as typeof actual.readFileSync
   }
 })
 
 const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+
 const { getMacDaemonTccAttributionHealth } = await import('./daemon-tcc-attribution')
+
 const { isDaemonStaleForCurrentBundle } = await import('./daemon-bundle-staleness')
 
 describe('macOS daemon TCC attribution main-thread cost', () => {

@@ -20,17 +20,21 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
     ) => {
       let leaf = runtime.resolveLeafForHandle(params.terminal)
       const isMobile = params.client?.type === 'mobile'
+
       const serializerGenerationBeforeAnyMount = isMobile
         ? (runtime.getRendererTerminalSerializerGenerationForHandle?.(params.terminal) ?? 0)
         : 0
+
       let rendererMountRequestedBeforePty = false
       const useBinaryStream = params.capabilities?.terminalBinaryStream === 1 && Boolean(sendBinary)
+
       if (signal?.aborted) {
         return
       }
 
       if (!leaf?.ptyId && params.client) {
         rendererMountRequestedBeforePty = runtime.requestRendererTerminalTabMount(params.terminal)
+
         try {
           const ptyId = await runtime.waitForLeafPtyId(params.terminal, 10_000, signal)
           leaf = { ptyId }
@@ -40,6 +44,7 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
           }
         }
       }
+
       if (!leaf?.ptyId) {
         const read = await runtime.readTerminal(params.terminal)
         emit({
@@ -49,17 +54,21 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
           truncated: isTerminalReadPayloadIncomplete(read)
         })
         emit({ type: 'end' })
+
         return
       }
+
       if (isMobile && (!useBinaryStream || !sendBinary)) {
         throw new Error('binary_terminal_stream_required')
       }
 
       const ptyId = leaf.ptyId
       const clientId = params.client?.id
+
       const missingHeadlessStateBeforeMobileFit =
         isMobile &&
         (rendererMountRequestedBeforePty || runtime.hasHeadlessTerminalState?.(ptyId) === false)
+
       const args: TerminalSubscriptionArgs = {
         params,
         runtime,
@@ -81,14 +90,19 @@ export const TERMINAL_SUBSCRIBE_METHODS = [
             : runtime.getRendererTerminalSerializerGeneration(ptyId)
           : 0
       }
+
       if (isMobile && params.capabilities?.mobileInputLeaseOnly === 1 && Boolean(clientId)) {
         await runTerminalLeaseSubscription(args)
+
         return
       }
+
       if (!useBinaryStream) {
         await runTerminalJsonSubscription(args)
+
         return
       }
+
       await runTerminalBinarySubscription(args)
     }
   })

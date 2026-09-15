@@ -33,9 +33,11 @@ export default function FolderWorkspacePrChecksPanel({
   const fetchHostedReviewForBranch = useAppStore((s) => s.fetchHostedReviewForBranch)
   const fetchPRChecks = useAppStore((s) => s.fetchPRChecks)
   const fetchPRCheckDetails = useAppStore((s) => s.fetchPRCheckDetails)
+
   const [refreshOutcomes, setRefreshOutcomes] = useState<
     ReadonlyMap<string, ParentPrChecksRefreshOutcome>
   >(() => new Map())
+
   const [expandedRowIds, setExpandedRowIds] = useState<ReadonlySet<string>>(() => new Set())
   const [manualRefreshGeneration, setManualRefreshGeneration] = useState(0)
   const lastForcedManualRefreshGenerationRef = useRef(0)
@@ -59,6 +61,7 @@ export default function FolderWorkspacePrChecksPanel({
       worktreesByRepo
     ]
   )
+
   const projectionSelector = useMemo(
     () =>
       createParentPrChecksProjectionSelector({
@@ -69,16 +72,20 @@ export default function FolderWorkspacePrChecksPanel({
       }),
     [childWorktrees, repos, settings, refreshOutcomes]
   )
+
   const projection = useAppStore(projectionSelector)
   const folderWorkspaceId = folderWorkspace?.id ?? null
+
   const headerSummary = useMemo(
     () => formatReviewChecksHeaderSummary(projection.summary),
     [projection.summary]
   )
+
   const refreshCandidates = useMemo(
     () => getParentPrChecksRefreshCandidates({ worktrees: childWorktrees, repos }),
     [childWorktrees, repos]
   )
+
   const refreshCandidateSignature = useMemo(
     () =>
       refreshCandidates
@@ -94,6 +101,7 @@ export default function FolderWorkspacePrChecksPanel({
         .join(';;'),
     [refreshCandidates]
   )
+
   const refreshCandidatesRef = useRef(refreshCandidates)
 
   useEffect(() => {
@@ -102,18 +110,23 @@ export default function FolderWorkspacePrChecksPanel({
 
   useEffect(() => {
     const candidates = refreshCandidatesRef.current
+
     if (!isVisible || !folderWorkspaceId || childWorktrees.length === 0) {
       return
     }
+
     if (candidates.length === 0) {
       return
     }
+
     // Why: manual refresh should force exactly one generation; automatic
     // refresh cycles after that must stay cache/staleness-aware.
     const forceRefresh = manualRefreshGeneration > lastForcedManualRefreshGenerationRef.current
+
     if (forceRefresh) {
       lastForcedManualRefreshGenerationRef.current = manualRefreshGeneration
     }
+
     let cancelled = false
     void runLimitedParentPrChecksRefreshes({
       candidates,
@@ -125,9 +138,11 @@ export default function FolderWorkspacePrChecksPanel({
         if (cancelled) {
           return
         }
+
         setRefreshOutcomes((current) => new Map(current).set(identity, outcome))
       }
     })
+
     return () => {
       cancelled = true
     }
@@ -145,6 +160,7 @@ export default function FolderWorkspacePrChecksPanel({
     () => new Set(refreshCandidates.map((candidate) => candidate.identity)),
     [refreshCandidates]
   )
+
   const isRefreshing = [...refreshOutcomes.entries()].some(
     ([identity, outcome]) => currentRefreshIdentities.has(identity) && outcome.kind === 'loading'
   )
@@ -153,6 +169,7 @@ export default function FolderWorkspacePrChecksPanel({
     const validRowIds = new Set(projection.rows.map((row) => row.id))
     setExpandedRowIds((current) => {
       const next = new Set([...current].filter((id) => validRowIds.has(id)))
+
       return next.size === current.size ? current : next
     })
   }, [projection.rows])
@@ -160,11 +177,13 @@ export default function FolderWorkspacePrChecksPanel({
   const toggleRowExpanded = useCallback((rowId: string): void => {
     setExpandedRowIds((current) => {
       const next = new Set(current)
+
       if (next.has(rowId)) {
         next.delete(rowId)
       } else {
         next.add(rowId)
       }
+
       return next
     })
   }, [])
@@ -174,6 +193,7 @@ export default function FolderWorkspacePrChecksPanel({
       if (!row.repo) {
         return Promise.resolve(null)
       }
+
       return fetchPRCheckDetails(
         row.repo.path,
         {
@@ -284,7 +304,9 @@ function formatReviewChecksHeaderSummary(summary: {
   if (summary.attached === 0) {
     return null
   }
+
   const worktreeCount = formatWorktreeCount(summary.attached)
+
   const attentionParts = [
     summary.failing > 0 ? formatFailingCount(summary.failing) : null,
     summary.pending > 0 ? formatPendingCount(summary.pending) : null
@@ -293,6 +315,7 @@ function formatReviewChecksHeaderSummary(summary: {
   if (attentionParts.length > 0) {
     return [...attentionParts, worktreeCount].join(' · ')
   }
+
   if (summary.passing === summary.attached) {
     return [
       worktreeCount,
@@ -302,6 +325,7 @@ function formatReviewChecksHeaderSummary(summary: {
       )
     ].join(' · ')
   }
+
   return worktreeCount
 }
 

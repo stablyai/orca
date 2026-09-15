@@ -10,9 +10,11 @@ export function cancelInterruptedWatcherSubscribe(args: {
   restartChild: () => Promise<void>
 }): void {
   const { record } = args
+
   if (!record.interrupted || record.pendingSubscribe || !args.records.delete(record.id)) {
     return
   }
+
   resetPendingSubscribeAttempt(record)
   // Why: recovery may replace this root synchronously from the terminal hook;
   // publish failure only after its predecessor releases native handles.

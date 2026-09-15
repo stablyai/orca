@@ -25,6 +25,7 @@ function expectBaselineKeptWithLaunchDatePending(markerPath: string): void {
   const marker = JSON.parse(readFileSync(markerPath, 'utf-8')) as {
     pendingScanDates?: unknown
   }
+
   expect(marker.pendingScanDates).toEqual([getCodexSessionBackfillDate()])
   expect(
     hasCompletedCodexSessionBackfillMarker(markerPath, join(getSystemCodexHomePath(), 'sessions'))
@@ -39,6 +40,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -60,6 +62,7 @@ describe('CodexRuntimeHomeService', () => {
       'codex-session-backfill',
       'backfill-complete.json'
     )
+
     mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
     writeFileSync(markerPath, '{}\n', 'utf-8')
     const store = createStore(createSettings())
@@ -146,11 +149,13 @@ describe('CodexRuntimeHomeService', () => {
     service.setRealHomeLaneGate(() => false)
     expect(service.getSelectedHostCodexHomeRoute()).toBe('shared-home')
     expect(service.getHostCodexHomePathsForSessionDiscovery()).toEqual([getRuntimeCodexHomePath()])
+
     const markerPath = join(
       testState.userDataDir,
       'codex-session-backfill',
       'backfill-complete.json'
     )
+
     mkdirSync(join(testState.userDataDir, 'codex-session-backfill'), { recursive: true })
     writeFileSync(markerPath, '{}\n', 'utf-8')
     expect(service.prepareForCodexLaunch()).toBe(getRuntimeCodexHomePath())
@@ -174,6 +179,7 @@ describe('CodexRuntimeHomeService', () => {
         launchEnv: { CODEX_HOME: perSpawnCustomHome }
       })
     ).toBeNull()
+
     if (process.platform !== 'win32') {
       // Why: shell startup CODEX_HOME discovery is a POSIX-shell lane; Windows
       // must not invoke an ambient WSL bash while evaluating this contract.
@@ -188,10 +194,12 @@ describe('CodexRuntimeHomeService', () => {
         getRuntimeCodexHomePath()
       )
     }
+
     const previousCodexHome = process.env.CODEX_HOME
     const previousOrcaCodexHome = process.env.ORCA_CODEX_HOME
     process.env.CODEX_HOME = getRuntimeCodexHomePath()
     process.env.ORCA_CODEX_HOME = getRuntimeCodexHomePath()
+
     try {
       // Background fetchers prefer ambient CODEX_HOME when passed null, so an
       // explicit path proves nested Orca launches cannot poll the managed home.
@@ -214,6 +222,7 @@ describe('CodexRuntimeHomeService', () => {
       } else {
         process.env.CODEX_HOME = previousCodexHome
       }
+
       if (previousOrcaCodexHome === undefined) {
         delete process.env.ORCA_CODEX_HOME
       } else {
@@ -261,6 +270,7 @@ describe('CodexRuntimeHomeService', () => {
       'utf-8'
     )
     const store = createStore(createSettings({ shellStartupEnvProbeSupported: true }))
+
     try {
       const { CodexRuntimeHomeService } = await import('./runtime-home-service')
       const service = new CodexRuntimeHomeService(store as never)
@@ -288,6 +298,7 @@ describe('CodexRuntimeHomeService', () => {
       'account-1',
       createCodexAuthJson('managed@example.com', 'acct-managed', 'managed')
     )
+
     const unownedHome = join(testState.fakeHomeDir, 'unowned-codex-home')
     mkdirSync(unownedHome, { recursive: true })
     writeFileSync(join(unownedHome, '.orca-managed-home'), 'account-2\n', 'utf-8')
@@ -298,12 +309,14 @@ describe('CodexRuntimeHomeService', () => {
       'real-pane': { selectionKey: 'host', accountId: null, homeRoute: 'real-home' },
       'wsl-pane': { selectionKey: 'wsl:Ubuntu', accountId: null, homeRoute: 'wsl-home' }
     })
+
     const settings = createSettings({
       codexManagedAccounts: [
         createCodexAccountRecord('account-1', 'managed@example.com', 'acct-managed', accountHome),
         createCodexAccountRecord('account-2', 'other@example.com', 'acct-other', unownedHome)
       ]
     })
+
     const store = createStore(settings)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
@@ -323,6 +336,7 @@ describe('CodexRuntimeHomeService', () => {
   it('keeps pre-rollout shared-home panes authenticated on the real-home lane', async () => {
     const oldSystemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-system')
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
+
     const systemConfig = [
       'model_provider = "codex-lb"',
       '',
@@ -331,6 +345,7 @@ describe('CodexRuntimeHomeService', () => {
       'requires_openai_auth = true',
       ''
     ].join('\n')
+
     writeFileSync(getSystemCodexAuthPath(), oldSystemAuth, 'utf-8')
     const store = createStore(createSettings({ shellStartupEnvProbeSupported: false }))
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')

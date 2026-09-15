@@ -50,6 +50,7 @@ export function BottomDrawer({
     if (mounted || !afterClosePendingRef.current) {
       return
     }
+
     afterClosePendingRef.current = false
     onAfterCloseRef.current?.()
   }, [mounted])
@@ -58,10 +59,12 @@ export function BottomDrawer({
     if (hiddenHandledRef.current) {
       return
     }
+
     hiddenHandledRef.current = true
     afterClosePendingRef.current = true
     setMounted(false)
   }, [])
+
   const resolvedMounted = resolveBottomDrawerMounted(visible, mounted)
 
   // Why: opening drawers should mount before commit; waiting for a passive

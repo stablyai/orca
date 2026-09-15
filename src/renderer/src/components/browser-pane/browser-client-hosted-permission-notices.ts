@@ -13,6 +13,7 @@ export function useBrowserClientHostedPermissionNotices(browserPageId: string): 
       if (event.browserPageId !== browserPageId) {
         return
       }
+
       toast.message(formatPermissionNotice(event), {
         id: `browser-permission-denied:${browserPageId}:${event.permission}`
       })

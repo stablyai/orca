@@ -27,6 +27,7 @@ describe('terminal subscribe mount replay', () => {
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
     const registry = createSubscriptionRegistryDouble()
     let mounted = false
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       subscribeToPtyExit: vi.fn(() => vi.fn()),
@@ -40,6 +41,7 @@ describe('terminal subscribe mount replay', () => {
       waitForRendererTerminalSerializer: vi.fn(async (_ptyId, afterGeneration) => {
         expect(afterGeneration).toBe(3)
         mounted = true
+
         return true
       }),
       handleMobileSubscribe: vi.fn().mockResolvedValue(true),
@@ -66,6 +68,7 @@ describe('terminal subscribe mount replay', () => {
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(request, vi.fn(), {
@@ -97,6 +100,7 @@ describe('terminal subscribe mount replay', () => {
     let generation = 1
     let headlessPresent = false
     let serializeCalls = 0
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       subscribeToPtyExit: vi.fn(() => vi.fn()),
@@ -113,6 +117,7 @@ describe('terminal subscribe mount replay', () => {
       handleMobileSubscribe: vi.fn(async () => {
         headlessPresent = true
         generation = 2
+
         return true
       }),
       handleMobileUnsubscribe: vi.fn(),
@@ -121,9 +126,11 @@ describe('terminal subscribe mount replay', () => {
       readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
       serializeTerminalBuffer: vi.fn(async () => {
         serializeCalls += 1
+
         if (serializeCalls === 1) {
           return { data: 'suffix-only redraw', cols: 80, rows: 24, seq: 2 }
         }
+
         return { data: 'raced idle prompt $ ', cols: 80, rows: 24, seq: 5 }
       }),
       serializeRendererTerminalBuffer: vi.fn(async () => ({
@@ -143,6 +150,7 @@ describe('terminal subscribe mount replay', () => {
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(request, vi.fn(), {
@@ -186,9 +194,11 @@ describe('terminal subscribe mount replay', () => {
     const registry = createSubscriptionRegistryDouble()
     let mounted = false
     let signalWaitStarted!: () => void
+
     const waitStarted = new Promise<void>((resolve) => {
       signalWaitStarted = resolve
     })
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       subscribeToPtyExit: vi.fn(() => vi.fn()),
@@ -203,6 +213,7 @@ describe('terminal subscribe mount replay', () => {
         (_ptyId: string, _afterGeneration: number, timeoutMs: number | undefined) => {
           expect(timeoutMs).toBeUndefined()
           signalWaitStarted()
+
           return new Promise<boolean>((resolve) => {
             setTimeout(() => {
               mounted = true
@@ -236,6 +247,7 @@ describe('terminal subscribe mount replay', () => {
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(request, vi.fn(), {
@@ -286,10 +298,13 @@ describe('terminal subscribe mount replay', () => {
     const registry = createSubscriptionRegistryDouble()
     let generation = 0
     let headlessPresent = false
+
     const requestRendererTerminalTabMount = vi.fn(() => {
       generation = 1
+
       return true
     })
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       subscribeToPtyExit: vi.fn(() => vi.fn()),
@@ -298,6 +313,7 @@ describe('terminal subscribe mount replay', () => {
         // A redraw may reach main before the PTY wait completes, but it does
         // not contain the legacy terminal's restored history.
         headlessPresent = true
+
         return 'pty-late-leaf'
       }),
       hasHeadlessTerminalState: vi.fn(() => headlessPresent),
@@ -336,6 +352,7 @@ describe('terminal subscribe mount replay', () => {
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(request, vi.fn(), {
@@ -370,6 +387,7 @@ describe('terminal subscribe mount replay', () => {
   it('cancels the mount-ready wait when the mobile subscription closes', async () => {
     const registry = createSubscriptionRegistryDouble()
     let waitSignal: AbortSignal | undefined
+
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       subscribeToPtyExit: vi.fn(() => vi.fn()),
@@ -383,6 +401,7 @@ describe('terminal subscribe mount replay', () => {
       waitForRendererTerminalSerializer: vi.fn(
         (_ptyId: string, _afterGeneration: number, _timeoutMs: number, signal?: AbortSignal) => {
           waitSignal = signal
+
           return new Promise<boolean>((resolve) => {
             signal?.addEventListener('abort', () => resolve(false), { once: true })
           })
@@ -406,6 +425,7 @@ describe('terminal subscribe mount replay', () => {
       cleanupSubscription: vi.fn(registry.cleanupSubscription),
       waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
     } as unknown as OrcaRuntimeService
+
     const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
 
     const dispatchPromise = dispatcher.dispatchStreaming(request, vi.fn(), {

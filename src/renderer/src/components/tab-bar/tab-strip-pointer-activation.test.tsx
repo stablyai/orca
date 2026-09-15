@@ -73,6 +73,7 @@ describe('useTabStripPointerActivation', () => {
   it('ignores non-left buttons and disabled presses', () => {
     const onActivate = vi.fn()
     const dragListener = vi.fn()
+
     const { result, rerender } = renderHook(
       ({ disabled }: { disabled: boolean }) =>
         useTabStripPointerActivation({ onActivate, disabled }),

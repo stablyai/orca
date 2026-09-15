@@ -16,6 +16,7 @@ import {
 } from '@/lib/floating-workspace-guest-bridge'
 
 import { useAppStore } from '../../store'
+
 function getWorktreeRuntimeEnvironmentId(worktreeId: string | null | undefined): string | null {
   return getRuntimeEnvironmentIdForWorktree(useAppStore.getState(), worktreeId)
 }
@@ -24,24 +25,32 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onNewTerminalTab(() => {
       const store = useAppStore.getState()
+
       if (isFloatingWorkspacePanelFocused()) {
         void createFloatingWorkspaceTerminalTab(store)
+
         return
       }
+
       const worktreeId = store.activeWorktreeId
+
       if (!worktreeId) {
         return
       }
+
       void (async () => {
         const environmentId = getWorktreeRuntimeEnvironmentId(worktreeId)
+
         const outcome = await createWebRuntimeSessionTerminal({
           worktreeId,
           environmentId,
           activate: true
         })
+
         if (outcome.status === 'created' || isWebRuntimeSessionActive(environmentId)) {
           return
         }
+
         const newTab = store.createTab(worktreeId)
         store.setActiveTabType('terminal')
         // Why: mirror Terminal.tsx handleNewTab so a new tab appends at the end, not index 0, when tabBarOrder is unset.
@@ -56,12 +65,14 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
         const validIds = new Set([...termIds, ...editorIds, ...browserIds])
         const base = (stored ?? []).filter((id) => validIds.has(id))
         const inBase = new Set(base)
+
         for (const id of [...termIds, ...editorIds, ...browserIds]) {
           if (!inBase.has(id)) {
             base.push(id)
             inBase.add(id)
           }
         }
+
         const order = base.filter((id) => id !== newTab.id)
         order.push(newTab.id)
         freshStore.setTabBarOrder(worktreeId, order)
@@ -90,9 +101,11 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
         useAppStore.getState(),
         sourceId
       )
+
       if (!workspaceId) {
         return
       }
+
       dispatchFloatingWorkspaceGuestClose({ sourceId: workspaceId })
     })
   )

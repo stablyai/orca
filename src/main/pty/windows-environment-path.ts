@@ -11,6 +11,7 @@ import { readWindowsPathRegistry } from './windows-path-registry-reader'
 export { resolvePathEnvKey } from './windows-path-segment-merge'
 
 type ExecFile = typeof execFile
+
 type ExecFileSync = typeof execFileSync
 
 type ReadWindowsPathOptions = {
@@ -27,7 +28,9 @@ const WINDOWS_PATH_REGISTRY_KEYS = [
 ] as const
 
 const PERSISTED_WINDOWS_PATH_CACHE_TTL_MS = 30_000
+
 const PERSISTED_WINDOWS_PATH_QUERY_TIMEOUT_MS = 5_000
+
 const windowsPathRegistryFallback = new WindowsPathRegistryFallback(
   WINDOWS_PATH_REGISTRY_KEYS.length
 )
@@ -38,19 +41,26 @@ let persistedWindowsPathCache:
       segments: string[]
     }
   | undefined
+
 let pendingPersistedWindowsPathRefresh: Promise<string[]> | undefined
+
 let persistedWindowsPathCacheGeneration = 0
+
 let persistedWindowsPathReadSequence = 0
+
 let persistedWindowsPathCommittedSequence = 0
 
 function parseRegistryPathValue(output: string, valueName: string): string | null {
   const valuePattern = new RegExp(`^\\s*${valueName}\\s+REG_\\w+\\s+(.*)$`, 'i')
+
   for (const line of output.split(/\r?\n/)) {
     const match = valuePattern.exec(line)
+
     if (match) {
       return match[1]?.trim() ?? ''
     }
   }
+
   return null
 }
 
@@ -72,6 +82,7 @@ function registryOutputSegments(
   pathDelimiter: string
 ): string[] {
   const value = parseRegistryPathValue(output, valueName)
+
   return value
     ? splitPathSegments(expandWindowsEnvironmentVariables(value, env), pathDelimiter)
     : []
@@ -95,14 +106,19 @@ function cachePersistedWindowsPathReads(reads: RegistryPathRead[], readSequence:
     // Why: a slower async read must not replace a newer synchronous refresh.
     return persistedWindowsPathCache ? [...persistedWindowsPathCache.segments] : []
   }
+
   persistedWindowsPathCommittedSequence = readSequence
   const segments = windowsPathRegistryFallback.commitReads(reads)
+
   if (!segments) {
     // Why: unresolved hives preserve ordering, but still need negative caching on the PTY hot path.
     persistedWindowsPathCache = { readAt: Date.now(), segments: [] }
+
     return []
   }
+
   persistedWindowsPathCache = { readAt: Date.now(), segments: [...segments] }
+
   return [...segments]
 }
 
@@ -114,6 +130,7 @@ function readRegistryPathAsync(
   pathDelimiter: string
 ): Promise<RegistryPathRead> {
   const [key, valueName] = registryValue
+
   return new Promise((resolve) => {
     run(
       executable,
@@ -122,8 +139,10 @@ function readRegistryPathAsync(
       (error, stdout) => {
         if (error) {
           resolve({ failed: true, segments: [] })
+
           return
         }
+
         resolve({
           failed: false,
           segments: registryOutputSegments(String(stdout), valueName, env, pathDelimiter)
@@ -135,6 +154,7 @@ function readRegistryPathAsync(
 
 export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions = {}): string[] {
   const platform = options.platform ?? process.platform
+
   if (platform !== 'win32') {
     return []
   }
@@ -144,7 +164,9 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
     options.execFileSync === undefined &&
     options.env === undefined &&
     options.platform === undefined
+
   const now = Date.now()
+
   if (
     !options.forceRefresh &&
     useProductionCache &&
@@ -163,6 +185,7 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
   const env = options.env ?? process.env
   const pathDelimiter = getPathDelimiter(platform)
   const readSequence = useProductionCache ? ++persistedWindowsPathReadSequence : 0
+
   const reads = options.execFileSync
     ? WINDOWS_PATH_REGISTRY_KEYS.map(([key, valueName]) => {
         try {
@@ -175,6 +198,7 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
               windowsHide: true
             }
           )
+
           return {
             failed: false,
             segments: registryOutputSegments(output, valueName, env, pathDelimiter)
@@ -184,7 +208,9 @@ export function readPersistedWindowsPathSegments(options: ReadWindowsPathOptions
         }
       })
     : readNativeRegistryPaths(env, pathDelimiter)
+
   const segments = reads.flatMap((read) => read.segments)
+
   if (!useProductionCache) {
     return segments
   }
@@ -199,6 +225,7 @@ export async function readPersistedWindowsPathSegmentsAsync(
   options: ReadWindowsPathOptions = {}
 ): Promise<string[]> {
   const platform = options.platform ?? process.platform
+
   if (platform !== 'win32') {
     return []
   }
@@ -208,7 +235,9 @@ export async function readPersistedWindowsPathSegmentsAsync(
     options.execFileSync === undefined &&
     options.env === undefined &&
     options.platform === undefined
+
   const now = Date.now()
+
   if (
     !options.forceRefresh &&
     useProductionCache &&
@@ -217,6 +246,7 @@ export async function readPersistedWindowsPathSegmentsAsync(
   ) {
     return [...persistedWindowsPathCache.segments]
   }
+
   if (useProductionCache && pendingPersistedWindowsPathRefresh) {
     return [...(await pendingPersistedWindowsPathRefresh)]
   }
@@ -225,6 +255,7 @@ export async function readPersistedWindowsPathSegmentsAsync(
   const pathDelimiter = getPathDelimiter(platform)
   const cacheGeneration = persistedWindowsPathCacheGeneration
   const readSequence = useProductionCache ? ++persistedWindowsPathReadSequence : 0
+
   const refresh = (
     options.execFile
       ? Promise.all(
@@ -241,20 +272,25 @@ export async function readPersistedWindowsPathSegmentsAsync(
       : Promise.resolve(readNativeRegistryPaths(env, pathDelimiter))
   ).then((reads) => {
     const segments = reads.flatMap((read) => read.segments)
+
     if (!useProductionCache) {
       return segments
     }
+
     if (cacheGeneration !== persistedWindowsPathCacheGeneration) {
       // Why: callers must not merge or inspect a snapshot invalidated while its queries ran.
       return readPersistedWindowsPathSegmentsAsync()
     }
+
     return cachePersistedWindowsPathReads(reads, readSequence)
   })
 
   if (!useProductionCache) {
     return refresh
   }
+
   pendingPersistedWindowsPathRefresh = refresh
+
   try {
     return [...(await refresh)]
   } finally {
@@ -282,6 +318,7 @@ export function mergePersistedWindowsPath(
   options: ReadWindowsPathOptions = {}
 ): void {
   const platform = options.platform ?? process.platform
+
   if (platform !== 'win32') {
     return
   }
@@ -296,9 +333,11 @@ export async function mergePersistedWindowsPathAsync(
   options: ReadWindowsPathOptions = {}
 ): Promise<void> {
   const platform = options.platform ?? process.platform
+
   if (platform !== 'win32') {
     return
   }
+
   const sourceEnv = options.env ?? process.env
   const persistedSegments = await readPersistedWindowsPathSegmentsAsync(options)
   mergeWindowsPathSegments(env, persistedSegments, platform, sourceEnv)

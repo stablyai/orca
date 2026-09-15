@@ -24,6 +24,7 @@ export function reportTerminalDropUploadSkipsAndFailures(
           )
     )
   }
+
   if (failed.length > 0) {
     const noun = failed.length === 1 ? 'file' : 'files'
     toast.error(

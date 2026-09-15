@@ -27,7 +27,9 @@ function message(buffer: Buffer): RpcMessage | null {
   if (buffer[0] !== MessageType.Regular) {
     return null
   }
+
   const length = buffer.readUInt32BE(9)
+
   return JSON.parse(buffer.subarray(13, 13 + length).toString('utf8'))
 }
 
@@ -75,6 +77,7 @@ class SaturatedSink {
     writableHighWaterMark: () => 8 * 1024 * 1024,
     waitWriteDrain: (callback) => {
       this.drainWaiters.add(callback)
+
       return () => this.drainWaiters.delete(callback)
     }
   }
@@ -83,15 +86,19 @@ class SaturatedSink {
     this.writes.push(Buffer.from(data))
     this.writableBytes += data.length
     onSettled({ ok: true })
+
     if (!this.saturateNext) {
       return true
     }
+
     this.saturateNext = false
+
     return false
   }
 
   drain(): void {
     this.writableBytes = 0
+
     for (const callback of Array.from(this.drainWaiters)) {
       callback()
     }
@@ -140,6 +147,7 @@ describe('relay PTY publication admission', () => {
       (data, onSettled) => {
         writes.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -161,6 +169,7 @@ describe('relay PTY publication admission', () => {
       (data, onSettled) => {
         writes.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },
@@ -200,6 +209,7 @@ describe('relay PTY publication admission', () => {
       (data, onSettled) => {
         writes.push(Buffer.from(data))
         onSettled({ ok: true })
+
         return true
       },
       { supportsWriteCallback: true },

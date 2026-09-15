@@ -14,6 +14,7 @@ function HoverControlProbe({
 }): null {
   const control = useWorktreeCardDetailsHoverControl()
   onChange(control)
+
   return null
 }
 

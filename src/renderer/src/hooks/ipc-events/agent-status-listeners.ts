@@ -27,16 +27,19 @@ export function registerAgentStatusListeners(args: {
     transientClearWatermarkByConnectionId,
     liveAgentStatusBurstQueue
   } = args
+
   unsubs.push(
     window.api.agentStatus.onSet((data) => {
       enqueueLiveAgentStatus(data)
     })
   )
+
   const unsubscribeAgentStatusClear = window.api.agentStatus.onClear?.(
     (data: AgentStatusClearIpcPayload) => {
       if (typeof data !== 'object' || data === null) {
         return
       }
+
       if ('transient' in data && data.transient === true) {
         if (
           typeof data.connectionId !== 'string' ||
@@ -45,11 +48,14 @@ export function registerAgentStatusListeners(args: {
         ) {
           return
         }
+
         const previousWatermark = transientClearWatermarkByConnectionId.get(data.connectionId) ?? -1
         const effectiveWatermark = Math.max(previousWatermark, data.clearedAt)
         transientClearWatermarkByConnectionId.set(data.connectionId, effectiveWatermark)
+
         for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
           const pending = pendingAgentStatusEvents[index].data
+
           if (
             pending.connectionId === data.connectionId &&
             pending.receivedAt <= effectiveWatermark
@@ -57,8 +63,10 @@ export function registerAgentStatusListeners(args: {
             pendingAgentStatusEvents.splice(index, 1)
           }
         }
+
         for (let index = liveAgentStatusBurstQueue.length - 1; index >= 0; index -= 1) {
           const queued = liveAgentStatusBurstQueue[index]
+
           if (
             queued.connectionId === data.connectionId &&
             queued.receivedAt <= effectiveWatermark
@@ -66,56 +74,73 @@ export function registerAgentStatusListeners(args: {
             liveAgentStatusBurstQueue.splice(index, 1)
           }
         }
+
         useAppStore.getState().clearTransientAgentStatuses(data.connectionId, effectiveWatermark)
+
         return
       }
+
       if (!('paneKey' in data) || typeof data.paneKey !== 'string') {
         return
       }
+
       // Why: preserve set→clear FIFO so a queued completion still survives pane teardown.
       if (liveAgentStatusBurstQueue.some((queued) => queued.paneKey === data.paneKey)) {
         drainQueuedLiveAgentStatusesForPane(data.paneKey)
       }
+
       for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
         if (pendingAgentStatusEvents[index].data.paneKey === data.paneKey) {
           pendingAgentStatusEvents.splice(index, 1)
         }
       }
+
       const store = useAppStore.getState()
+
       if (store.agentStatusByPaneKey[data.paneKey]?.state === 'done') {
         return
       }
+
       store.removeAgentStatus(data.paneKey)
     }
   )
+
   if (unsubscribeAgentStatusClear) {
     unsubs.push(unsubscribeAgentStatusClear)
   }
+
   const unsubscribeMigrationUnsupported = window.api.agentStatus.onMigrationUnsupported?.(
     (entry) => {
       const store = useAppStore.getState()
+
       if (!store.workspaceSessionReady) {
         return
       }
+
       if (entry.paneKey && resolvePaneKey(store, entry.paneKey).exists) {
         store.setMigrationUnsupportedPty(entry)
       }
     }
   )
+
   if (unsubscribeMigrationUnsupported) {
     unsubs.push(unsubscribeMigrationUnsupported)
   }
+
   const unsubscribeMigrationUnsupportedClear = window.api.agentStatus.onMigrationUnsupportedClear?.(
     ({ ptyId }) => {
       useAppStore.getState().clearMigrationUnsupportedPty(ptyId)
     }
   )
+
   if (unsubscribeMigrationUnsupportedClear) {
     unsubs.push(unsubscribeMigrationUnsupportedClear)
   }
+
   const unsubscribeLegacyWorkerTerminalRecovery =
     window.api.agentStatus.onLegacyWorkerTerminalRecovery?.((event) => {
       const action = resolveLegacyWorkerTerminalRecoveryAction(event)
+
       if (action.kind === 'rollback-surface') {
         window.dispatchEvent(new CustomEvent(CLOSE_TERMINAL_PANE_EVENT, { detail: action.detail }))
         rollbackLegacyWorkerTerminalSurfaceInStore(useAppStore.getState(), action.detail)
@@ -123,6 +148,7 @@ export function registerAgentStatusListeners(args: {
         useAppStore.getState().clearSleepingAgentSession(action.paneKey)
       }
     })
+
   if (unsubscribeLegacyWorkerTerminalRecovery) {
     unsubs.push(unsubscribeLegacyWorkerTerminalRecovery)
   }

@@ -19,6 +19,7 @@ export function WorktreeReviewLinkField({
   value
 }: WorktreeReviewLinkFieldProps): React.JSX.Element {
   const isGitLab = provider === 'gitlab'
+
   return (
     <div className="space-y-1">
       <label className="text-[11px] font-medium text-muted-foreground">

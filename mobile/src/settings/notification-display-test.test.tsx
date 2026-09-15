@@ -7,20 +7,25 @@ const mocks = vi.hoisted(() => ({
   loadHosts: vi.fn(),
   clients: [] as { state: string; client: { sendRequest: ReturnType<typeof vi.fn> } }[]
 }))
+
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   Text: 'Text',
   View: 'View',
   StyleSheet: { create: (value: unknown) => value, absoluteFillObject: {} }
 }))
+
 vi.mock('../transport/host-store', () => ({ loadHostCatalog: mocks.loadHosts }))
+
 vi.mock('../transport/use-all-host-clients', () => ({ useAllHostClients: () => mocks.clients }))
 
 let renderer: ReactTestRenderer
+
 beforeEach(() => {
   mocks.loadHosts.mockReset().mockResolvedValue([{ id: 'first' }, { id: 'second' }])
   mocks.clients = []
 })
+
 afterEach(() => act(() => renderer?.unmount()))
 
 async function send() {
@@ -81,6 +86,7 @@ it.each([false, true])('explains missing pairing or connection (paired=%s)', asy
   if (!paired) {
     mocks.loadHosts.mockResolvedValue([])
   }
+
   await send()
   expect(JSON.stringify(renderer.toJSON())).toContain(
     paired ? 'Connect a desktop' : 'Pair a desktop'

@@ -36,9 +36,11 @@ async function renderPopover(args: {
 // 'input' event the way React's synthetic onChange listens for it.
 function typeInDraft(container: HTMLElement, value: string): void {
   const textarea = container.querySelector('textarea')
+
   if (!textarea) {
     throw new Error('textarea not found')
   }
+
   const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set
   setter?.call(textarea, value)
   textarea.dispatchEvent(new Event('input', { bubbles: true }))

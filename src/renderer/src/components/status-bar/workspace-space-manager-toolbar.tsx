@@ -30,6 +30,7 @@ export function WorkspaceSpaceManagerToolbar({
     toggleVisibleSelection,
     visibleDeletableIds
   } = model
+
   return (
     <>
       {hasRows ? (

@@ -8,11 +8,17 @@ import {
 } from './terminal-pane-tab-detach'
 
 const WORKTREE_ID = 'repo-1::/worktree'
+
 const SOURCE_TAB_ID = 'tab-source'
+
 const TARGET_GROUP_ID = 'group-target'
+
 const EXISTING_TAB_1 = 'tab-existing-1'
+
 const EXISTING_TAB_2 = 'tab-existing-2'
+
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
 
 function rect(args: { left: number; top: number; width: number; height: number }): DOMRect {
@@ -85,12 +91,15 @@ function createStore(
   const store = {
     createTab: vi.fn((_worktreeId, _targetGroupId, _shellOverride, options) => {
       const tab = createTerminalTab('tab-detached', options?.initialPtyId ?? null)
+
       const group = store.groupsByWorktree[WORKTREE_ID]?.find(
         (candidate) => candidate.id === TARGET_GROUP_ID
       )
+
       if (group && !group.tabOrder.includes(tab.id)) {
         group.tabOrder = [...group.tabOrder, tab.id]
       }
+
       return tab
     }),
     groupsByWorktree: {
@@ -108,6 +117,7 @@ function createStore(
       const group = store.groupsByWorktree[WORKTREE_ID]?.find(
         (candidate) => candidate.id === groupId
       )
+
       if (group) {
         group.tabOrder = tabIds
       }
@@ -129,6 +139,7 @@ function createStore(
       [SOURCE_TAB_ID]: layout
     }
   }
+
   return store as unknown as TerminalPaneTabDetachStore
 }
 
@@ -136,11 +147,13 @@ type SourcePaneCwd = NonNullable<Parameters<typeof detachTerminalPaneToTab>[0]['
 
 function expectDeferredSplitDetachRejected(sourcePaneCwd: SourcePaneCwd): void {
   const store = createStore(unboundSplitLayout())
+
   const manager = {
     getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
     getLeafId: vi.fn(() => LEAF_2),
     detachPaneForExternalMove: vi.fn(() => true)
   }
+
   const persistLayoutSnapshot = vi.fn()
 
   const result = detachTerminalPaneToTab({
@@ -171,11 +184,13 @@ describe('resolveTerminalTabStripDropTarget', () => {
 
   it('finds a same-worktree tab strip under overlay elements', () => {
     const stripRect = rect({ left: 0, top: 0, width: 300, height: 32 })
+
     const strip = {
       dataset: { tabGroupStripId: TARGET_GROUP_ID, worktreeId: WORKTREE_ID },
       getBoundingClientRect: () => stripRect,
       querySelectorAll: () => []
     }
+
     const overlay = { closest: () => null }
     const child = { closest: () => strip }
     vi.stubGlobal('document', {
@@ -204,19 +219,23 @@ describe('resolveTerminalTabStripDropTarget', () => {
     const stripRect = rect({ left: 0, top: 0, width: 300, height: 32 })
     const firstTabRect = rect({ left: 0, top: 0, width: 80, height: 32 })
     const secondTabRect = rect({ left: 80, top: 0, width: 80, height: 32 })
+
     const firstTab = {
       dataset: { tabId: EXISTING_TAB_1 },
       getBoundingClientRect: () => firstTabRect
     }
+
     const secondTab = {
       dataset: { tabId: EXISTING_TAB_2 },
       getBoundingClientRect: () => secondTabRect
     }
+
     const strip = {
       dataset: { tabGroupStripId: TARGET_GROUP_ID, worktreeId: WORKTREE_ID },
       getBoundingClientRect: () => stripRect,
       querySelectorAll: () => [firstTab, secondTab]
     }
+
     vi.stubGlobal('document', {
       elementsFromPoint: vi.fn(() => [{ closest: () => firstTab }, { closest: () => strip }]),
       elementFromPoint: vi.fn()
@@ -252,6 +271,7 @@ describe('resolveTerminalTabStripDropTarget', () => {
       getBoundingClientRect: () =>
         ({ left: 0, top: 0, right: 300, bottom: 32, width: 300, height: 32 }) as DOMRect
     }
+
     vi.stubGlobal('document', {
       elementsFromPoint: vi.fn(() => [{ closest: () => strip }]),
       elementFromPoint: vi.fn()
@@ -273,11 +293,13 @@ describe('resolveTerminalTabStripDropTarget', () => {
 describe('detachTerminalPaneToTab', () => {
   it('creates a new terminal tab with the detached leaf layout and PTY id', () => {
     const store = createStore()
+
     const manager = {
       getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
       getLeafId: vi.fn((paneId: number) => (paneId === 2 ? LEAF_2 : LEAF_1)),
       detachPaneForExternalMove: vi.fn(() => true)
     }
+
     const persistLayoutSnapshot = vi.fn()
 
     const result = detachTerminalPaneToTab({
@@ -338,6 +360,7 @@ describe('detachTerminalPaneToTab', () => {
     'preserves the moved PTY shell override when the source uses %s',
     (shellOverride) => {
       const store = createStore(splitLayout(), [EXISTING_TAB_1], shellOverride)
+
       const manager = {
         getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
         getLeafId: vi.fn(() => LEAF_1),
@@ -365,6 +388,7 @@ describe('detachTerminalPaneToTab', () => {
 
   it('syncs PTY ownership when the primary source pane is detached', () => {
     const store = createStore()
+
     const manager = {
       getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
       getLeafId: vi.fn((paneId: number) => (paneId === 1 ? LEAF_1 : LEAF_2)),
@@ -408,6 +432,7 @@ describe('detachTerminalPaneToTab', () => {
 
   it('moves the detached tab into the requested group slot', () => {
     const store = createStore(splitLayout(), [EXISTING_TAB_1, EXISTING_TAB_2])
+
     const manager = {
       getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
       getLeafId: vi.fn((paneId: number) => (paneId === 2 ? LEAF_2 : LEAF_1)),
@@ -443,6 +468,7 @@ describe('detachTerminalPaneToTab', () => {
       activeLeafId: LEAF_2,
       expandedLeafId: null
     })
+
     const manager = {
       getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
       getLeafId: vi.fn(() => LEAF_2),
@@ -499,6 +525,7 @@ describe('detachTerminalPaneToTab', () => {
 
   it('carries resolved cwd when detaching an unbound non-deferred pane', () => {
     const store = createStore(unboundSplitLayout())
+
     const manager = {
       getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
       getLeafId: vi.fn(() => LEAF_2),

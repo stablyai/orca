@@ -5,18 +5,23 @@ import {
 } from './mobile-network-interface-selection'
 
 const LAN: MobileNetworkInterface = { name: 'en0', address: '192.168.1.24' }
+
 const TAILNET: MobileNetworkInterface = { name: 'tailscale0', address: '100.64.1.20' }
+
 const BRIDGE: MobileNetworkInterface = { name: 'docker0', address: '172.17.0.1' }
+
 const DEFAULT_SWITCH: MobileNetworkInterface = {
   name: 'vEthernet (Default Switch)',
   address: '172.28.80.1',
   hasDefaultRoute: true
 }
+
 const WSL_SWITCH: MobileNetworkInterface = {
   name: 'vEthernet (WSL (Hyper-V firewall))',
   address: '172.20.96.1',
   hasDefaultRoute: true
 }
+
 const EXTERNAL_SWITCH: MobileNetworkInterface = {
   name: 'vEthernet (Lab)',
   address: '192.168.1.30',

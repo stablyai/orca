@@ -12,7 +12,9 @@ describe('sliceCheckLogTail', () => {
       const lines = Array.from({ length: 500 }, (_, index) =>
         index % spacing === 0 ? `error: failure ${index}` : `line ${index}`
       )
+
       const selected = new Set<number>()
+
       for (let error = 0; error < 400; error += spacing) {
         for (let offset = -2; offset <= 2; offset++) {
           if (error + offset >= 0 && error + offset < 400) {
@@ -20,6 +22,7 @@ describe('sliceCheckLogTail', () => {
           }
         }
       }
+
       const context = [...selected].sort((a, b) => a - b).slice(-30)
       expect(sliceCheckLogTail(lines.join('\n'))).toBe(
         [
@@ -64,10 +67,12 @@ describe('sliceCheckLogTail', () => {
   it('keeps earlier error context when the recent tail is larger than the byte cap', () => {
     const noisyPrefix = Array.from({ length: 120 }, (_, index) => `Installing package ${index}`)
     const failure = 'AssertionError: expected visible failure'
+
     const hugeRecentTail = Array.from(
       { length: 100 },
       (_, index) => `recent line ${index} ${'x'.repeat(300)}`
     )
+
     const sliced = sliceCheckLogTail([...noisyPrefix, failure, ...hugeRecentTail].join('\n'))
 
     expect(sliced).toContain(failure)

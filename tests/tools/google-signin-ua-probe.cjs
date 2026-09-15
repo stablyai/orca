@@ -1,7 +1,10 @@
 // Run with `node_modules/.bin/electron tests/tools/google-signin-ua-probe.cjs --mode=cleaned`.
 const { app, BrowserWindow, session } = require('electron')
+
 const { mkdtempSync } = require('node:fs')
+
 const { tmpdir } = require('node:os')
+
 const { join } = require('node:path')
 
 const MODES = new Set([
@@ -19,18 +22,23 @@ const MODES = new Set([
   // request already carrying the Firefox auth UA, regardless of destination host.
   'app-fixed'
 ])
+
 const mode = process.argv.find((arg) => arg.startsWith('--mode='))?.slice('--mode='.length)
+
 if (!mode || !MODES.has(mode)) {
   throw new Error(`Expected --mode=${[...MODES].join('|')}`)
 }
 
 const headless = process.argv.includes('--headless')
+
 const exitAfterMs = Number(
   process.argv.find((arg) => arg.startsWith('--exit-after-ms='))?.slice('--exit-after-ms='.length)
 )
 
 const profileRoot = mkdtempSync(join(tmpdir(), `orca-google-signin-${mode}-`))
+
 const partition = `persist:google-signin-${mode}`
+
 app.setPath('userData', profileRoot)
 
 function log(event, details = {}) {
@@ -50,12 +58,14 @@ function firefoxUserAgent() {
       : process.platform === 'win32'
         ? 'Windows NT 10.0; Win64; x64'
         : 'X11; Linux x86_64'
+
   return `Mozilla/5.0 (${platform}; rv:140.0) Gecko/20100101 Firefox/140.0`
 }
 
 function isGoogleAuthUrl(rawUrl) {
   try {
     const hostname = new URL(rawUrl).hostname.toLowerCase()
+
     return hostname === 'accounts.google.com' || hostname === 'accounts.youtube.com'
   } catch {
     return false
@@ -65,6 +75,7 @@ function isGoogleAuthUrl(rawUrl) {
 function safeUrl(rawUrl) {
   try {
     const url = new URL(rawUrl)
+
     return `${url.origin}${url.pathname}`
   } catch {
     return '<invalid>'
@@ -85,13 +96,17 @@ function detectUaHintMismatch(headers) {
   const ua = headers['user-agent'] || ''
   const isFirefox = /Firefox\/\d/.test(ua) && !/Chrome\//.test(ua)
   const hasHints = Object.keys(headers).some((key) => key.startsWith('sec-ch-ua'))
+
   if (isFirefox && hasHints) {
     return 'firefox-ua-with-chrome-hints'
   }
+
   const isChrome = /Chrome\/\d/.test(ua)
+
   if (isChrome && !hasHints) {
     return 'chrome-ua-without-hints'
   }
+
   return null
 }
 
@@ -110,9 +125,11 @@ function removeClientHints(headers) {
 
 function applyChromeClientHints(headers, userAgent) {
   const fullVersion = userAgent.match(/Chrome\/([\d.]+)/)?.[1]
+
   if (!fullVersion) {
     return
   }
+
   const majorVersion = fullVersion.split('.')[0]
   setHeader(
     headers,
@@ -130,36 +147,45 @@ function identityForUrl(rawUrl, identities) {
   if (mode === 'electron-fixed') {
     return identities.native
   }
+
   if (mode === 'firefox-fixed') {
     return identities.firefox
   }
+
   if (isGoogleAuthUrl(rawUrl) && mode === 'electron-auth') {
     return identities.native
   }
+
   if (isGoogleAuthUrl(rawUrl) && mode === 'firefox-auth') {
     return identities.firefox
   }
+
   return identities.cleaned
 }
 
 function relevantHeaders(headers) {
   const result = {}
+
   for (const [key, value] of Object.entries(headers)) {
     const lower = key.toLowerCase()
+
     if (lower === 'user-agent' || lower.startsWith('sec-ch-ua')) {
       result[lower] = value
     }
   }
+
   return result
 }
 
 app.whenReady().then(async () => {
   const browserSession = session.fromPartition(partition)
   await browserSession.clearStorageData()
+
   const identities = {
     native: browserSession.getUserAgent(),
     firefox: firefoxUserAgent()
   }
+
   identities.cleaned = cleanElectronUserAgent(identities.native)
   browserSession.setUserAgent(identityForUrl('about:blank', identities))
 
@@ -178,6 +204,7 @@ app.whenReady().then(async () => {
         removeClientHints(headers)
       } else {
         const currentUa = incoming['user-agent']
+
         // STA-3811 fix: a request already carrying the Firefox auth UA came from
         // the auth document; real Firefox sends no client hints, so strip them
         // instead of rewriting to Chrome — keeping UA and hints one story.
@@ -185,6 +212,7 @@ app.whenReady().then(async () => {
           removeClientHints(headers)
         }
       }
+
       const outgoing = relevantHeaders(headers)
       const uaMismatch = detectUaHintMismatch(outgoing)
       log('request', {
@@ -197,22 +225,26 @@ app.whenReady().then(async () => {
         uaHintMismatch: uaMismatch
       })
       callback({ requestHeaders: headers })
+
       return
     }
 
     const identity = identityForUrl(details.url, identities)
     setHeader(headers, 'user-agent', identity)
+
     if (identity === identities.firefox) {
       removeClientHints(headers)
     } else if (identity === identities.cleaned) {
       applyChromeClientHints(headers, identity)
     }
+
     if (details.resourceType === 'mainFrame') {
       log('main-frame-request', {
         url: safeUrl(details.url),
         headers: relevantHeaders(headers)
       })
     }
+
     callback({ requestHeaders: headers })
   })
 
@@ -240,11 +272,13 @@ app.whenReady().then(async () => {
     if (!isMainFrame) {
       return
     }
+
     if (isAppMode) {
       // Mirror applyGoogleAuthUserAgent: Firefox UA on auth navs, restore the
       // cleaned session UA otherwise. This WebContents UA is what leaks onto
       // cross-host subresource requests while the auth document is on screen.
       const current = window.webContents.getUserAgent()
+
       if (isGoogleAuthUrl(url)) {
         if (current !== identities.firefox) {
           window.webContents.setUserAgent(identities.firefox)
@@ -252,16 +286,21 @@ app.whenReady().then(async () => {
       } else if (current === identities.firefox) {
         window.webContents.setUserAgent(identities.cleaned)
       }
+
       log('main-frame-navigation', {
         url: safeUrl(url),
         appliedUserAgent: window.webContents.getUserAgent()
       })
+
       return
     }
+
     const identity = identityForUrl(url, identities)
+
     if (window.webContents.getUserAgent() !== identity) {
       window.webContents.setUserAgent(identity)
     }
+
     log('main-frame-navigation', { url: safeUrl(url), appliedUserAgent: identity })
   })
   window.webContents.on('did-finish-load', async () => {
@@ -274,6 +313,7 @@ app.whenReady().then(async () => {
           platform: navigator.userAgentData.platform
         } : null
       })`)
+
       log('document-identity', { url: safeUrl(window.webContents.getURL()), ...identity })
     } catch (error) {
       log('document-identity-error', { error: String(error) })

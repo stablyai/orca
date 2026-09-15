@@ -23,6 +23,7 @@ import type { ReactDevtoolsCommitHook } from './react-devtools-commit-hook-shim'
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const recordBreadcrumb = vi.fn()
+
 vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: (name: string, data?: unknown) => recordBreadcrumb(name, data)
 }))
@@ -60,10 +61,12 @@ function RunawayLayoutEffectPane(): React.JSX.Element {
       useCascadeStore.getState().bump()
     }
   })
+
   return <div>{ticks}</div>
 }
 
 let host: HTMLDivElement
+
 let root: Root
 
 const commitHook = (globalThis as { __REACT_DEVTOOLS_GLOBAL_HOOK__?: ReactDevtoolsCommitHook })
@@ -74,12 +77,14 @@ beforeEach(() => {
   resetReactCommitCascadeTelemetryForTests()
   resetReactCommitCascadeObserverForTests()
   useCascadeStore.setState({ ticks: 0 })
+
   // Why cleared rather than deleting the global: react-dom captured this hook
   // OBJECT at its own module evaluation, so a replacement object would never be
   // called — and reinstalling over the last test's wrapper double-counts commits.
   if (commitHook) {
     commitHook.onCommitFiberRoot = undefined
   }
+
   installReactCommitCascadeObserver()
   host = document.createElement('div')
   document.body.appendChild(host)
@@ -102,6 +107,7 @@ describe('react commit cascade observer', () => {
     const cascadeCalls = recordBreadcrumb.mock.calls.filter(
       ([name]) => name === REACT_COMMIT_CASCADE_BREADCRUMB
     )
+
     expect(cascadeCalls).toHaveLength(1)
 
     const payload = (cascadeCalls[0]?.[1] ?? {}) as Record<string, unknown>
@@ -120,16 +126,20 @@ describe('react commit cascade observer', () => {
   it('counts exactly one commit per hook invocation', () => {
     let cascadingInvocations = 0
     const observed = commitHook?.onCommitFiberRoot
+
     if (commitHook) {
       // The mount commit holds no cascading lanes, so only these are countable.
       commitHook.onCommitFiberRoot = (rendererId, fiberRoot, priorityLevel, didError) => {
         const lanes = (fiberRoot as { pendingLanes?: number } | null)?.pendingLanes ?? 0
+
         if ((lanes & REACT_CASCADING_LANES) !== 0) {
           cascadingInvocations += 1
         }
+
         observed?.call(commitHook, rendererId, fiberRoot, priorityLevel, didError)
       }
     }
+
     let invocationsAtReport: number | undefined
     recordBreadcrumb.mockImplementation((name: string) => {
       if (name === REACT_COMMIT_CASCADE_BREADCRUMB && invocationsAtReport === undefined) {
@@ -154,6 +164,7 @@ describe('react commit cascade observer', () => {
     const payload = recordBreadcrumb.mock.calls.find(
       ([name]) => name === REACT_COMMIT_CASCADE_BREADCRUMB
     )?.[1]
+
     expect(JSON.stringify(payload).length).toBeLessThan(MAX_CASCADE_CRUMB_BYTES)
   })
 

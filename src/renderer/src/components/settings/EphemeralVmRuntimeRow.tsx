@@ -29,6 +29,7 @@ export function EphemeralVmRuntimeRow({
   onCopyCleanupCommand
 }: EphemeralVmRuntimeRowProps): React.JSX.Element {
   const hasError = cleanupFailed || runtime.status === 'failed'
+
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <div

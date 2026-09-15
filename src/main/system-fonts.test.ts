@@ -32,15 +32,18 @@ function expectedFallbackFont(platform = process.platform): string {
   if (platform === 'darwin') {
     return 'SF Mono'
   }
+
   if (platform === 'win32') {
     return 'Cascadia Mono'
   }
+
   return 'JetBrains Mono'
 }
 
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const originalPlatform = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   try {
     return await fn()
   } finally {

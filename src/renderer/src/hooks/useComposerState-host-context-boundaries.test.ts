@@ -46,6 +46,7 @@ const COMPOSER_SOURCE = {
   quickStartup: readComposerModule('quick-startup-plan.ts'),
   workspaceIdentity: readComposerModule('workspace-identity-state.ts')
 } as const
+
 const RECIPE_OPTIONS_SOURCE = readFileSync(
   join(__dirname, 'useEphemeralVmRecipeOptions.ts'),
   'utf8'
@@ -56,6 +57,7 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf(endPattern, start + startPattern.length)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 
@@ -277,6 +279,7 @@ describe('useComposerState host-context boundaries', () => {
       'const detect = isRemote',
       '// Per-repo: load yaml hooks'
     )
+
     expect(detectSection).toContain('ensureRemoteDetectedAgents(connectionId!)')
     expect(detectSection).toContain('ensureRuntimeDetectedAgents(runtimeEnvironmentId)')
     expect(detectSection).toContain('ensureDetectedAgents()')
@@ -348,11 +351,13 @@ describe('useComposerState host-context boundaries', () => {
     expect(submitLookup).toContain("kind: 'metadata-only'")
     expect(submitLookup).toContain('baseBranch: prStartPoint.baseBranch')
     expect(submitLookup).toContain('branchNameOverride: prStartPoint.branchNameOverride')
+
     const selectedPrSubmitLookup = sourceBetween(
       submitLookup,
       'if (linkedWorkItem) {',
       'const intent = getSmartGitHubSubmitIntent(name)'
     )
+
     expect(selectedPrSubmitLookup).toContain('smartGitHubPrStartPointSelectionRef.current')
     expect(selectedPrSubmitLookup).toContain("linkedWorkItemIdentity?.type === 'pr'")
     expect(selectedPrSubmitLookup).toContain("startPointIdentity?.type === 'pr'")
@@ -382,6 +387,7 @@ describe('useComposerState host-context boundaries', () => {
       COMPOSER_SOURCE.quickSubmitSourcePreparation +
       COMPOSER_SOURCE.quickSubmitPreparation +
       COMPOSER_SOURCE.quickCreation
+
     expect(quickSubmit).toContain("smartGitHubResolution.kind === 'pr-start-point'")
     expect(quickSubmit).toContain("smartGitHubResolution.kind === 'metadata-only'")
     expect(quickSubmit).toContain('effectiveLinkedPR !== null || linkedGitLabMR !== null')
@@ -576,6 +582,7 @@ describe('useComposerState host-context boundaries', () => {
     expect(COMPOSER_SOURCE.workspaceIdentity).toContain(
       'const sourceIntentBlocksCreate = !linkedWorkItem && isBlockingJiraUrlIntent(smartNameMode, name)'
     )
+
     const submitSections = [
       COMPOSER_SOURCE.navigation,
       COMPOSER_SOURCE.fullSubmitOrchestration,
@@ -620,6 +627,7 @@ describe('useComposerState host-context boundaries', () => {
       url: 'https://company.atlassian.net/jira/browse/ORCA-123',
       jiraIdentifier: 'ORCA-123'
     }
+
     const context = {
       kind: 'task-source' as const,
       provider: 'jira' as const,
@@ -665,6 +673,7 @@ describe('useComposerState host-context boundaries', () => {
       'const startupPlan = buildAgentStartupPlan({',
       'const shouldSeedInitialAgentStatus ='
     )
+
     expect(fullStartupPlan).toContain('platform: selectedRepoAgentLaunchPlatform')
     expect(fullStartupPlan).not.toContain('platform: CLIENT_PLATFORM')
     expect(COMPOSER_SOURCE.fullCreation).toContain('startupDraft: startupPlan.draftPrompt')
@@ -674,6 +683,7 @@ describe('useComposerState host-context boundaries', () => {
       'buildQuickComposerStartup({',
       'const startupPolicySettlement ='
     )
+
     expect(quickStartupPlan).toContain('platform: selectedRepoAgentLaunchPlatform')
     expect(quickStartupPlan).not.toContain('platform: CLIENT_PLATFORM')
   })
@@ -711,6 +721,7 @@ describe('useComposerState host-context boundaries', () => {
       COMPOSER_SOURCE.fullCreation +
       COMPOSER_SOURCE.quickSubmitPreparation +
       COMPOSER_SOURCE.quickCreation
+
     expect(submitSources).not.toContain('isOrcaCliAvailableForLaunch')
     expect(submitSources).not.toContain('hasGeneratedLinearSourceContext')
     expect(submitSources).not.toContain('shouldDraftGeneratedLinearContext')
@@ -728,6 +739,7 @@ describe('useComposerState host-context boundaries', () => {
       COMPOSER_SOURCE.fullSubmitPreparation +
       COMPOSER_SOURCE.fullCreation +
       COMPOSER_SOURCE.fullCreationStartup
+
     expect(fullSubmit).toContain(
       'canUseIssueCommandForLinkedItemProvider(submitLinkedWorkItemProvider)'
     )
@@ -742,6 +754,7 @@ describe('useComposerState host-context boundaries', () => {
       COMPOSER_SOURCE.quickSubmitPreparation +
       COMPOSER_SOURCE.quickCreation +
       COMPOSER_SOURCE.quickStartup
+
     expect(quickSubmit).toContain('startupPlan.draftPrompt = draftPrompt')
   })
 

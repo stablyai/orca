@@ -3,6 +3,7 @@ import { GIT_HISTORY_REF_COLOR, GIT_HISTORY_REMOTE_REF_COLOR } from './git-histo
 import type { GitHistoryGraphNode, GitHistoryItemViewModel } from './git-history-graph'
 
 export const GIT_HISTORY_INCOMING_CHANGES_ID = 'git-history-incoming-changes'
+
 export const GIT_HISTORY_OUTGOING_CHANGES_ID = 'git-history-outgoing-changes'
 
 function cloneNode(node: GitHistoryGraphNode): GitHistoryGraphNode {
@@ -15,6 +16,7 @@ function findLastIndex<T>(items: readonly T[], predicate: (item: T) => boolean):
       return index
     }
   }
+
   return -1
 }
 
@@ -46,8 +48,10 @@ function ensureIncomingRemoteLane(
     const localMergeBaseIndex = outputSwimlanes.findIndex(
       (node) => node.id === mergeBase && node.color === GIT_HISTORY_REF_COLOR
     )
+
     const remoteMergeBaseIndex =
       localMergeBaseIndex === -1 ? inputSwimlanes.length : localMergeBaseIndex + 1
+
     outputSwimlanes.splice(remoteMergeBaseIndex, 0, {
       id: mergeBase,
       color: GIT_HISTORY_REMOTE_REF_COLOR
@@ -61,6 +65,7 @@ function ensureIncomingRemoteLane(
   const remoteMergeBaseIndex = outputSwimlanes.findIndex(
     (node) => node.id === mergeBase && node.color === GIT_HISTORY_REMOTE_REF_COLOR
   )
+
   inputSwimlanes.splice(
     remoteMergeBaseIndex === -1 ? inputSwimlanes.length : remoteMergeBaseIndex,
     0,
@@ -97,24 +102,30 @@ function addIncomingChangesHistoryItem(
   const beforeHistoryItemIndex = findLastIndex(viewModels, (viewModel) =>
     viewModel.outputSwimlanes.some((node) => node.id === mergeBase)
   )
+
   const afterHistoryItemIndex = viewModels.findIndex(
     (viewModel) => viewModel.historyItem.id === mergeBase
   )
+
   if (afterHistoryItemIndex === -1) {
     return
   }
 
   const before = beforeHistoryItemIndex !== -1 ? viewModels[beforeHistoryItemIndex] : undefined
+
   const incomingChangeMerged =
     before?.historyItem.parentIds.length === 2 && before.historyItem.parentIds.includes(mergeBase)
+
   if (incomingChangeMerged) {
     return
   }
 
   const after = viewModels[afterHistoryItemIndex] as GitHistoryItemViewModel
+
   const inputSwimlanes =
     before?.outputSwimlanes.map((node) => remoteBoundaryInputNode(node, mergeBase)) ??
     after.inputSwimlanes.map(cloneNode)
+
   const outputSwimlanes = after.inputSwimlanes.map(cloneNode)
   ensureIncomingRemoteLane(inputSwimlanes, outputSwimlanes, mergeBase)
 
@@ -127,6 +138,7 @@ function addIncomingChangesHistoryItem(
   }
 
   const displayIdLength = viewModels[0]?.historyItem.displayId?.length ?? 0
+
   const incomingChangesHistoryItem: GitHistoryItem = {
     id: GIT_HISTORY_INCOMING_CHANGES_ID,
     displayId: '0'.repeat(displayIdLength),
@@ -154,6 +166,7 @@ function addOutgoingChangesHistoryItem(
   currentRef: GitHistoryItemRef
 ): void {
   const currentRevision = currentRef.revision
+
   if (!currentRevision) {
     return
   }
@@ -161,11 +174,13 @@ function addOutgoingChangesHistoryItem(
   const currentRefIndex = viewModels.findIndex(
     (viewModel) => viewModel.kind === 'HEAD' && viewModel.historyItem.id === currentRevision
   )
+
   if (currentRefIndex === -1) {
     return
   }
 
   const displayIdLength = viewModels[0]?.historyItem.displayId?.length ?? 0
+
   const outgoingChangesHistoryItem: GitHistoryItem = {
     id: GIT_HISTORY_OUTGOING_CHANGES_ID,
     displayId: '0'.repeat(displayIdLength),
@@ -176,6 +191,7 @@ function addOutgoingChangesHistoryItem(
   }
 
   const inputSwimlanes = viewModels[currentRefIndex]!.inputSwimlanes.map(cloneNode)
+
   const outputSwimlanes = inputSwimlanes.concat({
     id: currentRevision,
     color: GIT_HISTORY_REF_COLOR

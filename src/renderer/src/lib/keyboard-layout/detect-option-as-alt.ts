@@ -81,18 +81,22 @@ export function detectOptionAsAltFromLayoutMap(
   if (!layoutMap || layoutMap.size === 0) {
     return 'unknown'
   }
+
   for (const [code, expected] of Object.entries(US_FINGERPRINT)) {
     const actual = layoutMap.get(code)
+
     if (actual === undefined) {
       // Incomplete map. Bail rather than guess — `unknown` → `'false'` is
       // safe (composition works; B/F/D word-nav still handled by the
       // existing terminal-shortcut-policy compensation).
       return 'unknown'
     }
+
     if (actual !== expected) {
       return 'non-us'
     }
   }
+
   return 'us'
 }
 
@@ -115,5 +119,6 @@ export function effectiveMacOptionAsAlt(
   if (setting === 'auto') {
     return detectedCategoryToDefault(detected)
   }
+
   return setting
 }

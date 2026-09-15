@@ -13,6 +13,7 @@ export function getBrowserCookieImportSourceLabels(
   platform: 'darwin' | 'win32' | 'linux'
 ): string[] {
   const labels: string[] = []
+
   for (const source of CHROMIUM_COOKIE_IMPORT_SOURCES) {
     if (platform === 'darwin' && source.mac) {
       labels.push(source.label)
@@ -22,9 +23,12 @@ export function getBrowserCookieImportSourceLabels(
       labels.push(source.label)
     }
   }
+
   labels.push('Firefox')
+
   if (platform === 'darwin') {
     labels.push('Safari')
   }
+
   return labels
 }

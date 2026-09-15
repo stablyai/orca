@@ -14,18 +14,23 @@ export const AGENT_SESSION_REWIND_REASONS = [
   'proof-mismatch',
   'outcome-unknown'
 ] as const
+
 export type AgentSessionRewindReason = (typeof AGENT_SESSION_REWIND_REASONS)[number]
+
 export type AgentSessionRewindSupport =
   | { supported: true }
   | { supported: false; reason: AgentSessionRewindReason }
+
 export type AgentSessionRewindParams = {
   envelope: AgentSessionMutationEnvelope
   itemId: string
   expectedEpoch: string
 }
+
 export type AgentSessionRewindResult = { itemId: string; epoch: string }
 
 const Key = z.string().min(1).max(4096)
+
 export const AgentSessionRewindRecordSchema = z.object({
   operationId: Key,
   callerKey: Key,
@@ -47,7 +52,9 @@ export const AgentSessionRewindRecordSchema = z.object({
     )
     .max(10_000)
 })
+
 export type AgentSessionRewindRecord = z.infer<typeof AgentSessionRewindRecordSchema>
+
 export const isAgentSessionRewindRecord = (value: unknown): value is AgentSessionRewindRecord =>
   AgentSessionRewindRecordSchema.safeParse(value).success
 
@@ -55,6 +62,8 @@ export function isAgentSessionRewindResult(value: unknown): value is AgentSessio
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const result = value as Partial<AgentSessionRewindResult>
+
   return typeof result.itemId === 'string' && typeof result.epoch === 'string'
 }

@@ -27,6 +27,7 @@ export type SkillInstallReceiptV1 = {
 
 function normalizedSkillInstallPath(canonicalPath: string): string {
   const normalized = resolve(canonicalPath)
+
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
@@ -42,12 +43,14 @@ export async function writeSkillStateFile(path: string, value: unknown): Promise
   await mkdir(dirname(path), { recursive: true, mode: 0o700 })
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`
   const handle = await open(temporary, 'wx', 0o600)
+
   try {
     await handle.writeFile(`${JSON.stringify(value)}\n`, 'utf8')
     await handle.sync()
   } finally {
     await handle.close()
   }
+
   try {
     await renameSkillPathWithWindowsRetry(temporary, path)
   } finally {
@@ -59,7 +62,9 @@ function isReceipt(value: unknown): value is SkillInstallReceiptV1 {
   if (!value || typeof value !== 'object') {
     return false
   }
+
   const receipt = value as Partial<SkillInstallReceiptV1>
+
   return (
     receipt.schemaVersion === 1 &&
     typeof receipt.packageId === 'string' &&
@@ -92,22 +97,27 @@ export async function listManagedSkillInstalls(
   }
 ): Promise<Omit<ManagedSkillInstall, 'destination'>[]> {
   const receiptsDirectory = join(stateDirectory, 'receipts')
+
   const entries = (await readdir(receiptsDirectory, { withFileTypes: true }).catch(() => []))
     .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
     .slice(0, 2048)
+
   const installs = await Promise.all(
     entries.map(async (entry): Promise<Omit<ManagedSkillInstall, 'destination'> | null> => {
       const parsed = await readFile(join(receiptsDirectory, entry.name), 'utf8')
         .then((value): unknown => JSON.parse(value))
         .catch(() => null)
+
       if (!isReceipt(parsed)) {
         return null
       }
+
       const observed = options?.observeReceipt
         ? await options.observeReceipt(parsed).catch(() => null)
         : await nativeSkillInstallFilesystem
             .observeSkill(parsed.canonicalPath, parsed.fileModes)
             .catch(() => null)
+
       return {
         name: basename(parsed.canonicalPath),
         packageId: parsed.packageId,
@@ -126,6 +136,7 @@ export async function listManagedSkillInstalls(
       }
     })
   )
+
   return installs
     .filter((install): install is Omit<ManagedSkillInstall, 'destination'> => install !== null)
     .sort((left, right) => right.installedAt.localeCompare(left.installedAt))
@@ -139,6 +150,7 @@ export async function readSkillInstallReceipt(
     const parsed: unknown = JSON.parse(
       await readFile(skillInstallReceiptPath(stateDirectory, canonicalPath), 'utf8')
     )
+
     return isReceipt(parsed) &&
       normalizedSkillInstallPath(parsed.canonicalPath) === normalizedSkillInstallPath(canonicalPath)
       ? parsed

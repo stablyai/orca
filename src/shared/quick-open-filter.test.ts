@@ -118,10 +118,12 @@ describe('shouldExcludeQuickOpenRelPath', () => {
       'a[1]/x',
       'a./x'
     ]
+
     for (const prefix of paths) {
       for (const relPath of paths) {
         const expected =
           relPath === prefix || (relPath.length > prefix.length && relPath.startsWith(`${prefix}/`))
+
         expect(shouldExcludeQuickOpenRelPath(relPath, [prefix])).toBe(expected)
       }
     }
@@ -170,6 +172,7 @@ describe('buildRgArgsForQuickOpen', () => {
       excludePathPrefixes: [],
       forceSlashSeparator: false
     })
+
     expect(primary).toContain('--files')
     expect(primary).toContain('--hidden')
     expect(primary).toContain('!**/node_modules')
@@ -182,6 +185,7 @@ describe('buildRgArgsForQuickOpen', () => {
       excludePathPrefixes: [],
       forceSlashSeparator: false
     })
+
     expect(ignoredPass).toContain('--no-ignore-vcs')
     expect(ignoredPass).not.toContain('.env*')
     expect(ignoredPass).not.toContain('**/.env*')
@@ -194,6 +198,7 @@ describe('buildRgArgsForQuickOpen', () => {
       excludePathPrefixes: [],
       forceSlashSeparator: true
     })
+
     const idx = primary.indexOf('--path-separator')
     expect(idx).toBeGreaterThanOrEqual(0)
     expect(primary[idx + 1]).toBe('/')
@@ -205,6 +210,7 @@ describe('buildRgArgsForQuickOpen', () => {
       excludePathPrefixes: ['packages/app', 'feature[1]'],
       forceSlashSeparator: false
     })
+
     expect(primary).toContain('!packages/app')
     expect(primary).toContain('!packages/app/**')
     // Glob metacharacters in a literal name must be escaped.

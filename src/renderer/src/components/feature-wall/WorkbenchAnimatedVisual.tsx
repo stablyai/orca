@@ -67,25 +67,32 @@ function WorkbenchTerminalVisualFrame(props: {
   const panelRef = useRef<HTMLDivElement | null>(null)
   const leftPaneRef = useRef<HTMLDivElement | null>(null)
   const splitRowRef = useRef<HTMLDivElement | null>(null)
+
   const cursor = useWorkbenchTerminalCursor(
     panelRef,
     leftPaneRef,
     splitRowRef,
     props.state.cursorTarget
   )
+
   const isTwoAgentsChecklist = props.variant === 'two-agents-checklist'
+
   const splitOpen =
     props.state.phase.kind === 'menu-click' ||
     props.state.phase.kind === 'split-empty' ||
     props.state.phase.kind === 'split-active'
+
   const menuShown =
     props.state.phase.kind === 'menu-open' ||
     props.state.phase.kind === 'menu-active' ||
     props.state.phase.kind === 'menu-click'
+
   const splitRowActive =
     props.state.phase.kind === 'menu-active' || props.state.phase.kind === 'menu-click'
+
   const showRipple =
     props.state.phase.kind === 'right-click' || props.state.phase.kind === 'menu-click'
+
   const promptAccentClass = isTwoAgentsChecklist ? 'text-foreground' : 'text-amber-600'
 
   return (
@@ -198,6 +205,7 @@ function buildReducedMotionState(
   variant: WorkbenchAnimatedVisualVariant
 ): WorkbenchTerminalVisualState {
   const isTwoAgentsChecklist = variant === 'two-agents-checklist'
+
   return {
     phase: isTwoAgentsChecklist ? { kind: 'split-active' } : { kind: 'idle' },
     running: WORKBENCH_RUN_QUEUE[0],
@@ -213,6 +221,7 @@ function buildReducedMotionState(
 
 // Why: stable identities — a fresh cursorTarget per render would re-fire the cursor layout effect.
 const WORKBENCH_TOUR_REDUCED_MOTION_STATE = buildReducedMotionState('tour')
+
 const WORKBENCH_TWO_AGENTS_REDUCED_MOTION_STATE = buildReducedMotionState('two-agents-checklist')
 
 function getReducedMotionState(

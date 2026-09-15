@@ -33,18 +33,21 @@ function trustTier(plugin: PluginHostListEntry): string {
       'Background worker — runs its own process'
     )
   }
+
   if (hasInstructionalContent(plugin)) {
     return translate(
       'auto.components.settings.PluginConsentDialog.instructionalTrust',
       'Instructional content — runs later under user or agent authority'
     )
   }
+
   if (plugin.panels.length === 0 && plugin.capabilities.length === 0) {
     return translate(
       'auto.components.settings.PluginConsentDialog.declarativeTrust',
       'Declarative content — no plugin code'
     )
   }
+
   return translate(
     'auto.components.settings.PluginConsentDialog.panelTrust',
     'Panel or host-integrated content — no worker process'
@@ -64,15 +67,18 @@ function trustTierShort(plugin: PluginHostListEntry): string {
   if (plugin.hasWorker) {
     return translate('auto.components.settings.PluginConsentDialog.trustShortWorker', 'Worker')
   }
+
   if (hasInstructionalContent(plugin)) {
     return translate(
       'auto.components.settings.PluginConsentDialog.trustShortInstructional',
       'Instructional'
     )
   }
+
   if (plugin.panels.length > 0 || plugin.capabilities.length > 0) {
     return translate('auto.components.settings.PluginConsentDialog.trustShortPanel', 'Panel')
   }
+
   return translate(
     'auto.components.settings.PluginConsentDialog.trustShortDeclarative',
     'Declarative'
@@ -83,15 +89,18 @@ function consentTitle(plugin: PluginHostListEntry): string {
   if (!plugin.hasWorker && plugin.capabilities.length === 0 && !hasInstructionalContent(plugin)) {
     return translate('auto.components.settings.PluginConsentDialog.reviewTitle', 'Review plugin')
   }
+
   if (!hasInstructionalContent(plugin)) {
     return translate('auto.components.settings.PluginConsentDialog.title', 'Review permissions')
   }
+
   if (plugin.hasWorker || plugin.capabilities.length > 0) {
     return translate(
       'auto.components.settings.PluginConsentDialog.mixedTitle',
       'Review access and content'
     )
   }
+
   return translate(
     'auto.components.settings.PluginConsentDialog.instructionalTitle',
     'Review plugin content'
@@ -107,12 +116,15 @@ export function PluginConsentDialog({
   const keepDisabledRef = useRef<HTMLButtonElement>(null)
   const [busyDecision, setBusyDecision] = useState<'approve' | 'keep-disabled' | null>(null)
   const [error, setError] = useState<string | null>(null)
+
   const decide = async (decision: 'approve' | 'keep-disabled'): Promise<void> => {
     if (!plugin?.consentFingerprint || busyDecision) {
       return
     }
+
     setBusyDecision(decision)
     setError(null)
+
     try {
       // Why: consent is conditional on the exact trust boundary rendered by this dialog.
       await onDecision(plugin.pluginKey, plugin.consentFingerprint, decision)

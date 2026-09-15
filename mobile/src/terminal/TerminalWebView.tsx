@@ -48,17 +48,21 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   const messageIdRef = useRef(0)
   const pendingPingIdRef = useRef<number | null>(null)
   const terminalThemeKey = useMemo(() => JSON.stringify(terminalTheme ?? null), [terminalTheme])
+
   const measureResolveRef = useRef<
     ((result: { cols: number; rows: number } | null) => void) | null
   >(null)
+
   // Why: each init() call posts 'init' to the WebView and arms a fresh
   // ready promise. WebView's init() rAF chain ends with a 'ready' notify
   // that resolves it. measureFitDimensions awaits this so it doesn't
   // race ahead of term.open() / renderService population.
   const readyPromiseRef = useRef<Promise<void> | null>(null)
   const readyResolveRef = useRef<(() => void) | null>(null)
+
   const { clearEngineError, engineError, reportEngineError, reportNativeEngineError } =
     useTerminalWebViewEngineErrorState(onEngineError)
+
   const { armWebReadyWatchdog, clearWebReadyWatchdog } = useTerminalWebReadyWatchdog(
     isWebReadyRef,
     reportEngineError
@@ -68,6 +72,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     messageIdRef.current += 1
     const id = messageIdRef.current
     webViewRef.current?.postMessage(JSON.stringify({ ...msg, id }))
+
     return id
   }, [])
 
@@ -79,8 +84,10 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     (msg: TerminalWebViewCommand) => {
       if (!isWebReadyRef.current) {
         pendingMessages.queue(msg)
+
         return
       }
+
       sendToWebView(msg)
     },
     [pendingMessages, sendToWebView]
@@ -105,9 +112,11 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       isWebReadyRef.current = true
       clearWebReadyWatchdog()
       clearEngineError()
+
       if (notifyParent) {
         onWebReady?.()
       }
+
       // Why: reload clears queued commands, so readiness must always restore the
       // native-selected theme even when its value did not change in React.
       sendToWebView({ type: 'set-theme', terminalTheme })
@@ -126,11 +135,13 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
       let msg: Record<string, unknown>
+
       try {
         msg = JSON.parse(event.nativeEvent.data) as Record<string, unknown>
       } catch {
         return
       }
+
       routeTerminalQueryReply(msg, onTerminalQueryReply)
 
       if (msg.type === 'web-ready') {
@@ -153,6 +164,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
       } else if (msg.type === 'measure-result') {
         const resolve = measureResolveRef.current
         measureResolveRef.current = null
+
         if (resolve) {
           const cols = typeof msg.cols === 'number' ? msg.cols : null
           const rows = typeof msg.rows === 'number' ? msg.rows : null
@@ -237,6 +249,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         if (Platform.OS !== 'ios') {
           return
         }
+
         // Why: direct ping is the only command allowed through while readiness is
         // invalid; init/write commands queue until this exact document answers.
         isWebReadyRef.current = false
@@ -261,11 +274,13 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         // for the full 3s under rapid re-init (orientation change,
         // multiple resubscribes), delaying cold-start fit chains.
         const priorResolve = readyResolveRef.current
+
         if (priorResolve) {
           readyResolveRef.current = null
           readyPromiseRef.current = null
           priorResolve()
         }
+
         readyPromiseRef.current = new Promise<void>((resolve) => {
           readyResolveRef.current = resolve
         })
@@ -302,19 +317,24 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         if (!isWebReadyRef.current) {
           return Promise.resolve(null)
         }
+
         return new Promise((resolve) => {
           measureResolveRef.current?.(null)
           let timeout: ReturnType<typeof setTimeout> | null = null
+
           const finish = (result: { cols: number; rows: number } | null) => {
             if (timeout) {
               clearTimeout(timeout)
               timeout = null
             }
+
             if (measureResolveRef.current === finish) {
               measureResolveRef.current = null
             }
+
             resolve(result)
           }
+
           measureResolveRef.current = finish
           sendToWebView({ type: 'measure', containerHeight })
           // Why: if the WebView doesn't respond within 2s (e.g., xterm
@@ -341,15 +361,19 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
         // immediately if no init is pending. Capped at 3s so a stuck
         // WebView doesn't hang the caller.
         const p = readyPromiseRef.current
+
         if (!p) {
           return
         }
+
         await new Promise<void>((resolve) => {
           let settled = false
+
           const timeout = setTimeout(() => {
             settled = true
             resolve()
           }, 3000)
+
           void p.finally(() => {
             if (!settled) {
               clearTimeout(timeout)

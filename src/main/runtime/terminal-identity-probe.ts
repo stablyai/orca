@@ -41,13 +41,16 @@ export function resolveTerminalIdentityFromProbes(
   if (probes.isLiveStructuredWorker() || probes.hasLivePty()) {
     return { handle, live: true }
   }
+
   try {
     probes.assertLiveLeaf()
+
     return { handle, live: true }
   } catch (error) {
     if (error instanceof Error && error.message === TERMINAL_HANDLE_STALE_ERROR) {
       return { handle, live: false }
     }
+
     // Anything else — a graph that is not ready yet — is "could not look", and must propagate
     // exactly as it does through `terminal.show` today rather than being read as a dead handle.
     throw error

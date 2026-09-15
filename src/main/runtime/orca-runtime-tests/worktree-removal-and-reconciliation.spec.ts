@@ -62,6 +62,7 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(1)
 
     const duplicatePath = '/tmp/workspaces/runtime-duplicate-terminal'
+
     const getRepos = vi.spyOn(store, 'getRepos').mockReturnValue([
       {
         id: TEST_REPO_ID,
@@ -78,6 +79,7 @@ describe('OrcaRuntimeService', () => {
         addedAt: 2
       }
     ])
+
     computeWorktreePathMock.mockReturnValue(duplicatePath)
     ensurePathWithinWorkspaceMock.mockReturnValue(duplicatePath)
     vi.mocked(getEffectiveHooks).mockReturnValue(null)
@@ -112,6 +114,7 @@ describe('OrcaRuntimeService', () => {
   it('resolves an exact path selector when duplicate repo entries expose the same path', async () => {
     const runtime = new OrcaRuntimeService(store)
     const duplicatePath = '/tmp/workspaces/runtime-duplicate-selector'
+
     const getRepos = vi.spyOn(store, 'getRepos').mockReturnValue([
       {
         id: TEST_REPO_ID,
@@ -128,6 +131,7 @@ describe('OrcaRuntimeService', () => {
         addedAt: 2
       }
     ])
+
     vi.mocked(listWorktrees).mockResolvedValue([
       {
         path: duplicatePath,
@@ -286,10 +290,12 @@ describe('OrcaRuntimeService', () => {
     ])
 
     const before = Date.now()
+
     const result = await runtime.createManagedWorktree({
       repoSelector: 'id:repo-1',
       name: 'runtime-grace'
     })
+
     const after = Date.now()
 
     expect(result.worktree.createdAt).toBeDefined()
@@ -301,6 +307,7 @@ describe('OrcaRuntimeService', () => {
 
   it('routes runtime worktree creation through the selected WSL project runtime', async () => {
     setPlatform('win32')
+
     const runtimeStore = {
       ...store,
       getProjects: () => [
@@ -319,7 +326,9 @@ describe('OrcaRuntimeService', () => {
         localWindowsRuntimeDefault: { kind: 'windows-host' }
       })
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
+
     const createdWorktree = {
       path: '/tmp/workspaces/runtime-wsl',
       head: 'def',
@@ -327,28 +336,36 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(listWorktrees).mockResolvedValue([createdWorktree])
+
     const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
       if (args[0] === 'symbolic-ref') {
         return { stdout: 'refs/remotes/origin/main\n', stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/heads/runtime-wsl^{commit}')) {
         throw new Error('missing local branch')
       }
+
       if (args[0] === 'rev-parse' && args[1] === '--path-format=absolute') {
         return { stdout: `${TEST_REPO_PATH}/.git\n`, stderr: '' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/main^{commit}')) {
         return { stdout: 'base-sha\n', stderr: '' }
       }
+
       if (args[0] === 'remote' && args.length === 1) {
         return { stdout: 'origin\n', stderr: '' }
       }
+
       if (args[0] === 'remote' && args[1] === 'get-url') {
         return { stdout: 'git@github.com:stablyai/orca.git\n', stderr: '' }
       }
+
       return { stdout: '', stderr: '' }
     })
 
@@ -379,11 +396,13 @@ describe('OrcaRuntimeService', () => {
         { wslDistro: 'Ubuntu' },
         expect.any(Function)
       )
+
       // Why: the lazy adoption callback is only invoked when the conflict probe
       // sees a local ref, so drive it here to prove adoption also routes via WSL.
       const adoptLocalBranch = vi
         .mocked(getBranchConflictKind)
         .mock.calls.findLast((call) => call[1] === 'runtime-wsl')?.[4]
+
       await expect(adoptLocalBranch?.()).resolves.toBe(false)
       expect(gitSpy).toHaveBeenCalledWith(
         ['rev-parse', '--verify', '--quiet', 'refs/heads/runtime-wsl^{commit}'],
@@ -501,11 +520,13 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(TEST_WORKTREE_ID, {
       hostId: 'runtime:env-1'
     })
+
     const orphanStore = {
       ...runtimeStore,
       getRepos: () => [],
       getRepo: () => undefined
     }
+
     const runtime = createWorktreeRemovalRuntime(orphanStore)
 
     // Nothing left the disk, so non-desktop callers must be able to tell "forgotten" from "deleted".
@@ -531,18 +552,22 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore } = createStaleRuntimeWorktreeStore(TEST_WORKTREE_ID, {
       hostId: 'runtime:env-1'
     })
+
     const orphanStore = {
       ...runtimeStore,
       getRepos: () => [],
       getRepo: () => undefined
     }
+
     const localProvider = {
       listProcesses: vi.fn(async () => [{ id: `${TEST_WORKTREE_ID}@@1` }]),
       shutdown: vi.fn(async () => {})
     }
+
     const runtime = new OrcaRuntimeService(orphanStore as never, undefined, {
       getLocalProvider: () => localProvider as never
     })
+
     const stopAndWait = vi.fn().mockResolvedValue(true)
     runtime.setPtyController({
       write: () => true,
@@ -577,18 +602,22 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(TEST_WORKTREE_ID, {
       hostId: 'local'
     })
+
     const orphanStore = {
       ...runtimeStore,
       getRepos: () => [],
       getRepo: () => undefined
     }
+
     const localProvider = {
       listProcesses: vi.fn(async () => [{ id: `${TEST_WORKTREE_ID}@@1` }]),
       shutdown: vi.fn(async () => {})
     }
+
     const runtime = new OrcaRuntimeService(orphanStore as never, undefined, {
       getLocalProvider: () => localProvider as never
     })
+
     const stopAndWait = vi.fn().mockResolvedValue(true)
     runtime.setPtyController({
       write: () => true,
@@ -598,6 +627,7 @@ describe('OrcaRuntimeService', () => {
     })
     syncSinglePty(runtime, 'local-pty-1')
     runtime.registerPty('local-pty-1', TEST_WORKTREE_ID)
+
     const internals = runtime as unknown as {
       resolveWorktreeRemovalTarget: () => Promise<{
         id: string
@@ -605,6 +635,7 @@ describe('OrcaRuntimeService', () => {
         path: string
       }>
     }
+
     internals.resolveWorktreeRemovalTarget = vi.fn().mockResolvedValue({
       id: TEST_WORKTREE_ID,
       repoId: TEST_REPO_ID,
@@ -624,18 +655,22 @@ describe('OrcaRuntimeService', () => {
 
   it('still sweeps the local host for an ownerless orphan', async () => {
     const { runtimeStore } = createStaleRuntimeWorktreeStore(TEST_WORKTREE_ID)
+
     const orphanStore = {
       ...runtimeStore,
       getRepos: () => [],
       getRepo: () => undefined
     }
+
     const localProvider = {
       listProcesses: vi.fn(async () => []),
       shutdown: vi.fn(async () => {})
     }
+
     const runtime = new OrcaRuntimeService(orphanStore as never, undefined, {
       getLocalProvider: () => localProvider as never
     })
+
     const stopAndWait = vi.fn().mockResolvedValue(true)
     runtime.setPtyController({
       write: () => true,
@@ -656,11 +691,13 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore } = createStaleRuntimeWorktreeStore(TEST_WORKTREE_ID, {
       hostId: 'runtime:env-1'
     })
+
     const orphanStore = {
       ...runtimeStore,
       getRepos: () => [],
       getRepo: () => undefined
     }
+
     const runtime = createWorktreeRemovalRuntime(orphanStore)
 
     await runtime.removeManagedWorktree(TEST_WORKTREE_ID)

@@ -65,6 +65,7 @@ export function createRemoteRuntimeTransportMocks(
   const runtimeSubscribe = vi.fn()
   const refreshSessionTabsSnapshot = vi.fn(async () => {})
   const subscriptionSendBinary = vi.fn()
+
   const streamFixtures = createTerminalStreamFixtures({
     getCallbacks: bindings.getCallbacks,
     sendBinary: subscriptionSendBinary
@@ -85,6 +86,7 @@ export function createRemoteRuntimeTransportMocks(
       if (request.method === 'session.tabs.activate') {
         const params = request.params as { tabId: string; leafId?: string }
         const resolvedLeafId = params.leafId ?? 'pane:1'
+
         return {
           ok: true,
           result: {
@@ -109,10 +111,12 @@ export function createRemoteRuntimeTransportMocks(
           }
         }
       }
+
       if (request.method === 'terminal.resolvePane') {
         const params = request.params as { paneKey: string; worktreeId: string }
         const separator = params.paneKey.indexOf(':')
         const handle = bindings.getResolvedPaneHandle()
+
         return {
           ok: true,
           result: {
@@ -125,12 +129,14 @@ export function createRemoteRuntimeTransportMocks(
           }
         }
       }
+
       return { ok: true, result: { terminal: { handle: 'terminal-1' } } }
     })
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: MultiplexSubscriptionCallbacks) => {
         bindings.setCallbacks(callbacks)
         queueMicrotask(streamFixtures.emitMultiplexReady)
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )

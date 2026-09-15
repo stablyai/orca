@@ -48,14 +48,17 @@ async function openHardWrappedFixture(
   testInfo: { workerIndex: number }
 ): Promise<string> {
   const context = await getActiveWorktreeContext(page)
+
   const filePath = await createMarkdownFixture(
     context,
     'prose-reflow',
     testInfo.workerIndex,
     HARD_WRAPPED_MARKDOWN
   )
+
   await openMarkdownFixture(page, context, filePath)
   await waitForRichMarkdownEditor(page)
+
   return filePath
 }
 
@@ -64,6 +67,7 @@ async function getGoalParagraphMetrics(
 ): Promise<ReflowMetrics> {
   return page.evaluate(() => {
     const editor = document.querySelector('.rich-markdown-editor')
+
     if (!editor) {
       throw new Error('Rich markdown editor was not mounted')
     }
@@ -71,7 +75,9 @@ async function getGoalParagraphMetrics(
     const paragraphs = Array.from(editor.querySelectorAll('p')).filter((paragraph) =>
       paragraph.textContent?.includes('launch-lifetime')
     )
+
     const paragraph = paragraphs[0]
+
     if (!paragraph) {
       throw new Error('Hard-wrapped paragraph was not rendered')
     }
@@ -79,10 +85,12 @@ async function getGoalParagraphMetrics(
     const range = document.createRange()
     range.selectNodeContents(paragraph)
     const lineTops: number[] = []
+
     for (const rect of Array.from(range.getClientRects())) {
       if (rect.width <= 0 || rect.height <= 0) {
         continue
       }
+
       if (!lineTops.some((top) => Math.abs(top - rect.top) < 2)) {
         lineTops.push(rect.top)
       }
@@ -106,6 +114,7 @@ async function placeCaretAtGoalParagraphEnd(
     const editorElement = document.querySelector(
       '.rich-markdown-editor'
     ) as PageRichMarkdownEditorElement | null
+
     const paragraph = Array.from(editorElement?.querySelectorAll('p') ?? []).find((candidate) =>
       candidate.textContent?.includes('launch-lifetime')
     ) as
@@ -115,7 +124,9 @@ async function placeCaretAtGoalParagraphEnd(
           }
         })
       | undefined
+
     const selectionPosition = paragraph?.pmViewDesc?.posAtEnd
+
     if (!editorElement?.editor?.commands || typeof selectionPosition !== 'number') {
       throw new Error('Cannot place caret at the hard-wrapped paragraph end')
     }
@@ -132,13 +143,16 @@ async function placeCaretAtHeadingStart(
     const editorElement = document.querySelector(
       '.rich-markdown-editor'
     ) as PageRichMarkdownEditorElement | null
+
     const editor = editorElement?.editor
     let selectionPosition: number | null = null
     editor?.state?.doc?.descendants?.((node, pos) => {
       if (node.type?.name === 'heading' && node.textContent?.includes('Next section')) {
         selectionPosition = pos + 1
+
         return false
       }
+
       return true
     })
 

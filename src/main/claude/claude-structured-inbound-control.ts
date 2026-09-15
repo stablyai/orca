@@ -3,6 +3,7 @@ import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
 
 export const CLAUDE_CAN_USE_TOOL_SUBTYPE = 'can_use_tool'
+
 export const CLAUDE_REQUEST_USER_DIALOG_SUBTYPE = 'request_user_dialog'
 
 /**
@@ -61,10 +62,13 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
         settle: resolve,
         turnId: deps.currentTurnId?.() ?? null
       })
+
       if (!prompt) {
         resolve(denySafeResult(options.toolUseID))
+
         return
       }
+
       const cancel = (): void => {
         if (deps.prompts.forgetIfPending(prompt)) {
           deps.emit({
@@ -77,12 +81,15 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
           resolve(null)
         }
       }
+
       if (options.signal.aborted) {
         // No abort event can still fire, so registering a listener would park the callback
         // forever behind a prompt nothing will answer.
         cancel()
+
         return
       }
+
       options.signal.addEventListener('abort', cancel, { once: true })
       deps.emit({ type: 'prompt', sessionId: deps.sessionId, prompt })
     })

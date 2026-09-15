@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const phaseEvents: string[] = []
+
 let releaseI18n: (() => void) | null = null
 
 vi.mock('./main-process-ready-foundation', () => ({
@@ -10,11 +11,13 @@ vi.mock('./main-process-ready-foundation', () => ({
     phaseEvents.push('foundation')
   })
 }))
+
 vi.mock('./main-process-ready-runtime', () => ({
   initializeReadyRuntimeServices: vi.fn(async () => {
     phaseEvents.push('runtime-services')
   })
 }))
+
 vi.mock('./main-process-i18n-menu', () => ({
   initializeMainProcessI18nAndMenu: vi.fn(
     () =>
@@ -27,6 +30,7 @@ vi.mock('./main-process-i18n-menu', () => ({
       })
   )
 }))
+
 vi.mock('./main-process-runtime-launch', () => ({
   initializeMainProcessRuntimeLaunch: vi.fn(async () => {
     phaseEvents.push('launch-start')
@@ -50,6 +54,7 @@ describe('ready-phase concurrency', () => {
     } as unknown as Parameters<typeof initializeMainProcessReady>[0]
 
     const ready = initializeMainProcessReady(options)
+
     // Drain the launch phase's microtasks while i18n is still pending.
     for (let tick = 0; tick < 8; tick += 1) {
       await Promise.resolve()
@@ -79,6 +84,7 @@ describe('ready-phase concurrency', () => {
     void ready.then(() => {
       settled = true
     })
+
     for (let tick = 0; tick < 8; tick += 1) {
       await Promise.resolve()
     }

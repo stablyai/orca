@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest'
 import { ORCHESTRATION_COMMAND_SPECS } from '../../src/cli/specs/orchestration'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const guideRoot = join(projectDir, 'skill-guides', 'orchestration')
+
 const guidePaths = [
   join(projectDir, 'skill-guides', 'orchestration.md'),
   ...readdirSync(join(guideRoot, 'references')).map((name) => join(guideRoot, 'references', name))
@@ -13,6 +15,7 @@ const guidePaths = [
 function documentedInvocations() {
   return guidePaths.flatMap((path) => {
     const text = readFileSync(path, 'utf8')
+
     return [...text.matchAll(/ORCA orchestration ([a-z-]+)([^`\n]*)/gu)].map((match) => ({
       path,
       verb: match[1],
@@ -30,6 +33,7 @@ describe('orchestration guide command contract', () => {
     for (const invocation of documentedInvocations()) {
       const allowed = specs.get(invocation.verb)
       expect(allowed, `${invocation.path}: ${invocation.verb}`).toBeDefined()
+
       for (const flag of invocation.flags) {
         expect(allowed, `${invocation.path}: ${invocation.verb} --${flag}`).toContain(flag)
       }

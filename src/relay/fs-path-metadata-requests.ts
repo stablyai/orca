@@ -20,11 +20,13 @@ async function resolveSymlinkDirectoryEntry(
 
 function fileStatFromLstat(stats: Awaited<ReturnType<typeof lstat>>) {
   let type: 'file' | 'directory' | 'symlink' = 'file'
+
   if (stats.isDirectory()) {
     type = 'directory'
   } else if (stats.isSymbolicLink()) {
     type = 'symlink'
   }
+
   return {
     size: stats.size,
     type,
@@ -48,17 +50,21 @@ export async function readRelayDir(params: Record<string, unknown>) {
   const entries = await readdir(dirPath, { withFileTypes: true })
   const mapped: { name: string; isDirectory: boolean; isSymlink: boolean }[] = []
   const symlinkEntries: { entry: Dirent; mappedEntry: (typeof mapped)[number] }[] = []
+
   for (const entry of entries) {
     const mappedEntry = {
       name: entry.name,
       isDirectory: entry.isDirectory(),
       isSymlink: entry.isSymbolicLink()
     }
+
     mapped.push(mappedEntry)
+
     if (!mappedEntry.isDirectory && mappedEntry.isSymlink) {
       symlinkEntries.push({ entry, mappedEntry })
     }
   }
+
   if (symlinkEntries.length > 0) {
     await forEachWithConcurrency(
       symlinkEntries,
@@ -68,17 +74,20 @@ export async function readRelayDir(params: Record<string, unknown>) {
       }
     )
   }
+
   return sortDirEntries(mapped)
 }
 
 export async function statRelayPath(params: Record<string, unknown>) {
   const filePath = expandTilde(params.filePath as string)
   const stats = await lstat(filePath)
+
   if (stats.isSymbolicLink()) {
     try {
       // Why: callers use stat to decide whether to read a path or enumerate
       // it; symlink-to-directory must behave like its target for that choice.
       const targetStats = await stat(filePath)
+
       return {
         size: targetStats.size,
         type: targetStats.isDirectory() ? 'directory' : 'file',
@@ -92,15 +101,18 @@ export async function statRelayPath(params: Record<string, unknown>) {
       return { size: stats.size, type: 'symlink', mtime: stats.mtimeMs }
     }
   }
+
   return fileStatFromLstat(stats)
 }
 
 export async function lstatRelayPath(params: Record<string, unknown>) {
   const filePath = expandTilde(params.filePath as string)
+
   return fileStatFromLstat(await lstat(filePath))
 }
 
 export async function realpathRelayPath(params: Record<string, unknown>) {
   const filePath = expandTilde(params.filePath as string)
+
   return await realpath(filePath)
 }

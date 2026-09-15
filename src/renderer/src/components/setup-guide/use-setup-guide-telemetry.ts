@@ -39,6 +39,7 @@ export function useSetupGuideOpenCloseTelemetry(args: {
 }): void {
   const setupSteps = useMemo(() => getFeatureWallSetupSteps(), [])
   const sessionRef = useRef<SetupGuideTelemetrySession | null>(null)
+
   const snapshotRef = useRef<SetupGuideTelemetrySnapshot>({
     completedCount: 0,
     totalSteps: FEATURE_WALL_SETUP_STEP_IDS.length,
@@ -56,9 +57,11 @@ export function useSetupGuideOpenCloseTelemetry(args: {
 
   const closeSession = useCallback((outcome: 'completed' | 'dismissed' | 'interrupted'): void => {
     const session = sessionRef.current
+
     if (!session) {
       return
     }
+
     sessionRef.current = null
     const snapshot = snapshotRef.current
     trackSetupGuideClosed({
@@ -79,9 +82,12 @@ export function useSetupGuideOpenCloseTelemetry(args: {
         totalSteps: setupSteps.length,
         firstIncompleteStepId
       })
+
       sessionRef.current = { source, initialCompletedCount: completedCount }
+
       return
     }
+
     if (!args.isOpen && sessionRef.current) {
       closeSession('dismissed')
     }
@@ -114,6 +120,7 @@ export function useSetupGuideStepCompletionTelemetry(args: {
   setupGuideVisible: boolean
 }): void {
   const stateRef = useRef<SetupGuideStepCompletionTelemetryState | null>(null)
+
   if (!stateRef.current) {
     stateRef.current = createSetupGuideStepCompletionTelemetryState()
   }
@@ -142,21 +149,26 @@ export function recordSetupGuideStepCompletionTelemetry(args: {
   if (!args.state.emitted) {
     args.state.emitted = readEmittedSetupGuideStepIds()
   }
+
   const previousDone = args.state.previousDone
   args.state.previousDone = { ...args.progress.stepDone }
   const emitted = args.state.emitted
+
   if (!previousDone || !args.setupGuideVisible) {
     // Why: hidden async refresh can flip already-complete setup state from false
     // to true; only visible guide actions are attributable enough to event.
     persistCompletedSetupGuideStepBaselines(args.progress.stepDone, emitted)
+
     return
   }
 
   const completedCount = countCompletedSetupSteps(args.progress.stepDone)
+
   for (const stepId of FEATURE_WALL_SETUP_STEP_IDS) {
     if (!args.progress.stepDone[stepId] || previousDone[stepId] || emitted.has(stepId)) {
       continue
     }
+
     emitted.add(stepId)
     persistEmittedSetupGuideStepId(stepId)
     trackSetupGuideStepCompleted({
@@ -180,6 +192,7 @@ function persistCompletedSetupGuideStepBaselines(
     if (!done[stepId] || emitted.has(stepId)) {
       continue
     }
+
     emitted.add(stepId)
     persistEmittedSetupGuideStepId(stepId)
   }

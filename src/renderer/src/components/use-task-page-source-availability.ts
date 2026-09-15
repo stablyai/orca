@@ -14,9 +14,11 @@ import {
   getTaskSourceCacheScope
 } from '../../../shared/task-source-context'
 import { useTaskPageSourceSummary } from './use-task-page-source-summary'
+
 export type TaskPageSourceAvailabilityPreludeModel = ReturnType<
   typeof useTaskPageSourceAvailabilityPrelude
 >
+
 export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHostsModel) {
   const {
     settings,
@@ -35,23 +37,28 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     taskSourceRepoContexts,
     hostRegistryById
   } = model
+
   const getTaskPickerRepoHostLabel = useCallback(
     (repo: Repo): string | null => {
       const provider = taskSource === 'gitlab' ? 'gitlab' : 'github'
       const context = getTaskPageRepoSourceContext(repo, provider)
       const hostId = context?.hostId ?? repo.executionHostId ?? 'local'
+
       return hostRegistryById.get(hostId)?.label ?? null
     },
     [hostRegistryById, taskSource]
   )
+
   const taskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
     if (taskSource !== 'github' && taskSource !== 'gitlab') {
       return []
     }
+
     return [
       ...taskSourceRepoContexts.flatMap((context) => {
         const host = hostRegistryById.get(context.hostId)
         const availability = getTaskSourceHostAvailabilityForHost(host, context.hostId)
+
         return availability ? [availability] : []
       }),
       ...getRepoBackedProviderAvailability({
@@ -71,16 +78,20 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     taskSource,
     taskSourceRepoContexts
   ])
+
   const accountBackedTaskSourceHostId = useMemo(
     () => getSettingsFocusedExecutionHostId(settings),
     [settings]
   )
+
   const fallbackTaskSourceProjectId = useMemo(() => {
     const firstRepoContext = selectedRepos
       .map((repo) => getTaskPageRepoSourceContext(repo, 'github'))
       .find((context): context is TaskSourceContext => context !== null)
+
     return firstRepoContext?.projectId ?? 'account-backed-task-source'
   }, [selectedRepos])
+
   const linearTaskSourceContext = useMemo(
     () =>
       normalizeTaskSourceContext({
@@ -108,13 +119,16 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
       selectedLinearWorkspaceId
     ]
   )
+
   // Why: only react to invalidation tokens for this TaskPage source scope.
   const linearListInvalidationVersionForSource = useMemo(() => {
     const scope = linearTaskSourceContext
       ? getTaskSourceCacheScope(linearTaskSourceContext)
       : 'local'
+
     return linearListInvalidationToken.scope === scope ? linearListInvalidationToken.version : 0
   }, [linearListInvalidationToken, linearTaskSourceContext])
+
   const jiraTaskSourceContext = useMemo(
     () =>
       normalizeTaskSourceContext({
@@ -135,17 +149,22 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
       selectedJiraSiteId
     ]
   )
+
   const jiraTaskSourceScopeKey = jiraTaskSourceContext
     ? getTaskSourceCacheScope(jiraTaskSourceContext)
     : providerRuntimeContextKey
+
   const accountBackedTaskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
     if (taskSource !== 'linear' && taskSource !== 'jira') {
       return []
     }
+
     const host = hostRegistryById.get(accountBackedTaskSourceHostId)
     const availability = getTaskSourceHostAvailabilityForHost(host, accountBackedTaskSourceHostId)
+
     return availability ? [availability] : []
   }, [accountBackedTaskSourceHostId, hostRegistryById, taskSource])
+
   const nextModel = model as typeof model & {
     getTaskPickerRepoHostLabel: typeof getTaskPickerRepoHostLabel
     taskSourceHostAvailability: typeof taskSourceHostAvailability
@@ -157,6 +176,7 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
     jiraTaskSourceScopeKey: typeof jiraTaskSourceScopeKey
     accountBackedTaskSourceHostAvailability: typeof accountBackedTaskSourceHostAvailability
   }
+
   nextModel.getTaskPickerRepoHostLabel = getTaskPickerRepoHostLabel
   nextModel.taskSourceHostAvailability = taskSourceHostAvailability
   nextModel.accountBackedTaskSourceHostId = accountBackedTaskSourceHostId
@@ -166,10 +186,14 @@ export function useTaskPageSourceAvailabilityPrelude(model: TaskPageRuntimeHosts
   nextModel.jiraTaskSourceContext = jiraTaskSourceContext
   nextModel.jiraTaskSourceScopeKey = jiraTaskSourceScopeKey
   nextModel.accountBackedTaskSourceHostAvailability = accountBackedTaskSourceHostAvailability
+
   return nextModel
 }
+
 export function useTaskPageSourceAvailability(model: TaskPageRuntimeHostsModel) {
   const preludeModel = useTaskPageSourceAvailabilityPrelude(model)
+
   return useTaskPageSourceSummary(preludeModel)
 }
+
 export type TaskPageSourceAvailabilityModel = ReturnType<typeof useTaskPageSourceAvailability>

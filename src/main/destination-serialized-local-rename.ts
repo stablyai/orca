@@ -13,6 +13,7 @@ function isENOENT(error: unknown): boolean {
 
 async function destinationParentKey(filePath: string): Promise<string> {
   const parentPath = dirname(filePath)
+
   try {
     return normalize(await realpath(parentPath))
   } catch (error) {
@@ -21,6 +22,7 @@ async function destinationParentKey(filePath: string): Promise<string> {
     if (isENOENT(error)) {
       return normalize(parentPath)
     }
+
     throw error
   }
 }
@@ -32,17 +34,21 @@ export async function renameLocalPathSerializedByDestination(
   const key = await destinationParentKey(newPath)
   const previous = pendingRenamesByParent.get(key) ?? Promise.resolve()
   let release!: () => void
+
   const current = new Promise<void>((resolve) => {
     release = resolve
   })
+
   pendingRenamesByParent.set(key, current)
 
   await previous
+
   try {
     await assertNoClobberRenameDestinationAvailable(oldPath, newPath)
     await rename(oldPath, newPath)
   } finally {
     release()
+
     if (pendingRenamesByParent.get(key) === current) {
       pendingRenamesByParent.delete(key)
     }

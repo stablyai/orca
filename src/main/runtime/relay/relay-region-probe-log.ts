@@ -2,6 +2,7 @@ import { relayDirectorHost } from './relay-region-catalog-fetch'
 import type { RegionMeasurement, RelayRegion, RelayRegionProbeReport } from './relay-region-probe'
 
 export const RELAY_REGION_PROBE_EVENT = 'relay_region_probe'
+
 export const RELAY_REGION_SELF_HEAL_EVENT = 'relay_region_self_heal'
 
 /** Why the resolver ended up with the region it returned, or with no hint. */
@@ -45,6 +46,7 @@ export type RelayRegionSelfHealLogEvent = {
 }
 
 export type RelayRegionLogEvent = RelayRegionProbeLogEvent | RelayRegionSelfHealLogEvent
+
 export type RelayRegionLogSink = (event: RelayRegionLogEvent) => void
 
 // JSON rather than an object argument: Node pretty-prints nested objects across
@@ -124,9 +126,11 @@ function refreshReason(
     // a selection that is not the fastest reading is a deliberate hold.
     return best && selected.region !== best.region ? 'held-previous' : 'measured'
   }
+
   if (reports.some((report) => report.verdict === 'measured')) {
     return 'sole-survivor-forbidden'
   }
+
   return reports.every((report) => report.verdict === 'unreachable')
     ? 'all-unreachable'
     : 'all-rejected'

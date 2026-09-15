@@ -35,13 +35,16 @@ describe('paired runtime browser host command admission', () => {
     const { callbacks, close } = await subscribeLease({
       sendRequest: undefined
     })
+
     const onError = vi.fn()
     const onPageCommand = vi.fn()
+
     const lease = createLease({
       pageCommandProtocolVersion: 1,
       onPageCommand,
       onError
     })
+
     const starting = lease.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
     callbacks.current!.onResponse({
@@ -99,11 +102,13 @@ describe('paired runtime browser host command admission', () => {
       const { callbacks, close } = await subscribeLease()
       const onError = vi.fn()
       const onPageCommand = vi.fn()
+
       const lease = createLease({
         pageCommandProtocolVersion: 1,
         onPageCommand,
         onError
       })
+
       const starting = lease.start()
       await vi.waitFor(() => expect(callbacks.current).toBeDefined())
       callbacks.current!.onResponse({
@@ -153,10 +158,12 @@ describe('paired runtime browser host command admission', () => {
 
   it('refuses an inventory refresh on a lease that never negotiated reconnect', async () => {
     const { callbacks, close } = await subscribeLease()
+
     const lease = createLease({
       pageInventoryProtocolVersion: 1,
       getPageInventory: () => []
     })
+
     const starting = lease.start()
     await vi.waitFor(() => expect(callbacks.current).toBeDefined())
     callbacks.current!.onResponse({
@@ -199,6 +206,7 @@ async function subscribeLease(options?: { sendRequest?: ReturnType<typeof vi.fn>
 }> {
   const callbacks: { current?: RemoteRuntimeSubscriptionCallbacks } = {}
   const close = vi.fn()
+
   const sendRequest =
     options && 'sendRequest' in options
       ? options.sendRequest
@@ -208,9 +216,11 @@ async function subscribeLease(options?: { sendRequest?: ReturnType<typeof vi.fn>
           result: { accepted: true },
           _meta: { runtimeId: 'runtime-a' }
         })
+
   subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
     async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
       callbacks.current = args[4] as RemoteRuntimeSubscriptionCallbacks
+
       return {
         requestId: 'browser-host',
         close,
@@ -223,5 +233,6 @@ async function subscribeLease(options?: { sendRequest?: ReturnType<typeof vi.fn>
       }
     }
   )
+
   return { callbacks, close }
 }

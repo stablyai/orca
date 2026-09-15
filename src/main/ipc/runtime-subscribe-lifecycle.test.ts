@@ -33,6 +33,7 @@ vi.mock('../runtime/rpc/dispatcher', () => ({
   RpcDispatcher: class {
     dispatch(_request: unknown, options: { connectionId?: string }): Promise<unknown> {
       unaryConnections.push(options.connectionId)
+
       return Promise.resolve({ ok: true, result: {} })
     }
 
@@ -48,7 +49,9 @@ vi.mock('../runtime/rpc/dispatcher', () => ({
         signal: options.signal,
         subscriptionId: request.id
       }
+
       streams.push(record)
+
       return new Promise<void>((resolve) => {
         options.signal.addEventListener('abort', () => {
           record.settled = true
@@ -79,17 +82,21 @@ type SenderHarness = {
 function createSender(id: number): SenderHarness {
   const senderListeners = new Map<string, (() => void)[]>()
   let destroyed = false
+
   const add = (eventName: string, callback: () => void): void => {
     const callbacks = senderListeners.get(eventName) ?? []
     callbacks.push(callback)
     senderListeners.set(eventName, callbacks)
   }
+
   const fire = (eventName: string): void => {
     for (const callback of senderListeners.get(eventName) ?? []) {
       callback()
     }
   }
+
   const mainFrame = {}
+
   return {
     destroy: () => {
       destroyed = true
@@ -112,6 +119,7 @@ function createSender(id: number): SenderHarness {
           )
           callback()
         }
+
         add(eventName, wrapped)
       },
       send: vi.fn()
@@ -121,17 +129,21 @@ function createSender(id: number): SenderHarness {
 
 async function call(sender: SenderHarness['sender']): Promise<void> {
   const handler = handlers.get('runtime:call')
+
   if (!handler) {
     throw new Error('runtime:call handler not registered')
   }
+
   await handler({ sender, senderFrame: sender.mainFrame }, { method: 'agentSession.hold' })
 }
 
 function subscribe(sender: SenderHarness['sender'], subscriptionId: string): void {
   const handler = handlers.get('runtime:subscribe')
+
   if (!handler) {
     throw new Error('runtime:subscribe handler not registered')
   }
+
   handler(
     { sender, senderFrame: sender.mainFrame },
     { subscriptionId, method: 'agentSession.watch' }
@@ -140,9 +152,11 @@ function subscribe(sender: SenderHarness['sender'], subscriptionId: string): voi
 
 function streamFor(subscriptionId: string): StreamRecord {
   const record = streams.findLast((entry) => entry.subscriptionId === subscriptionId)
+
   if (!record) {
     throw new Error(`no stream dispatched for ${subscriptionId}`)
   }
+
   return record
 }
 
@@ -259,9 +273,11 @@ describe('runtime:subscribe renderer lifecycle cleanup', () => {
     const stream = streamFor('sub-explicit')
 
     const unsubscribe = listeners.get('runtime:unsubscribe')
+
     if (!unsubscribe) {
       throw new Error('runtime:unsubscribe listener not registered')
     }
+
     unsubscribe({ sender: harness.sender }, { subscriptionId: 'sub-explicit' })
 
     expect(stream.signal.aborted).toBe(true)
@@ -279,9 +295,11 @@ describe('runtime:subscribe renderer lifecycle cleanup', () => {
     expect(second.signal.aborted).toBe(false)
 
     const unsubscribe = listeners.get('runtime:unsubscribe')
+
     if (!unsubscribe) {
       throw new Error('runtime:unsubscribe listener not registered')
     }
+
     unsubscribe({ sender: firstHarness.sender }, { subscriptionId: 'sub-collision' })
 
     expect(first.signal.aborted).toBe(true)

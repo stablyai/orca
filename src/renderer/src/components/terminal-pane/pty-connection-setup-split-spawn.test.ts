@@ -35,8 +35,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -57,6 +60,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -66,6 +70,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -86,6 +91,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -96,9 +102,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -108,9 +116,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -119,6 +129,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -146,16 +157,20 @@ describe('connectPanePty', () => {
 
   it('clears the mobile-fit pane binding when the pane connection is disposed', async () => {
     const { connectPanePty } = await import('./pty-connection')
+
     const { getFitOverrideForPane, setFitOverride } =
       await import('@/lib/pane-manager/mobile-fit-overrides')
+
     const transport = createMockTransport()
     transportFactoryQueue.push(transport)
     const pane = createPane(1)
 
     const binding = connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
       | ((ptyId: string) => void)
       | undefined
+
     expect(onPtySpawn).toBeTypeOf('function')
     onPtySpawn?.('pty-fit')
     setFitOverride('pty-fit', 'mobile-fit', 49, 20)
@@ -197,9 +212,11 @@ describe('connectPanePty', () => {
     setFitOverride('pty-fit', 'mobile-fit', 49, 20)
 
     connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
       | ((ptyId: string) => void)
       | undefined
+
     expect(onPtySpawn).toBeTypeOf('function')
     onPtySpawn?.('pty-fit')
 
@@ -212,13 +229,17 @@ describe('connectPanePty', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
+
     const runNextFrame = (): void => {
       const callback = frameCallbacks.shift()
+
       if (!callback) {
         throw new Error('expected a queued animation frame')
       }
+
       callback(0)
     }
 
@@ -227,6 +248,7 @@ describe('connectPanePty', () => {
 
     const ptyId = 'pty-post-spawn-transient-lock'
     setDriverForPty(ptyId, { kind: 'mobile', clientId: 'phone-1' })
+
     try {
       const transport = createMockTransport(ptyId)
       transportFactoryQueue.push(transport)
@@ -261,13 +283,17 @@ describe('connectPanePty', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
+
     const runNextFrame = (): void => {
       const callback = frameCallbacks.shift()
+
       if (!callback) {
         throw new Error('expected a queued animation frame')
       }
+
       callback(0)
     }
 
@@ -286,18 +312,22 @@ describe('connectPanePty', () => {
     let proposedGrid = { cols: 240, rows: 50 }
     let splitMounted = false
     const root = createMeasuredElement({ rect: () => createRect(1200, 800) })
+
     const split = createMeasuredElement({
       className: () => (splitMounted ? 'pane-split is-vertical' : ''),
       rect: () => createRect(1200, 800)
     })
+
     const mainContainer = createMeasuredElement({
       parentElement: () => (splitMounted ? split : root),
       rect: () => (splitMounted ? createRect(600, 800) : createRect(1200, 800))
     })
+
     const setupContainer = createMeasuredElement({
       parentElement: () => (splitMounted ? split : null),
       rect: () => createRect(599, 800, 601, 0)
     })
+
     pane.container = mainContainer
     siblingPane.container = setupContainer
     ;(
@@ -321,19 +351,23 @@ describe('connectPanePty', () => {
     )
 
     runNextFrame()
+
     for (let i = 0; i < 8; i++) {
       runNextFrame()
     }
+
     expect(transport.connect).not.toHaveBeenCalled()
 
     splitMounted = true
     panes = [pane, siblingPane]
     proposedGrid = { cols: 120, rows: 50 }
     let postSplitFrames = 0
+
     while (frameCallbacks.length > 0 && transport.connect.mock.calls.length === 0) {
       if (postSplitFrames >= 12) {
         throw new Error('startup did not connect after setup split became ready')
       }
+
       postSplitFrames += 1
       runNextFrame()
     }
@@ -346,13 +380,17 @@ describe('connectPanePty', () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
       frameCallbacks.push(callback)
+
       return frameCallbacks.length
     })
+
     const runNextFrame = (): void => {
       const callback = frameCallbacks.shift()
+
       if (!callback) {
         throw new Error('expected a queued animation frame')
       }
+
       callback(0)
     }
 
@@ -365,10 +403,13 @@ describe('connectPanePty', () => {
     })
     mainTransport.connect.mockImplementation(async () => {
       mainPtyId = 'pty-main'
+
       const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
+
       onPtySpawn?.(mainPtyId)
+
       return mainPtyId
     })
     let setupPtyId: string | null = null
@@ -376,10 +417,13 @@ describe('connectPanePty', () => {
     setupTransport.getPtyId.mockImplementation(() => setupPtyId)
     setupTransport.connect.mockImplementation(async () => {
       setupPtyId = 'pty-setup'
+
       const onPtySpawn = createdTransportOptions[1]?.onPtySpawn as
         | ((ptyId: string) => void)
         | undefined
+
       onPtySpawn?.(setupPtyId)
+
       return setupPtyId
     })
     transportFactoryQueue.push(mainTransport, setupTransport)
@@ -388,9 +432,11 @@ describe('connectPanePty', () => {
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
       ptyIdsByTabId: { 'tab-1': [] }
     }
+
     const updateStoreTabPtyId = vi.fn((_tabId: string, ptyId: string) => {
       mockStoreState.tabsByWorktree['wt-1'][0].ptyId = ptyId
       const livePtyIds = mockStoreState.ptyIdsByTabId?.['tab-1'] ?? []
+
       if (!livePtyIds.includes(ptyId)) {
         livePtyIds.push(ptyId)
       }
@@ -400,18 +446,22 @@ describe('connectPanePty', () => {
     const setupPane = createPane(2)
     let splitMounted = false
     const root = createMeasuredElement({ rect: () => createRect(1200, 800) })
+
     const split = createMeasuredElement({
       className: () => (splitMounted ? 'pane-split is-vertical' : ''),
       rect: () => createRect(1200, 800)
     })
+
     const mainContainer = createMeasuredElement({
       parentElement: () => (splitMounted ? split : root),
       rect: () => (splitMounted ? createRect(600, 800) : createRect(1200, 800))
     })
+
     const setupContainer = createMeasuredElement({
       parentElement: () => split,
       rect: () => createRect(599, 800, 601, 0)
     })
+
     mainPane.container = mainContainer
     setupPane.container = setupContainer
     const manager = createManager(2)
@@ -440,11 +490,13 @@ describe('connectPanePty', () => {
     for (let frame = 0; frame < 40 && setupTransport.connect.mock.calls.length === 0; frame++) {
       runNextFrame()
     }
+
     expect(setupTransport.connect).toHaveBeenCalledTimes(1)
     expect(mockStoreState.tabsByWorktree['wt-1'][0].ptyId).toBe('pty-setup')
     expect(mainTransport.connect).not.toHaveBeenCalled()
 
     splitMounted = true
+
     for (
       let frame = 0;
       frame < 20 &&
@@ -506,6 +558,7 @@ describe('connectPanePty', () => {
 
     setupSpawn.resolve('pty-setup')
     mainSpawn.resolve('pty-main')
+
     for (let i = 0; i < 20; i++) {
       await Promise.resolve()
     }
@@ -525,6 +578,7 @@ describe('connectPanePty', () => {
     transport.getPtyId.mockImplementation(() => currentPtyId)
     transport.connect.mockImplementation(async () => {
       currentPtyId = 'pty-daemon-reattach'
+
       return { id: currentPtyId, isReattach: true }
     })
     transportFactoryQueue.push(transport)
@@ -556,6 +610,7 @@ describe('connectPanePty', () => {
       callbacks.onReattachDetermined?.()
       transport.getPtyId.mockReturnValue(stablePtyId)
       callbacks.onData?.('NEWER-LIVE-SSH-OUTPUT')
+
       return {
         id: stablePtyId,
         isReattach: true,
@@ -574,24 +629,30 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const { parseCallbacks, writes } = captureCallbackTerminalWrites(pane)
+
     const deps = createDeps({
       startup: { command: 'codex resume provider-session' }
     })
 
     connectPanePty(pane as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(4)
+
     if (!onDataHandler || parseCallbacks.length === 0) {
       throw new Error('expected replay and terminal input handlers')
     }
+
     ;(onDataHandler as (data: string) => void)('DURING_ADOPTION_REPLAY\r')
     expect(transport.sendInput).not.toHaveBeenCalledWith('DURING_ADOPTION_REPLAY\r')
+
     for (let step = 0; step < 30; step += 1) {
       parseCallbacks.shift()?.()
       await flushAsyncTicks(2)
     }
+
     ;(onDataHandler as (data: string) => void)('AFTER_ADOPTION_REPLAY\r')
 
     expect(pane.container.dataset.ptyId).toBe(stablePtyId)
@@ -619,6 +680,7 @@ describe('connectPanePty', () => {
     let onDataHandler: ((data: string) => void) | null = null
     pane.terminal.onData = vi.fn(((handler: (data: string) => void) => {
       onDataHandler = handler
+
       return { dispose: vi.fn() }
     }) as typeof pane.terminal.onData)
     const manager = createManager(1)
@@ -629,9 +691,11 @@ describe('connectPanePty', () => {
     connectPanePty(pane as never, manager as never, deps as never)
 
     expect(onDataHandler).toBeDefined()
+
     if (!onDataHandler) {
       throw new Error('expected onData handler to be registered')
     }
+
     // Simulate xterm emitting a DA1 auto-reply during replay parse.
     ;(onDataHandler as (data: string) => void)('\x1b[?1;2c')
     expect(transport.sendInput).not.toHaveBeenCalled()

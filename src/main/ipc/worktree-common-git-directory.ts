@@ -26,12 +26,15 @@ function isFileStat(value: GitDirectoryStat): boolean {
 function runtimeDirname(pathValue: string): string {
   const normalized = normalizeRuntimePathSeparators(pathValue).replace(/\/+$/, '')
   const index = normalized.lastIndexOf('/')
+
   if (index === -1) {
     return '.'
   }
+
   if (index === 0) {
     return '/'
   }
+
   return normalized.slice(0, index)
 }
 
@@ -42,25 +45,33 @@ export async function resolveWorktreeCommonGitDirectory(
   const dotGitPath = resolveRuntimePath(repo.path, '.git')
   const statPath = access.stat ?? stat
   const readText = access.readFile ?? ((path: string) => readFile(path, 'utf8'))
+
   try {
     const dotGitStat = await statPath(dotGitPath)
+
     if (isDirectoryStat(dotGitStat)) {
       return dotGitPath
     }
+
     if (!isFileStat(dotGitStat)) {
       return null
     }
+
     const content = await readText(dotGitPath)
     const gitDir = content.match(/^gitdir:\s*(.+)\s*$/m)?.[1]?.trim()
+
     if (!gitDir) {
       return null
     }
+
     const resolvedGitDir = resolveRuntimePath(repo.path, gitDir)
+
     return getRuntimePathBasename(runtimeDirname(resolvedGitDir)) === 'worktrees'
       ? runtimeDirname(runtimeDirname(resolvedGitDir))
       : resolvedGitDir
   } catch (error) {
     console.warn(`[worktree-base-watcher] cannot resolve git common dir for ${repo.id}:`, error)
+
     return null
   }
 }

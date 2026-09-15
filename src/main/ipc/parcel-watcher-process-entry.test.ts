@@ -16,10 +16,13 @@ vi.mock('node:fs', () => ({
   watch: watchMock,
   writeFileSync: writeFileSyncMock
 }))
+
 vi.mock('node:fs/promises', () => ({ stat: statMock }))
+
 vi.mock('./shallow-watch-delivery-probe', () => ({
   detectShallowWatchDelivery: detectShallowWatchDeliveryMock
 }))
+
 vi.mock('@parcel/watcher', () => ({ subscribe: subscribeMock }))
 
 describe('parcel watcher process canary', () => {
@@ -47,16 +50,19 @@ describe('parcel watcher process canary', () => {
         process.off('message', listener)
       }
     }
+
     for (const listener of process.listeners('exit')) {
       if (!originalExitListeners.includes(listener)) {
         process.off('exit', listener)
       }
     }
+
     for (const listener of process.listeners('disconnect')) {
       if (!originalDisconnectListeners.includes(listener)) {
         process.off('disconnect', listener)
       }
     }
+
     process.send = originalSend
     vi.useRealTimers()
     vi.restoreAllMocks()
@@ -70,6 +76,7 @@ describe('parcel watcher process canary', () => {
     watchMock.mockImplementation(() => {
       const watcher = new EventEmitter() as EventEmitter & { close: () => void }
       watcher.close = () => watcher.emit('close')
+
       return watcher
     })
     const sendMock = vi.fn()
@@ -93,10 +100,12 @@ describe('parcel watcher process canary', () => {
 
   it('hosts shallow subscriptions without invoking the recursive native watcher', async () => {
     detectShallowWatchDeliveryMock.mockResolvedValue(true)
+
     const watcherCallbacks = new Map<
       string,
       (eventType: string, fileName: string | Buffer | null) => void
     >()
+
     watchMock.mockImplementation(
       (
         path: string,
@@ -106,6 +115,7 @@ describe('parcel watcher process canary', () => {
         watcherCallbacks.set(path, callback)
         const watcher = new EventEmitter() as EventEmitter & { close: () => void }
         watcher.close = () => watcher.emit('close')
+
         return watcher
       }
     )
@@ -197,6 +207,7 @@ describe('parcel watcher process canary', () => {
     let finishSecondCrawl:
       | ((subscription: { unsubscribe: () => Promise<void> }) => void)
       | undefined
+
     const deadlockedUnsubscribe = vi.fn(() => new Promise<void>(() => undefined))
     subscribeMock
       .mockResolvedValueOnce({ unsubscribe: vi.fn() })
@@ -293,6 +304,7 @@ describe('parcel watcher process canary', () => {
     let finishActiveCrawl:
       | ((subscription: { unsubscribe: () => Promise<void> }) => void)
       | undefined
+
     subscribeMock.mockResolvedValueOnce({ unsubscribe: vi.fn() }).mockReturnValueOnce(
       new Promise((resolve) => {
         finishActiveCrawl = resolve
@@ -405,10 +417,12 @@ describe('parcel watcher process canary', () => {
     let callback:
       | ((err: Error | null, events: { type: string; path: string }[]) => void)
       | undefined
+
     subscribeMock
       .mockResolvedValueOnce({ unsubscribe: vi.fn() })
       .mockImplementationOnce(async (_dir, nextCallback) => {
         callback = nextCallback
+
         return { unsubscribe: vi.fn() }
       })
     statMock.mockImplementation(async (eventPath: string) => ({
@@ -460,10 +474,12 @@ describe('parcel watcher process canary', () => {
     let callback:
       | ((err: Error | null, events: { type: string; path: string }[]) => void)
       | undefined
+
     subscribeMock
       .mockResolvedValueOnce({ unsubscribe: vi.fn() })
       .mockImplementationOnce(async (_dir, nextCallback) => {
         callback = nextCallback
+
         return { unsubscribe: vi.fn() }
       })
     const sendMock = vi.fn()
@@ -500,23 +516,29 @@ describe('parcel watcher process canary', () => {
     let callback:
       | ((err: Error | null, events: { type: string; path: string }[]) => void)
       | undefined
+
     let releaseFirstEvent: (() => void) | undefined
     const sentEventPaths: string[] = []
     subscribeMock
       .mockResolvedValueOnce({ unsubscribe: vi.fn() })
       .mockImplementationOnce(async (_dir, nextCallback) => {
         callback = nextCallback
+
         return { unsubscribe: vi.fn() }
       })
     process.send = vi.fn((message, onSent) => {
       if (message.op !== 'events') {
         return true
       }
+
       sentEventPaths.push(message.events[0]?.path ?? '')
+
       if (!releaseFirstEvent) {
         releaseFirstEvent = onSent
+
         return false
       }
+
       return true
     }) as typeof process.send
 
@@ -549,19 +571,23 @@ describe('parcel watcher process canary', () => {
     let callback:
       | ((err: Error | null, events: { type: string; path: string }[]) => void)
       | undefined
+
     let releaseFirstEvent: (() => void) | undefined
     const unsubscribe = vi.fn().mockResolvedValue(undefined)
     subscribeMock
       .mockResolvedValueOnce({ unsubscribe: vi.fn() })
       .mockImplementationOnce(async (_dir, nextCallback) => {
         callback = nextCallback
+
         return { unsubscribe }
       })
     process.send = vi.fn((message, onSent) => {
       if (message.op === 'events' && !releaseFirstEvent) {
         releaseFirstEvent = onSent
+
         return false
       }
+
       return true
     }) as typeof process.send
 

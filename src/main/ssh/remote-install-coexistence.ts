@@ -57,6 +57,7 @@ export function selectRemoteInstallModel(input: {
         'both install directories on disk is fine and expected.'
     }
   }
+
   if (input.registration === 'none') {
     return {
       outcome: 'refuse',
@@ -66,9 +67,11 @@ export function selectRemoteInstallModel(input: {
         'as an orcad peer; what is already installed on it does not decide which it is.'
     }
   }
+
   const model: RemoteInstallModelId = input.registration === 'ssh-target' ? 'relay' : 'orcad'
   const inventory = inventoryRemoteInstallDirs(input.installedDirNames)
   const coexisting = model === 'relay' ? inventory.orcad : inventory.relay
+
   return {
     outcome: 'use',
     model,

@@ -55,7 +55,9 @@ function resolveLocalProjectRuntime(
   const wslAvailable = hasCachedWslAvailability()
     ? (getCachedWslAvailability() ?? undefined)
     : undefined
+
   const availableWslDistros = hasCachedWslDistros() ? getCachedWslDistros() : null
+
   return resolveProjectExecutionRuntime({
     appPlatform: process.platform,
     projectId: project.id,
@@ -76,10 +78,13 @@ export function resolveLocalProjectRuntimeForRepo(
   ) {
     return undefined
   }
+
   const project = store.getProjects().find((entry) => entry.sourceRepoIds.includes(repo.id))
+
   if (!project) {
     return undefined
   }
+
   return resolveLocalProjectRuntime(store, project)
 }
 
@@ -88,32 +93,41 @@ export function resolveLocalProjectRuntimesForRepos(
   repos: readonly Repo[]
 ): ReadonlyMap<string, ProjectExecutionRuntimeResolution> {
   const runtimeByRepoId = new Map<string, ProjectExecutionRuntimeResolution>()
+
   if (!canResolveProjectRuntimeForRepo(store)) {
     return runtimeByRepoId
   }
+
   const requestedRepoIds = new Set(
     repos
       .filter((repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
       .map((repo) => repo.id)
   )
+
   if (requestedRepoIds.size === 0) {
     return runtimeByRepoId
   }
+
   const settings = store.getSettings()
+
   for (const project of store.getProjects()) {
     const matchingRepoIds = project.sourceRepoIds.filter(
       (repoId) => requestedRepoIds.has(repoId) && !runtimeByRepoId.has(repoId)
     )
+
     if (matchingRepoIds.length === 0) {
       continue
     }
+
     // Why: one project runtime applies to every source repo in that project;
     // resolving it once prevents mobile polls from rescanning project settings.
     const runtime = resolveLocalProjectRuntime(store, project, settings)
+
     for (const repoId of matchingRepoIds) {
       runtimeByRepoId.set(repoId, runtime)
     }
   }
+
   return runtimeByRepoId
 }
 
@@ -124,9 +138,12 @@ export function resolveLocalProjectRuntimeForWorktreeId(
   if (!store || !worktreeId) {
     return undefined
   }
+
   if (!canResolveProjectRuntimeForWorktreeId(store)) {
     return undefined
   }
+
   const repo = store.getRepo(getRepoIdFromWorktreeId(worktreeId))
+
   return repo ? resolveLocalProjectRuntimeForRepo(store, repo) : undefined
 }

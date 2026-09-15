@@ -8,6 +8,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 export function findCrossHostPaneTabIds(state: PersistedState): ReadonlySet<string> {
   const seenTabIds = new Set<string>()
   const collidingTabIds = new Set<string>()
+
   for (const session of [
     state.workspaceSession,
     ...Object.values(state.workspaceSessionsByHostId ?? {})
@@ -17,9 +18,11 @@ export function findCrossHostPaneTabIds(state: PersistedState): ReadonlySet<stri
         collidingTabIds.add(tabId)
         continue
       }
+
       seenTabIds.add(tabId)
     }
   }
+
   return collidingTabIds
 }
 
@@ -30,5 +33,6 @@ export function withoutPaneTabIds(
   if (tabIds.size === 0) {
     return leafIdByInputLeafIdByTabId
   }
+
   return new Map([...leafIdByInputLeafIdByTabId].filter(([tabId]) => !tabIds.has(tabId)))
 }

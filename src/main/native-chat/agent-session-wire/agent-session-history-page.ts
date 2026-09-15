@@ -40,6 +40,7 @@ export function resolveHistoryLimit(limit: number | undefined): number {
   if (limit === undefined || !Number.isFinite(limit)) {
     return AGENT_SESSION_HISTORY_DEFAULT_LIMIT
   }
+
   return Math.min(AGENT_SESSION_HISTORY_MAX_LIMIT, Math.max(1, Math.floor(limit)))
 }
 
@@ -53,29 +54,38 @@ export function readAgentSessionHistory(
   if (journal.isReadOnly) {
     return historyReset(snapshot, 'schema_unreadable')
   }
+
   const limit = resolveHistoryLimit(request.limit)
+
   if (request.direction === 'after') {
     return readForward(journal, snapshot, request.cursor, limit)
   }
+
   const cursor = request.direction === 'before' ? request.cursor : undefined
+
   if (cursor) {
     if (cursor.epoch !== snapshot.cursor.epoch) {
       return historyReset(snapshot, 'epoch_changed')
     }
+
     if (cursor.sequence > snapshot.cursor.sequence) {
       return historyReset(snapshot, 'cursor_ahead')
     }
   }
+
   const older = cursor
     ? snapshot.items.filter((item) => item.sequence < cursor.sequence)
     : snapshot.items
+
   const windowed = newestWholeSequenceGroups(older, limit)
+
   const { items, dropped } = boundHistoryItemsByBytes(
     windowed,
     'newest',
     submissionBytesByItemId(snapshot.submissions),
     HISTORY_PAGE_CONTENT_BUDGET_BYTES
   )
+
   return {
     ok: true,
     page: buildPage({
@@ -101,11 +111,14 @@ export function createAgentSessionCatchUpReader(
   journal: AgentSessionJournal
 ): (request: AgentSessionHistoryRequest) => AgentSessionHistoryResult {
   let snapshot = journal.snapshot()
+
   return (request) => {
     const live = journal.cursor()
+
     if (live.epoch !== snapshot.cursor.epoch || live.sequence !== snapshot.cursor.sequence) {
       snapshot = journal.snapshot()
     }
+
     return readAgentSessionHistory(journal, request, snapshot)
   }
 }
@@ -122,12 +135,14 @@ function buildHydrationPage(
   fence?: number
 ): AgentSessionHistoryPage {
   const items = newestWholeSequenceGroups(snapshot.items, AGENT_SESSION_HISTORY_MAX_LIMIT)
+
   const bounded = boundHistoryItemsByBytes(
     items,
     'newest',
     submissionBytesByItemId(snapshot.submissions),
     HISTORY_PAGE_CONTENT_BUDGET_BYTES
   )
+
   return buildPage({
     snapshot,
     direction: 'tail',
@@ -165,12 +180,16 @@ function readForward(
     // a page it cannot place.
     return historyReset(snapshot, 'cursor_ahead')
   }
+
   // One lookahead preserves hasNewer without rereading the entire remaining journal per page.
   const since = journal.readSince(cursor, limit + 1)
+
   if (!since.ok) {
     return historyReset(snapshot, since.reset)
   }
+
   const submissionBytes = submissionBytesByItemId(snapshot.submissions)
+
   // The page cost is EVERYTHING variable it carries: items with their
   // submissions AND removal ids — a legal pre-bounding tombstone id can dwarf
   // every item on the page.
@@ -183,43 +202,55 @@ function readForward(
       (total, itemId) => total + Buffer.byteLength(JSON.stringify(itemId), 'utf8') + 1,
       0
     )
+
   // Rows replay forward, so the byte bound shrinks the ROW window rather than
   // clipping projected items: dropping an item while advancing the cursor past
   // the rows that touched it would lose that revision for good.
   let rows = since.rows.slice(0, limit)
+
   let projected = projectJournalBatch({
     rows,
     snapshot,
     afterSequence: cursor.sequence,
     canonicalItemId: (itemId) => journal.canonicalItemId(itemId)
   })
+
   if (!projected.ok) {
     return historyReset(snapshot, projected.reset)
   }
+
   let contentBytes = pageContentBytes(projected.batch.items, projected.batch.removedItemIds)
+
   while (rows.length > 1 && contentBytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
     rows = rows.slice(0, Math.ceil(rows.length / 2))
+
     const shrunk = projectJournalBatch({
       rows,
       snapshot,
       afterSequence: cursor.sequence,
       canonicalItemId: (itemId) => journal.canonicalItemId(itemId)
     })
+
     if (!shrunk.ok) {
       return historyReset(snapshot, shrunk.reset)
     }
+
     projected = shrunk
     contentBytes = pageContentBytes(projected.batch.items, projected.batch.removedItemIds)
   }
+
   // One row can still touch an over-budget item; degrade it visibly.
   let items = projected.batch.items
+
   if (contentBytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
     items = items.map((item) => {
       const bytes = historyEntryBytes(item, submissionBytes)
+
       return bytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES ? oversizedHistoryItem(item, bytes) : item
     })
     contentBytes = pageContentBytes(items, projected.batch.removedItemIds)
   }
+
   if (contentBytes > HISTORY_PAGE_CONTENT_BUDGET_BYTES) {
     // A single row's semantic payload — in practice a pre-bounding oversized
     // removal id — can never fit any page, and truncating a removal id would
@@ -228,7 +259,9 @@ function readForward(
     // client resumes from the live cursor past this row.
     return historyReset(snapshot, 'cursor_compacted')
   }
+
   const lastSequence = rows.at(-1)?.seq ?? cursor.sequence
+
   return {
     ok: true,
     page: buildPage({
@@ -260,6 +293,7 @@ function buildPage(input: {
   const pageItemIds = new Set(input.items.map((item) => item.itemId))
   const oldest = input.items[0]
   const newest = input.items.at(-1)
+
   return {
     sessionId: input.snapshot.sessionId,
     epoch,

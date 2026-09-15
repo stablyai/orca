@@ -25,12 +25,14 @@ import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 // session-scanner-opencode-sqlite-discovery.ts.
 
 const OPENCODE_SQLITE_PREVIEW_LIMIT = 5
+
 // Why (#8864): a heavy session can hold ~10K parts (25-150 KB tool-output
 // blobs). Join preview parts against only the newest N messages instead of
 // scanning every part of the session, using the real (session_id, time_created,
 // id) index. Bounds the read to those messages' parts; the 15 s parse timeout
 // caps the residual for a single pathological giant part.
 const OPENCODE_SQLITE_PREVIEW_MESSAGE_WINDOW = 100
+
 // Bounds a pathological single message; a real typed prompt is a handful of parts.
 const FIRST_USER_PROMPT_PART_LIMIT = 512
 
@@ -80,6 +82,7 @@ function buildSessionQuery(db: SyncDatabase): string {
         WHERE m.session_id = s.id
           AND json_extract(m.data, '$.role') IN ('user','assistant'))`
     : '0'
+
   return `SELECT s.id,
                  ${sessionColumnSelect(db, 'title')} AS title,
                  ${sessionColumnSelect(db, 'directory')} AS directory,
@@ -102,15 +105,19 @@ function extractModelId(modelJson: string | null): string | null {
   if (!modelJson) {
     return null
   }
+
   try {
     const parsed = JSON.parse(modelJson) as unknown
+
     const record =
       parsed && typeof parsed === 'object' && !Array.isArray(parsed)
         ? (parsed as Record<string, unknown>)
         : null
+
     if (!record) {
       return null
     }
+
     // Why: OpenCode 1.17.x stores model as {"id":"glm-5.2","providerID":"..."}.
     // Older schemas used {"modelID":"..."}; accept both.
     return (
@@ -127,22 +134,27 @@ function mapPreviewRole(role: string | null): AiVaultSessionPreviewMessage['role
   if (role === 'user' || role === 'assistant' || role === 'system' || role === 'tool') {
     return role
   }
+
   return 'unknown'
 }
 
 function extractPartText(partData: string): string | null {
   try {
     const parsed = JSON.parse(partData) as unknown
+
     const record =
       parsed && typeof parsed === 'object' && !Array.isArray(parsed)
         ? (parsed as Record<string, unknown>)
         : null
+
     if (!record) {
       return null
     }
+
     if (typeof record.text === 'string') {
       return record.text
     }
+
     return null
   } catch {
     return null
@@ -179,15 +191,19 @@ function readFirstUserPromptFromOpenCodeDb(db: SyncDatabase, sessionId: string):
       .all(sessionId) as { part_data: string }[]
 
     const parts: string[] = []
+
     for (const row of rows) {
       const text = extractPartText(row.part_data)
+
       if (text) {
         parts.push(text)
       }
     }
+
     if (parts.length === 0) {
       return null
     }
+
     return normalizeFullFirstUserPromptText(parts.join('\n'))
   } catch {
     return null
@@ -198,6 +214,7 @@ function buildPreviewQuery(db: SyncDatabase): string | null {
   if (!canReadOpenCodeMessageParts(db)) {
     return null
   }
+
   return `SELECT json_extract(m.data, '$.role') AS role,
                  p.data AS part_data,
                  p.time_created,
@@ -245,10 +262,13 @@ function readSession(args: {
   platform: NodeJS.Platform
 }): AiVaultSession | null {
   const { db, dbPath, sessionId, platform } = args
+
   if (!canReadOpenCodeSessions(db)) {
     return null
   }
+
   const row = db.prepare(buildSessionQuery(db)).get(sessionId) as SessionRow | undefined
+
   if (!row || row.id !== sessionId) {
     return null
   }
@@ -257,6 +277,7 @@ function readSession(args: {
     typeof row.time_updated === 'number' && row.time_updated > 0
       ? row.time_updated
       : row.time_created
+
   // Why: discovery uses a synthetic db#session path only for parser routing.
   // The UI's log open/reveal actions need a real filesystem path.
   const accumulator = createAccumulator({
@@ -268,6 +289,7 @@ function readSession(args: {
     },
     sessionId
   })
+
   accumulator.title = normalizeTitleText(row.title ?? '')
   accumulator.cwd = row.directory
   accumulator.model = extractModelId(row.model_json)
@@ -278,6 +300,7 @@ function readSession(args: {
   updateTimeline(accumulator, row.time_updated)
 
   const previewSql = buildPreviewQuery(db)
+
   if (previewSql) {
     // Why: SQL already dropped anything older than the newest-N window, so the
     // accumulator never shifts and cannot detect the truncation itself. Ask for
@@ -285,23 +308,30 @@ function readSession(args: {
     const probedRows = db
       .prepare(previewSql)
       .all(sessionId, OPENCODE_SQLITE_PREVIEW_LIMIT + 1) as PreviewRow[]
+
     if (probedRows.length > OPENCODE_SQLITE_PREVIEW_LIMIT) {
       accumulator.previewMessagesTruncated = true
     }
+
     // Newest-first, so the probe row to drop is the oldest one at the tail.
     const previewRows = probedRows.slice(0, OPENCODE_SQLITE_PREVIEW_LIMIT)
+
     // Why: query returns newest-first; push in chronological order so the
     // accumulator's ring buffer keeps the newest OPENCODE_SQLITE_PREVIEW_LIMIT
     // messages.
     for (let i = previewRows.length - 1; i >= 0; i--) {
       const previewRow = previewRows[i]
+
       if (!previewRow) {
         continue
       }
+
       const text = extractPartText(previewRow.part_data)
+
       if (!text) {
         continue
       }
+
       addPreviewMessage(accumulator, {
         role: mapPreviewRole(previewRow.role),
         text,
@@ -309,6 +339,7 @@ function readSession(args: {
         // Preview window is newest-N; first-prompt is loaded separately below.
         seedFirstUserPrompt: false
       })
+
       if (previewRow.role === 'user' && !accumulator.title) {
         accumulator.title =
           normalizeTitleText(previewRow.summary_title ?? '') ||

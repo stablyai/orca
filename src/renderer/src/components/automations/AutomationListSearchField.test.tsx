@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AutomationListSearchField } from './AutomationListSearchField'
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -71,6 +72,7 @@ describe('AutomationListSearchField', () => {
       bubbles: true,
       cancelable: true
     })
+
     input?.dispatchEvent(modified)
     expect(modified.defaultPrevented).toBe(false)
     expect(onArrowNavigate).toHaveBeenCalledTimes(2)
@@ -109,6 +111,7 @@ describe('AutomationListSearchField', () => {
       bubbles: true,
       cancelable: true
     })
+
     input?.dispatchEvent(shiftEnter)
     expect(shiftEnter.defaultPrevented).toBe(false)
     expect(onEnter).toHaveBeenCalledTimes(1)

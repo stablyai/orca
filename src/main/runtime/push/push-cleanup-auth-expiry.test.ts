@@ -5,12 +5,15 @@ import { buildPushChallengeFixture, createPushHostKeypair } from './push-host-ch
 
 it('retains a delete when its session proof expires before the DELETE is attempted', async () => {
   const keypair = createPushHostKeypair()
+
   const hostFingerprint = createHash('sha256')
     .update(keypair.publicKey)
     .digest('base64url')
     .slice(0, 16)
+
   let now = 1_770_000_000_000
   let deletes = 0
+
   const client = new PushGatewayClient({
     gatewayUrl: 'https://push.example.test',
     keypair,
@@ -24,18 +27,24 @@ it('retains a delete when its session proof expires before the DELETE is attempt
           issuedAt: now,
           challengeId: 'challenge-1'
         })
+
         now += 11_000
+
         return Response.json(fixture.challenge)
       }
+
       if (String(url).endsWith('/session')) {
         return Response.json({ error: 'invalid_proof' }, { status: 401 })
       }
+
       if (init?.method === 'DELETE') {
         deletes++
       }
+
       return new Response(null, { status: 204 })
     }) as typeof fetch
   })
+
   expect(await client.deleteDevice('registration-1')).toEqual(false)
   expect(deletes).toBe(0)
 })

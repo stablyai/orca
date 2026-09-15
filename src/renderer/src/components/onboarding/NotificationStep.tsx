@@ -43,11 +43,13 @@ export function NotificationStep({
 }: NotificationStepProps): React.JSX.Element {
   const notificationSettings = settings?.notifications
   const notificationSettingsRef = useRef(notificationSettings)
+
   // Why: undefined settings are still loading — assume enabled (the default)
   // so the fresh-install permission flow starts without waiting.
   const [macPermissionState, setMacPermissionState] = useMacNotificationPermissionState(
     notificationSettings?.enabled !== false
   )
+
   const [isPickingSound, setIsPickingSound] = useState(false)
   const [selectPortalRoot, setSelectPortalRoot] = useState<HTMLElement | null>(null)
   const syncedNotificationSettingsRef = useRef(notificationSettings)
@@ -70,13 +72,16 @@ export function NotificationStep({
     updates: Partial<GlobalSettings['notifications']>
   ): Promise<void> => {
     const current = notificationSettingsRef.current
+
     if (!current) {
       return
     }
+
     const nextNotifications = {
       ...current,
       ...updates
     }
+
     notificationSettingsRef.current = nextNotifications
     await updateSettings({
       notifications: nextNotifications
@@ -92,10 +97,12 @@ export function NotificationStep({
     if (customSoundId === 'system') {
       return
     }
+
     const result = await window.api.notifications.playSound({
       force: true,
       volume: getCustomSoundVolume()
     })
+
     if (!result.played) {
       if (mountedRef.current) {
         toast.error(
@@ -110,8 +117,10 @@ export function NotificationStep({
 
   const handleChooseCustomSound = async (): Promise<void> => {
     setIsPickingSound(true)
+
     try {
       const soundPath = await window.api.shell.pickAudio()
+
       if (soundPath) {
         await updateNotificationSettings({ customSoundId: 'custom', customSoundPath: soundPath })
         await previewSound('custom')
@@ -126,8 +135,10 @@ export function NotificationStep({
   const handleSoundSelect = async (value: NotificationSoundSelectValue): Promise<void> => {
     if (!isNotificationSoundId(value)) {
       await handleChooseCustomSound()
+
       return
     }
+
     await updateNotificationSettings({ customSoundId: value })
     await previewSound(value)
   }
@@ -140,17 +151,22 @@ export function NotificationStep({
           'Notification settings are still loading'
         )
       )
+
       return
     }
+
     const showsMacPermissionCard = macPermissionState !== null
+
     const outcome = await sendNotificationSettingsTestNotification(
       notificationSettings,
       getCustomSoundVolume(),
       showsMacPermissionCard ? { suppressSystemPermissionToasts: true } : undefined
     )
+
     if (!mountedRef.current || !showsMacPermissionCard) {
       return
     }
+
     // Why: the test doubles as a permission re-check — its confirmed outcome
     // is fresher than whatever the mount-time probe reported.
     if (outcome === 'delivered') {
@@ -223,6 +239,7 @@ export function NotificationStep({
               >
                 {soundOptions.map((option) => {
                   const OptionIcon = option.icon
+
                   return (
                     <SelectItem key={option.id} value={option.id}>
                       <OptionIcon className="size-4" />

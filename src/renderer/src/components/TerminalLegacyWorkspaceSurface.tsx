@@ -11,6 +11,7 @@ export function TerminalLegacyWorkspaceSurface({
   if (controller.effectiveActiveLayout || controller.anyMountedWorktreeHasLayout) {
     return null
   }
+
   return (
     <>
       <TerminalLegacyTerminalPanes controller={controller} />

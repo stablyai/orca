@@ -12,8 +12,10 @@ export function applyPdfScalePreference(
 ): void {
   if (typeof preference === 'number') {
     viewer.currentScale = clampPdfScale(preference, bounds.min, bounds.max)
+
     return
   }
+
   viewer.currentScaleValue = 'page-width'
 }
 
@@ -27,5 +29,6 @@ export function stepPdfScalePreference(
     direction === 'in'
       ? clampPdfScale(currentScale * bounds.step, bounds.min, bounds.max)
       : clampPdfScale(currentScale / bounds.step, bounds.min, bounds.max)
+
   return { scale: next, preference: next }
 }

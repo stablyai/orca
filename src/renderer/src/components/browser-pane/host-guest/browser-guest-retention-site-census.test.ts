@@ -109,19 +109,23 @@ const NON_READER_TERM_EXPORTS = [
 
 function productionSources(): Map<string, string> {
   const sources = new Map<string, string>()
+
   for (const entry of readdirSync(RENDERER_SRC, { recursive: true, withFileTypes: true })) {
     if (!entry.isFile() || !/\.tsx?$/.test(entry.name) || entry.name.endsWith('.d.ts')) {
       continue
     }
+
     if (/\.test\.tsx?$/.test(entry.name) || /test-(harness|rig|fixtures)/.test(entry.name)) {
       continue
     }
+
     const filePath = join(entry.parentPath, entry.name)
     sources.set(
       relative(RENDERER_SRC, filePath).split(sep).join('/'),
       readFileSync(filePath, 'utf8')
     )
   }
+
   return sources
 }
 
@@ -169,15 +173,18 @@ describe('browser guest retention site census', () => {
 
   it('keeps each registered site consulting retention through its helper', () => {
     const missing: string[] = []
+
     for (const [file, requiredSymbols] of RETENTION_SITES) {
       const source = sources.get(file)
       expect(source, `${file} is registered as a retention site but no longer exists`).toBeDefined()
+
       for (const symbol of requiredSymbols) {
         if (!new RegExp(`\\b${symbol}\\b`).test(source ?? '')) {
           missing.push(`${file}: ${symbol}`)
         }
       }
     }
+
     expect(missing, 'A registered retention site stopped consulting retention.').toEqual([])
   })
 
@@ -203,10 +210,13 @@ describe('browser guest retention site census', () => {
       ...PER_PAGE_RETENTION_HOOKS,
       ...NON_READER_TERM_EXPORTS
     ])
+
     const unclassified: string[] = []
+
     for (const file of RETENTION_TERM_STORES) {
       const source = sources.get(file)
       expect(source, `${file} is registered as a term store but no longer exists`).toBeDefined()
+
       for (const [, name] of (source ?? '').matchAll(/^export (?:function|const|let) (\w+)/gm)) {
         if (!classified.has(name)) {
           unclassified.push(`${file}: ${name}`)

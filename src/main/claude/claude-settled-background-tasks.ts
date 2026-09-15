@@ -51,8 +51,10 @@ export function claudeBackgroundTaskDetail(
 function setBounded<K, V>(map: Map<K, V>, key: K, value: V): void {
   map.delete(key)
   map.set(key, value)
+
   if (map.size > MAX_RETAINED_TASKS) {
     const oldest = map.keys().next()
+
     if (!oldest.done) {
       map.delete(oldest.value)
     }
@@ -81,6 +83,7 @@ export class ClaudeSettledBackgroundTasks {
   ): void {
     const source = liveSource ?? this.recentlyRemoved.get(id)
     const already = this.settled.get(id)
+
     if (source?.backgrounded) {
       setBounded(this.settled, id, {
         ...claudeBackgroundTaskDetail(id, {
@@ -96,6 +99,7 @@ export class ClaudeSettledBackgroundTasks {
         ...(outcome.totalTokens !== undefined ? { totalTokens: outcome.totalTokens } : {})
       })
     }
+
     this.recentlyRemoved.delete(id)
   }
 
@@ -106,9 +110,11 @@ export class ClaudeSettledBackgroundTasks {
     this.settled.delete(id)
     this.recentlyRemoved.delete(id)
     const source = settled ?? removed
+
     if (!source || source.startedAt === undefined) {
       return undefined
     }
+
     // Positive live evidence, so it re-enters live in this turn too; a resumed
     // task is always backgrounded, which is what actually gates its visibility.
     return {

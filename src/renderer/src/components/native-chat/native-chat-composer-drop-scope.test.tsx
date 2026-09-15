@@ -32,7 +32,9 @@ const intake = vi.hoisted(() => ({
   readFile: vi.fn(),
   upload: vi.fn()
 }))
+
 vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
+
 // Keeps the real notice strings so the silent-failure guards assert what users see.
 vi.mock('./native-chat-attachment-upload', async (importOriginal) => ({
   ...(await importOriginal<typeof AttachmentUploadModule>()),
@@ -44,7 +46,9 @@ vi.mock('electron', () => ({
   ipcRenderer: electron,
   webUtils: { getPathForFile: electron.getPathForFile }
 }))
+
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+
 vi.mock('@/runtime/runtime-terminal-inspection', () => ({ isRemoteRuntimePtyId: () => false }))
 
 import {
@@ -56,6 +60,7 @@ import {
 function ComposerProbe({ pane, hidden = false }: { pane: string; hidden?: boolean }) {
   const textareaRef = useRef<NativeChatComposerInput>(null)
   const [notice, setNotice] = useState<string | null>(null)
+
   const attachments = useNativeChatComposerAttachments({
     attachmentScopeKey: pane,
     allowWithoutTarget: true,
@@ -68,13 +73,16 @@ function ComposerProbe({ pane, hidden = false }: { pane: string; hidden?: boolea
     setDraft: () => {},
     setNotice
   })
+
   const { attachExternalPaths } = useNativeChatExternalAttachments({
     terminalTabId: pane,
     disabled: false,
     attachResolvedPaths: attachments.attachResolvedPaths,
     setNotice
   })
+
   useNativeChatFileAttachmentActions(pane, attachExternalPaths)
+
   return (
     <div data-pane={pane} style={{ display: hidden ? 'none' : 'block' }}>
       <div data-native-file-drop-target="composer" data-composer-scope-key={pane}>
@@ -125,6 +133,7 @@ async function dropTwoImages(target: Element): Promise<void> {
 
 function WorkspaceComposerProbe({ onDrop }: { onDrop: (paths: string[]) => void }) {
   useComposerDropListener(onDrop)
+
   return <div data-native-file-drop-target="composer" data-workspace-composer="true" />
 }
 
@@ -217,6 +226,7 @@ describe('native chat composer drop scoping', () => {
         <ComposerProbe pane="chat-b" hidden />
       </>
     )
+
     expect(readNativeChatAttachmentCache('chat-a')).toEqual([])
     expect(readNativeChatAttachmentCache('chat-b')).toEqual([])
 
@@ -248,6 +258,7 @@ describe('native chat composer drop scoping', () => {
         <div data-native-file-drop-target="composer" data-unscoped-composer="true" />
       </>
     )
+
     await dropTwoImages(view.container.querySelector('[data-unscoped-composer="true"]')!)
     expect(electron.send).toHaveBeenCalledExactlyOnceWith('terminal:file-dropped-from-preload', {
       target: 'composer',
@@ -259,6 +270,7 @@ describe('native chat composer drop scoping', () => {
 
   it('isolates native chat drops from the workspace composer while preserving workspace drops', async () => {
     const workspaceDrop = vi.fn()
+
     const view = render(
       <>
         <ComposerProbe pane="chat-a" />
@@ -298,16 +310,19 @@ describe('native chat composer drop scoping', () => {
       if (!authorized.has(filePath)) {
         throw new Error('Access denied: path resolves outside allowed directories')
       }
+
       return { content: 'AA==', isBinary: true, mimeType: 'image/png' }
     })
     await expect(intake.readFile({ filePath: '/repro/first.png' })).rejects.toThrow('Access denied')
     intake.readFile.mockClear()
+
     const view = render(
       <>
         <ComposerProbe pane="chat-a" />
         <ComposerProbe pane="chat-b" hidden />
       </>
     )
+
     await dropTwoImages(
       view.container.querySelector(
         '[data-pane="chat-a"] [data-native-file-drop-target="composer"]'
@@ -331,12 +346,14 @@ describe('native chat composer drop scoping', () => {
   it('uploads once for the SSH drop owner without authorizing remote paths locally', async () => {
     intake.owner = { kind: 'ssh', connectionId: 'conn-1' }
     intake.upload.mockResolvedValue(['/remote/first.png', '/remote/second.png'])
+
     const view = render(
       <>
         <ComposerProbe pane="chat-a" />
         <ComposerProbe pane="chat-b" hidden />
       </>
     )
+
     await dropTwoImages(view.container.querySelector('[data-pane="chat-a"] .ProseMirror')!)
     expect(intake.upload).toHaveBeenCalledExactlyOnceWith(
       ['/repro/first.png', '/repro/second.png'],
@@ -359,6 +376,7 @@ describe('native chat composer drop scoping', () => {
         </div>
       </div>
     )
+
     await dropTwoImages(view.container.querySelector('[data-inner-drop-point="true"]')!)
     expect(electron.send).toHaveBeenCalledExactlyOnceWith('terminal:file-dropped-from-preload', {
       target: 'composer',
@@ -375,6 +393,7 @@ describe('native chat composer drop scoping', () => {
         <div data-native-file-drop-target="editor" />
       </>
     )
+
     await dropTwoImages(view.container.querySelector('[data-native-file-drop-target="editor"]')!)
     expect(electron.send).toHaveBeenCalledExactlyOnceWith('terminal:file-dropped-from-preload', {
       target: 'editor',

@@ -18,6 +18,7 @@ class FakeElement extends FakeNode {
     if (this.matches(selector)) {
       return this
     }
+
     return this.parentElement?.closest(selector) ?? null
   }
 

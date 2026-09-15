@@ -27,6 +27,7 @@ const PREFIX_QUALITIES: ReadonlySet<PaletteMatchQuality> = new Set<PaletteMatchQ
 ])
 
 const MIN_COMPACT_LENGTH = 2
+
 const SIGILS = new Set(['#', '!'])
 
 function allowedQualities(
@@ -34,24 +35,30 @@ function allowedQualities(
   token: PaletteQueryToken
 ): readonly PaletteMatchQuality[] {
   let qualities = paletteProfileAllowedQualities(field.profile)
+
   if (field.identifier && !identifierKindAllowsPrefix(field.identifier.kind)) {
     qualities = qualities.filter((quality) => !PREFIX_QUALITIES.has(quality))
   }
+
   if (token.isSingleLatinCharacter) {
     qualities = qualities.filter((quality) => SHORT_TOKEN_QUALITIES.has(quality))
   }
+
   if (token.isIdentifierLike) {
     qualities = qualities.filter((quality) => quality !== 'typo')
   }
+
   return qualities
 }
 
 /** `#123` must not reach a GitLab MR, and `!123` must not reach a GitHub PR. */
 function passesSigilGate(field: PaletteIndexedField, token: PaletteQueryToken): boolean {
   const leading = token.text[0]
+
   if (!SIGILS.has(leading)) {
     return true
   }
+
   return field.identifier ? field.identifier.sigil === leading : true
 }
 
@@ -61,18 +68,23 @@ function isWordStart(field: PaletteIndexedField, index: number): boolean {
 
 function matchAtomComponentRun(atom: PaletteAtom, compact: string): [number, number] | null {
   const components = atom.components
+
   for (let start = 0; start < components.length; start += 1) {
     let joined = ''
+
     for (let end = start; end < components.length; end += 1) {
       joined += components[end].text
+
       if (joined.length > compact.length) {
         break
       }
+
       if (joined === compact) {
         return [components[start].start, components[end].end]
       }
     }
   }
+
   return null
 }
 
@@ -91,44 +103,55 @@ function matchLiteral(
   if (qualities.includes('field-exact') && normalized === text) {
     return { quality: 'field-exact', ranges: toRanges(field, 0, normalized.length) }
   }
+
   if (qualities.includes('word-exact')) {
     const word = field.words.find((entry) => entry.text === text)
+
     if (word) {
       return { quality: 'word-exact', ranges: toRanges(field, word.start, word.end) }
     }
+
     const atom = field.atoms.find((entry) => normalized.slice(entry.start, entry.end) === text)
+
     if (atom) {
       return { quality: 'word-exact', ranges: toRanges(field, atom.start, atom.end) }
     }
   }
+
   if (qualities.includes('field-prefix') && normalized.startsWith(text)) {
     return { quality: 'field-prefix', ranges: toRanges(field, 0, text.length) }
   }
+
   if (qualities.includes('word-prefix')) {
     const word = field.words.find((entry) => entry.text.startsWith(text))
     const atom = field.atoms.find((entry) => normalized.startsWith(text, entry.start))
     const start = word && atom ? Math.min(word.start, atom.start) : (word?.start ?? atom?.start)
+
     if (start !== undefined) {
       return { quality: 'word-prefix', ranges: toRanges(field, start, start + text.length) }
     }
   }
 
   const literalIndex = normalized.indexOf(text)
+
   if (literalIndex === -1) {
     return null
   }
+
   if (qualities.includes('boundary-substring') && isWordStart(field, literalIndex)) {
     return {
       quality: 'boundary-substring',
       ranges: toRanges(field, literalIndex, literalIndex + text.length)
     }
   }
+
   if (qualities.includes('literal-substring')) {
     return {
       quality: 'literal-substring',
       ranges: toRanges(field, literalIndex, literalIndex + text.length)
     }
   }
+
   return null
 }
 
@@ -140,12 +163,15 @@ function matchCompact(
   if (!qualities.includes('compact') || token.compact.length < MIN_COMPACT_LENGTH) {
     return null
   }
+
   for (const atom of field.atoms) {
     const run = matchAtomComponentRun(atom, token.compact)
+
     if (run) {
       return { quality: 'compact', ranges: toRanges(field, run[0], run[1]) }
     }
   }
+
   return null
 }
 
@@ -157,14 +183,17 @@ function matchTypo(
   if (!qualities.includes('typo') || !token.isLetterOnly || !isPaletteTypoCandidate(token.text)) {
     return null
   }
+
   for (const word of field.words) {
     if (!isPaletteTypoCandidate(word.text) || !isLetterOnlyWord(word.text)) {
       continue
     }
+
     if (isWithinOnePaletteEdit(token.text, word.text)) {
       return { quality: 'typo', ranges: toRanges(field, word.start, word.end) }
     }
   }
+
   return null
 }
 
@@ -176,7 +205,9 @@ export function matchPaletteField(
   if (token.isPunctuationOnly || !passesSigilGate(field, token)) {
     return null
   }
+
   const qualities = allowedQualities(field, token)
+
   return (
     matchLiteral(field, token, qualities) ??
     matchCompact(field, token, qualities) ??

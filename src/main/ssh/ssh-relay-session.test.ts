@@ -115,8 +115,11 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
+
 const { execCommand } = await import('./ssh-relay-deploy-helpers')
+
 const { getRemoteHostPlatform } = await import('./ssh-remote-platform')
+
 const {
   registerSshPtyProvider,
   unregisterSshPtyProvider,
@@ -125,8 +128,10 @@ const {
   deletePtyOwnership,
   setPtyOwnership
 } = await import('../ipc/pty')
+
 const { registerSshFilesystemProvider, unregisterSshFilesystemProvider } =
   await import('../providers/ssh-filesystem-dispatch')
+
 const { registerSshGitProvider, unregisterSshGitProvider } =
   await import('../providers/ssh-git-dispatch')
 
@@ -148,6 +153,7 @@ describe('SshRelaySession', () => {
   it('hands each PTY data event exactly once to the bounded main intake', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const runtime = { onPtyData: vi.fn(), onPtyExit: vi.fn() }
+
     const session = new SshRelaySession(
       'target-1',
       getMainWindow,
@@ -155,10 +161,13 @@ describe('SshRelaySession', () => {
       mockPortForward,
       runtime as never
     )
+
     await session.establish(mockConn)
+
     const ptyProvider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
       onData: ReturnType<typeof vi.fn>
     }
+
     const onData = ptyProvider.onData.mock.calls[0]?.[0] as (payload: {
       id: string
       data: string
@@ -212,9 +221,11 @@ describe('SshRelaySession', () => {
       if (method === 'preflight.detectAgents') {
         return { agents: ['codex'] }
       }
+
       if (method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD) {
         throw new Error('runtime unavailable')
       }
+
       return { ok: true }
     })
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
@@ -240,9 +251,11 @@ describe('SshRelaySession', () => {
       if (method === 'preflight.detectAgents') {
         return { agents: ['codex'] }
       }
+
       if (method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD) {
         throw Object.assign(new Error('request disposed'), { code: 'DISPOSED' })
       }
+
       return { ok: true }
     })
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -268,9 +281,11 @@ describe('SshRelaySession', () => {
   it('does not run POSIX managed hook installers on Windows remotes', async () => {
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+
     const mockConn = {
       writeFile: vi.fn().mockResolvedValue(undefined)
     } as unknown as SshConnection
+
     vi.mocked(deployAndLaunchRelay).mockResolvedValueOnce({
       transport: {
         write: vi.fn(),
@@ -307,6 +322,7 @@ describe('SshRelaySession', () => {
           resolvePluginInstall = () => resolve({ ok: true })
         })
       }
+
       return { ok: true }
     })
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
@@ -369,9 +385,11 @@ describe('SshRelaySession', () => {
 
   it('compiles a native Windows Orca CLI bridge without a cmd.exe shim', async () => {
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
+
     const mockConn = {
       writeFile: vi.fn().mockResolvedValue(undefined)
     } as unknown as SshConnection
+
     vi.mocked(deployAndLaunchRelay).mockResolvedValueOnce({
       transport: {
         write: vi.fn(),
@@ -476,6 +494,7 @@ describe('SshRelaySession', () => {
     const replaySends = vi
       .mocked(mockWindow.webContents.send)
       .mock.calls.filter(([channel]) => channel === 'pty:replay')
+
     expect(mockAttach).toHaveBeenCalledTimes(2)
     expect(replaySends).toHaveLength(2)
   })
@@ -596,9 +615,11 @@ describe('SshRelaySession', () => {
     mockDeploySuccess()
 
     const { getSshPtyProvider } = await import('../ipc/pty')
+
     const mockAttach = vi
       .fn()
       .mockRejectedValueOnce(new Error('PTY "pty-1" not found (identity mismatch)'))
+
     vi.mocked(getSshPtyProvider).mockReturnValue({
       attachForReconnect: mockAttach,
       dispose: vi.fn()
@@ -634,11 +655,13 @@ describe('SshRelaySession', () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const { getSshPtyProvider } = await import('../ipc/pty')
     let resolveAttach!: () => void
+
     const mockAttach = vi.fn().mockReturnValue(
       new Promise<void>((resolve) => {
         resolveAttach = resolve
       })
     )
+
     vi.mocked(getSshPtyProvider).mockReturnValue({
       attachForReconnect: mockAttach,
       dispose: vi.fn()
@@ -665,11 +688,13 @@ describe('SshRelaySession', () => {
 
     const { getSshPtyProvider } = await import('../ipc/pty')
     let resolveAttach!: () => void
+
     const mockAttach = vi.fn().mockReturnValue(
       new Promise<void>((resolve) => {
         resolveAttach = resolve
       })
     )
+
     vi.mocked(getSshPtyProvider).mockReturnValue({
       attachForReconnect: mockAttach,
       dispose: vi.fn()
@@ -694,10 +719,12 @@ describe('SshRelaySession', () => {
     mockDeploySuccess()
 
     const { getSshPtyProvider } = await import('../ipc/pty')
+
     const mockAttach = vi
       .fn()
       .mockRejectedValueOnce(new Error('PTY "pty-stale" not found'))
       .mockResolvedValueOnce(undefined)
+
     vi.mocked(getSshPtyProvider).mockReturnValue({
       attachForReconnect: mockAttach,
       dispose: vi.fn()

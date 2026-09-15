@@ -15,5 +15,6 @@ const REASONS: readonly string[] = Object.values(RELAY_HOST_CLOSE_REASON)
 // Close reasons are attacker-adjacent free text; only exact known members count.
 export function relayHostCloseReasonFrom(value: unknown): RelayHostCloseReason | null {
   const text = typeof value === 'string' ? value : (value?.toString() ?? '')
+
   return REASONS.includes(text) ? (text as RelayHostCloseReason) : null
 }

@@ -25,7 +25,9 @@ import {
   sendSharedControlSubscription
 } from './remote-runtime-shared-control-connection-actions'
 import type * as SharedControlTypes from './remote-runtime-shared-control-types'
+
 type PendingRequest = SharedControlTypes.SharedControlPendingRequest<unknown>
+
 type LogicalSubscription = SharedControlTypes.SharedControlLogicalSubscription<unknown>
 
 export class RemoteRuntimeSharedControlConnection {
@@ -107,9 +109,11 @@ export class RemoteRuntimeSharedControlConnection {
     this.intentionallyClosed = true
     this.socketGeneration.invalidate()
     this.reconnect.clear()
+
     for (const subscription of Array.from(this.subscriptions.values())) {
       this.closeSubscription(subscription.requestId)
     }
+
     this.closeSocket(error)
     this.publishDiagnostics()
   }
@@ -174,16 +178,20 @@ export class RemoteRuntimeSharedControlConnection {
         this.readyWaiters,
         remoteRuntimeUnavailableError()
       )
+
       return
     }
+
     this.reconnect.clear()
     const socketGeneration = this.socketGeneration.begin()
+
     const opened = openSharedControlSocket(this.pairing, {
       getCurrentSocket: () => this.ws,
       onClose: (close, error) => {
         if (this.socketGeneration.isCurrent(socketGeneration)) {
           this.diagnostics.markClose(close)
         }
+
         this.handleSocketClosed(error, socketGeneration)
       },
       onError: (error) => this.handleSocketClosed(error, socketGeneration),
@@ -193,10 +201,13 @@ export class RemoteRuntimeSharedControlConnection {
         onDead: (error) => this.handleSocketClosed(error, socketGeneration)
       }
     })
+
     if (!opened.ok) {
       this.handleSocketClosed(opened.error, socketGeneration)
+
       return
     }
+
     this.ws = opened.socket.ws
     this.sharedKey = opened.socket.sharedKey
     this.socketCleanup = opened.socket.cleanup
@@ -279,6 +290,7 @@ export class RemoteRuntimeSharedControlConnection {
     ) {
       return
     }
+
     this.diagnostics.markError(error.message)
     this.reconnect.scheduleAfterSocketClose({
       intentionallyClosed: this.intentionallyClosed,

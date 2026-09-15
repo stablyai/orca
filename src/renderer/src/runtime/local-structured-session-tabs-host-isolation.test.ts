@@ -25,8 +25,11 @@ vi.mock('../store', () => ({
 }))
 
 const REMOTE_GROUP = 'remote-group'
+
 const STRUCTURED_GROUP = 'structured-group'
+
 const HOST_TAB_ID = 'host-tab-1'
+
 const MIRRORED_TAB_ID = toWebTerminalSurfaceTabId(HOST_TAB_ID)
 
 function terminalSnapshot(version = 1): RuntimeMobileSessionTabsResult {
@@ -150,6 +153,7 @@ describe('local structured session tab host isolation', () => {
   it('materializes the active paired worktree without disturbing another worktree layout', () => {
     const otherWorktree = 'repo::/other-worktree'
     const otherLayout = { type: 'leaf' as const, groupId: 'other-group' }
+
     const state = applySnapshot(
       makeState({ layoutByWorktree: { [otherWorktree]: otherLayout } }),
       terminalSnapshot(),

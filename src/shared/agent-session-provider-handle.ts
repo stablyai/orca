@@ -40,6 +40,7 @@ export type AgentSessionProviderHandleChain = readonly AgentSessionProviderHandl
 export const MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS = 256
 
 const MAX_HANDLE_FIELD_LENGTH = 512
+
 const LINK_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/
 
 function isHandleField(value: unknown): value is string {
@@ -55,13 +56,16 @@ export function isAgentSessionProviderHandle(value: unknown): value is AgentSess
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const handle = value as Partial<AgentSessionProviderHandle> & Record<string, unknown>
+
   if (handle.provider === 'claude') {
     return (
       isHandleField(handle.sessionId) &&
       (handle.leafUuid === null || isHandleField(handle.leafUuid))
     )
   }
+
   return handle.provider === 'codex' && isHandleField(handle.threadId)
 }
 
@@ -108,12 +112,15 @@ export function isAgentSessionProviderHandleLink(
   if (typeof value !== 'object' || value === null) {
     return false
   }
+
   const link = value as Partial<AgentSessionProviderHandleLink>
+
   const originValid =
     link.origin === 'created' ||
     link.origin === 'adopted' ||
     link.origin === 'resumed' ||
     link.origin === 'forked'
+
   return (
     typeof link.linkId === 'string' &&
     LINK_ID_PATTERN.test(link.linkId) &&
@@ -134,19 +141,25 @@ export function isAgentSessionProviderHandleChain(
   if (!Array.isArray(value) || value.length > MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS) {
     return false
   }
+
   let validated: AgentSessionProviderHandleLink[] = []
+
   try {
     for (const link of value) {
       if (!isAgentSessionProviderHandleLink(link)) {
         return false
       }
+
       const next = appendAgentSessionProviderHandleLink(validated, link)
+
       // A persisted chain must name every link exactly once; retry elision belongs at append time.
       if (next.length !== validated.length + 1) {
         return false
       }
+
       validated = next
     }
+
     return true
   } catch {
     return false
@@ -164,37 +177,48 @@ export function appendAgentSessionProviderHandleLink(
   if (!isAgentSessionProviderHandleLink(link)) {
     throw new Error('agent_session_provider_handle_invalid')
   }
+
   const head = agentSessionProviderHandleChainHead(chain)
+
   if (!head) {
     if (link.origin !== 'created' && link.origin !== 'adopted') {
       throw new Error('agent_session_provider_handle_invalid')
     }
+
     return [link]
   }
+
   if (link.handle.provider !== head.handle.provider) {
     throw new Error('agent_session_provider_handle_provider_mismatch')
   }
+
   if (link.mintedAtFence < head.mintedAtFence) {
     throw new Error('agent_session_provider_handle_stale_fence')
   }
+
   if (link.origin === 'created' || link.origin === 'adopted') {
     throw new Error('agent_session_provider_handle_invalid')
   }
+
   const sameRoot =
     agentSessionProviderHandleRoot(link.handle) === agentSessionProviderHandleRoot(head.handle)
+
   if (link.origin === 'resumed' && !sameRoot) {
     // Why: a resume that lands on another identity root forked; recording it as a resume would
     // make Orca claim continuity the provider never gave.
     throw new Error('agent_session_provider_handle_forked')
   }
+
   if (link.origin === 'forked') {
     if (sameRoot) {
       throw new Error('agent_session_provider_handle_invalid')
     }
+
     if (link.forkedFromKey !== agentSessionProviderHandleKey(head.handle)) {
       throw new Error('agent_session_provider_handle_invalid')
     }
   }
+
   if (
     link.origin === 'resumed' &&
     agentSessionProviderHandlesEqual(link.handle, head.handle) &&
@@ -203,14 +227,17 @@ export function appendAgentSessionProviderHandleLink(
     // Why: re-proving the same handle at the same fence is a retry, not a new identity.
     return [...chain]
   }
+
   if (findAgentSessionProviderHandleLink(chain, link.linkId)) {
     // Why: the lease names its exact proof by link id; reuse would make that reference ambiguous.
     throw new Error('agent_session_provider_handle_invalid')
   }
+
   if (chain.length >= MAX_AGENT_SESSION_PROVIDER_HANDLE_LINKS) {
     // Why: dropping older links would erase fork provenance, so refuse and let the caller roll
     // the journal epoch instead of silently losing where this conversation came from.
     throw new Error('agent_session_provider_handle_chain_overflow')
   }
+
   return [...chain, link]
 }

@@ -31,19 +31,23 @@ const WORDS = [
 /** Deterministic: the same seed gives the same corpus on every host and run. */
 function mulberry32(seed: number): () => number {
   let state = seed >>> 0
+
   return () => {
     state = (state + 0x6d2b79f5) >>> 0
     let t = Math.imul(state ^ (state >>> 15), 1 | state)
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
 
 function words(random: () => number, count: number): string {
   const out: string[] = []
+
   for (let index = 0; index < count; index++) {
     out.push(WORDS[Math.floor(random() * WORDS.length)])
   }
+
   return out.join(' ')
 }
 
@@ -74,6 +78,7 @@ export async function writeSyntheticTranscriptCorpus(
   const sessions = options.sessions ?? 40
   const turns = options.turnsPerSession ?? 60
   const toolWords = options.toolResultWords ?? 200
+
   for (const [name, value] of Object.entries({
     sessions,
     turnsPerSession: turns,
@@ -83,6 +88,7 @@ export async function writeSyntheticTranscriptCorpus(
       throw new RangeError(`${name} must be a finite non-negative safe integer`)
     }
   }
+
   const random = mulberry32(options.seed ?? 1)
   const root = await mkdtemp(join(tmpdir(), 'orca-search-corpus-'))
   const files: string[] = []
@@ -92,6 +98,7 @@ export async function writeSyntheticTranscriptCorpus(
   for (let session = 0; session < sessions; session++) {
     const sessionId = `00000000-0000-4000-8000-${String(session).padStart(12, '0')}`
     const lines: string[] = []
+
     for (let turn = 0; turn < turns; turn++) {
       const at = new Date(1740000000000 + turn * 60_000).toISOString()
       lines.push(
@@ -143,6 +150,7 @@ export async function writeSyntheticTranscriptCorpus(
       // Empty tool results emit no searchable message.
       messageCount += toolWords === 0 ? 3 : 4
     }
+
     const path = join(root, `${sessionId}.jsonl`)
     const body = `${lines.join('\n')}\n`
     await writeFile(path, body)

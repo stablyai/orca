@@ -20,18 +20,23 @@ const state = vi.hoisted(() => ({
   revealWorktreeInSidebar: vi.fn(),
   setContextualToursBlockingSurfaceVisible: vi.fn()
 }))
+
 vi.mock('@/store', () => ({
   useAppStore: (selector: (value: typeof state) => unknown) => selector(state)
 }))
 
 type Args = Parameters<typeof useSidebarRevealRequests>[0]
+
 function Host({ args }: { args: Args }): null {
   useSidebarRevealRequests(args)
+
   return null
 }
 
 let root: Root
+
 let container: HTMLDivElement
+
 let args: Args
 
 async function render(): Promise<void> {
@@ -48,6 +53,7 @@ async function click(label: string): Promise<void> {
   const button = Array.from(document.querySelectorAll('button')).find(
     (candidate) => candidate.textContent === label
   )
+
   expect(button).toBeDefined()
   await act(async () => button!.click())
 }
@@ -57,6 +63,7 @@ beforeEach(() => {
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
+
   const worktree: Worktree = {
     id: 'wt-1',
     hostId: 'ssh:dev',
@@ -79,6 +86,7 @@ beforeEach(() => {
     sortOrder: 1,
     lastActivityAt: 1
   }
+
   args = {
     groupBy: 'repo',
     renderedSidebarRowKeys: new Set(),
@@ -218,12 +226,14 @@ describe('revealing a filtered workspace', () => {
       await render()
       await act(async () => requestScrollToCurrentWorkspaceRevealAndRename())
       expect(args.clearFilters).not.toHaveBeenCalled()
+
       if (filtered) {
         await click('Clear filters and reveal')
         expect(args.clearFilters).toHaveBeenCalledTimes(1)
       } else {
         expect(document.querySelector('[role="dialog"]')).toBeNull()
       }
+
       expect(state.revealWorktreeInSidebar).toHaveBeenCalledWith(folderWorkspaceKey('folder-1'), {
         behavior: 'smooth',
         highlight: true,

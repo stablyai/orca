@@ -39,6 +39,7 @@ function jiraIssue(
 ): JiraIssue {
   const siteId = options.siteId ?? 'site-1'
   const projectKey = options.projectKey ?? 'ALP'
+
   return {
     id: `${siteId}:${key}`,
     key,
@@ -132,14 +133,17 @@ describe('Jira issue status grouping', () => {
       jiraIssue('ALP-1', 'First', '1', 'To Do'),
       jiraIssue('ALP-2', 'Second', '2', 'In Progress')
     ])
+
     const multipleSites = getSingleJiraProjectScope([
       jiraIssue('ALP-1', 'First', '1', 'To Do', { siteId: 'site-1' }),
       jiraIssue('ALP-2', 'Second', '2', 'In Progress', { siteId: 'site-2' })
     ])
+
     const multipleProjects = getSingleJiraProjectScope([
       jiraIssue('ALP-1', 'First', '1', 'To Do', { projectKey: 'ALP' }),
       jiraIssue('BRV-1', 'Second', '2', 'In Progress', { projectKey: 'BRV' })
     ])
+
     const missingSite = jiraIssue('ALP-3', 'Third', '3', 'Done')
     delete missingSite.siteId
     delete missingSite.project.siteId
@@ -155,6 +159,7 @@ describe('Jira issue status grouping', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     jiraGetProjectStatusOrderMock.mockRejectedValueOnce(error)
     const scope = getSingleJiraProjectScope([jiraIssue('ALP-1', 'First', '1', 'To Do')])
+
     if (!scope) {
       throw new Error('Expected one Jira project scope')
     }

@@ -14,12 +14,15 @@ export function resolveSidebarProjectDropPath(
   paths: readonly string[]
 ): SidebarProjectDropPathResolution {
   const usablePaths = paths.filter((path) => path.length > 0)
+
   if (usablePaths.length === 0) {
     return { status: 'empty' }
   }
+
   if (usablePaths.length > 1) {
     return { status: 'multiple', count: usablePaths.length }
   }
+
   return { status: 'ready', path: usablePaths[0] }
 }
 
@@ -37,6 +40,7 @@ export function getSidebarProjectDropAffordance(args: {
   if (!args.isDragOver && !args.isHandlingDrop) {
     return { visible: false }
   }
+
   if (args.isHandlingDrop) {
     return {
       visible: true,
@@ -51,6 +55,7 @@ export function getSidebarProjectDropAffordance(args: {
       )
     }
   }
+
   if (args.remoteRuntimeActive) {
     return {
       visible: true,
@@ -65,6 +70,7 @@ export function getSidebarProjectDropAffordance(args: {
       )
     }
   }
+
   return {
     visible: true,
     tone: 'ready',

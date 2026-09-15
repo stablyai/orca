@@ -10,15 +10,19 @@ export function overallStatus(
   if (statuses.length === 0) {
     return 'disconnected'
   }
+
   if (statuses.every((s) => s === 'connected')) {
     return 'connected'
   }
+
   if (statuses.some((s) => s === 'connecting')) {
     return 'connecting'
   }
+
   if (statuses.some((s) => s === 'connected')) {
     return 'partial'
   }
+
   return 'disconnected'
 }
 
@@ -42,6 +46,7 @@ export function sshStatusForOverall(status: SshConnectionStatus): HostStatus {
   if (status === 'connected') {
     return 'connected'
   }
+
   return isConnectingSshStatus(status) ? 'connecting' : 'disconnected'
 }
 
@@ -51,12 +56,14 @@ export function runtimeHostConnectionDetail(
   if (!remoteControl) {
     return undefined
   }
+
   if (
     remoteControl.state === 'awaiting_ready' ||
     remoteControl.state === 'awaiting_authenticated'
   ) {
     return undefined
   }
+
   if (remoteControl.state === 'reconnecting') {
     return translate(
       'auto.components.status.bar.SshStatusSegment.runtime_reconnect_attempt',
@@ -64,9 +71,11 @@ export function runtimeHostConnectionDetail(
       { value0: String(remoteControl.reconnectAttempt + 1) }
     )
   }
+
   if (remoteControl.lastError) {
     return remoteControl.lastError
   }
+
   if (remoteControl.lastClose?.reason) {
     return translate(
       'auto.components.status.bar.SshStatusSegment.runtime_last_close_reason',
@@ -74,6 +83,7 @@ export function runtimeHostConnectionDetail(
       { value0: remoteControl.lastClose.reason }
     )
   }
+
   // Why: pending-request / subscription counts are internal RPC plumbing (e.g. a
   // live browser screencast shows as "N streams"). They're noise in a user-facing
   // status row and make the line truncate — only surface actionable detail

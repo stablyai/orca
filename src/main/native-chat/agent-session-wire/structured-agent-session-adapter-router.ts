@@ -6,6 +6,7 @@ import type {
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
 type RoutedAgent = 'claude' | 'codex'
+
 type SessionRoute = { adapter: StructuredAgentSessionAdapter; state: 'live' | 'stopped' }
 
 export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessionAdapter {
@@ -20,6 +21,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean => {
     const adapter = this.adapterForAgent(agent)
+
     return adapter ? (adapter.supportsLocation?.(location) ?? false) : false
   }
 
@@ -33,17 +35,22 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     if (this.allAdaptersClosed) {
       throw new Error('structured session adapter router is closed')
     }
+
     const adapter = this.requireAgent(input.identity)
     const acquired = await adapter.acquire(input)
+
     if (this.allAdaptersClosed) {
       throw new Error('structured session adapter router is closed')
     }
+
     this.routes.set(input.identity.sessionId, { adapter, state: 'live' })
+
     return acquired
   }
 
   async releaseAcquisition(input: { sessionId: string }): Promise<boolean> {
     const route = this.routes.get(input.sessionId)
+
     if (route) {
       try {
         return (await route.adapter.releaseAcquisition?.(input)) === true
@@ -51,10 +58,13 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
         this.routes.delete(input.sessionId)
       }
     }
+
     let released = false
+
     for (const candidate of Object.values(this.adapters)) {
       released = (await candidate.releaseAcquisition?.(input)) === true || released
     }
+
     return released
   }
 
@@ -77,9 +87,11 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) => {
     const compact = this.owner(input.sessionId).compact
+
     if (!compact) {
       throw new Error('Compaction is unavailable for this provider.')
     }
+
     return compact(input)
   }
 
@@ -90,6 +102,7 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     input
   ) => {
     const stop = this.owner(input.sessionId).stopBackgroundTasks
+
     return stop ? stop(input) : Promise.resolve({ cancelled: false })
   }
 
@@ -108,9 +121,11 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   readOptions = (input: { sessionId: string; fence: number }) => {
     const reader = this.owner(input.sessionId).readOptions
+
     if (!reader) {
       throw new Error(`structured session ${input.sessionId} does not report options`)
     }
+
     return reader(input)
   }
 
@@ -141,21 +156,27 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     ) => NonNullable<StructuredAgentSessionAdapter['closeSession']> | undefined
   ): Promise<boolean> {
     const route = this.routes.get(sessionId)
+
     if (!route) {
       // No route is loss of contact, never proof of a stop. Answering `true` here would hand a
       // caller a receipt for a session this router never acted on — and the caller spends that
       // receipt by releasing the durable lease.
       return false
     }
+
     if (route.state === 'stopped') {
       return true
     }
+
     const stop = selectStop(route.adapter)
     const stopped = await stop?.call(route.adapter, sessionId)
+
     if (stopped === true) {
       route.state = 'stopped'
+
       return true
     }
+
     return false
   }
 
@@ -163,12 +184,15 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     if (this.allAdaptersClosed) {
       return
     }
+
     if (this.closePromise) {
       return this.closePromise
     }
+
     this.closePromise = (async () => {
       try {
         await this.closeAdapters()
+
         // Adapter shutdown only resolves once every child is PROVEN stopped, so each routed
         // session inherits that proof and keeps it per session. Clearing the map instead would
         // leave one boolean as the only surviving evidence, and an empty map cannot tell a
@@ -176,11 +200,13 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
         for (const route of this.routes.values()) {
           route.state = 'stopped'
         }
+
         this.allAdaptersClosed = true
       } finally {
         this.closePromise = null
       }
     })()
+
     return this.closePromise
   }
 
@@ -191,22 +217,27 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   private owner(sessionId: string): StructuredAgentSessionAdapter {
     const adapter = this.liveOwnerOrNull(sessionId)
+
     if (!adapter) {
       throw new Error(`no live structured adapter owns ${sessionId}`)
     }
+
     return adapter
   }
 
   private liveOwnerOrNull(sessionId: string): StructuredAgentSessionAdapter | null {
     const route = this.routes.get(sessionId)
+
     return route?.state === 'live' ? route.adapter : null
   }
 
   private requireAgent(identity: AgentSessionJournalIdentity): StructuredAgentSessionAdapter {
     const adapter = this.adapterForAgent(identity.agent)
+
     if (!adapter) {
       throw new Error(`structured sessions do not support ${identity.agent}`)
     }
+
     return adapter
   }
 

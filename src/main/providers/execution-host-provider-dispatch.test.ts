@@ -14,7 +14,9 @@ import {
 } from './ssh-filesystem-dispatch'
 
 const connectionId = 'host-dispatch-target'
+
 const gitProvider = { listWorktrees: async () => [] } as never
+
 const filesystemProvider = { readDir: async () => [] } as never
 
 describe('execution host provider dispatch', () => {

@@ -8,45 +8,61 @@ import {
 } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -71,16 +87,19 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       const firstSpawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       const secondSpawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       mainWindow.webContents.send.mockClear()
 
       const firstChunk = 'x'.repeat(16 * 1024)
@@ -122,21 +141,25 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       const firstSpawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       const secondSpawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       const newSpawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       const firstChunk = 'x'.repeat(16 * 1024)
       const setActiveRendererPty = getPtySetActiveRendererPtyListener()
       let reentered = false
@@ -145,6 +168,7 @@ describe('registerPtyHandlers', () => {
           if (channel !== 'pty:data' || payload.id !== firstSpawn.id || reentered) {
             return
           }
+
           reentered = true
           firstProc.emitData('+same')
           secondProc.emitData('+append')
@@ -181,16 +205,19 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       const firstSpawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string; incarnationId: string }
+
       const secondSpawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       const firstChunk = 'x'.repeat(16 * 1024)
       mainWindow.webContents.send.mockClear()
       let exited = false
@@ -237,11 +264,13 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       const firstSpawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
@@ -283,21 +312,25 @@ describe('registerPtyHandlers', () => {
 
     try {
       registerPtyHandlers(mainWindow as never)
+
       const firstSpawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       const secondSpawn = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
         cwd: '/tmp'
       })) as { id: string }
+
       const ackData = getPtyAckDataListener()
       mainWindow.webContents.send.mockClear()
 
       firstProc.emitData('x'.repeat(600 * 1024))
       vi.advanceTimersByTime(2)
+
       for (let index = 0; index < 31; index++) {
         vi.advanceTimersByTime(1)
       }
@@ -369,13 +402,17 @@ describe('registerPtyHandlers', () => {
     try {
       registerPtyHandlers(mainWindow as never)
       const ptyIds = Array.from({ length: 100 }, (_, index) => `pressure-pty-${index}`)
+
       for (const id of ptyIds) {
         provider.emitData(id, 'a')
       }
+
       vi.runAllTimers()
+
       for (const id of ptyIds) {
         provider.emitData(id, 'b')
       }
+
       expect(getPtyRendererDeliveryDebugSnapshot()).toMatchObject({
         pendingPtyCount: 100,
         pendingChars: 100,
@@ -386,6 +423,7 @@ describe('registerPtyHandlers', () => {
       const ackData = getPtyAckDataListener()
       const mapValuesSpy = vi.spyOn(Map.prototype, 'values')
       let mapValuesCalls = 0
+
       try {
         for (let index = 0; index < 1_000; index++) {
           ackData(null, { id: ptyIds[0]!, processedChars: 1 })

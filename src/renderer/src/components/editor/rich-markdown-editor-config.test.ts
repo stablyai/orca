@@ -21,6 +21,7 @@ function stateSetter<T>(): Dispatch<SetStateAction<T>> {
 
 function getSpellcheckAttribute(config: ReturnType<typeof createRichMarkdownEditorConfig>): string {
   const attributes = config.editorProps?.attributes
+
   return typeof attributes === 'function'
     ? attributes({} as never).spellcheck
     : (attributes?.spellcheck ?? '')
@@ -28,6 +29,7 @@ function getSpellcheckAttribute(config: ReturnType<typeof createRichMarkdownEdit
 
 function createConfigParams(overrides: Partial<EditorConfigParams> = {}): EditorConfigParams {
   const codec = createRichMarkdownEditorCodec()
+
   return {
     codec,
     htmlSuperscriptLinkContext: createRichMarkdownHtmlSuperscriptLinkContext({
@@ -113,6 +115,7 @@ describe('createRichMarkdownEditorConfig', () => {
     })
     const flushPendingSerialization = vi.fn()
     const clearAnnotationTarget = vi.fn()
+
     const config = createRichMarkdownEditorConfig(
       createConfigParams({ clearAnnotationTarget, flushPendingSerialization })
     )

@@ -44,6 +44,7 @@ export function useMobilePrBranchContext(input: {
   includeBranchIdentity?: boolean
 }): MobilePrBranchContext {
   const { client, connState, worktreeId, includeBranchIdentity = true } = input
+
   const [context, setContext] = useState<MobilePrBranchContext>({
     branch: null,
     headSha: null,
@@ -57,6 +58,7 @@ export function useMobilePrBranchContext(input: {
 
   useEffect(() => {
     let cancelled = false
+
     if (!ready || !client) {
       setContext({
         branch: null,
@@ -66,8 +68,10 @@ export function useMobilePrBranchContext(input: {
         repoLoaded: false,
         loaded: !includeBranchIdentity
       })
+
       return
     }
+
     setContext({
       branch: null,
       headSha: null,
@@ -129,6 +133,7 @@ export function useMobilePrBranchContext(input: {
           }))
         }
       })
+
     return () => {
       cancelled = true
     }
@@ -145,6 +150,7 @@ export async function loadMobilePrBranchContext(
     loadMobilePrBranchIdentity(client, worktreeId),
     loadMobilePrRepoContext(client, worktreeId)
   ])
+
   return { ...branch, ...repo, repoLoaded: true, loaded: true }
 }
 
@@ -153,6 +159,7 @@ export async function loadMobilePrRepoContext(
   worktreeId: string
 ): Promise<Pick<MobilePrBranchContext, 'isGithubRepo'>> {
   const slugOutcome = await fetchGithubRepoSlug(client, worktreeId)
+
   return { isGithubRepo: slugOutcome.ok && slugOutcome.result !== null }
 }
 
@@ -166,6 +173,7 @@ export async function loadMobilePrBranchIdentity(
     // fallback; compare failures must not hide the PR panel when git.status works.
     readBranchCompare(client, worktreeId).catch(() => null)
   ])
+
   return deriveMobilePrBranchContext(status, branchCompare)
 }
 
@@ -174,6 +182,7 @@ async function readGitStatus(
   worktreeId: string
 ): Promise<MobileGitStatusResult | null> {
   const response = await client.sendRequest('git.status', { worktree: `id:${worktreeId}` })
+
   return response.ok ? readMobileGitStatusResult(response.result) : null
 }
 
@@ -184,12 +193,15 @@ async function readBranchCompare(
   // branchCompare requires a baseRef; without one (or on error) the headOid fallback is
   // simply unavailable and headSha relies on status.head.
   const baseRef = await resolveMobileBranchCompareBaseRef(client, worktreeId)
+
   if (!baseRef) {
     return null
   }
+
   const response = await client.sendRequest('git.branchCompare', {
     worktree: `id:${worktreeId}`,
     baseRef
   })
+
   return response.ok ? readMobileBranchCompareResult(response.result) : null
 }

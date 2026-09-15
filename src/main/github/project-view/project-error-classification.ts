@@ -16,12 +16,15 @@ export function extractGraphqlErrors(stderr: string, stdout: string): GhGraphqlE
   // errors, and the stderr carries a summary. Try stdout first; if parsing
   // fails, fall back to stderr.
   const sources = [stdout, stderr]
+
   for (const src of sources) {
     if (!src) {
       continue
     }
+
     try {
       const parsed = JSON.parse(src) as { errors?: GhGraphqlErrorShape[] }
+
       if (parsed.errors && parsed.errors.length > 0) {
         return parsed.errors
       }
@@ -29,27 +32,34 @@ export function extractGraphqlErrors(stderr: string, stdout: string): GhGraphqlE
       // not JSON — continue
     }
   }
+
   return []
 }
 
 export function errorsIndicateParentField(errors: GhGraphqlErrorShape[], stderr: string): boolean {
   const lower = stderr.toLowerCase()
+
   // Preview-header shape: gh returns a 4xx with "preview" in the message.
   if (lower.includes('preview') && lower.includes('parent')) {
     return true
   }
+
   return errors.some((e) => {
     const type = (e.type ?? '').toUpperCase()
+
     if (type === 'FIELD_NOT_FOUND' || type === 'UNDEFINED_FIELD' || type === 'FIELD_ERRORS') {
       const tail = e.path?.at(-1)
+
       if (tail === 'parent') {
         return true
       }
+
       // FIELD_ERRORS often omits `path`; match on message for the parent field.
       if ((e.message ?? '').toLowerCase().includes('parent')) {
         return true
       }
     }
+
     return false
   })
 }
@@ -74,6 +84,7 @@ export function classifyProjectError(
       message: `Sign in to GitHub to load project tasks. Run \`gh auth login --hostname ${selectedHost}\`.`
     }
   }
+
   // Scope
   if (
     s.includes('missing required scope') ||
@@ -85,10 +96,12 @@ export function classifyProjectError(
       message: `GitHub project access needs additional scopes. Run \`gh auth refresh --hostname ${selectedHost} -s project -s read:org -s repo\`.`
     }
   }
+
   // Rate limit
   if (s.includes('rate limit') || s.includes('api rate limit exceeded')) {
     return { type: 'rate_limited', message: 'GitHub rate limit hit. Try again in a few minutes.' }
   }
+
   // Network — checked BEFORE not_found because DNS failures surface as
   // "could not resolve host", which would otherwise be partially matched by
   // the not_found branch's "could not resolve" check. Substring matching here
@@ -104,6 +117,7 @@ export function classifyProjectError(
   ) {
     return { type: 'network_error', message: 'Network error — check your connection.' }
   }
+
   // Not found
   if (
     s.includes('http 404') ||
@@ -115,6 +129,7 @@ export function classifyProjectError(
     /could not resolve to an? /.test(s)
   ) {
     const firstNotFound = errors.find((e) => (e.type ?? '').toUpperCase() === 'NOT_FOUND')
+
     return {
       type: 'not_found',
       message: 'Project or view not found.',
@@ -123,19 +138,23 @@ export function classifyProjectError(
         : undefined
     }
   }
+
   // Validation
   if (s.includes('http 422') || s.includes('validation failed')) {
     return { type: 'validation_error', message: `Invalid request — ${stderr.trim()}` }
   }
+
   // GraphQL error with structured info
   if (errors.length > 0) {
     const first = errors[0]
+
     return {
       type: 'unknown',
       message: first.message ?? 'Unknown GraphQL error.',
       details: { path: first.path, code: first.extensions?.code }
     }
   }
+
   // Why: don't leak full stderr to the UI — it can include verbose request
   // dumps with header diagnostics. Truncate to the first non-empty line and
   // cap length so unexpected diagnostics stay readable but bounded.
@@ -144,7 +163,9 @@ export function classifyProjectError(
       .split('\n')
       .map((l) => l.trim())
       .find((l) => l.length > 0) ?? ''
+
   const safe = firstLine.length > 200 ? `${firstLine.slice(0, 200)}…` : firstLine
+
   return {
     type: 'unknown',
     message: safe ? `GitHub request failed: ${safe}` : 'GitHub request failed.'
@@ -170,6 +191,7 @@ export function rateLimitedError(blocked: {
 }): GitHubProjectViewError {
   const resetIn = Math.max(0, blocked.resetAt - Math.floor(Date.now() / 1000))
   const mins = Math.ceil(resetIn / 60)
+
   return {
     type: 'rate_limited',
     message: `GitHub rate limit nearly exhausted (${blocked.remaining}/${blocked.limit} left). Resets in ~${mins}m.`

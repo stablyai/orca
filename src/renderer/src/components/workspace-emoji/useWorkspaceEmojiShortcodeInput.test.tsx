@@ -14,6 +14,7 @@ function EmojiInputHarness({
 }): React.JSX.Element {
   const [value, setValue] = useState(initialValue)
   const inputRef = useRef<HTMLInputElement>(null)
+
   const emojiInput = useWorkspaceEmojiShortcodeInput({
     inputRef,
     onValueChange: setValue,
@@ -94,6 +95,7 @@ describe('useWorkspaceEmojiShortcodeInput', () => {
     render(
       <EmojiInputHarness initialValue="Launch :wink" onUnhandledKeyDown={onUnhandledKeyDown} />
     )
+
     const input = screen.getByRole('textbox', { name: 'Workspace name' })
 
     ;(input as HTMLInputElement).setSelectionRange(12, 12)
@@ -109,6 +111,7 @@ describe('useWorkspaceEmojiShortcodeInput', () => {
     render(
       <EmojiInputHarness initialValue="Launch :wink" onUnhandledKeyDown={onUnhandledKeyDown} />
     )
+
     const input = screen.getByRole('textbox', { name: 'Workspace name' })
 
     ;(input as HTMLInputElement).setSelectionRange(12, 12)

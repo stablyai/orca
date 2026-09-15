@@ -24,23 +24,28 @@ export class EmulatorStartLeaseRegistry {
     isRegistered: (info: EmulatorSessionInfo) => boolean
   ): Promise<EmulatorStartLease> {
     this.claimsByBackend.set(backend, (this.claimsByBackend.get(backend) ?? 0) + 1)
+
     try {
       await this.cleanupByBackend.get(backend)
       const info = await backend.startSession(device)
       let released = false
+
       return {
         info,
         release: async (options = {}) => {
           if (released) {
             return
           }
+
           released = true
+
           if (options.cleanupIfUnused) {
             this.addPendingCleanup(backend, info, isRegistered, {
               includeOrphaned: true,
               shutdownDevice: true
             })
           }
+
           await this.release(backend)
         }
       }
@@ -62,31 +67,39 @@ export class EmulatorStartLeaseRegistry {
 
   private async release(backend: EmulatorBackend): Promise<void> {
     const remaining = this.decrement(backend)
+
     if (remaining > 0) {
       return
     }
+
     await this.drainCleanup(backend)
   }
 
   private async drainCleanup(backend: EmulatorBackend): Promise<void> {
     await this.cleanupByBackend.get(backend)
+
     if ((this.claimsByBackend.get(backend) ?? 0) > 0) {
       return
     }
+
     const pending = this.pendingCleanupByBackend.get(backend)
     this.pendingCleanupByBackend.delete(backend)
+
     if (!pending) {
       return
     }
+
     const cleanup = Promise.allSettled(
       [...pending.values()].map(async ({ info, isRegistered, includeOrphaned, shutdownDevice }) => {
         if (isRegistered(info)) {
           return
         }
+
         await backend.stopHelperForDevice(info.deviceUdid, {
           helperPid: info.helperPid,
           includeOrphaned
         })
+
         if (shutdownDevice) {
           await backend.shutdownDevice(info.deviceUdid)
         }
@@ -94,6 +107,7 @@ export class EmulatorStartLeaseRegistry {
     )
       .then(() => undefined)
       .finally(() => this.cleanupByBackend.delete(backend))
+
     this.cleanupByBackend.set(backend, cleanup)
     await cleanup
   }
@@ -117,11 +131,13 @@ export class EmulatorStartLeaseRegistry {
 
   private decrement(backend: EmulatorBackend): number {
     const next = Math.max(0, (this.claimsByBackend.get(backend) ?? 1) - 1)
+
     if (next === 0) {
       this.claimsByBackend.delete(backend)
     } else {
       this.claimsByBackend.set(backend, next)
     }
+
     return next
   }
 }

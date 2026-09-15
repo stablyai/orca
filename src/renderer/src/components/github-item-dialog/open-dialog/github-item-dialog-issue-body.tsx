@@ -128,6 +128,7 @@ export function GitHubItemDialogIssueBody({
               if (detailsCacheKey) {
                 patchCachedPRReviewRequests(detailsCacheKey, nextReviewRequests)
               }
+
               onReviewRequestsChange?.(
                 { id: workItem.id, repoId: workItem.repoId },
                 nextReviewRequests

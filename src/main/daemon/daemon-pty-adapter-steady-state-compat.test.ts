@@ -15,7 +15,9 @@ function createAdapter(
     tokenPath: '/tmp/orca-steady-state-compat.token',
     protocolVersion
   })
+
   ;(adapter as unknown as ClientInternals).client = { request, disconnect: vi.fn() }
+
   return adapter
 }
 
@@ -57,6 +59,7 @@ describe('steadyState across daemon versions', () => {
         ptyIncarnationId: 'inc-1'
       }
     }
+
     const request = vi.fn(async () => oldDaemonAnswer)
     const adapter = createAdapter(COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION, request)
     await expect(adapter.inspectProcess('sess-a', { steadyState: true })).resolves.toEqual(

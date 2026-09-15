@@ -26,6 +26,7 @@ function safelyFocusApp(app: Pick<App, 'focus'>): void {
   if (isBackgroundLaunch()) {
     return
   }
+
   try {
     app.focus({ steal: true })
   } catch {
@@ -41,10 +42,13 @@ export function safelyRevealWindow(window: BrowserWindow): void {
   if (window.isDestroyed() || isWindowlessLaunch()) {
     return
   }
+
   if (window.isMinimized()) {
     window.restore()
   }
+
   showWindowWithoutStealingFocus(window)
+
   if (!isBackgroundLaunch()) {
     window.focus()
   }
@@ -73,6 +77,7 @@ function retryFocus(window: BrowserWindow, app: Pick<App, 'focus'>, setTimer: Fo
     if (window.isDestroyed()) {
       return
     }
+
     safelyFocusApp(app)
     safelyRevealWindow(window)
   }, 100)
@@ -88,6 +93,7 @@ function activateWindow(
 ): void {
   safelyFocusApp(app)
   safelyRevealWindow(window)
+
   // Why: moveTop/always-on-top/refocus are foreground reinforcement; in a
   // background launch they would drag the window over the developer's work.
   if (platform === 'win32' && !isBackgroundLaunch()) {
@@ -96,6 +102,7 @@ function activateWindow(
     } catch {
       // Older Electron versions or destroyed windows may reject this; focus retry remains.
     }
+
     pulseAlwaysOnTop(window, setTimer)
     retryFocus(window, app, setTimer)
   }
@@ -106,6 +113,7 @@ function activateWindow(
 // swallowed throw would otherwise strand the app with no window until some
 // later external trigger happens to retry.
 const REOPEN_MAX_ATTEMPTS = 3
+
 const REOPEN_RETRY_DELAY_MS = 300
 
 function openWindowWithRetry(
@@ -118,9 +126,11 @@ function openWindowWithRetry(
     return opts.openWindow()
   } catch (error) {
     opts.warn?.('[window] Failed to reopen main window for second-instance launch', error)
+
     if (attempt >= REOPEN_MAX_ATTEMPTS) {
       return null
     }
+
     setTimer(() => {
       // Why: openWindow() (openMainWindow) is not idempotent — it constructs and
       // registers a fresh BrowserWindow on every call. Between attempts another
@@ -128,14 +138,17 @@ function openWindowWithRetry(
       // produced a live window, so adopt it instead of opening a duplicate that
       // would orphan the one already on screen.
       const existing = opts.getWindow()
+
       const window =
         existing && !existing.isDestroyed()
           ? existing
           : openWindowWithRetry(opts, platform, setTimer, attempt + 1)
+
       if (window) {
         activateWindow(window, opts.app, platform, setTimer)
       }
     }, REOPEN_RETRY_DELAY_MS)
+
     return null
   }
 }
@@ -152,13 +165,17 @@ export function focusExistingMainWindow(
     if (!opts.app.isReady() || opts.canOpenWindow?.() === false) {
       return 'pending'
     }
+
     window = openWindowWithRetry(opts, platform, setTimer, 1)
+
     if (!window) {
       return 'pending'
     }
+
     openedWindow = true
   }
 
   activateWindow(window, opts.app, platform, setTimer)
+
   return openedWindow ? 'opened' : 'focused'
 }

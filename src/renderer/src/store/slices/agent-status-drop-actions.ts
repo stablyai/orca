@@ -21,8 +21,10 @@ function removeAcknowledgement(
   if (!(paneKey in acknowledgements)) {
     return acknowledgements
   }
+
   const next = { ...acknowledgements }
   delete next[paneKey]
+
   return next
 }
 
@@ -33,6 +35,7 @@ export function createAgentStatusDropActions(
   'dropAgentStatus' | 'dropAgentStatusByTabPrefix' | 'dropHibernatedAgentStatusPane'
 > {
   const { set, freshness } = runtime
+
   return {
     dropAgentStatus: (paneKey, opts?: DropAgentStatusOptions) => {
       let liveExisted = false
@@ -40,26 +43,34 @@ export function createAgentStatusDropActions(
         const hasLive = paneKey in s.agentStatusByPaneKey
         liveExisted = hasLive
         const hasRetained = paneKey in s.retainedAgentsByPaneKey
+
         const migrationUnsupported = pruneMigrationUnsupportedEntries(
           s.migrationUnsupportedByPtyId,
           (entry) => entry.paneKey === paneKey
         )
+
         const nextAck = removeAcknowledgement(s.acknowledgedAgentsByPaneKey, paneKey)
+
         // Row dismissal keeps cutoff/manual-unread: the pane may still be live, and its next
         // hook event would replay every cleared stateHistory event as unread without them.
         const nextClearedAt = opts?.paneRemoved
           ? removeAcknowledgement(s.activityClearedAtByPaneKey, paneKey)
           : s.activityClearedAtByPaneKey
+
         const nextManualUnread = opts?.paneRemoved
           ? removeAcknowledgement(s.manuallyUnreadTurnsByPaneKey, paneKey)
           : s.manuallyUnreadTurnsByPaneKey
+
         const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
+
         const nextLaunchConfigs = hasLaunchConfig
           ? { ...s.agentLaunchConfigByPaneKey }
           : s.agentLaunchConfigByPaneKey
+
         if (hasLaunchConfig) {
           delete nextLaunchConfigs[paneKey]
         }
+
         if (!hasLive && !hasRetained && !migrationUnsupported.changed) {
           const cleanupPatch = {
             ...(hasLaunchConfig ? { agentLaunchConfigByPaneKey: nextLaunchConfigs } : {}),
@@ -73,19 +84,26 @@ export function createAgentStatusDropActions(
               ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
               : {})
           }
+
           return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
         }
+
         const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+
         if (hasLive) {
           delete nextLive[paneKey]
         }
+
         const nextRetained = hasRetained
           ? { ...s.retainedAgentsByPaneKey }
           : s.retainedAgentsByPaneKey
+
         if (hasRetained) {
           delete nextRetained[paneKey]
         }
+
         const needsSuppressor = hasLive && !(paneKey in s.retentionSuppressedPaneKeys)
+
         return {
           agentStatusByPaneKey: nextLive,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
@@ -109,9 +127,11 @@ export function createAgentStatusDropActions(
           sortEpoch: hasLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
         }
       })
+
       if (liveExisted) {
         freshness.scheduleDeferred()
       }
+
       if (typeof window !== 'undefined') {
         window.api?.agentStatus?.drop?.(paneKey)
       }
@@ -127,12 +147,16 @@ export function createAgentStatusDropActions(
           retiredAliasPaneKeys,
           opts
         )
+
         hadLive = dropped.hadLive
+
         return dropped.patch
       })
+
       if (hadLive) {
         freshness.scheduleDeferred()
       }
+
       if (typeof window !== 'undefined') {
         window.api?.agentStatus?.dropByTabPrefix?.(tabIdPrefix)
       }
@@ -145,11 +169,14 @@ export function createAgentStatusDropActions(
         const hasLive = liveEntry !== undefined
         const hasRetained = paneKey in s.retainedAgentsByPaneKey
         const hasLaunchConfig = paneKey in s.agentLaunchConfigByPaneKey
+
         const migrationUnsupported = pruneMigrationUnsupportedEntries(
           s.migrationUnsupportedByPtyId,
           (entry) => entry.paneKey === paneKey
         )
+
         const retainedEvidence = new Map<string, RetainedAgentEntry>()
+
         for (const retained of opts?.retainedCompletionEvidence ?? []) {
           if (
             retained.entry.paneKey === paneKey &&
@@ -159,6 +186,7 @@ export function createAgentStatusDropActions(
             retainedEvidence.set(paneKey, retained)
           }
         }
+
         if (
           liveEntry?.state === 'done' &&
           liveEntry.agentType !== undefined &&
@@ -169,16 +197,21 @@ export function createAgentStatusDropActions(
             retainedAgentEntryFromLive(s, worktreeId, liveEntry, liveEntry.agentType)
           )
         }
+
         const keepsCompletionEvidence = retainedEvidence.has(paneKey)
+
         const nextAck = !keepsCompletionEvidence
           ? removeAcknowledgement(s.acknowledgedAgentsByPaneKey, paneKey)
           : s.acknowledgedAgentsByPaneKey
+
         const nextClearedAt = !keepsCompletionEvidence
           ? removeAcknowledgement(s.activityClearedAtByPaneKey, paneKey)
           : s.activityClearedAtByPaneKey
+
         const nextManualUnread = !keepsCompletionEvidence
           ? removeAcknowledgement(s.manuallyUnreadTurnsByPaneKey, paneKey)
           : s.manuallyUnreadTurnsByPaneKey
+
         if (
           !hasLive &&
           !hasRetained &&
@@ -197,33 +230,43 @@ export function createAgentStatusDropActions(
               ? { manuallyUnreadTurnsByPaneKey: nextManualUnread }
               : {})
           }
+
           return Object.keys(cleanupPatch).length > 0 ? cleanupPatch : s
         }
+
         hadLive = hasLive
         const nextLive = hasLive ? { ...s.agentStatusByPaneKey } : s.agentStatusByPaneKey
+
         if (hasLive) {
           delete nextLive[paneKey]
         }
+
         const nextLaunchConfigs = hasLaunchConfig
           ? { ...s.agentLaunchConfigByPaneKey }
           : s.agentLaunchConfigByPaneKey
+
         if (hasLaunchConfig) {
           delete nextLaunchConfigs[paneKey]
         }
+
         const nextRetained =
           hasRetained || keepsCompletionEvidence
             ? { ...s.retainedAgentsByPaneKey }
             : s.retainedAgentsByPaneKey
+
         if (hasRetained && !keepsCompletionEvidence) {
           delete nextRetained[paneKey]
         }
+
         for (const [key, retained] of retainedEvidence) {
           if (shouldReplaceRetainedWithLive(nextRetained[key], retained)) {
             nextRetained[key] = retained
           }
         }
+
         const needsSuppressor =
           hasLive && !keepsCompletionEvidence && !(paneKey in s.retentionSuppressedPaneKeys)
+
         return {
           agentStatusByPaneKey: nextLive,
           agentLaunchConfigByPaneKey: nextLaunchConfigs,
@@ -247,6 +290,7 @@ export function createAgentStatusDropActions(
           sortEpoch: hasLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
         }
       })
+
       if (hadLive) {
         freshness.scheduleDeferred()
       }

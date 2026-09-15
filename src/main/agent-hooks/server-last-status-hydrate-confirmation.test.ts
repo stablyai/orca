@@ -50,6 +50,7 @@ describe('Last-status persistence', () => {
       prompt: 'still running',
       agentType: 'claude' as const
     }
+
     const firstServer = new AgentHookServer()
     await firstServer.start({ env: 'production', userDataPath })
     firstServer.ingestTerminalStatus({
@@ -64,11 +65,14 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       const restored = server.getStatusSnapshot()[0]
+
       if (!restored) {
         throw new Error('expected hydrated status')
       }
+
       expect(restored?.restoredUnconfirmed).toBe(true)
       vi.spyOn(Date, 'now').mockReturnValue(restored.receivedAt - 1_000)
       server.ingestTerminalStatus({
@@ -110,6 +114,7 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       server.ingestRemote(
         {
@@ -163,6 +168,7 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       server.ingestRemote(
         {
@@ -228,6 +234,7 @@ describe('Last-status persistence', () => {
 
     const thirdServer = new AgentHookServer()
     await thirdServer.start({ env: 'production', userDataPath })
+
     try {
       expect(thirdServer.getStatusSnapshot()).toEqual([
         expect.objectContaining({ paneKey: PANE, state: 'working', restoredUnconfirmed: true })
@@ -254,9 +261,11 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       const baseline = server.getStatusSnapshot()[0]
       expect(baseline).toMatchObject({ paneKey: PANE, restoredUnconfirmed: true })
+
       const applied = server.inferInterrupt({
         paneKey: PANE,
         baselineUpdatedAt: baseline.receivedAt,
@@ -265,6 +274,7 @@ describe('Last-status persistence', () => {
         baselineAgentType: 'codex',
         intent: 'plain-escape'
       })
+
       // Why: synthesizing `done` onto a never-confirmed `working` would fabricate a transition from stale disk state.
       expect(applied).toBe(false)
       expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'working' })
@@ -300,6 +310,7 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       const clearListener = vi.fn()
       server.setPaneStatusClearListener(clearListener)
@@ -367,6 +378,7 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       const listener = vi.fn()
       server.setListener(listener)
@@ -428,6 +440,7 @@ describe('Last-status persistence', () => {
 
     const server = new AgentHookServer()
     await server.start({ env: 'production', userDataPath })
+
     try {
       expect(server.getStatusSnapshot()).toEqual([
         expect.objectContaining({

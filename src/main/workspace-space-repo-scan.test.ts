@@ -5,6 +5,7 @@ import { summarizeWorkspaceSpaceRows } from './workspace-space-repo-scan'
 describe('summarizeWorkspaceSpaceRows', () => {
   it('reads each summary field once per row', () => {
     const reads = { status: 0, sizeBytes: 0, reclaimableBytes: 0 }
+
     const makeRow = (status: WorkspaceSpaceWorktree['status']) =>
       new Proxy({ status, sizeBytes: 10, reclaimableBytes: 4 } as WorkspaceSpaceWorktree, {
         get(target, property, receiver) {
@@ -15,6 +16,7 @@ describe('summarizeWorkspaceSpaceRows', () => {
           ) {
             reads[property] += 1
           }
+
           return Reflect.get(target, property, receiver)
         }
       })

@@ -18,9 +18,11 @@ export function SessionRestoredBannerPortals({
     <>
       {panes.map((pane) => {
         const reason = paneIds.get(pane.id)
+
         if (!reason) {
           return null
         }
+
         return createPortal(
           // Why: resumed TUIs repaint xterm immediately, so the wake marker
           // must live in that pane's chrome instead of the PTY byte stream.

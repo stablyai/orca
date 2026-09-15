@@ -51,6 +51,7 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
   afterEach(() => {
     restorePlatform()
     rmSync(managedRoot, { recursive: true, force: true })
+
     if (sourceDir) {
       rmSync(sourceDir, { recursive: true, force: true })
     }
@@ -62,18 +63,23 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
       activeClaudeManagedAccountId: null as string | null,
       activeClaudeManagedAccountIdsByRuntime: { host: null as string | null, wsl: {} }
     }
+
     const store = {
       getSettings: vi.fn(() => settings),
       updateSettings: vi.fn((updates: Partial<typeof settings>) => {
         settings = { ...settings, ...updates }
+
         return settings
       })
     }
+
     const rateLimits = { evictInactiveClaudeCache: vi.fn() }
+
     const runtimeAuth = {
       clearLastWrittenCredentialsJson: vi.fn(),
       forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
     }
+
     return { store, rateLimits, runtimeAuth, getSettings: () => settings }
   }
 
@@ -92,11 +98,13 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
 
     const deps = makeDeps()
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       deps.store as never,
       deps.rateLimits as never,
       deps.runtimeAuth as never
     )
+
     // Why: avoid spawning a real `claude auth status` subprocess in the test.
     ;(service as unknown as { runClaudeCommand: () => Promise<string> }).runClaudeCommand = vi.fn(
       async () => '{"email":"new@example.com"}'
@@ -122,11 +130,13 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
     )
     const deps = makeDeps()
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       deps.store as never,
       deps.rateLimits as never,
       deps.runtimeAuth as never
     )
+
     ;(service as unknown as { runClaudeCommand: () => Promise<string> }).runClaudeCommand = vi.fn(
       async () => '{"email":"new@example.com"}'
     )
@@ -148,11 +158,13 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
     )
     const deps = makeDeps()
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       deps.store as never,
       deps.rateLimits as never,
       deps.runtimeAuth as never
     )
+
     ;(service as unknown as { runClaudeCommand: () => Promise<string> }).runClaudeCommand = vi.fn(
       async () => '{"email":"existing@example.com"}'
     )
@@ -173,11 +185,13 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
     )
     const deps = makeDeps()
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       deps.store as never,
       deps.rateLimits as never,
       deps.runtimeAuth as never
     )
+
     ;(service as unknown as { runClaudeCommand: () => Promise<string> }).runClaudeCommand = vi.fn(
       async () => '{"email":"new@example.com"}'
     )
@@ -213,11 +227,13 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const deps = makeDeps()
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       deps.store as never,
       deps.rateLimits as never,
       deps.runtimeAuth as never
     )
+
     ;(service as unknown as { runClaudeCommand: () => Promise<string> }).runClaudeCommand = vi.fn(
       async () => {
         throw Object.assign(new Error('spawn claude ENOENT'), { code: 'ENOENT' })
@@ -235,6 +251,7 @@ describe('ClaudeAccountService.addAccountFromConfigDir', () => {
     sourceDir = mkdtempSync(join(tmpdir(), 'orca-claude-source-empty-'))
     const deps = makeDeps()
     const { ClaudeAccountService } = await import('./service')
+
     const service = new ClaudeAccountService(
       deps.store as never,
       deps.rateLimits as never,

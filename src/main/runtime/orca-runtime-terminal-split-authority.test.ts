@@ -7,10 +7,15 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const REPO_ID = 'repo-1'
+
 const WORKTREE_ID = `${REPO_ID}::/workspace`
+
 const TAB_ID = 'tab-remote'
+
 const SOURCE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const SOURCE_PTY_ID = 'pty-source'
+
 const SPLIT_PTY_ID = 'pty-split'
 
 function sourceLayout(): TerminalLayoutSnapshot {
@@ -47,6 +52,7 @@ function persistedSession(includeSource = true): WorkspaceSessionState {
 
 function remoteSnapshot(): RuntimeMobileSessionTabsSnapshot {
   const layout = sourceLayout()
+
   return {
     worktree: WORKTREE_ID,
     publicationEpoch: 'remote-viewer',
@@ -87,6 +93,7 @@ function createHarness(
   const connectionId = options.connectionId ?? null
   const ownerHostId = connectionId ? `ssh:${connectionId}` : 'local'
   const requestedSessionHostIds: (string | undefined)[] = []
+
   const repo = {
     id: REPO_ID,
     path: '/workspace',
@@ -95,11 +102,13 @@ function createHarness(
     addedAt: 1,
     ...(connectionId ? { connectionId } : {})
   }
+
   const store = {
     getRepos: () => [repo],
     getRepo: (id: string) => (id === REPO_ID ? repo : undefined),
     getWorkspaceSession: (hostId?: string) => {
       requestedSessionHostIds.push(hostId)
+
       return hostId === undefined || hostId === ownerHostId ? session : getDefaultWorkspaceSession()
     },
     setWorkspaceSession: (next: WorkspaceSessionState) => {
@@ -107,7 +116,9 @@ function createHarness(
     },
     persistPtyBinding: () => true
   }
+
   let resolveSpawn: ((result: { id: string }) => void) | undefined
+
   const spawn = options.deferSpawn
     ? vi.fn(
         () =>
@@ -116,10 +127,12 @@ function createHarness(
           })
       )
     : vi.fn(async () => ({ id: SPLIT_PTY_ID }))
+
   const kill = vi.fn(() => true)
   const retireRejectedPty = vi.fn()
   const stopAndWait = vi.fn(async () => options.stopAndWaitResult ?? true)
   let resolveReveal: ((result: { tabId: string }) => void) | undefined
+
   const revealTerminalSession = options.deferReveal
     ? vi.fn(
         () =>
@@ -128,6 +141,7 @@ function createHarness(
           })
       )
     : vi.fn().mockRejectedValue(new Error(`Terminal tab ${TAB_ID} not found`))
+
   const rendererSplitTerminal = vi.fn()
   const runtime = new OrcaRuntimeService(store as never)
   Object.assign(runtime, {
@@ -175,6 +189,7 @@ function createHarness(
         : [],
     mobileSessionTabs: (options.includePairedSnapshot ?? includeSource) ? [remoteSnapshot()] : []
   })
+
   if (!options.graphOnlySource) {
     runtime.registerPty(SOURCE_PTY_ID, WORKTREE_ID, connectionId, {
       tabId: TAB_ID,
@@ -182,6 +197,7 @@ function createHarness(
       ...(options.sourceIncarnationId ? { incarnationId: options.sourceIncarnationId } : {})
     })
   }
+
   const internals = runtime as unknown as {
     issueHandle: (leaf: unknown) => string
     issuePtyHandle: (pty: unknown) => string
@@ -189,9 +205,11 @@ function createHarness(
     mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
     ptysById: Map<string, unknown>
   }
+
   const handle = options.graphOnlySource
     ? internals.issueHandle([...internals.leaves.values()][0])
     : internals.issuePtyHandle(internals.ptysById.get(SOURCE_PTY_ID))
+
   return {
     runtime,
     handle,
@@ -232,9 +250,11 @@ describe('remote runtime terminal split authority', () => {
 
     const newLeafId = harness.rendererSplitTerminal.mock.calls[0]?.[2]?.newLeafId
     expect(newLeafId).toEqual(expect.any(String))
+
     if (typeof newLeafId !== 'string') {
       throw new Error('split notifier did not receive a pre-minted leaf id')
     }
+
     expect(harness.rendererSplitTerminal).toHaveBeenCalledWith(TAB_ID, 1, {
       direction: 'vertical',
       command: undefined,
@@ -306,12 +326,14 @@ describe('remote runtime terminal split authority', () => {
       }
     })
     expect(Object.values(persistedLayout!.ptyIdsByLeafId!)).toContain(SPLIT_PTY_ID)
+
     const siblingSurfaces = harness
       .getSnapshot()!
       .tabs.filter(
         (tab): tab is Extract<typeof tab, { type: 'terminal' }> =>
           tab.type === 'terminal' && tab.parentTabId === TAB_ID
       )
+
     expect(siblingSurfaces).toHaveLength(2)
     expect(siblingSurfaces.every((tab) => tab.parentLayout?.root?.type === 'split')).toBe(true)
   })
@@ -402,6 +424,7 @@ describe('remote runtime terminal split authority', () => {
       includePairedSnapshot: false,
       stopAndWaitResult: true
     })
+
     harness.replacePersistedSourceIncarnation('persisted-before')
 
     const split = harness.runtime.splitTerminal(harness.handle, { direction: 'horizontal' })
@@ -451,6 +474,7 @@ describe('remote runtime terminal split authority', () => {
       sourceIncarnationId: 'projected-before',
       stopAndWaitResult: false
     })
+
     harness.kill.mockImplementation(() => {
       throw new Error('kill failed')
     })

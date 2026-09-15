@@ -15,6 +15,7 @@ describe('getDiffViewerLargeDiffSaveAction', () => {
 
   it('can save an intentionally empty draft when content is available', () => {
     const onSave = vi.fn()
+
     const action = getDiffViewerLargeDiffSaveAction({
       editable: true,
       modifiedContent: '',

@@ -19,11 +19,13 @@ describe('review Markdown table delimiter cost', () => {
       { parse: parseMarkdownBlocks, input: `a|b\n${delimiter}` },
       { timeout: 250 }
     )
+
     expect(blocks).toEqual([{ kind: 'paragraph', text: `a|b\n${delimiter}` }])
   })
 
   it('preserves the original delimiter grammar over generated rows', () => {
     const parts = ['', '-', '--', ':', ':-:', ':--', '--:', '|', ' ', '\t', '\r', '\\|', 'x']
+
     for (const left of parts) {
       for (const middle of parts) {
         for (const right of parts) {

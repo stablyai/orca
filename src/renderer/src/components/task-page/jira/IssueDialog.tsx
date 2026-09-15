@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
 import { getJiraCreateAllowedValueLabel } from '@/components/task-page-jira-create-fields'
+
 export function TaskPageJiraIssueDialog({
   model
 }: {
@@ -72,6 +73,7 @@ export function TaskPageJiraIssueDialog({
     handleNewJiraIssueProjectTriggerKeyDown,
     handleCreateNewJiraIssue
   } = model
+
   return (
     <Dialog
       open={newJiraIssueOpen}
@@ -170,6 +172,7 @@ export function TaskPageJiraIssueDialog({
                       {filteredNewJiraIssueProjects.map((project) => {
                         const selectionKey = getJiraProjectSelectionKey(project)
                         const selected = selectionKey === newJiraIssueTargetProjectSelectionKey
+
                         return (
                           <CommandItem
                             key={selectionKey}
@@ -275,6 +278,7 @@ export function TaskPageJiraIssueDialog({
             <div className="grid gap-3 sm:grid-cols-2">
               {visibleJiraCreateFields.map((field) => {
                 const fieldValue = newJiraIssueCustomFieldValues[field.key] ?? ''
+
                 return (
                   <div key={field.key} className="flex min-w-0 flex-col gap-1">
                     <label className="text-[11px] font-medium text-muted-foreground">
@@ -305,6 +309,7 @@ export function TaskPageJiraIssueDialog({
                         <SelectContent>
                           {field.allowedValues.map((value) => {
                             const optionValue = value.id ?? value.value ?? value.name ?? ''
+
                             return optionValue ? (
                               <SelectItem key={optionValue} value={optionValue}>
                                 {getJiraCreateAllowedValueLabel(value)}

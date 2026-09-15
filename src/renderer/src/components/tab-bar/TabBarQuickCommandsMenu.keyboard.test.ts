@@ -26,17 +26,21 @@ const reactRuntime = vi.hoisted(() => ({
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useState<T>(initial: T | (() => T)) {
       const i = reactRuntime.index++
+
       if (!(i in reactRuntime.states)) {
         reactRuntime.states[i] = typeof initial === 'function' ? (initial as () => T)() : initial
       }
+
       const setState = (next: T | ((prev: T) => T)): void => {
         reactRuntime.states[i] =
           typeof next === 'function' ? (next as (p: T) => T)(reactRuntime.states[i] as T) : next
       }
+
       return [reactRuntime.states[i] as T, setState] as const
     },
     useEffect(effect: () => void | (() => void)) {
@@ -171,6 +175,7 @@ beforeEach(() => {
   })
   vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
     cb(0)
+
     return 1
   })
   vi.stubGlobal('cancelAnimationFrame', vi.fn())
@@ -301,6 +306,7 @@ describe('TabBarQuickCommandsMenu keyboard shortcut', () => {
       classList: { contains: (className: string) => className === 'xterm-helper-textarea' },
       closest: () => null
     } as unknown as EventTarget
+
     const handler = windowListeners.get('keydown')!
     handler(makeKeyEvent({ target: terminalTarget }))
 
@@ -324,6 +330,7 @@ describe('TabBarQuickCommandsMenu keyboard shortcut', () => {
     const recorderTarget = {
       closest: (selector: string) => (selector === '[data-shortcut-recorder-active]' ? {} : null)
     } as unknown as EventTarget
+
     const handler = windowListeners.get('keydown')!
     handler(makeKeyEvent({ target: recorderTarget }))
 
@@ -343,18 +350,21 @@ describe('TabBarQuickCommandsMenu keyboard shortcut', () => {
     )
     const keyDown = windowListeners.get('keydown')!
     const keyUp = windowListeners.get('keyup')!
+
     const firstDown = makeKeyEvent({
       key: 'Shift',
       code: 'ShiftLeft',
       metaKey: false,
       shiftKey: true
     })
+
     const firstUp = makeKeyEvent({
       key: 'Shift',
       code: 'ShiftLeft',
       metaKey: false,
       shiftKey: true
     })
+
     const secondDown = makeKeyEvent({
       key: 'Shift',
       code: 'ShiftLeft',

@@ -53,12 +53,14 @@ export default function AccountsScreen() {
     setSnapshot(nextSnapshot)
     setError(null)
   }, [])
+
   const rejectInvalidSnapshot = useCallback(() => {
     // Why: a stale snapshot can expose a finite reset action for the wrong
     // account; fail closed if a host sends a shape this mobile cannot prove.
     setSnapshot(null)
     setError('Invalid accounts snapshot from host')
   }, [])
+
   const {
     supported: codexResetSupported,
     resetting: resettingCodex,
@@ -77,6 +79,7 @@ export default function AccountsScreen() {
   useFocusEffect(
     useCallback(() => {
       setClockEnabled(true)
+
       return () => setClockEnabled(false)
     }, [])
   )
@@ -87,18 +90,24 @@ export default function AccountsScreen() {
     if (!hostId) {
       return
     }
+
     let stale = false
     void loadHosts().then((hosts) => {
       if (stale) {
         return
       }
+
       const host = hosts.find((h) => h.id === hostId)
+
       if (!host) {
         setError('Host not found')
+
         return
       }
+
       setHostName(host.name)
     })
+
     return () => {
       stale = true
     }
@@ -112,11 +121,14 @@ export default function AccountsScreen() {
     if (!client || connState !== 'connected') {
       return
     }
+
     const unsubscribe = client.subscribe('accounts.subscribe', null, (payload) => {
       if (!payload || typeof payload !== 'object') {
         return
       }
+
       const evt = payload as { type?: string; snapshot?: unknown }
+
       if (evt.type === 'ready' || evt.type === 'snapshot') {
         try {
           acceptSnapshot(decodeAccountsSnapshot(evt.snapshot))
@@ -125,6 +137,7 @@ export default function AccountsScreen() {
         }
       }
     })
+
     return unsubscribe
   }, [acceptSnapshot, client, connState, rejectInvalidSnapshot])
 
@@ -132,9 +145,12 @@ export default function AccountsScreen() {
     if (!client) {
       return
     }
+
     setRefreshing(true)
+
     try {
       const res = await client.sendRequest('accounts.list')
+
       if (res.ok) {
         acceptSnapshot(decodeAccountsSnapshot(res.result))
       } else {
@@ -156,23 +172,30 @@ export default function AccountsScreen() {
       if (!client) {
         return
       }
+
       const codexTarget = provider === 'codex' ? snapshot?.rateLimits.codexTarget : null
+
       if (provider === 'codex' && !codexTarget) {
         return
       }
+
       setBusyAccountId(accountId ?? `${provider}:default`)
+
       const method =
         provider === 'claude'
           ? 'accounts.selectClaude'
           : codexTarget?.runtime === 'wsl'
             ? 'accounts.selectCodexForTarget'
             : 'accounts.selectCodex'
+
       try {
         // Why: old hosts silently strip unknown target fields. Use the distinct
         // targeted RPC for WSL so version skew fails before mutating host state.
         const params =
           codexTarget?.runtime === 'wsl' ? { accountId, target: codexTarget } : { accountId }
+
         const res = await client.sendRequest(method, params)
+
         if (!res.ok) {
           Alert.alert('Could not switch account', res.error.message)
         } else {
@@ -194,16 +217,20 @@ export default function AccountsScreen() {
     if (!snapshot) {
       return null
     }
+
     const state = provider === 'claude' ? snapshot.claude : snapshot.codex
+
     const activeAccountId =
       provider === 'codex' && snapshot.codex.activeAccountIdsByRuntime
         ? getActiveCodexAccountIdForRateLimitTarget(snapshot)
         : state.activeAccountId
+
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
     const activeSessionBar = getUsageBarState(activeUsage, 'session')
     const activeWeeklyBar = getUsageBarState(activeUsage, 'weekly')
     const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
+
     return (
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -253,15 +280,20 @@ export default function AccountsScreen() {
 
           {state.accounts.map((account) => {
             const isActive = activeAccountId === account.id
+
             const inactiveEntry = !isActive
               ? getInactiveProviderUsage(snapshot, provider, account.id)
               : null
+
             const usage = isActive ? activeUsage : (inactiveEntry?.rateLimits ?? null)
+
             const isFetching =
               (isActive && usage?.status === 'fetching') ||
               (!isActive && inactiveEntry?.isFetching === true)
+
             const sessionBar = getUsageBarState(usage, 'session', isFetching)
             const weeklyBar = getUsageBarState(usage, 'weekly', isFetching)
+
             return (
               <View key={account.id}>
                 <View style={styles.separator} />

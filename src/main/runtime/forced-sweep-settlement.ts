@@ -21,6 +21,7 @@ export type WorktreeSweepTracker = {
  */
 export function createWorktreeSweepTracker(): WorktreeSweepTracker {
   const running = new Set<Promise<unknown>>()
+
   return {
     track:
       <T>(run: () => Promise<T>) =>
@@ -30,23 +31,30 @@ export function createWorktreeSweepTracker(): WorktreeSweepTracker {
         // Why: the tracked copy is observed here too, so a rejection this call abandons
         // never surfaces as an unhandled rejection in whatever ran next.
         void sweep.catch(() => undefined).finally(() => running.delete(sweep))
+
         return sweep
       },
     awaitAbandonedSweeps: async (graceMs = ABANDONED_SWEEP_GRACE_MS) => {
       const pending = [...running]
+
       if (pending.length === 0) {
         return false
       }
+
       let expiry: ReturnType<typeof setTimeout> | undefined
+
       const expired = new Promise<true>((resolve) => {
         expiry = setTimeout(() => resolve(true), graceMs)
         expiry.unref?.()
       })
+
       const stillRunning = await Promise.race([
         Promise.allSettled(pending).then(() => false),
         expired
       ])
+
       clearTimeout(expiry)
+
       return stillRunning
     }
   }
@@ -80,19 +88,24 @@ export async function settleSweepsForForcedRemoval(
 ): Promise<ForcedSweepSettlement> {
   const settled = await Promise.allSettled([sweeps.runtime, sweeps.provider, sweeps.registry])
   const [runtimeSettled, providerSettled, registrySettled] = settled
+
   // Report what the surviving sweeps actually stopped rather than a flat zero.
   const stopped = {
     runtimeStopped: runtimeSettled.status === 'fulfilled' ? runtimeSettled.value.stopped : 0,
     providerStopped: providerSettled.status === 'fulfilled' ? providerSettled.value : 0,
     registryStopped: registrySettled.status === 'fulfilled' ? registrySettled.value : 0
   }
+
   const reasons = settled.flatMap((result) =>
     result.status === 'rejected' ? [result.reason as unknown] : []
   )
+
   const stillRunning = await tracker.awaitAbandonedSweeps()
+
   if (reasons.length === 0 && !stillRunning) {
     return { stopped, incomplete: false }
   }
+
   // Why (#11960): a sweep that cannot even complete — unresponsive daemon, dropped SSH
   // channel — fails before the unproven-stop gate could offer its escape hatch, so an
   // explicit Force Delete has to survive it. Report every reason, specific ones first: the
@@ -103,6 +116,7 @@ export async function settleSweepsForForcedRemoval(
     ...reasons.filter((candidate) => candidate !== deadlineError),
     ...reasons.filter((candidate) => candidate === deadlineError)
   ].map(describeError)
+
   if (stillRunning) {
     // Force must never wedge, so the wait is bounded — but "we stopped waiting" is not
     // "handles released", and on Windows/WSL that is the difference between a clean
@@ -111,9 +125,11 @@ export async function settleSweepsForForcedRemoval(
       `a sweep was still running after the ${ABANDONED_SWEEP_GRACE_MS}ms grace, so its PTY handles may outlive the delete`
     )
   }
+
   console.warn(
     `[worktree-teardown] forcing removal after an incomplete PTY sweep for ${worktreeId} — ${detail.join('; ')}`
   )
+
   // Reporting `incomplete` does skip the per-PTY verdict, which could still have named live
   // PTYs when only one sweep failed — accepted for now because this path is behind an
   // explicit Force Delete, deletes either way, and clears no registry rows, so the cost is

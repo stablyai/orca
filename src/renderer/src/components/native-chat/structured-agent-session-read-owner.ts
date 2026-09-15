@@ -43,6 +43,7 @@ function countsTowardInitialHistory(item: AgentJournalRenderItem): boolean {
 
 function ownerKey(sessionId: string, target: RuntimeClientTarget): string {
   const targetKey = target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
+
   return `${targetKey}:${sessionId}`
 }
 
@@ -55,6 +56,7 @@ function createReadOwner(
     state: EMPTY_STRUCTURED_AGENT_SESSION,
     loadingOlder: false
   }
+
   let stopActiveRun: (() => void) | null = null
   const retiredHistoryRead = (): boolean => true
   let captureActiveHistoryReadGuard = (): (() => boolean) => retiredHistoryRead
@@ -66,43 +68,54 @@ function createReadOwner(
       listener()
     }
   }
+
   const setSnapshot = (next: StructuredAgentSessionReadSnapshot): void => {
     if (next === snapshot) {
       return
     }
+
     snapshot = next
     emit()
   }
+
   const apply = (action: StructuredAgentSessionAction): void => {
     const state = reduceStructuredAgentSession(snapshot.state, action, Date.now())
+
     if (state !== snapshot.state) {
       setSnapshot({ ...snapshot, state })
     }
   }
+
   const setProviderSession = (providerSession: AgentProviderSessionMetadata | undefined): void => {
     if (!agentProviderSessionsEqual(undefined, snapshot.providerSession, providerSession)) {
       setSnapshot({ ...snapshot, providerSession })
     }
   }
+
   const clearLoadingOlder = (): void => {
     if (snapshot.loadingOlder) {
       setSnapshot({ ...snapshot, loadingOlder: false })
     }
   }
+
   const hydrate = async (shouldStop: () => boolean): Promise<void> => {
     const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
       target,
       'agentSession.history',
       { sessionId, direction: 'tail', limit: AGENT_SESSION_HISTORY_MAX_LIMIT }
     )
+
     if (shouldStop()) {
       return
     }
+
     setProviderSession(result.providerSession)
+
     if (!result.ok) {
       if (shouldStop()) {
         return
       }
+
       apply({
         type: 'event',
         event: {
@@ -113,23 +126,32 @@ function createReadOwner(
           fence: result.fence ?? 0
         }
       })
+
       return
     }
+
     if (shouldStop()) {
       return
     }
+
     apply({ type: 'history-page', page: result.page })
+
     if (shouldStop()) {
       return
     }
+
     let restored = snapshot.state.items.filter(countsTowardInitialHistory).length
     let anchorSlides = 0
+
     while (snapshot.state.hasOlder && restored < NATIVE_CHAT_INITIAL_LIMIT) {
       const oldest = oldestStructuredAgentSessionCursor(snapshot.state)
+
       if (!oldest || shouldStop()) {
         break
       }
+
       const missing = NATIVE_CHAT_INITIAL_LIMIT - restored
+
       const older = await callStructuredAgentSession<AgentSessionHistoryResult>(
         target,
         'agentSession.history',
@@ -140,28 +162,37 @@ function createReadOwner(
           limit: Math.min(AGENT_SESSION_HISTORY_MAX_LIMIT, missing)
         }
       )
+
       if (shouldStop()) {
         return
       }
+
       if (!older.ok || older.page.window.oldest?.sequence === oldest.sequence) {
         break
       }
+
       if (shouldStop()) {
         return
       }
+
       // A live batch that head-trimmed past the anchor makes this page discontiguous;
       // the reducer drops it, so re-anchor rather than chase a moving window forever.
       if (oldestStructuredAgentSessionCursor(snapshot.state)?.sequence !== oldest.sequence) {
         anchorSlides += 1
+
         if (anchorSlides >= OLDER_PAGE_ANCHOR_ATTEMPTS) {
           break
         }
+
         continue
       }
+
       apply({ type: 'older-page', requestedCursor: oldest, page: older.page })
+
       if (shouldStop()) {
         return
       }
+
       restored = snapshot.state.items.filter(countsTowardInitialHistory).length
     }
   }
@@ -170,6 +201,7 @@ function createReadOwner(
     if (snapshot.state.epoch === null) {
       apply({ type: 'loading' })
     }
+
     const transport = startStructuredAgentSessionReadTransport({
       applyEvent: (event) => apply({ type: 'event', event }),
       applyError: (message) => apply({ type: 'error', message }),
@@ -179,6 +211,7 @@ function createReadOwner(
       sessionId,
       target
     })
+
     captureActiveHistoryReadGuard = transport.captureHistoryReadGuard
     stopActiveRun = () => {
       captureActiveHistoryReadGuard = () => retiredHistoryRead
@@ -188,20 +221,25 @@ function createReadOwner(
   }
 
   let owner: StructuredAgentSessionReadOwner
+
   const deleteIfUnused = (): void => {
     if (activations.size === 0 && listeners.size === 0 && owners.get(key) === owner) {
       owners.delete(key)
     }
   }
+
   owner = {
     activate: () => {
       const token = Symbol(sessionId)
       activations.add(token)
+
       if (activations.size === 1) {
         start()
       }
+
       return () => {
         activations.delete(token)
+
         if (activations.size === 0) {
           stopActiveRun?.()
           deleteIfUnused()
@@ -216,9 +254,11 @@ function createReadOwner(
     getSnapshot: () => snapshot,
     loadOlder: async () => {
       const shouldStop = captureActiveHistoryReadGuard()
+
       if (shouldStop()) {
         return
       }
+
       if (
         !oldestStructuredAgentSessionCursor(snapshot.state) ||
         !snapshot.state.hasOlder ||
@@ -226,26 +266,33 @@ function createReadOwner(
       ) {
         return
       }
+
       setSnapshot({ ...snapshot, loadingOlder: true })
+
       try {
         // A live batch can head-trim past the anchor mid-read, and the reducer drops
         // that page rather than leave a hole in the transcript. Re-anchor and retry.
         for (let attempt = 0; attempt < OLDER_PAGE_ANCHOR_ATTEMPTS; attempt += 1) {
           const cursor = oldestStructuredAgentSessionCursor(snapshot.state)
+
           if (!cursor || shouldStop()) {
             return
           }
+
           const result = await callStructuredAgentSession<AgentSessionHistoryResult>(
             target,
             'agentSession.history',
             { sessionId, direction: 'before', cursor, limit: AGENT_SESSION_HISTORY_MAX_LIMIT }
           )
+
           if (shouldStop() || !result.ok) {
             return
           }
+
           // The reducer drops a page whose anchor slid, so only an intact anchor lands.
           if (oldestStructuredAgentSessionCursor(snapshot.state)?.sequence === cursor.sequence) {
             apply({ type: 'older-page', requestedCursor: cursor, page: result.page })
+
             return
           }
         }
@@ -264,12 +311,14 @@ function createReadOwner(
     },
     subscribe: (listener) => {
       listeners.add(listener)
+
       return () => {
         listeners.delete(listener)
         deleteIfUnused()
       }
     }
   }
+
   return owner
 }
 
@@ -279,10 +328,12 @@ export function getStructuredAgentSessionReadOwner(
 ): StructuredAgentSessionReadOwner {
   const key = ownerKey(sessionId, target)
   let owner = owners.get(key)
+
   if (!owner) {
     owner = createReadOwner(key, sessionId, target)
     owners.set(key, owner)
   }
+
   return owner
 }
 
@@ -290,5 +341,6 @@ export function resetStructuredAgentSessionReadOwnersForTests(): void {
   for (const owner of owners.values()) {
     owner.dispose()
   }
+
   owners.clear()
 }

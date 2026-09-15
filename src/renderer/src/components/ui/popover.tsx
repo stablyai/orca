@@ -29,15 +29,19 @@ function resolvePopoverScroller(
   content: HTMLElement
 ): HTMLElement | null {
   let node = target instanceof Node ? target : null
+
   while (node && node !== content.parentNode) {
     if (node instanceof HTMLElement && node.scrollHeight > node.clientHeight) {
       const overflowY = getComputedStyle(node).overflowY
+
       if (overflowY === 'auto' || overflowY === 'scroll') {
         return node
       }
     }
+
     node = node.parentNode
   }
+
   return null
 }
 
@@ -61,6 +65,7 @@ function handlePopoverWheel(event: WheelEvent, content: HTMLDivElement): void {
   }
 
   const el = resolvePopoverScroller(event.target, content)
+
   if (!el) {
     return
   }
@@ -71,6 +76,7 @@ function handlePopoverWheel(event: WheelEvent, content: HTMLDivElement): void {
       : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
         ? event.deltaY * el.clientHeight
         : event.deltaY
+
   const maxScrollTop = el.scrollHeight - el.clientHeight
   const nextScrollTop = Math.max(0, Math.min(maxScrollTop, el.scrollTop + delta))
 
@@ -94,12 +100,14 @@ function attachPopoverContent(
   wheelTarget.addEventListener('wheel', handleWheel, { passive: false })
 
   const refCleanup = typeof forwardedRef === 'function' ? forwardedRef(content) : undefined
+
   if (forwardedRef && typeof forwardedRef !== 'function') {
     forwardedRef.current = content
   }
 
   return () => {
     wheelTarget.removeEventListener('wheel', handleWheel)
+
     if (typeof refCleanup === 'function') {
       refCleanup()
     } else if (typeof forwardedRef === 'function') {
@@ -126,15 +134,18 @@ function PopoverContent({
   const handleConsumerWheel = React.useCallback(
     (event: React.WheelEvent<HTMLDivElement>): void => {
       onWheel?.(event)
+
       if (event.defaultPrevented) {
         consumerPreventedWheelEvents.add(event.nativeEvent)
       }
     },
     [onWheel]
   )
+
   const handleConsumerWheelCapture = React.useCallback(
     (event: React.WheelEvent<HTMLDivElement>): void => {
       onWheelCapture?.(event)
+
       if (event.defaultPrevented) {
         consumerPreventedWheelEvents.add(event.nativeEvent)
       }
@@ -147,11 +158,13 @@ function PopoverContent({
       if (node) {
         return attachPopoverContent(node, portalContainer, forwardedRef)
       }
+
       if (typeof forwardedRef === 'function') {
         forwardedRef(null)
       } else if (forwardedRef) {
         forwardedRef.current = null
       }
+
       return undefined
     },
     [forwardedRef, portalContainer]

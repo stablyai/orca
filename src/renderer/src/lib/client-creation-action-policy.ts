@@ -7,16 +7,21 @@ import { getRuntimeEnvironmentIdForWorktree } from './worktree-runtime-owner'
 
 export const MANAGED_BROWSER_UNAVAILABLE_MESSAGE =
   "Managed browser tabs are unavailable because this web client's paired runtime does not support browser streaming."
+
 export const RUNTIME_BROWSER_UNAVAILABLE_MESSAGE =
   'Managed browser tabs are unavailable because the paired runtime does not support browser streaming.'
+
 export const FLOATING_BROWSER_UNAVAILABLE_MESSAGE =
   'Managed browser tabs are unavailable in the web client floating workspace.'
+
 export const LOCAL_BROWSER_UNAVAILABLE_MESSAGE =
   'Managed browser tabs in the web client must be created by a capable paired runtime.'
+
 export const MOBILE_EMULATOR_UNAVAILABLE_MESSAGE =
   'Mobile Emulator is unavailable in the web client.'
 
 export type ClientCreationAction = 'managed-browser' | 'mobile-emulator'
+
 export type ClientCreationActionProvider = 'local-client' | 'paired-runtime'
 
 export type ClientCreationActionAvailability =
@@ -63,11 +68,13 @@ export function getClientCreationActionPolicy(
   worktreeId: string | null
 ): ClientCreationActionPolicy {
   const floatingWorkspace = worktreeId === FLOATING_TERMINAL_WORKTREE_ID
+
   const runtimeEnvironmentId = floatingWorkspace
     ? null
     : worktreeId
       ? getRuntimeEnvironmentIdForWorktree(state, worktreeId)
       : (state.settings?.activeRuntimeEnvironmentId?.trim() ?? null)
+
   const runtimeStatus = runtimeEnvironmentId
     ? (state.runtimeStatusByEnvironmentId?.get(runtimeEnvironmentId)?.status ?? null)
     : null
@@ -85,6 +92,7 @@ export function assertClientCreationActionAvailable(
   action: ClientCreationAction
 ): void {
   const availability = getClientCreationActionPolicy(state, worktreeId)[action]
+
   if (availability.state !== 'enabled') {
     throw new Error(availability.reason)
   }
@@ -96,6 +104,7 @@ export function assertRuntimeManagedBrowserCreationAvailable(
 ): void {
   const capabilities =
     state.runtimeStatusByEnvironmentId?.get(runtimeEnvironmentId)?.status?.capabilities
+
   if (!capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY)) {
     throw new Error(RUNTIME_BROWSER_UNAVAILABLE_MESSAGE)
   }
@@ -108,9 +117,12 @@ export function assertManagedBrowserMaterializationAllowed(
   if (!isPairedWebClientWindow()) {
     return
   }
+
   const runtimeEnvironmentId = browserRuntimeEnvironmentId?.trim()
+
   if (!runtimeEnvironmentId) {
     throw new Error(LOCAL_BROWSER_UNAVAILABLE_MESSAGE)
   }
+
   assertRuntimeManagedBrowserCreationAvailable(state, runtimeEnvironmentId)
 }

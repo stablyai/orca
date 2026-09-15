@@ -19,6 +19,7 @@ vi.mock('./runner', () => ({
   ) => {
     const { stdout } = await gitExecFileAsyncMock(args)
     const stoppedEarly = options.onStdout(stdout ?? '') === true
+
     return { stoppedEarly }
   },
   gitOptionalLocksDisabledEnv: (env: NodeJS.ProcessEnv = process.env) => ({
@@ -55,6 +56,7 @@ function featureFixPushTargetSnapshot(): { stdout: string } {
     'branch.feature/fix.remote\nfork',
     'branch.feature/fix.merge\nrefs/heads/feature/fix'
   ]
+
   return { stdout: `${records.join('\0')}\0` }
 }
 
@@ -79,18 +81,23 @@ describe('getStatus missing-upstream polling churn', () => {
           stdout: '# branch.oid abcdef1234567890\n# branch.head Initi-Project\n'
         }
       }
+
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
         return { stdout: 'Initi-Project\n' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error("fatal: no upstream configured for branch 'Initi-Project'")
       }
+
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')) {
         throw new Error('missing remote branch')
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -100,10 +107,13 @@ describe('getStatus missing-upstream polling churn', () => {
 
     const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
       const args = getGitArgs(call)
+
       return args[0] === 'rev-parse' && args.includes('HEAD@{u}')
     })
+
     const sameNameOriginProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
       const args = getGitArgs(call)
+
       return args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')
     })
 
@@ -120,18 +130,23 @@ describe('getStatus missing-upstream polling churn', () => {
           stdout: '# branch.oid abcdef1234567890\n# branch.head Initi-Project\n'
         }
       }
+
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
         return { stdout: 'Initi-Project\n' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error("fatal: no upstream configured for branch 'Initi-Project'")
       }
+
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')) {
         throw new Error('missing remote branch')
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -141,6 +156,7 @@ describe('getStatus missing-upstream polling churn', () => {
 
     const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
       const args = getGitArgs(call)
+
       return args[0] === 'rev-parse' && args.includes('HEAD@{u}')
     })
 
@@ -154,20 +170,25 @@ describe('getStatus missing-upstream polling churn', () => {
           stdout: '# branch.oid abcdef1234567890\n# branch.head Initi-Project\n'
         }
       }
+
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
         return { stdout: 'Initi-Project\n' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         await Promise.resolve()
         throw new Error("fatal: no upstream configured for branch 'Initi-Project'")
       }
+
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')) {
         await Promise.resolve()
         throw new Error('missing remote branch')
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -175,10 +196,13 @@ describe('getStatus missing-upstream polling churn', () => {
 
     const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
       const args = getGitArgs(call)
+
       return args[0] === 'rev-parse' && args.includes('HEAD@{u}')
     })
+
     const sameNameOriginProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
       const args = getGitArgs(call)
+
       return args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')
     })
 
@@ -197,25 +221,33 @@ describe('getStatus missing-upstream polling churn', () => {
           stdout: '# branch.oid abcdef1234567890\n# branch.head bench/feature\n'
         }
       }
+
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
         return { stdout: 'bench/feature\n' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error("fatal: no upstream configured for branch 'bench/feature'")
       }
+
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/bench/feature')) {
         return { stdout: 'abcdef1234567890\n' }
       }
+
       if (args[0] === 'rev-list') {
         revListCalls++
+
         if (revList.failOnCall === revListCalls) {
           throw new Error('fatal: bad revision')
         }
+
         return { stdout: '1\t0\n' }
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
   }
@@ -277,18 +309,23 @@ describe('getStatus missing-upstream polling churn', () => {
           stdout: '# branch.oid abcdef1234567890\n# branch.head feature/fix\n'
         }
       }
+
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
         return { stdout: 'feature/fix\n' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error("fatal: no upstream configured for branch 'feature/fix'")
       }
+
       if (isConfigListSnapshotCommand(args)) {
         return featureFixPushTargetSnapshot()
       }
+
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/'))) {
         throw new Error('missing remote branch')
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -297,6 +334,7 @@ describe('getStatus missing-upstream polling churn', () => {
 
     const upstreamProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
       const args = getGitArgs(call)
+
       return args[0] === 'rev-parse' && args.includes('HEAD@{u}')
     })
 
@@ -310,22 +348,28 @@ describe('getStatus missing-upstream polling churn', () => {
       if (args.includes('status')) {
         currentStatusBranch = nextBranch
         nextBranch = 'Other-Project'
+
         return {
           stdout: `# branch.oid abcdef1234567890\n# branch.head ${currentStatusBranch}\n`
         }
       }
+
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
         return { stdout: `${currentStatusBranch}\n` }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error('fatal: no upstream configured')
       }
+
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
+
       if (args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))) {
         throw new Error('missing remote branch')
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -334,6 +378,7 @@ describe('getStatus missing-upstream polling churn', () => {
 
     const sameNameOriginProbeCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
       const args = getGitArgs(call)
+
       return args[0] === 'rev-parse' && args.some((arg) => arg.startsWith('refs/remotes/origin/'))
     })
 
@@ -350,18 +395,23 @@ describe('getStatus missing-upstream polling churn', () => {
           stdout: '# branch.oid abcdef1234567890\n# branch.head Initi-Project\n'
         }
       }
+
       if (args[0] === 'symbolic-ref' && args.includes('HEAD')) {
         return { stdout: 'Initi-Project\n' }
       }
+
       if (args[0] === 'rev-parse' && args.includes('HEAD@{u}')) {
         throw new Error("fatal: no upstream configured for branch 'Initi-Project'")
       }
+
       if (isConfigListSnapshotCommand(args)) {
         return emptyGitConfigSnapshot()
       }
+
       if (args[0] === 'rev-parse' && args.includes('refs/remotes/origin/Initi-Project')) {
         throw new Error('missing remote branch')
       }
+
       throw new Error(`unexpected git command: ${args.join(' ')}`)
     })
 
@@ -370,16 +420,20 @@ describe('getStatus missing-upstream polling churn', () => {
     const configListCalls = gitExecFileAsyncMock.mock.calls.filter((call) =>
       isConfigListSnapshotCommand(getGitArgs(call))
     )
+
     const configGetCalls = gitExecFileAsyncMock.mock.calls.filter((call) => {
       const args = getGitArgs(call)
+
       return args[0] === 'config' && args[1] === '--get'
     })
 
     expect(configListCalls).toHaveLength(1)
     expect(configGetCalls).toHaveLength(0)
+
     if (!status.upstreamStatus) {
       throw new Error('expected upstream status')
     }
+
     expect(status.upstreamStatus.hasUpstream).toBe(false)
   })
 })

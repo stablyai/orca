@@ -21,6 +21,7 @@ it('avoids allocating copies of unaffected pages during an item mutation', () =>
   const pages = Array.from({ length: 20 }, (_, p) =>
     Array.from({ length: 200 }, (_, i) => item(`${p}:${i}`))
   )
+
   const inputs = new Set<unknown>([pages, ...pages])
   const map = Array.prototype.map
   const slice = Array.prototype.slice
@@ -33,16 +34,21 @@ it('avoids allocating copies of unaffected pages during an item mutation', () =>
     if (inputs.has(this)) {
       allocations++
     }
+
     return Reflect.apply(map, this, [callback, thisArg]) as U[]
   }
+
   Array.prototype.slice = function (this: unknown[], ...args: Parameters<typeof slice>) {
     if (inputs.has(this)) {
       allocations++
     }
+
     return slice.apply(this, args)
   }
+
   let result: ReturnType<typeof patchTaskPageGitHubWorkItemPages>
   let unchanged: ReturnType<typeof patchTaskPageGitHubWorkItemPages>
+
   try {
     unchanged = patchTaskPageGitHubWorkItemPages(
       pages,
@@ -58,6 +64,7 @@ it('avoids allocating copies of unaffected pages during an item mutation', () =>
     Array.prototype.map = map
     Array.prototype.slice = slice
   }
+
   expect(allocations).toBe(2)
   expect(unchanged).toBe(pages)
   expect(result[0]).toBe(pages[0])
@@ -69,12 +76,14 @@ it('preserves sparse pages, null pages, duplicate matches and predicate exclusio
   const page = [item('match'), item('match')]
   delete page[0]
   const pages = [page, null, [item('match'), item('match')]]
+
   const patched = patchTaskPageGitHubWorkItemPages(
     pages,
     { id: 'match', repoId: 'repo' },
     { title: 'new' },
     (row) => row !== pages[2]?.[0]
   )
+
   expect(0 in patched[0]!).toBe(false)
   expect(patched[1]).toBeNull()
   expect(patched[2]?.map((row) => row.title)).toEqual(['match', 'new'])

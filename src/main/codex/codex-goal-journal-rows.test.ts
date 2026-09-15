@@ -63,10 +63,12 @@ describe('codexGoalRowSignature', () => {
   it('ignores the counters that climb on every turn', () => {
     // Two frames one live turn apart: only accounting moved.
     const first = codexGoalRowSignature('thread/goal/updated', goalFrame())
+
     const later = codexGoalRowSignature(
       'thread/goal/updated',
       goalFrame({ goal: { tokensUsed: 25999, timeUsedSeconds: 8, updatedAt: 1789067996 } })
     )
+
     expect(later).toBe(first)
   })
 

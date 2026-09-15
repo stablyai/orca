@@ -24,14 +24,19 @@ const {
 }))
 
 vi.mock('./web-runtime-session', () => ({ closeWebRuntimeSessionTab, isWebRuntimeSessionActive }))
+
 vi.mock('@/store/slices/browser-webview-cleanup', () => ({ destroyWorkspaceWebviews }))
+
 vi.mock('@/store', () => ({ useAppStore: { getState: () => storeState.current } }))
 
 import { closeBrowserWorkspaceTabOnHosts } from './browser-workspace-tab-close'
 
 const WORKSPACE_ID = 'workspace-a'
+
 const PAGE_ID = 'page-a'
+
 const OTHER_WORKSPACE_ID = 'workspace-b'
+
 const OTHER_PAGE_ID = 'page-b'
 
 function browserPage(
@@ -108,6 +113,7 @@ function twoOwnerClientHostedHandles(): Partial<AppState> {
     browserHostGeneration: 1,
     pageHostGeneration: 1
   }
+
   return {
     browserPagesByWorkspace: {
       [WORKSPACE_ID]: [browserPage(PAGE_ID, WORKSPACE_ID), browserPage('page-c', WORKSPACE_ID)]

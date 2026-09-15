@@ -94,6 +94,7 @@ export function getSyntheticAgentTitleProfile(
   if (!agentType) {
     return null
   }
+
   return SYNTHETIC_AGENT_TITLE_PROFILES[agentType] ?? null
 }
 
@@ -102,9 +103,11 @@ export function getSyntheticAgentTerminalTitle(
   state: AgentStatusState
 ): string | null {
   const profile = getSyntheticAgentTitleProfile(agentType)
+
   if (!profile || profile.synthesizeTerminalTitle === false || state === 'working') {
     return null
   }
+
   return state === 'blocked' || state === 'waiting' ? profile.permissionLabel : profile.idleLabel
 }
 
@@ -113,8 +116,10 @@ export function shouldDriveSyntheticAgentTitleFromHook(
   state: AgentStatusState
 ): boolean {
   const profile = getSyntheticAgentTitleProfile(agentType)
+
   if (!profile || profile.synthesizeTerminalTitle === false) {
     return false
   }
+
   return state !== 'working' || profile.synthesizeWorkingTitle !== false
 }

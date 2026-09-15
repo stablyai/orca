@@ -9,12 +9,16 @@ const WRAPPER_SEPARATOR = ' | '
 export function getWrapperTitleSegments(title: string): string[] {
   const segments = [title]
   let separatorIndex = title.indexOf(WRAPPER_SEPARATOR)
+
   while (separatorIndex >= 0) {
     const wrapped = title.slice(separatorIndex + WRAPPER_SEPARATOR.length).trim()
+
     if (wrapped && !segments.includes(wrapped)) {
       segments.push(wrapped)
     }
+
     separatorIndex = title.indexOf(WRAPPER_SEPARATOR, separatorIndex + WRAPPER_SEPARATOR.length)
   }
+
   return segments
 }

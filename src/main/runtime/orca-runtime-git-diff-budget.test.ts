@@ -26,12 +26,15 @@ vi.mock('../git/status', async () => ({
 }))
 
 const OVERSIZED_BASE64 = 'A'.repeat(REMOTE_RPC_MAX_CONTENT_BYTES + 1)
+
 const BRANCH_COMPARE = { mergeBase: 'base-oid', headOid: 'head-oid' }
+
 const COMMIT_ARGS = {
   commitOid: 'commit-oid',
   parentOid: 'parent-oid',
   filePath: 'assets/logo.png'
 }
+
 const TOO_LARGE = { code: 'diff_too_large', data: { maxBytes: REMOTE_RPC_MAX_CONTENT_BYTES } }
 
 function oversizedResult(): GitDiffResult {
@@ -54,6 +57,7 @@ function commands(
     path: '/remote/repo',
     git: { path: '/remote/repo', branch: 'main', isBare: false, isMainWorktree: false }
   } as unknown as ResolvedRuntimeGitWorktree
+
   return new RuntimeGitCommands({
     resolveRuntimeGitTarget: async () => ({
       worktree,

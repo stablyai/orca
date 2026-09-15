@@ -27,28 +27,34 @@ export class CliCommandInstallation extends CliCommandInspection {
   protected async installSymlink(status: CliInstallStatus): Promise<void> {
     const commandPath = status.commandPath
     const launcherPath = status.launcherPath
+
     if (!commandPath || !launcherPath || status.state === 'installed') {
       return
     }
 
     const inspected = await this.inspectStableSymlink(commandPath, launcherPath)
+
     if (inspected.status.state === 'conflict') {
       throw new Error(
         `Refusing to replace non-Orca command at ${commandPath}. Remove it and register again if it is no longer needed.`
       )
     }
+
     if (inspected.status.state === 'installed') {
       return
     }
 
     let quarantine: CommandQuarantine
+
     try {
       quarantine = await this.quarantineCommandPath(commandPath)
     } catch (error) {
       if (this.platform !== 'darwin' || !isPermissionError(error)) {
         throw error
       }
+
       await this.installSymlinkWithPrivileges(commandPath, launcherPath, inspected)
+
       return
     }
 
@@ -65,36 +71,46 @@ export class CliCommandInstallation extends CliCommandInspection {
       await this.restoreQuarantinedCommand(quarantine, commandPath)
       throw error
     }
+
     await this.discardQuarantinedCommand(quarantine)
   }
 
   protected async removeSymlink(commandPath: string): Promise<void> {
     const launcherPath = await this.resolveLauncherPath()
+
     if (!launcherPath) {
       throw new Error('The Orca CLI launcher is no longer available.')
     }
+
     const inspected = await this.inspectStableSymlink(commandPath, launcherPath)
+
     if (inspected.status.state === 'not_installed') {
       return
     }
+
     if (inspected.status.state === 'conflict') {
       throw new Error(`Refusing to remove non-Orca command at ${commandPath}.`)
     }
 
     let quarantine: CommandQuarantine
+
     try {
       quarantine = await this.quarantineCommandPath(commandPath)
     } catch (error) {
       if (this.platform !== 'darwin' || !isPermissionError(error)) {
         throw error
       }
+
       await this.removeSymlinkWithPrivileges(commandPath, inspected)
+
       return
     }
+
     if (!(await capturedExpectedEntry(quarantine, inspected))) {
       await this.restoreQuarantinedCommand(quarantine, commandPath)
       throw new Error(`Refusing to remove non-Orca command at ${commandPath}.`)
     }
+
     await this.discardQuarantinedCommand(quarantine)
   }
 
@@ -104,16 +120,22 @@ export class CliCommandInstallation extends CliCommandInspection {
     }
 
     const commandPath = join(this.homePath, '.local', 'bin', LEGACY_LINUX_COMMAND_NAME)
+
     try {
       const inspected = await this.inspectStableLegacyCommand(commandPath, launcherPath)
+
       if (!inspected?.managed) {
         return
       }
+
       const quarantine = await this.quarantineCommandPath(commandPath)
+
       if (!(await capturedExpectedEntry(quarantine, inspected))) {
         await this.restoreQuarantinedCommand(quarantine, commandPath)
+
         return
       }
+
       await this.discardQuarantinedCommand(quarantine)
     } catch (error) {
       // Why: the new command is already registered; leave legacy cleanup for a later attempt.
@@ -134,6 +156,7 @@ export class CliCommandInstallation extends CliCommandInspection {
 
   protected isManagedLegacyLinuxTarget(resolvedTarget: string, launcherPath: string): boolean {
     const legacyLauncherPath = resolve(dirname(launcherPath), LEGACY_LINUX_COMMAND_NAME)
+
     if (resolvedTarget === legacyLauncherPath) {
       return true
     }
@@ -147,11 +170,13 @@ export class CliCommandInstallation extends CliCommandInspection {
     }
 
     const devLauncherDir = resolve(this.userDataPath, ...DEV_LAUNCHER_DIR)
+
     if (isPathInsideOrEqual(devLauncherDir, resolvedTarget)) {
       return true
     }
 
     const extractionOptions = this.appImageExtractionOptions()
+
     return extractionOptions
       ? isAppImageExtractedLauncherPath(
           extractionOptions,
@@ -167,15 +192,19 @@ export class CliCommandInstallation extends CliCommandInspection {
 
   protected async ensureLinuxAppImagePayload(): Promise<AppImageExtractedRoot | null> {
     const extractionOptions = this.appImageExtractionOptions()
+
     if (!this.isLinuxAppImage() || !extractionOptions) {
       return null
     }
+
     const extractedRoot = await ensureAppImageExtractedRoot(extractionOptions)
+
     if (!extractedRoot) {
       throw new Error(
         `Could not extract the Orca AppImage at ${this.appImagePath}. Check that it is executable and that ${this.appImageCacheRootPath} has free space.`
       )
     }
+
     return extractedRoot
   }
 
@@ -199,12 +228,15 @@ export class CliCommandInstallation extends CliCommandInspection {
     const inspected = await inspectStableCommand(commandPath, () =>
       this.inspectSymlink(commandPath, launcherPath)
     )
+
     if (!inspected.snapshot) {
       return null
     }
+
     const resolvedTarget = inspected.rawSymlinkTarget
       ? resolve(dirname(commandPath), inspected.rawSymlinkTarget)
       : inspected.status.currentTarget
+
     return {
       fileSha256: inspected.fileSha256,
       rawSymlinkTarget: inspected.rawSymlinkTarget,
@@ -223,24 +255,30 @@ export class CliCommandInstallation extends CliCommandInspection {
   ): Promise<void> {
     if (!quarantine.snapshot) {
       await rmdir(quarantine.directoryPath)
+
       return
     }
+
     await this.assertHeldIdentity(quarantine)
+
     try {
       await (quarantine.snapshot.isSymbolicLink
         ? symlink(await readlink(quarantine.heldPath), commandPath)
         : this.linkQuarantinedCommand(quarantine.heldPath, commandPath))
       const restored = await readEntrySnapshot(commandPath)
+
       const restoredSymlink =
         restored?.isSymbolicLink && quarantine.snapshot.isSymbolicLink
           ? (await readlink(commandPath)) === (await readlink(quarantine.heldPath))
           : false
+
       if (
         !restored ||
         (!restoredSymlink && !hasSameIdentity(restored.identity, quarantine.snapshot.identity))
       ) {
         throw new Error('The restored command identity could not be verified.')
       }
+
       await this.discardQuarantinedCommand(quarantine, quarantine.snapshot.isSymbolicLink)
     } catch (error) {
       throw new Error(
@@ -258,6 +296,7 @@ export class CliCommandInstallation extends CliCommandInspection {
       await this.assertHeldIdentity(quarantine, requireStableMetadata)
       await unlink(quarantine.heldPath)
     }
+
     await rmdir(quarantine.directoryPath)
   }
 
@@ -266,6 +305,7 @@ export class CliCommandInstallation extends CliCommandInspection {
     requireStableMetadata = true
   ): Promise<void> {
     const current = await readEntrySnapshot(quarantine.heldPath)
+
     if (
       !current ||
       !quarantine.snapshot ||
@@ -293,6 +333,7 @@ export class CliCommandInstallation extends CliCommandInspection {
       })
     )
     const installed = await this.inspectStableSymlink(commandPath, launcherPath)
+
     if (installed.status.state !== 'installed') {
       throw new Error(`Could not register the Orca command at ${commandPath}.`)
     }

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const closeWebRuntimeSessionTabMock = vi.fn()
+
 const getRuntimeEnvironmentIdForWorktreeMock = vi.fn()
 
 vi.mock('./web-runtime-session', () => ({

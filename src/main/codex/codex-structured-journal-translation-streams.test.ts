@@ -17,7 +17,9 @@ import { CODEX_COMMAND_APPROVAL_METHOD } from './codex-structured-prompt-replies
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 
 const SESSION_ID = 'session-1'
+
 const THREAD_ID = 'thread-abc'
+
 const TURN_ID = 'turn-1'
 
 type Row = { key: string; body: AgentJournalItemBody }
@@ -27,6 +29,7 @@ function recorder() {
   const tombstones: string[] = []
   const bound: [string, string, string][] = []
   let publishes = 0
+
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity: AgentJournalItemIdentity, body) =>
       rows.push({ key: agentJournalItemKey(identity), body }),
@@ -35,6 +38,7 @@ function recorder() {
       publishes += 1
     }
   }
+
   return {
     sink,
     rows,
@@ -49,11 +53,14 @@ function recorder() {
 /** Fires the coalescing window on demand instead of on wall time. */
 function manualWindow() {
   const pending: (() => void)[] = []
+
   return {
     schedule: (run: () => void) => {
       pending.push(run)
+
       return () => {
         const index = pending.indexOf(run)
+
         if (index !== -1) {
           pending.splice(index, 1)
         }
@@ -61,6 +68,7 @@ function manualWindow() {
     },
     fire: () => {
       const due = pending.splice(0)
+
       for (const run of due) {
         run()
       }
@@ -81,6 +89,7 @@ function translatorWith(tap = recorder(), window = manualWindow()) {
     bindPromptItemId: tap.bindPromptItemId,
     schedule: window.schedule
   })
+
   return { translator, tap, window }
 }
 
@@ -93,9 +102,12 @@ describe('codex journal translation', () => {
       if (rejectTerminal && body.kind === 'tool-call' && body.state === 'failed') {
         return { accepted: false as const, reason: 'backpressure' as const }
       }
+
       appendItem(identity, body, options)
+
       return { accepted: true as const }
     }
+
     for (let index = 0; index <= 256; index += 1) {
       const result = translator.handle(
         notification('item/started', {
@@ -107,10 +119,12 @@ describe('codex journal translation', () => {
           }
         })
       )
+
       if (index === 256) {
         expect(result).toEqual({ accepted: false, reason: 'backpressure' })
       }
     }
+
     rejectTerminal = false
     expect(
       translator.handle(
@@ -132,6 +146,7 @@ describe('codex journal translation', () => {
   it('terminalizes evicted pending prompts instead of silently forgetting them', () => {
     const { translator, tap } = translatorWith()
     translator.handle(TURN_STARTED)
+
     for (let index = 0; index <= 128; index += 1) {
       expect(
         translator.handle({
@@ -145,6 +160,7 @@ describe('codex journal translation', () => {
         })
       ).toEqual({ accepted: true })
     }
+
     expect(
       tap.rows.some(
         (row) => row.body.kind === 'approval' && row.body.resolution.state === 'cancelled'
@@ -165,6 +181,7 @@ describe('codex journal translation', () => {
 
   it('releases a turn ordinal map when the turn completes', () => {
     const spy = vi.spyOn(CodexTurnOrdinals.prototype, 'forgetTurn')
+
     try {
       const { translator } = translatorWith()
       translator.handle(TURN_STARTED)
@@ -228,6 +245,7 @@ describe('codex journal translation', () => {
         }
       })
     )
+
     const admission = translator.handle({
       type: 'provider-frame',
       sessionId: SESSION_ID,
@@ -270,19 +288,25 @@ describe('codex journal translation', () => {
     const appendItem = tap.sink.appendItem
     tap.sink.tryAppendItem = (...args) => {
       const body = args[1]
+
       if (body.kind === 'status' && body.text.includes('more provider notification')) {
         return rejectSuppression
           ? { accepted: false as const, reason: 'backpressure' as const }
           : (appendItem(...args), { accepted: true as const })
       }
+
       appendItem(...args)
+
       return { accepted: true as const }
     }
+
     const { translator } = translatorWith(tap)
     translator.handle(TURN_STARTED)
+
     for (let index = 0; index < MAX_CODEX_GENERIC_ROWS_PER_TURN + 1; index += 1) {
       translator.handle(notification('future/notification', { value: index }))
     }
+
     translator.handle(
       notification('item/started', {
         item: { type: 'commandExecution', id: 'exec-order', command: 'run', status: 'inProgress' }
@@ -306,6 +330,7 @@ describe('codex journal translation', () => {
     const { translator, tap } = translatorWith()
     translator.handle(TURN_STARTED)
     const before = tap.rows.length
+
     for (const method of [
       'remoteControl/status/changed',
       'thread/status/changed',
@@ -320,6 +345,7 @@ describe('codex journal translation', () => {
         accepted: true
       })
     }
+
     expect(tap.rows.length).toBe(before)
     expect(tap.publishes()).toBe(0)
   })
@@ -327,20 +353,24 @@ describe('codex journal translation', () => {
   it('bounds generic rows per turn while keeping the suppression visible and countable', () => {
     const { translator, tap, window } = translatorWith()
     translator.handle(TURN_STARTED)
+
     for (let index = 0; index < MAX_CODEX_GENERIC_ROWS_PER_TURN + 20; index += 1) {
       translator.handle(notification('future/notification', { value: index }))
     }
+
     translator.handle(notification('item/future/outputDelta', { itemId: 'future', delta: 'x' }))
     window.fire()
 
     const generic = tap.rows.filter(
       (row) => row.body.kind === 'status' && row.body.providerFrame !== undefined
     )
+
     expect(generic).toHaveLength(MAX_CODEX_GENERIC_ROWS_PER_TURN)
     expect(generic[0]?.body).toMatchObject({
       kind: 'status',
       providerFrame: { kind: 'notification:future/notification' }
     })
+
     // The 20 capped frames reduce to ONE summary row whose count is exact, so
     // suppressed provider activity is never invisible.
     const summaries = new Map(
@@ -348,6 +378,7 @@ describe('codex journal translation', () => {
         .filter((row) => row.key.includes('provider-frame-suppressed'))
         .map((row) => [row.key, row.body])
     )
+
     expect(summaries.size).toBe(1)
     expect([...summaries.values()][0]).toEqual({
       kind: 'status',
@@ -365,9 +396,11 @@ describe('codex journal translation', () => {
   it('coalesces a suppressed provider-frame flood into one append and publish', () => {
     const { translator, tap, window } = translatorWith()
     translator.handle(TURN_STARTED)
+
     for (let index = 0; index < MAX_CODEX_GENERIC_ROWS_PER_TURN; index += 1) {
       translator.handle(notification('future/notification', { value: index }))
     }
+
     const publishesBeforeSuppression = tap.publishes()
 
     for (let index = 0; index < 500; index += 1) {
@@ -396,14 +429,18 @@ describe('codex journal translation', () => {
       if (reject) {
         return { accepted: false as const, reason: 'backpressure' as const }
       }
+
       appendItem(...args)
+
       return { accepted: true as const }
     }
+
     const translator = createCodexJournalTranslator({
       sink: tap.sink,
       primaryThreadId: () => THREAD_ID,
       schedule: window.schedule
     })
+
     translator.handle(TURN_STARTED)
     translator.handle(notification('future/notification', { value: 1 }))
     reject = false
@@ -415,6 +452,7 @@ describe('codex journal translation', () => {
     for (let index = 1; index < MAX_CODEX_GENERIC_ROWS_PER_TURN; index += 1) {
       translator.handle(notification('future/notification', { value: index + 2 }))
     }
+
     reject = true
     translator.handle(notification('future/notification', { value: 'suppressed' }))
     window.fire()
@@ -429,15 +467,18 @@ describe('codex journal translation', () => {
   it('exempts error-surface provider frames from the generic-row cap', () => {
     const { translator, tap, window } = translatorWith()
     translator.handle(TURN_STARTED)
+
     for (let index = 0; index < MAX_CODEX_GENERIC_ROWS_PER_TURN + 3; index += 1) {
       translator.handle(notification('future/notification', { value: index }))
     }
+
     translator.handle(notification('future/failure', { error: 'provider exploded' }))
     window.fire()
 
     const generic = tap.rows.filter(
       (row) => row.body.kind === 'status' && row.body.providerFrame !== undefined
     )
+
     expect(generic).toHaveLength(MAX_CODEX_GENERIC_ROWS_PER_TURN + 1)
     expect(generic.at(-1)?.body).toMatchObject({
       providerFrame: { kind: 'notification:future/failure' }
@@ -454,8 +495,10 @@ describe('codex journal translation', () => {
     const { translator, tap, window } = translatorWith()
     translator.handle(TURN_STARTED)
     const uniqueTurns = MAX_CODEX_GENERIC_TURN_BUCKETS + 12
+
     for (let turn = 0; turn < uniqueTurns; turn += 1) {
       const turnId = `adversarial-${turn}`
+
       for (let row = 0; row < MAX_CODEX_GENERIC_ROWS_PER_TURN + 1; row += 1) {
         translator.handle(
           notification('future/notification', {
@@ -465,6 +508,7 @@ describe('codex journal translation', () => {
         )
       }
     }
+
     window.fire()
 
     const summaries = tap.rows.filter((row) => row.key.includes('provider-frame-suppressed'))
@@ -478,7 +522,9 @@ describe('codex journal translation', () => {
         if (row.body.kind !== 'status') {
           return total
         }
+
         const match = row.body.text.match(/^(\d+) more provider notification/)
+
         return total + (match ? Number(match[1]) : 0)
       }, 0)
     ).toBe(uniqueTurns)
@@ -499,6 +545,7 @@ describe('codex journal translation', () => {
     const { translator, tap } = translatorWith()
 
     translator.handle(notification('thread/started', { thread: { id: THREAD_ID } }))
+
     for (let index = 0; index < 8; index += 1) {
       translator.handle(
         notification('mcpServer/startupStatus/updated', {
@@ -507,6 +554,7 @@ describe('codex journal translation', () => {
         })
       )
     }
+
     translator.handle(notification('remoteControl/status/changed', { status: 'disabled' }))
 
     const timeline = projectStructuredItemsToNativeChat(
@@ -518,6 +566,7 @@ describe('codex journal translation', () => {
         body: row.body
       }))
     )
+
     expect(timeline).toEqual([])
   })
 
@@ -552,6 +601,7 @@ describe('codex journal translation', () => {
         body: row.body
       }))
     )
+
     expect(timeline.map(({ role, blocks }) => ({ role, blocks }))).toEqual([
       { role: 'assistant', blocks: [{ type: 'text', text: 'hello' }] }
     ])
@@ -576,6 +626,7 @@ describe('codex journal translation', () => {
         body: row.body
       }))
     )
+
     expect(timeline).toEqual([
       expect.objectContaining({
         role: 'system',
@@ -628,12 +679,15 @@ describe('notice journal pipeline', () => {
   it('preserves every notice after generic traffic reaches its cap', () => {
     const { translator, tap, window } = translatorWith()
     translator.handle(TURN_STARTED)
+
     for (let index = 0; index < MAX_CODEX_GENERIC_ROWS_PER_TURN; index += 1) {
       translator.handle(notification('future/notification', { value: index }))
     }
+
     for (const method of ['warning', 'guardianWarning', 'configWarning', 'deprecationNotice']) {
       translator.handle(notification(method, { message: method, summary: method }))
     }
+
     window.fire()
     expect(tap.rows.slice(-4).map((row) => row.body)).toEqual([
       expect.objectContaining({ text: 'warning', tone: 'warning' }),

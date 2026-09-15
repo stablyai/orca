@@ -13,26 +13,33 @@ export function useTerminalEditorCloseFoundation(
 ) {
   const { openFiles } = controller
   const [saveDialogFileId, setSaveDialogFileId] = useState<string | null>(null)
+
   const saveDialogFile = saveDialogFileId
     ? openFiles.find((file) => file.id === saveDialogFileId)
     : null
+
   const pendingEditorCloseQueueRef = useRef<string[]>([])
   const inFlightSaveFileIdRef = useRef<string | null>(null)
   const isClosingRef = useRef(false)
   const closeDialogDebounceTimersRef = useRef<Set<number>>(new Set())
+
   const releaseCloseDialogGuardAfterDebounce = useCallback(() => {
     const timer = window.setTimeout(() => {
       closeDialogDebounceTimersRef.current.delete(timer)
       isClosingRef.current = false
     }, CLOSE_DIALOG_DEBOUNCE_MS)
+
     closeDialogDebounceTimersRef.current.add(timer)
   }, [])
+
   const [windowCloseDialogOpen, setWindowCloseDialogOpen] = useState(false)
+
   // Why: "running" and "could not reach the host" are different claims, and telling the user
   // processes are running when the truth is that a host went quiet is the fabricated certainty
   // docs/reference/ssh-execution-boundary.md forbids.
   const [windowCloseDialogKind, setWindowCloseDialogKind] =
     useState<Exclude<WindowCloseRunningWork['kind'], 'none'>>('running')
+
   const windowCloseAfterDirtyRef = useRef<{ isQuitting: boolean } | null>(null)
 
   const confirmNativeWindowClose = useCallback(() => {
@@ -41,12 +48,15 @@ export function useTerminalEditorCloseFoundation(
     const accepted = runWithWindowCloseCheckpointScope(() =>
       window.dispatchEvent(new Event('beforeunload', { cancelable: true }))
     )
+
     if (!accepted) {
       // Why: a checkpoint-vetoed quit used to die here with no dialog and no log,
       // leaving SIGKILL as the only exit (#15352). Dirty-file vetoes publish no reason.
       showShutdownCheckpointFailureToast()
+
       return
     }
+
     window.api.ui.confirmWindowClose()
   }, [])
 
@@ -56,8 +66,10 @@ export function useTerminalEditorCloseFoundation(
         .then((runningWork) => {
           if (runningWork.kind === 'none') {
             confirmNativeWindowClose()
+
             return
           }
+
           setWindowCloseDialogKind(runningWork.kind)
           setWindowCloseDialogOpen(true)
         })

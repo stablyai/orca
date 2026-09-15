@@ -112,11 +112,14 @@ export function useWorkspaceCleanupFacetRows({
       spaceMeasurements: s.workspaceSpaceMeasurements
     }))
   )
+
   const { hostedReviewCache, repos, settings, worktreesByRepo } = sources
+
   const candidateIdCounts = useMemo(
     () => countWorkspaceCleanupCandidateIds(candidates),
     [candidates]
   )
+
   // Why: each per-candidate cache lives in one memo together with the derived
   // context it is keyed on — the memo deps ARE the cache invalidation, no refs
   // (ref writes during render are unsafe under concurrent rendering), and
@@ -129,6 +132,7 @@ export function useWorkspaceCleanupFacetRows({
     }),
     [hostedReviewCache, repos, settings, worktreesByRepo]
   )
+
   const facetContext = useMemo(
     () => ({
       worktreeById: buildWorkspaceCleanupWorktreeIndex(worktreesByRepo, repos),
@@ -137,10 +141,12 @@ export function useWorkspaceCleanupFacetRows({
     }),
     [repos, sources.workspaceStatuses, worktreesByRepo]
   )
+
   const liveAgentStatusByWorktreeId = useMemo(
     () => getLiveAgentStatusByWorktreeId(sources.agentStatusByPaneKey, sources.tabsByWorktree, now),
     [now, sources.agentStatusByPaneKey, sources.tabsByWorktree]
   )
+
   // Why (STA-4343): dismissals are keyed by host-qualified identity, so the keys
   // ARE identities — comparing them to a bare worktreeId never matched.
   const dismissedIdentities = useMemo(
@@ -164,10 +170,12 @@ export function useWorkspaceCleanupFacetRows({
     () => buildWorkspaceCleanupSizeIndex(sources.spaceWorktrees, candidates),
     [candidates, sources.spaceWorktrees]
   )
+
   const sizeByWorktreeId = useMemo(() => {
     if (sources.spaceMeasurements.length === 0) {
       return completedSizeByWorktreeId
     }
+
     return new Map([
       ...completedSizeByWorktreeId,
       ...buildWorkspaceCleanupSizeIndex(sources.spaceMeasurements, candidates)
@@ -204,6 +212,7 @@ export function useWorkspaceCleanupFacetRows({
     () => runWorkspaceCleanupQuery(facets, { filters, sort }, now),
     [facets, filters, now, sort]
   )
+
   const facetFilters = useMemo<WorkspaceCleanupFilterState>(
     () => ({
       query: '',
@@ -231,6 +240,7 @@ export function useWorkspaceCleanupFacetRows({
       filters.ticket
     ]
   )
+
   const facetCounts = useMemo(
     () =>
       facetPanelOpen
@@ -238,6 +248,7 @@ export function useWorkspaceCleanupFacetRows({
         : EMPTY_FACET_COUNTS,
     [facetFilters, facetPanelOpen, facets, now]
   )
+
   // Identity churn here is harmless: the only consumer reads the latest set
   // inside a useEffectEvent body and never keys an effect on it.
   const facetMatchedIdentities = useMemo<ReadonlySet<string>>(
@@ -245,6 +256,7 @@ export function useWorkspaceCleanupFacetRows({
       new Set(filterWorkspaceCleanupFacets(facets, facetFilters, now).map((row) => row.identity)),
     [facetFilters, facets, now]
   )
+
   const measuredSizeCount = useMemo(() => countWorkspaceCleanupMeasuredRows(facets), [facets])
   const unmeasuredSizeCount = facets.length - measuredSizeCount
 
@@ -252,12 +264,15 @@ export function useWorkspaceCleanupFacetRows({
     if (!facetPanelOpen) {
       return EMPTY_FACET_OPTIONS
     }
+
     const repoLabels = new Map<string, string>()
+
     for (const row of facets) {
       if (!repoLabels.has(row.repoId)) {
         repoLabels.set(row.repoId, row.repoName)
       }
     }
+
     return {
       workspaceStatuses: sources.workspaceStatuses.map((status) => ({
         id: status.id,

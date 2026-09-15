@@ -52,6 +52,7 @@ const SEARCH_DECORATIONS = {
 } as const
 
 const PROBE_ROWS = 30
+
 const PROBE_COLS = 80
 
 function settle(ms = 20): Promise<void> {
@@ -88,11 +89,13 @@ function openTerminalWithSearch(): SearchHarness {
     search,
     highlightedCellCount: () => {
       let count = 0
+
       for (let line = 0; line < PROBE_ROWS; line++) {
         for (let x = 0; x < PROBE_COLS; x++) {
           decorationService.forEachDecorationAtCell(x, line, undefined, () => count++)
         }
       }
+
       return count
     },
     closeSearch: () => {
@@ -139,10 +142,12 @@ describe('terminal search decoration cleanup (STA-2707)', () => {
 
         harness.search.findNext('needle', { decorations: SEARCH_DECORATIONS })
         await settle()
+
         for (let i = 0; i < navigations; i++) {
           harness.search.findNext('needle', { decorations: SEARCH_DECORATIONS })
           await settle(5)
         }
+
         await settle()
         expect(
           harness.highlightedCellCount(),
@@ -172,6 +177,7 @@ describe('terminal search decoration cleanup (STA-2707)', () => {
       harness.search.findNext(query, { decorations: SEARCH_DECORATIONS, incremental: true })
       await settle(10)
     }
+
     await settle()
 
     harness.closeSearch()

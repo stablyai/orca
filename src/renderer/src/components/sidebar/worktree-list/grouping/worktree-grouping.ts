@@ -36,11 +36,14 @@ function getLaneLabelForKey(
 ): string {
   if (groupBy === 'workspace-status') {
     const status = getWorkspaceStatusFromGroupKey(key, workspaceStatuses)
+
     return workspaceStatuses.find((entry) => entry.id === status)?.label ?? status ?? key
   }
+
   if (groupBy === 'pr-status') {
     return PR_GROUP_META[key.replace(/^pr:/, '') as PRGroupKey].label
   }
+
   return key
 }
 
@@ -79,10 +82,12 @@ export function buildOrderedGroups(args: {
   } = args
 
   const grouped = new Map<string, WorktreeGroupEntry>()
+
   for (const w of naturalWorktrees) {
     let key: string
     let label: string
     let repo: Repo | undefined
+
     if (groupBy === 'repo') {
       const grouping = getProjectGroupingForRepo(w.repoId, repoMap, projectIndex)
       key = grouping.key
@@ -98,19 +103,23 @@ export function buildOrderedGroups(args: {
       key = getPRLaneKey(prGroup)
       label = PR_GROUP_META[prGroup].label
     }
+
     if (!grouped.has(key)) {
       grouped.set(key, { label, items: [], repo, repoIds: new Set() })
     }
+
     const group = grouped.get(key)!
     group.items.push(w)
     addRepoIdToGroup(group, w.repoId)
   }
+
   // Why: folder workspaces are not worktrees, so they never appear in the loop
   // above. Bucketing them here — and creating the lane when no worktree opened
   // one — is what lets a folder workspace be the sole occupant of a lane (#15362).
   if (groupBy !== 'repo') {
     for (const pair of folderWorkspaces) {
       const key = getFolderWorkspaceLaneKey(pair, groupBy, workspaceStatuses)
+
       if (!grouped.has(key)) {
         grouped.set(key, {
           label: getLaneLabelForKey(key, groupBy, workspaceStatuses),
@@ -119,23 +128,29 @@ export function buildOrderedGroups(args: {
           repoIds: new Set()
         })
       }
+
       const group = grouped.get(key)!
       group.folderWorkspaces ??= []
       group.folderWorkspaces.push(pair)
     }
+
     for (const group of grouped.values()) {
       group.folderWorkspaces?.sort((left, right) =>
         compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
       )
     }
   }
+
   if (groupBy === 'repo') {
     for (const repoId of placeholderRepoIds) {
       const grouping = getProjectGroupingForRepo(repoId, repoMap, projectIndex)
+
       if (!grouping.repo) {
         continue
       }
+
       const key = grouping.key
+
       if (!grouped.has(key)) {
         // Why: repos can arrive before worktree scans, but stale IDs passed by
         // older snapshots must not render an "Unknown" project header.
@@ -150,10 +165,12 @@ export function buildOrderedGroups(args: {
       }
     }
   }
+
   if (groupBy === 'repo') {
     for (const [repoId, candidate] of importedWorktreesByRepo) {
       const grouping = getProjectGroupingForRepo(repoId, repoMap, projectIndex)
       const key = grouping.key
+
       if (!grouped.has(key)) {
         grouped.set(key, {
           label: grouping.label,
@@ -166,10 +183,12 @@ export function buildOrderedGroups(args: {
       }
     }
   }
+
   if (groupBy === 'repo') {
     for (const [repoId, candidate] of newExternalWorktreesInboxByRepo) {
       const grouping = getProjectGroupingForRepo(repoId, repoMap, projectIndex)
       const key = grouping.key
+
       if (!grouped.has(key)) {
         // Why: the default policy removes pinned worktrees from natural groups,
         // but actionable inbox rows still need a project section to render in.
@@ -184,10 +203,12 @@ export function buildOrderedGroups(args: {
       }
     }
   }
+
   if (groupBy === 'repo') {
     for (const repoId of pendingByRepo.keys()) {
       const grouping = getProjectGroupingForRepo(repoId, repoMap, projectIndex)
       const key = grouping.key
+
       if (!grouped.has(key)) {
         // Why: creating the first worktree in a repo leaves it with no group yet;
         // ensure one so the in-progress row nests under its repo instead of being
@@ -205,10 +226,12 @@ export function buildOrderedGroups(args: {
   }
 
   const orderedGroups: OrderedGroupEntry[] = []
+
   if (groupBy === 'pr-status') {
     for (const prGroup of PR_GROUP_ORDER) {
       const key = `pr:${prGroup}`
       const group = grouped.get(key)
+
       if (group) {
         orderedGroups.push([key, group])
       }
@@ -219,6 +242,7 @@ export function buildOrderedGroups(args: {
     for (const status of workspaceStatuses) {
       const key = getWorkspaceStatusGroupKey(status.id)
       const group = grouped.get(key)
+
       if (group) {
         orderedGroups.push([key, group])
       }
@@ -230,15 +254,18 @@ export function buildOrderedGroups(args: {
       // same persisted order source the row sorter reads.
       group.repo = getManualOrderAnchorRepo(group, repoMap, repoOrder)
     }
+
     // Why: project header order is its own user choice (projectOrderBy),
     // decoupled from workspace sortBy. Manual uses the canonical repoOrder so
     // header drag has a stable source of truth; Recent follows activity.
     const entries = sortProjectEntries(Array.from(grouped.entries()), projectOrderBy, repoOrder)
+
     // Why: large imported repo sets can have one group per repo; spreading
     // those entries into push can exceed V8's argument limit.
     for (const entry of entries) {
       orderedGroups.push(entry)
     }
   }
+
   return orderedGroups
 }

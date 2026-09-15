@@ -9,6 +9,7 @@ export type DiagnosticsHostSelection = {
 }
 
 export type DiagnosticsSubmissionState = 'sending' | 'sent' | 'failed'
+
 export type DiagnosticsSubmissionStates = Readonly<Record<string, DiagnosticsSubmissionState>>
 
 export function selectDiagnosticsHostId(
@@ -19,9 +20,11 @@ export function selectDiagnosticsHostId(
   if (requestedHostId && hosts.some((host) => host.id === requestedHostId)) {
     return requestedHostId
   }
+
   if (previousHostId && hosts.some((host) => host.id === previousHostId)) {
     return previousHostId
   }
+
   return hosts[0]?.id ?? null
 }
 
@@ -32,12 +35,15 @@ export function resolveDiagnosticsHostId(
   routeKey?: object
 ): string | null {
   const selected = manualSelection
+
   if (selected && selected.requestedHostId === requestedHostId && selected.routeKey === routeKey) {
     const manualHostId = selected.hostId
+
     if (hosts.some((host) => host.id === manualHostId)) {
       return manualHostId
     }
   }
+
   return selectDiagnosticsHostId(hosts, requestedHostId, null)
 }
 
@@ -54,11 +60,13 @@ export function updateDiagnosticsSubmissionState(
   state: DiagnosticsSubmissionState | null
 ): DiagnosticsSubmissionStates {
   const next = { ...states }
+
   if (state) {
     next[key] = state
   } else {
     delete next[key]
   }
+
   return next
 }
 
@@ -71,6 +79,7 @@ export async function readHydratedConnectionLog(
   } catch {
     await store.hydrate(hostId).catch(() => {})
   }
+
   return store.get(hostId)
 }
 
@@ -83,6 +92,7 @@ export async function readConnectionDiagnosticsSnapshot(
   hostId: string
 ) {
   const entries = await readHydratedConnectionLog(store, hostId)
+
   return {
     state: context.getState(hostId),
     reconnectAttempts: context.getReconnectAttempt(hostId),

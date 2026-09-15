@@ -67,6 +67,7 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
   signal?: AbortSignal
 }): Promise<void> {
   const inventory = options.lease.pageInventory
+
   if (
     options.lease.pageReconciliationProtocolVersion !== 1 ||
     options.lease.pageInventoryProtocolVersion !== 1 ||
@@ -74,7 +75,9 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
   ) {
     return
   }
+
   const inventoryByPageId = new Map(inventory.map((page) => [page.browserPageId, page]))
+
   const pages = options.pages
     .listPages()
     .filter(
@@ -84,6 +87,7 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
         isRecoverableByLease(page, options.lease) &&
         !isActiveExactPage(page, inventoryByPageId.get(page.browserPageId), options.lease)
     )
+
   await mapWithConcurrency(
     pages,
     MAX_RECOVERY_CONCURRENCY,
@@ -117,7 +121,9 @@ function isPlacedAsObservedAtAttach(
   if (!pagePlacementsAtAttach) {
     return true
   }
+
   const observed = pagePlacementsAtAttach.get(page.browserPageId)
+
   return observed !== undefined && sameRuntimeBrowserPlacement(observed, page.placement)
 }
 
@@ -141,6 +147,7 @@ function isRecoverableByLease(
   if (isRestoredClientHostedBrowserPlacement(page.placement)) {
     return page.pairedDeviceId === lease.pairedDeviceId
   }
+
   return (
     page.placement.browserHostClientId === lease.browserHostClientId &&
     page.placement.browserHostGeneration <= lease.browserHostGeneration
@@ -162,13 +169,17 @@ async function resolveRecoveryExecutionHostKey(
   if (!isRestoredClientHostedBrowserPlacement(page.placement)) {
     return page.executionHostKey
   }
+
   const resolved = await options.resolveExecutionHostKey?.(page.workspaceId)
+
   if (resolved?.status === 'resolved') {
     return resolved.executionHostKey
   }
+
   if (resolved?.status === 'workspace-gone') {
     options.releaseUnrecoverablePage?.(page)
   }
+
   return null
 }
 
@@ -180,6 +191,7 @@ function releaseUnhostablePage(
   if (options.authority.getPlacement(page.browserPageId)) {
     return
   }
+
   options.releaseUnrecoverablePage?.(page)
 }
 
@@ -189,10 +201,13 @@ async function recoverPage(
   options: Parameters<typeof recoverUnavailableRuntimeBrowserClientPages>[0]
 ): Promise<void> {
   const executionHostKey = await resolveRecoveryExecutionHostKey(page, options)
+
   if (executionHostKey === null) {
     return
   }
+
   const currentPlacement = options.authority.getPlacement(page.browserPageId)
+
   if (currentPlacement && !sameRuntimeBrowserPlacement(currentPlacement, page.placement)) {
     if (
       currentPlacement.kind === 'client' &&
@@ -201,21 +216,26 @@ async function recoverPage(
     ) {
       options.pages.replaceClientPagePlacement(page.browserPageId, page.placement, currentPlacement)
       options.notifyWorkspace(page.workspaceId)
+
       return
     }
+
     throw new Error('browser_page_placement_stale')
   }
+
   if (currentPlacement) {
     if (inventory) {
       assertInventoryAuthority(page, inventory, options.lease)
       await closeUnavailablePage(options.authority, page)
     } else {
       const retirement = options.authority.beginPageRetirement(page.browserPageId, currentPlacement)
+
       if (!options.authority.completePageRetirement(retirement)) {
         throw new Error('browser_page_placement_stale')
       }
     }
   }
+
   const placement = await options.authority.createClientPage({
     browserPageId: page.browserPageId,
     browserHostClientId: options.lease.browserHostClientId,
@@ -225,19 +245,23 @@ async function recoverPage(
     requiredCapabilities: [BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY],
     workspaceId: page.workspaceId
   })
+
   const recovered = options.pages.replaceClientPagePlacement(
     page.browserPageId,
     page.placement,
     placement,
     executionHostKey
   )
+
   const url = inventory?.currentUrl ?? page.url
+
   if (url && url !== 'about:blank') {
     await navigateRecoveredPage(options.authority, page.browserPageId, placement, url)
     options.pages.updatePage(page.browserPageId, placement, { url, loading: false })
   } else if (recovered.loading) {
     options.pages.updatePage(page.browserPageId, placement, { loading: false })
   }
+
   options.notifyWorkspace(page.workspaceId)
 }
 
@@ -258,15 +282,21 @@ async function closeUnavailablePage(
       }
     }
   )
+
   const result = await issued.result
+
   if (result.status === 'failed') {
     throw new Error(result.errorCode)
   }
+
   const currentPlacement = authority.getPlacement(page.browserPageId)
+
   if (!currentPlacement || !sameRuntimeBrowserPlacement(currentPlacement, page.placement)) {
     throw new Error('browser_page_placement_stale')
   }
+
   const retirement = authority.beginPageRetirement(page.browserPageId, currentPlacement)
+
   if (!authority.completePageRetirement(retirement)) {
     throw new Error('browser_page_placement_stale')
   }
@@ -282,7 +312,9 @@ async function navigateRecoveredPage(
     commandAuthority(authority, browserPageId, placement),
     { type: 'navigate', url }
   )
+
   const result = await issued.result
+
   if (result.status === 'failed') {
     throw new Error(result.errorCode)
   }
@@ -343,14 +375,17 @@ async function mapWithConcurrency<T>(
   signal?: AbortSignal
 ): Promise<void> {
   let index = 0
+
   const worker = async (): Promise<void> => {
     while (index < values.length && !signal?.aborted) {
       const value = values[index]
       index += 1
+
       if (value !== undefined) {
         await operation(value)
       }
     }
   }
+
   await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker))
 }

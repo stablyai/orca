@@ -40,6 +40,7 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   },
   'computer permissions': async ({ flags, client, json }) => {
     const id = getComputerPermissionSetupId(flags)
+
     const result = await client.call<{
       platform: NodeJS.Platform
       helperAppPath: string | null
@@ -48,13 +49,16 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
       permissions?: { id: string; status: string }[]
       nextStep?: string | null
     }>('computer.permissions', id ? { id } : {})
+
     printResult(result, json, (value) => {
       if (value.platform !== 'darwin') {
         return 'Computer-use permission setup is only required on macOS.'
       }
+
       const firstLine = value.launchedHelper
         ? 'Opened Orca Computer Use permission setup.'
         : 'Computer Use permissions checked.'
+
       return [
         firstLine,
         `Helper app: ${value.helperAppPath}`,
@@ -74,15 +78,18 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const result = await client.call<ComputerListWindowsResult>('computer.listWindows', {
       app: getRequiredStringFlag(flags, 'app')
     })
+
     printResult(result, json, formatListWindows)
   },
   'computer get-app-state': async ({ flags, client, cwd, json }) => {
     const observeFlags = getComputerObserveFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+
     const result = await client.call<ComputerSnapshotResult>('computer.getAppState', {
       ...target,
       ...observeFlags
     })
+
     printResult(result, json, formatGetAppState)
   },
   'computer click': async ({ flags, client, cwd, json }) => {
@@ -90,11 +97,13 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerActionObserveFlags(flags)
     const actionParams = getComputerClickActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+
     const result = await client.call<ComputerActionResult>('computer.click', {
       ...target,
       ...actionParams,
       ...observeFlags
     })
+
     printResult(result, json, (value) =>
       formatComputerAction('click', value, { ...target, ...observeFlags })
     )
@@ -104,11 +113,13 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerActionObserveFlags(flags)
     const actionParams = getComputerSecondaryActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+
     const result = await client.call<ComputerActionResult>('computer.performSecondaryAction', {
       ...target,
       ...actionParams,
       ...observeFlags
     })
+
     printResult(result, json, (value) =>
       formatComputerAction('perform-secondary-action', value, { ...target, ...observeFlags })
     )
@@ -118,11 +129,13 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerActionObserveFlags(flags)
     const actionParams = getComputerScrollActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+
     const result = await client.call<ComputerActionResult>('computer.scroll', {
       ...target,
       ...actionParams,
       ...observeFlags
     })
+
     printResult(result, json, (value) =>
       formatComputerAction('scroll', value, { ...target, ...observeFlags })
     )
@@ -132,11 +145,13 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerActionObserveFlags(flags)
     const actionParams = getComputerDragActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+
     const result = await client.call<ComputerActionResult>('computer.drag', {
       ...target,
       ...actionParams,
       ...observeFlags
     })
+
     printResult(result, json, (value) =>
       formatComputerAction('drag', value, { ...target, ...observeFlags })
     )
@@ -146,11 +161,13 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerActionObserveFlags(flags)
     const actionParams = await getComputerTextActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+
     const result = await client.call<ComputerActionResult>('computer.typeText', {
       ...target,
       ...actionParams,
       ...observeFlags
     })
+
     printResult(result, json, (value) =>
       formatComputerAction('type-text', value, { ...target, ...observeFlags })
     )
@@ -160,11 +177,13 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerActionObserveFlags(flags)
     const actionParams = getComputerKeyActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+
     const result = await client.call<ComputerActionResult>('computer.pressKey', {
       ...target,
       ...actionParams,
       ...observeFlags
     })
+
     printResult(result, json, (value) =>
       formatComputerAction('press-key', value, { ...target, ...observeFlags })
     )
@@ -174,11 +193,13 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerActionObserveFlags(flags)
     const actionParams = getComputerHotkeyActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+
     const result = await client.call<ComputerActionResult>('computer.hotkey', {
       ...target,
       ...actionParams,
       ...observeFlags
     })
+
     printResult(result, json, (value) =>
       formatComputerAction('hotkey', value, { ...target, ...observeFlags })
     )
@@ -188,11 +209,13 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerActionObserveFlags(flags)
     const actionParams = await getComputerTextActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+
     const result = await client.call<ComputerActionResult>('computer.pasteText', {
       ...target,
       ...actionParams,
       ...observeFlags
     })
+
     printResult(result, json, (value) =>
       formatComputerAction('paste-text', value, { ...target, ...observeFlags })
     )
@@ -202,11 +225,13 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
     const observeFlags = getComputerActionObserveFlags(flags)
     const actionParams = await getComputerSetValueActionFlags(flags)
     const target = await getComputerCommandTarget(flags, cwd, client)
+
     const result = await client.call<ComputerActionResult>('computer.setValue', {
       ...target,
       ...actionParams,
       ...observeFlags
     })
+
     printResult(result, json, (value) =>
       formatComputerAction('set-value', value, { ...target, ...observeFlags })
     )
@@ -221,9 +246,11 @@ function getComputerPermissionSetupId(
   flags: Map<string, string | boolean>
 ): 'accessibility' | 'screenshots' | undefined {
   const id = getOptionalStringFlag(flags, 'id')
+
   if (id === undefined || id === 'accessibility' || id === 'screenshots') {
     return id
   }
+
   throw new RuntimeClientError('invalid_argument', '--id must be "accessibility" or "screenshots"')
 }
 

@@ -19,6 +19,7 @@ function fakeTransport(overrides?: { connected?: boolean; sendOk?: boolean }): {
 } {
   const connected = overrides?.connected ?? true
   const sendOk = overrides?.sendOk ?? true
+
   return {
     isConnected: () => connected,
     sendInput: vi.fn<(data: string) => boolean>(() => sendOk),
@@ -119,10 +120,12 @@ describe('maybePushMode2031Flip', () => {
   it('tracks flip state per-pane', () => {
     const transportA = fakeTransport()
     const transportB = fakeTransport()
+
     const subs = new Map([
       [1, true],
       [2, true]
     ])
+
     const last = new Map<number, 'dark' | 'light'>()
 
     maybePushMode2031Flip(1, 'dark', transportA, subs, last)
@@ -136,12 +139,14 @@ describe('maybePushMode2031Flip', () => {
     expect(last.get(2)).toBe('dark')
   })
 })
+
 describe('applyTerminalAppearance theme assignment', () => {
   // xterm rebuilds the palette on any new theme-object identity (wiping OSC color mutations), so the assignment must be value-gated.
   // Measurable by default: metric options (fontSize/fontFamily/…) only land on
   // panes that can measure; unmeasurable panes defer them until fit/reveal.
   function makePane(id: number, overrides?: { measurable?: boolean }): ManagedPane {
     const measurable = overrides?.measurable ?? true
+
     return {
       id,
       terminal: { options: {}, cols: 80, rows: 24 },
@@ -337,6 +342,7 @@ describe('applyTerminalAppearance theme assignment', () => {
     // no usable box that repaint is wasted and the cols/rows re-fit that must
     // follow it cannot run. The write waits for a measurable pane.
     let measurable = false
+
     const pane = {
       id: 1,
       terminal: { options: {}, cols: 80, rows: 24 },
@@ -349,6 +355,7 @@ describe('applyTerminalAppearance theme assignment', () => {
         proposeDimensions: () => (measurable ? { cols: 80, rows: 24 } : undefined)
       }
     } as unknown as ManagedPane
+
     const settings = getDefaultSettings('/tmp')
 
     apply(pane, { ...settings, terminalFontSize: 19 })
@@ -377,6 +384,7 @@ describe('applyTerminalAppearance theme assignment', () => {
         writes.push(value)
       }
     })
+
     const pane = {
       id: 1,
       terminal: { options, cols: 80, rows: 24 },
@@ -389,6 +397,7 @@ describe('applyTerminalAppearance theme assignment', () => {
         proposeDimensions: () => (measurable ? { cols: 80, rows: 24 } : undefined)
       }
     } as unknown as ManagedPane
+
     const settings = getDefaultSettings('/tmp')
 
     apply(pane, { ...settings, terminalFontSize: 15 })
@@ -407,10 +416,13 @@ describe('publishTerminalViewAttributesAtAppStart', () => {
   it('publishes composed attributes without any pane mount and dedupes repeats', () => {
     _resetTerminalViewAttributesPublisherForTest()
     const sent: TerminalViewAttributes[] = []
+
     const send = (attributes: TerminalViewAttributes): boolean => {
       sent.push(attributes)
+
       return true
     }
+
     const settings = getDefaultSettings('/tmp')
 
     expect(publishTerminalViewAttributesAtAppStart(settings, true, send)).toBe(true)
@@ -424,10 +436,13 @@ describe('publishTerminalViewAttributesAtAppStart', () => {
 
   it('makes the later pane-mount applyTerminalAppearance a deduped no-op re-push', () => {
     _resetTerminalViewAttributesPublisherForTest()
+
     const publishMock = vi.fn()
+
     ;(globalThis as unknown as { window: unknown }).window = {
       api: { pty: { publishTerminalViewAttributes: publishMock } }
     }
+
     try {
       const settings = getDefaultSettings('/tmp')
       publishTerminalViewAttributesAtAppStart(settings, true)
@@ -439,6 +454,7 @@ describe('publishTerminalViewAttributesAtAppStart', () => {
         setPaneLigaturesEnabled: vi.fn(),
         setPaneStyleOptions: vi.fn()
       } as unknown as PaneManager
+
       applyTerminalAppearance(
         manager,
         settings,

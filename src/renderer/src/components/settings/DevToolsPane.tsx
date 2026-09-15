@@ -11,6 +11,7 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 
 const LONG_WORKSPACE_NAME = 'feature/dev-toast-layout-with-a-long-workspace-name'
+
 const DEV_TOAST_DESCRIPTION =
   'This is intentionally long copy for checking width, line wrapping, icon alignment, action placement, and close-button overlap in the shared toast frame.'
 

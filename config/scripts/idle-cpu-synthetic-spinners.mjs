@@ -2,8 +2,10 @@ export async function installSyntheticVisibleSpinners(page, count, animation, st
   if (count <= 0) {
     return
   }
+
   const animationTiming =
     animation === 'steps' ? `1s steps(${steps}, end) infinite` : '1s linear infinite'
+
   await page.addStyleTag({
     content: `
       @keyframes orca-idle-bench-spin {
@@ -34,11 +36,13 @@ export async function installSyntheticVisibleSpinners(page, count, animation, st
     const host = document.createElement('div')
     host.className = 'orca-idle-bench-spinner-host'
     host.setAttribute('data-orca-idle-bench-spinners', String(spinnerCount))
+
     for (let index = 0; index < spinnerCount; index += 1) {
       const spinner = document.createElement('div')
       spinner.className = 'orca-idle-bench-spinner'
       host.appendChild(spinner)
     }
+
     document.body.appendChild(host)
   }, count)
 }

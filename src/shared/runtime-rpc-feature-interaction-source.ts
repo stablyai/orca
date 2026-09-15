@@ -8,6 +8,7 @@ export function withBrowserPaneUiRuntimeRpcSource(value: unknown): unknown {
       [ORCA_RUNTIME_RPC_FEATURE_INTERACTION_SOURCE_KEY]: ORCA_RUNTIME_RPC_BROWSER_UI_SOURCE
     }
   }
+
   return {
     ...value,
     [ORCA_RUNTIME_RPC_FEATURE_INTERACTION_SOURCE_KEY]: ORCA_RUNTIME_RPC_BROWSER_UI_SOURCE

@@ -55,14 +55,17 @@ function groupByBucket(cards: DashboardCard[]): Record<DashboardBucket, Dashboar
     done: [],
     idle: []
   }
+
   for (const card of cards) {
     grouped[card.bucket].push(card)
   }
+
   // Most-recently-moved first: a card entering a column lands at the top,
   // matching the view-transition motion the user just watched.
   for (const bucket of DASHBOARD_BUCKET_ORDER) {
     grouped[bucket].sort((a, b) => b.stateChangedAt - a.stateChangedAt)
   }
+
   return grouped
 }
 
@@ -147,27 +150,34 @@ export function AgentKanbanBoard({
       DASHBOARD_BUCKET_ORDER.filter((bucket) => bucket !== 'idle' || snapshot.showIdle === true),
     [snapshot.showIdle]
   )
+
   const visibleCards = useMemo(
     () => snapshot.cards.filter((card) => visibleBuckets.includes(card.bucket)),
     [snapshot.cards, visibleBuckets]
   )
+
   const [query, setQuery] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [filters, setFilters] = useState<DashboardFilters>(EMPTY_DASHBOARD_FILTERS)
+
   const filteredCards = useMemo(
     () => filterDashboardCards(visibleCards, query, filters),
     [visibleCards, filters, query]
   )
+
   const grouped = useMemo(() => groupByBucket(filteredCards), [filteredCards])
+
   const hasRelativeTimestamps = useMemo(
     () => snapshot.cards.some((card) => (card.finishedAt ?? card.startedAt) > 0),
     [snapshot.cards]
   )
+
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     if (!hasRelativeTimestamps) {
       return
     }
+
     return installWindowVisibilityInterval({
       run: () => setNow(Date.now()),
       intervalMs: 30_000
@@ -179,19 +189,24 @@ export function AgentKanbanBoard({
       const usesPlatformModifier = navigator.userAgent.includes('Mac')
         ? event.metaKey
         : event.ctrlKey
+
       if (!usesPlatformModifier || event.key.toLowerCase() !== 'k') {
         return
       }
+
       if (
         event.target instanceof Element &&
         event.target.closest('input, textarea, [contenteditable="true"], .xterm')
       ) {
         return
       }
+
       event.preventDefault()
       searchInputRef.current?.focus()
     }
+
     document.addEventListener('keydown', handleSearchShortcut)
+
     return () => document.removeEventListener('keydown', handleSearchShortcut)
   }, [])
 
@@ -201,10 +216,12 @@ export function AgentKanbanBoard({
   // card vanishing entirely (pane closed) — the user dismisses it explicitly.
   // Its live routing is cleared because daemon PTY ids can be reused.
   const [openedCard, setOpenedCard] = useState<DashboardCard | null>(null)
+
   const dialogCard = useMemo(() => {
     if (!openedCard) {
       return null
     }
+
     return (
       snapshot.cards.find((c) => c.paneKey === openedCard.paneKey) ?? {
         ...openedCard,
@@ -213,6 +230,7 @@ export function AgentKanbanBoard({
       }
     )
   }, [snapshot.cards, openedCard])
+
   const handleDialogOpenChange = useCallback((open: boolean) => {
     if (!open) {
       setOpenedCard(null)
@@ -229,6 +247,7 @@ export function AgentKanbanBoard({
     },
     [onAckAgent]
   )
+
   // Watching the open dialog counts as seeing state changes as they happen —
   // without this, an agent finishing while you watch would re-flag its card.
   useEffect(() => {

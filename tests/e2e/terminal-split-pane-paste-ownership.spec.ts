@@ -45,10 +45,12 @@ process.stdin.on('data', (chunk) => {
 function countOccurrences(value: string, needle: string): number {
   let count = 0
   let index = value.indexOf(needle)
+
   while (index !== -1) {
     count += 1
     index = value.indexOf(needle, index + needle.length)
   }
+
   return count
 }
 
@@ -71,6 +73,7 @@ test.describe('split terminal pane paste ownership', () => {
     const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
     const activePane = snapshot.panes.find((pane) => pane.leafId === snapshot.activeLeafId)
     const inactivePane = snapshot.panes.find((pane) => pane.leafId !== snapshot.activeLeafId)
+
     if (!activePane?.ptyId || !inactivePane?.ptyId) {
       throw new Error('Split terminal panes did not expose active and inactive PTY ids')
     }
@@ -95,20 +98,24 @@ test.describe('split terminal pane paste ownership', () => {
       await waitForTerminalOutput(orcaPage, encodedPayload, 10_000, 12_000)
 
       const writes = await readTerminalPtyWriteEntries(electronApp)
+
       const activeWrites = writes
         .filter((entry) => entry.id === activePane.ptyId)
         .map((entry) => entry.data)
         .join('')
+
       const inactiveWrites = writes
         .filter((entry) => entry.id === inactivePane.ptyId)
         .map((entry) => entry.data)
         .join('')
+
       expect(countOccurrences(activeWrites, payload)).toBe(1)
       expect(inactiveWrites).not.toContain(payload)
     } finally {
       if (scriptStarted) {
         await sendToTerminal(orcaPage, activePane.ptyId, '\x03').catch(() => undefined)
       }
+
       rmSync(scriptPath, { force: true })
     }
   })
@@ -131,6 +138,7 @@ test.describe('split terminal pane paste ownership', () => {
     const snapshot = await waitForPaneIdentitySnapshot(orcaPage, 2)
     const activePane = snapshot.panes.find((pane) => pane.leafId === snapshot.activeLeafId)
     const dropPane = snapshot.panes.find((pane) => pane.leafId !== snapshot.activeLeafId)
+
     if (!activePane?.ptyId || !dropPane?.ptyId) {
       throw new Error('Split terminal panes did not expose active and drop-target PTY ids')
     }
@@ -143,20 +151,25 @@ test.describe('split terminal pane paste ownership', () => {
     await orcaPage.evaluate(
       ({ leafId, pathValue }) => {
         const state = window.__store?.getState()
+
         const tabId =
           state?.activeTabType === 'terminal'
             ? state.activeTabId
             : state?.activeWorktreeId
               ? (state.activeTabIdByWorktree?.[state.activeWorktreeId] ?? null)
               : null
+
         const manager = tabId ? window.__paneManagers?.get(tabId) : null
         const pane = manager?.getPanes?.().find((candidate) => candidate.leafId === leafId)
+
         if (!pane) {
           throw new Error('Drop target pane not found')
         }
+
         const dataTransfer = new DataTransfer()
         dataTransfer.setData('text/x-orca-file-path', pathValue)
         const target = pane.container.querySelector('.xterm-screen, textarea') ?? pane.container
+
         for (const eventType of ['dragenter', 'dragover', 'drop']) {
           target.dispatchEvent(
             new DragEvent(eventType, {
@@ -174,6 +187,7 @@ test.describe('split terminal pane paste ownership', () => {
       .poll(
         async () => {
           const writes = await readTerminalPtyWriteEntries(electronApp)
+
           return writes.some(
             (entry) => entry.id === dropPane.ptyId && entry.data.includes(dropMarker)
           )
@@ -183,14 +197,17 @@ test.describe('split terminal pane paste ownership', () => {
       .toBe(true)
 
     const writes = await readTerminalPtyWriteEntries(electronApp)
+
     const activeWrites = writes
       .filter((entry) => entry.id === activePane.ptyId)
       .map((entry) => entry.data)
       .join('')
+
     const dropWrites = writes
       .filter((entry) => entry.id === dropPane.ptyId)
       .map((entry) => entry.data)
       .join('')
+
     expect(dropWrites).toContain(dropMarker)
     expect(activeWrites).not.toContain(dropMarker)
   })

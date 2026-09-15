@@ -54,6 +54,7 @@ type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
 
 function normalizeRuntimeEnvironmentId(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
+
   return trimmed ? trimmed : null
 }
 
@@ -70,17 +71,21 @@ function normalizeSettingsUpdates(
 ): Partial<GlobalSettings> {
   const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedUpdates } =
     updates as LegacyTerminalScrollbackSettingsUpdate
+
   void _legacyScrollbackBytes
+
   if ('terminalQuickCommands' in updates) {
     sanitizedUpdates.terminalQuickCommands = normalizeTerminalQuickCommands(
       updates.terminalQuickCommands
     )
   }
+
   if ('terminalCustomThemes' in updates) {
     sanitizedUpdates.terminalCustomThemes = normalizeTerminalCustomThemes(
       updates.terminalCustomThemes
     )
   }
+
   if ('visibleTaskProviders' in updates || 'defaultTaskSource' in updates) {
     const taskProviderSettings = normalizeTaskProviderSettings({
       visibleTaskProviders:
@@ -92,43 +97,53 @@ function normalizeSettingsUpdates(
           ? updates.defaultTaskSource
           : currentSettings?.defaultTaskSource
     })
+
     sanitizedUpdates.defaultTaskSource = taskProviderSettings.defaultTaskSource
     sanitizedUpdates.visibleTaskProviders = taskProviderSettings.visibleTaskProviders
   }
+
   if ('openInApplications' in updates) {
     sanitizedUpdates.openInApplications = normalizeOpenInApplications(updates.openInApplications, {
       createId: createOpenInApplicationId
     })
   }
+
   if ('disabledTuiAgents' in updates) {
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
   }
+
   if ('agentDefaultArgs' in updates) {
     sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
     sanitizedUpdates.agentYoloDefaultsMigrated = true
   }
+
   if ('agentDefaultEnv' in updates) {
     sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
     sanitizedUpdates.agentYoloDefaultsMigrated = true
   }
+
   if ('uiLanguage' in updates) {
     sanitizedUpdates.uiLanguage = normalizeUiLanguage(updates.uiLanguage)
   }
+
   if ('terminalScrollbackRows' in updates) {
     sanitizedUpdates.terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
       updates.terminalScrollbackRows
     )
   }
+
   if ('mobilePairingCustomAddress' in updates) {
     sanitizedUpdates.mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(
       updates.mobilePairingCustomAddress
     )
   }
+
   if ('mobilePairingCustomAddresses' in updates) {
     sanitizedUpdates.mobilePairingCustomAddresses = normalizeMobilePairingCustomAddresses(
       updates.mobilePairingCustomAddresses
     )
   }
+
   return sanitizedUpdates
 }
 
@@ -166,10 +181,12 @@ async function verifyRuntimeEnvironmentReachable(environmentId: string | null): 
   if (!environmentId) {
     return
   }
+
   const response = await window.api.runtimeEnvironments.getStatus({
     selector: environmentId,
     timeoutMs: 15_000
   })
+
   const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
   assertRuntimeStatusCompatible(status)
   // Why: the switch probe already proved compatibility; avoid immediately
@@ -186,8 +203,10 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
 
   fetchSettings: async (options) => {
     await ownerHydration.fetchSettingsWithOwnerHydration({ options, set, get })
+
     const { runtimeEnvironmentCatalogHydrated, runtimeEnvironments, runtimeStatusByEnvironmentId } =
       get()
+
     // Why: settings refreshes are frequent, but only incomplete host coverage needs
     // the all-host boot probe. A recorded null still means the host was checked.
     if (
@@ -207,7 +226,9 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
     const shouldPublish = ownerHydration.createSettingsPublicationFence(
       'activeRuntimeEnvironmentId' in updates || 'worktreeVisibilityDefaults' in updates
     )
+
     const visibilityOwnerHostId = getSettingsFocusedExecutionHostId(get().settings)
+
     try {
       await persistSettingsUpdates(
         set,
@@ -217,6 +238,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
         get().worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId,
         shouldPublish
       )
+
       if ('worktreeVisibilityDefaults' in updates) {
         await get().fetchAllWorktrees({ visibilityOwnerHostId })
       }
@@ -229,6 +251,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
     const shouldPublish = ownerHydration.createSettingsPublicationFence(
       'activeRuntimeEnvironmentId' in updates || 'worktreeVisibilityDefaults' in updates
     )
+
     const visibilityOwnerHostId = getSettingsFocusedExecutionHostId(get().settings)
     await persistSettingsUpdates(
       set,
@@ -238,6 +261,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       get().worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId,
       shouldPublish
     )
+
     if ('worktreeVisibilityDefaults' in updates) {
       await get().fetchAllWorktrees({ visibilityOwnerHostId })
     }
@@ -246,32 +270,42 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
   setActiveRuntimeEnvironmentPreference: async (environmentId) => {
     const nextId = normalizeRuntimeEnvironmentId(environmentId)
     const previousId = normalizeRuntimeEnvironmentId(get().settings?.activeRuntimeEnvironmentId)
+
     if (previousId === nextId) {
       return true
     }
+
     const shouldPublish = ownerHydration.createSettingsPublicationFence(true)
+
     try {
       clearRuntimeCompatibilityCache(nextId)
       await verifyRuntimeEnvironmentReachable(nextId)
+
       if (!shouldPublish()) {
         return true
       }
+
       const nextSettings = await window.api.settings.setActiveRuntimeEnvironmentPreference({
         environmentId: nextId
       })
+
       bumpProviderRuntimeSessionGeneration()
+
       // Why: this is a focus change, so keep other host state while hydrating only the new owner's default.
       const focusedSettings =
         (nextSettings as GlobalSettings | undefined) ??
         (get().settings ? { ...get().settings!, activeRuntimeEnvironmentId: nextId } : null)
+
       if (focusedSettings) {
         const hydrated = await hydrateOwnerWorktreeVisibilityDefaults(
           focusedSettings,
           get().worktreeVisibilityDefaultsByHost
         )
+
         if (!shouldPublish()) {
           return true
         }
+
         set((state) => ({
           settings: hydrated.settings,
           worktreeVisibilityDefaultsByHost: {
@@ -286,18 +320,21 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       } else {
         set({ settings: null })
       }
+
       // Why: hydration is host-merged by downstream slices. Switching focus
       // should add/update the selected host without discarding other hosts.
       await get().fetchRepos()
       await get().fetchAllWorktrees()
       await get().fetchWorktreeLineage()
       await get().fetchBrowserSessionProfiles()
+
       return true
     } catch (err) {
       console.error('Failed to switch runtime environment:', err)
       toast.error(translate('auto.store.slices.settings.e12dab333b', 'Failed to switch servers'), {
         description: err instanceof Error ? err.message : String(err)
       })
+
       return false
     }
   }

@@ -38,8 +38,11 @@ export const CONFLICT_HINT_MAP: Record<GitConflictKind, string> = {
 }
 
 const EMPTY_CONFLICT_REVIEW_ENTRIES: readonly ConflictReviewEntry[] = []
+
 let conflictReviewFileTreeCollapsedPreference = false
+
 type ConflictNavigationDirection = 'previous' | 'next'
+
 type ConflictReviewPanelEntry = ConflictReviewEntry & {
   liveEntry?: GitStatusEntry
 }
@@ -56,9 +59,11 @@ export function getNextConflictNavigationIndex({
   if (total <= 0) {
     return null
   }
+
   if (currentIndex === null || currentIndex < 0 || currentIndex >= total) {
     return direction === 'previous' ? total - 1 : 0
   }
+
   return direction === 'previous' ? (currentIndex + total - 1) % total : (currentIndex + 1) % total
 }
 
@@ -76,6 +81,7 @@ export function ConflictBanner({
   }
 }): React.JSX.Element | null {
   const conflict = file.conflict
+
   if (!conflict) {
     return null
   }
@@ -181,6 +187,7 @@ export function ConflictBanner({
 
 export function ConflictPlaceholderView({ file }: { file: OpenFile }): React.JSX.Element | null {
   const conflict = file.conflict
+
   if (!conflict) {
     return null
   }
@@ -228,11 +235,14 @@ export function ConflictReviewPanel({
   const [fileTreeCollapsed, setFileTreeCollapsedState] = React.useState(
     () => conflictReviewFileTreeCollapsedPreference
   )
+
   const snapshotEntries = file.conflictReview?.entries ?? EMPTY_CONFLICT_REVIEW_ENTRIES
+
   const liveEntriesByPath = React.useMemo(
     () => new Map(liveEntries.map((entry) => [entry.path, entry])),
     [liveEntries]
   )
+
   const treeEntries = React.useMemo<readonly ConflictReviewPanelEntry[]>(
     () =>
       snapshotEntries.map((entry) => ({
@@ -241,14 +251,18 @@ export function ConflictReviewPanel({
       })),
     [liveEntriesByPath, snapshotEntries]
   )
+
   const unresolvedSnapshotEntries = treeEntries.filter(
     (entry) => entry.liveEntry?.conflictStatus === 'unresolved'
   )
+
   const unresolvedCount = unresolvedSnapshotEntries.length
   const [renderStartTime] = React.useState(() => Date.now())
+
   const snapshotTime = new Date(
     file.conflictReview?.snapshotTimestamp ?? renderStartTime
   ).toLocaleTimeString()
+
   const setFileTreeCollapsed = React.useCallback((collapsed: boolean) => {
     conflictReviewFileTreeCollapsedPreference = collapsed
     setFileTreeCollapsedState(collapsed)

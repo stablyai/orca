@@ -56,6 +56,7 @@ describe('defaultSelectedSkillProviders', () => {
       'claude',
       false
     )
+
     expect(withoutClaude.has('claude')).toBe(false)
     expect(withoutClaude.has('codex')).toBe(true)
     expect(toggledSkillProviderSelection(withoutClaude, 'claude', true).has('claude')).toBe(true)

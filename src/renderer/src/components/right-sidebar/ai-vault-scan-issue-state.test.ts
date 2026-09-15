@@ -48,6 +48,7 @@ describe('aiVaultScanNoticeIssues', () => {
       path: '/home/ada',
       message: 'Only the first 64 project paths were scanned.'
     }
+
     const truncated = result([], [scopeIssue])
 
     expect(blockingAiVaultScanIssue(truncated)).toBeNull()
@@ -63,12 +64,14 @@ describe('aiVaultScanNoticeIssues', () => {
       path: 'dev-box',
       message: 'Remote connection dropped.'
     }
+
     const scopeIssue = {
       agent: 'codex' as const,
       kind: 'scope' as const,
       path: '/home/ada',
       message: 'Only the first 64 project paths were scanned.'
     }
+
     const partial = result(
       [{ id: 'session' }],
       [hostIssue, scopeIssue, { agent: 'codex', path: '/bad.jsonl', message: 'Malformed' }]
@@ -89,6 +92,7 @@ describe('aiVaultScanNoticeIssues', () => {
       message:
         'OpenCode is writing to opencode.db right now, so its history was skipped. It is read again on the next refresh.'
     }
+
     const empty = result([], [sourceIssue])
 
     expect(skippedAiVaultTranscriptCount(empty)).toBe(0)

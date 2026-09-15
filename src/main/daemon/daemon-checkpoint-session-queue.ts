@@ -45,16 +45,20 @@ export class CheckpointSessionQueue {
     callbacks: DeadlineCallbacks = {}
   ): Promise<T> {
     const work = this.enqueue(sessionId, operation)
+
     return new Promise<T>((resolve, reject) => {
       let deadlineFired = false
+
       const timer = setTimeout(() => {
         deadlineFired = true
+
         try {
           callbacks.onDeadline?.()
         } finally {
           resolve(onDeadline)
         }
       }, deadlineMs)
+
       timer.unref?.()
       work.then(
         (value) => {
@@ -63,10 +67,13 @@ export class CheckpointSessionQueue {
         },
         (error: unknown) => {
           clearTimeout(timer)
+
           if (deadlineFired) {
             callbacks.onAbandonedRejection?.(error)
+
             return
           }
+
           reject(error)
         }
       )
@@ -82,20 +89,27 @@ export class CheckpointSessionQueue {
     this.pending.set(sessionId, (this.pending.get(sessionId) ?? 0) + 1)
     const next = previous.catch(() => {}).then(operation)
     this.tails.set(sessionId, next)
+
     const settle = (): void => {
       const remaining = (this.pending.get(sessionId) ?? 1) - 1
+
       if (remaining > 0) {
         this.pending.set(sessionId, remaining)
+
         return
       }
+
       this.pending.delete(sessionId)
+
       if (this.tails.get(sessionId) === next) {
         this.tails.delete(sessionId)
       }
     }
+
     // Why a detached handler: `next` is the shared tail, so a rejection the caller
     // already sees would still surface here as an unhandled rejection.
     next.then(settle, settle)
+
     return next
   }
 }

@@ -21,18 +21,23 @@ export function resolveLinearIssueEmptyKind(options: {
   if (options.serverIssueCount > 0 && options.filteredIssueCount === 0) {
     return 'client-team'
   }
+
   if (options.serverIssueCount > 0) {
     return null
   }
+
   if (options.hasContextLabel) {
     return 'context'
   }
+
   if (options.searchActive) {
     return 'search'
   }
+
   if (!isEmptyLinearIssueAttributeFilter(options.attributeFilter)) {
     return 'server-attribute-filter'
   }
+
   return 'unfiltered-scope'
 }
 

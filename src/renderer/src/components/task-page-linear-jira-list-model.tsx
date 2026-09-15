@@ -16,9 +16,11 @@ import type { TaskPageGitHubMutationIntent } from '@/components/task-page-github
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { LinearGroupSection } from './task-page-linear-issue-model'
 import { compareNumericLocaleText } from '@/lib/locale-text-collators'
+
 export function getLinearPriorityRank(priority: number): number {
   return priority === 0 ? 5 : priority
 }
+
 export function compareLinearIssues(
   a: LinearIssue,
   b: LinearIssue,
@@ -27,15 +29,20 @@ export function compareLinearIssues(
   if (orderBy === 'updated') {
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   }
+
   if (orderBy === 'identifier') {
     return compareNumericLocaleText(a.identifier, b.identifier)
   }
+
   const priorityDelta = getLinearPriorityRank(a.priority) - getLinearPriorityRank(b.priority)
+
   if (priorityDelta !== 0) {
     return priorityDelta
   }
+
   return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
 }
+
 export function getLinearIssueGroup(
   issue: LinearIssue,
   groupBy: LinearGroupBy
@@ -49,35 +56,41 @@ export function getLinearIssueGroup(
       label: issue.state.name
     }
   }
+
   if (groupBy === 'assignee') {
     return {
       key: `assignee:${issue.assignee?.id ?? 'unassigned'}`,
       label: issue.assignee?.displayName ?? 'Unassigned'
     }
   }
+
   if (groupBy === 'priority') {
     return {
       key: `priority:${issue.priority}`,
       label: getLinearPriorityLabel(issue.priority)
     }
   }
+
   if (groupBy === 'team') {
     return {
       key: `team:${issue.team.id}`,
       label: issue.team.name
     }
   }
+
   return {
     key: 'all',
     label: translate('auto.components.TaskPage.dfc0c79bd8', 'Issues')
   }
 }
+
 export function groupLinearIssues(
   issues: LinearIssue[],
   groupBy: LinearGroupBy,
   orderBy: LinearOrderBy
 ): LinearGroupSection[] {
   const sorted = [...issues].sort((a, b) => compareLinearIssues(a, b, orderBy))
+
   if (groupBy === 'none') {
     return [
       {
@@ -87,10 +100,13 @@ export function groupLinearIssues(
       }
     ]
   }
+
   const sections = new Map<string, LinearGroupSection>()
+
   for (const issue of sorted) {
     const group = getLinearIssueGroup(issue, groupBy)
     const section = sections.get(group.key)
+
     if (section) {
       section.issues.push(issue)
     } else {
@@ -101,8 +117,10 @@ export function groupLinearIssues(
       })
     }
   }
+
   return [...sections.values()]
 }
+
 export function TaskPageJiraErrorBanner({
   error,
   open,
@@ -147,29 +165,38 @@ export function TaskPageJiraErrorBanner({
     </Collapsible>
   )
 }
+
 export function getLinearIssueGridTemplate(
   visibleProperties: ReadonlySet<LinearDisplayProperty>
 ): string {
   const columns = ['96px', 'minmax(240px,1.55fr)']
+
   if (visibleProperties.has('labels')) {
     columns.push('minmax(168px,0.9fr)')
   }
+
   if (visibleProperties.has('team')) {
     columns.push('minmax(172px,0.9fr)')
   }
+
   if (visibleProperties.has('state')) {
     columns.push('138px')
   }
+
   if (visibleProperties.has('assignee')) {
     columns.push('64px')
   }
+
   if (visibleProperties.has('updated')) {
     columns.push('104px')
   }
+
   // Why: Worktrees is icon-only (open vs start); keep it narrow so issue title keeps the room.
   columns.push('64px')
+
   return columns.join(' ')
 }
+
 export type TaskPageGitHubWorkItemMutationRunner = {
   run: (input: {
     item: GitHubWorkItem

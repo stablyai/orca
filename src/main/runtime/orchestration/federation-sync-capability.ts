@@ -15,6 +15,7 @@ export async function resolveFederatedLifecycleSettlementCapability(
   if (federated.protocol_version < ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION) {
     return null
   }
+
   return getOrchestrationPeerCapabilityCache(runtime).resolve({
     peerFingerprint: federated.peer_fingerprint,
     expectedRuntimeEpoch: federated.remote_runtime_epoch,

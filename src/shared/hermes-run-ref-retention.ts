@@ -24,10 +24,13 @@ export class HermesRunRefRetainer<T extends HermesSortableRunRef> {
 
   add(ref: T): void {
     this.seen += 1
+
     if (this.maxEntries === 0) {
       return
     }
+
     this.pending.push(ref)
+
     if (this.pending.length >= this.maxEntries) {
       this.flush()
     }
@@ -35,6 +38,7 @@ export class HermesRunRefRetainer<T extends HermesSortableRunRef> {
 
   finish(): BoundedHermesRunRefs<T> {
     this.flush()
+
     return {
       refs: this.retained.slice(),
       saturated: this.seen > this.maxEntries
@@ -45,11 +49,14 @@ export class HermesRunRefRetainer<T extends HermesSortableRunRef> {
     if (this.pending.length === 0) {
       return
     }
+
     for (const ref of this.pending) {
       this.retained.push(ref)
     }
+
     this.pending.length = 0
     this.retained.sort(compareHermesRunRefsNewestFirst)
+
     if (this.retained.length > this.maxEntries) {
       this.retained.length = this.maxEntries
     }
@@ -62,8 +69,10 @@ export function compareHermesRunRefsNewestFirst(
 ): number {
   const leftTime = left.run_at ? Date.parse(left.run_at) : Number.NaN
   const rightTime = right.run_at ? Date.parse(right.run_at) : Number.NaN
+
   if (Number.isFinite(leftTime) && Number.isFinite(rightTime)) {
     return rightTime - leftTime
   }
+
   return right.id.localeCompare(left.id)
 }

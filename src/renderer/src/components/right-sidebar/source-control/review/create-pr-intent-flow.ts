@@ -61,20 +61,25 @@ export function createCreatePrIntentRunToken(input: Omit<CreatePrIntentRunToken,
 
 function normalizeCreatePrIntentBaseIdentityRef(ref: string | null | undefined): string {
   const trimmed = ref?.trim()
+
   if (!trimmed) {
     return ''
   }
+
   // Why: compare bases are local git refs; origin/main and upstream/main must
   // stay distinct even though hosted review APIs receive only branch names.
   if (trimmed.startsWith('refs/remotes/')) {
     return trimmed.slice('refs/remotes/'.length)
   }
+
   if (trimmed.startsWith('remotes/')) {
     return trimmed.slice('remotes/'.length)
   }
+
   if (trimmed.startsWith('refs/heads/')) {
     return trimmed.slice('refs/heads/'.length)
   }
+
   return trimmed
 }
 
@@ -101,6 +106,7 @@ export function createPrIntentCurrentTargetConflictsWithToken(
   if (current.worktreeId !== token.worktreeId) {
     return false
   }
+
   return !createPrIntentRunTokenMatches(token, current)
 }
 
@@ -109,6 +115,7 @@ export function createPrIntentGitStatusMatchesToken(
   status: { branch?: string | null }
 ): boolean {
   const branch = normalizeHostedReviewHeadRef(status.branch ?? '')
+
   return branch.length > 0 && branch === token.branch
 }
 
@@ -170,6 +177,7 @@ export function resolveCreatePrIntentRemoteStep({
     if (shouldForcePushWithLeaseForUpstream(upstreamStatus)) {
       return 'force_push'
     }
+
     // Why: auto-prepare only a behind-only branch, and only via `--ff-only`.
     // Plain sync/merge could create a merge commit if the branch diverges mid
     // flight or the user has pull.ff=no; --ff-only enforces the no-consent-
@@ -208,6 +216,7 @@ export function resolveCreatePrIntentGeneratedReviewFields(
   if (!generated.success) {
     return { ok: false, error: generated.error }
   }
+
   return {
     ok: true,
     fields: {

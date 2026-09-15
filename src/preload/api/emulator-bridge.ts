@@ -17,7 +17,9 @@ export const emulatorApi = {
       _event: Electron.IpcRendererEvent,
       data: { streamId: string; bytes: ArrayBuffer }
     ) => callback(data)
+
     ipcRenderer.on('emulator:frameStreamFrame', listener)
+
     return () => ipcRenderer.removeListener('emulator:frameStreamFrame', listener)
   },
   onFrameStreamError: (
@@ -27,7 +29,9 @@ export const emulatorApi = {
       _event: Electron.IpcRendererEvent,
       data: { streamId: string; message: string }
     ) => callback(data)
+
     ipcRenderer.on('emulator:frameStreamError', listener)
+
     return () => ipcRenderer.removeListener('emulator:frameStreamError', listener)
   },
   startVideoStream: (args: { deviceId: string; streamId: string }): Promise<{ streamId: string }> =>
@@ -49,7 +53,9 @@ export const emulatorApi = {
         meta: { codecId: string; width: number; height: number }
       }
     ) => callback(data)
+
     ipcRenderer.on('emulator:videoStreamMeta', listener)
+
     return () => ipcRenderer.removeListener('emulator:videoStreamMeta', listener)
   },
   onVideoStreamFrame: (
@@ -71,13 +77,17 @@ export const emulatorApi = {
         bytes: ArrayBuffer
       }
     ) => callback(data)
+
     ipcRenderer.on('emulator:videoStreamFrame', listener)
+
     return () => ipcRenderer.removeListener('emulator:videoStreamFrame', listener)
   },
   onPaneFocus: (callback: (data: { worktreeId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { worktreeId: string }) =>
       callback(data)
+
     ipcRenderer.on('emulator:pane-focus', listener)
+
     return () => ipcRenderer.removeListener('emulator:pane-focus', listener)
   },
   onAutoAttach: (
@@ -93,7 +103,9 @@ export const emulatorApi = {
         info: { deviceUdid: string; streamUrl: string; wsUrl: string; axUrl?: string }
       }
     ) => callback(data)
+
     ipcRenderer.on('ui:emulatorAutoAttach', listener)
+
     return () => ipcRenderer.removeListener('ui:emulatorAutoAttach', listener)
   }
 } satisfies PreloadApi['emulator']

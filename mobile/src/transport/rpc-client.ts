@@ -63,5 +63,6 @@ export function connect(
     typeof optionsOrLegacy === 'function'
       ? { onStateChange: optionsOrLegacy }
       : (optionsOrLegacy ?? {})
+
   return new DirectRpcClient(endpoint, deviceToken, serverPublicKeyB64, options)
 }

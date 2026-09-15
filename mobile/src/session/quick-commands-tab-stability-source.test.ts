@@ -3,8 +3,11 @@ import { describe, expect, it } from 'vitest'
 import { readMobileSessionRouteSource } from './mobile-session-route-source-family.test-support'
 
 const sourcePath = './MobileSessionHeader.tsx'
+
 const source = readMobileSessionRouteSource(sourcePath)
+
 const sheetsSource = readMobileSessionRouteSource('./MobileSessionSheets.tsx')
+
 const sourceFile = ts.createSourceFile(
   sourcePath,
   source,
@@ -23,10 +26,12 @@ function findQuickCommandsTabButtons(): ts.JsxSelfClosingElement[] {
     ) {
       matches.push(node)
     }
+
     ts.forEachChild(node, visit)
   }
 
   visit(sourceFile)
+
   return matches
 }
 
@@ -35,6 +40,7 @@ function getQuickCommandsTabSource(): string {
   expect(start).toBeGreaterThanOrEqual(0)
   const end = source.indexOf('</SafeAreaView>', start)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end)
 }
 
@@ -46,14 +52,18 @@ describe('quick-commands tab stability', () => {
     expect(buttons).toHaveLength(1)
     const tabBar = buttons[0].parent
     expect(ts.isJsxElement(tabBar)).toBe(true)
+
     if (!ts.isJsxElement(tabBar)) {
       return
     }
+
     expect(tabBar.openingElement.tagName.getText(sourceFile)).toBe('View')
+
     const style = tabBar.openingElement.attributes.properties.find(
       (attribute): attribute is ts.JsxAttribute =>
         ts.isJsxAttribute(attribute) && attribute.name.getText(sourceFile) === 'style'
     )
+
     expect(style?.initializer?.getText(sourceFile)).toBe('{styles.tabBar}')
     expect(tabSource).toContain('if (quickCommandsSupported === true)')
     expect(tabSource).toContain('setShowQuickCommands(true)')

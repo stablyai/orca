@@ -25,6 +25,7 @@ const sessionSummaryCache = new WeakMap<AppState['tabsByWorktree'], SessionSumma
 
 function getTabIdFromPaneKey(paneKey: string): string | null {
   const separator = paneKey.indexOf(':')
+
   return separator > 0 ? paneKey.slice(0, separator) : null
 }
 
@@ -39,13 +40,16 @@ function computeProjectRuntimeSessionSummary(
     if (getRepoIdFromWorktreeId(worktreeId) !== repoId) {
       continue
     }
+
     projectWorktreeIds.add(worktreeId)
 
     for (const tab of tabs) {
       const livePtyIds = new Set(state.ptyIdsByTabId[tab.id] ?? [])
+
       if (tab.ptyId) {
         livePtyIds.add(tab.ptyId)
       }
+
       liveTerminalCount += livePtyIds.size
     }
   }
@@ -54,15 +58,19 @@ function computeProjectRuntimeSessionSummary(
   // the shared index answers the same question the repo-scoped map used to.
   const tabWorktreeIds = getTabIdToWorktreeId(state.tabsByWorktree)
   let activeTaskCount = 0
+
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
     if (entry.state === 'done') {
       continue
     }
+
     const tabId = entry.tabId ?? getTabIdFromPaneKey(paneKey)
     const worktreeId = entry.worktreeId ?? (tabId ? tabWorktreeIds.get(tabId) : null)
+
     if (!worktreeId) {
       continue
     }
+
     if (projectWorktreeIds.has(worktreeId) || getRepoIdFromWorktreeId(worktreeId) === repoId) {
       activeTaskCount += 1
     }
@@ -76,6 +84,7 @@ export function getProjectRuntimeSessionSummary(
   repoId: string
 ): ProjectRuntimeSessionSummary {
   let cache = sessionSummaryCache.get(state.tabsByWorktree)
+
   if (
     !cache ||
     cache.ptyIdsByTabId !== state.ptyIdsByTabId ||
@@ -88,11 +97,15 @@ export function getProjectRuntimeSessionSummary(
     }
     sessionSummaryCache.set(state.tabsByWorktree, cache)
   }
+
   const cached = cache.byRepoId.get(repoId)
+
   if (cached) {
     return cached
   }
+
   const summary = computeProjectRuntimeSessionSummary(state, repoId)
   cache.byRepoId.set(repoId, summary)
+
   return summary
 }

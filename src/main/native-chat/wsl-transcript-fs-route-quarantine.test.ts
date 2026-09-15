@@ -15,6 +15,7 @@ function deferred<T>(): {
 } {
   let resolve!: (value: T) => void
   let reject!: (error: unknown) => void
+
   return {
     promise: new Promise<T>((res, rej) => ((resolve = res), (reject = rej))),
     resolve,
@@ -52,13 +53,16 @@ describe('WSL transcript fs route quarantine strike accounting', () => {
   it('joins a live in-flight task on a quarantined route instead of refusing', async () => {
     vi.useFakeTimers()
     const scanWork = deferred<string>()
+
     try {
       const path = '\\\\wsl.localhost\\Ubuntu\\join-during-quarantine'
       const scanTask = vi.fn(() => scanWork.promise)
+
       const scanned = runWslTranscriptFsTask(
         { operation: 'stat', path, priority: 'scan' },
         scanTask
       )
+
       await vi.advanceTimersByTimeAsync(0)
       expect(scanTask).toHaveBeenCalledOnce()
 
@@ -67,6 +71,7 @@ describe('WSL transcript fs route quarantine strike accounting', () => {
         'exact',
         () => new Promise<string>(() => {})
       )
+
       const stalledRejected = expect(stalled).rejects.toMatchObject({ code: 'timeout' })
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS)
       await stalledRejected
@@ -76,6 +81,7 @@ describe('WSL transcript fs route quarantine strike accounting', () => {
         run('\\\\wsl.localhost\\Ubuntu\\join-fresh', 'exact', async () => 'fresh')
       ).rejects.toMatchObject({ code: 'unavailable' })
       const joinerTask = vi.fn(async () => 'never')
+
       const joined = runWslTranscriptFsTask(
         { operation: 'stat', path, priority: 'scan' },
         joinerTask
@@ -95,14 +101,17 @@ describe('WSL transcript fs route quarantine strike accounting', () => {
   // deadline strikes for one incident would double-step the back-off.
   it('counts concurrent lane deadlines on one stall as a single strike', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
+
     try {
       const path = '\\\\wsl.localhost\\Ubuntu\\two-lane-stall'
       const exact = run(path, 'exact', () => new Promise<string>(() => {}))
+
       const scan = run(
         '\\\\wsl.localhost\\Ubuntu\\two-lane-tree',
         'scan',
         () => new Promise<string>(() => {})
       )
+
       const exactRejected = expect(exact).rejects.toMatchObject({ code: 'timeout' })
       const scanRejected = expect(scan).rejects.toMatchObject({ code: 'timeout' })
       await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS)
@@ -120,6 +129,7 @@ describe('WSL transcript fs route quarantine strike accounting', () => {
   it('starts the back-off from the base window again after strike history decays', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
     const path = '\\\\wsl.localhost\\Ubuntu\\daily-slow-wake'
+
     const stallOnce = (): Promise<string> =>
       runWslTranscriptFsTask(
         { operation: 'open', path, priority: 'exact', dedupe: false },
@@ -128,6 +138,7 @@ describe('WSL transcript fs route quarantine strike accounting', () => {
             signal.addEventListener('abort', () => reject(signal.reason), { once: true })
           )
       )
+
     try {
       const first = stallOnce()
       const firstRejected = expect(first).rejects.toMatchObject({ code: 'timeout' })

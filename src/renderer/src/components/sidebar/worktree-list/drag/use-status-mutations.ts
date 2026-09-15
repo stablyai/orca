@@ -35,9 +35,11 @@ export function useWorktreeStatusMutations(args: {
   const moveWorktreeToStatus = useCallback(
     (worktreeId: string, status: WorkspaceStatus) => {
       const current = worktreeMap.get(worktreeId)
+
       if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
         return
       }
+
       void updateWorktreeMeta(
         worktreeId,
         { workspaceStatus: status },
@@ -50,17 +52,21 @@ export function useWorktreeStatusMutations(args: {
   const moveWorktreesToStatus = useCallback(
     (worktreeIds: readonly string[], status: WorkspaceStatus) => {
       const updates: WorktreeMetaBatchUpdate[] = []
+
       for (const worktreeId of worktreeIds) {
         const current = worktreeMap.get(worktreeId)
+
         if (!current || getWorkspaceStatus(current, workspaceStatuses) === status) {
           continue
         }
+
         updates.push({
           worktreeId,
           updates: { workspaceStatus: status },
           executionHostId: current.hostId ?? 'local'
         })
       }
+
       if (updates.length > 0) {
         void updateWorktreesMeta(updates)
       }
@@ -79,40 +85,52 @@ export function useWorktreeStatusMutations(args: {
         rankByWorktreeId: manualOrderCatalog.rankByWorktreeId,
         allWorktreeIds: manualOrderCatalog.orderedIds
       })
+
       const updates = new Map<string, WorktreeMetaBatchUpdate>()
+
       for (const worktreeId of dropArgs.worktreeIds) {
         const current = worktreeMap.get(worktreeId)
+
         if (!current) {
           continue
         }
+
         const next: Partial<WorktreeMeta> = {}
+
         if (getWorkspaceStatus(current, workspaceStatuses) !== dropArgs.status) {
           next.workspaceStatus = dropArgs.status
         }
+
         updates.set(worktreeId, {
           worktreeId,
           updates: next,
           executionHostId: current.hostId ?? 'local'
         })
       }
+
       for (const [worktreeId, manualOrder] of order.updates) {
         const entry = updates.get(worktreeId)
+
         if (entry) {
           entry.updates = { ...entry.updates, ...manualOrder }
         }
       }
+
       for (const [worktreeId, entry] of updates) {
         if (Object.keys(entry.updates).length === 0) {
           updates.delete(worktreeId)
         }
       }
+
       if (updates.size === 0) {
         return
       }
+
       // Why: the insertion line promises exact placement, so persist manual order on a cross-status drop.
       if (order.changed) {
         setSortBy('manual')
       }
+
       void updateWorktreesMeta([...updates.values()])
     },
     [manualOrderCatalog, setSortBy, updateWorktreesMeta, worktreeMap, workspaceStatuses]
@@ -145,9 +163,11 @@ export function useWorktreeStatusMutations(args: {
         rankByWorktreeId: manualOrderCatalog.rankByWorktreeId,
         allWorktreeIds: manualOrderCatalog.orderedIds
       })
+
       if (result.changed) {
         setSortBy('manual')
       }
+
       void updateWorktreesMeta(
         [...result.updates].map(([worktreeId, updates]) => ({
           worktreeId,
@@ -163,8 +183,10 @@ export function useWorktreeStatusMutations(args: {
     (worktreeIds: readonly string[], status: WorkspaceStatus) => {
       const sourceGroupKeys = worktreeIds.flatMap((worktreeId) => {
         const worktree = worktreeMap.get(worktreeId)
+
         return worktree ? [getWorkspaceStatus(worktree, workspaceStatuses)] : []
       })
+
       return shouldWriteManualOrderForGroupDrop({
         sortBy,
         sourceGroupKeys,
@@ -185,13 +207,16 @@ export function useWorktreeStatusMutations(args: {
         allWorktreeIds: manualOrderCatalog.orderedIds,
         rankByWorktreeId: manualOrderCatalog.rankByWorktreeId
       })
+
       if (result.updates.length === 0) {
         return
       }
+
       // Why: switch to Manual when the drop changes order so the placement stays visible.
       if (result.shouldSwitchToManual) {
         setSortBy('manual')
       }
+
       useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
       void updateWorktreesMeta(result.updates)
     },

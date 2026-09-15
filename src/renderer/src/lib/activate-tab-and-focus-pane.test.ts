@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { activateTabAndFocusPane } from './activate-tab-and-focus-pane'
 
 const setActiveTab = vi.hoisted(() => vi.fn())
+
 const setActiveTabType = vi.hoisted(() => vi.fn())
 
 vi.mock('@/store', () => ({

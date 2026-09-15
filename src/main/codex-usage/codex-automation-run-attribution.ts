@@ -22,6 +22,7 @@ function shouldForceAutomationUsageScan(
   completedAt: number
 ): boolean {
   const { lastScanCompletedAt, lastScanError } = scanState
+
   // Why: attribution needs a scan after the run finishes, but repeated
   // lookups after that point should not rescan all Codex session history.
   return Boolean(lastScanError) || lastScanCompletedAt === null || lastScanCompletedAt < completedAt
@@ -32,6 +33,7 @@ export async function resolveCodexAutomationRunUsage(
   deps: CodexAutomationAttributionDeps
 ): Promise<AutomationRunUsage> {
   const collectedAt = Date.now()
+
   const unavailable = (
     unavailableReason: AutomationRunUsage['unavailableReason'],
     unavailableMessage: string
@@ -57,6 +59,7 @@ export async function resolveCodexAutomationRunUsage(
   if (!deps.getState().scanState.enabled) {
     return unavailable('usage_not_enabled', 'Codex usage tracking is not enabled.')
   }
+
   if (!input.worktreeId || !input.startedAt || !input.completedAt) {
     return unavailable('no_matching_session', 'Run session metadata is incomplete.')
   }
@@ -64,30 +67,37 @@ export async function resolveCodexAutomationRunUsage(
   const scanState = await deps.refresh(
     shouldForceAutomationUsageScan(deps.getState().scanState, input.completedAt)
   )
+
   if (scanState.lastScanError) {
     return unavailable('scan_failed', scanState.lastScanError)
   }
 
   const windowStart = input.startedAt - AUTOMATION_ATTRIBUTION_WINDOW_MS
   const windowEnd = input.completedAt + AUTOMATION_ATTRIBUTION_WINDOW_MS
+
   const candidates = deps.getState().sessions.filter((session) => {
     const first = new Date(session.firstTimestamp).getTime()
     const last = new Date(session.lastTimestamp).getTime()
+
     if (!Number.isFinite(first) || !Number.isFinite(last)) {
       return false
     }
+
     if (session.sessionId === input.terminalSessionId) {
       return true
     }
+
     if (first < windowStart || first > windowEnd || last > windowEnd) {
       return false
     }
+
     return session.locationBreakdown.some((entry) => entry.worktreeId === input.worktreeId)
   })
 
   if (candidates.length === 0) {
     return unavailable('no_matching_session', 'No Codex usage session matched this run.')
   }
+
   if (candidates.length > 1) {
     return unavailable(
       'ambiguous_session',
@@ -96,10 +106,13 @@ export async function resolveCodexAutomationRunUsage(
   }
 
   const session = candidates[0]
+
   const scopedLocations = session.locationBreakdown.filter(
     (entry) => entry.worktreeId === input.worktreeId
   )
+
   const locations = scopedLocations.length > 0 ? scopedLocations : session.locationBreakdown
+
   const totals = locations.reduce(
     (acc, entry) => {
       acc.events += entry.eventCount
@@ -108,6 +121,7 @@ export async function resolveCodexAutomationRunUsage(
       acc.outputTokens += entry.outputTokens
       acc.reasoningOutputTokens += entry.reasoningOutputTokens
       acc.totalTokens += entry.totalTokens
+
       return acc
     },
     {
@@ -119,13 +133,16 @@ export async function resolveCodexAutomationRunUsage(
       totalTokens: 0
     }
   )
+
   const scopedModelRows = session.locationModelBreakdown.filter(
     (entry) => entry.worktreeId === input.worktreeId
   )
+
   const modelRows = scopedModelRows.length > 0 ? scopedModelRows : session.modelBreakdown
   const modelLabels = [...new Set(modelRows.map((entry) => entry.modelLabel))]
   let estimatedCostUsd = 0
   let hasKnownCost = false
+
   if (scopedModelRows.length > 0) {
     for (const modelRow of scopedModelRows) {
       const cost = estimateCostUsd(
@@ -134,6 +151,7 @@ export async function resolveCodexAutomationRunUsage(
         modelRow.cachedInputTokens,
         modelRow.outputTokens
       )
+
       if (cost !== null) {
         hasKnownCost = true
         estimatedCostUsd += cost
@@ -146,6 +164,7 @@ export async function resolveCodexAutomationRunUsage(
       totals.cachedInputTokens,
       totals.outputTokens
     )
+
     if (cost !== null) {
       hasKnownCost = true
       estimatedCostUsd += cost

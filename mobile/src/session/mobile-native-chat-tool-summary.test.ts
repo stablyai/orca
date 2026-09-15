@@ -36,6 +36,7 @@ describe('summarizeToolInput', () => {
     const input: Record<string, unknown> = Object.fromEntries(
       Array.from({ length: 8 }, (_unused, index) => [`key${index}`, index])
     )
+
     const lateGetter = vi.fn(() => 'should not be read')
     Object.defineProperty(input, 'late', { enumerable: true, get: lateGetter })
 

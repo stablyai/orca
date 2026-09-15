@@ -12,6 +12,7 @@ export function mapGitLabUser(raw: GitLabRawUser | null | undefined): GitLabAssi
   if (!raw?.username) {
     return null
   }
+
   return {
     ...(typeof raw.id === 'number' ? { id: raw.id } : {}),
     username: raw.username,

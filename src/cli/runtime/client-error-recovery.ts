@@ -8,11 +8,13 @@ export function attachMutationRecovery(
   if (!requestId || !(error instanceof RuntimeClientError)) {
     return error
   }
+
   const data = {
     ...(error.data && typeof error.data === 'object' ? error.data : {}),
     orchestrationRequestId: requestId,
     ...(originalCommand ? { originalCommand } : {})
   }
+
   if (error instanceof RuntimeRpcFailureError) {
     return new RuntimeRpcFailureError({
       ...error.response,
@@ -23,6 +25,7 @@ export function attachMutationRecovery(
       }
     })
   }
+
   return new RuntimeClientError(
     error.code,
     `${error.message} Orchestration mutation request ID: ${requestId}.`,

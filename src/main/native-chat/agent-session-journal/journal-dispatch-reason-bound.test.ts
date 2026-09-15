@@ -23,6 +23,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
 const HUGE = 'x'.repeat(4 * DEFAULT_JOURNAL_PAYLOAD_LIMITS.inlineHeadBytes)
 
 let root: string
+
 let clock = 1_000
 
 const journals = createTrackedJournalOpener()
@@ -46,6 +47,7 @@ async function settle(reason: string): Promise<string | null> {
     fence: 1
   })
   await journal.resolveDispatch({ clientMessageId: 'msg-1', state: 'rejected', reason, fence: 1 })
+
   return journal.snapshot().submissions[0]?.reason ?? null
 }
 

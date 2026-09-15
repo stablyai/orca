@@ -56,39 +56,49 @@ const REVIEW_RANK: Record<WorkspaceCleanupReviewState, number> = {
 export const WORKSPACE_CLEANUP_BLOCKER_VALUES = Object.keys(
   BLOCKER_SEVERITY
 ) as WorkspaceCleanupBlocker[]
+
 export const WORKSPACE_CLEANUP_AGENT_STATE_VALUES = Object.keys(
   AGENT_RANK
 ) as WorkspaceCleanupAgentState[]
+
 export const WORKSPACE_CLEANUP_GIT_STATE_VALUES = Object.keys(
   GIT_RANK
 ) as WorkspaceCleanupGitState[]
+
 export const WORKSPACE_CLEANUP_REVIEW_STATE_VALUES = Object.keys(
   REVIEW_RANK
 ) as WorkspaceCleanupReviewState[]
+
 export const WORKSPACE_CLEANUP_TICKET_SOURCE_VALUES: WorkspaceCleanupTicketSource[] = [
   'work-item',
   'linear',
   'issue'
 ]
+
 export const WORKSPACE_CLEANUP_IDLE_SIGNAL_VALUES: WorkspaceCleanupIdleSignal[] = [
   'last-visited',
   'last-activity',
   'created'
 ]
+
 export const WORKSPACE_CLEANUP_TRI_STATE_VALUES: WorkspaceCleanupTriState[] = [
   'any',
   'only',
   'exclude'
 ]
+
 export const WORKSPACE_CLEANUP_PRESENCE_VALUES: WorkspaceCleanupPresence[] = ['any', 'some', 'none']
+
 export const WORKSPACE_CLEANUP_BLOCKER_MODE_VALUES: WorkspaceCleanupBlockerMode[] = [
   'any-of',
   'none-of'
 ]
+
 export const WORKSPACE_CLEANUP_SORT_DIRECTION_VALUES: WorkspaceCleanupSortDirectionState[] = [
   'asc',
   'desc'
 ]
+
 export const WORKSPACE_CLEANUP_SORT_FIELD_VALUES: WorkspaceCleanupSortField[] = [
   'last-activity',
   'last-visited',

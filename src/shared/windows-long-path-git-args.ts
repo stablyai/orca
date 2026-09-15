@@ -21,5 +21,6 @@ export function windowsLongPathGitArgs(
   if (platform !== 'win32' || parseWslUncPath(cwd)) {
     return []
   }
+
   return [...WINDOWS_LONG_PATH_GIT_ARGS]
 }

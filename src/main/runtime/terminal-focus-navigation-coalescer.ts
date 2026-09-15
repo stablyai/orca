@@ -69,6 +69,7 @@ export class TerminalFocusNavigationCoalescer<TResult> {
           this.pending.reject(error)
         }
       }
+
       const generation = ++this.generation
       this.pending = {
         key: job.key,
@@ -86,20 +87,25 @@ export class TerminalFocusNavigationCoalescer<TResult> {
     if (this.running) {
       return
     }
+
     this.running = true
+
     try {
       while (this.pending) {
         const job = this.pending
         this.pending = null
         this.activeKey = job.key
+
         const ctx: TerminalFocusNavigationContext = {
           isCurrent: () => job.generation === this.generation
         }
+
         try {
           if (!ctx.isCurrent()) {
             job.resolve(job.resolveSuperseded())
             continue
           }
+
           const result = await job.run(ctx)
           job.resolve(ctx.isCurrent() ? result : job.resolveSuperseded(result))
         } catch (error) {
@@ -118,6 +124,7 @@ export class TerminalFocusNavigationCoalescer<TResult> {
       }
     } finally {
       this.running = false
+
       if (this.pending) {
         void this.pump()
       }

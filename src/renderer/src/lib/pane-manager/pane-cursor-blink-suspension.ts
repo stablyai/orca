@@ -31,6 +31,7 @@ export function suspendTerminalCursorBlink(terminal: Terminal): void {
   if (parkedCursorBlink.has(terminal)) {
     return
   }
+
   parkedCursorBlink.set(terminal, terminal.options.cursorBlink === true)
   terminal.options.cursorBlink = false
 }
@@ -40,6 +41,7 @@ export function resumeTerminalCursorBlink(terminal: Terminal): void {
   if (!parkedCursorBlink.has(terminal)) {
     return
   }
+
   const restored = parkedCursorBlink.get(terminal) === true
   parkedCursorBlink.delete(terminal)
   terminal.options.cursorBlink = restored
@@ -53,8 +55,10 @@ export function resumeTerminalCursorBlink(terminal: Terminal): void {
 export function setTerminalCursorBlinkOption(terminal: Terminal, enabled: boolean): void {
   if (parkedCursorBlink.has(terminal)) {
     parkedCursorBlink.set(terminal, enabled)
+
     return
   }
+
   terminal.options.cursorBlink = enabled
 }
 

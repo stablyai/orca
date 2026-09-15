@@ -88,16 +88,21 @@ export function VaultSessionRow({
   // Computed once so the dropdown menu and the context menu never disagree.
   const deleteBlockedReason = aiVaultSessionDeleteBlockedReason(session)
   const requestDelete = (): void => onRequestDelete(session)
+
   const detailsTooltip = detailsExpanded
     ? translate('auto.components.right.sidebar.AiVaultSessionRow.hideDetails', 'Hide Details')
     : translate('auto.components.right.sidebar.AiVaultSessionRow.showDetails', 'Show Details')
+
   const startResumeDrag = useCallback(
     (event: React.DragEvent<HTMLElement>): void => {
       event.stopPropagation()
+
       if (resumeDisabled) {
         event.preventDefault()
+
         return
       }
+
       writeAiVaultSessionDragData(event.dataTransfer, {
         agent: session.agent,
         sessionId: session.sessionId,
@@ -133,9 +138,11 @@ export function VaultSessionRow({
             // bubbles their clicks here — without this, choosing Delete expands
             // the row behind the dialog.
             const target = event.target
+
             if (target instanceof Node && !event.currentTarget.contains(target)) {
               return
             }
+
             onToggleDetails()
           }}
         >

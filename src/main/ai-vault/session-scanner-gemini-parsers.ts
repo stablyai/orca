@@ -60,6 +60,7 @@ export async function parseGeminiSessionContent(
       options
     })
   }
+
   return parseGeminiJsonSessionContent(file, content, platform, options)
 }
 
@@ -71,20 +72,25 @@ function parseGeminiJsonSessionContent(
   messages?: TranscriptMessageSink
 ): AiVaultSession | null {
   const record = asRecord(JSON.parse(content) as unknown)
+
   if (!record) {
     return null
   }
+
   const accumulator = createAccumulator({
     agent: 'gemini',
     file,
     sessionId: extractString(record.sessionId) ?? sessionIdFromFileName(file.path),
     messages
   })
+
   updateTimeline(accumulator, extractString(record.startTime))
   updateTimeline(accumulator, extractString(record.lastUpdated))
+
   for (const message of arrayValue(record.messages)) {
     consumeGeminiMessage(accumulator, asRecord(message))
   }
+
   return finalizeSession(accumulator, platform, options)
 }
 
@@ -97,23 +103,31 @@ export async function parseGeminiJsonlSessionFile(
     input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
+
   return parseGeminiJsonlSessionLines({ file, lines, platform, messages })
 }
 
 function consumeGeminiJsonlRecordLine(accumulator: SessionAccumulator, line: string): void {
   const record = parseJsonObject(line)
+
   if (!record) {
     return
   }
+
   const setRecord = asRecord(record.$set)
+
   if (setRecord) {
     updateTimeline(accumulator, extractString(setRecord.lastUpdated))
+
     return
   }
+
   const sessionId = extractString(record.sessionId)
+
   if (sessionId) {
     accumulator.sessionId = sessionId
   }
+
   updateTimeline(accumulator, extractString(record.startTime))
   updateTimeline(accumulator, extractString(record.lastUpdated))
   consumeGeminiMessage(accumulator, record)
@@ -144,9 +158,11 @@ export async function parseGeminiJsonlSessionLines(args: {
   messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
   const state = createGeminiJsonlSessionResumeState(args.file, args.messages)
+
   for await (const line of args.lines) {
     state.consumeLine(line)
   }
+
   return state.finalize(args.platform, args.options)
 }
 
@@ -157,20 +173,26 @@ export function consumeGeminiMessage(
   if (!record) {
     return
   }
+
   updateTimeline(accumulator, extractString(record.timestamp))
+
   if (record.type === 'user') {
     accumulator.messageCount++
     accumulator.title ??= extractContentText(record.content)
     addPreviewContent(accumulator, 'user', record.content, record.timestamp)
+
     return
   }
+
   if (record.type === 'gemini') {
     accumulator.messageCount++
     addPreviewContent(accumulator, 'assistant', record.content, record.timestamp)
     const model = extractString(record.model)
+
     if (model) {
       accumulator.model = model
     }
+
     accumulator.totalTokens += tokenTotal(record.tokens)
   }
 }
@@ -191,12 +213,15 @@ export async function parseGeminiSessionDocument(
     consume: (state, value) => consumeGeminiMessage(state, asRecord(value)),
     signal
   })
+
   if (!parsed) {
     return null
   }
+
   const { record, state: accumulator } = parsed
   accumulator.sessionId = extractString(record.sessionId) ?? sessionIdFromFileName(file.path)
   updateTimeline(accumulator, extractString(record.startTime))
   updateTimeline(accumulator, extractString(record.lastUpdated))
+
   return finalizeSession(accumulator, platform, options)
 }

@@ -45,7 +45,9 @@ const { scheduleRuntimeGraphSync, shouldSeedCacheTimerOnInitialTitle } = vi.hois
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -57,6 +59,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -66,6 +69,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -75,6 +79,7 @@ vi.mock('./cache-timer-seeding', () => ({
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -84,9 +89,11 @@ vi.mock('react', async (importOriginal) => {
 vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn(() => {
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -94,15 +101,18 @@ vi.mock('./pty-transport', () => ({
 vi.mock('./remote-runtime-pty-transport', () => ({
   createRemoteRuntimePtyTransport: vi.fn(() => {
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
 
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -131,17 +141,21 @@ async function connectVisibleRemotePane(): Promise<{
   const captured: { callbacks: ConnectCallbacks | null } = { callbacks: null }
   transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
     captured.callbacks = callbacks
+
     return REMOTE_PTY_ID
   })
   transportFactoryQueue.push(transport)
   const deps = createDeps({ isVisibleRef: { current: true } })
+
   const binding = connectPanePty(
     createPane(1) as never,
     createManager(1) as never,
     deps as never
   ) as Binding
+
   await flushAsyncTicks(6)
   expect(captured.callbacks).not.toBeNull()
+
   return {
     transport,
     binding,

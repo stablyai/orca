@@ -19,9 +19,12 @@ export function resolvePaneAgentSessionId(
   if (state.paneForegroundAgentByPaneKey[paneKey]?.shellForeground === true) {
     return null
   }
+
   const live = state.agentStatusByPaneKey[paneKey]
+
   if (live && live.restoredUnconfirmed !== true) {
     return live.providerSession?.id ?? null
   }
+
   return state.sleepingAgentSessionsByPaneKey[paneKey]?.providerSession.id ?? null
 }

@@ -15,6 +15,7 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
   unsubs.push(
     window.api.ui.onOpenQuickOpen(() => {
       const store = useAppStore.getState()
+
       if (store.activeView === 'terminal' && store.activeWorktreeId !== null) {
         store.openModal('quick-open')
       }
@@ -40,6 +41,7 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
         if (isFloatingWorkspacePanelFocused()) {
           return
         }
+
         deleteHoveredWorkspaceImmediately(useAppStore.getState())
       })
     )
@@ -49,9 +51,11 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
     unsubs.push(
       window.api.ui.onOpenWorkspaceBoard(() => {
         const store = useAppStore.getState()
+
         if (store.activeView === 'settings') {
           return
         }
+
         store.setSidebarOpen(true)
         window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
       })
@@ -71,9 +75,11 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
   unsubs.push(
     window.api.ui.onOpenTasks(() => {
       const store = useAppStore.getState()
+
       if (store.activeView === 'settings' || !store.repos.some((repo) => isGitRepoKind(repo))) {
         return
       }
+
       store.openTaskPage()
     })
   )
@@ -81,17 +87,22 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
   unsubs.push(
     window.api.ui.onJumpToWorktreeIndex((index) => {
       const store = useAppStore.getState()
+
       // Why: while Cmd+J is open the digit chord means "activate recent row N" — main already
       // preventDefault'd it, so routing it here keeps digits out of the palette's search input.
       if (store.activeModal === 'worktree-palette') {
         emitCmdJRowIndexJump(index)
+
         return
       }
+
       if (store.activeView !== 'terminal') {
         return
       }
+
       const visibleTargets = getVisibleWorktreeShortcutTargets()
       const target = visibleTargets[index]
+
       if (target) {
         if (target.executionHostId) {
           activateAndRevealWorkspace(target.id, { executionHostId: target.executionHostId })
@@ -108,6 +119,7 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
       if (useAppStore.getState().activeModal === 'worktree-palette') {
         return
       }
+
       activateTabNumberShortcut(index)
     })
   )
@@ -115,10 +127,12 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
   unsubs.push(
     window.api.ui.onWorktreeHistoryNavigate((direction) => {
       const store = useAppStore.getState()
+
       // Why: mirror button visibility — worktree history nav is only meaningful in the terminal view, so no-op elsewhere.
       if (store.activeView !== 'terminal') {
         return
       }
+
       if (direction === 'back') {
         store.goBackWorktree()
       } else {

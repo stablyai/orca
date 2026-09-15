@@ -65,7 +65,9 @@ export async function inventorySkillFreshness(args: {
     loadSkillBundleArtifacts(args.resourceRoot),
     readGloballyUpdatableSkillLocks({ homeDir: args.homeDir, stateHome: args.stateHome })
   ])
+
   const currentByName = new Map(artifacts.manifest.skills.map((skill) => [skill.name, skill]))
+
   const discoveryArgs = {
     homeDir: args.homeDir,
     cwd: args.cwd,
@@ -74,12 +76,14 @@ export async function inventorySkillFreshness(args: {
     // launch cwd as another repo would create phantom poison placements.
     includeCwd: false
   }
+
   const roots = buildSkillDiscoverySources(discoveryArgs)
   const homeRoots = roots.filter((root) => root.sourceKind === 'home')
   const allRepoRoots = roots.filter((root) => root.sourceKind === 'repo')
   const { scanned: repoRoots, omitted: omittedRepoRoots } = boundRepositorySkillRoots(allRepoRoots)
   const pluginRoots = roots.filter((root) => root.sourceKind === 'plugin')
   const canonicalRootPath = homeRoots.find((root) => root.id === 'home-agents')?.path
+
   if (!canonicalRootPath) {
     throw new Error('Missing canonical agent skills root')
   }
@@ -97,6 +101,7 @@ export async function inventorySkillFreshness(args: {
         })
     )
   )
+
   // Why: each observation may retain the package byte ceiling while hashing;
   // launch/focus scans must not fan out across every known placement.
   const homeInstallations = (await runSkillCandidateTasks(homeTasks)).filter(
@@ -104,6 +109,7 @@ export async function inventorySkillFreshness(args: {
   )
 
   const candidateLstat = args.candidateLstat ?? ((path) => lstat(path))
+
   const repoTasks = artifacts.manifest.skills.flatMap((current) =>
     repoRoots.map(
       (root) => () =>
@@ -117,6 +123,7 @@ export async function inventorySkillFreshness(args: {
         })
     )
   )
+
   // Why: stored repositories can grow without bound. If the probe budget is
   // exhausted, one sentinel per name preserves safety without hashing more packages.
   const omittedRepoTasks =
@@ -141,15 +148,18 @@ export async function inventorySkillFreshness(args: {
               }
             })
         )
+
   const pluginScans = await Promise.all(
     pluginRoots.map(async (root) => ({
       root,
       scan: await scanKnownPluginSkillCandidates(root.path, new Set(currentByName.keys()))
     }))
   )
+
   const pluginTasks = pluginScans.flatMap(({ root, scan }) =>
     scan.candidates.flatMap((candidate) => {
       const current = currentByName.get(candidate.name)
+
       return current
         ? [
             () =>
@@ -165,6 +175,7 @@ export async function inventorySkillFreshness(args: {
         : []
     })
   )
+
   const scanIssues = pluginScans.flatMap(({ root, scan }) =>
     scan.issues.map((issue) => ({
       rootId: root.id,
@@ -172,9 +183,11 @@ export async function inventorySkillFreshness(args: {
       ...issue
     }))
   )
+
   const unsupportedInstallations = (
     await runSkillCandidateTasks([...repoTasks, ...omittedRepoTasks, ...pluginTasks])
   ).filter((installation): installation is SkillFreshnessInstallation => installation !== null)
+
   const installations = dedupeSkillFreshnessPlacements([
     ...homeInstallations,
     ...unsupportedInstallations

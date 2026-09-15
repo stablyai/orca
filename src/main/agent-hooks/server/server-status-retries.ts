@@ -32,9 +32,11 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
 
   protected clearAssistantMessageRetry(paneKey: string): void {
     const timer = this.assistantMessageRetryTimers.get(paneKey)
+
     if (!timer) {
       return
     }
+
     clearTimeout(timer)
     this.assistantMessageRetryTimers.delete(paneKey)
   }
@@ -52,15 +54,19 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     if (source !== 'codex') {
       return
     }
+
     this.codexSubagentPollScheduler.clear(original.paneKey)
+
     if (!hasCodexTranscriptSubagents(this.state, original.paneKey)) {
       return
     }
+
     this.codexSubagentPollScheduler.schedule(original.paneKey, { source, body, original })
   }
 
   private runCodexSubagentPoll(paneKey: string, poll: CodexSubagentPoll): void {
     const { source, body, original } = poll
+
     // Keep the identity check at callback time: a newer event supersedes this
     // payload even when its pane still has transcript children.
     if (
@@ -70,12 +76,16 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     ) {
       return
     }
+
     const normalized = normalizeHookPayload(this.state, source, body, this.env)
+
     if (!normalized) {
       return
     }
+
     const subagentsChanged =
       JSON.stringify(normalized.payload.subagents) !== JSON.stringify(original.payload.subagents)
+
     const next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
     this.scheduleCodexSubagentPoll(source, body, next)
   }
@@ -94,9 +104,12 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     ) {
       return
     }
+
     this.clearAssistantMessageRetry(original.paneKey)
+
     if (!discoveryReady) {
       const discovery = preparePendingGrokResultDiscovery(source, body)
+
       if (discovery) {
         // Why: slug-group discovery can outlive the bounded flush timers; its completion must drive the first retry deterministically.
         void discovery
@@ -108,9 +121,11 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
           .catch((err) => {
             console.error('[agent-hooks] Grok result discovery failed:', err)
           })
+
         return
       }
     }
+
     const timer = setTimeout(() => {
       try {
         this.assistantMessageRetryTimers.delete(original.paneKey)
@@ -119,7 +134,9 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
         console.error('[agent-hooks] assistant message retry failed:', err)
       }
     }, ASSISTANT_MESSAGE_RETRY_MS)
+
     this.assistantMessageRetryTimers.set(original.paneKey, timer)
+
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
@@ -135,6 +152,7 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     const current = this.state.lastStatusByPaneKey.get(original.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+
     if (
       !current ||
       (requireExactOriginal && current !== original) ||
@@ -144,11 +162,15 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     ) {
       return
     }
+
     const normalized = this.normalizeLocalHookPayload(source, body)
+
     if (!normalized.event?.payload.lastAssistantMessage) {
       this.scheduleAssistantMessageRetry(source, body, original, nextAttempt, requireExactOriginal)
+
       return
     }
+
     // Why: some agents POST Stop before their transcript line is flushed; discovery is event-driven, later content retries stay timed.
     this.applyNormalizedStatus(normalized.event, normalized.onAccepted)
   }

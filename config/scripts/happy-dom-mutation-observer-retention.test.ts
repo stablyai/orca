@@ -10,12 +10,15 @@ function readListenerCallbacks(target: Node): unknown[] {
   const listenersSymbol = Object.getOwnPropertySymbols(target).find(
     (candidate) => candidate.description === 'mutationListeners'
   )
+
   const listeners = listenersSymbol
     ? (target as unknown as Record<symbol, unknown>)[listenersSymbol]
     : []
+
   if (!Array.isArray(listeners)) {
     return []
   }
+
   return listeners.map((listener: { callback?: { deref: () => unknown } }) =>
     listener.callback?.deref()
   )
@@ -44,9 +47,11 @@ describe('happy-dom MutationObserver retention', () => {
     const target = document.createElement('div')
     document.body.append(target)
     let deliveries = 0
+
     const observer = new MutationObserver(() => {
       deliveries += 1
     })
+
     observer.observe(target, { childList: true, subtree: true })
 
     target.replaceChildren(document.createElement('div'))
@@ -54,11 +59,13 @@ describe('happy-dom MutationObserver retention', () => {
     expect(deliveries).toBe(1)
 
     const collectGarbage = (globalThis as { gc?: () => void }).gc
+
     if (collectGarbage) {
       for (let round = 0; round < 5; round += 1) {
         await new Promise((resolve) => setTimeout(resolve, 1))
         collectGarbage()
       }
+
       await new Promise((resolve) => setTimeout(resolve, 1))
     }
 

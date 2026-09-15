@@ -9,9 +9,11 @@ export function getFeatureWallActiveStepCopy(
   reviewActiveStep: ReviewStep | null
 ): FeatureWallActiveStepCopy | null {
   const activeStep = agentsActiveStep ?? workbenchActiveStep ?? reviewActiveStep
+
   if (!activeStep) {
     return null
   }
+
   return {
     title: activeStep.subtitle,
     description: activeStep.description,

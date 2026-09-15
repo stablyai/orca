@@ -9,6 +9,7 @@ export function handleMainWindowSkillIpc<Args extends unknown[], Result>(
     if (getTrustedUIRendererWebContents() !== event.sender) {
       throw new Error('Unauthorized skill IPC sender')
     }
+
     return listener(event, ...(args as Args))
   })
 }

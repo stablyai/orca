@@ -7,9 +7,11 @@ export function conversationCommandBlocked(
   record: AgentSessionRecord
 ): string | null {
   const items = ctx.journal.snapshot().items
+
   if (record.rewind?.phase === 'prepared' || record.rewind?.phase === 'provider-succeeded') {
     return 'agent_session_rewind:outcome-unknown'
   }
+
   if (
     record.conversationCommand?.command === 'clear' &&
     record.conversationCommand.phase === 'committed' &&
@@ -17,18 +19,22 @@ export function conversationCommandBlocked(
   ) {
     return 'This conversation has been cleared. Open the current conversation to continue.'
   }
+
   if (
     record.conversationCommand?.state === 'unknown' &&
     record.conversationCommand.phase === 'prepared'
   ) {
     return 'The previous conversation operation is unconfirmed.'
   }
+
   if (record.lease.handoffStage || record.lease.handoffOperationId) {
     return 'Wait for the session handoff to finish.'
   }
+
   if (activeStructuredAgentSessionTurnId(items)) {
     return 'Wait for the current turn to finish before using this command.'
   }
+
   if (
     items.some(
       (item) =>
@@ -38,7 +44,9 @@ export function conversationCommandBlocked(
   ) {
     return 'Resolve the pending question or approval before using this command.'
   }
+
   const backgroundTasks = ctx.adapter.backgroundTaskState?.(ctx.sessionId)
+
   if (backgroundTasks?.state === 'monitoring') {
     // Only ask for a stop the host can actually perform. A provider that
     // exposes neither a targeted nor an untargeted stop would otherwise leave
@@ -47,6 +55,7 @@ export function conversationCommandBlocked(
       ? 'Stop background tasks before using this command.'
       : 'Wait for background tasks to finish before using this command.'
   }
+
   if (
     ctx.journal
       .submissions()
@@ -54,5 +63,6 @@ export function conversationCommandBlocked(
   ) {
     return 'Resolve pending or unconfirmed messages before using this command.'
   }
+
   return null
 }

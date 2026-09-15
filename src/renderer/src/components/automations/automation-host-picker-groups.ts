@@ -26,13 +26,16 @@ export function groupAutomationHostEntriesByAuthority(
   for (const entry of ordered) {
     const authorityKey = automationAuthorityCatalogKey(entry.stableRef.authority)
     let group = byKey.get(authorityKey)
+
     if (!group) {
       group = { authorityKey, authorityLabel: entry.authorityLabel, entries: [] }
       byKey.set(authorityKey, group)
       groups.push(group)
     }
+
     group.entries.push(entry)
   }
+
   return groups
 }
 

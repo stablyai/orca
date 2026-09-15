@@ -88,6 +88,7 @@ describe('browser file channel negotiation', () => {
       fileChannelAvailability: 'unsupported' as const,
       sendFileChannelRequest: async () => ({ ok: true, result: {}, _meta: {} }) as never
     }
+
     transport.bind(sender)
     expect(transport.available).toBe(false)
     // Old host: the caller may keep its local fallback, unlike a lost or unbound channel.
@@ -99,6 +100,7 @@ describe('browser file channel negotiation', () => {
       sendFileChannelRequest: async () =>
         ({ ok: true, result: { released: true }, _meta: {} }) as never
     }
+
     transport.bind(negotiatedSender)
     expect(transport.available).toBe(true)
     expect(transport.availability).toBe('negotiated')

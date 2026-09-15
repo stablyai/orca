@@ -205,9 +205,11 @@ function createRuntime(): RuntimeStub {
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void
+
   const promise = new Promise<void>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
@@ -223,6 +225,7 @@ async function fireReadyToShow(mainWindow: MainWindowStub): Promise<void> {
   const handler = mainWindow.once.mock.calls.find(([event]) => event === 'ready-to-show')?.[1] as
     | (() => void)
     | undefined
+
   handler?.()
   await new Promise((resolve) => {
     setImmediate(resolve)
@@ -348,6 +351,7 @@ describe('attachMainWindowServices', () => {
       expect(removeHandlerMock.mock.calls.filter(([value]) => value === channel)).toHaveLength(2)
       expect(handleMock.mock.calls.filter(([value]) => value === channel)).toHaveLength(2)
     }
+
     expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledTimes(releaseCount + 1)
   })
 
@@ -359,6 +363,7 @@ describe('attachMainWindowServices', () => {
     const handler = handleMock.mock.calls.find(
       ([channel]) => channel === 'macosTccPrompts:consumePending'
     )?.[1]
+
     expect(handler?.({ sender: { id: 999 } })).toBeNull()
     expect(consumePendingTccPromptNoticeMock).not.toHaveBeenCalled()
     expect(handler?.({ sender: mainWindow.webContents })).toEqual({ claimId: 1, promptCount: 3 })
@@ -372,6 +377,7 @@ describe('attachMainWindowServices', () => {
     const handler = handleMock.mock.calls.find(
       ([channel]) => channel === 'macosTccPrompts:acknowledgePending'
     )?.[1]
+
     handler?.({ sender: { id: 999 } }, 7)
     handler?.({ sender: mainWindow.webContents }, Number.NaN)
     expect(acknowledgePendingTccPromptNoticeMock).not.toHaveBeenCalled()
@@ -388,6 +394,7 @@ describe('attachMainWindowServices', () => {
     const handler = handleMock.mock.calls.find(
       ([channel]) => channel === 'macosTccPrompts:releasePending'
     )?.[1]
+
     handler?.({ sender: { id: 999 } }, 7)
     handler?.({ sender: mainWindow.webContents }, Number.NaN)
     expect(releasePendingTccPromptNoticeMock).not.toHaveBeenCalled()
@@ -399,6 +406,7 @@ describe('attachMainWindowServices', () => {
   it('releases the owner claim when the main renderer reloads or crashes', () => {
     const mainWindow = createMainWindow()
     attachMainWindowServices(mainWindow as never, createStore(), createRuntime() as never)
+
     const handlers = (event: string): (() => void)[] =>
       mainWindow.webContents.on.mock.calls
         .filter(([name]) => name === event)
@@ -406,21 +414,27 @@ describe('attachMainWindowServices', () => {
 
     releasePendingTccPromptNoticeMock.mockClear()
     mainWindow.webContents.isLoadingMainFrame.mockReturnValue(false)
+
     for (const handler of handlers('did-start-loading')) {
       handler()
     }
+
     expect(releasePendingTccPromptNoticeMock).not.toHaveBeenCalled()
 
     mainWindow.webContents.isLoadingMainFrame.mockReturnValue(true)
+
     for (const handler of handlers('did-start-loading')) {
       handler()
     }
+
     expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledOnce()
 
     releasePendingTccPromptNoticeMock.mockClear()
+
     for (const handler of handlers('render-process-gone')) {
       handler()
     }
+
     expect(releasePendingTccPromptNoticeMock).toHaveBeenCalledOnce()
   })
 
@@ -430,6 +444,7 @@ describe('attachMainWindowServices', () => {
 
     removeHandlerMock.mockClear()
     releasePendingTccPromptNoticeMock.mockClear()
+
     for (const handler of getClosedHandlers(mainWindow.on)) {
       handler()
     }
@@ -449,9 +464,11 @@ describe('attachMainWindowServices', () => {
     attachMainWindowServices(newWindow as never, createStore(), createRuntime() as never)
 
     removeHandlerMock.mockClear()
+
     for (const handler of oldClosedHandlers) {
       handler()
     }
+
     expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:consumePending')
     expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:acknowledgePending')
     expect(removeHandlerMock).not.toHaveBeenCalledWith('macosTccPrompts:releasePending')
@@ -460,6 +477,7 @@ describe('attachMainWindowServices', () => {
     for (const handler of getClosedHandlers(newWindow.on)) {
       handler()
     }
+
     expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:consumePending')
     expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:acknowledgePending')
     expect(removeHandlerMock).toHaveBeenCalledWith('macosTccPrompts:releasePending')
@@ -545,6 +563,7 @@ describe('attachMainWindowServices', () => {
     removeHandlerMock.mockClear()
     const closedHandlers = getClosedHandlers(mainWindowOnMock)
     expect(closedHandlers.length).toBeGreaterThan(0)
+
     for (const handler of closedHandlers) {
       handler()
     }
@@ -565,6 +584,7 @@ describe('attachMainWindowServices', () => {
     attachMainWindowServices(newWindow as never, createStore(), createRuntime() as never)
 
     removeHandlerMock.mockClear()
+
     for (const handler of oldClosedHandlers) {
       handler()
     }
@@ -574,6 +594,7 @@ describe('attachMainWindowServices', () => {
     for (const handler of getClosedHandlers(newWindowOnMock)) {
       handler()
     }
+
     expect(removeHandlerMock).toHaveBeenCalledWith('app:reload')
   })
 
@@ -596,6 +617,7 @@ describe('attachMainWindowServices', () => {
   it('requests macOS media access only when the renderer asks for media', async () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { value: 'darwin' })
+
     try {
       attachMainWindowServices(createMainWindow() as never, createStore(), createRuntime() as never)
 
@@ -641,6 +663,7 @@ describe('attachMainWindowServices', () => {
     expect(removeAllListenersMock).toHaveBeenCalledWith(channel)
 
     const closedHandlers = getClosedHandlers(mainWindowOnMock)
+
     for (const handler of closedHandlers) {
       handler()
     }
@@ -712,6 +735,7 @@ describe('attachMainWindowServices', () => {
     attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
 
     runtime.setNotifier.mockClear()
+
     for (const handler of getClosedHandlers(mainWindowOnMock)) {
       handler()
     }
@@ -734,6 +758,7 @@ describe('attachMainWindowServices', () => {
     attachMainWindowServices(newWindow as never, createStore(), runtime as never)
 
     runtime.setNotifier.mockClear()
+
     for (const handler of oldClosedHandlers) {
       handler()
     }
@@ -743,6 +768,7 @@ describe('attachMainWindowServices', () => {
     for (const handler of getClosedHandlers(newWindowOnMock)) {
       handler()
     }
+
     expect(runtime.setNotifier).toHaveBeenCalledWith(null)
   })
 
@@ -758,6 +784,7 @@ describe('attachMainWindowServices', () => {
     attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
 
     expect(runtime.setNotifier).toHaveBeenCalledTimes(1)
+
     const notifier = runtime.setNotifier.mock.calls[0][0] as {
       worktreesChanged: (repoId: string) => void
       reposChanged: () => void
@@ -810,6 +837,7 @@ describe('attachMainWindowServices', () => {
     const handlers = mainWindow.webContents.on.mock.calls
       .filter(([event]) => event === 'render-process-gone')
       .map(([, handler]) => handler as () => void)
+
     for (const handler of handlers) {
       handler()
     }
@@ -836,18 +864,22 @@ describe('attachMainWindowServices', () => {
         }
       ) => Promise<{ tabId: string; title?: string }>
     }
+
     const revealPromise = notifier.revealTerminalSession('wt-1', {
       ptyId: 'pty-1',
       title: 'SSH tmux',
       cwd: '/repo/packages/web',
       viewMode: 'chat'
     })
+
     const sentPayload = sendMock.mock.calls.find(
       ([channel]) => channel === 'ui:createTerminal'
     )?.[1]
+
     const handler = onMock.mock.calls.find(
       ([channel]) => channel === 'terminal:tabCreateReply'
     )?.[1]
+
     expect(sentPayload).toMatchObject({ cwd: '/repo/packages/web', viewMode: 'chat' })
 
     handler?.(
@@ -883,6 +915,7 @@ describe('attachMainWindowServices', () => {
         }
       ) => Promise<unknown>
     }
+
     const opts = {
       ptyId: 'pty-worker',
       tabId: 'tab-worker',
@@ -892,11 +925,14 @@ describe('attachMainWindowServices', () => {
         incarnationId: 'inc-worker'
       }
     }
+
     const mismatch = notifier.revealTerminalSession('worktree-1', opts)
     const mismatchPayload = sendMock.mock.calls.at(-1)?.[1]
+
     const mismatchHandler = onMock.mock.calls.findLast(
       ([channel]) => channel === 'terminal:tabCreateReply'
     )?.[1]
+
     mismatchHandler?.(
       { sender: mainWindow.webContents },
       {
@@ -914,15 +950,18 @@ describe('attachMainWindowServices', () => {
 
     const exact = notifier.revealTerminalSession('worktree-1', opts)
     const exactPayload = sendMock.mock.calls.at(-1)?.[1]
+
     const exactHandler = onMock.mock.calls.findLast(
       ([channel]) => channel === 'terminal:tabCreateReply'
     )?.[1]
+
     const identity = {
       worktreeId: 'worktree-1',
       tabId: 'tab-worker',
       leafId: 'leaf-worker',
       ptyId: 'pty-worker'
     }
+
     exactHandler?.(
       { sender: mainWindow.webContents },
       { requestId: exactPayload.requestId, tabId: 'tab-worker', identity }
@@ -939,6 +978,7 @@ describe('attachMainWindowServices', () => {
     const store = createStore()
 
     vi.useFakeTimers()
+
     try {
       attachMainWindowServices(mainWindow as never, store, createRuntime() as never)
 

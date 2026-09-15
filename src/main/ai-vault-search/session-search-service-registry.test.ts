@@ -46,10 +46,12 @@ describe('session search service registry', () => {
   it('searches indexed data by default, drops legacy options and suppresses unsolicited diagnostics', async () => {
     const service = fakeSearchService()
     setSessionSearchService(service)
+
     const result = await searchSessionService(
       { query: 'needle', tier: 'conversation', refresh: true },
       'ipc'
     )
+
     expect(service.reconcile).not.toHaveBeenCalled()
     expect(service.search).toHaveBeenCalledWith({ query: 'needle', limit: 20 })
     expect(result).not.toHaveProperty('debug')
@@ -68,10 +70,12 @@ describe('session search service registry', () => {
         })
     )
     setSessionSearchService(service)
+
     const result = searchSessionService(
       { query: 'needle', freshness: 'wait-until-current' },
       'runtime'
     )
+
     await Promise.resolve()
     expect(service.search).not.toHaveBeenCalled()
     release()
@@ -89,10 +93,12 @@ describe('session search service registry', () => {
         })
     )
     setSessionSearchService(service)
+
     const result = searchSessionService(
       { query: 'needle', freshness: 'wait-until-current' },
       'relay'
     )
+
     await vi.advanceTimersByTimeAsync(4_999)
     expect(service.search).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
@@ -113,6 +119,7 @@ describe('session search service registry', () => {
       searchSessionService({ query: 'needle', freshness: 'wait-until-current' }, 'ipc')
     ).rejects.toThrow('cannot reconcile')
     expect(service.search).not.toHaveBeenCalled()
+
     for (const reason of ['disabled', 'not-ready'] as const) {
       service.search.mockResolvedValue({ kind: 'unavailable', reason })
       expect(await searchSessionService({ query: 'needle' }, 'ipc')).toEqual({

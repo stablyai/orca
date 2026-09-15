@@ -98,6 +98,7 @@ describe('#10142 close confirmation policy is the same for keyboard and mouse', 
       join(__dirname, '../terminal-pane/use-terminal-pane-close-actions.ts'),
       'utf8'
     )
+
     const handler = source.slice(source.indexOf('const handleRequestClosePane'))
     // The shared probe, not a direct inspect: the pane path asks the same question as the tab
     // guard, and routing both through one measurement is what stops them drifting on what an
@@ -110,6 +111,7 @@ describe('#10142 close confirmation policy is the same for keyboard and mouse', 
   // Control: the harness does observe a guard when one exists — pinning blocks the same mouse close.
   it('mouse close routes a pinned tab through its confirmation guard', () => {
     const state = stateWithBusyTerminalTab(closeTab)
+
     ;(state.unifiedTabsByWorktree as Record<string, { isPinned: boolean }[]>)[
       'wt-1'
     ]![0]!.isPinned = true

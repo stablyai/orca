@@ -10,8 +10,10 @@ describe('setBoundedScopeCacheEntry', () => {
     setBoundedScopeCacheEntry(cache, 'keep', 1)
 
     const total = NATIVE_CHAT_COMPOSER_SCOPE_CACHE_MAX + 20
+
     for (let i = 0; i < total; i += 1) {
       setBoundedScopeCacheEntry(cache, `scope-${i}`, i)
+
       if (i % 10 === 0) {
         setBoundedScopeCacheEntry(cache, 'keep', 1)
       }

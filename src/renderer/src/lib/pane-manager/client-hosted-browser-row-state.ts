@@ -25,13 +25,16 @@ export type ClientHostedBrowserRowSelection = {
 const EMPTY_ROWS: readonly ClientHostedBrowserRow[] = []
 
 const rowsByWorktreeId = new Map<string, readonly ClientHostedBrowserRow[]>()
+
 let selection: ClientHostedBrowserRowSelection | null = null
 
 const snapshotListeners = new Set<() => void>()
+
 let version = 0
 
 function subscribe(listener: () => void): () => void {
   snapshotListeners.add(listener)
+
   return () => {
     snapshotListeners.delete(listener)
   }
@@ -51,6 +54,7 @@ function getNoActiveRowServerSnapshot(): string | null {
 
 function notifyChange(): void {
   version += 1
+
   for (const listener of snapshotListeners) {
     listener()
   }
@@ -60,7 +64,9 @@ function dropSelectionForMissingRow(): void {
   if (!selection) {
     return
   }
+
   const rows = rowsByWorktreeId.get(selection.worktreeId) ?? EMPTY_ROWS
+
   if (!rows.some((row) => row.browserPageId === selection?.browserPageId)) {
     selection = null
   }
@@ -72,6 +78,7 @@ export function applyClientHostedBrowserRows(event: ClientHostedBrowserRowsEvent
   } else {
     rowsByWorktreeId.set(event.worktreeId, event.rows)
   }
+
   dropSelectionForMissingRow()
   notifyChange()
 }
@@ -80,11 +87,13 @@ export function hydrateClientHostedBrowserRows(
   events: readonly ClientHostedBrowserRowsEvent[]
 ): void {
   rowsByWorktreeId.clear()
+
   for (const event of events) {
     if (event.rows.length > 0) {
       rowsByWorktreeId.set(event.worktreeId, event.rows)
     }
   }
+
   dropSelectionForMissingRow()
   notifyChange()
 }
@@ -95,6 +104,7 @@ export function getClientHostedBrowserRows(worktreeId: string): readonly ClientH
 
 export function useClientHostedBrowserRows(worktreeId: string): readonly ClientHostedBrowserRow[] {
   useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+
   return getClientHostedBrowserRows(worktreeId)
 }
 
@@ -109,6 +119,7 @@ export function clearClientHostedBrowserRowSelection(): void {
   if (!selection) {
     return
   }
+
   selection = null
   notifyChange()
 }
@@ -119,6 +130,7 @@ export function getClientHostedBrowserRowSelection(): ClientHostedBrowserRowSele
 
 export function useClientHostedBrowserRowSelection(): ClientHostedBrowserRowSelection | null {
   useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+
   return selection
 }
 
@@ -134,7 +146,9 @@ export function isClientHostedBrowserRowSelectionLive(
   if (!candidate) {
     return false
   }
+
   const group = groups.find((entry) => entry.id === candidate.groupId)
+
   return (
     group !== undefined && (group.activeTabId ?? null) === candidate.groupActiveTabIdAtSelection
   )
@@ -161,6 +175,7 @@ export function resolveActiveClientHostedBrowserRowId(
   if (!candidate || candidate.worktreeId !== scope.worktreeId) {
     return null
   }
+
   return isClientHostedBrowserRowSelectionLive(candidate, [
     { id: scope.groupId, activeTabId: scope.groupActiveTabId }
   ])
@@ -172,6 +187,7 @@ export function useActiveClientHostedBrowserRowId(
   scope: ClientHostedBrowserRowStripScope
 ): string | null {
   const { worktreeId, groupId, groupActiveTabId } = scope
+
   // Why snapshot the derived id and not the selection: every strip subscribes, so a row title or
   // loading push must not re-render strips whose active state did not move.
   const getActiveRowId = useCallback(
@@ -179,5 +195,6 @@ export function useActiveClientHostedBrowserRowId(
       resolveActiveClientHostedBrowserRowId(selection, { worktreeId, groupId, groupActiveTabId }),
     [groupActiveTabId, groupId, worktreeId]
   )
+
   return useSyncExternalStore(subscribe, getActiveRowId, getNoActiveRowServerSnapshot)
 }

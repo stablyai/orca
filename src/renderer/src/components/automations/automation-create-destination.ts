@@ -88,6 +88,7 @@ export function automationCreateUpdateRequiredAuthorityLabels(
     .filter((entry) => !automationCreateHostEligible(entry))
     .filter((entry) => automationHostRecoveryActions(entry).authority === 'update-server')
     .map((entry) => entry.authorityLabel)
+
   return [...new Set(labels)]
 }
 
@@ -97,12 +98,15 @@ export function resolveAutomationCreateDestination(
   if (!entry) {
     return { status: 'choice-required', reason: 'unselected' }
   }
+
   if (entry.kind === 'orphan') {
     return { status: 'choice-required', reason: 'orphan' }
   }
+
   if (!automationCreateHostEligible(entry)) {
     return { status: 'choice-required', reason: 'unavailable' }
   }
+
   return {
     status: 'ready',
     authority: entry.owner.authority,
@@ -121,9 +125,11 @@ export function preselectAutomationCreateHost(
   activeWorkspaceStableKey: string | null
 ): AutomationHostCatalogEntry | null {
   const key = selectedStableKey ?? activeWorkspaceStableKey
+
   if (!key) {
     return null
   }
+
   return entries.find((entry) => entry.stableKey === key) ?? null
 }
 
@@ -138,9 +144,11 @@ export function revalidateAutomationCreateDestination(
 ): AutomationCreateDestinationResolution | { status: 'stale'; entry: AutomationHostCatalogEntry } {
   const current = entries.find((entry) => entry.stableKey === captured.entry.stableKey)
   const resolved = resolveAutomationCreateDestination(current)
+
   if (resolved.status !== 'ready') {
     return resolved
   }
+
   return isSameAutomationOwner(destinationOwner(resolved), destinationOwner(captured))
     ? resolved
     : { status: 'stale', entry: resolved.entry }
@@ -158,22 +166,27 @@ export function soleAutomationCreateHost(
   if (!hydration.runtimeCatalogSettled || !hydration.desktopSshHydrated) {
     return null
   }
+
   const eligible = entries.filter(automationCreateHostEligible)
+
   return eligible.length === 1 ? (eligible[0] ?? null) : null
 }
 
 /** The catalog host a workspace's execution host names, for the All-hosts pre-fill. */
 export function automationCreateHostStableKey(hostId: string | null | undefined): string | null {
   const host = parseExecutionHostId(hostId)
+
   if (!host) {
     return null
   }
+
   if (host.kind === 'runtime') {
     return hostStableKey({
       authority: { kind: 'runtime', environmentId: host.environmentId },
       selector: { kind: 'self' }
     })
   }
+
   // A desktop SSH workspace is still desktop-stored; only the selector differs.
   return hostStableKey({
     authority: { kind: 'desktop' },
@@ -199,10 +212,13 @@ export function automationCreateProjectMismatch(
 ): boolean {
   const table = tables.get(automationAuthorityCatalogKey(destination.authority))
   const connectionId = table ? repoConnectionIdIn(table)(projectId) : undefined
+
   if (connectionId === undefined) {
     return true
   }
+
   const selector = destination.destination.selector
+
   return selector.kind === 'ssh' ? connectionId !== selector.targetId : connectionId !== null
 }
 

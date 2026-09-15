@@ -22,6 +22,7 @@ import { getShellReadyWrapperRoot } from './shell-ready'
 async function importFreshShellReady() {
   vi.resetModules()
   const module = await import('./shell-ready')
+
   return {
     ...module,
     getShellReadyLaunchConfig: (shell: string) =>
@@ -32,9 +33,13 @@ async function importFreshShellReady() {
 }
 
 const describePosix = process.platform === 'win32' ? describe.skip : describe
+
 const hasZsh = process.platform !== 'win32' && spawnSync('zsh', ['--version']).status === 0
+
 const itWithZsh = hasZsh ? it : it.skip
+
 const FISH = resolveFishBinary()
+
 const itWithFish = FISH.available ? it : it.skip
 
 const SHELL_READY_MARKER_OUTPUT = '\x1b]777;orca-shell-ready\x07'
@@ -60,6 +65,7 @@ async function runInteractiveZshLogin(args: {
   isDone: (output: string) => boolean
 }): Promise<string> {
   const pty = await import('node-pty')
+
   // Why: -o noglobalrcs skips /etc/zsh/*, whose insecure fpath dirs make compinit block on a [y/n] prompt before the marker fires.
   const proc = pty.spawn('zsh', ['-o', 'noglobalrcs', '-l'], {
     name: 'xterm-256color',
@@ -76,14 +82,18 @@ async function runInteractiveZshLogin(args: {
       ORCA_SHELL_FEATURES: 'ready'
     }
   })
+
   let output = ''
   let settle = (): void => {}
+
   const done = new Promise<void>((resolve) => {
     settle = resolve
   })
+
   const deadline = setTimeout(settle, 10_000)
   proc.onData((chunk) => {
     output += chunk
+
     if (args.isDone(output)) {
       settle()
     }
@@ -91,6 +101,7 @@ async function runInteractiveZshLogin(args: {
   await done
   clearTimeout(deadline)
   proc.kill()
+
   return output
 }
 
@@ -100,6 +111,7 @@ async function runInteractiveZshRc(args: {
   isDone: (output: string) => boolean
 }): Promise<string> {
   const pty = await import('node-pty')
+
   // Why: -o noglobalrcs skips /etc/zsh/* so the CI runner's global compinit can't block on an insecure-directory [y/n] prompt.
   const proc = pty.spawn('zsh', ['-o', 'noglobalrcs', '-i'], {
     name: 'xterm-256color',
@@ -114,14 +126,18 @@ async function runInteractiveZshRc(args: {
       ORCA_SHELL_FEATURES: 'ready'
     }
   })
+
   let output = ''
   let settle = (): void => {}
+
   const done = new Promise<void>((resolve) => {
     settle = resolve
   })
+
   const deadline = setTimeout(settle, 10_000)
   proc.onData((chunk) => {
     output += chunk
+
     if (args.isDone(output)) {
       settle()
     }
@@ -129,6 +145,7 @@ async function runInteractiveZshRc(args: {
   await done
   clearTimeout(deadline)
   proc.kill()
+
   return output
 }
 
@@ -156,11 +173,13 @@ describePosix('daemon shell-ready launch config', () => {
     } else {
       process.env.ORCA_USER_DATA_PATH = previousUserDataPath
     }
+
     if (previousOrcaOrigZdotdir === undefined) {
       delete process.env.ORCA_ORIG_ZDOTDIR
     } else {
       process.env.ORCA_ORIG_ZDOTDIR = previousOrcaOrigZdotdir
     }
+
     rmSync(userDataPath, { recursive: true, force: true })
     vi.restoreAllMocks()
   })
@@ -241,6 +260,7 @@ describePosix('daemon shell-ready launch config', () => {
       const sentinel = join(tempHome, 'launched')
       const erased = join(tempHome, 'marker-erased')
       const stillRegistered = join(tempHome, 'marker-still-registered')
+
       try {
         mkdirSync(join(tempHome, '.config', 'fish'), { recursive: true })
         // Why: mimic a slow prompt integration (Starship) — init work before the first prompt.
@@ -249,6 +269,7 @@ describePosix('daemon shell-ready launch config', () => {
           'command sleep 0.2\nfunction fish_prompt\n  printf "> "\nend\n'
         )
         const pty = await import('node-pty')
+
         const proc = pty.spawn('fish', config.args ?? [], {
           name: 'xterm-256color',
           cols: 80,
@@ -261,6 +282,7 @@ describePosix('daemon shell-ready launch config', () => {
             ...config.env
           }
         })
+
         let output = ''
         let scannedOutput = ''
         const startupScanState = createShellStartupOutputScanState()
@@ -268,10 +290,13 @@ describePosix('daemon shell-ready launch config', () => {
         let erasureProbeWritten = false
         let queryCarry = ''
         let settle = (): void => {}
+
         const done = new Promise<void>((resolve) => {
           settle = resolve
         })
+
         const deadline = setTimeout(settle, 10_000)
+
         // Why: settling on the first sentinel observes only one post-marker prompt,
         // so a marker that never erased itself still looks single. Drive a second
         // command and settle on its result, which also probes the erase directly.
@@ -281,12 +306,15 @@ describePosix('daemon shell-ready launch config', () => {
             proc.write(
               `functions -q __orca_shell_ready_marker; and touch ${stillRegistered}; or touch ${erased}\n`
             )
+
             return
           }
+
           if (erasureProbeWritten && (existsSync(erased) || existsSync(stillRegistered))) {
             settle()
           }
         }, 50)
+
         proc.onData((chunk) => {
           output += chunk
           scannedOutput += scanShellStartupOutput(startupScanState, chunk).output
@@ -296,6 +324,7 @@ describePosix('daemon shell-ready launch config', () => {
           const carriedLength = queryCarry.length
           const scan = queryCarry + chunk
           queryCarry = scan.slice(-QUERY_CARRY_LEN)
+
           for (const [query, reply] of TERMINAL_QUERY_REPLIES) {
             for (
               let at = scan.indexOf(query);
@@ -309,6 +338,7 @@ describePosix('daemon shell-ready launch config', () => {
               }
             }
           }
+
           if (!commandWritten && output.includes(SHELL_READY_MARKER_OUTPUT)) {
             commandWritten = true
             // Why: mirror PostReadyFlushGate — flush shortly after the post-marker prompt draw.
@@ -346,6 +376,7 @@ describePosix('daemon shell-ready launch config', () => {
     const previousHome = process.env.HOME
     process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh'
     process.env.HOME = '/Users/alice'
+
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
@@ -356,6 +387,7 @@ describePosix('daemon shell-ready launch config', () => {
       } else {
         process.env.ZDOTDIR = previousZdotdir
       }
+
       if (previousHome === undefined) {
         delete process.env.HOME
       } else {
@@ -372,6 +404,7 @@ describePosix('daemon shell-ready launch config', () => {
     process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh'
     process.env.ORCA_ORIG_ZDOTDIR = userZdotdir
     process.env.HOME = userDataPath
+
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
@@ -382,11 +415,13 @@ describePosix('daemon shell-ready launch config', () => {
       } else {
         process.env.ZDOTDIR = previousZdotdir
       }
+
       if (previousOrigZdotdir === undefined) {
         delete process.env.ORCA_ORIG_ZDOTDIR
       } else {
         process.env.ORCA_ORIG_ZDOTDIR = previousOrigZdotdir
       }
+
       if (previousHome === undefined) {
         delete process.env.HOME
       } else {
@@ -402,6 +437,7 @@ describePosix('daemon shell-ready launch config', () => {
     delete process.env.ZDOTDIR
     process.env.ORCA_ORIG_ZDOTDIR = '/some/other/orca/shell-ready/zsh'
     process.env.HOME = '/Users/alice'
+
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
@@ -412,11 +448,13 @@ describePosix('daemon shell-ready launch config', () => {
       } else {
         process.env.ZDOTDIR = previousZdotdir
       }
+
       if (previousOrigZdotdir === undefined) {
         delete process.env.ORCA_ORIG_ZDOTDIR
       } else {
         process.env.ORCA_ORIG_ZDOTDIR = previousOrigZdotdir
       }
+
       if (previousHome === undefined) {
         delete process.env.HOME
       } else {
@@ -437,6 +475,7 @@ describePosix('daemon shell-ready launch config', () => {
     expect(zshenv.indexOf('builtin export ZDOTDIR=')).toBeLessThan(
       zshenv.indexOf('builtin source -- "$_orca_user_zshenv"')
     )
+
     // Why nothing else: zsh reads .zprofile, .zshrc and .zlogin through ZDOTDIR,
     // which is the user's own again by the time it looks for them.
     for (const name of ['.zprofile', '.zshrc', '.zlogin']) {
@@ -478,12 +517,14 @@ describePosix('daemon shell-ready launch config', () => {
           ''
         ].join('\n')
       )
+
       try {
         const output = await runInteractiveZshLogin({
           tempHome,
           wrapperZdotdir: config.env.ZDOTDIR,
           isDone: (current) => current.includes(SHELL_READY_MARKER_OUTPUT)
         })
+
         expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
       } finally {
         rmSync(tempHome, { recursive: true, force: true })
@@ -509,6 +550,7 @@ describePosix('daemon shell-ready launch config', () => {
           ''
         ].join('\n')
       )
+
       try {
         const output = await runInteractiveZshLogin({
           tempHome,
@@ -516,6 +558,7 @@ describePosix('daemon shell-ready launch config', () => {
           isDone: (current) =>
             current.includes(SHELL_READY_MARKER_OUTPUT) && current.includes(userHookOutput)
         })
+
         // Why: the marker widget chains to the prior widget, so a user-registered azhw dispatcher must keep dispatching.
         expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
         expect(output).toContain(userHookOutput)
@@ -548,12 +591,14 @@ describePosix('daemon shell-ready launch config', () => {
           ''
         ].join('\n')
       )
+
       try {
         const output = await runInteractiveZshRc({
           zdotdir,
           isDone: (current) =>
             current.includes(SHELL_READY_MARKER_OUTPUT) && current.includes(userHookOutput)
         })
+
         expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
         expect(output).toContain(userHookOutput)
         expect(output.indexOf(SHELL_READY_MARKER_OUTPUT)).toBeLessThan(
@@ -579,12 +624,16 @@ describePosix('daemon shell-ready launch config', () => {
     const zshrc = readFileSync(join(getShellReadyWrapperRoot(), 'zsh', '.zshenv'), 'utf8')
     const zlogin = zshrc
     const bashRc = readFileSync(join(getShellReadyWrapperRoot(), 'bash', 'rcfile'), 'utf8')
+
     const restoreLine =
       '[[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"'
+
     const mimoRestoreLine =
       '[[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"'
+
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
+
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
     const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
     expect(zshrc).toContain(restoreLine)
@@ -608,6 +657,7 @@ describePosix('daemon shell-ready launch config', () => {
     expect(zshrc).toContain(ompWrapperLine)
     expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)
+
     for (const wrapperFile of [zshrc, zlogin, bashRc]) {
       expect(wrapperFile).not.toContain('prime-agent()')
       expect(wrapperFile).not.toContain('__orca_prime_agent')
@@ -621,6 +671,7 @@ describePosix('daemon shell-ready launch config', () => {
     const previousZdotdir = process.env.ZDOTDIR
     const userZdotdir = makeUserZdotdir(userDataPath, '.config', 'zsh')
     process.env.ZDOTDIR = userZdotdir
+
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
@@ -640,6 +691,7 @@ describePosix('daemon shell-ready launch config', () => {
     const previousHome = process.env.HOME
     process.env.ZDOTDIR = '/some/other/orca/shell-ready/zsh/'
     process.env.HOME = '/Users/alice'
+
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
@@ -650,6 +702,7 @@ describePosix('daemon shell-ready launch config', () => {
       } else {
         process.env.ZDOTDIR = previousZdotdir
       }
+
       if (previousHome === undefined) {
         delete process.env.HOME
       } else {
@@ -664,6 +717,7 @@ describePosix('daemon shell-ready launch config', () => {
     const previousHome = process.env.HOME
     process.env.ZDOTDIR = '/'
     process.env.HOME = '/Users/alice'
+
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')
@@ -674,6 +728,7 @@ describePosix('daemon shell-ready launch config', () => {
       } else {
         process.env.ZDOTDIR = previousZdotdir
       }
+
       if (previousHome === undefined) {
         delete process.env.HOME
       } else {
@@ -687,6 +742,7 @@ describePosix('daemon shell-ready launch config', () => {
     const previousZdotdir = process.env.ZDOTDIR
     const userZdotdir = makeUserZdotdir(userDataPath, 'shell-ready', 'zsh-custom')
     process.env.ZDOTDIR = userZdotdir
+
     try {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
       const config = getShellReadyLaunchConfig('/bin/zsh')

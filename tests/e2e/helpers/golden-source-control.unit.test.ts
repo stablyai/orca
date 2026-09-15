@@ -15,8 +15,10 @@ const { realpathSyncNativeMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('node:child_process', () => ({ execFileSync: vi.fn() }))
+
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
+
   return {
     ...actual,
     realpathSync: Object.assign(
@@ -30,6 +32,7 @@ vi.mock('node:fs', async (importOriginal) => {
 const execFileSyncMock = vi.mocked(execFileSync)
 
 const WINDOWS_SHORT_WORKTREE = 'C:\\Users\\RUNNER~1\\AppData\\Local\\Temp\\e2e-golden-file-save-1'
+
 const WINDOWS_LONG_WORKTREE = 'C:\\Users\\runneradmin\\AppData\\Local\\Temp\\e2e-golden-file-save-1'
 
 type GitCall = { args: string[]; cwd?: string }
@@ -48,6 +51,7 @@ const gitArgsFor = (): string[][] => gitCallsFor().map((call) => call.args)
 const captureThrow = (run: () => void): unknown => {
   try {
     run()
+
     return undefined
   } catch (error) {
     return error
@@ -59,6 +63,7 @@ const worktreeAddTargets = (): { branchName: string; worktreePath: string } => {
   const addArgs = gitArgsFor().find((args) => args[0] === 'worktree' && args[1] === 'add')
   expect(addArgs).toBeDefined()
   const [, , worktreePath, , branchName] = addArgs as string[]
+
   return { branchName, worktreePath }
 }
 
@@ -115,6 +120,7 @@ describe('createGoldenWorktree', () => {
       if (args[0] === 'config' && args[1] === 'extensions.worktreeConfig') {
         throw setupError
       }
+
       return ''
     }) as unknown as typeof execFileSync)
 
@@ -136,9 +142,11 @@ describe('createGoldenWorktree', () => {
       if (args[0] === 'config' && args[1] === 'extensions.worktreeConfig') {
         throw setupError
       }
+
       if (args[0] === 'branch') {
         throw new Error('branch is still checked out')
       }
+
       return ''
     }) as unknown as typeof execFileSync)
 

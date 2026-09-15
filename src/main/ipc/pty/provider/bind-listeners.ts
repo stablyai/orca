@@ -34,6 +34,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       ) {
         return
       }
+
       session.mainWindow.webContents.send('pty:writeUnavailable', { id: payload.id })
     }) ?? null
   )
@@ -48,8 +49,10 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           payload.scanSeedAnsi,
           payload.mode2031PendingSubscribe
         )
+
         return
       }
+
       if (payload.kind === 'dataGap') {
         providerSnapshotRequiredPtys.add(payload.id)
         session.runtime?.notePtyDataGap(payload.id, payload.sequenceChars ?? payload.droppedChars)
@@ -58,8 +61,10 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           'hidden-drop',
           session.runtime?.getPtyOutputSequence(payload.id)
         )
+
         return
       }
+
       session.runtime?.emitDaemonPtyTransientFact(payload.id, payload.fact)
     }) ?? null
   )
@@ -70,6 +75,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
   setLocalDataUnsub(
     localProvider.onData((payload) => {
       const rawLength = payload.sequenceChars ?? payload.data.length
+
       const outputSeq = isLocalProvider
         ? session.runtime?.getPtyOutputSequence(payload.id)
         : session.runtime?.onPtyData(
@@ -79,6 +85,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
             rawLength,
             payload.transformed
           )
+
       session.acceptPtyDataForRenderer(payload, outputSeq)
     })
   )
@@ -87,9 +94,11 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       if (!isCurrentPtyExit(payload)) {
         return
       }
+
       if (session.consumeSyntheticKillExit(payload.id)) {
         return
       }
+
       if (!isLocalProvider) {
         clearProviderPtyState(payload.id)
         ptyOwnership.delete(payload.id)
@@ -99,6 +108,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           ...(payload.cause ? { cause: payload.cause } : {})
         })
       }
+
       // Why not the whole payload: the exit cause is a main-process fact for the
       // runtime's records; the renderer's pty:exit contract stays as it was.
       session.sendPtyExitToRenderer({

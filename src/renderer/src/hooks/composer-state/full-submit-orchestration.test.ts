@@ -9,9 +9,11 @@ import {
 
 function deferred<T>() {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((next) => {
     resolve = next
   })
+
   return { promise, resolve }
 }
 
@@ -21,6 +23,7 @@ describe('useFullSubmitOrchestration cancellation', () => {
     let cancelled = false
     const executeFullCreation = vi.fn<FullSubmitOrchestrationInput['executeFullCreation']>()
     const setCreating = vi.fn<FullSubmitOrchestrationInput['setCreating']>()
+
     const state = {
       disabledTuiAgents: [],
       executeFullCreation,
@@ -51,6 +54,7 @@ describe('useFullSubmitOrchestration cancellation', () => {
       tuiAgent: 'claude',
       workspaceSeedName: 'workspace'
     } satisfies FullSubmitOrchestrationInput
+
     const hook = renderHook(() => useFullSubmitOrchestration(state))
 
     let submission!: Promise<void>

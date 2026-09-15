@@ -55,6 +55,7 @@ export class RelayControlOrigin {
     if (!this.activeControl) {
       throw new Error('relay_control_not_active')
     }
+
     return this.activeControl
   }
 
@@ -86,14 +87,17 @@ export class RelayControlOrigin {
     if (assignment.cellUrl !== this.cellUrl || assignment.assignmentEpoch < this.assignmentEpoch) {
       throw new Error('relay_assignment_origin_mismatch')
     }
+
     this.assignment = assignment
   }
 
   get pendingRequestCount(): number {
     let count = 0
+
     for (const control of this.controls) {
       count += control.pendingRequestCount
     }
+
     return count
   }
 
@@ -107,15 +111,19 @@ export class RelayControlOrigin {
     if (assignment.cellUrl !== this.cellUrl || !this.controlResumeSecret || this.generation <= 0) {
       throw new Error('relay_control_rebind_origin_mismatch')
     }
+
     const previous = this.activeControl
+
     const { control, ack } = await this.openControl({
       relayJwt,
       assignmentEpoch: assignment.assignmentEpoch,
       previousGeneration: this.generation,
       controlResumeSecret: this.controlResumeSecret
     })
+
     this.activate(control, ack)
     this.updateAssignment(assignment)
+
     // Why: the resumed control owns the same server generation and splices;
     // the predecessor remains only long enough for any idempotent reply in flight.
     if (previous && previous.pendingRequestCount === 0) {
@@ -144,17 +152,23 @@ export class RelayControlOrigin {
     if (this.closed) {
       return
     }
+
     this.closed = true
+
     for (const timer of this.retiredControlTimers.values()) {
       clearTimeout(timer)
     }
+
     this.retiredControlTimers.clear()
+
     for (const control of this.controls) {
       control.closeNow(hostCloseReason)
     }
+
     this.controls.clear()
     this.activeControl = null
     this.observedOpens.clear()
+
     try {
       await this.transport.stop()
     } finally {
@@ -194,10 +208,12 @@ export class RelayControlOrigin {
       onClose: (code) => {
         this.controls.delete(control)
         const timer = this.retiredControlTimers.get(control)
+
         if (timer) {
           clearTimeout(timer)
           this.retiredControlTimers.delete(control)
         }
+
         if (this.activeControl === control) {
           this.activeControl = null
           this.options.onClose(this, code)
@@ -206,6 +222,7 @@ export class RelayControlOrigin {
       createSocket: this.options.createControlSocket
     })
     this.controls.add(control)
+
     try {
       return { control, ack: await control.connect() }
     } catch (error) {
@@ -217,10 +234,12 @@ export class RelayControlOrigin {
 
   private closeRetiredControl(control: RelayControlClient): void {
     const timer = this.retiredControlTimers.get(control)
+
     if (timer) {
       clearTimeout(timer)
       this.retiredControlTimers.delete(control)
     }
+
     if (this.activeControl !== control && this.controls.delete(control)) {
       control.closeNow()
     }
@@ -234,17 +253,21 @@ export class RelayControlOrigin {
     if (!this.controls.has(control) || !control.isLive()) {
       throw new Error('relay_control_closed_before_activation')
     }
+
     if (ack.generation <= 0) {
       throw new Error('invalid_relay_generation')
     }
+
     this.transport.setGeneration(ack.generation)
     this.generation = ack.generation
     this.controlResumeSecret = ack.controlResumeSecret
     this.leaseExpiresAt = ack.leaseExpiresAt
     this.activeControl = control
+
     for (const connectionId of ack.activeConnIds) {
       this.options.onConnectionOwned(connectionId, this)
     }
+
     this.replayPendingConnections(ack)
   }
 
@@ -253,15 +276,19 @@ export class RelayControlOrigin {
   // the phone waits out its attach deadline and is closed as if the host were offline.
   private replayPendingConnections(ack: RelayHostHelloAckMessage): void {
     const active = new Set(ack.activeConnIds)
+
     for (const pending of ack.pendingConns) {
       if (active.has(pending.connId) || this.transport.hasConnection(pending.connId)) {
         continue
       }
+
       const message = this.pendingConnectionOpen(pending)
+
       if (!message) {
         console.warn('[relay] pending connection not replayable: relay stated no kind/device')
         continue
       }
+
       // Not remembered: a replay must not extend the observed entry's own life.
       this.dialConnection(message)
     }
@@ -276,9 +303,11 @@ export class RelayControlOrigin {
     const observed = this.observedOpens.get(pending.connId)?.message
     const kind = pending.kind ?? observed?.kind
     const relayDeviceId = pending.relayDeviceId ?? observed?.relayDeviceId
+
     if (!kind || !relayDeviceId) {
       return null
     }
+
     return {
       type: 'conn-open',
       connId: pending.connId,
@@ -295,6 +324,7 @@ export class RelayControlOrigin {
     if (this.closed) {
       return
     }
+
     this.rememberOpen(message)
     this.dialConnection(message)
   }
@@ -308,21 +338,26 @@ export class RelayControlOrigin {
 
   private rememberOpen(message: RelayConnectionOpenMessage): void {
     const now = Date.now()
+
     for (const [connId, entry] of this.observedOpens) {
       // Past the attach deadline the cell has already failed the connection.
       if (now - entry.seenAt > RELAY_HOST_ATTACH_DEADLINE_MS) {
         this.observedOpens.delete(connId)
       }
     }
+
     // The contract caps a session at 8 connections; the surplus is a clock that
     // never advanced, so drop oldest-first rather than growing without bound.
     while (this.observedOpens.size >= OBSERVED_OPEN_LIMIT) {
       const oldest = this.observedOpens.keys().next()
+
       if (oldest.done) {
         break
       }
+
       this.observedOpens.delete(oldest.value)
     }
+
     this.observedOpens.set(message.connId, { message, seenAt: now })
   }
 }

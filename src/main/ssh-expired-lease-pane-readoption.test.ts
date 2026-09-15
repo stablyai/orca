@@ -15,12 +15,17 @@ vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
+
 vi.mock('node-pty', () => ({ spawn: vi.fn(), default: { spawn: vi.fn() } }))
 
 const TARGET = 'ssh-1'
+
 const HOST_ID = 'ssh:ssh-1' as const
+
 const WORKTREE = 'repo1::/worktree'
+
 const TAB = 'tab-1'
+
 const APP_PTY_ID = 'ssh:ssh-1@@remote-pty'
 
 function storeWithBoundRemotePane(): ReturnType<typeof createStore> {
@@ -52,6 +57,7 @@ function storeWithBoundRemotePane(): ReturnType<typeof createStore> {
     },
     HOST_ID
   )
+
   return store
 }
 
@@ -100,6 +106,7 @@ describe('a pane whose SSH lease expired can still be re-adopted', () => {
  */
 describe('recovery through createTerminal reattaches before it respawns', () => {
   const PANE_KEY = makePaneKey(TAB, TEST_LEAF_1)
+
   const ADOPT_ARGS = {
     cols: 120,
     rows: 40,
@@ -123,10 +130,13 @@ describe('recovery through createTerminal reattaches before it respawns', () => 
   it('reattaches the surviving orphan instead of spawning a second shell', async () => {
     const store = storeWithBoundRemotePane()
     store.markSshRemotePtyLease(TARGET, APP_PTY_ID, 'expired')
+
     const spawn = vi.fn(async (options: { sessionId?: string; attachOnly?: boolean }) => {
       void options
+
       return { id: APP_PTY_ID, isReattach: true as const, pid: 4242 }
     })
+
     sshProviders.set(TARGET, { spawn } as unknown as IPtyProvider)
 
     const adopted = await adoptStablePane(undefined, store, ADOPT_ARGS)
@@ -147,9 +157,11 @@ describe('recovery through createTerminal reattaches before it respawns', () => 
   it('falls through to a fresh spawn once the host answers that the PTY is absent', async () => {
     const store = storeWithBoundRemotePane()
     store.markSshRemotePtyLease(TARGET, APP_PTY_ID, 'expired')
+
     const spawn = vi.fn(async () => {
       throw new SshPtyAbsentFromRelayError(`${SSH_SESSION_EXPIRED_ERROR}: remote-pty`)
     })
+
     sshProviders.set(TARGET, { spawn } as unknown as IPtyProvider)
 
     // A null adoption is exactly what routes createTerminal to a fresh shell, so a pane whose

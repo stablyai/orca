@@ -28,12 +28,14 @@ describe('agent hook completion store sync', () => {
     const tabCount = 100
     const coordinatorCount = 100
     const updateCount = 600
+
     const tabsByWorktree = Object.fromEntries(
       Array.from({ length: tabCount }, (_, index) => [
         `wt-${index}`,
         [{ id: `tab-${index}`, ptyId: `pty-${index}`, title: `Terminal ${index}` }]
       ])
     )
+
     let previous = createState({ tabsByWorktree })
     let syncPasses = 0
     let tabVisits = 0
@@ -48,9 +50,11 @@ describe('agent hook completion store sync', () => {
 
     for (let index = 0; index < updateCount; index += 1) {
       const targetTabs = previous.tabsByWorktree['wt-99']
+
       if (!targetTabs) {
         throw new Error('Expected title-update fixture tab')
       }
+
       const current = createState({
         ...previous,
         tabsByWorktree: {
@@ -58,6 +62,7 @@ describe('agent hook completion store sync', () => {
           'wt-99': targetTabs.map((tab) => ({ ...tab, title: `Agent frame ${index}` }))
         }
       })
+
       const measurement = _measureAgentHookCompletionStoreSyncForTest(current, previous)
       syncPasses += Number(measurement.shouldSync)
       tabVisits += measurement.tabVisits
@@ -68,22 +73,26 @@ describe('agent hook completion store sync', () => {
       tabVisits: updateCount * 2 * tabCount,
       coordinatorVisits: updateCount * 2 * coordinatorCount
     }
+
     const gatedCost = {
       tabVisits,
       coordinatorVisits: syncPasses * coordinatorCount
     }
+
     expect(previousFullPassCost).toEqual({ tabVisits: 120_000, coordinatorVisits: 120_000 })
     expect(gatedCost).toEqual({ tabVisits: 600, coordinatorVisits: 0 })
   })
 
   it('keeps every coordinator-liveness input reactive', () => {
     const previous = createState()
+
     const titleOnly = createState({
       ...previous,
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-1', ptyId: 'pty-1', title: 'Codex working' }]
       }
     })
+
     expect(shouldSyncAgentHookCompletionForStoreUpdate(titleOnly, previous)).toBe(false)
 
     const tabCreated = createState({
@@ -93,6 +102,7 @@ describe('agent hook completion store sync', () => {
         'wt-2': [{ id: 'tab-2', ptyId: null }]
       }
     })
+
     expect(shouldSyncAgentHookCompletionForStoreUpdate(tabCreated, previous)).toBe(true)
 
     const tabRemoved = createState({ ...previous, tabsByWorktree: {} })
@@ -102,6 +112,7 @@ describe('agent hook completion store sync', () => {
       ...previous,
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-2' }] }
     })
+
     expect(shouldSyncAgentHookCompletionForStoreUpdate(tabPtyChanged, previous)).toBe(true)
 
     expect(
@@ -130,6 +141,7 @@ describe('agent hook completion store sync', () => {
         notifications: { enabled: false, agentTaskComplete: false }
       }
     })
+
     expect(shouldSyncAgentHookCompletionForStoreUpdate(trackingDisabled, previous)).toBe(false)
     expect(
       shouldSyncAgentHookCompletionForStoreUpdate(
@@ -146,6 +158,7 @@ describe('agent hook completion store sync', () => {
         'wt-2': [{ id: 'tab-shared', ptyId: 'pty-second' }]
       }
     })
+
     const reorderedWorktrees = createState({
       ...previous,
       tabsByWorktree: {
@@ -153,6 +166,7 @@ describe('agent hook completion store sync', () => {
         'wt-1': previous.tabsByWorktree['wt-1'] ?? []
       }
     })
+
     expect(shouldSyncAgentHookCompletionForStoreUpdate(reorderedWorktrees, previous)).toBe(true)
 
     const twoTabPrevious = createState({
@@ -163,6 +177,7 @@ describe('agent hook completion store sync', () => {
         ]
       }
     })
+
     const reorderedTabs = createState({
       ...twoTabPrevious,
       tabsByWorktree: {
@@ -172,6 +187,7 @@ describe('agent hook completion store sync', () => {
         ]
       }
     })
+
     expect(shouldSyncAgentHookCompletionForStoreUpdate(reorderedTabs, twoTabPrevious)).toBe(true)
   })
 
@@ -182,6 +198,7 @@ describe('agent hook completion store sync', () => {
         notifications: { enabled: false, agentTaskComplete: false }
       }
     })
+
     const stillTrackedByNotifications = createState({
       ...previous,
       settings: {
@@ -189,6 +206,7 @@ describe('agent hook completion store sync', () => {
         notifications: { enabled: true, agentTaskComplete: true }
       }
     })
+
     expect(shouldSyncAgentHookCompletionForStoreUpdate(stillTrackedByNotifications, previous)).toBe(
       false
     )

@@ -6,10 +6,15 @@ import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
 
 export const GOLDEN_CHANGED_PATH = 'src/index.ts'
+
 export const GOLDEN_REMOVED_LINE = 'export const hello = "world"'
+
 export const GOLDEN_ADDED_LINE = 'export const hello = "golden daily loop"'
+
 export const GOLDEN_GIT_AUTHOR_NAME = 'Orca E2E'
+
 export const GOLDEN_GIT_AUTHOR_EMAIL = 'orca-e2e@example.invalid'
+
 const GOLDEN_PRE_COMMIT_MARKER = '.e2e-pre-commit-ran'
 
 export type GoldenWorktree = {
@@ -35,6 +40,7 @@ export function canonicalizeGoldenWorktreePath(
     .replace(/\\/g, '/')
     .replace(/^\/private(?=\/var\/)/, '')
     .replace(/\/+$/, '')
+
   return platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
@@ -63,13 +69,16 @@ export function createGoldenWorktree(repoPath: string, label: string): GoldenWor
   // the long path (runneradmin). Seeded repos already realpath; this extra
   // worktree must too or activateGoldenWorktree never matches the sidebar.
   let worktreePath: string
+
   try {
     worktreePath = realpathSync.native(requestedPath)
   } catch (realpathError) {
     rollbackGoldenWorktree(repoPath, { branchName, worktreePath: requestedPath })
     throw realpathError
   }
+
   const fixture: GoldenWorktree = { branchName, worktreePath }
+
   try {
     execFileSync('git', ['config', 'extensions.worktreeConfig', 'true'], {
       cwd: worktreePath,
@@ -87,6 +96,7 @@ export function createGoldenWorktree(repoPath: string, label: string): GoldenWor
     rollbackGoldenWorktree(repoPath, fixture)
     throw setupError
   }
+
   return fixture
 }
 
@@ -108,9 +118,11 @@ export function cleanupGoldenWorktree(repoPath: string, fixture: GoldenWorktree)
   } catch {
     // The hook setting may not have been installed before setup failed.
   }
+
   if (fixture.hooksPath) {
     rmSync(fixture.hooksPath, { recursive: true, force: true })
   }
+
   try {
     execFileSync('git', ['worktree', 'remove', '--force', fixture.worktreePath], {
       cwd: repoPath,
@@ -120,15 +132,18 @@ export function cleanupGoldenWorktree(repoPath: string, fixture: GoldenWorktree)
     rmSync(fixture.worktreePath, { recursive: true, force: true })
     execFileSync('git', ['worktree', 'prune'], { cwd: repoPath, stdio: 'pipe' })
   }
+
   execFileSync('git', ['branch', '-D', fixture.branchName], { cwd: repoPath, stdio: 'pipe' })
 }
 
 export function seedGoldenSourceEdit(worktreePath: string): void {
   const changedPath = path.join(worktreePath, GOLDEN_CHANGED_PATH)
   const original = readFileSync(changedPath, 'utf8')
+
   if (!original.includes(GOLDEN_REMOVED_LINE)) {
     throw new Error(`Golden source fixture is missing: ${GOLDEN_REMOVED_LINE}`)
   }
+
   writeFileSync(changedPath, original.replace(GOLDEN_REMOVED_LINE, GOLDEN_ADDED_LINE))
 }
 
@@ -146,6 +161,7 @@ export function installPassingNodePreCommitHook(fixture: GoldenWorktree): string
     `#!/bin/sh\nnode -e "const fs = require('node:fs'); const path = require('node:path'); fs.writeFileSync(path.join(path.dirname(process.argv[1]), '${GOLDEN_PRE_COMMIT_MARKER}'), 'ran')" "$0"\n`
   )
   chmodSync(hookPath, 0o755)
+
   return markerPath
 }
 
@@ -159,15 +175,19 @@ export async function activateGoldenWorktree(
       async () => {
         const listed = await page.evaluate(async () => {
           const store = window.__store
+
           if (!store) {
             throw new Error('window.__store is not available')
           }
+
           await store.getState().fetchRepos()
+
           const repos: {
             id: string
             path: string
             worktrees: { id: string; path: string }[]
           }[] = []
+
           for (const repo of store.getState().repos) {
             await store.getState().fetchWorktrees(repo.id)
             repos.push({
@@ -179,28 +199,36 @@ export async function activateGoldenWorktree(
               }))
             })
           }
+
           return repos
         })
+
         // Why: compare on the Node side so realpath can expand Windows 8.3
         // aliases. page.evaluate cannot call realpathSync.
         const repo = listed.find((entry) => goldenWorktreePathsMatch(entry.path, repoPath))
+
         const worktree = repo?.worktrees.find((entry) =>
           goldenWorktreePathsMatch(entry.path, worktreePath)
         )
+
         if (!repo || !worktree) {
           return false
         }
+
         await page.evaluate(
           ({ repoId, worktreeId }) => {
             const store = window.__store
+
             if (!store) {
               throw new Error('window.__store is not available')
             }
+
             store.getState().setActiveRepo(repoId)
             store.getState().setActiveWorktree(worktreeId)
           },
           { repoId: repo.id, worktreeId: worktree.id }
         )
+
         return true
       },
       { timeout: 10_000, message: `Golden worktree did not load: ${worktreePath}` }
@@ -216,9 +244,11 @@ export async function openGoldenSourceControl(
   await activateGoldenWorktree(page, repoPath, fixture.worktreePath)
   await page.evaluate(() => {
     const store = window.__store
+
     if (!store) {
       throw new Error('window.__store is not available')
     }
+
     const state = store.getState()
     state.setRightSidebarTab('explorer')
     state.setRightSidebarOpen(true)
@@ -232,6 +262,7 @@ export async function openGoldenSourceControl(
       () =>
         page.evaluate(() => {
           const state = window.__store?.getState()
+
           return state?.activeWorktreeId
             ? Object.hasOwn(state.gitStatusByWorktree, state.activeWorktreeId)
             : false

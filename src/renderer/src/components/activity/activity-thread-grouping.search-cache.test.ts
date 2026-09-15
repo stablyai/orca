@@ -28,10 +28,12 @@ describe('activity thread search text cache', () => {
   it('builds a thread searchable text once per thread identity across keystrokes', () => {
     const thread = makeThread('tab-1:leaf-1', 'Refactor billing pipeline')
     const before = getThreadSearchTextComputeCount()
+
     // Simulate typing a query letter by letter against the same thread objects.
     for (const searchQuery of ['r', 're', 'ref', 'refa', 'refac']) {
       expect(activityThreadMatchesSearchQuery({ thread, searchQuery })).toBe(true)
     }
+
     expect(getThreadSearchTextComputeCount() - before).toBe(1)
   })
 

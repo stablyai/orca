@@ -22,6 +22,7 @@ function splitAction(
       if (!availability(ctx).available || !ctx.splitActiveChat?.(direction)) {
         return { status: 'unavailable', reason: 'no-active-chat' }
       }
+
       return { status: 'ok' }
     }
   }

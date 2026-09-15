@@ -20,9 +20,11 @@ export class SshConnectionStore {
    *  still pinned to a target that no longer exists. */
   listRemovedTargetLabels(): Record<string, string> {
     const labels: Record<string, string> = {}
+
     for (const tombstone of this.store.getRemovedSshTargetTombstones()) {
       labels[tombstone.oldTargetId] = tombstone.label
     }
+
     return labels
   }
 
@@ -45,6 +47,7 @@ export class SshConnectionStore {
       // Why: a fresh registration; automations fenced on an earlier one must not adopt it.
       generation: this.store.allocateSshTargetGeneration()
     }
+
     // Why: re-adding a host the user previously deleted is an explicit intent to
     // keep it — lift any tombstone so config sync stops suppressing this alias.
     this.reclaimAlias(full.configHost ?? full.label)
@@ -53,6 +56,7 @@ export class SshConnectionStore {
     // (repos/worktrees still point at the old, now-dead target id). Track the
     // exact migrations so IPC can refresh and renderer can prune only proven stale rows.
     this.lastRepoReadoptions = readoptOrphanedWorkspacesForTarget(this.store, full)
+
     return full
   }
 
@@ -65,6 +69,7 @@ export class SshConnectionStore {
   ): SshTarget {
     const id = getRuntimeOwnedSshTargetId(runtimeId)
     const existing = this.store.getSshTarget(id)
+
     const next: SshTarget = {
       ...target,
       id,
@@ -77,42 +82,53 @@ export class SshConnectionStore {
         ? { lastRequiredPassphrase: existing.lastRequiredPassphrase }
         : {})
     }
+
     if (existing) {
       return this.store.updateSshTarget(id, next) ?? next
     }
+
     this.store.addSshTarget(next)
+
     return next
   }
 
   updateTarget(id: string, updates: Partial<Omit<SshTarget, 'id'>>): SshTarget | null {
     const updated = this.store.updateSshTarget(id, updates)
+
     if (updated) {
       // Why: actively editing a target reclaims its alias from the deleted set,
       // so an edit can never leave the host tombstoned.
       this.reclaimAlias(updated.configHost ?? updated.label)
     }
+
     return updated
   }
 
   removeTarget(id: string): void {
     const target = this.store.getSshTarget(id)
+
     if (target && !isRuntimeOwnedSshTarget(target)) {
       const alias = target.configHost ?? target.label
+
       if (alias) {
         // Why: tombstone so passive ~/.ssh/config sync does not resurrect the host.
         // The config picker still lists it so re-pick/save can reclaim the alias.
         this.store.addDeletedSshConfigAlias(alias)
       }
+
       this.store.addRemovedSshTargetTombstone(buildRemovedSshTargetTombstone(target, Date.now()))
     }
+
     this.store.removeSshTarget(id)
   }
 
   private reclaimAlias(alias: string | undefined): void {
     const normalized = normalizeSshConfigAlias(alias)
+
     if (!normalized) {
       return
     }
+
     // Why: tombstones persisted before alias folding (and hosts written with different
     // casing) must all be lifted, or a re-add stays suppressed for its case variants.
     for (const stored of this.store.getDeletedSshConfigAliases()) {
@@ -129,17 +145,20 @@ export class SshConnectionStore {
    */
   importFromSshConfig(options?: { reAdopt?: boolean }): SshTarget[] {
     const readoptions: SshRepoReadoption[] = []
+
     // Why: the explicit Import action re-adopts every config host, so it clears
     // all tombstones first. The passive on-open sync passes no flag and keeps
     // deleted hosts suppressed.
     if (options?.reAdopt) {
       this.store.clearDeletedSshConfigAliases()
     }
+
     // Why: aliases are compared case-insensitively everywhere else (picker, duplicate
     // check, tombstones); a case-sensitive Set here would double-insert `Prod` vs `prod`.
     const deletedAliases = new Set(
       this.store.getDeletedSshConfigAliases().map((alias) => normalizeSshConfigAlias(alias))
     )
+
     const configHosts = loadUserSshConfig()
     const existingTargets = this.store.getSshTargets()
     // Map config-managed targets (and legacy targets that strongly look like
@@ -148,8 +167,10 @@ export class SshConnectionStore {
     // and untouched.
     const syncableByAlias = new Map<string, SshTarget>()
     const manualAliases = new Set<string>()
+
     for (const existing of existingTargets) {
       const alias = normalizeSshConfigAlias(existing.configHost ?? existing.label)
+
       if (
         existing.source === 'manual' ||
         (existing.source === undefined && !isLegacyConfigImportTarget(existing))
@@ -157,6 +178,7 @@ export class SshConnectionStore {
         manualAliases.add(alias)
         continue
       }
+
       if (alias && !syncableByAlias.has(alias)) {
         syncableByAlias.set(alias, existing)
       }
@@ -174,20 +196,25 @@ export class SshConnectionStore {
 
     for (const candidate of candidates) {
       const alias = normalizeSshConfigAlias(candidate.configHost ?? candidate.label)
+
       if (manualAliases.has(alias)) {
         // A manual target owns this alias — never clobber it.
         continue
       }
+
       if (deletedAliases.has(alias)) {
         // The user deleted this config host — stay deleted until they re-add it
         // or re-adopt config explicitly.
         continue
       }
+
       if (processedAliases.has(alias)) {
         continue
       }
+
       processedAliases.add(alias)
       const existing = syncableByAlias.get(alias)
+
       if (existing) {
         const nextFields = {
           configHost: candidate.configHost,
@@ -201,6 +228,7 @@ export class SshConnectionStore {
           proxyCommand: candidate.proxyCommand,
           jumpHost: candidate.jumpHost
         }
+
         // Skip the write (and the "synced" report) when nothing changed, so a
         // repeat sync on every pane open is a no-op. A legacy target with no
         // `source` is always rewritten once to stamp it as config-managed.
@@ -209,13 +237,16 @@ export class SshConnectionStore {
           (Object.keys(nextFields) as (keyof typeof nextFields)[]).some(
             (key) => existing[key] !== nextFields[key]
           )
+
         if (!isDirty) {
           continue
         }
+
         const updated = this.store.updateSshTarget(existing.id, {
           ...nextFields,
           source: 'ssh-config'
         })
+
         if (updated) {
           changed.push(updated)
         }
@@ -225,6 +256,7 @@ export class SshConnectionStore {
           source: 'ssh-config',
           generation: this.store.allocateSshTargetGeneration()
         }
+
         this.store.addSshTarget(inserted)
         // Why: a freshly-inserted config host may be one the user removed and is
         // now re-importing — re-adopt its orphaned workspaces. Updated-in-place
@@ -235,6 +267,7 @@ export class SshConnectionStore {
     }
 
     this.lastRepoReadoptions = readoptions
+
     return changed
   }
 }
@@ -249,6 +282,7 @@ export function isRuntimeOwnedSshTarget(target: SshTarget): boolean {
 
 function isLegacyConfigImportTarget(target: SshTarget): boolean {
   const alias = target.configHost ?? target.label
+
   // Why: legacy manual and imported targets both lack `source`. Only adopt the
   // old import shape, where the SSH alias was kept as label/configHost while
   // host stored the resolved HostName; otherwise preserve the user's target.

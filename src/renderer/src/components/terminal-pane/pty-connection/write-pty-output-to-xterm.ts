@@ -21,14 +21,17 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
   ): void {
     // Why: every application byte funnels through here, so it's the one place the kitty keyboard mirror observes the pane's protocol negotiation.
     session.kittyKeyboardModes.scan(data)
+
     if (foreground) {
       session.resetHiddenOutputRestoreIfPtyChanged()
     }
+
     const parseHiddenStartupOutput =
       !foreground &&
       session.canUseHiddenOutputSnapshot(session.transport.getPtyId()) &&
       session.shouldSnapshotHiddenCodexOutput &&
       (opts?.hiddenStartupRendererQuery === true || containsHiddenStartupRendererQuery(data))
+
     const synchronizedForegroundScan =
       session.shouldProtectNativeWindowsSynchronizedOutput && foreground
         ? scanSynchronizedForegroundOutput(
@@ -37,33 +40,43 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
             session.synchronizedForegroundOutputActive
           )
         : null
+
     const synchronizedOutputStarted = synchronizedForegroundScan?.started === true
     const synchronizedOutputEnded = synchronizedForegroundScan?.ended === true
+
     const synchronizedForegroundOutput =
       synchronizedForegroundScan !== null &&
       (session.synchronizedForegroundOutputActive ||
         synchronizedOutputStarted ||
         synchronizedOutputEnded)
+
     const nextSynchronizedForegroundOutputActive = synchronizedForegroundScan?.active === true
+
     // Why: xterm's DOM renderer draws the cursor as row content, so Windows cursor-only restores need row invalidation even outside DEC 2026.
     const nativeWindowsCursorRestore =
       session.shouldProtectNativeWindowsSynchronizedOutput &&
       foreground &&
       containsCursorRestore(data)
+
     const foregroundOutput = foreground || parseHiddenStartupOutput
+
     if (foreground) {
       session.scheduleForegroundGridDriftCheck()
     }
+
     const renderRefreshDecision = foregroundOutput
       ? session.shouldForceForegroundRenderRefresh(data)
       : { refresh: false, inPlaceRewrite: false }
+
     const foregroundRenderRefreshNeeded = renderRefreshDecision.refresh
+
     // Why: Claude Code's in-place prompt redraws on Windows ConPTY can paint one frame late; a follow-up repaint fixes the column desync without a resize.
     const nativeWindowsInPlaceRewriteFollowup = nativeWindowsRewriteNeedsFollowupRenderRefresh({
       isNativeWindowsConpty: session.shouldApplyNativeWindowsRewriteRefresh,
       isForeground: foreground,
       isInPlaceRewrite: renderRefreshDecision.inPlaceRewrite
     })
+
     // Why: recompute the latch on every synchronized START so each frame's interactivity is judged by its own open time and can't leak across a same-chunk close+open; clear only on leaving synchronized output.
     if (synchronizedForegroundOutput && synchronizedOutputStarted) {
       session.synchronizedForegroundFrameInteractive =
@@ -72,9 +85,11 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     } else if (!nextSynchronizedForegroundOutputActive && !synchronizedOutputEnded) {
       session.synchronizedForegroundFrameInteractive = false
     }
+
     // Why: ConPTY can split a submit repaint's closing chunk past the 150ms window, so treat a keystroke-opened frame as latency-sensitive to drain it fast (~16-32ms) not the 1s coalesce fallback.
     const synchronizedFrameLatencySensitive =
       synchronizedForegroundOutput && session.synchronizedForegroundFrameInteractive
+
     session.synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
     session.synchronizedForegroundMarkerTail = synchronizedForegroundScan?.markerTail ?? ''
     writeTerminalOutput(session.pane.terminal, data, {
@@ -105,6 +120,7 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     if (session.disposed) {
       return
     }
+
     session.writePtyOutputToXterm(
       session.idleAgentTerminalModeReset,
       shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)

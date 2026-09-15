@@ -41,14 +41,17 @@ export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
   const operation = input.operations.find(
     (row) => row.callerKey === input.callerKey && row.operationId === input.operationId
   )
+
   if (
     operation?.outcome.status !== 'succeeded' ||
     operation.outcome.sessionId !== input.selfSessionId
   ) {
     return null
   }
+
   const record = input.record
   const adopted = record?.providerHandleChain[0]
+
   if (
     !record ||
     record.sessionId !== input.selfSessionId ||
@@ -57,11 +60,14 @@ export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
   ) {
     return null
   }
+
   const providerSessionId =
     adopted.handle.provider === 'codex' ? adopted.handle.threadId : adopted.handle.sessionId
+
   if (providerSessionId !== input.providerSessionId) {
     return null
   }
+
   return {
     record,
     providerHandle:
@@ -135,21 +141,27 @@ export async function resolveStructuredAgentSessionAdoption(input: {
   }) => Promise<string | null>
 }): Promise<StructuredAgentSessionAdoption> {
   const seen = new Set<string>()
+
   for (const accountHomePath of input.candidateAccountHomes) {
     const trimmed = accountHomePath.trim()
+
     if (!trimmed || seen.has(trimmed)) {
       continue
     }
+
     seen.add(trimmed)
+
     const transcriptPath = await input.resolveTranscript({
       agent: input.agent,
       providerSessionId: input.providerSessionId,
       accountHomePath: trimmed
     })
+
     if (transcriptPath) {
       return { accountHomePath: trimmed, transcriptPath }
     }
   }
+
   // Refuse rather than fall back to the default home. Resuming under a home that does not hold the
   // conversation is how a "resume" silently becomes a blank chat wearing the old chat's name.
   throw new Error('agent_session_identity_required')

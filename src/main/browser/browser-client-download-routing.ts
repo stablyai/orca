@@ -31,6 +31,7 @@ export function registerBrowserClientDownloadRouter(
   router: BrowserClientDownloadRouter
 ): () => void {
   routersByEnvironmentId.set(environmentId, router)
+
   return () => {
     if (routersByEnvironmentId.get(environmentId) === router) {
       routersByEnvironmentId.delete(environmentId)
@@ -59,25 +60,31 @@ export function routeBrowserClientDownload(input: {
 }): BrowserClientDownloadDecision {
   for (const router of routersByEnvironmentId.values()) {
     let outcome: BrowserClientDownloadRouteOutcome
+
     try {
       outcome = router.route(input)
     } catch {
       // A router that cannot answer proves nothing about ownership; the probe below decides.
       continue
     }
+
     if (outcome.kind === 'remote') {
       return { kind: 'remote', route: outcome.route }
     }
+
     if (outcome.kind === 'local-fallback') {
       return { kind: 'local' }
     }
+
     if (outcome.kind === 'unavailable') {
       return { kind: 'blocked' }
     }
   }
+
   if (!isClientHostedWebContents(input.guestWebContentsId)) {
     return { kind: 'local' }
   }
+
   // A client-hosted page whose owner cannot be resolved (retiring, closed composition, failed
   // lookup) has no proven destination, and this desktop's Downloads folder is not it.
   return { kind: 'blocked' }

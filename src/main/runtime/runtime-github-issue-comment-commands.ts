@@ -27,6 +27,7 @@ export class RuntimeGitHubIssueCommentCommands {
     fields?: GitHubCreateIssueFields
   ): Promise<Awaited<ReturnType<typeof createIssue>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return createIssue(
       repo.path,
       title,
@@ -44,6 +45,7 @@ export class RuntimeGitHubIssueCommentCommands {
     updates: GitHubIssueUpdate
   ): Promise<Awaited<ReturnType<typeof updateIssue>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return updateIssue(
       repo.path,
       number,
@@ -60,6 +62,7 @@ export class RuntimeGitHubIssueCommentCommands {
     prRepo?: GitHubOwnerRepo | null
   ): Promise<Awaited<ReturnType<typeof addIssueComment>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return addIssueComment(
       repo.path,
       number,
@@ -75,6 +78,7 @@ export class RuntimeGitHubIssueCommentCommands {
     args: Omit<GitHubPRReviewCommentInput, 'repoPath'>
   ): Promise<Awaited<ReturnType<typeof addPRReviewComment>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return addPRReviewComment({
       repoPath: repo.path,
       connectionId: repo.connectionId ?? null,
@@ -96,6 +100,7 @@ export class RuntimeGitHubIssueCommentCommands {
     }
   ): Promise<Awaited<ReturnType<typeof addPRReviewCommentReply>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     return addPRReviewCommentReply(
       repo.path,
       args.prNumber,

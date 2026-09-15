@@ -90,6 +90,7 @@ describe('setHostSettingOverride', () => {
     const settings = settingsWith({
       'ssh:box': { displayLabel: 'Box', defaultWorktreeLocation: '/w' }
     })
+
     const next = setHostSettingOverride(settings, 'ssh:box', 'displayLabel', '  ')
     expect(next).toEqual({ 'ssh:box': { defaultWorktreeLocation: '/w' } })
   })
@@ -100,6 +101,7 @@ describe('clearHostSettingOverride', () => {
     const settings = settingsWith({
       'ssh:box': { displayLabel: 'Box', defaultWorktreeLocation: '/w' }
     })
+
     expect(clearHostSettingOverride(settings, 'ssh:box', 'displayLabel')).toEqual({
       'ssh:box': { defaultWorktreeLocation: '/w' }
     })
@@ -132,6 +134,7 @@ describe('getHostDisplayLabelOverrides', () => {
       'runtime:env': { defaultWorktreeLocation: '/w' },
       local: { displayLabel: '  ' }
     })
+
     const map = getHostDisplayLabelOverrides(settings)
     expect(map.get('ssh:box')).toBe('Box')
     expect(map.has('runtime:env')).toBe(false)

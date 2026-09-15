@@ -17,15 +17,18 @@ export function resolveMobileNativeChatTerminalStreamAction(args: {
   if (!args.activeHandle || args.activeTabType !== 'terminal') {
     return 'none'
   }
+
   if (args.showNativeChat) {
     if (!args.streamCovered) {
       return 'pause'
     }
+
     // Why: the covered stream IS the input lease. Anything that tore it down
     // (terminal.list churn, a client swap, an `end` frame) would otherwise leave
     // the composer locked forever — nothing else re-subscribes a covered handle.
     return args.streamActive ? 'none' : 'rearm'
   }
+
   // Why `streamIsLeaseOnly`: switching from a chat tab to a terminal tab subscribes the
   // incoming handle before the route learns chat is gone, so it lands a lease-only stream
   // on an uncovered handle. Without this input that is indistinguishable from a healthy

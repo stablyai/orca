@@ -30,6 +30,7 @@ type MinimalClickEvent = Pick<
   React.MouseEvent<HTMLButtonElement>,
   'nativeEvent' | 'stopPropagation'
 >
+
 type ClickModifiers = Partial<Pick<MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>>
 
 function clickEvent(modifiers: ClickModifiers = {}): MinimalClickEvent {
@@ -50,10 +51,12 @@ beforeEach(() => {
 describe('HostedReviewHeaderLink', () => {
   it('opens GitHub PRs in the Checks tab instead of rendering an external link', () => {
     const onOpenHostedReviewInChecks = vi.fn()
+
     const element = HostedReviewHeaderLink({
       review: makeReview(),
       onOpenHostedReviewInChecks
     })
+
     const markup = renderToStaticMarkup(element)
 
     expect(markup).toContain('<button')
@@ -65,6 +68,7 @@ describe('HostedReviewHeaderLink', () => {
     expect(markup).not.toContain('⌘+click')
 
     const event = clickEvent()
+
     ;(element.props.onClick as (event: MinimalClickEvent) => void)(event)
     expect(event.stopPropagation).toHaveBeenCalledTimes(1)
     expect(onOpenHostedReviewInChecks).toHaveBeenCalledTimes(1)
@@ -78,12 +82,14 @@ describe('HostedReviewHeaderLink', () => {
     ['Shift+Ctrl-click', { ctrlKey: true, shiftKey: true }]
   ])('opens GitHub PRs in the Checks tab on %s', (_label, modifiers) => {
     const onOpenHostedReviewInChecks = vi.fn()
+
     const element = HostedReviewHeaderLink({
       review: makeReview(),
       onOpenHostedReviewInChecks
     })
 
     const event = clickEvent(modifiers)
+
     ;(element.props.onClick as (event: MinimalClickEvent) => void)(event)
 
     expect(event.stopPropagation).toHaveBeenCalledTimes(1)
@@ -93,6 +99,7 @@ describe('HostedReviewHeaderLink', () => {
 
   it('opens GitLab MRs in the Checks tab instead of rendering an external link', () => {
     const onOpenHostedReviewInChecks = vi.fn()
+
     const element = HostedReviewHeaderLink({
       review: makeReview({
         provider: 'gitlab',
@@ -101,6 +108,7 @@ describe('HostedReviewHeaderLink', () => {
       }),
       onOpenHostedReviewInChecks
     })
+
     const markup = renderToStaticMarkup(element)
 
     expect(markup).toContain('<button')
@@ -108,6 +116,7 @@ describe('HostedReviewHeaderLink', () => {
     expect(markup).toContain('MR #31')
 
     const event = clickEvent()
+
     ;(element.props.onClick as (event: MinimalClickEvent) => void)(event)
     expect(event.stopPropagation).toHaveBeenCalledTimes(1)
     expect(onOpenHostedReviewInChecks).toHaveBeenCalledTimes(1)
@@ -121,6 +130,7 @@ describe('HostedReviewHeaderLink', () => {
     ['Shift+Ctrl-click', { ctrlKey: true, shiftKey: true }]
   ])('opens GitLab MRs in the Checks tab on %s', (_label, modifiers) => {
     const onOpenHostedReviewInChecks = vi.fn()
+
     const element = HostedReviewHeaderLink({
       review: makeReview({
         provider: 'gitlab',
@@ -131,6 +141,7 @@ describe('HostedReviewHeaderLink', () => {
     })
 
     const event = clickEvent(modifiers)
+
     ;(element.props.onClick as (event: MinimalClickEvent) => void)(event)
 
     expect(event.stopPropagation).toHaveBeenCalledTimes(1)

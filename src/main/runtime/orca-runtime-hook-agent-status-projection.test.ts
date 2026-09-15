@@ -16,13 +16,19 @@ vi.mock('electron', () => ({
 }))
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 // A leaf this runtime never minted: pane lookup recovers a reminted tab id by leaf id,
 // so only an unknown leaf id is genuinely unresolvable.
 const UNKNOWN_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const TAB_ID = 'ask-tab'
+
 const WORKTREE_ID = 'wt-1'
+
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
+
 const PTY_ID = 'pty-ask'
+
 const ASK_PROMPT = JSON.stringify({
   questions: [
     {
@@ -33,6 +39,7 @@ const ASK_PROMPT = JSON.stringify({
     }
   ]
 })
+
 const PROVIDER_SESSION = {
   key: 'session_id' as const,
   id: 'ac1f6b90-2f77-4f0e-9c5e-1d2f6a4b8c31',
@@ -41,6 +48,7 @@ const PROVIDER_SESSION = {
 
 function hookRow(overrides: Partial<AgentStatusIpcPayload> = {}): AgentStatusIpcPayload {
   const now = Date.now()
+
   return {
     paneKey: PANE_KEY,
     state: 'waiting',
@@ -66,6 +74,7 @@ async function createRuntimeWithHookRows(
   const readRows = statusWiring
     ? (): AgentStatusIpcPayload[] => [...rows, ...statusWiring.deps.getAgentStatusSnapshot()]
     : (): AgentStatusIpcPayload[] => rows
+
   const runtime = new OrcaRuntimeService(null, undefined, {
     ...(statusWiring
       ? {
@@ -79,9 +88,11 @@ async function createRuntimeWithHookRows(
     getAgentStatusSnapshot: readRows,
     ...(statusWiring ? {} : { getAgentProviderSessionRowsForPane: readRows })
   })
+
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
   }
+
   vi.spyOn(internals, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
     id: WORKTREE_ID,
     path: '/repo/app',
@@ -101,6 +112,7 @@ async function createRuntimeWithHookRows(
     launchAgent: 'claude',
     title: 'Terminal'
   })
+
   return runtime
 }
 
@@ -112,6 +124,7 @@ async function projectAgentStatus(
   preparePane?.(runtime)
   const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
   const tab = result.tabs[0]
+
   return tab?.type === 'terminal'
     ? (tab.agentStatus as unknown as Record<string, unknown> | undefined)
     : undefined
@@ -127,6 +140,7 @@ function lastOscTitleEpochMs(runtime: OrcaRuntimeService): number {
   const pty = (
     runtime as unknown as { ptysById: Map<string, { lastOscTitleEpochMs: number | null }> }
   ).ptysById.get(PTY_ID)
+
   return pty?.lastOscTitleEpochMs ?? 0
 }
 
@@ -164,6 +178,7 @@ describe('headless hook agent-status projection (#11761)', () => {
 
   it('publishes a gated turn end as event metadata, not stored agent status', async () => {
     const turnCompletedAt = Date.now()
+
     const runtime = await createRuntimeWithHookRows([
       hookRow({
         state: 'working',
@@ -204,6 +219,7 @@ describe('headless hook agent-status projection (#11761)', () => {
 
   it('falls back to identity-only done once the hook row goes stale', async () => {
     const stale = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1_000
+
     const agentStatus = await projectAgentStatus([
       hookRow({ receivedAt: stale, stateStartedAt: stale })
     ])
@@ -294,12 +310,15 @@ describe('headless hook agent-status projection (#11761)', () => {
     const runtime = await createRuntimeWithHookRows(rows)
     const questionAt = rows[0]!.receivedAt
     const dateNow = vi.spyOn(Date, 'now').mockReturnValue(questionAt + 1)
+
     try {
       const initial = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
       const initialTab = initial.tabs[0]
+
       if (initialTab?.type !== 'terminal' || !initialTab.terminal) {
         throw new Error('expected a live terminal handle')
       }
+
       await runtime.renameTerminal(initialTab.terminal, 'bash')
       observePaneTitle(runtime, 'bash')
       let result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
@@ -323,10 +342,12 @@ describe('headless hook agent-status projection (#11761)', () => {
 
   it('does not carry a hook question across a provider generation reset', async () => {
     const runtime = await createRuntimeWithHookRows([hookRow()])
+
     const internals = runtime as unknown as {
       ptysById: Map<string, { title: string | null }>
       resetTrackedTerminalStateForProviderGeneration: (ptyId: string) => void
     }
+
     internals.ptysById.get(PTY_ID)!.title = 'bash'
     internals.resetTrackedTerminalStateForProviderGeneration(PTY_ID)
 
@@ -348,6 +369,7 @@ describe('headless hook agent-status projection (#11761)', () => {
     const internals = runtime as unknown as {
       resetTrackedTerminalStateForProviderGeneration: (ptyId: string) => void
     }
+
     internals.resetTrackedTerminalStateForProviderGeneration(PTY_ID)
 
     expect(statusWiring.statusStore.getStatusSnapshot()).toEqual([])
@@ -358,9 +380,11 @@ describe('headless hook agent-status projection (#11761)', () => {
     const statusWiring = makeAgentStatusStoreWiring()
     const runtime = await createRuntimeWithHookRows([], statusWiring)
     const terminal = (await runtime.listTerminals()).terminals[0]
+
     if (!terminal) {
       throw new Error('expected a live terminal')
     }
+
     const priorPaneKey = makePaneKey('prior-tab', UNKNOWN_LEAF_ID)
     statusWiring.statusStore.ingestTerminalStatus({
       paneKey: priorPaneKey,
@@ -389,6 +413,7 @@ describe('headless hook agent-status projection (#11761)', () => {
     const internals = runtime as unknown as {
       dropDisconnectedPtyRecord: (ptyId: string) => void
     }
+
     internals.dropDisconnectedPtyRecord(PTY_ID)
 
     expect(statusWiring.statusStore.getStatusSnapshot()).toEqual([])
@@ -398,10 +423,12 @@ describe('headless hook agent-status projection (#11761)', () => {
   it('keeps an unverifiable remote row when its disconnected PTY record is pruned', async () => {
     const statusWiring = makeAgentStatusStoreWiring()
     const runtime = await createRuntimeWithHookRows([], statusWiring)
+
     const internals = runtime as unknown as {
       ptysById: Map<string, { connected: boolean; connectionId: string | null }>
       dropDisconnectedPtyRecord: (ptyId: string) => void
     }
+
     const pty = internals.ptysById.get(PTY_ID)!
     pty.connectionId = 'ssh-target'
     runtime.onPtyData(
@@ -423,9 +450,11 @@ describe('headless hook agent-status projection (#11761)', () => {
     const statusWiring = makeAgentStatusStoreWiring()
     const runtime = await createRuntimeWithHookRows([], statusWiring)
     const terminal = (await runtime.listTerminals()).terminals[0]
+
     if (!terminal) {
       throw new Error('expected a live terminal')
     }
+
     const priorPaneKey = makePaneKey('prior-tab', UNKNOWN_LEAF_ID)
     statusWiring.statusStore.ingestTerminalStatus({
       paneKey: priorPaneKey,
@@ -455,9 +484,11 @@ describe('headless hook agent-status projection (#11761)', () => {
 
   it('does not carry a hook question across an identity-only owner title', async () => {
     const runtime = await createRuntimeWithHookRows([hookRow()])
+
     const internals = runtime as unknown as {
       ptysById: Map<string, { title: string | null }>
     }
+
     internals.ptysById.get(PTY_ID)!.title = 'bash'
     observePaneTitle(runtime, 'Cursor Agent')
 
@@ -469,6 +500,7 @@ describe('headless hook agent-status projection (#11761)', () => {
   // The title path is refreshed live; an older hook `done` must not erase it.
   it('keeps the title-derived working state when the hook row predates the title', async () => {
     const now = Date.now()
+
     const agentStatus = await projectAgentStatus(
       [
         hookRow({

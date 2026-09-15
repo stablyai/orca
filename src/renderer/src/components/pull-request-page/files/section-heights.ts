@@ -7,10 +7,12 @@ export function usePRFileSectionHeights(
 ): [Record<number, number>, (updater: SetStateAction<Record<number, number>>) => void] {
   const [state, setState] = useState(() => ({ entrySignature, values: EMPTY_SECTION_HEIGHTS }))
   const heights = state.entrySignature === entrySignature ? state.values : EMPTY_SECTION_HEIGHTS
+
   const setHeights = useCallback(
     (updater: SetStateAction<Record<number, number>>) => {
       setState((prev) => {
         const current = prev.entrySignature === entrySignature ? prev.values : EMPTY_SECTION_HEIGHTS
+
         return {
           entrySignature,
           values: typeof updater === 'function' ? updater(current) : updater
@@ -19,5 +21,6 @@ export function usePRFileSectionHeights(
     },
     [entrySignature]
   )
+
   return [heights, setHeights]
 }

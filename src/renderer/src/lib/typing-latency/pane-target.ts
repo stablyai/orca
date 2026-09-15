@@ -22,6 +22,7 @@ export type ProbePane = {
 
 export function listProbePanes(): ProbePane[] {
   const panes: ProbePane[] = []
+
   try {
     forEachLivePaneForDesyncSentinel((_key, pane) => {
       panes.push(pane as ProbePane)
@@ -29,6 +30,7 @@ export function listProbePanes(): ProbePane[] {
   } catch {
     // Why: a mid-teardown manager must not prevent the probe from starting.
   }
+
   return panes
 }
 
@@ -43,6 +45,7 @@ export function findPaneOwningNode<T extends { pane: ProbePane | null }>(
   if (!node) {
     return null
   }
+
   return entries.find((entry) => paneRootElement(entry.pane)?.contains(node) === true) ?? null
 }
 
@@ -50,5 +53,6 @@ export function findPaneOwningFocus<T extends { pane: ProbePane | null }>(
   entries: readonly T[]
 ): T | null {
   const focused = typeof document === 'undefined' ? null : document.activeElement
+
   return findPaneOwningNode(entries, focused)
 }

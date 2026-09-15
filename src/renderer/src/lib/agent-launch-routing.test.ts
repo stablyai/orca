@@ -177,6 +177,7 @@ describe('explicit structured chat requests', () => {
         hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
         workspaceKind: 'folder' as const
       }
+
       expect(resolveAgentLaunchRoute(input)).toBe('terminal-tui')
       expect(structuredAgentLaunchSupported(input)).toBe(true)
       expect(structuredAgentLaunchSupported({ ...input, hostCapabilities: [] })).toBe(false)

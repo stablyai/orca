@@ -31,6 +31,7 @@ describe('SshGitProvider', () => {
         isMainWorktree: true
       }
     ]
+
     mux.request.mockResolvedValue(worktrees)
 
     const controller = new AbortController()
@@ -80,18 +81,23 @@ describe('SshGitProvider', () => {
   it('keeps supported clean checks on the preferred relay RPC', async () => {
     let resolveProbe!: (result: { clean: boolean }) => void
     let resolveRemaining!: (result: { clean: boolean }) => void
+
     const probe = new Promise<{ clean: boolean }>((resolve) => {
       resolveProbe = resolve
     })
+
     const remaining = new Promise<{ clean: boolean }>((resolve) => {
       resolveRemaining = resolve
     })
+
     let preferredRequestCount = 0
     mux.request.mockImplementation((method) => {
       expect(method).toBe('git.worktreeIsClean')
       preferredRequestCount += 1
+
       return preferredRequestCount === 1 ? probe : remaining
     })
+
     const checks = Array.from({ length: 10 }, (_, index) =>
       provider.worktreeIsClean(`/repo/worktree-${index}`)
     )
@@ -186,6 +192,7 @@ describe('SshGitProvider', () => {
       if (method === 'git.worktreeIsClean') {
         throw methodNotFound(method)
       }
+
       return CLEAN_STATUS
     })
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -209,16 +216,20 @@ describe('SshGitProvider', () => {
 
   it('shares one old-relay probe across concurrent clean checks', async () => {
     let rejectProbe!: (error: Error) => void
+
     const probe = new Promise((_resolve, reject) => {
       rejectProbe = reject
     })
+
     mux.request.mockImplementation((method) => {
       if (method === 'git.worktreeIsClean') {
         return probe
       }
+
       return Promise.resolve(CLEAN_STATUS)
     })
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const checks = Array.from({ length: 10 }, (_, index) =>
       provider.worktreeIsClean(`/repo/worktree-${index}`)
     )
@@ -245,6 +256,7 @@ describe('SshGitProvider', () => {
     const transportError = Object.assign(new Error('Method not found: git.worktreeIsClean'), {
       code: -32602
     })
+
     mux.request.mockRejectedValueOnce(transportError).mockResolvedValueOnce({ clean: true })
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
@@ -265,22 +277,28 @@ describe('SshGitProvider', () => {
     const transportError = new Error('connection closed')
     let rejectProbe!: (error: Error) => void
     let resolveRetries!: (result: { clean: boolean }) => void
+
     const probe = new Promise((_resolve, reject) => {
       rejectProbe = reject
     })
+
     const retries = new Promise<{ clean: boolean }>((resolve) => {
       resolveRetries = resolve
     })
+
     let preferredRequestCount = 0
     mux.request.mockImplementation((method) => {
       expect(method).toBe('git.worktreeIsClean')
       preferredRequestCount += 1
+
       return preferredRequestCount === 1 ? probe : retries
     })
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     const checks = Array.from({ length: 3 }, (_, index) =>
       provider.worktreeIsClean(`/repo/worktree-${index}`)
     )
+
     const settledChecks = Promise.allSettled(checks)
 
     try {
@@ -308,6 +326,7 @@ describe('SshGitProvider', () => {
       if (method === 'git.worktreeIsClean') {
         throw methodNotFound(method)
       }
+
       return CLEAN_STATUS
     })
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -331,6 +350,7 @@ describe('SshGitProvider', () => {
       if (method === 'git.worktreeIsClean') {
         throw methodNotFound(method)
       }
+
       return {
         entries: [{ path: 'scratch.txt', status: 'untracked', area: 'untracked' }],
         conflictOperation: 'unknown'

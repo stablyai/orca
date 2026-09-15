@@ -37,16 +37,20 @@ export function resolveSelectedProjectRowRepo(input: {
   }
 
   const repository = input.row.content.repository
+
   if (!repository) {
     return { status: 'invalid_slug' }
   }
+
   const [owner, repo] = repository.split('/')
+
   if (!owner || !repo) {
     return { status: 'invalid_slug' }
   }
 
   const { origin, upstream } = input.lookupSlugMatches(repository, input.host)
   const globalMatches = [...origin, ...upstream]
+
   if (globalMatches.length === 0) {
     return { status: 'no_global_match' }
   }
@@ -55,16 +59,20 @@ export function resolveSelectedProjectRowRepo(input: {
   // that preference globally let an open-but-unselected clone of the upstream
   // repo hide the selected fork, reproducing #12647 for anyone holding both.
   const selectedOrigin = origin.filter((match) => input.selectedRepoIds.has(match.id))
+
   const selectedMatches =
     selectedOrigin.length > 0
       ? selectedOrigin
       : upstream.filter((match) => input.selectedRepoIds.has(match.id))
+
   if (selectedMatches.length === 0) {
     return { status: 'unselected_match', globalMatches }
   }
+
   if (selectedMatches.length === 1) {
     return { status: 'selected_match', repo: selectedMatches[0], globalMatches }
   }
+
   return { status: 'ambiguous_selected_match', selectedMatches, globalMatches }
 }
 
@@ -83,9 +91,11 @@ export function filterProjectTableRowsByOpenRepos(
   const rows = table.rows.filter((row) =>
     projectRowHasOpenRepo(row, lookupSlug, table.project.host)
   )
+
   if (rows.length === table.rows.length && table.totalCount === rows.length) {
     return table
   }
+
   return { ...table, rows, totalCount: rows.length }
 }
 
@@ -103,12 +113,15 @@ export function filterProjectTableRowsBySelectedRepos(
       slugIndexReady,
       selectedRepoIds
     })
+
     return (
       resolution.status === 'selected_match' || resolution.status === 'ambiguous_selected_match'
     )
   })
+
   if (rows.length === table.rows.length && table.totalCount === rows.length) {
     return table
   }
+
   return { ...table, rows, totalCount: rows.length }
 }

@@ -3,6 +3,7 @@ import { addViewportSizeChangeListener } from './viewport-size-change-listener'
 
 function createViewport(width: number, height: number) {
   const listeners = new Set<() => void>()
+
   return {
     innerWidth: width,
     innerHeight: height,
@@ -15,6 +16,7 @@ function createViewport(width: number, height: number) {
     resizeTo(nextWidth: number, nextHeight: number) {
       this.innerWidth = nextWidth
       this.innerHeight = nextHeight
+
       for (const listener of listeners) {
         listener()
       }

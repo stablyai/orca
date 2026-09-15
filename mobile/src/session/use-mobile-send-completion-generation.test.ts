@@ -19,6 +19,7 @@ describe('mobile send completion generation', () => {
 
     function Harness({ surfaceKey }: { surfaceKey: string }): null {
       getGeneration = useMobileSendCompletionGeneration({ onBlur, surfaceKey })
+
       return null
     }
 
@@ -46,9 +47,11 @@ describe('mobile send completion generation', () => {
 
     function Harness({ surfaceKey, suspend }: { surfaceKey: string; suspend: boolean }): null {
       getGeneration = useMobileSendCompletionGeneration({ onBlur: vi.fn(), surfaceKey })
+
       if (suspend) {
         throw never
       }
+
       return null
     }
 

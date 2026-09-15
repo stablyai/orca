@@ -6,31 +6,42 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // tab and the layout the wake path restores.
 
 const WORKTREE_ID = 'repo::/worktree'
+
 const TAB_ID = 'tab-1'
+
 const PTY_ID = `${WORKTREE_ID}@@session-1`
+
 const SECOND_PTY_ID = `${WORKTREE_ID}@@session-2`
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const SECOND_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 const startedWatcherDisposers: ReturnType<typeof vi.fn>[] = []
+
 vi.mock('./parked-terminal-byte-watcher', () => ({
   startParkedTerminalByteWatcher: () => {
     const dispose = vi.fn()
     startedWatcherDisposers.push(dispose)
+
     return dispose
   }
 }))
 
 type ExitCallback = (code: number, context: { hadPrimary: boolean }) => void
+
 const exitCallbacksByPtyId = new Map<string, ExitCallback>()
+
 vi.mock('./pty-dispatcher', () => ({
   subscribeToPtyExit: (ptyId: string, callback: ExitCallback) => {
     exitCallbacksByPtyId.set(ptyId, callback)
+
     return vi.fn()
   }
 }))
 
 const discardPreHandlerPtyState = vi.fn()
+
 vi.mock('./pty-pre-handler-buffer', () => ({
   consumePreHandlerPtyState: vi.fn(),
   discardPreHandlerPtyState: (ptyId: string) => discardPreHandlerPtyState(ptyId),
@@ -38,6 +49,7 @@ vi.mock('./pty-pre-handler-buffer', () => ({
 }))
 
 const closeTerminalTab = vi.fn()
+
 vi.mock('../terminal/terminal-tab-actions', () => ({
   closeTerminalTab: (tabId: string, options?: unknown) => closeTerminalTab(tabId, options)
 }))
@@ -53,7 +65,9 @@ type MockStoreState = {
   isPtyShutdownPending: ReturnType<typeof vi.fn>
   suppressedPtyExitIds: Record<string, true>
 }
+
 let mockStoreState: MockStoreState
+
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => mockStoreState }
 }))
@@ -72,7 +86,9 @@ function startSplitWatchers(): ParkedTabWatcherEntry {
     paneIdByPtyId: new Map(),
     disposersByPtyId: new Map()
   }
+
   const tab = { id: TAB_ID, ptyId: PTY_ID }
+
   for (const pane of [
     { ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true },
     { ptyId: SECOND_PTY_ID, paneId: 2, leafId: SECOND_LEAF_ID, drivesTabTitle: false }
@@ -86,6 +102,7 @@ function startSplitWatchers(): ParkedTabWatcherEntry {
       restorePolicy: {}
     })
   }
+
   return entry
 }
 

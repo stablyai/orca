@@ -14,15 +14,22 @@ import { createRootDispatch } from './db/root-dispatch-test-fixture'
 // own Run to the mailbox `orchestration check` actually reads.
 
 const WORKTREE_ID = 'repo-1::/tmp/sta-4604-worktree'
+
 const WORKER_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const COORDINATOR_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const WORKER_PTY_ID = 'pty-worker'
+
 const COORDINATOR_PTY_ID = 'pty-coordinator'
+
 const WORKER_PANE_KEY = makePaneKey('tab-worker', WORKER_LEAF_ID)
+
 const COORDINATOR_PANE_KEY = makePaneKey('tab-coordinator', COORDINATOR_LEAF_ID)
 
 function makeStore() {
   const session: WorkspaceSessionState = getDefaultWorkspaceSession()
+
   return {
     getWorkspaceSession: vi.fn(() => session),
     setWorkspaceSession: vi.fn(),
@@ -96,6 +103,7 @@ function makeRuntimeWithTwoPanes(): {
       }
     ]
   })
+
   return { runtime, workerHandle, coordinatorHandle }
 }
 
@@ -118,8 +126,10 @@ async function gradeWorkerExit(
 }> {
   const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
   const db = new OrchestrationDb(':memory:')
+
   try {
     const lightweight = mode === 'lightweight-run'
+
     const runId = lightweight
       ? db.createRun({
           objective: 'sta-4604 lightweight run',
@@ -127,9 +137,11 @@ async function gradeWorkerExit(
           coordinatorPaneKey: COORDINATOR_PANE_KEY
         }).id
       : LEGACY_RUN_ID
+
     if (mode === 'legacy-run') {
       db.createCoordinatorRun({ spec: 'legacy coordinator loop', coordinatorHandle })
     }
+
     const task = db.createTask({ spec: 'do the work', runId })
     const dispatch = createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
     runtime.setOrchestrationDb(db as never)
@@ -140,6 +152,7 @@ async function gradeWorkerExit(
     const direct = db.getUnreadMessages(coordinatorHandle, ['escalation'])
     const runMailbox = db.getUnreadRunMailbox(runId, 100, ['escalation'])
     const escalation = runMailbox[0] ?? direct[0]
+
     return {
       dispatchStatus: db.getDispatchContextById(dispatch.id)?.status,
       escalationsToCoordinatorHandle: direct.length,
@@ -177,12 +190,14 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
   it('titles the escalation from task_title, not the raw spec', async () => {
     const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
     const db = new OrchestrationDb(':memory:')
+
     try {
       const runId = db.createRun({
         objective: 'escalation prose',
         coordinatorHandle,
         coordinatorPaneKey: COORDINATOR_PANE_KEY
       }).id
+
       const spec = `Fix the auth redirect loop\n\n${'detail '.repeat(60)}`
       const task = db.createTask({ spec, runId, taskTitle: 'Fix auth redirect' })
       createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
@@ -262,12 +277,14 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
   it('wakes a coordinator already blocked in check --wait', async () => {
     const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
     const db = new OrchestrationDb(':memory:')
+
     try {
       const run = db.createRun({
         objective: 'sta-4604 blocking coordinator',
         coordinatorHandle,
         coordinatorPaneKey: COORDINATOR_PANE_KEY
       })
+
       const task = db.createTask({ spec: 'do the work', runId: run.id })
       createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
       runtime.setOrchestrationDb(db as never)
@@ -276,6 +293,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
         typeFilter: ['escalation'],
         timeoutMs: 2_000
       })
+
       runtime.onPtyExit(WORKER_PTY_ID, 137)
 
       await expect(waiting).resolves.toBe('notified')
@@ -298,6 +316,7 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
   it('escalates only into the dying worker own Run when several Runs are live', async () => {
     const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
     const db = new OrchestrationDb(':memory:')
+
     try {
       // A second, more recently created Run is the trap: any "latest active run" lookup picks it.
       const ownRun = db.createRun({
@@ -305,11 +324,13 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
         coordinatorHandle,
         coordinatorPaneKey: COORDINATOR_PANE_KEY
       })
+
       const otherRun = db.createRun({
         objective: 'unrelated newer run',
         coordinatorHandle: 'term_other_coordinator',
         coordinatorPaneKey: makePaneKey('tab-other', '33333333-3333-4333-8333-333333333333')
       })
+
       const task = db.createTask({ spec: 'owned work', runId: ownRun.id })
       createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
       runtime.setOrchestrationDb(db as never)
@@ -329,19 +350,23 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
   it('escalates for a supervised worker and settles its worker_dispatches row', async () => {
     const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
     const db = new OrchestrationDb(':memory:')
+
     try {
       const run = db.createRun({
         objective: 'supervised worker run',
         coordinatorHandle,
         coordinatorPaneKey: COORDINATOR_PANE_KEY
       })
+
       const task = db.createTask({ spec: 'supervised work', runId: run.id })
+
       const started = db.createStartingWorkerDispatch({
         creator: { kind: 'system' },
         maxDepth: Number.MAX_SAFE_INTEGER,
         taskId: task.id,
         startOptions: {}
       })
+
       db.prepareStartingWorkerAuthority({
         dispatchId: started.dispatch.id,
         handle: workerHandle,
@@ -376,18 +401,22 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
   it('still escalates on the failure that breaks the circuit', async () => {
     const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
     const db = new OrchestrationDb(':memory:')
+
     try {
       const run = db.createRun({
         objective: 'circuit breaker run',
         coordinatorHandle,
         coordinatorPaneKey: COORDINATOR_PANE_KEY
       })
+
       const task = db.createTask({ spec: 'repeatedly failing work', runId: run.id })
+
       // Burn the breaker down to its last life so this exit is the one that trips it.
       for (let attempt = 1; attempt < DISPATCH_CIRCUIT_BREAK_FAILURES; attempt += 1) {
         const previous = createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
         db.failDispatch(previous.id, `attempt ${attempt}`, { workerProcessExited: true })
       }
+
       const dispatch = createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
       runtime.setOrchestrationDb(db as never)
 
@@ -414,11 +443,13 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
 
   it('preserves the dispatch Run when legacy coordinator routing is used', async () => {
     const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
+
     const insertMessage = vi.fn((message: { to: string }) => ({
       ...message,
       to_handle: message.to,
       type: 'escalation'
     }))
+
     runtime.setOrchestrationDb({
       getActiveDispatchForTerminal: (handle: string) =>
         handle === workerHandle
@@ -441,12 +472,14 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
   it('still reaches the Run mailbox when the Run has no bound coordinator', async () => {
     const { runtime, workerHandle, coordinatorHandle } = makeRuntimeWithTwoPanes()
     const db = new OrchestrationDb(':memory:')
+
     try {
       const run = db.createRun({
         objective: 'run whose coordinator later unbinds',
         coordinatorHandle,
         coordinatorPaneKey: COORDINATOR_PANE_KEY
       })
+
       const task = db.createTask({ spec: 'work outliving its coordinator', runId: run.id })
       createRootDispatch(db, task.id, workerHandle, WORKER_PANE_KEY)
       // Rebinding the pane to a newer Run clears the old Run's coordinator_handle.

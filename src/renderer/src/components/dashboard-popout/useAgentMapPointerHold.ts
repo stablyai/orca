@@ -23,25 +23,31 @@ export function useAgentMapPointerHold(dragRef: AgentMapPointerDragRef): {
   clearDrag: (pointerId: number) => boolean
 } {
   const [held, setHeld] = useState<AgentMapPointerHold | null>(null)
+
   const hold = useCallback((target: Element): void => {
     const projectId = closestId(target, 'data-agent-map-project-id')
     const worktreeId = closestId(target, 'data-agent-map-worktree-id')
     // A pan off empty canvas holds nothing, so leave the memoized scene alone.
     setHeld(projectId === null && worktreeId === null ? null : { projectId, worktreeId })
   }, [])
+
   const release = useCallback((): void => {
     setHeld((current) => (current === null ? current : null))
   }, [])
+
   const clearDrag = useCallback(
     (pointerId: number): boolean => {
       if (dragRef.current?.pointerId !== pointerId) {
         return false
       }
+
       dragRef.current = null
       release()
+
       return true
     },
     [dragRef, release]
   )
+
   return { held, hold, release, clearDrag }
 }

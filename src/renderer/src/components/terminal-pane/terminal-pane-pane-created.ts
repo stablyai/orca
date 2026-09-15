@@ -41,11 +41,14 @@ export function createTerminalPaneCreatedHandler(
   return (pane, spawnHints) => {
     const { deps, refs, ptyDeps, startupWithSetupSplitWait, startup, osc7UncHost } = context
     const manager = deps.managerRef.current
+
     if (!manager) {
       return
     }
+
     const { settingsRef, paneCwdRef, paneKittyKeyboardModesRef, replayingPanesRef, managerRef } =
       deps
+
     const { deferredSplitHandoffs } = context
     const paneKey = makePaneKey(deps.tabId, pane.leafId)
     const restoredPtyId = ptyDeps.restoredPtyIdByLeafId?.[pane.leafId]
@@ -53,11 +56,13 @@ export function createTerminalPaneCreatedHandler(
     let effectiveSpawnHints = spawnHints
     let claimedDeferredSplitHandoff: ReturnType<typeof claimDeferredSplitPaneHandoff> = null
     let deferredSplitHandoff: DeferredSplitPaneHandoffHandle | undefined
+
     if (spawnHints?.cwdPromise && !hasAuthoritativeSpawnHint) {
       deferredSplitHandoff = beginDeferredSplitPaneHandoff(paneKey, spawnHints.cwdPromise)
       deferredSplitHandoffs.set(pane.id, deferredSplitHandoff)
     } else if (!hasAuthoritativeSpawnHint) {
       claimedDeferredSplitHandoff = claimDeferredSplitPaneHandoff(paneKey)
+
       if (claimedDeferredSplitHandoff) {
         deferredSplitHandoff = claimedDeferredSplitHandoff.handle
         deferredSplitHandoffs.set(pane.id, deferredSplitHandoff)
@@ -71,6 +76,7 @@ export function createTerminalPaneCreatedHandler(
       // deferred record must not be claimed by a later remount.
       discardDeferredSplitPaneHandoffForKey(paneKey)
     }
+
     const handoffForInput = deferredSplitHandoff
 
     const osc52Disposable = pane.terminal.parser.registerOscHandler(
@@ -86,9 +92,11 @@ export function createTerminalPaneCreatedHandler(
         })
       )
     )
+
     refs.osc52DisposablesRef.current.set(pane.id, osc52Disposable)
 
     const existingPaneCwd = paneCwdRef.current.get(pane.id)
+
     if (!existingPaneCwd) {
       paneCwdRef.current.set(pane.id, {
         cwd: resolvePaneSeedCwd(effectiveSpawnHints?.cwd, ptyDeps.cwd ?? ''),
@@ -107,15 +115,19 @@ export function createTerminalPaneCreatedHandler(
         pendingCwd: effectiveSpawnHints.cwdPromise
       })
     }
+
     if (effectiveSpawnHints?.cwdPromise) {
       const cwdPromise = effectiveSpawnHints.cwdPromise
+
       // A rejected lookup keeps the seed cwd; either way the settled identity
       // stays until bind/failure so a stale cleanup cannot clear a newer lookup.
       const applySettledCwd = (cwd: string | null): void => {
         const current = paneCwdRef.current.get(pane.id)
+
         if (!current || current.confirmed || current.pendingCwd !== cwdPromise) {
           return
         }
+
         paneCwdRef.current.set(pane.id, {
           cwd: cwd ?? current.cwd,
           confirmed: false,
@@ -123,12 +135,15 @@ export function createTerminalPaneCreatedHandler(
           pendingCwd: cwdPromise
         })
       }
+
       void cwdPromise.then(applySettledCwd, () => applySettledCwd(null))
     }
+
     const osc7Disposable = pane.terminal.parser.registerOscHandler(
       7,
       guardParserHandler('osc-7-cwd', (data) => {
         const parsedCwd = parseOsc7(data, { uncHost: osc7UncHost })
+
         if (parsedCwd) {
           const confirmed = !isPaneReplaying(replayingPanesRef, pane.id)
           paneCwdRef.current.set(
@@ -136,9 +151,11 @@ export function createTerminalPaneCreatedHandler(
             mergePaneCwdFromOsc7(paneCwdRef.current.get(pane.id), parsedCwd, confirmed)
           )
         }
+
         return true
       })
     )
+
     refs.osc7DisposablesRef.current.set(pane.id, osc7Disposable)
 
     installTerminalPaneInputHandling({
@@ -167,12 +184,14 @@ export function createTerminalPaneCreatedHandler(
     })
 
     context.applyAppearance(manager)
+
     const onQueuedStartupSpawned = createQueuedStartupConsumer(
       ptyDeps.startup,
       startupWithSetupSplitWait,
       () => useAppStore.getState().consumeTabStartupCommand(deps.tabId),
       () => useAppStore.getState().pendingStartupByTabId[deps.tabId] === startup
     )
+
     const panePtyBinding = connectPanePty(pane, manager, {
       ...ptyDeps,
       ...(onQueuedStartupSpawned ? { onQueuedStartupSpawned } : {}),
@@ -184,6 +203,7 @@ export function createTerminalPaneCreatedHandler(
                 pane.id,
                 effectiveSpawnHints.cwdPromise
               )
+
               if (handoffForInput) {
                 clearDeferredSplitPaneHandoff(handoffForInput)
                 deferredSplitHandoffs.delete(pane.id)
@@ -210,12 +230,15 @@ export function createTerminalPaneCreatedHandler(
         : ptyDeps.restoredPtyIdByLeafId,
       restoredLeafId: pane.leafId
     })
+
     ptyDeps.startup = null
+
     const nextInitialCwdState = clearQueuedInitialCwdAfterFirstPane(
       refs.queuedInitialCwdRef.current,
       context.defaultTabCwd,
       ptyDeps.cwd ?? ''
     )
+
     refs.queuedInitialCwdRef.current = nextInitialCwdState.queuedInitialCwd
     ptyDeps.cwd = nextInitialCwdState.ptyCwd
     deps.panePtyBindingsRef.current.set(pane.id, panePtyBinding)

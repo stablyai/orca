@@ -39,19 +39,23 @@ export function resolveAutomationWorkspaceProvenance(args: {
   request: AutomationWorkspaceProvenanceRequest | undefined
 }): AutomationWorkspaceProvenance | undefined {
   const { authority, repoSelector, repo, request } = args
+
   if (!request) {
     return undefined
   }
 
   let automation: Automation
+
   try {
     automation = authority.showAutomation(request.automationId)
   } catch {
     invalidAutomationProvenanceRequest()
   }
+
   const run = authority
     .listAutomationRuns(request.automationId)
     .find((entry) => entry.id === request.automationRunId)
+
   const expectedRepoId = run?.runContext?.repoId ?? getAutomationRunRepoId(automation)
 
   if (
@@ -64,6 +68,7 @@ export function resolveAutomationWorkspaceProvenance(args: {
   ) {
     invalidAutomationProvenanceRequest()
   }
+
   if (
     !beginAutomationDispatchTokenUse({
       automationId: request.automationId,
@@ -84,6 +89,7 @@ export function releaseAutomationWorkspaceProvenanceRequest(
   if (!request) {
     return
   }
+
   releaseAutomationDispatchTokenUse({
     token: request.dispatchToken,
     reservationId: request.createRequestId
@@ -96,6 +102,7 @@ export function finishAutomationWorkspaceProvenanceRequest(
   if (!request) {
     return
   }
+
   finishAutomationDispatchTokenUse({
     token: request.dispatchToken,
     reservationId: request.createRequestId

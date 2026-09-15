@@ -44,6 +44,7 @@ describe('OrcaRuntimeService', () => {
 
     let retainedChars = lines.reduce((sum, line) => sum + line.length, 0)
     let expectedStartIndex = 0
+
     while (expectedStartIndex < lines.length && retainedChars > 256 * 1024) {
       retainedChars -= lines[expectedStartIndex].length
       expectedStartIndex += 1
@@ -59,6 +60,7 @@ describe('OrcaRuntimeService', () => {
     const lines = Array.from({ length: 5000 }, (_, index) =>
       index % 2 === 0 ? `line-${index}` : '   '
     )
+
     const mapSpy = vi.spyOn(Array.prototype, 'map')
 
     const preview = buildPreview(lines, 'partial-tail')
@@ -147,6 +149,7 @@ describe('OrcaRuntimeService', () => {
   it('strips retained terminal path line and hash locators before matching', () => {
     const colonPath = '/tmp/orca report/result.json'
     const hashPath = '/tmp/result-hash.json'
+
     const candidates = appendRecentPtyPathCandidates(
       undefined,
       `wrote ${colonPath}:12:3 for you\nfile://${hashPath}#L12C3 generated\n`
@@ -213,19 +216,23 @@ describe('OrcaRuntimeService', () => {
     expect(candidates).toEqual([])
 
     let retained: string[] | undefined
+
     for (let index = 0; index < 200; index += 1) {
       retained = appendRecentPtyPathCandidates(retained, `/tmp/${'a'.repeat(900)}-${index}.json\n`)
     }
+
     const totalBytes = (retained ?? []).reduce(
       (sum, candidate) => sum + Buffer.byteLength(candidate, 'utf8'),
       0
     )
+
     expect(totalBytes).toBeLessThanOrEqual(64 * 1024)
   })
 
   it('keeps Windows file URI drive paths in bounded PTY path candidates', () => {
     const artifactPath = 'C:/Users/me/AppData/Local/Temp/result.json'
     const prefix = 'x'.repeat(8 * 1024)
+
     const candidates = appendRecentPtyPathCandidates(
       undefined,
       `file:///C:/Users/me/AppData/Local/Temp/result.json\n${prefix}`
@@ -349,6 +356,7 @@ describe('OrcaRuntimeService', () => {
       'Downloading 10%',
       '\x1b[2K\x1b[1GDownloading 20%'
     )
+
     expect(eraseWithoutCarriageReturn.partialLine).toBe('Downloading 20%')
 
     const runtime = new OrcaRuntimeService(store)
@@ -459,6 +467,7 @@ describe('OrcaRuntimeService', () => {
     const cursorRead = await runtime.readTerminal(terminal.handle, {
       cursor: Number(beforeRedraw.nextCursor)
     })
+
     expect(cursorRead.tail).toEqual(['• Working.', 'Tool call finished'])
     expect(cursorRead.oldestCursor).toBe('0')
     expect(cursorRead.nextCursor).toBe('4')
@@ -483,6 +492,7 @@ describe('OrcaRuntimeService', () => {
     const cursorRead = await runtime.readTerminal(terminal.handle, {
       cursor: Number(beforeRedraw.nextCursor)
     })
+
     expect(cursorRead.tail).toEqual(['B2'])
     expect(cursorRead.oldestCursor).toBe('0')
     expect(cursorRead.nextCursor).toBe('4')
@@ -585,6 +595,7 @@ describe('OrcaRuntimeService', () => {
     const cursorRead = await runtime.readTerminal(terminal.handle, {
       cursor: Number(beforeRedraw.nextCursor)
     })
+
     expect(cursorRead.tail).toEqual(['• Working.'])
     expect(cursorRead.oldestCursor).toBe('0')
     expect(cursorRead.nextCursor).toBe('3')
@@ -626,11 +637,13 @@ describe('OrcaRuntimeService', () => {
     const longRetained = longRead.tail.join('\n')
     expect(longRetained).toContain('Working done')
     expect(longRetained).not.toContain('x'.repeat(100))
+
     const pty = (
       runtime as unknown as {
         ptysById: Map<string, { lastOscTitle: string | null }>
       }
     ).ptysById.get('pty-1')
+
     expect(pty?.lastOscTitle).toBe('x'.repeat(MAX_OSC_TITLE_CHARS))
   })
 
@@ -685,18 +698,21 @@ describe('OrcaRuntimeService', () => {
     const infinityParam = '9'.repeat(400)
     runtime.onPtyData('pty-1', `A\x1b[1000000000CZ\n`, 100)
     runtime.onPtyData('pty-1', `B\x1b[${infinityParam}GQ\n`, 101)
+
     for (let index = 0; index < 50; index += 1) {
       runtime.onPtyData('pty-1', `R${index}\x1b[2K\x1b[999999CZ\n`, 102 + index)
     }
 
     const read = await runtime.readTerminal(terminal.handle, { cursor: 0, limit: 60 })
     expect(read.tail).toHaveLength(52)
+
     for (const line of read.tail) {
       expect(line.length).toBeLessThan(5000)
       expect(line).not.toContain('1000000000')
       expect(line).not.toContain(infinityParam)
       expect(line).not.toContain('999999')
     }
+
     expect(read.tail[0]?.startsWith('A')).toBe(true)
     expect(read.tail[0]?.endsWith('Z')).toBe(true)
     expect(read.tail[1]?.startsWith('B')).toBe(true)

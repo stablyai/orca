@@ -14,6 +14,7 @@ import {
 } from './ephemeral-vm-runtimes'
 
 const EPHEMERAL_VM_RUNTIME_FEATURES_FILE = 'orca-ephemeral-vm-runtime-features.json'
+
 export const MAX_EPHEMERAL_VM_RUNTIME_FEATURE_STORE_FILE_BYTES = 1024 * 1024
 
 const EphemeralVmRuntimeFeatureEntrySchema = z
@@ -61,9 +62,11 @@ export function assertEphemeralVmRuntimeCheckoutModeCanPersist(
   }
 ): void {
   const snapshot = readEphemeralVmRuntimeFeatureStore(userDataPath)
+
   if (!snapshot.writable) {
     throw new Error('Could not preserve ephemeral VM runtime compatibility metadata.')
   }
+
   const required: EphemeralVmRuntimeFeatureEntry = {
     id: args.id,
     recipeId: args.recipeId,
@@ -71,6 +74,7 @@ export function assertEphemeralVmRuntimeCheckoutModeCanPersist(
     recipeCheckoutMode: args.checkoutMode,
     ...(args.checkoutMode === 'provisioned-root' ? { resultCheckoutMode: 'provisioned-root' } : {})
   }
+
   try {
     assertFeatureStoreCanPersist(snapshot, mergeFeatureEntries(snapshot.features, [required]))
   } catch (error) {
@@ -79,6 +83,7 @@ export function assertEphemeralVmRuntimeCheckoutModeCanPersist(
         'Could not preserve ephemeral VM runtime compatibility metadata; the feature store exceeds its durable capacity.'
       )
     }
+
     throw error
   }
 }
@@ -87,11 +92,14 @@ export function readEphemeralVmRuntimeFeatureStore(
   userDataPath: string
 ): EphemeralVmRuntimeFeatureStoreSnapshot {
   const path = getEphemeralVmRuntimeFeatureStorePath(userDataPath)
+
   if (!existsSync(path)) {
     return { writable: true, features: [], retainedRecords: [] }
   }
+
   try {
     hardenExistingSecureFile(path)
+
     const parsed = EphemeralVmRuntimeFeatureStoreSchema.parse(
       JSON.parse(
         readNodeFileSyncWithinLimit(
@@ -100,6 +108,7 @@ export function readEphemeralVmRuntimeFeatureStore(
         ).buffer.toString('utf8')
       )
     )
+
     return parseFeatureRecords(parsed.records)
   } catch {
     return { writable: false, features: [], retainedRecords: [] }
@@ -114,6 +123,7 @@ export function writeEphemeralVmRuntimeFeatureStore(
   if (!snapshot.writable) {
     throw new Error('The ephemeral VM runtime feature store is not writable.')
   }
+
   writeSecureJsonFileWithinLimit(
     getEphemeralVmRuntimeFeatureStorePath(userDataPath),
     runtimeFeatureStoreValue(snapshot, features),
@@ -129,6 +139,7 @@ function assertFeatureStoreCanPersist(
   if (!snapshot.writable) {
     throw new Error('The ephemeral VM runtime feature store is not writable.')
   }
+
   stringifyJsonWithinByteLimit(
     runtimeFeatureStoreValue(snapshot, features),
     MAX_EPHEMERAL_VM_RUNTIME_FEATURE_STORE_FILE_BYTES
@@ -140,9 +151,11 @@ function mergeFeatureEntries(
   required: readonly EphemeralVmRuntimeFeatureEntry[]
 ): EphemeralVmRuntimeFeatureEntry[] {
   const merged = new Map(existing.map((entry) => [featureIdentity(entry), entry]))
+
   for (const entry of required) {
     merged.set(featureIdentity(entry), entry)
   }
+
   return sortRuntimeFeatures([...merged.values()])
 }
 
@@ -150,11 +163,14 @@ export function featureEntryFromRuntime(
   runtime: EphemeralVmRuntimeRecord
 ): EphemeralVmRuntimeFeatureEntry | null {
   const recipeCheckoutMode = runtime.recipe?.checkoutMode
+
   const resultCheckoutMode =
     runtime.recipeResult.schemaVersion === 2 ? runtime.recipeResult.checkoutMode : undefined
+
   if (!recipeCheckoutMode && !resultCheckoutMode) {
     return null
   }
+
   return {
     id: runtime.id,
     recipeId: runtime.recipeId,
@@ -169,12 +185,15 @@ export function restoreRuntimeFeatureList(
   features: readonly EphemeralVmRuntimeFeatureEntry[]
 ): EphemeralVmRuntimeRecord[] {
   const byIdentity = new Map<string, EphemeralVmRuntimeFeatureEntry>()
+
   for (const feature of features) {
     const identity = featureIdentity(feature)
+
     if (!byIdentity.has(identity)) {
       byIdentity.set(identity, feature)
     }
   }
+
   return runtimes.map((runtime) =>
     restoreRuntimeFeatures(runtime, byIdentity.get(featureIdentity(runtime)))
   )
@@ -187,6 +206,7 @@ function restoreRuntimeFeatures(
   if (!feature) {
     return runtime
   }
+
   return EphemeralVmRuntimeRecordSchema.parse({
     ...runtime,
     ...(runtime.recipe && feature.recipeCheckoutMode
@@ -223,23 +243,29 @@ function parseFeatureRecords(records: unknown[]): EphemeralVmRuntimeFeatureStore
   const features: EphemeralVmRuntimeFeatureEntry[] = []
   const retainedRecords: unknown[] = []
   const identities = new Map<string, string>()
+
   for (const record of records) {
     const parsed = EphemeralVmRuntimeFeatureEntrySchema.safeParse(record)
+
     if (!parsed.success) {
       retainedRecords.push(record)
       continue
     }
+
     const identity = featureIdentity(parsed.data)
     const serialized = JSON.stringify(parsed.data)
     const existing = identities.get(identity)
+
     if (existing && existing !== serialized) {
       return { writable: false, features: [], retainedRecords: [] }
     }
+
     if (!existing) {
       identities.set(identity, serialized)
       features.push(parsed.data)
     }
   }
+
   return { writable: true, features: sortRuntimeFeatures(features), retainedRecords }
 }
 

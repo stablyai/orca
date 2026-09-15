@@ -13,14 +13,18 @@ export function wrapPosixHookCommand(
 ): string {
   // Why: single-quote escape so $, `, ", \ in scriptPath stay literal — avoids shell injection from an arbitrary path.
   const quoted = quotePosixShellString(scriptPath)
+
   const envPrefix = Object.entries(env)
     .map(([key, value]) => `${key}='${value.replaceAll("'", "'\\''")}'`)
     .join(' ')
+
   const invocation = envPrefix ? `${envPrefix} /bin/sh ${quoted}` : `/bin/sh ${quoted}`
+
   const fallback =
     options.fallbackStdout === undefined
       ? POSIX_HOOK_STDIN_DRAIN_COMMAND
       : `printf '%s\\n' ${quotePosixShellString(options.fallbackStdout)}; ${POSIX_HOOK_STDIN_DRAIN_COMMAND}`
+
   // Why: default form avoids Grok rejecting unset vars or splicing values into shell quotes at load
   // time; the child shell checks the current pane env before spawning the managed script.
   const guards = [
@@ -29,5 +33,6 @@ export function wrapPosixHookCommand(
     `[ -r ${quoted} ]`,
     `[ -x ${quoted} ]`
   ].join(' && ')
+
   return `if ${guards}; then ${invocation}; else ${fallback}; fi`
 }

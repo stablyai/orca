@@ -44,14 +44,17 @@ import { awaitTargetLifecycle } from './ssh-target-lifecycle-queue'
 
 export async function connectTarget(targetId: string): Promise<SshConnectionState> {
   const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
+
   if (e2eProbePath) {
     appendFileSync(e2eProbePath, `${JSON.stringify(targetId)}\n`)
     throw new Error('e2e_forbidden_local_ssh_connect')
   }
+
   // Why: fence callers that entered before a same-turn disconnect/reset but resume after its cleanup.
   const admissionAuthority = getSshProviderAuthority(targetId)
   await awaitTargetLifecycle(targetId)
   const reset = resetRelayInFlight.get(targetId)
+
   if (reset) {
     await reset
   }
@@ -59,24 +62,30 @@ export async function connectTarget(targetId: string): Promise<SshConnectionStat
   // Why: serialize concurrent ssh:connect for the same target; interleaved connects otherwise leak the first session.
   const existing = connectInFlight.get(targetId)
   let replacePendingTransport = false
+
   if (existing) {
     if (isCurrentConnectAttempt(targetId, existing.authority)) {
       return existing.promise
     }
   }
+
   if (!isCurrentConnectAttempt(targetId, admissionAuthority)) {
     throw createCancelledConnectAttemptError()
   }
+
   const observedAuthority = admissionAuthority
+
   if (existing) {
     if (connectInFlight.get(targetId) === existing) {
       connectInFlight.delete(targetId)
       replacePendingTransport = true
     }
   }
+
   if (!isCurrentSshProviderAuthority(observedAuthority)) {
     throw createCancelledConnectAttemptError()
   }
+
   // Why: the shutdown drain fences and snapshots synchronously, so a connect either registers in
   // connectInFlight below (and gets joined) or fails here — it can never slip between the two.
   assertSshConnectsNotFenced()
@@ -85,6 +94,7 @@ export async function connectTarget(targetId: string): Promise<SshConnectionStat
   const promise = doConnect(targetId, replacePendingTransport)
   const attempt = { authority: getSshProviderAuthority(targetId), promise }
   connectInFlight.set(targetId, attempt)
+
   try {
     return await promise
   } finally {
@@ -99,6 +109,7 @@ async function doConnect(
   replacePendingTransport = false
 ): Promise<SshConnectionState> {
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
+
   if (!target) {
     throw new Error(`SSH target "${targetId}" not found`)
   }
@@ -106,6 +117,7 @@ async function doConnect(
   const existingSession = activeSessions.get(targetId)
   const existingState = connectionManager!.getState(targetId)
   const existingMux = existingSession?.getMux()
+
   if (
     existingSession?.getState() === 'ready' &&
     existingState?.status === 'connected' &&
@@ -117,25 +129,31 @@ async function doConnect(
   ) {
     // Why: BrowserWindow reactivation re-fires ssh:connect for already-live targets; treat as a refresh instead of tearing down the relay and its forwards.
     broadcastSshState(getCurrentMainWindow, targetId, existingState)
+
     return getPublicSshState(targetId)!
   }
 
   const authority = rotateSshProviderAuthority(targetId)
   clearRelayStateOverride(targetId)
+
   const pendingTransportDisconnect = replacePendingTransport
     ? connectionManager!.disconnect(targetId).then(
         () => ({ ok: true }) as const,
         (error: unknown) => ({ ok: false, error }) as const
       )
     : null
+
   let conn
+
   // Why: tear down any existing session first to avoid leaking its multiplexer, providers, and timers (double-connect / reconnect-after-error).
   if (existingSession) {
     // Why: await port teardown before disposing, else the new session's restorePortForwards can hit EADDRINUSE on not-yet-released ports.
     await portForwardManager!.removeAllForwards(targetId)
+
     if (!isCurrentConnectAttempt(targetId, authority)) {
       throw createCancelledConnectAttemptError()
     }
+
     try {
       await existingSession.detachAndPersist()
     } finally {
@@ -153,9 +171,11 @@ async function doConnect(
 
   if (pendingTransportDisconnect) {
     const disconnectResult = await pendingTransportDisconnect
+
     if (!disconnectResult.ok) {
       throw disconnectResult.error
     }
+
     if (!isCurrentConnectAttempt(targetId, authority)) {
       throw createCancelledConnectAttemptError()
     }
@@ -166,6 +186,7 @@ async function doConnect(
   // means a connect either registers before the shutdown drain snapshots, or registers never and
   // owns nothing to clean up.
   assertSshConnectsNotFenced()
+
   // Why: create the session early so onStateChange sees it in 'deploying' and skips reconnect logic.
   const session = new SshRelaySession(
     targetId,
@@ -175,19 +196,23 @@ async function doConnect(
     currentRuntime,
     broadcastDetectedPortsFromCurrentWindow
   )
+
   configureRelaySessionCallbacks(session)
   activeSessions.set(targetId, session)
+
   const ownsSession = (): boolean =>
     isCurrentConnectAttempt(targetId, authority) && activeSessions.get(targetId) === session
 
   // Why captured here and not with existingState: connect() reuses an already-connected transport,
   // and only a transport this attempt opened is this attempt's to close when it loses the race.
   const priorConnection = connectionManager!.getConnection(targetId)
+
   const mintedConnection = (): SshConnection | null =>
     conn && conn !== priorConnection ? conn : null
 
   try {
     conn = await connectionManager!.connect(target)
+
     if (!ownsSession()) {
       throw createCancelledConnectAttemptError()
     }
@@ -195,10 +220,12 @@ async function doConnect(
     // Why: connect()'s internal state may not have reached the renderer; broadcast explicitly so the UI leaves 'connecting'.
     const errObj = err instanceof Error ? err : new Error(String(err))
     const status: SshConnectionStatus = isAuthError(errObj) ? 'auth-failed' : 'error'
+
     if (!ownsSession()) {
       await abandonCancelledConnectAttempt(targetId, session, mintedConnection())
       throw createCancelledConnectAttemptError()
     }
+
     // Why: clear this failed connect's flag so a later non-prompting connect isn't deferred.
     credentialRequestedForTarget.delete(targetId)
     await abandonFailedSshSession(targetId, session)
@@ -222,6 +249,7 @@ async function doConnect(
     })
 
     await session.establish(conn, relayGracePeriodForTarget(target))
+
     if (!ownsSession()) {
       throw createCancelledConnectAttemptError()
     }
@@ -240,8 +268,10 @@ async function doConnect(
       await abandonCancelledConnectAttempt(targetId, session, mintedConnection())
       throw createCancelledConnectAttemptError()
     }
+
     await abandonFailedSshSession(targetId, session)
     clearRelayLostBackoff(targetId)
+
     try {
       await connectionManager!.disconnect(targetId)
     } catch (disconnectError) {
@@ -250,6 +280,7 @@ async function doConnect(
         `[ssh] Failed to disconnect transport after failed establish for ${targetId}: ${disconnectError instanceof Error ? disconnectError.message : String(disconnectError)}`
       )
     }
+
     throw err
   }
 

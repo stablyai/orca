@@ -23,6 +23,7 @@ import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
 const SESSION = 'subscriber-session'
 
 let root: string
+
 const journals = createTrackedJournalOpener()
 
 beforeEach(async () => {
@@ -46,6 +47,7 @@ describe('AgentSessionSubscribers', () => {
       },
       journalDir: join(root, 'checkpoint-journal')
     })
+
     const events: AgentSessionSubscribeEvent[] = []
 
     new AgentSessionSubscribers().open({
@@ -85,12 +87,15 @@ describe('AgentSessionSubscribers', () => {
       },
       journalDir: join(root, 'clock-journal')
     })
+
     let now = 1_000
     const events: AgentSessionSubscribeEvent[] = []
     const subscribers = new AgentSessionSubscribers({ now: () => (now += 1) })
+
     const emit = (event: AgentSessionSubscribeEvent): void => {
       events.push(event)
     }
+
     subscribers.open({ id: 'one', sessionId: SESSION, journal, fence: 1, emit })
     subscribers.open({ id: 'two', sessionId: SESSION, journal, fence: 1, emit })
     await journal.appendItem(
@@ -130,6 +135,7 @@ describe('AgentSessionSubscribers', () => {
       },
       journalDir: join(root, 'catalog-journal')
     })
+
     let commands = [{ name: 'first', kind: 'skill' as const }]
     const events: AgentSessionSubscribeEvent[] = []
     const subscribers = new AgentSessionSubscribers({ readCommands: () => commands })
@@ -173,7 +179,9 @@ describe('AgentSessionSubscribers', () => {
       },
       journalDir: join(root, 'hook-journal')
     })
+
     const published: string[] = []
+
     const subscribers = new AgentSessionSubscribers({
       onJournalPublished: (sessionId, published_journal) => {
         expect(published_journal).toBe(journal)
@@ -209,6 +217,7 @@ describe('AgentSessionSubscribers', () => {
       },
       journalDir: join(root, 'unread-journal')
     })
+
     const statusFeed = new StructuredAgentSessionStatusFeed({
       sessions: new Map([
         [
@@ -219,9 +228,11 @@ describe('AgentSessionSubscribers', () => {
       getRecord: () => null,
       now: () => 1_000
     })
+
     const subscribers = new AgentSessionSubscribers({
       onJournalPublished: (sessionId, published) => statusFeed.publish(sessionId, published)
     })
+
     const statuses: AgentSessionStatusEvent[] = []
     statusFeed.subscribe({ id: 'session-list', emit: (event) => statuses.push(event) })
     const turn = { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 } as const
@@ -263,6 +274,7 @@ describe('AgentSessionSubscribers', () => {
       },
       journalDir: join(root, 'journal')
     })
+
     const subscribers = new AgentSessionSubscribers()
     const events: AgentSessionSubscribeEvent[] = []
     subscribers.open({
@@ -272,6 +284,7 @@ describe('AgentSessionSubscribers', () => {
       fence: 1,
       emit: (event) => events.push(event)
     })
+
     const handoff: AgentSessionHandoffStatus = {
       owner: 'native',
       direction: 'to-tui',
@@ -308,6 +321,7 @@ describe('AgentSessionSubscribers', () => {
       },
       journalDir: join(root, 'background-journal')
     })
+
     const subscribers = new AgentSessionSubscribers()
     const events: AgentSessionSubscribeEvent[] = []
     subscribers.open({
@@ -324,6 +338,7 @@ describe('AgentSessionSubscribers', () => {
       state: 'monitoring' as const,
       tasks: [{ id: 'task-1', kind: 'command' as const, description: 'run the build' }]
     }
+
     subscribers.backgroundTasks(SESSION, backgroundTasks, 2)
 
     expect(journal.cursor()).toEqual(cursor)
@@ -357,6 +372,7 @@ describe('AgentSessionSubscribers', () => {
       },
       journalDir: join(root, 'activity-journal')
     })
+
     const subscribers = new AgentSessionSubscribers()
     const events: AgentSessionSubscribeEvent[] = []
     subscribers.open({
@@ -399,6 +415,7 @@ describe('AgentSessionSubscribers', () => {
 
   it('catches a subscriber up past a pre-existing unsendable removal with a bounded reset', async () => {
     const journalDir = join(root, 'oversized-removal-journal')
+
     const seeded = await journals.open({
       identity: {
         sessionId: SESSION,
@@ -409,11 +426,13 @@ describe('AgentSessionSubscribers', () => {
       },
       journalDir
     })
+
     // A row admitted before identity bounding: its removal id alone exceeds
     // the outbound cap, so no catch-up batch can ever carry it.
     const hugeItemId = `codex:thread-1:${'h'.repeat(5 * 1024 * 1024)}:1`
     const resumeCursor = seeded.cursor()
     const seq = resumeCursor.sequence
+
     const rows: JournalRow[] = [
       {
         kind: 'item',
@@ -437,19 +456,24 @@ describe('AgentSessionSubscribers', () => {
         ts: 2_001
       }
     ]
+
     // Staged straight into the session database, exactly as a previous writer
     // would have committed them.
     await seeded.close()
     const opened = openJournalDatabase(journalDatabaseFile(journalDir))
+
     try {
       opened.db.exec('BEGIN IMMEDIATE')
+
       for (const row of rows) {
         insertJournalRow(opened.db, SESSION, row)
       }
+
       opened.db.exec('COMMIT')
     } finally {
       opened.db.close()
     }
+
     const journal = await journals.open({
       identity: {
         sessionId: SESSION,
@@ -478,6 +502,7 @@ describe('AgentSessionSubscribers', () => {
         REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
       )
     }
+
     const reset = events.find((event) => event.type === 'reset')
     expect(reset).toBeDefined()
 

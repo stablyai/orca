@@ -16,6 +16,7 @@ export function buildWorktreeManualOrderCatalog(args: {
     ...args.worktrees,
     ...args.folderWorkspaces.map((workspace) => folderWorkspaceToWorktree(workspace))
   ].filter((row) => !row.isArchived)
+
   const labels = buildWorktreeSortLabels(rows)
   rows.sort(
     (left, right) =>
@@ -23,8 +24,10 @@ export function buildWorktreeManualOrderCatalog(args: {
       compareWorktreeSortLabel(left, right, labels)
   )
   const rowsById = new Map<string, Worktree[]>()
+
   for (const row of rows) {
     const matches = rowsById.get(row.id)
+
     if (matches) {
       matches.push(row)
     } else {
@@ -34,9 +37,11 @@ export function buildWorktreeManualOrderCatalog(args: {
 
   const orderedIds = [...rowsById.keys()]
   const rankByWorktreeId = new Map<string, number>()
+
   for (const [worktreeId, matches] of rowsById) {
     const ranks = matches.map((row) => row.manualOrder)
     const rank = ranks[0]
+
     if (
       typeof rank === 'number' &&
       Number.isFinite(rank) &&
@@ -45,5 +50,6 @@ export function buildWorktreeManualOrderCatalog(args: {
       rankByWorktreeId.set(worktreeId, rank)
     }
   }
+
   return { orderedIds, rankByWorktreeId }
 }

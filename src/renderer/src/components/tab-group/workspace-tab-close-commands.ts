@@ -42,25 +42,33 @@ export function createWorkspaceTabCloseCommands({
           item.contentType === 'conflict-review' ||
           item.contentType === 'check-details')
     )
+
     if (!otherReference) {
       const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === entityId)
+
       if (file?.isDirty) {
         // Why: route through Terminal.tsx so the unsaved-confirmation save/discard queue stays centralized across all close paths.
         requestEditorFileClose(entityId)
+
         return false
       }
+
       closeFile(entityId)
     }
+
     return true
   }
 
   const leaveWorktreeIfEmpty = () => {
     const state = useAppStore.getState()
+
     if (state.activeWorktreeId !== worktreeId) {
       return
     }
+
     // Why: split-group closes bypass legacy Terminal.tsx; deselect the emptied worktree here or the window goes blank instead of landing.
     const { renderableTabCount } = state.reconcileWorktreeTabModel(worktreeId)
+
     if (renderableTabCount === 0) {
       setActiveWorktree(null)
     }
@@ -71,19 +79,24 @@ export function createWorkspaceTabCloseCommands({
     opts?: { skipEmptyCheck?: boolean; skipRunningProcessConfirm?: boolean }
   ) => {
     const item = groupTabs.find((candidate) => candidate.id === itemId)
+
     if (!item) {
       return
     }
+
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
       useAppStore.getState(),
       worktreeId
     )
+
     if (item.contentType === 'agent-session') {
       // Cancel pending creation and retire the host session before removing its tab.
       cancelStructuredAgentLaunch(worktreeId, item.entityId)
+
       const target = getActiveRuntimeTarget({
         activeRuntimeEnvironmentId: runtimeEnvironmentId
       })
+
       void closeStructuredAgentSession(target, item.entityId)
         .then(() => {
           const closeHostTab = () =>
@@ -92,6 +105,7 @@ export function createWorkspaceTabCloseCommands({
               tabId: `agent-session:${item.entityId}`,
               reason: 'user'
             })
+
           return target.kind === 'local'
             ? withLocalSessionTabCloseOwner(worktreeId, item.id, closeHostTab)
             : closeHostTab()
@@ -101,13 +115,16 @@ export function createWorkspaceTabCloseCommands({
           // Why: cancel above drops the seed only while the launch is still pending; a settled
           // launch whose composer never adopted it would otherwise keep it until worktree removal.
           clearStructuredAgentLaunchDraft(item.entityId)
+
           if (!opts?.skipEmptyCheck) {
             leaveWorktreeIfEmpty()
           }
         })
         .catch(reportStructuredSessionCloseError)
+
       return
     }
+
     if (item.contentType === 'terminal') {
       // Why: closeTerminalTab can defer behind a pin / running-process dialog, so the
       // empty check has to run on the actual close — never on cancel.
@@ -115,10 +132,13 @@ export function createWorkspaceTabCloseCommands({
         ...(opts?.skipRunningProcessConfirm ? { skipRunningProcessConfirm: true } : {}),
         ...(!opts?.skipEmptyCheck ? { onClosed: leaveWorktreeIfEmpty } : {})
       })
+
       return
     }
+
     if (item.contentType === 'browser') {
       const plan = closeWorkspaceBrowserTab(worktreeId, item.entityId, item.id)
+
       // Why: the empty check below answers "the user emptied this worktree". Unwinding a create
       // that never finished is not that — it must leave the selection as the click found it.
       if (!plan.closesLocally || plan.localCloseReason === 'cleanup') {
@@ -128,11 +148,14 @@ export function createWorkspaceTabCloseCommands({
       closeUnifiedTab(item.id)
     } else {
       const canCloseTab = closeEditorIfUnreferenced(item.entityId, item.id)
+
       if (!canCloseTab) {
         return
       }
+
       closeUnifiedTab(item.id)
     }
+
     if (!opts?.skipEmptyCheck) {
       leaveWorktreeIfEmpty()
     }

@@ -48,11 +48,14 @@ export function registerTerminalPanePasteListeners({
     setTerminalError,
     worktreeId
   } = controller
+
   const { executePanePasteText, pasteFromClipboard } = execution
   let suppressNextNativePaste = false
   let pasteSuppressionTimerId: number | null = null
+
   const shouldSuppressNativePaste = (event: KeyboardEvent): boolean => {
     const key = event.key.toLowerCase()
+
     return (
       (isMac &&
         key === 'v' &&
@@ -69,14 +72,17 @@ export function registerTerminalPanePasteListeners({
         !event.altKey)
     )
   }
+
   const onKeyPaste = (event: KeyboardEvent): void => {
     const target = event.target
+
     if (
       (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
       isInsideNativeChatRoot(target)
     ) {
       return
     }
+
     const matchesPaste = keybindingMatchesAction(
       'terminal.paste',
       event,
@@ -84,36 +90,48 @@ export function registerTerminalPanePasteListeners({
       keybindings,
       { context: 'terminal' }
     )
+
     if (!matchesPaste) {
       if (shouldSuppressNativePaste(event)) {
         suppressNextNativePaste = true
+
         if (pasteSuppressionTimerId !== null) {
           window.clearTimeout(pasteSuppressionTimerId)
         }
+
         pasteSuppressionTimerId = window.setTimeout(() => {
           pasteSuppressionTimerId = null
           suppressNextNativePaste = false
         }, 0)
       }
+
       return
     }
+
     if (isClipboardEventPasteRequired() && firesNativePasteEvent(event, isMac)) {
       return
     }
+
     event.preventDefault()
     event.stopPropagation()
     const manager = managerRef.current
+
     if (!manager) {
       return
     }
+
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
+
     if (!pane) {
       return
     }
+
     suppressNextNativePaste = true
+
     if (pasteSuppressionTimerId !== null) {
       window.clearTimeout(pasteSuppressionTimerId)
     }
+
     pasteSuppressionTimerId = window.setTimeout(() => {
       pasteSuppressionTimerId = null
       suppressNextNativePaste = false
@@ -123,44 +141,57 @@ export function registerTerminalPanePasteListeners({
 
   const onPaste = (event: ClipboardEvent): void => {
     const target = event.target
+
     if (
       (target instanceof Element && target.closest('[data-terminal-search-root]')) ||
       isInsideNativeChatRoot(target)
     ) {
       return
     }
+
     if (suppressNextNativePaste) {
       suppressNextNativePaste = false
+
       if (pasteSuppressionTimerId !== null) {
         window.clearTimeout(pasteSuppressionTimerId)
         pasteSuppressionTimerId = null
       }
+
       event.preventDefault()
       event.stopPropagation()
+
       return
     }
+
     event.preventDefault()
     event.stopPropagation()
     const manager = managerRef.current
+
     if (!manager) {
       return
     }
+
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
+
     if (!pane) {
       return
     }
+
     if (isClipboardEventPasteRequired()) {
       const eventText = getClipboardEventText(event)
       pasteFromClipboard(pane, 'paste-event', (options) =>
         assertClipboardTextWithinLimitWithYield(eventText, options)
       )
+
       return
     }
+
     pasteFromClipboard(pane, 'paste-event')
   }
 
   const onAppMenuPaste = (event: Event): void => {
     const activeElementAtDispatch = document.activeElement
+
     if (
       !(activeElementAtDispatch instanceof Element) ||
       !container.contains(activeElementAtDispatch) ||
@@ -169,21 +200,28 @@ export function registerTerminalPanePasteListeners({
     ) {
       return
     }
+
     event.preventDefault()
     event.stopPropagation()
     const manager = managerRef.current
+
     if (!manager) {
       return
     }
+
     const pane = manager.getActivePane() ?? manager.getPanes()[0]
+
     if (!pane) {
       return
     }
+
     const connectionId = getConnectionId(worktreeId) ?? null
+
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(
       useAppStore.getState(),
       worktreeId
     )
+
     void pasteTerminalClipboard({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
@@ -200,6 +238,7 @@ export function registerTerminalPanePasteListeners({
 
   const onAppMenuSelectionAction = (event: Event): void => {
     const activeElement = document.activeElement
+
     if (
       !(activeElement instanceof Element) ||
       !container.contains(activeElement) ||
@@ -209,23 +248,30 @@ export function registerTerminalPanePasteListeners({
     ) {
       return
     }
+
     const manager = managerRef.current
     const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+
     if (!pane) {
       return
     }
+
     const action = (event as CustomEvent<AppMenuSelectionAction>).detail
+
     if (action === 'copy') {
       if (!pane.terminal.getSelection()) {
         return
       }
+
       event.preventDefault()
       void copyTerminalSelection({
         terminal: pane.terminal,
         writeClipboardText: window.api.ui.writeTerminalClipboardText
       }).catch(() => undefined)
+
       return
     }
+
     if (action === 'select-all') {
       event.preventDefault()
       pane.terminal.selectAll()
@@ -236,10 +282,12 @@ export function registerTerminalPanePasteListeners({
   container.addEventListener('paste', onPaste, { capture: true })
   window.addEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
   window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
+
   return () => {
     if (pasteSuppressionTimerId !== null) {
       window.clearTimeout(pasteSuppressionTimerId)
     }
+
     container.removeEventListener('keydown', onKeyPaste, { capture: true })
     container.removeEventListener('paste', onPaste, { capture: true })
     window.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)

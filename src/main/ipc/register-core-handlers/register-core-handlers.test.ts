@@ -618,12 +618,14 @@ describe('registerCoreHandlers', () => {
       ok: true,
       result: { useRealCodexHome: true }
     })
+
     const prepareArgs = {
       agent: 'codex',
       filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
       codexHome: '/managed',
       executionHostId: 'runtime:env-123'
     }
+
     await expect(
       aiVaultOptions.prepareRuntimeSessionResume('env-123', prepareArgs)
     ).resolves.toEqual({ useRealCodexHome: true })

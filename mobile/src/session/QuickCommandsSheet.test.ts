@@ -11,8 +11,11 @@ const mocks = vi.hoisted(() => ({
   commands: [] as TerminalQuickCommand[],
   persist: vi.fn()
 }))
+
 const quickCommandEditorForm = 'QuickCommandEditorForm'
+
 const quickCommandsList = 'QuickCommandsList'
+
 const command: TerminalQuickCommand = {
   id: 'command',
   label: 'Test',
@@ -57,9 +60,11 @@ vi.mock('./use-quick-commands', () => ({
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {}
+
   const promise = new Promise<T>((done) => {
     resolve = done
   })
+
   return { promise, resolve }
 }
 
@@ -163,6 +168,7 @@ describe('QuickCommandsSheet', () => {
       id: 'repo-command',
       scope: { type: 'repo', repoId: 'repo-1' }
     }
+
     mocks.commands = [command, repoCommand]
     await act(async () => {
       renderer = create(
@@ -206,6 +212,7 @@ describe('QuickCommandsSheet', () => {
     const actions = mocks.alert.mock.calls[0]?.[2] as
       | Array<{ style?: string; onPress?: () => void }>
       | undefined
+
     act(() => actions?.find((action) => action.style === 'destructive')?.onPress?.())
 
     expect(mocks.persist).toHaveBeenCalledTimes(1)

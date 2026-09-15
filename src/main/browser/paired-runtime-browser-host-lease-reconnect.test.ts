@@ -40,6 +40,7 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
     const onError = vi.fn()
     const onReconnected = vi.fn()
     const onTransportLost = vi.fn()
+
     const lease = createReconnectLease({
       timeoutMs: 500,
       reconnectRetryDelayMs: 50,
@@ -47,6 +48,7 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
       onReconnected,
       onTransportLost
     })
+
     const starting = lease.start()
     void starting.catch(() => undefined)
     await Promise.resolve()
@@ -75,6 +77,7 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
         const close = vi.fn()
         closes.push(close)
         queueMicrotask(() => callbacks.onError(capacityError()))
+
         return {
           requestId: `browser-host-${closes.length}`,
           close,
@@ -83,11 +86,13 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
       }
     )
     const onError = vi.fn()
+
     const lease = createReconnectLease({
       timeoutMs: 250,
       reconnectRetryDelayMs: 50,
       onError
     })
+
     const starting = lease.start()
     void starting.catch(() => undefined)
 
@@ -104,11 +109,13 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
     vi.useFakeTimers()
     const attempts = mockAttempts()
     const onError = vi.fn()
+
     const lease = createReconnectLease({
       timeoutMs: 500,
       reconnectRetryDelayMs: 50,
       onError
     })
+
     const starting = lease.start()
     void starting.catch(() => undefined)
     await Promise.resolve()
@@ -163,6 +170,7 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
     const attempts = mockAttempts()
     const onError = vi.fn()
     const onReconnected = vi.fn()
+
     const lease = createReconnectLease({
       reconnectGraceMs: 500,
       reconnectRetryDelayMs: 50,
@@ -170,6 +178,7 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
       onError,
       onReconnected
     })
+
     const starting = lease.start()
     await Promise.resolve()
     attempts[0]!.callbacks.onResponse(readyResponse(true))
@@ -193,21 +202,26 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
 
   it('does not double-charge result capacity when outstanding commands replay', async () => {
     const attempts = mockAttempts()
+
     const results = new Map([
       ['page-a', deferredCommandResult()],
       ['page-b', deferredCommandResult()]
     ])
+
     const onPageCommand = vi.fn(
       (command) =>
         results.get(command.browserPageId)?.promise ?? Promise.reject(new Error('unknown'))
     )
+
     const onError = vi.fn()
+
     const lease = createReconnectLease({
       maxConcurrentCommandResults: 1,
       maxUnsettledCommandResults: 2,
       onPageCommand,
       onError
     })
+
     const starting = lease.start()
     await vi.waitFor(() => expect(attempts).toHaveLength(1))
     attempts[0]!.callbacks.onResponse(readyResponse(true))
@@ -221,17 +235,21 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
         commandId: 'shared-command'
       })
     ]
+
     for (const command of commands) {
       attempts[0]!.callbacks.onResponse(command)
     }
+
     await vi.waitFor(() => expect(onPageCommand).toHaveBeenCalledTimes(2))
 
     attempts[0]!.callbacks.onError(recoverableError())
     await vi.waitFor(() => expect(attempts).toHaveLength(2))
     attempts[1]!.callbacks.onResponse(readyResponse(true))
+
     for (const command of commands) {
       attempts[1]!.callbacks.onResponse(command)
     }
+
     await vi.waitFor(() => expect(onPageCommand).toHaveBeenCalledTimes(4))
     expect(onError).not.toHaveBeenCalled()
 
@@ -278,12 +296,14 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
 
     subscribeRemoteRuntimeRequestMock.mockReset()
     const unsolicitedAttempts = mockAttempts()
+
     const unsolicited = new PairedRuntimeBrowserHostLease({
       pairing,
       authorityRuntimeId: 'runtime-a',
       browserHostClientId: 'host-a',
       hostCapabilities: ['webview']
     })
+
     const unsolicitedStart = unsolicited.start()
     await vi.waitFor(() => expect(unsolicitedAttempts).toHaveLength(1))
     unsolicitedAttempts[0]!.callbacks.onResponse(readyResponse(true))
@@ -293,6 +313,7 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
 
   it('fails terminally when a reconnect cannot encode a complete inventory', async () => {
     const attempts = mockAttempts()
+
     const getPageInventory = vi
       .fn()
       .mockReturnValueOnce([])
@@ -309,6 +330,7 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
           state: 'active'
         }
       ])
+
     const onError = vi.fn()
     const lease = createReconnectLease({ getPageInventory, onError })
     const starting = lease.start()
@@ -384,6 +406,7 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
     const attempts = mockAttempts()
     const onTransportLost = vi.fn()
     const onError = vi.fn()
+
     const lease = createReconnectLease({
       reconnectGraceMs: 250,
       reconnectRetryDelayMs: 50,
@@ -391,6 +414,7 @@ describe('PairedRuntimeBrowserHostLease reconnect', () => {
       onTransportLost,
       onError
     })
+
     const starting = lease.start()
     await Promise.resolve()
     attempts[0]!.callbacks.onResponse(readyResponse(true))
@@ -439,21 +463,25 @@ function mockAttempts(): {
     params: Record<string, unknown>
     sendRequest: ReturnType<typeof vi.fn>
   }[] = []
+
   subscribeRemoteRuntimeRequestMock.mockImplementation(
     async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
       const close = vi.fn()
+
       const sendRequest = vi.fn().mockResolvedValue({
         id: 'command-result',
         ok: true,
         result: { accepted: true },
         _meta: { runtimeId: 'runtime-a' }
       })
+
       attempts.push({
         callbacks: args[4] as RemoteRuntimeSubscriptionCallbacks,
         close,
         params: args[2] as Record<string, unknown>,
         sendRequest
       })
+
       return {
         requestId: `browser-host-${attempts.length}`,
         close,
@@ -462,6 +490,7 @@ function mockAttempts(): {
       }
     }
   )
+
   return attempts
 }
 
@@ -497,9 +526,11 @@ function deferredCommandResult(): {
   resolve: (result: BrowserClientHostCommandResult) => void
 } {
   let resolve = (_result: BrowserClientHostCommandResult): void => {}
+
   const promise = new Promise<BrowserClientHostCommandResult>((innerResolve) => {
     resolve = innerResolve
   })
+
   return { promise, resolve }
 }
 

@@ -24,6 +24,7 @@ const TOOL_ROW_CHARS = 3072
 // SQLite ext/fts5/fts5_unicode2.c: sqlite3Fts5UnicodeIsdiacritic, with remove_diacritics=1.
 const FOLDED_DIACRITIC =
   /[\u0300-\u0304\u0306-\u030c\u030f\u0311\u031b\u0323-\u0328\u032d-\u032e\u0330-\u0331]/
+
 const TOKEN_BOUNDARY = /[^\p{L}\p{N}\p{Co}_.\-/+\uD800-\uDFFF]/u
 
 /**
@@ -38,6 +39,7 @@ function lastTokenBoundaryEnd(text: string, floor: number, end: number): number 
       return at + 1
     }
   }
+
   return -1
 }
 
@@ -50,20 +52,26 @@ function lastTokenBoundaryEnd(text: string, floor: number, end: number): number 
 function* textChunks(text: string): Generator<string> {
   if (text.length <= CHUNK_TARGET_CHARS) {
     yield text
+
     return
   }
+
   let start = 0
+
   while (start < text.length) {
     let end = Math.min(text.length, start + CHUNK_TARGET_CHARS)
+
     if (end < text.length) {
       // Only the second half of the window: backing up further would trade a
       // torn token for chunks half the size. No boundary at all in 4,000
       // characters is not a word, so the target itself is the honest cut.
       const split = lastTokenBoundaryEnd(text, start + CHUNK_TARGET_CHARS / 2, end)
+
       if (split > start) {
         end = split
       }
     }
+
     yield text.slice(start, end)
     start = end
   }
@@ -85,6 +93,7 @@ export function* searchMessageRows(
       }
       continue
     }
+
     for (const text of textChunks(message.text)) {
       yield { ...message, text }
     }
@@ -103,9 +112,11 @@ export function insertSearchMessage(
   message: TranscriptMessage
 ): void {
   const text = message.text
+
   const id = db
     .prepare('INSERT INTO messages(session_row_id, role, ts) VALUES (?, ?, ?)')
     .run(sessionId, message.role, message.timestamp).lastInsertRowid
+
   const user = message.role === 'user' ? text : ''
   const assistant = message.role === 'assistant' ? text : ''
   const tool = message.role === 'tool' ? text : ''
@@ -125,11 +136,14 @@ export function deleteSearchMessages(db: SyncDatabase, sessionId: number, limit 
   const ids = db
     .prepare('SELECT id FROM messages WHERE session_row_id = ? LIMIT ?')
     .all(sessionId, limit) as { id: number }[]
+
   const full = db.prepare('DELETE FROM messages_fts WHERE rowid = ?')
   const message = db.prepare('DELETE FROM messages WHERE id = ?')
+
   for (const { id } of ids) {
     full.run(id)
     message.run(id)
   }
+
   return ids.length
 }

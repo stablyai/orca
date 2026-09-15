@@ -8,9 +8,11 @@ import {
 } from './terminal-provider-snapshot-capability'
 
 type TabsByWorktree = SnapshotCapabilityBindingState['tabsByWorktree']
+
 type LayoutsByTabId = NonNullable<SnapshotCapabilityBindingState['terminalLayoutsByTabId']>
 
 const EMPTY_TABS: TabsByWorktree = Object.freeze({})
+
 const EMPTY_LAYOUTS: LayoutsByTabId = Object.freeze({})
 
 function sameBoundTab(previous: SnapshotCapabilityTab, next: SnapshotCapabilityTab): boolean {
@@ -23,16 +25,21 @@ function sameLayoutLeafPtyIds(previous: LayoutsByTabId, next: LayoutsByTabId): b
   if (previous === next) {
     return true
   }
+
   const tabIds = Object.keys(next)
+
   if (tabIds.length !== Object.keys(previous).length) {
     return false
   }
+
   for (const tabId of tabIds) {
     const nextLayout = next[tabId]
     const previousLayout = previous[tabId]
+
     if (previousLayout === nextLayout) {
       continue
     }
+
     if (
       !previousLayout ||
       !sameStringRecord(previousLayout.ptyIdsByLeafId, nextLayout?.ptyIdsByLeafId)
@@ -40,6 +47,7 @@ function sameLayoutLeafPtyIds(previous: LayoutsByTabId, next: LayoutsByTabId): b
       return false
     }
   }
+
   return true
 }
 
@@ -66,12 +74,14 @@ export function createTerminalProviderSnapshotBoundPtyIdsSelector(): (
 
   return (state) => {
     const layoutsByTabId = state.terminalLayoutsByTabId ?? EMPTY_LAYOUTS
+
     const unchanged =
       collected &&
       previousPtyIdsByTabId === state.ptyIdsByTabId &&
       previousPendingReconnectPtyIdByTabId === state.pendingReconnectPtyIdByTabId &&
       sameBucketRecords(previousTabsByWorktree, state.tabsByWorktree, sameBoundTab) &&
       sameLayoutLeafPtyIds(previousLayoutsByTabId, layoutsByTabId)
+
     if (!unchanged) {
       boundPtyIds = reuseArrayIfEqual(
         boundPtyIds,
@@ -81,8 +91,10 @@ export function createTerminalProviderSnapshotBoundPtyIdsSelector(): (
       previousPendingReconnectPtyIdByTabId = state.pendingReconnectPtyIdByTabId
       collected = true
     }
+
     previousTabsByWorktree = state.tabsByWorktree
     previousLayoutsByTabId = layoutsByTabId
+
     return boundPtyIds
   }
 }

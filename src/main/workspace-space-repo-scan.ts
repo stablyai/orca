@@ -64,15 +64,18 @@ export function summarizeWorkspaceSpaceRows(
   let unavailableWorktreeCount = 0
   let totalSizeBytes = 0
   let reclaimableBytes = 0
+
   for (const row of rows) {
     if (row.status === 'ok') {
       scannedWorktreeCount += 1
     } else {
       unavailableWorktreeCount += 1
     }
+
     totalSizeBytes += row.sizeBytes
     reclaimableBytes += row.reclaimableBytes
   }
+
   return {
     scannedWorktreeCount,
     unavailableWorktreeCount,
@@ -88,12 +91,15 @@ async function listWorktreesForSpaceScan(
 ): Promise<WorktreeListResult> {
   try {
     throwIfWorkspaceSpaceScanAborted(signal)
+
     if (isFolderRepo(repo)) {
       return { ok: true, worktrees: [createFolderWorktree(repo)] }
     }
+
     // Why: the raw `connectionId` field answers "local" for a row that spells its owner only as
     // `executionHostId: 'ssh:<target>'`, which sizes a same-named path on this machine instead.
     const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
+
     if (route.kind === 'runtime') {
       return {
         ok: false,
@@ -101,6 +107,7 @@ async function listWorktreesForSpaceScan(
         error: `Host ${route.hostId} is not reachable from this process.`
       }
     }
+
     if (route.kind === 'ssh') {
       if (!route.provider) {
         return {
@@ -109,21 +116,28 @@ async function listWorktreesForSpaceScan(
           error: `SSH connection "${route.connectionId}" is not connected.`
         }
       }
+
       const worktrees = await route.provider.listWorktrees(repo.path, { signal })
       throwIfWorkspaceSpaceScanAborted(signal)
+
       return { ok: true, worktrees }
     }
+
     const worktrees = await listRepoWorktrees(repo, {
       ...getLocalProjectWorktreeGitOptions(store, repo),
       signal
     })
+
     throwIfWorkspaceSpaceScanAborted(signal)
+
     return { ok: true, worktrees }
   } catch (error) {
     if (error instanceof WorkspaceSpaceScanCancelledError) {
       throw error
     }
+
     const classified = classifyWorkspaceSpaceError(error)
+
     return { ok: false, status: classified.status, error: classified.message }
   }
 }
@@ -149,9 +163,11 @@ function mergeForSpaceScan(repo: Repo, gitWorktree: GitWorktreeInfo, store: Stor
   const allMeta = store.getAllWorktreeMeta?.()
   const legacyMeta = store.getWorktreeMeta?.(worktreeId)
   const metaById = allMeta ?? (legacyMeta ? { [worktreeId]: legacyMeta } : {})
+
   const meta =
     readWorktreeMetaForHost(store, worktreeId, executionHostId) ??
     getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
+
   return mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
 }
 
@@ -173,12 +189,14 @@ export async function scanWorkspaceSpaceRepo(args: {
     options.onProgress
   )
   const listed = await listWorktreesForSpaceScan(store, repo, options.signal)
+
   if (!listed.ok) {
     reportProgress(
       progress,
       { scannedRepoCount: progress.scannedRepoCount + 1 },
       options.onProgress
     )
+
     return {
       worktrees: [],
       summary: {
@@ -196,15 +214,18 @@ export async function scanWorkspaceSpaceRepo(args: {
       }
     }
   }
+
   const worktrees = listed.worktrees
     .filter((gitWorktree) => !gitWorktree.prunable)
     .map((gitWorktree) => mergeForSpaceScan(repo, gitWorktree, store))
+
   reportProgress(
     progress,
     { totalWorktreeCount: progress.totalWorktreeCount + worktrees.length },
     options.onProgress
   )
   const filesystemRoute = resolveFilesystemRouteForHost(getRepoExecutionHostId(repo))
+
   const rows = await mapWithConcurrency(worktrees, WORKTREE_SCAN_CONCURRENCY, async (worktree) => {
     throwIfWorkspaceSpaceScanAborted(options.signal)
     reportProgress(
@@ -215,6 +236,7 @@ export async function scanWorkspaceSpaceRepo(args: {
       },
       options.onProgress
     )
+
     const row =
       filesystemRoute.kind !== 'local'
         ? filesystemRoute.kind === 'ssh' && filesystemRoute.provider
@@ -245,6 +267,7 @@ export async function scanWorkspaceSpaceRepo(args: {
               options.signal
             )
           )
+
     reportProgress(
       progress,
       {
@@ -260,8 +283,10 @@ export async function scanWorkspaceSpaceRepo(args: {
       },
       options.onProgress
     )
+
     return row
   })
+
   reportProgress(
     progress,
     {
@@ -272,6 +297,7 @@ export async function scanWorkspaceSpaceRepo(args: {
     options.onProgress
   )
   const summary = summarizeWorkspaceSpaceRows(rows)
+
   return {
     worktrees: rows,
     summary: {

@@ -15,8 +15,10 @@ export type HooksJsonSnapshot = {
 export function parseHooksJsonText(raw: string): HooksConfig | null {
   // Why: JSON.parse rejects a decoded UTF-8 BOM; strip only the leading marker.
   const content = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw
+
   try {
     const parsed = JSON.parse(content)
+
     return isPlainObject(parsed) ? parsed : null
   } catch {
     return null
@@ -34,6 +36,7 @@ export function readHooksJsonWithRaw(configPath: string): HooksJsonSnapshot {
   // closes the TOCTOU window between the two calls.
   try {
     const raw = readFileSync(configPath, 'utf-8')
+
     return { raw, config: parseHooksJsonText(raw) }
   } catch (error) {
     return isDefinitiveAbsence(error) ? { raw: null, config: {} } : { raw: null, config: null }

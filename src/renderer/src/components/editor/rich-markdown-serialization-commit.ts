@@ -32,6 +32,7 @@ export function commitRichMarkdownSerialization(
   roundTrip: (markdown: string) => string | null
 ): RichMarkdownSerializationCommit {
   let edited: string | undefined
+
   try {
     edited = editor?.getMarkdown()
   } catch {
@@ -39,12 +40,14 @@ export function commitRichMarkdownSerialization(
     // save/restart flush must never crash here.
     edited = undefined
   }
+
   if (edited === undefined) {
     // Torn-down fallback: reuse the already-reconciled bytes without patching.
     return { markdown: refs.lastCommittedMarkdownRef.current, didSerialize: false }
   }
 
   let reconciled: string
+
   try {
     reconciled = reconcileSerializedMarkdown({
       originalSource: refs.originalSourceRef.current,
@@ -65,5 +68,6 @@ export function commitRichMarkdownSerialization(
   // Why: the external-change guard short-circuits on lastCommittedMarkdownRef, so
   // it must hold the exact reconciled bytes that reach disk, not the canonical form.
   refs.lastCommittedMarkdownRef.current = reconciled
+
   return { markdown: reconciled, didSerialize: true }
 }

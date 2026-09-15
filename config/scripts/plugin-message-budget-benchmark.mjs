@@ -7,7 +7,9 @@ import { build } from 'esbuild'
 import { buildCounterbalancedSchedule } from './counterbalanced-benchmark-schedule.mjs'
 
 const baseline = process.argv[2] ?? '20ab9950654'
+
 const file = 'src/shared/plugins/plugin-panel-message-budget.ts'
+
 async function load(contents) {
   const result = await build({
     stdin: { contents, loader: 'ts', resolveDir: dirname(resolve(file)) },
@@ -16,17 +18,23 @@ async function load(contents) {
     format: 'esm',
     write: false
   })
+
   return import(
     `data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`
   )
 }
+
 const before = await load(
   execFileSync('git', ['show', `${baseline}:${file}`], { encoding: 'utf8' })
 )
+
 const after = await load(readFileSync(file, 'utf8'))
+
 const results = []
+
 for (const count of [5, 1000, 100000]) {
   const entries = Array.from({ length: count }, (_, i) => [`key-${i}`, `value-${i}`])
+
   for (const [kind, value] of [
     ['array', entries.map(([, value]) => value)],
     ['map', new Map(entries)],
@@ -34,41 +42,53 @@ for (const count of [5, 1000, 100000]) {
     ['object', Object.fromEntries(entries)]
   ]) {
     const input = structuredClone(value)
+
     for (const cap of [0, 1, 64, 1024, 65536, Infinity]) {
       assert.equal(
         after.structuredCloneMessageBytes(input, cap),
         before.structuredCloneMessageBytes(input, cap)
       )
     }
+
     const arms = { before, after }
     const iterations = count < 100 ? 1000 : 10
+
     const run = (arm) => {
       global.gc?.()
       const start = performance.now()
       const cpuStart = process.cpuUsage()
+
       for (let i = 0; i < iterations; i++) {
         arms[arm].structuredCloneMessageBytes(input)
       }
+
       const cpu = process.cpuUsage(cpuStart)
+
       return {
         ms: (performance.now() - start) / iterations,
         cpuMs: (cpu.user + cpu.system) / 1000 / iterations
       }
     }
+
     for (let i = 0; i < 3; i++) {
       run('before')
       run('after')
     }
+
     const samples = { before: [], after: [] }
+
     for (const pair of buildCounterbalancedSchedule(10, 'before', 'after')) {
       for (const arm of pair) {
         samples[arm].push(run(arm))
       }
     }
+
     const median = (values) => {
       const sorted = [...values].sort((a, b) => a - b)
+
       return (sorted[4] + sorted[5]) / 2
     }
+
     results.push({
       count,
       kind,
@@ -80,6 +100,7 @@ for (const count of [5, 1000, 100000]) {
     })
   }
 }
+
 console.log(
   JSON.stringify(
     {

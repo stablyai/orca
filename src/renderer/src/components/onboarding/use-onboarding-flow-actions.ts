@@ -73,6 +73,7 @@ export function useOnboardingFlowActions({
 }: OnboardingFlowActionsArgs) {
   // Why: sync latch; busyLabel state commits too late to stop a ~30ms Cmd+Enter auto-repeat from re-entering next() and skipping a step.
   const nextInFlightRef = useRef(false)
+
   const trackCurrentStepCompleted = useCallback(
     (advancedVia: 'button' | 'keyboard'): void => {
       const durationMs = consumeStepDurationMs()
@@ -82,9 +83,11 @@ export function useOnboardingFlowActions({
         duration_ms: durationMs,
         advanced_via: advancedVia
       })
+
       if (currentStep.id === 'integrations') {
         trackTaskSourcesSnapshot('continue', durationMs, advancedVia)
       }
+
       if (currentStep.id === 'windows_terminal') {
         track(
           'onboarding_windows_terminal_snapshot',
@@ -106,16 +109,21 @@ export function useOnboardingFlowActions({
       trackTaskSourcesSnapshot
     ]
   )
+
   const next = useCallback(
     async (advancedVia: 'button' | 'keyboard' = 'button') => {
       if (nextInFlightRef.current || busyLabel) {
         return
       }
+
       nextInFlightRef.current = true
+
       try {
         const result = await persistCurrentStep()
+
         if (result.ok) {
           trackCurrentStepCompleted(advancedVia)
+
           if (currentStep.id === 'notifications') {
             setBusyLabel(
               translate(
@@ -124,13 +132,17 @@ export function useOnboardingFlowActions({
               )
             )
             const closed = await closeWith('completed', ONBOARDING_FINAL_STEP, 'add_project_modal')
+
             if (closed) {
               openModal('add-repo')
             }
+
             return
           }
+
           const nextIndex = getNextStepIndex(stepIndex)
           const skippedThroughStepNumber = STEPS[nextIndex].stepNumber - 1
+
           if (skippedThroughStepNumber > currentStep.stepNumber) {
             // Why: skipped optional pages must still persist progress at the next visible page.
             try {
@@ -147,6 +159,7 @@ export function useOnboardingFlowActions({
               )
             }
           }
+
           setStepIndex(nextIndex)
         }
       } finally {
@@ -174,11 +187,15 @@ export function useOnboardingFlowActions({
     if (busyLabel) {
       return
     }
+
     setError(null)
+
     if (currentStep.id === 'notifications') {
       return
     }
+
     const durationMs = consumeStepDurationMs()
+
     const preferencesSaved = await prepareSkippedOnboardingPreferences({
       currentStepId: currentStep.id,
       themeBeforePreview: themeStepEntryThemeRef.current,
@@ -189,20 +206,25 @@ export function useOnboardingFlowActions({
       updateSettings,
       setError
     })
+
     if (!preferencesSaved) {
       return
     }
+
     const stepId = currentStep.id
     const stepNumber = currentStep.stepNumber
     const valueKind = currentStep.valueKind
     setBusyLabel(
       translate('components.onboarding.flow.actions.openingAddProject', 'Opening Add Project...')
     )
+
     try {
       const closed = await closeWith('completed', ONBOARDING_FINAL_STEP, 'add_project_modal')
+
       if (!closed) {
         return
       }
+
       // Why: repo picker now lives in the Add Project dialog, so skipping optional setup closes onboarding and hands off to it.
       track('onboarding_step_skipped', {
         step: stepNumber,
@@ -210,9 +232,11 @@ export function useOnboardingFlowActions({
         duration_ms: durationMs,
         advanced_via: 'button'
       })
+
       if (stepId === 'integrations') {
         trackTaskSourcesSnapshot('skip_to_project_setup', durationMs, 'button')
       }
+
       if (stepId === 'windows_terminal') {
         track(
           'onboarding_windows_terminal_snapshot',
@@ -224,6 +248,7 @@ export function useOnboardingFlowActions({
           })
         )
       }
+
       openModal('add-repo')
     } finally {
       setBusyLabel(null)
@@ -251,7 +276,9 @@ export function useOnboardingFlowActions({
       if (busyLabel) {
         return false
       }
+
       setError(null)
+
       return closeWith('dismissed', currentStep.stepNumber, undefined, {
         durationMs: consumeStepDurationMs(),
         advancedVia

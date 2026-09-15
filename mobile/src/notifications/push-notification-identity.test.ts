@@ -10,6 +10,7 @@ it('reads a bounded individual notification identity', () => {
     notificationEpoch: 'epoch-1',
     notificationSeq: 7
   }
+
   expect(readPushNotificationIdentity(identity)).toEqual(identity)
 })
 

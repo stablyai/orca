@@ -11,14 +11,17 @@ function clientWithResponses(responses: RpcResponse[]): Pick<RpcClient, 'sendReq
   calls: { method: string; params: unknown }[]
 } {
   const calls: { method: string; params: unknown }[] = []
+
   return {
     calls,
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
       calls.push({ method, params })
       const response = responses.shift()
+
       if (!response) {
         throw new Error(`unexpected request: ${method}`)
       }
+
       return response
     })
   }
@@ -131,6 +134,7 @@ describe('attachMobileImageToTerminal', () => {
       },
       ok('save', '/tmp/pending.png')
     ])
+
     // Why: upload can outlive the stream subscription whose acknowledgement
     // originally enabled the composer.
     const beforeTerminalSend = vi.fn(async () => false)

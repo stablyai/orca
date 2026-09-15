@@ -22,13 +22,21 @@ import { collectActiveDashboardWorkspaces } from './dashboard-snapshot-workspace
 import { selectWorktreeAgentRowsCached } from './worktree-agent-rows-cache'
 
 const BASE = 1_700_000_000_000
+
 const STALE = AGENT_STATUS_STALE_AFTER_MS
+
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
+
 const LEAF_3 = '33333333-3333-4333-8333-333333333333'
+
 const PANE_1 = makePaneKey('tab1', LEAF_1)
+
 const PANE_2 = makePaneKey('tab2', LEAF_2)
+
 const FOLDER_WORKSPACE_ID = folderWorkspaceKey('folder-1')
+
 const PANE_3 = makePaneKey('tab3', LEAF_3)
 
 /**
@@ -45,11 +53,14 @@ function oracleBucketCounts(
     done: 0,
     idle: 0
   }
+
   const activeWorktrees = collectActiveDashboardWorkspaces(state, false)
+
   const { singletonOrchestration, orchestrationByWorktree } = selectDashboardOrchestration(
     state,
     activeWorktrees
   )
+
   for (const { worktree } of activeWorktrees) {
     const rows = selectWorktreeAgentRowsCached({
       state,
@@ -61,13 +72,16 @@ function oracleBucketCounts(
       now,
       generation: undefined
     })
+
     for (const row of rows) {
       if (row.rowSource === 'subagent') {
         continue
       }
+
       counts[dashboardRowBucketProjection(row, state.acknowledgedAgentsByPaneKey).bucket] += 1
     }
   }
+
   return counts
 }
 
@@ -299,6 +313,7 @@ describe('buildDashboardBucketCounts equivalence with the unmemoized walk', () =
   it('matches the oracle for every mutation at every clock, sharing one cache', () => {
     for (const mutation of MUTATIONS) {
       const cache = createDashboardBucketCountsCache()
+
       for (const step of CLOCK_WALK) {
         const state = mutation.apply(baseState())
         expect(
@@ -312,8 +327,10 @@ describe('buildDashboardBucketCounts equivalence with the unmemoized walk', () =
   it('matches the oracle when mutations are applied cumulatively through one cache', () => {
     const cache = createDashboardBucketCountsCache()
     let state = baseState()
+
     for (const mutation of MUTATIONS) {
       state = mutation.apply(state)
+
       for (const step of CLOCK_WALK) {
         expect(
           buildDashboardBucketCounts(state, step.now, cache, step.generation),
@@ -355,6 +372,7 @@ describe('buildDashboardBucketCounts equivalence with the unmemoized walk', () =
         [PANE_1]: entry(PANE_1, 'tab1', 'w1', { prompt: 'more output' })
       }
     }
+
     const second = buildDashboardBucketCounts(streamed, BASE + 1_000, cache, 1)
     expect(cache.lastComputedWorktreeIds).toEqual(['w1'])
     expect(second).toBe(first)
@@ -366,6 +384,7 @@ describe('buildDashboardBucketCounts equivalence with the unmemoized walk', () =
         [PANE_1]: entry(PANE_1, 'tab1', 'w1', { state: 'blocked' })
       }
     }
+
     expect(buildDashboardBucketCounts(moved, BASE + 2_000, cache, 1)).not.toBe(first)
   })
 })

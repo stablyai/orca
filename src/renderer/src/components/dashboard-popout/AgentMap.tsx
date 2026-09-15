@@ -42,7 +42,9 @@ const ALL_AGENT_STATES: ReadonlySet<AgentMapState> = new Set<AgentMapState>([
   'done',
   'idle'
 ])
+
 const ALL_HOSTS: ReadonlySet<DashboardCardHostKind> = new Set(ALL_AGENT_MAP_HOSTS)
+
 const EMPTY_WORKSPACES: DashboardWorkspace[] = []
 
 export function AgentMap({
@@ -64,6 +66,7 @@ export function AgentMap({
 }: AgentMapProps): React.JSX.Element {
   const canvasRef = useRef<AgentMapCanvasHandle>(null)
   const layoutCacheRef = useRef<AgentMapLayoutCache | null>(null)
+
   const visibleCards = useMemo(
     () =>
       filterAgentMapCards({
@@ -73,18 +76,22 @@ export function AgentMap({
       }),
     [cards, enabledStates, enabledHosts]
   )
+
   const visibleWorkspaces = useMemo(
     () => workspaces.filter((workspace) => enabledHosts.has(workspace.hostKind)),
     [enabledHosts, workspaces]
   )
+
   const layoutResult = useMemo(
     () => updateAgentMapLayout(layoutCacheRef.current, visibleCards, now, visibleWorkspaces),
     [visibleCards, visibleWorkspaces, now]
   )
+
   const recentFlareStatuses = useMemo(
     () => selectAgentMapRecentFlareStatuses(visibleCards),
     [visibleCards]
   )
+
   useEffect(() => {
     layoutCacheRef.current = layoutResult.cache
   }, [layoutResult.cache])

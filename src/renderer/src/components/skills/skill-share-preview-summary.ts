@@ -5,9 +5,11 @@ export function byteLabel(bytes: number): string {
   if (bytes < 1024) {
     return `${bytes} B`
   }
+
   if (bytes < 1024 * 1024) {
     return `${(bytes / 1024).toFixed(1)} KB`
   }
+
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
@@ -32,12 +34,15 @@ export function summarizeExecutableContent(
   executableCount: number
 ): SkillShareRiskSummary {
   const parts: string[] = []
+
   if (scriptCount > 0) {
     parts.push(scriptCountLabel(scriptCount))
   }
+
   if (executableCount > 0) {
     parts.push(executableCountLabel(executableCount))
   }
+
   return parts.length === 0
     ? {
         risky: false,
@@ -60,6 +65,7 @@ export type SkillShareSensitiveFile = { path: string; script: boolean; executabl
 export function sensitiveShareFiles(preview: SkillSharePreview): SkillShareSensitiveFile[] {
   const scripts = new Set(preview.scriptPaths)
   const executables = new Set(preview.executablePaths)
+
   return [...new Set([...preview.scriptPaths, ...preview.executablePaths])]
     .sort((left, right) => left.localeCompare(right))
     .map((path) => ({ path, script: scripts.has(path), executable: executables.has(path) }))

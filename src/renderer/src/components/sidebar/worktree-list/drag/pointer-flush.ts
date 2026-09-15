@@ -43,6 +43,7 @@ function showStatusHoverWithoutInsertionLine(
   target: WorktreeSidebarLineageDropTarget
 ): void {
   const { drag, ctx } = args
+
   const statusDrop = target.status
     ? ctx.computeWorktreeStatusDrop({
         pointerY: drag.currentY,
@@ -50,7 +51,9 @@ function showStatusHoverWithoutInsertionLine(
         draggedIds: drag.reorderDraggedIds
       })
     : null
+
   updateLatestWorktreeStatusDropTarget(drag, target, statusDrop)
+
   if (statusDrop) {
     clearWorkspaceKanbanSidebarDropTargetVisual()
     args.setDragOverStatus(null)
@@ -61,8 +64,10 @@ function showStatusHoverWithoutInsertionLine(
         matchPointerY: true
       })
     )
+
     return
   }
+
   args.setDragOverStatus(target.status)
   args.setPinDragOver(target.isPinDrop)
   args.setWorktreeDragState((prev) =>
@@ -83,9 +88,11 @@ function clearInsertionLine(args: WorktreePointerDragFrameArgs): void {
 export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs): void {
   const { drag, ctx } = args
   drag.frameId = null
+
   if (!drag.active || !drag.preview) {
     return
   }
+
   delete drag.preview.dataset.worktreeSidebarNesting
   updateSidebarDragPreviewPosition({
     preview: drag.preview,
@@ -94,10 +101,13 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     offsetX: drag.previewOffsetX,
     offsetY: drag.previewOffsetY
   })
+
   if (!ctx.refreshWorktreeDragSession()) {
     ctx.clearWorktreeDrag()
+
     return
   }
+
   // Why: show the board preview as soon as a card drag begins so the drop target is visible up front, not only at the sidebar edge.
   if (
     !drag.workspaceBoardDragPreviewRequested &&
@@ -107,6 +117,7 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     drag.workspaceBoardDragPreviewRequested = true
     args.onWorkspaceBoardDragPreviewStart()
   }
+
   const boardTarget = updateWorkspaceKanbanSidebarDropTargetVisual({
     x: drag.currentX,
     y: drag.currentY,
@@ -116,22 +127,27 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
         args.shouldShowWorkspaceBoardDropIndicator(drag.reorderDraggedIds, target.status)
       )
   })
+
   drag.latestBoardDropTarget = {
     target: boardTarget,
     x: drag.currentX,
     y: drag.currentY
   }
+
   if (isWorkspaceKanbanSidebarDropPointInBoard(drag.currentX, drag.currentY)) {
     args.onWorkspaceBoardDragPreviewCommit()
   }
+
   if (boardTarget.status || boardTarget.isPinDrop) {
     drag.reorderIntent = null
     drag.latestStatusDropTarget = null
     clearInsertionLine(args)
+
     return
   }
 
   const sidebarContainer = ctx.scrollRef.current
+
   const preferredStatusTarget = ctx.getEligibleLineageDropTarget(
     sidebarContainer
       ? getPointerDropStatusTarget({
@@ -142,7 +158,9 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
       : NO_WORKTREE_SIDEBAR_DROP_TARGET,
     drag.draggedIds
   )
+
   const lineageParentId = preferredStatusTarget.lineageParentId
+
   if (lineageParentId) {
     drag.reorderIntent = null
     updateLatestWorktreeStatusDropTarget(drag, preferredStatusTarget, null)
@@ -160,8 +178,10 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     args.setWorktreeDragState((prev) =>
       applyWorktreeLineageDropPreview(prev, lineageParentId, drag.currentY)
     )
+
     return
   }
+
   if (
     shouldPreferSidebarStatusDropTarget({
       sourceGroupKey: drag.sourceGroupKey,
@@ -171,17 +191,22 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
   ) {
     drag.reorderIntent = null
     showStatusHoverWithoutInsertionLine(args, preferredStatusTarget)
+
     return
   }
 
   const drop = ctx.computeWorktreeDrop(drag.currentY)
+
   if (!drop) {
     drag.reorderIntent = null
     showStatusHoverWithoutInsertionLine(args, preferredStatusTarget)
+
     return
   }
+
   // Let the pointer cross a reorder gutter into the card before moving its target.
   let intent = drag.reorderIntent
+
   if (!intent || (intent.dropIndex !== drop.dropIndex && intent.pointerY !== drag.currentY)) {
     intent = {
       dropIndex: drop.dropIndex,
@@ -193,7 +218,9 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
     intent.dropIndex = drop.dropIndex
     intent.pointerY = drag.currentY
   }
+
   drag.reorderIntent = intent
+
   if (performance.now() - intent.startedAt < REORDER_INTENT_DELAY_MS) {
     drag.latestStatusDropTarget = null
     args.setWorktreeDragState((prev) =>
@@ -203,8 +230,10 @@ export function flushWorktreePointerDragFrame(args: WorktreePointerDragFrameArgs
       })
     )
     drag.frameId = window.requestAnimationFrame(() => flushWorktreePointerDragFrame(args))
+
     return
   }
+
   drag.latestStatusDropTarget = null
   clearWorkspaceKanbanSidebarDropTargetVisual()
   args.setDragOverStatus(null)

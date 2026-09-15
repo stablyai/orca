@@ -13,11 +13,13 @@ const { acceptOutputDataMock, getSshPtyProviderMock } = vi.hoisted(() => ({
 
 vi.mock('../ipc/ssh-pty-output-intake-registry', async (importOriginal) => {
   const original = (await importOriginal()) as object
+
   return { ...original, acceptSshPtyOutputData: acceptOutputDataMock }
 })
 
 vi.mock('../ipc/pty', async (importOriginal) => {
   const original = (await importOriginal()) as object
+
   return { ...original, getSshPtyProvider: getSshPtyProviderMock }
 })
 
@@ -89,16 +91,19 @@ function rejectedPayload(overrides: Partial<SshPtyDataPayload> = {}): SshPtyData
 
 function prepareSession() {
   const deps = createMockDeps()
+
   const mux = {
     isDisposed: vi.fn(() => false),
     dispose: vi.fn()
   } as unknown as SshChannelMultiplexer
+
   const session = new SshRelaySession(
     'target-1',
     deps.getMainWindow,
     deps.mockStore,
     deps.mockPortForward
   )
+
   const internals = session as unknown as RejectedDeliverySession
   internals.mux = mux
   internals.activePtyProviderGeneration = 23
@@ -110,6 +115,7 @@ function prepareSession() {
     ownerLease: 'owner-lease',
     outputFlowControl: { version: 1, windowSu: 64 }
   }
+
   return { deps, internals, mux, session }
 }
 
@@ -204,11 +210,13 @@ describe('SshRelaySession rejected PTY delivery recovery', () => {
         updatedAt: 1
       }
     ])
+
     const reattachKnownPty = vi.fn(
       async (args: Parameters<RejectedDeliverySession['reattachKnownPty']>[0]) => {
         args.attachedLeaseIds.add(args.ptyId)
       }
     )
+
     internals.reattachKnownPty = reattachKnownPty
 
     await internals.acceptPtyData(rejectedPayload({ rejectedSourceRecovery: 'fresh-activation' }))
@@ -272,6 +280,7 @@ describe('SshRelaySession rejected PTY delivery recovery', () => {
       nextSourceSu: 4
     })
     const commit = vi.fn()
+
     const attachForReconnect = vi.fn(async () => ({
       incarnationId: 'incarnation-bad',
       sourceActivation: {
@@ -285,6 +294,7 @@ describe('SshRelaySession rejected PTY delivery recovery', () => {
       },
       sourceActivationLease: { commit, rollback: vi.fn(async () => true) }
     }))
+
     getSshPtyProviderMock.mockReturnValue({ attachForReconnect } as unknown as SshPtyProvider)
 
     await expect(
@@ -309,6 +319,7 @@ describe('SshRelaySession rejected PTY delivery recovery', () => {
 
   it('accepts an exact existing activation as stale-frame confirmation', async () => {
     const { internals, mux } = prepareSession()
+
     const checkpoint = {
       status: 'checkpoint' as const,
       clientGeneration: 1,
@@ -317,8 +328,10 @@ describe('SshRelaySession rejected PTY delivery recovery', () => {
       deliveryToken: 'token-current',
       acceptedSourceEndSu: 7
     }
+
     internals.sourceRecoveryRequest = vi.fn(async () => checkpoint)
     const commit = vi.fn()
+
     const attachForReconnect = vi.fn(async () => ({
       incarnationId: 'incarnation-bad',
       sourceActivation: {
@@ -332,6 +345,7 @@ describe('SshRelaySession rejected PTY delivery recovery', () => {
       },
       sourceActivationLease: { commit, rollback: vi.fn(async () => true) }
     }))
+
     getSshPtyProviderMock.mockReturnValue({ attachForReconnect } as unknown as SshPtyProvider)
 
     await expect(
@@ -413,13 +427,16 @@ describe('SshRelaySession rejected PTY delivery recovery', () => {
     const release: (() => void)[] = []
     let active = 0
     let peak = 0
+
     const reattach = vi.fn(async () => {
       active++
       peak = Math.max(peak, active)
       await new Promise<void>((resolve) => release.push(resolve))
       active--
+
       return true
     })
+
     internals.reattachRejectedPty = reattach
 
     for (let index = 0; index < 20; index++) {
@@ -441,11 +458,14 @@ describe('SshRelaySession rejected PTY delivery recovery', () => {
 
     expect(peak).toBe(8)
     expect(reattach).toHaveBeenCalledTimes(8)
+
     for (const resolve of release.splice(0)) {
       resolve()
     }
+
     await vi.waitFor(() => expect(reattach).toHaveBeenCalledTimes(16))
     expect(peak).toBe(8)
+
     for (const resolve of release.splice(0)) {
       resolve()
     }
@@ -487,6 +507,7 @@ describe('SshRelaySession rejected PTY delivery recovery', () => {
       )
       await Promise.resolve()
     }
+
     await vi.waitFor(() => expect(mux.dispose).toHaveBeenCalledOnce(), { timeout: 2000 })
 
     expect(onTerminalError).not.toHaveBeenCalled()

@@ -68,8 +68,11 @@ import { classifyPrJobs } from './pr-code-change-scope.mjs'
  */
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const WINDOWS_LANE_JOB = 'package_windows'
+
 const WINDOWS_LANE_STEP = 'Test Windows-specific boundaries'
+
 const WINDOWS_LANE_RUNNER = 'windows-2022'
 
 /**
@@ -128,6 +131,7 @@ const MANUAL_OPT_IN = [
 
 /** Caps so growing either list is two deliberate edits, not one. */
 const UNREGISTERED_MAX = 8
+
 const MANUAL_OPT_IN_MAX = 10
 
 /**
@@ -159,7 +163,9 @@ export function isScannerSelfPath(path) {
 }
 
 const WIN32_TRUE_EXPRESSION = String.raw`process\.platform\s*===\s*['"]win32['"]`
+
 const WIN32_FALSE_EXPRESSION = String.raw`process\.platform\s*!==\s*['"]win32['"]`
+
 const SUITE = String.raw`(?:describe|suite)`
 
 /**
@@ -181,6 +187,7 @@ const FLAG_TRUE_ASSIGNMENT = new RegExp(
   String.raw`(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*${WIN32_TRUE_EXPRESSION}(?=\s*(?:&&|;|\r?\n|$))`,
   'g'
 )
+
 const FLAG_FALSE_ASSIGNMENT = new RegExp(
   String.raw`(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*${WIN32_FALSE_EXPRESSION}(?=\s*(?:;|\r?\n|$))`,
   'g'
@@ -202,6 +209,7 @@ function buildGates(source) {
   const falseOnWindows = [...source.matchAll(FLAG_FALSE_ASSIGNMENT)].map(([, name]) => name)
   const isTrue = `(?:${WIN32_TRUE_EXPRESSION}|\\b(?:${alternation(trueOnWindows)})\\b)`
   const isFalse = `(?:${WIN32_FALSE_EXPRESSION}|!\\s*(?:${alternation(trueOnWindows)})\\b|\\b(?:${alternation(falseOnWindows)})\\b)`
+
   return [
     // `\)` or `&&` after the condition: a bare gate, or a compound one whose
     // remaining conjuncts only narrow it further. Anchoring on `\)` alone was
@@ -221,9 +229,11 @@ export function isWindows32GatedTestFile(path, source) {
   if (/\.win32\.(?:test|spec)\./.test(path)) {
     return true
   }
+
   // Prose about a gate is not a gate; the shared stripper tracks quote state so
   // a slash-star inside a string cannot blank live code.
   const code = stripComments(source)
+
   return buildGates(code).some((gate) => gate.test(code))
 }
 
@@ -244,7 +254,9 @@ export function isWindows32GatedTestFile(path, source) {
  * closed -- the file reads as registrable, which is the safe direction.
  */
 const WIN32_CONJUNCT = new RegExp(String.raw`${WIN32_TRUE_EXPRESSION}\s*&&([^\n]*)`, 'g')
+
 const ENV_READ = /process\.env\.[A-Za-z0-9_]+/
+
 const IDENTIFIER = /[A-Za-z_$][\w$]*/g
 
 function isAssignedFromEnv(name, code) {
@@ -255,10 +267,12 @@ function isAssignedFromEnv(name, code) {
 
 export function requiresEnvOptIn(source) {
   const code = stripComments(source)
+
   return [...code.matchAll(WIN32_CONJUNCT)].some(([, conjunct]) => {
     if (ENV_READ.test(conjunct)) {
       return true
     }
+
     return [...conjunct.matchAll(IDENTIFIER)].some(([name]) => isAssignedFromEnv(name, code))
   })
 }
@@ -279,6 +293,7 @@ export function couldRunOnWindows(runsOn) {
       : Array.isArray(runsOn)
         ? runsOn
         : [...(runsOn?.labels ?? []), runsOn?.group ?? ''].flat()
+
   return labels.some((label) => /windows/i.test(String(label)) || String(label).includes('${{'))
 }
 
@@ -289,18 +304,22 @@ function readWindowsWorkflow() {
   const windowsJobs = jobs.filter(([, job]) => couldRunOnWindows(job?.['runs-on']))
   const steps = workflow.jobs?.[WINDOWS_LANE_JOB]?.steps ?? []
   const step = steps.find((candidate) => candidate?.name === WINDOWS_LANE_STEP)
+
   if (!step) {
     throw new Error(
       `No "${WINDOWS_LANE_STEP}" step in the ${WINDOWS_LANE_JOB} job of .github/workflows/pr.yml. ` +
         'If it was renamed, update WINDOWS_LANE_STEP here -- do not delete this guard.'
     )
   }
+
   const run = String(step.run ?? '')
+
   if (!run.includes('vitest run')) {
     throw new Error(
       `The "${WINDOWS_LANE_STEP}" step no longer invokes vitest; this guard is stale.`
     )
   }
+
   return {
     windowsJobNames: windowsJobs.map(([name]) => name),
     laneFiles: run.split(/\s+/).filter((token) => TEST_FILE_PATTERN.test(token))
@@ -308,10 +327,12 @@ function readWindowsWorkflow() {
 }
 
 const { windowsJobNames, laneFiles } = readWindowsWorkflow()
+
 const scannedTestFiles = scanSourceTree(projectDir, {
   includeTests: true,
   extensions: TEST_FILE_PATTERN
 }).filter(({ relativePath }) => !relativePath.startsWith(UNREACHABLE_BY_THE_WINDOWS_LANE))
+
 const gatedFiles = scannedTestFiles
   .filter(({ relativePath }) => !isScannerSelfPath(relativePath))
   .filter(({ relativePath, source }) => isWindows32GatedTestFile(relativePath, source))
@@ -329,17 +350,20 @@ function isInClassifier(path) {
 
 function registrationFailure(path) {
   const missing = []
+
   if (!laneFiles.includes(path)) {
     missing.push(
       `add "${path}" to the "${WINDOWS_LANE_STEP}" vitest argv in .github/workflows/pr.yml ` +
         `(job ${WINDOWS_LANE_JOB})`
     )
   }
+
   if (!isInClassifier(path)) {
     missing.push(
       `add '${path}' to WINDOWS_PACKAGE_TESTS in config/scripts/pr-code-change-scope.mjs`
     )
   }
+
   return missing.length === 0 ? null : `${path}: ${missing.join('; and ')}`
 }
 
@@ -364,6 +388,7 @@ describe('Windows-gated test files are registered in the Windows CI lane', () =>
 
   it('parses a plausible Windows lane invocation', () => {
     expect(laneFiles.length).toBeGreaterThan(15)
+
     const missingFromDisk = laneFiles.filter((path) => {
       try {
         return !statSync(join(projectDir, path)).isFile()
@@ -371,6 +396,7 @@ describe('Windows-gated test files are registered in the Windows CI lane', () =>
         return true
       }
     })
+
     expect(
       missingFromDisk,
       'The Windows lane invokes vitest on paths that do not exist -- vitest will run nothing for them.'
@@ -416,10 +442,12 @@ describe('Windows-gated test files are registered in the Windows CI lane', () =>
 
   it('has every Windows-gated test file in both registration lists', () => {
     const grandfathered = new Set([...UNREGISTERED_ON_MAIN, ...MANUAL_OPT_IN])
+
     const failures = gatedFiles
       .filter((path) => !grandfathered.has(path))
       .map(registrationFailure)
       .filter((failure) => failure !== null)
+
     expect(
       failures,
       'A Windows-gated test file is missing from a Windows CI registration list. It self-skips on ' +
@@ -433,6 +461,7 @@ describe('Windows-gated test files are registered in the Windows CI lane', () =>
     const stale = [...UNREGISTERED_ON_MAIN, ...MANUAL_OPT_IN].filter(
       (path) => !gatedFiles.includes(path) || registrationFailure(path) === null
     )
+
     expect(
       stale,
       'These files are no longer unregistered Windows-gated debt -- they were registered, ' +

@@ -14,22 +14,27 @@ export function lastEnteredDoneAt(
   if (agent.rowSource === 'subagent' && agent.state !== 'done') {
     return null
   }
+
   const entry = agent.entry
   // Why: same primitive Smart Sort ranks on, so the displayed age and Done eligibility share a clock.
   // (Session-boundary `done` means the session connected idle — STA-3386 — so it resolves to the real
   // completion it displaced, if any.)
   const completedAt = agentEntryCompletionAt(entry)
+
   if (completedAt !== null) {
     return completedAt
   }
+
   // Why: display is looser than ranking — an interrupted turn still shows when it stopped.
   if (entry.state === 'done' && entry.interrupted === true && entry.sessionBoundary !== true) {
     return entry.stateStartedAt
   }
+
   for (let i = (entry.stateHistory?.length ?? 0) - 1; i >= 0; i--) {
     if (entry.stateHistory[i].state === 'done') {
       return entry.stateHistory[i].startedAt
     }
   }
+
   return null
 }

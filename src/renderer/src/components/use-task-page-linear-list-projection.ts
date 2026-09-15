@@ -8,6 +8,7 @@ import {
 import { compareLinearIssues } from './task-page-linear-jira-list-model'
 import { LINEAR_ITEM_LIMIT } from './task-page-source-context'
 import { useTaskPageLinearListPresentation } from './use-task-page-linear-list-presentation'
+
 export function useTaskPageLinearListProjectionPrelude(model: TaskPageLinearListSelectionModel) {
   const {
     linearMode,
@@ -37,20 +38,24 @@ export function useTaskPageLinearListProjectionPrelude(model: TaskPageLinearList
     activeLinearIssueLimit,
     displayedLinearIssues
   } = model
+
   const filteredLinearIssues = useMemo(() => {
     const searchedIssues =
       linearMode === 'in-orca'
         ? filterLinearIssuesBySearchQuery(displayedLinearIssues, appliedLinearSearch)
         : displayedLinearIssues
+
     // Why: 'in-orca' is scoped by local workspace links, not by team, and it has no "Fetch more" —
     // a team filter would silently drop a linked ticket with no way to recover it.
     if (activeLinearIssueContextLabel || linearMode === 'in-orca') {
       return searchedIssues
     }
+
     // Why: team options can arrive after issue rows render; treat an empty selection as "all" until reconciliation sets teams.
     if (searchedIssues.length > 0 && linearTeamSelection.size === 0) {
       return searchedIssues
     }
+
     return searchedIssues.filter((issue) => linearTeamSelection.has(issue.team.id))
   }, [
     activeLinearIssueContextLabel,
@@ -59,31 +64,39 @@ export function useTaskPageLinearListProjectionPrelude(model: TaskPageLinearList
     linearMode,
     linearTeamSelection
   ])
+
   const orderedLinearIssues = useMemo(
     () => [...filteredLinearIssues].sort((a, b) => compareLinearIssues(a, b, linearOrderBy)),
     [filteredLinearIssues, linearOrderBy]
   )
+
   const loadedLinearIssuePages = Math.max(
     1,
     Math.ceil(orderedLinearIssues.length / LINEAR_ITEM_LIMIT)
   )
+
   const linearIssueTotalPages =
     orderedLinearIssues.length === 0
       ? 1
       : loadedLinearIssuePages + (activeLinearIssueCanRequestMore ? 1 : 0)
+
   const visibleLinearIssuePage = Math.min(
     activeLinearIssuePage,
     Math.max(0, loadedLinearIssuePages - 1)
   )
+
   const pagedLinearIssues = useMemo(() => {
     const start = visibleLinearIssuePage * LINEAR_ITEM_LIMIT
+
     return orderedLinearIssues.slice(start, start + LINEAR_ITEM_LIMIT)
   }, [orderedLinearIssues, visibleLinearIssuePage])
+
   const showLinearIssuePagination =
     orderedLinearIssues.length > 0 &&
     !activeLinearIssueError &&
     linearIssueTotalPages > 1 &&
     !(activeLinearIssueLoading && activeLinearIssues.length === 0)
+
   const setActiveLinearIssuePage = useCallback(
     (page: number) => {
       if (selectedLinearProject && linearProjectTab === 'issues') {
@@ -103,6 +116,7 @@ export function useTaskPageLinearListProjectionPrelude(model: TaskPageLinearList
       setLinearCustomViewIssuePage
     ]
   )
+
   const setActiveLinearIssueLoadingTargetPage = useCallback(
     (page: number | null) => {
       if (selectedLinearProject && linearProjectTab === 'issues') {
@@ -122,9 +136,11 @@ export function useTaskPageLinearListProjectionPrelude(model: TaskPageLinearList
       setLinearProjectIssueLoadingTargetPage
     ]
   )
+
   const ensureActiveLinearIssueLimit = useCallback(
     (targetLimit: number) => {
       const nextLimit = Math.min(clampLinearIssueListLimit(targetLimit), LINEAR_ISSUE_LIST_MAX)
+
       if (selectedLinearProject && linearProjectTab === 'issues') {
         setLinearProjectIssueLimit((limit) => Math.max(limit, nextLimit))
       } else if (selectedLinearCustomView?.model === 'issue') {
@@ -142,11 +158,13 @@ export function useTaskPageLinearListProjectionPrelude(model: TaskPageLinearList
       setLinearProjectIssueLimit
     ]
   )
+
   const handleLinearIssuePageChange = useCallback(
     (page: number) => {
       if (page < loadedLinearIssuePages) {
         setActiveLinearIssuePage(page)
         setActiveLinearIssueLoadingTargetPage(null)
+
         return
       }
 
@@ -161,23 +179,30 @@ export function useTaskPageLinearListProjectionPrelude(model: TaskPageLinearList
       setActiveLinearIssuePage
     ]
   )
+
   const showLinearEmptyFilteredLoadMore =
     orderedLinearIssues.length === 0 && !activeLinearIssueError && activeLinearIssueCanRequestMore
+
   const handleLinearEmptyFilteredLoadMore = useCallback(() => {
     setActiveLinearIssueLoadingTargetPage(null)
     ensureActiveLinearIssueLimit(activeLinearIssueLimit + LINEAR_ITEM_LIMIT)
   }, [activeLinearIssueLimit, ensureActiveLinearIssueLimit, setActiveLinearIssueLoadingTargetPage])
+
   useEffect(() => {
     if (activeLinearIssueLoading || activeLinearIssueLoadingTargetPage === null) {
       return
     }
+
     const maxLoadedPage = Math.max(0, loadedLinearIssuePages - 1)
     const targetPageLoaded = activeLinearIssueLoadingTargetPage <= maxLoadedPage
+
     const targetPageCannotLoad =
       !activeLinearIssueCanRequestMore || activeLinearIssueLimit >= LINEAR_ISSUE_LIST_MAX
+
     if (targetPageLoaded || targetPageCannotLoad) {
       setActiveLinearIssuePage(Math.min(activeLinearIssueLoadingTargetPage, maxLoadedPage))
       setActiveLinearIssueLoadingTargetPage(null)
+
       return
     }
 
@@ -201,6 +226,7 @@ export function useTaskPageLinearListProjectionPrelude(model: TaskPageLinearList
     ) {
       return
     }
+
     setActiveLinearIssuePage(visibleLinearIssuePage)
   }, [
     activeLinearIssueLoadingTargetPage,
@@ -208,6 +234,7 @@ export function useTaskPageLinearListProjectionPrelude(model: TaskPageLinearList
     setActiveLinearIssuePage,
     visibleLinearIssuePage
   ])
+
   const nextModel = model as typeof model & {
     filteredLinearIssues: typeof filteredLinearIssues
     orderedLinearIssues: typeof orderedLinearIssues
@@ -223,6 +250,7 @@ export function useTaskPageLinearListProjectionPrelude(model: TaskPageLinearList
     showLinearEmptyFilteredLoadMore: typeof showLinearEmptyFilteredLoadMore
     handleLinearEmptyFilteredLoadMore: typeof handleLinearEmptyFilteredLoadMore
   }
+
   nextModel.filteredLinearIssues = filteredLinearIssues
   nextModel.orderedLinearIssues = orderedLinearIssues
   nextModel.loadedLinearIssuePages = loadedLinearIssuePages
@@ -236,13 +264,18 @@ export function useTaskPageLinearListProjectionPrelude(model: TaskPageLinearList
   nextModel.handleLinearIssuePageChange = handleLinearIssuePageChange
   nextModel.showLinearEmptyFilteredLoadMore = showLinearEmptyFilteredLoadMore
   nextModel.handleLinearEmptyFilteredLoadMore = handleLinearEmptyFilteredLoadMore
+
   return nextModel
 }
+
 export type TaskPageLinearListProjectionPreludeModel = ReturnType<
   typeof useTaskPageLinearListProjectionPrelude
 >
+
 export function useTaskPageLinearListProjection(model: TaskPageLinearListSelectionModel) {
   const projectionModel = useTaskPageLinearListProjectionPrelude(model)
+
   return useTaskPageLinearListPresentation(projectionModel)
 }
+
 export type TaskPageLinearListProjectionModel = ReturnType<typeof useTaskPageLinearListProjection>

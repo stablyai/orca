@@ -2,8 +2,11 @@ import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
 import { compareFileNames } from './file-name-sort'
 
 export const QUICK_OPEN_RESULT_LIMIT = 50
+
 export const QUICK_OPEN_QUERY_MAX_BYTES = 2 * 1024
+
 export const QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS = 256
+
 export const QUICK_OPEN_SEARCH_VERSION = 1
 
 export type QuickOpenIndexedFile = {
@@ -28,11 +31,14 @@ export function getPreparedQuickOpenFiles(
   files: readonly string[]
 ): readonly QuickOpenIndexedFile[] {
   const cached = preparedQuickOpenFiles.get(files)
+
   if (cached) {
     return cached
   }
+
   const prepared = prepareQuickOpenFiles(files)
   preparedQuickOpenFiles.set(files, prepared)
+
   return prepared
 }
 
@@ -58,12 +64,15 @@ export function rankQuickOpenFiles(
 
   const normalizedQuery = normalizeQuickOpenQuery(query)
   const results: QuickOpenRankedResult[] = []
+
   for (const file of files) {
     const score = normalizedQuery ? fuzzyMatchIndexedFile(normalizedQuery, file) : 0
+
     if (score !== -1) {
       retainTopResult(results, { path: file.path, score, inputIndex: file.inputIndex }, limit)
     }
   }
+
   return finalizeResults(results)
 }
 
@@ -83,13 +92,17 @@ export class QuickOpenPathRanker {
 
   consider(path: string): void {
     const file = prepareQuickOpenFile(path, this.inputIndex++)
+
     if (this.normalizedQuery === null) {
       return
     }
+
     const score = this.normalizedQuery ? fuzzyMatchIndexedFile(this.normalizedQuery, file) : 0
+
     if (score === -1) {
       return
     }
+
     this.matchCount++
     retainTopResult(
       this.retained,
@@ -113,6 +126,7 @@ function normalizeQuickOpenQuery(query: string): string {
 function prepareQuickOpenFile(path: string, inputIndex: number): QuickOpenIndexedFile {
   const searchPath = path.replace(/\\/g, '/')
   const lastSlash = searchPath.lastIndexOf('/')
+
   return {
     path,
     lowerPath: searchPath.toLowerCase(),
@@ -128,13 +142,17 @@ function fuzzyMatchIndexedFile(query: string, file: QuickOpenIndexedFile): numbe
 
   while (qi < query.length) {
     const next = lastMatchIdx + 1
+
     const ti =
       file.lowerPath[next] === query[qi] ? next : file.lowerPath.indexOf(query[qi], next + 1)
+
     if (ti === -1) {
       return -1
     }
+
     const gap = lastMatchIdx === -1 ? 0 : ti - lastMatchIdx - 1
     score += gap
+
     if (
       ti > 0 &&
       (file.lowerPath[ti - 1] === '/' ||
@@ -143,6 +161,7 @@ function fuzzyMatchIndexedFile(query: string, file: QuickOpenIndexedFile): numbe
     ) {
       score -= 5
     }
+
     lastMatchIdx = ti
     qi++
   }
@@ -150,9 +169,11 @@ function fuzzyMatchIndexedFile(query: string, file: QuickOpenIndexedFile): numbe
   if (qi < query.length) {
     return -1
   }
+
   if (file.lowerFilename.includes(query)) {
     score -= 100
   }
+
   return score
 }
 
@@ -168,22 +189,28 @@ function retainTopResult(
   if (heap.length === limit && compareRankedResult(candidate, heap[0]) >= 0) {
     return
   }
+
   if (heap.length < limit) {
     heap.push(candidate)
     siftResultUp(heap, heap.length - 1)
+
     return
   }
+
   heap[0] = candidate
   siftResultDown(heap)
 }
 
 function siftResultUp(heap: QuickOpenRankedResult[], startIndex: number): void {
   let index = startIndex
+
   while (index > 0) {
     const parentIndex = Math.floor((index - 1) / 2)
+
     if (compareRankedResult(heap[index], heap[parentIndex]) <= 0) {
       return
     }
+
     ;[heap[index], heap[parentIndex]] = [heap[parentIndex], heap[index]]
     index = parentIndex
   }
@@ -191,19 +218,25 @@ function siftResultUp(heap: QuickOpenRankedResult[], startIndex: number): void {
 
 function siftResultDown(heap: QuickOpenRankedResult[]): void {
   let index = 0
+
   while (true) {
     const leftIndex = index * 2 + 1
+
     if (leftIndex >= heap.length) {
       return
     }
+
     const rightIndex = leftIndex + 1
+
     const worseChildIndex =
       rightIndex < heap.length && compareRankedResult(heap[rightIndex], heap[leftIndex]) > 0
         ? rightIndex
         : leftIndex
+
     if (compareRankedResult(heap[worseChildIndex], heap[index]) <= 0) {
       return
     }
+
     ;[heap[index], heap[worseChildIndex]] = [heap[worseChildIndex], heap[index]]
     index = worseChildIndex
   }

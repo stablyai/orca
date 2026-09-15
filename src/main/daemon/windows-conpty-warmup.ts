@@ -13,6 +13,7 @@ export function warmWindowsConptyOnce(spawnPty: typeof pty.spawn = pty.spawn): v
   if (process.platform !== 'win32') {
     return
   }
+
   // Why: setImmediate keeps the ready/handshake path ahead of the warm-up; a
   // real spawn arriving first simply does the warming itself.
   setImmediate(() => {
@@ -27,6 +28,7 @@ export function warmWindowsConptyOnce(spawnPty: typeof pty.spawn = pty.spawn): v
         // ones warmed, not the legacy system ConPTY.
         useConptyDll: true
       })
+
       const killTimer = setTimeout(() => {
         try {
           proc.kill()
@@ -34,6 +36,7 @@ export function warmWindowsConptyOnce(spawnPty: typeof pty.spawn = pty.spawn): v
           /* best-effort cleanup of a stuck warm-up shell */
         }
       }, WARMUP_KILL_TIMEOUT_MS)
+
       killTimer.unref?.()
       proc.onExit(() => {
         clearTimeout(killTimer)

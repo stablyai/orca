@@ -10,6 +10,7 @@ const event = (providerGeneration: number) => ({
 describe('SshPtyOutputGenerationGuard', () => {
   it('compacts sequential closures without weakening stale rejection', () => {
     const guard = new SshPtyOutputGenerationGuard(() => false)
+
     for (let generation = 1; generation <= 2_048; generation++) {
       guard.closeGeneration(generation)
     }

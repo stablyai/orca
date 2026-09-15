@@ -24,6 +24,7 @@ describe('DaemonPtyAdapter startup delivery', () => {
     harness = await startDaemonAdapterHarness((opts) => {
       lastSpawnOpts = opts
       lastSubprocess = createMockSubprocess()
+
       return lastSubprocess
     })
     adapter = harness.adapter
@@ -41,7 +42,9 @@ describe('DaemonPtyAdapter startup delivery', () => {
     const resolveShell = vi
       .spyOn(localPtyUtils, 'resolveUnixShellPath')
       .mockReturnValue('/usr/bin/fish')
+
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+
     try {
       await adapter.spawn({
         cols: 80,

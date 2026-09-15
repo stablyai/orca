@@ -29,13 +29,16 @@ describe('agent availability settings', () => {
       defaultTuiAgent: null,
       disabledTuiAgents: []
     }
+
     let latest = settings
+
     const updateSettings = vi
       .fn<(update: Partial<GlobalSettings>) => Promise<void>>()
       .mockRejectedValueOnce(new Error('write failed'))
       .mockImplementationOnce(async (update) => {
         latest = { ...latest, ...update }
       })
+
     const enqueue = createAgentAvailabilityUpdateQueue()
 
     await expect(

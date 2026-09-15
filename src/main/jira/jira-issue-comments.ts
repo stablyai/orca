@@ -43,6 +43,7 @@ async function collectCommentMediaRequest(
   const htmlIds: string[] = []
   const seen = new Set<string>()
   const mediaAttrs: JiraAdfMediaAttrs[] = []
+
   for (const comment of comments) {
     for (const id of extractAttachmentContentIdsFromHtml(asString(comment.renderedBody))) {
       if (!seen.has(id)) {
@@ -50,12 +51,14 @@ async function collectCommentMediaRequest(
         htmlIds.push(id)
       }
     }
+
     mediaAttrs.push(...collectAdfMediaAttrs(comment.body))
   }
 
   const needingCount = mediaAttrs.filter(
     (attrs) => !(attrs.url && /^https?:\/\//i.test(attrs.url))
   ).length
+
   // Why: selectPreferredAttachmentIds yields nothing without attachment-needing media, so
   // HTML ids alone can never produce a download — skip the extra metadata request entirely.
   if (needingCount === 0) {
@@ -65,14 +68,17 @@ async function collectCommentMediaRequest(
   // Why: comment media usually references issue-level attachments; pull them once
   // for the whole thread. Use apiBasePath so Server/DC does not 404 on /rest/api/3.
   let attachmentField: unknown
+
   try {
     const issue = await jiraRequest<JiraRecord>(
       client,
       `${apiBasePath(client.site)}/issue/${encodeURIComponent(key)}?fields=attachment`
     )
+
     attachmentField = asRecord(issue.fields).attachment
   } catch (error) {
     console.warn('[jira] comment attachment lookup failed:', error)
+
     return undefined
   }
 
@@ -81,9 +87,11 @@ async function collectCommentMediaRequest(
     attachmentField,
     mediaAttrs
   })
+
   if (selection.needCount === 0 && selection.preferredIds.length === 0) {
     return undefined
   }
+
   return {
     attachmentField,
     preferredIds: selection.preferredIds,
@@ -98,6 +106,7 @@ export async function getIssueComments(
   siteId?: string | null
 ): Promise<JiraComment[]> {
   const entry = getClients(siteId)[0]
+
   if (!entry) {
     return []
   }
@@ -105,6 +114,7 @@ export async function getIssueComments(
   let comments: JiraRecord[] = []
   let mediaRequest: MediaRequest | undefined
   let held = false
+
   try {
     await acquire()
     held = true
@@ -115,6 +125,7 @@ export async function getIssueComments(
         startAt: String(startAt),
         expand: 'renderedBody'
       })
+
       return `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}/comment?${params.toString()}`
     })
     mediaRequest = await collectCommentMediaRequest(entry, key, comments)
@@ -123,7 +134,9 @@ export async function getIssueComments(
       clearToken(entry.site.id)
       throw error
     }
+
     console.warn('[jira] getIssueComments failed:', error)
+
     return []
   } finally {
     if (held) {
@@ -135,12 +148,15 @@ export async function getIssueComments(
   try {
     const prepared = mediaRequest ? await prepareMediaResolver(entry, mediaRequest) : undefined
     const mapped = comments.map((comment) => mapComment(comment, prepared?.options))
+
     if (prepared) {
       flushMediaResolutionWarn(entry, prepared)
     }
+
     return mapped
   } catch (error) {
     console.warn('[jira] getIssueComments media load failed:', error)
+
     return comments.map((comment) => mapComment(comment))
   }
 }

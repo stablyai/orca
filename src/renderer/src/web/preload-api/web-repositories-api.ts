@@ -15,14 +15,17 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
   return {
     list: async () => {
       const owned = await callRuntimeResultWithOwner<{ repos: Repo[] }>('repo.list')
+
       return owned.result.repos.map((repo) => withRuntimeRepoOwner(repo, owned.hostId))
     },
     add: async ({ path, kind, displayName }) => {
       invalidateRuntimeWorktreeCaches()
+
       const owned = await callRuntimeResultWithOwner<{ repo: Repo } | { error: string }>(
         'repo.add',
         { path, kind, displayName }
       )
+
       return withRuntimeRepoMutationOwner(owned.result, owned.hostId)
     },
     remove: async ({ repoId }) => {
@@ -43,6 +46,7 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
         repo: repoId,
         updates
       })
+
       return withRuntimeRepoOwner(owned.result.repo, owned.hostId)
     },
     pickFolder: () => Promise.resolve(null),
@@ -50,11 +54,13 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     pickDirectory: () => Promise.resolve(null),
     clone: async ({ url, destination }) => {
       invalidateRuntimeWorktreeCaches()
+
       const owned = await callRuntimeResultWithOwner<{ repo: Repo }>(
         'repo.clone',
         { url, destination },
         10 * 60_000
       )
+
       return withRuntimeRepoOwner(owned.result.repo, owned.hostId)
     },
     cloneRemote: async () => {
@@ -68,17 +74,22 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     cloneAbort: () => Promise.resolve(),
     addRemote: async ({ remotePath, displayName, kind }) => {
       invalidateRuntimeWorktreeCaches()
+
       const owned = await callRuntimeResultWithOwner<{ repo: Repo }>('repo.add', {
         path: remotePath,
         kind
       })
+
       const result = {
         repo: withRuntimeRepoOwner(owned.result.repo, owned.hostId)
       }
+
       if (!displayName) {
         return result
       }
+
       assertActiveEnvironment(owned.environmentId)
+
       return {
         repo: await createReposApi().update({
           repoId: result.repo.id,
@@ -88,10 +99,12 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
     },
     create: async ({ parentPath, name, kind }) => {
       invalidateRuntimeWorktreeCaches()
+
       const owned = await callRuntimeResultWithOwner<{ repo: Repo } | { error: string }>(
         'repo.create',
         { parentPath, name, kind }
       )
+
       return withRuntimeRepoMutationOwner(owned.result, owned.hostId)
     },
     isGitAvailable: async () =>
@@ -100,6 +113,7 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
       const result = await callRuntimeResult<{ resolvedPath: string }>('files.browseServerDir', {
         path: '~'
       })
+
       return getDefaultCreateProjectParent(result.resolvedPath)
     },
     onCloneProgress: () => noopUnsubscribe,
@@ -123,6 +137,7 @@ export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
         query,
         limit
       })
+
       return result.refDetails ?? result.refs.map(legacyBaseRefSearchResult)
     },
     onChanged: () => noopUnsubscribe

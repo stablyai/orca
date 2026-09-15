@@ -12,12 +12,15 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/orca-test-user-data' } }))
+
 vi.mock('../../shared/runtime-environment-store', () => ({
   listEnvironments: () => mocks.environments
 }))
+
 vi.mock('./browser-route-partition-binding-runtime', () => ({
   activeBrowserRoutePartitionOrcaProfileId: () => 'local-default'
 }))
+
 vi.mock('./browser-route-partition-storage-dependencies', () => ({
   browserRoutePartitionStorageDependencies: (isPartitionLive: (p: string) => boolean) => ({
     bindings: {
@@ -26,6 +29,7 @@ vi.mock('./browser-route-partition-storage-dependencies', () => ({
         for (const partition of partitions) {
           mocks.bindings.delete(partition)
         }
+
         return partitions.length
       }
     },
@@ -47,7 +51,9 @@ import {
 } from './browser-route-partition-storage-runtime'
 
 const ENV_PARTITION = `persist:orca-browser-v1-${'a'.repeat(64)}`
+
 const LIVE_TARGET_PARTITION = `persist:orca-browser-v1-${'b'.repeat(64)}`
+
 const REMOVED_TARGET_PARTITION = `persist:orca-browser-v1-${'c'.repeat(64)}`
 
 function seedBindings(): void {
@@ -111,9 +117,11 @@ describe('route partition storage runtime with local SSH scopes', () => {
     // exercises the REAL retention module through the runtime's isPartitionLive.
     const { registerBrowserRoutePartitionRetentionProbe } =
       await import('./browser-route-partition-retention')
+
     const unregister = registerBrowserRoutePartitionRetentionProbe(
       (partition) => partition === REMOVED_TARGET_PARTITION
     )
+
     try {
       const swept = await collectOrphanedBrowserRoutePartitionStorage(() => ['target-live'])
       expect(swept).toEqual([])

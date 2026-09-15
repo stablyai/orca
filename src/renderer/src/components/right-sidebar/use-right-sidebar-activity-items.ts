@@ -35,11 +35,13 @@ export function useRightSidebarActivityItems({
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
   const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
   const activeWorktreeId = useAppStore((s) => (rightSidebarOpen ? s.activeWorktreeId : null))
+
   // Why: source control and checks are meaningless for non-git folders.
   // Hide those tabs so the activity bar only shows relevant actions.
   const activeWorktree = useAppStore((s) =>
     activeWorktreeId ? (s.getKnownWorktreeById(activeWorktreeId) ?? null) : null
   )
+
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const activeWorkspaceScope = parseWorkspaceKey(activeWorktreeId ?? '')
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
@@ -47,13 +49,16 @@ export function useRightSidebarActivityItems({
   const isSshRepo = Boolean(activeRepo?.connectionId)
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
   const pluginPanels = usePluginPanels()
+
   const visiblePluginPanels = useMemo(
     () => (pluginSystemEnabled ? pluginPanels : []),
     [pluginPanels, pluginSystemEnabled]
   )
+
   const installedPlugins = usePluginPanelsStore((s) => s.plugins)
   const pluginFetchStatus = usePluginPanelsStore((s) => s.fetchStatus)
   const pluginPanelErrors = usePluginPanelsStore((s) => s.panelErrors)
+
   const installedPluginTabKeys = useMemo(
     () => collectInstalledPluginTabKeys(installedPlugins),
     [installedPlugins]

@@ -24,6 +24,7 @@ export function readBrowserClientPageGuestMetadataIfLive(
 ): BrowserClientPageMetadataSnapshot | null {
   try {
     const url = redactKagiSessionToken(eventUrl || webview.getURL() || 'about:blank')
+
     return {
       url,
       title: webview.getTitle() || url || 'Browser',
@@ -39,6 +40,7 @@ export function readBrowserClientPageGuestMetadataIfLive(
       errorName: error instanceof Error ? error.name : typeof error,
       errorMessage: error instanceof Error ? error.message : String(error)
     })
+
     return null
   }
 }
@@ -50,14 +52,17 @@ export function createBrowserClientPageLoadFailureHandler(
 ): (event: Event) => void {
   return (event) => {
     let guestUnavailable = false
+
     const loadError = resolveBrowserWebviewLoadFailure(event as BrowserPageFailLoadEvent, {
       // Discarded ERR_ABORTED/subframe events must not read the guest.
       fallbackUrl: () => {
         const metadata = readBrowserClientPageGuestMetadataIfLive(webview)
         guestUnavailable = metadata === null
+
         return metadata?.url ?? null
       }
     })
+
     if (guestUnavailable) {
       onUnavailable()
     } else if (loadError) {

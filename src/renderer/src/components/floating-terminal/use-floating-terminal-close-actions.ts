@@ -37,18 +37,23 @@ export function useFloatingTerminalCloseActions({
   const closeFloatingItems = useCallback(
     (visibleIds: string[]) => {
       const state = useAppStore.getState()
+
       const currentGroupTabs = activeGroup
         ? (state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).filter(
             (tab) => tab.groupId === activeGroup.id
           )
         : (state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? [])
+
       const items = visibleIds
         .map((visibleId) => resolveGroupTabFromVisibleId(currentGroupTabs, visibleId))
         .filter((item): item is Tab => item !== null && !item.isPinned)
+
       if (items.length === 0) {
         return
       }
+
       const dirtyEditorFileIds: string[] = []
+
       for (const item of items) {
         if (item.contentType === 'terminal') {
           closeTab(item.entityId, { reason: 'cleanup' })
@@ -59,13 +64,16 @@ export function useFloatingTerminalCloseActions({
           closeUnifiedTab(item.id)
         } else {
           const file = state.openFiles.find((candidate) => candidate.id === item.entityId)
+
           if (file?.isDirty) {
             dirtyEditorFileIds.push(item.entityId)
             continue
           }
+
           closeFile(item.entityId)
         }
       }
+
       if (dirtyEditorFileIds.length > 0) {
         queueEditorCloseRequests(dirtyEditorFileIds)
       }
@@ -76,30 +84,39 @@ export function useFloatingTerminalCloseActions({
   const closeFloatingItemConfirmed = useCallback(
     (visibleId: string, options?: { guestOwned?: boolean }) => {
       const item = resolveGroupTabFromVisibleId(groupTabs, visibleId)
+
       if (!item) {
         return
       }
+
       const panelOwnedNow = options?.guestOwned === true || isFloatingWorkspacePanelFocused()
       const itemCountBeforeClose = countVisibleFloatingWorkspaceItems(useAppStore.getState())
+
       const armIfEmptying = (): void => {
         if (!panelOwnedNow) {
           return
         }
+
         const itemCountAfterClose = countVisibleFloatingWorkspaceItems(useAppStore.getState())
+
         if (itemCountAfterClose === 0 && itemCountAfterClose < itemCountBeforeClose) {
           armFloatingPanelReclaimIntent()
         }
       }
+
       if (item.contentType === 'terminal') {
         closeTerminalTab(item.entityId, { onClosed: armIfEmptying })
+
         return
       }
+
       const state = useAppStore.getState()
       guardPinnedTabClose({
         isPinned: item.isPinned === true,
         tabLabel: resolvePinnedTabLabel(state, FLOATING_TERMINAL_WORKTREE_ID, visibleId),
         onClose: () => {
           const latest = useAppStore.getState()
+
           if (item.contentType === 'browser') {
             destroyWorkspaceWebviews(latest.browserPagesByWorkspace, item.entityId)
             closeBrowserTab(item.entityId)
@@ -107,13 +124,17 @@ export function useFloatingTerminalCloseActions({
             closeUnifiedTab(item.id)
           } else {
             const file = latest.openFiles.find((candidate) => candidate.id === item.entityId)
+
             if (file?.isDirty) {
               pendingReclaimArmByFileIdRef.current.set(item.entityId, armIfEmptying)
               queueEditorCloseRequests([item.entityId])
+
               return
             }
+
             closeFile(item.entityId)
           }
+
           armIfEmptying()
         }
       })
@@ -131,15 +152,19 @@ export function useFloatingTerminalCloseActions({
   const closeOthers = useCallback(
     (visibleId: string) => {
       const state = useAppStore.getState()
+
       const currentGroupTabs = activeGroup
         ? (state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).filter(
             (tab) => tab.groupId === activeGroup.id
           )
         : (state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? [])
+
       const item = resolveGroupTabFromVisibleId(currentGroupTabs, visibleId)
+
       if (!item) {
         return
       }
+
       closeFloatingItems(
         currentGroupTabs.filter((tab) => tab.id !== item.id && !tab.isPinned).map((tab) => tab.id)
       )
@@ -150,32 +175,41 @@ export function useFloatingTerminalCloseActions({
   const closeToSide = useCallback(
     (visibleId: string, side: 'left' | 'right') => {
       const state = useAppStore.getState()
+
       const currentGroup = activeGroup
         ? state.groupsByWorktree[FLOATING_TERMINAL_WORKTREE_ID]?.find(
             (group) => group.id === activeGroup.id
           )
         : null
+
       const currentGroupTabs = currentGroup
         ? (state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).filter(
             (tab) => tab.groupId === currentGroup.id
           )
         : (state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? [])
+
       const item = resolveGroupTabFromVisibleId(currentGroupTabs, visibleId)
+
       if (!item || !currentGroup) {
         return
       }
+
       const index = currentGroup.tabOrder.indexOf(item.id)
+
       if (index === -1) {
         return
       }
+
       const sideIds =
         side === 'right'
           ? currentGroup.tabOrder.slice(index + 1)
           : currentGroup.tabOrder.slice(0, index)
+
       const tabById = new Map(currentGroupTabs.map((tab) => [tab.id, tab]))
       closeFloatingItems(
         sideIds.filter((tabId) => {
           const tab = tabById.get(tabId)
+
           return tab ? !tab.isPinned : false
         })
       )
@@ -187,6 +221,7 @@ export function useFloatingTerminalCloseActions({
     (visibleId: string) => closeToSide(visibleId, 'right'),
     [closeToSide]
   )
+
   const closeToLeft = useCallback(
     (visibleId: string) => closeToSide(visibleId, 'left'),
     [closeToSide]
@@ -194,11 +229,13 @@ export function useFloatingTerminalCloseActions({
 
   const closeAllFiles = useCallback(() => {
     const state = useAppStore.getState()
+
     const currentGroupTabs = activeGroup
       ? (state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).filter(
           (tab) => tab.groupId === activeGroup.id
         )
       : (state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? [])
+
     closeFloatingItems(
       currentGroupTabs
         .filter(

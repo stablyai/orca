@@ -11,9 +11,11 @@ export function revealMountedWorktreeElement(
   const element = optionId
     ? document.getElementById(optionId)
     : getMountedWorktreeOptions(worktreeId, container)[0]
+
   if (!element || !container.contains(element)) {
     return null
   }
+
   return revealElementInScrollContainer(container, element, behavior, onScrollIssued)
     ? element
     : null
@@ -26,9 +28,11 @@ export function revealMountedSidebarRowElement(
   onScrollIssued?: (targetTop: number) => void
 ): HTMLElement | null {
   const element = document.getElementById(getWorktreeOptionId(rowKey))
+
   if (!element || !container.contains(element)) {
     return null
   }
+
   return revealElementInScrollContainer(container, element, behavior, onScrollIssued)
     ? element
     : null

@@ -7,8 +7,10 @@ export function resolveHangWatchdogWorkerPath(
   pathExists: (candidate: string) => boolean = existsSync
 ): string {
   const adjacentBuildEntry = join(appPath, 'main-thread-hang-watchdog-entry.js')
+
   if (!isPackaged && pathExists(adjacentBuildEntry)) {
     return adjacentBuildEntry
   }
+
   return join(appPath, 'out', 'main', 'main-thread-hang-watchdog-entry.js')
 }

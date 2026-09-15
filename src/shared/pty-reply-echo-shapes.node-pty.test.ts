@@ -17,9 +17,11 @@ import { locateEcho, replyEchoProjections } from './pty-startup-reply-echo-shape
 import { mode2031SequenceFor } from './terminal-color-scheme-protocol'
 
 const BASH = '/bin/bash'
+
 const itWithBash = process.platform !== 'win32' && existsSync(BASH) ? it : it.skip
 
 const COLOR_SCHEME_REPLY = mode2031SequenceFor('dark')
+
 const OSC_COLOR_REPLY_ST = '\x1b]11;rgb:2e2e/3434/3434\x1b\\'
 
 type Pty = { write: (data: string) => void; kill: () => void }
@@ -35,6 +37,7 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 
 async function waitFor(predicate: () => boolean, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs
+
   while (Date.now() < deadline && !predicate()) {
     await sleep(25)
   }
@@ -47,27 +50,32 @@ async function waitFor(predicate: () => boolean, timeoutMs: number): Promise<voi
 async function echoOf(reply: string, discipline: 'readline' | 'cooked'): Promise<string> {
   const { spawn } = await import('node-pty')
   let output = ''
+
   const pty = spawn(BASH, ['--norc', '--noprofile', '-i'], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
     env: { ...process.env, PS1: 'ORCA16542> ', TERM: 'xterm-256color' }
   })
+
   live = { write: (data) => pty.write(data), kill: () => pty.kill() }
   pty.onData((data) => {
     output += data
   })
 
   await waitFor(() => output.includes('ORCA16542> '), 10_000)
+
   if (discipline === 'cooked') {
     pty.write('read -r ORCA_LINE\r')
     await sleep(400)
   }
+
   output = ''
   pty.write(reply)
   // No marker to wait on: the echo is all this produces, so settle instead.
   await waitFor(() => output.length > 0, 5_000)
   await sleep(250)
+
   return output
 }
 

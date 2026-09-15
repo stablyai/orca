@@ -40,14 +40,18 @@ export async function sweepProviderByPrefix(
   // so leave the fallback unset whenever stripping shortened the path — else
   // deleting one instance would sweep the others.
   const fullWorktreePath = splitWorktreeId(worktreeId)?.worktreePath
+
   const cwdFallbackPath =
     splitWorktreeIdForFilesystem(worktreeId)?.worktreePath === fullWorktreePath
       ? fullWorktreePath
       : undefined
+
   const rpcDeadline = teardownRpcDeadline(deadline)
+
   const sessions = failClosed
     ? await provider.listProcesses({ deadlineMs: rpcDeadline })
     : await provider.listProcesses({ deadlineMs: rpcDeadline }).catch(() => [])
+
   const ownedSessions = sessions.filter((session) => {
     // Why: older daemon/relay process rows may omit cwd; their established ID
     // and authoritative worktree ownership must remain usable during teardown.
@@ -57,8 +61,10 @@ export async function sweepProviderByPrefix(
       typeof session.cwd === 'string' &&
       session.cwd.length > 0 &&
       isPathInsideOrEqual(cwdFallbackPath, session.cwd)
+
     return session.id.startsWith(prefix) || session.worktreeId === worktreeId || cwdOwned
   })
+
   // Why: agent shutdown snapshots coalesce only when requests begin together;
   // bounded concurrency avoids serial process scans without unbounded fanout.
   const stopped = await mapWithConcurrency(
@@ -68,24 +74,31 @@ export async function sweepProviderByPrefix(
       if (Date.now() >= deadline) {
         return 0
       }
+
       const stopResult = await stopPty(session.id, async () => {
         if (Date.now() >= deadline) {
           return false
         }
+
         try {
           await provider.shutdown(session.id, { immediate: true, deadlineMs: rpcDeadline })
+
           return Date.now() < deadline
         } catch {
           return false
         }
       })
+
       if (stopResult.owner && Date.now() < deadline) {
         clearStoppedPtyState(session.id, onPtyStopped)
+
         return 1
       }
+
       return 0
     }
   )
+
   return stopped.reduce<number>((count, value) => count + value, 0)
 }
 
@@ -101,6 +114,7 @@ export async function sweepRegistryForWorktree(
 ): Promise<number> {
   const rpcDeadline = teardownRpcDeadline(deadline)
   const entries = listRegisteredPtys().filter((r) => r.worktreeId === worktreeId)
+
   const stopped = await mapWithConcurrency(
     entries,
     WORKTREE_TEARDOWN_CONCURRENCY,
@@ -108,24 +122,31 @@ export async function sweepRegistryForWorktree(
       if (Date.now() >= deadline) {
         return 0
       }
+
       const stopResult = await stopPty(entry.ptyId, async () => {
         if (Date.now() >= deadline) {
           return false
         }
+
         try {
           await localProvider.shutdown(entry.ptyId, { immediate: true, deadlineMs: rpcDeadline })
+
           return Date.now() < deadline
         } catch {
           return false
         }
       })
+
       if (stopResult.owner && Date.now() < deadline) {
         clearStoppedPtyState(entry.ptyId, onPtyStopped)
+
         return 1
       }
+
       return 0
     }
   )
+
   return stopped.reduce<number>((count, value) => count + value, 0)
 }
 

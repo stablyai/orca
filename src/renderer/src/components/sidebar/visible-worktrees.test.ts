@@ -116,16 +116,19 @@ describe('computeVisibleWorktreeIds', () => {
       runtimeOwnerEnvironmentId: 'env-1',
       creatorProvenance: { kind: 'paired-device' as const, deviceId: 'device-a' }
     }
+
     const other = {
       ...makeWorktree('other'),
       runtimeOwnerEnvironmentId: 'env-1',
       creatorProvenance: { kind: 'paired-device' as const, deviceId: 'device-b' }
     }
+
     const host = {
       ...makeWorktree('host'),
       runtimeOwnerEnvironmentId: 'env-1',
       creatorProvenance: { kind: 'host' as const }
     }
+
     const legacy = { ...makeWorktree('legacy'), runtimeOwnerEnvironmentId: 'env-1' }
 
     const result = computeVisibleWorktreeIds(
@@ -187,6 +190,7 @@ describe('computeVisibleWorktreeIds', () => {
 
   it('hides automation-created workspaces when the automation filter is enabled', () => {
     const manual = makeWorktree('manual')
+
     const automationCreated = {
       ...makeWorktree('automation-created'),
       automationProvenance: {
@@ -217,6 +221,7 @@ describe('computeVisibleWorktreeIds', () => {
 
   it('hides CLI-created workspaces when the CLI filter is enabled', () => {
     const manual = makeWorktree('manual')
+
     const cliCreated = {
       ...makeWorktree('cli-created'),
       cliProvenance: {
@@ -238,6 +243,7 @@ describe('computeVisibleWorktreeIds', () => {
 
   it('keeps CLI-created workspaces visible while the CLI filter is off', () => {
     const manual = makeWorktree('manual')
+
     const cliCreated = {
       ...makeWorktree('cli-created'),
       cliProvenance: { kind: 'created-by-cli' as const, createdAt: 123 }
@@ -481,6 +487,7 @@ describe('computeVisibleWorktreeIds', () => {
       [runtime.id],
       visibleOptions({ workspaceHostScope: 'runtime:env-1' })
     )
+
     const localResult = computeVisibleWorktreeIds(
       { repo1: [runtime] },
       [runtime.id],
@@ -636,6 +643,7 @@ describe('computeVisibleWorktreeIds', () => {
       },
       ptyIdsByTabId: { 't-a': ['p-a'], 't-b': ['p-b'] }
     }
+
     const byRepo = { repo1: [awakeA, main, awakeB] }
     const sortedIds = [awakeA.id, main.id, awakeB.id]
 
@@ -705,11 +713,13 @@ describe('computeVisibleWorktreeIds', () => {
 
   it('keeps inline parents out of non-nested board results across parent filters', () => {
     const child = makeWorktree('child')
+
     const run = (
       parent: ReturnType<typeof makeWorktree>,
       options: Partial<VisibleOptions>
     ): string[] => {
       const resolvedChild = { ...child, lineage: makeWorktreeLineage(child, parent) }
+
       return computeVisibleWorktreeIds(
         { repo1: [parent, resolvedChild] },
         [parent.id, child.id],
@@ -799,6 +809,7 @@ describe('computeVisibleWorktreeIds', () => {
   it('does not resurrect stale lineage parents', () => {
     const parent = makeWorktree('parent')
     const child = makeWorktree('child')
+
     const lineage = makeWorktreeLineage(child, parent, {
       parentWorktreeInstanceId: 'old-parent-instance'
     })
@@ -894,6 +905,7 @@ describe('computeVisibleWorktreeIds', () => {
       projectId: 'project-b',
       isMainWorktree: true
     })
+
     const child = Object.assign(makeWorktree('child'), { projectId: 'project-a' })
     const lineage = makeWorktreeLineage(child, parent)
 

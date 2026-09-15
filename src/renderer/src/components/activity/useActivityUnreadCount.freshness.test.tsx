@@ -7,6 +7,7 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-typ
 // test must prove the reducer bumps that epoch for every transition the count depends on.
 vi.mock('@/store', async () => {
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
+
   return { useAppStore: createTestStore() }
 })
 
@@ -15,12 +16,14 @@ import { flushMicrotasks } from '@/store/slices/agent-status-test-harness'
 import { useActivityUnreadCount } from './useActivityUnreadCount'
 
 const PANE_KEY = 'tab-1:11111111-1111-4111-8111-111111111111'
+
 const START = 2_000
 
 beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(START)
 })
+
 afterEach(() => {
   useAppStore.getState().removeAgentStatus(PANE_KEY)
   vi.useRealTimers()

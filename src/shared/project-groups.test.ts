@@ -86,6 +86,7 @@ describe('project-groups', () => {
 
   it('clears repo memberships whose group no longer exists', () => {
     const groups = [createProjectGroup({ name: 'Known', createdFrom: 'manual', tabOrder: 0 })]
+
     const repos = clearMissingProjectGroupMemberships(
       [
         repo({ id: 'known', projectGroupId: groups[0].id }),

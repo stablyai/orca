@@ -35,6 +35,7 @@ describe('changed-code quality line matching', () => {
   it('normalizes absolute diagnostic paths before matching', () => {
     const root = process.cwd()
     const file = 'config/scripts/check-changed-code-quality.test.mjs'
+
     const diagnostic = {
       filename: `${root}/${file}`,
       labels: [{ span: { line: 24 } }]

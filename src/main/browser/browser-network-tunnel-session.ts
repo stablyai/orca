@@ -52,14 +52,19 @@ export class BrowserNetworkTunnelSession {
     if (this.closed) {
       return
     }
+
     const frame = decodeBrowserNetworkTunnelFrame(bytes)
+
     if (!frame) {
       this.close()
+
       return
     }
+
     if (frame.tunnelGeneration !== this.tunnelGeneration) {
       return
     }
+
     this.handleFrame(frame)
   }
 
@@ -67,10 +72,13 @@ export class BrowserNetworkTunnelSession {
     if (this.closed) {
       return
     }
+
     this.closed = true
+
     for (const stream of this.streams.values()) {
       this.retireStream(stream)
     }
+
     this.streams.clear()
     this.onClose?.()
   }
@@ -79,24 +87,32 @@ export class BrowserNetworkTunnelSession {
     if (handleBrowserNetworkTunnelHeartbeat(frame, this.frameSender)) {
       return
     }
+
     if (frame.opcode === BrowserNetworkTunnelOpcode.Open) {
       this.openStream(frame)
+
       return
     }
+
     const stream = this.streams.get(frame.streamId)
+
     if (!stream) {
       if (this.openedStreamIds.has(frame.streamId)) {
         return
       }
+
       this.close()
+
       return
     }
+
     if (frame.opcode === BrowserNetworkTunnelOpcode.Data) {
       this.writeToDestination(stream, frame.payload)
     } else if (frame.opcode === BrowserNetworkTunnelOpcode.WindowUpdate) {
       this.grantDestinationCredit(stream, frame.payload)
     } else if (frame.opcode === BrowserNetworkTunnelOpcode.HalfClose) {
       const error = halfCloseBrowserNetworkDestination(stream)
+
       if (error) {
         this.failProtocolStream(stream, error)
       }
@@ -121,9 +137,11 @@ export class BrowserNetworkTunnelSession {
       onConnectTimeout: (pendingStream) =>
         this.failStream(pendingStream, 'destination_connect_timeout')
     })
+
     if (!stream) {
       return
     }
+
     const socket = stream.socket
     this.streams.set(stream.id, stream)
     socket.setNoDelay(true)
@@ -139,6 +157,7 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream) || stream.connected) {
       return
     }
+
     stream.connected = true
     stream.releasePendingOpen()
     clearTimeout(stream.connectTimeout)
@@ -161,6 +180,7 @@ export class BrowserNetworkTunnelSession {
         if (!this.isCurrent(stream)) {
           return
         }
+
         stream.receiveCredit += bytes
         this.frameSender.send(
           BrowserNetworkTunnelOpcode.WindowUpdate,
@@ -170,6 +190,7 @@ export class BrowserNetworkTunnelSession {
       },
       (bytes) => this.resourceBudget.claimRetainedBytes(bytes)
     )
+
     if (error) {
       this.failDestinationFlow(stream, error)
     }
@@ -180,8 +201,10 @@ export class BrowserNetworkTunnelSession {
   private failDestinationFlow(stream: BrowserNetworkTunnelStream, code: string): void {
     if (code === BROWSER_NETWORK_TUNNEL_ROUTE_BUFFER_OVERFLOW) {
       this.failStream(stream, code)
+
       return
     }
+
     this.failProtocolStream(stream, code)
   }
 
@@ -190,10 +213,13 @@ export class BrowserNetworkTunnelSession {
     payload: Uint8Array<ArrayBufferLike>
   ): void {
     const error = grantBrowserNetworkDestinationCredit(stream, payload)
+
     if (error) {
       this.failProtocolStream(stream, error)
+
       return
     }
+
     this.flushDestinationData(stream)
   }
 
@@ -204,16 +230,22 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream) || bytes.byteLength === 0) {
       return
     }
+
     if (!this.resourceBudget.reserveRetainedBytes(bytes.byteLength)) {
       this.failStream(stream, BROWSER_NETWORK_TUNNEL_ROUTE_BUFFER_OVERFLOW)
+
       return
     }
+
     const error = queueBrowserNetworkDestinationData(stream, bytes)
+
     if (error) {
       this.resourceBudget.releaseRetainedBytes(bytes.byteLength)
       this.failStream(stream, error)
+
       return
     }
+
     this.flushDestinationData(stream)
   }
 
@@ -231,15 +263,21 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream)) {
       return
     }
+
     if (!stream.connected) {
       this.failStream(stream, 'destination_closed_before_connect')
+
       return
     }
+
     if (stream.destinationEnded) {
       this.failStream(stream, 'duplicate_destination_half_close')
+
       return
     }
+
     stream.destinationEnded = true
+
     if (stream.pendingToClient.length === 0) {
       this.sendDestinationHalfClose(stream)
     }
@@ -249,13 +287,17 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream)) {
       return
     }
+
     // The client has never seen Opened for this stream, so HalfClose/Close would read as a
     // protocol violation and fence the whole tunnel; fail just this stream instead.
     if (!stream.connected) {
       this.failStream(stream, 'destination_closed_before_connect')
+
       return
     }
+
     stream.destinationClosed = true
+
     if (stream.pendingToClient.length === 0) {
       this.finalizeDestinationClose(stream)
     }
@@ -265,6 +307,7 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream)) {
       return
     }
+
     this.frameSender.sendError(stream.id, code)
     this.deleteStream(stream)
   }
@@ -273,6 +316,7 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream)) {
       return
     }
+
     this.frameSender.sendError(stream.id, code)
     this.close()
   }
@@ -281,6 +325,7 @@ export class BrowserNetworkTunnelSession {
     if (stream.destinationHalfCloseSent) {
       return
     }
+
     stream.destinationHalfCloseSent = true
     this.frameSender.send(BrowserNetworkTunnelOpcode.HalfClose, stream.id)
   }
@@ -294,6 +339,7 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream)) {
       return
     }
+
     this.streams.delete(stream.id)
     this.retireStream(stream)
   }

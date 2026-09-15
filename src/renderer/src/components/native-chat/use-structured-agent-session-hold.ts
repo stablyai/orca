@@ -34,13 +34,16 @@ export function useStructuredAgentSessionHold(args: {
     if (!enabled) {
       return
     }
+
     const runtimeTarget = targetRef.current
     const holderId = structuredAgentSessionHolderId(surface)
+
     const held = callStructuredAgentSession(runtimeTarget, 'agentSession.hold', {
       sessionId,
       holderId
       // An older host has no such method; the session still reads, it just is not held.
     }).catch(() => undefined)
+
     return () => {
       void held.then(() =>
         callStructuredAgentSession(runtimeTarget, 'agentSession.release', {

@@ -15,11 +15,13 @@ export const BROWSER_STORAGE_HANDLERS: Record<string, CommandHandler> = {
     // Why: the server accepts any string value; setItem(key, '') differs from an unset key.
     const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
+
     const result = await client.call<unknown>('browser.storage.local.set', {
       key,
       value,
       ...target
     })
+
     printResult(result, json, () => `localStorage["${key}"] set`)
   },
   'storage local clear': async ({ flags, client, cwd, json }) => {
@@ -37,11 +39,13 @@ export const BROWSER_STORAGE_HANDLERS: Record<string, CommandHandler> = {
     const key = getRequiredStringFlag(flags, 'key')
     const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
     const target = await getBrowserCommandTarget(flags, cwd, client)
+
     const result = await client.call<unknown>('browser.storage.session.set', {
       key,
       value,
       ...target
     })
+
     printResult(result, json, () => `sessionStorage["${key}"] set`)
   },
   'storage session clear': async ({ flags, client, cwd, json }) => {

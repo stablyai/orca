@@ -13,11 +13,13 @@ describe('closeRetainedTuiOwner', () => {
     let record = agentSessionRecordFixture(agentSessionLeaseFixture())
     const closeTuiOwner = vi.fn(async () => ({}))
     const releaseOwner = vi.fn()
+
     const owner = {
       terminal: { handle: 'terminal-1', tabId: 'tab-1', paneKey: 'pane-1', ptyId: 'pty-1' },
       process: record.lease.ownerProcess!,
       link: record.providerHandleChain[0]!
     }
+
     const deps = {
       store: {
         transitionHandoff: async (
@@ -25,6 +27,7 @@ describe('closeRetainedTuiOwner', () => {
           transition: (current: typeof record) => typeof record
         ) => {
           record = transition(record)
+
           return record
         }
       },

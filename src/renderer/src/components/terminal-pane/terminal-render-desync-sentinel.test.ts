@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const forEachLivePaneForDesyncSentinel = vi.fn()
+
 const resetAndRefreshAllTerminalWebglAtlases = vi.fn()
+
 vi.mock('@/lib/pane-manager/pane-manager-registry', () => ({
   forEachLivePaneForDesyncSentinel: (
     ...args: Parameters<typeof forEachLivePaneForDesyncSentinel>
@@ -10,14 +12,19 @@ vi.mock('@/lib/pane-manager/pane-manager-registry', () => ({
 }))
 
 const recordTerminalWebglDiagnostic = vi.fn()
+
 const documentAddEventListener = vi.fn()
+
 const documentRemoveEventListener = vi.fn()
+
 class FakeNode {}
+
 const writeTerminalRenderDesyncEvidence = vi.fn().mockResolvedValue({
   directory: '/evidence/capture',
   pngPath: '/evidence/capture/corrupt.png',
   metadataPath: '/evidence/capture/corrupt.json'
 })
+
 vi.mock('../../../../shared/terminal-webgl-diagnostics', () => ({
   recordTerminalWebglDiagnostic: (...args: Parameters<typeof recordTerminalWebglDiagnostic>) =>
     recordTerminalWebglDiagnostic(...args)
@@ -36,6 +43,7 @@ import {
 
 function fakePane(overrides: { paused?: boolean } = {}) {
   const refreshRows = vi.fn()
+
   const terminal = {
     element: { contains: vi.fn(() => false) },
     rows: 24,
@@ -65,6 +73,7 @@ function fakePane(overrides: { paused?: boolean } = {}) {
       }
     }
   }
+
   return { pane: { id: 1, terminal }, refreshRows }
 }
 
@@ -111,6 +120,7 @@ describe('terminal-render-desync-sentinel', () => {
       (visit: (key: string, pane: unknown) => void) => visit(paneKey, pane)
     )
     sampleRenderDesyncOnce(() => divergence)
+
     return { refreshRows }
   }
 
@@ -210,6 +220,7 @@ describe('terminal-render-desync-sentinel', () => {
 
   it('stays disarmed without the flag and starts a burst on modifier-click', () => {
     vi.useFakeTimers()
+
     try {
       const storage = new Map<string, string>()
       vi.stubGlobal('localStorage', {
@@ -252,7 +263,9 @@ describe('terminal-render-desync-sentinel', () => {
       setItem: (k: string, v: string) => storage.set(k, v)
     })
     maybeStartTerminalRenderDesyncSentinel()
+
     const { pane } = fakePane()
+
     ;(
       pane.terminal as { element: { contains: ReturnType<typeof vi.fn> } }
     ).element.contains.mockReturnValue(true)
@@ -301,6 +314,7 @@ describe('sentinel arming surface', () => {
       removeEventListener: documentRemoveEventListener
     })
     vi.stubGlobal('navigator', { userAgent: 'Mac' })
+
     const { isTerminalRenderDesyncSentinelArmed, setTerminalRenderDesyncSentinelArmed } =
       await import('./terminal-render-desync-trigger')
 
@@ -331,6 +345,7 @@ describe('sentinel arming surface', () => {
       addEventListener: documentAddEventListener,
       removeEventListener: documentRemoveEventListener
     })
+
     const { isTerminalRenderDesyncSentinelArmed, setTerminalRenderDesyncSentinelArmed } =
       await import('./terminal-render-desync-trigger')
 
@@ -358,9 +373,12 @@ describe('sentinel arming surface', () => {
     })
     vi.stubGlobal('navigator', { userAgent: 'Mac' })
     vi.stubGlobal('Node', FakeNode)
+
     const { isTerminalRenderDesyncSentinelArmed, setTerminalRenderDesyncSentinelArmed } =
       await import('./terminal-render-desync-trigger')
+
     const { pane } = fakePane()
+
     ;(
       pane.terminal as never as {
         _core: { _renderService: { _renderer: { value: { _canvas: { width: number } } } } }

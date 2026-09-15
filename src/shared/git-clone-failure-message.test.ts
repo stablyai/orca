@@ -69,6 +69,7 @@ describe('getGitCloneFailureMessage', () => {
         (typeof separator === 'string' && separator === '\n') ||
         (separator instanceof RegExp && separator.source === '\\r?\\n')
     )
+
     expect(usedLineSplit).toBe(false)
   })
 

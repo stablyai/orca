@@ -83,6 +83,7 @@ describe('abortRebase', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['rebase', '--abort'], { cwd: '/repo' })
   })
 })
+
 describe('detectConflictOperation', () => {
   beforeEach(() => {
     readFileMock.mockReset()
@@ -96,6 +97,7 @@ describe('detectConflictOperation', () => {
       if (target.endsWith('REBASE_HEAD')) {
         return undefined
       }
+
       throw Object.assign(new Error(`ENOENT: ${target}`), { code: 'ENOENT' })
     })
 
@@ -115,6 +117,7 @@ describe('detectConflictOperation', () => {
       if (target.endsWith(marker)) {
         return undefined
       }
+
       throw Object.assign(new Error(`ENOENT: ${target}`), { code: 'ENOENT' })
     })
 
@@ -159,9 +162,11 @@ describe('detectConflictOperation', () => {
       await expect(detectConflictOperation(String.raw`C:\Users\me\repo\feature`)).resolves.toBe(
         'unknown'
       )
+
       for (const [target] of accessMock.mock.calls) {
         expect(target).toContain(String.raw`C:\Users\me\repo\.git\worktrees\feature`)
       }
+
       expect(accessMock).toHaveBeenCalledTimes(4)
     } finally {
       platformSpy.mockRestore()
@@ -198,9 +203,11 @@ describe('detectConflictOperation', () => {
       expect(readFileMock.mock.calls[0][0]).toContain(
         String.raw`\\wsl.localhost\Ubuntu\home\me\repo\feature`
       )
+
       for (const [target] of accessMock.mock.calls) {
         expect(target).toContain(String.raw`\\wsl.localhost\Ubuntu\home\me\repo\feature`)
       }
+
       expect(accessMock).toHaveBeenCalledTimes(4)
     } finally {
       platformSpy.mockRestore()
@@ -216,9 +223,11 @@ describe('detectConflictOperation', () => {
 
     try {
       await expect(detectConflictOperation('/mnt/c/Users/me/repo/feature')).resolves.toBe('unknown')
+
       for (const [target] of accessMock.mock.calls) {
         expect(target).toContain(String.raw`C:\Users\me\repo\.git\worktrees\feature`)
       }
+
       expect(accessMock).toHaveBeenCalledTimes(4)
     } finally {
       platformSpy.mockRestore()

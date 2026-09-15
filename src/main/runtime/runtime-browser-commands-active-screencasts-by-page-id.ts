@@ -22,9 +22,11 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
 
   protected requireAgentBrowserBridge(): AgentBrowserBridge {
     const bridge = this.host.getAgentBrowserBridge()
+
     if (!bridge) {
       throw new BrowserError('browser_no_tab', 'No browser session is active')
     }
+
     return bridge
   }
 
@@ -52,10 +54,12 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
   ): boolean {
     for (const [, webContentsId] of bridge.getRegisteredTabs(worktreeId)) {
       const guest = webContents.fromId(webContentsId)
+
       if (guest && !guest.isDestroyed()) {
         return true
       }
     }
+
     return false
   }
 
@@ -65,10 +69,13 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
     browserPageId: string
   ): boolean {
     const webContentsId = bridge.getRegisteredTabs(worktreeId).get(browserPageId)
+
     if (webContentsId == null) {
       return false
     }
+
     const guest = webContents.fromId(webContentsId)
+
     return Boolean(guest && !guest.isDestroyed())
   }
 
@@ -77,6 +84,7 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
     if (!selector) {
       // Why: after restart, webviews mount only when the pane is visible; activate the view so persisted tabs become operable via registerGuest.
       const bridge = this.host.getAgentBrowserBridge()
+
       if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, undefined)) {
         try {
           await this.ensureBrowserWorktreeActive(undefined)
@@ -84,12 +92,14 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
           // Window may not exist yet (e.g. during startup or in tests)
         }
       }
+
       return undefined
     }
 
     const worktreeId = (await this.host.resolveWorktreeSelector(selector)).id
     // Why: explicit selectors are user intent, so resolution errors surface (not silently widen scope); only activation stays best-effort.
     const bridge = this.host.getAgentBrowserBridge()
+
     if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, worktreeId)) {
       try {
         await this.ensureBrowserWorktreeActive(worktreeId)
@@ -97,6 +107,7 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
         // Fall through with the validated worktree id so routing stays scoped to the caller's explicit selector.
       }
     }
+
     return worktreeId
   }
 
@@ -105,6 +116,7 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
   ): Promise<ResolvedBrowserCommandTarget> {
     const browserPageId =
       typeof params.page === 'string' && params.page.length > 0 ? params.page : undefined
+
     if (!browserPageId) {
       return {
         worktreeId: await this.resolveBrowserWorktreeId(params.worktree)
@@ -114,7 +126,9 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
     const worktreeId = params.worktree
       ? (await this.host.resolveWorktreeSelector(params.worktree)).id
       : undefined
+
     const bridge = this.host.getAgentBrowserBridge()
+
     if (bridge && !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {
       try {
         await this.ensureBrowserPageActive(worktreeId, browserPageId)
@@ -122,6 +136,7 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
         // Fall through with the explicit page target; downstream routing surfaces a clear "tab not found" error if wake fails.
       }
     }
+
     return {
       // Why: an explicit browserPageId is already a stable tab identity, so don't auto-resolve cwd worktree scoping on top of it.
       worktreeId,
@@ -135,10 +150,13 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
   ): ResolvedBrowserPageWebContents {
     const bridge = this.requireAgentBrowserBridge()
     const resolvedPageId = browserPageId ?? bridge.getActivePageId(worktreeId)
+
     if (!resolvedPageId) {
       throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
     }
+
     const webContentsId = bridge.getRegisteredTabs(worktreeId).get(resolvedPageId)
+
     if (webContentsId == null) {
       const scope = worktreeId ? ' in this worktree' : ''
       throw new BrowserError(
@@ -146,13 +164,16 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
         `Browser page ${resolvedPageId} was not found${scope}`
       )
     }
+
     const guest = webContents.fromId(webContentsId)
+
     if (!guest || guest.isDestroyed()) {
       throw new BrowserError(
         'browser_tab_not_found',
         `Browser page ${resolvedPageId} is no longer available`
       )
     }
+
     return { browserPageId: resolvedPageId, webContents: guest }
   }
 
@@ -204,6 +225,7 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
 
   async browserSnapshot(params: BrowserCommandTargetParams): Promise<BrowserSnapshotResult> {
     const target = await this.resolveBrowserCommandTarget(params)
+
     return this.requireAgentBrowserBridge().snapshot(target.worktreeId, target.browserPageId)
   }
 }

@@ -49,6 +49,7 @@ export function useComposerSourceState(
     smartGitHubPrStartPointSelectionRef:
       target.asyncComposerState.smartGitHubPrStartPointSelectionRef
   })
+
   const attachmentDropState = useAttachmentDropState({
     agentPromptRef: target.asyncComposerState.agentPromptRef,
     cancelPromptCaretFrame: target.providerRuntimeSync.cancelPromptCaretFrame,
@@ -60,6 +61,7 @@ export function useComposerSourceState(
     setAgentPrompt: target.sourceContextState.setAgentPrompt,
     setAttachmentPaths: target.sourceContextState.setAttachmentPaths
   })
+
   const targetChangeActions = useTargetChangeActions({
     baseBranch: target.workspaceIdentityState.baseBranch,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
@@ -96,6 +98,7 @@ export function useComposerSourceState(
     smartGitHubPrStartPointSelectionRef:
       target.asyncComposerState.smartGitHubPrStartPointSelectionRef
   })
+
   const projectTargetActions = useProjectTargetActions({
     actionableHostIds: target.composerTargetStore.actionableHostIds,
     eligibleRepos: target.composerTargetStore.eligibleRepos,
@@ -131,6 +134,7 @@ export function useComposerSourceState(
     selectedWorkspaceTarget: target.runtimeTargetSelection.selectedWorkspaceTarget,
     workspaceHostScope: target.composerTargetStore.workspaceHostScope
   })
+
   const branchStartPointActions = useBranchStartPointActions({
     applyLinkedGitLabWorkItem: sourceIdentityActions.applyLinkedGitLabWorkItem,
     applyLinkedWorkItem: external.githubSourceApplication.applyLinkedWorkItem,
@@ -158,6 +162,7 @@ export function useComposerSourceState(
     smartGitHubPrStartPointSelectionRef:
       target.asyncComposerState.smartGitHubPrStartPointSelectionRef
   })
+
   const githubProviderSelection = useGitHubProviderSelection({
     applyLinkedWorkItem: external.githubSourceApplication.applyLinkedWorkItem,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
@@ -187,6 +192,7 @@ export function useComposerSourceState(
     smartGitHubPrStartPointSelectionRef:
       target.asyncComposerState.smartGitHubPrStartPointSelectionRef
   })
+
   const gitlabProviderSelection = useGitLabProviderSelection({
     applyLinkedGitLabWorkItem: sourceIdentityActions.applyLinkedGitLabWorkItem,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
@@ -213,6 +219,7 @@ export function useComposerSourceState(
     setStartFromResetHint: target.workspaceIdentityState.setStartFromResetHint,
     settings: target.composerTargetStore.settings
   })
+
   const workItemSourceActions = useWorkItemSourceActions({
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
     lastAutoNameRef: target.asyncComposerState.lastAutoNameRef,
@@ -234,6 +241,7 @@ export function useComposerSourceState(
       target.asyncComposerState.smartGitHubPrStartPointSelectionRef,
     worktreesByRepo: target.composerTargetStore.worktreesByRepo
   })
+
   const issueSourceActions = useIssueSourceActions({
     baseBranch: target.workspaceIdentityState.baseBranch,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
@@ -264,6 +272,7 @@ export function useComposerSourceState(
     smartGitHubPrStartPointSelectionRef:
       target.asyncComposerState.smartGitHubPrStartPointSelectionRef
   })
+
   const composerNavigationActions = useComposerNavigationActions({
     closeModal: target.composerTargetStore.closeModal,
     creating: target.asyncComposerState.creating,
@@ -278,6 +287,7 @@ export function useComposerSourceState(
     sourceIntentBlocksCreate: target.workspaceIdentityState.sourceIntentBlocksCreate,
     updateWorktreeMeta: target.composerTargetStore.updateWorktreeMeta
   })
+
   return {
     sourceIdentityActions,
     attachmentDropState,

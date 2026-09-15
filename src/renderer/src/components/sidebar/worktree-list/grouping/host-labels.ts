@@ -20,6 +20,7 @@ import type { RenderableFolderWorkspace } from './folder-workspace-lanes'
 
 function getRepoHostId(repoId: string, repoMap: Map<string, Repo>): ExecutionHostId | null {
   const repo = repoMap.get(repoId)
+
   return repo ? getRepoExecutionHostId(repo) : null
 }
 
@@ -30,14 +31,19 @@ function getRepoHostLabel(
   hostLabelById: ReadonlyMap<string, string> | undefined
 ): string | null {
   const setup = projectIndex?.setupByRepoId.get(repoId)
+
   if (setup) {
     return getHostContextLabel(setup.hostId, { hostLabelById })
   }
+
   const repo = repoMap.get(repoId)
+
   if (!repo) {
     return null
   }
+
   const hostId = getRepoExecutionHostId(repo)
+
   return getHostContextLabel(hostId, { hostLabelById })
 }
 
@@ -51,18 +57,23 @@ export function getMixedHostContextLabels(
   // Host identity, not the rendered label, determines whether rows are ambiguous:
   // two hosts can intentionally share a user-facing label.
   const uniqueHostIds = new Set<ExecutionHostId>()
+
   for (const repoId of group.repoIds) {
     const label = getRepoHostLabel(repoId, repoMap, projectIndex, hostLabelById)
+
     if (!label) {
       continue
     }
+
     labelsByRepoId.set(repoId, label)
     const setup = projectIndex?.setupByRepoId.get(repoId)
     const hostId = setup?.hostId ?? getRepoHostId(repoId, repoMap)
+
     if (hostId) {
       uniqueHostIds.add(hostId)
     }
   }
+
   return uniqueHostIds.size > 1 ? labelsByRepoId : undefined
 }
 
@@ -94,39 +105,50 @@ export function getNoticeHostContextLabels(
   hostLabelById: ReadonlyMap<string, string> | undefined
 ): Map<string, NoticeHostContext> | undefined {
   const eligible = new Set(noticeRepoIds)
+
   if (eligible.size === 0) {
     return undefined
   }
+
   // Why host ids and not labels: two hosts can share one user-facing label, and
   // that project spans hosts just the same — counting labels hides exactly the
   // case where the rows are hardest to tell apart.
   const hostIdsForProject = new Map<string, Set<string>>()
   const labelsByRepoId = new Map<string, NoticeHostContext>()
   const projectKeyByRepoId = new Map<string, string>()
+
   for (const repoId of allRepoIds) {
     const label = getRepoHostLabel(repoId, repoMap, projectIndex, hostLabelById)
+
     if (!label) {
       continue
     }
+
     const projectKey = getProjectGroupingForRepo(repoId, repoMap, projectIndex).projectId ?? repoId
     const hostId = projectIndex?.setupByRepoId.get(repoId)?.hostId ?? getRepoHostId(repoId, repoMap)
+
     if (hostId) {
       const hostIds = hostIdsForProject.get(projectKey) ?? new Set<string>()
       hostIds.add(hostId)
       hostIdsForProject.set(projectKey, hostIds)
     }
+
     if (eligible.has(repoId) && hostId) {
       labelsByRepoId.set(repoId, { label, hostId: hostId as ExecutionHostId })
       projectKeyByRepoId.set(repoId, projectKey)
     }
   }
+
   const mixed = new Map<string, NoticeHostContext>()
+
   for (const [repoId, context] of labelsByRepoId) {
     const projectKey = projectKeyByRepoId.get(repoId)
+
     if (projectKey && (hostIdsForProject.get(projectKey)?.size ?? 0) > 1) {
       mixed.set(repoId, context)
     }
   }
+
   return mixed.size > 0 ? mixed : undefined
 }
 
@@ -153,18 +175,23 @@ export function getHostWorktreeCounts(
   if (worktrees.length === 0) {
     return undefined
   }
+
   // Derived from the id map rather than repeating its dedupe walk: every caller asks for both,
   // and a host's count is exactly the length of its id list by construction.
   // Dedup by host, not by bare id: the same id on two hosts is two workspaces
   // and has to be counted under each of them (STA-4343).
   const idsByHost = getHostWorktreeIds(worktrees, repoMap, defaultHostId)
+
   if (!idsByHost) {
     return undefined
   }
+
   const counts = new Map<ExecutionHostId, number>()
+
   for (const [hostId, ids] of idsByHost) {
     counts.set(hostId, ids.length)
   }
+
   return counts
 }
 
@@ -176,20 +203,25 @@ export function getHostWorktreeIds(
   if (worktrees.length === 0) {
     return undefined
   }
+
   const idsByHost = new Map<ExecutionHostId, string[]>()
   const seenIdentities = new Set<string>()
+
   for (const worktree of worktrees) {
     // Hoisted: the identity string was built twice per row, once to test and once to record.
     const identity = getWorktreeHostIdentity(worktree)
+
     if (seenIdentities.has(identity)) {
       continue
     }
+
     seenIdentities.add(identity)
     const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
     const ids = idsByHost.get(hostId) ?? []
     ids.push(worktree.id)
     idsByHost.set(hostId, ids)
   }
+
   return idsByHost
 }
 
@@ -210,11 +242,14 @@ export function getLaneHostWorktreeCounts(
   if (worktrees.length === 0 && folderWorkspaces.length === 0) {
     return undefined
   }
+
   const counts = getHostWorktreeCounts(worktrees, repoMap, defaultHostId) ?? new Map()
+
   for (const { folderWorkspace, projectGroup } of folderWorkspaces) {
     const hostId = getFolderWorkspaceHostId(folderWorkspace, projectGroup, defaultHostId)
     counts.set(hostId, (counts.get(hostId) ?? 0) + 1)
   }
+
   return counts
 }
 
@@ -235,12 +270,16 @@ export function getLaneHostWorktreeIds(
   if (worktrees.length === 0 && folderWorkspaces.length === 0) {
     return undefined
   }
+
   const idsByHost = getHostWorktreeIds(worktrees, repoMap, defaultHostId) ?? new Map()
+
   for (const { folderWorkspace, projectGroup } of folderWorkspaces) {
     const hostId = getFolderWorkspaceHostId(folderWorkspace, projectGroup, defaultHostId)
+
     if (!idsByHost.has(hostId)) {
       idsByHost.set(hostId, [])
     }
   }
+
   return idsByHost
 }

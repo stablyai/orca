@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as DiagnosticModule from './linux-package-install-diagnostic'
 
 const ESC = String.fromCharCode(27)
+
 let diagnostic: typeof DiagnosticModule
 
 beforeEach(async () => {
@@ -26,9 +27,11 @@ describe('redactLinuxPackageInstallText', () => {
 
   it('strips string escape payloads and remaining two-byte escapes', () => {
     const BEL = String.fromCharCode(7)
+
     const text =
       `${ESC}]8;;https://tracker.invalid/report${BEL}dpkg${ESC}]8;;${BEL} ` +
       `${ESC}P1;2|payload${ESC}\\failed${ESC}c`
+
     expect(diagnostic.redactLinuxPackageInstallText(text, null)).toBe('dpkg failed')
   })
 

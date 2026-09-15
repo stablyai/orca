@@ -30,12 +30,14 @@ export function parseAdbDevices(stdout: string): AndroidAdbDevice[] {
 
   for (const rawLine of stdout.split('\n')) {
     const line = rawLine.trim()
+
     if (line === '' || line === DEVICES_HEADER) {
       continue
     }
 
     const tokens = line.split(/\s+/)
     const serial = tokens[0]
+
     if (!serial) {
       continue
     }
@@ -44,6 +46,7 @@ export function parseAdbDevices(stdout: string): AndroidAdbDevice[] {
     // is a single token, so the key:value tokens start one position later.
     let state: AndroidAdbDeviceState
     let tokenStart: number
+
     if (tokens[1] === 'no' && tokens[2] === 'permissions') {
       state = 'no permissions'
       tokenStart = 3
@@ -60,11 +63,14 @@ export function parseAdbDevices(stdout: string): AndroidAdbDevice[] {
 
     for (const token of tokens.slice(tokenStart)) {
       const sep = token.indexOf(':')
+
       if (sep === -1) {
         continue
       }
+
       const key = token.slice(0, sep)
       const value = token.slice(sep + 1)
+
       if (key === 'model') {
         device.model = value
       } else if (key === 'product') {
@@ -86,9 +92,11 @@ export function parseWmSize(stdout: string): { width: number; height: number } |
   const override = /Override size:\s*(\d+)x(\d+)/.exec(stdout)
   const physical = /Physical size:\s*(\d+)x(\d+)/.exec(stdout)
   const match = override ?? physical
+
   if (!match) {
     return null
   }
+
   return { width: Number(match[1]), height: Number(match[2]) }
 }
 

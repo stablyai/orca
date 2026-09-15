@@ -108,6 +108,7 @@ describe('resolveExplicitTerminalTitleAgentType', () => {
     ]) {
       expect(isClaudeIdentityFrameTitle(title)).toBe(true)
     }
+
     for (const title of [
       '⠋ use Claude Sonnet',
       'OC | ⠋ ask claude about this',

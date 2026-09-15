@@ -29,6 +29,7 @@ describe('generateCommitMessageFromContext', () => {
           expect(plan.args).toHaveLength(2)
           expect(plan.args[0]).toBe('--message')
           expect(plan.args[1]).toContain('Staged files:\nM\tREADME.md')
+
           return {
             stdout: 'Add README note.\n',
             stderr: '',
@@ -51,6 +52,7 @@ describe('generateCommitMessageFromContext', () => {
       new Error('Request "agent.execNonInteractive" timed out after 65000ms'),
       { code: SSH_MUX_REQUEST_TIMEOUT_CODE }
     )
+
     const result = await generateCommitMessageFromContext(
       {
         branch: 'main',

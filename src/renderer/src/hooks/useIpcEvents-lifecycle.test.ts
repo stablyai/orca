@@ -2,6 +2,7 @@ import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { createHarnessStoreState } from './ipc-events-test-harness'
+
 const EXPECTED_DIRECT_CALLBACK_METHODS = [
   'agentStatus.onClear',
   'agentStatus.onLegacyWorkerTerminalRecovery',
@@ -223,6 +224,7 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     let dependencies: readonly unknown[] | undefined
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (_effect: () => void | (() => void), nextDependencies?: readonly unknown[]) => {
@@ -246,6 +248,7 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     const listeners = new Map<string, ListenerRecord[]>()
     const storeSubscriptions: { active: boolean; cleanup: Mock }[] = []
     const setUpdateStatus = vi.fn()
+
     const storeState = new Proxy(
       createHarnessStoreState({
         tabsByWorktree: { 'wt-1': [] },
@@ -267,6 +270,7 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
           const record = { active: true, cleanup: vi.fn() }
           const subscriptionIndex = storeSubscriptions.length
           storeSubscriptions.push(record)
+
           return () => {
             cleanupOrder.push(`store.unsubscribe.${subscriptionIndex}`)
             record.active = false
@@ -284,11 +288,13 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
             if (name === 'runtimeEnvironments' && property === 'subscribe') {
               return async () => {
                 registrationOrder.push('runtimeEnvironments.subscribe')
+
                 return {
                   unsubscribe: () => cleanupOrder.push('runtimeEnvironment.unsubscribe')
                 }
               }
             }
+
             if (property.startsWith('on')) {
               return (callback: (...args: unknown[]) => void) => {
                 registrationOrder.push(`${name}.${property}`)
@@ -296,6 +302,7 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
                 const records = listeners.get(`${name}.${property}`) ?? []
                 records.push(record)
                 listeners.set(`${name}.${property}`, records)
+
                 return () => {
                   cleanupOrder.push(`ipc.${name}.${property}`)
                   record.active = false
@@ -303,50 +310,65 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
                 }
               }
             }
+
             if (property === 'getStatus') {
               return () => {
                 registrationOrder.push(`${name}.${property}`)
+
                 return Promise.resolve({ state: 'idle' })
               }
             }
+
             if (property === 'get') {
               return () => {
                 registrationOrder.push(`${name}.${property}`)
+
                 return Promise.resolve({ limits: {}, lastUpdatedAt: 0 })
               }
             }
+
             if (property === 'getState') {
               return () => {
                 registrationOrder.push(`${name}.${property}`)
+
                 return Promise.resolve(null)
               }
             }
+
             if (property === 'clientId') {
               return () => {
                 registrationOrder.push(`${name}.${property}`)
+
                 return Promise.resolve(null)
               }
             }
+
             if (property.startsWith('get') || property.startsWith('list')) {
               return () => {
                 registrationOrder.push(`${name}.${property}`)
+
                 return Promise.resolve([])
               }
             }
+
             if (property.startsWith('consumePending')) {
               return () => {
                 registrationOrder.push(`${name}.${property}`)
+
                 return Promise.resolve(null)
               }
             }
+
             return vi.fn()
           }
         }
       )
+
     const api = new Proxy(
       {},
       { get: (_target, property: string) => namespace(property) }
     ) as unknown
+
     vi.stubGlobal('window', {
       api,
       dispatchEvent: vi.fn(),
@@ -355,18 +377,22 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     })
 
     const { installAppLifetimeIpcEvents } = await import('./ipc-events/app-lifetime-ipc-bridge')
+
     const recordCleanupPhase = (phase: string): void => {
       cleanupOrder.push(phase)
     }
+
     const firstCleanup = installAppLifetimeIpcEvents(recordCleanupPhase)
     await Promise.resolve()
     await Promise.resolve()
+
     const directCallbackMethods = [...listeners.keys()]
       .filter(
         (method) =>
           method !== 'mobile.onUnpairedDeviceAuthFailure' && method !== 'ui.onMobileMarkdownRequest'
       )
       .sort()
+
     expect(directCallbackMethods).toEqual(EXPECTED_DIRECT_CALLBACK_METHODS)
     expect([...listeners.keys()].sort()).toEqual(
       [...EXPECTED_CALLBACK_REGISTRATION_SEQUENCE].sort()
@@ -386,8 +412,10 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
       'runtimeEnvironments.subscribe',
       ...EXPECTED_CALLBACK_REGISTRATION_SEQUENCE.slice(3)
     ])
+
     const groupOrder = (names: readonly string[]): string[] =>
       registrationOrder.filter((entry) => names.includes(entry))
+
     expect(
       groupOrder([
         'ui.onOpenSettings',
@@ -466,9 +494,11 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     expect(storeSubscriptions.filter((item) => item.active)).toHaveLength(2)
 
     firstCleanup()
+
     const ipcCleanupOrder = cleanupOrder
       .filter((entry) => entry.startsWith('ipc.') && entry !== 'ipc.dispose')
       .map((entry) => entry.slice('ipc.'.length))
+
     expect(ipcCleanupOrder).toEqual(EXPECTED_CALLBACK_REGISTRATION_SEQUENCE)
     expect(cleanupOrder.slice(0, 6)).toEqual([
       'agent.disposeAsyncState',
@@ -499,11 +529,13 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     ).toBe(true)
 
     const statusWritesBeforePostUnmountEvent = setUpdateStatus.mock.calls.length
+
     for (const record of listeners.get('updater.onStatus') ?? []) {
       if (record.active) {
         record.callback({ state: 'available' })
       }
     }
+
     expect(setUpdateStatus).toHaveBeenCalledTimes(statusWritesBeforePostUnmountEvent)
 
     const secondCleanup = installAppLifetimeIpcEvents(recordCleanupPhase)

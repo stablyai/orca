@@ -6,12 +6,19 @@ import type { OrcaRuntimeService } from './orca-runtime'
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
 
 export const REPO_ID = 'repo-1'
+
 export const FOLDER_REPO_ID = 'folder-repo-1'
+
 export const worktreeId = (name: string): string => `${REPO_ID}::/tmp/${name}`
+
 export const HOST_WORKTREE_ID = worktreeId('host')
+
 export const CLIENT_A_WORKTREE_ID = worktreeId('client-a')
+
 export const CLIENT_A2_WORKTREE_ID = worktreeId('client-a2')
+
 export const CLIENT_B_WORKTREE_ID = worktreeId('client-b')
+
 export const SESSION_WORKTREE_ID = worktreeId('session')
 
 export type PairedSession = {
@@ -52,6 +59,7 @@ export function makeStore() {
       }
     ])
   )
+
   const repos = [
     {
       id: REPO_ID,
@@ -70,6 +78,7 @@ export function makeStore() {
       addedAt: 2
     }
   ]
+
   return {
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
     getRepos: () => repos,
@@ -80,6 +89,7 @@ export function makeStore() {
     setWorktreeMeta: (id: string, patch: Record<string, unknown>) => {
       const next = { ...worktreeMeta[id], ...patch }
       worktreeMeta[id] = next as (typeof worktreeMeta)[string]
+
       return next as never
     },
     removeWorktreeMeta: () => {},
@@ -109,9 +119,11 @@ function nextMessage(ws: WebSocket): Promise<string> {
 
 export async function authenticate(pairingUrl: string): Promise<PairedSession> {
   const pairing = parsePairingCode(pairingUrl)
+
   if (!pairing) {
     throw new Error('invalid_pairing_url')
   }
+
   const ws = await connect(pairing.endpoint)
   const keys = generateKeyPair()
   const serverPublicKey = Uint8Array.from(Buffer.from(pairing.publicKeyB64, 'base64'))
@@ -129,6 +141,7 @@ export async function authenticate(pairingUrl: string): Promise<PairedSession> {
   expect(JSON.parse(decrypt(await nextMessage(ws), sharedKey)!)).toEqual({
     type: 'e2ee_authenticated'
   })
+
   return { ws, sharedKey }
 }
 
@@ -142,33 +155,45 @@ export function createReader(session: PairedSession): ResponseReader {
     predicate: (response: Record<string, unknown>) => boolean
     resolve: (response: Record<string, unknown>) => void
   }
+
   const queued: Record<string, unknown>[] = []
   const waiters: Waiter[] = []
+
   const onMessage = (data: WebSocket.RawData): void => {
     const plaintext = decrypt(
       typeof data === 'string' ? data : data.toString('utf-8'),
       session.sharedKey
     )
+
     if (!plaintext) {
       return
     }
+
     const response = JSON.parse(plaintext) as Record<string, unknown>
+
     const waiterIndex = waiters.findIndex(
       (waiter) => response.id === waiter.id && waiter.predicate(response)
     )
+
     if (waiterIndex === -1) {
       queued.push(response)
+
       return
     }
+
     waiters.splice(waiterIndex, 1)[0]?.resolve(response)
   }
+
   session.ws.on('message', onMessage)
+
   return {
     next: (id, predicate = () => true) => {
       const queuedIndex = queued.findIndex((response) => response.id === id && predicate(response))
+
       if (queuedIndex !== -1) {
         return Promise.resolve(queued.splice(queuedIndex, 1)[0]!)
       }
+
       return new Promise((resolve) => waiters.push({ id, predicate, resolve }))
     },
     dispose: () => {
@@ -201,6 +226,7 @@ export function seedSessionTabs(runtime: OrcaRuntimeService): void {
     title: id,
     isActive: id === 'host-tab'
   }))
+
   runtime.syncWindowGraph(1, {
     tabs: [],
     leaves: [],
@@ -223,6 +249,7 @@ export function seedSessionTabs(runtime: OrcaRuntimeService): void {
       }
     ]
   })
+
   for (let index = 0; index < tabs.length; index += 1) {
     runtime.registerPty(`pty-${index + 1}`, SESSION_WORKTREE_ID)
   }

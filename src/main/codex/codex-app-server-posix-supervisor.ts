@@ -99,6 +99,7 @@ export function supervisedPosixLaunch(
       cwd
     })
   ).toString('base64')
+
   return {
     command: process.execPath,
     args: ['-e', POSIX_PROVIDER_SUPERVISOR_SCRIPT],
@@ -118,6 +119,7 @@ export function createProviderSpawnSpec(
   platform: NodeJS.Platform
 ): { program: string; args: string[]; env: NodeJS.ProcessEnv; cwd: string; detached: boolean } {
   const supervised = platform === 'win32' ? null : supervisedPosixLaunch(launch, childEnv)
+
   return {
     program: supervised?.command ?? launch.command,
     args: supervised?.args ?? launch.args,

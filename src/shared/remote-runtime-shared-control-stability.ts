@@ -14,11 +14,14 @@ export function scheduleSharedControlStableReset(args: {
     if (args.getState() === 'ready' && args.getSocket()?.readyState === WebSocket.OPEN) {
       args.reset()
     }
+
     args.clearCurrent()
   }, args.delayMs)
+
   if (typeof timer.unref === 'function') {
     timer.unref()
   }
+
   return timer
 }
 

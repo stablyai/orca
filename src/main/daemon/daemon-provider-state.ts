@@ -14,6 +14,7 @@ import {
 import { PROTOCOL_VERSION } from './types'
 
 let spawner: DaemonSpawner | null = null
+
 let adapter: DaemonProvider | null = null
 
 export function installDaemonProvider(newSpawner: DaemonSpawner, newAdapter: DaemonProvider): void {
@@ -51,7 +52,9 @@ export function getDaemonEndpointFacts(): DaemonEndpointFacts | null {
   if (!adapter) {
     return null
   }
+
   const runtimeDir = getRuntimeDir()
+
   return {
     runtimeDir,
     socketPath: getDaemonSocketPath(runtimeDir),
@@ -70,9 +73,11 @@ export function getDaemonEndpointFacts(): DaemonEndpointFacts | null {
  */
 export function readDaemonPidRecord(): ParsedDaemonPid | null {
   const facts = getDaemonEndpointFacts()
+
   if (!facts) {
     return null
   }
+
   try {
     return parseDaemonPidFile(readFileSync(facts.pidPath, 'utf8'))
   } catch {
@@ -88,6 +93,7 @@ export function getDaemonProvider(): DaemonProvider | null {
 // remedy surface always reflects the daemon actually serving terminals right now.
 export async function getCurrentDaemonMacTccAttributionHealth(): Promise<MacDaemonTccAttributionHealth> {
   const runtimeDir = getRuntimeDir()
+
   return getMacDaemonTccAttributionHealth(
     runtimeDir,
     getDaemonSocketPath(runtimeDir),
@@ -100,16 +106,20 @@ export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
   if (!adapter) {
     return null
   }
+
   const adapters =
     adapter instanceof DaemonPtyRouter || adapter instanceof DegradedDaemonPtyProvider
       ? adapter.getAllAdapters()
       : [adapter]
+
   const inventories = await Promise.allSettled(
     adapters.map((daemonAdapter) => daemonAdapter.listProcesses())
   )
+
   if (inventories.some((inventory) => inventory.status === 'rejected')) {
     return null
   }
+
   return inventories.flatMap((inventory) =>
     inventory.status === 'fulfilled' ? inventory.value.map((process) => process.id) : []
   )

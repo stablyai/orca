@@ -25,11 +25,13 @@ export function dispatchSharedControlFrame(args: {
 }): void {
   if (args.frame.type === 'keepalive') {
     refreshSharedControlPendingRequestTimeouts(args.pendingRequests)
+
     return
   }
 
   const response = args.frame.response
   const subscription = args.subscriptions.get(response.id)
+
   if (subscription) {
     handleSharedControlLogicalResponse({
       subscriptions: args.subscriptions,
@@ -44,15 +46,18 @@ export function dispatchSharedControlFrame(args: {
           send: args.send
         })
     })
+
     if (!args.subscriptions.has(response.id)) {
       args.retiredRequestIds.retire(response.id)
     }
+
     return
   }
 
   if (args.pendingRequests.has(response.id)) {
     resolveSharedControlPendingResponse(args.pendingRequests, response.id, response)
     args.retiredRequestIds.retire(response.id)
+
     return
   }
 

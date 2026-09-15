@@ -1,6 +1,7 @@
 import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
 
 export const LINEAR_BOARD_DRAG_ISSUE_MIME = 'application/x-orca-linear-issue-id'
+
 export const LINEAR_BOARD_DRAG_ISSUE_ID_MAX_BYTES = 1024
 
 export type LinearBoardIssueDragReadResult =
@@ -16,9 +17,11 @@ export function writeLinearBoardIssueDragData(
   if (!issueId || isLinearBoardIssueIdTooLarge(issueId)) {
     return false
   }
+
   dataTransfer.effectAllowed = 'move'
   dataTransfer.setData(LINEAR_BOARD_DRAG_ISSUE_MIME, issueId)
   dataTransfer.setData('text/plain', issueId)
+
   return true
 }
 
@@ -27,12 +30,15 @@ export function readLinearBoardIssueDragData(
 ): LinearBoardIssueDragReadResult {
   const hasTypedPayload = Array.from(dataTransfer.types).includes(LINEAR_BOARD_DRAG_ISSUE_MIME)
   const issueId = dataTransfer.getData(LINEAR_BOARD_DRAG_ISSUE_MIME)
+
   if (!issueId) {
     return hasTypedPayload ? { status: 'hidden' } : { status: 'missing' }
   }
+
   if (isLinearBoardIssueIdTooLarge(issueId)) {
     return { status: 'rejected', reason: 'too-large' }
   }
+
   return { status: 'issue', issueId }
 }
 

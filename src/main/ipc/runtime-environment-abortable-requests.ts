@@ -30,6 +30,7 @@ export function sendRemoteRuntimeRequestAbortable(
       clientCapabilities
     )
   }
+
   return envelope
     ? sendRemoteRuntimeRequest(pairing, method, params, timeoutMs, envelope)
     : sendRemoteRuntimeRequest(pairing, method, params, timeoutMs)
@@ -68,6 +69,7 @@ export function sendRemoteRuntimeSharedControlRequestAbortable(
       signal
     )
   }
+
   return envelope
     ? sendRemoteRuntimeSharedControlRequest(
         environmentId,

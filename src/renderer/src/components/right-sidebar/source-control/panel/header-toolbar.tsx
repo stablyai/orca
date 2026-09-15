@@ -173,6 +173,7 @@ export function SourceControlHeaderToolbar({
   const filterInputRef = useRef<HTMLInputElement>(null)
   const normalizedFilter = filterQuery.trim()
   const showCollapsedToolbar = !filterExpanded
+
   const overflowProps = {
     sourceControlViewMode,
     viewModeToggleDisabled,
@@ -201,6 +202,7 @@ export function SourceControlHeaderToolbar({
     if (!filterExpanded) {
       return
     }
+
     filterInputRef.current?.focus()
     filterInputRef.current?.select()
   }, [filterExpanded])
@@ -338,6 +340,7 @@ export function shouldShowSourceControlCompareUnavailableCard(
   if (!summary || summary.status === 'loading' || summary.status === 'ready' || hasFilter) {
     return false
   }
+
   return !hasUncommittedEntries && !hasBranchEntries
 }
 

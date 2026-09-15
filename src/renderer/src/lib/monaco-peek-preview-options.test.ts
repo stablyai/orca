@@ -44,6 +44,7 @@ const peekPreviewOptions = {
 describe('installMonacoPeekReferencesPreviewOptions', () => {
   it('updates the embedded preview after ReferenceWidget creates it', () => {
     const preview = createPreviewEditor()
+
     const referenceWidget = createReferenceWidgetConstructor({
       fillBody(instance) {
         instance._preview = preview
@@ -58,14 +59,17 @@ describe('installMonacoPeekReferencesPreviewOptions', () => {
 
   it('updates the embedded preview before revealing a reference', async () => {
     const calls: string[] = []
+
     const preview: FakePreviewEditor = {
       updateOptions: vi.fn(() => calls.push('updateOptions'))
     }
+
     const referenceWidget = createReferenceWidgetConstructor({
       revealReference: async () => {
         calls.push('revealReference')
       }
     })
+
     referenceWidget.prototype._preview = preview
 
     installMonacoPeekReferencesPreviewOptions(referenceWidget)

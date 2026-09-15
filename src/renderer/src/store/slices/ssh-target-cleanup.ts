@@ -27,6 +27,7 @@ export function sshTargetLabelsEqual(
   if (labels.size !== targets.length) {
     return false
   }
+
   return targets.every((target) => labels.get(target.id) === target.label)
 }
 
@@ -39,12 +40,15 @@ export function sshTargetLabelsEqual(
  */
 export function collectSshTargetGenerations(targets: SshTargetSummary[]): Map<string, number> {
   const generations = new Map<string, number>()
+
   for (const target of targets) {
     const generation = sanitizeSshTargetGeneration(target.generation)
+
     if (generation !== undefined) {
       generations.set(target.id, generation)
     }
   }
+
   return generations
 }
 
@@ -67,17 +71,21 @@ function collectSshTargetTerminalTabIds(state: AppState, targetId: string): Set<
     detectedWorktreesByRepo: state.detectedWorktreesByRepo,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
   }).gitWorktreeIds
+
   const tabIds = new Set<string>()
+
   for (const worktrees of Object.values(state.worktreesByRepo)) {
     for (const worktree of worktrees) {
       if (!targetWorktreeIds.has(worktree.id)) {
         continue
       }
+
       for (const tab of state.tabsByWorktree[worktree.id] ?? []) {
         tabIds.add(tab.id)
       }
     }
   }
+
   return tabIds
 }
 
@@ -106,13 +114,16 @@ function omitRemovedSshTargetTabSessions(
 ): { next: Record<string, string>; removed: boolean } {
   const next: Record<string, string> = {}
   let removed = false
+
   for (const [tabId, sessionId] of Object.entries(sessions)) {
     if (isRemovedSshTargetTabSession(tabId, sessionId, targetId, targetTabIds)) {
       removed = true
       continue
     }
+
     next[tabId] = sessionId
   }
+
   return { next, removed }
 }
 
@@ -126,6 +137,7 @@ function omitRemovedSshTargetRecovery<T extends { authority: { targetId: string 
       ([tabId, entry]) => !targetTabIds.has(tabId) && entry.authority.targetId !== targetId
     )
   )
+
   return { next, removed: Object.keys(next).length !== Object.keys(entries).length }
 }
 
@@ -150,8 +162,10 @@ function clearSshTargetTabPtyState(
 
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     let nextTabs = tabs
+
     for (const [index, tab] of tabs.entries()) {
       const lastKnownPtyId = state.lastKnownRelayPtyIdByTabId[tab.id]
+
       const ptyIds = [
         ...new Set([
           ...(state.ptyIdsByTabId[tab.id] ?? []),
@@ -159,32 +173,41 @@ function clearSshTargetTabPtyState(
           ...(lastKnownPtyId ? [lastKnownPtyId] : [])
         ])
       ]
+
       const shouldClearTab =
         targetTabIds.has(tab.id) || ptyIds.some((ptyId) => isSshTargetSessionId(ptyId, targetId))
+
       if (!shouldClearTab) {
         continue
       }
+
       if (!tab.ptyId && ptyIds.length === 0 && nextLastKnownRelayPtyIdByTabId[tab.id] == null) {
         continue
       }
+
       changed = true
+
       if (nextTabs === tabs) {
         nextTabs = [...tabs]
       }
+
       const { pendingActivationSpawn: _pendingActivationSpawn, ...tabWithoutActivationSpawn } = tab
       void _pendingActivationSpawn
       nextTabs[index] = { ...tabWithoutActivationSpawn, ptyId: null }
       nextPtyIdsByTabId[tab.id] = []
       delete nextLastKnownRelayPtyIdByTabId[tab.id]
+
       for (const ptyId of ptyIds) {
         delete nextPendingCodexPaneRestartIds[ptyId]
         delete nextCodexRestartNoticeByPtyId[ptyId]
       }
     }
+
     if (nextTabs !== tabs) {
       if (nextTabsByWorktree === state.tabsByWorktree) {
         nextTabsByWorktree = { ...nextTabsByWorktree }
       }
+
       nextTabsByWorktree[worktreeId] = nextTabs
     }
   }
@@ -205,23 +228,28 @@ export function buildRemovedSshTargetCleanupPatch(
 ): Partial<AppState> | null {
   const targetTabIds = collectSshTargetTerminalTabIds(state, targetId)
   const tabPtyState = clearSshTargetTabPtyState(state, targetId, targetTabIds)
+
   const { next: nextDeferredSessions, removed: removedDeferredSession } =
     omitRemovedSshTargetTabSessions(state.deferredSshSessionIdsByTabId, targetId, targetTabIds)
+
   // Why: pending-reconnect holds each tab's pre-restart session until reconnect
   // drains it; if the target is removed first the entry is dead but the orphan
   // sweep now reads it as liveness, so clear it here too (#9911).
   const { next: nextPendingReconnect, removed: removedPendingReconnect } =
     omitRemovedSshTargetTabSessions(state.pendingReconnectPtyIdByTabId, targetId, targetTabIds)
+
   const { next: nextPaneRetries, removed: removedPaneRetries } = omitRemovedSshTargetRecovery(
     state.directSshPaneRetryByTabId,
     targetId,
     targetTabIds
   )
+
   const { next: nextLiveBindings, removed: removedLiveBindings } = omitRemovedSshTargetRecovery(
     state.directSshLivePtyBindingByTabId,
     targetId,
     targetTabIds
   )
+
   const { next: nextRetryHistory, removed: removedRetryHistory } = omitRemovedSshTargetRecovery(
     state.directSshPaneRetryHistoryByTabId,
     targetId,
@@ -229,9 +257,11 @@ export function buildRemovedSshTargetCleanupPatch(
   )
 
   const nextDeferredTargets = state.deferredSshReconnectTargets.filter((id) => id !== targetId)
+
   const nextTransientClearedConnections = {
     ...state.transientClearedAgentStatusConnectionIds
   }
+
   const removedTransientClearBlock = Object.hasOwn(nextTransientClearedConnections, targetId)
   delete nextTransientClearedConnections[targetId]
   const nextConnectionStates = new Map(state.sshConnectionStates)
@@ -255,8 +285,10 @@ export function buildRemovedSshTargetCleanupPatch(
   delete nextDetectedPorts[targetId]
   const nextCredentialQueue = state.sshCredentialQueue.filter((req) => req.targetId !== targetId)
   const removedCredentialRequest = nextCredentialQueue.length !== state.sshCredentialQueue.length
+
   const removedDeferredTarget =
     nextDeferredTargets.length !== state.deferredSshReconnectTargets.length
+
   const changed =
     removedTransientClearBlock ||
     removedConnectionState ||
@@ -274,6 +306,7 @@ export function buildRemovedSshTargetCleanupPatch(
     removedPaneRetries ||
     removedLiveBindings ||
     removedRetryHistory
+
   if (!changed) {
     return null
   }

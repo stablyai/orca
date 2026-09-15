@@ -170,6 +170,7 @@ function StatsGrid(props: {
       valueFontSize: 14
     }
   ]
+
   return (
     <div style={{ position: 'relative', zIndex: 1, marginBottom: 20 }}>
       {cards.map((card, i) => (
@@ -245,13 +246,16 @@ function DailyChart(props: {
   slicedDaily: Parameters<typeof getDailySegments>[0][]
 }): React.JSX.Element {
   const CHART_H = 120
+
   const maxSegSum = Math.max(
     1,
     ...props.slicedDaily.map((entry) => {
       const segs = getDailySegments(entry)
+
       return segs.reduce((sum, s) => sum + s.value, 0)
     })
   )
+
   return (
     <>
       <table
@@ -288,6 +292,7 @@ function DailyChart(props: {
             <tr>
               {props.slicedDaily.map((entry) => {
                 const segments = getDailySegments(entry)
+
                 return (
                   <td
                     key={entry.day}

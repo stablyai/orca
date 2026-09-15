@@ -14,16 +14,23 @@ import type { DirectSshSnapshotApplyToken } from './direct-ssh-reconnect-coordin
 import { repairActiveTerminalTab } from '../components/terminal/use-active-terminal-repair'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
 const TARGET_ID = 'ssh-target-1'
+
 const OLD_PATH = '/srv/proj/wt'
+
 const NEW_PATH = '/srv/proj/wt-renamed'
+
 const OLD_ID = `repoA::${OLD_PATH}`
+
 const NEW_ID = `repoA::${NEW_PATH}`
+
 // Why a cap and not a while(true): on unfixed code this cycle never terminates.
 const MAX_REPAIR_PASSES = 200
 
@@ -133,9 +140,11 @@ function runRepairCycle(store: TestStore): {
 } {
   let passes = 0
   let depIdentityChurn = 0
+
   for (; passes < MAX_REPAIR_PASSES; passes += 1) {
     const live = store.getState()
     const depsBefore = live.activeTabIdByWorktree
+
     const repaired = repairActiveTerminalTab({
       activeTabType: 'terminal',
       activeTabId: live.activeTabId,
@@ -144,13 +153,16 @@ function runRepairCycle(store: TestStore): {
       setActiveTab: live.setActiveTab,
       tabs: live.activeWorktreeId ? (live.tabsByWorktree[live.activeWorktreeId] ?? []) : []
     })
+
     if (!repaired) {
       return { converged: true, passes, depIdentityChurn }
     }
+
     if (store.getState().activeTabIdByWorktree !== depsBefore) {
       depIdentityChurn += 1
     }
   }
+
   return { converged: false, passes, depIdentityChurn }
 }
 
@@ -177,11 +189,13 @@ describe('direct-SSH snapshot apply, tab id owned by two worktrees', () => {
       reconnectPersistedTerminals: (async () => {
         const live = store.getState()
         const registered: Record<string, string[]> = { ...live.ptyIdsByTabId }
+
         for (const tabs of Object.values(live.tabsByWorktree)) {
           for (const tab of tabs) {
             registered[tab.id] = [`pty-${tab.id}`]
           }
         }
+
         store.setState({ ptyIdsByTabId: registered })
       }) as never,
       markRemoteWorkspaceHydrated: (() => {}) as never,

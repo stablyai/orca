@@ -16,9 +16,11 @@ export function getWorktreeTitleRenameCommit(
   nextDisplayName: string
 ): WorktreeTitleRenameCommit {
   const trimmed = nextDisplayName.trim()
+
   if (!trimmed || trimmed === currentDisplayName) {
     return { kind: 'cancel' }
   }
+
   return { kind: 'save', displayName: trimmed }
 }
 
@@ -75,6 +77,7 @@ export function WorktreeTitleInlineRename({
   const [value, setValue] = useState(displayName)
   const [saving, setSaving] = useState(false)
   const [titleTruncated, setTitleTruncated] = useState(false)
+
   const emojiInput = useWorkspaceEmojiShortcodeInput({
     disabled: saving,
     inputRef: inputElementRef,
@@ -98,19 +101,23 @@ export function WorktreeTitleInlineRename({
       // root owns that stale-write guard without a mount-only Effect.
       mountedRef.current = node !== null
       titleElementRef.current = node
+
       // Why: wrapped titles render in full and never truncate, so skip the measure +
       // ResizeObserver entirely — for that mode it could only churn unused state.
       if (!node || editingRef.current || wrapTitle) {
         measureTitleTruncated(null)
+
         return
       }
 
       measureTitleTruncated(node)
       const updateTitleTruncated = () => measureTitleTruncated(node)
+
       if (typeof ResizeObserver === 'undefined') {
         window.addEventListener('resize', updateTitleTruncated)
         removeTitleResizeListenerRef.current = () =>
           window.removeEventListener('resize', updateTitleTruncated)
+
         return
       }
 
@@ -126,12 +133,14 @@ export function WorktreeTitleInlineRename({
   // Why: remounts the rendered title so truncation is measured again. The editor must
   // not share it — an unread flip would remount the input and reselect what was typed.
   const titleElementKey = `${displayName}:${showUnreadEmphasis ? 'unread' : 'read'}`
+
   // Why: the sidebar row needs a text-only editor to avoid layout jumps; the
   // hovercard can use a compact field that reads more like native rename UI.
   const editingInputClassName =
     editingPresentation === 'field'
       ? 'h-6 rounded-sm border border-input bg-input/40 px-1.5 py-0 shadow-xs selection:bg-[Highlight] selection:text-[HighlightText] focus-visible:border-ring focus-visible:ring-[1px] focus-visible:ring-ring/50 dark:bg-input/30'
       : 'h-[1lh] rounded-none border-0 !border-transparent !bg-transparent p-0 !shadow-none focus-visible:border-transparent focus-visible:ring-0 focus-visible:outline-none dark:!bg-transparent'
+
   const savingInputClassName = editingPresentation === 'field' ? 'pr-6' : 'pr-4'
   const savingSpinnerClassName = editingPresentation === 'field' ? 'right-1.5' : 'right-0'
 
@@ -140,10 +149,13 @@ export function WorktreeTitleInlineRename({
       if (editingRef.current === nextEditing) {
         return
       }
+
       editingRef.current = nextEditing
+
       if (nextEditing) {
         measureTitleTruncated(null)
       }
+
       setEditing(nextEditing)
       // Why: the parent card disables drag while renaming; an Effect leaves one draggable commit.
       onEditingChange?.(nextEditing)
@@ -159,9 +171,11 @@ export function WorktreeTitleInlineRename({
 
   const handleInputRef = useCallback((input: HTMLInputElement | null) => {
     inputElementRef.current = input
+
     if (!input) {
       return
     }
+
     input.focus()
     // Why: double-click rename should make replacing the workspace title a one-keystroke action.
     input.select()
@@ -174,10 +188,13 @@ export function WorktreeTitleInlineRename({
     if (!beginEditing) {
       return
     }
+
     onBeginEditingConsumed?.()
+
     if (disabled || editing) {
       return
     }
+
     openRenameEditor()
   }, [beginEditing, disabled, editing, onBeginEditingConsumed, openRenameEditor])
 
@@ -190,6 +207,7 @@ export function WorktreeTitleInlineRename({
       if (disabled) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       openRenameEditor()
@@ -209,15 +227,19 @@ export function WorktreeTitleInlineRename({
     }
 
     const commit = getWorktreeTitleRenameCommit(displayName, value)
+
     if (commit.kind === 'cancel') {
       cancelRename()
+
       return
     }
 
     savingRef.current = true
     setSaving(true)
+
     try {
       await onRename(commit.displayName)
+
       if (mountedRef.current) {
         setEditingMode(false)
       }
@@ -234,6 +256,7 @@ export function WorktreeTitleInlineRename({
       }
     } finally {
       savingRef.current = false
+
       if (mountedRef.current) {
         setSaving(false)
       }
@@ -243,14 +266,17 @@ export function WorktreeTitleInlineRename({
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLInputElement>) => {
       event.stopPropagation()
+
       if (emojiInput.handleKeyDown(event)) {
         return
       }
+
       // Why: an Enter that only confirms a CJK IME candidate must not commit the
       // rename; wait for a non-composition Enter.
       if (isImeCompositionKeyDown(event)) {
         return
       }
+
       if (event.key === 'Enter') {
         event.preventDefault()
         void commitRename()

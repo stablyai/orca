@@ -27,6 +27,7 @@ export function TerminalLegacyTerminalPanes({
     worktreeFiles,
     workspaceSurfaces
   } = controller
+
   return (
     <div
       className={`relative flex-1 min-h-0 overflow-hidden ${
@@ -41,12 +42,15 @@ export function TerminalLegacyTerminalPanes({
         .filter((workspace) => mountedWorktreeIdsRef.current.has(workspace.id))
         .map((workspace) => {
           const isVisible = activeView === 'terminal' && workspace.id === renderedActiveWorktreeId
+
           const shouldMeasureHiddenWorktree =
             !isVisible && measurableBackgroundWorktreeIdsRef.current.has(workspace.id)
+
           const shouldColdParkTerminalPanes =
             !isVisible &&
             !shouldMeasureHiddenWorktree &&
             effectiveParkedTerminalWorktreeIds.has(workspace.id)
+
           return (
             <div
               key={workspace.id}
@@ -71,9 +75,12 @@ export function TerminalLegacyTerminalPanes({
                     activityTerminalPortals,
                     { worktreeId: workspace.id, tabId: tab.id }
                   )
+
                   const isActivityPortalTab = activityTerminalPortal !== null
+
                   const isActiveTerminalTab =
                     isVisible && tab.id === activeTabId && activeTabType === 'terminal'
+
                   if (
                     shouldColdParkTerminalPanes &&
                     !isActivityPortalTab &&
@@ -81,6 +88,7 @@ export function TerminalLegacyTerminalPanes({
                   ) {
                     return null
                   }
+
                   const terminalPane = (
                     <TerminalPane
                       key={`${tab.id}-${tab.generation ?? 0}`}
@@ -95,6 +103,7 @@ export function TerminalLegacyTerminalPanes({
                       onCloseTab={() => handleCloseTab(tab.id)}
                     />
                   )
+
                   if (activityTerminalPortal) {
                     return createPortal(
                       terminalPane,
@@ -102,6 +111,7 @@ export function TerminalLegacyTerminalPanes({
                       `activity-terminal-${tab.id}`
                     )
                   }
+
                   return terminalPane
                 })}
             </div>

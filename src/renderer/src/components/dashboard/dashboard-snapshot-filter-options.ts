@@ -14,6 +14,7 @@ export function buildDashboardSnapshotFilterOptions(
     id: workspace.projectId,
     label: boundedLabel(workspace.projectName)
   }))
+
   const workspaceStatuses = (
     state.workspaceStatuses && state.workspaceStatuses.length > 0
       ? state.workspaceStatuses
@@ -23,5 +24,6 @@ export function buildDashboardSnapshotFilterOptions(
     label: status.label,
     color: status.color
   }))
+
   return { projects, workspaceStatuses }
 }

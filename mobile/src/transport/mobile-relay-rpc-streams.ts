@@ -39,8 +39,10 @@ function buildParamsUnsubscribe(
 ): StreamUnsubscribe | null {
   if (method === 'terminal.subscribe') {
     const unsubscribeParams = buildTerminalUnsubscribeParams(params)
+
     return unsubscribeParams ? { method: 'terminal.unsubscribe', params: unsubscribeParams } : null
   }
+
   return buildStreamUnsubscribe(method, params, requestId)
 }
 
@@ -69,6 +71,7 @@ export class MobileRelayRpcStreams {
     subscribeOptions?: Parameters<RpcClient['subscribe']>[3]
   ): () => void {
     const id = this.options.nextId()
+
     const stream: StreamRecord = {
       method,
       params,
@@ -78,12 +81,14 @@ export class MobileRelayRpcStreams {
       cancelled: false,
       sent: false
     }
+
     this.streams.set(id, stream)
     void this.options
       .waitForConnected()
       .then(() => {
         if (!stream.cancelled) {
           stream.sent = true
+
           if (!this.options.sendFrame({ id, method, params: stream.params })) {
             this.fail(id, stream, 'Connection interrupted')
           }
@@ -93,6 +98,7 @@ export class MobileRelayRpcStreams {
         const message = error instanceof Error ? error.message : 'Connection interrupted'
         this.fail(id, stream, message, error)
       })
+
     return () => this.cancel(id)
   }
 
@@ -102,11 +108,13 @@ export class MobileRelayRpcStreams {
 
   handleResponse(response: RpcResponse): boolean {
     const cancelled = this.cancelledSubscriptions.get(response.id)
+
     if (cancelled) {
       if (!response.ok) {
         this.cancelledSubscriptions.delete(response.id)
       } else if (response.result && typeof response.result === 'object') {
         const result = response.result as { subscriptionId?: unknown; type?: unknown }
+
         if (result.type === 'end') {
           this.cancelledSubscriptions.delete(response.id)
         } else if (result.type === 'snapshot' && cancelled.unsubscribe) {
@@ -115,58 +123,78 @@ export class MobileRelayRpcStreams {
         } else if (typeof result.subscriptionId === 'string') {
           this.cancelledSubscriptions.delete(response.id)
           const unsubscribe = buildReadyStreamUnsubscribe(cancelled.method, result.subscriptionId)
+
           if (unsubscribe) {
             this.options.sendFrame({ id: this.options.nextId(), ...unsubscribe })
           }
         }
       }
+
       if (response.ok && !isStreamingOpenerReply(response)) {
         this.cancelledSubscriptions.delete(response.id)
       }
+
       return true
     }
+
     const stream = this.streams.get(response.id)
+
     if (!stream) {
       return false
     }
+
     if (!response.ok) {
       this.fail(response.id, stream, response.error.message, response.error)
+
       return true
     }
+
     const result = (response as RpcSuccess).result
+
     if (result && typeof result === 'object') {
       const metadata = result as { subscriptionId?: unknown; streamId?: unknown; type?: unknown }
+
       if (stream.method === 'session.tabs.subscribe' && metadata.type === 'snapshot') {
         stream.receivedSnapshot = true
       }
+
       if (typeof metadata.subscriptionId === 'string') {
         stream.subscriptionId = metadata.subscriptionId
       }
+
       if (typeof metadata.streamId === 'number') {
         stream.streamIds.add(metadata.streamId)
         this.terminalListeners.set(metadata.streamId, stream.listener)
       }
+
       if (stream.method === 'browser.screencast') {
         this.activeBrowserStream = stream
       }
+
       if (metadata.type === 'end') {
         stream.listener(result)
         this.remove(response.id)
+
         return true
       }
     }
+
     if (!stream.cancelled) {
       stream.listener(result)
     }
+
     return true
   }
 
   handleBinary(bytes: Uint8Array): void {
     const browserFrame = decodeBrowserScreencastFrame(bytes)
+
     if (browserFrame && this.activeBrowserStream?.onBinaryFrame) {
       this.activeBrowserStream.onBinaryFrame(browserFrame)
+
       return
     }
+
     handleTerminalBinaryFrame(bytes, {
       terminalSnapshots: this.terminalSnapshots,
       getListener: (streamId) => this.terminalListeners.get(streamId)
@@ -177,6 +205,7 @@ export class MobileRelayRpcStreams {
     for (const stream of this.streams.values()) {
       stream.cancelled = true
     }
+
     this.streams.clear()
     this.cancelledSubscriptions.clear()
     this.terminalListeners.clear()
@@ -186,12 +215,16 @@ export class MobileRelayRpcStreams {
 
   private cancel(id: string): void {
     const stream = this.streams.get(id)
+
     if (!stream || stream.cancelled) {
       return
     }
+
     stream.cancelled = true
+
     if (stream.sent) {
       const byParams = buildParamsUnsubscribe(stream.method, stream.params, id)
+
       if (stream.method === 'terminal.subscribe') {
         if (byParams) {
           this.sendUnsubscribe(byParams)
@@ -200,6 +233,7 @@ export class MobileRelayRpcStreams {
         const unsubscribe = stream.subscriptionId
           ? buildReadyStreamUnsubscribe(stream.method, stream.subscriptionId)
           : null
+
         if (byParams && stream.method === 'session.tabs.subscribe' && !stream.receivedSnapshot) {
           // The host registers cleanup only after resolving the initial snapshot.
           this.cancelledSubscriptions.set(id, { method: stream.method, unsubscribe: byParams })
@@ -219,6 +253,7 @@ export class MobileRelayRpcStreams {
         }
       }
     }
+
     this.remove(id)
   }
 
@@ -228,35 +263,44 @@ export class MobileRelayRpcStreams {
     if (this.hasLiveOwner(unsubscribe)) {
       return
     }
+
     this.options.sendFrame({ id: this.options.nextId(), ...unsubscribe })
   }
 
   private hasLiveOwner(unsubscribe: StreamUnsubscribe): boolean {
     const token = JSON.stringify(unsubscribe)
+
     for (const [siblingId, sibling] of this.streams) {
       if (sibling.cancelled || !sibling.sent) {
         continue
       }
+
       const siblingUnsubscribe = buildParamsUnsubscribe(sibling.method, sibling.params, siblingId)
+
       if (siblingUnsubscribe && JSON.stringify(siblingUnsubscribe) === token) {
         return true
       }
     }
+
     return false
   }
 
   private remove(id: string): void {
     const stream = this.streams.get(id)
+
     if (!stream) {
       return
     }
+
     for (const streamId of stream.streamIds) {
       this.terminalListeners.delete(streamId)
       this.terminalSnapshots.delete(streamId)
     }
+
     if (this.activeBrowserStream === stream) {
       this.activeBrowserStream = null
     }
+
     this.streams.delete(id)
   }
 
@@ -264,6 +308,7 @@ export class MobileRelayRpcStreams {
     if (stream.cancelled || this.streams.get(id) !== stream) {
       return
     }
+
     try {
       stream.listener({ type: 'error', message, error })
     } finally {

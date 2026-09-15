@@ -13,6 +13,7 @@ vi.mock('node:child_process', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeChildProcess>()),
   spawn: spawnMock
 }))
+
 vi.mock('../../own-chromium-tree-kill-guard', () => ({
   admitSelfInitiatedTreeKill: admitMock
 }))
@@ -26,6 +27,7 @@ function childWithPid(pid: number): ChildProcess {
   Object.defineProperty(child, 'pid', { value: pid })
   vi.spyOn(child, 'kill').mockReturnValue(true)
   vi.spyOn(child, 'unref').mockImplementation(() => {})
+
   return child
 }
 
@@ -70,6 +72,7 @@ describe('Git command tree termination', () => {
     const killer = childWithPid(5678)
     spawnMock.mockReturnValue(killer)
     let settled = false
+
     const pending = killSpawnedCommandTree(child).then(() => {
       settled = true
     })
@@ -102,12 +105,15 @@ describe('Git command tree termination', () => {
         if (program !== process.execPath) {
           throw new Error('Unexpected external process in native exit probe')
         }
+
         return original.spawn(program, args, options)
       })
+
       const child = spawnProcess({
         program: process.execPath,
         args: ['-e', `process.exit(${exitCode})`]
       })
+
       const closed = once(child, 'close')
       await once(child, 'exit')
       expect(child.exitCode).toBe(exitCode)

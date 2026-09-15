@@ -4,6 +4,7 @@ import { aiVaultSessionDeleteBlockedReason } from './ai-vault-session-deletabili
 // translate() with no loaded catalog returns the English fallback, so these
 // assertions pin the English copy as well as the gate order.
 const NON_LOCAL = 'Only sessions on this device can be deleted.'
+
 const SYNTHETIC = "This session can't be deleted from Orca."
 
 const localGeminiSession = {

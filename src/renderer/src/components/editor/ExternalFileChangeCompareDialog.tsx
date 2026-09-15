@@ -51,6 +51,7 @@ export function ExternalFileChangeCompareDialog({
     if (!open) {
       return
     }
+
     let cancelled = false
     setDiskState({ kind: 'loading' })
     // Why: read at open time — the banner can be minutes old and the agent
@@ -67,6 +68,7 @@ export function ExternalFileChangeCompareDialog({
         if (cancelled) {
           return
         }
+
         setDiskState(
           result.isBinary ? { kind: 'binary' } : { kind: 'ready', content: result.content }
         )
@@ -75,11 +77,13 @@ export function ExternalFileChangeCompareDialog({
         if (cancelled) {
           return
         }
+
         setDiskState({
           kind: 'error',
           message: err instanceof Error ? err.message : String(err)
         })
       })
+
     return () => {
       cancelled = true
     }

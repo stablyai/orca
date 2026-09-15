@@ -37,6 +37,7 @@ import {
 } from './automations-page-runtime-fixtures'
 
 export const RUNTIME_REPO_ID = RUNTIME_REPO_ID_FIXTURE
+
 export const RUNTIME_WORKSPACE_ID = RUNTIME_WORKSPACE_ID_FIXTURE
 
 export type ListPanelProps = {
@@ -150,7 +151,9 @@ export const mocks: AutomationsPageMocks = {
 vi.mock('@/store', () => {
   const useAppStore = (selector: (state: Partial<AppState>) => unknown): unknown =>
     selector(mocks.state as Partial<AppState>)
+
   useAppStore.getState = (): Partial<AppState> => mocks.state as Partial<AppState>
+
   return { useAppStore }
 })
 
@@ -207,7 +210,9 @@ vi.mock('./AutomationsListPanel', () => ({
       props.selectAutomationRow(rowKey)
       props.onOpenDetail()
     }
+
     mocks.listPanel = { ...props, selectAutomationRow }
+
     return (
       <div data-testid="list-panel">
         <button aria-label="Refresh automations" onClick={props.onRefresh} />
@@ -245,6 +250,7 @@ vi.mock('./AutomationsListPanel', () => ({
 vi.mock('./AutomationsDetailPane', () => ({
   AutomationsDetailPane: (props: DetailPaneProps) => {
     mocks.detailPane = props
+
     return (
       <div data-testid="detail-pane">
         <span data-testid="detail-name">{props.selected?.name ?? 'none'}</span>
@@ -257,6 +263,7 @@ vi.mock('./AutomationsDetailPane', () => ({
 vi.mock('./AutomationEditorDialog', () => ({
   AutomationEditorDialog: (props: EditorDialogProps) => {
     mocks.editorDialog = props
+
     return <div data-testid="editor-dialog">{props.open ? 'open' : 'closed'}</div>
   }
 }))
@@ -264,6 +271,7 @@ vi.mock('./AutomationEditorDialog', () => ({
 vi.mock('./AutomationDeleteDialogs', () => ({
   AutomationDeleteDialog: (props: DeleteDialogProps) => {
     mocks.deleteDialog = props
+
     return null
   },
   ExternalAutomationDeleteDialog: () => null
@@ -299,12 +307,15 @@ export const api = {
 
 /** The precondition a Desktop + Self row captures; every fenced request repeats it. */
 export const SELF_PRECONDITION = { selector: { kind: 'self' } }
+
 /** The owner the catalog projects for Desktop + Self, which every scoped call names. */
 export const DESKTOP_SELF_OWNER = { authority: { kind: 'desktop' }, selector: { kind: 'self' } }
 
 export const RUNTIME_ID = 'gpu'
+
 /** A runtime that advertises both automation capabilities, so its rows carry owners. */
 const RUNTIME_CAPABILITIES = [LIST_HOST_SCOPE, OWNER_FENCING, CREATE_IDEMPOTENCY]
+
 export const RUNTIME_SELF_FILTER = {
   kind: 'host' as const,
   host: {
@@ -324,12 +335,16 @@ async function answerAutomationRpc(
     const answers = mocks.state.runtimeAnswers as
       | { automations: Automation[]; runs: AutomationRun[] }
       | undefined
+
     if (method === 'automation.list') {
       return selfScopedList(answers?.automations ?? [])
     }
+
     return method === 'automation.runs' ? { runs: answers?.runs ?? [] } : {}
   }
+
   const args = params as Record<string, unknown> | undefined
+
   switch (method) {
     case 'automation.list':
       return args?.selector
@@ -379,6 +394,7 @@ export async function renderPage(options?: { strict?: boolean }): Promise<{
   document.body.appendChild(container)
   const root = createRoot(container)
   roots.push(root)
+
   const rerender = async (): Promise<void> => {
     await act(async () => {
       // Strict mounts double-invoke effects the way the dev app does, which is
@@ -386,10 +402,13 @@ export async function renderPage(options?: { strict?: boolean }): Promise<{
       const page = options?.strict
         ? createElement(StrictMode, null, createElement(AutomationsPage))
         : createElement(AutomationsPage)
+
       root.render(page)
     })
   }
+
   await rerender()
+
   return { container, rerender }
 }
 

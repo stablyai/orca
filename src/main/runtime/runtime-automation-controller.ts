@@ -58,6 +58,7 @@ export class RuntimeAutomationController {
   /** Keep runtime-owned automation work ahead of queued external probes. */
   withExternalProbePriority<T>(run: () => T): T {
     const wrap = this.service?.externalProbePriority
+
     return wrap ? wrap(run) : run()
   }
 
@@ -65,6 +66,7 @@ export class RuntimeAutomationController {
     if (!this.store?.listAutomations) {
       throw new Error('runtime_unavailable')
     }
+
     return this.store.listAutomations()
   }
 
@@ -72,6 +74,7 @@ export class RuntimeAutomationController {
     if (!this.store?.listAutomationRuns) {
       throw new Error('runtime_unavailable')
     }
+
     return this.store.listAutomationRuns(automationId)
   }
 
@@ -79,6 +82,7 @@ export class RuntimeAutomationController {
     if (this.store?.listAutomationRunsPage) {
       return this.store.listAutomationRunsPage(automationId, limit, cursor)
     }
+
     return paginateAutomationRuns(this.listRuns(automationId), limit, cursor)
   }
 
@@ -86,6 +90,7 @@ export class RuntimeAutomationController {
     if (!this.store?.listAutomationsForScope) {
       throw new Error('runtime_unavailable')
     }
+
     return this.store.listAutomationsForScope(params)
   }
 
@@ -95,9 +100,11 @@ export class RuntimeAutomationController {
 
   show(id: string): Automation {
     const automation = this.list().find((entry) => entry.id === id)
+
     if (!automation) {
       throw new Error('Automation not found.')
     }
+
     return automation
   }
 
@@ -108,11 +115,14 @@ export class RuntimeAutomationController {
     if (!this.store?.createAutomation) {
       throw new Error('runtime_unavailable')
     }
+
     const target = await this.resolveTarget(input)
     assertAutomationRunContextMatchesTarget(input.runContext, target.repo)
+
     if (input.reuseSession && target.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
+
     return this.store.createAutomation(
       {
         creationKey: input.creationKey,
@@ -148,26 +158,33 @@ export class RuntimeAutomationController {
     if (!this.store?.updateAutomation) {
       throw new Error('runtime_unavailable')
     }
+
     const current = this.show(id)
     const patch: AutomationUpdateInput = {}
     this.copyPatchValues(updates, patch)
+
     const targetChanged =
       hasRuntimeAutomationUpdateValue(updates, 'repo') ||
       hasRuntimeAutomationUpdateValue(updates, 'workspace') ||
       hasRuntimeAutomationUpdateValue(updates, 'workspaceMode')
+
     if (targetChanged) {
       const target = await this.resolveTarget(updates, current)
       assertAutomationRunContextMatchesTarget(updates.runContext, target.repo)
+
       if (patch.reuseSession === true && target.workspaceMode !== 'existing') {
         throw new Error('Session reuse requires an existing workspace target.')
       }
+
       patch.projectId = target.projectId
       patch.workspaceMode = target.workspaceMode
       patch.workspaceId = target.workspaceId
+
       if (target.workspaceMode !== 'existing') {
         patch.reuseSession = false
       }
     }
+
     if (
       !targetChanged &&
       hasRuntimeAutomationUpdateValue(updates, 'runContext') &&
@@ -176,9 +193,11 @@ export class RuntimeAutomationController {
       const repo = await this.resolvers.showRepo(`id:${current.projectId}`)
       assertAutomationRunContextMatchesTarget(updates.runContext, repo)
     }
+
     if (!targetChanged && patch.reuseSession && current.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
+
     return this.store.updateAutomation(id, patch, options)
   }
 
@@ -189,8 +208,10 @@ export class RuntimeAutomationController {
     if (!this.store?.deleteAutomation) {
       throw new Error('runtime_unavailable')
     }
+
     this.show(id)
     this.store.deleteAutomation(id, expectedOwner ? { expectedOwner } : undefined)
+
     return { removed: true, id }
   }
 
@@ -198,7 +219,9 @@ export class RuntimeAutomationController {
     if (!this.service) {
       throw new Error('runtime_unavailable')
     }
+
     const service = this.service
+
     return await runAutomationNowFenced({
       automationId: id,
       service,
@@ -207,8 +230,10 @@ export class RuntimeAutomationController {
           if (expectedOwner) {
             throw new Error('runtime_unavailable')
           }
+
           return
         }
+
         this.store.assertAutomationOwnerFence({
           id,
           expectedOwner,
@@ -238,6 +263,7 @@ export class RuntimeAutomationController {
       'enabled',
       'missedRunGraceMinutes'
     ] as const
+
     for (const key of keys) {
       if (hasRuntimeAutomationUpdateValue(updates, key)) {
         Object.assign(patch, { [key]: updates[key] })
@@ -261,6 +287,7 @@ export class RuntimeAutomationController {
   }> {
     const hasRepo = input.repo !== undefined
     const hasWorkspace = input.workspace !== undefined
+
     if (
       current?.workspaceMode === 'existing' &&
       hasRepo &&
@@ -271,9 +298,11 @@ export class RuntimeAutomationController {
         'Repo updates for existing-workspace automation require workspaceMode new_per_run.'
       )
     }
+
     const workspace = input.workspace
       ? await this.resolvers.showManagedWorktree(input.workspace)
       : null
+
     const repoSelector =
       input.repo ??
       (workspace?.repoId
@@ -281,7 +310,9 @@ export class RuntimeAutomationController {
         : current?.projectId
           ? `id:${current.projectId}`
           : null)
+
     const repo = repoSelector ? await this.resolvers.showRepo(repoSelector) : null
+
     const workspaceMode =
       input.workspaceMode ??
       (workspace
@@ -289,21 +320,28 @@ export class RuntimeAutomationController {
         : input.repo && !current
           ? 'new_per_run'
           : (current?.workspaceMode ?? 'new_per_run'))
+
     if (workspaceMode === 'existing') {
       const workspaceId = workspace?.id ?? current?.workspaceId
       const projectId = workspace?.repoId ?? current?.projectId
+
       if (repo && repo.id !== projectId) {
         throw new Error('Selected workspace belongs to a different repo.')
       }
+
       if (!workspaceId || !projectId) {
         throw new Error('Existing-workspace automation requires --workspace.')
       }
+
       return { projectId, workspaceMode, workspaceId, repo }
     }
+
     const projectId = repo?.id ?? workspace?.repoId ?? current?.projectId
+
     if (!projectId) {
       throw new Error('Automation requires --repo or --workspace.')
     }
+
     return { projectId, workspaceMode: 'new_per_run', workspaceId: null, repo }
   }
 }

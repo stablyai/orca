@@ -11,6 +11,7 @@ import type { AutomationCreateDestinationControl } from './use-automation-create
 import type { Repo } from '../../../../shared/repo-types'
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -116,6 +117,7 @@ describe('AutomationDestinationField', () => {
     const updateRequired = container.querySelector(
       '[data-testid="automation-create-update-required"]'
     )
+
     expect(updateRequired?.textContent).toContain('legacy-box')
   })
 

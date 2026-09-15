@@ -3,41 +3,60 @@ import { performance } from 'node:perf_hooks'
 import v8 from 'node:v8'
 
 const PTY_COUNT = Number.parseInt(process.env.ORCA_PTY_BENCH_PTY_COUNT ?? '24', 10)
+
 const PAYLOAD_CHARS = Number.parseInt(process.env.ORCA_PTY_BENCH_PAYLOAD_CHARS ?? '262144', 10)
+
 const RUNS = Number.parseInt(process.env.ORCA_PTY_BENCH_RUNS ?? '30', 10)
+
 const MEASURE_TIMER_DELAYS = process.env.ORCA_PTY_BENCH_MEASURE_TIMER_DELAYS !== '0'
+
 const INGRESS_CHUNKS = Number.parseInt(process.env.ORCA_PTY_BENCH_INGRESS_CHUNKS ?? '96', 10)
+
 const INGRESS_CHUNK_CHARS = Number.parseInt(process.env.ORCA_PTY_BENCH_INGRESS_CHARS ?? '65536', 10)
+
 const CHUNK_CHARS = 16 * 1024
+
 const MAX_WRITES_PER_SLICE = 2
+
 const RECENT_PTY_OUTPUT_LIMIT = 4096
+
 const MAX_TAIL_LINES = 2000
+
 const MAX_TAIL_CHARS = 256 * 1024
+
 const MAX_TAIL_PARTIAL_CHARS = 4000
+
 const OSC_TITLE_RE = /\x1b\]([012]);([^\x07\x1b]*?)(?:\x07|\x1b\\)/g
+
 const URL_CANDIDATE_PATTERN = /\bhttps?:\/\/[^\s<>"'`]+/gi
 
 if (!Number.isInteger(PTY_COUNT) || PTY_COUNT <= 0) {
   throw new Error(`ORCA_PTY_BENCH_PTY_COUNT must be positive, received ${PTY_COUNT}`)
 }
+
 if (!Number.isInteger(PAYLOAD_CHARS) || PAYLOAD_CHARS <= 0) {
   throw new Error(`ORCA_PTY_BENCH_PAYLOAD_CHARS must be positive, received ${PAYLOAD_CHARS}`)
 }
+
 if (!Number.isInteger(RUNS) || RUNS <= 0) {
   throw new Error(`ORCA_PTY_BENCH_RUNS must be positive, received ${RUNS}`)
 }
+
 if (!Number.isInteger(INGRESS_CHUNKS) || INGRESS_CHUNKS <= 0) {
   throw new Error(`ORCA_PTY_BENCH_INGRESS_CHUNKS must be positive, received ${INGRESS_CHUNKS}`)
 }
+
 if (!Number.isInteger(INGRESS_CHUNK_CHARS) || INGRESS_CHUNK_CHARS <= 0) {
   throw new Error(`ORCA_PTY_BENCH_INGRESS_CHARS must be positive, received ${INGRESS_CHUNK_CHARS}`)
 }
 
 function makePendingData() {
   const pending = new Map()
+
   for (let index = 0; index < PTY_COUNT; index++) {
     pending.set(`pty-${index}`, `${index}:`.padEnd(PAYLOAD_CHARS, 'x'))
   }
+
   return pending
 }
 
@@ -48,10 +67,13 @@ function simulateWebContentsSend(id, data) {
 function flushLegacy(pending) {
   let bytes = 0
   const start = performance.now()
+
   for (const [id, data] of pending) {
     bytes += simulateWebContentsSend(id, data)
   }
+
   pending.clear()
+
   return { bytes, durationMs: performance.now() - start }
 }
 
@@ -59,32 +81,40 @@ function flushBoundedSlice(pending) {
   let bytes = 0
   let writes = 0
   const start = performance.now()
+
   while (pending.size > 0 && writes < MAX_WRITES_PER_SLICE) {
     const next = pending.entries().next().value
+
     if (!next) {
       break
     }
+
     const [id, data] = next
     pending.delete(id)
     const chunk = data.slice(0, CHUNK_CHARS)
     const remaining = data.slice(CHUNK_CHARS)
+
     if (remaining) {
       pending.set(id, remaining)
     }
+
     bytes += simulateWebContentsSend(id, chunk)
     writes++
   }
+
   return { bytes, durationMs: performance.now() - start }
 }
 
 function drainBounded(pending) {
   let bytes = 0
   const sliceDurations = []
+
   while (pending.size > 0) {
     const result = flushBoundedSlice(pending)
     bytes += result.bytes
     sliceDurations.push(result.durationMs)
   }
+
   return { bytes, sliceDurations }
 }
 
@@ -94,9 +124,11 @@ function makeIngressChunk() {
 
 function extractLastOscTitleLegacy(data) {
   let last = null
+
   for (const m of data.matchAll(OSC_TITLE_RE)) {
     last = m[2]
   }
+
   return last
 }
 
@@ -104,6 +136,7 @@ function extractLastOscTitleCurrent(data) {
   if (!data.includes('\x1b]')) {
     return null
   }
+
   return extractLastOscTitleLegacy(data)
 }
 
@@ -124,13 +157,16 @@ function hasMeaningfulContentLegacy(chunk) {
 function hasMeaningfulContentCurrent(chunk) {
   for (let index = 0; index < chunk.length; index++) {
     const code = chunk.charCodeAt(index)
+
     if (code === 0x1b || code < 0x09 || (code > 0x0d && code < 0x20) || code > 0x7e) {
       break
     }
+
     if (code > 0x20) {
       return true
     }
   }
+
   return hasMeaningfulContentLegacy(chunk)
 }
 
@@ -148,6 +184,7 @@ function normalizeTerminalChunkLegacy(chunk) {
 function terminalChunkNeedsNormalization(chunk) {
   for (let index = 0; index < chunk.length; index++) {
     const code = chunk.charCodeAt(index)
+
     if (
       code === 0x1b ||
       code === 0x0d ||
@@ -158,6 +195,7 @@ function terminalChunkNeedsNormalization(chunk) {
       return true
     }
   }
+
   return false
 }
 
@@ -177,6 +215,7 @@ function appendNormalizedToTailBuffer(previousLines, previousPartialLine, normal
   const pieces = `${boundedPreviousPartialLine}${normalizedChunk}`.split('\n')
   const nextPartialLine = (pieces.pop() ?? '').replace(/[ \t]+$/g, '')
   const retainedPartialLine = nextPartialLine.slice(-MAX_TAIL_PARTIAL_CHARS)
+
   let nextLines =
     pieces.length > 0
       ? [...previousLines, ...pieces.map((line) => line.replace(/[ \t]+$/g, ''))]
@@ -190,8 +229,10 @@ function appendNormalizedToTailBuffer(previousLines, previousPartialLine, normal
     if (nextLines === previousLines) {
       nextLines = [...previousLines]
     }
+
     let totalChars =
       nextLines.reduce((sum, line) => sum + line.length, 0) + retainedPartialLine.length
+
     while (nextLines.length > 0 && totalChars > MAX_TAIL_CHARS) {
       totalChars -= nextLines.shift().length
     }
@@ -219,14 +260,17 @@ function tailStateMatches(lines, partialLine, snapshot) {
   ) {
     return false
   }
+
   if (lines === snapshot.lines) {
     return true
   }
+
   for (let index = 0; index < lines.length; index++) {
     if (lines[index] !== snapshot.lines[index]) {
       return false
     }
   }
+
   return true
 }
 
@@ -235,24 +279,31 @@ class AdvertisedUrlPtyBuffer {
 
   ingest(chunk) {
     this.raw += chunk
+
     if (this.raw.length > 4096) {
       this.raw = this.raw.slice(-4096)
     }
+
     const lastLineBreak = Math.max(this.raw.lastIndexOf('\n'), this.raw.lastIndexOf('\r'))
+
     if (lastLineBreak === -1) {
       return ''
     }
+
     const finalized = this.raw.slice(0, lastLineBreak + 1)
     this.raw = this.raw.slice(lastLineBreak + 1)
+
     return finalized
   }
 }
 
 function scanAdvertisedUrls(buffer, chunk) {
   const finalized = buffer.ingest(chunk)
+
   if (!finalized) {
     return
   }
+
   for (const _match of finalized.matchAll(URL_CANDIDATE_PATTERN)) {
     // Candidate extraction is enough for this benchmark; URL validation is rare
     // and only happens after a URL-shaped match.
@@ -295,11 +346,13 @@ function measureRuntimeIngressCurrent() {
     scanAdvertisedUrls(advertisedUrlBuffer, chunk)
     extractLastOscTitleCurrent(chunk)
     const normalizedChunk = normalizeTerminalChunkCurrent(chunk)
+
     const ptyTailBefore = {
       lines: ptyTail.lines,
       partialLine: ptyTail.partialLine,
       linesTotal: ptyTail.lines.length
     }
+
     ptyTail = appendNormalizedToTailBuffer(ptyTail.lines, ptyTail.partialLine, normalizedChunk)
     leafTail = tailStateMatches(leafTail.lines, leafTail.partialLine, ptyTailBefore)
       ? { lines: ptyTail.lines, partialLine: ptyTail.partialLine }
@@ -322,12 +375,16 @@ function scheduleBoundedFlush(pending) {
   return new Promise((resolve) => {
     const drain = () => {
       flushBoundedSlice(pending)
+
       if (pending.size > 0) {
         setTimeout(drain, 1)
+
         return
       }
+
       resolve()
     }
+
     setTimeout(drain, 0)
   })
 }
@@ -335,18 +392,23 @@ function scheduleBoundedFlush(pending) {
 async function measureInputTimerDelay(flushKind) {
   const pending = makePendingData()
   const scheduledAt = performance.now()
+
   const drainPromise =
     flushKind === 'legacy' ? scheduleLegacyFlush(pending) : scheduleBoundedFlush(pending)
+
   const inputDelay = await new Promise((resolve) => {
     setTimeout(() => resolve(performance.now() - scheduledAt), 0)
   })
+
   await drainPromise
+
   return inputDelay
 }
 
 function percentile(values, p) {
   const sorted = [...values].sort((a, b) => a - b)
   const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1))
+
   return sorted[index] ?? 0
 }
 

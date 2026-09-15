@@ -41,5 +41,6 @@ export function useRichMarkdownReconcileRoundTrip({
         worktreeRoot
       })
     })
+
   return ref
 }

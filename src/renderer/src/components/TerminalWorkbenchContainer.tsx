@@ -12,6 +12,7 @@ export function TerminalWorkbenchContainer({
   children: React.ReactNode
 }): React.JSX.Element {
   const retainBrowserGuestPaint = useAnyBrowserGuestNeedsPaint(!isVisible)
+
   return (
     <div
       className={

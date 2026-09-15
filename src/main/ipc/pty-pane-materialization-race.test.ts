@@ -9,45 +9,61 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { registerPtyHandlers, getPtyIdForPaneKey, setLocalPtyProvider } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+
 vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+
 vi.mock('node:child_process', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
+
 vi.mock('../opencode/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
+
 vi.mock('../mimo/hook-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
+
 vi.mock('../agent-hooks/server', () =>
   import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
+
 vi.mock('../pi/titlebar-extension-service', () =>
   import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
+
 vi.mock('../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+
 vi.mock('../wsl', async (importOriginal) =>
   (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
+
 vi.mock('../telemetry/client', () =>
   import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
+
 vi.mock('../telemetry/classify-error', () =>
   import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () =>
   import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
+
 vi.mock('../memory/pty-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
+
 vi.mock('../agent-hooks/migration-unsupported-pty-state', () =>
   import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
+
 vi.mock('../codex/codex-pane-account-registry', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
+
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
@@ -64,6 +80,7 @@ describe('registerPtyHandlers', () => {
         leafId: string
       }): () => void
     }
+
     const providerSpawn = vi.fn(async () => ({ id: 'pty-after-runtime-claim' }))
     setLocalPtyProvider({
       spawn: providerSpawn,
@@ -89,6 +106,7 @@ describe('registerPtyHandlers', () => {
       getProfiles: vi.fn()
     } as never)
     let controller: RuntimeSpawnController | null = null
+
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value
@@ -100,10 +118,12 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
+
     registerPtyHandlers(mainWindow as never, runtime as never)
     const tabId = 'tab-early-runtime-claim'
     const leafId = '44444444-4444-4444-8444-444444444444'
     const worktreeId = 'repo-1::/tmp/early-runtime-claim'
+
     const releaseClaim = (controller as unknown as RuntimeSpawnController).claimStablePaneCreate({
       worktreeId,
       connectionId: null,
@@ -124,6 +144,7 @@ describe('registerPtyHandlers', () => {
         ORCA_WORKTREE_ID: worktreeId
       }
     })
+
     await new Promise<void>((resolve) => setImmediate(resolve))
     expect(providerSpawn).not.toHaveBeenCalled()
 
@@ -143,13 +164,16 @@ describe('registerPtyHandlers', () => {
         env: Record<string, string>
       }): Promise<{ id: string }>
     }
+
     let resolveProviderSpawn!: (result: { id: string }) => void
+
     const providerSpawn = vi.fn(
       () =>
         new Promise<{ id: string }>((resolve) => {
           resolveProviderSpawn = resolve
         })
     )
+
     setLocalPtyProvider({
       spawn: providerSpawn,
       write: vi.fn(),
@@ -172,6 +196,7 @@ describe('registerPtyHandlers', () => {
       getProfiles: vi.fn()
     } as never)
     let controller: RuntimeSpawnController | null = null
+
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value
@@ -183,12 +208,14 @@ describe('registerPtyHandlers', () => {
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
+
     let releaseAuth!: (value: {
       configDir: string
       envPatch: Record<string, never>
       stripAuthEnv: false
       provenance: string
     }) => void
+
     const prepareClaudeAuth = vi.fn(
       () =>
         new Promise<{
@@ -200,6 +227,7 @@ describe('registerPtyHandlers', () => {
           releaseAuth = resolve
         })
     )
+
     registerPtyHandlers(
       mainWindow as never,
       runtime as never,
@@ -210,6 +238,7 @@ describe('registerPtyHandlers', () => {
     const tabId = 'tab-mid-preflight-runtime'
     const leafId = '55555555-5555-4555-8555-555555555555'
     const paneKey = makePaneKey(tabId, leafId)
+
     const paneArgs = {
       cols: 80,
       rows: 24,
@@ -223,12 +252,14 @@ describe('registerPtyHandlers', () => {
       ...paneArgs,
       command: 'claude'
     })
+
     await vi.waitFor(() => expect(prepareClaudeAuth).toHaveBeenCalledOnce())
 
     const runtimeSpawn = (controller as unknown as RuntimeSpawnController).spawn({
       ...paneArgs,
       command: 'printf runtime'
     })
+
     await vi.waitFor(() => expect(providerSpawn).toHaveBeenCalledOnce())
     releaseAuth({
       configDir: '/tmp/claude',
@@ -262,13 +293,16 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding?: boolean
       }): Promise<{ id: string }>
     }
+
     let resolveSpawn!: (result: { id: string }) => void
+
     const providerSpawn = vi.fn(
       () =>
         new Promise<{ id: string }>((resolve) => {
           resolveSpawn = resolve
         })
     )
+
     setLocalPtyProvider({
       spawn: providerSpawn,
       write: vi.fn(),
@@ -292,11 +326,14 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
+
     const store = {
       persistPtyBinding: vi.fn()
     }
+
     let registeredPane: { ptyId: string; tabId: string; leafId: string } | null = null
     let controller: RuntimeSpawnController | null = null
+
     const runtime = {
       setPtyController: vi.fn((value) => {
         controller = value
@@ -320,6 +357,7 @@ describe('registerPtyHandlers', () => {
         if (!registeredPane) {
           throw new Error('terminal_not_found')
         }
+
         return {
           handle: 'term_trusted',
           tabId: registeredPane.tabId,
@@ -343,6 +381,7 @@ describe('registerPtyHandlers', () => {
     )
     const leafId = '33333333-3333-4333-8333-333333333333'
     const paneKey = makePaneKey('tab-race', leafId)
+
     const rendererSpawn = handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24,
@@ -356,9 +395,11 @@ describe('registerPtyHandlers', () => {
         ORCA_WORKTREE_ID: 'repo-1::/tmp'
       }
     }) as Promise<{ id: string }>
+
     await Promise.resolve()
 
     const spawnController = controller as unknown as RuntimeSpawnController
+
     const runtimeSpawn = spawnController.spawn({
       cols: 80,
       rows: 24,
@@ -369,6 +410,7 @@ describe('registerPtyHandlers', () => {
       env: { ORCA_PANE_KEY: paneKey },
       persistHostSessionBinding: true
     })
+
     await vi.waitFor(() => expect(providerSpawn).toHaveBeenCalledTimes(1))
     resolveSpawn({ id: 'pty-renderer' })
     const [rendererResult, runtimeResult] = await Promise.all([rendererSpawn, runtimeSpawn])
@@ -414,6 +456,7 @@ describe('registerPtyHandlers', () => {
         owner: { handle?: string; tabId: string; leafId: string; ptyId: string }
         materialized?: true
       } | null
+
       type RuntimeSpawnController = {
         adoptStablePane(args: {
           cols: number
@@ -429,24 +472,29 @@ describe('registerPtyHandlers', () => {
           stablePaneOwner?: { handle: string; tabId: string; leafId: string }
         }>
       }
+
       const tabId = 'tab-live-owner'
       const leafId = '66666666-6666-4666-8666-666666666666'
       const paneKey = makePaneKey(tabId, leafId)
       let ownerPublished = false
       let releaseAttach!: () => void
       let attachBarrier: Promise<void>
+
       const resetAttachBarrier = (): void => {
         attachBarrier = new Promise<void>((resolve) => {
           releaseAttach = resolve
         })
       }
+
       resetAttachBarrier()
       const supportsAgentSessionClaims = vi.fn(async () => false)
       const supportsAgentSessionCreateOperations = vi.fn(async () => false)
+
       const providerSpawn = vi.fn(
         async (options: { attachOnly?: boolean; command?: string; sessionId?: string }) => {
           if (options.attachOnly) {
             await attachBarrier
+
             return {
               id: 'pty-live-owner',
               incarnationId: 'inc-live-owner',
@@ -455,9 +503,11 @@ describe('registerPtyHandlers', () => {
               providerSequence: { value: 20, generation: 'continued' as const }
             }
           }
+
           return { id: 'pty-live-owner', incarnationId: 'inc-live-owner' }
         }
       )
+
       setLocalPtyProvider({
         spawn: providerSpawn,
         write: vi.fn(),
@@ -483,11 +533,13 @@ describe('registerPtyHandlers', () => {
         getDefaultShell: vi.fn(),
         getProfiles: vi.fn()
       } as never)
+
       const folderWorkspace = {
         id: 'live-owner',
         folderPath: cwd,
         projectGroupId: 'folder-group'
       }
+
       const store = {
         persistPtyBinding: vi.fn(),
         getFolderWorkspace: vi.fn(() => folderWorkspace),
@@ -495,11 +547,14 @@ describe('registerPtyHandlers', () => {
         getProjectGroups: vi.fn(() => []),
         getRepos: vi.fn(() => [])
       }
+
       const prepareClaudeAuth = vi.fn(() => {
         throw new Error('replacement auth preflight must not run')
       })
+
       const onCodexHomePtySpawned = vi.fn()
       let controller: RuntimeSpawnController | null = null
+
       const runtime = {
         setPtyController: vi.fn((value) => {
           controller = value
@@ -508,6 +563,7 @@ describe('registerPtyHandlers', () => {
           if (!ownerPublished) {
             throw new Error('terminal_not_found')
           }
+
           return {
             handle: 'term-live-owner',
             tabId,
@@ -561,6 +617,7 @@ describe('registerPtyHandlers', () => {
       mainWindow.webContents.send.mockClear()
 
       wslUncDirectoryExistsAsyncMock.mockClear()
+
       const mountArgs = {
         cols: 120,
         rows: 40,
@@ -593,6 +650,7 @@ describe('registerPtyHandlers', () => {
           request_kind: 'new'
         }
       }
+
       const firstMount = handlers.get('pty:spawn')!(null, mountArgs)
       await vi.waitFor(() => expect(providerSpawn).toHaveBeenCalledTimes(2))
       const secondMount = handlers.get('pty:spawn')!(null, mountArgs)
@@ -636,9 +694,11 @@ describe('registerPtyHandlers', () => {
       releaseAttach()
       await vi.waitFor(() => expect(runtimeSecondAdoption).not.toBeNull())
       const pendingRuntimeAdoption = runtimeSecondAdoption
+
       if (!pendingRuntimeAdoption) {
         throw new Error('runtime adoption did not enter during renderer publication')
       }
+
       const adoptedOwner = await pendingRuntimeAdoption
       expect(adoptedOwner).toMatchObject({ materialized: true })
 
@@ -664,10 +724,12 @@ describe('registerPtyHandlers', () => {
         },
         agentSessionCreateOperationId: 'create-op-must-not-run'
       })
+
       const [rendererFirstResult, claimedResult] = await Promise.all([
         rendererFirstMount,
         claimedResultPromise
       ])
+
       expect(rendererFirstResult).toMatchObject({
         id: 'pty-live-owner',
         incarnationId: 'inc-live-owner',

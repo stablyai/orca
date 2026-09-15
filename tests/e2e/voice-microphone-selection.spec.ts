@@ -17,6 +17,7 @@ async function installFakeMicrophoneDevices(
 ): Promise<void> {
   await page.addInitScript((initialDevices) => {
     const listeners = new Set<EventListener>()
+
     const state: FakeMicrophoneState = {
       devices: initialDevices,
       dispatchDeviceChange: () => {
@@ -25,6 +26,7 @@ async function installFakeMicrophoneDevices(
         }
       }
     }
+
     const mediaDevices = {
       enumerateDevices: async () =>
         state.devices.map((device) => ({
@@ -66,9 +68,11 @@ async function prepareVoiceSettings(
     async ({ microphoneDeviceId, microphoneDeviceLabel }) => {
       const store = window.__store
       const settings = await window.api.settings.get()
+
       if (!store || !settings.voice) {
         throw new Error('Voice settings are not available')
       }
+
       await store.getState().updateSettings({
         uiLanguage: 'en',
         voice: {
@@ -85,9 +89,11 @@ async function prepareVoiceSettings(
   )
   await expect(page.getByPlaceholder('Search settings')).toBeVisible()
   const featureTipDialog = page.getByRole('dialog', { name: 'Voice Dictation is here' })
+
   if (await featureTipDialog.isVisible().catch(() => false)) {
     await page.getByRole('button', { name: 'Maybe Later' }).click()
   }
+
   await expect(page.getByRole('heading', { name: 'Voice', exact: true })).toBeVisible()
 }
 
@@ -96,6 +102,7 @@ async function readMicrophoneSettings(
 ): Promise<{ deviceId: string | null; label: string | null }> {
   return page.evaluate(async () => {
     const voice = (await window.api.settings.get()).voice
+
     return {
       deviceId: voice?.microphoneDeviceId ?? null,
       label: voice?.microphoneDeviceLabel ?? null
@@ -155,9 +162,11 @@ test.describe('Voice microphone selection', () => {
     await orcaPage.evaluate(() => {
       const state = (window as Window & { __orcaE2EFakeMicrophone?: FakeMicrophoneState })
         .__orcaE2EFakeMicrophone
+
       if (!state) {
         throw new Error('Fake microphone state is not available')
       }
+
       state.devices = [
         { deviceId: 'built-in', label: 'Built-in Microphone' },
         { deviceId: 'fresh-airpods-id', label: 'AirPods' }
@@ -175,6 +184,7 @@ test.describe('Voice microphone selection', () => {
         await expect(trigger).toHaveText('AirPods', { timeout: 1_000 })
         await trigger.press('Space')
       }
+
       await expect(airpodsOption).toBeVisible({ timeout: 1_000 })
     }).toPass({ timeout: 10_000 })
     await expect(orcaPage.getByRole('option', { name: 'AirPods (unavailable)' })).toHaveCount(0)

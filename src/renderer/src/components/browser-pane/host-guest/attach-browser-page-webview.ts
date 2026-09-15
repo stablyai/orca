@@ -89,6 +89,7 @@ export function attachBrowserPageWebview(
   const viewport = ensureBrowserPageViewport(browserTabId, workspaceId)
   let container = viewport?.container ?? null
   let webviewContainer = viewport?.content ?? null
+
   if (!container || !webviewContainer) {
     return
   }
@@ -100,14 +101,18 @@ export function attachBrowserPageWebview(
     webviewPartition,
     resolveContainer: () => ensureBrowserPageViewport(browserTabId, workspaceId)?.content ?? null
   })
+
   if (!ensuredWebview) {
     return
   }
+
   container = ensureBrowserPageViewport(browserTabId, workspaceId)?.container ?? null
   webviewContainer = ensuredWebview.container
+
   if (!container || !webviewContainer) {
     return
   }
+
   const webview = ensuredWebview.webview
   const needsInitialNavigation = ensuredWebview.created
   seedLiveBrowserUrl(browserTabId, redactKagiSessionToken(browserTabUrlRef.current))
@@ -127,9 +132,11 @@ export function attachBrowserPageWebview(
   const onContainerDragOver = (event: globalThis.DragEvent): void => {
     handleInternalFileDragOverRef.current(event as unknown as DragEvent<HTMLDivElement>)
   }
+
   const onContainerDrop = (event: globalThis.DragEvent): void => {
     handleInternalFileDropRef.current(event as unknown as DragEvent<HTMLDivElement>)
   }
+
   container.addEventListener('dragover', onContainerDragOver)
   container.addEventListener('drop', onContainerDrop)
 

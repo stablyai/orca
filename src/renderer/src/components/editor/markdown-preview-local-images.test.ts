@@ -110,6 +110,7 @@ describe('extractMarkdownPreviewLocalImageCandidates', () => {
         }
       }
     )
+
     const secondOwner = extractMarkdownPreviewLocalImageCandidates(
       '![Logo](./logo.png)',
       '/repo/docs/readme.md',
@@ -129,12 +130,14 @@ describe('extractMarkdownPreviewLocalImageCandidates', () => {
 describe('prewarmMarkdownPreviewLocalImages', () => {
   it('prewarms capped, deduped candidates through the shared loader boundary', async () => {
     const loaded: MarkdownPreviewLocalImageCandidate[] = []
+
     const prewarm = prewarmMarkdownPreviewLocalImages(
       ['![One](./one.png)', '![Duplicate](./one.png?v=1)', '![Two](./two.png)'].join('\n'),
       '/repo/docs/readme.md',
       {
         loadImage: (candidate) => {
           loaded.push(candidate)
+
           return Promise.resolve(null)
         }
       }
@@ -150,6 +153,7 @@ describe('prewarmMarkdownPreviewLocalImages', () => {
 
   it('does not enqueue more than the candidate cap', async () => {
     const loaded: MarkdownPreviewLocalImageCandidate[] = []
+
     const prewarm = prewarmMarkdownPreviewLocalImages(
       markdownImages(MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_LIMIT + 5),
       '/repo/docs/readme.md',
@@ -157,6 +161,7 @@ describe('prewarmMarkdownPreviewLocalImages', () => {
         concurrency: MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_LIMIT,
         loadImage: (candidate) => {
           loaded.push(candidate)
+
           return Promise.resolve(null)
         }
       }
@@ -179,6 +184,7 @@ describe('prewarmMarkdownPreviewLocalImages', () => {
         started.push(candidate.absolutePath)
         active += 1
         maxActive = Math.max(maxActive, active)
+
         return new Promise((resolve) => {
           releaseNext.push(() => {
             active -= 1
@@ -197,6 +203,7 @@ describe('prewarmMarkdownPreviewLocalImages', () => {
       releaseNext.shift()?.()
       await flushPromises()
     }
+
     await prewarm.done
 
     expect(maxActive).toBe(2)
@@ -210,6 +217,7 @@ describe('prewarmMarkdownPreviewLocalImages', () => {
     const prewarm = prewarmMarkdownPreviewLocalImages(markdownImages(10), '/repo/docs/readme.md', {
       loadImage: (candidate) => {
         started.push(candidate.absolutePath)
+
         return new Promise((resolve) => {
           pending.push(() => resolve(null))
         })
@@ -218,19 +226,23 @@ describe('prewarmMarkdownPreviewLocalImages', () => {
 
     expect(started).toHaveLength(MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_CONCURRENCY)
     prewarm.cancel()
+
     for (const release of pending) {
       release()
     }
+
     await prewarm.done
   })
 
   it('stops scheduling not-yet-started work after cancellation', async () => {
     const pending: (() => void)[] = []
     const started: string[] = []
+
     const prewarm = prewarmMarkdownPreviewLocalImages(markdownImages(5), '/repo/docs/readme.md', {
       concurrency: 2,
       loadImage: (candidate) => {
         started.push(candidate.absolutePath)
+
         return new Promise((resolve) => {
           pending.push(() => resolve(null))
         })
@@ -239,9 +251,11 @@ describe('prewarmMarkdownPreviewLocalImages', () => {
 
     expect(started).toHaveLength(2)
     prewarm.cancel()
+
     for (const release of pending) {
       release()
     }
+
     await prewarm.done
 
     expect(started).toHaveLength(2)

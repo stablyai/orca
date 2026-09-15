@@ -95,6 +95,7 @@ describe('getPRGroupKey', () => {
   it('uses SSH-scoped PR cache entries instead of local entries for SSH repos', () => {
     const sshRepo = { ...repo, connectionId: 'ssh-1' }
     const sshRepoMap = new Map([[sshRepo.id, sshRepo]])
+
     const prCache = {
       'repo-1::feature/super-critical': {
         data: { state: 'merged' }
@@ -154,6 +155,7 @@ describe('buildRows with pinned worktrees', () => {
         [unpinned1.id, unpinned1]
       ])
     )
+
     const pinnedHeader = rows[0]
 
     expect(pinnedHeader).toMatchObject({ type: 'header', key: 'pinned' })
@@ -228,6 +230,7 @@ describe('buildRows with pinned worktrees', () => {
       null,
       new Set()
     )
+
     expect(rows[2]).toMatchObject({
       type: 'header',
       key: 'workspace-status:in-progress',
@@ -268,6 +271,7 @@ describe('buildRows with pinned worktrees', () => {
     const pinnedHeader = rows.find((r) => r.type === 'header' && r.key === 'pinned')
     expect(pinnedHeader).toBeDefined()
     const prGroup = rows.filter((r) => r.type === 'header' && r.key.startsWith('pr:'))
+
     for (const header of prGroup) {
       if (header.type === 'header') {
         expect(header.count).toBe(1)
@@ -294,6 +298,7 @@ describe('buildRows with pinned worktrees', () => {
       null,
       new Set(['pinned'])
     )
+
     expect(rows[0]).toMatchObject({ type: 'header', key: 'pinned' })
     expect(rows[1]).toMatchObject({ type: 'header', key: 'workspace-status:in-progress' })
     expect(rows[2]).toMatchObject({ type: 'item', worktree: { id: 'wt-1' } })
@@ -321,6 +326,7 @@ describe('buildRows with pinned worktrees', () => {
       displayName: 'design-assets',
       kind: 'folder'
     }
+
     const folderWorktree: Worktree = {
       ...worktree,
       id: 'folder-1::/tmp/design-assets',
@@ -330,6 +336,7 @@ describe('buildRows with pinned worktrees', () => {
       displayName: folderRepo.displayName,
       isMainWorktree: true
     }
+
     const rows = buildRows(
       'repo',
       [folderWorktree],
@@ -362,8 +369,10 @@ describe('buildRows with pinned worktrees', () => {
       { id: 'todo', label: 'Ready' },
       { id: 'in-progress', label: 'Doing' }
     ]
+
     const blocked = { ...worktree, id: 'wt-blocked', workspaceStatus: 'blocked' }
     const doing = { ...worktree, id: 'wt-doing', workspaceStatus: 'in-progress' }
+
     const rows = buildRows(
       'workspace-status',
       [doing, blocked],

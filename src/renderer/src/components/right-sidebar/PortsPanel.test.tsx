@@ -66,9 +66,13 @@ const compatibleStatus = {
 }
 
 const localScan = vi.fn()
+
 const localKill = vi.fn()
+
 const runtimeCall = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const openUrl = vi.fn()
 
 function portOpenClick(
@@ -182,6 +186,7 @@ describe('PortsPanel runtime routing', () => {
 
   it('coalesces concurrent local scans for the same runtime target and repo', async () => {
     let resolveScan: (scan: WorkspacePortScanResult) => void = () => {}
+
     localScan.mockReturnValueOnce(
       new Promise<WorkspacePortScanResult>((resolve) => {
         resolveScan = resolve
@@ -222,6 +227,7 @@ describe('PortsPanel runtime routing', () => {
         worktreeId: 'repo::/workspace/other'
       }
     }
+
     const otherRepoWorkspace: WorkspacePort = {
       ...workspacePort,
       id: '127.0.0.1:5175:1236',
@@ -235,6 +241,7 @@ describe('PortsPanel runtime routing', () => {
         path: '/workspace/other-repo'
       }
     }
+
     const unassignedPort: WorkspacePort = {
       id: '127.0.0.1:5176:1237',
       bindHost: '127.0.0.1',
@@ -429,6 +436,7 @@ describe('PortsPanel runtime routing', () => {
     const createBrowserTab = vi.fn()
     const setRemoteBrowserPageHandle = vi.fn()
     openUrl.mockResolvedValueOnce(undefined)
+
     const openInOrcaBrowser = resolvePortOpenInOrcaBrowser({
       settings: { openLinksInApp: true },
       event: portOpenClick({ ctrlKey: true, shiftKey: true }),
@@ -483,8 +491,10 @@ describe('PortsPanel runtime routing', () => {
           _meta: { runtimeId: 'runtime-1' }
         })
       }
+
       if (method === 'workspacePorts.scan') {
         scanCalls += 1
+
         if (scanCalls === 1) {
           return Promise.resolve({
             id: method,
@@ -493,8 +503,10 @@ describe('PortsPanel runtime routing', () => {
             _meta: { runtimeId: 'runtime-1' }
           })
         }
+
         return Promise.reject(new Error('transient RPC timeout'))
       }
+
       return Promise.reject(new Error(`Unexpected method ${method}`))
     })
 
@@ -528,6 +540,7 @@ describe('PortsPanel runtime routing', () => {
     const replaceWorkspacePortScans = vi.fn()
     const setWorkspacePortScanRefreshing = vi.fn()
     const localPort: WorkspacePort = { ...workspacePort, id: 'local-port', port: 5173 }
+
     const refreshedRemotePort: WorkspacePort = {
       ...workspacePort,
       id: 'remote-port',
@@ -540,16 +553,19 @@ describe('PortsPanel runtime routing', () => {
         path: '/srv/app'
       }
     }
+
     const localHostScan: WorkspacePortScanResult = {
       ...emptyScan,
       scannedAt: 10,
       ports: [localPort]
     }
+
     const remoteHostScan: WorkspacePortScanResult = {
       ...emptyScan,
       scannedAt: 20,
       ports: [refreshedRemotePort]
     }
+
     let scanCalls = 0
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       if (method === 'status.get') {
@@ -560,8 +576,10 @@ describe('PortsPanel runtime routing', () => {
           _meta: { runtimeId: 'runtime-1' }
         })
       }
+
       if (method === 'workspacePorts.scan') {
         scanCalls += 1
+
         return Promise.resolve({
           id: method,
           ok: true,
@@ -569,6 +587,7 @@ describe('PortsPanel runtime routing', () => {
           _meta: { runtimeId: 'runtime-1' }
         })
       }
+
       return Promise.reject(new Error(`Unexpected method ${method}`))
     })
 
@@ -644,6 +663,7 @@ describe('PortsPanel runtime routing', () => {
       ...workspacePort,
       advertisedUrl: 'https://local.getmontecarlo.com:63468'
     }
+
     expect(browserUrlForPort(advertised)).toBe('https://local.getmontecarlo.com:63468')
     expect(addressForPort(advertised)).toBe('local.getmontecarlo.com:63468')
   })

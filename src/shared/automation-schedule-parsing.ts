@@ -10,6 +10,7 @@ import {
 } from './automation-cron-field-parsing'
 
 export const AUTOMATION_CRON_EXPRESSION_MAX_BYTES = 2 * 1024
+
 export type ParsedRrule = {
   kind: 'rrule'
   freq: 'HOURLY' | 'DAILY' | 'WEEKLY'
@@ -30,32 +31,43 @@ export type ParsedCron = {
 }
 
 export type ParsedSchedule = ParsedRrule | ParsedCron
+
 export type { CronParseOptions }
 
 const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const
+
 const WEEKDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR'] as const
 
 function parseRrule(rrule: string): ParsedRrule {
   const entries = new Map<string, string>()
+
   for (const part of rrule.split(';')) {
     const [key, value] = part.split('=')
+
     if (key && value) {
       entries.set(key.toUpperCase(), value)
     }
   }
+
   const freq = entries.get('FREQ')
+
   if (freq !== 'HOURLY' && freq !== 'DAILY' && freq !== 'WEEKLY') {
     throw new Error('Unsupported automation recurrence.')
   }
+
   const byHour = Number(entries.get('BYHOUR') ?? '9')
   const byMinute = Number(entries.get('BYMINUTE') ?? '0')
+
   if (!Number.isInteger(byHour) || byHour < 0 || byHour > 23) {
     throw new Error('Invalid recurrence hour.')
   }
+
   if (!Number.isInteger(byMinute) || byMinute < 0 || byMinute > 59) {
     throw new Error('Invalid recurrence minute.')
   }
+
   const byDay = (entries.get('BYDAY') ?? '').split(',').filter(Boolean)
+
   if (
     freq === 'WEEKLY' &&
     (byDay.length === 0 ||
@@ -63,6 +75,7 @@ function parseRrule(rrule: string): ParsedRrule {
   ) {
     throw new Error('Invalid recurrence day.')
   }
+
   return { kind: 'rrule', freq, byDay, byHour, byMinute }
 }
 
@@ -71,11 +84,14 @@ export function parseCronExpression(
   options: CronParseOptions = {}
 ): ParsedCron {
   const parts = getAutomationCronExpressionFields(expression, 6)
+
   if (parts.length !== 5) {
     throw new Error('Cron schedule must have five fields.')
   }
+
   const [minute, hour, dayOfMonth, month, dayOfWeek] = parts
   const rejectOversizedStep = options.rejectOversizedStep ?? false
+
   const daysOfMonth = parseCronField({
     value: dayOfMonth,
     min: 1,
@@ -83,6 +99,7 @@ export function parseCronExpression(
     field: 'day of month',
     rejectOversizedStep
   })
+
   const daysOfWeek = parseCronField({
     value: dayOfWeek,
     min: 0,
@@ -93,6 +110,7 @@ export function parseCronExpression(
     distinctValueCount: 7,
     rejectOversizedStep
   })
+
   return {
     kind: 'cron',
     minutes: parseCronField({
@@ -122,24 +140,31 @@ export function getAutomationCronExpressionFields(expression: string, maxFields 
   if (isClipboardTextByteLengthOverLimit(expression, AUTOMATION_CRON_EXPRESSION_MAX_BYTES)) {
     return []
   }
+
   const fields: string[] = []
   let tokenStart = -1
+
   for (let index = 0; index <= expression.length; index += 1) {
     const isEnd = index === expression.length
+
     if (!isEnd && !isAutomationCronFieldWhitespace(expression.charCodeAt(index))) {
       if (tokenStart === -1) {
         tokenStart = index
       }
+
       continue
     }
+
     if (tokenStart !== -1) {
       fields.push(expression.slice(tokenStart, index))
       tokenStart = -1
+
       if (fields.length >= maxFields) {
         break
       }
     }
   }
+
   return fields
 }
 
@@ -161,15 +186,18 @@ function isAutomationCronFieldWhitespace(code: number): boolean {
 
 export function parseSchedule(schedule: string, options: CronParseOptions = {}): ParsedSchedule {
   const trimmed = schedule.trim()
+
   if (trimmed.includes('=')) {
     return parseRrule(trimmed)
   }
+
   return parseCronExpression(trimmed, options)
 }
 
 function scheduleRuns(schedule: string, options: CronParseOptions): boolean {
   try {
     const parsed = parseSchedule(schedule, options)
+
     return parsed.kind !== 'cron' || cronHasPossibleOccurrence(parsed, Date.now())
   } catch {
     return false
@@ -212,23 +240,30 @@ export function parseAutomationRrule(rrule: string): {
   dayOfWeek: number
 } {
   const rule = parseRrule(rrule)
+
   if (rule.freq === 'HOURLY') {
     return { preset: 'hourly', hour: rule.byHour, minute: rule.byMinute, dayOfWeek: 1 }
   }
+
   if (rule.freq === 'DAILY') {
     return { preset: 'daily', hour: rule.byHour, minute: rule.byMinute, dayOfWeek: 1 }
   }
+
   if (rule.byDay.join(',') === WEEKDAY_CODES.join(',')) {
     return { preset: 'weekdays', hour: rule.byHour, minute: rule.byMinute, dayOfWeek: 1 }
   }
+
   if (rule.byDay.length !== 1) {
     throw new Error('Invalid recurrence day.')
   }
+
   const dayCode = rule.byDay[0]
   const dayOfWeek = DAY_CODES.indexOf(dayCode as (typeof DAY_CODES)[number])
+
   if (dayOfWeek === -1) {
     throw new Error('Invalid recurrence day.')
   }
+
   return {
     preset: 'weekly',
     hour: rule.byHour,

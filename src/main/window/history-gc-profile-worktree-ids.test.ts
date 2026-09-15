@@ -40,8 +40,10 @@ function userDataWithProfiles(
       }))
     })
   )
+
   for (const profile of profiles) {
     mkdirSync(join(root, 'profiles', profile.id), { recursive: true })
+
     if (profile.raw !== undefined) {
       writeFileSync(join(root, 'profiles', profile.id, 'orca-data.json'), profile.raw)
     } else if (profile.state !== undefined) {
@@ -51,6 +53,7 @@ function userDataWithProfiles(
       )
     }
   }
+
   return root
 }
 

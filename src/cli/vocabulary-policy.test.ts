@@ -39,6 +39,7 @@ describe('findVocabularyViolations (fixtures)', () => {
     const violations = findVocabularyViolations([
       spec(['gadget', 'delete'], [['gadget', 'nested', 'rm']])
     ])
+
     expect(violations).toHaveLength(1)
   })
 

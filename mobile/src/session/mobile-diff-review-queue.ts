@@ -110,6 +110,7 @@ function branchEntryIdentity(
 
 function isGeneratedOrLockFile(filePath: string): boolean {
   const normalized = filePath.toLowerCase()
+
   return (
     normalized.endsWith('package-lock.json') ||
     normalized.endsWith('pnpm-lock.yaml') ||
@@ -131,12 +132,15 @@ export function mobileDiffReviewCommentMatchesItem(
   if (comment.source === 'markdown' || comment.filePath !== item.filePath) {
     return false
   }
+
   if (comment.scope !== undefined && comment.scope !== item.scope) {
     return false
   }
+
   if (comment.oldPath !== undefined && comment.oldPath !== item.oldPath) {
     return false
   }
+
   return true
 }
 
@@ -147,18 +151,23 @@ function queueNoteCounts(
   let noteCount = 0
   let unsentNoteCount = 0
   let staleNoteCount = 0
+
   for (const comment of comments) {
     if (!mobileDiffReviewCommentMatchesItem(comment, item)) {
       continue
     }
+
     noteCount += 1
+
     if (comment.sentAt === undefined) {
       unsentNoteCount += 1
     }
+
     if (comment.diffIdentity !== undefined && comment.diffIdentity !== item.diffIdentity) {
       staleNoteCount += 1
     }
   }
+
   return { noteCount, unsentNoteCount, staleNoteCount }
 }
 
@@ -171,10 +180,12 @@ function statusEntryToQueueItem(
   const key = createMobileDiffReviewFileKey(scope, entry.area, entry.path, entry.oldPath)
   const diffIdentity = statusEntryIdentity(entry, scope)
   const reviewFileState = reviewState.files[key]
+
   const counts = queueNoteCounts(
     { filePath: entry.path, oldPath: entry.oldPath, scope, diffIdentity },
     comments
   )
+
   return {
     key,
     scope,
@@ -206,10 +217,12 @@ function branchEntryToQueueItem(
   const key = createMobileDiffReviewFileKey(scope, 'branch', entry.path, entry.oldPath)
   const diffIdentity = branchEntryIdentity(entry, input.branchHeadOid, input.branchMergeBase)
   const reviewFileState = input.reviewState.files[key]
+
   const counts = queueNoteCounts(
     { filePath: entry.path, oldPath: entry.oldPath, scope, diffIdentity },
     input.comments
   )
+
   return {
     key,
     scope,
@@ -242,6 +255,7 @@ export function buildMobileDiffReviewQueue(
     ),
     ...input.branchEntries.map((entry) => branchEntryToQueueItem(entry, input))
   ]
+
   if (queue.length > 1) {
     const collator = new Intl.Collator(undefined, { numeric: true })
     queue.sort(
@@ -251,6 +265,7 @@ export function buildMobileDiffReviewQueue(
         collator.compare(first.filePath, second.filePath)
     )
   }
+
   return queue
 }
 
@@ -282,14 +297,18 @@ export function summarizeMobileDiffReviewQueue(
 ): MobileDiffReviewQueueSummary {
   let reviewedCount = 0
   let reviewedUnstagedCount = 0
+
   for (const item of queue) {
     if (!item.isReviewed) {
       continue
     }
+
     reviewedCount += 1
+
     if (item.scope === 'unstaged' && item.canStage) {
       reviewedUnstagedCount += 1
     }
   }
+
   return { reviewedCount, reviewedUnstagedCount }
 }

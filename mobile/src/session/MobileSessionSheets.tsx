@@ -90,6 +90,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
     showAgentSessionHistoryAction,
     showChecksAction
   } = controller
+
   return (
     <>
       <MobileSessionHeaderMoreActionsSheet
@@ -138,8 +139,10 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
                   onPress: () => {
                     if (browserScreencastSupported !== true) {
                       showToast('Desktop update required for mobile browser streaming', 1600)
+
                       return
                     }
+
                     setShowCreateBrowserModal(true)
                   }
                 },
@@ -167,9 +170,11 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             onPress: () => {
               const delivery = pendingDiffNotesDelivery
               setPendingDiffNotesDelivery(null)
+
               if (!delivery) {
                 return
               }
+
               void Clipboard.setStringAsync(delivery.prompt)
                 .then(() => {
                   triggerSuccess()
@@ -216,6 +221,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             closeBeforePress: true,
             onPress: () => {
               const target = markdownActionTarget
+
               if (target) {
                 discardMarkdownLocalContent(target)
               }
@@ -227,6 +233,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             onPress: () => {
               const target = markdownActionTarget
               setMarkdownActionTarget(null)
+
               if (target) {
                 void Clipboard.setStringAsync(target.relativePath || target.filePath)
                 showToast('Path copied')
@@ -247,6 +254,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             onPress: () => {
               const target = fileActionTarget
               setFileActionTarget(null)
+
               if (target) {
                 void readFileTab(target)
               }
@@ -281,9 +289,11 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
             icon: FileText,
             onPress: () => {
               const drafts = leaveDrafts ?? []
+
               const combined = drafts
                 .map((draft) => `# ${draft.title}\n\n${draft.content}`)
                 .join('\n\n---\n\n')
+
               void Clipboard.setStringAsync(combined)
                 .then(() => {
                   setLeaveDrafts(null)
@@ -366,6 +376,7 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
               if (deleteKeyTarget) {
                 void handleDeleteCustomKey(deleteKeyTarget)
               }
+
               setDeleteKeyTarget(null)
             }
           }

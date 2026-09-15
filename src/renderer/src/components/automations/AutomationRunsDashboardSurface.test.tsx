@@ -14,6 +14,7 @@ vi.mock('./AutomationRunsDashboard', () => ({
     onOpenRun: (entry: AutomationRunsDashboardEntry) => void
   }) => {
     openRun = props.onOpenRun
+
     return null
   }
 }))
@@ -24,6 +25,7 @@ describe('AutomationRunsDashboardSurface', () => {
   it('opens a run as a top-level page', () => {
     const row = makeAutomationListRow()
     const run = makeRun()
+
     const entry: AutomationRunsDashboardEntry = {
       key: `${row.key}:${run.id}`,
       hostKey: 'desktop:self',
@@ -32,6 +34,7 @@ describe('AutomationRunsDashboardSurface', () => {
       run,
       scope: 'local'
     }
+
     const setPageView = vi.fn()
     const setRunPageOrigin = vi.fn()
     const selectAutomationRow = vi.fn()

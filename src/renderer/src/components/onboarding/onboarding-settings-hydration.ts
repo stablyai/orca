@@ -38,6 +38,7 @@ export function resolveOnboardingSettingsHydration({
     settings.defaultTuiAgent && settings.defaultTuiAgent !== 'blank'
       ? settings.defaultTuiAgent
       : null
+
   if (!agentInteracted && settingsAgent !== null && currentAgent !== settingsAgent) {
     update.selectedAgent = settingsAgent
   }

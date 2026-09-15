@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ webContents: { fromId: mocks.webContentsFromId } }))
+
 vi.mock('../browser/browser-manager', () => ({
   browserManager: {
     getWebContentsIdByTabId: mocks.getWebContentsIdByTabId,
@@ -38,6 +39,7 @@ function attachDocumentGuest(browserPageId: string): void {
     entryRelativePath: 'index.html',
     browserPageId
   })
+
   const guest = {
     isFocused: () => false,
     isDestroyed: () => false,
@@ -47,6 +49,7 @@ function attachDocumentGuest(browserPageId: string): void {
     setWindowOpenHandler: vi.fn(),
     setWebRTCIPHandlingPolicy: vi.fn()
   }
+
   installDocPreviewGuestPolicy(guest as never, { id: 91, send: vi.fn() })
 }
 
@@ -61,6 +64,7 @@ function track(pending: Promise<void>): () => 'pending' | 'resolved' | 'rejected
       state = 'rejected'
     }
   )
+
   return () => state
 }
 

@@ -150,7 +150,9 @@ export type TerminalState = {
   deferredSshReconnectTargets: string[]
   deferredSshSessionIdsByTabId: Record<string, string>
 }
+
 export type TerminalSlice = TerminalState & TerminalActions
 
 export type TerminalStoreSet = Parameters<StateCreator<AppState, [], [], AppState>>[0]
+
 export type TerminalStoreGet = Parameters<StateCreator<AppState, [], [], AppState>>[1]

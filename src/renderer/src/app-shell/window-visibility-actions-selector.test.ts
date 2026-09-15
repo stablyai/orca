@@ -42,15 +42,20 @@ describe('window visibility action selector', () => {
 
   it('does not rerender a subscriber for unrelated store writes', () => {
     resetWindowVisibilityActionsSelectorCacheForTest()
+
     const store = createStore<WindowVisibilityActions & { unrelated: number }>(() => ({
       ...makeActions(),
       unrelated: 0
     }))
+
     let renderCount = 0
+
     const view = renderHook(() => {
       renderCount += 1
+
       return useStore(store, selectWindowVisibilityActions)
     })
+
     const initialRenderCount = renderCount
 
     act(() => {

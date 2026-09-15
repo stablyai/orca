@@ -69,10 +69,12 @@ afterEach(() => resetTaskPageGitHubMutationRegistryForTests())
 describe('TaskPage GitHub mutation regressions', () => {
   it('invalidates quiet responses after a query changes away and back', () => {
     const initial = { queryKey: 'q1', generation: 0 }
+
     const returned = advanceTaskPageQuietRevalidateScope(
       advanceTaskPageQuietRevalidateScope(initial, 'q2'),
       'q1'
     )
+
     expect(isTaskPageQuietRevalidateScopeCurrent(returned, 'q1', initial.generation)).toBe(false)
     expect(isTaskPageQuietRevalidateScopeCurrent(returned, 'q1', returned.generation)).toBe(true)
   })
@@ -89,9 +91,11 @@ describe('TaskPage GitHub mutation regressions', () => {
     const newOwner = {}
     const oldRun = beginTaskPageQuietRevalidateRun(quiet, oldOwner)
     const newRun = beginTaskPageQuietRevalidateRun(quiet, newOwner)
+
     if (oldRun === null || newRun === null) {
       throw new Error('Expected both quiet owners to start a run.')
     }
+
     expect(finishTaskPageQuietRevalidateRun(quiet, oldOwner, oldRun)).toBe(false)
     expect(quiet.inFlight).toBe(true)
     expect(finishTaskPageQuietRevalidateRun(quiet, newOwner, newRun)).toBe(true)
@@ -104,6 +108,7 @@ describe('TaskPage GitHub mutation regressions', () => {
 
   it('resets exhausted family lag when a new confirmation arrives', () => {
     const base = item()
+
     const confirmState = (state: 'open' | 'closed'): void => {
       const began = beginTaskPageGitHubWorkItemMutation({
         item: base,
@@ -113,6 +118,7 @@ describe('TaskPage GitHub mutation regressions', () => {
         viewerLogin: 'me',
         patchWorkItem: () => {}
       })
+
       confirmTaskPageGitHubWorkItemMutation(began.key, began.generation, {
         query: query(),
         queryKey: 'q',
@@ -120,11 +126,14 @@ describe('TaskPage GitHub mutation regressions', () => {
         item: base
       })
     }
+
     confirmState('closed')
+
     const familyKey = taskPageGitHubFamilyDirtyKey(
       taskPageGitHubItemKey(base.repoId, base.id),
       'state'
     )
+
     getOrCreateQuietRevalidateState('q').lagSkipAttempts.set(familyKey, MAX_LAG_TRAILS)
     expect(getTaskPageGitHubRevalidatableAuthorityItemKeys('q')).not.toContain(
       taskPageGitHubItemKey(base.repoId, base.id)
@@ -184,6 +193,7 @@ describe('TaskPage GitHub mutation regressions', () => {
       viewerLogin: 'me',
       patchWorkItem: () => {}
     })
+
     expect(autoMerge.opKey).toBe('autoMerge')
     expect(canStartTaskPageGitHubWorkItemMutation({ item: base, intent: { type: 'merge' } })).toBe(
       false
@@ -201,9 +211,11 @@ describe('TaskPage GitHub mutation regressions', () => {
       patchWorkItem: () => {}
     })
     let notifications = 0
+
     const unsubscribe = subscribeTaskPageGitHubMutationRegistry(() => {
       notifications += 1
     })
+
     rebuildSoftHiddenFromItemsForTests({
       query: query(),
       queryKey: 'q',
@@ -216,6 +228,7 @@ describe('TaskPage GitHub mutation regressions', () => {
 
   it('preserves the visible page when an earlier authority page changes membership', () => {
     const pages = [[item({ id: 'issue:1' })], [item({ id: 'issue:2' })], [item({ id: 'issue:3' })]]
+
     const next = reconcileTaskPagePagesAfterQuietRefresh({
       pages,
       queryKey: 'q',
@@ -225,6 +238,7 @@ describe('TaskPage GitHub mutation regressions', () => {
       visiblePage: 2,
       visibleItems: [item({ id: 'issue:4' })]
     })
+
     expect(next).toHaveLength(3)
     expect(next[1]).toBeNull()
     expect(next[2]?.[0].id).toBe('issue:4')
@@ -232,7 +246,9 @@ describe('TaskPage GitHub mutation regressions', () => {
 
   it('does not apply an old query soft-hide after mutation completion', () => {
     const patchWorkItem = (): void => {}
+
     const base = item({ state: 'open' })
+
     const began = beginTaskPageGitHubWorkItemMutation({
       item: base,
       intent: { type: 'setState', state: 'closed' },
@@ -241,6 +257,7 @@ describe('TaskPage GitHub mutation regressions', () => {
       viewerLogin: 'me',
       patchWorkItem
     })
+
     setTaskPageGitHubMutationQueryKey('current-open-query')
     confirmTaskPageGitHubWorkItemMutation(began.key, began.generation, {
       query: query(),
@@ -266,7 +283,9 @@ describe('TaskPage GitHub mutation regressions', () => {
 
   it('hard refresh clears only authority that predates its request', () => {
     const patchWorkItem = (): void => {}
+
     const base = item({ state: 'open', autoMergeEnabled: false })
+
     const stateMutation = beginTaskPageGitHubWorkItemMutation({
       item: base,
       intent: { type: 'setState', state: 'closed' },
@@ -275,6 +294,7 @@ describe('TaskPage GitHub mutation regressions', () => {
       viewerLogin: 'me',
       patchWorkItem
     })
+
     confirmTaskPageGitHubWorkItemMutation(stateMutation.key, stateMutation.generation, {
       query: query(),
       queryKey: 'q',
@@ -283,6 +303,7 @@ describe('TaskPage GitHub mutation regressions', () => {
       patchWorkItem
     })
     const fetchGeneration = getOrCreateQuietRevalidateState('q').dirtyGeneration
+
     const autoMergeMutation = beginTaskPageGitHubWorkItemMutation({
       item: { ...base, state: 'closed' },
       intent: { type: 'setAutoMerge', enabled: true },
@@ -291,6 +312,7 @@ describe('TaskPage GitHub mutation regressions', () => {
       viewerLogin: 'me',
       patchWorkItem
     })
+
     confirmTaskPageGitHubWorkItemMutation(autoMergeMutation.key, autoMergeMutation.generation, {
       query: query(),
       queryKey: 'q',
@@ -310,6 +332,7 @@ describe('TaskPage GitHub mutation regressions', () => {
 
   it('releases confirmed authority for rows no longer present on loaded pages', () => {
     const base = item({ autoMergeEnabled: false })
+
     const began = beginTaskPageGitHubWorkItemMutation({
       item: base,
       intent: { type: 'setAutoMerge', enabled: true },
@@ -318,6 +341,7 @@ describe('TaskPage GitHub mutation regressions', () => {
       viewerLogin: 'me',
       patchWorkItem: () => {}
     })
+
     confirmTaskPageGitHubWorkItemMutation(began.key, began.generation, {
       query: query(),
       queryKey: 'q',
@@ -334,28 +358,34 @@ describe('TaskPage GitHub mutation regressions', () => {
     const [overlaid] = applyPendingTaskPageGitHubMutationsToItems([
       item({ assignees: undefined, reviewRequests: undefined })
     ])
+
     expect(overlaid.assignees).toBeUndefined()
     expect(overlaid.reviewRequests).toBeUndefined()
   })
 
   it('patches a later provider page without rebuilding untouched pages', () => {
     const firstPage = [item({ id: 'issue:1' })]
+
     const pages = patchTaskPageGitHubWorkItemPages(
       [firstPage, [item({ id: 'issue:2' })]],
       { id: 'issue:2', repoId: 'repo-1' },
       { state: 'closed' }
     )
+
     expect(pages[0]).toBe(firstPage)
     expect(pages[1]?.[0].state).toBe('closed')
   })
 
   it('does not claim authority over untouched search fields', () => {
     const patches: Partial<GitHubWorkItem>[] = []
+
     const patchWorkItem = (_id: string, patch: Partial<GitHubWorkItem>): void => {
       patches.push(patch)
     }
+
     const open = item({ state: 'open', assignees: undefined, reviewRequests: undefined })
     const closed = item({ state: 'closed', assignees: undefined, reviewRequests: undefined })
+
     for (const serverItem of [open, closed]) {
       adoptQuietSearchFieldsForItem({
         item: serverItem,
@@ -366,6 +396,7 @@ describe('TaskPage GitHub mutation regressions', () => {
         patchWorkItem
       })
     }
+
     expect(getLastConfirmedClientValue(null, open.repoId, open.id, 'state')).toBeUndefined()
     expect(patches.findLast((patch) => patch.state !== undefined)?.state).toBe('closed')
     expect(patches.at(-1)?.assignees).toBeUndefined()

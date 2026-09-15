@@ -30,5 +30,6 @@ export function resolveDirToggleTiming({
   if (!fromRenameHotspot) {
     return 'immediate'
   }
+
   return clickCount > 1 ? 'skip' : 'deferred'
 }

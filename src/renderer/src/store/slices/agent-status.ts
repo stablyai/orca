@@ -46,17 +46,23 @@ export type {
   SleepingAgentLaunchConfig,
   SleepingAgentSessionRecord
 } from './agent-status-contract'
+
 export type { AgentStatusSlice } from './agent-status-slice-contract'
+
 export {
   collectSleepingAgentSessionRecordsForWorktree,
   collectHibernatedCompletionEvidenceForWorktree
 } from './agent-status-recovery-collection'
+
 export { removeSleepingRecordsReplacedByManualWorktreeSleep } from './agent-status-sleeping-records'
+
 export {
   buildAgentStatusTabPrefixDropPatch,
   type AgentStatusTabPrefixDropState
 } from './agent-status-drop-reducer'
+
 export { MAX_LIVE_AGENT_STATUSES } from './agent-status-capacity-eviction'
+
 export {
   RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX,
   RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX
@@ -69,12 +75,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
   let composedActions:
     | Pick<AgentStatusSlice, 'setAgentStatus' | 'recordAgentProviderSession'>
     | undefined
+
   const runtime = createAgentStatusRuntime(storeSet, storeGet, () => {
     if (!composedActions) {
       throw new Error('agent-status actions are not initialized')
     }
+
     return composedActions
   })
+
   const actions = {
     ...createAgentStatusAuthorityActions(runtime),
     ...createAgentStatusCleanupActions(runtime),
@@ -87,10 +96,12 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     ...createAgentStatusRecoveryActions(runtime),
     ...createAgentStatusRetentionActions(runtime)
   } as AgentStatusSlice
+
   composedActions = {
     setAgentStatus: actions.setAgentStatus,
     recordAgentProviderSession: actions.recordAgentProviderSession
   }
+
   return {
     ...actions,
     agentStatusByPaneKey: {},

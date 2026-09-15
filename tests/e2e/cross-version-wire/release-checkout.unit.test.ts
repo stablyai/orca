@@ -24,6 +24,7 @@ import {
   type CheckoutStagingContext,
   type ReleaseCheckout
 } from './release-checkout'
+
 const temporaryRoots: string[] = []
 
 const COMPRESSED_LOCK_OPTIONS: CheckoutLockOptions = {
@@ -36,6 +37,7 @@ const COMPRESSED_LOCK_OPTIONS: CheckoutLockOptions = {
 function temporaryCacheRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'orca-cross-version-checkout-'))
   temporaryRoots.push(root)
+
   return root
 }
 
@@ -47,6 +49,7 @@ function syntheticCheckout(): ReleaseCheckout {
   // Why realpath: vite-node reports module urls through macOS's /var -> /private/var
   // symlink, so provenance assertions need the resolved form.
   const root = realpathSync(temporaryCacheRoot())
+
   return { ref: 'v0.0.0-synthetic', commit: 'f'.repeat(40), label: 'v0.0.0-synthetic', root }
 }
 
@@ -56,18 +59,24 @@ function waitForCondition(
   timeoutMs: number
 ): Promise<void> {
   const startedAt = Date.now()
+
   return new Promise((resolvePoll, rejectPoll) => {
     const poll = (): void => {
       if (condition()) {
         resolvePoll()
+
         return
       }
+
       if (Date.now() - startedAt > timeoutMs) {
         rejectPoll(new Error(`Timed out after ${timeoutMs}ms waiting for ${description}`))
+
         return
       }
+
       setTimeout(poll, 25)
     }
+
     poll()
   })
 }
@@ -159,6 +168,7 @@ function startMaterializerChild(
     env: { ...process.env, NODE_OPTIONS: '' },
     terminationBarrier: true
   })
+
   let childOutput = ''
   child.stdout.on('data', (chunk) => {
     childOutput += String(chunk)
@@ -166,10 +176,12 @@ function startMaterializerChild(
   child.stderr.on('data', (chunk) => {
     childOutput += String(chunk)
   })
+
   const exited = new Promise<number | null>((resolveExit, rejectExit) => {
     child.once('error', rejectExit)
     child.once('close', resolveExit)
   })
+
   return { child, exited, output: () => childOutput }
 }
 
@@ -177,6 +189,7 @@ async function stopMaterializerChild(observed: ObservedMaterializerChild): Promi
   if (observed.child.exitCode === null && observed.child.signalCode === null) {
     await forceTerminateProcessTree(observed.child)
   }
+
   await observed.exited.catch(() => null)
 }
 
@@ -198,6 +211,7 @@ async function runContentionPhase(
   const releaseLock = await lock(published.root, { realpath: false, stale: 60_000 })
   let released = false
   let rival: ObservedMaterializerChild | undefined
+
   const releaseOnce = async (): Promise<void> => {
     if (!released) {
       released = true
@@ -217,20 +231,24 @@ async function runContentionPhase(
     // onLockAttempt runs only after the rival's first stamp miss and invocation
     // of the actual lock function; no elapsed-time guess stands in for contention.
     await waitForFile(ablateLock ? stagingMarker : attemptMarker, 30_000)
+
     if (!ablateLock) {
       expect(existsSync(acquiredMarker), rival.output()).toBe(false)
     }
 
     renameSync(aside, published.root)
+
     const consuming = importReleaseCheckoutModule(published, `/in-use-sentinel-${phase}.mjs`).then(
       (value) => value,
       (error: unknown) => error
     )
+
     if (ablateLock) {
       // The staging marker is after the second stamp miss. Publishing before this
       // acknowledgement would let the ablation pass without exercising deletion.
       writeFileSync(proceedPath, '')
     }
+
     await releaseOnce()
 
     const exitCode = await rival.exited
@@ -239,17 +257,21 @@ async function runContentionPhase(
     expect(exitCode, rival.output()).toBe(0)
     expect(existsSync(acquiredMarker), rival.output()).toBe(true)
     const consumerResult = await consuming
+
     if (!ablateLock) {
       expect(consumerResult).toMatchObject({ sentinel: 'published-tree' })
     }
+
     return existsSync(sentinel)
   } finally {
     if (rival) {
       await stopMaterializerChild(rival)
     }
+
     if (existsSync(aside) && !existsSync(published.root)) {
       renameSync(aside, published.root)
     }
+
     await releaseOnce()
   }
 }
@@ -264,6 +286,7 @@ describe('release checkout materialization', () => {
   it('single-flights concurrent consumers of one release identity', async () => {
     const cacheRoot = temporaryCacheRoot()
     let publications = 0
+
     const options = {
       cacheRoot,
       testHooks: {
@@ -273,6 +296,7 @@ describe('release checkout materialization', () => {
         }
       }
     }
+
     const checkouts = await Promise.all([
       materializeReleaseCheckout('v1.4.190', options),
       materializeReleaseCheckout('v1.4.190', options),
@@ -320,6 +344,7 @@ describe('release checkout materialization', () => {
 
     const loading = importReleaseCheckoutModule(first, '/delayed-entry.mjs')
     let second: ReleaseCheckout
+
     try {
       await waitForFile(importStarted, 5_000)
       second = await materializeReleaseCheckout(secondRef, options)
@@ -334,6 +359,7 @@ describe('release checkout materialization', () => {
   it('causally single-flights a rival process before publishing an in-use checkout', async () => {
     const cacheRoot = temporaryCacheRoot()
     const scratch = temporaryCacheRoot()
+
     const published = await materializeReleaseCheckout('v1.4.190', {
       cacheRoot,
       testHooks: { populateStaging: populateMinimalStaging }
@@ -352,13 +378,17 @@ describe('release checkout materialization', () => {
     const acquiredMarker = join(scratch, 'heartbeat-rival-acquired')
     const resultPath = join(scratch, 'heartbeat-rival-result.json')
     let releaseWork!: () => void
+
     const workGate = new Promise<void>((resolveWork) => {
       releaseWork = resolveWork
     })
+
     let acknowledgeStaging!: (context: CheckoutStagingContext) => void
+
     const stagingReady = new Promise<CheckoutStagingContext>((resolveStaging) => {
       acknowledgeStaging = resolveStaging
     })
+
     const publisher = materializeReleaseCheckout('v1.4.190', {
       cacheRoot,
       testHooks: {
@@ -370,7 +400,9 @@ describe('release checkout materialization', () => {
         populateStaging: populateMinimalStaging
       }
     })
+
     const active = await stagingReady
+
     const rival = startMaterializerChild(scratch, 'heartbeat-rival', {
       cacheRoot,
       ref: 'v1.4.190',
@@ -390,6 +422,7 @@ describe('release checkout materialization', () => {
           if (existsSync(`${active.root}.lock`)) {
             mtimes.add(statSync(`${active.root}.lock`).mtimeMs)
           }
+
           return Date.now() - blockedAt > COMPRESSED_LOCK_OPTIONS.stale + 250 && mtimes.size >= 3
         },
         15_000
@@ -416,6 +449,7 @@ describe('release checkout materialization', () => {
     const cacheRoot = temporaryCacheRoot()
     const scratch = temporaryCacheRoot()
     const stagingMarker = join(scratch, 'crashed-staging')
+
     const crashed = startMaterializerChild(scratch, 'crashing-publisher', {
       cacheRoot,
       ref: 'v1.4.190',
@@ -426,10 +460,12 @@ describe('release checkout materialization', () => {
 
     try {
       await waitForFile(stagingMarker, 30_000)
+
       const crashedContext = JSON.parse(readFileSync(stagingMarker, 'utf8')) as {
         root: string
         staging: string
       }
+
       const lockPath = `${crashedContext.root}.lock`
       expect(existsSync(crashedContext.staging)).toBe(true)
       expect(existsSync(lockPath)).toBe(true)
@@ -440,6 +476,7 @@ describe('release checkout materialization', () => {
 
       const unrelated = join(crashedContext.staging, '..', '.staging-unrelated-live-owner')
       mkdirSync(unrelated)
+
       const recovered = await materializeReleaseCheckout('v1.4.190', {
         cacheRoot,
         testHooks: {
@@ -468,6 +505,7 @@ describe('release checkout materialization', () => {
     ).rejects.toThrow(/missing the terminal stream protocol/)
 
     let populated = 0
+
     const recovered = await materializeReleaseCheckout('v1.4.190', {
       cacheRoot,
       testHooks: {
@@ -477,6 +515,7 @@ describe('release checkout materialization', () => {
         }
       }
     })
+
     expect(populated).toBe(1)
     expect(existsSync(join(recovered.root, 'src', 'shared', 'terminal-stream-protocol.ts'))).toBe(
       true
@@ -488,8 +527,10 @@ describe('release checkout module importer', () => {
   it('hands the importer a raw absolute forward-slash specifier, never a file URL', async () => {
     const checkout = syntheticCheckout()
     const captured: string[] = []
+
     const capture = (specifier: string): Promise<Record<string, unknown>> => {
       captured.push(specifier)
+
       return Promise.resolve({})
     }
 
@@ -501,6 +542,7 @@ describe('release checkout module importer', () => {
       `${normalizedRoot}/src/main/runtime/rpc/dispatcher.ts`,
       `${normalizedRoot}/src/shared/protocol-version.ts`
     ])
+
     for (const specifier of captured) {
       expect(specifier).not.toMatch(/^file:/)
       expect(specifier).not.toContain('\\')

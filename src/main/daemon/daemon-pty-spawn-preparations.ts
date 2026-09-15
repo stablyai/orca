@@ -33,7 +33,9 @@ export class DaemonPtySpawnPreparations {
       clientId,
       requestId
     }
+
     this.cancellationByPreparation.set(preparation, Promise.withResolvers<void>())
+
     if (Number.isSafeInteger(cancelAfterMs) && Number(cancelAfterMs) > 0) {
       preparation.cancelTimer = setTimeout(
         () => this.cancelPreparation(preparation),
@@ -41,9 +43,11 @@ export class DaemonPtySpawnPreparations {
       )
       preparation.cancelTimer.unref()
     }
+
     const pendingForSession = this.pending.get(sessionId) ?? new Set()
     pendingForSession.add(preparation)
     this.pending.set(sessionId, pendingForSession)
+
     return preparation
   }
 
@@ -54,10 +58,13 @@ export class DaemonPtySpawnPreparations {
     // Race cancellation against preflight so shutdown/disconnect can return the
     // protocol cancellation error before tearing down the client transport.
     const cancellation = this.cancellationByPreparation.get(preparation)
+
     const preparationTask = cancellation
       ? Promise.race([this.preparePtySpawn(), cancellation.promise])
       : this.preparePtySpawn()
+
     await preparationTask
+
     if (preparation.canceled) {
       throw new TerminalAttachCanceledError(sessionId)
     }
@@ -67,9 +74,11 @@ export class DaemonPtySpawnPreparations {
     if (preparation.cancelTimer) {
       clearTimeout(preparation.cancelTimer)
     }
+
     this.cancellationByPreparation.delete(preparation)
     const pendingForSession = this.pending.get(sessionId)
     pendingForSession?.delete(preparation)
+
     if (pendingForSession?.size === 0) {
       this.pending.delete(sessionId)
     }
@@ -77,10 +86,13 @@ export class DaemonPtySpawnPreparations {
 
   cancel(sessionId: string, request?: { clientId: string; requestId?: string }): boolean {
     const pendingForSession = this.pending.get(sessionId)
+
     if (!pendingForSession) {
       return false
     }
+
     let canceled = false
+
     for (const preparation of pendingForSession) {
       if (
         request &&
@@ -89,9 +101,11 @@ export class DaemonPtySpawnPreparations {
       ) {
         continue
       }
+
       this.cancelPreparation(preparation)
       canceled = true
     }
+
     return canceled
   }
 

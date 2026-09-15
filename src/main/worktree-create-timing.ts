@@ -48,6 +48,7 @@ export function createWorktreeCreateTimingRecorder(
   return {
     async time<T>(phase: string, operation: () => Promise<T>): Promise<T> {
       const operationStartedAt = clock()
+
       try {
         return await operation()
       } finally {
@@ -56,6 +57,7 @@ export function createWorktreeCreateTimingRecorder(
     },
     timeSync<T>(phase: string, operation: () => T): T {
       const operationStartedAt = clock()
+
       try {
         return operation()
       } finally {

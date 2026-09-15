@@ -42,6 +42,7 @@ export async function prepareAndInvokeUpdaterInstall(
     awaitCheckpoint
   })
   relay.markPrepared()
+
   try {
     await invoke()
   } catch (error) {
@@ -60,6 +61,7 @@ export async function prepareAndInvokeAppRestart(
     abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
     awaitCheckpoint
   })
+
   try {
     await invoke()
   } catch (error) {

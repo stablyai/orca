@@ -18,11 +18,14 @@ import type { AppState } from '@/store/types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 
 const SOURCE = 'repo-a::/repo-a'
+
 const TARGET = 'repo-b::/repo-b'
+
 const FILE_PATH = '/repo-b/docs/readme.md'
 
 function WatchProbe(): null {
   useEditorExternalWatch()
+
   return null
 }
 
@@ -72,6 +75,7 @@ function openRestoredSource(): string {
 function reparent(fileId: string) {
   const state = useAppStore.getState()
   state.setRestoredEditorOwnerMigrationPending(fileId, true)
+
   return state.reparentRestoredEditorFileOwner({
     fileId,
     targetWorktreeId: TARGET,
@@ -131,9 +135,11 @@ describe('restored editor owner reparent', () => {
     const result = reparent(oldId)
 
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     const next = useAppStore.getState()
     const moved = next.openFiles.find((file) => file.id === result.fileId)!
     expect(moved).toMatchObject({
@@ -283,6 +289,7 @@ describe('restored editor owner reparent', () => {
       refreshGitHubForWorktreeIfStale
     } as unknown as Partial<AppState>)
     const targetSnapshots: AppState[] = []
+
     const unsubscribe = useAppStore.subscribe((state) => {
       if (state.activeWorktreeId === TARGET) {
         targetSnapshots.push(state)
@@ -318,6 +325,7 @@ describe('restored editor owner reparent', () => {
   it('repairs a duplicate migrated tab id held by a non-selected destination group', () => {
     const oldId = openRestoredSource()
     const movedTabId = useAppStore.getState().unifiedTabsByWorktree[SOURCE]![0]!.id
+
     const keptFileId = useAppStore.getState().openFile(
       {
         filePath: '/repo-b/docs/other.md',
@@ -329,9 +337,11 @@ describe('restored editor owner reparent', () => {
       },
       { suppressActiveRuntimeFallback: true }
     )
+
     const keptTab = useAppStore
       .getState()
       .unifiedTabsByWorktree[TARGET]!.find((tab) => tab.entityId === keptFileId)!
+
     useAppStore.setState((state) => ({
       unifiedTabsByWorktree: {
         ...state.unifiedTabsByWorktree,
@@ -397,6 +407,7 @@ describe('restored editor owner reparent', () => {
     expect(result.ok).toBe(true)
 
     const state = useAppStore.getState()
+
     const session = buildEditorSessionData(
       state.openFiles,
       state.editorDrafts,
@@ -404,6 +415,7 @@ describe('restored editor owner reparent', () => {
       state.activeFileIdByWorktree,
       state.activeTabTypeByWorktree
     )
+
     expect(session.openFilesByWorktree?.[SOURCE]).toBeUndefined()
     expect(session.openFilesByWorktree?.[TARGET]?.[0]).toMatchObject({
       relativePath: 'docs/readme.md',
@@ -423,6 +435,7 @@ describe('restored editor owner reparent', () => {
 
   it.each([false, true])('fails closed on a %s destination collision', (dirtyDestination) => {
     const sourceId = openRestoredSource()
+
     const destinationId = useAppStore.getState().openFile(
       {
         filePath: FILE_PATH,
@@ -434,10 +447,12 @@ describe('restored editor owner reparent', () => {
       },
       { suppressActiveRuntimeFallback: true }
     )
+
     if (dirtyDestination) {
       useAppStore.getState().setEditorDraft(destinationId, 'destination draft')
       useAppStore.getState().markFileDirty(destinationId, true)
     }
+
     const before = useAppStore.getState().openFiles
 
     expect(reparent(sourceId)).toEqual({ ok: false, reason: 'collision' })
@@ -451,6 +466,7 @@ describe('restored editor owner reparent', () => {
 
   it('leaves destination tabs and groups byte-identical when activation hits a collision', () => {
     const sourceId = openRestoredSource()
+
     const destinationId = useAppStore.getState().openFile(
       {
         filePath: FILE_PATH,
@@ -462,15 +478,19 @@ describe('restored editor owner reparent', () => {
       },
       { suppressActiveRuntimeFallback: true }
     )
+
     const destinationTab = useAppStore
       .getState()
       .unifiedTabsByWorktree[TARGET]?.find((tab) => tab.entityId === destinationId)
+
     expect(destinationTab).toBeDefined()
+
     const staleTab = {
       ...destinationTab!,
       id: 'stale-target-tab',
       entityId: 'stale-target-file'
     }
+
     useAppStore.setState((state) => ({
       activeWorktreeId: SOURCE,
       activeFileId: sourceId,
@@ -536,7 +556,9 @@ describe('restored editor owner reparent', () => {
   it('unsubscribes the source watch once and subscribes the destination once', async () => {
     const watchWorktree = vi.fn().mockResolvedValue(undefined)
     const unwatchWorktree = vi.fn().mockResolvedValue(undefined)
+
     const previousApi = (window as unknown as { api?: unknown }).api
+
     ;(window as unknown as { api: unknown }).api = {
       fs: {
         watchWorktree,
@@ -588,6 +610,7 @@ describe('restored editor owner reparent', () => {
       ],
       projectGroups: [{ id: 'group-notes', name: 'Notes', executionHostId: 'local' }]
     } as unknown as Partial<AppState>)
+
     const oldId = useAppStore.getState().openFile(
       {
         filePath: '/notes/todo.md',
@@ -599,7 +622,9 @@ describe('restored editor owner reparent', () => {
       },
       { suppressActiveRuntimeFallback: true }
     )
+
     useAppStore.getState().setRestoredEditorOwnerMigrationPending(oldId, true)
+
     const result = useAppStore.getState().reparentRestoredEditorFileOwner({
       fileId: oldId,
       targetWorktreeId: 'folder:notes',
@@ -615,9 +640,11 @@ describe('restored editor owner reparent', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     const state = useAppStore.getState()
     const moved = state.openFiles.find((file) => file.id === result.fileId)!
     expect(getEditorFileOperationContext(state, moved, null)).toMatchObject({
@@ -663,6 +690,7 @@ describe('restored editor owner reparent', () => {
     }))
     const oldId = openRestoredSource()
     useAppStore.getState().setRestoredEditorOwnerMigrationPending(oldId, true)
+
     const result = useAppStore.getState().reparentRestoredEditorFileOwner({
       fileId: oldId,
       targetWorktreeId: TARGET,
@@ -678,9 +706,11 @@ describe('restored editor owner reparent', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     expect(
       useAppStore.getState().openFiles.find((file) => file.id === result.fileId)
     ).toMatchObject({
@@ -699,20 +729,26 @@ describe('restored editor owner reparent', () => {
     const oldId = openRestoredSource()
     const result = reparent(oldId)
     expect(result.ok).toBe(true)
+
     if (!result.ok) {
       return
     }
+
     const target = {
       worktreeId: TARGET,
       worktreePath: '/repo-b',
       connectionId: undefined,
       runtimeEnvironmentId: null
     }
+
     const externalChanges: unknown[] = []
+
     const listener = (event: Event): void => {
       externalChanges.push((event as CustomEvent).detail)
     }
+
     window.addEventListener('orca:editor-external-file-change', listener)
+
     const watcher = createExternalWatchEventHandler((path, owner) =>
       path === target.worktreePath && owner === null ? target : undefined
     )

@@ -12,8 +12,11 @@ type ReactElementLike = {
 }
 
 const TAB_A = 'tab-a'
+
 const TAB_B = 'tab-b'
+
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
+
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
 
 const hookRuntime = vi.hoisted(() => ({
@@ -42,6 +45,7 @@ const harness = vi.hoisted(() => ({
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useCallback<T extends (...args: never[]) => unknown>(callback: T): T {
@@ -52,22 +56,26 @@ vi.mock('react', async () => {
     },
     useEffect(effect: () => void | (() => void)): void {
       const cleanup = effect()
+
       if (typeof cleanup === 'function') {
         hookRuntime.cleanups.push(cleanup)
       }
     },
     useState<T>(initial: T | (() => T)) {
       const stateIndex = hookRuntime.index++
+
       if (!(stateIndex in hookRuntime.states)) {
         hookRuntime.states[stateIndex] =
           typeof initial === 'function' ? (initial as () => T)() : initial
       }
+
       const setState = (next: T | ((previous: T) => T)): void => {
         hookRuntime.states[stateIndex] =
           typeof next === 'function'
             ? (next as (previous: T) => T)(hookRuntime.states[stateIndex] as T)
             : next
       }
+
       return [hookRuntime.states[stateIndex] as T, setState] as const
     }
   }
@@ -203,6 +211,7 @@ function agentRow({
   startedAt?: number
 }): DashboardAgentRowData {
   const entryState: AgentStatusState = state === 'idle' ? 'working' : state
+
   return {
     paneKey,
     entry: agentEntry(paneKey, agentType, entryState, startedAt),
@@ -253,21 +262,29 @@ function expand(node: unknown): unknown {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return node
   }
+
   if (Array.isArray(node)) {
     return node.map((entry) => expand(entry))
   }
+
   if (!React.isValidElement(node)) {
     if (typeof node === 'object' && 'props' in node) {
       const element = node as ReactElementLike
+
       return { ...element, props: { ...element.props, children: expand(element.props.children) } }
     }
+
     return node
   }
+
   const element = node as React.ReactElement<Record<string, unknown>>
+
   if (typeof element.type === 'function') {
     const Component = element.type as (props: Record<string, unknown>) => unknown
+
     return expand(Component(element.props))
   }
+
   return {
     type: element.type,
     props: { ...element.props, children: expand(element.props.children) }
@@ -278,12 +295,16 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return
   }
+
   if (Array.isArray(node)) {
     node.forEach((entry) => visit(entry, cb))
+
     return
   }
+
   const element = node as ReactElementLike
   cb(element)
+
   if (element.props?.children) {
     visit(element.props.children, cb)
   }
@@ -296,14 +317,17 @@ function findAllByType(node: unknown, type: unknown): ReactElementLike[] {
       found.push(entry)
     }
   })
+
   return found
 }
 
 function findByType(node: unknown, type: unknown): ReactElementLike {
   const found = findAllByType(node, type)[0]
+
   if (!found) {
     throw new Error(`element not found: ${String(type)}`)
   }
+
   return found
 }
 
@@ -311,21 +335,27 @@ function collectText(node: unknown): string {
   if (node == null || typeof node === 'boolean') {
     return ''
   }
+
   if (typeof node === 'string') {
     return node
   }
+
   if (typeof node === 'number') {
     return String(node)
   }
+
   if (Array.isArray(node)) {
     return node.map(collectText).join('')
   }
+
   const element = node as ReactElementLike
+
   return collectText(element.props?.children)
 }
 
 function render(props: Record<string, unknown> = {}): unknown {
   hookRuntime.index = 0
+
   return expand(
     <ReviewNotesSendMenuContent worktreeId="wt-1" groupId="group-1" prompt="my notes" {...props} />
   )
@@ -614,6 +644,7 @@ describe('ReviewNotesSendMenuContent', () => {
     ]
 
     const tree = render({ onPromptDelivered })
+
     ;(findByType(tree, 'DropdownMenuItem').props.onSelect as () => void)()
     await flushMicrotasks()
 
@@ -650,6 +681,7 @@ describe('ReviewNotesSendMenuContent', () => {
     ]
 
     const tree = render({ onPromptDelivered })
+
     ;(findByType(tree, 'DropdownMenuItem').props.onSelect as () => void)()
     await flushMicrotasks()
 
@@ -678,6 +710,7 @@ describe('ReviewNotesSendMenuContent', () => {
     ]
 
     const tree = render({ onPromptDelivered })
+
     ;(findByType(tree, 'DropdownMenuItem').props.onSelect as () => void)()
     await flushMicrotasks()
 

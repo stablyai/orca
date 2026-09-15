@@ -12,9 +12,11 @@ const store = {
 }
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
+
 vi.mock('@/lib/ephemeral-vm-workspace-target', () => ({
   prepareEphemeralVmWorkspaceTarget: prepareTargetMock
 }))
+
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 import { prepareRequestForCreate } from './ephemeral-vm-worktree-creation'

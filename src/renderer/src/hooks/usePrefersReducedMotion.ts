@@ -6,6 +6,7 @@ function readPrefersReducedMotion(): boolean {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
     return false
   }
+
   return window.matchMedia(REDUCED_MOTION_QUERY).matches
 }
 
@@ -16,11 +17,15 @@ export function usePrefersReducedMotion(): boolean {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
       return
     }
+
     const media = window.matchMedia(REDUCED_MOTION_QUERY)
+
     const onChange = (event: MediaQueryListEvent): void => {
       setPrefersReducedMotion(event.matches)
     }
+
     media.addEventListener('change', onChange)
+
     return () => media.removeEventListener('change', onChange)
   }, [])
 

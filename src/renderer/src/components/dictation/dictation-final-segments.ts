@@ -1,8 +1,12 @@
 const WORD_BOUNDARY_CHAR_RE = /^[\p{L}\p{N}]$/u
+
 const CJK_BOUNDARY_CHAR_RE =
   /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]$/u
+
 const NO_SPACE_BEFORE_CHAR_RE = /^[,.;:!?%。，、！？；：）)\]}]$/u
+
 const NO_SPACE_AFTER_CHAR_RE = /^[([{（《「『]$/u
+
 const SPACE_AFTER_CHAR_RE = /^[,.;:!?%]$/u
 
 function getFirstNonWhitespaceChar(text: string): string {
@@ -20,9 +24,11 @@ function shouldInsertSpaceBetweenFinalSegments(previousText: string, nextText: s
 
   const previousChar = getLastNonWhitespaceChar(previousText)
   const nextChar = getFirstNonWhitespaceChar(nextText)
+
   if (!previousChar || !nextChar) {
     return false
   }
+
   if (
     CJK_BOUNDARY_CHAR_RE.test(previousChar) ||
     CJK_BOUNDARY_CHAR_RE.test(nextChar) ||
@@ -42,5 +48,6 @@ export function formatFinalTranscriptSegment(text: string, previousInsertedText:
   if (shouldInsertSpaceBetweenFinalSegments(previousInsertedText, text)) {
     return ` ${text}`
   }
+
   return text
 }

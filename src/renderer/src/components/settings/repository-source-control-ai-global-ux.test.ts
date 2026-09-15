@@ -145,11 +145,13 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
 
   it('preserves keystrokes typed while an action save is in flight', async () => {
     let resolveUpdate: (ok: boolean) => void = () => {}
+
     const updateRepo = vi.fn().mockReturnValue(
       new Promise<boolean>((resolve) => {
         resolveUpdate = resolve
       })
     )
+
     const { result } = setup(withRecipe('orig'), updateRepo)
     act(() => {
       result.current.updateActionTemplate('fixCommitFailure', 'first')
@@ -178,11 +180,13 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
 
   it('resets drafts and saving state when the selected repo changes', async () => {
     let resolveUpdate: (ok: boolean) => void = () => {}
+
     const updateRepo = vi.fn().mockReturnValue(
       new Promise<boolean>((resolve) => {
         resolveUpdate = resolve
       })
     )
+
     const { result, rerender } = setup(withRecipe('orig'), updateRepo)
     act(() => {
       result.current.updateActionTemplate('fixCommitFailure', 'editing-a')
@@ -222,6 +226,7 @@ describe('useRepositorySourceControlAiGlobalUx', () => {
       .mockResolvedValueOnce(true) // action mode
       .mockResolvedValueOnce(true) // agent
       .mockResolvedValueOnce(false) // enablement
+
     const { result } = setup({}, updateRepo)
     await act(async () => {
       result.current.updateActionMode('fixCommitFailure', 'override')

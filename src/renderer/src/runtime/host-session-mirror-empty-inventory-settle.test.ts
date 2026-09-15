@@ -62,11 +62,14 @@ function stubPairedHost(
   omittedHostIds: readonly string[] = []
 ): HostCall[] {
   const calls: HostCall[] = []
+
   const call = vi.fn(async (args: { method: string; params: Record<string, unknown> }) => {
     calls.push({ method: args.method, params: args.params })
+
     if (liveTerminalHandles === null) {
       return { ok: false, error: { code: -32000, message: 'terminal_liveness_unavailable' } }
     }
+
     return {
       ok: true,
       result: {
@@ -81,7 +84,9 @@ function stubPairedHost(
       }
     }
   })
+
   vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
+
   return calls
 }
 
@@ -185,6 +190,7 @@ describe('empty host inventory settling the session mirror', () => {
     parkUntilHostSessionMirrorHydrates(environmentId, WORKTREE, () => {
       resumeSweeps += 1
     })
+
     const settle = createEmptyInventorySettle(environmentId, {
       authoritative: true,
       expectedEnvironmentPairingRevision: 11
@@ -204,6 +210,7 @@ describe('empty host inventory settling the session mirror', () => {
     parkUntilHostSessionMirrorHydrates(environmentId, WORKTREE, () => {
       resumeSweeps += 1
     })
+
     const settle = createEmptyInventorySettle(environmentId, {
       authoritative: true,
       expectedEnvironmentConnectionGeneration: 1
@@ -239,6 +246,7 @@ describe('empty host inventory settling the session mirror', () => {
     parkUntilHostSessionMirrorHydrates(environmentId, WORKTREE, () => {
       resumeSweeps += 1
     })
+
     const settle = createEmptyInventorySettle(environmentId, {
       authoritative: true,
       expectedTrackingGeneration: 0
@@ -318,10 +326,12 @@ describe('empty host inventory settling the session mirror', () => {
   // empty keeps settling as it did before authoritative inventories existed.
   it('settles a scope-less legacy empty inventory', async () => {
     const environmentId = 'env-legacy-scope-less'
+
     const call = vi.fn(async () => ({
       ok: true,
       result: { terminals: [], totalCount: 0, truncated: false }
     }))
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
     let resumeSweeps = 0
     parkUntilHostSessionMirrorHydrates(environmentId, WORKTREE, () => {
@@ -466,12 +476,14 @@ describe('empty host inventory settling the session mirror', () => {
 
   it('does not reuse an in-flight probe across connection generations', async () => {
     const responses: ((response: RuntimeRpcResponse<unknown>) => void)[] = []
+
     const call = vi.fn(
       (): Promise<RuntimeRpcResponse<unknown>> =>
         new Promise((resolve) => {
           responses.push(resolve)
         })
     )
+
     const firstProbe = probeHostLiveTerminals('env-generation', call, 1)
     const secondProbe = probeHostLiveTerminals('env-generation', call, 2)
 
@@ -506,12 +518,14 @@ describe('empty host inventory settling the session mirror', () => {
   it('does not let a probe response cross a same-id pairing revision', async () => {
     const environmentId = 'env-repaired'
     let resolveProbe!: (response: RuntimeRpcResponse<unknown>) => void
+
     const call = vi.fn(
       () =>
         new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
           resolveProbe = resolve
         })
     )
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
     replaceRuntimeEnvironmentRevisions([{ id: environmentId, createdAt: 1, pairingRevision: 11 }])
     let resumeSweeps = 0
@@ -545,12 +559,14 @@ describe('empty host inventory settling the session mirror', () => {
   it('does not reuse an in-flight probe across same-id pairing revisions', async () => {
     const environmentId = 'env-repaired-inflight'
     const responses: ((response: RuntimeRpcResponse<unknown>) => void)[] = []
+
     const call = vi.fn(
       () =>
         new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
           responses.push(resolve)
         })
     )
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
     replaceRuntimeEnvironmentRevisions([{ id: environmentId, createdAt: 1, pairingRevision: 11 }])
     let resumeSweeps = 0
@@ -594,12 +610,14 @@ describe('empty host inventory settling the session mirror', () => {
   it('invalidates a pending legacy probe when environment tracking is cleared', async () => {
     const environmentId = 'env-cleared'
     let resolveProbe!: (response: RuntimeRpcResponse<unknown>) => void
+
     const call = vi.fn(
       () =>
         new Promise<RuntimeRpcResponse<unknown>>((resolve) => {
           resolveProbe = resolve
         })
     )
+
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
     let resumeSweeps = 0
     parkUntilHostSessionMirrorHydrates(environmentId, WORKTREE, () => {

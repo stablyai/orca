@@ -49,11 +49,13 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
     setComments,
     setPRCommentReaction
   } = model
+
   const handleAddPRComment = useCallback(
     async (body: string) => {
       if (!repo || !prNumber || !pr?.prRepo) {
         return { ok: false as const, error: commentsDisabledReason ?? 'Commenting unavailable.' }
       }
+
       const requestKey = checksPanelAsyncResultKey(
         prCacheKey,
         branch,
@@ -61,18 +63,24 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         pr.prRepo,
         pr.headSha
       )
+
       const result = await addPRConversationComment(repo.path, prNumber, body, {
         repoId: repo.id,
         prRepo: pr.prRepo
       })
+
       if (!isCurrentAsyncResult(requestKey)) {
         return result.ok ? { ok: true as const } : result
       }
+
       if (!result.ok) {
         toast.error(result.error)
+
         return result
       }
+
       setComments((prev) => mergePRCommentIntoList(prev, result.comment))
+
       return { ok: true as const }
     },
     [
@@ -93,6 +101,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       if (!pr?.prRepo || !isMutablePRConversationComment(comment)) {
         return false
       }
+
       const result = await window.api.gh.updateIssueCommentBySlug({
         owner: pr.prRepo.owner,
         repo: pr.prRepo.repo,
@@ -100,13 +109,17 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         commentId: comment.id,
         body
       })
+
       if (!result.ok) {
         toast.error(result.error.message)
+
         return false
       }
+
       setComments((prev) =>
         prev.map((entry) => (entry.id === comment.id ? { ...entry, body } : entry))
       )
+
       return true
     },
     [pr?.prRepo, setComments]
@@ -117,6 +130,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       if (!pr?.prRepo || !isMutablePRConversationComment(comment)) {
         return
       }
+
       const confirmed = await confirm({
         title: translate('auto.components.right.sidebar.ChecksPanel.ea9b649ce3', 'Delete comment?'),
         description: translate(
@@ -126,19 +140,24 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         confirmLabel: translate('auto.components.right.sidebar.ChecksPanel.786e3c143f', 'Delete'),
         confirmVariant: 'destructive'
       })
+
       if (!confirmed) {
         return
       }
+
       const result = await window.api.gh.deleteIssueCommentBySlug({
         owner: pr.prRepo.owner,
         repo: pr.prRepo.repo,
         host: githubProjectHost(pr.prRepo.host),
         commentId: comment.id
       })
+
       if (!result.ok) {
         toast.error(result.error.message)
+
         return
       }
+
       setComments((prev) => prev.filter((entry) => entry.id !== comment.id))
     },
     [pr?.prRepo, confirm, setComments]
@@ -151,9 +170,11 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       reacted: boolean
     ): Promise<boolean> => {
       const reactionSubjectId = comment.reactionSubjectId
+
       if (!repo || !prNumber || !pr?.prRepo || !reactionSubjectId) {
         return false
       }
+
       const requestKey = checksPanelAsyncResultKey(
         prCacheKey,
         branch,
@@ -161,8 +182,10 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         pr.prRepo,
         pr.headSha
       )
+
       const previousReaction = comment.reactions?.find((reaction) => reaction.content === content)
       setComments((current) => setReactionOnSubject(current, reactionSubjectId, content, reacted))
+
       const ok = await setPRCommentReaction(
         repo.path,
         prNumber,
@@ -171,9 +194,11 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         reacted,
         { repoId: repo.id, prRepo: pr.prRepo }
       )
+
       if (!isCurrentAsyncResult(requestKey) || ok) {
         return ok
       }
+
       setComments((current) =>
         restoreReactionOnSubject(current, reactionSubjectId, content, previousReaction)
       )
@@ -183,6 +208,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
           'Failed to update reaction.'
         )
       )
+
       return false
     },
     [
@@ -200,9 +226,11 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
   const handleReplyToComment = useCallback(
     async (comment: PRComment, body: string, options: { notifyOnFailure?: boolean } = {}) => {
       const notifyOnFailure = options.notifyOnFailure !== false
+
       if (!repo || !prNumber || !pr?.prRepo) {
         return { ok: false as const, error: commentsDisabledReason ?? 'Commenting unavailable.' }
       }
+
       const requestKey = checksPanelAsyncResultKey(
         prCacheKey,
         branch,
@@ -210,6 +238,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
         pr.prRepo,
         pr.headSha
       )
+
       // Why: review-thread replies nest under the parent on GitHub; conversation
       // comments are top-level only. Prefer thread replies whenever path/threadId/url
       // indicate a review comment.
@@ -218,6 +247,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
           parent: comment,
           existingComments: commentsRef.current
         }) ?? comment.threadId
+
       const result = canPostPRReviewThreadReply(comment)
         ? await addPRReviewCommentReply(repo.path, prNumber, comment.id, body, {
             repoId: repo.id,
@@ -235,15 +265,19 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
               prRepo: pr.prRepo
             }
           )
+
       if (!isCurrentAsyncResult(requestKey)) {
         return result.ok ? { ok: true as const } : result
       }
+
       if (!result.ok) {
         if (notifyOnFailure) {
           toast.error(result.error)
         }
+
         return result
       }
+
       // Why: keep review replies under the parent thread in the sidebar even when the
       // host payload omits threadId/path (conversation posts stay standalone).
       const mergedComment = canPostPRReviewThreadReply(comment)
@@ -252,7 +286,9 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
             threadId: parentThreadId
           })
         : result.comment
+
       setComments((prev) => mergePRCommentIntoList(prev, mergedComment))
+
       return { ok: true as const }
     },
     [
@@ -269,6 +305,7 @@ export function useChecksPanelCommentMutations(model: ChecksPanelCommentMutation
       commentsRef
     ]
   )
+
   return {
     handleAddPRComment,
     handleEditComment,

@@ -23,6 +23,7 @@ describe('appendTerminalErrorMessage', () => {
       appendTerminalErrorMessage(null, 'Paste failed.'),
       'Remote terminal was closed.'
     )
+
     expect(accumulated).toBe('Paste failed.\nRemote terminal was closed.')
   })
 
@@ -43,12 +44,14 @@ describe('appendTerminalErrorMessage', () => {
       appendTerminalErrorMessage(null, MULTILINE_ERROR),
       'Paste failed.'
     )
+
     expect(appendTerminalErrorMessage(leading, MULTILINE_ERROR)).toBe(leading)
 
     const trailing = appendTerminalErrorMessage(
       appendTerminalErrorMessage(null, 'Paste failed.'),
       MULTILINE_ERROR
     )
+
     expect(appendTerminalErrorMessage(trailing, MULTILINE_ERROR)).toBe(trailing)
 
     const middle = appendTerminalErrorMessage(trailing, 'Remote terminal was closed.')
@@ -74,11 +77,13 @@ describe('appendTerminalErrorMessage', () => {
       appendTerminalErrorMessage(null, 'SSH connection failed: host unreachable'),
       MULTILINE_ERROR
     )
+
     expect(stripSshReconnectOwnedErrorLines(accumulated)).toBe(MULTILINE_ERROR)
   })
 
   it('caps a distinct error storm to the newest lines', () => {
     let accumulated: string | null = null
+
     for (let index = 0; index < MAX_TERMINAL_ERROR_LINES + 12; index += 1) {
       accumulated = appendTerminalErrorMessage(accumulated, `timeout #${index}`)
     }
@@ -131,6 +136,7 @@ describe('pane terminal errors', () => {
 
   it('bounds distinct errors retained for one pane', () => {
     let errors = {}
+
     for (let index = 0; index < 20; index += 1) {
       errors = appendPaneTerminalError(errors, 1, `Failure ${index}`)
     }
@@ -146,6 +152,7 @@ describe('pane terminal errors', () => {
       1,
       Array.from({ length: MAX_TERMINAL_ERROR_LINES + 4 }, (_, index) => `line ${index}`).join('\n')
     )
+
     errors = appendPaneTerminalError(errors, 1, 'y'.repeat(MAX_TERMINAL_ERROR_CHARS + 500))
 
     const visible = terminalErrorForPane(null, errors, 1)
@@ -158,6 +165,7 @@ describe('pane terminal errors', () => {
 
   it('releases closed pane entries across monotonically increasing pane ids', () => {
     let errors = appendPaneTerminalError({}, 1, 'Surviving pane failed.')
+
     for (let paneId = 2; paneId < 1_002; paneId += 1) {
       errors = appendPaneTerminalError(errors, paneId, `Closed pane ${paneId} failed.`)
       errors = clearPaneTerminalError(errors, paneId)

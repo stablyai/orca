@@ -20,6 +20,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -31,13 +32,17 @@ describe('CodexAccountService.addAccountFromHome', () => {
 
   it('imports and switches personal and enterprise accounts sharing an email independently', async () => {
     vi.doMock('../codex-cli/command', () => ({ resolveCodexCommand: () => 'codex' }))
+
     const sourceHomes = [
       mkdtempSync(join(tmpdir(), 'orca-codex-personal-')),
       mkdtempSync(join(tmpdir(), 'orca-codex-enterprise-'))
     ]
+
     const email = 'same@example.com'
+
     const credentials = ['plus', 'enterprise'].map((plan) => {
       const parsed = JSON.parse(createCodexAuthJson(email, `provider-${plan}`, `refresh-${plan}`))
+
       const payload = Buffer.from(
         JSON.stringify({
           email,
@@ -47,7 +52,9 @@ describe('CodexAccountService.addAccountFromHome', () => {
           }
         })
       ).toString('base64url')
+
       parsed.tokens.id_token = `header.${payload}.signature`
+
       return JSON.stringify(parsed)
     })
 
@@ -58,6 +65,7 @@ describe('CodexAccountService.addAccountFromHome', () => {
       const store = createStore(createSettings())
       const runtimeHome = createRuntimeHome()
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         createRateLimits() as never,
@@ -90,6 +98,7 @@ describe('CodexAccountService.addAccountFromHome', () => {
           )
         })
       }
+
       expect(runtimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(4)
     } finally {
       sourceHomes.forEach((home) => rmSync(home, { recursive: true, force: true }))
@@ -112,6 +121,7 @@ describe('CodexAccountService.addAccountFromHome', () => {
       const rateLimits = createRateLimits()
       const runtimeHome = createRuntimeHome()
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,
@@ -151,6 +161,7 @@ describe('CodexAccountService.addAccountFromHome', () => {
         throw new Error('activation failed')
       })
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,
@@ -180,6 +191,7 @@ describe('CodexAccountService.addAccountFromHome', () => {
       const rateLimits = createRateLimits()
       const runtimeHome = createRuntimeHome()
       const { CodexAccountService } = await import('./service')
+
       const service = new CodexAccountService(
         store as never,
         rateLimits as never,

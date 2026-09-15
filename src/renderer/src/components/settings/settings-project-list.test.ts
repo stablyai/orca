@@ -87,6 +87,7 @@ describe('buildSettingsProjectList', () => {
         executionHostId: 'runtime:home-mac'
       })
     ]
+
     const localOnly: Repo[] = [makeRepo({ id: 'local-1', gitRemoteIdentity: gitRemote })]
 
     expect(buildSettingsProjectList(withRuntime)[0].representativeRepoId).toBe(
@@ -101,6 +102,7 @@ describe('getSettingsProjectRepresentativeRepoId', () => {
       makeSetup({ hostId: 'runtime:home-mac', repoId: 'aaa' }),
       makeSetup({ hostId: 'local', repoId: 'zzz' })
     ]
+
     expect(getSettingsProjectRepresentativeRepoId(setups)).toBe('zzz')
   })
 
@@ -109,6 +111,7 @@ describe('getSettingsProjectRepresentativeRepoId', () => {
       makeSetup({ hostId: 'runtime:home-mac', repoId: 'zzz' }),
       makeSetup({ hostId: 'ssh:box', repoId: 'aaa' })
     ]
+
     expect(getSettingsProjectRepresentativeRepoId(setups)).toBe('aaa')
   })
 })
@@ -132,6 +135,7 @@ describe('resolveEffectiveProjectHost', () => {
       makeSetup({ hostId: 'ssh:box', repoId: 'a', setupState: 'not-set-up' }),
       makeSetup({ hostId: 'runtime:home-mac', repoId: 'b', setupState: 'ready' })
     ]
+
     expect(resolveEffectiveProjectHost(remoteSetups, 'runtime:gone')).toBe('runtime:home-mac')
   })
 
@@ -145,6 +149,7 @@ describe('deep-link resolution', () => {
     makeRepo({ id: 'local-1', gitRemoteIdentity: gitRemote }),
     makeRepo({ id: 'remote-9', gitRemoteIdentity: gitRemote, executionHostId: 'runtime:home-mac' })
   ]
+
   const projects = buildSettingsProjectList(repos)
 
   it('maps every host repoId to the representative section (getSettingsSectionId resolver)', () => {
@@ -227,6 +232,7 @@ describe('deep-link resolution', () => {
         path: '/remote/repo'
       })
     ]
+
     const sameIdProjects = buildSettingsProjectList(sameIdRepos)
 
     expect(
@@ -241,12 +247,14 @@ describe('deep-link resolution', () => {
       executionHostId: 'runtime:home-mac',
       path: '/direct/repo'
     })
+
     const jumpRepo = makeRepo({
       id: 'jump-repo',
       gitRemoteIdentity: gitRemote,
       executionHostId: 'runtime:home-mac',
       path: '/jump/repo'
     })
+
     const sameHubProjects = buildSettingsProjectList([directRepo, jumpRepo])
     const jumpSetup = sameHubProjects[0].setups.find((setup) => setup.repoId === 'jump-repo')
 
@@ -264,6 +272,7 @@ describe('deep-link resolution', () => {
 describe('removeSettingsProjectFromAllHosts', () => {
   it('removes every host setup with its own hostId and skips setups without a repo row', async () => {
     const removeProject = vi.fn().mockResolvedValue(undefined)
+
     const setups = [
       makeSetup({ hostId: 'local', repoId: 'local-1' }),
       makeSetup({ hostId: 'ssh:box', repoId: '  ' }),
@@ -281,6 +290,7 @@ describe('removeSettingsProjectFromAllHosts', () => {
 
   it('awaits each host removal before starting the next', async () => {
     let resolveFirst: (() => void) | undefined
+
     const removeProject = vi
       .fn()
       .mockImplementationOnce(
@@ -290,6 +300,7 @@ describe('removeSettingsProjectFromAllHosts', () => {
           })
       )
       .mockResolvedValue(undefined)
+
     const setups = [
       makeSetup({ hostId: 'local', repoId: 'local-1' }),
       makeSetup({ hostId: 'runtime:home-mac', repoId: 'remote-9' })

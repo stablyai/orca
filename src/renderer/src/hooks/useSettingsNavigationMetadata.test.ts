@@ -54,6 +54,7 @@ describe('settings navigation metadata', () => {
       isWebClient: false,
       repos: [repo]
     })
+
     const agents = sections.find((section) => section.id === 'agents')
     const orchestration = sections.find((section) => section.id === 'orchestration')
 
@@ -77,6 +78,7 @@ describe('settings navigation metadata', () => {
       isLinearConnected: true,
       repos: [repo]
     }).find((section) => section.id === 'linear')
+
     expect(linearSection?.group).toBe('capabilities')
   })
 
@@ -102,9 +104,11 @@ describe('settings navigation metadata', () => {
       isWebClient: false,
       repos: [repo]
     })
+
     const automations = sections.find((section) => section.id === 'automations')
     const artifacts = sections.find((section) => section.id === 'artifacts')
     const shareSkills = sections.find((section) => section.id === 'share-skills')
+
     const workflowIds = sections
       .filter((section) => section.group === 'workflows')
       .map((section) => section.id)
@@ -128,6 +132,7 @@ describe('settings navigation metadata', () => {
       isWebClient: false,
       repos: [repo]
     })
+
     const account = desktopSections.find((section) => section.id === 'orca-account')
 
     expect(account?.group).toBe('setup')
@@ -153,6 +158,7 @@ describe('settings navigation metadata', () => {
       isWebClient: true,
       repos: [repo]
     })
+
     const webIds = webSections.map((section) => section.id)
 
     expect(webIds).not.toContain('browser')
@@ -190,6 +196,7 @@ describe('settings navigation metadata', () => {
       mobileEmulatorCreationEnabled: false,
       repos: [repo]
     })
+
     const shortcutTitles = sections
       .find((section) => section.id === 'shortcuts')
       ?.searchEntries.map((entry) => entry.title)
@@ -217,7 +224,9 @@ describe('settings navigation metadata', () => {
       isWebClient: false,
       repos: [repo]
     })
+
     const experimental = sections.find((section) => section.id === 'experimental')
+
     const entry = experimental?.searchEntries.find(
       (searchEntry) => searchEntry.title === 'Cloud VM'
     )
@@ -234,6 +243,7 @@ describe('settings navigation metadata', () => {
       isWebClient: false,
       repos: [repo]
     })
+
     const desktopIds = desktopSections.map((section) => section.id)
 
     expect(desktopSections.find((section) => section.id === 'plugins')?.group).toBe('experimental')
@@ -371,6 +381,7 @@ describe('settings navigation metadata', () => {
       remoteName: 'origin',
       remoteUrl: 'git@gitlab.com:acme/app.git'
     }
+
     const sections = buildSettingsNavigationMetadata({
       isMac: false,
       isWindows: false,
@@ -408,6 +419,7 @@ describe('settings navigation metadata', () => {
 
   it('does not import Settings page or pane UI modules from the metadata hook', () => {
     const testDir = import.meta.dirname
+
     // Why: the section tables live in sibling settings-navigation-* modules, so reading only the
     // hook would scan a file that no longer holds the imports this guard exists to police.
     // Walk recursively so a later split that nests the modules cannot shrink this guard.
@@ -417,7 +429,9 @@ describe('settings navigation metadata', () => {
         (name) => basename(name).startsWith('settings-navigation-') && name.endsWith('.ts')
       )
     ]
+
     expect(sourceFiles.length).toBeGreaterThan(1)
+
     const importLines = sourceFiles
       .flatMap((name) => readFileSync(resolve(testDir, name), 'utf8').split('\n'))
       .filter((line) => line.trim().startsWith('import '))
@@ -430,10 +444,12 @@ describe('settings navigation metadata', () => {
 
   it('does not import Settings page or pane UI modules from the quick action registry', () => {
     const testDir = import.meta.dirname
+
     const registrySource = readFileSync(
       resolve(testDir, '../components/cmd-j/quick-actions.ts'),
       'utf8'
     )
+
     const importLines = registrySource
       .split('\n')
       .filter((line) => line.trim().startsWith('import '))

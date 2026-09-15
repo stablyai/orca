@@ -32,6 +32,7 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
+
       return listWorkItems(
         repo.path,
         normalizeGitLabMRListState(args.state),
@@ -51,6 +52,7 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
     'gitlab:workItemDetails',
     async (_event, args: GitLabRepoSelectorArgs & { iid: number; type: 'issue' | 'mr' }) => {
       const repo = assertRegisteredRepo(args, store)
+
       return getWorkItemDetails(
         repo.path,
         args.iid,
@@ -80,6 +82,7 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
     ) => {
       const repo = assertRegisteredRepo(args, store)
       const projectRef: ProjectRef = { host: args.host, path: args.path }
+
       const result = await getWorkItemByProjectRef(
         repo.path,
         projectRef,
@@ -88,12 +91,14 @@ export function registerGitLabWorkItemHandlers(store: Store): void {
         repoConnectionId(repo),
         ...localGitOptionArgs(store, repo)
       )
+
       // Why: only persist a recent entry when the lookup actually
       // produced an item. A 404 / auth failure shouldn't pollute the
       // user's recents list with project paths they can't read.
       if (result) {
         recordGitLabProjectRecent(store, args.host, args.path)
       }
+
       return result
     }
   )

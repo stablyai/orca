@@ -15,6 +15,7 @@ import { deriveMobileE2EEV2KeySchedule } from './mobile-e2ee-v2-key-schedule'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../../shared/remote-runtime-memory-limits'
 
 const MOBILE_E2EE_V2_FRAME_OVERHEAD_BYTES = 82
+
 export const MAX_MOBILE_E2EE_V2_TEXT_FRAME_BASE64_CHARACTERS =
   Math.ceil((REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES + MOBILE_E2EE_V2_FRAME_OVERHEAD_BYTES) / 3) * 4
 
@@ -44,9 +45,11 @@ export class DesktopMobileE2EEV2Session {
     if (!hasExpectedContext(args.hello, args.expectedContext)) {
       return null
     }
+
     const hello = args.hello as MobileE2EEV2Hello
     const serverKeys = nacl.box.keyPair.fromSecretKey(args.serverSecretKey)
     const randomBytes = args.randomBytes ?? ((length: number) => nacl.randomBytes(length))
+
     const ready: MobileE2EEV2Ready = {
       type: 'e2ee_ready',
       v: 2,
@@ -56,17 +59,22 @@ export class DesktopMobileE2EEV2Session {
       selection: { framing: 2, payloadKinds: ['text', 'binary'] },
       context: hello.context
     }
+
     const handshake = validateMobileE2EEV2Handshake(hello, ready)
+
     if (!handshake) {
       return null
     }
+
     const sharedSecret = deriveSharedKey(args.serverSecretKey, handshake.clientPublicKey)
+
     const schedule = deriveMobileE2EEV2KeySchedule({
       sharedSecret,
       transcript: encodeMobileE2EEV2Transcript(handshake),
       clientNonce: handshake.clientNonce,
       desktopNonce: handshake.desktopNonce
     })
+
     return new DesktopMobileE2EEV2Session(
       ready,
       Buffer.from(schedule.transcriptHash).toString('base64'),
@@ -78,10 +86,13 @@ export class DesktopMobileE2EEV2Session {
 
   openText(frameB64: string): string | null {
     const frame = decodeCanonicalBase64(frameB64, MAX_MOBILE_E2EE_V2_TEXT_FRAME_BASE64_CHARACTERS)
+
     if (!frame) {
       return null
     }
+
     const plaintext = this.open(frame, 'text')
+
     return plaintext ? new TextDecoder().decode(plaintext) : null
   }
 
@@ -106,9 +117,11 @@ export class DesktopMobileE2EEV2Session {
       payloadKind,
       expectedCounter: this.inboundCounter
     })
+
     if (plaintext) {
       this.inboundCounter++
     }
+
     return plaintext
   }
 
@@ -121,7 +134,9 @@ export class DesktopMobileE2EEV2Session {
       payloadKind,
       counter: this.outboundCounter
     })
+
     this.outboundCounter++
+
     return frame
   }
 }
@@ -133,11 +148,15 @@ function hasExpectedContext(
   if (typeof hello !== 'object' || hello === null || !('context' in hello)) {
     return false
   }
+
   const context = (hello as { context?: unknown }).context
+
   if (typeof context !== 'object' || context === null) {
     return false
   }
+
   const candidate = context as { transport?: unknown; relayHostId?: unknown }
+
   return (
     candidate.transport === expected.transport && candidate.relayHostId === expected.relayHostId
   )
@@ -150,6 +169,8 @@ function decodeCanonicalBase64(value: string, maxEncodedCharacters: number): Uin
   ) {
     return null
   }
+
   const bytes = Buffer.from(value, 'base64')
+
   return bytes.toString('base64') === value ? bytes : null
 }

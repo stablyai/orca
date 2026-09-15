@@ -17,6 +17,7 @@ describe('pickResumeWorktree', () => {
       wt('b', { isActive: true, lastOutputAt: 1 }),
       wt('c', { lastOutputAt: 500 })
     ]
+
     expect(pickResumeWorktree(list)?.id).toBe('b')
   })
 

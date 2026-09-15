@@ -10,7 +10,9 @@ const readIdentities = async (
   (await readGitCommonHeadIdentities(...args)).identities
 
 const OID_A = 'a'.repeat(40)
+
 const OID_B = 'b'.repeat(40)
+
 const OID_C = 'c'.repeat(40)
 
 describe('readGitCommonHeadIdentities', () => {
@@ -25,6 +27,7 @@ describe('readGitCommonHeadIdentities', () => {
     roots.push(root)
     const commonDir = join(root, 'checkout', '.git')
     await mkdir(commonDir, { recursive: true })
+
     return commonDir
   }
 
@@ -123,6 +126,7 @@ describe('readGitCommonHeadIdentities', () => {
     // A crafted repo can put arbitrary content in HEAD; backslash segments
     // would traverse on Windows where join treats them as separators too.
     await writeFile(join(dirname(commonDir), '..', 'outside.txt'), 'secret\n')
+
     for (const ref of [
       'refs/heads/../../../outside.txt',
       'refs\\..\\..\\..\\outside.txt',

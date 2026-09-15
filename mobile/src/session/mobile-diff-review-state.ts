@@ -24,11 +24,14 @@ function normalizeFileState(key: string, value: unknown): MobileDiffReviewFileSt
   if (!isRecord(value)) {
     return null
   }
+
   const filePath = typeof value.filePath === 'string' ? value.filePath : ''
   const scope = normalizeScope(value.scope)
+
   if (!filePath || !scope) {
     return null
   }
+
   return {
     key: typeof value.key === 'string' && value.key ? value.key : key,
     filePath,
@@ -47,13 +50,17 @@ export function normalizeMobileDiffReviewState(value: unknown): MobileDiffReview
   if (!isRecord(value) || !isRecord(value.files)) {
     return { version: 1, files: {} }
   }
+
   const files: Record<string, MobileDiffReviewFileState> = {}
+
   for (const [key, candidate] of Object.entries(value.files)) {
     const state = normalizeFileState(key, candidate)
+
     if (state) {
       files[state.key] = state
     }
   }
+
   return {
     version: 1,
     updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : undefined,
@@ -73,15 +80,19 @@ export function mergeMobileDiffReviewState(
 ): MobileDiffReviewState {
   const files: Record<string, MobileDiffReviewFileState> = { ...state.files }
   let invalidatedReview = false
+
   for (const descriptor of descriptors) {
     const previous = files[descriptor.key]
+
     const changedSinceReview =
       previous?.reviewedAt !== undefined &&
       previous.reviewDiffIdentity !== undefined &&
       previous.reviewDiffIdentity !== descriptor.diffIdentity
+
     if (changedSinceReview) {
       invalidatedReview = true
     }
+
     files[descriptor.key] = {
       key: descriptor.key,
       filePath: descriptor.filePath,
@@ -93,6 +104,7 @@ export function mergeMobileDiffReviewState(
       reviewDiffIdentity: changedSinceReview ? undefined : previous?.reviewDiffIdentity
     }
   }
+
   // Why: a file whose diff changed is no longer reviewed, so a prior "review
   // complete" marker is stale — match markUnreviewed and drop completedAt.
   return {
@@ -134,9 +146,11 @@ export function clearMobileDiffReviewFileReviewed(
   now: number
 ): MobileDiffReviewState {
   const previous = state.files[key]
+
   if (!previous) {
     return state
   }
+
   return {
     ...state,
     updatedAt: now,
@@ -178,11 +192,14 @@ export function didMobileDiffReviewFileChangeSinceReview(
 
 export function buildMobileDiffIdentity(parts: readonly string[]): string {
   let hash = 2166136261
+
   for (const part of parts) {
     hash = Math.imul(hash ^ part.length, 16777619)
+
     for (let index = 0; index < part.length; index += 1) {
       hash = Math.imul(hash ^ part.charCodeAt(index), 16777619)
     }
   }
+
   return `d${(hash >>> 0).toString(36)}`
 }

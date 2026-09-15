@@ -1,4 +1,5 @@
 import { isAgentTaskCompleteTrackingEnabledFromState as isAgentHookCompletionTrackingEnabled } from '@/components/terminal-pane/agent-task-complete-policy'
+
 export { isAgentHookCompletionTrackingEnabled }
 
 type CompletionNotificationSettings = {
@@ -38,6 +39,7 @@ function terminalTabLivenessMatches(
 
   const currentWorktreeIds = Object.keys(current)
   const previousWorktreeIds = Object.keys(previous)
+
   if (currentWorktreeIds.length !== previousWorktreeIds.length) {
     return false
   }
@@ -46,23 +48,29 @@ function terminalTabLivenessMatches(
   // iterator allocated a [index, value] tuple per worktree and per tab in each changed bucket.
   for (let worktreeIndex = 0; worktreeIndex < currentWorktreeIds.length; worktreeIndex += 1) {
     const worktreeId = currentWorktreeIds[worktreeIndex]
+
     // Why: duplicate tab ids use first-worktree-wins lookup semantics, so a
     // worktree-key reorder is a liveness change even when every array is reused.
     if (previousWorktreeIds[worktreeIndex] !== worktreeId) {
       return false
     }
+
     const currentTabs = current[worktreeId]
     const previousTabs = previous[worktreeId]
+
     if (currentTabs === previousTabs) {
       continue
     }
+
     if (!currentTabs || !previousTabs || currentTabs.length !== previousTabs.length) {
       return false
     }
+
     for (let tabIndex = 0; tabIndex < currentTabs.length; tabIndex += 1) {
       const currentTab = currentTabs[tabIndex]
       visitTab?.()
       const previousTab = previousTabs[tabIndex]
+
       if (
         !previousTab ||
         currentTab.id !== previousTab.id ||
@@ -72,6 +80,7 @@ function terminalTabLivenessMatches(
       }
     }
   }
+
   return true
 }
 
@@ -85,6 +94,7 @@ function shouldSync(
   ) {
     return true
   }
+
   if (
     current.ptyIdsByTabId !== previous.ptyIdsByTabId ||
     current.terminalLayoutsByTabId !== previous.terminalLayoutsByTabId ||
@@ -92,6 +102,7 @@ function shouldSync(
   ) {
     return true
   }
+
   return !terminalTabLivenessMatches(current.tabsByWorktree, previous.tabsByWorktree, visitTab)
 }
 
@@ -107,8 +118,10 @@ export function _measureAgentHookCompletionStoreSyncForTest(
   previous: AgentHookCompletionStoreSnapshot
 ): { shouldSync: boolean; tabVisits: number } {
   let tabVisits = 0
+
   const requiresSync = shouldSync(current, previous, () => {
     tabVisits += 1
   })
+
   return { shouldSync: requiresSync, tabVisits }
 }

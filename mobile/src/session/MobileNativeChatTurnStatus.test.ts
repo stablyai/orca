@@ -4,8 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
+
   const Text = ({ children, ...props }: { children?: unknown }): unknown =>
     React.createElement('Text', props, children)
+
   return {
     ActivityIndicator: (props: Record<string, unknown>) =>
       React.createElement('ActivityIndicator', props),
@@ -17,6 +19,7 @@ vi.mock('react-native', async () => {
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
   }
 })
+
 vi.mock('lucide-react-native', () => ({ ChevronRight: 'ChevronRight' }))
 
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
@@ -46,6 +49,7 @@ describe('MobileNativeChatTurnStatus', () => {
     act(() => {
       renderer = create(createElement(MobileNativeChatTurnStatus, props))
     })
+
     return renderer!
   }
 
@@ -78,6 +82,7 @@ describe('MobileNativeChatTurnStatus', () => {
       thinking: true,
       activityText: 'Running pnpm test'
     })
+
     expect(labels(tree.root)).toEqual(['Running pnpm test'])
     expect(spinners(tree.root)).toHaveLength(1)
     // No label consumes the duration, so nothing schedules a tick for it.
@@ -86,12 +91,14 @@ describe('MobileNativeChatTurnStatus', () => {
 
   it('settles to a tappable "Worked for" row that toggles the turn', () => {
     const onToggleExpanded = vi.fn()
+
     const tree = render({
       startedAt: Date.now(),
       thinking: false,
       workedSeconds: 184,
       onToggleExpanded
     })
+
     expect(labels(tree.root)).toEqual(['Worked for 3m 4s'])
     const button = tree.root.findByType('Pressable' as never)
     expect(button.props.accessibilityLabel).toBe('Toggle turn details')

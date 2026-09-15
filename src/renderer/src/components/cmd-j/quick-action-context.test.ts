@@ -133,6 +133,7 @@ describe('Cmd+J quick action context', () => {
     const currentWorkspaceActions = ['delete-workspace']
     const workspaceAgnosticActions = ['create-workspace', 'add-quick-command']
     const actionById = new Map(getCmdJQuickActions().map((action) => [action.id, action]))
+
     const baseContext = {
       ...ctx({}),
       activeWorktree: null,
@@ -201,6 +202,7 @@ describe('Cmd+J quick action context', () => {
       branch: 'main',
       createdAt: 0
     } as Worktree
+
     const state = {
       activeWorktreeId: 'wt-1',
       worktreesByRepo: { 'repo-1': [worktree] },
@@ -263,6 +265,7 @@ describe('Cmd+J quick action context', () => {
       branch: 'main',
       createdAt: 0
     } as Worktree
+
     const state = {
       activeWorktreeId: 'wt-1',
       worktreesByRepo: { 'repo-1': [worktree] },
@@ -313,6 +316,7 @@ describe('Cmd+J quick action context', () => {
   it('runtime re-check returns unavailable without invoking the action helper', async () => {
     const calls: string[] = []
     const action = getCmdJQuickActions().find((entry) => entry.id === 'new-terminal-tab')
+
     const context = {
       ...ctx({ activeGroupId: null }),
       activeWorktree: null,
@@ -337,6 +341,7 @@ describe('Cmd+J quick action context', () => {
   it('omits unsupported paired-web browser execution without affecting terminal or markdown', async () => {
     const calls: string[] = []
     const actions = new Map(getCmdJQuickActions().map((action) => [action.id, action]))
+
     const context = {
       ...ctx({}),
       activeWorktree: null,
@@ -374,6 +379,7 @@ describe('Cmd+J quick action context', () => {
   it('runtime re-check invokes the current workspace delete action when available', async () => {
     const calls: string[] = []
     const action = getCmdJQuickActions().find((entry) => entry.id === 'delete-workspace')
+
     const context = {
       ...ctx({ activeGroupId: null }),
       activeWorktree: null,
@@ -395,6 +401,7 @@ describe('Cmd+J quick action context', () => {
   it('offers and runs split actions only for an active movable chat', async () => {
     const calls: string[] = []
     const action = getCmdJQuickActions().find((entry) => entry.id === 'split-chat-right')
+
     const context = {
       ...ctx({}),
       activeWorktree: null,
@@ -408,6 +415,7 @@ describe('Cmd+J quick action context', () => {
       canSplitActiveChat: true,
       splitActiveChat: (direction: string) => {
         calls.push(direction)
+
         return true
       }
     } satisfies CmdJQuickActionContext

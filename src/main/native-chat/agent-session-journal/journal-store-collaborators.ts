@@ -62,6 +62,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     cursor: host.cursor,
     adopt: host.adopt
   })
+
   return {
     epochController,
     restore: () => restoreJournalStore(host, { epochController }),

@@ -5,7 +5,9 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const projectDir = path.resolve(import.meta.dirname, '../..')
+
 const packageJson = JSON.parse(readFileSync(path.join(projectDir, 'package.json'), 'utf8'))
+
 const wrapperPath = path.join(projectDir, 'config', 'scripts', 'orca-dev.mjs')
 
 describe('orca-dev package bin', () => {
@@ -31,6 +33,7 @@ describe('orca-dev package bin', () => {
       ].join('\n'),
       'utf8'
     )
+
     if (process.platform !== 'win32') {
       chmodSync(cliEntry, 0o755)
     }

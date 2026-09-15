@@ -8,6 +8,7 @@ import { supportsClaudeStructuredLocation } from './claude-structured-location-s
 function setPlatform(platform: NodeJS.Platform): PropertyDescriptor | undefined {
   const previous = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+
   return previous
 }
 
@@ -22,6 +23,7 @@ describe('supportsClaudeStructuredLocation', () => {
   afterEach(() => {
     __setWindowsProcessTreeLoaderForTests()
     resetWindowsProcessTableForTests()
+
     if (previousPlatform) {
       Object.defineProperty(process, 'platform', previousPlatform)
     }

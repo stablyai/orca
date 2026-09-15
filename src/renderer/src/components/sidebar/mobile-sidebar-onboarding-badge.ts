@@ -33,11 +33,13 @@ export function useMobileSidebarOnboardingBadge(enabled = true): {
     if (dismissed) {
       return
     }
+
     try {
       window.localStorage.setItem(DISMISS_KEY, '1')
     } catch {
       // Best-effort; if storage is unavailable the badge will reappear next mount.
     }
+
     setDismissed(true)
   }, [dismissed])
 

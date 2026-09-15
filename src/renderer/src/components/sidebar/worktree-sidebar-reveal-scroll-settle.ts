@@ -32,5 +32,6 @@ export function isRevealScrollSettling({
   if (!pending || now >= pending.expiresAt) {
     return false
   }
+
   return Math.abs(scrollTop - pending.targetTop) > SETTLED_TOLERANCE_PX
 }

@@ -42,6 +42,7 @@ describe('pr-comment-action-state', () => {
       comment({ id: 2, body: 'FYI' }),
       comment({ id: 3, threadId: 't-resolved', path: 'src/b.ts', isResolved: true })
     ])
+
     expect(partitionPRCommentGroupsForTriage(groups)).toEqual({
       open: [groups[0]],
       conversation: [groups[1]],
@@ -61,6 +62,7 @@ describe('pr-comment-action-state', () => {
       comment({ id: 1, createdAt: '2026-06-16T10:00:00Z', body: 'first' }),
       comment({ id: 2, createdAt: '2026-06-16T11:00:00Z', body: 'second' })
     ])
+
     const sorted = sortPRCommentGroupsByRecency(groups)
 
     expect(sorted.map((group) => getPRCommentGroupActionState(group))).toEqual([
@@ -92,6 +94,7 @@ describe('pr-comment-action-state', () => {
         isResolved: false
       })
     ])
+
     const partitioned = partitionPRCommentGroupsForTriage(
       sortPRCommentGroupsByRecency(groups, 'newest-first')
     )

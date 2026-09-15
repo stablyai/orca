@@ -6,6 +6,7 @@ export function abbreviateOrchestrationTasks<T extends { spec: string }>(
   return tasks.map((task) => {
     const spec = task.spec.replace(/\s+/g, ' ').trim()
     const truncated = spec.length > TASK_SPEC_BRIEF_LENGTH
+
     return {
       ...task,
       spec: truncated ? `${truncateAtCodePoint(spec).trimEnd()}…` : spec,
@@ -21,5 +22,6 @@ function truncateAtCodePoint(spec: string): string {
   // Why: a cut through a surrogate pair leaves a lone high surrogate that
   // strict JSON consumers reject; drop it rather than emit malformed UTF-16.
   const lastUnit = sliced.charCodeAt(sliced.length - 1)
+
   return lastUnit >= 0xd800 && lastUnit <= 0xdbff ? sliced.slice(0, -1) : sliced
 }

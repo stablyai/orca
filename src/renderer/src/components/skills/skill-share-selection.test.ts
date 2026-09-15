@@ -29,6 +29,7 @@ describe('eligibleShareSkillCount', () => {
       skill('beta', { sourceKind: 'plugin' }),
       skill('gamma', { installed: false })
     ]
+
     expect(eligibleShareSkillCount(results, true)).toBe(1)
     expect(addShareableSkillResults(new Set(), results, results, true).size).toBe(1)
   })

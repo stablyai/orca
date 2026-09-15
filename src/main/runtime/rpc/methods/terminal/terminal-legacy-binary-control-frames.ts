@@ -33,51 +33,67 @@ export function registerLegacyBinaryControlFrames(
     supportsDesktopViewportClaims,
     supportsWriteUnavailable
   } = args
+
   if (!registerBinaryStreamHandler) {
     return () => {}
   }
+
   return registerBinaryStreamHandler(streamId, (frame) => {
     if (controls.isClosed()) {
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.Input) {
       const text = decodeTerminalStreamText(frame.payload)
+
       if (!text) {
         return
       }
+
       if (isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
         return
       }
+
       void controls.getDesktopClaimTail().then(async (claimed) => {
         if (!claimed || isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
           return
         }
+
         const outcome = await sendTerminalStreamInput(runtime, {
           terminal: params.terminal,
           text,
           client: params.client,
           isMobile
         })
+
         if (!controls.isClosed() && outcome === 'rejected' && supportsWriteUnavailable) {
           controls.sendFrame(TerminalStreamOpcode.WriteUnavailable)
         }
       })
+
       return
     }
+
     if (frame.opcode === TerminalStreamOpcode.Resize && params.client) {
       const viewport = decodeTerminalStreamJson<{ cols?: unknown; rows?: unknown }>(frame.payload)
+
       if (!viewport || typeof viewport.cols !== 'number' || typeof viewport.rows !== 'number') {
         return
       }
+
       const cols = viewport.cols
       const rows = viewport.rows
+
       if (clientId) {
         controls.setRegisteredRemoteDesktopDriver()
+
         if (controls.isBuffering()) {
           controls.setPendingRemoteDesktopViewport({ cols: viewport.cols, rows: viewport.rows })
+
           return
         }
       }
+
       controls.setDesktopClaimTail(
         controls
           .getDesktopClaimTail()
@@ -92,12 +108,15 @@ export function registerLegacyBinaryControlFrames(
               'register',
               !supportsDesktopViewportClaims
             )
+
             return supportsDesktopViewportClaims ? priorClaimed && result.applied : result.applied
           })
           .catch(() => false)
       )
+
       return
     }
+
     if (
       frame.opcode === TerminalStreamOpcode.ClaimViewport &&
       params.client &&
@@ -105,9 +124,11 @@ export function registerLegacyBinaryControlFrames(
       !isMobile
     ) {
       const viewport = decodeTerminalStreamJson<{ cols?: unknown; rows?: unknown }>(frame.payload)
+
       if (!viewport || typeof viewport.cols !== 'number' || typeof viewport.rows !== 'number') {
         return
       }
+
       const cols = viewport.cols
       const rows = viewport.rows
       controls.setRegisteredRemoteDesktopDriver()

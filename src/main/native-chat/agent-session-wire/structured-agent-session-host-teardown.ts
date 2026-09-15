@@ -29,10 +29,13 @@ async function withPhaseTimeout(run: () => Promise<void>, timeoutMs: number): Pr
     () => ({ failed: false }) as const,
     (error: unknown) => ({ failed: true, error }) as const
   )
+
   const outcome = await withTimeout<Awaited<typeof settled> | null>(settled, timeoutMs, null)
+
   if (outcome === null) {
     throw new Error(`agent session host teardown phase did not finish within ${timeoutMs}ms`)
   }
+
   if (outcome.failed) {
     throw outcome.error
   }
@@ -80,6 +83,7 @@ export async function tearDownStructuredAgentSessionHost(input: {
   acknowledgeSessionRelease?: (sessionId: string) => void
 }): Promise<void> {
   const failures: unknown[] = []
+
   for (const phase of input.phases) {
     try {
       await phase.run()
@@ -91,10 +95,12 @@ export async function tearDownStructuredAgentSessionHost(input: {
   const entries = [...input.sessions.entries()].filter(
     ([sessionId]) => !input.retainSessionIds?.has(sessionId)
   )
+
   // `allSettled`, so one rejected close cannot skip the others.
   const closed = await Promise.allSettled(entries.map(([, session]) => session.journal.close()))
   closed.forEach((result, index) => {
     const sessionId = entries[index]?.[0]
+
     if (result.status === 'fulfilled') {
       // Only a FULFILLED close drops the entry. One that rejected stays indexed,
       // which is what makes a later close a real retry rather than a no-op.
@@ -102,8 +108,10 @@ export async function tearDownStructuredAgentSessionHost(input: {
         input.sessions.delete(sessionId)
         input.acknowledgeSessionRelease?.(sessionId)
       }
+
       return
     }
+
     failures.push(result.reason)
   })
 

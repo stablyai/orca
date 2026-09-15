@@ -20,26 +20,33 @@ function runMirrorSequence(
   const payloads: string[] = []
   let sentText = ''
   let heldText = ''
+
   for (const frame of fieldStates) {
     const { text, composing } = typeof frame === 'string' ? { text: frame } : frame
     const step = computeTerminalLiveMirrorStep(sentText, text, { commitHeld: false, composing })
     const payload = buildTerminalLiveMirrorPayload(step)
+
     if (payload.length > 0) {
       payloads.push(payload)
     }
+
     sentText = step.nextSentText
     heldText = step.heldText
   }
+
   if (options.commitAtEnd) {
     const lastField = sentText + heldText
     const step = computeTerminalLiveMirrorStep(sentText, lastField, { commitHeld: true })
     const payload = buildTerminalLiveMirrorPayload(step)
+
     if (payload.length > 0) {
       payloads.push(payload)
     }
+
     sentText = step.nextSentText
     heldText = step.heldText
   }
+
   return { payloads, sentText, heldText }
 }
 
@@ -117,6 +124,7 @@ describe('terminal live preedit mirror with a reported marked-text range', () =>
       commitHeld: false,
       composing: false
     })
+
     expect(committed.nextSentText).toBe('ls ')
 
     // When
@@ -271,14 +279,18 @@ describe('terminal live preedit mirror with no marked-text report', () => {
       field += codePoint
       const live = computeTerminalLiveMirrorStep(sentText, field, { commitHeld: false })
       const livePayload = buildTerminalLiveMirrorPayload(live)
+
       if (livePayload.length > 0) {
         payloads.push(livePayload)
       }
+
       const settled = computeTerminalLiveMirrorStep(live.nextSentText, field, { commitHeld: true })
       const settledPayload = buildTerminalLiveMirrorPayload(settled)
+
       if (settledPayload.length > 0) {
         payloads.push(settledPayload)
       }
+
       sentText = settled.nextSentText
     }
 

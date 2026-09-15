@@ -11,6 +11,7 @@ import {
 } from './tab-create-entry-local-path'
 
 const initialState = useAppStore.getInitialState()
+
 const localWorktreeId = 'repo-local::/Users/me/repo'
 
 function makeRepo(overrides: Partial<Repo> & { id: string }): Repo {
@@ -215,6 +216,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
       folderPath: '/home/me/folder',
       connectionId: 'ssh-1'
     })
+
     const worktreeId = folderWorkspaceKey(folderWorkspace.id)
     useAppStore.setState({
       folderWorkspaces: [folderWorkspace],
@@ -337,6 +339,7 @@ describe('getTabEntryAllowAbsolutePaths', () => {
     const selectedState = { ...state, getKnownWorktreeById }
 
     expect(selector(selectedState)).toBe(true)
+
     for (let index = 0; index < 1_000; index += 1) {
       expect(selector({ ...selectedState, pendingToastCount: index } as never)).toBe(true)
     }

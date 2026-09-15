@@ -15,6 +15,7 @@ type CreateHost = (
 ) => unknown
 
 const createHostCallbacks: CreateHost[] = []
+
 const hostOptions: { browserHostClientId: string }[] = []
 
 vi.mock('./paired-runtime-browser-client-host', () => ({
@@ -89,19 +90,24 @@ async function hostingIdentity(): Promise<string> {
     authorityRuntimeId: 'runtime-a'
   })
   const createHost = createHostCallbacks[0]
+
   if (!createHost) {
     throw new Error('client host composition never asked for a host')
   }
+
   createHost({ pairing: {}, authorityRuntimeId: 'runtime-a' }, {})
   const options = hostOptions[0]
+
   if (!options) {
     throw new Error('client host was never constructed')
   }
+
   return options.browserHostClientId
 }
 
 async function hostingIdentityForLaunch(profileDirectory: string): Promise<string> {
   await launch(profileDirectory)
+
   return await hostingIdentity()
 }
 

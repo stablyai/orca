@@ -99,6 +99,7 @@ describe('writeBatchedWorkspaceRecordEntry identity', () => {
       groups,
       batch
     )
+
     expect(unchanged).toBe(current)
     expect(batch.ownedStateKeys.has('groupsByWorktree')).toBe(false)
 
@@ -110,6 +111,7 @@ describe('writeBatchedWorkspaceRecordEntry identity', () => {
       [{ id: 'group-2' }],
       batch
     )
+
     expect(changed).not.toBe(current)
     expect(current[WORKTREE]).toBe(groups)
     expect(batch.ownedStateKeys.has('groupsByWorktree')).toBe(true)

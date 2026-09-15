@@ -19,14 +19,18 @@ export function createRuntimeRootOwnershipReleaser<T extends RuntimeRootOwnershi
     if (roots.get(root.rootPath) !== root) {
       return
     }
+
     roots.delete(root.rootPath)
     forgetRoot(root.rootPath)
   }
+
   const releaseAfterFailure = (root: T, error: Error): void => {
     if (!(isWatcherProcessFailure(error) && error.physicalExit)) {
       release(root)
+
       return
     }
+
     root.terminalReleaseError = error
     // Why: an unkillable child can still own the native root after logical
     // teardown; reserve the exact root until that child's physical exit.
@@ -37,5 +41,6 @@ export function createRuntimeRootOwnershipReleaser<T extends RuntimeRootOwnershi
       }
     })
   }
+
   return { release, releaseAfterFailure }
 }

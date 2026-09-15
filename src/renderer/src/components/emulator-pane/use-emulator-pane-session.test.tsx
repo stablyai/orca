@@ -49,16 +49,22 @@ const deviceList = devices.map((device) => ({
 }))
 
 let attachDeferred: Deferred<AttachResult>
+
 let rotateDeferred: Deferred<void>
+
 let container: HTMLDivElement
+
 let root: Root
+
 let latest: ReturnType<typeof useEmulatorPaneSession> | null = null
 
 function createDeferred<T>(): Deferred<T> {
   let resolve: (value: T) => void = () => {}
+
   const promise = new Promise<T>((res) => {
     resolve = res
   })
+
   return { promise, resolve }
 }
 
@@ -85,7 +91,9 @@ function Probe(): React.JSX.Element {
     worktreeId: WORKTREE_ID,
     autoAttachOnMount: false
   })
+
   latest = state
+
   return (
     <button type="button" onClick={() => void state.attach('device-b')}>
       Switch
@@ -98,6 +106,7 @@ function AutoAttachProbe(): React.JSX.Element | null {
     worktreeId: WORKTREE_ID,
     autoAttachOnMount: true
   })
+
   return null
 }
 
@@ -132,15 +141,19 @@ describe('useEmulatorPaneSession', () => {
             if (method === 'emulator.listDevices') {
               return runtimeSuccess(deviceList)
             }
+
             if (method === 'emulator.attach') {
               return runtimeSuccess(await attachDeferred.promise)
             }
+
             if (method === 'emulator.rotate') {
               return runtimeSuccess(await rotateDeferred.promise)
             }
+
             if (method === 'emulator.shutdown') {
               return runtimeSuccess({ deviceUdid: 'device-b' })
             }
+
             throw new Error(`Unexpected RPC method: ${method}`)
           })
         }
@@ -246,16 +259,21 @@ describe('useEmulatorPaneSession', () => {
   it('keeps simulator discovery setup errors during auto attach', async () => {
     const message =
       'Xcode Simulator tools are unavailable. Install full Xcode, open it once, then select it with `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`.'
+
     consumePrelaunchedSimulatorSession(WORKTREE_ID)
+
     const runtimeCall = vi.fn(async ({ method }: RuntimeCallRequest) => {
       if (method === 'emulator.listDevices') {
         return runtimeFailure('emulator_simctl_unavailable', message)
       }
+
       if (method === 'emulator.attach') {
         throw new Error('attach should not run without a discovered target')
       }
+
       throw new Error(`Unexpected RPC method: ${method}`)
     })
+
     Object.defineProperty(window, 'api', {
       configurable: true,
       value: { runtime: { call: runtimeCall } }

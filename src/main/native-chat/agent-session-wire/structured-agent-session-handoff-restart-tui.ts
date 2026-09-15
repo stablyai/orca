@@ -32,6 +32,7 @@ export async function recoverUnavailableTuiAsNative(
   continueHandoff: ContinueHandoff
 ): Promise<void> {
   await input.deps.transport!.stopRecoveredOwner(record)
+
   if (record.lease.handoffStage === 'preparing') {
     const stopped = await stopStoredAgentSessionOwnerForHandoff(input.deps.store, {
       sessionId: record.sessionId,
@@ -39,9 +40,12 @@ export async function recoverUnavailableTuiAsNative(
       operationId: record.lease.handoffOperationId!,
       now: input.deps.now()
     })
+
     await continueHandoff(input, stopped)
+
     return
   }
+
   if (record.lease.handoffStage === 'new-owner-proving') {
     const abandoned = await abandonStoredAgentSessionHandoffAttempt(input.deps.store, {
       sessionId: record.sessionId,
@@ -50,16 +54,21 @@ export async function recoverUnavailableTuiAsNative(
       recoverableRuntimeKind: 'native',
       now: input.deps.now()
     })
+
     await continueHandoff(input, abandoned)
+
     return
   }
+
   const operationId = createStructuredAgentSessionOperationId(randomUUID, input.deps.now())
+
   const stopped = await stopStoredRecoveringTuiOwnerForHandoff(input.deps.store, {
     sessionId: record.sessionId,
     expectedFence: record.lease.runtimeFence,
     operationId,
     now: input.deps.now()
   })
+
   await continueHandoff(input, stopped)
 }
 
@@ -72,13 +81,17 @@ export async function recoverTuiOwnerOrContinue(
     const owner = await input.deps.transport!.recoverTuiOwner(record)
     const reproved = await input.deps.transport!.reproveTuiOwner({ record, owner })
     await persistReprovedTuiOwner(input, record.sessionId, reproved)
+
     return reproved
   } catch (error) {
     const ownerState = await input.deps.transport!.probeRecoveredOwner?.(record)
+
     if (ownerState !== 'dead') {
       throw error
     }
+
     await recoverUnavailableTuiAsNative(input, record, continueHandoff)
+
     return null
   }
 }

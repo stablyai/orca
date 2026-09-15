@@ -15,9 +15,11 @@ describe('desktop mobile-relay pairing contract', () => {
 
   it('preserves optional paired device identity', () => {
     const fixture = createMobileRelayPairingFixtures(now)[0]!
+
     if (!fixture.expected) {
       throw new Error('Expected a valid direct pairing fixture')
     }
+
     const payload = { ...fixture.expected, pairedDeviceId: 'paired-device-a' }
 
     expect(schema.parse(payload)).toMatchObject({ pairedDeviceId: 'paired-device-a' })

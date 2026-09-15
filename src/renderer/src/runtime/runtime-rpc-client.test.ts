@@ -20,7 +20,9 @@ import {
 } from '../../../shared/runtime-rpc-feature-interaction-source'
 
 const runtimeCall = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentSubscribe = vi.fn()
 
 beforeEach(() => {
@@ -126,6 +128,7 @@ describe('runtime RPC client routing', () => {
       undefined,
       { signal: controller.signal }
     )
+
     await vi.waitFor(() => expect(runtimeEnvironmentSubscribe).toHaveBeenCalled())
     controller.abort()
 
@@ -136,6 +139,7 @@ describe('runtime RPC client routing', () => {
 
   it('rejects an abortable paired-runtime request at the response deadline', async () => {
     vi.useFakeTimers()
+
     try {
       const controller = new AbortController()
       const unsubscribe = vi.fn()
@@ -147,6 +151,7 @@ describe('runtime RPC client routing', () => {
         undefined,
         { signal: controller.signal, timeoutMs: 15_000 }
       )
+
       await vi.waitFor(() => expect(runtimeEnvironmentSubscribe).toHaveBeenCalled())
       const rejection = expect(request).rejects.toThrow('timed out before status.get completed')
       await vi.advanceTimersByTimeAsync(15_000)
@@ -169,6 +174,7 @@ describe('runtime RPC client routing', () => {
               minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
             }
           : { repos: [{ id: 'repo-1' }] }
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -216,11 +222,13 @@ describe('runtime RPC client routing', () => {
   it('expires startup compatibility failures at the TTL boundary', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(0))
+
     try {
       let statusCalls = 0
       runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
         if (method === 'status.get') {
           statusCalls += 1
+
           if (statusCalls === 1) {
             return Promise.resolve({
               id: 'status',
@@ -229,6 +237,7 @@ describe('runtime RPC client routing', () => {
               _meta: { runtimeId: 'remote-runtime' }
             })
           }
+
           return Promise.resolve({
             id: 'status',
             ok: true,
@@ -241,6 +250,7 @@ describe('runtime RPC client routing', () => {
             _meta: { runtimeId: 'remote-runtime' }
           })
         }
+
         return Promise.resolve({
           id: method,
           ok: true,
@@ -273,6 +283,7 @@ describe('runtime RPC client routing', () => {
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       if (method === 'status.get') {
         statusCalls += 1
+
         if (statusCalls === 1) {
           return Promise.resolve({
             id: 'status',
@@ -281,6 +292,7 @@ describe('runtime RPC client routing', () => {
             _meta: { runtimeId: 'remote-runtime' }
           })
         }
+
         return Promise.resolve({
           id: 'status',
           ok: true,
@@ -293,6 +305,7 @@ describe('runtime RPC client routing', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -338,6 +351,7 @@ describe('runtime RPC client routing', () => {
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       if (method === 'status.get') {
         statusCalls += 1
+
         if (statusCalls === 1) {
           return Promise.resolve({
             id: 'status',
@@ -346,6 +360,7 @@ describe('runtime RPC client routing', () => {
             _meta: { runtimeId: 'remote-runtime' }
           })
         }
+
         return Promise.resolve({
           id: 'status',
           ok: true,
@@ -358,6 +373,7 @@ describe('runtime RPC client routing', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -399,6 +415,7 @@ describe('runtime RPC client routing', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -429,11 +446,13 @@ describe('runtime RPC client routing', () => {
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       if (method === 'status.get') {
         statusCalls += 1
+
         if (statusCalls === 1) {
           return new Promise((_, reject) => {
             rejectFirstStatus = reject
           })
         }
+
         return Promise.resolve({
           id: 'status',
           ok: true,
@@ -446,6 +465,7 @@ describe('runtime RPC client routing', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -461,6 +481,7 @@ describe('runtime RPC client routing', () => {
       () => 'resolved',
       (error) => `rejected:${error.message}`
     )
+
     // Let the first status.get register its in-flight cache entry.
     await Promise.resolve()
 
@@ -469,6 +490,7 @@ describe('runtime RPC client routing', () => {
     const secondCall = callRuntimeRpc(target, 'worktree.detectedList', undefined, {
       reuseRecentCompatibilityFailure: true
     })
+
     await Promise.resolve()
     // The doomed pending probe rejects; it must not fail the fresh re-probe.
     rejectFirstStatus(new Error('stale connection closed'))
@@ -511,6 +533,7 @@ describe('runtime RPC client routing', () => {
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       if (method === 'status.get') {
         statusCalls += 1
+
         if (statusCalls === 1) {
           return Promise.resolve({
             id: 'status',
@@ -519,6 +542,7 @@ describe('runtime RPC client routing', () => {
             _meta: { runtimeId: 'remote-runtime' }
           })
         }
+
         return Promise.resolve({
           id: 'status',
           ok: true,
@@ -532,6 +556,7 @@ describe('runtime RPC client routing', () => {
           _meta: { runtimeId: 'remote-runtime' }
         })
       }
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -552,6 +577,7 @@ describe('runtime RPC client routing', () => {
     let statusCalls = 0
     runtimeEnvironmentCall.mockImplementation(() => {
       statusCalls += 1
+
       return Promise.resolve({
         id: 'status',
         ok: true,
@@ -579,6 +605,7 @@ describe('runtime RPC client routing', () => {
     const methods: string[] = []
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
       methods.push(method)
+
       if (method === 'status.get') {
         return Promise.resolve({
           id: 'status',
@@ -593,6 +620,7 @@ describe('runtime RPC client routing', () => {
           _meta: { runtimeId: 'old-runtime' }
         })
       }
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -614,6 +642,7 @@ describe('runtime RPC client routing', () => {
     let statusCalls = 0
     runtimeEnvironmentCall.mockImplementation(() => {
       statusCalls += 1
+
       return Promise.resolve({
         id: 'status',
         ok: true,
@@ -647,10 +676,12 @@ describe('runtime RPC client routing', () => {
   it('expires a supported capability verdict so a runtime downgrade is detected', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(0))
+
     try {
       let statusCalls = 0
       runtimeEnvironmentCall.mockImplementation(() => {
         statusCalls += 1
+
         return Promise.resolve({
           id: 'status',
           ok: true,
@@ -696,6 +727,7 @@ describe('runtime RPC client routing', () => {
     runtimeEnvironmentCall.mockImplementation(() => {
       statusCalls += 1
       const runtimeId = statusCalls === 1 ? 'runtime-before-restart' : 'runtime-after-restart'
+
       return Promise.resolve({
         id: 'status',
         ok: true,
@@ -765,6 +797,7 @@ describe('runtime RPC client routing', () => {
               minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
             }
           : { ok: true }
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -802,6 +835,7 @@ describe('runtime RPC client routing', () => {
               minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
             }
           : { ok: true }
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -831,6 +865,7 @@ describe('runtime RPC client routing', () => {
               minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
             }
           : { ok: true }
+
       return Promise.resolve({
         id: method,
         ok: true,
@@ -866,6 +901,7 @@ describe('runtime RPC client routing', () => {
     }
 
     expect(() => unwrapRuntimeRpcResult(failure)).toThrow(RuntimeRpcCallError)
+
     try {
       unwrapRuntimeRpcResult(failure)
     } catch (error) {

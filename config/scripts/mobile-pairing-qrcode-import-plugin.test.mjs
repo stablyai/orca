@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { resolveOxlintInvocation } from './oxlint-cli-invocation.mjs'
 
 const pluginPath = path.resolve('config/oxlint-plugins/mobile-pairing-qrcode-import.mjs')
+
 const oxlint = resolveOxlintInvocation()
 
 function lintSource(source) {
@@ -21,14 +22,17 @@ function lintSource(source) {
       rules: { 'mobile-pairing/no-eager-qrcode-import': 'error' }
     })
   )
+
   const result = spawnSync(
     oxlint.command,
     [...oxlint.prefixArgs, '--config', configPath, '--format', 'json', sourcePath],
     { encoding: 'utf8', windowsHide: true }
   )
+
   if (result.error) {
     throw result.error
   }
+
   return JSON.parse(result.stdout).diagnostics
 }
 

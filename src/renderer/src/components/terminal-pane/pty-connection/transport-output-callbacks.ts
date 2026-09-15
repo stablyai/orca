@@ -20,6 +20,7 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
     const generation = (session.transportStreamGeneration += 1)
     const processExitState = session.createProcessExitState(startup)
     session.currentProcessExitState = processExitState
+
     const isCurrent = (): boolean =>
       !session.disposed &&
       generation === session.transportStreamGeneration &&
@@ -27,6 +28,7 @@ export function bindCaptureTransportOutputCallbacks(session: ConnectPanePtySessi
       // stream's queued callback runs; only the registered transport may
       // mutate pane-scoped error/recovery state.
       session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport
+
     return {
       generation,
       callbacks: {

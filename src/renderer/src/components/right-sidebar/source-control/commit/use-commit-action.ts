@@ -67,10 +67,13 @@ export function useSourceControlCommitAction({
               pushTarget: activeWorktree?.pushTarget
             }
           : null)
+
       if (!target) {
         return false
       }
+
       const message = (messageOverride ?? commitMessage).trim()
+
       if (
         !message ||
         (!options?.skipStagedSnapshotCheck && stagedCount === 0) ||
@@ -82,10 +85,12 @@ export function useSourceControlCommitAction({
       if (commitInFlightRef.current[target.worktreeId]) {
         return false
       }
+
       commitInFlightRef.current[target.worktreeId] = true
 
       setCommitInFlightByWorktree((prev) => ({ ...prev, [target.worktreeId]: true }))
       setCommitErrorForWorktree(target.worktreeId, null)
+
       try {
         const commitResult = await commitRuntimeGit(
           {
@@ -97,24 +102,30 @@ export function useSourceControlCommitAction({
           },
           message
         )
+
         if (!commitResult.success) {
           setCommitErrorForWorktree(target.worktreeId, commitResult.error ?? 'Commit failed')
+
           return false
         }
 
         // Why: textarea stays editable during commit, so only clear the draft when it still matches what we committed — else we'd discard edits typed after Commit.
         updateCommitDrafts((prev) => {
           const current = prev[target.worktreeId]
+
           if (current !== undefined && current.trim() !== message) {
             // User typed more after submit — preserve their in-progress edits.
             return prev
           }
+
           return writeCommitDraftForWorktree(prev, target.worktreeId, '')
         })
         setCommitErrorForWorktree(target.worktreeId, null)
+
         if (!options?.target) {
           void refreshActiveGitStatusAfterMutation()
         }
+
         // Why: flip branchSummary to 'loading' synchronously so "No changes on this branch" doesn't flash before the branchCompare poll lands the commit.
         if (!options?.target && compareBaseRef) {
           beginGitBranchCompareRequest(
@@ -123,16 +134,19 @@ export function useSourceControlCommitAction({
             compareBaseRef
           )
         }
+
         if (!options?.target) {
           void refreshBranchCompareRef.current()
           void refreshGitHistoryRef.current()
         }
+
         return true
       } catch (error) {
         setCommitErrorForWorktree(
           target.worktreeId,
           error instanceof Error ? error.message : 'Commit failed'
         )
+
         return false
       } finally {
         setCommitInFlightByWorktree((prev) => ({ ...prev, [target.worktreeId]: false }))

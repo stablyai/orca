@@ -124,29 +124,37 @@ export function CreateHostedReviewComposer({
   const ReviewIcon = provider === 'gitlab' ? GitMerge : GitPullRequestArrow
   const stackedModeAvailable = provider === 'github' && stackedCreationSupported
   const normalizedBase = stripBaseRef(base)
+
   const stackSelectionKey = stackParentReview
     ? `${normalizedBase}:${stackParentReview.number}`
     : null
+
   const [stackSelection, setStackSelection] = useState({ key: '', enabled: false })
+
   const effectiveStacked =
     stackedModeAvailable &&
     stackSelectionKey !== null &&
     stackSelection.key === stackSelectionKey &&
     stackSelection.enabled
+
   const setStacked = (enabled: boolean): void => {
     setStackSelection({ key: stackSelectionKey ?? '', enabled })
   }
+
   const strippedBranch = stripBaseRef(branch)
   const baseSameAsBranch = normalizedBase.toLowerCase() === strippedBranch.toLowerCase()
+
   const createDisabled =
     primaryAction.disabled ||
     generating ||
     title.trim().length === 0 ||
     normalizedBase.trim().length === 0 ||
     baseSameAsBranch
+
   // Why: surface a concrete reason on the disabled Create PR button so the
   // user knows what's blocking submission instead of a silent gray state.
   let createDisabledReason: string | undefined
+
   if (generating) {
     createDisabledReason = translate(
       'auto.components.right.sidebar.SourceControl.318e2a7f88',
@@ -174,19 +182,23 @@ export function CreateHostedReviewComposer({
   // the user can't race the request; generated fields only hydrate safely if
   // the hook still sees untouched field revisions.
   const fieldsLocked = generating
+
   const generateDetailsLabel = translate(
     'auto.components.right.sidebar.SourceControl.02d8c04339',
     'Generate {{value0}} details with AI',
     { value0: copy.reviewLabel }
   )
+
   const stopGeneratingDetailsLabel = translate(
     'auto.components.right.sidebar.SourceControl.b355e740b2',
     'Stop generating {{value0}} details',
     { value0: copy.reviewLabel }
   )
+
   const generateTooltipLabel = generating
     ? stopGeneratingDetailsLabel
     : (generateDisabledReason ?? generateDetailsLabel)
+
   const generateButton = generating ? (
     <Button
       type="button"
@@ -216,6 +228,7 @@ export function CreateHostedReviewComposer({
       {translate('auto.components.right.sidebar.SourceControl.aee92f8684', 'Generate')}
     </Button>
   )
+
   const effectiveDropdownItems = dropdownItems ?? EMPTY_DROPDOWN_ITEMS
   const showDropdown = effectiveDropdownItems.length > 0 && onDropdownAction
 
@@ -345,8 +358,10 @@ export function CreateHostedReviewComposer({
                       onSelect={(event) => {
                         if (entry.disabled) {
                           event.preventDefault()
+
                           return
                         }
+
                         onDropdownAction(entry.kind)
                       }}
                     >

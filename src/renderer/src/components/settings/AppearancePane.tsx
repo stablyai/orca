@@ -40,6 +40,7 @@ import {
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
 import { resolveInterfaceSectionSummary } from './appearance-interface-summary'
+
 export { getAppearancePaneSearchEntries }
 
 type AppearancePaneProps = {
@@ -75,9 +76,11 @@ export function AppearancePane({
 }: AppearancePaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const appearanceAccordionDeepLink = useAppStore((state) => state.appearanceAccordionDeepLink)
+
   const clearAppearanceAccordionDeepLink = useAppStore(
     (state) => state.clearAppearanceAccordionDeepLink
   )
+
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const isWebClient = isWebClientLocation()
   // Why: the system tray behavior is desktop-Electron Windows-only; a Windows
@@ -97,15 +100,19 @@ export function AppearancePane({
     if (!appearanceAccordionDeepLink) {
       return
     }
+
     setOpenSections((current) => {
       if (current.has(appearanceAccordionDeepLink)) {
         return current
       }
+
       const next = new Set(current)
       next.add(appearanceAccordionDeepLink)
+
       return next
     })
     clearAppearanceAccordionDeepLink()
+
     // Why: expand is layout-synchronous; scroll on the next frame so the target
     // has non-zero height when Settings (or this fallback) scrolls.
     const frameId = requestAnimationFrame(() => {
@@ -113,22 +120,27 @@ export function AppearancePane({
         .getElementById(USAGE_PERCENTAGE_DISPLAY_SETTING_ID)
         ?.scrollIntoView({ block: 'nearest' })
     })
+
     return () => {
       cancelAnimationFrame(frameId)
     }
   }, [appearanceAccordionDeepLink, clearAppearanceAccordionDeepLink])
+
   const interfaceTitle = translate(
     'auto.components.settings.AppearancePane.interfaceTitle',
     'Interface'
   )
+
   const terminalTitle = translate(
     'auto.components.settings.AppearancePane.terminalTitle',
     'Terminal'
   )
+
   const windowSidebarTitle = translate(
     'auto.components.settings.AppearancePane.windowSidebarTitle',
     'Window & Sidebar'
   )
+
   const windowSidebarSummary = translate(
     'auto.components.settings.AppearancePane.windowSidebarSummary',
     'Sidebar, status bar, and file explorer'
@@ -145,12 +157,14 @@ export function AppearancePane({
     ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
     ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
   ]
+
   const terminalSearchEntries = [
     { title: terminalTitle },
     ...getTerminalAppearanceSearchEntries({
       showDesktopThemeImports: !isWebClient
     })
   ]
+
   const windowSearchEntries = [
     {
       title: windowSidebarTitle,
@@ -168,10 +182,12 @@ export function AppearancePane({
   const windowMatches = matchesSettingsSearch(searchQuery, windowSearchEntries)
   const interfaceLabelMatches = matchesSettingsSearch(searchQuery, { title: interfaceTitle })
   const terminalLabelMatches = matchesSettingsSearch(searchQuery, { title: terminalTitle })
+
   const windowLabelMatches = matchesSettingsSearch(searchQuery, {
     title: windowSidebarTitle,
     description: windowSidebarSummary
   })
+
   const appIconMatches = matchesSettingsSearch(searchQuery, getAppIconEntries())
 
   // While searching, force-open every section that contains a match so its
@@ -185,22 +201,26 @@ export function AppearancePane({
           ? terminalMatches
           : windowMatches
     }
+
     return openSections.has(key)
   }
 
   function toggleSection(key: AppearanceSectionKey): void {
     setOpenSections((current) => {
       const next = new Set(current)
+
       if (next.has(key)) {
         next.delete(key)
       } else {
         next.add(key)
       }
+
       return next
     })
   }
 
   const interfaceSummary = resolveInterfaceSectionSummary(settings)
+
   const terminalSummary = `${
     settings.terminalFontFamily ||
     translate('auto.components.settings.AppearancePane.terminalDefaultFont', 'Default font')

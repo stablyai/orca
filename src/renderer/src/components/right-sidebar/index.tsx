@@ -35,6 +35,7 @@ function RightSidebarInner(): React.JSX.Element {
     platform: getRendererAppPlatform(),
     isWebClient: isPairedWebClientWindow()
   })
+
   const rightSidebarShortcut = useShortcutLabel('sidebar.right.toggle')
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarWidth = useAppStore((s) => s.rightSidebarWidth)
@@ -44,6 +45,7 @@ function RightSidebarInner(): React.JSX.Element {
   const activityBarPosition = useAppStore((s) => s.activityBarPosition)
   const setActivityBarPosition = useAppStore((s) => s.setActivityBarPosition)
   const [topActivityStripWidth, setTopActivityStripWidth] = useState<number | null>(null)
+
   const {
     visibleItems,
     activeFolderWorkspaceKey,
@@ -51,6 +53,7 @@ function RightSidebarInner(): React.JSX.Element {
     pluginFetchStatus,
     installedPluginTabKeys
   } = useRightSidebarActivityItems({ rightSidebarOpen })
+
   const { effectiveTab, selectActivityTab } = useRightSidebarTabRouting({
     visibleItems,
     activeFolderWorkspaceKey,
@@ -62,11 +65,13 @@ function RightSidebarInner(): React.JSX.Element {
   const activityBarSideWidth = activityBarPosition === 'side' ? ACTIVITY_BAR_SIDE_WIDTH : 0
   const windowWidth = useWindowWidth()
   const maxWidth = computeMaxRightSidebarPanelWidth(windowWidth, activityBarSideWidth)
+
   const renderedRightSidebarWidth = clampRightSidebarPanelWidth(
     rightSidebarWidth,
     windowWidth,
     activityBarSideWidth
   )
+
   const { containerRef, onResizeStart } = useSidebarResize<HTMLDivElement>({
     isOpen: rightSidebarOpen,
     width: renderedRightSidebarWidth,
@@ -76,6 +81,7 @@ function RightSidebarInner(): React.JSX.Element {
     renderedExtraWidth: activityBarSideWidth,
     setWidth: setRightSidebarWidth
   })
+
   const topActivityStripRef = useMeasuredWidth(setTopActivityStripWidth)
 
   const panelContent = rightSidebarOpen ? (
@@ -214,4 +220,5 @@ function RightSidebarInner(): React.JSX.Element {
 }
 
 const RightSidebar = React.memo(RightSidebarInner)
+
 export default RightSidebar

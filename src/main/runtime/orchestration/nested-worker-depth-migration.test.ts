@@ -20,6 +20,7 @@ describe('nested worker depth migration (v30)', () => {
   afterEach(() => {
     db?.close()
     db = undefined
+
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
       tempDir = undefined
@@ -52,6 +53,7 @@ describe('nested worker depth migration (v30)', () => {
       )
       .run()
     oldDb.close()
+
     return dbPath
   }
 
@@ -106,11 +108,13 @@ describe('nested worker depth migration (v30)', () => {
     const dbPath = createV29Database()
     db = new OrchestrationDb(dbPath)
     const sqlite = (db as unknown as { db: Database.Database }).db
+
     const sql = sqlite
       .prepare(
         "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = 'idx_remote_dispatch_attachments_active_pane'"
       )
       .get() as { sql: string }
+
     for (const state of ['start_unknown', 'stopping', 'stop_unknown']) {
       expect(sql.sql).toContain(state)
     }

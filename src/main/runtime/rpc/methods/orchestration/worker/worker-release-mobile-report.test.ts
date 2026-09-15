@@ -5,7 +5,9 @@ import { sendTerminalStreamInput } from '../../terminal/terminal-input-delivery'
 import { eraseRpcMethods, isStreamingMethod, type RpcMethod } from '../../../core'
 
 const h = createOrchestrationWorkerReleaseHarness()
+
 beforeEach(() => h.setup())
+
 afterEach(() => h.cleanup())
 
 it.each(['local', 'ssh'])(
@@ -23,6 +25,7 @@ it.each(['local', 'ssh'])(
           : null
       )
     }
+
     const worker = await h.startSettledWorker()
     expect(h.db.getWorkerTerminalResourceByOwner(worker.dispatchId)?.host_scope).toContain(host)
     h.runtime.registerPreAllocatedHandleForPty('pty-worker', 'term_worker')
@@ -83,11 +86,13 @@ it.each(['unary', 'stream'])('mobile %s bytes do no orchestration database work'
   const takeover = vi.spyOn(h.db, 'markWorkerTerminalUserOwned')
   const prepare = vi.spyOn(h.db.db, 'prepare')
   const exec = vi.spyOn(h.db.db, 'exec')
+
   const params = {
     terminal: 'term_worker',
     text: 'x',
     client: { id: 'phone', type: 'mobile' as const }
   }
+
   if (lane === 'stream') {
     await expect(sendTerminalStreamInput(runtime, { ...params, isMobile: true })).resolves.toBe(
       'delivered'
@@ -96,10 +101,12 @@ it.each(['unary', 'stream'])('mobile %s bytes do no orchestration database work'
     const method = eraseRpcMethods(TERMINAL_SEND_METHODS).find(
       (m): m is RpcMethod => m.name === 'terminal.send' && !isStreamingMethod(m)
     )!
+
     await expect(
       method.handler(method.params!.parse(params) as never, { runtime } as never)
     ).resolves.toMatchObject({ send: { accepted: true } })
   }
+
   expect(write).toHaveBeenCalledWith('pty-worker', 'x')
   expect(commit).toHaveBeenCalledTimes(1)
   expect(dbAccess).not.toHaveBeenCalled()
@@ -114,6 +121,7 @@ it('the report is reachable from a mobile-scoped device token', async () => {
   // refusal, so a missing entry silently reverts every phone to the unfenced behaviour.
   const { MOBILE_RPC_METHOD_ALLOWLIST } =
     await import('../../../../runtime-rpc/runtime-rpc-mobile-method-allowlist')
+
   expect(MOBILE_RPC_METHOD_ALLOWLIST.has('orchestration.workerTerminalUserInput')).toBe(true)
 })
 
@@ -125,12 +133,15 @@ it('a phone report during the boot wait takes the pane and fences the later rele
   const gate = h.deferred<unknown>()
   vi.spyOn(h.runtime, 'waitForTerminal').mockReturnValue(gate.promise as never)
   const task = h.db.createTask({ spec: 'mid-boot phone takeover', runId: h.activeRunId })
+
   const start = h.call('orchestration.workerStart', {
     task: task.id,
     from: 'term_coord',
     agent: 'codex'
   })
+
   await vi.waitFor(() => expect(h.runtime.waitForTerminal).toHaveBeenCalled())
+
   const dispatchId = (
     h.db.db.prepare("SELECT dispatch_id FROM worker_dispatches WHERE state = 'starting'").get() as {
       dispatch_id: string

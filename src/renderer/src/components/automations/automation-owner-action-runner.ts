@@ -86,9 +86,11 @@ function conflictOutcome(code: AutomationOwnerConflictCode): AutomationActionOut
 
 function classify(error: unknown): AutomationActionOutcome<never> {
   const conflict = matchAutomationOwnerConflict(error)
+
   if (conflict) {
     return conflictOutcome(conflict)
   }
+
   if (error instanceof AutomationHostScopeUnsupportedError) {
     return {
       status: 'conflict',
@@ -99,6 +101,7 @@ function classify(error: unknown): AutomationActionOutcome<never> {
       }
     }
   }
+
   return {
     status: 'failed',
     message:
@@ -124,16 +127,20 @@ async function attempt<TValue>(
   if (availability.kind === 'blocked') {
     return { status: 'blocked', block: availability.block }
   }
+
   if (availability.kind === 'uncaptured') {
     return { status: 'uncaptured' }
   }
+
   try {
     if (availability.kind === 'owned') {
       return { status: 'ok', value: await owned(availability.owner) }
     }
+
     if (!orphanFenced) {
       return { status: 'blocked', block: orphanUnsupported() }
     }
+
     return { status: 'ok', value: await orphanFenced() }
   } catch (error) {
     return classify(error)
@@ -200,6 +207,7 @@ export async function showOwnedAutomation(
 ): Promise<AutomationActionResult<Automation | null>> {
   return await attempt(availability, async (owner) => {
     const result = await listAutomationsForOwner(owner)
+
     return result.automations.find((automation) => automation.id === id) ?? null
   })
 }

@@ -37,6 +37,7 @@ describe('buildActivityVirtualItems', () => {
       groupBy: 'status',
       collapsedGroupKeys: new Set()
     })
+
     expect(items.map((item) => getActivityVirtualItemKey(item))).toEqual([
       'h:working',
       't:a',
@@ -53,6 +54,7 @@ describe('buildActivityVirtualItems', () => {
       groupBy: 'none',
       collapsedGroupKeys: new Set()
     })
+
     expect(items.map((item) => getActivityVirtualItemKey(item))).toEqual(['t:a', 't:b'])
   })
 
@@ -62,6 +64,7 @@ describe('buildActivityVirtualItems', () => {
       groupBy: 'status',
       collapsedGroupKeys: new Set(['working'])
     })
+
     expect(items.map((item) => getActivityVirtualItemKey(item))).toEqual([
       'h:working',
       'h:done',
@@ -75,6 +78,7 @@ describe('buildActivityVirtualItems', () => {
       groupBy: 'status',
       collapsedGroupKeys: new Set()
     })
+
     expect(findActivityThreadItemIndex(items, 'c')).toBe(3)
     expect(findActivityThreadItemIndex(items, 'missing')).toBeNull()
     expect(findActivityThreadItemIndex(items, null)).toBeNull()

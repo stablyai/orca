@@ -29,6 +29,7 @@ export async function readRuntimeWorktreeVisibilityDefaults(
       undefined,
       { timeoutMs: 15_000, reuseRecentCompatibilityFailure: true }
     )
+
     return normalizeWorktreeVisibilityDefaults(result.settings.worktreeVisibilityDefaults) ?? null
   } catch {
     return undefined
@@ -40,6 +41,7 @@ export async function readRuntimeWorktreeVisibilitySnapshot(environmentId: strin
   sourceDefaultsSupported: boolean
 }> {
   const defaults = await readRuntimeWorktreeVisibilityDefaults(environmentId)
+
   const sourceDefaultsSupported =
     defaults !== undefined &&
     (await runtimeEnvironmentSupportsCapability(
@@ -47,6 +49,7 @@ export async function readRuntimeWorktreeVisibilitySnapshot(environmentId: strin
       WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
       15_000
     ).catch(() => false))
+
   return { defaults, sourceDefaultsSupported }
 }
 
@@ -60,6 +63,7 @@ export async function hydrateOwnerWorktreeVisibilityDefaults(
   sourceDefaultsSupportedRuntimeEnvironmentId: string | null
 }> {
   const target = getActiveRuntimeTarget(settings)
+
   if (target.kind !== 'environment') {
     return {
       settings,
@@ -71,15 +75,20 @@ export async function hydrateOwnerWorktreeVisibilityDefaults(
       }
     }
   }
+
   const hostId = toRuntimeExecutionHostId(target.environmentId)
+
   const localDefaults =
     defaultsByHost[LOCAL_EXECUTION_HOST_ID] ?? settings.worktreeVisibilityDefaults
+
   const ownerDefaultsByHost = localDefaults
     ? { ...defaultsByHost, [LOCAL_EXECUTION_HOST_ID]: localDefaults }
     : defaultsByHost
+
   const { defaults, sourceDefaultsSupported } = await readRuntimeWorktreeVisibilitySnapshot(
     target.environmentId
   )
+
   if (defaults) {
     return {
       settings: { ...settings, worktreeVisibilityDefaults: defaults },
@@ -90,8 +99,10 @@ export async function hydrateOwnerWorktreeVisibilityDefaults(
         : null
     }
   }
+
   if (defaults === undefined) {
     const cached = ownerDefaultsByHost[hostId]
+
     if (cached) {
       return {
         settings: { ...settings, worktreeVisibilityDefaults: cached },
@@ -102,7 +113,9 @@ export async function hydrateOwnerWorktreeVisibilityDefaults(
           : null
       }
     }
+
     const { worktreeVisibilityDefaults: _unavailable, ...settingsWithoutDefaults } = settings
+
     return {
       settings: settingsWithoutDefaults as GlobalSettings,
       defaultsByHost: ownerDefaultsByHost,
@@ -110,7 +123,9 @@ export async function hydrateOwnerWorktreeVisibilityDefaults(
       sourceDefaultsSupportedRuntimeEnvironmentId: null
     }
   }
+
   const { worktreeVisibilityDefaults: _unsupported, ...settingsWithoutDefaults } = settings
+
   return {
     settings: settingsWithoutDefaults as GlobalSettings,
     defaultsByHost: { ...ownerDefaultsByHost, [hostId]: null },

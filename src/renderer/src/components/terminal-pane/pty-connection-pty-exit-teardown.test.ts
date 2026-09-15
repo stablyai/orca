@@ -37,8 +37,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -59,6 +62,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -68,6 +72,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -88,6 +93,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -98,9 +104,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -110,9 +118,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -121,6 +131,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -133,11 +144,13 @@ function createDeps(overrides: Record<string, unknown> = {}) {
 
 function installSleepingCodexResumeState(restoredPtyId?: string) {
   const paneKey = makePaneKey('tab-1', LEAF_1)
+
   const launchConfig = {
     agentCommand: "codex '--model' 'gpt-5'",
     agentArgs: '--model gpt-5',
     agentEnv: { CODEX_PROFILE: 'captured' }
   }
+
   mockStoreState = {
     ...mockStoreState,
     tabsByWorktree: {
@@ -160,6 +173,7 @@ function installSleepingCodexResumeState(restoredPtyId?: string) {
       }
     }
   } as StoreState
+
   return launchConfig
 }
 
@@ -183,14 +197,17 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
     const manager = createManager(1)
+
     const deps = createDeps({
       consumeSuppressedPtyExit: vi.fn(() => true)
     })
 
     connectPanePty(createPane(2) as never, manager as never, deps as never)
+
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as
       | ((ptyId: string, exitCode?: number) => void)
       | undefined
+
     expect(onPtyExit).toBeTypeOf('function')
 
     onPtyExit?.('pty-pane-2')
@@ -210,6 +227,7 @@ describe('connectPanePty', () => {
     transportFactoryQueue.push(transport)
     const manager = createManager(1)
     let pending = true
+
     const deps = createDeps({
       isPtyShutdownPending: vi.fn(() => pending),
       consumeSuppressedPtyExit: vi.fn(() => true)
@@ -240,6 +258,7 @@ describe('connectPanePty', () => {
     transportFactoryQueue.push(transport)
     const manager = createManager(1)
     let pending = true
+
     const deps = createDeps({
       isPtyShutdownPending: vi.fn(() => pending),
       consumeSuppressedPtyExit: vi.fn(() => true)
@@ -265,6 +284,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
     const manager = createManager(1)
+
     const deps = createDeps({
       isPtyShutdownPending: vi.fn(() => false),
       consumeSuppressedPtyExit: vi.fn(() => true)
@@ -286,6 +306,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
     const manager = createManager(2, 2)
+
     const deps = createDeps({
       restoredLeafId: LEAF_2,
       paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) },
@@ -330,6 +351,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
     const manager = createManager(2, 2)
+
     const deps = createDeps({
       restoredLeafId: LEAF_2,
       isVisibleRef: { current: false },
@@ -356,9 +378,11 @@ describe('connectPanePty', () => {
     const deps = createDeps()
 
     connectPanePty(createPane(1) as never, manager as never, deps as never)
+
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
       | ((ptyId: string) => void)
       | undefined
+
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
     expect(onPtySpawn).toBeTypeOf('function')
     expect(onPtyExit).toBeTypeOf('function')
@@ -386,9 +410,11 @@ describe('connectPanePty', () => {
       manager as never,
       deps as never
     ) as unknown as { markShortcutTerminalInputSent: () => void }
+
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
       | ((ptyId: string) => void)
       | undefined
+
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
 
     onPtySpawn?.('tab-pty')
@@ -407,9 +433,11 @@ describe('connectPanePty', () => {
     const deps = createDeps()
 
     connectPanePty(createPane(1) as never, manager as never, deps as never)
+
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as
       | ((ptyId: string, exitCode?: number) => void)
       | undefined
+
     expect(onPtyExit).toBeTypeOf('function')
 
     onPtyExit?.('tab-pty', -1)
@@ -427,15 +455,18 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
     const manager = createManager(2)
+
     const deps = createDeps({
       restoredLeafId: LEAF_2,
       paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
     })
 
     connectPanePty(createPane(2) as never, manager as never, deps as never)
+
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as
       | ((ptyId: string, exitCode?: number) => void)
       | undefined
+
     expect(onPtyExit).toBeTypeOf('function')
 
     onPtyExit?.('pty-pane-2', -1)
@@ -456,9 +487,11 @@ describe('connectPanePty', () => {
     const deps = createDeps()
 
     connectPanePty(pane as never, manager as never, deps as never)
+
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
       | ((ptyId: string) => void)
       | undefined
+
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
     expect(onPtySpawn).toBeTypeOf('function')
     expect(onPtyExit).toBeTypeOf('function')
@@ -480,6 +513,7 @@ describe('connectPanePty', () => {
     const deps = createDeps({ onPaneProcessDied: vi.fn() })
 
     connectPanePty(pane as never, manager as never, deps as never)
+
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as
       | ((ptyId: string, exitCode?: number) => void)
       | undefined
@@ -505,9 +539,11 @@ describe('connectPanePty', () => {
     const deps = createDeps({ onPaneProcessDied: vi.fn() })
 
     connectPanePty(createPane(1) as never, manager as never, deps as never)
+
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as
       | ((ptyId: string, exitCode?: number) => void)
       | undefined
+
     onPtyExit?.('tab-pty', 1)
 
     expect(deps.onPaneProcessDied).toHaveBeenCalledWith({
@@ -525,6 +561,7 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('tab-pty')
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'tab-pty'
     })
     transportFactoryQueue.push(transport)
@@ -533,6 +570,7 @@ describe('connectPanePty', () => {
     const deps = createDeps({ onPaneProcessDied: vi.fn(), startup })
 
     connectPanePty(createPane(1) as never, manager as never, deps as never)
+
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as
       | ((ptyId: string, exitCode?: number) => void)
       | undefined
@@ -557,10 +595,12 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('resume-pty')
     transport.connect.mockImplementation(async (options: { callbacks: ConnectCallbacks }) => {
       callbacks.push(options.callbacks)
+
       return 'resume-pty'
     })
     transportFactoryQueue.push(transport)
     const launchConfig = installSleepingCodexResumeState()
+
     const deps = createDeps({
       startup: { command: 'codex stale-startup' },
       onPaneProcessDied: vi.fn()
@@ -569,9 +609,11 @@ describe('connectPanePty', () => {
     connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(20)
     callbacks[0]?.onData?.('too many consoles in use, max consoles is 128')
+
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as
       | ((ptyId: string, exitCode?: number) => void)
       | undefined
+
     onPtyExit?.('resume-pty', 1)
 
     expect(deps.onPaneProcessDied).toHaveBeenCalledWith({
@@ -597,16 +639,21 @@ describe('connectPanePty', () => {
     transport.connect.mockImplementation(
       async (options: { sessionId?: string; callbacks: ConnectCallbacks }) => {
         callbacks.push(options.callbacks)
+
         if (options.sessionId) {
           options.callbacks.onData?.('too many consoles in use, max consoles is 128')
+
           return { id: currentPtyId, sessionExpired: true }
         }
+
         currentPtyId = 'resume-pty'
+
         return currentPtyId
       }
     )
     transportFactoryQueue.push(transport)
     installSleepingCodexResumeState('lost-pty')
+
     const deps = createDeps({
       onPaneProcessDied: vi.fn(),
       restoredLeafId: LEAF_1,
@@ -616,9 +663,11 @@ describe('connectPanePty', () => {
     connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
     await flushAsyncTicks(30)
     expect(callbacks).toHaveLength(2)
+
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as
       | ((ptyId: string, exitCode?: number) => void)
       | undefined
+
     onPtyExit?.('resume-pty', 1)
 
     expect(deps.onPaneProcessDied).toHaveBeenCalledWith({
@@ -641,9 +690,11 @@ describe('connectPanePty', () => {
     const deps = createDeps({ onPaneProcessDied: vi.fn() })
 
     connectPanePty(createPane(1) as never, manager as never, deps as never)
+
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as
       | ((ptyId: string, exitCode?: number) => void)
       | undefined
+
     onPtyExit?.('tab-pty', 1)
 
     expect(deps.onPaneProcessDied).not.toHaveBeenCalled()
@@ -659,9 +710,11 @@ describe('connectPanePty', () => {
     const deps = createDeps()
 
     connectPanePty(createPane(1) as never, manager as never, deps as never)
+
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as
       | ((ptyId: string, exitCode?: number) => void)
       | undefined
+
     expect(onPtyExit).toBeTypeOf('function')
 
     // No onPtySpawn call: simulates a reattach to a persisted session.
@@ -682,12 +735,15 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
 
     connectPanePty(pane as never, manager as never, deps as never)
+
     const onPtyRebind = createdTransportOptions[0]?.onPtyRebind as
       | ((ptyId: string, replacedPtyId: string) => void)
       | undefined
+
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as
       | ((ptyId: string, exitCode?: number) => void)
       | undefined
+
     expect(onPtyRebind).toBeTypeOf('function')
     expect(onPtyExit).toBeTypeOf('function')
 
@@ -719,12 +775,15 @@ describe('connectPanePty', () => {
     const pane = createPane(1)
 
     connectPanePty(pane as never, manager as never, deps as never)
+
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
       | ((ptyId: string) => void)
       | undefined
+
     const onPtyRebind = createdTransportOptions[0]?.onPtyRebind as
       | ((ptyId: string, replacedPtyId: string) => void)
       | undefined
+
     expect(onPtySpawn).toBeTypeOf('function')
     expect(onPtyRebind).toBeTypeOf('function')
 
@@ -736,9 +795,11 @@ describe('connectPanePty', () => {
     // tab/layout commit that the real store performs atomically on replacement.
     mockStoreState.tabsByWorktree['wt-1'][0]!.ptyId = 'terminal-reconnected'
     const replacementLayout = mockStoreState.terminalLayoutsByTabId?.['tab-1']
+
     if (!replacementLayout) {
       throw new Error('test fixture missing terminal layout')
     }
+
     replacementLayout.ptyIdsByLeafId![LEAF_1] = 'terminal-reconnected'
 
     onPtySpawn?.('terminal-old')
@@ -772,12 +833,15 @@ describe('connectPanePty', () => {
     }
 
     connectPanePty(pane as never, manager as never, deps as never)
+
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
       | ((ptyId: string) => void)
       | undefined
+
     const onPtyRebind = createdTransportOptions[0]?.onPtyRebind as
       | ((ptyId: string, replacedPtyId: string) => void)
       | undefined
+
     expect(onPtySpawn).toBeTypeOf('function')
     expect(onPtyRebind).toBeTypeOf('function')
 
@@ -807,8 +871,10 @@ describe('connectPanePty', () => {
     const deps = createDeps()
     const pane = createPane(1)
     mockStoreState.tabsByWorktree['wt-1'] = [{ id: 'tab-1', ptyId: 'terminal-old' }]
+
     const terminalLayoutsByTabId =
       mockStoreState.terminalLayoutsByTabId ?? (mockStoreState.terminalLayoutsByTabId = {})
+
     terminalLayoutsByTabId['tab-1'] = {
       root: { type: 'leaf', leafId: LEAF_1 },
       activeLeafId: LEAF_1,
@@ -817,9 +883,11 @@ describe('connectPanePty', () => {
     }
 
     connectPanePty(pane as never, manager as never, deps as never)
+
     const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
       | ((ptyId: string) => void)
       | undefined
+
     expect(onPtySpawn).toBeTypeOf('function')
 
     onPtySpawn?.('terminal-new')
@@ -835,10 +903,12 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-pane-2')
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-pane-2'
     })
     transportFactoryQueue.push(transport)
     const manager = createManager(2)
+
     const deps = createDeps({
       restoredLeafId: LEAF_2,
       paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
@@ -861,15 +931,18 @@ describe('connectPanePty', () => {
     const transport = createMockTransport('pty-pane-2')
     transportFactoryQueue.push(transport)
     const manager = createManager(2)
+
     const deps = createDeps({
       restoredLeafId: LEAF_2,
       paneTransportsRef: { current: new Map([[1, createMockTransport('pty-pane-1')]]) }
     })
 
     connectPanePty(pane as never, manager as never, deps as never)
+
     const onDataMock = pane.terminal.onData as unknown as {
       mock: { calls: [[(data: string) => void] | []] }
     }
+
     const terminalInputHandler = onDataMock.mock.calls[0]?.[0]
     const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
     expect(terminalInputHandler).toBeTypeOf('function')

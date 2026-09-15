@@ -18,6 +18,7 @@ type CompositionOptions = {
 }
 
 const compositionOptions: CompositionOptions[] = []
+
 const recordedUrlParams: unknown[] = []
 
 vi.mock('./paired-runtime-browser-client-host', () => ({
@@ -109,11 +110,14 @@ async function startHost() {
     authorityRuntimeId: 'runtime-a'
   })
   const options = compositionOptions[0]
+
   if (!options) {
     throw new Error('client host composition was never constructed')
   }
+
   const { publishBrowserClientPageMetadata } =
     await import('./browser-client-page-metadata-transport')
+
   return { options, publishBrowserClientPageMetadata }
 }
 

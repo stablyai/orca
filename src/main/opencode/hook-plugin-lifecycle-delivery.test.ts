@@ -19,9 +19,13 @@ vi.mock('electron', () => ({
 import { _internals } from './hook-service'
 
 type SessionFixture = { id: string; parentID?: string }
+
 type PluginEvent = { type: string; properties?: Record<string, unknown> }
+
 type PluginEventHandler = (input: { event: PluginEvent }) => Promise<void>
+
 type PluginHooks = { event: PluginEventHandler; dispose?: () => Promise<void> }
+
 type RecordedPost = {
   hook_event_name: string
   sessionID?: string
@@ -44,9 +48,11 @@ describe('OpenCode plugin lifecycle delivery', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-opencode-lifecycle-plugin-'))
     posts = []
     savedEnv = {}
+
     for (const key of ENV_KEYS) {
       savedEnv[key] = process.env[key]
     }
+
     process.env.ORCA_PANE_KEY = 'tab-1:leaf-1'
     process.env.ORCA_AGENT_HOOK_PORT = '45678'
     process.env.ORCA_AGENT_HOOK_TOKEN = 'test-token'
@@ -54,6 +60,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     savedFetch = globalThis.fetch
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       posts.push(readPayload(init))
+
       return new Response(null, { status: 204 })
     }) as typeof globalThis.fetch
   })
@@ -61,6 +68,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
   afterEach(() => {
     vi.useRealTimers()
     globalThis.fetch = savedFetch
+
     for (const key of ENV_KEYS) {
       if (savedEnv[key] === undefined) {
         delete process.env[key]
@@ -68,6 +76,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
         process.env[key] = savedEnv[key]
       }
     }
+
     rmSync(tempDir, { recursive: true, force: true })
   })
 
@@ -86,9 +95,11 @@ describe('OpenCode plugin lifecycle delivery', () => {
   async function loadHooksWithSession(session: object): Promise<PluginHooks> {
     const pluginPath = join(tempDir, 'orca-opencode-status.mjs')
     writeFileSync(pluginPath, _internals.getOpenCodePluginSource())
+
     const module = (await import(pathToFileURL(pluginPath).href)) as {
       OrcaOpenCodeStatusPlugin: (ctx: unknown) => Promise<PluginHooks>
     }
+
     return module.OrcaOpenCodeStatusPlugin({ client: { session } })
   }
 
@@ -126,6 +137,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     if (!signal) {
       return Promise.reject(new Error('missing abort signal'))
     }
+
     return new Promise((_resolve, reject) => {
       signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
     })
@@ -158,6 +170,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     const fetchMock = vi.fn(
       async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(null, { status: 204 })
     )
+
     globalThis.fetch = fetchMock as typeof globalThis.fetch
     const handler = await loadHandler()
 
@@ -188,22 +201,30 @@ describe('OpenCode plugin lifecycle delivery', () => {
 
   it('preserves FIFO lifecycle order while the first session lookup is delayed', async () => {
     let releaseFirstLookup: (() => void) | undefined
+
     const firstLookup = new Promise<void>((resolve) => {
       releaseFirstLookup = resolve
     })
+
     let notifyFirstLookupStarted: (() => void) | undefined
+
     const firstLookupStarted = new Promise<void>((resolve) => {
       notifyFirstLookupStarted = resolve
     })
+
     let calls = 0
+
     const list = vi.fn(async () => {
       calls += 1
+
       if (calls === 1) {
         notifyFirstLookupStarted?.()
         await firstLookup
       }
+
       return { data: [{ id: 'root' }] }
     })
+
     const handler = await loadHandler(list)
 
     const busy = handler({ event: status('busy') })
@@ -229,6 +250,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       posts.push(readPayload(init))
       attempts += 1
+
       return new Response(null, { status: attempts === 1 ? 503 : 204 })
     }) as typeof globalThis.fetch
     const handler = await loadHandler()
@@ -250,17 +272,22 @@ describe('OpenCode plugin lifecycle delivery', () => {
     let attempts = 0
     let firstSignal: AbortSignal | undefined
     let notifyFirstFetchStarted: (() => void) | undefined
+
     const firstFetchStarted = new Promise<void>((resolve) => {
       notifyFirstFetchStarted = resolve
     })
+
     globalThis.fetch = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
       posts.push(readPayload(init))
       attempts += 1
+
       if (attempts > 1) {
         return Promise.resolve(new Response(null, { status: 204 }))
       }
+
       firstSignal = init?.signal ?? undefined
       notifyFirstFetchStarted?.()
+
       return new Promise<Response>((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
           once: true
@@ -290,6 +317,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const payload = readPayload(init)
       posts.push(payload)
+
       return new Response(null, {
         status: payload.hook_event_name === 'SessionBusy' ? 503 : 204
       })
@@ -311,6 +339,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       posts.push(readPayload(init))
       attempts += 1
+
       return new Response(null, { status: attempts === 1 ? 503 : 204 })
     }) as typeof globalThis.fetch
     const handler = await loadHandler()
@@ -333,10 +362,13 @@ describe('OpenCode plugin lifecycle delivery', () => {
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const payload = readPayload(init)
       posts.push(payload)
+
       if (payload.hook_event_name === 'SessionIdle') {
         idleAttempts += 1
+
         return new Response(null, { status: idleAttempts === 1 ? 503 : 204 })
       }
+
       return new Response(null, { status: 204 })
     }) as typeof globalThis.fetch
     const handler = await loadHandler()
@@ -360,6 +392,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       posts.push(readPayload(init))
       attempts += 1
+
       return new Response(null, { status: attempts === 1 ? 503 : 204 })
     }) as typeof globalThis.fetch
     const handler = await loadHandler()
@@ -378,6 +411,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       posts.push(readPayload(init))
       attempts += 1
+
       return new Response(null, { status: attempts === 1 ? 503 : 204 })
     }) as typeof globalThis.fetch
     const handler = await loadHandler()
@@ -397,6 +431,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     vi.useFakeTimers()
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       posts.push(readPayload(init))
+
       return new Response(null, { status: 503 })
     }) as typeof globalThis.fetch
     const handler = await loadHandler()
@@ -405,6 +440,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     expect(names()).toHaveLength(1)
 
     const retryDelays = [500, 1_000, 2_000, 4_000, 8_000, 16_000, 30_000, 30_000]
+
     for (const [index, delay] of retryDelays.entries()) {
       await vi.advanceTimersByTimeAsync(delay - 1)
       expect(names()).toHaveLength(index + 1)
@@ -416,17 +452,23 @@ describe('OpenCode plugin lifecycle delivery', () => {
   it('fails Busy open after a hung lookup and still lets queued Idle proceed', async () => {
     vi.useFakeTimers()
     let releaseLookup: (() => void) | undefined
+
     const blockedLookup = new Promise<void>((resolve) => {
       releaseLookup = resolve
     })
+
     let calls = 0
+
     const list = vi.fn(async () => {
       calls += 1
+
       if (calls === 1) {
         await blockedLookup
       }
+
       return { data: [{ id: 'root' }] }
     })
+
     const handler = await loadHandler(list)
     const busy = handler({ event: status('busy') })
     const idle = handler({ event: status('idle') })
@@ -435,6 +477,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     expect(list).toHaveBeenCalledTimes(1)
     expect(posts).toHaveLength(0)
     await vi.advanceTimersByTimeAsync(1)
+
     try {
       expect(list).toHaveBeenCalledTimes(2)
       // Busy is safe to fail open: even a child means its root is working.
@@ -443,6 +486,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     } finally {
       releaseLookup?.()
     }
+
     await Promise.all([busy, idle])
   })
 
@@ -450,11 +494,14 @@ describe('OpenCode plugin lifecycle delivery', () => {
     vi.useFakeTimers()
     let capturedParameters: unknown
     let capturedSignal: AbortSignal | undefined
+
     function get(parameters: unknown, options: { signal?: AbortSignal }) {
       capturedParameters = parameters
       capturedSignal = options?.signal
+
       return rejectWhenAborted(capturedSignal)
     }
+
     const hooks = await loadHooksWithSession({
       get,
       list: async () => ({ data: [{ id: 'root' }] })
@@ -472,10 +519,13 @@ describe('OpenCode plugin lifecycle delivery', () => {
   it('aborts a hung legacy-SDK point lookup through its one-object argument', async () => {
     vi.useFakeTimers()
     let capturedOptions: { path?: { id?: string }; signal?: AbortSignal } | undefined
+
     function get(options: { path?: { id?: string }; signal?: AbortSignal }) {
       capturedOptions = options
+
       return rejectWhenAborted(options.signal)
     }
+
     const hooks = await loadHooksWithSession({
       get,
       list: async () => ({ data: [{ id: 'root' }] })
@@ -494,11 +544,14 @@ describe('OpenCode plugin lifecycle delivery', () => {
     vi.useFakeTimers()
     let capturedParameters: unknown
     let capturedSignal: AbortSignal | undefined
+
     function list(parameters: unknown, options: { signal?: AbortSignal }) {
       capturedParameters = parameters
       capturedSignal = options?.signal
+
       return rejectWhenAborted(capturedSignal)
     }
+
     const hooks = await loadHooksWithSession({ list })
 
     const busy = hooks.event({ event: status('busy') })
@@ -513,10 +566,13 @@ describe('OpenCode plugin lifecycle delivery', () => {
   it('aborts a hung legacy-SDK list fallback through its one-object argument', async () => {
     vi.useFakeTimers()
     let capturedOptions: { signal?: AbortSignal } | undefined
+
     function list(options: { signal?: AbortSignal }) {
       capturedOptions = options
+
       return rejectWhenAborted(options.signal)
     }
+
     const hooks = await loadHooksWithSession({ list })
 
     const busy = hooks.event({ event: status('busy') })
@@ -533,6 +589,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
       const payload = readPayload(init)
       posts.push(payload)
       const firstBusy = payload.hook_event_name === 'SessionBusy' && names().length === 1
+
       return new Response(null, { status: firstBusy ? 503 : 204 })
     }) as typeof globalThis.fetch
     const handler = await loadHandler()
@@ -553,15 +610,18 @@ describe('OpenCode plugin lifecycle delivery', () => {
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       posts.push(readPayload(init))
       attempts += 1
+
       return new Response(null, { status: attempts < 3 ? 503 : 204 })
     }) as typeof globalThis.fetch
     const handler = await loadHandler()
 
     await handler({ event: status('busy') })
     await handler({ event: delta('stream-0') })
+
     for (let index = 1; index < 50; index += 1) {
       await handler({ event: delta(`stream-${String(index)}`) })
     }
+
     expect(names()).toEqual(['SessionBusy', 'SessionBusy'])
 
     await vi.advanceTimersByTimeAsync(999)
@@ -574,6 +634,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     vi.useFakeTimers()
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       posts.push(readPayload(init))
+
       return new Response(null, { status: 503 })
     }) as typeof globalThis.fetch
     const hooks = await loadHooks()
@@ -672,6 +733,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
     globalThis.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const payload = readPayload(init)
       posts.push(payload)
+
       return new Response(null, {
         status: payload.hook_event_name === 'MessagePart' ? 503 : 204
       })
@@ -700,17 +762,23 @@ describe('OpenCode plugin lifecycle delivery', () => {
 
   it('does not publish a MessagePart after its factory is disposed during lookup', async () => {
     let releaseLookup: (() => void) | undefined
+
     const blockedLookup = new Promise<void>((resolve) => {
       releaseLookup = resolve
     })
+
     let calls = 0
+
     const list = vi.fn(async () => {
       calls += 1
+
       if (calls === 2) {
         await blockedLookup
       }
+
       return { data: [{ id: 'seed' }, { id: 'root' }] }
     })
+
     const hooks = await loadHooks(list)
     await hooks.event({
       event: {
@@ -728,6 +796,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
         }
       }
     })
+
     await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2))
     await hooks.dispose?.()
     releaseLookup?.()
@@ -749,6 +818,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
         }
       }
     })
+
     const part = (text: string): PluginEvent => ({
       type: 'message.part.updated',
       properties: {
@@ -788,6 +858,7 @@ describe('OpenCode plugin lifecycle delivery', () => {
         url: String(url),
         token: new Headers(init?.headers).get('X-Orca-Agent-Hook-Token')
       })
+
       return new Response(null, { status: 204 })
     }) as typeof globalThis.fetch
     const handler = await loadHandler()

@@ -34,6 +34,7 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
     ) {
       return
     }
+
     try {
       // Why: dropStatusEntry (not clearPaneState) is correct here — the user is
       // dismissing a status row, not tearing down a PTY. clearPaneState would also
@@ -50,6 +51,7 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
     if (!isValidAgentStatusCacheIdentity(request)) {
       return
     }
+
     try {
       if (agentHookServer.dropPersistedStatusEntry(request)) {
         clearMigrationUnsupportedPtysForPaneKey(request.paneKey)
@@ -63,10 +65,13 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
     if (!Array.isArray(request) || request.length > MAX_DROP_PERSISTED_BATCH) {
       return
     }
+
     const identities = request.filter(isValidAgentStatusCacheIdentity)
+
     if (identities.length === 0) {
       return
     }
+
     try {
       for (const paneKey of agentHookServer.dropPersistedStatusEntries(identities)) {
         clearMigrationUnsupportedPtysForPaneKey(paneKey)
@@ -80,6 +85,7 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
     if (typeof paneKey !== 'string' || !isValidPaneKey(paneKey)) {
       return
     }
+
     try {
       // Why: a process-table-confirmed agent exit is exactly the case the dismissal above excludes
       // — the pane's agent is NOT still alive — so its latches must go with the row (STA-4612).
@@ -99,6 +105,7 @@ export function registerAgentStatusRowTeardownIpcHandlers(): void {
     if (!isValidAgentStatusDropTabId(tabId)) {
       return
     }
+
     try {
       agentHookServer.dropStatusEntriesByTabPrefix(tabId)
       clearMigrationUnsupportedPtysByTabPrefix(tabId)
@@ -112,7 +119,9 @@ function isValidAgentStatusCacheIdentity(value: unknown): value is AgentStatusCa
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false
   }
+
   const request = value as Record<string, unknown>
+
   return (
     typeof request.paneKey === 'string' &&
     isValidPaneKey(request.paneKey) &&

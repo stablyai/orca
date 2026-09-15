@@ -8,11 +8,13 @@ export function normalizeRepoBadgeColor(value: unknown): string | null {
   }
 
   const match = value.trim().match(HEX_COLOR_PATTERN)
+
   if (!match) {
     return null
   }
 
   const rawHex = match[1].toLowerCase()
+
   const hex =
     rawHex.length === 3
       ? rawHex
@@ -20,7 +22,9 @@ export function normalizeRepoBadgeColor(value: unknown): string | null {
           .map((part) => part + part)
           .join('')
       : rawHex
+
   const normalized = `#${hex}`
+
   return REPO_COLORS.find((repoColor) => repoColor === normalized) ?? normalized
 }
 

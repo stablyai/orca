@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const ipcEmitter = new EventEmitter()
+
 const ipcMainMock = {
   on: vi.fn((channel: string, listener: (...args: unknown[]) => void) => {
     ipcEmitter.on(channel, listener)
@@ -25,10 +26,13 @@ describe('requestMobileMarkdownFromRenderer', () => {
 
   it('ignores markdown responses from other renderer processes', async () => {
     const { requestMobileMarkdownFromRenderer } = await import('./mobile-markdown-request-relay')
+
     const mainWebContents = {
       send: vi.fn()
     }
+
     const otherWebContents = {}
+
     const mainWindow = {
       isDestroyed: () => false,
       webContents: mainWebContents
@@ -39,6 +43,7 @@ describe('requestMobileMarkdownFromRenderer', () => {
       worktreeId: 'wt-1',
       tabId: 'tab-md'
     })
+
     const sentRequest = mainWebContents.send.mock.calls[0]?.[1] as { id: string }
 
     ipcEmitter.emit(

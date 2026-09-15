@@ -15,10 +15,13 @@ export type PtySlaveLineEditorState = 'line-editor' | 'other' | 'unknown' | 'una
 export type PtySlaveLineEditorProbe = () => Promise<PtySlaveLineEditorState>
 
 const STTY_TIMEOUT_MS = 2_000
+
 // `stty -a` prints the lflags as a space-separated list where a disabled flag is
 // prefixed with `-`, so `echo` and `-echo` are the two tokens that matter.
 const ECHO_FLAG = /(?:^|\s)(-?)echo(?:\s|$)/
+
 const ICANON_FLAG = /(?:^|\s)(-?)icanon(?:\s|$)/
+
 const LNEXT_UNDEFINED = /(?:^|[;\s])lnext\s*=\s*<undef>(?:;|\s|$)/
 
 function sttyArgs(ptsName: string, platform: NodeJS.Platform): readonly string[] {
@@ -31,9 +34,11 @@ function sttyArgs(ptsName: string, platform: NodeJS.Platform): readonly string[]
 function parseLineEditorState(sttyOutput: string): PtySlaveLineEditorState {
   const echo = ECHO_FLAG.exec(sttyOutput)
   const icanon = ICANON_FLAG.exec(sttyOutput)
+
   if (!echo || !icanon) {
     return 'unknown'
   }
+
   return echo[1] === '-' && icanon[1] === '-' && LNEXT_UNDEFINED.test(sttyOutput)
     ? 'line-editor'
     : 'other'
@@ -51,6 +56,7 @@ function isPermanentSttyFailure(error: ExecFileException): boolean {
   if (error.killed || error.signal) {
     return false
   }
+
   return error.code !== 'EAGAIN' && error.code !== 'EMFILE' && error.code !== 'ENFILE'
 }
 
@@ -77,6 +83,7 @@ function runStty(ptsName: string, platform: NodeJS.Platform): Promise<SttyProbeR
  */
 export function readPtySlavePath(pty: unknown): string | undefined {
   const candidate = (pty as { ptsName?: unknown } | null | undefined)?.ptsName
+
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined
 }
 
@@ -95,21 +102,25 @@ function createSttyProbe<T extends string>(
   if (platform === 'win32' || !ptsName) {
     return undefined
   }
+
   // Why latch: `stty` missing or the slave already reaped is a permanent condition for
   // this pty, and the caller polls — without this a dead probe respawns a process per
   // attempt. A successful probe is never cached, because the bit is what changes, and a
   // transient failure is not latched at all (see isPermanentSttyFailure).
   let unavailable = false
   let inFlight: Promise<SttyProbeResult> | null = null
+
   return async () => {
     if (unavailable) {
       return 'unavailable'
     }
+
     inFlight ??= runStty(ptsName, platform).finally(() => {
       inFlight = null
     })
     const result = await inFlight
     unavailable = result.permanent
+
     return result.stdout === null
       ? result.permanent
         ? 'unavailable'

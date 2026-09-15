@@ -84,6 +84,7 @@ function keygenRemoveTarget(displayHost: string, port: number): string {
  * default and we accepted AND persisted a host the user had told ssh to refuse.
  */
 const STRICT_VALUES = new Set(['true', 'yes', 'always'])
+
 const LAX_VALUES = new Set(['false', 'no', 'off'])
 
 /**
@@ -99,13 +100,17 @@ export function strictestHostKeyChecking(
   siteValue: string | null
 ): string {
   const user = userValue ?? 'ask'
+
   if (siteValue === null) {
     return user
   }
+
   const site = siteValue.trim().toLowerCase()
+
   if (STRICT_VALUES.has(site) && !STRICT_VALUES.has(user.trim().toLowerCase())) {
     return site
   }
+
   // A site that is lax never loosens a user who is not: refusing to write trust is the safe side.
   return LAX_VALUES.has(site) ? user : site === 'accept-new' && user === 'ask' ? site : user
 }
@@ -168,6 +173,7 @@ export function decideHostKey(input: HostKeyDecisionInput): HostKeyDecision {
     port,
     hostKeyStoreFile
   } = input
+
   const strict = input.strictHostKeyChecking.toLowerCase()
 
   // Revocation outranks everything, including StrictHostKeyChecking=no. A revoked key is a
@@ -194,6 +200,7 @@ export function decideHostKey(input: HostKeyDecisionInput): HostKeyDecision {
       )
     }
   }
+
   // Why known_hosts outranks our own record here: this is what a legitimate key rotation looks like
   // once the user has run the remedy we print. `ssh-keygen -R host` then a reconnect leaves
   // known_hosts holding the NEW key while our store still holds the old one, and checking the store
@@ -203,6 +210,7 @@ export function decideHostKey(input: HostKeyDecisionInput): HostKeyDecision {
   if (knownHostsOutcome === 'match') {
     return { action: 'accept', outcome: 'match' }
   }
+
   if (storeOutcome === 'mismatch') {
     return {
       action: 'reject',
@@ -226,6 +234,7 @@ export function decideHostKey(input: HostKeyDecisionInput): HostKeyDecision {
     storeOutcome === 'unknown-type-known-host'
   ) {
     const fromKnownHosts = knownHostsOutcome === 'unknown-type-known-host'
+
     return {
       action: 'reject',
       outcome: 'unknown-type-known-host',
@@ -266,6 +275,7 @@ export function decideHostKey(input: HostKeyDecisionInput): HostKeyDecision {
       )
     }
   }
+
   // Deliberately ABOVE the incomplete-sources check, and deliberately BELOW explicit strict.
   //
   // A machine provisioned a minute ago cannot be in known_hosts, by construction — no policy, seen
@@ -282,6 +292,7 @@ export function decideHostKey(input: HostKeyDecisionInput): HostKeyDecision {
   if (isEphemeralRuntimeTarget) {
     return { action: 'accept', outcome: unknownOutcome }
   }
+
   if (siteConfigSuppressed) {
     // We could not read the system ssh_config, so we cannot prove a site policy does not forbid
     // this. Refusing to extend NEW trust while blind is the only way to avoid being laxer than ssh.
@@ -294,14 +305,17 @@ export function decideHostKey(input: HostKeyDecisionInput): HostKeyDecision {
       )
     }
   }
+
   if (knownHostsUnreadable) {
     // Connect as ssh does, but do not write a record from evidence we could not read.
     return { action: 'accept', outcome: unknownOutcome }
   }
+
   if (LAX_VALUES.has(strict)) {
     // OpenSSH accepts here but does not write. Persisting would silently convert a deliberately
     // lax setting into a permanent trust record.
     return { action: 'accept', outcome: unknownOutcome }
   }
+
   return { action: 'accept-and-remember', outcome: unknownOutcome }
 }

@@ -72,13 +72,16 @@ export function useAddRepoNestedImportFlow({
   trackNestedBackAction: () => void
 } {
   const nestedImportGenRef = useRef(0)
+
   const resetNestedImportFlow = useCallback((): void => {
     nestedImportGenRef.current++
   }, [])
+
   const trackNestedBackAction = useCallback((): void => {
     if (!nestedScan || !nestedAttemptId) {
       return
     }
+
     track(
       'add_repo_nested_import_action',
       buildNestedRepoImportActionTelemetry({
@@ -102,6 +105,7 @@ export function useAddRepoNestedImportFlow({
   const handleImportNestedRepos = useCallback(
     async (mode: 'group' | 'separate'): Promise<void> => {
       const attemptId = nestedAttemptId
+
       if (
         !nestedScan ||
         !attemptId ||
@@ -112,12 +116,15 @@ export function useAddRepoNestedImportFlow({
       ) {
         return
       }
+
       const foundCount = nestedScan.repos.length
       const selectedCount = nestedSelectedPaths.size
+
       const selectedProjectPaths = getSelectedNestedRepoPathsInScanOrder(
         nestedScan,
         nestedSelectedPaths
       )
+
       const runtimeKind = nestedRuntimeKind ?? getNestedRepoRuntimeKind(nestedConnectionId)
       const gen = ++nestedImportGenRef.current
       setIsAdding(true)
@@ -133,6 +140,7 @@ export function useAddRepoNestedImportFlow({
         })
       )
       let resultTracked = false
+
       try {
         const result = await importNestedRepos({
           parentPath: nestedScan.selectedPath,
@@ -143,6 +151,7 @@ export function useAddRepoNestedImportFlow({
           runtimeEnvironmentId: nestedRuntimeEnvironmentId,
           mode
         })
+
         track(
           'add_repo_nested_import_result',
           buildNestedRepoImportResultTelemetry({
@@ -156,15 +165,20 @@ export function useAddRepoNestedImportFlow({
           })
         )
         resultTracked = true
+
         if (!result) {
           return
         }
+
         const importedRepoIds = result.projects
           .map((entry) => entry.projectId)
           .filter((projectId): projectId is string => typeof projectId === 'string')
+
         const firstRepoId = importedRepoIds[0]
+
         if (!firstRepoId) {
           const firstFailure = result.projects.find((entry) => entry.status === 'failed')?.error
+
           if (gen === nestedImportGenRef.current) {
             toast.error(
               translate(
@@ -176,16 +190,21 @@ export function useAddRepoNestedImportFlow({
               }
             )
           }
+
           return
         }
+
         const completionOwner = nestedConnectionId === null ? nestedRuntimeEnvironmentId : undefined
         const completionOwnerOptions = worktreeRefreshOptions(completionOwner, nestedConnectionId)
+
         for (const projectId of importedRepoIds) {
           await fetchWorktrees(projectId, completionOwnerOptions)
         }
+
         if (gen !== nestedImportGenRef.current) {
           return
         }
+
         if (result.failedCount > 0) {
           toast.warning(
             translate(
@@ -201,13 +220,16 @@ export function useAddRepoNestedImportFlow({
             }
           )
         }
+
         const repo = useAppStore.getState().repos.find((entry) => entry.id === firstRepoId)
+
         if (repo) {
           const source: AddRepoExistingWorkspaceSource = nestedConnectionId
             ? 'ssh_remote_path'
             : activeRuntimeEnvironmentId?.trim()
               ? 'runtime_server_path'
               : 'local_folder_picker'
+
           await onGitRepoReady(repo.id, source, completionOwnerOptions.executionHostId)
         }
       } catch (err) {
@@ -229,6 +251,7 @@ export function useAddRepoNestedImportFlow({
             })
           )
         }
+
         if (gen === nestedImportGenRef.current) {
           setIsAdding(false)
         }
@@ -251,18 +274,22 @@ export function useAddRepoNestedImportFlow({
       setIsAdding
     ]
   )
+
   const handleOpenNestedRootFolder = useCallback(() => {
     if (!nestedScan) {
       return Promise.resolve()
     }
+
     const generation = ++nestedImportGenRef.current
     // Why: only an edited name overrides host naming, so an untouched prefill still lets the host
     // pick (e.g. the SSH target label for `~`).
     const enteredName = nestedGroupName.trim()
+
     const displayName =
       enteredName && enteredName !== defaultProjectGroupNameForPath(nestedScan.selectedPath)
         ? enteredName
         : undefined
+
     return completeNestedFolderOpen({
       scan: nestedScan,
       generation,
@@ -289,6 +316,7 @@ export function useAddRepoNestedImportFlow({
     nestedSelectedPaths.size,
     setIsAdding
   ])
+
   return {
     handleImportNestedRepos,
     handleOpenNestedRootFolder,

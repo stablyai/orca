@@ -32,6 +32,7 @@ export function buildPluginWorkerEnv(
 ): Record<string, string> {
   const env: Record<string, string> = {}
   const windowsLookup = new Map<string, string>()
+
   if (platform === 'win32') {
     // Why: Windows environment keys are case-insensitive, while POSIX keys
     // are not; folding on every platform could promote an attacker-set `path`.
@@ -41,12 +42,16 @@ export function buildPluginWorkerEnv(
       }
     }
   }
+
   for (const key of WORKER_ENV_ALLOWLIST) {
     const value = platform === 'win32' ? windowsLookup.get(key) : baseEnv[key]
+
     if (value !== undefined) {
       env[key === 'SYSTEMROOT' ? 'SystemRoot' : key] = value
     }
   }
+
   env.ELECTRON_RUN_AS_NODE = '1'
+
   return env
 }

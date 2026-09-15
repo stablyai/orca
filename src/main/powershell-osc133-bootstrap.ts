@@ -1,5 +1,6 @@
 import { getPowerShellOmpShellWrapper } from './pty/omp-shell-wrapper'
 import { getPowerShellCodexShellLaunchPreflight } from './pty/codex-shell-launch-preflight'
+
 export { encodePowerShellCommand } from '../shared/powershell-command-encoding'
 
 /**
@@ -105,6 +106,7 @@ export function getPowerShellOsc133Bootstrap(): string {
 
 export function isPowerShellExecutableName(shellName: string): boolean {
   const normalized = shellName.toLowerCase()
+
   return (
     normalized === 'pwsh' ||
     normalized === 'pwsh.exe' ||

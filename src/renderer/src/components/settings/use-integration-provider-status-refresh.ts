@@ -14,9 +14,11 @@ export function useIntegrationProviderStatusRefresh(): void {
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
+
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
   )
+
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
@@ -26,9 +28,11 @@ export function useIntegrationProviderStatusRefresh(): void {
     if (!linearStatusCurrent || !linearStatusChecked) {
       void checkLinearConnection()
     }
+
     if (!jiraStatusCurrent || !jiraStatusChecked) {
       void checkJiraConnection()
     }
+
     if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
     }

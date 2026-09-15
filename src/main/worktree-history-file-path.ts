@@ -29,6 +29,7 @@
 
 /** 16 hex chars: `hashWorktreeId`. */
 const WORKTREE_HASH = '[0-9a-f]{16}'
+
 const HISTORY_FILE = '(?:zsh|bash)_history'
 
 // Why a leading `/` rather than `(?:^|/)`: every minted value is absolute (or a

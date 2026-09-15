@@ -66,14 +66,18 @@ describe('terminal freeze report', () => {
 
   it('installs the console-callable global exactly once per renderer', async () => {
     snapshotMock.mockResolvedValue({ pendingPtyCount: 0 })
+
     const { installTerminalFreezeReport, buildTerminalFreezeReport } =
       await import('./terminal-freeze-report')
+
     installTerminalFreezeReport()
+
     const installed = (
       globalThis.window as unknown as {
         __orcaTerminalFreezeReport?: () => Promise<unknown>
       }
     ).__orcaTerminalFreezeReport
+
     expect(installed).toBe(buildTerminalFreezeReport)
   })
 })

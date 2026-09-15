@@ -20,11 +20,15 @@ export function handleCodexSessionExit(input: {
   onBackgroundTasksChanged?: CodexStructuredSessionAdapterDeps['onBackgroundTasksChanged']
 }): boolean {
   const session = input.sessions.get(input.sessionId)
+
   if (!session || session.connection !== input.connection || session.ended) {
     input.prompts?.clear()
+
     return false
   }
+
   session.exitObservedAt ??= Date.now()
+
   const event: StructuredAgentSessionLifecycleEvent = {
     type: 'ended',
     sessionId: input.sessionId,
@@ -34,9 +38,11 @@ export function handleCodexSessionExit(input: {
     acquisitionGeneration: session.acquisitionGeneration,
     observedAt: session.exitObservedAt
   } as const
+
   // A synchronous sink rejection (usually backpressure) is handed to host
   // recovery, which appends the bounded fallback before reacquisition.
   const admission = session.translator?.handle(event) ?? { accepted: true }
+
   if (!admission.accepted) {
     // The connection invokes onExit exactly once. Forward a flagged event so
     // host recovery can append its no-new-blob fallback even when admission is
@@ -44,8 +50,10 @@ export function handleCodexSessionExit(input: {
     if (event.cause !== 'unexpected-exit' && !input.allowFailedSettlement) {
       return false
     }
+
     event.settlementRetryRequired = true
   }
+
   session.ended = true
   // Nothing can echo for this child any more; the journal's pending-submission
   // recovery is what settles the sends these were armed for.
@@ -56,6 +64,7 @@ export function handleCodexSessionExit(input: {
   input.onEvent?.(event)
   session.prompts.clear()
   session.translator?.dispose()
+
   return true
 }
 
@@ -72,9 +81,11 @@ export async function closeCodexPublishedSession(
   }
 ): Promise<boolean> {
   const session = sessions.get(sessionId)
+
   if (!session) {
     return true
   }
+
   if (
     (options?.expectedFence !== undefined && session.fence !== options.expectedFence) ||
     (options?.expectedAcquisitionGeneration !== undefined &&
@@ -82,15 +93,18 @@ export async function closeCodexPublishedSession(
   ) {
     return false
   }
+
   // Sink-failure recovery force-closes the child but must preserve the
   // observed-exit cause so host lease settlement runs as an unexpected death.
   session.requestedClose = options?.requestedClose ?? true
   // Keep the session indexed until the child exit is observed. A timeout or
   // failed kill must leave the live connection available for a safe retry.
   const exited = await session.connection.close()
+
   if (exited !== true) {
     return false
   }
+
   if (!session.ended) {
     const handled = handleCodexSessionExit({
       sessions,
@@ -101,13 +115,16 @@ export async function closeCodexPublishedSession(
       ...(options?.allowFailedSettlement ? { allowFailedSettlement: true } : {}),
       ...(onEvent ? { onEvent } : {})
     })
+
     // Keep the closed session indexed when terminal settlement admission was
     // rejected; a later close attempt retries the same stable lifecycle event.
     if (!handled) {
       return false
     }
   }
+
   sessions.delete(sessionId)
+
   return true
 }
 
@@ -118,12 +135,15 @@ export async function closeCodexSession(
   onEvent?: (event: CodexStructuredSessionEvent) => void
 ): Promise<boolean> {
   const attempt = acquisitions.get(sessionId)
+
   if (!(await cancelCodexAcquisitionAttempt(attempt))) {
     return false
   }
+
   if (attempt) {
     acquisitions.deleteIfCurrent(sessionId, attempt)
   }
+
   return closeCodexPublishedSession(sessions, sessionId, onEvent)
 }
 

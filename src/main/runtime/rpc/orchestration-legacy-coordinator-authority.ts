@@ -21,35 +21,46 @@ export class LegacyCoordinatorAuthority {
   ): LegacyCoordinatorAuthorityProof | undefined {
     const db = this.runtime.getOrchestrationDb()
     const adoption = db.getLegacyAdoption()
+
     if (!adoption) {
       return undefined
     }
+
     // Why: an unnamed Run means the caller's own binding; only an unbound caller can still mean the adopted Run.
     const requestedRun = requestedRunId ?? boundRunId(db, request) ?? adoption.adopted_run_id
+
     if (requestedRun !== adoption.adopted_run_id) {
       return undefined
     }
+
     const candidate = db.resolveLegacyCoordinatorCandidate({
       runId: adoption.adopted_run_id,
       terminalHandle: request.orchestrationCompatibilityEvidence?.terminalHandle,
       paneKey: request.orchestrationCompatibilityEvidence?.paneKey
     })
+
     if (!candidate) {
       const evidence = request.orchestrationCompatibilityEvidence
+
       if (!evidence) {
         return undefined
       }
+
       const run = db.getRun(adoption.adopted_run_id)
       const principal = db.getLegacyCoordinatorPrincipal(adoption.adopted_run_id)
+
       // Why: an unclaimed adopted Run has no coordinator to fence, and a revoked principal is exactly that.
       if (!run?.coordinator_pane_key && principal?.status !== 'committed') {
         return undefined
       }
+
       const caller = this.runtime.verifyOrchestrationCompatibilityCaller(evidence)
+
       // Why: the binding is trusted DB state, so the owner keeps its Run on hosts where attestation is unavailable.
       if (run && (ownsRunBinding(run, caller) || ownsRunBinding(run, evidence))) {
         return undefined
       }
+
       // Why: only a caller already known as the legacy coordinator is in this fence's jurisdiction;
       // fencing anyone else hides the honest downstream error behind unusable takeover guidance.
       if (
@@ -58,24 +69,32 @@ export class LegacyCoordinatorAuthority {
       ) {
         return undefined
       }
+
       throw legacyCoordinatorReadOnly()
     }
+
     const existing = db.getLegacyCoordinatorPrincipal(adoption.adopted_run_id)
+
     const proofCandidate = existing
       ? this.candidate(adoption.adopted_run_id, existing)
       : this.candidate(adoption.adopted_run_id, candidate)
+
     const attestation = verifyAttestedLegacyCandidate({
       runtime: this.runtime,
       evidence: request.orchestrationCompatibilityEvidence,
       candidate: proofCandidate
     })
+
     const run = db.getRun(adoption.adopted_run_id)
+
     if (!run || !this.bindingMatches(run, proofCandidate)) {
       throw legacyCoordinatorReadOnly()
     }
+
     if (existing && !this.principalMatchesAttestation(existing, attestation)) {
       throw legacyCoordinatorReadOnly()
     }
+
     const principal = existing
       ? existing
       : request.method === 'orchestration.runUse'
@@ -86,6 +105,7 @@ export class LegacyCoordinatorAuthority {
             authority: attestation
           })
         : undefined
+
     return {
       runId: run.id,
       principalId: principal?.id ?? null,
@@ -99,6 +119,7 @@ export class LegacyCoordinatorAuthority {
     const db = this.runtime.getOrchestrationDb()
     const adoption = db.getLegacyAdoption()
     const run = db.getRun(proof.runId)
+
     if (
       adoption?.adopted_run_id !== proof.runId ||
       !run ||
@@ -106,8 +127,10 @@ export class LegacyCoordinatorAuthority {
     ) {
       throw legacyCoordinatorReadOnly()
     }
+
     const candidate = this.candidate(proof.runId, proof)
     const principal = db.getLegacyCoordinatorPrincipal(proof.runId)
+
     if (proof.principalId) {
       if (
         principal?.id !== proof.principalId ||
@@ -125,17 +148,21 @@ export class LegacyCoordinatorAuthority {
     ) {
       throw legacyCoordinatorReadOnly()
     }
+
     const attestation = verifyAttestedLegacyCandidate({
       runtime: this.runtime,
       evidence: request.orchestrationCompatibilityEvidence,
       candidate
     })
+
     if (principal && !this.principalMatchesAttestation(principal, attestation)) {
       throw legacyCoordinatorReadOnly()
     }
+
     if (!this.bindingMatches(run, candidate)) {
       throw legacyCoordinatorReadOnly()
     }
+
     return run.id
   }
 
@@ -196,5 +223,6 @@ function ownsRunBinding(
 
 function boundRunId(db: OrchestrationDb, request: RpcRequest): string | undefined {
   const paneKey = request.orchestrationCompatibilityEvidence?.paneKey
+
   return paneKey ? db.getCurrentRunForPane(paneKey)?.id : undefined
 }

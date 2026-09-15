@@ -4,6 +4,7 @@ import { buildJiraCreateCustomFields } from '@/components/task-page-jira-create-
 import { jiraCreateIssue, jiraGetIssue } from '@/runtime/runtime-jira-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+
 export function useTaskPageJiraIssueCreation(model: TaskPageLinearIssueCreationModel) {
   const {
     settings,
@@ -29,20 +30,26 @@ export function useTaskPageJiraIssueCreation(model: TaskPageLinearIssueCreationM
     visibleJiraCreateFields,
     hasMissingJiraCreateField
   } = model
+
   const handleCreateNewJiraIssue = useCallback(async (): Promise<void> => {
     if (!newJiraIssueTargetProject || !newJiraIssueTargetType) {
       return
     }
+
     const title = newJiraIssueTitle.trim()
+
     if (!title || newJiraIssueSubmitting || hasMissingJiraCreateField || jiraCreateFieldsLoading) {
       return
     }
+
     const customFields = buildJiraCreateCustomFields(
       visibleJiraCreateFields,
       newJiraIssueCustomFieldValues
     )
+
     setNewJiraIssueSubmitting(true)
     const submitProviderRuntimeContextKey = providerRuntimeContextKey
+
     try {
       const result = await jiraCreateIssue(jiraTaskSourceContext ?? settings, {
         siteId: newJiraIssueTargetProject.siteId,
@@ -52,16 +59,20 @@ export function useTaskPageJiraIssueCreation(model: TaskPageLinearIssueCreationM
         description: newJiraIssueBody || undefined,
         customFields
       })
+
       if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
         return
       }
+
       if (!result.ok) {
         toast.error(
           result.error ||
             translate('auto.components.TaskPage.aec5feeb69', 'Failed to create Jira issue.')
         )
+
         return
       }
+
       toast.success(
         translate('auto.components.TaskPage.cb98f0350c', 'Created {{value0}}', {
           value0: result.key
@@ -90,6 +101,7 @@ export function useTaskPageJiraIssueCreation(model: TaskPageLinearIssueCreationM
           if (submitProviderRuntimeContextKey !== providerRuntimeContextKeyRef.current) {
             return
           }
+
           if (full) {
             // Why: list cache may still be fresh after create; insert the new row locally before selecting so the inspector stays open.
             setJiraIssues((prev) => [full, ...prev.filter((issue) => issue.key !== full.key)])
@@ -134,10 +146,14 @@ export function useTaskPageJiraIssueCreation(model: TaskPageLinearIssueCreationM
     setNewJiraIssueCustomFieldValues,
     setNewJiraIssueSubmitting
   ])
+
   const nextModel = model as typeof model & {
     handleCreateNewJiraIssue: typeof handleCreateNewJiraIssue
   }
+
   nextModel.handleCreateNewJiraIssue = handleCreateNewJiraIssue
+
   return nextModel
 }
+
 export type TaskPageJiraIssueCreationModel = ReturnType<typeof useTaskPageJiraIssueCreation>

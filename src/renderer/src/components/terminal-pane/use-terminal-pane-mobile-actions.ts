@@ -32,27 +32,36 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
     tabId,
     worktreeId
   } = controller
+
   const getMobileOwnedTerminalPtyIds = useCallback((): string[] => {
     const ptyIds = new Set(getMobileFitOverridePtyIds())
+
     for (const [ptyId, driver] of getAllDrivers()) {
       if (driver.kind === 'mobile') {
         ptyIds.add(ptyId)
       }
     }
+
     return [...ptyIds]
   }, [])
+
   const scheduleRestoredTerminalRefit = useCallback((): void => {
     requestAnimationFrame(refitAndRefreshAllTerminalPanes)
     window.setTimeout(refitAndRefreshAllTerminalPanes, 100)
   }, [])
+
   const restorePaneTerminalFit = useCallback(
     async (pane: ManagedPane, ptyId: string): Promise<void> => {
       const currentPtyId = paneTransportsRef.current.get(pane.id)?.getPtyId() ?? null
+
       if (currentPtyId !== ptyId) {
         refreshMobileOverlays()
+
         return
       }
+
       const restored = await restoreTerminalFitToDesktop(ptyId, settingsRef.current ?? undefined)
+
       if (restored) {
         scheduleRestoredTerminalRefit()
         pane.terminal.focus()
@@ -61,12 +70,14 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [refreshMobileOverlays, scheduleRestoredTerminalRefit]
   )
+
   const restoreAllTerminalFits = useCallback(
     async (focusPane: ManagedPane): Promise<void> => {
       const restored = await restoreTerminalFitsToDesktop(
         getMobileOwnedTerminalPtyIds(),
         settingsRef.current ?? undefined
       )
+
       if (restored) {
         scheduleRestoredTerminalRefit()
         focusPane.terminal.focus()
@@ -75,51 +86,65 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [getMobileOwnedTerminalPtyIds, scheduleRestoredTerminalRefit]
   )
+
   const terminalShouldHandleMiddleClick = useCallback(
     (target: EventTarget | null): target is Node => {
       if (!(target instanceof Element)) {
         return false
       }
+
       if (target.closest('[data-terminal-search-root]')) {
         return false
       }
+
       const editable = target.closest(
         'input, textarea, [contenteditable=""], [contenteditable="true"]'
       )
+
       return !editable || editable.classList.contains('xterm-helper-textarea')
     },
     []
   )
+
   const getPrimarySelectionMiddleClickPane = useCallback(
     (target: EventTarget | null) => {
       if (!terminalShouldHandleMiddleClick(target)) {
         return null
       }
+
       const manager = managerRef.current
+
       if (!manager) {
         return null
       }
+
       const clickedPane =
         manager.getPanes().find((pane) => pane.container.contains(target as Node)) ??
         manager.getActivePane() ??
         manager.getPanes()[0]
+
       if (!clickedPane || clickedPane.terminal.modes.mouseTrackingMode !== 'none') {
         return null
       }
+
       return clickedPane
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [terminalShouldHandleMiddleClick]
   )
+
   const handlePrimarySelectionMiddleMouseDown = useCallback(
     (event: React.MouseEvent<HTMLDivElement>): void => {
       if (event.button !== 1 || !isPrimarySelectionEnabled()) {
         return
       }
+
       const clickedPane = getPrimarySelectionMiddleClickPane(event.target)
+
       if (!clickedPane) {
         return
       }
+
       event.preventDefault()
       event.stopPropagation()
       armPrimarySelectionNativePasteSuppression()
@@ -128,17 +153,22 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
         if (!text) {
           return
         }
+
         const transport = paneTransportsRef.current.get(clickedPane.id)
         const ptyId = transport?.getPtyId() ?? null
         const isMac = navigator.userAgent.includes('Mac')
+
         const shortcutPlatform: NodeJS.Platform = isMac
           ? 'darwin'
           : navigator.userAgent.includes('Windows')
             ? 'win32'
             : 'linux'
+
         const connectionId = getConnectionId(worktreeId) ?? null
+
         const targetStillMounted = (): boolean => {
           const manager = managerRef.current
+
           return Boolean(
             manager
               ?.getPanes()
@@ -152,6 +182,7 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
             transport.getPtyId() === ptyId
           )
         }
+
         const plan = await planTerminalPasteWithYield({
           text,
           source: 'middle-click',
@@ -170,6 +201,7 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
           },
           terminalBracketedPasteMode: clickedPane.terminal.modes.bracketedPasteMode
         })
+
         const execution = await executeTerminalPastePlan(plan, {
           pasteText: (pasteText, pasteOptions) =>
             pasteTerminalText(clickedPane.terminal, pasteText, pasteOptions),
@@ -177,16 +209,20 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
           isTargetCurrent: targetStillMounted,
           canContinue: targetStillMounted
         })
+
         if (execution.status !== 'pasted') {
           setTerminalError(formatTerminalPasteExecutionError(execution.reason))
+
           return
         }
+
         recordTerminalUserInputForLeaf(tabId, clickedPane.leafId)
       })
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [getPrimarySelectionMiddleClickPane, tabId, worktreeId]
   )
+
   const handlePrimarySelectionAuxClick = useCallback(
     (event: React.MouseEvent<HTMLDivElement>): void => {
       if (
@@ -201,16 +237,20 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
     },
     [getPrimarySelectionMiddleClickPane]
   )
+
   const activatePaneTitleInteraction = useCallback((paneId: number): void => {
     managerRef.current?.setActivePane(paneId, { focus: false })
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [])
+
   const splitTerminalPaneFromHeader = useCallback(
     (pane: ManagedPane, direction: 'vertical' | 'horizontal') => {
       const manager = managerRef.current
+
       if (!manager) {
         return
       }
+
       splitTerminalPaneWithInheritedCwd({
         worktreeId,
         tabId,
@@ -227,6 +267,7 @@ export function useTerminalPaneMobileActions(controller: TerminalPaneContextCont
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
     [cwd]
   )
+
   const beginPaneDragFromHeader = useCallback(
     (paneId: number, handle: HTMLElement, event: PointerEvent) => {
       managerRef.current?.beginPaneDragFromPointerDown(paneId, handle, event)

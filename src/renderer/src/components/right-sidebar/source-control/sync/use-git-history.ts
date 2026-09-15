@@ -43,11 +43,14 @@ export function useSourceControlGitHistory({
   const [gitHistoryByWorktree, setGitHistoryByWorktree] = useState<
     Record<string, GitHistoryPanelState>
   >({})
+
   const gitHistoryRequestSeqRef = useRef(0)
   const gitHistoryRequestByWorktreeRef = useRef<Record<string, number>>({})
+
   const gitHistoryState = activeWorktreeId
     ? (gitHistoryByWorktree[activeWorktreeId] ?? EMPTY_GIT_HISTORY_STATE)
     : EMPTY_GIT_HISTORY_STATE
+
   // Why: the read is routed by owner host, so track it as a stable string — a new settings object alone must not refetch.
   const ownerHostKey = activeRepoSettings?.activeRuntimeEnvironmentId?.trim() ?? ''
 
@@ -55,6 +58,7 @@ export function useSourceControlGitHistory({
     setGitHistoryByWorktree((prev) => {
       let changed = false
       const next: Record<string, GitHistoryPanelState> = {}
+
       for (const key of Object.keys(prev)) {
         if (worktreeMap.has(key)) {
           next[key] = prev[key]
@@ -62,8 +66,10 @@ export function useSourceControlGitHistory({
           changed = true
         }
       }
+
       return changed ? next : prev
     })
+
     for (const key of Object.keys(gitHistoryRequestByWorktreeRef.current)) {
       if (!worktreeMap.has(key)) {
         delete gitHistoryRequestByWorktreeRef.current[key]
@@ -82,12 +88,14 @@ export function useSourceControlGitHistory({
     ) {
       return
     }
+
     const worktreeId = activeWorktreeId
     const requestId = gitHistoryRequestSeqRef.current + 1
     gitHistoryRequestSeqRef.current = requestId
     gitHistoryRequestByWorktreeRef.current[worktreeId] = requestId
     setGitHistoryByWorktree((prev) => {
       const previous = prev[worktreeId]
+
       return {
         ...prev,
         [worktreeId]: previous?.result
@@ -95,8 +103,10 @@ export function useSourceControlGitHistory({
           : { status: 'loading' }
       }
     })
+
     try {
       const connectionId = getConnectionId(worktreeId) ?? undefined
+
       const result = await getRuntimeGitHistory(
         {
           // Why: route the history read by the repo OWNER host, not the focused runtime.
@@ -107,9 +117,11 @@ export function useSourceControlGitHistory({
         },
         { limit: 50, baseRef: compareBaseRef }
       )
+
       if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
         return
       }
+
       setGitHistoryByWorktree((prev) => ({
         ...prev,
         [worktreeId]: { status: 'ready', result }
@@ -118,9 +130,11 @@ export function useSourceControlGitHistory({
       if (gitHistoryRequestByWorktreeRef.current[worktreeId] !== requestId) {
         return
       }
+
       const message = error instanceof Error ? error.message : 'Failed to load commits'
       setGitHistoryByWorktree((prev) => {
         const previous = prev[worktreeId]
+
         return {
           ...prev,
           [worktreeId]: previous?.result
@@ -139,6 +153,7 @@ export function useSourceControlGitHistory({
     isGitHistoryVisible,
     worktreePath
   ])
+
   const refreshGitHistoryRef = useRef(refreshGitHistory)
   // Why: publish in an effect, not the render body — a discarded render must not install its callback. Declared first so the effect below sees the fresh one.
   useEffect(() => {
@@ -150,6 +165,7 @@ export function useSourceControlGitHistory({
     if (!isBranchVisible || !isGitHistoryExpanded || !isGitHistoryVisible) {
       return
     }
+
     void refreshGitHistoryRef.current()
   }, [
     // Why: history is fetched with compareBaseRef, so re-run when it changes (effectiveBaseRef can stay put while it moves).

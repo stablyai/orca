@@ -263,9 +263,11 @@ export function isDocsOnlyPath(file) {
   if (DOCS_ONLY_FILES.has(file)) {
     return true
   }
+
   if (DOCS_ONLY_PREFIXES.some((prefix) => file.startsWith(prefix))) {
     return true
   }
+
   return /^README\.[^/]+\.md$/.test(file)
 }
 
@@ -275,6 +277,7 @@ export function shouldRunPrChecks(changedFiles) {
   if (changedFiles.length === 0) {
     return true
   }
+
   return changedFiles.some((file) => !isDocsOnlyPath(file) && !isDesktopIrrelevantPath(file))
 }
 
@@ -290,12 +293,14 @@ export function classifyPrJobs(changedFiles) {
   const emptyDiff = changedFiles.length === 0
   const shouldRun = shouldRunPrChecks(changedFiles)
   const forceAll = emptyDiff || changedFiles.some(isGlobalForcePath)
+
   const jobs = Object.fromEntries(
     PR_CHECK_JOBS.map((job) => [
       job,
       shouldRun && (forceAll || ALWAYS_ON_CODE_JOBS.has(job) || jobDetector(job)(changedFiles))
     ])
   )
+
   return {
     should_run: shouldRun,
     native_cache_changed: shouldRun && (emptyDiff || changedFiles.some(isNativeCacheInputPath)),
@@ -342,9 +347,11 @@ function isProductBundlePath(file, extraPrefixes) {
   if (isTestFile(file)) {
     return false
   }
+
   if (file.startsWith('src/')) {
     return true
   }
+
   return matchesPrefix(file, extraPrefixes)
 }
 
@@ -373,11 +380,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   // outgrows the 64 KB pipe buffer, which a stale PR base.sha reaches easily.
   let input = ''
   process.stdin.setEncoding('utf8')
+
   for await (const chunk of process.stdin) {
     input += chunk
   }
+
   const files = input.split(/\r?\n/).filter(Boolean)
   const classification = classifyPrJobs(files)
+
   for (const [name, value] of Object.entries(classification)) {
     process.stdout.write(`${name}=${value ? 'true' : 'false'}\n`)
   }

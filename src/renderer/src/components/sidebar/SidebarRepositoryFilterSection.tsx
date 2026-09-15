@@ -22,9 +22,11 @@ function getProjectFilterVisibilityLabel({
       'All projects'
     )
   }
+
   if (selectedCount === 1) {
     return selectedRepos[0]?.displayName ?? 'Projects'
   }
+
   return translate(
     'auto.components.sidebar.SidebarRepositoryFilterSection.selectedProjectsCount',
     '{{value0}} projects',
@@ -52,27 +54,34 @@ const SidebarRepositoryFilterSection = React.memo(function SidebarRepositoryFilt
   const setFilterRepoIds = setFilterRepoIdsProp ?? setWorkspaceFilterRepoIds
 
   const canFilterRepos = repos.length > 1
+
   // Why: derive from current repos so stale ids (e.g. lingering after a repo
   // is removed) don't inflate counts or falsely signal an applied filter.
   const selectedRepoIdSet = useMemo(() => {
     const set = new Set<string>()
+
     for (const repo of repos) {
       if (filterRepoIds.includes(repo.id)) {
         set.add(repo.id)
       }
     }
+
     return set
   }, [repos, filterRepoIds])
+
   const selectedCount = selectedRepoIdSet.size
   const hasRepoFilter = selectedCount > 0
+
   const selectedRepos = useMemo(
     () => repos.filter((repo) => selectedRepoIdSet.has(repo.id)),
     [repos, selectedRepoIdSet]
   )
+
   const availableRepos = useMemo(
     () => repos.filter((repo) => !selectedRepoIdSet.has(repo.id)),
     [repos, selectedRepoIdSet]
   )
+
   const visibilityLabel = getProjectFilterVisibilityLabel({ selectedCount, selectedRepos })
 
   const clearRepos = useCallback(() => setFilterRepoIds([]), [setFilterRepoIds])

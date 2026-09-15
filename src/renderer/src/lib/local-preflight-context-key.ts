@@ -15,11 +15,14 @@ export function localPreflightContextKey(context: LocalPreflightContextKeyInput)
       ? context.projectRuntime.runtime.cacheKey
       : context.projectRuntime.repair.cacheKey
   }
+
   if (context?.runtimeContextKey) {
     return context.runtimeContextKey
   }
+
   if (context?.wslDistro) {
     return `wsl:${context.wslDistro}`
   }
+
   return context?.wslDefault ? 'wsl:default' : 'host'
 }

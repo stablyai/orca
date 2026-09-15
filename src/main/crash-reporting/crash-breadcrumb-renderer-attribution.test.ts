@@ -70,7 +70,9 @@ describe('renderer crash breadcrumb attribution', () => {
         thresholdPct: 80
       })
     }
+
     recordCrashBreadcrumb('renderer_a_event', undefined, 'renderer:11')
+
     for (let index = 0; index < 26; index += 1) {
       recordCrashBreadcrumb(`renderer_b_event_${index}`, undefined, 'renderer:22')
     }
@@ -109,6 +111,7 @@ describe('renderer crash breadcrumb attribution', () => {
       minIntervalMs: 30_000,
       origin: 'renderer:11'
     })
+
     for (let index = 0; index < 4; index += 1) {
       recordCrashBreadcrumb(
         'renderer_memory_highwater',
@@ -116,6 +119,7 @@ describe('renderer crash breadcrumb attribution', () => {
         'renderer:22'
       )
     }
+
     for (let index = 0; index < 25; index += 1) {
       recordCrashBreadcrumb(`renderer_b_event_${index}`, undefined, 'renderer:22')
     }

@@ -9,7 +9,9 @@ import type { MobileGitStatusResult } from './mobile-git-status'
 type GitStep = { method: string; params?: Record<string, unknown> }
 
 type MobileSourceControlPrimaryActionKind = SourceControlCommitAreaPrimaryActionDecision['kind']
+
 type MobileSourceControlPrimaryActionDecision = SourceControlCommitAreaPrimaryActionDecision
+
 type MobileSourceControlRemoteOpKind = SourceControlRemoteOpKind
 
 export type MobileSourceControlPrimaryAction = {
@@ -63,8 +65,10 @@ export function buildMobileSourceControlPrimaryAction(
     branchCommitsAhead: getMobileBranchCommitsAhead(args),
     hasCurrentBranch: Boolean(args.status?.branch)
   })
+
   const ioBusy =
     args.busyAction !== null || args.openingPath !== null || args.openingBranchPath !== null
+
   const disabled = decision.disabled || ioBusy
 
   return {
@@ -79,6 +83,7 @@ export function buildMobileSourceControlPrimaryAction(
       if (disabled) {
         return
       }
+
       void runMobilePrimaryAction(decision, args.handlers)
     }
   }
@@ -120,10 +125,13 @@ function getMobileBranchCommitsAhead(
   args: MobileSourceControlPrimaryActionArgs
 ): number | undefined {
   const summary = args.branchCompareResult?.summary
+
   if (summary?.status === 'ready' && summary.commitsAhead !== undefined) {
     return summary.commitsAhead
   }
+
   const upstream = args.status?.upstreamStatus
+
   return upstream?.hasUpstream ? upstream.ahead : undefined
 }
 
@@ -131,6 +139,7 @@ function getMobilePrimaryActionLabel(decision: MobileSourceControlPrimaryActionD
   if (decision.requiresForceWithLease) {
     return 'Force Push'
   }
+
   switch (decision.kind) {
     case 'commit':
       return 'Commit'
@@ -225,9 +234,11 @@ async function runMobilePrimaryAction(
   switch (decision.kind) {
     case 'commit':
       await handlers.commit()
+
       return
     case 'stage':
       await handlers.stageAll()
+
       return
     case 'push': {
       const params = decision.requiresForceWithLease ? { forceWithLease: true } : undefined
@@ -235,18 +246,23 @@ async function runMobilePrimaryAction(
         decision.requiresForceWithLease ? 'force-push' : 'push',
         [{ method: 'git.push', params }]
       )
+
       return
     }
+
     case 'pull':
       await handlers.runActionSheetGitSequence('pull', [{ method: 'git.pull' }])
+
       return
     case 'sync':
       await handlers.runActionSheetGitSync()
+
       return
     case 'publish':
       await handlers.runActionSheetGitSequence('publish', [
         { method: 'git.push', params: { publish: true } }
       ])
+
       return
   }
 }

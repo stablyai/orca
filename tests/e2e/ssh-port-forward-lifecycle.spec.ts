@@ -40,9 +40,13 @@ import {
 } from './helpers/ssh-port-forward-transport-evidence'
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
+
 const FORCE_SYSTEM_SSH = process.env.ORCA_SSH_FORCE_SYSTEM_TRANSPORT === '1'
+
 const REMOTE_PORT = 7860
+
 const REFRESH_BARRIER_PORT = 7861
+
 const SCAN_REFRESH_PORT = 7862
 
 test.describe('Docker SSH port-forward lifecycle', () => {
@@ -61,6 +65,7 @@ test.describe('Docker SSH port-forward lifecycle', () => {
     const unrelatedLocalPort = unrelatedLocalPortReservation.port
     const marker = `ORCA_FORWARD_${Date.now()}`
     const unrelatedMarker = `${marker}_UNRELATED`
+
     try {
       target = startDockerSshRelayTarget(testInfo)
       const systemSshInvocationLogPath = await trustDockerSshHost(electronApp, target)
@@ -69,11 +74,13 @@ test.describe('Docker SSH port-forward lifecycle', () => {
       await waitForActiveWorktree(orcaPage)
       const remote = await connectDockerSshRelayTarget(orcaPage, target)
       const remotePid = startRemoteHttpListener(target, REMOTE_PORT, marker)
+
       const unrelatedRemotePid = startRemoteHttpListener(
         target,
         REFRESH_BARRIER_PORT,
         unrelatedMarker
       )
+
       await openPortsPanel(orcaPage)
 
       await expect
@@ -141,6 +148,7 @@ test.describe('Docker SSH port-forward lifecycle', () => {
       await expectForwardEvidence(orcaPage, remote.targetId, [
         { localPort, remotePort: REMOTE_PORT }
       ])
+
       if (FORCE_SYSTEM_SSH) {
         await expect
           .poll(() => readSystemSshInvocationKinds(systemSshInvocationLogPath))
@@ -150,10 +158,12 @@ test.describe('Docker SSH port-forward lifecycle', () => {
       }
 
       await releaseSshPortForwardSnapshotBarrier(electronApp)
+
       const postHydrationRoundTripForwards = await orcaPage.evaluate(
         (targetId) => window.api.ssh.listPortForwards({ targetId }),
         remote.targetId
       )
+
       expect(postHydrationRoundTripForwards).toContainEqual(
         expect.objectContaining({ localPort, remotePort: REMOTE_PORT })
       )
@@ -201,12 +211,14 @@ test.describe('Docker SSH port-forward lifecycle', () => {
       await expect(orcaPage.getByText(`:${SCAN_REFRESH_PORT}`, { exact: true })).toBeVisible()
 
       await unrelatedLocalPortReservation.release()
+
       const unrelatedForward = await addPortForward(orcaPage, {
         targetId: remote.targetId,
         localPort: unrelatedLocalPort,
         remotePort: REFRESH_BARRIER_PORT,
         label: 'unrelated-listener'
       })
+
       await expectForwardEvidence(orcaPage, remote.targetId, [
         { localPort, remotePort: REMOTE_PORT },
         { localPort: unrelatedLocalPort, remotePort: REFRESH_BARRIER_PORT }
@@ -225,6 +237,7 @@ test.describe('Docker SSH port-forward lifecycle', () => {
         (targetId) => window.__store?.getState().sshConnectionStates.get(targetId),
         remote.targetId
       )
+
       await reconnectDockerSshRelayTarget(orcaPage, remote.targetId)
       await expect
         .poll(
@@ -233,6 +246,7 @@ test.describe('Docker SSH port-forward lifecycle', () => {
               (targetId) => window.__store?.getState().sshConnectionStates.get(targetId),
               remote.targetId
             )
+
             return (
               state?.status === 'connected' &&
               (state.providerEpoch !== authorityBeforeTransportReconnect?.providerEpoch ||
@@ -262,9 +276,11 @@ test.describe('Docker SSH port-forward lifecycle', () => {
         collisionServer.listen(0, '127.0.0.1', resolve)
       })
       const collisionAddress = collisionServer.address()
+
       if (!collisionAddress || typeof collisionAddress === 'string') {
         throw new Error('Unable to reserve a collision port')
       }
+
       try {
         const collisionResult = await orcaPage.evaluate(
           async ({ targetId, localPort, remotePort }) => {
@@ -276,6 +292,7 @@ test.describe('Docker SSH port-forward lifecycle', () => {
                 remotePort,
                 label: 'collision'
               })
+
               return { ok: true, message: '' }
             } catch (error) {
               return { ok: false, message: error instanceof Error ? error.message : String(error) }
@@ -287,6 +304,7 @@ test.describe('Docker SSH port-forward lifecycle', () => {
             remotePort: REMOTE_PORT
           }
         )
+
         expect(collisionResult).toMatchObject({ ok: false })
         expect(collisionResult.message).toMatch(/in use|EADDRINUSE/i)
       } finally {
@@ -294,6 +312,7 @@ test.describe('Docker SSH port-forward lifecycle', () => {
           collisionServer.close((error) => (error ? reject(error) : resolve()))
         )
       }
+
       await expectForwardEvidence(orcaPage, remote.targetId, [
         { localPort, remotePort: REMOTE_PORT },
         { localPort: unrelatedLocalPort, remotePort: REFRESH_BARRIER_PORT }
@@ -302,6 +321,7 @@ test.describe('Docker SSH port-forward lifecycle', () => {
       const primaryRow = orcaPage
         .getByText(`:${localPort} → :${REMOTE_PORT}`, { exact: true })
         .locator('../../..')
+
       await primaryRow.getByTitle('Remove').click()
       await expect(
         orcaPage.getByText(`:${localPort} → :${REMOTE_PORT}`, { exact: true })

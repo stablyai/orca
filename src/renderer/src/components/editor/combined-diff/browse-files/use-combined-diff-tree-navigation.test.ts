@@ -24,9 +24,11 @@ function makeSection(key: string, viewed: boolean): DiffSection {
 
 function renderNavigation(sections: DiffSection[], entrySignature: string) {
   const sectionsRef = { current: sections } as React.RefObject<DiffSection[]>
+
   return renderHook(
     (props: { sections: DiffSection[]; entrySignature: string }) => {
       sectionsRef.current = props.sections
+
       return useCombinedDiffTreeNavigation({
         ensureSectionLoaded: vi.fn(),
         entrySignature: props.entrySignature,

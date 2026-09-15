@@ -31,6 +31,7 @@ const PRIMARY_RATE_LIMIT_STDERR =
 
 // What the distro prints when the CLI is absent inside WSL but present on the host.
 const WSL_GH_MISSING = 'bash: line 1: gh: command not found\n'
+
 const TRANSIENT_502 = 'HTTP 502 Bad Gateway'
 
 function spawnEnoent(command: string): { spawnError: Error } {
@@ -315,6 +316,7 @@ describe('ghExecFileAsync WSL fallback', () => {
     const options = {
       cwd: String.raw`\\wsl.localhost\Ubuntu\home\jinwoo\stably\noqa`
     }
+
     await expect(ghExecFileAsync(['api', 'repos/acme/widgets/pulls'], options)).rejects.toThrow(
       'rate limit'
     )

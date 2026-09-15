@@ -77,11 +77,13 @@ describe('PtyHandler retires a closed pane surface', () => {
   ): Promise<{ id: string; incarnationId: string; term: typeof mockPtyInstance }> {
     const term = { ...mockPtyInstance, kill: vi.fn(), onData: vi.fn(), onExit: vi.fn() }
     mockPtySpawn.mockReturnValue(term)
+
     const spawned = await spawnPty({
       env: { ORCA_PANE_KEY: PANE_KEY },
       agentSessionEnsure: AGENT_SESSION_ENSURE,
       ...params
     })
+
     return { id: spawned.id, incarnationId: spawned.incarnationId, term }
   }
 

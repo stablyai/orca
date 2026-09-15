@@ -121,6 +121,7 @@ function getEditorRelativePath(entry: SearchableWorkspaceTab | undefined): strin
   if (!entry || entry.tab.contentType !== 'editor') {
     return null
   }
+
   return entry.secondaryText || null
 }
 
@@ -147,7 +148,9 @@ function rank<TEngine extends EngineResult>(
     if (!result.rank) {
       return []
     }
+
     const converted = toResult(result)
+
     return [
       {
         matchRank: result.rank,
@@ -168,11 +171,13 @@ export function searchOpenTabCandidates({
   context: suppliedContext
 }: OpenTabSearchInput): OpenTabSearchResult[] {
   const trimmed = query.trim()
+
   if (!trimmed || isOpenTabSearchQueryTooLarge(query)) {
     return []
   }
 
   const context = suppliedContext ?? createPaletteSearchContext(Date.now())
+
   // Why map workspace only: editor relativePath is read from the searchable entry.
   const workspaceEntriesByIdentity = new Map(
     workspaceTabs.map((entry) => [
@@ -267,5 +272,6 @@ export function capOpenTabSearchCandidates(
     OPEN_TAB_SEARCH_RESULT_LIMIT,
     (result) => result.id === retainedResultId
   )
+
   return [...capped.visible]
 }

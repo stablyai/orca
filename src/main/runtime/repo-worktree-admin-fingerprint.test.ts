@@ -15,11 +15,14 @@ import { readRepoWorktreeAdminFingerprint } from './repo-worktree-admin-fingerpr
 const execFileAsync = promisify(execFile)
 
 let scratchDir = ''
+
 let repoPath = ''
+
 let worktreePath = ''
 
 async function git(args: string[], cwd: string): Promise<string> {
   const { stdout } = await execFileAsync('git', args, { cwd })
+
   return stdout
 }
 

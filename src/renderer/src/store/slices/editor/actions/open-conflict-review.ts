@@ -12,13 +12,16 @@ export function createOpenConflictReview(
   return {
     openConflictReviewFile: (reviewFileId, worktreeId, worktreePath, entry, language) => {
       const absolutePath = joinPath(worktreePath, entry.path)
+
       const reviewTab = (get().unifiedTabsByWorktree?.[worktreeId] ?? []).find(
         (tab) => tab.entityId === reviewFileId && tab.contentType === 'conflict-review'
       )
+
       let openedConflictFile = true
       set((s) => {
         const conflict = toOpenConflictMetadata(entry)
         const existing = s.openFiles.find((f) => f.id === absolutePath)
+
         const nextTracked =
           entry.conflictStatus === 'unresolved' && entry.conflictKind
             ? {
@@ -29,6 +32,7 @@ export function createOpenConflictReview(
 
         if (!conflict) {
           openedConflictFile = false
+
           return s
         }
 
@@ -97,6 +101,7 @@ export function createOpenConflictReview(
       if (!openedConflictFile) {
         return
       }
+
       // Why: the conflict file needs a normal editor backing tab for save/close, but selecting from Conflict Review must keep the review tab visible; restore focus after.
       void openWorkspaceEditorItem(
         get(),
@@ -107,6 +112,7 @@ export function createOpenConflictReview(
         undefined,
         reviewTab?.groupId
       )
+
       if (reviewTab) {
         get().activateTab?.(reviewTab.id)
       }
@@ -121,6 +127,7 @@ export function createOpenConflictReview(
           snapshotTimestamp: Date.now(),
           entries
         }
+
         const existing = s.openFiles.find((f) => f.id === id)
 
         if (existing) {

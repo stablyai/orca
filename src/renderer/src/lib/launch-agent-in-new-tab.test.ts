@@ -3,17 +3,29 @@ import { toAppSshPtyId } from '../../../shared/ssh-pty-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const mockCreateTab = vi.fn()
+
 const mockQueueTabStartupCommand = vi.fn()
+
 const mockSetActiveTabType = vi.fn()
+
 const mockSetTabViewMode = vi.fn()
+
 const mockSetTabBarOrder = vi.fn()
+
 const mockSetAgentStatus = vi.fn()
+
 const mockPasteDraftWhenAgentReady = vi.fn()
+
 const mockSeedNativeChatLaunchPrompt = vi.fn()
+
 const mockSeedNativeChatLaunchDraft = vi.fn()
+
 const mockMarkNativeChatLaunchPromptFailed = vi.fn()
+
 const mockTrack = vi.fn()
+
 const mockToastMessage = vi.fn()
+
 const mockWaitForAgentReady = vi.fn()
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -126,7 +138,9 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 
 const mockCreateWebRuntimeSessionTerminal = vi.fn()
+
 const mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft = vi.fn()
+
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)
 
 vi.mock('@/runtime/web-runtime-session', () => ({
@@ -687,6 +701,7 @@ describe('launchAgentInNewTab', () => {
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
+
     store.terminalLayoutsByTabId = {
       'tab-1': {
         activeLeafId: LEAF_ID,
@@ -749,6 +764,7 @@ describe('launchAgentInNewTab', () => {
       prompt: 'pending prompt',
       promptDelivery: 'submit-after-ready'
     })
+
     store.terminalLayoutsByTabId = {
       'tab-1': { activeLeafId: LEAF_ID, ptyIdsByLeafId: { [LEAF_ID]: ptyId } }
     }
@@ -776,6 +792,7 @@ describe('launchAgentInNewTab', () => {
       prompt: 'large generated prompt',
       promptDelivery: 'submit-after-ready'
     })
+
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: false,
       failureNotified: false
@@ -788,6 +805,7 @@ describe('launchAgentInNewTab', () => {
   it('marks failed submit-after-ready delivery as notified after readiness timeout toast', async () => {
     mockPasteDraftWhenAgentReady.mockImplementation(({ onTimeout }) => {
       onTimeout?.()
+
       return Promise.resolve(false)
     })
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-1' } as never] }
@@ -812,6 +830,7 @@ describe('launchAgentInNewTab', () => {
   it('marks a cancelled submit-after-ready launch notified when the user closed the tab', async () => {
     mockPasteDraftWhenAgentReady.mockImplementation(({ onTimeout }) => {
       onTimeout?.()
+
       return Promise.resolve(false)
     })
     // User closed the tab before the agent became ready — it is gone from the list.
@@ -835,6 +854,7 @@ describe('launchAgentInNewTab', () => {
   it('marks a cancelled submit-after-ready launch notified when the user switched worktrees', async () => {
     mockPasteDraftWhenAgentReady.mockImplementation(({ onTimeout }) => {
       onTimeout?.()
+
       return Promise.resolve(false)
     })
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-1' } as never] }
@@ -858,6 +878,7 @@ describe('launchAgentInNewTab', () => {
   it('leaves a genuine launch failure unnotified so the caller surfaces it', async () => {
     mockPasteDraftWhenAgentReady.mockImplementation(({ onTimeout }) => {
       onTimeout?.()
+
       return Promise.resolve(false)
     })
     // PTY never spawned: a real failure, not a user cancellation.

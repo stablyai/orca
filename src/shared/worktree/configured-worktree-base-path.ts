@@ -12,6 +12,7 @@ export function isRuntimePathAbsoluteForRepo(repoPath: string, layoutPath: strin
     isWindowsAbsolutePathLike(repoPath) || isWindowsAbsolutePathLike(layoutPath)
       ? 'windows'
       : 'posix'
+
   return isRuntimePathAbsolute(layoutPath, pathFlavor)
 }
 
@@ -30,9 +31,12 @@ export function resolveConfiguredWorktreeBasePaths(
   repo: Pick<Repo, 'path' | 'worktreeBasePath'> | undefined
 ): string[] {
   const configured = repo?.worktreeBasePath?.trim()
+
   if (!repo || !configured) {
     return []
   }
+
   const runtimeBase = resolveWslRepoWorktreeBasePath(repo.path, configured)
+
   return [resolveWorkspaceLayoutPath(repo.path, runtimeBase)]
 }

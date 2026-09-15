@@ -5,14 +5,17 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
 
 const scrollToEnd = vi.hoisted(() => vi.fn())
+
 const scrollToOffset = vi.hoisted(() => vi.fn())
 
 vi.mock('react-native', async () => {
   const React = await import('react')
+
   return {
     ActivityIndicator: 'ActivityIndicator',
     FlatList: React.forwardRef((props, ref) => {
       React.useImperativeHandle(ref, () => ({ scrollToEnd, scrollToOffset }), [])
+
       return React.createElement('FlatList', props)
     }),
     Pressable: 'Pressable',
@@ -32,6 +35,7 @@ vi.mock('react-native-gesture-handler', () => {
     onStart: () => chain,
     onUpdate: () => chain
   }
+
   return {
     Gesture: { Simultaneous: () => ({}), Native: () => ({}), Pinch: () => chain },
     GestureDetector: 'GestureDetector',
@@ -47,9 +51,13 @@ vi.mock('lucide-react-native', () => ({
 }))
 
 vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
+
 vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
+
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
+
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
+
 vi.mock('./MobileAgentWorkingIndicator', () => ({
   MobileAgentWorkingIndicator: 'WorkingIndicator'
 }))
@@ -58,6 +66,7 @@ vi.mock('./MobileAgentWorkingIndicator', () => ({
 // the only composer behaviour these banner tests exercise.
 vi.mock('./MobileNativeChatComposer', async () => {
   const React = await import('react')
+
   return {
     MobileNativeChatComposer: (props: {
       onSend: (text: string) => Promise<boolean>
@@ -150,8 +159,10 @@ describe('MobileNativeChatView', () => {
   it('keeps Stop hidden during a structured dispatch until a provider turn can be cancelled', async () => {
     const props = { structuredActivityUi: true, agentWorking: true, canStop: false }
     await render(props)
+
     const stops = () =>
       renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Stop the agent')
+
     expect(stops()).toHaveLength(0)
     await update({ ...props, canStop: true })
     expect(stops()).toHaveLength(1)
@@ -171,6 +182,7 @@ describe('MobileNativeChatView', () => {
     const listNode = list()
     const data = listNode.props.data as NativeChatMessage[]
     const index = data.findIndex((row) => row.id === id)
+
     return listNode.props.renderItem({ item: data[index], index })
   }
 
@@ -185,6 +197,7 @@ describe('MobileNativeChatView', () => {
   function bannerText(): string {
     const [alert, ...rest] = banners()
     expect(rest).toHaveLength(0)
+
     return alert
       .findAll((node) => node.type === 'Text')
       .map((node) => node.props.children)
@@ -195,6 +208,7 @@ describe('MobileNativeChatView', () => {
     const composer = renderer!.root.find((node) => node.type === 'Composer') as {
       props: { onPress: () => Promise<boolean> }
     }
+
     await act(async () => {
       await composer.props.onPress()
     })
@@ -259,6 +273,7 @@ describe('MobileNativeChatView', () => {
 
   it('lets content growth own streaming tail-follow without a delayed animated command', async () => {
     vi.useFakeTimers()
+
     try {
       const folded = [assistantTurn('a1', 'Starting')]
       await render({ folded })
@@ -325,6 +340,7 @@ describe('MobileNativeChatView', () => {
 
   it('keeps tail-follow paused across the drag-to-momentum handoff', async () => {
     vi.useFakeTimers()
+
     try {
       const folded = [assistantTurn('a1', 'Latest')]
       await render({ folded })
@@ -417,6 +433,7 @@ describe('MobileNativeChatView', () => {
 
   it('uses finger-release metrics when no momentum event follows', async () => {
     vi.useFakeTimers()
+
     try {
       const folded = [assistantTurn('a1', 'Latest')]
       await render({ folded })
@@ -451,6 +468,7 @@ describe('MobileNativeChatView', () => {
 
   it('repins when content grows between tail release and drag settle', async () => {
     vi.useFakeTimers()
+
     try {
       const folded = [assistantTurn('a1', 'Latest')]
       await render({ folded })
@@ -498,6 +516,7 @@ describe('MobileNativeChatView', () => {
 
   it('keeps a history load detached after its triggering drag settles', async () => {
     vi.useFakeTimers()
+
     try {
       const folded = [assistantTurn('a1', 'Short history')]
       const onLoadEarlier = vi.fn()
@@ -537,6 +556,7 @@ describe('MobileNativeChatView', () => {
 
   it('routes an accepted send through the immediate nonanimated tail owner', async () => {
     vi.useFakeTimers()
+
     try {
       const folded = [assistantTurn('a1', 'History')]
       await render({ folded })
@@ -564,6 +584,7 @@ describe('MobileNativeChatView', () => {
     const chevron = renderer!.root.find(
       (node) => node.props.accessibilityLabel === 'Scroll to latest'
     )
+
     act(() => chevron.props.onPress())
     expect(scrollToEnd).toHaveBeenLastCalledWith({ animated: false })
 
@@ -574,6 +595,7 @@ describe('MobileNativeChatView', () => {
 
   it('repins after a keyboard-driven viewport layout only while following', async () => {
     vi.useFakeTimers()
+
     try {
       const folded = [assistantTurn('a1', 'Latest')]
       await render({ folded })
@@ -609,6 +631,7 @@ describe('MobileNativeChatView', () => {
 
   it('keeps a visible lock through a subscribed-end lease blip', async () => {
     vi.useFakeTimers()
+
     try {
       await render({ inputLockReason: 'waiting' })
       await act(async () => vi.advanceTimersByTime(600))
@@ -629,6 +652,7 @@ describe('MobileNativeChatView', () => {
 
   it('unlocks after the lease stays ready', async () => {
     vi.useFakeTimers()
+
     try {
       await render({ inputLockReason: 'waiting' })
       await act(async () => vi.advanceTimersByTime(600))
@@ -660,10 +684,12 @@ describe('MobileNativeChatView', () => {
 
     function footerProps(): Record<string, unknown> | null {
       const list = renderer!.root.find((node) => node.type === 'FlatList')
+
       const footer = list.props.ListFooterComponent as
         | { props: Record<string, unknown> }
         | null
         | undefined
+
       return footer?.props ?? null
     }
 
@@ -729,6 +755,7 @@ describe('MobileNativeChatView', () => {
       }
     ])('hides live turn activity for a pending $label without settling it', async (testCase) => {
       const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'waiting for input')]
+
       const working = {
         messages: folded,
         folded,
@@ -736,6 +763,7 @@ describe('MobileNativeChatView', () => {
         agentWorking: true,
         canStop: true
       }
+
       await render({ ...working, ...testCase.interaction })
 
       expect(footerProps()).toBeNull()
@@ -830,6 +858,7 @@ describe('MobileNativeChatView', () => {
 
     it('does not carry a running turn clock across chat surfaces', async () => {
       vi.useFakeTimers()
+
       try {
         vi.setSystemTime(1_000)
         const firstTab = [userTurn('u1', 'first')]
@@ -864,6 +893,7 @@ describe('MobileNativeChatView', () => {
         userTurn('u1', 'go'),
         assistantTurn('a1', 'working')
       ]
+
       await render({
         messages: history,
         folded: history,

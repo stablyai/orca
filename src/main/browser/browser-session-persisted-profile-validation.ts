@@ -12,7 +12,9 @@ export function isValidPersistedBrowserSessionProfile(
   if (!profile || typeof profile !== 'object') {
     return false
   }
+
   const candidate = profile as Partial<BrowserSessionProfile>
+
   return (
     candidate.id !== 'default' &&
     candidate.scope !== 'default' &&

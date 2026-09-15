@@ -28,5 +28,6 @@ export function filterHeadlessOneShotAgentCommand<T extends AgentCommandRecognit
   if (recognition && isHeadlessOneShotAgentCommand(recognition.agent, tokens)) {
     return null
   }
+
   return recognition
 }

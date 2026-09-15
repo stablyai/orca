@@ -42,6 +42,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     if (screenState.kind !== 'ready' || screenState.comments.length === 0) {
       return
     }
+
     await Clipboard.setStringAsync(formatDiffComments(screenState.comments))
     triggerSuccess()
     setActionError('Review notes copied')
@@ -51,6 +52,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     if (screenState.kind !== 'ready') {
       return
     }
+
     const nextComments = clearSentMobileDiffComments(screenState.comments)
     await saveCommentsAndReviewState(nextComments, screenState.reviewState)
   }, [saveCommentsAndReviewState, screenState])
@@ -60,11 +62,13 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       if (screenState.kind !== 'ready') {
         return
       }
+
       const next = markMobileDiffCommentsSent(
         screenState.comments,
         new Set(comments.map((comment) => comment.id)),
         Date.now()
       )
+
       await saveCommentsAndReviewState(next, screenState.reviewState)
     },
     [saveCommentsAndReviewState, screenState]
@@ -75,22 +79,27 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
+
       // Marked by terminal handle, not by surface, so a paste orphaned here by native
       // chat would ride along with these notes (#10228). Diff review carries no device token.
       if (!(await healMobileNativeChatStaleInput({ client, terminal, deviceToken: null }))) {
         throw new Error('Failed to send notes')
       }
+
       const response = await client.sendRequest('terminal.send', {
         terminal,
         text: formatMobileDiffReviewPrompt(comments),
         enter: true
       })
+
       if (!response.ok) {
         throw new Error(response.error?.message || 'Failed to send notes')
       }
+
       if (!readMobileReviewTerminalSendAccepted(response.result)) {
         throw new Error('Terminal input is locked')
       }
+
       await markNotesSent(comments)
       triggerSuccess()
       setActionError('Review notes sent')
@@ -104,19 +113,24 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
+
       const response = await client.sendRequest('session.tabs.createTerminal', {
         worktree: `id:${worktreeId}`,
         activate: false,
         select: true,
         navigation: 'caller'
       })
+
       if (!response.ok) {
         throw new Error(response.error?.message || 'Failed to create terminal')
       }
+
       const created = readMobileReviewCreatedTerminal(response.result)
+
       if (!created) {
         throw new Error('Created terminal response was invalid')
       }
+
       await sendPromptToTerminal(created.terminal, comments)
     },
     [client, connState, sendPromptToTerminal, worktreeId]
@@ -125,16 +139,21 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
   const openSendSheet = useCallback(async () => {
     if (!client || connState !== 'connected') {
       setActionError('Waiting for desktop...')
+
       return
     }
+
     setSendSheet({ kind: 'loading' })
+
     try {
       const response = await client.sendRequest('session.tabs.list', {
         worktree: `id:${worktreeId}`
       })
+
       if (!response.ok) {
         throw new Error(response.error?.message || 'Unable to load agent sessions')
       }
+
       setSendSheet({ kind: 'ready', terminals: readMobileReviewTerminalTabs(response.result) })
     } catch (err) {
       setSendSheet({

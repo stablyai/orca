@@ -24,6 +24,7 @@ export function effectiveMobilePairingConnectionMode(args: {
   if (args.preferred === 'automatic' && !args.signedIn) {
     return 'local-only'
   }
+
   return args.preferred
 }
 

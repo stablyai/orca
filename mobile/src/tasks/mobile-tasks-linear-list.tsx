@@ -36,6 +36,7 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
     setActionItem,
     setLinearStatusPickerItem
   } = model
+
   return loading ? (
     <View style={styles.centered}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -135,8 +136,10 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
             </View>
           )
         }
+
         const issue = entry.issue
         const linearTask = createLinearTask(issue) as Extract<TaskItem, { provider: 'linear' }>
+
         return (
           <Pressable
             style={({ pressed }) => [styles.taskRow, pressed && styles.taskRowPressed]}

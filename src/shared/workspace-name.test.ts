@@ -234,6 +234,7 @@ describe('getWorkspaceIntentName', () => {
 
   it('compacts pasted task text without whitespace regex splitting', () => {
     const split = vi.spyOn(String.prototype, 'split')
+
     const sourceText = [
       'https://github.com/acme/app/issues/123',
       '\nadd',
@@ -275,6 +276,7 @@ describe('getLinearIssueWorkspaceName', () => {
       identifier: 'ENG-42',
       title: 'Implement a very long Linear issue title that should be truncated'
     })
+
     expect(seed.length).toBeLessThanOrEqual(48)
     expect(seed).toMatch(/^eng-42-/)
   })

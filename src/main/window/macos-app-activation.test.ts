@@ -11,6 +11,7 @@ function makeWindow(destroyed = false): BrowserWindow {
 describe('createMacAppActivationHandler', () => {
   it('leaves an existing window to native macOS activation', () => {
     const requestActivation = vi.fn()
+
     const handler = createMacAppActivationHandler({
       getWindow: () => makeWindow(),
       requestActivation
@@ -25,6 +26,7 @@ describe('createMacAppActivationHandler', () => {
     'requests desktop activation for a missing or destroyed window',
     (window) => {
       const requestActivation = vi.fn()
+
       const handler = createMacAppActivationHandler({
         getWindow: () => window,
         requestActivation

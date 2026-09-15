@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
 const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
+
 const { spawnMock, handleMock, resolveAuthorizedPathMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   handleMock: vi.fn((channel: string, handler: (event: unknown, args: unknown) => unknown) => {
@@ -36,6 +37,7 @@ function createMockProcess(pid = 1234): ChildProcessWithoutNullStreams {
     kill: vi.fn(),
     unref: vi.fn()
   })
+
   return proc
 }
 
@@ -63,6 +65,7 @@ describe('notebook IPC', () => {
 
     const handler = handlers.get('notebook:runPythonCell')
     expect(handler).toBeDefined()
+
     const resultPromise = handler?.(null, {
       filePath: '/repo/notebook.ipynb',
       code: 'while True: pass'

@@ -45,6 +45,7 @@ describe('pane terminal output scheduler', () => {
 
   it('does not feed a replay quiet window when foreground writes are rejected', async () => {
     const { writeTerminalOutput } = await loadScheduler()
+
     const {
       _resetWritePipelineHealthForTests,
       captureTerminalParseProgressGeneration,
@@ -52,17 +53,21 @@ describe('pane terminal output scheduler', () => {
       isTerminalWritePipelineCertifiedDead,
       registerUndeliverableWriteHandler
     } = await import('./terminal-write-pipeline-health')
+
     const terminal = createForegroundTerminal()
     terminal.write.mockImplementation(() => {
       throw new Error('terminal disposed')
     })
     const recoveryReasons: string[] = []
+
     const unregister = registerUndeliverableWriteHandler(terminal, (reason) => {
       recoveryReasons.push(reason)
     })
+
     const generation = captureTerminalParseProgressGeneration(terminal)
     const ackCredits = [vi.fn(), vi.fn(), vi.fn()]
     const onParsed = vi.fn()
+
     try {
       for (const [index, ackCredit] of ackCredits.entries()) {
         writeTerminalOutput(terminal, `rejected-${index}`, {
@@ -80,6 +85,7 @@ describe('pane terminal output scheduler', () => {
       // directly while recovery owns the certified-dead instance.
       expect(terminal.write).toHaveBeenCalledTimes(1)
       expect(onParsed).not.toHaveBeenCalled()
+
       for (const ackCredit of ackCredits) {
         expect(ackCredit).toHaveBeenCalledTimes(1)
       }
@@ -92,6 +98,7 @@ describe('pane terminal output scheduler', () => {
   it('survives a write to a disposed terminal during background drain', async () => {
     vi.useFakeTimers()
     const { writeTerminalOutput } = await loadScheduler()
+
     const throwing = {
       write: vi.fn(() => {
         throw new Error('terminal disposed')

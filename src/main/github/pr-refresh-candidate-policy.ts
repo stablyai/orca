@@ -9,6 +9,7 @@ import type { GitHubPRBranchLookupOptions } from './client'
 import { NO_REVIEW_REFRESH_INTERVAL_MS } from '../source-control/hosted-review-refresh-pacing'
 
 export const MANUAL_MERGEABILITY_PENDING_REFRESH_MS = 2_500
+
 export const POST_PUSH_DELAY_MS = 2_500
 
 type PRBranchLookupCandidate = Pick<
@@ -35,12 +36,15 @@ export function hostedReviewOptionArgs(
       : {}),
     admissionTier: admissionTierForRefreshReason(reason)
   }
+
   if (shouldAcceptMergedFallbackPR(candidate)) {
     options.acceptMergedFallbackPR = true
   }
+
   if (typeof candidate.currentHeadOid === 'string' && candidate.currentHeadOid.trim().length > 0) {
     options.currentHeadOid = candidate.currentHeadOid.trim()
   }
+
   return Object.keys(options).length > 0 ? [options] : []
 }
 
@@ -52,12 +56,15 @@ export function admissionTierForRefreshReason(
 
 export function refreshKey(candidate: GitHubPRRefreshCandidate): string {
   const connectionScope = candidate.connectionId ?? 'local'
+
   const runtimeScope = candidate.connectionId
     ? 'remote'
     : `runtime:${candidate.localGitOptions?.wslDistro ? `wsl:${candidate.localGitOptions.wslDistro}` : 'host'}`
+
   if (typeof candidate.linkedPRNumber === 'number') {
     return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::pr::${candidate.linkedPRNumber}`
   }
+
   return `${connectionScope}::${runtimeScope}::${candidate.repoPath}::branch::${candidate.branch}`
 }
 
@@ -67,18 +74,23 @@ export function validateCandidate(
   if (candidate.repoKind !== 'git') {
     return 'not-git'
   }
+
   if (candidate.isBare) {
     return 'bare'
   }
+
   if (candidate.isArchived) {
     return 'archived'
   }
+
   if (candidate.connectionId && candidate.connectionState === 'disconnected') {
     return 'disconnected'
   }
+
   if (!candidate.branch && typeof candidate.linkedPRNumber !== 'number') {
     return 'fresh'
   }
+
   return null
 }
 
@@ -98,7 +110,9 @@ export function shouldBroadcastQueued(reason: GitHubPRRefreshReason, dueAt: numb
   if (isBudgetedBackground(reason)) {
     return false
   }
+
   const delay = dueAt - Date.now()
+
   return delay > 0 && delay <= 5_000
 }
 
@@ -109,6 +123,7 @@ export function shouldSkipFresh(
   if (bypassesFreshnessDelay(reason) || candidate.cachedFetchedAt == null) {
     return false
   }
+
   return Date.now() - candidate.cachedFetchedAt < refreshIntervalForCandidate(candidate)
 }
 
@@ -141,6 +156,7 @@ export function visibleCandidateAfterOutcome(
   if (outcome.kind === 'upstream-error') {
     return candidate
   }
+
   return {
     ...candidate,
     cachedFetchedAt: outcome.fetchedAt,
@@ -156,9 +172,11 @@ function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): numbe
   if (candidate.cachedPRState === 'closed' || candidate.cachedPRState === 'merged') {
     return 30 * 60_000
   }
+
   if (candidate.cachedHasPR === false) {
     return NO_REVIEW_REFRESH_INTERVAL_MS
   }
+
   if (
     candidate.cachedHasPR === true &&
     candidate.cachedPRState === 'open' &&
@@ -167,15 +185,19 @@ function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): numbe
   ) {
     return 10_000
   }
+
   if (candidate.cachedChecksStatus === 'success') {
     return 10 * 60_000
   }
+
   if (candidate.cachedChecksStatus === 'failure') {
     return 3 * 60_000
   }
+
   if (candidate.cachedChecksStatus === 'pending') {
     return 90_000
   }
+
   return 60_000
 }
 

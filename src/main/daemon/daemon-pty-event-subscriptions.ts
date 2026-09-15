@@ -14,8 +14,10 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     }) => void
   ): () => void {
     this.dataListeners.push(callback)
+
     return () => {
       const idx = this.dataListeners.indexOf(callback)
+
       if (idx !== -1) {
         this.dataListeners.splice(idx, 1)
       }
@@ -24,8 +26,10 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
 
   onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
     this.backgroundStreamListeners.push(callback)
+
     return () => {
       const idx = this.backgroundStreamListeners.indexOf(callback)
+
       if (idx !== -1) {
         this.backgroundStreamListeners.splice(idx, 1)
       }
@@ -40,8 +44,10 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
   ): () => void {
     this.exitListeners.push(callback)
+
     return () => {
       const idx = this.exitListeners.indexOf(callback)
+
       if (idx !== -1) {
         this.exitListeners.splice(idx, 1)
       }
@@ -50,8 +56,10 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
 
   onWriteUnavailable(callback: (payload: { id: string }) => void): () => void {
     this.writeUnavailableListeners.push(callback)
+
     return () => {
       const idx = this.writeUnavailableListeners.indexOf(callback)
+
       if (idx !== -1) {
         this.writeUnavailableListeners.splice(idx, 1)
       }
@@ -92,6 +100,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.identityChangeListeners.length = 0
     this.removeEventListener?.()
     this.removeEventListener = null
+
     // Why: final checkpoints are written daemon-side (TerminalHost.dispose); here the adapter only marks sessions
     // cleanly ended so they don't trigger false cold restores.
     if (this.historyManager) {
@@ -99,6 +108,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
         .dispose()
         .catch((err) => console.warn('[history] dispose failed:', err))
     }
+
     this.client.disconnect()
   }
 
@@ -106,6 +116,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     if (this.protocolVersion < CLEAN_DISCONNECT_PROTOCOL_VERSION) {
       return
     }
+
     // Why: an authenticated pair cancels the adoption watchdog and lets a never-used adapter retire its empty daemon on quit.
     await this.client.ensureConnected()
     this.recordAuthenticatedIdentity()
@@ -121,6 +132,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
       this.releasePendingRespawnAdoptionLease()
       this.disconnectOnlyPromise = this.finishDisconnectOnly([...this.keepHistoryShutdowns])
     }
+
     await this.disconnectOnlyPromise
   }
 
@@ -137,26 +149,32 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
     this.lastFullCheckpointAt.clear()
     this.coldRestoreCache.clear()
     this.wslDistrosBySessionId.clear()
+
     // Why: the detached daemon keeps these PTYs alive for warm reattach; a leftover pause would stall shells for a failsafe window.
     for (const id of this.pausedProducerSessionIds) {
       this.client.notify('resumePty', { sessionId: id })
     }
+
     this.pausedProducerSessionIds.clear()
     this.producerResumesOwedOnReconnect.clear()
     this.removeEventListener?.()
     this.removeEventListener = null
+
     if (this.protocolVersion >= CLEAN_DISCONNECT_PROTOCOL_VERSION) {
       try {
         // Why: only the authenticated daemon can atomically prove it's empty; a shared budget keeps this off quit's critical path.
         const deadlineMs = Date.now() + 250
+
         if (!this.client.isConnected()) {
           await this.client.ensureConnectedWithin(Math.max(1, deadlineMs - Date.now()))
         }
+
         await this.client.request('shutdownIfIdle', undefined, Math.max(1, deadlineMs - Date.now()))
       } catch {
         // An unreachable daemon falls back to event-driven retirement once its auth sockets close and it proves itself empty.
       }
     }
+
     this.client.disconnect()
   }
 }

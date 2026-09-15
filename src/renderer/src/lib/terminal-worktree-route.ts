@@ -36,6 +36,7 @@ const UNRESOLVED_TERMINAL_HOST: TerminalHostOwnership = {
   kind: 'unresolved',
   runtimeEnvironmentId: null
 }
+
 const LOCAL_OR_SSH_TERMINAL_HOST: TerminalHostOwnership = {
   kind: 'local-or-ssh',
   runtimeEnvironmentId: null
@@ -58,6 +59,7 @@ export function resolveTerminalHostOwnership(
     // Why: a tab with no owning row proves nothing about its host, so teardown cannot claim its PTY.
     return purpose === 'teardown' ? UNRESOLVED_TERMINAL_HOST : LOCAL_OR_SSH_TERMINAL_HOST
   }
+
   if (
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
     parseWorkspaceKey(worktreeId)?.type === 'folder'
@@ -69,6 +71,7 @@ export function resolveTerminalHostOwnership(
       getRuntimeEnvironmentIdForWorktree(state, worktreeId)
     )
   }
+
   // Why: inline setup/onboarding terminals (skill installs, feature tips) have no worktree row,
   // so the strict owner resolver reports them as an unresolved cross-host worktree. Scope them to
   // the active runtime — so a remote skill install lands on that runtime — falling back to local
@@ -81,7 +84,9 @@ export function resolveTerminalHostOwnership(
       getSingleFocusedRuntimeEnvironmentId(state)
     )
   }
+
   const resolution = resolveWorktreeOperationRouteResult(state, worktreeId)
+
   if (resolution.kind === 'resolved') {
     if (resolution.route.runtimeEnvironmentId) {
       // Why: a real worktree row keeps its runtime owner on teardown. Unlike the host-agnostic
@@ -89,11 +94,14 @@ export function resolveTerminalHostOwnership(
       // so downgrading to local here would kill a paired-client PTY that lives on the HUB (#9994).
       return { kind: 'runtime', runtimeEnvironmentId: resolution.route.runtimeEnvironmentId }
     }
+
     const parsed = parseExecutionHostId(resolution.route.executionHostId)
+
     return parsed?.kind === 'local' || parsed?.kind === 'ssh'
       ? LOCAL_OR_SSH_TERMINAL_HOST
       : UNRESOLVED_TERMINAL_HOST
   }
+
   if (
     purpose === 'spawn' &&
     state.worktreesByRepo === undefined &&
@@ -104,6 +112,7 @@ export function resolveTerminalHostOwnership(
     // them and still fail closed above. Teardown never takes this fail-open — it would kill on a guess.
     return ownershipForRuntimeEnvironmentId(getSingleFocusedRuntimeEnvironmentId(state))
   }
+
   return UNRESOLVED_TERMINAL_HOST
 }
 
@@ -125,6 +134,7 @@ function resolveFloatingScopeOwnership(
   ) {
     return ownershipForRuntimeEnvironmentId(runtimeEnvironmentId)
   }
+
   // Why: this surface publishes no runtime owner and only looks runtime-owned because exactly one
   // runtime is focused — a guess that flips as catalogs hydrate, stranding the local PTY (STA-2639).
   return LOCAL_OR_SSH_TERMINAL_HOST
@@ -135,6 +145,7 @@ export function resolveTerminalWorktreeRoute(
   worktreeId: string | null | undefined
 ): TerminalWorktreeRoute | null {
   const ownership = resolveTerminalHostOwnership(state, worktreeId, 'spawn')
+
   return ownership.kind === 'unresolved'
     ? null
     : { runtimeEnvironmentId: ownership.runtimeEnvironmentId }

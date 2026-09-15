@@ -22,24 +22,32 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
         'Local build switching is currently available only on macOS.',
         true
       )
+
       return
     }
+
     if (this.currentStatus.state === 'checking' || this.currentStatus.state === 'downloading') {
       return
     }
+
     if (this.localBuildSelectionInProgress) {
       return
     }
+
     this.localBuildSelectionInProgress = true
+
     try {
       const [{ chooseLocalBuild }, { startLocalBuildFeed }] = await Promise.all([
         import('../local-builds/local-build-switch'),
         import('../local-builds/local-build-feed-server')
       ])
+
       const candidate = await chooseLocalBuild(this.mainWindowRef)
+
       if (!candidate) {
         return
       }
+
       this.closeLocalBuildFeed()
       const feed = await startLocalBuildFeed(candidate)
       this.activeLocalBuildFeed = feed
@@ -75,8 +83,10 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
   protected async checkForPinnedBuild(channel: ReleaseChannel, tag: string): Promise<void> {
     if (!app.isPackaged || is.dev) {
       this.sendStatus({ state: 'not-available', userInitiated: true })
+
       return
     }
+
     // Why here as well as in the picker: the renderer disables the option, but IPC is reachable regardless, and there is no artifact to install on a platform the dev workflows do not build for.
     if (!isChannelSupportedOnPlatform(channel, process.platform)) {
       this.sendStatus({
@@ -84,8 +94,10 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
         message: `${RELEASE_CHANNEL_LABELS[channel]} builds are produced only for ${DEV_CHANNEL_PLATFORM_LABEL}.`,
         userInitiated: true
       })
+
       return
     }
+
     // Why: electron-updater would otherwise take this all the way to a download and fail it with a raw ERR_UPDATER_INVALID_SIGNATURE. Say what to do instead — the installer is run by hand once, and in-app updates work from there on.
     if (
       requiresManualDevChannelInstall({
@@ -99,21 +111,29 @@ export abstract class UpdaterBuildSelection extends UpdaterMenuChecks {
         message: `${RELEASE_CHANNEL_LABELS[channel]} builds are unsigned, and this signed build only installs updates signed by Orca's publisher. Download the installer from the release page and run it once — updates work normally from there, including back to Stable.`,
         userInitiated: true
       })
+
       return
     }
+
     if (this.currentStatus.state === 'checking' || this.currentStatus.state === 'downloading') {
       return
     }
+
     if (this.localBuildSelectionInProgress || this.pinnedBuildSelectionInProgress) {
       return
     }
+
     this.pinnedBuildSelectionInProgress = true
+
     try {
       const target = resolveTargetBuild(channel, tag)
+
       if (compareVersions(target.version, app.getVersion()) === 0) {
         this.sendSettledCheckStatus({ state: 'not-available', userInitiated: true })
+
         return
       }
+
       this.closeLocalBuildFeed()
       this.activeUpdateSource = hasDedicatedReleaseRepo(channel) ? channel : 'release'
       this.isPinnedBuildActive = true

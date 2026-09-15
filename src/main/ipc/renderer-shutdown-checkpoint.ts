@@ -17,6 +17,7 @@ export const SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS = 20_000
 function flushStagedStateWithDeadline(store: Store): Promise<ShutdownCheckpointResult> {
   const controller = new AbortController()
   let timer: ReturnType<typeof setTimeout> | null = null
+
   const deadline = new Promise<ShutdownCheckpointResult>((resolve) => {
     timer = setTimeout(() => {
       controller.abort()
@@ -24,6 +25,7 @@ function flushStagedStateWithDeadline(store: Store): Promise<ShutdownCheckpointR
       resolve({ ok: false })
     }, SHUTDOWN_CHECKPOINT_FLUSH_DEADLINE_MS)
   })
+
   // Why not drain to stable: Store retries a superseded staged write without
   // chasing unrelated live mutations, which the deadline would otherwise cut off.
   const flush = store
@@ -31,8 +33,10 @@ function flushStagedStateWithDeadline(store: Store): Promise<ShutdownCheckpointR
     .then((): ShutdownCheckpointResult => ({ ok: true }))
     .catch((error): ShutdownCheckpointResult => {
       console.error('[app] Failed to persist staged renderer state:', error)
+
       return { ok: false }
     })
+
   return Promise.race([flush, deadline]).finally(() => {
     if (timer) {
       clearTimeout(timer)
@@ -47,15 +51,18 @@ export function registerRendererShutdownCheckpointHandler(store: Store): void {
 
   ipcMain.on('app:stage-before-unload-sync', (event, args: StageBeforeUnloadSyncArgs) => {
     let ok = true
+
     try {
       for (const { state, hostId } of args.sessions) {
         store.stageWorkspaceSessionBeforeUnload(state, hostId)
       }
+
       store.updateUI(args.ui)
     } catch (error) {
       console.error('[app] Failed to stage renderer state before unload:', error)
       ok = false
     }
+
     pendingCheckpoint = ok ? flushStagedStateWithDeadline(store) : Promise.resolve({ ok: false })
     event.returnValue = { ok }
   })

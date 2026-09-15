@@ -41,22 +41,28 @@ export type PrebuiltSlotOutcome =
  */
 export function resolveOrcadPrebuildsDir(entryScript = process.argv[1]): string | null {
   const override = process.env.ORCA_ORCAD_PREBUILDS_DIR
+
   if (override) {
     return override
   }
+
   return entryScript ? join(dirname(entryScript), 'prebuilds') : null
 }
 
 export function readPrebuiltSlotManifest(prebuildsDir: string): PrebuiltSlotManifest | null {
   try {
     const parsed = JSON.parse(readFileSync(join(prebuildsDir, 'manifest.json'), 'utf8')) as unknown
+
     if (!parsed || typeof parsed !== 'object') {
       return null
     }
+
     const manifest = parsed as Partial<PrebuiltSlotManifest>
+
     if (typeof manifest.nodeAbi !== 'string' || typeof manifest.version !== 'string') {
       return null
     }
+
     return {
       module: typeof manifest.module === 'string' ? manifest.module : 'node-pty',
       version: manifest.version,
@@ -84,10 +90,13 @@ export function installPrebuiltSlot(options: {
 }): PrebuiltSlotOutcome {
   const slot = nativeSlotName(options.abi)
   const prebuildsDir = options.prebuildsDir ?? resolveOrcadPrebuildsDir()
+
   if (!prebuildsDir || !existsSync(prebuildsDir)) {
     return { installed: false, slot, why: 'no-prebuilds-dir' }
   }
+
   const manifest = readPrebuiltSlotManifest(prebuildsDir)
+
   if (manifest && manifest.nodeAbi !== options.abi.nodeAbi) {
     return {
       installed: false,
@@ -96,10 +105,13 @@ export function installPrebuiltSlot(options: {
       detail: `shipped prebuilds target Node ABI ${manifest.nodeAbi}, this host runs ABI ${options.abi.nodeAbi}`
     }
   }
+
   const source = join(prebuildsDir, slot, 'pty.node')
+
   if (!existsSync(source)) {
     return { installed: false, slot, why: 'no-slot' }
   }
+
   const releaseDir = join(options.nodePtyDir, 'build', 'Release')
   mkdirSync(releaseDir, { recursive: true })
   copyFileSync(source, join(releaseDir, 'pty.node'))
@@ -108,8 +120,10 @@ export function installPrebuiltSlot(options: {
   // build/Release/spawn-helper. Without it every spawn fails with ENOENT at the moment
   // a user opens a terminal, long after the "install succeeded" line.
   let spawnHelper = false
+
   if (usesNodePtySpawnHelper(options.abi.platform)) {
     const helperSource = join(prebuildsDir, slot, 'spawn-helper')
+
     if (existsSync(helperSource)) {
       const helperDest = join(releaseDir, 'spawn-helper')
       copyFileSync(helperSource, helperDest)
@@ -117,5 +131,6 @@ export function installPrebuiltSlot(options: {
       spawnHelper = true
     }
   }
+
   return { installed: true, slot, spawnHelper }
 }

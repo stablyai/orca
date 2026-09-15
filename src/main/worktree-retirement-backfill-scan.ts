@@ -35,6 +35,7 @@ function withScanDeadline(scan: Promise<unknown>): Promise<void> {
         new Error(`retirement backfill scan exceeded ${RETIREMENT_BACKFILL_SCAN_TIMEOUT_MS}ms`)
       )
     }, RETIREMENT_BACKFILL_SCAN_TIMEOUT_MS)
+
     timer.unref?.()
     void scan
       .then(
@@ -64,26 +65,32 @@ export function runRetirementBackfillScan(
   scan: () => Promise<RetirementScanResult>
 ): Promise<Set<string>> {
   let storeScans = scansByStore.get(store)
+
   if (!storeScans) {
     storeScans = new Map()
     scansByStore.set(store, storeScans)
   }
+
   const cached = storeScans.get(scanKey)
+
   if (
     cached &&
     (cached.retryAfter === 0 || cached.outstanding || monotonicNow() < cached.retryAfter)
   ) {
     return cached.names
   }
+
   const entry: BackfillScan = {
     names: Promise.resolve(new Set()),
     retryAfter: 0,
     outstanding: true
   }
+
   const started = scan()
   void started.then(
     (result) => {
       entry.outstanding = false
+
       // A listing that lands after the deadline still holds the right answer, and under WSL gate
       // contention that is the common case rather than the edge one — the gate admits a single
       // scan at a time and gives it 60s, four times this deadline. Dropping it would leave the
@@ -109,6 +116,7 @@ export function runRetirementBackfillScan(
       entry.retryAfter = result.complete
         ? 0
         : monotonicNow() + RETIREMENT_BACKFILL_RETRY_AFTER_FAILURE_MS
+
       return result.names
     })
     .catch((error: unknown) => {
@@ -116,5 +124,6 @@ export function runRetirementBackfillScan(
       throw error
     })
   storeScans.set(scanKey, entry)
+
   return entry.names
 }

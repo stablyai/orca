@@ -9,7 +9,9 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { makeStore } from './runtime-rpc-worktree-store-fixtures'
 
 const WORKTREE_PATH = '/tmp/worktree-a'
+
 const PTY_ID = 'pty-prompt'
+
 // Why: the submit delay is resolved per send from the *executing* host and the payload size,
 // so these suites drive it by stubbing that host rather than by mocking the shared module.
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!
@@ -54,17 +56,21 @@ async function createPromptRuntime(): Promise<{
     spawn: vi.fn().mockResolvedValue({ id: PTY_ID }),
     write: (_ptyId, data) => {
       writes.push(data)
+
       if (data === '\r') {
         submitTimes.push(Date.now() - startedAt)
       }
+
       return true
     },
     kill: () => true,
     getForegroundProcess: async () => null
   })
+
   const terminal = await runtime.createTerminal(`path:${WORKTREE_PATH}`, {
     launchAgent: 'aider'
   })
+
   return { runtime, handle: terminal.handle, writes, submitTimes }
 }
 
@@ -166,9 +172,11 @@ describe('agent prompt submit delay on a ConPTY host', () => {
     vi.useFakeTimers()
     const controller = new AbortController()
     const { runtime, handle, writes } = await createPromptRuntime()
+
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
       signal: controller.signal
     })
+
     const rejected = expect(submission).rejects.toThrow('request_aborted')
 
     await vi.advanceTimersByTimeAsync(submitDelayFor('review this', 'win32'))
@@ -317,23 +325,29 @@ describe('agent prompt render gate on a ConPTY host', () => {
       spawn: vi.fn().mockResolvedValue({ id: PTY_ID }),
       write: (_ptyId, data) => {
         writes.push(data)
+
         if (data === '\r') {
           submitTimes.push(Date.now() - startedAt)
         }
+
         if (data.includes('\x1b[201~')) {
           setTimeout(() => runtime.onPtyData(PTY_ID, '\x1b[?25h', Date.now()), markerDelayMs)
+
           for (let at = markerDelayMs + 500; at <= (agentOutput.noiseUntilMs ?? 0); at += 500) {
             setTimeout(() => runtime.onPtyData(PTY_ID, '.', Date.now()), at)
           }
         }
+
         return true
       },
       kill: () => true,
       getForegroundProcess: async () => null
     })
+
     const terminal = await runtime.createTerminal(`path:${WORKTREE_PATH}`, {
       launchAgent: 'claude'
     })
+
     return { runtime, handle: terminal.handle, writes, submitTimes }
   }
 
@@ -360,16 +374,19 @@ describe('agent prompt render gate on a ConPTY host', () => {
     useHostPlatform('win32')
     vi.useFakeTimers()
     const prompt = 'y'.repeat(320_000)
+
     const ingestMs = getTerminalPasteIngestMs(
       'win32',
       Buffer.byteLength(buildAgentPromptPasteBytes(prompt), 'utf8')
     )
+
     // The marker lands mid-ingest, which re-arms the cap; the ingest term must not be charged
     // a second time from that later moment.
     const { runtime, handle, writes, submitTimes } = await createSettlementRuntime({
       markerDelayMs: ingestMs - 1_000,
       noiseUntilMs: ingestMs + 20_000
     })
+
     const submission = runtime.sendTerminalAgentPrompt(handle, prompt)
     const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
 
@@ -426,11 +443,13 @@ describe('plain terminal send suffix delay', () => {
     vi.useFakeTimers()
     const controller = new AbortController()
     const { runtime, handle, writes } = await createPromptRuntime()
+
     const send = runtime.sendTerminal(
       handle,
       { text: 'z'.repeat(320_000), enter: true },
       { signal: controller.signal }
     )
+
     const rejected = expect(send).rejects.toThrow('request_aborted')
 
     await vi.advanceTimersByTimeAsync(100)

@@ -81,6 +81,7 @@ export function LinearCustomViewTableContent({
   if (loading && views.length === 0) {
     return <LinearCustomViewTableSkeleton />
   }
+
   if (views.length === 0) {
     return <LinearCustomViewTableEmpty hasError={hasError} />
   }
@@ -90,6 +91,7 @@ export function LinearCustomViewTableContent({
       {views.map((view) => {
         const selected = view.id === selectedViewId
         const workspace = linearProjectWorkspaceLabel(workspaceSelection, view.workspaceName)
+
         return (
           <div
             key={`${view.workspaceId ?? 'workspace'}-${view.id}`}
@@ -102,6 +104,7 @@ export function LinearCustomViewTableContent({
               if (event.target !== event.currentTarget) {
                 return
               }
+
               if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault()
                 onSelectView(view)

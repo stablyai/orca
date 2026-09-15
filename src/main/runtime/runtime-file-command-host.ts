@@ -75,9 +75,11 @@ export function watchWindowsRuntimeFileExplorer(
 
   const emitOverflow = (): void => {
     timer = null
+
     if (disposed) {
       return
     }
+
     callback([{ kind: 'overflow', absolutePath: rootPath }])
   }
 
@@ -85,28 +87,35 @@ export function watchWindowsRuntimeFileExplorer(
     if (disposed) {
       return
     }
+
     if (timer) {
       clearTimeout(timer)
     }
+
     timer = setTimeout(emitOverflow, WINDOWS_RUNTIME_FILE_WATCH_DEBOUNCE_MS)
   }
 
   // Why: Parcel's Watchman probe can crash the headless server on Windows; use a conservative overflow refresh instead.
   const watcher = watchFs(rootPath, { recursive: true }, scheduleOverflow)
+
   const onClose = (): void => {
     watcher.removeListener('error', onError)
     physicalClose.markExited()
   }
+
   const onError = (err: Error): void => {
     console.error('[runtime-files.watch] Windows watcher error', { rootPath, err })
+
     if (timer) {
       clearTimeout(timer)
       timer = null
     }
+
     watcher.removeListener('close', onClose)
     watcher.removeListener('error', onError)
     // Why: Node nulls FSWatcher's native handle on error without a close event; treat the error as physical-exit proof.
     physicalClose.markExited()
+
     if (!disposed) {
       try {
         callback([{ kind: 'overflow', absolutePath: rootPath }])
@@ -115,15 +124,18 @@ export function watchWindowsRuntimeFileExplorer(
       }
     }
   }
+
   watcher.once('close', onClose)
   watcher.on('error', onError)
 
   return async () => {
     disposed = true
+
     if (timer) {
       clearTimeout(timer)
       timer = null
     }
+
     if (!closeStarted) {
       try {
         watcher.close()
@@ -131,8 +143,10 @@ export function watchWindowsRuntimeFileExplorer(
         console.error('[runtime-files.watch] Windows watcher close error', { rootPath, err })
         throw err
       }
+
       closeStarted = true
     }
+
     try {
       await physicalClose.waitForExit(
         WINDOWS_RUNTIME_FILE_WATCH_CLOSE_DEADLINE_MS,
@@ -154,7 +168,9 @@ export function isSafeMobileRelativePath(relativePath: string): boolean {
   if (!relativePath || relativePath.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(relativePath)) {
     return false
   }
+
   const parts = relativePath.replace(/\\/g, '/').split('/')
+
   return parts.every((part) => part !== '' && part !== '.' && part !== '..')
 }
 
@@ -165,9 +181,11 @@ export function isMobileMarkdownPath(relativePath: string): boolean {
 export function isMobileBinaryPath(relativePath: string): boolean {
   const basename = basenameFromRelativePath(relativePath)
   const dotIndex = basename.lastIndexOf('.')
+
   if (dotIndex <= 0) {
     return false
   }
+
   return MOBILE_BINARY_EXTENSIONS.has(basename.slice(dotIndex).toLowerCase())
 }
 
@@ -179,18 +197,22 @@ export function isRuntimeDirectoryEntry(entry: {
   if (entry.isSymbolicLink()) {
     return false
   }
+
   if (entry.isDirectory()) {
     return true
   }
+
   return false
 }
 
 export function isBinaryBuffer(buffer: Buffer): boolean {
   const len = Math.min(buffer.length, 8192)
+
   for (let i = 0; i < len; i += 1) {
     if (buffer[i] === 0) {
       return true
     }
   }
+
   return false
 }

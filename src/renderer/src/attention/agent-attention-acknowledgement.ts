@@ -43,16 +43,21 @@ export function computeAgentAcknowledgementTargets(
   if (subjectKey === null) {
     return []
   }
+
   const targets: string[] = []
   const acknowledgedAt = records.acknowledgedTurnStartedAt[subjectKey] ?? 0
   const liveTurn = records.liveTurns[subjectKey]
+
   if (liveTurn && acknowledgedAt < liveTurn.stateStartedAt) {
     targets.push(subjectKey)
   }
+
   const retainedTurn = records.retainedTurns[subjectKey]
+
   if (retainedTurn && acknowledgedAt < retainedTurn.entry.stateStartedAt) {
     targets.push(subjectKey)
   }
+
   return targets
 }
 
@@ -64,6 +69,7 @@ export function resolveViewedUnreadSubjectKey(
   if (subjectKey === null) {
     return null
   }
+
   return readAgentAttentionUnreadReason(unreadBySubjectKey[subjectKey]) === null ? null : subjectKey
 }
 
@@ -81,16 +87,20 @@ export function computeLapsedManualUnreadProtections(
   activeSubjectKeys: ReadonlySet<string>
 ): string[] {
   const lapsed: string[] = []
+
   for (const [subjectKey, turnStartedAt] of Object.entries(records.manuallyUnreadTurnStartedAt)) {
     if (!activeSubjectKeys.has(subjectKey)) {
       lapsed.push(subjectKey)
       continue
     }
+
     const currentTurn = readAgentAttentionTurnStartedAt(records, subjectKey)
+
     if (currentTurn !== null && currentTurn !== turnStartedAt) {
       lapsed.push(subjectKey)
     }
   }
+
   return lapsed
 }
 
@@ -105,16 +115,19 @@ export function shouldClearWorkspaceAttention(
   if (!remainder.hasSurfaces) {
     return true
   }
+
   for (const subjectKey of remainder.unreadSubjectKeys) {
     if (!args.clearedSubjectKeys.has(subjectKey)) {
       return false
     }
   }
+
   for (const groupId of remainder.unreadGroupIds) {
     if (groupId !== args.viewedGroupId) {
       return false
     }
   }
+
   return true
 }
 
@@ -129,6 +142,7 @@ export function applyAgentAttentionAcknowledgement(
   }
 ): void {
   const subjectKeysToClear = new Set(args.subjectKeys)
+
   if (args.viewedUnreadSubjectKey) {
     subjectKeysToClear.add(args.viewedUnreadSubjectKey)
   }
@@ -140,11 +154,14 @@ export function applyAgentAttentionAcknowledgement(
   if (args.subjectKeys.length > 0) {
     sink.acknowledgeSubjects(args.subjectKeys)
   }
+
   if (args.workspaceIdToClear !== null) {
     // Why: the selected agent is now visible, so drop the Dock-driving workspace unread.
     sink.clearWorkspaceUnread(args.workspaceIdToClear)
   }
+
   sink.clearGroupUnread(args.viewedGroupId)
+
   for (const subjectKey of subjectKeysToClear) {
     sink.clearSubjectUnread(subjectKey)
   }

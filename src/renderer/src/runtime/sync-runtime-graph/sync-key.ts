@@ -29,6 +29,7 @@ export {
   buildRuntimeMobileAgentStatusProjectionForTests,
   resetRuntimeMobileAgentStatusProjectionCacheForTests
 }
+
 export type { RuntimeMobileSessionSyncKey } from './types'
 
 function getTerminalThemeSystemPrefersDark(
@@ -45,10 +46,12 @@ export function canSkipRuntimeMobileSessionSyncKeyBuild(
   previousSystemPrefersDark: boolean | null | undefined = systemPrefersDark
 ): boolean {
   const currentThemePreference = getTerminalThemeSystemPrefersDark(state, systemPrefersDark)
+
   const previousThemePreference = getTerminalThemeSystemPrefersDark(
     previousState,
     previousSystemPrefersDark
   )
+
   return (
     currentThemePreference === previousThemePreference &&
     state.tabsByWorktree === previousState.tabsByWorktree &&
@@ -89,15 +92,19 @@ export function getRuntimeMobileSessionSyncKey(
   const browserTabsByWorktree = getBrowserTabsByWorktree(state)
   const browserPagesByWorkspace = getBrowserPagesByWorkspace(state)
   const agentStatusByPaneKey = state.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY
+
   const previousBrowserTabsByWorktree = previousState
     ? getBrowserTabsByWorktree(previousState)
     : EMPTY_BROWSER_TABS_BY_WORKTREE
+
   const previousBrowserPagesByWorkspace = previousState
     ? getBrowserPagesByWorkspace(previousState)
     : EMPTY_BROWSER_PAGES_BY_WORKSPACE
+
   const previousAgentStatusByPaneKey = previousState
     ? (previousState.agentStatusByPaneKey ?? EMPTY_AGENT_STATUS_BY_PANE_KEY)
     : EMPTY_AGENT_STATUS_BY_PANE_KEY
+
   return {
     terminalLayoutsByTabId: state.terminalLayoutsByTabId,
     runtimePaneTitlesByTabId: state.runtimePaneTitlesByTabId,

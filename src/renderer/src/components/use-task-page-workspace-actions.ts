@@ -13,8 +13,10 @@ import {
   getGitLabWorkItemWorkspaceSeed,
   getTaskPageRepoSourceContext
 } from './task-page-source-context'
+
 export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
   const { repoMap, openModal } = model
+
   const openComposerForItem = useCallback(
     (item: GitHubWorkItem): void => {
       const linkedWorkItem: LinkedWorkItemSummary = {
@@ -29,6 +31,7 @@ export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
             }
           : {})
       }
+
       openModal('new-workspace-composer', {
         linkedWorkItem,
         initialGitHubWorkItem: item,
@@ -41,6 +44,7 @@ export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
     },
     [openModal, repoMap]
   )
+
   const handleUseWorkItem = useCallback(
     (item: GitHubWorkItem): void => {
       useAppStore.getState().recordFeatureInteraction('github-tasks')
@@ -48,6 +52,7 @@ export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
     },
     [openComposerForItem]
   )
+
   const handleOpenOrUseGitHubWorkItem = useCallback(
     (item: GitHubWorkItem): void => {
       const currentAttached = findGithubWorkItemWorkspaceAttachment(
@@ -56,11 +61,15 @@ export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
         item.type,
         item.number
       )
+
       if (!currentAttached) {
         handleUseWorkItem(item)
+
         return
       }
+
       const result = activateAndRevealWorktree(currentAttached.id)
+
       if (result === false) {
         toast.error(
           item.type === 'pr'
@@ -73,12 +82,15 @@ export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
                 'Unable to open the workspace attached to this issue.'
               )
         )
+
         return
       }
+
       useAppStore.getState().recordFeatureInteraction('github-tasks')
     },
     [handleUseWorkItem]
   )
+
   const openComposerForGitLabItem = useCallback(
     (item: GitLabWorkItem): void => {
       const linkedWorkItem: LinkedWorkItemSummary = {
@@ -93,6 +105,7 @@ export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
             }
           : {})
       }
+
       openModal('new-workspace-composer', {
         linkedWorkItem,
         taskSourceContext: getTaskPageRepoSourceContext(
@@ -107,6 +120,7 @@ export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
     },
     [openModal, repoMap]
   )
+
   const handleUseGitLabItem = useCallback(
     (item: GitLabWorkItem): void => {
       useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
@@ -114,6 +128,7 @@ export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
     },
     [openComposerForGitLabItem]
   )
+
   const nextModel = model as typeof model & {
     openComposerForItem: typeof openComposerForItem
     handleUseWorkItem: typeof handleUseWorkItem
@@ -121,11 +136,14 @@ export function useTaskPageWorkspaceActions(model: TaskPageSearchActionsModel) {
     openComposerForGitLabItem: typeof openComposerForGitLabItem
     handleUseGitLabItem: typeof handleUseGitLabItem
   }
+
   nextModel.openComposerForItem = openComposerForItem
   nextModel.handleUseWorkItem = handleUseWorkItem
   nextModel.handleOpenOrUseGitHubWorkItem = handleOpenOrUseGitHubWorkItem
   nextModel.openComposerForGitLabItem = openComposerForGitLabItem
   nextModel.handleUseGitLabItem = handleUseGitLabItem
+
   return nextModel
 }
+
 export type TaskPageWorkspaceActionsModel = ReturnType<typeof useTaskPageWorkspaceActions>

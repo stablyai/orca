@@ -17,9 +17,11 @@ const { fakeElectron } = vi.hoisted(() => {
   function createFakeWebContents(): FakeWebContents {
     const handlers = new Map<string, Handler[]>()
     let destroyed = false
+
     const add = (event: string, handler: Handler): void => {
       handlers.set(event, [...(handlers.get(event) ?? []), handler])
     }
+
     return {
       on: vi.fn(add),
       once: vi.fn(add),
@@ -39,6 +41,7 @@ const { fakeElectron } = vi.hoisted(() => {
         if (event === 'destroyed') {
           destroyed = true
         }
+
         // off() replaces the stored array, so iterating the fetched one is safe.
         for (const handler of handlers.get(event) ?? []) {
           handler(...args)
@@ -58,6 +61,7 @@ const { fakeElectron } = vi.hoisted(() => {
       if (Object.hasOwn(options, 'webContents') && options.webContents === undefined) {
         throw new TypeError('options.webContents must be a WebContents')
       }
+
       this.options = options
       this.webContents = options.webContents ?? createFakeWebContents()
       FakeWebContentsView.instances.push(this)
@@ -117,9 +121,11 @@ const { createFakeWebContents, FakeWebContentsView, FakeBaseWindow } = fakeElect
 
 function lastWindow(): InstanceType<typeof FakeBaseWindow> {
   const instance = FakeBaseWindow.instances.at(-1)
+
   if (!instance) {
     throw new Error('no BaseWindow was constructed')
   }
+
   return instance
 }
 
@@ -130,9 +136,11 @@ function lastViews(): {
 } {
   const bar = FakeWebContentsView.instances.at(-2)
   const content = FakeWebContentsView.instances.at(-1)
+
   if (!bar || !content) {
     throw new Error('expected an origin bar view and a content view')
   }
+
   return { bar, content }
 }
 
@@ -176,6 +184,7 @@ describe('openPopupWithOriginBar', () => {
   it('adopts the pre-created popup contents so window.opener and the session survive', () => {
     const adopted = createFakeWebContents()
     const webPreferences = { partition: 'persist:browser' }
+
     const popup = openPopupWithOriginBar(
       { webContents: adopted as never, webPreferences },
       'https://example.com/login'

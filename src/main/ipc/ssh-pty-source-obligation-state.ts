@@ -75,6 +75,7 @@ export function sealSourceToken(token: TokenRecord): void {
   if (token.state !== 'active') {
     throw new Error('SSH PTY source token cannot be sealed from its current state')
   }
+
   token.state = 'sealed-unsettled'
 }
 
@@ -82,12 +83,14 @@ export function markSourceExitPublished(token: TokenRecord): void {
   if (token.state !== 'sealed-unsettled') {
     throw new Error('SSH PTY source exit publication requires a sealed token')
   }
+
   if (
     token.obligationsTerminalEndSu !== token.receivedEndSu ||
     token.ackQueuedEndSu !== token.receivedEndSu
   ) {
     throw new Error('SSH PTY source exit cannot publish before terminal ACK queueing')
   }
+
   token.exitPublished = true
 }
 
@@ -100,7 +103,9 @@ export function beginSourceExitTimeout(token: TokenRecord): Readonly<{
   if (token.state !== 'sealed-unsettled') {
     throw new Error('SSH PTY source exit timeout requires a sealed token')
   }
+
   token.state = 'canceling'
+
   return Object.freeze({
     id: token.identity.id,
     deliveryToken: token.identity.deliveryToken,
@@ -135,10 +140,12 @@ export function advanceSourceTerminalEnd(token: TokenRecord): void {
   let endSu = token.obligationsTerminalEndSu
   let low = 0
   let high = token.spans.length
+
   // Committed spans are contiguous; skip the terminal prefix retained until ACK publication.
   if (token.spans[0]?.span.sourceEndSu <= endSu) {
     while (low < high) {
       const middle = low + Math.floor((high - low) / 2)
+
       if (token.spans[middle]!.span.sourceEndSu <= endSu) {
         low = middle + 1
       } else {
@@ -146,19 +153,24 @@ export function advanceSourceTerminalEnd(token: TokenRecord): void {
       }
     }
   }
+
   for (let index = low; index < token.spans.length; index += 1) {
     const record = token.spans[index]!
+
     if (record.span.sourceEndSu <= endSu) {
       continue
     }
+
     if (
       record.span.sourceStartSu !== endSu ||
       !Array.from(record.obligations.values()).every(obligationIsTerminal)
     ) {
       break
     }
+
     endSu = record.span.sourceEndSu
   }
+
   token.obligationsTerminalEndSu = endSu
 }
 
@@ -170,6 +182,7 @@ export function cancelOpenSourceObligations(token: TokenRecord, reason: string):
       }
     }
   }
+
   advanceSourceTerminalEnd(token)
 }
 
@@ -190,6 +203,7 @@ export function releaseSourceTokenSpans(
   for (const record of token.spans) {
     spanOwners.delete(record.span.spanId)
   }
+
   token.spans = []
 }
 
@@ -211,6 +225,7 @@ export function rollbackCommittedSourceSpan(
   spanOwners: Map<string, SpanRecord>
 ): boolean {
   const last = token.spans.at(-1)
+
   if (
     last?.span !== reservation.span ||
     token.receivedEndSu !== reservation.span.sourceEndSu ||
@@ -220,9 +235,11 @@ export function rollbackCommittedSourceSpan(
   ) {
     return false
   }
+
   token.spans.pop()
   token.receivedEndSu = reservation.span.sourceStartSu
   spanOwners.delete(reservation.span.spanId)
+
   return true
 }
 
@@ -231,9 +248,11 @@ export function requireSourceSpan(
   spanId: string
 ): { token: TokenRecord; span: SpanRecord } {
   const span = spanOwners.get(spanId)
+
   if (!span || span.span.spanId !== spanId) {
     throw new Error('Unknown or reclaimed SSH PTY source span')
   }
+
   return { token: span.owner, span }
 }
 
@@ -242,9 +261,11 @@ export function requireSourceReservation(
   reservation: SshPtySourceAdmissionReservation
 ): ReservationRecord {
   const record = reservations.get(reservation.reservationId)
+
   if (!record || record.reservation !== reservation) {
     throw new Error('Unknown SSH PTY source admission reservation')
   }
+
   return record
 }
 
@@ -256,15 +277,18 @@ export function closeSourceGeneration(
   closeToken: (token: TokenRecord) => void
 ): number {
   let closed = 0
+
   for (const token of Array.from(tokens.values())) {
     if (token.identity.providerGeneration !== providerGeneration || token.state === 'closed') {
       continue
     }
+
     token.generationClosed = true
     cancelOpenSourceObligations(token, reason)
     closeToken(token)
     closed++
   }
+
   for (const [id, record] of reservations) {
     if (
       record.state === 'reserved' &&
@@ -274,6 +298,7 @@ export function closeSourceGeneration(
       reservations.delete(id)
     }
   }
+
   return closed
 }
 
@@ -284,12 +309,15 @@ export function closeAllSourceTokens(
   closeToken: (token: TokenRecord) => void
 ): number {
   let closed = 0
+
   const generations = new Set(
     Array.from(tokens.values(), (token) => token.identity.providerGeneration)
   )
+
   for (const providerGeneration of generations) {
     closed += closeSourceGeneration(tokens, reservations, providerGeneration, reason, closeToken)
   }
+
   return closed
 }
 
@@ -307,8 +335,10 @@ export function closeSourceToken(
   const key = ptySourceDeliveryKey(token.identity)
   tokens.delete(key)
   closedSnapshots.set(key, snapshotSourceToken(token))
+
   while (closedSnapshots.size > CLOSED_SOURCE_TOKEN_TOMBSTONE_LIMIT) {
     closedSnapshots.delete(closedSnapshots.keys().next().value!)
   }
+
   onTokenClosed(token.identity)
 }

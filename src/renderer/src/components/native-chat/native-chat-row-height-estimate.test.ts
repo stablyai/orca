@@ -35,19 +35,23 @@ describe('transcript row height estimate', () => {
       nativeChatRowContentMetrics(message('one line')),
       NO_CHROME
     )
+
     const long = estimateNativeChatRowHeight(
       nativeChatRowContentMetrics(message(Array.from({ length: 40 }, () => 'line').join('\n'))),
       NO_CHROME
     )
+
     expect(long).toBeGreaterThan(short)
   })
 
   it('bounds the estimate at both ends', () => {
     const empty = estimateNativeChatRowHeight(nativeChatRowContentMetrics(message('')), NO_CHROME)
+
     const enormous = estimateNativeChatRowHeight(
       nativeChatRowContentMetrics(message('line\n'.repeat(5000))),
       NO_CHROME
     )
+
     expect(empty).toBeGreaterThan(0)
     expect(enormous).toBeLessThan(5000 * 22)
   })
@@ -65,6 +69,7 @@ describe('transcript row height estimate', () => {
         nativeChatRowContentMetrics(message(Array.from({ length: count }, () => 'x').join('\n'))),
         NO_CHROME
       )
+
     const perLine = lines(10) - lines(9)
 
     expect(perLine).toBeGreaterThan(0)
@@ -93,16 +98,19 @@ describe('transcript row height estimate', () => {
 
   it('includes both rendered parts and their gap for a receipt carrying a diff', () => {
     const empty = nativeChatRowContentMetrics(message(''))
+
     const receipt = estimateNativeChatRowHeight(empty, {
       hasReceipt: true,
       hasStatus: false,
       hasTurnDiff: false
     })
+
     const diff = estimateNativeChatRowHeight(empty, {
       hasReceipt: false,
       hasStatus: false,
       hasTurnDiff: true
     })
+
     const together = estimateNativeChatRowHeight(empty, {
       hasReceipt: true,
       hasStatus: false,
@@ -119,6 +127,7 @@ describe('transcript row height estimate', () => {
 
   it('keeps role-specific chrome when two messages share their blocks', () => {
     const blocks: NativeChatMessage['blocks'] = [{ type: 'text', text: 'same content' }]
+
     const withRole = (role: NativeChatMessage['role']): NativeChatMessage => ({
       ...message('same content', role),
       blocks
@@ -130,6 +139,7 @@ describe('transcript row height estimate', () => {
 
   it('reserves more for a row carrying a tool run than for its prose alone', () => {
     const prose = nativeChatRowContentMetrics(message('ran something'))
+
     const withTool = nativeChatRowContentMetrics({
       id: 'tool',
       role: 'assistant',
@@ -140,6 +150,7 @@ describe('transcript row height estimate', () => {
       timestamp: 1,
       source: 'transcript'
     })
+
     expect(estimateNativeChatRowHeight(withTool, NO_CHROME)).toBeGreaterThan(
       estimateNativeChatRowHeight(prose, NO_CHROME)
     )

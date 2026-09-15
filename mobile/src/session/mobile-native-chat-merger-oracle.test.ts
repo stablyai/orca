@@ -24,6 +24,7 @@ function msg(id: string, overrides: Partial<NativeChatMessage> = {}): NativeChat
 // sequence — the cache must never diverge from a full rebuild (#18).
 describe('mobile stateful merger — oracle vs pure merge', () => {
   const base = [msg('a'), msg('b', { source: 'hook' })]
+
   const batches: NativeChatMessage[][] = [
     [msg('c')], // pure tail
     [], // empty frame
@@ -38,6 +39,7 @@ describe('mobile stateful merger — oracle vs pure merge', () => {
     replaceList(merger, base)
     let pure = mergeNativeChatMessages(base, [])
     expect(merger.list).toEqual(pure)
+
     for (const batch of batches) {
       const out = applyAppend(merger, batch)
       pure = mergeNativeChatMessages(pure, batch)

@@ -22,6 +22,7 @@ type SessionSnapshotOperationsRuntime = Pick<
 >
 
 const sessionSnapshotOperationsContext = Symbol('SessionSnapshotOperations')
+
 type SessionSnapshotOperationsContext = {
   runtime: SessionSnapshotOperationsRuntime
   sessions: SessionHostPartitionOperations
@@ -43,10 +44,13 @@ export class SessionSnapshotOperations {
 
   setWorkspaceSession(session: PersistedState['workspaceSession'], hostId?: string | null): void {
     const resolved = resolveHostId(hostId)
+
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
       setLocalWorkspaceSession(this, session)
+
       return
     }
+
     setHostWorkspaceSession(this[sessionSnapshotOperationsContext].sessions, resolved, session)
   }
 
@@ -55,27 +59,35 @@ export class SessionSnapshotOperations {
     hostId?: string | null
   ): void {
     const resolved = resolveHostId(hostId)
+
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
       setLocalWorkspaceSession(this, session, true)
+
       return
     }
+
     setHostWorkspaceSession(this[sessionSnapshotOperationsContext].sessions, resolved, session)
   }
 
   patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
     const resolved = resolveHostId(hostId)
+
     // Why: the debounced hot path sends only changed slices; scalar/UI patches skip terminal normalization, topology patches keep stale-PTY protections.
     let next: WorkspaceSessionState = {
       ...this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved),
       ...patch
     }
+
     if (workspaceSessionPatchNeedsFullNormalization(patch)) {
       this.setWorkspaceSession(next, resolved)
+
       return
     }
+
     if (Object.hasOwn(patch, 'browserUrlHistory')) {
       next = pruneWorkspaceSessionBrowserHistory(next)
     }
+
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
       this[sessionSnapshotOperationsContext].runtime.state.workspaceSession = next
     } else {
@@ -84,6 +96,7 @@ export class SessionSnapshotOperations {
         [resolved]: next
       }
     }
+
     scheduleSave(this[sessionSnapshotOperationsContext].scheduling)
   }
 }

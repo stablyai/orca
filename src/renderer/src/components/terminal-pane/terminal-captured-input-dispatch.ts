@@ -31,10 +31,13 @@ export function sendCapturedTerminalInput({
   ) {
     return false
   }
+
   const sent = capturedTransport.sendInput(data)
+
   if (sent) {
     onAccepted?.()
   }
+
   return sent
 }
 

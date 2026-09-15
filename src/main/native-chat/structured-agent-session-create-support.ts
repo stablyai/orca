@@ -33,6 +33,7 @@ export function resolveStructuredAgentSessionCreateSupport(input: {
             : 'agent'
     }
   }
+
   // Claude only: Codex resolves its account on a different path, so its answer is untouched here.
   // `wsl` is the closest existing reason — the cause is a WSL-bound account rather than a WSL
   // workspace — and no client reads the field, so it stays as-is.
@@ -44,5 +45,6 @@ export function resolveStructuredAgentSessionCreateSupport(input: {
   ) {
     return { supported: false, reason: 'wsl' }
   }
+
   return { supported: true }
 }

@@ -6,13 +6,17 @@ import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 export function parseOwnerRepoFromItemUrl(url: string): GitHubOwnerRepo | null {
   try {
     const parsed = new URL(url)
+
     if ((parsed.protocol !== 'https:' && parsed.protocol !== 'http:') || !parsed.host) {
       return null
     }
+
     const segments = parsed.pathname.split('/').filter(Boolean)
+
     if (segments.length < 2) {
       return null
     }
+
     return { owner: segments[0], repo: segments[1], host: parsed.host }
   } catch {
     return null
@@ -48,6 +52,7 @@ export function resolvePullRequestRepo(
         }
       : null) ??
     parseOwnerRepoFromItemUrl(item.url)
+
   return repo ? { ...repo, host: githubProjectHost(repo.host) } : null
 }
 
@@ -60,5 +65,6 @@ export function normalizeItemDialogTab(
   if (item?.type !== 'pr') {
     return 'conversation'
   }
+
   return tab ?? 'conversation'
 }

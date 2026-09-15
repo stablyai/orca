@@ -16,6 +16,7 @@ type WorktreePathLike = {
 // flat in the sidebar, so per-repo scoping let two repos collide on one name.
 function collectUsedNames(worktreesByRepo: Record<string, WorktreePathLike[]>): Set<string> {
   const usedNames = new Set<string>()
+
   for (const worktrees of Object.values(worktreesByRepo)) {
     for (const worktree of worktrees) {
       // Shared basename, not `@/lib/path`'s: mobile keys collisions the same way, and two copies of
@@ -23,6 +24,7 @@ function collectUsedNames(worktreesByRepo: Record<string, WorktreePathLike[]>): 
       usedNames.add(normalizeSuggestedName(suggestionPathBasename(worktree.path)))
     }
   }
+
   return usedNames
 }
 
@@ -43,9 +45,11 @@ export function getSuggestedCreatureName(
   retired: RetiredNameRegistry = EMPTY_RETIRED_NAME_REGISTRY
 ): string {
   const usedNames = collectUsedNames(worktreesByRepo)
+
   for (const retiredName of retired.names) {
     usedNames.add(normalizeSuggestedName(retiredName))
   }
+
   return selectSuggestedCreatureName(usedNames, random, retired.exhaustedTiers)
 }
 

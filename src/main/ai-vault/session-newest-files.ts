@@ -14,26 +14,35 @@ export class SessionNewestFiles {
     // The backfill enumerates with no limit; skip the insert search entirely.
     if (!Number.isFinite(this.limit)) {
       this.files.push(file)
+
       return
     }
+
     if (this.limit <= 0) {
       return
     }
+
     const last = this.files.at(-1)
+
     if (this.files.length >= this.limit && last && file.mtimeMs <= last.mtimeMs) {
       return
     }
+
     let low = 0
     let high = this.files.length
+
     while (low < high) {
       const middle = (low + high) >>> 1
+
       if (this.files[middle].mtimeMs >= file.mtimeMs) {
         low = middle + 1
       } else {
         high = middle
       }
     }
+
     this.files.splice(low, 0, file)
+
     if (this.files.length > this.limit) {
       this.files.pop()
     }

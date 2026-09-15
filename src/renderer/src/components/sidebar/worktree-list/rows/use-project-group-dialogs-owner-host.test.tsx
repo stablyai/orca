@@ -43,6 +43,7 @@ const remoteGroup: ProjectGroup = {
 }
 
 let latest: ProjectGroupDialogs | null = null
+
 const roots: Root[] = []
 
 function HookProbe(): null {
@@ -51,6 +52,7 @@ function HookProbe(): null {
     repoMap: new Map(),
     projectGroups: [remoteGroup]
   })
+
   return null
 }
 

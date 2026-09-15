@@ -51,12 +51,14 @@ afterEach(() => {
 describe('PairedRuntimeBrowserNetworkRoute', () => {
   it('closes a subscription that resolves after route teardown', async () => {
     let resolveSubscription = (_subscription: RemoteRuntimeSubscription): void => {}
+
     const closeSubscription = vi.fn()
     subscribeRemoteRuntimeRequestMock.mockReturnValueOnce(
       new Promise((resolve) => {
         resolveSubscription = resolve
       })
     )
+
     const route = new PairedRuntimeBrowserNetworkRoute({
       pairing,
       lease,
@@ -81,6 +83,7 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
       async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
         callbacks = args[4] as RemoteRuntimeSubscriptionCallbacks
+
         return {
           requestId: 'waiting-subscription',
           close: closeSubscription,
@@ -133,6 +136,7 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
       async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
         callbacks = args[4] as RemoteRuntimeSubscriptionCallbacks
+
         return {
           requestId: 'runtime-closed-subscription',
           close: closeSubscription,
@@ -171,6 +175,7 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
     subscribeRemoteRuntimeRequestMock.mockImplementationOnce(
       async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
         callbacks = args[4] as RemoteRuntimeSubscriptionCallbacks
+
         return {
           requestId: 'cleanup-failure-subscription',
           close: closeSubscription,
@@ -178,14 +183,17 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
         }
       }
     )
+
     const closeSocks = vi
       .spyOn(RemoteBrowserSocksServer.prototype, 'close')
       .mockRejectedValueOnce(new Error('listener close failed'))
+
     const route = createRoute({
       onError: () => {
         throw new Error('reporting failed')
       }
     })
+
     const starting = route.start()
     await vi.waitFor(() => expect(callbacks).toBeDefined())
     callbacks!.onResponse({
@@ -212,6 +220,7 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
       async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
         callbacks = args[4] as RemoteRuntimeSubscriptionCallbacks
         subscriptionOptions = args[5] as Record<string, unknown>
+
         return { requestId: 'budgeted', close: vi.fn(), sendBinary: () => true }
       }
     )
@@ -298,9 +307,11 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
 
   it('reattaches with the exact existing v1 payload and capability pair', async () => {
     const attempts = mockSubscriptionAttempts()
+
     const route = createRoute({
       subscription: { clientCapabilities: ['existing.optional.v1'] }
     })
+
     const starting = route.start()
     await vi.waitFor(() => expect(attempts).toHaveLength(1))
     ready(attempts[0]!, 7)
@@ -327,17 +338,20 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
         ]
       })
     }
+
     await route.close()
   })
 
   it('keeps page-command negotiation off the independent tunnel attach', async () => {
     const attempts = mockSubscriptionAttempts()
     const commandLease = { ...lease, pageCommandProtocolVersion: 1 }
+
     const route = new PairedRuntimeBrowserNetworkRoute({
       pairing,
       lease: commandLease,
       executionHostRevision: 1
     })
+
     const starting = route.start()
     await vi.waitFor(() => expect(attempts).toHaveLength(1))
     ready(attempts[0]!, 7)
@@ -352,12 +366,14 @@ describe('PairedRuntimeBrowserNetworkRoute', () => {
 
   it('negotiates execution-host routing only for an SSH descriptor', async () => {
     const attempts = mockSubscriptionAttempts()
+
     const executionHost = {
       kind: 'ssh' as const,
       targetId: 'target-a',
       providerEpoch: 'provider-epoch-a',
       connectionGeneration: 2
     }
+
     const route = createRoute({ executionHost })
     const starting = route.start()
     await vi.waitFor(() => expect(attempts).toHaveLength(1))
@@ -677,17 +693,21 @@ function mockSubscriptionAttempts(): SubscriptionAttempt[] {
         close: vi.fn(),
         sent: []
       }
+
       attempts.push(attempt)
+
       return {
         requestId: `attempt-${attempts.length}`,
         close: attempt.close,
         sendBinary: (bytes) => {
           attempt.sent.push(bytes)
+
           return true
         }
       }
     }
   )
+
   return attempts
 }
 
@@ -735,6 +755,7 @@ async function expectSocksRoundTrip(
 async function connectSocks(host: string, port: number): Promise<Socket> {
   const socket = connect(port, host)
   await once(socket, 'connect')
+
   return socket
 }
 
@@ -749,20 +770,25 @@ function domainConnectRequest(host: string, port: number): Uint8Array {
   request.set([5, 1, 0, 3, name.byteLength], 0)
   request.set(name, 5)
   new DataView(request.buffer).setUint16(5 + name.byteLength, port, false)
+
   return request
 }
 
 async function readExact(socket: Socket, size: number): Promise<Uint8Array> {
   const chunks: Buffer[] = []
   let total = 0
+
   while (total < size) {
     const [chunk] = (await once(socket, 'data')) as [Buffer]
     chunks.push(chunk)
     total += chunk.byteLength
   }
+
   const combined = Buffer.concat(chunks)
+
   if (combined.byteLength > size) {
     socket.unshift(combined.subarray(size))
   }
+
   return combined.subarray(0, size)
 }

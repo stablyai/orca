@@ -82,11 +82,13 @@ function TreeRow(props: {
   const { item, expanded, onPreviewFile, onToggleDirectory } = props
   const isDirectory = item.kind === 'directory'
   const isExpanded = expanded.has(item.relativePath)
+
   // Images render in the mobile viewer (via files.readPreview), so a binary
   // image is openable; only non-previewable binaries are unavailable.
   const previewable =
     item.kind !== 'directory' &&
     canPreviewMobileFileRow({ kind: item.kind, relativePath: item.relativePath })
+
   const isImage = item.kind === 'binary' && previewable
   const disabled = item.kind === 'binary' && !previewable
   const markdown = item.kind === 'text' && isMarkdownPath(item.relativePath)
@@ -102,6 +104,7 @@ function TreeRow(props: {
       disabled={disabled}
       onPress={() => {
         triggerSelection()
+
         if (isDirectory) {
           onToggleDirectory(item.relativePath)
         } else if (!disabled) {

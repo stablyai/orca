@@ -48,14 +48,18 @@ export function ensureLinuxTerminalOrcaCliShimDir(
 ): string | null {
   const resourcesPath =
     options.resourcesPath === undefined ? process.resourcesPath : options.resourcesPath
+
   const hasExplicitAppImagePath = Object.hasOwn(options, 'appImagePath')
   const runtimeIdentity = resolveAppImageRuntimeIdentity({ resourcesPath })
+
   if (!hasExplicitAppImagePath && hasAppImagePathEnvironment() && !runtimeIdentity) {
     return null
   }
+
   const appImagePath = hasExplicitAppImagePath
     ? (options.appImagePath ?? null)
     : (runtimeIdentity?.appImagePath ?? null)
+
   if (appImagePath) {
     return ensureAppImageShim(options, resourcesPath, appImagePath)
   }
@@ -63,7 +67,9 @@ export function ensureLinuxTerminalOrcaCliShimDir(
   if (!resourcesPath) {
     return null
   }
+
   const launcherPath = getBundledLauncherPath('linux', resourcesPath)
+
   return launcherPath && existsSync(launcherPath)
     ? ensureShimForLauncher(options.userDataPath, launcherPath)
     : null
@@ -77,15 +83,18 @@ function ensureAppImageShim(
   if (!resourcesPath) {
     return null
   }
+
   const cacheRootPath = options.appImageCacheRootPath ?? getAppImageCacheRootPath()
   removeAppImageLegacyLiveEndpoint(cacheRootPath)
 
   const liveLauncherPath = getBundledLauncherPath('linux', resourcesPath)
+
   if (!liveLauncherPath || !existsSync(liveLauncherPath)) {
     return null
   }
 
   const stableLauncherPath = ensureAppImageStableLauncher(cacheRootPath)
+
   if (
     stableLauncherPath &&
     isAppImageInstalledLauncherCurrent({
@@ -97,6 +106,7 @@ function ensureAppImageShim(
   }
 
   const fence = captureAppImageRuntimeFence(liveLauncherPath)
+
   return fence
     ? ensureShimForScript(
         options.userDataPath,
@@ -118,11 +128,13 @@ function captureAppImageRuntimeFence(launcherPath: string): AppImageRuntimeFence
   if (process.platform !== 'linux') {
     return null
   }
+
   const resolvedLauncherPath = resolve(launcherPath)
   const runtimeRoot = dirname(dirname(dirname(resolvedLauncherPath)))
   const runtimeIdentity = readFileIdentity(runtimeRoot)
   const launcherIdentity = readFileIdentity(resolvedLauncherPath)
   const startTime = readLinuxProcessStartTime(process.pid)
+
   return runtimeIdentity && launcherIdentity && startTime
     ? {
         pid: process.pid,
@@ -138,6 +150,7 @@ function captureAppImageRuntimeFence(launcherPath: string): AppImageRuntimeFence
 function readFileIdentity(path: string): string | null {
   try {
     const stats = statSync(path)
+
     return formatFileIdentity(stats)
   } catch {
     return null
@@ -158,13 +171,16 @@ function readLinuxProcessStartTime(pid: number): string | null {
   try {
     const content = readFileSync(join('/proc', String(pid), 'stat'), 'utf8')
     const commandEnd = content.lastIndexOf(') ')
+
     if (commandEnd === -1) {
       return null
     }
+
     const fields = content
       .slice(commandEnd + 2)
       .trim()
       .split(/\s+/)
+
     return fields[19] ?? null
   } catch {
     return null
@@ -181,6 +197,7 @@ function buildAppImageLiveLauncherScript(
   const expectedRuntimeIdentity = quoteShell(fence.runtimeIdentity)
   const expectedLauncherIdentity = quoteShell(fence.launcherIdentity)
   const quotedLauncherPath = quoteShell(launcherPath)
+
   return `#!/usr/bin/env bash
 runtime_pid=${runtimePid}
 runtime_start_time=${runtimeStartTime}
@@ -216,15 +233,18 @@ function ensureShimForLauncher(userDataPath: string, launcherPath: string): stri
 function ensureShimForScript(userDataPath: string, script: string): string | null {
   const shimDir = join(userDataPath, SHIM_DIR_NAME)
   const shimPath = join(shimDir, 'orca')
+
   try {
     if (readShim(shimPath) !== script) {
       mkdirSync(shimDir, { recursive: true })
       writeFileSync(shimPath, script, 'utf8')
     }
+
     chmodSync(shimPath, 0o755)
   } catch {
     return null
   }
+
   return shimDir
 }
 

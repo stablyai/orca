@@ -80,6 +80,7 @@ describe('OrcaRuntimeService', () => {
   it('routes SSH-backed forward-slash UNC file and git paths without collapsing the root', async () => {
     vi.mocked(listWorktrees).mockClear()
     vi.mocked(listWorktrees).mockRejectedValue(new Error('local git should not run for SSH repos'))
+
     const remoteStore = {
       ...store,
       getRepos: () => [
@@ -101,7 +102,9 @@ describe('OrcaRuntimeService', () => {
         connectionId: 'ssh-1'
       })
     }
+
     const fsProvider = { readDir: vi.fn().mockResolvedValue([]) }
+
     const gitProvider = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -120,6 +123,7 @@ describe('OrcaRuntimeService', () => {
         hasConflicts: false
       })
     }
+
     registerSshFilesystemProvider('ssh-1', fsProvider as never)
     registerSshGitProvider('ssh-1', gitProvider as never)
     const runtime = new OrcaRuntimeService(remoteStore as never)
@@ -150,6 +154,7 @@ describe('OrcaRuntimeService', () => {
     await writeFile(join(folderPath, 'src', 'app.ts'), 'export {}\n')
     const folderWorkspace = makeFolderWorkspace({ folderPath })
     const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
+
     const runtime = new OrcaRuntimeService(
       createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
     )
@@ -167,6 +172,7 @@ describe('OrcaRuntimeService', () => {
 
   it('routes SSH folder workspace file explorer paths through the filesystem provider', async () => {
     const folderPath = '/srv/platform'
+
     const fsProvider = {
       stat: vi.fn(async (pathValue: string) => ({
         size: pathValue.endsWith('/app.ts') ? 8 : 0,
@@ -182,11 +188,14 @@ describe('OrcaRuntimeService', () => {
       ]),
       readFile: vi.fn().mockResolvedValue({ content: 'remote\n', isBinary: false })
     }
+
     const folderWorkspace = makeFolderWorkspace({ folderPath, connectionId: 'ssh-folder' })
     const projectGroup = makeFolderProjectGroup({ parentPath: folderPath })
+
     const runtime = new OrcaRuntimeService(
       createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never
     )
+
     registerSshFilesystemProvider('ssh-folder', fsProvider as never)
 
     try {
@@ -214,6 +223,7 @@ describe('OrcaRuntimeService', () => {
 
   it('lists persisted SSH worktrees while the git provider is unavailable', async () => {
     vi.mocked(listWorktrees).mockClear()
+
     const remoteRepo = {
       id: 'remote-repo',
       path: '/home/user/repo',
@@ -222,12 +232,15 @@ describe('OrcaRuntimeService', () => {
       addedAt: 1,
       connectionId: 'ssh-missing'
     }
+
     const mainId = `${remoteRepo.id}::/home/user/repo`
     const childId = `${remoteRepo.id}::/home/user/repo-child`
+
     const metaById: Record<string, WorktreeMeta> = {
       [mainId]: makeWorktreeMeta({ displayName: 'Remote main' }),
       [childId]: makeWorktreeMeta({ displayName: 'Remote child', linkedPR: 42 })
     }
+
     const runtimeStore = {
       ...store,
       getRepos: () => [remoteRepo],
@@ -236,9 +249,11 @@ describe('OrcaRuntimeService', () => {
       getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
       setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
         metaById[worktreeId] = { ...metaById[worktreeId], ...meta }
+
         return metaById[worktreeId]
       }
     }
+
     const runtime = new OrcaRuntimeService(runtimeStore as never)
 
     const listed = await runtime.listManagedWorktrees('id:remote-repo')
@@ -300,11 +315,13 @@ describe('OrcaRuntimeService', () => {
 
   it('guides registered SSH repo ids without probing the provider', async () => {
     const remoteRepo = { ...store.getRepos()[0], connectionId: 'ssh-1' }
+
     const remoteStore = {
       ...store,
       getRepos: () => [remoteRepo],
       getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined)
     }
+
     vi.mocked(listWorktrees).mockClear()
     getSshGitProviderMock.mockClear()
     const runtime = new OrcaRuntimeService(remoteStore)
@@ -384,6 +401,7 @@ describe('OrcaRuntimeService', () => {
 
   it('does not reuse stale in-flight worktree scans after creating a worktree', async () => {
     const addRetiredWorktreeName = vi.fn()
+
     const runtime = new OrcaRuntimeService({
       ...store,
       addRetiredWorktreeName,
@@ -394,7 +412,9 @@ describe('OrcaRuntimeService', () => {
         )
       })
     })
+
     const staleScan = deferred<typeof MOCK_GIT_WORKTREES>()
+
     const createdWorktree = {
       path: '/tmp/workspaces/repo-nautilus-101',
       head: 'def',
@@ -402,6 +422,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     vi.mocked(listWorktrees)
@@ -410,11 +431,13 @@ describe('OrcaRuntimeService', () => {
       .mockResolvedValueOnce([...MOCK_GIT_WORKTREES, createdWorktree])
 
     const staleLookup = runtime.showManagedWorktree(TEST_WORKTREE_ID)
+
     const result = await runtime.createManagedWorktree({
       repoSelector: 'id:repo-1',
       name: 'nautilus',
       nameWasGenerated: true
     })
+
     const freshLookup = runtime.showManagedWorktree(result.worktree.id)
 
     staleScan.resolve(MOCK_GIT_WORKTREES)
@@ -475,11 +498,13 @@ describe('OrcaRuntimeService', () => {
   it('neither skips nor retires a name the user typed', async () => {
     // Why: the pool contains ordinary words. Retirement only ever applies to generated names.
     const addRetiredWorktreeName = vi.fn()
+
     const runtime = new OrcaRuntimeService({
       ...store,
       addRetiredWorktreeName,
       getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: ['nautilus'] })
     })
+
     const createdWorktree = {
       path: '/tmp/workspaces/nautilus',
       head: 'def',
@@ -487,6 +512,7 @@ describe('OrcaRuntimeService', () => {
       isBare: false,
       isMainWorktree: false
     }
+
     computeWorktreePathMock.mockReturnValue(createdWorktree.path)
     ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
     // Not `...Once`: the shared beforeEach re-stubs the resolved value but cannot drain a queue,

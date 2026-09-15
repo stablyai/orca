@@ -7,17 +7,21 @@ const terminalWebViewSource = readFileSync(
   new URL('./TerminalWebView.tsx', import.meta.url),
   'utf8'
 )
+
 const terminalHtmlModuleSource = readFileSync(
   new URL('./terminal-webview-html.ts', import.meta.url),
   'utf8'
 )
+
 const terminalHtmlDocumentShellSource = readFileSync(
   new URL('./terminal-webview-html/document-shell.ts', import.meta.url),
   'utf8'
 )
+
 // Read behavior from the assembled document; the module source only contains
 // fragment imports and cannot prove the injected code is present.
 const terminalHtmlSource = readTerminalWebViewHtmlSource()
+
 const terminalWebglRecoverySource = readFileSync(
   new URL('./terminal-webview-webgl-recovery-injected.ts', import.meta.url),
   'utf8'
@@ -32,6 +36,7 @@ function extractStatusDotNormalizer() {
   expect(declarationEnd).toBeGreaterThan(declarationStart)
   expect(functionStart).toBeGreaterThan(declarationEnd)
   expect(functionEnd).toBeGreaterThan(functionStart)
+
   return `${terminalHtmlSource.slice(declarationStart, declarationEnd)}\n${terminalHtmlSource.slice(functionStart, functionEnd)}`
 }
 
@@ -41,6 +46,7 @@ function normalizeStatusDotChunks(chunks: string[]) {
 ${extractStatusDotNormalizer()}
 output = chunks.map(function(chunk) { return normalizeStatusDotPresentation(chunk); }).join('');
 `).runInNewContext(context)
+
   return context.output ?? ''
 }
 
@@ -57,13 +63,16 @@ function resolveTerminalFontFamily(navigatorValue: {
   expect(functionStart).toBeGreaterThanOrEqual(0)
   expect(declarationLine).toBeGreaterThan(functionStart)
   expect(declarationEnd).toBeGreaterThan(declarationLine)
+
   const context: { navigator: typeof navigatorValue; output?: string } = {
     navigator: navigatorValue
   }
+
   new Script(`
 ${terminalHtmlSource.slice(functionStart, declarationEnd)}
 output = terminalFontFamily;
 `).runInNewContext(context)
+
   return context.output ?? ''
 }
 
@@ -132,9 +141,11 @@ describe('TerminalWebView text zoom', () => {
 
   it('resets pending Claude status dot selector state when the terminal lifecycle resets', () => {
     const initStart = terminalHtmlSource.indexOf('function init(')
+
     const initReplay = terminalHtmlSource.indexOf(
       'var replayData = normalizeInitialData(initialData)'
     )
+
     const clearStart = terminalHtmlSource.indexOf("} else if (msg.type === 'clear') {")
     const clearEnd = terminalHtmlSource.indexOf("} else if (msg.type === 'measure')", clearStart)
     expect(initStart).toBeGreaterThanOrEqual(0)
@@ -175,6 +186,7 @@ describe('TerminalWebView text zoom', () => {
     platform: 'iPhone',
     maxTouchPoints: 5
   }
+
   const ANDROID_NAVIGATOR = {
     userAgent: 'Mozilla/5.0 (Linux; Android 16)',
     platform: 'Linux armv8l',
@@ -196,6 +208,7 @@ describe('TerminalWebView text zoom', () => {
       platform: 'MacIntel',
       maxTouchPoints: 5
     })
+
     expect(fontFamily.startsWith('ui-monospace, "Menlo"')).toBe(true)
     expect(fontFamily.startsWith('"SF Mono"')).toBe(false)
     expect(fontFamily.endsWith(', monospace')).toBe(true)

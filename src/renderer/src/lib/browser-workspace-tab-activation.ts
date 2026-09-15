@@ -18,19 +18,26 @@ export function getActivatableBrowserWorkspaceTab(params: BrowserWorkspaceTabTar
   const state = useAppStore.getState()
   // A hostless tab cannot be attributed when the same worktree ID exists on several hosts.
   const ambiguousWorktreeIds = findAmbiguousWorktreeIds(getPaletteOwnershipWorktreeIds(state))
+
   if (!params.executionHostId && ambiguousWorktreeIds.has(params.worktreeId)) {
     return null
   }
+
   const worktree = state.getKnownWorktreeById(params.worktreeId, params.executionHostId)
+
   if (!worktree) {
     return null
   }
+
   // setActiveBrowserTab resolves its backing tab globally by workspace ID.
   const tabs = Object.values(state.unifiedTabsByWorktree).flat()
+
   const browserTabs = tabs.filter(
     (candidate) => candidate.contentType === 'browser' && candidate.entityId === params.workspaceId
   )
+
   const unifiedTab = browserTabs[0]
+
   if (
     browserTabs.some(
       (tab) =>
@@ -42,20 +49,25 @@ export function getActivatableBrowserWorkspaceTab(params: BrowserWorkspaceTabTar
   ) {
     return null
   }
+
   return unifiedTab
 }
 
 export function activateBrowserWorkspaceTab(params: BrowserWorkspaceTabTarget): boolean {
   const unifiedTab = getActivatableBrowserWorkspaceTab(params)
+
   if (!unifiedTab) {
     return false
   }
+
   const state = useAppStore.getState()
   state.focusGroup(params.worktreeId, unifiedTab.groupId)
   state.activateTab(unifiedTab.id, { worktreeId: params.worktreeId })
   state.setActiveBrowserTab(params.workspaceId)
+
   if (params.pageId) {
     state.setActiveBrowserPage(params.workspaceId, params.pageId)
   }
+
   return true
 }

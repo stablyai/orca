@@ -13,12 +13,15 @@ export function KeepAwakeCard(props: {
   updateSettings: (updates: Partial<GlobalSettings>) => void
 }): JSX.Element {
   const { settings, updateSettings } = props
+
   const enabled =
     normalizeComputerAwakeMode(
       settings.computerAwakeMode,
       settings.keepComputerAwakeWhileAgentsRun
     ) !== 'off'
+
   const title = getAgentAwakeTitle()
+
   return (
     <div className="rounded-xl border border-border bg-muted/20 p-4">
       <div className="flex items-center justify-between gap-4">

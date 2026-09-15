@@ -35,11 +35,14 @@ test.describe('Windows terminal env and shell identity', () => {
 
     const tabIds = await orcaPage.evaluate(() => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Store unavailable')
       }
+
       const state = store.getState()
       const worktreeId = state.activeWorktreeId
+
       if (!worktreeId) {
         throw new Error('No active worktree')
       }
@@ -48,6 +51,7 @@ test.describe('Windows terminal env and shell identity', () => {
       store.setState({
         settings: { ...state.settings!, terminalWindowsShell: 'wsl.exe' }
       })
+
       const fallbackTab = store.getState().createTab(worktreeId, undefined, undefined, {
         activate: false
       })
@@ -55,6 +59,7 @@ test.describe('Windows terminal env and shell identity', () => {
       store.setState({
         settings: { ...store.getState().settings!, terminalWindowsShell: 'cmd.exe' }
       })
+
       const cmdTab = store.getState().createTab(worktreeId, undefined, undefined, {
         activate: false
       })
@@ -65,6 +70,7 @@ test.describe('Windows terminal env and shell identity', () => {
     const tabSnapshot = await orcaPage.evaluate(({ fallbackTabId, cmdTabId }) => {
       const state = window.__store!.getState()
       const tabs = Object.values(state.tabsByWorktree).flat()
+
       return {
         fallbackShell: tabs.find((tab) => tab.id === fallbackTabId)?.shellOverride,
         cmdShell: tabs.find((tab) => tab.id === cmdTabId)?.shellOverride
@@ -79,9 +85,11 @@ test.describe('Windows terminal env and shell identity', () => {
     const fallbackTab = orcaPage.locator(
       `[data-testid="sortable-tab"][data-tab-id="${tabIds.fallbackTabId}"]`
     )
+
     const cmdTab = orcaPage.locator(
       `[data-testid="sortable-tab"][data-tab-id="${tabIds.cmdTabId}"]`
     )
+
     await expect(fallbackTab).toBeVisible()
     await expect(cmdTab).toBeVisible()
 
@@ -104,19 +112,25 @@ test.describe('Windows terminal env and shell identity', () => {
       const store = window.__store!
       const worktreeId = store.getState().activeWorktreeId!
       const ids: string[] = []
+
       for (const shell of ['powershell.exe', 'cmd.exe'] as const) {
         await store.getState().updateSettings({ terminalWindowsShell: shell })
         ids.push(
           store.getState().createTab(worktreeId, undefined, undefined, { activate: false }).id
         )
       }
+
       return ids
     })
+
     const shells = await orcaPage.evaluate((ids) => {
       const tabs = Object.values(window.__store!.getState().tabsByWorktree).flat()
+
       return ids.map((id) => tabs.find((tab) => tab.id === id)?.shellOverride)
     }, tabIds)
+
     expect(shells).toEqual(['wsl.exe', 'wsl.exe'])
+
     for (const id of tabIds) {
       const tab = orcaPage.locator(`[data-testid="sortable-tab"][data-tab-id="${id}"]`)
       await expect(tab).toBeVisible()

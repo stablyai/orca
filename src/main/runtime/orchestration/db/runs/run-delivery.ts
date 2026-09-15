@@ -9,12 +9,14 @@ export function requireCurrentConsumer(
   consumerGeneration: number
 ): RunRow {
   const run = this.getRunRaw(runId)
+
   if (!run || run.legacy === 1 || run.consumer_generation !== consumerGeneration) {
     throw new OrchestrationError(
       'consumer_fenced',
       'This mailbox consumer has been replaced. Rebind with orchestration run-use.'
     )
   }
+
   return run
 }
 
@@ -61,8 +63,10 @@ export function getRunMailboxHistory(
   const address = `run:${runId}`
   // Why: SQLite reads a negative LIMIT as unbounded, so an unsanitized caller value dumps the whole mailbox.
   const rowLimit = Math.max(1, Math.floor(limit))
+
   if (types && types.length > 0) {
     const placeholders = types.map(() => '?').join(',')
+
     return exposeMessageListTimestamps(
       this.db
         .prepare(
@@ -72,6 +76,7 @@ export function getRunMailboxHistory(
         .all(runId, address, ...types, rowLimit) as MessageRow[]
     )
   }
+
   return exposeMessageListTimestamps(
     this.db
       .prepare(
@@ -89,19 +94,24 @@ export function getUnreadRunMailbox(
   types?: MessageType[]
 ): MessageRow[] {
   const address = `run:${runId}`
+
   const conditions = [
     'run_id = ?',
     'to_handle = ?',
     'read = 0',
     "delivery_contract = 'current_delivery'"
   ]
+
   const params: (string | number)[] = [runId, address]
+
   if (types?.length) {
     conditions.push(`type IN (${types.map(() => '?').join(',')})`)
     params.push(...types)
   }
+
   const indexClause = types?.length ? ' INDEXED BY idx_messages_unread_current_run_type' : ''
   params.push(Math.max(1, Math.floor(limit)))
+
   return exposeMessageListTimestamps(
     this.db
       .prepare(

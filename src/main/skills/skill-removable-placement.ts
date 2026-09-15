@@ -20,6 +20,7 @@ function pathInside(root: string, path: string): boolean {
 
 async function aliasTargetsCanonical(path: string, canonicalPath: string): Promise<boolean> {
   const target = await readlink(path).catch(() => null)
+
   return Boolean(
     target && normalizedPath(resolve(dirname(path), target)) === normalizedPath(canonicalPath)
   )
@@ -38,6 +39,7 @@ export async function isRemovableSkillPlacement(input: {
   ) {
     return false
   }
+
   if (
     !input.allowedProviderRoots.some(
       (root) =>
@@ -48,24 +50,31 @@ export async function isRemovableSkillPlacement(input: {
   ) {
     return false
   }
+
   if (input.placement.topology === 'provider-alias' && input.filesystem.aliasTargets) {
     return input.filesystem.aliasTargets(input.receipt.canonicalPath, input.placement.path)
   }
+
   const stat = await lstat(input.placement.path).catch(() => null)
+
   if (!stat) {
     return false
   }
+
   if (input.placement.topology === 'provider-alias') {
     return (
       stat.isSymbolicLink() &&
       aliasTargetsCanonical(input.placement.path, input.receipt.canonicalPath)
     )
   }
+
   if (!stat.isDirectory()) {
     return false
   }
+
   const observed = await input.filesystem
     .observeSkill(input.placement.path, input.receipt.fileModes)
     .catch(() => null)
+
   return observed?.observedDigest === input.receipt.packageDigest
 }

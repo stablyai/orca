@@ -54,6 +54,7 @@ const BASE_DRAFT: AutomationDraft = {
 }
 
 let container: HTMLDivElement
+
 let root: Root
 
 beforeEach(() => {
@@ -75,6 +76,7 @@ afterEach(async () => {
 // what re-renders it after an in-place language switch.
 function LanguageAwarePicker({ draft }: { draft: AutomationDraft }): React.JSX.Element {
   useTranslation()
+
   return React.createElement(AutomationSchedulePicker, {
     draft,
     validateAdvancedSchedule: isValidAutomationCronSchedule,
@@ -96,6 +98,7 @@ function renderedWeekdayOptions(): { value: string; text: string }[] {
 
 function renderedCronFieldChips(): { text: string; title: string }[] {
   const grid = container.querySelector('.grid-cols-5')
+
   return Array.from(grid?.children ?? []).map((chip) => ({
     text: chip.firstElementChild?.textContent ?? '',
     title: chip.firstElementChild?.getAttribute('title') ?? ''

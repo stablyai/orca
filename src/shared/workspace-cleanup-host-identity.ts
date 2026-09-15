@@ -38,10 +38,13 @@ export function resolveWorkspaceCleanupRemovalHostId(
   candidate: WorkspaceCleanupHostFacts
 ): ExecutionHostId | null {
   const explicitHostId = normalizeExecutionHostId(candidate.executionHostId)
+
   if (explicitHostId) {
     return explicitHostId
   }
+
   const connectionId = candidate.connectionId?.trim()
+
   return connectionId ? toSshExecutionHostId(connectionId) : null
 }
 
@@ -61,6 +64,7 @@ export function getWorkspaceCleanupCandidateIdentity(
 
 export function getWorkspaceCleanupIdentityWorktreeId(identity: string): string {
   const separatorIndex = identity.indexOf(WORKSPACE_CLEANUP_IDENTITY_SEPARATOR)
+
   return separatorIndex === -1
     ? identity
     : identity.slice(separatorIndex + WORKSPACE_CLEANUP_IDENTITY_SEPARATOR.length)

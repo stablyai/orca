@@ -22,25 +22,31 @@ describe('tool attribution allocation', () => {
       if (items[0] === prose) {
         appends += items.length
       }
+
       return push.apply(this, items)
     }
+
     let output: NativeChatMessage[]
+
     try {
       output = foldToolMessages(messages)
     } finally {
       Array.prototype.push = push
     }
+
     expect(appends).toBe(0)
     output.forEach((entry, i) => expect(entry).toBe(messages[i]))
   })
 
   it('removes only unattributable results while preserving subsequent call/result pairs', () => {
     const text: NativeChatBlock = { type: 'text', text: 'Prose' }
+
     const call: NativeChatBlock = {
       type: 'tool-call',
       name: 'read',
       input: {}
     }
+
     const result: NativeChatBlock = { type: 'tool-result', output: 'done' }
     const input = message('one', [text, result, text, call, result, result, text])
     expect(foldToolMessages([input])[0].blocks).toEqual([text, text, call, result, text])

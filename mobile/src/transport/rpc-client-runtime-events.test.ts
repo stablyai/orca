@@ -62,6 +62,7 @@ class RuntimeEventTestSocket {
 type SentRequest = { id: string; method: string; params?: unknown }
 
 const sockets: RuntimeEventTestSocket[] = []
+
 const originalWebSocket = globalThis.WebSocket
 
 function sentRequests(socket: RuntimeEventTestSocket, method: string): SentRequest[] {
@@ -76,6 +77,7 @@ function connectReadyClient(): { client: RpcClient; socket: RuntimeEventTestSock
   socket.open()
   socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
   socket.receive('encrypted:{"type":"e2ee_authenticated"}')
+
   return { client, socket }
 }
 

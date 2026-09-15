@@ -52,7 +52,9 @@ export const pluginsApi = {
   onChanged: (callback): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, change: PluginChangeEvent): void =>
       callback(change)
+
     ipcRenderer.on('plugins:changed', listener)
+
     return () => {
       ipcRenderer.removeListener('plugins:changed', listener)
     }

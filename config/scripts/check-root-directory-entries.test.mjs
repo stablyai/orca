@@ -6,7 +6,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 
 const projectDir = resolve(import.meta.dirname, '../..')
+
 const guardScript = join(projectDir, '.github/scripts/check-root-directory-entries.mjs')
+
 const tempDirs = []
 
 function git(cwd, args) {
@@ -23,6 +25,7 @@ function makeFixture() {
   writeFileSync(join(root, 'config', 'base.txt'), 'base\n')
   git(root, ['add', '-A'])
   git(root, ['commit', '--quiet', '-m', 'base'])
+
   return { root, base: git(root, ['rev-parse', 'HEAD']) }
 }
 
@@ -32,8 +35,10 @@ function commitFiles(root, files) {
     mkdirSync(dirname(target), { recursive: true })
     writeFileSync(target, contents)
   }
+
   git(root, ['add', '-A'])
   git(root, ['commit', '--quiet', '-m', 'head'])
+
   return git(root, ['rev-parse', 'HEAD'])
 }
 
@@ -42,19 +47,23 @@ function commitFiles(root, files) {
 // git ls-tree -z emits exactly the record format git mktree -z reads back.
 function commitRawEntries(root, parent, entries) {
   const parentTree = execFileSync('git', ['ls-tree', '-z', parent], { cwd: root })
+
   const records = entries.map((name) => {
     const blob = execFileSync('git', ['hash-object', '-w', '--stdin'], {
       cwd: root,
       encoding: 'utf8',
       input: 'too prominent\n'
     }).trim()
+
     return Buffer.concat([Buffer.from(`100644 blob ${blob}\t`), name, Buffer.from([0])])
   })
+
   const tree = execFileSync('git', ['mktree', '-z'], {
     cwd: root,
     encoding: 'utf8',
     input: Buffer.concat([parentTree, ...records])
   }).trim()
+
   return execFileSync('git', ['commit-tree', tree, '-p', parent, '-m', 'head'], {
     cwd: root,
     encoding: 'utf8'
@@ -155,9 +164,11 @@ describe('root directory guard', () => {
   // same string and a new root entry gets waved through as pre-existing.
   it('does not confuse two different invalid UTF-8 names for the same entry', () => {
     const fixture = makeFixture()
+
     const base = commitRawEntries(fixture.root, fixture.base, [
       Buffer.concat([Buffer.from([0xc0, 0x80]), Buffer.from('.txt')])
     ])
+
     const head = commitRawEntries(fixture.root, fixture.base, [
       Buffer.concat([Buffer.from([0xc0, 0x81]), Buffer.from('.txt')])
     ])
@@ -180,6 +191,7 @@ describe('root directory guard', () => {
     const stopIndex = lines.findIndex((line) => line.startsWith('::stop-commands::'))
     const resumeToken = lines[stopIndex]?.slice('::stop-commands::'.length)
     const resumeIndex = lines.indexOf(`::${resumeToken}::`)
+
     const escaped = lines.filter(
       (line, index) =>
         (index < stopIndex || index > resumeIndex) && line.trimStart().startsWith('::')
@@ -222,6 +234,7 @@ describe('root directory guard', () => {
   it('is wired into the PR verify gate', () => {
     const workflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
     const guardJob = workflow.jobs.root_directory_guard
+
     const guardStep = guardJob.steps.find(
       (step) => step.name === 'Reject new root-level files and folders'
     )

@@ -36,7 +36,9 @@ export const browserGuestRegistrationAndDownloadsApi = {
       _event: Electron.IpcRendererEvent,
       request: BrowserWebAuthnAccountRequest
     ): void => callback(request)
+
     ipcRenderer.on('browser:webauthn-account-requested', listener)
+
     return () => ipcRenderer.removeListener('browser:webauthn-account-requested', listener)
   },
   onWebAuthnAccountRequestClosed: (
@@ -44,7 +46,9 @@ export const browserGuestRegistrationAndDownloadsApi = {
   ): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { requestId: string }): void =>
       callback(data)
+
     ipcRenderer.on('browser:webauthn-account-request-closed', listener)
+
     return () => ipcRenderer.removeListener('browser:webauthn-account-request-closed', listener)
   },
   respondWebAuthnAccount: (response: BrowserWebAuthnAccountResponse): Promise<boolean> =>
@@ -81,7 +85,9 @@ export const browserGuestRegistrationAndDownloadsApi = {
         loadError: { code: number; description: string; validatedUrl: string }
       }
     ) => callback(data)
+
     ipcRenderer.on('browser:guest-load-failed', listener)
+
     return () => ipcRenderer.removeListener('browser:guest-load-failed', listener)
   },
   onCertificateFailureChanged: (callback): (() => void) => {
@@ -89,7 +95,9 @@ export const browserGuestRegistrationAndDownloadsApi = {
       _event: Electron.IpcRendererEvent,
       data: Parameters<typeof callback>[0]
     ): void => callback(data)
+
     ipcRenderer.on('browser:certificate-failure-changed', listener)
+
     return () => ipcRenderer.removeListener('browser:certificate-failure-changed', listener)
   },
   proceedCertificate: (args) => ipcRenderer.invoke('browser:proceedCertificate', args),
@@ -100,7 +108,9 @@ export const browserGuestRegistrationAndDownloadsApi = {
       _event: Electron.IpcRendererEvent,
       data: { browserPageId: string; permission: string; origin: string }
     ) => callback(data)
+
     ipcRenderer.on('browser:permission-denied', listener)
+
     return () => ipcRenderer.removeListener('browser:permission-denied', listener)
   },
   onPopup: (
@@ -118,7 +128,9 @@ export const browserGuestRegistrationAndDownloadsApi = {
         action: 'opened-in-orca' | 'opened-external' | 'blocked'
       }
     ) => callback(data)
+
     ipcRenderer.on('browser:popup', listener)
+
     return () => ipcRenderer.removeListener('browser:popup', listener)
   },
   onDownloadRequested: (
@@ -146,7 +158,9 @@ export const browserGuestRegistrationAndDownloadsApi = {
         status: 'downloading'
       }
     ) => callback(data)
+
     ipcRenderer.on('browser:download-requested', listener)
+
     return () => ipcRenderer.removeListener('browser:download-requested', listener)
   },
   onDownloadProgress: (
@@ -168,7 +182,9 @@ export const browserGuestRegistrationAndDownloadsApi = {
         state: 'progressing' | 'interrupted' | null
       }
     ) => callback(data)
+
     ipcRenderer.on('browser:download-progress', listener)
+
     return () => ipcRenderer.removeListener('browser:download-progress', listener)
   },
   onDownloadFinished: (
@@ -192,7 +208,9 @@ export const browserGuestRegistrationAndDownloadsApi = {
         error: string | null
       }
     ) => callback(data)
+
     ipcRenderer.on('browser:download-finished', listener)
+
     return () => ipcRenderer.removeListener('browser:download-finished', listener)
   }
 } satisfies Partial<PreloadApi['browser']>

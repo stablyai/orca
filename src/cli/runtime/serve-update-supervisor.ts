@@ -14,13 +14,16 @@ import { serveSignalExitError } from './serve-signal-exit-diagnostic'
 import { waitForMacBundleVersion } from './mac-app-update-bundle'
 
 export const SERVE_REPLACEMENT_READY_TIMEOUT_MS = 60_000
+
 export const SERVE_CHILD_FORCE_KILL_SCHEDULING_MARGIN_MS = 5_000
+
 export const SERVE_CHILD_FORCE_KILL_GRACE_MS =
   QUIT_RENDERER_ACK_TIMEOUT_MS +
   WILL_QUIT_TEARDOWN_DEADLINE_MS +
   SERVE_CHILD_FORCE_KILL_SCHEDULING_MARGIN_MS
 
 type InstallRequestedHandoff = Extract<ServeUpdateHandoffState, { phase: 'install-requested' }>
+
 type ServeReadiness = 'not-expected' | 'pending' | 'verified' | 'failed'
 
 type ServeSupervisorArgs = {
@@ -35,6 +38,7 @@ export async function resumeInterruptedServeUpdate(
   args: ServeSupervisorArgs & { handoffPath: string; handoff: InstallRequestedHandoff }
 ): Promise<number> {
   const installed = await waitForMacBundleVersion(args.executable, args.handoff.targetVersion)
+
   if (!installed) {
     await recordServeUpdateHandoffFailure(
       args.handoffPath,
@@ -42,7 +46,9 @@ export async function resumeInterruptedServeUpdate(
       `Timed out waiting for Orca ${args.handoff.targetVersion} to be installed.`
     )
   }
+
   const child = args.spawnChild(args.executable, args.childArgs, args.spawnOptions)
+
   return superviseForegroundServe({
     ...args,
     child,
@@ -70,6 +76,7 @@ export async function superviseForegroundServe(
     if (result.readiness === 'failed') {
       return 1
     }
+
     if (expectedHandoff && result.readiness !== 'verified') {
       if (args.handoffPath) {
         await recordServeUpdateHandoffFailure(
@@ -78,10 +85,12 @@ export async function superviseForegroundServe(
           `Replacement exited before serving version ${expectedHandoff.targetVersion}.`
         )
       }
+
       return 1
     }
 
     const handoff = args.handoffPath ? await readServeUpdateHandoff(args.handoffPath) : null
+
     if (
       handoff?.phase !== 'install-requested' ||
       (child.pid !== undefined && handoff.servingPid !== child.pid)
@@ -89,10 +98,12 @@ export async function superviseForegroundServe(
       if (typeof result.code === 'number' || result.signalWasForwarded) {
         return result.code ?? 0
       }
+
       throw serveSignalExitError(result.signal)
     }
 
     const installed = await waitForMacBundleVersion(args.executable, handoff.targetVersion)
+
     if (!installed) {
       await recordServeUpdateHandoffFailure(
         args.handoffPath!,
@@ -103,6 +114,7 @@ export async function superviseForegroundServe(
     } else {
       expectedHandoff = handoff
     }
+
     child = args.spawnChild(args.executable, args.childArgs, args.spawnOptions)
   }
 }
@@ -124,22 +136,28 @@ function waitForForegroundChild(
     let readiness: ServeReadiness = expected ? 'pending' : 'not-expected'
     let stateWrite = Promise.resolve()
     let childSettled = false
+
     const terminateChild = (): void => {
       if (childSettled) {
         return
       }
+
       child.kill('SIGTERM')
       forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), SERVE_CHILD_FORCE_KILL_GRACE_MS)
     }
+
     const recordReplacementFailure = (reason: string): boolean => {
       if (!expected || readiness !== 'pending') {
         return false
       }
+
       readiness = 'failed'
+
       if (readyTimer) {
         clearTimeout(readyTimer)
         readyTimer = null
       }
+
       stateWrite = recordServeUpdateHandoffFailure(
         expected.handoffPath,
         expected.handoff,
@@ -147,38 +165,50 @@ function waitForForegroundChild(
       ).catch((error) => {
         process.stderr.write(`[serve] could not record update handoff failure: ${String(error)}\n`)
       })
+
       return true
     }
+
     const rejectReplacement = (reason: string): void => {
       if (!recordReplacementFailure(reason)) {
         return
       }
+
       terminateChild()
     }
+
     const forwardSignal = (signal: NodeJS.Signals): void => {
       // A Windows console delivers Ctrl-C to parent and child; child.kill would terminate the child mid-teardown.
       if (process.platform !== 'win32') {
         forwardedSignals.add(signal)
         child.kill(signal)
       }
+
       forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), SERVE_CHILD_FORCE_KILL_GRACE_MS)
     }
+
     const handleMessage = (value: unknown): void => {
       const message = parseServeSupervisorMessage(value)
+
       if (!message || !expected || readiness !== 'pending') {
         return
       }
+
       if (message.version !== expected.handoff.targetVersion) {
         rejectReplacement(
           `Replacement reported version ${message.version}; expected ${expected.handoff.targetVersion}.`
         )
+
         return
       }
+
       readiness = 'verified'
+
       if (readyTimer) {
         clearTimeout(readyTimer)
         readyTimer = null
       }
+
       stateWrite = completeServeUpdateHandoff(
         expected.handoffPath,
         expected.handoff,
@@ -189,30 +219,39 @@ function waitForForegroundChild(
         terminateChild()
       })
     }
+
     const cleanup = (): void => {
       process.off('SIGINT', forwardSignal)
       process.off('SIGTERM', forwardSignal)
+
       if (forwardsHangup) {
         process.off('SIGHUP', forwardSignal)
       }
+
       if (typeof child.off === 'function') {
         child.off('message', handleMessage)
       }
+
       if (forceKillTimer) {
         clearTimeout(forceKillTimer)
       }
+
       if (readyTimer) {
         clearTimeout(readyTimer)
       }
     }
+
     process.on('SIGINT', forwardSignal)
     process.on('SIGTERM', forwardSignal)
+
     if (forwardsHangup) {
       process.on('SIGHUP', forwardSignal)
     }
+
     if (typeof child.on === 'function') {
       child.on('message', handleMessage)
     }
+
     if (expected) {
       readyTimer = setTimeout(() => {
         rejectReplacement(
@@ -220,12 +259,14 @@ function waitForForegroundChild(
         )
       }, SERVE_REPLACEMENT_READY_TIMEOUT_MS)
     }
+
     const handleExit = (code: number | null, signal: NodeJS.Signals | null): void => {
       childSettled = true
       cleanup()
       const signalWasForwarded = signal !== null && forwardedSignals.has(signal)
       void stateWrite.then(() => resolveWait({ code, signal, readiness, signalWasForwarded }))
     }
+
     child.once('error', (error) => {
       childSettled = true
       recordReplacementFailure(`Could not start the replacement process: ${String(error)}`)

@@ -2,24 +2,40 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = await vi.hoisted(async () => {
   const { createSshIpcMocks } = await import('./ssh-ipc-module-mocks')
+
   return createSshIpcMocks()
 })
 
 vi.mock('../ssh/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
+
 vi.mock('electron', () => mocks.electron)
+
 vi.mock('./ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegistry)
+
 vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
+
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
+
 vi.mock('../ssh/ssh-relay-deploy', () => mocks.sshRelayDeploy)
+
 vi.mock('../ssh/ssh-relay-reset', () => mocks.sshRelayReset)
+
 vi.mock('../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
+
 vi.mock('../providers/ssh-pty-provider', () => mocks.sshPtyProvider)
+
 vi.mock('../providers/ssh-filesystem-provider', () => mocks.sshFilesystemProvider)
+
 vi.mock('./pty', () => mocks.pty)
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => mocks.sshFilesystemDispatch)
+
 vi.mock('../providers/ssh-git-provider', () => mocks.sshGitProvider)
+
 vi.mock('../providers/ssh-git-dispatch', () => mocks.sshGitDispatch)
+
 vi.mock('../ssh/ssh-port-forward', () => mocks.sshPortForward)
+
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
 import {
@@ -54,6 +70,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -71,6 +88,7 @@ describe('SSH IPC handlers', () => {
     expect(mockConnectionManager.connect).toHaveBeenCalledWith(target)
     expect(mockForceStopRelayForTarget).toHaveBeenCalledWith(conn, 'ssh-1')
     expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('ssh-1', 'pty-1', 'expired')
+
     // Every already-`expired` lease is skipped on its raw state, marked or not: reset retires the
     // routes this force-stop invalidated, and an expired lease has none left to retire. It is also
     // never upgraded to `terminated` — a killed relay makes its PTYs unreachable, not proven dead.
@@ -78,6 +96,7 @@ describe('SSH IPC handlers', () => {
       expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith('ssh-1', ptyId, 'expired')
       expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith('ssh-1', ptyId, 'terminated')
     }
+
     expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1')
   })
 
@@ -91,6 +110,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -121,6 +141,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -148,6 +169,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -185,11 +207,14 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     let resolveConnect!: (value: unknown) => void
+
     const connectResult = new Promise((resolve) => {
       resolveConnect = resolve
     })
+
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockReturnValue(connectResult)
     mockConnectionManager.getConnection.mockReturnValue(conn)
@@ -203,11 +228,13 @@ describe('SSH IPC handlers', () => {
     const connectPromise = handlers.get('ssh:connect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<unknown>
+
     await vi.waitFor(() => expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1))
 
     const resetPromise = handlers.get('ssh:resetRelay')!(null, {
       targetId: 'ssh-1'
     }) as Promise<void>
+
     await Promise.resolve()
 
     expect(mockPortForwardManager.removeAllForwards).not.toHaveBeenCalled()
@@ -231,10 +258,13 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     let failConnect!: (error: unknown) => void
+
     const connectResult = new Promise((_resolve, reject) => {
       failConnect = reject
     })
+
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockReturnValue(connectResult)
     // Why undefined: reset must fall through to opening its own transport, which is the call under test.
@@ -249,6 +279,7 @@ describe('SSH IPC handlers', () => {
     const connectPromise = handlers.get('ssh:connect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<unknown>
+
     await vi.waitFor(() => expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1))
 
     // Why admitted first: the gate latches only after reset is already parked behind the connect, so
@@ -256,6 +287,7 @@ describe('SSH IPC handlers', () => {
     const resetPromise = handlers.get('ssh:resetRelay')!(null, {
       targetId: 'ssh-1'
     }) as Promise<void>
+
     await Promise.resolve()
 
     quitTeardownStartGate.tryStart({ preventDefault() {} })
@@ -276,12 +308,15 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const resetConn = {}
     const connectConn = {}
     let resolveForceStop!: () => void
+
     const forceStopResult = new Promise<void>((resolve) => {
       resolveForceStop = resolve
     })
+
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.getConnection.mockReturnValue(resetConn)
     mockConnectionManager.connect.mockResolvedValue(connectConn)
@@ -296,6 +331,7 @@ describe('SSH IPC handlers', () => {
     const resetPromise = handlers.get('ssh:resetRelay')!(null, {
       targetId: 'ssh-1'
     }) as Promise<void>
+
     const connectPromise = handlers.get('ssh:connect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<unknown>
@@ -322,13 +358,16 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     let resolveForceStop!: () => void
     let activeForceStops = 0
     let maxConcurrentForceStops = 0
+
     const forceStopResult = new Promise<void>((resolve) => {
       resolveForceStop = resolve
     })
+
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.getConnection.mockReturnValue(conn)
     mockForceStopRelayForTarget.mockImplementation(async () => {
@@ -341,6 +380,7 @@ describe('SSH IPC handlers', () => {
     const firstReset = handlers.get('ssh:resetRelay')!(null, {
       targetId: 'ssh-1'
     }) as Promise<void>
+
     const secondReset = handlers.get('ssh:resetRelay')!(null, {
       targetId: 'ssh-1'
     }) as Promise<void>
@@ -365,6 +405,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     let resolveForceStop!: () => void
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.getConnection.mockReturnValue({})
@@ -378,10 +419,13 @@ describe('SSH IPC handlers', () => {
     const reset = handlers.get('ssh:resetRelay')!(null, {
       targetId: 'ssh-1'
     }) as Promise<void>
+
     await vi.waitFor(() => expect(mockForceStopRelayForTarget).toHaveBeenCalledOnce())
+
     const removal = handlers.get('ssh:removeTarget')!(null, {
       id: 'ssh-1'
     }) as Promise<void>
+
     await Promise.resolve()
 
     expect(mockSshStore.removeTarget).not.toHaveBeenCalled()
@@ -401,6 +445,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -415,6 +460,7 @@ describe('SSH IPC handlers', () => {
       const callbacks = mockConnectionManager.callbacksRef.current as {
         onStateChange: (id: string, state: SshConnectionState) => void
       }
+
       callbacks.onStateChange(targetId, {
         targetId,
         status: 'reconnecting',
@@ -453,6 +499,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -486,6 +533,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -521,6 +569,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -538,6 +587,7 @@ describe('SSH IPC handlers', () => {
     const suspendListener = powerMonitorOnMock.mock.calls.find(
       ([event]) => event === 'suspend'
     )?.[1]
+
     expect(suspendListener).toBeTypeOf('function')
 
     suspendListener()
@@ -555,6 +605,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = {}
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue(conn)

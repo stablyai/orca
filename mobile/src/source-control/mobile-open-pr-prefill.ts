@@ -9,6 +9,7 @@ export async function readFreshGitStatus(
 ): Promise<MobileGitStatusResult | null> {
   try {
     const fresh = await sendGitRequest<unknown>('git.status', { worktree: `id:${worktreeId}` })
+
     return readMobileGitStatusResult(fresh) ?? fallback
   } catch {
     return fallback
@@ -24,7 +25,9 @@ export function getMobilePrEligibilityReadiness(status: MobileGitStatusResult | 
   if (!status) {
     return {}
   }
+
   const up = status?.upstreamStatus
+
   const upstreamReadiness = up
     ? {
         hasUpstream: up.hasUpstream,
@@ -32,6 +35,7 @@ export function getMobilePrEligibilityReadiness(status: MobileGitStatusResult | 
         behind: up.behind
       }
     : {}
+
   return {
     hasUncommittedChanges: (status.entries?.length ?? 0) > 0,
     ...upstreamReadiness

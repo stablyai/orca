@@ -39,6 +39,7 @@ import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 import { findBareHookCommandVariables } from './managed-hook-command-env.test-fixture'
 
 let tmpDir: string
+
 let configPath: string
 
 beforeEach(() => {
@@ -73,6 +74,7 @@ describe('readHooksJsonWithRaw', () => {
 
   it('rejects multiple or misplaced BOM characters', () => {
     const body = '{"hooks": {"Stop": []}}'
+
     for (const contents of [`\uFEFF\uFEFF${body}`, ` \uFEFF${body}`, `{\uFEFF"hooks": {}}`]) {
       writeFileSync(configPath, contents, 'utf-8')
 
@@ -125,6 +127,7 @@ describe('writeHooksJson', () => {
     const config: HooksConfig = {
       hooks: { Stop: [{ hooks: [{ type: 'command', command: 'foo' }] }] }
     }
+
     writeHooksJson(configPath, config)
     const written = JSON.parse(readFileSync(configPath, 'utf-8'))
     expect(written).toEqual(config)
@@ -140,11 +143,13 @@ describe('writeHooksJson', () => {
     const original: HooksConfig = {
       hooks: { Stop: [{ hooks: [{ type: 'command', command: 'original' }] }] }
     }
+
     writeFileSync(configPath, `${JSON.stringify(original, null, 2)}\n`, 'utf-8')
 
     const updated: HooksConfig = {
       hooks: { Stop: [{ hooks: [{ type: 'command', command: 'updated' }] }] }
     }
+
     writeHooksJson(configPath, updated)
 
     const bak = JSON.parse(readFileSync(`${configPath}.bak`, 'utf-8'))
@@ -176,6 +181,7 @@ describe('writeHooksJson', () => {
     const config: HooksConfig = {
       hooks: { Stop: [{ hooks: [{ type: 'command', command: 'foo' }] }] }
     }
+
     writeHooksJson(configPath, config)
     // First write had no prior file, so no .bak should exist.
     expect(existsSync(`${configPath}.bak`)).toBe(false)
@@ -189,6 +195,7 @@ describe('writeHooksJson', () => {
     const updated: HooksConfig = {
       hooks: { Stop: [{ hooks: [{ type: 'command', command: 'bar' }] }] }
     }
+
     writeHooksJson(configPath, updated)
     const bak = JSON.parse(readFileSync(`${configPath}.bak`, 'utf-8'))
     expect(bak).toEqual(config)
@@ -198,9 +205,11 @@ describe('writeHooksJson', () => {
     const v1: HooksConfig = {
       hooks: { Stop: [{ hooks: [{ type: 'command', command: 'v1' }] }] }
     }
+
     const v2: HooksConfig = {
       hooks: { Stop: [{ hooks: [{ type: 'command', command: 'v2' }] }] }
     }
+
     const v3: HooksConfig = {
       hooks: { Stop: [{ hooks: [{ type: 'command', command: 'v3' }] }] }
     }
@@ -517,6 +526,7 @@ describe('wrapPosixHookCommand', () => {
     const cmd = wrapPosixHookCommand('/does/not/exist.sh', {
       ORCA_COPILOT_HOOK_EVENT: 'UserPromptSubmit'
     })
+
     expect(cmd).toBe(
       `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then ORCA_COPILOT_HOOK_EVENT='UserPromptSubmit' /bin/sh '/does/not/exist.sh'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     )
@@ -542,10 +552,12 @@ describe('wrapPosixHookCommand', () => {
     'writes the fallback response and still drains a large stdin payload',
     () => {
       const cmd = wrapPosixHookCommand('/does/not/exist.sh', {}, { fallbackStdout: '{"a":"b"}' })
+
       const result = spawnSync('/bin/sh', ['-c', cmd], {
         input: Buffer.alloc(1_000_000, 'x'),
         encoding: 'utf8'
       })
+
       expect(result.status).toBe(0)
       expect(result.stdout).toBe('{"a":"b"}\n')
     }
@@ -567,6 +579,7 @@ describe('wrapPosixHookCommand', () => {
     () => {
       const scriptPath = join(tmpDir, 'directory-hook.sh')
       mkdirSync(scriptPath)
+
       const result = spawnSync('/bin/sh', ['-c', wrapPosixHookCommand(scriptPath)], {
         input: Buffer.alloc(1_000_000, 'x')
       })
@@ -582,6 +595,7 @@ describe('wrapPosixHookCommand', () => {
       const scriptPath = join(tmpDir, 'unreadable-hook.sh')
       writeFileSync(scriptPath, '#!/bin/sh\nexit 0\n', 'utf-8')
       chmodSync(scriptPath, 0o111)
+
       const result = spawnSync('/bin/sh', ['-c', wrapPosixHookCommand(scriptPath)], {
         input: Buffer.alloc(1_000_000, 'x')
       })
@@ -614,11 +628,13 @@ const qualifiedWindowsPowerShellCommand =
 function decodeWindowsHookCommand(command: string): string {
   const encodedCommand = command.match(/ -EncodedCommand (\S+)$/)?.[1]
   expect(encodedCommand).toBeTruthy()
+
   return Buffer.from(encodedCommand!, 'base64').toString('utf16le')
 }
 
 function expectedDecodedWindowsHookCommand(scriptPath: string): string {
   const quoted = `'${scriptPath.replaceAll("'", "''")}'`
+
   // Why: the execution-policy bypass rides in the payload, not on the command
   // line, so the launcher cannot spell the AV-blocked flag triple (#16003).
   // Why: PowerShell progress CLIXML corrupts consumers that merge stderr into JSON stdout.
@@ -642,6 +658,7 @@ describe('wrapWindowsHookCommand', () => {
     const command = wrapWindowsHookCommand('C:\\hooks\\copilot-hook.ps1', {
       ORCA_COPILOT_HOOK_EVENT: 'UserPromptSubmit'
     })
+
     expect(decodeWindowsHookCommand(command)).toContain(
       "$env:ORCA_COPILOT_HOOK_EVENT = 'UserPromptSubmit'; if (Test-Path"
     )
@@ -658,6 +675,7 @@ describe('wrapWindowsHookCommand', () => {
         { fallbackStdout: '{"permission":"allow"}' }
       )
     )
+
     const answer = decoded.indexOf('Write-Output \'{"permission":"allow"}\'')
     const guard = decoded.indexOf(WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD)
     const ownsStdin = decoded.indexOf('[Console]::In.ReadToEnd()')
@@ -814,6 +832,7 @@ describe('wrapRuntimeHomeHookCommand', () => {
       process.platform === 'win32'
         ? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
         : '/bin/sh'
+
     const result = spawnSync(shell, ['-c', wrapRuntimeHomeHookCommand('claude-hook')], {
       env: {
         ...process.env,
@@ -832,6 +851,7 @@ describe('wrapRuntimeHomeHookCommand', () => {
     mkdirSync(scriptDir, { recursive: true })
     writeFileSync(join(scriptDir, 'claude-hook.cmd'), '@echo off\r\nexit /b 7\r\n', 'utf-8')
     const gitBash = join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
+
     const result = spawnSync(gitBash, ['-c', wrapRuntimeHomeHookCommand('claude-hook')], {
       env: { ...process.env, HOME: destinationHome.replaceAll('\\', '/') }
     })
@@ -842,10 +862,12 @@ describe('wrapRuntimeHomeHookCommand', () => {
 
   it('drains stdin when HOME is unavailable', () => {
     const command = `unset HOME; ${wrapRuntimeHomeHookCommand('claude-hook')}`
+
     const shell =
       process.platform === 'win32'
         ? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
         : '/bin/sh'
+
     const result = spawnSync(shell, ['-c', command], {
       input: Buffer.alloc(1_000_000, 'x')
     })
@@ -859,6 +881,7 @@ describe('wrapRuntimeHomeHookCommand', () => {
       process.platform === 'win32'
         ? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
         : '/bin/sh'
+
     const result = spawnSync(
       shell,
       ['-c', wrapRuntimeHomeHookCommand('missing-orca-hook', { neutralJsonWhenMissing: true })],

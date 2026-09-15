@@ -17,6 +17,7 @@ vi.mock('@/components/terminal-pane/pty-dispatcher', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })
 
@@ -48,6 +49,7 @@ describe('recordTerminalInput store writes are coalesced', () => {
     for (let i = 0; i < 50; i++) {
       store.getState().recordTerminalInput(PANE, 1_000 + i * 15)
     }
+
     unsubscribe()
 
     // 50 keystrokes inside ~750ms: leading edge plus at most one window boundary.

@@ -36,12 +36,14 @@ export class RuntimeGitDiffCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return assertGitDiffWithinTransportBudget(
         await provider.getDiff(target.worktree.path, relativePath, staged, compareAgainstHead),
         maxContentBytes
       )
     }
+
     return assertGitDiffWithinTransportBudget(
       await getDiff(target.worktree.path, relativePath, staged, compareAgainstHead, {
         ...localGitOptionsForTarget(target),
@@ -58,9 +60,11 @@ export class RuntimeGitDiffCommands {
   ): Promise<GitBranchCompareResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return provider.getBranchCompare(target.worktree.path, baseRef, { admissionTier })
     }
+
     return getBranchCompare(target.worktree.path, baseRef, {
       ...localGitOptionsForTarget(target),
       admissionTier
@@ -73,9 +77,11 @@ export class RuntimeGitDiffCommands {
   ): Promise<GitCommitCompareResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return provider.getCommitCompare(target.worktree.path, commitId)
     }
+
     return getCommitCompare(target.worktree.path, commitId, {
       ...localGitOptionsForTarget(target),
       admissionTier: 'interactive'
@@ -93,6 +99,7 @@ export class RuntimeGitDiffCommands {
     const relativePath = normalizeRuntimeGitRelativePath(filePath)
     const oldRelativePath = oldPath ? normalizeRuntimeGitRelativePath(oldPath) : undefined
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       const results = await provider.getBranchDiff(target.worktree.path, compare.mergeBase, {
         includePatch: true,
@@ -100,6 +107,7 @@ export class RuntimeGitDiffCommands {
         filePath: relativePath,
         oldPath: oldRelativePath
       })
+
       return assertGitDiffWithinTransportBudget(
         results[0] ?? {
           kind: 'text',
@@ -111,6 +119,7 @@ export class RuntimeGitDiffCommands {
         maxContentBytes
       )
     }
+
     return assertGitDiffWithinTransportBudget(
       await getBranchDiff(
         target.worktree.path,
@@ -138,6 +147,7 @@ export class RuntimeGitDiffCommands {
     const relativePath = normalizeRuntimeRelativePath(args.filePath)
     const oldRelativePath = args.oldPath ? normalizeRuntimeRelativePath(args.oldPath) : undefined
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return assertGitDiffWithinTransportBudget(
         await provider.getCommitDiff(target.worktree.path, {
@@ -149,6 +159,7 @@ export class RuntimeGitDiffCommands {
         maxContentBytes
       )
     }
+
     return assertGitDiffWithinTransportBudget(
       await getCommitDiff(
         target.worktree.path,
@@ -175,10 +186,13 @@ export class RuntimeGitDiffCommands {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const normalizedRelativePath = normalizeRuntimeGitRelativePath(relativePath)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return provider.getRemoteFileUrl(target.worktree.path, normalizedRelativePath, line)
     }
+
     await awaitWindowsHostGitEnvironmentReady({ cwd: target.worktree.path })
+
     return getRemoteFileUrl(target.worktree.path, normalizedRelativePath, line)
   }
 
@@ -188,10 +202,13 @@ export class RuntimeGitDiffCommands {
   ): Promise<string | null> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const provider = requireRuntimeGitProvider(target)
+
     if (provider) {
       return provider.getRemoteCommitUrl(target.worktree.path, sha)
     }
+
     await awaitWindowsHostGitEnvironmentReady({ cwd: target.worktree.path })
+
     return getRemoteCommitUrl(target.worktree.path, sha)
   }
 }

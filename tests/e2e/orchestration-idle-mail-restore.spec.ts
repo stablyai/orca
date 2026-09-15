@@ -40,7 +40,9 @@ import { mailDisposition, readMailRow } from './helpers/orchestration-mail-store
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
 const POINTER_COMMAND = 'orca-dev orchestration check'
+
 const NO_DELIVERY_SETTLE_MS = 5_000
+
 const DELIVERY_TIMEOUT_MS = 20_000
 
 test.describe.configure({ mode: 'serial' })
@@ -50,6 +52,7 @@ async function waitForRegisteredWorktree(client: RuntimeClient, worktreeId: stri
     .poll(
       async () => {
         const listed = await client.call<{ worktrees: { id: string }[] }>('worktree.list', {})
+
         return listed.result.worktrees.some((worktree) => worktree.id === worktreeId)
       },
       { timeout: 60_000, message: 'runtime never registered the worktree' }
@@ -66,6 +69,7 @@ async function waitForObservedTitle(
     .poll(
       async () => {
         const listed = await client.call<RuntimeTerminalListResult>('terminal.list')
+
         return listed.result.terminals.find((entry) => entry.handle === handle)?.title ?? null
       },
       { timeout: 30_000, message: `runtime never observed the title ${title}` }
@@ -76,9 +80,11 @@ async function waitForObservedTitle(
 test('keeps mail pending across a restart and delivers it when the agent reports live', async (// oxlint-disable-next-line no-empty-pattern -- this spec owns both Electron launches and opts out of the shared app fixture.
 {}, testInfo) => {
   test.setTimeout(300_000)
+
   const repoPath = existsSync(TEST_REPO_PATH_FILE)
     ? readFileSync(TEST_REPO_PATH_FILE, 'utf8').trim()
     : ''
+
   test.skip(!repoPath || !existsSync(repoPath), 'Global setup did not produce a seeded test repo')
 
   const session = createRestartSession(testInfo)
@@ -97,9 +103,11 @@ test('keeps mail pending across a restart and delivers it when the agent reports
     // that a headless CI renderer loses.
     const ptyId = await waitForActivePanePtyId(first.page)
     const { paneKey } = await waitForActivePaneHookDescriptor(first.page)
+
     const originalHandle = (
       await firstClient.call<{ terminal: { handle: string } }>('terminal.resolvePane', { paneKey })
     ).result.terminal.handle
+
     const originalPtyId = ptyId
 
     // Keystrokes typed before the shell reaches its prompt are dropped outright.
@@ -115,6 +123,7 @@ test('keeps mail pending across a restart and delivers it when the agent reports
     agent.setTitle(CODEX_IDLE_TITLE)
     await waitForObservedTitle(firstClient, originalHandle, CODEX_IDLE_TITLE)
     const titlesBeforeRestart = agent.titleEmitCount()
+
     const run = await firstClient.call<{ run: { id: string } }>('orchestration.runCreate', {
       objective: 'Restart-safe mailbox delivery',
       from: originalHandle
@@ -134,10 +143,13 @@ test('keeps mail pending across a restart and delivers it when the agent reports
       .poll(
         async () => {
           const listed = await secondClient.call<RuntimeTerminalListResult>('terminal.list')
+
           const restored = listed.result.terminals.find(
             (entry) => entry.ptyId === originalPtyId && entry.writable
           )
+
           restoredHandle = restored?.handle ?? null
+
           return restored?.title ?? null
         },
         { timeout: 120_000, message: 'agent pane never came back writable after restart' }
@@ -156,6 +168,7 @@ test('keeps mail pending across a restart and delivers it when the agent reports
       body: 'e2e body',
       type: 'status'
     })
+
     const messageId = sent.result.message.id
 
     // Why a fixed wait: expect.poll would settle on the first 'pending' reading,
@@ -186,9 +199,11 @@ test('keeps mail pending across a restart and delivers it when the agent reports
     if (firstApp) {
       await session.close(firstApp)
     }
+
     if (secondApp) {
       await session.close(secondApp)
     }
+
     await session.dispose()
   }
 })

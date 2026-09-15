@@ -11,8 +11,11 @@ import { getRemoteHostPlatform, type RemoteHostPlatform } from './ssh-remote-pla
 import { powerShellCommand } from './ssh-remote-powershell'
 
 const PLATFORM_PROBE_MARKER = '__ORCA_REMOTE_PLATFORM__'
+
 const MAX_UNAME_FIELD_CHARS = 64
+
 const MAX_THROWN_OUTPUT_CHARS = 200
+
 const MAX_LOGGED_OUTPUT_CHARS = 1000
 
 type PlatformProbeOutcome =
@@ -26,24 +29,32 @@ export async function detectRemoteHostPlatform(
   options?: { signal?: AbortSignal }
 ): Promise<RemoteHostPlatform | null> {
   const uname = await detectUnamePlatform(conn, options?.signal)
+
   if (uname.kind === 'detected') {
     return getRemoteHostPlatform(uname.platform)
   }
+
   if (uname.kind === 'failed' && shouldAbandonAfterUnameProbe(uname.error)) {
     throw uname.error
   }
+
   const windows = await detectWindowsPlatform(conn, options?.signal)
+
   if (windows.kind === 'detected') {
     return getRemoteHostPlatform(windows.platform)
   }
+
   // Why: only the PowerShell probe can settle a uname the parser cannot map
   // (Cygwin, say), so a refused or timed-out channel leaves it unsettled.
   const windowsProbeNeverRan = windows.kind === 'failed' && isTransportShapedError(windows.error)
+
   if ((uname.kind === 'unsupported' && !windowsProbeNeverRan) || windows.kind === 'unsupported') {
     const reported = uname.kind === 'unsupported' ? uname.uname : probeUname(windows)
     console.warn(`[ssh-relay] Remote reported an unsupported platform: ${reported}`)
+
     return null
   }
+
   console.warn(
     `[ssh-relay] Remote platform detection failed (uname probe: ${uname.kind}, PowerShell probe: ${windows.kind}). ` +
       `Remote output: "${summarizeProbeOutput(probeEvidence(uname) || probeEvidence(windows), MAX_LOGGED_OUTPUT_CHARS)}"`
@@ -70,15 +81,19 @@ function undetectedPlatformError(
       return wrapProbeError(outcome.error)
     }
   }
+
   if (uname.kind === 'failed') {
     return wrapProbeError(uname.error)
   }
+
   if (uname.kind === 'unparsed') {
     return unrecognizedOutputError(uname.output)
   }
+
   if (windows.kind === 'failed') {
     return wrapProbeError(windows.error)
   }
+
   return unrecognizedOutputError(probeOutput(windows))
 }
 
@@ -94,6 +109,7 @@ function isTransportShapedError(error: unknown): boolean {
 
 function wrapProbeError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error)
+
   return new Error(`Could not detect the remote platform: ${message}`, { cause: error })
 }
 
@@ -119,6 +135,7 @@ function probeEvidence(outcome: PlatformProbeOutcome): string {
 // CR/LF keeps a Windows banner from becoming a multi-line renderer message.
 function summarizeProbeOutput(output: string, maxChars: number): string {
   const collapsed = output.replace(/\s+/gu, ' ').trim()
+
   return collapsed.length > maxChars ? `…${collapsed.slice(-maxChars)}` : collapsed
 }
 
@@ -129,12 +146,15 @@ async function detectUnamePlatform(
   try {
     // Why: Remote startup output may omit its trailing newline and must not absorb the marker.
     const command = `printf '\\n%s ' '${PLATFORM_PROBE_MARKER}'; uname -sm`
+
     const output = signal
       ? await execCommand(conn, command, { signal })
       : await execCommand(conn, command)
+
     return parseRemotePlatformOutput(output)
   } catch (error) {
     signal?.throwIfAborted()
+
     return { kind: 'failed', error }
   }
 }
@@ -151,31 +171,40 @@ async function detectWindowsPlatform(
       // Why: Remote startup output may omit its trailing newline and must not absorb the marker.
       `Write-Output ("\`n${PLATFORM_PROBE_MARKER} Windows " + $arch)`
     ].join('; ')
+
     const output = await execCommand(conn, powerShellCommand(script), {
       wrapCommand: false,
       ...(signal ? { signal } : {})
     })
+
     return parseRemotePlatformOutput(output)
   } catch (error) {
     signal?.throwIfAborted()
+
     return { kind: 'failed', error }
   }
 }
 
 function parseRemotePlatformOutput(output: string): PlatformProbeOutcome {
   let unsupportedUname = ''
+
   // Why: SSH startup noise can resemble valid probe output and select the wrong relay.
   for (const line of iterateProcessOutputLines(output)) {
     const parts = getProcessOutputFields(line, 3)
+
     if (parts.length < 3 || parts[0] !== PLATFORM_PROBE_MARKER) {
       continue
     }
+
     const platform = parseUnameToRelayPlatform(parts[1], parts[2])
+
     if (platform) {
       return { kind: 'detected', platform }
     }
+
     unsupportedUname = `${clampUnameField(parts[1])} ${clampUnameField(parts[2])}`
   }
+
   return unsupportedUname
     ? { kind: 'unsupported', uname: unsupportedUname }
     : { kind: 'unparsed', output }

@@ -24,21 +24,27 @@ const POSIX_INVARIANT_SIGNAL_NAMES: Record<number, string> = {
 }
 
 const WAIT_STATUS_SIGNAL_MASK = 0x7f
+
 const WAIT_STATUS_CORE_DUMP_FLAG = 0x80
+
 const WAIT_STATUS_STOPPED_MARKER = 0x7f
 
 export function decodePosixWaitStatus(status: number): PosixWaitStatusDecode | null {
   if (!Number.isInteger(status) || status < 0 || status > 0xffff) {
     return null
   }
+
   const signal = status & WAIT_STATUS_SIGNAL_MASK
+
   if (signal === WAIT_STATUS_STOPPED_MARKER) {
     // WIFSTOPPED/WIFCONTINUED shapes never describe a dead process.
     return null
   }
+
   if (signal === 0) {
     return { kind: 'exited', exitStatus: (status >> 8) & 0xff }
   }
+
   return {
     kind: 'signaled',
     signal,
@@ -52,6 +58,8 @@ export function describePosixWaitStatus(decoded: PosixWaitStatusDecode): string 
   if (decoded.kind === 'exited') {
     return `exit status ${decoded.exitStatus}`
   }
+
   const name = decoded.signalName ?? `signal ${decoded.signal}`
+
   return decoded.coreDumped ? `${name}, core dumped` : name
 }

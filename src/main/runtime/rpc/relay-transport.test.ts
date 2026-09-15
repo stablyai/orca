@@ -21,6 +21,7 @@ describe('CloudRelayTransport', () => {
             for (const client of server.clients) {
               client.terminate()
             }
+
             server.close(() => resolve())
           })
       )
@@ -33,29 +34,36 @@ describe('CloudRelayTransport', () => {
     servers.push(server)
     await new Promise<void>((resolve) => server.once('listening', resolve))
     const address = server.address()
+
     if (typeof address === 'string' || address === null) {
       throw new Error('expected TCP relay test server')
     }
+
     const accepted = new Promise<{ socket: WebSocket; path: string }>((resolve) => {
       server.once('connection', (socket, request) => resolve({ socket, path: request.url ?? '' }))
     })
+
     let clientSocket: WebSocketClient | null = null
     const onConnectionClosed = vi.fn()
+
     const transport = new CloudRelayTransport({
       cellUrl: `http://127.0.0.1:${address.port}`,
       relayHostId: 'AbCdEf0123_-xyZ9',
       generation: 7,
       createSocket: (url) => {
         clientSocket = new WebSocketClient(url, { perMessageDeflate: false })
+
         return clientSocket
       },
       onConnectionClosed
     })
+
     transports.push(transport)
     const received: (string | Uint8Array<ArrayBufferLike>)[] = []
     transport.onMessage((message) => received.push(message))
     transport.onConnectionClose(vi.fn())
     await transport.start()
+
     const opening = transport.openConnection({
       connId: 'conn/with spaces',
       connTicket: 'ticket-1',
@@ -63,6 +71,7 @@ describe('CloudRelayTransport', () => {
       relayDeviceId: 'device-1',
       attachDeadlineMs: 1_000
     })
+
     const { socket, path } = await accepted
     const auth = await nextMessage(socket)
     await opening
@@ -96,28 +105,35 @@ describe('CloudRelayTransport', () => {
 
   it('stop() resolves after the close timeout when a socket never emits close', async () => {
     vi.useFakeTimers()
+
     try {
       const listeners = new Map<string, ((...args: unknown[]) => void)[]>()
+
       const addListener = (event: string, fn: (...args: unknown[]) => void): void => {
         const existing = listeners.get(event) ?? []
         existing.push(fn)
         listeners.set(event, existing)
       }
+
       const removeListener = (event: string, fn: (...args: unknown[]) => void): void => {
         listeners.set(
           event,
           (listeners.get(event) ?? []).filter((listener) => listener !== fn)
         )
       }
+
       const emit = (event: string, ...args: unknown[]): void => {
         const eventListeners = listeners.get(event) ?? []
+
         if (event === 'error' && eventListeners.length === 0) {
           throw args[0]
         }
+
         for (const fn of eventListeners) {
           fn(...args)
         }
       }
+
       // Why: models a half-open post-sleep relay socket — terminate() never
       // produces a 'close' event, which previously hung stop() forever.
       const fakeSocket = {
@@ -130,7 +146,9 @@ describe('CloudRelayTransport', () => {
         send: vi.fn(),
         terminate: () => {}
       }
+
       const onConnectionClosed = vi.fn()
+
       const transport = new CloudRelayTransport({
         cellUrl: 'http://127.0.0.1:9',
         relayHostId: 'AbCdEf0123_-xyZ9',
@@ -138,13 +156,17 @@ describe('CloudRelayTransport', () => {
         createSocket: () => fakeSocket as unknown as WebSocketClient,
         onConnectionClosed
       })
+
       let reply: ((response: string) => void) | null = null
+
       const onMessage = vi.fn(
         (_message: string | Uint8Array<ArrayBufferLike>, respond: (response: string) => void) => {
           reply = respond
         }
       )
+
       transport.onMessage(onMessage)
+
       const opening = transport.openConnection({
         connId: 'conn-1',
         connTicket: 'ticket-1',
@@ -152,6 +174,7 @@ describe('CloudRelayTransport', () => {
         relayDeviceId: 'device-1',
         attachDeadlineMs: 1_000
       })
+
       emit('open')
       await opening
       vi.mocked(fakeSocket.send).mockClear()
@@ -159,9 +182,11 @@ describe('CloudRelayTransport', () => {
       expect(onMessage).toHaveBeenCalledOnce()
 
       let stopped = false
+
       const stopPromise = transport.stop().then(() => {
         stopped = true
       })
+
       emit('message', 'during-stop', false)
       expect(onMessage).toHaveBeenCalledOnce()
       await vi.advanceTimersByTimeAsync(4_999)
@@ -199,16 +224,20 @@ describe('CloudRelayTransport', () => {
 
   it('observes a synchronous close emitted by terminate without waiting for the deadline', async () => {
     vi.useFakeTimers()
+
     try {
       const listeners = new Map<string, ((...args: unknown[]) => void)[]>()
+
       const addListener = (event: string, fn: (...args: unknown[]) => void): void => {
         listeners.set(event, [...(listeners.get(event) ?? []), fn])
       }
+
       const emit = (event: string): void => {
         for (const fn of listeners.get(event) ?? []) {
           fn()
         }
       }
+
       const fakeSocket = {
         readyState: 1,
         OPEN: 1,
@@ -219,12 +248,14 @@ describe('CloudRelayTransport', () => {
         send: () => {},
         terminate: () => emit('close')
       }
+
       const transport = new CloudRelayTransport({
         cellUrl: 'http://127.0.0.1:9',
         relayHostId: 'AbCdEf0123_-xyZ9',
         generation: 1,
         createSocket: () => fakeSocket as unknown as WebSocketClient
       })
+
       const opening = transport.openConnection({
         connId: 'conn-sync-close',
         connTicket: 'ticket-1',
@@ -232,6 +263,7 @@ describe('CloudRelayTransport', () => {
         relayDeviceId: 'device-1',
         attachDeadlineMs: 1_000
       })
+
       emit('open')
       await opening
 
@@ -245,26 +277,33 @@ describe('CloudRelayTransport', () => {
 
   it('releases an expired attach even when terminate never emits close', async () => {
     vi.useFakeTimers()
+
     try {
       const listeners = new Map<string, ((...args: unknown[]) => void)[]>()
+
       const addListener = (event: string, fn: (...args: unknown[]) => void): void => {
         listeners.set(event, [...(listeners.get(event) ?? []), fn])
       }
+
       const removeListener = (event: string, fn: (...args: unknown[]) => void): void => {
         listeners.set(
           event,
           (listeners.get(event) ?? []).filter((listener) => listener !== fn)
         )
       }
+
       const emit = (event: string, ...args: unknown[]): void => {
         const eventListeners = listeners.get(event) ?? []
+
         if (event === 'error' && eventListeners.length === 0) {
           throw args[0]
         }
+
         for (const fn of eventListeners) {
           fn(...args)
         }
       }
+
       const fakeSocket = {
         readyState: 0,
         OPEN: 1,
@@ -275,7 +314,9 @@ describe('CloudRelayTransport', () => {
         send: vi.fn(),
         terminate: vi.fn()
       }
+
       const onConnectionClosed = vi.fn()
+
       const transport = new CloudRelayTransport({
         cellUrl: 'http://127.0.0.1:9',
         relayHostId: 'AbCdEf0123_-xyZ9',
@@ -283,6 +324,7 @@ describe('CloudRelayTransport', () => {
         createSocket: () => fakeSocket as unknown as WebSocketClient,
         onConnectionClosed
       })
+
       const opening = transport.openConnection({
         connId: 'conn-attach-timeout',
         connTicket: 'ticket-1',
@@ -290,6 +332,7 @@ describe('CloudRelayTransport', () => {
         relayDeviceId: 'device-1',
         attachDeadlineMs: 1_000
       })
+
       const rejectedOpening = expect(opening).rejects.toThrow('relay_host_data_attach_timeout')
 
       await vi.advanceTimersByTimeAsync(1_000)
@@ -313,22 +356,27 @@ describe('CloudRelayTransport', () => {
 
   it('bounds device termination cleanup and deduplicates its close waiter', async () => {
     vi.useFakeTimers()
+
     try {
       const listeners = new Map<string, ((...args: unknown[]) => void)[]>()
+
       const addListener = (event: string, fn: (...args: unknown[]) => void): void => {
         listeners.set(event, [...(listeners.get(event) ?? []), fn])
       }
+
       const removeListener = (event: string, fn: (...args: unknown[]) => void): void => {
         listeners.set(
           event,
           (listeners.get(event) ?? []).filter((listener) => listener !== fn)
         )
       }
+
       const emit = (event: string, ...args: unknown[]): void => {
         for (const fn of listeners.get(event) ?? []) {
           fn(...args)
         }
       }
+
       const fakeSocket = {
         readyState: 1,
         OPEN: 1,
@@ -339,7 +387,9 @@ describe('CloudRelayTransport', () => {
         send: vi.fn(),
         terminate: vi.fn()
       }
+
       const onConnectionClosed = vi.fn()
+
       const transport = new CloudRelayTransport({
         cellUrl: 'http://127.0.0.1:9',
         relayHostId: 'AbCdEf0123_-xyZ9',
@@ -347,7 +397,9 @@ describe('CloudRelayTransport', () => {
         createSocket: () => fakeSocket as unknown as WebSocketClient,
         onConnectionClosed
       })
+
       transport.onMessage(() => {})
+
       const opening = transport.openConnection({
         connId: 'conn-device-termination',
         connTicket: 'ticket-1',
@@ -355,6 +407,7 @@ describe('CloudRelayTransport', () => {
         relayDeviceId: 'device-1',
         attachDeadlineMs: 10_000
       })
+
       emit('open')
       await opening
       emit('message', 'attached', false)

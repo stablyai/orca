@@ -16,17 +16,21 @@ function cursorCoreService(terminal: Terminal): CursorCoreService {
   expect(core?.coreService, 'xterm private coreService compatibility').toBeDefined()
   expect(typeof core?.coreService?.isCursorHidden).toBe('boolean')
   expect(typeof core?.coreService?.isCursorInitialized).toBe('boolean')
+
   return core!.coreService!
 }
 
 function listenerOwner(target: EventTarget): ListenerOwner {
   let owner = target as ListenerOwner | null
+
   while (owner) {
     if (Object.hasOwn(owner, 'addEventListener') && Object.hasOwn(owner, 'removeEventListener')) {
       return owner
     }
+
     owner = Object.getPrototypeOf(owner) as ListenerOwner | null
   }
+
   throw new Error(`No event-listener owner for ${target.constructor.name}`)
 }
 
@@ -40,6 +44,7 @@ function eventListenerOwners(): ListenerOwner[] {
     document.createElement('textarea'),
     document.createElement('canvas')
   ]
+
   return [...new Set(targets.map(listenerOwner))]
 }
 
@@ -55,8 +60,10 @@ function trackEventListenerCleanup(): () => {
     target: EventTarget
     type: string
   }> = []
+
   const capture = (options?: boolean | AddEventListenerOptions | EventListenerOptions): boolean =>
     typeof options === 'boolean' ? options : (options?.capture ?? false)
+
   const activeRegistration = (
     target: EventTarget,
     type: string,
@@ -82,6 +89,7 @@ function trackEventListenerCleanup(): () => {
       options?: boolean | AddEventListenerOptions
     ) {
       addEventListener.call(this, type, listener, options)
+
       if (!activeRegistration(this, type, listener, options)) {
         registrations.push({
           capture: capture(options),
@@ -100,6 +108,7 @@ function trackEventListenerCleanup(): () => {
     ) {
       removeEventListener.call(this, type, listener, options)
       const registration = activeRegistration(this, type, listener, options)
+
       if (registration) {
         registration.removed = true
       }
@@ -176,6 +185,7 @@ describe('xterm caret rendering oracle', () => {
 
   it('releases listeners across 25 terminal lifecycles', () => {
     const listenerCleanup = trackEventListenerCleanup()
+
     for (let cycle = 0; cycle < 25; cycle += 1) {
       const terminal = new Terminal(MOBILE_TERMINAL_CARET_OPTIONS)
       const container = document.createElement('div')

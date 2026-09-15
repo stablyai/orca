@@ -12,6 +12,7 @@ vi.mock('sonner', () => ({
 const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
   notifyHostOfMirroredEditorCloseMock: vi.fn()
 }))
+
 vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
@@ -51,6 +52,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   it('preserves omitted conflict state when a capped result is incomplete', () => {
     const store = createEditorStore()
+
     const conflict = {
       path: 'src/conflict.ts',
       status: 'modified' as const,
@@ -59,6 +61,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       conflictStatus: 'unresolved' as const,
       conflictStatusSource: 'git' as const
     }
+
     store.getState().trackConflictPath('wt-huge', conflict.path, conflict.conflictKind)
     store.getState().openConflictFile('wt-huge', '/repo', conflict, 'typescript')
     store.getState().setGitStatus('wt-huge', {
@@ -95,6 +98,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   it('treats a blank git status HEAD as unknown without invalidating branch compare', () => {
     const store = createEditorStore()
+
     const summary = {
       baseRef: 'refs/remotes/origin/main',
       baseOid: 'base-old',
@@ -131,6 +135,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   it('rejects a stale clean branch compare after git status reports a newer HEAD', () => {
     const store = createEditorStore()
+
     const cleanSummary = {
       baseRef: 'refs/remotes/origin/main',
       baseOid: 'base-old',
@@ -141,6 +146,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       commitsAhead: 0,
       status: 'ready' as const
     }
+
     const updatedSummary = {
       ...cleanSummary,
       headOid: 'head-new',
@@ -207,6 +213,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   it('rejects a stale unborn branch compare after git status reports a committed HEAD', () => {
     const store = createEditorStore()
+
     const unbornSummary = {
       baseRef: 'refs/remotes/origin/main',
       baseOid: 'base-old',
@@ -217,6 +224,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
       commitsAhead: 0,
       status: 'ready' as const
     }
+
     const committedSummary = {
       ...unbornSummary,
       headOid: 'head-new',
@@ -276,6 +284,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   it('accepts an unborn branch compare when git status reports the initial branch marker', () => {
     const store = createEditorStore()
+
     const unbornSummary = {
       baseRef: 'refs/remotes/origin/main',
       baseOid: 'base-old',
@@ -341,6 +350,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   it('accepts a newer branch compare before git status catches up', () => {
     const store = createEditorStore()
+
     const summary = {
       baseRef: 'refs/remotes/origin/main',
       baseOid: 'base-old',
@@ -372,6 +382,7 @@ describe('createEditorSlice conflict status reconciliation', () => {
 
   it('preserves a newer branch compare when an unchanged older status refresh returns', () => {
     const store = createEditorStore()
+
     const summary = {
       baseRef: 'refs/remotes/origin/main',
       baseOid: 'base-old',

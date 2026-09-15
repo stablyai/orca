@@ -32,21 +32,27 @@ export function buildImportedWorktreesCardCandidates(args: {
   const visibleRepoIds = args.visibleWorktrees
     ? new Set(args.visibleWorktrees.map((worktree) => worktree.repoId))
     : null
+
   const filterRepoIds = args.filterRepoIds?.length ? new Set(args.filterRepoIds) : null
   const candidates = new Map<string, ImportedWorktreesCardCandidate>()
+
   for (const repo of args.repos) {
     if (filterRepoIds && !filterRepoIds.has(repo.id)) {
       continue
     }
+
     if (visibleRepoIds && !visibleRepoIds.has(repo.id)) {
       continue
     }
+
     if (!isGitRepoKind(repo)) {
       continue
     }
+
     if (typeof repo.externalWorktreeVisibilityPromptDismissedAt === 'number') {
       continue
     }
+
     const visibility = effectiveExternalWorktreeVisibility(
       repo,
       isLegacyRepoForExternalWorktreeVisibility(repo),
@@ -56,13 +62,17 @@ export function buildImportedWorktreesCardCandidates(args: {
         args.visibilityDefaultsByHost ?? {}
       )
     )
+
     if (visibility !== 'hide' && !args.forceVisibleRepoIds?.has(repo.id)) {
       continue
     }
+
     const hiddenWorktrees = getHiddenImportedWorktrees(args.detectedWorktreesByRepo[repo.id])
+
     if (hiddenWorktrees.length > 0) {
       candidates.set(repo.id, { repo, hiddenWorktrees })
     }
   }
+
   return candidates
 }

@@ -10,26 +10,33 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
 
 type Lowlight = ReturnType<typeof createLowlight>
+
 type Counters = { highlight: number; highlightAuto: number; listLanguages: number }
+
 type RuntimeKeyedPlugin = Plugin & { key?: string }
+
 type DecorationWithAttrs = Decoration & {
   type: { attrs?: { class?: string } }
 }
 
 function observedLowlight(counters: Counters): Lowlight {
   const base = createLowlight(common)
+
   return {
     ...base,
     highlight: (...args) => {
       counters.highlight += 1
+
       return base.highlight(...args)
     },
     highlightAuto: (...args) => {
       counters.highlightAuto += 1
+
       return base.highlightAuto(...args)
     },
     listLanguages: () => {
       counters.listLanguages += 1
+
       return base.listLanguages()
     }
   }
@@ -61,6 +68,7 @@ function createEditor({
   defaultLanguage?: string | null
 }): Editor {
   const extension = incremental ? RichMarkdownCodeBlockLowlight : CodeBlockLowlight
+
   return new Editor({
     element: document.createElement('div'),
     extensions: [
@@ -78,21 +86,27 @@ function nodePositions(editor: Editor, name: string): number[] {
       positions.push(pos)
     }
   })
+
   return positions
 }
 
 function decorationSnapshot(editor: Editor, incremental: boolean): unknown[] {
   const keyPrefix = incremental ? 'richMarkdownLowlight$' : 'lowlight$'
+
   const plugin = editor.state.plugins.find((candidate) =>
     (candidate as RuntimeKeyedPlugin).key?.startsWith(keyPrefix)
   )
+
   const decorations = plugin?.getState(editor.state) as DecorationSet | undefined
+
   if (!decorations) {
     const keys = editor.state.plugins.map((candidate) => (candidate as RuntimeKeyedPlugin).key)
     throw new Error(`Missing ${keyPrefix} plugin: ${JSON.stringify(keys)}`)
   }
+
   return decorations.find().map((decoration) => {
     const typed = decoration as DecorationWithAttrs
+
     return [decoration.from, decoration.to, typed.type.attrs?.class]
   })
 }
@@ -115,25 +129,30 @@ describe('incremental rich markdown lowlight', () => {
     for (const editor of editors) {
       editor.destroy()
     }
+
     editors.length = 0
   })
 
   function createPair(content?: JSONContent, defaultLanguage: string | null = null) {
     const stockCounters = { highlight: 0, highlightAuto: 0, listLanguages: 0 }
     const incrementalCounters = { highlight: 0, highlightAuto: 0, listLanguages: 0 }
+
     const stock = createEditor({
       incremental: false,
       counters: stockCounters,
       content,
       defaultLanguage
     })
+
     const incremental = createEditor({
       incremental: true,
       counters: incrementalCounters,
       content,
       defaultLanguage
     })
+
     editors.push(stock, incremental)
+
     return { stock, incremental, stockCounters, incrementalCounters }
   }
 
@@ -148,10 +167,13 @@ describe('incremental rich markdown lowlight', () => {
   it('matches stock decorations when a default language is configured', () => {
     const content = documentWithCodeBlocks(1)
     const codeBlock = content.content?.[1]
+
     if (!codeBlock?.attrs) {
       throw new Error('Missing code block')
     }
+
     codeBlock.attrs.language = null
+
     const { stock, incremental, stockCounters, incrementalCounters } = createPair(
       content,
       'typescript'
@@ -216,10 +238,12 @@ describe('incremental rich markdown lowlight', () => {
     for (const editor of [stock, incremental]) {
       const pos = nodePositions(editor, 'codeBlock')[0]
       const node = editor.state.doc.nodeAt(pos)
+
       const tr = editor.state.tr.setNodeMarkup(pos, undefined, {
         ...node?.attrs,
         language: 'javascript'
       })
+
       tr.setSelection(TextSelection.create(tr.doc, pos + 1))
       editor.view.dispatch(tr)
     }
@@ -232,22 +256,28 @@ describe('incremental rich markdown lowlight', () => {
 
     for (const editor of [stock, incremental]) {
       const end = editor.state.doc.content.size
+
       const codeBlock = editor.schema.nodes.codeBlock.create(
         { language: 'typescript' },
         editor.schema.text('let inserted = true')
       )
+
       editor.view.dispatch(editor.state.tr.insert(end, codeBlock))
     }
+
     expectParity(stock, incremental)
 
     for (const editor of [stock, incremental]) {
       const pos = nodePositions(editor, 'codeBlock')[1]
       const node = editor.state.doc.nodeAt(pos)
+
       if (!node) {
         throw new Error('Missing code block')
       }
+
       editor.view.dispatch(editor.state.tr.delete(pos, pos + node.nodeSize))
     }
+
     expectParity(stock, incremental)
   })
 
@@ -259,6 +289,7 @@ describe('incremental rich markdown lowlight', () => {
       const tr = editor.state.tr.setSelection(TextSelection.create(editor.state.doc, pos))
       editor.view.dispatch(tr.insertText('undoable'))
     }
+
     expectParity(stock, incremental)
 
     expect(stock.commands.undo()).toBe(true)
@@ -280,6 +311,7 @@ describe('incremental rich markdown lowlight', () => {
       )
       expect(editor.commands.setCodeBlock({ language: 'typescript' })).toBe(true)
     }
+
     expectParity(stock, incremental)
 
     for (const editor of [stock, incremental]) {
@@ -289,6 +321,7 @@ describe('incremental rich markdown lowlight', () => {
       )
       expect(editor.commands.setParagraph()).toBe(true)
     }
+
     expectParity(stock, incremental)
   })
 
@@ -302,12 +335,14 @@ describe('incremental rich markdown lowlight', () => {
       )
       expect(editor.view.pasteText('pasted text')).toBe(true)
     }
+
     expectParity(stock, incremental)
 
     for (const editor of [stock, incremental]) {
       const pos = nodePositions(editor, 'codeBlock')[0] + 1
       editor.view.dispatch(editor.state.tr.delete(pos, pos + 6))
     }
+
     expectParity(stock, incremental)
   })
 
@@ -318,12 +353,14 @@ describe('incremental rich markdown lowlight', () => {
       const pos = nodePositions(editor, 'codeBlock')[0] + 8
       editor.view.dispatch(editor.state.tr.split(pos))
     }
+
     expectParity(stock, incremental)
 
     for (const editor of [stock, incremental]) {
       const joinPos = nodePositions(editor, 'codeBlock')[1]
       editor.view.dispatch(editor.state.tr.join(joinPos))
     }
+
     expectParity(stock, incremental)
   })
 
@@ -333,9 +370,11 @@ describe('incremental rich markdown lowlight', () => {
     for (const editor of [stock, incremental]) {
       const pos = nodePositions(editor, 'codeBlock')[0]
       const node = editor.state.doc.nodeAt(pos)
+
       if (!node) {
         throw new Error('Missing code block')
       }
+
       const tr = editor.state.tr.delete(pos, pos + node.nodeSize)
       const insertedAt = tr.doc.content.size
       tr.insert(insertedAt, node)
@@ -369,6 +408,7 @@ describe('incremental rich markdown lowlight', () => {
         { type: 'paragraph', content: [{ type: 'text', text: 'after' }] }
       ]
     }
+
     const { stock, incremental } = createPair(content)
 
     for (const editor of [stock, incremental]) {
@@ -423,26 +463,33 @@ describe('incremental rich markdown lowlight', () => {
       type: 'doc',
       content: documentWithCodeBlocks(3).content?.filter((node) => node.type === 'codeBlock')
     }
+
     const { stock, incremental } = createPair(content)
 
     for (const editor of [stock, incremental]) {
       const firstPos = nodePositions(editor, 'codeBlock')[0]
       const first = editor.state.doc.nodeAt(firstPos)
+
       if (!first) {
         throw new Error('Missing first code block')
       }
+
       editor.view.dispatch(editor.state.tr.insertText('tail', firstPos + first.nodeSize - 1))
     }
+
     expectParity(stock, incremental)
 
     for (const editor of [stock, incremental]) {
       const firstPos = nodePositions(editor, 'codeBlock')[0]
       const first = editor.state.doc.nodeAt(firstPos)
+
       if (!first) {
         throw new Error('Missing first code block')
       }
+
       editor.view.dispatch(editor.state.tr.delete(firstPos, firstPos + first.nodeSize))
     }
+
     expectParity(stock, incremental)
   })
 
@@ -450,6 +497,7 @@ describe('incremental rich markdown lowlight', () => {
     const { stock, incremental, stockCounters, incrementalCounters } = createPair(
       documentWithCodeBlocks(533)
     )
+
     resetCounters(stockCounters)
     resetCounters(incrementalCounters)
 

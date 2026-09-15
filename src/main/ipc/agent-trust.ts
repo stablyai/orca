@@ -27,8 +27,10 @@ export function registerAgentTrustHandlers(): void {
       if (!args || typeof args.workspacePath !== 'string' || !args.workspacePath) {
         return
       }
+
       try {
         const connectionId = typeof args.connectionId === 'string' ? args.connectionId.trim() : ''
+
         if (connectionId) {
           // Why: SSH-launched agents read trust artifacts from the remote
           // user's home, not from this desktop process.

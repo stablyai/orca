@@ -113,6 +113,7 @@ export function useSourceControlCreateReviewComposer({
       onCancelGenerate: handleCancelGeneratePullRequestFieldsForActive
     }
   })
+
   const stackParentReview = useHostedReviewStackParent({
     enabled: hostedReviewCreateProvider === 'github' && prStackedCreationSupported,
     repoPath: activeRepo?.path ?? '',
@@ -129,6 +130,7 @@ export function useSourceControlCreateReviewComposer({
     if (!sourceControlAiActionsVisible) {
       return
     }
+
     if (
       hasConfiguredSourceControlTextGenerationDefaults({
         actionId: 'pullRequest',
@@ -137,8 +139,10 @@ export function useSourceControlCreateReviewComposer({
       })
     ) {
       void handleGeneratePullRequestFields()
+
       return
     }
+
     openPullRequestGenerationDialog()
   }, [
     activeRepo,
@@ -160,6 +164,7 @@ export function useSourceControlCreateReviewComposer({
     ) {
       return
     }
+
     if (
       !shouldHydratePullRequestGenerationResult({
         record: activePullRequestGenerationRecord
@@ -167,6 +172,7 @@ export function useSourceControlCreateReviewComposer({
     ) {
       return
     }
+
     const result = activePullRequestGenerationRecord.result
     applyGeneratedPullRequestFields(result, activePullRequestGenerationRecord.seedFieldRevisions)
     updatePullRequestGenerationRecord(activePullRequestGenerationKey, (record) => {
@@ -176,6 +182,7 @@ export function useSourceControlCreateReviewComposer({
       ) {
         return null
       }
+
       return {
         ...record,
         hydrated: true

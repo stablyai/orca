@@ -28,6 +28,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         repo: repoId,
         limit: WEB_RUNTIME_WORKTREE_LIST_LIMIT
       })
+
       return owned.result.worktrees.map((worktree) =>
         withRuntimeWorktreeOwner(worktree, owned.hostId)
       )
@@ -48,6 +49,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
       invalidateRuntimeWorktreeCaches()
+
       const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.create', {
         repo: args.repoId,
         name: args.name,
@@ -93,6 +95,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         manualOrder: args.manualOrder,
         automationProvenanceRequest: args.automationProvenanceRequest
       })
+
       return {
         ...owned.result,
         worktree: withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)
@@ -129,6 +132,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       }),
     remove: async ({ worktreeId, hostId, force, allowUnverifiedPtyStop, skipArchive }) => {
       invalidateRuntimeWorktreeCaches()
+
       return callRuntimeResult<RemoveWorktreeResult>('worktree.rm', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
         ...(hostId ? { hostId } : {}),
@@ -155,10 +159,12 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         Object.hasOwn(updates, 'pushTarget') && updates.pushTarget === undefined
           ? { ...updates, pushTarget: null }
           : updates
+
       const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.set', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
         ...rpcUpdates
       })
+
       return withRuntimeWorktreeOwner(owned.result.worktree, owned.hostId)
     },
     listLineage: async () =>
@@ -168,6 +174,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
       }>('worktree.lineageList'),
     updateLineage: async ({ worktreeId, parentWorktreeId, noParent }) => {
       invalidateRuntimeWorktreeCaches()
+
       const result = await callRuntimeResult<{
         worktree: Worktree & { lineage?: WorktreeLineage | null }
       }>('worktree.set', {
@@ -175,6 +182,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         parentWorktree: parentWorktreeId,
         noParent
       })
+
       return result.worktree.lineage ?? null
     },
     persistSortOrder: async ({ orderedIds }) => {

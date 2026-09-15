@@ -42,6 +42,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   const { message, turnKey, status, receipt, turnDiff } = slot
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
+
   return (
     <div className="flex flex-col gap-5">
       {receipt ? (

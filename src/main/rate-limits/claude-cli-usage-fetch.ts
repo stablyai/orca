@@ -22,12 +22,15 @@ function classifyClaudeCliUsageFailure(
   if (!limits.error) {
     return undefined
   }
+
   if (/rate limited/i.test(limits.error)) {
     return 'rate-limited'
   }
+
   if (/plan usage is unavailable|usage is unavailable/i.test(limits.error)) {
     return 'usage-unavailable'
   }
+
   return 'cli-unavailable'
 }
 
@@ -39,11 +42,13 @@ export async function fetchClaudeUsageViaCli(input: {
   signal?: AbortSignal
 }): Promise<ProviderRateLimits> {
   recordClaudeUsageAttempt(input.attempts, 'cli')
+
   const limits = await fetchViaPty({
     authPreparation: input.authPreparation,
     networkProxySettings: input.networkProxySettings,
     signal: input.signal
   })
+
   return withClaudeUsageMetadata(
     limits,
     metadataForClaudeUsageAttempt({
@@ -68,6 +73,7 @@ async function supplementOAuthUsageFromCli(input: {
   if (input.signal?.aborted || !canSupplementClaudeOAuthUsage(input)) {
     return input.oauthLimits
   }
+
   try {
     return mergeClaudeUsageWindows(
       input.oauthLimits,
@@ -81,6 +87,7 @@ async function supplementOAuthUsageFromCli(input: {
     )
   } catch (error) {
     warnClaudeUsageFetchFailure(input.authPreparation, input.oauthCredentials, error)
+
     return input.oauthLimits
   }
 }
@@ -102,9 +109,11 @@ export async function completeClaudeOAuthUsageSuccess(input: {
       isManagedClaudeAuth(input.options?.authPreparation),
     signal: input.options?.signal
   })
+
   if (input.options?.signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+
   return withClaudeUsageMetadata(
     limits,
     metadataForClaudeUsageAttempt({

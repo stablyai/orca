@@ -11,31 +11,39 @@ import {
 } from './orca-runtime-files-test-harness'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
+
 vi.mock('fs/promises', async () =>
   (await import('./orca-runtime-files-mock-registry')).fsPromisesModuleMock()
 )
+
 vi.mock(
   './file-watcher-host',
   async () => (await import('./orca-runtime-files-mock-registry')).fileWatcherHostMock
 )
+
 vi.mock('../ipc/filesystem-auth', async () =>
   (await import('./orca-runtime-files-mock-registry')).filesystemAuthModuleMock()
 )
+
 vi.mock('../git/runner', async () =>
   (await import('./orca-runtime-files-mock-registry')).gitRunnerModuleMock()
 )
+
 vi.mock(
   '../ipc/rg-availability',
   async () => (await import('./orca-runtime-files-mock-registry')).rgAvailabilityMock
 )
+
 vi.mock(
   '../ipc/local-worktree-runtime-options',
   async () => (await import('./orca-runtime-files-mock-registry')).localWorktreeRuntimeOptionsMock
 )
+
 vi.mock(
   '../ipc/filesystem-search-git',
   async () => (await import('./orca-runtime-files-mock-registry')).filesystemSearchGitMock
 )
+
 vi.mock(
   '../providers/ssh-filesystem-dispatch',
   async () => (await import('./orca-runtime-files-mock-registry')).sshFilesystemDispatchMock
@@ -53,6 +61,7 @@ function createRuntimeSearchChild(): MockRuntimeSearchChild {
   child.stdout.setEncoding = vi.fn()
   child.stderr = new EventEmitter()
   child.kill = vi.fn()
+
   return child
 }
 
@@ -72,15 +81,19 @@ describe('RuntimeFileCommands', () => {
         executionHostId: 'local'
       }))
     })
+
     const child = createRuntimeSearchChild()
     resolveAuthorizedPathMock.mockResolvedValue('/repo')
     checkRgAvailableMock.mockResolvedValue(true)
     wslAwareSpawnMock.mockReturnValue(child)
+
     const resultPromise = commands.searchRuntimeFiles('id:wt-1', {
       query: 'needle',
       maxResults: 10
     })
+
     await flushRuntimeSearchMicrotasks()
+
     const line = JSON.stringify({
       type: 'match',
       data: {
@@ -90,8 +103,10 @@ describe('RuntimeFileCommands', () => {
         submatches: [{ start: 0, end: 6 }]
       }
     })
+
     const originalSplit = String.prototype.split
     let scanned = 0
+
     const spy = vi.spyOn(String.prototype, 'split').mockImplementation(function (
       this: string,
       separator: unknown,
@@ -100,16 +115,20 @@ describe('RuntimeFileCommands', () => {
       if (separator === '\n') {
         scanned += this.length
       }
+
       return Reflect.apply(originalSplit, this, [separator, limit])
     })
+
     try {
       for (let offset = 0; offset < line.length; offset += 1024) {
         child.stdout.emit('data', line.slice(offset, offset + 1024))
       }
+
       child.emit('close', 0, null)
     } finally {
       spy.mockRestore()
     }
+
     const result = await resultPromise
     expect(result.totalMatches).toBe(1)
     expect(result.files[0].filePath).toBe('/repo/file.ts')

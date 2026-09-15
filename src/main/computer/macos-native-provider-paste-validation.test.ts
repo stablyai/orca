@@ -48,6 +48,7 @@ class FakeSocket extends EventEmitter {
   write(line: string, callback?: (error?: Error | null) => void): boolean {
     this.writes.push(line)
     callback?.(null)
+
     return true
   }
 
@@ -57,6 +58,7 @@ class FakeSocket extends EventEmitter {
 
   destroy(): this {
     this.destroyed = true
+
     return this
   }
 }
@@ -68,6 +70,7 @@ class FakeProvider extends EventEmitter {
 
 async function loadClientModule() {
   vi.resetModules()
+
   return await import('./macos-native-provider-client')
 }
 
@@ -100,11 +103,13 @@ describe('MacOSNativeProviderClient paste validation', () => {
     spawnMock.mockImplementation(() => {
       const provider = new FakeProvider()
       providers.push(provider)
+
       return provider
     })
     connectMacOSProviderSocketMock.mockImplementation(async () => {
       const socket = new FakeSocket()
       sockets.push(socket)
+
       return socket
     })
   })

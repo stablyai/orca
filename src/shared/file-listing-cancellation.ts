@@ -21,9 +21,11 @@ export class FileListingCancelledError extends Error {
  */
 export function fileListingCancellationError(signal?: AbortSignal): Error {
   const reason = signal?.reason
+
   if (reason instanceof FileListingCancelledError) {
     return reason
   }
+
   return new FileListingCancelledError()
 }
 

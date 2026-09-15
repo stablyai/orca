@@ -1,6 +1,7 @@
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
 
 const richMarkdownSizeEncoder = new TextEncoder()
+
 // Why: rich-mode eligibility is checked during render-model work, so this
 // avoids allocating a large Uint8Array every time markdown content changes.
 const richMarkdownSizeBuffer = new Uint8Array(RICH_MARKDOWN_MAX_SIZE_BYTES + 1)

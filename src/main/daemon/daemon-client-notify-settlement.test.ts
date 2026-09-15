@@ -7,12 +7,14 @@ describe('daemon notify partial handoff', () => {
     'retains possible handoff after writing %j then throwing',
     async (data) => {
       const transported: string[] = []
+
       const socket = {
         write: (encoded: string) => {
           transported.push(encoded.slice(0, -1))
           throw new Error('socket failed after partial flush')
         }
       } as unknown as Socket
+
       const onUndeliverable = vi.fn()
 
       const settlement = await writeNotifyWithSettlement({
@@ -37,6 +39,7 @@ describe('daemon notify partial handoff', () => {
         throw new Error('partial flush')
       }
     } as unknown as Socket
+
     await expect(
       writeNotifyWithSettlement({
         socket,

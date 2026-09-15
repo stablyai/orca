@@ -58,9 +58,11 @@ function commitNativeComposition(): void {
 async function readActiveComposition(page: Page): Promise<string | null> {
   return page.evaluate(() => {
     const textarea = document.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea:focus')
+
     const composition = textarea?.parentElement?.querySelector<HTMLElement>(
       '.composition-view.active'
     )
+
     return composition?.textContent?.replaceAll('\u200e', '') ?? null
   })
 }
@@ -85,10 +87,12 @@ async function runNativeScenario(
   const ptyId = await waitForActivePanePtyId(page)
   const reader = createTerminalImeByteReader(testRepoPath, 1)
   let completed = false
+
   try {
     await startTerminalImeByteReader(page, ptyId, reader)
     await focusActiveTerminalInput(page)
     await installTerminalImeBoundaryProbe(page)
+
     if (preCommit) {
       typeNativeTwoSetKoreanPreedit(processId, keyCodes)
       await expect.poll(() => readActiveComposition(page)).toBe(preCommit.preeditText)
@@ -110,9 +114,11 @@ async function runNativeScenario(
       () => undefined
     )
     await disposeTerminalImeBoundaryProbe(page).catch(() => undefined)
+
     if (!completed) {
       await sendToTerminal(page, ptyId, '\x03').catch(() => undefined)
     }
+
     removeTerminalImeByteReader(reader)
   }
 }

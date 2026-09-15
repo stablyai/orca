@@ -13,7 +13,9 @@ import {
 import { join } from 'node:path'
 
 export const AGENT_HOOK_SPOOL_MAX_BYTES = 5 * 1024 * 1024
+
 export const AGENT_HOOK_SPOOL_MAX_FILES = 1024
+
 export const AGENT_HOOK_SPOOL_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 export type SpoolRecord = {
@@ -59,31 +61,39 @@ export function readSpoolFile(
   now = Date.now()
 ): { records: SpoolRecord[]; consumed: number } {
   let bytes: Buffer
+
   try {
     bytes = readFileSync(path)
   } catch {
     return { records: [], consumed: 0 }
   }
+
   const records: SpoolRecord[] = []
   let consumed = 0
   let start = 0
+
   // indexOf, not a per-byte loop: this runs over every spooled file before the hook listener binds,
   // and Buffer.indexOf finds the newline with memchr instead of an interpreted scan.
   for (;;) {
     const end = bytes.indexOf(0x0a, start)
+
     // A final line without its newline may still be in flight from a hook writer.
     // Leave it untouched until the writer terminates the record explicitly.
     if (end === -1) {
       break
     }
+
     const lineBytes = bytes.subarray(start, end)
     consumed = end + 1
     start = end + 1
+
     if (lineBytes.length === 0) {
       continue
     }
+
     try {
       const value = JSON.parse(lineBytes.toString('utf8')) as Partial<SpoolRecord>
+
       if (
         typeof value.paneKey === 'string' &&
         typeof value.source === 'string' &&
@@ -97,6 +107,7 @@ export function readSpoolFile(
       // Torn lines are discarded while later complete lines remain replayable.
     }
   }
+
   return { records, consumed }
 }
 
@@ -111,17 +122,22 @@ export type SpoolDrainOptions = {
 export function drainAgentHookSpool(options: SpoolDrainOptions): number {
   const spoolDir = join(options.endpointDir, 'spool')
   let names: string[]
+
   try {
     names = readdirSync(spoolDir)
   } catch {
     return 0
   }
+
   const now = options.now ?? Date.now()
+
   const candidates = names
     .map((name) => {
       const path = join(spoolDir, name)
+
       try {
         const stat = statSync(path)
+
         // Empty files are retained to keep append handles race-safe, but they must not
         // consume the bounded replay candidate set ahead of files with durable events.
         return stat.isFile() && stat.size > 0 ? { path, mtimeMs: stat.mtimeMs } : null
@@ -132,23 +148,31 @@ export function drainAgentHookSpool(options: SpoolDrainOptions): number {
     .filter((entry): entry is { path: string; mtimeMs: number } => entry !== null)
     .sort((a, b) => a.mtimeMs - b.mtimeMs)
     .slice(0, AGENT_HOOK_SPOOL_MAX_FILES)
+
   let drained = 0
+
   for (const candidate of candidates) {
     const { records, consumed } = readSpoolFile(candidate.path, now)
+
     for (const record of records) {
       const expected = options.getPersistedLaunchTokenHash(record.paneKey)
       const actual = launchTokenHash(record.launchToken)
+
       if (expected && actual !== expected) {
         continue
       }
+
       options.ingest({ ...record, isReplay: true })
       drained += 1
     }
+
     try {
       const fd = openSync(candidate.path, 'r+')
+
       try {
         // Keep the inode so a concurrent append handle cannot silently orphan writes.
         const size = fstatSync(fd).size
+
         if (size > consumed) {
           // Why: a hook may have appended between the read and here; shift the unread tail
           // to the front instead of truncating to zero, which would erase it.
@@ -166,5 +190,6 @@ export function drainAgentHookSpool(options: SpoolDrainOptions): number {
       // A concurrently removed or inaccessible file is harmless; the next launch retries it.
     }
   }
+
   return drained
 }

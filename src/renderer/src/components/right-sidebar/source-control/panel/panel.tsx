@@ -17,6 +17,7 @@ export function SourceControlPanel() {
       </div>
     )
   }
+
   if (isFolder) {
     return (
       <div className="flex items-center justify-center h-full text-xs text-muted-foreground px-4 text-center">

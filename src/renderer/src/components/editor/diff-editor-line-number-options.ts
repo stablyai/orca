@@ -28,6 +28,7 @@ export function applyDiffEditorLineNumberOptions(
     if (originalEditor.getRawOptions().lineNumbers !== lineNumberOptions.original) {
       originalEditor.updateOptions({ lineNumbers: lineNumberOptions.original })
     }
+
     if (modifiedEditor.getRawOptions().lineNumbers !== lineNumberOptions.modified) {
       modifiedEditor.updateOptions({ lineNumbers: lineNumberOptions.modified })
     }

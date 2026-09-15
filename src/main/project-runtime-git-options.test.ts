@@ -16,6 +16,7 @@ function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
     configurable: true,
     value: platform
   })
+
   try {
     return run()
   } finally {
@@ -75,6 +76,7 @@ describe('project runtime git options', () => {
 
   it('returns repair state for missing cached WSL distro before local git execution', () => {
     _setWslCachesForTests({ available: true, distros: ['Debian'] })
+
     const project = makeProject({
       localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
     })
@@ -100,6 +102,7 @@ describe('project runtime git options', () => {
 
   it('returns repair state for cached WSL unavailable before local git execution', () => {
     _setWslCachesForTests({ available: false, distros: [] })
+
     const project = makeProject({
       localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
     })
@@ -111,6 +114,7 @@ describe('project runtime git options', () => {
 
   it('keeps project host override on host even when cached WSL is unavailable', () => {
     _setWslCachesForTests({ available: false, distros: [] })
+
     const project = makeProject({
       localWindowsRuntimePreference: { kind: 'windows-host' }
     })
@@ -140,6 +144,7 @@ describe('project runtime git options', () => {
   describe('getWorktreeMirrorDistro', () => {
     it('names the distro a resolved WSL project runs in', () => {
       _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+
       const project = makeProject({
         localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
       })
@@ -161,6 +166,7 @@ describe('project runtime git options', () => {
     // repair still gets a worktree, on the Windows side as it always has.
     it('names no distro instead of throwing when the runtime needs repair', () => {
       _setWslCachesForTests({ available: true, distros: ['Debian'] })
+
       const project = makeProject({
         localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
       })
@@ -180,6 +186,7 @@ describe('project runtime git options', () => {
   describe('getWorktreeCreatePrefetchGitOptions', () => {
     it('routes the warm-up through the distro a resolved WSL project runs in', () => {
       _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+
       const project = makeProject({
         localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
       })
@@ -195,6 +202,7 @@ describe('project runtime git options', () => {
     // existed, never surface the repair state git execution raises.
     it('falls back to host git instead of throwing when the runtime needs repair', () => {
       _setWslCachesForTests({ available: true, distros: ['Debian'] })
+
       const project = makeProject({
         localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
       })
@@ -208,9 +216,11 @@ describe('project runtime git options', () => {
 
     it('does not resolve a project runtime for folder workspaces', () => {
       _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
+
       const project = makeProject({
         localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
       })
+
       const store = makeStore(project)
       const getProjects = vi.fn(store.getProjects)
 

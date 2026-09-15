@@ -7,7 +7,9 @@ import { AgentHookServer } from './server'
 import { makePaneKey } from '../../shared/stable-pane-id'
 
 const PANE_KEY = makePaneKey('tab-1', '11111111-1111-4111-8111-111111111111')
+
 const CHILD_ID = '019fa65f-3144-7151-9c02-cff7a28f316f'
+
 const SECOND_CHILD_ID = '019fa65f-3144-7151-9c02-cff7a28f3170'
 
 function line(record: unknown): string {
@@ -34,6 +36,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
     for (const dir of dirs) {
       rmSync(dir, { recursive: true, force: true })
     }
+
     dirs.length = 0
   })
 
@@ -58,8 +61,10 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
     writeFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_started' } }))
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const response = await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
         method: 'POST',
         headers: {
@@ -109,6 +114,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
     writeFileSync(secondChildPath, started)
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
       await fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}/hook/codex`, {
@@ -163,8 +169,10 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
     writeFileSync(childPath, line({ type: 'event_msg', payload: { type: 'task_started' } }))
     const server = new AgentHookServer()
     await server.start({ env: 'production' })
+
     try {
       const env = server.buildPtyEnv()
+
       const post = (path: string, payload: unknown): Promise<Response> =>
         fetch(`http://127.0.0.1:${env.ORCA_AGENT_HOOK_PORT}${path}`, {
           method: 'POST',
@@ -188,6 +196,7 @@ describe('AgentHookServer Codex subagent transcript polling', () => {
         session_id: 'nested-session',
         transcript_path: join(dir, 'nested-copilot-transcript.jsonl')
       })
+
       expect(nested.status).toBe(204)
       // The nested completion is suppressed, so the pane is still the same live codex turn.
       expect(server.getStatusSnapshot()[0]?.agentType).toBe('codex')

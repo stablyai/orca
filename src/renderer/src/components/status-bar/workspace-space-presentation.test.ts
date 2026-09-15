@@ -133,6 +133,7 @@ function decisionInputs(
 ): Parameters<typeof getWorkspaceDecisionDetails>[1] {
   const defaultRepo = repo()
   const defaultWorktree = worktreeRecord()
+
   return {
     repoMap: new Map([[defaultRepo.id, defaultRepo]]),
     worktreeMap: new Map([[defaultWorktree.id, defaultWorktree]]),
@@ -165,10 +166,12 @@ describe('workspace space presentation helpers', () => {
       activeWorkspaceExecutionHostId: 'local',
       gitStatusByWorktree: { wt: [] }
     })
+
     const local = getWorkspaceDecisionDetails(
       row({ worktreeId: 'wt', executionHostId: 'local' }),
       inputs
     )
+
     const ssh = getWorkspaceDecisionDetails(
       row({ worktreeId: 'wt', executionHostId: 'ssh:builder' }),
       inputs
@@ -198,6 +201,7 @@ describe('workspace space presentation helpers', () => {
       forceDeleteReason: 'dirty' as const,
       executionHostId: 'local' as const
     }
+
     const states = {
       [composeWorktreeHostIdentity('local', 'wt')]: failedOnLocal
     }
@@ -213,10 +217,12 @@ describe('workspace space presentation helpers', () => {
   it('keeps clean and dirty same-id rows isolated by host', () => {
     const localRow = row({ worktreeId: 'wt', executionHostId: 'local' })
     const sshRow = row({ worktreeId: 'wt', executionHostId: 'ssh:builder' })
+
     const statuses = new Map([
       [getWorkspaceSpaceWorktreeIdentity(localRow), []],
       [getWorkspaceSpaceWorktreeIdentity(sshRow), [{ path: 'dirty.txt' }]]
     ])
+
     const inputs = decisionInputs({ gitStatusByWorktreeIdentity: statuses })
     const local = getWorkspaceDecisionDetails(localRow, inputs)
     const ssh = getWorkspaceDecisionDetails(sshRow, inputs)
@@ -260,6 +266,7 @@ describe('workspace space presentation helpers', () => {
 
   it('rejects oversized pasted filters before reading workspace rows', () => {
     const oversizedQuery = 'secret-workspace-space'.repeat(WORKSPACE_SPACE_FILTER_QUERY_MAX_BYTES)
+
     const rows = [
       {
         get canDelete(): boolean {
@@ -287,6 +294,7 @@ describe('workspace space presentation helpers', () => {
     const rows = Array.from({ length: 130_000 }, (_, index) =>
       row({ worktreeId: `wt-${index}`, sizeBytes: index === 87_654 ? 999_999 : index })
     )
+
     const items = Array.from({ length: 130_000 }, (_, index) => ({
       name: `item-${index}`,
       path: `/repo/item-${index}`,
@@ -317,6 +325,7 @@ describe('workspace space presentation helpers', () => {
       row({ worktreeId: 'idle', canDelete: true, status: 'ok' }),
       row({ worktreeId: 'deleting', canDelete: true, status: 'ok' })
     ]
+
     const isDeleting = (worktree: WorkspaceSpaceWorktree): boolean =>
       worktree.worktreeId === 'deleting'
 
@@ -479,6 +488,7 @@ describe('workspace space presentation helpers', () => {
         ])
       })
     )
+
     const different = getWorkspaceDecisionDetails(
       row({ branch: 'refs/heads/feature/local' }),
       decisionInputs({
@@ -517,6 +527,7 @@ describe('workspace space presentation helpers', () => {
       status: 'success',
       title: 'Review'
     }
+
     const explicit = getWorkspaceDecisionDetails(
       row({ branch: 'refs/heads/feature/local' }),
       decisionInputs({
@@ -537,6 +548,7 @@ describe('workspace space presentation helpers', () => {
         ])
       })
     )
+
     const gitLab = getWorkspaceDecisionDetails(
       row({ branch: 'refs/heads/feature/local' }),
       decisionInputs({
@@ -603,6 +615,7 @@ describe('workspace space presentation helpers', () => {
       row({ worktreeId: 'visible-b', executionHostId: 'local' }),
       row({ worktreeId: 'rest-b', executionHostId: 'local' })
     ]
+
     const visibleWorktreeIdentities = new Set(
       [rows[1], rows[3]].map(getWorkspaceSpaceWorktreeIdentity)
     )

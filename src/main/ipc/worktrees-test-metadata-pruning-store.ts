@@ -13,6 +13,7 @@ export function configureMetadataPruningStoreMocks(
         executionHostId?: string | null
         kind?: string
       }
+
       return {
         repo: {
           id: repo.id,

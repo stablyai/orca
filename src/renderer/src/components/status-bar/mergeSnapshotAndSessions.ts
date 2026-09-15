@@ -54,8 +54,10 @@ function shortCwd(cwd: string): string {
   if (!cwd) {
     return ''
   }
+
   const sep = cwd.includes('\\') ? '\\' : '/'
   const parts = cwd.split(/[\\/]+/).filter(Boolean)
+
   return parts.length > 2 ? parts.slice(-2).join(sep) : cwd
 }
 
@@ -63,7 +65,9 @@ function parsePaneKey(paneKey: string | null): { tabId: string; leafId: string }
   if (!paneKey) {
     return null
   }
+
   const parsed = parseStablePaneKey(paneKey)
+
   return parsed ? { tabId: parsed.tabId, leafId: parsed.leafId } : null
 }
 
@@ -73,22 +77,29 @@ function resolveSnapshotSessionLabel(
   index: ResourceSessionBindingIndex
 ): string {
   const parsed = parsePaneKey(session.paneKey)
+
   if (parsed) {
     const match = index.tabsByIdByWorktree.get(worktreeId)?.get(parsed.tabId)
     const tab = match?.tab
     const tabIndex = match?.index ?? -1
+
     if (tab) {
       const custom = tab.customTitle?.trim()
+
       if (custom) {
         return custom
       }
+
       return tab.defaultTitle?.trim() || tab.title?.trim() || `Terminal ${tabIndex + 1}`
     }
   }
+
   if (session.pid > 0) {
     return `pid ${session.pid}`
   }
+
   const fallback = session.sessionId?.slice(0, 8)
+
   return fallback ? `session ${fallback}` : '(unknown session)'
 }
 
@@ -101,39 +112,51 @@ function resolveDaemonSessionLabel(
 ): string {
   if (tabId && resolvedWorktreeId) {
     const tab = index.tabsByIdByWorktree.get(resolvedWorktreeId)?.get(tabId)?.tab
+
     if (tab) {
       const custom = tab.customTitle?.trim()
+
       if (custom) {
         return custom
       }
+
       const runtimeMap = ctx.runtimePaneTitlesByTabId[tabId]
+
       if (runtimeMap) {
         const live = Object.values(runtimeMap).find((t) => t?.trim())
+
         if (live) {
           return live
         }
       }
+
       const fallback = tab.defaultTitle?.trim() || tab.title?.trim()
+
       if (fallback) {
         return fallback
       }
     }
   }
+
   if (session.cwd) {
     return shortCwd(session.cwd)
   }
+
   if (resolvedWorktreeId) {
     return shortCwd(resolvedWorktreeId)
   }
+
   if (session.title) {
     return session.title
   }
+
   return 'unknown'
 }
 
 // ─── Public merge function ─────────────────────────────────────────
 
 export const UNATTRIBUTED_REPO_ID = '__unattributed__'
+
 export const UNATTRIBUTED_REPO_NAME = 'Unattributed'
 
 export function mergeSnapshotAndSessions(
@@ -149,6 +172,7 @@ export function mergeSnapshotAndSessions(
   // sessions do not appear as Resource Manager orphans before their pane mounts.
   const index = buildResourceSessionBindingIndex(ctx)
   const boundPtyIds = index.boundPtyIds
+
   // Why: the daemon list is the only place agent ownership is reported. Snapshot-derived rows
   // describe the same sessions by id, so carry it across rather than inventing an answer; a
   // session the daemon never listed is 'unknown', not 'absent'.
@@ -158,9 +182,11 @@ export function mergeSnapshotAndSessions(
 
   function ensureRepo(repoId: string, repoName: string): UnifiedProjectGroup {
     const existing = repos.get(repoId)
+
     if (existing) {
       return existing
     }
+
     const next: UnifiedProjectGroup = {
       repoId,
       repoName,
@@ -169,8 +195,10 @@ export function mergeSnapshotAndSessions(
       hasRemoteChildren: false,
       worktrees: []
     }
+
     repos.set(repoId, next)
     worktreeRowsByRepo.set(repoId, new Map())
+
     return next
   }
 
@@ -185,6 +213,7 @@ export function mergeSnapshotAndSessions(
     repo.worktrees.push(row)
     repo.hasRemoteChildren ||= row.isRemote
     const rows = worktreeRowsByRepo.get(repo.repoId)!
+
     if (!rows.has(row.worktreeId)) {
       rows.set(row.worktreeId, row)
     }
@@ -197,15 +226,19 @@ export function mergeSnapshotAndSessions(
       const repoId = worktree?.repoId ?? wt.repoId
       const repoName = (worktree && ctx.repoDisplayNameById.get(repoId)) || wt.repoName
       const { isRemote, isRuntimeScoped } = resolveResourceWorkspaceHost(ctx, wt.worktreeId, repoId)
+
       // Why: local snapshot data must never render under a runtime-hosted repo
       // row; belt-and-braces with the matching session-ingest guard below.
       if (isRuntimeScoped) {
         continue
       }
+
       const repo = ensureRepo(repoId, repoName)
+
       const sessions: UnifiedSessionRow[] = wt.sessions.map((s) => {
         seenSessionIds.add(s.sessionId)
         const tabId = index.ptyIdToTabId.get(s.sessionId) ?? null
+
         return {
           sessionId: s.sessionId,
           paneKey: s.paneKey,
@@ -219,6 +252,7 @@ export function mergeSnapshotAndSessions(
           hasLocalSamples: true
         }
       })
+
       appendWorktreeRow(repo, {
         worktreeId: wt.worktreeId,
         worktreeName: worktree?.displayName?.trim() || wt.worktreeName,
@@ -240,6 +274,7 @@ export function mergeSnapshotAndSessions(
     if (seenSessionIds.has(session.id)) {
       continue
     }
+
     seenSessionIds.add(session.id)
 
     // 2a: tab-store walk — does this session belong to a tab in this renderer?
@@ -255,12 +290,15 @@ export function mergeSnapshotAndSessions(
     const isUnattributed = !worktreeId
     const finalWorktreeId = worktreeId ?? `${UNATTRIBUTED_REPO_ID}::${session.id}`
     const worktree = resolveResourceFolderWorkspace(ctx, finalWorktreeId)
+
     const finalRepoId = isUnattributed
       ? UNATTRIBUTED_REPO_ID
       : (worktree?.repoId ?? getRepoIdFromWorktreeId(finalWorktreeId))
+
     const finalRepoName = isUnattributed
       ? UNATTRIBUTED_REPO_NAME
       : ctx.repoDisplayNameById.get(finalRepoId) || finalRepoId
+
     const finalWorktreeName = isUnattributed
       ? session.title || session.id.slice(0, 12)
       : worktree?.displayName?.trim() || deriveWorktreeNameFromWorktreeId(finalWorktreeId)
@@ -272,6 +310,7 @@ export function mergeSnapshotAndSessions(
       finalWorktreeId,
       finalRepoId
     )
+
     if (isRuntimeScoped) {
       continue
     }
@@ -279,6 +318,7 @@ export function mergeSnapshotAndSessions(
     const repo = ensureRepo(finalRepoId, finalRepoName)
 
     let row = findWorktreeRow(repo, finalWorktreeId)
+
     if (!row) {
       row = {
         worktreeId: finalWorktreeId,
@@ -313,12 +353,15 @@ export function mergeSnapshotAndSessions(
   // ── Step 3: add browser resources, including browser-only workspaces.
   for (const [worktreeId, browsers] of Object.entries(ctx.browserTabsByWorktree ?? {})) {
     const worktree = ctx.worktreeById?.get(worktreeId)
+
     if (!worktree || browsers.length === 0) {
       continue
     }
+
     const repoName = ctx.repoDisplayNameById.get(worktree.repoId) || worktree.repoId
     const repo = ensureRepo(worktree.repoId, repoName)
     let row = findWorktreeRow(repo, worktreeId)
+
     if (!row) {
       row = {
         worktreeId,
@@ -335,6 +378,7 @@ export function mergeSnapshotAndSessions(
       }
       appendWorktreeRow(repo, row)
     }
+
     row.browsers = browsers
   }
 
@@ -343,6 +387,7 @@ export function mergeSnapshotAndSessions(
     let cpuSum = 0
     let memSum = 0
     let anyLocal = false
+
     for (const wt of repo.worktrees) {
       if (wt.cpu !== null && wt.memory !== null) {
         cpuSum += wt.cpu
@@ -350,6 +395,7 @@ export function mergeSnapshotAndSessions(
         anyLocal = true
       }
     }
+
     repo.cpu = anyLocal ? cpuSum : null
     repo.memory = anyLocal ? memSum : null
   }

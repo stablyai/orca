@@ -37,12 +37,14 @@ function classifyRemoteQuestion(
   params: RemoteAnswerParams
 ): 'settled' | 'writable' {
   const question = this.getRemoteQuestion(params.messageId)
+
   if (!question || question.dispatch_id !== params.dispatchId) {
     throw new OrchestrationError(
       'question_not_found',
       `Remote Question ${params.messageId} was not found.`
     )
   }
+
   if (question.status === 'answered') {
     if (
       question.answer_message_id !== params.answerMessageId ||
@@ -53,8 +55,10 @@ function classifyRemoteQuestion(
         `Remote Question ${params.messageId} already has a different answer.`
       )
     }
+
     return 'settled'
   }
+
   // Why: the guarded UPDATE is a silent no-op for a closed question, which the caller would read as stored.
   if (question.status === 'closed') {
     throw new OrchestrationError(
@@ -62,6 +66,7 @@ function classifyRemoteQuestion(
       `Remote Question ${params.messageId} is closed.`
     )
   }
+
   return 'writable'
 }
 
@@ -69,6 +74,7 @@ export function answerRemoteQuestion(this: OrchestrationDb, params: RemoteAnswer
   if (classifyRemoteQuestion.call(this, params) === 'settled') {
     return
   }
+
   const changes = this.db
     .prepare(
       `UPDATE remote_questions
@@ -77,14 +83,17 @@ export function answerRemoteQuestion(this: OrchestrationDb, params: RemoteAnswer
        WHERE message_id = ? AND status = 'pending'`
     )
     .run(params.answerMessageId, params.body, params.messageId).changes
+
   if (changes > 0) {
     return
   }
+
   // Why: a concurrent answer or close won the guarded UPDATE after our read; re-classify so the caller
   // sees the stored outcome instead of a success that never happened.
   if (classifyRemoteQuestion.call(this, params) === 'settled') {
     return
   }
+
   throw new OrchestrationError(
     'answer_conflict',
     `Remote Question ${params.messageId} could not be answered.`

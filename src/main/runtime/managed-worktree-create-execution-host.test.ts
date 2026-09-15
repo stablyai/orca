@@ -12,11 +12,13 @@ vi.mock('electron', () => ({
 }))
 
 const createRuntimeFolderWorktreeMock = vi.hoisted(() => vi.fn())
+
 vi.mock('./runtime-folder-worktree-create', () => ({
   createRuntimeFolderWorktree: createRuntimeFolderWorktreeMock
 }))
 
 const createRuntimeLocalManagedWorktreeMock = vi.hoisted(() => vi.fn())
+
 vi.mock('./runtime-local-worktree-create', () => ({
   createRuntimeLocalManagedWorktree: createRuntimeLocalManagedWorktreeMock
 }))
@@ -25,6 +27,7 @@ const trustMocks = vi.hoisted(() => ({
   local: vi.fn(async () => {}),
   remote: vi.fn(async () => {})
 }))
+
 vi.mock('./runtime-worktree-agent-startup', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   markLocalWorktreeTrusted: trustMocks.local,
@@ -34,6 +37,7 @@ vi.mock('./runtime-worktree-agent-startup', async (importOriginal) => ({
 import { OrcaRuntimeService } from './orca-runtime'
 
 const TARGET_ID = 'remote-1'
+
 const REMOTE_PATH = '/srv/app'
 
 type RuntimeInternals = {
@@ -51,6 +55,7 @@ function makeRuntime(repo: Record<string, unknown>): {
     getSettings: () => ({ disabledTuiAgents: [], workspaceDir: '/tmp/workspaces' }),
     getProjectHostSetups: () => []
   }
+
   const runtime = new OrcaRuntimeService(store as never)
   const internals = runtime as unknown as RuntimeInternals
   vi.spyOn(internals, 'resolveRepoSelector').mockResolvedValue(repo)
@@ -60,10 +65,13 @@ function makeRuntime(repo: Record<string, unknown>): {
     workspaceLineage: null,
     warnings: []
   })
+
   const createRemote = vi.fn().mockResolvedValue({
     worktree: { id: 'wt-1', path: '/srv/app-feature', branch: 'feature' }
   })
+
   vi.spyOn(internals, 'createManagedRemoteWorktree').mockImplementation(createRemote)
+
   return { runtime, createRemote }
 }
 

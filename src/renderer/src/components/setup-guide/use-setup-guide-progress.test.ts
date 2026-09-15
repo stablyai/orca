@@ -220,6 +220,7 @@ describe('setup script probe readiness', () => {
       { id: 'repo-a', hookSettings: undefined },
       { id: 'repo-b', hookSettings: undefined }
     ])
+
     const remoteSignature = getSetupScriptProbeSignature(
       { activeRuntimeEnvironmentId: 'runtime-1' },
       [
@@ -227,6 +228,7 @@ describe('setup script probe readiness', () => {
         { id: 'repo-b', hookSettings: undefined }
       ]
     )
+
     const reorderedSignature = getSetupScriptProbeSignature({ activeRuntimeEnvironmentId: null }, [
       { id: 'repo-b', hookSettings: undefined },
       { id: 'repo-a', hookSettings: undefined }
@@ -240,6 +242,7 @@ describe('setup script probe readiness', () => {
   it('resets readiness on setup-script generation changes and ignores late older results', () => {
     const firstSignature = 'runtime:local|repo-a'
     const secondSignature = 'runtime:local|repo-b'
+
     const firstReady = settleSetupScriptProbe(
       markSetupScriptProbePending(
         { signature: null, ready: false, hasSetupScript: false },
@@ -267,6 +270,7 @@ describe('setup script probe readiness', () => {
 
   it('settles setup-script failures as ready with no setup script', () => {
     const signature = 'runtime:local|repo-a'
+
     const pending = markSetupScriptProbePending(
       { signature: null, ready: false, hasSetupScript: false },
       signature
@@ -281,6 +285,7 @@ describe('setup script probe readiness', () => {
 
   it('allows late positive setup-script results to update after timeout settlement', () => {
     const signature = 'runtime:local|repo-a'
+
     const timedOut = {
       signature,
       ready: true,

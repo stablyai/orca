@@ -64,6 +64,7 @@ export function useHostedReviewActions({
   const [merging, setMerging] = useState(false)
   const [stateUpdating, setStateUpdating] = useState<'open' | 'closed' | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+
   const { readying, handleMarkReadyForReview } = useReadyHostedReviewAction({
     reviewNumber: review.number,
     githubPR,
@@ -80,6 +81,7 @@ export function useHostedReviewActions({
       if (!isGitLab && githubPR?.stack) {
         const usesMergeQueue =
           review.mergeQueueRequired === true || githubPR.mergeQueueRequired === true
+
         const confirmed = await confirm(
           buildGitHubPRStackMergeConfirmation({
             stack: githubPR.stack,
@@ -88,12 +90,15 @@ export function useHostedReviewActions({
             usesMergeQueue
           })
         )
+
         if (!confirmed) {
           return
         }
       }
+
       setMerging(true)
       setActionError(null)
+
       try {
         const result = isGitLab
           ? await window.api.gl.mergeMR({
@@ -108,6 +113,7 @@ export function useHostedReviewActions({
               method,
               prRepo: githubPR?.prRepo ?? null
             })
+
         if (!result.ok) {
           setActionError(result.error)
         } else {
@@ -137,9 +143,11 @@ export function useHostedReviewActions({
     if (isGitLab || !autoMergeAction) {
       return
     }
+
     const enabled = autoMergeAction.kind === 'enable'
     setMerging(true)
     setActionError(null)
+
     try {
       const result = await setGitHubHostedReviewAutoMerge({
         repo,
@@ -148,6 +156,7 @@ export function useHostedReviewActions({
         method: enabled ? defaultMergeMethod : undefined,
         prRepo: githubPR?.prRepo ?? null
       })
+
       if (!result.ok) {
         setActionError(result.error)
       } else {
@@ -173,8 +182,10 @@ export function useHostedReviewActions({
       if (stateUpdating) {
         return
       }
+
       const isClosing = nextState === 'closed'
       const label = isClosing ? 'Close' : 'Reopen'
+
       const confirmed = await confirm({
         title: `${label} ${shortLabel} ${isGitLab ? '!' : '#'}${review.number}?`,
         description: isClosing
@@ -191,11 +202,14 @@ export function useHostedReviewActions({
         confirmLabel: label,
         confirmVariant: isClosing ? 'destructive' : 'default'
       })
+
       if (!confirmed) {
         return
       }
+
       setStateUpdating(nextState)
       setActionError(null)
+
       try {
         const result = isGitLab
           ? isClosing
@@ -215,6 +229,7 @@ export function useHostedReviewActions({
               prRepo: githubPR?.prRepo ?? null,
               nextState
             })
+
         if (!result.ok) {
           setActionError(result.error)
           toast.error(result.error)
@@ -237,6 +252,7 @@ export function useHostedReviewActions({
       } catch (err) {
         const message =
           err instanceof Error ? err.message : `Failed to ${label.toLowerCase()} ${reviewLabel}`
+
         setActionError(message)
         toast.error(message)
       } finally {

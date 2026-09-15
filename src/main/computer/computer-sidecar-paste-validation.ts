@@ -7,9 +7,12 @@ export function validateComputerSidecarPasteText(
   if (method !== 'pasteText' || !params || typeof params !== 'object') {
     return
   }
+
   const text = (params as Record<string, unknown>).text
+
   if (typeof text !== 'string') {
     return
   }
+
   return validateComputerClipboardPasteTextWithBoundedYield(text)
 }

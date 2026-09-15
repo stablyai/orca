@@ -16,6 +16,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeOs>()
+
   return { ...actual, homedir: homedirMock }
 })
 
@@ -37,6 +38,7 @@ function invokeHandlerWithStatus(
     getMirroredHostHomePathForStatus: () => mirrored
   })
   const handler = handleMock.mock.calls.at(-1)?.[1] as () => CodexConfigSyncStatus
+
   return handler()
 }
 

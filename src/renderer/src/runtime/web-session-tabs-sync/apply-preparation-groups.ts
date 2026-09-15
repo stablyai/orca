@@ -37,12 +37,15 @@ export function prepareWebSessionTabsSnapshotGroups(
     intentUnifiedTabId,
     reservedEmptyPreviewFallbackTabId
   } = base
+
   const currentGroups = state.groupsByWorktree[worktreeId] ?? []
+
   const clientGroupIdByLocalTabId = new Map(
     mirroredBrowserTabs.flatMap((entry) =>
       entry.clientGroupId ? [[entry.unifiedTab.id, entry.clientGroupId]] : []
     )
   )
+
   // Why: once this worktree has client groups, placement is client-owned — snapshots may only
   // append never-seen tabs, drop vanished ones, and honor explicit focus intent. Host order,
   // host actives, and host layout apply only on first adoption (no client groups yet).
@@ -54,26 +57,33 @@ export function prepareWebSessionTabsSnapshotGroups(
     if (!nextUnifiedTabs || (currentGroups.length === 0 && !options?.preserveLocalLayout)) {
       return null
     }
+
     // Why: an entity-identical replacement (provisional terminal → mirrored surface, local
     // editor → host editor tab) is a rename — its position and focus must carry over.
     const rekeyedTabIds = new Map<string, string>()
+
     for (const [provisionalTabId, hostTabId] of provisionalHandoffHostTabIds) {
       const mirroredId = toWebTerminalSurfaceTabId(hostTabId)
+
       if (mirroredId !== provisionalTabId) {
         rekeyedTabIds.set(provisionalTabId, mirroredId)
       }
     }
+
     for (const entry of mirroredEditorTabs) {
       const existing = existingTabIndex.getEditorUnifiedTab(entry.file.id, entry.hostTabId)
+
       if (existing && existing.id !== entry.unifiedTab.id) {
         rekeyedTabIds.set(existing.id, entry.unifiedTab.id)
       }
     }
+
     const knownGroupTabIds = new Set(
       currentGroups.flatMap((group) =>
         group.tabOrder.map((tabId) => rekeyedTabIds.get(tabId) ?? tabId)
       )
     )
+
     // Why: a pending record is this client's own create intent — authoritative even when the
     // provisional tab was provisionally adopted elsewhere or the target group record lags its leaf.
     // The entry's own clientGroupId comes first, so a group the user moved the row into after the
@@ -84,17 +94,21 @@ export function prepareWebSessionTabsSnapshotGroups(
         worktreeId,
         remotePageId: entry.remotePageId
       })
+
       if (!recordedGroupId) {
         return []
       }
+
       return [{ tabId: entry.unifiedTab.id, groupId: entry.clientGroupId ?? recordedGroupId }]
     })
+
     for (const parentTabId of new Set(terminalSurfaceTabs.map((tab) => tab.parentTabId))) {
       const recordedGroupId = peekWebSessionTerminalPlacementGroup({
         environmentId,
         worktreeId,
         hostTabId: parentTabId
       })
+
       if (recordedGroupId) {
         placementMoves.push({
           tabId: toWebTerminalSurfaceTabId(parentTabId),
@@ -102,12 +116,14 @@ export function prepareWebSessionTabsSnapshotGroups(
         })
       }
     }
+
     const adoptedTabs = mirroredUnifiedTabs
       .filter((tab) => !knownGroupTabIds.has(tab.id))
       .map((tab) => ({
         tabId: tab.id,
         groupId: clientGroupIdByLocalTabId.get(tab.id) ?? tab.groupId
       }))
+
     return reconcileClientOwnedTabPlacement({
       currentGroups,
       worktreeId,
@@ -123,13 +139,16 @@ export function prepareWebSessionTabsSnapshotGroups(
         isWebSessionBrowserPlacementGroupReserved({ worktreeId, groupId })
     })
   })()
+
   const nextGroups = (() => {
     if (clientOwnedPlacement) {
       return clientOwnedPlacement.groups
     }
+
     if (!nextUnifiedTabs || nextUnifiedTabs.length === 0) {
       return null
     }
+
     if (snapshot.tabGroups && snapshot.tabGroups.length > 0) {
       return buildMirroredHostGroups({
         currentGroups,
@@ -144,6 +163,7 @@ export function prepareWebSessionTabsSnapshotGroups(
         clientGroupIdByLocalTabId
       })
     }
+
     const strippedGroups = retainClientPlacedMirroredTabs({
       groups: currentGroups,
       mirroredUnifiedIds,
@@ -151,6 +171,7 @@ export function prepareWebSessionTabsSnapshotGroups(
       clientGroupIdByLocalTabId,
       nextActiveUnifiedTabId
     })
+
     const target = strippedGroups.find((group) => group.id === targetGroupId) ?? {
       id: targetGroupId,
       worktreeId,
@@ -158,18 +179,21 @@ export function prepareWebSessionTabsSnapshotGroups(
       tabOrder: [],
       recentTabIds: []
     }
+
     const targetOrder = [
       ...target.tabOrder.filter((tabId) => validUnifiedTabIds.has(tabId)),
       ...mirroredUnifiedTabs
         .filter((tab) => !clientGroupIdByLocalTabId.has(tab.id))
         .map((tab) => tab.id)
     ]
+
     const targetActiveTabId =
       nextActiveUnifiedTabId && targetOrder.includes(nextActiveUnifiedTabId)
         ? nextActiveUnifiedTabId
         : target.activeTabId && targetOrder.includes(target.activeTabId)
           ? target.activeTabId
           : (targetOrder[0] ?? null)
+
     const updatedTarget: TabGroup = {
       ...target,
       worktreeId,
@@ -179,9 +203,11 @@ export function prepareWebSessionTabsSnapshotGroups(
         ? pushRecentTabId(sanitizeRecentTabIds(target.recentTabIds, targetOrder), targetActiveTabId)
         : []
     }
+
     const merged = strippedGroups.some((group) => group.id === targetGroupId)
       ? strippedGroups.map((group) => (group.id === targetGroupId ? updatedTarget : group))
       : [...strippedGroups, updatedTarget]
+
     return merged.filter(
       (group) =>
         group.id === targetGroupId ||
@@ -195,35 +221,44 @@ export function prepareWebSessionTabsSnapshotGroups(
 
   const nextTabBarOrder = (() => {
     const current = state.tabBarOrderByWorktree[worktreeId] ?? []
+
     const validTabBarIds = new Set([
       ...retainedUnifiedTabs.map((tab) => tab.id),
       ...mirroredUnifiedTabs.map((tab) => tab.id)
     ])
+
     const hostTabBarOrder =
       snapshot.tabGroups?.flatMap((group) =>
         group.tabOrder
           .map((tabId) => hostToLocalTabId.get(tabId))
           .filter((tabId): tabId is string => tabId !== undefined && validTabBarIds.has(tabId))
       ) ?? []
+
     const next: string[] = []
     const seen = new Set<string>()
+
     const push = (tabId: string): void => {
       if (validTabBarIds.has(tabId) && !seen.has(tabId)) {
         seen.add(tabId)
         next.push(tabId)
       }
     }
+
     // Why: snapshots can arrive after the client staged local browser tabs, so preserve visible order and only append new host tabs.
     for (const tabId of current) {
       push(tabId)
     }
+
     const hostOrMirroredOrder =
       hostTabBarOrder.length > 0 ? hostTabBarOrder : mirroredUnifiedTabs.map((tab) => tab.id)
+
     for (const tabId of hostOrMirroredOrder) {
       push(tabId)
     }
+
     return next
   })()
+
   return {
     ...base,
     currentGroups,

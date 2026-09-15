@@ -7,6 +7,7 @@ describe('canonical worktree identity', () => {
     executionHostId: 'local',
     instanceId: '11111111-1111-4111-8111-111111111111'
   }
+
   const remote: WorktreeIdentityRef = {
     ...local,
     executionHostId: 'ssh:build-box'

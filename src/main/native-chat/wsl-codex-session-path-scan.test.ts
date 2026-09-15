@@ -10,6 +10,7 @@ import { findWslCodexSessionPath } from './wsl-codex-session-path-scan'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   return { promise: new Promise<T>((res) => (resolve = res)), resolve }
 }
 
@@ -29,17 +30,20 @@ describe('WSL Codex session path scans', () => {
         options: { filePredicate?: (path: string) => boolean }
       ) => {
         filePredicate = options.filePredicate
+
         return scan.promise
       }
     )
 
     const first = findWslCodexSessionPath('\\\\wsl.localhost\\Ubuntu\\sessions', 'first')
     const second = findWslCodexSessionPath('\\\\wsl.localhost\\Ubuntu\\sessions', 'second')
+
     const candidates = [
       '\\\\wsl.localhost\\Ubuntu\\sessions\\rollout-first.jsonl',
       '\\\\wsl.localhost\\Ubuntu\\sessions\\rollout-second.jsonl',
       '\\\\wsl.localhost\\Ubuntu\\sessions\\rollout-unrelated.jsonl'
     ]
+
     scan.resolve(candidates.filter((path) => filePredicate?.(path)))
 
     await expect(Promise.all([first, second])).resolves.toEqual([
@@ -72,6 +76,7 @@ describe('WSL Codex session path scans', () => {
     mocks.walk.mockImplementation(
       (_root: string, _agent: string, _issues: unknown[], options: { signal?: AbortSignal }) => {
         scanSignal = options.signal
+
         return new Promise<string[]>((_resolve, reject) => {
           options.signal?.addEventListener('abort', () => reject(options.signal?.reason), {
             once: true
@@ -80,11 +85,13 @@ describe('WSL Codex session path scans', () => {
       }
     )
     const controller = new AbortController()
+
     const scan = findWslCodexSessionPath(
       '\\\\wsl.localhost\\Ubuntu\\sessions',
       'closed',
       controller.signal
     )
+
     await vi.waitFor(() => expect(mocks.walk).toHaveBeenCalledOnce())
 
     controller.abort(new Error('closed'))
@@ -98,19 +105,23 @@ describe('WSL Codex session path scans', () => {
     const replacementPath = '\\\\wsl.localhost\\Ubuntu\\sessions\\rollout-replacement.jsonl'
     mocks.walk.mockReturnValueOnce(abandoned.promise).mockReturnValueOnce(replacementScan.promise)
     const controller = new AbortController()
+
     const first = findWslCodexSessionPath(
       '\\\\wsl.localhost\\Ubuntu\\sessions',
       'first',
       controller.signal
     )
+
     await vi.waitFor(() => expect(mocks.walk).toHaveBeenCalledOnce())
 
     controller.abort(new Error('closed'))
     await expect(first).rejects.toThrow('closed')
+
     const replacement = findWslCodexSessionPath(
       '\\\\wsl.localhost\\Ubuntu\\sessions',
       'replacement'
     )
+
     await vi.waitFor(() => expect(mocks.walk).toHaveBeenCalledTimes(2))
 
     abandoned.resolve([])
@@ -138,6 +149,7 @@ describe('WSL Codex session path scans', () => {
         options: { filePredicate?: (path: string) => boolean }
       ) => {
         filePredicate = options.filePredicate
+
         return scan.promise
       }
     )
@@ -147,20 +159,24 @@ describe('WSL Codex session path scans', () => {
     const initialThenCount = scanThen.mock.calls.length
     const duplicateController = new AbortController()
     const duplicate = findWslCodexSessionPath(root, 'keeper', duplicateController.signal)
+
     const uniqueCanceled = Array.from({ length: 256 }, (_, index) => {
       const controller = new AbortController()
+
       return {
         controller,
         path: `${root}\\rollout-canceled-${index}.jsonl`,
         promise: findWslCodexSessionPath(root, `canceled-${index}`, controller.signal)
       }
     })
+
     const canceledResults = Promise.allSettled([
       duplicate,
       ...uniqueCanceled.map(({ promise }) => promise)
     ])
 
     duplicateController.abort(new Error('duplicate closed'))
+
     for (const { controller } of uniqueCanceled) {
       controller.abort(new Error('joiner closed'))
     }

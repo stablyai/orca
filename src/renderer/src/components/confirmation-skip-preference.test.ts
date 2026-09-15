@@ -22,10 +22,12 @@ function deferred(): {
 } {
   let reject!: (error: Error) => void
   let resolve!: () => void
+
   const promise = new Promise<void>((onResolve, onReject) => {
     resolve = onResolve
     reject = onReject
   })
+
   return { promise, reject, resolve }
 }
 

@@ -3,6 +3,7 @@ import { OUTSTANDING_MAILBOX_INDEX_SQL } from './migrate-v41'
 
 export function hasColumn(this: OrchestrationDb, table: string, column: string): boolean {
   const rows = this.db.pragma(`table_info(${table})`) as { name: string }[]
+
   return rows.some((r) => r.name === column)
 }
 
@@ -10,19 +11,23 @@ export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): v
   if (this.hasColumn('deliveries', 'mailbox_handle')) {
     this.db.exec(OUTSTANDING_MAILBOX_INDEX_SQL)
   }
+
   const hasDeliveredAt = this.hasColumn('messages', 'delivered_at')
+
   if (hasDeliveredAt) {
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_messages_undelivered_inbox
         ON messages(to_handle, read, delivered_at, sequence)
     `)
   }
+
   if (this.hasColumn('messages', 'pointer_enter_pending')) {
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_messages_pending_pointer_enter
         ON messages(to_handle, sequence)
         WHERE read = 0 AND pointer_enter_pending > 0;
     `)
+
     if (this.hasColumn('messages', 'pointer_pty_id')) {
       // Working-title frames release one PTY's reservations, including already-read rows.
       this.db.exec(`
@@ -39,6 +44,7 @@ export function createMailboxDeliveryIndexesIfPossible(this: OrchestrationDb): v
   ) {
     return
   }
+
   this.db.exec(`
     CREATE INDEX IF NOT EXISTS idx_messages_undelivered_direct_run
       ON messages(run_id, to_handle, sequence)
@@ -61,6 +67,7 @@ export function messagesTypeCheckAllowsHeartbeat(this: OrchestrationDb): boolean
   const row = this.db
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'messages'")
     .get() as { sql: string } | undefined
+
   return !!row && row.sql.includes("'heartbeat'")
 }
 
@@ -68,6 +75,7 @@ export function messagesTypeCheckAllowsQuestion(this: OrchestrationDb): boolean 
   const row = this.db
     .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'messages'")
     .get() as { sql: string } | undefined
+
   return !!row && row.sql.includes("'question'")
 }
 

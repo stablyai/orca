@@ -26,6 +26,7 @@ const contentState = vi.hoisted(() => ({
 
 vi.mock('./markdown-rich-mode', async (importActual) => {
   const actual = await importActual<typeof MarkdownRichModeModule>()
+
   return {
     ...actual,
     getMarkdownRichModeEligibilityDecision: (params: {
@@ -33,6 +34,7 @@ vi.mock('./markdown-rich-mode', async (importActual) => {
       sizeOverridden: boolean
     }) => {
       probe.eligibility(params.content)
+
       return actual.getMarkdownRichModeEligibilityDecision(params)
     }
   }
@@ -40,10 +42,12 @@ vi.mock('./markdown-rich-mode', async (importActual) => {
 
 vi.mock('./markdown-round-trip', async (importActual) => {
   const actual = await importActual<typeof MarkdownRoundTripModule>()
+
   return {
     ...actual,
     getRichMarkdownRoundTripOutput: (content: string) => {
       probe.roundTrip(content)
+
       return actual.getRichMarkdownRoundTripOutput(content)
     }
   }
@@ -53,6 +57,7 @@ vi.mock('./EditorPanelShell', () => ({
   EditorPanelShell: (props: ShellProps) => {
     probe.shellRender()
     probe.lastShellProps = props
+
     // Why: `richModeUnsupportedMessage` is exactly what EditorMarkdownFileSurface
     // renders as the rich-mode fallback banner, so rendering it here asserts on
     // the banner text without mounting the whole editor surface.
@@ -79,6 +84,7 @@ import EditorPanel from './EditorPanel'
 import { resetMarkdownRichModeEligibilityCache } from './markdown-rich-mode-eligibility-cache'
 
 const WORKTREE_ID = 'wt-memo'
+
 const FILE_PATH = '/repo/notes.md'
 
 // Why: HTML in the body is the branch that reaches the TipTap round trip, and
@@ -122,7 +128,9 @@ function makeOpenFile(): OpenFile {
 }
 
 const initialAppState = useAppStore.getInitialState()
+
 let container: HTMLDivElement
+
 let root: Root
 
 async function flushEffects(): Promise<void> {
@@ -202,8 +210,10 @@ describe('EditorPanel markdown classification memoization', () => {
     await flushEffects()
 
     const file = useAppStore.getState().openFiles[0]
+
     const change = (content: string): Promise<void> =>
       act(async () => probe.lastShellProps?.onContentChangeForFile(file, content))
+
     const isDirty = (): boolean | undefined =>
       useAppStore.getState().openFiles.find((entry) => entry.id === FILE_PATH)?.isDirty
 
@@ -252,6 +262,7 @@ describe('EditorPanel markdown classification memoization', () => {
     await act(async () => {
       await i18n.changeLanguage('ja')
     })
+
     try {
       // An ordinary idle re-render, the same shape as a git-status poll tick.
       await act(async () => {

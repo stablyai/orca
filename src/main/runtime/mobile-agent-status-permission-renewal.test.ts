@@ -13,6 +13,7 @@ import { AGENT_STATUS_STALE_AFTER_MS, type AgentStatusEntry } from '../../shared
 // past a hook that is still current, while lastAgentStatusRichInvalidatedAtEpochMs (which
 // moves only on a class change) stays at the settle.
 const SETTLE_AFTER_HOOK_MS = -39
+
 const TRAILING_TITLE_AFTER_HOOK_MS = 123
 
 // Private by design — the projection has no public entry point, and testing it through a
@@ -25,8 +26,10 @@ type TitleRenewal = (
 
 function renewFromPtyTitle(): TitleRenewal {
   const runtime = new OrcaRuntimeService()
+
   const renew = (runtime as unknown as { renewMobileAgentStatusFromPtyTitle: TitleRenewal })
     .renewMobileAgentStatusFromPtyTitle
+
   return (status, pty, options) => renew.call(runtime, status, pty, options ?? {})
 }
 
@@ -65,9 +68,11 @@ describe('mobile/paired projection for a pane pending a human answer', () => {
     'keeps a fresh `%s` instead of publishing a title-derived done',
     (state) => {
       const hookAt = Date.now()
+
       const out = renewFromPtyTitle()(claudeStatus(state, hookAt), parkedOnPromptPty(hookAt), {
         preserveQuestionUnderShellTitle: true
       })
+
       expect(out?.state).toBe(state)
     }
   )
@@ -76,9 +81,11 @@ describe('mobile/paired projection for a pane pending a human answer', () => {
   // would hold the card open forever instead of decaying like any other abandoned row.
   it('still lets the title retire a `waiting` older than the stale boundary', () => {
     const hookAt = Date.now() - AGENT_STATUS_STALE_AFTER_MS - 1
+
     const out = renewFromPtyTitle()(claudeStatus('waiting', hookAt), parkedOnPromptPty(hookAt), {
       preserveQuestionUnderShellTitle: true
     })
+
     expect(out?.state).toBe('done')
   })
 
@@ -86,15 +93,18 @@ describe('mobile/paired projection for a pane pending a human answer', () => {
   // title renewal wholesale — an idle title must still retire a stale spinner (#1437).
   it('still lets an idle title retire a fresh `working`', () => {
     const hookAt = Date.now()
+
     const out = renewFromPtyTitle()(claudeStatus('working', hookAt), parkedOnPromptPty(hookAt), {
       preserveQuestionUnderShellTitle: true
     })
+
     expect(out?.state).toBe('done')
   })
 
   it('does not let replay delivery time make old working evidence outrank a newer title', () => {
     const hookAt = Date.now() - 1_000
     const replayedAt = Date.now()
+
     const out = renewFromPtyTitle()(
       { ...claudeStatus('working', replayedAt), evidenceObservedAt: hookAt },
       parkedOnPromptPty(hookAt),
@@ -109,14 +119,17 @@ describe('mobile/paired projection for a pane pending a human answer', () => {
   // finished turn's question card would linger into the next working interval (#11761).
   it('still lets a working title retire a fresh `waiting`', () => {
     const hookAt = Date.now()
+
     const workingTitlePty = {
       ...(parkedOnPromptPty(hookAt) as Record<string, unknown>),
       lastAgentStatus: 'working',
       lastOscTitle: '⠋ Claude'
     }
+
     const out = renewFromPtyTitle()(claudeStatus('waiting', hookAt), workingTitlePty, {
       preserveQuestionUnderShellTitle: true
     })
+
     expect(out?.state).toBe('working')
   })
 })

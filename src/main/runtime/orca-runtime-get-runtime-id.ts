@@ -77,18 +77,22 @@ export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersiste
     includeConfiguredHosts = true
   ): Set<ExecutionHostId> {
     const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
+
     for (const hostId of this.store?.getWorkspaceSessionHostIds?.() ?? []) {
       hostIds.add(hostId)
     }
+
     for (const hostId of additionalHostIds) {
       if (!/%|\s/.test(hostId)) {
         hostIds.add(hostId)
       }
     }
+
     if (includeConfiguredHosts) {
       for (const repo of this.store?.getRepos?.() ?? []) {
         hostIds.add(getRepoExecutionHostId(repo))
       }
+
       for (const folder of this.store?.getFolderWorkspaces?.() ?? []) {
         if (folder.executionHostId) {
           hostIds.add(folder.executionHostId)
@@ -97,6 +101,7 @@ export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersiste
         }
       }
     }
+
     return hostIds
   }
 
@@ -110,12 +115,15 @@ export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersiste
       queriedHostIds,
       targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID
     )
+
     let targetHost: ExecutionHostId | null = null
+
     for (const worktree of worktrees) {
       if (worktree.id === targetWorktreeId && worktree.hostId) {
         targetHost = worktree.hostId
       }
     }
+
     for (const worktree of worktrees) {
       if (
         worktree.hostId &&
@@ -125,16 +133,20 @@ export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersiste
         known.add(worktree.hostId)
       }
     }
+
     for (const terminal of terminals) {
       if (terminal.executionHostId) {
         known.add(terminal.executionHostId)
       }
     }
+
     const scoped = targetWorktreeId
       ? (targetHost ?? this.tryGetWorkspaceSessionHostIdForWorktree(targetWorktreeId))
       : null
+
     if (scoped) {
       known.add(scoped)
+
       if (parseExecutionHostId(scoped)?.kind === 'runtime') {
         for (const folder of this.store?.getFolderWorkspaces?.() ?? []) {
           if (
@@ -147,11 +159,14 @@ export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersiste
         }
       }
     }
+
     if (targetWorktreeId?.startsWith('folder:')) {
       const folderId = targetWorktreeId.slice('folder:'.length)
+
       const folder = this.store
         ?.getFolderWorkspaces?.()
         .find((candidate) => candidate.id === folderId)
+
       if (
         folder?.executionHostId &&
         parseExecutionHostId(folder.executionHostId)?.kind === 'runtime' &&
@@ -160,12 +175,15 @@ export class OrcaRuntimeWithGetRuntimeId extends OrcaRuntimeWithHasExactPersiste
         known.delete(toSshExecutionHostId(folder.connectionId))
       }
     }
+
     const candidates = targetWorktreeId ? (scoped ? [scoped] : []) : [...known]
+
     const covered = new Set(
       candidates.filter(
         (id) => queriedHostIds.has(id) && parseExecutionHostId(id)?.kind !== 'runtime'
       )
     )
+
     return {
       hostIds: [...covered].sort(),
       omittedHostIds: [...known].filter((id) => !covered.has(id)).sort()

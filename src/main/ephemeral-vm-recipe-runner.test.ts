@@ -25,6 +25,7 @@ afterEach(() => {
 function makeRepo(): string {
   const root = mkdtempSync(join(tmpdir(), 'orca-vm-recipe-runner-'))
   tmpRoots.push(root)
+
   return root
 }
 
@@ -105,6 +106,7 @@ describe('runEphemeralVmRecipeStart', () => {
     })
 
     expect(result.ok).toBe(true)
+
     if (result.ok) {
       expect(result.context.recipeId).toBe('cloud-sandbox')
       expect(result.context.instanceId).toMatch(/^orca-/)
@@ -157,6 +159,7 @@ describe('runEphemeralVmRecipeStart', () => {
         '}))'
       ].join('\n')
     )
+
     const recipe = {
       id: 'cloud-sandbox',
       name: 'Cloud Sandbox',
@@ -207,12 +210,14 @@ describe('runEphemeralVmRecipeStart', () => {
 describe('runEphemeralVmRecipeCleanup', () => {
   it('builds a copyable cleanup payload and command', () => {
     const repoPath = makeRepo()
+
     const recipe: OrcaVmRecipe = {
       id: 'cloud-sandbox',
       name: 'Cloud Sandbox',
       create: 'unused',
       destroy: './scripts/orca-vm/destroy.sh'
     }
+
     const payload = buildEphemeralVmRecipeCleanupPayload({
       recipe,
       context: {
@@ -265,6 +270,7 @@ describe('runEphemeralVmRecipeCleanup', () => {
         '})'
       ].join('\n')
     )
+
     const recipe: OrcaVmRecipe = {
       id: 'cloud-sandbox',
       name: 'Cloud Sandbox',
@@ -291,6 +297,7 @@ describe('runEphemeralVmRecipeCleanup', () => {
     if (!result.ok) {
       throw new Error(JSON.stringify(result))
     }
+
     expect(result.skipped).toBe(false)
     expect(JSON.parse(result.stdout)).toEqual({
       mode: 'destroy',
@@ -420,6 +427,7 @@ describe('runEphemeralVmRecipeSuspend and runEphemeralVmRecipeResume', () => {
 
     expect(result.ok).toBe(true)
     expect(result.skipped).toBe(false)
+
     if (result.ok && !result.skipped) {
       expect(result.result).toMatchObject({
         pairingCode: nextPairingCode,

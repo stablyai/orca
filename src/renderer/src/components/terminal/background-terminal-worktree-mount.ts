@@ -5,22 +5,29 @@ import {
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 
 const pendingMounts = new Map<string, BackgroundMountTerminalWorktreeDetail>()
+
 const requestListeners = new Set<() => void>()
+
 let hasRequestedMount = false
 
 function mergePendingMount(detail: BackgroundMountTerminalWorktreeDetail): void {
   const existing = pendingMounts.get(detail.worktreeId)
+
   if (!existing) {
     pendingMounts.set(detail.worktreeId, {
       worktreeId: detail.worktreeId,
       ...(detail.tabIds !== undefined ? { tabIds: [...new Set(detail.tabIds)] } : {})
     })
+
     return
   }
+
   if (existing.tabIds === undefined || detail.tabIds === undefined) {
     pendingMounts.set(detail.worktreeId, { worktreeId: detail.worktreeId })
+
     return
   }
+
   pendingMounts.set(detail.worktreeId, {
     worktreeId: detail.worktreeId,
     tabIds: [...new Set([...existing.tabIds, ...detail.tabIds])]
@@ -38,13 +45,17 @@ export function requestBackgroundTerminalWorktreeMount(
   if (!detail.worktreeId) {
     return
   }
+
   mergePendingMount(detail)
+
   if (!hasRequestedMount) {
     hasRequestedMount = true
+
     for (const listener of requestListeners) {
       listener()
     }
   }
+
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
       new CustomEvent<BackgroundMountTerminalWorktreeDetail>(
@@ -61,19 +72,23 @@ export function takePendingBackgroundTerminalWorktreeMount(
   if (!worktreeId) {
     return null
   }
+
   const pending = pendingMounts.get(worktreeId) ?? null
   pendingMounts.delete(worktreeId)
+
   return pending
 }
 
 export function takeAllPendingBackgroundTerminalWorktreeMounts(): BackgroundMountTerminalWorktreeDetail[] {
   const pending = [...pendingMounts.values()]
   pendingMounts.clear()
+
   return pending
 }
 
 export function subscribeBackgroundTerminalWorktreeMountRequests(listener: () => void): () => void {
   requestListeners.add(listener)
+
   return () => requestListeners.delete(listener)
 }
 
@@ -89,8 +104,10 @@ export function addBackgroundMountedTerminalWorktree(
   if (!worktreeId || mountedWorktreeIds.has(worktreeId)) {
     return false
   }
+
   mountedWorktreeIds.add(worktreeId)
   onAdded()
+
   return true
 }
 
@@ -109,20 +126,26 @@ export function applyBackgroundMountTabRestriction(
   if (!worktreeId) {
     return
   }
+
   const existing = restrictions.get(worktreeId)
+
   // Why: a worktree mounted without a restriction is fully mounted (the user
   // visited it, or a legacy whole-worktree mount ran); narrowing it
   // retroactively would unmount live panes.
   if (mountedWorktreeIds.has(worktreeId) && !existing) {
     return
   }
+
   if (!tabIds) {
     restrictions.delete(worktreeId)
+
     return
   }
+
   if (existing && tabIds.every((tabId) => existing.has(tabId))) {
     return
   }
+
   restrictions.set(worktreeId, new Set([...(existing ?? []), ...tabIds]))
 }
 
@@ -165,9 +188,11 @@ export function canDeferColdActivationTabsForHost(args: {
   pairedRuntimeParkingEnvironmentIds?: ReadonlySet<string>
 }): boolean {
   const host = parseExecutionHostId(args.executionHostId)
+
   if (host?.kind === 'local') {
     return true
   }
+
   // Why: remote ownership must match the exact host advertising bounded
   // snapshots; stale runtime identities stay eager instead of losing output.
   return (
@@ -183,14 +208,19 @@ function replaceActivationDeferredMountTabs(
   allTabIds: readonly string[]
 ): void {
   const next = collectDeferredMountTabIds(restrictedTabIds, allTabIds)
+
   if (next.size === 0) {
     deferredMountTabIdsByWorktree.delete(worktreeId)
+
     return
   }
+
   const current = deferredMountTabIdsByWorktree.get(worktreeId)
+
   if (current?.size === next.size && Array.from(next).every((tabId) => current.has(tabId))) {
     return
   }
+
   deferredMountTabIdsByWorktree.set(worktreeId, next)
 }
 
@@ -221,8 +251,10 @@ export function planColdActivationTabDeferral(opts: {
     isTabDeferrable,
     immediateTabIds
   } = opts
+
   const previouslyAllowed = restrictions.get(worktreeId)
   const initial = new Set<string>()
+
   for (const tabId of allTabIds) {
     // Why live/previously-allowed tabs stay in: narrowing would unmount
     // panes that are already up (or background mounts still registering).
@@ -235,14 +267,19 @@ export function planColdActivationTabDeferral(opts: {
       initial.add(tabId)
     }
   }
+
   const deferredCount = allTabIds.length - initial.size
+
   if (deferredCount <= COLD_ACTIVATION_TAB_DEFER_THRESHOLD) {
     restrictions.delete(worktreeId)
     deferredMountTabIdsByWorktree.delete(worktreeId)
+
     return false
   }
+
   restrictions.set(worktreeId, initial)
   replaceActivationDeferredMountTabs(deferredMountTabIdsByWorktree, worktreeId, initial, allTabIds)
+
   return true
 }
 
@@ -261,32 +298,43 @@ export function revealActivationDeferredTabs(opts: {
 }): void {
   const { restrictions, deferredMountTabIdsByWorktree, worktreeId, allTabIds, immediateTabIds } =
     opts
+
   // Why: targeted background mounts share the allowed-tab restriction map,
   // but only activation deferral may eagerly fan out parked watcher coverage.
   if (!deferredMountTabIdsByWorktree.has(worktreeId)) {
     return
   }
+
   const existing = restrictions.get(worktreeId)
+
   if (!existing) {
     deferredMountTabIdsByWorktree.delete(worktreeId)
+
     return
   }
+
   let grew = false
+
   for (const tabId of immediateTabIds) {
     if (!existing.has(tabId)) {
       grew = true
       break
     }
   }
+
   const next = grew ? new Set([...existing, ...immediateTabIds]) : existing
+
   if (allTabIds.length > 0 && allTabIds.every((tabId) => next.has(tabId))) {
     restrictions.delete(worktreeId)
     deferredMountTabIdsByWorktree.delete(worktreeId)
+
     return
   }
+
   if (grew) {
     restrictions.set(worktreeId, next)
   }
+
   replaceActivationDeferredMountTabs(deferredMountTabIdsByWorktree, worktreeId, next, allTabIds)
 }
 
@@ -297,14 +345,17 @@ export function collectDeferredMountTabIds(
   tabIds: readonly string[]
 ): Set<string> {
   const deferred = new Set<string>()
+
   if (restrictedTabIds === null) {
     return deferred
   }
+
   for (const tabId of tabIds) {
     if (!restrictedTabIds.has(tabId)) {
       deferred.add(tabId)
     }
   }
+
   return deferred
 }
 
@@ -319,16 +370,21 @@ export function pruneClosedBackgroundMountTabs(
   deferredMountTabIdsByWorktree?: Map<string, ReadonlySet<string>>
 ): boolean {
   let changed = false
+
   for (const [worktreeId, tabIds] of restrictions) {
     const liveTabIds = new Set((tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
     const retained = new Set([...tabIds].filter((tabId) => liveTabIds.has(tabId)))
     const deferred = deferredMountTabIdsByWorktree?.get(worktreeId)
+
     const retainedDeferred = deferred
       ? new Set([...deferred].filter((tabId) => liveTabIds.has(tabId)))
       : null
+
     const deferredChanged = deferred !== undefined && retainedDeferred?.size !== deferred.size
+
     if (deferredChanged) {
       changed = true
+
       if (retainedDeferred && retainedDeferred.size > 0) {
         deferredMountTabIdsByWorktree?.set(worktreeId, retainedDeferred)
       } else {
@@ -339,10 +395,13 @@ export function pruneClosedBackgroundMountTabs(
         continue
       }
     }
+
     if (retained.size === tabIds.size) {
       continue
     }
+
     changed = true
+
     if (retained.size === 0) {
       // Why: an activation restriction may legitimately have no allowed tabs
       // while live deferred tabs remain; keep the active surface mounted.
@@ -356,5 +415,6 @@ export function pruneClosedBackgroundMountTabs(
       restrictions.set(worktreeId, retained)
     }
   }
+
   return changed
 }

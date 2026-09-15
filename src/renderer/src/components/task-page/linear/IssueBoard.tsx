@@ -12,6 +12,7 @@ import {
 import { LINEAR_ITEM_LIMIT } from '../../task-page-source-context'
 import { TaskPageLinearIssueBoardColumns } from './IssueBoardColumns'
 import { TaskPageLinearIssueTable } from './IssueTable'
+
 export function TaskPageLinearIssueBoard({
   model
 }: {
@@ -31,6 +32,7 @@ export function TaskPageLinearIssueBoard({
     linearSearchActive,
     filteredLinearIssues
   } = model
+
   return (
     <div
       className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek"
@@ -91,11 +93,13 @@ export function TaskPageLinearIssueBoard({
                     'Try a different search query.'
                   )
                 }
+
                 return translate(
                   'auto.components.TaskPage.linearEmptyHasWorktree',
                   'No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.'
                 )
               }
+
               const emptyKind = resolveLinearIssueEmptyKind({
                 hasContextLabel: Boolean(activeLinearIssueContextLabel),
                 searchActive: linearSearchActive,
@@ -103,24 +107,28 @@ export function TaskPageLinearIssueBoard({
                 serverIssueCount: activeLinearIssues.length,
                 filteredIssueCount: filteredLinearIssues.length
               })
+
               if (emptyKind === 'context') {
                 return translate(
                   'auto.components.TaskPage.25ff84769a',
                   'No issues match this Linear context.'
                 )
               }
+
               if (emptyKind === 'search') {
                 return translate(
                   'auto.components.TaskPage.2bdefbcac3',
                   'Try a different search query.'
                 )
               }
+
               if (emptyKind === 'server-attribute-filter') {
                 return translate(
                   'auto.components.TaskPage.linearEmptyAttributeFilter',
                   'No issues match the selected filters. Clear a filter or try different criteria.'
                 )
               }
+
               return translate(
                 'auto.components.TaskPage.linearEmptyUnfilteredScope',
                 'No issues in this workspace scope. Try searching or adjusting teams.'

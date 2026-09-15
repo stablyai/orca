@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { assertRegisteredRepo } from './gitlab-repo-access'
 
 const repoPath = '/workspace/repo'
+
 const localRepo = {
   id: 'repo-1',
   path: repoPath,
@@ -9,6 +10,7 @@ const localRepo = {
   badgeColor: '#000',
   addedAt: 0
 }
+
 const sshRepo = { ...localRepo, displayName: 'ssh', connectionId: 'ssh-1' }
 
 function makeStore() {

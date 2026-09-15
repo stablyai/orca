@@ -17,9 +17,11 @@ export function capGitStatusEntries<T>(
   previous: { didHitLimit?: boolean; statusLength?: number } = {}
 ): { entries: T[]; didHitLimit?: true; statusLength?: number } {
   const exceededLimit = limit > 0 && entries.length > limit
+
   if (!exceededLimit && previous.didHitLimit !== true) {
     return { entries }
   }
+
   return {
     entries: exceededLimit ? entries.slice(0, limit) : entries,
     didHitLimit: true,

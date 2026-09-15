@@ -103,11 +103,14 @@ describe('structured agent-session owner probe', () => {
 
   it('reads the process table once for many local owners', async () => {
     const secondOwner = { ...OWNER, pid: 5252, spawnToken: 'token-2' }
+
     const probeMany = vi.fn(async () => [
       { outcome: 'identity-matched' as const, matchedOn: ['process-start-time' as const] },
       { outcome: 'pid-absent' as const }
     ])
+
     const probeOne = vi.fn(async () => ({ outcome: 'indeterminate' as const, reason: 'unused' }))
+
     const records = [
       record(OWNER),
       { ...record(secondOwner), sessionId: 'session-2' }
@@ -131,6 +134,7 @@ describe('structured agent-session owner probe', () => {
 
   it('refuses to probe an owner on another host, whose pid means nothing here', async () => {
     const probe = deadProbe()
+
     const result = await createStructuredAgentSessionOwnerProbe(
       HOST_ID,
       probe
@@ -142,6 +146,7 @@ describe('structured agent-session owner probe', () => {
 
   it('leaves a reservation whose spawn token is still live on this host latched', async () => {
     const probe = deadProbe()
+
     const result = await createStructuredAgentSessionOwnerProbe(HOST_ID, probe, async () => [9001])(
       record(null, { claimStatus: 'reserved', reservedSpawnToken: 'token-1' })
     )
@@ -194,6 +199,7 @@ describe('structured agent-session owner probe', () => {
 
   it('releases only a reservation carrying durable pre-spawn proof', async () => {
     const probe = deadProbe()
+
     const result = await createStructuredAgentSessionOwnerProbe(
       HOST_ID,
       probe
@@ -209,19 +215,23 @@ describe('structured agent-session runtime install', () => {
 
   afterEach(async () => {
     await stopStructuredAgentSessionRuntime()
+
     if (stateDirectory) {
       await rm(stateDirectory, { recursive: true, force: true })
       stateDirectory = null
     }
+
     vi.restoreAllMocks()
   })
 
   it('starts orphan reaping and reports failures without failing installation', async () => {
     stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
     const failure = new Error('scan failed')
+
     const reapOrphanChildren = vi.fn(async () => {
       throw failure
     })
+
     const onError = vi.fn()
 
     await expect(
@@ -276,14 +286,17 @@ describe('structured agent-session runtime install', () => {
   it('does not infer Windows process identity support from an injected reader', async () => {
     stateDirectory = await mkdtemp(join(tmpdir(), 'orca-structured-runtime-'))
     const originalPlatform = process.platform
+
     const location: AgentSessionExecutionLocation = {
       executionHostId: 'local',
       wslDistro: null,
       workspaceId: 'workspace-1',
       workspaceKind: 'folder'
     }
+
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     __setWindowsProcessTreeLoaderForTests(() => null)
+
     try {
       const host = await ensureStructuredAgentSessionHost({
         stateDirectory,
@@ -315,6 +328,7 @@ describe('a teardown that fails is retried by the next stop', () => {
     agent: 'codex',
     providerHandle: { kind: 'codex', threadId: 'thread-1' }
   }
+
   const journals = createTrackedJournalOpener()
   let directory: string | null = null
 
@@ -322,6 +336,7 @@ describe('a teardown that fails is retried by the next stop', () => {
     await agentSessionJournalCloseRetries.retryAll()
     await journals.closeAll()
     await stopStructuredAgentSessionRuntime().catch(() => undefined)
+
     if (directory) {
       await rm(directory, { recursive: true, force: true })
       directory = null
@@ -343,20 +358,24 @@ describe('a teardown that fails is retried by the next stop', () => {
     const journalDir = join(directory, 'stubborn-journal')
     const real = await journals.open({ identity: JOURNAL_IDENTITY, journalDir })
     let closeFailures = 2
+
     const flaky = new Proxy(real, {
       get(target, property, receiver) {
         if (property !== 'close') {
           return Reflect.get(target, property, receiver)
         }
+
         return async () => {
           if (closeFailures > 0) {
             closeFailures -= 1
             throw new Error('close rejected')
           }
+
           await target.close()
         }
       }
     }) as AgentSessionJournal
+
     await agentSessionJournalCloseRetries.closeOrRetain(flaky)
 
     // The host's teardown runs the registry retry, so this stop surfaces it.

@@ -20,6 +20,7 @@ function referenceResultBytes(result: GitDiffResult): number {
 function sideOfJsonBytes(unit: string, jsonBytes: number): string {
   const unitCost = Buffer.byteLength(JSON.stringify(unit), 'utf8') - 2
   const count = Math.floor((jsonBytes - 2) / unitCost)
+
   return unit.repeat(count) + 'x'.repeat(jsonBytes - 2 - count * unitCost)
 }
 
@@ -36,6 +37,7 @@ function textDiff(modifiedContent: string): GitDiffResult {
 function textDiffOfJsonBytes(unit: string, jsonBytes: number): GitDiffResult {
   const empty = textDiff('')
   const fixedBytes = referenceResultBytes(empty) - 2
+
   return textDiff(sideOfJsonBytes(unit, jsonBytes - fixedBytes))
 }
 
@@ -49,8 +51,10 @@ function binaryDiffOfJsonBytes(unit: string, jsonBytes: number): GitDiffResult {
     originalIsBinary: true,
     modifiedIsBinary: true
   }
+
   const contentBytes = jsonBytes - (referenceResultBytes(empty) - 4)
   const firstBytes = Math.floor(contentBytes / 2)
+
   return {
     ...empty,
     originalContent: sideOfJsonBytes(unit, firstBytes),
@@ -64,6 +68,7 @@ function budgetError(result: GitDiffResult): { code?: string; data?: unknown } {
   } catch (error) {
     return error as { code?: string; data?: unknown }
   }
+
   throw new Error('expected the transport budget assertion to throw')
 }
 

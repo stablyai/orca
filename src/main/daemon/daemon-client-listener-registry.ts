@@ -5,8 +5,10 @@ export class DaemonClientListeners<T> {
 
   add(listener: T): () => void {
     this.listeners.push(listener)
+
     return () => {
       const idx = this.listeners.indexOf(listener)
+
       if (idx !== -1) {
         this.listeners.splice(idx, 1)
       }

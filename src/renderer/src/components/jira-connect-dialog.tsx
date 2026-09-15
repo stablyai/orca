@@ -27,7 +27,9 @@ type JiraConnectDialogProps = {
 }
 
 type ConnectState = 'idle' | 'connecting' | 'error'
+
 type JiraInstanceType = 'cloud' | 'server'
+
 // Self-hosted Jira accepts either a personal access token (Bearer) or classic
 // username + password (Basic); older Server/DC instances predate PATs.
 type ServerAuthMethod = 'pat' | 'basic'
@@ -65,6 +67,7 @@ export function JiraConnectDialog({
     if (!open) {
       return
     }
+
     setInstanceType('cloud')
     setServerAuthMethod('pat')
     setSiteUrl('')
@@ -80,11 +83,13 @@ export function JiraConnectDialog({
   // uses no identity, so the email field is hidden and left empty.
   const isServerBasic = isServer && serverAuthMethod === 'basic'
   const needsIdentity = !isServer || isServerBasic
+
   const canSubmit =
     Boolean(siteUrl.trim()) &&
     (!needsIdentity || Boolean(email.trim())) &&
     Boolean(apiToken.trim()) &&
     connectState !== 'connecting'
+
   const credentialStorageCopy = hasRemoteProviderRuntime(settings)
     ? 'Your token is sent to the selected remote runtime and stored there with runtime-supported encryption.'
     : 'Your token is stored locally and encrypted when local runtime storage supports it.'
@@ -116,6 +121,7 @@ export function JiraConnectDialog({
     const trimmedSite = siteUrl.trim()
     const trimmedEmail = email.trim()
     const trimmedToken = apiToken.trim()
+
     if (
       !trimmedSite ||
       (needsIdentity && !trimmedEmail) ||
@@ -124,8 +130,10 @@ export function JiraConnectDialog({
     ) {
       return
     }
+
     setConnectState('connecting')
     setConnectError(null)
+
     try {
       const result = await connectJira({
         siteUrl: trimmedSite,
@@ -135,9 +143,11 @@ export function JiraConnectDialog({
         apiToken: trimmedToken,
         authType: instanceType
       })
+
       if (!mountedRef.current) {
         return
       }
+
       if (result.ok) {
         setSiteUrl('')
         setEmail('')
@@ -147,8 +157,10 @@ export function JiraConnectDialog({
         setConnectState('idle')
         onOpenChange(false)
         onConnected?.()
+
         return
       }
+
       setConnectState('error')
       setConnectError(result.error)
     } catch (error) {
@@ -204,6 +216,7 @@ export function JiraConnectDialog({
                 if (!value || connectState === 'connecting') {
                   return
                 }
+
                 setInstanceType(value as JiraInstanceType)
                 clearCredentialsOnModeSwitch()
               }}
@@ -229,6 +242,7 @@ export function JiraConnectDialog({
                   if (!value || connectState === 'connecting') {
                     return
                   }
+
                   setServerAuthMethod(value as ServerAuthMethod)
                   clearCredentialsOnModeSwitch()
                 }}

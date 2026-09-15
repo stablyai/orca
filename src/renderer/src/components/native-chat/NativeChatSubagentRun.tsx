@@ -18,8 +18,10 @@ function formatSubagentTokens(tokens: number): string {
   if (tokens < 1_000) {
     return String(Math.round(tokens))
   }
+
   const scaled = tokens < 1_000_000 ? tokens / 1_000 : tokens / 1_000_000
   const suffix = tokens < 1_000_000 ? 'k' : 'M'
+
   return `${scaled.toFixed(1).replace(/\.0$/, '')}${suffix}`
 }
 
@@ -35,6 +37,7 @@ function subagentStateLabel(
   if (state === 'completed') {
     return translate('components.native-chat.subagents.state.completed', 'completed')
   }
+
   if (groupTotal <= 1) {
     switch (state) {
       case 'working':
@@ -49,6 +52,7 @@ function subagentStateLabel(
         return translate('components.native-chat.subagents.state.unverifiable', 'unverifiable')
     }
   }
+
   switch (state) {
     case 'working':
       return translate(
@@ -142,6 +146,7 @@ function SubagentElapsed({
 }): React.JSX.Element {
   const now = useNow(1_000, counting)
   const end = counting ? now : (settledAt ?? now)
+
   return <>{formatNativeChatDuration(Math.max(0, (end - startedAt) / 1000))}</>
 }
 
@@ -164,11 +169,13 @@ export function NativeChatSubagentRun({
   const [open, setOpen] = useState(false)
   const agents = block.agents
   const summary = useMemo(() => summarizeSubagentGroup(agents), [agents])
+
   if (summary.total === 0) {
     return null
   }
 
   const working = summary.working > 0
+
   const headline = working
     ? summary.total === 1
       ? translate('components.native-chat.subagents.startedOne', 'Kicked off 1 subagent')
@@ -180,16 +187,21 @@ export function NativeChatSubagentRun({
       : translate('components.native-chat.subagents.ranN', 'Ran {{value0}} subagents', {
           value0: summary.total
         })
+
   const verdictState: NativeChatSubagentState = working
     ? 'working'
     : (summary.settledState ?? 'idle')
+
   const verdict = working
     ? subagentStateLabel('working', summary.working, summary.total)
     : subagentStateLabel(verdictState, summary.settledCount, summary.total)
+
   // A child that already failed must not wait for its siblings to be readable.
   const alertState = working ? summary.adverseState : null
+
   const alert =
     alertState === null ? null : subagentStateLabel(alertState, summary.adverseCount, summary.total)
+
   // A child settled by the reopen reads `unverifiable` with no terminal stamp:
   // it stopped being observable at an unknown moment. Measuring to `now` would
   // report the time since the host died as how long the child ran, on a row that
@@ -200,6 +212,7 @@ export function NativeChatSubagentRun({
     (agent) =>
       normalizeSubagentState(agent.state) === 'unverifiable' && typeof agent.settledAt !== 'number'
   )
+
   const clockStartedAt =
     !runLengthUnknown && (working || summary.settledAt !== null) ? summary.startedAt : null
 
@@ -248,6 +261,7 @@ export function NativeChatSubagentRun({
         <ul className="mt-1 space-y-0.5">
           {agents.map((agent) => {
             const state = normalizeSubagentState(agent.state)
+
             return (
               <li key={agent.id} className="flex items-center gap-1.5 py-0.5">
                 <StatusDot state={state} pulsing={state === 'working'} />

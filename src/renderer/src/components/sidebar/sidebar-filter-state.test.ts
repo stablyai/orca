@@ -228,6 +228,7 @@ describe('computeClearFilterActions', () => {
         filterRepoIds: ['repo1']
       })
     )
+
     expect(actions.resetHideDefaultBranchWorkspace).toBe(false)
     expect(actions.resetShowSleepingWorkspaces).toBe(false)
     expect(actions.resetFilterRepoIds).toBe(true)

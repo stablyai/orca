@@ -33,20 +33,25 @@ export function classifyGitHubUnavailable(message: string): GitHubUnavailableKin
   if (!message) {
     return null
   }
+
   if (RATE_LIMITED_PATTERN.test(message)) {
     return 'rate_limited'
   }
+
   if (SERVER_ERROR_PATTERN.test(message)) {
     return 'server_error'
   }
+
   if (NETWORK_PATTERN.test(message)) {
     return 'network'
   }
+
   return null
 }
 
 /** True when the message indicates GitHub itself is unreachable/unavailable. */
 export function isGitHubUnavailableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '')
+
   return classifyGitHubUnavailable(message) !== null
 }

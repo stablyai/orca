@@ -23,15 +23,18 @@ export function useWebviewGuestFocus(
       isAttached: () => webviewRef.current !== null,
       focus: () => {
         const webview = webviewRef.current
+
         if (!webview) {
           return false
         }
+
         try {
           webview.focus()
         } catch {
           // Why: WebViewElement.focus() reads null internals once the guest is destroyed (STA-3448).
           return false
         }
+
         return document.activeElement === webview
       }
     }),
@@ -54,10 +57,13 @@ export function useElementGuestFocus(
       isAttached: () => (primaryRef.current ?? fallbackRef?.current ?? null) !== null,
       focus: () => {
         const element = primaryRef.current ?? fallbackRef?.current ?? null
+
         if (!element) {
           return false
         }
+
         element.focus()
+
         return document.activeElement === element
       }
     }),

@@ -15,9 +15,11 @@ const mocks = vi.hoisted(() => {
     tabsByWorktree: {} as Record<string, { id: string }[]>,
     ptyIdsByTabId: {} as Record<string, string[]>
   }
+
   const activateAndRevealWorktree = vi.fn()
   const activateAndRevealFolderWorkspace = vi.fn()
   const resumeWorkspace = vi.fn().mockResolvedValue(null)
+
   return {
     activateAndRevealFolderWorkspace,
     activateAndRevealWorktree,

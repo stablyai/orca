@@ -53,6 +53,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     onOpenSession,
     onReconnect
   } = input
+
   const listRef = useRef<FlatList<ReviewDiffLine> | null>(null)
   const loadGenerationRef = useRef(0)
   const seededInitialTargetRef = useRef(false)
@@ -75,24 +76,33 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     const generation = loadGenerationRef.current + 1
     loadGenerationRef.current = generation
     const isCurrent = () => generation === loadGenerationRef.current
+
     if (!worktreeId) {
       setScreenState({ kind: 'error', message: 'Missing worktree' })
+
       return
     }
+
     // Why (F10): a loaded review outlives a blip — the waiting state is for a screen with nothing
     // to show, and this branch (not the one below it) is the one a drop actually reaches.
     const keepReady = (fallback: ReviewScreenState) => (prev: ReviewScreenState) =>
       prev.kind === 'ready' ? prev : fallback
+
     if (!client || connState !== 'connected') {
       setScreenState(keepReady({ kind: 'error', message: 'Waiting for desktop...' }))
+
       return
     }
+
     setScreenState(keepReady({ kind: 'loading' }))
+
     try {
       const nextState = await loadMobileDiffReviewSnapshot(client, worktreeId)
+
       if (!isCurrent()) {
         return
       }
+
       setScreenState(nextState)
       setActionError(nextState.kind === 'ready' ? (nextState.branchError ?? null) : null)
     } catch (err) {
@@ -117,10 +127,12 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     if (screenState.kind !== 'ready') {
       return []
     }
+
     const branchEntries =
       screenState.branchCompare && canOpenMobileBranchCompareDiff(screenState.branchCompare.summary)
         ? screenState.branchCompare.entries
         : []
+
     return buildMobileDiffReviewQueue({
       worktreeId,
       statusEntries: screenState.status.entries,
@@ -134,10 +146,12 @@ export function useMobileDiffReviewController(input: ControllerInput) {
 
   const filteredQueue = useMemo(() => filterMobileDiffReviewQueue(queue, filter), [filter, queue])
   const currentItem = filteredQueue[currentIndex] ?? null
+
   const { reviewedCount, reviewedUnstagedCount } = useMemo(
     () => summarizeMobileDiffReviewQueue(queue),
     [queue]
   )
+
   const unsentComments =
     screenState.kind === 'ready' ? getUnsentMobileDiffComments(screenState.comments) : []
 
@@ -149,6 +163,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     if (seededInitialTargetRef.current || filteredQueue.length === 0) {
       return
     }
+
     seededInitialTargetRef.current = true
     // Why: review data loads asynchronously; seed the tapped file only after the
     // first real queue exists so the clamp effect cannot reset it back to zero.
@@ -158,8 +173,10 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   useEffect(() => {
     if (filteredQueue.length === 0) {
       setCurrentIndex(0)
+
       return
     }
+
     if (currentIndex >= filteredQueue.length) {
       setCurrentIndex(filteredQueue.length - 1)
     }
@@ -178,6 +195,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     if (!currentItem || screenState.kind !== 'ready') {
       return []
     }
+
     return screenState.comments.filter((comment) =>
       mobileDiffReviewCommentMatchesItem(comment, currentItem)
     )
@@ -200,21 +218,25 @@ export function useMobileDiffReviewController(input: ControllerInput) {
 
   const commentsByLine = useMemo(() => {
     const map = new Map<number, DiffComment[]>()
+
     for (const comment of commentsForCurrentItem) {
       const list = map.get(comment.lineNumber) ?? []
       list.push(comment)
       map.set(comment.lineNumber, list)
     }
+
     return map
   }, [commentsForCurrentItem])
 
   // Head branch + SHA for the PR sidebar come from git.status (the review snapshot),
   // not the branchCompare base ref. headOid is the branch-compare fallback for the SHA.
   const prSidebarBranch = screenState.kind === 'ready' ? (screenState.status.branch ?? null) : null
+
   const prSidebarHeadSha =
     screenState.kind === 'ready'
       ? (screenState.status.head ?? screenState.branchCompare?.summary.headOid ?? null)
       : null
+
   const prSidebar = useMobilePrSidebarController({
     client,
     connState,

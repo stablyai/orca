@@ -31,14 +31,18 @@ export function resolveClaudeManagedCredentialsLocation(
 ): ClaudeManagedCredentialsLocation | null {
   if (account.managedAuthRuntime === 'wsl') {
     const managedAuthPath = resolveOwnedWslClaudeManagedAuthPath(account)
+
     return managedAuthPath ? { kind: 'file', managedAuthPath } : null
   }
+
   const managedAuthPath = resolveOwnedClaudeManagedAuthPath(account.id, account.managedAuthPath, {
     adoptLegacyMarker: true
   })
+
   if (!managedAuthPath) {
     return null
   }
+
   return process.platform === 'darwin'
     ? { kind: 'keychain', accountId: account.id, managedAuthPath }
     : { kind: 'file', managedAuthPath }
@@ -71,19 +75,25 @@ function resolveOwnedWslClaudeManagedAuthPath(account: InactiveClaudeAccount): s
   if (process.platform !== 'win32') {
     return null
   }
+
   const wslInfo = parseWslUncPath(account.managedAuthPath)
+
   if (!wslInfo || (account.wslDistro && wslInfo.distro !== account.wslDistro)) {
     return null
   }
+
   const linuxPath = account.wslLinuxAuthPath ?? wslInfo.linuxPath
+
   if (
     !linuxPath.includes('/.local/share/orca/claude-accounts/') ||
     !linuxPath.endsWith(`/${account.id}/auth`)
   ) {
     return null
   }
+
   try {
     const markerPath = path.join(account.managedAuthPath, '.orca-managed-claude-auth')
+
     if (
       !existsSync(markerPath) ||
       lstatSync(markerPath).isSymbolicLink() ||
@@ -91,6 +101,7 @@ function resolveOwnedWslClaudeManagedAuthPath(account: InactiveClaudeAccount): s
     ) {
       return null
     }
+
     return account.managedAuthPath
   } catch {
     return null
@@ -105,7 +116,9 @@ export async function withClaudeManagedPreviewKeychainCredentials<T>(
   if (location.kind !== 'keychain') {
     return operation()
   }
+
   await writeActiveClaudeKeychainCredentials(credentialsJson, location.managedAuthPath)
+
   try {
     return await operation()
   } finally {
@@ -119,6 +132,7 @@ export async function readStagedClaudeManagedPreviewCredentials(
   if (location.kind !== 'keychain') {
     return null
   }
+
   try {
     return await readActiveClaudeKeychainCredentialsStrict(location.managedAuthPath)
   } catch {

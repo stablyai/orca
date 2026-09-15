@@ -14,7 +14,9 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { applyManagedHooks, CLAUDE_EVENTS } from './hook-settings'
 
 const PANE_KEY = makePaneKey('compact-registration', '11111111-1111-4111-8111-111111111111')
+
 const TURN_PROMPT_ID = '22222222-2222-4222-8222-222222222222'
+
 const COMPACT_PROMPT_ID = '33333333-3333-4333-8333-333333333333'
 
 const REGISTERED_EVENT_NAMES = new Set<string>(CLAUDE_EVENTS.map((event) => event.eventName))
@@ -29,10 +31,13 @@ function deliverIfRegistered(
   if (!REGISTERED_EVENT_NAMES.has(payload.hook_event_name as string)) {
     return null
   }
+
   const event = normalizeHookPayload(state, 'claude', { paneKey: PANE_KEY, payload }, 'production')
+
   if (event) {
     state.lastStatusByPaneKey.set(PANE_KEY, event)
   }
+
   return event
 }
 
@@ -55,6 +60,7 @@ function successfulManualCompact(state: HookListenerState) {
     })
   )
   deliverIfRegistered(state, hook('SessionStart', COMPACT_PROMPT_ID, { source: 'compact' }))
+
   return deliverIfRegistered(state, hook('PostCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
 }
 
@@ -72,6 +78,7 @@ function hydrateStuckRow(
   const subagents = options.withRestoredChild
     ? [{ id: 'child-1', state: 'working' as const, startedAt: 0, agentType: 'general' }]
     : undefined
+
   const hydrated = {
     paneKey: PANE_KEY,
     source: 'claude',
@@ -89,7 +96,9 @@ function hydrateStuckRow(
       ...(subagents ? { subagents } : {})
     }
   } as unknown as AgentHookEventPayload
+
   state.lastStatusByPaneKey.set(PANE_KEY, hydrated)
+
   if (subagents) {
     seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, subagents)
   }
@@ -109,6 +118,7 @@ describe('Claude compact hook registration', () => {
       { type: 'command', command: 'orca-claude-hook' },
       'claude-hook.sh'
     )
+
     const postCompact = written.hooks?.PostCompact ?? []
     expect(
       postCompact.some((definition) =>
@@ -136,6 +146,7 @@ describe('STA-2915: a manual compact clears the pane', () => {
   it('keeps the summarizer SubagentStop from being the thing that resolves the pane', () => {
     const state = createHookListenerState()
     startTurn(state)
+
     // The start-less SubagentStop re-emits the cached lead state; it can only republish `working`,
     // never clear it. Only PostCompact resolves the pane.
     const republished = deliverIfRegistered(
@@ -147,6 +158,7 @@ describe('STA-2915: a manual compact clears the pane', () => {
         session_crons: []
       })
     )
+
     expect(republished?.payload.state).toBe('working')
   })
 })
@@ -227,6 +239,7 @@ describe('STA-2915: the pane the ticket actually reports', () => {
     hydrateStuckRow(state, { withRestoredChild: true })
 
     deliverIfRegistered(state, hook('PreCompact', COMPACT_PROMPT_ID, { trigger: 'manual' }))
+
     // Why: assert the summarizer stays silent rather than assuming it. With a restored roster it
     // publishes nothing, which is what leaves the hydrated row in place for the completion — if
     // that ever changes, this test must fail loudly instead of quietly testing something else.
@@ -234,6 +247,7 @@ describe('STA-2915: the pane the ticket actually reports', () => {
       state,
       hook('SubagentStop', COMPACT_PROMPT_ID, { agent_id: 'a75b38b59774e1f31', agent_type: '' })
     )
+
     expect(summarizer).toBeNull()
     deliverIfRegistered(state, hook('SessionStart', COMPACT_PROMPT_ID, { source: 'compact' }))
 
@@ -293,6 +307,7 @@ describe('compact completion guards', () => {
   it('clears a stuck row restored from disk after a restart, despite a stale connection id', () => {
     const state = createHookListenerState()
     hydrateStuckRow(state)
+
     // Why: the completion must land while the HYDRATED row is still the cached owner, or the
     // restored-row branch is never the one under test. Deliver it alone — an intervening
     // summarizer would replace the row with a live one and the assertion would pass through the
@@ -386,6 +401,7 @@ describe('the consumed-compact record is torn down with its pane', () => {
     startTurn(state)
     expect(successfulManualCompact(state)?.payload.state).toBe('done')
     expect(state.claudeConsumedCompactPromptIdByPaneKey.get(PANE_KEY)).toBe(COMPACT_PROMPT_ID)
+
     return state
   }
 

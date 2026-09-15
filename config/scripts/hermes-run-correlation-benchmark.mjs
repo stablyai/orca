@@ -8,21 +8,27 @@ import { fileURLToPath } from 'node:url'
 import { build } from 'esbuild'
 
 const root = fileURLToPath(new URL('../..', import.meta.url))
+
 const fixture = await mkdtemp(join(tmpdir(), 'orca-hermes-correlation-'))
+
 const baselineDirectory = process.argv[2]
+
 const key = (seconds) =>
   new Date(Date.UTC(2026, 0, 1) + seconds * 1000)
     .toISOString()
     .replace(/[-:]/g, '')
     .replace('T', '_')
     .slice(0, 15)
+
 try {
   for (const host of ['native', 'relay']) {
     const entry =
       host === 'native'
         ? 'src/main/automations/hermes-cron-run-content.ts'
         : 'src/relay/hermes-run-correlation.ts'
+
     const readers = []
+
     for (const mode of baselineDirectory ? ['baseline', 'current'] : ['current']) {
       const bundle = join(fixture, `${host}-${mode}.cjs`)
       await build({
@@ -54,12 +60,16 @@ try {
       })
       readers.push({ mode, ...createRequire(import.meta.url)(bundle) })
     }
+
     if (readers.length === 2) {
       let seed = 92817
+
       const random = (max) => {
         seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+
         return seed % max
       }
+
       const pool = [
         null,
         '',
@@ -70,6 +80,7 @@ try {
         '20260103_000000',
         '20260101_240000'
       ]
+
       for (let trial = 0; trial < 200; trial++) {
         const sessions = Array.from({ length: random(70) }, (_, i) => ({
           kind: 'session',
@@ -79,6 +90,7 @@ try {
           run_key: pool[random(pool.length)],
           output_content: `session ${i}`
         }))
+
         const outputs = Array.from({ length: random(70) }, (_, i) => ({
           kind: 'output',
           id: `output-${i}`,
@@ -88,6 +100,7 @@ try {
           output_path: 'unused',
           output_content: `output ${i}`
         }))
+
         for (const method of [
           'mergeHermesOutputAndSessionRunRefs',
           'mergeHermesOutputAndSessionRuns'
@@ -98,8 +111,10 @@ try {
           )
         }
       }
+
       console.log(JSON.stringify({ host, randomizedParityCases: 400 }))
     }
+
     for (const runs of [100, 1000, 5000]) {
       const sessions = Array.from({ length: runs }, (_, i) => ({
         kind: 'session',
@@ -108,6 +123,7 @@ try {
         run_at: null,
         run_key: key(i * 3600)
       })).toReversed()
+
       const outputs = Array.from({ length: runs }, (_, i) => ({
         kind: 'output',
         id: `output-${i}`,
@@ -116,16 +132,20 @@ try {
         run_key: key(i * 3600 + 120),
         output_path: 'unused'
       }))
+
       let expected
+
       for (const reader of [...readers, ...readers.toReversed()]) {
         const start = performance.now()
         const result = reader.mergeHermesOutputAndSessionRunRefs(outputs, sessions)
         const durationMs = performance.now() - start
         assert.equal(result.length, runs)
         result.forEach((row, i) => assert.equal(row.session.id, `session-${i}`))
+
         if (expected) {
           assert.deepEqual(result, expected)
         }
+
         expected = result
         console.log(JSON.stringify({ host, mode: reader.mode, runs, durationMs }))
       }

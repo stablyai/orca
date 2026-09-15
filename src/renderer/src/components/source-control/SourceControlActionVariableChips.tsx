@@ -73,6 +73,7 @@ function SourceControlVariableDetails({
   }
 
   const info = SOURCE_CONTROL_ACTION_VARIABLE_INFO[variable]
+
   return (
     <div className="max-w-80 space-y-2 text-left leading-relaxed">
       <div className="space-y-0.5">
@@ -120,6 +121,7 @@ export function SourceControlActionVariableChips({
         const preview = hasVariablePreview(variablePreviews, variable)
           ? variablePreviews?.[variable]
           : undefined
+
         return (
           <HoverCard key={variable} openDelay={150} closeDelay={120}>
             <HoverCardTrigger asChild>

@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 
 const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx'
+
 const knobByFlag = {
   '--iterations': 'ORCA_AI_VAULT_BENCH_ITERATIONS',
   '--sessions': 'ORCA_AI_VAULT_BENCH_SESSIONS',
@@ -11,13 +12,18 @@ const knobByFlag = {
 }
 
 const env = { ...process.env, ORCA_AI_VAULT_TYPING_BENCH: '1' }
+
 const passthroughArgs = []
+
 const argv = process.argv.slice(2)
+
 for (let index = 0; index < argv.length; index += 1) {
   if (argv[index] === '--') {
     continue
   }
+
   const knob = knobByFlag[argv[index]]
+
   if (knob) {
     env[knob] = argv[++index]
   } else {
@@ -44,7 +50,9 @@ const child = spawn(
 child.on('exit', (code, signal) => {
   if (signal) {
     process.kill(process.pid, signal)
+
     return
   }
+
   process.exit(code ?? 1)
 })

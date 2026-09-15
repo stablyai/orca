@@ -59,6 +59,7 @@ describe('notebook cell execution lifecycle', () => {
     const content = notebookContent()
     const onSave = vi.fn().mockResolvedValue(true)
     const applyContent = vi.fn()
+
     const { result } = renderHook(() =>
       useIpynbCellExecution({
         filePath: '/repo/notebook.ipynb',
@@ -95,6 +96,7 @@ describe('notebook cell execution lifecycle', () => {
   it('drops stale trust prompts across file moves and skips execution after a failed save', async () => {
     const content = notebookContent()
     const onSave = vi.fn().mockResolvedValue(false)
+
     const hook = renderHook(
       ({ filePath }: { filePath: string }) =>
         useIpynbCellExecution({

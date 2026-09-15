@@ -12,20 +12,27 @@ import {
 } from './relay-bench-invocation.mjs'
 
 const USAGE = `${LIVE_ENV_VAR}=1 node region-probe-replay.mjs --director=<origin> [--rounds=N]`
+
 const SAMPLES = 3
+
 const PROBE_TIMEOUT_MS = 1500
+
 const CATALOG_TIMEOUT_MS = 10_000
+
 const MAX_ROUNDS = 1000
 
 const probe = async (origin) => {
   const started = performance.now()
+
   try {
     const res = await fetch(`${origin}/health`, {
       cache: 'no-store',
       redirect: 'error',
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
     })
+
     await res.arrayBuffer()
+
     return res.ok ? performance.now() - started : null
   } catch {
     return null
@@ -38,33 +45,43 @@ const probe = async (origin) => {
 export async function vetProbeOrigins(entry, deps) {
   const allowed = []
   const refused = []
+
   for (const origin of entry.probeOrigins ?? []) {
     const verdict = classifyPublicHttpsOrigin(origin)
+
     if (!verdict.ok) {
       refused.push(verdict.reason)
       continue
     }
+
     const resolved = await resolvesToPublicAddress(verdict.origin, deps)
+
     if (!resolved.ok) {
       refused.push(resolved.reason)
       continue
     }
+
     allowed.push(verdict.origin)
   }
+
   return { allowed, refused }
 }
 
 export async function sampleRegion(entry, deps) {
   const { allowed, refused } = await vetProbeOrigins(entry, deps)
   const base = { region: entry.region, samples: [], median: null, spread: null }
+
   if (!allowed.length) {
     return { ...base, refusedOrigins: refused, verdict: 'REFUSED (no allowed probe origin)' }
   }
+
   const samples = []
+
   for (let index = 0; index < SAMPLES; index++) {
     const latencies = (await Promise.all(allowed.map(deps?.probe ?? probe))).filter(
       (value) => value !== null
     )
+
     // Math.min of nothing is Infinity, which would spread into NaN and read as a passing region.
     if (!latencies.length) {
       return {
@@ -73,12 +90,15 @@ export async function sampleRegion(entry, deps) {
         verdict: 'UNREACHABLE (every probe failed)'
       }
     }
+
     samples.push(Math.min(...latencies))
   }
+
   const raw = samples.map((value) => Math.round(value))
   samples.sort((a, b) => a - b)
   const median = samples[1]
   const spread = samples[2] - samples[0]
+
   return {
     region: entry.region,
     samples: raw,
@@ -95,6 +115,7 @@ async function main() {
   const { options } = parseArgs(process.argv.slice(2))
   requireLiveRun(USAGE)
   const director = requireDirector(options, USAGE)
+
   const rounds = requireBoundedInteger(options.get('--rounds'), '--rounds', USAGE, {
     min: 1,
     max: MAX_ROUNDS,
@@ -102,10 +123,12 @@ async function main() {
   })
 
   let catalog
+
   try {
     const res = await fetch(`${director}/v1/regions`, {
       signal: AbortSignal.timeout(CATALOG_TIMEOUT_MS)
     })
+
     catalog = await res.json()
   } catch (err) {
     const timedOut = err.name === 'TimeoutError' || err.cause?.name === 'TimeoutError'
@@ -115,13 +138,17 @@ async function main() {
         : `director ${director}/v1/regions failed: ${err.message}`
     )
     process.exitCode = 1
+
     return
   }
+
   if (!Array.isArray(catalog?.regions) || catalog.regions.length === 0) {
     console.error(`director ${director}/v1/regions returned no regions`)
     process.exitCode = 1
+
     return
   }
+
   for (let round = 0; round < rounds; round++) {
     console.log(
       JSON.stringify(await Promise.all(catalog.regions.map((entry) => sampleRegion(entry))))

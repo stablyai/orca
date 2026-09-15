@@ -21,15 +21,19 @@ class FakeSink {
   write = (data: Buffer, settle: (result: SinkWriteSettlement) => void): boolean | void => {
     this.accepted.push({ data: data.toString(), settle })
     this.writableLength += data.length
+
     if (this.saturateNext) {
       this.saturateNext = false
+
       return false
     }
+
     return true
   }
 
   drain(): void {
     this.writableLength = 0
+
     for (const waiter of this.drainWaiters.splice(0)) {
       waiter()
     }
@@ -49,8 +53,10 @@ function createWriter(
       writableHighWaterMark: () => sink.highWaterMark,
       waitWriteDrain: (callback) => {
         sink.drainWaiters.push(callback)
+
         return () => {
           const index = sink.drainWaiters.indexOf(callback)
+
           if (index !== -1) {
             sink.drainWaiters.splice(index, 1)
           }
@@ -74,6 +80,7 @@ function enqueue(
   expect(writer.enqueue(lane, () => Buffer.from(value), Buffer.byteLength(value), settled)).toBe(
     true
   )
+
   return settled
 }
 
@@ -197,6 +204,7 @@ describe('DispatcherClientWriter', () => {
     enqueue(writer, 'ordinary', 'blocker')
     enqueue(writer, 'ordinary', 'ordinary')
     enqueue(writer, 'bulk', 'bulk')
+
     for (let index = 1; index <= 12; index++) {
       enqueue(writer, 'interactive', `interactive-${index}`)
     }
@@ -209,6 +217,7 @@ describe('DispatcherClientWriter', () => {
 
   it('settles callback-less saturated writes when drain fires during registration', () => {
     const settled = vi.fn()
+
     const writer = new DispatcherClientWriter(
       () => false,
       {
@@ -235,6 +244,7 @@ describe('DispatcherClientWriter', () => {
     for (let index = 0; index < 4; index++) {
       expect(writer.enqueue('ordinary', () => Buffer.alloc(16), 16)).toBe(true)
     }
+
     expect(writer.enqueue('ordinary', () => Buffer.alloc(1), 1)).toBe(false)
     expect(writer.retainedProducerBytes).toBe(64)
     expect(sink.accepted).toHaveLength(1)
@@ -268,6 +278,7 @@ describe('DispatcherClientWriter', () => {
     const writer = createWriter(sink)
     enqueue(writer, 'ordinary', 'first')
     let idle = false
+
     const waiting = writer.waitForIdle().then(() => {
       idle = true
     })

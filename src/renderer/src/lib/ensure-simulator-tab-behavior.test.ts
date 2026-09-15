@@ -185,6 +185,7 @@ describe('ensureSimulatorTab', () => {
   it('cancels pending managed shutdown when surfacing a simulator tab', async () => {
     vi.useFakeTimers()
     let cancelPendingSimulatorPaneShutdown: ((worktreeId: string) => void) | null = null
+
     try {
       const shutdownManagedSimulator = vi.fn()
       const scheduler = await import('./simulator-pane-shutdown-scheduler')

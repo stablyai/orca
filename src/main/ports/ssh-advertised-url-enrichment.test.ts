@@ -18,6 +18,7 @@ function watcherWith(
       // worktree appears first in the request wins to keep assertions explicit.
       for (const wt of worktreeIds) {
         const hit = entries[`${wt}::${port}`]
+
         if (hit) {
           return {
             origin: hit.origin ?? 'http://x:1',
@@ -30,6 +31,7 @@ function watcherWith(
           }
         }
       }
+
       return undefined
     }
   }
@@ -76,6 +78,7 @@ describe('enrichSshForwardEntries', () => {
     const entries: PortForwardEntry[] = [
       { id: 'a', connectionId: 'conn', localPort: 53001, remoteHost: 'h', remotePort: 3001 }
     ]
+
     expect(enrichSshForwardEntries(entries, [], watcherWith({}))).toEqual(entries)
   })
 
@@ -87,10 +90,12 @@ describe('enrichSshForwardEntries', () => {
         protocol: 'https'
       }
     })
+
     const entries: PortForwardEntry[] = [
       { id: 'a', connectionId: 'conn', localPort: 53001, remoteHost: 'h', remotePort: 3001 },
       { id: 'b', connectionId: 'conn', localPort: 53002, remoteHost: 'h', remotePort: 3002 }
     ]
+
     const enriched = enrichSshForwardEntries(entries, ['wt'], watcher)
     expect(enriched[0].advertisedUrl).toBe('https://custom.example.com:3001')
     expect(enriched[0].advertisedProtocol).toBe('https')
@@ -99,9 +104,11 @@ describe('enrichSshForwardEntries', () => {
 
   it('does not mutate the input array entries', () => {
     const watcher = watcherWith({ 'wt::3001': { origin: 'http://x:3001', protocol: 'http' } })
+
     const entries: PortForwardEntry[] = [
       { id: 'a', connectionId: 'conn', localPort: 53001, remoteHost: 'h', remotePort: 3001 }
     ]
+
     enrichSshForwardEntries(entries, ['wt'], watcher)
     expect(entries[0].advertisedUrl).toBeUndefined()
   })
@@ -110,12 +117,14 @@ describe('enrichSshForwardEntries', () => {
 describe('enrichSshDetectedPorts', () => {
   it('reconciles an empty scan before returning unchanged ports', () => {
     const calls: unknown[][] = []
+
     const watcher = {
       reconcileScan(...args: Parameters<AdvertisedUrlWatcher['reconcileScan']>): void {
         calls.push(['reconcile', ...args])
       },
       lookupBest(...args: Parameters<AdvertisedUrlWatcher['lookupBest']>): AdvertisedUrl {
         calls.push(['lookupBest', ...args])
+
         return {
           origin: 'https://local.example.com:3001',
           host: 'local.example.com',
@@ -140,10 +149,12 @@ describe('enrichSshDetectedPorts', () => {
         protocol: 'https'
       }
     })
+
     const ports: DetectedPort[] = [
       { port: 3001, host: '127.0.0.1', processName: 'node' },
       { port: 3002, host: '0.0.0.0' }
     ]
+
     const enriched = enrichSshDetectedPorts(ports, ['wt'], watcher)
     expect(enriched[0].advertisedUrl).toBe('https://local.example.com:3001')
     expect(enriched[0].advertisedProtocol).toBe('https')
@@ -152,12 +163,14 @@ describe('enrichSshDetectedPorts', () => {
 
   it('passes detected listener PID through to watcher lookup', () => {
     const calls: unknown[][] = []
+
     const watcher = {
       reconcileScan(...args: Parameters<AdvertisedUrlWatcher['reconcileScan']>): void {
         calls.push(['reconcile', ...args])
       },
       lookupBest(...args: Parameters<AdvertisedUrlWatcher['lookupBest']>): AdvertisedUrl {
         calls.push(['lookupBest', ...args])
+
         return {
           origin: 'https://local.example.com:3001',
           host: 'local.example.com',
@@ -184,12 +197,14 @@ describe('enrichSshDetectedPorts', () => {
 
   it('skips advertised enrichment when one port maps to multiple listener PIDs', () => {
     const calls: unknown[][] = []
+
     const watcher = {
       reconcileScan(...args: Parameters<AdvertisedUrlWatcher['reconcileScan']>): void {
         calls.push(['reconcile', ...args])
       },
       lookupBest(...args: Parameters<AdvertisedUrlWatcher['lookupBest']>): AdvertisedUrl {
         calls.push(['lookupBest', ...args])
+
         return {
           origin: 'https://local.example.com:3001',
           host: 'local.example.com',
@@ -226,12 +241,14 @@ describe('enrichSshDetectedPorts', () => {
 
   it('still enriches duplicate host rows when the port has one unique PID', () => {
     const calls: unknown[][] = []
+
     const watcher = {
       reconcileScan(...args: Parameters<AdvertisedUrlWatcher['reconcileScan']>): void {
         calls.push(['reconcile', ...args])
       },
       lookupBest(...args: Parameters<AdvertisedUrlWatcher['lookupBest']>): AdvertisedUrl {
         calls.push(['lookupBest', ...args])
+
         return {
           origin: 'https://local.example.com:3001',
           host: 'local.example.com',
@@ -272,12 +289,14 @@ describe('enrichSshDetectedPorts', () => {
 
   it('can enrich cached scanner rows without validating their PID', () => {
     const calls: unknown[][] = []
+
     const watcher = {
       reconcileScan(...args: Parameters<AdvertisedUrlWatcher['reconcileScan']>): void {
         calls.push(['reconcile', ...args])
       },
       lookupBest(...args: Parameters<AdvertisedUrlWatcher['lookupBest']>): AdvertisedUrl {
         calls.push(['lookupBest', ...args])
+
         return {
           origin: 'https://local.example.com:3001',
           host: 'local.example.com',

@@ -4,6 +4,7 @@ export function formatSparsePresetUpdatedAt(timestamp: number): string | null {
   }
 
   const date = new Date(timestamp)
+
   if (Number.isNaN(date.getTime())) {
     return null
   }

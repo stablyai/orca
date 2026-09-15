@@ -6,22 +6,35 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 
 const acceptSend = vi.fn()
+
 const captureSendOrigin = vi.fn()
+
 const clearDraftForSend = vi.fn()
+
 const restoreRejectedDraft = vi.fn()
+
 const holdUnconfirmedSend = vi.fn()
 
 // Mutable stand-ins so the launch-draft wiring below can drive chat resolution
 // and transcript state; defaults keep the send-seam tests unchanged.
 const viewMode = { isTabChatView: (_tabId: string) => true }
+
 const sessionState = { messages: [] as unknown[], status: 'ready', transcriptLoading: false }
+
 const structuredSendWithOutcome = vi.fn()
+
 const structuredCancel = vi.fn()
+
 const structuredCancelPrompt = vi.fn(async () => true)
+
 const structuredRespondPermission = vi.fn(async () => true)
+
 const structuredRespondQuestion = vi.fn(async () => true)
+
 const structuredSetOption = vi.fn(async () => true)
+
 const structuredInvokeOption = vi.fn(async () => true)
+
 const structuredOptionSnapshot: SessionOptionDescriptor[] = [
   {
     id: 'model',
@@ -36,12 +49,14 @@ const structuredOptionSnapshot: SessionOptionDescriptor[] = [
     settable: true
   }
 ]
+
 const structuredOptionSurface = {
   getSnapshot: () => structuredOptionSnapshot,
   setOption: async () => ({ snapshot: structuredOptionSnapshot }),
   invokeAction: async () => ({ snapshot: structuredOptionSnapshot }),
   subscribe: () => () => {}
 }
+
 const structuredPermission = {
   title: 'Allow Bash?',
   detail: 'rm -rf build',
@@ -50,13 +65,16 @@ const structuredPermission = {
     { label: 'Deny', send: 'deny' }
   ]
 }
+
 const structuredQuestion = {
   question: 'Pick destination',
   options: ['Choice A', 'Choice B'],
   allowOther: true,
   optionTokens: ['choice-a', 'choice-b']
 }
+
 const structuredActivity = { isWorking: false, turnId: null as string | null }
+
 const structuredSessionState = {
   messages: [] as unknown[],
   status: 'ready',
@@ -66,7 +84,9 @@ const structuredSessionState = {
   loadingEarlier: false,
   loadEarlier: vi.fn()
 }
+
 const draftsArgs: Record<string, unknown>[] = []
+
 const promptsState = {
   permission: null as unknown,
   question: null as unknown,
@@ -82,9 +102,11 @@ vi.mock('./use-mobile-session-view-mode', () => ({
     toggleTabChatView: vi.fn()
   })
 }))
+
 vi.mock('./use-mobile-native-chat-session', () => ({
   useMobileNativeChatSession: () => sessionState
 }))
+
 vi.mock('./use-mobile-structured-agent-session', () => ({
   useMobileStructuredAgentSession: () => ({
     session: structuredSessionState,
@@ -103,9 +125,11 @@ vi.mock('./use-mobile-structured-agent-session', () => ({
     invokeStructuredOption: structuredInvokeOption
   })
 }))
+
 vi.mock('./use-mobile-native-chat-drafts', () => ({
   useMobileNativeChatDrafts: (args: Record<string, unknown>) => {
     draftsArgs.push(args)
+
     return {
       composerText: '',
       setComposerText: vi.fn(),
@@ -121,25 +145,33 @@ vi.mock('./use-mobile-native-chat-drafts', () => ({
     }
   }
 }))
+
 vi.mock('./use-mobile-native-chat-prompts', () => ({
   useMobileNativeChatPrompts: () => promptsState
 }))
+
 const answerSendArgs: { streamIdentity?: string }[] = []
+
 vi.mock('./use-mobile-native-chat-answer-send', () => ({
   useMobileNativeChatAnswerSend: (args: { streamIdentity?: string }) => {
     answerSendArgs.push(args)
+
     return { answerAsk: vi.fn(), cancelPending: vi.fn() }
   }
 }))
+
 vi.mock('./mobile-native-chat-permission-send', () => ({
   useMobileNativeChatPermissionSend: () => vi.fn()
 }))
+
 vi.mock('./use-mobile-native-chat-stop', () => ({
   useMobileNativeChatStop: () => vi.fn()
 }))
+
 vi.mock('./use-mobile-native-chat-file-search', () => ({
   useMobileNativeChatFileSearch: () => ({ nativeChatFilePaths: [], loadNativeChatFiles: vi.fn() })
 }))
+
 // Partial: the stale-input heal reaches the real transport through image-send,
 // which must read the REAL timeout constant, not a copy that can silently drift.
 vi.mock('./mobile-native-chat-send', async (importOriginal) => ({
@@ -205,6 +237,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       onSendError,
       onSendResolved
     })
+
     return null
   }
 
@@ -250,9 +283,11 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     })
     expect(accepted).toBe(true)
     expect(clientStub.sendRequest).toHaveBeenCalledTimes(2)
+
     for (const call of clientStub.sendRequest.mock.calls) {
       expect(call[1]).toMatchObject({ terminal: 'term-1', text: '\x15', enter: false })
     }
+
     expect(isMobileNativeChatInputStale('term-1')).toBe(false)
   })
 
@@ -360,7 +395,9 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       activeHandle: null,
       inputLeaseReady: false
     }
+
     structuredActivity.isWorking = true
+
     try {
       await act(async () => {
         renderer?.update(createElement(Harness, props))
@@ -551,6 +588,7 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
       onSendError: vi.fn(),
       onSendResolved: vi.fn()
     })
+
     return null
   }
 
@@ -643,6 +681,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
       onSendError: vi.fn(),
       onSendResolved: vi.fn()
     })
+
     return null
   }
 
@@ -922,6 +961,7 @@ describe('useMobileNativeChatController streaming scope', () => {
       onSendError: vi.fn(),
       onSendResolved: vi.fn()
     })
+
     return null
   }
 

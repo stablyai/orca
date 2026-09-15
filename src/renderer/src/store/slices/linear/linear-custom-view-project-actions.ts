@@ -41,16 +41,20 @@ export function createLinearCustomViewProjectActions(
     ) => {
       const scope = getLinearReadScope(get().settings, options?.sourceContext)
       const { contextKey } = scope
+
       const cacheKey = scopedLinearCacheKey(
         scope,
         linearCollectionCacheKey(workspaceId, 'custom-view-projects', viewId, limit)
       )
+
       const cached = get().linearCustomViewProjectCache[cacheKey]
+
       if (!options?.force && isFresh(cached)) {
         return cached.data ?? emptyLinearCollection<LinearProjectSummary>()
       }
 
       const inflight = inflightCustomViewProjectRequests.get(cacheKey)
+
       if (
         inflight &&
         inflight.contextKey === contextKey &&
@@ -63,6 +67,7 @@ export function createLinearCustomViewProjectActions(
       let entry: InflightLinearCollectionRequest<LinearProjectSummary>
       const requestCacheGeneration = getLinearCacheGeneration()
       const requestMutationGeneration = getLinearMutationGeneration()
+
       const promise = linearListCustomViewProjects(scope.settings, viewId, limit, workspaceId, {
         force: options?.force
       })
@@ -84,10 +89,12 @@ export function createLinearCustomViewProjectActions(
               })
             }))
           }
+
           return result
         })
         .catch((error) => {
           console.warn('[linear] listLinearCustomViewProjects failed:', error)
+
           if (
             (isIntegrationCredentialDecryptionError(error) || looksLikeAuthError(error)) &&
             canWriteLinearReadResult(
@@ -100,15 +107,18 @@ export function createLinearCustomViewProjectActions(
           ) {
             void get().checkLinearConnection(true)
           }
+
           const fallback =
             get().linearCustomViewProjectCache[cacheKey]?.data ??
             emptyLinearCollection<LinearProjectSummary>()
+
           return collectionWithWorkspaceError(fallback, workspaceId, error)
         })
         .finally(() => {
           if (inflightCustomViewProjectRequests.get(cacheKey) === entry) {
             inflightCustomViewProjectRequests.delete(cacheKey)
           }
+
           if (
             shouldRefreshStatusAfterRead(workspaceId, get().linearStatus) &&
             canWriteLinearReadResult(
@@ -131,6 +141,7 @@ export function createLinearCustomViewProjectActions(
         mutationGeneration: requestMutationGeneration
       }
       inflightCustomViewProjectRequests.set(cacheKey, entry)
+
       return promise
     }
   }

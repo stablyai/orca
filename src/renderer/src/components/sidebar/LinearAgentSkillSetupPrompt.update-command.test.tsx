@@ -45,11 +45,13 @@ vi.mock('../settings/CliSkillRuntimeSetup', () => ({
 vi.mock('../settings/AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: (props: Record<string, unknown> & { children?: ReactNode }) => {
     mocks.panelProps.push(props)
+
     return <section data-testid="linear-skill-panel">{String(props.installedCommand)}</section>
   }
 }))
 
 let root: Root | null = null
+
 let container: HTMLDivElement | null = null
 
 function cliStatus(): CliInstallStatus {
@@ -143,6 +145,7 @@ describe('LinearAgentSkillSetupPrompt update command', () => {
         root?.unmount()
       })
     }
+
     root = null
     container?.remove()
     container = null

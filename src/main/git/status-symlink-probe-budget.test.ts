@@ -7,8 +7,11 @@ const { lstat, stream, conflict } = vi.hoisted(() => ({
   stream: vi.fn(),
   conflict: vi.fn()
 }))
+
 vi.mock('node:fs/promises', () => ({ lstat }))
+
 vi.mock('./source-control/git-conflict-operation', () => ({ detectConflictOperation: conflict }))
+
 vi.mock('./runner', () => ({
   gitStreamStdout: stream,
   gitOptionalLocksDisabledEnv: () => ({ GIT_OPTIONAL_LOCKS: '0' })
@@ -20,6 +23,7 @@ beforeEach(() => {
   lstat.mockResolvedValue({ isSymbolicLink: () => true })
   stream.mockImplementation(async (_args, options) => {
     options.onStdout('? unrelated.txt\n')
+
     return { stoppedEarly: false }
   })
 })
@@ -33,11 +37,13 @@ describe('status shared symlink probe budget', () => {
     'does no unrelated symlink probes for %i configured paths over 100 refreshes',
     async (count) => {
       const paths = Array.from({ length: count }, (_, index) => `shared-${index}`)
+
       for (let refresh = 0; refresh < 100; refresh++) {
         expect((await status(paths)).entries).toEqual([
           { path: 'unrelated.txt', status: 'untracked', area: 'untracked' }
         ])
       }
+
       expect(lstat).not.toHaveBeenCalled()
       expect(stream).toHaveBeenCalledTimes(100)
     }
@@ -46,6 +52,7 @@ describe('status shared symlink probe budget', () => {
   it('probes matching normalized paths, retaining duplicate probes and original order', async () => {
     stream.mockImplementation(async (_args, options) => {
       options.onStdout('? link\n? 日本 語\n? unrelated.txt\n')
+
       return { stoppedEarly: false }
     })
     const result = await status(['absent', ' /link ', '\\日本 語', 'link', '../link', 'C:link'])
@@ -70,6 +77,7 @@ describe('status shared symlink probe budget', () => {
   it('does not broaden exact path matching to descendants or case variants', async () => {
     stream.mockImplementation(async (_args, options) => {
       options.onStdout('? link/child\n? LINK\n')
+
       return { stoppedEarly: false }
     })
     expect((await status(['link'])).entries.map((entry) => entry.path)).toEqual([

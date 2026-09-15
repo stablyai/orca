@@ -24,17 +24,20 @@ afterEach(async () => {
 async function makeTempDir(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-parse-cache-'))
   tempRoots.push(root)
+
   return root
 }
 
 async function claudeCandidate(path: string): Promise<SessionFileCandidate> {
   const fileStat = await stat(path)
+
   const file: FileWithMtime = {
     path,
     mtimeMs: fileStat.mtimeMs,
     modifiedAt: fileStat.mtime.toISOString(),
     sizeBytes: fileStat.size
   }
+
   return { agent: 'claude', file, codexHome: null }
 }
 
@@ -66,11 +69,13 @@ function assistantRecord(index: number, text: string): string {
 // Ground truth: what a cold one-shot parse of the current file contents yields.
 async function freshParse(path: string) {
   const candidate = await claudeCandidate(path)
+
   return parseClaudeSessionFile(candidate.file)
 }
 
 async function cachedParse(path: string) {
   const candidate = await claudeCandidate(path)
+
   return parseAgentSessionFileCached(candidate, process.platform)
 }
 
@@ -121,6 +126,7 @@ describe('parseAgentSessionFileCached', () => {
       process.platform,
       stats
     )
+
     expect(stats.incremental).toBe(1)
     expect(incremental).toEqual(await freshParse(path))
     expect(incremental?.messageCount).toBe(5)
@@ -148,15 +154,19 @@ describe('parseAgentSessionFileCached', () => {
     Buffer.concat = ((list: readonly Uint8Array[], totalLength?: number) => {
       const joined = originalConcat(list as Uint8Array[], totalLength)
       concatenatedBytes += joined.length
+
       return joined
     }) as typeof Buffer.concat
+
     try {
       const stats = createSessionParseStats()
+
       const parsed = await parseAgentSessionFileCached(
         await claudeCandidate(path),
         process.platform,
         stats
       )
+
       expect(parsed).not.toBeNull()
     } finally {
       Buffer.concat = originalConcat
@@ -195,11 +205,13 @@ describe('parseAgentSessionFileCached', () => {
 
     await writeFile(path, `${userRecord(0, 'rewritten only line')}\n`)
     const stats = createSessionParseStats()
+
     const reparsed = await parseAgentSessionFileCached(
       await claudeCandidate(path),
       process.platform,
       stats
     )
+
     expect(stats.fullParses).toBe(1)
     expect(stats.incremental).toBe(0)
     expect(reparsed).toEqual(await freshParse(path))
@@ -220,11 +232,13 @@ describe('parseAgentSessionFileCached', () => {
     await writeFile(path, rewritten)
 
     const stats = createSessionParseStats()
+
     const reparsed = await parseAgentSessionFileCached(
       await claudeCandidate(path),
       process.platform,
       stats
     )
+
     expect(stats.fullParses).toBe(1)
     expect(stats.incremental).toBe(0)
     expect(reparsed).toEqual(await freshParse(path))
@@ -252,6 +266,7 @@ describe('parseAgentSessionFileCached', () => {
   it('caches non-Claude sessions by mtime and size', async () => {
     const root = await makeTempDir()
     await mkdir(join(root, '2026', '05', '01'), { recursive: true })
+
     const path = join(
       root,
       '2026',
@@ -259,6 +274,7 @@ describe('parseAgentSessionFileCached', () => {
       '01',
       'rollout-2026-05-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl'
     )
+
     await writeFile(
       path,
       `${JSON.stringify({
@@ -268,6 +284,7 @@ describe('parseAgentSessionFileCached', () => {
       })}\n`
     )
     const fileStat = await stat(path)
+
     const candidate: SessionFileCandidate = {
       agent: 'codex',
       file: {
@@ -278,6 +295,7 @@ describe('parseAgentSessionFileCached', () => {
       },
       codexHome: null
     }
+
     const stats = createSessionParseStats()
     const first = await parseAgentSessionFileCached(candidate, process.platform, stats)
     const second = await parseAgentSessionFileCached(candidate, process.platform, stats)

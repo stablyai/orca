@@ -106,10 +106,12 @@ export function sessionSlashCommandSuggestions(
   const described = new Map(
     getAgentSlashCommands(agent).map((command) => [command.name, command.description])
   )
+
   return reported
     .filter((entry) => entry.kind === 'command')
     .map((entry) => {
       const description = entry.description ?? described.get(entry.name)
+
       return {
         name: entry.name,
         ...(description ? { description } : {}),
@@ -140,9 +142,11 @@ export function filterSlashCommands(
   query: string
 ): SlashCommandSuggestion[] {
   const normalized = query.toLowerCase()
+
   if (normalized === '') {
     return [...commands]
   }
+
   return commands.filter((command) => command.name.toLowerCase().startsWith(normalized))
 }
 
@@ -170,19 +174,24 @@ export function classifyNativeChatSend(
   // draft with leading whitespace is prose; trimming here would claim a "Ran"
   // line for text the agent never dispatched.
   const firstToken = draft.split(/\s/, 1)[0] ?? ''
+
   if (pickerSkillOriginToken && firstToken === pickerSkillOriginToken) {
     return 'chat'
   }
+
   if (commands.some((command) => firstToken === `/${command.name}`)) {
     return 'command'
   }
+
   if (firstToken.startsWith('/')) {
     return 'unknown-token'
   }
+
   // Why: `$` is Codex grammar only. For other agents a leading `$PATH`-style
   // token is ordinary prose and must keep its bubble and attachments.
   if (skillPrefix === '$' && firstToken.startsWith('$')) {
     return 'unknown-token'
   }
+
   return 'chat'
 }

@@ -73,10 +73,13 @@ function getDraggedPathOperationOwner(
   path: string
 ): FileExplorerOperationOwner | undefined {
   const visibleOwner = rowProjection.getRowByPath(path)?.operationOwner
+
   if (visibleOwner || !dirCache) {
     return visibleOwner
   }
+
   const parent = dirCache[dirname(path)]
+
   return parent?.children.find((child) => child.path === path)?.operationOwner
 }
 
@@ -88,15 +91,19 @@ function resolveDragSourceExecutionHostId(
   paths: readonly string[]
 ): ExecutionHostId | null {
   let sourceExecutionHostId: ExecutionHostId | null = null
+
   for (const path of paths) {
     const executionHostId = getFileExplorerOperationExecutionHostId(
       getDraggedPathOperationOwner(rowProjection, dirCache, path)
     )
+
     if (!executionHostId || (sourceExecutionHostId && executionHostId !== sourceExecutionHostId)) {
       return null
     }
+
     sourceExecutionHostId = executionHostId
   }
+
   return sourceExecutionHostId
 }
 
@@ -150,6 +157,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
   } = props
 
   const visibleSelectionCount = rowProjection.countVisiblePaths(selectedPaths)
+
   // Resolved at dragstart, not per render: the virtualizer re-renders on every
   // scroll frame and only a drag ever reads this.
   const resolveDragSourceHostId = (paths: readonly string[]): ExecutionHostId | null =>
@@ -159,11 +167,14 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
       {virtualizer.getVirtualItems().map((vItem) => {
         const isInlineRow = inlineInputIndex >= 0 && vItem.index === inlineInputIndex
+
         const rowIndex =
           !isInlineRow && inlineInputIndex >= 0 && vItem.index > inlineInputIndex
             ? vItem.index - 1
             : vItem.index
+
         const node = isInlineRow ? null : rowProjection.getRowAtIndex(rowIndex)
+
         if (!isInlineRow && !node) {
           return null
         }
@@ -171,6 +182,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         const showInline =
           isInlineRow ||
           (inlineInput?.type === 'rename' && node && inlineInput.existingPath === node.path)
+
         const inlineDepth = isInlineRow ? inlineInput!.depth : (node?.depth ?? 0)
 
         if (showInline) {
@@ -195,9 +207,11 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
         const n = node!
         // Why: relativePath is normalized at construction (fileExplorerEntriesToTreeNodes), so re-normalizing per row per render only paid 2 regexes for a byte-identical string.
         const normalizedRelativePath = n.relativePath
+
         const nodeStatus = n.isDirectory
           ? (folderStatusByRelativePath.get(normalizedRelativePath) ?? null)
           : (statusByRelativePath.get(normalizedRelativePath) ?? null)
+
         const isIgnored = shouldShowIgnoredDecoration(
           nodeStatus,
           ignoredByRelativePath,
@@ -206,11 +220,13 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
 
         const rowParentDir = n.isDirectory ? n.path : dirname(n.path)
         const sourceParentDir = dragSourcePath ? dirname(dragSourcePath) : null
+
         const isInDropTarget =
           (dropTargetDir != null &&
             dropTargetDir === rowParentDir &&
             dropTargetDir !== sourceParentDir) ||
           (nativeDropTargetDir != null && nativeDropTargetDir === rowParentDir)
+
         return (
           <div
             key={vItem.key}

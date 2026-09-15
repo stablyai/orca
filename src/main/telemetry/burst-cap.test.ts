@@ -31,6 +31,7 @@ describe('burst-cap', () => {
     for (let i = 0; i < 30; i++) {
       expect(consumeBurstToken('app_opened')).toBe(true)
     }
+
     expect(consumeBurstToken('app_opened')).toBe(false)
   })
 
@@ -38,6 +39,7 @@ describe('burst-cap', () => {
     for (let i = 0; i < 20; i++) {
       expect(consumeBurstToken('agent_error')).toBe(true)
     }
+
     expect(consumeBurstToken('agent_error')).toBe(false)
   })
 
@@ -46,24 +48,29 @@ describe('burst-cap', () => {
     for (let i = 0; i < 30; i++) {
       consumeBurstToken('app_opened')
     }
+
     expect(consumeBurstToken('app_opened')).toBe(false)
     // …then advance half the refill window. Half of 30 = 15 tokens back.
     vi.advanceTimersByTime(30_000)
     let allowed = 0
+
     for (let i = 0; i < 20; i++) {
       if (consumeBurstToken('app_opened')) {
         allowed++
       }
     }
+
     expect(allowed).toBeGreaterThanOrEqual(14)
     expect(allowed).toBeLessThanOrEqual(15)
   })
 
   it('emits exactly one warn the first time the per-event cap is crossed', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     for (let i = 0; i < 30; i++) {
       consumeBurstToken('app_opened')
     }
+
     // Four overflow attempts — only one warn across all of them.
     consumeBurstToken('app_opened')
     consumeBurstToken('app_opened')
@@ -111,12 +118,15 @@ describe('burst-cap', () => {
     // ceiling is hit, all further attempts must fail regardless of which
     // event name.
     let accepted = 0
+
     for (let i = 0; i < 2000; i++) {
       vi.advanceTimersByTime(10_000) // generous refill
+
       if (consumeBurstToken('app_opened')) {
         accepted++
       }
     }
+
     expect(accepted).toBe(1000)
   })
 
@@ -125,6 +135,7 @@ describe('burst-cap', () => {
       vi.advanceTimersByTime(10_000)
       consumeBurstToken('app_opened')
     }
+
     resetBurstCapsForSession()
     expect(consumeBurstToken('app_opened')).toBe(true)
     expect(_getBurstCapStateForTests().perSessionCount).toBe(1)
@@ -136,15 +147,18 @@ describe('burst-cap', () => {
     for (let i = 0; i < 5; i++) {
       expect(consumeConsentMutationToken()).toBe(true)
     }
+
     expect(consumeConsentMutationToken()).toBe(false)
     expect(consumeConsentMutationToken()).toBe(false)
   })
 
   it('emits exactly one warn when the consent-mutation cap is first crossed', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     for (let i = 0; i < 5; i++) {
       consumeConsentMutationToken()
     }
+
     // Multiple overflow attempts — one warn only.
     consumeConsentMutationToken()
     consumeConsentMutationToken()
@@ -156,6 +170,7 @@ describe('burst-cap', () => {
     for (let i = 0; i < 5; i++) {
       consumeConsentMutationToken()
     }
+
     expect(consumeConsentMutationToken()).toBe(false)
     resetBurstCapsForSession()
     expect(consumeConsentMutationToken()).toBe(true)

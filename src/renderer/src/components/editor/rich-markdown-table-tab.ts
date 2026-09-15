@@ -11,6 +11,7 @@ export function handleRichMarkdownTableTab(editor: Editor, shiftKey: boolean): b
 
   if (shiftKey) {
     editor.commands.goToPreviousCell()
+
     return true
   }
 

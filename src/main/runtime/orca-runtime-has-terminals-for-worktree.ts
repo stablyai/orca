@@ -8,16 +8,19 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
     const graphEpoch = this.captureReadyGraphEpoch()
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     this.assertStableReadyGraph(graphEpoch)
+
     for (const leaf of this.leaves.values()) {
       if (leaf.worktreeId === worktree.id && leaf.ptyId) {
         return true
       }
     }
+
     for (const pty of this.ptysById.values()) {
       if (pty.worktreeId === worktree.id && pty.connected) {
         return true
       }
     }
+
     return false
   }
 
@@ -29,22 +32,27 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
     ) {
       this.attachWindow(windowId)
       const revision = this.graphReloadLifecycle.getActiveRevision()
+
       return this.authoritativeWindowId === windowId && revision !== null
         ? { revision, recovery: 'headless' }
         : null
     }
+
     if (windowId !== this.authoritativeWindowId) {
       return null
     }
+
     if (this.graphStatus === 'reloading') {
       return {
         revision: this.graphReloadLifecycle.begin(windowId),
         recovery: this.shouldRestoreHeadlessGraph(windowId) ? 'headless' : 'reloading'
       }
     }
+
     if (this.graphStatus !== 'ready') {
       return null
     }
+
     return { revision: this.beginGraphReload(windowId), recovery: 'renderer' }
   }
 
@@ -55,27 +63,32 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
     const revision = this.graphReloadLifecycle.begin(windowId)
     this.setTerminalSideEffectConsumerAvailable(false)
     this.rememberDetachedPreAllocatedLeaves()
+
     // A null incarnation is safe within one graph diff, but cannot prove a same-id PTY survived a renderer reload.
     for (const [ptyId, retained] of this.handleByPtyIncarnation) {
       if (retained.incarnationId === null) {
         this.invalidatePtyIncarnationHandle(ptyId)
       }
     }
+
     const retainedHandles = new Set([
       ...this.handleByPtyId.values(),
       ...[...this.handleByPtyIncarnation.values()].map((record) => record.handle)
     ])
+
     for (const handle of this.terminalWaiters.handles()) {
       if (!retainedHandles.has(handle)) {
         this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
       }
     }
+
     this.handles.clear()
     this.handleByLeafKey.clear()
     // Why: handleByPtyId (pre-allocated CLI handles) survives reloads so CLI agents keep control; adoptPreAllocatedHandle re-links on the new graph.
     // Incarnation-scoped waiters survive a renderer reload; the rebuilt graph
     // may re-adopt the same PTY and resolve them without a false stale error.
     this.refreshWritableFlags()
+
     return revision
   }
 
@@ -87,26 +100,36 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
     ) {
       return false
     }
+
     if (fence.recovery === 'headless' && this.shouldRestoreHeadlessGraph(windowId)) {
       this.restoreHeadlessGraphAuthority()
+
       return false
     }
+
     if (fence.recovery === 'renderer') {
       const restoresPublishedInventory =
         this.sessionTabsInventoryPublicationEpoch === this.rendererGraphEpoch - 1
+
       this.graphStatus = 'ready'
       this.setTerminalSideEffectConsumerAvailable(true)
+
       for (const leaf of this.leaves.values()) {
         this.adoptPreAllocatedHandle(leaf)
       }
+
       this.reconcilePtyIncarnationHandles()
       this.refreshWritableFlags()
+
       if (restoresPublishedInventory) {
         this.markSessionTabsInventoryPublished()
       }
+
       return true
     }
+
     this.graphReloadLifecycle.begin(windowId)
+
     return false
   }
 
@@ -114,11 +137,14 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
     if (windowId !== this.authoritativeWindowId) {
       return
     }
+
     this.graphReloadLifecycle.settleActive('success')
+
     if (windowId !== HEADLESS_RUNTIME_WINDOW_ID) {
       this.headlessGraphFallbackAvailable = false
       this.pendingHeadlessPromotionWindowId = null
     }
+
     this.graphStatus = 'ready'
     this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
     this.refreshWritableFlags()
@@ -131,9 +157,11 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
     if (windowId !== this.authoritativeWindowId) {
       return
     }
+
     if (this.graphStatus === 'ready') {
       this.beginGraphReload(windowId)
     }
+
     this.graphReloadLifecycle.settleActive('failure')
     this.transitionGraphReloadToTerminalState(windowId)
   }
@@ -144,30 +172,39 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
       windowId === this.pendingHeadlessPromotionWindowId
     ) {
       this.pendingHeadlessPromotionWindowId = null
+
       return
     }
+
     if (windowId !== this.authoritativeWindowId) {
       return
     }
+
     this.graphReloadLifecycle.settleActive('cancelled')
+
     if (this.shouldRestoreHeadlessGraph(windowId)) {
       this.pendingHeadlessPromotionWindowId = null
       this.restoreHeadlessGraphAuthority()
+
       return
     }
+
     // Why: once the authoritative renderer graph disappears, fail closed for live-terminal ops instead of guessing from old state.
     if (this.graphStatus !== 'unavailable') {
       this.rendererGraphEpoch += 1
     }
+
     this.graphStatus = 'unavailable'
     this.setTerminalSideEffectConsumerAvailable(false)
     this.authoritativeWindowId = null
     this.rememberDetachedPreAllocatedLeaves()
+
     for (const [ptyId, handle] of this.handleByPtyId) {
       if (this.handleByPtyIncarnation.get(ptyId)?.handle === handle) {
         this.handleByPtyId.delete(ptyId)
       }
     }
+
     this.tabs.clear()
     this.leaves.clear()
     this.leavesByPtyId.clear()
@@ -182,6 +219,7 @@ export class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithStopE
     if (windowId !== this.authoritativeWindowId || this.graphStatus !== 'reloading') {
       return
     }
+
     this.transitionGraphReloadToTerminalState(windowId)
   }
 }

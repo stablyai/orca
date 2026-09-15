@@ -7,6 +7,7 @@ export function redactForTransport(
   transport: SessionSearchTransport
 ): AiVaultSearchHit {
   const { resumeCommand, source, ...fields } = hit
+
   return {
     ...fields,
     source: transport === 'relay' ? { presence: source.presence } : { ...source },
@@ -24,6 +25,7 @@ export function redactStatusForTransport(
   if (transport !== 'relay') {
     return status
   }
+
   return {
     ...status,
     degradedRoots: status.degradedRoots.map(() => ({

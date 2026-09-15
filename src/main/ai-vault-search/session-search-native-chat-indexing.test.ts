@@ -18,11 +18,15 @@ import {
 // below is the library and the filesystem.
 
 const INTERVAL_MS = 20_000
+
 const SESSION_ID = 'cccccccc-dddd-4eee-8fff-000000000000'
+
 const CWD = '/repo/orca'
 
 let harness: SessionSearchIndexerHarness
+
 let clock: FakeSessionSearchClock
+
 let indexer: SessionSearchIndexer
 
 beforeEach(async () => {
@@ -42,6 +46,7 @@ afterEach(async () => {
 /** The rows Orca's native chat writes: uuid, block content, cwd on the first turn. */
 function nativeChatTurn(uuid: string, role: 'user' | 'assistant', text: string): string {
   const timestamp = new Date(1_740_000_000_000 + Number(uuid.slice(-2)) * 60_000).toISOString()
+
   return JSON.stringify({
     type: role,
     uuid,

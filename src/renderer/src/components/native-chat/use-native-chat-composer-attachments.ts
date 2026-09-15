@@ -51,6 +51,7 @@ export function useNativeChatComposerAttachments({
   const [imageAttachments, setImageAttachments] = useState<NativeChatComposerImageAttachment[]>(
     () => readNativeChatAttachmentCache(attachmentScopeKey)
   )
+
   const imageAttachmentCounter = useRef(0)
 
   const updateImageAttachments = useCallback(
@@ -62,6 +63,7 @@ export function useNativeChatComposerAttachments({
       setImageAttachments((prev) => {
         const next = updater(prev)
         writeNativeChatAttachmentCache(attachmentScopeKey, next)
+
         return next
       })
     },
@@ -70,6 +72,7 @@ export function useNativeChatComposerAttachments({
 
   const nextAttachmentId = useCallback((): string => {
     imageAttachmentCounter.current += 1
+
     return `${Date.now()}-${imageAttachmentCounter.current}`
   }, [])
 
@@ -78,6 +81,7 @@ export function useNativeChatComposerAttachments({
   const attachmentTargetBlocked = useCallback(
     (targetOwned = false): boolean => {
       const target = resolveTarget()
+
       return (
         (!target && !allowWithoutTarget) ||
         Boolean(target && nativeChatComposerTargetIsRemote(target.ptyId) && !targetOwned)
@@ -100,6 +104,7 @@ export function useNativeChatComposerAttachments({
       if (paths.length === 0) {
         return
       }
+
       updateImageAttachments((prev) => [
         ...prev,
         ...paths.map(({ path, connectionId }) => ({
@@ -133,12 +138,16 @@ export function useNativeChatComposerAttachments({
       if (disabledRef.current) {
         return null
       }
+
       if (attachmentTargetBlocked()) {
         noteAttachmentTargetBlocked()
+
         return null
       }
+
       const id = nextAttachmentId()
       updateImageAttachments((prev) => [...prev, { id, path: '', previewUrl, pending: true }])
+
       return id
     },
     [
@@ -181,6 +190,7 @@ export function useNativeChatComposerAttachments({
     clearImageAttachments: () =>
       updateImageAttachments((prev) => {
         prev.forEach(releaseAttachmentPreview)
+
         return []
       }),
     flushPendingAttachments,
@@ -203,9 +213,11 @@ function removeAttachmentById(
   id: string
 ): NativeChatComposerImageAttachment[] {
   const removed = attachments.find((attachment) => attachment.id === id)
+
   if (removed) {
     releaseAttachmentPreview(removed)
   }
+
   return attachments.filter((attachment) => attachment.id !== id)
 }
 
@@ -229,10 +241,13 @@ function writeNativeChatAttachmentCache(
     // the lifetime of the scope cache. Settled attachments reload from their
     // authorized path after a remount, so never retain the transient preview.
     .map(({ previewUrl: _previewUrl, ...attachment }) => attachment)
+
   if (attachments.length === 0) {
     attachmentCache.delete(scopeKey)
+
     return
   }
+
   // LRU-bounded so pending attachments for permanently-removed panes can't accumulate.
   setBoundedScopeCacheEntry(attachmentCache, scopeKey, [...attachments])
 }

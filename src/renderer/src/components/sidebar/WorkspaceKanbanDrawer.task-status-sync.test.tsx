@@ -92,6 +92,7 @@ vi.mock('./WorkspaceKanbanLaneGrid', () => ({
     onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
   }) => {
     laneAssignStatusState.current = onAssignWorkspaceStatus ?? null
+
     return <div data-testid="workspace-board-lanes" />
   }
 }))
@@ -158,6 +159,7 @@ vi.mock('@/components/contextual-tours/use-contextual-tour', () => ({
 vi.mock('./use-workspace-kanban-card-pointer-drag', () => ({
   useWorkspaceKanbanCardPointerDrag: (params: PointerDragParams) => {
     pointerDragState.current = params
+
     return {
       isPointerDragActiveRef: { current: false },
       onCardPointerDownCapture: vi.fn()
@@ -180,6 +182,7 @@ vi.mock('./use-workspace-status-drop', () => ({
 
 vi.mock('./workspace-board-task-status-sync', async (importOriginal) => {
   const actual = await importOriginal<typeof WorkspaceBoardTaskStatusSync>()
+
   return {
     ...actual,
     syncWorkspaceBoardTaskStatuses: syncWorkspaceBoardTaskStatusesMock
@@ -187,8 +190,11 @@ vi.mock('./workspace-board-task-status-sync', async (importOriginal) => {
 })
 
 let container: HTMLDivElement
+
 let root: Root
+
 let consoleInfoSpy: ReturnType<typeof vi.spyOn>
+
 let consoleWarnSpy: ReturnType<typeof vi.spyOn>
 
 const statuses = [

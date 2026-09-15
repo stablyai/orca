@@ -47,6 +47,7 @@ export function buildSetupHostOptions({
   hostOptions: readonly ExecutionHostRegistryEntry[]
 }): SetupHostOption[] {
   const setupHostIds = new Set(projectHostSetups.map((setup) => setup.hostId))
+
   return hostOptions
     .filter((host) => !setupHostIds.has(host.id))
     .map((host) => {
@@ -54,6 +55,7 @@ export function buildSetupHostOptions({
       // Why: import and clone require live remote providers, while an offline
       // host can still be recorded as a placeholder for later setup.
       const canUsePathActions = host.health === 'local' || host.health === 'available'
+
       return {
         id: host.id,
         label: host.label || getExecutionHostLabel(host.id),
@@ -83,8 +85,10 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
       )
     }
   }
+
   if (host.kind === 'runtime') {
     const capabilities = host.capabilities
+
     if (!capabilities) {
       return {
         isAvailable: false,
@@ -94,6 +98,7 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
         )
       }
     }
+
     if (
       !capabilities.includes(PROJECT_HOST_SETUP_RUNTIME_CAPABILITY) ||
       !capabilities.includes(WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY)
@@ -107,6 +112,7 @@ function getHostSetupAvailability(host: ExecutionHostRegistryEntry): {
       }
     }
   }
+
   return {
     isAvailable: true,
     detail: host.detail

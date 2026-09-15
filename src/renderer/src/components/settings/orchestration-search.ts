@@ -92,6 +92,7 @@ export function getOrchestrationPaneSearchEntries({
   includeNestedWorkerDepth = true
 }: OrchestrationPaneSearchOptions = {}) {
   const entries = getAllOrchestrationPaneSearchEntries()
+
   return includeNestedWorkerDepth
     ? entries
     : entries.filter(

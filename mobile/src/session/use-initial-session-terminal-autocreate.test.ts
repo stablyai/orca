@@ -17,10 +17,12 @@ type HarnessProps = {
 
 describe('useInitialSessionTerminalAutoCreate', () => {
   let renderer: ReactTestRenderer | null = null
+
   let stateRef: RefObject<{
     autoCreatedForWorktree: string | null
     sawSessionTabs: boolean
   }>
+
   const consumeCreationRoute = vi.fn()
   const createTerminal = vi.fn()
 
@@ -38,6 +40,7 @@ describe('useInitialSessionTerminalAutoCreate', () => {
       consumeCreationRoute,
       createTerminal
     })
+
     return null
   }
 
@@ -164,6 +167,7 @@ describe('useWorktreeSessionTabsLoaded', () => {
 
   function Harness({ worktreeId }: { worktreeId: string }): null {
     current = useWorktreeSessionTabsLoaded(worktreeId)
+
     return null
   }
 

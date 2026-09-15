@@ -41,6 +41,7 @@ export async function parseDroidSessionFile(
 ): Promise<AiVaultSession | null> {
   const input = openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan')
   const lines = createInterface({ input, crlfDelay: Infinity })
+
   try {
     return await parseDroidSessionLines({ file, lines, platform, messages })
   } finally {
@@ -68,24 +69,32 @@ export async function parseDroidSessionContent(
 
 function consumeDroidRecordLine(accumulator: SessionAccumulator, line: string): void {
   const record = parseJsonObject(line)
+
   if (!record) {
     return
   }
+
   updateTimeline(accumulator, record.timestamp)
+
   if (record.type === 'session_start') {
     accumulator.sessionId = extractString(record.id) ?? accumulator.sessionId
     accumulator.title = normalizeTitleText(extractString(record.title) ?? '')
     accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
+
     return
   }
+
   if (record.type === 'system') {
     accumulator.cwd = extractString(record.cwd) ?? accumulator.cwd
     accumulator.model = extractString(record.model) ?? accumulator.model
   }
+
   const streamSessionId = extractString(record.session_id) ?? extractString(record.sessionId)
+
   if (streamSessionId) {
     accumulator.sessionId = streamSessionId
   }
+
   if (record.type === 'message') {
     consumeDroidMessage(accumulator, record)
   } else if (record.type === 'completion') {
@@ -122,9 +131,11 @@ async function parseDroidSessionLines(args: {
   messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
   const state = createDroidSessionResumeState(args.file, args.messages)
+
   for await (const line of args.lines) {
     state.consumeLine(line)
   }
+
   return state.finalize(args.platform, args.options)
 }
 
@@ -133,15 +144,19 @@ function consumeDroidMessage(
   record: Record<string, unknown>
 ): void {
   const role = extractString(record.role) ?? extractString(asRecord(record.message)?.role)
+
   if (role !== 'user' && role !== 'assistant') {
     return
   }
+
   accumulator.messageCount++
+
   if (role === 'user') {
     accumulator.title ??=
       normalizeTitleText(extractString(record.text) ?? '') ||
       extractMessageText(asRecord(record.message))
   }
+
   addPreviewMessage(accumulator, {
     role,
     text:

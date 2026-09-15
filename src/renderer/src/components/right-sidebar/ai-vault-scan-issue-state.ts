@@ -6,6 +6,7 @@ export function blockingAiVaultScanIssue(
   if (!result || result.sessions.length > 0) {
     return null
   }
+
   return result.issues.find((issue) => issue.kind === 'host') ?? null
 }
 
@@ -19,7 +20,9 @@ export function aiVaultScanNoticeIssues(result: AiVaultListResult | null): AiVau
   if (!result) {
     return []
   }
+
   const blocking = blockingAiVaultScanIssue(result)
+
   return result.issues.filter((issue) => Boolean(issue.kind) && issue !== blocking)
 }
 
@@ -34,17 +37,22 @@ const SKIPPED_TRANSCRIPT_REASON_LIMIT = 3
 // capped so a 500-issue scan can't turn the panel into a wall of text.
 export function skippedAiVaultTranscriptReasons(result: AiVaultListResult | null): string[] {
   const reasons = new Set<string>()
+
   for (const issue of result?.issues ?? []) {
     if (issue.kind) {
       continue
     }
+
     const message = issue.message.trim()
+
     if (message) {
       reasons.add(message)
     }
+
     if (reasons.size === SKIPPED_TRANSCRIPT_REASON_LIMIT) {
       break
     }
   }
+
   return [...reasons]
 }

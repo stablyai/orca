@@ -86,10 +86,12 @@ function createWorktreeRunnerScript(args: {
     waitForAgentStartup,
     setupShell
   } = args
+
   const envVars = getSetupRunnerEnvVars(repo, worktreePath)
   // Why: WSL worktrees are Linux fs even though process.platform is 'win32'; use bash for WSL, .cmd for native Windows.
   const wslWorktree = isWslPath(worktreePath) || Boolean(runtimeTarget?.wslDistro)
   const nativeWindowsWorktree = process.platform === 'win32' && !wslWorktree
+
   // Why: the terminal-shell preference says nothing about the language a project's script is
   // written in, and every pre-existing Windows script was authored against the cmd runner. Only a
   // `#!` line opts a script into bash, so the same orca.yaml runs identically for every Windows
@@ -99,6 +101,7 @@ function createWorktreeRunnerScript(args: {
       ? setupShell
       : { family: 'cmd' }
     : { family: 'posix' }
+
   // Why: `shell` tells the launcher which shell types the command, not which format the runner
   // file is in — the .cmd/.sh extension already carries that. Reporting the runner family here
   // would make a Git Bash pane receive `cmd.exe /c ...`, whose `/c` MSYS rewrites into a drive
@@ -108,6 +111,7 @@ function createWorktreeRunnerScript(args: {
     : process.platform === 'win32' && runtimeTarget?.wslDistro
       ? { family: 'posix', executable: 'wsl.exe' }
       : undefined
+
   // Why: linked worktrees use a `.git` file, so resolve the real per-worktree gitdir via git rev-parse --git-path.
   const runnerExtension = runnerShell.family === 'cmd' ? 'cmd' : 'sh'
   const gitRelPath = `orca/${runnerBaseName}.${runnerExtension}`
@@ -116,6 +120,7 @@ function createWorktreeRunnerScript(args: {
   // Why: git runs inside WSL and returns a Linux path; convert to a UNC path so the Windows fs calls can reach it.
   if (wslWorktree) {
     const wslInfo = getHookWslContext(worktreePath, runtimeTarget)
+
     if (wslInfo?.distro) {
       runnerScriptPath = toWindowsWslPath(runnerScriptPath.trim(), wslInfo.distro)
     }
@@ -127,6 +132,7 @@ function createWorktreeRunnerScript(args: {
     writeFileSync(runnerScriptPath, buildWindowsRunnerScript(script), 'utf-8')
   } else {
     writeFileSync(runnerScriptPath, buildPosixRunnerScript(script), 'utf-8')
+
     if (!nativeWindowsWorktree) {
       // Why: chmod over a UNC path to the WSL filesystem sets the execute bit correctly inside WSL.
       chmodSync(runnerScriptPath, 0o755)
@@ -144,6 +150,7 @@ function createWorktreeRunnerScript(args: {
     // Only path-valued keys convert; the workspace name and policy values are not paths.
     for (const key of SETUP_RUNNER_PATH_ENV_KEYS) {
       const value = envVars[key]
+
       if (value) {
         envVars[key] = nativeWindowsPathToPosixShellPath(value)
       }
@@ -171,12 +178,15 @@ export function resolveSetupRunnerShell(
   }
 
   const terminalWindowsShell = settings?.terminalWindowsShell
+
   const configuredShell =
     typeof terminalWindowsShell === 'string' && terminalWindowsShell.trim()
       ? terminalWindowsShell.trim()
       : 'powershell.exe'
+
   const shellBasename = configuredShell.replaceAll('\\', '/').split('/').pop()?.toLowerCase()
   const family = resolveWindowsShellStartupFamily(configuredShell)
+
   if (family === 'posix' && shellBasename !== 'wsl.exe' && shellBasename !== 'wsl') {
     // Why: the PTY resolves Git Bash independently and falls back to PowerShell when it
     // is missing, so gate the .sh runner on the same resolution. This also keeps
@@ -185,6 +195,7 @@ export function resolveSetupRunnerShell(
     const resolveGitBashShellPath =
       options.resolveGitBashShellPath ??
       ((shell: string) => resolveWindowsGitBashShellPath(shell, { platform }))
+
     if (resolveGitBashShellPath(configuredShell)) {
       // Note: this reports the terminal's family — the shell that types the launch command, and
       // therefore also that a bash runner *could* launch here. Whether one is written is decided

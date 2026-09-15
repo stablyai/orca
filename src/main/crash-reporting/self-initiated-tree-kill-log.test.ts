@@ -48,6 +48,7 @@ function capturingStore(recorded: RecordedReport[]) {
   return {
     record: async (report: RecordedReport) => {
       recorded.push(report)
+
       return { id: 'report-1' }
     },
     attachDetails: async () => null
@@ -64,6 +65,7 @@ async function recordKilledRenderer(): Promise<Record<string, unknown>> {
     async () => null
   )
   await vi.waitFor(() => expect(recorded).toHaveLength(1))
+
   return recorded[0]!.details
 }
 
@@ -88,6 +90,7 @@ describe('self-initiated tree kill breadcrumb', () => {
     await terminateWindowsProcessTree(4242, {
       execFileImpl: ((_program, _args, _options, done) => {
         ;(done as () => void)()
+
         return undefined as never
       }) as never,
       site: 'pty-descendant-sweep'
@@ -122,6 +125,7 @@ describe('self-initiated tree kill breadcrumb', () => {
     await terminateWindowsProcessTree(777, {
       execFileImpl: ((_program, _args, _options, done) => {
         ;(done as () => void)()
+
         return undefined as never
       }) as never,
       site: 'codex-turn-added-roots'
@@ -165,6 +169,7 @@ describe('self-initiated tree kill breadcrumb', () => {
 
   it('bounds the ring at 32 entries', () => {
     const goneAt = 2_000_000
+
     for (let index = 0; index < 40; index += 1) {
       recordSelfInitiatedTreeKill({
         pid: index + 1,
@@ -188,6 +193,7 @@ describe('self-initiated tree kill breadcrumb', () => {
         })
       }
     }
+
     recordRefusedOwnChromiumTreeKill({
       pid: 4242,
       site: 'pty-descendant-sweep',
@@ -228,6 +234,7 @@ describe('self-initiated tree kill breadcrumb', () => {
 
   it('lists a pid-addressed tree kill ahead of teardown noise so truncation keeps it', () => {
     const goneAt = 4_000_000
+
     for (let index = 0; index < 12; index += 1) {
       recordSelfInitiatedTreeKill({
         pid: 2000 + index,
@@ -236,6 +243,7 @@ describe('self-initiated tree kill breadcrumb', () => {
         at: goneAt - 1
       })
     }
+
     recordSelfInitiatedTreeKill({
       pid: 9999,
       site: 'pty-descendant-sweep',
@@ -263,6 +271,7 @@ describe('self-initiated tree kill breadcrumb', () => {
       scope: 'win-taskkill-tree',
       at: goneAt - 4_000
     })
+
     for (let index = 0; index < 32; index += 1) {
       recordSelfInitiatedTreeKill({
         pid: 6000 + index,
@@ -287,6 +296,7 @@ describe('self-initiated tree kill breadcrumb', () => {
     // death. A scope-preference eviction with no floor splices the entry it just
     // pushed, and `{}` is byte-identical to the external-kill arm.
     const goneAt = 5_000_000
+
     for (let index = 0; index < 32; index += 1) {
       recordSelfInitiatedTreeKill({
         pid: 6000 + index,
@@ -295,6 +305,7 @@ describe('self-initiated tree kill breadcrumb', () => {
         at: goneAt - 600_000 + index * 1_000
       })
     }
+
     recordSelfInitiatedTreeKill({
       pid: 7777,
       site: 'windows-pty-job-teardown',
@@ -312,6 +323,7 @@ describe('self-initiated tree kill breadcrumb', () => {
 
   it('evicts the oldest pid kill, not the newest, once every candidate is pid-addressed', () => {
     const goneAt = 5_000_000
+
     for (let index = 0; index < 33; index += 1) {
       recordSelfInitiatedTreeKill({
         pid: 6000 + index,

@@ -8,14 +8,19 @@ import {
 } from './automation-run-open-target'
 
 const leafId = '11111111-1111-4111-8111-111111111111'
+
 const otherLeafId = '22222222-2222-4222-8222-222222222222'
+
 const paneKey = `tab-1:${leafId}`
+
 const splitPaneKey = `tab-1:${otherLeafId}`
+
 const runLeafLayout = {
   root: { type: 'leaf' as const, leafId },
   activeLeafId: leafId,
   expandedLeafId: null
 }
+
 const livePtyIds = ['pty-run']
 
 function run(overrides: Partial<AutomationRun> = {}): AutomationRun {
@@ -133,9 +138,11 @@ describe('automation run open target', () => {
     })
 
     expect(target).not.toBeNull()
+
     if (!target) {
       throw new Error('Expected target.')
     }
+
     expect(buildAutomationRunOpenLayout({ target, currentLayout: runLeafLayout })).toMatchObject({
       root: { type: 'leaf', leafId },
       activeLeafId: leafId,
@@ -182,6 +189,7 @@ describe('automation run open target', () => {
       expandedLeafId: otherLeafId,
       ptyIdsByLeafId: { [leafId]: 'pty-run', [otherLeafId]: 'pty-other' }
     }
+
     const target = resolveAutomationRunOpenTarget({
       run: run(),
       terminalTabExists: true,
@@ -190,9 +198,11 @@ describe('automation run open target', () => {
     })
 
     expect(target).not.toBeNull()
+
     if (!target) {
       throw new Error('Expected target.')
     }
+
     const layout = buildAutomationRunOpenLayout({
       target,
       currentLayout

@@ -20,6 +20,7 @@ function makeState(args: {
 }): AppState {
   const repoId = 'repo-1'
   const worktreeId = `${repoId}::worktree-1`
+
   const repos: AppState['repos'] =
     args.repoPath === undefined
       ? []
@@ -33,6 +34,7 @@ function makeState(args: {
             ...args.repo
           }
         ]
+
   return {
     activeRepoId: repoId,
     activeWorktreeId: args.worktreePath === undefined ? null : worktreeId,
@@ -81,6 +83,7 @@ describe('local preflight context', () => {
       }),
       'darwin'
     )
+
     const fromWorktree = getLocalPreflightContext(
       makeState({
         repoPath: '/Users/alice/repo',
@@ -88,6 +91,7 @@ describe('local preflight context', () => {
       }),
       'darwin'
     )
+
     const fromOtherDistro = getLocalPreflightContext(
       makeState({
         repoPath: '/Users/alice/repo',

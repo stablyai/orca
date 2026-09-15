@@ -75,6 +75,7 @@ describe('summarizeAutomationRunUsage', () => {
       { ...makeRun(makeUsage()), createdAt: 3, status: 'dispatch_failed', dispatchedAt: 33 },
       { ...makeRun(makeUsage()), createdAt: 2, status: 'completed', dispatchedAt: 22 }
     ])
+
     expect(summary.lastRunStatus).toBe('dispatch_failed')
     expect(summary.lastRunAt).toBe(33)
   })

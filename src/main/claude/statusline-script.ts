@@ -9,6 +9,7 @@ import {
 } from '../../shared/claude-statusline-rate-limits'
 
 const STATUSLINE_CLEANUP_LABEL = 'orca_statusline_cleanup'
+
 const STATUSLINE_PROBE_LABEL = 'orca_statusline_probe'
 
 // Why: Claude Code pipes `rate_limits` to the statusLine command on every turn; forwarding

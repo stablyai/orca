@@ -21,6 +21,7 @@ export function getConfiguredBranchPrefix(
   gitUsername: string | null
 ): string | null {
   const raw = selectBranchPrefixInput(settings, gitUsername)
+
   return raw ? normalizeBranchPrefix(raw) || null : null
 }
 
@@ -33,6 +34,7 @@ export function computeBranchName(
   gitUsername: string | null
 ): string {
   const prefix = getConfiguredBranchPrefix(settings, gitUsername)
+
   return prefix ? `${prefix}/${sanitizedName}` : sanitizedName
 }
 
@@ -47,16 +49,20 @@ export function computeValidatedBranchName(
   gitUsername: string | null
 ): string {
   const prefix = getConfiguredBranchPrefix(settings, gitUsername)
+
   if (prefix === null) {
     return sanitizedName
   }
+
   if (getBranchPrefixIssue(prefix) !== null) {
     // Why: git-username can resolve to garbage (e.g. a rate-limited `gh api` JSON body).
     // Skip the prefix rather than blocking every worktree create; custom prefixes still fail loudly.
     if (settings.branchPrefix === 'git-username') {
       return sanitizedName
     }
+
     assertBranchPrefixValid(prefix)
   }
+
   return `${prefix}/${sanitizedName}`
 }

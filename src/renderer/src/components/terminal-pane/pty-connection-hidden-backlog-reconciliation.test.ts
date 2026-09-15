@@ -34,8 +34,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -56,6 +59,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -65,6 +69,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -85,6 +90,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -95,9 +101,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -107,9 +115,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -118,6 +128,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -162,6 +173,7 @@ describe('connectPanePty', () => {
     }> {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-id')
+
       const capturedDataCallback: {
         current:
           | ((
@@ -170,21 +182,26 @@ describe('connectPanePty', () => {
             ) => void)
           | null
       } = { current: null }
+
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
           capturedDataCallback.current = callbacks.onData ?? null
+
           return 'pty-id'
         }
       )
       transportFactoryQueue.push(transport)
       const pane = createPane(1)
       const manager = createManager(1)
+
       const binding = connectPanePty(pane as never, manager as never, deps as never) as {
         syncProcessTracking: () => void
         dispose: () => void
       }
+
       await flushAsyncTicks(6)
       expect(capturedDataCallback.current).not.toBeNull()
+
       return { transport, pane, dataCallback: capturedDataCallback.current!, binding }
     }
 
@@ -216,24 +233,31 @@ describe('connectPanePty', () => {
         enableMainAuthority()
         const deps = createDeps({ isVisibleRef: { current: true } })
         const { pane, transport, dataCallback } = await connectHiddenPane(deps)
+
         const transportOptions = createdTransportOptions.at(-1) as {
           onPtySpawn?: (ptyId: string) => void
         }
+
         transportOptions.onPtySpawn?.('pty-id')
+
         const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
           typeof vi.fn
         >
+
         const firstSnapshot = createDeferred<{
           data: string
           cols: number
           rows: number
           seq: number
         }>()
+
         getMainBufferSnapshot
           .mockReturnValueOnce(firstSnapshot.promise)
           .mockResolvedValue({ data: 'repaint snapshot\r\n', cols: 100, rows: 30, seq: 5_000_000 })
+
         const { _dispatchPtyModelRestoreNeededForTest } =
           await import('./pty-model-restore-channel')
+
         _dispatchPtyModelRestoreNeededForTest({
           id: 'pty-id',
           reason: 'pending-cap',
@@ -241,6 +265,7 @@ describe('connectPanePty', () => {
         })
         await flushAsyncTicks(4)
         expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
+
         return {
           pane,
           transport,
@@ -253,8 +278,10 @@ describe('connectPanePty', () => {
       it('abandons the restore on queue overflow, writes the stream through, and repaints once', async () => {
         const { pane, dataCallback, getMainBufferSnapshot, resolveFirstSnapshot } =
           await startInFlightRestore()
+
         const { markTerminalFollowOutput, markTerminalPinnedViewport } =
           await import('@/lib/pane-manager/terminal-scroll-intent')
+
         const parseCallbacks: (() => void)[] = []
         pane.terminal.write.mockImplementation((_data: string, callback?: () => void) => {
           if (callback) {
@@ -278,9 +305,11 @@ describe('connectPanePty', () => {
           expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
           pane.terminal.buffer.active.viewportY = 200
           pane.terminal.buffer.active.baseY = 200
+
           for (const callback of parseCallbacks.splice(0)) {
             callback()
           }
+
           // The post-replay fit is part of the transaction now; let its promise settle before asserting.
           await flushAsyncTicks(20)
           expect(pane.terminal.scrollToLine).toHaveBeenLastCalledWith(142)
@@ -310,8 +339,10 @@ describe('connectPanePty', () => {
       it('holds the post-flood repaint while the user reads scrollback and runs it on return to the bottom', async () => {
         const { pane, dataCallback, getMainBufferSnapshot, resolveFirstSnapshot } =
           await startInFlightRestore()
+
         const { markTerminalFollowOutput, markTerminalPinnedViewport } =
           await import('@/lib/pane-manager/terminal-scroll-intent')
+
         pane.terminal.buffer.active.viewportY = 42
         pane.terminal.buffer.active.baseY = 100
         markTerminalPinnedViewport(pane.terminal)
@@ -372,13 +403,17 @@ describe('connectPanePty', () => {
         const isVisibleRef = { current: false }
         const deps = createDeps({ isVisibleRef })
         const { pane, dataCallback } = await connectHiddenPane(deps)
+
         const transportOptions = createdTransportOptions.at(-1) as {
           onPtySpawn?: (ptyId: string) => void
         }
+
         transportOptions.onPtySpawn?.('pty-id')
+
         const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
           typeof vi.fn
         >
+
         getMainBufferSnapshot.mockResolvedValue({
           data: 'hidden reveal snapshot\r\n',
           cols: 100,
@@ -393,8 +428,10 @@ describe('connectPanePty', () => {
 
         // Reveal: the latched restore fetches exactly one snapshot.
         isVisibleRef.current = true
+
         const { requestTerminalBacklogRecovery } =
           await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+
         requestTerminalBacklogRecovery(pane.terminal as never)
         await flushAsyncTicks(20)
         expect(getMainBufferSnapshot).toHaveBeenCalledTimes(1)
@@ -413,21 +450,27 @@ describe('connectPanePty', () => {
         enableMainAuthority()
         const deps = createDeps({ isVisibleRef: { current: true } })
         const { pane, dataCallback, transport } = await connectHiddenPane(deps)
+
         const transportOptions = createdTransportOptions.at(-1) as {
           onPtySpawn?: (ptyId: string) => void
         }
+
         transportOptions.onPtySpawn?.('pty-id')
+
         const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
           typeof vi.fn
         >
+
         getMainBufferSnapshot.mockResolvedValue({
           data: 'restored snapshot\r\n',
           cols: 100,
           rows: 30,
           seq: 64
         })
+
         const { _dispatchPtyModelRestoreNeededForTest } =
           await import('./pty-model-restore-channel')
+
         _dispatchPtyModelRestoreNeededForTest({
           id: 'pty-id',
           reason: 'pending-cap',
@@ -440,6 +483,7 @@ describe('connectPanePty', () => {
           expect.any(Function)
         )
         pane.terminal.write.mockClear()
+
         return { pane, dataCallback, getMainBufferSnapshot, transport, deps }
       }
 
@@ -536,19 +580,25 @@ describe('connectPanePty', () => {
         const isVisibleRef = { current: true }
         const deps = createDeps({ isVisibleRef })
         const { pane, dataCallback } = await connectHiddenPane(deps)
+
         const transportOptions = createdTransportOptions.at(-1) as {
           onPtySpawn?: (ptyId: string) => void
         }
+
         transportOptions.onPtySpawn?.('pty-id')
+
         const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
           typeof vi.fn
         >
+
         // Visible prompt echo metered in main's cumulative seq domain.
         dataCallback('$ node frame-script.mjs\r\n', { seq: 2_315, rawLength: 25 })
         // Pane hides mid-stream; main drops the hidden frame and marks restore.
         isVisibleRef.current = false
+
         const { _dispatchPtyModelRestoreNeededForTest } =
           await import('./pty-model-restore-channel')
+
         _dispatchPtyModelRestoreNeededForTest({
           id: 'pty-id',
           reason: 'hidden-drop',
@@ -563,8 +613,10 @@ describe('connectPanePty', () => {
           pendingDeliveryStartSeq: 2_472
         })
         isVisibleRef.current = true
+
         const { requestTerminalBacklogRecovery } =
           await import('@/lib/pane-manager/pane-terminal-output-scheduler')
+
         requestTerminalBacklogRecovery(pane.terminal as never)
         await flushAsyncTicks(20)
         expect(writtenData(pane)).toContain('LOW_RISK_RESTORE_FRAME_40')
@@ -590,8 +642,10 @@ describe('connectPanePty', () => {
           seq: 96,
           pendingDeliveryStartSeq: 80
         })
+
         const { _dispatchPtyModelRestoreNeededForTest } =
           await import('./pty-model-restore-channel')
+
         _dispatchPtyModelRestoreNeededForTest({
           id: 'pty-id',
           reason: 'pending-cap',

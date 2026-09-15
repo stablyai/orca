@@ -20,10 +20,12 @@ describe('fetchBrowserClientUploadFiles', () => {
   it('reassembles a multi-chunk remote file and stamps the page authority on every read', async () => {
     const requests: { method: string; params: Record<string, unknown> }[] = []
     const chunks = ['abc', 'de']
+
     const files = await fetchBrowserClientUploadFiles({
       request: async (method, params) => {
         requests.push({ method, params: params as Record<string, unknown> })
         const chunk = chunks.shift() ?? ''
+
         return {
           contentBase64: Buffer.from(chunk).toString('base64'),
           bytesRead: chunk.length,
@@ -107,29 +109,35 @@ it.each([0, 1, 128 * 1024])(
   'avoids recopying 16 single-chunk uploads of %i bytes',
   async (size) => {
     const source = Buffer.alloc(size, 171)
+
     const response = {
       contentBase64: source.toString('base64'),
       bytesRead: size,
       totalBytes: size,
       eof: true
     }
+
     const remotePaths = Array.from({ length: 16 }, (_, i) => `file-${i}.bin`)
     const request = vi.fn(async () => response)
     const concat = vi.spyOn(Buffer, 'concat')
     let copies = 0
     let files: Awaited<ReturnType<typeof fetchBrowserClientUploadFiles>>
+
     try {
       files = await fetchBrowserClientUploadFiles({ request, event, remotePaths })
       copies = concat.mock.calls.length
     } finally {
       concat.mockRestore()
     }
+
     expect(copies).toBe(0)
     expect(request).toHaveBeenCalledTimes(16)
     expect(files.map((file) => file.remotePath)).toEqual(remotePaths)
+
     for (const file of files) {
       expect(file.contents).toEqual(source)
     }
+
     if (size > 0) {
       files[0].contents[0] = 0
       expect(files[1].contents[0]).toBe(171)

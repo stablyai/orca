@@ -20,6 +20,7 @@ import {
 } from './dev-electron-bundle-cache.mjs'
 
 const apply = process.argv.includes('--apply')
+
 const repoRoot = process.argv.includes('--repo')
   ? path.resolve(process.argv[process.argv.indexOf('--repo') + 1])
   : process.cwd()
@@ -28,6 +29,7 @@ function listWorktrees(root) {
   const raw = execFileSync('git', ['-C', root, 'worktree', 'list', '--porcelain'], {
     encoding: 'utf8'
   })
+
   return raw
     .split('\n')
     .filter((line) => line.startsWith('worktree '))
@@ -37,29 +39,35 @@ function listWorktrees(root) {
 function measure(targetPath) {
   let total = 0
   let entries
+
   try {
     entries = readdirSync(targetPath, { withFileTypes: true })
   } catch {
     return 0
   }
+
   for (const entry of entries) {
     const entryPath = path.join(targetPath, entry.name)
+
     if (entry.isDirectory()) {
       total += measure(entryPath)
     } else if (!entry.isSymbolicLink()) {
       total += statSync(entryPath, { throwIfNoEntry: false })?.size ?? 0
     }
   }
+
   return total
 }
 
 export function collectDevBundles(worktree) {
   const root = path.join(worktree, 'out', 'electron-dev')
+
   try {
     return readdirSync(root, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => {
         const dir = path.join(root, entry.name)
+
         return {
           dir,
           hasMarker: existsSync(path.join(dir, DEV_BUNDLE_MARKER_FILENAME)),
@@ -75,18 +83,22 @@ function main() {
   // The patched dev bundle is only built on macOS; elsewhere the dev app runs from dist directly.
   if (process.platform !== 'darwin') {
     console.log('No dev Electron bundles on this platform; nothing to reclaim.')
+
     return
   }
 
   const processTable = getDevBundleProcessTable()
+
   if (processTable === null) {
     // Same rule the dev runner uses: no process table means we cannot prove a bundle is idle.
     console.error('Could not read the process table; refusing to guess which bundles are idle.')
     process.exitCode = 1
+
     return
   }
 
   const bundles = listWorktrees(repoRoot).flatMap((worktree) => collectDevBundles(worktree))
+
   // currentDir is null on purpose: unlike the dev runner, this sweep is not about to launch anything,
   // so the only thing protecting a bundle is a live process or an in-flight build.
   const stale = selectStaleDevBundleDirs({
@@ -98,14 +110,17 @@ function main() {
 
   let reclaimed = 0
   let removed = 0
+
   for (const dir of stale) {
     const size = measure(dir)
+
     if (!apply) {
       console.log(`would remove  ${dir}  ${(size / 1024 ** 3).toFixed(2)} GiB`)
       reclaimed += size
       removed += 1
       continue
     }
+
     try {
       rmSync(dir, { recursive: true, force: true })
       reclaimed += size

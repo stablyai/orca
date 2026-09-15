@@ -13,6 +13,7 @@ export type GitHubRepoLookupIndex = {
 
 // Why: repo identity/path updates replace this array, while weak ownership avoids retaining superseded snapshots.
 const lookupByRepos = new WeakMap<readonly Repo[], GitHubRepoLookupIndex>()
+
 const EMPTY_REPOS: readonly Repo[] = []
 
 export function getGitHubRepoLookupIndex(
@@ -20,6 +21,7 @@ export function getGitHubRepoLookupIndex(
 ): GitHubRepoLookupIndex {
   const repoRows = repos ?? EMPTY_REPOS
   const cached = lookupByRepos.get(repoRows)
+
   if (cached) {
     return cached
   }
@@ -35,16 +37,20 @@ export function getGitHubRepoLookupIndex(
       indexedCount += 1
       const repoId = repo.id
       const repoPath = repo.path
+
       if (!byId.has(repoId)) {
         byId.set(repoId, { index, repo })
       }
+
       if (!byPath.has(repoPath)) {
         byPath.set(repoPath, { index, repo })
       }
+
       if (matches(repoId, repoPath)) {
         return repo
       }
     }
+
     return undefined
   }
 
@@ -56,17 +62,23 @@ export function getGitHubRepoLookupIndex(
       if (!repoId) {
         return lookup.findByPath(repoPath)
       }
+
       const idMatch = byId.get(repoId)
       const pathMatch = byPath.get(repoPath)
+
       if (idMatch || pathMatch) {
         if (!pathMatch || (idMatch && idMatch.index < pathMatch.index)) {
           return idMatch?.repo
         }
+
         return pathMatch.repo
       }
+
       return scanUntil((id, path) => id === repoId || path === repoPath)
     }
   }
+
   lookupByRepos.set(repoRows, lookup)
+
   return lookup
 }

@@ -21,18 +21,22 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
   ): Promise<RuntimeTerminalInteractiveWait | null | undefined> {
     let ptyId: string
     let terminal: RuntimeTerminalAgentStatusSnapshot
+
     try {
       ptyId = this.getTerminalAgentStatusPtyId(handle)
       terminal = this.getTerminalAgentStatusSnapshot(handle, ptyId)
     } catch {
       return undefined
     }
+
     const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle)
+
     const promptReason = this.resolveAuthoritativeTerminalWaitPermission(
       terminal,
       explicitStatus,
       this.agentPromptLifecycleByPtyId.get(ptyId)
     )
+
     if (promptReason) {
       return {
         source: 'prompt-text',
@@ -40,20 +44,25 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
         ...(terminal.waitBlockedAt !== null ? { since: terminal.waitBlockedAt } : {})
       }
     }
+
     if (terminal.titleStatus === 'permission' && terminal.titleStatusIsLive) {
       return { source: 'title' }
     }
+
     if (explicitStatus?.status !== 'permission') {
       return null
     }
+
     const status = await withTimeout(
       this.probeAgentStatusOncePerPty(handle, ptyId),
       TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS,
       undefined
     )
+
     if (!status) {
       return undefined
     }
+
     return status.isRunningAgent && status.status === 'permission'
       ? { source: 'hook', since: explicitStatus.updatedAt }
       : null
@@ -64,9 +73,11 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
     ptyId: string
   ): Promise<RuntimeTerminalAgentStatus | undefined> {
     const inFlight = this.interactiveWaitProbesByPtyId.get(ptyId)
+
     if (inFlight) {
       return inFlight
     }
+
     const probe = this.getTerminalAgentStatus(handle)
       .catch(() => undefined)
       .finally(() => {
@@ -74,13 +85,16 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
           this.interactiveWaitProbesByPtyId.delete(ptyId)
         }
       })
+
     this.interactiveWaitProbesByPtyId.set(ptyId, probe)
+
     return probe
   }
 
   getTerminalWorktreeIdForPaneKey(paneKey: string): string | null {
     const parsed = parsePaneKey(paneKey)
     const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : null
+
     return leaf?.worktreeId ?? this.getPtyRecordForPaneKey(paneKey)?.worktreeId ?? null
   }
 
@@ -95,6 +109,7 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
     displayName: string
   } | null> {
     let worktreeId = this.store?.getWorkspaceSession?.()?.activeWorktreeId ?? null
+
     if (!worktreeId && this.graphStatus === 'ready') {
       for (const tab of this.tabs.values()) {
         if (tab.activeLeafId && tab.worktreeId) {
@@ -103,11 +118,14 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
         }
       }
     }
+
     if (!worktreeId) {
       return null
     }
+
     try {
       const resolved = await this.resolveWorktreeSelector(`id:${worktreeId}`)
+
       return {
         worktreeId: resolved.id,
         path: resolved.git.path,
@@ -124,18 +142,24 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
       handle,
       this.getOrchestrationDbIfAvailable?.() ?? null
     )
+
     if (structured) {
       return structured.identity.processIncarnation
     }
+
     const live = this.getLivePtyForHandle(handle)
     const record = live?.record ?? this.handles.get(handle)
+
     if (!record?.ptyId) {
       return null
     }
+
     const incarnationId = live?.pty.incarnationId ?? this.ptysById.get(record.ptyId)?.incarnationId
+
     if (incarnationId) {
       return `${record.ptyId}:${incarnationId}`
     }
+
     // Why: legacy providers may omit process incarnation; retain the prior restart-degraded fence.
     return `${this.runtimeId}:${record.ptyId}:${record.ptyGeneration}`
   }
@@ -146,12 +170,15 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
   ): ExactWorkerProviderSession | null {
     const paneKey = this.getTerminalPaneKey(handle)
     const processIncarnation = this.getTerminalProcessIncarnation(handle)
+
     if (!paneKey || !processIncarnation) {
       return null
     }
+
     let connectionId: string | null | undefined
     let launchToken: string | null | undefined
     let wslDistro: string | undefined
+
     try {
       const ptyId = this.getTerminalAgentStatusPtyId(handle)
       const pty = this.ptysById.get(ptyId)
@@ -167,6 +194,7 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
       launchToken = undefined
       wslDistro = undefined
     }
+
     return selectExactWorkerProviderSession({
       paneKey,
       processIncarnation,
@@ -180,9 +208,11 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
 
   validateOrchestrationAgentLauncher(agent: TuiAgent): void {
     const settings = this.store?.getSettings()
+
     if (!settings) {
       throw new Error('runtime_unavailable')
     }
+
     if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
       throw new OrchestrationError(
         'agent_unconfigured',

@@ -16,14 +16,17 @@ function createEditor(content: string): {
   root: HTMLDivElement
 } {
   const codec = createRichMarkdownEditorCodec(TEST_KEY)
+
   const context = createRichMarkdownHtmlSuperscriptLinkContext({
     sourceFilePath: '/repo/README.md',
     worktreeId: 'worktree-1',
     worktreeRoot: '/repo',
     sourceOwner: { kind: 'local' }
   })
+
   const root = document.createElement('div')
   document.body.appendChild(root)
+
   const editor = new Editor({
     element: root,
     extensions: createRichMarkdownExtensions({
@@ -36,6 +39,7 @@ function createEditor(content: string): {
     }),
     contentType: 'markdown'
   })
+
   return { editor, context, root }
 }
 
@@ -56,6 +60,7 @@ describe('handleRichMarkdownLinkShortcut', () => {
   it('opens the html-superscript action bubble for a citation NodeSelection', () => {
     const source = '<sup><a href="https://example.com">1</a></sup>'
     const { editor, context, root } = createEditor(`See note ${source}.`)
+
     try {
       let citationPos = -1
       editor.state.doc.descendants((node, pos) => {
@@ -99,6 +104,7 @@ describe('handleRichMarkdownLinkShortcut', () => {
 
   it('opens an editable markdown bubble when there is no link selection', () => {
     const { editor, context, root } = createEditor('plain text')
+
     try {
       editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, 1)))
       const setLinkBubble = vi.fn()

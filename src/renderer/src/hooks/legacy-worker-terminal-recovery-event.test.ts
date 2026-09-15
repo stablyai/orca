@@ -44,6 +44,7 @@ describe('legacy worker terminal recovery events', () => {
     const closeTab = vi.fn()
     const retireAgentPaneAuthority = vi.fn()
     const siblingLeafId = '22222222-2222-4222-8222-222222222222'
+
     const store = {
       tabsByWorktree: {
         worktree: [{ id: 'legacy-worker' }]
@@ -97,6 +98,7 @@ describe('legacy worker terminal recovery events', () => {
     const setTabLayout = vi.fn()
     const clearTabPtyId = vi.fn()
     const closeTab = vi.fn()
+
     const store = {
       tabsByWorktree: {
         worktree: [{ id: 'legacy-worker' }]

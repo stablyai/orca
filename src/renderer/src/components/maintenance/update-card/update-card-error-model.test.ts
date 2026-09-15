@@ -28,6 +28,7 @@ describe('update card error model precedence', () => {
       },
       true
     )
+
     expect(model?.title).toBe('Local Build Error')
     expect(model?.primaryAction?.label).toBe('Choose Another Build')
     expect(model?.releaseUrl).toBeUndefined()
@@ -38,6 +39,7 @@ describe('update card error model precedence', () => {
       state: 'error',
       message: 'New version 1.4.200 is not signed by the application owner: publisherNames: Orca'
     })
+
     expect(model?.variant).toBe('security')
     expect(model?.primaryAction).toBeUndefined()
     expect(model?.manualLabel).toBe('Check official releases')
@@ -45,6 +47,7 @@ describe('update card error model precedence', () => {
 
   it('preserves the pending HTTP/1 compatibility recovery action', () => {
     const onEnableHttp1Compatibility = vi.fn()
+
     const model = buildUpdateCardErrorModel({
       status: { state: 'error', message: 'net::ERR_HTTP2_PROTOCOL_ERROR' },
       isLocalBuild: false,
@@ -58,6 +61,7 @@ describe('update card error model precedence', () => {
       onRecheck: vi.fn(),
       onInstallRetry: vi.fn()
     })
+
     expect(model?.variant).toBe('http1Compatibility')
     expect(model?.primaryAction).toMatchObject({
       label: 'Enable & Restart',

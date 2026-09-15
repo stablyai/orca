@@ -21,18 +21,22 @@ export function useEditorAnimatedVisualAnimation(
     rowH1Ref,
     rowCodeRef
   } = refs
+
   useEffect(() => {
     if (reducedMotion) {
       return
     }
+
     const docMaybe = docRef.current
     const activeLineInitial = activeLineRef.current
     const cursorMaybe = cursorRef.current
     const menuMaybe = menuRef.current
     const afterMaybe = afterRef.current
+
     if (!docMaybe || !activeLineInitial || !cursorMaybe || !menuMaybe || !afterMaybe) {
       return
     }
+
     // Re-bind to non-null locals so the helper closures spanning `await`
     // points keep their narrowed types — TS flow analysis drops the narrow
     // through async boundaries otherwise.
@@ -43,6 +47,7 @@ export function useEditorAnimatedVisualAnimation(
 
     let cancelled = false
     const timers: number[] = []
+
     const wait = (ms: number): Promise<void> =>
       new Promise((resolve) => {
         const id = window.setTimeout(() => resolve(), ms)
@@ -56,6 +61,7 @@ export function useEditorAnimatedVisualAnimation(
 
     let activeLine: HTMLDivElement = activeLineInitial
     let activeText: HTMLSpanElement | null = activeTextRef.current
+
     let activeCaret: HTMLSpanElement | null =
       activeLineInitial.querySelector<HTMLSpanElement>('[data-md-caret]')
 
@@ -75,19 +81,23 @@ export function useEditorAnimatedVisualAnimation(
       menu.style.left = `${x}px`
       menu.style.top = '0px'
       const wasShown = menu.dataset.shown === '1'
+
       if (!wasShown) {
         menu.style.visibility = 'hidden'
         menu.dataset.shown = '1'
         menu.style.opacity = '1'
         menu.style.transform = 'none'
       }
+
       const menuH = menu.getBoundingClientRect().height
+
       if (!wasShown) {
         menu.dataset.shown = ''
         menu.style.opacity = ''
         menu.style.transform = ''
         menu.style.visibility = ''
       }
+
       const belowY = lineRect.bottom - docRect.top + 6
       const aboveY = lineRect.top - docRect.top - menuH - 6
       const docH = docRect.height
@@ -108,11 +118,13 @@ export function useEditorAnimatedVisualAnimation(
       menu.style.opacity = '1'
       menu.style.transform = 'translateY(0) scale(1)'
     }
+
     function hideMenu(): void {
       menu.dataset.shown = ''
       menu.style.opacity = '0'
       menu.style.transform = 'translateY(-4px) scale(0.985)'
     }
+
     function clearActiveRow(): void {
       menu
         .querySelectorAll<HTMLElement>('[data-slash-row]')
@@ -128,6 +140,7 @@ export function useEditorAnimatedVisualAnimation(
         if (cancelled) {
           return
         }
+
         el.textContent = (el.textContent ?? '') + ch
         await wait(perChar)
       }
@@ -144,9 +157,11 @@ export function useEditorAnimatedVisualAnimation(
       const wrapper = document.createElement('div')
       wrapper.innerHTML = initialActiveLineHTML
       const fresh = wrapper.firstElementChild as HTMLDivElement | null
+
       if (!fresh) {
         return
       }
+
       if (initialActiveLineParent) {
         if (
           initialActiveLineNextSibling &&
@@ -157,6 +172,7 @@ export function useEditorAnimatedVisualAnimation(
           initialActiveLineParent.appendChild(fresh)
         }
       }
+
       activeLine = fresh
       activeText = fresh.querySelector<HTMLSpanElement>('[data-md-active-text]')
       activeCaret = fresh.querySelector<HTMLSpanElement>('[data-md-caret]')
@@ -175,6 +191,7 @@ export function useEditorAnimatedVisualAnimation(
         void cursor.offsetWidth
         cursor.style.transition = ''
         await wait(EDITOR_ANIMATION_TIMING.preHoverMs)
+
         if (cancelled) {
           return
         }
@@ -183,11 +200,15 @@ export function useEditorAnimatedVisualAnimation(
         if (activeText) {
           activeText.textContent = ''
         }
+
         await typeInto(activeText ?? activeLine, '/')
+
         if (cancelled) {
           return
         }
+
         await wait(EDITOR_ANIMATION_TIMING.postTypeMs)
+
         if (cancelled) {
           return
         }
@@ -198,11 +219,14 @@ export function useEditorAnimatedVisualAnimation(
         showMenu()
         cursor.style.opacity = '1'
         const rowH1 = rowH1Ref.current
+
         if (rowH1) {
           moveCursorTo(rowH1, 14, 11)
           rowH1.classList.add('slash-active')
         }
+
         await wait(EDITOR_ANIMATION_TIMING.menuHoldMs)
+
         if (cancelled) {
           return
         }
@@ -210,13 +234,16 @@ export function useEditorAnimatedVisualAnimation(
         // 3. Click — line becomes an H1.
         cursor.dataset.clicking = '1'
         await wait(EDITOR_ANIMATION_TIMING.clickRippleMs)
+
         if (cancelled) {
           return
         }
+
         cursor.dataset.clicking = ''
         hideMenu()
         cursor.style.opacity = '0'
         await wait(EDITOR_ANIMATION_TIMING.postClickMs)
+
         if (cancelled) {
           return
         }
@@ -224,21 +251,29 @@ export function useEditorAnimatedVisualAnimation(
         // Convert the active line to an H1: clear the slash glyph, drop the
         // monospace styling, type the heading.
         activeLine.dataset.role = 'h1'
+
         if (activeText) {
           activeText.textContent = ''
         }
+
         if (activeCaret) {
           activeCaret.style.display = ''
         }
+
         await wait(EDITOR_ANIMATION_TIMING.postH1RevealMs)
+
         if (cancelled) {
           return
         }
+
         await typeInto(activeText ?? activeLine, 'Ship checklist', 55)
+
         if (cancelled) {
           return
         }
+
         await wait(EDITOR_ANIMATION_TIMING.postH1TypeMs)
+
         if (cancelled) {
           return
         }
@@ -257,6 +292,7 @@ export function useEditorAnimatedVisualAnimation(
         after.appendChild(newActive)
         const lineForBeat2 = newActive
         await wait(EDITOR_ANIMATION_TIMING.newLineHoldMs)
+
         if (cancelled) {
           return
         }
@@ -265,29 +301,37 @@ export function useEditorAnimatedVisualAnimation(
           if (cancelled) {
             return
           }
+
           newText.textContent = (newText.textContent ?? '') + ch
           await wait(EDITOR_ANIMATION_TIMING.typePerCharMs)
         }
+
         await wait(EDITOR_ANIMATION_TIMING.postTypeMs)
+
         if (cancelled) {
           return
         }
 
         // Filter to the Code Block row, anchor menu, highlight.
         clearActiveRow()
+
         if (rowH1) {
           rowH1.classList.remove('slash-active')
         }
+
         setSlashMode('code')
         placeMenuNearLine(lineForBeat2)
         showMenu()
         cursor.style.opacity = '1'
         const rowCode = rowCodeRef.current
+
         if (rowCode) {
           moveCursorTo(rowCode, 14, 11)
           rowCode.classList.add('slash-active')
         }
+
         await wait(EDITOR_ANIMATION_TIMING.menuHoldMs)
+
         if (cancelled) {
           return
         }
@@ -295,13 +339,16 @@ export function useEditorAnimatedVisualAnimation(
         // 5. Click — line becomes a code block.
         cursor.dataset.clicking = '1'
         await wait(EDITOR_ANIMATION_TIMING.clickRippleMs)
+
         if (cancelled) {
           return
         }
+
         cursor.dataset.clicking = ''
         hideMenu()
         cursor.style.opacity = '0'
         await wait(EDITOR_ANIMATION_TIMING.postClickMs)
+
         if (cancelled) {
           return
         }
@@ -312,6 +359,7 @@ export function useEditorAnimatedVisualAnimation(
         lineForBeat2.replaceWith(codeBlock)
 
         await wait(EDITOR_ANIMATION_TIMING.finalHoldMs)
+
         if (cancelled) {
           return
         }
@@ -322,6 +370,7 @@ export function useEditorAnimatedVisualAnimation(
     }
 
     void loop()
+
     return () => {
       cancelled = true
       timers.forEach((id) => window.clearTimeout(id))

@@ -41,6 +41,7 @@ export const WorkerStartParams = z
         message: 'Missing --task or --spec'
       })
     }
+
     if (params.task && params.spec) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -48,6 +49,7 @@ export const WorkerStartParams = z
         message: '--task and --spec are mutually exclusive'
       })
     }
+
     // Why: --spec creates a new Task, so a retry link to a prior Dispatch could never resolve and
     // the refusal named a Task id the caller never supplied.
     if (params.retryOf && params.spec) {

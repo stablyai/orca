@@ -31,6 +31,7 @@ import {
 import { ReviewChipAvatar } from './Avatars'
 import { createTaskPageGitHubReviewerActions } from '../../task-page-github-reviewer-actions'
 import { TaskPageGitHubReviewerPicker } from './ReviewerPicker'
+
 export function PRReviewCell({
   item,
   repo,
@@ -44,24 +45,31 @@ export function PRReviewCell({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [reviewerInput, setReviewerInput] = useState('')
+
   const [localReviewRequests, setLocalReviewRequests] = useState<GitHubAssignableUser[]>(
     () => item.reviewRequests ?? []
   )
+
   const [reviewerPickerSide, setReviewerPickerSide] = useState<'top' | 'bottom'>('bottom')
   const [reviewerPickerMaxHeight, setReviewerPickerMaxHeight] = useState<number | null>(null)
+
   const [reviewRequestsSource, setReviewRequestsSource] = useState(() => ({
     itemId: item.id,
     repoId: item.repoId,
     reviewRequests: item.reviewRequests
   }))
+
   const [activeReviewerCursor, setActiveReviewerCursor] = useState({
     resetKey: '',
     index: 0
   })
+
   const [submitting, setSubmitting] = useState(false)
+
   const repoOwnerSettings = useAppStore(
     useShallow((s) => getSettingsForRepoRuntimeOwner(s, repo?.id ?? null))
   )
+
   const sourceSettings = useMemo(
     () =>
       sourceContext?.provider === 'github'
@@ -72,22 +80,27 @@ export function PRReviewCell({
         : repoOwnerSettings,
     [repoOwnerSettings, sourceContext]
   )
+
   const reviewerInputRef = useRef<HTMLInputElement | null>(null)
   const reviewerTriggerRef = useRef<HTMLButtonElement | null>(null)
   const reviewerInputFocusFrameRef = useRef<number | null>(null)
+
   const cancelReviewerInputFocusFrame = useCallback((): void => {
     if (reviewerInputFocusFrameRef.current === null) {
       return
     }
+
     cancelAnimationFrame(reviewerInputFocusFrameRef.current)
     reviewerInputFocusFrameRef.current = null
   }, [])
+
   const setReviewerInputNode = useCallback(
     (node: HTMLInputElement | null): void => {
       // Why: the queued picker focus is only valid while this input is mounted.
       if (!node) {
         cancelReviewerInputFocusFrame()
       }
+
       reviewerInputRef.current = node
     },
     [cancelReviewerInputFocusFrame]
@@ -106,17 +119,22 @@ export function PRReviewCell({
     })
     setLocalReviewRequests(item.reviewRequests ?? [])
   }
+
   const reviewerSeedUsers = useMemo<GitHubAssignableUser[]>(() => {
     const byLogin = new Map<string, GitHubAssignableUser>()
+
     const add = (user: GitHubAssignableUser): void => {
       if (!user.login) {
         return
       }
+
       byLogin.set(user.login.toLowerCase(), user)
     }
+
     for (const user of localReviewRequests) {
       add(user)
     }
+
     for (const review of item.latestReviews ?? []) {
       add({
         login: review.login,
@@ -124,6 +142,7 @@ export function PRReviewCell({
         avatarUrl: review.avatarUrl ?? ''
       })
     }
+
     if (item.author) {
       add({
         login: item.author,
@@ -131,9 +150,12 @@ export function PRReviewCell({
         avatarUrl: ''
       })
     }
+
     return Array.from(byLogin.values())
   }, [item.author, item.latestReviews, localReviewRequests])
+
   const reviewRepo = useMemo(() => resolveTaskPullRequestRepo(item), [item])
+
   const reviewerMetadata = useRepoAssigneesBySlug(
     open && reviewRepo ? reviewRepo.owner : null,
     open && reviewRepo ? reviewRepo.repo : null,
@@ -141,7 +163,9 @@ export function PRReviewCell({
     sourceSettings,
     reviewRepo?.host
   )
+
   const authorLogin = item.author?.toLowerCase() ?? null
+
   const reviewerCandidates = useMemo(
     () =>
       mergeReviewerSuggestions(reviewerMetadata.data, reviewerSeedUsers).filter(
@@ -149,10 +173,12 @@ export function PRReviewCell({
       ),
     [authorLogin, reviewerMetadata.data, reviewerSeedUsers]
   )
+
   const reviewerCandidatesByLogin = useMemo(
     () => new Map(reviewerCandidates.map((user) => [user.login.toLowerCase(), user])),
     [reviewerCandidates]
   )
+
   const selectedReviewerLogins = useMemo(
     () =>
       new Set(
@@ -160,11 +186,14 @@ export function PRReviewCell({
       ),
     [localReviewRequests]
   )
+
   const reviewerQueryState = useMemo(
     () => getGitHubPRReviewerQueryState(reviewerInput),
     [reviewerInput]
   )
+
   const reviewerQuery = reviewerQueryState.query
+
   const filteredReviewerCandidates = useMemo(
     () =>
       filterGitHubPRReviewerCandidates({
@@ -173,6 +202,7 @@ export function PRReviewCell({
       }),
     [reviewerCandidates, reviewerQueryState]
   )
+
   const suggestedReviewerRows = useMemo(
     () =>
       reviewerQuery.length === 0 && !reviewerQueryState.isTooLarge
@@ -191,29 +221,37 @@ export function PRReviewCell({
       selectedReviewerLogins
     ]
   )
+
   const everyoneElseReviewerRows = useMemo(() => {
     const suggestedLogins = new Set(suggestedReviewerRows.map((user) => user.login.toLowerCase()))
+
     return filteredReviewerCandidates.filter(
       (user) => !suggestedLogins.has(user.login.toLowerCase())
     )
   }, [filteredReviewerCandidates, suggestedReviewerRows])
+
   const actionableReviewerRows = useMemo(
     () => [...suggestedReviewerRows, ...everyoneElseReviewerRows],
     [everyoneElseReviewerRows, suggestedReviewerRows]
   )
+
   const reviewerCursorResetKey = `${reviewerQuery}\u0000${actionableReviewerRows.length}`
+
   if (activeReviewerCursor.resetKey !== reviewerCursorResetKey) {
     setActiveReviewerCursor({
       resetKey: reviewerCursorResetKey,
       index: 0
     })
   }
+
   const activeReviewerIndex =
     activeReviewerCursor.resetKey === reviewerCursorResetKey ? activeReviewerCursor.index : 0
+
   const setActiveReviewerIndex = useCallback(
     (nextIndex: number | ((current: number) => number)): void => {
       setActiveReviewerCursor((current) => {
         const currentIndex = current.resetKey === reviewerCursorResetKey ? current.index : 0
+
         return {
           resetKey: reviewerCursorResetKey,
           index: typeof nextIndex === 'function' ? nextIndex(currentIndex) : nextIndex
@@ -222,6 +260,7 @@ export function PRReviewCell({
     },
     [reviewerCursorResetKey]
   )
+
   if (item.type !== 'pr') {
     return (
       <span className="text-[11px] text-muted-foreground">
@@ -229,18 +268,22 @@ export function PRReviewCell({
       </span>
     )
   }
+
   const itemWithLocalReviewRequests = {
     ...item,
     reviewRequests: localReviewRequests
   }
+
   const primaryReviewer = getGitHubPRPrimaryReviewer(itemWithLocalReviewRequests)
   const reviewerRows = getGitHubPRReviewerRows(itemWithLocalReviewRequests)
   const extraReviewerCount = Math.max(0, reviewerRows.length - 1)
+
   const hasReviewerMetadata =
     item.reviewDecision !== undefined ||
     localReviewRequests.length > 0 ||
     item.reviewRequests !== undefined ||
     item.latestReviews !== undefined
+
   const { handleRequestReview, requestReviewer } = createTaskPageGitHubReviewerActions({
     item,
     localReviewRequests,
@@ -258,6 +301,7 @@ export function PRReviewCell({
     submitting,
     workItemMutation
   })
+
   const handleReviewerPickerOpenChange = (nextOpen: boolean): void => {
     if (nextOpen) {
       const rect = reviewerTriggerRef.current?.getBoundingClientRect()
@@ -269,18 +313,23 @@ export function PRReviewCell({
       setReviewerPickerSide(nextSide)
       setReviewerPickerMaxHeight(Math.max(180, Math.min(360, available || 360)))
     }
+
     setOpen(nextOpen)
+
     if (nextOpen) {
       cancelReviewerInputFocusFrame()
       reviewerInputFocusFrameRef.current = requestAnimationFrame(() => {
         reviewerInputFocusFrameRef.current = null
         reviewerInputRef.current?.focus()
       })
+
       return
     }
+
     cancelReviewerInputFocusFrame()
     setReviewerInput('')
   }
+
   return (
     <Popover open={open} onOpenChange={handleReviewerPickerOpenChange}>
       <PopoverTrigger asChild>

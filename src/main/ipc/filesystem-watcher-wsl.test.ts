@@ -20,7 +20,9 @@ import {
 import type { WatchedRoot, WslWatcherDeps } from './filesystem-watcher-wsl'
 
 const SNAPSHOT_START = '\x1e'
+
 const SNAPSHOT_END = '\x1f'
+
 const ROOT_KEY = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
 
 class FakeChildProcess extends EventEmitter {
@@ -29,6 +31,7 @@ class FakeChildProcess extends EventEmitter {
   stderr = new PassThrough()
   kill = vi.fn(() => {
     this.emit('close', null, 'SIGTERM')
+
     return true
   })
 }
@@ -40,6 +43,7 @@ function snapshotFrame(entries: [type: string, mtime: string, path: string][]): 
 }
 
 type ScheduleBatchFlush = (root: WatchedRoot) => void
+
 type ScheduleBatchFlushMock = ReturnType<typeof vi.fn<ScheduleBatchFlush>>
 
 function makeDeps(
@@ -63,6 +67,7 @@ function startWatcher(deps = makeDeps()): {
   const child = new FakeChildProcess()
   spawnMock.mockReturnValueOnce(child)
   const promise = createWslWatcher(ROOT_KEY, ROOT_KEY, deps)
+
   return { child, promise, deps }
 }
 
@@ -71,6 +76,7 @@ async function resolveInitialSnapshot(
   promise: Promise<WatchedRoot>
 ): Promise<WatchedRoot> {
   child.stdout.write(snapshotFrame([['f', '1.0', '/home/me/repo/README.md']]))
+
   return promise
 }
 
@@ -120,6 +126,7 @@ describe('createWslWatcher', () => {
     const siblingReleases = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN - 1 }, () =>
       reserveWatcherChild()
     )
+
     const { child, promise } = startWatcher()
     await resolveInitialSnapshot(child, promise)
 
@@ -136,6 +143,7 @@ describe('createWslWatcher', () => {
     const siblingReleases = Array.from({ length: MAX_PHYSICAL_WATCHER_CHILDREN - 1 }, () =>
       reserveWatcherChild()
     )
+
     const child = new FakeChildProcess()
     vi.spyOn(child.stdin, 'end').mockImplementation(() => {
       throw new Error('script write failed')
@@ -212,9 +220,11 @@ describe('createWslWatcher', () => {
     const root = await resolveInitialSnapshot(child, promise)
 
     let settled = false
+
     const unsubscribe = root.subscription.unsubscribe().finally(() => {
       settled = true
     })
+
     await Promise.resolve()
     expect(settled).toBe(false)
 
@@ -225,6 +235,7 @@ describe('createWslWatcher', () => {
 
   it('retains a timed-out WSL watcher owner until a later physical close', async () => {
     vi.useFakeTimers()
+
     try {
       const child = new FakeChildProcess()
       child.kill = vi.fn(() => true)
@@ -233,10 +244,12 @@ describe('createWslWatcher', () => {
       const root = await resolveInitialSnapshot(child, promise)
 
       const unsubscribe = root.subscription.unsubscribe()
+
       const rejected = expect(unsubscribe).rejects.toMatchObject({
         code: 'process_unavailable',
         physicalExit: expect.any(Promise)
       })
+
       await vi.advanceTimersByTimeAsync(WSL_WATCHER_PHYSICAL_EXIT_TIMEOUT_MS)
       await rejected
 

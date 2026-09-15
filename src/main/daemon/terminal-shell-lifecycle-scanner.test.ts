@@ -3,6 +3,7 @@ import { POST_REPLAY_DEAD_TUI_RESET } from '../../shared/terminal-mode-reset-pro
 import { TerminalShellLifecycleScanner } from './terminal-shell-lifecycle-scanner'
 
 const ENTER_ALT = '\x1b[?1049h'
+
 const LEAVE_ALT = '\x1b[?1049l'
 
 describe('TerminalShellLifecycleScanner', () => {
@@ -96,6 +97,7 @@ describe('TerminalShellLifecycleScanner', () => {
 
     it('invalidates the candidate when output arrives before the owner is set', () => {
       const scanner = new TerminalShellLifecycleScanner()
+
       const candidate = scanner.scan(
         `${ENTER_ALT}TUI${LEAVE_ALT}\x1b]133;D;0\x07`
       ).cleanExitCandidate

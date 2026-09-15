@@ -4,6 +4,7 @@ import type { AutomationRunTerminalHost } from './runtime-terminal-run-observer'
 import type { AutomationRunCompletionObservation } from './run-completion-watcher'
 
 const HANDLE = 'terminal-1'
+
 const RUNTIME_TUI_IDLE_TIMEOUT_MS = 5 * 60 * 1000
 
 /** The three shapes the runtime satisfies tui-idle from. `lastAgentStatus` is the
@@ -28,6 +29,7 @@ function createFakeRuntime(initial: Partial<FakePane>) {
     preview: '',
     ...initial
   }
+
   const waiters = new Set<FakeWaiter>()
   let waitCalls = 0
 
@@ -46,12 +48,15 @@ function createFakeRuntime(initial: Partial<FakePane>) {
     readTerminal: async () => ({ tail: ['previous run output'] }),
     waitForTerminal: (_handle, options) => {
       waitCalls += 1
+
       if (options?.signal?.aborted) {
         return Promise.reject(new Error('request_aborted'))
       }
+
       if (satisfiedNow()) {
         return Promise.resolve({ satisfied: true })
       }
+
       return new Promise((resolve, reject) => {
         const waiter: FakeWaiter = {
           resolve,
@@ -61,14 +66,17 @@ function createFakeRuntime(initial: Partial<FakePane>) {
             reject(new Error('timeout'))
           }, options?.timeoutMs ?? RUNTIME_TUI_IDLE_TIMEOUT_MS)
         }
+
         waiters.add(waiter)
       })
     },
     setPane: (next) => {
       Object.assign(pane, next)
+
       if (!satisfiedNow()) {
         return
       }
+
       for (const waiter of waiters) {
         waiters.delete(waiter)
         clearTimeout(waiter.timer)
@@ -77,6 +85,7 @@ function createFakeRuntime(initial: Partial<FakePane>) {
     },
     waitCalls: () => waitCalls
   }
+
   return runtime
 }
 
@@ -85,6 +94,7 @@ function observe(runtime: AutomationRunTerminalHost) {
   const settled: AutomationRunCompletionObservation[] = []
   const errors: unknown[] = []
   const observer = createRuntimeAutomationRunTerminalObserver(runtime)
+
   const promise = observer
     .observeCompletion(HANDLE, { signal: controller.signal })
     .then((observation) => {
@@ -93,6 +103,7 @@ function observe(runtime: AutomationRunTerminalHost) {
     .catch((error: unknown) => {
       errors.push(error)
     })
+
   return { controller, settled, errors, promise }
 }
 

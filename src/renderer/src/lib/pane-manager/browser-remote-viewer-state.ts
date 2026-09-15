@@ -7,19 +7,24 @@ import { useSyncExternalStore } from 'react'
 const remotelyViewedPageIds = new Set<string>()
 
 type BrowserRemoteViewerChangeListener = (browserPageId: string) => void
+
 const changeListeners = new Set<BrowserRemoteViewerChangeListener>()
+
 const snapshotListeners = new Set<() => void>()
+
 let version = 0
 
 export function onBrowserRemoteViewerChange(
   listener: BrowserRemoteViewerChangeListener
 ): () => void {
   changeListeners.add(listener)
+
   return () => changeListeners.delete(listener)
 }
 
 function subscribe(listener: () => void): () => void {
   snapshotListeners.add(listener)
+
   return () => {
     snapshotListeners.delete(listener)
   }
@@ -35,9 +40,11 @@ function getServerSnapshot(): number {
 
 function notifyChange(browserPageId: string): void {
   version += 1
+
   for (const listener of changeListeners) {
     listener(browserPageId)
   }
+
   for (const listener of snapshotListeners) {
     listener()
   }
@@ -52,6 +59,7 @@ export function setRemoteViewersForBrowserPage(
   } else {
     remotelyViewedPageIds.delete(browserPageId)
   }
+
   notifyChange(browserPageId)
 }
 
@@ -69,6 +77,7 @@ export function useBrowserRemoteViewerForAny(
   browserPageIds: readonly (string | null | undefined)[]
 ): boolean {
   useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+
   return hasRemoteViewerForAnyBrowserPage(browserPageIds)
 }
 
@@ -76,11 +85,13 @@ export function getBrowserRemotelyViewedPageIds(
   browserPageIds: readonly (string | null | undefined)[]
 ): Set<string> {
   const viewed = new Set<string>()
+
   for (const pageId of browserPageIds) {
     if (pageId && isBrowserPageRemotelyViewed(pageId)) {
       viewed.add(pageId)
     }
   }
+
   return viewed
 }
 
@@ -88,6 +99,7 @@ export function useBrowserRemotelyViewedPageIds(
   browserPageIds: readonly (string | null | undefined)[]
 ): Set<string> {
   useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot)
+
   return getBrowserRemotelyViewedPageIds(browserPageIds)
 }
 
@@ -96,10 +108,12 @@ export function hydrateBrowserRemoteViewerPages(browserPageIds: readonly string[
   // so every page that gained or lost the signal has to be notified, not just the new ones.
   const affectedPageIds = new Set(remotelyViewedPageIds)
   remotelyViewedPageIds.clear()
+
   for (const browserPageId of browserPageIds) {
     affectedPageIds.add(browserPageId)
     remotelyViewedPageIds.add(browserPageId)
   }
+
   for (const browserPageId of affectedPageIds) {
     notifyChange(browserPageId)
   }

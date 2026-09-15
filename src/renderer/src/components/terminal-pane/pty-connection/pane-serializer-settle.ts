@@ -22,30 +22,40 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
   ): Promise<void> => {
     try {
       await session.replayWriteQueue
+
       if (session.disposed || session.transport.getPtyId() !== ptyId) {
         await window.api.pty
           .clearPendingPaneSerializer(session.cacheKey, generation)
           .catch(() => {})
+
         return
       }
+
       await waitForTerminalOutputParsed(session.pane.terminal)
+
       if (!session.disposed && session.transport.getPtyId() === ptyId) {
         await window.api.pty.settlePaneSerializer(session.cacheKey, generation)
+
         return
       }
     } catch {
       // Clear below so a failed parser/replay cannot leave the pane generation pending.
     }
+
     await window.api.pty.clearPendingPaneSerializer(session.cacheKey, generation).catch(() => {})
   }
+
   session.reportRemoteRendererSerializerReady = (): void => {
     const ptyId = session.transport.getPtyId()
+
     if (!ptyId || !isRemoteRuntimePtyId(ptyId)) {
       return
     }
+
     if (!hasPtySerializer(ptyId)) {
       session.registerPaneSerializerFor(ptyId)
     }
+
     // Why: onSubscribed follows the snapshot callback, but replay drains
     // asynchronously; join it and xterm's parser before reporting readiness.
     void session.replayWriteQueue
@@ -65,31 +75,38 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
       ? { command: session.paneStartup.command }
       : null
     : null
+
   const startupDraftReadyScanner = session.ownsStartupDraftPaste
     ? createDraftPasteReadyScanner(
         session.startupDraftAgentConfig?.draftPasteReadySignal ??
           'render-quiet-after-bracketed-paste'
       )
     : null
+
   let startupDraftReadinessArmed = false
   let startupDraftPasteSettled = !session.ownsStartupDraftPaste
   let startupDraftPasteInFlight = false
   let startupDraftInputRecorded = false
   let startupDraftQuietTimer: ReturnType<typeof setTimeout> | null = null
   let startupDraftHardTimer: ReturnType<typeof setTimeout> | null = null
+
   const clearStartupDraftPasteTimers = (): void => {
     if (startupDraftQuietTimer !== null) {
       clearTimeout(startupDraftQuietTimer)
       startupDraftQuietTimer = null
     }
+
     if (startupDraftHardTimer !== null) {
       clearTimeout(startupDraftHardTimer)
       startupDraftHardTimer = null
     }
   }
+
   session.cleanupStartupDraftPasteTimers = clearStartupDraftPasteTimers
+
   const getStartupDraftPtyId = (): string | null => {
     const ptyId = session.transport.getPtyId()
+
     if (
       !ptyId ||
       session.disposed ||
@@ -97,8 +114,10 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     ) {
       return null
     }
+
     return ptyId
   }
+
   const sendStartupDraftPaste = (): void => {
     if (
       !session.startupDraftPrompt ||
@@ -108,28 +127,35 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     ) {
       return
     }
+
     const ptyId = getStartupDraftPtyId()
+
     if (!ptyId) {
       return
     }
+
     startupDraftPasteInFlight = true
     startupDraftPasteSettled = true
     session.startupDraftPasteAttempted = true
     session.cleanupStartupDraftPasteTimers()
+
     const settings = getSettingsForWorktreeRuntimeOwner(
       useAppStore.getState(),
       session.deps.worktreeId
     )
+
     // Why: xterm focus reports share this transport queue. Bypassing it can
     // race CSI I against the draft on ConPTY and expose a literal `[I` prefix.
     void sendAgentDraftPasteContent(settings, ptyId, session.startupDraftPrompt, async (data) => {
       const accepted = await writeTerminalPastePtyInput(session.transport, data)
+
       if (accepted && !startupDraftInputRecorded) {
         // Why: this transport write bypasses xterm's user-input signal; keep
         // the composed draft from being discarded by later hibernation.
         startupDraftInputRecorded = true
         session.recordTerminalInputForHibernation()
       }
+
       return accepted
     })
       .catch(() => false)
@@ -137,21 +163,27 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
         startupDraftPasteInFlight = false
       })
   }
+
   const deliverStartupDraftIfAgentOwnsPty = async (): Promise<void> => {
     if (!session.startupDraftAgentConfig || startupDraftPasteSettled) {
       return
     }
+
     const ptyId = getStartupDraftPtyId()
+
     if (!ptyId) {
       return
     }
+
     const settings = getSettingsForWorktreeRuntimeOwner(
       useAppStore.getState(),
       session.deps.worktreeId
     )
+
     try {
       const process = await inspectRuntimeTerminalProcess(settings, ptyId)
       const foreground = process.foregroundProcess?.toLowerCase() ?? ''
+
       if (
         getStartupDraftPtyId() === ptyId &&
         isExpectedAgentProcess(foreground, session.startupDraftAgentConfig.expectedProcess)
@@ -162,47 +194,60 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
       // Best-effort fallback; the primary path is the PTY readiness marker.
     }
   }
+
   const armStartupDraftHardTimer = (): void => {
     if (!startupDraftReadyScanner || startupDraftPasteSettled || startupDraftHardTimer !== null) {
       return
     }
+
     startupDraftHardTimer = setTimeout(() => {
       startupDraftHardTimer = null
       void deliverStartupDraftIfAgentOwnsPty()
     }, resolveDraftPasteReadyTimeoutMs(session.startupDraftAgent))
   }
+
   const armStartupDraftQuietTimer = (): void => {
     if (!startupDraftReadyScanner || startupDraftPasteSettled) {
       return
     }
+
     if (startupDraftQuietTimer !== null) {
       clearTimeout(startupDraftQuietTimer)
     }
+
     startupDraftQuietTimer = setTimeout(() => {
       startupDraftQuietTimer = null
       sendStartupDraftPaste()
     }, STARTUP_DRAFT_PASTE_QUIET_MS)
   }
+
   session.armStartupDraftReadinessObservation = (): void => {
     if (!startupDraftReadyScanner || startupDraftReadinessArmed) {
       return
     }
+
     startupDraftReadinessArmed = true
     armStartupDraftHardTimer()
   }
+
   session.observeStartupDraftPasteReadiness = (data: string): void => {
     if (!startupDraftReadyScanner || !startupDraftReadinessArmed || startupDraftPasteSettled) {
       return
     }
+
     const scanned = startupDraftReadyScanner.observe(data)
+
     if (scanned.ready) {
       sendStartupDraftPaste()
+
       return
     }
+
     if (scanned.armQuietTimer) {
       armStartupDraftQuietTimer()
     }
   }
+
   if (
     session.ownsStartupDraftPaste &&
     !session.connectionId &&
@@ -210,6 +255,7 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
   ) {
     session.armStartupDraftReadinessObservation()
   }
+
   let sessionRestoredBannerShown: SessionRestoredBannerReason | null = null
   session.showSessionRestoredBanner = (reason: SessionRestoredBannerReason = 'restored'): void => {
     // Why: a plain 'restored' banner must not latch out the later 'resume-unavailable'
@@ -220,6 +266,7 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
     ) {
       return
     }
+
     sessionRestoredBannerShown = reason
     session.deps.onShowSessionRestoredBanner(session.pane.id, reason)
   }

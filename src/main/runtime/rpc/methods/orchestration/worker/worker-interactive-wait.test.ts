@@ -16,8 +16,11 @@ vi.mock('electron', () => ({
 }))
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const TAB_ID = 'tab-worker'
+
 const WORKTREE_ID = 'wt-worker'
+
 const PTY_ID = 'pty-worker'
 
 // Captured verbatim from cursor-agent 2026.08.11-e8db854 driven through Orca.
@@ -29,9 +32,11 @@ function workerShowMethod() {
   const method = ORCHESTRATION_METHODS.find(
     (candidate) => candidate.name === 'orchestration.workerShow'
   )
+
   if (!method) {
     throw new Error('Missing method orchestration.workerShow')
   }
+
   return method
 }
 
@@ -42,9 +47,11 @@ describe('worker-show interactive wait (STA-3714, STA-4513)', () => {
 
   async function showWorkerPaneServing(paneOutput: string, opts?: { breakIdentity?: boolean }) {
     const runtime = new OrcaRuntimeService(null)
+
     const internals = runtime as unknown as {
       resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
     }
+
     vi.spyOn(internals, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
       id: WORKTREE_ID,
       path: '/repo/app',
@@ -58,11 +65,13 @@ describe('worker-show interactive wait (STA-3714, STA-4513)', () => {
       kill: () => true,
       getForegroundProcess: async () => 'cursor-agent'
     })
+
     const terminal = await runtime.createTerminal(`id:${WORKTREE_ID}`, {
       tabId: TAB_ID,
       leafId: LEAF_ID,
       title: 'worker'
     })
+
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, {
       tabs: [
@@ -90,17 +99,21 @@ describe('worker-show interactive wait (STA-3714, STA-4513)', () => {
 
     db = new OrchestrationDb(':memory:')
     runtime.setOrchestrationDb(db)
+
     const run = db.createRun({
       objective: 'supervise lanes',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
+
     const task = db.createTask({ spec: 'run the suite', runId: run.id })
     const paneKey = runtime.getTerminalPaneKey(terminal.handle)
     const incarnation = runtime.getTerminalProcessIncarnation(terminal.handle)
+
     if (!paneKey || !incarnation) {
       throw new Error('Runtime did not expose the worker pane identity.')
     }
+
     const dispatch = createRootDispatch(
       db,
       task.id,
@@ -109,6 +122,7 @@ describe('worker-show interactive wait (STA-3714, STA-4513)', () => {
       'launch-hash', // A dispatch recorded against a process that has since been replaced.
       opts?.breakIdentity === true ? `${incarnation}:replaced` : incarnation
     )
+
     db.mintDispatchCapability({
       dispatchId: dispatch.id,
       paneKey,
@@ -116,6 +130,7 @@ describe('worker-show interactive wait (STA-3714, STA-4513)', () => {
     })
 
     const method = workerShowMethod()
+
     return method.handler(method.params?.parse({ dispatch: dispatch.id }), { runtime })
   }
 

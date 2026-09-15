@@ -40,14 +40,19 @@ vi.mock('expo-router', () => ({
 }))
 
 vi.mock('react-native-safe-area-context', () => ({ SafeAreaView: 'SafeAreaView' }))
+
 vi.mock('../components/OrcaLogo', () => ({ OrcaLogo: 'OrcaLogo' }))
+
 vi.mock('./MobileOnboardingPage', () => ({ MobileOnboardingPage: 'MobileOnboardingPage' }))
+
 vi.mock('../notifications/mobile-notifications', () => ({
   ensureNotificationPermissions: mocks.ensureNotificationPermissions
 }))
+
 vi.mock('../storage/session-view-preferences', () => ({
   saveDefaultSessionView: mocks.saveDefaultSessionView
 }))
+
 vi.mock('../notifications/push-registration', () => ({
   setRemotePushEnabled: mocks.setRemotePushEnabled
 }))
@@ -79,6 +84,7 @@ describe('MobileOnboardingScreen', () => {
         throw new Error(String(args[0]))
       }
     })
+
     await act(async () => {
       renderer = create(createElement(MobileOnboardingScreen))
     })

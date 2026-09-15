@@ -27,6 +27,7 @@ const LINEAR_ITEM = {
     ].join('\n')
   }
 }
+
 const PRODUCT_WORKFLOW_PHRASES = [
   'orca linear',
   'meta.partial',
@@ -83,6 +84,7 @@ describe('contained linked context block', () => {
 
   it('escapes terminal and unicode format controls from linked context source data', () => {
     const tagLatinSmallLetterA = String.fromCodePoint(0xe0061)
+
     const block = buildContainedLinkedContextBlock({
       provider: 'linear',
       version: 1,

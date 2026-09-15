@@ -19,6 +19,7 @@ export async function readLocalAntigravityHistory(path: string): Promise<string 
     if (error instanceof WslTranscriptFsError) {
       throw error
     }
+
     return null
   }
 }
@@ -44,7 +45,9 @@ export function createAntigravityWorkspaceResolver(
       if (session.agent !== 'antigravity' || session.cwd) {
         return session
       }
+
       let index = indexes.get(historyPath)
+
       if (!index) {
         // Why: a read failure is transient (a stalled WSL distro refuses here),
         // so it must not be memoized — every later session under this history
@@ -55,12 +58,16 @@ export function createAntigravityWorkspaceResolver(
             if (indexes.get(historyPath) === pending) {
               indexes.delete(historyPath)
             }
+
             throw error
           })
+
         index = pending
         indexes.set(historyPath, pending)
       }
+
       const workspace = findAntigravityWorkspace(session, await index)
+
       return workspace ? { ...session, cwd: workspace } : session
     }
   }
@@ -68,18 +75,22 @@ export function createAntigravityWorkspaceResolver(
 
 function indexAntigravityHistory(content: string | null): AntigravityHistoryIndex {
   const index: AntigravityHistoryIndex = new Map()
+
   for (const line of content?.split(/\r?\n/) ?? []) {
     const record = parseJsonObject(line)
     const display = typeof record?.display === 'string' ? normalizeTitleText(record.display) : null
     const workspace = typeof record?.workspace === 'string' ? record.workspace.trim() : ''
     const entryTimestampMs = timestampMs(record?.timestamp)
+
     if (!display || !workspace || !Number.isFinite(entryTimestampMs)) {
       continue
     }
+
     const entries = index.get(display) ?? []
     entries.push({ timestampMs: entryTimestampMs, workspace })
     index.set(display, entries)
   }
+
   return index
 }
 
@@ -92,16 +103,21 @@ function findAntigravityWorkspace(
   if (session.title.endsWith('...')) {
     return null
   }
+
   const firstTitledUserTimestamp = session.previewMessages.find(
     (message) => message.role === 'user' && normalizeTitleText(message.text) === session.title
   )?.timestamp
+
   const promptTimestampMs = timestampMs(firstTitledUserTimestamp ?? session.createdAt)
+
   if (!Number.isFinite(promptTimestampMs)) {
     return null
   }
+
   const matches = (index.get(session.title) ?? []).filter(
     (entry) => Math.abs(entry.timestampMs - promptTimestampMs) <= HISTORY_MATCH_WINDOW_MS
   )
+
   // Why: history rows have no conversation id. A unique prompt/time match is
   // evidence for cwd; ambiguity must stay unknown instead of crossing projects.
   return matches.length === 1 ? (matches[0]?.workspace ?? null) : null

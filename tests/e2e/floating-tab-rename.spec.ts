@@ -7,7 +7,9 @@ import { createRestartSession } from './helpers/orca-restart'
 // Why: mirrors FLOATING_TERMINAL_WORKTREE_ID in src/shared/constants.ts.
 // E2E specs avoid importing renderer/shared modules into the Playwright runner.
 const FLOATING_WORKTREE_ID = 'global-floating-terminal'
+
 const OPEN_PANEL_SELECTOR = '[data-floating-terminal-panel][aria-hidden="false"]'
+
 const PANEL_SELECTOR = '[data-floating-terminal-panel]'
 
 async function seedFloatingMarkdownFile(page: Page): Promise<{
@@ -27,9 +29,11 @@ async function seedFloatingMarkdownFile(page: Page): Promise<{
   const originalPath = path.join(directory, originalName)
   const intermediatePath = path.join(directory, intermediateName)
   const renamedPath = path.join(directory, renamedName)
+
   const tabId = await page.evaluate(
     async ({ filePath, originalName, worktreeId }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Store unavailable')
       }
@@ -50,19 +54,24 @@ async function seedFloatingMarkdownFile(page: Page): Promise<{
       )
 
       const state = store.getState()
+
       const file = state.openFiles.find(
         (candidate) => candidate.filePath === filePath && candidate.worktreeId === worktreeId
       )
+
       const tab = state.unifiedTabsByWorktree[worktreeId]?.find(
         (candidate) => candidate.contentType === 'editor' && candidate.entityId === file?.id
       )
+
       if (!file || !tab) {
         throw new Error('Floating Markdown tab unavailable')
       }
+
       return tab.id
     },
     { filePath: originalPath, originalName, worktreeId: FLOATING_WORKTREE_ID }
   )
+
   return {
     originalName,
     originalPath,
@@ -80,15 +89,18 @@ async function openFloatingPanel(page: Page): Promise<void> {
     PANEL_SELECTOR,
     { timeout: 30_000 }
   )
+
   // Why: the panel's open flag is persisted (floating-terminal-panel-view-state), so
   // after a restart it reopens on its own and a blind toggle would close it again.
   const alreadyOpen = await page.evaluate(
     (selector) => Boolean(document.querySelector(selector)),
     OPEN_PANEL_SELECTOR
   )
+
   if (!alreadyOpen) {
     await page.evaluate(() => window.dispatchEvent(new Event('orca-toggle-floating-terminal')))
   }
+
   await expect(page.locator(OPEN_PANEL_SELECTOR)).toBeVisible()
 }
 
@@ -112,8 +124,10 @@ test('concurrent floating Markdown renames do not clobber the destination', asyn
         window.api.fs.rename({ oldPath: firstPath, newPath: destinationPath }),
         window.api.fs.rename({ oldPath: secondPath, newPath: destinationPath })
       ])
+
       const firstExists = await window.api.fs.pathExists({ filePath: firstPath })
       const secondExists = await window.api.fs.pathExists({ filePath: secondPath })
+
       return {
         statuses: settled.map(({ status }) => status).sort(),
         rejectionMessages: settled.flatMap((outcome) =>
@@ -154,6 +168,7 @@ test('Enter commits a floating Markdown rename only once', async ({ orcaPage }) 
     name: `Rename file ${seeded.originalName}`,
     exact: true
   })
+
   await input.fill(seeded.renamedName)
   await input.press('Enter')
 
@@ -192,8 +207,10 @@ test('Electron serializes native Unicode rename aliases', async ({ orcaPage }) =
         window.api.fs.rename({ oldPath: firstPath, newPath: sharpSDestination }),
         window.api.fs.rename({ oldPath: secondPath, newPath: expandedDestination })
       ])
+
       const firstExists = await window.api.fs.pathExists({ filePath: firstPath })
       const secondExists = await window.api.fs.pathExists({ filePath: secondPath })
+
       return {
         statuses: settled.map(({ status }) => status).sort(),
         destinationContent: (await window.api.fs.readFile({ filePath: sharpSDestination })).content,
@@ -241,15 +258,18 @@ test('floating workspace Markdown renames survive an app restart', async (// oxl
       name: `Rename file ${seeded.originalName}`,
       exact: true
     })
+
     await enterInput.fill(seeded.intermediateName)
     await enterInput.press('Enter')
     await expect(tab).toContainText(seeded.intermediateName)
 
     await tab.getByText(seeded.intermediateName, { exact: true }).dispatchEvent('dblclick')
+
     const blurInput = panel.getByRole('textbox', {
       name: `Rename file ${seeded.intermediateName}`,
       exact: true
     })
+
     await blurInput.fill(seeded.renamedName)
     await panel.getByRole('radio', { name: 'Rich Editor' }).click()
     await expect(tab).toContainText(seeded.renamedName)
@@ -283,9 +303,11 @@ test('floating workspace Markdown renames survive an app restart', async (// oxl
     await openFloatingPanel(second.page)
 
     const restoredPanel = second.page.locator(OPEN_PANEL_SELECTOR)
+
     const restoredTab = restoredPanel.locator('[data-tab-id]').filter({
       hasText: seeded.renamedName
     })
+
     await expect(restoredTab).toContainText(seeded.renamedName)
     await expect
       .poll(() =>
@@ -297,6 +319,7 @@ test('floating workspace Markdown renames survive an app restart', async (// oxl
                 (candidate) =>
                   candidate.worktreeId === worktreeId && candidate.filePath === renamedPath
               )
+
             return {
               restoredPath: file?.filePath ?? null,
               content: (await window.api.fs.readFile({ filePath: renamedPath })).content,
@@ -323,12 +346,14 @@ test('floating workspace Markdown renames survive an app restart', async (// oxl
       if (!app) {
         continue
       }
+
       try {
         await session.close(app)
       } catch {
         // best-effort cleanup
       }
     }
+
     await session.dispose()
   }
 })

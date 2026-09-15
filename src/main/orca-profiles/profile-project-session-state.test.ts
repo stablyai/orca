@@ -8,8 +8,11 @@ import {
 import { extractSessionForTransfer } from './profile-project-session-transfer'
 
 const REMOVED_WORKTREE_ID = 'repo-a::/removed'
+
 const RETAINED_WORKTREE_ID = 'repo-b::/retained'
+
 const REMOVED_REPO_ID = 'repo-a'
+
 const RETAINED_REPO_ID = 'repo-b'
 
 describe('profile project session state', () => {
@@ -19,6 +22,7 @@ describe('profile project session state', () => {
       terminalTopologyRevisionByRepoId: { [REMOVED_REPO_ID]: 5 },
       terminalPtyIncarnationsByPaneKey: { 'base-tab:leaf': 'base-incarnation' }
     }
+
     const incoming = {
       ...getDefaultWorkspaceSession(),
       terminalTopologyRevisionByRepoId: {
@@ -122,6 +126,7 @@ describe('profile project session state', () => {
       REMOVED_REPO_ID,
       'repo-c'
     )
+
     const transferredWorktreeId = 'repo-c::/removed'
 
     expect(result.browserTabsByWorktree?.[transferredWorktreeId]?.[0]?.docLocation).toEqual({

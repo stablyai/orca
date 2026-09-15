@@ -13,18 +13,23 @@ export function rememberAuthoritativelyRemovedWorktrees(
   if (worktreeIds.length === 0) {
     return
   }
+
   const removed = authoritativelyRemovedWorktreeIdsByHost.get(hostId) ?? new Set<string>()
+
   for (const worktreeId of worktreeIds) {
     // Why: re-insert so a re-removed id moves to the back of the insertion order the cap evicts from.
     removed.delete(worktreeId)
     removed.add(worktreeId)
   }
+
   for (const oldest of removed) {
     if (removed.size <= AUTHORITATIVE_REMOVAL_MEMORY_LIMIT) {
       break
     }
+
     removed.delete(oldest)
   }
+
   authoritativelyRemovedWorktreeIdsByHost.set(hostId, removed)
 }
 
@@ -34,12 +39,15 @@ export function forgetAuthoritativelyRemovedWorktrees(
   worktreeIds: Iterable<string>
 ): void {
   const removed = authoritativelyRemovedWorktreeIdsByHost.get(hostId)
+
   if (!removed) {
     return
   }
+
   for (const worktreeId of worktreeIds) {
     removed.delete(worktreeId)
   }
+
   if (removed.size === 0) {
     authoritativelyRemovedWorktreeIdsByHost.delete(hostId)
   }
@@ -61,13 +69,17 @@ export function forgetPersistedWorktreeMetaForRemovals(
   worktreeIds: readonly string[]
 ): void {
   const parsedHost = parseExecutionHostId(hostId)
+
   if (worktreeIds.length === 0 || (parsedHost?.kind !== 'ssh' && parsedHost?.kind !== 'runtime')) {
     return
   }
+
   const forget = window.api.worktrees.forgetRemovedForExecutionHost
+
   if (typeof forget !== 'function') {
     return
   }
+
   void forget({ repoId, executionHostId: parsedHost.id, worktreeIds: [...worktreeIds] }).catch(
     (err) => {
       console.warn(`Failed to forget metadata for removed worktrees in repo ${repoId}:`, err)

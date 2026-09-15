@@ -17,16 +17,20 @@ export function watchBrowserClientPageGuestLoss(options: {
   onLost: () => void
 }): { lose(reason: BrowserClientPageGuestLossReason): void; dispose(): void } {
   const { webview } = options
+
   const releaseWebviewRef = (): void => {
     if (options.webviewRef.current === webview) {
       options.webviewRef.current = null
     }
   }
+
   let lost = false
+
   const lose = (reason: BrowserClientPageGuestLossReason): void => {
     if (lost) {
       return
     }
+
     lost = true
     // Why the breadcrumb: the crash report this replaces was the only field signal for guest death.
     recordRendererCrashBreadcrumb('browser_client_page_guest_unavailable', {
@@ -38,10 +42,12 @@ export function watchBrowserClientPageGuestLoss(options: {
     releaseWebviewRef()
     options.onLost()
   }
+
   const onDestroyed = (): void => lose('destroyed')
   const onRendererGone = (): void => lose('render-process-gone')
   webview.addEventListener('destroyed', onDestroyed)
   webview.addEventListener('render-process-gone', onRendererGone)
+
   return {
     lose,
     dispose: () => {

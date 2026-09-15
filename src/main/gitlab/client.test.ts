@@ -17,6 +17,7 @@ const {
 
 vi.mock('./gl-utils', async () => {
   const actual = await vi.importActual<typeof GlUtils>('./gl-utils')
+
   return {
     ...actual,
     glabExecFileAsync: glabExecFileAsyncMock,
@@ -92,12 +93,14 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
           target_branch: 'main'
         })
       })
+
       const item = await getWorkItemByProjectRef(
         '/repo',
         { host: 'gitlab.com', path: 'g/p' },
         5,
         'mr'
       )
+
       expect(item).toMatchObject({ type: 'mr', number: 5, branchName: 'feat' })
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
         ['api', '--hostname', 'gitlab.com', 'projects/g%2Fp/merge_requests/5'],
@@ -115,12 +118,14 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
           web_url: 'https://gitlab.com/g/p/-/issues/9'
         })
       })
+
       const item = await getWorkItemByProjectRef(
         '/repo',
         { host: 'gitlab.com', path: 'g/p' },
         9,
         'issue'
       )
+
       expect(item).toMatchObject({ type: 'issue', number: 9 })
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
         ['api', '--hostname', 'gitlab.com', 'projects/g%2Fp/issues/9'],
@@ -179,12 +184,14 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
 
     it('returns null when the API errors', async () => {
       glabExecFileAsyncMock.mockRejectedValueOnce(new Error('not found'))
+
       const item = await getWorkItemByProjectRef(
         '/repo',
         { host: 'gitlab.com', path: 'g/p' },
         9,
         'issue'
       )
+
       expect(item).toBeNull()
     })
   })

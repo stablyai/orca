@@ -59,22 +59,28 @@ export function isLocalWindowsConptyPaneForCtrlArrow({
   }
 
   const ptyId = transport?.getPtyId() ?? null
+
   if (ptyId !== null && isRemoteRuntimePtyId(ptyId)) {
     return false
   }
 
   const sessionMetadata = transport?.getLocalSessionMetadata?.()
+
   const hasLiveLocalSession =
     ptyId !== null && sessionMetadata !== null && sessionMetadata !== undefined
+
   const transportConnectionId = transport?.getConnectionId?.()
+
   const connectionId = hasLiveLocalSession
     ? null
     : transportConnectionId === undefined
       ? getConnectionIdFromState(state, worktreeId)
       : transportConnectionId
+
   const tabShellOverride = state.tabsByWorktree[worktreeId]?.find(
     (candidate) => candidate.id === tabId
   )?.shellOverride
+
   const executionHostId: ExecutionHostId = hasLiveLocalSession
     ? LOCAL_EXECUTION_HOST_ID
     : getExecutionHostIdForWorktree(state, worktreeId)

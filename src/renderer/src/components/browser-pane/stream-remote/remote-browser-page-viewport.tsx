@@ -79,6 +79,7 @@ export function RemoteBrowserPageViewport({
   const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
   const remoteFailureUrl = browserTab.loadError?.validatedUrl ?? browserTab.url
   const remoteFailureExternalUrl = resolveRemoteFailureExternalUrl(remoteFailureUrl)
+
   const showRemoteFailureOverlay =
     Boolean(browserTab.loadError) &&
     remoteFailureUrl !== 'about:blank' &&
@@ -159,6 +160,7 @@ export function RemoteBrowserPageViewport({
           }
           onProceedCertificate={async (challengeId) => {
             const target = runtimeTarget()
+
             if (
               !target ||
               remotePageHandle?.environmentId !== target.environmentId ||
@@ -166,6 +168,7 @@ export function RemoteBrowserPageViewport({
             ) {
               return { ok: false, reason: 'missing' }
             }
+
             return callRuntimeRpc<BrowserCertificateProceedResult>(
               target,
               'browser.certificate.proceed',

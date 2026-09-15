@@ -111,6 +111,7 @@ describe('diff section layout', () => {
 
   it('estimates line-count height without allocating split arrays', () => {
     const originalSplit = String.prototype.split
+
     const patchedSplit = function patchedSplit(
       this: string,
       separator?: unknown,
@@ -119,9 +120,12 @@ describe('diff section layout', () => {
       if (String(this).startsWith('line 0')) {
         throw new Error('layout should not split full diff content')
       }
+
       const args = limit === undefined ? [separator] : [separator, limit]
+
       return Reflect.apply(originalSplit, this, args) as string[]
     } as typeof String.prototype.split
+
     String.prototype.split = patchedSplit
 
     try {
@@ -185,6 +189,7 @@ describe('diff section layout', () => {
       isImage: true,
       mimeType: 'image/png'
     }
+
     const pdfDiff: GitDiffResult = {
       kind: 'binary',
       originalContent: '',
@@ -264,6 +269,7 @@ describe('diff section layout', () => {
       removed: 0,
       largeDiffRenderLimit: null
     }
+
     expect(usesLargeDiffFallbackHeight({ ...section, loading: false, loadOnDemand: true })).toBe(
       true
     )

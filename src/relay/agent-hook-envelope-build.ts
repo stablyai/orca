@@ -45,10 +45,13 @@ export function hookBodyEnv(body: unknown): string | undefined {
   if (typeof body !== 'object' || body === null) {
     return undefined
   }
+
   const v = (body as Record<string, unknown>).env
+
   if (typeof v !== 'string' || v.length === 0 || v.length > MAX_HOOK_META_LEN) {
     return undefined
   }
+
   return v
 }
 
@@ -56,9 +59,12 @@ export function hookBodyVersion(body: unknown): string | undefined {
   if (typeof body !== 'object' || body === null) {
     return undefined
   }
+
   const v = (body as Record<string, unknown>).version
+
   if (typeof v !== 'string' || v.length === 0 || v.length > MAX_HOOK_META_LEN) {
     return undefined
   }
+
   return v
 }

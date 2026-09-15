@@ -19,5 +19,6 @@ export function unwrapRuntimeRpcResult<TResult>(response: RuntimeRpcResponse<TRe
   if (response.ok === false) {
     throw new RuntimeRpcCallError(response)
   }
+
   return response.result
 }

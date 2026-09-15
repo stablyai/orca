@@ -17,10 +17,13 @@ export function emitRelayWatcherTerminalFailure(
       state.clientWatchIds.delete(clientId)
       continue
     }
+
     const watchId = state.clientWatchIds.get(clientId)
+
     if (watchId === undefined) {
       continue
     }
+
     // Why: a shared relay may serve multiple Orca clients; only owners of
     // this exact logical watch should invalidate their provider state.
     dispatcher.notifyClient(clientId, 'fs.watchFailed', {

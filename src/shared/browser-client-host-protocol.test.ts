@@ -77,6 +77,7 @@ describe('browser client-host control protocol', () => {
       state: 'active' as const,
       currentUrl: 'https://remote.internal/'
     }
+
     const attach = BrowserClientHostAttachParams.parse({
       authorityRuntimeId: 'runtime-a',
       browserHostClientId: 'host-a',
@@ -190,6 +191,7 @@ describe('browser client-host control protocol', () => {
   it('bounds inventory identities after JSON escaping without narrowing legacy identities', () => {
     const authorityRuntimeId = maxInventoryIdentity('runtime-')
     const browserHostClientId = maxInventoryIdentity('host-')
+
     const pageInventory = Array.from({ length: 256 }, (_, index) => ({
       authorityRuntimeId,
       authorityEpoch: maxInventoryIdentity('epoch-'),
@@ -201,7 +203,9 @@ describe('browser client-host control protocol', () => {
       executionHostKey: maxInventoryIdentity('execution-'),
       state: 'active' as const
     }))
+
     const firstPage = pageInventory.at(0)
+
     if (!firstPage) {
       throw new Error('expected inventory page')
     }
@@ -245,6 +249,7 @@ describe('browser client-host control protocol', () => {
       hostCapabilities: z.array(z.string()),
       pageCommandProtocolVersion: z.literal(1).optional()
     })
+
     const legacyReady = z.object({
       type: z.literal('ready'),
       authorityEpoch: z.string(),
@@ -282,6 +287,7 @@ describe('browser client-host control protocol', () => {
       browserPageId: 'page-a',
       pageHostGeneration: 3
     }
+
     const command = {
       type: 'command' as const,
       pageCommandProtocolVersion: 1 as const,
@@ -386,6 +392,7 @@ describe('browser client-host control protocol', () => {
       browserHostClientId: 'host-a',
       browserHostGeneration: 1
     }
+
     expect(
       BrowserNetworkTunnelAttachParams.parse({
         ...authority,
@@ -458,17 +465,20 @@ describe('browser client-host control protocol', () => {
 
 function maxInventoryIdentity(prefix: string): string {
   let value = prefix
+
   while (
     value.length < 256 &&
     jsonByteLength(`${value}\0`) <= BROWSER_CLIENT_HOST_PAGE_INVENTORY_IDENTITY_MAX_JSON_BYTES
   ) {
     value += '\0'
   }
+
   while (
     jsonByteLength(`${value}x`) <= BROWSER_CLIENT_HOST_PAGE_INVENTORY_IDENTITY_MAX_JSON_BYTES
   ) {
     value += 'x'
   }
+
   return value
 }
 

@@ -353,6 +353,7 @@ describe('folder workspace execution host', () => {
         executionHostId: 'runtime:env-1',
         connectionId: 'box'
       })
+
       const scoped = state({
         folderWorkspaces: [workspace({ connectionId: 'box' })],
         repos: [runtimePathRepo]
@@ -364,18 +365,22 @@ describe('folder workspace execution host', () => {
 
   it('reads each repository membership once while collecting candidates', () => {
     let membershipReads = 0
+
     const repos = Array.from({ length: 32 }, (_, index) => {
       const candidate = repo({
         id: ['repo', index].join('-'),
         path: ['/elsewhere', index].join('/')
       })
+
       Object.defineProperty(candidate, 'projectGroupId', {
         configurable: true,
         get: () => {
           membershipReads += 1
+
           return undefined
         }
       })
+
       return candidate
     })
 

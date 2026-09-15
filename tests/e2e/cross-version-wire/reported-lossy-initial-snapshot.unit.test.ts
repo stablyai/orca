@@ -9,16 +9,25 @@ import {
 } from './versioned-terminal-wire'
 
 const REPORTED_CLIENT_REF = '4cb013c0a9'
+
 const REPORTED_HOST_REF = '4bb337741c'
+
 const PRE_FIX_MAIN_REF = 'fd9125ea8c'
+
 const MARKER = 'REPORTED_LOSSY_INITIAL_MARKER'
+
 const RECOVERED_LIVE_MARKER = 'RECOVERED_LIVE_AFTER_INITIAL'
+
 const CONTINUED_LIVE_MARKER = 'CONTINUED_LIVE_AFTER_RECOVERY'
+
 const TIMEOUT_MS = 180_000
 
 let candidate: TerminalWireBuild
+
 let preFixMain: TerminalWireBuild
+
 let reportedClient: TerminalWireBuild
+
 let reportedHost: TerminalWireBuild
 
 beforeAll(async () => {
@@ -50,10 +59,12 @@ async function runLossyInitialSnapshotPair(args: {
     initialBuffer: MARKER,
     overflowInitialSnapshots: true
   })
+
   const link = createTerminalWireLink({ ...args, hostStub })
   const snapshots: string[] = []
   const terminalModel = new Terminal({ cols: 120, rows: 40 })
   let subscribed = 0
+
   try {
     const terminal = await args.clientBuild.client
       .getRemoteRuntimeTerminalMultiplexer('reported-lossy-initial')
@@ -71,7 +82,9 @@ async function runLossyInitialSnapshotPair(args: {
           }
         }
       })
+
     await vi.waitFor(() => expect(subscribed).toBe(1), { timeout: 10_000 })
+
     if (args.exerciseLiveRecovery) {
       hostStub.emitOutput(RECOVERED_LIVE_MARKER)
       await vi.waitFor(
@@ -84,13 +97,17 @@ async function runLossyInitialSnapshotPair(args: {
         { timeout: 10_000 }
       )
     }
+
     terminal.close()
     const snapshotStartOpcode = Number(args.clientBuild.codec.TerminalStreamOpcode.SnapshotStart)
+
     return {
       frames: link.observed.map((frame) => {
         const codec =
           frame.direction === 'host-to-client' ? args.clientBuild.codec : args.hostBuild.codec
+
         const name = codec.TerminalStreamOpcode[frame.opcode]
+
         return `${frame.direction}:${typeof name === 'string' ? name : frame.opcode}`
       }),
       missingRuntimeMethods: hostStub.missingRuntimeMethods,
@@ -111,9 +128,11 @@ async function runLossyInitialSnapshotPair(args: {
 
 function readTerminalText(terminal: Terminal): string {
   const lines: string[] = []
+
   for (let index = 0; index < terminal.buffer.active.length; index += 1) {
     lines.push(terminal.buffer.active.getLine(index)?.translateToString(true) ?? '')
   }
+
   return lines.join('\n')
 }
 

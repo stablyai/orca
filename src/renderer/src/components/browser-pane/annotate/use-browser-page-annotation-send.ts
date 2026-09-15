@@ -47,15 +47,18 @@ export function useBrowserPageAnnotationSend({
   const browserAnnotations = useAppStore(
     (s) => s.browserAnnotationsByPageId[browserTabId] ?? EMPTY_BROWSER_ANNOTATIONS
   )
+
   const activeGroupId = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
   const browserAnnotationsRef = useRef(browserAnnotations)
   const [browserAnnotationTrayOpen, setBrowserAnnotationTrayOpen] = useState(true)
   const [browserAnnotationsCopied, setBrowserAnnotationsCopied] = useState(false)
   const annotationCopyTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
   const browserAnnotationsPrompt = useMemo(
     () => formatBrowserAnnotationsAsMarkdown(browserAnnotations),
     [browserAnnotations]
   )
+
   const openAgentSendPopoverTargetMode = useAppStore((s) => s.openAgentSendPopoverTargetMode)
   const closeAgentSendPopoverTargetMode = useAppStore((s) => s.closeAgentSendPopoverTargetMode)
   const activeAgentSendTargetModeId = useAppStore((s) => s.agentSendPopoverTargetMode?.id ?? null)
@@ -144,6 +147,7 @@ export function useBrowserPageAnnotationSend({
     if (!browserAnnotationsPrompt) {
       return
     }
+
     void window.api.ui.writeClipboardText(browserAnnotationsPrompt)
     recordFeatureInteraction('browser-annotations')
     clearTimeout(annotationCopyTimerRef.current)
@@ -159,6 +163,7 @@ export function useBrowserPageAnnotationSend({
     if (browserAnnotationsRef.current.length === 0) {
       return
     }
+
     clearTimeout(annotationCopyTimerRef.current)
     setBrowserAnnotationsCopied(false)
     recordFeatureInteraction('browser-annotations')
@@ -172,6 +177,7 @@ export function useBrowserPageAnnotationSend({
         setBrowserAnnotationsCopied(false)
         setBrowserAnnotationTrayOpen(true)
       }
+
       deleteBrowserPageAnnotation(browserTabId, annotationId)
       recordFeatureInteraction('browser-annotations')
     },

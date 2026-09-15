@@ -10,6 +10,8 @@ export function useBrowserPageSlotViewport(workspaceId: string): HTMLDivElement 
       subscribeBrowserOverlaySlotViewport(workspaceId, listener),
     [workspaceId]
   )
+
   const getSnapshot = useCallback(() => getBrowserOverlaySlotViewport(workspaceId), [workspaceId])
+
   return useSyncExternalStore(subscribe, getSnapshot, () => null)
 }

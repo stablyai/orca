@@ -10,6 +10,7 @@ for (const theme of ['dark', 'light'] as const) {
       await state.updateSettingsOrThrow({ theme })
       const worktreeId = state.activeWorktreeId!
       const tabs = state.tabsByWorktree[worktreeId] ?? []
+
       for (let index = tabs.length; index < 2; index++) {
         state.createTab(worktreeId)
       }
@@ -22,6 +23,7 @@ for (const theme of ['dark', 'light'] as const) {
     await expect(panels).toHaveCount(1)
     const panel = (await panels.boundingBox())!
     const target = { x: panel.x + panel.width - 30, y: panel.y + panel.height / 2 }
+
     const startDrag = async (): Promise<void> => {
       const tab = (await tabs.first().boundingBox())!
       await orcaPage.mouse.move(tab.x + tab.width / 2, tab.y + tab.height / 2)

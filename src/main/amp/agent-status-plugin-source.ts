@@ -1,4 +1,5 @@
 export const AMP_PLUGIN_FILE = 'orca-agent-status.ts'
+
 export const AMP_PLUGIN_MARKER = 'Managed by Orca. Do not edit; changes may be overwritten.'
 
 export function getAmpPluginSource(): string {

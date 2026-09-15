@@ -34,11 +34,13 @@ export {
   terminalSelectionExceedsPrimaryLimit,
   splitPaneWithOneShotStartup
 } from './terminal-pane-lifecycle-primitives'
+
 export {
   applyTerminalPaneCloseRequest,
   retireMountedTerminalPaneSurface,
   suppressIntentionalPaneCloseExit
 } from './terminal-pane-lifecycle-close'
+
 export type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
 
 /** Coordinates mount, visibility, and live appearance effects for terminal panes. */
@@ -49,6 +51,7 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
   const terminalScrollbackRows = normalizeDesktopTerminalScrollbackRows(
     deps.settings?.terminalScrollbackRows
   )
+
   const systemPrefersDarkRef = refs.systemPrefersDarkRef
   systemPrefersDarkRef.current = deps.systemPrefersDark
 
@@ -56,19 +59,24 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
     const onWakeHibernatedAgents = (event: Event): void => {
       const detail = (event as CustomEvent<{ worktreeId: string; wokenClaimKeys?: Set<string> }>)
         .detail
+
       if (!detail || detail.worktreeId !== deps.worktreeId) {
         return
       }
+
       for (const panePtyBinding of deps.panePtyBindingsRef.current.values()) {
         const claimKey = (panePtyBinding as IDisposableWithWake).wakeHibernatedAgentIfArmed?.(
           detail.wokenClaimKeys
         )
+
         if (claimKey) {
           detail.wokenClaimKeys?.add(claimKey)
         }
       }
     }
+
     window.addEventListener('orca:wake-hibernated-agents-worktree', onWakeHibernatedAgents)
+
     return () =>
       window.removeEventListener('orca:wake-hibernated-agents-worktree', onWakeHibernatedAgents)
   }, [deps.worktreeId, deps.panePtyBindingsRef])
@@ -79,23 +87,28 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
       tabId: deps.tabId,
       cwd: deps.cwd
     })
+
     refs.previousVisibleForReconcileRef.current = {
       tabId: deps.tabId,
       cwd: deps.cwd,
       isVisible: deps.isVisible
     }
     deps.isVisibleRef.current = deps.isVisible
+
     const resumedFromHidden = isTerminalPaneVisibilityResume({
       previousIsVisible,
       isVisible: deps.isVisible
     })
+
     for (const panePtyBinding of deps.panePtyBindingsRef.current.values()) {
       const binding = panePtyBinding as IDisposableWithVisibility
       binding.syncProcessTracking?.()
+
       if (resumedFromHidden) {
         binding.noteVisibilityResume?.()
       }
     }
+
     if (resumedFromHidden && typeof window.api.pty.hasPty === 'function') {
       reconcileMissingSessions({
         bindings: deps.panePtyBindingsRef.current.values() as Iterable<ReconcilableBinding>,
@@ -115,26 +128,34 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
     if (!deps.isActive || !deps.isVisible || typeof window === 'undefined') {
       return
     }
+
     const onWindowFocus = (): void => {
       const activePane = deps.managerRef.current?.getActivePane()
+
       if (!activePane) {
         return
       }
+
       const binding = deps.panePtyBindingsRef.current.get(activePane.id) as
         | (IDisposable & { sampleForegroundAgentOnFocus?: () => void })
         | undefined
+
       binding?.sampleForegroundAgentOnFocus?.()
     }
+
     window.addEventListener('focus', onWindowFocus)
+
     return () => window.removeEventListener('focus', onWindowFocus)
   }, [deps.isActive, deps.isVisible, deps.managerRef, deps.panePtyBindingsRef])
 
   useEffect(() => {
     const manager = deps.managerRef.current
     const currentSettings = deps.settingsRef.current
+
     if (!manager || !deps.settings || !currentSettings) {
       return
     }
+
     applyTerminalAppearance(
       manager,
       currentSettings,
@@ -167,20 +188,26 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
 
   useEffect(() => {
     const manager = deps.managerRef.current
+
     if (!manager) {
       return
     }
+
     applyTerminalScrollbackRowsToMountedPanes(manager, terminalScrollbackRows)
   }, [deps.managerRef, terminalScrollbackRows])
 
   useEffect(() => {
     const manager = deps.managerRef.current
+
     if (!manager) {
       return
     }
+
     const hide = deps.settings?.terminalMouseHideWhileTyping ?? false
+
     for (const pane of manager.getPanes()) {
       const existing = refs.mouseHideDisposablesRef.current.get(pane.id)
+
       if (hide && !existing) {
         refs.mouseHideDisposablesRef.current.set(
           pane.id,

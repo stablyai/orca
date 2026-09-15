@@ -107,12 +107,14 @@ export function ArtifactListRows({
                   if (isPortaledRowMenuClick(event)) {
                     return
                   }
+
                   selectArtifact(item.artifact.slug)
                 }}
                 onKeyDown={(event) => {
                   if (!isRowActivationKey(event)) {
                     return
                   }
+
                   event.preventDefault()
                   selectArtifact(item.artifact.slug)
                 }}

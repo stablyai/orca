@@ -12,19 +12,25 @@ export function waitForRemoteRuntimeRequestReady(
   if (signal?.aborted) {
     return Promise.reject(abortSignalReason(signal))
   }
+
   return new Promise<void>((resolve, reject) => {
     let waiter!: RemoteRuntimeRequestReadyWaiter
+
     const remove = (): void => {
       const index = waiters.indexOf(waiter)
+
       if (index !== -1) {
         waiters.splice(index, 1)
       }
+
       signal?.removeEventListener('abort', onAbort)
     }
+
     const onAbort = (): void => {
       remove()
       reject(abortSignalReason(signal!))
     }
+
     waiter = {
       resolve: () => {
         remove()
@@ -37,6 +43,7 @@ export function waitForRemoteRuntimeRequestReady(
     }
     waiters.push(waiter)
     signal?.addEventListener('abort', onAbort, { once: true })
+
     if (signal?.aborted) {
       onAbort()
     }

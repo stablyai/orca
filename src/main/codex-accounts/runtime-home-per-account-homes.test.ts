@@ -24,6 +24,7 @@ vi.mock('electron', () => ({
 
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof import('node:os')>('node:os') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     homedir: () => testState.fakeHomeDir
@@ -42,11 +43,13 @@ describe('CodexRuntimeHomeService', () => {
   it('routes a host MANAGED account to its own self-contained home', async () => {
     writeFileSync(getSystemCodexAuthPath(), '{"account":"system"}\n', 'utf-8')
     const runtimeAuthPath = getRuntimeCodexAuthPath()
+
     const managedHomePath = createManagedAuth(
       testState.userDataDir,
       'account-1',
       '{"account":"managed"}\n'
     )
+
     const store = createStore(
       createSettings({
         shellStartupEnvProbeSupported: true,
@@ -67,6 +70,7 @@ describe('CodexRuntimeHomeService', () => {
         activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
       })
     )
+
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
@@ -95,6 +99,7 @@ describe('CodexRuntimeHomeService', () => {
       const account2Auth = createCodexAuthJson(secondEmail, 'acct-2', 'two')
       const home1 = createManagedAuth(testState.userDataDir, 'account-1', account1Auth)
       const home2 = createManagedAuth(testState.userDataDir, 'account-2', account2Auth)
+
       const settings = createSettings({
         shellStartupEnvProbeSupported: true,
         codexManagedAccounts: [
@@ -124,6 +129,7 @@ describe('CodexRuntimeHomeService', () => {
         activeCodexManagedAccountId: 'account-1',
         activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
       })
+
       const store = createStore(settings)
       const { CodexRuntimeHomeService } = await import('./runtime-home-service')
       const service = new CodexRuntimeHomeService(store as never)
@@ -162,11 +168,13 @@ describe('CodexRuntimeHomeService', () => {
       'approval_policy = "never"\n',
       'utf-8'
     )
+
     const home1 = createManagedAuth(
       testState.userDataDir,
       'account-1',
       createCodexAuthJson('one@example.com', 'acct-1', 'one')
     )
+
     const store = createStore(
       createSettings({
         shellStartupEnvProbeSupported: true,
@@ -187,6 +195,7 @@ describe('CodexRuntimeHomeService', () => {
         activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
       })
     )
+
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
@@ -201,6 +210,7 @@ describe('CodexRuntimeHomeService', () => {
 
   it('points the rate-limit fetch at the per-account home', async () => {
     const home1 = createManagedAuth(testState.userDataDir, 'account-1', '{"account":"managed"}\n')
+
     const store = createStore(
       createSettings({
         shellStartupEnvProbeSupported: true,
@@ -221,6 +231,7 @@ describe('CodexRuntimeHomeService', () => {
         activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
       })
     )
+
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
@@ -233,6 +244,7 @@ describe('CodexRuntimeHomeService', () => {
     const brokenHome = join(testState.userDataDir, 'codex-accounts', 'account-1', 'home')
     mkdirSync(brokenHome, { recursive: true })
     writeFileSync(join(brokenHome, '.orca-managed-home'), 'account-1\n', 'utf-8')
+
     const settings = createSettings({
       shellStartupEnvProbeSupported: true,
       codexManagedAccounts: [
@@ -251,6 +263,7 @@ describe('CodexRuntimeHomeService', () => {
       activeCodexManagedAccountId: 'account-1',
       activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
     })
+
     const store = createStore(settings)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
@@ -266,11 +279,13 @@ describe('CodexRuntimeHomeService', () => {
     const sharedSessionsDir = join(getRuntimeCodexHomePath(), 'sessions', '2026', '07', '16')
     mkdirSync(sharedSessionsDir, { recursive: true })
     writeFileSync(join(sharedSessionsDir, 'rollout-pre-e.jsonl'), '{"record":"pre-e"}\n', 'utf-8')
+
     const home1 = createManagedAuth(
       testState.userDataDir,
       'account-1',
       createCodexAuthJson('one@example.com', 'acct-1', 'one')
     )
+
     const perAccountSessionsDir = join(home1, 'sessions', '2026', '07', '17')
     mkdirSync(perAccountSessionsDir, { recursive: true })
     writeFileSync(
@@ -278,6 +293,7 @@ describe('CodexRuntimeHomeService', () => {
       '{"record":"e-era"}\n',
       'utf-8'
     )
+
     const store = createStore(
       createSettings({
         shellStartupEnvProbeSupported: true,
@@ -298,6 +314,7 @@ describe('CodexRuntimeHomeService', () => {
         activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
       })
     )
+
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
@@ -311,6 +328,7 @@ describe('CodexRuntimeHomeService', () => {
   it('includes WSL account homes in session discovery', async () => {
     const wslHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\me\\.local\\share\\orca\\codex-accounts\\account-1\\home'
+
     const store = createStore(
       createSettings({
         codexManagedAccounts: [
@@ -331,6 +349,7 @@ describe('CodexRuntimeHomeService', () => {
         ]
       })
     )
+
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
@@ -345,9 +364,11 @@ describe('CodexRuntimeHomeService', () => {
       'account-1',
       createCodexAuthJson('one@example.com', 'acct-1', 'one')
     )
+
     const rolloutDir = join(home1, 'sessions', '2026', '07', '17')
     mkdirSync(rolloutDir, { recursive: true })
     writeFileSync(join(rolloutDir, 'rollout-e-era.jsonl'), '{"record":"e-era"}\n', 'utf-8')
+
     const store = createStore(
       createSettings({
         shellStartupEnvProbeSupported: false,
@@ -368,6 +389,7 @@ describe('CodexRuntimeHomeService', () => {
         activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
       })
     )
+
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
 
@@ -379,14 +401,17 @@ describe('CodexRuntimeHomeService', () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
     const managedAuth = createCodexAuthJson('user@example.com', 'acct-user', 'managed', 1)
+
     const refreshedManagedAuth = createCodexAuthJson(
       'user@example.com',
       'acct-user',
       'refreshed',
       2
     )
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
+
     const settings = createSettings({
       shellStartupEnvProbeSupported: true,
       codexManagedAccounts: [
@@ -405,6 +430,7 @@ describe('CodexRuntimeHomeService', () => {
       activeCodexManagedAccountId: 'account-1',
       activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
     })
+
     const store = createStore(settings)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)
@@ -433,14 +459,17 @@ describe('CodexRuntimeHomeService', () => {
     const runtimeAuthPath = getRuntimeCodexAuthPath()
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')
     const managedAuth = createCodexAuthJson('user@example.com', 'acct-user', 'managed', 1)
+
     const refreshedManagedAuth = createCodexAuthJson(
       'user@example.com',
       'acct-user',
       'refreshed',
       2
     )
+
     writeFileSync(getSystemCodexAuthPath(), systemAuth, 'utf-8')
     const managedHomePath = createManagedAuth(testState.userDataDir, 'account-1', managedAuth)
+
     const settings = createSettings({
       shellStartupEnvProbeSupported: true,
       codexManagedAccounts: [
@@ -459,6 +488,7 @@ describe('CodexRuntimeHomeService', () => {
       activeCodexManagedAccountId: 'account-1',
       activeCodexManagedAccountIdsByRuntime: { host: 'account-1', wsl: {} }
     })
+
     const store = createStore(settings)
     const { CodexRuntimeHomeService } = await import('./runtime-home-service')
     const service = new CodexRuntimeHomeService(store as never)

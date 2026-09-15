@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 let tempHome = ''
+
 const decryptStringMock = vi.fn((value: Buffer) => value.toString('utf-8'))
 
 async function loadStore(
@@ -28,11 +29,14 @@ async function loadStore(
   })
   vi.doMock('node:os', async () => {
     const actual = await vi.importActual<typeof Os>('node:os')
+
     return { ...actual, homedir: () => tempHome }
   })
+
   if (options.shortWrites) {
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof Fs>('node:fs')
+
       return {
         ...actual,
         // Why: write(2) may return a short count; publishing without looping
@@ -42,10 +46,12 @@ async function loadStore(
       }
     })
   }
+
   if (options.writeError) {
     const error = options.writeError
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof Fs>('node:fs')
+
       return {
         ...actual,
         writeSync: () => {
@@ -54,12 +60,14 @@ async function loadStore(
       }
     })
   }
+
   if (options.unlinkError) {
     // Why mocked: chmod-based failure injection is not portable — Windows has no
     // POSIX modes and a root/elevated runner can unlink through a 0500 directory.
     const error = options.unlinkError
     vi.doMock('node:fs', async () => {
       const actual = await vi.importActual<typeof Fs>('node:fs')
+
       return {
         ...actual,
         unlinkSync: () => {
@@ -68,6 +76,7 @@ async function loadStore(
       }
     })
   }
+
   return import('./credential-store')
 }
 
@@ -122,6 +131,7 @@ describe('Bitbucket credential store', () => {
 
   it('re-tightens permissions when overwriting an existing credential', async () => {
     const store = await loadStore()
+
     const save = (account: string): void =>
       store.saveBitbucketCredential({
         authMode: 'token',
@@ -131,13 +141,16 @@ describe('Bitbucket credential store', () => {
         accessToken: 'access-secret',
         apiToken: null
       })
+
     save('first')
     // Why: writeFileSync's mode is ignored for an existing file, so a loosened
     // credential would stay world-readable across a reconnect.
     const { chmodSync } = await import('node:fs')
+
     for (const file of ['bitbucket-credential.enc', 'bitbucket-credential.json']) {
       chmodSync(join(tempHome, '.orca', file), 0o644)
     }
+
     save('second')
 
     for (const file of ['bitbucket-credential.enc', 'bitbucket-credential.json']) {
@@ -341,6 +354,7 @@ describe('Bitbucket credential store', () => {
     const denied: NodeJS.ErrnoException = Object.assign(new Error('permission denied'), {
       code: 'EACCES'
     })
+
     const store = await loadStore({ unlinkError: denied })
     store.saveBitbucketCredential({
       authMode: 'basic',
@@ -361,6 +375,7 @@ describe('Bitbucket credential store', () => {
     const missing: NodeJS.ErrnoException = Object.assign(new Error('no such file'), {
       code: 'ENOENT'
     })
+
     const store = await loadStore({ unlinkError: missing })
     expect(() => store.clearStoredBitbucketCredential()).not.toThrow()
   })

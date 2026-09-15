@@ -21,7 +21,9 @@ type GlobalCollectionScanCounts = {
 }
 
 const ALPHA_ID = 'repo-alpha::/workspace/alpha'
+
 const BETA_ID = 'repo-beta::/workspace/beta'
+
 const PROJECTION_CANDIDATE_COUNT = 1_000
 
 function countOpenFileScans(
@@ -33,15 +35,19 @@ function countOpenFileScans(
       if (property === Symbol.iterator) {
         return () => {
           counts.openFiles += 1
+
           return target[Symbol.iterator]()
         }
       }
+
       if (property === 'filter') {
         return (predicate: (file: AppState['openFiles'][number]) => boolean) => {
           counts.openFiles += 1
+
           return target.filter(predicate)
         }
       }
+
       return Reflect.get(target, property, receiver)
     }
   })
@@ -51,6 +57,7 @@ function countRecordScans<T extends object>(record: T, onScan: () => void): T {
   return new Proxy(record, {
     ownKeys(target) {
       onScan()
+
       return Reflect.ownKeys(target)
     }
   })
@@ -81,19 +88,23 @@ describe('workspace cleanup enrichment performance', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW)
     const pending = deferred<WorkspaceCleanupScanResult>()
     let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined
+
     const scan = vi.fn(
       (
         _args?: WorkspaceCleanupScanArgs,
         progressCallback?: (progress: WorkspaceCleanupScanProgress) => void
       ) => {
         onProgress = progressCallback
+
         return pending.promise
       }
     )
+
     installWorkspaceCleanupApi(scan)
 
     const alphaTab = { id: 'tab-alpha', title: 'shell' }
     const betaTab = { id: 'tab-beta', title: 'shell' }
+
     const alphaWorking = {
       paneKey: 'tab-alpha:leaf-alpha',
       state: 'working',
@@ -102,6 +113,7 @@ describe('workspace cleanup enrichment performance', () => {
       stateStartedAt: NOW,
       stateHistory: []
     }
+
     const betaDone = {
       paneKey: 'tab-beta:leaf-beta',
       state: 'done',
@@ -110,11 +122,13 @@ describe('workspace cleanup enrichment performance', () => {
       stateStartedAt: NOW,
       stateHistory: []
     }
+
     const counts: GlobalCollectionScanCounts = {
       openFiles: 0,
       retainedAgents: 0,
       agentStatuses: 0
     }
+
     const openFiles = countOpenFileScans(
       [
         {
@@ -144,6 +158,7 @@ describe('workspace cleanup enrichment performance', () => {
       ] as AppState['openFiles'],
       counts
     )
+
     const retainedAgentsByPaneKey = countRecordScans(
       {
         'tab-alpha:retained': {
@@ -165,6 +180,7 @@ describe('workspace cleanup enrichment performance', () => {
         counts.retainedAgents += 1
       }
     )
+
     const agentStatusByPaneKey = countRecordScans(
       {
         [alphaWorking.paneKey]: alphaWorking,
@@ -174,6 +190,7 @@ describe('workspace cleanup enrichment performance', () => {
         counts.agentStatuses += 1
       }
     )
+
     const candidates = [
       makeCandidate({
         worktreeId: ALPHA_ID,
@@ -194,17 +211,21 @@ describe('workspace cleanup enrichment performance', () => {
         makePerformanceCandidate(index + 2, 'projection')
       )
     ]
+
     const tabsByWorktree = Object.fromEntries(
       candidates.map((candidate, index) => {
         if (index === 0) {
           return [candidate.worktreeId, [alphaTab]]
         }
+
         if (index === 1) {
           return [candidate.worktreeId, [betaTab]]
         }
+
         return [candidate.worktreeId, [{ id: `tab-projection-${index}`, title: 'shell' }]]
       })
     ) as unknown as AppState['tabsByWorktree']
+
     const store = createCleanupTestStore()
     store.setState({
       activeWorktreeId: BETA_ID,
@@ -267,40 +288,50 @@ describe('workspace cleanup enrichment performance', () => {
 
   it('caps terminal candidate probes for streamed and final enrichment', async () => {
     const candidateCount = WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY + 3
+
     const streamCandidates = Array.from({ length: candidateCount }, (_, index) =>
       makePerformanceCandidate(index)
     )
+
     const finalCandidates = streamCandidates.map((candidate, index) => ({
       ...candidate,
       fingerprint: `fingerprint-${index}-final`
     }))
+
     const tabsByWorktree = Object.fromEntries(
       streamCandidates.map((candidate, index) => [
         candidate.worktreeId,
         [{ id: `tab-${index}`, title: 'shell' }]
       ])
     ) as AppState['tabsByWorktree']
+
     const ptyIdsByTabId = Object.fromEntries(
       streamCandidates.map((_, index) => [`tab-${index}`, [`pty-${index}`]])
     )
+
     const pending = deferred<WorkspaceCleanupScanResult>()
     let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined
+
     const scan = vi.fn(
       (
         _args?: WorkspaceCleanupScanArgs,
         progressCallback?: (progress: WorkspaceCleanupScanProgress) => void
       ) => {
         onProgress = progressCallback
+
         return pending.promise
       }
     )
+
     installWorkspaceCleanupApi(scan)
 
     type ProbePhase = 'stream' | 'final'
+
     let phase: ProbePhase = 'stream'
     let probeGate = deferred<void>()
     const active: Record<ProbePhase, number> = { stream: 0, final: 0 }
     const peak: Record<ProbePhase, number> = { stream: 0, final: 0 }
+
     const hasChildProcesses = vi.fn(async () => {
       const callPhase = phase
       const callGate = probeGate
@@ -308,8 +339,10 @@ describe('workspace cleanup enrichment performance', () => {
       peak[callPhase] = Math.max(peak[callPhase], active[callPhase])
       await callGate.promise
       active[callPhase] -= 1
+
       return false
     })
+
     ;(
       globalThis.window as unknown as {
         api: {
@@ -364,18 +397,22 @@ describe('workspace cleanup enrichment performance', () => {
 
   it('drains streamed enrichment before projecting the final scan', async () => {
     const candidateCount = WORKSPACE_CLEANUP_ENRICHMENT_CONCURRENCY + 3
+
     const candidates = Array.from({ length: candidateCount }, (_, index) =>
       makePerformanceCandidate(index)
     )
+
     const tabsByWorktree = Object.fromEntries(
       candidates.map((candidate, index) => [
         candidate.worktreeId,
         [{ id: `tab-overlap-${index}`, title: 'shell' }]
       ])
     ) as AppState['tabsByWorktree']
+
     const ptyIdsByTabId = Object.fromEntries(
       candidates.map((_, index) => [`tab-overlap-${index}`, [`pty-overlap-${index}`]])
     )
+
     const pending = deferred<WorkspaceCleanupScanResult>()
     let onProgress: ((progress: WorkspaceCleanupScanProgress) => void) | undefined
     installWorkspaceCleanupApi(
@@ -385,6 +422,7 @@ describe('workspace cleanup enrichment performance', () => {
           progressCallback?: (progress: WorkspaceCleanupScanProgress) => void
         ) => {
           onProgress = progressCallback
+
           return pending.promise
         }
       )
@@ -393,13 +431,16 @@ describe('workspace cleanup enrichment performance', () => {
     const probeGate = deferred<void>()
     let active = 0
     let peak = 0
+
     const hasChildProcesses = vi.fn(async () => {
       active += 1
       peak = Math.max(peak, active)
       await probeGate.promise
       active -= 1
+
       return false
     })
+
     ;(
       globalThis.window as unknown as {
         api: {
@@ -444,13 +485,17 @@ describe('workspace cleanup enrichment performance', () => {
   it('rebuilds focused removal enrichment from state changed after the broad scan', async () => {
     const candidate = makeCandidate()
     const focusedScan = deferred<WorkspaceCleanupScanResult>()
+
     const scan = vi.fn((args?: WorkspaceCleanupScanArgs) =>
       args?.worktreeId
         ? focusedScan.promise
         : Promise.resolve({ scannedAt: NOW, candidates: [candidate], errors: [] })
     )
+
     installWorkspaceCleanupApi(scan)
+
     const hasChildProcesses = vi.fn().mockResolvedValue(false)
+
     ;(
       globalThis.window as unknown as {
         api: {

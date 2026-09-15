@@ -20,6 +20,7 @@ export function ensureSharedControlReady(args: {
   if (isSharedControlReady(args)) {
     return Promise.resolve()
   }
+
   return waitForSharedControlReadyWithTimeout({
     readyWaiters: args.readyWaiters,
     timeoutMs: args.timeoutMs,

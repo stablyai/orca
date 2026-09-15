@@ -1,5 +1,7 @@
 import { StaleRelayBrokerError } from './relay-session-broker-contract'
+
 export { StaleRelayBrokerError } from './relay-session-broker-contract'
+
 import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
 import type { PairingRelay } from '../../../shared/mobile-relay-pairing-offer'
 import type {
@@ -72,8 +74,10 @@ export class RelaySessionBroker {
 
   static async connect(options: RelaySessionBrokerOptions): Promise<RelaySessionBroker> {
     const broker = new RelaySessionBroker(options)
+
     try {
       await broker.open(options.accessToken)
+
       return broker
     } catch (error) {
       broker.closeNow()
@@ -91,6 +95,7 @@ export class RelaySessionBroker {
 
   get ownerIdentityKey(): string {
     const identity = this.options.identity
+
     return `${identity.userId}\0${identity.profileId}\0${identity.organizationId}`
   }
 
@@ -100,9 +105,11 @@ export class RelaySessionBroker {
 
   get endpoint(): MobileRelayEndpoint | null {
     const assignment = this.originPool.activeAssignment
+
     if (!assignment) {
       return null
     }
+
     return {
       v: 1,
       directorUrl: this.options.authConfig.relayDirectorUrl,
@@ -115,20 +122,25 @@ export class RelaySessionBroker {
 
   createInvite(relayDeviceId: string) {
     const control = this.originPool.activeControl
+
     if (!control) {
       return Promise.reject(new Error('relay_control_not_active'))
     }
+
     return control.createInvite(relayDeviceId)
   }
 
   async createPairingRelay(relayDeviceId: string): Promise<PairingRelay> {
     const assignment = this.originPool.activeAssignment
     const control = this.originPool.activeControl
+
     if (!assignment || !control) {
       throw new Error('relay_control_not_active')
     }
+
     const invite = await control.createInvite(relayDeviceId)
     this.assertCurrent()
+
     return {
       v: 1,
       directorUrl: this.options.authConfig.relayDirectorUrl,
@@ -143,9 +155,11 @@ export class RelaySessionBroker {
 
   revokeDevice(relayDeviceId: string, reqId?: string): Promise<void> {
     const control = this.originPool.activeControl
+
     if (!control) {
       return Promise.reject(new Error('relay_control_not_active'))
     }
+
     return control.revokeDevice(relayDeviceId, reqId)
   }
 
@@ -158,16 +172,20 @@ export class RelaySessionBroker {
       authorization.mode === 'relay-basis'
         ? this.originPool.controlForBasis(authorization.basisConnId)
         : this.originPool.activeControl
+
     if (!control) {
       throw new Error('relay_control_not_active')
     }
+
     const message = await control.installCredential({
       relayDeviceId,
       authorization,
       ...params
     })
+
     this.assertCurrent()
     const { type: _type, ...result } = message
+
     return result
   }
 
@@ -176,23 +194,29 @@ export class RelaySessionBroker {
     reqId: string
   ): Promise<DeviceCredentialInstallStatusResult> {
     const control = this.originPool.activeControl
+
     if (!control) {
       throw new Error('relay_control_not_active')
     }
+
     const message = await control.credentialInstallStatus(relayDeviceId, reqId)
     this.assertCurrent()
     const { type: _type, ...result } = message
+
     return result
   }
 
   async confirmResume(basisConnId: string, reqId: string): Promise<DeviceResumeConfirmed> {
     const control = this.originPool.controlForBasis(basisConnId)
+
     if (!control) {
       throw new Error('relay_basis_origin_not_found')
     }
+
     const message = await control.confirmResume(basisConnId, reqId)
     this.assertCurrent()
     const { type: _type, ...result } = message
+
     return result
   }
 
@@ -200,14 +224,18 @@ export class RelaySessionBroker {
     if (this.closed) {
       return
     }
+
     const publishOffline = this.options.isCurrent()
     this.closed = true
+
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer)
       this.refreshTimer = null
     }
+
     this.originPool.closeNow(hostCloseReason)
     this.regionRefresh?.close()
+
     if (publishOffline) {
       this.options.onStatus('offline')
     }
@@ -215,6 +243,7 @@ export class RelaySessionBroker {
 
   private async open(accessToken: string): Promise<void> {
     this.publishStatus('connecting')
+
     const [authorization, preferredRegion] = await Promise.all([
       exchangeRelayAuthorization({
         endpoint: this.options.authConfig.relayTokenEndpoint,
@@ -224,7 +253,9 @@ export class RelaySessionBroker {
       }),
       this.options.resolvePreferredRegion?.().catch(() => undefined) ?? Promise.resolve(undefined)
     ])
+
     this.assertCurrent()
+
     const assignment = await requestRelayAssignment({
       directorUrl: this.options.authConfig.relayDirectorUrl,
       relayToken: authorization.relayToken,
@@ -240,15 +271,19 @@ export class RelaySessionBroker {
       isCurrent: () => this.isCurrent(),
       fetch: this.options.fetch
     })
+
     this.assertCurrent()
+
     try {
       await this.originPool.openInitial(assignment, authorization.relayToken)
     } catch (error) {
       if (!this.isCurrent()) {
         throw new StaleRelayBrokerError()
       }
+
       throw error
     }
+
     this.assertCurrent()
     this.authorization = authorization
     this.publishStatus('registered')
@@ -258,9 +293,11 @@ export class RelaySessionBroker {
 
   private scheduleRefresh(): void {
     const authorization = this.authorization
+
     if (!authorization || this.closed) {
       return
     }
+
     const now = (this.options.now ?? Date.now)()
     const random = this.options.random ?? Math.random
     const delay = relayRenewalDelayMs(authorization.expiresAt, now, random)
@@ -269,19 +306,24 @@ export class RelaySessionBroker {
 
   private async refreshAuthorization(): Promise<void> {
     this.refreshTimer = null
+
     try {
       const accessToken = await this.options.refreshAccessToken()
       this.assertCurrent()
+
       if (!accessToken) {
         this.closeNow()
+
         return
       }
+
       const authorization = await exchangeRelayAuthorization({
         endpoint: this.options.authConfig.relayTokenEndpoint,
         accessToken,
         keypair: this.options.keypair,
         fetch: this.options.fetch
       })
+
       this.assertCurrent()
       this.originPool.refreshAuthorization(authorization.relayToken)
       this.authorization = authorization
@@ -290,14 +332,17 @@ export class RelaySessionBroker {
     } catch {
       const expiry = this.authorization?.expiresAt ?? 0
       const now = (this.options.now ?? Date.now)()
+
       if (!this.closed && this.options.isCurrent() && now <= expiry + 60_000) {
         const random = this.options.random ?? Math.random
         this.refreshTimer = setTimeout(
           () => void this.refreshAuthorization(),
           5_000 + Math.floor(random() * 10_001)
         )
+
         return
       }
+
       this.closeNow()
     }
   }
@@ -316,8 +361,10 @@ export class RelaySessionBroker {
     if (!this.isCurrent()) {
       return
     }
+
     const cellUrl = this.originPool.activeAssignment?.cellUrl
     this.options.onStatus(status, relayStatusCellUrl(status, cellUrl))
+
     if (status === 'registered' && cellUrl) {
       // Fire-and-forget: the listener may probe this cell, and nothing about the
       // live session is allowed to wait on that.

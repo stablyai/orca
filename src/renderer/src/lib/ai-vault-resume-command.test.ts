@@ -337,6 +337,7 @@ describe('ai vault resume command runtime', () => {
       worktreePath: 'C:\\Users\\alice\\repo',
       localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
     })
+
     state.settings = {
       ...state.settings,
       agentDefaultArgs: { claude: '--dangerously-skip-permissions --effort max' },
@@ -629,6 +630,7 @@ describe('ai vault resume command runtime', () => {
       worktreePath: '/home/alice/repo',
       terminalWindowsShell: 'cmd.exe'
     })
+
     state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
     expect(

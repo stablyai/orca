@@ -18,6 +18,7 @@ describe('normalizeWorkspaceDocHistoryEntries', () => {
       entry({ title: 'Old', lastVisitedAt: 1 }),
       entry({ title: 'New', lastVisitedAt: 5 })
     ])
+
     expect(entries).toHaveLength(1)
     expect(entries[0]?.title).toBe('New')
   })
@@ -29,6 +30,7 @@ describe('normalizeWorkspaceDocHistoryEntries', () => {
         lastVisitedAt: i
       })
     )
+
     const entries = normalizeWorkspaceDocHistoryEntries(oversized)
     expect(entries).toHaveLength(MAX_WORKSPACE_DOC_HISTORY_ENTRIES)
     // The oldest rows are the dropped ones.
@@ -45,6 +47,7 @@ describe('normalizeWorkspaceDocHistoryEntries', () => {
         visitCount: 1
       }
     ])
+
     expect(entries).toHaveLength(1)
     expect(entries[0]?.title).toBe('a.html')
   })
@@ -55,12 +58,14 @@ describe('normalizeWorkspaceDocHistoryEntries', () => {
   })
   it('indexes document identity while deduplicating a large legacy history', () => {
     let reads = 0
+
     const entries = Array.from({ length: 10_000 }, (_, i) =>
       entry({
         docLocation: {
           kind: 'workspace-doc',
           get worktreeId() {
             reads++
+
             return 'wt-1'
           },
           filePath: `/repo/${i % 99}.html`
@@ -68,6 +73,7 @@ describe('normalizeWorkspaceDocHistoryEntries', () => {
         lastVisitedAt: i
       })
     )
+
     const result = normalizeWorkspaceDocHistoryEntries(entries)
     expect(reads).toBeLessThanOrEqual(20_000)
     expect(result).toHaveLength(99)
@@ -82,6 +88,7 @@ describe('normalizeWorkspaceDocHistoryEntries', () => {
       { kind: 'workspace-doc' as const, worktreeId: 'a', filePath: 'b::c' },
       { kind: 'workspace-doc' as const, worktreeId: 'a', filePath: 'B::c' }
     ]
+
     const entries = locations.map((docLocation) => entry({ docLocation }))
     expect(normalizeWorkspaceDocHistoryEntries(entries)).toEqual(entries)
   })

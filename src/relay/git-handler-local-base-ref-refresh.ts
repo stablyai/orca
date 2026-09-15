@@ -21,6 +21,7 @@ export async function refreshLocalBaseRefForWorktreeCreateOp(
   ) {
     throw new Error('Invalid local base ref refresh request.')
   }
+
   if (!fullRef.startsWith('refs/heads/') || !remoteTrackingRef.startsWith('refs/remotes/')) {
     throw new Error('Invalid local base ref refresh refs.')
   }
@@ -29,6 +30,7 @@ export async function refreshLocalBaseRefForWorktreeCreateOp(
   await git(['check-ref-format', remoteTrackingRef], repoPath)
 
   const localOid = await revParseCommit(git, repoPath, fullRef, 'Local base ref is missing.')
+
   const remoteOid = await revParseCommit(
     git,
     repoPath,
@@ -46,21 +48,27 @@ export async function refreshLocalBaseRefForWorktreeCreateOp(
 
   const worktrees = await readRelayWorktreeList(git, repoPath, capabilities)
   const ownerWorktree = worktrees.find((worktree) => worktree.branch === fullRef)
+
   if (ownerWorktree) {
     if (ownerWorktreePath && !areRelayWorktreePathsEqual(ownerWorktree.path, ownerWorktreePath)) {
       throw new Error('Local base ref is checked out in a different worktree.')
     }
+
     const { stdout } = await git(
       ['status', '--porcelain', '--untracked-files=no'],
       ownerWorktree.path
     )
+
     if (stdout.trim()) {
       throw new Error('Local base ref worktree has tracked changes.')
     }
+
     if (checkOnly) {
       return
     }
+
     await git(['reset', '--hard', remoteOid], ownerWorktree.path)
+
     return
   }
 
@@ -70,6 +78,7 @@ export async function refreshLocalBaseRefForWorktreeCreateOp(
   if (checkOnly) {
     return
   }
+
   await git(['update-ref', fullRef, remoteOid, localOid], repoPath)
 }
 
@@ -81,8 +90,10 @@ async function revParseCommit(
 ): Promise<string> {
   const { stdout } = await git(['rev-parse', '--verify', `${ref}^{commit}`], repoPath)
   const oid = stdout.trim()
+
   if (!oid) {
     throw new Error(missingMessage)
   }
+
   return oid
 }

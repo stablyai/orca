@@ -12,6 +12,7 @@ export function registerTerminalPaneMountReadiness(): void {
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
+
     // Why: each test launches a fresh Electron instance. The React tree needs
     // to render Terminal → TabGroupPanel → TerminalPane → useTerminalPaneLifecycle
     // before the PaneManager registers on window.__paneManagers. On cold starts
@@ -20,6 +21,7 @@ export function registerTerminalPaneMountReadiness(): void {
     const hasPaneManager = await waitForActiveTerminalManager(orcaPage, 30_000)
       .then(() => true)
       .catch(() => false)
+
     test.skip(
       !hasPaneManager,
       'Electron automation in this environment never mounts the live TerminalPane manager, so pane split/resize assertions would only fail on harness setup.'

@@ -15,11 +15,13 @@ export function getFolderWorkspaceInstanceId(repo: Repo, instanceId: string): st
 
 export function getFolderWorkspaceInstanceIdentity(repo: Repo, worktreeId: string): string {
   const prefix = `${getFolderWorkspaceRootId(repo)}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`
+
   return worktreeId.startsWith(prefix) ? worktreeId.slice(prefix.length) : randomUUID()
 }
 
 export function isFolderWorkspaceIdForRepo(repo: Repo, worktreeId: string): boolean {
   const rootId = getFolderWorkspaceRootId(repo)
+
   return (
     worktreeId === rootId ||
     worktreeId.startsWith(`${rootId}${FOLDER_WORKSPACE_INSTANCE_SEPARATOR}`)

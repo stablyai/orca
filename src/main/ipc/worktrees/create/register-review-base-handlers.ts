@@ -31,24 +31,31 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
       }
     ): Promise<GitHubPrStartPoint | { error: string }> => {
       const repo = store.getRepo(args.repoId)
+
       if (!repo) {
         return { error: 'Repo not found' }
       }
+
       if (isFolderRepo(repo)) {
         return { error: 'Folder mode does not support creating worktrees.' }
       }
+
       const gitExec = async (args: string[]): Promise<{ stdout: string; stderr: string }> => {
         if (!repo.connectionId) {
           return gitExecFileAsync(args, getLocalProjectGitExecOptions(store, repo))
         }
+
         const provider = getSshGitProvider(repo.connectionId)
+
         if (!provider) {
           throw new Error(
             'SSH Git provider is not available. Reconnect to this target and try again.'
           )
         }
+
         return provider.exec(args, repo.path)
       }
+
       // Why: SSH review-head fetches require narrow write-capable RPCs.
       const fetchRemoteTrackingRef = (remote: string, branch: string): Promise<void> =>
         fetchPrHeadTrackingRef(
@@ -58,6 +65,7 @@ export function registerReviewBaseHandlers(context: WorktreeIpcContext): void {
           branch,
           { localGitExecOptions: getLocalProjectGitExecOptions(store, repo) }
         )
+
       const fetchPullRequestHeadRef = (remote: string, prNumber: number): Promise<string> =>
         fetchGitHubPullRequestHeadRef(
           repo,

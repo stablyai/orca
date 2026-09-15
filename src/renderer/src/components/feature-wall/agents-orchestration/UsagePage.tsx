@@ -8,8 +8,11 @@ import { translate } from '@/i18n/i18n'
 type Phase = 'reset' | 'expanded' | 'targeted' | 'swapped'
 
 const EXPAND_DELAY = 2200
+
 const TARGET_DELAY = 3400
+
 const SWAP_DELAY = 4400
+
 const LOOP_DELAY = 7800
 
 export function UsagePage(props: { active: boolean; reducedMotion: boolean }): JSX.Element {
@@ -20,14 +23,19 @@ export function UsagePage(props: { active: boolean; reducedMotion: boolean }): J
   useEffect(() => {
     if (!active) {
       setPhase('reset')
+
       return
     }
+
     if (reducedMotion) {
       setPhase('swapped')
+
       return
     }
+
     let cancelled = false
     const timeouts: number[] = []
+
     const at = (delay: number, fn: () => void): void => {
       timeouts.push(
         window.setTimeout(() => {
@@ -37,6 +45,7 @@ export function UsagePage(props: { active: boolean; reducedMotion: boolean }): J
         }, delay)
       )
     }
+
     const loop = (): void => {
       setPhase('reset')
       at(EXPAND_DELAY, () => setPhase('expanded'))
@@ -51,7 +60,9 @@ export function UsagePage(props: { active: boolean; reducedMotion: boolean }): J
         }
       })
     }
+
     loop()
+
     return () => {
       cancelled = true
       timeouts.forEach((id) => window.clearTimeout(id))
@@ -302,6 +313,7 @@ function BottomBar(props: { swapped: boolean }): JSX.Element {
   const codexFillWidth = props.swapped ? '0%' : '96%'
   const codexFillColor = props.swapped ? 'rgb(34 197 94)' : 'rgb(239 68 68)'
   const codexMeta = props.swapped ? '0% used 5h · 4% used wk' : '96% used 47m'
+
   return (
     <div
       className="absolute bottom-[22px] left-1/2 flex -translate-x-1/2 items-center gap-3.5 rounded-lg border border-border bg-muted/60 px-3.5 py-1.5 text-[11px] shadow-[0_1px_2px_rgba(24,24,27,0.04)]"

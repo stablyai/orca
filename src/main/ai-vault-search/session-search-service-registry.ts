@@ -26,18 +26,24 @@ export async function searchSessionService(
 ): Promise<AiVaultSearchResponse> {
   const request = AiVaultSearchRequestSchema.parse(raw)
   const current = service
+
   if (!current) {
     return { kind: 'unavailable', reason: 'no-service' }
   }
+
   const freshness =
     request.freshness === 'wait-until-current'
       ? await reconcileWithin(current, freshnessTimeoutMs)
       : false
+
   const result = AiVaultSearchResponseSchema.parse(await current.search(request))
+
   if (result.kind !== 'results') {
     return result
   }
+
   const { debug, ...fields } = result
+
   return {
     ...fields,
     hits: result.hits.map((hit) => redactForTransport(hit, transport)),
@@ -51,6 +57,7 @@ export async function sessionSearchServiceStatus(
   transport: SessionSearchTransport
 ): Promise<AiVaultSearchStatus> {
   AiVaultSearchStatusRequestSchema.parse(raw)
+
   return redactStatusForTransport(
     AiVaultSearchStatusSchema.parse(
       service ? await service.status() : unavailableSessionSearchStatus()
@@ -61,6 +68,7 @@ export async function sessionSearchServiceStatus(
 
 async function reconcileWithin(current: SessionSearchService, timeoutMs: number): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
+
   try {
     return await Promise.race([
       Promise.resolve()

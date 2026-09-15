@@ -28,24 +28,30 @@ function extractModel(value: unknown): string | null {
   }
 
   const record = value as Record<string, unknown>
+
   const direct = [extractString(record.model), extractString(record.model_name)].find(
     (candidate) => candidate !== null
   )
+
   if (direct) {
     return direct
   }
 
   if (record.info && typeof record.info === 'object') {
     const info = record.info as Record<string, unknown>
+
     const infoDirect = [extractString(info.model), extractString(info.model_name)].find(
       (candidate) => candidate !== null
     )
+
     if (infoDirect) {
       return infoDirect
     }
+
     if (info.metadata && typeof info.metadata === 'object') {
       const metadata = info.metadata as Record<string, unknown>
       const metadataModel = extractString(metadata.model)
+
       if (metadataModel) {
         return metadataModel
       }
@@ -54,6 +60,7 @@ function extractModel(value: unknown): string | null {
 
   if (record.metadata && typeof record.metadata === 'object') {
     const metadata = record.metadata as Record<string, unknown>
+
     return extractString(metadata.model)
   }
 
@@ -65,6 +72,7 @@ export function parseCodexUsageRecord(
   context: CodexUsageParseContext
 ): CodexUsageParsedEvent | null {
   let parsed: CodexUsageRawRecord
+
   try {
     parsed = JSON.parse(line) as CodexUsageRawRecord
   } catch {
@@ -78,9 +86,11 @@ export function parseCodexUsageRecord(
   if (parsed.type === 'session_meta') {
     context.sessionId = extractString(parsed.payload.id) ?? context.sessionId
     context.sessionCwd = extractString(parsed.payload.cwd)
+
     if (!context.currentCwd && context.sessionCwd) {
       context.currentCwd = context.sessionCwd
     }
+
     return null
   }
 
@@ -88,6 +98,7 @@ export function parseCodexUsageRecord(
     context.currentCwd =
       extractString(parsed.payload.cwd) ?? context.currentCwd ?? context.sessionCwd
     context.currentModel = extractModel(parsed.payload) ?? context.currentModel
+
     return null
   }
 
@@ -96,6 +107,7 @@ export function parseCodexUsageRecord(
   }
 
   const info = parsed.payload.info
+
   if (info == null || typeof info !== 'object') {
     // Why: Codex emits token_count snapshots with null info for rate-limit
     // updates. Treating them as malformed usage would make active sessions look
@@ -106,19 +118,26 @@ export function parseCodexUsageRecord(
   const record = info as Record<string, unknown>
   const totalUsage = normalizeRawUsage(record.total_token_usage)
   const lastUsage = normalizeRawUsage(record.last_token_usage)
+
   if (context.totalOnlyBaselinePending) {
     context.totalOnlyBaselinePending = false
+
     if (totalUsage && !lastUsage && !context.previousTotals) {
       context.previousTotals = totalUsage
+
       return null
     }
   }
+
   const resolvedUsage = resolveCodexUsageDelta(totalUsage, lastUsage, context.previousTotals)
+
   if (!resolvedUsage) {
     return null
   }
+
   if (resolvedUsage.kind === 'baseline') {
     context.previousTotals = resolvedUsage.nextTotals
+
     return null
   }
 

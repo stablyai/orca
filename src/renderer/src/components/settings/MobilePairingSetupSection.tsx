@@ -59,6 +59,7 @@ export function MobilePairingSetupSection({
   // substitutes its own default when the renderer has not resolved one yet.
   // LAN has no such fallback, so it needs an explicit reachable host.
   const generateDisabled = loading || !canGenerate || (!usingRelay && !selectedAddress)
+
   // "Also use…" frames this as additive under Relay, not a second connection mode.
   // The phone races both paths and direct wins ties when nearby.
   const relayAddressLabel = translate(

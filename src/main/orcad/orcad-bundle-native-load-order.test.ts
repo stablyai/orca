@@ -24,7 +24,9 @@ import { runProcessSync } from '../../shared/child-process/run-process'
  * to cooperate. What it must never do is skip.
  */
 const REPO_ROOT = join(__dirname, '..', '..', '..')
+
 const BUNDLE = join(REPO_ROOT, 'out', 'orcad', 'orcad.js')
+
 const BUILD_SCRIPT = join(REPO_ROOT, 'config', 'scripts', 'build-orcad.mjs')
 
 /**
@@ -36,12 +38,14 @@ function ensureOrcadBundle(): void {
   if (existsSync(BUNDLE)) {
     return
   }
+
   const build = runProcessSync({
     program: process.execPath,
     args: [BUILD_SCRIPT],
     cwd: REPO_ROOT,
     timeoutMs: 300_000
   })
+
   if (!existsSync(BUNDLE)) {
     const output = `${build.stdout}${build.stderr}`.slice(0, 4000)
     throw new Error(
@@ -82,6 +86,7 @@ describe('orcad bundle native load order', () => {
       args: [harness],
       timeoutMs: 120_000
     })
+
     const output = `${result.stdout}${result.stderr}`
 
     // Proof the graph fully loaded and reached argv parsing rather than dying early.

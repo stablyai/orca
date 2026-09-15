@@ -36,25 +36,30 @@ function stateFile(dataFile: string): string {
 function readState(path: string): ReportState | null {
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown
+
     if (parsed && typeof parsed === 'object' && 'lastReportedGap' in parsed) {
       const value = (parsed as ReportState).lastReportedGap
+
       return { lastReportedGap: typeof value === 'string' ? value : null }
     }
   } catch {
     // Missing or corrupt: treat as never reported and report again.
   }
+
   return null
 }
 
 export function reportSecretProtectionGap(options: ReportOptions): string | null {
   const log = options.log ?? ((message: string) => console.warn(message))
   let gap: string | null
+
   try {
     gap = getSecretStore().describeProtectionGap()
   } catch (error) {
     // Why swallow: this is diagnostics. An uninstalled store is already a hard failure
     // at the first real read, and that error is the useful one.
     log(`[secrets] could not determine at-rest protection: ${String(error)}`)
+
     return null
   }
 
@@ -80,5 +85,6 @@ export function reportSecretProtectionGap(options: ReportOptions): string | null
       log(`[secrets] could not persist the protection report state: ${String(error)}`)
     }
   }
+
   return gap
 }

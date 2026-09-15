@@ -37,7 +37,9 @@ export const worktreesApi = {
       _event: Electron.IpcRendererEvent,
       data: { creationId?: string; phase: 'fetching' | 'creating' }
     ) => callback(data)
+
     ipcRenderer.on('createWorktree:progress', listener)
+
     return () => ipcRenderer.removeListener('createWorktree:progress', listener)
   },
 
@@ -78,13 +80,16 @@ export const worktreesApi = {
       _event: Electron.IpcRendererEvent,
       data: { repoId: string; renamed?: { oldWorktreeId: string; newWorktreeId: string } }
     ) => callback(data)
+
     ipcRenderer.on('worktrees:changed', listener)
+
     return () => ipcRenderer.removeListener('worktrees:changed', listener)
   },
 
   onGitStatusMetadataChanged: (callback: (data: { repoId: string }) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: { repoId: string }) => callback(data)
     ipcRenderer.on('worktrees:gitStatusMetadataChanged', listener)
+
     return () => ipcRenderer.removeListener('worktrees:gitStatusMetadataChanged', listener)
   },
 
@@ -95,14 +100,18 @@ export const worktreesApi = {
       _event: Electron.IpcRendererEvent,
       data: { repoId: string; identities: WorktreeHeadIdentity[] }
     ) => callback(data)
+
     ipcRenderer.on('worktrees:headIdentitiesChanged', listener)
+
     return () => ipcRenderer.removeListener('worktrees:headIdentitiesChanged', listener)
   },
 
   onBaseStatus: (callback: (data: WorktreeBaseStatusEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: WorktreeBaseStatusEvent) =>
       callback(data)
+
     ipcRenderer.on('worktree:baseStatus', listener)
+
     return () => ipcRenderer.removeListener('worktree:baseStatus', listener)
   },
 
@@ -111,7 +120,9 @@ export const worktreesApi = {
   ): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: WorktreeRemoteBranchConflictEvent) =>
       callback(data)
+
     ipcRenderer.on('worktree:remoteBranchConflict', listener)
+
     return () => ipcRenderer.removeListener('worktree:remoteBranchConflict', listener)
   }
 } satisfies PreloadApi['worktrees']

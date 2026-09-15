@@ -18,13 +18,17 @@ const file = {
   mtimeMs: 1000,
   modifiedAt: new Date(1000).toISOString()
 }
+
 const options = { executionHostId: 'ssh:parity' as const, executionHostPlatform: 'darwin' as const }
+
 async function* bytes(content: string) {
   const data = Buffer.from(content)
+
   for (let i = 0; i < data.length; i += 3) {
     yield data.subarray(i, i + 3)
   }
 }
+
 const fixtures = [
   {
     agent: 'hermes',
@@ -48,6 +52,7 @@ const fixtures = [
       '{"messages":[{"type":"user","content":"Ü🐋 first","timestamp":"2026-01-02T00:00:00Z"},{"type":"gemini","content":"answer","tokens":{"input":10,"output":20}}],"sessionId":"id","startTime":"2026-01-01T00:00:00Z","lastUpdated":"2026-01-03T00:00:00Z"}'
   }
 ]
+
 describe('streamed whole-document parser equivalence', () => {
   for (const fixture of fixtures) {
     it(`${fixture.agent}: field order and UTF8 chunk boundaries preserve every output field`, async () => {
@@ -55,6 +60,7 @@ describe('streamed whole-document parser equivalence', () => {
         await fixture.parse(file, fixture.content, 'darwin', options)
       )
     })
+
     for (const last of [
       '[]',
       'null',
@@ -68,14 +74,17 @@ describe('streamed whole-document parser equivalence', () => {
         )
       })
     }
+
     it(`${fixture.agent}: rejects a malformed tail after valid messages`, async () => {
       const content = fixture.content.slice(0, -1)
       await expect(fixture.stream(file, bytes(content), 'darwin', options)).rejects.toThrow()
     })
   }
+
   it('Cline preserves sidecar semantics, metadata field order and duplicate arrays', async () => {
     const metadata =
       '{"session_id":"id","cwd":"/repo","started_at":"2026-01-01T00:00:00Z","prompt":"fallback"}'
+
     for (const messages of [
       '{"messages":[{"role":"user","content":"Ü🐋 first","ts":"2026-01-02T00:00:00Z"},{"role":"assistant","content":"answer","modelInfo":{"id":"sidecar"}}],"updated_at":"2026-01-03T00:00:00Z"}',
       '{"messages":[{"role":"user","content":"old"}],"messages":[]}',

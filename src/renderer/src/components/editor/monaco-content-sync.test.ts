@@ -14,14 +14,17 @@ function createHarness(
   pushUndoStop: ReturnType<typeof vi.fn>
 } {
   const getValue = vi.fn(() => initialContent)
+
   const getFullModelRange = vi.fn(() => ({
     startLineNumber: 1,
     startColumn: 1,
     endLineNumber: 3,
     endColumn: 5
   }))
+
   const pushEditOperations = vi.fn()
   const applyEdits = vi.fn()
+
   const model = {
     getValue,
     getEOL: () => eol,
@@ -29,11 +32,14 @@ function createHarness(
     pushEditOperations,
     applyEdits
   } as unknown as editor.ITextModel
+
   const pushUndoStop = vi.fn()
+
   const editorInstance = {
     getModel: () => model,
     pushUndoStop
   } as unknown as editor.IStandaloneCodeEditor
+
   return {
     editorInstance,
     getValue,

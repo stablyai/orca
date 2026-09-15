@@ -21,9 +21,11 @@ vi.mock('react-native', () => ({
 
 vi.mock('react-native-webview', async () => {
   const React = await import('react')
+
   const WebView = React.forwardRef((props: Record<string, unknown>, _ref) =>
     React.createElement('WebView', props)
   )
+
   return { WebView, default: WebView }
 })
 
@@ -37,6 +39,7 @@ function postWebViewMessage(payload: Record<string, unknown>): void {
   if (!renderer) {
     throw new Error('TerminalWebView did not render')
   }
+
   const webView = renderer.root.findByType('WebView')
   act(() => {
     webView.props.onMessage({ nativeEvent: { data: JSON.stringify(payload) } })
@@ -49,6 +52,7 @@ describe('TerminalWebView query reply routing', () => {
       act(() => renderer?.unmount())
       renderer = null
     }
+
     vi.restoreAllMocks()
   })
 

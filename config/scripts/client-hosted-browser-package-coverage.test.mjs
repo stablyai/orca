@@ -16,9 +16,11 @@ describe('client-hosted browser package coverage', () => {
   it('runs client-hosted Electron lifecycle coverage on native package hosts', () => {
     const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
     const parsedWorkflow = parse(prWorkflow)
+
     const linuxStep = parsedWorkflow.jobs.package.steps.find(
       (step) => step.name === 'Test Linux Electron lifecycle boundary'
     )
+
     const windowsStep = parsedWorkflow.jobs.package_windows.steps.find(
       (step) => step.name === 'Test Windows-specific boundaries'
     )
@@ -32,6 +34,7 @@ describe('client-hosted browser package coverage', () => {
     ].map((name) => `src/main/browser/${name}.electron.test.ts`)
 
     expect(linuxStep.run).toContain('xvfb-run --auto-servernum')
+
     for (const file of required) {
       expect(linuxStep.run).toContain(file)
       expect(windowsStep.run).toContain(file)
@@ -43,6 +46,7 @@ describe('client-hosted browser package coverage', () => {
   // which is the only way this step has ever failed.
   it('gives each Linux Electron probe the runner to itself', () => {
     const parsedWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
+
     const linuxStep = parsedWorkflow.jobs.package.steps.find(
       (step) => step.name === 'Test Linux Electron lifecycle boundary'
     )

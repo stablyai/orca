@@ -23,17 +23,21 @@ export function runLineageDeleteAll(args: {
   if (args.deleteAllTargetCount <= 1) {
     return
   }
+
   const currentTargets = args.resolveConfirmedTargets(
     args.lineageDeleteIdentities,
     args.deleteAllTargetCount
   )
+
   if (!currentTargets) {
     return
   }
+
   const deletePromise = runWorktreeDeletesInParallel(currentTargets, {
     force: args.forceOnConfirm,
     onForceDeleted: args.onForceDeleted
   })
+
   args.closeModal()
   void deletePromise.then((deletedTargets) => {
     if (deletedTargets.length > 0) {

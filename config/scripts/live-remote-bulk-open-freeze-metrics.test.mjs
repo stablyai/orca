@@ -60,11 +60,13 @@ describe('live-remote-bulk-open-freeze-metrics', () => {
     expect(REALISTIC_SCENARIOS).toContain('idle-backlog-open')
     expect(REALISTIC_SCENARIOS).toContain('idle-backlog-reconnect-open')
     expect(REALISTIC_SCENARIOS).toContain('lockup-storm')
+
     const soft = evaluateRealisticFreezeSignals({
       maxOpenMs: 3200,
       firstOpenMs: 2800,
       reconnectRefreshMs: 900
     })
+
     expect(soft.softFreeze).toBe(true)
     expect(soft.hardFreeze).toBe(false)
     expect(soft.peakLatencyMs).toBe(3200)
@@ -74,6 +76,7 @@ describe('live-remote-bulk-open-freeze-metrics', () => {
       firstOpenMs: 700,
       reconnectRefreshMs: 6200
     })
+
     expect(hardFromReconnect.hardFreeze).toBe(true)
     expect(hardFromReconnect.peakLatencyMs).toBe(6200)
   })
@@ -88,6 +91,7 @@ describe('live-remote-bulk-open-freeze-metrics', () => {
       foreverWindowMs: 30_000,
       statusSlowMs: 15_000
     })
+
     expect(healthy.foreverUiLockupObserved).toBe(false)
 
     const forever = evaluateFullAppFreeze({
@@ -99,6 +103,7 @@ describe('live-remote-bulk-open-freeze-metrics', () => {
       foreverWindowMs: 30_000,
       statusSlowMs: 15_000
     })
+
     expect(forever.foreverUiLockupObserved).toBe(true)
     expect(forever.longestUnhealthyWindowMs).toBeGreaterThanOrEqual(30_000)
 
@@ -203,6 +208,7 @@ describe('live-remote-bulk-open-freeze-metrics', () => {
       expect(d).toBeGreaterThanOrEqual(250)
       expect(d).toBeLessThanOrEqual(400)
     }
+
     expect(humanPaceDelayMs(100, 0)).toBe(100)
   })
 
@@ -210,17 +216,22 @@ describe('live-remote-bulk-open-freeze-metrics', () => {
     const { readdirSync, readFileSync, existsSync } = await import('node:fs')
     const { resolve } = await import('node:path')
     const reportDir = resolve(process.cwd(), 'test-results/freeze-repro')
+
     if (!existsSync(reportDir)) {
       // Local clones without lab artifacts still pass pure metrics tests above.
       return
     }
+
     const reportName = readdirSync(reportDir).find(
       (name) => name.startsWith('live-bulk-open-freeze-') && name.endsWith('.json')
     )
+
     if (reportName == null) {
       return
     }
+
     const report = JSON.parse(readFileSync(resolve(reportDir, reportName), 'utf8'))
+
     const evaluated = evaluateFreezeSignals({
       maxSwitchMs: report.maxSwitchMs,
       maxBatchWallMs: report.maxBatchWallMs ?? 0,
@@ -229,6 +240,7 @@ describe('live-remote-bulk-open-freeze-metrics', () => {
       softMs: report.softMs,
       hardMs: report.hardMs
     })
+
     expect(evaluated.hardFreeze).toBe(report.hardFreeze)
     expect(evaluated.peakLatencyMs).toBeGreaterThanOrEqual(5000)
     expect(typeof report.environment).toBe('string')

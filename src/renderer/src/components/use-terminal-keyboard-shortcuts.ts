@@ -15,20 +15,26 @@ export function useTerminalKeyboardShortcuts(controller: TerminalActivationContr
     mobileEmulatorEnabled,
     terminalShortcutPolicy
   } = controller
+
   useEffect(() => {
     if (!activeWorktreeId) {
       return
     }
+
     const isMac = navigator.userAgent.includes('Mac')
+
     const shortcutPlatform: NodeJS.Platform = isMac
       ? 'darwin'
       : navigator.userAgent.includes('Windows')
         ? 'win32'
         : 'linux'
+
     const onKeyDown = (event: KeyboardEvent): void => {
       handleTerminalWorkspaceKeyDown(event, controller, shortcutPlatform)
     }
+
     window.addEventListener('keydown', onKeyDown, { capture: true })
+
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- preserve the original listener refresh contract across extraction.
   }, [

@@ -30,6 +30,7 @@ export function setupGoogleAuthUserAgentOverride(sess: Session): void {
 
   sess.webRequest.onBeforeSendHeaders({ urls: ['https://*/*'] }, (details, callback) => {
     const headers = details.requestHeaders
+
     if (isGoogleAuthUrl(details.url)) {
       // Why: present a Firefox identity on Google's sign-in hosts so the user logs
       // in inside the app and Google issues self-refreshing bound cookies. Strip
@@ -37,8 +38,10 @@ export function setupGoogleAuthUserAgentOverride(sess: Session): void {
       setUserAgentHeader(headers, firefoxUa)
       stripClientHints(headers)
       callback({ requestHeaders: headers })
+
       return
     }
+
     if (currentUserAgent(headers) === firefoxUa) {
       // Why: while the auth document is on screen the WebContents UA is Firefox,
       // so its cross-host subresource/XHR requests (gstatic, play.google.com, the
@@ -49,8 +52,10 @@ export function setupGoogleAuthUserAgentOverride(sess: Session): void {
       // sends no client hints, so strip them to keep one identity for the flow.
       stripClientHints(headers)
       callback({ requestHeaders: headers })
+
       return
     }
+
     callback({ requestHeaders: headers })
   })
 }

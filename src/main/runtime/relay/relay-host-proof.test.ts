@@ -8,34 +8,42 @@ import {
 } from './relay-host-proof'
 
 const encoder = new TextEncoder()
+
 const HOST_PROOF_DOMAIN = 'orca-relay-host-proof/v1'
+
 const CHALLENGE_DOMAIN = 'orca-relay-host-challenge/v1'
+
 const CLOCK_SKEW_MS = 30_000
 
 function concat(parts: readonly Uint8Array[]): Uint8Array {
   const output = new Uint8Array(parts.reduce((total, part) => total + part.byteLength, 0))
   let offset = 0
+
   for (const part of parts) {
     output.set(part, offset)
     offset += part.byteLength
   }
+
   return output
 }
 
 function uint32(value: number): Uint8Array {
   const bytes = new Uint8Array(4)
   new DataView(bytes.buffer).setUint32(0, value, false)
+
   return bytes
 }
 
 function uint64(value: number): Uint8Array {
   const bytes = new Uint8Array(8)
   new DataView(bytes.buffer).setBigUint64(0, BigInt(value), false)
+
   return bytes
 }
 
 function field(name: string, value: Uint8Array): Uint8Array {
   const encodedName = encoder.encode(name)
+
   return concat([uint32(encodedName.byteLength), encodedName, uint32(value.byteLength), value])
 }
 
@@ -93,6 +101,7 @@ function buildChallengeFixture(options: {
   const origin = 'https://c2.relay.onorca.dev'
   const relayHostId = 'host-abc123'
   const challengeId = 'challenge-skew'
+
   const transcript = buildTranscript({
     origin,
     relayKey: relayKeys.publicKey,
@@ -103,12 +112,14 @@ function buildChallengeFixture(options: {
     relayHostId,
     hostKey: hostKeys.publicKey
   })
+
   const plaintext = concat([
     text(`${CHALLENGE_DOMAIN}\0`),
     uint32(transcript.byteLength),
     transcript,
     secret
   ])
+
   const challenge: RelayHostChallenge = {
     challengeId,
     relayEphemeralPublicKeyB64: Buffer.from(relayKeys.publicKey).toString('base64'),
@@ -118,6 +129,7 @@ function buildChallengeFixture(options: {
     ).toString('base64'),
     expiresAt: options.expiresAt
   }
+
   const context: RelayHostProofContext = {
     relayOrigin: origin,
     userId: 'user-1',
@@ -130,10 +142,12 @@ function buildChallengeFixture(options: {
     resumeRequested: false,
     now: () => options.localNow
   }
+
   const expectedProof = createHmac('sha256', secret)
     .update(text(`${HOST_PROOF_DOMAIN}\0ack\0`))
     .update(transcript)
     .digest('base64')
+
   return { challenge, context, expectedProof }
 }
 
@@ -144,6 +158,7 @@ describe('answerRelayHostChallenge clock skew (#10401)', () => {
     const localNow = serverNow - skewBehindMs
     const issuedAt = serverNow
     const expiresAt = issuedAt + 10_000
+
     const { challenge, context, expectedProof } = buildChallengeFixture({
       issuedAt,
       expiresAt,
@@ -158,6 +173,7 @@ describe('answerRelayHostChallenge clock skew (#10401)', () => {
     const issuedAt = serverNow
     const expiresAt = issuedAt + 10_000
     const localNow = expiresAt + 4_400
+
     const { challenge, context, expectedProof } = buildChallengeFixture({
       issuedAt,
       expiresAt,
@@ -170,12 +186,14 @@ describe('answerRelayHostChallenge clock skew (#10401)', () => {
   it('accepts challenges at the clock-skew boundaries', () => {
     const issuedAt = 1_700_000_000_000
     const expiresAt = issuedAt + 10_000
+
     for (const localNow of [issuedAt - CLOCK_SKEW_MS, expiresAt + CLOCK_SKEW_MS]) {
       const { challenge, context, expectedProof } = buildChallengeFixture({
         issuedAt,
         expiresAt,
         localNow
       })
+
       expect(answerRelayHostChallenge(challenge, context)).toBe(expectedProof)
     }
   })
@@ -185,41 +203,49 @@ describe('answerRelayHostChallenge clock skew (#10401)', () => {
     const issuedAt = serverNow
     const expiresAt = issuedAt + 10_000
     const localNowTooBehind = issuedAt - CLOCK_SKEW_MS - 1
+
     const behind = buildChallengeFixture({
       issuedAt,
       expiresAt,
       localNow: localNowTooBehind
     })
+
     expect(answerRelayHostChallenge(behind.challenge, behind.context)).toBeNull()
 
     const localNowTooAhead = expiresAt + CLOCK_SKEW_MS + 1
+
     const ahead = buildChallengeFixture({
       issuedAt,
       expiresAt,
       localNow: localNowTooAhead
     })
+
     expect(answerRelayHostChallenge(ahead.challenge, ahead.context)).toBeNull()
   })
 
   it('still rejects an oversized server challenge window', () => {
     const issuedAt = 1_700_000_000_000
     const expiresAt = issuedAt + 10_001
+
     const { challenge, context } = buildChallengeFixture({
       issuedAt,
       expiresAt,
       localNow: issuedAt
     })
+
     expect(answerRelayHostChallenge(challenge, context)).toBeNull()
   })
 
   it('rejects a challenge that expires before it is issued', () => {
     const issuedAt = 1_700_000_000_000
     const expiresAt = issuedAt - 1
+
     const { challenge, context } = buildChallengeFixture({
       issuedAt,
       expiresAt,
       localNow: issuedAt
     })
+
     expect(answerRelayHostChallenge(challenge, context)).toBeNull()
   })
 })

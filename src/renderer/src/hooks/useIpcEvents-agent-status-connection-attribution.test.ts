@@ -41,6 +41,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       useAppStore: {
         subscribe: vi.fn((listener: StoreSubscribeListener) => {
           subscribeListenerRef.current = listener
+
           return () => {
             subscribeListenerRef.current = null
           }
@@ -71,9 +72,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
     const hydrateEditorSession = vi.fn()
     const hydrateBrowserSession = vi.fn()
     let resolveClientId!: (id: string) => void
+
     const clientId = new Promise<string>((resolve) => {
       resolveClientId = resolve
     })
+
     const onChangedListenerRef: {
       current:
         | ((event: {
@@ -83,6 +86,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           }) => void)
         | null
     } = { current: null }
+
     const storeState: StoreLike = buildStoreState({
       workspaceSessionReady: true,
       repos: [{ id: 'repo-1', connectionId: 'conn-1' }],
@@ -112,6 +116,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
           clientId: () => clientId,
           onChanged: (cb: typeof onChangedListenerRef.current) => {
             onChangedListenerRef.current = cb
+
             return () => {}
           }
         }
@@ -164,6 +169,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('silently discards snapshot entries whose tabs are still unknown', async () => {
     const setAgentStatus = vi.fn()
+
     const getSnapshot = vi.fn(() =>
       Promise.resolve([
         {
@@ -219,6 +225,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('silently discards stale worktree-attributed snapshots for unknown panes', async () => {
     const setAgentStatus = vi.fn()
+
     const getSnapshot = vi.fn(() =>
       Promise.resolve([
         {
@@ -277,6 +284,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('applies worktree-attributed child snapshots when runtime identity is present', async () => {
     const setAgentStatus = vi.fn()
+
     const getSnapshot = vi.fn(() =>
       Promise.resolve([
         {
@@ -354,6 +362,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('silently discards valid paneKeys whose leaf is not in the current layout', async () => {
     const setAgentStatus = vi.fn()
+
     const getSnapshot = vi.fn(() =>
       Promise.resolve([
         {
@@ -409,9 +418,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('forwards events whose connectionId matches the live repo connection', async () => {
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     const storeState: StoreLike = buildStoreState({
       setAgentStatus,
       workspaceSessionReady: true,
@@ -441,6 +452,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -470,9 +482,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('drops events whose connectionId no longer matches the live local repo', async () => {
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     const storeState: StoreLike = buildStoreState({
       setAgentStatus,
       workspaceSessionReady: true,
@@ -502,6 +516,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -524,9 +539,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('drops remote-stamped events when the owning worktree is no longer in worktreesByRepo', async () => {
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     const storeState: StoreLike = buildStoreState({
       setAgentStatus,
       workspaceSessionReady: true,
@@ -554,6 +571,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })
@@ -576,9 +594,11 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
   it('accepts events without a stamped connectionId for preload compatibility', async () => {
     const setAgentStatus = vi.fn()
+
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
+
     const storeState: StoreLike = buildStoreState({
       setAgentStatus,
       workspaceSessionReady: true,
@@ -608,6 +628,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       buildWindowApi({
         onSet: (cb) => {
           onSetListenerRef.current = cb
+
           return () => {}
         }
       })

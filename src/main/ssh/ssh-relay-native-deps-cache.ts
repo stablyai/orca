@@ -81,21 +81,27 @@ export function computeRelayNativeDepsCacheKey(input: {
 }): string {
   const hash = createHash('sha256')
   hash.update(`epoch ${RELAY_NATIVE_DEPS_CACHE_EPOCH}\n`)
+
   for (const [name, version] of Object.entries(input.deps).sort(([a], [b]) => (a < b ? -1 : 1))) {
     hash.update(`dep ${name} ${version}\n`)
   }
+
   const patches = [...(input.patchSources ?? [])].sort((a, b) => (a.filename < b.filename ? -1 : 1))
+
   for (const patch of patches) {
     hash.update(
       `patch ${patch.filename} ${createHash('sha256').update(patch.contents).digest('hex')}\n`
     )
   }
+
   const key = `${input.platform}-${hash.digest('hex').slice(0, CACHE_KEY_HASH_LENGTH)}`
+
   if (!isRelayNativeDepsCacheEntryName(key)) {
     // Why: the key reaches the host inside `mv` and `rm -rf`; an unrecognized platform must
     // disable the cache rather than arrive as a path fragment nobody validated.
     throw new Error(`Unsafe relay native-deps cache key: ${JSON.stringify(key)}`)
   }
+
   return key
 }
 
@@ -130,6 +136,7 @@ export function relayNativeDepsCacheEntryDir(
   if (!isRelayNativeDepsCacheEntryName(key)) {
     throw new Error(`Unsafe relay native-deps cache key: ${JSON.stringify(key)}`)
   }
+
   return joinRemotePath(host, relayNativeDepsCacheBaseDir(host, remoteHome), key)
 }
 

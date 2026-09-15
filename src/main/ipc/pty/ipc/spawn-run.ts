@@ -14,6 +14,7 @@ function releaseAbandonedAgentTeamsLeader(ctx: PtyIpcSpawnState): void {
   if (!ctx.agentTeamsLeaderHandle) {
     return
   }
+
   ctx.deps.runtime?.releaseClaudeAgentTeamsLeaderForHandle?.(ctx.agentTeamsLeaderHandle)
   ctx.agentTeamsLeaderHandle = null
 }
@@ -22,7 +23,9 @@ function restoreProvisionalPtySize(ctx: PtyIpcSpawnState): void {
   if (ctx.effectiveSessionId === undefined) {
     return
   }
+
   const key = ctx.effectiveSessionAppId ?? ctx.effectiveSessionId
+
   if (ctx.hadSessionSizeBeforeAttach && ctx.sessionSizeBeforeAttach) {
     ptySizes.set(key, ctx.sessionSizeBeforeAttach)
   } else {
@@ -34,31 +37,40 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
   triggerPtySpawnPushTargetMaterialization(deps, args)
   const ctx = createPtyIpcSpawnState(deps, args)
   const early = await beginPtyIpcSpawn(ctx)
+
   if (early) {
     return early
   }
+
   try {
     await preparePtyIpcSpawnPreflight(ctx)
     await assemblePtyIpcSpawnEnv(ctx)
+
     const earlyReserved = await buildPtyIpcSpawnOptions(ctx).catch((error: unknown) => {
       restoreProvisionalPtySize(ctx)
       throw error
     })
+
     if (earlyReserved) {
       // Why: this request lost the pane to the reservation winner, so its
       // pre-allocated leader handle never binds to a PTY. Nothing else can
       // evict the team env assembly created for it — exit/close cleanup keys
       // off handleByPtyId — so every lost race would leak one team forever.
       releaseAbandonedAgentTeamsLeader(ctx)
+
       return earlyReserved
     }
+
     await executePtyIpcSpawn(ctx)
+
     return await commitPtyIpcSpawn(ctx)
   } catch (err) {
     releaseAbandonedAgentTeamsLeader(ctx)
+
     if (ctx.preSpawnHiddenMarkId !== null) {
       ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.preSpawnHiddenMarkId, false)
     }
+
     if (ctx.pendingRegistrationPtyId) {
       deps.runtime?.cancelPendingPtyRegistration?.(
         ctx.pendingRegistrationPtyId,
@@ -66,6 +78,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
       )
       ctx.pendingRegistrationPtyId = null
     }
+
     // Why: once the reservation is created, any later throw —
     // spawn failure, persist failure, or a post-spawn helper such as
     // seedHeadlessTerminal/registerPty/track — must settle it. Otherwise

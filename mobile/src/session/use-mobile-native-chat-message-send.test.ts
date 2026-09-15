@@ -8,8 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 
 const sendWithOutcome = vi.fn()
+
 const clearInputWrite = vi.fn()
+
 const typeCommandWithOutcome = vi.fn()
+
 vi.mock('./mobile-native-chat-send', () => ({
   sendMobileNativeChatMessageWithOutcome: (...args: unknown[]) => sendWithOutcome(...args),
   typeMobileNativeChatCommandWithOutcome: (...args: unknown[]) => typeCommandWithOutcome(...args),
@@ -18,6 +21,7 @@ vi.mock('./mobile-native-chat-send', () => ({
   MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS: 15_000,
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS: 2_000
 }))
+
 vi.mock('./mobile-native-chat-stale-input', () => ({
   healMobileNativeChatStaleInput: () => Promise.resolve(true)
 }))
@@ -52,6 +56,7 @@ describe('useMobileNativeChatMessageSend', () => {
     agent: string | null = 'claude'
   ): void => {
     agentRef.current = agent
+
     function Probe(): null {
       api = useMobileNativeChatMessageSend({
         client: { sendRequest: vi.fn() } as never,
@@ -68,8 +73,10 @@ describe('useMobileNativeChatMessageSend', () => {
         holdUnconfirmedSend,
         onSendError
       })
+
       return null
     }
+
     act(() => {
       renderer = create(createElement(Probe))
     })
@@ -83,6 +90,7 @@ describe('useMobileNativeChatMessageSend', () => {
       text?: string
       resolvedLaunchDraft?: { text: string; createdAt: number }
     }
+
   const clearArgs = (): { clearInput?: string } =>
     (clearInputWrite.mock.calls[0]?.[0] ?? {}) as { clearInput?: string }
 

@@ -73,6 +73,7 @@ describe('clear pane identity', () => {
             }
           : {})
       })
+
       const snapshot = makeSnapshot(
         [
           {
@@ -87,6 +88,7 @@ describe('clear pane identity', () => {
         ],
         { activeTabId: 'agent-session:new-session', activeTabType: 'agent-session' }
       )
+
       if (history !== 'absent') {
         const oldTab = {
           type: 'agent-session' as const,
@@ -96,17 +98,20 @@ describe('clear pane identity', () => {
           title: 'History',
           isActive: false
         }
+
         if (history === 'before') {
           snapshot.tabs.unshift(oldTab)
         } else {
           snapshot.tabs.push(oldTab)
         }
       }
+
       const next = applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW, {
         contentScope: 'agent-session',
         preserveLocalLayout: true,
         terminalPtyMode: 'local'
       })
+
       expect(next.unifiedTabsByWorktree?.[WT]).toHaveLength(history === 'absent' ? 1 : 2)
       expect(
         next.unifiedTabsByWorktree?.[WT]?.find((tab) => tab.entityId === 'new-session')
@@ -123,11 +128,13 @@ describe('clear pane identity', () => {
       expect(next.groupsByWorktree?.[WT]?.[0]?.tabOrder[0]).toBe('local-pane')
       expect(next.activeTabIdByWorktree?.[WT] ?? state.activeTabIdByWorktree[WT]).toBe('local-pane')
       expect(next.tabsByWorktree?.[WT] ?? []).toEqual([])
+
       const repeated = applyWebSessionTabsSnapshot({ ...state, ...next }, snapshot, ENV, NOW + 1, {
         contentScope: 'agent-session',
         preserveLocalLayout: true,
         terminalPtyMode: 'local'
       })
+
       expect(repeated.unifiedTabsByWorktree?.[WT] ?? next.unifiedTabsByWorktree?.[WT]).toEqual(
         next.unifiedTabsByWorktree?.[WT]
       )
@@ -148,6 +155,7 @@ describe('clear pane identity', () => {
         sortOrder: 0
       }
     ]
+
     const snapshot = makeSnapshot([
       {
         type: 'agent-session',
@@ -167,6 +175,7 @@ describe('clear pane identity', () => {
         isActive: true
       }
     ])
+
     const tabs = buildMirroredAgentTabs(snapshot, new Map(), 'g', 0, current, NOW)
     expect(new Set(tabs.map((tab) => tab.unifiedTab.id)).size).toBe(2)
     expect(tabs[0]!.unifiedTab.id).toBe(current[0]!.id)

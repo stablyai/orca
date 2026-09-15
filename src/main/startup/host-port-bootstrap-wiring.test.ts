@@ -21,6 +21,7 @@ describe('host port bootstrap wiring', () => {
     join(process.cwd(), 'src/main/startup/main-process-preflight.ts'),
     'utf8'
   )
+
   const entrySource = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
 
   const INSTALLS = [
@@ -52,6 +53,7 @@ describe('host port bootstrap wiring', () => {
     expect(preflightReturn).toBeGreaterThan(preflightStart)
     expect(preflightCall).toBeGreaterThanOrEqual(0)
     expect(readyPhase).toBeGreaterThan(preflightCall)
+
     for (const install of INSTALLS) {
       const installIndex = source.indexOf(install)
       expect(installIndex, `${install} should run in preflight`).toBeGreaterThan(preflightStart)
@@ -95,6 +97,7 @@ describe('host port bootstrap wiring', () => {
     const preflightCall = entrySource.indexOf('runMainProcessPreflight({')
     expect(preflightCall).toBeGreaterThanOrEqual(0)
     expect(readyPhase).toBeGreaterThan(preflightCall)
+
     for (const install of INSTALLS) {
       expect(source.split(install).length - 1, `${install} should be owned by preflight`).toBe(1)
     }

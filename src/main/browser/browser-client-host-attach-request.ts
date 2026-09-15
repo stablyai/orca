@@ -11,12 +11,14 @@ export function assertBrowserClientHostAttachOptions(
   ) {
     throw new Error('Browser host page inventory negotiation is incomplete')
   }
+
   if (
     options.leaseReconnectProtocolVersion !== undefined &&
     options.pageInventoryProtocolVersion === undefined
   ) {
     throw new Error('Browser host reconnect requires page inventory negotiation')
   }
+
   if (
     options.pageReconciliationProtocolVersion !== undefined &&
     (options.pageCommandProtocolVersion !== 1 ||
@@ -34,22 +36,28 @@ export function createBrowserClientHostAttachRequest(
   const pageCommandProtocolVersion = options.onPageCommand
     ? options.pageCommandProtocolVersion
     : undefined
+
   const pageInventory = options.getPageInventory
     ? prepareBrowserClientPageInventoryForAttach(options.getPageInventory())
     : undefined
+
   const pageInventoryProtocolVersion = pageInventory
     ? options.pageInventoryProtocolVersion
     : undefined
+
   const leaseReconnectProtocolVersion = pageInventoryProtocolVersion
     ? options.leaseReconnectProtocolVersion
     : undefined
+
   const pageReconciliationProtocolVersion =
     pageCommandProtocolVersion && pageInventoryProtocolVersion
       ? options.pageReconciliationProtocolVersion
       : undefined
+
   const fileChannelProtocolVersion = pageCommandProtocolVersion
     ? options.fileChannelProtocolVersion
     : undefined
+
   const params = BrowserClientHostAttachParams.parse({
     authorityRuntimeId: options.authorityRuntimeId,
     browserHostClientId: options.browserHostClientId,
@@ -65,6 +73,7 @@ export function createBrowserClientHostAttachRequest(
     ...(pageReconciliationProtocolVersion ? { pageReconciliationProtocolVersion } : {}),
     ...(fileChannelProtocolVersion ? { fileChannelProtocolVersion } : {})
   })
+
   return {
     pageCommandProtocolVersion,
     pageInventoryProtocolVersion,

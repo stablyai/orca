@@ -4,10 +4,12 @@ import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation
 function deferred(): { promise: Promise<void>; resolve: () => void; reject: (e: unknown) => void } {
   let resolve!: () => void
   let reject!: (e: unknown) => void
+
   const promise = new Promise<void>((res, rej) => {
     resolve = res
     reject = rej
   })
+
   return { promise, resolve, reject }
 }
 
@@ -18,6 +20,7 @@ describe('runExclusivelyForCodexTrustConfig', () => {
     const nested = await runExclusivelyForCodexTrustConfig('/a/config.toml', () =>
       runExclusivelyForCodexTrustConfig('/a/config.toml', () => Promise.resolve('inner'))
     )
+
     expect(nested).toBe('inner')
   })
 
@@ -25,12 +28,15 @@ describe('runExclusivelyForCodexTrustConfig', () => {
     const gate = deferred()
     let innerRan = false
     const blocking = runExclusivelyForCodexTrustConfig('/b/config.toml', () => gate.promise)
+
     const nested = runExclusivelyForCodexTrustConfig('/a/config.toml', () =>
       runExclusivelyForCodexTrustConfig('/b/config.toml', () => {
         innerRan = true
+
         return Promise.resolve()
       })
     )
+
     await Promise.resolve()
     expect(innerRan).toBe(false)
     gate.resolve()
@@ -48,12 +54,15 @@ describe('runExclusivelyForCodexTrustConfig', () => {
       order.push('a:start')
       await first.promise
       order.push('a:end')
+
       return 'a'
     })
+
     const b = runExclusivelyForCodexTrustConfig('/home/.codex/config.toml', async () => {
       order.push('b:start')
       await second.promise
       order.push('b:end')
+
       return 'b'
     })
 
@@ -82,6 +91,7 @@ describe('runExclusivelyForCodexTrustConfig', () => {
     const failing = runExclusivelyForCodexTrustConfig('/a/config.toml', () =>
       Promise.reject(new Error('grant blew up'))
     )
+
     await expect(failing).rejects.toThrow('grant blew up')
     await expect(
       runExclusivelyForCodexTrustConfig('/a/config.toml', () => Promise.resolve('next'))
@@ -93,14 +103,18 @@ describe('runExclusivelyForCodexTrustConfig', () => {
   it('serializes equivalent paths that differ only in normalization', async () => {
     const gate = deferred()
     let secondStarted = false
+
     const blocked = runExclusivelyForCodexTrustConfig(
       String.raw`C:\Users\Alice\.codex\config.toml`,
       () => gate.promise
     )
+
     const queued = runExclusivelyForCodexTrustConfig('C:/Users/Alice/.codex/config.toml', () => {
       secondStarted = true
+
       return Promise.resolve()
     })
+
     await Promise.resolve()
     expect(secondStarted).toBe(false)
     gate.resolve()
@@ -112,17 +126,21 @@ describe('runExclusivelyForCodexTrustConfig', () => {
   it('coalesces WSL UNC aliases without folding the case-sensitive Linux path', async () => {
     const aliasGate = deferred()
     let aliasStarted = false
+
     const blockedAlias = runExclusivelyForCodexTrustConfig(
       String.raw`\\wsl.localhost\Ubuntu\home\Alice\.codex\config.toml`,
       () => aliasGate.promise
     )
+
     const queuedAlias = runExclusivelyForCodexTrustConfig(
       String.raw`\\wsl$\ubuntu\home\Alice\.codex\config.toml`,
       () => {
         aliasStarted = true
+
         return Promise.resolve()
       }
     )
+
     await Promise.resolve()
     expect(aliasStarted).toBe(false)
 

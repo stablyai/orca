@@ -41,13 +41,18 @@ const IDENTITY: AgentSessionJournalIdentity = {
 }
 
 const journals = createTrackedJournalOpener()
+
 let root: string
+
 let clock = 1_000
+
 let epochs = 0
+
 let journal: AgentSessionJournal
 
 function tick(): number {
   clock += 1
+
   return clock
 }
 
@@ -75,6 +80,7 @@ beforeEach(async () => {
     now: tick,
     mintEpoch: () => {
       epochs += 1
+
       return `epoch-${epochs}`
     }
   })
@@ -98,14 +104,17 @@ describe('resolveHistoryLimit', () => {
 describe('readAgentSessionHistory', () => {
   it('serves the newest page on tail and pages backward from it', async () => {
     await appendItems(5)
+
     const tail = readAgentSessionHistory(journal, {
       sessionId: 'session-1',
       direction: 'tail',
       limit: 2
     })
+
     if (!tail.ok) {
       throw new Error(`expected a page, got reset ${tail.reset}`)
     }
+
     expect(tail.page.items.map((entry) => entry.body)).toEqual([body('item-4'), body('item-5')])
     expect(tail.page.hasOlder).toBe(true)
     expect(tail.page.hasNewer).toBe(false)
@@ -117,9 +126,11 @@ describe('readAgentSessionHistory', () => {
       cursor: tail.page.window.nextCursor,
       limit: 2
     })
+
     if (!older.ok) {
       throw new Error(`expected a page, got reset ${older.reset}`)
     }
+
     expect(older.page.items.map((entry) => entry.body)).toEqual([body('item-2'), body('item-3')])
     expect(older.page.hasNewer).toBe(true)
   })
@@ -128,15 +139,18 @@ describe('readAgentSessionHistory', () => {
     await appendItems(2)
     const cursor = journal.cursor()
     await appendItems(5)
+
     const page = readAgentSessionHistory(journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor,
       limit: 2
     })
+
     if (!page.ok) {
       throw new Error(`expected a page, got reset ${page.reset}`)
     }
+
     expect(page.page.items).toHaveLength(2)
     expect(page.page.hasNewer).toBe(true)
     expect(page.page.window.nextCursor.sequence).toBeGreaterThan(cursor.sequence)
@@ -152,9 +166,11 @@ describe('readAgentSessionHistory', () => {
       direction: 'after',
       cursor
     })
+
     if (!page.ok) {
       throw new Error(`expected a page, got reset ${page.reset}`)
     }
+
     expect(page.page.items).toHaveLength(0)
     expect(page.page.removedItemIds).toEqual(['codex:thread-1:turn-1:1'])
   })
@@ -170,6 +186,7 @@ describe('readAgentSessionHistory', () => {
     await appendItems(1)
     const stale = journal.cursor()
     await journal.rollEpoch('legacy_import', 2)
+
     for (const direction of ['before', 'after'] as const) {
       expect(
         readAgentSessionHistory(journal, { sessionId: 'session-1', direction, cursor: stale })
@@ -197,9 +214,11 @@ describe('readAgentSessionHistory', () => {
       fence: 1
     })
     const page = readAgentSessionHistory(journal, { sessionId: 'session-1', direction: 'tail' })
+
     if (!page.ok) {
       throw new Error(`expected a page, got reset ${page.reset}`)
     }
+
     expect(page.page.items[0]?.itemId).toBe(agentJournalSubmissionKey('msg-1'))
     expect(page.page.submissions).toHaveLength(1)
     expect(page.page.submissions[0]).toMatchObject({
@@ -224,8 +243,10 @@ describe('history page byte ceiling', () => {
     if (!result.ok) {
       throw new Error(`expected a page, got reset ${result.reset}`)
     }
+
     // The actual channel gate: the page must serialize under the outbound cap.
     serializeRemoteRuntimePayload(result.page)
+
     return result.page
   }
 
@@ -235,6 +256,7 @@ describe('history page byte ceiling', () => {
     const tail = pageOf(
       readAgentSessionHistory(journal, { sessionId: 'session-1', direction: 'tail', limit: 40 })
     )
+
     expect(tail.items.length).toBeGreaterThan(0)
     expect(tail.hasOlder).toBe(true)
 
@@ -242,9 +264,11 @@ describe('history page byte ceiling', () => {
     let cursor = tail.window.nextCursor
     let hasOlder = tail.hasOlder
     let guard = 0
+
     while (hasOlder) {
       guard += 1
       expect(guard).toBeLessThan(30)
+
       const page = pageOf(
         readAgentSessionHistory(journal, {
           sessionId: 'session-1',
@@ -253,11 +277,13 @@ describe('history page byte ceiling', () => {
           limit: 40
         })
       )
+
       expect(page.items.length).toBeGreaterThan(0)
       seen.push(...page.items.map((entry) => entry.itemId))
       cursor = page.window.nextCursor
       hasOlder = page.hasOlder
     }
+
     expect(new Set(seen).size).toBe(20)
   })
 
@@ -273,6 +299,7 @@ describe('history page byte ceiling', () => {
         limit: 40
       })
     )
+
     expect(first.items.length).toBeGreaterThan(0)
     expect(first.hasNewer).toBe(true)
 
@@ -280,9 +307,11 @@ describe('history page byte ceiling', () => {
     let cursor = first.window.nextCursor
     let hasNewer = first.hasNewer
     let guard = 0
+
     while (hasNewer) {
       guard += 1
       expect(guard).toBeLessThan(30)
+
       const page = pageOf(
         readAgentSessionHistory(journal, {
           sessionId: 'session-1',
@@ -291,11 +320,13 @@ describe('history page byte ceiling', () => {
           limit: 40
         })
       )
+
       expect(page.items.length).toBeGreaterThan(0)
       seen.push(...page.items.map((entry) => entry.itemId))
       cursor = page.window.nextCursor
       hasNewer = page.hasNewer
     }
+
     expect(new Set(seen).size).toBe(20)
   })
 
@@ -305,6 +336,7 @@ describe('history page byte ceiling', () => {
     const tail = pageOf(
       readAgentSessionHistory(journal, { sessionId: 'session-1', direction: 'tail', limit: 40 })
     )
+
     expect(tail.items).toHaveLength(1)
     const bodyOnPage = tail.items[0]?.body
     expect(bodyOnPage?.kind).toBe('status')
@@ -320,6 +352,7 @@ describe('projectJournalBatch', () => {
       sessionId: 'session-1',
       recordId: 'turn-lifecycle:turn-1'
     }
+
     await journal.appendItem(turn, { kind: 'status', text: 'working' }, { fence: 1 })
     const cursor = journal.cursor()
     await journal.appendLifecycleBatch({
@@ -338,9 +371,11 @@ describe('projectJournalBatch', () => {
       cursor,
       limit: 1
     })
+
     if (!page.ok) {
       throw new Error(`expected a page, got reset ${page.reset}`)
     }
+
     expect(page.page.items.map((entry) => entry.body)).toEqual([body('one'), body('two')])
     expect(page.page.removedItemIds).toHaveLength(1)
     expect(new Set(page.page.items.map((entry) => entry.sequence)).size).toBe(1)
@@ -350,18 +385,22 @@ describe('projectJournalBatch', () => {
       direction: 'tail',
       limit: 1
     })
+
     if (!tail.ok) {
       throw new Error(`expected a page, got reset ${tail.reset}`)
     }
+
     expect(tail.page.items.map((entry) => entry.body)).toEqual([body('one'), body('two')])
   })
 
   it('reports a hole in the row sequence as journal_gap', async () => {
     await appendItems(3)
     const since = journal.readSince({ epoch: journal.epoch, sequence: 0 })
+
     if (!since.ok) {
       throw new Error(`expected rows, got reset ${since.reset}`)
     }
+
     const withHole = since.rows.filter((row) => row.seq !== since.rows[1]?.seq)
     expect(
       projectJournalBatch({ rows: withHole, snapshot: journal.snapshot(), afterSequence: 0 })
@@ -373,17 +412,21 @@ describe('projectJournalBatch', () => {
     const cursor = journal.cursor()
     await journal.appendItem(item(1), body('revised'), { fence: 1 })
     const since = journal.readSince(cursor)
+
     if (!since.ok) {
       throw new Error(`expected rows, got reset ${since.reset}`)
     }
+
     const projected = projectJournalBatch({
       rows: since.rows,
       snapshot: journal.snapshot(),
       afterSequence: cursor.sequence
     })
+
     if (!projected.ok) {
       throw new Error(`expected a batch, got reset ${projected.reset}`)
     }
+
     expect(projected.batch.items).toHaveLength(1)
     expect(projected.batch.items[0]).toMatchObject({ body: body('revised'), revision: 2 })
     expect(projected.batch.cursor).toEqual(journal.cursor())
@@ -394,17 +437,21 @@ describe('projectJournalBatch', () => {
     const cursor = journal.cursor()
     await journal.appendTombstone(item(1), { fence: 1 })
     const since = journal.readSince(cursor)
+
     if (!since.ok) {
       throw new Error(`expected rows, got reset ${since.reset}`)
     }
+
     const projected = projectJournalBatch({
       rows: since.rows,
       snapshot: journal.snapshot(),
       afterSequence: cursor.sequence
     })
+
     if (!projected.ok) {
       throw new Error(`expected a batch, got reset ${projected.reset}`)
     }
+
     expect(projected.batch.removedItemIds).toHaveLength(1)
     expect(projected.batch.items).toHaveLength(0)
   })
@@ -415,6 +462,7 @@ describe('projectJournalBatch', () => {
       role: 'user',
       blocks: [{ type: 'text', text: 'queued follow-up' }]
     }
+
     await journal.appendSubmission({
       clientMessageId: 'client-follow-up',
       payloadFingerprint: structuredAgentSessionPayloadFingerprint({
@@ -448,9 +496,11 @@ describe('projectJournalBatch', () => {
       direction: 'after',
       cursor
     })
+
     if (!page.ok) {
       throw new Error(`expected a page, got reset ${page.reset}`)
     }
+
     expect(page.page.items).toMatchObject([
       { itemId: agentJournalSubmissionKey('client-follow-up'), revision: 1 }
     ])
@@ -480,19 +530,24 @@ async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSess
         ts: tick()
       }) as JournalRow
   )
+
   // Rows are staged straight into the session database: the reopen below has to
   // see them exactly as a previous writer would have committed them.
   await journal.close()
   const opened = openJournalDatabase(journalDatabaseFile(root))
+
   try {
     opened.db.exec('BEGIN IMMEDIATE')
+
     for (const row of full) {
       insertJournalRow(opened.db, IDENTITY.sessionId, row)
     }
+
     opened.db.exec('COMMIT')
   } finally {
     opened.db.close()
   }
+
   return journals.open({ identity: IDENTITY, journalDir: root, now: tick })
 }
 
@@ -504,6 +559,7 @@ describe('pre-existing oversized identities', () => {
 
   it('answers an unfittable pre-existing removal with a bounded reset instead of an unsendable page', async () => {
     const seq = journal.cursor().sequence
+
     const reopened = await reopenWithRawRows([
       { kind: 'item', itemId: HUGE_ITEM_ID, revision: 1, seq: seq + 1, body: body('big') },
       { kind: 'tombstone', itemId: HUGE_ITEM_ID, revision: 2, seq: seq + 2 }
@@ -516,10 +572,13 @@ describe('pre-existing oversized identities', () => {
         cursor: { epoch: reopened.epoch, sequence },
         limit: 40
       })
+
       expect(result.ok).toBe(false)
+
       if (result.ok) {
         throw new Error('expected a reset')
       }
+
       expect(result.reset).toBe('cursor_compacted')
       expect(serializedPageBytes(result.page)).toBeLessThanOrEqual(
         REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
@@ -529,9 +588,11 @@ describe('pre-existing oversized identities', () => {
       // starts past the unsendable row.
       expect(result.page.items).toEqual([])
       const liveCursor = result.page.liveCursor
+
       if (!liveCursor) {
         throw new Error('expected a live cursor on the reset page')
       }
+
       expect(liveCursor.sequence).toBeGreaterThanOrEqual(seq + 2)
 
       const resumed = readAgentSessionHistory(reopened, {
@@ -540,16 +601,19 @@ describe('pre-existing oversized identities', () => {
         cursor: liveCursor,
         limit: 40
       })
+
       expect(resumed.ok).toBe(true)
     }
   })
 
   it('charges removal ids into the page budget and splits catch-up instead of overflowing', async () => {
     const seq = journal.cursor().sequence
+
     const removalIds = Array.from(
       { length: 30 },
       (_, index) => `codex:thread-1:${'r'.repeat(250 * 1024)}:${index}`
     )
+
     const reopened = await reopenWithRawRows(
       removalIds.map((itemId, index) => ({
         kind: 'tombstone' as const,
@@ -562,34 +626,43 @@ describe('pre-existing oversized identities', () => {
     const seen = new Set<string>()
     let cursor = { epoch: reopened.epoch, sequence: seq }
     let guard = 0
+
     while (true) {
       guard += 1
       expect(guard).toBeLessThan(30)
+
       const result = readAgentSessionHistory(reopened, {
         sessionId: 'session-1',
         direction: 'after',
         cursor,
         limit: 40
       })
+
       if (!result.ok) {
         throw new Error(`expected a page, got reset ${result.reset}`)
       }
+
       expect(serializedPageBytes(result.page)).toBeLessThanOrEqual(
         REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
       )
+
       for (const removed of result.page.removedItemIds) {
         seen.add(removed)
       }
+
       cursor = result.page.window.nextCursor
+
       if (!result.page.hasNewer) {
         break
       }
     }
+
     expect(seen).toEqual(new Set(removalIds))
   })
 
   it('bounds the truncation marker id for a live oversized-id item', async () => {
     const seq = journal.cursor().sequence
+
     const reopened = await reopenWithRawRows([
       { kind: 'item', itemId: HUGE_ITEM_ID, revision: 1, seq: seq + 1, body: body('big') }
     ])
@@ -599,9 +672,11 @@ describe('pre-existing oversized identities', () => {
       direction: 'tail',
       limit: 40
     })
+
     if (!tail.ok) {
       throw new Error(`expected a page, got reset ${tail.reset}`)
     }
+
     expect(serializedPageBytes(tail.page)).toBeLessThanOrEqual(
       REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
     )
@@ -617,9 +692,11 @@ describe('pre-existing oversized identities', () => {
       cursor: { epoch: reopened.epoch, sequence: seq },
       limit: 40
     })
+
     if (!forward.ok) {
       throw new Error(`expected a page, got reset ${forward.reset}`)
     }
+
     expect(serializedPageBytes(forward.page)).toBeLessThanOrEqual(
       REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
     )
@@ -635,6 +712,7 @@ describe('identity bounding at admission', () => {
       turnId: 'T'.repeat(5 * 1024 * 1024),
       ordinal: 1
     }
+
     const start = { epoch: journal.epoch, sequence: journal.cursor().sequence }
     const appended = await journal.appendItem(oversized, body('bounded'), { fence: 1 })
     expect(appended.itemId.length).toBeLessThan(2048)
@@ -649,9 +727,11 @@ describe('identity bounding at admission', () => {
       cursor: start,
       limit: 40
     })
+
     if (!created.ok) {
       throw new Error(`expected a page, got reset ${created.reset}`)
     }
+
     expect(serializedPageBytes(created.page)).toBeLessThanOrEqual(
       REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
     )
@@ -663,9 +743,11 @@ describe('identity bounding at admission', () => {
       cursor: beforeTombstone,
       limit: 40
     })
+
     if (!removal.ok) {
       throw new Error(`expected a page, got reset ${removal.reset}`)
     }
+
     expect(serializedPageBytes(removal.page)).toBeLessThanOrEqual(
       REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
     )

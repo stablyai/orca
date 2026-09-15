@@ -49,6 +49,7 @@ function resolveAgentArgsPlaceholderAgent(
   if (selectedAgent && !isCustomAgentId(selectedAgent)) {
     return selectedAgent
   }
+
   return defaultTuiAgent && defaultTuiAgent !== 'blank' ? defaultTuiAgent : null
 }
 
@@ -68,9 +69,11 @@ export function SourceControlActionRecipeRow({
   onSave
 }: SourceControlActionRecipeRowProps): React.JSX.Element {
   const templateDirty = JSON.stringify(draftValue) !== JSON.stringify(baseValue)
+
   const agentArgsPlaceholder = getSourceControlAgentArgsPlaceholder(
     resolveAgentArgsPlaceholderAgent(selectedAgent, defaultTuiAgent)
   )
+
   const agentOptions = getAgentCatalogForAction(actionId, selectedAgent)
   const agentWarningText = getSourceControlActionAgentWarningText(actionId, selectedAgent)
   const agentSupportText = getSourceControlActionAgentSupportText(actionId)

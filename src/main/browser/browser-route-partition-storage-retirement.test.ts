@@ -53,6 +53,7 @@ function stubHost(
   return {
     start: vi.fn(async () => {
       callbacks.onAuthority(leaseAuthority)
+
       return leaseAuthority
     }),
     retirePage: vi.fn(async () => true),
@@ -68,14 +69,17 @@ describe('browser route partition storage retirement', () => {
   it('clears a removed environment only after its client host finishes tearing down', async () => {
     const order: string[] = []
     let finishTeardown = (): void => {}
+
     const whenClientHostClosed = new Promise<void>((resolve) => {
       finishTeardown = () => {
         order.push('teardown')
         resolve()
       }
     })
+
     const clearStorage = vi.fn(async () => {
       order.push('clear')
+
       return { clearedPartitions: [partition], livePartitions: [] }
     })
 
@@ -85,6 +89,7 @@ describe('browser route partition storage retirement', () => {
       clearStorage,
       retryDelayMs: 0
     })
+
     await Promise.resolve()
     expect(clearStorage).not.toHaveBeenCalled()
 
@@ -98,10 +103,13 @@ describe('browser route partition storage retirement', () => {
   it('waits for the executor close a busy host deferred before clearing', async () => {
     const order: string[] = []
     let settleHandlers = (): void => {}
+
     const handlersSettled = new Promise<void>((resolve) => {
       settleHandlers = resolve
     })
+
     let partitionRetained = true
+
     const registry = new PairedRuntimeBrowserClientHostRegistry<{
       environmentId: string
       pairingRevision: number
@@ -128,6 +136,7 @@ describe('browser route partition storage retirement', () => {
           createHost: (_input, callbacks) => stubHost(callbacks, handlersSettled)
         })
     })
+
     await registry.start({
       environmentId: 'environment-a',
       pairingRevision: 1,
@@ -141,12 +150,14 @@ describe('browser route partition storage retirement', () => {
       whenClientHostClosed: registry.retireEnvironment('environment-a'),
       clearStorage: async () => {
         order.push('clear')
+
         return partitionRetained
           ? { clearedPartitions: [], livePartitions: [partition] }
           : { clearedPartitions: [partition], livePartitions: [] }
       },
       retryDelayMs: 0
     })
+
     // Why: the clear must still be waiting after the host close itself resolved, not merely be
     // ordered behind it by microtask luck.
     await drainTasks()
@@ -163,6 +174,7 @@ describe('browser route partition storage retirement', () => {
       .fn()
       .mockResolvedValueOnce({ clearedPartitions: [], livePartitions: [partition] })
       .mockResolvedValueOnce({ clearedPartitions: [partition], livePartitions: [] })
+
     const onError = vi.fn()
 
     const cleared = await retireBrowserRoutePartitionStorageForEnvironment({
@@ -182,6 +194,7 @@ describe('browser route partition storage retirement', () => {
     const clearStorage = vi
       .fn()
       .mockResolvedValue({ clearedPartitions: [], livePartitions: [partition] })
+
     const onError = vi.fn()
 
     const cleared = await retireBrowserRoutePartitionStorageForEnvironment({
@@ -203,6 +216,7 @@ describe('browser route partition storage retirement', () => {
     const clearStorage = vi
       .fn()
       .mockResolvedValue({ clearedPartitions: [partition], livePartitions: [] })
+
     const onError = vi.fn()
 
     const cleared = await retireBrowserRoutePartitionStorageForEnvironment({

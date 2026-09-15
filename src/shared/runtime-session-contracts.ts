@@ -58,6 +58,7 @@ export function browserUnavailableMessage(
   detail?: string
 ): string {
   const base = BROWSER_UNAVAILABLE_MESSAGES[reason]
+
   return detail ? `${base} (${detail})` : base
 }
 

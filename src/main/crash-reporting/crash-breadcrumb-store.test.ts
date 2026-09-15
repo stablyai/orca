@@ -32,6 +32,7 @@ describe('crash breadcrumb store', () => {
       thresholdPct: 80,
       'store.agentStatusByPaneKey': 500
     })
+
     for (let index = 0; index < 32; index += 1) {
       vi.advanceTimersByTime(60_000)
       recordCrashBreadcrumb('renderer_memory', { index })
@@ -76,6 +77,7 @@ describe('crash breadcrumb store', () => {
       for (const thresholdPct of [60, 80]) {
         recordCrashBreadcrumb('renderer_memory_highwater', { rendererSurface, thresholdPct })
       }
+
       for (const thresholdPrivateMB of [600, 1000]) {
         recordCrashBreadcrumb('renderer_memory_highwater', {
           rendererSurface,
@@ -119,9 +121,11 @@ describe('crash breadcrumb store', () => {
     recordCrashBreadcrumb('app_started', { packaged: false })
 
     const snapshot = getCrashBreadcrumbSnapshot()
+
     if (snapshot[0]?.data) {
       snapshot[0].data.packaged = true
     }
+
     snapshot.pop()
 
     expect(getCrashBreadcrumbSnapshot()).toHaveLength(1)
@@ -138,14 +142,18 @@ describe('crash breadcrumb store', () => {
       coalesceKey: 'agent:claude:working',
       minIntervalMs: 30_000
     })
+
     vi.advanceTimersByTime(1_000)
+
     const suppressed = recordCoalescedCrashBreadcrumb({
       name: 'agent_state_changed',
       data: { agentType: 'claude', state: 'working' },
       coalesceKey: 'agent:claude:working',
       minIntervalMs: 30_000
     })
+
     vi.advanceTimersByTime(30_000)
+
     const resumed = recordCoalescedCrashBreadcrumb({
       name: 'agent_state_changed',
       data: { agentType: 'claude', state: 'working' },
@@ -167,6 +175,7 @@ describe('crash breadcrumb store', () => {
   it('expires the coalescing window after a backward wall-clock step', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-20T12:00:00.000Z'))
+
     const hit = (): { suppressedSinceLast: number } | undefined =>
       recordCoalescedCrashBreadcrumb({
         name: 'agent_state_changed',
@@ -187,6 +196,7 @@ describe('crash breadcrumb store', () => {
   it('does not collapse the coalescing window after a forward wall-clock step', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-05-20T12:00:00.000Z'))
+
     const hit = (): { suppressedSinceLast: number } | undefined =>
       recordCoalescedCrashBreadcrumb({
         name: 'agent_state_changed',
@@ -233,10 +243,12 @@ describe('crash breadcrumb store', () => {
         recordCrashBreadcrumb(`pre_crash_evidence_${index}`, { index })
       }
     }
+
     const burstSize = 34
 
     it('erases the entire pre-crash trail when uncoalesced', () => {
       recordPreCrashTrail()
+
       for (let pane = 0; pane < burstSize; pane += 1) {
         recordCrashBreadcrumb('terminal_safe_fit_retry_exhausted', { paneId: 1 })
       }
@@ -255,6 +267,7 @@ describe('crash breadcrumb store', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
       recordPreCrashTrail()
+
       for (let pane = 0; pane < burstSize; pane += 1) {
         vi.advanceTimersByTime(2)
         recordCoalescedCrashBreadcrumb({
@@ -293,6 +306,7 @@ describe('crash breadcrumb store', () => {
     it('keeps suppressing a hot key while high-cardinality churn fills the LRU', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+
       const hitBurstKey = (): { suppressedSinceLast: number } | undefined =>
         recordCoalescedCrashBreadcrumb({
           name: 'terminal_safe_fit_retry_exhausted',
@@ -303,6 +317,7 @@ describe('crash breadcrumb store', () => {
 
       hitBurstKey()
       let reEmissions = 0
+
       for (let index = 0; index < 200; index += 1) {
         vi.advanceTimersByTime(10)
         recordCoalescedCrashBreadcrumb({
@@ -311,6 +326,7 @@ describe('crash breadcrumb store', () => {
           coalesceKey: `renderer_error:error-${index}`,
           minIntervalMs: 30_000
         })
+
         if (hitBurstKey() !== undefined) {
           reEmissions += 1
         }
@@ -328,6 +344,7 @@ describe('crash breadcrumb store', () => {
     it('still expires the suppression window while a hot key is re-anchored', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+
       const hit = (): { suppressedSinceLast: number } | undefined =>
         recordCoalescedCrashBreadcrumb({
           name: 'terminal_safe_fit_retry_exhausted',
@@ -337,10 +354,12 @@ describe('crash breadcrumb store', () => {
         })
 
       hit()
+
       for (let index = 0; index < 29; index += 1) {
         vi.advanceTimersByTime(1_000)
         expect(hit()).toBeUndefined()
       }
+
       vi.advanceTimersByTime(1_000)
 
       expect(hit()).toEqual({ suppressedSinceLast: 29 })
@@ -352,6 +371,7 @@ describe('crash breadcrumb store', () => {
     it('reports the newest census of a growing burst, not the first', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+
       for (let pane = 1; pane <= burstSize; pane += 1) {
         vi.advanceTimersByTime(2)
         recordCoalescedCrashBreadcrumb({
@@ -387,6 +407,7 @@ describe('crash breadcrumb store', () => {
     it('counts a burst once when the window expires and the key re-emits', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+
       const hit = (livePanes: number): void => {
         recordCoalescedCrashBreadcrumb({
           name: 'terminal_safe_fit_retry_exhausted',
@@ -417,6 +438,7 @@ describe('crash breadcrumb store', () => {
     it('does not re-claim repeats a snapshot already folded into the crumb', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+
       const hit = (livePanes: number): { suppressedSinceLast: number } | undefined =>
         recordCoalescedCrashBreadcrumb({
           name: 'terminal_safe_fit_retry_exhausted',
@@ -433,9 +455,11 @@ describe('crash breadcrumb store', () => {
       const resumed = hit(3)
 
       expect(resumed).toEqual({ suppressedSinceLast: 0 })
+
       const bursts = getCrashBreadcrumbSnapshot().filter(
         (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
       )
+
       expect(bursts[0].data).toEqual({ livePanes: 2, suppressedSinceLast: 1 })
       expect(bursts[1].data).toEqual({ livePanes: 3 })
 
@@ -443,9 +467,11 @@ describe('crash breadcrumb store', () => {
       // claim only the new repeat — not the one the first crumb already owns.
       vi.advanceTimersByTime(10)
       hit(4)
+
       const resolved = getCrashBreadcrumbSnapshot().filter(
         (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
       )
+
       expect(resolved[1].data).toEqual({ livePanes: 4, suppressedSinceLast: 1 })
     })
 
@@ -454,6 +480,7 @@ describe('crash breadcrumb store', () => {
     it('keeps the carried count when a fold resolves onto a re-emitted crumb', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+
       const hit = (livePanes: number): void => {
         recordCoalescedCrashBreadcrumb({
           name: 'terminal_safe_fit_retry_exhausted',
@@ -474,6 +501,7 @@ describe('crash breadcrumb store', () => {
       const bursts = getCrashBreadcrumbSnapshot().filter(
         (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
       )
+
       expect(bursts[1].data).toEqual({ livePanes: 4, suppressedSinceLast: 2 })
     })
 
@@ -484,6 +512,7 @@ describe('crash breadcrumb store', () => {
     it('re-claims repeats on the next emit when the burst crumb was evicted from the ring', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+
       const hit = (livePanes: number): { suppressedSinceLast: number } | undefined =>
         recordCoalescedCrashBreadcrumb({
           name: 'terminal_safe_fit_retry_exhausted',
@@ -496,17 +525,21 @@ describe('crash breadcrumb store', () => {
       vi.advanceTimersByTime(10)
       hit(2)
       hit(3)
+
       for (let index = 0; index < 30; index += 1) {
         recordCrashBreadcrumb(`renderer_error_${index}`, { index })
       }
+
       getCrashBreadcrumbSnapshot()
       vi.advanceTimersByTime(31_000)
       const resumed = hit(4)
 
       expect(resumed).toEqual({ suppressedSinceLast: 2 })
+
       const burst = getCrashBreadcrumbSnapshot().find(
         (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
       )
+
       expect(burst?.data).toEqual({ livePanes: 4, suppressedSinceLast: 2 })
     })
 
@@ -516,6 +549,7 @@ describe('crash breadcrumb store', () => {
     it('re-claims repeats when retained profiles push the burst crumb past the snapshot budget', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+
       const hit = (livePanes: number): { suppressedSinceLast: number } | undefined =>
         recordCoalescedCrashBreadcrumb({
           name: 'terminal_safe_fit_retry_exhausted',
@@ -528,17 +562,20 @@ describe('crash breadcrumb store', () => {
       vi.advanceTimersByTime(10)
       hit(2)
       hit(3)
+
       for (let index = 0; index < 4; index += 1) {
         recordCrashBreadcrumb('renderer_memory_highwater', {
           rendererSurface: `surface-${index}`,
           thresholdPct: 80
         })
       }
+
       // Ring stays at 30 (burst crumb still at index 0) but only the newest 26
       // ring entries fit a snapshot alongside the 4 retained profiles.
       for (let index = 0; index < 29; index += 1) {
         recordCrashBreadcrumb(`renderer_error_${index}`, { index })
       }
+
       getCrashBreadcrumbSnapshot()
       vi.advanceTimersByTime(31_000)
       const resumed = hit(4)
@@ -551,6 +588,7 @@ describe('crash breadcrumb store', () => {
     it('keeps immutable snapshots cumulative without re-claiming resolved debt', () => {
       vi.useFakeTimers()
       vi.setSystemTime(new Date('2026-07-22T12:00:00.000Z'))
+
       const hit = (livePanes: number): { suppressedSinceLast: number } | undefined =>
         recordCoalescedCrashBreadcrumb({
           name: 'terminal_safe_fit_retry_exhausted',
@@ -566,9 +604,11 @@ describe('crash breadcrumb store', () => {
       const firstSnapshot = getCrashBreadcrumbSnapshot()
       vi.advanceTimersByTime(10)
       hit(4)
+
       const secondFold = getCrashBreadcrumbSnapshot().find(
         (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
       )
+
       expect(firstSnapshot[0]?.data).toEqual({ livePanes: 3, suppressedSinceLast: 2 })
       expect(secondFold?.data).toEqual({ livePanes: 4, suppressedSinceLast: 3 })
 
@@ -580,9 +620,11 @@ describe('crash breadcrumb store', () => {
       // over-resolving in the first window would push this claim negative.
       vi.advanceTimersByTime(10)
       hit(6)
+
       const resolved = getCrashBreadcrumbSnapshot().filter(
         (entry) => entry.name === 'terminal_safe_fit_retry_exhausted'
       )
+
       expect(resolved[1].data).toEqual({ livePanes: 6, suppressedSinceLast: 1 })
     })
 

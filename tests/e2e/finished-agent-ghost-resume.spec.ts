@@ -49,9 +49,11 @@ function readPersistedRecords(userDataDir: string): Record<string, PersistedReco
     DEFAULT_LOCAL_ORCA_PROFILE_ID,
     'orca-data.json'
   )
+
   const data = JSON.parse(readFileSync(dataPath, 'utf8')) as {
     workspaceSession?: { sleepingAgentSessionsByPaneKey?: Record<string, PersistedRecord> }
   }
+
   return data.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {}
 }
 
@@ -63,17 +65,22 @@ function stubPersistedResumeCommand(userDataDir: string): PersistedRecord {
     DEFAULT_LOCAL_ORCA_PROFILE_ID,
     'orca-data.json'
   )
+
   const data = JSON.parse(readFileSync(dataPath, 'utf8')) as {
     workspaceSession?: { sleepingAgentSessionsByPaneKey?: Record<string, PersistedRecord> }
   }
+
   const record = Object.values(data.workspaceSession?.sleepingAgentSessionsByPaneKey ?? {}).find(
     (candidate) => candidate.providerSession?.id === PROVIDER_SESSION_ID
   )
+
   if (!record) {
     throw new Error('Expected the finished agent turn to leave a persisted record')
   }
+
   record.launchConfig = { agentCommand: 'echo', agentArgs: '', agentEnv: {} }
   writeFileSync(dataPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8')
+
   return record
 }
 
@@ -82,8 +89,10 @@ test.describe.configure({ mode: 'serial' })
 test('does not respawn an agent whose turn already finished', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
 {}, testInfo) => {
   const repoPath = readFileSync(TEST_REPO_PATH_FILE, 'utf-8').trim()
+
   if (!repoPath || !existsSync(repoPath)) {
     test.skip(true, 'Global setup did not produce a seeded test repo')
+
     return
   }
 
@@ -134,8 +143,10 @@ test('does not respawn an agent whose turn already finished', async (// oxlint-d
     // The finished turn keeps its resume identity without restating done as work.
     const liveRecord = await page.evaluate((paneKey) => {
       const record = window.__store?.getState().sleepingAgentSessionsByPaneKey[paneKey]
+
       return record ? { state: record.state, origin: record.origin } : null
     }, descriptor.paneKey)
+
     expect(liveRecord, 'a finished turn leaves a resume record').not.toBeNull()
     expect(liveRecord?.state, 'the done turn stays done').toBe('done')
     expect(liveRecord?.origin).toBe('live')
@@ -150,6 +161,7 @@ test('does not respawn an agent whose turn already finished', async (// oxlint-d
       (wtId) => (window.__store?.getState().tabsByWorktree[wtId] ?? [])[0]?.id ?? null,
       worktreeId
     )
+
     expect(tabId, 'the agent pane must have a tab to close').not.toBeNull()
     expect(tabId).not.toBe(survivingTabId)
     await page.evaluate(
@@ -172,9 +184,11 @@ test('does not respawn an agent whose turn already finished', async (// oxlint-d
 
     // The record outlived the pane it belonged to.
     const persisted = readPersistedRecords(session.userDataDir)
+
     const survivor = Object.values(persisted).find(
       (candidate) => candidate.providerSession?.id === PROVIDER_SESSION_ID
     )
+
     expect(survivor, 'killing the pane left the resume record behind').toBeDefined()
     stubPersistedResumeCommand(session.userDataDir)
 
@@ -194,6 +208,7 @@ test('does not respawn an agent whose turn already finished', async (// oxlint-d
     const respawned = await secondLaunch.page.evaluate((wtId) => {
       const state = window.__store?.getState()
       const tabs = state?.tabsByWorktree[wtId] ?? []
+
       return tabs.map((tab) => ({
         id: tab.id,
         launchAgent: tab.launchAgent ?? null,
@@ -201,17 +216,21 @@ test('does not respawn an agent whose turn already finished', async (// oxlint-d
         banner: state?.pendingStartupByTabId[tab.id]?.showSessionRestoredBanner ?? false
       }))
     }, worktreeId)
+
     const resumeTabs = respawned.filter(
       (tab) => tab.launchAgent === 'codex' || tab.startup?.includes(PROVIDER_SESSION_ID)
     )
+
     expect(resumeTabs, `a finished agent was respawned: ${JSON.stringify(respawned)}`).toEqual([])
   } finally {
     if (secondApp) {
       await session.close(secondApp)
     }
+
     if (firstApp) {
       await session.close(firstApp)
     }
+
     await session.dispose()
   }
 })

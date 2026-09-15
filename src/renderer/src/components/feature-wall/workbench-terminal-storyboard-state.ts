@@ -28,10 +28,15 @@ export const WORKBENCH_RUN_QUEUE: readonly { name: string; desc: string }[] = [
 ]
 
 export const WORKBENCH_RUN_TICK_MS = 2400
+
 export const WORKBENCH_CLAUDE_COMMAND = 'claude'
+
 export const WORKBENCH_REVIEW_PROMPT = 'review src/auth for missing error handling'
+
 export const WORKBENCH_CODEX_COMMAND = 'codex'
+
 export const WORKBENCH_CODEX_PROMPT = 'fix failing checkout test'
+
 export const WORKBENCH_RESPONSE_WIDTHS = [72, 88, 64, 78] as const
 
 export function getTwoAgentsReducedMotionLines(): readonly WorkbenchTerminalLine[] {

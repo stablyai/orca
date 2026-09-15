@@ -13,6 +13,7 @@ vi.mock('sonner', () => ({
 const { notifyHostOfMirroredEditorCloseMock } = vi.hoisted(() => ({
   notifyHostOfMirroredEditorCloseMock: vi.fn()
 }))
+
 vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
@@ -81,6 +82,7 @@ describe('createEditorSlice remote branch actions', () => {
 
   it('does not notify subscribers when upstream status is unchanged', () => {
     const store = createEditorStore()
+
     const status = {
       hasUpstream: true,
       upstreamName: 'origin/main',
@@ -349,9 +351,11 @@ describe('createEditorSlice remote branch actions', () => {
 
   it('preserves actionable publish errors and refreshes upstream after rejection', async () => {
     const store = createEditorStore()
+
     const publishError = new Error(
       'Push rejected: remote has newer commits (non-fast-forward). Please pull or sync first.'
     )
+
     gitPushMock.mockRejectedValueOnce(publishError)
 
     await expect(store.getState().pushBranch('wt-1', '/repo', true)).rejects.toThrow(
@@ -378,9 +382,11 @@ describe('createEditorSlice remote branch actions', () => {
 
   it('maps publish updates-were-rejected into a clean actionable toast', async () => {
     const store = createEditorStore()
+
     const publishError = new Error(
       'Updates were rejected because the tip of your current branch is behind its remote counterpart.'
     )
+
     gitPushMock.mockRejectedValueOnce(publishError)
 
     await expect(store.getState().pushBranch('wt-1', '/repo', true)).rejects.toThrow(
@@ -407,9 +413,11 @@ describe('createEditorSlice remote branch actions', () => {
 
   it('maps raw publish wrapper errors into a cleaner actionable toast', async () => {
     const store = createEditorStore()
+
     const rawPublishError = new Error(
       'git push failed: Command failed: git push --set-upstream origin feature-branch\nremote: Repository not found.\nfatal: Authentication failed for https://github.com/acme/private-repo.git'
     )
+
     gitPushMock.mockRejectedValueOnce(rawPublishError)
 
     await expect(store.getState().pushBranch('wt-1', '/repo', true)).rejects.toThrow(
@@ -440,9 +448,11 @@ describe('createEditorSlice remote branch actions', () => {
 
   it('maps non-fast-forward push errors into a clean actionable toast', async () => {
     const store = createEditorStore()
+
     const pushError = new Error(
       'Updates were rejected because the tip of your current branch is behind its remote counterpart.'
     )
+
     gitPushMock.mockRejectedValueOnce(pushError)
 
     await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
@@ -496,12 +506,14 @@ describe('createEditorSlice remote branch actions', () => {
 
   it('surfaces submodule push failures with the submodule name', async () => {
     const store = createEditorStore()
+
     const pushError = new Error(
       "Command failed: git push\nPushing submodule 'find-cmux-followers'\n" +
         ' ! [rejected]        master -> master (fetch first)\n' +
         "Unable to push submodule 'find-cmux-followers'\n" +
         'fatal: failed to push all needed submodules'
     )
+
     gitPushMock.mockRejectedValueOnce(pushError)
 
     await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
@@ -528,9 +540,11 @@ describe('createEditorSlice remote branch actions', () => {
 
   it('surfaces transport-prefixed normalized submodule push failures', async () => {
     const store = createEditorStore()
+
     const pushError = new Error(
       "Error invoking remote method 'git:push': Error: Submodule 'find-cmux-followers' has remote changes. Pull inside the submodule, then try again."
     )
+
     gitPushMock.mockRejectedValueOnce(pushError)
 
     await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
@@ -556,9 +570,11 @@ describe('createEditorSlice remote branch actions', () => {
 
   it('maps pre-push hook failures to hook-specific guidance instead of remote access', async () => {
     const store = createEditorStore()
+
     const pushError = new Error(
       "git push failed: Command failed: git push origin main\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1\neslint found 2 errors"
     )
+
     gitPushMock.mockRejectedValueOnce(pushError)
 
     await expect(store.getState().pushBranch('wt-1', '/repo', false)).rejects.toThrow(
@@ -696,7 +712,9 @@ describe('createEditorSlice remote branch actions', () => {
     const store = createEditorStore()
 
     let resolveA: () => void = () => {}
+
     let resolveB: () => void = () => {}
+
     gitPushMock
       .mockImplementationOnce(
         () =>
@@ -815,9 +833,11 @@ describe('createEditorSlice remote branch actions', () => {
     // the actionable fatal/remote line so auth/protected-branch reasons stay
     // visible.
     const store = createEditorStore()
+
     const authError = new Error(
       'git push failed: Command failed: git push origin feature\nremote: Repository not found.\nfatal: Authentication failed for https://github.com/acme/private-repo.git'
     )
+
     gitPushMock.mockRejectedValueOnce(authError)
 
     await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow(authError.message)
@@ -834,9 +854,11 @@ describe('createEditorSlice remote branch actions', () => {
     // push — sync just pulled, so the bare "Pull first" guidance is wrong.
     // Surface a sync-shaped retry hint instead.
     const store = createEditorStore()
+
     const pushError = new Error(
       'Updates were rejected because the tip of your current branch is behind its remote counterpart.'
     )
+
     gitPushMock.mockRejectedValueOnce(pushError)
 
     await expect(store.getState().syncBranch('wt-1', '/repo')).rejects.toThrow(pushError.message)
@@ -850,12 +872,15 @@ describe('createEditorSlice remote branch actions', () => {
 
   it('marks syncBranch inner push hook failures as sync push-stage failures', async () => {
     const store = createEditorStore()
+
     const pushError = new Error(
       "git push failed: Command failed: git push origin feature\nerror: failed to push some refs to 'origin'\nhusky - pre-push hook exited with code 1"
     )
+
     gitPushMock.mockRejectedValueOnce(pushError)
 
     let thrown: unknown
+
     try {
       await store.getState().syncBranch('wt-1', '/repo')
     } catch (error) {

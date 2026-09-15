@@ -5,10 +5,15 @@ import { spawnSync } from 'node:child_process'
 import process from 'node:process'
 
 const BASELINE_COMMIT = 'bf0c77d5bc800e19117084c27fd1441eda9134ad'
+
 const AFFECTED_MAIN_COMMIT = '25abb9368d98ad84a174f530e02f4228d2269062'
+
 const root = process.cwd()
+
 const driver = process.argv[2] ?? 'config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts'
+
 const config = 'config/vitest.config.ts'
+
 const tempRoot = mkdtempSync(join(tmpdir(), 'orca-sta-4274-repro-'))
 
 try {
@@ -54,6 +59,7 @@ function extractSource(commit, name) {
   mkdirSync(destination)
   run('git', ['archive', '--format=tar', `--output=${archive}`, commit, 'src/main', 'src/shared'])
   run('tar', ['-xf', archive, '-C', destination])
+
   return destination
 }
 
@@ -65,6 +71,7 @@ function restoreAffectedStoreFiles(destination) {
     const result = run('git', ['show', `${AFFECTED_MAIN_COMMIT}:${relativePath}`], {
       encoding: 'utf8'
     })
+
     writeFileSync(join(destination, relativePath), result.stdout)
   }
 }
@@ -72,11 +79,13 @@ function restoreAffectedStoreFiles(destination) {
 function makeDataDir(name) {
   const destination = join(tempRoot, name)
   mkdirSync(destination)
+
   return destination
 }
 
 function runOracle(label, targetRoot, operation, userDataPath, options = {}) {
   const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+
   const result = spawnSync(pnpm, ['exec', 'vitest', 'run', driver, '--config', config], {
     cwd: root,
     encoding: 'utf8',
@@ -87,19 +96,25 @@ function runOracle(label, targetRoot, operation, userDataPath, options = {}) {
       STA_4274_USER_DATA_PATH: userDataPath
     }
   })
+
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
+
   if (options.expectFailure) {
     if (result.status === 0 || !output.includes(options.expectFailure)) {
       throw new Error(
         `${label} did not fail with ${JSON.stringify(options.expectFailure)}\n${output}`
       )
     }
+
     process.stdout.write(`EXPECTED_FAIL ${label}\n`)
+
     return
   }
+
   if (result.status !== 0) {
     throw new Error(`${label} failed\n${output}`)
   }
+
   process.stdout.write(`PASS ${label}\n`)
 }
 
@@ -109,10 +124,12 @@ function run(command, args, options = {}) {
     encoding: options.encoding,
     maxBuffer: 16 * 1024 * 1024
   })
+
   if (result.status !== 0) {
     throw new Error(
       `${command} ${args.join(' ')} failed\n${String(result.stdout ?? '')}${String(result.stderr ?? '')}`
     )
   }
+
   return result
 }

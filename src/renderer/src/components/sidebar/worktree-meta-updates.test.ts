@@ -45,10 +45,13 @@ function buildUpdates(
     live,
     reviewProvider
   )
+
   const undefinedKeys = Object.keys(updates).filter(
     (key) => updates[key as keyof WorktreeMeta] === undefined
   )
+
   expect(undefinedKeys).toEqual([])
+
   return updates
 }
 
@@ -74,6 +77,7 @@ describe('buildWorktreeMetaUpdates', () => {
         'https://gitlab.example.com/group/project/-/merge_requests/42'
       )
     ).toBe(42)
+
     for (const invalid of [
       '#42',
       '0',
@@ -97,6 +101,7 @@ describe('buildWorktreeMetaUpdates', () => {
     expect(updates.comment).toBe('shipping today')
     expect(updates).not.toHaveProperty('linkedPR')
     expect(updates).not.toHaveProperty('linkedIssue')
+
     for (const key of LINEAR_LINK_KEYS) {
       expect(updates).not.toHaveProperty(key)
     }
@@ -117,6 +122,7 @@ describe('buildWorktreeMetaUpdates', () => {
     const updates = buildUpdates({ issueInput: '12' })
 
     expect(updates).toEqual({ linkedIssue: 12 })
+
     for (const key of LINEAR_LINK_KEYS) {
       expect(updates).not.toHaveProperty(key)
     }
@@ -317,6 +323,7 @@ describe('buildWorktreeMetaUpdates', () => {
     )
 
     expect(updates).not.toHaveProperty('linkedIssue')
+
     for (const key of LINEAR_LINK_KEYS) {
       expect(updates).not.toHaveProperty(key)
     }

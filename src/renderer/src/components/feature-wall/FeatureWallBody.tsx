@@ -53,6 +53,7 @@ export function FeatureWallBody(props: {
     browserUseSkill,
     onUsageAccountStateChange
   } = props
+
   const isWorkspaces = selected.id === 'workspaces'
   const isTasks = selected.id === 'tasks'
   const isAgents = selected.id === 'agents-orchestration'
@@ -73,6 +74,7 @@ export function FeatureWallBody(props: {
   const isOnboardingOrchestration = isAgentsOrchestration && source === 'onboarding'
   const orchestrationVisualWidthPx = isOnboardingOrchestration ? 440 : 520
   const orchestrationVisualHeightPx = isOnboardingOrchestration ? 240 : 392
+
   const animatedVisualWidth = isWorkspaces
     ? 'w-[440px]'
     : isWorkbenchEditor
@@ -96,6 +98,7 @@ export function FeatureWallBody(props: {
                     ? 'w-[440px]'
                     : 'w-[520px]'
                   : 'w-[520px]'
+
   const settingWidth = isTasks
     ? 'max-w-[760px]'
     : isAgentsUsage
@@ -117,7 +120,9 @@ export function FeatureWallBody(props: {
                 ? 'max-w-[340px]'
                 : 'max-w-[400px]'
               : 'max-w-[480px]'
+
   const setupTerminalHeightPx = source === 'onboarding' ? 140 : 240
+
   const settingContent = isTasks ? (
     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <LinearRow compact />
@@ -144,9 +149,12 @@ export function FeatureWallBody(props: {
   ) : isReviewShip ? (
     <AiCommitPrSettingsCard />
   ) : null
+
   const shouldUseOnboardingTourZones =
     source === 'onboarding' && hasAnimatedVisual && Boolean(settingContent)
+
   const shouldStickSetupToBottom = shouldUseOnboardingTourZones
+
   // Why: several visuals expand/collapse internally; setup controls should sit
   // after a stable stage so they do not jump with the animation loop.
   const visualStageHeight = isTasks
@@ -172,6 +180,7 @@ export function FeatureWallBody(props: {
                     ? 'h-[320px]'
                     : 'h-[392px]'
                   : 'h-[330px]'
+
   const animatedVisual = isWorkspaces ? (
     <WorkspacesAnimatedVisual reducedMotion={prefersReducedMotion} />
   ) : isTasks ? (
@@ -211,6 +220,7 @@ export function FeatureWallBody(props: {
       }
     />
   ) : null
+
   const animatedVisualNode = (
     <div className={cn('flex w-full items-start justify-center', visualStageHeight)}>
       <div
@@ -224,6 +234,7 @@ export function FeatureWallBody(props: {
       </div>
     </div>
   )
+
   const previewVisualNode = shouldUseOnboardingTourZones ? (
     <TourZone className="items-center">{animatedVisualNode}</TourZone>
   ) : (
@@ -283,5 +294,6 @@ export function FeatureWallBody(props: {
 
 function TourZone(props: { className?: string; children: JSX.Element | null }): JSX.Element {
   const { className, children } = props
+
   return <div className={cn('flex min-w-0 flex-col', className)}>{children}</div>
 }

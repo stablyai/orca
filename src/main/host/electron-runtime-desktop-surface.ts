@@ -9,7 +9,9 @@ export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
     if (!Notification.isSupported()) {
       return false
     }
+
     new Notification({ title, body }).show()
+
     return true
   },
   findWindowById: (id) => BrowserWindow.fromId(id),

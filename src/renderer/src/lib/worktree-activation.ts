@@ -51,8 +51,10 @@ function ensureFolderWorkspaceInitialTerminal(
   if (providesInitialSurface === true && startup === undefined) {
     return null
   }
+
   const state = useAppStore.getState()
   const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
+
   const primaryTabId = ensureWorktreeHasInitialTerminal(
     state,
     workspaceKey,
@@ -62,6 +64,7 @@ function ensureFolderWorkspaceInitialTerminal(
     undefined,
     { reseedEmptiedWorkspace: providesInitialSurface !== true }
   )
+
   return primaryTabId
 }
 
@@ -84,21 +87,26 @@ export function activateAndRevealFolderWorkspace(
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
+
   const folderWorkspaceOwner = findFolderWorkspaceOwner(
     state,
     folderWorkspaceId,
     opts?.executionHostId
   )
+
   const folderWorkspace = state.folderWorkspaces.find(
     (workspace) => workspace === folderWorkspaceOwner
   )
+
   if (!folderWorkspace) {
     return false
   }
+
   const runtimeEnvironmentId =
     opts && 'runtimeEnvironmentId' in opts
       ? (opts.runtimeEnvironmentId ?? null)
       : getRuntimeEnvironmentIdForWorktree(state, folderWorkspaceKey(folderWorkspaceId))
+
   const pathStatus = state.getFreshFolderWorkspacePathStatus(
     {
       scope: 'folder-workspace',
@@ -106,6 +114,7 @@ export function activateAndRevealFolderWorkspace(
     },
     { runtimeEnvironmentId }
   )
+
   if (folderWorkspaceActivationBlocked(pathStatus)) {
     const title =
       getFolderWorkspacePathStatusTitle(pathStatus) ??
@@ -113,9 +122,11 @@ export function activateAndRevealFolderWorkspace(
         'auto.lib.worktree.activation.cannotOpenFolderWorkspace',
         'Cannot open folder workspace'
       )
+
     toast.error(title, {
       description: getFolderWorkspacePathStatusDescription(pathStatus) ?? folderWorkspace.folderPath
     })
+
     return false
   }
 
@@ -128,9 +139,11 @@ export function activateAndRevealFolderWorkspace(
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
   const providesInitialSurface = activationProvidesInitialSurface(opts)
   state.markWorktreeVisited(workspaceKey)
+
   if (!state.isNavigatingHistory) {
     state.recordWorktreeVisit(workspaceKey)
   }
+
   // Why: same ordering as the worktree path — gate first, then resume only when not deferring.
   const shouldGateAgentActivation =
     !opts?.startup &&
@@ -139,9 +152,11 @@ export function activateAndRevealFolderWorkspace(
         shouldAutoCreateInitialTerminal(
           state.reconcileWorktreeTabModel(workspaceKey).renderableTabCount
         )))
+
   if (!shouldGateAgentActivation) {
     resumeSleepingAgentSessionsForWorktree(workspaceKey)
   }
+
   if (shouldGateAgentActivation) {
     gateAndReseedEmptyWorkspace(
       workspaceKey,
@@ -149,6 +164,7 @@ export function activateAndRevealFolderWorkspace(
       opts?.executionHostId
     )
   }
+
   const primaryTabId = shouldGateAgentActivation
     ? null
     : ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup, providesInitialSurface)
@@ -177,13 +193,17 @@ export function activateAndRevealWorktree(
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
   const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
+
   if (!wt) {
     return false
   }
+
   const hasActivationWork = Boolean(
     opts?.startup || opts?.setup || opts?.defaultTabs || opts?.issueCommand
   )
+
   const providesInitialSurface = activationProvidesInitialSurface(opts)
+
   // Why: a plain reselect should still reveal the sidebar row but must not restamp focus recency or wake persistence.
   const isPlainAlreadyActiveTerminal =
     !hasActivationWork &&
@@ -206,6 +226,7 @@ export function activateAndRevealWorktree(
   state.setActiveWorktree(worktreeId, opts?.executionHostId)
   const postActivationState = useAppStore.getState()
   const ownerRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(postActivationState, wt.id)
+
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
     // Why: paired web clients own only local selection, so the desktop host publishes session surfaces without treating it as a nav command.
     void activateWebRuntimeSessionWorktree({
@@ -235,12 +256,14 @@ export function activateAndRevealWorktree(
         shouldAutoCreateInitialTerminal(
           postActivationState.reconcileWorktreeTabModel(worktreeId).renderableTabCount
         )))
+
   if (!shouldGateAgentActivation) {
     // Why: sleeping destroys the local PTY but preserves the provider session id, so waking should
     // restore those CLI sessions. Ordering is load-bearing: resuming synchronously creates the
     // session's tab first, so the seeding below doesn't add a bare shell next to it.
     resumeSleepingAgentSessionsForWorktree(worktreeId)
   }
+
   if (shouldGateAgentActivation) {
     gateAndReseedEmptyWorkspace(
       worktreeId,
@@ -268,6 +291,7 @@ export function activateAndRevealWorktree(
             reseedEmptiedWorkspace: !providesInitialSurface
           }
         )
+
   if (primaryTabId && opts?.initialCwd) {
     useAppStore.getState().queueTabInitialCwd(primaryTabId, opts.initialCwd)
   }
@@ -277,15 +301,18 @@ export function activateAndRevealWorktree(
     if (state.filterRepoIds.length > 0 && !state.filterRepoIds.includes(wt.repoId)) {
       state.setFilterRepoIds([])
     }
+
     if (
       state.hideAutomationGeneratedWorkspaces &&
       wt.automationProvenance?.kind === 'created-by-automation'
     ) {
       state.setHideAutomationGeneratedWorkspaces(false)
     }
+
     if (state.hideCliCreatedWorkspaces && wt.cliProvenance?.kind === 'created-by-cli') {
       state.setHideCliCreatedWorkspaces(false)
     }
+
     if (state.hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(wt)) {
       state.setHideDetachedHeadWorkspaces(false)
     }
@@ -333,9 +360,11 @@ export function activateAndRevealWorkspace(
   }
 ): ActivateAndRevealResult | false {
   const workspaceScope = parseWorkspaceKey(workspaceId)
+
   if (workspaceScope?.type !== 'folder') {
     return activateAndRevealWorktree(workspaceId, opts)
   }
+
   return activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, opts)
 }
 

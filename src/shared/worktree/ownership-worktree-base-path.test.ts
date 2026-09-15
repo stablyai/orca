@@ -94,6 +94,7 @@ describe('repo-specific worktree ownership layouts', () => {
       path: 'C:\\projects\\App\\repo',
       worktreeBasePath: '..\\worktrees'
     })
+
     const settings = makeSettings({ workspaceDir: 'D:\\global' })
 
     expect(
@@ -111,6 +112,7 @@ describe('repo-specific worktree ownership layouts', () => {
       path: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\src\\repo',
       worktreeBasePath: '/home/jin/src/.orca-worktrees'
     })
+
     const settings = makeSettings({ workspaceDir: 'C:\\global' })
     const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
 
@@ -135,6 +137,7 @@ describe('repo-specific worktree ownership layouts', () => {
       path: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\jin\\src\\repo',
       worktreeBasePath: '/home/jin/src/../.orca-worktrees'
     })
+
     const settings = makeSettings({ workspaceDir: 'C:\\global' })
     const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
 
@@ -159,6 +162,7 @@ describe('repo-specific worktree ownership layouts', () => {
       path: '\\\\wsl.localhost\\Ubuntu-24.04\\home\\Dev\\Repo',
       worktreeBasePath: '/home/Dev/Repo/.claude/worktrees'
     })
+
     const settings = makeSettings({ workspaceDir: 'C:\\global' })
 
     expect(

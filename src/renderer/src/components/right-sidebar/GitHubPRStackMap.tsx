@@ -17,33 +17,42 @@ function stackEntryStatus(entry: GitHubPRStackEntry): string {
   if (entry.state === 'merged') {
     return translate('auto.components.right.sidebar.GitHubPRStackMap.8a9bdc36c0', 'merged')
   }
+
   if (entry.state === 'closed') {
     return translate('auto.components.right.sidebar.GitHubPRStackMap.3511405914', 'closed')
   }
+
   if (entry.state === 'draft') {
     return translate('auto.components.right.sidebar.GitHubPRStackMap.568c647ccd', 'draft')
   }
+
   if (entry.mergeable === 'CONFLICTING') {
     return translate('auto.components.right.sidebar.GitHubPRStackMap.bea9ade223', 'conflicts')
   }
+
   if (entry.checksStatus === 'failure') {
     return translate('auto.components.right.sidebar.GitHubPRStackMap.838aadf512', 'checks failed')
   }
+
   if (entry.checksStatus === 'pending') {
     return translate('auto.components.right.sidebar.GitHubPRStackMap.316039b5db', 'checks pending')
   }
+
   if (entry.reviewDecision === 'CHANGES_REQUESTED') {
     return translate(
       'auto.components.right.sidebar.GitHubPRStackMap.4b1e5ee9d3',
       'changes requested'
     )
   }
+
   if (entry.reviewDecision === 'REVIEW_REQUIRED') {
     return translate('auto.components.right.sidebar.GitHubPRStackMap.9a17b5255c', 'review needed')
   }
+
   if (entry.reviewDecision === 'APPROVED') {
     return translate('auto.components.right.sidebar.GitHubPRStackMap.d3d97cf3f2', 'approved')
   }
+
   return translate('auto.components.right.sidebar.GitHubPRStackMap.e6cb964305', 'open')
 }
 
@@ -57,6 +66,7 @@ export function GitHubPRStackMap({
   onOpenPullRequest: (url: string, modifiers: GitHubPRStackMapNavigationModifiers) => void
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
+
   const entries = useMemo(
     () => [...(stack.entries ?? [])].sort((a, b) => b.position - a.position),
     [stack.entries]
@@ -114,6 +124,7 @@ export function GitHubPRStackMap({
           <div className="py-1">
             {entries.map((entry) => {
               const current = entry.number === currentPRNumber
+
               return (
                 <button
                   key={entry.number}

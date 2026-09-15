@@ -4,7 +4,9 @@ import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const FOLDER_WORKSPACE_ID = 'folder-workspace-1'
+
 const FOLDER_WORKSPACE_KEY = `folder:${FOLDER_WORKSPACE_ID}`
+
 const EMULATOR_INFO: EmulatorSessionInfo = {
   deviceUdid: 'emulator-5554',
   streamUrl: 'scrcpy://emulator-5554',
@@ -44,7 +46,9 @@ describe('RuntimeEmulatorCommands folder workspace routing', () => {
         registerActiveEmulator: vi.fn(),
         stopActiveForSwitch: vi.fn(async () => null)
       }
+
       const send = vi.fn()
+
       const runtime = new OrcaRuntimeService({
         getFolderWorkspaces: () => [makeFolderWorkspace()],
         getAllWorktreeMeta: () => new Map(),
@@ -56,6 +60,7 @@ describe('RuntimeEmulatorCommands folder workspace routing', () => {
           androidSdkPath: null
         })
       } as never)
+
       runtime.setEmulatorBridge(bridge as never)
       Object.assign(runtime, {
         getAuthoritativeWindow: () => ({ webContents: { send } })
@@ -87,6 +92,7 @@ describe('RuntimeEmulatorCommands folder workspace routing', () => {
     async (selector) => {
       let folderWorkspaces = [makeFolderWorkspace()]
       const shutdownActiveManagedForWorktree = vi.fn(async () => EMULATOR_INFO.deviceUdid)
+
       const runtime = new OrcaRuntimeService({
         getFolderWorkspaces: () => folderWorkspaces,
         getAllWorktreeMeta: () => new Map(),
@@ -94,6 +100,7 @@ describe('RuntimeEmulatorCommands folder workspace routing', () => {
         getRepos: () => [],
         getSettings: () => ({ androidSdkPath: null })
       } as never)
+
       runtime.setEmulatorBridge({ shutdownActiveManagedForWorktree } as never)
 
       folderWorkspaces = []
@@ -108,9 +115,11 @@ describe('RuntimeEmulatorCommands folder workspace routing', () => {
   it('cleans up an attach that finishes after its folder workspace is deleted', async () => {
     let folderWorkspaces = [makeFolderWorkspace()]
     const release = vi.fn(async () => {})
+
     let finishHelperStart:
       | ((lease: { info: EmulatorSessionInfo; release: typeof release }) => void)
       | undefined
+
     const bridge = {
       acquireHelperForDevice: vi.fn(
         () =>
@@ -123,6 +132,7 @@ describe('RuntimeEmulatorCommands folder workspace routing', () => {
       shutdownActiveManagedForWorktree: vi.fn(async () => null),
       stopActiveForSwitch: vi.fn(async () => null)
     }
+
     const runtime = new OrcaRuntimeService({
       getFolderWorkspaces: () => folderWorkspaces,
       getAllWorktreeMeta: () => new Map(),
@@ -134,6 +144,7 @@ describe('RuntimeEmulatorCommands folder workspace routing', () => {
         androidSdkPath: null
       })
     } as never)
+
     runtime.setEmulatorBridge(bridge as never)
     Object.assign(runtime, {
       getAuthoritativeWindow: () => ({ webContents: { send: vi.fn() } })
@@ -143,6 +154,7 @@ describe('RuntimeEmulatorCommands folder workspace routing', () => {
       device: EMULATOR_INFO.deviceUdid,
       worktree: FOLDER_WORKSPACE_KEY
     })
+
     await vi.waitFor(() => expect(bridge.acquireHelperForDevice).toHaveBeenCalledOnce())
     folderWorkspaces = []
     await expect(

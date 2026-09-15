@@ -3,6 +3,7 @@ import type { WebContents } from 'electron'
 /** All the service asks of the renderer: is it still there, and take this message. Narrower
  *  than WebContents so a test can supply the real shape instead of casting one. */
 export type AutomationRendererChannel = Pick<WebContents, 'isDestroyed' | 'send'>
+
 import type { Store } from '../persistence'
 import {
   isFinalAutomationRunStatus,
@@ -111,10 +112,12 @@ export class AutomationService {
     if (this.timer) {
       return
     }
+
     this.timer = setInterval(() => {
       void this.evaluateDueRuns()
     }, this.tickMs)
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
+
     // Why: headless serve never gets a renderer-ready IPC, but due runs still
     // need the same startup catch-up pass desktop gets after renderer attach.
     if (this.rendererReady || this.headlessDispatcher) {
@@ -127,25 +130,31 @@ export class AutomationService {
 
   stop(): void {
     this.completionWatcher?.dispose()
+
     if (!this.timer) {
       return
     }
+
     clearInterval(this.timer)
     this.timer = null
   }
 
   async runNow(automationId: string): Promise<AutomationRun> {
     const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
+
     if (!automation) {
       throw new Error('Automation not found.')
     }
+
     const run = this.runs.createRun(automation, Date.now(), 'manual')
+
     return await this.requestDispatch(automation, run, this.resolveTarget(automation))
   }
 
   /** The run-history row doc:94 pairs with the typed refusal an execute fence throws. */
   recordRefusedRun(automationId: string): void {
     const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
+
     if (automation) {
       recordRefusedAutomationRun({
         store: this.store,
@@ -158,17 +167,23 @@ export class AutomationService {
 
   async runPrecheck(automationId: string, runId: string): Promise<AutomationPrecheckResult | null> {
     const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
+
     if (!automation) {
       throw new Error('Automation not found.')
     }
+
     const run = this.store.listAutomationRuns(automationId).find((entry) => entry.id === runId)
+
     if (!run) {
       throw new Error('Automation run not found.')
     }
+
     if (run.trigger !== 'scheduled' || !automation.precheck) {
       return null
     }
+
     const target = this.resolveTarget(automation)
+
     if (!target.ok) {
       return {
         command: automation.precheck.command,
@@ -184,6 +199,7 @@ export class AutomationService {
         completedAt: Date.now()
       }
     }
+
     return await runAutomationPrecheck({
       precheck: automation.precheck,
       target:
@@ -196,13 +212,17 @@ export class AutomationService {
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
     const run = this.runs.updateRun(result)
     clearAutomationDispatchTokens(run.automationId, run.id)
+
     if (!isFinalAutomationRunStatus(run.status)) {
       if (run.status === 'dispatched') {
         this.completionWatcher?.watch(run)
       }
+
       return run
     }
+
     this.completionWatcher?.forget(run.id)
+
     // Why: the renderer's mark-completed effect can re-fire for the same run
     // before refresh() flips its status snapshot off 'dispatched'. Re-running
     // collectRunUsage advances the attribution window and can rewrite an
@@ -210,6 +230,7 @@ export class AutomationService {
     if (run.usage) {
       return run
     }
+
     return await writeAutomationRunUsage({
       store: this.store,
       runs: this.runs,
@@ -223,13 +244,17 @@ export class AutomationService {
     if (this.evaluating) {
       return
     }
+
     this.evaluating = true
+
     try {
       const now = Date.now()
+
       for (const automation of this.store.listAutomations()) {
         if (!automation.enabled || automation.nextRunAt > now) {
           continue
         }
+
         // Isolated per record (#16303): an unreadable schedule throws out of the
         // occurrence math, and an uncaught throw here skipped every later due row.
         try {
@@ -245,11 +270,15 @@ export class AutomationService {
 
   private async evaluateAutomation(automation: Automation, now: number): Promise<void> {
     const scheduledFor = this.store.getLatestAutomationOccurrence(automation, now)
+
     if (scheduledFor === null) {
       this.store.advanceAutomationNextRun(automation.id, now)
+
       return
     }
+
     const graceMs = automation.missedRunGraceMinutes * 60 * 1000
+
     if (now - scheduledFor > graceMs) {
       const missed = this.runs.createRun(automation, scheduledFor)
       this.runs.updateRun({
@@ -259,6 +288,7 @@ export class AutomationService {
         error: 'Orca was unavailable during the missed-run grace window.'
       })
       this.store.advanceAutomationNextRun(automation.id, now)
+
       return
     }
 
@@ -267,8 +297,10 @@ export class AutomationService {
     // retention, which would evict the automation's real history.
     const target = this.resolveTarget(automation)
     const refusal = describeScheduledRefusal({ target, canDispatch: this.canDispatch() })
+
     if (refusal && this.runs.repeatSkip(automation.id, refusal, scheduledFor)) {
       this.store.advanceAutomationNextRun(automation.id, now)
+
       return
     }
 
@@ -284,6 +316,7 @@ export class AutomationService {
 
   private canDispatchToRenderer(): boolean {
     const webContents = this.webContents
+
     return Boolean(webContents && !webContents.isDestroyed() && this.rendererReady)
   }
 
@@ -305,6 +338,7 @@ export class AutomationService {
         error: target.error
       })
     }
+
     if (!this.canDispatchToRenderer()) {
       if (this.headlessDispatcher) {
         return await runHeadlessAutomationDispatch({
@@ -318,6 +352,7 @@ export class AutomationService {
           watchRun: (dispatched) => this.completionWatcher?.watch(dispatched)
         })
       }
+
       return this.runs.updateRun({
         runId: run.id,
         status: 'skipped_unavailable',
@@ -325,17 +360,20 @@ export class AutomationService {
         error: NO_DISPATCH_HOST
       })
     }
+
     const updated = this.runs.updateRun({
       runId: run.id,
       status: 'dispatching',
       workspaceId: automation.workspaceId,
       error: null
     })
+
     const payload: AutomationDispatchRequest = {
       automation,
       run: updated,
       dispatchToken: createAutomationDispatchToken(automation.id, updated.id)
     }
+
     return sendRendererDispatch(this.webContents, payload, this.runs, updated)
   }
 }

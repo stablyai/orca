@@ -27,6 +27,7 @@ export type AgentSessionContinuationRequest = {
 function markdownFenceFor(value: string): string {
   const matches = value.match(/`+/g)
   const longest = matches?.reduce((length, fence) => Math.max(length, fence.length), 0) ?? 0
+
   return '`'.repeat(Math.max(3, longest + 1))
 }
 
@@ -39,12 +40,15 @@ export function buildAgentSessionContinuationPrompt(
   mode: AgentSessionContinuationContextMode
 ): string | null {
   const transcriptPath = source.transcriptPath?.trim() || null
+
   const capturedTranscript = transcriptPath
     ? null
     : buildBoundedSessionTranscript(source.capturedText)
+
   if (mode === 'full' && !transcriptPath) {
     return null
   }
+
   if (!transcriptPath && !capturedTranscript) {
     return null
   }
@@ -57,6 +61,7 @@ export function buildAgentSessionContinuationPrompt(
       ? `Original working directory: ${source.sourceWorkingDirectory.trim()}`
       : null
   ].filter((line): line is string => Boolean(line))
+
   const statusHints = [
     source.lastPrompt?.trim() ? `Last user prompt: ${source.lastPrompt.trim()}` : null,
     source.lastAssistantMessage?.trim()
@@ -89,6 +94,7 @@ function buildContextSection(args: {
   if (args.transcriptPath) {
     const fence = markdownFenceFor(args.transcriptPath)
     const pathBlock = [`${fence}text`, args.transcriptPath, fence]
+
     if (args.mode === 'full') {
       return [
         'Read the complete original session transcript from this path before continuing:',
@@ -96,6 +102,7 @@ function buildContextSection(args: {
         'Do not modify or delete the transcript file.'
       ]
     }
+
     return [
       'The complete original session transcript is available at this path:',
       ...pathBlock,
@@ -105,6 +112,7 @@ function buildContextSection(args: {
 
   const transcript = args.capturedTranscript ?? ''
   const fence = markdownFenceFor(transcript)
+
   return [
     'A saved session transcript was unavailable, so use this bounded recent terminal capture:',
     `${fence}text`,

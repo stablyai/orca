@@ -3,6 +3,7 @@ import { getPageNumbers } from '@/components/task-page-pagination-page-numbers'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { ChevronLeft, LoaderCircle, ChevronRight } from 'lucide-react'
+
 export function PaginationBar({
   currentPage,
   totalPages,
@@ -15,8 +16,10 @@ export function PaginationBar({
   onPageChange: (page: number) => void
 }): React.JSX.Element {
   const pageNumbers = getPageNumbers(currentPage, totalPages)
+
   const btnClass =
     'inline-flex w-24 items-center justify-center gap-0.5 rounded-md px-2 py-1 text-sm text-muted-foreground transition hover:bg-muted/60 hover:text-foreground disabled:pointer-events-none disabled:opacity-40'
+
   const numClass = (page: number): string =>
     cn(
       'inline-flex size-8 items-center justify-center rounded-md text-sm transition',
@@ -24,6 +27,7 @@ export function PaginationBar({
         ? 'bg-primary text-primary-foreground font-medium'
         : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
     )
+
   return (
     <nav
       aria-label={translate('auto.components.TaskPage.e65757a338', 'Pagination')}

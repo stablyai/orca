@@ -7,6 +7,7 @@ export function createRelayAiVaultFilesystemProvider(): RemoteSessionFilesystemP
   return {
     async readDir(dirPath) {
       const entries = await readdir(dirPath, { withFileTypes: true })
+
       return entries.map((entry) => ({
         name: entry.name,
         isDirectory: entry.isDirectory(),
@@ -17,6 +18,7 @@ export function createRelayAiVaultFilesystemProvider(): RemoteSessionFilesystemP
     readTranscriptBytes: readRelayTranscriptBytes,
     async stat(filePath) {
       const stats = await lstat(filePath)
+
       return {
         size: stats.size,
         type: stats.isDirectory() ? 'directory' : stats.isSymbolicLink() ? 'symlink' : 'file',

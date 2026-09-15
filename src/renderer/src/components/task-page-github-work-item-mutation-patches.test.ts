@@ -28,6 +28,7 @@ function baseItem(overrides: Partial<GitHubWorkItem> = {}): GitHubWorkItem {
 describe('applyTaskPageGitHubListOps', () => {
   it('adds and removes logins', () => {
     const snapshot = [{ login: 'alice', name: null, avatarUrl: '' }]
+
     const afterAdd = applyTaskPageGitHubListOps(snapshot, [
       {
         family: 'assignees',
@@ -36,10 +37,13 @@ describe('applyTaskPageGitHubListOps', () => {
         users: [{ login: 'bob', name: 'Bob', avatarUrl: 'x' }]
       }
     ])
+
     expect(afterAdd.map((u) => u.login)).toEqual(['alice', 'bob'])
+
     const afterRemove = applyTaskPageGitHubListOps(afterAdd, [
       { family: 'assignees', kind: 'remove', logins: ['alice'] }
     ])
+
     expect(afterRemove.map((u) => u.login)).toEqual(['bob'])
   })
 
@@ -58,11 +62,14 @@ describe('buildTaskPageGitHubWorkItemMutationPatch', () => {
       state: 'open',
       autoMergeEnabled: true
     })
+
     const patch = buildTaskPageGitHubWorkItemMutationPatch(item, { type: 'merge' })
     expect(patch.kind).toBe('whole')
+
     if (patch.kind !== 'whole') {
       return
     }
+
     expect(patch.next).toEqual({ state: 'merged', autoMergeEnabled: false })
     expect(patch.previous).toEqual({ state: 'open', autoMergeEnabled: true })
   })
@@ -72,6 +79,7 @@ describe('buildTaskPageGitHubWorkItemMutationPatch', () => {
       type: 'setAutoMerge',
       enabled: true
     })
+
     expect(patch.next).toEqual({ autoMergeEnabled: true })
   })
 
@@ -80,10 +88,13 @@ describe('buildTaskPageGitHubWorkItemMutationPatch', () => {
       type: 'toggleAssignee',
       user: { login: 'Alice', name: 'A', avatarUrl: '' }
     })
+
     expect(patch.kind).toBe('list')
+
     if (patch.kind !== 'list') {
       return
     }
+
     expect(patch.opKey).toBe('assignees:alice')
     expect(patch.listOp.kind).toBe('add')
     expect(patch.next.assignees?.map((u) => u.login.toLowerCase())).toEqual(['alice'])
@@ -98,10 +109,13 @@ describe('buildTaskPageGitHubWorkItemMutationPatch', () => {
         { login: 'carol', name: null, avatarUrl: '' }
       ]
     })
+
     expect(patch.kind).toBe('list')
+
     if (patch.kind !== 'list') {
       return
     }
+
     expect(patch.opKey).toBe('reviewRequests:batch:bob,carol')
     expect(patch.listOp.logins).toEqual(['bob', 'carol'])
   })

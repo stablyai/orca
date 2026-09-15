@@ -59,6 +59,7 @@ export function getMobileAiVaultResumeRepoTargetStatus(
   if (!repo) {
     return 'unknown'
   }
+
   return getMobileAiVaultResumeExecutionHostTargetStatus(getRepoExecutionHostId(repo))
 }
 
@@ -72,10 +73,13 @@ export function getMobileAiVaultResumeWorktreeTargetStatus(args: {
   if (!args.worktreeId) {
     return 'unknown'
   }
+
   const worktree = args.worktrees.find((candidate) => candidate.worktreeId === args.worktreeId)
+
   if (!worktree) {
     return 'unknown'
   }
+
   if (worktree.workspaceKind === 'folder-workspace') {
     return getMobileAiVaultResumeFolderTargetStatus({
       worktreeId: args.worktreeId,
@@ -85,10 +89,13 @@ export function getMobileAiVaultResumeWorktreeTargetStatus(args: {
       projectGroups: args.projectGroups ?? []
     })
   }
+
   const worktreeHost = getMobileAiVaultResumeExecutionHostTargetStatus(worktree.hostId)
+
   if (worktreeHost !== 'unknown') {
     return worktreeHost
   }
+
   return getMobileAiVaultResumeRepoTargetStatus(
     args.repos.find((candidate) => candidate.id === worktree.repoId)
   )
@@ -108,9 +115,11 @@ export function mobileAiVaultResumeTargetBlockMessage(
   if (status === 'runtime') {
     return 'Resume from history is not available in runtime-hosted workspaces.'
   }
+
   if (status === 'ssh') {
     return 'This session is stored on the host machine, so it cannot be resumed in an SSH workspace. Open a local workspace for this project.'
   }
+
   return 'Open a local workspace before resuming a session.'
 }
 
@@ -127,9 +136,11 @@ export function resolveMobileAiVaultSessionResumeTarget(args: {
     worktrees: args.worktrees,
     activeWorktreeId: args.activeWorktreeId
   })
+
   const sessionWorktreeId = canResumeInMobileSessionWorktree(sessionWorktree)
     ? sessionWorktree?.worktreeId
     : null
+
   const candidateWorktreeIds = [
     sessionWorktreeId,
     args.activeWorktreeId && args.activeWorktreeId !== sessionWorktreeId
@@ -145,9 +156,11 @@ export function resolveMobileAiVaultSessionResumeTarget(args: {
       folderWorkspaces: args.folderWorkspaces,
       projectGroups: args.projectGroups
     })
+
     if (!isSupportedMobileAiVaultResumeTargetStatus(targetStatus)) {
       continue
     }
+
     return {
       status: 'ready',
       worktreeId: candidateWorktreeId,
@@ -168,6 +181,7 @@ export function resolveMobileAiVaultSessionResumeTarget(args: {
     folderWorkspaces: args.folderWorkspaces,
     projectGroups: args.projectGroups
   })
+
   return { status: 'blocked', message: mobileAiVaultResumeTargetBlockMessage(blockedStatus) }
 }
 
@@ -181,19 +195,24 @@ function getMobileAiVaultResumeFolderTargetStatus(args: {
   const folderWorkspaceId = args.worktreeId.startsWith('folder:')
     ? args.worktreeId.slice('folder:'.length)
     : null
+
   const folderWorkspace = folderWorkspaceId
     ? args.folderWorkspaces.find((workspace) => workspace.id === folderWorkspaceId)
     : null
+
   if (!folderWorkspace) {
     return 'unknown'
   }
+
   const projectGroupId =
     folderWorkspace.projectGroupId ?? parseFolderWorkspaceRepoId(args.worktree.repoId)
+
   const projectGroup = projectGroupId
     ? args.projectGroups.find((group) => group.id === projectGroupId)
     : null
 
   const groupHostId = normalizeExecutionHostId(projectGroup?.executionHostId)
+
   if (groupHostId) {
     return getMobileAiVaultResumeExecutionHostTargetStatus(groupHostId)
   }
@@ -203,6 +222,7 @@ function getMobileAiVaultResumeFolderTargetStatus(args: {
     projectGroup?.connectionId ??
     ''
   ).trim()
+
   if (explicitConnectionId) {
     return getMobileAiVaultResumeExecutionHostTargetStatus(
       toSshExecutionHostId(explicitConnectionId)
@@ -223,14 +243,17 @@ function getMobileAiVaultResumeExecutionHostTargetStatus(
   hostId: ExecutionHostId | null | undefined
 ): MobileAiVaultResumeTargetStatus {
   const parsed = parseExecutionHostId(hostId)
+
   if (!parsed) {
     return 'unknown'
   }
+
   return parsed.kind
 }
 
 function parseFolderWorkspaceRepoId(repoId: string): string | null {
   const prefix = 'folder-workspace:'
+
   return repoId.startsWith(prefix) ? repoId.slice(prefix.length) || null : null
 }
 
@@ -243,11 +266,14 @@ function getMobileFolderWorkspaceCandidateRepos(args: {
   if (!args.folderWorkspace || !args.projectGroupId) {
     return []
   }
+
   const folderWorkspace = args.folderWorkspace
   const groupIds = getMobileProjectGroupSubtreeIds(args.projectGroups, args.projectGroupId)
+
   const groupRepos = args.repos.filter(
     (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
   )
+
   const pathRepos = args.repos.filter(
     (repo) =>
       !(typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) &&
@@ -255,16 +281,20 @@ function getMobileFolderWorkspaceCandidateRepos(args: {
       repo.path.trim().length > 0 &&
       isPathInsideOrEqual(folderWorkspace.folderPath, repo.path)
   )
+
   if (folderWorkspace.connectionId) {
     return [
       ...groupRepos,
       ...pathRepos.filter((repo) => (repo.connectionId ?? null) === folderWorkspace.connectionId)
     ]
   }
+
   if (groupRepos.length === 0) {
     return pathRepos
   }
+
   const groupConnectionIds = new Set(groupRepos.map((repo) => repo.connectionId ?? null))
+
   return [
     ...groupRepos,
     ...pathRepos.filter((repo) => groupConnectionIds.has(repo.connectionId ?? null))
@@ -277,8 +307,10 @@ function getMobileProjectGroupSubtreeIds(
 ): Set<string> {
   const ids = new Set<string>([projectGroupId])
   let changed = true
+
   while (changed) {
     changed = false
+
     for (const group of projectGroups) {
       if (group.parentGroupId && ids.has(group.parentGroupId) && !ids.has(group.id)) {
         ids.add(group.id)
@@ -286,6 +318,7 @@ function getMobileProjectGroupSubtreeIds(
       }
     }
   }
+
   return ids
 }
 
@@ -295,10 +328,13 @@ function mergeMobileAiVaultResumeExecutionHostTargetStatuses(
   if (hostIds.length === 0) {
     return 'local'
   }
+
   const statuses = hostIds.map(getMobileAiVaultResumeExecutionHostTargetStatus)
   const uniqueStatuses = new Set(statuses)
+
   if (uniqueStatuses.has('runtime')) {
     return 'runtime'
   }
+
   return new Set(hostIds).size === 1 ? (statuses[0] ?? 'unknown') : 'unknown'
 }

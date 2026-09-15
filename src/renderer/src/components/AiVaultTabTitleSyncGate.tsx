@@ -4,7 +4,9 @@ import { scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
 import { useAppStore } from '@/store'
 
 const TITLE_SYNC_DELAY_MS = 1_000
+
 const TITLE_SYNC_QUIET_MS = 1_500
+
 const TITLE_SYNC_IDLE_TIMEOUT_MS = 3_000
 
 export function AiVaultTabTitleSyncGate(): null {
@@ -23,5 +25,6 @@ export function AiVaultTabTitleSyncGate(): null {
       }),
     []
   )
+
   return null
 }

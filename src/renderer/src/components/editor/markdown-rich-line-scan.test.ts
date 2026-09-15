@@ -10,12 +10,14 @@ describe('rich Markdown line scanning', () => {
     const spy = vi.spyOn(String.prototype, 'charCodeAt')
     let decision: ReturnType<typeof decide>
     let calls: number
+
     try {
       decision = decide(content)
       calls = spy.mock.calls.length
     } finally {
       spy.mockRestore()
     }
+
     expect(decision).toEqual({ exceedsSizeLimit: false, unsupportedReason: null })
     expect(calls).toBeLessThan(10)
   })

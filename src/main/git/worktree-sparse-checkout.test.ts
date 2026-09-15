@@ -32,9 +32,11 @@ async function createRepoWithTwoDirs(): Promise<string> {
 
 function mainWorktree(worktrees: Awaited<ReturnType<typeof listWorktrees>>) {
   const found = worktrees.find((worktree) => worktree.isMainWorktree)
+
   if (!found) {
     throw new Error('expected a main worktree in the listing')
   }
+
   return found
 }
 

@@ -10,6 +10,7 @@ describe('remote transport sendInputImmediate (#7329)', () => {
   const runtimeCall = vi.fn()
   const runtimeSubscribe = vi.fn()
   const subscriptionSendBinary = vi.fn()
+
   let subscriptionCallbacks: {
     onResponse: (response: unknown) => void
     onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
@@ -37,6 +38,7 @@ describe('remote transport sendInputImmediate (#7329)', () => {
     runtimeSubscribe.mockImplementation(
       async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
         subscriptionCallbacks = callbacks
+
         return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
       }
     )
@@ -55,13 +57,16 @@ describe('remote transport sendInputImmediate (#7329)', () => {
 
   it('sends a query reply immediately, but debounces typed input by 8ms', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
         leafId: 'pane:1'
       })
+
       transport.attach({
         existingPtyId: 'remote:env-1@@terminal-1',
         cols: 80,
@@ -92,13 +97,16 @@ describe('remote transport sendInputImmediate (#7329)', () => {
 
   it('sends an immediate reply even with no pending typed input', async () => {
     vi.useFakeTimers()
+
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'tab-1',
         leafId: 'pane:1'
       })
+
       transport.attach({
         existingPtyId: 'remote:env-1@@terminal-1',
         cols: 80,
@@ -123,11 +131,13 @@ describe('remote transport sendInputImmediate (#7329)', () => {
     // batcher's async validationTail (not in `pending`). sendInputImmediate must
     // not send the reply ahead of it and reorder bytes on the wire.
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+
     const transport = createRemoteRuntimePtyTransport('env-1', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
       leafId: 'pane:1'
     })
+
     transport.attach({
       existingPtyId: 'remote:env-1@@terminal-1',
       cols: 80,
@@ -149,6 +159,7 @@ describe('remote transport sendInputImmediate (#7329)', () => {
     // one debounce tick, and a fixed sleep raced that chain under CI load.
     const combined = (): string =>
       (terminalSendCalls() as { params: { text: string } }[]).map((s) => s.params.text).join('')
+
     await expect.poll(combined, { timeout: 5000, interval: 5 }).toContain('\x1b[3;1Rz')
 
     // The paste bytes must come before the reply — no reordering.

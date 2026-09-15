@@ -32,18 +32,21 @@ export function installInProcessSessionSearchService(args: {
   if (!sessionSearchSqliteAvailable()) {
     return null
   }
+
   const instance = new SessionSearchInstance({
     databasePath: sessionSearchDatabasePath(args.dataRoot),
     roots: args.roots,
     resolveRoots: args.resolveRoots,
     ...(args.onError ? { onError: args.onError } : {})
   })
+
   instance.apply(args.settings)
   setSessionSearchService({
     search: (request) => instance.search(request),
     status: async () => instance.status(),
     reconcile: () => instance.reconcile()
   })
+
   return {
     dispose: () => {
       setSessionSearchService(null)

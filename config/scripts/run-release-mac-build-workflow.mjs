@@ -1,6 +1,9 @@
 const DEFAULT_API_VERSION = '2026-03-10'
+
 const DEFAULT_TIMEOUT_MINUTES = 90
+
 const DEFAULT_POLL_SECONDS = 30
+
 const RUN_DISCOVERY_TIMEOUT_SECONDS = 120
 
 export function readReleaseMacBuildWorkflowOptions(env = process.env) {
@@ -33,6 +36,7 @@ export async function runReleaseMacBuildWorkflow(options, deps = {}) {
   const sleep = deps.sleep ?? sleepMilliseconds
   const dispatchStartedAtMs = now() - 10_000
   const dispatchResult = await dispatchReleaseMacBuildWorkflow(api, options)
+
   const workflowRun =
     readWorkflowRunFromDispatchResult(dispatchResult) ??
     (await findDispatchedReleaseMacBuildRun(api, options, {
@@ -59,6 +63,7 @@ export async function runReleaseMacBuildWorkflow(options, deps = {}) {
   }
 
   console.log(`Mac release build workflow succeeded: ${completedRun.html_url}`)
+
   return completedRun
 }
 
@@ -93,7 +98,9 @@ export async function findDispatchedReleaseMacBuildRun(api, options, deps = {}) 
         options.workflow
       )}/runs?event=workflow_dispatch&per_page=20`
     )
+
     const workflowRuns = Array.isArray(response?.workflow_runs) ? response.workflow_runs : []
+
     const match = workflowRuns.find((run) => {
       const createdAtMs = Date.parse(run.created_at ?? '')
 
@@ -140,11 +147,13 @@ export async function waitForReleaseMacBuildRun(api, workflowRunId, options, dep
 
 export function createGitHubApiClient(options, deps = {}) {
   const fetchImpl = deps.fetch ?? globalThis.fetch
+
   if (typeof fetchImpl !== 'function') {
     throw new Error('A fetch implementation is required.')
   }
 
   const [owner, repo] = options.repo.split('/')
+
   if (!owner || !repo) {
     throw new Error(`GITHUB_REPOSITORY must be in owner/repo form, got "${options.repo}".`)
   }
@@ -163,6 +172,7 @@ export function createGitHubApiClient(options, deps = {}) {
         },
         method
       })
+
       const text = await response.text()
       const data = text.length > 0 ? JSON.parse(text) : null
 
@@ -202,6 +212,7 @@ function readPositiveInteger(rawValue, defaultValue) {
   }
 
   const value = Number(rawValue)
+
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`Expected a positive integer, got "${rawValue}".`)
   }

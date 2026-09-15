@@ -24,10 +24,13 @@ export function closeClientHostedBrowserPagesForWorktree(
   worktreeId: string
 ): void {
   const openPages = getRuntimeBrowserPageRegistry(runtime).listPages(worktreeId)
+
   if (openPages.length === 0) {
     return
   }
+
   const authority = getBrowserHostLeaseRegistry(runtime)
+
   for (const page of openPages) {
     void closeRuntimeBrowserClientPage(authority, {
       browserPageId: page.browserPageId,

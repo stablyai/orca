@@ -19,9 +19,11 @@ export function resolveAdvertisedPairingEndpoint(
 ): PairingEndpointResolution {
   const endpoint = new URL(boundEndpoint)
   const override = advertisedAddress?.trim()
+
   if (!override) {
     // Why: a wildcard listener is not client-reachable; default pairing must remain local-only unless explicitly advertised.
     endpoint.hostname = '127.0.0.1'
+
     return valid(formatWebSocketUrl(endpoint))
   }
 
@@ -30,13 +32,17 @@ export function resolveAdvertisedPairingEndpoint(
   }
 
   const parsed = parseHostOverride(override)
+
   if (!parsed || isWildcardHost(parsed.hostname)) {
     return invalid()
   }
+
   endpoint.hostname = bracketIpv6(parsed.hostname)
+
   if (parsed.port) {
     endpoint.port = parsed.port
   }
+
   return valid(formatWebSocketUrl(endpoint))
 }
 
@@ -47,18 +53,23 @@ export function resolveAdvertisedPairingHostname(
   advertisedAddress: string | null | undefined
 ): string | null {
   const override = advertisedAddress?.trim()
+
   if (!override) {
     return null
   }
+
   if (override.includes('://')) {
     const normalized = normalizePairingUrl(override)
+
     return normalized ? unbracketIpv6(new URL(normalized).hostname) : null
   }
+
   return parseHostOverride(override)?.hostname ?? null
 }
 
 function resolveFullUrl(value: string): PairingEndpointResolution {
   const endpoint = normalizePairingUrl(value)
+
   return endpoint ? valid(endpoint) : invalid()
 }
 
@@ -66,14 +77,18 @@ function parseHostOverride(value: string): { hostname: string; port: string } | 
   try {
     const rawIpVersion = isIP(value)
     const explicitPort = rawIpVersion === 6 ? null : getExplicitPort(value)
+
     // Why: port zero is a bind-time request, not an endpoint a remote client can dial.
     if (explicitPort === '0') {
       return null
     }
+
     if (rawIpVersion !== 6 && value.endsWith(':')) {
       return null
     }
+
     const url = new URL(rawIpVersion === 6 ? `ws://[${value}]` : `ws://${value}`)
+
     if (
       !url.hostname ||
       url.username ||
@@ -84,6 +99,7 @@ function parseHostOverride(value: string): { hostname: string; port: string } | 
     ) {
       return null
     }
+
     return { hostname: unbracketIpv6(url.hostname), port: explicitPort ?? url.port }
   } catch {
     return null
@@ -92,6 +108,7 @@ function parseHostOverride(value: string): { hostname: string; port: string } | 
 
 function getExplicitPort(value: string): string | null {
   const match = value.startsWith('[') ? value.match(/^\[[^\]]+\]:(\d+)$/) : value.match(/:(\d+)$/)
+
   return match?.[1] ?? null
 }
 
@@ -101,6 +118,7 @@ function isWildcardHost(hostname: string): boolean {
 
 function bracketIpv6(hostname: string): string {
   const normalized = unbracketIpv6(hostname)
+
   return normalized.includes(':') ? `[${normalized}]` : normalized
 }
 
@@ -110,6 +128,7 @@ function unbracketIpv6(hostname: string): string {
 
 function formatWebSocketUrl(url: URL): string {
   const formatted = url.toString()
+
   return url.pathname === '/' && !url.search && !url.hash ? formatted.replace(/\/$/, '') : formatted
 }
 
@@ -117,6 +136,7 @@ function valid(endpoint: string): PairingEndpointResolution {
   if (endpoint.length > PAIRING_ENDPOINT_MAX_CHARACTERS) {
     return invalid()
   }
+
   return { ok: true, endpoint }
 }
 

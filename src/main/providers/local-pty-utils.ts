@@ -27,6 +27,7 @@ function toUnpackedAsarPath(candidate: string): string {
 
 export function getNodePtySpawnHelperCandidates(): string[] {
   const unixTerminalPath = require.resolve('node-pty/lib/unixTerminal.js')
+
   const packageRoot =
     basename(unixTerminalPath) === 'unixTerminal.js'
       ? unixTerminalPath.replace(/[/\\]lib[/\\]unixTerminal\.js$/, '')
@@ -50,11 +51,13 @@ export function getShellValidationError(shellPath: string): string | null {
       `Set a valid SHELL environment variable or install zsh/bash.`
     )
   }
+
   try {
     accessSync(shellPath, fsConstants.X_OK)
   } catch {
     return `Shell "${shellPath}" is not executable. Check file permissions.`
   }
+
   return null
 }
 
@@ -66,14 +69,18 @@ export function resolveUnixShellPath(shellPath: string): string {
   if (!isAbsolute(shellPath)) {
     return shellPath
   }
+
   const candidates = [
     shellPath,
     ...UNIX_SHELL_FALLBACKS.filter((candidate) => candidate !== shellPath)
   ]
+
   const resolved = candidates.find((candidate) => getShellValidationError(candidate) === null)
+
   if (resolved) {
     return resolved
   }
+
   throw new Error(`No executable Unix shell found (tried: ${candidates.join(', ')})`)
 }
 
@@ -89,6 +96,7 @@ export function ensureNodePtySpawnHelperExecutable(): void {
   if (didEnsureSpawnHelperExecutable || !usesNodePtySpawnHelper(process.platform)) {
     return
   }
+
   didEnsureSpawnHelperExecutable = true
 
   try {
@@ -96,11 +104,15 @@ export function ensureNodePtySpawnHelperExecutable(): void {
       if (!existsSync(candidate)) {
         continue
       }
+
       const mode = statSync(candidate).mode
+
       if ((mode & 0o111) !== 0) {
         return
       }
+
       chmodSync(candidate, mode | 0o755)
+
       return
     }
   } catch (error) {
@@ -181,6 +193,7 @@ function spawnWindowsFallbackChain(
 ): ShellSpawnResult | null {
   const { termName = 'xterm-256color', cols, rows, env, ptySpawn } = params
   const attempts = params.windowsFallbackAttempts ?? []
+
   // Skip the first entry: it is the primary that already failed above.
   for (const attempt of attempts.slice(1)) {
     try {
@@ -192,9 +205,11 @@ function spawnWindowsFallbackChain(
         env,
         ...windowsConptyDllOptions()
       })
+
       console.warn(
         `[pty] Primary shell "${params.shellPath}" failed (${primaryError}), fell back to "${attempt.shellPath}"`
       )
+
       return {
         process: proc,
         shellPath: attempt.shellPath,
@@ -204,6 +219,7 @@ function spawnWindowsFallbackChain(
       // This fallback shell also failed -- try the next link in the chain.
     }
   }
+
   return null
 }
 
@@ -224,6 +240,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
     getShellReadyConfig,
     onBeforeFallbackSpawn
   } = params
+
   let primaryError: string | null = null
 
   if (process.platform !== 'win32') {
@@ -233,6 +250,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
   if (!primaryError) {
     try {
       const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, env)
+
       return {
         process: ptySpawn(wrapped.file, wrapped.args, {
           name: termName,
@@ -252,6 +270,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
 
   if (process.platform === 'win32') {
     const fallback = spawnWindowsFallbackChain(params, primaryError ?? 'unknown error')
+
     if (fallback) {
       return fallback
     }
@@ -266,24 +285,30 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
     // child — including a nested zsh that would then load Orca's wrapper. Tracked
     // per attempt, not once: the second fallback must not inherit the first's.
     let staleLaunchEnvKeys: readonly string[] = params.launchEnvKeys ?? []
+
     for (const fallback of fallbackShells) {
       if (getShellValidationError(fallback)) {
         continue
       }
+
       try {
         const fallbackReady = getShellReadyConfig?.(fallback)
         env.SHELL = fallback
         onBeforeFallbackSpawn?.(env, fallback)
+
         for (const key of staleLaunchEnvKeys) {
           delete env[key]
         }
+
         Object.assign(env, fallbackReady?.env ?? {})
         staleLaunchEnvKeys = Object.keys(fallbackReady?.env ?? {})
+
         const wrapped = wrapShellSpawnForMacosTccAttribution(
           fallback,
           fallbackReady?.args ?? ['-l'],
           env
         )
+
         const proc = ptySpawn(wrapped.file, wrapped.args, {
           name: termName,
           cols,
@@ -291,9 +316,11 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
           cwd,
           env
         })
+
         console.warn(
           `[pty] Primary shell "${shellPath}" failed (${primaryError ?? 'unknown error'}), fell back to "${fallback}"`
         )
+
         return {
           process: proc,
           shellPath: fallback,

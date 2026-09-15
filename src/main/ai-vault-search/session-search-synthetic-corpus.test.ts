@@ -25,8 +25,10 @@ it.each([0, 200, 2000])(
       turnsPerSession: 1,
       toolResultWords
     })
+
     const store = new SessionSearchStore(join(corpus.root, 'index.sqlite'))
     const unregister = registerSessionSearchIndexConsumer(store)
+
     try {
       await parseTranscript(corpus.files[0]!)
       expect(corpus.messageCount).toBe(toolResultWords === 0 ? 3 : 4)

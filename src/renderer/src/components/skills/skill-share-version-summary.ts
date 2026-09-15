@@ -19,6 +19,7 @@ export function summarizeSkillShareVersion(version: SkillCloudVersion | undefine
       ? version.manifest.skills.flatMap((skill) => skill.files)
       : version.manifest.files
     : []
+
   return {
     scriptCount: files.filter((file) => file.path.startsWith('scripts/')).length,
     executableCount: files.filter((file) => file.executable).length,

@@ -22,6 +22,7 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
     setShowLinearWorkspacePicker,
     taskUiReady
   } = model
+
   return (
     provider === 'linear' &&
     linearConnected && (
@@ -34,6 +35,7 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
               if (!taskUiReady) {
                 return
               }
+
               setShowLinearWorkspacePicker(true)
             }}
           >
@@ -47,6 +49,7 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
             if (!taskUiReady) {
               return
             }
+
             setShowLinearTeamPicker(true)
           }}
         >
@@ -59,6 +62,7 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
             if (!taskUiReady) {
               return
             }
+
             setShowLinearFilterPicker(true)
           }}
         >
@@ -71,6 +75,7 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
             if (!taskUiReady) {
               return
             }
+
             setShowLinearViewPicker(true)
           }}
         >
@@ -83,6 +88,7 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
             if (!taskUiReady) {
               return
             }
+
             setShowLinearGroupPicker(true)
           }}
         >
@@ -95,6 +101,7 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
             if (!taskUiReady) {
               return
             }
+
             setShowLinearOrderPicker(true)
           }}
         >
@@ -107,6 +114,7 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
             if (!taskUiReady) {
               return
             }
+
             setShowLinearDisplayPicker(true)
           }}
         >

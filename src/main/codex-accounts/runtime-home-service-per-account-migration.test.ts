@@ -8,11 +8,14 @@ import type * as NodeOs from 'node:os'
 import { readHookTrustEntries } from '../codex/config-toml-trust'
 
 const testState = { userData: '', home: '' }
+
 const previousEnv: Record<string, string | undefined> = {}
 
 vi.mock('electron', () => ({ app: { getPath: () => testState.userData } }))
+
 vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
+
   return { ...actual, homedir: () => testState.home }
 })
 
@@ -20,6 +23,7 @@ beforeEach(() => {
   vi.resetModules()
   testState.userData = mkdtempSync(join(tmpdir(), 'orca-codex-e-migration-'))
   testState.home = mkdtempSync(join(tmpdir(), 'orca-codex-e-home-'))
+
   for (const key of [
     'ORCA_USER_DATA_PATH',
     'ORCA_DISABLE_CODEX_TRUST_RPC',
@@ -29,6 +33,7 @@ beforeEach(() => {
     previousEnv[key] = process.env[key]
     delete process.env[key]
   }
+
   process.env.ORCA_USER_DATA_PATH = testState.userData
   process.env.ORCA_DISABLE_CODEX_TRUST_RPC = '1'
   mkdirSync(systemHome(), { recursive: true })
@@ -38,6 +43,7 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(testState.userData, { recursive: true, force: true })
   rmSync(testState.home, { recursive: true, force: true })
+
   for (const [key, value] of Object.entries(previousEnv)) {
     if (value === undefined) {
       delete process.env[key]
@@ -53,12 +59,14 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     const accountOneMigrated = createAuth('one@example.com', 'acct-1', 'one-migrated', 2_000)
     const accountTwoAuth = createAuth('two@example.com', 'acct-2', 'two-current', 3_000)
     const accountOne = createManagedAccount('account-1', 'acct-1', accountOneStale)
+
     const accountTwo = createManagedAccount(
       'account-2',
       'acct-2',
       accountTwoAuth,
       'two@example.com'
     )
+
     const sharedSession = join(sharedHome(), 'sessions', '2026', '07', 'rollout.jsonl')
     mkdirSync(join(systemHome(), 'skills', 'fixture-skill'), { recursive: true })
     mkdirSync(join(systemHome(), 'hooks'), { recursive: true })
@@ -202,12 +210,14 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
       'acct-1',
       createAuth('one@example.com', 'acct-1', 'one', 1_000)
     )
+
     const accountTwo = createManagedAccount(
       'account-2',
       'acct-2',
       createAuth('two@example.com', 'acct-2', 'two', 2_000),
       'two@example.com'
     )
+
     const systemRollout = join('2026', '07', '20', 'rollout-2026-07-20T10-00-00-aaaa.jsonl')
     const siblingRollout = join('2026', '07', '21', 'rollout-2026-07-21T10-00-00-bbbb.jsonl')
     writeRollout(systemHome(), systemRollout, '{"session":"real-home"}\n')
@@ -262,6 +272,7 @@ function createStore(accounts: CodexManagedAccount[], activeId: string | null) {
     activeCodexManagedAccountId: activeId,
     activeCodexManagedAccountIdsByRuntime: { host: activeId, wsl: {} }
   } as GlobalSettings
+
   return {
     settings,
     store: {
@@ -281,6 +292,7 @@ function createManagedAccount(
   mkdirSync(home, { recursive: true })
   writeFileSync(join(home, '.orca-managed-home'), `${id}\n`, 'utf-8')
   writeFileSync(join(home, 'auth.json'), auth, 'utf-8')
+
   return managedAccountRecord(id, providerId, home, email)
 }
 
@@ -332,6 +344,7 @@ function sharedAuthPath(): string {
 
 function createAuth(email: string, accountId: string, token: string, expiresAt: number): string {
   const header = Buffer.from('{}').toString('base64url')
+
   const payload = Buffer.from(
     JSON.stringify({
       email,
@@ -342,6 +355,7 @@ function createAuth(email: string, accountId: string, token: string, expiresAt: 
       }
     })
   ).toString('base64url')
+
   return `${JSON.stringify({
     tokens: {
       id_token: `${header}.${payload}.`,

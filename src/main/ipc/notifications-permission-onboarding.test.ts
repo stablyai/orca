@@ -40,9 +40,11 @@ describe('notifications:probeDelivery', () => {
     const call = handleMock.mock.calls.find(
       (c: unknown[]) => c[0] === 'notifications:probeDelivery'
     )
+
     if (!call) {
       throw new Error('notifications:probeDelivery handler not registered')
     }
+
     return call[1] as (event: unknown, args?: { force?: boolean }) => unknown
   }
 
@@ -50,9 +52,11 @@ describe('notifications:probeDelivery', () => {
     // Why: findLast — a test may run several probes, and only the newest
     // probe's listeners can settle the pending promise.
     const call = notificationOnceMock.mock.calls.findLast((c: unknown[]) => c[0] === eventName)
+
     if (!call) {
       throw new Error(`Probe notification ${eventName} once handler not registered`)
     }
+
     return call[1] as (...args: unknown[]) => void
   }
 
@@ -62,6 +66,7 @@ describe('notifications:probeDelivery', () => {
     updateUI: ReturnType<typeof vi.fn>
   } {
     const state = { ...ui }
+
     return {
       getSettings: () => ({
         notifications: {
@@ -234,9 +239,11 @@ describe('triggerStartupNotificationRegistration', () => {
 
   function getStartupNotificationEventHandler(eventName: string): (...args: unknown[]) => void {
     const call = notificationOnMock.mock.calls.find((c: unknown[]) => c[0] === eventName)
+
     if (!call) {
       throw new Error(`Startup notification ${eventName} handler not registered`)
     }
+
     return call[1] as (...args: unknown[]) => void
   }
 
@@ -286,6 +293,7 @@ describe('triggerStartupNotificationRegistration', () => {
 
   it('does nothing on non-darwin platforms', async () => {
     Object.defineProperty(process, 'platform', { value: 'linux', configurable: true })
+
     const store = {
       getUI: () => ({ notificationPermissionRequested: undefined }),
       updateUI: vi.fn()
@@ -316,6 +324,7 @@ describe('triggerStartupNotificationRegistration', () => {
 
   it('cleans up startup notification registration when native delivery fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
     try {
       const store = {
         getUI: () => ({ notificationPermissionRequested: undefined }),

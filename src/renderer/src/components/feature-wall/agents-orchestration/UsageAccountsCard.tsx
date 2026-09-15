@@ -19,6 +19,7 @@ type ConnectAction = 'idle' | 'adding'
 
 function ConnectionPill(props: { connected: boolean; label: string }): JSX.Element {
   const { connected, label } = props
+
   return (
     <span
       className={cn(
@@ -49,6 +50,7 @@ function ProviderRow(props: {
   onSignIn: () => void
 }): JSX.Element {
   const { icon, name, description, connected, connectionLabel, isAdding, onSignIn } = props
+
   return (
     <div className="rounded-lg border border-border bg-muted/20">
       <div className="flex items-center gap-3 px-3 py-2">
@@ -112,6 +114,7 @@ export function UsageAccountsCard(props: {
     void (async () => {
       try {
         const next = await window.api.claudeAccounts.list()
+
         if (!stale) {
           setClaudeAccounts(next)
         }
@@ -119,9 +122,11 @@ export function UsageAccountsCard(props: {
         // Leave the account state unknown.
       }
     })()
+
     void (async () => {
       try {
         const next = await window.api.codexAccounts.list()
+
         if (!stale) {
           setCodexAccounts(next)
         }
@@ -129,6 +134,7 @@ export function UsageAccountsCard(props: {
         // Leave the account state unknown.
       }
     })()
+
     return () => {
       stale = true
     }
@@ -138,6 +144,7 @@ export function UsageAccountsCard(props: {
     managedAccountCount: claudeAccounts?.accounts.length,
     provider: rateLimits.claude
   })
+
   const codexConnection = getFeatureWallUsageProviderConnection({
     managedAccountCount: codexAccounts?.accounts.length,
     provider: rateLimits.codex
@@ -147,15 +154,21 @@ export function UsageAccountsCard(props: {
     if (claudeAction !== 'idle') {
       return
     }
+
     setClaudeAction('adding')
+
     try {
       const next = await window.api.claudeAccounts.add()
+
       if (mountedRef.current) {
         setClaudeAccounts(next)
       }
+
       await fetchSettings()
+
       if (mountedRef.current) {
         await onAccountStateChange?.()
+
         if (mountedRef.current) {
           toast.success(
             translate(
@@ -188,15 +201,21 @@ export function UsageAccountsCard(props: {
     if (codexAction !== 'idle') {
       return
     }
+
     setCodexAction('adding')
+
     try {
       const next = await window.api.codexAccounts.add()
+
       if (mountedRef.current) {
         setCodexAccounts(next)
       }
+
       await fetchSettings()
+
       if (mountedRef.current) {
         await onAccountStateChange?.()
+
         if (mountedRef.current) {
           toast.success(
             translate(

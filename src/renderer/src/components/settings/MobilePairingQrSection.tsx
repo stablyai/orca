@@ -43,6 +43,7 @@ export function MobilePairingQrSection({
       window.clearTimeout(codeCopiedResetTimerRef.current)
       codeCopiedResetTimerRef.current = null
     }
+
     onClearCodeCopiedTimer()
   }, [onClearCodeCopiedTimer])
 
@@ -50,6 +51,7 @@ export function MobilePairingQrSection({
     (node: HTMLButtonElement | null) => {
       pairingCodeButtonMountedRef.current = node !== null
       pairingCodeButtonRef.current = node
+
       if (node === null) {
         clearCodeCopiedResetTimer()
       }
@@ -60,6 +62,7 @@ export function MobilePairingQrSection({
   useEffect(() => {
     const becameReady = !hadPairingUrlRef.current && pairingUrl != null
     hadPairingUrlRef.current = pairingUrl != null
+
     if (becameReady && document.activeElement === document.body) {
       pairingCodeButtonRef.current?.focus()
     }
@@ -69,11 +72,14 @@ export function MobilePairingQrSection({
     if (!pairingUrl) {
       return
     }
+
     try {
       await window.api.ui.writeClipboardText(pairingUrl)
+
       if (!pairingCodeButtonMountedRef.current) {
         return
       }
+
       clearCodeCopiedResetTimer()
       onCodeCopiedChange(true)
       codeCopiedResetTimerRef.current = window.setTimeout(() => {

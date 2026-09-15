@@ -38,9 +38,11 @@ function view(fields: GitHubProjectField[]): GitHubProjectView {
 
 function row(values: GitHubProjectFieldValue[]): GitHubProjectRow {
   const fieldValuesByFieldId: Record<string, GitHubProjectFieldValue> = {}
+
   for (const value of values) {
     fieldValuesByFieldId[value.fieldId] = value
   }
+
   return {
     id: 'PVTI_1',
     itemType: 'ISSUE',
@@ -104,12 +106,14 @@ describe('resolveRoadmapDateSource', () => {
 
   it('derives placement fields from row values when no configured field has them', () => {
     const bare = view([{ kind: 'field', id: 'f_t', name: 'Title', dataType: 'TITLE' }])
+
     const rows = [
       row([
         { kind: 'date', fieldId: 'f_start', date: '2026-03-02', fieldName: 'Start date' },
         { kind: 'date', fieldId: 'f_end', date: '2026-03-04', fieldName: 'Target date' }
       ])
     ]
+
     expect(resolveRoadmapDateSource(bare, rows)).toEqual({
       kind: 'date-range',
       startField: { kind: 'field', id: 'f_start', name: 'Start date', dataType: 'DATE' },
@@ -162,6 +166,7 @@ describe('getRoadmapSpan', () => {
       ]),
       source
     )
+
     expect(span).toEqual({ startMs: utc('2026-03-02'), endMs: utc('2026-03-05'), point: false })
   })
 
@@ -170,6 +175,7 @@ describe('getRoadmapSpan', () => {
       row([{ kind: 'date', fieldId: 'f_end', date: '2026-03-04' }]),
       source
     )
+
     expect(span).toEqual({ startMs: utc('2026-03-04'), endMs: utc('2026-03-05'), point: true })
   })
 
@@ -181,6 +187,7 @@ describe('getRoadmapSpan', () => {
       ]),
       source
     )
+
     expect(span).toEqual({ startMs: utc('2026-03-01'), endMs: utc('2026-03-11'), point: false })
   })
 
@@ -202,6 +209,7 @@ describe('getRoadmapSpan', () => {
       ]),
       { kind: 'iteration', field: iterationField('f_it', 'Sprint') }
     )
+
     expect(span).toEqual({
       startMs: utc('2026-03-02'),
       endMs: utc('2026-03-02') + 14 * ROADMAP_DAY_MS,
@@ -264,6 +272,7 @@ describe('buildRoadmapTicks', () => {
       'quarter',
       utc('2026-05-15')
     )
+
     expect(quarters[0]?.startMs).toBe(utc('2026-01-01'))
     const years = buildRoadmapTicks([span('2026-05-02', '2026-05-10')], 'year', utc('2026-05-15'))
     expect(years[0]?.startMs).toBe(utc('2025-01-01'))

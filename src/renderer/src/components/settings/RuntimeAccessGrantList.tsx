@@ -78,6 +78,7 @@ export function RuntimeAccessGrantList({
           {grants.map((grant) => {
             const isCurrent = currentGrantId === grant.deviceId
             const isRevoking = revokingGrantId === grant.deviceId
+
             return (
               <div
                 key={grant.deviceId}

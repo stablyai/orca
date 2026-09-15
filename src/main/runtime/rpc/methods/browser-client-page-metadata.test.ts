@@ -85,6 +85,7 @@ describe('browser.clientHost.pageMetadata RPC', () => {
 async function createHarness() {
   const cleanups = new Map<string, () => void>()
   const notifySessionTabs = vi.fn()
+
   const runtime = {
     getRuntimeId: () => 'runtime-a',
     getStartedAt: () => 1,
@@ -94,19 +95,24 @@ async function createHarness() {
     registerSubscriptionCleanup: (id: string, cleanup: () => void) => cleanups.set(id, cleanup),
     notifyMobileSessionTabsChanged: notifySessionTabs
   } as unknown as OrcaRuntimeService
+
   const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CLIENT_HOST_METHODS })
   const replies: string[] = []
+
   const attached = dispatcher.dispatchStreaming(attachRequest(), (reply) => replies.push(reply), {
     connectionId: 'connection-a',
     clientKind: 'runtime',
     pairedDeviceId: 'device-a',
     clientCapabilities: CLIENT_CAPABILITIES
   })
+
   await vi.waitFor(() => expect(replies).toHaveLength(1))
   const placement = getBrowserHostLeaseRegistry(runtime).placeClientPage('page-a', 'host-a')
+
   if (placement.kind !== 'client') {
     throw new Error('expected client placement')
   }
+
   getRuntimeBrowserPageRegistry(runtime).publishClientPage({
     browserPageId: 'page-a',
     workspaceId: 'worktree-a',
@@ -156,6 +162,7 @@ async function dispatchMetadata(
       ...overrides
     }
   )
+
   return JSON.parse(replies[0]!)
 }
 

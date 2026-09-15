@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 const shim = vi.hoisted(() => ({ ensureLinuxTerminalOrcaCliShimDir: vi.fn() }))
+
 vi.mock('../cli/linux-terminal-orca-cli-shim', () => shim)
 
 import { structuredWorkerChildIdentityEnv } from './structured-worker-child-identity-env'
@@ -15,11 +16,15 @@ import {
 } from './structured-worker-identity'
 
 const SESSION_ID = 'f7a1c0de-1111-4222-8333-444455556666'
+
 const USER_DATA = '/data/orca'
+
 const RESOURCES = '/app/Resources'
+
 const SHIM_DIR = join(USER_DATA, 'linux-orca-cli-shim')
 
 const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')!
+
 const resourcesDescriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath')
 
 function pinPlatform(platform: NodeJS.Platform): void {
@@ -37,6 +42,7 @@ function registerWorker(): string {
     worktreeId: 'wt_1',
     hostScope: { kind: 'local', hostId: 'local' }
   })
+
   return handle
 }
 
@@ -49,6 +55,7 @@ beforeEach(() => {
 afterEach(() => {
   structuredWorkerIdentities.clear()
   Object.defineProperty(process, 'platform', platformDescriptor)
+
   if (resourcesDescriptor) {
     Object.defineProperty(process, 'resourcesPath', resourcesDescriptor)
   } else {

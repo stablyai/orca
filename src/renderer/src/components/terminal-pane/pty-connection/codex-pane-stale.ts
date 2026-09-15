@@ -5,6 +5,7 @@ let codexRestartNoticePresenceSource: Record<
   string,
   { previousAccountLabel: string; nextAccountLabel: string }
 > | null = null
+
 let codexRestartNoticePresence = false
 
 export function hasCodexRestartNotices(
@@ -14,6 +15,7 @@ export function hasCodexRestartNotices(
     codexRestartNoticePresenceSource = noticesByPtyId
     codexRestartNoticePresence = Object.keys(noticesByPtyId).length > 0
   }
+
   return codexRestartNoticePresence
 }
 
@@ -24,9 +26,11 @@ export function isCodexPaneStale(args: {
 }): boolean {
   const state = useAppStore.getState()
   const { codexRestartNoticeByPtyId } = state
+
   if (!hasCodexRestartNotices(codexRestartNoticeByPtyId)) {
     return false
   }
+
   // Why: a bound pane's own record is the last word — its ptyId is exactly the
   // shell its keystrokes reach. `tab.ptyId` holds one sibling's id, not this
   // pane's, so in a split tab consulting it would kill this pane's keyboard over
@@ -40,6 +44,7 @@ export function isCodexPaneStale(args: {
   // recovery — a coarser signal than a bound pane's own record, but the tab's id
   // is the only evidence available of which shell this pane is about to own.
   const tab = (state.tabsByWorktree[args.worktreeId] ?? []).find((entry) => entry.id === args.tabId)
+
   if (tab?.ptyId && blocksCodexPaneInput(codexRestartNoticeByPtyId[tab.ptyId])) {
     return true
   }

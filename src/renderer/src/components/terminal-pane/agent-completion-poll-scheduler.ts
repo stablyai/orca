@@ -21,6 +21,7 @@ export function createAgentCompletionPollScheduler(args: {
     if (state.pollTimer === null) {
       return
     }
+
     clearTimeout(state.pollTimer)
     state.pollTimer = null
     state.pollTimerTier = null
@@ -28,9 +29,11 @@ export function createAgentCompletionPollScheduler(args: {
 
   function shouldRunCadenceInspection(): boolean {
     const ptyId = options.getPtyId()
+
     if (ptyId && options.isRemotePtyId?.(ptyId) === true) {
       return false
     }
+
     return (
       state.hasAgentRunEvidence ||
       state.lastForegroundAgent !== null ||
@@ -44,18 +47,23 @@ export function createAgentCompletionPollScheduler(args: {
 
   function currentPollTier(): PollCadenceTier {
     const ptyId = options.getPtyId()
+
     if (ptyId && options.isRemotePtyId?.(ptyId) === true) {
       return 'hidden'
     }
+
     if (options.shouldPollProcessCadence?.() === false) {
       return 'hidden'
     }
+
     if (state.lastForegroundAgent) {
       return 'active'
     }
+
     if (state.hasAgentRunEvidence) {
       return 'idle'
     }
+
     if (
       options.isProcessInspectionCostly?.() === true &&
       (state.lastPaneActivityAt === null ||
@@ -63,6 +71,7 @@ export function createAgentCompletionPollScheduler(args: {
     ) {
       return 'no-evidence'
     }
+
     return 'idle'
   }
 
@@ -70,7 +79,9 @@ export function createAgentCompletionPollScheduler(args: {
     if (state.disposed || !state.pollTrackingStarted || !options.isLive() || pendingTitle.get()) {
       return
     }
+
     const tier = currentPollTier()
+
     if (state.pollTimer !== null) {
       if (
         state.pollTimerTier !== null &&
@@ -81,27 +92,34 @@ export function createAgentCompletionPollScheduler(args: {
         return
       }
     }
+
     if (!shouldRunCadenceInspection() || !options.getPtyId()) {
       return
     }
+
     const base = POLL_TIER_INTERVAL_MS[tier]
+
     const backoff =
       state.consecutiveInspectionErrors > 0
         ? Math.min(Math.max(10_000, base), base * 2 ** state.consecutiveInspectionErrors)
         : base
+
     const now = Date.now()
+
     // Only genuinely idle panes share a deadline: a pane with a foreground agent, or one still
     // inside the post-activity hot window, keeps its exact interval and its own phase.
     const isIdlePane =
       state.lastForegroundAgent === null &&
       (state.lastPaneActivityAt === null ||
         now - state.lastPaneActivityAt >= NO_EVIDENCE_ACTIVITY_HOT_WINDOW_MS)
+
     const interval = nextCadenceInspectionDelayMs({
       baseMs: backoff,
       hasConsecutiveErrors: state.consecutiveInspectionErrors > 0,
       alignToSharedGrid: isIdlePane,
       now
     })
+
     state.pollTimerTier = tier
     state.pollTimer = setTimeout(() => {
       state.pollTimer = null

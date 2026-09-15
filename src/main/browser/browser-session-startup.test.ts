@@ -52,6 +52,7 @@ describe('initializeBrowserSessionsForApp', () => {
   it('replays pending cookie imports before initializing browser sessions', async () => {
     const { applyPendingCookieImportMock, initializeBrowserSessionsFromPersistedStateMock } =
       installRegistryMock()
+
     const { initializeBrowserSessionsForApp } = await import('./browser-session-startup')
 
     initializeBrowserSessionsForApp()
@@ -71,6 +72,7 @@ describe('initializeBrowserSessionsForApp', () => {
       applyPendingCookieImportMock,
       initializeBrowserSessionsFromPersistedStateMock
     } = installRegistryMock()
+
     const { initializeBrowserSessionsForApp } = await import('./browser-session-startup')
 
     initializeBrowserSessionsForApp({
@@ -108,6 +110,7 @@ describe('initializeBrowserSessionsForApp', () => {
       configureRouteSessionsForOrcaProfileMock,
       collectOrphanedBrowserRoutePartitionStorageMock
     } = installRegistryMock()
+
     const { initializeBrowserSessionsForApp } = await import('./browser-session-startup')
 
     initializeBrowserSessionsForApp({
@@ -134,6 +137,7 @@ describe('initializeBrowserSessionsForApp', () => {
   it('initializes browser sessions once per app process', async () => {
     const { applyPendingCookieImportMock, initializeBrowserSessionsFromPersistedStateMock } =
       installRegistryMock()
+
     const { initializeBrowserSessionsForApp } = await import('./browser-session-startup')
 
     initializeBrowserSessionsForApp()
@@ -146,6 +150,7 @@ describe('initializeBrowserSessionsForApp', () => {
   it('retries if initialization fails before completion', async () => {
     const { applyPendingCookieImportMock, initializeBrowserSessionsFromPersistedStateMock } =
       installRegistryMock()
+
     initializeBrowserSessionsFromPersistedStateMock.mockImplementationOnce(() => {
       throw new Error('session init failed')
     })

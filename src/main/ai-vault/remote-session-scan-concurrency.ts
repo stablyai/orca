@@ -13,6 +13,7 @@ export function limitRemoteScanFilesystemConcurrency(
   maxInFlight: number = REMOTE_SCAN_FILESYSTEM_CONCURRENCY
 ): RemoteSessionFilesystemProvider {
   const gate = createConcurrencyGate(maxInFlight)
+
   return {
     readDir: (dirPath) => gate(() => provider.readDir(dirPath)),
     readFile: (filePath) => gate(() => provider.readFile(filePath)),
@@ -22,17 +23,22 @@ export function limitRemoteScanFilesystemConcurrency(
           readTranscriptBytes: async function* (path: string, signal?: AbortSignal) {
             let enter!: () => void
             let release!: () => void
+
             const entered = new Promise<void>((resolve) => {
               enter = resolve
             })
+
             const released = new Promise<void>((resolve) => {
               release = resolve
             })
+
             const held = gate(async () => {
               enter()
               await released
             })
+
             await entered
+
             try {
               yield* provider.readTranscriptBytes!(path, signal)
             } finally {
@@ -58,10 +64,12 @@ function createConcurrencyGate(maxInFlight: number): <T>(run: () => Promise<T>) 
       // never race a fresh one into an over-limit slot.
       await new Promise<void>((resolve) => waiting.push(resolve))
     }
+
     try {
       return await run()
     } finally {
       const next = waiting.shift()
+
       if (next) {
         next()
       } else {

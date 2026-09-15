@@ -24,12 +24,16 @@ async function appendUniqueThemeFiles(
   candidateFiles: ThemeFileCandidate[]
 ): Promise<boolean> {
   let capped = false
+
   for (const file of candidateFiles) {
     const dedupeKey = await themeFileDedupeKey(file.path)
+
     if (seenFilePaths.has(dedupeKey)) {
       continue
     }
+
     seenFilePaths.add(dedupeKey)
+
     if (targetFiles.length < MAX_THEME_FILES) {
       targetFiles.push(file)
     } else {
@@ -37,12 +41,14 @@ async function appendUniqueThemeFiles(
       break
     }
   }
+
   return capped
 }
 
 async function isDirectoryPath(directoryPath: string): Promise<boolean> {
   try {
     const info = await stat(directoryPath)
+
     return info.isDirectory()
   } catch {
     return false
@@ -56,6 +62,7 @@ async function directoryHasThemeFileCandidate(
   if (!(await isDirectoryPath(directoryPath))) {
     return false
   }
+
   const selection = await filesFromDirectory(
     directoryPath,
     warpThemeSourceLabelForDirectory(directoryPath),
@@ -63,6 +70,7 @@ async function directoryHasThemeFileCandidate(
     1,
     false
   )
+
   return !selection.canceled && selection.files.length > 0
 }
 
@@ -75,26 +83,34 @@ export async function filesFromAutoDirectories(
   const skippedFiles: WarpThemeImportSkippedFile[] = []
   let autoDiscoveryExpired = false
   let globalThemeFileLimitHit = false
+
   for (const directoryPath of directories) {
     if (budget?.isExpired()) {
       autoDiscoveryExpired = true
       break
     }
+
     const remainingThemeFileSlots = MAX_THEME_FILES - mergedFiles.length
+
     if (remainingThemeFileSlots <= 0) {
       globalThemeFileLimitHit =
         (await directoryHasThemeFileCandidate(directoryPath, budget)) || globalThemeFileLimitHit
+
       if (budget?.isExpired()) {
         autoDiscoveryExpired = true
       }
+
       if (globalThemeFileLimitHit || autoDiscoveryExpired) {
         break
       }
+
       continue
     }
+
     if (!(await isDirectoryPath(directoryPath))) {
       continue
     }
+
     const selection = await filesFromDirectory(
       directoryPath,
       warpThemeSourceLabelForDirectory(directoryPath),
@@ -102,15 +118,18 @@ export async function filesFromAutoDirectories(
       MAX_THEME_FILES,
       false
     )
+
     if (selection.canceled) {
       continue
     }
+
     globalThemeFileLimitHit =
       (await appendUniqueThemeFiles(mergedFiles, seenFilePaths, selection.files)) ||
       selection.themeFileLimitHit ||
       globalThemeFileLimitHit
     skippedFiles.push(...selection.skippedFiles)
   }
+
   if (autoDiscoveryExpired) {
     skippedFiles.push({
       label: 'Warp themes',

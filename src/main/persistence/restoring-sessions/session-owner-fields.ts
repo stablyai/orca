@@ -28,6 +28,7 @@ export function createMinimalPersistedTerminalTab(args: {
 }): TerminalTab {
   const ordinal = args.existingTabCount + 1
   const defaultTitle = `Terminal ${ordinal}`
+
   return {
     id: args.tabId,
     ptyId: args.ptyId,
@@ -55,16 +56,20 @@ export function deleteOwnerKeyedSessionFields(
   options: { advanceTerminalTopologyRevision?: boolean } = {}
 ): void {
   const removedTerminalTabs = next.tabsByWorktree?.[ownerKey] ?? []
+
   if (next.tabsByWorktree) {
     delete next.tabsByWorktree[ownerKey]
   }
+
   for (const tab of removedTerminalTabs) {
     removedTabIds.add(tab.id)
     delete next.terminalLayoutsByTabId[tab.id]
+
     if (next.activeTabId === tab.id) {
       next.activeTabId = null
     }
   }
+
   if (options.advanceTerminalTopologyRevision) {
     const repoId = getRepoIdFromWorktreeId(ownerKey)
     const previousTopologyRevision = next.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
@@ -73,35 +78,44 @@ export function deleteOwnerKeyedSessionFields(
       [repoId]: previousTopologyRevision + 1
     }
   }
+
   const browserWorkspaces = next.browserTabsByWorktree?.[ownerKey] ?? []
+
   if (next.browserTabsByWorktree) {
     delete next.browserTabsByWorktree[ownerKey]
   }
+
   if (next.browserPagesByWorkspace) {
     for (const workspace of browserWorkspaces) {
       delete next.browserPagesByWorkspace[workspace.id]
     }
   }
+
   // Driven by the same census the repo-removal path uses, so a field added to the session type
   // cannot be dropped there and forgotten here -- which is how the client-hosted rows were missed.
   for (const field of OWNER_KEYED_SESSION_FIELDS_DELETED_WITH_THEIR_OWNER) {
     const record = next[field] as Record<string, unknown> | undefined
+
     if (record) {
       delete record[ownerKey]
     }
   }
+
   // Scanned, not indexed: this map also holds `${executionHostId}|${worktreeId}` keys.
   if (next.lastVisitedAtByWorktreeId) {
     for (const key of Object.keys(next.lastVisitedAtByWorktreeId)) {
       const rawId = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key
+
       if (key === ownerKey || rawId === ownerKey) {
         delete next.lastVisitedAtByWorktreeId[key]
       }
     }
   }
+
   if (next.activeWorkspaceKey === ownerKey) {
     next.activeWorkspaceKey = null
   }
+
   if (next.activeWorktreeId === ownerKey) {
     next.activeWorktreeId = null
   }

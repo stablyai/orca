@@ -41,6 +41,7 @@ export async function restartDaemon(): Promise<RestartDaemonResult> {
 async function runRestartDaemon(): Promise<RestartDaemonResult> {
   const currentSpawner = getDaemonSpawner()
   const currentAdapter = getDaemonProvider()
+
   if (!currentSpawner || !currentAdapter) {
     throw new Error('restartDaemon called before initDaemonPtyProvider')
   }
@@ -57,14 +58,18 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     currentAdapter instanceof DegradedDaemonPtyProvider
       ? await currentAdapter.shutdownFallbackSessions()
       : 0
+
   const currentDaemonSessionIds =
     currentAdapter instanceof DegradedDaemonPtyProvider
       ? currentAdapter.getCurrentDaemonSessionIds()
       : []
+
   const killedCount =
     new Set([...currentOnly.getActiveSessionIds(), ...currentDaemonSessionIds]).size +
     fallbackKilledCount
+
   currentOnly.fanoutSyntheticExits(-1)
+
   if (currentAdapter instanceof DegradedDaemonPtyProvider) {
     currentAdapter.fanoutCurrentDaemonSyntheticExits(-1)
   }
@@ -74,6 +79,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
 
   // Step 3: kill the current-protocol daemon process; legacy adapters untouched.
   let info: Awaited<ReturnType<DaemonSpawner['ensureRunning']>>
+
   try {
     await cleanupDaemonForProtocol(runtimeDir, PROTOCOL_VERSION)
 
@@ -102,6 +108,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
       // failed_health_check from the launcher — the app cannot tell wedged from dead at this point.
       if (reason === 'daemon_died') {
         console.warn('[daemon] Daemon process died — respawning')
+
         // Why: a manual restart tears the daemon down under a still-live adapter, so a pane
         // respawning on its synthetic exit would bill a user action to the crash bucket.
         if (!isDaemonRestartInFlight()) {
@@ -111,12 +118,16 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
         // Must reach the launcher below without an await in between; see the consume site.
         attributeNextDaemonReplacement(reason)
       }
+
       currentSpawner.resetHandle()
       await currentSpawner.ensureRunning()
+
       return takeDaemonAdoptionLeaseRelease(currentSpawner.getHandle())
     }
   })
+
   let newProvider: DaemonProvider = newCurrent
+
   try {
     // Temporary launcher lease overlaps this permanent pair so a manual restart can't strand a newly spawned daemon during adoption.
     await newCurrent.establishLifecycleLease()
@@ -127,24 +138,30 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
       legacyAdapters.length > 0
         ? new DaemonPtyRouter({ current: newCurrent, legacy: legacyAdapters })
         : newCurrent
+
     if (newProvider instanceof DaemonPtyRouter) {
       await newProvider.discoverLegacySessions()
     }
   } catch (error) {
     let cleanupError: unknown
+
     try {
       if (newProvider instanceof DaemonPtyRouter) {
         newProvider.disposeRouterOnly()
       }
+
       await cleanupFailedDaemonAdoption(currentSpawner, newCurrent)
     } catch (caught) {
       cleanupError = caught
     }
+
     // Previous provider stays module-authoritative until the swap; restore its renderer bindings when adoption fails.
     rebindLocalProviderListeners()
+
     if (cleanupError) {
       throw new AggregateError([error, cleanupError], 'Daemon restart and cleanup both failed')
     }
+
     throw error
   }
 

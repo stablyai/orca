@@ -33,6 +33,7 @@ export class StructuredAgentSessionLeaseRenewer {
     if (this.timer) {
       return
     }
+
     this.timer = setInterval(() => void this.renewNow(), this.input.intervalMs ?? RENEW_INTERVAL_MS)
     this.timer.unref?.()
   }
@@ -48,7 +49,9 @@ export class StructuredAgentSessionLeaseRenewer {
     if (this.running) {
       return
     }
+
     this.running = true
+
     try {
       const records = this.input.store.listRecords().filter(
         (record) =>
@@ -63,19 +66,25 @@ export class StructuredAgentSessionLeaseRenewer {
               record.lease.handoffStage === 'manual-recovery')
           )
       )
+
       const probes = await this.probe(records)
+
       const renewals: {
         sessionId: string
         fence: number
         childProbe: AgentSessionOwnerProbe
         now: number
       }[] = []
+
       const now = this.input.now()
+
       for (const record of records) {
         const probe = probes.get(record.sessionId)
+
         if (!probe) {
           continue
         }
+
         if (
           record.lease.runtimeKind === 'tui' &&
           isProvenDeadProbe(probe) &&
@@ -86,8 +95,10 @@ export class StructuredAgentSessionLeaseRenewer {
           } catch (error) {
             this.input.onError?.({ sessionId: record.sessionId, error })
           }
+
           continue
         }
+
         renewals.push({
           sessionId: record.sessionId,
           fence: record.lease.runtimeFence,
@@ -95,9 +106,11 @@ export class StructuredAgentSessionLeaseRenewer {
           now
         })
       }
+
       // The store persists the whole record file per transaction, so keep the healthy path to
       // one commit. If one renewal is superseded, retrying individually preserves isolation.
       let results: PromiseSettledResult<AgentSessionRecord>[]
+
       try {
         const renewed = await this.input.store.renewLeases(renewals)
         await Promise.all(
@@ -111,13 +124,16 @@ export class StructuredAgentSessionLeaseRenewer {
           renewals.map(async (renewal) => {
             const renewed = await this.input.store.renewLease(renewal)
             await this.input.onRenewed?.(renewed)
+
             return renewed
           })
         )
       }
+
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
           const renewal = renewals[index]
+
           if (renewal) {
             this.input.onError?.({ sessionId: renewal.sessionId, error: result.reason })
           }
@@ -135,21 +151,26 @@ export class StructuredAgentSessionLeaseRenewer {
       if (this.input.probeMany) {
         return await this.input.probeMany(records)
       }
+
       const settled = await Promise.allSettled(records.map((record) => this.input.probe(record)))
       const probes = new Map<string, AgentSessionOwnerProbe>()
+
       for (const [index, result] of settled.entries()) {
         const record = records[index]
+
         if (result.status === 'fulfilled') {
           probes.set(record.sessionId, result.value)
         } else {
           this.input.onError?.({ sessionId: record.sessionId, error: result.reason })
         }
       }
+
       return probes
     } catch (error) {
       for (const record of records) {
         this.input.onError?.({ sessionId: record.sessionId, error })
       }
+
       return new Map()
     }
   }

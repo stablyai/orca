@@ -50,6 +50,7 @@ export function hasExplicitIdleTitle(
       return true
     }
   }
+
   return false
 }
 
@@ -74,6 +75,7 @@ export function nameOnlyIdleNeedsCorroboration(
   // Why the title fallback: an adopted pane carries no launch metadata, but its
   // name-only title is exactly the thing that names the agent.
   const resolved = agent ?? (title ? resolveExplicitTerminalTitleAgentType(title) : null)
+
   return getSyntheticAgentTerminalTitle(resolved, 'done') !== null
 }
 
@@ -86,10 +88,12 @@ export function hasSustainedTitleIdle(
   if (record.lastAgentStatus !== 'idle') {
     return false
   }
+
   if (!nameOnlyIdleNeedsCorroboration(agent, record.lastOscTitle)) {
     // The title is the only rest signal this agent emits, so there is nothing to wait for.
     return true
   }
+
   // Why not "no timestamp means nothing to debounce": an adopted or daemon-backed pane has
   // no local output clock, so for an agent that WILL announce rest explicitly there is no
   // corroboration available at all. Settling here let a busy Codex/Devin satisfy the wait
@@ -97,6 +101,7 @@ export function hasSustainedTitleIdle(
   if (record.lastOutputAt === null) {
     return false
   }
+
   return Date.now() - record.lastOutputAt >= quiescenceMs
 }
 
@@ -131,8 +136,10 @@ export function isTuiIdleSatisfied(input: TuiIdleSatisfactionInput): boolean {
   if (hasExplicitIdleTitle(input.record, input.rendererTitle) || input.readPositiveBodyEvidence()) {
     return true
   }
+
   if (hasFreshWorkingFirstPartyStatus(input.firstPartyStatus)) {
     return false
   }
+
   return hasSustainedTitleIdle(input.record, input.agent, input.quiescenceMs)
 }

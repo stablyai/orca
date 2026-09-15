@@ -24,10 +24,13 @@ export function selectRefreshedNetworkAddress(
       ? currentAddress
       : undefined
   }
+
   if (currentAddressIsManual) {
     return currentAddress
   }
+
   const currentInterface = interfaces.find((iface) => iface.address === currentAddress)
+
   if (
     currentInterface &&
     (currentAddressWasExplicitlySelected ||
@@ -35,6 +38,7 @@ export function selectRefreshedNetworkAddress(
   ) {
     return currentAddress
   }
+
   // Why: shared with main so the picker never shows a default the QR didn't advertise. Undefined on
   // a bridge-only host: Relay pairs without a direct address rather than offering an unreachable one.
   return selectAutoAdvertisedPairingAddress(interfaces)

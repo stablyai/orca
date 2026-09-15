@@ -15,6 +15,7 @@ function createQueryReplyGate(notify: (message: unknown) => void): {
   queuedBoundaries: Array<() => void>
 } {
   const queuedBoundaries: Array<() => void> = []
+
   const factory = new Function(
     'notify',
     'enqueueWriteBoundary',
@@ -31,17 +32,21 @@ function createQueryReplyGate(notify: (message: unknown) => void): {
     notify: (message: unknown) => void,
     enqueueBoundary: (callback: () => void) => void
   ) => QueryReplyGate
+
   const gate = factory(notify, (callback) => queuedBoundaries.push(callback))
+
   return { gate, queuedBoundaries }
 }
 
 describe('mobile terminal query replies', () => {
   it('forwards xterm-generated data only after initial replay drains', () => {
     const listenerIndex = XTERM_WEBVIEW_SOURCE.html.indexOf('term.onData(function(data)')
+
     const enableIndex = XTERM_WEBVIEW_SOURCE.html.indexOf(
       'attachTerminalQueryReplyBridge(term, gen)',
       listenerIndex
     )
+
     const notifyIndex = XTERM_WEBVIEW_SOURCE.html.indexOf(
       'forwardTerminalDataReply(data)',
       listenerIndex
@@ -59,10 +64,12 @@ describe('mobile terminal query replies', () => {
 
   it('mutes a replacement terminal until its own replay drains', () => {
     const initIndex = XTERM_WEBVIEW_SOURCE.html.indexOf('function init(cols, rows, initialData')
+
     const disableIndex = XTERM_WEBVIEW_SOURCE.html.indexOf(
       'resetTerminalDataReplyAuthority()',
       initIndex
     )
+
     const enableIndex = XTERM_WEBVIEW_SOURCE.html.indexOf(
       'attachTerminalQueryReplyBridge(term, gen)',
       disableIndex
@@ -115,10 +122,12 @@ describe('mobile terminal query replies', () => {
 
     expect(messages).toEqual([{ type: 'terminal-data', bytes: '\x1b[3;4R' }])
     const clearStart = XTERM_WEBVIEW_SOURCE.html.indexOf("} else if (msg.type === 'clear') {")
+
     const clearEnd = XTERM_WEBVIEW_SOURCE.html.indexOf(
       "} else if (msg.type === 'measure')",
       clearStart
     )
+
     expect(XTERM_WEBVIEW_SOURCE.html.slice(clearStart, clearEnd)).toContain(
       'resumeTerminalDataReplyAuthority()'
     )

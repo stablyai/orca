@@ -44,20 +44,25 @@ export function useSourceControlAgentActionDialog({
 }: SourceControlAgentActionDialogProps): UseSourceControlAgentActionDialogResult {
   const settings = useAppStore((state) => state.settings)
   const repo = useRepoById(repoId ?? null)
+
   const launchAgentScope = useMemo(
     () => resolveSourceControlLaunchAgentScope({ settings, repo, actionId }),
     [actionId, repo, settings]
   )
+
   // Why: when this repo already overrides the global default, default the save
   // scope to the repo so saving the corrected agent updates that override in
   // place instead of writing a global default the override would still shadow.
   const defaultSaveTargetValue =
     launchAgentScope.overridesGlobalAgent && repoId ? 'repo' : DEFAULT_SAVE_TARGET_VALUE
+
   const ensureDetectedAgents = useAppStore((state) => state.ensureDetectedAgents)
   const ensureRemoteDetectedAgents = useAppStore((state) => state.ensureRemoteDetectedAgents)
+
   const [commandTemplate, setCommandTemplate] = useState(
     savedCommandInputTemplate ?? '{basePrompt}'
   )
+
   const [agentArgs, setAgentArgs] = useState(savedAgentArgs ?? '')
   const [selectedAgent, setSelectedAgent] = useState<TuiAgent | null>(savedAgentId ?? null)
   const [detectedAgents, setDetectedAgents] = useState<TuiAgent[]>([])
@@ -77,15 +82,20 @@ export function useSourceControlAgentActionDialog({
     if (connectionUnavailable) {
       setDetectedAgents([])
       setDetecting(false)
+
       return []
     }
+
     setDetecting(true)
+
     try {
       const nextAgents =
         typeof connectionId === 'string'
           ? await ensureRemoteDetectedAgents(connectionId)
           : await ensureDetectedAgents()
+
       setDetectedAgents(nextAgents)
+
       return nextAgents
     } finally {
       setDetecting(false)
@@ -95,13 +105,17 @@ export function useSourceControlAgentActionDialog({
   useEffect(() => {
     if (!open) {
       wasOpenRef.current = false
+
       return
     }
+
     const cycle = wasOpenRef.current ? openCycleRef.current : openCycleRef.current + 1
+
     if (!wasOpenRef.current) {
       openCycleRef.current = cycle
       setOpenCycle(cycle)
     }
+
     wasOpenRef.current = true
     setDetectedOpenCycle(null)
     setCommandTemplate(savedCommandInputTemplate ?? '{basePrompt}')
@@ -114,6 +128,7 @@ export function useSourceControlAgentActionDialog({
       if (stale || openCycleRef.current !== cycle) {
         return
       }
+
       setSelectedAgent(
         (current) =>
           current ??
@@ -126,6 +141,7 @@ export function useSourceControlAgentActionDialog({
       )
       setDetectedOpenCycle(cycle)
     })
+
     return () => {
       stale = true
     }
@@ -147,6 +163,7 @@ export function useSourceControlAgentActionDialog({
     () => detectedAgents.filter((agent) => isTuiAgentEnabled(agent, disabledAgents)),
     [detectedAgents, disabledAgents]
   )
+
   const agentOptions = useMemo(
     () =>
       getAgentCatalog().filter(
@@ -154,14 +171,18 @@ export function useSourceControlAgentActionDialog({
       ),
     [enabledDetectedAgents, selectedAgent]
   )
+
   const selectedAgentUnavailable = Boolean(
     selectedAgent &&
     !isSourceControlAgentDetectedAndEnabled(selectedAgent, detectedAgents, disabledAgents)
   )
+
   const hasEnabledAgents = enabledDetectedAgents.length > 0
+
   const commandInput = renderSourceControlActionCommandTemplate(commandTemplate, {
     basePrompt: baseCommandInput
   })
+
   const trimmedCommandInput = commandInput.trim()
 
   const { deliveryPlan, resetDeliveryPlan, isStarting, handleStart, startWithDetectedAgents } =
@@ -210,6 +231,7 @@ export function useSourceControlAgentActionDialog({
         setSaveLaunchRecipe(true)
         setSaveTargetValue(defaultSaveTargetValue)
       }
+
       onOpenChange(nextOpen)
     },
     [defaultSaveTargetValue, onOpenChange, resetDeliveryPlan]
@@ -260,12 +282,15 @@ export function useSourceControlAgentActionDialog({
       },
     [resetDeliveryPlan]
   )
+
   const onSelectedAgentChange = useMemo(() => resetPlanAfter(setSelectedAgent), [resetPlanAfter])
   const onAgentArgsChange = useMemo(() => resetPlanAfter(setAgentArgs), [resetPlanAfter])
+
   const onCommandTemplateChange = useMemo(
     () => resetPlanAfter(setCommandTemplate),
     [resetPlanAfter]
   )
+
   const onSaveLaunchRecipeChange = useMemo(
     () => resetPlanAfter(setSaveLaunchRecipe),
     [resetPlanAfter]
@@ -275,9 +300,12 @@ export function useSourceControlAgentActionDialog({
     if (!launchAgentScope.overridesGlobalAgent) {
       return null
     }
+
     const catalog = getAgentCatalog()
+
     const labelFor = (agentId: TuiAgent | null): string =>
       catalog.find((entry) => entry.id === agentId)?.label ?? agentId ?? ''
+
     return {
       effectiveAgentLabel: labelFor(launchAgentScope.effectiveAgentId),
       globalAgentLabel: labelFor(launchAgentScope.globalAgentId)

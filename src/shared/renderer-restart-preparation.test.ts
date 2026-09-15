@@ -17,10 +17,12 @@ describe('prepareRendererForAppRestart', () => {
     const started = vi.fn()
     const aborted = vi.fn()
     const independentlyAborted = vi.fn()
+
     const checkpoint = vi.fn((event: Event) => {
       event.currentTarget?.dispatchEvent(new Event(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT))
       event.preventDefault()
     })
+
     eventTarget.addEventListener('restart-started', started)
     eventTarget.addEventListener(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT, aborted)
     eventTarget.addEventListener('restart-aborted', independentlyAborted)
@@ -92,6 +94,7 @@ describe('prepareRendererForAppRestart', () => {
           }
         })
     })
+
     let settled = false
     void prepared.then(() => {
       settled = true

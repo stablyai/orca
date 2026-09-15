@@ -7,9 +7,13 @@ import { waitForSessionReady } from './helpers/store'
 import { openSourceControlForWorktree } from './helpers/worktree-registration'
 
 const subject = 'brew-install: source shared brew context before resolving prefixes'
+
 const reportedLine = 'Sources bin/lib/brew-context.sh, mirroring the brew-install update:'
+
 const conventionalLine = 'Keep this conventional commit-message body line intact through column 72'
+
 const unbrokenLine = `https://example.com/${'commit-message-segment-'.repeat(8)}`
+
 const commitMessage = `${subject}
 
 ${reportedLine}
@@ -28,6 +32,7 @@ function createCommitWorktree(repoPath: string): { branchName: string; worktreeP
     cwd: repoPath,
     stdio: 'pipe'
   })
+
   return { branchName, worktreePath }
 }
 
@@ -45,6 +50,7 @@ async function cleanupCommitWorktree(
     rmSync(worktreePath, { recursive: true, force: true })
     execFileSync('git', ['worktree', 'prune'], { cwd: repoPath, stdio: 'pipe' })
   }
+
   execFileSync('git', ['branch', '-D', branchName], { cwd: repoPath, stdio: 'pipe' })
 }
 
@@ -82,6 +88,7 @@ test('keeps conventional commit-message lines intact in the history tooltip', as
   const tooltip = orcaPage
     .locator('[data-slot="tooltip-content"]')
     .filter({ hasText: reportedLine })
+
   await expect(tooltip).toBeVisible()
   await expect(tooltip).toContainText(commitMessage)
   await orcaPage.evaluate(async () => {
@@ -92,13 +99,16 @@ test('keeps conventional commit-message lines intact in the history tooltip', as
     (element, targetLines) => {
       const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
       let textNode: Text | null = null
+
       while (walker.nextNode()) {
         const candidate = walker.currentNode as Text
+
         if (targetLines.every((line) => candidate.data.includes(line))) {
           textNode = candidate
           break
         }
       }
+
       if (!textNode) {
         throw new Error('Commit message text node was not found in the tooltip')
       }
@@ -108,20 +118,25 @@ test('keeps conventional commit-message lines intact in the history tooltip', as
         const range = document.createRange()
         range.setStart(textNode, start)
         range.setEnd(textNode, start + targetLine.length)
+
         const rectTops = Array.from(range.getClientRects())
           .filter((rect) => rect.width > 0.5)
           .map((rect) => rect.top)
+
         const visualLineTops = rectTops.reduce<number[]>((tops, top) => {
           if (!tops.some((existing) => Math.abs(existing - top) < 2)) {
             tops.push(top)
           }
+
           return tops
         }, [])
+
         return visualLineTops.length
       })
 
       const style = getComputedStyle(element)
       const tooltipRect = element.getBoundingClientRect()
+
       return {
         visualLineCounts,
         tooltipLeft: tooltipRect.left,

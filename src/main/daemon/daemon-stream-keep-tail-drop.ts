@@ -47,7 +47,9 @@ export type PendingStreamDataBatch = {
 // Hysteresis (cap = 2× keep) bounds drop churn.
 // Kill switch: ORCA_DAEMON_BACKGROUND_STREAM_DROP=0 disables thinning.
 const BACKGROUND_SESSION_KEEP_TAIL_CHARS = 512 * 1024
+
 const BACKGROUND_SESSION_MIN_KEEP_TAIL_CHARS = 64 * 1024
+
 // Why a GLOBAL budget too: the per-session cap bounds each flood, but N
 // backgrounded sessions can still queue N×cap in aggregate — and a reveal
 // (worktree switch) then waits behind the whole aggregate at the gated drain
@@ -70,6 +72,7 @@ export function backgroundSessionKeepTailChars(droppableSessionsWithQueuedData: 
 export function backgroundSessionDropCapChars(droppableSessionsWithQueuedData: number): number {
   return backgroundSessionKeepTailChars(droppableSessionsWithQueuedData) * 2
 }
+
 // Mirrors main's DROPPED_QUERY_SALVAGE_MAX_CHARS: salvage past this means a
 // pathological query stream; keep the O(1) memory guarantee. A prior drop's
 // salvage entry is itself the oldest data and re-salvages through the next
@@ -89,42 +92,55 @@ export function dropOldestQueuedForSession(
   salvageDroppedData: (dropped: string) => string
 ): void {
   let toDrop = (batch.queuedCharsBySession.get(sessionId) ?? 0) - keepTailChars
+
   if (toDrop <= 0) {
     return
   }
+
   const totalDropped = toDrop
   let droppedSequenceChars = 0
   let salvaged = ''
+
   const salvageIntoCap = (dropped: string): void => {
     if (salvaged.length >= DROPPED_QUERY_SALVAGE_MAX_CHARS) {
       return
     }
+
     salvaged = (salvaged + salvageDroppedData(dropped)).slice(0, DROPPED_QUERY_SALVAGE_MAX_CHARS)
   }
+
   let existingGap: DataGapEvent | null = null
   let insertGapAt = -1
+
   for (let i = 0; i < batch.queue.length && toDrop > 0; i++) {
     const entry = batch.queue[i]
+
     if (entry.sessionId !== sessionId) {
       continue
     }
+
     if (entry.control) {
       if (entry.control.event === 'dataGap') {
         existingGap = entry.control
       }
+
       continue
     }
+
     if (entry.data.length <= toDrop) {
       toDrop -= entry.data.length
       droppedSequenceChars += entry.sequenceChars ?? entry.data.length
       salvageIntoCap(entry.data)
+
       if (insertGapAt === -1) {
         insertGapAt = i
       }
+
       batch.queue.splice(i, 1)
       i--
     } else {
       const cut = clampToSafeSplitIndex(entry.data, 0, toDrop)
+
       if (cut > 0) {
         const entrySequenceChars = entry.sequenceChars ?? entry.data.length
         const cutSequenceChars = entrySequenceChars === 0 ? 0 : cut
@@ -134,22 +150,28 @@ export function dropOldestQueuedForSession(
         const remainingSequenceChars = entrySequenceChars - cutSequenceChars
         entry.sequenceChars =
           remainingSequenceChars === entry.data.length ? undefined : remainingSequenceChars
+
         if (insertGapAt === -1) {
           insertGapAt = i
         }
       }
+
       toDrop = 0
     }
   }
+
   const dropped = totalDropped - toDrop
+
   if (dropped <= 0) {
     return
   }
+
   batch.queuedChars -= dropped
   batch.queuedCharsBySession.set(
     sessionId,
     Math.max(0, (batch.queuedCharsBySession.get(sessionId) ?? 0) - dropped)
   )
+
   if (existingGap) {
     const priorSequenceChars = existingGap.payload.sequenceChars ?? existingGap.payload.droppedChars
     existingGap.payload.droppedChars += dropped
@@ -171,12 +193,14 @@ export function dropOldestQueuedForSession(
     })
     insertGapAt = Math.max(0, insertGapAt) + 1
   }
+
   if (salvaged.length > 0) {
     // Salvaged query bytes ride as a tiny data entry at the gap position —
     // the writing program is blocked on their replies.
     const at = existingGap
       ? batch.queue.findIndex((e) => e.control === existingGap) + 1
       : insertGapAt
+
     batch.queue.splice(at, 0, { sessionId, data: salvaged, sequenceChars: 0 })
     batch.queuedChars += salvaged.length
     batch.queuedCharsBySession.set(

@@ -13,6 +13,7 @@ import {
 } from './git-handler-test-harness'
 
 const FORK_REMOTE = 'pr-contributor-orca'
+
 const FORK_URL = 'https://github.com/contributor/orca.git'
 
 describe('GitHandler git.exec fork remote', () => {
@@ -44,6 +45,7 @@ describe('GitHandler git.exec fork remote', () => {
       args: ['remote', 'get-url', FORK_REMOTE],
       cwd: tmpDir
     })) as { stdout: string }
+
     expect(url.stdout.trim()).toBe(FORK_URL)
 
     await dispatcher.callRequest('git.exec', {

@@ -23,6 +23,7 @@ let testScreenshotDir: string | null = null
 afterEach(() => {
   vi.restoreAllMocks()
   delete process.env.ORCA_COMPUTER_SCREENSHOT_TMPDIR
+
   if (testScreenshotDir) {
     rmSync(testScreenshotDir, { recursive: true, force: true })
     testScreenshotDir = null
@@ -59,6 +60,7 @@ function worktree(overrides: Partial<RuntimeWorktreeRecord> = {}): RuntimeWorktr
     displayName: '',
     comment: ''
   }
+
   return { ...base, ...overrides }
 }
 
@@ -786,9 +788,11 @@ describe('printResult computer screenshots', () => {
     )
 
     expect(existsSync(expiredPath)).toBe(true)
+
     const output = JSON.parse(logSpy.mock.calls[0][0]) as {
       result: { screenshot: { dataOmitted: boolean; path: string } }
     }
+
     expect(output.result.screenshot.dataOmitted).toBe(true)
     expect(output.result.screenshot.path).toContain('req_1-screenshot.png')
   })
@@ -823,6 +827,7 @@ describe('printResult computer screenshots', () => {
     const output = JSON.parse(logSpy.mock.calls[0][0]) as {
       result: { screenshot: { data: string; path?: string; dataOmitted?: boolean } }
     }
+
     expect(output.result.screenshot.data).toBe(screenshotData)
     expect(output.result.screenshot.path).toBeUndefined()
     expect(output.result.screenshot.dataOmitted).toBeUndefined()
@@ -851,6 +856,7 @@ describe('printResult computer screenshots', () => {
     const output = JSON.parse(logSpy.mock.calls[0][0]) as {
       result: { screenshot: { data: string; path?: string; dataOmitted?: boolean } }
     }
+
     expect(output.result.screenshot.data).toBe(screenshotData)
     expect(output.result.screenshot.path).toBeUndefined()
     expect(output.result.screenshot.dataOmitted).toBeUndefined()

@@ -12,6 +12,7 @@ import { acquire, extractExecError, ghExecFileAsync, release } from './gh-utils'
 
 function githubIssueErrorMessage(error: unknown): string {
   const { stderr, stdout } = extractExecError(error)
+
   return stderr.trim() || stdout.trim()
 }
 
@@ -30,9 +31,11 @@ export async function createIssue(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitHubCreateIssueResult> {
   const trimmedTitle = title.trim()
+
   if (!trimmedTitle) {
     return { ok: false, error: 'Title is required' }
   }
+
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
     async () =>
@@ -47,10 +50,13 @@ export async function createIssue(
     connectionId,
     localGitOptions
   )
+
   if (!ownerRepo) {
     return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
   }
+
   await acquire()
+
   try {
     const createArgs = (issueBody: string) => {
       const args = [
@@ -63,12 +69,15 @@ export async function createIssue(
         '--raw-field',
         `body=${issueBody}`
       ]
+
       for (const label of fields?.labels ?? []) {
         args.push('--raw-field', `labels[]=${label}`)
       }
+
       for (const assignee of fields?.assignees ?? []) {
         args.push('--raw-field', `assignees[]=${assignee}`)
       }
+
       return args
     }
 
@@ -76,11 +85,13 @@ export async function createIssue(
       JSON.parse(stdout) as { number?: number; html_url?: string; url?: string }
 
     let data: { number?: number; html_url?: string; url?: string }
+
     try {
       const { stdout } = await ghExecFileAsync(createArgs(body), ghOptions)
       data = parseIssue(stdout)
     } catch (err) {
       const message = githubIssueErrorMessage(err)
+
       if (!/body is too long \(maximum is \d+ characters\)/i.test(message)) {
         return { ok: false, error: message }
       }
@@ -89,6 +100,7 @@ export async function createIssue(
       // on update, so establish the issue before attaching its body.
       const { stdout } = await ghExecFileAsync(createArgs(''), ghOptions)
       data = parseIssue(stdout)
+
       if (typeof data.number !== 'number') {
         return { ok: false, error: 'Unexpected response from GitHub' }
       }
@@ -108,6 +120,7 @@ export async function createIssue(
       } catch (patchErr) {
         const patchMessage = githubIssueErrorMessage(patchErr)
         const identity = data.html_url ?? data.url ?? `#${data.number}`
+
         return {
           ok: true,
           number: data.number,
@@ -120,6 +133,7 @@ export async function createIssue(
     if (typeof data.number !== 'number') {
       return { ok: false, error: 'Unexpected response from GitHub' }
     }
+
     return {
       ok: true,
       number: data.number,

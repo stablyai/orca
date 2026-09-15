@@ -118,11 +118,15 @@ export function AutomationsDetailPane({
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (shouldHandleAutomationDetailEscapeKey(event)) {
         event.preventDefault()
+
         if (selectedExternalRunPage) {
           onClearExternalRunPage()
+
           return
         }
+
         onBackToList()
+
         return
       }
 
@@ -136,6 +140,7 @@ export function AutomationsDetailPane({
           key: event.key as 'ArrowLeft' | 'ArrowRight',
           canAccessRuns: Boolean(selected)
         })
+
         if (nextTab && nextTab !== activePaneTab) {
           event.preventDefault()
           onActivePaneTabChange(nextTab)
@@ -144,6 +149,7 @@ export function AutomationsDetailPane({
     }
 
     window.addEventListener('keydown', handleKeyDown)
+
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [
     activePaneTab,

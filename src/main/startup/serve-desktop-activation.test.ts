@@ -4,6 +4,7 @@ import { createServeDesktopActivationGate } from './serve-desktop-activation'
 describe('createServeDesktopActivationGate', () => {
   it('coalesces activation requests while serve is initializing and drains once when ready', () => {
     const activateWindow = vi.fn()
+
     const gate = createServeDesktopActivationGate({
       initialState: 'initializing',
       activateWindow
@@ -23,6 +24,7 @@ describe('createServeDesktopActivationGate', () => {
 
   it('activates immediately after the persistent provider is ready', () => {
     const activateWindow = vi.fn()
+
     const gate = createServeDesktopActivationGate({
       initialState: 'ready',
       activateWindow
@@ -37,6 +39,7 @@ describe('createServeDesktopActivationGate', () => {
   it('drops pending activation and fails closed when promotion is blocked', () => {
     const activateWindow = vi.fn()
     const onBlocked = vi.fn()
+
     const gate = createServeDesktopActivationGate({
       initialState: 'initializing',
       activateWindow,

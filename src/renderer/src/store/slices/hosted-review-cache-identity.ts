@@ -24,6 +24,7 @@ export function getHostedReviewCacheKey(
   hasRepoOwner = false
 ): string {
   const scope = getHostedReviewCacheHostScope(settings, connectionId, executionHostId, hasRepoOwner)
+
   return `${scope}::${repoId ?? repoPath}::${branch}`
 }
 
@@ -34,18 +35,23 @@ function getHostedReviewCacheHostScope(
   hasRepoOwner = false
 ): string {
   const hostId = normalizeExecutionHostId(executionHostId)
+
   if (hostId) {
     return hostId
   }
+
   const sshConnectionId = connectionId?.trim()
+
   if (sshConnectionId) {
     return toSshExecutionHostId(sshConnectionId)
   }
+
   // Why: a known repo owner with no SSH/runtime marker is local; absent owner
   // context keeps the focused-runtime fallback for active-host operations.
   if (hasRepoOwner) {
     return 'local'
   }
+
   return getSettingsFocusedExecutionHostId(settings)
 }
 
@@ -59,6 +65,7 @@ export function linkedReviewHintKey(options?: LinkedReviewHints): string {
     ['azure-devops', options?.linkedAzureDevOpsPR ?? null],
     ['gitea', options?.linkedGiteaPR ?? null]
   ] as const
+
   return hints
     .filter(([, number]) => number !== null)
     .map(([provider, number]) => `${provider}:${number}`)

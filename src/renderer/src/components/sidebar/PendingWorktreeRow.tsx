@@ -12,6 +12,7 @@ function statusLabel(entry: PendingWorktreeCreation): string {
   if (entry.status === 'error') {
     return entry.error ?? 'Creation failed'
   }
+
   return getCreationProgressLabel(entry)
 }
 
@@ -27,11 +28,13 @@ export function PendingWorktreeRow({
 }): React.JSX.Element | null {
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
   const active = useAppStore((s) => s.activePendingCreationId === creationId)
+
   if (!entry) {
     return null
   }
 
   const isError = entry.status === 'error'
+
   return (
     <div
       className={cn(

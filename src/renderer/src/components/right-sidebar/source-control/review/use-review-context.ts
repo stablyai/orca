@@ -50,12 +50,14 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     linkedPR: activeWorktree?.linkedPR ?? null,
     suppressedGitHubPR: activeWorktree?.suppressedGitHubPR ?? null
   })
+
   const {
     hasSuppressedGitHubPR,
     hostedReview,
     hostedReviewCreation,
     hostedReviewCreationProviderHintRef
   } = hostedReviewState
+
   const baseRefs = useSourceControlBaseRefs({
     activeRepoConnectionId,
     activeRepoExecutionHostId,
@@ -69,7 +71,9 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     remoteStatus,
     settings
   })
+
   const { compareBaseRef, effectiveBaseRef } = baseRefs
+
   const branchCompare = useSourceControlBranchCompare({
     activeRepoSettings,
     activeWorktreeId,
@@ -81,6 +85,7 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     activeGitStatusHead,
     remoteStatus
   })
+
   const createPrIntentTarget = useSourceControlCreatePrIntentTarget({
     activeRepoId,
     activeRepoSettings,
@@ -91,6 +96,7 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     worktreeMap,
     worktreePath
   })
+
   const linkedReviews = useSourceControlLinkedReviews({
     activePrFromQueue: hasSuppressedGitHubPR ? null : activePrFromQueue,
     activeRepo,
@@ -102,6 +108,7 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     hostedReviewEntry,
     remoteStatus
   })
+
   const {
     fallbackGitHubPRNumber,
     hasResolvableReviewPushTargetLink,
@@ -111,6 +118,7 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     linkedGitLabMR,
     linkedGiteaPR
   } = linkedReviews
+
   const providerHint = useSourceControlHostedReviewProviderHint({
     activeRepo,
     activeRepoId,
@@ -129,6 +137,7 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     linkedGitLabMR,
     linkedGiteaPR
   })
+
   useSourceControlHostedReviewPolling({
     activeRepo,
     activeWorktree,
@@ -147,6 +156,7 @@ export function useSourceControlReviewContext(panelState: SourceControlPanelStat
     linkedGitLabMR,
     linkedGiteaPR
   })
+
   const suppressedGitHubPRState = resolveSourceControlSuppressedGitHubPRState({
     worktree: activeWorktree ?? null,
     isFolder,

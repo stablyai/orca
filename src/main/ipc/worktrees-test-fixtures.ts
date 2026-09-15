@@ -5,6 +5,7 @@ import { store } from './worktrees-test-ipc-surface'
 
 // Why: durable review-head refs are scoped by remote identity (name + URL hash).
 export const ORIGIN_REMOTE_URL = 'git@github.com:org/repo.git'
+
 export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
 
 export const createdWorktreeList = [
@@ -37,7 +38,9 @@ export function mockKnownFeatureWorktree(
       isMainWorktree: false
     }
   ]
+
   listWorktreesMock.mockResolvedValue(worktrees)
+
   return worktrees
 }
 

@@ -19,6 +19,7 @@ import { assessDaemonHandles } from './loaded-module-probe.mjs'
 import { runSelftest } from './selftest.mjs'
 
 const HERE = import.meta.dirname
+
 const FALLBACK_PROTOCOL_VERSION = 18
 
 // Read PROTOCOL_VERSION from the daemon source so the spike client never drifts
@@ -27,12 +28,14 @@ function resolveProtocolVersion() {
   try {
     const typesPath = join(HERE, '..', '..', 'src', 'main', 'daemon', 'types.ts')
     const match = readFileSync(typesPath, 'utf8').match(/PROTOCOL_VERSION\s*=\s*(\d+)/)
+
     if (match) {
       return Number(match[1])
     }
   } catch {
     // Fall through to the pinned default.
   }
+
   return FALLBACK_PROTOCOL_VERSION
 }
 
@@ -40,6 +43,7 @@ function makeSocketPath() {
   if (process.platform === 'win32') {
     return `\\\\?\\pipe\\orca-daemon-spike-${randomUUID().slice(0, 12)}`
   }
+
   return join(process.env.TMPDIR ?? '/tmp', `orca-daemon-spike-${randomUUID().slice(0, 12)}.sock`)
 }
 
@@ -48,22 +52,29 @@ function makeSocketPath() {
  *  verifiable from the CI log. Depth-limited to keep output readable. */
 function printHostTree(hostRoot, maxDepth = 6) {
   console.log(`\n--- copied daemon-host tree: ${hostRoot} ---`)
+
   if (!existsSync(hostRoot)) {
     console.log('  (missing)')
+
     return
   }
+
   const walk = (dir, depth) => {
     let entries = []
+
     try {
       entries = readdirSync(dir, { withFileTypes: true })
     } catch {
       return
     }
+
     for (const e of entries) {
       const full = join(dir, e.name)
       const rel = relative(hostRoot, full).split('\\').join('/')
+
       if (e.isDirectory()) {
         console.log(`  ${rel}/`)
+
         if (depth < maxDepth) {
           walk(full, depth + 1)
         }
@@ -72,6 +83,7 @@ function printHostTree(hostRoot, maxDepth = 6) {
       }
     }
   }
+
   walk(hostRoot, 0)
 }
 
@@ -81,6 +93,7 @@ function printDaemonLogs(workDir, tailLines = 60) {
   for (const name of ['daemon.log', 'daemon-stdout.log', 'daemon-stderr.log']) {
     const p = join(workDir, name)
     console.log(`\n--- ${name} ---`)
+
     try {
       const text = readFileSync(p, 'utf8').trimEnd()
       const lines = text.split('\n')
@@ -96,15 +109,19 @@ function printDaemonLogs(workDir, tailLines = 60) {
 function printEchoDiagnostics(d) {
   if (!d) {
     console.log('  (no diagnostics captured)')
+
     return
   }
+
   console.log(`  createOrAttach response: ${JSON.stringify(d.createResponse)}`)
   console.log(`  data frames (our session): ${d.ourDataFrames}`)
   console.log(`  data frames (other sessions): ${d.otherDataFrames}`)
   console.log(`  exit events: ${JSON.stringify(d.exitEvents)}`)
+
   if (d.sessionsAtTimeout !== null) {
     console.log(`  listSessions at timeout: ${JSON.stringify(d.sessionsAtTimeout)}`)
   }
+
   const sample = d.rawSample || ''
   console.log(`  raw stream sample (${sample.length} chars): ${JSON.stringify(sample)}`)
 }
@@ -113,12 +130,14 @@ async function shutdownDaemon(child) {
   if (!child || child.exitCode !== null) {
     return
   }
+
   await new Promise((resolve) => {
     const timer = setTimeout(resolve, 5000)
     child.once('exit', () => {
       clearTimeout(timer)
       resolve()
     })
+
     try {
       child.kill('SIGTERM')
     } catch {
@@ -130,6 +149,7 @@ async function shutdownDaemon(child) {
 
 async function runLaunch(opts) {
   const { appDir, workDir, tier, keepWorkDir } = opts
+
   const report = {
     tier,
     ready: false,
@@ -149,11 +169,14 @@ async function runLaunch(opts) {
   const plan = resolveTierFileSet(inv, tier)
   report.warnings = plan.warnings
   console.log(`tier: ${plan.label}  (${plan.ops.length} copy ops)`)
+
   if (plan.warnings.length > 0) {
     for (const w of plan.warnings) {
       console.error(`  WARNING: ${w}`)
     }
+
     report.error = 'incomplete file set for chosen tier'
+
     return report
   }
 
@@ -162,11 +185,14 @@ async function runLaunch(opts) {
     plan,
     workDir
   )
+
   if (skipped.length > 0) {
     console.error(`  copy skipped (missing sources): ${skipped.join(', ')}`)
     report.error = `required sources missing: ${skipped.join(', ')}`
+
     return report
   }
+
   console.log(`copied host: ${hostExePath}`)
   console.log(`daemon entry: ${daemonEntryPath}`)
   console.log(`node-pty native dir: ${nodePtyNativeDir || '(none)'}`)
@@ -179,6 +205,7 @@ async function runLaunch(opts) {
   const protocolVersion = resolveProtocolVersion()
 
   let child = null
+
   try {
     const launched = await launchDaemonHost({
       hostExePath,
@@ -189,6 +216,7 @@ async function runLaunch(opts) {
       nodePtyNativeDir,
       logFilePath
     })
+
     child = launched.child
     report.ready = true
     console.log(`daemon ready (pid=${launched.pid})`)
@@ -202,6 +230,7 @@ async function runLaunch(opts) {
       `handle probe: mainModuleOk=${handles.mainModuleOk} ` +
         `modules=${handles.moduleCount ?? 0} appDirResident=${handles.appDirModules.length}`
     )
+
     for (const m of handles.appDirModules) {
       console.error(`  APP-DIR MODULE (would lock during update): ${m}`)
     }
@@ -211,6 +240,7 @@ async function runLaunch(opts) {
     // Match the marker only when it appears alone at line start (executed
     // output), not inside the echoed `echo <marker>` input line.
     const expectRe = new RegExp(`(?:^|\\r?\\n)${marker}(?:\\r|\\n)`)
+
     // `echo <marker>` is shell-agnostic (cmd / powershell / pwsh / bash); force
     // powershell.exe so the CI runner's ambient COMSPEC can't pick a shell that
     // behaves differently under ConPTY.
@@ -222,6 +252,7 @@ async function runLaunch(opts) {
       expectRe,
       shellOverride: process.platform === 'win32' ? 'powershell.exe' : undefined
     })
+
     report.ptyEchoOk = true
     console.log(`pty echo: nonce round-tripped (${echo.output.length} bytes of output)`)
     console.log('pty echo diagnostics:')
@@ -232,13 +263,16 @@ async function runLaunch(opts) {
     child = child ?? err?.child ?? null
     report.error = err instanceof Error ? err.message : String(err)
     console.error(`\nFAILURE: ${report.error}`)
+
     if (err && err.diagnostics) {
       console.error('pty echo diagnostics:')
       printEchoDiagnostics(err.diagnostics)
     }
+
     printDaemonLogs(workDir)
   } finally {
     await shutdownDaemon(child)
+
     if (!keepWorkDir) {
       try {
         rmSync(workDir, { recursive: true, force: true })
@@ -266,13 +300,17 @@ function printFinalReport(report) {
   console.log(`  pty echo ok:          ${report.ptyEchoOk}`)
   console.log(`  main module = copy:   ${report.mainModuleOk}`)
   console.log(`  app-dir modules:      ${report.appDirModules.length}`)
+
   for (const m of report.appDirModules) {
     console.log(`      - ${m}`)
   }
+
   if (report.error) {
     console.log(`  error:                ${report.error}`)
   }
+
   console.log(`  VERDICT:              ${pass ? 'PASS' : 'FAIL'}\n`)
+
   return pass
 }
 
@@ -281,13 +319,17 @@ async function main() {
 
   if (parsed.help) {
     console.log(getUsage())
+
     return 0
   }
+
   if (parsed.error) {
     console.error(`error: ${parsed.error}`)
     console.error(getUsage())
+
     return 2
   }
+
   if (parsed.selftest) {
     return runSelftest() ? 0 : 1
   }
@@ -296,10 +338,12 @@ async function main() {
     console.error(
       'launch mode requires Windows (ConPTY + loaded-module probe). Use --selftest elsewhere.'
     )
+
     return 2
   }
 
   const report = await runLaunch(parsed.launch)
+
   return printFinalReport(report) ? 0 : 1
 }
 

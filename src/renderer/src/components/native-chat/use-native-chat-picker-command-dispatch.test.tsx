@@ -5,12 +5,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { EMPTY_HISTORY } from './native-chat-composer-state'
 
 const sendNativeChatMessage = vi.fn()
+
 const sendNativeChatTypedCommand = vi.fn()
 
 vi.mock('./native-chat-runtime-send', () => ({
   sendNativeChatMessage: (...args: unknown[]) => sendNativeChatMessage(...args),
   sendNativeChatTypedCommand: (...args: unknown[]) => sendNativeChatTypedCommand(...args)
 }))
+
 vi.mock('@/lib/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
   emitNativeChatPickerItemAccepted: vi.fn(),

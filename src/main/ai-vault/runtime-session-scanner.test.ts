@@ -132,6 +132,7 @@ describe('runtime AI Vault session scanner', () => {
       ok: true,
       result: { useRealCodexHome: true }
     })
+
     const args = {
       agent: 'codex' as const,
       filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',

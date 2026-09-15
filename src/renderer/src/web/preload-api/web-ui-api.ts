@@ -25,11 +25,13 @@ import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
 
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   let zoomLevel = readLocalWebUIState().uiZoomLevel
+
   return {
     get: async () => {
       try {
         const result = await callRuntimeResult<{ ui: PairedUiState }>('ui.get', undefined, 15_000)
         const local = readLocalWebUIState()
+
         const next = {
           ...mergeHostWebUIState(local, result.ui),
           osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
@@ -42,8 +44,10 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
             result.ui.contextualToursSeenIds
           )
         }
+
         writeJson(UI_STORAGE_KEY, next)
         zoomLevel = next.uiZoomLevel
+
         return next
       } catch {
         return readLocalWebUIState()
@@ -56,6 +60,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       // Why strip here too when the host also strips: an old host predating that strip would
       // otherwise persist this browser's runtime:web-* keys over the desktop profile's order.
       const hostUpdates = omitPairingLocalUiFields(updates)
+
       try {
         await callRuntimeResult('ui.set', hostUpdates, 15_000)
       } catch {
@@ -76,6 +81,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const current = readLocalWebUIState()
       const featureInteractions = normalizeFeatureInteractions(current.featureInteractions)
       const existing = featureInteractions[id]
+
       const optimistic = mergeWebUIState(current, {
         featureInteractions: {
           ...featureInteractions,
@@ -85,14 +91,18 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
           }
         }
       })
+
       writeJson(UI_STORAGE_KEY, optimistic)
+
       try {
         const result = await callRuntimeResult<{ ui: PairedUiState }>(
           'ui.recordFeatureInteraction',
           id,
           15_000
         )
+
         const local = readLocalWebUIState()
+
         const next = {
           ...mergeHostWebUIState(local, result.ui),
           osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
@@ -105,8 +115,10 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
             result.ui.contextualToursSeenIds
           )
         }
+
         writeJson(UI_STORAGE_KEY, next)
         zoomLevel = next.uiZoomLevel
+
         return next
       } catch {
         return optimistic
@@ -126,10 +138,13 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       if (!requireActiveEnvironmentOrNull()) {
         return null
       }
+
       const contentBase64 = await readClipboardImagePngBase64()
+
       if (!contentBase64) {
         return null
       }
+
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
     readClipboardImageThumbnail: () => readClipboardImageThumbnail().catch(() => null),

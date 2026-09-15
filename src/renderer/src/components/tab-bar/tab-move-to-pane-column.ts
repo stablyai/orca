@@ -14,19 +14,24 @@ export function canMoveTabToNewPaneColumnFromState(
 ): boolean {
   for (const [worktreeId, tabs] of Object.entries(state.unifiedTabsByWorktree)) {
     const tab = tabs.find((candidate) => candidate.id === unifiedTabId)
+
     if (!tab || tab.groupId !== groupId) {
       continue
     }
+
     const group = (state.groupsByWorktree[worktreeId] ?? []).find(
       (candidate) => candidate.id === groupId
     )
+
     if (!group) {
       return false
     }
+
     // Why: mirror dropUnifiedTab — splitting the only tab in a group onto an
     // adjacent split pane is a layout no-op the store rejects.
     return group.tabOrder.length > 1
   }
+
   return false
 }
 
@@ -40,18 +45,22 @@ export function moveTabToNewPaneColumn(args: {
   direction: TabSplitDirection
 }): boolean {
   const state = useAppStore.getState()
+
   const worktreeId = Object.entries(state.unifiedTabsByWorktree).find(([, tabs]) =>
     tabs.some(
       (candidate) => candidate.id === args.unifiedTabId && candidate.groupId === args.groupId
     )
   )?.[0]
+
   if (!worktreeId || !canMoveTabToNewPaneColumnFromState(state, args.unifiedTabId, args.groupId)) {
     return false
   }
+
   const moved = state.dropUnifiedTab(args.unifiedTabId, {
     groupId: args.groupId,
     splitDirection: args.direction
   })
+
   if (moved) {
     mirrorWebRuntimeTabMove({
       kind: 'split',
@@ -61,5 +70,6 @@ export function moveTabToNewPaneColumn(args: {
       splitDirection: args.direction
     })
   }
+
   return moved
 }

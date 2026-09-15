@@ -37,6 +37,7 @@ export class RecoverableRenderErrorBoundary extends React.Component<Props, State
     if (props.resetKey !== state.resetKey) {
       return { error: null, resetKey: props.resetKey }
     }
+
     return null
   }
 
@@ -46,13 +47,16 @@ export class RecoverableRenderErrorBoundary extends React.Component<Props, State
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
     console.error(`[${this.props.boundaryId}] render crash contained by boundary`, error, errorInfo)
+
     if (this.props.reportAsCrash === false) {
       return
     }
+
     if (isLazyChunkLoadError(error)) {
       // Contained by this fallback; recovery breadcrumbs live on the load path.
       return
     }
+
     void reportReactErrorBoundaryCrash({
       boundaryId: this.props.boundaryId,
       surface: this.props.surface,

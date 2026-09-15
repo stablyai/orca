@@ -121,6 +121,7 @@ describe('verify-localization-catalog', () => {
         auto: { first: 'Primero {{name}}', second: 'Segundo' }
       }
     })
+
     const pluginCatalogPath = path.join(root, 'plugin-locale.json')
     writeJson(pluginCatalogPath, {
       auto: { first: 'Primeiro {{wrongName}}', pluginOnly: 'Plugin only' }

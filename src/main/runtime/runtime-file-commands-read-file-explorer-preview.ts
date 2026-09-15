@@ -38,17 +38,22 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
       maxContentBytes === undefined
         ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
         : previewableBinaryByteLimit(maxContentBytes)
+
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     const provider = requireRuntimeFileProvider(target)
+
     if (provider) {
       const fileStats = await provider.stat(target.path)
+
       if (fileStats.size > binaryMaxBytes) {
         throw new Error('file_too_large')
       }
+
       const result = await readPreviewFileWithinCap(provider, target.path, {
         maxBinaryBytes: binaryMaxBytes,
         maxTextBytes: MOBILE_FILE_READ_MAX_BYTES
       })
+
       // Why: the stat gate sizes base64 binaries; text crosses the wire JSON-escaped (up to 6x), so
       // hold it to the same decoded limit the local branch enforces before reading.
       if (
@@ -57,6 +62,7 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
       ) {
         throw new Error('file_too_large')
       }
+
       if (
         result.isBinary &&
         maxContentBytes !== undefined &&
@@ -64,6 +70,7 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
       ) {
         throw new Error('file_too_large')
       }
+
       return assertPreviewWithinTransportBudget(result, maxContentBytes)
     }
 
@@ -71,14 +78,17 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
     const mimeType = RUNTIME_PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
     const maxBytes = mimeType ? binaryMaxBytes : MOBILE_FILE_READ_MAX_BYTES
     let buffer: Buffer
+
     try {
       buffer = (await readNodeFileWithinLimit(filePath, maxBytes)).buffer
     } catch (error) {
       if (error instanceof NodeFileReadTooLargeError) {
         throw new Error('file_too_large')
       }
+
       throw error
     }
+
     if (mimeType) {
       return assertPreviewWithinTransportBudget(
         {
@@ -94,6 +104,7 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
     if (isBinaryBuffer(buffer)) {
       return assertPreviewWithinTransportBudget({ content: '', isBinary: true }, maxContentBytes)
     }
+
     return assertPreviewWithinTransportBudget(
       { content: buffer.toString('utf-8'), isBinary: false },
       maxContentBytes
@@ -115,16 +126,20 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
       ...(implicitRootRelativePath === null ? [] : [implicitRootRelativePath]),
       ...authorizedRootRelativePaths
     ]
+
     const [boundary, entry, target, ...authorityRoots] = await this.resolveFileExplorerPaths(
       worktreeSelector,
       relativePaths
     )
+
     const implicitRoot = implicitRootRelativePath === null ? null : authorityRoots[0]
     const authorizedRoots = authorityRoots.slice(implicitRoot === null ? 0 : 1)
+
     const binaryMaxBytes =
       maxContentBytes === undefined
         ? LOCAL_PREVIEWABLE_BINARY_MAX_BYTES
         : previewableBinaryByteLimit(maxContentBytes)
+
     const request: DocPreviewFileAccessRequest = {
       boundaryPath: boundary.path,
       entryPath: entry.path,
@@ -134,13 +149,17 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
       maxTextBytes: MOBILE_FILE_READ_MAX_BYTES,
       maxBinaryBytes: binaryMaxBytes
     }
+
     const provider = requireRuntimeFileProvider(target)
+
     if (provider && !provider.readDocPreviewFile) {
       throw new Error('Secure document previews require a newer SSH relay')
     }
+
     const result = provider?.readDocPreviewFile
       ? await provider.readDocPreviewFile(request)
       : await readAuthorizedDocPreviewFile(request)
+
     return assertPreviewWithinTransportBudget(result, maxContentBytes)
   }
 
@@ -152,24 +171,31 @@ export class RuntimeFileCommandsWithReadFileExplorerPreview extends RuntimeFileC
   ): Promise<RuntimeFileReadChunkResult> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
     const provider = requireRuntimeFileProvider(target)
+
     if (provider) {
       const fileStat = await provider.stat(target.path)
+
       if (fileStat.type === 'directory') {
         throw new Error('Cannot download a directory')
       }
+
       return readSshFileExplorerChunk(provider, target.path, fileStat.size, offset, length)
     }
 
     const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())
     const fileStats = await stat(filePath)
+
     if (fileStats.isDirectory()) {
       throw new Error('Cannot download a directory')
     }
+
     const handle = await open(filePath, 'r')
+
     try {
       const buffer = Buffer.alloc(Math.min(length, Math.max(0, fileStats.size - offset)))
       const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, offset)
       const chunk = buffer.subarray(0, bytesRead)
+
       return {
         contentBase64: chunk.toString('base64'),
         bytesRead,

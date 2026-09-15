@@ -9,6 +9,7 @@ import {
 } from './ai-vault-original-pane'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const OTHER_LEAF_ID = '22222222-2222-4222-8222-222222222222'
 
 const baseSession: AiVaultSession = {
@@ -69,6 +70,7 @@ function makeState(overrides: Record<string, unknown> = {}) {
 
 function makeEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry {
   const paneKey = makePaneKey('tab-1', LEAF_ID)
+
   return {
     state: 'working',
     prompt: 'continue',
@@ -137,6 +139,7 @@ describe('findOriginalAiVaultSessionPane', () => {
     const firstPaneKey = makePaneKey('tab-1', LEAF_ID)
     const secondPaneKey = makePaneKey('tab-2', OTHER_LEAF_ID)
     const first = makeEntry({ paneKey: firstPaneKey, providerSession: undefined })
+
     const second = makeEntry({
       paneKey: secondPaneKey,
       tabId: 'tab-2',
@@ -234,6 +237,7 @@ describe('findAiVaultSessionLiveState', () => {
       prompt: baseSession.title,
       state: 'working'
     })
+
     expect(
       findAiVaultSessionLiveState(
         makeState({ agentStatusByPaneKey: { [matching.paneKey]: matching } }),
@@ -242,6 +246,7 @@ describe('findAiVaultSessionLiveState', () => {
     ).toBe('working')
 
     const otherPaneKey = makePaneKey('tab-1', OTHER_LEAF_ID)
+
     const ambiguous = makeState({
       agentStatusByPaneKey: {
         [matching.paneKey]: matching,
@@ -253,6 +258,7 @@ describe('findAiVaultSessionLiveState', () => {
         })
       }
     })
+
     expect(findAiVaultSessionLiveState(ambiguous, baseSession)).toBeNull()
   })
 

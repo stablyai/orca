@@ -98,6 +98,7 @@ describe('issue #8784 GHE avatar fallback (regression)', () => {
     const start = source.indexOf(`function ${fn}`)
     expect(start, `${file}: function ${fn} not found`).toBeGreaterThanOrEqual(0)
     const next = source.indexOf('\nfunction ', start + 1)
+
     return source.slice(start, next === -1 ? undefined : next)
   }
 

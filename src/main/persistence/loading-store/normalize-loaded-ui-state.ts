@@ -31,31 +31,39 @@ export function normalizeLoadedUiState(
   const rawSort = parsed.ui?.sortBy
   const sort = normalizeSortBy(rawSort)
   const migrate = !parsed.ui?._sortBySmartMigrated && rawSort === 'recent'
+
   const rightSidebarOpen =
     typeof parsed.ui?.rightSidebarOpen === 'boolean'
       ? parsed.ui.rightSidebarOpen
       : typeof parsed.settings?.rightSidebarOpenByDefault === 'boolean'
         ? parsed.settings.rightSidebarOpenByDefault
         : defaults.ui.rightSidebarOpen
+
   if (typeof parsed.ui?.rightSidebarOpen !== 'boolean') {
     markNeedsSave()
   }
+
   const workspaceStatusesDefaultOrderMigrated =
     parsed.ui?._workspaceStatusesDefaultOrderMigrated === true
+
   // Why: a short-lived default put Done on the left; repair only the exact raw payload once so user reorders survive.
   const workspaceStatusesReorderedDefaultRepaired =
     parsed.ui?._workspaceStatusesReorderedDefaultRepaired === true
+
   // Why: only exact legacy default payloads migrate; customized status labels/colors/icons/order are kept.
   const workspaceStatusesDefaultWorkflowMigrated =
     parsed.ui?._workspaceStatusesDefaultWorkflowMigrated === true
+
   // Why: visual migration has its own guard so later user choices of valid legacy color/icon IDs are preserved.
   const workspaceStatusesDefaultVisualsMigrated =
     parsed.ui?._workspaceStatusesDefaultVisualsMigrated === true
+
   const workspaceStatuses = normalizePersistedWorkspaceStatuses(parsed.ui?.workspaceStatuses, {
     migrateDefaultWorkflowStatuses: !workspaceStatusesDefaultWorkflowMigrated,
     repairReorderedDefaultStatuses: !workspaceStatusesReorderedDefaultRepaired,
     migrateLegacyDefaultStatusVisuals: !workspaceStatusesDefaultVisualsMigrated
   })
+
   if (
     !workspaceStatusesDefaultOrderMigrated ||
     !workspaceStatusesReorderedDefaultRepaired ||
@@ -64,57 +72,74 @@ export function normalizeLoadedUiState(
   ) {
     markNeedsSave()
   }
+
   const rawCardProps = parsed.ui?.worktreeCardProperties
   const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
   const expandedCardPropsMigrated = parsed.ui?._expandedWorktreeCardPropertiesDefaulted === true
   const jiraIssueCardPropDefaulted = parsed.ui?._jiraIssueWorktreeCardPropertyDefaulted === true
   const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
+
   const deliberateUncheck =
     hadExperimentOn && Array.isArray(rawCardProps) && !rawCardProps.includes('inline-agents')
+
   const needsInlineAgentsMigration =
     !inlineAgentsMigrated &&
     !deliberateUncheck &&
     Array.isArray(rawCardProps) &&
     !rawCardProps.includes('inline-agents')
+
   const needsLegacyDefaultedCompactMigration =
     loadedCompactWorktreeCards &&
     parsed.ui?._worktreeCardModeDefaulted === true &&
     isDefaultedCompactWorktreeCardProperties(rawCardProps)
+
   const migratedCardProps = (() => {
     if (!Array.isArray(rawCardProps)) {
       return undefined
     }
+
     if (needsLegacyDefaultedCompactMigration) {
       return getWorktreeCardModeProperties('Compact')
     }
+
     const candidate = needsInlineAgentsMigration
       ? [...rawCardProps, 'inline-agents' as const]
       : rawCardProps
+
     const expandedCandidate = (() => {
       if (expandedCardPropsMigrated) {
         return candidate
       }
+
       const next = [...candidate]
+
       // Why: Linear rode the 'issue' property and Ports were always shown; split them out once to preserve existing cards.
       if (candidate.includes('issue') && !candidate.includes('linear-issue')) {
         next.push('linear-issue' as const)
       }
+
       if (!candidate.includes('ports')) {
         next.push('ports' as const)
       }
+
       return next
     })()
+
     // Why: 'jira-issue' joined the defaults after the expansion migration already stamped upgraded profiles, so it needs its own one-shot backfill.
     const jiraCandidate =
       jiraIssueCardPropDefaulted || expandedCandidate.includes('jira-issue')
         ? expandedCandidate
         : [...expandedCandidate, 'jira-issue' as const]
+
     const normalized = normalizeWorktreeCardProperties(jiraCandidate)
+
     const changed =
       normalized.length !== rawCardProps.length ||
       normalized.some((property, index) => property !== rawCardProps[index])
+
     return changed ? normalized : undefined
   })()
+
   if (
     migratedCardProps !== undefined ||
     !inlineAgentsMigrated ||
@@ -123,11 +148,14 @@ export function normalizeLoadedUiState(
   ) {
     markNeedsSave()
   }
+
   const rawExplorerView = parsed.ui?.rightSidebarExplorerView
+
   const rightSidebarExplorerView = normalizeRightSidebarExplorerView(
     rawExplorerView,
     parsed.ui?.rightSidebarTab
   )
+
   // Why: without a dirty mark the legacy "Search tab, no explorer view" repair stays
   // in memory only, so a profile that never writes again redoes it on every launch.
   if (
@@ -137,16 +165,19 @@ export function normalizeLoadedUiState(
   ) {
     markNeedsSave()
   }
+
   const setupGuideSidebarDismissed = resolveSetupGuideSidebarDismissedOnLoad(
     parsed.ui?.setupGuideSidebarDismissed,
     normalizedOnboarding
   )
+
   if (
     parsed.ui?.setupGuideSidebarDismissed !== setupGuideSidebarDismissed &&
     (setupGuideSidebarDismissed || parsed.ui?.setupGuideSidebarDismissed !== undefined)
   ) {
     markNeedsSave()
   }
+
   // Why: only upgraded profiles still on the new default get the one-time usage-display notice; fresh profiles stay quiet.
   const usagePercentageDisplayChangeNoticeDismissed =
     resolveUsagePercentageDisplayChangeNoticeDismissed({
@@ -158,12 +189,14 @@ export function normalizeLoadedUiState(
         ui: parsed.ui
       })
     })
+
   if (
     parsed.ui?.usagePercentageDisplayChangeNoticeDismissed !==
     usagePercentageDisplayChangeNoticeDismissed
   ) {
     markNeedsSave()
   }
+
   return {
     ...defaults.ui,
     // Why: missing card properties follow the persisted layout mode; explicit choices are preserved below.

@@ -23,6 +23,7 @@ describe('useIpcEvents browser tab close routing', () => {
     const closeBrowserTab = vi.fn()
     const closeBrowserPage = vi.fn()
     const replyTabClose = vi.fn()
+
     const tabCloseListenerRef: {
       current:
         | ((data: { requestId: string; tabId: string | null; worktreeId?: string }) => void)
@@ -33,6 +34,7 @@ describe('useIpcEvents browser tab close routing', () => {
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
@@ -166,6 +168,7 @@ describe('useIpcEvents browser tab close routing', () => {
             }) => void
           ) => {
             tabCloseListenerRef.current = listener
+
             return () => {}
           },
           replyTabClose,
@@ -248,6 +251,7 @@ describe('useIpcEvents browser tab close routing', () => {
     const closeBrowserTab = vi.fn()
     const closeBrowserPage = vi.fn()
     const replyTabClose = vi.fn()
+
     const tabCloseListenerRef: {
       current:
         | ((data: { requestId: string; tabId: string | null; worktreeId?: string }) => void)
@@ -258,6 +262,7 @@ describe('useIpcEvents browser tab close routing', () => {
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
@@ -392,6 +397,7 @@ describe('useIpcEvents browser tab close routing', () => {
             }) => void
           ) => {
             tabCloseListenerRef.current = listener
+
             return () => {}
           },
           replyTabClose,
@@ -472,6 +478,7 @@ describe('useIpcEvents browser tab close routing', () => {
     const closeBrowserTab = vi.fn()
     const closeBrowserPage = vi.fn()
     const replyTabClose = vi.fn()
+
     const tabCloseListenerRef: {
       current:
         | ((data: { requestId: string; tabId: string | null; worktreeId?: string }) => void)
@@ -482,6 +489,7 @@ describe('useIpcEvents browser tab close routing', () => {
 
     vi.doMock('react', async () => {
       const actual = await vi.importActual<typeof ReactModule>('react')
+
       return {
         ...actual,
         useEffect: (effect: () => void | (() => void)) => {
@@ -613,6 +621,7 @@ describe('useIpcEvents browser tab close routing', () => {
             }) => void
           ) => {
             tabCloseListenerRef.current = listener
+
             return () => {}
           },
           replyTabClose,

@@ -54,6 +54,7 @@ export function NativeChatInteractiveCard({
   const interactivePrompt = useAppStore(
     (s) => s.agentStatusByPaneKey[paneKey]?.interactivePrompt ?? null
   )
+
   // Thread the sibling `toolName` from the same status entry so the question
   // parser can dispatch through the tool's registered parser (mobile parity).
   const interactiveToolName = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.toolName ?? null)
@@ -61,16 +62,20 @@ export function NativeChatInteractiveCard({
 
   const card = useMemo(() => {
     const statusCard = parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined)
+
     if (statusCard?.kind === 'approval') {
       return statusCard
     }
+
     const prompt = resolveNativeChatAsk({
       liveAsk: statusCard?.prompt ?? null,
       messages: messages ?? [],
       transcriptSettled: transcriptSettled && messages != null
     })
+
     return prompt ? { kind: 'question' as const, prompt } : null
   }, [interactivePrompt, interactiveToolName, messages, transcriptSettled])
+
   const cardKey = useMemo(() => nativeChatCardDismissKey(card), [card])
   const [dismissedKey, setDismissedKey] = useState<string | null>(null)
   // A question answer is a paced multi-step write (body→Enter per question); keep
@@ -79,14 +84,17 @@ export function NativeChatInteractiveCard({
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const submittingRef = useRef(false)
   const [submitting, setSubmitting] = useState(false)
+
   const clearDismissTimer = useCallback((): void => {
     if (dismissTimerRef.current) {
       clearTimeout(dismissTimerRef.current)
       dismissTimerRef.current = null
     }
+
     submittingRef.current = false
     setSubmitting(false)
   }, [])
+
   // A replacement prompt, ownership loss, or unmount must stop both timers and
   // PTY writes during commit, before an old answer can type into the new prompt.
   useLayoutEffect(
@@ -111,12 +119,14 @@ export function NativeChatInteractiveCard({
   const showingQuestion = card?.kind === 'question' && canSend && cardKey !== dismissedKey
   useEffect(() => {
     onShowingQuestionChange?.(showingQuestion)
+
     return () => onShowingQuestionChange?.(false)
   }, [showingQuestion, onShowingQuestionChange])
 
   if (!card || !canSend || cardKey === dismissedKey) {
     return null
   }
+
   if (card.kind === 'question') {
     return (
       <NativeChatQuestionCard
@@ -128,17 +138,21 @@ export function NativeChatInteractiveCard({
           if (submittingRef.current) {
             return
           }
+
           submittingRef.current = true
+
           const dismissAnsweredCard = (): void => {
             setDismissedKey(cardKey)
             submittingRef.current = false
             setSubmitting(false)
             dismissTimerRef.current = null
           }
+
           const keepRejectedAnswerVisible = (): void => {
             submittingRef.current = false
             setSubmitting(false)
           }
+
           const result = sendAnswer(card.prompt, selections, (delivered) => {
             if (delivered) {
               dismissAnsweredCard()
@@ -146,19 +160,24 @@ export function NativeChatInteractiveCard({
               keepRejectedAnswerVisible()
             }
           })
+
           if (result.settleAfterMs <= 0) {
             // Keep the actionable card visible when its PTY disappeared between
             // render and submit; the next live target update can make it retryable.
             keepRejectedAnswerVisible()
+
             return
           }
+
           setSubmitting(true)
+
           if (result.waitsForVerifiedDelivery) {
             // Why: remote acceptance can outlive the keystroke pacing window.
             // Keep the card until delivery is proven instead of cancelling the
             // inference callback at the old fixed dismissal deadline.
             return
           }
+
           // Hold the card until the paced write finishes, then mark it answered
           // (which hides it and restores the composer).
           dismissTimerRef.current = setTimeout(() => {
@@ -174,6 +193,7 @@ export function NativeChatInteractiveCard({
       />
     )
   }
+
   return (
     <NativeChatApprovalCard
       approval={card.approval}

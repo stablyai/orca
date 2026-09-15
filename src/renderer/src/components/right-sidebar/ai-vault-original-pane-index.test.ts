@@ -38,15 +38,18 @@ const SESSION: AiVaultSession = {
 function countedRecord<T>(count: number, makeValue: (index: number) => T) {
   const reads = { value: 0 }
   const record: Record<string, T> = {}
+
   for (let index = 0; index < count; index += 1) {
     Object.defineProperty(record, `entry-${index}`, {
       enumerable: true,
       get: () => {
         reads.value += 1
+
         return makeValue(index)
       }
     })
   }
+
   return { reads, record }
 }
 
@@ -68,6 +71,7 @@ function unrelatedEntry(index: number): AgentStatusEntry {
 describe('AI Vault original-pane index', () => {
   it('builds lazily on the first lookup and shares one index across callbacks', () => {
     const live = countedRecord(500, unrelatedEntry)
+
     const retained = countedRecord(500, (index) => ({
       entry: unrelatedEntry(index),
       worktreeId: 'other-worktree',
@@ -75,6 +79,7 @@ describe('AI Vault original-pane index', () => {
       agentType: 'claude',
       startedAt: index
     }))
+
     const sleeping = countedRecord(500, (index) => ({
       paneKey: `other-tab-${index}:11111111-1111-4111-8111-111111111111`,
       tabId: `other-tab-${index}`,
@@ -87,6 +92,7 @@ describe('AI Vault original-pane index', () => {
       updatedAt: index,
       origin: 'live'
     }))
+
     const getIndex = createLazyAiVaultOriginalPaneIndex({
       agentStatusByPaneKey: live.record,
       retainedAgentsByPaneKey: retained.record,
@@ -104,6 +110,7 @@ describe('AI Vault original-pane index', () => {
 
   it('builds once instead of rescanning every agent collection for every visible row', () => {
     const live = countedRecord(500, unrelatedEntry)
+
     const retained = countedRecord(500, (index) => ({
       entry: unrelatedEntry(index),
       worktreeId: 'other-worktree',
@@ -111,6 +118,7 @@ describe('AI Vault original-pane index', () => {
       agentType: 'claude',
       startedAt: index
     }))
+
     const sleeping = countedRecord(500, (index) => ({
       paneKey: `other-tab-${index}:11111111-1111-4111-8111-111111111111`,
       tabId: `other-tab-${index}`,
@@ -123,6 +131,7 @@ describe('AI Vault original-pane index', () => {
       updatedAt: index,
       origin: 'live'
     }))
+
     const state = {
       agentStatusByPaneKey: live.record,
       retainedAgentsByPaneKey: retained.record,
@@ -137,10 +146,12 @@ describe('AI Vault original-pane index', () => {
     live.reads.value = 0
     retained.reads.value = 0
     sleeping.reads.value = 0
+
     for (let row = 0; row < 20; row += 1) {
       expect(findOriginalAiVaultSessionPaneInIndex(index, SESSION)).toBeNull()
       expect(findAiVaultSessionLiveStateInIndex(index, SESSION)).toBeNull()
     }
+
     expect(live.reads.value + retained.reads.value + sleeping.reads.value).toBe(0)
   })
 
@@ -151,6 +162,7 @@ describe('AI Vault original-pane index', () => {
       '33333333-3333-4333-8333-333333333333',
       '44444444-4444-4444-8444-444444444444'
     ]
+
     const tabs = leafIds.map((_, index) => ({
       id: `tab-${index + 1}`,
       ptyId: null,
@@ -161,6 +173,7 @@ describe('AI Vault original-pane index', () => {
       sortOrder: index,
       createdAt: index
     }))
+
     const layouts = Object.fromEntries(
       leafIds.map((leafId, index) => [
         `tab-${index + 1}`,
@@ -172,6 +185,7 @@ describe('AI Vault original-pane index', () => {
         }
       ])
     )
+
     const liveDirect = {
       ...unrelatedEntry(1),
       agentType: 'codex',
@@ -181,6 +195,7 @@ describe('AI Vault original-pane index', () => {
       state: 'blocked',
       providerSession: { key: 'session_id', id: 'live-direct' }
     } as AgentStatusEntry
+
     const livePrompt = {
       ...unrelatedEntry(2),
       agentType: 'codex',
@@ -190,6 +205,7 @@ describe('AI Vault original-pane index', () => {
       prompt: 'Unique prompt match that is long enough',
       providerSession: undefined
     } as AgentStatusEntry
+
     const retainedEntry = {
       ...unrelatedEntry(3),
       agentType: 'codex',
@@ -198,6 +214,7 @@ describe('AI Vault original-pane index', () => {
       worktreeId: 'wt-1',
       providerSession: { key: 'session_id', id: 'retained-direct' }
     } as AgentStatusEntry
+
     const state = {
       agentStatusByPaneKey: {
         [liveDirect.paneKey]: liveDirect,
@@ -229,7 +246,9 @@ describe('AI Vault original-pane index', () => {
       tabsByWorktree: { 'wt-1': tabs },
       terminalLayoutsByTabId: layouts
     } as never
+
     const index = buildAiVaultOriginalPaneIndex(state)
+
     const sessions = [
       { ...SESSION, sessionId: 'live-direct' },
       {

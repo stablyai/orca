@@ -188,6 +188,7 @@ export function getWorktreeCardPropertyOptions({
   const issueOptions = newCardStyle
     ? ISSUE_WORKTREE_CARD_PROPERTY_OPTIONS
     : [TASK_WORKTREE_CARD_PROPERTY_OPTION]
+
   const branchOption: WorktreeCardPropertyOption = {
     id: 'branch',
     properties: ['branch'],
@@ -202,9 +203,11 @@ export function getWorktreeCardPropertyOptions({
         : translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.219ebf1961', 'Branch name')
     }
   }
+
   if (newCardStyle) {
     return [...issueOptions, ...BASE_WORKTREE_CARD_PROPERTY_OPTIONS.slice(1, -1), branchOption]
   }
+
   return [
     BASE_WORKTREE_CARD_PROPERTY_OPTIONS[0],
     ...issueOptions,

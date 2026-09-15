@@ -35,12 +35,17 @@ vi.mock('./ssh-relay-deploy', () => ({
 }))
 
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
+
 const { SshRelaySession } = await import('./ssh-relay-session')
 
 const SSH_LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const REPLAY_LEAF_ID = '22222222-2222-4222-8222-222222222222'
+
 const BAD_LEAF_ID = '33333333-3333-4333-8333-333333333333'
+
 const COMPACT_PROMPT_ID = '44444444-4444-4444-8444-444444444444'
+
 const PREVIOUS_PROMPT_ID = '55555555-5555-4555-8555-555555555555'
 
 type CapturedStatus = {
@@ -99,6 +104,7 @@ function createFakeRelay(): FakeRelay {
       }
     })
   })
+
   relayFeed = (data) => dispatcher.feed(data)
 
   dispatcher.onRequest('pty.openClient', async (params) => ({
@@ -124,6 +130,7 @@ function createFakeRelay(): FakeRelay {
   dispatcher.onRequest('ports.detect', async () => ({ ports: [], platform: 'linux' }))
   dispatcher.onRequest('pty.spawn', async (params) => {
     ptySpawnRequests.push(params)
+
     return { id: `remote-pty-${ptySpawnRequests.length}` }
   })
   dispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => {
@@ -135,6 +142,7 @@ function createFakeRelay(): FakeRelay {
         envelope as unknown as Record<string, unknown>
       )
     }
+
     return { replayed: replayEnvelopes.length }
   })
 
@@ -168,13 +176,16 @@ function createSession(targetId: string): InstanceType<typeof SshRelaySession> {
     clearSshRemotePtyKillIntent: vi.fn(),
     noteSshRemotePtyKillReplayAttempt: vi.fn()
   } as unknown as Store
+
   const portForwardManager = {
     removeAllForwards: vi.fn().mockResolvedValue(undefined)
   } as unknown as SshPortForwardManager
+
   const getMainWindow = vi.fn().mockReturnValue({
     isDestroyed: () => false,
     webContents: { send: vi.fn() }
   })
+
   return new SshRelaySession(targetId, getMainWindow, store, portForwardManager)
 }
 
@@ -245,6 +256,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
     agentHookServer.setPaneStatusClearListener(null)
     agentHookInternals.resetCachesForTests()
     warnSpy.mockRestore()
+
     if (previousRemoteHooksFlag === undefined) {
       delete process.env[ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]
     } else {
@@ -267,6 +279,7 @@ describe('SshRelaySession agent hooks over a fake relay transport', () => {
 
     const provider = getSshPtyProvider('conn-fake')
     expect(provider).toBeDefined()
+
     const spawn = await provider!.spawn({
       cols: 120,
       rows: 40,

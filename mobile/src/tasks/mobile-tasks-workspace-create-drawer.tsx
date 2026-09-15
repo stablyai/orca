@@ -51,6 +51,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
     workspaceCreateTargetRepo,
     workspaceNameDraft
   } = model
+
   return (
     <BottomDrawer
       visible={taskUiReady && workspaceCreateDraft != null}
@@ -294,6 +295,7 @@ export function renderMobileTasksWorkspaceCreateRepoPicker(model: ConnectionPres
     workspaceCreateTargetRepo,
     workspaceRepoOptions
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && workspaceCreateDraft != null && showWorkspaceCreateRepoPicker}
@@ -323,6 +325,7 @@ export function renderMobileTasksWorkspaceAgentPicker(model: ConnectionPresentat
     workspaceAgentOptions,
     workspaceCreateDraft
   } = model
+
   return (
     <PickerModal
       visible={taskUiReady && workspaceCreateDraft != null && showWorkspaceAgentPicker}

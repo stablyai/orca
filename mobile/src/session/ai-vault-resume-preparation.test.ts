@@ -10,6 +10,7 @@ import {
 } from './ai-vault-resume-preparation'
 
 const LEGACY_CODEX_HOME = '/Users/ada/Library/Application Support/orca/codex-runtime-home/home'
+
 const PER_ACCOUNT_HOME = '/Users/ada/Library/Application Support/orca/codex-accounts/a/home'
 
 function legacySession(overrides: Partial<AiVaultSession> = {}): AiVaultSession {
@@ -50,6 +51,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
     }
   ])('uses the legacy command and environment on old-host $code', async (error) => {
     const legacy = legacySession()
+
     const sendRequest = vi
       .fn()
       .mockResolvedValueOnce({ ok: false, error })
@@ -79,6 +81,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
 
   it('uses the real Codex home when a supported desktop requests it', async () => {
     const legacy = legacySession()
+
     const sendRequest = vi.fn().mockResolvedValue({
       ok: true,
       result: { useRealCodexHome: true }
@@ -106,6 +109,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
 
   it('preserves the legacy resume path when a supported desktop declines real-home use', async () => {
     const legacy = legacySession()
+
     const sendRequest = vi.fn().mockResolvedValue({
       ok: true,
       result: { useRealCodexHome: false }
@@ -139,6 +143,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
   it('repins a per-account session to the home the host substitutes', async () => {
     const substituteHome = '/Users/ada/Library/Application Support/orca/codex-accounts/b/home'
     const current = legacySession({ codexHome: PER_ACCOUNT_HOME })
+
     const sendRequest = vi.fn().mockResolvedValue({
       ok: true,
       result: { useRealCodexHome: false, substituteCodexHome: substituteHome }
@@ -163,6 +168,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
 
   it('keeps a per-account session home when an older host sends no repin', async () => {
     const current = legacySession({ codexHome: PER_ACCOUNT_HOME })
+
     const sendRequest = vi.fn().mockResolvedValue({
       ok: true,
       result: { useRealCodexHome: false }
@@ -173,6 +179,7 @@ describe('prepareMobileAiVaultSessionResume', () => {
 
   it('keeps a per-account session usable when the host cannot prepare at all', async () => {
     const current = legacySession({ codexHome: PER_ACCOUNT_HOME })
+
     const sendRequest = vi.fn().mockResolvedValue({
       ok: false,
       error: { code: 'method_not_found', message: 'Unknown method' }

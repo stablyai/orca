@@ -5,6 +5,7 @@ import { focusActiveTerminalInput, waitForTerminalOutput } from './terminal'
 import type { BuiltInWindowsTerminalShell } from '../../../src/shared/windows-terminal-shell'
 
 export const GOLDEN_STUB_READY_MARKER = 'GOLDEN_STUB_AGENT_READY'
+
 export const GOLDEN_STUB_EXIT_MARKER = 'GOLDEN_STUB_AGENT_EXITED'
 
 /** Agents exposed by the fixture directory for tab-bar detection. */
@@ -17,6 +18,7 @@ const fixtureDir = path.join(process.cwd(), 'tests', 'e2e', 'fixtures', 'golden-
 
 export function getGoldenStubAgentLaunchEnv(): NodeJS.ProcessEnv {
   const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ?? 'PATH'
+
   return {
     [pathKey]: [fixtureDir, process.env[pathKey] ?? ''].filter(Boolean).join(path.delimiter)
   }
@@ -35,9 +37,11 @@ export async function configureGoldenStubAgent(
   await page.evaluate(
     async ({ agent, agentArgs, windowsShell }) => {
       const store = window.__store
+
       if (!store) {
         throw new Error('Orca store is unavailable')
       }
+
       await store.getState().updateSettings({
         defaultTuiAgent: agent,
         agentCmdOverrides: { [agent]: 'golden-stub-agent' },

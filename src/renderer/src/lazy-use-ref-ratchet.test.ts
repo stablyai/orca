@@ -18,61 +18,78 @@ const RENDERER_ROOT = import.meta.dirname
 function collectSourceFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name)
+
     if (entry.isDirectory()) {
       if (entry.name === 'node_modules' || entry.name === 'dist') {
         continue
       }
+
       collectSourceFiles(full, out)
       continue
     }
+
     if (!/\.tsx?$/.test(entry.name) || /\.(test|spec)\.tsx?$/.test(entry.name)) {
       continue
     }
+
     out.push(full)
   }
+
   return out
 }
 
 /** Reads the balanced argument text of the `useRef(...)` starting at `from`. */
 function readUseRefArgument(source: string, from: number): { arg: string; end: number } | null {
   let i = from
+
   while (source[i] === ' ') {
     i++
   }
+
   if (source[i] === '<') {
     let depth = 0
+
     while (i < source.length) {
       if (source[i] === '<') {
         depth++
       } else if (source[i] === '>') {
         depth--
+
         if (depth === 0) {
           i++
           break
         }
       }
+
       i++
     }
   }
+
   while (source[i] === ' ') {
     i++
   }
+
   if (source[i] !== '(') {
     return null
   }
+
   const argStart = i + 1
   let depth = 0
+
   while (i < source.length) {
     if (source[i] === '(') {
       depth++
     } else if (source[i] === ')') {
       depth--
+
       if (depth === 0) {
         return { arg: source.slice(argStart, i).trim(), end: i + 1 }
       }
     }
+
     i++
   }
+
   return null
 }
 
@@ -95,30 +112,39 @@ function findNonLazyUseRefs(file: string): string[] {
   const source = readFileSync(file, 'utf8')
   const findings: string[] = []
   let index = 0
+
   while ((index = source.indexOf('useRef', index)) !== -1) {
     const start = index
     index += 'useRef'.length
+
     if (/[\w$.]/.test(source[start - 1] ?? '')) {
       continue
     }
+
     const parsed = readUseRefArgument(source, index)
+
     if (!parsed) {
       continue
     }
+
     index = parsed.end
     const arg = parsed.arg
+
     if (arg === '' || ALLOWED_ARGUMENT.test(arg)) {
       continue
     }
+
     // Only a call or constructor invocation actually burns work per render.
     if (!/\(/.test(arg) && !/\bnew\b/.test(arg)) {
       continue
     }
+
     const line = source.slice(0, start).split('\n').length
     findings.push(
       `${path.relative(RENDERER_ROOT, file)}:${line} useRef(${arg.replace(/\s+/g, ' ').slice(0, 90)})`
     )
   }
+
   return findings
 }
 

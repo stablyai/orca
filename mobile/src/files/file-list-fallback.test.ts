@@ -24,6 +24,7 @@ describe('directoryCacheFromFileList', () => {
       { relativePath: 'src/app.ts', basename: 'app.ts', kind: 'text' },
       { relativePath: 'README.md', basename: 'README.md', kind: 'text' }
     ])
+
     expect(cache['']?.entries).toEqual(
       expect.arrayContaining([
         { name: 'src', isDirectory: true },
@@ -44,6 +45,7 @@ describe('directoryCacheFromFileList', () => {
       { relativePath: 'src', basename: 'src', kind: 'text' },
       { relativePath: 'src/app.ts', basename: 'app.ts', kind: 'text' }
     ])
+
     expect(cache['']?.entries).toEqual([{ name: 'src', isDirectory: true }])
   })
 
@@ -56,6 +58,7 @@ describe('directoryCacheFromFileList', () => {
     const cache = directoryCacheFromFileList([
       { relativePath: '__proto__/pollute.js', basename: 'pollute.js', kind: 'text' }
     ])
+
     expect(Object.getPrototypeOf(cache)).toBe(Object.prototype)
     expect(cache['']?.entries).toEqual([{ name: '__proto__', isDirectory: true }])
     expect(getDirectoryCacheState(cache, '__proto__')?.entries).toEqual([

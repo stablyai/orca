@@ -26,9 +26,11 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
 
   protected flushScheduledMobileSessionTabsChanged(worktreeId: string): void {
     const changeSequence = this.pendingMobileSessionTabsChangeSequenceByWorktree.get(worktreeId)
+
     if (changeSequence === undefined) {
       return
     }
+
     this.pendingMobileSessionTabsChangeSequenceByWorktree.delete(worktreeId)
     this.notifyMobileSessionTabsChangedNow(worktreeId, changeSequence)
   }
@@ -37,12 +39,16 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }
+
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+
     if (!snapshot) {
       return
     }
+
     // Why: browser bridge events are already worktree-scoped; don't fan out every workspace snapshot during navigation/tab churn.
     const result = this.toMobileSessionTabsResult(snapshot)
+
     for (const subscription of this.mobileSessionTabListeners) {
       subscription.listener(
         this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
@@ -55,9 +61,11 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }
+
     for (const snapshot of this.mobileSessionTabsByWorktree.values()) {
       const result = this.toMobileSessionTabsResult(snapshot)
       const changeSequence = ++this.mobileSessionTabsChangeSequence
+
       for (const subscription of this.mobileSessionTabListeners) {
         subscription.listener(
           this.projectMobileSessionTabsForClient(result, subscription.clientNavigationId),
@@ -72,6 +80,7 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
     clientNavigationId?: string
   ): RuntimeMobileSessionTabsResult {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+
     if (!snapshot) {
       return this.projectMobileSessionTabsForClient(
         {
@@ -86,6 +95,7 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
         clientNavigationId
       )
     }
+
     return this.projectMobileSessionTabsForClient(
       this.toMobileSessionTabsResult(snapshot),
       clientNavigationId
@@ -98,6 +108,7 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
     follow = false
   ): void {
     const changeSequence = ++this.mobileSessionTabsChangeSequence
+
     for (const subscription of this.mobileSessionTabListeners) {
       if (subscription.clientNavigationId === clientNavigationId) {
         subscription.listener(
@@ -115,20 +126,25 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
     const worktreeId =
       this.getValidatedExplicitWorktreeIdSelector(worktreeSelector) ??
       (await this.resolveWorktreeSelector(worktreeSelector)).id
+
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+
     const tab = snapshot?.tabs.find(
       (candidate): candidate is RuntimeMobileSessionMarkdownTab =>
         candidate.type === 'markdown' && candidate.id === tabId
     )
+
     if (!tab) {
       throw new Error('tab_not_found')
     }
+
     return worktreeId
   }
 
   protected getLiveBrowserTabsByPageId(worktreeId: string): Map<string, BrowserTabInfo> {
     const liveTabs = this.agentBrowserBridge?.tabList?.(worktreeId).tabs ?? []
     const byPageId = new Map(liveTabs.map((tab) => [tab.browserPageId, tab]))
+
     for (const [index, page] of getRuntimeBrowserPageRegistry(this)
       .listPages(worktreeId)
       .entries()) {
@@ -142,6 +158,7 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
         profileId: page.browserProfileId
       })
     }
+
     return byPageId
   }
 
@@ -149,14 +166,17 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
     tabs: readonly RuntimeMobileSessionClientTab[]
   ): Set<string> {
     const ids = new Set<string>()
+
     for (const tab of tabs) {
       ids.add(tab.id)
+
       if (tab.type === 'terminal') {
         ids.add(tab.parentTabId)
       } else if (tab.type === 'browser') {
         ids.add(tab.browserWorkspaceId)
       }
     }
+
     return ids
   }
 
@@ -167,18 +187,24 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
     if (!groups || groups.length === 0) {
       return undefined
     }
+
     const returnedIds = this.collectReturnedSessionTabIds(returnedTabs)
+
     const sanitized = groups
       .map((group): RuntimeMobileSessionTabGroup | null => {
         const tabOrder = group.tabOrder.filter((tabId) => returnedIds.has(tabId))
+
         if (tabOrder.length === 0) {
           return null
         }
+
         const activeTabId =
           group.activeTabId && tabOrder.includes(group.activeTabId)
             ? group.activeTabId
             : (tabOrder[0] ?? null)
+
         const recentTabIds = group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId))
+
         return {
           id: group.id,
           activeTabId,
@@ -187,6 +213,7 @@ export class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends OrcaRuntime
         }
       })
       .filter((group): group is RuntimeMobileSessionTabGroup => group !== null)
+
     return sanitized.length > 0 ? sanitized : undefined
   }
 }

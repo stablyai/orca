@@ -14,6 +14,7 @@ import {
 } from './terminal-viewport-refit-state'
 
 const hookSource = readFileSync(new URL('./terminal-viewport-refit.ts', import.meta.url), 'utf8')
+
 const sessionSource = [
   readMobileSessionRouteSource('../session/use-mobile-session-keyboard-state.ts'),
   readMobileSessionRouteSource('../session/MobileSessionActiveContent.tsx')
@@ -60,7 +61,9 @@ describe('terminal viewport refit', () => {
       keyboardVisible: false,
       pending: false
     }
+
     let refitCount = 0
+
     const dispatch = (event: TerminalFrameHeightRefitEvent) => {
       const transition = reduceTerminalFrameHeightRefit(state, event)
       state = transition.state
@@ -101,6 +104,7 @@ describe('terminal viewport refit', () => {
       { frameHeight: 600, keyboardVisible: true, pending: false },
       { type: 'frame-height', height: 520 }
     )
+
     expect(r.shouldRefit).toBe(false)
     expect(r.state.pending).toBe(true)
 
@@ -120,6 +124,7 @@ describe('terminal viewport refit', () => {
       type: 'keyboard-visibility',
       visible: false
     })
+
     expect(rescheduled.shouldRefit).toBe(true)
     const ran = reduceTerminalFrameHeightRefit(rescheduled.state, { type: 'refit-committed' })
     expect(ran.shouldRefit).toBe(true)
@@ -177,6 +182,7 @@ describe('terminal viewport refit', () => {
       hookSource.indexOf("if (Platform.OS !== 'ios')"),
       hookSource.indexOf('const previousConnStateRef')
     )
+
     const reconnectEffect = hookSource.slice(
       hookSource.indexOf('const previousConnStateRef'),
       hookSource.indexOf('disposedRef.current = false')
@@ -217,6 +223,7 @@ describe('terminal viewport refit', () => {
       error: { code: 'method_not_found', message: 'Unknown method: terminal.updateViewport' },
       _meta: { runtimeId: 'runtime' }
     } satisfies RpcResponse
+
     expect(isTerminalUpdateViewportUpdated(unsupported)).toBe(false)
     expect(
       resolveTerminalUpdateViewportCapability({
@@ -227,13 +234,16 @@ describe('terminal viewport refit', () => {
 
     let capability: TerminalUpdateViewportCapability = 'unknown'
     let probeCount = 0
+
     for (let refit = 0; refit < 10; refit += 1) {
       if (capability === 'unsupported') {
         continue
       }
+
       probeCount += 1
       capability = resolveTerminalUpdateViewportCapability(unsupported)
     }
+
     expect(probeCount).toBe(1)
 
     const responseCheckIndex = hookSource.indexOf('isTerminalUpdateViewportUpdated(response)')
@@ -279,18 +289,21 @@ describe('terminal viewport refit', () => {
       result: { updated: true, applied: true },
       _meta: { runtimeId: 'runtime' }
     } satisfies RpcResponse
+
     const okRecordedButNotApplied = {
       id: '1b',
       ok: true,
       result: { updated: true, applied: false },
       _meta: { runtimeId: 'runtime' }
     } satisfies RpcResponse
+
     const okNotUpdated = {
       id: '2',
       ok: true,
       result: { updated: false, applied: false },
       _meta: { runtimeId: 'runtime' }
     } satisfies RpcResponse
+
     const failed = {
       id: '3',
       ok: false,
@@ -309,6 +322,7 @@ describe('terminal viewport refit', () => {
 
   it('rejects stale async refits when the active terminal, ref, or run changes', () => {
     const expectedRef = { resetZoom: () => {} }
+
     const current = {
       activeHandle: 'term-1',
       expectedHandle: 'term-1',

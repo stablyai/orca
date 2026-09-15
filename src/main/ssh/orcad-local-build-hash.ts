@@ -15,6 +15,7 @@ export const ORCAD_BUILD_HASH_LENGTH = 16
 
 export function computeLocalOrcadBuildHash(localOrcadDir: string): string {
   const entry = join(localOrcadDir, 'orcad.js')
+
   return createHash('sha256')
     .update(readFileSync(entry))
     .digest('hex')

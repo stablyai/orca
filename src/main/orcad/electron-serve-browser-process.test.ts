@@ -19,6 +19,7 @@ vi.mock('../../shared/child-process/run-process', async (importOriginal) => ({
 import { ElectronServeBrowserProcess } from './electron-serve-browser-process'
 
 const FAKE_SIDECAR = join(import.meta.dirname, '__fixtures__', 'fake-orcad-electron-sidecar.cjs')
+
 const INSTALLED_EXECUTABLE = join('/Applications', 'Orca.app', 'Contents', 'MacOS', 'Orca')
 
 /** Every key the provider must strip so the sidecar cannot inherit orcad's own browser config. */
@@ -63,9 +64,13 @@ const host: RuntimeBrowserCommandHost = {
 }
 
 let harnessRoot: string
+
 let logPath: string
+
 let controlPath: string
+
 let sidecarMode: string | undefined
+
 let started: ElectronServeBrowserProcess[]
 
 async function setControl(control: Record<string, unknown>): Promise<void> {
@@ -74,6 +79,7 @@ async function setControl(control: Record<string, unknown>): Promise<void> {
 
 async function sidecarRequests(): Promise<SidecarRequest[]> {
   const raw = await readFile(logPath, 'utf8')
+
   return raw
     .split('\n')
     .filter((line) => line.trim())
@@ -88,6 +94,7 @@ async function startProvider(): Promise<ElectronServeBrowserProcess> {
   const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
   started.push(processHandle)
   await processHandle.start()
+
   return processHandle
 }
 
@@ -103,9 +110,11 @@ beforeEach(async () => {
   started = []
   await writeFile(logPath, '')
   await setControl({})
+
   const actual = await vi.importActual<typeof RunProcessModule>(
     '../../shared/child-process/run-process'
   )
+
   spawnProcessMock.mockReset()
   spawnProcessMock.mockImplementation((spec: RunProcessModule.ProcessSpec) =>
     actual.spawnProcess({
@@ -126,6 +135,7 @@ afterEach(async () => {
   for (const processHandle of started) {
     await processHandle.stop()
   }
+
   vi.unstubAllEnvs()
   await rm(harnessRoot, { recursive: true, force: true })
 })
@@ -135,6 +145,7 @@ describe('ElectronServeBrowserProcess start-up', () => {
     for (const key of AGENT_BROWSER_ENVIRONMENT_KEYS) {
       vi.stubEnv(key, `leaked-${key}`)
     }
+
     vi.stubEnv('ORCA_HARNESS_UNRELATED', 'preserved')
 
     const processHandle = await startProvider()
@@ -149,9 +160,11 @@ describe('ElectronServeBrowserProcess start-up', () => {
     expect(Number.isInteger(port) && port > 0 && port < 65_536).toBe(true)
     const userDataArg = args.find((arg) => arg.startsWith('--user-data-dir='))
     expect(userDataArg).toBeDefined()
+
     for (const key of AGENT_BROWSER_ENVIRONMENT_KEYS) {
       expect(spec.env).not.toHaveProperty(key)
     }
+
     expect(spec.env?.ORCA_HARNESS_UNRELATED).toBe('preserved')
     expect(processHandle.isAvailable()).toBe(true)
   })
@@ -166,6 +179,7 @@ describe('ElectronServeBrowserProcess start-up', () => {
     const statusCalls = (await sidecarRequests()).filter(
       (request) => request.method === 'status.get'
     )
+
     expect(statusCalls).toHaveLength(3)
     expect(processHandle.isAvailable()).toBe(true)
   })
@@ -181,9 +195,11 @@ describe('ElectronServeBrowserProcess start-up', () => {
 
   it('stops the sidecar process and removes its user data directory', async () => {
     const processHandle = await startProvider()
+
     const userDataPath = (spawnSpec().args ?? [])
       .find((arg) => arg.startsWith('--user-data-dir='))!
       .slice('--user-data-dir='.length)
+
     const metadata = JSON.parse(
       await readFile(join(userDataPath, 'orca-runtime.json'), 'utf8')
     ) as { pid: number }
@@ -228,26 +244,32 @@ describe('ElectronServeBrowserProcess command routing', () => {
     const created = (await commands.browserTabCreate({ worktree: 'wt-a' })) as {
       browserPageId: string
     }
+
     await commands.browserGoto({ worktree: 'wt-a', url: 'https://example.test/' })
 
     const requests = await browserRequests()
     expect(requests.map((request) => request.method)).toEqual(['browser.tabCreate', 'browser.goto'])
+
     for (const request of requests) {
       expect(request.authToken).toBe('fake-sidecar-auth-token')
       expect(request.params).not.toHaveProperty('worktree')
     }
+
     // The active page is targeted implicitly once the worktree resolves.
     expect(requests[1].params.page).toBe(created.browserPageId)
   })
 
   it('leaves targetless methods untargeted and renumbers listed tabs per worktree', async () => {
     const commands = (await startProvider()).createCommands(host)
+
     const first = (await commands.browserTabCreate({ worktree: 'wt-a' })) as {
       browserPageId: string
     }
+
     const second = (await commands.browserTabCreate({ worktree: 'wt-a' })) as {
       browserPageId: string
     }
+
     await commands.browserTabCreate({ worktree: 'wt-b' })
 
     const listed = (await commands.browserTabList({ worktree: 'wt-a' })) as {
@@ -258,17 +280,21 @@ describe('ElectronServeBrowserProcess command routing', () => {
       expect.objectContaining({ browserPageId: first.browserPageId, index: 0 }),
       expect.objectContaining({ browserPageId: second.browserPageId, index: 1 })
     ])
+
     const listRequest = (await browserRequests()).find(
       (request) => request.method === 'browser.tabList'
     )
+
     expect(listRequest?.params).not.toHaveProperty('page')
   })
 
   it('fences pages to the worktree that created them without calling the sidecar', async () => {
     const commands = (await startProvider()).createCommands(host)
+
     const created = (await commands.browserTabCreate({ worktree: 'wt-a' })) as {
       browserPageId: string
     }
+
     const before = (await browserRequests()).length
 
     await expect(
@@ -283,6 +309,7 @@ describe('ElectronServeBrowserProcess command routing', () => {
 
   it('routes browserTabCurrent to browser.tabShow for the active page', async () => {
     const commands = (await startProvider()).createCommands(host)
+
     const created = (await commands.browserTabCreate({ worktree: 'wt-a' })) as {
       browserPageId: string
     }
@@ -296,9 +323,11 @@ describe('ElectronServeBrowserProcess command routing', () => {
 
   it('re-creating a known page id is idempotent and issues no sidecar request', async () => {
     const commands = (await startProvider()).createCommands(host)
+
     const created = (await commands.browserTabCreate({ worktree: 'wt-a' })) as {
       browserPageId: string
     }
+
     const before = (await browserRequests()).length
 
     await expect(

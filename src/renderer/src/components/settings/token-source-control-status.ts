@@ -27,13 +27,16 @@ export function tokenProviderStatusLabel(input: {
       ? translate(`${NS}.statusConfigured`, 'Configured')
       : translate(`${NS}.statusConnected`, 'Connected')
   }
+
   if (input.status === 'unavailable') {
     return translate(`${NS}.statusUnavailable`, 'Unavailable')
   }
+
   if (input.status === 'not-configured') {
     return input.optional
       ? translate(`${NS}.statusOptionalSetup`, 'Optional setup')
       : translate(`${NS}.statusNotConfigured`, 'Not configured')
   }
+
   return translate(`${NS}.statusAuthFailed`, 'Auth failed')
 }

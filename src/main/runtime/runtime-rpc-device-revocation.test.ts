@@ -24,6 +24,7 @@ vi.mock('../git/worktree', () => {
       isMainWorktree: false
     }
   ]
+
   return {
     listWorktrees: vi.fn().mockResolvedValue(worktrees),
     listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
@@ -34,6 +35,7 @@ describe('OrcaRuntimeRpcServer', () => {
   it('cleans up pre-auth E2EE WebSocket state when the socket closes', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
@@ -49,10 +51,13 @@ describe('OrcaRuntimeRpcServer', () => {
         name: 'mobile-test',
         scope: 'mobile'
       })
+
       expect(offer.available).toBe(true)
+
       if (!offer.available) {
         throw new Error('WebSocket pairing unavailable')
       }
+
       const parsed = parsePairingCode(offer.pairingUrl)!
       const ws = await connectWs(parsed.endpoint)
       const mobileKeys = generateKeyPair()
@@ -81,12 +86,14 @@ describe('OrcaRuntimeRpcServer', () => {
   it('terminates active WebSockets for a revoked mobile device', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,
       wsPort: 0
     })
+
     const disconnectSpy = vi.spyOn(runtime, 'onClientDisconnected')
 
     await server.start()
@@ -97,10 +104,13 @@ describe('OrcaRuntimeRpcServer', () => {
         name: 'mobile-test',
         scope: 'mobile'
       })
+
       expect(offer.available).toBe(true)
+
       if (!offer.available) {
         throw new Error('WebSocket pairing unavailable')
       }
+
       const first = await authenticateMobileWs(offer.pairingUrl)
       const second = await authenticateMobileWs(offer.pairingUrl)
 
@@ -122,6 +132,7 @@ describe('OrcaRuntimeRpcServer', () => {
   it('does not revoke runtime-scoped devices through mobile revocation', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
@@ -137,7 +148,9 @@ describe('OrcaRuntimeRpcServer', () => {
         name: 'runtime-test',
         scope: 'runtime'
       })
+
       expect(offer.available).toBe(true)
+
       if (!offer.available) {
         throw new Error('WebSocket pairing unavailable')
       }
@@ -152,6 +165,7 @@ describe('OrcaRuntimeRpcServer', () => {
   it('terminates active WebSockets for a revoked runtime access grant', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
@@ -167,10 +181,13 @@ describe('OrcaRuntimeRpcServer', () => {
         name: 'runtime-test',
         scope: 'runtime'
       })
+
       expect(offer.available).toBe(true)
+
       if (!offer.available) {
         throw new Error('WebSocket pairing unavailable')
       }
+
       const first = await authenticateMobileWs(offer.pairingUrl)
       const second = await authenticateMobileWs(offer.pairingUrl)
 
@@ -191,6 +208,7 @@ describe('OrcaRuntimeRpcServer', () => {
   it('rotates unused runtime pairing links without revoking already-used grants', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
+
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
@@ -207,14 +225,17 @@ describe('OrcaRuntimeRpcServer', () => {
         rotate: true,
         scope: 'runtime'
       })
+
       const second = server.createPairingOffer({
         address: '127.0.0.1',
         name: 'runtime-test',
         rotate: true,
         scope: 'runtime'
       })
+
       expect(first.available).toBe(true)
       expect(second.available).toBe(true)
+
       if (!first.available || !second.available) {
         throw new Error('WebSocket pairing unavailable')
       }
@@ -226,13 +247,16 @@ describe('OrcaRuntimeRpcServer', () => {
       expect(server.getDeviceRegistry()?.getDevice(first.deviceId)).toBeNull()
 
       server.getDeviceRegistry()?.updateLastSeen(second.deviceId)
+
       const third = server.createPairingOffer({
         address: '127.0.0.1',
         name: 'runtime-test',
         rotate: true,
         scope: 'runtime'
       })
+
       expect(third.available).toBe(true)
+
       if (!third.available) {
         throw new Error('WebSocket pairing unavailable')
       }

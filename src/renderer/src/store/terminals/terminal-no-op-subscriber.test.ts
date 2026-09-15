@@ -54,6 +54,7 @@ describe('terminal no-op subscriber budget', () => {
       () => store.getState().clearNativeChatLaunchPrompt('tab'),
       () => store.getState().clearNativeChatLaunchDraft('tab')
     ]
+
     for (const action of actions) {
       listener.mockClear()
       action()
@@ -123,15 +124,18 @@ describe('terminal no-op subscriber budget', () => {
       ])
     const listener = vi.fn()
     store.subscribe(listener)
+
     const actions = [
       () => store.getState().dismissCodexRestartNotices(['pty']),
       () => store.getState().reopenCodexRestartPrompt('pty'),
       () => store.getState().clearCodexRestartNotice('pty')
     ]
+
     for (const [index, action] of actions.entries()) {
       if (index === 1) {
         store.getState().queueCodexPaneRestarts(['pty'])
       }
+
       listener.mockClear()
       action()
       expect(listener).toHaveBeenCalledTimes(1)
@@ -140,6 +144,7 @@ describe('terminal no-op subscriber budget', () => {
       expect(listener).toHaveBeenCalledTimes(1)
       expect(store.getState()).toBe(before)
     }
+
     expect(store.getState().codexRestartNoticeByPtyId.pty).toBeUndefined()
     expect(store.getState().pendingCodexPaneRestartIds.pty).toBeUndefined()
   })

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockStateValues: unknown[] = []
+
 let mockStateIndex = 0
 
 function resetMockState() {
@@ -9,16 +10,20 @@ function resetMockState() {
 
 vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+
   return {
     ...actual,
     useState: (initial: unknown) => {
       const i = mockStateIndex++
+
       if (mockStateValues[i] === undefined) {
         mockStateValues[i] = initial
       }
+
       const setter = (v: unknown) => {
         mockStateValues[i] = v
       }
+
       return [mockStateValues[i], setter]
     },
     useCallback: (fn: () => void) => fn,
@@ -183,9 +188,11 @@ type ReactElementLike = {
 function getPropNodes(el: ReactElementLike): unknown[] {
   const nodes = [el.props?.children, el.props?.description, el.props?.control]
   const options = el.props?.options
+
   if (Array.isArray(options)) {
     nodes.push(options.map((option) => (option as { label?: unknown }).label))
   }
+
   return nodes
 }
 
@@ -197,20 +204,26 @@ function collectText(node: unknown): string {
   if (node == null) {
     return ''
   }
+
   if (typeof node === 'string') {
     return node
   }
+
   if (typeof node === 'number') {
     return String(node)
   }
+
   if (Array.isArray(node)) {
     return node.map(collectText).join('')
   }
+
   const el = node as ReactElementLike
   const rendered = renderFunctionElement(el)
+
   if (rendered !== undefined) {
     return collectText(rendered)
   }
+
   return getPropNodes(el).map(collectText).join('')
 }
 
@@ -218,33 +231,44 @@ function findAnchorByText(node: unknown, text: string): ReactElementLike | null 
   if (node == null) {
     return null
   }
+
   if (Array.isArray(node)) {
     for (const child of node) {
       const found = findAnchorByText(child, text)
+
       if (found) {
         return found
       }
     }
+
     return null
   }
+
   if (typeof node === 'string' || typeof node === 'number') {
     return null
   }
+
   const el = node as ReactElementLike
   const typeName = typeof el.type === 'function' ? el.type.name : String(el.type)
+
   if (typeName === 'a' && collectText(el.props.children).includes(text)) {
     return el
   }
+
   const rendered = renderFunctionElement(el)
+
   if (rendered !== undefined) {
     return findAnchorByText(rendered, text)
   }
+
   for (const child of getPropNodes(el)) {
     const found = findAnchorByText(child, text)
+
     if (found) {
       return found
     }
   }
+
   return null
 }
 
@@ -252,18 +276,24 @@ function hasShellIconFor(node: unknown, shell: string): boolean {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return false
   }
+
   if (Array.isArray(node)) {
     return node.some((child) => hasShellIconFor(child, shell))
   }
+
   const el = node as ReactElementLike
   const typeName = typeof el.type === 'function' ? el.type.name : String(el.type)
+
   if (typeName === 'ShellIcon' && el.props.shell === shell) {
     return true
   }
+
   const rendered = renderFunctionElement(el)
+
   if (rendered !== undefined) {
     return hasShellIconFor(rendered, shell)
   }
+
   return getPropNodes(el).some((child) => hasShellIconFor(child, shell))
 }
 

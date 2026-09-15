@@ -10,13 +10,16 @@ vi.mock('react-native-gesture-handler', () => {
     runOnJS: () => pinch,
     onStart: (cb: () => void) => {
       handlers.start = cb
+
       return pinch
     },
     onUpdate: (cb: (e: { scale: number }) => void) => {
       handlers.update = cb
+
       return pinch
     }
   }
+
   return {
     Gesture: { Simultaneous: (...g: unknown[]) => g, Native: () => ({}), Pinch: () => pinch }
   }
@@ -37,9 +40,11 @@ describe('quantizeFontScale', () => {
 
   it('collapses a full-range pinch to at most one commit per step', () => {
     const committed = new Set<number>()
+
     for (let i = 0; i <= 600; i++) {
       committed.add(quantizeFontScale(0.7 + i * 0.002))
     }
+
     expect(committed.size).toBeLessThanOrEqual(Math.round(1 / FONT_SCALE_STEP) + 1)
   })
 })
@@ -50,6 +55,7 @@ describe('useMobileNativeChatPinchGesture', () => {
 
   function Probe(): null {
     latest = useMobileNativeChatPinchGesture().fontScale
+
     return null
   }
 
@@ -73,9 +79,11 @@ describe('useMobileNativeChatPinchGesture', () => {
   // that silently drops the tail of a long message.
   it('commits nothing for gesture noise the user cannot see', () => {
     act(() => handlers.start?.())
+
     for (const scale of [1.001, 0.995, 1.008, 1.02, 0.982]) {
       act(() => handlers.update?.({ scale }))
     }
+
     expect(latest).toBe(1)
   })
 

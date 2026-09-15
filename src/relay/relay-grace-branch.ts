@@ -58,10 +58,12 @@ export function applyRelayGraceTimeConfiguration(
   state: RelayGraceTimeConfigurationInput
 ): { graceTimeMs: number } {
   const seconds = Number(graceTimeSeconds)
+
   if (Number.isFinite(seconds) && seconds >= 0) {
     const previousConfiguredGraceMs = state.readConfiguredGraceMs()
     // Why: the host sends 0 before system sleep so live remote PTYs survive longer than the ordinary grace window.
     state.writeConfiguredGraceMs(Math.floor(seconds) * 1000)
+
     const reconfigure = decideRelayGraceReconfigure({
       previousConfiguredGraceMs,
       nextConfiguredGraceMs: state.readConfiguredGraceMs(),
@@ -69,12 +71,14 @@ export function applyRelayGraceTimeConfiguration(
       shutdownInFlight: state.isShutdownInFlight(),
       currentBranch: state.readGraceBranch()
     })
+
     if (reconfigure.rearm) {
       state.startGrace('grace reconfigured', {
         retryDeferredShutdown: reconfigure.retryDeferredShutdown
       })
     }
   }
+
   return { graceTimeMs: state.readConfiguredGraceMs() }
 }
 
@@ -96,6 +100,7 @@ export function decideRelayGraceReconfigure(
   ) {
     return { rearm: false }
   }
+
   // Why carry the branch forward: re-arming without it downgrades a deferred shutdown to an ordinary
   // configured window, and the refused kill is never retried.
   return { rearm: true, retryDeferredShutdown: input.currentBranch === 'shutdown-deferred' }
@@ -112,6 +117,7 @@ export function decideRelayGrace(input: RelayGraceDecisionInput): RelayGraceDeci
   // Why: a detached relay that never accepted a client has no PTY state and shouldn't linger forever.
   const startupEmptyDetached =
     input.detached && !input.hasAcceptedSocketClient && input.activePtyCount === 0
+
   // Why: zero PTYs means nothing left to preserve, so only the unlimited default is capped — an
   // explicitly configured grace is honored verbatim rather than clamped down to the idle cap.
   // Why: a spawn parked mid-creation is not in the pool yet, so capping on it would kill the live

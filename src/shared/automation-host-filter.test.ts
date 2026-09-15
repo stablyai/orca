@@ -14,6 +14,7 @@ const sshHost: StableAutomationCatalogRef = {
   authority: { kind: 'runtime', environmentId: 'env-1' },
   selector: { kind: 'ssh', targetId: 'ssh:a' }
 }
+
 const sshFilter: AutomationHostFilter = { kind: 'host', host: sshHost }
 
 describe('persisted automation host filter', () => {
@@ -35,6 +36,7 @@ describe('persisted automation host filter', () => {
       },
       sshFilter
     ]
+
     for (const filter of filters) {
       expect(parsePersistedAutomationHostFilter(toPersistedAutomationHostFilter(filter))).toEqual(
         filter
@@ -72,6 +74,7 @@ describe('persisted automation host filter', () => {
       kind: 'host',
       host: { authority: { kind: 'desktop' }, selector: { kind: 'ssh', targetId: 'shared' } }
     }
+
     const runtime: AutomationHostFilter = {
       kind: 'host',
       host: {
@@ -79,6 +82,7 @@ describe('persisted automation host filter', () => {
         selector: { kind: 'ssh', targetId: 'shared' }
       }
     }
+
     expect(automationHostFiltersEqual(desktop, runtime)).toBe(false)
   })
 })

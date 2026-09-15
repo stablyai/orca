@@ -10,6 +10,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 // what adoption reads as "retire this page" versus "wait for its host". Stubbing the seam that
 // decides destruction proves only that the caller obeys the answer, never that the answer is right.
 const FOLDER_WORKSPACE_ID = 'folder-workspace-1'
+
 const WORKSPACE_ID = `folder:${FOLDER_WORKSPACE_ID}`
 
 describe('browser execution host key resolution', () => {
@@ -46,6 +47,7 @@ describe('browser execution host key resolution', () => {
 
 function createRuntime(overrides: Partial<FolderWorkspace> = {}): OrcaRuntimeService {
   const folderPath = mkdtempSync(join(tmpdir(), 'orca-browser-host-key-'))
+
   const folderWorkspace: FolderWorkspace = {
     id: FOLDER_WORKSPACE_ID,
     projectGroupId: 'project-group-1',
@@ -62,6 +64,7 @@ function createRuntime(overrides: Partial<FolderWorkspace> = {}): OrcaRuntimeSer
     updatedAt: 1,
     ...overrides
   }
+
   return new OrcaRuntimeService({
     getFolderWorkspaces: () => [folderWorkspace],
     getProjectGroups: () => [],

@@ -14,7 +14,9 @@ const MAC_WORKFLOWS = [
 ]
 
 const winWorkflow = () => readWorkflow('.github/workflows/dev-channel-win-build.yml')
+
 const winSteps = () => winWorkflow().jobs['build-win'].steps
+
 const stepNamed = (steps, name) => steps.find((step) => step.name === name)
 
 describe('dev-channel Windows build wiring', () => {
@@ -60,9 +62,11 @@ describe('dev-channel Windows build wiring', () => {
       for (const key of ['tag', 'version', 'head_sha', 'published']) {
         expect(job.outputs[key]).toBeTruthy()
       }
+
       // Every referenced step id must actually exist in the job.
       for (const expression of Object.values(job.outputs)) {
         const referenced = [...expression.matchAll(/steps\.([A-Za-z0-9_-]+)\./g)].map((m) => m[1])
+
         for (const id of referenced) {
           expect(stepIds).toContain(id)
         }

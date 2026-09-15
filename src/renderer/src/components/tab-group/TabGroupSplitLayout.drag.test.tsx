@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const setTabGroupSplitRatioMock = vi.fn()
+
 const recordFeatureInteractionMock = vi.fn()
 
 vi.mock('../../store', () => ({
@@ -49,6 +50,7 @@ function pointerEvent(type: string, init: { pointerId?: number; clientX?: number
   Object.defineProperty(event, 'pointerId', { value: init.pointerId ?? 1 })
   Object.defineProperty(event, 'clientX', { value: init.clientX ?? 0 })
   Object.defineProperty(event, 'clientY', { value: 0 })
+
   return event
 }
 

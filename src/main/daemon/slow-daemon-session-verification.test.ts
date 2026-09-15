@@ -22,6 +22,7 @@ const RESPONSE_DELAY_MS = 3_500
 
 function createMockSubprocess(): SubprocessHandle {
   let onExitCb: ((code: number) => void) | null = null
+
   return {
     pid: 55555,
     getForegroundProcess: vi.fn(() => null),
@@ -52,10 +53,12 @@ function startDelayProxy(listenPath: string, upstreamPath: string): Server {
         }
       }, RESPONSE_DELAY_MS)
     })
+
     const teardown = (): void => {
       clientSocket.destroy()
       upstream.destroy()
     }
+
     clientSocket.on('close', teardown)
     clientSocket.on('error', teardown)
     upstream.on('close', () => {
@@ -63,7 +66,9 @@ function startDelayProxy(listenPath: string, upstreamPath: string): Server {
     })
     upstream.on('error', teardown)
   })
+
   proxy.listen(listenPath)
+
   return proxy
 }
 
@@ -90,12 +95,15 @@ describe('slow daemon session verification', () => {
     for (const client of clients.splice(0)) {
       client.disconnect()
     }
+
     if (proxy) {
       await new Promise<void>((resolve) => proxy.close(() => resolve()))
     }
+
     if (server) {
       await server.shutdown()
     }
+
     rmSync(dir, { recursive: true, force: true })
   })
 

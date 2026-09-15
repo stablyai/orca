@@ -43,19 +43,24 @@ function getLaunchBinary(command: string): string {
 }
 
 const PI_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.pi.launchCmd)
+
 const OMP_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG.omp.launchCmd)
+
 const PRIME_AGENT_LAUNCH_BINARY = getLaunchBinary(TUI_AGENT_CONFIG['prime-agent'].launchCmd)
 
 export function detectExplicitPiAgentKindFromCommand(
   command: string | undefined
 ): PiAgentKind | null {
   const binary = getLaunchBinary(command ?? '')
+
   if (binary === OMP_LAUNCH_BINARY) {
     return 'omp'
   }
+
   if (binary === PRIME_AGENT_LAUNCH_BINARY) {
     return 'prime-agent'
   }
+
   return binary === PI_LAUNCH_BINARY ? 'pi' : null
 }
 
@@ -73,6 +78,7 @@ export function detectExplicitPiAgentKindFromCommand(
  */
 export function detectPiAgentKindFromCommand(command: string | undefined): PiAgentKind {
   const explicitKind = detectExplicitPiAgentKindFromCommand(command)
+
   if (explicitKind) {
     return explicitKind
   }

@@ -11,10 +11,13 @@ export type WslSessionContext = {
 
 export function getWslContextFromSessionId(sessionId: string): WslSessionContext | undefined {
   const worktreeId = parsePtySessionId(sessionId).worktreeId
+
   const worktreePath = worktreeId
     ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
     : undefined
+
   const wslInfo = worktreePath ? parseWslPath(worktreePath) : null
+
   return wslInfo ? { distro: wslInfo.distro, treatPosixCwdAsWsl: true } : undefined
 }
 
@@ -22,6 +25,7 @@ export function getWslContextFromPreferredDistro(
   distro: string | null | undefined
 ): WslSessionContext | undefined {
   const trimmed = distro?.trim()
+
   return trimmed ? { distro: trimmed, treatPosixCwdAsWsl: true } : undefined
 }
 
@@ -34,10 +38,13 @@ export function resolveWslSessionContext(args: {
   if (process.platform !== 'win32') {
     return undefined
   }
+
   const cwdDistro = args.cwd ? parseWslUncPath(args.cwd)?.distro : undefined
+
   if (cwdDistro) {
     return { distro: cwdDistro, treatPosixCwdAsWsl: true }
   }
+
   return (
     (args.sessionId ? getWslContextFromSessionId(args.sessionId) : undefined) ??
     (isWslShellName(args.shellOverride)

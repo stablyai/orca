@@ -7,12 +7,14 @@ import type { StructuredSessionTabPublicationVersion } from '../local-structured
 // never reach the mirror, so every async entry point carries the generation it
 // was started under and re-checks it before applying.
 let syncGeneration = 0
+
 let restorePromise: Promise<void> | null = null
 
 export const localStructuredSessionVersionByWorktree = new Map<
   string,
   StructuredSessionTabPublicationVersion
 >()
+
 export const localStructuredSessionEpochHistoryByWorktree = new Map<
   string,
   SessionTabsPublicationEpochHistory
@@ -48,6 +50,7 @@ export function latchLocalStructuredSessionRestore(start: () => Promise<void>): 
     restorePromise = null
     throw error
   })
+
   return restorePromise
 }
 

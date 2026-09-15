@@ -58,6 +58,7 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
     lastActivityAt: 1,
     isMainWorktree: false
   }
+
   return { ...worktree, ...overrides }
 }
 
@@ -163,6 +164,7 @@ describe('resolveAiVaultSessionWorktreeInfo', () => {
       path: '/srv/orca',
       hostId: 'local'
     })
+
     const sshWorktree = makeWorktree({
       id: 'repo-ssh::/srv/orca',
       repoId: 'repo-ssh',

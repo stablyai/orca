@@ -64,12 +64,15 @@ export function buildRetiredTerminalTabStateSweepPatch(
   if (tabIds.length === 0) {
     return null
   }
+
   // Why: the registry side effects run while the patch is computed (possibly inside a set()
   // updater) — safe because all are idempotent and the ids are genuinely retired, but a caller
   // that discards the patch still mutates the registries.
   let swept: RetiredTerminalTabSweepState = state
+
   for (const tabId of tabIds) {
     retireParkedTerminalTab(tabId)
+
     const { patch } = buildAgentStatusTabPrefixDropPatch(
       swept,
       tabId,
@@ -79,21 +82,26 @@ export function buildRetiredTerminalTabStateSweepPatch(
         ...(opts?.preserveActivityClearedState ? { preserveActivityClearedState: true } : {})
       }
     )
+
     const foreground = buildPaneForegroundAgentTabPrefixClearPatch(
       swept.paneForegroundAgentByPaneKey,
       [`${tabId}:`]
     )
+
     swept = { ...swept, ...patch, ...foreground }
     forgetAgentHibernationTabOutput(tabId)
   }
+
   forgetForegroundTerminalTabs(tabIds)
   forgetAgentStartupDeliveriesForTabs(tabIds)
   const changed: Record<string, unknown> = {}
+
   for (const key of Object.keys(swept) as (keyof RetiredTerminalTabSweepState)[]) {
     if (!Object.is(swept[key], state[key])) {
       changed[key] = swept[key]
     }
   }
+
   return Object.keys(changed).length === 0
     ? null
     : (changed as Partial<RetiredTerminalTabSweepState>)

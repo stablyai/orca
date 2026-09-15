@@ -34,6 +34,7 @@ describe('RepositorySourceControlAiActionRows', () => {
     const actionDirtyById = Object.fromEntries(
       SOURCE_CONTROL_ACTION_IDS.map((actionId) => [actionId, actionId === 'fixCommitFailure'])
     ) as Record<SourceControlActionId, boolean>
+
     const source = {
       enabled: true,
       agentId: null,

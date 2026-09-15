@@ -7,8 +7,10 @@ import { createPtyIpcSpawnState, type PtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
 
 const SESSION_ID = 'orca-pty-session-1'
+
 /** What a pane that mounted while `display:none` reports: xterm's unmeasured default. */
 const HIDDEN_PANE_REQUEST = { cols: 80, rows: 24 }
+
 /** The grid the surviving daemon session is actually running at. */
 const LIVE_GRID = { cols: 211, rows: 57 }
 
@@ -31,6 +33,7 @@ function makeCtx(args: PtySpawnIpcArgs, runtime: ReturnType<typeof makeRuntime>)
     sendPtySpawnedToRenderer: vi.fn(),
     runtime
   } as unknown as PtySpawnIpcDeps
+
   const ctx = createPtyIpcSpawnState(deps, args)
   ctx.env = {}
   ctx.isDaemonHostSpawn = true
@@ -38,6 +41,7 @@ function makeCtx(args: PtySpawnIpcArgs, runtime: ReturnType<typeof makeRuntime>)
   ctx.effectiveSessionAppId = SESSION_ID
   // Mirrors spawn-preflight: a caller-supplied sessionId is an attach, never a fresh mint.
   ctx.isMintedSessionId = args.sessionId === undefined
+
   return ctx
 }
 
@@ -54,6 +58,7 @@ async function runSpawn(
   const preAttachSize = ptySizes.get(SESSION_ID)
   ctx.result = result
   await commitPtyIpcSpawn(ctx)
+
   return { runtime, preAttachSize }
 }
 

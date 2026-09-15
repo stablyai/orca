@@ -37,6 +37,7 @@ const cache = new Map<string, CachedTranscript>()
 // it unbounded. Map preserves insertion order, so evicting the first key drops
 // the oldest entry (a simple LRU once re-inserts bump recency; see setCached).
 const MAX_CACHE_ENTRIES = 50
+
 // Why: a heavy Claude/Codex coding session's JSONL is routinely tens of MB (tool
 // results embed whole file contents, command output, and diffs), and each cached
 // entry is the full unwindowed parse. The count cap alone let 50 such entries
@@ -45,6 +46,7 @@ const MAX_CACHE_ENTRIES = 50
 // recent entry (see setCached) so an active transcript is never re-parsed on
 // every read, which caps the regression to extra re-parses only past this budget.
 const MAX_CACHE_BYTES = 128 * 1024 * 1024
+
 // Overridable only from tests so the byte-eviction path can be exercised without
 // writing hundreds of MB of fixtures; production always uses MAX_CACHE_BYTES.
 let maxCacheBytes = MAX_CACHE_BYTES
@@ -54,17 +56,21 @@ function setCached(key: string, value: CachedTranscript): void {
   cache.delete(key)
   cache.set(key, value)
   let totalBytes = 0
+
   for (const entry of cache.values()) {
     totalBytes += entry.bytes
   }
+
   // Evict oldest until within BOTH caps, but never drop the most-recent entry
   // (cache.size > 1): a single active transcript larger than the whole budget
   // must stay cached or every read would re-parse the full file.
   while (cache.size > 1 && (cache.size > MAX_CACHE_ENTRIES || totalBytes > maxCacheBytes)) {
     const oldest = cache.keys().next().value
+
     if (oldest === undefined) {
       break
     }
+
     totalBytes -= cache.get(oldest)?.bytes ?? 0
     cache.delete(oldest)
   }
@@ -77,6 +83,7 @@ function cacheKey(agent: AgentType, filePath: string): string {
 async function fileStat(filePath: string): Promise<{ mtimeMs: number; bytes: number }> {
   try {
     const stats = await wslGatedStat(filePath, 'exact')
+
     return { mtimeMs: stats.mtimeMs, bytes: stats.size }
   } catch (err) {
     // Why: swallowing a gate refusal into an unknown mtime falls through to a
@@ -84,6 +91,7 @@ async function fileStat(filePath: string): Promise<{ mtimeMs: number; bytes: num
     if (err instanceof WslTranscriptFsError) {
       throw err
     }
+
     return { mtimeMs: Number.NaN, bytes: 0 }
   }
 }
@@ -100,6 +108,7 @@ export async function readNativeChatTranscriptCached(
   transcriptPath?: string
 ): Promise<ReadTranscriptResult> {
   let filePath: string | null
+
   try {
     filePath = await resolveSessionFilePath(agent, sessionId, { transcriptPath })
   } catch (err) {
@@ -107,6 +116,7 @@ export async function readNativeChatTranscriptCached(
     // or `notFound` so the next call re-resolves.
     return { error: wslTranscriptFsRefusal(err).message }
   }
+
   if (!filePath) {
     // Not cached (see below): a not-yet-flushed transcript should be re-checked
     // on the next call, not pinned as a settled miss (#8401).
@@ -117,6 +127,7 @@ export async function readNativeChatTranscriptCached(
   const cached = cache.get(key)
   let mtimeMs: number
   let bytes: number
+
   try {
     ;({ mtimeMs, bytes } = await fileStat(filePath))
   } catch (err) {
@@ -126,23 +137,29 @@ export async function readNativeChatTranscriptCached(
     if (cached) {
       // Bump recency so a session read through a stall survives eviction.
       setCached(key, cached)
+
       return cached.result
     }
+
     return { error: wslTranscriptFsRefusal(err).message }
   }
+
   if (cached && Number.isFinite(mtimeMs) && cached.mtimeMs === mtimeMs) {
     // Bump recency so a frequently-read session survives eviction.
     setCached(key, cached)
+
     return cached.result
   }
 
   const result = await readNativeChatTranscript(agent, sessionId, { filePath })
+
   // Why: a body-read refusal is transient unavailability, but the file's mtime
   // is unchanged by it — caching it would serve the retryable error to every
   // later call until the transcript itself changes, even after the distro woke.
   if (Number.isFinite(mtimeMs) && !isGateRefusal(result)) {
     setCached(key, { result, mtimeMs, bytes })
   }
+
   return result
 }
 

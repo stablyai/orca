@@ -30,6 +30,7 @@ export type IssueSourceIndicatorProps = {
 // Why: never leak the local remote name ("upstream" / "origin"); it would imply
 // Orca maintains a stable mapping between UI labels and git config.
 const LABEL_PREFIX_LIST = 'Issues from '
+
 const LABEL_PREFIX_ITEM = 'Issue from '
 
 export function sameGitHubOwnerRepo(
@@ -39,6 +40,7 @@ export function sameGitHubOwnerRepo(
   if (!left || !right) {
     return false
   }
+
   // Why: names are case-insensitive, but the same slug on github.com and GHES
   // identifies different repositories and must not suppress source routing.
   return githubRepoIdentityKey(left) === githubRepoIdentityKey(right)
@@ -65,15 +67,20 @@ export default function IssueSourceIndicator({
   if (!issues || !prs) {
     return null
   }
+
   if (sameGitHubOwnerRepo(issues, prs)) {
     return null
   }
+
   const host = issues.host?.trim()
+
   const slug =
     host && !isDefaultGitHubHost(host)
       ? `${host}/${issues.owner}/${issues.repo}`
       : `${issues.owner}/${issues.repo}`
+
   const prefix = variant === 'item' ? LABEL_PREFIX_ITEM : LABEL_PREFIX_LIST
+
   return (
     <span
       className={cn(

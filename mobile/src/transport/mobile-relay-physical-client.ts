@@ -7,7 +7,9 @@ import { isRpcResponse } from './rpc-response-shape'
 import { redactSocketEndpoint } from './socket-event-debug'
 import type { ConnectionLogSink, RpcResponse } from './types'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+
 export { RelayOuterError } from './mobile-relay-e2ee-link'
+
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 
 const RELAY_ERROR_CLOSE_GRACE_MS = 250
@@ -39,11 +41,13 @@ export function connectMobileRelayForPairing(args: {
   const cellHost = redactSocketEndpoint(socketUrl)
   log('info', 'Relay: dialing cell', cellHost)
   const socket = (args.createSocket ?? ((url) => new WebSocket(url)))(socketUrl)
+
   const session = MobileE2EEV2ClientSession.create({
     desktopPublicKeyB64: args.desktopPublicKeyB64,
     transport: 'relay',
     relayHostId: args.relay.relayHostId
   })
+
   const pending = new Map<string, PendingRequest>()
   let requestCounter = 0
   let closed = false
@@ -53,10 +57,12 @@ export function connectMobileRelayForPairing(args: {
   let authenticated = false
   let resolveAuthenticated!: () => void
   let rejectAuthenticated!: (error: Error) => void
+
   const authenticatedPromise = new Promise<void>((resolve, reject) => {
     resolveAuthenticated = resolve
     rejectAuthenticated = reject
   })
+
   const channel = new MobileE2EEV2PhysicalChannel({
     session,
     socket,
@@ -69,15 +75,19 @@ export function connectMobileRelayForPairing(args: {
     },
     onText: (plaintext) => {
       let value: unknown
+
       try {
         value = JSON.parse(plaintext)
       } catch {
         return
       }
+
       if (!isRpcResponse(value)) {
         return
       }
+
       const request = pending.get(value.id)
+
       if (request) {
         clearTimeout(request.timer)
         pending.delete(value.id)
@@ -99,6 +109,7 @@ export function connectMobileRelayForPairing(args: {
       })
     )
   }
+
   let inboundChain: Promise<void> = Promise.resolve()
   socket.onmessage = (event) => {
     inboundChain = inboundChain
@@ -106,14 +117,18 @@ export function connectMobileRelayForPairing(args: {
         if (closed) {
           return
         }
+
         if (!outerReady) {
           acceptRelayHello(event.data)
+
           return
         }
+
         await channel.handleMessage(event.data)
       })
       .catch((error: unknown) => fail(asError(error)))
   }
+
   // WebSocket implementations commonly emit `error` immediately before
   // `close`; the bounded fallback represents an opaque 1006 close.
   socket.onerror = () => {
@@ -122,11 +137,13 @@ export function connectMobileRelayForPairing(args: {
       fail(new RelayOuterError(1006))
     }, RELAY_ERROR_CLOSE_GRACE_MS)
   }
+
   socket.onclose = (event) => {
     if (transportErrorTimer) {
       clearTimeout(transportErrorTimer)
       transportErrorTimer = null
     }
+
     fail(new RelayOuterError(event.code || 1006))
   }
 
@@ -134,22 +151,29 @@ export function connectMobileRelayForPairing(args: {
     if (typeof raw !== 'string') {
       throw new Error('expected plaintext relay hello')
     }
+
     let value: unknown
+
     try {
       value = JSON.parse(raw)
     } catch {
       throw new Error('invalid relay hello JSON')
     }
+
     const parsed = RelayPhoneHelloSchema.safeParse(value)
+
     if (!parsed.success) {
       throw new Error('invalid relay hello')
     }
+
     if (!parsed.data.ok) {
       throw new RelayOuterError(parsed.data.code)
     }
+
     if (parsed.data.credentialKind !== (args.expectedCredentialKind ?? 'invite')) {
       throw new Error('relay credential resolved as an unexpected credential kind')
     }
+
     outerReady = true
     log('info', 'Relay: cell accepted credential', 'Starting E2EE handshake')
     channel.start()
@@ -159,22 +183,28 @@ export function connectMobileRelayForPairing(args: {
     if (closed) {
       return
     }
+
     closed = true
+
     if (transportErrorTimer) {
       clearTimeout(transportErrorTimer)
       transportErrorTimer = null
     }
+
     if (intentionallyClosed) {
       log('info', 'Relay: pairing socket closed', cellHost)
     } else {
       log('warn', 'Relay: pairing socket closed', pairingRelayErrorDetail(error))
     }
+
     channel.dispose()
     rejectAuthenticated(error)
+
     for (const request of pending.values()) {
       clearTimeout(request.timer)
       request.reject(error)
     }
+
     pending.clear()
     socket.close()
   }
@@ -182,16 +212,21 @@ export function connectMobileRelayForPairing(args: {
   return {
     async sendRequest(method, params) {
       await authenticatedPromise
+
       if (closed || !authenticated) {
         throw new Error('relay pairing client closed')
       }
+
       const id = `relay-pair-${++requestCounter}`
+
       return new Promise<RpcResponse>((resolve, reject) => {
         const timer = setTimeout(() => {
           pending.delete(id)
           reject(new Error(`relay pairing RPC timed out: ${method}`))
         }, requestTimeoutMs)
+
         pending.set(id, { resolve, reject, timer })
+
         if (
           !channel.sendText(JSON.stringify({ id, deviceToken: args.deviceToken, method, params }))
         ) {
@@ -212,6 +247,7 @@ export function relayPhoneWebSocketUrl(relay: PairingRelay): string {
   const url = new URL(relay.cellUrl)
   url.protocol = 'wss:'
   url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
+
   return url.toString()
 }
 

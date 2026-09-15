@@ -13,6 +13,7 @@ export function resolveMobileBrowserAddressSync(
   next: MobileBrowserAddressSyncState
 ): MobileBrowserAddressSyncResult {
   const changed = previous.focused !== next.focused || previous.url !== next.url
+
   return {
     nextState: changed ? next : previous,
     shouldSyncValue: changed && !next.focused

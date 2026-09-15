@@ -45,11 +45,13 @@ describe('runtime-required English catalog rule', () => {
   // contributor's machine and CI would make the gate flap forever.
   it('produces byte-identical output whatever order the call sites are visited in', () => {
     const shuffled = references.toReversed()
+
     const forward = JSON.stringify(
       buildRuntimeRequiredCatalog(entries, collectRuntimeRequiredKeys(entries, references)),
       null,
       2
     )
+
     const reversed = JSON.stringify(
       buildRuntimeRequiredCatalog(entries, collectRuntimeRequiredKeys(entries, shuffled)),
       null,

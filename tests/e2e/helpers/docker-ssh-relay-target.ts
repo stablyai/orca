@@ -8,7 +8,9 @@ import { getDockerSshRelayImage } from './docker-ssh-relay-image'
 import type { TestInfo } from '@stablyai/playwright-test'
 
 export const DOCKER_SSH_RELAY_REMOTE_REPO_PATH = '/tmp/orca-docker-relay-perf-repo'
+
 export const DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH = '/tmp/orca-docker-proxy-jump-repo'
+
 export const DOCKER_SSH_SECOND_HUB_REMOTE_REPO_PATH = '/tmp/orca-docker-second-hub-repo'
 
 export type DockerSshRelayTarget = {
@@ -82,22 +84,27 @@ function sshArgs(target: DockerSshRelayTarget, command: string): string[] {
 function waitForSsh(target: DockerSshRelayTarget): void {
   const deadline = Date.now() + 90_000
   let lastError = ''
+
   while (Date.now() < deadline) {
     const result = spawnSync('ssh', sshArgs(target, 'true'), {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 5_000
     })
+
     if (result.status === 0) {
       return
     }
+
     lastError = result.stderr || result.stdout || `exit ${result.status}`
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1_000)
   }
+
   const logs = spawnSync('docker', ['logs', target.containerName], {
     encoding: 'utf8',
     timeout: 10_000
   })
+
   throw new Error(
     `Timed out waiting for Docker SSH target: ${lastError}\n${logs.stderr || logs.stdout}`
   )
@@ -168,6 +175,7 @@ function probeDockerSshRelayTargetForwarding(target: DockerSshRelayTarget): stri
     ],
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 15_000 }
   )
+
   return result.stderr || result.stdout || `exit ${result.status}`
 }
 
@@ -188,13 +196,17 @@ export function blockDockerSshRelayTargetTcpForwarding(target: DockerSshRelayTar
   )
   const deadline = Date.now() + 60_000
   let lastProbe = ''
+
   while (Date.now() < deadline) {
     lastProbe = probeDockerSshRelayTargetForwarding(target)
+
     if (/administratively prohibited/i.test(lastProbe)) {
       return
     }
+
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500)
   }
+
   throw new Error(
     `sshd never began refusing TCP forwarding after AllowTcpForwarding no: ${lastProbe}`
   )
@@ -223,11 +235,13 @@ export function copyFileIntoDockerSshRelayTarget(
 
 export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTarget {
   const host = process.env.ORCA_E2E_SSH_TARGET_HOST?.trim() || '127.0.0.1'
+
   if (host === 'localhost' || host === '::1' || host.startsWith('127.')) {
     if (process.env.ORCA_E2E_SSH_TARGET_HOST) {
       throw new Error(`ORCA_E2E_SSH_TARGET_HOST must be non-loopback: ${host}`)
     }
   }
+
   const bindHost = host === '127.0.0.1' ? host : '0.0.0.0'
   const tempDir = mkdtempSync(path.join(os.tmpdir(), 'orca-ssh-docker-'))
   const identityFile = path.join(tempDir, 'id_ed25519')
@@ -264,23 +278,28 @@ export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTar
     )
 
     const port = Number(run('docker', ['port', containerName, '22/tcp']).split(':').at(-1))
+
     if (!Number.isInteger(port) || port <= 0) {
       throw new Error(`Unable to read mapped SSH port for ${containerName}`)
     }
+
     const containerIp = run('docker', [
       'inspect',
       '--format',
       '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}',
       containerName
     ])
+
     if (!containerIp) {
       throw new Error(`Unable to read container IP for ${containerName}`)
     }
+
     target = { containerName, containerIp, host, identityFile, port, tempDir }
     waitForSsh(target)
     seedRemoteRepo(target, DOCKER_SSH_RELAY_REMOTE_REPO_PATH)
     seedRemoteRepo(target, DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH)
     seedRemoteRepo(target, DOCKER_SSH_SECOND_HUB_REMOTE_REPO_PATH)
+
     return target
   } catch (error) {
     cleanupDockerSshRelayTarget(
@@ -294,6 +313,7 @@ export function cleanupDockerSshRelayTarget(target: DockerSshRelayTarget | null)
   if (!target) {
     return
   }
+
   tryRun('docker', ['rm', '-f', target.containerName], { timeoutMs: 20_000 })
   rmSync(target.tempDir, { recursive: true, force: true })
 }

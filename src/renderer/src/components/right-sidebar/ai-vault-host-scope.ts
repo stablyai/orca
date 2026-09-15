@@ -27,23 +27,29 @@ export function useAiVaultExecutionHostScope(args: {
   onExecutionHostScopeChange: (scope: ExecutionHostScope) => void
 } {
   const userChangedHostScopeRef = useRef(false)
+
   const activeExecutionHostId = useMemo(
     () => getAiVaultResumeWorkspaceExecutionHostId(args.resumeTargetState, args.activeWorktreeId),
     [args.activeWorktreeId, args.resumeTargetState]
   )
+
   const activeExecutionHost = parseExecutionHostId(activeExecutionHostId)
+
   const activeExecutionHostScope: ExecutionHostId | null =
     activeExecutionHost?.kind === 'ssh' || activeExecutionHost?.kind === 'runtime'
       ? activeExecutionHost.id
       : null
+
   // Why: a named workspace whose host the client store cannot place is `unverifiable`, not local.
   // Defaulting it to local scanned the desktop's own history and reported "No agent sessions found"
   // for a user whose sessions all live on an SSH host (#13713). Widen to every host instead of
   // asserting one. A local workspace still resolves to `local` and is unaffected.
   const workspaceHostUnresolved = args.activeWorktreeId !== null && activeExecutionHostId === null
+
   const defaultExecutionHostScope: ExecutionHostScope =
     activeExecutionHostScope ??
     (workspaceHostUnresolved ? ALL_EXECUTION_HOSTS_SCOPE : LOCAL_EXECUTION_HOST_ID)
+
   const [executionHostScope, setExecutionHostScope] =
     useState<ExecutionHostScope>(defaultExecutionHostScope)
 
@@ -57,11 +63,14 @@ export function useAiVaultExecutionHostScope(args: {
       ...(activeExecutionHostScope ? [activeExecutionHostScope] : []),
       ...(args.availableExecutionHostScopes ?? [])
     ])
+
     if (!allowedScopes.has(executionHostScope)) {
       setExecutionHostScope(defaultExecutionHostScope)
       userChangedHostScopeRef.current = false
+
       return
     }
+
     if (!userChangedHostScopeRef.current && executionHostScope !== defaultExecutionHostScope) {
       setExecutionHostScope(defaultExecutionHostScope)
     }
@@ -93,6 +102,7 @@ export function buildRuntimeAiVaultHostScopeOptions(
   return runtimeEnvironments.map((environment) => {
     const id = toRuntimeExecutionHostId(environment.id)
     const label = environment.name.trim() || getExecutionHostLabel(id)
+
     return { id, label }
   })
 }
@@ -103,27 +113,34 @@ export function buildAiVaultHostScopeOptions(args: {
 }): AiVaultHostScopeOption[] {
   const options: AiVaultHostScopeOption[] = []
   const seen = new Set<ExecutionHostScope>()
+
   const add = (option: AiVaultHostScopeOption): void => {
     if (seen.has(option.id)) {
       return
     }
+
     seen.add(option.id)
     options.push(option)
   }
+
   const activeHost = args.activeExecutionHostScope
     ? parseExecutionHostId(args.activeExecutionHostScope)
     : null
 
   add({ id: LOCAL_EXECUTION_HOST_ID, label: getExecutionHostLabel(LOCAL_EXECUTION_HOST_ID) })
+
   if (activeHost?.kind === 'ssh') {
     add({ id: activeHost.id, label: getExecutionHostLabel(activeHost.id) })
   }
+
   for (const option of args.runtimeHostOptions) {
     add(option)
   }
+
   if (activeHost?.kind === 'runtime') {
     add({ id: activeHost.id, label: getExecutionHostLabel(activeHost.id) })
   }
+
   add({ id: ALL_EXECUTION_HOSTS_SCOPE, label: getExecutionHostLabel(ALL_EXECUTION_HOSTS_SCOPE) })
 
   return options

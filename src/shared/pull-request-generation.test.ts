@@ -143,21 +143,25 @@ describe('parseGeneratedPullRequestFields', () => {
   it('parses CRLF fenced JSON output without full-string fence matching', () => {
     const matchSpy = vi.spyOn(String.prototype, 'match')
     const replaceSpy = vi.spyOn(String.prototype, 'replace')
+
     const fields = parseGeneratedPullRequestFields(
       '```JSON\r\n{"base":"main","title":"fix: add details.","body":"Summary","draft":true}\r\n```',
       context
     )
 
     expect(fields.title).toBe('fix: add details')
+
     const usedFenceMatch = matchSpy.mock.calls.some(
       ([pattern]) =>
         pattern instanceof RegExp &&
         pattern.source.startsWith('^```') &&
         pattern.source.includes('[\\s\\S]')
     )
+
     const usedCrlfReplace = replaceSpy.mock.calls.some(
       ([pattern]) => pattern instanceof RegExp && pattern.source === '\\r\\n' && pattern.global
     )
+
     expect(usedFenceMatch).toBe(false)
     expect(usedCrlfReplace).toBe(false)
   })
@@ -190,6 +194,7 @@ describe('parseGeneratedPullRequestFields', () => {
   it('rejects excessive nesting before JSON.parse', () => {
     const parseSpy = vi.spyOn(JSON, 'parse')
     const depth = GENERATED_PULL_REQUEST_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+
     try {
       expect(() =>
         parseGeneratedPullRequestFields(`${'['.repeat(depth)}0${']'.repeat(depth)}`, context)

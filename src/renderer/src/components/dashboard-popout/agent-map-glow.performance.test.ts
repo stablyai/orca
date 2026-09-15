@@ -20,20 +20,25 @@ describe('Agent Map glow performance boundary', () => {
 
   it('keeps glow styling free of animated and filtered paint work', () => {
     const css = source('agent-map.css')
+
     const baseGlowRules = css.match(
       /\.agent-map-(?:worktree-status|agent-status)-glow\s*\{[^}]+\}/gs
     )
+
     const glowRules = css.match(
       /\.agent-map-(?:worktree-status|agent-status)-glow[^{}]*\{[^}]+\}/gs
     )
 
     expect(baseGlowRules).toHaveLength(2)
+
     for (const rule of baseGlowRules ?? []) {
       expect(rule).toContain('pointer-events: none')
       expect(rule).toContain('vector-effect: non-scaling-stroke')
     }
+
     // 2 base + 4 agent statuses + 4 worktree statuses.
     expect(glowRules).toHaveLength(10)
+
     for (const rule of glowRules ?? []) {
       expect(rule).not.toMatch(/filter:|animation:|transition:/)
     }
@@ -50,6 +55,7 @@ describe('Agent Map glow performance boundary', () => {
     expect(marker).not.toContain('<foreignObject')
     expect(marker).toContain('<AgentQuestionIcon')
     expect(markerRules).toHaveLength(2)
+
     for (const rule of markerRules) {
       expect(rule).not.toMatch(/filter:|animation:|transition:/)
     }
@@ -79,6 +85,7 @@ describe('Agent Map glow performance boundary', () => {
     const windowMs = Number(
       metadata.match(/AGENT_MAP_STATUS_FLARE_MS = ([\d_]+)/)?.[1].replaceAll('_', '')
     )
+
     const cssMs = Number(flareRule.match(/animation: agent-map-status-flare (\d+)ms/)?.[1])
     expect(windowMs).toBeGreaterThan(0)
     expect(cssMs).toBe(windowMs)

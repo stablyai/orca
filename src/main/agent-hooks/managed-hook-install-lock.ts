@@ -16,6 +16,7 @@ import {
 } from './managed-hook-owner-identity'
 
 const LOCK_WAIT_TIMEOUT_MS = 10_000
+
 const LOCK_RETRY_MS = 20
 
 async function releaseInstallLock(
@@ -33,6 +34,7 @@ async function releaseInstallLock(
       hostIdentity,
       processIdentity
     )
+
     if (removal !== 'removed') {
       console.warn(`[agent-hooks] Failed to release managed-hook install lock: ${removal}`)
     }
@@ -55,30 +57,36 @@ async function acquireInstallLock(
   const hostIdentity = suppliedHostIdentity ?? (await readManagedHookHostIdentity())
   await cleanupManagedHookLockFiles(lockParent, hostIdentity)
   const processIdentity = await readManagedHookProcessIdentity(process.pid)
+
   if (typeof processIdentity !== 'string') {
     throw new Error('Could not identify the managed-hook installer process')
   }
+
   const deadline = Date.now() + waitTimeoutMs
 
   while (true) {
     signal?.throwIfAborted()
+
     const owner = await tryCreateManagedHookLock(
       lockParent,
       lockPath,
       hostIdentity,
       processIdentity
     )
+
     if (owner) {
       return async () =>
         await releaseInstallLock(lockPath, lockParent, owner, hostIdentity, processIdentity)
     }
 
     const state = await inspectManagedHookLock(lockPath)
+
     if (state.kind === 'unknown') {
       // Why: unverifiable legacy locks cannot be stolen safely; hooks are best-effort,
       // so fail fast instead of adding a recurring connection timeout.
       throw new Error('Managed-hook install lock has an unverifiable owner')
     }
+
     if (state.kind === 'owned' && state.owner.hostIdentity !== hostIdentity) {
       // Why: homes can be shared across SSH hosts, whose PID namespaces are unrelated.
       throw new Error('Managed-hook install lock belongs to another host')
@@ -86,13 +94,16 @@ async function acquireInstallLock(
 
     if (state.kind === 'owned') {
       const currentIdentity = await readManagedHookProcessIdentity(state.owner.pid)
+
       if (currentIdentity === undefined) {
         throw new Error('Could not verify the managed-hook lock owner process')
       }
+
       const abandonedOwnLock =
         state.owner.pid === process.pid &&
         currentIdentity === processIdentity &&
         !isManagedHookLockOwnerActive(state.owner.token)
+
       if (
         currentIdentity === null ||
         currentIdentity !== state.owner.processIdentity ||
@@ -105,23 +116,29 @@ async function acquireInstallLock(
           hostIdentity,
           processIdentity
         )
+
         if (removal === 'removed') {
           if (Date.now() >= deadline) {
             throw new Error('Timed out waiting for another managed-hook install to finish')
           }
+
           continue
         }
+
         if (removal === 'foreign') {
           throw new Error('Managed-hook install lock recovery belongs to another host')
         }
+
         if (removal === 'unverifiable') {
           throw new Error('Managed-hook install lock has an unverifiable recovery claim')
         }
       }
     }
+
     if (Date.now() >= deadline) {
       throw new Error('Timed out waiting for another managed-hook install to finish')
     }
+
     await delay(LOCK_RETRY_MS, undefined, { signal })
   }
 }
@@ -140,8 +157,10 @@ export async function withManagedHookInstallLock<T>(
     hostIdentity,
     options?.waitTimeoutMs ?? LOCK_WAIT_TIMEOUT_MS
   )
+
   try {
     signal?.throwIfAborted()
+
     return await run()
   } finally {
     await release()

@@ -7,11 +7,13 @@ import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { preserveFolderUpgradeWorktreePath } from './folder-upgrade-worktree-path'
 
 const roots: string[] = []
+
 afterEach(() => {
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
 })
+
 const repo: Repo = {
   id: 'folder',
   path: 'C:\\projects\\draft',
@@ -21,6 +23,7 @@ const repo: Repo = {
   kind: 'git',
   folderUpgradeGitRootPath: 'C:/projects/draft'
 }
+
 function row(path: string): GitWorktreeInfo {
   return { path, branch: 'draft', head: 'abc', isBare: false, isMainWorktree: false }
 }

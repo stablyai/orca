@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callRuntimeEnvironment = vi.hoisted(() => vi.fn())
+
 vi.mock('../ipc/runtime-environment-transport-routing', () => ({ callRuntimeEnvironment }))
 
 import { callRuntimeSessionSearch } from './runtime-session-search-call'

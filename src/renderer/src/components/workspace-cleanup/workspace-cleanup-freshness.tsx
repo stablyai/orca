@@ -19,9 +19,11 @@ export function WorkspaceCleanupFreshness({
   progress: WorkspaceCleanupScanProgress | null
 }): React.JSX.Element | null {
   const now = useNow(30_000)
+
   if (scannedAt === null && !refreshing) {
     return null
   }
+
   return (
     <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
       {scannedAt !== null ? (
@@ -47,6 +49,7 @@ function formatWorkspaceCleanupRefreshingLabel(
   if (!progress || progress.totalWorktreeCount === 0) {
     return translate('components.workspace.cleanup.browse.refreshing', 'Refreshing…')
   }
+
   return translate(
     'components.workspace.cleanup.browse.refreshingProgress',
     'Refreshing {{value0}}/{{value1}}',

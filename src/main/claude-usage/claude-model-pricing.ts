@@ -15,6 +15,7 @@ type ClaudeModelPricing = {
 }
 
 const LONG_CONTEXT_THRESHOLD_TOKENS = 200_000
+
 const SONNET_LONG_CONTEXT_PRICING = {
   thresholdTokens: LONG_CONTEXT_THRESHOLD_TOKENS,
   inputAboveThreshold: 6,
@@ -96,59 +97,78 @@ function normalizeModelForPricing(model: string | null): string | null {
   if (!model) {
     return null
   }
+
   const lower = model
     .toLowerCase()
     .trim()
     .replace(/^anthropic[/:]/, '')
+
   const alias = MODEL_ALIASES[lower]
+
   if (alias) {
     return alias
   }
+
   const normalized = lower.replace(/\./g, '-')
+
   if (/fable-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-fable-5'
   }
+
   if (/opus-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-5'
   }
+
   if (/opus-4-8(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-8'
   }
+
   if (/opus-4-7(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-7'
   }
+
   if (/opus-4-6(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-6'
   }
+
   if (/opus-4-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-5'
   }
+
   if (/opus-4-1(?:$|[^0-9])/.test(normalized)) {
     return 'claude-opus-4-1'
   }
+
   if (isLegacyBaseOpus4Model(normalized)) {
     return 'claude-opus-4'
   }
+
   if (lower.includes('opus-4')) {
     // Why: new Opus 4 point releases now share the current low Opus pricing;
     // avoid overbilling unknown future Claude Code model IDs as legacy Opus 4.
     return 'claude-opus-4-8'
   }
+
   if (/sonnet-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-sonnet-5'
   }
+
   if (/sonnet-4-6(?:$|[^0-9])/.test(normalized)) {
     return 'claude-sonnet-4-6'
   }
+
   if (/sonnet-4-5(?:$|[^0-9])/.test(normalized)) {
     return 'claude-sonnet-4-5'
   }
+
   if (lower.includes('sonnet-4')) {
     return 'claude-sonnet-4-6'
   }
+
   if (lower.includes('sonnet-3-7') || lower.includes('sonnet-3.7')) {
     return 'claude-sonnet-3-7'
   }
+
   // Why: legacy version-first IDs like `claude-3-5-sonnet-20241022` are still
   // present in historical Claude Code/SDK logs read off disk. Match them so
   // their cost is not silently dropped from the breakdown.
@@ -160,18 +180,23 @@ function normalizeModelForPricing(model: string | null): string | null {
   ) {
     return 'claude-sonnet-3-5'
   }
+
   if (lower.includes('haiku-4-5')) {
     return 'claude-haiku-4-5'
   }
+
   if (lower.includes('haiku-3-5') || lower.includes('haiku-3.5')) {
     return 'claude-haiku-3-5'
   }
+
   if (lower.includes('3-5-haiku') || lower.includes('3.5-haiku')) {
     return 'claude-haiku-3-5'
   }
+
   if (lower.includes('haiku-3')) {
     return 'claude-haiku-3'
   }
+
   return null
 }
 
@@ -184,8 +209,10 @@ function calculateTieredCost(
   if (threshold === undefined || abovePrice === undefined) {
     return tokens * basePrice
   }
+
   const belowTokens = Math.min(tokens, threshold)
   const aboveTokens = Math.max(tokens - threshold, 0)
+
   return belowTokens * basePrice + aboveTokens * abovePrice
 }
 
@@ -202,18 +229,23 @@ export function estimateCostUsd(
   cacheWrite1hTokens = 0
 ): number | null {
   const normalized = normalizeModelForPricing(model)
+
   if (!normalized) {
     return null
   }
+
   const pricing = MODEL_PRICING[normalized]
   const write1hTokens = Math.min(Math.max(cacheWrite1hTokens, 0), cacheWriteTokens)
   // Why: both TTL buckets share one long-context allowance. Giving each its own
   // would make a split bucket cheaper than the same tokens billed entirely at 5m.
   const write1hShare = cacheWriteTokens > 0 ? write1hTokens / cacheWriteTokens : 0
+
   const write5mThreshold =
     pricing.thresholdTokens === undefined ? undefined : pricing.thresholdTokens * (1 - write1hShare)
+
   const write1hThreshold =
     pricing.thresholdTokens === undefined ? undefined : pricing.thresholdTokens * write1hShare
+
   return (
     (calculateTieredCost(
       inputTokens,

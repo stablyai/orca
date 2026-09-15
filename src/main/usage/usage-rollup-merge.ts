@@ -22,8 +22,10 @@ export function mergeUsageSessions<TMetric extends object>(
   { fold, cloneSessionForMerge }: UsageRollupMergeOptions<TMetric>
 ): void {
   const breakdownsBySession = new Map<string, UsageSessionBreakdownIndex<TMetric>>()
+
   for (const session of sessions) {
     const existing = target.get(session.sessionId)
+
     if (!existing) {
       target.set(session.sessionId, cloneSessionForMerge(session))
       continue
@@ -46,12 +48,15 @@ export function mergeUsageSessions<TMetric extends object>(
     fold(existing, session)
 
     let breakdowns = breakdownsBySession.get(session.sessionId)
+
     if (!breakdowns) {
       breakdowns = indexUsageSessionBreakdowns(existing)
       breakdownsBySession.set(session.sessionId, breakdowns)
     }
+
     for (const location of session.locationBreakdown) {
       const existingLocation = breakdowns.locations.get(location.locationKey)
+
       if (existingLocation) {
         existingLocation.eventCount += location.eventCount
         existingLocation.inputTokens += location.inputTokens
@@ -69,6 +74,7 @@ export function mergeUsageSessions<TMetric extends object>(
 
     for (const model of session.modelBreakdown) {
       const existingModel = breakdowns.models.get(model.modelKey)
+
       if (existingModel) {
         existingModel.eventCount += model.eventCount
         existingModel.inputTokens += model.inputTokens
@@ -88,6 +94,7 @@ export function mergeUsageSessions<TMetric extends object>(
       const existingLocationModel = breakdowns.locationModels.get(
         usageLocationModelKey(locationModel.locationKey, locationModel.modelKey)
       )
+
       if (existingLocationModel) {
         existingLocationModel.eventCount += locationModel.eventCount
         existingLocationModel.inputTokens += locationModel.inputTokens
@@ -116,10 +123,12 @@ export function mergeUsageDailyAggregates<TMetric extends object>(
   for (const aggregate of dailyAggregates) {
     const key = usageDailyAggregateKey(aggregate)
     const existing = target.get(key)
+
     if (!existing) {
       target.set(key, { ...aggregate })
       continue
     }
+
     existing.eventCount += aggregate.eventCount
     existing.inputTokens += aggregate.inputTokens
     existing.cachedInputTokens += aggregate.cachedInputTokens

@@ -62,7 +62,9 @@ type Props = {
 }
 
 const EMPTY_VISIBILITY_DEFAULTS: WorktreeVisibilityDefaults = {}
+
 const EMPTY_WORKTREES: readonly DetectedWorktree[] = []
+
 const VISIBILITY_SEGMENTS: readonly ExternalWorktreeVisibility[] = ['show', 'hide']
 
 export function getWorktreeVisibilitySourceLabel(source: WorktreeVisibilitySourceRow): string {
@@ -71,12 +73,14 @@ export function getWorktreeVisibilitySourceLabel(source: WorktreeVisibilitySourc
       ? translate('auto.components.sidebar.WorktreeVisibilitySourceList.claude', 'Claude Code')
       : translate('auto.components.sidebar.WorktreeVisibilitySourceList.gsd', 'GSD')
   }
+
   if (source.kind === 'other') {
     return translate(
       'auto.components.sidebar.WorktreeVisibilitySourceList.other',
       'Other locations'
     )
   }
+
   return (
     getRuntimePathBasename(source.source.rootPath) ||
     translate('auto.components.sidebar.WorktreeVisibilitySourceList.custom', 'Custom location')
@@ -87,12 +91,14 @@ function getSourcePath(source: WorktreeVisibilitySourceRow): string {
   if (source.kind === 'built-in') {
     return source.id === 'claude' ? '.claude/worktrees/*' : '.gsd-workspaces/*'
   }
+
   if (source.kind === 'other') {
     return translate(
       'auto.components.sidebar.WorktreeVisibilitySourceList.otherPath',
       'Outside listed sources'
     )
   }
+
   return `${source.source.rootPath.replace(/[\\/]+$/, '')}/*`
 }
 
@@ -107,11 +113,13 @@ function sourceVisibility(
       ? effectiveBuiltInWorktreeSourceVisibility(repo, source.id, visibilityDefaults)
       : effectiveDefaultBuiltInWorktreeSourceVisibility(visibilityDefaults, source.id)
   }
+
   if (source.kind === 'custom') {
     const explicit = repo
       ? normalizeWorktreeVisibilitySourcePreferences(repo.worktreeVisibilitySourcePreferences)
           ?.custom?.[source.source.id]
       : undefined
+
     return (
       explicit ??
       (repoCustomSourceIds.has(source.source.id)
@@ -119,6 +127,7 @@ function sourceVisibility(
         : effectiveDefaultCustomWorktreeSourceVisibility(visibilityDefaults, source.source.id))
     )
   }
+
   return effectiveExternalWorktreeVisibility(
     repo ?? {},
     repo ? isLegacyRepoForExternalWorktreeVisibility(repo) : false,
@@ -166,6 +175,7 @@ export default function WorktreeVisibilitySourceList({
       ) ?? [],
     [providedCustomSources, repo, visibilityDefaults]
   )
+
   const repoCustomSourceIds = useMemo(
     () =>
       new Set(
@@ -175,6 +185,7 @@ export default function WorktreeVisibilitySourceList({
       ),
     [repo?.customWorktreeVisibilitySources]
   )
+
   const sources = useMemo<WorktreeVisibilitySourceRow[]>(
     () => [
       { kind: 'built-in', id: 'claude' },
@@ -184,6 +195,7 @@ export default function WorktreeVisibilitySourceList({
     ],
     [customSources]
   )
+
   const classify = useMemo(
     () =>
       createWorktreeVisibilitySourceMatcher(
@@ -193,15 +205,19 @@ export default function WorktreeVisibilitySourceList({
       ),
     [customSources, repo, worktrees]
   )
+
   const sourceCounts = useMemo(() => {
     const counts = new Map<string, number>()
+
     for (const worktree of worktrees) {
       if (worktree.selectedCheckout || worktree.ownership === 'orca-managed') {
         continue
       }
+
       const key = sourceMatchKey(worktree.visibilitySource ?? classify(worktree.path))
       counts.set(key, (counts.get(key) ?? 0) + 1)
     }
+
     return counts
   }, [classify, worktrees])
 
@@ -225,17 +241,21 @@ export default function WorktreeVisibilitySourceList({
           const count = sourceCounts.get(key) ?? 0
           const accessibleLabel = getAccessibleSourceLabel(source, label)
           const sourceDisabled = disabled || (source.kind !== 'other' && sourceDefaultsDisabled)
+
           const provenance = getWorktreeVisibilitySourceProvenance(
             repo,
             source,
             visibilityDefaults,
             repoCustomSourceIds
           )
+
           const visibility = sourceVisibility(repo, source, visibilityDefaults, repoCustomSourceIds)
           const note = getWorktreeVisibilitySourceNote(provenance)
           const overrideNotice = getWorktreeVisibilityOverrideNotice(provenance, visibility)
+
           const matchingOverride =
             provenance?.kind === 'project-override' && provenance.globalVisibility === visibility
+
           return (
             <div
               key={key}

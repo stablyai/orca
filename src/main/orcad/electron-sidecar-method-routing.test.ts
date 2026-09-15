@@ -31,14 +31,17 @@ async function runtimeCommandFor(
   method: (typeof BROWSER_RPC_METHODS)[number]
 ): Promise<string | null> {
   let recorded: string | null = null
+
   const runtime = new Proxy({} as Record<string, unknown>, {
     get: (_target, property) => {
       if (typeof property === 'string' && recorded === null && property.startsWith('browser')) {
         recorded = property
       }
+
       return () => ({})
     }
   })
+
   try {
     await (method.handler as (...args: unknown[]) => Promise<unknown>)(
       { value: '', input: '', text: '', subscriptionId: 'subscription' },
@@ -48,6 +51,7 @@ async function runtimeCommandFor(
   } catch {
     // Handlers that guard on host state still record the property access above.
   }
+
   return recorded
 }
 
@@ -59,21 +63,27 @@ describe('electronSidecarRuntimeMethodName', () => {
   it('round-trips every registered browser RPC method', async () => {
     const mismatches: string[] = []
     const unmapped: string[] = []
+
     for (const method of BROWSER_RPC_METHODS) {
       const command = await runtimeCommandFor(method)
+
       if (!command) {
         unmapped.push(method.name)
         continue
       }
+
       if (UNROUTABLE_RUNTIME_COMMANDS.has(command)) {
         expect(electronSidecarRuntimeMethodName(command)).not.toBe(method.name)
         continue
       }
+
       const routed = electronSidecarRuntimeMethodName(command)
+
       if (routed !== method.name) {
         mismatches.push(`${command} routes to ${routed}, sidecar registers ${method.name}`)
       }
     }
+
     expect(mismatches).toEqual([])
     expect(unmapped).toEqual([...RPC_METHODS_WITHOUT_BROWSER_COMMAND])
   })

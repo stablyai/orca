@@ -196,16 +196,19 @@ describe('keep-awake copy under non-English UI languages', () => {
     const trigger = await screen.findByRole('button', {
       name: '防止电脑休眠，智能体 · 生效中'
     })
+
     expect(trigger.textContent).toContain('智能体')
 
     const menu = screen.getByRole('menu')
     await waitFor(() => expect(menu.textContent).toContain('防止电脑休眠'))
     expect(menu.textContent).toContain('智能体 · 生效中')
+
     const [onItem, agentItem, offItem] = screen.getAllByRole('menuitemradio') as [
       HTMLElement,
       HTMLElement,
       HTMLElement
     ]
+
     expect(within(onItem).getByText('开启')).toBeTruthy()
     expect(within(onItem).getByText('始终防止此电脑进入睡眠状态')).toBeTruthy()
     expect(within(agentItem).getByText('智能体')).toBeTruthy()

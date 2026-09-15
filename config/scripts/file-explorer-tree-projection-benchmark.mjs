@@ -12,16 +12,21 @@ const DEFAULT_OPTIONS = {
 
 function parseOptions() {
   const options = { ...DEFAULT_OPTIONS }
+
   for (const arg of process.argv.slice(2)) {
     const match = arg.match(/^--([^=]+)=(\d+)$/)
+
     if (!match) {
       continue
     }
+
     const [, key, value] = match
+
     if (key in options) {
       options[key] = Number(value)
     }
   }
+
   return options
 }
 
@@ -41,9 +46,11 @@ function addChild(dirCache, parentPath, child) {
 
 function makeTreeFixture(options) {
   const worktreePath = '/repo'
+
   const dirCache = {
     [worktreePath]: { children: [], loading: false }
   }
+
   const expanded = new Set([worktreePath])
   const ignored = new Set()
   const canonicalPaths = []
@@ -96,9 +103,11 @@ function makeTreeFixture(options) {
         const filePath = joinExplorerPath(nestedPath, fileName)
         const rel = relativePath(worktreePath, filePath)
         canonicalPaths.push(rel)
+
         if (fileIndex % 23 === 0) {
           ignored.add(rel)
         }
+
         addChild(dirCache, nestedPath, {
           depth: 2,
           isDirectory: false,
@@ -115,19 +124,25 @@ function makeTreeFixture(options) {
 
 function flattenCurrent(worktreePath, dirCache, expanded) {
   const result = []
+
   const addChildren = (parentPath) => {
     const cached = dirCache[parentPath]
+
     if (!cached?.children) {
       return
     }
+
     for (const child of cached.children) {
       result.push(child)
+
       if (child.isDirectory && expanded.has(child.path)) {
         addChildren(child.path)
       }
     }
   }
+
   addChildren(worktreePath)
+
   return result
 }
 
@@ -135,6 +150,7 @@ function getVisibleRows(flatRows, ignored, showGitIgnoredFiles) {
   if (showGitIgnoredFiles) {
     return flatRows
   }
+
   return flatRows.filter((row) => !ignored.has(row.relativePath))
 }
 
@@ -144,6 +160,7 @@ function runLegacyCurrentPass(fixture, showGitIgnoredFiles) {
   const visibleRows = getVisibleRows(flatRows, fixture.ignored, showGitIgnoredFiles)
   const visibleRowsByPath = new Map(visibleRows.map((row) => [row.path, row]))
   const orderedPaths = visibleRows.map((row) => row.path)
+
   return {
     flatCount: flatRows.length,
     orderedPathCount: orderedPaths.length,
@@ -155,19 +172,25 @@ function runLegacyCurrentPass(fixture, showGitIgnoredFiles) {
 
 function collectIgnoredQueryRelativePaths(fixture) {
   const relativePaths = []
+
   const addChildren = (parentPath) => {
     const cached = fixture.dirCache[parentPath]
+
     if (!cached?.children) {
       return
     }
+
     for (const row of cached.children) {
       relativePaths.push(row.relativePath)
+
       if (row.isDirectory && fixture.expanded.has(row.path)) {
         addChildren(row.path)
       }
     }
   }
+
   addChildren(fixture.worktreePath)
+
   return relativePaths
 }
 
@@ -175,25 +198,32 @@ function runDirectDirCacheProjectionPass(fixture, showGitIgnoredFiles) {
   const ignoredQueryRelativePaths = collectIgnoredQueryRelativePaths(fixture)
   const visibleRows = []
   const visibleRowsByPath = new Map()
+
   const addChildren = (parentPath) => {
     const cached = fixture.dirCache[parentPath]
+
     if (!cached?.children) {
       return
     }
+
     for (const row of cached.children) {
       if (!showGitIgnoredFiles && fixture.ignored.has(row.relativePath)) {
         continue
       }
+
       visibleRows.push(row)
       visibleRowsByPath.set(row.path, row)
+
       if (row.isDirectory && fixture.expanded.has(row.path)) {
         addChildren(row.path)
       }
     }
   }
+
   addChildren(fixture.worktreePath)
   const selectedPath = visibleRows.at(-1)?.path ?? null
   const selectedNode = selectedPath ? visibleRowsByPath.get(selectedPath) : null
+
   return {
     ignoredQueryPathCount: ignoredQueryRelativePaths.length,
     selectedPath: selectedNode?.path ?? null,
@@ -205,22 +235,29 @@ function runDirectDirCacheProjectionPass(fixture, showGitIgnoredFiles) {
 function buildIndexedProjection(fixture, showGitIgnoredFiles) {
   const rows = []
   const rowsByPath = new Map()
+
   const addChildren = (parentPath) => {
     const cached = fixture.dirCache[parentPath]
+
     if (!cached?.children) {
       return
     }
+
     for (const child of cached.children) {
       rowsByPath.set(child.path, child)
+
       if (showGitIgnoredFiles || !fixture.ignored.has(child.relativePath)) {
         rows.push(child)
       }
+
       if (child.isDirectory && fixture.expanded.has(child.path)) {
         addChildren(child.path)
       }
     }
   }
+
   addChildren(fixture.worktreePath)
+
   return {
     getVisibleCount: () => rows.length,
     getVisibleSlice: (start, end) => rows.slice(start, end + 1),
@@ -231,13 +268,16 @@ function buildIndexedProjection(fixture, showGitIgnoredFiles) {
 function measure(label, passes, fn) {
   const durations = []
   let lastResult
+
   for (let index = 0; index < passes; index++) {
     const start = performance.now()
     lastResult = fn(index)
     durations.push(performance.now() - start)
   }
+
   durations.sort((a, b) => a - b)
   const sum = durations.reduce((total, value) => total + value, 0)
+
   return {
     label,
     maxMs: durations.at(-1),
@@ -273,27 +313,33 @@ function main() {
   const legacyCurrent = measure('legacy-current-full-flatten+maps', options.passes, () =>
     runLegacyCurrentPass(fixture, false)
   )
+
   printMeasurement(legacyCurrent)
 
   const directProjection = measure('direct-dir-cache-row-projection', options.passes, () =>
     runDirectDirCacheProjectionPass(fixture, false)
   )
+
   printMeasurement(directProjection)
 
   const projectionBuild = measure('indexed-projection-rebuild', options.passes, () =>
     buildIndexedProjection(fixture, false)
   )
+
   printMeasurement(projectionBuild)
 
   const projection = buildIndexedProjection(fixture, false)
+
   const indexedSlice = measure('indexed-visible-window-slice', options.passes, (index) => {
     const visibleCount = projection.getVisibleCount()
     const maxStart = Math.max(0, visibleCount - options.windowSize)
     const start = maxStart === 0 ? 0 : (index * 97) % maxStart
     const rows = projection.getVisibleSlice(start, start + options.windowSize - 1)
     const selected = projection.getRowByPath(rows.at(-1)?.path ?? '')
+
     return { selected: selected?.path ?? null, visibleWindowCount: rows.length }
   })
+
   printMeasurement(indexedSlice)
 
   console.log(

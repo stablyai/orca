@@ -18,6 +18,7 @@ describe('main-process fatal error guards (issue #9441)', () => {
     expect(listeners.length).toBe(before + 1)
     const listener = listeners.at(-1) as (reason: unknown, promise: Promise<unknown>) => void
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       // Why: invoking the listener directly must not throw — a throwing handler would still kill main.
       expect(() =>
@@ -27,6 +28,7 @@ describe('main-process fatal error guards (issue #9441)', () => {
       process.removeListener('unhandledRejection', listener as never)
       consoleError.mockRestore()
     }
+
     expect(record).toHaveBeenCalledWith(
       'main_unhandled_rejection',
       expect.objectContaining({ errorMessage: 'spawn EAGAIN', errorCode: 'EAGAIN' }),
@@ -43,6 +45,7 @@ describe('main-process fatal error guards (issue #9441)', () => {
     }))
     const { recordFatalMainProcessError } = await import('./main-process-error-guards')
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     try {
       expect(() =>
         recordFatalMainProcessError('main_uncaught_exception', 'not-an-error')
@@ -77,6 +80,7 @@ describe('main-process fatal error guards (issue #9441)', () => {
       recordDurableCrashBreadcrumb: record
     }))
     const { recordFatalMainProcessError } = await import('./main-process-error-guards')
+
     const hostileReason = {
       toString(): never {
         throw new Error('toString failed')
@@ -85,6 +89,7 @@ describe('main-process fatal error guards (issue #9441)', () => {
         throw new Error('inspect failed')
       }
     }
+
     const consoleError = vi.spyOn(console, 'error').mockImplementation((...values: unknown[]) => {
       if (values.some((value) => typeof value !== 'string')) {
         throw new Error('unsafe console formatting')
@@ -141,6 +146,7 @@ describe('main-process fatal error guards (issue #9441)', () => {
     for (let i = 0; i < 25; i++) {
       recordFatalMainProcessError('main_unhandled_rejection', new Error(`storm ${i}`))
     }
+
     expect(record).toHaveBeenCalledTimes(20)
 
     now += 60_000
@@ -167,6 +173,7 @@ describe('main-process fatal error guards (issue #9441)', () => {
     for (let i = 0; i < 25; i++) {
       recordFatalMainProcessError('main_unhandled_rejection', new Error(`storm ${i}`))
     }
+
     expect(record).toHaveBeenCalledTimes(20)
 
     // Why: a backward jump must not trap the exhausted window and suppress every later breadcrumb.
@@ -193,6 +200,7 @@ describe('main-process fatal error guards (issue #9441)', () => {
     for (let i = 0; i < 25; i++) {
       recordFatalMainProcessError('main_unhandled_rejection', new Error(`storm ${i}`))
     }
+
     expect(record).toHaveBeenCalledTimes(20)
 
     // Why: this record precedes the re-throw that kills main; losing it would recreate issue #9441.
@@ -217,11 +225,13 @@ describe('main-process fatal error guards (issue #9441)', () => {
     const listeners = process.listeners('uncaughtException')
     expect(listeners.length).toBe(before + 1)
     const listener = listeners.at(-1) as (error: unknown) => void
+
     try {
       listener(Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
     } finally {
       process.removeListener('uncaughtException', listener as never)
     }
+
     // Why: EPIPE/EIO are expected pipe churn; recording them would flood the breadcrumb store.
     expect(record).not.toHaveBeenCalled()
   })
@@ -240,18 +250,24 @@ describe('main-process fatal error guards (issue #9441)', () => {
     vi.spyOn(process, 'on').mockImplementation(((event, listener) => {
       if (event === 'uncaughtException') {
         handler = listener as (error: unknown) => void
+
         return process
       }
+
       return originalOn(event, listener)
     }) as typeof process.on)
+
     const offSpy = vi.spyOn(process, 'off').mockImplementation(((event, listener) => {
       if (event === 'uncaughtException') {
         return process
       }
+
       return originalOff(event, listener)
     }) as typeof process.off)
+
     vi.spyOn(globalThis, 'setImmediate').mockImplementation(((callback) => {
       scheduled = callback as () => void
+
       return {} as NodeJS.Immediate
     }) as typeof setImmediate)
 

@@ -76,6 +76,7 @@ describe('prunePendingSshPtyKills', () => {
         intent: intent({ requestedAt: NOW - index })
       }))
     ]
+
     const pruned = prunePendingSshPtyKills(entries, NOW)
     expect(pruned).toHaveLength(MAX_SSH_PENDING_PTY_KILLS_PER_TARGET)
     expect(pruned.map((entry) => entry.ptyId)).not.toContain('pty-stale')

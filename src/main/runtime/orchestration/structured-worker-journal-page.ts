@@ -19,15 +19,18 @@ export type StructuredJournalPage = {
 /** The newest page of a session's journal, or null when this runtime cannot read it. */
 export function readStructuredJournalPage(sessionId: string): StructuredJournalPage | null {
   const host = getStructuredAgentSessionHost()
+
   if (!host) {
     return null
   }
+
   try {
     const result = host.history({
       sessionId,
       direction: 'tail',
       limit: STRUCTURED_JOURNAL_PAGE_LIMIT
     })
+
     return { items: result.page.items, hasOlder: result.page.hasOlder }
   } catch {
     return null

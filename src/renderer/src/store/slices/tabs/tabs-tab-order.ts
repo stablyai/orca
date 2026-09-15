@@ -10,13 +10,16 @@ export function partitionPinnedTabOrder(
   const withoutMoving = dedupeTabOrder(tabOrder).filter((id) => id !== movingTabId)
   const pinnedIds = withoutMoving.filter((id) => tabById.get(id)?.isPinned)
   const unpinnedIds = withoutMoving.filter((id) => !tabById.get(id)?.isPinned)
+
   return [...pinnedIds, movingTabId, ...unpinnedIds]
 }
 
 export function applyTabOrderSortValues(tabs: Tab[], tabOrder: string[]): Tab[] {
   const orderMap = new Map(tabOrder.map((id, index) => [id, index]))
+
   return tabs.map((tab) => {
     const sortOrder = orderMap.get(tab.id)
+
     return sortOrder === undefined ? tab : { ...tab, sortOrder }
   })
 }
@@ -37,5 +40,6 @@ export function canReplacePreviewContentType(
   if (isReplaceablePreviewContentType(incomingContentType)) {
     return isReplaceablePreviewContentType(existingContentType)
   }
+
   return existingContentType === incomingContentType
 }

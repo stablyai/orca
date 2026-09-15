@@ -6,12 +6,15 @@ import { readMobileSessionRouteSource } from '../session/mobile-session-route-so
 const runtimeSource = readMobileSessionRouteSource(
   '../session/use-mobile-session-terminal-runtime.ts'
 )
+
 const sendActionsSource = readMobileSessionRouteSource(
   '../session/use-mobile-session-terminal-send-actions.ts'
 )
+
 const terminalInputSource = readMobileSessionRouteSource(
   '../session/use-mobile-session-terminal-input.ts'
 )
+
 const commandDockSource = readMobileSessionRouteSource('../session/MobileSessionCommandDock.tsx')
 
 function sourceSlice(source: string, anchorStart: string, anchorEnd: string): string {
@@ -21,6 +24,7 @@ function sourceSlice(source: string, anchorStart: string, anchorEnd: string): st
   expect(source.indexOf(anchorStart, start + 1)).toBe(-1)
   const end = source.indexOf(anchorEnd, start)
   expect(end).toBeGreaterThan(start)
+
   return source.slice(start, end + anchorEnd.length)
 }
 
@@ -63,6 +67,7 @@ describe('terminal input connection gate', () => {
         })
       ).toEqual({ canCompose: false, canSend: false })
     }
+
     expect(
       resolveMobileTerminalInputGate({
         connState: 'connected',
@@ -94,6 +99,7 @@ describe('session route offline-compose wiring', () => {
       'ref={commandInputRef}',
       'onSubmitEditing={() => void handleSend()}'
     )
+
     expect(bufferedInput).toContain('editable={canCompose}')
 
     const liveCapture = sourceSlice(
@@ -101,6 +107,7 @@ describe('session route offline-compose wiring', () => {
       'ref={liveInputRef}',
       'importantForAutofill="no"'
     )
+
     expect(liveCapture).toContain('editable={canSend}')
   })
 
@@ -110,6 +117,7 @@ describe('session route offline-compose wiring', () => {
       'styles.sendButton,',
       'accessibilityLabel="Send command"'
     )
+
     expect(sendButton).toContain('disabled={!canSend}')
   })
 
@@ -119,6 +127,7 @@ describe('session route offline-compose wiring', () => {
       'async function handleSend()',
       'sendingRef.current = true'
     )
+
     expect(handleSend).toContain('!canSend')
   })
 
@@ -128,6 +137,7 @@ describe('session route offline-compose wiring', () => {
       'liveInputEnabled && styles.accessoryKeyActive',
       'onPress={toggleLiveInput}'
     )
+
     expect(modeToggle).toContain('disabled={!canCompose}')
   })
 
@@ -137,6 +147,7 @@ describe('session route offline-compose wiring', () => {
       'useTerminalLiveInputCommit({',
       'setLiveInputCapture'
     )
+
     expect(hookCall).toContain("connected: connState === 'connected'")
   })
 
@@ -146,9 +157,11 @@ describe('session route offline-compose wiring', () => {
     // keys get the same option inside terminal-live-accessory-raw-send.ts.
     expect(sendActionsSource).toContain('TERMINAL_INPUT_SEND_OPTIONS')
     expect(terminalInputSource).toContain('TERMINAL_INPUT_SEND_OPTIONS')
+
     const optionUses = [sendActionsSource, terminalInputSource].flatMap(
       (source) => source.match(/TERMINAL_INPUT_SEND_OPTIONS/g) ?? []
     ).length
+
     // Two owner imports plus one buffered, one live, and one gesture send.
     expect(optionUses).toBe(5)
     expect(TERMINAL_INPUT_SEND_OPTIONS).toEqual({ failWhenDisconnected: true })

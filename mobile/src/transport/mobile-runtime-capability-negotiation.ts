@@ -17,6 +17,7 @@ export async function settleMobileRuntimeCapabilities(
   sendRequest: CapabilityRequest
 ): Promise<void> {
   let response: RpcResponse
+
   try {
     response = await sendRequest(
       MOBILE_RUNTIME_CLIENT_CAPABILITY_UPDATE_METHOD,
@@ -26,9 +27,12 @@ export async function settleMobileRuntimeCapabilities(
     if (!isRpcDeliveryUnknown(error)) {
       throw error
     }
+
     console.warn('[net] mobile capability negotiation unanswered — proceeding', error)
+
     return
   }
+
   if (!response.ok) {
     console.warn('[net] mobile capability negotiation unavailable', response.error.code)
   }
@@ -50,6 +54,7 @@ export function negotiateMobileRuntimeCapabilities(args: {
       if (!args.current()) {
         return
       }
+
       // Why: nothing else force-closes a socket that cannot send before `connected` is published.
       console.warn('[net] mobile capability negotiation could not be sent', error)
       args.onFailure()

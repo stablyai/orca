@@ -16,11 +16,14 @@ export function logRelayDialFailure(
   if (!error) {
     return
   }
+
   const base = `${error.name}: ${String(error.message).slice(0, 80)}`
+
   const detail =
     error instanceof RelayDirectorHttpError && error.retryAfterMs != null
       ? `${base}; retry-after=${error.retryAfterMs}ms`
       : base
+
   log(source === 'dial' ? 'relay dial failed' : 'active relay session failed', detail, {
     level: 'error',
     code: source === 'dial' ? 'relay-dial-failed' : 'relay-session-failed'

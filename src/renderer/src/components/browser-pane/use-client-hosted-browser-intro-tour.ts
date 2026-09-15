@@ -18,6 +18,7 @@ export function useClientHostedBrowserIntroTour(enabled: boolean): void {
     if (!enabled || !persistedUIReady || recordedRef.current) {
       return
     }
+
     recordedRef.current = true
     void recordFeatureInteraction('client-hosted-browser')
   }, [enabled, persistedUIReady, recordFeatureInteraction])
@@ -25,7 +26,9 @@ export function useClientHostedBrowserIntroTour(enabled: boolean): void {
     if (!enabled || !persistedUIReady || seen || requestedRef.current) {
       return
     }
+
     requestedRef.current = true
+
     return requestContextualTourWhenReady({
       id: 'client-hosted-browser',
       source: 'client_hosted_browser_visible'

@@ -22,11 +22,15 @@ import type { RelayDispatcher } from './dispatcher'
 
 // Mirrors the relay drain constants; kept local so a constant change fails this oracle loudly.
 const CHUNK_CHARS = 16 * 1024
+
 const MAX_WRITES = 2
+
 const BATCH_INTERVAL_MS = 8
+
 const DRAIN_CONTINUE_MS = 1
 
 type PendingOutput = { data: string; rawLength?: number; seq?: number }
+
 type DataEvent = { id: string; data: string; seq?: number; rawLength?: number }
 
 /**
@@ -41,13 +45,16 @@ function legacyFlushTick(pendingById: Map<string, PendingOutput>): {
 } {
   const events: DataEvent[] = []
   let writes = 0
+
   for (const [id, pending] of Array.from(pendingById.entries())) {
     if (writes >= MAX_WRITES) {
       break
     }
+
     pendingById.delete(id)
     const chunk = pending.data.slice(0, CHUNK_CHARS)
     const remaining = pending.data.slice(CHUNK_CHARS)
+
     if (remaining) {
       pendingById.set(id, {
         data: remaining,
@@ -55,6 +62,7 @@ function legacyFlushTick(pendingById: Map<string, PendingOutput>): {
         seq: pending.seq
       })
     }
+
     events.push({
       id,
       data: chunk,
@@ -65,30 +73,36 @@ function legacyFlushTick(pendingById: Map<string, PendingOutput>): {
     })
     writes += 1
   }
+
   return { events, writes, reschedules: pendingById.size > 0 && writes > 0 }
 }
 
 function legacyTimeline(initial: Map<string, PendingOutput>): DataEvent[] {
   const pendingById = new Map(initial)
   const timeline: DataEvent[] = []
+
   for (let tick = 0; tick < 500 && pendingById.size > 0; tick++) {
     const result = legacyFlushTick(pendingById)
     timeline.push(...result.events)
+
     if (!result.reschedules) {
       break
     }
   }
+
   return timeline
 }
 
 // xorshift32 — deterministic across platforms, no Math.random.
 function createRandom(seed: number): () => number {
   let state = seed >>> 0 || 1
+
   return () => {
     state ^= state << 13
     state ^= state >>> 17
     state ^= state << 5
     state >>>= 0
+
     return state / 0x1_0000_0000
   }
 }
@@ -99,6 +113,7 @@ describe('relay PTY output drain — differential vs the pre-optimization snapsh
     callRequest: (method: string, params?: Record<string, unknown>) => Promise<unknown>
     _notifications: { method: string; params?: Record<string, unknown> }[]
   }
+
   let handler: PtyHandler
   let dataCallbacks: Map<string, (data: string) => void>
   let exitCallbacks: Map<string, (event: { exitCode: number }) => void>
@@ -117,12 +132,15 @@ describe('relay PTY output drain — differential vs the pre-optimization snapsh
     dispatcher = {
       notify: vi.fn((method: string, params?: Record<string, unknown>) => {
         notifications.push({ method, params })
+
         if (method !== 'pty.data' || !onNotifyData || reentering) {
           return
         }
+
         // Why: the relay sink is a synchronous write; this hook models a sink that re-enters
         // PTY ingress before the drain returns.
         reentering = true
+
         try {
           onNotifyData(params as unknown as { id: string; data: string })
         } finally {
@@ -131,13 +149,16 @@ describe('relay PTY output drain — differential vs the pre-optimization snapsh
       }),
       callRequest: async (method: string, params: Record<string, unknown> = {}) => {
         const h = requestHandlers.get(method)
+
         if (!h) {
           throw new Error(`No handler for ${method}`)
         }
+
         return h(params)
       },
       _notifications: notifications
     }
+
     const full = {
       onRequest: vi.fn((method: string, h: (params: Record<string, unknown>) => Promise<unknown>) =>
         requestHandlers.set(method, h)
@@ -145,6 +166,7 @@ describe('relay PTY output drain — differential vs the pre-optimization snapsh
       onNotification: vi.fn(),
       notify: dispatcher.notify
     }
+
     handler = new PtyHandler(full as unknown as RelayDispatcher)
   })
 
@@ -158,6 +180,7 @@ describe('relay PTY output drain — differential vs the pre-optimization snapsh
 
   async function spawnPtys(count: number): Promise<string[]> {
     const ids: string[] = []
+
     for (let i = 0; i < count; i++) {
       let dataCallback!: (data: string) => void
       let exitCallback!: (event: { exitCode: number }) => void
@@ -175,6 +198,7 @@ describe('relay PTY output drain — differential vs the pre-optimization snapsh
       exitCallbacks.set(spawned.id, exitCallback)
       ids.push(spawned.id)
     }
+
     return ids
   }
 
@@ -202,6 +226,7 @@ describe('relay PTY output drain — differential vs the pre-optimization snapsh
     }
 
     await vi.advanceTimersByTimeAsync(BATCH_INTERVAL_MS)
+
     for (let tick = 0; tick < 200; tick++) {
       await vi.advanceTimersByTimeAsync(DRAIN_CONTINUE_MS)
     }
@@ -215,6 +240,7 @@ describe('relay PTY output drain — differential vs the pre-optimization snapsh
     const ids = await spawnPtys(sessionCount)
 
     const expectedPending = new Map<string, PendingOutput>()
+
     for (const id of ids) {
       const chunks = 1 + Math.floor(random() * 3)
       const extra = Math.floor(random() * 64)
@@ -224,6 +250,7 @@ describe('relay PTY output drain — differential vs the pre-optimization snapsh
     }
 
     await vi.advanceTimersByTimeAsync(BATCH_INTERVAL_MS)
+
     for (let tick = 0; tick < 300; tick++) {
       await vi.advanceTimersByTimeAsync(DRAIN_CONTINUE_MS)
     }
@@ -249,6 +276,7 @@ describe('relay PTY output drain — differential vs the pre-optimization snapsh
 
   it('writes at most two PTYs per tick and rotates the rest to the next tick', async () => {
     const ids = await spawnPtys(3)
+
     for (const id of ids) {
       dataCallbacks.get(id)!('a'.repeat(CHUNK_CHARS + 4))
     }

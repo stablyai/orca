@@ -68,6 +68,7 @@ export function RuntimeServersConnectSection({
   onRemove
 }: RuntimeServersConnectSectionProps): React.JSX.Element {
   const updateCheckHint = getUpdateCheckHint()
+
   return (
     <div className={cn('space-y-3', !visible && 'hidden')}>
       <div

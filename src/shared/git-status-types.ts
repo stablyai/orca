@@ -1,5 +1,7 @@
 export type GitFileStatus = 'modified' | 'added' | 'deleted' | 'renamed' | 'untracked' | 'copied'
+
 export type GitStagingArea = 'staged' | 'unstaged' | 'untracked'
+
 export type GitConflictKind =
   | 'both_modified'
   | 'both_added'
@@ -10,8 +12,11 @@ export type GitConflictKind =
   | 'deleted_by_them'
 
 export type GitConflictResolutionStatus = 'unresolved' | 'resolved_locally'
+
 export type GitConflictStatusSource = 'git' | 'session'
+
 export type GitConflictOperation = 'merge' | 'rebase' | 'cherry-pick' | 'unknown'
+
 export type GitSubmoduleStatus = {
   commitChanged: boolean
   trackedChanges: boolean

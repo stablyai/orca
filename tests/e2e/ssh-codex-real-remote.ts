@@ -15,9 +15,11 @@ function tomlString(value: string): string {
 
 export function installRemoteRealCodex(target: DockerSshRelayTarget): void {
   const codexAuthPath = path.join(os.homedir(), '.codex', 'auth.json')
+
   if (!existsSync(codexAuthPath)) {
     throw new Error(`Real remote Codex repro needs local auth at ${codexAuthPath}`)
   }
+
   dockerExec(target, 'mkdir -p /root/.codex')
   dockerWriteFile(target, '/root/.codex/auth.json', readFileSync(codexAuthPath), '600')
   const trustedRemotePath = tomlString(DOCKER_SSH_RELAY_REMOTE_REPO_PATH)
@@ -47,6 +49,7 @@ export function realRemoteCodexCommand(doneMarker: string): string {
     'Then briefly summarize that all three commands ran.',
     `End your final response with this exact marker: ${doneMarker}`
   ].join(' ')
+
   return [
     'codex',
     '--no-alt-screen',

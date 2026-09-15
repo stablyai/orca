@@ -34,7 +34,9 @@ type CachedSharedControlConnection = {
 }
 
 const requestConnections = new Map<string, CachedRuntimeConnection>()
+
 const sharedControlConnections = new Map<string, CachedSharedControlConnection>()
+
 const statusOwners = new Map<string, { key: string; owner: RuntimeHostStatusOwner }>()
 
 export function getRuntimeEnvironmentStatusOwner(
@@ -45,10 +47,12 @@ export function getRuntimeEnvironmentStatusOwner(
   const pairing = getPreferredPairingOffer(environment)
   const key = `${userDataPath}\0${environment.pairingRevision ?? environment.createdAt}\0${getPairingKey(pairing)}`
   let cached = statusOwners.get(environment.id)
+
   if (!cached || cached.key !== key || cached.owner.read().retired) {
     if (cached) {
       closeRemoteRuntimeRequestConnection(environment.id)
     }
+
     const owner = createRuntimeEnvironmentStatusOwner(userDataPath, environment, {
       isReady: () => getRemoteRuntimeSharedControlDiagnostics(environment.id)?.state === 'ready',
       request: (signal) =>
@@ -67,12 +71,15 @@ export function getRuntimeEnvironmentStatusOwner(
       },
       pause: () => pauseRemoteRuntimeSharedControlRetry(environment.id)
     })
+
     cached = { key, owner }
     statusOwners.set(environment.id, cached)
+
     if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
       owner.dispose()
     }
   }
+
   return cached.owner
 }
 
@@ -96,6 +103,7 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
 ): Promise<RuntimeRpcResponse<TResult>> {
   const pairingKey = getPairingKey(pairing)
   let cached = requestConnections.get(environmentId)
+
   if (!cached || cached.pairingKey !== pairingKey) {
     cached?.connection.close()
     cached = {
@@ -107,6 +115,7 @@ export function sendRemoteRuntimeConnectionRequest<TResult>(
     }
     requestConnections.set(environmentId, cached)
   }
+
   return cached.connection.request(method, params, timeoutMs, signal)
 }
 
@@ -204,6 +213,7 @@ function getSharedControlConnection(
 ): RemoteRuntimeSharedControlConnection {
   const pairingKey = getPairingKey(pairing)
   let cached = sharedControlConnections.get(environmentId)
+
   if (!cached || cached.pairingKey !== pairingKey) {
     advanceRuntimeEnvironmentTransportGeneration(environmentId)
     cached?.connection.close()
@@ -219,6 +229,7 @@ function getSharedControlConnection(
           if (getRuntimeEnvironmentTransportGeneration(environmentId) !== transportGeneration) {
             return
           }
+
           publishRuntimeEnvironmentDiagnostics({
             environmentId,
             transportGeneration,
@@ -239,6 +250,7 @@ function getSharedControlConnection(
     }
     sharedControlConnections.set(environmentId, cached)
   }
+
   return cached.connection
 }
 

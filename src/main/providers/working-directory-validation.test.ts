@@ -7,6 +7,7 @@ const wslUncDirectoryExistsAsyncMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../wsl', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return { ...actual, wslUncDirectoryExistsAsync: wslUncDirectoryExistsAsyncMock }
 })
 
@@ -97,6 +98,7 @@ describe('validateWorkingDirectoryAsync', () => {
 
     it('leaves the shared probe intact for callers that are still waiting', async () => {
       let releaseProbe: () => void = () => {}
+
       wslUncDirectoryExistsAsyncMock.mockReturnValue(
         new Promise<boolean>((resolve) => {
           releaseProbe = () => resolve(true)
@@ -117,6 +119,7 @@ describe('validateWorkingDirectoryAsync', () => {
 
     it('never pins a second probe on a path whose probe is still hung', async () => {
       vi.useFakeTimers()
+
       try {
         wslUncDirectoryExistsAsyncMock.mockReturnValue(new Promise<boolean>(() => {}))
         const hung = deadShare('still-hung')
@@ -171,6 +174,7 @@ describe('validateWorkingDirectoryAsync', () => {
           () => {}
         )
       }
+
       await flushLaneAcquire()
 
       expect(peak).toBe(2)
@@ -178,6 +182,7 @@ describe('validateWorkingDirectoryAsync', () => {
 
     it('keeps a healthy local path out of a stalled share queue', async () => {
       wslUncDirectoryExistsAsyncMock.mockReturnValue(new Promise<boolean>(() => {}))
+
       for (let index = 0; index < 4; index += 1) {
         void validateWorkingDirectoryAsync(`\\\\wsl.localhost\\Ubuntu\\blocking-${index}`).catch(
           () => {}
@@ -204,6 +209,7 @@ describe('validateWorkingDirectoryAsync', () => {
           )
         }
       }
+
       await flushLaneAcquire()
 
       expect(inFlight).toBe(4)
@@ -230,6 +236,7 @@ describe('validateWorkingDirectoryAsync', () => {
 
     it('shares one in-flight probe for the same working directory', async () => {
       let releaseProbe: () => void = () => {}
+
       wslUncDirectoryExistsAsyncMock.mockReturnValue(
         new Promise<boolean>((resolve) => {
           releaseProbe = () => resolve(true)

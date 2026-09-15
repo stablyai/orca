@@ -53,6 +53,7 @@ export function combinePtyIngressSourceSpans(
   if (!first) {
     return second
   }
+
   return {
     data: first.data + second.data,
     rawStartSeq: first.rawStartSeq,

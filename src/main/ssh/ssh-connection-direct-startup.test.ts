@@ -21,15 +21,19 @@ import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
 import type { SshTarget } from '../../shared/ssh-types'
 
 vi.mock('ssh2', async () => (await import('./ssh-connection-test-harness')).createSsh2Module())
+
 vi.mock('./system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()
 )
+
 vi.mock('./ssh-system-fallback', async () =>
   (await import('./ssh-connection-test-harness')).createSystemFallbackModule()
 )
+
 vi.mock('./ssh-control-socket', async () =>
   (await import('./ssh-connection-test-harness')).createControlSocketModule()
 )
+
 vi.mock('./ssh-config-parser', async () =>
   (await import('./ssh-connection-test-harness')).createSshConfigParserModule()
 )
@@ -139,9 +143,11 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), callbacks)
 
     const connectResult = conn.connectViaSystemSsh().catch((err: Error) => err)
+
     for (let i = 0; i < 5 && spawnSystemSshMock.mock.calls.length === 0; i++) {
       await Promise.resolve()
     }
+
     expect(spawnSystemSshMock).toHaveBeenCalledTimes(1)
 
     await conn.disconnect()
@@ -175,18 +181,22 @@ describe('SshConnection', () => {
     const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), callbacks)
 
     const connectResult = conn.connectViaSystemSsh().catch((err: Error) => err)
+
     for (let i = 0; i < 5 && spawnSystemSshMock.mock.calls.length === 0; i++) {
       await Promise.resolve()
     }
+
     expect(spawnSystemSshMock).toHaveBeenCalledTimes(1)
 
     await conn.disconnect()
 
     const result = await connectResult
     expect(result).toBeInstanceOf(Error)
+
     if (!(result instanceof Error)) {
       throw new Error('Expected direct system SSH startup to reject')
     }
+
     expect(result.message).toBe('SSH connection attempt was cancelled')
     expect(conn.getState()).toMatchObject({ status: 'disconnected', error: null })
     expect(conn.usesSystemSshTransport()).toBe(false)

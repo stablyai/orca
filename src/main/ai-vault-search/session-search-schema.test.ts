@@ -16,12 +16,15 @@ import {
 } from './session-search-schema'
 
 const recordedRmSync = vi.hoisted(() => vi.fn())
+
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
+
   return {
     ...actual,
     rmSync: (...args: Parameters<typeof actual.rmSync>) => {
       recordedRmSync(...args)
+
       return actual.rmSync(...args)
     }
   }
@@ -37,6 +40,7 @@ afterEach(async () => {
 async function tempDatabasePath(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-session-search-schema-'))
   roots.push(root)
+
   return join(root, 'index.sqlite')
 }
 
@@ -66,12 +70,14 @@ describe('openSessionSearchDatabase', () => {
   it('carries one FTS table and throws away an index that carries two', async () => {
     const path = await tempDatabasePath()
     const fresh = openSessionSearchDatabase(path)
+
     const tables = (): string[] =>
       (
         fresh
           .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE '%_fts'")
           .all() as { name: string }[]
       ).map((row) => row.name)
+
     expect(tables()).toEqual(['messages_fts'])
 
     // What an index written before this bump looks like: the second table, and
@@ -122,6 +128,7 @@ describe('openSessionSearchDatabase', () => {
     openSessionSearchDatabase(path).close()
     await writeFile(`${path}-shm`, '')
     removeSessionSearchDatabase(path)
+
     for (const suffix of ['', '-wal', '-shm']) {
       await expect(stat(`${path}${suffix}`)).rejects.toMatchObject({
         code: 'ENOENT'
@@ -141,6 +148,7 @@ it('rebuilds a file too corrupt to open instead of refusing forever', async () =
   await writeFile(path, bytes)
 
   const rebuilt = openSessionSearchDatabase(path)
+
   try {
     expect(schemaVersion(rebuilt)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
     expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
@@ -156,6 +164,7 @@ it('rebuilds a file that is not a database at all', async () => {
   await writeFile(path, 'not a SQLite database')
 
   const rebuilt = openSessionSearchDatabase(path)
+
   try {
     expect(schemaVersion(rebuilt)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
   } finally {
@@ -166,12 +175,14 @@ it('rebuilds a file that is not a database at all', async () => {
 it('gives up rather than looping when a fresh file still cannot be opened', async () => {
   const path = await tempDatabasePath()
   await writeFile(path, 'not a SQLite database')
+
   // Every open of this path fails, so the one permitted retry is exhausted.
   const open = vi.spyOn(SyncDatabase.prototype, 'pragma').mockImplementation(() => {
     throw Object.assign(new Error('database disk image is malformed'), {
       code: 'SQLITE_CORRUPT'
     })
   })
+
   try {
     expect(() => openSessionSearchDatabase(path)).toThrow(/malformed/)
   } finally {
@@ -192,6 +203,7 @@ it('surfaces the unlink failure itself when a stale index cannot be removed', as
       code: 'EPERM'
     })
   })
+
   try {
     // The stale handle is closed before the unlink, so the failure path must not
     // close it again: ERR_INVALID_STATE would bury the cause and would not be
@@ -210,6 +222,7 @@ it('creates the directory the index lives in', async () => {
   // has made that folder yet. SQLite would fail with `unable to open database
   // file`, which is correctly not treated as corruption, so it never retries.
   const db = openSessionSearchDatabase(join(root, 'ai-vault-search', 'index.sqlite'))
+
   try {
     expect(schemaVersion(db)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
   } finally {
@@ -227,6 +240,7 @@ it('rebuilds a newer index rather than reading a schema it does not know', async
   newer.close()
 
   const rebuilt = openSessionSearchDatabase(path)
+
   try {
     expect(schemaVersion(rebuilt)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
     expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
@@ -247,6 +261,7 @@ it('rebuilds when meta exists but its version row is gone', async () => {
   damaged.close()
 
   const rebuilt = openSessionSearchDatabase(path)
+
   try {
     expect(schemaVersion(rebuilt)).toBe(String(SESSION_SEARCH_SCHEMA_VERSION))
     expect(rebuilt.prepare('SELECT COUNT(*) AS c FROM files').get()).toEqual({
@@ -259,6 +274,7 @@ it('rebuilds when meta exists but its version row is gone', async () => {
 
 it('opens with the pragmas the write path depends on', async () => {
   const db = openSessionSearchDatabase(await tempDatabasePath())
+
   try {
     // auto_vacuum=2 is INCREMENTAL, and only takes on an empty file: without it
     // a purge cannot hand pages back in bounded steps.
@@ -276,6 +292,7 @@ it('opens with the pragmas the write path depends on', async () => {
 
 it("walks a session's rows through an index rather than scanning the table", async () => {
   const db = openSessionSearchDatabase(await tempDatabasePath())
+
   try {
     // The replace delete and the orphan drain both take this path, once per file.
     const plan = (
@@ -285,6 +302,7 @@ it("walks a session's rows through an index rather than scanning the table", asy
     )
       .map((row) => row.detail)
       .join(' ')
+
     expect(plan).toContain('messages_session')
   } finally {
     db.close()
@@ -293,6 +311,7 @@ it("walks a session's rows through an index rather than scanning the table", asy
 
 it('keeps only the session indexes a retrieval query can seek', async () => {
   const db = openSessionSearchDatabase(await tempDatabasePath())
+
   try {
     const names = (
       db
@@ -301,6 +320,7 @@ it('keeps only the session indexes a retrieval query can seek', async () => {
     )
       .map((row) => row.name)
       .sort()
+
     // One per shape PR 4's retrieval seeks: the agent filter, the newest-first
     // order and date window, and the folder-prefix range scan. Fork folding reads
     // `content_hash` off rows it already holds, so that column is not indexed.
@@ -315,12 +335,15 @@ it("retries a Windows lock that outlives rmSync's own retries", async () => {
   openSessionSearchDatabase(path).close()
   vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
   recordedRmSync.mockReset()
+
   const locked = Object.assign(new Error('EPERM: operation not permitted'), {
     code: 'EPERM'
   })
+
   recordedRmSync.mockImplementationOnce(() => {
     throw locked
   })
+
   try {
     expect(() => removeSessionSearchDatabase(path)).not.toThrow()
     expect(recordedRmSync.mock.calls.length).toBe(5)
@@ -335,9 +358,11 @@ it('gives Windows the shared retry options for a late handle release', async () 
   const path = await tempDatabasePath()
   vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
   recordedRmSync.mockClear()
+
   try {
     removeSessionSearchDatabase(path)
     expect(recordedRmSync).toHaveBeenCalled()
+
     for (const [, options] of recordedRmSync.mock.calls) {
       expect(options).toMatchObject({
         maxRetries: WINDOWS_RM_MAX_RETRIES,

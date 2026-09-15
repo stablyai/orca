@@ -49,6 +49,7 @@ afterEach(async () => {
 describe('Claude provider fallback', () => {
   it('drops suppressed init frames instead of dereferencing a null translation', () => {
     const items: { identity: unknown; body: AgentJournalItemBody }[] = []
+
     const sink = {
       appendItem: (identity: unknown, body: AgentJournalItemBody) => {
         items.push({ identity, body })
@@ -56,7 +57,9 @@ describe('Claude provider fallback', () => {
       appendTombstone: vi.fn(),
       publish: vi.fn()
     }
+
     const translator = createClaudeJournalTranslator({ sink })
+
     const initEvent: ClaudeStructuredSessionEvent = {
       type: 'message',
       sessionId: 'orca-session',
@@ -79,6 +82,7 @@ describe('Claude provider fallback', () => {
       now: () => 1_700_000_000_000,
       mintEpoch: () => 'epoch-1'
     })
+
     const deferred = createDeferredStructuredAgentSessionEventSink()
     deferred.bind({
       journal,
@@ -113,5 +117,6 @@ function statusText(row: { body: AgentJournalItemBody }): string {
   if (row.body.kind !== 'status') {
     throw new Error('expected status row')
   }
+
   return row.body.text
 }

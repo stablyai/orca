@@ -73,8 +73,10 @@ export function FileExplorerToolbar({
             onClick={(event) => {
               if (!canCollapseAll) {
                 event.preventDefault()
+
                 return
               }
+
               onCollapseAll()
             }}
           >
@@ -107,8 +109,10 @@ export function FileExplorerToolbar({
             onClick={(event) => {
               if (!canRefresh) {
                 event.preventDefault()
+
                 return
               }
+
               refresh.handleRefresh()
             }}
           >

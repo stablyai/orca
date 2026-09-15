@@ -30,6 +30,7 @@ const CHANNEL_VERSION_ENV = {
 export function collectDevChannelPackagingProblems({ channel, platform, config, env }) {
   const problems = []
   const expectedRepo = CHANNEL_REPOS[channel]
+
   if (!expectedRepo) {
     return [
       `Unknown dev channel "${channel}"; expected one of ${Object.keys(CHANNEL_REPOS).join(', ')}.`
@@ -53,6 +54,7 @@ export function collectDevChannelPackagingProblems({ channel, platform, config, 
   // already created. A config that dropped it would package package.json's
   // version and upload into the wrong release entirely.
   const expectedVersion = env[CHANNEL_VERSION_ENV[channel]]
+
   if (expectedVersion && config.extraMetadata?.version !== expectedVersion) {
     problems.push(
       `extraMetadata.version is "${config.extraMetadata?.version}" but the workflow computed "${expectedVersion}".`
@@ -69,6 +71,7 @@ export function collectDevChannelPackagingProblems({ channel, platform, config, 
         'win.verifyUpdateCodeSignature must be false for unsigned dev builds, or electron-updater will Authenticode-verify every installer this build downloads and reject all of them.'
       )
     }
+
     if (config.win?.signtoolOptions?.publisherName != null) {
       problems.push(
         `win.signtoolOptions.publisherName is set to "${config.win.signtoolOptions.publisherName}" on an unsigned dev build; it must be absent.`
@@ -81,37 +84,46 @@ export function collectDevChannelPackagingProblems({ channel, platform, config, 
 
 function parseArgs(argv) {
   const args = {}
+
   for (const entry of argv) {
     const match = /^--([^=]+)=(.*)$/.exec(entry)
+
     if (match) {
       args[match[1]] = match[2]
     }
   }
+
   return args
 }
 
 function main() {
   const { channel, platform = process.platform } = parseArgs(process.argv.slice(2))
+
   if (!channel) {
     console.error(
       'Usage: verify-dev-channel-packaging.mjs --channel=<hourly|daily|adhoc> [--platform=win32]'
     )
     process.exit(1)
   }
+
   const require = createRequire(import.meta.url)
   const config = require(resolve(import.meta.dirname, '../electron-builder.config.cjs'))
+
   const problems = collectDevChannelPackagingProblems({
     channel,
     platform,
     config,
     env: process.env
   })
+
   if (problems.length > 0) {
     for (const problem of problems) {
       console.error(`::error::${problem}`)
     }
+
     process.exit(1)
   }
+
   console.log(
     `Dev-channel packaging verified: ${channel} on ${platform} → stablyai/${CHANNEL_REPOS[channel]} @ ${config.extraMetadata?.version}`
   )

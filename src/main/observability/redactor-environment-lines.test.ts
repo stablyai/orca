@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { redactString } from './redactor'
 
 const originalEnvLine = /^\s*([A-Z_][A-Z0-9_]*)\s*=\s*\S.*/gm
+
 const original = (input: string): string =>
   input.replace(originalEnvLine, (_match, key) => `${String(key)}=[redacted:env-value]`)
 
@@ -39,12 +40,15 @@ describe('environment line redaction parity', () => {
   it('matches the original across 20,000 malformed and valid sequences', () => {
     const tokens = [...whitespace, 'FOO', '_A12', 'lowercase', '!', '=', '==', 'value', '0', 'FOO=']
     let seed = 173
+
     for (let sample = 0; sample < 20000; sample++) {
       let source = ''
+
       for (let token = 0; token < 18; token++) {
         seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
         source += tokens[seed % tokens.length]
       }
+
       expect(redactString(source), JSON.stringify(source)).toBe(original(source))
     }
   })

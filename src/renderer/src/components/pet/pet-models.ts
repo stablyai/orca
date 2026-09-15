@@ -7,7 +7,9 @@ import { translate } from '@/i18n/i18n'
 // user hasn't uploaded a custom image. Vite's `?url` import hashes each asset
 // at build time so they participate in the normal caching pipeline.
 export const DEFAULT_PET_ID = 'claude-the-mage'
+
 export const OPENCODE_PET_ID = 'opencode-the-rogue'
+
 export const GREMLIN_PET_ID = 'gremlin-the-trickster'
 
 export type BundledPetId = typeof DEFAULT_PET_ID | typeof OPENCODE_PET_ID | typeof GREMLIN_PET_ID

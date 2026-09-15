@@ -20,17 +20,21 @@ export function findSetupScriptPromptRepo(input: {
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
 }): Repo | null {
   const { activeRepoId, activeWorktree, repos, settings } = input
+
   if (!activeRepoId) {
     return null
   }
+
   // Why: runtime-relayed SSH worktrees expose their transport host separately from the repo catalog owner.
   const runtimeOwnerEnvironmentId = activeWorktree?.runtimeOwnerEnvironmentId?.trim()
+
   const activeWorktreeHostId =
     activeWorktree?.repoId === activeRepoId
       ? runtimeOwnerEnvironmentId
         ? toRuntimeExecutionHostId(runtimeOwnerEnvironmentId)
         : activeWorktree.hostId
       : undefined
+
   return findRepoForHost(repos, activeRepoId, {
     settings,
     ...(activeWorktreeHostId ? { hostId: activeWorktreeHostId } : {})
@@ -53,12 +57,14 @@ export function getRenderedSetupScriptPromptState(input: {
   lastVisiblePrompt: LastVisibleSetupScriptPrompt | null
 }): SetupScriptPromptState | null {
   const { activeRepoHostIdentity, activeRepoId, lastVisiblePrompt, promptState } = input
+
   if (
     promptState?.repoId === activeRepoId &&
     promptState.repoHostIdentity === activeRepoHostIdentity
   ) {
     return promptState
   }
+
   return !promptState && lastVisiblePrompt?.state.repoHostIdentity === activeRepoHostIdentity
     ? lastVisiblePrompt.state
     : null

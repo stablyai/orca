@@ -18,6 +18,7 @@ export function MobileHomeAccountUsageCards(props: {
   if (props.items.length === 0) {
     return null
   }
+
   return (
     <>
       <Text style={styles.sectionHeading}>Account usage</Text>
@@ -26,10 +27,12 @@ export function MobileHomeAccountUsageCards(props: {
           snapshot.claude.accounts.find(
             (account) => account.id === snapshot.claude.activeAccountId
           ) ?? null
+
         const codexActive =
           snapshot.codex.accounts.find(
             (account) => account.id === snapshot.codex.activeAccountId
           ) ?? null
+
         return (
           <Pressable
             key={host.id}
@@ -43,14 +46,19 @@ export function MobileHomeAccountUsageCards(props: {
             ) : null}
             {(['claude', 'codex'] as ProviderKey[]).map((provider) => {
               const active = provider === 'claude' ? claudeActive : codexActive
+
               const accounts =
                 provider === 'claude' ? snapshot.claude.accounts : snapshot.codex.accounts
+
               const limits = getActiveProviderRateLimits(snapshot, provider)
+
               if (accounts.length === 0 && !hasActiveProviderUsage(limits)) {
                 return null
               }
+
               const sessionBar = getUsageBarState(limits, 'session')
               const weeklyBar = getUsageBarState(limits, 'weekly')
+
               return (
                 <View key={provider} style={styles.row}>
                   <View style={styles.icon}>

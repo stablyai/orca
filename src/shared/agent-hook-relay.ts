@@ -125,6 +125,7 @@ export const AGENT_HOOK_NOTIFICATION_METHOD = 'agent.hook' as const
  *  (see `src/relay/agent-hook-envelope-publication.ts`), so `ingestRemote` can tell
  *  "shed in transit" from "the agent cleared it"; rosters include their digest. */
 export const AGENT_HOOK_SHED_FIELDS_KEY = 'shedFields' as const
+
 const AGENT_HOOK_SHED_SUBAGENTS_DIGEST_PREFIX = 'subagents:sha256:'
 
 function subagentRosterDigest(subagents: readonly AgentSubagentSnapshot[]): string {
@@ -136,6 +137,7 @@ function subagentRosterDigest(subagents: readonly AgentSubagentSnapshot[]): stri
     model ?? null,
     description ?? null
   ])
+
   return createHash('sha256').update(JSON.stringify(stableRoster)).digest('base64url')
 }
 
@@ -151,7 +153,9 @@ function hasMatchingShedSubagentsField(
   if (!previous.subagents) {
     return false
   }
+
   const expected = createShedSubagentsField(previous.subagents)
+
   return shedFields.some((field) => field === expected)
 }
 
@@ -182,15 +186,18 @@ export function restoreShedStatusFields(
   if (!previous || !Array.isArray(shedFields) || shedFields.length === 0) {
     return payload
   }
+
   const subagents =
     payload.subagents === undefined &&
     hasMatchingTurnIdentity(payload, previous) &&
     hasMatchingShedSubagentsField(shedFields, previous)
       ? previous.subagents
       : undefined
+
   if (subagents === undefined) {
     return payload
   }
+
   return {
     ...payload,
     subagents
@@ -227,12 +234,16 @@ export const ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV = 'ORCA_FEATURE_REMOTE_AGENT_HO
 
 export function isRemoteAgentHooksEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
   const raw = env[ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV]
+
   if (raw === undefined) {
     return true
   }
+
   const trimmed = raw.trim()
+
   if (trimmed.length === 0 || trimmed === '0') {
     return false
   }
+
   return true
 }

@@ -18,16 +18,20 @@ export class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMarkPtyLivene
     const inner = this.mobileSubscribers.get(ptyId)
     const sub = inner?.get(clientId)
     const softLeaver = this.pendingSoftLeavers.get(ptyId)
+
     // Why: native chat pauses terminal output, so its later sends have no
     // subscriber lifecycle that could release a newly-created desktop lock.
     if (!sub && softLeaver?.clientId !== clientId) {
       return
     }
+
     if (sub) {
       sub.lastActedAt = Date.now()
     }
+
     const prev = previousFloor ?? this.getDriver(ptyId)
     const currentMode = this.mobileDisplayModes.get(ptyId)
+
     // Why: a deliberate mobile action implies mobile is resuming control.
     // If the display mode is currently 'desktop' (set by an earlier
     // take-back), flip it back to 'auto' (= map absence) and re-apply so
@@ -36,13 +40,16 @@ export class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMarkPtyLivene
       if (currentMode === 'desktop') {
         this.mobileDisplayModes.delete(ptyId)
       }
+
       await this.applyMobileDisplayMode(ptyId)
     }
+
     // Why: display changes are async; a later PTY write must keep the floor
     // when an older phone-fit operation eventually completes.
     if (!isCurrent()) {
       return
     }
+
     this.setDriver(ptyId, { kind: 'mobile', clientId })
   }
 
@@ -63,27 +70,35 @@ export class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMarkPtyLivene
   ): Promise<{ updated: boolean; applied: boolean }> {
     const inner = this.mobileSubscribers.get(ptyId)
     const sub = inner?.get(clientId)
+
     if (!sub) {
       return { updated: false, applied: false }
     }
+
     sub.viewport = viewport
     sub.lastActedAt = Date.now()
 
     const mode = this.getMobileDisplayMode(ptyId)
+
     if (mode === 'desktop') {
       // Watching at desktop dims — viewport is informational only.
       return { updated: true, applied: false }
     }
+
     if (this.getDriver(ptyId).kind === 'desktop') {
       return { updated: true, applied: false }
     }
+
     // Drive PTY dims by the most-recent-actor (just updated to this client).
     const winner = this.pickMostRecentActor(inner!)
+
     if (!winner) {
       return { updated: false, applied: false }
     }
+
     const winnerSub = inner!.get(winner.clientId)
     const driveViewport = winnerSub?.viewport ?? viewport
+
     const { cols: clampedCols, rows: clampedRows } = clampTerminalViewport(
       driveViewport.cols,
       driveViewport.rows
@@ -95,10 +110,13 @@ export class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMarkPtyLivene
     this.setDriver(ptyId, { kind: 'mobile', clientId })
 
     const needsFreshSubscribeGuard = !this.layouts.has(ptyId)
+
     if (needsFreshSubscribeGuard) {
       this.freshSubscribeGuard.add(ptyId)
     }
+
     let result: ApplyLayoutResult
+
     try {
       result = await this.enqueueLayout(ptyId, {
         kind: 'phone',
@@ -111,6 +129,7 @@ export class OrcaRuntimeWithMobileTookFloor extends OrcaRuntimeWithMarkPtyLivene
         this.freshSubscribeGuard.delete(ptyId)
       }
     }
+
     return { updated: true, applied: result.ok }
   }
 }

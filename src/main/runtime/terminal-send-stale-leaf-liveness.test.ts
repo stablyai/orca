@@ -12,11 +12,14 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session-state
 // session legitimately accepts writes before its pane remounts).
 
 const WORKTREE_ID = 'repo-1::/tmp/probe-worktree'
+
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
 const STALE_PTY_ID = 'pty-stale-from-prior-run'
 
 function makeStore() {
   const session: WorkspaceSessionState = getDefaultWorkspaceSession()
+
   return {
     getWorkspaceSession: vi.fn(() => session),
     setWorkspaceSession: vi.fn(),
@@ -62,6 +65,7 @@ async function makeRuntimeWithLeafHandle(options: {
   runtime.attachWindow(1)
   publishLeafGraph(runtime, options.leafPtyId ?? STALE_PTY_ID)
   const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)
+
   return { runtime, handle: terminals[0].handle, write }
 }
 
@@ -166,6 +170,7 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
 
   it('never probes when the provider synchronously knows the id (live pty)', async () => {
     const probe = vi.fn(async () => false)
+
     const { runtime, handle, write } = await makeRuntimeWithLeafHandle({
       probePtyLiveness: probe,
       hasPty: (ptyId) => ptyId === STALE_PTY_ID
@@ -196,6 +201,7 @@ describe('sendTerminal absence gate for leaf-branch writes', () => {
   it('drops the cached absent verdict once the provider re-learns the id', async () => {
     const probe = vi.fn(async () => false)
     const livePtyIds = new Set<string>()
+
     const { runtime, handle, write } = await makeRuntimeWithLeafHandle({
       probePtyLiveness: probe,
       hasPty: (ptyId) => livePtyIds.has(ptyId)
@@ -239,6 +245,7 @@ type StoredMessageRow = {
 function makeOrchestrationDbStub(toHandle: () => string) {
   const rows: StoredMessageRow[] = []
   const runMailbox = 'run:run_test'
+
   const clearMailboxPointerEnter = (ids: ReadonlySet<string>) => {
     for (const row of rows) {
       if (ids.has(row.id)) {
@@ -248,28 +255,36 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       }
     }
   }
+
   const markAsDelivered = vi.fn((ids: string[]) => {
     const deliveredIds = new Set(ids)
+
     for (const row of rows) {
       if (deliveredIds.has(row.id)) {
         row.delivered_at = 'now'
       }
     }
+
     clearMailboxPointerEnter(deliveredIds)
   })
+
   const markAsUndelivered = vi.fn((ids: string[]) => {
     const releasedIds = new Set(ids)
+
     for (const row of rows) {
       if (releasedIds.has(row.id) && row.read === 0) {
         row.delivered_at = null
       }
     }
+
     clearMailboxPointerEnter(releasedIds)
   })
+
   const stageMailboxPointerEnter = vi.fn(
     (ids: string[], target: { ptyId: string; processIncarnation: string }) => {
       const stagedIds = new Set(ids)
       let changed = 0
+
       for (const row of rows) {
         if (stagedIds.has(row.id) && row.read === 0) {
           row.pointer_enter_pending = 1
@@ -278,15 +293,18 @@ function makeOrchestrationDbStub(toHandle: () => string) {
           changed += 1
         }
       }
+
       return changed === ids.length
     }
   )
+
   const matchesReservation = (
     row: StoredMessageRow,
     target: { ptyId: string; processIncarnation: string }
   ): boolean =>
     row.pointer_pty_id === target.ptyId &&
     row.pointer_process_incarnation === target.processIncarnation
+
   const advanceMailboxPointerPhase = (
     ids: string[],
     target: { ptyId: string; processIncarnation: string },
@@ -295,6 +313,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
   ): boolean => {
     const selected = new Set(ids)
     let changed = 0
+
     for (const row of rows) {
       if (
         selected.has(row.id) &&
@@ -306,16 +325,20 @@ function makeOrchestrationDbStub(toHandle: () => string) {
         changed += 1
       }
     }
+
     return changed === ids.length
   }
+
   const markMailboxPointerWriteAttempted = vi.fn(
     (ids: string[], target: { ptyId: string; processIncarnation: string }) =>
       advanceMailboxPointerPhase(ids, target, 1, 2)
   )
+
   const markMailboxPointerEnterAttempted = vi.fn(
     (ids: string[], target: { ptyId: string; processIncarnation: string }) =>
       advanceMailboxPointerPhase(ids, target, 2, 3)
   )
+
   const selectReservation = (
     ids: string[],
     target: { ptyId: string; processIncarnation: string },
@@ -331,6 +354,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
         )
         .map((row) => row.id)
     )
+
   const settleMailboxPointerEnter = vi.fn(
     (
       ids: string[],
@@ -338,14 +362,17 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       expectedPhases: readonly number[]
     ) => {
       const settled = selectReservation(ids, target, expectedPhases)
+
       for (const row of rows) {
         if (settled.has(row.id)) {
           row.delivered_at ??= 'now'
         }
       }
+
       clearMailboxPointerEnter(settled)
     }
   )
+
   const releaseMailboxPointerEnter = vi.fn(
     (
       ids: string[],
@@ -353,25 +380,30 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       expectedPhases: readonly number[]
     ) => {
       const released = selectReservation(ids, target, expectedPhases)
+
       for (const row of rows) {
         if (released.has(row.id) && row.read === 0) {
           row.delivered_at = null
         }
       }
+
       clearMailboxPointerEnter(released)
     }
   )
+
   const releasePendingMailboxPointerForPty = vi.fn((ptyId: string) => {
     const reservedIds = new Set(
       rows
         .filter((row) => row.pointer_enter_pending === 1 && row.pointer_pty_id === ptyId)
         .map((row) => row.id)
     )
+
     const pendingIds = new Set(
       rows
         .filter((row) => row.pointer_enter_pending > 0 && row.pointer_pty_id === ptyId)
         .map((row) => row.id)
     )
+
     for (const row of rows) {
       if (reservedIds.has(row.id) && row.read === 0) {
         row.delivered_at = null
@@ -379,8 +411,10 @@ function makeOrchestrationDbStub(toHandle: () => string) {
         row.delivered_at ??= 'now'
       }
     }
+
     clearMailboxPointerEnter(pendingIds)
   })
+
   return {
     rows,
     runMailbox,
@@ -438,9 +472,11 @@ function makeOrchestrationDbStub(toHandle: () => string) {
         const routed = rows.filter(
           (row) => row.run_id === runId && row.to_handle === handle && row.read === 0
         )
+
         for (const row of routed) {
           row.to_handle = runMailbox
         }
+
         return {
           routedCount: routed.length,
           hasMore: false,
@@ -478,6 +514,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     // provider never knew this id, modeling a leaf restored from a prior process.
     runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex working\x07', 100)
     runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex done\x07', 101)
+
     return { runtime, handle, write, stub }
   }
 
@@ -486,12 +523,14 @@ describe('push-on-idle orchestration delivery absence gate', () => {
   // the dead process's authority — ptyId is exactly what a same-id respawn keeps.
   it('re-applies the live-idle gate when the probe answers after a same-id respawn', async () => {
     let resolveProbe!: (value: boolean | null) => void
+
     const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
       probePtyLiveness: () =>
         new Promise<boolean | null>((resolve) => {
           resolveProbe = resolve
         })
     })
+
     stub.insert('for the old session')
 
     runtime.notifyMessageArrived(handle, 'status')
@@ -533,6 +572,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     })
 
     const pulled: string[] = []
+
     const checkResumed = runtime
       .waitForMessage(stub.runMailbox, { typeFilter: ['worker_done'], timeoutMs: 60_000 })
       .then(() => {
@@ -557,9 +597,11 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(pulled).toEqual(['worker completion'])
+
     const payloads = write.mock.calls
       .map(([, data]) => data)
       .filter((data): data is string => typeof data === 'string')
+
     const pointers = payloads.filter((data) => data.includes('orchestration check'))
     expect(pointers).toHaveLength(1)
     expect(pointers[0]).toContain('You have 1 orchestration message')
@@ -573,6 +615,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
   // carried in here would skip a row with nothing left to retry it (#12536 again).
   it('does not carry a stale waiter reservation into the probe continuation', async () => {
     let resolveProbe!: (value: boolean | null) => void
+
     const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
       probePtyLiveness: () =>
         new Promise<boolean | null>((resolve) => {
@@ -584,6 +627,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       typeFilter: ['worker_done'],
       timeoutMs: 60_000
     })
+
     stub.insert('unclaimed status')
     runtime.notifyMessageArrived(handle, 'status')
     await Promise.resolve()
@@ -605,6 +649,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     const payloads = write.mock.calls
       .map(([, data]) => data)
       .filter((data): data is string => typeof data === 'string')
+
     const pointers = payloads.filter((data) => data.includes('orchestration check'))
     expect(pointers).toHaveLength(1)
     expect(pointers[0]).toContain('You have 2 orchestration messages')
@@ -616,6 +661,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
       probePtyLiveness: async () => false
     })
+
     stub.insert('lost forever?')
 
     runtime.deliverPendingMessagesForHandle(handle)
@@ -630,6 +676,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
     const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
       probePtyLiveness: async () => null
     })
+
     stub.insert('hello')
 
     runtime.deliverPendingMessagesForHandle(handle)
@@ -647,14 +694,17 @@ describe('push-on-idle orchestration delivery absence gate', () => {
   // the 500ms window must park until the sequence watermark advances.
   it('delivers once across concurrent probe triggers and an in-window re-trigger, then flushes parked rows', async () => {
     vi.useFakeTimers()
+
     try {
       let resolveProbe!: (value: boolean | null) => void
+
       const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
         probePtyLiveness: () =>
           new Promise<boolean | null>((resolve) => {
             resolveProbe = resolve
           })
       })
+
       stub.insert('exactly once')
 
       runtime.deliverPendingMessagesForHandle(handle)
@@ -667,6 +717,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
         write.mock.calls.filter(
           ([, data]) => typeof data === 'string' && data.includes('orchestration check')
         )
+
       expect(pointerWrites()).toHaveLength(1)
       expect(pointerWrites()[0]?.[1]).toContain('You have 1 orchestration message')
 
@@ -703,13 +754,16 @@ describe('push-on-idle orchestration delivery absence gate', () => {
 
   it('sync-path double-trigger inside the Enter window delivers the first batch once and parks the rest', async () => {
     vi.useFakeTimers()
+
     try {
       const probe = vi.fn(async () => null)
+
       const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
         probePtyLiveness: probe,
         // Provider knows the id: delivery takes the pure synchronous path.
         hasPty: (ptyId) => ptyId === STALE_PTY_ID
       })
+
       stub.insert('first')
 
       runtime.deliverPendingMessagesForHandle(handle)
@@ -720,6 +774,7 @@ describe('push-on-idle orchestration delivery absence gate', () => {
         write.mock.calls.filter(
           ([, data]) => typeof data === 'string' && data.includes('orchestration check')
         )
+
       expect(pointerWrites()).toHaveLength(1)
       expect(pointerWrites()[0]?.[1]).toContain('You have 1 orchestration message')
       expect(probe).not.toHaveBeenCalled()
@@ -744,11 +799,13 @@ describe('push-on-idle orchestration delivery absence gate', () => {
   // the dead incarnation must not submit stale input into the replacement.
   it('retires an armed Enter when the pty exits and respawns under the same id inside the window', async () => {
     vi.useFakeTimers()
+
     try {
       const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
         probePtyLiveness: async () => null,
         hasPty: (ptyId) => ptyId === STALE_PTY_ID
       })
+
       stub.insert('for the old session')
 
       runtime.deliverPendingMessagesForHandle(handle)
@@ -774,9 +831,11 @@ describe('push-on-idle orchestration delivery absence gate', () => {
       ).toHaveLength(1)
       runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex working\x07', 200)
       runtime.onPtyData(STALE_PTY_ID, '\x1b]0;Codex done\x07', 201)
+
       const payloadWrites = write.mock.calls.filter(
         ([, data]) => typeof data === 'string' && data.includes('orchestration check')
       )
+
       expect(payloadWrites).toHaveLength(2)
       await vi.advanceTimersByTimeAsync(500)
       expect(write.mock.calls.filter(([, data]) => data === '\r')).toHaveLength(1)
@@ -789,11 +848,13 @@ describe('push-on-idle orchestration delivery absence gate', () => {
 
   it('cleans all delivery state on exit without id reuse — no leak, no stray settle effects', async () => {
     vi.useFakeTimers()
+
     try {
       const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
         probePtyLiveness: async () => null,
         hasPty: (ptyId) => ptyId === STALE_PTY_ID
       })
+
       stub.insert('first')
       runtime.deliverPendingMessagesForHandle(handle)
       stub.insert('second')
@@ -819,11 +880,13 @@ describe('push-on-idle orchestration delivery absence gate', () => {
   // read writable=true and inject Enter after the exit, without any respawn.
   it('does not fire a stale Enter through an orphaned leaf snapshot after resync and exit', async () => {
     vi.useFakeTimers()
+
     try {
       const { runtime, handle, write, stub } = await makeIdleLeafWithoutPtyRecord({
         probePtyLiveness: async () => null,
         hasPty: (ptyId) => ptyId === STALE_PTY_ID
       })
+
       stub.insert('orphaned snapshot')
 
       runtime.deliverPendingMessagesForHandle(handle)

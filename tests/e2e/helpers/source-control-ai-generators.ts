@@ -8,10 +8,13 @@ async function setCustomGenerator(page: Page, scriptPath: string): Promise<void>
       (() => {
         throw new Error('window.__store is not available')
       })()
+
     const currentSettings = store.getState().settings
+
     if (!currentSettings) {
       throw new Error('Settings were not loaded')
     }
+
     await store.getState().updateSettings({
       activeRuntimeEnvironmentId: null,
       sourceControlAi: {

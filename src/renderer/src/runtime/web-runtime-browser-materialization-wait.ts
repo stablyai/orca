@@ -17,24 +17,31 @@ export function waitForWebRuntimeBrowserPageMaterialization(args: {
       args.remotePageId,
       args.expectedGroupId
     )
+
   if (hasMaterialized()) {
     return Promise.resolve(true)
   }
+
   return new Promise((resolve) => {
     let settled = false
     let timeout: ReturnType<typeof setTimeout> | undefined
     let unsubscribe: (() => void) | undefined
+
     const finish = (materialized: boolean): void => {
       if (settled) {
         return
       }
+
       settled = true
+
       if (timeout) {
         clearTimeout(timeout)
       }
+
       unsubscribe?.()
       resolve(materialized)
     }
+
     unsubscribe = useAppStore.subscribe((state) => {
       if (
         hasMaterializedWebRuntimeBrowserPage(
@@ -48,11 +55,15 @@ export function waitForWebRuntimeBrowserPageMaterialization(args: {
         finish(true)
       }
     })
+
     if (settled) {
       unsubscribe()
+
       return
     }
+
     timeout = setTimeout(() => finish(false), PAGE_MATERIALIZATION_TIMEOUT_MS)
+
     if (hasMaterialized()) {
       finish(true)
     }

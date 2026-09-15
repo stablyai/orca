@@ -17,11 +17,13 @@ export async function readTerminalHistoryCheckpoint(
   if (!existsSync(path)) {
     return { status: 'missing' }
   }
+
   try {
     const value = await readTerminalHistoryJsonAsync<unknown>(
       path,
       TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
     )
+
     return isTerminalCheckpointFile(value)
       ? { status: 'readable', checkpoint: value }
       : { status: 'unreadable' }
@@ -34,7 +36,9 @@ function isTerminalCheckpointFile(value: unknown): value is TerminalCheckpointFi
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const checkpoint = value as Partial<TerminalCheckpointFile>
+
   return (
     typeof checkpoint.snapshotAnsi === 'string' &&
     typeof checkpoint.scrollbackAnsi === 'string' &&
@@ -60,7 +64,9 @@ function isTerminalModes(value: unknown): value is TerminalModes {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false
   }
+
   const modes = value as Partial<TerminalModes>
+
   return (
     typeof modes.bracketedPaste === 'boolean' &&
     typeof modes.mouseTracking === 'boolean' &&

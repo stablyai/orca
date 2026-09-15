@@ -20,6 +20,7 @@ function renderUrlSync(guestUrl: () => string): {
 } {
   const updates: [string, BrowserTabPageState][] = []
   const webview = { getURL: () => guestUrl(), src: '' } as unknown as Electron.WebviewTag
+
   const view = renderHook(() =>
     useBrowserPageWebviewUrlSync({
       browserTabId: 'tab-1',
@@ -44,6 +45,7 @@ function renderUrlSync(guestUrl: () => string): {
       focusWebviewNow: () => false
     })
   )
+
   return { updates, unmount: view.unmount }
 }
 

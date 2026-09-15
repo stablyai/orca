@@ -31,9 +31,13 @@ const projectGroup: ProjectGroup = {
 }
 
 const reposRemove = vi.fn()
+
 const reposRemoveForHost = vi.fn()
+
 const projectGroupsDelete = vi.fn()
+
 const runtimeEnvironmentCall = vi.fn()
+
 const runtimeEnvironmentTransportCall = vi.fn()
 
 beforeEach(() => {
@@ -64,12 +68,14 @@ describe('project group deletion store routing', () => {
       id: 'child',
       parentGroupId: projectGroup.id
     }
+
     const siblingGroup: ProjectGroup = {
       ...projectGroup,
       id: 'sibling',
       name: 'Tools',
       tabOrder: 1
     }
+
     const childWorkspace: FolderWorkspace = {
       id: 'folder-workspace-1',
       projectGroupId: childGroup.id,
@@ -85,6 +91,7 @@ describe('project group deletion store routing', () => {
       createdAt: 1,
       updatedAt: 1
     }
+
     projectGroupsDelete.mockResolvedValue(true)
     const store = createTestStore()
     store.setState({
@@ -167,6 +174,7 @@ describe('project group deletion store routing', () => {
       id: 'child',
       parentGroupId: projectGroup.id
     }
+
     const siblingRepo = { ...remoteRepo, id: 'sibling', projectGroupId: null }
     projectGroupsDelete.mockResolvedValue(true)
     const store = createTestStore()
@@ -204,12 +212,14 @@ describe('project group deletion store routing', () => {
       projectGroupId: projectGroup.id,
       executionHostId: 'local' as const
     }
+
     const sshRepo = {
       ...localRepo,
       path: '/ssh/shared',
       connectionId: 'ssh-1',
       executionHostId: 'ssh:ssh-1' as const
     }
+
     projectGroupsDelete.mockResolvedValue(true)
     const store = createTestStore()
     store.setState({
@@ -275,11 +285,13 @@ describe('project group deletion store routing', () => {
         throw new Error('remove failed')
       }
     })
+
     const childGroup: ProjectGroup = {
       ...projectGroup,
       id: 'child',
       parentGroupId: projectGroup.id
     }
+
     projectGroupsDelete.mockResolvedValue(true)
     const store = createTestStore()
     store.setState({

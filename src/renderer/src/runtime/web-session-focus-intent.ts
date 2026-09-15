@@ -42,28 +42,37 @@ export function resolveWebSessionVisibleTabId(
   // Why: the coarse (activeTabType, entityId) address inverts a many-to-one projection and cannot
   // tell editor-family kinds apart; group state is what is actually on screen.
   const groups = state.groupsByWorktree?.[worktreeId] ?? []
+
   if (groups.length > 0) {
     const activeGroupId = state.activeGroupIdByWorktree?.[worktreeId] ?? null
+
     const activeGroup =
       (activeGroupId ? groups.find((group) => group.id === activeGroupId) : null) ?? groups[0]
+
     // Why: authoritative that nothing is visible too — never resolve into an unfocused group.
     if (activeGroup?.activeTabId == null) {
       return null
     }
+
     const activeTabId = activeGroup.activeTabId
     const direct = tabs.find((tab) => tab.id === activeTabId && tab.groupId === activeGroup.id)
+
     if (direct) {
       return direct.id
     }
+
     // Why: reconcile can rematerialize the visible tab under a new id (local -> mirrored), so
     // follow its entity rather than dropping focus. Stays inside the group to avoid a pane jump.
     const previous = (state.unifiedTabsByWorktree?.[worktreeId] ?? []).find(
       (tab) => tab.id === activeTabId
     )
+
     if (!previous) {
       return null
     }
+
     const previousType = toVisibleTabType(previous.contentType)
+
     return (
       tabs.find(
         (tab) =>
@@ -78,21 +87,26 @@ export function resolveWebSessionVisibleTabId(
   const currentType =
     state.activeTabTypeByWorktree?.[worktreeId] ??
     (state.activeWorktreeId === worktreeId ? state.activeTabType : null)
+
   if (currentType === 'terminal') {
     const tabId = state.activeTabIdByWorktree?.[worktreeId]
+
     return tabId && tabs.some((tab) => tab.id === tabId) ? tabId : null
   }
+
   // Why: a structured chat tab has no per-worktree active-entity map to address it by, so the
   // entityId lookup below would always miss. There is at most one per worktree here.
   if (currentType === 'agent-session') {
     return tabs.find((tab) => tab.contentType === 'agent-session')?.id ?? null
   }
+
   const entityId =
     currentType === 'browser'
       ? state.activeBrowserTabIdByWorktree?.[worktreeId]
       : currentType === 'editor'
         ? state.activeFileIdByWorktree?.[worktreeId]
         : null
+
   return (
     tabs.find(
       (tab) => toVisibleTabType(tab.contentType) === currentType && tab.entityId === entityId
@@ -106,24 +120,32 @@ export function resolveWebSessionSiblingVisibleTabId(
   tabs = state.unifiedTabsByWorktree?.[worktreeId] ?? []
 ): string | null {
   const activeGroupId = state.activeGroupIdByWorktree?.[worktreeId] ?? null
+
   const preferredType =
     state.activeTabTypeByWorktree?.[worktreeId] ??
     (state.activeWorktreeId === worktreeId ? state.activeTabType : null)
+
   const tabById = new Map(tabs.map((tab) => [tab.id, tab]))
   let fallback: string | null = null
+
   for (const group of state.groupsByWorktree?.[worktreeId] ?? []) {
     if (group.id === activeGroupId || group.activeTabId == null) {
       continue
     }
+
     const tab = tabById.get(group.activeTabId)
+
     if (!tab || tab.groupId !== group.id) {
       continue
     }
+
     if (preferredType && toVisibleTabType(tab.contentType) === preferredType) {
       return tab.id
     }
+
     fallback ??= tab.id
   }
+
   return fallback
 }
 
@@ -139,9 +161,11 @@ export function recordWebSessionFocusIntent(
   expectedCurrentLocalTabId?: string | null
 ): void {
   const trimmed = hostTabId.trim()
+
   if (!worktreeId || !trimmed) {
     return
   }
+
   const trimmedLeafId = leafId?.trim()
   pendingFocusByOwnerAndWorktree.set(focusIntentPartitionKey(owner, worktreeId), {
     hostTabId: trimmed,
@@ -169,6 +193,7 @@ export function clearWebSessionFocusIntentIfMatches(
 ): void {
   const key = focusIntentPartitionKey(owner, worktreeId)
   const intent = pendingFocusByOwnerAndWorktree.get(key)
+
   if (intent?.hostTabId === hostTabId && (leafId === undefined || intent.leafId === leafId)) {
     pendingFocusByOwnerAndWorktree.delete(key)
   }
@@ -176,6 +201,7 @@ export function clearWebSessionFocusIntentIfMatches(
 
 export function clearWebSessionFocusIntentsForOwner(owner: WebSessionIntentOwner): void {
   const prefix = `${webSessionIntentOwnerKey(owner)}\0`
+
   for (const key of pendingFocusByOwnerAndWorktree.keys()) {
     if (key.startsWith(prefix)) {
       pendingFocusByOwnerAndWorktree.delete(key)

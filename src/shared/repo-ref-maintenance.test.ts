@@ -14,7 +14,9 @@ import {
 } from './repo-ref-maintenance-policy'
 
 const QUIET_MS = 1000
+
 const THRESHOLD = 5
+
 const roots: string[] = []
 
 async function refsDirectoryWith(looseRefs: number): Promise<string> {
@@ -22,9 +24,11 @@ async function refsDirectoryWith(looseRefs: number): Promise<string> {
   roots.push(root)
   const refs = join(root, 'refs', 'remotes', 'origin')
   await mkdir(refs, { recursive: true })
+
   for (let index = 0; index < looseRefs; index += 1) {
     await writeFile(join(refs, `ref-${index}`), 'a')
   }
+
   return join(root, 'refs')
 }
 
@@ -33,9 +37,11 @@ async function saturatingRefsDirectory(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-ref-maintenance-wide-'))
   roots.push(root)
   const refs = join(root, 'refs')
+
   for (let index = 0; index < 4200; index += 1) {
     await mkdir(join(refs, `ns-${index}`), { recursive: true })
   }
+
   return refs
 }
 
@@ -50,6 +56,7 @@ function attributesOf(span: RefMaintenanceSpan): Record<string, unknown> {
 
 function recordingSpan(): RefMaintenanceSpan {
   const recorded: Record<string, unknown> = {}
+
   return {
     recorded,
     setAttribute(key: string, value: unknown) {
@@ -70,9 +77,11 @@ function createHarness(
   } = {}
 ): Harness {
   const spans: RefMaintenanceSpan[] = []
+
   const packRefs = vi.fn<(lock: PackedRefsLockReporter) => Promise<void>>(
     overrides.packRefs ?? (async () => {})
   )
+
   const maintenance = new RepoRefMaintenance({
     quietPeriodMs: QUIET_MS,
     looseRefThreshold: THRESHOLD,
@@ -80,10 +89,12 @@ function createHarness(
     observe: (attempt) => {
       const span = recordingSpan()
       spans.push(span)
+
       return attempt(span)
     },
     ...overrides
   })
+
   return { maintenance, spans, packRefs }
 }
 
@@ -107,9 +118,11 @@ function packStartSignal(): {
   onStart: (lock: PackedRefsLockReporter) => void
 } {
   let onStart: (lock: PackedRefsLockReporter) => void = () => {}
+
   const started = new Promise<PackedRefsLockReporter>((resolve) => {
     onStart = resolve
   })
+
   return { started, onStart }
 }
 
@@ -125,9 +138,11 @@ function yieldToIo(): Promise<void> {
  */
 async function until(predicate: () => boolean, what: string): Promise<void> {
   const deadline = Date.now() + 10_000
+
   while (!predicate() && Date.now() < deadline) {
     await yieldToIo()
   }
+
   if (!predicate()) {
     throw new Error(`timed out after 10s waiting for ${what}`)
   }
@@ -140,10 +155,12 @@ async function until(predicate: () => boolean, what: string): Promise<void> {
  */
 async function untilWithTimers(predicate: () => boolean, what: string): Promise<void> {
   const deadline = Date.now() + 10_000
+
   while (!predicate() && Date.now() < deadline) {
     await vi.advanceTimersByTimeAsync(QUIET_MS)
     await yieldToIo()
   }
+
   if (!predicate()) {
     throw new Error(`timed out after 10s waiting for ${what}`)
   }
@@ -292,6 +309,7 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
     let peak = 0
     const releases: (() => void)[] = []
     const { maintenance } = createHarness()
+
     const slowPack = async (): Promise<void> => {
       concurrent += 1
       peak = Math.max(peak, concurrent)
@@ -405,10 +423,12 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
     const { maintenance, packRefs } = createHarness()
 
     const firstPack = packStartSignal()
+
     const observed = target('local::/a/.git', refs, async (lock) => {
       firstPack.onStart(lock)
       await packRefs(lock)
     })
+
     maintenance.arm(observed)
     maintenance.arm(target('local::/b/.git', refs, packRefs))
     await vi.advanceTimersByTimeAsync(QUIET_MS - 1)
@@ -465,6 +485,7 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
     // Retrying that aggressively would be wrong -- the backlog is gone.
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     const { maintenance, spans } = createHarness()
+
     const repo = target('local::/raced/.git', refs, async () => {
       await emptyRefsDirectory(refs)
       throw new Error("error: cannot lock ref 'refs/heads/moved'")
@@ -487,6 +508,7 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
 
   it('records a failure when the pack left the backlog in place', async () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
+
     const { maintenance, spans } = createHarness({
       packRefs: async () => {
         throw new Error('permission denied')
@@ -501,11 +523,13 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
 
   it('records a failure instead of throwing, and backs off', async () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
+
     const { maintenance, spans, packRefs } = createHarness({
       packRefs: async () => {
         throw new Error('packed-refs.lock exists')
       }
     })
+
     const repo = target('local::/failing/.git', refs, packRefs)
 
     maintenance.arm(repo)

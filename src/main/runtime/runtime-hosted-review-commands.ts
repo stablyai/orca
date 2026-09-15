@@ -52,6 +52,7 @@ export class RuntimeHostedReviewCommands {
     const repo = await this.deps.resolveRepo(repoSelector)
     const options = this.deps.getExecutionOptions(repo)
     const connectionId = hostedReviewSshConnectionId(getRepoHostedReviewExecutionHostId(repo))
+
     return options
       ? getRepoSlug(repo.path, connectionId, options)
       : getRepoSlug(repo.path, connectionId)
@@ -61,6 +62,7 @@ export class RuntimeHostedReviewCommands {
     const repo = await this.deps.resolveRepo(repoSelector)
     const options = this.deps.getExecutionOptions(repo)
     const connectionId = hostedReviewSshConnectionId(getRepoHostedReviewExecutionHostId(repo))
+
     return options
       ? getRepoUpstream(repo.path, connectionId, options)
       : getRepoUpstream(repo.path, connectionId)
@@ -76,20 +78,25 @@ export class RuntimeHostedReviewCommands {
     reason?: GitHubPRRefreshReason
   ): Promise<PRRefreshOutcome> {
     const repo = await this.deps.resolveRepo(repoSelector)
+
     const lookupOptions: GitHubPRBranchLookupOptions = {
       ...this.deps.getExecutionOptions(
         repo,
         reason ? admissionTierForRefreshReason(reason) : undefined
       )
     }
+
     if (acceptMergedFallbackPR === true) {
       lookupOptions.acceptMergedFallbackPR = true
     }
+
     if (typeof currentHeadOid === 'string' && currentHeadOid.trim().length > 0) {
       lookupOptions.currentHeadOid = currentHeadOid.trim()
     }
+
     const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
       Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
+
     return getPRForBranchOutcome(
       repo.path,
       branch,
@@ -115,6 +122,7 @@ export class RuntimeHostedReviewCommands {
   }): Promise<HostedReviewInfo | null> {
     const repo = await this.deps.resolveRepo(args.repoSelector)
     const executionOptions = this.deps.getExecutionOptions(repo, args.admissionTier ?? 'background')
+
     const review = await getHostedReviewForBranch({
       repoPath: repo.path,
       executionHostId: getRepoHostedReviewExecutionHostId(repo),
@@ -129,9 +137,11 @@ export class RuntimeHostedReviewCommands {
       linkedGiteaPR: args.linkedGiteaPR ?? null,
       ...executionOptions
     })
+
     if (review?.provider === 'github') {
       this.deps.recordCreated(repo.id, review.number, review.url)
     }
+
     return review
   }
 
@@ -140,6 +150,7 @@ export class RuntimeHostedReviewCommands {
   ): Promise<HostedReviewCreationEligibility> {
     const { repo, repoPath } = await this.deps.resolveTarget(args)
     const executionOptions = this.deps.getExecutionOptions(repo, 'interactive')
+
     return getHostedReviewCreationEligibility({
       repoPath,
       executionHostId: getRepoHostedReviewExecutionHostId(repo),
@@ -164,6 +175,7 @@ export class RuntimeHostedReviewCommands {
   ): Promise<CreateHostedReviewResult> {
     const { repo, repoPath } = await this.deps.resolveTarget(args)
     const executionOptions = this.deps.getExecutionOptions(repo, 'interactive')
+
     const input = {
       provider: args.provider,
       base: args.base,
@@ -173,13 +185,17 @@ export class RuntimeHostedReviewCommands {
       draft: args.draft,
       ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
     }
+
     const executionHostId = getRepoHostedReviewExecutionHostId(repo)
+
     const result = executionOptions
       ? await createHostedReview(repoPath, input, executionHostId, executionOptions)
       : await createHostedReview(repoPath, input, executionHostId)
+
     if (result.ok) {
       this.deps.recordCreated(repo.id, result.number, result.url)
     }
+
     return result
   }
 
@@ -188,6 +204,7 @@ export class RuntimeHostedReviewCommands {
   ): Promise<CreateStackedHostedReviewResult> {
     const { repo, repoPath } = await this.deps.resolveTarget(args)
     const executionOptions = this.deps.getExecutionOptions(repo, 'interactive')
+
     const result = await createStackedHostedReview(
       repoPath,
       {
@@ -202,9 +219,11 @@ export class RuntimeHostedReviewCommands {
       getRepoHostedReviewExecutionHostId(repo),
       executionOptions ?? {}
     )
+
     if (result.ok) {
       this.deps.recordCreated(repo.id, result.number, result.url)
     }
+
     return result
   }
 }

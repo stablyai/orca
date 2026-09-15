@@ -34,8 +34,11 @@ const {
 }))
 
 let mockStoreState: StoreState
+
 let transportFactoryQueue: MockTransport[] = []
+
 let createdTransportOptions: Record<string, unknown>[] = []
+
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
 vi.mock('@/runtime/sync-runtime-graph', () => ({
@@ -56,6 +59,7 @@ vi.mock('@/store', () => ({
     getState: () => mockStoreState,
     subscribe: (listener: (state: StoreState) => void) => {
       storeSubscribers.push(listener)
+
       return () => {
         storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
       }
@@ -65,6 +69,7 @@ vi.mock('@/store', () => ({
 
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
+
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
 })
 
@@ -85,6 +90,7 @@ vi.mock('@/lib/codex-stale-pane-sweep', () => ({
 // Why: the working→idle test invokes the real useNotificationDispatch hook outside React, so useCallback must pass through (safe suite-wide: no test here renders React).
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof React>()
+
   return {
     ...actual,
     useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
@@ -95,9 +101,11 @@ vi.mock('./pty-transport', () => ({
   createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
     createdTransportOptions.push(options)
     const nextTransport = transportFactoryQueue.shift()
+
     if (!nextTransport) {
       throw new Error('No mock transport queued')
     }
+
     return nextTransport
   })
 }))
@@ -107,9 +115,11 @@ vi.mock('./remote-runtime-pty-transport', () => ({
     (_environmentId: string, options: Record<string, unknown>) => {
       createdTransportOptions.push(options)
       const nextTransport = transportFactoryQueue.shift()
+
       if (!nextTransport) {
         throw new Error('No mock transport queued')
       }
+
       return nextTransport
     }
   )
@@ -118,6 +128,7 @@ vi.mock('./remote-runtime-pty-transport', () => ({
 // Why: stub only getEagerPtyBufferHandle so tests can simulate a live eager buffer (adopt path) without standing up the real IPC dispatcher.
 vi.mock('./pty-dispatcher', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     getEagerPtyBufferHandle: vi.fn(() => undefined)
@@ -155,6 +166,7 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
@@ -172,6 +184,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     vi.useFakeTimers()
+
     try {
       const startChunk = '\x1b[?2026h'
       const plainRowChunk = '| hidden Claude row |\r\n'
@@ -199,6 +212,7 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
@@ -216,6 +230,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     vi.useFakeTimers()
+
     try {
       capturedDataCallback.current?.('\x1b[?202')
       capturedDataCallback.current?.('6hbody row\r\n')
@@ -239,6 +254,7 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
@@ -256,15 +272,18 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     vi.useFakeTimers()
+
     try {
       capturedDataCallback.current?.('plain hidden emoji 😀 and CJK 没改什么\r\n')
       capturedDataCallback.current?.('\x1b[48;2;52;52;52mcolored shell text\x1b[0m\r\n')
       capturedDataCallback.current?.('\x1b]0;hidden title\x07\x1b]133;A\x07')
 
       vi.advanceTimersByTime(50)
+
       for (const callback of parseCallbacks) {
         callback()
       }
+
       expectNoGlobalAtlasRecovery()
     } finally {
       vi.useRealTimers()
@@ -277,6 +296,7 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
@@ -294,6 +314,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     vi.useFakeTimers()
+
     try {
       capturedDataCallback.current?.('\x1b[2J\x1b[Hredrawn hidden table\x1b[K')
 
@@ -312,6 +333,7 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
@@ -329,6 +351,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     vi.useFakeTimers()
+
     try {
       capturedDataCallback.current?.('prompt rewrite\r')
       vi.advanceTimersByTime(50)
@@ -352,11 +375,14 @@ describe('connectPanePty', () => {
   it('keeps output after a skipped hidden alternate-screen frame pane-local', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
+
     const capturedDataCallback: {
       current: ((data: string, meta?: { background?: boolean }) => void) | null
     } = { current: null }
+
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
@@ -375,6 +401,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(6)
 
     vi.useFakeTimers()
+
     try {
       capturedDataCallback.current?.('\x1b[?2026h')
       vi.advanceTimersByTime(50)
@@ -405,12 +432,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       isActiveRef: { current: false },
       isVisibleRef: { current: true }
@@ -435,15 +464,18 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
+
     const manager = {
       ...createManager(2),
       getActivePane: vi.fn(() => ({ id: 2 }))
     }
+
     const deps = createDeps({
       isActiveRef: { current: true },
       isVisibleRef: { current: true }
@@ -471,12 +503,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const deps = createDeps({
       isActiveRef: { current: true },
       isVisibleRef: { current: true }
@@ -504,12 +538,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -525,6 +561,7 @@ describe('connectPanePty', () => {
         }
       }) as never
     )
+
     await flushAsyncTicks(6)
 
     expect(capturedDataCallback.current).not.toBeNull()
@@ -547,12 +584,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -568,6 +607,7 @@ describe('connectPanePty', () => {
         }
       }) as never
     )
+
     await flushAsyncTicks(6)
 
     expect(capturedDataCallback.current).not.toBeNull()
@@ -590,12 +630,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -604,6 +646,7 @@ describe('connectPanePty', () => {
         startup: { command: 'codex' }
       }) as never
     )
+
     await flushAsyncTicks(6)
 
     expect(capturedDataCallback.current).not.toBeNull()
@@ -626,12 +669,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -640,6 +685,7 @@ describe('connectPanePty', () => {
         startup: { command: '/Users/me/.grok/bin/grok --permission-mode bypassPermissions' }
       }) as never
     )
+
     await flushAsyncTicks(6)
 
     expect(capturedDataCallback.current).not.toBeNull()
@@ -662,12 +708,14 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
@@ -676,6 +724,7 @@ describe('connectPanePty', () => {
         startup: { command: 'printf noisy startup' }
       }) as never
     )
+
     await flushAsyncTicks(6)
 
     expect(capturedDataCallback.current).not.toBeNull()
@@ -696,6 +745,7 @@ describe('connectPanePty', () => {
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
     transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
       capturedDataCallback.current = callbacks.onData ?? null
+
       return 'pty-id'
     })
     transportFactoryQueue.push(transport)
@@ -706,14 +756,17 @@ describe('connectPanePty', () => {
 
     const pane = createPane(1)
     const manager = createManager(1)
+
     const binding = connectPanePty(
       pane as never,
       manager as never,
       createDeps({ isVisibleRef: { current: false } }) as never
     )
+
     await flushAsyncTicks(6)
 
     vi.useFakeTimers()
+
     try {
       capturedDataCallback.current?.('\x1b[?2031h')
       vi.advanceTimersByTime(50)

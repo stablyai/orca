@@ -57,6 +57,7 @@ class MockWebSocket {
 }
 
 const mockSockets: MockWebSocket[] = []
+
 const originalWebSocket = globalThis.WebSocket
 
 function authenticate(socket: MockWebSocket): void {
@@ -71,10 +72,12 @@ function sentRequest(socket: MockWebSocket, method: string): { id: string } {
       id: string
       method: string
     }
+
     if (decoded.method === method) {
       return { id: decoded.id }
     }
   }
+
   throw new Error(`Request not sent: ${method}`)
 }
 

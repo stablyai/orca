@@ -30,14 +30,17 @@ export type WorktreeLookupIndex = {
 }
 
 const EMPTY_WORKTREES_BY_REPO: AppState['worktreesByRepo'] = {}
+
 const EMPTY_WORKTREE_REPOS: AppState['repos'] = []
 
 export function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
   const byId = new Map<string, WorktreeLookupEntry>()
+
   for (const worktrees of Object.values(state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO)) {
     for (const worktree of worktrees) {
       const worktreeId = worktree.id
       const existing = byId.get(worktreeId)
+
       if (existing) {
         existing.unique = null
       } else {
@@ -47,14 +50,18 @@ export function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
   }
 
   const repoHostIdsByRepoId = new Map<string, Set<string>>()
+
   for (const repo of state.repos ?? []) {
     let hostIds = repoHostIdsByRepoId.get(repo.id)
+
     if (!hostIds) {
       hostIds = new Set<string>()
       repoHostIdsByRepoId.set(repo.id, hostIds)
     }
+
     hostIds.add(getRepoExecutionHostId(repo))
   }
+
   return { byId, repoHostIdsByRepoId }
 }
 
@@ -68,11 +75,14 @@ export function getWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
   const worktreesByRepo = state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO
   const repos = state.repos ?? EMPTY_WORKTREE_REPOS
   const cached = worktreeLookupIndexes.get(worktreesByRepo)
+
   if (cached && cached.repos === repos) {
     return cached.index
   }
+
   const index = buildWorktreeLookupIndex(state)
   worktreeLookupIndexes.set(worktreesByRepo, { repos, index })
+
   return index
 }
 
@@ -83,20 +93,26 @@ export function findUniqueWorktreeById(
   lookupIndex = getWorktreeLookupIndex(state)
 ): Worktree | null {
   const match = lookupIndex.byId.get(worktreeId)?.unique ?? null
+
   // Why: metadata persistence is keyed only by worktree id; an id owned by two hosts is non-unique so destructive clears fail closed.
   if (!match || executionHostId === undefined) {
     return match
   }
+
   const expectedHostId = normalizeExecutionHostId(executionHostId) ?? LOCAL_EXECUTION_HOST_ID
   const explicitWorktreeHostId = normalizeExecutionHostId(match.hostId)
+
   if (explicitWorktreeHostId) {
     return explicitWorktreeHostId === expectedHostId ? match : null
   }
+
   const repoHostIds = lookupIndex.repoHostIdsByRepoId.get(match.repoId)
+
   // Pre-host persisted rows are safe only when their repo has one unambiguous owner.
   if (!repoHostIds || repoHostIds.size !== 1 || !repoHostIds.has(expectedHostId)) {
     return null
   }
+
   return match
 }
 
@@ -109,9 +125,11 @@ export function isStaleExactLinkedPRLookup(
   if (!worktreeId || linkedPRNumber == null) {
     return false
   }
+
   const worktree = lookupIndex
     ? (lookupIndex.byId.get(worktreeId)?.first ?? null)
     : findWorktreeById(state, worktreeId)
+
   return worktree?.linkedPR !== linkedPRNumber
 }
 
@@ -121,6 +139,7 @@ export function shouldClearDivergedLinkedMergedPR(args: {
   requestHeadOid: string | null
 }): boolean {
   const { pr, linkedPRNumber, requestHeadOid } = args
+
   return (
     linkedPRNumber != null &&
     requestHeadOid !== null &&
@@ -140,6 +159,7 @@ export function shouldApplyDivergedLinkedPRClear(args: {
   requestHeadOid: string | null
 }): boolean {
   const { worktree, linkedPRNumber, branch, requestHeadOid } = args
+
   return (
     Boolean(worktree) &&
     requestHeadOid !== null &&
@@ -162,6 +182,7 @@ export function shouldClearBranchMismatchedLinkedOpenPR(args: {
   const { pr, linkedPRNumber, branch, requestHeadOid, pushTargetBranch } = args
   const headRefName = pr?.headRefName?.trim() ?? ''
   const currentBranch = branch.replace(/^refs\/heads\//, '').trim()
+
   return (
     linkedPRNumber != null &&
     pr?.number === linkedPRNumber &&
@@ -184,6 +205,7 @@ export function shouldApplyBranchMismatchedLinkedPRClear(args: {
   requestHeadOid: string | null
 }): boolean {
   const { worktree, linkedPRNumber, branch, requestHeadOid } = args
+
   return (
     Boolean(worktree) &&
     requestHeadOid !== null &&
@@ -203,13 +225,17 @@ export function buildPRRefreshCandidate(
   repoOverride?: Repo
 ): GitHubPRRefreshCandidate | null {
   const repo = repoOverride ?? getGitHubRepoLookupIndex(state.repos).findById(worktree.repoId)
+
   if (!repo) {
     return null
   }
+
   if (isMacAppDataPath(repoPath ?? repo.path)) {
     return null
   }
+
   const branch = worktree.branch.replace(/^refs\/heads\//, '')
+
   const cacheKey = prCacheKey(
     repoPath ?? repo.path,
     repo.id,
@@ -219,7 +245,9 @@ export function buildPRRefreshCandidate(
     repo.executionHostId,
     true
   )
+
   const cachedPR = state.prCache[cacheKey]?.data ?? null
+
   const hostedReviewFallbackPRNumber = githubHostedReviewFallbackPRNumber(
     state,
     repoPath ?? repo.path,
@@ -229,26 +257,32 @@ export function buildPRRefreshCandidate(
     repo.executionHostId,
     true
   )
+
   const cachedFallbackPRNumber = cachedPR?.number ?? null
+
   // Why: a merged PR is a valid fallback only while the worktree sits on its head or a confirmed-contained commit — else the branch moved on.
   const cachedMergedPRMovedPastHead =
     worktree.linkedPR == null &&
     cachedPR?.state === 'merged' &&
     cachedPR.headSha !== worktree.head &&
     cachedPR.confirmedContainedHeadOid !== worktree.head
+
   const fallbackPRNumber =
     worktree.linkedPR == null && !cachedMergedPRMovedPastHead
       ? (cachedFallbackPRNumber ?? hostedReviewFallbackPRNumber)
       : null
+
   const fallbackPRSource: GitHubPRFallbackSource | null =
     worktree.linkedPR != null || fallbackPRNumber == null
       ? null
       : cachedFallbackPRNumber != null
         ? 'pr-cache'
         : 'hosted-review'
+
   const sshStatus = repo.connectionId
     ? state.sshConnectionStates.get(repo.connectionId)?.status
     : null
+
   return {
     repoId: repo.id,
     repoPath: repoPath ?? repo.path,

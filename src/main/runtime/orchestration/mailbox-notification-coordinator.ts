@@ -34,12 +34,14 @@ export class OrchestrationMailboxNotificationCoordinator<
     if (this.deps.structuredPointerDelivery?.deliverForHandle(handle, reservedTypes)) {
       return
     }
+
     this.deps.pointerDelivery.deliverForHandle(handle, reservedTypes)
   }
 
   deliverForLeaf(leaf: OrchestrationMailboxLeaf): void {
     this.notifyForwarded(this.deps.mailboxOwner.routeForeignDirectMessages(leaf))
     const mailboxHandle = this.deps.mailboxOwner.resolve(leaf)
+
     if (mailboxHandle) {
       this.deps.pointerDelivery.deliver(leaf, { mailboxHandle })
     }
@@ -48,11 +50,14 @@ export class OrchestrationMailboxNotificationCoordinator<
   notifyMessageArrived(handle: string, messageType?: string): void {
     const { mailboxHandle, forwarded, directTypes } = this.resolveArrivedMailboxes(handle)
     this.notifyForwarded(forwarded)
+
     if (!mailboxHandle) {
       return
     }
+
     const waiters = this.deps.getMessageWaiters(mailboxHandle)
     const arrivedTypes = directTypes ?? (messageType ? [messageType] : undefined)
+
     const consumers = waiters
       ? [...waiters].filter(
           (waiter) =>
@@ -61,14 +66,18 @@ export class OrchestrationMailboxNotificationCoordinator<
             arrivedTypes.some((type) => waiter.typeFilter?.includes(type))
         )
       : []
+
     if (consumers.length === 0) {
       const reservedTypes = new Set(
         waiters ? [...waiters].flatMap((waiter) => waiter.typeFilter ?? []) : []
       )
+
       // Let a check awakened in this drain mark its rows read before the push re-reads them.
       queueMicrotask(() => this.deps.deliverForHandle(mailboxHandle, reservedTypes))
+
       return
     }
+
     for (const waiter of consumers) {
       this.deps.resolveMessageWaiter(waiter)
     }
@@ -76,12 +85,15 @@ export class OrchestrationMailboxNotificationCoordinator<
 
   wakeRoutedMessageWaiters(mailboxHandle: string, types: readonly string[]): void {
     const waiters = [...(this.deps.getMessageWaiters(mailboxHandle) ?? [])]
+
     if (waiters.length === 0 || types.length === 0) {
       return
     }
+
     // Snapshot ownership before the routed rows wake and remove their waiters.
     queueMicrotask(() => {
       const liveWaiters = this.deps.getMessageWaiters(mailboxHandle)
+
       for (const waiter of waiters) {
         if (
           liveWaiters?.has(waiter) &&
@@ -105,14 +117,18 @@ export class OrchestrationMailboxNotificationCoordinator<
     if (handle.startsWith('run:') || handle.startsWith('dispatch:')) {
       return { mailboxHandle: handle, forwarded: [] }
     }
+
     if (!this.deps.getDb()) {
       return { mailboxHandle: handle, forwarded: [] }
     }
+
     if (!this.deps.hasTerminalHandle(handle)) {
       return this.resolveDetachedMailbox(handle)
     }
+
     try {
       const leaf = this.deps.getLiveLeafForHandle(handle)
+
       return {
         mailboxHandle: this.deps.mailboxOwner.resolve(leaf, handle, {
           requireRequestedMail: true
@@ -133,9 +149,11 @@ export class OrchestrationMailboxNotificationCoordinator<
       handle,
       this.deps.getPaneKeyForHandle(handle)
     )
+
     const directTypes = routed.hasMore
       ? []
       : (this.deps.getDb()?.getUnreadDirectMessageTypes(handle) ?? [])
+
     return {
       mailboxHandle: directTypes.length > 0 ? handle : null,
       forwarded: routed.mailboxes,

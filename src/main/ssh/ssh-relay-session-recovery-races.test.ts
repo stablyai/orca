@@ -31,9 +31,11 @@ const {
 }))
 
 vi.mock('./ssh-relay-deploy', () => ({ deployAndLaunchRelay: vi.fn() }))
+
 vi.mock('./ssh-pty-consumer-session', () => ({
   openSshPtyConsumerSession: openConsumerSessionMock
 }))
+
 vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   acceptSshPtyOutputData: acceptOutputDataMock,
   acceptSshPtyOutputExit: acceptOutputExitMock,
@@ -49,6 +51,7 @@ vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
   applySshPtySourceCancellationProof: vi.fn(() => true),
   applySshPtySourceRecoveryCancellationProof: vi.fn(() => true)
 }))
+
 vi.mock('./ssh-channel-multiplexer', () => ({
   SshChannelMultiplexer: class MockSshChannelMultiplexer {
     notify = vi.fn()
@@ -62,17 +65,20 @@ vi.mock('./ssh-channel-multiplexer', () => ({
     isDisposed = vi.fn().mockReturnValue(false)
   }
 }))
+
 vi.mock('../providers/ssh-pty-provider', () => ({
   isSshPtyNotFoundError: vi.fn().mockReturnValue(false),
   isSshPtyIdentityMismatchError: vi.fn().mockReturnValue(false),
   SshPtyProvider: class MockSshPtyProvider {
     onData = vi.fn().mockImplementation((handler) => {
       ptyDataHandlerRef.current = handler
+
       return () => {}
     })
     onReplay = vi.fn().mockReturnValue(() => {})
     onExit = vi.fn().mockImplementation((handler) => {
       ptyExitHandlerRef.current = handler
+
       return () => {}
     })
     attachForReconnect = attachForReconnectMock
@@ -80,14 +86,17 @@ vi.mock('../providers/ssh-pty-provider', () => ({
     dispose = ptyProviderDisposeMock
   }
 }))
+
 vi.mock('../providers/ssh-filesystem-provider', () => ({
   SshFilesystemProvider: class MockSshFilesystemProvider {
     dispose = vi.fn()
   }
 }))
+
 vi.mock('../providers/ssh-git-provider', () => ({
   SshGitProvider: class MockSshGitProvider {}
 }))
+
 vi.mock('../ipc/pty', () => ({
   registerSshPtyProvider: vi.fn(),
   unregisterSshPtyProvider: vi.fn(),
@@ -100,11 +109,13 @@ vi.mock('../ipc/pty', () => ({
   restorePtyIncarnation: vi.fn(),
   setPtyOwnership: vi.fn()
 }))
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
   registerSshFilesystemProvider: vi.fn(),
   unregisterSshFilesystemProvider: vi.fn(),
   getSshFilesystemProvider: vi.fn().mockReturnValue({ dispose: vi.fn() })
 }))
+
 vi.mock('../providers/ssh-git-dispatch', () => ({
   registerSshGitProvider: vi.fn(),
   unregisterSshGitProvider: vi.fn()
@@ -120,9 +131,12 @@ const {
   setPtyOwnership,
   unregisterSshPtyProvider
 } = await import('../ipc/pty')
+
 const { closeSshPtyOutputGeneration, getSshPtyAcceptedSourceCheckpoints } =
   await import('../ipc/ssh-pty-output-intake-registry')
+
 const { applySshPtySourceCancellationProof } = await import('../ipc/ssh-pty-output-intake-registry')
+
 const { applySshPtySourceRecoveryCancellationProof } =
   await import('../ipc/ssh-pty-output-intake-registry')
 
@@ -182,6 +196,7 @@ describe('SshRelaySession recovery race fencing', () => {
     const complete = onNotificationByMethodMock.mock.calls.findLast(
       ([method]) => method === 'pty.recoveryComplete'
     )?.[1] as ((params: Record<string, unknown>) => void) | undefined
+
     complete?.(params)
   }
 
@@ -213,17 +228,20 @@ describe('SshRelaySession recovery race fencing', () => {
       }
     ])
     const deps = createMockDeps()
+
     const session = new SshRelaySession(
       targetId,
       deps.getMainWindow,
       deps.mockStore,
       deps.mockPortForward
     )
+
     await session.establish(deps.mockConn)
     vi.mocked(getPtyIdsForConnection).mockReturnValue([`ssh:${targetId}@@pty-1`])
     vi.mocked(getSshPtyProvider).mockImplementation(
       () => vi.mocked(registerSshPtyProvider).mock.calls.at(-1)?.[1]
     )
+
     return { session, deps }
   }
 
@@ -231,6 +249,7 @@ describe('SshRelaySession recovery race fencing', () => {
     const targetId = 'exit-with-complete-private-body'
     const { session, deps } = await prepareRecovery(targetId)
     const recoveryActivationLease = { commit: vi.fn(), retire: vi.fn() }
+
     const sourceActivationLease = {
       commit: vi.fn(),
       rollback: vi.fn(async () => true),
@@ -251,9 +270,11 @@ describe('SshRelaySession recovery race fencing', () => {
             sourceEndSu: 8
           }
         })
+
         return recoveryActivationLease
       })
     }
+
     attachForReconnectMock.mockImplementation(async () => {
       ptyExitHandlerRef.current?.({
         id: `ssh:${targetId}@@pty-1`,
@@ -262,6 +283,7 @@ describe('SshRelaySession recovery race fencing', () => {
         ptyIncarnation: 'incarnation-1',
         incarnationId: 'incarnation-1'
       })
+
       return {
         incarnationId: 'incarnation-1',
         sourceRecovery: pendingRecovery(8),
@@ -297,6 +319,7 @@ describe('SshRelaySession recovery race fencing', () => {
     )
     const { session, deps } = await prepareRecovery(targetId)
     const recoveryActivationLease = { commit: vi.fn(), retire: vi.fn() }
+
     const sourceActivationLease = {
       commit: vi.fn(),
       rollback: vi.fn(async () => true),
@@ -317,9 +340,11 @@ describe('SshRelaySession recovery race fencing', () => {
             sourceEndSu: 6
           }
         })
+
         return recoveryActivationLease
       })
     }
+
     attachForReconnectMock.mockImplementation(async () => {
       ptyExitHandlerRef.current?.({
         id: `ssh:${targetId}@@pty-1`,
@@ -328,6 +353,7 @@ describe('SshRelaySession recovery race fencing', () => {
         ptyIncarnation: 'incarnation-1',
         incarnationId: 'incarnation-1'
       })
+
       return {
         incarnationId: 'incarnation-1',
         sourceRecovery: pendingRecovery(8),
@@ -361,6 +387,7 @@ describe('SshRelaySession recovery race fencing', () => {
     const targetId = 'exit-before-recovery-identity'
     let settleRollback: ((settled: boolean) => void) | undefined
     const { session, deps } = await prepareRecovery(targetId)
+
     const sourceActivationLease = {
       commit: vi.fn(),
       rollback: vi.fn(
@@ -371,6 +398,7 @@ describe('SshRelaySession recovery race fencing', () => {
       ),
       transferToRecovery: vi.fn()
     }
+
     attachForReconnectMock.mockImplementation(async () => {
       ptyExitHandlerRef.current?.({
         id: `ssh:${targetId}@@pty-1`,
@@ -379,6 +407,7 @@ describe('SshRelaySession recovery race fencing', () => {
         ptyIncarnation: 'incarnation-1',
         incarnationId: 'incarnation-1'
       })
+
       return {
         incarnationId: 'incarnation-1',
         sourceRecovery: { status: 'restoreRequired', reason: 'checkpointUnavailable' },
@@ -413,6 +442,7 @@ describe('SshRelaySession recovery race fencing', () => {
           recoveryEndSu: 4
         })
       })
+
       return {
         incarnationId: 'incarnation-1',
         sourceRecovery: pendingRecovery(4)
@@ -463,6 +493,7 @@ describe('SshRelaySession recovery race fencing', () => {
           recoveryEndSu: 8
         })
       })
+
       return {
         incarnationId: 'incarnation-1',
         sourceRecovery: pendingRecovery(8)
@@ -497,6 +528,7 @@ describe('SshRelaySession recovery race fencing', () => {
     )
     const { session, deps } = await prepareRecovery(targetId)
     const recoveryActivationLease = { commit: vi.fn(), retire: vi.fn() }
+
     const sourceActivationLease = {
       commit: vi.fn(),
       rollback: vi.fn(),
@@ -533,9 +565,11 @@ describe('SshRelaySession recovery race fencing', () => {
             sourceEndSu: 12
           }
         })
+
         return recoveryActivationLease
       })
     }
+
     attachForReconnectMock.mockResolvedValue({
       incarnationId: 'incarnation-1',
       sourceRecovery: pendingRecovery(12),
@@ -572,25 +606,32 @@ describe('SshRelaySession recovery race fencing', () => {
         if (method !== 'pty.cancelDelivery') {
           return []
         }
+
         if (failure === 'publication') {
           throw new Error('cancel publication failed')
         }
+
         return cancellationResult
       })
+
       if (failure === 'proof') {
         vi.mocked(applySshPtySourceRecoveryCancellationProof).mockImplementation(() => {
           throw new Error('cancel proof rejected')
         })
       }
+
       const { session, deps } = await prepareRecovery(targetId)
       const onRelayLost = vi.fn()
       const recoveryActivationLease = { commit: vi.fn(), retire: vi.fn() }
+
       const activationLease = {
         commit: vi.fn(),
         rollback: vi.fn(),
         transferToRecovery: vi.fn(() => recoveryActivationLease)
       }
+
       session.setOnRelayLost(onRelayLost)
+
       let cleanupCountsBeforeFailure:
         | {
             generation: number
@@ -601,6 +642,7 @@ describe('SshRelaySession recovery race fencing', () => {
             unregister: number
           }
         | undefined
+
       attachForReconnectMock.mockImplementation(async () => {
         cleanupCountsBeforeFailure = {
           generation: vi.mocked(closeSshPtyOutputGeneration).mock.calls.length,
@@ -620,6 +662,7 @@ describe('SshRelaySession recovery race fencing', () => {
             sourceEndSu: 8
           })
         })
+
         return {
           incarnationId: 'incarnation-1',
           sourceRecovery: pendingRecovery(8),
@@ -690,6 +733,7 @@ describe('SshRelaySession recovery race fencing', () => {
           recoveryEndSu: 4
         })
       })
+
       return { incarnationId: 'incarnation-1', sourceRecovery: pendingRecovery(4) }
     })
     await session.reconnect(deps.mockConn)
@@ -717,18 +761,22 @@ describe('SshRelaySession recovery race fencing', () => {
     const { session, deps } = await prepareRecovery(targetId)
     const staleRecoveryLease = { commit: vi.fn(), retire: vi.fn() }
     const replacementRecoveryLease = { commit: vi.fn(), retire: vi.fn() }
+
     const staleLease = {
       commit: vi.fn(),
       rollback: vi.fn(),
       transferToRecovery: vi.fn(() => staleRecoveryLease)
     }
+
     const replacementLease = {
       commit: vi.fn(),
       rollback: vi.fn(),
       transferToRecovery: vi.fn(() => replacementRecoveryLease)
     }
+
     attachForReconnectMock.mockImplementation(async () => {
       const ownerGeneration = openConsumerSessionMock.mock.calls.length
+
       if (ownerGeneration === 3) {
         queueMicrotask(() => {
           completeRecovery({
@@ -742,6 +790,7 @@ describe('SshRelaySession recovery race fencing', () => {
           })
         })
       }
+
       return {
         incarnationId: 'incarnation-1',
         sourceRecovery: {

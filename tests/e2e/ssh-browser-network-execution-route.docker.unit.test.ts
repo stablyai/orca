@@ -17,6 +17,7 @@ import {
 import { resolveSshBrowserNetworkExecutionRoute } from '../../src/main/browser/ssh-browser-network-execution-route'
 
 const runDocker = process.env.ORCA_RUN_DOCKER_SSH_BROWSER_E2E === '1'
+
 const executionHost = {
   kind: 'ssh' as const,
   targetId: 'target-a',
@@ -35,14 +36,17 @@ describe.runIf(runDocker)('SSH browser network execution route Docker journey', 
       target,
       "grep -q 'remote-only.internal' /etc/hosts || printf '127.0.0.1 remote-only.internal\\n' >> /etc/hosts"
     )
+
     const server = [
       "const http=require('http')",
       "http.createServer((_request,response)=>response.end('sta-4150-remote-only')).listen(18080,'127.0.0.1')"
     ].join(';')
+
     execDockerSshRelayTargetCommand(
       target,
       `nohup node -e ${shellQuote(server)} >/tmp/sta-4150-http.log 2>&1 </dev/null &`
     )
+
     const waitForServer = [
       "const net=require('net')",
       'const deadline=Date.now()+5000',
@@ -51,6 +55,7 @@ describe.runIf(runDocker)('SSH browser network execution route Docker journey', 
       "socket.once('error',()=>{socket.destroy();if(Date.now()>=deadline)process.exit(1);setTimeout(probe,25)})}",
       'probe()'
     ].join(';')
+
     execDockerSshRelayTargetCommand(target, `node -e ${shellQuote(waitForServer)}`)
     client = new Client()
     await new Promise<void>((resolve, reject) => {
@@ -70,6 +75,7 @@ describe.runIf(runDocker)('SSH browser network execution route Docker journey', 
     if (client) {
       client.end()
     }
+
     cleanupDockerSshRelayTarget(target)
   })
 
@@ -84,8 +90,10 @@ describe.runIf(runDocker)('SSH browser network execution route Docker journey', 
       getClient: () => client,
       usesSystemSshTransport: () => false
     } as unknown as SshConnection
+
     const authorityAbort = new AbortController()
     const forwardOut = vi.spyOn(client!, 'forwardOut')
+
     const route = await resolveSshBrowserNetworkExecutionRoute(
       { executionHost, runtimeId: 'runtime-a', runtimeRevision: 1 },
       {
@@ -95,10 +103,12 @@ describe.runIf(runDocker)('SSH browser network execution route Docker journey', 
           authority.connectionGeneration === 2,
         registerAuthorityAbort: (_authority, controller) => {
           authorityAbort.signal.addEventListener('abort', () => controller.abort(), { once: true })
+
           return () => {}
         }
       }
     )
+
     const socket = route.connect({ host: 'remote-only.internal', port: 18080 })
     socket.on('error', () => {})
     await once(socket as never, 'connect')
@@ -139,6 +149,7 @@ describe.runIf(runDocker)('SSH browser network execution route Docker journey', 
         '  UserKnownHostsFile /dev/null'
       ].join('\n')
     )
+
     const connection = {
       getState: () => ({
         targetId: 'target-a',
@@ -159,6 +170,7 @@ describe.runIf(runDocker)('SSH browser network execution route Docker journey', 
       }),
       getSystemSshBuildArgsOptions: () => ({ configFile })
     } as unknown as SshConnection
+
     const route = await resolveSshBrowserNetworkExecutionRoute(
       { executionHost, runtimeId: 'runtime-a', runtimeRevision: 1 },
       {
@@ -167,6 +179,7 @@ describe.runIf(runDocker)('SSH browser network execution route Docker journey', 
         registerAuthorityAbort: () => () => {}
       }
     )
+
     const socket = route.connect({ host: 'remote-only.internal', port: 18080 })
     socket.on('error', () => {})
     await once(socket as never, 'connect')
@@ -196,10 +209,12 @@ function readHttpResponse(socket: {
       const length = chunks.reduce((total, chunk) => total + chunk.byteLength, 0)
       const response = new Uint8Array(length)
       let offset = 0
+
       for (const chunk of chunks) {
         response.set(chunk, offset)
         offset += chunk.byteLength
       }
+
       resolve(new TextDecoder().decode(response))
     })
   })

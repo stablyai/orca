@@ -20,9 +20,11 @@ describe('contextual tour definitions', () => {
     ]
 
     expect(CONTEXTUAL_TOURS.map((tour) => tour.id)).toEqual(expectedIds)
+
     for (const tour of CONTEXTUAL_TOURS) {
       expect(tour.steps[0]?.requiredForStart).toBe(true)
       const stepCount = (tour.steps as readonly unknown[]).length
+
       if (stepCount === 1) {
         // A lone step needs a completion path beyond the default Next: either it
         // self-completes on the feature interaction, or it carries an explicit
@@ -34,7 +36,9 @@ describe('contextual tour definitions', () => {
       } else {
         expect(stepCount).toBeGreaterThanOrEqual(2)
       }
+
       expect(stepCount).toBeLessThanOrEqual(tour.id === 'workspace-agent-sessions' ? 5 : 3)
+
       for (const step of tour.steps) {
         expect(step.title.length).toBeGreaterThan(0)
         expect(step.body.length).toBeGreaterThan(0)
@@ -129,6 +133,7 @@ describe('contextual tour definitions', () => {
     const tour = CONTEXTUAL_TOURS.find((entry) => entry.id === 'tasks') as
       | ContextualTour
       | undefined
+
     const step = tour?.steps[2]
 
     expect(step).toMatchObject({

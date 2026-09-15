@@ -23,10 +23,12 @@ vi.mock('../hooks', () => ({
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' })
 }))
+
 vi.mock('../worktree-runner-script', () => ({ createSetupRunnerScript: vi.fn() }))
 
 vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return { ...actual, computeWorktreePath: vi.fn(), ensurePathWithinWorkspace: vi.fn() }
 })
 
@@ -36,6 +38,7 @@ vi.mock('../ipc/registered-worktree-roots-cache', () => ({
 
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
+
   return {
     ...actual,
     getDefaultBaseRef: vi.fn().mockReturnValue('origin/main'),
@@ -45,6 +48,7 @@ vi.mock('../git/repo', async (importOriginal) => {
 
 vi.mock('../git/git-username', async () => {
   const actual = await vi.importActual<typeof GitUsernameModule>('../git/git-username')
+
   return { ...actual, resolveLocalGitUsername: vi.fn(async () => '') }
 })
 
@@ -91,6 +95,7 @@ describe('fit override integration', () => {
         currentSize.cols = cols
         currentSize.rows = rows
         resizes.push({ ptyId, cols, rows })
+
         return true
       },
       getSize: () => ({ ...currentSize })
@@ -196,6 +201,7 @@ describe('fit override integration', () => {
       resize: (ptyId, cols, rows) => {
         ptySize = { cols, rows }
         resizes.push(`${ptyId}:${cols}x${rows}`)
+
         return true
       },
       getSize: () => ({ ...ptySize })
@@ -258,6 +264,7 @@ describe('fit override integration', () => {
       ...store,
       getSettings: () => ({ ...store.getSettings(), mobileAutoRestoreFitMs: 5_000 })
     }
+
     const runtime = new OrcaRuntimeService(finiteRestoreStore)
     let ptySize = { cols: 100, rows: 30 }
 
@@ -267,6 +274,7 @@ describe('fit override integration', () => {
       getForegroundProcess: async () => null,
       resize: (_ptyId, cols, rows) => {
         ptySize = { cols, rows }
+
         return true
       },
       getSize: () => ({ ...ptySize })
@@ -306,6 +314,7 @@ describe('fit override integration', () => {
       getForegroundProcess: async () => null,
       resize: (_ptyId, cols, rows) => {
         ptySize = { cols, rows }
+
         return true
       },
       getSize: () => ({ ...ptySize })

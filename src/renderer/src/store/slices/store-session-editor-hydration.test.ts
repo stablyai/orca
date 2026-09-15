@@ -10,6 +10,7 @@ vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.f
 // Mock agent-status (imported by terminal-helpers)
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -24,6 +25,7 @@ function ownedEditorFileId(
   runtimeEnvironmentId: string | null | undefined
 ): string {
   const runtimeKey = runtimeEnvironmentId?.trim() || 'local'
+
   return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
 }
 
@@ -254,6 +256,7 @@ describe('hydrateEditorSession', () => {
 
     const floatingActiveFileId =
       store.getState().activeFileIdByWorktree[FLOATING_TERMINAL_WORKTREE_ID]
+
     expect(floatingActiveFileId).not.toBe(sharedPath)
     expect(
       store
@@ -406,6 +409,7 @@ describe('hydrateEditorSession', () => {
       language: 'typescript',
       runtimeEnvironmentId
     }
+
     store.getState().hydrateEditorSession({
       activeRepoId: 'repo1',
       activeWorktreeId: wt,

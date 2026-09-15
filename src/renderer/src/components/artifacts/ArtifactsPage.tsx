@@ -35,10 +35,12 @@ export default function ArtifactsPage(): React.JSX.Element {
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null)
   const signedIn = authStatus?.state === 'connected'
   const needsReconnect = authStatus?.state === 'reconnect-required'
+
   const openAccountSettings = (): void => {
     openSettingsTarget({ pane: 'orca-account', repoId: null })
     openSettingsPage()
   }
+
   const {
     accountIdentity,
     artifacts,
@@ -51,7 +53,9 @@ export default function ArtifactsPage(): React.JSX.Element {
     removeArtifact,
     setError
   } = useArtifactPagination(authStatus, refreshAuth)
+
   const deletingId = deleting?.identity === accountIdentity ? deleting.slug : null
+
   const selectedArtifact =
     selectedSlug === null
       ? null
@@ -68,13 +72,17 @@ export default function ArtifactsPage(): React.JSX.Element {
       if (event.key !== 'Escape' || event.defaultPrevented) {
         return
       }
+
       const target = event.target
+
       if (!(target instanceof HTMLElement)) {
         return
       }
+
       if (target.dataset.escapeClearsValue === 'true') {
         return
       }
+
       if (
         target instanceof HTMLInputElement ||
         target instanceof HTMLTextAreaElement ||
@@ -83,22 +91,29 @@ export default function ArtifactsPage(): React.JSX.Element {
       ) {
         event.preventDefault()
         target.blur()
+
         return
       }
+
       if (selectedSlug) {
         event.preventDefault()
         setSelectedSlug(null)
+
         return
       }
+
       event.preventDefault()
       closePage()
     }
+
     window.addEventListener('keydown', onKeyDown)
+
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [closePage, selectedSlug])
 
   const deleteArtifact = async (item: ArtifactListItem): Promise<void> => {
     const name = item.artifact.title || item.artifact.originalFileName || item.artifact.slug
+
     if (!settings?.skipDeleteArtifactConfirm) {
       const accepted = await confirm({
         title: translate('auto.components.artifacts.ArtifactsPage.deleteTitle', 'Delete artifact?'),
@@ -120,36 +135,47 @@ export default function ArtifactsPage(): React.JSX.Element {
             })
         }
       })
+
       if (!accepted) {
         return
       }
     }
+
     const requestedIdentity = accountIdentity
+
     if (!requestedIdentity) {
       return
     }
+
     const requestedAccountIsCurrent = (): boolean =>
       artifactAccountIdentity(useAppStore.getState().orcaProfileAuthStatus) === requestedIdentity
+
     if (!requestedAccountIsCurrent()) {
       return
     }
+
     setDeleting({ identity: requestedIdentity, slug: item.artifact.slug })
+
     try {
       const result = await callRuntimeRpc<ArtifactCloudOperation<void>>(
         LOCAL_RUNTIME,
         'artifacts.delete',
         { id: item.artifact.slug }
       )
+
       if (!requestedAccountIsCurrent()) {
         return
       }
+
       if (result.status !== 'ok') {
         await refreshAuth()
         throw new Error(result.status)
       }
+
       removeArtifact(requestedIdentity, item.artifact.slug)
     } catch (deleteError) {
       console.error('Failed to delete artifact:', deleteError)
+
       if (requestedAccountIsCurrent()) {
         setError(
           translate(

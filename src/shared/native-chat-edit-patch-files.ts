@@ -20,6 +20,7 @@ const MOVE_MARKER = /(?:^|\n)Moved to: (.+)$/
 
 export function splitMoveMarker(patch: string): { body: string; movedTo: string | null } {
   const match = MOVE_MARKER.exec(patch)
+
   return match
     ? { body: patch.slice(0, match.index), movedTo: match[1]!.trim() }
     : { body: patch, movedTo: null }
@@ -48,6 +49,7 @@ export function editFilesFromPatchText(
     // A file count cannot name a card, regardless of the patch contents.
     return null
   }
+
   // The body carries its own marker when the journal clipped it. Read as
   // content it becomes a numbered line of the file, and the rows that follow
   // are reported complete.
@@ -62,23 +64,28 @@ export function editFilesFromPatchText(
   // destination is only ever in the header. Sections that name nothing are
   // preamble and must not change that count.
   const namedSections = split.sections.filter((section) => section.path !== null).length
+
   const named = (section: UnifiedPatchSection): string =>
     (namedSections <= 1 && section.oldPath === null
       ? (callerPath ?? section.path)
       : (section.path ?? callerPath)) ?? 'file'
+
   const files = split.sections.flatMap((section) => {
     const parsed = summaryOnly
       ? summarizeUnifiedPatch(section.body)
       : editLinesFromUnifiedPatch(section.body)
+
     if (!parsed && section.path === null) {
       return []
     }
+
     const metadata = {
       path: named(section),
       oldPath: section.oldPath,
       changeKind: section.changeKind,
       truncated: bounded.truncated || split.truncated || (parsed?.truncated ?? false)
     }
+
     return [
       summaryOnly
         ? {
@@ -94,11 +101,14 @@ export function editFilesFromPatchText(
           })
     ]
   })
+
   // The move marker names where the whole patch moved, so it can only speak for
   // a patch describing one file.
   if (moved.movedTo !== null && files.length === 1 && files[0]) {
     const only = files[0]
+
     return [{ ...only, path: moved.movedTo, oldPath: only.path, changeKind: 'renamed' }]
   }
+
   return files.length > 0 ? files : null
 }

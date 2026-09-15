@@ -43,57 +43,73 @@ export class RemoteBrowserPageSession {
     if (!this.deps.tokens.isCurrent(token) || !token.remotePageId) {
       return null
     }
+
     const shown = await this.deps.callRpc<{ tab: BrowserTabInfo }>(
       { kind: 'environment', environmentId: token.environmentId },
       'browser.tabShow',
       { worktree: this.deps.getWorktreeSelector(), page: token.remotePageId },
       { timeoutMs: 15_000, suppressFeatureInteraction: true }
     )
+
     return shown.tab
   }
 
   async ensureRemotePage(token: RemoteBrowserOperationToken): Promise<string | null> {
     const { tokens } = this.deps
+
     if (!tokens.isCurrent(token)) {
       return null
     }
+
     const existingHandle = this.deps.readStoredHandle()
+
     if (existingHandle?.environmentId !== token.environmentId) {
       return this.createRemotePage(token)
     }
+
     tokens.setRemotePage(existingHandle.remotePageId)
+
     try {
       const cachedTab = await this.fetchTabInfo({
         ...token,
         remotePageId: existingHandle.remotePageId
       })
+
       return cachedTab ? existingHandle.remotePageId : null
     } catch (error) {
       if (!isRemoteBrowserPageMissingError(error)) {
         throw error
       }
+
       this.deps.removeStoredHandle(existingHandle.remotePageId)
+
       if (tokens.remotePage === existingHandle.remotePageId) {
         tokens.setRemotePage(null)
       }
+
       if (tokens.isCurrent(token)) {
         this.deps.closeMissingRemotePage(existingHandle.remotePageId)
       }
+
       return null
     }
   }
 
   scheduleTabInfoRefresh(token: RemoteBrowserOperationToken, delayMs = 250): void {
     const { tokens } = this.deps
+
     if (!tokens.isCurrent(token)) {
       return
     }
+
     this.cancelTabInfoRefresh()
     this.tabRefreshTimer = setTimeout(() => {
       this.tabRefreshTimer = null
+
       if (!tokens.isCurrent(token)) {
         return
       }
+
       void this.fetchTabInfo(token)
         .then((tab) => {
           if (tab && tokens.isCurrent(token)) {
@@ -119,14 +135,17 @@ export class RemoteBrowserPageSession {
     const target: RuntimeClientTarget = { kind: 'environment', environmentId: token.environmentId }
     const worktree = this.deps.getWorktreeSelector()
     const currentUrl = this.deps.getCurrentUrl()
+
     const initialUrl =
       currentUrl === ORCA_BROWSER_BLANK_URL ? 'about:blank' : currentUrl || 'about:blank'
+
     const created = await this.deps.callRpc<{ browserPageId: string }>(
       target,
       'browser.tabCreate',
       { worktree, url: initialUrl },
       { timeoutMs: 30_000, suppressFeatureInteraction: true }
     )
+
     if (!this.deps.tokens.isCurrent(token)) {
       void this.deps
         .callRpc(
@@ -136,13 +155,16 @@ export class RemoteBrowserPageSession {
           { timeoutMs: 15_000, suppressFeatureInteraction: true }
         )
         .catch(() => {})
+
       return null
     }
+
     this.deps.tokens.setRemotePage(created.browserPageId)
     this.deps.writeStoredHandle({
       environmentId: target.environmentId,
       remotePageId: created.browserPageId
     })
+
     return created.browserPageId
   }
 }

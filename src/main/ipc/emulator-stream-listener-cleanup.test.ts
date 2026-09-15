@@ -38,8 +38,10 @@ function makeOwner(): EventEmitter & { isDestroyed: () => boolean; send: () => v
     isDestroyed: () => boolean
     send: () => void
   }
+
   owner.isDestroyed = () => false
   owner.send = () => {}
+
   return owner
 }
 
@@ -61,6 +63,7 @@ describe('emulator frame stream listener cleanup', () => {
       const { streamId } = start(event, { streamUrl: 'http://127.0.0.1:0/stream' }) as {
         streamId: string
       }
+
       expect(owner.listenerCount('destroyed')).toBe(1)
       stop(event, { streamId })
       expect(owner.listenerCount('destroyed')).toBe(0)

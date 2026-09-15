@@ -5,8 +5,10 @@ export async function sendTerminalLiveControlAfterPendingFlush(
   sendControlBytes: TerminalLiveAsyncSendStep
 ): Promise<boolean> {
   const flushed = await flushPendingText()
+
   if (!flushed) {
     return false
   }
+
   return sendControlBytes()
 }

@@ -9,8 +9,10 @@ import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rp
 
 // Mock sonner (imported transitively by other slices)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
+
 vi.mock('@/lib/agent-status', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
+
   return {
     ...actual,
     detectAgentStatusFromTitle: vi.fn().mockReturnValue(null)
@@ -18,13 +20,16 @@ vi.mock('@/lib/agent-status', async (importOriginal) => {
 })
 
 const updateMeta = vi.fn().mockResolvedValue({})
+
 const runtimeEnvironmentCall = vi.fn().mockResolvedValue({
   id: 'rpc-1',
   ok: true,
   result: { ok: true },
   _meta: { runtimeId: 'remote-runtime' }
 })
+
 const runtimeEnvironmentTransportCall = vi.fn()
+
 const mockApi = {
   ui: {
     recordFeatureInteraction: vi.fn().mockResolvedValue({ featureInteractions: {} }),
@@ -107,6 +112,7 @@ globalThis.window = { api: mockApi }
 import { createTestStore } from './store-test-helpers'
 
 const REPO = 'repo1'
+
 const WT = 'repo1::/path/wt'
 
 function makeComment(overrides: Partial<DiffComment> & Pick<DiffComment, 'id'>): DiffComment {
@@ -228,6 +234,7 @@ describe('updateDiffComment', () => {
 
   it('updates the body, trims it, and persists', async () => {
     const store = createTestStore()
+
     const original: DiffComment = {
       id: 'c1',
       worktreeId: WT,
@@ -238,6 +245,7 @@ describe('updateDiffComment', () => {
       sentAt: 2000,
       side: 'modified'
     }
+
     seed(store, [original])
 
     const ok = await store.getState().updateDiffComment(WT, 'c1', '  new body  ')
@@ -642,6 +650,7 @@ describe('bulk clear diff comments', () => {
     const laterComments = [makeComment({ id: 'c2', body: 'later' })]
     seed(store, comments)
     let rejectPersist: (err: Error) => void = () => {}
+
     updateMeta.mockImplementationOnce(
       () =>
         new Promise((_, reject) => {

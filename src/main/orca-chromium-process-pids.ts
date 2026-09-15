@@ -39,14 +39,17 @@ export function readOrcaChromiumProcessPids(): ReadonlySet<number> {
   if (!hasAppEnvironment()) {
     return new Set()
   }
+
   try {
     const pids = getAppEnvironment()
       .getAppMetrics()
       .map((metric) => metric.pid)
       .filter((pid) => Number.isInteger(pid) && pid > 0)
+
     return new Set(pids)
   } catch (error) {
     recordUnreadableOwnChromiumMetrics(error)
+
     return new Set()
   }
 }

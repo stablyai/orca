@@ -11,6 +11,7 @@ export async function awaitDaemonWorkWithinCallerDeadline(
 ): Promise<boolean> {
   void work.catch(() => {})
   let timer: ReturnType<typeof setTimeout> | undefined
+
   try {
     return await Promise.race([
       work.then(() => true),

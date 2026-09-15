@@ -8,19 +8,26 @@ import { OrchestrationDb } from './db'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 const LEGACY_COORDINATOR_HANDLE = 'term_legacy_coord'
+
 const LEGACY_COORDINATOR_PANE = 'tab_coord:44444444-4444-4444-8444-444444444444'
+
 const LEGACY_WORKER_HANDLE = 'term_legacy_worker'
+
 const LEGACY_WORKER_PANE = 'tab_worker:33333333-3333-4333-8333-333333333333'
+
 const CURRENT_COORDINATOR_HANDLE = 'term_current_coord'
+
 const CURRENT_COORDINATOR_PANE = 'tab_current:11111111-1111-4111-8111-111111111111'
 
 const tempDirs: string[] = []
+
 const databases: OrchestrationDb[] = []
 
 afterEach(() => {
   for (const database of databases.splice(0)) {
     database.close()
   }
+
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -28,6 +35,7 @@ afterEach(() => {
 
 function track(db: OrchestrationDb): OrchestrationDb {
   databases.push(db)
+
   return db
 }
 
@@ -46,12 +54,15 @@ function createAdoptedFixture(options: { settleWork: boolean }): AdoptedFixture 
   const dbPath = join(dir, 'orchestration.db')
 
   const before = new OrchestrationDb(dbPath)
+
   const task = before.createTask({
     runId: 'run_legacy_local',
     spec: 'legacy assignment',
     createdByTerminalHandle: LEGACY_COORDINATOR_HANDLE
   })
+
   const dispatch = createRootDispatch(before, task.id, LEGACY_WORKER_HANDLE, LEGACY_WORKER_PANE)
+
   const recovery = before.insertMessage({
     runId: 'run_legacy_local',
     from: LEGACY_WORKER_HANDLE,
@@ -59,12 +70,15 @@ function createAdoptedFixture(options: { settleWork: boolean }): AdoptedFixture 
     subject: 'recovered worker outcome',
     type: 'worker_done'
   })
+
   before.close()
 
   const raw = new SyncDatabase(dbPath)
+
   if (options.settleWork) {
     raw.exec("UPDATE dispatch_contexts SET status = 'completed'")
   }
+
   raw.exec(`
     DROP INDEX IF EXISTS idx_messages_delivery_contract;
     DROP TABLE legacy_mail_receipts;
@@ -76,6 +90,7 @@ function createAdoptedFixture(options: { settleWork: boolean }): AdoptedFixture 
   raw.close()
 
   const db = track(new OrchestrationDb(dbPath))
+
   return {
     db,
     adoptedRunId: db.getLegacyAdoption()?.adopted_run_id as string,
@@ -228,6 +243,7 @@ describe('adopted Run binding without --takeover-legacy', () => {
 describe('pane-bound Run lookup', () => {
   function explain(db: OrchestrationDb, paneKey: string): string {
     const sqlite = (db as unknown as { db: Database.Database }).db
+
     return (
       sqlite
         .prepare(
@@ -245,6 +261,7 @@ describe('pane-bound Run lookup', () => {
 
   it('matches a reminted tab half by leaf UUID', () => {
     const db = track(new OrchestrationDb(':memory:'))
+
     const run = db.createRun({
       objective: 'work',
       coordinatorHandle: 'term_a',
@@ -282,11 +299,13 @@ describe('pane-bound Run lookup', () => {
 
   it('unbinds only the leaf-equivalent Run when a pane rebinds', () => {
     const db = track(new OrchestrationDb(':memory:'))
+
     const shared = db.createRun({
       objective: 'first',
       coordinatorHandle: 'term_d',
       coordinatorPaneKey: 'tab_one:99999999-9999-4999-8999-999999999999'
     })
+
     const untouched = db.createRun({
       objective: 'other pane',
       coordinatorHandle: 'term_e',
@@ -315,6 +334,7 @@ describe('pane-bound Run lookup', () => {
   it('stays flat as the bound-Run set grows', () => {
     const db = track(new OrchestrationDb(':memory:'))
     const leafOf = (i: number) => `${i.toString(16).padStart(8, '0')}-1111-4111-8111-111111111111`
+
     const bind = (from: number, to: number): void => {
       for (let i = from; i < to; i++) {
         db.createRun({
@@ -324,15 +344,20 @@ describe('pane-bound Run lookup', () => {
         })
       }
     }
+
     const probe = `tab_reminted:${leafOf(0)}`
+
     const measure = (): number => {
       for (let i = 0; i < 200; i++) {
         db.getCurrentRunForPane(probe)
       }
+
       const start = performance.now()
+
       for (let i = 0; i < 2000; i++) {
         db.getCurrentRunForPane(probe)
       }
+
       return (performance.now() - start) / 2000
     }
 
@@ -351,6 +376,7 @@ describe('pane-bound Run lookup', () => {
     const db = track(new OrchestrationDb(':memory:'))
     const sqlite = (db as unknown as { db: Database.Database }).db
     const leaf = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+
     for (let i = 0; i < 500; i++) {
       db.createRun({
         objective: `run ${i}`,
@@ -358,6 +384,7 @@ describe('pane-bound Run lookup', () => {
         coordinatorPaneKey: `tab_${i}:${i.toString(16).padStart(8, '0')}-1111-4111-8111-111111111111`
       })
     }
+
     db.createRun({
       objective: 'target',
       coordinatorHandle: 'term_target',

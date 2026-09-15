@@ -44,10 +44,13 @@ function makeStore(...repos: Repo[]): RepoIdentityStore & { updateRepo: ReturnTy
     getRepo: (id) => repos.find((candidate) => candidate.id === id),
     updateRepo: vi.fn((id, updates) => {
       const target = repos.find((candidate) => candidate.id === id)
+
       if (!target) {
         return null
       }
+
       Object.assign(target, updates)
+
       return target
     })
   }
@@ -58,13 +61,16 @@ function deferred<T>(): {
   resolve: (value: T) => void
 } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
 const REFRESH_STARTUP_DELAY_MS = 5 * 60 * 1000
+
 const REFRESH_TTL_MS = 6 * 60 * 60 * 1000
 
 const movedIdentity: GitRemoteIdentity = {
@@ -134,6 +140,7 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     // dialing it here reaches a same-named box of ours. The row keeps the probe this process has
     // always run for it; what it must never do is dial our same-named target.
     vi.mocked(probeGitRemoteIdentity).mockResolvedValue({ status: 'unavailable' })
+
     const store = makeStore(
       makeRepo({ connectionId: 'nested-1', executionHostId: 'runtime:env-a' })
     )
@@ -153,6 +160,7 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     // carry only `executionHostId` collapse onto one key, so the first host being down suppresses
     // the probe for the second one entirely.
     vi.mocked(probeGitRemoteIdentity).mockResolvedValue({ status: 'unavailable' })
+
     const store = makeStore(
       makeRepo({ id: 'repo-m4air', executionHostId: 'ssh:m4air' }),
       makeRepo({ id: 'repo-openclaw', executionHostId: 'ssh:openclaw' })
@@ -356,6 +364,7 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
+
     const repos = Array.from({ length: 6 }, (_unused, index) =>
       makeRepo({
         id: `repo-${index}`,
@@ -363,6 +372,7 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
         gitRemoteIdentity: remoteIdentity
       })
     )
+
     const store = makeStore(...repos)
 
     await sweep(store)
@@ -393,6 +403,7 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
     const repo = makeRepo({ gitRemoteIdentity: remoteIdentity })
     const live: Repo[] = [repo]
+
     const store: RepoIdentityStore = {
       getRepos: () => live,
       getRepo: (id) => live.find((candidate) => candidate.id === id),
@@ -416,12 +427,15 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
     vi.setSystemTime(1_000)
     vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
     const kept = makeRepo({ gitRemoteIdentity: remoteIdentity })
+
     const removed = makeRepo({
       id: 'repo-2',
       path: '/workspace/other-app',
       gitRemoteIdentity: remoteIdentity
     })
+
     const live: Repo[] = [kept, removed]
+
     const store: RepoIdentityStore = {
       getRepos: () => live,
       getRepo: (id) => live.find((candidate) => candidate.id === id),
@@ -466,10 +480,13 @@ describe('retiring probes for removed repos', () => {
       getRepo: (id) => live.find((candidate) => candidate.id === id),
       updateRepo: vi.fn((id, updates) => {
         const target = live.find((candidate) => candidate.id === id)
+
         if (!target) {
           return null
         }
+
         Object.assign(target, updates)
+
         return target
       })
     }
@@ -477,9 +494,11 @@ describe('retiring probes for removed repos', () => {
 
   function probeSignal(callIndex: number): AbortSignal {
     const signal = vi.mocked(probeGitRemoteIdentity).mock.calls[callIndex]?.[2]?.signal
+
     if (!signal) {
       throw new Error(`probe call ${callIndex} was made without an abort signal`)
     }
+
     return signal
   }
 

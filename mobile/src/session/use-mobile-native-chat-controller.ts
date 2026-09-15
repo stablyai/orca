@@ -57,6 +57,7 @@ export function useMobileNativeChatController(args: {
     onSendError,
     onSendResolved
   } = args
+
   const {
     activeChatAgent,
     activeChatAgentRef,
@@ -96,6 +97,7 @@ export function useMobileNativeChatController(args: {
       promptCancelSupported: agentSessionPromptCancelSupported,
       onSendError
     })
+
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText,
@@ -130,8 +132,10 @@ export function useMobileNativeChatController(args: {
   const nativeChatStreamLive = activeChatStructured
     ? structuredNativeChat.isWorking
     : activeTabAgentWorking
+
   const nativeChatAgentWorking =
     nativeChatStreamLive && (activeChatStructured || activeChatResolution != null)
+
   // Throttle the streaming bubble: OpenCode emits a status frame per streamed
   // part, and each one re-renders and re-parses the whole accumulated markdown.
   const nativeChatStreamingText = useThrottledLatestValue(
@@ -140,6 +144,7 @@ export function useMobileNativeChatController(args: {
       : mobileNativeChatStreamPreview(nativeChatStatus, nativeChatAgentWorking),
     NATIVE_CHAT_STREAM_THROTTLE_MS
   )
+
   const {
     permission: legacyNativeChatPermission,
     question: legacyQuestion,
@@ -151,10 +156,12 @@ export function useMobileNativeChatController(args: {
     messages: nativeChatSession.messages,
     transcriptLoading: nativeChatSession.transcriptLoading
   })
+
   // A never-read transcript cannot prove that a dismissed prompt cleared.
   const nativeChatTranscriptSettled =
     nativeChatSession.status === 'ready' ||
     (nativeChatSession.status === 'error' && nativeChatSession.messages.length > 0)
+
   const {
     askKey: nativeChatAskKey,
     showAsk: showNativeChatAsk,
@@ -252,16 +259,20 @@ export function useMobileNativeChatController(args: {
       toggleTabChatView,
       worktreeId
     })
+
   useLayoutEffect(() => {
     recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand
   }, [recordNativeChatSessionOptionCommand])
   // Card actions retire the route's held failure banner too, not just sends.
   const answerAsk = useNativeChatAcceptedAction(handleNativeChatAnswerAsk, onSendResolved)
   const cancelAsk = useNativeChatAcceptedAction(handleNativeChatCancelAsk, onSendResolved)
+
   const handleNativeChatRespondPermission = activeChatStructured
     ? structuredNativeChat.respondPermission
     : legacyHandleNativeChatRespondPermission
+
   const respond = useNativeChatAcceptedAction(handleNativeChatRespondPermission, onSendResolved)
+
   const structuredCancelPrompt = useNativeChatAcceptedAction(
     activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false,
     onSendResolved

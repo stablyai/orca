@@ -4,6 +4,7 @@ import { OSC52_CLIPBOARD_SETTING_ID } from './osc52-clipboard-setting-anchor'
 import { translate } from '@/i18n/i18n'
 
 let hasShownOsc52ClipboardBlockedToast = false
+
 let hasShownOsc52ClipboardFailedToast = false
 
 export function showOsc52ClipboardBlockedToast(): void {

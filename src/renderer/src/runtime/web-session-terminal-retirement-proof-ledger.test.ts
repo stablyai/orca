@@ -17,9 +17,13 @@ import {
 } from './web-session-terminal-retirement-proof-ledger'
 
 const TAB_ID = 'host-tab'
+
 const LEAF_ID = 'leaf-1'
+
 const HANDLE = 'term-retired'
+
 const WORKTREE = 'repo::ledger'
+
 const retired = {
   parentTabId: TAB_ID,
   leafId: LEAF_ID,
@@ -89,10 +93,12 @@ describe('web session terminal retirement proof ledger', () => {
       ENVIRONMENT_ID,
       frame(1, { retiredTerminalSurfaces: [retired] })
     )
+
     const revived = mergeRetainedTerminalRetirementProofs(
       ENVIRONMENT_ID,
       frame(2, { tabs: [pendingSurface(TAB_ID, LEAF_ID, 'pty-new', 'term-new')] })
     )
+
     expect(revived.retiredTerminalSurfaces).toBeUndefined()
     expect(
       mergeRetainedTerminalRetirementProofs(ENVIRONMENT_ID, frame(3)).retiredTerminalSurfaces
@@ -135,18 +141,22 @@ describe('web session terminal retirement proof ledger', () => {
       leafId: `leaf-${index}`,
       terminal: `term-${index}`
     }))
+
     for (let version = 1; version <= 3; version += 1) {
       const full = frame(version, { retiredTerminalSurfaces: proofs })
       const merged = mergeRetainedTerminalRetirementProofs(ENVIRONMENT_ID, full)
       expect(merged).toBe(full)
       expect(merged.retiredTerminalSurfaces).toHaveLength(64)
     }
+
     // A host that rotated one identity past its cap: the client list stays at the cap too.
     const rotated = [...proofs.slice(1), { ...retired, leafId: 'leaf-new', terminal: 'term-new' }]
+
     const merged = mergeRetainedTerminalRetirementProofs(
       ENVIRONMENT_ID,
       frame(4, { retiredTerminalSurfaces: rotated })
     )
+
     expect(merged.retiredTerminalSurfaces).toHaveLength(64)
     expect(merged.retiredTerminalSurfaces?.at(-1)?.leafId).toBe('leaf-new')
   })
@@ -160,15 +170,18 @@ describe('web session terminal retirement proof ledger', () => {
       leafId: `leaf-${index}`,
       terminal: `term-${index}`
     }))
+
     const legacyHostFrames = [
       frame(1, { retiredTerminalSurfaces: proofs }),
       frame(2),
       frame(3, { retiredTerminalSurfaces: proofs })
     ]
+
     const visible = legacyHostFrames.map(
       (hostFrame) =>
         mergeRetainedTerminalRetirementProofs(ENVIRONMENT_ID, hostFrame).retiredTerminalSurfaces
     )
+
     // A legacy client sees exactly what the host sent, frame by frame.
     expect(visible).toEqual(legacyHostFrames.map((hostFrame) => hostFrame.retiredTerminalSurfaces))
   })
@@ -189,12 +202,14 @@ describe('orphan recovery over delta frames', () => {
   it('retires a stale local pane from a proof delivered on an earlier frame', async () => {
     const state = makeState(WORKTREE, [{ leafId: LEAF_ID, handle: HANDLE }])
     const call = vi.fn()
+
     const first = await recoverWebSessionTerminalOrphansBeforeApply(
       state,
       frame(1, { retiredTerminalSurfaces: [retired] }),
       ENVIRONMENT_ID,
       { call: call as never }
     )
+
     expect(first?.tabs).toEqual([])
 
     const second = await recoverWebSessionTerminalOrphansBeforeApply(
@@ -203,6 +218,7 @@ describe('orphan recovery over delta frames', () => {
       ENVIRONMENT_ID,
       { call: call as never }
     )
+
     expect(second?.tabs).toEqual([])
     expect(second?.retiredTerminalSurfaces).toEqual([retired])
     expect(call).not.toHaveBeenCalled()

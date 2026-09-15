@@ -2,24 +2,40 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = await vi.hoisted(async () => {
   const { createSshIpcMocks } = await import('./ssh-ipc-module-mocks')
+
   return createSshIpcMocks()
 })
 
 vi.mock('../ssh/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
+
 vi.mock('electron', () => mocks.electron)
+
 vi.mock('./ssh-pty-output-intake-registry', () => mocks.sshPtyOutputIntakeRegistry)
+
 vi.mock('../ssh/ssh-connection-store', () => mocks.sshConnectionStore)
+
 vi.mock('../ssh/ssh-connection-manager', () => mocks.sshConnectionManager)
+
 vi.mock('../ssh/ssh-relay-deploy', () => mocks.sshRelayDeploy)
+
 vi.mock('../ssh/ssh-relay-reset', () => mocks.sshRelayReset)
+
 vi.mock('../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
+
 vi.mock('../providers/ssh-pty-provider', () => mocks.sshPtyProvider)
+
 vi.mock('../providers/ssh-filesystem-provider', () => mocks.sshFilesystemProvider)
+
 vi.mock('./pty', () => mocks.pty)
+
 vi.mock('../providers/ssh-filesystem-dispatch', () => mocks.sshFilesystemDispatch)
+
 vi.mock('../providers/ssh-git-provider', () => mocks.sshGitProvider)
+
 vi.mock('../providers/ssh-git-dispatch', () => mocks.sshGitDispatch)
+
 vi.mock('../ssh/ssh-port-forward', () => mocks.sshPortForward)
+
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
 import { getActiveMultiplexer } from './ssh'
@@ -56,6 +72,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue({})
     mockConnectionManager.disconnect.mockResolvedValue(undefined)
@@ -63,6 +80,7 @@ describe('SSH IPC handlers', () => {
     const connect = handlers.get('ssh:connect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<SshConnectionState>
+
     const disconnect = handlers.get('ssh:disconnect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<void>
@@ -80,6 +98,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const staleConn = {}
     const freshConn = {}
     let resolveStaleConnect!: (connection: unknown) => void
@@ -97,6 +116,7 @@ describe('SSH IPC handlers', () => {
         if (transportConnectPending) {
           throw new Error('Connection to Server is already in progress')
         }
+
         return freshConn
       })
     mockConnectionManager.disconnect.mockImplementationOnce(async () => {
@@ -118,15 +138,19 @@ describe('SSH IPC handlers', () => {
     const staleConnect = handlers.get('ssh:connect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<SshConnectionState>
+
     await vi.waitFor(() => expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1))
 
     const disconnect = handlers.get('ssh:disconnect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<void>
+
     await vi.waitFor(() => expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1'))
+
     const freshConnect = handlers.get('ssh:connect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<SshConnectionState>
+
     resolveStaleConnect(staleConn)
     await expect(staleConnect).rejects.toThrow('SSH connection attempt was cancelled')
     expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1)
@@ -146,6 +170,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const lateConn = { id: 'late-transport' }
     let resolveStaleConnect!: (connection: unknown) => void
     mockSshStore.getTarget.mockReturnValue(target)
@@ -160,6 +185,7 @@ describe('SSH IPC handlers', () => {
     const staleConnect = handlers.get('ssh:connect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<SshConnectionState>
+
     await vi.waitFor(() => expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1))
     // Why await the whole disconnect: the leak only exists once its teardown has already run, so
     // nothing else is left to close the transport this attempt opens afterwards.
@@ -180,8 +206,10 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     const conn = { id: 'establishing-transport' }
     let releaseRelayLaunch = (): void => {}
+
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.getConnection.mockReturnValue(undefined)
     mockConnectionManager.connect.mockResolvedValue(conn)
@@ -196,6 +224,7 @@ describe('SSH IPC handlers', () => {
     const connect = handlers.get('ssh:connect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<SshConnectionState>
+
     await vi.waitFor(() => expect(mockDeployAndLaunchRelay).toHaveBeenCalledTimes(1))
     await handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
 
@@ -214,6 +243,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     // Why: connect() hands back the already-open transport, so this attempt never owned it.
     const sharedConn = { id: 'shared-transport' }
     let resolveStaleConnect!: (connection: unknown) => void
@@ -229,6 +259,7 @@ describe('SSH IPC handlers', () => {
     const staleConnect = handlers.get('ssh:connect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<SshConnectionState>
+
     await vi.waitFor(() => expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1))
     await handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
 
@@ -246,6 +277,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     let resolveTransportDisconnect!: () => void
     let transportDisconnectPending = false
     mockSshStore.getTarget.mockReturnValue(target)
@@ -253,6 +285,7 @@ describe('SSH IPC handlers', () => {
       if (transportDisconnectPending) {
         throw new Error('Connection to Server is already in progress')
       }
+
       return {}
     })
     mockConnectionManager.disconnect.mockImplementationOnce(
@@ -280,18 +313,22 @@ describe('SSH IPC handlers', () => {
     const disconnect = handlers.get('ssh:disconnect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<void>
+
     const disconnectSettled = vi.fn()
     void disconnect.then(disconnectSettled, disconnectSettled)
     await vi.waitFor(() =>
       expect(mockPortForwardManager.removeAllForwards).toHaveBeenCalledWith('ssh-1')
     )
+
     const reconnect = handlers.get('ssh:connect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<SshConnectionState>
+
     const reconnectResult = reconnect.then(
       (state) => ({ ok: true as const, state }),
       (error: unknown) => ({ ok: false as const, error })
     )
+
     await Promise.resolve()
 
     expect(disconnectSettled).not.toHaveBeenCalled()
@@ -315,6 +352,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     let resolveTransportDisconnect!: () => void
     mockSshStore.getTarget.mockReturnValue(target)
     mockConnectionManager.connect.mockResolvedValue({})
@@ -339,6 +377,7 @@ describe('SSH IPC handlers', () => {
     const removal = handlers.get('ssh:removeTarget')!(null, {
       id: 'ssh-1'
     }) as Promise<void>
+
     await vi.waitFor(() =>
       expect(mockPortForwardManager.removeAllForwards).toHaveBeenCalledWith('ssh-1')
     )
@@ -361,6 +400,7 @@ describe('SSH IPC handlers', () => {
       port: 22,
       username: 'deploy'
     }
+
     let resolveStaleConnect!: (connection: unknown) => void
     let resolveForwardRemoval!: () => void
     let resolveTransportDisconnect!: () => void
@@ -378,6 +418,7 @@ describe('SSH IPC handlers', () => {
         if (transportConnectPending) {
           throw new Error('Connection to Server is already in progress')
         }
+
         return {}
       })
     mockConnectionManager.disconnect.mockImplementationOnce(
@@ -405,25 +446,31 @@ describe('SSH IPC handlers', () => {
     const staleConnect = handlers.get('ssh:connect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<SshConnectionState>
+
     const sharedStaleConnect = handlers.get('ssh:connect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<SshConnectionState>
+
     await vi.waitFor(() => expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1))
 
     mockSshStore.lastRepoReadoptions = [
       { oldTargetId: 'ssh-1', newTargetId: 'ssh-new', repoIds: ['repo-1'] }
     ]
     await handlers.get('ssh:addTarget')!(null, { target })
+
     const freshConnect = handlers.get('ssh:connect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<SshConnectionState>
+
     await vi.waitFor(() =>
       expect(mockPortForwardManager.removeAllForwards).toHaveBeenCalledWith('ssh-1')
     )
     await vi.waitFor(() => expect(mockConnectionManager.disconnect).toHaveBeenCalledWith('ssh-1'))
+
     const sharedFreshConnect = handlers.get('ssh:connect')!(null, {
       targetId: 'ssh-1'
     }) as Promise<SshConnectionState>
+
     expect(mockConnectionManager.connect).toHaveBeenCalledTimes(1)
     resolveForwardRemoval()
     resolveTransportDisconnect()

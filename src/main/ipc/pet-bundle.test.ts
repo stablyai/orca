@@ -11,6 +11,7 @@ import {
 function u32(value: number): Buffer {
   const buffer = Buffer.alloc(4)
   buffer.writeUInt32LE(value, 0)
+
   return buffer
 }
 
@@ -20,6 +21,7 @@ function u24(value: number): Buffer {
 
 function webpVp8x(width: number, height: number): Buffer {
   const payload = Buffer.concat([Buffer.from([0, 0, 0, 0]), u24(width - 1), u24(height - 1)])
+
   return Buffer.concat([
     Buffer.from('RIFF'),
     u32(4 + 8 + payload.byteLength),
@@ -83,6 +85,7 @@ describe('applyCodexPetDefaults', () => {
     // fps=8 matches the Codex default and the legacy geometry, but baking
     // durations makes it a non-match so the uniform pacing is preserved.
     const manifest = applyCodexPetDefaults({ id: 'octo', displayName: 'Octo', fps: 8 })
+
     const sprite = {
       frameWidth: 192,
       frameHeight: 208,
@@ -94,6 +97,7 @@ describe('applyCodexPetDefaults', () => {
       defaultAnimation: 'idle',
       animations: manifest.animations
     }
+
     expect(applyCodexSpriteTimingDefaults(sprite)).toBe(sprite)
     expect(sprite.animations?.idle.frameDurationsMs).toEqual([125, 125, 125, 125, 125, 125])
   })

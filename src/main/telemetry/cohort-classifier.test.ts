@@ -74,9 +74,11 @@ describe('cohort-classifier', () => {
       })
     )
     const warnSpy = console.warn as unknown as ReturnType<typeof vi.spyOn>
+
     for (let i = 0; i < 50; i++) {
       getCohortAtEmit()
     }
+
     expect(warnSpy).toHaveBeenCalledTimes(1)
   })
 

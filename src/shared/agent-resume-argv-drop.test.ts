@@ -15,9 +15,11 @@ function planFor(platform: NodeJS.Platform, agentArgs?: string): string {
     platform,
     ...(agentArgs ? { agentArgs } : {})
   })
+
   if (!plan) {
     throw new Error('expected a codex resume plan')
   }
+
   return plan.launchCommand
 }
 
@@ -61,6 +63,7 @@ describe('dropAgentResumeArgvFromCommand', () => {
       key: 'session_id' as const,
       id: '940237d9-c712-48e8-bca1-fd75fc4a8d4b'
     }
+
     const plan = buildAgentResumeStartupPlan({
       agent: 'copilot',
       providerSession,
@@ -68,6 +71,7 @@ describe('dropAgentResumeArgvFromCommand', () => {
       agentArgs: '--yolo',
       platform: 'darwin'
     })
+
     expect(
       dropAgentResumeArgvFromCommand({
         command: plan?.launchCommand ?? '',

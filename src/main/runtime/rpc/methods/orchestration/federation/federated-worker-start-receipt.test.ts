@@ -21,11 +21,13 @@ describe('federated worker start receipt validation', () => {
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     databases.push(db)
+
     const run = db.createRun({
       objective: 'federated worker',
       coordinatorHandle: 'term_coord',
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
+
     const task = db.createTask({ spec: 'remote work', runId: run.id })
     vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
       environmentId: 'environment_remote',
@@ -33,6 +35,7 @@ describe('federated worker start receipt validation', () => {
       peerFingerprint: 'remote_peer',
       pairingRevision: 73
     })
+
     const remoteCall = vi
       .spyOn(runtime, 'callOrchestrationWorkerServer')
       .mockImplementation(async (_environmentId, method, params) => {
@@ -44,6 +47,7 @@ describe('federated worker start receipt validation', () => {
             ]
           }
         }
+
         return {
           dispatchId: (params as { dispatchId: string }).dispatchId,
           state: 'ready',
@@ -81,6 +85,7 @@ describe('federated worker start receipt validation', () => {
       remote_worktree_id: null,
       remote_terminal_handle: null
     })
+
     for (const call of remoteCall.mock.calls) {
       expect(call[5]).toEqual({
         ...(call[1] === 'orchestration.federationAttachStart' ? { contractVerified: true } : {}),

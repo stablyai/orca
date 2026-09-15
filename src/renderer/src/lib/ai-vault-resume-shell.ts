@@ -33,13 +33,16 @@ export function resolveAiVaultResumeStartupShell(args: {
   if (args.platform !== 'win32') {
     return 'posix'
   }
+
   const projectRuntime = args.isLocalSession
     ? getLocalProjectExecutionRuntimeContext(args.state, args.worktreeId, CLIENT_PLATFORM)
     : undefined
+
   const workspacePath = getAiVaultResumeWorkspacePath(
     args.state,
     args.worktreeId ?? args.state.activeWorktreeId
   )
+
   const shellOverride = args.isLocalSession
     ? resolveLocalWindowsTerminalShellOverrideForTab({
         explicitShellOverride: undefined,
@@ -48,7 +51,9 @@ export function resolveAiVaultResumeStartupShell(args: {
         projectRuntime
       })
     : undefined
+
   const shell = shellOverride ? resolveWindowsShellStartupFamily(shellOverride) : undefined
+
   return resolveStartupShell(args.platform, shell)
 }
 
@@ -59,15 +64,19 @@ export function getAiVaultResumeWorkspacePath(
   if (!worktreeId) {
     return null
   }
+
   const workspaceScope = parseWorkspaceKey(worktreeId)
+
   if (workspaceScope?.type === 'folder') {
     return (
       state.folderWorkspaces.find((workspace) => workspace.id === workspaceScope.folderWorkspaceId)
         ?.folderPath ?? null
     )
   }
+
   const targetWorktreeId =
     workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : worktreeId
+
   return (
     Object.values(state.worktreesByRepo ?? {})
       .flat()

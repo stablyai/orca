@@ -15,15 +15,18 @@ const rows = { worktrees: [{ id: 'w1' }] }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
+
   const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise
   })
+
   return { promise, resolve }
 }
 
 function replying(response: RpcResponse): FakeSession {
   const session = new FakeSession('connected')
   session.sendRequest.mockResolvedValue(response)
+
   return session
 }
 
@@ -67,6 +70,7 @@ describe('the post-barrier combinator', () => {
       startRpcOperation(refusing, workspaceListAtBarrier, {}),
       startRpcOperation(dropped, terminalListAtBarrier, {})
     ])
+
     lateRefusal.resolve(rpcRefusal('method_not_found', 'no such method'))
 
     await expect(barrier).rejects.toThrow('method_not_found: no such method')
@@ -100,6 +104,7 @@ describe('the post-barrier combinator', () => {
       startRpcOperation(refusing, workspaceListAtBarrier, {}),
       startRpcOperation(stalled, terminalListAtBarrier, {})
     ])
+
     const raced = await Promise.race([
       barrier.then(
         () => 'resolved' as const,
@@ -107,6 +112,7 @@ describe('the post-barrier combinator', () => {
       ),
       settleAfter(50)
     ])
+
     expect(raced).toBe('still waiting')
 
     pending.resolve(rpcSuccess({ terminals: [] }))

@@ -14,6 +14,7 @@ describe('remote runtime socket liveness', () => {
     let now = 1_000
     const ping = vi.fn()
     const onDead = vi.fn()
+
     const monitor = startRemoteRuntimeSocketLiveness({
       ping,
       onDead,
@@ -31,6 +32,7 @@ describe('remote runtime socket liveness', () => {
       now += delta
       await vi.advanceTimersByTimeAsync(100)
     }
+
     expect(onDead).not.toHaveBeenCalled()
 
     now += 100
@@ -43,6 +45,7 @@ describe('remote runtime socket liveness', () => {
     let now = 1_000
     const ping = vi.fn()
     const onDead = vi.fn()
+
     const monitor = startRemoteRuntimeSocketLiveness({
       ping,
       onDead,
@@ -53,6 +56,7 @@ describe('remote runtime socket liveness', () => {
     now += 3_600_000
     await vi.advanceTimersByTimeAsync(100)
     monitor.noteActivity()
+
     for (const delta of [100, 100, 100]) {
       now += delta
       await vi.advanceTimersByTimeAsync(100)

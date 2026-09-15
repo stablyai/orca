@@ -19,6 +19,7 @@ export function pendingStructuredPromptIdentity(
       ? item.body.resolution.state === 'pending'
       : false
   )
+
   return prompt ? { itemId: prompt.itemId, expectedRevision: prompt.revision } : undefined
 }
 
@@ -36,21 +37,27 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   const { client, enabled, onSendError, operationIds, sessionId, sessionKey, stateRef } = args
   const current = stateRef.current
   const turnId = activeStructuredAgentSessionTurnId(current.items)
+
   if (!client || !sessionId || !enabled || current.fence === null || !turnId) {
     onSendError('Stop not sent')
+
     return false
   }
+
   // Check the capability before fields enter either the fingerprint or operation key.
   const fields = {
     turnId,
     ...(args.prompt && args.promptCancelSupported === true ? { prompt: args.prompt } : {})
   }
+
   const key = `${sessionKey}:agentSession.cancel:${JSON.stringify(fields)}`
+
   const clientOperationId = retainStructuredSessionOperationId(
     operationIds,
     key,
     operationIds.get(key)
   )
+
   const result: StructuredAgentSessionMutationCallResult<AgentSessionCancelResult> =
     await requestStructuredAgentSessionMutation<AgentSessionCancelResult>({
       client,
@@ -61,12 +68,15 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
       fields,
       clientOperationId
     })
+
   if (result.status !== 'unknown') {
     operationIds.delete(key)
   }
+
   if (result.status === 'accepted') {
     return true
   }
+
   if (result.status === 'unknown') {
     onSendError('Stop unconfirmed — check chat before retrying')
   } else if (result.status === 'refused') {
@@ -74,5 +84,6 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   } else if (result.status === 'failed') {
     onSendError(result.message === 'Request not sent' ? 'Stop not sent' : result.message)
   }
+
   return false
 }

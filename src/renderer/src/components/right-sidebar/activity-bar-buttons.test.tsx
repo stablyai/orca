@@ -26,6 +26,7 @@ describe('TopActivityOverflowMenu', () => {
     document.body.appendChild(container)
     const root = createRoot(container)
     roots.push(root)
+
     const item: ActivityBarItem = {
       id: 'plugin:orca-samples.demo/dashboard',
       icon: () => <span />,

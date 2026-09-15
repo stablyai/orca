@@ -8,9 +8,11 @@ const mocks = vi.hoisted(() => ({
   convertBrowserPage: vi.fn(),
   convertBrowserPageToWorkspaceDoc: vi.fn()
 }))
+
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ convertBrowserPage: mocks.convertBrowserPage }) }
 }))
+
 vi.mock('@/lib/file-preview', () => ({
   convertBrowserPageToWorkspaceDoc: mocks.convertBrowserPageToWorkspaceDoc
 }))

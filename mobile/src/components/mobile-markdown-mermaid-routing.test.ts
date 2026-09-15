@@ -11,6 +11,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
+
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
 
 let renderer: ReactTestRenderer | undefined
@@ -25,6 +26,7 @@ function render(content: string): ReactTestRenderer {
   act(() => {
     renderer = create(createElement(MobileMarkdown, { content }))
   })
+
   return renderer!
 }
 

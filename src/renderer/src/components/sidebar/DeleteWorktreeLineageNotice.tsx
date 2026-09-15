@@ -15,6 +15,7 @@ export function DeleteWorktreeLineageNotice({
   dirtyChangeCountsByWorktreeId
 }: DeleteWorktreeLineageNoticeProps): JSX.Element | null {
   const childWorkspaceCount = descendants.length
+
   if (childWorkspaceCount === 0) {
     return null
   }

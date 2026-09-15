@@ -9,7 +9,9 @@ import {
 import { SKILL_PACKAGE_CONTENT_TYPE } from '../../../src/shared/skill-package-manifest'
 
 export const REMOTE_SKILL_PACKAGE_ID = 'package_remote_e2e'
+
 export const REMOTE_SKILL_VERSION_ID = 'version_remote_e2e'
+
 export const REMOTE_SKILL_NAME = 'remote-e2e-skill'
 
 export type RemoteSkillCloudFixture = {
@@ -29,6 +31,7 @@ export async function startRemoteSkillCloudFixture(): Promise<RemoteSkillCloudFi
     join(source, 'SKILL.md'),
     '---\nname: remote-e2e-skill\ndescription: Remote installation integration\n---\n\n# Remote E2E\n'
   )
+
   const archive = await createSkillPackageArchive({
     sourceDirectory: source,
     archivePath: join(root, 'package.tar.gz'),
@@ -36,9 +39,11 @@ export async function startRemoteSkillCloudFixture(): Promise<RemoteSkillCloudFi
     versionId: REMOTE_SKILL_VERSION_ID,
     createdAt: '2026-08-11T12:00:00.000Z'
   })
+
   const bytes = await readFile(archive.archivePath)
   const requests: RemoteSkillCloudFixture['requests'] = []
   let origin = ''
+
   const server = createServer((request, response) => {
     void handleRemoteSkillCloudRequest({
       request,
@@ -52,15 +57,19 @@ export async function startRemoteSkillCloudFixture(): Promise<RemoteSkillCloudFi
       response.end(JSON.stringify({ code: 'fixture_failed', message: String(error) }))
     })
   })
+
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
     server.listen(Number(process.env.ORCA_E2E_SKILL_CLOUD_PORT ?? 0), '127.0.0.1', resolve)
   })
   const address = server.address()
+
   if (!address || typeof address === 'string') {
     throw new Error('Skill fixture has no TCP address')
   }
+
   origin = `http://127.0.0.1:${address.port}`
+
   return { archive, bytes, requests, root, server, origin }
 }
 
@@ -78,6 +87,7 @@ async function handleRemoteSkillCloudRequest(input: {
   requests: RemoteSkillCloudFixture['requests']
 }): Promise<void> {
   const path = new URL(input.request.url ?? '/', input.origin).pathname
+
   if (input.request.method === 'GET' && path === '/package.tar.gz') {
     input.requests.push({ method: 'GET', path, body: null })
     input.response.writeHead(200, {
@@ -85,8 +95,10 @@ async function handleRemoteSkillCloudRequest(input: {
       'content-length': input.bytes.length
     })
     input.response.end(input.bytes)
+
     return
   }
+
   if (
     input.request.method === 'POST' &&
     path ===
@@ -98,8 +110,10 @@ async function handleRemoteSkillCloudRequest(input: {
     input.response.end(
       JSON.stringify(downloadGrant(input.archive, input.bytes.length, input.origin))
     )
+
     return
   }
+
   input.response.writeHead(404, { 'content-type': 'application/json' })
   input.response.end(JSON.stringify({ code: 'not_found', message: 'Not found' }))
 }
@@ -127,8 +141,10 @@ function downloadGrant(archive: CreatedSkillPackage, compressedBytes: number, or
 
 async function readRequestBody(request: IncomingMessage): Promise<string> {
   const chunks: Buffer[] = []
+
   for await (const chunk of request) {
     chunks.push(Buffer.from(chunk))
   }
+
   return Buffer.concat(chunks).toString('utf8')
 }

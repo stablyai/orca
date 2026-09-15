@@ -14,6 +14,7 @@ describe('Codex transcript skill context', () => {
           { type: 'image', url: 'https://example.test/image.png' }
         ]
       }
+
       const record = type === 'message' ? message : { type, payload: message }
       expect(decodeCodexTranscriptLine(JSON.stringify(record), 'mixed')?.blocks).toEqual([
         { type: 'text', text: 'Inspect this image' },
@@ -40,6 +41,7 @@ describe('Codex transcript skill context', () => {
         role: 'user',
         content: [{ type: 'text', text: `${prefix}\n<name>example</name>\nInstructions\n</skill>` }]
       }
+
       for (const record of [message, { type: 'response_item', payload: message }]) {
         expect(decodeCodexTranscriptLine(JSON.stringify(record), 'context')).toBeNull()
       }

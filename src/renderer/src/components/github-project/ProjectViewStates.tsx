@@ -45,6 +45,7 @@ function ProjectViewTab({
   // Why: allowlist, not denylist — raw.layout is cast unchecked, so a future
   // GitHub layout value must stay disabled instead of masquerading as a table.
   const supported = view.layout === 'TABLE_LAYOUT' || view.layout === 'ROADMAP_LAYOUT'
+
   const layoutLabel =
     view.layout === 'BOARD_LAYOUT'
       ? 'Board'
@@ -53,12 +54,14 @@ function ProjectViewTab({
         : view.layout === 'TABLE_LAYOUT'
           ? 'Table'
           : formatUnknownLayout(view.layout)
+
   const Icon =
     view.layout === 'BOARD_LAYOUT'
       ? KanbanSquare
       : view.layout === 'ROADMAP_LAYOUT'
         ? MapIcon
         : TableIcon
+
   const tab = (
     <button
       type="button"
@@ -86,10 +89,13 @@ function ProjectViewTab({
       <span className={cn(active && 'font-medium')}>{view.name}</span>
     </button>
   )
+
   if (supported) {
     return tab
   }
+
   const message = `Orca doesn't support ${layoutLabel} project views yet.`
+
   return (
     <HoverCard openDelay={200} closeDelay={100}>
       <HoverCardTrigger asChild>
@@ -154,6 +160,7 @@ export function ProjectViewErrorState({
       </div>
     )
   }
+
   const copy =
     error.type === 'too_large'
       ? `This view has ${totalCount ?? 'many'} items — too large to render in Orca. Narrow the view's filter on GitHub.`
@@ -169,6 +176,7 @@ export function ProjectViewErrorState({
           : error.type === 'schema_drift'
             ? 'Could not read this project view.'
             : error.message
+
   return (
     <div className="flex flex-1 flex-col items-start gap-3 p-6 text-sm">
       <div className="text-muted-foreground">{copy}</div>
@@ -182,6 +190,7 @@ function formatUnknownLayout(layout: string): string {
     .replace(/_LAYOUT$/, '')
     .replaceAll('_', ' ')
     .toLowerCase()
+
   return base ? base.charAt(0).toUpperCase() + base.slice(1) : layout
 }
 
@@ -246,6 +255,7 @@ export function ProjectItemsEmptyState({ filter }: { filter: string }): React.JS
       </div>
     )
   }
+
   return (
     <div className="flex min-h-[120px] flex-col items-center justify-center gap-1 p-6 text-center text-sm text-muted-foreground">
       <span>

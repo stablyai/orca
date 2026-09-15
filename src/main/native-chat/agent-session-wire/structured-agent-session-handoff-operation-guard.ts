@@ -33,26 +33,32 @@ export class StructuredAgentSessionHandoffOperationGuard {
       fingerprint: input.fingerprint,
       now: input.now
     })
+
     if (ledger.decision === 'refused') {
       return { decision: 'refused', code: ledger.code }
     }
+
     const active = this.activeBySession.get(input.sessionId)
+
     const queuedCancellation =
       input.action === 'cancel-queued' &&
       input.status?.phase === 'queued' &&
       input.status.operationId === active?.operationId
+
     const activeConflict = Boolean(
       active &&
       ((active.operationId === input.operationId &&
         (active.fingerprint !== input.fingerprint || active.callerKey !== input.callerKey)) ||
         (active.operationId !== input.operationId && !queuedCancellation))
     )
+
     const queuedConflict = Boolean(
       !active &&
       input.status?.phase === 'queued' &&
       input.status.operationId !== input.operationId &&
       input.action !== 'cancel-queued'
     )
+
     if (activeConflict || queuedConflict) {
       if (ledger.decision === 'admit') {
         await this.store.recordOperationOutcome({
@@ -61,12 +67,16 @@ export class StructuredAgentSessionHandoffOperationGuard {
           outcome: { status: 'failed', code: 'agent_session_operation_conflict' }
         })
       }
+
       return { decision: 'refused', code: 'agent_session_operation_conflict' }
     }
+
     if (ledger.decision === 'admit') {
       this.reserve(input)
+
       return { decision: 'new' }
     }
+
     if (input.action === 'retry' && ledger.row.outcome.status === 'failed') {
       await this.store.recordOperationOutcome({
         callerKey: input.callerKey,
@@ -74,16 +84,20 @@ export class StructuredAgentSessionHandoffOperationGuard {
         outcome: { status: 'pending' }
       })
       this.reserve(input)
+
       return { decision: 'retry' }
     }
+
     if (
       ledger.row.outcome.status === 'pending' &&
       !active &&
       input.status?.operationId !== input.operationId
     ) {
       this.reserve(input)
+
       return { decision: 'new' }
     }
+
     return { decision: 'replay', outcome: ledger.row.outcome }
   }
 

@@ -11,6 +11,7 @@ async function flushPromises(): Promise<void> {
   for (let index = 0; index < 5; index += 1) {
     await Promise.resolve()
   }
+
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
@@ -40,6 +41,7 @@ describe('rich markdown local images', () => {
   it('reloads persisted relative images after the markdown file context is assigned', async () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
+
     const editor = new Editor({
       element: host,
       extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
@@ -69,6 +71,7 @@ describe('rich markdown local images', () => {
   it('keeps a displayed image leased when another surface releases the same cache entry', async () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
+
     const editor = new Editor({
       element: host,
       extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
@@ -92,6 +95,7 @@ describe('rich markdown local images', () => {
   it('renders a mid-sentence image inside its paragraph without a block box', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
+
     const editor = new Editor({
       element: host,
       extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),

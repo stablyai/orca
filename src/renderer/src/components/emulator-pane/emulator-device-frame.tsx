@@ -49,6 +49,7 @@ type EmulatorDeviceFrameProps = {
 
 const MAX_GESTURE_SAMPLES = 32,
   WHEEL_GESTURE_IDLE_MS = 80
+
 type PendingWheelGesture = {
   end: EmulatorScreenPoint
   live: boolean
@@ -82,15 +83,19 @@ export function EmulatorDeviceFrame({
   const wheelGestureRef = useRef<PendingWheelGesture | null>(null)
   const [streamError, setStreamError] = useState(false)
   const [streamSize, setStreamSize] = useState<StreamSize | null>(null)
+
   const visualStreamGeometry = useMemo(
     () => resolveVisualStreamGeometry(streamSize, visualOrientation),
     [streamSize, visualOrientation]
   )
+
   const canInteract = isLive && !loading && !streamError
+
   const { cancelKeyboardFrames, sendKeyboardFrames, sendTouch } = useEmulatorControlStream(
     wsUrl,
     canInteract
   )
+
   const { enableKeyboardCapture, handleBlur, handleKeyDown, handlePaste, keyboardCaptureActive } =
     useEmulatorScreenKeyboard({
       cancelKeyboardFrames,
@@ -123,18 +128,24 @@ export function EmulatorDeviceFrame({
   const flushWheelGesture = useCallback(() => {
     const pending = wheelGestureRef.current
     wheelGestureRef.current = null
+
     if (!pending) {
       return
     }
+
     if (pending.timerId !== null) {
       window.clearTimeout(pending.timerId)
     }
+
     if (pending.live) {
       const end = clampEmulatorScreenPoint(pending.end)
       void sendTouch({ ...end, type: 'end' })
+
       return
     }
+
     const points = buildWheelGesturePoints(pending.start, pending.end)
+
     if (points) {
       sendGesturePoints(points)
     }
@@ -143,17 +154,22 @@ export function EmulatorDeviceFrame({
   useEffect(
     () => () => {
       const pending = wheelGestureRef.current
+
       if (pending?.timerId != null) {
         window.clearTimeout(pending.timerId)
       }
+
       if (pending?.live) {
         const end = clampEmulatorScreenPoint(pending.end)
         void sendTouch({ ...end, type: 'end' })
       }
+
       const point = lastTouchPointRef.current
+
       if (liveTouchRef.current && point) {
         void sendTouch(buildEmulatorGesturePoint(point, 'end', liveTouchEdgeRef.current))
       }
+
       wheelGestureRef.current = null
       liveTouchRef.current = false
       liveTouchEdgeRef.current = undefined
@@ -167,15 +183,20 @@ export function EmulatorDeviceFrame({
       if (!canInteract || event.button !== 0) {
         return
       }
+
       event.preventDefault()
+
       try {
         event.currentTarget.focus({ preventScroll: true })
       } catch {}
+
       enableKeyboardCapture()
       const point = mapEventToScreenPoint(event)
+
       if (!point) {
         return
       }
+
       activePointerIdRef.current = event.pointerId
       pointerSamplesRef.current = [{ clientX: event.clientX, clientY: event.clientY }]
       lastTouchPointRef.current = point
@@ -185,6 +206,7 @@ export function EmulatorDeviceFrame({
       liveTouchRef.current = sendTouch(
         buildEmulatorGesturePoint(point, 'begin', liveTouchEdgeRef.current)
       )
+
       try {
         event.currentTarget.setPointerCapture(event.pointerId)
       } catch {}
@@ -195,24 +217,32 @@ export function EmulatorDeviceFrame({
   const handlePointerMove = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
       const samples = pointerSamplesRef.current
+
       if (!samples || activePointerIdRef.current !== event.pointerId) {
         return
       }
+
       event.preventDefault()
       const last = samples.at(-1)
+
       if (last && Math.hypot(event.clientX - last.clientX, event.clientY - last.clientY) < 4) {
         return
       }
+
       const sample = { clientX: event.clientX, clientY: event.clientY }
+
       if (samples.length < MAX_GESTURE_SAMPLES - 1) {
         samples.push(sample)
       } else {
         samples[samples.length - 1] = sample
       }
+
       if (!liveTouchRef.current) {
         return
       }
+
       const point = mapEventToScreenPoint(event)
+
       if (point) {
         lastTouchPointRef.current = point
         void sendTouch(buildEmulatorGesturePoint(point, 'move', liveTouchEdgeRef.current))
@@ -226,10 +256,13 @@ export function EmulatorDeviceFrame({
       if (activePointerIdRef.current !== event.pointerId) {
         return
       }
+
       const point = lastTouchPointRef.current
+
       if (liveTouchRef.current && point) {
         void sendTouch(buildEmulatorGesturePoint(point, 'end', liveTouchEdgeRef.current))
       }
+
       pointerSamplesRef.current = null
       activePointerIdRef.current = null
       liveTouchRef.current = false
@@ -242,36 +275,47 @@ export function EmulatorDeviceFrame({
   const handlePointerUp = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
       const samples = pointerSamplesRef.current
+
       if (!samples || activePointerIdRef.current !== event.pointerId) {
         return
       }
+
       event.preventDefault()
       pointerSamplesRef.current = null
       activePointerIdRef.current = null
       const endPoint = mapEventToScreenPoint(event) ?? lastTouchPointRef.current
+
       if (liveTouchRef.current) {
         if (endPoint) {
           void sendTouch(buildEmulatorGesturePoint(endPoint, 'end', liveTouchEdgeRef.current))
         }
+
         liveTouchRef.current = false
         liveTouchEdgeRef.current = undefined
         lastTouchPointRef.current = null
+
         return
       }
+
       liveTouchEdgeRef.current = undefined
       lastTouchPointRef.current = null
+
       if (!canInteract) {
         return
       }
+
       samples.push({ clientX: event.clientX, clientY: event.clientY })
+
       const action = resolveEmulatorPointerAction(
         samples,
         event.currentTarget.getBoundingClientRect(),
         visualStreamGeometry.size
       )
+
       if (!action) {
         return
       }
+
       if (action.kind === 'tap') {
         void onTap(action.point.x, action.point.y)
       } else {
@@ -286,6 +330,7 @@ export function EmulatorDeviceFrame({
       if (!canInteract) {
         return
       }
+
       const delta = resolveEmulatorWheelDelta(
         {
           clientX: event.clientX,
@@ -297,24 +342,32 @@ export function EmulatorDeviceFrame({
         event.currentTarget.getBoundingClientRect(),
         visualStreamGeometry.size
       )
+
       if (!delta) {
         return
       }
+
       event.preventDefault()
       const previous = wheelGestureRef.current
+
       if (previous?.timerId != null) {
         window.clearTimeout(previous.timerId)
       }
+
       const start = previous?.start ?? delta.start
+
       const end = clampEmulatorScreenPoint(
         previous
           ? { x: previous.end.x + delta.delta.x, y: previous.end.y + delta.delta.y }
           : { x: delta.start.x + delta.delta.x, y: delta.start.y + delta.delta.y }
       )
+
       const live = previous?.live ?? sendTouch({ ...start, type: 'begin' })
+
       if (live) {
         void sendTouch({ ...end, type: 'move' })
       }
+
       wheelGestureRef.current = {
         start,
         end,
@@ -347,10 +400,12 @@ export function EmulatorDeviceFrame({
   // Why: serve-sim may keep portrait-sized pixels for portrait-locked apps; the
   // physical frame still follows the last successful rotate request.
   const screenAspectRatio = visualStreamGeometry.aspectRatio
+
   const frameKind = useMemo(
     () => resolveDeviceFrameKind(deviceName, streamAspectRatio),
     [deviceName, streamAspectRatio]
   )
+
   const frameLayout = useMemo(
     () => fitDeviceFrameToPane(paneSize, screenAspectRatio, frameKind),
     [frameKind, screenAspectRatio, paneSize]

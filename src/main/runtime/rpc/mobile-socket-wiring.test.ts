@@ -78,6 +78,7 @@ describe('MobileSocketWiring', () => {
     direct.terminateClientConnections.mockReturnValue(1)
     relay.terminateClientConnections.mockReturnValue(2)
     const desktop = generateKeyPair()
+
     const wiring = new MobileSocketWiring({
       deviceRegistry: registryFor('device-1', 'valid-token'),
       e2eeKeypair: {
@@ -89,6 +90,7 @@ describe('MobileSocketWiring', () => {
       onBinary: vi.fn(),
       onClose: vi.fn()
     })
+
     const detachDirect = wiring.attachTransport(direct)
     wiring.attachTransport(relay)
 
@@ -106,6 +108,7 @@ describe('MobileSocketWiring', () => {
 
   it('releases detached transports from revocation fanout under origin churn', () => {
     const desktop = generateKeyPair()
+
     const wiring = new MobileSocketWiring({
       deviceRegistry: registryFor('device-1', 'valid-token'),
       e2eeKeypair: {
@@ -117,6 +120,7 @@ describe('MobileSocketWiring', () => {
       onBinary: vi.fn(),
       onClose: vi.fn()
     })
+
     const live = new FakeTransport()
     wiring.attachTransport(live)
     const retired = Array.from({ length: 1_000 }, () => new FakeTransport())
@@ -142,6 +146,7 @@ describe('MobileSocketWiring', () => {
     const transport = new FakeTransport()
     const onText = vi.fn()
     const onClose = vi.fn()
+
     const wiring = new MobileSocketWiring({
       deviceRegistry: registryFor('device-1', 'valid-token', 'runtime'),
       e2eeKeypair: {
@@ -153,6 +158,7 @@ describe('MobileSocketWiring', () => {
       onBinary: vi.fn(),
       onClose
     })
+
     wiring.attachTransport(transport)
 
     transport.receive(
@@ -200,6 +206,7 @@ describe('MobileSocketWiring', () => {
     const ws = new FakeSocket()
     const transport = new FakeTransport()
     const onText = vi.fn()
+
     const wiring = new MobileSocketWiring({
       deviceRegistry: registryFor('device-1', 'valid-token', 'mobile'),
       e2eeKeypair: {
@@ -211,6 +218,7 @@ describe('MobileSocketWiring', () => {
       onBinary: vi.fn(),
       onClose: vi.fn()
     })
+
     wiring.attachTransport(transport)
 
     transport.receive(
@@ -249,9 +257,11 @@ describe('MobileSocketWiring', () => {
     const transport = new FakeTransport()
     const notificationError = new Error('renderer exited')
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const onUnpairedDeviceAuthFailure = vi.fn(() => {
       throw notificationError
     })
+
     const wiring = new MobileSocketWiring({
       deviceRegistry: registryFor('device-1', 'valid-token'),
       e2eeKeypair: {
@@ -264,6 +274,7 @@ describe('MobileSocketWiring', () => {
       onClose: vi.fn(),
       onUnpairedDeviceAuthFailure
     })
+
     wiring.attachTransport(transport)
 
     transport.receive(
@@ -300,6 +311,7 @@ describe('MobileSocketWiring', () => {
     const ws = new FakeSocket()
     const transport = new FakeTransport()
     const onUnpairedDeviceAuthFailure = vi.fn()
+
     const wiring = new MobileSocketWiring({
       deviceRegistry: registryFor('device-1', 'valid-token'),
       e2eeKeypair: {
@@ -312,6 +324,7 @@ describe('MobileSocketWiring', () => {
       onClose: vi.fn(),
       onUnpairedDeviceAuthFailure
     })
+
     wiring.attachTransport(transport)
 
     transport.receive(
@@ -338,6 +351,7 @@ describe('MobileSocketWiring', () => {
     const phone = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
     const ws = new FakeSocket()
     const transport = new FakeTransport()
+
     const metadata: MobileSocketTransportMetadata = {
       transport: 'relay',
       relayHostId: 'AbCdEf0123_-xyZ9',
@@ -345,6 +359,7 @@ describe('MobileSocketWiring', () => {
       basisConnId: 'connection-1',
       credentialKind: 'invite'
     }
+
     const wiring = new MobileSocketWiring({
       deviceRegistry: registryFor('e2ee-device', 'valid-token'),
       e2eeKeypair: {
@@ -356,7 +371,9 @@ describe('MobileSocketWiring', () => {
       onBinary: vi.fn(),
       onClose: vi.fn()
     })
+
     wiring.attachTransport(transport, () => metadata)
+
     const hello: MobileE2EEV2Hello = {
       type: 'e2ee_hello',
       v: 2,
@@ -371,15 +388,18 @@ describe('MobileSocketWiring', () => {
         relayHostId: metadata.relayHostId
       }
     }
+
     transport.receive(ws, JSON.stringify(hello))
     const ready = JSON.parse(ws.sent[0]!.toString()) as MobileE2EEV2Ready
     const handshake = validateMobileE2EEV2Handshake(hello, ready)!
+
     const schedule = deriveMobileE2EEV2KeySchedule({
       sharedSecret: deriveSharedKey(phone.secretKey, desktop.publicKey),
       transcript: encodeMobileE2EEV2Transcript(handshake),
       clientNonce: handshake.clientNonce,
       desktopNonce: handshake.desktopNonce
     })
+
     const auth = sealMobileE2EEV2Frame({
       payload: new TextEncoder().encode(
         JSON.stringify({
@@ -395,6 +415,7 @@ describe('MobileSocketWiring', () => {
       payloadKind: 'text',
       counter: 0n
     })
+
     transport.receive(ws, Buffer.from(auth).toString('base64'))
 
     expect(transport.setClientId).not.toHaveBeenCalled()
@@ -407,6 +428,7 @@ describe('MobileSocketWiring', () => {
     const ws = new FakeSocket()
     const transport = new FakeTransport()
     const onText = vi.fn()
+
     const metadata: MobileSocketTransportMetadata = {
       transport: 'relay',
       relayHostId: 'AbCdEf0123_-xyZ9',
@@ -414,6 +436,7 @@ describe('MobileSocketWiring', () => {
       basisConnId: 'connection-1',
       credentialKind: 'resume'
     }
+
     const wiring = new MobileSocketWiring({
       deviceRegistry: registryFor('device-1', 'valid-token'),
       e2eeKeypair: {
@@ -425,7 +448,9 @@ describe('MobileSocketWiring', () => {
       onBinary: vi.fn(),
       onClose: vi.fn()
     })
+
     wiring.attachTransport(transport, () => metadata)
+
     const hello: MobileE2EEV2Hello = {
       type: 'e2ee_hello',
       v: 2,
@@ -440,15 +465,18 @@ describe('MobileSocketWiring', () => {
         relayHostId: metadata.relayHostId
       }
     }
+
     transport.receive(ws, JSON.stringify(hello))
     const ready = JSON.parse(ws.sent[0]!.toString()) as MobileE2EEV2Ready
     const handshake = validateMobileE2EEV2Handshake(hello, ready)!
+
     const schedule = deriveMobileE2EEV2KeySchedule({
       sharedSecret: deriveSharedKey(phone.secretKey, desktop.publicKey),
       transcript: encodeMobileE2EEV2Transcript(handshake),
       clientNonce: handshake.clientNonce,
       desktopNonce: handshake.desktopNonce
     })
+
     const send = (value: unknown, counter: bigint): void => {
       const frame = sealMobileE2EEV2Frame({
         payload: new TextEncoder().encode(JSON.stringify(value)),
@@ -458,8 +486,10 @@ describe('MobileSocketWiring', () => {
         payloadKind: 'text',
         counter
       })
+
       transport.receive(ws, Buffer.from(frame).toString('base64'))
     }
+
     send(
       {
         type: 'e2ee_auth',
@@ -469,11 +499,13 @@ describe('MobileSocketWiring', () => {
       },
       0n
     )
+
     const capabilityFrame = {
       type: 'e2ee_client_capabilities',
       v: 1,
       clientCapabilities: ['agent-session.structured.v1']
     }
+
     send(capabilityFrame, 1n)
     send({ id: 'rpc-1', method: 'agentSession.history', params: {} }, 2n)
 

@@ -32,6 +32,7 @@ import { useRepositoryHookSettingsDraft } from './use-repository-hook-settings-d
 import { useRepositoryIssueCommand } from './use-repository-issue-command'
 
 export { getLocalCommandSourcePolicyNotice }
+
 export type { LocalCommandSourcePolicyNotice }
 
 type RepositoryHooksSectionProps = {
@@ -61,12 +62,15 @@ export function RepositoryHooksSection({
   const settingsSearchQuery = useAppStore((state) => state.settingsSearchQuery)
   const selectedHostId = getRepoExecutionHostId(repo)
   const repoHostIdentity = `${selectedHostId}\0${repo.id}`
+
   const hookRuntimeSettings = useMemo(() => {
     const parsedHost = parseExecutionHostId(selectedHostId)
+
     return {
       activeRuntimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
     }
   }, [selectedHostId])
+
   const yamlState = yamlHooks
     ? 'loaded'
     : hasHooksFile
@@ -74,6 +78,7 @@ export function RepositoryHooksSection({
         ? 'update-available'
         : 'invalid'
       : 'missing'
+
   const {
     hookSettingsDraft,
     updateScriptDraft,
@@ -81,29 +86,37 @@ export function RepositoryHooksSection({
     flushScriptDraftOnUnmount,
     updateHookSettingsPolicyDraft
   } = useRepositoryHookSettingsDraft({ repo, repoHostIdentity, onUpdateHookSettings })
+
   const issueCommand = useRepositoryIssueCommand({
     hookRuntimeSettings,
     repoId: repo.id,
     repoHostIdentity,
     selectedHostId
   })
+
   const localHookFields = getLocalHookFields()
+
   const selectedSetupRunPolicy: SetupRunPolicy =
     hookSettingsDraft.setupRunPolicy ?? 'run-by-default'
+
   const selectedSetupAgentStartupPolicy: SetupAgentStartupPolicy =
     hookSettingsDraft.setupAgentStartupPolicy ?? 'start-immediately'
+
   const sharedSetupScript = yamlHooks?.scripts.setup
   const sharedArchiveScript = yamlHooks?.scripts.archive
   const hasSharedSetupScript = Boolean(sharedSetupScript?.trim())
   const hasSharedArchiveScript = Boolean(sharedArchiveScript?.trim())
   const hasSharedScript = hasSharedSetupScript || hasSharedArchiveScript
+
   const hasLocalScript = Boolean(
     hookSettingsDraft.scripts.setup?.trim() || hookSettingsDraft.scripts.archive?.trim()
   )
+
   const selectedCommandSourcePolicy: HookCommandSourcePolicy = resolveHookCommandSourcePolicy(
     hookSettingsDraft.commandSourcePolicy,
     { hasLocalScript }
   )
+
   const localCommandSourceNotice = getLocalCommandSourcePolicyNotice({
     hooksInspectionReady,
     currentPolicy: selectedCommandSourcePolicy,
@@ -111,6 +124,7 @@ export function RepositoryHooksSection({
     archiveScript: hookSettingsDraft.scripts.archive,
     hasSharedScript
   })
+
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
 
   return (

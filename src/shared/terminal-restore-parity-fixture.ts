@@ -36,10 +36,12 @@ export function createRendererParityTerminal(dims: { cols: number; rows: number 
     allowProposedApi: true,
     vtExtensions: { kittyKeyboard: true }
   })
+
   const serializeAddon = new SerializeAddon()
   terminal.loadAddon(serializeAddon)
   terminal.loadAddon(new Unicode11Addon())
   activateOrcaTerminalUnicodeProvider(terminal)
+
   return { terminal, serializeAddon }
 }
 
@@ -58,14 +60,17 @@ export async function writeChunksToTerminal(terminal: Terminal, chunks: string[]
 export function visibleRows(terminal: Terminal): string[] {
   const buffer = terminal.buffer.active
   const rows: string[] = []
+
   for (let y = 0; y < terminal.rows; y++) {
     rows.push(buffer.getLine(buffer.baseY + y)?.translateToString(true) ?? '')
   }
+
   return rows
 }
 
 export function visibleRowWraps(terminal: Terminal): boolean[] {
   const buffer = terminal.buffer.active
+
   return Array.from({ length: terminal.rows }, (_, y) =>
     Boolean(buffer.getLine(buffer.baseY + y)?.isWrapped)
   )
@@ -73,6 +78,7 @@ export function visibleRowWraps(terminal: Terminal): boolean[] {
 
 // xterm attribute color modes (Attributes CM_* in xterm's buffer model).
 const COLOR_MODE_P16 = 16777216
+
 const COLOR_MODE_P256 = 33554432
 
 /** Known-legitimate serializer normalization: SerializeAddon re-emits palette
@@ -97,14 +103,18 @@ type TerminalBufferLine = ReturnType<Terminal['buffer']['active']['getLine']>
 
 function effectiveRowStyles(line: TerminalBufferLine): string {
   const cells: string[] = []
+
   for (let x = 0; line && x < line.length; x++) {
     const cell = line.getCell(x)
+
     if (!cell) {
       continue
     }
+
     const chars = cell.getChars()
     const fgMode = canonicalColorMode(cell.getFgColorMode(), cell.getFgColor())
     const bgMode = canonicalColorMode(cell.getBgColorMode(), cell.getBgColor())
+
     if (chars === '' || chars === ' ') {
       const blankFlags = [
         chars === ' ' && cell.isUnderline(),
@@ -113,10 +123,12 @@ function effectiveRowStyles(line: TerminalBufferLine): string {
       ]
         .map((flag) => (flag ? '1' : '0'))
         .join('')
+
       const inverseFg = cell.isInverse() ? `·if${fgMode}:${cell.getFgColor()}` : ''
       cells.push(`▯·w${cell.getWidth()}·b${bgMode}:${cell.getBgColor()}·${blankFlags}${inverseFg}`)
       continue
     }
+
     const flags = [
       cell.isBold(),
       cell.isDim(),
@@ -127,19 +139,24 @@ function effectiveRowStyles(line: TerminalBufferLine): string {
     ]
       .map((flag) => (flag ? '1' : '0'))
       .join('')
+
     cells.push(
       `${chars}·w${cell.getWidth()}·f${fgMode}:${cell.getFgColor()}·b${bgMode}:${cell.getBgColor()}·${flags}`
     )
   }
+
   const defaultBlank = `▯·w1·b0:-1·000`
+
   while (cells.length > 0 && cells.at(-1) === defaultBlank) {
     cells.pop()
   }
+
   return cells.join('|')
 }
 
 export function visibleRowStyles(terminal: Terminal): string[] {
   const buffer = terminal.buffer.active
+
   return Array.from({ length: terminal.rows }, (_, y) =>
     effectiveRowStyles(buffer.getLine(buffer.baseY + y))
   )
@@ -154,23 +171,29 @@ export function cursorPosition(terminal: Terminal): { x: number; y: number } {
 export function normalBufferRowsTrimmed(terminal: Terminal): string[] {
   const buffer = terminal.buffer.normal
   const rows: string[] = []
+
   for (let y = 0; y < buffer.length; y++) {
     rows.push(buffer.getLine(y)?.translateToString(true) ?? '')
   }
+
   while (rows.length > 0 && rows.at(-1) === '') {
     rows.pop()
   }
+
   return rows
 }
 
 export function normalBufferStylesTrimmed(terminal: Terminal): string[] {
   const buffer = terminal.buffer.normal
+
   const rows = Array.from({ length: buffer.length }, (_, y) =>
     effectiveRowStyles(buffer.getLine(y))
   )
+
   while (rows.length > 0 && rows.at(-1) === '') {
     rows.pop()
   }
+
   return rows
 }
 
@@ -183,6 +206,7 @@ export function normalBufferStylesTrimmed(terminal: Terminal): string[] {
 export const SNAPSHOT_REPLAY_PREAMBLE_NORMAL = `${ABORT_TRUNCATED_CONTROL_STRING}${buildSnapshotReplayPrologue(
   { targetAlternateScreen: false, paneOnAlternateScreen: false }
 )}`
+
 export const SNAPSHOT_REPLAY_PREAMBLE_ALT = `${ABORT_TRUNCATED_CONTROL_STRING}${buildSnapshotReplayPrologue(
   { targetAlternateScreen: true, paneOnAlternateScreen: false }
 )}`
@@ -223,6 +247,7 @@ export function buildParityMainBufferSnapshot(
   const { terminal } = parity
   const alternateScreen = terminal.buffer.active.type === 'alternate'
   const scrollback = opts.scrollbackRows ?? DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT
+
   // Same composition as HeadlessEmulator.getSnapshot: absolute-cursor CUP for
   // the wrap-pending relative-restore defect plus the DECSC register epilogue.
   let snapshotAnsi = serializeWithAbsoluteCursor(
@@ -231,30 +256,38 @@ export function buildParityMainBufferSnapshot(
     { scrollback },
     readSavedCursorRegister(terminal)
   )
+
   let scrollbackAnsi: string | undefined
+
   if (alternateScreen) {
     // Why: HeadlessEmulator splits the normal buffer from the active alt frame;
     // rehydrateSequences owns the transition between them.
     const marker = '\x1b[?1049h'
     const start = snapshotAnsi.lastIndexOf(marker)
+
     if (start !== -1) {
       scrollbackAnsi = snapshotAnsi.slice(0, start)
       snapshotAnsi = snapshotAnsi.slice(start + marker.length)
     }
   }
+
   const seqs: string[] = []
+
   if (alternateScreen) {
     seqs.push('\x1b[0m\x1b[?1049h')
   }
+
   if (terminal.modes.bracketedPasteMode) {
     seqs.push('\x1b[?2004h')
   }
+
   // Why normal-buffer-only: HeadlessEmulator.getModes reports
   // applicationCursor false while the alternate buffer is active, so the
   // production rehydrate omits ?1h for alt-screen snapshots.
   if (!alternateScreen && terminal.modes.applicationCursorKeysMode) {
     seqs.push('\x1b[?1h')
   }
+
   // Mouse-mode rehydrate omitted: TerminalMouseModeMirror is main-only and
   // mouse reporting is input encoding — it cannot alter rendered output.
   const snapshot: ParityMainSnapshot = {
@@ -265,11 +298,14 @@ export function buildParityMainBufferSnapshot(
     alternateScreen,
     ...(scrollbackAnsi !== undefined ? { scrollbackAnsi } : {})
   }
+
   if (opts.pendingDeliveryStartSeq !== undefined) {
     snapshot.pendingDeliveryStartSeq = opts.pendingDeliveryStartSeq
   }
+
   if (opts.pendingEscapeTail) {
     snapshot.pendingEscapeTailAnsi = opts.pendingEscapeTail
   }
+
   return snapshot
 }

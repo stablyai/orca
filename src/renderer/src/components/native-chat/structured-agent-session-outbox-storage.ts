@@ -14,6 +14,7 @@ function storageKey(sessionId: string): string {
 export function readOutbox(sessionId: string): StructuredAgentSessionOutboxEntry[] {
   try {
     const value = JSON.parse(localStorage.getItem(storageKey(sessionId)) ?? '[]')
+
     return Array.isArray(value)
       ? value
           .map((entry) => parseStructuredAgentSessionOutboxEntry(entry, sessionId))
@@ -38,6 +39,7 @@ export function writeOutbox(
     } else {
       localStorage.setItem(storageKey(sessionId), JSON.stringify(entries))
     }
+
     return true
   } catch {
     return false
@@ -55,6 +57,7 @@ export function enqueueStructuredAgentSessionLaunchPrompt(
     attachments: [],
     queuedAt: Date.now()
   })
+
   return writeOutbox(sessionId, [...readOutbox(sessionId), entry]) ? entry : null
 }
 
@@ -69,14 +72,18 @@ export function mutateStructuredAgentSessionLaunchPrompt(
 ): boolean {
   const current = readOutbox(sessionId)
   let matched = false
+
   const next = current.flatMap((entry) => {
     if (entry.clientMessageId !== clientMessageId) {
       return [entry]
     }
+
     matched = true
     const replacement = update(entry)
+
     return replacement ? [replacement] : []
   })
+
   return matched && writeOutbox(sessionId, next)
 }
 

@@ -11,15 +11,21 @@ import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
 
 const fetchHostedReviewForBranch = vi.fn()
+
 const fetchIssue = vi.fn()
+
 const fetchLinearIssue = vi.fn()
+
 const replaceWorkspacePortScans = vi.fn()
+
 const setWorkspacePortScanRefreshing = vi.fn()
+
 const cacheTimerMocks = vi.hoisted(() => ({
   usePromptCacheCountdownStartedAt: vi.fn()
 }))
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status', 'ports']
+
 let settings: Partial<GlobalSettings> | null = { compactWorktreeCards: true }
 
 vi.mock('@/store', () => ({
@@ -58,6 +64,7 @@ vi.mock('@/store', () => ({
 // Why: the real Radix HoverCard is controlled by each root's `open`/`onOpenChange`; expose them so the test can
 // prove the compact title root and the ports root track independent open-state controllers.
 const openChangeByRoot = new Map<HTMLElement, (open: boolean) => void>()
+
 vi.mock('@/components/ui/hover-card', () => ({
   HoverCard: ({
     children,
@@ -194,13 +201,17 @@ function makePortScan(worktree: Worktree): { key: string; result: WorkspacePortS
 
 function rootContaining(selector: string): HTMLElement {
   const el = document.querySelector(selector)
+
   if (!el) {
     throw new Error(`No element matched ${selector}`)
   }
+
   const root = el.closest('[data-hovercard-root]')
+
   if (!(root instanceof HTMLElement)) {
     throw new Error(`No hover-card root ancestor for ${selector}`)
   }
+
   return root
 }
 

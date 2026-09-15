@@ -33,6 +33,7 @@ function getLocaleValue(path: string): unknown {
     if (!node || typeof node !== 'object' || Array.isArray(node)) {
       return undefined
     }
+
     return (node as Record<string, unknown>)[segment]
   }, ko)
 }

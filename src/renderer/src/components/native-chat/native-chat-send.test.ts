@@ -8,6 +8,7 @@ import {
 } from './native-chat-send'
 
 const BEGIN = '\x1b[200~'
+
 const END = '\x1b[201~'
 
 describe('NATIVE_CHAT_SUBMIT', () => {

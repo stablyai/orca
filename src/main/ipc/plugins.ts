@@ -65,11 +65,13 @@ export function parsePluginInstallArgs(args: unknown): z.infer<typeof installArg
 const removeArgsSchema = z.object({
   pluginKey: z.string().refine(isQualifiedPluginKey, 'invalid qualified plugin key')
 })
+
 const logsArgsSchema = z.object({ pluginKey: z.string().min(1) })
 
 // Why re-exported: moved to ../plugins/plugin-client-list so the runtime RPC can reach
 // it without ipcMain. Existing importers of this path keep working.
 export { listPluginsForClients } from '../plugins/plugin-client-list'
+
 import { listPluginsForClients } from '../plugins/plugin-client-list'
 
 export function canRemoveInstalledPlugin(
@@ -114,6 +116,7 @@ export function registerPluginHandlers(
   ipcMain.handle('plugins:list', async () => listPluginsForClients(pluginService))
   ipcMain.handle('plugins:listLanguagePacks', async () => {
     await pluginService.whenReady()
+
     return pluginService.contentPacks.languagePacks.list()
   })
   ipcMain.handle('plugins:consent', async (event, args: unknown) => {
@@ -127,6 +130,7 @@ export function registerPluginHandlers(
       decision: parsed.decision,
       originWebContentsId: event.sender.id
     })
+
     return listPluginsForClients(pluginService)
   })
 
@@ -140,6 +144,7 @@ export function registerPluginHandlers(
       enabled: parsed.enabled,
       originWebContentsId: event.sender.id
     })
+
     return listPluginsForClients(pluginService)
   })
 
@@ -149,16 +154,21 @@ export function registerPluginHandlers(
     'plugins:readPanelEntry',
     async (event, args: unknown): Promise<PluginPanelEntry | null> => {
       const ownerKey = rendererPanelOwner(event.sender.id)
+
       const ownerLease = bindPluginPanelOwnerLifecycle(event.sender, () =>
         pluginService.panels.revokeOwner(ownerKey)
       )
+
       await pluginService.whenReady()
       const parsed = readPanelEntryArgsSchema.parse(args)
       const entry = await pluginService.panels.open(ownerKey, parsed.pluginKey, parsed.panelId)
+
       if (!ownerLease.isCurrent()) {
         pluginService.panels.revokeOwner(ownerKey)
+
         return null
       }
+
       return entry
     }
   )
@@ -169,6 +179,7 @@ export function registerPluginHandlers(
     'plugins:panelAction',
     async (event, args: unknown): Promise<PluginPanelActionOutcome> => {
       await pluginService.whenReady()
+
       return pluginService.panels.execute(rendererPanelOwner(event.sender.id), args)
     }
   )
@@ -176,6 +187,7 @@ export function registerPluginHandlers(
   ipcMain.handle('plugins:invokeCommand', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = invokeCommandArgsSchema.parse(args)
+
     return pluginService.invokeCommand(parsed.pluginKey, parsed.commandId, parsed.args)
   })
 
@@ -184,8 +196,10 @@ export function registerPluginHandlers(
     const parsed = parsePluginInstallArgs(args)
     const pluginsDir = getUserPluginsDir(pluginService.options.userDataPath)
     const hostVersion = pluginService.options.hostVersion
+
     const blockedPluginReason = (pluginKey: string): string | null =>
       pluginService.options.getPluginKillListEntry?.(pluginKey)?.reason ?? null
+
     const result =
       parsed.kind === 'local-path'
         ? await installPluginFromLocalPath({
@@ -201,9 +215,11 @@ export function registerPluginHandlers(
             hostVersion,
             blockedPluginReason
           })
+
     if (result.ok) {
       await pluginService.refresh()
     }
+
     return result
   })
 
@@ -212,9 +228,11 @@ export function registerPluginHandlers(
     const parsed = removeArgsSchema.parse(args)
     const pluginsDir = getUserPluginsDir(pluginService.options.userDataPath)
     const lock = await readPluginLockfile(pluginsDir)
+
     if (!canRemoveInstalledPlugin(pluginService, parsed.pluginKey, lock)) {
       throw new Error(`cannot remove protected or non-installed plugin ${parsed.pluginKey}`)
     }
+
     await pluginService.deactivatePlugin(parsed.pluginKey)
     await removeInstalledPlugin({
       pluginsDir,
@@ -225,19 +243,23 @@ export function registerPluginHandlers(
     const settings = store.getSettings()
     const consents = { ...settings.pluginConsents }
     delete consents[parsed.pluginKey]
+
     const disabledPlugins = normalizePluginIdList(settings.disabledPlugins).filter(
       (pluginKey) => pluginKey !== parsed.pluginKey
     )
+
     store.updateSettings(
       { pluginConsents: consents, disabledPlugins },
       { notifyListeners: true, originWebContentsId: event.sender.id }
     )
     await pluginService.refresh()
+
     return listPluginsForClients(pluginService)
   })
 
   ipcMain.handle('plugins:getLogs', async (_event, args: unknown) => {
     const parsed = logsArgsSchema.parse(args)
+
     return pluginService.getLogs(parsed.pluginKey)
   })
 
@@ -245,8 +267,10 @@ export function registerPluginHandlers(
   // renderer calls this right after updating those settings.
   ipcMain.handle('plugins:refresh', async () => {
     await pluginService.refresh()
+
     return listPluginsForClients(pluginService)
   })
+
   if (marketplaceServices) {
     registerPluginMarketplaceHandlers(pluginService, marketplaceServices)
   }

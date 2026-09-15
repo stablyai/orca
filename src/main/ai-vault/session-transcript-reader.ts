@@ -64,6 +64,7 @@ export async function readResumableTranscript(args: {
 }): Promise<ResumableTranscriptRead> {
   const { file } = args.candidate
   const resume = args.resume
+
   const canResume =
     resume !== null &&
     typeof file.sizeBytes === 'number' &&
@@ -81,6 +82,7 @@ export async function readResumableTranscript(args: {
   // Mirrors the reader's entry guard so a dismissed transcript is not reported
   // as an incremental parse that read nothing.
   const stoppedBeforeRead = state.shouldStop?.() === true
+
   if (args.stats) {
     if (stoppedBeforeRead) {
       args.stats.earlyStopped++
@@ -99,6 +101,7 @@ export async function readResumableTranscript(args: {
     // nothing yet at this point of a whole-file read.
     identity: () => state.identity?.() ?? null
   })
+
   try {
     const readResult = await consumeCompleteJsonlLines({
       path: file.path,
@@ -109,6 +112,7 @@ export async function readResumableTranscript(args: {
       onLineBytes: state.consumeLineBytes?.bind(state),
       shouldStop: state.shouldStop?.bind(state)
     })
+
     if (args.stats) {
       args.stats.bytesRead += readResult.bytesRead
     }
@@ -120,6 +124,7 @@ export async function readResumableTranscript(args: {
     // but stays out of the resumable state so the (possibly still-growing) line
     // is re-read once complete instead of being half-counted.
     let displayState = state
+
     if (readResult.trailingPartialLine !== null) {
       const partialLine = readResult.trailingPartialLine
       displayState = state.clone()
@@ -128,6 +133,7 @@ export async function readResumableTranscript(args: {
 
     const session = await displayState.finalize(args.platform)
     channel.finishRead({ session, byteOffset: readResult.consumedThrough, incomplete: false })
+
     return {
       session,
       resume: {
@@ -155,16 +161,20 @@ export async function readWholeTranscript(args: {
   stats?: TranscriptReadStats
 }): Promise<AiVaultSession | null> {
   const { file } = args.candidate
+
   if (args.stats) {
     args.stats.fullParses++
     args.stats.bytesRead += file.sizeBytes ?? 0
   }
+
   const publishes = parserPublishesMessages(args.candidate)
   const channel = new TranscriptMessageChannel()
   channel.beginRead({ candidate: args.candidate, mode: 'replace', previousByteOffset: 0 })
+
   try {
     const session = await parseAgentSessionFile(args.candidate, args.platform, channel)
     channel.finishRead({ session, byteOffset: file.sizeBytes ?? 0, incomplete: !publishes })
+
     return session
   } catch (error) {
     channel.finishRead({ session: null, byteOffset: 0, incomplete: true })
@@ -179,5 +189,6 @@ export async function readWholeTranscript(args: {
 // a stale vault row until the file is next truncated or the app restarts).
 async function endsWithNewlineAt(path: string, offset: number): Promise<boolean> {
   const slice = await readTranscriptSlice(path, offset - 1, 1, 'scan')
+
   return slice.length === 1 && slice[0] === NEWLINE_BYTE
 }

@@ -45,6 +45,7 @@ describe('buildSpriteAnimationCss', () => {
         fps: 6,
         frameDurationsMs
       })
+
       expect(keyframesCss).toBe(
         '@keyframes pet-kf { from { background-position: 0px -200px; } to { background-position: -300px -200px; } }'
       )
@@ -67,6 +68,7 @@ describe('buildSpriteAnimationCss', () => {
         fps: 8,
         frameDurationsMs
       })
+
       expect(keyframesCss).not.toContain('step')
       expect(keyframesCss).toContain(' to {')
       expect(animationCss).toContain('steps(2)')
@@ -80,6 +82,7 @@ describe('buildSpriteAnimationCss', () => {
       fps: 8,
       frameDurationsMs: [10, 990]
     })
+
     expect(keyframesCss).toContain('0% { background-position: 0px -200px; }')
     expect(keyframesCss).toContain('1% { background-position: -100px -200px; }')
   })

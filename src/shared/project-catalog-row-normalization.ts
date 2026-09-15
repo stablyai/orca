@@ -41,6 +41,7 @@ function timestampValue(value: unknown): number {
 
 export function normalizeProjectHostSetupRow(setup: ProjectHostSetup): ProjectHostSetup {
   const row: Record<string, unknown> = isRecord(setup) ? setup : {}
+
   const needsRepair =
     !isString(row.id) ||
     !isString(row.projectId) ||
@@ -50,9 +51,11 @@ export function normalizeProjectHostSetupRow(setup: ProjectHostSetup): ProjectHo
     !isString(row.displayName) ||
     !isTimestamp(row.createdAt) ||
     !isTimestamp(row.updatedAt)
+
   if (!needsRepair) {
     return setup
   }
+
   return {
     ...row,
     id: stringValue(row.id),
@@ -75,6 +78,7 @@ export function normalizeProjectHostSetupRow(setup: ProjectHostSetup): ProjectHo
 export function normalizeProjectRow(project: Project): Project {
   const row: Record<string, unknown> = isRecord(project) ? project : {}
   const sourceRepoIdsConform = Array.isArray(row.sourceRepoIds) && row.sourceRepoIds.every(isString)
+
   const needsRepair =
     !isString(row.id) ||
     !isString(row.displayName) ||
@@ -82,9 +86,11 @@ export function normalizeProjectRow(project: Project): Project {
     !sourceRepoIdsConform ||
     !isTimestamp(row.createdAt) ||
     !isTimestamp(row.updatedAt)
+
   if (!needsRepair) {
     return project
   }
+
   return {
     ...row,
     id: stringValue(row.id),
@@ -102,15 +108,20 @@ function normalizeRows<T>(rows: T[], normalize: (row: T) => T): T[] {
   if (!Array.isArray(rows)) {
     return []
   }
+
   let repaired: T[] | null = null
+
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index]!
     const normalized = normalize(row)
+
     if (normalized !== row && !repaired) {
       repaired = rows.slice(0, index)
     }
+
     repaired?.push(normalized)
   }
+
   return repaired ?? rows
 }
 

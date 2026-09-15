@@ -65,6 +65,7 @@ describe('orchestration RPC methods', () => {
       // Why: send notifies arrival so already-idle recipients get push-on-idle
       // delivery without waiting for a status transition (#12536).
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
+
       const result = (await call('orchestration.send', {
         from: 'term_coord',
         to: `run:${activeRunId}`,
@@ -123,6 +124,7 @@ describe('orchestration RPC methods', () => {
       const workerCheck = (await call('orchestration.check', {
         terminal: 'term_worker'
       })) as { dispatchId: string; messages: { subject: string }[] }
+
       expect(workerCheck).toMatchObject({
         dispatchId: dispatch.id,
         messages: [{ subject: 'Pause after this step' }]
@@ -132,12 +134,14 @@ describe('orchestration RPC methods', () => {
     it('routes Dispatch mail by stable pane identity after worker handle remint', async () => {
       setup()
       const task = db.createTask({ spec: 'controlled worker after restart' })
+
       const dispatch = createRootDispatch(
         db,
         task.id,
         'term_worker_before',
         'tab_worker:leaf_worker'
       )
+
       db.insertMessage({
         from: 'term_coord',
         to: `dispatch:${dispatch.id}`,
@@ -227,6 +231,7 @@ describe('orchestration RPC methods', () => {
     it('fences a replacement process for a capability-less manual Dispatch', async () => {
       setup()
       const task = db.createTask({ spec: 'process-bound manual work' })
+
       const dispatch = createRootDispatch(
         db,
         task.id,
@@ -235,10 +240,12 @@ describe('orchestration RPC methods', () => {
         undefined,
         'runtime_test:term_worker:1'
       )
+
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
         handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
       )
       vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:2')
+
       const payload = JSON.stringify({
         taskId: task.id,
         dispatchId: dispatch.id,
@@ -260,12 +267,14 @@ describe('orchestration RPC methods', () => {
       expect(db.getTask(task.id)?.status).toBe('dispatched')
 
       vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:1')
+
       const accepted = (await call('orchestration.send', {
         from: 'term_worker',
         subject: 'Done by assignee',
         type: 'worker_done',
         payload
       })) as { lifecycle: { action: string } }
+
       expect(accepted.lifecycle.action).toBe('completed')
     })
 
@@ -274,6 +283,7 @@ describe('orchestration RPC methods', () => {
       async (type) => {
         setup()
         const task = db.createTask({ spec: `process-bound ${type}` })
+
         const dispatch = createRootDispatch(
           db,
           task.id,
@@ -282,6 +292,7 @@ describe('orchestration RPC methods', () => {
           undefined,
           'runtime_test:term_worker:1'
         )
+
         vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
           handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
         )
@@ -314,6 +325,7 @@ describe('orchestration RPC methods', () => {
         vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue(
           'runtime_test:term_worker:1'
         )
+
         const accepted = (await call('orchestration.send', {
           from: 'term_worker',
           subject: `${type} by assignee`,
@@ -323,6 +335,7 @@ describe('orchestration RPC methods', () => {
             ...(type === 'decision_gate' ? { question: 'Proceed?' } : {})
           })
         })) as { message: { type: string } }
+
         expect(accepted.message.type).toBe(type)
       }
     )
@@ -393,14 +406,17 @@ describe('orchestration RPC methods', () => {
       setup()
       const task = db.createTask({ spec: 'capability work' })
       const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
+
       const capability = db.mintDispatchCapability({
         dispatchId: dispatch.id,
         paneKey: 'tab_worker:leaf_worker',
         processIncarnation: 'runtime_test:term_worker:1'
       })
+
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
         handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
       )
+
       const payload = JSON.stringify({
         taskId: task.id,
         dispatchId: dispatch.id,
@@ -413,6 +429,7 @@ describe('orchestration RPC methods', () => {
         type: 'worker_done',
         payload
       })) as { lifecycle: { code: string }; message: { subject: string } }
+
       expect(rejected).toMatchObject({
         lifecycle: { code: 'dispatch_capability_invalid' },
         message: { subject: 'Rejected worker_done: Done' }
@@ -420,36 +437,42 @@ describe('orchestration RPC methods', () => {
       expect(db.getTask(task.id)?.status).toBe('dispatched')
 
       ctx = { runtime, orchestrationCapability: 'dcap_wrong' }
+
       const wrongToken = (await call('orchestration.send', {
         from: 'term_worker',
         subject: 'Done',
         type: 'worker_done',
         payload
       })) as { lifecycle: { code: string } }
+
       expect(wrongToken.lifecycle.code).toBe('dispatch_capability_invalid')
 
       ctx = { runtime, orchestrationCapability: capability }
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
         handle === 'term_worker' ? 'tab_foreign:leaf_foreign' : coordinatorPaneKey
       )
+
       const wrongPane = (await call('orchestration.send', {
         from: 'term_worker',
         subject: 'Done',
         type: 'worker_done',
         payload
       })) as { lifecycle: { code: string } }
+
       expect(wrongPane.lifecycle.code).toBe('dispatch_capability_invalid')
 
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
         handle === 'term_worker' ? 'tab_worker:leaf_worker' : coordinatorPaneKey
       )
       vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:2')
+
       const wrongProcess = (await call('orchestration.send', {
         from: 'term_worker',
         subject: 'Done',
         type: 'worker_done',
         payload
       })) as { lifecycle: { code: string } }
+
       expect(wrongProcess.lifecycle.code).toBe('dispatch_capability_invalid')
 
       vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue('runtime_test:term_worker:1')
@@ -468,6 +491,7 @@ describe('orchestration RPC methods', () => {
         type: 'worker_done',
         payload
       })) as { lifecycle: { code: string } }
+
       expect(revoked.lifecycle.code).toBe('dispatch_capability_invalid')
     })
 
@@ -547,6 +571,7 @@ describe('orchestration RPC methods', () => {
 
     it('rejects worker_done groups before terminal listing failures can win', async () => {
       setup()
+
       const listTerminals = vi
         .spyOn(runtime, 'listTerminals')
         .mockRejectedValue(new Error('terminal listing failed'))

@@ -21,6 +21,7 @@ export function useHostViewSettings(args: {
   state: HostScreenState
 }) {
   const { client, connState, hostId, state } = args
+
   const {
     clientRef,
     collapsedGroups,
@@ -69,16 +70,20 @@ export function useHostViewSettings(args: {
     (patch: Partial<MobileViewState>) => {
       const next: MobileViewState = { ...viewStateRef.current, ...patch }
       applyViewState(next)
+
       if (!client) {
         return
       }
+
       // Send only the touched fields: the host merges partial updates, so a stale
       // mirror can no longer revert sibling settings another client just changed
       // (STA-5781; supersedes the #8873 whole-payload special case).
       const payload: WorkspaceViewSettings = buildWorkspaceViewSettingsUpdate(patch, next)
+
       if (Object.keys(payload).length === 0) {
         return
       }
+
       void client.sendRequest('ui.set', payload).catch(() => {
         // Best-effort: view settings are a convenience preference.
       })
@@ -91,17 +96,23 @@ export function useHostViewSettings(args: {
     if (!client || connState !== 'connected') {
       return
     }
+
     const requestClient = client
     const requestHostId = hostId
+
     try {
       const response = await requestClient.sendRequest('ui.get')
+
       if (clientRef.current !== requestClient || hostId !== requestHostId || !response.ok) {
         return
       }
+
       const ui = ((response as RpcSuccess).result as { ui?: WorkspaceViewSettings }).ui
+
       if (!ui) {
         return
       }
+
       applyViewState(applyDesktopViewSettings(viewStateRef.current, ui))
     } catch {
       // Transient transport failure; retry on the next focus/connect.
@@ -126,11 +137,13 @@ export function useHostViewSettings(args: {
   const toggleRepoFilter = useCallback(
     (repoId: string) => {
       const next = new Set(viewStateRef.current.filterRepoIds)
+
       if (next.has(repoId)) {
         next.delete(repoId)
       } else {
         next.add(repoId)
       }
+
       persistViewSettings({ filterRepoIds: [...next] })
     },
     [persistViewSettings]
@@ -142,15 +155,20 @@ export function useHostViewSettings(args: {
 
   const activeFilterCount = useMemo(() => {
     let count = 0
+
     if (filters.hideSleeping) {
       count++
     }
+
     if (filters.hideDefaultBranch) {
       count++
     }
+
     count += filters.filterRepoIds.size
+
     return count
   }, [filters])
+
   const selectedSortLabel =
     SORT_OPTIONS.find((option) => option.value === sortMode)?.label ?? 'Recent'
 
@@ -164,13 +182,16 @@ export function useHostViewSettings(args: {
   const toggleCollapsed = useCallback(
     (key: string) => {
       const next = new Set(viewStateRef.current.collapsedGroups)
+
       if (!next.delete(key)) {
         next.add(key)
       }
+
       persistViewSettings({ collapsedGroups: [...next] })
     },
     [persistViewSettings]
   )
+
   const toggleWorktreeLineage = useCallback(
     (item: Worktree) => toggleCollapsed(getMobileWorkspaceLineageGroupKey(item)),
     [toggleCollapsed]

@@ -9,6 +9,7 @@ import {
 } from './browser-artifact-upload'
 
 const stat = vi.fn()
+
 const readFile = vi.fn()
 
 beforeEach(() => {

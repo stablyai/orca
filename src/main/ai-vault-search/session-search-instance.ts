@@ -79,17 +79,21 @@ export class SessionSearchInstance {
 
   async search(request: AiVaultSearchRequest): Promise<AiVaultSearchResponse> {
     const live = this.live
+
     if (!live) {
       return { kind: 'unavailable', reason: this.settings.enabled ? 'not-ready' : 'disabled' }
     }
+
     return live.service.search(request)
   }
 
   status(): AiVaultSearchStatus {
     const live = this.live
+
     if (!live) {
       return { ...unavailableSessionSearchStatus(), enabled: this.settings.enabled }
     }
+
     return {
       enabled: true,
       ...live.indexer.status(),
@@ -110,9 +114,11 @@ export class SessionSearchInstance {
     if (!this.settings.enabled) {
       return
     }
+
     const { historyDays } = this.settings
     let indexer: SessionSearchIndexer | null = null
     let db: SyncDatabase | null = null
+
     try {
       indexer = new SessionSearchIndexer({
         databasePath: this.options.databasePath,
@@ -125,10 +131,12 @@ export class SessionSearchInstance {
           : { reconcileIntervalMs: this.options.reconcileIntervalMs })
       })
       db = openSessionSearchDatabase(this.options.databasePath)
+
       // Later expiry comes from the indexer purge, which also invalidates page cursors.
       const engineOptions = {
         retentionCutoffMs: sessionSearchHistoryCutoffMs(historyDays, Date.now())
       }
+
       const engine = new SessionSearchEngine(db, engineOptions)
       this.live = {
         indexer,
@@ -150,9 +158,11 @@ export class SessionSearchInstance {
   private closeLive(): void {
     const live = this.live
     this.live = null
+
     if (!live) {
       return
     }
+
     try {
       live.indexer.close()
     } finally {

@@ -22,8 +22,11 @@ import { removeTreeSync } from '../shared/windows-transient-lock-removal'
  * archive under the real binary.
  */
 const requireFromTest = createRequire(import.meta.url)
+
 const electronBinary = requireFromTest('electron') as string
+
 const electronDist = join(dirname(requireFromTest.resolve('electron/package.json')), 'dist')
+
 const FIXTURE_ASAR = [
   join(electronDist, 'Electron.app/Contents/Resources/default_app.asar'),
   join(electronDist, 'resources/default_app.asar')
@@ -31,6 +34,7 @@ const FIXTURE_ASAR = [
 
 // Mirrors the residue reported on the failing machine, down to the depth of the blocking leaf.
 const ENTRY_NAME = 'wt-1700000000000-abcdef01'
+
 const ASAR_PARENT = 'node_modules/.pnpm/electron/node_modules/electron/dist/App/Contents/Resources'
 
 const roots: string[] = []
@@ -67,6 +71,7 @@ function buildDriver(bundlePath: string, target: string, resultPath: string): st
 
 async function bundleHostTreeRemoval(outFile: string): Promise<void> {
   const { build } = await import('vite')
+
   const result = await build({
     root: process.cwd(),
     configFile: false,
@@ -87,6 +92,7 @@ async function bundleHostTreeRemoval(outFile: string): Promise<void> {
       }
     }
   })
+
   const output = (Array.isArray(result) ? result[0] : result) as { output: { code?: string }[] }
   const code = output.output[0]?.code
   expect(typeof code).toBe('string')
@@ -99,6 +105,7 @@ function buildStrandedTree(root: string): string {
   mkdirSync(asarParent, { recursive: true })
   copyFileSync(FIXTURE_ASAR as string, join(asarParent, 'default_app.asar'))
   writeFileSync(join(asarParent, 'plain.txt'), 'x', 'utf8')
+
   return target
 }
 
@@ -120,6 +127,7 @@ describe('removeHostTree against a tree holding an asar archive', () => {
         env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
         timeout: 60_000
       })
+
       expect(run.status, run.stderr?.slice(-2000)).toBe(0)
 
       const probe = JSON.parse(readFileSync(resultPath, 'utf8')) as ProbeResult

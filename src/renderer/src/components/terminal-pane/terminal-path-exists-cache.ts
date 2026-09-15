@@ -14,13 +14,17 @@ export function getTerminalPathExistsCacheKey({
   runtimeEnvironmentId?: string | null
 }): string {
   const runtimeId = runtimeEnvironmentId?.trim()
+
   if (isRemoteRuntimePath && runtimeId) {
     return `${runtimeId}\0${absolutePath}`
   }
+
   const sshConnectionId = connectionId?.trim()
+
   if (sshConnectionId) {
     return `ssh:${sshConnectionId}\0${absolutePath}`
   }
+
   return `${runtimeId || 'active'}\0${absolutePath}`
 }
 
@@ -29,10 +33,12 @@ export function readTerminalPathExistsCache(
   key: string
 ): boolean | undefined {
   const value = cache.get(key)
+
   if (value !== undefined) {
     cache.delete(key)
     cache.set(key, value)
   }
+
   return value
 }
 
@@ -48,11 +54,14 @@ export function writeTerminalPathExistsCache(
     // sessions; keep recent link probes without retaining every path forever.
     while (cache.size >= TERMINAL_PATH_EXISTS_CACHE_MAX_ENTRIES) {
       const oldestKey = cache.keys().next().value
+
       if (oldestKey === undefined) {
         break
       }
+
       cache.delete(oldestKey)
     }
   }
+
   cache.set(key, exists)
 }
